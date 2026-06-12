@@ -1,9 +1,48 @@
 import { createDb } from "@bambi-app/db";
-import * as schema from "@bambi-app/db/schema/auth";
+import {
+	account,
+	accountRelations,
+	invitation,
+	invitationRelations,
+	member,
+	memberRelations,
+	organizationRelations,
+	organization as organizationTable,
+	session,
+	sessionRelations,
+	team,
+	teamMember,
+	teamMemberRelations,
+	teamRelations,
+	user,
+	userRelations,
+	verification,
+} from "@bambi-app/db/schema/auth";
 import { env } from "@bambi-app/env/server";
 import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { organization } from "better-auth/plugins";
+
+const schema = {
+	account,
+	accountRelations,
+	invitation,
+	invitationRelations,
+	member,
+	memberRelations,
+	organization: organizationTable,
+	organizationRelations,
+	session,
+	sessionRelations,
+	team,
+	teamMember,
+	teamMemberRelations,
+	teamRelations,
+	user,
+	userRelations,
+	verification,
+};
 
 export function createAuth() {
 	const db = createDb();
@@ -32,7 +71,15 @@ export function createAuth() {
 				httpOnly: true,
 			},
 		},
-		plugins: [expo()],
+		plugins: [
+			expo(),
+			organization({
+				teams: {
+					enabled: true,
+					allowRemovingAllTeams: false,
+				},
+			}),
+		],
 	});
 }
 
