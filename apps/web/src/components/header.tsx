@@ -1,17 +1,22 @@
 "use client";
 import { cn } from "@bambi-app/ui/lib/utils";
+import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ModeToggle } from "./mode-toggle";
 import UserMenu from "./user-menu";
 
-const links = [
-	{ href: "/jobs", id: "jobs", label: "공고" },
-	{ href: "/chats", id: "chats", label: "채팅" },
-	{ href: "/chats", id: "schedule", label: "일정" },
-	{ href: "/employer", id: "employer", label: "구인자 관리" },
-] as const;
+const links: {
+	href: Route;
+	id: "chats" | "employer" | "jobs" | "schedule";
+	label: string;
+}[] = [
+	{ href: "/jobs" as Route, id: "jobs", label: "공고" },
+	{ href: "/chats" as Route, id: "chats", label: "채팅" },
+	{ href: "/chats" as Route, id: "schedule", label: "일정" },
+	{ href: "/employer" as Route, id: "employer", label: "구인자 관리" },
+];
 
 export default function Header() {
 	const pathname = usePathname();

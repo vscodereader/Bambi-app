@@ -2,6 +2,7 @@
 
 import { buttonVariants } from "@bambi-app/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
+import type { Route } from "next";
 import Link from "next/link";
 
 import { PageShell } from "@/components/bambi/page-shell";
@@ -17,16 +18,21 @@ const roleLabels = {
 	job_seeker: "구직자",
 } as const;
 
-const getPrimaryHref = (role: null | string | undefined): string => {
+interface HomeAction {
+	href: Route;
+	label: string;
+}
+
+const getPrimaryHref = (role: null | string | undefined): Route => {
 	if (!role) {
-		return "/onboarding";
+		return "/onboarding" as Route;
 	}
 
 	if (role === "employer" || role === "admin") {
-		return "/employer";
+		return "/employer" as Route;
 	}
 
-	return "/jobs";
+	return "/jobs" as Route;
 };
 
 const getRoleLabel = (role: null | string | undefined): string => {
@@ -43,13 +49,13 @@ const primaryActionLabels = {
 	"/onboarding": "온보딩 시작",
 } as const;
 
-const getSecondaryActions = (role: null | string | undefined) => {
+const getSecondaryActions = (role: null | string | undefined): HomeAction[] => {
 	if (role === "employer" || role === "admin") {
-		return [{ href: "/chats", label: "채팅" }];
+		return [{ href: "/chats" as Route, label: "채팅" }];
 	}
 
 	if (role === "job_seeker") {
-		return [{ href: "/chats", label: "채팅" }];
+		return [{ href: "/chats" as Route, label: "채팅" }];
 	}
 
 	return [];

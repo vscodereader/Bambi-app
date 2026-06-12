@@ -10,8 +10,15 @@ import { use, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
+import { FieldError, FormError } from "@/components/bambi/form-message";
 import { PageShell } from "@/components/bambi/page-shell";
 import Loader from "@/components/loader";
+import {
+	emptyJobForm,
+	type JobForm,
+	type JobFormErrors,
+	validateJobForm,
+} from "@/lib/bambi-job-form";
 import {
 	industryOptions,
 	payUnitOptions,
@@ -19,53 +26,19 @@ import {
 } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
-interface JobForm {
-	description: string;
-	industryCategory: string;
-	interviewNotes: string;
-	organizationId: string;
-	payAmount: string;
-	payUnit: string;
-	region: string;
-	teamId: string;
-	title: string;
-	workSchedule: string;
-}
-
-const emptyJobForm: JobForm = {
-	description: "",
-	industryCategory: industryOptions[0],
-	interviewNotes: "",
-	organizationId: "",
-	payAmount: "",
-	payUnit: payUnitOptions[0],
-	region: regionOptions[0],
-	teamId: "",
-	title: "",
-	workSchedule: "",
-};
-
-const toJobInput = (form: typeof emptyJobForm) => ({
-	description: form.description,
-	industryCategory: form.industryCategory,
-	interviewNotes: form.interviewNotes || undefined,
-	organizationId: form.organizationId,
-	payAmount: Number(form.payAmount),
-	payUnit: form.payUnit,
-	region: form.region,
-	teamId: form.teamId || undefined,
-	title: form.title,
-	workSchedule: form.workSchedule,
-});
-
 const selectClassName =
 	"h-10 w-full min-w-0 rounded-none border border-input bg-background px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 md:h-8 md:text-xs";
 
 const textareaClassName =
 	"min-h-28 w-full min-w-0 rounded-none border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50";
 
+const readOnlyValueClassName =
+	"min-h-10 break-words border bg-muted/30 px-3 py-2 text-muted-foreground text-sm md:min-h-8 md:text-xs";
+
 const getErrorCode = (error: Error): string | undefined =>
 	"code" in error && typeof error.code === "string" ? error.code : undefined;
+
+const getFieldErrorId = (field: keyof JobForm) => `${field}-error`;
 
 export default function EditEmployerJobPage({
 	params,
@@ -76,13 +49,18 @@ export default function EditEmployerJobPage({
 	const router = useRouter();
 	const utils = useQueryClient();
 	const [form, setForm] = useState(emptyJobForm);
+	const [fieldErrors, setFieldErrors] = useState<JobFormErrors>({});
+	const [formError, setFormError] = useState<null | string>(null);
 	const jobQuery = useQuery(
 		orpc.bambi.jobs.getEditableById.queryOptions({ input: { id } })
 	);
 	const updateMutation = useMutation(
 		orpc.bambi.jobs.update.mutationOptions({
 			onError: (error) => {
-				toast.error(error.message);
+				const message =
+					"공고를 수정하지 못했습니다. 입력값과 공고 수정 권한을 확인해 주세요.";
+				setFormError(message);
+				toast.error(error.message || message);
 			},
 			onSuccess: async () => {
 				toast.success("공고가 수정되었습니다.");
@@ -117,18 +95,36 @@ export default function EditEmployerJobPage({
 		});
 	}, [job]);
 
-	const updateFormValue = (field: keyof typeof emptyJobForm, value: string) => {
+	const updateFormValue = (field: keyof JobForm, value: string) => {
 		setForm((currentForm) => ({
 			...currentForm,
 			[field]: value,
 		}));
+		setFieldErrors((currentErrors) => ({
+			...currentErrors,
+			[field]: undefined,
+		}));
+		setFormError(null);
 	};
 
 	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
+		const validation = validateJobForm(form, {
+			teamScopes: form.teamId
+				? [{ organizationId: form.organizationId, teamId: form.teamId }]
+				: [],
+		});
+
+		if (!validation.ok) {
+			setFieldErrors(validation.errors);
+			setFormError(validation.message);
+			toast.error(validation.message);
+			return;
+		}
+
 		updateMutation.mutate({
-			data: toJobInput(form),
+			data: validation.input,
 			id,
 		});
 	};
@@ -206,26 +202,17 @@ export default function EditEmployerJobPage({
 			title="공고 수정"
 		>
 			<form className="space-y-6 border p-4" onSubmit={handleSubmit}>
+				<FormError message={formError} />
 				<section aria-label="소속 정보" className="grid gap-4 md:grid-cols-2">
 					<div className="space-y-2">
-						<Label htmlFor="organizationId">조직</Label>
-						<Input
-							disabled
-							id="organizationId"
-							name="organizationId"
-							readOnly
-							value={form.organizationId}
-						/>
+						<span className="font-medium text-sm">조직 ID</span>
+						<p className={readOnlyValueClassName}>{form.organizationId}</p>
 					</div>
 					<div className="space-y-2">
-						<Label htmlFor="teamId">팀</Label>
-						<Input
-							disabled
-							id="teamId"
-							name="teamId"
-							readOnly
-							value={form.teamId || "전체 조직"}
-						/>
+						<span className="font-medium text-sm">팀 ID</span>
+						<p className={readOnlyValueClassName}>
+							{form.teamId || "전체 조직"}
+						</p>
 					</div>
 				</section>
 
@@ -233,17 +220,31 @@ export default function EditEmployerJobPage({
 					<div className="space-y-2 md:col-span-2">
 						<Label htmlFor="title">공고 제목</Label>
 						<Input
+							aria-describedby={
+								fieldErrors.title ? getFieldErrorId("title") : undefined
+							}
+							aria-invalid={Boolean(fieldErrors.title)}
 							id="title"
 							name="title"
 							onChange={(event) => updateFormValue("title", event.target.value)}
-							placeholder="예: 금요일 라운지 홀 스태프 모집"
+							placeholder="예: 금요일 라운지 홀 스태프 모집…"
 							required
 							value={form.title}
+						/>
+						<FieldError
+							id={getFieldErrorId("title")}
+							message={fieldErrors.title}
 						/>
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="industryCategory">업종</Label>
 						<select
+							aria-describedby={
+								fieldErrors.industryCategory
+									? getFieldErrorId("industryCategory")
+									: undefined
+							}
+							aria-invalid={Boolean(fieldErrors.industryCategory)}
 							className={selectClassName}
 							id="industryCategory"
 							name="industryCategory"
@@ -259,10 +260,18 @@ export default function EditEmployerJobPage({
 								</option>
 							))}
 						</select>
+						<FieldError
+							id={getFieldErrorId("industryCategory")}
+							message={fieldErrors.industryCategory}
+						/>
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="region">지역</Label>
 						<select
+							aria-describedby={
+								fieldErrors.region ? getFieldErrorId("region") : undefined
+							}
+							aria-invalid={Boolean(fieldErrors.region)}
 							className={selectClassName}
 							id="region"
 							name="region"
@@ -278,10 +287,18 @@ export default function EditEmployerJobPage({
 								</option>
 							))}
 						</select>
+						<FieldError
+							id={getFieldErrorId("region")}
+							message={fieldErrors.region}
+						/>
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="payAmount">급여 금액</Label>
 						<Input
+							aria-describedby={
+								fieldErrors.payAmount ? getFieldErrorId("payAmount") : undefined
+							}
+							aria-invalid={Boolean(fieldErrors.payAmount)}
 							id="payAmount"
 							inputMode="numeric"
 							min="1"
@@ -289,15 +306,23 @@ export default function EditEmployerJobPage({
 							onChange={(event) =>
 								updateFormValue("payAmount", event.target.value)
 							}
-							placeholder="예: 12000"
+							placeholder="예: 12000…"
 							required
 							type="number"
 							value={form.payAmount}
+						/>
+						<FieldError
+							id={getFieldErrorId("payAmount")}
+							message={fieldErrors.payAmount}
 						/>
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="payUnit">급여 단위</Label>
 						<select
+							aria-describedby={
+								fieldErrors.payUnit ? getFieldErrorId("payUnit") : undefined
+							}
+							aria-invalid={Boolean(fieldErrors.payUnit)}
 							className={selectClassName}
 							id="payUnit"
 							name="payUnit"
@@ -313,18 +338,32 @@ export default function EditEmployerJobPage({
 								</option>
 							))}
 						</select>
+						<FieldError
+							id={getFieldErrorId("payUnit")}
+							message={fieldErrors.payUnit}
+						/>
 					</div>
 					<div className="space-y-2 md:col-span-2">
 						<Label htmlFor="workSchedule">근무 일정</Label>
 						<Input
+							aria-describedby={
+								fieldErrors.workSchedule
+									? getFieldErrorId("workSchedule")
+									: undefined
+							}
+							aria-invalid={Boolean(fieldErrors.workSchedule)}
 							id="workSchedule"
 							name="workSchedule"
 							onChange={(event) =>
 								updateFormValue("workSchedule", event.target.value)
 							}
-							placeholder="예: 금/토 20:00-02:00"
+							placeholder="예: 금/토 20:00-02:00…"
 							required
 							value={form.workSchedule}
+						/>
+						<FieldError
+							id={getFieldErrorId("workSchedule")}
+							message={fieldErrors.workSchedule}
 						/>
 					</div>
 				</section>
@@ -333,6 +372,12 @@ export default function EditEmployerJobPage({
 					<div className="space-y-2">
 						<Label htmlFor="description">상세 설명</Label>
 						<textarea
+							aria-describedby={
+								fieldErrors.description
+									? getFieldErrorId("description")
+									: undefined
+							}
+							aria-invalid={Boolean(fieldErrors.description)}
 							className={textareaClassName}
 							id="description"
 							maxLength={2000}
@@ -341,14 +386,24 @@ export default function EditEmployerJobPage({
 							onChange={(event) =>
 								updateFormValue("description", event.target.value)
 							}
-							placeholder="업무 내용, 지원 조건, 준비 사항을 입력해 주세요."
+							placeholder="업무 내용, 지원 조건, 준비 사항을 입력해 주세요…"
 							required
 							value={form.description}
+						/>
+						<FieldError
+							id={getFieldErrorId("description")}
+							message={fieldErrors.description}
 						/>
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="interviewNotes">면접 안내</Label>
 						<textarea
+							aria-describedby={
+								fieldErrors.interviewNotes
+									? getFieldErrorId("interviewNotes")
+									: undefined
+							}
+							aria-invalid={Boolean(fieldErrors.interviewNotes)}
 							className={textareaClassName}
 							id="interviewNotes"
 							maxLength={500}
@@ -356,8 +411,12 @@ export default function EditEmployerJobPage({
 							onChange={(event) =>
 								updateFormValue("interviewNotes", event.target.value)
 							}
-							placeholder="면접 장소, 준비물, 연락 가능 시간을 입력해 주세요."
+							placeholder="면접 장소, 준비물, 연락 가능 시간을 입력해 주세요…"
 							value={form.interviewNotes}
+						/>
+						<FieldError
+							id={getFieldErrorId("interviewNotes")}
+							message={fieldErrors.interviewNotes}
 						/>
 					</div>
 				</section>
@@ -370,7 +429,7 @@ export default function EditEmployerJobPage({
 						취소
 					</Link>
 					<Button disabled={updateMutation.isPending} type="submit">
-						{updateMutation.isPending ? "수정 중" : "공고 수정"}
+						{updateMutation.isPending ? "수정 중…" : "공고 수정"}
 					</Button>
 				</div>
 			</form>
