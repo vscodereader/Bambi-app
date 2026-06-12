@@ -36,6 +36,9 @@ const getProfileInput = ({
 	phoneNumber: phoneNumber.trim() || undefined,
 });
 
+const hasProfileInput = (input: ReturnType<typeof getProfileInput>): boolean =>
+	input.displayName !== undefined || input.phoneNumber !== undefined;
+
 export default function OnboardingPage() {
 	const router = useRouter();
 	const utils = useQueryClient();
@@ -50,6 +53,9 @@ export default function OnboardingPage() {
 
 	const createJobSeekerMutation = useMutation(
 		orpc.bambi.onboarding.createJobSeekerProfile.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message);
+			},
 			onSuccess: async () => {
 				toast.success("프로필이 저장되었습니다.");
 				await utils.invalidateQueries({
@@ -62,6 +68,9 @@ export default function OnboardingPage() {
 
 	const createEmployerMutation = useMutation(
 		orpc.bambi.onboarding.createEmployerProfile.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message);
+			},
 			onSuccess: async () => {
 				toast.success("프로필이 저장되었습니다.");
 				await utils.invalidateQueries({
@@ -74,6 +83,9 @@ export default function OnboardingPage() {
 
 	const updateMyProfileMutation = useMutation(
 		orpc.bambi.onboarding.updateMyProfile.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message);
+			},
 			onSuccess: async () => {
 				toast.success("프로필이 저장되었습니다.");
 				await utils.invalidateQueries({
@@ -84,6 +96,8 @@ export default function OnboardingPage() {
 	);
 
 	const profile = mineQuery.data?.bambiProfile ?? null;
+	const profileInput = getProfileInput({ displayName, phoneNumber });
+	const canSubmitProfileInput = hasProfileInput(profileInput);
 	const isBusy =
 		createJobSeekerMutation.isPending ||
 		createEmployerMutation.isPending ||
@@ -101,15 +115,11 @@ export default function OnboardingPage() {
 	}, [profile, session.data?.user.name]);
 
 	const handleCreateJobSeeker = () => {
-		createJobSeekerMutation.mutate(
-			getProfileInput({ displayName, phoneNumber })
-		);
+		createJobSeekerMutation.mutate(profileInput);
 	};
 
 	const handleCreateEmployer = () => {
-		createEmployerMutation.mutate(
-			getProfileInput({ displayName, phoneNumber })
-		);
+		createEmployerMutation.mutate(profileInput);
 	};
 
 	const handleUpdateProfile = () => {
@@ -117,9 +127,12 @@ export default function OnboardingPage() {
 			return;
 		}
 
-		updateMyProfileMutation.mutate(
-			getProfileInput({ displayName, phoneNumber })
-		);
+		if (!canSubmitProfileInput) {
+			toast.error("표시명 또는 휴대폰 번호 중 하나를 입력해 주세요.");
+			return;
+		}
+
+		updateMyProfileMutation.mutate(profileInput);
 	};
 
 	if (session.isPending || (session.data?.user && mineQuery.isLoading)) {
@@ -161,11 +174,24 @@ export default function OnboardingPage() {
 			title="온보딩"
 		>
 			<section className="grid gap-5 border p-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
-				<div className="space-y-4">
+				<form
+					className="space-y-4"
+					onSubmit={(event) => {
+						event.preventDefault();
+
+						if (profile) {
+							handleUpdateProfile();
+							return;
+						}
+
+						handleCreateJobSeeker();
+					}}
+				>
 					<div className="grid gap-3 sm:grid-cols-2">
 						<div className="space-y-2">
 							<Label htmlFor="displayName">표시명</Label>
 							<Input
+								autoComplete="name"
 								id="displayName"
 								name="displayName"
 								onChange={(event) => setDisplayName(event.target.value)}
@@ -176,6 +202,7 @@ export default function OnboardingPage() {
 						<div className="space-y-2">
 							<Label htmlFor="phoneNumber">휴대폰 번호</Label>
 							<Input
+								autoComplete="tel"
 								id="phoneNumber"
 								inputMode="tel"
 								name="phoneNumber"
@@ -188,12 +215,12 @@ export default function OnboardingPage() {
 					</div>
 
 					{profile ? (
-						<Button disabled={isBusy} onClick={handleUpdateProfile}>
+						<Button disabled={isBusy || !canSubmitProfileInput} type="submit">
 							{updateMyProfileMutation.isPending ? "저장 중" : "프로필 저장"}
 						</Button>
 					) : (
 						<div className="flex flex-col gap-2 sm:flex-row">
-							<Button disabled={isBusy} onClick={handleCreateJobSeeker}>
+							<Button disabled={isBusy} type="submit">
 								{createJobSeekerMutation.isPending
 									? "저장 중"
 									: "구직자로 시작"}
@@ -201,13 +228,14 @@ export default function OnboardingPage() {
 							<Button
 								disabled={isBusy}
 								onClick={handleCreateEmployer}
+								type="button"
 								variant="outline"
 							>
 								{createEmployerMutation.isPending ? "저장 중" : "구인자로 시작"}
 							</Button>
 						</div>
 					)}
-				</div>
+				</form>
 
 				<aside className="border p-4">
 					<div className="flex flex-wrap items-center gap-2">
