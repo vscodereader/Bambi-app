@@ -26,7 +26,13 @@
       "!**/.svelte-kit",
       "!**/wrangler.jsonc",
       "!**/.source",
-      "!**/convex/_generated"
+      "!**/convex/_generated",
+      "!**/.agents",
+      "!**/.codex",
+      "!**/.claude",
+      "!**/.gemini",
+      "!**/android",
+      "!**/ios/Pods"
     ]
   },
   "formatter": {
@@ -80,5 +86,17 @@
       "tailwindDirectives": true
     }
   },
+  "overrides": [
+    {
+      "includes": ["apps/native/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noGlobalDirnameFilename": "off"
+          }
+        }
+      }
+    }
+  ],
   "extends": ["ultracite/biome/core", "ultracite/biome/next", "ultracite/biome/react"]
 }
