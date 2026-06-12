@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the first backend foundation for Bambi: domain schema, policy helpers, and oRPC routers for job posts, chats, interviews, contact consent, reports, and admin moderation.
+**Goal:** Build the first backend foundation for Bambi: Better Auth organization support, Bambi domain schema, policy helpers, and oRPC routers for organization-owned job posts, chats, interviews, contact consent, reports, and admin moderation.
 
-**Architecture:** Keep this first implementation backend-only so the product domain is testable before UI work. Better Auth remains responsible for account identity, sessions, cookies, and future auth plugins such as phone number or admin user management. Bambi-specific authorization lives in API services: pure business rules in `packages/api/src/services/bambi-policy.ts`, request/user authorization helpers in `packages/api/src/services/bambi-authz.ts`, database tables in `packages/db/src/schema/bambi.ts`, and oRPC routers under `packages/api/src/routers/bambi/`.
+**Architecture:** Keep this first implementation backend-only so the product domain is testable before UI work. Better Auth remains responsible for account identity, sessions, cookies, organization membership, invitations, and organization teams. Bambi-specific authorization lives in API services: pure business rules in `packages/api/src/services/bambi-policy.ts`, request/user authorization helpers in `packages/api/src/services/bambi-authz.ts`, product-specific organization verification tables in `packages/db/src/schema/bambi.ts`, and oRPC routers under `packages/api/src/routers/bambi/`.
 
 **Tech Stack:** TypeScript, pnpm workspaces, Turborepo, Drizzle ORM with PostgreSQL, Better Auth session context, oRPC, Zod, Vitest, Ultracite/Biome.
 
@@ -17,10 +17,11 @@ This plan implements the backend domain foundation only.
 Included:
 
 - Vitest setup for domain tests.
+- Better Auth organization plugin with teams enabled.
 - Bambi database schema.
 - Better Auth and Bambi authorization boundary.
-- Policy helpers for visibility, contact reveal, chat eligibility, and moderation status.
-- Authorization helpers for profile, role, employer ownership, chat participant, and admin checks.
+- Policy helpers for organization-based visibility, contact reveal, chat eligibility, and moderation status.
+- Authorization helpers for Bambi profile, organization membership, team membership, chat participant, and admin checks.
 - Job post router.
 - Chat, interview, and contact consent router.
 - Report and admin moderation router.
@@ -35,14 +36,19 @@ Excluded from this plan:
 - Video chat.
 - Payment or paid placement.
 - External phone, business, or adult verification provider integrations.
+- Dynamic access-control customization beyond the default owner/admin/member organization roles.
 
 ## File Structure
 
 - Create `packages/db/src/schema/bambi.ts`: Bambi domain tables, enums, relations, and shared enum values.
 - Modify `packages/db/src/schema/index.ts`: export Bambi schema.
+- Modify `packages/auth/src/index.ts`: add Better Auth organization plugin with teams enabled.
+- Modify `apps/web/src/lib/auth-client.ts`: add Better Auth organization client plugin with teams enabled.
+- Modify `apps/native/lib/auth-client.ts`: add Better Auth organization client plugin with teams enabled.
+- Modify `packages/db/src/schema/auth.ts`: update through Better Auth CLI schema generation after adding the plugin.
 - Create `packages/api/src/services/bambi-policy.ts`: pure policy functions used by routers and tests.
 - Create `packages/api/src/services/bambi-policy.test.ts`: tests for policy decisions.
-- Create `packages/api/src/services/bambi-authz.ts`: reusable authorization helpers built on Better Auth session user IDs and Bambi domain tables.
+- Create `packages/api/src/services/bambi-authz.ts`: reusable authorization helpers built on Better Auth session user IDs, Better Auth organization membership, Better Auth teams, and Bambi domain tables.
 - Create `packages/api/src/routers/bambi/jobs.ts`: job post creation, listing, detail, update, and status operations.
 - Create `packages/api/src/routers/bambi/chats.ts`: chat room creation, messages, interview proposals, schedule state changes, and contact reveal consent.
 - Create `packages/api/src/routers/bambi/moderation.ts`: reports and admin moderation operations.
@@ -89,17 +95,21 @@ Use Better Auth for:
 - Signing users in and out.
 - Reading the current session in `createContext`.
 - Cookie, CSRF, and trusted origin handling.
+- Employer organizations.
+- Organization members, invitations, and active organization.
+- Organization teams for branch, department, or venue-level subdivisions.
 - Future phone verification via the Better Auth phone number plugin.
 - Future platform-level admin user management via the Better Auth admin plugin if needed.
 
-This plan does not modify `packages/auth/src/index.ts` or add Better Auth plugins. Adding the Better Auth phone number plugin or admin plugin requires a separate auth integration plan because plugin schema changes must be generated or migrated through the Better Auth CLI.
+This plan modifies `packages/auth/src/index.ts` to add the Better Auth organization plugin with teams enabled. Re-run the Better Auth CLI after adding the plugin because plugin schema changes must be generated or migrated through the Better Auth CLI. Phone number and admin plugins remain separate follow-up integrations.
 
 Use Bambi domain tables and API helpers for:
 
 - Job seeker, employer, and admin product roles.
 - Account status inside the Bambi product: `active`, `warned`, `suspended`.
-- Employer business or venue verification.
-- Whether a user can create a post, start a chat, send a message, reveal contact details, or perform moderation.
+- Employer organization business or venue verification.
+- Whether a member can create a post for an organization or team.
+- Whether a user can start a chat, send a message, reveal contact details, or perform moderation.
 - Audit logging for product moderation actions.
 
 In this foundation plan, `bambiProfile.isPhoneVerified` is the product-level gate used by Bambi APIs. When the Better Auth phone number plugin is introduced, the integration plan must either sync Better Auth's verified phone state into `bambiProfile.isPhoneVerified` or replace the Bambi gate with a typed helper that reads Better Auth's phone verification field directly.
@@ -107,6 +117,27 @@ In this foundation plan, `bambiProfile.isPhoneVerified` is the product-level gat
 Do not rely on client-provided role, verification, or account status values. Routers must derive the user ID from `context.session.user.id`, then load Bambi profile and ownership data from the database.
 
 Do not store Bambi role, employer verification, or product suspension only inside the Better Auth session cookie. Better Auth custom session fields may not be present in every cache strategy, and product authorization needs fresh database state for moderation-sensitive actions.
+
+## Employer Organization Model
+
+Map Bambi employer concepts to Better Auth organization features like this:
+
+- Better Auth `organization`: employer business, venue group, or store group.
+- Better Auth `member`: user membership inside an employer organization.
+- Better Auth member roles: `owner` for representative, `admin` for manager, `member` for staff.
+- Better Auth `team`: branch, department, venue, or internal hiring unit.
+- Better Auth `teamMember`: staff assignment to a branch or department.
+- Bambi `employerOrganizationProfile`: product-specific verification, public display metadata, and moderation state for the organization.
+- Bambi `employerTeamProfile`: optional product-specific metadata for a team.
+- Bambi `jobPost`: belongs to an organization, optionally belongs to a team, and records the user who created it.
+
+MVP posting permissions:
+
+- Organization `owner` and `admin` can create posts for the whole organization and any team under it.
+- Organization `member` can create posts only for teams they belong to.
+- If no team is selected, a `member` cannot create an organization-wide post.
+- Organization verification controls badge and default listing priority.
+- Team verification is optional and can override display metadata, but does not replace organization verification in the MVP.
 
 ---
 
@@ -459,7 +490,158 @@ git commit -m "test: add bambi policy coverage"
 
 ---
 
-### Task 2: Add Bambi Database Schema
+### Task 2: Enable Better Auth Organizations and Teams
+
+**Files:**
+
+- Modify: `packages/auth/src/index.ts`
+- Modify: `apps/web/src/lib/auth-client.ts`
+- Modify: `apps/native/lib/auth-client.ts`
+- Modify: `packages/db/src/schema/auth.ts`
+
+- [ ] **Step 1: Add the server organization plugin**
+
+Modify `packages/auth/src/index.ts`:
+
+```ts
+import { createDb } from "@bambi-app/db";
+import * as schema from "@bambi-app/db/schema/auth";
+import { env } from "@bambi-app/env/server";
+import { expo } from "@better-auth/expo";
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { organization } from "better-auth/plugins";
+
+export function createAuth() {
+	const db = createDb();
+
+	return betterAuth({
+		database: drizzleAdapter(db, {
+			provider: "pg",
+
+			schema,
+		}),
+		trustedOrigins: [
+			env.CORS_ORIGIN,
+			"bambi-app://",
+			"exp://",
+			"http://localhost:8081",
+		],
+		emailAndPassword: {
+			enabled: true,
+		},
+		secret: env.BETTER_AUTH_SECRET,
+		baseURL: env.BETTER_AUTH_URL,
+		advanced: {
+			defaultCookieAttributes: {
+				sameSite: "none",
+				secure: true,
+				httpOnly: true,
+			},
+		},
+		plugins: [
+			expo(),
+			organization({
+				teams: {
+					enabled: true,
+					allowRemovingAllTeams: false,
+				},
+			}),
+		],
+	});
+}
+
+export const auth = createAuth();
+```
+
+- [ ] **Step 2: Add the web organization client plugin**
+
+Modify `apps/web/src/lib/auth-client.ts`:
+
+```ts
+import { env } from "@bambi-app/env/web";
+import { createAuthClient } from "better-auth/react";
+import { organizationClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+	baseURL: env.NEXT_PUBLIC_SERVER_URL,
+	plugins: [
+		organizationClient({
+			teams: {
+				enabled: true,
+			},
+		}),
+	],
+});
+```
+
+- [ ] **Step 3: Add the native organization client plugin**
+
+Modify `apps/native/lib/auth-client.ts`:
+
+```ts
+import { env } from "@bambi-app/env/native";
+import { expoClient } from "@better-auth/expo/client";
+import { createAuthClient } from "better-auth/react";
+import { organizationClient } from "better-auth/client/plugins";
+import Constants from "expo-constants";
+import * as SecureStore from "expo-secure-store";
+
+export const authClient = createAuthClient({
+	baseURL: env.EXPO_PUBLIC_SERVER_URL,
+	plugins: [
+		expoClient({
+			scheme: Constants.expoConfig?.scheme as string,
+			storagePrefix: Constants.expoConfig?.scheme as string,
+			storage: SecureStore,
+		}),
+		organizationClient({
+			teams: {
+				enabled: true,
+			},
+		}),
+	],
+});
+```
+
+- [ ] **Step 4: Generate Better Auth organization schema**
+
+Run:
+
+```bash
+pnpm dlx @better-auth/cli@latest generate --config packages/auth/src/index.ts
+```
+
+Expected: Better Auth updates the auth schema to include organization, member, invitation, team, and team member models. Keep the generated Drizzle schema in `packages/db/src/schema/auth.ts`.
+
+- [ ] **Step 5: Verify the auth endpoint still responds**
+
+Start the server if it is not running:
+
+```bash
+pnpm run dev:server
+```
+
+Then call:
+
+```bash
+curl http://localhost:3000/api/auth/ok
+```
+
+Expected: response includes `"status":"ok"`.
+
+- [ ] **Step 6: Commit organization auth integration**
+
+Run:
+
+```bash
+git add packages/auth/src/index.ts apps/web/src/lib/auth-client.ts apps/native/lib/auth-client.ts packages/db/src/schema/auth.ts
+git commit -m "feat: enable employer organizations"
+```
+
+---
+
+### Task 3: Add Bambi Database Schema
 
 **Files:**
 
@@ -552,14 +734,12 @@ export const bambiProfile = pgTable(
 	],
 );
 
-export const employerProfile = pgTable(
-	"employer_profile",
+export const employerOrganizationProfile = pgTable(
+	"employer_organization_profile",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		venueName: text("venue_name").notNull(),
+		organizationId: text("organization_id").notNull(),
+		displayName: text("display_name").notNull(),
 		businessRegistrationNumber: text("business_registration_number"),
 		verificationStatus: employerVerificationStatus("verification_status")
 			.default("none")
@@ -572,10 +752,32 @@ export const employerProfile = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		uniqueIndex("employer_profile_user_id_idx").on(table.userId),
-		index("employer_profile_verification_status_idx").on(
+		uniqueIndex("employer_organization_profile_org_id_idx").on(
+			table.organizationId,
+		),
+		index("employer_organization_profile_verification_status_idx").on(
 			table.verificationStatus,
 		),
+	],
+);
+
+export const employerTeamProfile = pgTable(
+	"employer_team_profile",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		organizationId: text("organization_id").notNull(),
+		teamId: text("team_id").notNull(),
+		displayName: text("display_name").notNull(),
+		region: text("region"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("employer_team_profile_team_id_idx").on(table.teamId),
+		index("employer_team_profile_org_id_idx").on(table.organizationId),
 	],
 );
 
@@ -583,9 +785,11 @@ export const jobPost = pgTable(
 	"job_post",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
-		employerId: uuid("employer_id")
+		organizationId: text("organization_id").notNull(),
+		teamId: text("team_id"),
+		createdByUserId: text("created_by_user_id")
 			.notNull()
-			.references(() => employerProfile.id, { onDelete: "cascade" }),
+			.references(() => user.id, { onDelete: "cascade" }),
 		status: jobPostStatus("status").default("pending_review").notNull(),
 		industryCategory: text("industry_category").notNull(),
 		region: text("region").notNull(),
@@ -605,7 +809,9 @@ export const jobPost = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		index("job_post_employer_id_idx").on(table.employerId),
+		index("job_post_organization_id_idx").on(table.organizationId),
+		index("job_post_team_id_idx").on(table.teamId),
+		index("job_post_created_by_user_id_idx").on(table.createdByUserId),
 		index("job_post_status_idx").on(table.status),
 		index("job_post_discovery_idx").on(
 			table.status,
@@ -623,6 +829,8 @@ export const chatRoom = pgTable(
 		jobPostId: uuid("job_post_id")
 			.notNull()
 			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id").notNull(),
+		teamId: text("team_id"),
 		employerUserId: text("employer_user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
@@ -641,6 +849,8 @@ export const chatRoom = pgTable(
 			table.jobPostId,
 			table.jobSeekerUserId,
 		),
+		index("chat_room_organization_id_idx").on(table.organizationId),
+		index("chat_room_team_id_idx").on(table.teamId),
 		index("chat_room_employer_user_id_idx").on(table.employerUserId),
 		index("chat_room_job_seeker_user_id_idx").on(table.jobSeekerUserId),
 	],
@@ -817,22 +1027,24 @@ export const bambiProfileRelations = relations(bambiProfile, ({ one }) => ({
 	}),
 }));
 
-export const employerProfileRelations = relations(
-	employerProfile,
-	({ one, many }) => ({
-		user: one(user, {
-			fields: [employerProfile.userId],
-			references: [user.id],
-		}),
-		jobPosts: many(jobPost),
+export const employerOrganizationProfileRelations = relations(
+	employerOrganizationProfile,
+	({ many }) => ({
+		teamProfiles: many(employerTeamProfile),
 	}),
 );
 
-export const jobPostRelations = relations(jobPost, ({ one, many }) => ({
-	employer: one(employerProfile, {
-		fields: [jobPost.employerId],
-		references: [employerProfile.id],
+export const employerTeamProfileRelations = relations(
+	employerTeamProfile,
+	({ one }) => ({
+		organizationProfile: one(employerOrganizationProfile, {
+			fields: [employerTeamProfile.organizationId],
+			references: [employerOrganizationProfile.organizationId],
+		}),
 	}),
+);
+
+export const jobPostRelations = relations(jobPost, ({ many }) => ({
 	chatRooms: many(chatRoom),
 }));
 ```
@@ -869,7 +1081,7 @@ git commit -m "feat: add bambi domain schema"
 
 ---
 
-### Task 3: Add Bambi Authorization Helpers
+### Task 4: Add Bambi Authorization Helpers
 
 **Files:**
 
@@ -881,10 +1093,10 @@ Create `packages/api/src/services/bambi-authz.ts`:
 
 ```ts
 import { db } from "@bambi-app/db";
+import { member, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	bambiProfile,
 	chatRoom,
-	employerProfile,
 	type accountStatus,
 	type bambiUserRole,
 } from "@bambi-app/db/schema/bambi";
@@ -905,6 +1117,12 @@ export interface BambiAccessProfile {
 	role: BambiRole;
 	status: AccountStatus;
 	isPhoneVerified: boolean;
+}
+
+interface EmployerPostingAccessInput {
+	organizationId: string;
+	teamId?: string | null;
+	session: SessionLike | null;
 }
 
 export const requireSessionUserId = (session: SessionLike | null): string => {
@@ -977,7 +1195,11 @@ export const requireAdminProfile = async (
 	return profile;
 };
 
-export const requireEmployerProfile = async (session: SessionLike | null) => {
+export const requireEmployerPostingAccess = async ({
+	organizationId,
+	teamId,
+	session,
+}: EmployerPostingAccessInput): Promise<BambiAccessProfile> => {
 	const profile = await requireActiveBambiProfile(session);
 
 	if (profile.role !== "employer" && profile.role !== "admin") {
@@ -986,19 +1208,51 @@ export const requireEmployerProfile = async (session: SessionLike | null) => {
 		});
 	}
 
-	const [employer] = await db
+	const [organizationMember] = await db
 		.select()
-		.from(employerProfile)
-		.where(eq(employerProfile.userId, profile.userId))
+		.from(member)
+		.where(
+			and(
+				eq(member.userId, profile.userId),
+				eq(member.organizationId, organizationId),
+			),
+		)
 		.limit(1);
 
-	if (!employer) {
+	if (!organizationMember) {
 		throw new ORPCError("FORBIDDEN", {
-			message: "Employer profile is required.",
+			message: "Employer organization membership is required.",
 		});
 	}
 
-	return employer;
+	if (organizationMember.role === "owner" || organizationMember.role === "admin") {
+		return profile;
+	}
+
+	if (!teamId) {
+		throw new ORPCError("FORBIDDEN", {
+			message: "Staff members can create posts only for assigned teams.",
+		});
+	}
+
+	const [assignedTeam] = await db
+		.select()
+		.from(teamMember)
+		.where(
+			and(
+				eq(teamMember.userId, profile.userId),
+				eq(teamMember.teamId, teamId),
+			),
+		)
+		.limit(1);
+
+	if (!assignedTeam) {
+		throw new ORPCError("FORBIDDEN", {
+			message: "Team membership is required.",
+		});
+	}
+
+	return profile;
 };
 
 export const requireChatParticipant = async (
@@ -1050,7 +1304,7 @@ git commit -m "feat: add bambi authorization helpers"
 
 ---
 
-### Task 4: Add Job Post Router
+### Task 5: Add Job Post Router
 
 **Files:**
 
@@ -1064,13 +1318,16 @@ Create `packages/api/src/routers/bambi/jobs.ts`:
 
 ```ts
 import { db } from "@bambi-app/db";
-import { employerProfile, jobPost } from "@bambi-app/db/schema/bambi";
+import {
+	employerOrganizationProfile,
+	jobPost,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
-import { requireEmployerProfile } from "../../services/bambi-authz";
+import { requireEmployerPostingAccess } from "../../services/bambi-authz";
 import {
 	type EmployerVerificationStatus,
 	type JobPostStatus,
@@ -1079,6 +1336,8 @@ import {
 } from "../../services/bambi-policy";
 
 const jobPostInput = z.object({
+	organizationId: z.string().min(1),
+	teamId: z.string().min(1).optional(),
 	title: z.string().min(2).max(80),
 	industryCategory: z.string().min(1).max(80),
 	region: z.string().min(1).max(80),
@@ -1128,14 +1387,21 @@ export const jobsRouter = {
 				payAmount: jobPost.payAmount,
 				payUnit: jobPost.payUnit,
 				status: jobPost.status,
-				employerVerificationStatus: employerProfile.verificationStatus,
+				employerVerificationStatus:
+					employerOrganizationProfile.verificationStatus,
 				publishedAt: jobPost.publishedAt,
 			})
 			.from(jobPost)
-			.innerJoin(employerProfile, eq(jobPost.employerId, employerProfile.id))
+			.innerJoin(
+				employerOrganizationProfile,
+				eq(
+					jobPost.organizationId,
+					employerOrganizationProfile.organizationId,
+				),
+			)
 			.where(and(...filters))
 			.orderBy(
-				sql`case when ${employerProfile.verificationStatus} = 'verified' then 0 else 1 end`,
+				sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
 				desc(jobPost.publishedAt),
 			)
 			.limit(input.limit);
@@ -1155,14 +1421,35 @@ export const jobsRouter = {
 			}
 
 			return post;
-		}),
+	}),
 
 	create: protectedProcedure.input(jobPostInput).handler(async ({ context, input }) => {
-		const employer = await requireEmployerProfile(context.session);
+		const actor = await requireEmployerPostingAccess({
+			organizationId: input.organizationId,
+			teamId: input.teamId,
+			session: context.session,
+		});
+		const [organizationProfile] = await db
+			.select()
+			.from(employerOrganizationProfile)
+			.where(
+				eq(
+					employerOrganizationProfile.organizationId,
+					input.organizationId,
+				),
+			)
+			.limit(1);
+
+		if (!organizationProfile) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "Employer organization profile is required.",
+			});
+		}
+
 		const riskDetected = hasRiskFlags(input);
 		const status = getInitialJobPostStatus({
 			employerVerificationStatus:
-				employer.verificationStatus as EmployerVerificationStatus,
+				organizationProfile.verificationStatus as EmployerVerificationStatus,
 			hasRiskFlags: riskDetected,
 		});
 		const now = new Date();
@@ -1171,7 +1458,7 @@ export const jobsRouter = {
 			.insert(jobPost)
 			.values({
 				...input,
-				employerId: employer.id,
+				createdByUserId: actor.userId,
 				status,
 				riskFlags: riskDetected ? ["risky_term"] : [],
 				publishedAt: status === "published" ? now : null,
@@ -1189,27 +1476,53 @@ export const jobsRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			const employer = await requireEmployerProfile(context.session);
+			const actor = await requireEmployerPostingAccess({
+				organizationId: input.data.organizationId,
+				teamId: input.data.teamId,
+				session: context.session,
+			});
 			const [existing] = await db
 				.select()
 				.from(jobPost)
-				.where(and(eq(jobPost.id, input.id), eq(jobPost.employerId, employer.id)))
+				.where(
+					and(
+						eq(jobPost.id, input.id),
+						eq(jobPost.organizationId, input.data.organizationId),
+					),
+				)
 				.limit(1);
 
 			if (!existing) {
 				throw new ORPCError("NOT_FOUND");
 			}
+			const [organizationProfile] = await db
+				.select()
+				.from(employerOrganizationProfile)
+				.where(
+					eq(
+						employerOrganizationProfile.organizationId,
+						input.data.organizationId,
+					),
+				)
+				.limit(1);
+
+			if (!organizationProfile) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "Employer organization profile is required.",
+				});
+			}
 
 			const status = getUpdatedJobPostStatus({
 				currentStatus: existing.status as JobPostStatus,
 				employerVerificationStatus:
-					employer.verificationStatus as EmployerVerificationStatus,
+					organizationProfile.verificationStatus as EmployerVerificationStatus,
 				publicContentChanged: true,
 			});
 			const [updated] = await db
 				.update(jobPost)
 				.set({
 					...input.data,
+					createdByUserId: actor.userId,
 					status,
 					publishedAt:
 						status === "published" && !existing.publishedAt
@@ -1283,7 +1596,7 @@ git commit -m "feat: add bambi job post api"
 
 ---
 
-### Task 5: Add Chat, Interview, and Contact Consent Router
+### Task 6: Add Chat, Interview, and Contact Consent Router
 
 **Files:**
 
@@ -1300,7 +1613,6 @@ import {
 	chatMessage,
 	chatRoom,
 	contactRevealConsent,
-	employerProfile,
 	interviewSchedule,
 	jobPost,
 	userBlock,
@@ -1327,10 +1639,11 @@ export const chatsRouter = {
 				.select({
 					id: jobPost.id,
 					status: jobPost.status,
-					employerUserId: employerProfile.userId,
+					organizationId: jobPost.organizationId,
+					teamId: jobPost.teamId,
+					employerUserId: jobPost.createdByUserId,
 				})
 				.from(jobPost)
-				.innerJoin(employerProfile, eq(jobPost.employerId, employerProfile.id))
 				.where(eq(jobPost.id, input.jobPostId))
 				.limit(1);
 
@@ -1369,6 +1682,8 @@ export const chatsRouter = {
 				.insert(chatRoom)
 				.values({
 					jobPostId: input.jobPostId,
+					organizationId: post.organizationId,
+					teamId: post.teamId,
 					employerUserId: post.employerUserId,
 					jobSeekerUserId: profile.userId,
 				})
@@ -1603,7 +1918,7 @@ git commit -m "feat: add bambi chat interview api"
 
 ---
 
-### Task 6: Add Reports and Admin Moderation Router
+### Task 7: Add Reports and Admin Moderation Router
 
 **Files:**
 
@@ -1831,11 +2146,11 @@ git commit -m "feat: add bambi moderation api"
 
 ---
 
-### Task 7: Final Verification
+### Task 8: Final Verification
 
 **Files:**
 
-- Verify all files created or modified in Tasks 1-6.
+- Verify all files created or modified in Tasks 1-7.
 
 - [ ] **Step 1: Run full verification**
 
