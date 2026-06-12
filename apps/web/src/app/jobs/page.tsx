@@ -224,17 +224,20 @@ export default function JobsPage() {
 				<div className="space-y-2">
 					<Label htmlFor="minPayAmount">최소 급여</Label>
 					<Input
+						className="h-10 text-sm md:h-8 md:text-xs"
 						id="minPayAmount"
 						inputMode="numeric"
 						min="1"
 						name="minPayAmount"
 						onChange={(event) => setMinPayAmount(event.target.value)}
-						placeholder="예: 12000..."
+						placeholder="예: 12000…"
 						type="number"
 						value={minPayAmount}
 					/>
 				</div>
-				<Button type="submit">필터 적용</Button>
+				<Button className="h-10 text-sm md:h-8 md:text-xs" type="submit">
+					필터 적용
+				</Button>
 			</form>
 
 			{jobsContent}

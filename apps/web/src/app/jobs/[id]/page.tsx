@@ -37,16 +37,21 @@ const getJobStatusTone = (
 	return "default";
 };
 
-const getChatStartErrorMessage = (message: string): string => {
-	if (message.includes("FORBIDDEN")) {
+const getErrorCode = (error: Error): string | undefined =>
+	"code" in error && typeof error.code === "string" ? error.code : undefined;
+
+const getChatStartErrorMessage = (error: Error): string => {
+	const errorCode = getErrorCode(error);
+
+	if (errorCode === "FORBIDDEN") {
 		return "채팅을 시작할 수 없습니다. 로그인, 휴대폰 인증, 계정 상태를 확인해 주세요.";
 	}
 
-	if (message.includes("UNAUTHORIZED")) {
+	if (errorCode === "UNAUTHORIZED") {
 		return "로그인 후 채팅을 시작할 수 있습니다.";
 	}
 
-	return message;
+	return error.message;
 };
 
 export default function JobDetailPage({
@@ -62,7 +67,7 @@ export default function JobDetailPage({
 	const startChatMutation = useMutation(
 		orpc.bambi.chats.startFromJobPost.mutationOptions({
 			onError: (error) => {
-				toast.error(getChatStartErrorMessage(error.message));
+				toast.error(getChatStartErrorMessage(error));
 			},
 			onSuccess: (room) => {
 				router.push(`/chats/${room.id}` as Route);
@@ -78,6 +83,28 @@ export default function JobDetailPage({
 
 	if (jobQuery.isLoading) {
 		return <Loader />;
+	}
+
+	if (jobQuery.isError && getErrorCode(jobQuery.error) === "NOT_FOUND") {
+		return (
+			<PageShell
+				description="삭제되었거나 공개 상태가 아닌 공고입니다."
+				title="공고 상세"
+			>
+				<EmptyState
+					action={
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href="/jobs"
+						>
+							공고 목록으로
+						</Link>
+					}
+					description="공개된 공고만 상세 내용을 확인할 수 있습니다."
+					title="공고를 찾을 수 없습니다"
+				/>
+			</PageShell>
+		);
 	}
 
 	if (jobQuery.isError) {
@@ -183,7 +210,7 @@ export default function JobDetailPage({
 						onClick={handleStartChat}
 						type="button"
 					>
-						{startChatMutation.isPending ? "채팅 시작 중..." : "채팅 시작"}
+						{startChatMutation.isPending ? "채팅 시작 중…" : "채팅 시작"}
 					</Button>
 					<Link
 						className={buttonVariants({
