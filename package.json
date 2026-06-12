@@ -1,0 +1,38 @@
+{
+  "name": "bambi-app",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:native": "turbo -F native dev",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev",
+    "db:push": "turbo -F @bambi-app/db db:push",
+    "db:studio": "turbo -F @bambi-app/db db:studio",
+    "db:generate": "turbo -F @bambi-app/db db:generate",
+    "db:migrate": "turbo -F @bambi-app/db db:migrate",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "dependencies": {
+    "@bambi-app/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@bambi-app/config": "workspace:*",
+    "@biomejs/biome": "2.4.16",
+    "@types/node": "^22.13.14",
+    "lefthook": "latest",
+    "turbo": "^2.9.16",
+    "typescript": "catalog:",
+    "ultracite": "7.8.3"
+  },
+  "packageManager": "pnpm@11.0.0-rc.5"
+}

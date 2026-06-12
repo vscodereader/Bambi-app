@@ -1,0 +1,37 @@
+{
+  "name": "server",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsdown",
+    "check-types": "tsc -b",
+    "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/devtools": "^0.0.2",
+    "@ai-sdk/google": "^3.0.1",
+    "@bambi-app/api": "workspace:*",
+    "@bambi-app/auth": "workspace:*",
+    "@bambi-app/db": "workspace:*",
+    "@bambi-app/env": "workspace:*",
+    "@fastify/cors": "^11.0.1",
+    "@orpc/openapi": "catalog:",
+    "@orpc/server": "catalog:",
+    "@orpc/zod": "catalog:",
+    "ai": "catalog:",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "evlog": "catalog:",
+    "fastify": "^5.3.3",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@bambi-app/config": "workspace:*",
+    "@types/node": "^22.13.14",
+    "tsdown": "^0.21.9",
+    "tsx": "^4.19.2",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "scheme": "bambi-app",
+    "userInterfaceStyle": "automatic",
+    "orientation": "default",
+    "web": {
+      "bundler": "metro"
+    },
+    "name": "bambi-app",
+    "slug": "bambi-app",
+    "plugins": ["expo-font"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
