@@ -174,14 +174,17 @@ export default function ChatDetailPage({
 
 	const handleProposeInterview = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
+		const formData = new FormData(event.currentTarget);
+		const scheduledAtValue = String(formData.get("scheduledAt") ?? "");
+		const locationNoteValue = String(formData.get("locationNote") ?? "");
 
-		if (!scheduledAt) {
+		if (!scheduledAtValue) {
 			setInterviewError(null);
 			setScheduledAtError("면접 일시를 선택해 주세요.");
 			return;
 		}
 
-		const scheduledDate = parseKstDatetimeLocal(scheduledAt);
+		const scheduledDate = parseKstDatetimeLocal(scheduledAtValue);
 
 		if (!scheduledDate) {
 			setInterviewError(null);
@@ -197,7 +200,7 @@ export default function ChatDetailPage({
 
 		proposeInterviewMutation.mutate({
 			chatRoomId: id,
-			locationNote: locationNote.trim() || undefined,
+			locationNote: locationNoteValue.trim() || undefined,
 			scheduledAt: scheduledDate.toISOString(),
 		});
 	};
