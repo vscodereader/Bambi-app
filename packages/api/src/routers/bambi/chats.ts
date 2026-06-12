@@ -8,7 +8,7 @@ import {
 	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -205,6 +205,56 @@ export const chatsRouter = {
 			)
 			.orderBy(desc(chatRoom.updatedAt));
 	}),
+
+	getById: protectedProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.handler(async ({ context, input }) => {
+			const { profile, room } = await requireChatParticipant(
+				input.id,
+				context.session
+			);
+
+			await throwIfChatBlocked({
+				actorUserId: profile.userId,
+				employerUserId: room.employerUserId,
+				isBlocked: room.isBlocked,
+				jobSeekerUserId: room.jobSeekerUserId,
+			});
+
+			const [post] = await db
+				.select({
+					id: jobPost.id,
+					title: jobPost.title,
+					industryCategory: jobPost.industryCategory,
+					region: jobPost.region,
+					payAmount: jobPost.payAmount,
+					payUnit: jobPost.payUnit,
+					status: jobPost.status,
+				})
+				.from(jobPost)
+				.where(eq(jobPost.id, room.jobPostId))
+				.limit(1);
+
+			const messages = await db
+				.select()
+				.from(chatMessage)
+				.where(eq(chatMessage.chatRoomId, room.id))
+				.orderBy(asc(chatMessage.createdAt));
+
+			const schedules = await db
+				.select()
+				.from(interviewSchedule)
+				.where(eq(interviewSchedule.chatRoomId, room.id))
+				.orderBy(desc(interviewSchedule.createdAt));
+
+			return {
+				currentUserId: profile.userId,
+				jobPost: post ?? null,
+				messages,
+				room,
+				schedules,
+			};
+		}),
 
 	sendMessage: protectedProcedure
 		.input(sendMessageInput)

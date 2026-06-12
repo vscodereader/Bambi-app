@@ -1,14 +1,18 @@
 import { db } from "@bambi-app/db";
+import { member, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	employerOrganizationProfile,
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
-import { requireEmployerPostingAccess } from "../../services/bambi-authz";
+import {
+	requireActiveBambiProfile,
+	requireEmployerPostingAccess,
+} from "../../services/bambi-authz";
 import {
 	type EmployerVerificationStatus,
 	getInitialJobPostStatus,
@@ -97,6 +101,93 @@ export const jobsRouter = {
 			if (post?.status !== "published") {
 				throw new ORPCError("NOT_FOUND");
 			}
+
+			return post;
+		}),
+
+	listMine: protectedProcedure.handler(async ({ context }) => {
+		const profile = await requireActiveBambiProfile(context.session);
+
+		if (profile.role === "job_seeker") {
+			throw new ORPCError("FORBIDDEN");
+		}
+
+		const organizationMemberships = await db
+			.select({
+				organizationId: member.organizationId,
+				role: member.role,
+			})
+			.from(member)
+			.where(eq(member.userId, profile.userId));
+		const teamMemberships = await db
+			.select({ teamId: teamMember.teamId })
+			.from(teamMember)
+			.where(eq(teamMember.userId, profile.userId));
+		const manageableOrganizationIds = organizationMemberships
+			.filter(
+				(membership) =>
+					membership.role === "owner" || membership.role === "admin"
+			)
+			.map((membership) => membership.organizationId);
+		const assignedTeamIds = teamMemberships.map(
+			(membership) => membership.teamId
+		);
+		const accessFilters = [eq(jobPost.createdByUserId, profile.userId)];
+
+		if (manageableOrganizationIds.length > 0) {
+			accessFilters.push(
+				inArray(jobPost.organizationId, manageableOrganizationIds)
+			);
+		}
+
+		if (assignedTeamIds.length > 0) {
+			accessFilters.push(inArray(jobPost.teamId, assignedTeamIds));
+		}
+
+		return await db
+			.select({
+				id: jobPost.id,
+				title: jobPost.title,
+				industryCategory: jobPost.industryCategory,
+				region: jobPost.region,
+				payAmount: jobPost.payAmount,
+				payUnit: jobPost.payUnit,
+				status: jobPost.status,
+				organizationId: jobPost.organizationId,
+				teamId: jobPost.teamId,
+				createdByUserId: jobPost.createdByUserId,
+				employerVerificationStatus:
+					employerOrganizationProfile.verificationStatus,
+				createdAt: jobPost.createdAt,
+				updatedAt: jobPost.updatedAt,
+			})
+			.from(jobPost)
+			.innerJoin(
+				employerOrganizationProfile,
+				eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+			)
+			.where(or(...accessFilters))
+			.orderBy(desc(jobPost.updatedAt));
+	}),
+
+	getEditableById: protectedProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.handler(async ({ context, input }) => {
+			const [post] = await db
+				.select()
+				.from(jobPost)
+				.where(eq(jobPost.id, input.id))
+				.limit(1);
+
+			if (!post) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			await requireEmployerPostingAccess({
+				organizationId: post.organizationId,
+				teamId: post.teamId,
+				session: context.session,
+			});
 
 			return post;
 		}),

@@ -13,6 +13,7 @@ import { protectedProcedure } from "../../index";
 import {
 	assertCanCreateBambiProfile,
 	assertCanManageEmployerProfile,
+	assertCanUpdateOwnBambiProfile,
 	type BambiProfileRole,
 	type OrganizationRole,
 } from "../../services/bambi-onboarding";
@@ -20,6 +21,10 @@ import {
 const profileInput = z.object({
 	displayName: z.string().min(1).max(80).optional(),
 	phoneNumber: z.string().min(3).max(30).optional(),
+});
+
+const profileUpdateInput = profileInput.extend({
+	role: z.enum(["job_seeker", "employer", "admin"]).optional(),
 });
 
 const organizationProfileInput = z.object({
@@ -172,6 +177,33 @@ export const onboardingRouter = {
 			employerTeamProfiles: teamProfiles,
 		};
 	}),
+
+	updateMyProfile: protectedProcedure
+		.input(profileUpdateInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			const [existingProfile] = await db
+				.select({ role: bambiProfile.role })
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, userId))
+				.limit(1);
+
+			assertCanUpdateOwnBambiProfile({
+				existingRole: existingProfile?.role,
+				requestedRole: input.role,
+			});
+
+			const [updatedProfile] = await db
+				.update(bambiProfile)
+				.set({
+					displayName: input.displayName,
+					phoneNumber: input.phoneNumber,
+				})
+				.where(eq(bambiProfile.userId, userId))
+				.returning();
+
+			return updatedProfile;
+		}),
 
 	createJobSeekerProfile: protectedProcedure
 		.input(profileInput)

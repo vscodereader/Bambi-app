@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
 	canRevealContact,
 	canStartChat,
+	getEmployerVerificationStatusLabel,
 	getInitialJobPostStatus,
+	getJobPostStatusLabel,
 	getUpdatedJobPostStatus,
 	shouldPrioritizeJobPost,
 } from "./bambi-policy";
@@ -146,5 +148,27 @@ describe("bambi policy", () => {
 				jobPostStatus: "published",
 			})
 		).toBe(false);
+	});
+
+	it("prioritizes only published posts from verified employers", () => {
+		expect(
+			shouldPrioritizeJobPost({
+				employerVerificationStatus: "verified",
+				jobPostStatus: "published",
+			})
+		).toBe(true);
+		expect(
+			shouldPrioritizeJobPost({
+				employerVerificationStatus: "verified",
+				jobPostStatus: "pending_review",
+			})
+		).toBe(false);
+	});
+
+	it("returns Korean labels for employer and job statuses", () => {
+		expect(getEmployerVerificationStatusLabel("verified")).toBe("인증 완료");
+		expect(getEmployerVerificationStatusLabel("pending")).toBe("인증 대기");
+		expect(getJobPostStatusLabel("published")).toBe("공개");
+		expect(getJobPostStatusLabel("pending_review")).toBe("검수 대기");
 	});
 });
