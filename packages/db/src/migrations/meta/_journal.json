@@ -8,6 +8,13 @@
       "when": 1781264891032,
       "tag": "0000_perfect_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781265406036,
+      "tag": "0001_striped_molecule_man",
+      "breakpoints": true
     }
   ]
 }

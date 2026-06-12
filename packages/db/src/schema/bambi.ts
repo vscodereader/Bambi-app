@@ -12,7 +12,7 @@ import {
 	uuid,
 } from "drizzle-orm/pg-core";
 
-import { user } from "./auth";
+import { organization, team, user } from "./auth";
 
 export const bambiUserRole = pgEnum("bambi_user_role", [
 	"job_seeker",
@@ -89,7 +89,9 @@ export const employerOrganizationProfile = pgTable(
 	"employer_organization_profile",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		organizationId: text("organization_id").notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
 		displayName: text("display_name").notNull(),
 		businessRegistrationNumber: text("business_registration_number"),
 		verificationStatus: employerVerificationStatus("verification_status")
@@ -116,8 +118,12 @@ export const employerTeamProfile = pgTable(
 	"employer_team_profile",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		organizationId: text("organization_id").notNull(),
-		teamId: text("team_id").notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		teamId: text("team_id")
+			.notNull()
+			.references(() => team.id, { onDelete: "cascade" }),
 		displayName: text("display_name").notNull(),
 		region: text("region"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -136,8 +142,12 @@ export const jobPost = pgTable(
 	"job_post",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		organizationId: text("organization_id").notNull(),
-		teamId: text("team_id"),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		teamId: text("team_id").references(() => team.id, {
+			onDelete: "set null",
+		}),
 		createdByUserId: text("created_by_user_id")
 			.notNull()
 			.references(() => user.id),
@@ -180,8 +190,12 @@ export const chatRoom = pgTable(
 		jobPostId: uuid("job_post_id")
 			.notNull()
 			.references(() => jobPost.id, { onDelete: "cascade" }),
-		organizationId: text("organization_id").notNull(),
-		teamId: text("team_id"),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		teamId: text("team_id").references(() => team.id, {
+			onDelete: "set null",
+		}),
 		employerUserId: text("employer_user_id")
 			.notNull()
 			.references(() => user.id),
