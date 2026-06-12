@@ -5,6 +5,7 @@ export const formatDateTime = (value: string | Date): string =>
 	new Intl.DateTimeFormat("ko-KR", {
 		dateStyle: "medium",
 		timeStyle: "short",
+		timeZone: "Asia/Seoul",
 	}).format(new Date(value));
 
 export const formatNullable = (value: null | string | undefined): string =>
