@@ -49,7 +49,7 @@ export default function AIScreen() {
 
 	useEffect(() => {
 		scrollViewRef.current?.scrollToEnd({ animated: true });
-	}, [messages]);
+	});
 
 	const onSubmit = () => {
 		const value = input.trim();
@@ -127,18 +127,18 @@ export default function AIScreen() {
 											{message.role === "user" ? "You" : "AI"}
 										</Text>
 										<View className="gap-1">
-											{message.parts.map((part, i) =>
+											{message.parts.map((part) =>
 												part.type === "text" ? (
 													<Text
 														className="text-foreground text-sm leading-relaxed"
-														key={`${message.id}-${i}`}
+														key={`${message.id}-${part.text}`}
 													>
 														{part.text}
 													</Text>
 												) : (
 													<Text
 														className="text-foreground text-sm leading-relaxed"
-														key={`${message.id}-${i}`}
+														key={`${message.id}-${JSON.stringify(part)}`}
 													>
 														{JSON.stringify(part)}
 													</Text>

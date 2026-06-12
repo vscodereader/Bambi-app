@@ -21,7 +21,7 @@ export default function AIPage() {
 
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, [messages]);
+	});
 
 	const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -53,14 +53,14 @@ export default function AIPage() {
 							<p className="mb-1 font-semibold text-sm">
 								{message.role === "user" ? "You" : "AI Assistant"}
 							</p>
-							{message.parts?.map((part, index) => {
+							{message.parts?.map((part) => {
 								if (part.type === "text") {
 									return (
 										<Streamdown
 											isAnimating={
 												status === "streaming" && message.role === "assistant"
 											}
-											key={index}
+											key={`${message.id}-${part.text}`}
 										>
 											{part.text}
 										</Streamdown>

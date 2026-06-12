@@ -6,7 +6,11 @@ dotenv.config({
 });
 
 export default defineConfig({
-	schema: "./src/schema",
+	schema: [
+		"./src/schema/auth.ts",
+		"./src/schema/bambi.ts",
+		"./src/schema/todo.ts",
+	],
 	out: "./src/migrations",
 	dialect: "postgresql",
 	dbCredentials: {

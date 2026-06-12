@@ -21,6 +21,13 @@ const TITLE_TEXT = `
 
 export default function Home() {
 	const healthCheck = useQuery(orpc.healthCheck.queryOptions());
+	let healthStatusText = "Disconnected";
+
+	if (healthCheck.isLoading) {
+		healthStatusText = "Checking...";
+	} else if (healthCheck.data) {
+		healthStatusText = "Connected";
+	}
 
 	return (
 		<div className="container mx-auto max-w-3xl px-4 py-2">
@@ -33,11 +40,7 @@ export default function Home() {
 							className={`h-2 w-2 rounded-full ${healthCheck.data ? "bg-green-500" : "bg-red-500"}`}
 						/>
 						<span className="text-muted-foreground text-sm">
-							{healthCheck.isLoading
-								? "Checking..."
-								: healthCheck.data
-									? "Connected"
-									: "Disconnected"}
+							{healthStatusText}
 						</span>
 					</div>
 				</section>

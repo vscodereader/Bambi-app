@@ -19,7 +19,13 @@ export default function Home() {
 	const mutedColor = useThemeColor("muted");
 	const successColor = useThemeColor("success");
 	const dangerColor = useThemeColor("danger");
-	const foregroundColor = useThemeColor("foreground");
+	let connectionLabel = "API Disconnected";
+
+	if (isLoading) {
+		connectionLabel = "Checking connection...";
+	} else if (isConnected) {
+		connectionLabel = "Connected to API";
+	}
 
 	return (
 		<Container className="p-6">
@@ -68,13 +74,7 @@ export default function Home() {
 							<Text className="mb-1 font-medium text-foreground">
 								ORPC Backend
 							</Text>
-							<Card.Description>
-								{isLoading
-									? "Checking connection..."
-									: isConnected
-										? "Connected to API"
-										: "API Disconnected"}
-							</Card.Description>
+							<Card.Description>{connectionLabel}</Card.Description>
 						</View>
 						{isLoading && (
 							<Ionicons color={mutedColor} name="hourglass-outline" size={20} />

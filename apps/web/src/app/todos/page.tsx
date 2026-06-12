@@ -60,6 +60,51 @@ export default function TodosPage() {
 		deleteMutation.mutate({ id });
 	};
 
+	let todoListContent = (
+		<ul className="space-y-2">
+			{todos.data?.map((todo) => (
+				<li
+					className="flex items-center justify-between rounded-md border p-2"
+					key={todo.id}
+				>
+					<div className="flex items-center space-x-2">
+						<Checkbox
+							checked={todo.completed}
+							id={`todo-${todo.id}`}
+							onCheckedChange={() => handleToggleTodo(todo.id, todo.completed)}
+						/>
+						<label
+							className={`${todo.completed ? "text-muted-foreground line-through" : ""}`}
+							htmlFor={`todo-${todo.id}`}
+						>
+							{todo.text}
+						</label>
+					</div>
+					<Button
+						aria-label="Delete todo"
+						onClick={() => handleDeleteTodo(todo.id)}
+						size="icon"
+						variant="ghost"
+					>
+						<Trash2 className="h-4 w-4" />
+					</Button>
+				</li>
+			))}
+		</ul>
+	);
+
+	if (todos.isLoading) {
+		todoListContent = (
+			<div className="flex justify-center py-4">
+				<Loader2 className="h-6 w-6 animate-spin" />
+			</div>
+		);
+	} else if (todos.data?.length === 0) {
+		todoListContent = (
+			<p className="py-4 text-center">No todos yet. Add one above!</p>
+		);
+	}
+
 	return (
 		<div className="mx-auto w-full max-w-md py-10">
 			<Card>
@@ -90,46 +135,7 @@ export default function TodosPage() {
 						</Button>
 					</form>
 
-					{todos.isLoading ? (
-						<div className="flex justify-center py-4">
-							<Loader2 className="h-6 w-6 animate-spin" />
-						</div>
-					) : todos.data?.length === 0 ? (
-						<p className="py-4 text-center">No todos yet. Add one above!</p>
-					) : (
-						<ul className="space-y-2">
-							{todos.data?.map((todo) => (
-								<li
-									className="flex items-center justify-between rounded-md border p-2"
-									key={todo.id}
-								>
-									<div className="flex items-center space-x-2">
-										<Checkbox
-											checked={todo.completed}
-											id={`todo-${todo.id}`}
-											onCheckedChange={() =>
-												handleToggleTodo(todo.id, todo.completed)
-											}
-										/>
-										<label
-											className={`${todo.completed ? "text-muted-foreground line-through" : ""}`}
-											htmlFor={`todo-${todo.id}`}
-										>
-											{todo.text}
-										</label>
-									</div>
-									<Button
-										aria-label="Delete todo"
-										onClick={() => handleDeleteTodo(todo.id)}
-										size="icon"
-										variant="ghost"
-									>
-										<Trash2 className="h-4 w-4" />
-									</Button>
-								</li>
-							))}
-						</ul>
-					)}
+					{todoListContent}
 				</CardContent>
 			</Card>
 		</div>
