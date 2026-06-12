@@ -14,6 +14,7 @@ import { FieldError, FormError } from "@/components/bambi/form-message";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import Loader from "@/components/loader";
+import { parseKstDatetimeLocal } from "@/lib/bambi-datetime";
 import { formatDateTime, formatNullable, formatPay } from "@/lib/bambi-format";
 import { interviewStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
@@ -68,9 +69,11 @@ export default function ChatDetailPage({
 	const queryClient = useQueryClient();
 	const [messageBody, setMessageBody] = useState("");
 	const [messageError, setMessageError] = useState<null | string>(null);
+	const [messageBodyError, setMessageBodyError] = useState<null | string>(null);
 	const [scheduledAt, setScheduledAt] = useState("");
 	const [locationNote, setLocationNote] = useState("");
 	const [interviewError, setInterviewError] = useState<null | string>(null);
+	const [scheduledAtError, setScheduledAtError] = useState<null | string>(null);
 	const [scheduleActionError, setScheduleActionError] = useState<null | string>(
 		null
 	);
@@ -96,11 +99,13 @@ export default function ChatDetailPage({
 					error
 				);
 				setMessageError(message);
+				setMessageBodyError(null);
 				toast.error(message);
 			},
 			onSuccess: async () => {
 				setMessageBody("");
 				setMessageError(null);
+				setMessageBodyError(null);
 				await invalidateRoom();
 			},
 		})
@@ -114,12 +119,14 @@ export default function ChatDetailPage({
 					error
 				);
 				setInterviewError(message);
+				setScheduledAtError(null);
 				toast.error(message);
 			},
 			onSuccess: async () => {
 				setScheduledAt("");
 				setLocationNote("");
 				setInterviewError(null);
+				setScheduledAtError(null);
 				await invalidateRoom();
 			},
 		})
@@ -148,12 +155,14 @@ export default function ChatDetailPage({
 		const body = messageBody.trim();
 
 		if (!body) {
-			setMessageError("메시지를 입력해 주세요.");
+			setMessageError(null);
+			setMessageBodyError("메시지를 입력해 주세요.");
 			return;
 		}
 
 		if (body.length > 2000) {
-			setMessageError("메시지는 2,000자 이하로 입력해 주세요.");
+			setMessageError(null);
+			setMessageBodyError("메시지는 2,000자 이하로 입력해 주세요.");
 			return;
 		}
 
@@ -167,14 +176,22 @@ export default function ChatDetailPage({
 		event.preventDefault();
 
 		if (!scheduledAt) {
-			setInterviewError("면접 일시를 선택해 주세요.");
+			setInterviewError(null);
+			setScheduledAtError("면접 일시를 선택해 주세요.");
 			return;
 		}
 
-		const scheduledDate = new Date(scheduledAt);
+		const scheduledDate = parseKstDatetimeLocal(scheduledAt);
 
-		if (Number.isNaN(scheduledDate.getTime())) {
-			setInterviewError("올바른 면접 일시를 선택해 주세요.");
+		if (!scheduledDate) {
+			setInterviewError(null);
+			setScheduledAtError("올바른 면접 일시를 선택해 주세요.");
+			return;
+		}
+
+		if (scheduledDate.getTime() <= Date.now()) {
+			setInterviewError(null);
+			setScheduledAtError("현재 이후의 면접 일시를 선택해 주세요.");
 			return;
 		}
 
@@ -265,6 +282,9 @@ export default function ChatDetailPage({
 	}
 
 	const { currentUserId, jobPost, messages, room, schedules } = roomDetail;
+	const messageBodyHelp =
+		messageBodyError ??
+		(messageBody.length > 1900 ? `${messageBody.length}/2000` : undefined);
 
 	return (
 		<PageShell
@@ -374,9 +394,9 @@ export default function ChatDetailPage({
 							<Label htmlFor="messageBody">메시지</Label>
 							<textarea
 								aria-describedby={
-									messageError ? "message-body-error" : undefined
+									messageBodyHelp ? "message-body-error" : undefined
 								}
-								aria-invalid={Boolean(messageError)}
+								aria-invalid={Boolean(messageBodyError)}
 								className={textareaClassName}
 								disabled={sendMessageMutation.isPending}
 								id="messageBody"
@@ -385,19 +405,13 @@ export default function ChatDetailPage({
 								onChange={(event) => {
 									setMessageBody(event.target.value);
 									setMessageError(null);
+									setMessageBodyError(null);
 								}}
-								placeholder="메시지를 입력하세요."
+								placeholder="메시지를 입력하세요…"
 								required
 								value={messageBody}
 							/>
-							<FieldError
-								id="message-body-error"
-								message={
-									messageBody.length > 1900
-										? `${messageBody.length}/2000`
-										: undefined
-								}
-							/>
+							<FieldError id="message-body-error" message={messageBodyHelp} />
 						</div>
 						<div className="flex justify-end">
 							<Button disabled={sendMessageMutation.isPending} type="submit">
@@ -421,21 +435,25 @@ export default function ChatDetailPage({
 								<Label htmlFor="scheduledAt">면접 일시</Label>
 								<Input
 									aria-describedby={
-										interviewError ? "scheduled-at-error" : undefined
+										scheduledAtError ? "scheduled-at-error" : undefined
 									}
-									aria-invalid={Boolean(interviewError)}
+									aria-invalid={Boolean(scheduledAtError)}
 									disabled={proposeInterviewMutation.isPending}
 									id="scheduledAt"
 									name="scheduledAt"
 									onChange={(event) => {
 										setScheduledAt(event.target.value);
 										setInterviewError(null);
+										setScheduledAtError(null);
 									}}
 									required
 									type="datetime-local"
 									value={scheduledAt}
 								/>
-								<FieldError id="scheduled-at-error" />
+								<FieldError
+									id="scheduled-at-error"
+									message={scheduledAtError ?? undefined}
+								/>
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor="locationNote">장소 메모</Label>
@@ -449,7 +467,7 @@ export default function ChatDetailPage({
 										setLocationNote(event.target.value);
 										setInterviewError(null);
 									}}
-									placeholder="예: 강남역 2번 출구 근처 매장"
+									placeholder="예: 강남역 2번 출구 근처 매장…"
 									value={locationNote}
 								/>
 							</div>

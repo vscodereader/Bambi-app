@@ -27,11 +27,22 @@ const sendMessageInput = z.object({
 	body: z.string().min(1).max(2000),
 });
 
-const proposeInterviewInput = z.object({
-	chatRoomId: z.string().uuid(),
-	scheduledAt: z.string().datetime(),
-	locationNote: z.string().max(300).optional(),
-});
+const isFutureIsoDateTime = (value: string): boolean => {
+	const time = new Date(value).getTime();
+
+	return Number.isFinite(time) && time > Date.now();
+};
+
+const proposeInterviewInput = z
+	.object({
+		chatRoomId: z.string().uuid(),
+		scheduledAt: z.string().datetime(),
+		locationNote: z.string().max(300).optional(),
+	})
+	.refine(({ scheduledAt }) => isFutureIsoDateTime(scheduledAt), {
+		message: "Interview schedule must be in the future.",
+		path: ["scheduledAt"],
+	});
 
 const setInterviewStatusInput = z.object({
 	interviewScheduleId: z.string().uuid(),
