@@ -18,7 +18,8 @@
     "db:generate": "turbo -F @bambi-app/db db:generate",
     "db:migrate": "turbo -F @bambi-app/db db:migrate",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "test": "turbo test"
   },
   "dependencies": {
     "@bambi-app/env": "workspace:*",
@@ -32,7 +33,8 @@
     "lefthook": "latest",
     "turbo": "^2.9.16",
     "typescript": "catalog:",
-    "ultracite": "7.8.3"
+    "ultracite": "7.8.3",
+    "vitest": "^4.0.15"
   },
   "packageManager": "pnpm@11.0.0-rc.5"
 }
