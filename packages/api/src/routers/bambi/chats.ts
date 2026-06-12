@@ -15,7 +15,6 @@ import { protectedProcedure } from "../../index";
 import {
 	requireActiveBambiProfile,
 	requireChatParticipant,
-	requireSessionUserId,
 } from "../../services/bambi-authz";
 import { canRevealContact, canStartChat } from "../../services/bambi-policy";
 
@@ -193,15 +192,15 @@ export const chatsRouter = {
 		}),
 
 	listMine: protectedProcedure.handler(async ({ context }) => {
-		const userId = requireSessionUserId(context.session);
+		const profile = await requireActiveBambiProfile(context.session);
 
 		return await db
 			.select()
 			.from(chatRoom)
 			.where(
 				or(
-					eq(chatRoom.employerUserId, userId),
-					eq(chatRoom.jobSeekerUserId, userId)
+					eq(chatRoom.employerUserId, profile.userId),
+					eq(chatRoom.jobSeekerUserId, profile.userId)
 				)
 			)
 			.orderBy(desc(chatRoom.updatedAt));
