@@ -7,6 +7,7 @@
     "check-types": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "tsx watch src/index.ts",
+    "seed:bambi": "tsx src/seeds/bambi-dev.ts",
     "start": "node dist/index.mjs"
   },
   "dependencies": {
@@ -23,6 +24,7 @@
     "ai": "catalog:",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
+    "drizzle-orm": "catalog:",
     "evlog": "catalog:",
     "fastify": "^5.3.3",
     "zod": "catalog:"

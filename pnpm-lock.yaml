@@ -295,6 +295,9 @@ importers:
       dotenv:
         specifier: 'catalog:'
         version: 17.4.2
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(pg@8.21.0)
       evlog:
         specifier: 'catalog:'
         version: 2.19.0(@orpc/server@1.14.5(@opentelemetry/api@1.9.1)(fastify@5.8.5)(ws@8.21.0))(ai@6.0.201(zod@4.4.3))(express@5.2.1)(fastify@5.8.5)(hono@4.12.25)(next@16.2.9(@opentelemetry/api@1.9.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)(vite@8.0.16(@types/node@22.19.21)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
