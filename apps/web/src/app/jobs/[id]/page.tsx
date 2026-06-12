@@ -2,6 +2,7 @@
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use } from "react";
@@ -36,6 +37,18 @@ const getJobStatusTone = (
 	return "default";
 };
 
+const getChatStartErrorMessage = (message: string): string => {
+	if (message.includes("FORBIDDEN")) {
+		return "채팅을 시작할 수 없습니다. 로그인, 휴대폰 인증, 계정 상태를 확인해 주세요.";
+	}
+
+	if (message.includes("UNAUTHORIZED")) {
+		return "로그인 후 채팅을 시작할 수 있습니다.";
+	}
+
+	return message;
+};
+
 export default function JobDetailPage({
 	params,
 }: {
@@ -49,10 +62,10 @@ export default function JobDetailPage({
 	const startChatMutation = useMutation(
 		orpc.bambi.chats.startFromJobPost.mutationOptions({
 			onError: (error) => {
-				toast.error(error.message);
+				toast.error(getChatStartErrorMessage(error.message));
 			},
 			onSuccess: (room) => {
-				router.push(`/chats/${room.id}`);
+				router.push(`/chats/${room.id}` as Route);
 			},
 		})
 	);
@@ -65,6 +78,25 @@ export default function JobDetailPage({
 
 	if (jobQuery.isLoading) {
 		return <Loader />;
+	}
+
+	if (jobQuery.isError) {
+		return (
+			<PageShell
+				description="공고 상세 정보를 불러오지 못했습니다."
+				title="공고 상세"
+			>
+				<EmptyState
+					action={
+						<Button onClick={() => jobQuery.refetch()} type="button">
+							다시 시도
+						</Button>
+					}
+					description="연결 상태를 확인한 뒤 다시 시도해 주세요."
+					title="공고 정보를 불러올 수 없습니다"
+				/>
+			</PageShell>
+		);
 	}
 
 	if (!post) {
@@ -105,7 +137,7 @@ export default function JobDetailPage({
 								{post.industryCategory} · {post.region}
 							</p>
 						</div>
-						<h1 className="font-semibold text-2xl tracking-normal">
+						<h1 className="break-words font-semibold text-2xl tracking-normal">
 							{post.title}
 						</h1>
 					</div>
@@ -119,20 +151,20 @@ export default function JobDetailPage({
 						</div>
 						<div>
 							<h2 className="text-muted-foreground text-xs">근무 일정</h2>
-							<p className="mt-1 text-sm">{post.workSchedule}</p>
+							<p className="mt-1 break-words text-sm">{post.workSchedule}</p>
 						</div>
 					</div>
 
 					<div className="space-y-2">
 						<h2 className="font-medium text-base">상세 설명</h2>
-						<p className="whitespace-pre-wrap text-sm leading-6">
+						<p className="whitespace-pre-wrap break-words text-sm leading-6">
 							{post.description}
 						</p>
 					</div>
 
 					<div className="space-y-2">
 						<h2 className="font-medium text-base">면접 안내</h2>
-						<p className="whitespace-pre-wrap text-sm leading-6">
+						<p className="whitespace-pre-wrap break-words text-sm leading-6">
 							{formatNullable(post.interviewNotes)}
 						</p>
 					</div>
@@ -151,7 +183,7 @@ export default function JobDetailPage({
 						onClick={handleStartChat}
 						type="button"
 					>
-						{startChatMutation.isPending ? "채팅 시작 중" : "채팅 시작"}
+						{startChatMutation.isPending ? "채팅 시작 중..." : "채팅 시작"}
 					</Button>
 					<Link
 						className={buttonVariants({
