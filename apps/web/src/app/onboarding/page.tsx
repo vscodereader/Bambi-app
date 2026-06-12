@@ -184,7 +184,7 @@ export default function OnboardingPage() {
 							return;
 						}
 
-						handleCreateJobSeeker();
+						toast.error("구직자 또는 구인자로 시작 버튼을 선택해 주세요.");
 					}}
 				>
 					<div className="grid gap-3 sm:grid-cols-2">
@@ -220,7 +220,11 @@ export default function OnboardingPage() {
 						</Button>
 					) : (
 						<div className="flex flex-col gap-2 sm:flex-row">
-							<Button disabled={isBusy} type="submit">
+							<Button
+								disabled={isBusy}
+								onClick={handleCreateJobSeeker}
+								type="button"
+							>
 								{createJobSeekerMutation.isPending
 									? "저장 중"
 									: "구직자로 시작"}

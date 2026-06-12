@@ -1,23 +1,19 @@
-"use client";
+import LoginClient, { type LoginMode } from "./login-client";
 
-import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+interface LoginPageProps {
+	searchParams: Promise<{
+		mode?: string | string[];
+	}>;
+}
 
-import SignInForm from "@/components/sign-in-form";
-import SignUpForm from "@/components/sign-up-form";
+const getLoginMode = (mode: string | string[] | undefined): LoginMode => {
+	const selectedMode = Array.isArray(mode) ? mode[0] : mode;
 
-export default function LoginPage() {
-	const searchParams = useSearchParams();
-	const mode = searchParams.get("mode");
-	const [showSignIn, setShowSignIn] = useState(mode !== "sign-up");
+	return selectedMode === "sign-up" ? "sign-up" : "sign-in";
+};
 
-	useEffect(() => {
-		setShowSignIn(mode !== "sign-up");
-	}, [mode]);
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+	const params = await searchParams;
 
-	return showSignIn ? (
-		<SignInForm onSwitchToSignUp={() => setShowSignIn(false)} />
-	) : (
-		<SignUpForm onSwitchToSignIn={() => setShowSignIn(true)} />
-	);
+	return <LoginClient initialMode={getLoginMode(params.mode)} />;
 }
