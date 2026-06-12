@@ -5,7 +5,7 @@ import {
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
@@ -141,7 +141,7 @@ export const jobsRouter = {
 			organizationIds,
 			teamMemberships,
 		});
-		const accessFilters = [eq(jobPost.createdByUserId, profile.userId)];
+		const accessFilters: SQL[] = [];
 
 		if (manageableOrganizationIds.length > 0) {
 			accessFilters.push(
@@ -158,6 +158,10 @@ export const jobsRouter = {
 			if (teamAccessFilter) {
 				accessFilters.push(teamAccessFilter);
 			}
+		}
+
+		if (accessFilters.length === 0) {
+			return [];
 		}
 
 		return await db

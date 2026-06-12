@@ -370,8 +370,19 @@ export const chatsRouter = {
 			const [updatedSchedule] = await db
 				.update(interviewSchedule)
 				.set({ status: input.status })
-				.where(eq(interviewSchedule.id, input.interviewScheduleId))
+				.where(
+					and(
+						eq(interviewSchedule.id, input.interviewScheduleId),
+						eq(interviewSchedule.status, schedule.status)
+					)
+				)
 				.returning();
+
+			if (!updatedSchedule) {
+				throw new ORPCError("CONFLICT", {
+					message: "Interview schedule status has changed.",
+				});
+			}
 
 			return updatedSchedule;
 		}),
