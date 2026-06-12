@@ -6,7 +6,7 @@ import { Label } from "@bambi-app/ui/components/label";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
@@ -34,99 +34,36 @@ const textareaClassName =
 
 const getFieldErrorId = (field: keyof JobForm) => `${field}-error`;
 
+interface PostingScope {
+	organizationDisplayName: string;
+	organizationId: string;
+	scopeType: "organization" | "team";
+	teamDisplayName: null | string;
+	teamId: null | string;
+}
+
+const getPostingScopeValue = (scope: PostingScope) =>
+	JSON.stringify([scope.organizationId, scope.teamId]);
+
+const getPostingScopeLabel = (scope: PostingScope) => {
+	if (scope.scopeType === "organization") {
+		return `${scope.organizationDisplayName} / 전체 조직`;
+	}
+
+	return `${scope.organizationDisplayName} / ${scope.teamDisplayName ?? scope.teamId}`;
+};
+
+interface NewEmployerJobFormProps {
+	postingScopes: PostingScope[];
+}
+
 export default function NewEmployerJobPage() {
-	const router = useRouter();
-	const utils = useQueryClient();
 	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
-	const [form, setForm] = useState(emptyJobForm);
-	const [fieldErrors, setFieldErrors] = useState<JobFormErrors>({});
-	const [formError, setFormError] = useState<null | string>(null);
-
-	const createMutation = useMutation(
-		orpc.bambi.jobs.create.mutationOptions({
-			onError: (error) => {
-				const message =
-					"공고를 등록하지 못했습니다. 입력값과 공고 등록 권한을 확인해 주세요.";
-				setFormError(message);
-				toast.error(error.message || message);
-			},
-			onSuccess: async () => {
-				toast.success("공고가 등록되었습니다.");
-				await utils.invalidateQueries({
-					queryKey: orpc.bambi.jobs.listMine.queryKey(),
-				});
-				router.push("/employer");
-			},
-		})
-	);
-
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	const organizationProfiles =
 		mineQuery.data?.employerOrganizationProfiles ?? [];
-	const teamProfiles = mineQuery.data?.employerTeamProfiles ?? [];
-	const selectedOrganizationTeams = teamProfiles.filter(
-		(teamProfile) => teamProfile.organizationId === form.organizationId
-	);
-	const teamScopes = teamProfiles.map((teamProfile) => ({
-		organizationId: teamProfile.organizationId,
-		teamId: teamProfile.teamId,
-	}));
+	const postingScopes = mineQuery.data?.employerJobPostingScopes ?? [];
 	const isEmployer = Boolean(profile && profile.role !== "job_seeker");
-
-	useEffect(() => {
-		const firstOrganizationId = organizationProfiles[0]?.organizationId;
-
-		if (!form.organizationId && firstOrganizationId) {
-			setForm((currentForm) => ({
-				...currentForm,
-				organizationId: firstOrganizationId,
-			}));
-			return;
-		}
-
-		const teamMatchesOrganization = selectedOrganizationTeams.some(
-			(teamProfile) => teamProfile.teamId === form.teamId
-		);
-
-		if (form.teamId && !teamMatchesOrganization) {
-			setForm((currentForm) => ({
-				...currentForm,
-				teamId: "",
-			}));
-		}
-	}, [
-		form.organizationId,
-		form.teamId,
-		organizationProfiles,
-		selectedOrganizationTeams,
-	]);
-
-	const updateFormValue = (field: keyof JobForm, value: string) => {
-		setForm((currentForm) => ({
-			...currentForm,
-			[field]: value,
-		}));
-		setFieldErrors((currentErrors) => ({
-			...currentErrors,
-			[field]: undefined,
-		}));
-		setFormError(null);
-	};
-
-	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-
-		const validation = validateJobForm(form, { teamScopes });
-
-		if (!validation.ok) {
-			setFieldErrors(validation.errors);
-			setFormError(validation.message);
-			toast.error(validation.message);
-			return;
-		}
-
-		createMutation.mutate(validation.input);
-	};
 
 	if (mineQuery.isLoading) {
 		return <Loader />;
@@ -192,10 +129,10 @@ export default function NewEmployerJobPage() {
 		);
 	}
 
-	if (organizationProfiles.length === 0) {
+	if (organizationProfiles.length === 0 || postingScopes.length === 0) {
 		return (
 			<PageShell
-				description="공고를 등록하려면 소속 조직 프로필이 필요합니다."
+				description="공고를 등록하려면 등록 가능한 조직 또는 팀 범위가 필요합니다."
 				title="새 공고 등록"
 			>
 				<EmptyState
@@ -207,12 +144,126 @@ export default function NewEmployerJobPage() {
 							구인자 관리로 이동
 						</Link>
 					}
-					description="조직 프로필이 연결되면 새 공고를 등록할 수 있습니다."
-					title="조직 프로필이 없습니다"
+					description="대표 또는 관리자는 전체 조직 공고를, 직원은 소속 팀 공고를 등록할 수 있습니다."
+					title="등록 가능한 공고 범위가 없습니다"
 				/>
 			</PageShell>
 		);
 	}
+
+	return <NewEmployerJobForm postingScopes={postingScopes} />;
+}
+
+function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
+	const router = useRouter();
+	const utils = useQueryClient();
+	const [form, setForm] = useState(emptyJobForm);
+	const [fieldErrors, setFieldErrors] = useState<JobFormErrors>({});
+	const [formError, setFormError] = useState<null | string>(null);
+
+	const createMutation = useMutation(
+		orpc.bambi.jobs.create.mutationOptions({
+			onError: (error) => {
+				const message =
+					"공고를 등록하지 못했습니다. 입력값과 공고 등록 권한을 확인해 주세요.";
+				setFormError(message);
+				toast.error(error.message || message);
+			},
+			onSuccess: async () => {
+				toast.success("공고가 등록되었습니다.");
+				await utils.invalidateQueries({
+					queryKey: orpc.bambi.jobs.listMine.queryKey(),
+				});
+				router.push("/employer");
+			},
+		})
+	);
+
+	const postingScopeOptions = useMemo(
+		() =>
+			postingScopes.map((scope) => ({
+				label: getPostingScopeLabel(scope),
+				scope,
+				value: getPostingScopeValue(scope),
+			})),
+		[postingScopes]
+	);
+	const selectedPostingScope = postingScopeOptions.find(
+		(option) =>
+			option.scope.organizationId === form.organizationId &&
+			(option.scope.teamId ?? "") === form.teamId
+	);
+	const teamScopes = useMemo(
+		() =>
+			postingScopes
+				.filter((scope) => scope.scopeType === "team" && scope.teamId)
+				.map((scope) => ({
+					organizationId: scope.organizationId,
+					teamId: scope.teamId ?? "",
+				})),
+		[postingScopes]
+	);
+
+	useEffect(() => {
+		const firstScope = postingScopeOptions[0]?.scope;
+
+		if (!selectedPostingScope && firstScope) {
+			setForm((currentForm) => ({
+				...currentForm,
+				organizationId: firstScope.organizationId,
+				teamId: firstScope.teamId ?? "",
+			}));
+		}
+	}, [postingScopeOptions, selectedPostingScope]);
+
+	const updatePostingScope = (value: string) => {
+		const nextScope = postingScopeOptions.find(
+			(option) => option.value === value
+		)?.scope;
+
+		if (!nextScope) {
+			return;
+		}
+
+		setForm((currentForm) => ({
+			...currentForm,
+			organizationId: nextScope.organizationId,
+			teamId: nextScope.teamId ?? "",
+		}));
+		setFieldErrors((currentErrors) => ({
+			...currentErrors,
+			organizationId: undefined,
+			teamId: undefined,
+		}));
+		setFormError(null);
+	};
+
+	const updateFormValue = (field: keyof JobForm, value: string) => {
+		setForm((currentForm) => ({
+			...currentForm,
+			[field]: value,
+		}));
+		setFieldErrors((currentErrors) => ({
+			...currentErrors,
+			[field]: undefined,
+		}));
+		setFormError(null);
+	};
+
+	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+
+		const validation = validateJobForm(form, { teamScopes });
+
+		if (!validation.ok) {
+			setFieldErrors(validation.errors);
+			setFormError(validation.message);
+			toast.error(validation.message);
+			return;
+		}
+
+		createMutation.mutate(validation.input);
+	};
 
 	return (
 		<PageShell
@@ -222,63 +273,33 @@ export default function NewEmployerJobPage() {
 			<form className="space-y-6 border p-4" onSubmit={handleSubmit}>
 				<FormError message={formError} />
 				<section aria-label="소속 정보" className="grid gap-4 md:grid-cols-2">
-					<div className="space-y-2">
-						<Label htmlFor="organizationId">조직</Label>
+					<div className="space-y-2 md:col-span-2">
+						<Label htmlFor="postingScope">공고 등록 범위</Label>
 						<select
 							aria-describedby={
-								fieldErrors.organizationId
+								fieldErrors.organizationId || fieldErrors.teamId
 									? getFieldErrorId("organizationId")
 									: undefined
 							}
-							aria-invalid={Boolean(fieldErrors.organizationId)}
+							aria-invalid={Boolean(
+								fieldErrors.organizationId || fieldErrors.teamId
+							)}
 							className={selectClassName}
-							id="organizationId"
-							name="organizationId"
-							onChange={(event) =>
-								updateFormValue("organizationId", event.target.value)
-							}
+							id="postingScope"
+							name="postingScope"
+							onChange={(event) => updatePostingScope(event.target.value)}
 							required
-							value={form.organizationId}
+							value={selectedPostingScope?.value ?? ""}
 						>
-							{organizationProfiles.map((organizationProfile) => (
-								<option
-									key={organizationProfile.organizationId}
-									value={organizationProfile.organizationId}
-								>
-									{organizationProfile.displayName}
+							{postingScopeOptions.map((option) => (
+								<option key={option.value} value={option.value}>
+									{option.label}
 								</option>
 							))}
 						</select>
 						<FieldError
 							id={getFieldErrorId("organizationId")}
-							message={fieldErrors.organizationId}
-						/>
-					</div>
-					<div className="space-y-2">
-						<Label htmlFor="teamId">팀</Label>
-						<select
-							aria-describedby={
-								fieldErrors.teamId ? getFieldErrorId("teamId") : undefined
-							}
-							aria-invalid={Boolean(fieldErrors.teamId)}
-							className={selectClassName}
-							id="teamId"
-							name="teamId"
-							onChange={(event) =>
-								updateFormValue("teamId", event.target.value)
-							}
-							value={form.teamId}
-						>
-							<option value="">전체 조직</option>
-							{selectedOrganizationTeams.map((teamProfile) => (
-								<option key={teamProfile.teamId} value={teamProfile.teamId}>
-									{teamProfile.displayName}
-								</option>
-							))}
-						</select>
-						<FieldError
-							id={getFieldErrorId("teamId")}
-							message={fieldErrors.teamId}
+							message={fieldErrors.organizationId ?? fieldErrors.teamId}
 						/>
 					</div>
 				</section>

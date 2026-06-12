@@ -10,6 +10,7 @@ import { and, eq } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
+import { getJobPostingScopes } from "../../services/bambi-job-access";
 import {
 	assertCanCreateBambiProfile,
 	assertCanManageEmployerProfile,
@@ -135,6 +136,7 @@ export const onboardingRouter = {
 			.select({
 				id: employerOrganizationProfile.id,
 				organizationId: employerOrganizationProfile.organizationId,
+				role: member.role,
 				displayName: employerOrganizationProfile.displayName,
 				businessRegistrationNumber:
 					employerOrganizationProfile.businessRegistrationNumber,
@@ -170,11 +172,49 @@ export const onboardingRouter = {
 					eq(teamMember.userId, userId)
 				)
 			);
+		const postingScopes = getJobPostingScopes({
+			organizationMemberships: organizationProfiles.map(
+				({ organizationId, role }) => ({
+					organizationId,
+					role,
+				})
+			),
+			teamMemberships: teamProfiles.map(({ organizationId, teamId }) => ({
+				organizationId,
+				teamId,
+			})),
+		});
+		const organizationProfileById = new Map(
+			organizationProfiles.map((organizationProfile) => [
+				organizationProfile.organizationId,
+				organizationProfile,
+			])
+		);
+		const teamProfileById = new Map(
+			teamProfiles.map((teamProfile) => [teamProfile.teamId, teamProfile])
+		);
 
 		return {
 			bambiProfile: profile ?? null,
 			employerOrganizationProfiles: organizationProfiles,
 			employerTeamProfiles: teamProfiles,
+			employerJobPostingScopes: postingScopes.map((scope) => {
+				const organizationProfile = organizationProfileById.get(
+					scope.organizationId
+				);
+				const teamProfile = scope.teamId
+					? teamProfileById.get(scope.teamId)
+					: undefined;
+
+				return {
+					organizationDisplayName:
+						organizationProfile?.displayName ?? scope.organizationId,
+					organizationId: scope.organizationId,
+					scopeType: scope.scopeType,
+					teamDisplayName: teamProfile?.displayName ?? null,
+					teamId: scope.teamId ?? null,
+				};
+			}),
 		};
 	}),
 
