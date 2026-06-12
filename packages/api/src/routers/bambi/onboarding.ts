@@ -190,6 +190,8 @@ export const onboardingRouter = {
 
 			assertCanUpdateOwnBambiProfile({
 				existingRole: existingProfile?.role,
+				hasPersonalProfileChanges:
+					input.displayName !== undefined || input.phoneNumber !== undefined,
 				requestedRole: input.role,
 			});
 

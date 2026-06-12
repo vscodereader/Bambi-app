@@ -15,6 +15,7 @@ interface AssertCanManageEmployerProfileInput {
 
 interface AssertCanUpdateOwnBambiProfileInput {
 	existingRole?: BambiProfileRole | null;
+	hasPersonalProfileChanges?: boolean;
 	requestedRole?: BambiProfileRole;
 }
 
@@ -42,6 +43,7 @@ export const assertCanCreateBambiProfile = ({
 
 export const assertCanUpdateOwnBambiProfile = ({
 	existingRole,
+	hasPersonalProfileChanges = true,
 	requestedRole,
 }: AssertCanUpdateOwnBambiProfileInput): void => {
 	if (!existingRole) {
@@ -53,6 +55,12 @@ export const assertCanUpdateOwnBambiProfile = ({
 	if (requestedRole && requestedRole !== existingRole) {
 		throw new ORPCError("FORBIDDEN", {
 			message: "Bambi profile role cannot be changed from onboarding.",
+		});
+	}
+
+	if (!hasPersonalProfileChanges) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "At least one personal profile field is required.",
 		});
 	}
 };

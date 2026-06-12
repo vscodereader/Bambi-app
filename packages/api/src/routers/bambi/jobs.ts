@@ -1,5 +1,5 @@
 import { db } from "@bambi-app/db";
-import { member, teamMember } from "@bambi-app/db/schema/auth";
+import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	employerOrganizationProfile,
 	jobPost,
@@ -13,6 +13,7 @@ import {
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
 } from "../../services/bambi-authz";
+import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import {
 	type EmployerVerificationStatus,
 	getInitialJobPostStatus,
@@ -120,18 +121,26 @@ export const jobsRouter = {
 			.from(member)
 			.where(eq(member.userId, profile.userId));
 		const teamMemberships = await db
-			.select({ teamId: teamMember.teamId })
+			.select({
+				organizationId: team.organizationId,
+				teamId: teamMember.teamId,
+			})
 			.from(teamMember)
+			.innerJoin(team, eq(teamMember.teamId, team.id))
 			.where(eq(teamMember.userId, profile.userId));
+		const organizationIds = organizationMemberships.map(
+			(membership) => membership.organizationId
+		);
 		const manageableOrganizationIds = organizationMemberships
 			.filter(
 				(membership) =>
 					membership.role === "owner" || membership.role === "admin"
 			)
 			.map((membership) => membership.organizationId);
-		const assignedTeamIds = teamMemberships.map(
-			(membership) => membership.teamId
-		);
+		const accessibleTeamPostScopes = getAccessibleTeamPostScopes({
+			organizationIds,
+			teamMemberships,
+		});
 		const accessFilters = [eq(jobPost.createdByUserId, profile.userId)];
 
 		if (manageableOrganizationIds.length > 0) {
@@ -140,8 +149,15 @@ export const jobsRouter = {
 			);
 		}
 
-		if (assignedTeamIds.length > 0) {
-			accessFilters.push(inArray(jobPost.teamId, assignedTeamIds));
+		for (const scope of accessibleTeamPostScopes) {
+			const teamAccessFilter = and(
+				eq(jobPost.organizationId, scope.organizationId),
+				eq(jobPost.teamId, scope.teamId)
+			);
+
+			if (teamAccessFilter) {
+				accessFilters.push(teamAccessFilter);
+			}
 		}
 
 		return await db

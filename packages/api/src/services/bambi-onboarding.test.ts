@@ -101,4 +101,14 @@ describe("bambi onboarding", () => {
 			})
 		).toThrow("Bambi profile is required.");
 	});
+
+	it("requires at least one personal profile field before profile update", () => {
+		expect(() =>
+			assertCanUpdateOwnBambiProfile({
+				existingRole: "job_seeker",
+				hasPersonalProfileChanges: false,
+				requestedRole: undefined,
+			})
+		).toThrow("At least one personal profile field is required.");
+	});
 });
