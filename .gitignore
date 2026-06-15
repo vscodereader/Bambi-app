@@ -54,3 +54,4 @@ coverage
 .worktrees
 tmp
 temp
+/.playwright-mcp/
