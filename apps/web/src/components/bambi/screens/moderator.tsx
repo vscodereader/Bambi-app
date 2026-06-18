@@ -11,16 +11,28 @@ import type {
 	QueueItem,
 	Report,
 	ReportSeverity,
+	RiskLevel,
 	UserStatus,
 	VisualTone,
 } from "@/lib/bambi/types";
-import { AppBar, Avatar, Badge, Button } from "../ds";
+import {
+	AppBar,
+	Avatar,
+	Badge,
+	Button,
+	IconButton,
+	Logo,
+	StatGroup,
+} from "../ds";
 import {
 	AlertCircle,
+	BellIcon,
 	CheckIcon,
+	ChevronDownIcon,
 	ChevronRightIcon,
-	ClipboardListIcon,
-	LockIcon,
+	FlagIcon,
+	ShieldIcon,
+	SortIcon,
 	UserIcon,
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
@@ -28,26 +40,61 @@ import { RiskFlag } from "../safety-kit";
 const HI: Record<string, string> = {
 	block: "rgba(255,90,95,0.22)",
 	review: "rgba(245,158,11,0.24)",
+	low: "rgba(31,181,115,0.20)",
 };
 const UL: Record<string, string> = {
 	block: "var(--red-500)",
 	review: "var(--amber-500)",
+	low: "var(--green-500)",
+};
+const RISK_HI_KEY: Record<RiskLevel, string> = {
+	high: "block",
+	mid: "review",
+	low: "low",
 };
 
-// 위반 구간을 강조 표시하는 읽기 전용 본문 (큐 검수용).
-function HiText({ text }: { text: string }) {
-	const findings = scan(text);
-	const segs: { t: string; sev?: string; start: number }[] = [];
-	let cur = 0;
-	for (const f of findings) {
-		if (f.start > cur) {
-			segs.push({ t: text.slice(cur, f.start), start: cur });
+// 감지 문구를 위험도 색상으로 강조하는 읽기 전용 본문 (큐 검수용).
+function HiText({
+	text,
+	terms,
+	level = "mid",
+}: {
+	text: string;
+	terms?: string[];
+	level?: RiskLevel;
+}) {
+	const ranges: { start: number; end: number }[] = [];
+	if (terms?.length) {
+		for (const term of terms) {
+			let from = 0;
+			let i = text.indexOf(term, from);
+			while (i !== -1) {
+				ranges.push({ start: i, end: i + term.length });
+				from = i + term.length;
+				i = text.indexOf(term, from);
+			}
 		}
-		segs.push({ t: text.slice(f.start, f.end), sev: f.sev, start: f.start });
-		cur = f.end;
+		ranges.sort((a, b) => a.start - b.start);
+	} else {
+		for (const f of scan(text)) {
+			ranges.push({ start: f.start, end: f.end });
+		}
+	}
+	const key = RISK_HI_KEY[level];
+	const segs: { t: string; hi: boolean; start: number }[] = [];
+	let cur = 0;
+	for (const r of ranges) {
+		if (r.start < cur) {
+			continue;
+		}
+		if (r.start > cur) {
+			segs.push({ t: text.slice(cur, r.start), hi: false, start: cur });
+		}
+		segs.push({ t: text.slice(r.start, r.end), hi: true, start: r.start });
+		cur = r.end;
 	}
 	if (cur < text.length) {
-		segs.push({ t: text.slice(cur), start: cur });
+		segs.push({ t: text.slice(cur), hi: false, start: cur });
 	}
 	return (
 		<p
@@ -60,15 +107,15 @@ function HiText({ text }: { text: string }) {
 			}}
 		>
 			{segs.map((s) =>
-				s.sev ? (
+				s.hi ? (
 					<mark
 						key={s.start}
 						style={{
-							background: HI[s.sev],
+							background: HI[key],
 							color: "var(--text-strong)",
 							borderRadius: 4,
 							padding: "1px 1px",
-							boxShadow: `inset 0 -2px 0 ${UL[s.sev]}`,
+							boxShadow: `inset 0 -2px 0 ${UL[key]}`,
 							fontWeight: 700,
 						}}
 					>
@@ -79,6 +126,46 @@ function HiText({ text }: { text: string }) {
 				)
 			)}
 		</p>
+	);
+}
+
+// 위험도 배지 ("위험: 높음/중간/낮음").
+const RISK_BADGE: Record<RiskLevel, { bg: string; fg: string; label: string }> =
+	{
+		high: {
+			bg: "var(--status-danger-bg)",
+			fg: "var(--status-danger-fg)",
+			label: "높음",
+		},
+		mid: {
+			bg: "var(--status-pending-bg)",
+			fg: "var(--status-pending-fg)",
+			label: "중간",
+		},
+		low: {
+			bg: "var(--status-success-bg)",
+			fg: "var(--status-success-fg)",
+			label: "낮음",
+		},
+	};
+
+function RiskBadge({ level }: { level: RiskLevel }) {
+	const c = RISK_BADGE[level];
+	return (
+		<span
+			style={{
+				fontFamily: "var(--font-sans)",
+				fontSize: 11,
+				fontWeight: 800,
+				padding: "3px 9px",
+				borderRadius: 999,
+				background: c.bg,
+				color: c.fg,
+				whiteSpace: "nowrap",
+			}}
+		>
+			위험: {c.label}
+		</span>
 	);
 }
 
@@ -181,84 +268,387 @@ function EmptyState({ icon, text }: { icon: ReactNode; text: string }) {
 	);
 }
 
-function ConsoleHeader({
-	title,
-	subtitle,
+function ConsoleTabs({
+	tab,
+	onTab,
 }: {
-	title: string;
-	subtitle?: string;
+	tab: string;
+	onTab: (v: string) => void;
+}) {
+	const items = [
+		{ v: "queue", label: "공고 검수" },
+		{ v: "reports", label: "신고" },
+		{ v: "users", label: "사용자" },
+	];
+	return (
+		<div
+			style={{
+				display: "flex",
+				gap: 6,
+				padding: 4,
+				background: "var(--surface-sunken)",
+				borderRadius: "var(--radius-md)",
+			}}
+		>
+			{items.map((it) => {
+				const on = tab === it.v;
+				return (
+					<button
+						key={it.v}
+						onClick={() => onTab(it.v)}
+						style={{
+							flex: 1,
+							height: 40,
+							border: "none",
+							cursor: "pointer",
+							borderRadius: "var(--radius-sm)",
+							background: on ? "var(--ink-800)" : "transparent",
+							color: on ? "#fff" : "var(--text-muted)",
+							fontFamily: "var(--font-sans)",
+							fontSize: 14,
+							fontWeight: on ? 800 : 600,
+							boxShadow: on ? "var(--shadow-sm)" : "none",
+							transition: "all var(--dur-fast) var(--ease-out)",
+						}}
+						type="button"
+					>
+						{it.label}
+					</button>
+				);
+			})}
+		</div>
+	);
+}
+
+export function ConsoleTop({
+	tab,
+	onTab,
+	counts,
+}: {
+	tab: string;
+	onTab: (v: string) => void;
+	counts: { queue: number; reports: number; warned: number };
 }) {
 	return (
-		<div style={{ padding: "10px 24px 6px" }}>
-			<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-				<div
-					style={{
-						width: 22,
-						height: 22,
-						borderRadius: 7,
-						background: "var(--ink-800)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-					}}
-				>
+		<div
+			style={{
+				display: "flex",
+				flexDirection: "column",
+				gap: 14,
+				padding: "6px 20px 12px",
+			}}
+		>
+			<div
+				style={{
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "space-between",
+				}}
+			>
+				<Logo lang="ko" size="md" />
+				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
 					<span
 						style={{
-							width: 13,
-							height: 13,
 							display: "inline-flex",
-							color: "var(--coral-400)",
+							alignItems: "center",
+							gap: 5,
+							height: 30,
+							padding: "0 11px",
+							borderRadius: "var(--radius-pill)",
+							background: "var(--surface-subtle)",
+							color: "var(--text-default)",
+							fontFamily: "var(--font-sans)",
+							fontSize: 12,
+							fontWeight: 700,
+							whiteSpace: "nowrap",
 						}}
 					>
-						<LockIcon />
+						<span
+							style={{
+								display: "inline-flex",
+								width: 14,
+								height: 14,
+								color: "var(--ink-700)",
+							}}
+						>
+							<ShieldIcon />
+						</span>
+						운영자 모드
 					</span>
+					<IconButton badge variant="subtle">
+						<BellIcon />
+					</IconButton>
 				</div>
-				<span
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 12,
-						fontWeight: 700,
-						letterSpacing: "0.04em",
-						textTransform: "uppercase",
-						color: "var(--text-subtle)",
-					}}
-				>
-					운영자 콘솔
-				</span>
 			</div>
 			<h1
 				style={{
-					margin: "8px 0 2px",
+					margin: 0,
+					padding: "0 4px",
 					fontFamily: "var(--font-display)",
-					fontSize: 23,
+					fontSize: 24,
 					fontWeight: 800,
 					color: "var(--text-strong)",
 				}}
 			>
-				{title}
+				운영자 콘솔
 			</h1>
-			{subtitle ? (
-				<p
-					style={{
-						margin: 0,
-						fontFamily: "var(--font-sans)",
-						fontSize: 13,
-						color: "var(--text-muted)",
-					}}
-				>
-					{subtitle}
-				</p>
-			) : null}
+			<div style={{ padding: "0 4px" }}>
+				<ConsoleTabs onTab={onTab} tab={tab} />
+			</div>
+			<div style={{ padding: "0 4px" }}>
+				<StatGroup
+					items={[
+						{ label: "검수 대기", value: counts.queue },
+						{ label: "신고 대기", value: counts.reports },
+						{ label: "경고 사용자", value: counts.warned },
+					]}
+				/>
+			</div>
 		</div>
 	);
 }
 
 // ---- 큐 --------------------------------------------------------------------
-function QueueList({
+function QueueFilterRow() {
+	return (
+		<div style={{ display: "flex", gap: 8 }}>
+			<div
+				style={{
+					flex: 1,
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "space-between",
+					height: 40,
+					padding: "0 14px",
+					borderRadius: 12,
+					border: "1px solid var(--border-default)",
+					background: "var(--surface-card)",
+					color: "var(--text-default)",
+					fontFamily: "var(--font-sans)",
+					fontSize: 13,
+					fontWeight: 600,
+				}}
+			>
+				전체 상태
+				<span
+					style={{
+						display: "inline-flex",
+						width: 16,
+						height: 16,
+						color: "var(--text-muted)",
+					}}
+				>
+					<ChevronDownIcon />
+				</span>
+			</div>
+			<div
+				style={{
+					display: "flex",
+					alignItems: "center",
+					gap: 6,
+					height: 40,
+					padding: "0 14px",
+					borderRadius: 12,
+					border: "1px solid var(--border-default)",
+					background: "var(--surface-card)",
+					color: "var(--text-default)",
+					fontFamily: "var(--font-sans)",
+					fontSize: 13,
+					fontWeight: 600,
+				}}
+			>
+				회신순
+				<span
+					style={{
+						display: "inline-flex",
+						width: 15,
+						height: 15,
+						color: "var(--text-muted)",
+					}}
+				>
+					<SortIcon />
+				</span>
+			</div>
+		</div>
+	);
+}
+
+function QueueCheckbox({
+	checked,
+	dark,
+	onToggle,
+}: {
+	checked: boolean;
+	dark: boolean;
+	onToggle: () => void;
+}) {
+	return (
+		<button
+			aria-label="항목 선택"
+			aria-pressed={checked}
+			onClick={(e) => {
+				e.stopPropagation();
+				onToggle();
+			}}
+			style={{
+				flex: "0 0 22px",
+				width: 22,
+				height: 22,
+				marginTop: 1,
+				borderRadius: 7,
+				cursor: "pointer",
+				display: "inline-flex",
+				alignItems: "center",
+				justifyContent: "center",
+				background: checked ? "var(--color-primary)" : "transparent",
+				border: checked
+					? "1px solid transparent"
+					: `1.5px solid ${dark ? "rgba(255,255,255,0.4)" : "var(--border-strong)"}`,
+				color: "#fff",
+			}}
+			type="button"
+		>
+			{checked ? (
+				<span style={{ display: "inline-flex", width: 13, height: 13 }}>
+					<CheckIcon />
+				</span>
+			) : null}
+		</button>
+	);
+}
+
+function QueueRow({
+	q,
+	selected,
+	onToggle,
+	onOpen,
+}: {
+	q: QueueItem;
+	selected: boolean;
+	onToggle: () => void;
+	onOpen: () => void;
+}) {
+	const dark = selected;
+	const subFg = dark ? "var(--text-on-dark-muted)" : "var(--text-muted)";
+	return (
+		// biome-ignore lint/a11y/useSemanticElements: 행 내부에 체크박스 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
+		<div
+			onClick={onOpen}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onOpen();
+				}
+			}}
+			role="button"
+			style={{
+				display: "flex",
+				alignItems: "flex-start",
+				gap: 12,
+				padding: 14,
+				borderRadius: 16,
+				cursor: "pointer",
+				background: dark ? "var(--ink-800)" : "var(--surface-card)",
+				color: dark ? "#fff" : "var(--text-default)",
+				border: dark
+					? "1px solid transparent"
+					: "1px solid var(--border-subtle)",
+				boxShadow: dark ? "var(--shadow-md)" : "var(--shadow-card)",
+			}}
+			tabIndex={0}
+		>
+			<QueueCheckbox checked={selected} dark={dark} onToggle={onToggle} />
+			<Avatar name={q.company} size="sm" square />
+			<div
+				style={{
+					flex: 1,
+					minWidth: 0,
+					display: "flex",
+					flexDirection: "column",
+					gap: 5,
+				}}
+			>
+				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+					<span
+						style={{
+							fontFamily: "var(--font-sans)",
+							fontSize: 14.5,
+							fontWeight: 700,
+							color: dark ? "#fff" : "var(--text-strong)",
+							whiteSpace: "nowrap",
+						}}
+					>
+						{q.company}
+					</span>
+					<span
+						style={{
+							flex: 1,
+							minWidth: 0,
+							fontFamily: "var(--font-sans)",
+							fontSize: 13,
+							color: subFg,
+							whiteSpace: "nowrap",
+							overflow: "hidden",
+							textOverflow: "ellipsis",
+						}}
+					>
+						{q.role}
+					</span>
+					<RiskBadge level={q.riskLevel} />
+				</div>
+				<div
+					style={{
+						fontFamily: "var(--font-sans)",
+						fontSize: 12.5,
+						lineHeight: 1.45,
+						color: subFg,
+					}}
+				>
+					<span>감지 문구 </span>
+					<span
+						style={{
+							fontWeight: 700,
+							color: dark ? "#fff" : "var(--text-default)",
+						}}
+					>
+						{q.detected.map((d) => `"${d}"`).join(", ")}
+					</span>
+				</div>
+				<div
+					style={{
+						fontFamily: "var(--font-sans)",
+						fontSize: 11.5,
+						color: dark ? "rgba(255,255,255,0.55)" : "var(--text-subtle)",
+					}}
+				>
+					접수 {q.receivedAt} · ID {q.refId}
+				</div>
+			</div>
+			<span
+				aria-hidden="true"
+				style={{
+					display: "inline-flex",
+					width: 18,
+					height: 18,
+					marginTop: 1,
+					color: dark ? "rgba(255,255,255,0.5)" : "var(--text-subtle)",
+				}}
+			>
+				<ChevronRightIcon />
+			</span>
+		</div>
+	);
+}
+
+export function QueueList({
 	items,
+	selected,
+	onToggle,
 	onOpen,
 }: {
 	items: QueueItem[];
+	selected: string[];
+	onToggle: (id: string) => void;
 	onOpen: (item: QueueItem) => void;
 }) {
 	return (
@@ -266,96 +656,32 @@ function QueueList({
 			style={{
 				flex: 1,
 				minHeight: 0,
+				overflowY: "auto",
+				padding: "0 24px 20px",
 				display: "flex",
 				flexDirection: "column",
+				gap: 12,
 			}}
 		>
-			<ConsoleHeader
-				subtitle={
-					items.length
-						? `자동 필터가 잡은 ${items.length}건이 검토를 기다려요`
-						: "검수할 공고가 없어요"
-				}
-				title="공고 검수 대기"
-			/>
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					padding: "10px 24px 20px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 12,
-				}}
-			>
-				{items.length ? (
-					items.map((q) => (
-						<button
-							key={q.id}
-							onClick={() => onOpen(q)}
-							style={{
-								textAlign: "left",
-								padding: 16,
-								borderRadius: 16,
-								background: "var(--surface-card)",
-								border: "1px solid var(--border-subtle)",
-								boxShadow: "var(--shadow-card)",
-								cursor: "pointer",
-								display: "flex",
-								flexDirection: "column",
-								gap: 12,
-							}}
-							type="button"
-						>
-							<div
-								style={{ display: "flex", alignItems: "flex-start", gap: 12 }}
-							>
-								<Avatar name={q.company} size="md" square />
-								<div style={{ flex: 1, minWidth: 0 }}>
-									<div
-										style={{
-											fontFamily: "var(--font-sans)",
-											fontSize: 15.5,
-											fontWeight: 700,
-											color: "var(--text-strong)",
-										}}
-									>
-										{q.title}
-									</div>
-									<div
-										style={{
-											fontFamily: "var(--font-sans)",
-											fontSize: 13,
-											color: "var(--text-muted)",
-											marginTop: 2,
-										}}
-									>
-										{q.company} · {q.location} · {q.submitted}
-									</div>
-								</div>
-							</div>
-							<div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-								{q.flags.map((f) => (
-									<RiskFlag
-										key={`${f.label}-${f.match}`}
-										label={f.label}
-										match={f.match}
-										sev={f.sev}
-									/>
-								))}
-							</div>
-						</button>
-					))
-				) : (
-					<EmptyState icon={<CheckIcon />} text="모든 공고를 검수했어요" />
-				)}
-			</div>
+			<QueueFilterRow />
+			{items.length ? (
+				items.map((q) => (
+					<QueueRow
+						key={q.id}
+						onOpen={() => onOpen(q)}
+						onToggle={() => onToggle(q.id)}
+						q={q}
+						selected={selected.includes(q.id)}
+					/>
+				))
+			) : (
+				<EmptyState icon={<CheckIcon />} text="검수할 공고가 없어요" />
+			)}
 		</div>
 	);
 }
 
-function QueueDetail({
+export function QueueDetail({
 	item,
 	tone,
 	onBack,
@@ -410,7 +736,7 @@ function QueueDetail({
 								marginTop: 2,
 							}}
 						>
-							{item.company} · {item.location}
+							{item.company} · {item.location} · ID {item.refId}
 						</div>
 					</div>
 				</div>
@@ -418,7 +744,7 @@ function QueueDetail({
 					style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
 				>
 					<MetaBox label="급여" value={item.pay} />
-					<MetaBox label="접수" value={item.submitted} />
+					<MetaBox label="접수" value={item.receivedAt} />
 				</div>
 				<div
 					style={{
@@ -484,7 +810,11 @@ function QueueDetail({
 							border: "1px solid var(--border-subtle)",
 						}}
 					>
-						<HiText text={item.desc} />
+						<HiText
+							level={item.riskLevel}
+							terms={item.detected}
+							text={item.desc}
+						/>
 					</div>
 				</div>
 				<div
@@ -760,7 +1090,7 @@ function ReportRow({
 	);
 }
 
-function ReportList({
+export function ReportList({
 	items,
 	onOpen,
 }: {
@@ -778,20 +1108,12 @@ function ReportList({
 				flexDirection: "column",
 			}}
 		>
-			<ConsoleHeader
-				subtitle={
-					open.length
-						? `${open.length}건의 신고가 조치를 기다려요`
-						: "처리할 신고가 없어요"
-				}
-				title="신고 인박스"
-			/>
 			<div
 				style={{
 					flex: 1,
 					minHeight: 0,
 					overflowY: "auto",
-					padding: "10px 24px 20px",
+					padding: "4px 24px 20px",
 					display: "flex",
 					flexDirection: "column",
 					gap: 12,
@@ -874,7 +1196,7 @@ function PartyBox({
 	);
 }
 
-function ReportDetail({
+export function ReportDetail({
 	item,
 	onBack,
 	onResolve,
@@ -1138,7 +1460,7 @@ function UserRow({
 	);
 }
 
-function UserList({
+export function UserList({
 	items,
 	onOpen,
 }: {
@@ -1154,16 +1476,12 @@ function UserList({
 				flexDirection: "column",
 			}}
 		>
-			<ConsoleHeader
-				subtitle="신고 이력과 제재 상태를 확인해요"
-				title="사용자 관리"
-			/>
 			<div
 				style={{
 					flex: 1,
 					minHeight: 0,
 					overflowY: "auto",
-					padding: "10px 24px 20px",
+					padding: "4px 24px 20px",
 					display: "flex",
 					flexDirection: "column",
 					gap: 12,
@@ -1337,7 +1655,7 @@ function SanctionSheet({
 	);
 }
 
-function UserDetail({
+export function UserDetail({
 	item,
 	onBack,
 	onSanction,
@@ -1487,24 +1805,17 @@ function UserDetail({
 }
 
 // ---- 콘솔 셸 ---------------------------------------------------------------
-function ModTabs({
+export function ModTabs({
 	tab,
 	setTab,
-	counts,
 }: {
 	tab: string;
 	setTab: (v: string) => void;
-	counts: { queue: number; reports: number; users: number };
 }) {
 	const items = [
-		{
-			v: "queue",
-			label: "공고 검수",
-			icon: <ClipboardListIcon />,
-			n: counts.queue,
-		},
-		{ v: "reports", label: "신고", icon: <AlertCircle />, n: counts.reports },
-		{ v: "users", label: "사용자", icon: <UserIcon />, n: 0 },
+		{ v: "queue", label: "검수", icon: <ShieldIcon /> },
+		{ v: "reports", label: "신고", icon: <FlagIcon /> },
+		{ v: "users", label: "사용자", icon: <UserIcon /> },
 	];
 	return (
 		<nav style={{ display: "flex", padding: "10px 8px 8px" }}>
@@ -1528,39 +1839,8 @@ function ModTabs({
 						}}
 						type="button"
 					>
-						<span
-							style={{
-								position: "relative",
-								display: "inline-flex",
-								width: 24,
-								height: 24,
-							}}
-						>
+						<span style={{ display: "inline-flex", width: 24, height: 24 }}>
 							{it.icon}
-							{it.n ? (
-								<span
-									style={{
-										position: "absolute",
-										top: -5,
-										right: -8,
-										minWidth: 16,
-										height: 16,
-										padding: "0 4px",
-										borderRadius: 999,
-										background: "var(--coral-500)",
-										color: "#fff",
-										fontFamily: "var(--font-sans)",
-										fontSize: 10,
-										fontWeight: 700,
-										display: "inline-flex",
-										alignItems: "center",
-										justifyContent: "center",
-										boxShadow: "0 0 0 2px var(--surface-card)",
-									}}
-								>
-									{it.n}
-								</span>
-							) : null}
 						</span>
 						<span
 							style={{
@@ -1578,6 +1858,146 @@ function ModTabs({
 	);
 }
 
+// ---- 일괄 처리 액션 바 -----------------------------------------------------
+function ActionBtn({
+	label,
+	tone,
+	onClick,
+}: {
+	label: string;
+	tone?: "danger" | "success";
+	onClick: () => void;
+}) {
+	let color = "#fff";
+	if (tone === "danger") {
+		color = "var(--coral-400)";
+	} else if (tone === "success") {
+		color = "var(--green-500)";
+	}
+	return (
+		<button
+			onClick={onClick}
+			style={{
+				height: 34,
+				padding: "0 11px",
+				borderRadius: 10,
+				cursor: "pointer",
+				whiteSpace: "nowrap",
+				background: "rgba(255,255,255,0.08)",
+				border: "1px solid rgba(255,255,255,0.14)",
+				color,
+				fontFamily: "var(--font-sans)",
+				fontSize: 12.5,
+				fontWeight: 700,
+			}}
+			type="button"
+		>
+			{label}
+		</button>
+	);
+}
+
+export function QueueActionBar({
+	count,
+	onAction,
+}: {
+	count: number;
+	onAction: (action: "reject" | "hold" | "approve" | "sanction") => void;
+}) {
+	return (
+		<div style={{ padding: "8px 16px 4px" }}>
+			<div
+				style={{
+					display: "flex",
+					alignItems: "center",
+					gap: 8,
+					padding: "10px 12px",
+					borderRadius: 16,
+					background: "var(--ink-800)",
+					boxShadow: "var(--shadow-lg)",
+				}}
+			>
+				<span
+					style={{
+						fontFamily: "var(--font-sans)",
+						fontSize: 12.5,
+						fontWeight: 700,
+						color: "#fff",
+						whiteSpace: "nowrap",
+					}}
+				>
+					{count}개 선택됨
+				</span>
+				<div
+					style={{
+						display: "flex",
+						gap: 6,
+						marginLeft: "auto",
+					}}
+				>
+					<ActionBtn
+						label="반려"
+						onClick={() => onAction("reject")}
+						tone="danger"
+					/>
+					<ActionBtn label="보류" onClick={() => onAction("hold")} />
+					<ActionBtn
+						label="승인"
+						onClick={() => onAction("approve")}
+						tone="success"
+					/>
+					<ActionBtn label="경고/제재" onClick={() => onAction("sanction")} />
+				</div>
+			</div>
+		</div>
+	);
+}
+
+export function ConsoleToast({ message }: { message: string }) {
+	return (
+		<div
+			style={{
+				position: "absolute",
+				left: 0,
+				right: 0,
+				bottom: 84,
+				display: "flex",
+				justifyContent: "center",
+				zIndex: 30,
+				pointerEvents: "none",
+			}}
+		>
+			<div
+				style={{
+					display: "flex",
+					alignItems: "center",
+					gap: 8,
+					padding: "11px 18px",
+					borderRadius: 999,
+					background: "var(--ink-800)",
+					color: "#fff",
+					boxShadow: "var(--shadow-lg)",
+					fontFamily: "var(--font-sans)",
+					fontSize: 13,
+					fontWeight: 700,
+				}}
+			>
+				<span
+					style={{
+						width: 16,
+						height: 16,
+						display: "inline-flex",
+						color: "var(--green-500)",
+					}}
+				>
+					<CheckIcon />
+				</span>
+				{message}
+			</div>
+		</div>
+	);
+}
+
 type Detail =
 	| { kind: "queue"; item: QueueItem }
 	| { kind: "report"; item: Report }
@@ -1585,11 +2005,14 @@ type Detail =
 	| null;
 
 export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
-	const [tab, setTab] = useState("queue");
+	const [tab, setTabState] = useState("queue");
 	const [detail, setDetail] = useState<Detail>(null);
 	const [queue, setQueue] = useState<QueueItem[]>(QUEUE);
 	const [reports, setReports] = useState<Report[]>(REPORTS);
 	const [users, setUsers] = useState<ManagedUser[]>(USERS);
+	const [selected, setSelected] = useState<string[]>(
+		QUEUE.length ? [QUEUE[0].id] : []
+	);
 	const [toast, setToast] = useState<string | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1601,8 +2024,19 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 		timer.current = setTimeout(() => setToast(null), 2200);
 	};
 
+	const setTab = (v: string) => {
+		setTabState(v);
+		setSelected([]);
+	};
+
+	const toggleSelect = (id: string) =>
+		setSelected((s) =>
+			s.includes(id) ? s.filter((x) => x !== id) : [...s, id]
+		);
+
 	const resolveQueue = (id: string, action: "approve" | "reject") => {
 		setQueue((q) => q.filter((x) => x.id !== id));
+		setSelected((s) => s.filter((x) => x !== id));
 		setDetail(null);
 		flash(action === "approve" ? "공고를 승인했어요" : "공고를 반려했어요");
 	};
@@ -1629,59 +2063,81 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 		flash(label);
 	};
 
-	const openReports = reports.filter((r) => r.status === "open").length;
-
-	let body: ReactNode = null;
-	if (detail) {
-		if (detail.kind === "queue") {
-			body = (
-				<QueueDetail
-					item={detail.item}
-					onBack={() => setDetail(null)}
-					onResolve={resolveQueue}
-					tone={tone}
-				/>
-			);
-		} else if (detail.kind === "report") {
-			body = (
-				<ReportDetail
-					item={detail.item}
-					onBack={() => setDetail(null)}
-					onResolve={resolveReport}
-					onSanction={sanction}
-				/>
-			);
-		} else if (detail.kind === "user") {
-			body = (
-				<UserDetail
-					item={detail.item}
-					onBack={() => setDetail(null)}
-					onSanction={sanction}
-				/>
-			);
+	const bulkAction = (action: "reject" | "hold" | "approve" | "sanction") => {
+		const n = selected.length;
+		if (action === "approve") {
+			setQueue((q) => q.filter((x) => !selected.includes(x.id)));
+			flash(`${n}건을 승인했어요`);
+		} else if (action === "reject") {
+			setQueue((q) => q.filter((x) => !selected.includes(x.id)));
+			flash(`${n}건을 반려했어요`);
+		} else if (action === "hold") {
+			flash(`${n}건을 보류했어요`);
+		} else {
+			flash(`${n}건에 경고를 보냈어요`);
 		}
-	} else if (tab === "queue") {
-		body = (
+		setSelected([]);
+	};
+
+	const openReports = reports.filter((r) => r.status === "open").length;
+	const warnedUsers = users.filter((u) => u.status === "warned").length;
+
+	let detailBody: ReactNode = null;
+	if (detail?.kind === "queue") {
+		detailBody = (
+			<QueueDetail
+				item={detail.item}
+				onBack={() => setDetail(null)}
+				onResolve={resolveQueue}
+				tone={tone}
+			/>
+		);
+	} else if (detail?.kind === "report") {
+		detailBody = (
+			<ReportDetail
+				item={detail.item}
+				onBack={() => setDetail(null)}
+				onResolve={resolveReport}
+				onSanction={sanction}
+			/>
+		);
+	} else if (detail?.kind === "user") {
+		detailBody = (
+			<UserDetail
+				item={detail.item}
+				onBack={() => setDetail(null)}
+				onSanction={sanction}
+			/>
+		);
+	}
+
+	let listBody: ReactNode = null;
+	if (tab === "queue") {
+		listBody = (
 			<QueueList
 				items={queue}
 				onOpen={(item) => setDetail({ kind: "queue", item })}
+				onToggle={toggleSelect}
+				selected={selected}
 			/>
 		);
 	} else if (tab === "reports") {
-		body = (
+		listBody = (
 			<ReportList
 				items={reports}
 				onOpen={(item) => setDetail({ kind: "report", item })}
 			/>
 		);
 	} else {
-		body = (
+		listBody = (
 			<UserList
 				items={users}
 				onOpen={(item) => setDetail({ kind: "user", item })}
 			/>
 		);
 	}
+
+	const showActionBar = !detail && tab === "queue" && selected.length > 0;
 
 	return (
 		<div
@@ -1693,7 +2149,34 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 				position: "relative",
 			}}
 		>
-			{body}
+			{detail ? (
+				detailBody
+			) : (
+				<>
+					<ConsoleTop
+						counts={{
+							queue: queue.length,
+							reports: openReports,
+							warned: warnedUsers,
+						}}
+						onTab={setTab}
+						tab={tab}
+					/>
+					<div
+						style={{
+							flex: 1,
+							minHeight: 0,
+							display: "flex",
+							flexDirection: "column",
+						}}
+					>
+						{listBody}
+					</div>
+				</>
+			)}
+			{showActionBar ? (
+				<QueueActionBar count={selected.length} onAction={bulkAction} />
+			) : null}
 			{detail ? null : (
 				<div
 					style={{
@@ -1701,15 +2184,7 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 						background: "var(--surface-page)",
 					}}
 				>
-					<ModTabs
-						counts={{
-							queue: queue.length,
-							reports: openReports,
-							users: users.length,
-						}}
-						setTab={setTab}
-						tab={tab}
-					/>
+					<ModTabs setTab={setTab} tab={tab} />
 				</div>
 			)}
 			{toast ? (

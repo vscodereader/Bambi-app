@@ -3,10 +3,12 @@
 
 import {
 	ArrowLeft,
+	ArrowUpDown,
 	Bell,
 	Bookmark,
 	Briefcase,
 	Check,
+	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
 	CircleAlert,
@@ -17,6 +19,7 @@ import {
 	EllipsisVertical,
 	Eye,
 	EyeOff,
+	Flag,
 	House,
 	Lock,
 	type LucideIcon,
@@ -27,7 +30,9 @@ import {
 	Plus,
 	Search,
 	Settings,
+	ShieldCheck,
 	SlidersHorizontal,
+	Star,
 	User,
 	Zap,
 } from "lucide-react";
@@ -47,6 +52,7 @@ export const BellIcon = fill(Bell);
 export const BookmarkIcon = fill(Bookmark);
 export const BriefcaseIcon = fill(Briefcase);
 export const CheckIcon = fill(Check);
+export const ChevronDownIcon = fill(ChevronDown);
 export const ChevronLeftIcon = fill(ChevronLeft);
 export const ChevronRightIcon = fill(ChevronRight);
 export const ClipboardListIcon = fill(ClipboardList);
@@ -58,6 +64,7 @@ export const EyeIcon = fill(Eye);
 export const EyeOffIcon = fill(EyeOff);
 export const Filter = fill(SlidersHorizontal);
 export const Flash = fill(Zap);
+export const FlagIcon = fill(Flag);
 export const Home2 = fill(House);
 export const LockIcon = fill(Lock);
 export const MapPinIcon = fill(MapPin);
@@ -67,4 +74,7 @@ export const PlusIcon = fill(Plus);
 export const SearchIcon = fill(Search);
 export const Search2 = fill(Search);
 export const SettingsIcon = fill(Settings);
+export const ShieldIcon = fill(ShieldCheck);
+export const SortIcon = fill(ArrowUpDown);
+export const StarIcon = fill(Star);
 export const UserIcon = fill(User);

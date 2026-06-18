@@ -2,6 +2,7 @@
 
 export type Severity = "block" | "review" | "warn" | "ok";
 export type ReportSeverity = "high" | "mid" | "low";
+export type RiskLevel = "high" | "mid" | "low";
 export type VerdictState = "block" | "review" | "publish";
 export type ModerationModel = "pre" | "post" | "hybrid";
 export type VisualTone = "calm" | "bold";
@@ -41,6 +42,8 @@ export interface Job {
 	location: string;
 	pay: string;
 	pref: string;
+	rating: number;
+	reviews: number;
 	status: string;
 	tags: string[];
 	title: string;
@@ -57,11 +60,16 @@ export interface QueueFlag {
 export interface QueueItem {
 	company: string;
 	desc: string;
+	detected: string[];
 	flags: QueueFlag[];
 	id: string;
 	location: string;
 	pay: string;
+	receivedAt: string;
+	refId: string;
 	risk: Severity;
+	riskLevel: RiskLevel;
+	role: string;
 	submitted: string;
 	title: string;
 }

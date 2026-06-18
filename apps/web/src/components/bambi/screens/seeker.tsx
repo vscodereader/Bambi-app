@@ -27,6 +27,7 @@ import {
 	BookmarkIcon,
 	BriefcaseIcon,
 	CheckIcon,
+	ChevronDownIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	ClipboardListIcon,
@@ -39,6 +40,7 @@ import {
 	PlusIcon,
 	Search2,
 	SettingsIcon,
+	ShieldIcon,
 	UserIcon,
 } from "../icons";
 import { PhoneFrame } from "../phone-frame";
@@ -47,7 +49,7 @@ import { ContactReveal } from "./contact-reveal";
 
 function SeekerCategory() {
 	const [sel, setSel] = useState("전체");
-	const cats = ["전체", "서빙", "매니저", "바텐더", "가드", "주방"];
+	const cats = ["전체", "라운지", "바", "클럽", "호스트바", "카페"];
 	return (
 		<div
 			style={{
@@ -63,6 +65,27 @@ function SeekerCategory() {
 					{c}
 				</Tag>
 			))}
+			<button
+				aria-label="카테고리 더보기"
+				style={{
+					flex: "0 0 auto",
+					width: "var(--control-h-xs)",
+					height: "var(--control-h-xs)",
+					borderRadius: "var(--radius-pill)",
+					border: "1px solid var(--border-default)",
+					background: "var(--surface-card)",
+					color: "var(--text-muted)",
+					cursor: "pointer",
+					display: "inline-flex",
+					alignItems: "center",
+					justifyContent: "center",
+				}}
+				type="button"
+			>
+				<span style={{ display: "inline-flex", width: 16, height: 16 }}>
+					<ChevronDownIcon />
+				</span>
+			</button>
 		</div>
 	);
 }
@@ -75,7 +98,7 @@ function TrustStrip({ tone }: { tone: VisualTone }) {
 				display: "flex",
 				alignItems: "center",
 				gap: 10,
-				padding: "11px 14px",
+				padding: "13px 14px",
 				borderRadius: 14,
 				background: dark ? "var(--ink-800)" : "var(--color-primary-soft)",
 				color: dark ? "#fff" : "var(--color-primary-press)",
@@ -90,32 +113,44 @@ function TrustStrip({ tone }: { tone: VisualTone }) {
 					color: dark ? "var(--coral-300)" : "var(--coral-600)",
 				}}
 			>
-				<CheckIcon />
+				<ShieldIcon />
 			</span>
 			<span
 				style={{
 					flex: 1,
 					fontFamily: "var(--font-sans)",
 					fontSize: 12.5,
-					fontWeight: 600,
+					fontWeight: 700,
 					lineHeight: 1.4,
 				}}
 			>
-				모든 공고는 게시 전 검수를 거쳐요. 불법·강요·미성년 관련 공고는
-				차단돼요.
+				연락처는 면접 확정 전까지 비공개로 보호돼요
+			</span>
+			<span
+				aria-hidden="true"
+				style={{
+					width: 18,
+					height: 18,
+					flex: "0 0 18px",
+					display: "inline-flex",
+					opacity: 0.7,
+				}}
+			>
+				<ChevronRightIcon />
 			</span>
 		</div>
 	);
 }
 
-function SeekerHome({
+export function SeekerHome({
 	onOpenJob,
+	onChatJob,
 	tone = "calm",
 }: {
 	onOpenJob: (job: Job) => void;
+	onChatJob: (job: Job) => void;
 	tone?: VisualTone;
 }) {
-	const [saved, setSaved] = useState<Record<string, boolean>>({ j1: true });
 	return (
 		<div
 			style={{
@@ -134,9 +169,39 @@ function SeekerHome({
 				}}
 			>
 				<Logo lang="ko" size="md" />
-				<IconButton badge variant="subtle">
-					<BellIcon />
-				</IconButton>
+				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+					<span
+						style={{
+							display: "inline-flex",
+							alignItems: "center",
+							gap: 5,
+							height: 30,
+							padding: "0 11px",
+							borderRadius: "var(--radius-pill)",
+							background: "var(--surface-subtle)",
+							color: "var(--text-default)",
+							fontFamily: "var(--font-sans)",
+							fontSize: 12,
+							fontWeight: 700,
+							whiteSpace: "nowrap",
+						}}
+					>
+						<span
+							style={{
+								display: "inline-flex",
+								width: 14,
+								height: 14,
+								color: "var(--green-600)",
+							}}
+						>
+							<ShieldIcon />
+						</span>
+						익명 보호 중
+					</span>
+					<IconButton badge variant="subtle">
+						<BellIcon />
+					</IconButton>
+				</div>
 			</div>
 			<div
 				style={{
@@ -161,13 +226,14 @@ function SeekerHome({
 							color: "var(--text-strong)",
 						}}
 					>
-						하늘님, 오늘 밤도
-						<br />
-						좋은 자리가 기다려요
+						하늘님, 좋은 자리를 확인해요
 					</h1>
 				</div>
 				<div style={{ padding: "0 24px" }}>
-					<SearchField placeholder="직무, 지역으로 검색" />
+					<SearchField
+						filterLabel="필터"
+						placeholder="업종, 지역, 공고 제목 검색"
+					/>
 				</div>
 				<div style={{ padding: "0 24px" }}>
 					<TrustStrip tone={tone} />
@@ -206,22 +272,23 @@ function SeekerHome({
 					style={{
 						display: "flex",
 						flexDirection: "column",
-						gap: 14,
+						gap: 12,
 						padding: "0 24px",
 					}}
 				>
 					{JOBS.map((j) => (
 						<JobCard
-							company={j.company}
+							avatarName={j.company}
 							featured={j.featured}
 							key={j.id}
 							location={j.location}
+							onChat={() => onChatJob(j)}
 							onClick={() => onOpenJob(j)}
-							onSave={(val) => setSaved((s) => ({ ...s, [j.id]: val }))}
 							pay={j.pay}
-							saved={!!saved[j.id]}
-							tags={j.tags}
-							title={j.title}
+							rating={j.rating}
+							reviews={j.reviews}
+							title={`${j.company} ${j.title}`}
+							verified={j.verified}
 						/>
 					))}
 				</div>
@@ -230,7 +297,7 @@ function SeekerHome({
 	);
 }
 
-function SeekerDetail({
+export function SeekerDetail({
 	job,
 	onBack,
 	onStartChat,
@@ -604,7 +671,7 @@ function ReportOverlay({
 	);
 }
 
-function SeekerChat({
+export function SeekerChat({
 	job,
 	onBack,
 	onReveal,
@@ -963,7 +1030,7 @@ function SeekerChat({
 	);
 }
 
-function SeekerMe() {
+export function SeekerMe() {
 	const rows = [
 		{ icon: <ClipboardListIcon />, label: "내 신고 내역", meta: "0건" },
 		{ icon: <ClockIcon />, label: "예정된 면접", meta: "1건" },
@@ -1108,6 +1175,168 @@ function SeekerMe() {
 	);
 }
 
+const CHAT_PREVIEWS = [
+	{
+		jobId: "j1",
+		last: "네 안녕하세요, 가능합니다! 면접은 언제쯤 볼 수 있을까요?",
+		time: "오후 2:14",
+		unread: 1,
+	},
+	{
+		jobId: "j3",
+		last: "좋아요. 이번 주 수요일 저녁 가능하시면 일정 잡아드릴게요.",
+		time: "어제",
+		unread: 0,
+	},
+	{
+		jobId: "j4",
+		last: "지원 감사합니다. 확인 후 채팅으로 안내드릴게요.",
+		time: "2일 전",
+		unread: 0,
+	},
+];
+
+export function SeekerChats({ onOpen }: { onOpen: (jobId: string) => void }) {
+	const rows = CHAT_PREVIEWS.map((c) => ({
+		...c,
+		job: JOBS.find((j) => j.id === c.jobId),
+	})).filter((c) => c.job);
+	return (
+		<div
+			style={{
+				flex: 1,
+				minHeight: 0,
+				display: "flex",
+				flexDirection: "column",
+			}}
+		>
+			<div style={{ padding: "8px 24px 4px" }}>
+				<h1
+					style={{
+						margin: 0,
+						fontFamily: "var(--font-display)",
+						fontSize: 24,
+						fontWeight: 800,
+						color: "var(--text-strong)",
+					}}
+				>
+					채팅
+				</h1>
+			</div>
+			<div
+				style={{
+					flex: 1,
+					minHeight: 0,
+					overflowY: "auto",
+					padding: "10px 16px 16px",
+					display: "flex",
+					flexDirection: "column",
+					gap: 2,
+				}}
+			>
+				{rows.map((c) => (
+					<button
+						key={c.jobId}
+						onClick={() => onOpen(c.jobId)}
+						style={{
+							display: "flex",
+							alignItems: "center",
+							gap: 12,
+							padding: "12px 8px",
+							border: "none",
+							background: "transparent",
+							cursor: "pointer",
+							textAlign: "left",
+							borderRadius: 14,
+						}}
+						type="button"
+					>
+						<Avatar name={c.job?.company} size="lg" square />
+						<div style={{ flex: 1, minWidth: 0 }}>
+							<div
+								style={{
+									display: "flex",
+									alignItems: "baseline",
+									justifyContent: "space-between",
+									gap: 8,
+								}}
+							>
+								<span
+									style={{
+										fontFamily: "var(--font-sans)",
+										fontSize: 15,
+										fontWeight: 700,
+										color: "var(--text-strong)",
+										whiteSpace: "nowrap",
+										overflow: "hidden",
+										textOverflow: "ellipsis",
+									}}
+								>
+									{c.job?.company}
+								</span>
+								<span
+									style={{
+										flex: "0 0 auto",
+										fontFamily: "var(--font-sans)",
+										fontSize: 11.5,
+										color: "var(--text-subtle)",
+									}}
+								>
+									{c.time}
+								</span>
+							</div>
+							<div
+								style={{
+									display: "flex",
+									alignItems: "center",
+									gap: 8,
+									marginTop: 3,
+								}}
+							>
+								<span
+									style={{
+										flex: 1,
+										minWidth: 0,
+										fontFamily: "var(--font-sans)",
+										fontSize: 13,
+										color: "var(--text-muted)",
+										whiteSpace: "nowrap",
+										overflow: "hidden",
+										textOverflow: "ellipsis",
+									}}
+								>
+									{c.last}
+								</span>
+								{c.unread ? (
+									<span
+										style={{
+											flex: "0 0 auto",
+											minWidth: 18,
+											height: 18,
+											padding: "0 5px",
+											borderRadius: 999,
+											background: "var(--coral-500)",
+											color: "#fff",
+											fontFamily: "var(--font-sans)",
+											fontSize: 11,
+											fontWeight: 700,
+											display: "inline-flex",
+											alignItems: "center",
+											justifyContent: "center",
+										}}
+									>
+										{c.unread}
+									</span>
+								) : null}
+							</div>
+						</div>
+					</button>
+				))}
+			</div>
+		</div>
+	);
+}
+
 interface Frame {
 	name: string;
 	params?: { job?: Job };
@@ -1131,7 +1360,11 @@ export function SeekerPersona({
 	let screen: React.ReactNode = null;
 	if (cur.name === "home") {
 		screen = (
-			<SeekerHome onOpenJob={(j) => push("detail", { job: j })} tone={tone} />
+			<SeekerHome
+				onChatJob={(j) => push("chat", { job: j })}
+				onOpenJob={(j) => push("detail", { job: j })}
+				tone={tone}
+			/>
 		);
 	} else if (cur.name === "detail") {
 		screen = (

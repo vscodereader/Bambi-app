@@ -47,7 +47,63 @@ button {
 	}
 }
 
-/* ---- 스테이지 (페르소나 스위처) ---- */
+/* ---- 앱 셸 (모바일 우선 + 데스크톱 홍보 거터) ---- */
+.bambi-backdrop {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	min-height: 100dvh;
+	background: var(--surface-page);
+}
+
+.bambi-app {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: 480px;
+	height: 100dvh;
+	overflow: hidden;
+	background: var(--surface-page);
+}
+
+.bambi-promo {
+	display: none;
+}
+
+@media (min-width: 768px) {
+	.bambi-backdrop {
+		gap: 28px;
+		background:
+			radial-gradient(
+				1200px 720px at 50% -20%,
+				var(--coral-50) 0%,
+				rgba(255, 255, 255, 0) 55%
+			),
+			var(--surface-subtle);
+	}
+
+	.bambi-app {
+		box-shadow:
+			0 0 0 1px var(--border-subtle),
+			0 24px 70px rgba(17, 24, 39, 0.1);
+	}
+}
+
+@media (min-width: 1080px) {
+	.bambi-promo {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		justify-content: center;
+		width: 296px;
+		height: 100dvh;
+		padding: 32px 0;
+		overflow: hidden;
+	}
+}
+
+/* ---- 스테이지 (페르소나 스위처 · /preview) ---- */
 .bambi-stage {
 	display: flex;
 	align-items: center;

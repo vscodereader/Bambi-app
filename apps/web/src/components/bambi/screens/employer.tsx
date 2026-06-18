@@ -15,17 +15,21 @@ import {
 	IconButton,
 	Input,
 	Logo,
+	SegmentedTabs,
+	StatGroup,
 	Tag,
 } from "../ds";
 import {
 	AlertCircle,
 	BellIcon,
 	CheckIcon,
+	ChevronDownIcon,
 	ChevronRightIcon,
 	ClipboardListIcon,
 	ClockIcon,
 	PlusIcon,
 	SettingsIcon,
+	ShieldIcon,
 	UserIcon,
 } from "../icons";
 import { PhoneFrame } from "../phone-frame";
@@ -118,7 +122,7 @@ function GuardIntro({ tone }: { tone: VisualTone }) {
 	);
 }
 
-function EmployerPost({
+export function EmployerPost({
 	onBack,
 	onDone,
 	tone = "calm",
@@ -225,7 +229,7 @@ function EmployerPost({
 	);
 }
 
-function EmployerPostResult({
+export function EmployerPostResult({
 	state,
 	onDone,
 }: {
@@ -318,41 +322,52 @@ function EmployerPostResult({
 }
 
 interface Posting {
+	applicants: number;
+	area: string;
+	dateLabel: string;
+	guide?: string;
 	id: string;
-	meta: string;
 	pay: string;
 	reason?: string;
 	state: "published" | "review" | "rejected";
 	title: string;
-	views: string;
+	views: number;
 }
+
+const STORE_NAME = "달밤 라운지";
 
 const MY_POSTINGS: Posting[] = [
 	{
 		id: "p1",
 		title: "홀 서빙 · 주말 야간",
-		pay: "시급 18,000원",
 		state: "published",
-		meta: "게시 중 · 지원 5",
-		views: "조회 248",
+		area: "강남 · 청담",
+		pay: "시급 18,000원",
+		views: 128,
+		applicants: 5,
+		dateLabel: "게시일 2025.09.20",
 	},
 	{
 		id: "p2",
-		title: "주말 이벤트 스탭",
-		pay: "일급 150,000원",
+		title: "바텐더 · 평일",
 		state: "review",
-		meta: "검수 중 · 약 10분",
-		views: "",
+		area: "강남 · 청담",
+		pay: "시급 16,000원",
+		views: 64,
+		applicants: 2,
+		dateLabel: "검수 예상 6시간",
 	},
 	{
 		id: "p3",
-		title: "라운지 직원 급구",
-		pay: "시급 25,000원",
+		title: "전일제 매니저",
 		state: "rejected",
-		meta: "반려됨",
-		views: "",
-		reason:
-			"'2차', '애프터' 등 성적 서비스를 암시하는 표현이 있어 게시할 수 없어요.",
+		area: "강남 · 청담",
+		pay: "급여 협의",
+		views: 31,
+		applicants: 1,
+		dateLabel: "반려일 2025.09.19",
+		reason: "근무 조건이 정보 가이드라인을 위반했어요.",
+		guide: "가이드: 성별 제한, 외모 조건, 과도한 개인 정보 요구 금지",
 	},
 ];
 
@@ -367,16 +382,16 @@ const POSTING_STATE: Record<
 
 function PostingRow({ p }: { p: Posting }) {
 	const stateConf = POSTING_STATE[p.state];
+	const rejected = p.state === "rejected";
 	return (
 		<div
 			style={{
 				padding: 16,
 				borderRadius: 16,
 				background: "var(--surface-card)",
-				border:
-					p.state === "rejected"
-						? "1px solid var(--red-500)"
-						: "1px solid var(--border-subtle)",
+				border: rejected
+					? "1px solid var(--red-500)"
+					: "1px solid var(--border-subtle)",
 				boxShadow: "var(--shadow-card)",
 				display: "flex",
 				flexDirection: "column",
@@ -384,6 +399,7 @@ function PostingRow({ p }: { p: Posting }) {
 			}}
 		>
 			<div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+				<Avatar name={STORE_NAME} size="sm" square />
 				<div style={{ flex: 1, minWidth: 0 }}>
 					<div
 						style={{
@@ -397,13 +413,18 @@ function PostingRow({ p }: { p: Posting }) {
 					</div>
 					<div
 						style={{
+							display: "flex",
+							alignItems: "center",
+							gap: 6,
 							fontFamily: "var(--font-sans)",
 							fontSize: 13,
 							color: "var(--text-muted)",
 							marginTop: 3,
 						}}
 					>
-						{p.pay}
+						<span>{p.area}</span>
+						<span style={{ color: "var(--border-strong)" }}>|</span>
+						<span>{p.pay}</span>
 					</div>
 				</div>
 				<Badge dot tone={stateConf.tone}>
@@ -412,9 +433,6 @@ function PostingRow({ p }: { p: Posting }) {
 			</div>
 			<div
 				style={{
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "space-between",
 					paddingTop: 10,
 					borderTop: "1px solid var(--border-subtle)",
 				}}
@@ -426,21 +444,10 @@ function PostingRow({ p }: { p: Posting }) {
 						color: "var(--text-subtle)",
 					}}
 				>
-					{p.meta}
+					조회 {p.views} · 지원 {p.applicants} · {p.dateLabel}
 				</span>
-				{p.views ? (
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 12,
-							color: "var(--text-subtle)",
-						}}
-					>
-						{p.views}
-					</span>
-				) : null}
 			</div>
-			{p.state === "rejected" ? (
+			{rejected ? (
 				<div
 					style={{
 						display: "flex",
@@ -462,23 +469,44 @@ function PostingRow({ p }: { p: Posting }) {
 					>
 						<AlertCircle />
 					</span>
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 12,
-							lineHeight: 1.5,
-							color: "var(--status-danger-fg)",
-						}}
-					>
-						{p.reason}
-					</span>
+					<div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+						<span
+							style={{
+								fontFamily: "var(--font-sans)",
+								fontSize: 12.5,
+								fontWeight: 700,
+								lineHeight: 1.5,
+								color: "var(--status-danger-fg)",
+							}}
+						>
+							반려 사유 · {p.reason}
+						</span>
+						{p.guide ? (
+							<span
+								style={{
+									fontFamily: "var(--font-sans)",
+									fontSize: 12,
+									lineHeight: 1.5,
+									color: "var(--text-muted)",
+								}}
+							>
+								{p.guide}
+							</span>
+						) : null}
+					</div>
 				</div>
 			) : null}
 		</div>
 	);
 }
 
-function EmployerPostings({ onNew }: { onNew: () => void }) {
+export function EmployerPostings({ onNew }: { onNew: () => void }) {
+	const [tab, setTab] = useState("all");
+	const published = MY_POSTINGS.filter((p) => p.state === "published").length;
+	const review = MY_POSTINGS.filter((p) => p.state === "review").length;
+	const rejected = MY_POSTINGS.filter((p) => p.state === "rejected").length;
+	const list =
+		tab === "all" ? MY_POSTINGS : MY_POSTINGS.filter((p) => p.state === tab);
 	return (
 		<div
 			style={{
@@ -497,9 +525,39 @@ function EmployerPostings({ onNew }: { onNew: () => void }) {
 				}}
 			>
 				<Logo lang="ko" size="md" />
-				<IconButton variant="subtle">
-					<BellIcon />
-				</IconButton>
+				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+					<span
+						style={{
+							display: "inline-flex",
+							alignItems: "center",
+							gap: 5,
+							height: 30,
+							padding: "0 11px",
+							borderRadius: "var(--radius-pill)",
+							background: "var(--surface-subtle)",
+							color: "var(--text-default)",
+							fontFamily: "var(--font-sans)",
+							fontSize: 12,
+							fontWeight: 700,
+							whiteSpace: "nowrap",
+						}}
+					>
+						<span
+							style={{
+								display: "inline-flex",
+								width: 14,
+								height: 14,
+								color: "var(--green-600)",
+							}}
+						>
+							<ShieldIcon />
+						</span>
+						사업자 인증 완료
+					</span>
+					<IconButton variant="subtle">
+						<BellIcon />
+					</IconButton>
+				</div>
 			</div>
 			<div
 				style={{
@@ -512,7 +570,7 @@ function EmployerPostings({ onNew }: { onNew: () => void }) {
 					padding: "4px 24px 16px",
 				}}
 			>
-				<div>
+				<div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 					<h1
 						style={{
 							margin: 0,
@@ -523,78 +581,67 @@ function EmployerPostings({ onNew }: { onNew: () => void }) {
 							color: "var(--text-strong)",
 						}}
 					>
-						달밤 라운지님,
-						<br />
-						등록한 공고예요
+						내 공고
 					</h1>
-				</div>
-				<button
-					onClick={onNew}
-					style={{
-						display: "flex",
-						alignItems: "center",
-						gap: 12,
-						padding: 16,
-						borderRadius: 16,
-						border: "1px dashed var(--coral-300)",
-						background: "var(--color-primary-soft)",
-						cursor: "pointer",
-						textAlign: "left",
-					}}
-					type="button"
-				>
-					<span
+					<div
 						style={{
-							width: 44,
-							height: 44,
-							flex: "0 0 44px",
-							borderRadius: 14,
-							background: "var(--color-primary)",
-							color: "#fff",
 							display: "inline-flex",
 							alignItems: "center",
-							justifyContent: "center",
+							gap: 6,
+							alignSelf: "flex-start",
 						}}
 					>
-						<span style={{ width: 22, height: 22, display: "inline-flex" }}>
-							<PlusIcon />
-						</span>
-					</span>
-					<div style={{ flex: 1 }}>
-						<div
+						<span
 							style={{
 								fontFamily: "var(--font-sans)",
 								fontSize: 15,
-								fontWeight: 800,
-								color: "var(--text-strong)",
+								fontWeight: 700,
+								color: "var(--text-default)",
 							}}
 						>
-							새 공고 등록
-						</div>
-						<div
+							{STORE_NAME}
+						</span>
+						<span
 							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 12.5,
-								color: "var(--color-primary-press)",
-								marginTop: 2,
+								display: "inline-flex",
+								width: 18,
+								height: 18,
+								color: "var(--text-muted)",
 							}}
 						>
-							작성하는 동안 금지 표현을 실시간으로 확인해요
-						</div>
+							<ChevronDownIcon />
+						</span>
 					</div>
-					<span
-						style={{
-							width: 18,
-							height: 18,
-							display: "inline-flex",
-							color: "var(--coral-500)",
-						}}
-					>
-						<ChevronRightIcon />
-					</span>
-				</button>
+				</div>
+				<StatGroup
+					items={[
+						{ label: "게시", value: published },
+						{ label: "검수", value: review },
+						{ label: "반려", tone: "danger", value: rejected },
+					]}
+				/>
+				<Button
+					block
+					leftIcon={<PlusIcon />}
+					onClick={onNew}
+					size="lg"
+					variant="primary"
+				>
+					새 공고 등록
+				</Button>
+				<SegmentedTabs
+					items={[
+						{ value: "all", label: `전체 ${MY_POSTINGS.length}` },
+						{ value: "published", label: `게시됨 ${published}` },
+						{ value: "review", label: `검수 중 ${review}` },
+						{ value: "rejected", label: `반려됨 ${rejected}` },
+					]}
+					onChange={setTab}
+					value={tab}
+					variant="underline"
+				/>
 				<div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-					{MY_POSTINGS.map((p) => (
+					{list.map((p) => (
 						<PostingRow key={p.id} p={p} />
 					))}
 				</div>
@@ -603,7 +650,7 @@ function EmployerPostings({ onNew }: { onNew: () => void }) {
 	);
 }
 
-function EmployerMe() {
+export function EmployerMe() {
 	const rows = [
 		{ icon: <ClipboardListIcon />, label: "공고 검수 정책", meta: "" },
 		{ icon: <AlertCircle />, label: "받은 경고", meta: "0회" },

@@ -8,6 +8,7 @@ import { useState } from "react";
 import {
 	ArrowNarrowLeft,
 	BookmarkIcon,
+	CheckIcon,
 	ClockIcon,
 	EyeIcon,
 	EyeOffIcon,
@@ -17,6 +18,7 @@ import {
 	Message,
 	Search2,
 	SearchIcon,
+	StarIcon,
 	UserIcon,
 } from "./icons";
 
@@ -986,6 +988,7 @@ export function Input({
 
 // ---- SearchField -----------------------------------------------------------
 interface SearchFieldProps {
+	filterLabel?: string;
 	onFilter?: () => void;
 	placeholder?: string;
 	showFilter?: boolean;
@@ -996,6 +999,7 @@ export function SearchField({
 	placeholder = "검색",
 	onFilter,
 	showFilter = true,
+	filterLabel,
 	style,
 }: SearchFieldProps) {
 	return (
@@ -1039,7 +1043,36 @@ export function SearchField({
 					}}
 				/>
 			</div>
-			{showFilter ? (
+			{showFilter && filterLabel ? (
+				<button
+					aria-label={filterLabel}
+					onClick={onFilter}
+					style={{
+						display: "inline-flex",
+						alignItems: "center",
+						gap: 7,
+						height: "var(--control-h)",
+						flex: "0 0 auto",
+						padding: "0 16px",
+						borderRadius: "var(--radius-lg)",
+						border: "1px solid var(--border-default)",
+						cursor: "pointer",
+						background: "var(--surface-card)",
+						color: "var(--text-default)",
+						fontFamily: "var(--font-sans)",
+						fontSize: "var(--text-sm)",
+						fontWeight: "var(--weight-bold)",
+						whiteSpace: "nowrap",
+					}}
+					type="button"
+				>
+					<span style={{ display: "inline-flex", width: 18, height: 18 }}>
+						<Filter />
+					</span>
+					{filterLabel}
+				</button>
+			) : null}
+			{showFilter && !filterLabel ? (
 				<button
 					aria-label="필터"
 					onClick={onFilter}
@@ -1369,36 +1402,36 @@ export function ChatBubble({
 
 // ---- JobCard ---------------------------------------------------------------
 interface JobCardProps {
-	company: string;
+	avatarName?: string;
 	featured?: boolean;
 	location?: string;
-	logo?: string;
-	logoName?: string;
+	onChat?: () => void;
 	onClick?: () => void;
-	onSave?: (saved: boolean) => void;
 	pay?: string;
-	saved?: boolean;
+	rating?: number;
+	reviews?: number;
 	style?: CSSProperties;
-	tags?: string[];
 	title: string;
+	verified?: boolean;
 }
 
 export function JobCard({
 	title,
-	company,
+	avatarName,
 	location,
-	logo,
-	logoName,
 	pay,
-	tags = [],
-	saved = false,
-	onSave,
+	rating,
+	reviews,
+	verified = false,
 	featured = false,
 	style,
 	onClick,
+	onChat,
 }: JobCardProps) {
+	const headFg = featured ? "var(--white)" : "var(--text-strong)";
+	const subFg = featured ? "var(--text-on-dark-muted)" : "var(--text-muted)";
 	return (
-		// biome-ignore lint/a11y/useSemanticElements: 카드 내부에 북마크 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
+		// biome-ignore lint/a11y/useSemanticElements: 카드 내부에 채팅 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
 		<div
 			onClick={onClick}
 			onKeyDown={(e) => {
@@ -1410,9 +1443,9 @@ export function JobCard({
 			role="button"
 			style={{
 				display: "flex",
-				flexDirection: "column",
-				gap: 14,
-				padding: 16,
+				alignItems: "center",
+				gap: 12,
+				padding: 14,
 				borderRadius: "var(--radius-card)",
 				background: featured ? "var(--surface-inverse)" : "var(--surface-card)",
 				color: featured ? "var(--text-inverse)" : "var(--text-default)",
@@ -1425,132 +1458,219 @@ export function JobCard({
 			}}
 			tabIndex={0}
 		>
-			<div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-				<Avatar name={logoName || company} size="lg" square src={logo} />
+			<Avatar name={avatarName} size="md" square />
+			<div
+				style={{
+					flex: 1,
+					minWidth: 0,
+					display: "flex",
+					flexDirection: "column",
+					gap: 4,
+				}}
+			>
+				<span
+					style={{
+						fontFamily: "var(--font-sans)",
+						fontSize: "var(--text-sm)",
+						fontWeight: "var(--weight-bold)",
+						color: headFg,
+						lineHeight: 1.3,
+						whiteSpace: "nowrap",
+						overflow: "hidden",
+						textOverflow: "ellipsis",
+					}}
+				>
+					{title}
+				</span>
+				{location ? (
+					<span
+						style={{
+							fontFamily: "var(--font-sans)",
+							fontSize: "var(--text-xs)",
+							color: subFg,
+						}}
+					>
+						{location}
+					</span>
+				) : null}
 				<div
+					style={{
+						display: "flex",
+						alignItems: "center",
+						gap: 8,
+						flexWrap: "wrap",
+					}}
+				>
+					{pay ? (
+						<span
+							style={{
+								fontFamily: "var(--font-sans)",
+								fontSize: "var(--text-sm)",
+								fontWeight: "var(--weight-extrabold)",
+								color: headFg,
+							}}
+						>
+							{pay}
+						</span>
+					) : null}
+					{verified ? (
+						<span
+							style={{
+								display: "inline-flex",
+								alignItems: "center",
+								gap: 3,
+								height: 20,
+								padding: "0 8px",
+								borderRadius: "var(--radius-pill)",
+								background: "var(--status-success-bg)",
+								color: "var(--status-success-fg)",
+								fontFamily: "var(--font-sans)",
+								fontSize: "var(--text-2xs)",
+								fontWeight: "var(--weight-bold)",
+								whiteSpace: "nowrap",
+							}}
+						>
+							<span style={{ display: "inline-flex", width: 11, height: 11 }}>
+								<CheckIcon />
+							</span>
+							인증 완료
+						</span>
+					) : null}
+				</div>
+				{typeof reviews === "number" ? (
+					<div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+						<span
+							style={{
+								display: "inline-flex",
+								width: 13,
+								height: 13,
+								color: "var(--coral-500)",
+							}}
+						>
+							<StarIcon style={{ fill: "var(--coral-500)" }} />
+						</span>
+						<span
+							style={{
+								fontFamily: "var(--font-sans)",
+								fontSize: "var(--text-xs)",
+								color: subFg,
+							}}
+						>
+							후기 {reviews}개
+						</span>
+						{typeof rating === "number" ? (
+							<span
+								style={{
+									fontFamily: "var(--font-sans)",
+									fontSize: "var(--text-xs)",
+									fontWeight: "var(--weight-bold)",
+									color: headFg,
+								}}
+							>
+								{rating.toFixed(1)}
+							</span>
+						) : null}
+					</div>
+				) : null}
+			</div>
+			<button
+				onClick={(e) => {
+					e.stopPropagation();
+					onChat?.();
+				}}
+				style={{
+					flex: "0 0 auto",
+					height: 36,
+					padding: "0 18px",
+					borderRadius: "var(--radius-md)",
+					cursor: "pointer",
+					fontFamily: "var(--font-sans)",
+					fontSize: "var(--text-sm)",
+					fontWeight: "var(--weight-bold)",
+					whiteSpace: "nowrap",
+					...(featured
+						? {
+								background: "var(--color-primary)",
+								color: "var(--color-on-primary)",
+								border: "1px solid transparent",
+								boxShadow: "var(--shadow-primary)",
+							}
+						: {
+								background: "var(--surface-card)",
+								color: "var(--text-strong)",
+								border: "1px solid var(--border-default)",
+							}),
+				}}
+				type="button"
+			>
+				채팅
+			</button>
+		</div>
+	);
+}
+
+// ---- StatGroup -------------------------------------------------------------
+interface StatCell {
+	label: string;
+	tone?: "default" | "danger" | "primary";
+	value: ReactNode;
+}
+interface StatGroupProps {
+	items: StatCell[];
+	style?: CSSProperties;
+}
+
+export function StatGroup({ items, style }: StatGroupProps) {
+	return (
+		<div
+			style={{
+				display: "flex",
+				borderRadius: "var(--radius-lg)",
+				border: "1px solid var(--border-subtle)",
+				background: "var(--surface-card)",
+				boxShadow: "var(--shadow-card)",
+				overflow: "hidden",
+				...style,
+			}}
+		>
+			{items.map((it, i) => (
+				<div
+					key={it.label}
 					style={{
 						flex: 1,
-						minWidth: 0,
 						display: "flex",
 						flexDirection: "column",
-						gap: 3,
+						alignItems: "center",
+						gap: 4,
+						padding: "14px 8px",
+						borderLeft: i ? "1px solid var(--border-subtle)" : "none",
 					}}
 				>
 					<span
 						style={{
 							fontFamily: "var(--font-sans)",
-							fontSize: "var(--text-h3)",
-							fontWeight: "var(--weight-bold)",
-							color: featured ? "var(--white)" : "var(--text-strong)",
-							lineHeight: 1.3,
+							fontSize: "var(--text-xs)",
+							fontWeight: "var(--weight-medium)",
+							color: "var(--text-muted)",
 						}}
 					>
-						{title}
+						{it.label}
 					</span>
 					<span
 						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 5,
-							fontFamily: "var(--font-sans)",
-							fontSize: "var(--text-sm)",
-							color: featured
-								? "var(--text-on-dark-muted)"
-								: "var(--text-muted)",
-						}}
-					>
-						{company}
-						{location ? (
-							<>
-								<span style={{ opacity: 0.5 }}>·</span>
-								<span
-									style={{
-										display: "inline-flex",
-										width: 13,
-										height: 13,
-										opacity: 0.8,
-									}}
-								>
-									<MapPinIcon />
-								</span>
-								{location}
-							</>
-						) : null}
-					</span>
-				</div>
-				<button
-					aria-label="저장"
-					onClick={(e) => {
-						e.stopPropagation();
-						onSave?.(!saved);
-					}}
-					style={{
-						border: "none",
-						background: "none",
-						cursor: "pointer",
-						padding: 2,
-						display: "inline-flex",
-						width: 22,
-						height: 22,
-						color: (() => {
-							if (saved) {
-								return "var(--coral-500)";
-							}
-							return featured ? "rgba(255,255,255,0.6)" : "var(--text-subtle)";
-						})(),
-					}}
-					type="button"
-				>
-					<BookmarkIcon
-						style={saved ? { fill: "var(--coral-500)" } : undefined}
-					/>
-				</button>
-			</div>
-			{tags.length ? (
-				<div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-					{tags.map((t) => (
-						<Badge
-							key={t}
-							style={
-								featured
-									? {
-											background: "rgba(255,255,255,0.10)",
-											color: "var(--white)",
-										}
-									: undefined
-							}
-							tone={featured ? "dark" : "neutral"}
-						>
-							{t}
-						</Badge>
-					))}
-				</div>
-			) : null}
-			{pay ? (
-				<div
-					style={{
-						display: "flex",
-						alignItems: "baseline",
-						justifyContent: "space-between",
-						paddingTop: 2,
-						borderTop: featured
-							? "1px solid rgba(255,255,255,0.08)"
-							: "1px solid var(--border-subtle)",
-					}}
-				>
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: "var(--text-body)",
+							fontFamily: "var(--font-display)",
+							fontSize: "var(--text-h2)",
 							fontWeight: "var(--weight-extrabold)",
-							color: featured ? "var(--white)" : "var(--text-strong)",
-							paddingTop: 12,
+							color:
+								it.tone === "danger" || it.tone === "primary"
+									? "var(--color-primary)"
+									: "var(--text-strong)",
 						}}
 					>
-						{pay}
+						{it.value}
 					</span>
 				</div>
-			) : null}
+			))}
 		</div>
 	);
 }
