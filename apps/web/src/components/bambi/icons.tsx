@@ -1,0 +1,70 @@
+// 밤비 디자인 시스템 아이콘 — 원본 Figma 익스포트 아이콘을 lucide-react로 매핑.
+// 모든 아이콘은 부모 컨테이너(span)를 채우도록 100% 크기, stroke=currentColor 상속.
+
+import {
+	ArrowLeft,
+	Bell,
+	Bookmark,
+	Briefcase,
+	Check,
+	ChevronLeft,
+	ChevronRight,
+	CircleAlert,
+	CircleDollarSign,
+	ClipboardList,
+	Clock,
+	Copy,
+	EllipsisVertical,
+	Eye,
+	EyeOff,
+	House,
+	Lock,
+	type LucideIcon,
+	type LucideProps,
+	MapPin,
+	MessageCircle,
+	Phone,
+	Plus,
+	Search,
+	Settings,
+	SlidersHorizontal,
+	User,
+	Zap,
+} from "lucide-react";
+
+const fill = (
+	Icon: LucideIcon
+): ((props: LucideProps) => React.ReactElement) => {
+	function BambiIcon(props: LucideProps) {
+		return <Icon height="100%" width="100%" {...props} />;
+	}
+	return BambiIcon;
+};
+
+export const AlertCircle = fill(CircleAlert);
+export const ArrowNarrowLeft = fill(ArrowLeft);
+export const BellIcon = fill(Bell);
+export const BookmarkIcon = fill(Bookmark);
+export const BriefcaseIcon = fill(Briefcase);
+export const CheckIcon = fill(Check);
+export const ChevronLeftIcon = fill(ChevronLeft);
+export const ChevronRightIcon = fill(ChevronRight);
+export const ClipboardListIcon = fill(ClipboardList);
+export const ClockIcon = fill(Clock);
+export const CopyIcon = fill(Copy);
+export const DollarCircle = fill(CircleDollarSign);
+export const DotsVertical = fill(EllipsisVertical);
+export const EyeIcon = fill(Eye);
+export const EyeOffIcon = fill(EyeOff);
+export const Filter = fill(SlidersHorizontal);
+export const Flash = fill(Zap);
+export const Home2 = fill(House);
+export const LockIcon = fill(Lock);
+export const MapPinIcon = fill(MapPin);
+export const Message = fill(MessageCircle);
+export const PhoneIcon = fill(Phone);
+export const PlusIcon = fill(Plus);
+export const SearchIcon = fill(Search);
+export const Search2 = fill(Search);
+export const SettingsIcon = fill(Settings);
+export const UserIcon = fill(User);

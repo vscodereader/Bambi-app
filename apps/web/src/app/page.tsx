@@ -1,154 +1,120 @@
 "use client";
 
-import { buttonVariants } from "@bambi-app/ui/components/button";
-import { useQuery } from "@tanstack/react-query";
-import type { Route } from "next";
-import Link from "next/link";
+// 밤비 — 신뢰·안전 흐름 데모 스테이지.
+// 페르소나(구직자/구인자/운영자)별 모바일 흐름을 디바이스 프레임 안에서 보여준다.
 
-import { PageShell } from "@/components/bambi/page-shell";
-import { StatusBadge } from "@/components/bambi/status-badge";
-import Loader from "@/components/loader";
-import { authClient } from "@/lib/auth-client";
-import { formatNullable } from "@/lib/bambi-format";
-import { orpc } from "@/utils/orpc";
+import { useEffect, useState } from "react";
+import { PhoneFrame } from "@/components/bambi/phone-frame";
+import { EmployerPersona } from "@/components/bambi/screens/employer";
+import { ModeratorApp } from "@/components/bambi/screens/moderator";
+import { SeekerPersona } from "@/components/bambi/screens/seeker";
 
-const roleLabels = {
-	admin: "관리자",
-	employer: "구인자",
-	job_seeker: "구직자",
-} as const;
+// 데모 기본값 — 원본 프로토타입의 Tweaks 기본값에 해당.
+// (검수 모델은 가드의 전 범위(게시/검수/차단)를 보여주는 hybrid로 설정)
+const VISUAL_TONE = "calm" as const;
+const REPORT_MODE = "sheet" as const;
+const MODERATION_MODEL = "hybrid" as const;
 
-interface HomeAction {
-	href: Route;
-	label: string;
-}
+type PersonaId = "seeker" | "employer" | "mod";
 
-const getPrimaryHref = (role: null | string | undefined): Route => {
-	if (!role) {
-		return "/onboarding" as Route;
-	}
+const PERSONAS: { id: PersonaId; label: string }[] = [
+	{ id: "seeker", label: "구직자" },
+	{ id: "employer", label: "구인자" },
+	{ id: "mod", label: "운영자" },
+];
 
-	if (role === "employer" || role === "admin") {
-		return "/employer" as Route;
-	}
-
-	return "/jobs" as Route;
-};
-
-const getRoleLabel = (role: null | string | undefined): string => {
-	if (!role) {
-		return "프로필 미설정";
-	}
-
-	return roleLabels[role as keyof typeof roleLabels] ?? role;
-};
-
-const primaryActionLabels = {
-	"/employer": "구인자 관리",
-	"/jobs": "공고 보기",
-	"/onboarding": "온보딩 시작",
-} as const;
-
-const getSecondaryActions = (role: null | string | undefined): HomeAction[] => {
-	if (role === "employer" || role === "admin") {
-		return [{ href: "/chats" as Route, label: "채팅" }];
-	}
-
-	if (role === "job_seeker") {
-		return [{ href: "/chats" as Route, label: "채팅" }];
-	}
-
-	return [];
+const CAP_BY_PERSONA: Record<PersonaId, string> = {
+	seeker: "탐색 → 상세 → 채팅 → 신고",
+	employer: "공고 등록 → 실시간 콘텐츠 가드 → 검수/게시",
+	mod: "검수 큐 → 신고 처리 → 사용자 제재",
 };
 
 export default function Home() {
-	const session = authClient.useSession();
-	const isSignedIn = Boolean(session.data?.user);
-	const mineQuery = useQuery({
-		...orpc.bambi.onboarding.getMine.queryOptions(),
-		enabled: isSignedIn,
-	});
+	const [persona, setPersona] = useState<PersonaId>("seeker");
+	const [scale, setScale] = useState(1);
 
-	if (session.isPending) {
-		return <Loader />;
-	}
+	useEffect(() => {
+		const fit = () => {
+			const margin = 36;
+			const cw = 375;
+			const ch = 812 + 70; // 폰 + 스위처 행
+			const s = Math.min(
+				1,
+				(window.innerWidth - margin) / cw,
+				(window.innerHeight - margin) / ch
+			);
+			setScale(s);
+		};
+		fit();
+		window.addEventListener("resize", fit);
+		return () => window.removeEventListener("resize", fit);
+	}, []);
 
-	if (!isSignedIn) {
-		return (
-			<PageShell
-				description="계정으로 로그인한 뒤 밤비 구인구직 도구를 사용할 수 있습니다."
-				title="밤비"
-			>
-				<section className="grid gap-4 border p-4 sm:grid-cols-[1fr_auto] sm:items-center">
-					<div className="space-y-1">
-						<h2 className="font-medium text-base">시작하기</h2>
-						<p className="text-muted-foreground text-sm">
-							구직자와 구인자 모두 하나의 계정으로 프로필을 만들 수 있습니다.
-						</p>
-					</div>
-					<div className="flex flex-col gap-2 sm:flex-row">
-						<Link className={buttonVariants()} href="/login">
-							로그인
-						</Link>
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href="/login?mode=sign-up"
-						>
-							회원가입
-						</Link>
-					</div>
-				</section>
-			</PageShell>
+	let app: React.ReactNode;
+	if (persona === "seeker") {
+		app = <SeekerPersona reportMode={REPORT_MODE} tone={VISUAL_TONE} />;
+	} else if (persona === "employer") {
+		app = (
+			<EmployerPersona moderationModel={MODERATION_MODEL} tone={VISUAL_TONE} />
+		);
+	} else {
+		app = (
+			<PhoneFrame indicatorTone="dark" statusTone="dark">
+				<ModeratorApp tone={VISUAL_TONE} />
+			</PhoneFrame>
 		);
 	}
 
-	if (mineQuery.isLoading) {
-		return <Loader />;
-	}
-
-	const profile = mineQuery.data?.bambiProfile ?? null;
-	const role = profile?.role;
-	const primaryHref = getPrimaryHref(role);
-	const secondaryActions = getSecondaryActions(role);
-
 	return (
-		<PageShell
-			description="프로필 상태에 맞춰 필요한 업무 화면으로 이동합니다."
-			title="밤비 홈"
-		>
-			<section className="grid gap-4 border p-4 lg:grid-cols-[1fr_auto] lg:items-center">
-				<div className="space-y-3">
-					<div className="flex flex-wrap items-center gap-2">
-						<h2 className="font-medium text-base">
-							{formatNullable(profile?.displayName ?? session.data?.user.name)}
-						</h2>
-						<StatusBadge tone={role ? "good" : "warning"}>
-							{getRoleLabel(role)}
-						</StatusBadge>
+		<main className="bambi-stage">
+			<div
+				style={{
+					transform: `scale(${scale})`,
+					transformOrigin: "center center",
+					display: "flex",
+					flexDirection: "column",
+					alignItems: "center",
+					gap: 18,
+				}}
+			>
+				<div
+					style={{
+						display: "flex",
+						flexDirection: "column",
+						alignItems: "center",
+						gap: 8,
+					}}
+				>
+					<div className="persona-seg">
+						{PERSONAS.map((pp) => (
+							<button
+								className={persona === pp.id ? "on" : ""}
+								key={pp.id}
+								onClick={() => setPersona(pp.id)}
+								type="button"
+							>
+								<span className="pdot" />
+								{pp.label}
+							</button>
+						))}
 					</div>
-					<p className="text-muted-foreground text-sm">
-						{role
-							? "주요 작업을 바로 이어서 진행할 수 있습니다."
-							: "구직자 또는 구인자 프로필을 먼저 선택해 주세요."}
-					</p>
+					<span className="stage-cap">{CAP_BY_PERSONA[persona]}</span>
 				</div>
-				<div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
-					<Link className={buttonVariants()} href={primaryHref}>
-						{primaryActionLabels[
-							primaryHref as keyof typeof primaryActionLabels
-						] ?? "바로가기"}
-					</Link>
-					{secondaryActions.map(({ href, label }) => (
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href={href}
-							key={href}
-						>
-							{label}
-						</Link>
-					))}
+				<div
+					style={{
+						width: 375,
+						height: 812,
+						background: "var(--surface-page)",
+						borderRadius: 44,
+						boxShadow:
+							"0 40px 90px rgba(0,0,0,0.55), 0 0 0 10px #05080d, 0 0 0 11px rgba(255,255,255,0.06)",
+						overflow: "hidden",
+						position: "relative",
+					}}
+				>
+					{app}
 				</div>
-			</section>
-		</PageShell>
+			</div>
+		</main>
 	);
 }

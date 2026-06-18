@@ -1,0 +1,225 @@
+// 밤비 신뢰·안전 흐름 — 샘플 데이터
+
+import type {
+	Job,
+	ManagedUser,
+	QueueItem,
+	Report,
+	ReportReason,
+} from "./types";
+
+export const JOBS: Job[] = [
+	{
+		id: "j1",
+		title: "홀 서빙 · 주말 야간",
+		company: "달밤 라운지",
+		location: "강남",
+		pay: "시급 18,000원",
+		tags: ["정규직", "주 3일", "초보 가능"],
+		type: "정규직",
+		hours: "20:00–02:00",
+		pref: "경력 우대",
+		featured: false,
+		desc: "강남 달밤 라운지에서 주말 야간 홀 서빙을 함께할 분을 찾습니다. 친절하고 성실한 분이면 누구나 환영해요. 첫 출근 전 충분히 안내해 드립니다.",
+		status: "published",
+		verified: true,
+	},
+	{
+		id: "j2",
+		title: "VIP 플로어 매니저",
+		company: "문스톤",
+		location: "청담",
+		pay: "월 350만원~",
+		tags: ["경력", "주 5일"],
+		type: "정규직",
+		hours: "19:00–01:00",
+		pref: "매니저 경력 2년",
+		featured: true,
+		desc: "청담 프리미엄 라운지 문스톤의 플로어를 총괄할 매니저를 모십니다. 팀 관리와 고객 응대 경험이 있는 분을 우대합니다.",
+		status: "published",
+		verified: true,
+	},
+	{
+		id: "j3",
+		title: "바텐더 (칵테일)",
+		company: "네온 바",
+		location: "이태원",
+		pay: "시급 20,000원",
+		tags: ["파트타임", "야간"],
+		type: "파트타임",
+		hours: "21:00–03:00",
+		pref: "칵테일 자격증",
+		featured: false,
+		desc: "이태원 네온 바에서 칵테일을 만들 바텐더를 찾습니다. 클래식 칵테일 제조가 가능한 분이면 좋아요.",
+		status: "published",
+		verified: true,
+	},
+	{
+		id: "j4",
+		title: "주차 · 발렛",
+		company: "클럽 오로라",
+		location: "홍대",
+		pay: "일급 130,000원",
+		tags: ["단기", "주말"],
+		type: "단기",
+		hours: "22:00–05:00",
+		pref: "2종 보통 면허",
+		featured: false,
+		desc: "홍대 클럽 오로라 주말 발렛 파킹 인력을 모집합니다. 운전이 능숙하고 책임감 있는 분 환영합니다.",
+		status: "published",
+		verified: true,
+	},
+];
+
+// 운영자 검수 큐 — 자동 필터에 걸려 사람 검수로 넘어온 공고
+export const QUEUE: QueueItem[] = [
+	{
+		id: "q1",
+		title: "라운지 홀 스탭 급구",
+		company: "벨벳 나이트",
+		location: "강남",
+		pay: "시급 25,000원 + 인센티브",
+		submitted: "3분 전",
+		risk: "review",
+		desc: "강남 신규 라운지 홀 스탭 모집합니다. 손님 응대와 자리 안내 위주이고, 2차는 선택이라 부담 없어요. 친해지면 애프터도 가능. 자세한 건 카톡으로 문의 주세요.",
+		flags: [
+			{ label: "성적 서비스 암시", sev: "review", match: "2차" },
+			{ label: "성적 서비스 암시", sev: "review", match: "애프터" },
+			{ label: "외부 연락 유도", sev: "review", match: "카톡" },
+		],
+	},
+	{
+		id: "q2",
+		title: "주류 매장 직원 모집",
+		company: "하이드",
+		location: "신사",
+		pay: "월 300만원~",
+		submitted: "12분 전",
+		risk: "review",
+		desc: "신사동 주류 매장 정직원 모집. 4대보험 가입, 선불금 500만원까지 지원 가능합니다. 성실하신 분이면 경력 무관 환영해요.",
+		flags: [{ label: "강요·착취 신호", sev: "review", match: "선불금" }],
+	},
+	{
+		id: "q3",
+		title: "이벤트 스탭 (단기)",
+		company: "퍼플로즈",
+		location: "강남",
+		pay: "일급 150,000원",
+		submitted: "26분 전",
+		risk: "review",
+		desc: "주말 프라이빗 파티 이벤트 스탭. 음료 서빙과 행사 보조 업무입니다. 연락은 오픈채팅으로 빠르게 답변드려요.",
+		flags: [{ label: "외부 연락 유도", sev: "review", match: "오픈채팅" }],
+	},
+];
+
+// 운영자 조치를 기다리는 채팅 신고
+export const REPORTS: Report[] = [
+	{
+		id: "r1",
+		reason: "성매매·성적 서비스 암시",
+		reporter: "김하늘",
+		reporterRole: "구직자",
+		target: "벨벳 나이트",
+		targetRole: "구인자",
+		time: "8분 전",
+		sev: "high",
+		status: "open",
+		note: "면접 얘기 중에 다른 서비스를 계속 물어봐요.",
+		thread: [
+			{
+				mine: false,
+				text: "홀 서빙 지원하신 거 맞죠? 혹시 2차도 가능하신지 먼저 여쭤볼게요.",
+			},
+			{
+				mine: true,
+				text: "공고에는 홀 서빙이라고 되어 있었는데요. 그런 일은 생각 안 하고 있어요.",
+			},
+			{
+				mine: false,
+				text: "그럼 조건 맞춰서 따로 얘기해요. 카톡 아이디 주시면 자세히 설명할게요.",
+			},
+		],
+	},
+	{
+		id: "r2",
+		reason: "외부 연락처 유도",
+		reporter: "박서준",
+		reporterRole: "구직자",
+		target: "하이드",
+		targetRole: "구인자",
+		time: "41분 전",
+		sev: "mid",
+		status: "open",
+		note: "밤비 채팅 대신 계속 텔레그램으로 오라고 해요.",
+		thread: [
+			{
+				mine: false,
+				text: "여기 말고 텔레그램으로 연락 주세요. 아이디 알려드릴게요.",
+			},
+			{ mine: true, text: "면접 전에는 밤비 안에서 얘기하고 싶어요." },
+		],
+	},
+	{
+		id: "r3",
+		reason: "허위 공고",
+		reporter: "이도윤",
+		reporterRole: "구직자",
+		target: "오로라 클럽",
+		targetRole: "구인자",
+		time: "1시간 전",
+		sev: "low",
+		status: "open",
+		note: "공고 급여와 실제로 말하는 금액이 너무 달라요.",
+		thread: [
+			{
+				mine: false,
+				text: "공고는 일급 13만원인데 실제로는 7만원부터 시작이에요.",
+			},
+			{ mine: true, text: "공고 내용이랑 너무 다른데요?" },
+		],
+	},
+];
+
+// 제재 화면용 사용자
+export const USERS: ManagedUser[] = [
+	{
+		id: "u1",
+		name: "벨벳 나이트",
+		role: "구인자",
+		joined: "2026.04",
+		status: "active",
+		reports: 3,
+		warnings: 1,
+		note: "성적 서비스 암시 신고 누적",
+	},
+	{
+		id: "u2",
+		name: "하이드",
+		role: "구인자",
+		joined: "2026.05",
+		status: "warned",
+		reports: 1,
+		warnings: 1,
+		note: "외부 연락처 유도 1회 경고",
+	},
+	{
+		id: "u3",
+		name: "김민재",
+		role: "구직자",
+		joined: "2026.03",
+		status: "active",
+		reports: 0,
+		warnings: 0,
+		note: "신고 이력 없음",
+	},
+];
+
+export const REPORT_REASONS: ReportReason[] = [
+	{ id: "sex", label: "성매매·성적 서비스 암시", sev: "high" },
+	{ id: "coerce", label: "강요·협박·착취", sev: "high" },
+	{ id: "minor", label: "미성년 관련", sev: "high" },
+	{ id: "fake", label: "허위 공고·사기", sev: "mid" },
+	{ id: "external", label: "외부 연락처 유도", sev: "mid" },
+	{ id: "abuse", label: "욕설·혐오 표현", sev: "mid" },
+	{ id: "etc", label: "기타", sev: "low" },
+];
