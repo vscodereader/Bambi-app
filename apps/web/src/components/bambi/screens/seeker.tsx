@@ -2,6 +2,7 @@
 
 // 밤비 — 구직자(Seeker) 화면: 탐색 → 상세 → 채팅 → 신고.
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { JOBS } from "@/lib/bambi/data";
 import type { Job, ReportMode, VisualTone } from "@/lib/bambi/types";
@@ -51,15 +52,7 @@ function SeekerCategory() {
 	const [sel, setSel] = useState("전체");
 	const cats = ["전체", "라운지", "바", "클럽", "호스트바", "카페"];
 	return (
-		<div
-			style={{
-				display: "flex",
-				gap: 8,
-				overflowX: "auto",
-				padding: "0 24px",
-				scrollbarWidth: "none",
-			}}
-		>
+		<div className="flex gap-2 overflow-x-auto px-6 [scrollbar-width:none]">
 			{cats.map((c) => (
 				<Tag key={c} onClick={() => setSel(c)} selected={sel === c}>
 					{c}
@@ -67,22 +60,10 @@ function SeekerCategory() {
 			))}
 			<button
 				aria-label="카테고리 더보기"
-				style={{
-					flex: "0 0 auto",
-					width: "var(--control-h-xs)",
-					height: "var(--control-h-xs)",
-					borderRadius: "var(--radius-pill)",
-					border: "1px solid var(--border-default)",
-					background: "var(--surface-card)",
-					color: "var(--text-muted)",
-					cursor: "pointer",
-					display: "inline-flex",
-					alignItems: "center",
-					justifyContent: "center",
-				}}
+				className="inline-flex size-9 flex-[0_0_auto] items-center justify-center rounded-full border border-[color:var(--border-default)] bg-card text-muted-foreground"
 				type="button"
 			>
-				<span style={{ display: "inline-flex", width: 16, height: 16 }}>
+				<span className="inline-flex size-4">
 					<ChevronDownIcon />
 				</span>
 			</button>
@@ -94,47 +75,25 @@ function TrustStrip({ tone }: { tone: VisualTone }) {
 	const dark = tone === "bold";
 	return (
 		<div
-			style={{
-				display: "flex",
-				alignItems: "center",
-				gap: 10,
-				padding: "13px 14px",
-				borderRadius: 14,
-				background: dark ? "var(--ink-800)" : "var(--color-primary-soft)",
-				color: dark ? "#fff" : "var(--color-primary-press)",
-			}}
+			className={cn(
+				"flex items-center gap-2.5 rounded-[14px] px-[14px] py-[13px]",
+				dark ? "bg-ink-800 text-white" : "bg-coral-50 text-coral-700"
+			)}
 		>
 			<span
-				style={{
-					width: 20,
-					height: 20,
-					flex: "0 0 20px",
-					display: "inline-flex",
-					color: dark ? "var(--coral-300)" : "var(--coral-600)",
-				}}
+				className={cn(
+					"inline-flex size-5 flex-[0_0_20px]",
+					dark ? "text-coral-300" : "text-coral-600"
+				)}
 			>
 				<ShieldIcon />
 			</span>
-			<span
-				style={{
-					flex: 1,
-					fontFamily: "var(--font-sans)",
-					fontSize: 12.5,
-					fontWeight: 700,
-					lineHeight: 1.4,
-				}}
-			>
+			<span className="flex-1 font-bold text-[12.5px] leading-[1.4]">
 				연락처는 면접 확정 전까지 비공개로 보호돼요
 			</span>
 			<span
 				aria-hidden="true"
-				style={{
-					width: 18,
-					height: 18,
-					flex: "0 0 18px",
-					display: "inline-flex",
-					opacity: 0.7,
-				}}
+				className="inline-flex size-[18px] flex-[0_0_18px] opacity-70"
 			>
 				<ChevronRightIcon />
 			</span>
@@ -152,48 +111,12 @@ export function SeekerHome({
 	tone?: VisualTone;
 }) {
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "space-between",
-					padding: "6px 20px 10px",
-				}}
-			>
+		<div className="flex min-h-0 flex-1 flex-col">
+			<div className="flex items-center justify-between px-5 pt-1.5 pb-2.5">
 				<Logo lang="ko" size="md" />
-				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-					<span
-						style={{
-							display: "inline-flex",
-							alignItems: "center",
-							gap: 5,
-							height: 30,
-							padding: "0 11px",
-							borderRadius: "var(--radius-pill)",
-							background: "var(--surface-subtle)",
-							color: "var(--text-default)",
-							fontFamily: "var(--font-sans)",
-							fontSize: 12,
-							fontWeight: 700,
-							whiteSpace: "nowrap",
-						}}
-					>
-						<span
-							style={{
-								display: "inline-flex",
-								width: 14,
-								height: 14,
-								color: "var(--green-600)",
-							}}
-						>
+				<div className="flex items-center gap-2">
+					<span className="inline-flex h-[30px] items-center gap-[5px] whitespace-nowrap rounded-full bg-secondary px-[11px] font-bold text-foreground text-xs">
+						<span className="inline-flex size-[14px] text-green-600">
 							<ShieldIcon />
 						</span>
 						익명 보호 중
@@ -203,79 +126,27 @@ export function SeekerHome({
 					</IconButton>
 				</div>
 			</div>
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					display: "flex",
-					flexDirection: "column",
-					gap: 18,
-					paddingBottom: 16,
-				}}
-			>
-				<div style={{ padding: "4px 24px 0" }}>
-					<h1
-						style={{
-							margin: 0,
-							fontFamily: "var(--font-display)",
-							fontSize: 24,
-							fontWeight: 800,
-							lineHeight: 1.32,
-							letterSpacing: "-0.01em",
-							color: "var(--text-strong)",
-						}}
-					>
+			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto pb-4">
+				<div className="px-6 pt-1">
+					<h1 className="m-0 font-extrabold text-2xl text-foreground leading-[1.32] tracking-[-0.01em] [font-family:var(--font-display)]">
 						하늘님, 좋은 자리를 확인해요
 					</h1>
 				</div>
-				<div style={{ padding: "0 24px" }}>
+				<div className="px-6">
 					<SearchField
 						filterLabel="필터"
 						placeholder="업종, 지역, 공고 제목 검색"
 					/>
 				</div>
-				<div style={{ padding: "0 24px" }}>
+				<div className="px-6">
 					<TrustStrip tone={tone} />
 				</div>
 				<SeekerCategory />
-				<div
-					style={{
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "space-between",
-						padding: "2px 24px 0",
-					}}
-				>
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 16,
-							fontWeight: 700,
-							color: "var(--text-strong)",
-						}}
-					>
-						추천 공고
-					</span>
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 14,
-							fontWeight: 600,
-							color: "var(--text-link)",
-						}}
-					>
-						전체보기
-					</span>
+				<div className="flex items-center justify-between px-6 pt-0.5">
+					<span className="font-bold text-base text-foreground">추천 공고</span>
+					<span className="font-semibold text-primary text-sm">전체보기</span>
 				</div>
-				<div
-					style={{
-						display: "flex",
-						flexDirection: "column",
-						gap: 12,
-						padding: "0 24px",
-					}}
-				>
+				<div className="flex flex-col gap-3 px-6">
 					{JOBS.map((j) => (
 						<JobCard
 							avatarName={j.company}
@@ -312,15 +183,7 @@ export function SeekerDetail({
 	const [saved, setSaved] = useState(false);
 	const [menu, setMenu] = useState(false);
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-				position: "relative",
-			}}
-		>
+		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar
 				actions={
 					<>
@@ -342,53 +205,20 @@ export function SeekerDetail({
 				<>
 					<button
 						aria-label="메뉴 닫기"
+						className="absolute inset-0 z-[5] cursor-default border-none bg-transparent"
 						onClick={() => setMenu(false)}
-						style={{
-							position: "absolute",
-							inset: 0,
-							zIndex: 5,
-							border: "none",
-							background: "transparent",
-							cursor: "default",
-						}}
 						type="button"
 					/>
-					<div
-						style={{
-							position: "absolute",
-							top: 50,
-							right: 12,
-							zIndex: 6,
-							background: "var(--surface-card)",
-							borderRadius: 14,
-							border: "1px solid var(--border-default)",
-							boxShadow: "var(--shadow-lg)",
-							overflow: "hidden",
-							minWidth: 180,
-						}}
-					>
+					<div className="absolute top-[50px] right-3 z-[6] min-w-[180px] overflow-hidden rounded-[14px] border border-[color:var(--border-default)] bg-card shadow-lg">
 						<button
+							className="flex w-full cursor-pointer items-center gap-2.5 border-none bg-transparent px-4 py-[13px] font-semibold text-red-600 text-sm"
 							onClick={() => {
 								setMenu(false);
 								onReport();
 							}}
-							style={{
-								display: "flex",
-								alignItems: "center",
-								gap: 10,
-								width: "100%",
-								padding: "13px 16px",
-								border: "none",
-								background: "transparent",
-								cursor: "pointer",
-								fontFamily: "var(--font-sans)",
-								fontSize: 14,
-								fontWeight: 600,
-								color: "var(--red-600)",
-							}}
 							type="button"
 						>
-							<span style={{ width: 18, height: 18, display: "inline-flex" }}>
+							<span className="inline-flex size-[18px]">
 								<AlertCircle />
 							</span>
 							이 공고 신고하기
@@ -396,84 +226,30 @@ export function SeekerDetail({
 					</div>
 				</>
 			) : null}
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					paddingBottom: 20,
-				}}
-			>
-				<div
-					style={{
-						display: "flex",
-						flexDirection: "column",
-						alignItems: "center",
-						gap: 12,
-						padding: "12px 24px 18px",
-					}}
-				>
+			<div className="min-h-0 flex-1 overflow-y-auto pb-5">
+				<div className="flex flex-col items-center gap-3 px-6 pt-3 pb-[18px]">
 					<Avatar
+						className="size-20 flex-[0_0_80px] rounded-[22px] shadow-md"
 						name={job.company}
 						size="xl"
 						square
-						style={{
-							width: 80,
-							height: 80,
-							flex: "0 0 80px",
-							borderRadius: 22,
-							boxShadow: "var(--shadow-md)",
-						}}
 					/>
-					<div style={{ textAlign: "center" }}>
-						<h1
-							style={{
-								margin: "0 0 6px",
-								fontFamily: "var(--font-display)",
-								fontSize: 24,
-								fontWeight: 800,
-								color: "var(--text-strong)",
-							}}
-						>
+					<div className="text-center">
+						<h1 className="mt-0 mr-0 mb-1.5 ml-0 font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
 							{job.title}
 						</h1>
-						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 15,
-								fontWeight: 500,
-								color: "var(--text-muted)",
-							}}
-						>
+						<span className="font-medium text-[15px] text-muted-foreground">
 							{job.company} · {job.location}
 						</span>
 					</div>
-					<div
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 6,
-							padding: "5px 12px",
-							borderRadius: 999,
-							background: "var(--status-success-bg)",
-							color: "var(--status-success-fg)",
-						}}
-					>
-						<span style={{ width: 14, height: 14, display: "inline-flex" }}>
+					<div className="flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-[5px] text-green-600">
+						<span className="inline-flex size-[14px]">
 							<CheckIcon />
 						</span>
-						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 12,
-								fontWeight: 700,
-							}}
-						>
-							검수 통과한 공고
-						</span>
+						<span className="font-bold text-xs">검수 통과한 공고</span>
 					</div>
 				</div>
-				<div style={{ padding: "0 24px" }}>
+				<div className="px-6">
 					<SegmentedTabs
 						items={[
 							{ value: "desc", label: "공고 설명" },
@@ -485,25 +261,10 @@ export function SeekerDetail({
 						variant="solid"
 					/>
 				</div>
-				<p
-					style={{
-						margin: "20px 24px",
-						fontFamily: "var(--font-sans)",
-						fontSize: 15,
-						lineHeight: 1.6,
-						color: "var(--text-default)",
-					}}
-				>
+				<p className="mx-6 my-5 text-[15px] text-foreground leading-[1.6]">
 					{job.desc}
 				</p>
-				<div
-					style={{
-						display: "grid",
-						gridTemplateColumns: "1fr 1fr",
-						gap: 18,
-						padding: "0 24px 22px",
-					}}
-				>
+				<div className="grid grid-cols-2 gap-[18px] px-6 pb-[22px]">
 					<InfoTile
 						icon={<BriefcaseIcon />}
 						label="고용형태"
@@ -514,14 +275,7 @@ export function SeekerDetail({
 					<InfoTile icon={<Flash />} label="우대사항" value={job.pref} />
 				</div>
 			</div>
-			<div
-				style={{
-					padding: "12px 24px 6px",
-					borderTop: "1px solid var(--border-subtle)",
-					display: "flex",
-					gap: 10,
-				}}
-			>
+			<div className="flex gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
 				<Button block onClick={onStartChat} size="lg" variant="primary">
 					1:1 채팅 시작
 				</Button>
@@ -552,113 +306,55 @@ function ReportOverlay({
 	const fullscreen = mode === "fullscreen";
 	return (
 		<div
-			style={{
-				position: "absolute",
-				inset: 0,
-				zIndex: 20,
-				display: "flex",
-				flexDirection: "column",
-				justifyContent: fullscreen ? "flex-start" : "flex-end",
-			}}
+			className={cn(
+				"absolute inset-0 z-20 flex flex-col",
+				fullscreen ? "justify-start" : "justify-end"
+			)}
 		>
 			<button
 				aria-label="닫기"
+				className={cn(
+					"absolute inset-0 cursor-pointer border-none bg-[var(--overlay-scrim)] transition-opacity [transition-duration:var(--dur-base)]",
+					fullscreen ? "opacity-0" : "opacity-100"
+				)}
 				onClick={step === "form" ? onCancel : undefined}
-				style={{
-					position: "absolute",
-					inset: 0,
-					border: "none",
-					background: "var(--overlay-scrim)",
-					opacity: fullscreen ? 0 : 1,
-					transition: "opacity var(--dur-base)",
-					cursor: "pointer",
-				}}
 				type="button"
 			/>
 			<div
-				style={{
-					position: "relative",
-					background: "var(--surface-page)",
-					borderRadius: fullscreen ? 0 : "24px 24px 0 0",
-					height: fullscreen ? "100%" : "auto",
-					maxHeight: fullscreen ? "100%" : "86%",
-					display: "flex",
-					flexDirection: "column",
-					boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
-					animation: "bambiSheetUp var(--dur-base) var(--ease-out)",
-				}}
+				className={cn(
+					"relative flex flex-col bg-background shadow-[0_-8px_40px_rgba(0,0,0,0.18)] [animation:bambiSheetUp_var(--dur-base)_var(--ease-out)]",
+					fullscreen
+						? "h-full max-h-full rounded-none"
+						: "h-auto max-h-[86%] rounded-t-3xl"
+				)}
 			>
 				{fullscreen ? (
-					<div
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 8,
-							padding: "8px 8px",
-							borderBottom: "1px solid var(--border-subtle)",
-						}}
-					>
+					<div className="flex items-center gap-2 border-border border-b p-2">
 						<button
 							aria-label="닫기"
+							className="inline-flex size-10 cursor-pointer items-center justify-center rounded-xl border-none bg-secondary text-foreground"
 							onClick={step === "form" ? onCancel : onClose}
-							style={{
-								width: 40,
-								height: 40,
-								borderRadius: 12,
-								border: "none",
-								background: "var(--surface-subtle)",
-								cursor: "pointer",
-								display: "inline-flex",
-								alignItems: "center",
-								justifyContent: "center",
-								color: "var(--text-strong)",
-							}}
 							type="button"
 						>
-							<span style={{ width: 22, height: 22, display: "inline-flex" }}>
+							<span className="inline-flex size-[22px]">
 								<ChevronLeftIcon />
 							</span>
 						</button>
-						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 16,
-								fontWeight: 700,
-								color: "var(--text-strong)",
-							}}
-						>
+						<span className="font-bold text-base text-foreground">
 							{company} 신고
 						</span>
 					</div>
 				) : (
-					<div
-						style={{
-							display: "flex",
-							justifyContent: "center",
-							padding: "10px 0 2px",
-						}}
-					>
-						<div
-							style={{
-								width: 40,
-								height: 4,
-								borderRadius: 2,
-								background: "var(--border-strong)",
-							}}
-						/>
+					<div className="flex justify-center pt-2.5 pb-0.5">
+						<div className="h-1 w-10 rounded-sm bg-[var(--border-strong)]" />
 					</div>
 				)}
 				<div
-					style={{
-						flex: 1,
-						minHeight: 0,
-						overflowY: "auto",
-						padding: fullscreen ? "20px 24px 24px" : "12px 24px 24px",
-						display: "flex",
-						flexDirection: "column",
-						justifyContent:
-							fullscreen && step === "done" ? "center" : "flex-start",
-					}}
+					className={cn(
+						"flex min-h-0 flex-1 flex-col overflow-y-auto",
+						fullscreen ? "px-6 pt-5 pb-6" : "px-6 pt-3 pb-6",
+						fullscreen && step === "done" ? "justify-center" : "justify-start"
+					)}
 				>
 					{step === "form" ? (
 						<ReportForm onCancel={onCancel} onSubmit={onSubmit} tone={tone} />
@@ -706,22 +402,8 @@ export function SeekerChat({
 	};
 
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-				background: "var(--surface-subtle)",
-				position: "relative",
-			}}
-		>
-			<div
-				style={{
-					background: "var(--surface-page)",
-					borderBottom: "1px solid var(--border-subtle)",
-				}}
-			>
+		<div className="relative flex min-h-0 flex-1 flex-col bg-secondary">
+			<div className="border-border border-b bg-background">
 				<AppBar
 					actions={
 						<IconButton onClick={openReport} variant="subtle">
@@ -737,76 +419,29 @@ export function SeekerChat({
 			<SafetyNotice onReport={openReport} tone={tone} />
 
 			<div
+				className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-[18px] py-4"
 				ref={scrollRef}
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					padding: "16px 18px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 10,
-				}}
 			>
 				{hidden ? (
-					<div style={{ margin: "auto", textAlign: "center", padding: 24 }}>
-						<div
-							style={{
-								width: 56,
-								height: 56,
-								margin: "0 auto 12px",
-								borderRadius: 18,
-								background: "var(--surface-sunken)",
-								display: "flex",
-								alignItems: "center",
-								justifyContent: "center",
-								color: "var(--text-muted)",
-							}}
-						>
-							<span style={{ width: 26, height: 26, display: "inline-flex" }}>
+					<div className="m-auto p-6 text-center">
+						<div className="mx-auto mt-0 mb-3 flex size-14 items-center justify-center rounded-[18px] bg-muted text-muted-foreground">
+							<span className="inline-flex size-[26px]">
 								<LockIcon />
 							</span>
 						</div>
-						<div
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 14,
-								fontWeight: 700,
-								color: "var(--text-default)",
-							}}
-						>
+						<div className="font-bold text-foreground text-sm">
 							신고 후 이 채팅을 숨겼어요
 						</div>
-						<p
-							style={{
-								margin: "6px auto 0",
-								maxWidth: 240,
-								fontFamily: "var(--font-sans)",
-								fontSize: 12.5,
-								lineHeight: 1.5,
-								color: "var(--text-muted)",
-							}}
-						>
+						<p className="mx-auto mt-1.5 max-w-[240px] text-[12.5px] text-muted-foreground leading-[1.5]">
 							운영팀이 검토 중이에요. 조치가 끝나면 알림으로 알려드려요.
 						</p>
 					</div>
 				) : (
 					<>
-						<div
-							style={{
-								alignSelf: "center",
-								padding: "5px 12px",
-								borderRadius: 999,
-								background: "var(--surface-sunken)",
-								fontFamily: "var(--font-sans)",
-								fontSize: 11,
-								fontWeight: 600,
-								color: "var(--text-muted)",
-							}}
-						>
+						<div className="self-center rounded-full bg-muted px-3 py-[5px] font-semibold text-[11px] text-muted-foreground">
 							오늘
 						</div>
-						<div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+						<div className="flex items-end gap-2">
 							<Avatar name={company} size="sm" square />
 							<ChatBubble>
 								안녕하세요! 공고 보고 연락드려요 😊 혹시 주말 근무 가능하실까요?
@@ -815,14 +450,14 @@ export function SeekerChat({
 						<ChatBubble mine read time="오후 2:14">
 							네 안녕하세요, 가능합니다! 면접은 언제쯤 볼 수 있을까요?
 						</ChatBubble>
-						<div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+						<div className="flex items-end gap-2">
 							<Avatar name={company} size="sm" square />
 							<ChatBubble>
 								좋아요. 이번 주 수요일 저녁 가능하시면 일정 잡아드릴게요.
 							</ChatBubble>
 						</div>
 						{sched !== "none" && (
-							<div style={{ alignSelf: "stretch", margin: "4px 0" }}>
+							<div className="my-1 self-stretch">
 								<ScheduleCard
 									date="6월 18일 (수)"
 									onConfirm={() => setSched("confirmed")}
@@ -836,69 +471,22 @@ export function SeekerChat({
 							</div>
 						)}
 						{sched === "confirmed" && (
-							<div
-								style={{
-									alignSelf: "center",
-									textAlign: "center",
-									padding: "10px 14px",
-									margin: "2px 0 4px",
-									maxWidth: 280,
-								}}
-							>
+							<div className="mx-0 mt-0.5 mb-1 max-w-[280px] self-center px-[14px] py-2.5 text-center">
 								<Badge dot tone="success">
 									면접 일정 확정
 								</Badge>
-								<p
-									style={{
-										margin: "8px 0 0",
-										fontFamily: "var(--font-sans)",
-										fontSize: 12,
-										lineHeight: 1.5,
-										color: "var(--text-muted)",
-									}}
-								>
+								<p className="mt-2 mr-0 mb-0 ml-0 text-muted-foreground text-xs leading-[1.5]">
 									양쪽이 동의하면 연락처가 공개돼요.
 								</p>
 							</div>
 						)}
 						{report === "form" && reportMode === "inline" ? (
-							<div
-								style={{
-									alignSelf: "stretch",
-									margin: "4px 0",
-									padding: 16,
-									borderRadius: 16,
-									background: "var(--surface-card)",
-									border: "1px solid var(--red-500)",
-									boxShadow: "var(--shadow-md)",
-								}}
-							>
-								<div
-									style={{
-										display: "flex",
-										alignItems: "center",
-										gap: 8,
-										marginBottom: 12,
-									}}
-								>
-									<span
-										style={{
-											width: 18,
-											height: 18,
-											display: "inline-flex",
-											color: "var(--red-600)",
-										}}
-									>
+							<div className="my-1 self-stretch rounded-2xl border border-red-500 bg-card p-4 shadow-md">
+								<div className="mb-3 flex items-center gap-2">
+									<span className="inline-flex size-[18px] text-red-600">
 										<AlertCircle />
 									</span>
-									<span
-										style={{
-											fontFamily: "var(--font-sans)",
-											fontSize: 14,
-											fontWeight: 800,
-											color: "var(--text-strong)",
-										}}
-									>
+									<span className="font-extrabold text-foreground text-sm">
 										{company} 신고
 									</span>
 								</div>
@@ -911,17 +499,7 @@ export function SeekerChat({
 							</div>
 						) : null}
 						{report === "done" && reportMode === "inline" ? (
-							<div
-								style={{
-									alignSelf: "stretch",
-									margin: "4px 0",
-									padding: 18,
-									borderRadius: 16,
-									background: "var(--surface-card)",
-									border: "1px solid var(--border-subtle)",
-									boxShadow: "var(--shadow-md)",
-								}}
-							>
+							<div className="my-1 self-stretch rounded-2xl border border-border bg-card p-[18px] shadow-md">
 								<ReportDone compact onClose={closeReport} />
 							</div>
 						) : null}
@@ -930,82 +508,33 @@ export function SeekerChat({
 			</div>
 
 			{!hidden && (
-				<div
-					style={{
-						background: "var(--surface-page)",
-						borderTop: "1px solid var(--border-subtle)",
-						padding: "10px 16px 6px",
-					}}
-				>
+				<div className="border-border border-t bg-background px-4 pt-2.5 pb-1.5">
 					{sched === "confirmed" ? (
 						<Button block onClick={onReveal} size="lg" variant="primary">
 							연락처 공개하기
 						</Button>
 					) : (
-						<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+						<div className="flex items-center gap-2.5">
 							<button
 								aria-label="일정 제안"
+								className="inline-flex size-11 flex-[0_0_44px] cursor-pointer items-center justify-center rounded-[14px] border-none bg-coral-50 text-coral-700"
 								onClick={() => setSched("proposed")}
-								style={{
-									width: 44,
-									height: 44,
-									flex: "0 0 44px",
-									borderRadius: 14,
-									border: "none",
-									cursor: "pointer",
-									background: "var(--color-primary-soft)",
-									color: "var(--color-primary-press)",
-									display: "inline-flex",
-									alignItems: "center",
-									justifyContent: "center",
-								}}
 								type="button"
 							>
-								<span style={{ width: 22, height: 22, display: "inline-flex" }}>
+								<span className="inline-flex size-[22px]">
 									<PlusIcon />
 								</span>
 							</button>
-							<div
-								style={{
-									flex: 1,
-									height: 44,
-									padding: "0 16px",
-									borderRadius: 999,
-									background: "var(--surface-subtle)",
-									display: "flex",
-									alignItems: "center",
-								}}
-							>
+							<div className="flex h-11 flex-1 items-center rounded-full bg-secondary px-4">
 								<input
 									aria-label="메시지를 입력하세요"
+									className="flex-1 border-none bg-transparent text-foreground text-sm outline-none"
 									placeholder="메시지를 입력하세요"
-									style={{
-										flex: 1,
-										border: "none",
-										outline: "none",
-										background: "transparent",
-										fontFamily: "var(--font-sans)",
-										fontSize: 14,
-										color: "var(--text-strong)",
-									}}
 								/>
 							</div>
 							<button
+								className="h-[38px] cursor-pointer whitespace-nowrap rounded-full border-none bg-primary px-4 font-bold text-[13px] text-white shadow-lg"
 								onClick={() => setSched("proposed")}
-								style={{
-									height: 38,
-									padding: "0 16px",
-									borderRadius: 999,
-									border: "none",
-									cursor: "pointer",
-									background: "var(--color-primary)",
-									color: "#fff",
-									fontFamily: "var(--font-sans)",
-									fontSize: 13,
-									fontWeight: 700,
-									whiteSpace: "nowrap",
-									boxShadow: "var(--shadow-primary)",
-								}}
 								type="button"
 							>
 								일정 제안
@@ -1038,133 +567,44 @@ export function SeekerMe() {
 		{ icon: <SettingsIcon />, label: "계정 설정", meta: "" },
 	];
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
-			<div style={{ padding: "8px 24px 4px" }}>
-				<h1
-					style={{
-						margin: 0,
-						fontFamily: "var(--font-display)",
-						fontSize: 24,
-						fontWeight: 800,
-						color: "var(--text-strong)",
-					}}
-				>
+		<div className="flex min-h-0 flex-1 flex-col">
+			<div className="px-6 pt-2 pb-1">
+				<h1 className="m-0 font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
 					내 정보
 				</h1>
 			</div>
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					padding: "16px 24px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 18,
-				}}
-			>
-				<div
-					style={{
-						display: "flex",
-						alignItems: "center",
-						gap: 14,
-						padding: 18,
-						borderRadius: 18,
-						background: "var(--surface-inverse)",
-					}}
-				>
+			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 py-4">
+				<div className="flex items-center gap-[14px] rounded-[18px] bg-ink-800 p-[18px]">
 					<Avatar name="김하늘" ring size="lg" />
-					<div style={{ flex: 1 }}>
-						<div
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 18,
-								fontWeight: 800,
-								color: "#fff",
-							}}
-						>
-							김하늘
-						</div>
-						<div
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 13,
-								color: "var(--text-on-dark-muted)",
-								marginTop: 2,
-							}}
-						>
+					<div className="flex-1">
+						<div className="font-extrabold text-[18px] text-white">김하늘</div>
+						<div className="mt-0.5 text-[13px] text-[color:var(--text-on-dark-muted)]">
 							구직자 · 강남 활동
 						</div>
 					</div>
 					<Badge tone="primary">인증완료</Badge>
 				</div>
-				<div
-					style={{
-						display: "flex",
-						flexDirection: "column",
-						borderRadius: 16,
-						border: "1px solid var(--border-subtle)",
-						overflow: "hidden",
-					}}
-				>
+				<div className="flex flex-col overflow-hidden rounded-2xl border border-border">
 					{rows.map((r, i) => (
 						<div
+							className={cn(
+								"flex items-center gap-3 p-4",
+								i ? "border-border border-t" : "border-none"
+							)}
 							key={r.label}
-							style={{
-								display: "flex",
-								alignItems: "center",
-								gap: 12,
-								padding: "16px",
-								borderTop: i ? "1px solid var(--border-subtle)" : "none",
-							}}
 						>
-							<span
-								style={{
-									width: 22,
-									height: 22,
-									display: "inline-flex",
-									color: "var(--text-muted)",
-								}}
-							>
+							<span className="inline-flex size-[22px] text-muted-foreground">
 								{r.icon}
 							</span>
-							<span
-								style={{
-									flex: 1,
-									fontFamily: "var(--font-sans)",
-									fontSize: 15,
-									fontWeight: 600,
-									color: "var(--text-strong)",
-								}}
-							>
+							<span className="flex-1 font-semibold text-[15px] text-foreground">
 								{r.label}
 							</span>
 							{r.meta ? (
-								<span
-									style={{
-										fontFamily: "var(--font-sans)",
-										fontSize: 13,
-										color: "var(--text-muted)",
-									}}
-								>
+								<span className="text-[13px] text-muted-foreground">
 									{r.meta}
 								</span>
 							) : null}
-							<span
-								style={{
-									width: 18,
-									height: 18,
-									display: "inline-flex",
-									color: "var(--text-subtle)",
-								}}
-							>
+							<span className="inline-flex size-[18px] text-[color:var(--text-subtle)]">
 								<ChevronRightIcon />
 							</span>
 						</div>
@@ -1202,129 +642,36 @@ export function SeekerChats({ onOpen }: { onOpen: (jobId: string) => void }) {
 		job: JOBS.find((j) => j.id === c.jobId),
 	})).filter((c) => c.job);
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
-			<div style={{ padding: "8px 24px 4px" }}>
-				<h1
-					style={{
-						margin: 0,
-						fontFamily: "var(--font-display)",
-						fontSize: 24,
-						fontWeight: 800,
-						color: "var(--text-strong)",
-					}}
-				>
+		<div className="flex min-h-0 flex-1 flex-col">
+			<div className="px-6 pt-2 pb-1">
+				<h1 className="m-0 font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
 					채팅
 				</h1>
 			</div>
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					padding: "10px 16px 16px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 2,
-				}}
-			>
+			<div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-4 pt-2.5 pb-4">
 				{rows.map((c) => (
 					<button
+						className="flex cursor-pointer items-center gap-3 rounded-[14px] border-none bg-transparent px-2 py-3 text-left"
 						key={c.jobId}
 						onClick={() => onOpen(c.jobId)}
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 12,
-							padding: "12px 8px",
-							border: "none",
-							background: "transparent",
-							cursor: "pointer",
-							textAlign: "left",
-							borderRadius: 14,
-						}}
 						type="button"
 					>
 						<Avatar name={c.job?.company} size="lg" square />
-						<div style={{ flex: 1, minWidth: 0 }}>
-							<div
-								style={{
-									display: "flex",
-									alignItems: "baseline",
-									justifyContent: "space-between",
-									gap: 8,
-								}}
-							>
-								<span
-									style={{
-										fontFamily: "var(--font-sans)",
-										fontSize: 15,
-										fontWeight: 700,
-										color: "var(--text-strong)",
-										whiteSpace: "nowrap",
-										overflow: "hidden",
-										textOverflow: "ellipsis",
-									}}
-								>
+						<div className="min-w-0 flex-1">
+							<div className="flex items-baseline justify-between gap-2">
+								<span className="truncate font-bold text-[15px] text-foreground">
 									{c.job?.company}
 								</span>
-								<span
-									style={{
-										flex: "0 0 auto",
-										fontFamily: "var(--font-sans)",
-										fontSize: 11.5,
-										color: "var(--text-subtle)",
-									}}
-								>
+								<span className="flex-[0_0_auto] text-[11.5px] text-[color:var(--text-subtle)]">
 									{c.time}
 								</span>
 							</div>
-							<div
-								style={{
-									display: "flex",
-									alignItems: "center",
-									gap: 8,
-									marginTop: 3,
-								}}
-							>
-								<span
-									style={{
-										flex: 1,
-										minWidth: 0,
-										fontFamily: "var(--font-sans)",
-										fontSize: 13,
-										color: "var(--text-muted)",
-										whiteSpace: "nowrap",
-										overflow: "hidden",
-										textOverflow: "ellipsis",
-									}}
-								>
+							<div className="mt-[3px] flex items-center gap-2">
+								<span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
 									{c.last}
 								</span>
 								{c.unread ? (
-									<span
-										style={{
-											flex: "0 0 auto",
-											minWidth: 18,
-											height: 18,
-											padding: "0 5px",
-											borderRadius: 999,
-											background: "var(--coral-500)",
-											color: "#fff",
-											fontFamily: "var(--font-sans)",
-											fontSize: 11,
-											fontWeight: 700,
-											display: "inline-flex",
-											alignItems: "center",
-											justifyContent: "center",
-										}}
-									>
+									<span className="inline-flex h-[18px] min-w-[18px] flex-[0_0_auto] items-center justify-center rounded-full bg-coral-500 px-[5px] font-bold text-[11px] text-white">
 										{c.unread}
 									</span>
 								) : null}
@@ -1402,23 +749,9 @@ export function SeekerPersona({
 	const navValue = cur.name === "me" ? "me" : "home";
 	return (
 		<PhoneFrame indicatorTone="dark" statusTone="dark">
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					display: "flex",
-					flexDirection: "column",
-				}}
-			>
-				{screen}
-			</div>
+			<div className="flex min-h-0 flex-1 flex-col">{screen}</div>
 			{showNav && (
-				<div
-					style={{
-						borderTop: "1px solid var(--border-subtle)",
-						background: "var(--surface-page)",
-					}}
-				>
+				<div className="border-border border-t bg-background">
 					<BottomNav
 						badges={{ chat: 1 }}
 						items={navItems}

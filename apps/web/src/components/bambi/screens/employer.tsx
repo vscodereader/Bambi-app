@@ -2,6 +2,7 @@
 
 // 밤비 — 구인자(Employer) 화면: 실시간 콘텐츠 가드가 붙은 공고 등록 + 내 공고.
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { scan, verdict } from "@/lib/bambi/scanner";
@@ -45,32 +46,11 @@ function FieldE({
 	children: ReactNode;
 }) {
 	return (
-		<div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-			<div
-				style={{
-					display: "flex",
-					alignItems: "baseline",
-					justifyContent: "space-between",
-				}}
-			>
-				<span
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 13,
-						fontWeight: 700,
-						color: "var(--text-strong)",
-					}}
-				>
-					{label}
-				</span>
+		<div className="flex flex-col gap-[9px]">
+			<div className="flex items-baseline justify-between">
+				<span className="font-bold text-[13px] text-foreground">{label}</span>
 				{hint ? (
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 11,
-							color: "var(--text-subtle)",
-						}}
-					>
+					<span className="text-[11px] text-[color:var(--text-subtle)]">
 						{hint}
 					</span>
 				) : null}
@@ -84,34 +64,21 @@ function GuardIntro({ tone }: { tone: VisualTone }) {
 	const dark = tone === "bold";
 	return (
 		<div
-			style={{
-				display: "flex",
-				gap: 12,
-				padding: 14,
-				borderRadius: 16,
-				background: dark ? "var(--ink-800)" : "var(--surface-subtle)",
-				color: dark ? "#fff" : "var(--text-default)",
-			}}
+			className={cn(
+				"flex gap-3 rounded-2xl p-[14px]",
+				dark ? "bg-ink-800 text-white" : "bg-secondary text-foreground"
+			)}
 		>
 			<span
-				style={{
-					width: 22,
-					height: 22,
-					flex: "0 0 22px",
-					display: "inline-flex",
-					color: dark ? "var(--coral-300)" : "var(--coral-500)",
-				}}
+				className={cn(
+					"inline-flex size-[22px] flex-[0_0_22px]",
+					dark ? "text-coral-300" : "text-coral-500"
+				)}
 			>
 				<AlertCircle />
 			</span>
-			<div
-				style={{
-					fontFamily: "var(--font-sans)",
-					fontSize: 12.5,
-					lineHeight: 1.5,
-				}}
-			>
-				<b style={{ fontWeight: 800 }}>
+			<div className="text-[12.5px] leading-normal">
+				<b className="font-extrabold">
 					밤비는 합법적인 유흥·접객 채용만 다뤄요.
 				</b>
 				<br />
@@ -153,26 +120,9 @@ export function EmployerPost({
 	}
 
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
+		<div className="flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="공고 등록" />
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					display: "flex",
-					flexDirection: "column",
-					gap: 18,
-					padding: "6px 24px 20px",
-				}}
-			>
+			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-1.5 pb-5">
 				<GuardIntro tone={tone} />
 				<FieldE label="공고 제목">
 					<Input
@@ -182,7 +132,7 @@ export function EmployerPost({
 					/>
 				</FieldE>
 				<FieldE label="직무">
-					<div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+					<div className="flex flex-wrap gap-2">
 						{roles.map((r) => (
 							<Tag key={r} onClick={() => toggle(r)} selected={sel.includes(r)}>
 								{r}
@@ -209,12 +159,7 @@ export function EmployerPost({
 				</FieldE>
 				<GuardSummary findings={findings} state={v.state} tone={tone} />
 			</div>
-			<div
-				style={{
-					padding: "12px 24px 6px",
-					borderTop: "1px solid var(--border-subtle)",
-				}}
-			>
+			<div className="border-border border-t px-6 pt-3 pb-1.5">
 				<Button
 					block
 					disabled={blocked}
@@ -239,80 +184,44 @@ export function EmployerPostResult({
 	const review = state === "review";
 	const conf = review
 		? {
-				bg: "var(--status-pending-bg)",
-				fg: "var(--status-pending-fg)",
+				bg: "bg-amber-50",
+				fg: "text-amber-500",
 				icon: <ClockIcon />,
 				title: "검수 요청이 접수됐어요",
 				body: "공고에서 확인이 필요한 표현이 있어 운영자가 먼저 검토해요. 보통 10분 이내에 게시 여부를 알려드려요.",
 				badge: "검수 대기",
 			}
 		: {
-				bg: "var(--status-success-bg)",
-				fg: "var(--status-success-fg)",
+				bg: "bg-green-50",
+				fg: "text-green-600",
 				icon: <CheckIcon />,
 				title: "공고가 게시됐어요",
 				body: "금지 표현 없이 통과했어요. 지금부터 구직자에게 노출되고, 채팅 문의를 받을 수 있어요.",
 				badge: "게시됨",
 			};
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-				justifyContent: "center",
-				alignItems: "center",
-				gap: 18,
-				padding: "0 32px",
-				textAlign: "center",
-			}}
-		>
+		<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[18px] px-8 text-center">
 			<div
-				style={{
-					width: 76,
-					height: 76,
-					borderRadius: 24,
-					background: conf.bg,
-					color: conf.fg,
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "center",
-				}}
+				className={cn(
+					"flex size-[76px] items-center justify-center rounded-[24px]",
+					conf.bg,
+					conf.fg
+				)}
 			>
-				<span style={{ width: 38, height: 38, display: "inline-flex" }}>
-					{conf.icon}
-				</span>
+				<span className="inline-flex size-[38px]">{conf.icon}</span>
 			</div>
 			<Badge dot tone={review ? "pending" : "success"}>
 				{conf.badge}
 			</Badge>
 			<div>
-				<h1
-					style={{
-						margin: "0 0 8px",
-						fontFamily: "var(--font-display)",
-						fontSize: 22,
-						fontWeight: 800,
-						color: "var(--text-strong)",
-					}}
-				>
+				<h1 className="mb-2 font-extrabold text-[22px] text-foreground">
 					{conf.title}
 				</h1>
-				<p
-					style={{
-						margin: 0,
-						fontFamily: "var(--font-sans)",
-						fontSize: 14,
-						lineHeight: 1.6,
-						color: "var(--text-muted)",
-						maxWidth: 300,
-					}}
-				>
+				<p className="m-0 max-w-[300px] text-muted-foreground text-sm leading-relaxed">
 					{conf.body}
 				</p>
 			</div>
-			<div style={{ width: "100%", maxWidth: 320, marginTop: 6 }}>
+			<div className="mt-1.5 w-full max-w-[320px]">
 				<Button block onClick={onDone} size="lg" variant="primary">
 					내 공고로 가기
 				</Button>
@@ -385,45 +294,20 @@ function PostingRow({ p }: { p: Posting }) {
 	const rejected = p.state === "rejected";
 	return (
 		<div
-			style={{
-				padding: 16,
-				borderRadius: 16,
-				background: "var(--surface-card)",
-				border: rejected
-					? "1px solid var(--red-500)"
-					: "1px solid var(--border-subtle)",
-				boxShadow: "var(--shadow-card)",
-				display: "flex",
-				flexDirection: "column",
-				gap: 10,
-			}}
+			className={cn(
+				"flex flex-col gap-2.5 rounded-2xl bg-card p-4 shadow-[var(--shadow-card)]",
+				rejected ? "border border-red-500" : "border border-border"
+			)}
 		>
-			<div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+			<div className="flex items-start gap-2.5">
 				<Avatar name={STORE_NAME} size="sm" square />
-				<div style={{ flex: 1, minWidth: 0 }}>
-					<div
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 15.5,
-							fontWeight: 700,
-							color: "var(--text-strong)",
-						}}
-					>
+				<div className="min-w-0 flex-1">
+					<div className="font-bold text-[15.5px] text-foreground">
 						{p.title}
 					</div>
-					<div
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 6,
-							fontFamily: "var(--font-sans)",
-							fontSize: 13,
-							color: "var(--text-muted)",
-							marginTop: 3,
-						}}
-					>
+					<div className="mt-[3px] flex items-center gap-1.5 text-[13px] text-muted-foreground">
 						<span>{p.area}</span>
-						<span style={{ color: "var(--border-strong)" }}>|</span>
+						<span className="text-[color:var(--border-strong)]">|</span>
 						<span>{p.pay}</span>
 					</div>
 				</div>
@@ -431,65 +315,22 @@ function PostingRow({ p }: { p: Posting }) {
 					{stateConf.label}
 				</Badge>
 			</div>
-			<div
-				style={{
-					paddingTop: 10,
-					borderTop: "1px solid var(--border-subtle)",
-				}}
-			>
-				<span
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 12,
-						color: "var(--text-subtle)",
-					}}
-				>
+			<div className="border-border border-t pt-2.5">
+				<span className="text-[color:var(--text-subtle)] text-xs">
 					조회 {p.views} · 지원 {p.applicants} · {p.dateLabel}
 				</span>
 			</div>
 			{rejected ? (
-				<div
-					style={{
-						display: "flex",
-						gap: 8,
-						padding: "10px 12px",
-						borderRadius: 12,
-						background: "var(--status-danger-bg)",
-					}}
-				>
-					<span
-						style={{
-							width: 16,
-							height: 16,
-							flex: "0 0 16px",
-							marginTop: 1,
-							display: "inline-flex",
-							color: "var(--red-600)",
-						}}
-					>
+				<div className="flex gap-2 rounded-xl bg-red-50 px-3 py-2.5">
+					<span className="mt-px inline-flex size-4 flex-[0_0_16px] text-red-600">
 						<AlertCircle />
 					</span>
-					<div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 12.5,
-								fontWeight: 700,
-								lineHeight: 1.5,
-								color: "var(--status-danger-fg)",
-							}}
-						>
+					<div className="flex flex-col gap-[3px]">
+						<span className="font-bold text-[12.5px] text-red-600 leading-normal">
 							반려 사유 · {p.reason}
 						</span>
 						{p.guide ? (
-							<span
-								style={{
-									fontFamily: "var(--font-sans)",
-									fontSize: 12,
-									lineHeight: 1.5,
-									color: "var(--text-muted)",
-								}}
-							>
+							<span className="text-muted-foreground text-xs leading-normal">
 								{p.guide}
 							</span>
 						) : null}
@@ -508,48 +349,12 @@ export function EmployerPostings({ onNew }: { onNew: () => void }) {
 	const list =
 		tab === "all" ? MY_POSTINGS : MY_POSTINGS.filter((p) => p.state === tab);
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "space-between",
-					padding: "6px 20px 10px",
-				}}
-			>
+		<div className="flex min-h-0 flex-1 flex-col">
+			<div className="flex items-center justify-between px-5 pt-1.5 pb-2.5">
 				<Logo lang="ko" size="md" />
-				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-					<span
-						style={{
-							display: "inline-flex",
-							alignItems: "center",
-							gap: 5,
-							height: 30,
-							padding: "0 11px",
-							borderRadius: "var(--radius-pill)",
-							background: "var(--surface-subtle)",
-							color: "var(--text-default)",
-							fontFamily: "var(--font-sans)",
-							fontSize: 12,
-							fontWeight: 700,
-							whiteSpace: "nowrap",
-						}}
-					>
-						<span
-							style={{
-								display: "inline-flex",
-								width: 14,
-								height: 14,
-								color: "var(--green-600)",
-							}}
-						>
+				<div className="flex items-center gap-2">
+					<span className="inline-flex h-[30px] items-center gap-[5px] whitespace-nowrap rounded-full bg-secondary px-[11px] font-bold text-foreground text-xs">
+						<span className="inline-flex size-[14px] text-green-600">
 							<ShieldIcon />
 						</span>
 						사업자 인증 완료
@@ -559,56 +364,16 @@ export function EmployerPostings({ onNew }: { onNew: () => void }) {
 					</IconButton>
 				</div>
 			</div>
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					display: "flex",
-					flexDirection: "column",
-					gap: 16,
-					padding: "4px 24px 16px",
-				}}
-			>
-				<div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-					<h1
-						style={{
-							margin: 0,
-							fontFamily: "var(--font-display)",
-							fontSize: 24,
-							fontWeight: 800,
-							lineHeight: 1.32,
-							color: "var(--text-strong)",
-						}}
-					>
+			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pt-1 pb-4">
+				<div className="flex flex-col gap-2">
+					<h1 className="font-extrabold text-2xl text-foreground leading-[1.32]">
 						내 공고
 					</h1>
-					<div
-						style={{
-							display: "inline-flex",
-							alignItems: "center",
-							gap: 6,
-							alignSelf: "flex-start",
-						}}
-					>
-						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 15,
-								fontWeight: 700,
-								color: "var(--text-default)",
-							}}
-						>
+					<div className="inline-flex items-center gap-1.5 self-start">
+						<span className="font-bold text-[15px] text-foreground">
 							{STORE_NAME}
 						</span>
-						<span
-							style={{
-								display: "inline-flex",
-								width: 18,
-								height: 18,
-								color: "var(--text-muted)",
-							}}
-						>
+						<span className="inline-flex size-[18px] text-muted-foreground">
 							<ChevronDownIcon />
 						</span>
 					</div>
@@ -640,7 +405,7 @@ export function EmployerPostings({ onNew }: { onNew: () => void }) {
 					value={tab}
 					variant="underline"
 				/>
-				<div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+				<div className="flex flex-col gap-3">
 					{list.map((p) => (
 						<PostingRow key={p.id} p={p} />
 					))}
@@ -657,68 +422,18 @@ export function EmployerMe() {
 		{ icon: <SettingsIcon />, label: "매장 정보", meta: "" },
 	];
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
-			<div style={{ padding: "8px 24px 4px" }}>
-				<h1
-					style={{
-						margin: 0,
-						fontFamily: "var(--font-display)",
-						fontSize: 24,
-						fontWeight: 800,
-						color: "var(--text-strong)",
-					}}
-				>
-					매장 정보
-				</h1>
+		<div className="flex min-h-0 flex-1 flex-col">
+			<div className="px-6 pt-2 pb-1">
+				<h1 className="font-extrabold text-2xl text-foreground">매장 정보</h1>
 			</div>
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					padding: "16px 24px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 18,
-				}}
-			>
-				<div
-					style={{
-						display: "flex",
-						alignItems: "center",
-						gap: 14,
-						padding: 18,
-						borderRadius: 18,
-						background: "var(--surface-inverse)",
-					}}
-				>
+			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 py-4">
+				<div className="flex items-center gap-[14px] rounded-[18px] bg-ink-800 p-[18px]">
 					<Avatar name="달밤 라운지" size="lg" square />
-					<div style={{ flex: 1 }}>
-						<div
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 18,
-								fontWeight: 800,
-								color: "#fff",
-							}}
-						>
+					<div className="flex-1">
+						<div className="font-extrabold text-[18px] text-white">
 							달밤 라운지
 						</div>
-						<div
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 13,
-								color: "var(--text-on-dark-muted)",
-								marginTop: 2,
-							}}
-						>
+						<div className="mt-0.5 text-[13px] text-[color:var(--text-on-dark-muted)]">
 							구인자 · 강남
 						</div>
 					</div>
@@ -726,66 +441,27 @@ export function EmployerMe() {
 						정상
 					</Badge>
 				</div>
-				<div
-					style={{
-						display: "flex",
-						flexDirection: "column",
-						borderRadius: 16,
-						border: "1px solid var(--border-subtle)",
-						overflow: "hidden",
-					}}
-				>
+				<div className="flex flex-col overflow-hidden rounded-2xl border border-border">
 					{rows.map((r, i) => (
 						<div
+							className={cn(
+								"flex items-center gap-3 p-4",
+								i ? "border-border border-t" : "border-none"
+							)}
 							key={r.label}
-							style={{
-								display: "flex",
-								alignItems: "center",
-								gap: 12,
-								padding: "16px",
-								borderTop: i ? "1px solid var(--border-subtle)" : "none",
-							}}
 						>
-							<span
-								style={{
-									width: 22,
-									height: 22,
-									display: "inline-flex",
-									color: "var(--text-muted)",
-								}}
-							>
+							<span className="inline-flex size-[22px] text-muted-foreground">
 								{r.icon}
 							</span>
-							<span
-								style={{
-									flex: 1,
-									fontFamily: "var(--font-sans)",
-									fontSize: 15,
-									fontWeight: 600,
-									color: "var(--text-strong)",
-								}}
-							>
+							<span className="flex-1 font-semibold text-[15px] text-foreground">
 								{r.label}
 							</span>
 							{r.meta ? (
-								<span
-									style={{
-										fontFamily: "var(--font-sans)",
-										fontSize: 13,
-										color: "var(--text-muted)",
-									}}
-								>
+								<span className="text-[13px] text-muted-foreground">
 									{r.meta}
 								</span>
 							) : null}
-							<span
-								style={{
-									width: 18,
-									height: 18,
-									display: "inline-flex",
-									color: "var(--text-subtle)",
-								}}
-							>
+							<span className="inline-flex size-[18px] text-[color:var(--text-subtle)]">
 								<ChevronRightIcon />
 							</span>
 						</div>
@@ -851,23 +527,9 @@ export function EmployerPersona({
 	];
 	return (
 		<PhoneFrame indicatorTone="dark" statusTone="dark">
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					display: "flex",
-					flexDirection: "column",
-				}}
-			>
-				{screen}
-			</div>
+			<div className="flex min-h-0 flex-1 flex-col">{screen}</div>
 			{showNav && (
-				<div
-					style={{
-						borderTop: "1px solid var(--border-subtle)",
-						background: "var(--surface-page)",
-					}}
-				>
+				<div className="border-border border-t bg-background">
 					<BottomNav
 						items={navItems}
 						onChange={(v) => {

@@ -1,7 +1,8 @@
 // 밤비 — 모바일 우선 앱 셸.
 // 모바일: 화면을 꽉 채우는 단일 컬럼. 데스크톱: 가운데 모바일 셸 + 왼쪽 홍보 배너 거터.
 
-import type { CSSProperties, ReactNode } from "react";
+import { cn } from "@bambi-app/ui/lib/utils";
+import type { ReactNode } from "react";
 import { Flash, LockIcon, ShieldIcon } from "./icons";
 
 type PromoTone = "coral" | "ink" | "light";
@@ -38,123 +39,78 @@ const PROMOS: Promo[] = [
 	},
 ];
 
-const PROMO_TONES: Record<
+const TONE: Record<
 	PromoTone,
-	{ bg: string; fg: string; sub: string; chip: string; chipFg: string }
+	{ body: string; card: string; chip: string; eyebrow: string; title: string }
 > = {
 	coral: {
-		bg: "var(--color-primary)",
-		fg: "var(--white)",
-		sub: "rgba(255,255,255,0.86)",
-		chip: "rgba(255,255,255,0.18)",
-		chipFg: "var(--white)",
+		card: "bg-primary text-white",
+		chip: "bg-white/20 text-white",
+		eyebrow: "text-white",
+		title: "text-white",
+		body: "text-white/85",
 	},
 	ink: {
-		bg: "var(--ink-800)",
-		fg: "var(--white)",
-		sub: "var(--text-on-dark-muted)",
-		chip: "rgba(255,255,255,0.1)",
-		chipFg: "var(--coral-300)",
+		card: "bg-ink-800 text-white",
+		chip: "bg-white/10 text-coral-300",
+		eyebrow: "text-coral-300",
+		title: "text-white",
+		body: "text-white/70",
 	},
 	light: {
-		bg: "var(--surface-card)",
-		fg: "var(--text-strong)",
-		sub: "var(--text-muted)",
-		chip: "var(--color-primary-soft)",
-		chipFg: "var(--color-primary-press)",
+		card: "border border-border bg-card text-foreground",
+		chip: "bg-coral-50 text-coral-700",
+		eyebrow: "text-coral-700",
+		title: "text-foreground",
+		body: "text-muted-foreground",
 	},
 };
 
 function PromoCard({ p }: { p: Promo }) {
-	const t = PROMO_TONES[p.tone];
-	const cardStyle: CSSProperties = {
-		display: "flex",
-		flexDirection: "column",
-		gap: 12,
-		padding: 22,
-		borderRadius: 22,
-		background: t.bg,
-		color: t.fg,
-		border:
-			p.tone === "light"
-				? "1px solid var(--border-subtle)"
-				: "1px solid transparent",
-		boxShadow: "var(--shadow-card)",
-	};
+	const t = TONE[p.tone];
 	return (
-		<div style={cardStyle}>
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					gap: 10,
-				}}
-			>
+		<div
+			className={cn(
+				"flex flex-col gap-3 rounded-3xl p-[22px] shadow-lg",
+				t.card
+			)}
+		>
+			<div className="flex items-center gap-2.5">
 				<span
-					style={{
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						width: 40,
-						height: 40,
-						borderRadius: 12,
-						background: t.chip,
-						color: t.chipFg,
-					}}
+					className={cn(
+						"inline-flex size-10 items-center justify-center rounded-xl",
+						t.chip
+					)}
 				>
-					<span style={{ display: "inline-flex", width: 20, height: 20 }}>
-						{p.icon}
-					</span>
+					<span className="inline-flex size-5">{p.icon}</span>
 				</span>
 				<span
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 12,
-						fontWeight: 800,
-						letterSpacing: "0.06em",
-						color: t.chipFg,
-					}}
+					className={cn("font-extrabold text-xs tracking-[0.06em]", t.eyebrow)}
 				>
 					{p.eyebrow}
 				</span>
 			</div>
-			<div
-				style={{
-					fontFamily: "var(--font-display)",
-					fontSize: 19,
-					fontWeight: 800,
-					lineHeight: 1.3,
-					color: t.fg,
-				}}
-			>
+			<div className={cn("font-extrabold text-[19px] leading-snug", t.title)}>
 				{p.title}
 			</div>
-			<p
-				style={{
-					margin: 0,
-					fontFamily: "var(--font-sans)",
-					fontSize: 13.5,
-					lineHeight: 1.55,
-					color: t.sub,
-				}}
-			>
-				{p.body}
-			</p>
+			<p className={cn("text-[13.5px] leading-relaxed", t.body)}>{p.body}</p>
 		</div>
 	);
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
 	return (
-		<div className="bambi-backdrop">
-			<aside aria-hidden="true" className="bambi-promo">
+		<div className="flex min-h-[100dvh] items-start justify-center bg-background md:gap-7 md:bg-secondary">
+			<aside className="hidden h-[100dvh] w-[296px] shrink-0 flex-col justify-center gap-4 min-[1080px]:flex">
 				{PROMOS.map((p) => (
 					<PromoCard key={p.title} p={p} />
 				))}
 			</aside>
-			<div className="bambi-app">{children}</div>
+			<div className="relative flex h-[100dvh] w-full max-w-[480px] flex-col overflow-hidden bg-background md:shadow-2xl md:ring-1 md:ring-border">
+				{children}
+			</div>
 			{/* 오른쪽은 앱을 가운데 정렬하기 위한 빈 여백 */}
-			<div aria-hidden="true" className="bambi-promo" />
+			<div className="hidden w-[296px] shrink-0 min-[1080px]:block" />
 		</div>
 	);
 }

@@ -1,5 +1,58 @@
+@import "../../../packages/ui/src/styles/globals.css";
 @import "./styles/bambi/fonts.css";
 @import "./styles/bambi/tokens.css";
+
+/* ---- web 브랜드: shadcn 시맨틱 토큰을 밤비 팔레트로 매핑 ---- */
+:root {
+	--background: #ffffff;
+	--foreground: #111827;
+	--card: #ffffff;
+	--card-foreground: #111827;
+	--popover: #ffffff;
+	--popover-foreground: #111827;
+	--primary: #f94b63;
+	--primary-foreground: #ffffff;
+	--secondary: #f9fafb;
+	--secondary-foreground: #111827;
+	--muted: #f3f4f6;
+	--muted-foreground: #6b7280;
+	--accent: #fff1f3;
+	--accent-foreground: #c11f39;
+	--destructive: #ff5a5f;
+	--border: #eef0f3;
+	--input: #e5e7eb;
+	--ring: #f94b63;
+	--radius: 0.875rem;
+}
+
+/* ---- 밤비 브랜드 팔레트 → Tailwind 유틸 (bg-coral-500, text-ink-800 …) ---- */
+@theme inline {
+	--font-sans:
+		"Pretendard Variable", Pretendard, "Inter", -apple-system,
+		BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI",
+		Roboto, sans-serif;
+	--color-coral-50: var(--coral-50);
+	--color-coral-100: var(--coral-100);
+	--color-coral-200: var(--coral-200);
+	--color-coral-300: var(--coral-300);
+	--color-coral-400: var(--coral-400);
+	--color-coral-500: var(--coral-500);
+	--color-coral-600: var(--coral-600);
+	--color-coral-700: var(--coral-700);
+	--color-ink-600: var(--ink-600);
+	--color-ink-700: var(--ink-700);
+	--color-ink-800: var(--ink-800);
+	--color-ink-900: var(--ink-900);
+	--color-green-50: var(--green-50);
+	--color-green-500: var(--green-500);
+	--color-green-600: var(--green-600);
+	--color-amber-50: var(--amber-50);
+	--color-amber-500: var(--amber-500);
+	--color-red-50: var(--red-50);
+	--color-red-300: var(--red-300);
+	--color-red-500: var(--red-500);
+	--color-red-600: var(--red-600);
+}
 
 /* ---- 베이스 ---- */
 html,
@@ -15,17 +68,7 @@ body {
 	text-rendering: optimizeLegibility;
 }
 
-*,
-*::before,
-*::after {
-	box-sizing: border-box;
-}
-
-button {
-	font-family: inherit;
-}
-
-/* 스크롤바 숨김 (디바이스 목업 충실도) */
+/* 스크롤바 숨김 (모바일 앱 충실도) */
 *::-webkit-scrollbar {
 	width: 0;
 	height: 0;
@@ -35,7 +78,6 @@ button {
 	scrollbar-width: none;
 }
 
-/* ---- 모션 ---- */
 @keyframes bambiSheetUp {
 	from {
 		transform: translateY(14px);
@@ -47,63 +89,7 @@ button {
 	}
 }
 
-/* ---- 앱 셸 (모바일 우선 + 데스크톱 홍보 거터) ---- */
-.bambi-backdrop {
-	display: flex;
-	align-items: flex-start;
-	justify-content: center;
-	min-height: 100dvh;
-	background: var(--surface-page);
-}
-
-.bambi-app {
-	position: relative;
-	display: flex;
-	flex-direction: column;
-	width: 100%;
-	max-width: 480px;
-	height: 100dvh;
-	overflow: hidden;
-	background: var(--surface-page);
-}
-
-.bambi-promo {
-	display: none;
-}
-
-@media (min-width: 768px) {
-	.bambi-backdrop {
-		gap: 28px;
-		background:
-			radial-gradient(
-				1200px 720px at 50% -20%,
-				var(--coral-50) 0%,
-				rgba(255, 255, 255, 0) 55%
-			),
-			var(--surface-subtle);
-	}
-
-	.bambi-app {
-		box-shadow:
-			0 0 0 1px var(--border-subtle),
-			0 24px 70px rgba(17, 24, 39, 0.1);
-	}
-}
-
-@media (min-width: 1080px) {
-	.bambi-promo {
-		display: flex;
-		flex-direction: column;
-		gap: 16px;
-		justify-content: center;
-		width: 296px;
-		height: 100dvh;
-		padding: 32px 0;
-		overflow: hidden;
-	}
-}
-
-/* ---- 스테이지 (페르소나 스위처 · /preview) ---- */
+/* ---- 스테이지 (페르소나 스위처 · /preview, 데모 전용) ---- */
 .bambi-stage {
 	display: flex;
 	align-items: center;

@@ -2,6 +2,7 @@
 
 // 밤비 — 운영자(Moderator) 콘솔: 검수 큐, 신고 인박스, 사용자 제재.
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
@@ -37,15 +38,10 @@ import {
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
 
-const HI: Record<string, string> = {
-	block: "rgba(255,90,95,0.22)",
-	review: "rgba(245,158,11,0.24)",
-	low: "rgba(31,181,115,0.20)",
-};
-const UL: Record<string, string> = {
-	block: "var(--red-500)",
-	review: "var(--amber-500)",
-	low: "var(--green-500)",
+const HI_CLASS: Record<string, string> = {
+	block: "bg-[rgba(255,90,95,0.22)] shadow-[inset_0_-2px_0_var(--red-500)]",
+	review: "bg-[rgba(245,158,11,0.24)] shadow-[inset_0_-2px_0_var(--amber-500)]",
+	low: "bg-[rgba(31,181,115,0.20)] shadow-[inset_0_-2px_0_var(--green-500)]",
 };
 const RISK_HI_KEY: Record<RiskLevel, string> = {
 	high: "block",
@@ -97,27 +93,15 @@ function HiText({
 		segs.push({ t: text.slice(cur), hi: false, start: cur });
 	}
 	return (
-		<p
-			style={{
-				margin: 0,
-				fontFamily: "var(--font-sans)",
-				fontSize: 14.5,
-				lineHeight: 1.65,
-				color: "var(--text-default)",
-			}}
-		>
+		<p className="m-0 text-[14.5px] text-[color:var(--text-default)] leading-[1.65]">
 			{segs.map((s) =>
 				s.hi ? (
 					<mark
+						className={cn(
+							"rounded px-px py-px font-bold text-[color:var(--text-strong)]",
+							HI_CLASS[key]
+						)}
 						key={s.start}
-						style={{
-							background: HI[key],
-							color: "var(--text-strong)",
-							borderRadius: 4,
-							padding: "1px 1px",
-							boxShadow: `inset 0 -2px 0 ${UL[key]}`,
-							fontWeight: 700,
-						}}
 					>
 						{s.t}
 					</mark>
@@ -130,39 +114,29 @@ function HiText({
 }
 
 // 위험도 배지 ("위험: 높음/중간/낮음").
-const RISK_BADGE: Record<RiskLevel, { bg: string; fg: string; label: string }> =
-	{
-		high: {
-			bg: "var(--status-danger-bg)",
-			fg: "var(--status-danger-fg)",
-			label: "높음",
-		},
-		mid: {
-			bg: "var(--status-pending-bg)",
-			fg: "var(--status-pending-fg)",
-			label: "중간",
-		},
-		low: {
-			bg: "var(--status-success-bg)",
-			fg: "var(--status-success-fg)",
-			label: "낮음",
-		},
-	};
+const RISK_BADGE: Record<RiskLevel, { cls: string; label: string }> = {
+	high: {
+		cls: "bg-[color:var(--status-danger-bg)] text-[color:var(--status-danger-fg)]",
+		label: "높음",
+	},
+	mid: {
+		cls: "bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]",
+		label: "중간",
+	},
+	low: {
+		cls: "bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)]",
+		label: "낮음",
+	},
+};
 
 function RiskBadge({ level }: { level: RiskLevel }) {
 	const c = RISK_BADGE[level];
 	return (
 		<span
-			style={{
-				fontFamily: "var(--font-sans)",
-				fontSize: 11,
-				fontWeight: 800,
-				padding: "3px 9px",
-				borderRadius: 999,
-				background: c.bg,
-				color: c.fg,
-				whiteSpace: "nowrap",
-			}}
+			className={cn(
+				"whitespace-nowrap rounded-full px-[9px] py-[3px] font-extrabold text-[11px]",
+				c.cls
+			)}
 		>
 			위험: {c.label}
 		</span>
@@ -170,31 +144,24 @@ function RiskBadge({ level }: { level: RiskLevel }) {
 }
 
 function SevPill({ sev }: { sev: ReportSeverity }) {
-	const map: Record<ReportSeverity, { bg: string; fg: string; t: string }> = {
+	const map: Record<ReportSeverity, { cls: string; t: string }> = {
 		high: {
-			bg: "var(--status-danger-bg)",
-			fg: "var(--status-danger-fg)",
+			cls: "bg-[color:var(--status-danger-bg)] text-[color:var(--status-danger-fg)]",
 			t: "심각",
 		},
 		mid: {
-			bg: "var(--status-pending-bg)",
-			fg: "var(--status-pending-fg)",
+			cls: "bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]",
 			t: "주의",
 		},
-		low: { bg: "var(--surface-sunken)", fg: "var(--text-muted)", t: "참고" },
+		low: { cls: "bg-muted text-muted-foreground", t: "참고" },
 	};
 	const m = map[sev] || map.low;
 	return (
 		<span
-			style={{
-				fontFamily: "var(--font-sans)",
-				fontSize: 11,
-				fontWeight: 800,
-				padding: "3px 9px",
-				borderRadius: 999,
-				background: m.bg,
-				color: m.fg,
-			}}
+			className={cn(
+				"rounded-full px-[9px] py-[3px] font-extrabold text-[11px]",
+				m.cls
+			)}
 		>
 			{m.t}
 		</span>
@@ -203,31 +170,9 @@ function SevPill({ sev }: { sev: ReportSeverity }) {
 
 function MetaBox({ label, value }: { label: string; value: string }) {
 	return (
-		<div
-			style={{
-				padding: "12px 14px",
-				borderRadius: 12,
-				background: "var(--surface-subtle)",
-			}}
-		>
-			<div
-				style={{
-					fontFamily: "var(--font-sans)",
-					fontSize: 11,
-					color: "var(--text-muted)",
-				}}
-			>
-				{label}
-			</div>
-			<div
-				style={{
-					fontFamily: "var(--font-sans)",
-					fontSize: 15,
-					fontWeight: 800,
-					color: "var(--text-strong)",
-					marginTop: 3,
-				}}
-			>
+		<div className="rounded-xl bg-secondary px-[14px] py-3">
+			<div className="text-[11px] text-muted-foreground">{label}</div>
+			<div className="mt-[3px] font-extrabold text-[15px] text-foreground">
 				{value}
 			</div>
 		</div>
@@ -236,32 +181,11 @@ function MetaBox({ label, value }: { label: string; value: string }) {
 
 function EmptyState({ icon, text }: { icon: ReactNode; text: string }) {
 	return (
-		<div style={{ margin: "auto", textAlign: "center", padding: 40 }}>
-			<div
-				style={{
-					width: 56,
-					height: 56,
-					margin: "0 auto 12px",
-					borderRadius: 18,
-					background: "var(--status-success-bg)",
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "center",
-					color: "var(--status-success-fg)",
-				}}
-			>
-				<span style={{ width: 26, height: 26, display: "inline-flex" }}>
-					{icon}
-				</span>
+		<div className="m-auto p-10 text-center">
+			<div className="mx-auto mt-0 mb-3 flex size-14 items-center justify-center rounded-[18px] bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)]">
+				<span className="inline-flex size-[26px]">{icon}</span>
 			</div>
-			<div
-				style={{
-					fontFamily: "var(--font-sans)",
-					fontSize: 14,
-					fontWeight: 700,
-					color: "var(--text-default)",
-				}}
-			>
+			<div className="font-bold text-[14px] text-[color:var(--text-default)]">
 				{text}
 			</div>
 		</div>
@@ -281,35 +205,19 @@ function ConsoleTabs({
 		{ v: "users", label: "사용자" },
 	];
 	return (
-		<div
-			style={{
-				display: "flex",
-				gap: 6,
-				padding: 4,
-				background: "var(--surface-sunken)",
-				borderRadius: "var(--radius-md)",
-			}}
-		>
+		<div className="flex gap-1.5 rounded-xl bg-muted p-1">
 			{items.map((it) => {
 				const on = tab === it.v;
 				return (
 					<button
+						className={cn(
+							"h-10 flex-1 cursor-pointer rounded-lg border-none text-[14px] transition-all",
+							on
+								? "bg-ink-800 font-extrabold text-white shadow-sm"
+								: "bg-transparent font-semibold text-muted-foreground"
+						)}
 						key={it.v}
 						onClick={() => onTab(it.v)}
-						style={{
-							flex: 1,
-							height: 40,
-							border: "none",
-							cursor: "pointer",
-							borderRadius: "var(--radius-sm)",
-							background: on ? "var(--ink-800)" : "transparent",
-							color: on ? "#fff" : "var(--text-muted)",
-							fontFamily: "var(--font-sans)",
-							fontSize: 14,
-							fontWeight: on ? 800 : 600,
-							boxShadow: on ? "var(--shadow-sm)" : "none",
-							transition: "all var(--dur-fast) var(--ease-out)",
-						}}
 						type="button"
 					>
 						{it.label}
@@ -330,47 +238,12 @@ export function ConsoleTop({
 	counts: { queue: number; reports: number; warned: number };
 }) {
 	return (
-		<div
-			style={{
-				display: "flex",
-				flexDirection: "column",
-				gap: 14,
-				padding: "6px 20px 12px",
-			}}
-		>
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "space-between",
-				}}
-			>
+		<div className="flex flex-col gap-[14px] px-5 pt-1.5 pb-3">
+			<div className="flex items-center justify-between">
 				<Logo lang="ko" size="md" />
-				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-					<span
-						style={{
-							display: "inline-flex",
-							alignItems: "center",
-							gap: 5,
-							height: 30,
-							padding: "0 11px",
-							borderRadius: "var(--radius-pill)",
-							background: "var(--surface-subtle)",
-							color: "var(--text-default)",
-							fontFamily: "var(--font-sans)",
-							fontSize: 12,
-							fontWeight: 700,
-							whiteSpace: "nowrap",
-						}}
-					>
-						<span
-							style={{
-								display: "inline-flex",
-								width: 14,
-								height: 14,
-								color: "var(--ink-700)",
-							}}
-						>
+				<div className="flex items-center gap-2">
+					<span className="inline-flex h-[30px] items-center gap-[5px] whitespace-nowrap rounded-full bg-secondary px-[11px] font-bold text-[12px] text-[color:var(--text-default)]">
+						<span className="inline-flex size-[14px] text-[color:var(--ink-700)]">
 							<ShieldIcon />
 						</span>
 						운영자 모드
@@ -380,22 +253,13 @@ export function ConsoleTop({
 					</IconButton>
 				</div>
 			</div>
-			<h1
-				style={{
-					margin: 0,
-					padding: "0 4px",
-					fontFamily: "var(--font-display)",
-					fontSize: 24,
-					fontWeight: 800,
-					color: "var(--text-strong)",
-				}}
-			>
+			<h1 className="m-0 px-1 font-extrabold text-[24px] text-foreground">
 				운영자 콘솔
 			</h1>
-			<div style={{ padding: "0 4px" }}>
+			<div className="px-1">
 				<ConsoleTabs onTab={onTab} tab={tab} />
 			</div>
-			<div style={{ padding: "0 4px" }}>
+			<div className="px-1">
 				<StatGroup
 					items={[
 						{ label: "검수 대기", value: counts.queue },
@@ -411,61 +275,16 @@ export function ConsoleTop({
 // ---- 큐 --------------------------------------------------------------------
 function QueueFilterRow() {
 	return (
-		<div style={{ display: "flex", gap: 8 }}>
-			<div
-				style={{
-					flex: 1,
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "space-between",
-					height: 40,
-					padding: "0 14px",
-					borderRadius: 12,
-					border: "1px solid var(--border-default)",
-					background: "var(--surface-card)",
-					color: "var(--text-default)",
-					fontFamily: "var(--font-sans)",
-					fontSize: 13,
-					fontWeight: 600,
-				}}
-			>
+		<div className="flex gap-2">
+			<div className="flex h-10 flex-1 items-center justify-between rounded-xl border border-[color:var(--border-default)] bg-card px-[14px] font-semibold text-[13px] text-[color:var(--text-default)]">
 				전체 상태
-				<span
-					style={{
-						display: "inline-flex",
-						width: 16,
-						height: 16,
-						color: "var(--text-muted)",
-					}}
-				>
+				<span className="inline-flex size-4 text-muted-foreground">
 					<ChevronDownIcon />
 				</span>
 			</div>
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					gap: 6,
-					height: 40,
-					padding: "0 14px",
-					borderRadius: 12,
-					border: "1px solid var(--border-default)",
-					background: "var(--surface-card)",
-					color: "var(--text-default)",
-					fontFamily: "var(--font-sans)",
-					fontSize: 13,
-					fontWeight: 600,
-				}}
-			>
+			<div className="flex h-10 items-center gap-1.5 rounded-xl border border-[color:var(--border-default)] bg-card px-[14px] font-semibold text-[13px] text-[color:var(--text-default)]">
 				회신순
-				<span
-					style={{
-						display: "inline-flex",
-						width: 15,
-						height: 15,
-						color: "var(--text-muted)",
-					}}
-				>
+				<span className="inline-flex size-[15px] text-muted-foreground">
 					<SortIcon />
 				</span>
 			</div>
@@ -486,30 +305,23 @@ function QueueCheckbox({
 		<button
 			aria-label="항목 선택"
 			aria-pressed={checked}
+			className={cn(
+				"mt-px inline-flex size-[22px] flex-[0_0_22px] cursor-pointer items-center justify-center rounded-[7px] text-white",
+				checked
+					? "border border-transparent bg-primary"
+					: cn(
+							"border-[1.5px]",
+							dark ? "border-white/40" : "border-[color:var(--border-strong)]"
+						)
+			)}
 			onClick={(e) => {
 				e.stopPropagation();
 				onToggle();
 			}}
-			style={{
-				flex: "0 0 22px",
-				width: 22,
-				height: 22,
-				marginTop: 1,
-				borderRadius: 7,
-				cursor: "pointer",
-				display: "inline-flex",
-				alignItems: "center",
-				justifyContent: "center",
-				background: checked ? "var(--color-primary)" : "transparent",
-				border: checked
-					? "1px solid transparent"
-					: `1.5px solid ${dark ? "rgba(255,255,255,0.4)" : "var(--border-strong)"}`,
-				color: "#fff",
-			}}
 			type="button"
 		>
 			{checked ? (
-				<span style={{ display: "inline-flex", width: 13, height: 13 }}>
+				<span className="inline-flex size-[13px]">
 					<CheckIcon />
 				</span>
 			) : null}
@@ -529,10 +341,18 @@ function QueueRow({
 	onOpen: () => void;
 }) {
 	const dark = selected;
-	const subFg = dark ? "var(--text-on-dark-muted)" : "var(--text-muted)";
+	const subFg = dark
+		? "text-[color:var(--text-on-dark-muted)]"
+		: "text-muted-foreground";
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: 행 내부에 체크박스 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
 		<div
+			className={cn(
+				"flex cursor-pointer items-start gap-3 rounded-2xl p-[14px]",
+				dark
+					? "border border-transparent bg-ink-800 text-white shadow-md"
+					: "border border-border bg-card text-[color:var(--text-default)] shadow-card"
+			)}
 			onClick={onOpen}
 			onKeyDown={(e) => {
 				if (e.key === "Enter" || e.key === " ") {
@@ -541,98 +361,51 @@ function QueueRow({
 				}
 			}}
 			role="button"
-			style={{
-				display: "flex",
-				alignItems: "flex-start",
-				gap: 12,
-				padding: 14,
-				borderRadius: 16,
-				cursor: "pointer",
-				background: dark ? "var(--ink-800)" : "var(--surface-card)",
-				color: dark ? "#fff" : "var(--text-default)",
-				border: dark
-					? "1px solid transparent"
-					: "1px solid var(--border-subtle)",
-				boxShadow: dark ? "var(--shadow-md)" : "var(--shadow-card)",
-			}}
 			tabIndex={0}
 		>
 			<QueueCheckbox checked={selected} dark={dark} onToggle={onToggle} />
 			<Avatar name={q.company} size="sm" square />
-			<div
-				style={{
-					flex: 1,
-					minWidth: 0,
-					display: "flex",
-					flexDirection: "column",
-					gap: 5,
-				}}
-			>
-				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+			<div className="flex min-w-0 flex-1 flex-col gap-[5px]">
+				<div className="flex items-center gap-2">
 					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 14.5,
-							fontWeight: 700,
-							color: dark ? "#fff" : "var(--text-strong)",
-							whiteSpace: "nowrap",
-						}}
+						className={cn(
+							"whitespace-nowrap font-bold text-[14.5px]",
+							dark ? "text-white" : "text-foreground"
+						)}
 					>
 						{q.company}
 					</span>
-					<span
-						style={{
-							flex: 1,
-							minWidth: 0,
-							fontFamily: "var(--font-sans)",
-							fontSize: 13,
-							color: subFg,
-							whiteSpace: "nowrap",
-							overflow: "hidden",
-							textOverflow: "ellipsis",
-						}}
-					>
+					<span className={cn("min-w-0 flex-1 truncate text-[13px]", subFg)}>
 						{q.role}
 					</span>
 					<RiskBadge level={q.riskLevel} />
 				</div>
-				<div
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 12.5,
-						lineHeight: 1.45,
-						color: subFg,
-					}}
-				>
+				<div className={cn("text-[12.5px] leading-[1.45]", subFg)}>
 					<span>감지 문구 </span>
 					<span
-						style={{
-							fontWeight: 700,
-							color: dark ? "#fff" : "var(--text-default)",
-						}}
+						className={cn(
+							"font-bold",
+							dark ? "text-white" : "text-[color:var(--text-default)]"
+						)}
 					>
 						{q.detected.map((d) => `"${d}"`).join(", ")}
 					</span>
 				</div>
 				<div
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 11.5,
-						color: dark ? "rgba(255,255,255,0.55)" : "var(--text-subtle)",
-					}}
+					className={cn(
+						"text-[11.5px]",
+						dark ? "text-white/55" : "text-[color:var(--text-subtle)]"
+					)}
 				>
 					접수 {q.receivedAt} · ID {q.refId}
 				</div>
 			</div>
 			<span
 				aria-hidden="true"
-				style={{
-					display: "inline-flex",
-					width: 18,
-					height: 18,
-					marginTop: 1,
-					color: dark ? "rgba(255,255,255,0.5)" : "var(--text-subtle)",
-				}}
+				className={cn(
+					"mt-px inline-flex size-[18px]",
+					dark ? "text-white/50" : "text-[color:var(--text-subtle)]"
+				)}
 			>
 				<ChevronRightIcon />
 			</span>
@@ -652,17 +425,7 @@ export function QueueList({
 	onOpen: (item: QueueItem) => void;
 }) {
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				overflowY: "auto",
-				padding: "0 24px 20px",
-				display: "flex",
-				flexDirection: "column",
-				gap: 12,
-			}}
-		>
+		<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pb-5">
 			<QueueFilterRow />
 			{items.length ? (
 				items.map((q) => (
@@ -694,91 +457,34 @@ export function QueueDetail({
 }) {
 	const [reject, setReject] = useState(false);
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-				position: "relative",
-			}}
-		>
+		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="공고 검수" />
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					padding: "4px 24px 20px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 18,
-				}}
-			>
-				<div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-1 pb-5">
+				<div className="flex items-center gap-3">
 					<Avatar name={item.company} size="lg" square />
 					<div>
-						<div
-							style={{
-								fontFamily: "var(--font-display)",
-								fontSize: 19,
-								fontWeight: 800,
-								color: "var(--text-strong)",
-							}}
-						>
+						<div className="font-extrabold text-[19px] text-foreground">
 							{item.title}
 						</div>
-						<div
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 13,
-								color: "var(--text-muted)",
-								marginTop: 2,
-							}}
-						>
+						<div className="mt-0.5 text-[13px] text-muted-foreground">
 							{item.company} · {item.location} · ID {item.refId}
 						</div>
 					</div>
 				</div>
-				<div
-					style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-				>
+				<div className="grid grid-cols-2 gap-2.5">
 					<MetaBox label="급여" value={item.pay} />
 					<MetaBox label="접수" value={item.receivedAt} />
 				</div>
-				<div
-					style={{
-						display: "flex",
-						flexDirection: "column",
-						gap: 8,
-						padding: 14,
-						borderRadius: 14,
-						background: "var(--status-pending-bg)",
-					}}
-				>
-					<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-						<span
-							style={{
-								width: 18,
-								height: 18,
-								display: "inline-flex",
-								color: "var(--status-pending-fg)",
-							}}
-						>
+				<div className="flex flex-col gap-2 rounded-[14px] bg-[color:var(--status-pending-bg)] p-[14px]">
+					<div className="flex items-center gap-2">
+						<span className="inline-flex size-[18px] text-[color:var(--status-pending-fg)]">
 							<AlertCircle />
 						</span>
-						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 13.5,
-								fontWeight: 800,
-								color: "var(--status-pending-fg)",
-							}}
-						>
+						<span className="font-extrabold text-[13.5px] text-[color:var(--status-pending-fg)]">
 							자동 필터가 감지한 신호 {item.flags.length}건
 						</span>
 					</div>
-					<div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+					<div className="flex flex-wrap gap-1.5">
 						{item.flags.map((f) => (
 							<RiskFlag
 								key={`${f.label}-${f.match}`}
@@ -791,25 +497,10 @@ export function QueueDetail({
 					</div>
 				</div>
 				<div>
-					<div
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 13,
-							fontWeight: 700,
-							color: "var(--text-strong)",
-							marginBottom: 8,
-						}}
-					>
+					<div className="mb-2 font-bold text-[13px] text-foreground">
 						공고 본문 · 감지 표현 강조
 					</div>
-					<div
-						style={{
-							padding: 16,
-							borderRadius: 14,
-							background: "var(--surface-subtle)",
-							border: "1px solid var(--border-subtle)",
-						}}
-					>
+					<div className="rounded-[14px] border border-border bg-secondary p-4">
 						<HiText
 							level={item.riskLevel}
 							terms={item.detected}
@@ -817,27 +508,12 @@ export function QueueDetail({
 						/>
 					</div>
 				</div>
-				<div
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 12,
-						lineHeight: 1.55,
-						color: "var(--text-muted)",
-						padding: "0 2px",
-					}}
-				>
+				<div className="px-0.5 text-[12px] text-muted-foreground leading-[1.55]">
 					판단 기준: 성적 서비스 암시·강요·외부 연락 유도는 반려, 단순 오해
 					소지는 승인 후 안내해요.
 				</div>
 			</div>
-			<div
-				style={{
-					padding: "12px 24px 6px",
-					borderTop: "1px solid var(--border-subtle)",
-					display: "flex",
-					gap: 10,
-				}}
-			>
+			<div className="flex gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
 				<Button
 					block
 					onClick={() => setReject(true)}
@@ -881,110 +557,40 @@ function RejectSheet({
 	];
 	const [sel, setSel] = useState(reasons[0]);
 	return (
-		<div
-			style={{
-				position: "absolute",
-				inset: 0,
-				zIndex: 20,
-				display: "flex",
-				flexDirection: "column",
-				justifyContent: "flex-end",
-			}}
-		>
+		<div className="absolute inset-0 z-20 flex flex-col justify-end">
 			<button
 				aria-label="닫기"
+				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
 				onClick={onCancel}
-				style={{
-					position: "absolute",
-					inset: 0,
-					border: "none",
-					background: "var(--overlay-scrim)",
-					cursor: "pointer",
-				}}
 				type="button"
 			/>
-			<div
-				style={{
-					position: "relative",
-					background: "var(--surface-page)",
-					borderRadius: "24px 24px 0 0",
-					padding: "20px 24px 24px",
-					boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
-					animation: "bambiSheetUp var(--dur-base) var(--ease-out)",
-				}}
-			>
-				<h2
-					style={{
-						margin: "0 0 4px",
-						fontFamily: "var(--font-display)",
-						fontSize: 19,
-						fontWeight: 800,
-						color: "var(--text-strong)",
-					}}
-				>
+			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
+				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
 					반려 사유 선택
 				</h2>
-				<p
-					style={{
-						margin: "0 0 14px",
-						fontFamily: "var(--font-sans)",
-						fontSize: 13,
-						color: "var(--text-muted)",
-					}}
-				>
+				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
 					선택한 사유는 구인자에게 그대로 전달돼요.
 				</p>
-				<div
-					style={{
-						display: "flex",
-						flexDirection: "column",
-						gap: 8,
-						marginBottom: 16,
-					}}
-				>
+				<div className="mb-4 flex flex-col gap-2">
 					{reasons.map((r) => {
 						const on = sel === r;
 						return (
 							<button
+								className={cn(
+									"flex cursor-pointer items-center gap-2.5 rounded-xl px-[14px] py-3 text-left",
+									on
+										? "border border-primary bg-coral-50"
+										: "border border-[color:var(--border-default)] bg-card"
+								)}
 								key={r}
 								onClick={() => setSel(r)}
-								style={{
-									display: "flex",
-									alignItems: "center",
-									gap: 10,
-									padding: "12px 14px",
-									borderRadius: 12,
-									cursor: "pointer",
-									textAlign: "left",
-									background: on
-										? "var(--color-primary-soft)"
-										: "var(--surface-card)",
-									border: on
-										? "1px solid var(--color-primary)"
-										: "1px solid var(--border-default)",
-								}}
 								type="button"
 							>
-								<span
-									style={{
-										flex: 1,
-										fontFamily: "var(--font-sans)",
-										fontSize: 14,
-										fontWeight: 600,
-										color: "var(--text-strong)",
-									}}
-								>
+								<span className="flex-1 font-semibold text-[14px] text-foreground">
 									{r}
 								</span>
 								{on ? (
-									<span
-										style={{
-											width: 18,
-											height: 18,
-											display: "inline-flex",
-											color: "var(--color-primary)",
-										}}
-									>
+									<span className="inline-flex size-[18px] text-primary">
 										<CheckIcon />
 									</span>
 								) : null}
@@ -992,7 +598,7 @@ function RejectSheet({
 						);
 					})}
 				</div>
-				<div style={{ display: "flex", gap: 10 }}>
+				<div className="flex gap-2.5">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
 					</Button>
@@ -1017,73 +623,34 @@ function ReportRow({
 }) {
 	return (
 		<button
+			className={cn(
+				"flex flex-col gap-2.5 rounded-2xl bg-card p-4 text-left shadow-card",
+				done ? "cursor-pointer opacity-60" : "cursor-pointer opacity-100",
+				r.sev === "high" && !done
+					? "border border-[color:var(--red-500)]"
+					: "border border-border"
+			)}
 			onClick={() => onOpen(r)}
-			style={{
-				textAlign: "left",
-				padding: 16,
-				borderRadius: 16,
-				cursor: "pointer",
-				background: "var(--surface-card)",
-				opacity: done ? 0.6 : 1,
-				border:
-					r.sev === "high" && !done
-						? "1px solid var(--red-500)"
-						: "1px solid var(--border-subtle)",
-				boxShadow: "var(--shadow-card)",
-				display: "flex",
-				flexDirection: "column",
-				gap: 10,
-			}}
 			type="button"
 		>
-			<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+			<div className="flex items-center gap-2">
 				<SevPill sev={r.sev} />
-				<span
-					style={{
-						flex: 1,
-						fontFamily: "var(--font-sans)",
-						fontSize: 14.5,
-						fontWeight: 800,
-						color: "var(--text-strong)",
-					}}
-				>
+				<span className="flex-1 font-extrabold text-[14.5px] text-foreground">
 					{r.reason}
 				</span>
 				{done ? (
 					<Badge tone="neutral">완료</Badge>
 				) : (
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 11,
-							color: "var(--text-subtle)",
-						}}
-					>
+					<span className="text-[11px] text-[color:var(--text-subtle)]">
 						{r.time}
 					</span>
 				)}
 			</div>
-			<div
-				style={{
-					fontFamily: "var(--font-sans)",
-					fontSize: 12.5,
-					color: "var(--text-muted)",
-				}}
-			>
-				<b style={{ color: "var(--text-default)" }}>{r.target}</b>(
+			<div className="text-[12.5px] text-muted-foreground">
+				<b className="text-[color:var(--text-default)]">{r.target}</b>(
 				{r.targetRole}) · 신고 {r.reporter}({r.reporterRole})
 			</div>
-			<div
-				style={{
-					fontFamily: "var(--font-sans)",
-					fontSize: 12.5,
-					lineHeight: 1.45,
-					color: "var(--text-default)",
-					padding: "8px 10px",
-					borderRadius: 10,
-					background: "var(--surface-subtle)",
-				}}
-			>
+			<div className="rounded-[10px] bg-secondary px-2.5 py-2 text-[12.5px] text-[color:var(--text-default)] leading-[1.45]">
 				"{r.note}"
 			</div>
 		</button>
@@ -1100,38 +667,13 @@ export function ReportList({
 	const open = items.filter((r) => r.status === "open");
 	const closed = items.filter((r) => r.status !== "open");
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					padding: "4px 24px 20px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 12,
-				}}
-			>
+		<div className="flex min-h-0 flex-1 flex-col">
+			<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pt-1 pb-5">
 				{open.map((r) => (
 					<ReportRow key={r.id} onOpen={onOpen} r={r} />
 				))}
 				{closed.length ? (
-					<div
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 12,
-							fontWeight: 700,
-							color: "var(--text-subtle)",
-							margin: "6px 0 0",
-						}}
-					>
+					<div className="mt-1.5 font-bold text-[12px] text-[color:var(--text-subtle)]">
 						처리 완료
 					</div>
 				) : null}
@@ -1154,43 +696,19 @@ function PartyBox({
 }) {
 	return (
 		<div
-			style={{
-				flex: 1,
-				display: "flex",
-				alignItems: "center",
-				gap: 10,
-				padding: 12,
-				borderRadius: 14,
-				background: "var(--surface-card)",
-				border: flagged
-					? "1px solid var(--red-300)"
-					: "1px solid var(--border-subtle)",
-			}}
+			className={cn(
+				"flex flex-1 items-center gap-2.5 rounded-[14px] bg-card p-3",
+				flagged
+					? "border border-[color:var(--red-300)]"
+					: "border border-border"
+			)}
 		>
 			<Avatar name={name} size="sm" square />
-			<div style={{ minWidth: 0 }}>
-				<div
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 13.5,
-						fontWeight: 700,
-						color: "var(--text-strong)",
-						whiteSpace: "nowrap",
-						overflow: "hidden",
-						textOverflow: "ellipsis",
-					}}
-				>
+			<div className="min-w-0">
+				<div className="truncate font-bold text-[13.5px] text-foreground">
 					{name}
 				</div>
-				<div
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 11,
-						color: "var(--text-muted)",
-					}}
-				>
-					{role}
-				</div>
+				<div className="text-[11px] text-muted-foreground">{role}</div>
 			</div>
 		</div>
 	);
@@ -1209,42 +727,16 @@ export function ReportDetail({
 }) {
 	const [act, setAct] = useState(false);
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-				position: "relative",
-			}}
-		>
+		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="신고 검토" />
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					padding: "4px 24px 20px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 16,
-				}}
-			>
-				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pt-1 pb-5">
+				<div className="flex items-center gap-2">
 					<SevPill sev={item.sev} />
-					<h2
-						style={{
-							margin: 0,
-							fontFamily: "var(--font-display)",
-							fontSize: 19,
-							fontWeight: 800,
-							color: "var(--text-strong)",
-						}}
-					>
+					<h2 className="m-0 font-extrabold text-[19px] text-foreground">
 						{item.reason}
 					</h2>
 				</div>
-				<div style={{ display: "flex", gap: 10 }}>
+				<div className="flex gap-2.5">
 					<PartyBox
 						flagged
 						name={item.target}
@@ -1256,62 +748,33 @@ export function ReportDetail({
 					/>
 				</div>
 				<div>
-					<div
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 13,
-							fontWeight: 700,
-							color: "var(--text-strong)",
-							marginBottom: 8,
-						}}
-					>
+					<div className="mb-2 font-bold text-[13px] text-foreground">
 						신고된 대화
 					</div>
-					<div
-						style={{
-							display: "flex",
-							flexDirection: "column",
-							gap: 8,
-							padding: 14,
-							borderRadius: 14,
-							background: "var(--surface-subtle)",
-							border: "1px solid var(--border-subtle)",
-						}}
-					>
+					<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
 						{item.thread.map((m) => (
 							<div
+								className={cn(
+									"max-w-[85%]",
+									m.mine ? "self-end" : "self-start"
+								)}
 								key={`${m.mine ? "me" : "them"}-${m.text}`}
-								style={{
-									alignSelf: m.mine ? "flex-end" : "flex-start",
-									maxWidth: "85%",
-								}}
 							>
 								<div
-									style={{
-										fontFamily: "var(--font-sans)",
-										fontSize: 10.5,
-										color: "var(--text-subtle)",
-										marginBottom: 3,
-										textAlign: m.mine ? "right" : "left",
-									}}
+									className={cn(
+										"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
+										m.mine ? "text-right" : "text-left"
+									)}
 								>
 									{m.mine ? item.reporter : item.target}
 								</div>
 								<div
-									style={{
-										padding: "9px 13px",
-										borderRadius: 14,
-										fontFamily: "var(--font-sans)",
-										fontSize: 13.5,
-										lineHeight: 1.45,
-										background: m.mine
-											? "var(--surface-card)"
-											: "var(--ink-800)",
-										color: m.mine ? "var(--text-strong)" : "#fff",
-										border: m.mine ? "1px solid var(--border-default)" : "none",
-										borderBottomRightRadius: m.mine ? 4 : 14,
-										borderBottomLeftRadius: m.mine ? 14 : 4,
-									}}
+									className={cn(
+										"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
+										m.mine
+											? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
+											: "rounded-bl-[4px] bg-ink-800 text-white"
+									)}
 								>
 									{m.text}
 								</div>
@@ -1320,41 +783,16 @@ export function ReportDetail({
 					</div>
 				</div>
 				{item.status === "open" ? null : (
-					<div
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 8,
-							padding: 14,
-							borderRadius: 14,
-							background: "var(--status-success-bg)",
-							color: "var(--status-success-fg)",
-						}}
-					>
-						<span style={{ width: 18, height: 18, display: "inline-flex" }}>
+					<div className="flex items-center gap-2 rounded-[14px] bg-[color:var(--status-success-bg)] p-[14px] text-[color:var(--status-success-fg)]">
+						<span className="inline-flex size-[18px]">
 							<CheckIcon />
 						</span>
-						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 13,
-								fontWeight: 700,
-							}}
-						>
-							이미 처리된 신고예요
-						</span>
+						<span className="font-bold text-[13px]">이미 처리된 신고예요</span>
 					</div>
 				)}
 			</div>
 			{item.status === "open" ? (
-				<div
-					style={{
-						padding: "12px 24px 6px",
-						borderTop: "1px solid var(--border-subtle)",
-						display: "flex",
-						gap: 10,
-					}}
-				>
+				<div className="flex gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
 					<Button
 						block
 						onClick={() => onResolve(item.id, "dismiss")}
@@ -1403,57 +841,25 @@ function UserRow({
 	const c = STATUS_CONF[u.status];
 	return (
 		<button
+			className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-card"
 			onClick={() => onOpen(u)}
-			style={{
-				textAlign: "left",
-				padding: 16,
-				borderRadius: 16,
-				cursor: "pointer",
-				background: "var(--surface-card)",
-				border: "1px solid var(--border-subtle)",
-				boxShadow: "var(--shadow-card)",
-				display: "flex",
-				alignItems: "center",
-				gap: 12,
-			}}
 			type="button"
 		>
 			<Avatar name={u.name} square={u.role === "구인자"} />
-			<div style={{ flex: 1, minWidth: 0 }}>
-				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 15,
-							fontWeight: 700,
-							color: "var(--text-strong)",
-						}}
-					>
+			<div className="min-w-0 flex-1">
+				<div className="flex items-center gap-2">
+					<span className="font-bold text-[15px] text-foreground">
 						{u.name}
 					</span>
 					<Badge dot tone={c.tone}>
 						{c.label}
 					</Badge>
 				</div>
-				<div
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 12.5,
-						color: "var(--text-muted)",
-						marginTop: 3,
-					}}
-				>
+				<div className="mt-[3px] text-[12.5px] text-muted-foreground">
 					{u.role} · 신고 {u.reports}건 · 경고 {u.warnings}회
 				</div>
 			</div>
-			<span
-				style={{
-					width: 18,
-					height: 18,
-					display: "inline-flex",
-					color: "var(--text-subtle)",
-				}}
-			>
+			<span className="inline-flex size-[18px] text-[color:var(--text-subtle)]">
 				<ChevronRightIcon />
 			</span>
 		</button>
@@ -1468,25 +874,8 @@ export function UserList({
 	onOpen: (u: ManagedUser) => void;
 }) {
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					padding: "4px 24px 20px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 12,
-				}}
-			>
+		<div className="flex min-h-0 flex-1 flex-col">
+			<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pt-1 pb-5">
 				{items.map((u) => (
 					<UserRow key={u.id} onOpen={onOpen} u={u} />
 				))}
@@ -1511,49 +900,35 @@ function SanctionBtn({
 	const danger = tone === "danger";
 	return (
 		<button
+			className={cn(
+				"flex cursor-pointer items-center gap-3 rounded-[14px] p-[14px] text-left",
+				strong
+					? "border border-[color:var(--red-500)] bg-[color:var(--status-danger-bg)]"
+					: "border border-[color:var(--border-default)] bg-card"
+			)}
 			onClick={onClick}
-			style={{
-				display: "flex",
-				alignItems: "center",
-				gap: 12,
-				padding: 14,
-				borderRadius: 14,
-				cursor: "pointer",
-				textAlign: "left",
-				background: strong ? "var(--status-danger-bg)" : "var(--surface-card)",
-				border: `1px solid ${strong ? "var(--red-500)" : "var(--border-default)"}`,
-			}}
 			type="button"
 		>
-			<div style={{ flex: 1 }}>
+			<div className="flex-1">
 				<div
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 14.5,
-						fontWeight: 800,
-						color: danger ? "var(--red-600)" : "var(--status-pending-fg)",
-					}}
+					className={cn(
+						"font-extrabold text-[14.5px]",
+						danger
+							? "text-[color:var(--red-600)]"
+							: "text-[color:var(--status-pending-fg)]"
+					)}
 				>
 					{label}
 				</div>
-				<div
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 12,
-						color: "var(--text-muted)",
-						marginTop: 2,
-					}}
-				>
-					{desc}
-				</div>
+				<div className="mt-0.5 text-[12px] text-muted-foreground">{desc}</div>
 			</div>
 			<span
-				style={{
-					width: 18,
-					height: 18,
-					display: "inline-flex",
-					color: danger ? "var(--red-500)" : "var(--text-subtle)",
-				}}
+				className={cn(
+					"inline-flex size-[18px]",
+					danger
+						? "text-[color:var(--red-500)]"
+						: "text-[color:var(--text-subtle)]"
+				)}
 			>
 				<ChevronRightIcon />
 			</span>
@@ -1571,60 +946,21 @@ function SanctionSheet({
 	onPick: (status: UserStatus, label: string) => void;
 }) {
 	return (
-		<div
-			style={{
-				position: "absolute",
-				inset: 0,
-				zIndex: 20,
-				display: "flex",
-				flexDirection: "column",
-				justifyContent: "flex-end",
-			}}
-		>
+		<div className="absolute inset-0 z-20 flex flex-col justify-end">
 			<button
 				aria-label="닫기"
+				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
 				onClick={onCancel}
-				style={{
-					position: "absolute",
-					inset: 0,
-					border: "none",
-					background: "var(--overlay-scrim)",
-					cursor: "pointer",
-				}}
 				type="button"
 			/>
-			<div
-				style={{
-					position: "relative",
-					background: "var(--surface-page)",
-					borderRadius: "24px 24px 0 0",
-					padding: "20px 24px 24px",
-					boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
-					animation: "bambiSheetUp var(--dur-base) var(--ease-out)",
-				}}
-			>
-				<h2
-					style={{
-						margin: "0 0 4px",
-						fontFamily: "var(--font-display)",
-						fontSize: 19,
-						fontWeight: 800,
-						color: "var(--text-strong)",
-					}}
-				>
+			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
+				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
 					{target} 제재
 				</h2>
-				<p
-					style={{
-						margin: "0 0 14px",
-						fontFamily: "var(--font-sans)",
-						fontSize: 13,
-						color: "var(--text-muted)",
-					}}
-				>
+				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
 					신고가 사실로 확인되면 단계별로 조치해요.
 				</p>
-				<div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+				<div className="flex flex-col gap-2.5">
 					<SanctionBtn
 						desc="정책 안내와 함께 경고 1회 누적"
 						label="경고 보내기"
@@ -1645,7 +981,7 @@ function SanctionSheet({
 						tone="danger"
 					/>
 				</div>
-				<div style={{ marginTop: 12 }}>
+				<div className="mt-3">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
 					</Button>
@@ -1666,56 +1002,16 @@ export function UserDetail({
 }) {
 	const c = STATUS_CONF[item.status];
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
+		<div className="flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="사용자 상세" />
-			<div
-				style={{
-					flex: 1,
-					minHeight: 0,
-					overflowY: "auto",
-					padding: "8px 24px 20px",
-					display: "flex",
-					flexDirection: "column",
-					gap: 18,
-				}}
-			>
-				<div
-					style={{
-						display: "flex",
-						flexDirection: "column",
-						alignItems: "center",
-						gap: 10,
-						textAlign: "center",
-						padding: "4px 0",
-					}}
-				>
+			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-2 pb-5">
+				<div className="flex flex-col items-center gap-2.5 py-1 text-center">
 					<Avatar name={item.name} size="xl" square={item.role === "구인자"} />
 					<div>
-						<div
-							style={{
-								fontFamily: "var(--font-display)",
-								fontSize: 21,
-								fontWeight: 800,
-								color: "var(--text-strong)",
-							}}
-						>
+						<div className="font-extrabold text-[21px] text-foreground">
 							{item.name}
 						</div>
-						<div
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 13,
-								color: "var(--text-muted)",
-								marginTop: 3,
-							}}
-						>
+						<div className="mt-[3px] text-[13px] text-muted-foreground">
 							{item.role} · 가입 {item.joined}
 						</div>
 					</div>
@@ -1723,57 +1019,23 @@ export function UserDetail({
 						{c.label}
 					</Badge>
 				</div>
-				<div
-					style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-				>
+				<div className="grid grid-cols-2 gap-2.5">
 					<MetaBox label="누적 신고" value={`${item.reports}건`} />
 					<MetaBox label="경고 횟수" value={`${item.warnings}회`} />
 				</div>
-				<div
-					style={{
-						display: "flex",
-						gap: 8,
-						padding: 14,
-						borderRadius: 14,
-						background: "var(--surface-subtle)",
-					}}
-				>
-					<span
-						style={{
-							width: 16,
-							height: 16,
-							flex: "0 0 16px",
-							marginTop: 1,
-							display: "inline-flex",
-							color: "var(--text-muted)",
-						}}
-					>
+				<div className="flex gap-2 rounded-[14px] bg-secondary p-[14px]">
+					<span className="mt-px inline-flex size-4 flex-[0_0_16px] text-muted-foreground">
 						<AlertCircle />
 					</span>
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 12.5,
-							lineHeight: 1.5,
-							color: "var(--text-default)",
-						}}
-					>
+					<span className="text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
 						{item.note}
 					</span>
 				</div>
 				<div>
-					<div
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: 13,
-							fontWeight: 700,
-							color: "var(--text-strong)",
-							marginBottom: 10,
-						}}
-					>
+					<div className="mb-2.5 font-bold text-[13px] text-foreground">
 						제재 적용
 					</div>
-					<div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+					<div className="flex flex-col gap-2.5">
 						<SanctionBtn
 							desc="정책 안내와 함께 경고를 1회 누적해요"
 							label="경고 보내기"
@@ -1818,36 +1080,25 @@ export function ModTabs({
 		{ v: "users", label: "사용자", icon: <UserIcon /> },
 	];
 	return (
-		<nav style={{ display: "flex", padding: "10px 8px 8px" }}>
+		<nav className="flex px-2 pt-2.5 pb-2">
 			{items.map((it) => {
 				const on = tab === it.v;
 				return (
 					<button
+						className={cn(
+							"flex flex-1 cursor-pointer flex-col items-center gap-1 border-none bg-none px-0 py-1",
+							on ? "text-primary" : "text-[color:var(--text-subtle)]"
+						)}
 						key={it.v}
 						onClick={() => setTab(it.v)}
-						style={{
-							flex: 1,
-							display: "flex",
-							flexDirection: "column",
-							alignItems: "center",
-							gap: 4,
-							border: "none",
-							background: "none",
-							cursor: "pointer",
-							padding: "4px 0",
-							color: on ? "var(--color-primary)" : "var(--text-subtle)",
-						}}
 						type="button"
 					>
-						<span style={{ display: "inline-flex", width: 24, height: 24 }}>
-							{it.icon}
-						</span>
+						<span className="inline-flex size-6">{it.icon}</span>
 						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: 10,
-								fontWeight: on ? 800 : 500,
-							}}
+							className={cn(
+								"text-[10px]",
+								on ? "font-extrabold" : "font-medium"
+							)}
 						>
 							{it.label}
 						</span>
@@ -1868,28 +1119,19 @@ function ActionBtn({
 	tone?: "danger" | "success";
 	onClick: () => void;
 }) {
-	let color = "#fff";
+	let color = "text-white";
 	if (tone === "danger") {
-		color = "var(--coral-400)";
+		color = "text-coral-400";
 	} else if (tone === "success") {
-		color = "var(--green-500)";
+		color = "text-green-500";
 	}
 	return (
 		<button
+			className={cn(
+				"h-[34px] cursor-pointer whitespace-nowrap rounded-[10px] border border-white/[0.14] bg-white/[0.08] px-[11px] font-bold text-[12.5px]",
+				color
+			)}
 			onClick={onClick}
-			style={{
-				height: 34,
-				padding: "0 11px",
-				borderRadius: 10,
-				cursor: "pointer",
-				whiteSpace: "nowrap",
-				background: "rgba(255,255,255,0.08)",
-				border: "1px solid rgba(255,255,255,0.14)",
-				color,
-				fontFamily: "var(--font-sans)",
-				fontSize: 12.5,
-				fontWeight: 700,
-			}}
 			type="button"
 		>
 			{label}
@@ -1905,36 +1147,12 @@ export function QueueActionBar({
 	onAction: (action: "reject" | "hold" | "approve" | "sanction") => void;
 }) {
 	return (
-		<div style={{ padding: "8px 16px 4px" }}>
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					gap: 8,
-					padding: "10px 12px",
-					borderRadius: 16,
-					background: "var(--ink-800)",
-					boxShadow: "var(--shadow-lg)",
-				}}
-			>
-				<span
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: 12.5,
-						fontWeight: 700,
-						color: "#fff",
-						whiteSpace: "nowrap",
-					}}
-				>
+		<div className="px-4 pt-2 pb-1">
+			<div className="flex items-center gap-2 rounded-2xl bg-ink-800 px-3 py-2.5 shadow-lg">
+				<span className="whitespace-nowrap font-bold text-[12.5px] text-white">
 					{count}개 선택됨
 				</span>
-				<div
-					style={{
-						display: "flex",
-						gap: 6,
-						marginLeft: "auto",
-					}}
-				>
+				<div className="ml-auto flex gap-1.5">
 					<ActionBtn
 						label="반려"
 						onClick={() => onAction("reject")}
@@ -1955,41 +1173,9 @@ export function QueueActionBar({
 
 export function ConsoleToast({ message }: { message: string }) {
 	return (
-		<div
-			style={{
-				position: "absolute",
-				left: 0,
-				right: 0,
-				bottom: 84,
-				display: "flex",
-				justifyContent: "center",
-				zIndex: 30,
-				pointerEvents: "none",
-			}}
-		>
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					gap: 8,
-					padding: "11px 18px",
-					borderRadius: 999,
-					background: "var(--ink-800)",
-					color: "#fff",
-					boxShadow: "var(--shadow-lg)",
-					fontFamily: "var(--font-sans)",
-					fontSize: 13,
-					fontWeight: 700,
-				}}
-			>
-				<span
-					style={{
-						width: 16,
-						height: 16,
-						display: "inline-flex",
-						color: "var(--green-500)",
-					}}
-				>
+		<div className="pointer-events-none absolute right-0 bottom-[84px] left-0 z-30 flex justify-center">
+			<div className="flex items-center gap-2 rounded-full bg-ink-800 px-[18px] py-[11px] font-bold text-[13px] text-white shadow-lg">
+				<span className="inline-flex size-4 text-green-500">
 					<CheckIcon />
 				</span>
 				{message}
@@ -2140,15 +1326,7 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 	const showActionBar = !detail && tab === "queue" && selected.length > 0;
 
 	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-				position: "relative",
-			}}
-		>
+		<div className="relative flex min-h-0 flex-1 flex-col">
 			{detail ? (
 				detailBody
 			) : (
@@ -2162,67 +1340,21 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 						onTab={setTab}
 						tab={tab}
 					/>
-					<div
-						style={{
-							flex: 1,
-							minHeight: 0,
-							display: "flex",
-							flexDirection: "column",
-						}}
-					>
-						{listBody}
-					</div>
+					<div className="flex min-h-0 flex-1 flex-col">{listBody}</div>
 				</>
 			)}
 			{showActionBar ? (
 				<QueueActionBar count={selected.length} onAction={bulkAction} />
 			) : null}
 			{detail ? null : (
-				<div
-					style={{
-						borderTop: "1px solid var(--border-subtle)",
-						background: "var(--surface-page)",
-					}}
-				>
+				<div className="border-border border-t bg-background">
 					<ModTabs setTab={setTab} tab={tab} />
 				</div>
 			)}
 			{toast ? (
-				<div
-					style={{
-						position: "absolute",
-						left: 0,
-						right: 0,
-						bottom: 84,
-						display: "flex",
-						justifyContent: "center",
-						zIndex: 30,
-						pointerEvents: "none",
-					}}
-				>
-					<div
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 8,
-							padding: "11px 18px",
-							borderRadius: 999,
-							background: "var(--ink-800)",
-							color: "#fff",
-							boxShadow: "var(--shadow-lg)",
-							fontFamily: "var(--font-sans)",
-							fontSize: 13,
-							fontWeight: 700,
-						}}
-					>
-						<span
-							style={{
-								width: 16,
-								height: 16,
-								display: "inline-flex",
-								color: "var(--green-500)",
-							}}
-						>
+				<div className="pointer-events-none absolute right-0 bottom-[84px] left-0 z-30 flex justify-center">
+					<div className="flex items-center gap-2 rounded-full bg-ink-800 px-[18px] py-[11px] font-bold text-[13px] text-white shadow-lg">
+						<span className="inline-flex size-4 text-green-500">
 							<CheckIcon />
 						</span>
 						{toast}

@@ -23,31 +23,11 @@ import {
 import { useMod } from "./screens/moderator-context";
 
 function Content({ children }: { children: ReactNode }) {
-	return (
-		<div
-			style={{
-				flex: 1,
-				minHeight: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}
-		>
-			{children}
-		</div>
-	);
+	return <div className="flex min-h-0 flex-1 flex-col">{children}</div>;
 }
 
 function NavBar({ children }: { children: ReactNode }) {
-	return (
-		<div
-			style={{
-				borderTop: "1px solid var(--border-subtle)",
-				background: "var(--surface-page)",
-			}}
-		>
-			{children}
-		</div>
-	);
+	return <div className="border-border border-t bg-background">{children}</div>;
 }
 
 // ---- 구직자 ----------------------------------------------------------------

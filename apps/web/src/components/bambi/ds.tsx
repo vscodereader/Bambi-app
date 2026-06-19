@@ -1,17 +1,30 @@
 "use client";
 
 // 밤비 디자인 시스템 — 코어 프리미티브.
-// Claude Design "_ds_bundle.js"에서 충실히 포팅 (인라인 스타일 + CSS 토큰).
+// shadcn(base-lyra) 기반으로 점진 전환 중. (apps/web/CLAUDE.md 참고)
 
+import {
+	Avatar as UiAvatar,
+	AvatarFallback as UiAvatarFallback,
+	AvatarImage as UiAvatarImage,
+} from "@bambi-app/ui/components/avatar";
+import { Badge as UiBadge } from "@bambi-app/ui/components/badge";
+import { Button as UiButton } from "@bambi-app/ui/components/button";
+import { Card as UiCard } from "@bambi-app/ui/components/card";
+import { Input as UiInput } from "@bambi-app/ui/components/input";
+import { Switch as UiSwitch } from "@bambi-app/ui/components/switch";
+import {
+	Tabs as UiTabs,
+	TabsList as UiTabsList,
+	TabsTrigger as UiTabsTrigger,
+} from "@bambi-app/ui/components/tabs";
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import { useState } from "react";
 import {
 	ArrowNarrowLeft,
 	BookmarkIcon,
 	CheckIcon,
 	ClockIcon,
-	EyeIcon,
-	EyeOffIcon,
 	Filter,
 	Home2,
 	MapPinIcon,
@@ -28,21 +41,29 @@ type Size = "xs" | "sm" | "md" | "lg" | "xl";
 const WHITESPACE_RE = /\s+/;
 
 // ---- Avatar ----------------------------------------------------------------
-const AVATAR_SIZES: Record<Size, number> = {
-	xs: 28,
-	sm: 36,
-	md: 44,
-	lg: 56,
-	xl: 72,
+const AVATAR_ROOT_SIZE: Record<Size, string> = {
+	xs: "size-7",
+	sm: "size-9",
+	md: "size-11",
+	lg: "size-14",
+	xl: "size-18",
+};
+
+const AVATAR_FALLBACK_TEXT: Record<Size, string> = {
+	xs: "text-[11px]",
+	sm: "text-[13px]",
+	md: "text-base",
+	lg: "text-xl",
+	xl: "text-[26px]",
 };
 
 interface AvatarProps {
+	className?: string;
 	name?: string;
 	ring?: boolean;
 	size?: Size;
 	square?: boolean;
 	src?: string;
-	style?: CSSProperties;
 }
 
 export function Avatar({
@@ -50,9 +71,9 @@ export function Avatar({
 	size = "md",
 	square = false,
 	ring = false,
-	style,
+	src,
+	className,
 }: AvatarProps) {
-	const dim = AVATAR_SIZES[size] || AVATAR_SIZES.md;
 	const initials = name
 		.trim()
 		.split(WHITESPACE_RE)
@@ -61,29 +82,26 @@ export function Avatar({
 		.join("")
 		.toUpperCase();
 	return (
-		<div
-			style={{
-				width: dim,
-				height: dim,
-				flex: `0 0 ${dim}px`,
-				borderRadius: square ? "var(--radius-tile)" : "50%",
-				overflow: "hidden",
-				display: "inline-flex",
-				alignItems: "center",
-				justifyContent: "center",
-				background: "var(--color-primary-soft)",
-				color: "var(--color-primary-press)",
-				fontFamily: "var(--font-sans)",
-				fontSize: Math.max(11, Math.round(dim * 0.36)),
-				fontWeight: "var(--weight-bold)",
-				boxShadow: ring
-					? "0 0 0 2px var(--surface-page), 0 0 0 4px var(--color-primary-soft)"
-					: "none",
-				...style,
-			}}
+		<UiAvatar
+			className={cn(
+				AVATAR_ROOT_SIZE[size] || AVATAR_ROOT_SIZE.md,
+				"after:border-0",
+				square ? "rounded-[14px] after:rounded-[14px]" : "rounded-full",
+				ring && "ring-2 ring-coral-50 ring-offset-2 ring-offset-background",
+				className
+			)}
 		>
-			<span>{initials || "•"}</span>
-		</div>
+			{src ? <UiAvatarImage src={src} /> : null}
+			<UiAvatarFallback
+				className={cn(
+					"bg-coral-50 font-bold text-coral-700",
+					AVATAR_FALLBACK_TEXT[size] || AVATAR_FALLBACK_TEXT.md,
+					square ? "rounded-[14px]" : "rounded-full"
+				)}
+			>
+				{initials || "•"}
+			</UiAvatarFallback>
+		</UiAvatar>
 	);
 }
 
@@ -97,23 +115,28 @@ type BadgeTone =
 	| "info"
 	| "dark";
 
-const BADGE_TONES: Record<BadgeTone, { bg: string; fg: string }> = {
-	neutral: { bg: "var(--surface-sunken)", fg: "var(--text-default)" },
-	primary: {
-		bg: "var(--color-primary-soft)",
-		fg: "var(--color-primary-press)",
-	},
-	success: { bg: "var(--status-success-bg)", fg: "var(--status-success-fg)" },
-	pending: { bg: "var(--status-pending-bg)", fg: "var(--status-pending-fg)" },
-	danger: { bg: "var(--status-danger-bg)", fg: "var(--status-danger-fg)" },
-	info: { bg: "var(--status-info-bg)", fg: "var(--status-info-fg)" },
-	dark: { bg: "var(--surface-inverse)", fg: "var(--text-inverse)" },
+type UiBadgeVariant =
+	| "default"
+	| "secondary"
+	| "destructive"
+	| "success"
+	| "warning"
+	| "dark";
+
+const BADGE_VARIANT: Record<BadgeTone, UiBadgeVariant> = {
+	neutral: "secondary",
+	primary: "default",
+	success: "success",
+	pending: "warning",
+	danger: "destructive",
+	info: "secondary",
+	dark: "dark",
 };
 
 interface BadgeProps {
 	children?: ReactNode;
+	className?: string;
 	dot?: boolean;
-	style?: CSSProperties;
 	tone?: BadgeTone;
 }
 
@@ -121,40 +144,13 @@ export function Badge({
 	tone = "neutral",
 	dot = false,
 	children,
-	style,
+	className,
 }: BadgeProps) {
-	const t = BADGE_TONES[tone] || BADGE_TONES.neutral;
 	return (
-		<span
-			style={{
-				display: "inline-flex",
-				alignItems: "center",
-				gap: 6,
-				height: 24,
-				padding: "0 10px",
-				borderRadius: "var(--radius-pill)",
-				background: t.bg,
-				color: t.fg,
-				fontFamily: "var(--font-sans)",
-				fontSize: "var(--text-xs)",
-				fontWeight: "var(--weight-semibold)",
-				lineHeight: 1,
-				whiteSpace: "nowrap",
-				...style,
-			}}
-		>
-			{dot ? (
-				<span
-					style={{
-						width: 6,
-						height: 6,
-						borderRadius: "50%",
-						background: "currentColor",
-					}}
-				/>
-			) : null}
+		<UiBadge className={cn(className)} variant={BADGE_VARIANT[tone]}>
+			{dot ? <span className="size-1.5 rounded-full bg-current" /> : null}
 			{children}
-		</span>
+		</UiBadge>
 	);
 }
 
@@ -168,87 +164,45 @@ type ButtonVariant =
 	| "danger";
 type ButtonSize = "lg" | "md" | "sm";
 
-const BTN_VARIANTS: Record<ButtonVariant, CSSProperties> = {
-	primary: {
-		background: "var(--color-primary)",
-		color: "var(--color-on-primary)",
-		border: "1px solid transparent",
-		boxShadow: "var(--shadow-primary)",
-	},
+const BTN_VARIANT_PROPS: Record<
+	ButtonVariant,
+	{ variant: "default" | "outline" | "ghost"; className: string }
+> = {
+	primary: { variant: "default", className: "" },
 	dark: {
-		background: "var(--surface-inverse)",
-		color: "var(--text-inverse)",
-		border: "1px solid transparent",
-		boxShadow: "var(--shadow-sm)",
+		variant: "default",
+		className: "bg-ink-800 text-white hover:bg-ink-700",
 	},
-	secondary: {
-		background: "var(--surface-card)",
-		color: "var(--text-strong)",
-		border: "1px solid var(--border-default)",
-		boxShadow: "none",
-	},
-	ghost: {
-		background: "transparent",
-		color: "var(--text-default)",
-		border: "1px solid transparent",
-		boxShadow: "none",
-	},
+	secondary: { variant: "outline", className: "" },
+	ghost: { variant: "ghost", className: "" },
 	soft: {
-		background: "var(--color-primary-soft)",
-		color: "var(--color-primary-press)",
-		border: "1px solid transparent",
-		boxShadow: "none",
+		variant: "default",
+		className: "bg-coral-50 text-coral-700 hover:bg-coral-100",
 	},
 	danger: {
-		background: "var(--red-500)",
-		color: "var(--white)",
-		border: "1px solid transparent",
-		boxShadow: "none",
+		variant: "default",
+		className: "bg-destructive text-white hover:bg-destructive/90",
 	},
 };
 
-const BTN_SIZES: Record<
+const BTN_SIZE_PROPS: Record<
 	ButtonSize,
-	{
-		height: string;
-		fontSize: string;
-		padding: string;
-		radius: string;
-		gap: number;
-	}
+	{ size: "lg" | "default" | "sm"; className: string }
 > = {
-	lg: {
-		height: "var(--control-h)",
-		fontSize: "var(--text-body)",
-		padding: "0 24px",
-		radius: "var(--radius-lg)",
-		gap: 8,
-	},
-	md: {
-		height: "var(--control-h-sm)",
-		fontSize: "var(--text-sm)",
-		padding: "0 18px",
-		radius: "var(--radius-md)",
-		gap: 8,
-	},
-	sm: {
-		height: "var(--control-h-xs)",
-		fontSize: "var(--text-sm)",
-		padding: "0 14px",
-		radius: "var(--radius-sm)",
-		gap: 6,
-	},
+	lg: { size: "lg", className: "h-14 rounded-lg px-6 text-base" },
+	md: { size: "default", className: "h-11 rounded-xl px-[18px] text-sm" },
+	sm: { size: "sm", className: "h-9 rounded-lg px-[14px] text-sm" },
 };
 
 interface ButtonProps {
 	block?: boolean;
 	children?: ReactNode;
+	className?: string;
 	disabled?: boolean;
 	leftIcon?: ReactNode;
 	onClick?: () => void;
 	rightIcon?: ReactNode;
 	size?: ButtonSize;
-	style?: CSSProperties;
 	variant?: ButtonVariant;
 }
 
@@ -260,51 +214,38 @@ export function Button({
 	rightIcon,
 	disabled = false,
 	children,
-	style,
+	className,
 	onClick,
 }: ButtonProps) {
-	const v = BTN_VARIANTS[variant] || BTN_VARIANTS.primary;
-	const s = BTN_SIZES[size] || BTN_SIZES.lg;
+	const v = BTN_VARIANT_PROPS[variant] || BTN_VARIANT_PROPS.primary;
+	const s = BTN_SIZE_PROPS[size] || BTN_SIZE_PROPS.lg;
 	return (
-		<button
-			className="bambi-btn"
+		<UiButton
+			className={cn(
+				"font-bold tracking-[-0.01em]",
+				s.className,
+				v.className,
+				block && "w-full",
+				className
+			)}
 			disabled={disabled}
 			onClick={onClick}
-			style={{
-				display: block ? "flex" : "inline-flex",
-				width: block ? "100%" : "auto",
-				alignItems: "center",
-				justifyContent: "center",
-				gap: s.gap,
-				height: s.height,
-				padding: s.padding,
-				fontFamily: "var(--font-sans)",
-				fontSize: s.fontSize,
-				fontWeight: "var(--weight-bold)",
-				letterSpacing: "var(--tracking-snug)",
-				lineHeight: 1,
-				borderRadius: s.radius,
-				cursor: disabled ? "not-allowed" : "pointer",
-				opacity: disabled ? 0.45 : 1,
-				transition:
-					"transform var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out)",
-				...v,
-				...style,
-			}}
+			size={s.size}
 			type="button"
+			variant={v.variant}
 		>
 			{leftIcon ? (
-				<span style={{ display: "inline-flex", width: 20, height: 20 }}>
+				<span className="inline-flex size-4" data-icon="inline-start">
 					{leftIcon}
 				</span>
 			) : null}
 			{children}
 			{rightIcon ? (
-				<span style={{ display: "inline-flex", width: 20, height: 20 }}>
+				<span className="inline-flex size-4" data-icon="inline-end">
 					{rightIcon}
 				</span>
 			) : null}
-		</button>
+		</UiButton>
 	);
 }
 
@@ -312,80 +253,74 @@ export function Button({
 type CardTone = "default" | "subtle" | "inverse" | "outline";
 type CardPad = "none" | "sm" | "md" | "lg";
 
-const CARD_PADS: Record<CardPad, number> = { none: 0, sm: 14, md: 16, lg: 20 };
+const CARD_PAD_CLASS: Record<CardPad, string> = {
+	none: "p-0",
+	sm: "p-3.5",
+	md: "p-4",
+	lg: "p-5",
+};
+
+const CARD_TONE_CLASS: Record<CardTone, string> = {
+	default: "bg-card border border-border shadow-sm ring-0",
+	subtle: "bg-secondary border-0 shadow-none ring-0",
+	inverse: "bg-ink-800 text-white border-0 ring-0",
+	outline:
+		"bg-card border border-[color:var(--border-default)] shadow-none ring-0",
+};
 
 interface CardProps {
 	children?: ReactNode;
+	className?: string;
 	interactive?: boolean;
 	pad?: CardPad;
-	style?: CSSProperties;
 	tone?: CardTone;
 }
 
 export function Card({
 	tone = "default",
 	pad = "md",
-	interactive = false,
 	children,
-	style,
+	className,
 }: CardProps) {
-	const tones: Record<CardTone, CSSProperties> = {
-		default: {
-			background: "var(--surface-card)",
-			color: "var(--text-default)",
-			border: "1px solid var(--border-subtle)",
-		},
-		subtle: {
-			background: "var(--surface-subtle)",
-			color: "var(--text-default)",
-			border: "1px solid transparent",
-		},
-		inverse: {
-			background: "var(--surface-inverse)",
-			color: "var(--text-inverse)",
-			border: "1px solid var(--border-inverse)",
-		},
-		outline: {
-			background: "var(--surface-card)",
-			color: "var(--text-default)",
-			border: "1px solid var(--border-default)",
-		},
-	};
-	const t = tones[tone] || tones.default;
 	return (
-		<div
-			className={
-				interactive ? "bambi-card bambi-card--interactive" : "bambi-card"
-			}
-			style={{
-				borderRadius: "var(--radius-card)",
-				padding: CARD_PADS[pad],
-				boxShadow: tone === "inverse" ? "none" : "var(--shadow-card)",
-				transition:
-					"transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out)",
-				...t,
-				...style,
-			}}
+		<UiCard
+			className={cn(
+				"gap-0 rounded-2xl py-0",
+				CARD_PAD_CLASS[pad] || CARD_PAD_CLASS.md,
+				CARD_TONE_CLASS[tone] || CARD_TONE_CLASS.default,
+				className
+			)}
 		>
 			{children}
-		</div>
+		</UiCard>
 	);
 }
 
 // ---- IconButton ------------------------------------------------------------
-const ICONBTN_SIZES: Record<"lg" | "md" | "sm", number> = {
-	lg: 48,
-	md: 40,
-	sm: 32,
+const ICONBTN_SIZE: Record<"lg" | "md" | "sm", "icon-lg" | "icon" | "icon-sm"> =
+	{
+		lg: "icon-lg",
+		md: "icon",
+		sm: "icon-sm",
+	};
+
+const ICONBTN_VARIANT: Record<
+	"subtle" | "plain" | "outline" | "inverse",
+	"secondary" | "ghost" | "outline"
+> = {
+	subtle: "secondary",
+	plain: "ghost",
+	outline: "outline",
+	inverse: "ghost",
 };
 
 interface IconButtonProps {
 	active?: boolean;
 	badge?: boolean;
 	children?: ReactNode;
+	className?: string;
 	onClick?: () => void;
 	size?: "lg" | "md" | "sm";
-	style?: CSSProperties;
 	variant?: "subtle" | "plain" | "outline" | "inverse";
 }
 
@@ -395,142 +330,50 @@ export function IconButton({
 	active = false,
 	badge = false,
 	children,
-	style,
+	className,
 	onClick,
 }: IconButtonProps) {
-	const dim = ICONBTN_SIZES[size] || ICONBTN_SIZES.md;
-	const skins: Record<string, CSSProperties> = {
-		subtle: {
-			background: "var(--surface-subtle)",
-			color: "var(--text-default)",
-			border: "1px solid transparent",
-		},
-		plain: {
-			background: "transparent",
-			color: "var(--text-default)",
-			border: "1px solid transparent",
-		},
-		outline: {
-			background: "var(--surface-card)",
-			color: "var(--text-default)",
-			border: "1px solid var(--border-default)",
-		},
-		inverse: {
-			background: "rgba(255,255,255,0.08)",
-			color: "var(--white)",
-			border: "1px solid rgba(255,255,255,0.12)",
-		},
-	};
-	const skin = active
-		? {
-				background: "var(--color-primary-soft)",
-				color: "var(--color-primary-press)",
-				border: "1px solid transparent",
-			}
-		: skins[variant] || skins.subtle;
 	return (
-		<button
-			onClick={onClick}
-			style={{
-				position: "relative",
-				display: "inline-flex",
-				alignItems: "center",
-				justifyContent: "center",
-				width: dim,
-				height: dim,
-				borderRadius: "var(--radius-md)",
-				cursor: "pointer",
-				transition:
-					"filter var(--dur-fast) var(--ease-out), background var(--dur-fast)",
-				...skin,
-				...style,
-			}}
-			type="button"
-		>
-			<span
-				style={{
-					display: "inline-flex",
-					width: Math.round(dim * 0.5),
-					height: Math.round(dim * 0.5),
-				}}
+		<span className="relative inline-flex">
+			<UiButton
+				className={cn(
+					"rounded-xl",
+					active && "bg-coral-50 text-coral-700 hover:bg-coral-100",
+					variant === "inverse" && "bg-white/10 text-white hover:bg-white/20",
+					className
+				)}
+				onClick={onClick}
+				size={ICONBTN_SIZE[size] || ICONBTN_SIZE.md}
+				variant={ICONBTN_VARIANT[variant] || ICONBTN_VARIANT.subtle}
 			>
-				{children}
-			</span>
+				<span className="inline-flex size-5">{children}</span>
+			</UiButton>
 			{badge ? (
-				<span
-					style={{
-						position: "absolute",
-						top: dim * 0.18,
-						right: dim * 0.18,
-						width: 8,
-						height: 8,
-						borderRadius: "50%",
-						background: "var(--coral-500)",
-						boxShadow: "0 0 0 2px var(--surface-page)",
-					}}
-				/>
+				<span className="absolute top-1 right-1 size-2 rounded-full bg-coral-500 ring-2 ring-background" />
 			) : null}
-		</button>
+		</span>
 	);
 }
 
 // ---- InfoTile --------------------------------------------------------------
 interface InfoTileProps {
+	className?: string;
 	icon?: ReactNode;
 	label?: ReactNode;
-	style?: CSSProperties;
 	value?: ReactNode;
 }
 
-export function InfoTile({ icon, label, value, style }: InfoTileProps) {
+export function InfoTile({ icon, label, value, className }: InfoTileProps) {
 	return (
-		<div style={{ display: "flex", alignItems: "center", gap: 12, ...style }}>
-			<div
-				style={{
-					width: 48,
-					height: 48,
-					flex: "0 0 48px",
-					borderRadius: "var(--radius-md)",
-					background: "var(--surface-subtle)",
-					display: "inline-flex",
-					alignItems: "center",
-					justifyContent: "center",
-					color: "var(--text-default)",
-				}}
-			>
-				<span style={{ display: "inline-flex", width: 22, height: 22 }}>
-					{icon}
-				</span>
+		<div className={cn("flex items-center gap-3", className)}>
+			<div className="inline-flex size-12 flex-[0_0_48px] items-center justify-center rounded-xl bg-secondary text-foreground">
+				<span className="inline-flex size-[22px]">{icon}</span>
 			</div>
-			<div
-				style={{
-					display: "flex",
-					flexDirection: "column",
-					gap: 2,
-					minWidth: 0,
-				}}
-			>
-				<span
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: "var(--text-xs)",
-						color: "var(--text-muted)",
-						fontWeight: "var(--weight-medium)",
-					}}
-				>
+			<div className="flex min-w-0 flex-col gap-0.5">
+				<span className="font-medium text-muted-foreground text-xs">
 					{label}
 				</span>
-				<span
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: "var(--text-body)",
-						color: "var(--text-strong)",
-						fontWeight: "var(--weight-bold)",
-						whiteSpace: "nowrap",
-						overflow: "hidden",
-						textOverflow: "ellipsis",
-					}}
-				>
+				<span className="truncate font-bold text-base text-foreground">
 					{value}
 				</span>
 			</div>
@@ -539,17 +382,37 @@ export function InfoTile({ icon, label, value, style }: InfoTileProps) {
 }
 
 // ---- Logo ------------------------------------------------------------------
-const LOGO_SIZES: Record<"sm" | "md" | "lg" | "xl", number> = {
-	sm: 28,
-	md: 36,
-	lg: 44,
-	xl: 64,
+// 사이즈별 정적 Tailwind 매핑 (dim 파생값을 클래스로 사전 계산: dim sm=28·md=36·lg=44·xl=64, gap≈dim*0.28, 타일 size/radius=dim·dim*0.3, 워드마크 fontSize=dim*0.5)
+const LOGO_GAP_CLASS: Record<"sm" | "md" | "lg" | "xl", string> = {
+	sm: "gap-2",
+	md: "gap-2.5",
+	lg: "gap-3",
+	xl: "gap-[18px]",
+};
+const LOGO_TILE_CLASS: Record<"sm" | "md" | "lg" | "xl", string> = {
+	sm: "size-7 flex-[0_0_28px] rounded-[8.4px]",
+	md: "size-9 flex-[0_0_36px] rounded-[10.8px]",
+	lg: "size-11 flex-[0_0_44px] rounded-[13.2px]",
+	xl: "size-16 flex-[0_0_64px] rounded-[19.2px]",
+};
+const LOGO_WORD_CLASS: Record<"sm" | "md" | "lg" | "xl", string> = {
+	sm: "text-[14px]",
+	md: "text-[18px]",
+	lg: "text-[22px]",
+	xl: "text-[32px]",
+};
+// SVG 글리프 크기(=dim*0.56)는 style이 아닌 width/height 속성으로 전달.
+const LOGO_GLYPH_DIM: Record<"sm" | "md" | "lg" | "xl", number> = {
+	sm: 28 * 0.56,
+	md: 36 * 0.56,
+	lg: 44 * 0.56,
+	xl: 64 * 0.56,
 };
 
 interface LogoProps {
+	className?: string;
 	lang?: "en" | "ko";
 	size?: "sm" | "md" | "lg" | "xl";
-	style?: CSSProperties;
 	tone?: "brand" | "inverse";
 	wordmark?: boolean;
 }
@@ -559,41 +422,32 @@ export function Logo({
 	wordmark = true,
 	lang = "en",
 	tone = "brand",
-	style,
+	className,
 }: LogoProps) {
-	const dim = LOGO_SIZES[size] || LOGO_SIZES.md;
-	const tileBg = tone === "inverse" ? "var(--white)" : "var(--color-primary)";
+	const glyphDim = LOGO_GLYPH_DIM[size] || LOGO_GLYPH_DIM.md;
 	const glyph = tone === "inverse" ? "var(--color-primary)" : "var(--white)";
-	const word = tone === "inverse" ? "var(--white)" : "var(--text-strong)";
 	const label = lang === "ko" ? "밤비" : "Bambi";
 	return (
 		<div
-			style={{
-				display: "inline-flex",
-				alignItems: "center",
-				gap: Math.round(dim * 0.28),
-				...style,
-			}}
+			className={cn(
+				"inline-flex items-center",
+				LOGO_GAP_CLASS[size] || LOGO_GAP_CLASS.md,
+				className
+			)}
 		>
 			<div
-				style={{
-					width: dim,
-					height: dim,
-					flex: `0 0 ${dim}px`,
-					borderRadius: dim * 0.3,
-					background: tileBg,
-					display: "inline-flex",
-					alignItems: "center",
-					justifyContent: "center",
-					boxShadow: tone === "inverse" ? "none" : "var(--shadow-primary)",
-				}}
+				className={cn(
+					"inline-flex items-center justify-center",
+					LOGO_TILE_CLASS[size] || LOGO_TILE_CLASS.md,
+					tone === "inverse" ? "bg-white shadow-none" : "bg-primary shadow-lg"
+				)}
 			>
 				<svg
 					aria-hidden="true"
 					fill="none"
-					height={dim * 0.56}
+					height={glyphDim}
 					viewBox="0 0 24 24"
-					width={dim * 0.56}
+					width={glyphDim}
 				>
 					<title>밤비</title>
 					<path
@@ -605,14 +459,11 @@ export function Logo({
 			</div>
 			{wordmark ? (
 				<span
-					style={{
-						fontFamily: "var(--font-display)",
-						fontSize: dim * 0.5,
-						fontWeight: "var(--weight-extrabold)",
-						letterSpacing: "var(--tracking-tight)",
-						color: word,
-						lineHeight: 1,
-					}}
+					className={cn(
+						"font-extrabold leading-none tracking-[-0.02em]",
+						LOGO_WORD_CLASS[size] || LOGO_WORD_CLASS.md,
+						tone === "inverse" ? "text-white" : "text-foreground"
+					)}
 				>
 					{label}
 				</span>
@@ -627,9 +478,9 @@ interface TabItem {
 	value: string;
 }
 interface SegmentedTabsProps {
+	className?: string;
 	items?: (TabItem | string)[];
 	onChange?: (value: string) => void;
-	style?: CSSProperties;
 	value?: string;
 	variant?: "solid" | "segment" | "underline";
 }
@@ -639,188 +490,59 @@ export function SegmentedTabs({
 	value,
 	onChange,
 	variant = "solid",
-	style,
+	className,
 }: SegmentedTabsProps) {
 	const norm: TabItem[] = items.map((it) =>
 		typeof it === "string" ? { value: it, label: it } : it
 	);
-	const idx = Math.max(
-		0,
-		norm.findIndex((it) => it.value === value)
-	);
-
-	if (variant === "segment") {
-		return (
-			<div
-				style={{
-					display: "flex",
-					gap: 4,
-					padding: 4,
-					background: "var(--surface-sunken)",
-					borderRadius: "var(--radius-md)",
-					...style,
-				}}
-			>
-				{norm.map((it, i) => {
-					const on = i === idx;
-					return (
-						<button
-							key={it.value}
-							onClick={() => onChange?.(it.value)}
-							style={{
-								flex: 1,
-								height: 40,
-								border: "none",
-								cursor: "pointer",
-								borderRadius: "var(--radius-sm)",
-								background: on ? "var(--surface-card)" : "transparent",
-								color: on ? "var(--text-strong)" : "var(--text-muted)",
-								fontFamily: "var(--font-sans)",
-								fontSize: "var(--text-sm)",
-								fontWeight: on ? "var(--weight-bold)" : "var(--weight-medium)",
-								boxShadow: on ? "var(--shadow-xs)" : "none",
-								transition: "all var(--dur-fast) var(--ease-out)",
-							}}
-							type="button"
-						>
-							{it.label}
-						</button>
-					);
-				})}
-			</div>
-		);
-	}
-
-	if (variant === "underline") {
-		return (
-			<div
-				style={{
-					display: "flex",
-					gap: 24,
-					borderBottom: "1px solid var(--border-subtle)",
-					...style,
-				}}
-			>
-				{norm.map((it, i) => {
-					const on = i === idx;
-					return (
-						<button
-							key={it.value}
-							onClick={() => onChange?.(it.value)}
-							style={{
-								position: "relative",
-								padding: "10px 0 12px",
-								border: "none",
-								background: "none",
-								cursor: "pointer",
-								fontFamily: "var(--font-sans)",
-								fontSize: "var(--text-sm)",
-								fontWeight: on ? "var(--weight-bold)" : "var(--weight-medium)",
-								color: on ? "var(--text-strong)" : "var(--text-muted)",
-							}}
-							type="button"
-						>
-							{it.label}
-							<span
-								style={{
-									position: "absolute",
-									left: 0,
-									right: 0,
-									bottom: -1,
-									height: 2.5,
-									borderRadius: 2,
-									background: on ? "var(--color-primary)" : "transparent",
-								}}
-							/>
-						</button>
-					);
-				})}
-			</div>
-		);
-	}
+	const listVariant = variant === "underline" ? "line" : "default";
 
 	return (
-		<div style={{ display: "flex", gap: 12, ...style }}>
-			{norm.map((it, i) => {
-				const on = i === idx;
-				return (
-					<button
-						key={it.value}
-						onClick={() => onChange?.(it.value)}
-						style={{
-							height: "var(--control-h-sm)",
-							padding: "0 22px",
-							cursor: "pointer",
-							borderRadius: "var(--radius-md)",
-							background: on ? "var(--surface-inverse)" : "var(--surface-card)",
-							color: on ? "var(--text-inverse)" : "var(--text-muted)",
-							border: on
-								? "1px solid transparent"
-								: "1px solid var(--border-default)",
-							fontFamily: "var(--font-sans)",
-							fontSize: "var(--text-sm)",
-							fontWeight: "var(--weight-bold)",
-							whiteSpace: "nowrap",
-							transition: "all var(--dur-fast) var(--ease-out)",
-						}}
-						type="button"
-					>
+		<UiTabs
+			className={cn("w-full", className)}
+			onValueChange={(v) => onChange?.(v)}
+			value={value}
+		>
+			<UiTabsList className="w-full" variant={listVariant}>
+				{norm.map((it) => (
+					<UiTabsTrigger key={it.value} value={it.value}>
 						{it.label}
-					</button>
-				);
-			})}
-		</div>
+					</UiTabsTrigger>
+				))}
+			</UiTabsList>
+		</UiTabs>
 	);
 }
 
 // ---- Tag -------------------------------------------------------------------
 interface TagProps {
 	children?: ReactNode;
+	className?: string;
 	leftIcon?: ReactNode;
 	onClick?: () => void;
 	selected?: boolean;
-	style?: CSSProperties;
 }
 
 export function Tag({
 	selected = false,
 	leftIcon,
 	children,
-	style,
+	className,
 	onClick,
 }: TagProps) {
 	return (
 		<button
+			className={cn(
+				"inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-4 font-semibold text-sm leading-none transition-colors",
+				selected
+					? "border border-transparent bg-ink-800 text-white"
+					: "border border-[color:var(--border-default)] bg-card text-muted-foreground",
+				className
+			)}
 			onClick={onClick}
-			style={{
-				display: "inline-flex",
-				alignItems: "center",
-				gap: 6,
-				height: "var(--control-h-xs)",
-				padding: "0 16px",
-				borderRadius: "var(--radius-pill)",
-				fontFamily: "var(--font-sans)",
-				fontSize: "var(--text-sm)",
-				fontWeight: "var(--weight-semibold)",
-				lineHeight: 1,
-				cursor: "pointer",
-				whiteSpace: "nowrap",
-				transition:
-					"background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast)",
-				background: selected ? "var(--surface-inverse)" : "var(--surface-card)",
-				color: selected ? "var(--text-inverse)" : "var(--text-muted)",
-				border: selected
-					? "1px solid transparent"
-					: "1px solid var(--border-default)",
-				...style,
-			}}
 			type="button"
 		>
-			{leftIcon ? (
-				<span style={{ display: "inline-flex", width: 16, height: 16 }}>
-					{leftIcon}
-				</span>
-			) : null}
+			{leftIcon ? <span className="inline-flex size-4">{leftIcon}</span> : null}
 			{children}
 		</button>
 	);
@@ -829,65 +551,36 @@ export function Tag({
 // ---- Switch ----------------------------------------------------------------
 interface SwitchProps {
 	checked?: boolean;
+	className?: string;
 	disabled?: boolean;
 	onChange?: (checked: boolean) => void;
-	style?: CSSProperties;
 }
 
 export function Switch({
 	checked = false,
 	onChange,
 	disabled = false,
-	style,
+	className,
 }: SwitchProps) {
 	return (
-		<button
-			aria-checked={checked}
+		<UiSwitch
+			checked={checked}
+			className={className}
 			disabled={disabled}
-			onClick={() => !disabled && onChange?.(!checked)}
-			role="switch"
-			style={{
-				position: "relative",
-				width: 48,
-				height: 28,
-				flex: "0 0 48px",
-				borderRadius: "var(--radius-pill)",
-				border: "none",
-				padding: 0,
-				cursor: disabled ? "not-allowed" : "pointer",
-				opacity: disabled ? 0.5 : 1,
-				background: checked ? "var(--color-primary)" : "var(--gray-300)",
-				transition: "background var(--dur-base) var(--ease-out)",
-				...style,
-			}}
-			type="button"
-		>
-			<span
-				style={{
-					position: "absolute",
-					top: 3,
-					left: checked ? 23 : 3,
-					width: 22,
-					height: 22,
-					borderRadius: "50%",
-					background: "var(--white)",
-					boxShadow: "var(--shadow-sm)",
-					transition: "left var(--dur-base) var(--ease-out)",
-				}}
-			/>
-		</button>
+			onCheckedChange={(c) => onChange?.(c)}
+		/>
 	);
 }
 
 // ---- Input -----------------------------------------------------------------
 interface InputProps {
+	className?: string;
 	defaultValue?: string;
 	error?: boolean;
-	inputStyle?: CSSProperties;
+	inputClassName?: string;
 	leadingIcon?: ReactNode;
 	onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 	placeholder?: string;
-	style?: CSSProperties;
 	type?: string;
 	value?: string;
 }
@@ -896,103 +589,53 @@ export function Input({
 	leadingIcon,
 	type = "text",
 	error = false,
-	style,
-	inputStyle,
+	className,
+	inputClassName,
 	value,
 	defaultValue,
 	placeholder,
 	onChange,
 }: InputProps) {
-	const [show, setShow] = useState(false);
-	const [focus, setFocus] = useState(false);
-	const isPassword = type === "password";
-	let borderColor = "var(--border-default)";
-	if (error) {
-		borderColor = "var(--status-danger-fg)";
-	} else if (focus) {
-		borderColor = "var(--border-focus)";
-	}
-	return (
-		<div
-			style={{
-				display: "flex",
-				alignItems: "center",
-				gap: 12,
-				height: "var(--control-h)",
-				padding: "0 18px",
-				borderRadius: "var(--radius-lg)",
-				background: "var(--surface-card)",
-				border: `1px solid ${borderColor}`,
-				boxShadow: focus && !error ? "var(--focus-ring)" : "none",
-				transition: "border-color var(--dur-fast), box-shadow var(--dur-fast)",
-				...style,
-			}}
-		>
-			{leadingIcon ? (
-				<span
-					style={{
-						display: "inline-flex",
-						width: 20,
-						height: 20,
-						color: "var(--text-subtle)",
-						flex: "0 0 20px",
-					}}
-				>
+	if (leadingIcon) {
+		return (
+			<div className={cn("relative", className)}>
+				<span className="absolute top-1/2 left-3 inline-flex size-5 -translate-y-1/2 text-muted-foreground">
 					{leadingIcon}
 				</span>
-			) : null}
-			<input
-				aria-label={placeholder}
-				defaultValue={defaultValue}
-				onBlur={() => setFocus(false)}
-				onChange={onChange}
-				onFocus={() => setFocus(true)}
-				placeholder={placeholder}
-				style={{
-					flex: 1,
-					minWidth: 0,
-					border: "none",
-					outline: "none",
-					background: "transparent",
-					fontFamily: "var(--font-sans)",
-					fontSize: "var(--text-body)",
-					fontWeight: "var(--weight-medium)",
-					color: "var(--text-strong)",
-					...inputStyle,
-				}}
-				type={isPassword && show ? "text" : type}
-				value={value}
-			/>
-			{isPassword ? (
-				<button
-					aria-label={show ? "숨기기" : "보기"}
-					onClick={() => setShow((p) => !p)}
-					style={{
-						display: "inline-flex",
-						width: 22,
-						height: 22,
-						color: "var(--text-subtle)",
-						background: "none",
-						border: "none",
-						cursor: "pointer",
-						padding: 0,
-					}}
-					type="button"
-				>
-					{show ? <EyeIcon /> : <EyeOffIcon />}
-				</button>
-			) : null}
-		</div>
+				<UiInput
+					aria-invalid={error}
+					aria-label={placeholder}
+					className={cn("h-11 rounded-xl pl-10", inputClassName)}
+					defaultValue={defaultValue}
+					onChange={onChange}
+					placeholder={placeholder}
+					type={type}
+					value={value}
+				/>
+			</div>
+		);
+	}
+	return (
+		<UiInput
+			aria-invalid={error}
+			aria-label={placeholder}
+			className={cn("h-11 rounded-xl", className, inputClassName)}
+			defaultValue={defaultValue}
+			onChange={onChange}
+			placeholder={placeholder}
+			type={type}
+			value={value}
+		/>
 	);
 }
 
 // ---- SearchField -----------------------------------------------------------
 interface SearchFieldProps {
+	className?: string;
 	filterLabel?: string;
 	onFilter?: () => void;
 	placeholder?: string;
 	showFilter?: boolean;
-	style?: CSSProperties;
 }
 
 export function SearchField({
@@ -1000,73 +643,28 @@ export function SearchField({
 	onFilter,
 	showFilter = true,
 	filterLabel,
-	style,
+	className,
 }: SearchFieldProps) {
 	return (
-		<div style={{ display: "flex", alignItems: "center", gap: 10, ...style }}>
-			<div
-				style={{
-					flex: 1,
-					display: "flex",
-					alignItems: "center",
-					gap: 12,
-					height: "var(--control-h)",
-					padding: "0 18px",
-					borderRadius: "var(--radius-lg)",
-					background: "var(--surface-subtle)",
-					border: "1px solid transparent",
-				}}
-			>
-				<span
-					style={{
-						display: "inline-flex",
-						width: 20,
-						height: 20,
-						color: "var(--text-subtle)",
-					}}
-				>
+		<div className={cn("flex items-center gap-2.5", className)}>
+			<div className="flex h-14 flex-1 items-center gap-3 rounded-lg border border-transparent bg-secondary px-[18px]">
+				<span className="inline-flex size-5 text-[color:var(--text-subtle)]">
 					<SearchIcon />
 				</span>
 				<input
 					aria-label={placeholder}
+					className="min-w-0 flex-1 border-none bg-transparent font-medium text-base text-foreground outline-none"
 					placeholder={placeholder}
-					style={{
-						flex: 1,
-						minWidth: 0,
-						border: "none",
-						outline: "none",
-						background: "transparent",
-						fontFamily: "var(--font-sans)",
-						fontSize: "var(--text-body)",
-						fontWeight: "var(--weight-medium)",
-						color: "var(--text-strong)",
-					}}
 				/>
 			</div>
 			{showFilter && filterLabel ? (
 				<button
 					aria-label={filterLabel}
+					className="inline-flex h-14 flex-[0_0_auto] cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-lg border border-[color:var(--border-default)] bg-card px-4 font-bold text-foreground text-sm"
 					onClick={onFilter}
-					style={{
-						display: "inline-flex",
-						alignItems: "center",
-						gap: 7,
-						height: "var(--control-h)",
-						flex: "0 0 auto",
-						padding: "0 16px",
-						borderRadius: "var(--radius-lg)",
-						border: "1px solid var(--border-default)",
-						cursor: "pointer",
-						background: "var(--surface-card)",
-						color: "var(--text-default)",
-						fontFamily: "var(--font-sans)",
-						fontSize: "var(--text-sm)",
-						fontWeight: "var(--weight-bold)",
-						whiteSpace: "nowrap",
-					}}
 					type="button"
 				>
-					<span style={{ display: "inline-flex", width: 18, height: 18 }}>
+					<span className="inline-flex size-[18px]">
 						<Filter />
 					</span>
 					{filterLabel}
@@ -1075,24 +673,11 @@ export function SearchField({
 			{showFilter && !filterLabel ? (
 				<button
 					aria-label="필터"
+					className="inline-flex h-14 w-14 flex-[0_0_56px] items-center justify-center rounded-lg border-none bg-primary text-primary-foreground shadow-lg"
 					onClick={onFilter}
-					style={{
-						width: "var(--control-h)",
-						height: "var(--control-h)",
-						flex: "0 0 var(--control-h)",
-						borderRadius: "var(--radius-lg)",
-						border: "none",
-						cursor: "pointer",
-						background: "var(--color-primary)",
-						color: "var(--color-on-primary)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "var(--shadow-primary)",
-					}}
 					type="button"
 				>
-					<span style={{ display: "inline-flex", width: 22, height: 22 }}>
+					<span className="inline-flex size-[22px]">
 						<Filter />
 					</span>
 				</button>
@@ -1105,8 +690,8 @@ export function SearchField({
 interface AppBarProps {
 	actions?: ReactNode;
 	center?: boolean;
+	className?: string;
 	onBack?: () => void;
-	style?: CSSProperties;
 	subtitle?: ReactNode;
 	title?: ReactNode;
 	tone?: "default" | "inverse";
@@ -1119,101 +704,55 @@ export function AppBar({
 	actions,
 	center = false,
 	tone = "default",
-	style,
+	className,
 }: AppBarProps) {
-	const fg = tone === "inverse" ? "var(--white)" : "var(--text-strong)";
+	const fg = tone === "inverse" ? "text-white" : "text-foreground";
 	const subFg =
-		tone === "inverse" ? "var(--text-on-dark-muted)" : "var(--text-muted)";
+		tone === "inverse"
+			? "text-[color:var(--text-on-dark-muted)]"
+			: "text-muted-foreground";
 	return (
 		<header
-			style={{
-				display: "flex",
-				alignItems: "center",
-				gap: 12,
-				height: 56,
-				padding: "0 8px",
-				background:
-					tone === "inverse" ? "var(--surface-inverse)" : "transparent",
-				...style,
-			}}
+			className={cn(
+				"flex h-[56px] items-center gap-3 px-2",
+				tone === "inverse" ? "bg-ink-800" : "bg-transparent",
+				className
+			)}
 		>
 			{onBack ? (
 				<button
 					aria-label="뒤로"
+					className={cn(
+						"inline-flex size-10 flex-[0_0_40px] cursor-pointer items-center justify-center rounded-xl border-none",
+						tone === "inverse" ? "bg-white/[0.08]" : "bg-secondary",
+						fg
+					)}
 					onClick={onBack}
-					style={{
-						width: 40,
-						height: 40,
-						flex: "0 0 40px",
-						borderRadius: "var(--radius-md)",
-						border: "none",
-						cursor: "pointer",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						background:
-							tone === "inverse"
-								? "rgba(255,255,255,0.08)"
-								: "var(--surface-subtle)",
-						color: fg,
-					}}
 					type="button"
 				>
-					<span style={{ display: "inline-flex", width: 22, height: 22 }}>
+					<span className="inline-flex size-[22px]">
 						<ArrowNarrowLeft />
 					</span>
 				</button>
 			) : (
-				<span style={{ width: 40, flex: "0 0 40px" }} />
+				<span className="w-10 flex-[0_0_40px]" />
 			)}
 			<div
-				style={{
-					flex: 1,
-					display: "flex",
-					flexDirection: "column",
-					alignItems: center ? "center" : "flex-start",
-					gap: 1,
-					minWidth: 0,
-				}}
+				className={cn(
+					"flex min-w-0 flex-1 flex-col gap-px",
+					center ? "items-center" : "items-start"
+				)}
 			>
 				{title ? (
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: "var(--text-h3)",
-							fontWeight: "var(--weight-bold)",
-							color: fg,
-							whiteSpace: "nowrap",
-							overflow: "hidden",
-							textOverflow: "ellipsis",
-							maxWidth: "100%",
-						}}
-					>
+					<span className={cn("max-w-full truncate font-bold text-base", fg)}>
 						{title}
 					</span>
 				) : null}
 				{subtitle ? (
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: "var(--text-xs)",
-							color: subFg,
-						}}
-					>
-						{subtitle}
-					</span>
+					<span className={cn("text-xs", subFg)}>{subtitle}</span>
 				) : null}
 			</div>
-			<div
-				style={{
-					flex: "0 0 auto",
-					display: "flex",
-					alignItems: "center",
-					gap: 6,
-					justifyContent: "flex-end",
-					minWidth: 40,
-				}}
-			>
+			<div className="flex min-w-10 flex-[0_0_auto] items-center justify-end gap-1.5">
 				{actions}
 			</div>
 		</header>
@@ -1228,9 +767,9 @@ interface NavItem {
 }
 interface BottomNavProps {
 	badges?: Record<string, number>;
+	className?: string;
 	items?: NavItem[];
 	onChange?: (value: string) => void;
-	style?: CSSProperties;
 	value?: string;
 }
 
@@ -1247,19 +786,14 @@ export function BottomNav({
 	value = "home",
 	onChange,
 	badges = {},
-	style,
+	className,
 }: BottomNavProps) {
 	return (
 		<nav
-			style={{
-				display: "flex",
-				alignItems: "stretch",
-				justifyContent: "space-around",
-				background: "var(--surface-card)",
-				borderTop: "1px solid var(--border-subtle)",
-				padding: "10px 8px 8px",
-				...style,
-			}}
+			className={cn(
+				"flex items-stretch justify-around border-border border-t bg-card px-2 pt-2.5 pb-2",
+				className
+			)}
 		>
 			{items.map((it) => {
 				const Icon = it.icon;
@@ -1267,62 +801,24 @@ export function BottomNav({
 				const count = badges[it.value];
 				return (
 					<button
+						className={cn(
+							"flex flex-1 cursor-pointer flex-col items-center gap-1 border-none bg-none px-0 py-1",
+							on ? "text-primary" : "text-[color:var(--text-subtle)]"
+						)}
 						key={it.value}
 						onClick={() => onChange?.(it.value)}
-						style={{
-							flex: 1,
-							display: "flex",
-							flexDirection: "column",
-							alignItems: "center",
-							gap: 4,
-							border: "none",
-							background: "none",
-							cursor: "pointer",
-							padding: "4px 0",
-							color: on ? "var(--color-primary)" : "var(--text-subtle)",
-						}}
 						type="button"
 					>
-						<span
-							style={{
-								position: "relative",
-								display: "inline-flex",
-								width: 24,
-								height: 24,
-							}}
-						>
+						<span className="relative inline-flex size-6">
 							<Icon />
 							{count ? (
-								<span
-									style={{
-										position: "absolute",
-										top: -5,
-										right: -8,
-										minWidth: 16,
-										height: 16,
-										padding: "0 4px",
-										borderRadius: 999,
-										background: "var(--coral-500)",
-										color: "#fff",
-										fontFamily: "var(--font-sans)",
-										fontSize: 10,
-										fontWeight: 700,
-										display: "inline-flex",
-										alignItems: "center",
-										justifyContent: "center",
-										boxShadow: "0 0 0 2px var(--surface-card)",
-									}}
-								>
+								<span className="absolute top-[-5px] right-[-8px] inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-coral-500 px-1 font-bold text-[10px] text-white shadow-[0_0_0_2px_var(--surface-card)]">
 									{count}
 								</span>
 							) : null}
 						</span>
 						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: "var(--text-2xs)",
-								fontWeight: on ? "var(--weight-bold)" : "var(--weight-medium)",
-							}}
+							className={cn("text-[10px]", on ? "font-bold" : "font-medium")}
 						>
 							{it.label}
 						</span>
@@ -1336,9 +832,9 @@ export function BottomNav({
 // ---- ChatBubble ------------------------------------------------------------
 interface ChatBubbleProps {
 	children?: ReactNode;
+	className?: string;
 	mine?: boolean;
 	read?: boolean;
-	style?: CSSProperties;
 	time?: string;
 }
 
@@ -1347,51 +843,30 @@ export function ChatBubble({
 	time,
 	read,
 	children,
-	style,
+	className,
 }: ChatBubbleProps) {
 	return (
 		<div
-			style={{
-				display: "flex",
-				flexDirection: "column",
-				alignItems: mine ? "flex-end" : "flex-start",
-				gap: 4,
-				...style,
-			}}
+			className={cn(
+				"flex flex-col gap-1",
+				mine ? "items-end" : "items-start",
+				className
+			)}
 		>
 			<div
-				style={{
-					maxWidth: "78%",
-					padding: "10px 14px",
-					borderRadius: 18,
-					borderBottomRightRadius: mine ? 6 : 18,
-					borderBottomLeftRadius: mine ? 18 : 6,
-					background: mine ? "var(--color-primary)" : "var(--surface-sunken)",
-					color: mine ? "var(--color-on-primary)" : "var(--text-default)",
-					fontFamily: "var(--font-sans)",
-					fontSize: "var(--text-sm)",
-					lineHeight: 1.5,
-					wordBreak: "break-word",
-				}}
+				className={cn(
+					"max-w-[78%] break-words rounded-[18px] px-[14px] py-2.5 text-sm leading-normal",
+					mine
+						? "rounded-br-[6px] bg-primary text-primary-foreground"
+						: "rounded-bl-[6px] bg-muted text-foreground"
+				)}
 			>
 				{children}
 			</div>
 			{time ? (
-				<span
-					style={{
-						display: "flex",
-						gap: 4,
-						alignItems: "center",
-						fontFamily: "var(--font-sans)",
-						fontSize: "var(--text-2xs)",
-						color: "var(--text-subtle)",
-						padding: "0 4px",
-					}}
-				>
+				<span className="flex items-center gap-1 px-1 text-[10px] text-[color:var(--text-subtle)]">
 					{mine && read ? (
-						<span style={{ color: "var(--coral-500)", fontWeight: 700 }}>
-							읽음
-						</span>
+						<span className="font-bold text-coral-500">읽음</span>
 					) : null}
 					{time}
 				</span>
@@ -1403,6 +878,7 @@ export function ChatBubble({
 // ---- JobCard ---------------------------------------------------------------
 interface JobCardProps {
 	avatarName?: string;
+	className?: string;
 	featured?: boolean;
 	location?: string;
 	onChat?: () => void;
@@ -1410,7 +886,6 @@ interface JobCardProps {
 	pay?: string;
 	rating?: number;
 	reviews?: number;
-	style?: CSSProperties;
 	title: string;
 	verified?: boolean;
 }
@@ -1424,15 +899,24 @@ export function JobCard({
 	reviews,
 	verified = false,
 	featured = false,
-	style,
+	className,
 	onClick,
 	onChat,
 }: JobCardProps) {
-	const headFg = featured ? "var(--white)" : "var(--text-strong)";
-	const subFg = featured ? "var(--text-on-dark-muted)" : "var(--text-muted)";
+	const headFg = featured ? "text-white" : "text-foreground";
+	const subFg = featured
+		? "text-[color:var(--text-on-dark-muted)]"
+		: "text-muted-foreground";
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: 카드 내부에 채팅 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
 		<div
+			className={cn(
+				"flex cursor-pointer items-center gap-3 rounded-2xl p-[14px]",
+				featured
+					? "border border-[color:var(--border-inverse)] bg-ink-800 text-white shadow-none"
+					: "border border-border bg-card text-foreground shadow-sm",
+				className
+			)}
 			onClick={onClick}
 			onKeyDown={(e) => {
 				if (e.key === "Enter" || e.key === " ") {
@@ -1441,96 +925,25 @@ export function JobCard({
 				}
 			}}
 			role="button"
-			style={{
-				display: "flex",
-				alignItems: "center",
-				gap: 12,
-				padding: 14,
-				borderRadius: "var(--radius-card)",
-				background: featured ? "var(--surface-inverse)" : "var(--surface-card)",
-				color: featured ? "var(--text-inverse)" : "var(--text-default)",
-				border: featured
-					? "1px solid var(--border-inverse)"
-					: "1px solid var(--border-subtle)",
-				boxShadow: featured ? "none" : "var(--shadow-card)",
-				cursor: "pointer",
-				...style,
-			}}
 			tabIndex={0}
 		>
 			<Avatar name={avatarName} size="md" square />
-			<div
-				style={{
-					flex: 1,
-					minWidth: 0,
-					display: "flex",
-					flexDirection: "column",
-					gap: 4,
-				}}
-			>
+			<div className="flex min-w-0 flex-1 flex-col gap-1">
 				<span
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: "var(--text-sm)",
-						fontWeight: "var(--weight-bold)",
-						color: headFg,
-						lineHeight: 1.3,
-						whiteSpace: "nowrap",
-						overflow: "hidden",
-						textOverflow: "ellipsis",
-					}}
+					className={cn("truncate font-bold text-sm leading-[1.3]", headFg)}
 				>
 					{title}
 				</span>
 				{location ? (
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: "var(--text-xs)",
-							color: subFg,
-						}}
-					>
-						{location}
-					</span>
+					<span className={cn("text-xs", subFg)}>{location}</span>
 				) : null}
-				<div
-					style={{
-						display: "flex",
-						alignItems: "center",
-						gap: 8,
-						flexWrap: "wrap",
-					}}
-				>
+				<div className="flex flex-wrap items-center gap-2">
 					{pay ? (
-						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: "var(--text-sm)",
-								fontWeight: "var(--weight-extrabold)",
-								color: headFg,
-							}}
-						>
-							{pay}
-						</span>
+						<span className={cn("font-extrabold text-sm", headFg)}>{pay}</span>
 					) : null}
 					{verified ? (
-						<span
-							style={{
-								display: "inline-flex",
-								alignItems: "center",
-								gap: 3,
-								height: 20,
-								padding: "0 8px",
-								borderRadius: "var(--radius-pill)",
-								background: "var(--status-success-bg)",
-								color: "var(--status-success-fg)",
-								fontFamily: "var(--font-sans)",
-								fontSize: "var(--text-2xs)",
-								fontWeight: "var(--weight-bold)",
-								whiteSpace: "nowrap",
-							}}
-						>
-							<span style={{ display: "inline-flex", width: 11, height: 11 }}>
+						<span className="inline-flex h-5 items-center gap-[3px] whitespace-nowrap rounded-full bg-green-50 px-2 font-bold text-[10px] text-green-600">
+							<span className="inline-flex size-[11px]">
 								<CheckIcon />
 							</span>
 							인증 완료
@@ -1538,35 +951,13 @@ export function JobCard({
 					) : null}
 				</div>
 				{typeof reviews === "number" ? (
-					<div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-						<span
-							style={{
-								display: "inline-flex",
-								width: 13,
-								height: 13,
-								color: "var(--coral-500)",
-							}}
-						>
-							<StarIcon style={{ fill: "var(--coral-500)" }} />
+					<div className="flex items-center gap-1.5">
+						<span className="inline-flex size-[13px] text-coral-500">
+							<StarIcon className="fill-coral-500" />
 						</span>
-						<span
-							style={{
-								fontFamily: "var(--font-sans)",
-								fontSize: "var(--text-xs)",
-								color: subFg,
-							}}
-						>
-							후기 {reviews}개
-						</span>
+						<span className={cn("text-xs", subFg)}>후기 {reviews}개</span>
 						{typeof rating === "number" ? (
-							<span
-								style={{
-									fontFamily: "var(--font-sans)",
-									fontSize: "var(--text-xs)",
-									fontWeight: "var(--weight-bold)",
-									color: headFg,
-								}}
-							>
+							<span className={cn("font-bold text-xs", headFg)}>
 								{rating.toFixed(1)}
 							</span>
 						) : null}
@@ -1574,32 +965,15 @@ export function JobCard({
 				) : null}
 			</div>
 			<button
+				className={cn(
+					"h-9 flex-[0_0_auto] cursor-pointer whitespace-nowrap rounded-xl px-[18px] font-bold text-sm",
+					featured
+						? "border border-transparent bg-primary text-primary-foreground shadow-lg"
+						: "border border-[color:var(--border-default)] bg-card text-foreground"
+				)}
 				onClick={(e) => {
 					e.stopPropagation();
 					onChat?.();
-				}}
-				style={{
-					flex: "0 0 auto",
-					height: 36,
-					padding: "0 18px",
-					borderRadius: "var(--radius-md)",
-					cursor: "pointer",
-					fontFamily: "var(--font-sans)",
-					fontSize: "var(--text-sm)",
-					fontWeight: "var(--weight-bold)",
-					whiteSpace: "nowrap",
-					...(featured
-						? {
-								background: "var(--color-primary)",
-								color: "var(--color-on-primary)",
-								border: "1px solid transparent",
-								boxShadow: "var(--shadow-primary)",
-							}
-						: {
-								background: "var(--surface-card)",
-								color: "var(--text-strong)",
-								border: "1px solid var(--border-default)",
-							}),
 				}}
 				type="button"
 			>
@@ -1616,56 +990,36 @@ interface StatCell {
 	value: ReactNode;
 }
 interface StatGroupProps {
+	className?: string;
 	items: StatCell[];
-	style?: CSSProperties;
 }
 
-export function StatGroup({ items, style }: StatGroupProps) {
+export function StatGroup({ items, className }: StatGroupProps) {
 	return (
 		<div
-			style={{
-				display: "flex",
-				borderRadius: "var(--radius-lg)",
-				border: "1px solid var(--border-subtle)",
-				background: "var(--surface-card)",
-				boxShadow: "var(--shadow-card)",
-				overflow: "hidden",
-				...style,
-			}}
+			className={cn(
+				"flex overflow-hidden rounded-lg border border-border bg-card shadow-sm",
+				className
+			)}
 		>
 			{items.map((it, i) => (
 				<div
+					className={cn(
+						"flex flex-1 flex-col items-center gap-1 px-2 py-[14px]",
+						i ? "border-border border-l" : "border-none"
+					)}
 					key={it.label}
-					style={{
-						flex: 1,
-						display: "flex",
-						flexDirection: "column",
-						alignItems: "center",
-						gap: 4,
-						padding: "14px 8px",
-						borderLeft: i ? "1px solid var(--border-subtle)" : "none",
-					}}
 				>
-					<span
-						style={{
-							fontFamily: "var(--font-sans)",
-							fontSize: "var(--text-xs)",
-							fontWeight: "var(--weight-medium)",
-							color: "var(--text-muted)",
-						}}
-					>
+					<span className="font-medium text-muted-foreground text-xs">
 						{it.label}
 					</span>
 					<span
-						style={{
-							fontFamily: "var(--font-display)",
-							fontSize: "var(--text-h2)",
-							fontWeight: "var(--weight-extrabold)",
-							color:
-								it.tone === "danger" || it.tone === "primary"
-									? "var(--color-primary)"
-									: "var(--text-strong)",
-						}}
+						className={cn(
+							"font-extrabold text-xl",
+							it.tone === "danger" || it.tone === "primary"
+								? "text-primary"
+								: "text-foreground"
+						)}
 					>
 						{it.value}
 					</span>
@@ -1688,13 +1042,13 @@ const SCHEDULE_STATUS: Record<
 
 interface ScheduleCardProps {
 	byMe?: boolean;
+	className?: string;
 	date?: string;
 	onConfirm?: () => void;
 	onDecline?: () => void;
 	onPropose?: () => void;
 	place?: string;
 	status?: ScheduleStatus;
-	style?: CSSProperties;
 	time?: string;
 }
 
@@ -1707,50 +1061,19 @@ export function ScheduleCard({
 	onConfirm,
 	onDecline,
 	onPropose,
-	style,
+	className,
 }: ScheduleCardProps) {
 	const st = SCHEDULE_STATUS[status] || SCHEDULE_STATUS.proposed;
 	return (
 		<div
-			style={{
-				display: "flex",
-				flexDirection: "column",
-				gap: 14,
-				padding: 16,
-				borderRadius: "var(--radius-lg)",
-				background: "var(--surface-card)",
-				border: "1px solid var(--border-default)",
-				boxShadow: "var(--shadow-sm)",
-				width: "100%",
-				...style,
-			}}
+			className={cn(
+				"flex w-full flex-col gap-[14px] rounded-lg border border-[color:var(--border-default)] bg-card p-4 shadow-sm",
+				className
+			)}
 		>
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "space-between",
-				}}
-			>
-				<span
-					style={{
-						display: "flex",
-						alignItems: "center",
-						gap: 8,
-						fontFamily: "var(--font-sans)",
-						fontSize: "var(--text-sm)",
-						fontWeight: "var(--weight-bold)",
-						color: "var(--text-strong)",
-					}}
-				>
-					<span
-						style={{
-							display: "inline-flex",
-							width: 18,
-							height: 18,
-							color: "var(--coral-500)",
-						}}
-					>
+			<div className="flex items-center justify-between">
+				<span className="flex items-center gap-2 font-bold text-foreground text-sm">
+					<span className="inline-flex size-[18px] text-coral-500">
 						<ClockIcon />
 					</span>
 					면접 일정
@@ -1759,54 +1082,18 @@ export function ScheduleCard({
 					{st.label}
 				</Badge>
 			</div>
-			<div
-				style={{
-					display: "flex",
-					flexDirection: "column",
-					gap: 8,
-					padding: "12px 14px",
-					borderRadius: "var(--radius-md)",
-					background: "var(--surface-subtle)",
-				}}
-			>
-				<span
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: "var(--text-h3)",
-						fontWeight: "var(--weight-extrabold)",
-						color: "var(--text-strong)",
-					}}
-				>
-					{date}
-				</span>
-				<div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-					<span
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 5,
-							fontFamily: "var(--font-sans)",
-							fontSize: "var(--text-sm)",
-							color: "var(--text-muted)",
-						}}
-					>
-						<span style={{ display: "inline-flex", width: 15, height: 15 }}>
+			<div className="flex flex-col gap-2 rounded-xl bg-secondary px-[14px] py-3">
+				<span className="font-extrabold text-base text-foreground">{date}</span>
+				<div className="flex flex-wrap gap-4">
+					<span className="flex items-center gap-[5px] text-muted-foreground text-sm">
+						<span className="inline-flex size-[15px]">
 							<ClockIcon />
 						</span>
 						{time}
 					</span>
 					{place ? (
-						<span
-							style={{
-								display: "flex",
-								alignItems: "center",
-								gap: 5,
-								fontFamily: "var(--font-sans)",
-								fontSize: "var(--text-sm)",
-								color: "var(--text-muted)",
-							}}
-						>
-							<span style={{ display: "inline-flex", width: 15, height: 15 }}>
+						<span className="flex items-center gap-[5px] text-muted-foreground text-sm">
+							<span className="inline-flex size-[15px]">
 								<MapPinIcon />
 							</span>
 							{place}
@@ -1835,20 +1122,13 @@ function renderScheduleActions({
 	if (status === "proposed") {
 		if (byMe) {
 			return (
-				<span
-					style={{
-						fontFamily: "var(--font-sans)",
-						fontSize: "var(--text-xs)",
-						color: "var(--text-subtle)",
-						textAlign: "center",
-					}}
-				>
+				<span className="text-center text-[color:var(--text-subtle)] text-xs">
 					상대방의 응답을 기다리고 있어요
 				</span>
 			);
 		}
 		return (
-			<div style={{ display: "flex", gap: 8 }}>
+			<div className="flex gap-2">
 				<Button block onClick={onDecline} size="md" variant="secondary">
 					변경 요청
 				</Button>
@@ -1860,15 +1140,7 @@ function renderScheduleActions({
 	}
 	if (status === "confirmed") {
 		return (
-			<span
-				style={{
-					fontFamily: "var(--font-sans)",
-					fontSize: "var(--text-xs)",
-					color: "var(--status-success-fg)",
-					textAlign: "center",
-					fontWeight: "var(--weight-semibold)",
-				}}
-			>
+			<span className="text-center font-semibold text-[color:var(--status-success-fg)] text-xs">
 				면접 일정이 확정되었어요 · 연락처 공개 동의를 진행해 주세요
 			</span>
 		);
