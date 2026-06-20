@@ -33,6 +33,13 @@
 - 아이콘은 객체로 전달(`icon={CheckIcon}`), lucide(`lucide-react`).
 - 이 레포의 shadcn `base`는 **base-ui**(radix 아님): 커스텀 트리거/엘리먼트는 `asChild`가 아니라
   `render` prop을 쓴다.
+- **base 컴포넌트는 밤비 룩으로 재테마됨**(`packages/ui/src/components`). 원래 base-lyra의
+  하드코딩 `rounded-none`·고밀도(`text-xs`)를 걷어내고 **반경 토큰 구동**으로 바꿔, `--radius`
+  스케일이 실제로 둥근 정도를 제어한다. 새/수정 컴포넌트도 **`rounded-none` 금지**, 반경은
+  `rounded-md`/`lg`/`xl`/`2xl`/`full`(= `--radius` 파생) 유틸로 표현한다. 밤비 반경 언어:
+  배지·스위치·아바타=`full`, 컨트롤(버튼·입력·탭 트리거)=`lg`, 작은 컨트롤=`md`,
+  카드·오버레이=`2xl`/`xl`, 체크박스=`sm`. `@bambi-app/ui/components`는 **web 전용**이라
+  (native/server 미사용) base 재테마가 web에만 적용된다.
 
 ## RSC
 
@@ -43,7 +50,9 @@
 - 브랜드: **coral**(primary), **ink**(다크 네이비 surface), green/amber/red(상태).
   `src/index.css`의 `@theme`에 `--color-*`로 노출 → `bg-coral-500` `text-ink-800` 등으로 사용.
 - shadcn 시맨틱 토큰(`--primary`/`--background`/`--foreground`/`--muted-foreground`/`--border`/`--ring`/`--radius`)은
-  web `:root`에서 밤비 팔레트로 override 되어 shadcn 컴포넌트가 코럴·둥근 룩을 따른다.
+  web `:root`(`src/index.css`)에서 밤비 팔레트로 override 된다. base 컴포넌트가 반경 토큰 구동으로
+  재테마돼 있어 `--radius`(현재 `0.875rem`)가 실제로 shadcn 컴포넌트의 둥근 정도를 제어한다.
+  즉 코럴·둥근 룩이 토큰만으로 따라온다(더 이상 래퍼에서 일일이 덧칠 불필요).
 
 ## 작업 흐름
 

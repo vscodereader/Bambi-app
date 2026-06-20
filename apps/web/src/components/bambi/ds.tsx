@@ -189,9 +189,9 @@ const BTN_SIZE_PROPS: Record<
 	ButtonSize,
 	{ size: "lg" | "default" | "sm"; className: string }
 > = {
-	lg: { size: "lg", className: "h-14 rounded-lg px-6 text-base" },
-	md: { size: "default", className: "h-11 rounded-xl px-[18px] text-sm" },
-	sm: { size: "sm", className: "h-9 rounded-lg px-[14px] text-sm" },
+	lg: { size: "lg", className: "h-14 px-6 text-base" },
+	md: { size: "default", className: "h-11 px-[18px] text-sm" },
+	sm: { size: "sm", className: "h-9 px-[14px] text-sm" },
 };
 
 interface ButtonProps {
@@ -285,7 +285,7 @@ export function Card({
 	return (
 		<UiCard
 			className={cn(
-				"gap-0 rounded-2xl py-0",
+				"gap-0 py-0",
 				CARD_PAD_CLASS[pad] || CARD_PAD_CLASS.md,
 				CARD_TONE_CLASS[tone] || CARD_TONE_CLASS.default,
 				className
