@@ -54,3 +54,7 @@ coverage
 .worktrees
 tmp
 temp
+/.playwright-mcp/
+
+.omc
+.omx

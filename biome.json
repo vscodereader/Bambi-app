@@ -31,7 +31,9 @@
       "!**/.claude",
       "!**/.gemini",
       "!**/android",
-      "!**/ios/Pods"
+      "!**/ios/Pods",
+      "!**/.superpowers",
+      "!**/src_temp"
     ]
   },
   "formatter": {
