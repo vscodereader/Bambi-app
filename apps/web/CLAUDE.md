@@ -37,9 +37,10 @@
   하드코딩 `rounded-none`·고밀도(`text-xs`)를 걷어내고 **반경 토큰 구동**으로 바꿔, `--radius`
   스케일이 실제로 둥근 정도를 제어한다. 새/수정 컴포넌트도 **`rounded-none` 금지**, 반경은
   `rounded-md`/`lg`/`xl`/`2xl`/`full`(= `--radius` 파생) 유틸로 표현한다. 밤비 반경 언어:
-  배지·스위치·아바타=`full`, 컨트롤(버튼·입력·탭 트리거)=`lg`, 작은 컨트롤=`md`,
-  카드·오버레이=`2xl`/`xl`, 체크박스=`sm`. `@bambi-app/ui/components`는 **web 전용**이라
-  (native/server 미사용) base 재테마가 web에만 적용된다.
+  칩·배지·스위치·아바타=`full`, 컨트롤(버튼·입력·검색·아이콘버튼)·카드=`lg`(16px), 타일(로고·인포)=`md`(14px),
+  큰 카드·시트·오버레이·탭 트랙=`xl`(20px), 체크박스=`sm`(12px). 이 매핑은 밤비 DS 반경 규칙
+  (컨트롤·카드 16 · 타일 14 · 칩/배지/스위치/아바타 pill · 큰 카드/시트 20)을 그대로 따른다.
+  `@bambi-app/ui/components`는 **web 전용**이라 (native/server 미사용) base 재테마가 web에만 적용된다.
 
 ## RSC
 
@@ -51,8 +52,11 @@
   `src/index.css`의 `@theme`에 `--color-*`로 노출 → `bg-coral-500` `text-ink-800` 등으로 사용.
 - shadcn 시맨틱 토큰(`--primary`/`--background`/`--foreground`/`--muted-foreground`/`--border`/`--ring`/`--radius`)은
   web `:root`(`src/index.css`)에서 밤비 팔레트로 override 된다. base 컴포넌트가 반경 토큰 구동으로
-  재테마돼 있어 `--radius`(현재 `0.875rem`)가 실제로 shadcn 컴포넌트의 둥근 정도를 제어한다.
-  즉 코럴·둥근 룩이 토큰만으로 따라온다(더 이상 래퍼에서 일일이 덧칠 불필요).
+  재테마돼 있어 `--radius`(현재 `1rem`=16px = 밤비 DS `--radius-lg`)가 실제로 shadcn 컴포넌트의 둥근 정도를
+  제어한다. 16px를 base로 두면 Tailwind 반경 스케일이 밤비 DS 스케일에 그대로 스냅된다:
+  `sm`12·`md`14·`lg`16·`xl`20·`2xl`24 = DS `--radius-md`·`-tile`·`-lg`/`-card`·`-xl`·`-2xl`.
+  즉 코럴·둥근 룩이 토큰만으로 따라온다(래퍼에서 일일이 덧칠 불필요). 그림자도 DS 토큰 사용:
+  카드 `shadow-[var(--shadow-card)]`, 코럴 CTA 글로우 `shadow-[var(--shadow-primary)]`.
 
 ## 작업 흐름
 

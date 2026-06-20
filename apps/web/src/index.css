@@ -22,7 +22,9 @@
 	--border: #eef0f3;
 	--input: #e5e7eb;
 	--ring: #f94b63;
-	--radius: 0.875rem;
+	/* 밤비 DS: --radius-lg(buttons·inputs·cards)=16px. 이 16px를 base로 두면
+	   Tailwind 반경 스케일(sm 12·md 14·lg 16·xl 20·2xl 24)이 DS 스케일에 그대로 스냅된다. */
+	--radius: 1rem;
 }
 
 /* ---- 밤비 브랜드 팔레트 → Tailwind 유틸 (bg-coral-500, text-ink-800 …) ---- */

@@ -168,7 +168,10 @@ const BTN_VARIANT_PROPS: Record<
 	ButtonVariant,
 	{ variant: "default" | "outline" | "ghost"; className: string }
 > = {
-	primary: { variant: "default", className: "" },
+	primary: {
+		variant: "default",
+		className: "shadow-[var(--shadow-primary)]",
+	},
 	dark: {
 		variant: "default",
 		className: "bg-ink-800 text-white hover:bg-ink-700",
@@ -261,7 +264,7 @@ const CARD_PAD_CLASS: Record<CardPad, string> = {
 };
 
 const CARD_TONE_CLASS: Record<CardTone, string> = {
-	default: "bg-card border border-border shadow-sm ring-0",
+	default: "bg-card border border-border shadow-[var(--shadow-card)] ring-0",
 	subtle: "bg-secondary border-0 shadow-none ring-0",
 	inverse: "bg-ink-800 text-white border-0 ring-0",
 	outline:
@@ -337,7 +340,7 @@ export function IconButton({
 		<span className="relative inline-flex">
 			<UiButton
 				className={cn(
-					"rounded-xl",
+					"rounded-lg",
 					active && "bg-coral-50 text-coral-700 hover:bg-coral-100",
 					variant === "inverse" && "bg-white/10 text-white hover:bg-white/20",
 					className
@@ -366,7 +369,7 @@ interface InfoTileProps {
 export function InfoTile({ icon, label, value, className }: InfoTileProps) {
 	return (
 		<div className={cn("flex items-center gap-3", className)}>
-			<div className="inline-flex size-12 flex-[0_0_48px] items-center justify-center rounded-xl bg-secondary text-foreground">
+			<div className="inline-flex size-12 flex-[0_0_48px] items-center justify-center rounded-md bg-secondary text-foreground">
 				<span className="inline-flex size-[22px]">{icon}</span>
 			</div>
 			<div className="flex min-w-0 flex-col gap-0.5">
@@ -605,7 +608,7 @@ export function Input({
 				<UiInput
 					aria-invalid={error}
 					aria-label={placeholder}
-					className={cn("h-11 rounded-xl pl-10", inputClassName)}
+					className={cn("h-11 rounded-lg pl-10", inputClassName)}
 					defaultValue={defaultValue}
 					onChange={onChange}
 					placeholder={placeholder}
@@ -619,7 +622,7 @@ export function Input({
 		<UiInput
 			aria-invalid={error}
 			aria-label={placeholder}
-			className={cn("h-11 rounded-xl", className, inputClassName)}
+			className={cn("h-11 rounded-lg", className, inputClassName)}
 			defaultValue={defaultValue}
 			onChange={onChange}
 			placeholder={placeholder}
@@ -723,7 +726,7 @@ export function AppBar({
 				<button
 					aria-label="뒤로"
 					className={cn(
-						"inline-flex size-10 flex-[0_0_40px] cursor-pointer items-center justify-center rounded-xl border-none",
+						"inline-flex size-10 flex-[0_0_40px] cursor-pointer items-center justify-center rounded-lg border-none",
 						tone === "inverse" ? "bg-white/[0.08]" : "bg-secondary",
 						fg
 					)}
@@ -911,10 +914,10 @@ export function JobCard({
 		// biome-ignore lint/a11y/useSemanticElements: 카드 내부에 채팅 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
 		<div
 			className={cn(
-				"flex cursor-pointer items-center gap-3 rounded-2xl p-[14px]",
+				"flex cursor-pointer items-center gap-3 rounded-lg p-[14px]",
 				featured
 					? "border border-[color:var(--border-inverse)] bg-ink-800 text-white shadow-none"
-					: "border border-border bg-card text-foreground shadow-sm",
+					: "border border-border bg-card text-foreground shadow-[var(--shadow-card)]",
 				className
 			)}
 			onClick={onClick}
@@ -966,7 +969,7 @@ export function JobCard({
 			</div>
 			<button
 				className={cn(
-					"h-9 flex-[0_0_auto] cursor-pointer whitespace-nowrap rounded-xl px-[18px] font-bold text-sm",
+					"h-9 flex-[0_0_auto] cursor-pointer whitespace-nowrap rounded-lg px-[18px] font-bold text-sm",
 					featured
 						? "border border-transparent bg-primary text-primary-foreground shadow-lg"
 						: "border border-[color:var(--border-default)] bg-card text-foreground"
