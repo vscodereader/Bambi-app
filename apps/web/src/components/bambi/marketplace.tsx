@@ -121,14 +121,18 @@ export function MarketplaceFilterSidebar({
 
 function TrustMiniPanel() {
 	return (
-		<Card className="rounded-lg bg-ink-800 text-white" pad="lg">
-			<span className="mb-3 inline-flex size-9 items-center justify-center rounded-lg bg-white/10 text-coral-300">
+		<Card
+			className="rounded-lg border-coral-100 bg-coral-50 text-coral-700"
+			pad="lg"
+			tone="outline"
+		>
+			<span className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-coral-200 bg-card text-coral-600">
 				<span className="inline-flex size-5">
 					<ShieldIcon />
 				</span>
 			</span>
 			<h2 className="m-0 font-extrabold text-lg">연락처는 보호돼요</h2>
-			<p className="mt-2 mb-0 text-[13px] text-white/70 leading-relaxed">
+			<p className="mt-2 mb-0 text-[13px] text-coral-700/80 leading-relaxed">
 				면접 일정 확정 전까지 전화번호와 외부 연락처는 공개되지 않아요.
 			</p>
 		</Card>
