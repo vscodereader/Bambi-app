@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import { notFound, useParams, useRouter } from "next/navigation";
-import { SeekerDetail } from "@/components/bambi/screens/seeker";
+import { SeekerJobDetailResponsive } from "@/components/bambi/screens/seeker-job-detail-responsive";
 import { JOBS } from "@/lib/bambi/data";
 
 export default function SeekerJobPage() {
@@ -13,7 +13,7 @@ export default function SeekerJobPage() {
 		notFound();
 	}
 	return (
-		<SeekerDetail
+		<SeekerJobDetailResponsive
 			job={job}
 			onBack={() => router.push("/seeker")}
 			onReport={() => router.push(`/seeker/chats/${job.id}` as Route)}
