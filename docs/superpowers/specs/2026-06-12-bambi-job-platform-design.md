@@ -1,7 +1,19 @@
 # 밤비 구인구직 플랫폼 MVP 설계
 
 작성일: 2026-06-12
-상태: 사용자 리뷰 대기
+상태: 도메인/API 기반 구현 완료, Web MVP 구현 진행 중
+
+## 0. 현재 구현 상태
+
+2026-06-23 기준 현재 구현 상태는 다음과 같다.
+
+- Bambi 도메인 스키마, 정책 헬퍼, 권한 헬퍼, oRPC 라우터 기반은 구현되어 있다.
+- `bambi.onboarding`, `bambi.jobs`, `bambi.chats`, `bambi.moderation` 라우터가 존재한다.
+- 개발 seed는 Better Auth 로그인 가능 계정, 조직/팀, 공고, 채팅, 면접, 연락처 공개 동의, 신고 데이터를 생성한다.
+- Web은 `/`, `/login`, `/onboarding`, `/seeker`, `/seeker/jobs/[id]`, `/seeker/jobs/[id]/chat`, `/seeker/chats`, `/seeker/chats/[id]`, `/employer`, `/employer/new`, `/moderator` 축으로 구현 중이다.
+- 구직자 공고 탐색, 공고 상세, 채팅 전 보호 확인, API 채팅방 목록/상세는 실제 oRPC와 TanStack Query를 우선 사용한다.
+- 구인자 공고 목록/등록 UI와 일부 내 정보 화면은 아직 샘플 데이터와 로컬 상태 중심이다.
+- 관리자 화면은 제품 콘셉트 검증용 UI가 있으며, 실제 운영 심사/제재 처리의 완전한 API 연결은 후속 범위다.
 
 ## 1. 제품 방향
 

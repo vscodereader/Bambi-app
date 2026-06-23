@@ -1,7 +1,33 @@
 # 밤비 Web Marketplace MVP 설계
 
 작성일: 2026-06-12
-상태: Web MVP 구현 진행 중
+상태: Web MVP 구현 진행 중, 구직자 API 루프와 로그인/온보딩 진입점 완료
+
+## 0. 현재 구현 상태
+
+2026-06-23 기준 Web MVP는 다음 상태다.
+
+완료된 범위:
+
+- `/login`: Better Auth 이메일 로그인/회원가입, seed 구직자 계정 기본 입력값 제공
+- `/onboarding`: Bambi 프로필 생성/수정, 구직자/구인자 역할 시작 선택
+- `/`: 비로그인도 공고를 탐색할 수 있는 반응형 마켓플레이스 홈
+- `/seeker`: `bambi.jobs.list` API 우선 공고 탐색, 샘플 fallback
+- `/seeker/jobs/[id]`: `bambi.jobs.getById` API 우선 공고 상세, 샘플 fallback
+- `/seeker/jobs/[id]/chat`: Better Auth 세션, `bambi.onboarding.getMine`, 휴대폰 인증 상태, 공고 상태 확인 후 `bambi.chats.startFromJobPost` 호출
+- `/seeker/chats`: `bambi.chats.listMine` API 우선 채팅 목록, 샘플 fallback
+- `/seeker/chats/[id]`: API 채팅방이면 `bambi.chats.getById`와 `sendMessage`를 사용하고, 샘플 id면 기존 프리뷰 채팅을 유지
+- `/employer`, `/moderator`: 공통 반응형 셸 위에 기존 구인자/운영자 화면 배치
+- `pnpm run db:seed:bambi`로 seed 계정과 검증용 데이터 생성 가능
+
+아직 남은 범위:
+
+- 구인자 공고 목록을 `bambi.jobs.listMine` API로 교체
+- `/employer/new` 공고 등록을 `bambi.jobs.create`와 연결
+- 공고 수정 화면과 `bambi.jobs.update` 연결
+- 채팅방 면접 일정 제안/확정 UI를 `bambi.chats.proposeInterview`, `setInterviewStatus`와 연결
+- 연락처 공개 UI를 `bambi.chats.revealContact`와 연결
+- 운영자 화면의 실제 심사/신고/제재 액션 API 연결
 
 ## 1. 목표
 
@@ -61,10 +87,10 @@
 
 로그인 상태에 따라 진입점을 나눈다.
 
-- 비로그인: 로그인 화면으로 이동하거나 로그인 CTA를 보여준다.
+- 비로그인: 마켓플레이스 홈을 보여주며, 시작하기 CTA는 `/login`으로 이동한다.
 - 로그인 + 프로필 없음: 온보딩 선택 화면으로 이동한다.
-- 로그인 + 구직자: 공고 탐색으로 이동한다.
-- 로그인 + 구인자/admin: 공고 탐색과 구인자 관리 진입점을 함께 보여준다.
+- 로그인 + 구직자: `/seeker` 공고 탐색으로 이동할 수 있다.
+- 로그인 + 구인자/admin: `/employer` 구인자 관리로 이동할 수 있다.
 
 ### `/onboarding`
 
@@ -85,9 +111,9 @@ seed 계정과 일반 이메일 계정으로 로그인하거나 회원가입할 
 - 로그인 성공 후 `/onboarding`으로 이동해 Bambi 프로필 상태를 확인한다.
 - 회원가입 성공 후에도 같은 온보딩 흐름으로 이어진다.
 
-### `/jobs`
+### `/seeker`
 
-공고 목록 화면이다.
+구직자 공고 목록 화면이다.
 
 - 업종 필터
 - 지역 필터
@@ -99,7 +125,7 @@ seed 계정과 일반 이메일 계정으로 로그인하거나 회원가입할 
 
 목록은 기존 `bambi.jobs.list` API를 사용한다.
 
-### `/jobs/[id]`
+### `/seeker/jobs/[id]`
 
 공고 상세 화면이다.
 
@@ -110,7 +136,17 @@ seed 계정과 일반 이메일 계정으로 로그인하거나 회원가입할 
 
 채팅 시작 후 생성된 채팅방으로 이동한다.
 
-### `/chats`
+### `/seeker/jobs/[id]/chat`
+
+채팅 시작 전 보호 확인 화면이다.
+
+- 로그인 상태 확인
+- Bambi 프로필과 역할 확인
+- 휴대폰 인증 상태 확인
+- 실제 API 공고면 `bambi.chats.startFromJobPost`로 채팅방 생성
+- 샘플 공고면 기존 프리뷰 채팅으로 이동
+
+### `/seeker/chats`
 
 내 채팅방 목록이다.
 
@@ -119,7 +155,7 @@ seed 계정과 일반 이메일 계정으로 로그인하거나 회원가입할 
 - 최근 메시지 요약
 - 면접 상태 요약
 
-### `/chats/[id]`
+### `/seeker/chats/[id]`
 
 채팅방 상세 화면이다.
 
@@ -141,7 +177,7 @@ seed 계정과 일반 이메일 계정으로 로그인하거나 회원가입할 
 - 공고 등록 버튼
 - 공고 상태 배지
 
-### `/employer/jobs/new`
+### `/employer/new`
 
 공고 등록 화면이다.
 
@@ -159,7 +195,7 @@ seed 계정과 일반 이메일 계정으로 로그인하거나 회원가입할 
 
 ### `/employer/jobs/[id]/edit`
 
-공고 수정 화면이다. 조직과 팀은 변경하지 않는다. 공개 내용 수정 후 상태가 다시 검수 대기로 바뀔 수 있음을 표시한다.
+공고 수정 화면이다. 아직 현재 라우트에는 구현되어 있지 않다. 조직과 팀은 변경하지 않는다. 공개 내용 수정 후 상태가 다시 검수 대기로 바뀔 수 있음을 표시한다.
 
 ## 5. 데이터 흐름
 
@@ -201,18 +237,22 @@ UI는 마케팅 랜딩이 아니라 반복 사용 가능한 작업 화면으로 
 
 ## 8. 테스트와 검증
 
-구현 완료 시 다음을 확인한다.
+현재 구현 기준으로 다음을 확인한다.
 
 - seed 계정으로 로그인할 수 있다.
 - 구직자 계정이 공고 목록에서 공고를 보고 상세로 이동할 수 있다.
 - 구직자 계정이 채팅을 시작하고 메시지를 보낼 수 있다.
-- 구인자 계정이 채팅방에서 메시지를 확인하고 면접 일정을 제안할 수 있다.
-- 상대방이 면접 일정을 확정할 수 있다.
-- 구인자 계정이 새 공고를 등록하고 상태를 확인할 수 있다.
 - `pnpm --filter @bambi-app/api test`가 통과한다.
 - `pnpm run check-types`가 통과한다.
 - `pnpm run check`가 통과한다.
 - Web 화면은 브라우저에서 주요 플로우를 수동 확인한다.
+
+후속 구현 완료 시 추가로 다음을 확인한다.
+
+- 구인자 계정이 API 기반 채팅방에서 메시지를 확인하고 면접 일정을 제안할 수 있다.
+- 상대방이 면접 일정을 확정할 수 있다.
+- 구인자 계정이 API로 새 공고를 등록하고 상태를 확인할 수 있다.
+- 연락처 공개 요청과 동의 상태가 `bambi.chats.revealContact`와 연결된다.
 
 ## 9. 구현 메모
 
