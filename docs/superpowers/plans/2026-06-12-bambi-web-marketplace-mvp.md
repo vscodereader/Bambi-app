@@ -10,6 +10,8 @@
 
 **Current Status:** The responsive marketplace pass is complete and the Web MVP now has active `/login` and `/onboarding` entry points. Seed users can sign in through Better Auth, then continue into Bambi profile confirmation or creation before entering seeker/employer flows.
 
+**Execution Note, 2026-06-23:** This file is historical context for the first Web MVP plan. The current route structure uses `/seeker`, `/seeker/jobs/[id]`, `/seeker/chats/[id]`, `/employer/new`, and `/employer/jobs/[id]/edit`. Continue remaining 1st Web MVP work from `docs/superpowers/plans/2026-06-23-bambi-web-mvp-completion.md`.
+
 ---
 
 ## Scope

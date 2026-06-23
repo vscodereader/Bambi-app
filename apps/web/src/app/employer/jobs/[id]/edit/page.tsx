@@ -6,7 +6,7 @@ import { Label } from "@bambi-app/ui/components/label";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
@@ -32,211 +32,68 @@ const selectClassName =
 const textareaClassName =
 	"min-h-28 w-full min-w-0 rounded-none border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50";
 
+const readOnlyValueClassName =
+	"min-h-10 break-words border bg-muted/30 px-3 py-2 text-muted-foreground text-sm md:min-h-8 md:text-xs";
+
+const getErrorCode = (error: Error): string | undefined =>
+	"code" in error && typeof error.code === "string" ? error.code : undefined;
+
 const getFieldErrorId = (field: keyof JobForm) => `${field}-error`;
 
-interface PostingScope {
-	organizationDisplayName: string;
-	organizationId: string;
-	scopeType: "organization" | "team";
-	teamDisplayName: null | string;
-	teamId: null | string;
-}
-
-const getPostingScopeValue = (scope: PostingScope) =>
-	JSON.stringify([scope.organizationId, scope.teamId]);
-
-const getPostingScopeLabel = (scope: PostingScope) => {
-	if (scope.scopeType === "organization") {
-		return `${scope.organizationDisplayName} / 전체 조직`;
-	}
-
-	return `${scope.organizationDisplayName} / ${scope.teamDisplayName ?? scope.teamId}`;
-};
-
-interface NewEmployerJobFormProps {
-	postingScopes: PostingScope[];
-}
-
-export default function NewEmployerJobPage() {
-	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
-	const profile = mineQuery.data?.bambiProfile ?? null;
-	const organizationProfiles =
-		mineQuery.data?.employerOrganizationProfiles ?? [];
-	const postingScopes = mineQuery.data?.employerJobPostingScopes ?? [];
-	const isEmployer = Boolean(profile && profile.role !== "job_seeker");
-
-	if (mineQuery.isLoading) {
-		return <Loader />;
-	}
-
-	if (mineQuery.isError) {
-		return (
-			<PageShell
-				description="공고 등록에 필요한 프로필 정보를 불러오지 못했습니다."
-				title="새 공고 등록"
-			>
-				<EmptyState
-					action={
-						<Button onClick={() => mineQuery.refetch()} type="button">
-							다시 시도
-						</Button>
-					}
-					description="로그인 상태와 연결 상태를 확인한 뒤 다시 시도해 주세요."
-					title="프로필 정보를 불러올 수 없습니다"
-				/>
-			</PageShell>
-		);
-	}
-
-	if (!profile) {
-		return (
-			<PageShell
-				description="공고를 등록하려면 밤비 프로필 설정이 필요합니다."
-				title="새 공고 등록"
-			>
-				<EmptyState
-					action={
-						<Link className={buttonVariants()} href="/onboarding">
-							온보딩으로 이동
-						</Link>
-					}
-					description="구인자 프로필을 만든 뒤 공고를 등록할 수 있습니다."
-					title="밤비 프로필이 없습니다"
-				/>
-			</PageShell>
-		);
-	}
-
-	if (!isEmployer) {
-		return (
-			<PageShell
-				description="현재 계정은 구직자 프로필로 설정되어 있습니다."
-				title="새 공고 등록"
-			>
-				<EmptyState
-					action={
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href="/seeker"
-						>
-							공고 탐색으로 이동
-						</Link>
-					}
-					description="구직자 계정은 공개 공고를 탐색하고 지원 대화를 시작할 수 있습니다."
-					title="공고 등록 권한이 없습니다"
-				/>
-			</PageShell>
-		);
-	}
-
-	if (organizationProfiles.length === 0 || postingScopes.length === 0) {
-		return (
-			<PageShell
-				description="공고를 등록하려면 등록 가능한 조직 또는 팀 범위가 필요합니다."
-				title="새 공고 등록"
-			>
-				<EmptyState
-					action={
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href="/employer"
-						>
-							구인자 관리로 이동
-						</Link>
-					}
-					description="대표 또는 관리자는 전체 조직 공고를, 직원은 소속 팀 공고를 등록할 수 있습니다."
-					title="등록 가능한 공고 범위가 없습니다"
-				/>
-			</PageShell>
-		);
-	}
-
-	return <NewEmployerJobForm postingScopes={postingScopes} />;
-}
-
-function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
+export default function EditEmployerJobPage({
+	params,
+}: {
+	params: Promise<{ id: string }>;
+}) {
+	const { id } = use(params);
 	const router = useRouter();
 	const utils = useQueryClient();
 	const [form, setForm] = useState(emptyJobForm);
 	const [fieldErrors, setFieldErrors] = useState<JobFormErrors>({});
 	const [formError, setFormError] = useState<null | string>(null);
-
-	const createMutation = useMutation(
-		orpc.bambi.jobs.create.mutationOptions({
+	const jobQuery = useQuery(
+		orpc.bambi.jobs.getEditableById.queryOptions({ input: { id } })
+	);
+	const updateMutation = useMutation(
+		orpc.bambi.jobs.update.mutationOptions({
 			onError: (error) => {
 				const message =
-					"공고를 등록하지 못했습니다. 입력값과 공고 등록 권한을 확인해 주세요.";
+					"공고를 수정하지 못했습니다. 입력값과 공고 수정 권한을 확인해 주세요.";
 				setFormError(message);
 				toast.error(error.message || message);
 			},
 			onSuccess: async () => {
-				toast.success("공고가 등록되었습니다.");
+				toast.success("공고가 수정되었습니다.");
 				await utils.invalidateQueries({
 					queryKey: orpc.bambi.jobs.listMine.queryKey(),
+				});
+				await utils.invalidateQueries({
+					queryKey: orpc.bambi.jobs.getEditableById.queryKey({ input: { id } }),
 				});
 				router.push("/employer");
 			},
 		})
 	);
-
-	const postingScopeOptions = useMemo(
-		() =>
-			postingScopes.map((scope) => ({
-				label: getPostingScopeLabel(scope),
-				scope,
-				value: getPostingScopeValue(scope),
-			})),
-		[postingScopes]
-	);
-	const selectedPostingScope = postingScopeOptions.find(
-		(option) =>
-			option.scope.organizationId === form.organizationId &&
-			(option.scope.teamId ?? "") === form.teamId
-	);
-	const teamScopes = useMemo(
-		() =>
-			postingScopes
-				.filter((scope) => scope.scopeType === "team" && scope.teamId)
-				.map((scope) => ({
-					organizationId: scope.organizationId,
-					teamId: scope.teamId ?? "",
-				})),
-		[postingScopes]
-	);
+	const job = jobQuery.data;
 
 	useEffect(() => {
-		const firstScope = postingScopeOptions[0]?.scope;
-
-		if (!selectedPostingScope && firstScope) {
-			setForm((currentForm) => ({
-				...currentForm,
-				organizationId: firstScope.organizationId,
-				teamId: firstScope.teamId ?? "",
-			}));
-		}
-	}, [postingScopeOptions, selectedPostingScope]);
-
-	const updatePostingScope = (value: string) => {
-		const nextScope = postingScopeOptions.find(
-			(option) => option.value === value
-		)?.scope;
-
-		if (!nextScope) {
+		if (!job) {
 			return;
 		}
 
-		setForm((currentForm) => ({
-			...currentForm,
-			organizationId: nextScope.organizationId,
-			teamId: nextScope.teamId ?? "",
-		}));
-		setFieldErrors((currentErrors) => ({
-			...currentErrors,
-			organizationId: undefined,
-			teamId: undefined,
-		}));
-		setFormError(null);
-	};
+		setForm({
+			description: job.description,
+			industryCategory: job.industryCategory,
+			interviewNotes: job.interviewNotes ?? "",
+			organizationId: job.organizationId,
+			payAmount: String(job.payAmount),
+			payUnit: job.payUnit,
+			region: job.region,
+			teamId: job.teamId ?? "",
+			title: job.title,
+			workSchedule: job.workSchedule,
+		});
+	}, [job]);
 
 	const updateFormValue = (field: keyof JobForm, value: string) => {
 		setForm((currentForm) => ({
@@ -253,7 +110,11 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
-		const validation = validateJobForm(form, { teamScopes });
+		const validation = validateJobForm(form, {
+			teamScopes: form.teamId
+				? [{ organizationId: form.organizationId, teamId: form.teamId }]
+				: [],
+		});
 
 		if (!validation.ok) {
 			setFieldErrors(validation.errors);
@@ -262,45 +123,96 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			return;
 		}
 
-		createMutation.mutate(validation.input);
+		updateMutation.mutate({
+			data: validation.input,
+			id,
+		});
 	};
+
+	if (jobQuery.isLoading) {
+		return <Loader />;
+	}
+
+	if (jobQuery.isError && getErrorCode(jobQuery.error) === "NOT_FOUND") {
+		return (
+			<PageShell
+				description="삭제되었거나 수정 권한이 없는 공고입니다."
+				title="공고 수정"
+			>
+				<EmptyState
+					action={
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href="/employer"
+						>
+							구인자 관리로 이동
+						</Link>
+					}
+					description="관리 가능한 공고만 수정할 수 있습니다."
+					title="공고를 찾을 수 없습니다"
+				/>
+			</PageShell>
+		);
+	}
+
+	if (jobQuery.isError) {
+		return (
+			<PageShell
+				description="공고 수정 정보를 불러오지 못했습니다."
+				title="공고 수정"
+			>
+				<EmptyState
+					action={
+						<Button onClick={() => jobQuery.refetch()} type="button">
+							다시 시도
+						</Button>
+					}
+					description="로그인 상태와 연결 상태를 확인한 뒤 다시 시도해 주세요."
+					title="공고 정보를 불러올 수 없습니다"
+				/>
+			</PageShell>
+		);
+	}
+
+	if (!job) {
+		return (
+			<PageShell
+				description="삭제되었거나 수정 권한이 없는 공고입니다."
+				title="공고 수정"
+			>
+				<EmptyState
+					action={
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href="/employer"
+						>
+							구인자 관리로 이동
+						</Link>
+					}
+					description="관리 가능한 공고만 수정할 수 있습니다."
+					title="공고를 찾을 수 없습니다"
+				/>
+			</PageShell>
+		);
+	}
 
 	return (
 		<PageShell
-			description="조직과 팀을 선택하고 공개할 공고 정보를 입력합니다."
-			title="새 공고 등록"
+			description="소속 조직과 팀은 유지한 채 공개 공고 내용을 수정합니다."
+			title="공고 수정"
 		>
 			<form className="space-y-6 border p-4" onSubmit={handleSubmit}>
 				<FormError message={formError} />
 				<section aria-label="소속 정보" className="grid gap-4 md:grid-cols-2">
-					<div className="space-y-2 md:col-span-2">
-						<Label htmlFor="postingScope">공고 등록 범위</Label>
-						<select
-							aria-describedby={
-								fieldErrors.organizationId || fieldErrors.teamId
-									? getFieldErrorId("organizationId")
-									: undefined
-							}
-							aria-invalid={Boolean(
-								fieldErrors.organizationId || fieldErrors.teamId
-							)}
-							className={selectClassName}
-							id="postingScope"
-							name="postingScope"
-							onChange={(event) => updatePostingScope(event.target.value)}
-							required
-							value={selectedPostingScope?.value ?? ""}
-						>
-							{postingScopeOptions.map((option) => (
-								<option key={option.value} value={option.value}>
-									{option.label}
-								</option>
-							))}
-						</select>
-						<FieldError
-							id={getFieldErrorId("organizationId")}
-							message={fieldErrors.organizationId ?? fieldErrors.teamId}
-						/>
+					<div className="space-y-2">
+						<span className="font-medium text-sm">조직 ID</span>
+						<p className={readOnlyValueClassName}>{form.organizationId}</p>
+					</div>
+					<div className="space-y-2">
+						<span className="font-medium text-sm">팀 ID</span>
+						<p className={readOnlyValueClassName}>
+							{form.teamId || "전체 조직"}
+						</p>
 					</div>
 				</section>
 
@@ -516,8 +428,8 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					>
 						취소
 					</Link>
-					<Button disabled={createMutation.isPending} type="submit">
-						{createMutation.isPending ? "등록 중…" : "공고 등록"}
+					<Button disabled={updateMutation.isPending} type="submit">
+						{updateMutation.isPending ? "수정 중…" : "공고 수정"}
 					</Button>
 				</div>
 			</form>
