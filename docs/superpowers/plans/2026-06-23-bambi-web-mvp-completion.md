@@ -146,23 +146,23 @@ Expected: both commands pass.
 - Modify: `apps/web/src/app/moderator/reports/[id]/page.tsx`
 - Modify: `apps/web/src/app/moderator/users/[id]/page.tsx`
 
-- [ ] **Step 1: Identify current moderator preview state**
+- [x] **Step 1: Identify current moderator preview state**
 
 Read the moderator context and screens. Keep local preview data only as fallback copy; API-backed pages should call `bambi.moderation.listReports`, `setReportStatus`, `setJobPostStatus`, and `setUserStatus`.
 
-- [ ] **Step 2: Wire report status actions**
+- [x] **Step 2: Wire report status actions**
 
 Report detail pages must set reports to `reviewing`, `resolved`, or `dismissed` with a required reason.
 
-- [ ] **Step 3: Wire job post moderation actions**
+- [x] **Step 3: Wire job post moderation actions**
 
 Queue detail pages must publish, reject, or hide pending posts with a required reason.
 
-- [ ] **Step 4: Wire user status actions**
+- [x] **Step 4: Wire user status actions**
 
 User detail pages must set user status to `active`, `warned`, or `suspended` with a required reason.
 
-- [ ] **Step 5: Verify moderator flow**
+- [x] **Step 5: Verify moderator flow**
 
 Run:
 

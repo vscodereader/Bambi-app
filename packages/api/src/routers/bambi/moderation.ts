@@ -1,9 +1,11 @@
 import { db } from "@bambi-app/db";
+import { user } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
 	bambiProfile,
 	chatMessage,
 	chatRoom,
+	employerOrganizationProfile,
 	jobPost,
 	report,
 	review,
@@ -43,6 +45,15 @@ const reportStatusSchema = z.enum([
 	"dismissed",
 ]);
 
+const jobPostModerationStatusSchema = z.enum([
+	"pending_review",
+	"published",
+	"hidden",
+	"rejected",
+]);
+
+const accountStatusSchema = z.enum(["active", "warned", "suspended"]);
+
 const createReportInput = z.object({
 	targetType: targetTypeSchema,
 	targetId: z.string().min(1),
@@ -55,26 +66,27 @@ const listReportsInput = z.object({
 	limit: z.number().int().min(1).max(100).default(50),
 });
 
+const listJobPostsInput = z.object({
+	status: jobPostModerationStatusSchema.optional(),
+	limit: z.number().int().min(1).max(100).default(50),
+});
+
+const listUsersInput = z.object({
+	status: accountStatusSchema.optional(),
+	limit: z.number().int().min(1).max(100).default(50),
+});
+
 const setReportStatusInput = z.object({
 	reportId: z.string().uuid(),
 	status: reportStatusSchema,
 	reason: z.string().min(2).max(500),
 });
 
-const jobPostModerationStatusSchema = z.enum([
-	"pending_review",
-	"published",
-	"hidden",
-	"rejected",
-]);
-
 const setJobPostStatusInput = z.object({
 	jobPostId: z.string().uuid(),
 	status: jobPostModerationStatusSchema,
 	reason: z.string().min(2).max(500),
 });
-
-const accountStatusSchema = z.enum(["active", "warned", "suspended"]);
 
 const setUserStatusInput = z.object({
 	targetUserId: z.string().min(1),
@@ -188,6 +200,73 @@ export const moderationRouter = {
 				.from(report)
 				.orderBy(desc(report.createdAt))
 				.limit(input.limit);
+		}),
+
+	listJobPosts: protectedProcedure
+		.input(listJobPostsInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			const query = db
+				.select({
+					id: jobPost.id,
+					title: jobPost.title,
+					industryCategory: jobPost.industryCategory,
+					region: jobPost.region,
+					payAmount: jobPost.payAmount,
+					payUnit: jobPost.payUnit,
+					workSchedule: jobPost.workSchedule,
+					description: jobPost.description,
+					interviewNotes: jobPost.interviewNotes,
+					status: jobPost.status,
+					riskFlags: jobPost.riskFlags,
+					rejectionReason: jobPost.rejectionReason,
+					organizationDisplayName: employerOrganizationProfile.displayName,
+					createdAt: jobPost.createdAt,
+					updatedAt: jobPost.updatedAt,
+				})
+				.from(jobPost)
+				.innerJoin(
+					employerOrganizationProfile,
+					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+				)
+				.orderBy(desc(jobPost.updatedAt))
+				.limit(input.limit);
+
+			if (input.status) {
+				return await query.where(eq(jobPost.status, input.status));
+			}
+
+			return await query;
+		}),
+
+	listUsers: protectedProcedure
+		.input(listUsersInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			const query = db
+				.select({
+					userId: bambiProfile.userId,
+					displayName: bambiProfile.displayName,
+					email: user.email,
+					role: bambiProfile.role,
+					status: bambiProfile.status,
+					isPhoneVerified: bambiProfile.isPhoneVerified,
+					phoneNumber: bambiProfile.phoneNumber,
+					createdAt: bambiProfile.createdAt,
+					updatedAt: bambiProfile.updatedAt,
+				})
+				.from(bambiProfile)
+				.innerJoin(user, eq(bambiProfile.userId, user.id))
+				.orderBy(desc(bambiProfile.updatedAt))
+				.limit(input.limit);
+
+			if (input.status) {
+				return await query.where(eq(bambiProfile.status, input.status));
+			}
+
+			return await query;
 		}),
 
 	setReportStatus: protectedProcedure
