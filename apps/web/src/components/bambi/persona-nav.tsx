@@ -27,7 +27,11 @@ function Content({ children }: { children: ReactNode }) {
 }
 
 function NavBar({ children }: { children: ReactNode }) {
-	return <div className="border-border border-t bg-background">{children}</div>;
+	return (
+		<div className="sticky bottom-0 z-30 border-border border-t bg-background md:hidden">
+			{children}
+		</div>
+	);
 }
 
 // ---- 구직자 ----------------------------------------------------------------
