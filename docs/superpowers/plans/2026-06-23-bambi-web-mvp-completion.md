@@ -112,19 +112,19 @@ Expected: both commands pass.
 - Modify: `apps/web/src/components/bambi/screens/contact-reveal.tsx`
 - Modify: `apps/web/src/app/seeker/chats/[id]/reveal/page.tsx`
 
-- [ ] **Step 1: Add interview proposal form**
+- [x] **Step 1: Add interview proposal form**
 
 Add `datetime-local` and location note fields to the chat detail side panel. Submit through `orpc.bambi.chats.proposeInterview`, then invalidate `getById` and `listMine`.
 
-- [ ] **Step 2: Add schedule status actions**
+- [x] **Step 2: Add schedule status actions**
 
 For each proposed schedule not proposed by the current user, show confirm and decline buttons. For confirmed schedules, show cancel and complete actions where the API allows them. Use `orpc.bambi.chats.setInterviewStatus`.
 
-- [ ] **Step 3: Connect reveal contact**
+- [x] **Step 3: Connect reveal contact**
 
 The reveal route must query the chat room, find a confirmed schedule, collect contact method/value, call `orpc.bambi.chats.revealContact`, and show the saved consent state.
 
-- [ ] **Step 4: Verify chat flow**
+- [x] **Step 4: Verify chat flow**
 
 Run:
 

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { interviewStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import { Badge, Button, Card } from "../ds";
 import { ClockIcon, DollarCircle, Message, ShieldIcon } from "../icons";
@@ -44,7 +45,12 @@ export function SeekerChatRoomResponsive({
 }: SeekerChatRoomResponsiveProps) {
 	const queryClient = useQueryClient();
 	const [message, setMessage] = useState("");
+	const [interviewAt, setInterviewAt] = useState("");
+	const [locationNote, setLocationNote] = useState("");
 	const [errorMessage, setErrorMessage] = useState<null | string>(null);
+	const [scheduleErrorMessage, setScheduleErrorMessage] = useState<
+		null | string
+	>(null);
 	const roomQuery = useQuery(
 		orpc.bambi.chats.getById.queryOptions({ input: { id: roomId } })
 	);
@@ -64,6 +70,30 @@ export function SeekerChatRoomResponsive({
 			onSuccess: async () => {
 				setMessage("");
 				setErrorMessage(null);
+				await invalidateRoom();
+			},
+		})
+	);
+	const proposeInterviewMutation = useMutation(
+		orpc.bambi.chats.proposeInterview.mutationOptions({
+			onError: (error) => {
+				setScheduleErrorMessage(getMutationErrorMessage(error));
+			},
+			onSuccess: async () => {
+				setInterviewAt("");
+				setLocationNote("");
+				setScheduleErrorMessage(null);
+				await invalidateRoom();
+			},
+		})
+	);
+	const setInterviewStatusMutation = useMutation(
+		orpc.bambi.chats.setInterviewStatus.mutationOptions({
+			onError: (error) => {
+				setScheduleErrorMessage(getMutationErrorMessage(error));
+			},
+			onSuccess: async () => {
+				setScheduleErrorMessage(null);
 				await invalidateRoom();
 			},
 		})
@@ -111,6 +141,36 @@ export function SeekerChatRoomResponsive({
 		sendMessageMutation.mutate({
 			body,
 			chatRoomId: room.id,
+		});
+	};
+	const handleInterviewSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+
+		if (!interviewAt) {
+			setScheduleErrorMessage("면접 일시를 선택해 주세요.");
+			return;
+		}
+
+		const scheduledAt = new Date(interviewAt);
+
+		if (!Number.isFinite(scheduledAt.getTime())) {
+			setScheduleErrorMessage("면접 일시를 다시 확인해 주세요.");
+			return;
+		}
+
+		proposeInterviewMutation.mutate({
+			chatRoomId: room.id,
+			locationNote: locationNote.trim() || undefined,
+			scheduledAt: scheduledAt.toISOString(),
+		});
+	};
+	const setScheduleStatus = (
+		interviewScheduleId: string,
+		status: "canceled" | "completed" | "confirmed" | "declined"
+	) => {
+		setInterviewStatusMutation.mutate({
+			interviewScheduleId,
+			status,
 		});
 	};
 
@@ -230,6 +290,50 @@ export function SeekerChatRoomResponsive({
 					</Card>
 					<Card className="rounded-lg" pad="lg" tone="outline">
 						<h2 className="m-0 font-extrabold text-lg">면접 일정</h2>
+						<form className="mt-4 grid gap-2" onSubmit={handleInterviewSubmit}>
+							<label
+								className="font-bold text-muted-foreground text-xs"
+								htmlFor="interview-at"
+							>
+								면접 일시
+							</label>
+							<input
+								className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
+								id="interview-at"
+								min={new Date().toISOString().slice(0, 16)}
+								onChange={(event) => setInterviewAt(event.target.value)}
+								type="datetime-local"
+								value={interviewAt}
+							/>
+							<label
+								className="font-bold text-muted-foreground text-xs"
+								htmlFor="location-note"
+							>
+								장소 메모
+							</label>
+							<input
+								className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
+								id="location-note"
+								maxLength={300}
+								onChange={(event) => setLocationNote(event.target.value)}
+								placeholder="예: 역삼역 3번 출구 근처"
+								value={locationNote}
+							/>
+							<Button
+								block
+								disabled={proposeInterviewMutation.isPending}
+								size="md"
+							>
+								{proposeInterviewMutation.isPending
+									? "제안 중"
+									: "면접 일정 제안"}
+							</Button>
+						</form>
+						{scheduleErrorMessage ? (
+							<p className="mt-3 mb-0 font-semibold text-red-600 text-xs">
+								{scheduleErrorMessage}
+							</p>
+						) : null}
 						{schedules.length === 0 ? (
 							<p className="mt-3 mb-0 text-muted-foreground text-sm leading-relaxed">
 								아직 제안된 면접 일정이 없어요. 채팅에서 가능한 시간을
@@ -253,13 +357,64 @@ export function SeekerChatRoomResponsive({
 														: "pending"
 												}
 											>
-												{schedule.status}
+												{interviewStatusLabels[
+													schedule.status as keyof typeof interviewStatusLabels
+												] ?? schedule.status}
 											</Badge>
 										</div>
 										{schedule.locationNote ? (
 											<p className="mt-2 mb-0 text-muted-foreground text-xs">
 												{schedule.locationNote}
 											</p>
+										) : null}
+										{schedule.status === "proposed" &&
+										schedule.proposedByUserId !== currentUserId ? (
+											<div className="mt-3 grid grid-cols-2 gap-2">
+												<Button
+													disabled={setInterviewStatusMutation.isPending}
+													onClick={() =>
+														setScheduleStatus(schedule.id, "confirmed")
+													}
+													size="md"
+													variant="primary"
+												>
+													확정
+												</Button>
+												<Button
+													disabled={setInterviewStatusMutation.isPending}
+													onClick={() =>
+														setScheduleStatus(schedule.id, "declined")
+													}
+													size="md"
+													variant="secondary"
+												>
+													거절
+												</Button>
+											</div>
+										) : null}
+										{schedule.status === "confirmed" ? (
+											<div className="mt-3 grid grid-cols-2 gap-2">
+												<Button
+													disabled={setInterviewStatusMutation.isPending}
+													onClick={() =>
+														setScheduleStatus(schedule.id, "completed")
+													}
+													size="md"
+													variant="secondary"
+												>
+													완료
+												</Button>
+												<Button
+													disabled={setInterviewStatusMutation.isPending}
+													onClick={() =>
+														setScheduleStatus(schedule.id, "canceled")
+													}
+													size="md"
+													variant="secondary"
+												>
+													취소
+												</Button>
+											</div>
 										) : null}
 									</div>
 								))}
