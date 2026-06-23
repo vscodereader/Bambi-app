@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import Loader from "@/components/loader";
+import { authClient } from "@/lib/auth-client";
 import { formatDateTime, formatNullable, formatPay } from "@/lib/bambi-format";
 import { jobStatusLabels, verificationStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
@@ -56,8 +57,18 @@ const getVerificationStatusTone = (
 	return "default";
 };
 
+const getErrorCode = (error: Error | null): string | undefined =>
+	error && "code" in error && typeof error.code === "string"
+		? error.code
+		: undefined;
+
 export default function EmployerPage() {
-	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	const session = authClient.useSession();
+	const isSignedIn = Boolean(session.data?.user);
+	const mineQuery = useQuery({
+		...orpc.bambi.onboarding.getMine.queryOptions(),
+		enabled: isSignedIn,
+	});
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	const canLoadJobs = Boolean(profile && profile.role !== "job_seeker");
 	const jobsQuery = useQuery({
@@ -86,8 +97,27 @@ export default function EmployerPage() {
 		);
 	};
 
-	if (mineQuery.isLoading) {
+	if (session.isPending || mineQuery.isLoading) {
 		return <Loader />;
+	}
+
+	if (!isSignedIn || getErrorCode(mineQuery.error) === "UNAUTHORIZED") {
+		return (
+			<PageShell
+				description="구인자 관리는 로그인 후 이용할 수 있습니다."
+				title="구인자 관리"
+			>
+				<EmptyState
+					action={
+						<Link className={buttonVariants()} href="/login">
+							로그인
+						</Link>
+					}
+					description="seed 구인자 계정으로 로그인하면 조직과 공고 상태를 확인할 수 있습니다."
+					title="로그인이 필요합니다"
+				/>
+			</PageShell>
+		);
 	}
 
 	if (mineQuery.isError) {

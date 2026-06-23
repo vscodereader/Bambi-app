@@ -179,7 +179,7 @@ Expected: both commands pass.
 
 - Modify only files required by verification findings.
 
-- [ ] **Step 1: Run automated checks**
+- [x] **Step 1: Run automated checks**
 
 Run:
 
@@ -199,6 +199,14 @@ With seeded data and local API/web servers:
 - `seeker@bambi.dev` can browse, open detail, start chat, send message, respond to interview proposal, and reveal contact after confirmation.
 - `owner@bambi.dev` can see organization/team status, create a job, and edit a job.
 - `admin@bambi.dev` can review reports, moderate job posts, and change user status through Web screens.
+
+2026-06-23 진행 노트:
+
+- `pnpm run db:seed:bambi` 성공.
+- dev API 서버 `http://127.0.0.1:23000`와 Web 서버 `http://localhost:23001` 구동 확인.
+- 브라우저에서 `/seeker`, owner 로그인 후 `/employer`, admin 로그인 후 `/moderator` 렌더링 확인.
+- owner `/employer`와 admin `/moderator`는 API 데이터가 표시되고 콘솔 오류 0건 확인.
+- 교차 계정 채팅 일정 제안/확정/연락처 공개의 전체 브라우저 시나리오는 후속 자동화 검증으로 남긴다.
 
 - [ ] **Step 3: Update docs and commit**
 

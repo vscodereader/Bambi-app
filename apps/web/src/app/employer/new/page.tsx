@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { FieldError, FormError } from "@/components/bambi/form-message";
 import { PageShell } from "@/components/bambi/page-shell";
 import Loader from "@/components/loader";
+import { authClient } from "@/lib/auth-client";
 import {
 	emptyJobForm,
 	type JobForm,
@@ -33,6 +34,10 @@ const textareaClassName =
 	"min-h-28 w-full min-w-0 rounded-none border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50";
 
 const getFieldErrorId = (field: keyof JobForm) => `${field}-error`;
+const getErrorCode = (error: Error | null): string | undefined =>
+	error && "code" in error && typeof error.code === "string"
+		? error.code
+		: undefined;
 
 interface PostingScope {
 	organizationDisplayName: string;
@@ -58,15 +63,39 @@ interface NewEmployerJobFormProps {
 }
 
 export default function NewEmployerJobPage() {
-	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	const session = authClient.useSession();
+	const isSignedIn = Boolean(session.data?.user);
+	const mineQuery = useQuery({
+		...orpc.bambi.onboarding.getMine.queryOptions(),
+		enabled: isSignedIn,
+	});
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	const organizationProfiles =
 		mineQuery.data?.employerOrganizationProfiles ?? [];
 	const postingScopes = mineQuery.data?.employerJobPostingScopes ?? [];
 	const isEmployer = Boolean(profile && profile.role !== "job_seeker");
 
-	if (mineQuery.isLoading) {
+	if (session.isPending || mineQuery.isLoading) {
 		return <Loader />;
+	}
+
+	if (!isSignedIn || getErrorCode(mineQuery.error) === "UNAUTHORIZED") {
+		return (
+			<PageShell
+				description="공고 등록은 로그인 후 이용할 수 있습니다."
+				title="새 공고 등록"
+			>
+				<EmptyState
+					action={
+						<Link className={buttonVariants()} href="/login">
+							로그인
+						</Link>
+					}
+					description="구인자 계정으로 로그인한 뒤 공고를 등록할 수 있습니다."
+					title="로그인이 필요합니다"
+				/>
+			</PageShell>
+		);
 	}
 
 	if (mineQuery.isError) {

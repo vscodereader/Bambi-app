@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { FieldError, FormError } from "@/components/bambi/form-message";
 import { PageShell } from "@/components/bambi/page-shell";
 import Loader from "@/components/loader";
+import { authClient } from "@/lib/auth-client";
 import {
 	emptyJobForm,
 	type JobForm,
@@ -35,8 +36,10 @@ const textareaClassName =
 const readOnlyValueClassName =
 	"min-h-10 break-words border bg-muted/30 px-3 py-2 text-muted-foreground text-sm md:min-h-8 md:text-xs";
 
-const getErrorCode = (error: Error): string | undefined =>
-	"code" in error && typeof error.code === "string" ? error.code : undefined;
+const getErrorCode = (error: Error | null): string | undefined =>
+	error && "code" in error && typeof error.code === "string"
+		? error.code
+		: undefined;
 
 const getFieldErrorId = (field: keyof JobForm) => `${field}-error`;
 
@@ -48,12 +51,15 @@ export default function EditEmployerJobPage({
 	const { id } = use(params);
 	const router = useRouter();
 	const utils = useQueryClient();
+	const session = authClient.useSession();
+	const isSignedIn = Boolean(session.data?.user);
 	const [form, setForm] = useState(emptyJobForm);
 	const [fieldErrors, setFieldErrors] = useState<JobFormErrors>({});
 	const [formError, setFormError] = useState<null | string>(null);
-	const jobQuery = useQuery(
-		orpc.bambi.jobs.getEditableById.queryOptions({ input: { id } })
-	);
+	const jobQuery = useQuery({
+		...orpc.bambi.jobs.getEditableById.queryOptions({ input: { id } }),
+		enabled: isSignedIn,
+	});
 	const updateMutation = useMutation(
 		orpc.bambi.jobs.update.mutationOptions({
 			onError: (error) => {
@@ -129,8 +135,27 @@ export default function EditEmployerJobPage({
 		});
 	};
 
-	if (jobQuery.isLoading) {
+	if (session.isPending || jobQuery.isLoading) {
 		return <Loader />;
+	}
+
+	if (!isSignedIn || getErrorCode(jobQuery.error) === "UNAUTHORIZED") {
+		return (
+			<PageShell
+				description="공고 수정은 로그인 후 이용할 수 있습니다."
+				title="공고 수정"
+			>
+				<EmptyState
+					action={
+						<Link className={buttonVariants()} href="/login">
+							로그인
+						</Link>
+					}
+					description="공고를 등록한 구인자 계정으로 로그인해 주세요."
+					title="로그인이 필요합니다"
+				/>
+			</PageShell>
+		);
 	}
 
 	if (jobQuery.isError && getErrorCode(jobQuery.error) === "NOT_FOUND") {
