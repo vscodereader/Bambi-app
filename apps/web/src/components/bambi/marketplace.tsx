@@ -7,6 +7,7 @@ import {
 	MARKETPLACE_REGIONS,
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
+import { SELECTED_JOB_CARD_CLASS } from "@/lib/bambi/selection-style";
 import type { Job } from "@/lib/bambi/types";
 import { Badge, Button, Card, Input, Logo, Tag } from "./ds";
 import {
@@ -217,7 +218,7 @@ export function ResponsiveJobCard({
 		<article
 			className={cn(
 				"rounded-lg border bg-card p-4 transition-colors",
-				active ? "border-ink-800 bg-ink-800 text-white" : "border-border"
+				active ? SELECTED_JOB_CARD_CLASS : "border-border"
 			)}
 		>
 			<button
@@ -229,7 +230,9 @@ export function ResponsiveJobCard({
 					<div
 						className={cn(
 							"flex size-12 shrink-0 items-center justify-center rounded-lg font-extrabold",
-							active ? "bg-white text-coral-600" : "bg-coral-50 text-coral-700"
+							active
+								? "border border-coral-200 bg-coral-50 text-coral-700"
+								: "bg-coral-50 text-coral-700"
 						)}
 					>
 						{job.company.slice(0, 2)}
@@ -239,7 +242,7 @@ export function ResponsiveJobCard({
 							<h3
 								className={cn(
 									"m-0 truncate font-extrabold text-base",
-									active ? "text-white" : "text-foreground"
+									active ? "text-coral-700" : "text-foreground"
 								)}
 							>
 								{job.company} {job.title}
@@ -256,7 +259,7 @@ export function ResponsiveJobCard({
 						<div
 							className={cn(
 								"mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm",
-								active ? "text-white/70" : "text-muted-foreground"
+								"text-muted-foreground"
 							)}
 						>
 							<span className="inline-flex items-center gap-1">
@@ -276,7 +279,7 @@ export function ResponsiveJobCard({
 							<strong
 								className={cn(
 									"text-[15px]",
-									active ? "text-white" : "text-foreground"
+									active ? "text-coral-700" : "text-foreground"
 								)}
 							>
 								{job.pay}
@@ -284,7 +287,7 @@ export function ResponsiveJobCard({
 							<span
 								className={cn(
 									"inline-flex items-center gap-1 text-xs",
-									active ? "text-white/70" : "text-muted-foreground"
+									"text-muted-foreground"
 								)}
 							>
 								<span className="inline-flex size-3.5">
@@ -303,7 +306,7 @@ export function ResponsiveJobCard({
 							className={cn(
 								"shrink-0 rounded-full px-2.5 py-1 font-bold text-xs",
 								active
-									? "bg-white/10 text-white/80"
+									? "border border-coral-200 bg-secondary text-coral-700"
 									: "bg-secondary text-muted-foreground"
 							)}
 							key={tag}
@@ -317,7 +320,7 @@ export function ResponsiveJobCard({
 					onClick={() => onChat(job)}
 					rightIcon={<Message />}
 					size="sm"
-					variant={active ? "primary" : "secondary"}
+					variant="secondary"
 				>
 					채팅
 				</Button>
