@@ -68,7 +68,7 @@ export function ResponsiveAppShell({
 										? "bg-ink-800 text-white"
 										: "border border-border bg-card text-foreground"
 								)}
-								href={isPublic ? "/seeker" : "/seeker/me"}
+								href={(isPublic ? "/login" : "/seeker/me") as Route}
 							>
 								{isPublic ? "시작하기" : "내 정보"}
 							</Link>

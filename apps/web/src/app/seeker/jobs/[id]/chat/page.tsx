@@ -114,12 +114,12 @@ export default function SeekerJobChatPreflightPage() {
 		}
 
 		if (!isLoggedIn) {
-			setFeedback("로그인 후 채팅을 시작할 수 있어요.");
+			router.push("/login" as Route);
 			return;
 		}
 
 		if (!hasJobSeekerProfile) {
-			setFeedback("구직자 프로필을 만든 뒤 채팅을 시작할 수 있어요.");
+			router.push("/onboarding" as Route);
 			return;
 		}
 

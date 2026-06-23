@@ -8,6 +8,8 @@
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS, @bambi-app/ui, lucide-react, Better Auth, oRPC, TanStack Query, TanStack Form, Drizzle ORM, Vitest, Ultracite.
 
+**Current Status:** The responsive marketplace pass is complete and the Web MVP now has active `/login` and `/onboarding` entry points. Seed users can sign in through Better Auth, then continue into Bambi profile confirmation or creation before entering seeker/employer flows.
+
 ---
 
 ## Scope

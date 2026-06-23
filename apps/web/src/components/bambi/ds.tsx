@@ -582,10 +582,13 @@ export function Switch({
 
 // ---- Input -----------------------------------------------------------------
 interface InputProps {
+	autoComplete?: string;
 	className?: string;
 	defaultValue?: string;
 	error?: boolean;
+	id?: string;
 	inputClassName?: string;
+	inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
 	leadingIcon?: ReactNode;
 	onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 	placeholder?: string;
@@ -599,6 +602,9 @@ export function Input({
 	error = false,
 	className,
 	inputClassName,
+	autoComplete,
+	id,
+	inputMode,
 	value,
 	defaultValue,
 	placeholder,
@@ -613,8 +619,11 @@ export function Input({
 				<UiInput
 					aria-invalid={error}
 					aria-label={placeholder}
+					autoComplete={autoComplete}
 					className={cn("h-11 rounded-lg pl-10", inputClassName)}
 					defaultValue={defaultValue}
+					id={id}
+					inputMode={inputMode}
 					onChange={onChange}
 					placeholder={placeholder}
 					type={type}
@@ -627,8 +636,11 @@ export function Input({
 		<UiInput
 			aria-invalid={error}
 			aria-label={placeholder}
+			autoComplete={autoComplete}
 			className={cn("h-11 rounded-lg", className, inputClassName)}
 			defaultValue={defaultValue}
+			id={id}
+			inputMode={inputMode}
 			onChange={onChange}
 			placeholder={placeholder}
 			type={type}
