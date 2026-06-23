@@ -210,6 +210,7 @@ interface ButtonProps {
 	onClick?: () => void;
 	rightIcon?: ReactNode;
 	size?: ButtonSize;
+	type?: "button" | "reset" | "submit";
 	variant?: ButtonVariant;
 }
 
@@ -223,6 +224,7 @@ export function Button({
 	children,
 	className,
 	onClick,
+	type = "button",
 }: ButtonProps) {
 	const v = BTN_VARIANT_PROPS[variant] || BTN_VARIANT_PROPS.primary;
 	const s = BTN_SIZE_PROPS[size] || BTN_SIZE_PROPS.lg;
@@ -238,7 +240,7 @@ export function Button({
 			disabled={disabled}
 			onClick={onClick}
 			size={s.size}
-			type="button"
+			type={type}
 			variant={v.variant}
 		>
 			{leftIcon ? (

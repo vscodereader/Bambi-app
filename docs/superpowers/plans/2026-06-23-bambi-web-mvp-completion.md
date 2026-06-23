@@ -192,7 +192,7 @@ pnpm --filter web build
 
 Expected: all commands pass.
 
-- [ ] **Step 2: Browser verify main flows**
+- [x] **Step 2: Browser verify main flows**
 
 With seeded data and local API/web servers:
 
@@ -206,8 +206,11 @@ With seeded data and local API/web servers:
 - dev API 서버 `http://127.0.0.1:23000`와 Web 서버 `http://localhost:23001` 구동 확인.
 - 브라우저에서 `/seeker`, owner 로그인 후 `/employer`, admin 로그인 후 `/moderator` 렌더링 확인.
 - owner `/employer`와 admin `/moderator`는 API 데이터가 표시되고 콘솔 오류 0건 확인.
-- 교차 계정 채팅 일정 제안/확정/연락처 공개의 전체 브라우저 시나리오는 후속 자동화 검증으로 남긴다.
+- staff 계정에서 채팅방 `33333333-3333-4333-8333-333333333301`에 면접 일정을 제안하고, seeker 계정에서 확정 후 연락처 `010-1000-9999` 공개 및 채팅 메시지 전송을 확인했다.
+- owner 계정에서 `/employer/new` 공고 생성과 `/employer/jobs/[id]/edit` 제목 수정을 확인했다.
+- admin 계정에서 공고 검수 상세 승인, 신고 상세 기각, 사용자 상세 경고 전송을 확인했다.
+- 위 브라우저 검증 중 콘솔 오류 0건 확인 후 `pnpm run db:seed:bambi`로 개발 seed 기준 상태를 복구했다.
 
-- [ ] **Step 3: Update docs and commit**
+- [x] **Step 3: Update docs and commit**
 
 Update specs/plans checkboxes or status notes to reflect completed Web MVP scope, then commit in Korean Conventional Commits format.

@@ -238,6 +238,7 @@ function ContactRevealApi({
 							className="mt-4"
 							disabled={!confirmedSchedule || revealContactMutation.isPending}
 							size="lg"
+							type="submit"
 							variant={confirmedSchedule ? "primary" : "secondary"}
 						>
 							{revealContactMutation.isPending

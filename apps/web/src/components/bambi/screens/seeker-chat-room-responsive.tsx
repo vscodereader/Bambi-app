@@ -259,6 +259,7 @@ export function SeekerChatRoomResponsive({
 						disabled={sendMessageMutation.isPending}
 						rightIcon={<Message />}
 						size="md"
+						type="submit"
 					>
 						전송
 					</Button>
@@ -323,6 +324,7 @@ export function SeekerChatRoomResponsive({
 								block
 								disabled={proposeInterviewMutation.isPending}
 								size="md"
+								type="submit"
 							>
 								{proposeInterviewMutation.isPending
 									? "제안 중"

@@ -24,6 +24,7 @@ import { orpc } from "@/utils/orpc";
 interface ModContextValue {
 	bulkAction: (action: "reject" | "hold" | "approve" | "sanction") => void;
 	clearSelection: () => void;
+	isLoading: boolean;
 	openReports: number;
 	queue: QueueItem[];
 	reports: Report[];
@@ -171,6 +172,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		const visibleQueue = apiQueue.length > 0 ? apiQueue : queue;
 		const visibleReports = apiReports.length > 0 ? apiReports : reports;
 		const visibleUsers = apiUsers.length > 0 ? apiUsers : users;
+		const isLoading =
+			moderationQueueQuery.isPending ||
+			moderationQueueQuery.isFetching ||
+			moderationReportsQuery.isPending ||
+			moderationReportsQuery.isFetching ||
+			moderationUsersQuery.isPending ||
+			moderationUsersQuery.isFetching;
 		const toggleSelect = (id: string) =>
 			setSelected((s) =>
 				s.includes(id) ? s.filter((x) => x !== id) : [...s, id]
@@ -292,6 +300,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			queue: visibleQueue,
 			reports: visibleReports,
 			users: visibleUsers,
+			isLoading,
 			selected,
 			toast,
 			openReports: visibleReports.filter((r) => r.status === "open").length,
@@ -305,8 +314,14 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		};
 	}, [
 		moderationQueueQuery.data,
+		moderationQueueQuery.isFetching,
+		moderationQueueQuery.isPending,
 		moderationReportsQuery.data,
+		moderationReportsQuery.isFetching,
+		moderationReportsQuery.isPending,
 		moderationUsersQuery.data,
+		moderationUsersQuery.isFetching,
+		moderationUsersQuery.isPending,
 		queue,
 		queryClient,
 		reports,
