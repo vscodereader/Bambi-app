@@ -1,11 +1,18 @@
 import type { ReactNode } from "react";
-import { AppShell } from "@/components/bambi/app-shell";
 import { EmployerNav } from "@/components/bambi/persona-nav";
+import { ResponsiveAppShell } from "@/components/bambi/responsive-shell";
+
+const EMPLOYER_NAV_ITEMS = [
+	{ href: "/employer", label: "내 공고" },
+	{ href: "/employer/new", label: "공고 등록" },
+	{ href: "/employer/me", label: "업체 정보" },
+	{ href: "/seeker", label: "채용정보" },
+] as const;
 
 export default function EmployerLayout({ children }: { children: ReactNode }) {
 	return (
-		<AppShell>
+		<ResponsiveAppShell navItems={EMPLOYER_NAV_ITEMS} variant="employer">
 			<EmployerNav>{children}</EmployerNav>
-		</AppShell>
+		</ResponsiveAppShell>
 	);
 }

@@ -8,6 +8,8 @@
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4, existing `@bambi-app/ui` primitives, Vitest for pure logic tests, Ultracite/Biome for lint and format.
 
+**Current Status:** The approved 1-3 redesign and follow-up integration pass are complete. The marketplace now prefers `bambi.jobs` API data with sample fallback, chat preflight reads Better Auth/onboarding state and creates chat rooms through `bambi.chats.startFromJobPost`, `/seeker/chats` handles API-backed rooms, and employer/moderator routes use the shared responsive shell. Verification covered type checks, Ultracite, API tests, Next production build, seed execution, production browser rendering with API server, and `next dev` route responses after enabling polling.
+
 ---
 
 ## Scope And File Structure

@@ -3,21 +3,42 @@
 import type { Route } from "next";
 import { notFound, useParams, useRouter } from "next/navigation";
 import { SeekerJobDetailResponsive } from "@/components/bambi/screens/seeker-job-detail-responsive";
-import { JOBS } from "@/lib/bambi/data";
+import { useMarketplaceJob } from "@/lib/bambi/api-jobs";
 
 export default function SeekerJobPage() {
 	const router = useRouter();
 	const { id } = useParams<{ id: string }>();
-	const job = JOBS.find((j) => j.id === id);
+	const { isError, isLoading, job, refetch } = useMarketplaceJob(id);
+	if (isLoading) {
+		return (
+			<div className="mx-auto w-full max-w-[720px] px-4 py-10 text-center font-bold text-muted-foreground">
+				공고 정보를 불러오고 있어요.
+			</div>
+		);
+	}
 	if (!job) {
 		notFound();
 	}
 	return (
-		<SeekerJobDetailResponsive
-			job={job}
-			onBack={() => router.push("/seeker")}
-			onReport={() => router.push(`/seeker/chats/${job.id}` as Route)}
-			onStartChat={() => router.push(`/seeker/chats/${job.id}` as Route)}
-		/>
+		<>
+			{isError ? (
+				<div className="mx-auto mt-4 w-full max-w-[720px] rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
+					실제 공고 상세를 불러오지 못했어요.
+					<button
+						className="ml-2 cursor-pointer border-none bg-transparent p-0 font-extrabold text-amber-900 underline"
+						onClick={refetch}
+						type="button"
+					>
+						다시 연결
+					</button>
+				</div>
+			) : null}
+			<SeekerJobDetailResponsive
+				job={job}
+				onBack={() => router.push("/seeker")}
+				onReport={() => router.push(`/seeker/chats/${job.id}` as Route)}
+				onStartChat={() => router.push(`/seeker/jobs/${job.id}/chat` as Route)}
+			/>
+		</>
 	);
 }

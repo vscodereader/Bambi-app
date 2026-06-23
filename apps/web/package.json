@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 23001",
+    "dev": "WATCHPACK_POLLING=true next dev --port 23001",
     "build": "next build",
     "check-types": "tsc --noEmit",
     "start": "next start"

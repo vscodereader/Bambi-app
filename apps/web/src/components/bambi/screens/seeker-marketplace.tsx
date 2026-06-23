@@ -2,11 +2,11 @@
 
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useMarketplaceJobs } from "@/lib/bambi/api-jobs";
 import { JOBS } from "@/lib/bambi/data";
 import {
 	DEFAULT_MARKETPLACE_FILTERS,
-	filterMarketplaceJobs,
 	getSelectedMarketplaceJob,
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
@@ -26,7 +26,7 @@ export function SeekerMarketplaceScreen() {
 		DEFAULT_MARKETPLACE_FILTERS
 	);
 	const [selectedJobId, setSelectedJobId] = useState(JOBS[0]?.id);
-	const jobs = useMemo(() => filterMarketplaceJobs(JOBS, filters), [filters]);
+	const { isApiBacked, isError, jobs, refetch } = useMarketplaceJobs(filters);
 	const selectedJob = getSelectedMarketplaceJob(jobs, selectedJobId);
 
 	const openJob = (job: Job) => {
@@ -37,7 +37,7 @@ export function SeekerMarketplaceScreen() {
 	};
 
 	const chatJob = (job: Job) => {
-		router.push(`/seeker/chats/${job.id}` as Route);
+		router.push(`/seeker/jobs/${job.id}/chat` as Route);
 	};
 
 	return (
@@ -62,10 +62,22 @@ export function SeekerMarketplaceScreen() {
 					</div>
 					<MarketplaceSearch filters={filters} onChange={setFilters} />
 				</div>
+				{isError ? (
+					<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
+						실제 공고 API를 불러오지 못해 샘플 공고를 표시하고 있어요.
+						<button
+							className="ml-2 cursor-pointer border-none bg-transparent p-0 font-extrabold text-amber-900 underline"
+							onClick={refetch}
+							type="button"
+						>
+							다시 연결
+						</button>
+					</div>
+				) : null}
 				<div className="mb-3 flex items-center justify-between">
 					<h2 className="m-0 font-extrabold text-lg">추천 공고</h2>
 					<span className="font-semibold text-muted-foreground text-sm">
-						{jobs.length}개
+						{jobs.length}개{isApiBacked ? " · 실시간" : ""}
 					</span>
 				</div>
 				<JobList

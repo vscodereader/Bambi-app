@@ -1,5 +1,4 @@
 @import "../../../packages/ui/src/styles/globals.css";
-@import "./styles/bambi/fonts.css";
 @import "./styles/bambi/tokens.css";
 
 /* ---- web 브랜드: shadcn 시맨틱 토큰을 밤비 팔레트로 매핑 ---- */

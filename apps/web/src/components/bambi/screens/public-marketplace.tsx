@@ -2,11 +2,10 @@
 
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { JOBS } from "@/lib/bambi/data";
+import { useState } from "react";
+import { useMarketplaceJobs } from "@/lib/bambi/api-jobs";
 import {
 	DEFAULT_MARKETPLACE_FILTERS,
-	filterMarketplaceJobs,
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
@@ -25,10 +24,11 @@ export function PublicMarketplaceScreen() {
 	const [filters, setFilters] = useState<MarketplaceFilters>(
 		DEFAULT_MARKETPLACE_FILTERS
 	);
-	const jobs = useMemo(() => filterMarketplaceJobs(JOBS, filters), [filters]);
+	const { isApiBacked, isError, jobs, refetch } = useMarketplaceJobs(filters);
 	const selectedJob = jobs[0];
 	const openJob = (job: Job) => router.push(`/seeker/jobs/${job.id}` as Route);
-	const startChat = () => router.push("/seeker");
+	const startChat = (job: Job) =>
+		router.push(`/seeker/jobs/${job.id}/chat?entry=public` as Route);
 	return (
 		<ResponsiveAppShell variant="public">
 			<div className="mx-auto flex w-full max-w-[1180px] gap-5 px-4 py-6 pb-16 md:px-6 md:py-10">
@@ -65,12 +65,24 @@ export function PublicMarketplaceScreen() {
 					<div className="mb-4">
 						<MarketplaceSearch filters={filters} onChange={setFilters} />
 					</div>
+					{isError ? (
+						<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
+							서버 공고를 불러오지 못해 샘플 공고를 먼저 보여드려요.
+							<button
+								className="ml-2 cursor-pointer border-none bg-transparent p-0 font-extrabold text-amber-900 underline"
+								onClick={refetch}
+								type="button"
+							>
+								다시 연결
+							</button>
+						</div>
+					) : null}
 					<div className="mb-3 flex items-center justify-between">
 						<h2 className="m-0 font-extrabold text-lg">
 							지금 확인할 수 있는 공고
 						</h2>
 						<span className="font-semibold text-muted-foreground text-sm">
-							{jobs.length}개
+							{jobs.length}개{isApiBacked ? " · 실시간" : ""}
 						</span>
 					</div>
 					<JobList jobs={jobs} onChat={startChat} onOpen={openJob} />

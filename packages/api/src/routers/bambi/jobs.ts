@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	employerOrganizationProfile,
+	employerTeamProfile,
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -72,15 +73,23 @@ export const jobsRouter = {
 				region: jobPost.region,
 				payAmount: jobPost.payAmount,
 				payUnit: jobPost.payUnit,
+				workSchedule: jobPost.workSchedule,
+				description: jobPost.description,
 				status: jobPost.status,
+				employerDisplayName: employerOrganizationProfile.displayName,
 				employerVerificationStatus:
 					employerOrganizationProfile.verificationStatus,
+				teamDisplayName: employerTeamProfile.displayName,
 				publishedAt: jobPost.publishedAt,
 			})
 			.from(jobPost)
 			.innerJoin(
 				employerOrganizationProfile,
 				eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+			)
+			.leftJoin(
+				employerTeamProfile,
+				eq(jobPost.teamId, employerTeamProfile.teamId)
 			)
 			.where(and(...filters))
 			.orderBy(
@@ -94,8 +103,39 @@ export const jobsRouter = {
 		.input(z.object({ id: z.string().uuid() }))
 		.handler(async ({ input }) => {
 			const [post] = await db
-				.select()
+				.select({
+					id: jobPost.id,
+					organizationId: jobPost.organizationId,
+					teamId: jobPost.teamId,
+					createdByUserId: jobPost.createdByUserId,
+					status: jobPost.status,
+					industryCategory: jobPost.industryCategory,
+					region: jobPost.region,
+					payAmount: jobPost.payAmount,
+					payUnit: jobPost.payUnit,
+					workSchedule: jobPost.workSchedule,
+					title: jobPost.title,
+					description: jobPost.description,
+					interviewNotes: jobPost.interviewNotes,
+					rejectionReason: jobPost.rejectionReason,
+					riskFlags: jobPost.riskFlags,
+					publishedAt: jobPost.publishedAt,
+					createdAt: jobPost.createdAt,
+					updatedAt: jobPost.updatedAt,
+					employerDisplayName: employerOrganizationProfile.displayName,
+					employerVerificationStatus:
+						employerOrganizationProfile.verificationStatus,
+					teamDisplayName: employerTeamProfile.displayName,
+				})
 				.from(jobPost)
+				.innerJoin(
+					employerOrganizationProfile,
+					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+				)
+				.leftJoin(
+					employerTeamProfile,
+					eq(jobPost.teamId, employerTeamProfile.teamId)
+				)
 				.where(eq(jobPost.id, input.id))
 				.limit(1);
 

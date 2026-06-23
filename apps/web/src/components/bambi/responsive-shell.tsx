@@ -22,7 +22,7 @@ const DEFAULT_NAV_ITEMS: NavItem[] = [
 interface ResponsiveAppShellProps {
 	children: ReactNode;
 	className?: string;
-	navItems?: NavItem[];
+	navItems?: readonly NavItem[];
 	showDesktopNav?: boolean;
 	variant?: "public" | "seeker" | "employer" | "moderator";
 }
