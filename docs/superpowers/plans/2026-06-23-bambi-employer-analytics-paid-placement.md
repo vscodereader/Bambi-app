@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add employer-facing performance analytics and a transparent paid placement foundation.
+**Goal:** Add employer-facing performance analytics and billing-ready reporting over job discovery and promoted placement.
 
-**Architecture:** Capture immutable events for impressions, detail views, chat starts, and contact reveals. Paid placement changes ranking through explicit sponsored slots and visible labeling, not hidden manipulation.
+**Architecture:** Capture immutable events for impressions, detail views, chat starts, contact reveals, promotion impressions, and boost actions. Paid placement reporting should read the transparent promotion sections defined by [Dense Marketplace And Promotion Ops](./2026-06-24-bambi-dense-marketplace-promotion-ops.md), not invent a second hidden ranking model.
 
 **Tech Stack:** Drizzle ORM, PostgreSQL, oRPC, TanStack Query, Next.js App Router, React 19, Tailwind CSS, Vitest, Ultracite.
 
@@ -16,14 +16,24 @@ Included:
 
 - Job performance event schema.
 - Employer analytics dashboard.
-- Sponsored placement campaign schema.
-- Sponsored label on seeker-facing listings.
+- Billing-ready promotion performance events.
+- Sponsored label analytics for seeker-facing listings.
+- Reporting that can aggregate by promotion tier, campaign, and job.
 
 Excluded:
 
 - Payment provider integration.
 - Automated bidding.
 - External ad network integration.
+- Dense marketplace list redesign.
+- Manual boost credit management.
+- Promotion tier purchase or campaign-management UI.
+
+## Dependency
+
+This plan should run after [Dense Marketplace And Promotion Ops](./2026-06-24-bambi-dense-marketplace-promotion-ops.md) if the project wants Foxalba-style listing density, promotion tiers, and manual boosts first.
+
+If this plan runs first, implement only neutral analytics primitives and leave promotion-specific tables or UI to the Dense Marketplace And Promotion Ops plan. Do not create a separate campaign schema that conflicts with `jobPromotionCampaign` or `jobPromotionBoostEvent`.
 
 ## File Structure
 
@@ -31,12 +41,10 @@ Excluded:
 - Create: `packages/db/src/migrations/0005_bambi_analytics_paid_placement.sql`
 - Create: `packages/api/src/services/bambi-analytics.ts`
 - Create: `packages/api/src/routers/bambi/analytics.ts`
-- Create: `packages/api/src/routers/bambi/promotions.ts`
 - Modify: `packages/api/src/routers/bambi/index.ts`
 - Modify: `packages/api/src/routers/bambi/jobs.ts`
 - Modify: `apps/web/src/app/employer/page.tsx`
 - Create: `apps/web/src/app/employer/analytics/page.tsx`
-- Create: `apps/web/src/app/employer/promotions/page.tsx`
 - Modify: `apps/web/src/components/bambi/marketplace.tsx`
 
 ## Task 1: Event Collection
@@ -93,27 +101,32 @@ Seed data, generate at least one detail view and chat start, then verify analyti
 
 **Files:**
 
-- Create: `packages/api/src/routers/bambi/promotions.ts`
 - Modify: `packages/api/src/routers/bambi/index.ts`
 - Modify: `packages/api/src/routers/bambi/jobs.ts`
-- Create: `apps/web/src/app/employer/promotions/page.tsx`
 - Modify: `apps/web/src/components/bambi/marketplace.tsx`
 
-- [ ] **Step 1: Add campaign schema**
+- [ ] **Step 1: Reuse campaign schema when available**
 
-Store `id`, `jobPostId`, `organizationId`, `status`, `startsAt`, `endsAt`, `dailyBudgetAmount`, `createdAt`, `updatedAt`.
+If [Dense Marketplace And Promotion Ops](./2026-06-24-bambi-dense-marketplace-promotion-ops.md) has already run, read `jobPromotionCampaign` and `jobPromotionBoostEvent` for tier, status, boost, and expiry dimensions.
 
-- [ ] **Step 2: Add campaign API**
+If it has not run, skip campaign table creation in this plan and keep analytics events generic so the later promotion plan can add the campaign schema once.
 
-Allow employers to create, pause, and list campaigns for owned published jobs.
+- [ ] **Step 2: Add promoted impression events**
 
-- [ ] **Step 3: Add sponsored listing label**
+Record promoted listing impressions with metadata containing:
 
-When a job is promoted, show a visible "스폰서" label on seeker job cards and detail.
+- `section`: `premium`, `recommended`, or `organic`
+- `promotionTier`
+- `campaignId` when available
+- `position`
+
+- [ ] **Step 3: Add sponsored listing label metrics**
+
+When a job is promoted by the dense marketplace plan, ensure the analytics dashboard can report performance for visibly labeled sponsored listings separately from organic listings.
 
 - [ ] **Step 4: Preserve ranking transparency**
 
-Keep sponsored jobs in a dedicated promoted slot before organic listings instead of mixing them invisibly.
+Report sponsored sections separately from organic listings. Do not mix sponsored and organic metrics into a single unexplained ranking score.
 
 ## Task 4: Final Verification
 
