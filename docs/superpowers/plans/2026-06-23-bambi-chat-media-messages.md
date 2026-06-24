@@ -29,7 +29,7 @@ Excluded:
 
 - Modify: `packages/db/src/schema/bambi.ts`
   - Add chat attachment metadata table or attachment columns.
-- Create: `packages/db/src/migrations/0003_bambi_chat_media.sql`
+- Create: `packages/db/src/migrations/0004_bambi_chat_media.sql`
   - Add attachment schema.
 - Create: `packages/api/src/services/bambi-media-policy.ts`
   - Define allowed MIME types, max sizes, and display category mapping.
@@ -51,7 +51,7 @@ Excluded:
 - Create: `packages/api/src/services/bambi-media-policy.ts`
 - Test: `packages/api/src/services/bambi-media-policy.test.ts`
 - Modify: `packages/db/src/schema/bambi.ts`
-- Create: `packages/db/src/migrations/0003_bambi_chat_media.sql`
+- Create: `packages/db/src/migrations/0004_bambi_chat_media.sql`
 
 - [ ] **Step 1: Define allowed media policy**
 
