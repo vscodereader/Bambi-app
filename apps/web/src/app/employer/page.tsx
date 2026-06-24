@@ -293,9 +293,17 @@ export default function EmployerPage() {
 							검수 상태는 공고 공개 여부에 영향을 줄 수 있습니다.
 						</p>
 					</div>
-					<Link className={buttonVariants()} href="/employer/new">
-						새 공고 등록
-					</Link>
+					<div className="flex flex-wrap gap-2">
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href={"/employer/settings" as Route}
+						>
+							조직 설정
+						</Link>
+						<Link className={buttonVariants()} href="/employer/new">
+							새 공고 등록
+						</Link>
+					</div>
 				</div>
 
 				{organizationProfiles.length > 0 ? (

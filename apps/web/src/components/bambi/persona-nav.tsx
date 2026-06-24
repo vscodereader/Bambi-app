@@ -12,6 +12,7 @@ import {
 	Message,
 	PlusIcon,
 	Search2,
+	SettingsIcon,
 	UserIcon,
 } from "./icons";
 import {
@@ -80,11 +81,21 @@ export function SeekerNav({ children }: { children: ReactNode }) {
 export function EmployerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const router = useRouter();
-	const showNav = path === "/employer" || path === "/employer/me";
-	const value = path === "/employer/me" ? "me" : "postings";
+	const showNav =
+		path === "/employer" ||
+		path === "/employer/me" ||
+		path.startsWith("/employer/settings");
+	let value = "postings";
+	if (path === "/employer/me") {
+		value = "me";
+	} else if (path.startsWith("/employer/settings")) {
+		value = "settings";
+	}
 	const go = (v: string) => {
 		if (v === "post") {
 			router.push("/employer/new");
+		} else if (v === "settings") {
+			router.push("/employer/settings" as Route);
 		} else if (v === "me") {
 			router.push("/employer/me");
 		} else {
@@ -100,6 +111,7 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 						items={[
 							{ value: "postings", label: "내 공고", icon: ClipboardListIcon },
 							{ value: "post", label: "등록", icon: PlusIcon },
+							{ value: "settings", label: "설정", icon: SettingsIcon },
 							{ value: "me", label: "내 정보", icon: UserIcon },
 						]}
 						onChange={go}

@@ -140,11 +140,22 @@ export const member = pgTable(
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
 		role: text("role").default("member").notNull(),
+		status: text("status").default("active").notNull(),
+		invitedEmail: text("invited_email"),
+		acceptedUserId: text("accepted_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		createdAt: timestamp("created_at").notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
 	},
 	(table) => [
 		index("member_organizationId_idx").on(table.organizationId),
 		index("member_userId_idx").on(table.userId),
+		index("member_status_idx").on(table.status),
+		index("member_invitedEmail_idx").on(table.invitedEmail),
 	]
 );
 
@@ -161,6 +172,13 @@ export const invitation = pgTable(
 		status: text("status").default("pending").notNull(),
 		expiresAt: timestamp("expires_at").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+		acceptedUserId: text("accepted_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		inviterId: text("inviter_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
@@ -168,6 +186,7 @@ export const invitation = pgTable(
 	(table) => [
 		index("invitation_organizationId_idx").on(table.organizationId),
 		index("invitation_email_idx").on(table.email),
+		index("invitation_status_idx").on(table.status),
 	]
 );
 

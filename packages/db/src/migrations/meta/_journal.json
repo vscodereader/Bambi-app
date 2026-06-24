@@ -36,6 +36,13 @@
       "when": 1782285734200,
       "tag": "0004_bambi_chat_media",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782287001330,
+      "tag": "0005_bambi_org_team_management",
+      "breakpoints": true
     }
   ]
 }
