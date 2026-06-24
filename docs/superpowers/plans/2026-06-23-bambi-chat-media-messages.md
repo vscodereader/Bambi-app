@@ -43,6 +43,7 @@ Excluded:
   - Add attachment picker, upload state, and message rendering.
 - Test: `packages/api/src/services/bambi-media-policy.test.ts`
 - Test: `packages/api/src/routers/bambi/chats.test.ts`
+- Test: `packages/api/src/routers/bambi/moderation.test.ts`
 
 ## Task 1: Media Policy And Schema
 
@@ -53,7 +54,7 @@ Excluded:
 - Modify: `packages/db/src/schema/bambi.ts`
 - Create: `packages/db/src/migrations/0004_bambi_chat_media.sql`
 
-- [ ] **Step 1: Define allowed media policy**
+- [x] **Step 1: Define allowed media policy**
 
 Allow:
 
@@ -62,15 +63,15 @@ Allow:
 
 Reject executable files, archives, unknown MIME types, and files with empty names.
 
-- [ ] **Step 2: Add policy tests**
+- [x] **Step 2: Add policy tests**
 
 Cover allowed image, allowed PDF, oversized image, executable MIME type, and empty filename.
 
-- [ ] **Step 3: Add attachment metadata schema**
+- [x] **Step 3: Add attachment metadata schema**
 
 Store `id`, `chatRoomId`, `messageId`, `storageKey`, `fileName`, `mimeType`, `byteSize`, `category`, `createdByUserId`, `createdAt`.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 pnpm --filter @bambi-app/api test
@@ -78,6 +79,11 @@ pnpm run check-types
 ```
 
 Expected: all commands pass.
+
+Verification 2026-06-24:
+
+- `pnpm --filter @bambi-app/api test` passed: 8 files / 44 tests.
+- `pnpm run check-types` passed: 6 tasks successful.
 
 ## Task 2: Upload And Media Message API
 
@@ -87,23 +93,27 @@ Expected: all commands pass.
 - Modify: `packages/api/src/routers/bambi/chats.ts`
 - Test: `packages/api/src/routers/bambi/chats.test.ts`
 
-- [ ] **Step 1: Add storage adapter**
+- [x] **Step 1: Add storage adapter**
 
 Create an adapter with `createUploadIntent` and `getPublicOrSignedUrl` so local development can use deterministic local object keys.
 
-- [ ] **Step 2: Add upload intent endpoint**
+- [x] **Step 2: Add upload intent endpoint**
 
 Add `bambi.chats.createAttachmentUpload` that validates room access, media policy, and returns upload metadata.
 
-- [ ] **Step 3: Add media message endpoint**
+- [x] **Step 3: Add media message endpoint**
 
 Add `bambi.chats.sendMediaMessage` that creates a chat message and attachment metadata in one transaction.
 
-- [ ] **Step 4: Add API tests**
+- [x] **Step 4: Add API tests**
 
 Verify participant access, MIME rejection, and metadata creation.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Add moderation report context**
+
+Include safe attachment metadata in reported chat message context without exposing storage internals.
+
+- [x] **Step 6: Verify**
 
 ```bash
 pnpm --filter @bambi-app/api test
@@ -112,6 +122,12 @@ pnpm run check
 
 Expected: all commands pass.
 
+Verification 2026-06-24:
+
+- `pnpm --filter @bambi-app/api test` passed: 9 files / 47 tests.
+- `pnpm run check` passed: 189 files checked.
+- `pnpm --filter @bambi-app/api test -- src/routers/bambi/moderation.test.ts` passed: 10 files / 48 tests after adding report media context.
+
 ## Task 3: Web Media UI
 
 **Files:**
@@ -119,29 +135,37 @@ Expected: all commands pass.
 - Modify: `apps/web/src/components/bambi/screens/seeker-chat-room-responsive.tsx`
 - Create: `apps/web/src/components/bambi/chat-attachment-preview.tsx`
 
-- [ ] **Step 1: Add attachment picker**
+- [x] **Step 1: Add attachment picker**
 
 Add an icon button near the message composer that accepts image and PDF files only.
 
-- [ ] **Step 2: Add upload progress state**
+- [x] **Step 2: Add upload progress state**
 
 Show selected filename, size, uploading state, and validation errors near the composer.
 
-- [ ] **Step 3: Render media messages**
+- [x] **Step 3: Render media messages**
 
 Render image thumbnails and PDF file rows inside the existing chat message list.
 
-- [ ] **Step 4: Keep contact protection intact**
+- [x] **Step 4: Keep contact protection intact**
 
 Do not expose phone, Kakao, or external contact metadata in attachment UI.
 
-- [ ] **Step 5: Browser verify**
+- [x] **Step 5: Browser verify**
 
 Seed data, open a known chat room, upload one allowed image and one rejected file, and confirm the allowed media appears while the rejected file shows an error.
 
+Verification 2026-06-24:
+
+- `pnpm run db:seed:bambi` passed and loaded dev chat room `33333333-3333-4333-8333-333333333301`.
+- Browser verified `/seeker/chats/33333333-3333-4333-8333-333333333301` as `seeker@bambi.dev`.
+- Rejected `package.json` synthetic file showed client validation error for unsupported type.
+- Allowed `browser-allowed.png` synthetic image created a media message; thumbnail loaded at `960x540`.
+- Next DevTools `get_errors` returned no config/session errors; browser console had 0 errors and 0 warnings after reload.
+
 ## Task 4: Final Verification
 
-- [ ] **Step 1: Run automated checks**
+- [x] **Step 1: Run automated checks**
 
 ```bash
 pnpm --filter @bambi-app/api test
@@ -152,6 +176,13 @@ pnpm --filter web build
 
 Expected: all commands pass.
 
-- [ ] **Step 2: Update plan and commit**
+- [x] **Step 2: Update plan and commit**
 
 Check completed boxes, add browser verification notes, and commit with Korean Conventional Commits format.
+
+Verification 2026-06-24:
+
+- `pnpm --filter @bambi-app/api test` passed: 10 files / 48 tests.
+- `pnpm run check-types` passed: 6 tasks successful.
+- `pnpm run check` passed: 192 files checked with no fixes.
+- `pnpm --filter web build` passed and included `/bambi/local-chat-attachments`.

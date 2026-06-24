@@ -3,6 +3,7 @@ import { user } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
 	bambiProfile,
+	chatAttachment,
 	chatMessage,
 	chatRoom,
 	employerOrganizationProfile,
@@ -11,7 +12,7 @@ import {
 	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -95,6 +96,7 @@ const setUserStatusInput = z.object({
 });
 
 type ReportTargetType = z.infer<typeof targetTypeSchema>;
+type ReportRow = typeof report.$inferSelect;
 
 const uuidTargetTypes = new Set<ReportTargetType>([
 	"job_post",
@@ -104,6 +106,62 @@ const uuidTargetTypes = new Set<ReportTargetType>([
 ]);
 
 const uuidTargetIdSchema = z.string().uuid();
+
+const getChatMessageTargetContext = async (targetId: string) => {
+	const [message] = await db
+		.select({
+			body: chatMessage.body,
+			chatRoomId: chatMessage.chatRoomId,
+			createdAt: chatMessage.createdAt,
+			id: chatMessage.id,
+			senderUserId: chatMessage.senderUserId,
+		})
+		.from(chatMessage)
+		.where(eq(chatMessage.id, targetId))
+		.limit(1);
+
+	if (!message) {
+		return null;
+	}
+
+	const attachments = await db
+		.select({
+			byteSize: chatAttachment.byteSize,
+			category: chatAttachment.category,
+			createdAt: chatAttachment.createdAt,
+			createdByUserId: chatAttachment.createdByUserId,
+			fileName: chatAttachment.fileName,
+			id: chatAttachment.id,
+			messageId: chatAttachment.messageId,
+			mimeType: chatAttachment.mimeType,
+		})
+		.from(chatAttachment)
+		.where(eq(chatAttachment.messageId, targetId))
+		.orderBy(asc(chatAttachment.createdAt));
+
+	return {
+		...message,
+		attachments,
+	};
+};
+
+const getReportTargetContext = async (reportRow: ReportRow) => {
+	if (reportRow.targetType !== "chat_message") {
+		return null;
+	}
+
+	const message = await getChatMessageTargetContext(reportRow.targetId);
+
+	return message ? { chatMessage: message } : null;
+};
+
+const withReportTargetContexts = async (reportRows: ReportRow[]) =>
+	await Promise.all(
+		reportRows.map(async (reportRow) => ({
+			...reportRow,
+			targetContext: await getReportTargetContext(reportRow),
+		}))
+	);
 
 const assertReportTargetExists = async (
 	targetType: ReportTargetType,
@@ -187,19 +245,23 @@ export const moderationRouter = {
 			await requireAdminProfile(context.session);
 
 			if (input.status) {
-				return await db
+				const reportRows = await db
 					.select()
 					.from(report)
 					.where(eq(report.status, input.status))
 					.orderBy(desc(report.createdAt))
 					.limit(input.limit);
+
+				return await withReportTargetContexts(reportRows);
 			}
 
-			return await db
+			const reportRows = await db
 				.select()
 				.from(report)
 				.orderBy(desc(report.createdAt))
 				.limit(input.limit);
+
+			return await withReportTargetContexts(reportRows);
 		}),
 
 	listJobPosts: protectedProcedure

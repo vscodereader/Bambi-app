@@ -29,6 +29,13 @@
       "when": 1782282090655,
       "tag": "0003_outgoing_wolf_cub",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782285734200,
+      "tag": "0004_bambi_chat_media",
+      "breakpoints": true
     }
   ]
 }

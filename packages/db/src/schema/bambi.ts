@@ -77,6 +77,11 @@ export const promotionStatus = pgEnum("promotion_status", [
 	"canceled",
 ]);
 
+export const chatAttachmentCategory = pgEnum("chat_attachment_category", [
+	"image",
+	"pdf",
+]);
+
 export const bambiProfile = pgTable(
 	"bambi_profile",
 	{
@@ -320,6 +325,34 @@ export const chatMessage = pgTable(
 	(table) => [
 		index("chat_message_chat_room_id_idx").on(table.chatRoomId),
 		index("chat_message_sender_user_id_idx").on(table.senderUserId),
+	]
+);
+
+export const chatAttachment = pgTable(
+	"chat_attachment",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
+		messageId: uuid("message_id")
+			.notNull()
+			.references(() => chatMessage.id, { onDelete: "cascade" }),
+		storageKey: text("storage_key").notNull(),
+		fileName: text("file_name").notNull(),
+		mimeType: text("mime_type").notNull(),
+		byteSize: integer("byte_size").notNull(),
+		category: chatAttachmentCategory("category").notNull(),
+		createdByUserId: text("created_by_user_id")
+			.notNull()
+			.references(() => user.id),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("chat_attachment_chat_room_id_idx").on(table.chatRoomId),
+		index("chat_attachment_message_id_idx").on(table.messageId),
+		uniqueIndex("chat_attachment_storage_key_uidx").on(table.storageKey),
+		index("chat_attachment_created_by_user_id_idx").on(table.createdByUserId),
 	]
 );
 
@@ -581,9 +614,30 @@ export const jobPromotionBoostEventRelations = relations(
 	})
 );
 
-export const chatRoomRelations = relations(chatRoom, ({ one }) => ({
+export const chatRoomRelations = relations(chatRoom, ({ many, one }) => ({
+	attachments: many(chatAttachment),
 	jobPost: one(jobPost, {
 		fields: [chatRoom.jobPostId],
 		references: [jobPost.id],
+	}),
+	messages: many(chatMessage),
+}));
+
+export const chatMessageRelations = relations(chatMessage, ({ many, one }) => ({
+	attachments: many(chatAttachment),
+	room: one(chatRoom, {
+		fields: [chatMessage.chatRoomId],
+		references: [chatRoom.id],
+	}),
+}));
+
+export const chatAttachmentRelations = relations(chatAttachment, ({ one }) => ({
+	message: one(chatMessage, {
+		fields: [chatAttachment.messageId],
+		references: [chatMessage.id],
+	}),
+	room: one(chatRoom, {
+		fields: [chatAttachment.chatRoomId],
+		references: [chatRoom.id],
 	}),
 }));

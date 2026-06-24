@@ -19,13 +19,16 @@ import {
 	EllipsisVertical,
 	Eye,
 	EyeOff,
+	FileText,
 	Flag,
 	House,
+	Image as ImageIconBase,
 	Lock,
 	type LucideIcon,
 	type LucideProps,
 	MapPin,
 	MessageCircle,
+	Paperclip,
 	Phone,
 	Plus,
 	Search,
@@ -34,6 +37,7 @@ import {
 	SlidersHorizontal,
 	Star,
 	User,
+	X,
 	Zap,
 } from "lucide-react";
 
@@ -62,13 +66,16 @@ export const DollarCircle = fill(CircleDollarSign);
 export const DotsVertical = fill(EllipsisVertical);
 export const EyeIcon = fill(Eye);
 export const EyeOffIcon = fill(EyeOff);
+export const FileTextIcon = fill(FileText);
 export const Filter = fill(SlidersHorizontal);
 export const Flash = fill(Zap);
 export const FlagIcon = fill(Flag);
 export const Home2 = fill(House);
+export const ImageIcon = fill(ImageIconBase);
 export const LockIcon = fill(Lock);
 export const MapPinIcon = fill(MapPin);
 export const Message = fill(MessageCircle);
+export const PaperclipIcon = fill(Paperclip);
 export const PhoneIcon = fill(Phone);
 export const PlusIcon = fill(Plus);
 export const SearchIcon = fill(Search);
@@ -78,3 +85,4 @@ export const ShieldIcon = fill(ShieldCheck);
 export const SortIcon = fill(ArrowUpDown);
 export const StarIcon = fill(Star);
 export const UserIcon = fill(User);
+export const XIcon = fill(X);

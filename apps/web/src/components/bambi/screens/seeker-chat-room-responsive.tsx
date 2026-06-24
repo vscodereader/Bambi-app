@@ -11,8 +11,19 @@ import {
 } from "@/lib/bambi-chat-realtime";
 import { interviewStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
+import {
+	ChatAttachmentPreview,
+	type ChatAttachmentPreviewItem,
+} from "../chat-attachment-preview";
 import { Badge, Button, Card } from "../ds";
-import { ClockIcon, DollarCircle, Message, ShieldIcon } from "../icons";
+import {
+	ClockIcon,
+	DollarCircle,
+	Message,
+	PaperclipIcon,
+	ShieldIcon,
+	XIcon,
+} from "../icons";
 
 interface SeekerChatRoomResponsiveProps {
 	onBack: () => void;
@@ -31,6 +42,61 @@ const formatPay = (amount?: number, unit?: string): string => {
 		return "채팅으로 확인";
 	}
 	return `${unit} ${amount.toLocaleString("ko-KR")}원`;
+};
+
+const ACCEPTED_ATTACHMENT_MIME_TYPES = [
+	"image/jpeg",
+	"image/png",
+	"image/webp",
+	"application/pdf",
+] as const;
+const IMAGE_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
+const PDF_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+type AttachmentDraftStatus = "error" | "selected" | "uploading";
+
+interface AttachmentDraft {
+	errorMessage?: string;
+	file: File;
+	status: AttachmentDraftStatus;
+}
+
+const formatAttachmentSize = (byteSize: number): string => {
+	if (byteSize >= 1024 * 1024) {
+		return `${(byteSize / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	return `${Math.max(1, Math.round(byteSize / 1024)).toLocaleString("ko-KR")} KB`;
+};
+
+const getAttachmentValidationError = (file: File): null | string => {
+	if (!ACCEPTED_ATTACHMENT_MIME_TYPES.includes(file.type as never)) {
+		return "JPG, PNG, WebP 이미지 또는 PDF만 첨부할 수 있어요.";
+	}
+
+	const maxBytes =
+		file.type === "application/pdf"
+			? PDF_ATTACHMENT_MAX_BYTES
+			: IMAGE_ATTACHMENT_MAX_BYTES;
+
+	if (file.size > maxBytes) {
+		return file.type === "application/pdf"
+			? "PDF는 10 MB 이하만 첨부할 수 있어요."
+			: "이미지는 8 MB 이하만 첨부할 수 있어요.";
+	}
+
+	return null;
+};
+
+const getAttachmentStatusLabel = (status: AttachmentDraftStatus): string => {
+	switch (status) {
+		case "uploading":
+			return "업로드 중";
+		case "error":
+			return "확인 필요";
+		default:
+			return "첨부 준비";
+	}
 };
 
 const getMutationErrorMessage = (error: Error): string => {
@@ -58,6 +124,213 @@ const getRealtimeStatusLabel = (status: RealtimeStatus): string => {
 	}
 };
 
+interface ChatMessageItem {
+	attachments?: ChatAttachmentPreviewItem[];
+	body: string;
+	createdAt: Date | string;
+	id: string;
+	senderUserId: string;
+}
+
+interface ChatMessageListProps {
+	currentUserId: string;
+	messages: ChatMessageItem[];
+	typingUserIds: string[];
+}
+
+function ChatMessageList({
+	currentUserId,
+	messages,
+	typingUserIds,
+}: ChatMessageListProps) {
+	if (messages.length === 0) {
+		return (
+			<div className="m-auto text-center text-muted-foreground text-sm">
+				아직 메시지가 없어요. 안전하게 첫 메시지를 보내보세요.
+			</div>
+		);
+	}
+
+	return (
+		<>
+			{messages.map((chatMessage) => {
+				const mine = chatMessage.senderUserId === currentUserId;
+				const attachments = chatMessage.attachments ?? [];
+
+				return (
+					<div
+						className={mine ? "flex justify-end" : "flex justify-start"}
+						key={chatMessage.id}
+					>
+						<div
+							className={
+								mine
+									? "max-w-[78%] rounded-lg bg-coral-500 px-4 py-2 text-white"
+									: "max-w-[78%] rounded-lg bg-secondary px-4 py-2 text-foreground"
+							}
+						>
+							{attachments.length === 0 ? (
+								<p className="m-0 whitespace-pre-wrap text-sm leading-relaxed">
+									{chatMessage.body}
+								</p>
+							) : (
+								<div className="grid gap-2">
+									{attachments.map((attachment) => (
+										<ChatAttachmentPreview
+											attachment={attachment}
+											key={attachment.id}
+											mine={mine}
+										/>
+									))}
+								</div>
+							)}
+							<p className="mt-1 mb-0 text-[11px] opacity-70">
+								{formatDateTime(chatMessage.createdAt)}
+							</p>
+						</div>
+					</div>
+				);
+			})}
+			{typingUserIds.length > 0 ? (
+				<div className="flex justify-start">
+					<div className="max-w-[78%] rounded-lg border border-coral-200 px-4 py-2 font-semibold text-coral-700 text-xs">
+						상대가 입력 중이에요
+					</div>
+				</div>
+			) : null}
+		</>
+	);
+}
+
+interface AttachmentDraftPanelProps {
+	attachmentDraft: AttachmentDraft;
+	isAttachmentSubmitting: boolean;
+	onClear: () => void;
+}
+
+function AttachmentDraftPanel({
+	attachmentDraft,
+	isAttachmentSubmitting,
+	onClear,
+}: AttachmentDraftPanelProps) {
+	return (
+		<div className="flex items-start gap-3 border-border border-b bg-secondary/60 px-4 py-3">
+			<span className="inline-flex size-9 flex-none items-center justify-center rounded-lg bg-background text-coral-600">
+				<PaperclipIcon />
+			</span>
+			<div className="min-w-0 flex-1">
+				<div className="flex items-center gap-2">
+					<strong className="min-w-0 truncate text-sm">
+						{attachmentDraft.file.name}
+					</strong>
+					<Badge
+						tone={attachmentDraft.status === "error" ? "danger" : "pending"}
+					>
+						{getAttachmentStatusLabel(attachmentDraft.status)}
+					</Badge>
+				</div>
+				<p className="mt-1 mb-0 text-muted-foreground text-xs">
+					{attachmentDraft.file.type || "알 수 없는 형식"} ·{" "}
+					{formatAttachmentSize(attachmentDraft.file.size)}
+				</p>
+				{attachmentDraft.errorMessage ? (
+					<p className="mt-1 mb-0 font-semibold text-red-600 text-xs">
+						{attachmentDraft.errorMessage}
+					</p>
+				) : null}
+			</div>
+			<button
+				aria-label="첨부 파일 제거"
+				className="inline-flex size-8 flex-none cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:text-foreground"
+				disabled={isAttachmentSubmitting}
+				onClick={onClear}
+				title="첨부 파일 제거"
+				type="button"
+			>
+				<span className="inline-flex size-4">
+					<XIcon />
+				</span>
+			</button>
+		</div>
+	);
+}
+
+interface ChatComposerProps {
+	attachmentDraft: AttachmentDraft | null;
+	attachmentInputRef: React.RefObject<HTMLInputElement | null>;
+	isAttachmentSubmitting: boolean;
+	isComposerSubmitting: boolean;
+	message: string;
+	onAttachmentChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+	onClearAttachment: () => void;
+	onMessageChange: (value: string) => void;
+	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}
+
+function ChatComposer({
+	attachmentDraft,
+	attachmentInputRef,
+	isAttachmentSubmitting,
+	isComposerSubmitting,
+	message,
+	onAttachmentChange,
+	onClearAttachment,
+	onMessageChange,
+	onSubmit,
+}: ChatComposerProps) {
+	return (
+		<div className="border-border border-t">
+			{attachmentDraft ? (
+				<AttachmentDraftPanel
+					attachmentDraft={attachmentDraft}
+					isAttachmentSubmitting={isAttachmentSubmitting}
+					onClear={onClearAttachment}
+				/>
+			) : null}
+			<form className="flex items-center gap-2 p-4" onSubmit={onSubmit}>
+				<label
+					aria-label="파일 첨부"
+					className="inline-flex size-11 flex-none cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-muted-foreground focus-within:ring-2 focus-within:ring-coral-100 hover:text-foreground"
+					title="파일 첨부"
+				>
+					<input
+						accept={ACCEPTED_ATTACHMENT_MIME_TYPES.join(",")}
+						className="sr-only"
+						onChange={onAttachmentChange}
+						ref={attachmentInputRef}
+						type="file"
+					/>
+					<span className="inline-flex size-5">
+						<PaperclipIcon />
+					</span>
+				</label>
+				<label className="sr-only" htmlFor="chat-message">
+					메시지
+				</label>
+				<input
+					className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
+					id="chat-message"
+					onChange={(event) => onMessageChange(event.target.value)}
+					placeholder="메시지를 입력하세요"
+					value={message}
+				/>
+				<Button
+					disabled={
+						isComposerSubmitting ||
+						attachmentDraft?.status === "error" ||
+						!(message.trim() || attachmentDraft)
+					}
+					rightIcon={<Message />}
+					size="md"
+					type="submit"
+				>
+					{isAttachmentSubmitting ? "업로드 중" : "전송"}
+				</Button>
+			</form>
+		</div>
+	);
+}
+
 export function SeekerChatRoomResponsive({
 	onBack,
 	onReveal,
@@ -65,6 +338,8 @@ export function SeekerChatRoomResponsive({
 }: SeekerChatRoomResponsiveProps) {
 	const queryClient = useQueryClient();
 	const [message, setMessage] = useState("");
+	const [attachmentDraft, setAttachmentDraft] =
+		useState<AttachmentDraft | null>(null);
 	const [interviewAt, setInterviewAt] = useState("");
 	const [locationNote, setLocationNote] = useState("");
 	const [realtimeStatus, setRealtimeStatus] =
@@ -74,6 +349,7 @@ export function SeekerChatRoomResponsive({
 	const [scheduleErrorMessage, setScheduleErrorMessage] = useState<
 		null | string
 	>(null);
+	const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 	const lastReadMessageSignatureRef = useRef("");
 	const typingActiveRef = useRef(false);
 	const roomQuery = useQuery(
@@ -97,6 +373,36 @@ export function SeekerChatRoomResponsive({
 				setMessage("");
 				setErrorMessage(null);
 				await invalidateRoom();
+			},
+		})
+	);
+	const createAttachmentUploadMutation = useMutation(
+		orpc.bambi.chats.createAttachmentUpload.mutationOptions({
+			onError: (error) => {
+				setAttachmentDraft((current) =>
+					current
+						? {
+								...current,
+								errorMessage: getMutationErrorMessage(error),
+								status: "error",
+							}
+						: current
+				);
+			},
+		})
+	);
+	const sendMediaMessageMutation = useMutation(
+		orpc.bambi.chats.sendMediaMessage.mutationOptions({
+			onError: (error) => {
+				setAttachmentDraft((current) =>
+					current
+						? {
+								...current,
+								errorMessage: getMutationErrorMessage(error),
+								status: "error",
+							}
+						: current
+				);
 			},
 		})
 	);
@@ -300,12 +606,104 @@ export function SeekerChatRoomResponsive({
 	}
 
 	const { currentUserId, jobPost, messages, room, schedules } = roomQuery.data;
+	const isAttachmentSubmitting =
+		createAttachmentUploadMutation.isPending ||
+		sendMediaMessageMutation.isPending;
+	const isComposerSubmitting =
+		sendMessageMutation.isPending || isAttachmentSubmitting;
 	const confirmedSchedule = schedules.find(
 		(schedule) => schedule.status === "confirmed"
 	);
-	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+	const clearAttachmentDraft = () => {
+		setAttachmentDraft(null);
+		if (attachmentInputRef.current) {
+			attachmentInputRef.current.value = "";
+		}
+	};
+	const handleAttachmentChange = (
+		event: React.ChangeEvent<HTMLInputElement>
+	) => {
+		const file = event.target.files?.[0];
+		event.target.value = "";
+
+		if (!file) {
+			return;
+		}
+
+		const error = getAttachmentValidationError(file);
+		setAttachmentDraft({
+			errorMessage: error ?? undefined,
+			file,
+			status: error ? "error" : "selected",
+		});
+		setErrorMessage(null);
+	};
+	const stopTyping = () => {
+		if (typingActiveRef.current) {
+			emitBambiChatTypingStopped(room.id);
+			typingActiveRef.current = false;
+		}
+	};
+	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		const body = message.trim();
+
+		if (attachmentDraft) {
+			const validationError =
+				attachmentDraft.errorMessage ??
+				getAttachmentValidationError(attachmentDraft.file);
+
+			if (validationError) {
+				setAttachmentDraft({
+					...attachmentDraft,
+					errorMessage: validationError,
+					status: "error",
+				});
+				return;
+			}
+
+			setAttachmentDraft({
+				...attachmentDraft,
+				errorMessage: undefined,
+				status: "uploading",
+			});
+
+			try {
+				const uploadIntent = await createAttachmentUploadMutation.mutateAsync({
+					byteSize: attachmentDraft.file.size,
+					chatRoomId: room.id,
+					fileName: attachmentDraft.file.name,
+					mimeType: attachmentDraft.file.type,
+				});
+
+				await sendMediaMessageMutation.mutateAsync({
+					byteSize: uploadIntent.byteSize,
+					chatRoomId: room.id,
+					fileName: uploadIntent.fileName,
+					mimeType: uploadIntent.mimeType,
+					storageKey: uploadIntent.storageKey,
+				});
+				clearAttachmentDraft();
+				setMessage("");
+				setErrorMessage(null);
+				await invalidateRoom();
+				stopTyping();
+			} catch (error) {
+				setAttachmentDraft((current) =>
+					current
+						? {
+								...current,
+								errorMessage:
+									error instanceof Error
+										? getMutationErrorMessage(error)
+										: "첨부 파일을 전송하지 못했어요.",
+								status: "error",
+							}
+						: current
+				);
+			}
+			return;
+		}
 
 		if (!body) {
 			setErrorMessage("메시지를 입력해 주세요.");
@@ -316,10 +714,7 @@ export function SeekerChatRoomResponsive({
 			body,
 			chatRoomId: room.id,
 		});
-		if (typingActiveRef.current) {
-			emitBambiChatTypingStopped(room.id);
-			typingActiveRef.current = false;
-		}
+		stopTyping();
 	};
 	const handleInterviewSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
@@ -391,67 +786,23 @@ export function SeekerChatRoomResponsive({
 					</p>
 				</div>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
-					{messages.length === 0 ? (
-						<div className="m-auto text-center text-muted-foreground text-sm">
-							아직 메시지가 없어요. 안전하게 첫 메시지를 보내보세요.
-						</div>
-					) : (
-						messages.map((chatMessage) => {
-							const mine = chatMessage.senderUserId === currentUserId;
-							return (
-								<div
-									className={mine ? "flex justify-end" : "flex justify-start"}
-									key={chatMessage.id}
-								>
-									<div
-										className={
-											mine
-												? "max-w-[78%] rounded-lg bg-coral-500 px-4 py-2 text-white"
-												: "max-w-[78%] rounded-lg bg-secondary px-4 py-2 text-foreground"
-										}
-									>
-										<p className="m-0 whitespace-pre-wrap text-sm leading-relaxed">
-											{chatMessage.body}
-										</p>
-										<p className="mt-1 mb-0 text-[11px] opacity-70">
-											{formatDateTime(chatMessage.createdAt)}
-										</p>
-									</div>
-								</div>
-							);
-						})
-					)}
-					{typingUserIds.length > 0 ? (
-						<div className="flex justify-start">
-							<div className="max-w-[78%] rounded-lg border border-coral-200 px-4 py-2 font-semibold text-coral-700 text-xs">
-								상대가 입력 중이에요
-							</div>
-						</div>
-					) : null}
-				</div>
-				<form
-					className="flex items-center gap-2 border-border border-t p-4"
-					onSubmit={handleSubmit}
-				>
-					<label className="sr-only" htmlFor="chat-message">
-						메시지
-					</label>
-					<input
-						className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
-						id="chat-message"
-						onChange={(event) => setMessage(event.target.value)}
-						placeholder="메시지를 입력하세요"
-						value={message}
+					<ChatMessageList
+						currentUserId={currentUserId}
+						messages={messages}
+						typingUserIds={typingUserIds}
 					/>
-					<Button
-						disabled={sendMessageMutation.isPending}
-						rightIcon={<Message />}
-						size="md"
-						type="submit"
-					>
-						전송
-					</Button>
-				</form>
+				</div>
+				<ChatComposer
+					attachmentDraft={attachmentDraft}
+					attachmentInputRef={attachmentInputRef}
+					isAttachmentSubmitting={isAttachmentSubmitting}
+					isComposerSubmitting={isComposerSubmitting}
+					message={message}
+					onAttachmentChange={handleAttachmentChange}
+					onClearAttachment={clearAttachmentDraft}
+					onMessageChange={setMessage}
+					onSubmit={handleSubmit}
+				/>
 				{errorMessage ? (
 					<div className="border-border border-t px-4 py-3 font-semibold text-red-600 text-sm">
 						{errorMessage}

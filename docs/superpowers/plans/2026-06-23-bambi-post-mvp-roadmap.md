@@ -15,7 +15,7 @@
 | Order | Plan | Scope | Primary Risk |
 | --- | --- | --- | --- |
 | 1 | [Realtime Chat](./2026-06-23-bambi-realtime-chat.md) | Socket.IO transport, read receipts, typing indicators | Completed 2026-06-24 |
-| 2 | [Chat Media Messages](./2026-06-23-bambi-chat-media-messages.md) | Image/file upload, moderation, rendering | Unsafe media handling |
+| 2 | [Chat Media Messages](./2026-06-23-bambi-chat-media-messages.md) | Image/file upload, moderation, rendering | Completed 2026-06-24 |
 | 3 | [Organization And Team Management](./2026-06-23-bambi-organization-team-management.md) | Multi-branch organization/team admin | Authorization boundaries |
 | 4 | [Dense Marketplace And Promotion Ops](./2026-06-24-bambi-dense-marketplace-promotion-ops.md) | Foxalba-informed dense job list, promotion sections, boost management | Completed 2026-06-24 |
 | 5 | [Moderator Bulk Actions](./2026-06-23-bambi-moderator-bulk-actions.md) | API-backed bulk moderation actions | Accidental mass changes |
@@ -62,7 +62,7 @@ Every linked plan is complete only when:
 
 Open [Realtime Chat](./2026-06-23-bambi-realtime-chat.md), complete every task, then return here and check this step.
 
-- [ ] **Step 2: Execute Chat Media Messages plan**
+- [x] **Step 2: Execute Chat Media Messages plan**
 
 Open [Chat Media Messages](./2026-06-23-bambi-chat-media-messages.md), complete every task, then return here and check this step.
 

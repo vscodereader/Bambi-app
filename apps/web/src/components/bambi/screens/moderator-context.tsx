@@ -50,6 +50,13 @@ const formatDate = (value: Date | string) =>
 		dateStyle: "short",
 		timeStyle: "short",
 	}).format(new Date(value));
+const formatByteSize = (byteSize: number) => {
+	if (byteSize >= 1024 * 1024) {
+		return `${(byteSize / 1024 / 1024).toFixed(1)} MB`;
+	}
+
+	return `${Math.max(1, Math.round(byteSize / 1024))} KB`;
+};
 const getRoleLabel = (role: string) => {
 	if (role === "admin") {
 		return "운영자";
@@ -135,27 +142,40 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				title: item.title,
 			})) ?? [];
 		const apiReports =
-			moderationReportsQuery.data?.map<Report>((item) => ({
-				id: item.id,
-				note: item.details ?? "상세 신고 내용이 없습니다.",
-				reason: item.reason,
-				reporter: `신고자 ${item.reporterUserId.slice(0, 6)}`,
-				reporterRole: "사용자",
-				sev: item.status === "open" ? "mid" : "low",
-				status:
-					item.status === "open" || item.status === "reviewing"
-						? "open"
-						: "closed",
-				target: `${item.targetType} ${item.targetId.slice(0, 8)}`,
-				targetRole: "대상",
-				thread: [
-					{
-						mine: false,
-						text: item.details ?? "신고 상세 내용을 확인해 주세요.",
-					},
-				],
-				time: formatDate(item.createdAt),
-			})) ?? [];
+			moderationReportsQuery.data?.map<Report>((item) => {
+				const attachments = item.targetContext?.chatMessage?.attachments ?? [];
+				const attachmentMessages = attachments.map((attachment) => ({
+					mine: false,
+					text: `첨부 파일 · ${attachment.fileName} · ${attachment.mimeType} · ${formatByteSize(attachment.byteSize)}`,
+				}));
+				const baseNote = item.details ?? "상세 신고 내용이 없습니다.";
+				const attachmentNote = attachments.length
+					? `첨부 ${attachments.length}개 포함`
+					: null;
+
+				return {
+					id: item.id,
+					note: attachmentNote ? `${baseNote}\n${attachmentNote}` : baseNote,
+					reason: item.reason,
+					reporter: `신고자 ${item.reporterUserId.slice(0, 6)}`,
+					reporterRole: "사용자",
+					sev: item.status === "open" ? "mid" : "low",
+					status:
+						item.status === "open" || item.status === "reviewing"
+							? "open"
+							: "closed",
+					target: `${item.targetType} ${item.targetId.slice(0, 8)}`,
+					targetRole: "대상",
+					thread: [
+						{
+							mine: false,
+							text: item.details ?? "신고 상세 내용을 확인해 주세요.",
+						},
+						...attachmentMessages,
+					],
+					time: formatDate(item.createdAt),
+				};
+			}) ?? [];
 		const apiUsers =
 			moderationUsersQuery.data?.map<ManagedUser>((item) => ({
 				id: item.userId,
