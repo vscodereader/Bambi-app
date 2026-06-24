@@ -14,7 +14,7 @@
 
 | Order | Plan | Scope | Primary Risk |
 | --- | --- | --- | --- |
-| 1 | [Realtime Chat](./2026-06-23-bambi-realtime-chat.md) | WebSocket transport, read receipts, typing indicators | Cross-session consistency |
+| 1 | [Realtime Chat](./2026-06-23-bambi-realtime-chat.md) | Socket.IO transport, read receipts, typing indicators | Completed 2026-06-24 |
 | 2 | [Chat Media Messages](./2026-06-23-bambi-chat-media-messages.md) | Image/file upload, moderation, rendering | Unsafe media handling |
 | 3 | [Reviews And Ratings](./2026-06-23-bambi-reviews-ratings.md) | Post-interview reviews and public rating summaries | Abuse and privacy |
 | 4 | [Employer Analytics And Paid Placement](./2026-06-23-bambi-employer-analytics-paid-placement.md) | Employer metrics, promoted listings, billing-ready events | Trust and ranking fairness |
@@ -48,7 +48,7 @@ Every linked plan is complete only when:
 
 ## Roadmap Tracking
 
-- [ ] **Step 1: Execute Realtime Chat plan**
+- [x] **Step 1: Execute Realtime Chat plan**
 
 Open [Realtime Chat](./2026-06-23-bambi-realtime-chat.md), complete every task, then return here and check this step.
 

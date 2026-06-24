@@ -16,6 +16,18 @@ import {
 	requireActiveBambiProfile,
 	requireChatParticipant,
 } from "../../services/bambi-authz";
+import {
+	getChatRecipientUserId,
+	getUnreadMessageCount,
+	markChatMessagesRead,
+} from "../../services/bambi-chat-read-state";
+import {
+	emitMessageCreated,
+	emitMessageRead,
+	emitUnreadUpdated,
+	isParticipantActiveInRoom,
+} from "../../services/bambi-chat-realtime";
+import { createBambiNotification } from "../../services/bambi-notifications";
 import { canRevealContact, canStartChat } from "../../services/bambi-policy";
 
 const startFromJobPostInput = z.object({
@@ -25,6 +37,11 @@ const startFromJobPostInput = z.object({
 const sendMessageInput = z.object({
 	chatRoomId: z.string().uuid(),
 	body: z.string().min(1).max(2000),
+});
+
+const markReadInput = z.object({
+	chatRoomId: z.string().uuid(),
+	messageIds: z.array(z.string().uuid()).min(1).max(50),
 });
 
 const isFutureIsoDateTime = (value: string): boolean => {
@@ -126,6 +143,9 @@ const canSetInterviewStatus = ({
 	}
 };
 
+const toIsoDateTime = (value: Date | string): string =>
+	value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+
 export const chatsRouter = {
 	startFromJobPost: protectedProcedure
 		.input(startFromJobPostInput)
@@ -205,7 +225,7 @@ export const chatsRouter = {
 	listMine: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
-		return await db
+		const rooms = await db
 			.select()
 			.from(chatRoom)
 			.where(
@@ -215,6 +235,16 @@ export const chatsRouter = {
 				)
 			)
 			.orderBy(desc(chatRoom.updatedAt));
+
+		return await Promise.all(
+			rooms.map(async (room) => ({
+				...room,
+				unreadCount: await getUnreadMessageCount({
+					chatRoomId: room.id,
+					userId: profile.userId,
+				}),
+			}))
+		);
 	}),
 
 	getById: protectedProcedure
@@ -291,12 +321,94 @@ export const chatsRouter = {
 				})
 				.returning();
 
+			if (!message) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Chat message could not be created.",
+				});
+			}
+
 			await db
 				.update(chatRoom)
 				.set({ updatedAt: new Date() })
 				.where(eq(chatRoom.id, room.id));
 
+			const recipientUserId = getChatRecipientUserId(room, profile.userId);
+			const recipientUnreadCount = await getUnreadMessageCount({
+				chatRoomId: room.id,
+				userId: recipientUserId,
+			});
+
+			emitMessageCreated({
+				createdAt: toIsoDateTime(message.createdAt),
+				messageId: message.id,
+				roomId: room.id,
+				senderUserId: profile.userId,
+			});
+			emitUnreadUpdated({
+				roomId: room.id,
+				unreadCount: recipientUnreadCount,
+				userId: recipientUserId,
+			});
+
+			if (!isParticipantActiveInRoom(room.id, recipientUserId)) {
+				await createBambiNotification({
+					actorUserId: profile.userId,
+					chatRoomId: room.id,
+					recipientUserId,
+					targetId: message.id,
+					targetType: "chat_message",
+				});
+			}
+
 			return message;
+		}),
+
+	markRead: protectedProcedure
+		.input(markReadInput)
+		.handler(async ({ context, input }) => {
+			const { profile, room } = await requireChatParticipant(
+				input.chatRoomId,
+				context.session
+			);
+
+			await throwIfChatBlocked({
+				actorUserId: profile.userId,
+				employerUserId: room.employerUserId,
+				isBlocked: room.isBlocked,
+				jobSeekerUserId: room.jobSeekerUserId,
+			});
+
+			const readReceipts = await markChatMessagesRead({
+				chatRoomId: room.id,
+				messageIds: input.messageIds,
+				readerUserId: profile.userId,
+			});
+			const unreadCount = await getUnreadMessageCount({
+				chatRoomId: room.id,
+				userId: profile.userId,
+			});
+
+			for (const receipt of readReceipts) {
+				emitMessageRead({
+					messageId: receipt.messageId,
+					readAt: toIsoDateTime(receipt.readAt),
+					readerUserId: profile.userId,
+					roomId: room.id,
+				});
+			}
+
+			if (readReceipts.length > 0) {
+				emitUnreadUpdated({
+					roomId: room.id,
+					unreadCount,
+					userId: profile.userId,
+				});
+			}
+
+			return {
+				readMessageIds: readReceipts.map(({ messageId }) => messageId),
+				unreadCount,
+			};
 		}),
 
 	proposeInterview: protectedProcedure

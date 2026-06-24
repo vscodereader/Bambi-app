@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	connectBambiChatSocket,
+	emitBambiChatTypingStarted,
+	emitBambiChatTypingStopped,
+	joinBambiChatRoom,
+	leaveBambiChatRoom,
+} from "@/lib/bambi-chat-realtime";
 import { interviewStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import { Badge, Button, Card } from "../ds";
@@ -38,6 +45,19 @@ const getMutationErrorMessage = (error: Error): string => {
 	return "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
 };
 
+type RealtimeStatus = "connected" | "connecting" | "offline";
+
+const getRealtimeStatusLabel = (status: RealtimeStatus): string => {
+	switch (status) {
+		case "connected":
+			return "실시간 연결";
+		case "offline":
+			return "오프라인";
+		default:
+			return "연결 중";
+	}
+};
+
 export function SeekerChatRoomResponsive({
 	onBack,
 	onReveal,
@@ -47,21 +67,27 @@ export function SeekerChatRoomResponsive({
 	const [message, setMessage] = useState("");
 	const [interviewAt, setInterviewAt] = useState("");
 	const [locationNote, setLocationNote] = useState("");
+	const [realtimeStatus, setRealtimeStatus] =
+		useState<RealtimeStatus>("connecting");
+	const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
 	const [errorMessage, setErrorMessage] = useState<null | string>(null);
 	const [scheduleErrorMessage, setScheduleErrorMessage] = useState<
 		null | string
 	>(null);
+	const lastReadMessageSignatureRef = useRef("");
+	const typingActiveRef = useRef(false);
 	const roomQuery = useQuery(
 		orpc.bambi.chats.getById.queryOptions({ input: { id: roomId } })
 	);
-	const invalidateRoom = async () => {
+	const currentSessionUserId = roomQuery.data?.currentUserId;
+	const invalidateRoom = useCallback(async () => {
 		await queryClient.invalidateQueries({
 			queryKey: orpc.bambi.chats.getById.queryKey({ input: { id: roomId } }),
 		});
 		await queryClient.invalidateQueries({
 			queryKey: orpc.bambi.chats.listMine.queryKey(),
 		});
-	};
+	}, [queryClient, roomId]);
 	const sendMessageMutation = useMutation(
 		orpc.bambi.chats.sendMessage.mutationOptions({
 			onError: (error) => {
@@ -71,6 +97,13 @@ export function SeekerChatRoomResponsive({
 				setMessage("");
 				setErrorMessage(null);
 				await invalidateRoom();
+			},
+		})
+	);
+	const markReadMutation = useMutation(
+		orpc.bambi.chats.markRead.mutationOptions({
+			onError: () => {
+				setErrorMessage("읽음 상태를 반영하지 못했어요.");
 			},
 		})
 	);
@@ -98,6 +131,147 @@ export function SeekerChatRoomResponsive({
 			},
 		})
 	);
+	const readCandidateMessageIds = useMemo(() => {
+		if (!roomQuery.data) {
+			return [];
+		}
+
+		return roomQuery.data.messages
+			.filter(
+				(chatMessage) => chatMessage.senderUserId !== currentSessionUserId
+			)
+			.map((chatMessage) => chatMessage.id);
+	}, [currentSessionUserId, roomQuery.data]);
+	const readCandidateMessageIdsSignature = readCandidateMessageIds.join("|");
+
+	useEffect(() => {
+		if (!currentSessionUserId) {
+			return;
+		}
+
+		const socket = connectBambiChatSocket();
+		const refreshIfCurrentRoom = (payload: { roomId: string }) => {
+			if (payload.roomId === roomId) {
+				invalidateRoom().catch(() => undefined);
+			}
+		};
+		const handleConnect = () => setRealtimeStatus("connected");
+		const handleDisconnect = () => setRealtimeStatus("offline");
+		const handleRealtimeError = (payload: { message: string }) => {
+			setErrorMessage(payload.message);
+		};
+		const handleTypingStarted = (payload: {
+			roomId: string;
+			userId: string;
+		}) => {
+			if (
+				payload.roomId !== roomId ||
+				payload.userId === currentSessionUserId
+			) {
+				return;
+			}
+
+			setTypingUserIds((prev) =>
+				prev.includes(payload.userId) ? prev : [...prev, payload.userId]
+			);
+		};
+		const handleTypingStopped = (payload: {
+			roomId: string;
+			userId: string;
+		}) => {
+			if (payload.roomId !== roomId) {
+				return;
+			}
+
+			setTypingUserIds((prev) =>
+				prev.filter((userId) => userId !== payload.userId)
+			);
+		};
+
+		socket.on("connect", handleConnect);
+		socket.on("disconnect", handleDisconnect);
+		socket.on("chat:error", handleRealtimeError);
+		socket.on("chat:message:created", refreshIfCurrentRoom);
+		socket.on("chat:message:read", refreshIfCurrentRoom);
+		socket.on("chat:unread:updated", refreshIfCurrentRoom);
+		socket.on("chat:typing:started", handleTypingStarted);
+		socket.on("chat:typing:stopped", handleTypingStopped);
+		setRealtimeStatus(socket.connected ? "connected" : "connecting");
+		joinBambiChatRoom(roomId).catch((error) => {
+			setRealtimeStatus("offline");
+			setErrorMessage(
+				error instanceof Error
+					? error.message
+					: "실시간 채팅 연결을 확인해 주세요."
+			);
+		});
+
+		return () => {
+			socket.off("connect", handleConnect);
+			socket.off("disconnect", handleDisconnect);
+			socket.off("chat:error", handleRealtimeError);
+			socket.off("chat:message:created", refreshIfCurrentRoom);
+			socket.off("chat:message:read", refreshIfCurrentRoom);
+			socket.off("chat:unread:updated", refreshIfCurrentRoom);
+			socket.off("chat:typing:started", handleTypingStarted);
+			socket.off("chat:typing:stopped", handleTypingStopped);
+			leaveBambiChatRoom(roomId);
+			typingActiveRef.current = false;
+			setTypingUserIds([]);
+		};
+	}, [currentSessionUserId, invalidateRoom, roomId]);
+
+	useEffect(() => {
+		if (!(roomQuery.data && readCandidateMessageIdsSignature)) {
+			return;
+		}
+
+		if (
+			lastReadMessageSignatureRef.current === readCandidateMessageIdsSignature
+		) {
+			return;
+		}
+
+		lastReadMessageSignatureRef.current = readCandidateMessageIdsSignature;
+		markReadMutation.mutate({
+			chatRoomId: roomId,
+			messageIds: readCandidateMessageIds,
+		});
+	}, [
+		markReadMutation,
+		readCandidateMessageIds,
+		readCandidateMessageIdsSignature,
+		roomId,
+		roomQuery.data,
+	]);
+
+	useEffect(() => {
+		if (!roomQuery.data) {
+			return;
+		}
+
+		if (!message.trim()) {
+			if (typingActiveRef.current) {
+				emitBambiChatTypingStopped(roomId);
+				typingActiveRef.current = false;
+			}
+			return;
+		}
+
+		if (!typingActiveRef.current) {
+			emitBambiChatTypingStarted(roomId);
+			typingActiveRef.current = true;
+		}
+
+		const timeoutId = window.setTimeout(() => {
+			if (typingActiveRef.current) {
+				emitBambiChatTypingStopped(roomId);
+				typingActiveRef.current = false;
+			}
+		}, 1200);
+
+		return () => window.clearTimeout(timeoutId);
+	}, [message, roomId, roomQuery.data]);
 
 	if (roomQuery.isLoading) {
 		return (
@@ -142,6 +316,10 @@ export function SeekerChatRoomResponsive({
 			body,
 			chatRoomId: room.id,
 		});
+		if (typingActiveRef.current) {
+			emitBambiChatTypingStopped(room.id);
+			typingActiveRef.current = false;
+		}
 	};
 	const handleInterviewSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
@@ -197,6 +375,9 @@ export function SeekerChatRoomResponsive({
 					<Badge tone={room.isBlocked ? "danger" : "success"}>
 						{room.isBlocked ? "차단됨" : "대화 가능"}
 					</Badge>
+					<Badge tone={realtimeStatus === "connected" ? "success" : "neutral"}>
+						{getRealtimeStatusLabel(realtimeStatus)}
+					</Badge>
 				</header>
 				<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
 					<div className="flex items-center gap-2 font-extrabold text-sm">
@@ -240,6 +421,13 @@ export function SeekerChatRoomResponsive({
 							);
 						})
 					)}
+					{typingUserIds.length > 0 ? (
+						<div className="flex justify-start">
+							<div className="max-w-[78%] rounded-lg border border-coral-200 px-4 py-2 font-semibold text-coral-700 text-xs">
+								상대가 입력 중이에요
+							</div>
+						</div>
+					) : null}
 				</div>
 				<form
 					className="flex items-center gap-2 border-border border-t p-4"

@@ -1,6 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
+import {
+	connectBambiChatSocket,
+	joinBambiChatRoom,
+	leaveBambiChatRoom,
+} from "@/lib/bambi-chat-realtime";
 import { orpc } from "@/utils/orpc";
 import { Avatar, Badge, Card } from "../ds";
 import { Message, ShieldIcon } from "../icons";
@@ -16,12 +22,53 @@ const formatDateTime = (value: Date | string): string =>
 		timeStyle: "short",
 	}).format(new Date(value));
 
+const getRoomButtonClassName = (unreadCount: number): string =>
+	[
+		"flex cursor-pointer items-center gap-3 rounded-lg border bg-card p-4 text-left shadow-sm transition-colors hover:border-coral-200",
+		unreadCount > 0
+			? "border-coral-300 ring-1 ring-coral-200"
+			: "border-border",
+	].join(" ");
+
 export function SeekerChatListResponsive({
 	onFallback,
 	onOpen,
 }: SeekerChatListResponsiveProps) {
+	const queryClient = useQueryClient();
 	const chatsQuery = useQuery(orpc.bambi.chats.listMine.queryOptions());
 	const rooms = chatsQuery.data ?? [];
+	const roomIds = useMemo(() => rooms.map((room) => room.id), [rooms]);
+
+	useEffect(() => {
+		if (roomIds.length === 0) {
+			return;
+		}
+
+		const socket = connectBambiChatSocket();
+		const refreshList = (payload: { roomId: string }) => {
+			if (roomIds.includes(payload.roomId)) {
+				queryClient
+					.invalidateQueries({
+						queryKey: orpc.bambi.chats.listMine.queryKey(),
+					})
+					.catch(() => undefined);
+			}
+		};
+
+		socket.on("chat:message:created", refreshList);
+		socket.on("chat:unread:updated", refreshList);
+		for (const roomId of roomIds) {
+			joinBambiChatRoom(roomId).catch(() => undefined);
+		}
+
+		return () => {
+			socket.off("chat:message:created", refreshList);
+			socket.off("chat:unread:updated", refreshList);
+			for (const roomId of roomIds) {
+				leaveBambiChatRoom(roomId);
+			}
+		};
+	}, [queryClient, roomIds]);
 
 	if (chatsQuery.isError) {
 		return (
@@ -81,7 +128,7 @@ export function SeekerChatListResponsive({
 				<div className="grid gap-3">
 					{rooms.map((room) => (
 						<button
-							className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-coral-200"
+							className={getRoomButtonClassName(room.unreadCount)}
 							key={room.id}
 							onClick={() => onOpen(room.id)}
 							type="button"
@@ -95,6 +142,9 @@ export function SeekerChatListResponsive({
 									<Badge tone={room.isBlocked ? "danger" : "success"}>
 										{room.isBlocked ? "차단됨" : "대화 가능"}
 									</Badge>
+									{room.unreadCount > 0 ? (
+										<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
+									) : null}
 								</div>
 								<p className="mt-1 mb-0 truncate text-muted-foreground text-sm">
 									공고 {room.jobPostId}

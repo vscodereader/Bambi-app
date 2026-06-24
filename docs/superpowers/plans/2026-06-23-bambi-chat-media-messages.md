@@ -6,7 +6,7 @@
 
 **Architecture:** Store media metadata in the database and binary objects in a storage provider behind server-issued upload URLs. Treat every media item as reviewable content and render only files that pass validation.
 
-**Tech Stack:** Next.js App Router, Hono/oRPC, Drizzle ORM, PostgreSQL, object storage adapter, TanStack Query, React 19, Vitest, Ultracite.
+**Tech Stack:** Next.js App Router, Fastify/oRPC, Drizzle ORM, PostgreSQL, object storage adapter, TanStack Query, React 19, Vitest, Ultracite.
 
 ---
 

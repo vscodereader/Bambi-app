@@ -241,6 +241,34 @@ export const chatMessage = pgTable(
 	]
 );
 
+export const chatMessageReadReceipt = pgTable(
+	"chat_message_read_receipt",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		messageId: uuid("message_id")
+			.notNull()
+			.references(() => chatMessage.id, { onDelete: "cascade" }),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
+		readerUserId: text("reader_user_id")
+			.notNull()
+			.references(() => user.id),
+		readAt: timestamp("read_at").defaultNow().notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("chat_message_read_receipt_message_id_reader_user_id_uidx").on(
+			table.messageId,
+			table.readerUserId
+		),
+		index("chat_message_read_receipt_chat_room_id_idx").on(table.chatRoomId),
+		index("chat_message_read_receipt_reader_user_id_idx").on(
+			table.readerUserId
+		),
+	]
+);
+
 export const interviewSchedule = pgTable(
 	"interview_schedule",
 	{
@@ -382,6 +410,35 @@ export const adminModerationAction = pgTable(
 	},
 	(table) => [
 		index("admin_moderation_action_target_type_target_id_idx").on(
+			table.targetType,
+			table.targetId
+		),
+	]
+);
+
+export const bambiNotification = pgTable(
+	"bambi_notification",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		recipientUserId: text("recipient_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		actorUserId: text("actor_user_id")
+			.notNull()
+			.references(() => user.id),
+		targetType: moderationTargetType("target_type").notNull(),
+		targetId: text("target_id").notNull(),
+		chatRoomId: uuid("chat_room_id").references(() => chatRoom.id, {
+			onDelete: "cascade",
+		}),
+		readAt: timestamp("read_at"),
+		metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("bambi_notification_recipient_user_id_idx").on(table.recipientUserId),
+		index("bambi_notification_chat_room_id_idx").on(table.chatRoomId),
+		index("bambi_notification_target_type_target_id_idx").on(
 			table.targetType,
 			table.targetId
 		),

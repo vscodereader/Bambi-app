@@ -176,7 +176,7 @@ pnpm --filter web build
 
 1차 Web MVP 이후 별도 단계로 다룰 수 있는 항목은 [Post-MVP Roadmap](./superpowers/plans/2026-06-23-bambi-post-mvp-roadmap.md)에서 메인 플랜으로 관리한다.
 
-- [실시간 채팅 WebSocket, read receipt, typing indicator](./superpowers/plans/2026-06-23-bambi-realtime-chat.md)
+- [실시간 채팅 Socket.IO, read receipt, typing indicator](./superpowers/plans/2026-06-23-bambi-realtime-chat.md) — 2026-06-24 완료
 - [이미지/파일 메시지](./superpowers/plans/2026-06-23-bambi-chat-media-messages.md)
 - [리뷰/평점 작성 플로우](./superpowers/plans/2026-06-23-bambi-reviews-ratings.md)
 - [구인자 analytics와 유료 노출](./superpowers/plans/2026-06-23-bambi-employer-analytics-paid-placement.md)

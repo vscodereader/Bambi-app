@@ -15,6 +15,13 @@
       "when": 1781265406036,
       "tag": "0001_striped_molecule_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782264348222,
+      "tag": "0002_nappy_night_nurse",
+      "breakpoints": true
     }
   ]
 }

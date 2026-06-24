@@ -25,6 +25,8 @@ import {
 import { evlog, useLogger } from "evlog/fastify";
 import Fastify from "fastify";
 
+import { attachBambiRealtime } from "./bambi-realtime";
+
 const baseCorsConfig = {
 	origin: env.CORS_ORIGIN,
 	methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -72,6 +74,7 @@ fastify.addHook("preHandler", async (request) => {
 	await identifyUser(useLogger(), request.headers, request.url);
 });
 fastify.register(fastifyCors, baseCorsConfig);
+attachBambiRealtime(fastify);
 
 fastify.register((rpcApp) => {
 	// Fully utilize oRPC features by letting oRPC parse the request body.

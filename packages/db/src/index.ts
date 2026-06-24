@@ -22,9 +22,11 @@ import {
 } from "./schema/auth";
 import {
 	adminModerationAction,
+	bambiNotification,
 	bambiProfile,
 	bambiProfileRelations,
 	chatMessage,
+	chatMessageReadReceipt,
 	chatRoom,
 	contactRevealConsent,
 	employerOrganizationProfile,
@@ -44,9 +46,11 @@ const schema = {
 	account,
 	accountRelations,
 	adminModerationAction,
+	bambiNotification,
 	bambiProfile,
 	bambiProfileRelations,
 	chatMessage,
+	chatMessageReadReceipt,
 	chatRoom,
 	contactRevealConsent,
 	employerOrganizationProfile,
