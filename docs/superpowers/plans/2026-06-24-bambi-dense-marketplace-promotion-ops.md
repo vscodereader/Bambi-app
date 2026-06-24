@@ -283,7 +283,7 @@ Create `bambi.promotions` procedures:
 
 All procedures must call existing employer access checks before touching a job's campaign.
 
-- [ ] **Step 4: Add API tests**
+- [x] **Step 4: Add API tests**
 
 Cover:
 
@@ -299,9 +299,9 @@ pnpm --filter @bambi-app/api test
 
 Expected: all API tests pass.
 
-Note: router-level API tests were not added in this pass. Promotion ordering and
-boost policy are covered by `bambi-promotions.test.ts`; router behavior was
-verified through type checks, full API tests, seed data, and browser smoke checks.
+Note: shared API service tests now cover sectioned public listing behavior,
+active-only promotion labels, and campaign-owned organization/team access scope
+used before boost authorization.
 
 ## Task 4: Dense Marketplace UI
 

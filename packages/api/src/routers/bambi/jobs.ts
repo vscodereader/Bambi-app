@@ -33,8 +33,8 @@ import {
 	type JobPostStatus,
 } from "../../services/bambi-policy";
 import {
-	getPromotionLabel,
-	type PromotionTier,
+	buildPublicJobSections,
+	type PublicPromotedJobListRow,
 } from "../../services/bambi-promotions";
 
 const jobPostInput = z.object({
@@ -56,11 +56,6 @@ const listInput = z.object({
 	minPayAmount: z.number().int().positive().optional(),
 	limit: z.number().int().min(1).max(50).default(20),
 });
-
-const promotedSectionLimits = {
-	premium: 5,
-	recommended: 10,
-} as const satisfies Record<"premium" | "recommended", number>;
 
 const hasRiskFlags = (input: z.infer<typeof jobPostInput>): boolean => {
 	const text = `${input.title} ${input.description} ${input.interviewNotes ?? ""}`;
@@ -86,25 +81,30 @@ export const jobsRouter = {
 			filters.push(sql`${jobPost.payAmount} >= ${input.minPayAmount}`);
 		}
 
-		const getPromotedJobs = async (tier: "premium" | "recommended") => {
-			const rows = await db
+		const getPromotedJobs = async (
+			tier: "premium" | "recommended"
+		): Promise<PublicPromotedJobListRow[]> =>
+			await db
 				.select({
-					id: jobPost.id,
-					title: jobPost.title,
-					industryCategory: jobPost.industryCategory,
-					region: jobPost.region,
-					payAmount: jobPost.payAmount,
-					payUnit: jobPost.payUnit,
-					workSchedule: jobPost.workSchedule,
 					description: jobPost.description,
-					status: jobPost.status,
 					employerDisplayName: employerOrganizationProfile.displayName,
 					employerVerificationStatus:
 						employerOrganizationProfile.verificationStatus,
-					teamDisplayName: employerTeamProfile.displayName,
-					publishedAt: jobPost.publishedAt,
-					promotionTier: jobPromotionCampaign.tier,
+					id: jobPost.id,
+					industryCategory: jobPost.industryCategory,
 					lastBoostedAt: jobPromotionCampaign.lastBoostedAt,
+					payAmount: jobPost.payAmount,
+					payUnit: jobPost.payUnit,
+					promotionEndsAt: jobPromotionCampaign.endsAt,
+					promotionStartsAt: jobPromotionCampaign.startsAt,
+					promotionStatus: jobPromotionCampaign.status,
+					promotionTier: jobPromotionCampaign.tier,
+					publishedAt: jobPost.publishedAt,
+					region: jobPost.region,
+					status: jobPost.status,
+					teamDisplayName: employerTeamProfile.displayName,
+					title: jobPost.title,
+					workSchedule: jobPost.workSchedule,
 				})
 				.from(jobPromotionCampaign)
 				.innerJoin(jobPost, eq(jobPromotionCampaign.jobPostId, jobPost.id))
@@ -129,80 +129,52 @@ export const jobsRouter = {
 					desc(jobPromotionCampaign.lastBoostedAt),
 					desc(jobPromotionCampaign.startsAt)
 				)
-				.limit(promotedSectionLimits[tier]);
+				.limit(tier === "premium" ? 5 : 10);
 
-			return rows.map((row) => ({
-				...row,
-				isPromoted: true,
-				promotionLabel: getPromotionLabel(row.promotionTier as PromotionTier),
-			}));
-		};
+		const [premiumRows, recommendedRows, organicRows] = await Promise.all([
+			getPromotedJobs("premium"),
+			getPromotedJobs("recommended"),
+			db
+				.select({
+					description: jobPost.description,
+					employerDisplayName: employerOrganizationProfile.displayName,
+					employerVerificationStatus:
+						employerOrganizationProfile.verificationStatus,
+					id: jobPost.id,
+					industryCategory: jobPost.industryCategory,
+					payAmount: jobPost.payAmount,
+					payUnit: jobPost.payUnit,
+					publishedAt: jobPost.publishedAt,
+					region: jobPost.region,
+					status: jobPost.status,
+					teamDisplayName: employerTeamProfile.displayName,
+					title: jobPost.title,
+					workSchedule: jobPost.workSchedule,
+				})
+				.from(jobPost)
+				.innerJoin(
+					employerOrganizationProfile,
+					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+				)
+				.leftJoin(
+					employerTeamProfile,
+					eq(jobPost.teamId, employerTeamProfile.teamId)
+				)
+				.where(and(...filters))
+				.orderBy(
+					sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
+					desc(jobPost.publishedAt)
+				)
+				.limit(input.limit + 15),
+		]);
 
-		const premium = await getPromotedJobs("premium");
-		const recommended = await getPromotedJobs("recommended");
-		const promotedJobIds = new Set(
-			[...premium, ...recommended].map((job) => job.id)
-		);
-		const organicLimit = Math.max(
-			0,
-			input.limit - premium.length - recommended.length
-		);
-		const organicRows = organicLimit
-			? await db
-					.select({
-						id: jobPost.id,
-						title: jobPost.title,
-						industryCategory: jobPost.industryCategory,
-						region: jobPost.region,
-						payAmount: jobPost.payAmount,
-						payUnit: jobPost.payUnit,
-						workSchedule: jobPost.workSchedule,
-						description: jobPost.description,
-						status: jobPost.status,
-						employerDisplayName: employerOrganizationProfile.displayName,
-						employerVerificationStatus:
-							employerOrganizationProfile.verificationStatus,
-						teamDisplayName: employerTeamProfile.displayName,
-						publishedAt: jobPost.publishedAt,
-					})
-					.from(jobPost)
-					.innerJoin(
-						employerOrganizationProfile,
-						eq(
-							jobPost.organizationId,
-							employerOrganizationProfile.organizationId
-						)
-					)
-					.leftJoin(
-						employerTeamProfile,
-						eq(jobPost.teamId, employerTeamProfile.teamId)
-					)
-					.where(and(...filters))
-					.orderBy(
-						sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
-						desc(jobPost.publishedAt)
-					)
-					.limit(organicLimit + promotedJobIds.size)
-			: [];
-		const organic = organicRows
-			.filter((row) => !promotedJobIds.has(row.id))
-			.slice(0, organicLimit)
-			.map((row) => ({
-				...row,
-				isPromoted: false,
-				lastBoostedAt: null,
-				promotionLabel: null,
-				promotionTier: null,
-			}));
-
-		return {
-			totalCount: premium.length + recommended.length + organic.length,
-			sections: {
-				premium,
-				recommended,
-				organic,
-			},
-		};
+		return buildPublicJobSections({
+			limit: input.limit,
+			now,
+			organicRows,
+			premiumRows,
+			recommendedRows,
+		});
 	}),
 
 	legacyList: publicProcedure.input(listInput).handler(async ({ input }) => {

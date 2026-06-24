@@ -21,6 +21,7 @@ import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import type { JobPostStatus } from "../../services/bambi-policy";
 import {
 	canConsumeManualBoost,
+	getCampaignEmployerAccessScope,
 	getManualBoostConsumption,
 	getPromotionLabel,
 	getRemainingManualBoosts,
@@ -75,8 +76,7 @@ const getCampaignForAccess = async (
 	}
 
 	const actor = await requireEmployerPostingAccess({
-		organizationId: row.organizationId,
-		teamId: row.teamId,
+		...getCampaignEmployerAccessScope(row),
 		session,
 	});
 

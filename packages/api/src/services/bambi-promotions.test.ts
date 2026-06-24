@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	buildPublicJobSections,
 	canConsumeManualBoost,
+	getCampaignEmployerAccessScope,
 	getManualBoostConsumption,
 	getPromotionSection,
 	getRemainingManualBoosts,
 	isCampaignPubliclyActive,
 	type PromotionCampaignForListing,
+	type PublicJobListRow,
+	type PublicPromotedJobListRow,
 	sortPromotedCampaigns,
 } from "./bambi-promotions";
 
@@ -26,6 +30,37 @@ const makeCampaign = (
 	startsAt: PAST,
 	status: "active",
 	tier: "recommended",
+	...overrides,
+});
+
+const makeJobRow = (
+	overrides: Partial<PublicJobListRow> = {}
+): PublicJobListRow => ({
+	description: "안전한 채팅으로 면접 일정을 조율합니다.",
+	employerDisplayName: "클럽 루나",
+	employerVerificationStatus: "verified",
+	id: "job-1",
+	industryCategory: "라운지",
+	payAmount: 180_000,
+	payUnit: "일급",
+	publishedAt: new Date("2026-06-20T09:00:00.000Z"),
+	region: "서울 강남구",
+	status: "published",
+	teamDisplayName: null,
+	title: "강남 라운지 홀 스태프",
+	workSchedule: "20:00-02:00",
+	...overrides,
+});
+
+const makePromotedJobRow = (
+	overrides: Partial<PublicPromotedJobListRow> = {}
+): PublicPromotedJobListRow => ({
+	...makeJobRow(),
+	lastBoostedAt: null,
+	promotionEndsAt: FUTURE,
+	promotionStartsAt: PAST,
+	promotionStatus: "active",
+	promotionTier: "premium",
 	...overrides,
 });
 
@@ -135,5 +170,67 @@ describe("bambi promotions", () => {
 				makeCampaign({ manualBoostsTotal: 2, manualBoostsUsed: 5 })
 			)
 		).toBe(0);
+	});
+
+	it("builds public job sections without unpublished jobs", () => {
+		const sections = buildPublicJobSections({
+			limit: 10,
+			now: NOW,
+			organicRows: [
+				makeJobRow({ id: "organic-published" }),
+				makeJobRow({ id: "organic-hidden", status: "hidden" }),
+			],
+			premiumRows: [
+				makePromotedJobRow({ id: "premium-published" }),
+				makePromotedJobRow({ id: "premium-hidden", status: "hidden" }),
+			],
+			recommendedRows: [],
+		});
+
+		expect(sections.totalCount).toBe(2);
+		expect(sections.sections.premium.map((job) => job.id)).toEqual([
+			"premium-published",
+		]);
+		expect(sections.sections.organic.map((job) => job.id)).toEqual([
+			"organic-published",
+		]);
+	});
+
+	it("adds promotion labels only for active public campaigns", () => {
+		const sections = buildPublicJobSections({
+			limit: 10,
+			now: NOW,
+			organicRows: [],
+			premiumRows: [makePromotedJobRow({ id: "active-premium" })],
+			recommendedRows: [
+				makePromotedJobRow({
+					id: "paused-recommended",
+					promotionStatus: "paused",
+					promotionTier: "recommended",
+				}),
+			],
+		});
+
+		expect(sections.sections.premium).toMatchObject([
+			{
+				id: "active-premium",
+				isPromoted: true,
+				promotionLabel: "프리미엄",
+				promotionTier: "premium",
+			},
+		]);
+		expect(sections.sections.recommended).toEqual([]);
+	});
+
+	it("builds employer access scope from the campaign organization before boost", () => {
+		expect(
+			getCampaignEmployerAccessScope({
+				organizationId: "other-organization",
+				teamId: "other-team",
+			})
+		).toEqual({
+			organizationId: "other-organization",
+			teamId: "other-team",
+		});
 	});
 });
