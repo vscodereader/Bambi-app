@@ -62,6 +62,23 @@ const getErrorCode = (error: Error | null): string | undefined =>
 		? error.code
 		: undefined;
 
+interface PromotionSummaryItem {
+	remainingManualBoosts: number;
+	status: string;
+}
+
+const getPromotionSummary = (promotions: PromotionSummaryItem[]) => ({
+	activeCount: promotions.filter((promotion) => promotion.status === "active")
+		.length,
+	pendingCount: promotions.filter(
+		(promotion) => promotion.status === "pending_payment"
+	).length,
+	remainingBoostCount: promotions.reduce(
+		(total, promotion) => total + promotion.remainingManualBoosts,
+		0
+	),
+});
+
 export default function EmployerPage() {
 	const session = authClient.useSession();
 	const isSignedIn = Boolean(session.data?.user);
@@ -75,10 +92,15 @@ export default function EmployerPage() {
 		...orpc.bambi.jobs.listMine.queryOptions(),
 		enabled: canLoadJobs,
 	});
+	const promotionsQuery = useQuery({
+		...orpc.bambi.promotions.listMine.queryOptions(),
+		enabled: canLoadJobs,
+	});
 	const organizationProfiles =
 		mineQuery.data?.employerOrganizationProfiles ?? [];
 	const teamProfiles = mineQuery.data?.employerTeamProfiles ?? [];
 	const jobs = jobsQuery.data ?? [];
+	const promotionSummary = getPromotionSummary(promotionsQuery.data ?? []);
 
 	const getOrganizationLabel = (organizationId: string): string =>
 		organizationProfiles.find(
@@ -366,15 +388,26 @@ export default function EmployerPage() {
 							내 공고
 						</h2>
 						<p className="mt-1 text-muted-foreground text-sm">
-							최근 수정된 공고부터 표시됩니다.
+							최근 수정된 공고부터 표시됩니다. 진행 중인 프로모션{" "}
+							{promotionSummary.activeCount}개 · 결제 대기{" "}
+							{promotionSummary.pendingCount}개 · 남은 끌어올리기{" "}
+							{promotionSummary.remainingBoostCount}회
 						</p>
 					</div>
-					<Link
-						className={buttonVariants({ variant: "outline" })}
-						href="/seeker"
-					>
-						공개 공고 보기
-					</Link>
+					<div className="flex flex-wrap gap-2">
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href={"/employer/promotions" as Route}
+						>
+							프로모션 관리
+						</Link>
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href="/seeker"
+						>
+							공개 공고 보기
+						</Link>
+					</div>
 				</div>
 				{jobsContent}
 			</section>

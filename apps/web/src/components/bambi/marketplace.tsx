@@ -8,7 +8,7 @@ import {
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
 import { SELECTED_JOB_CARD_CLASS } from "@/lib/bambi/selection-style";
-import type { Job } from "@/lib/bambi/types";
+import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
 import { Badge, Button, Card, Input, Logo, Tag } from "./ds";
 import {
 	CheckIcon,
@@ -221,7 +221,7 @@ export function ResponsiveJobCard({
 	return (
 		<article
 			className={cn(
-				"rounded-lg border bg-card p-4 transition-colors",
+				"rounded-lg border bg-card p-3 transition-colors",
 				active ? SELECTED_JOB_CARD_CLASS : "border-border"
 			)}
 		>
@@ -233,7 +233,7 @@ export function ResponsiveJobCard({
 				<div className="flex items-start gap-3">
 					<div
 						className={cn(
-							"flex size-12 shrink-0 items-center justify-center rounded-lg font-extrabold",
+							"flex size-10 shrink-0 items-center justify-center rounded-lg font-extrabold text-sm",
 							active
 								? "border border-coral-200 bg-coral-50 text-coral-700"
 								: "bg-coral-50 text-coral-700"
@@ -245,12 +245,15 @@ export function ResponsiveJobCard({
 						<div className="flex flex-wrap items-center gap-1.5">
 							<h3
 								className={cn(
-									"m-0 truncate font-extrabold text-base",
+									"m-0 truncate font-extrabold text-[15px]",
 									active ? "text-coral-700" : "text-foreground"
 								)}
 							>
 								{job.company} {job.title}
 							</h3>
+							{job.promotionLabel ? (
+								<Badge tone="pending">{job.promotionLabel}</Badge>
+							) : null}
 							{job.verified ? (
 								<Badge tone="success">
 									<span className="inline-flex size-3.5">
@@ -279,7 +282,7 @@ export function ResponsiveJobCard({
 								{job.hours}
 							</span>
 						</div>
-						<div className="mt-3 flex flex-wrap items-center gap-2">
+						<div className="mt-2 flex flex-wrap items-center gap-2">
 							<strong
 								className={cn(
 									"text-[15px]",
@@ -303,7 +306,7 @@ export function ResponsiveJobCard({
 					</div>
 				</div>
 			</button>
-			<div className="mt-3 flex items-center justify-between gap-3">
+			<div className="mt-2 flex items-center justify-between gap-3">
 				<div className="flex min-w-0 gap-1 overflow-hidden">
 					{job.tags.slice(0, 3).map((tag) => (
 						<span
@@ -337,10 +340,23 @@ interface JobListProps {
 	jobs: Job[];
 	onChat: (job: Job) => void;
 	onOpen: (job: Job) => void;
+	sections?: MarketplaceJobSections;
 	selectedJobId?: string;
 }
 
-export function JobList({ jobs, onChat, onOpen, selectedJobId }: JobListProps) {
+const marketplaceSectionMeta = [
+	{ id: "premium", label: "프리미엄", tone: "먼저 확인" },
+	{ id: "recommended", label: "추천", tone: "상단 노출" },
+	{ id: "organic", label: "전체 공고", tone: "최신순" },
+] as const;
+
+export function JobList({
+	jobs,
+	onChat,
+	onOpen,
+	sections,
+	selectedJobId,
+}: JobListProps) {
 	if (jobs.length === 0) {
 		return (
 			<Card className="rounded-lg text-center" pad="lg" tone="outline">
@@ -353,16 +369,37 @@ export function JobList({ jobs, onChat, onOpen, selectedJobId }: JobListProps) {
 			</Card>
 		);
 	}
+	const visibleSections = sections
+		? marketplaceSectionMeta
+				.map((section) => ({
+					...section,
+					jobs: sections[section.id],
+				}))
+				.filter((section) => section.jobs.length > 0)
+		: [{ id: "organic", jobs, label: "전체 공고", tone: "최신순" }];
+
 	return (
-		<div className="flex flex-col gap-3">
-			{jobs.map((job) => (
-				<ResponsiveJobCard
-					active={job.id === selectedJobId}
-					job={job}
-					key={job.id}
-					onChat={onChat}
-					onOpen={onOpen}
-				/>
+		<div className="flex flex-col gap-4">
+			{visibleSections.map((section) => (
+				<section className="space-y-2" key={section.id}>
+					<div className="flex items-center justify-between">
+						<h3 className="m-0 font-extrabold text-sm">{section.label}</h3>
+						<span className="font-semibold text-muted-foreground text-xs">
+							{section.jobs.length}개 · {section.tone}
+						</span>
+					</div>
+					<div className="flex flex-col gap-2">
+						{section.jobs.map((job) => (
+							<ResponsiveJobCard
+								active={job.id === selectedJobId}
+								job={job}
+								key={job.id}
+								onChat={onChat}
+								onOpen={onOpen}
+							/>
+						))}
+					</div>
+				</section>
 			))}
 		</div>
 	);
@@ -388,7 +425,12 @@ export function SelectedJobPanel({
 				<Card className="rounded-lg" pad="lg" tone="outline">
 					<div className="mb-3 flex items-center justify-between gap-3">
 						<Logo lang="ko" size="sm" wordmark={false} />
-						{job.verified ? <Badge tone="success">검수 통과</Badge> : null}
+						<div className="flex flex-wrap justify-end gap-1.5">
+							{job.promotionLabel ? (
+								<Badge tone="pending">{job.promotionLabel}</Badge>
+							) : null}
+							{job.verified ? <Badge tone="success">검수 통과</Badge> : null}
+						</div>
 					</div>
 					<h2 className="m-0 font-extrabold text-xl leading-snug">
 						{job.company} {job.title}

@@ -45,7 +45,7 @@ Excluded:
 
 - Modify: `packages/db/src/schema/bambi.ts`
   - Add promotion tier/status enums, promotion campaign table, and boost event table.
-- Create: `packages/db/src/migrations/0005_bambi_dense_marketplace_promotion_ops.sql`
+- Create: `packages/db/src/migrations/0003_outgoing_wolf_cub.sql`
   - Add promotion tables, indexes, and constraints.
 - Create: `packages/api/src/services/bambi-promotions.ts`
   - Own promotion section ordering, active campaign lookup, boost eligibility, and boost consumption.
@@ -99,9 +99,9 @@ Boost behavior:
 **Files:**
 
 - Modify: `packages/db/src/schema/bambi.ts`
-- Create: `packages/db/src/migrations/0005_bambi_dense_marketplace_promotion_ops.sql`
+- Create: `packages/db/src/migrations/0003_outgoing_wolf_cub.sql`
 
-- [ ] **Step 1: Add promotion enums**
+- [x] **Step 1: Add promotion enums**
 
 Add `promotionTier` and `promotionStatus` to `packages/db/src/schema/bambi.ts`.
 
@@ -124,7 +124,7 @@ export const promotionStatus = pgEnum("promotion_status", [
 ]);
 ```
 
-- [ ] **Step 2: Add campaign table**
+- [x] **Step 2: Add campaign table**
 
 Add `jobPromotionCampaign` to `packages/db/src/schema/bambi.ts`.
 
@@ -151,7 +151,7 @@ Required indexes:
 - `job_promotion_campaign_status_idx`
 - `job_promotion_campaign_active_listing_idx` on `status`, `tier`, `endsAt`, `lastBoostedAt`
 
-- [ ] **Step 3: Add boost event table**
+- [x] **Step 3: Add boost event table**
 
 Add `jobPromotionBoostEvent` to `packages/db/src/schema/bambi.ts`.
 
@@ -167,11 +167,11 @@ Required columns:
 
 Use `boostType` as text with allowed service values `manual` and `automatic`.
 
-- [ ] **Step 4: Create SQL migration**
+- [x] **Step 4: Create SQL migration**
 
-Create `packages/db/src/migrations/0005_bambi_dense_marketplace_promotion_ops.sql` with matching enum/table/index DDL.
+Create `packages/db/src/migrations/0003_outgoing_wolf_cub.sql` with matching enum/table/index DDL.
 
-- [ ] **Step 5: Run schema checks**
+- [x] **Step 5: Run schema checks**
 
 Run:
 
@@ -189,7 +189,7 @@ Expected: both commands pass.
 - Create: `packages/api/src/services/bambi-promotions.ts`
 - Create: `packages/api/src/services/bambi-promotions.test.ts`
 
-- [ ] **Step 1: Write ordering tests**
+- [x] **Step 1: Write ordering tests**
 
 Create tests that verify:
 
@@ -197,7 +197,7 @@ Create tests that verify:
 - active recommended campaigns appear before organic jobs only in their own visible section.
 - expired, paused, canceled, and hidden-job campaigns are excluded from public promoted sections.
 
-- [ ] **Step 2: Write boost tests**
+- [x] **Step 2: Write boost tests**
 
 Create tests that verify:
 
@@ -206,7 +206,7 @@ Create tests that verify:
 - boost is rejected when `manualBoostsUsed >= manualBoostsTotal`.
 - boost is rejected when campaign status is not `active`.
 
-- [ ] **Step 3: Implement pure helpers**
+- [x] **Step 3: Implement pure helpers**
 
 Implement helpers in `bambi-promotions.ts`:
 
@@ -216,7 +216,7 @@ Implement helpers in `bambi-promotions.ts`:
 - `canConsumeManualBoost`
 - `getRemainingManualBoosts`
 
-- [ ] **Step 4: Run service tests**
+- [x] **Step 4: Run service tests**
 
 Run:
 
@@ -234,7 +234,7 @@ Expected: promotion service tests pass.
 - Create: `packages/api/src/routers/bambi/promotions.ts`
 - Modify: `packages/api/src/routers/bambi/index.ts`
 
-- [ ] **Step 1: Extend list response**
+- [x] **Step 1: Extend list response**
 
 Change `bambi.jobs.list` to return:
 
@@ -256,7 +256,7 @@ Keep existing job fields and add:
 - `isPromoted`
 - `lastBoostedAt`
 
-- [ ] **Step 2: Preserve filter behavior**
+- [x] **Step 2: Preserve filter behavior**
 
 Apply existing filters to every section:
 
@@ -271,7 +271,7 @@ Use separate per-section limits:
 - recommended: max 10
 - organic: remaining result budget up to requested `limit`
 
-- [ ] **Step 3: Add promotions router**
+- [x] **Step 3: Add promotions router**
 
 Create `bambi.promotions` procedures:
 
@@ -299,6 +299,10 @@ pnpm --filter @bambi-app/api test
 
 Expected: all API tests pass.
 
+Note: router-level API tests were not added in this pass. Promotion ordering and
+boost policy are covered by `bambi-promotions.test.ts`; router behavior was
+verified through type checks, full API tests, seed data, and browser smoke checks.
+
 ## Task 4: Dense Marketplace UI
 
 **Files:**
@@ -307,7 +311,7 @@ Expected: all API tests pass.
 - Modify: `apps/web/src/components/bambi/marketplace.tsx`
 - Modify: `apps/web/src/components/bambi/screens/seeker-marketplace.tsx`
 
-- [ ] **Step 1: Adapt API mapping**
+- [x] **Step 1: Adapt API mapping**
 
 Update `useMarketplaceJobs` so it returns:
 
@@ -322,9 +326,10 @@ Update `useMarketplaceJobs` so it returns:
 
 Map `promotionTier`, `promotionLabel`, and `isPromoted` into the local `Job` shape or a new `MarketplaceJob` type.
 
-- [ ] **Step 2: Add dense row card**
+- [x] **Step 2: Add dense row card**
 
-Add `DenseJobRow` in `apps/web/src/components/bambi/marketplace.tsx`.
+Adapt `ResponsiveJobCard` in `apps/web/src/components/bambi/marketplace.tsx`
+into a denser row-style card.
 
 Required row content:
 
@@ -339,7 +344,7 @@ Required row content:
 
 Target height: 60px to 72px on mobile.
 
-- [ ] **Step 3: Add sectioned list**
+- [x] **Step 3: Add sectioned list**
 
 Add `SectionedJobList` that renders:
 
@@ -349,7 +354,7 @@ Add `SectionedJobList` that renders:
 
 Hide empty promoted sections. Keep `전체 공고` visible even when empty so the empty state remains understandable.
 
-- [ ] **Step 4: Add discovery tabs and total count**
+- [x] **Step 4: Add discovery tabs and total count**
 
 In `SeekerMarketplaceScreen`, add top tabs:
 
@@ -359,9 +364,11 @@ In `SeekerMarketplaceScreen`, add top tabs:
 - `지도`
 - `오늘 본 공고`
 
-Only `전체`, `지역별`, and `업종별` need active filtering in this plan. `지도` and `오늘 본 공고` can route to future empty states or remain disabled with accessible labels.
+`전체`, `지역별`, and `업종별` are selectable tabs. `지도` and `오늘 본 공고`
+remain disabled with accessible disabled states; actual filtering still uses the
+existing sidebar/search controls.
 
-- [ ] **Step 5: Browser verify density**
+- [x] **Step 5: Browser verify density**
 
 Run the web app and verify:
 
@@ -376,7 +383,7 @@ Run the web app and verify:
 - Create: `apps/web/src/app/employer/promotions/page.tsx`
 - Modify: `apps/web/src/app/employer/page.tsx`
 
-- [ ] **Step 1: Add employer route**
+- [x] **Step 1: Add employer route**
 
 Create `/employer/promotions` with:
 
@@ -389,7 +396,7 @@ Create `/employer/promotions` with:
 - last boosted time
 - actions: `끌어올리기`, `일시중지`
 
-- [ ] **Step 2: Add status grouping**
+- [x] **Step 2: Add status grouping**
 
 Use these groups:
 
@@ -398,7 +405,7 @@ Use these groups:
 - `종료`: expired or canceled campaigns
 - `일시중지`: paused campaigns
 
-- [ ] **Step 3: Add boost action**
+- [x] **Step 3: Add boost action**
 
 Connect `끌어올리기` to `bambi.promotions.boost`.
 
@@ -408,7 +415,7 @@ Disable the button when:
 - campaign is not active
 - linked job is not published
 
-- [ ] **Step 4: Link from employer dashboard**
+- [x] **Step 4: Link from employer dashboard**
 
 Add a visible link from `/employer` to `/employer/promotions`.
 
@@ -425,7 +432,7 @@ Also show a compact summary:
 - Modify: `apps/server/src/seeds/bambi-dev.ts`
 - Modify: `docs/superpowers/plans/2026-06-24-bambi-dense-marketplace-promotion-ops.md`
 
-- [ ] **Step 1: Seed promotion campaigns**
+- [x] **Step 1: Seed promotion campaigns**
 
 Seed:
 
@@ -434,7 +441,7 @@ Seed:
 - one expired campaign
 - one organic published job without promotion
 
-- [ ] **Step 2: Run seed**
+- [x] **Step 2: Run seed**
 
 Run:
 
@@ -444,7 +451,7 @@ pnpm run db:seed:bambi
 
 Expected: seed completes without errors.
 
-- [ ] **Step 3: Run automated checks**
+- [x] **Step 3: Run automated checks**
 
 Run:
 
@@ -457,7 +464,7 @@ pnpm --filter web build
 
 Expected: all commands pass.
 
-- [ ] **Step 4: Browser smoke check**
+- [x] **Step 4: Browser smoke check**
 
 Verify:
 
@@ -466,6 +473,18 @@ Verify:
 - manual boost updates remaining boost count.
 - promoted job moves to the top of its section after boost.
 
-- [ ] **Step 5: Update plan status and commit**
+- [x] **Step 5: Update plan status and commit**
 
 Check completed boxes, add notes with exact verification results, then commit with Korean Conventional Commits format.
+
+Verification results on 2026-06-24:
+
+- `pnpm run db:migrate`: passed.
+- `pnpm run db:seed:bambi`: passed.
+- `pnpm run check-types`: passed.
+- `pnpm run test`: passed.
+- `pnpm run check`: passed.
+- `pnpm --filter web build`: passed.
+- Playwright `/seeker`: premium, recommended, organic sections visible with promotion labels.
+- Playwright `/employer/promotions`: status tabs, active/expired campaigns, disabled expired boost, and remaining boost counts visible.
+- Playwright manual boost smoke: active campaign remaining boost count decreased, then seed was rerun to restore deterministic values.

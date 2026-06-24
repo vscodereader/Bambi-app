@@ -22,6 +22,13 @@
       "when": 1782264348222,
       "tag": "0002_nappy_night_nurse",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782282090655,
+      "tag": "0003_outgoing_wolf_cub",
+      "breakpoints": true
     }
   ]
 }

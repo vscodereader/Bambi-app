@@ -20,13 +20,25 @@ import {
 	SelectedJobPanel,
 } from "../marketplace";
 
+const discoveryTabs = [
+	{ id: "all", label: "전체", disabled: false },
+	{ id: "region", label: "지역별", disabled: false },
+	{ id: "category", label: "업종별", disabled: false },
+	{ id: "map", label: "지도", disabled: true },
+	{ id: "recent", label: "오늘 본 공고", disabled: true },
+] as const;
+
+type DiscoveryTabId = (typeof discoveryTabs)[number]["id"];
+
 export function SeekerMarketplaceScreen() {
 	const router = useRouter();
+	const [discoveryTabId, setDiscoveryTabId] = useState<DiscoveryTabId>("all");
 	const [filters, setFilters] = useState<MarketplaceFilters>(
 		DEFAULT_MARKETPLACE_FILTERS
 	);
 	const [selectedJobId, setSelectedJobId] = useState(JOBS[0]?.id);
-	const { isApiBacked, isError, jobs, refetch } = useMarketplaceJobs(filters);
+	const { isApiBacked, isError, jobs, refetch, sections } =
+		useMarketplaceJobs(filters);
 	const selectedJob = getSelectedMarketplaceJob(jobs, selectedJobId);
 
 	const openJob = (job: Job) => {
@@ -60,6 +72,24 @@ export function SeekerMarketplaceScreen() {
 							보호돼요.
 						</p>
 					</div>
+					<div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
+						{discoveryTabs.map((tab) => (
+							<button
+								aria-pressed={discoveryTabId === tab.id}
+								className={
+									discoveryTabId === tab.id
+										? "h-9 shrink-0 rounded-lg bg-foreground px-3 font-bold text-background text-sm disabled:opacity-50"
+										: "h-9 shrink-0 rounded-lg border border-border bg-card px-3 font-bold text-muted-foreground text-sm disabled:opacity-50"
+								}
+								disabled={tab.disabled}
+								key={tab.id}
+								onClick={() => setDiscoveryTabId(tab.id)}
+								type="button"
+							>
+								{tab.label}
+							</button>
+						))}
+					</div>
 					<MarketplaceSearch filters={filters} onChange={setFilters} />
 				</div>
 				{isError ? (
@@ -84,6 +114,7 @@ export function SeekerMarketplaceScreen() {
 					jobs={jobs}
 					onChat={chatJob}
 					onOpen={openJob}
+					sections={sections}
 					selectedJobId={selectedJob?.id}
 				/>
 			</section>

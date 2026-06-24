@@ -62,6 +62,21 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"user",
 ]);
 
+export const promotionTier = pgEnum("promotion_tier", [
+	"premium",
+	"recommended",
+	"standard",
+]);
+
+export const promotionStatus = pgEnum("promotion_status", [
+	"draft",
+	"pending_payment",
+	"active",
+	"paused",
+	"expired",
+	"canceled",
+]);
+
 export const bambiProfile = pgTable(
 	"bambi_profile",
 	{
@@ -179,6 +194,73 @@ export const jobPost = pgTable(
 			table.industryCategory,
 			table.region,
 			table.payAmount
+		),
+	]
+);
+
+export const jobPromotionCampaign = pgTable(
+	"job_promotion_campaign",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		tier: promotionTier("tier").notNull(),
+		status: promotionStatus("status").default("draft").notNull(),
+		startsAt: timestamp("starts_at").notNull(),
+		endsAt: timestamp("ends_at").notNull(),
+		manualBoostsTotal: integer("manual_boosts_total").default(0).notNull(),
+		manualBoostsUsed: integer("manual_boosts_used").default(0).notNull(),
+		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
+		lastBoostedAt: timestamp("last_boosted_at"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("job_promotion_campaign_job_post_id_idx").on(table.jobPostId),
+		index("job_promotion_campaign_organization_id_idx").on(
+			table.organizationId
+		),
+		index("job_promotion_campaign_status_idx").on(table.status),
+		index("job_promotion_campaign_active_listing_idx").on(
+			table.status,
+			table.tier,
+			table.endsAt,
+			table.lastBoostedAt
+		),
+	]
+);
+
+export const jobPromotionBoostEvent = pgTable(
+	"job_promotion_boost_event",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		campaignId: uuid("campaign_id")
+			.notNull()
+			.references(() => jobPromotionCampaign.id, { onDelete: "cascade" }),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		actorUserId: text("actor_user_id")
+			.notNull()
+			.references(() => user.id),
+		boostType: text("boost_type").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_promotion_boost_event_campaign_id_idx").on(table.campaignId),
+		index("job_promotion_boost_event_job_post_id_idx").on(table.jobPostId),
+		index("job_promotion_boost_event_organization_id_idx").on(
+			table.organizationId
 		),
 	]
 );
@@ -471,4 +553,37 @@ export const employerTeamProfileRelations = relations(
 
 export const jobPostRelations = relations(jobPost, ({ many }) => ({
 	chatRooms: many(chatRoom),
+	promotionCampaigns: many(jobPromotionCampaign),
+}));
+
+export const jobPromotionCampaignRelations = relations(
+	jobPromotionCampaign,
+	({ many, one }) => ({
+		boostEvents: many(jobPromotionBoostEvent),
+		jobPost: one(jobPost, {
+			fields: [jobPromotionCampaign.jobPostId],
+			references: [jobPost.id],
+		}),
+	})
+);
+
+export const jobPromotionBoostEventRelations = relations(
+	jobPromotionBoostEvent,
+	({ one }) => ({
+		campaign: one(jobPromotionCampaign, {
+			fields: [jobPromotionBoostEvent.campaignId],
+			references: [jobPromotionCampaign.id],
+		}),
+		jobPost: one(jobPost, {
+			fields: [jobPromotionBoostEvent.jobPostId],
+			references: [jobPost.id],
+		}),
+	})
+);
+
+export const chatRoomRelations = relations(chatRoom, ({ one }) => ({
+	jobPost: one(jobPost, {
+		fields: [chatRoom.jobPostId],
+		references: [jobPost.id],
+	}),
 }));

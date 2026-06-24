@@ -39,9 +39,13 @@ export interface Job {
 	featured: boolean;
 	hours: string;
 	id: string;
+	isPromoted?: boolean;
+	lastBoostedAt?: Date | null | string;
 	location: string;
 	pay: string;
 	pref: string;
+	promotionLabel?: null | string;
+	promotionTier?: "premium" | "recommended" | "standard" | null;
 	rating: number;
 	reviews: number;
 	status: string;
@@ -49,6 +53,12 @@ export interface Job {
 	title: string;
 	type: string;
 	verified: boolean;
+}
+
+export interface MarketplaceJobSections {
+	organic: Job[];
+	premium: Job[];
+	recommended: Job[];
 }
 
 export interface QueueFlag {

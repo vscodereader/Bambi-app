@@ -6,7 +6,7 @@ import {
 	filterMarketplaceJobs,
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
-import type { Job } from "@/lib/bambi/types";
+import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
 import { orpc } from "@/utils/orpc";
 import { JOBS } from "./data";
 
@@ -19,8 +19,11 @@ interface ApiMarketplaceJob {
 	employerVerificationStatus?: string | null;
 	id: string;
 	industryCategory: string;
+	lastBoostedAt?: Date | null | string;
 	payAmount: number;
 	payUnit: string;
+	promotionLabel?: null | string;
+	promotionTier?: "premium" | "recommended" | "standard" | null;
 	region: string;
 	status: string;
 	teamDisplayName?: string | null;
@@ -34,6 +37,7 @@ interface UseMarketplaceJobsResult {
 	isLoading: boolean;
 	jobs: Job[];
 	refetch: () => void;
+	sections: MarketplaceJobSections;
 }
 
 interface UseMarketplaceJobResult {
@@ -58,6 +62,7 @@ export const formatMarketplacePay = ({
 export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 	const company = getMarketplaceJobCompany(job);
 	const tags = [
+		job.promotionLabel ?? "",
 		job.industryCategory,
 		job.region,
 		job.employerVerificationStatus === "verified" ? "검증 완료" : "검수 완료",
@@ -71,9 +76,13 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		featured: job.employerVerificationStatus === "verified",
 		hours: job.workSchedule ?? "채팅으로 확인",
 		id: job.id,
+		isPromoted: Boolean(job.promotionTier),
+		lastBoostedAt: job.lastBoostedAt ?? null,
 		location: job.region,
 		pay: formatMarketplacePay(job),
 		pref: "면접 전 연락처 보호",
+		promotionLabel: job.promotionLabel ?? null,
+		promotionTier: job.promotionTier ?? null,
 		rating: 4.8,
 		reviews: 0,
 		status: job.status,
@@ -97,27 +106,67 @@ const toApiListInput = (filters: MarketplaceFilters) => ({
 			: filters.region,
 });
 
+const EMPTY_SECTIONS: MarketplaceJobSections = {
+	organic: [],
+	premium: [],
+	recommended: [],
+};
+
+const flattenSections = (sections: MarketplaceJobSections): Job[] => [
+	...sections.premium,
+	...sections.recommended,
+	...sections.organic,
+];
+
+const filterSections = (
+	sections: MarketplaceJobSections,
+	filters: MarketplaceFilters
+): MarketplaceJobSections => ({
+	organic: filterMarketplaceJobs(sections.organic, filters),
+	premium: filterMarketplaceJobs(sections.premium, filters),
+	recommended: filterMarketplaceJobs(sections.recommended, filters),
+});
+
+const buildFallbackSections = (
+	filters: MarketplaceFilters
+): MarketplaceJobSections => ({
+	...EMPTY_SECTIONS,
+	organic: filterMarketplaceJobs(JOBS, filters),
+});
+
 export function useMarketplaceJobs(
 	filters: MarketplaceFilters
 ): UseMarketplaceJobsResult {
 	const jobsQuery = useQuery(
 		orpc.bambi.jobs.list.queryOptions({ input: toApiListInput(filters) })
 	);
-	const apiJobs = jobsQuery.data?.map(toMarketplaceJob) ?? [];
-	const fallbackJobs = filterMarketplaceJobs(JOBS, filters);
-	const jobs =
-		jobsQuery.isSuccess && apiJobs.length > 0
-			? filterMarketplaceJobs(apiJobs, filters)
-			: fallbackJobs;
+	const apiSections = jobsQuery.data
+		? filterSections(
+				{
+					organic: jobsQuery.data.sections.organic.map(toMarketplaceJob),
+					premium: jobsQuery.data.sections.premium.map(toMarketplaceJob),
+					recommended:
+						jobsQuery.data.sections.recommended.map(toMarketplaceJob),
+				},
+				filters
+			)
+		: EMPTY_SECTIONS;
+	const fallbackSections = buildFallbackSections(filters);
+	const hasApiJobs = flattenSections(apiSections).length > 0;
+	const sections =
+		jobsQuery.isSuccess && hasApiJobs ? apiSections : fallbackSections;
+	const jobs = flattenSections(sections);
 
 	return {
-		isApiBacked: jobsQuery.isSuccess && apiJobs.length > 0,
+		isApiBacked: jobsQuery.isSuccess && hasApiJobs,
 		isError: jobsQuery.isError,
-		isLoading: jobsQuery.isLoading && fallbackJobs.length === 0,
+		isLoading:
+			jobsQuery.isLoading && flattenSections(fallbackSections).length === 0,
 		jobs,
 		refetch: () => {
 			jobsQuery.refetch().catch(() => undefined);
 		},
+		sections,
 	};
 }
 

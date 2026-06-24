@@ -24,7 +24,8 @@ export function PublicMarketplaceScreen() {
 	const [filters, setFilters] = useState<MarketplaceFilters>(
 		DEFAULT_MARKETPLACE_FILTERS
 	);
-	const { isApiBacked, isError, jobs, refetch } = useMarketplaceJobs(filters);
+	const { isApiBacked, isError, jobs, refetch, sections } =
+		useMarketplaceJobs(filters);
 	const selectedJob = jobs[0];
 	const openJob = (job: Job) => router.push(`/seeker/jobs/${job.id}` as Route);
 	const startChat = (job: Job) =>
@@ -85,7 +86,12 @@ export function PublicMarketplaceScreen() {
 							{jobs.length}개{isApiBacked ? " · 실시간" : ""}
 						</span>
 					</div>
-					<JobList jobs={jobs} onChat={startChat} onOpen={openJob} />
+					<JobList
+						jobs={jobs}
+						onChat={startChat}
+						onOpen={openJob}
+						sections={sections}
+					/>
 				</section>
 				<SelectedJobPanel
 					job={selectedJob}

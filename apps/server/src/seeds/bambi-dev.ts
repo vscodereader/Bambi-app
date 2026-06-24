@@ -17,9 +17,10 @@ import {
 	employerTeamProfile,
 	interviewSchedule,
 	jobPost,
+	jobPromotionCampaign,
 	report,
 } from "@bambi-app/db/schema/bambi";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 const DEV_PASSWORD = "Bambi1234!";
 
@@ -80,6 +81,10 @@ const ids = {
 	lunaPublishedJob: "22222222-2222-4222-8222-222222222201",
 	lunaTeamPublishedJob: "22222222-2222-4222-8222-222222222202",
 	pendingReviewJob: "22222222-2222-4222-8222-222222222203",
+	lunaOrganicPublishedJob: "22222222-2222-4222-8222-222222222204",
+	premiumPromotionCampaign: "88888888-8888-4888-8888-888888888801",
+	recommendedPromotionCampaign: "88888888-8888-4888-8888-888888888802",
+	expiredPromotionCampaign: "88888888-8888-4888-8888-888888888803",
 	chatRoom: "33333333-3333-4333-8333-333333333301",
 	seekerMessage: "44444444-4444-4444-8444-444444444401",
 	employerMessage: "44444444-4444-4444-8444-444444444402",
@@ -410,6 +415,24 @@ const seedJobs = async (userIds: Record<DevUserKey, string>): Promise<void> => {
 				riskFlags: [],
 				publishedAt: null,
 			},
+			{
+				id: ids.lunaOrganicPublishedJob,
+				organizationId: ids.lunaOrganization,
+				teamId: null,
+				createdByUserId: userIds.owner,
+				status: "published",
+				industryCategory: "카페",
+				region: "서울 서초구",
+				payAmount: 140_000,
+				payUnit: "일급",
+				workSchedule: "평일 18:00-23:00",
+				title: "서초 라운지 카운터 보조",
+				description:
+					"초보 지원자를 위한 짧은 교육 후 근무를 시작합니다. 상세 조건은 밤비 채팅에서 안내합니다.",
+				interviewNotes: "면접 장소는 채팅에서 확정합니다.",
+				riskFlags: [],
+				publishedAt,
+			},
 		])
 		.onConflictDoUpdate({
 			target: jobPost.id,
@@ -417,6 +440,123 @@ const seedJobs = async (userIds: Record<DevUserKey, string>): Promise<void> => {
 				updatedAt: new Date(),
 			},
 		});
+
+	await db
+		.update(jobPost)
+		.set({
+			publishedAt,
+			status: "published",
+			updatedAt: new Date(),
+		})
+		.where(
+			inArray(jobPost.id, [
+				ids.lunaPublishedJob,
+				ids.lunaTeamPublishedJob,
+				ids.lunaOrganicPublishedJob,
+			])
+		);
+	await db
+		.update(jobPost)
+		.set({
+			publishedAt: null,
+			status: "pending_review",
+			updatedAt: new Date(),
+		})
+		.where(eq(jobPost.id, ids.pendingReviewJob));
+
+	await db
+		.insert(jobPromotionCampaign)
+		.values([
+			{
+				id: ids.premiumPromotionCampaign,
+				jobPostId: ids.lunaPublishedJob,
+				organizationId: ids.lunaOrganization,
+				tier: "premium",
+				status: "active",
+				startsAt: new Date("2026-06-20T09:00:00.000Z"),
+				endsAt: new Date("2026-07-20T09:00:00.000Z"),
+				manualBoostsTotal: 5,
+				manualBoostsUsed: 1,
+				autoBoostsPerDay: 1,
+				lastBoostedAt: new Date("2026-06-24T08:00:00.000Z"),
+			},
+			{
+				id: ids.recommendedPromotionCampaign,
+				jobPostId: ids.lunaTeamPublishedJob,
+				organizationId: ids.lunaOrganization,
+				tier: "recommended",
+				status: "active",
+				startsAt: new Date("2026-06-21T09:00:00.000Z"),
+				endsAt: new Date("2026-07-05T09:00:00.000Z"),
+				manualBoostsTotal: 3,
+				manualBoostsUsed: 0,
+				autoBoostsPerDay: 0,
+				lastBoostedAt: null,
+			},
+			{
+				id: ids.expiredPromotionCampaign,
+				jobPostId: ids.lunaOrganicPublishedJob,
+				organizationId: ids.lunaOrganization,
+				tier: "standard",
+				status: "expired",
+				startsAt: new Date("2026-05-01T09:00:00.000Z"),
+				endsAt: new Date("2026-05-10T09:00:00.000Z"),
+				manualBoostsTotal: 1,
+				manualBoostsUsed: 1,
+				autoBoostsPerDay: 0,
+				lastBoostedAt: new Date("2026-05-05T09:00:00.000Z"),
+			},
+		])
+		.onConflictDoUpdate({
+			target: jobPromotionCampaign.id,
+			set: {
+				status: "active",
+				updatedAt: new Date(),
+			},
+		});
+
+	await db
+		.update(jobPromotionCampaign)
+		.set({
+			autoBoostsPerDay: 1,
+			endsAt: new Date("2026-07-20T09:00:00.000Z"),
+			lastBoostedAt: new Date("2026-06-24T08:00:00.000Z"),
+			manualBoostsTotal: 5,
+			manualBoostsUsed: 1,
+			startsAt: new Date("2026-06-20T09:00:00.000Z"),
+			status: "active",
+			tier: "premium",
+			updatedAt: new Date(),
+		})
+		.where(eq(jobPromotionCampaign.id, ids.premiumPromotionCampaign));
+	await db
+		.update(jobPromotionCampaign)
+		.set({
+			autoBoostsPerDay: 0,
+			endsAt: new Date("2026-07-05T09:00:00.000Z"),
+			lastBoostedAt: null,
+			manualBoostsTotal: 3,
+			manualBoostsUsed: 0,
+			startsAt: new Date("2026-06-21T09:00:00.000Z"),
+			status: "active",
+			tier: "recommended",
+			updatedAt: new Date(),
+		})
+		.where(eq(jobPromotionCampaign.id, ids.recommendedPromotionCampaign));
+	await db
+		.update(jobPromotionCampaign)
+		.set({
+			autoBoostsPerDay: 0,
+			endsAt: new Date("2026-05-10T09:00:00.000Z"),
+			lastBoostedAt: new Date("2026-05-05T09:00:00.000Z"),
+			manualBoostsTotal: 1,
+			manualBoostsUsed: 1,
+			startsAt: new Date("2026-05-01T09:00:00.000Z"),
+			status: "expired",
+			tier: "standard",
+			updatedAt: new Date(),
+		})
+		.where(eq(jobPromotionCampaign.id, ids.expiredPromotionCampaign));
 };
 
 const seedConversation = async (
