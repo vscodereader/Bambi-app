@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	connectBambiChatSocket,
 	emitBambiChatTypingStarted,
@@ -24,6 +31,7 @@ import {
 	ShieldIcon,
 	XIcon,
 } from "../icons";
+import { ReviewForm } from "../review-form";
 
 interface SeekerChatRoomResponsiveProps {
 	onBack: () => void;
@@ -109,6 +117,22 @@ const getMutationErrorMessage = (error: Error): string => {
 	}
 
 	return "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
+};
+
+const getReviewMutationErrorMessage = (error: Error): string => {
+	if ("code" in error && error.code === "BAD_REQUEST") {
+		return "별점과 후기 내용을 다시 확인해 주세요.";
+	}
+
+	if ("code" in error && error.code === "CONFLICT") {
+		return "이미 이 채팅방의 후기를 등록했어요.";
+	}
+
+	if ("code" in error && error.code === "FORBIDDEN") {
+		return "확정된 면접 이후에만 후기를 남길 수 있어요.";
+	}
+
+	return getMutationErrorMessage(error);
 };
 
 type RealtimeStatus = "connected" | "connecting" | "offline";
@@ -331,6 +355,100 @@ function ChatComposer({
 	);
 }
 
+interface ReviewSidebarCardReview {
+	body: string;
+	rating: number;
+	status: string;
+}
+
+interface ReviewSidebarCardProps {
+	canCreateReview: boolean;
+	errorMessage: null | string;
+	existingReview?: ReviewSidebarCardReview;
+	isLoading: boolean;
+	isSubmitting: boolean;
+	isVisible: boolean;
+	onSubmit: (input: { body: string; rating: number }) => void;
+	successMessage: null | string;
+}
+
+function ReviewSidebarCard({
+	canCreateReview,
+	errorMessage,
+	existingReview,
+	isLoading,
+	isSubmitting,
+	isVisible,
+	onSubmit,
+	successMessage,
+}: ReviewSidebarCardProps) {
+	if (!isVisible) {
+		return null;
+	}
+
+	let content: ReactNode;
+
+	if (isLoading) {
+		content = (
+			<p className="mt-4 mb-0 text-muted-foreground text-sm">
+				후기 상태를 확인하고 있어요.
+			</p>
+		);
+	} else if (existingReview) {
+		const title =
+			existingReview.status === "pending_review"
+				? "검수 중인 후기"
+				: "등록된 후기";
+
+		content = (
+			<div className="mt-4 rounded-lg border border-border bg-secondary p-3">
+				<strong className="text-sm">{title}</strong>
+				<p className="mt-1 mb-0 text-muted-foreground text-xs leading-relaxed">
+					별점 {existingReview.rating.toFixed(1)} · {existingReview.body}
+				</p>
+			</div>
+		);
+	} else if (canCreateReview) {
+		content = (
+			<div className="mt-4">
+				<ReviewForm
+					errorMessage={errorMessage}
+					isSubmitting={isSubmitting}
+					onSubmit={onSubmit}
+				/>
+				{successMessage ? (
+					<p className="mt-3 mb-0 font-semibold text-green-700 text-xs">
+						{successMessage}
+					</p>
+				) : null}
+			</div>
+		);
+	} else {
+		content = (
+			<p className="mt-4 mb-0 text-muted-foreground text-sm">
+				후기를 등록할 수 없는 채팅방입니다.
+			</p>
+		);
+	}
+
+	return (
+		<Card className="rounded-lg" pad="lg" tone="outline">
+			<div className="flex items-start justify-between gap-3">
+				<div>
+					<h2 className="m-0 font-extrabold text-lg">후기 남기기</h2>
+					<p className="mt-1 mb-0 text-muted-foreground text-sm leading-relaxed">
+						면접 이후 경험을 남기면 다른 구직자가 업체를 더 잘 판단할 수 있어요.
+					</p>
+				</div>
+				<Badge tone={existingReview ? "success" : "pending"}>
+					{existingReview ? "작성 완료" : "작성 가능"}
+				</Badge>
+			</div>
+			{content}
+		</Card>
+	);
+}
+
 export function SeekerChatRoomResponsive({
 	onBack,
 	onReveal,
@@ -349,6 +467,12 @@ export function SeekerChatRoomResponsive({
 	const [scheduleErrorMessage, setScheduleErrorMessage] = useState<
 		null | string
 	>(null);
+	const [reviewErrorMessage, setReviewErrorMessage] = useState<null | string>(
+		null
+	);
+	const [reviewSuccessMessage, setReviewSuccessMessage] = useState<
+		null | string
+	>(null);
 	const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 	const lastReadMessageSignatureRef = useRef("");
 	const typingActiveRef = useRef(false);
@@ -356,6 +480,10 @@ export function SeekerChatRoomResponsive({
 		orpc.bambi.chats.getById.queryOptions({ input: { id: roomId } })
 	);
 	const currentSessionUserId = roomQuery.data?.currentUserId;
+	const reviewListQuery = useQuery({
+		...orpc.bambi.reviews.listMine.queryOptions(),
+		enabled: Boolean(currentSessionUserId),
+	});
 	const invalidateRoom = useCallback(async () => {
 		await queryClient.invalidateQueries({
 			queryKey: orpc.bambi.chats.getById.queryKey({ input: { id: roomId } }),
@@ -434,6 +562,21 @@ export function SeekerChatRoomResponsive({
 			onSuccess: async () => {
 				setScheduleErrorMessage(null);
 				await invalidateRoom();
+			},
+		})
+	);
+	const createReviewMutation = useMutation(
+		orpc.bambi.reviews.create.mutationOptions({
+			onError: (error) => {
+				setReviewSuccessMessage(null);
+				setReviewErrorMessage(getReviewMutationErrorMessage(error));
+			},
+			onSuccess: async () => {
+				setReviewErrorMessage(null);
+				setReviewSuccessMessage("후기가 등록됐어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.reviews.listMine.queryKey(),
+				});
 			},
 		})
 	);
@@ -614,6 +757,20 @@ export function SeekerChatRoomResponsive({
 	const confirmedSchedule = schedules.find(
 		(schedule) => schedule.status === "confirmed"
 	);
+	const reviewEligibleSchedule = schedules.find(
+		(schedule) =>
+			schedule.status === "confirmed" || schedule.status === "completed"
+	);
+	const existingReview = reviewListQuery.data?.find(
+		(item) => item.chatRoomId === room.id
+	);
+	const canCreateReview =
+		currentUserId === room.jobSeekerUserId &&
+		Boolean(reviewEligibleSchedule) &&
+		!existingReview &&
+		!room.isBlocked &&
+		!reviewListQuery.isError &&
+		!reviewListQuery.isLoading;
 	const clearAttachmentDraft = () => {
 		setAttachmentDraft(null);
 		if (attachmentInputRef.current) {
@@ -744,6 +901,19 @@ export function SeekerChatRoomResponsive({
 		setInterviewStatusMutation.mutate({
 			interviewScheduleId,
 			status,
+		});
+	};
+	const handleReviewSubmit = ({
+		body,
+		rating,
+	}: {
+		body: string;
+		rating: number;
+	}) => {
+		createReviewMutation.mutate({
+			body,
+			chatRoomId: room.id,
+			rating,
 		});
 	};
 
@@ -972,6 +1142,19 @@ export function SeekerChatRoomResponsive({
 							연락처 공개하기
 						</Button>
 					</Card>
+					<ReviewSidebarCard
+						canCreateReview={canCreateReview}
+						errorMessage={reviewErrorMessage}
+						existingReview={existingReview}
+						isLoading={reviewListQuery.isLoading}
+						isSubmitting={createReviewMutation.isPending}
+						isVisible={
+							currentUserId === room.jobSeekerUserId &&
+							Boolean(reviewEligibleSchedule)
+						}
+						onSubmit={handleReviewSubmit}
+						successMessage={reviewSuccessMessage}
+					/>
 				</div>
 			</aside>
 		</div>

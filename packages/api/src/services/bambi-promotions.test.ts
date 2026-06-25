@@ -44,6 +44,8 @@ const makeJobRow = (
 	payAmount: 180_000,
 	payUnit: "일급",
 	publishedAt: new Date("2026-06-20T09:00:00.000Z"),
+	ratingAverage: 0,
+	ratingCount: 0,
 	region: "서울 강남구",
 	status: "published",
 	teamDisplayName: null,

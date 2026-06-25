@@ -978,7 +978,7 @@ export function JobCard({
 						<span className={cn("text-xs", subFg)}>후기 {reviews}개</span>
 						{typeof rating === "number" ? (
 							<span className={cn("font-bold text-xs", headFg)}>
-								{rating.toFixed(1)}
+								{reviews > 0 ? rating.toFixed(1) : "신규"}
 							</span>
 						) : null}
 					</div>

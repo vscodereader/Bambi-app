@@ -24,6 +24,12 @@ import {
 
 type FilterChange = (nextFilters: MarketplaceFilters) => void;
 
+const formatReviewValue = ({
+	rating,
+	reviews,
+}: Pick<Job, "rating" | "reviews">): string =>
+	`${reviews}개 · ${reviews > 0 ? rating.toFixed(1) : "신규"}`;
+
 interface MarketplaceFilterSidebarProps {
 	filters: MarketplaceFilters;
 	onChange: FilterChange;
@@ -300,7 +306,7 @@ export function ResponsiveJobCard({
 								<span className="inline-flex size-3.5">
 									<StarIcon />
 								</span>
-								후기 {job.reviews}개 · {job.rating}
+								후기 {formatReviewValue(job)}
 							</span>
 						</div>
 					</div>

@@ -54,6 +54,12 @@ export const reportStatus = pgEnum("report_status", [
 	"dismissed",
 ]);
 
+export const reviewStatus = pgEnum("review_status", [
+	"published",
+	"pending_review",
+	"hidden",
+]);
+
 export const moderationTargetType = pgEnum("moderation_target_type", [
 	"job_post",
 	"chat_room",
@@ -459,26 +465,33 @@ export const review = pgTable(
 	"review",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		interviewScheduleId: uuid("interview_schedule_id")
+		jobPostId: uuid("job_post_id")
 			.notNull()
-			.references(() => interviewSchedule.id, { onDelete: "cascade" }),
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
 		reviewerUserId: text("reviewer_user_id")
 			.notNull()
 			.references(() => user.id),
-		targetUserId: text("target_user_id")
-			.notNull()
-			.references(() => user.id),
 		rating: integer("rating").notNull(),
-		body: text("body"),
-		isHidden: boolean("is_hidden").default(false).notNull(),
+		body: text("body").notNull(),
+		status: reviewStatus("status").default("published").notNull(),
+		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
 	(table) => [
-		uniqueIndex("review_interview_schedule_id_reviewer_user_id_uidx").on(
-			table.interviewScheduleId,
+		uniqueIndex("review_chat_room_id_reviewer_user_id_uidx").on(
+			table.chatRoomId,
 			table.reviewerUserId
 		),
-		index("review_target_user_id_idx").on(table.targetUserId),
+		index("review_job_post_id_status_idx").on(table.jobPostId, table.status),
+		index("review_organization_id_idx").on(table.organizationId),
+		index("review_reviewer_user_id_idx").on(table.reviewerUserId),
 	]
 );
 

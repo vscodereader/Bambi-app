@@ -41,6 +41,8 @@ export interface PublicJobListRow {
 	payAmount: number;
 	payUnit: string;
 	publishedAt: Date | null;
+	ratingAverage: number;
+	ratingCount: number;
 	region: string;
 	status: string;
 	teamDisplayName: string | null;

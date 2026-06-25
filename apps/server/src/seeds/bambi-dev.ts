@@ -19,6 +19,7 @@ import {
 	jobPost,
 	jobPromotionCampaign,
 	report,
+	review,
 } from "@bambi-app/db/schema/bambi";
 import { eq, inArray } from "drizzle-orm";
 
@@ -563,6 +564,8 @@ const seedConversation = async (
 	userIds: Record<DevUserKey, string>
 ): Promise<void> => {
 	const now = new Date();
+
+	await db.delete(review).where(eq(review.chatRoomId, ids.chatRoom));
 
 	await db
 		.insert(chatRoom)

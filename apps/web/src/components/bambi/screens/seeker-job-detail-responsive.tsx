@@ -21,6 +21,12 @@ interface SeekerJobDetailResponsiveProps {
 	onStartChat: () => void;
 }
 
+const formatReviewValue = ({
+	rating,
+	reviews,
+}: Pick<Job, "rating" | "reviews">): string =>
+	`${reviews}개 · ${reviews > 0 ? rating.toFixed(1) : "신규"}`;
+
 export function SeekerJobDetailResponsive({
 	job,
 	onBack,
@@ -76,7 +82,7 @@ export function SeekerJobDetailResponsive({
 							<InfoTile
 								icon={<StarIcon />}
 								label="후기"
-								value={`${job.reviews}개 · ${job.rating}`}
+								value={formatReviewValue(job)}
 							/>
 						</div>
 					</div>

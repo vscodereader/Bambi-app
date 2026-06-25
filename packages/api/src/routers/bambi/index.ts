@@ -4,6 +4,7 @@ import { moderationRouter } from "./moderation";
 import { onboardingRouter } from "./onboarding";
 import { organizationsRouter } from "./organizations";
 import { promotionsRouter } from "./promotions";
+import { reviewsRouter } from "./reviews";
 import { teamsRouter } from "./teams";
 
 export const bambiRouter = {
@@ -13,5 +14,6 @@ export const bambiRouter = {
 	onboarding: onboardingRouter,
 	organizations: organizationsRouter,
 	promotions: promotionsRouter,
+	reviews: reviewsRouter,
 	teams: teamsRouter,
 };

@@ -5,6 +5,7 @@ import {
 	employerTeamProfile,
 	jobPost,
 	jobPromotionCampaign,
+	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
@@ -64,6 +65,9 @@ const hasRiskFlags = (input: z.infer<typeof jobPostInput>): boolean => {
 	return riskyTerms.some((term) => text.includes(term));
 };
 
+const ratingAverageSql = sql<number>`coalesce((select avg(${review.rating}) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::double precision`;
+const ratingCountSql = sql<number>`coalesce((select count(*) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::integer`;
+
 export const jobsRouter = {
 	list: publicProcedure.input(listInput).handler(async ({ input }) => {
 		const now = new Date();
@@ -100,6 +104,8 @@ export const jobsRouter = {
 					promotionStatus: jobPromotionCampaign.status,
 					promotionTier: jobPromotionCampaign.tier,
 					publishedAt: jobPost.publishedAt,
+					ratingAverage: ratingAverageSql,
+					ratingCount: ratingCountSql,
 					region: jobPost.region,
 					status: jobPost.status,
 					teamDisplayName: employerTeamProfile.displayName,
@@ -145,6 +151,8 @@ export const jobsRouter = {
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					publishedAt: jobPost.publishedAt,
+					ratingAverage: ratingAverageSql,
+					ratingCount: ratingCountSql,
 					region: jobPost.region,
 					status: jobPost.status,
 					teamDisplayName: employerTeamProfile.displayName,
@@ -247,6 +255,8 @@ export const jobsRouter = {
 					rejectionReason: jobPost.rejectionReason,
 					riskFlags: jobPost.riskFlags,
 					publishedAt: jobPost.publishedAt,
+					ratingAverage: ratingAverageSql,
+					ratingCount: ratingCountSql,
 					createdAt: jobPost.createdAt,
 					updatedAt: jobPost.updatedAt,
 					employerDisplayName: employerOrganizationProfile.displayName,

@@ -78,7 +78,7 @@ Open [Dense Marketplace And Promotion Ops](./2026-06-24-bambi-dense-marketplace-
 
 Open [Moderator Bulk Actions](./2026-06-23-bambi-moderator-bulk-actions.md), complete every task, then return here and check this step.
 
-- [ ] **Step 6: Execute Reviews And Ratings plan**
+- [x] **Step 6: Execute Reviews And Ratings plan**
 
 Open [Reviews And Ratings](./2026-06-23-bambi-reviews-ratings.md), complete every task, then return here and check this step.
 

@@ -8,28 +8,11 @@ import {
 } from "@/lib/bambi/marketplace";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
 import { orpc } from "@/utils/orpc";
+import { toMarketplaceJob } from "./api-job-mapper";
 import { JOBS } from "./data";
 
 const UUID_RE =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-interface ApiMarketplaceJob {
-	description?: string | null;
-	employerDisplayName?: string | null;
-	employerVerificationStatus?: string | null;
-	id: string;
-	industryCategory: string;
-	lastBoostedAt?: Date | null | string;
-	payAmount: number;
-	payUnit: string;
-	promotionLabel?: null | string;
-	promotionTier?: "premium" | "recommended" | "standard" | null;
-	region: string;
-	status: string;
-	teamDisplayName?: string | null;
-	title: string;
-	workSchedule?: string | null;
-}
 
 interface UseMarketplaceJobsResult {
 	isApiBacked: boolean;
@@ -49,49 +32,6 @@ interface UseMarketplaceJobResult {
 }
 
 export const isApiJobId = (id: string): boolean => UUID_RE.test(id);
-
-export const getMarketplaceJobCompany = (job: ApiMarketplaceJob): string =>
-	job.teamDisplayName ?? job.employerDisplayName ?? "검증 업체";
-
-export const formatMarketplacePay = ({
-	payAmount,
-	payUnit,
-}: Pick<ApiMarketplaceJob, "payAmount" | "payUnit">): string =>
-	`${payUnit} ${payAmount.toLocaleString("ko-KR")}원`;
-
-export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
-	const company = getMarketplaceJobCompany(job);
-	const tags = [
-		job.promotionLabel ?? "",
-		job.industryCategory,
-		job.region,
-		job.employerVerificationStatus === "verified" ? "검증 완료" : "검수 완료",
-	].filter((tag) => tag.length > 0);
-
-	return {
-		company,
-		desc:
-			job.description ??
-			"공고 상세와 면접 안내는 밤비 채팅에서 안전하게 확인할 수 있어요.",
-		featured: job.employerVerificationStatus === "verified",
-		hours: job.workSchedule ?? "채팅으로 확인",
-		id: job.id,
-		isPromoted: Boolean(job.promotionTier),
-		lastBoostedAt: job.lastBoostedAt ?? null,
-		location: job.region,
-		pay: formatMarketplacePay(job),
-		pref: "면접 전 연락처 보호",
-		promotionLabel: job.promotionLabel ?? null,
-		promotionTier: job.promotionTier ?? null,
-		rating: 4.8,
-		reviews: 0,
-		status: job.status,
-		tags,
-		title: job.title,
-		type: job.industryCategory,
-		verified: job.employerVerificationStatus === "verified",
-	};
-};
 
 const toApiListInput = (filters: MarketplaceFilters) => ({
 	industryCategory:

@@ -43,6 +43,13 @@
       "when": 1782287001330,
       "tag": "0005_bambi_org_team_management",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782362610103,
+      "tag": "0006_bambi_reviews_ratings",
+      "breakpoints": true
     }
   ]
 }
