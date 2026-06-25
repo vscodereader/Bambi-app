@@ -89,3 +89,5 @@ Open [Employer Analytics And Paid Placement](./2026-06-23-bambi-employer-analyti
 - [ ] **Step 8: Execute Native App plan**
 
 Open [Native App](./2026-06-23-bambi-native-app.md), complete every task, then return here and check this step.
+
+Progress: Native app shell, seeker/employer/moderator screens, native oRPC client, and automated checks are implemented. Full iOS/Android simulator smoke for seeker contact reveal, owner create/edit, and admin moderation actions remains pending.

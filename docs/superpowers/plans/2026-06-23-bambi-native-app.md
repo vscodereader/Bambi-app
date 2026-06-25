@@ -43,8 +43,14 @@ Excluded:
 - Create: `apps/native/app/(moderator)/index.tsx`
 - Create: `apps/native/app/(moderator)/reports.tsx`
 - Create: `apps/native/app/(moderator)/users.tsx`
+- Create: `apps/native/app/index.tsx`
+- Create: `apps/native/app/(seeker)/_layout.tsx`
+- Create: `apps/native/app/(employer)/_layout.tsx`
+- Create: `apps/native/app/(moderator)/_layout.tsx`
 - Create: `apps/native/src/lib/orpc.ts`
 - Create: `apps/native/src/components/*`
+- Modify: `apps/native/package.json`
+- Remove: Expo sample drawer, tab, modal, AI, and todo routes.
 
 ## Task 1: Native App Foundation
 
@@ -55,23 +61,23 @@ Excluded:
 - Create: `apps/native/app/login.tsx`
 - Create: `apps/native/app/onboarding.tsx`
 
-- [ ] **Step 1: Configure API client**
+- [x] **Step 1: Configure API client**
 
 Create a native oRPC client that points to the configured API base URL and sends auth credentials according to the existing Better Auth setup.
 
-- [ ] **Step 2: Add app-level providers**
+- [x] **Step 2: Add app-level providers**
 
 Wrap the app in TanStack Query provider and auth/session provider.
 
-- [ ] **Step 3: Add login screen**
+- [x] **Step 3: Add login screen**
 
 Support email/password login for dev accounts and route by profile role after login.
 
-- [ ] **Step 4: Add onboarding screen**
+- [x] **Step 4: Add onboarding screen**
 
 Mirror the Web role selection and profile completion behavior.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 
@@ -91,19 +97,19 @@ Expected: the app launches in simulator and login renders.
 - Create: `apps/native/app/(seeker)/chats/[id].tsx`
 - Create: `apps/native/app/(seeker)/chats/[id]/reveal.tsx`
 
-- [ ] **Step 1: Add job list**
+- [x] **Step 1: Add job list**
 
 Use `bambi.jobs.list` and render mobile-first job cards.
 
-- [ ] **Step 2: Add job detail**
+- [x] **Step 2: Add job detail**
 
 Use job detail data and expose chat start CTA.
 
-- [ ] **Step 3: Add chat room**
+- [x] **Step 3: Add chat room**
 
 Use existing chat APIs for messages, interview schedule status actions, and message send.
 
-- [ ] **Step 4: Add contact reveal**
+- [x] **Step 4: Add contact reveal**
 
 Use `bambi.chats.revealContact` only when a confirmed schedule exists.
 
@@ -119,15 +125,15 @@ As `seeker@bambi.dev`, browse jobs, open detail, open chat, and reveal contact a
 - Create: `apps/native/app/(employer)/new.tsx`
 - Create: `apps/native/app/(employer)/jobs/[id]/edit.tsx`
 
-- [ ] **Step 1: Add employer dashboard**
+- [x] **Step 1: Add employer dashboard**
 
 Use `bambi.onboarding.getMine` and `bambi.jobs.listMine`.
 
-- [ ] **Step 2: Add create form**
+- [x] **Step 2: Add create form**
 
 Reuse the same field requirements as Web `validateJobForm`.
 
-- [ ] **Step 3: Add edit form**
+- [x] **Step 3: Add edit form**
 
 Use `getEditableById` and `update`.
 
@@ -143,15 +149,15 @@ As `owner@bambi.dev`, create and edit one job.
 - Create: `apps/native/app/(moderator)/reports.tsx`
 - Create: `apps/native/app/(moderator)/users.tsx`
 
-- [ ] **Step 1: Add moderation queue**
+- [x] **Step 1: Add moderation queue**
 
 Use `bambi.moderation.listJobPosts` and status mutation actions.
 
-- [ ] **Step 2: Add reports screen**
+- [x] **Step 2: Add reports screen**
 
 Use `listReports` and report status actions.
 
-- [ ] **Step 3: Add users screen**
+- [x] **Step 3: Add users screen**
 
 Use `listUsers` and user status actions.
 
@@ -161,7 +167,7 @@ As `admin@bambi.dev`, approve a job, dismiss a report, and warn a user.
 
 ## Task 5: Final Verification
 
-- [ ] **Step 1: Run automated checks**
+- [x] **Step 1: Run automated checks**
 
 ```bash
 pnpm run check-types
@@ -173,3 +179,35 @@ Expected: all commands pass.
 - [ ] **Step 2: Update plan and commit**
 
 Check completed boxes, add simulator verification notes, and commit with Korean Conventional Commits format.
+
+## Implementation Notes
+
+- Replaced the Better T Stack sample native drawer/tabs/todo/AI routes with a Bambi-specific Expo Router stack.
+- Added `/login`, `/onboarding`, role-based root routing, and grouped seeker/employer/moderator route stacks.
+- Added `apps/native/src/lib/orpc.ts` for the native oRPC client and Better Auth cookie forwarding, while keeping the existing `apps/native/utils/orpc.ts` usable for legacy native components.
+- Added `apps/native/src/lib/bambi-native.ts` with Web-compatible job form validation helpers, native route selection helpers, status labels, and contact-reveal schedule guards.
+- Added a focused helper test at `apps/native/src/lib/bambi-native.test.ts`.
+- Added a native `check-types` script so `pnpm run check-types` includes the native package.
+- Local ignored file `apps/native/.env` was adjusted to `EXPO_PUBLIC_SERVER_URL=http://localhost:23000` to match the server dev port.
+
+## Verification Notes
+
+- `pnpm exec vitest run apps/native/src/lib/bambi-native.test.ts` passed: 1 file, 3 tests.
+- `pnpm --filter native check-types` passed.
+- `pnpm run check-types` passed and included `native:check-types`.
+- `pnpm run check` passed after formatting Expo-generated ignored declaration files.
+- `git diff --check` passed.
+- `pnpm db:seed:bambi` passed before native API smoke verification.
+- `pnpm --filter native exec expo start --clear` initially failed in sandbox while installing React Native DevTools, then passed with escalated permission and showed the Expo Go QR/Metro URL.
+- Expo web bundle passed from the Expo dev menu.
+- Browser smoke on 2026-06-25:
+  - Opened `http://127.0.0.1:8081`.
+  - Verified the native login screen rendered with no console errors.
+  - Started the API server with `CORS_ORIGIN=http://127.0.0.1:8081` and `BETTER_AUTH_URL=http://127.0.0.1:23000`.
+  - Logged in as `seeker@bambi.dev`.
+  - Verified the app routed to `공고 탐색` and rendered seeded premium, recommended, and organic jobs.
+  - Console error count was 0.
+- Pending manual/simulator smoke:
+  - Complete the seeker detail -> chat start -> confirmed schedule -> contact reveal flow in an iOS/Android simulator.
+  - Complete the owner create/edit job flow in an iOS/Android simulator.
+  - Complete the admin approve/dismiss/warn flow in an iOS/Android simulator.
