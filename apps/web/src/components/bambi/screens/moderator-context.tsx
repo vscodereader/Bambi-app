@@ -21,9 +21,24 @@ import type {
 } from "@/lib/bambi/types";
 import { orpc } from "@/utils/orpc";
 
+export type ModerationBulkScope = "queue" | "reports" | "users";
+export type ModerationBulkAction =
+	| "approve"
+	| "dismiss"
+	| "hold"
+	| "reject"
+	| "resolve"
+	| "suspend"
+	| "warn";
+
 interface ModContextValue {
-	bulkAction: (action: "reject" | "hold" | "approve" | "sanction") => void;
+	bulkAction: (
+		scope: ModerationBulkScope,
+		action: ModerationBulkAction,
+		reason: string
+	) => void;
 	clearSelection: () => void;
+	isBulkApplying: boolean;
 	isLoading: boolean;
 	openReports: number;
 	queue: QueueItem[];
@@ -74,9 +89,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	const [queue, setQueue] = useState<QueueItem[]>(QUEUE);
 	const [reports, setReports] = useState<Report[]>(REPORTS);
 	const [users, setUsers] = useState<ManagedUser[]>(USERS);
-	const [selected, setSelected] = useState<string[]>(
-		QUEUE.length ? [QUEUE[0].id] : []
-	);
+	const [selected, setSelected] = useState<string[]>([]);
 	const [toast, setToast] = useState<string | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const moderationQueueQuery = useQuery(
@@ -102,6 +115,15 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	);
 	const setUserStatusMutation = useMutation(
 		orpc.bambi.moderation.setUserStatus.mutationOptions()
+	);
+	const bulkSetJobPostStatusMutation = useMutation(
+		orpc.bambi.moderation.bulkSetJobPostStatus.mutationOptions()
+	);
+	const bulkSetReportStatusMutation = useMutation(
+		orpc.bambi.moderation.bulkSetReportStatus.mutationOptions()
+	);
+	const bulkSetUserStatusMutation = useMutation(
+		orpc.bambi.moderation.bulkSetUserStatus.mutationOptions()
 	);
 
 	const value = useMemo<ModContextValue>(() => {
@@ -199,11 +221,53 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			moderationReportsQuery.isFetching ||
 			moderationUsersQuery.isPending ||
 			moderationUsersQuery.isFetching;
+		const isBulkApplying =
+			bulkSetJobPostStatusMutation.isPending ||
+			bulkSetReportStatusMutation.isPending ||
+			bulkSetUserStatusMutation.isPending;
 		const toggleSelect = (id: string) =>
 			setSelected((s) =>
 				s.includes(id) ? s.filter((x) => x !== id) : [...s, id]
 			);
 		const clearSelection = () => setSelected([]);
+		const summarizeBulkResult = (
+			actionLabel: string,
+			result: {
+				failed: number;
+				failures: { targetId: string }[];
+				succeeded: number;
+			}
+		) => {
+			const failedIds = result.failures
+				.slice(0, 3)
+				.map((failure) => failure.targetId.slice(0, 8));
+			const failureText = failedIds.length
+				? ` · 실패 ID ${failedIds.join(", ")}`
+				: "";
+
+			return `${actionLabel} · 성공 ${result.succeeded}건 · 실패 ${result.failed}건${failureText}`;
+		};
+		const invalidateQueue = async () => {
+			await queryClient.invalidateQueries({
+				queryKey: orpc.bambi.moderation.listJobPosts.queryKey({
+					input: { limit: 50, status: "pending_review" },
+				}),
+			});
+		};
+		const invalidateReports = async () => {
+			await queryClient.invalidateQueries({
+				queryKey: orpc.bambi.moderation.listReports.queryKey({
+					input: { limit: 50 },
+				}),
+			});
+		};
+		const invalidateUsers = async () => {
+			await queryClient.invalidateQueries({
+				queryKey: orpc.bambi.moderation.listUsers.queryKey({
+					input: { limit: 50 },
+				}),
+			});
+		};
 		const resolveQueue = (id: string, action: "approve" | "reject") => {
 			if (isUuid(id)) {
 				setJobPostStatusMutation.mutate(
@@ -300,19 +364,152 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			);
 			flash(label);
 		};
-		const bulkAction = (action: "reject" | "hold" | "approve" | "sanction") => {
-			const n = selected.length;
+		const applyQueueBulkAction = (
+			selectedIds: string[],
+			action: ModerationBulkAction,
+			reason: string
+		) => {
+			let status: "hidden" | "published" | "rejected" = "hidden";
+			let actionLabel = "공고 보류";
+
 			if (action === "approve") {
-				setQueue((q) => q.filter((x) => !selected.includes(x.id)));
-				flash(`${n}건을 승인했어요`);
+				status = "published";
+				actionLabel = "공고 승인";
 			} else if (action === "reject") {
-				setQueue((q) => q.filter((x) => !selected.includes(x.id)));
-				flash(`${n}건을 반려했어요`);
-			} else if (action === "hold") {
-				flash(`${n}건을 보류했어요`);
-			} else {
-				flash(`${n}건에 경고를 보냈어요`);
+				status = "rejected";
+				actionLabel = "공고 반려";
 			}
+
+			const apiIds = selectedIds.filter(isUuid);
+			const previewIds = selectedIds.filter((id) => !isUuid(id));
+
+			if (apiIds.length > 0) {
+				bulkSetJobPostStatusMutation.mutate(
+					{
+						jobPostIds: apiIds,
+						reason,
+						status,
+					},
+					{
+						onSuccess: async (result) => {
+							await invalidateQueue();
+							flash(summarizeBulkResult(actionLabel, result));
+						},
+						onError: () =>
+							flash("공고 일괄 처리에 실패했어요. 다시 시도해 주세요."),
+					}
+				);
+			}
+
+			if (previewIds.length > 0) {
+				setQueue((items) =>
+					items.filter((item) => !previewIds.includes(item.id))
+				);
+				flash(`${actionLabel} · 성공 ${previewIds.length}건 · 실패 0건`);
+			}
+		};
+		const applyReportBulkAction = (
+			selectedIds: string[],
+			action: ModerationBulkAction,
+			reason: string
+		) => {
+			const status = action === "dismiss" ? "dismissed" : "resolved";
+			const actionLabel = action === "dismiss" ? "신고 기각" : "신고 해결";
+			const apiIds = selectedIds.filter(isUuid);
+			const previewIds = selectedIds.filter((id) => !isUuid(id));
+
+			if (apiIds.length > 0) {
+				bulkSetReportStatusMutation.mutate(
+					{
+						reason,
+						reportIds: apiIds,
+						status,
+					},
+					{
+						onSuccess: async (result) => {
+							await invalidateReports();
+							flash(summarizeBulkResult(actionLabel, result));
+						},
+						onError: () =>
+							flash("신고 일괄 처리에 실패했어요. 다시 시도해 주세요."),
+					}
+				);
+			}
+
+			if (previewIds.length > 0) {
+				setReports((items) =>
+					items.map((item) =>
+						previewIds.includes(item.id)
+							? { ...item, status: "closed" as const }
+							: item
+					)
+				);
+				flash(`${actionLabel} · 성공 ${previewIds.length}건 · 실패 0건`);
+			}
+		};
+		const applyUserBulkAction = (
+			selectedIds: string[],
+			action: ModerationBulkAction,
+			reason: string
+		) => {
+			const status = action === "suspend" ? "suspended" : "warned";
+			const actionLabel = action === "suspend" ? "사용자 정지" : "사용자 경고";
+			const apiIds = selectedIds.filter((id) => !isPreviewId(id));
+			const previewIds = selectedIds.filter(isPreviewId);
+
+			if (apiIds.length > 0) {
+				bulkSetUserStatusMutation.mutate(
+					{
+						reason,
+						status,
+						targetUserIds: apiIds,
+					},
+					{
+						onSuccess: async (result) => {
+							await invalidateUsers();
+							flash(summarizeBulkResult(actionLabel, result));
+						},
+						onError: () =>
+							flash("사용자 일괄 처리에 실패했어요. 다시 시도해 주세요."),
+					}
+				);
+			}
+
+			if (previewIds.length > 0) {
+				setUsers((items) =>
+					items.map((item) =>
+						previewIds.includes(item.id)
+							? {
+									...item,
+									status,
+									warnings:
+										status === "warned" ? item.warnings + 1 : item.warnings,
+								}
+							: item
+					)
+				);
+				flash(`${actionLabel} · 성공 ${previewIds.length}건 · 실패 0건`);
+			}
+		};
+		const bulkAction = (
+			scope: ModerationBulkScope,
+			action: ModerationBulkAction,
+			reason: string
+		) => {
+			const selectedIds = [...selected];
+
+			if (selectedIds.length === 0) {
+				return;
+			}
+
+			if (scope === "queue") {
+				applyQueueBulkAction(selectedIds, action, reason);
+			} else if (scope === "reports") {
+				applyReportBulkAction(selectedIds, action, reason);
+			} else {
+				applyUserBulkAction(selectedIds, action, reason);
+			}
+
 			setSelected([]);
 		};
 
@@ -321,6 +518,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			reports: visibleReports,
 			users: visibleUsers,
 			isLoading,
+			isBulkApplying,
 			selected,
 			toast,
 			openReports: visibleReports.filter((r) => r.status === "open").length,
@@ -333,6 +531,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			bulkAction,
 		};
 	}, [
+		bulkSetJobPostStatusMutation,
+		bulkSetReportStatusMutation,
+		bulkSetUserStatusMutation,
 		moderationQueueQuery.data,
 		moderationQueueQuery.isFetching,
 		moderationQueueQuery.isPending,

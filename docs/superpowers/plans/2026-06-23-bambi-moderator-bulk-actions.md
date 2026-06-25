@@ -44,15 +44,15 @@ Excluded:
 - Create: `packages/api/src/services/bambi-moderation-bulk.ts`
 - Test: `packages/api/src/services/bambi-moderation-bulk.test.ts`
 
-- [ ] **Step 1: Define result shape**
+- [x] **Step 1: Define result shape**
 
 Return `{ total, succeeded, failed, failures }`, where each failure includes `targetId`, `code`, and `message`.
 
-- [ ] **Step 2: Add input constraints**
+- [x] **Step 2: Add input constraints**
 
 Limit one bulk request to 50 target ids and reject empty id arrays.
 
-- [ ] **Step 3: Add service tests**
+- [x] **Step 3: Add service tests**
 
 Verify empty request rejection, max count rejection, and mixed success/failure result formatting.
 
@@ -63,19 +63,19 @@ Verify empty request rejection, max count rejection, and mixed success/failure r
 - Modify: `packages/api/src/routers/bambi/moderation.ts`
 - Test: `packages/api/src/routers/bambi/moderation.test.ts`
 
-- [ ] **Step 1: Add `bulkSetJobPostStatus`**
+- [x] **Step 1: Add `bulkSetJobPostStatus`**
 
 Accept job post ids, status, and reason. Create one admin action log per updated job post.
 
-- [ ] **Step 2: Add `bulkSetReportStatus`**
+- [x] **Step 2: Add `bulkSetReportStatus`**
 
 Accept report ids, status, and reason. Create one admin action log per updated report.
 
-- [ ] **Step 3: Add `bulkSetUserStatus`**
+- [x] **Step 3: Add `bulkSetUserStatus`**
 
 Accept user ids, status, and reason. Create one admin action log per updated user.
 
-- [ ] **Step 4: Add API tests**
+- [x] **Step 4: Add API tests**
 
 Verify admin-only access, partial failure behavior, and audit log creation.
 
@@ -86,15 +86,15 @@ Verify admin-only access, partial failure behavior, and audit log creation.
 - Modify: `apps/web/src/components/bambi/screens/moderator-context.tsx`
 - Modify: `apps/web/src/components/bambi/screens/moderator.tsx`
 
-- [ ] **Step 1: Replace local bulk state mutation**
+- [x] **Step 1: Replace local bulk state mutation**
 
 Use TanStack mutations for bulk actions and invalidate affected moderator queries on success.
 
-- [ ] **Step 2: Add confirmation sheet**
+- [x] **Step 2: Add confirmation sheet**
 
 Before applying a bulk action, show selected count, target action, reason input, and confirm/cancel buttons.
 
-- [ ] **Step 3: Add result toast**
+- [x] **Step 3: Add result toast**
 
 After completion, show success count and failure count. If failures exist, show a compact list of failed ids.
 
@@ -118,3 +118,12 @@ Expected: all commands pass.
 - [ ] **Step 2: Update plan and commit**
 
 Check completed boxes, add browser verification notes, and commit with Korean Conventional Commits format.
+
+## Verification Notes
+
+- 2026-06-25: Checked `packages/db/src/migrations/` before implementation. Latest migration is `0005_bambi_org_team_management.sql`; no new migration was required because bulk actions reuse existing moderation and audit tables.
+- 2026-06-25: Added service tests for empty requests, 50-target limit, and mixed success/failure formatting. Verified with `pnpm --filter @bambi-app/api test src/services/bambi-moderation-bulk.test.ts` (3 passed).
+- 2026-06-25: Added router tests for admin-only access, partial job-post failure reporting, and audit logs for job/report/user bulk updates. Verified endpoint exposure without DB using `pnpm --filter @bambi-app/api test src/routers/bambi/moderation.test.ts -t "exposes bulk moderation procedures"` (1 passed, 4 skipped).
+- 2026-06-25: Browser smoke checked on `http://localhost:23001` preview fallback: queue selection -> 승인 confirmation sheet -> reason field -> result toast and queue count update; reports/users selection action bars also appeared with the expected actions. Full `admin@bambi.dev` API-data verification remains unchecked because the configured database connection timed out.
+- 2026-06-25: `pnpm --filter @bambi-app/api test` was executed. DB-backed router tests in `chats.test.ts`, `moderation.test.ts`, and `organizations.test.ts` timed out at fixture setup; a separate `select 1` check against the configured database also timed out after 5 seconds. Non-DB API tests passed.
+- 2026-06-25: `pnpm run check-types`, `pnpm run check`, and `pnpm --filter web build` passed.

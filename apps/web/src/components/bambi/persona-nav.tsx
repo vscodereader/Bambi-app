@@ -5,7 +5,7 @@
 
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { BottomNav } from "./ds";
 import {
 	ClipboardListIcon,
@@ -134,8 +134,26 @@ const MOD_DETAIL_RE = /^\/moderator\/(?:queue|reports|users)\/[^/]+/;
 export function ModeratorShell({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const router = useRouter();
-	const { queue, selected, openReports, warnedUsers, toast, bulkAction } =
-		useMod();
+	const previousPath = useRef(path);
+	const {
+		bulkAction,
+		clearSelection,
+		isBulkApplying,
+		openReports,
+		queue,
+		selected,
+		toast,
+		warnedUsers,
+	} = useMod();
+
+	useEffect(() => {
+		if (previousPath.current === path) {
+			return;
+		}
+
+		previousPath.current = path;
+		clearSelection();
+	}, [clearSelection, path]);
 
 	const isDetail = MOD_DETAIL_RE.test(path);
 	if (isDetail) {
@@ -148,8 +166,17 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 	} else if (path.startsWith("/moderator/users")) {
 		tab = "users";
 	}
-	const go = (v: string) => router.push(MOD_ROUTES[v] ?? MOD_ROUTES.queue);
-	const showActionBar = tab === "queue" && selected.length > 0;
+	const go = (v: string) => {
+		clearSelection();
+		router.push(MOD_ROUTES[v] ?? MOD_ROUTES.queue);
+	};
+	let bulkScope: "queue" | "reports" | "users" = "queue";
+	if (tab === "reports") {
+		bulkScope = "reports";
+	} else if (tab === "users") {
+		bulkScope = "users";
+	}
+	const showActionBar = selected.length > 0;
 
 	return (
 		<>
@@ -164,7 +191,12 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 			/>
 			<Content>{children}</Content>
 			{showActionBar ? (
-				<QueueActionBar count={selected.length} onAction={bulkAction} />
+				<QueueActionBar
+					count={selected.length}
+					isApplying={isBulkApplying}
+					onAction={bulkAction}
+					scope={bulkScope}
+				/>
 			) : null}
 			<NavBar>
 				<ModTabs setTab={go} tab={tab} />

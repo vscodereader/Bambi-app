@@ -20,6 +20,7 @@ import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
+import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 
 export const targetTypeSchema = z.enum([
 	"job_post",
@@ -95,8 +96,28 @@ const setUserStatusInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
+const bulkSetReportStatusInput = z.object({
+	reportIds: z.array(z.string().uuid()),
+	status: reportStatusSchema,
+	reason: z.string().min(2).max(500),
+});
+
+const bulkSetJobPostStatusInput = z.object({
+	jobPostIds: z.array(z.string().uuid()),
+	status: jobPostModerationStatusSchema,
+	reason: z.string().min(2).max(500),
+});
+
+const bulkSetUserStatusInput = z.object({
+	targetUserIds: z.array(z.string().min(1)),
+	status: accountStatusSchema,
+	reason: z.string().min(2).max(500),
+});
+
 type ReportTargetType = z.infer<typeof targetTypeSchema>;
 type ReportRow = typeof report.$inferSelect;
+type JobPostModerationStatus = z.infer<typeof jobPostModerationStatusSchema>;
+type JobPostRow = typeof jobPost.$inferSelect;
 
 const uuidTargetTypes = new Set<ReportTargetType>([
 	"job_post",
@@ -162,6 +183,36 @@ const withReportTargetContexts = async (reportRows: ReportRow[]) =>
 			targetContext: await getReportTargetContext(reportRow),
 		}))
 	);
+
+const getJobPostModerationStatusPatch = ({
+	existing,
+	reason,
+	status,
+}: {
+	existing: JobPostRow;
+	reason: string;
+	status: JobPostModerationStatus;
+}) => {
+	const publishedAt =
+		status === "published"
+			? (existing.publishedAt ?? new Date())
+			: existing.publishedAt;
+	let rejectionReason = existing.rejectionReason;
+
+	if (status === "published") {
+		rejectionReason = null;
+	}
+
+	if (status === "rejected") {
+		rejectionReason = reason;
+	}
+
+	return {
+		publishedAt,
+		rejectionReason,
+		status,
+	};
+};
 
 const assertReportTargetExists = async (
 	targetType: ReportTargetType,
@@ -360,6 +411,41 @@ export const moderationRouter = {
 			});
 		}),
 
+	bulkSetReportStatus: protectedProcedure
+		.input(bulkSetReportStatusInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(
+				async (tx) =>
+					await executeBulkModeration({
+						processTarget: async (reportId) => {
+							const [updated] = await tx
+								.update(report)
+								.set({ status: input.status })
+								.where(eq(report.id, reportId))
+								.returning();
+
+							if (!updated) {
+								throw new ORPCError("NOT_FOUND", {
+									message: "Report was not found.",
+								});
+							}
+
+							await tx.insert(adminModerationAction).values({
+								adminUserId: admin.userId,
+								targetType: updated.targetType,
+								targetId: updated.targetId,
+								action: `set_report_status:${input.status}`,
+								reason: input.reason,
+								metadata: { bulk: true, reportId },
+							});
+						},
+						targetIds: input.reportIds,
+					})
+			);
+		}),
+
 	setJobPostStatus: protectedProcedure
 		.input(setJobPostStatusInput)
 		.handler(async ({ context, input }) => {
@@ -376,27 +462,15 @@ export const moderationRouter = {
 					throw new ORPCError("NOT_FOUND");
 				}
 
-				const publishedAt =
-					input.status === "published"
-						? (existing.publishedAt ?? new Date())
-						: existing.publishedAt;
-				let rejectionReason = existing.rejectionReason;
-
-				if (input.status === "published") {
-					rejectionReason = null;
-				}
-
-				if (input.status === "rejected") {
-					rejectionReason = input.reason;
-				}
+				const statusPatch = getJobPostModerationStatusPatch({
+					existing,
+					reason: input.reason,
+					status: input.status,
+				});
 
 				const [updated] = await tx
 					.update(jobPost)
-					.set({
-						status: input.status,
-						publishedAt,
-						rejectionReason,
-					})
+					.set(statusPatch)
 					.where(eq(jobPost.id, input.jobPostId))
 					.returning();
 
@@ -414,6 +488,53 @@ export const moderationRouter = {
 
 				return updated;
 			});
+		}),
+
+	bulkSetJobPostStatus: protectedProcedure
+		.input(bulkSetJobPostStatusInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(
+				async (tx) =>
+					await executeBulkModeration({
+						processTarget: async (jobPostId) => {
+							const [existing] = await tx
+								.select()
+								.from(jobPost)
+								.where(eq(jobPost.id, jobPostId))
+								.limit(1);
+
+							if (!existing) {
+								throw new ORPCError("NOT_FOUND", {
+									message: "Job post was not found.",
+								});
+							}
+
+							await tx
+								.update(jobPost)
+								.set(
+									getJobPostModerationStatusPatch({
+										existing,
+										reason: input.reason,
+										status: input.status,
+									})
+								)
+								.where(eq(jobPost.id, jobPostId))
+								.returning();
+
+							await tx.insert(adminModerationAction).values({
+								adminUserId: admin.userId,
+								targetType: "job_post",
+								targetId: jobPostId,
+								action: `set_status:${input.status}`,
+								reason: input.reason,
+								metadata: { bulk: true },
+							});
+						},
+						targetIds: input.jobPostIds,
+					})
+			);
 		}),
 
 	setUserStatus: protectedProcedure
@@ -442,5 +563,40 @@ export const moderationRouter = {
 
 				return updated;
 			});
+		}),
+
+	bulkSetUserStatus: protectedProcedure
+		.input(bulkSetUserStatusInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(
+				async (tx) =>
+					await executeBulkModeration({
+						processTarget: async (targetUserId) => {
+							const [updated] = await tx
+								.update(bambiProfile)
+								.set({ status: input.status })
+								.where(eq(bambiProfile.userId, targetUserId))
+								.returning();
+
+							if (!updated) {
+								throw new ORPCError("NOT_FOUND", {
+									message: "User was not found.",
+								});
+							}
+
+							await tx.insert(adminModerationAction).values({
+								adminUserId: admin.userId,
+								targetType: "user",
+								targetId: targetUserId,
+								action: `set_status:${input.status}`,
+								reason: input.reason,
+								metadata: { bulk: true },
+							});
+						},
+						targetIds: input.targetUserIds,
+					})
+			);
 		}),
 };

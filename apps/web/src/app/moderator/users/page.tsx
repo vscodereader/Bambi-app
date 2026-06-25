@@ -7,11 +7,13 @@ import { useMod } from "@/components/bambi/screens/moderator-context";
 
 export default function ModeratorUsersPage() {
 	const router = useRouter();
-	const { users } = useMod();
+	const { selected, toggleSelect, users } = useMod();
 	return (
 		<UserList
 			items={users}
 			onOpen={(u) => router.push(`/moderator/users/${u.id}` as Route)}
+			onToggle={toggleSelect}
+			selected={selected}
 		/>
 	);
 }
