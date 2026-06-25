@@ -38,6 +38,7 @@ export interface PublicJobListRow {
 	employerVerificationStatus: string | null;
 	id: string;
 	industryCategory: string;
+	organizationId: string;
 	payAmount: number;
 	payUnit: string;
 	publishedAt: Date | null;
@@ -52,6 +53,7 @@ export interface PublicJobListRow {
 
 export interface PublicPromotedJobListRow extends PublicJobListRow {
 	lastBoostedAt: Date | null;
+	promotionCampaignId: string;
 	promotionEndsAt: Date;
 	promotionStartsAt: Date;
 	promotionStatus: PromotionStatus;
@@ -207,7 +209,7 @@ const toPromotedJobListItem = (
 ): PublicPromotedJobListItem | null => {
 	const campaign: PromotionCampaignForListing = {
 		endsAt: row.promotionEndsAt,
-		id: row.id,
+		id: row.promotionCampaignId,
 		jobPostStatus: row.status as JobPostStatus,
 		lastBoostedAt: row.lastBoostedAt,
 		manualBoostsTotal: 0,

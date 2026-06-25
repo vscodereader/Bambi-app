@@ -1,3 +1,4 @@
+import { analyticsRouter } from "./analytics";
 import { chatsRouter } from "./chats";
 import { jobsRouter } from "./jobs";
 import { moderationRouter } from "./moderation";
@@ -8,6 +9,7 @@ import { reviewsRouter } from "./reviews";
 import { teamsRouter } from "./teams";
 
 export const bambiRouter = {
+	analytics: analyticsRouter,
 	chats: chatsRouter,
 	jobs: jobsRouter,
 	moderation: moderationRouter,

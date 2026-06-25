@@ -23,6 +23,10 @@ import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
 import {
+	recordJobListingImpressions,
+	recordJobPerformanceEvent,
+} from "../../services/bambi-analytics";
+import {
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
 } from "../../services/bambi-authz";
@@ -69,7 +73,7 @@ const ratingAverageSql = sql<number>`coalesce((select avg(${review.rating}) from
 const ratingCountSql = sql<number>`coalesce((select count(*) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::integer`;
 
 export const jobsRouter = {
-	list: publicProcedure.input(listInput).handler(async ({ input }) => {
+	list: publicProcedure.input(listInput).handler(async ({ context, input }) => {
 		const now = new Date();
 		const filters = [eq(jobPost.status, "published" as JobPostStatus)];
 
@@ -97,8 +101,10 @@ export const jobsRouter = {
 					id: jobPost.id,
 					industryCategory: jobPost.industryCategory,
 					lastBoostedAt: jobPromotionCampaign.lastBoostedAt,
+					organizationId: jobPost.organizationId,
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
+					promotionCampaignId: jobPromotionCampaign.id,
 					promotionEndsAt: jobPromotionCampaign.endsAt,
 					promotionStartsAt: jobPromotionCampaign.startsAt,
 					promotionStatus: jobPromotionCampaign.status,
@@ -148,6 +154,7 @@ export const jobsRouter = {
 						employerOrganizationProfile.verificationStatus,
 					id: jobPost.id,
 					industryCategory: jobPost.industryCategory,
+					organizationId: jobPost.organizationId,
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					publishedAt: jobPost.publishedAt,
@@ -176,13 +183,20 @@ export const jobsRouter = {
 				.limit(input.limit + 15),
 		]);
 
-		return buildPublicJobSections({
+		const result = buildPublicJobSections({
 			limit: input.limit,
 			now,
 			organicRows,
 			premiumRows,
 			recommendedRows,
 		});
+
+		await recordJobListingImpressions({
+			actorUserId: context.session?.user.id,
+			sections: result.sections,
+		});
+
+		return result;
 	}),
 
 	legacyList: publicProcedure.input(listInput).handler(async ({ input }) => {
@@ -236,7 +250,7 @@ export const jobsRouter = {
 
 	getById: publicProcedure
 		.input(z.object({ id: z.string().uuid() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
 			const [post] = await db
 				.select({
 					id: jobPost.id,
@@ -279,6 +293,13 @@ export const jobsRouter = {
 			if (post?.status !== "published") {
 				throw new ORPCError("NOT_FOUND");
 			}
+
+			await recordJobPerformanceEvent({
+				actorUserId: context.session?.user.id,
+				eventType: "detail_view",
+				jobPostId: post.id,
+				organizationId: post.organizationId,
+			});
 
 			return post;
 		}),

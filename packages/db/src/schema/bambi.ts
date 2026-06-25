@@ -83,6 +83,13 @@ export const promotionStatus = pgEnum("promotion_status", [
 	"canceled",
 ]);
 
+export const jobPerformanceEventType = pgEnum("job_performance_event_type", [
+	"impression",
+	"detail_view",
+	"chat_start",
+	"contact_reveal",
+]);
+
 export const chatAttachmentCategory = pgEnum("chat_attachment_category", [
 	"image",
 	"pdf",
@@ -272,6 +279,33 @@ export const jobPromotionBoostEvent = pgTable(
 		index("job_promotion_boost_event_job_post_id_idx").on(table.jobPostId),
 		index("job_promotion_boost_event_organization_id_idx").on(
 			table.organizationId
+		),
+	]
+);
+
+export const jobPerformanceEvent = pgTable(
+	"job_performance_event",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		actorUserId: text("actor_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		eventType: jobPerformanceEventType("event_type").notNull(),
+		metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_performance_event_job_post_id_idx").on(table.jobPostId),
+		index("job_performance_event_organization_id_idx").on(table.organizationId),
+		index("job_performance_event_type_created_at_idx").on(
+			table.eventType,
+			table.createdAt
 		),
 	]
 );

@@ -50,6 +50,13 @@
       "when": 1782362610103,
       "tag": "0006_bambi_reviews_ratings",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782365077049,
+      "tag": "0007_bambi_analytics_paid_placement",
+      "breakpoints": true
     }
   ]
 }

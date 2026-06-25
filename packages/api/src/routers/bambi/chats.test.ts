@@ -28,6 +28,7 @@ const {
 	chatRoom,
 	contactRevealConsent,
 	interviewSchedule,
+	jobPerformanceEvent,
 	jobPost,
 } = bambiSchema;
 
@@ -155,6 +156,9 @@ const cleanupChatFixture = async (fixture: ChatFixture): Promise<void> => {
 	await db
 		.delete(contactRevealConsent)
 		.where(eq(contactRevealConsent.userId, fixture.jobSeekerUserId));
+	await db
+		.delete(jobPerformanceEvent)
+		.where(eq(jobPerformanceEvent.jobPostId, fixture.jobPostId));
 	await db
 		.delete(interviewSchedule)
 		.where(eq(interviewSchedule.chatRoomId, fixture.chatRoomId));
@@ -285,6 +289,91 @@ describe("bambi chats router media", () => {
 				fileName: "shift-photo.jpg",
 				mimeType: "image/jpeg",
 				storageKey: uploadIntent.storageKey,
+			});
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+describe("bambi chats router analytics", () => {
+	it("records a chat_start event when a seeker starts a chat from a job post", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const startFromJobPost = createProcedureClient(
+				chatsRouter.startFromJobPost,
+				{
+					context: createContextForUser(fixture.outsiderUserId),
+					path: ["bambi", "chats", "startFromJobPost"],
+				}
+			);
+
+			const room = await startFromJobPost({ jobPostId: fixture.jobPostId });
+			const [event] = await db
+				.select()
+				.from(jobPerformanceEvent)
+				.where(eq(jobPerformanceEvent.jobPostId, fixture.jobPostId))
+				.limit(1);
+
+			expect(room).toMatchObject({
+				jobPostId: fixture.jobPostId,
+				jobSeekerUserId: fixture.outsiderUserId,
+			});
+			expect(event).toMatchObject({
+				actorUserId: fixture.outsiderUserId,
+				eventType: "chat_start",
+				jobPostId: fixture.jobPostId,
+				organizationId: fixture.organizationId,
+			});
+			expect(event?.metadata).toMatchObject({
+				chatRoomId: room.id,
+			});
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("records a contact_reveal event when contact information is revealed", async () => {
+		const fixture = await createChatFixture();
+		const scheduleId = randomUUID();
+
+		try {
+			await db.insert(interviewSchedule).values({
+				chatRoomId: fixture.chatRoomId,
+				id: scheduleId,
+				proposedByUserId: fixture.employerUserId,
+				scheduledAt: new Date(),
+				status: "confirmed",
+			});
+
+			const revealContact = createProcedureClient(chatsRouter.revealContact, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "chats", "revealContact"],
+			});
+
+			await revealContact({
+				contactMethod: "phone",
+				contactValue: "010-1234-5678",
+				interviewScheduleId: scheduleId,
+			});
+
+			const [event] = await db
+				.select()
+				.from(jobPerformanceEvent)
+				.where(eq(jobPerformanceEvent.jobPostId, fixture.jobPostId))
+				.limit(1);
+
+			expect(event).toMatchObject({
+				actorUserId: fixture.jobSeekerUserId,
+				eventType: "contact_reveal",
+				jobPostId: fixture.jobPostId,
+				organizationId: fixture.organizationId,
+			});
+			expect(event?.metadata).toMatchObject({
+				chatRoomId: fixture.chatRoomId,
+				contactMethod: "phone",
+				interviewScheduleId: scheduleId,
 			});
 		} finally {
 			await cleanupChatFixture(fixture);

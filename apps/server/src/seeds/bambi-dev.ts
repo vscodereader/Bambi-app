@@ -16,6 +16,7 @@ import {
 	employerOrganizationProfile,
 	employerTeamProfile,
 	interviewSchedule,
+	jobPerformanceEvent,
 	jobPost,
 	jobPromotionCampaign,
 	report,
@@ -358,6 +359,16 @@ const seedEmployerProfiles = async (): Promise<void> => {
 
 const seedJobs = async (userIds: Record<DevUserKey, string>): Promise<void> => {
 	const publishedAt = new Date("2026-06-12T09:00:00.000Z");
+	const seedJobIds = [
+		ids.lunaPublishedJob,
+		ids.lunaTeamPublishedJob,
+		ids.pendingReviewJob,
+		ids.lunaOrganicPublishedJob,
+	];
+
+	await db
+		.delete(jobPerformanceEvent)
+		.where(inArray(jobPerformanceEvent.jobPostId, seedJobIds));
 
 	await db
 		.insert(jobPost)

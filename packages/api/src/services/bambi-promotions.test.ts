@@ -41,6 +41,7 @@ const makeJobRow = (
 	employerVerificationStatus: "verified",
 	id: "job-1",
 	industryCategory: "라운지",
+	organizationId: "org-1",
 	payAmount: 180_000,
 	payUnit: "일급",
 	publishedAt: new Date("2026-06-20T09:00:00.000Z"),
@@ -59,6 +60,7 @@ const makePromotedJobRow = (
 ): PublicPromotedJobListRow => ({
 	...makeJobRow(),
 	lastBoostedAt: null,
+	promotionCampaignId: "campaign-1",
 	promotionEndsAt: FUTURE,
 	promotionStartsAt: PAST,
 	promotionStatus: "active",

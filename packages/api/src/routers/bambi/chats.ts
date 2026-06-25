@@ -13,6 +13,7 @@ import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
+import { recordJobPerformanceEvent } from "../../services/bambi-analytics";
 import {
 	requireActiveBambiProfile,
 	requireChatParticipant,
@@ -293,6 +294,16 @@ export const chatsRouter = {
 				.returning();
 
 			if (createdRoom) {
+				await recordJobPerformanceEvent({
+					actorUserId: profile.userId,
+					eventType: "chat_start",
+					jobPostId: post.id,
+					metadata: {
+						chatRoomId: createdRoom.id,
+					},
+					organizationId: post.organizationId,
+				});
+
 				return createdRoom;
 			}
 
@@ -757,6 +768,18 @@ export const chatsRouter = {
 					},
 				})
 				.returning();
+
+			await recordJobPerformanceEvent({
+				actorUserId: profile.userId,
+				eventType: "contact_reveal",
+				jobPostId: room.jobPostId,
+				metadata: {
+					chatRoomId: room.id,
+					contactMethod: input.contactMethod,
+					interviewScheduleId: schedule.id,
+				},
+				organizationId: room.organizationId,
+			});
 
 			return consent;
 		}),

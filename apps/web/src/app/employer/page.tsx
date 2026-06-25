@@ -300,6 +300,12 @@ export default function EmployerPage() {
 						>
 							조직 설정
 						</Link>
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href={"/employer/analytics" as Route}
+						>
+							성과 분석
+						</Link>
 						<Link className={buttonVariants()} href="/employer/new">
 							새 공고 등록
 						</Link>
@@ -408,6 +414,12 @@ export default function EmployerPage() {
 							href={"/employer/promotions" as Route}
 						>
 							프로모션 관리
+						</Link>
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href={"/employer/analytics" as Route}
+						>
+							성과 분석
 						</Link>
 						<Link
 							className={buttonVariants({ variant: "outline" })}
