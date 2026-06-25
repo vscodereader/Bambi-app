@@ -18,7 +18,7 @@
 | 2 | [Chat Media Messages](./2026-06-23-bambi-chat-media-messages.md) | Image/file upload, moderation, rendering | Completed 2026-06-24 |
 | 3 | [Organization And Team Management](./2026-06-23-bambi-organization-team-management.md) | Multi-branch organization/team admin | Completed 2026-06-24 |
 | 4 | [Dense Marketplace And Promotion Ops](./2026-06-24-bambi-dense-marketplace-promotion-ops.md) | Foxalba-informed dense job list, promotion sections, boost management | Completed 2026-06-24 |
-| 5 | [Moderator Bulk Actions](./2026-06-23-bambi-moderator-bulk-actions.md) | API-backed bulk moderation actions | Accidental mass changes |
+| 5 | [Moderator Bulk Actions](./2026-06-23-bambi-moderator-bulk-actions.md) | API-backed bulk moderation actions | Completed 2026-06-25 |
 | 6 | [Reviews And Ratings](./2026-06-23-bambi-reviews-ratings.md) | Post-interview reviews and public rating summaries | Abuse and privacy |
 | 7 | [Employer Analytics And Paid Placement](./2026-06-23-bambi-employer-analytics-paid-placement.md) | Employer metrics, billing-ready events, analytics over promoted listings | Trust and reporting accuracy |
 | 8 | [Native App](./2026-06-23-bambi-native-app.md) | Mobile native seeker/employer/admin shell and MVP flows | Web/native parity |
@@ -74,7 +74,7 @@ Open [Organization And Team Management](./2026-06-23-bambi-organization-team-man
 
 Open [Dense Marketplace And Promotion Ops](./2026-06-24-bambi-dense-marketplace-promotion-ops.md), complete every task, then return here and check this step.
 
-- [ ] **Step 5: Execute Moderator Bulk Actions plan**
+- [x] **Step 5: Execute Moderator Bulk Actions plan**
 
 Open [Moderator Bulk Actions](./2026-06-23-bambi-moderator-bulk-actions.md), complete every task, then return here and check this step.
 

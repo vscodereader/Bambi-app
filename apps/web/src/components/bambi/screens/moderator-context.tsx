@@ -8,11 +8,13 @@ import {
 	createContext,
 	type ReactNode,
 	useContext,
+	useEffect,
 	useMemo,
 	useRef,
 	useState,
 } from "react";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
+import { getVisibleModerationData } from "@/lib/bambi/moderation-data";
 import type {
 	ManagedUser,
 	QueueItem,
@@ -91,6 +93,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	const [users, setUsers] = useState<ManagedUser[]>(USERS);
 	const [selected, setSelected] = useState<string[]>([]);
 	const [toast, setToast] = useState<string | null>(null);
+	const [hasQueueApiData, setHasQueueApiData] = useState(false);
+	const [hasReportsApiData, setHasReportsApiData] = useState(false);
+	const [hasUsersApiData, setHasUsersApiData] = useState(false);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const moderationQueueQuery = useQuery(
 		orpc.bambi.moderation.listJobPosts.queryOptions({
@@ -126,6 +131,24 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		orpc.bambi.moderation.bulkSetUserStatus.mutationOptions()
 	);
 
+	useEffect(() => {
+		if (moderationQueueQuery.isSuccess) {
+			setHasQueueApiData(true);
+		}
+	}, [moderationQueueQuery.isSuccess]);
+
+	useEffect(() => {
+		if (moderationReportsQuery.isSuccess) {
+			setHasReportsApiData(true);
+		}
+	}, [moderationReportsQuery.isSuccess]);
+
+	useEffect(() => {
+		if (moderationUsersQuery.isSuccess) {
+			setHasUsersApiData(true);
+		}
+	}, [moderationUsersQuery.isSuccess]);
+
 	const value = useMemo<ModContextValue>(() => {
 		const flash = (msg: string) => {
 			setToast(msg);
@@ -134,86 +157,95 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			}
 			timer.current = setTimeout(() => setToast(null), 2200);
 		};
-		const apiQueue =
-			moderationQueueQuery.data?.map<QueueItem>((item) => ({
-				company: item.organizationDisplayName,
-				desc: item.description,
-				detected: item.riskFlags.length ? item.riskFlags : ["검수 필요"],
-				flags: item.riskFlags.length
-					? item.riskFlags.map((flag) => ({
-							label: "정책 확인",
-							match: flag,
-							sev: "review" as const,
-						}))
-					: [
-							{
-								label: "검수 대기",
-								match: item.status,
-								sev: "review" as const,
-							},
-						],
-				id: item.id,
-				location: item.region,
-				pay: `${item.payUnit} ${item.payAmount.toLocaleString("ko-KR")}원`,
-				receivedAt: formatDate(item.createdAt),
-				refId: `#${item.id.slice(0, 8)}`,
-				risk: item.riskFlags.length ? "review" : "warn",
-				riskLevel: item.riskFlags.length ? "mid" : "low",
-				role: item.industryCategory,
-				submitted: formatDate(item.createdAt),
-				title: item.title,
-			})) ?? [];
-		const apiReports =
-			moderationReportsQuery.data?.map<Report>((item) => {
-				const attachments = item.targetContext?.chatMessage?.attachments ?? [];
-				const attachmentMessages = attachments.map((attachment) => ({
-					mine: false,
-					text: `첨부 파일 · ${attachment.fileName} · ${attachment.mimeType} · ${formatByteSize(attachment.byteSize)}`,
-				}));
-				const baseNote = item.details ?? "상세 신고 내용이 없습니다.";
-				const attachmentNote = attachments.length
-					? `첨부 ${attachments.length}개 포함`
-					: null;
-
-				return {
-					id: item.id,
-					note: attachmentNote ? `${baseNote}\n${attachmentNote}` : baseNote,
-					reason: item.reason,
-					reporter: `신고자 ${item.reporterUserId.slice(0, 6)}`,
-					reporterRole: "사용자",
-					sev: item.status === "open" ? "mid" : "low",
-					status:
-						item.status === "open" || item.status === "reviewing"
-							? "open"
-							: "closed",
-					target: `${item.targetType} ${item.targetId.slice(0, 8)}`,
-					targetRole: "대상",
-					thread: [
+		const apiQueue = moderationQueueQuery.data?.map<QueueItem>((item) => ({
+			company: item.organizationDisplayName,
+			desc: item.description,
+			detected: item.riskFlags.length ? item.riskFlags : ["검수 필요"],
+			flags: item.riskFlags.length
+				? item.riskFlags.map((flag) => ({
+						label: "정책 확인",
+						match: flag,
+						sev: "review" as const,
+					}))
+				: [
 						{
-							mine: false,
-							text: item.details ?? "신고 상세 내용을 확인해 주세요.",
+							label: "검수 대기",
+							match: item.status,
+							sev: "review" as const,
 						},
-						...attachmentMessages,
 					],
-					time: formatDate(item.createdAt),
-				};
-			}) ?? [];
-		const apiUsers =
-			moderationUsersQuery.data?.map<ManagedUser>((item) => ({
-				id: item.userId,
-				joined: formatDate(item.createdAt),
-				name: item.displayName ?? item.email,
-				note: item.isPhoneVerified
-					? "휴대폰 인증 완료"
-					: "휴대폰 인증이 필요합니다.",
-				reports: 0,
-				role: getRoleLabel(item.role),
-				status: item.status,
-				warnings: item.status === "warned" ? 1 : 0,
-			})) ?? [];
-		const visibleQueue = apiQueue.length > 0 ? apiQueue : queue;
-		const visibleReports = apiReports.length > 0 ? apiReports : reports;
-		const visibleUsers = apiUsers.length > 0 ? apiUsers : users;
+			id: item.id,
+			location: item.region,
+			pay: `${item.payUnit} ${item.payAmount.toLocaleString("ko-KR")}원`,
+			receivedAt: formatDate(item.createdAt),
+			refId: `#${item.id.slice(0, 8)}`,
+			risk: item.riskFlags.length ? "review" : "warn",
+			riskLevel: item.riskFlags.length ? "mid" : "low",
+			role: item.industryCategory,
+			submitted: formatDate(item.createdAt),
+			title: item.title,
+		}));
+		const apiReports = moderationReportsQuery.data?.map<Report>((item) => {
+			const attachments = item.targetContext?.chatMessage?.attachments ?? [];
+			const attachmentMessages = attachments.map((attachment) => ({
+				mine: false,
+				text: `첨부 파일 · ${attachment.fileName} · ${attachment.mimeType} · ${formatByteSize(attachment.byteSize)}`,
+			}));
+			const baseNote = item.details ?? "상세 신고 내용이 없습니다.";
+			const attachmentNote = attachments.length
+				? `첨부 ${attachments.length}개 포함`
+				: null;
+
+			return {
+				id: item.id,
+				note: attachmentNote ? `${baseNote}\n${attachmentNote}` : baseNote,
+				reason: item.reason,
+				reporter: `신고자 ${item.reporterUserId.slice(0, 6)}`,
+				reporterRole: "사용자",
+				sev: item.status === "open" ? "mid" : "low",
+				status:
+					item.status === "open" || item.status === "reviewing"
+						? "open"
+						: "closed",
+				target: `${item.targetType} ${item.targetId.slice(0, 8)}`,
+				targetRole: "대상",
+				thread: [
+					{
+						mine: false,
+						text: item.details ?? "신고 상세 내용을 확인해 주세요.",
+					},
+					...attachmentMessages,
+				],
+				time: formatDate(item.createdAt),
+			};
+		});
+		const apiUsers = moderationUsersQuery.data?.map<ManagedUser>((item) => ({
+			id: item.userId,
+			joined: formatDate(item.createdAt),
+			name: item.displayName ?? item.email,
+			note: item.isPhoneVerified
+				? "휴대폰 인증 완료"
+				: "휴대폰 인증이 필요합니다.",
+			reports: 0,
+			role: getRoleLabel(item.role),
+			status: item.status,
+			warnings: item.status === "warned" ? 1 : 0,
+		}));
+		const visibleQueue = getVisibleModerationData({
+			apiData: apiQueue,
+			hasApiData: hasQueueApiData || moderationQueueQuery.isSuccess,
+			previewData: queue,
+		});
+		const visibleReports = getVisibleModerationData({
+			apiData: apiReports,
+			hasApiData: hasReportsApiData || moderationReportsQuery.isSuccess,
+			previewData: reports,
+		});
+		const visibleUsers = getVisibleModerationData({
+			apiData: apiUsers,
+			hasApiData: hasUsersApiData || moderationUsersQuery.isSuccess,
+			previewData: users,
+		});
 		const isLoading =
 			moderationQueueQuery.isPending ||
 			moderationQueueQuery.isFetching ||
@@ -534,15 +566,21 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		bulkSetJobPostStatusMutation,
 		bulkSetReportStatusMutation,
 		bulkSetUserStatusMutation,
+		hasQueueApiData,
+		hasReportsApiData,
+		hasUsersApiData,
 		moderationQueueQuery.data,
 		moderationQueueQuery.isFetching,
 		moderationQueueQuery.isPending,
+		moderationQueueQuery.isSuccess,
 		moderationReportsQuery.data,
 		moderationReportsQuery.isFetching,
 		moderationReportsQuery.isPending,
+		moderationReportsQuery.isSuccess,
 		moderationUsersQuery.data,
 		moderationUsersQuery.isFetching,
 		moderationUsersQuery.isPending,
+		moderationUsersQuery.isSuccess,
 		queue,
 		queryClient,
 		reports,

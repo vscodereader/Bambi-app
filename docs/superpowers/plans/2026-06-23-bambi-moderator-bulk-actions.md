@@ -98,13 +98,13 @@ Before applying a bulk action, show selected count, target action, reason input,
 
 After completion, show success count and failure count. If failures exist, show a compact list of failed ids.
 
-- [ ] **Step 4: Browser verify**
+- [x] **Step 4: Browser verify**
 
 As `admin@bambi.dev`, select multiple queue items, approve them with a reason, and verify the queue count updates from API data.
 
 ## Task 4: Final Verification
 
-- [ ] **Step 1: Run automated checks**
+- [x] **Step 1: Run automated checks**
 
 ```bash
 pnpm --filter @bambi-app/api test
@@ -115,7 +115,7 @@ pnpm --filter web build
 
 Expected: all commands pass.
 
-- [ ] **Step 2: Update plan and commit**
+- [x] **Step 2: Update plan and commit**
 
 Check completed boxes, add browser verification notes, and commit with Korean Conventional Commits format.
 
@@ -124,6 +124,9 @@ Check completed boxes, add browser verification notes, and commit with Korean Co
 - 2026-06-25: Checked `packages/db/src/migrations/` before implementation. Latest migration is `0005_bambi_org_team_management.sql`; no new migration was required because bulk actions reuse existing moderation and audit tables.
 - 2026-06-25: Added service tests for empty requests, 50-target limit, and mixed success/failure formatting. Verified with `pnpm --filter @bambi-app/api test src/services/bambi-moderation-bulk.test.ts` (3 passed).
 - 2026-06-25: Added router tests for admin-only access, partial job-post failure reporting, and audit logs for job/report/user bulk updates. Verified endpoint exposure without DB using `pnpm --filter @bambi-app/api test src/routers/bambi/moderation.test.ts -t "exposes bulk moderation procedures"` (1 passed, 4 skipped).
-- 2026-06-25: Browser smoke checked on `http://localhost:23001` preview fallback: queue selection -> 승인 confirmation sheet -> reason field -> result toast and queue count update; reports/users selection action bars also appeared with the expected actions. Full `admin@bambi.dev` API-data browser verification remains unchecked.
+- 2026-06-25: Browser smoke checked on `http://localhost:23001` preview fallback: queue selection -> 승인 confirmation sheet -> reason field -> result toast and queue count update; reports/users selection action bars also appeared with the expected actions.
 - 2026-06-25: Updated DB target to local PostgreSQL (`localhost:55432/bambi`, password omitted). `select 1` succeeded in 52ms, `pnpm --filter @bambi-app/db db:migrate` applied migrations successfully, and `pnpm --filter @bambi-app/api test` passed with 13 files / 64 tests. The previous connection timeout against `dev.mkvista.com` is resolved for local DB.
 - 2026-06-25: `pnpm run check-types`, `pnpm run check`, and `pnpm --filter web build` passed.
+- 2026-06-25: Added `getVisibleModerationData` to keep successful empty API results from falling back to moderator preview data. Verified with `pnpm vitest run apps/web/src/lib/bambi/moderation-data.test.ts` (3 passed).
+- 2026-06-25: API-data browser verification completed with `admin@bambi.dev`. Ran `pnpm run db:seed:bambi`, temporarily moved `22222222-2222-4222-8222-222222222201` to `pending_review` for a two-item queue, selected both queue items, applied bulk 승인, and verified the API-backed count changed from `검수 대기 2` to `검수 대기 0` with `검수할 공고가 없어요`.
+- 2026-06-25: Final verification passed: `pnpm --filter @bambi-app/api test` (13 files / 64 tests), `pnpm run check-types`, `pnpm run check`, and `pnpm --filter web build`.
