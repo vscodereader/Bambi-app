@@ -21,7 +21,7 @@
 | 5 | [Moderator Bulk Actions](./2026-06-23-bambi-moderator-bulk-actions.md) | API-backed bulk moderation actions | Completed 2026-06-25 |
 | 6 | [Reviews And Ratings](./2026-06-23-bambi-reviews-ratings.md) | Post-interview reviews and public rating summaries | Abuse and privacy |
 | 7 | [Employer Analytics And Paid Placement](./2026-06-23-bambi-employer-analytics-paid-placement.md) | Employer metrics, billing-ready events, analytics over promoted listings | Trust and reporting accuracy |
-| 8 | [Native App](./2026-06-23-bambi-native-app.md) | Mobile native seeker/employer/admin shell and MVP flows | Web/native parity |
+| 8 | [Native App](./2026-06-23-bambi-native-app.md) | Mobile native seeker/employer/admin shell and MVP flows, paused until Web final completion | Web/native parity after Web acceptance |
 
 ## Benchmark Inputs
 
@@ -38,9 +38,9 @@
 5. Moderator Bulk Actions
 6. Reviews And Ratings
 7. Employer Analytics And Paid Placement
-8. Native App
+8. Native App (deferred until Web final completion)
 
-The native app can begin after the Web contracts are stable, but it should not define new domain rules independently from Web/API.
+The native app is paused as of 2026-06-25. Do not select Native App as the next roadmap task until Web final completion is accepted. Resume native work only after the Web flows, API contracts, and remaining Web polish are stable enough to serve as the source of truth.
 
 Dense Marketplace And Promotion Ops should run before Employer Analytics And Paid Placement if promotion tables or boost events are needed as analytics dimensions. If Analytics runs first, its promotion foundation task should be reconciled with the dense marketplace promotion schema before implementation.
 
@@ -91,3 +91,5 @@ Open [Employer Analytics And Paid Placement](./2026-06-23-bambi-employer-analyti
 Open [Native App](./2026-06-23-bambi-native-app.md), complete every task, then return here and check this step.
 
 Progress: Native app shell, seeker/employer/moderator screens, native oRPC client, and automated checks are implemented. Full iOS/Android simulator smoke for seeker contact reveal, owner create/edit, and admin moderation actions remains pending.
+
+Status 2026-06-25: Paused until Web final completion. Keep this step unchecked and do not continue native implementation or simulator hardening before the Web experience is finalized and accepted.
