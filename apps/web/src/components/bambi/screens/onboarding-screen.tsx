@@ -5,6 +5,7 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { getOnboardingNextRoute } from "@/lib/bambi/onboarding-routes";
 import { orpc } from "@/utils/orpc";
 import { Badge, Button, Card, Input, Logo } from "../ds";
 import { BriefcaseIcon, Search2, ShieldIcon } from "../icons";
@@ -17,14 +18,6 @@ const roleLabels = {
 
 const getRoleLabel = (role: string): string =>
 	roleLabels[role as keyof typeof roleLabels] ?? role;
-
-const getNextRoute = (role?: null | string): Route => {
-	if (role === "employer" || role === "admin") {
-		return "/employer";
-	}
-
-	return "/seeker";
-};
 
 export function OnboardingScreen() {
 	const router = useRouter();
@@ -192,7 +185,9 @@ export function OnboardingScreen() {
 									프로필 저장
 								</Button>
 								<Button
-									onClick={() => router.push(getNextRoute(profile.role))}
+									onClick={() =>
+										router.push(getOnboardingNextRoute(profile.role) as Route)
+									}
 									variant="secondary"
 								>
 									{getRoleLabel(profile.role)} 화면으로 이동

@@ -10,6 +10,8 @@
 
 **Current Status:** The approved 1-3 redesign and follow-up integration pass are complete. The marketplace now prefers `bambi.jobs` API data with sample fallback, chat preflight reads Better Auth/onboarding state and creates chat rooms through `bambi.chats.startFromJobPost`, `/seeker/chats` handles API-backed rooms, and employer/moderator routes use the shared responsive shell. Verification covered type checks, Ultracite, API tests, Next production build, seed execution, production browser rendering with API server, and `next dev` route responses after enabling polling.
 
+**Tracking Note, 2026-06-26:** The unchecked task boxes below are preserved as the original redesign implementation recipe. They are not active roadmap tracking now that the redesign and integration pass are complete.
+
 ---
 
 ## Scope And File Structure

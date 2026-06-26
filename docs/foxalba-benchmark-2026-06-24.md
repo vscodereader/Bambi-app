@@ -274,3 +274,5 @@ Foxalba를 벤치마킹할 때 핵심은 "공고를 예쁘게 꾸미는 기능"�
 밤비는 Foxalba처럼 구인건이 많아 보이는 탐색 화면을 만들 필요가 있다. 다만 상세 본문은 자유 HTML이 아니라 안전한 블록형 편집으로 제한하고, 이미지도 대표 이미지와 상세 갤러리 중심으로 통제하는 것이 좋다.
 
 가장 먼저 할 일은 `dense job list`, `프리미엄/추천/일반 노출 구분`, `구인자 광고관리 상태 탭`, `끌어올리기 상품`을 설계하는 것이다.
+
+2026-06-26 갱신: `dense job list`, `프리미엄/추천/일반 노출 구분`, `구인자 광고관리 상태 탭`, `끌어올리기 상품`은 [Dense Marketplace And Promotion Ops](./superpowers/plans/2026-06-24-bambi-dense-marketplace-promotion-ops.md)와 [Employer Analytics And Paid Placement](./superpowers/plans/2026-06-23-bambi-employer-analytics-paid-placement.md)에서 완료했다. 아직 남은 Foxalba-informed 범위인 `대표 이미지 1장`, `상세 이미지 최대 5장`, `HTML이 아닌 안전한 블록형 상세 편집기`는 [Job Post Media And Block Editor](./superpowers/plans/2026-06-26-bambi-job-post-media-block-editor.md)로 분리했다.

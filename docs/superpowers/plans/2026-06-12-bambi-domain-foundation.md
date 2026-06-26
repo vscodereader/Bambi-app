@@ -8,6 +8,8 @@
 
 **Tech Stack:** TypeScript, pnpm workspaces, Turborepo, Drizzle ORM with PostgreSQL, Better Auth session context, oRPC, Zod, Vitest, Ultracite/Biome.
 
+**Current Status, 2026-06-26:** Historical context. The backend domain foundation has execution notes showing API tests, type checks, Ultracite, migration generation, and migration drift checks passing. Unchecked boxes below are preserved from the original implementation recipe and are not active roadmap tracking.
+
 ---
 
 ## Scope
