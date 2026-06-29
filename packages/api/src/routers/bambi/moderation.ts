@@ -8,11 +8,12 @@ import {
 	chatRoom,
 	employerOrganizationProfile,
 	jobPost,
+	jobPostMedia,
 	report,
 	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -165,6 +166,18 @@ const getChatMessageTargetContext = async (targetId: string) => {
 		attachments,
 	};
 };
+
+const jobPostMediaCountSql = sql<number>`(
+	select count(*)::integer
+	from ${jobPostMedia}
+	where ${jobPostMedia.jobPostId} = ${jobPost.id}
+)`;
+const jobPostHasCoverImageSql = sql<boolean>`exists(
+	select 1
+	from ${jobPostMedia}
+	where ${jobPostMedia.jobPostId} = ${jobPost.id}
+		and ${jobPostMedia.usage} = 'cover'
+)`;
 
 const getReportTargetContext = async (reportRow: ReportRow) => {
 	if (reportRow.targetType !== "chat_message") {
@@ -330,7 +343,10 @@ export const moderationRouter = {
 					payUnit: jobPost.payUnit,
 					workSchedule: jobPost.workSchedule,
 					description: jobPost.description,
+					descriptionBlocks: jobPost.descriptionBlocks,
+					hasCoverImage: jobPostHasCoverImageSql,
 					interviewNotes: jobPost.interviewNotes,
+					mediaCount: jobPostMediaCountSql,
 					status: jobPost.status,
 					riskFlags: jobPost.riskFlags,
 					rejectionReason: jobPost.rejectionReason,

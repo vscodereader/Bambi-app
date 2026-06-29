@@ -55,6 +55,23 @@ interface ModContextValue {
 	warnedUsers: number;
 }
 
+interface ApiQueueItem {
+	createdAt: Date | string;
+	description: string;
+	descriptionBlocks: { text: string }[];
+	hasCoverImage: boolean;
+	id: string;
+	industryCategory: string;
+	mediaCount: number;
+	organizationDisplayName: string;
+	payAmount: number;
+	payUnit: string;
+	region: string;
+	riskFlags: string[];
+	status: string;
+	title: string;
+}
+
 const ModContext = createContext<ModContextValue | null>(null);
 const UUID_PATTERN =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -73,6 +90,87 @@ const formatByteSize = (byteSize: number) => {
 	}
 
 	return `${Math.max(1, Math.round(byteSize / 1024))} KB`;
+};
+const RISKY_BLOCK_TERMS = ["미성년", "성매매", "강요"] as const;
+const getBlockRiskMatches = (
+	blocks: { text: string }[] | null | undefined
+): string[] => {
+	if (!blocks?.length) {
+		return [];
+	}
+
+	const matches = new Set<string>();
+
+	for (const block of blocks) {
+		for (const term of RISKY_BLOCK_TERMS) {
+			if (block.text.includes(term)) {
+				matches.add(term);
+			}
+		}
+	}
+
+	return [...matches];
+};
+const getQueueMediaSummaries = (item: ApiQueueItem): string[] =>
+	[
+		item.hasCoverImage ? "대표 이미지 포함" : "",
+		item.mediaCount > 0 ? `이미지 ${item.mediaCount}개` : "",
+		item.descriptionBlocks.length > 0
+			? `상세 블록 ${item.descriptionBlocks.length}개`
+			: "",
+	].filter((summary) => summary.length > 0);
+
+const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
+	const blockRiskMatches = getBlockRiskMatches(item.descriptionBlocks);
+	const mediaSummaries = getQueueMediaSummaries(item);
+	const policyFlags = item.riskFlags.map((flag) => ({
+		label: "정책 확인",
+		match: flag,
+		sev: "review" as const,
+	}));
+	const blockFlags = blockRiskMatches.map((match) => ({
+		label: "블록 위험어",
+		match,
+		sev: "review" as const,
+	}));
+	const mediaFlags = mediaSummaries.map((summary) => ({
+		label: "공고 구성",
+		match: summary,
+		sev: "ok" as const,
+	}));
+	const reviewFlags = [...policyFlags, ...blockFlags];
+	const flags =
+		reviewFlags.length || mediaFlags.length
+			? [...reviewFlags, ...mediaFlags]
+			: [
+					{
+						label: "검수 대기",
+						match: item.status,
+						sev: "review" as const,
+					},
+				];
+	const detected = [
+		...item.riskFlags,
+		...blockRiskMatches,
+		...mediaSummaries,
+	].filter((summary) => summary.length > 0);
+
+	return {
+		company: item.organizationDisplayName,
+		desc: item.description,
+		detected: detected.length ? detected : ["검수 필요"],
+		flags,
+		id: item.id,
+		location: item.region,
+		pay: `${item.payUnit} ${item.payAmount.toLocaleString("ko-KR")}원`,
+		receivedAt: formatDate(item.createdAt),
+		refId: `#${item.id.slice(0, 8)}`,
+		risk: reviewFlags.length ? "review" : "warn",
+		riskLevel: reviewFlags.length ? "mid" : "low",
+		role: item.industryCategory,
+		submitted: formatDate(item.createdAt),
+		title: item.title,
+	};
 };
 const getRoleLabel = (role: string) => {
 	if (role === "admin") {
@@ -157,34 +255,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			}
 			timer.current = setTimeout(() => setToast(null), 2200);
 		};
-		const apiQueue = moderationQueueQuery.data?.map<QueueItem>((item) => ({
-			company: item.organizationDisplayName,
-			desc: item.description,
-			detected: item.riskFlags.length ? item.riskFlags : ["검수 필요"],
-			flags: item.riskFlags.length
-				? item.riskFlags.map((flag) => ({
-						label: "정책 확인",
-						match: flag,
-						sev: "review" as const,
-					}))
-				: [
-						{
-							label: "검수 대기",
-							match: item.status,
-							sev: "review" as const,
-						},
-					],
-			id: item.id,
-			location: item.region,
-			pay: `${item.payUnit} ${item.payAmount.toLocaleString("ko-KR")}원`,
-			receivedAt: formatDate(item.createdAt),
-			refId: `#${item.id.slice(0, 8)}`,
-			risk: item.riskFlags.length ? "review" : "warn",
-			riskLevel: item.riskFlags.length ? "mid" : "low",
-			role: item.industryCategory,
-			submitted: formatDate(item.createdAt),
-			title: item.title,
-		}));
+		const apiQueue = moderationQueueQuery.data?.map(toApiQueueItem);
 		const apiReports = moderationReportsQuery.data?.map<Report>((item) => {
 			const attachments = item.targetContext?.chatMessage?.attachments ?? [];
 			const attachmentMessages = attachments.map((attachment) => ({

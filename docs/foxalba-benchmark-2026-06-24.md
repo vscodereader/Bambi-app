@@ -275,4 +275,6 @@ Foxalba를 벤치마킹할 때 핵심은 "공고를 예쁘게 꾸미는 기능"�
 
 가장 먼저 할 일은 `dense job list`, `프리미엄/추천/일반 노출 구분`, `구인자 광고관리 상태 탭`, `끌어올리기 상품`을 설계하는 것이다.
 
-2026-06-26 갱신: `dense job list`, `프리미엄/추천/일반 노출 구분`, `구인자 광고관리 상태 탭`, `끌어올리기 상품`은 [Dense Marketplace And Promotion Ops](./superpowers/plans/2026-06-24-bambi-dense-marketplace-promotion-ops.md)와 [Employer Analytics And Paid Placement](./superpowers/plans/2026-06-23-bambi-employer-analytics-paid-placement.md)에서 완료했다. 아직 남은 Foxalba-informed 범위인 `대표 이미지 1장`, `상세 이미지 최대 5장`, `HTML이 아닌 안전한 블록형 상세 편집기`는 [Job Post Media And Block Editor](./superpowers/plans/2026-06-26-bambi-job-post-media-block-editor.md)로 분리했다.
+2026-06-26 갱신: `dense job list`, `프리미엄/추천/일반 노출 구분`, `구인자 광고관리 상태 탭`, `끌어올리기 상품`은 [Dense Marketplace And Promotion Ops](./superpowers/plans/2026-06-24-bambi-dense-marketplace-promotion-ops.md)와 [Employer Analytics And Paid Placement](./superpowers/plans/2026-06-23-bambi-employer-analytics-paid-placement.md)에서 완료했다. 남은 Foxalba-informed 범위인 `대표 이미지 1장`, `상세 이미지 최대 5장`, `HTML이 아닌 안전한 블록형 상세 편집기`는 [Job Post Media And Block Editor](./superpowers/plans/2026-06-26-bambi-job-post-media-block-editor.md)로 분리했다.
+
+2026-06-29 갱신: [Job Post Media And Block Editor](./superpowers/plans/2026-06-26-bambi-job-post-media-block-editor.md)를 완료해 구인자 공고 등록/수정 화면, 공개 목록/상세, 운영자 검수 큐, seed 데이터에 대표 이미지·상세 이미지·안전한 블록형 상세 편집기를 반영했다. 따라서 Native App 보류 항목을 제외하면 이 문서에서 Web 쪽으로 채택한 Foxalba-informed 범위는 완료 상태다.

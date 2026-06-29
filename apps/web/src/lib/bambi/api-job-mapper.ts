@@ -1,12 +1,30 @@
-import type { Job } from "./types";
+import type { Job, JobDescriptionBlock, JobMedia } from "./types";
+
+export interface ApiJobMedia {
+	altText?: null | string;
+	byteSize: number;
+	fileName: string;
+	id?: string;
+	mimeType: string;
+	storageKey: string;
+	usage: "cover" | "detail";
+}
+
+export interface ApiJobMediaSet {
+	cover?: ApiJobMedia | null;
+	detail?: ApiJobMedia[];
+}
 
 export interface ApiMarketplaceJob {
+	coverImage?: ApiJobMedia | null;
 	description?: string | null;
+	descriptionBlocks?: JobDescriptionBlock[] | null;
 	employerDisplayName?: string | null;
 	employerVerificationStatus?: string | null;
 	id: string;
 	industryCategory: string;
 	lastBoostedAt?: Date | null | string;
+	media?: ApiJobMediaSet;
 	payAmount: number;
 	payUnit: string;
 	promotionLabel?: null | string;
@@ -19,6 +37,33 @@ export interface ApiMarketplaceJob {
 	title: string;
 	workSchedule?: string | null;
 }
+
+const toJobMediaUrl = (media: ApiJobMedia): string => {
+	const params = new URLSearchParams({
+		fileName: media.fileName,
+		key: media.storageKey,
+		usage: media.usage,
+	});
+
+	return `/bambi/local-job-media?${params.toString()}`;
+};
+
+const toJobMedia = (media?: ApiJobMedia | null): JobMedia | null => {
+	if (!media) {
+		return null;
+	}
+
+	return {
+		altText: media.altText ?? "",
+		byteSize: media.byteSize,
+		fileName: media.fileName,
+		id: media.id,
+		mimeType: media.mimeType,
+		storageKey: media.storageKey,
+		url: toJobMediaUrl(media),
+		usage: media.usage,
+	};
+};
 
 export const getMarketplaceJobCompany = (job: ApiMarketplaceJob): string =>
 	job.teamDisplayName ?? job.employerDisplayName ?? "검증 업체";
@@ -51,6 +96,10 @@ const toRating = ({
 
 export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 	const company = getMarketplaceJobCompany(job);
+	const coverImage = toJobMedia(job.media?.cover ?? job.coverImage ?? null);
+	const detailImages = (job.media?.detail ?? [])
+		.map(toJobMedia)
+		.filter((media): media is JobMedia => media !== null);
 	const tags = [
 		job.promotionLabel ?? "",
 		job.industryCategory,
@@ -60,9 +109,12 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 
 	return {
 		company,
+		coverImage,
 		desc:
 			job.description ??
 			"공고 상세와 면접 안내는 밤비 채팅에서 안전하게 확인할 수 있어요.",
+		descriptionBlocks: job.descriptionBlocks ?? [],
+		detailImages,
 		featured: job.employerVerificationStatus === "verified",
 		hours: job.workSchedule ?? "채팅으로 확인",
 		id: job.id,

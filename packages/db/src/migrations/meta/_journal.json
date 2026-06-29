@@ -57,6 +57,13 @@
       "when": 1782365077049,
       "tag": "0007_bambi_analytics_paid_placement",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782697929572,
+      "tag": "0008_bambi_job_post_media_blocks",
+      "breakpoints": true
     }
   ]
 }

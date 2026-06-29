@@ -50,6 +50,10 @@ Excluded:
 
 The current latest migration is `0007_bambi_analytics_paid_placement.sql`.
 
+2026-06-29 check: `packages/db/src/migrations/` still ends at `0007_bambi_analytics_paid_placement.sql`, so `0008` remains available.
+
+2026-06-29 implementation: generated and applied `0008_bambi_job_post_media_blocks.sql` with Drizzle migration metadata.
+
 Use the next migration:
 
 ```text
@@ -125,7 +129,7 @@ export type JobPostMediaUsage = (typeof jobPostMediaUsages)[number];
 - Create: `packages/api/src/services/bambi-job-media-policy.ts`
 - Create: `packages/api/src/services/bambi-job-media-policy.test.ts`
 
-- [ ] **Step 1: Write description block tests**
+- [x] **Step 1: Write description block tests**
 
 Create tests for:
 
@@ -144,7 +148,7 @@ pnpm vitest run packages/api/src/services/bambi-job-description-blocks.test.ts
 
 Expected: FAIL because the service does not exist.
 
-- [ ] **Step 2: Implement description block helpers**
+- [x] **Step 2: Implement description block helpers**
 
 Create:
 
@@ -178,7 +182,7 @@ Add validation that returns structured error codes:
 - `block_text_too_long`
 - `unsupported_block_type`
 
-- [ ] **Step 3: Write media policy tests**
+- [x] **Step 3: Write media policy tests**
 
 Create tests for:
 
@@ -196,7 +200,7 @@ pnpm vitest run packages/api/src/services/bambi-job-media-policy.test.ts
 
 Expected: FAIL because the service does not exist.
 
-- [ ] **Step 4: Implement media policy helpers**
+- [x] **Step 4: Implement media policy helpers**
 
 Create:
 
@@ -213,7 +217,7 @@ export const ALLOWED_JOB_POST_IMAGE_MIME_TYPES = [
 
 Add `validateJobPostImageUpload` and `validateJobPostMediaSet` helpers.
 
-- [ ] **Step 5: Run policy tests**
+- [x] **Step 5: Run policy tests**
 
 Run:
 
@@ -230,7 +234,7 @@ Expected: both policy test files pass.
 - Modify: `packages/db/src/schema/bambi.ts`
 - Create: `packages/db/src/migrations/0008_bambi_job_post_media_blocks.sql`
 
-- [ ] **Step 1: Add schema fields**
+- [x] **Step 1: Add schema fields**
 
 Add `descriptionBlocks` to `jobPost`:
 
@@ -266,7 +270,7 @@ Add `jobPostMedia` table with:
 - `createdAt`
 - `updatedAt`
 
-- [ ] **Step 2: Add indexes and relations**
+- [x] **Step 2: Add indexes and relations**
 
 Required indexes:
 
@@ -277,7 +281,7 @@ Required indexes:
 
 Add relations from `jobPost` to `jobPostMedia` and from `jobPostMedia` to `jobPost`.
 
-- [ ] **Step 3: Create SQL migration**
+- [x] **Step 3: Create SQL migration**
 
 Create `0008_bambi_job_post_media_blocks.sql` with:
 
@@ -286,7 +290,7 @@ Create `0008_bambi_job_post_media_blocks.sql` with:
 - `job_post_media` table
 - indexes and foreign keys
 
-- [ ] **Step 4: Run schema checks**
+- [x] **Step 4: Run schema checks**
 
 Run:
 
@@ -305,7 +309,7 @@ Expected: both commands pass.
 - Modify: `packages/api/src/routers/bambi/jobs.ts`
 - Create: `packages/api/src/routers/bambi/job-post-media.test.ts`
 
-- [ ] **Step 1: Add job media upload intent helper**
+- [x] **Step 1: Add job media upload intent helper**
 
 Extend storage service with:
 
@@ -325,7 +329,7 @@ Storage keys must use:
 bambi-job-post-media/<organizationId>/<actorUserId>/<uuid>-<safe-file-name>
 ```
 
-- [ ] **Step 2: Extend job input schema**
+- [x] **Step 2: Extend job input schema**
 
 Extend `jobPostInput` with:
 
@@ -341,7 +345,7 @@ media: z
 
 Keep `description` as the normalized plain text fallback produced from blocks.
 
-- [ ] **Step 3: Add upload intent procedure**
+- [x] **Step 3: Add upload intent procedure**
 
 Add protected `createMediaUpload` under `bambi.jobs` or a focused `bambi.jobPostMedia` router.
 
@@ -352,13 +356,13 @@ The procedure must:
 - return upload intent metadata only
 - not create public media records until create/update submits the media set
 
-- [ ] **Step 4: Persist media in create/update transactions**
+- [x] **Step 4: Persist media in create/update transactions**
 
 In `create`, insert the job post first, then insert cover/detail media rows in the same transaction.
 
 In `update`, replace the job post media set for that job post in the same transaction after access checks pass.
 
-- [ ] **Step 5: Add API tests**
+- [x] **Step 5: Add API tests**
 
 Cover:
 
@@ -387,7 +391,7 @@ Expected: the new test file passes.
 - Modify: `apps/web/src/app/employer/new/page.tsx`
 - Modify: `apps/web/src/app/employer/jobs/[id]/edit/page.tsx`
 
-- [ ] **Step 1: Add Web form validation tests**
+- [x] **Step 1: Add Web form validation tests**
 
 Test:
 
@@ -405,7 +409,7 @@ pnpm vitest run apps/web/src/lib/bambi-job-blocks.test.ts
 
 Expected: FAIL until Web form helpers are implemented.
 
-- [ ] **Step 2: Implement block editor**
+- [x] **Step 2: Implement block editor**
 
 Create a focused editor with:
 
@@ -418,7 +422,7 @@ Create a focused editor with:
 - textarea per block
 - no HTML input and no `dangerouslySetInnerHTML`
 
-- [ ] **Step 3: Implement media uploader**
+- [x] **Step 3: Implement media uploader**
 
 Create a component with:
 
@@ -429,7 +433,7 @@ Create a component with:
 - validation messages from `validateJobForm`
 - local preview using object URLs
 
-- [ ] **Step 4: Wire create page**
+- [x] **Step 4: Wire create page**
 
 Update `/employer/new` so submit:
 
@@ -439,11 +443,11 @@ Update `/employer/new` so submit:
 4. invalidates employer job queries
 5. returns to `/employer`
 
-- [ ] **Step 5: Wire edit page**
+- [x] **Step 5: Wire edit page**
 
 Update `/employer/jobs/[id]/edit` so existing media and blocks are loaded, edited, replaced, and submitted through `bambi.jobs.update`.
 
-- [ ] **Step 6: Run Web checks**
+- [x] **Step 6: Run Web checks**
 
 Run:
 
@@ -464,11 +468,11 @@ Expected: all commands pass.
 - Modify: `apps/web/src/components/bambi/screens/moderator-context.tsx`
 - Create: `apps/web/src/app/bambi/local-job-media/route.ts`
 
-- [ ] **Step 1: Render cover image in marketplace rows**
+- [x] **Step 1: Render cover image in marketplace rows**
 
 Use Next.js image rendering for cover images where available. Keep the current logo/initial fallback for jobs without a cover image.
 
-- [ ] **Step 2: Render detail blocks and gallery**
+- [x] **Step 2: Render detail blocks and gallery**
 
 Render block types as semantic HTML:
 
@@ -479,11 +483,11 @@ Render block types as semantic HTML:
 
 Render detail images below the structured facts and before interview notes.
 
-- [ ] **Step 3: Add local media route**
+- [x] **Step 3: Add local media route**
 
 Create `/bambi/local-job-media` using the same local placeholder style as `/bambi/local-chat-attachments`, but with job-media-specific query parameters.
 
-- [ ] **Step 4: Extend moderator context**
+- [x] **Step 4: Extend moderator context**
 
 Include:
 
@@ -494,7 +498,7 @@ Include:
 
 Moderator screens should show that a post contains images or structured blocks before approval.
 
-- [ ] **Step 5: Browser smoke**
+- [x] **Step 5: Browser smoke**
 
 Verify:
 
@@ -509,7 +513,7 @@ Verify:
 - Modify: `apps/server/src/seeds/bambi-dev.ts`
 - Modify this plan with verification notes.
 
-- [ ] **Step 1: Seed media and block examples**
+- [x] **Step 1: Seed media and block examples**
 
 Seed:
 
@@ -517,7 +521,7 @@ Seed:
 - one pending review job with a risky block flag
 - one promoted job with a cover image so dense marketplace rows exercise the image path
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 
@@ -532,7 +536,7 @@ pnpm --filter web build
 
 Expected: all commands pass.
 
-- [ ] **Step 3: Browser verify employer and seeker flows**
+- [x] **Step 3: Browser verify employer and seeker flows**
 
 Verify:
 
@@ -541,7 +545,7 @@ Verify:
 - `seeker@bambi.dev` can see cover image, detail gallery, and block content.
 - `admin@bambi.dev` can see media/block context in moderation queue.
 
-- [ ] **Step 4: Update roadmap and commit**
+- [x] **Step 4: Update roadmap and commit**
 
 Update:
 
@@ -556,3 +560,12 @@ Commit with Korean Conventional Commit format.
 - Spec coverage: representative image, up to five detail images, safe block editor, no free-form HTML, moderation visibility, public rendering, and local QA are covered.
 - Placeholder scan: this plan intentionally avoids `TBD`, `TODO`, and open-ended validation steps.
 - Type consistency: `JobDescriptionBlock`, `JobPostMediaUsage`, `descriptionBlocks`, and `jobPostMedia` names are used consistently across schema, API, and Web tasks.
+
+## Verification Notes
+
+2026-06-29 implementation verification:
+
+- TDD red/green: `job-post-media.test.ts` first failed because public `getById` did not return `descriptionBlocks`, then passed after adding the select field.
+- Automated checks passed: `pnpm run db:migrate`, `pnpm run db:seed:bambi`, `pnpm --filter @bambi-app/api test`, targeted API/Web Vitest runs, `pnpm run check-types`, `pnpm run check`, and `pnpm --filter web build`.
+- Browser smoke passed with Playwright CLI on `http://localhost:23001`: seeker detail rendered cover/detail images and semantic blocks, employer new/edit rendered block editor and media slots, moderator queue detail rendered risky block term plus cover/image/block context.
+- Runtime issue found and fixed: Next.js 16 rejected local image URLs with query strings in `next/image`; local job media previews now use `unoptimized`, matching the existing chat attachment preview pattern.

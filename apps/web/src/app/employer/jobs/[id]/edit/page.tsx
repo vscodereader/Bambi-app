@@ -11,13 +11,20 @@ import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
 import { FieldError, FormError } from "@/components/bambi/form-message";
+import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
+import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
 import { PageShell } from "@/components/bambi/page-shell";
 import Loader from "@/components/loader";
 import { authClient } from "@/lib/auth-client";
 import {
 	emptyJobForm,
+	emptyJobFormMedia,
+	type JobDescriptionBlockFormValue,
 	type JobForm,
 	type JobFormErrors,
+	type JobFormMedia,
+	type JobFormMediaItem,
+	resolveJobPostMediaForSubmit,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
 import {
@@ -43,6 +50,20 @@ const getErrorCode = (error: Error | null): string | undefined =>
 
 const getFieldErrorId = (field: keyof JobForm) => `${field}-error`;
 
+const toJobFormMediaItem = (item: {
+	altText: string;
+	byteSize: number;
+	fileName: string;
+	mimeType: string;
+	storageKey: string;
+}): JobFormMediaItem => ({
+	altText: item.altText,
+	byteSize: item.byteSize,
+	fileName: item.fileName,
+	mimeType: item.mimeType,
+	storageKey: item.storageKey,
+});
+
 export default function EditEmployerJobPage({
 	params,
 }: {
@@ -54,6 +75,13 @@ export default function EditEmployerJobPage({
 	const session = authClient.useSession();
 	const isSignedIn = Boolean(session.data?.user);
 	const [form, setForm] = useState(emptyJobForm);
+	const [descriptionBlocks, setDescriptionBlocks] = useState<
+		JobDescriptionBlockFormValue[]
+	>([]);
+	const [media, setMedia] = useState<JobFormMedia>({
+		...emptyJobFormMedia,
+		detail: [],
+	});
 	const [fieldErrors, setFieldErrors] = useState<JobFormErrors>({});
 	const [formError, setFormError] = useState<null | string>(null);
 	const jobQuery = useQuery({
@@ -80,6 +108,9 @@ export default function EditEmployerJobPage({
 			},
 		})
 	);
+	const createMediaUploadMutation = useMutation(
+		orpc.bambi.jobs.createMediaUpload.mutationOptions()
+	);
 	const job = jobQuery.data;
 
 	useEffect(() => {
@@ -99,6 +130,11 @@ export default function EditEmployerJobPage({
 			title: job.title,
 			workSchedule: job.workSchedule,
 		});
+		setDescriptionBlocks(job.descriptionBlocks ?? []);
+		setMedia({
+			cover: job.media.cover ? toJobFormMediaItem(job.media.cover) : null,
+			detail: job.media.detail.map(toJobFormMediaItem),
+		});
 	}, [job]);
 
 	const updateFormValue = (field: keyof JobForm, value: string) => {
@@ -113,10 +149,12 @@ export default function EditEmployerJobPage({
 		setFormError(null);
 	};
 
-	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
 		const validation = validateJobForm(form, {
+			descriptionBlocks,
+			media,
 			teamScopes: form.teamId
 				? [{ organizationId: form.organizationId, teamId: form.teamId }]
 				: [],
@@ -129,10 +167,30 @@ export default function EditEmployerJobPage({
 			return;
 		}
 
-		updateMutation.mutate({
-			data: validation.input,
-			id,
-		});
+		try {
+			const { media: validatedMedia, ...jobInput } = validation.input;
+			const mediaPayload = await resolveJobPostMediaForSubmit({
+				createUploadIntent: createMediaUploadMutation.mutateAsync,
+				media: validatedMedia,
+				organizationId: jobInput.organizationId,
+				teamId: jobInput.teamId,
+			});
+
+			updateMutation.mutate({
+				data: {
+					...jobInput,
+					media: mediaPayload,
+				},
+				id,
+			});
+		} catch (error) {
+			const message =
+				error instanceof Error
+					? error.message
+					: "이미지 업로드 준비 중 문제가 발생했습니다.";
+			setFormError(message);
+			toast.error(message);
+		}
 	};
 
 	if (session.isPending || jobQuery.isLoading) {
@@ -420,6 +478,18 @@ export default function EditEmployerJobPage({
 							message={fieldErrors.description}
 						/>
 					</div>
+					<JobPostBlockEditor
+						blocks={descriptionBlocks}
+						error={fieldErrors.descriptionBlocks}
+						onChange={(blocks) => {
+							setDescriptionBlocks(blocks);
+							setFieldErrors((currentErrors) => ({
+								...currentErrors,
+								descriptionBlocks: undefined,
+							}));
+							setFormError(null);
+						}}
+					/>
 					<div className="space-y-2">
 						<Label htmlFor="interviewNotes">면접 안내</Label>
 						<textarea
@@ -446,6 +516,19 @@ export default function EditEmployerJobPage({
 					</div>
 				</section>
 
+				<JobPostMediaUploader
+					error={fieldErrors.media}
+					media={media}
+					onChange={(nextMedia) => {
+						setMedia(nextMedia);
+						setFieldErrors((currentErrors) => ({
+							...currentErrors,
+							media: undefined,
+						}));
+						setFormError(null);
+					}}
+				/>
+
 				<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 					<Link
 						className={buttonVariants({ variant: "outline" })}
@@ -453,8 +536,15 @@ export default function EditEmployerJobPage({
 					>
 						취소
 					</Link>
-					<Button disabled={updateMutation.isPending} type="submit">
-						{updateMutation.isPending ? "수정 중…" : "공고 수정"}
+					<Button
+						disabled={
+							updateMutation.isPending || createMediaUploadMutation.isPending
+						}
+						type="submit"
+					>
+						{updateMutation.isPending || createMediaUploadMutation.isPending
+							? "수정 중…"
+							: "공고 수정"}
 					</Button>
 				</div>
 			</form>

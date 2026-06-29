@@ -18,6 +18,7 @@ import {
 	interviewSchedule,
 	jobPerformanceEvent,
 	jobPost,
+	jobPostMedia,
 	jobPromotionCampaign,
 	report,
 	review,
@@ -84,6 +85,11 @@ const ids = {
 	lunaTeamPublishedJob: "22222222-2222-4222-8222-222222222202",
 	pendingReviewJob: "22222222-2222-4222-8222-222222222203",
 	lunaOrganicPublishedJob: "22222222-2222-4222-8222-222222222204",
+	lunaPublishedJobCover: "99999999-9999-4999-8999-999999999901",
+	lunaPublishedJobDetailOne: "99999999-9999-4999-8999-999999999902",
+	lunaPublishedJobDetailTwo: "99999999-9999-4999-8999-999999999903",
+	lunaTeamPublishedJobCover: "99999999-9999-4999-8999-999999999904",
+	pendingReviewJobCover: "99999999-9999-4999-8999-999999999905",
 	premiumPromotionCampaign: "88888888-8888-4888-8888-888888888801",
 	recommendedPromotionCampaign: "88888888-8888-4888-8888-888888888802",
 	expiredPromotionCampaign: "88888888-8888-4888-8888-888888888803",
@@ -98,6 +104,7 @@ const ids = {
 
 type DevUser = (typeof devUsers)[number];
 type DevUserKey = DevUser["key"];
+type SeedJobPost = typeof jobPost.$inferInsert & { id: string };
 
 const assertDevPasswordWorks = async (devUser: DevUser): Promise<void> => {
 	try {
@@ -369,89 +376,222 @@ const seedJobs = async (userIds: Record<DevUserKey, string>): Promise<void> => {
 	await db
 		.delete(jobPerformanceEvent)
 		.where(inArray(jobPerformanceEvent.jobPostId, seedJobIds));
+	await db
+		.delete(jobPostMedia)
+		.where(inArray(jobPostMedia.jobPostId, seedJobIds));
+
+	const jobs: SeedJobPost[] = [
+		{
+			id: ids.lunaPublishedJob,
+			organizationId: ids.lunaOrganization,
+			teamId: null,
+			createdByUserId: userIds.owner,
+			status: "published",
+			industryCategory: "라운지",
+			region: "서울 강남구",
+			payAmount: 180_000,
+			payUnit: "일급",
+			workSchedule: "주 3일, 20:00-02:00",
+			title: "강남 라운지 홀 스태프 모집",
+			description:
+				"주요 업무\n\n고객 응대와 예약 관리, 홀 정리를 담당합니다.\n\n초보 지원 가능하며 담당자가 채팅으로 안내합니다.",
+			descriptionBlocks: [
+				{ id: "luna-main-heading", text: "주요 업무", type: "heading" },
+				{
+					id: "luna-main-body",
+					text: "고객 응대와 예약 관리, 홀 정리를 담당합니다.",
+					type: "paragraph",
+				},
+				{
+					id: "luna-main-callout",
+					text: "초보 지원 가능하며 담당자가 채팅으로 안내합니다.",
+					type: "callout",
+				},
+			],
+			interviewNotes: "확정된 면접 일정 전까지 연락처 공개는 선택입니다.",
+			riskFlags: [],
+			publishedAt,
+		},
+		{
+			id: ids.lunaTeamPublishedJob,
+			organizationId: ids.lunaOrganization,
+			teamId: ids.lunaGangnamTeam,
+			createdByUserId: userIds.staff,
+			status: "published",
+			industryCategory: "바",
+			region: "서울 강남구",
+			payAmount: 160_000,
+			payUnit: "일급",
+			workSchedule: "금/토, 19:00-01:00",
+			title: "강남점 주말 파트타임 모집",
+			description:
+				"주말 업무\n\n바 좌석 정리\n예약 확인\n간단한 고객 안내\n\n근무 조건은 면접에서 확인합니다.",
+			descriptionBlocks: [
+				{ id: "luna-team-heading", text: "주말 업무", type: "heading" },
+				{
+					id: "luna-team-list",
+					text: "바 좌석 정리\n예약 확인\n간단한 고객 안내",
+					type: "bullet_list",
+				},
+				{
+					id: "luna-team-note",
+					text: "근무 조건은 면접에서 확인합니다.",
+					type: "paragraph",
+				},
+			],
+			interviewNotes: "매장 인근 카페에서 사전 면접 가능합니다.",
+			riskFlags: [],
+			publishedAt,
+		},
+		{
+			id: ids.pendingReviewJob,
+			organizationId: ids.pendingOrganization,
+			teamId: null,
+			createdByUserId: userIds.pendingOwner,
+			status: "pending_review",
+			industryCategory: "라운지",
+			region: "부산 해운대구",
+			payAmount: 150_000,
+			payUnit: "일급",
+			workSchedule: "협의",
+			title: "해운대 라운지 오픈 멤버 모집",
+			description:
+				"검수 확인 필요\n\n사업장 인증 심사 중인 공고입니다.\n\n미성년 지원 가능 여부를 운영팀이 확인해야 합니다.",
+			descriptionBlocks: [
+				{
+					id: "pending-heading",
+					text: "검수 확인 필요",
+					type: "heading",
+				},
+				{
+					id: "pending-body",
+					text: "사업장 인증 심사 중인 공고입니다.",
+					type: "paragraph",
+				},
+				{
+					id: "pending-risk",
+					text: "미성년 지원 가능 여부를 운영팀이 확인해야 합니다.",
+					type: "callout",
+				},
+			],
+			interviewNotes: "운영팀 심사 완료 후 면접 일정을 확정합니다.",
+			riskFlags: ["risky_term"],
+			publishedAt: null,
+		},
+		{
+			id: ids.lunaOrganicPublishedJob,
+			organizationId: ids.lunaOrganization,
+			teamId: null,
+			createdByUserId: userIds.owner,
+			status: "published",
+			industryCategory: "카페",
+			region: "서울 서초구",
+			payAmount: 140_000,
+			payUnit: "일급",
+			workSchedule: "평일 18:00-23:00",
+			title: "서초 라운지 카운터 보조",
+			description:
+				"초보 지원자를 위한 짧은 교육 후 근무를 시작합니다. 상세 조건은 밤비 채팅에서 안내합니다.",
+			descriptionBlocks: [],
+			interviewNotes: "면접 장소는 채팅에서 확정합니다.",
+			riskFlags: [],
+			publishedAt,
+		},
+	];
 
 	await db
 		.insert(jobPost)
-		.values([
-			{
-				id: ids.lunaPublishedJob,
-				organizationId: ids.lunaOrganization,
-				teamId: null,
-				createdByUserId: userIds.owner,
-				status: "published",
-				industryCategory: "라운지",
-				region: "서울 강남구",
-				payAmount: 180_000,
-				payUnit: "일급",
-				workSchedule: "주 3일, 20:00-02:00",
-				title: "강남 라운지 홀 스태프 모집",
-				description:
-					"면접 후 근무 요일을 조율합니다. 초보 지원 가능하며 담당자가 채팅으로 안내합니다.",
-				interviewNotes: "확정된 면접 일정 전까지 연락처 공개는 선택입니다.",
-				riskFlags: [],
-				publishedAt,
-			},
-			{
-				id: ids.lunaTeamPublishedJob,
-				organizationId: ids.lunaOrganization,
-				teamId: ids.lunaGangnamTeam,
-				createdByUserId: userIds.staff,
-				status: "published",
-				industryCategory: "바",
-				region: "서울 강남구",
-				payAmount: 160_000,
-				payUnit: "일급",
-				workSchedule: "금/토, 19:00-01:00",
-				title: "강남점 주말 파트타임 모집",
-				description:
-					"강남점 담당자와 1:1 채팅 후 면접 일정을 정합니다. 근무 조건은 면접에서 확인합니다.",
-				interviewNotes: "매장 인근 카페에서 사전 면접 가능합니다.",
-				riskFlags: [],
-				publishedAt,
-			},
-			{
-				id: ids.pendingReviewJob,
-				organizationId: ids.pendingOrganization,
-				teamId: null,
-				createdByUserId: userIds.pendingOwner,
-				status: "pending_review",
-				industryCategory: "라운지",
-				region: "부산 해운대구",
-				payAmount: 150_000,
-				payUnit: "일급",
-				workSchedule: "협의",
-				title: "해운대 라운지 오픈 멤버 모집",
-				description:
-					"사업장 인증 심사 중인 공고입니다. 승인 후 상단 노출과 공개 탐색에 반영됩니다.",
-				interviewNotes: "운영팀 심사 완료 후 면접 일정을 확정합니다.",
-				riskFlags: [],
-				publishedAt: null,
-			},
-			{
-				id: ids.lunaOrganicPublishedJob,
-				organizationId: ids.lunaOrganization,
-				teamId: null,
-				createdByUserId: userIds.owner,
-				status: "published",
-				industryCategory: "카페",
-				region: "서울 서초구",
-				payAmount: 140_000,
-				payUnit: "일급",
-				workSchedule: "평일 18:00-23:00",
-				title: "서초 라운지 카운터 보조",
-				description:
-					"초보 지원자를 위한 짧은 교육 후 근무를 시작합니다. 상세 조건은 밤비 채팅에서 안내합니다.",
-				interviewNotes: "면접 장소는 채팅에서 확정합니다.",
-				riskFlags: [],
-				publishedAt,
-			},
-		])
+		.values(jobs)
 		.onConflictDoUpdate({
 			target: jobPost.id,
 			set: {
 				updatedAt: new Date(),
 			},
 		});
+
+	for (const seedJob of jobs) {
+		const { id, ...jobValues } = seedJob;
+
+		await db
+			.update(jobPost)
+			.set({
+				...jobValues,
+				updatedAt: new Date(),
+			})
+			.where(eq(jobPost.id, id));
+	}
+
+	await db.insert(jobPostMedia).values([
+		{
+			id: ids.lunaPublishedJobCover,
+			jobPostId: ids.lunaPublishedJob,
+			organizationId: ids.lunaOrganization,
+			uploadedByUserId: userIds.owner,
+			usage: "cover",
+			position: 0,
+			fileName: "luna-cover.jpg",
+			mimeType: "image/jpeg",
+			byteSize: 512_000,
+			storageKey: "bambi-job-post-media/org_bambi_luna/owner/luna-cover.jpg",
+			altText: "클럽 루나 대표 이미지",
+		},
+		{
+			id: ids.lunaPublishedJobDetailOne,
+			jobPostId: ids.lunaPublishedJob,
+			organizationId: ids.lunaOrganization,
+			uploadedByUserId: userIds.owner,
+			usage: "detail",
+			position: 0,
+			fileName: "luna-detail-hall.webp",
+			mimeType: "image/webp",
+			byteSize: 384_000,
+			storageKey:
+				"bambi-job-post-media/org_bambi_luna/owner/luna-detail-hall.webp",
+			altText: "홀 근무 공간",
+		},
+		{
+			id: ids.lunaPublishedJobDetailTwo,
+			jobPostId: ids.lunaPublishedJob,
+			organizationId: ids.lunaOrganization,
+			uploadedByUserId: userIds.owner,
+			usage: "detail",
+			position: 1,
+			fileName: "luna-detail-counter.webp",
+			mimeType: "image/webp",
+			byteSize: 392_000,
+			storageKey:
+				"bambi-job-post-media/org_bambi_luna/owner/luna-detail-counter.webp",
+			altText: "카운터 안내 공간",
+		},
+		{
+			id: ids.lunaTeamPublishedJobCover,
+			jobPostId: ids.lunaTeamPublishedJob,
+			organizationId: ids.lunaOrganization,
+			uploadedByUserId: userIds.staff,
+			usage: "cover",
+			position: 0,
+			fileName: "luna-team-cover.png",
+			mimeType: "image/png",
+			byteSize: 420_000,
+			storageKey:
+				"bambi-job-post-media/org_bambi_luna/staff/luna-team-cover.png",
+			altText: "강남점 대표 이미지",
+		},
+		{
+			id: ids.pendingReviewJobCover,
+			jobPostId: ids.pendingReviewJob,
+			organizationId: ids.pendingOrganization,
+			uploadedByUserId: userIds.pendingOwner,
+			usage: "cover",
+			position: 0,
+			fileName: "neon-pending-cover.jpg",
+			mimeType: "image/jpeg",
+			byteSize: 448_000,
+			storageKey:
+				"bambi-job-post-media/org_bambi_neon/owner/neon-pending-cover.jpg",
+			altText: "네온 라운지 검수 이미지",
+		},
+	]);
 
 	await db
 		.update(jobPost)

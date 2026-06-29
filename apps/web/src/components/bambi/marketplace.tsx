@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import Image from "next/image";
 import {
 	MARKETPLACE_CATEGORIES,
 	MARKETPLACE_QUICK_FILTERS,
@@ -237,16 +238,30 @@ export function ResponsiveJobCard({
 				type="button"
 			>
 				<div className="flex items-start gap-3">
-					<div
-						className={cn(
-							"flex size-10 shrink-0 items-center justify-center rounded-lg font-extrabold text-sm",
-							active
-								? "border border-coral-200 bg-coral-50 text-coral-700"
-								: "bg-coral-50 text-coral-700"
-						)}
-					>
-						{job.company.slice(0, 2)}
-					</div>
+					{job.coverImage ? (
+						<Image
+							alt={job.coverImage.altText || job.coverImage.fileName}
+							className={cn(
+								"size-10 shrink-0 rounded-lg border object-cover",
+								active ? "border-coral-200" : "border-border"
+							)}
+							height={40}
+							src={job.coverImage.url}
+							unoptimized
+							width={40}
+						/>
+					) : (
+						<div
+							className={cn(
+								"flex size-10 shrink-0 items-center justify-center rounded-lg font-extrabold text-sm",
+								active
+									? "border border-coral-200 bg-coral-50 text-coral-700"
+									: "bg-coral-50 text-coral-700"
+							)}
+						>
+							{job.company.slice(0, 2)}
+						</div>
+					)}
 					<div className="min-w-0 flex-1">
 						<div className="flex flex-wrap items-center gap-1.5">
 							<h3

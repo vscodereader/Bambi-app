@@ -1,6 +1,7 @@
 "use client";
 
-import type { Job } from "@/lib/bambi/types";
+import Image from "next/image";
+import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
 import { Badge, Button, Card, InfoTile } from "../ds";
 import {
 	AlertCircle,
@@ -26,6 +27,42 @@ const formatReviewValue = ({
 	reviews,
 }: Pick<Job, "rating" | "reviews">): string =>
 	`${reviews}개 · ${reviews > 0 ? rating.toFixed(1) : "신규"}`;
+const BULLET_ITEM_SEPARATOR = /\n+/;
+
+function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
+	if (block.type === "heading") {
+		return <h3 className="m-0 font-extrabold text-lg">{block.text}</h3>;
+	}
+
+	if (block.type === "bullet_list") {
+		const items = block.text
+			.split(BULLET_ITEM_SEPARATOR)
+			.map((item) => item.trim())
+			.filter((item) => item.length > 0);
+
+		return (
+			<ul className="m-0 list-disc space-y-1 pl-5 text-[15px] leading-relaxed">
+				{items.map((item) => (
+					<li key={item}>{item}</li>
+				))}
+			</ul>
+		);
+	}
+
+	if (block.type === "callout") {
+		return (
+			<p className="m-0 border border-coral-200 bg-coral-50 p-3 text-[15px] text-coral-800 leading-relaxed">
+				{block.text}
+			</p>
+		);
+	}
+
+	return (
+		<p className="m-0 text-[15px] text-foreground leading-relaxed">
+			{block.text}
+		</p>
+	);
+}
 
 export function SeekerJobDetailResponsive({
 	job,
@@ -67,6 +104,16 @@ export function SeekerJobDetailResponsive({
 								{job.location} · {job.type}
 							</p>
 						</div>
+						{job.coverImage ? (
+							<Image
+								alt={job.coverImage.altText || job.coverImage.fileName}
+								className="aspect-[16/9] w-full rounded-lg border object-cover"
+								height={360}
+								src={job.coverImage.url}
+								unoptimized
+								width={640}
+							/>
+						) : null}
 						<div className="grid gap-3 sm:grid-cols-2">
 							<InfoTile icon={<DollarCircle />} label="급여" value={job.pay} />
 							<InfoTile
@@ -89,9 +136,32 @@ export function SeekerJobDetailResponsive({
 				</section>
 				<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
 					<h2 className="m-0 font-extrabold text-xl">공고 설명</h2>
-					<p className="mt-3 mb-0 text-[15px] text-foreground leading-relaxed">
-						{job.desc}
-					</p>
+					{job.descriptionBlocks?.length ? (
+						<div className="mt-4 grid gap-4">
+							{job.descriptionBlocks.map((block) => (
+								<DescriptionBlock block={block} key={block.id} />
+							))}
+						</div>
+					) : (
+						<p className="mt-3 mb-0 text-[15px] text-foreground leading-relaxed">
+							{job.desc}
+						</p>
+					)}
+					{job.detailImages?.length ? (
+						<div className="mt-5 grid gap-3 sm:grid-cols-2">
+							{job.detailImages.map((image) => (
+								<Image
+									alt={image.altText || image.fileName}
+									className="aspect-[16/9] w-full rounded-lg border object-cover"
+									height={240}
+									key={image.storageKey}
+									src={image.url}
+									unoptimized
+									width={420}
+								/>
+							))}
+						</div>
+					) : null}
 				</section>
 				<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
 					<h2 className="m-0 font-extrabold text-xl">안전 확인</h2>

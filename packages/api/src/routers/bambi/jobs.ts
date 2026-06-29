@@ -4,12 +4,14 @@ import {
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobPost,
+	jobPostMedia,
 	jobPromotionCampaign,
 	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
 	and,
+	asc,
 	desc,
 	eq,
 	gt,
@@ -32,6 +34,20 @@ import {
 } from "../../services/bambi-authz";
 import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import {
+	getJobDescriptionBlockRiskTerms,
+	jobDescriptionBlockTypes,
+	normalizeJobDescriptionBlocks,
+	toPlainJobDescription,
+	validateJobDescriptionBlocks,
+} from "../../services/bambi-job-description-blocks";
+import {
+	JOB_POST_DETAIL_IMAGE_LIMIT,
+	JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH,
+	type JobPostMediaPolicyInput,
+	validateJobPostImageUpload,
+	validateJobPostMediaSet,
+} from "../../services/bambi-job-media-policy";
+import {
 	type EmployerVerificationStatus,
 	getInitialJobPostStatus,
 	getUpdatedJobPostStatus,
@@ -41,6 +57,31 @@ import {
 	buildPublicJobSections,
 	type PublicPromotedJobListRow,
 } from "../../services/bambi-promotions";
+import { createJobPostMediaUploadIntent } from "../../services/bambi-storage";
+
+const jobDescriptionBlockInput = z.object({
+	id: z.string().min(1).max(80),
+	text: z.string().max(800),
+	type: z.enum(jobDescriptionBlockTypes),
+});
+
+const jobPostMediaInput = z.object({
+	altText: z.string().max(JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH).default(""),
+	byteSize: z.number().int().min(1),
+	fileName: z.string().max(180),
+	mimeType: z.string().min(1).max(120),
+	storageKey: z.string().min(1).max(512),
+});
+
+const jobPostMediaSetInput = z
+	.object({
+		cover: jobPostMediaInput.optional(),
+		detail: z
+			.array(jobPostMediaInput)
+			.max(JOB_POST_DETAIL_IMAGE_LIMIT)
+			.default([]),
+	})
+	.optional();
 
 const jobPostInput = z.object({
 	organizationId: z.string().min(1),
@@ -52,7 +93,17 @@ const jobPostInput = z.object({
 	payUnit: z.string().min(1).max(30),
 	workSchedule: z.string().min(1).max(200),
 	description: z.string().min(10).max(2000),
+	descriptionBlocks: z.array(jobDescriptionBlockInput).max(12).optional(),
 	interviewNotes: z.string().max(500).optional(),
+	media: jobPostMediaSetInput,
+});
+
+const createMediaUploadInput = z.object({
+	organizationId: z.string().min(1),
+	teamId: z.string().min(1).optional(),
+	fileName: z.string().max(180),
+	mimeType: z.string().min(1).max(120),
+	byteSize: z.number().int().min(1),
 });
 
 const listInput = z.object({
@@ -62,15 +113,201 @@ const listInput = z.object({
 	limit: z.number().int().min(1).max(50).default(20),
 });
 
-const hasRiskFlags = (input: z.infer<typeof jobPostInput>): boolean => {
-	const text = `${input.title} ${input.description} ${input.interviewNotes ?? ""}`;
-	const riskyTerms = ["미성년", "성매매", "강요"];
+type JobPostInput = z.infer<typeof jobPostInput>;
+type JobPostMediaSetInput = z.infer<typeof jobPostMediaSetInput>;
 
-	return riskyTerms.some((term) => text.includes(term));
+interface PreparedJobPostContent {
+	description: string;
+	descriptionBlocks: NonNullable<JobPostInput["descriptionBlocks"]>;
+	hasRiskFlags: boolean;
+}
+
+interface JobPostMediaRowInput extends JobPostMediaPolicyInput {
+	position: number;
+}
+
+interface BuildJobPostMediaRowsInput {
+	actorUserId: string;
+	jobPostId: string;
+	media: JobPostMediaSetInput;
+	organizationId: string;
+}
+
+const RISKY_TERMS = ["미성년", "성매매", "강요"] as const;
+
+const hasRiskFlags = ({
+	blockRiskTerms,
+	description,
+	interviewNotes,
+	title,
+}: {
+	blockRiskTerms: string[];
+	description: string;
+	interviewNotes?: string;
+	title: string;
+}): boolean => {
+	const text = `${title} ${description} ${interviewNotes ?? ""}`;
+
+	return (
+		blockRiskTerms.length > 0 || RISKY_TERMS.some((term) => text.includes(term))
+	);
+};
+
+const getJobPostPolicyErrorMessage = (code: string): string => {
+	switch (code) {
+		case "alt_text_too_long":
+			return "Job post media alt text is too long.";
+		case "block_text_too_long":
+			return "Job description block text is too long.";
+		case "empty_block_text":
+			return "Job description block text is required.";
+		case "empty_file_name":
+			return "Job post media filename is required.";
+		case "file_too_large":
+			return "Job post media file is too large.";
+		case "too_many_blocks":
+			return "Job post has too many description blocks.";
+		case "too_many_cover_images":
+			return "Job post can have only one cover image.";
+		case "too_many_detail_images":
+			return "Job post can have up to five detail images.";
+		case "unsupported_block_type":
+			return "Job description block type is not supported.";
+		default:
+			return "Job post media file type is not supported.";
+	}
+};
+
+const prepareJobPostContent = (input: JobPostInput): PreparedJobPostContent => {
+	const descriptionBlocks = input.descriptionBlocks ?? [];
+	const validation = validateJobDescriptionBlocks(descriptionBlocks);
+
+	if (!validation.ok) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: getJobPostPolicyErrorMessage(validation.issues[0]?.code ?? ""),
+		});
+	}
+
+	const normalizedBlocks = normalizeJobDescriptionBlocks(descriptionBlocks);
+	const description =
+		normalizedBlocks.length > 0
+			? toPlainJobDescription(normalizedBlocks)
+			: input.description.trim();
+	const blockRiskTerms = getJobDescriptionBlockRiskTerms(normalizedBlocks);
+
+	return {
+		description,
+		descriptionBlocks: normalizedBlocks,
+		hasRiskFlags: hasRiskFlags({
+			blockRiskTerms,
+			description,
+			interviewNotes: input.interviewNotes,
+			title: input.title,
+		}),
+	};
+};
+
+const getMediaSetItems = (
+	media: JobPostMediaSetInput
+): JobPostMediaRowInput[] => {
+	if (!media) {
+		return [];
+	}
+
+	const rows: JobPostMediaRowInput[] = [];
+
+	if (media.cover) {
+		rows.push({
+			...media.cover,
+			usage: "cover",
+			position: 0,
+		});
+	}
+
+	for (const [index, item] of media.detail.entries()) {
+		rows.push({
+			...item,
+			usage: "detail",
+			position: index,
+		});
+	}
+
+	return rows;
+};
+
+const requireValidJobPostMediaSet = (
+	media: JobPostMediaSetInput
+): JobPostMediaRowInput[] => {
+	const rows = getMediaSetItems(media);
+	const result = validateJobPostMediaSet(rows);
+
+	if (!result.ok) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: getJobPostPolicyErrorMessage(result.issues[0]?.code ?? ""),
+		});
+	}
+
+	return rows;
+};
+
+const buildJobPostMediaInsertRows = ({
+	actorUserId,
+	jobPostId,
+	media,
+	organizationId,
+}: BuildJobPostMediaRowsInput) =>
+	requireValidJobPostMediaSet(media).map((item) => ({
+		altText: item.altText.trim(),
+		byteSize: item.byteSize,
+		fileName: item.fileName.trim(),
+		jobPostId,
+		mimeType: item.mimeType,
+		organizationId,
+		position: item.position,
+		storageKey: item.storageKey,
+		uploadedByUserId: actorUserId,
+		usage: item.usage,
+	}));
+
+const getJobPostMediaSet = async (jobPostId: string) => {
+	const rows = await db
+		.select()
+		.from(jobPostMedia)
+		.where(eq(jobPostMedia.jobPostId, jobPostId))
+		.orderBy(asc(jobPostMedia.usage), asc(jobPostMedia.position));
+
+	return {
+		cover: rows.find((item) => item.usage === "cover") ?? null,
+		detail: rows.filter((item) => item.usage === "detail"),
+	};
 };
 
 const ratingAverageSql = sql<number>`coalesce((select avg(${review.rating}) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::double precision`;
 const ratingCountSql = sql<number>`coalesce((select count(*) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::integer`;
+const coverImageSql = sql<{
+	altText: string;
+	byteSize: number;
+	fileName: string;
+	id: string;
+	mimeType: string;
+	storageKey: string;
+	usage: "cover";
+} | null>`(
+	select json_build_object(
+		'id', ${jobPostMedia.id},
+		'usage', ${jobPostMedia.usage},
+		'fileName', ${jobPostMedia.fileName},
+		'mimeType', ${jobPostMedia.mimeType},
+		'byteSize', ${jobPostMedia.byteSize},
+		'storageKey', ${jobPostMedia.storageKey},
+		'altText', ${jobPostMedia.altText}
+	)
+	from ${jobPostMedia}
+	where ${jobPostMedia.jobPostId} = ${jobPost.id}
+		and ${jobPostMedia.usage} = 'cover'
+	order by ${jobPostMedia.position} asc
+	limit 1
+)`;
 
 export const jobsRouter = {
 	list: publicProcedure.input(listInput).handler(async ({ context, input }) => {
@@ -95,6 +332,7 @@ export const jobsRouter = {
 			await db
 				.select({
 					description: jobPost.description,
+					coverImage: coverImageSql,
 					employerDisplayName: employerOrganizationProfile.displayName,
 					employerVerificationStatus:
 						employerOrganizationProfile.verificationStatus,
@@ -149,6 +387,7 @@ export const jobsRouter = {
 			db
 				.select({
 					description: jobPost.description,
+					coverImage: coverImageSql,
 					employerDisplayName: employerOrganizationProfile.displayName,
 					employerVerificationStatus:
 						employerOrganizationProfile.verificationStatus,
@@ -224,6 +463,7 @@ export const jobsRouter = {
 				payUnit: jobPost.payUnit,
 				workSchedule: jobPost.workSchedule,
 				description: jobPost.description,
+				coverImage: coverImageSql,
 				status: jobPost.status,
 				employerDisplayName: employerOrganizationProfile.displayName,
 				employerVerificationStatus:
@@ -265,6 +505,7 @@ export const jobsRouter = {
 					workSchedule: jobPost.workSchedule,
 					title: jobPost.title,
 					description: jobPost.description,
+					descriptionBlocks: jobPost.descriptionBlocks,
 					interviewNotes: jobPost.interviewNotes,
 					rejectionReason: jobPost.rejectionReason,
 					riskFlags: jobPost.riskFlags,
@@ -301,7 +542,10 @@ export const jobsRouter = {
 				organizationId: post.organizationId,
 			});
 
-			return post;
+			return {
+				...post,
+				media: await getJobPostMediaSet(post.id),
+			};
 		}),
 
 	listMine: protectedProcedure.handler(async ({ context }) => {
@@ -407,12 +651,45 @@ export const jobsRouter = {
 				session: context.session,
 			});
 
-			return post;
+			return {
+				...post,
+				media: await getJobPostMediaSet(post.id),
+			};
+		}),
+
+	createMediaUpload: protectedProcedure
+		.input(createMediaUploadInput)
+		.handler(async ({ context, input }) => {
+			const actor = await requireEmployerPostingAccess({
+				organizationId: input.organizationId,
+				teamId: input.teamId,
+				session: context.session,
+			});
+			const policy = validateJobPostImageUpload(input);
+
+			if (!policy.ok) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: getJobPostPolicyErrorMessage(policy.code),
+				});
+			}
+
+			return createJobPostMediaUploadIntent({
+				actorUserId: actor.userId,
+				byteSize: input.byteSize,
+				fileName: input.fileName,
+				mimeType: input.mimeType,
+				organizationId: input.organizationId,
+			});
 		}),
 
 	create: protectedProcedure
 		.input(jobPostInput)
 		.handler(async ({ context, input }) => {
+			const {
+				descriptionBlocks: _descriptionBlocks,
+				media,
+				...jobInput
+			} = input;
 			const actor = await requireEmployerPostingAccess({
 				organizationId: input.organizationId,
 				teamId: input.teamId,
@@ -432,7 +709,9 @@ export const jobsRouter = {
 				});
 			}
 
-			const riskDetected = hasRiskFlags(input);
+			const preparedContent = prepareJobPostContent(input);
+			const mediaRows = requireValidJobPostMediaSet(media);
+			const riskDetected = preparedContent.hasRiskFlags;
 			const status = getInitialJobPostStatus({
 				employerVerificationStatus:
 					organizationProfile.verificationStatus as EmployerVerificationStatus,
@@ -440,18 +719,49 @@ export const jobsRouter = {
 			});
 			const now = new Date();
 
-			const [created] = await db
-				.insert(jobPost)
-				.values({
-					...input,
-					createdByUserId: actor.userId,
-					status,
-					riskFlags: riskDetected ? ["risky_term"] : [],
-					publishedAt: status === "published" ? now : null,
-				})
-				.returning();
+			return await db.transaction(async (tx) => {
+				const [created] = await tx
+					.insert(jobPost)
+					.values({
+						...jobInput,
+						createdByUserId: actor.userId,
+						description: preparedContent.description,
+						descriptionBlocks: preparedContent.descriptionBlocks,
+						status,
+						riskFlags: riskDetected ? ["risky_term"] : [],
+						publishedAt: status === "published" ? now : null,
+					})
+					.returning();
 
-			return created;
+				if (!created) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR", {
+						message: "Job post could not be created.",
+					});
+				}
+
+				const insertedMedia =
+					mediaRows.length > 0
+						? await tx
+								.insert(jobPostMedia)
+								.values(
+									buildJobPostMediaInsertRows({
+										actorUserId: actor.userId,
+										jobPostId: created.id,
+										media,
+										organizationId: input.organizationId,
+									})
+								)
+								.returning()
+						: [];
+
+				return {
+					...created,
+					media: {
+						cover: insertedMedia.find((item) => item.usage === "cover") ?? null,
+						detail: insertedMedia.filter((item) => item.usage === "detail"),
+					},
+				};
+			});
 		}),
 
 	update: protectedProcedure
@@ -462,6 +772,11 @@ export const jobsRouter = {
 			})
 		)
 		.handler(async ({ context, input }) => {
+			const {
+				descriptionBlocks: _descriptionBlocks,
+				media,
+				...jobInput
+			} = input.data;
 			const [existing] = await db
 				.select()
 				.from(jobPost)
@@ -472,7 +787,7 @@ export const jobsRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
-			await requireEmployerPostingAccess({
+			const actor = await requireEmployerPostingAccess({
 				organizationId: existing.organizationId,
 				teamId: existing.teamId,
 				session: context.session,
@@ -504,7 +819,9 @@ export const jobsRouter = {
 				});
 			}
 
-			const riskDetected = hasRiskFlags(input.data);
+			const preparedContent = prepareJobPostContent(input.data);
+			const mediaRows = media ? requireValidJobPostMediaSet(media) : null;
+			const riskDetected = preparedContent.hasRiskFlags;
 			const status: JobPostStatus = riskDetected
 				? "pending_review"
 				: getUpdatedJobPostStatus({
@@ -513,20 +830,64 @@ export const jobsRouter = {
 							organizationProfile.verificationStatus as EmployerVerificationStatus,
 						publicContentChanged: true,
 					});
-			const [updated] = await db
-				.update(jobPost)
-				.set({
-					...input.data,
-					status,
-					riskFlags: riskDetected ? ["risky_term"] : [],
-					publishedAt:
-						status === "published" && !existing.publishedAt
-							? new Date()
-							: existing.publishedAt,
-				})
-				.where(eq(jobPost.id, input.id))
-				.returning();
 
-			return updated;
+			return await db.transaction(async (tx) => {
+				const [updated] = await tx
+					.update(jobPost)
+					.set({
+						...jobInput,
+						description: preparedContent.description,
+						descriptionBlocks: preparedContent.descriptionBlocks,
+						status,
+						riskFlags: riskDetected ? ["risky_term"] : [],
+						publishedAt:
+							status === "published" && !existing.publishedAt
+								? new Date()
+								: existing.publishedAt,
+					})
+					.where(eq(jobPost.id, input.id))
+					.returning();
+
+				if (!updated) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR", {
+						message: "Job post could not be updated.",
+					});
+				}
+
+				if (mediaRows) {
+					await tx
+						.delete(jobPostMedia)
+						.where(eq(jobPostMedia.jobPostId, input.id));
+
+					const insertedMedia =
+						mediaRows.length > 0
+							? await tx
+									.insert(jobPostMedia)
+									.values(
+										buildJobPostMediaInsertRows({
+											actorUserId: actor.userId,
+											jobPostId: updated.id,
+											media,
+											organizationId: existing.organizationId,
+										})
+									)
+									.returning()
+							: [];
+
+					return {
+						...updated,
+						media: {
+							cover:
+								insertedMedia.find((item) => item.usage === "cover") ?? null,
+							detail: insertedMedia.filter((item) => item.usage === "detail"),
+						},
+					};
+				}
+
+				return {
+					...updated,
+					media: await getJobPostMediaSet(updated.id),
+				};
+			});
 		}),
 };

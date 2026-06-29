@@ -33,6 +33,15 @@ export interface ManualBoostConsumption {
 }
 
 export interface PublicJobListRow {
+	coverImage?: {
+		altText: string;
+		byteSize: number;
+		fileName: string;
+		id: string;
+		mimeType: string;
+		storageKey: string;
+		usage: "cover";
+	} | null;
 	description: string | null;
 	employerDisplayName: string | null;
 	employerVerificationStatus: string | null;

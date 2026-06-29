@@ -191,7 +191,7 @@ Append verification notes with exact command results and any route-smoke finding
 
 Confirm the roadmap still says Native App is paused until Web final completion is accepted.
 
-- [ ] **Step 3: Commit docs after review**
+- [x] **Step 3: Commit docs after review**
 
 After the user reviews the result, commit with a Korean Conventional Commit message.
 
@@ -201,6 +201,8 @@ After the user reviews the result, commit with a Korean Conventional Commit mess
   - Post-MVP Roadmap now marks Reviews And Ratings and Employer Analytics And Paid Placement as completed.
   - `docs/result.md` now marks completed follow-up candidates and keeps Native App deferred until Web final acceptance.
   - Historical 2026-06-12 and responsive redesign plans now explain that unchecked boxes are archival implementation recipes, not active roadmap tasks.
+- 2026-06-29 commit follow-up:
+  - Documentation review result was committed in `e2e5442`.
 - Automated final gate on 2026-06-26:
   - `pnpm run db:seed:bambi` passed.
   - `pnpm --filter @bambi-app/api test` passed: 17 files, 78 tests.

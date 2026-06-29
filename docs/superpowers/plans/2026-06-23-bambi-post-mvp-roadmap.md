@@ -21,7 +21,7 @@
 | 5 | [Moderator Bulk Actions](./2026-06-23-bambi-moderator-bulk-actions.md) | API-backed bulk moderation actions | Completed 2026-06-25 |
 | 6 | [Reviews And Ratings](./2026-06-23-bambi-reviews-ratings.md) | Post-interview reviews and public rating summaries | Completed 2026-06-25 |
 | 7 | [Employer Analytics And Paid Placement](./2026-06-23-bambi-employer-analytics-paid-placement.md) | Employer metrics, billing-ready events, analytics over promoted listings | Completed 2026-06-25 |
-| 8 | [Job Post Media And Block Editor](./2026-06-26-bambi-job-post-media-block-editor.md) | Employer cover/detail images and safe structured job detail blocks | Content safety and media moderation |
+| 8 | [Job Post Media And Block Editor](./2026-06-26-bambi-job-post-media-block-editor.md) | Employer cover/detail images and safe structured job detail blocks | Completed 2026-06-29 |
 | 9 | [Native App](./2026-06-23-bambi-native-app.md) | Mobile native seeker/employer/admin shell and MVP flows, paused until Web final completion | Web/native parity after Web acceptance |
 
 ## Benchmark Inputs
@@ -90,7 +90,7 @@ Open [Reviews And Ratings](./2026-06-23-bambi-reviews-ratings.md), complete ever
 
 Open [Employer Analytics And Paid Placement](./2026-06-23-bambi-employer-analytics-paid-placement.md), complete every task, then return here and check this step.
 
-- [ ] **Step 8: Execute Job Post Media And Block Editor plan**
+- [x] **Step 8: Execute Job Post Media And Block Editor plan**
 
 Open [Job Post Media And Block Editor](./2026-06-26-bambi-job-post-media-block-editor.md), complete every task, then return here and check this step.
 

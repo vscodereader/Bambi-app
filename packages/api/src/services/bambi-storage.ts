@@ -26,6 +26,22 @@ interface ChatAttachmentObjectInput {
 	storageKey: string;
 }
 
+export interface JobPostMediaStorageInput {
+	actorUserId: string;
+	byteSize: number;
+	fileName: string;
+	mimeType: string;
+	organizationId: string;
+}
+
+export interface JobPostMediaUploadIntent {
+	byteSize: number;
+	fileName: string;
+	mimeType: string;
+	storageKey: string;
+	uploadUrl: string;
+}
+
 const normalizeFileNameForStorage = (fileName: string): string => {
 	const normalized = fileName
 		.trim()
@@ -80,3 +96,27 @@ export const createChatAttachmentUploadIntent = ({
 export const getChatAttachmentObjectUrl = (
 	input: ChatAttachmentObjectInput
 ): string => buildLocalObjectUrl(input);
+
+export const createJobPostMediaUploadIntent = ({
+	actorUserId,
+	byteSize,
+	fileName,
+	mimeType,
+	organizationId,
+}: JobPostMediaStorageInput): JobPostMediaUploadIntent => {
+	const storageFileName = normalizeFileNameForStorage(fileName);
+	const storageKey = [
+		"bambi-job-post-media",
+		organizationId,
+		actorUserId,
+		`${randomUUID()}-${storageFileName}`,
+	].join("/");
+
+	return {
+		byteSize,
+		fileName: fileName.trim(),
+		mimeType,
+		storageKey,
+		uploadUrl: `local://upload/${storageKey}`,
+	};
+};

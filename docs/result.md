@@ -200,7 +200,7 @@ QA 중 admin 온보딩 화면의 `관리자 화면으로 이동` 버튼이 `/emp
 - [구인자 analytics와 유료 노출](./superpowers/plans/2026-06-23-bambi-employer-analytics-paid-placement.md) — 2026-06-25 완료
 - [조직/팀 관리 화면 고도화](./superpowers/plans/2026-06-23-bambi-organization-team-management.md) — 2026-06-24 완료
 - [운영자 bulk action의 API 일괄 처리 고도화](./superpowers/plans/2026-06-23-bambi-moderator-bulk-actions.md) — 2026-06-25 완료
-- [구인 공고 이미지와 안전한 블록형 상세 편집기](./superpowers/plans/2026-06-26-bambi-job-post-media-block-editor.md) — 2026-06-26 플랜 작성
+- [구인 공고 이미지와 안전한 블록형 상세 편집기](./superpowers/plans/2026-06-26-bambi-job-post-media-block-editor.md) — 2026-06-29 완료
 - [모바일 네이티브 앱 화면](./superpowers/plans/2026-06-23-bambi-native-app.md) — Web 최종 완료 승인 이후까지 보류
 
-2026-06-26 기준으로 Native App을 제외한 기존 Post-MVP Roadmap 항목은 완료 처리되었다. 다음 신규 후보는 Foxalba 벤치마크에서 Dense Marketplace 범위 밖으로 남겨둔 `구인 공고 대표/상세 이미지 업로드`와 `안전한 블록형 상세 편집기`이며, 별도 실행 플랜으로 분리했다.
+2026-06-29 기준으로 Native App을 제외한 기존 Post-MVP Roadmap 항목은 완료 처리되었다. Foxalba 벤치마크에서 Dense Marketplace 범위 밖으로 남겨둔 `구인 공고 대표/상세 이미지 업로드`와 `안전한 블록형 상세 편집기`도 별도 실행 플랜으로 구현했고, native app은 Web 최종 완료 승인 이후까지 계속 보류한다.

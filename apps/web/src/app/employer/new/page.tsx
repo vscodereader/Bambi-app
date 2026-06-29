@@ -11,13 +11,19 @@ import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
 import { FieldError, FormError } from "@/components/bambi/form-message";
+import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
+import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
 import { PageShell } from "@/components/bambi/page-shell";
 import Loader from "@/components/loader";
 import { authClient } from "@/lib/auth-client";
 import {
 	emptyJobForm,
+	emptyJobFormMedia,
+	type JobDescriptionBlockFormValue,
 	type JobForm,
 	type JobFormErrors,
+	type JobFormMedia,
+	resolveJobPostMediaForSubmit,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
 import {
@@ -187,8 +193,18 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const router = useRouter();
 	const utils = useQueryClient();
 	const [form, setForm] = useState(emptyJobForm);
+	const [descriptionBlocks, setDescriptionBlocks] = useState<
+		JobDescriptionBlockFormValue[]
+	>([]);
+	const [media, setMedia] = useState<JobFormMedia>({
+		...emptyJobFormMedia,
+		detail: [],
+	});
 	const [fieldErrors, setFieldErrors] = useState<JobFormErrors>({});
 	const [formError, setFormError] = useState<null | string>(null);
+	const createMediaUploadMutation = useMutation(
+		orpc.bambi.jobs.createMediaUpload.mutationOptions()
+	);
 
 	const createMutation = useMutation(
 		orpc.bambi.jobs.create.mutationOptions({
@@ -279,10 +295,14 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		setFormError(null);
 	};
 
-	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
-		const validation = validateJobForm(form, { teamScopes });
+		const validation = validateJobForm(form, {
+			descriptionBlocks,
+			media,
+			teamScopes,
+		});
 
 		if (!validation.ok) {
 			setFieldErrors(validation.errors);
@@ -291,7 +311,27 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			return;
 		}
 
-		createMutation.mutate(validation.input);
+		try {
+			const { media: validatedMedia, ...jobInput } = validation.input;
+			const mediaPayload = await resolveJobPostMediaForSubmit({
+				createUploadIntent: createMediaUploadMutation.mutateAsync,
+				media: validatedMedia,
+				organizationId: jobInput.organizationId,
+				teamId: jobInput.teamId,
+			});
+
+			createMutation.mutate({
+				...jobInput,
+				media: mediaPayload,
+			});
+		} catch (error) {
+			const message =
+				error instanceof Error
+					? error.message
+					: "이미지 업로드 준비 중 문제가 발생했습니다.";
+			setFormError(message);
+			toast.error(message);
+		}
 	};
 
 	return (
@@ -512,6 +552,18 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 							message={fieldErrors.description}
 						/>
 					</div>
+					<JobPostBlockEditor
+						blocks={descriptionBlocks}
+						error={fieldErrors.descriptionBlocks}
+						onChange={(blocks) => {
+							setDescriptionBlocks(blocks);
+							setFieldErrors((currentErrors) => ({
+								...currentErrors,
+								descriptionBlocks: undefined,
+							}));
+							setFormError(null);
+						}}
+					/>
 					<div className="space-y-2">
 						<Label htmlFor="interviewNotes">면접 안내</Label>
 						<textarea
@@ -538,6 +590,19 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					</div>
 				</section>
 
+				<JobPostMediaUploader
+					error={fieldErrors.media}
+					media={media}
+					onChange={(nextMedia) => {
+						setMedia(nextMedia);
+						setFieldErrors((currentErrors) => ({
+							...currentErrors,
+							media: undefined,
+						}));
+						setFormError(null);
+					}}
+				/>
+
 				<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 					<Link
 						className={buttonVariants({ variant: "outline" })}
@@ -545,8 +610,15 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					>
 						취소
 					</Link>
-					<Button disabled={createMutation.isPending} type="submit">
-						{createMutation.isPending ? "등록 중…" : "공고 등록"}
+					<Button
+						disabled={
+							createMutation.isPending || createMediaUploadMutation.isPending
+						}
+						type="submit"
+					>
+						{createMutation.isPending || createMediaUploadMutation.isPending
+							? "등록 중…"
+							: "공고 등록"}
 					</Button>
 				</div>
 			</form>

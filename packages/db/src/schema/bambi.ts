@@ -90,10 +90,30 @@ export const jobPerformanceEventType = pgEnum("job_performance_event_type", [
 	"contact_reveal",
 ]);
 
+export const jobPostMediaUsage = pgEnum("job_post_media_usage", [
+	"cover",
+	"detail",
+]);
+
 export const chatAttachmentCategory = pgEnum("chat_attachment_category", [
 	"image",
 	"pdf",
 ]);
+
+export const jobDescriptionBlockTypes = [
+	"paragraph",
+	"heading",
+	"bullet_list",
+	"callout",
+] as const;
+
+export type JobDescriptionBlockType = (typeof jobDescriptionBlockTypes)[number];
+
+export interface JobDescriptionBlock {
+	id: string;
+	text: string;
+	type: JobDescriptionBlockType;
+}
 
 export const bambiProfile = pgTable(
 	"bambi_profile",
@@ -192,6 +212,10 @@ export const jobPost = pgTable(
 		workSchedule: text("work_schedule").notNull(),
 		title: text("title").notNull(),
 		description: text("description").notNull(),
+		descriptionBlocks: jsonb("description_blocks")
+			.$type<JobDescriptionBlock[]>()
+			.default([])
+			.notNull(),
 		interviewNotes: text("interview_notes"),
 		rejectionReason: text("rejection_reason"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
@@ -213,6 +237,40 @@ export const jobPost = pgTable(
 			table.region,
 			table.payAmount
 		),
+	]
+);
+
+export const jobPostMedia = pgTable(
+	"job_post_media",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		uploadedByUserId: text("uploaded_by_user_id")
+			.notNull()
+			.references(() => user.id),
+		usage: jobPostMediaUsage("usage").notNull(),
+		position: integer("position").notNull(),
+		fileName: text("file_name").notNull(),
+		mimeType: text("mime_type").notNull(),
+		byteSize: integer("byte_size").notNull(),
+		storageKey: text("storage_key").notNull(),
+		altText: text("alt_text").default("").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("job_post_media_job_post_id_idx").on(table.jobPostId),
+		index("job_post_media_organization_id_idx").on(table.organizationId),
+		index("job_post_media_usage_position_idx").on(table.usage, table.position),
+		uniqueIndex("job_post_media_storage_key_uidx").on(table.storageKey),
 	]
 );
 
@@ -633,7 +691,15 @@ export const employerTeamProfileRelations = relations(
 
 export const jobPostRelations = relations(jobPost, ({ many }) => ({
 	chatRooms: many(chatRoom),
+	media: many(jobPostMedia),
 	promotionCampaigns: many(jobPromotionCampaign),
+}));
+
+export const jobPostMediaRelations = relations(jobPostMedia, ({ one }) => ({
+	jobPost: one(jobPost, {
+		fields: [jobPostMedia.jobPostId],
+		references: [jobPost.id],
+	}),
 }));
 
 export const jobPromotionCampaignRelations = relations(
