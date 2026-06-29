@@ -223,3 +223,17 @@ Native App은 Web 최종 기준선이 마련되었더라도 즉시 재개하지 
 2026-06-29 기준으로 Native App을 제외한 기존 Post-MVP Roadmap 항목은 완료 처리되었다. Foxalba 벤치마크에서 Dense Marketplace 범위 밖으로 남겨둔 `구인 공고 대표/상세 이미지 업로드`와 `안전한 블록형 상세 편집기`도 별도 실행 플랜으로 구현했다.
 
 다음 작업 방향은 Native App 재개가 아니라 새로 들어오는 Web 추가 기능과 디자인/UI·UX 개선이다. 구체 요구사항이 들어오면 기능 단위로 별도 plan을 작성하고, UI/UX 개선은 실제 화면 검증과 함께 진행한다.
+
+## 12. 신규 Web UI/UX 개선 후보
+
+2026-06-29에 사용자가 Queenalba PC 웹 캡처를 제공했고, 고객이 첨부 자료처럼 채용정보를 더 강하게 노출하고 싶다는 요구를 전달했다.
+
+이 요구는 기존 Foxalba 벤치마크의 `목록 밀도`보다 `광고형 채용정보 노출`에 가깝다. 따라서 Native App이 아니라 Web UI/UX 개선 과제로 분리한다.
+
+관련 문서:
+
+- [Queenalba 채용정보 노출 벤치마킹 정리](./queenalba-benchmark-2026-06-29.md)
+- [Visual Job Exposure UI/UX Design](./superpowers/specs/2026-06-29-bambi-visual-job-exposure-uiux-design.md)
+- [Visual Job Exposure UI/UX Implementation Plan](./superpowers/plans/2026-06-29-bambi-visual-job-exposure-uiux.md)
+
+권장 다음 작업은 `Visual Job Exposure UI/UX Implementation Plan`을 실행해 `/`와 `/seeker`의 채용정보 노출을 `스페셜`, `급구`, `추천`, `전체` 섹션 중심으로 재구성하는 것이다.
