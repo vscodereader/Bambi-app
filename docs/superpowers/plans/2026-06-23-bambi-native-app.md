@@ -12,14 +12,14 @@
 
 ## Status
 
-Paused / deferred as of 2026-06-25.
+Paused / deferred as of 2026-06-25. Still deferred as of 2026-06-29.
 
-The native shell foundation landed in `738f321`, including the role-based app shell, seeker/employer/moderator screens, native oRPC client, and automated checks. Do not continue native implementation, simulator hardening, or native-only flow design until the Web experience is finalized and accepted.
+The native shell foundation landed in `738f321`, including the role-based app shell, seeker/employer/moderator screens, native oRPC client, and automated checks. The Web final baseline is now documented, but native implementation, simulator hardening, and native-only flow design should still not continue until the user explicitly asks to resume native work.
 
 Resume this plan only after:
 
-- Web final completion is accepted.
-- Web API/domain contracts are stable enough to be the native source of truth.
+- The user explicitly resumes Native App work.
+- Web API/domain contracts remain stable enough to be the native source of truth.
 - Remaining native verification can focus on parity instead of defining new behavior.
 
 When resumed, start with the pending iOS/Android simulator smoke items for seeker contact reveal, owner create/edit, and admin moderation actions.

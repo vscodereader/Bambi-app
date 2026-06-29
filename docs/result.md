@@ -2,7 +2,7 @@
 
 작성일: 2026-06-23
 
-갱신일: 2026-06-26
+갱신일: 2026-06-29
 
 ## 1. 프로젝트 방향
 
@@ -167,6 +167,21 @@ pnpm --filter web build
 
 QA 중 admin 온보딩 화면의 `관리자 화면으로 이동` 버튼이 `/employer`로 이동하는 문제가 발견되어 `getOnboardingNextRoute` helper와 회귀 테스트를 추가했다. 수정 후 admin 버튼은 `/moderator`로 이동했고, targeted test와 Web build까지 재검증했다.
 
+## 8.2 Web 최종 상태
+
+2026-06-29 기준으로 Bambi Web은 1차 MVP, Post-MVP Web 확장, Foxalba-informed Web 반영 범위, Web 최종 QA 게이트를 완료한 상태로 문서화한다.
+
+완료된 Web 범위는 다음과 같다.
+
+- 구직자: 공고 탐색, 상세, 채팅, 면접 일정, 연락처 공개, 리뷰/평점, 이미지/파일 메시지
+- 구인자: 공고 등록/수정, 대표·상세 이미지, 안전한 블록형 상세 편집기, 조직/팀 관리, 프로모션, analytics
+- 운영자: 공고 검수, 신고/사용자 처리, bulk action, 공고 media/block 검수 context
+- 공통 Web: 반응형 marketplace, dense listing, 추천/프리미엄/일반 구분, 최종 route smoke와 production build 검증
+
+이 상태를 Web 최종 기준선으로 삼고, 이후 Web 작업은 기존 MVP 미완료분이 아니라 새로 들어오는 추가 기능 또는 UI/UX 개선 과제로 분리해 진행한다. 각 추가 작업은 시작 전에 `docs/`와 `docs/superpowers/plans/`를 확인하고, 필요하면 별도 plan을 작성하거나 기존 roadmap에 명확히 반영한다.
+
+Native App은 Web 최종 기준선이 마련되었더라도 즉시 재개하지 않는다. 다음 단계는 Native가 아니라 Web 추가 기능과 디자인/UI/UX 개선이며, Native 재개 시점은 별도 사용자 지시가 있을 때 다시 판단한다.
+
 ## 9. 완료 커밋
 
 주요 완료 커밋은 다음과 같다.
@@ -182,13 +197,15 @@ QA 중 admin 온보딩 화면의 `관리자 화면으로 이동` 버튼이 `/emp
 
 ## 10. 현재 완료 판정
 
-1차 Web MVP 기준으로 아래 범위는 완료로 본다.
+1차 Web MVP와 이후 Web 확장 기준으로 아래 범위는 완료로 본다.
 
 - 구직자: 공고 탐색, 상세, 채팅 시작, 채팅 메시지, 면접 일정, 연락처 공개
 - 구인자: 로그인 보호, 내 공고 목록, 공고 생성, 공고 수정
 - 운영자: 공고 검수, 신고 처리, 사용자 상태 변경
 - 문서: specs 확인, completion plan 작성 및 체크리스트 완료 반영
 - 검증: 자동 검사와 주요 브라우저 시나리오 완료
+
+2026-06-29 업데이트: 기존 Post-MVP Web 항목과 Foxalba-informed Web 반영 범위까지 완료되었으므로, Web은 추가 기능/UI·UX 개선 전의 최종 기준선 상태로 본다.
 
 ## 11. 후속 후보
 
@@ -201,6 +218,8 @@ QA 중 admin 온보딩 화면의 `관리자 화면으로 이동` 버튼이 `/emp
 - [조직/팀 관리 화면 고도화](./superpowers/plans/2026-06-23-bambi-organization-team-management.md) — 2026-06-24 완료
 - [운영자 bulk action의 API 일괄 처리 고도화](./superpowers/plans/2026-06-23-bambi-moderator-bulk-actions.md) — 2026-06-25 완료
 - [구인 공고 이미지와 안전한 블록형 상세 편집기](./superpowers/plans/2026-06-26-bambi-job-post-media-block-editor.md) — 2026-06-29 완료
-- [모바일 네이티브 앱 화면](./superpowers/plans/2026-06-23-bambi-native-app.md) — Web 최종 완료 승인 이후까지 보류
+- [모바일 네이티브 앱 화면](./superpowers/plans/2026-06-23-bambi-native-app.md) — Web 최종 기준선 문서화 이후에도 별도 지시 전까지 보류
 
-2026-06-29 기준으로 Native App을 제외한 기존 Post-MVP Roadmap 항목은 완료 처리되었다. Foxalba 벤치마크에서 Dense Marketplace 범위 밖으로 남겨둔 `구인 공고 대표/상세 이미지 업로드`와 `안전한 블록형 상세 편집기`도 별도 실행 플랜으로 구현했고, native app은 Web 최종 완료 승인 이후까지 계속 보류한다.
+2026-06-29 기준으로 Native App을 제외한 기존 Post-MVP Roadmap 항목은 완료 처리되었다. Foxalba 벤치마크에서 Dense Marketplace 범위 밖으로 남겨둔 `구인 공고 대표/상세 이미지 업로드`와 `안전한 블록형 상세 편집기`도 별도 실행 플랜으로 구현했다.
+
+다음 작업 방향은 Native App 재개가 아니라 새로 들어오는 Web 추가 기능과 디자인/UI·UX 개선이다. 구체 요구사항이 들어오면 기능 단위로 별도 plan을 작성하고, UI/UX 개선은 실제 화면 검증과 함께 진행한다.

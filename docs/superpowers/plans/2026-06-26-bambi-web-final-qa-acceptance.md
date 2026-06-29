@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Prove the Web experience is ready for final acceptance before any Native App work resumes.
+**Goal:** Prove and document the Web experience as the final baseline before the project moves into new Web feature and UI/UX improvement work.
 
 **Architecture:** Treat this as a documentation and verification gate, not a feature implementation pass. Use the completed Web MVP and Post-MVP plans as source material, run the full automated gate against the current `develop` worktree, then record browser or route-smoke evidence for seeker, employer, moderator, and public surfaces.
 
@@ -18,7 +18,7 @@ Included:
 - Seed reset with deterministic Bambi development data.
 - API test, typecheck, Ultracite, and Web production build gates.
 - Browser or route-smoke verification for public, seeker, employer, and moderator Web surfaces.
-- Final acceptance note that Native App remains paused unless this Web gate is accepted.
+- Final acceptance note that Native App remains paused unless the user explicitly resumes it.
 
 Excluded:
 
@@ -40,7 +40,7 @@ Web final acceptance requires evidence for every item below:
 | Code quality | `pnpm run check` passes. |
 | Production readiness | `pnpm --filter web build` passes. |
 | Web surfaces | Public marketplace, seeker, employer, and moderator routes render without server errors. |
-| Native boundary | Native App remains explicitly deferred until Web acceptance is reviewed. |
+| Native boundary | Native App remains explicitly deferred after Web acceptance until the user explicitly resumes it. |
 
 ## Task 1: Documentation Consistency Audit
 
@@ -189,7 +189,7 @@ Append verification notes with exact command results and any route-smoke finding
 
 - [x] **Step 2: Keep Native App deferred**
 
-Confirm the roadmap still says Native App is paused until Web final completion is accepted.
+Confirm the roadmap still says Native App is paused until the user explicitly resumes it.
 
 - [x] **Step 3: Commit docs after review**
 
@@ -226,4 +226,8 @@ After the user reviews the result, commit with a Korean Conventional Commit mess
   - `pnpm run check-types` passed.
   - `pnpm run check` passed.
   - `pnpm --filter web build` passed.
-- Acceptance status: Web final QA gate is passed for the documented automated checks, route smoke, and authenticated browser entry checks. Native App remains deferred until the user reviews and accepts this Web gate.
+- Acceptance status: Web final QA gate is passed for the documented automated checks, route smoke, and authenticated browser entry checks.
+- 2026-06-29 final status update:
+  - Web MVP, Post-MVP Web plans, Foxalba-informed Web adoption, and Web final QA are documented as the current Web baseline.
+  - Next work is not Native App. Upcoming work should be handled as incoming Web feature requests and design/UI/UX improvement plans.
+  - Native App remains deferred until the user explicitly asks to resume native work.

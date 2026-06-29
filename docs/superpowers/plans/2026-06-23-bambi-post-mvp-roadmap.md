@@ -22,7 +22,7 @@
 | 6 | [Reviews And Ratings](./2026-06-23-bambi-reviews-ratings.md) | Post-interview reviews and public rating summaries | Completed 2026-06-25 |
 | 7 | [Employer Analytics And Paid Placement](./2026-06-23-bambi-employer-analytics-paid-placement.md) | Employer metrics, billing-ready events, analytics over promoted listings | Completed 2026-06-25 |
 | 8 | [Job Post Media And Block Editor](./2026-06-26-bambi-job-post-media-block-editor.md) | Employer cover/detail images and safe structured job detail blocks | Completed 2026-06-29 |
-| 9 | [Native App](./2026-06-23-bambi-native-app.md) | Mobile native seeker/employer/admin shell and MVP flows, paused until Web final completion | Web/native parity after Web acceptance |
+| 9 | [Native App](./2026-06-23-bambi-native-app.md) | Mobile native seeker/employer/admin shell and MVP flows, deferred until explicit resume | Web/native parity after Web acceptance |
 
 ## Benchmark Inputs
 
@@ -40,11 +40,11 @@
 6. Reviews And Ratings
 7. Employer Analytics And Paid Placement
 8. Job Post Media And Block Editor
-9. Native App (deferred until Web final completion)
+9. Native App (deferred until explicit resume)
 
-The Web final QA gate is tracked in [Web Final QA Acceptance](./2026-06-26-bambi-web-final-qa-acceptance.md). The next non-native product plan is Job Post Media And Block Editor because the Foxalba benchmark still leaves employer image upload and safe detail-content customization outside the completed Dense Marketplace scope.
+The Web final QA gate is tracked in [Web Final QA Acceptance](./2026-06-26-bambi-web-final-qa-acceptance.md). The Web baseline is documented as complete as of 2026-06-29 after Web MVP, Post-MVP Web work, Foxalba-informed Web adoption, and final QA verification.
 
-The native app is paused as of 2026-06-25. Do not select Native App as the next roadmap task until Web final completion is accepted. Resume native work only after the Web flows, API contracts, and remaining Web polish are stable enough to serve as the source of truth.
+The native app is paused as of 2026-06-25 and remains deferred as of 2026-06-29. Do not select Native App as the next roadmap task unless the user explicitly asks to resume it. The next product direction is new Web feature requests and design/UI/UX improvement work; create or update a focused plan under `docs/superpowers/plans/` before implementation.
 
 Dense Marketplace And Promotion Ops should run before Employer Analytics And Paid Placement if promotion tables or boost events are needed as analytics dimensions. If Analytics runs first, its promotion foundation task should be reconciled with the dense marketplace promotion schema before implementation.
 
@@ -100,4 +100,6 @@ Open [Native App](./2026-06-23-bambi-native-app.md), complete every task, then r
 
 Progress: Native app shell, seeker/employer/moderator screens, native oRPC client, and automated checks are implemented. Full iOS/Android simulator smoke for seeker contact reveal, owner create/edit, and admin moderation actions remains pending.
 
-Status 2026-06-25: Paused until Web final completion. Keep this step unchecked and do not continue native implementation or simulator hardening before the Web experience is finalized and accepted.
+Historical status 2026-06-25: Paused while Web final completion was pending. This step stayed unchecked while the Web experience was being finalized and accepted.
+
+Status 2026-06-29: Web final baseline is documented, but Native App is still not the next task. Keep this step unchecked. Continue with incoming Web feature plans and UI/UX improvement plans unless the user explicitly resumes native work.
