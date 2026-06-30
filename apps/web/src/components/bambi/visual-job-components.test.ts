@@ -21,16 +21,6 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("rightIcon={<Message />}");
 	});
 
-	it("defines a dense job row with selected state, verification, and chat affordances", () => {
-		const source = readComponent("dense-job-row.tsx");
-
-		expect(source).toContain("export function DenseJobRow");
-		expect(source).toContain("active = false");
-		expect(source).toContain("job.verified");
-		expect(source).toContain("검수");
-		expect(source).toContain("rightIcon={<Message />}");
-	});
-
 	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {
 		const source = readComponent("visual-job-exposure-sections.tsx");
 
@@ -41,7 +31,6 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("추천 채용");
 		expect(source).toContain("전체 공고");
 		expect(source).toContain("<VisualJobCard");
-		expect(source).toContain("<DenseJobRow");
 	});
 
 	it("wires the seeker marketplace to visual exposure sections", () => {

@@ -2,9 +2,10 @@
 
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
 import { getVisualJobExposureSections } from "@/lib/bambi/visual-job-exposure";
-import { DenseJobRow } from "./dense-job-row";
 import { Card } from "./ds";
 import { VisualJobCard } from "./visual-job-card";
+
+const CARD_GRID_CLASS = "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4";
 
 interface VisualJobExposureSectionsProps {
 	jobs: Job[];
@@ -46,7 +47,7 @@ export function VisualJobExposureSections({
 							{visualSections.special.length}개 · 프리미엄 노출
 						</span>
 					</div>
-					<div className="grid grid-cols-2 gap-2 md:grid-cols-3 2xl:grid-cols-4">
+					<div className={CARD_GRID_CLASS}>
 						{visualSections.special.map((job) => (
 							<VisualJobCard
 								job={job}
@@ -67,7 +68,7 @@ export function VisualJobExposureSections({
 							{visualSections.urgent.length}개 · 최근 끌어올림
 						</span>
 					</div>
-					<div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+					<div className={CARD_GRID_CLASS}>
 						{visualSections.urgent.map((job) => (
 							<VisualJobCard
 								job={job}
@@ -88,7 +89,7 @@ export function VisualJobExposureSections({
 							{visualSections.recommended.length}개 · 상단 추천
 						</span>
 					</div>
-					<div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+					<div className={CARD_GRID_CLASS}>
 						{visualSections.recommended.map((job) => (
 							<VisualJobCard
 								job={job}
@@ -108,14 +109,15 @@ export function VisualJobExposureSections({
 						{visualSections.organic.length}개 · 최신순
 					</span>
 				</div>
-				<div className="grid gap-2">
+				<div className={CARD_GRID_CLASS}>
 					{visualSections.organic.map((job) => (
-						<DenseJobRow
+						<VisualJobCard
 							active={job.id === selectedJobId}
 							job={job}
 							key={`organic-${job.id}`}
 							onChat={onChat}
 							onOpen={onOpen}
+							tone="organic"
 						/>
 					))}
 				</div>
