@@ -95,7 +95,7 @@ export function SeekerChatPreflight({
 	const buttonLabel =
 		continueLabel ?? (isContinuing ? "채팅방 만드는 중" : "밤비 채팅으로 이동");
 	return (
-		<div className="mx-auto w-full max-w-[80%] px-4 py-5 pb-28 md:px-6 md:py-7 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8">
+		<div className="mx-auto w-full px-5 py-5 pb-28 md:max-w-[80%] md:px-6 md:py-7 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8">
 			<main className="min-w-0">
 				<button
 					className="mb-4 cursor-pointer rounded-lg border border-border bg-card px-3 py-2 font-bold text-sm"
