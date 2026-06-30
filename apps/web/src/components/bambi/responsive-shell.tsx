@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@bambi-app/ui/components/button";
+import { buttonVariants } from "@bambi-app/ui/components/button";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import Link from "next/link";
@@ -65,18 +65,18 @@ export function ResponsiveAppShell({
 								</span>
 								연락처 보호
 							</span>
-							<Button
+							<Link
 								className={cn(
+									buttonVariants({
+										variant: isPublic ? "default" : "outline",
+									}),
 									"h-10 px-4 font-bold text-sm no-underline",
 									isPublic && "bg-ink-800 text-white hover:bg-ink-800/90"
 								)}
-								render={
-									<Link href={(isPublic ? "/login" : "/seeker/me") as Route} />
-								}
-								variant={isPublic ? "default" : "outline"}
+								href={(isPublic ? "/login" : "/seeker/me") as Route}
 							>
 								{isPublic ? "시작하기" : "내 정보"}
-							</Button>
+							</Link>
 						</div>
 					</div>
 				</header>
