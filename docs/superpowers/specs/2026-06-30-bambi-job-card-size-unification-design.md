@@ -254,3 +254,10 @@ max-w-[min(92dvw,1600px)]
 `responsive-shell.tsx`의 `isWide ? "max-w-[80%]" : "max-w-[1180px]"` 분기와 `isWide` 변수를 제거하고
 헤더 컨테이너를 항상 `max-w-[80%]`로 고정한다(운영자 콘솔 포함 전 variant 동일). `isPublic`은 CTA/
 로그인 링크 분기에 계속 쓰여 유지.
+
+### 8.12 정리 (2026-06-30) — 업체정보(매장 정보) 화면 폭/여백 정렬
+
+`/employer/me`의 `EmployerMe`("매장 정보") 화면은 `max-w` 없이 전체 폭으로 렌더돼 헤더
+(`max-w-[80%]`, `px-6`)와 어긋났다(같은 employer 영역의 `/employer`는 `PageShell`로 이미 80%).
+`EmployerMe` 최상위 컨테이너를 `mx-auto w-full max-w-[80%]`로 감싸 헤더와 폭을 맞춘다. 내부 섹션이
+이미 `px-6`를 써서 좌우 여백도 헤더와 동일해진다.
