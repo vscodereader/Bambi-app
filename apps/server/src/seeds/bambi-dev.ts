@@ -68,6 +68,142 @@ const devUsers = [
 		displayName: "운영 관리자",
 		phoneNumber: "010-9000-0001",
 	},
+	{
+		key: "ownerMars",
+		name: "라운지 마르스 대표",
+		email: "mars-owner@bambi.dev",
+		role: "employer",
+		displayName: "마르스 대표",
+		phoneNumber: "010-4000-0001",
+	},
+	{
+		key: "ownerVelvet",
+		name: "벨벳 바 대표",
+		email: "velvet-owner@bambi.dev",
+		role: "employer",
+		displayName: "벨벳 대표",
+		phoneNumber: "010-4000-0002",
+	},
+	{
+		key: "ownerHorizon",
+		name: "호라이즌 클럽 대표",
+		email: "horizon-owner@bambi.dev",
+		role: "employer",
+		displayName: "호라이즌 대표",
+		phoneNumber: "010-4000-0003",
+	},
+	{
+		key: "ownerSoda",
+		name: "소다 카페 대표",
+		email: "soda-owner@bambi.dev",
+		role: "employer",
+		displayName: "소다 대표",
+		phoneNumber: "010-4000-0004",
+	},
+	{
+		key: "ownerPrism",
+		name: "프리즘 대표",
+		email: "prism-owner@bambi.dev",
+		role: "employer",
+		displayName: "프리즘 대표",
+		phoneNumber: "010-4000-0005",
+	},
+	{
+		key: "seekerB",
+		name: "밤비 구직자 B",
+		email: "seeker-b@bambi.dev",
+		role: "job_seeker",
+		displayName: "익명 구직자 B",
+		phoneNumber: "010-1000-0002",
+	},
+	{
+		key: "seekerC",
+		name: "밤비 구직자 C",
+		email: "seeker-c@bambi.dev",
+		role: "job_seeker",
+		displayName: "익명 구직자 C",
+		phoneNumber: "010-1000-0003",
+	},
+	{
+		key: "seekerD",
+		name: "밤비 구직자 D",
+		email: "seeker-d@bambi.dev",
+		role: "job_seeker",
+		displayName: "익명 구직자 D",
+		phoneNumber: "010-1000-0004",
+	},
+	{
+		key: "seekerE",
+		name: "밤비 구직자 E",
+		email: "seeker-e@bambi.dev",
+		role: "job_seeker",
+		displayName: "익명 구직자 E",
+		phoneNumber: "010-1000-0005",
+	},
+	{
+		key: "ownerAqua",
+		name: "아쿠아 라운지 대표",
+		email: "aqua-owner@bambi.dev",
+		role: "employer",
+		displayName: "아쿠아 대표",
+		phoneNumber: "010-4000-0006",
+	},
+	{
+		key: "ownerEmber",
+		name: "엠버 바 대표",
+		email: "ember-owner@bambi.dev",
+		role: "employer",
+		displayName: "엠버 대표",
+		phoneNumber: "010-4000-0007",
+	},
+	{
+		key: "ownerNova",
+		name: "노바 클럽 대표",
+		email: "nova-owner@bambi.dev",
+		role: "employer",
+		displayName: "노바 대표",
+		phoneNumber: "010-4000-0008",
+	},
+	{
+		key: "ownerLumi",
+		name: "루미 노래방 대표",
+		email: "lumi-owner@bambi.dev",
+		role: "employer",
+		displayName: "루미 대표",
+		phoneNumber: "010-4000-0009",
+	},
+	{
+		key: "ownerComet",
+		name: "코멧 라운지 대표",
+		email: "comet-owner@bambi.dev",
+		role: "employer",
+		displayName: "코멧 대표",
+		phoneNumber: "010-4000-0010",
+	},
+	{
+		key: "seekerF",
+		name: "밤비 구직자 F",
+		email: "seeker-f@bambi.dev",
+		role: "job_seeker",
+		displayName: "익명 구직자 F",
+		phoneNumber: "010-1000-0006",
+	},
+	{
+		key: "seekerG",
+		name: "밤비 구직자 G",
+		email: "seeker-g@bambi.dev",
+		role: "job_seeker",
+		displayName: "익명 구직자 G",
+		phoneNumber: "010-1000-0007",
+	},
+	{
+		key: "seekerH",
+		name: "밤비 구직자 H",
+		email: "seeker-h@bambi.dev",
+		role: "job_seeker",
+		displayName: "익명 구직자 H",
+		phoneNumber: "010-1000-0008",
+	},
 ] as const;
 
 const ids = {
@@ -105,6 +241,943 @@ const ids = {
 type DevUser = (typeof devUsers)[number];
 type DevUserKey = DevUser["key"];
 type SeedJobPost = typeof jobPost.$inferInsert & { id: string };
+
+/**
+ * Deterministic UUID builder for the rich seed catalog. `segment` is the first
+ * 8 hex chars (one per entity table so ids never collide across tables) and `n`
+ * fills the final group, keeping the v4/variant-8 shape that the web client uses
+ * to tell API-backed ids apart from local mock ids.
+ */
+const richId = (segment: string, n: number): string =>
+	`${segment}-0000-4000-8000-${n.toString().padStart(12, "0")}`;
+
+const jobPublishedAt = (n: number): Date =>
+	new Date(
+		`2026-06-${(10 + (n % 18)).toString().padStart(2, "0")}T09:00:00.000Z`
+	);
+
+interface RichOrg {
+	businessRegistrationNumber: string;
+	id: string;
+	memberId: string;
+	name: string;
+	ownerKey: DevUserKey;
+	profileId: string;
+	region: string;
+	slug: string;
+}
+
+const richOrganizations: RichOrg[] = [
+	{
+		id: "org_bambi_mars",
+		name: "라운지 마르스",
+		slug: "lounge-mars",
+		ownerKey: "ownerMars",
+		memberId: "member_bambi_mars_owner",
+		profileId: richId("1a1a1a1a", 1),
+		region: "서울 강남구",
+		businessRegistrationNumber: "211-22-33445",
+	},
+	{
+		id: "org_bambi_velvet",
+		name: "벨벳 바",
+		slug: "velvet-bar",
+		ownerKey: "ownerVelvet",
+		memberId: "member_bambi_velvet_owner",
+		profileId: richId("1a1a1a1a", 2),
+		region: "서울 마포구",
+		businessRegistrationNumber: "312-33-44556",
+	},
+	{
+		id: "org_bambi_horizon",
+		name: "호라이즌 클럽",
+		slug: "horizon-club",
+		ownerKey: "ownerHorizon",
+		memberId: "member_bambi_horizon_owner",
+		profileId: richId("1a1a1a1a", 3),
+		region: "서울 송파구",
+		businessRegistrationNumber: "413-44-55667",
+	},
+	{
+		id: "org_bambi_soda",
+		name: "소다 카페",
+		slug: "soda-cafe",
+		ownerKey: "ownerSoda",
+		memberId: "member_bambi_soda_owner",
+		profileId: richId("1a1a1a1a", 4),
+		region: "인천 부평구",
+		businessRegistrationNumber: "514-55-66778",
+	},
+	{
+		id: "org_bambi_prism",
+		name: "프리즘",
+		slug: "prism-host",
+		ownerKey: "ownerPrism",
+		memberId: "member_bambi_prism_owner",
+		profileId: richId("1a1a1a1a", 5),
+		region: "경기 부천시",
+		businessRegistrationNumber: "615-66-77889",
+	},
+	{
+		id: "org_bambi_aqua",
+		name: "아쿠아 라운지",
+		slug: "aqua-lounge",
+		ownerKey: "ownerAqua",
+		memberId: "member_bambi_aqua_owner",
+		profileId: richId("1a1a1a1a", 6),
+		region: "부산 해운대구",
+		businessRegistrationNumber: "716-77-88990",
+	},
+	{
+		id: "org_bambi_ember",
+		name: "엠버 바",
+		slug: "ember-bar",
+		ownerKey: "ownerEmber",
+		memberId: "member_bambi_ember_owner",
+		profileId: richId("1a1a1a1a", 7),
+		region: "대구 중구",
+		businessRegistrationNumber: "817-88-99001",
+	},
+	{
+		id: "org_bambi_nova",
+		name: "노바 클럽",
+		slug: "nova-club",
+		ownerKey: "ownerNova",
+		memberId: "member_bambi_nova_owner",
+		profileId: richId("1a1a1a1a", 8),
+		region: "대전 서구",
+		businessRegistrationNumber: "918-99-00112",
+	},
+	{
+		id: "org_bambi_lumi",
+		name: "루미 노래방",
+		slug: "lumi-karaoke",
+		ownerKey: "ownerLumi",
+		memberId: "member_bambi_lumi_owner",
+		profileId: richId("1a1a1a1a", 9),
+		region: "광주 동구",
+		businessRegistrationNumber: "019-10-11223",
+	},
+	{
+		id: "org_bambi_comet",
+		name: "코멧 라운지",
+		slug: "comet-lounge",
+		ownerKey: "ownerComet",
+		memberId: "member_bambi_comet_owner",
+		profileId: richId("1a1a1a1a", 10),
+		region: "경기 수원시",
+		businessRegistrationNumber: "120-21-22334",
+	},
+];
+
+type RichJobStatus =
+	| "published"
+	| "hidden"
+	| "pending_review"
+	| "rejected"
+	| "draft";
+
+interface RichJobDef {
+	beginner?: boolean;
+	category: string;
+	desc: string;
+	n: number;
+	org: string;
+	ownerKey: DevUserKey;
+	pay: number;
+	promo?: "premium" | "recommended" | "standard";
+	region: string;
+	rejectionReason?: string;
+	schedule: string;
+	status: RichJobStatus;
+	title: string;
+	unit: string;
+}
+
+const richJobs: RichJobDef[] = [
+	{
+		n: 1,
+		org: "org_bambi_mars",
+		ownerKey: "ownerMars",
+		status: "published",
+		category: "라운지",
+		region: "서울 강남구",
+		pay: 3_200_000,
+		unit: "월급",
+		schedule: "주 5일, 19:00-03:00",
+		title: "강남 프리미엄 라운지 매니저",
+		desc: "홀 운영 총괄과 예약 관리, 직원 스케줄을 담당하는 정규직 매니저를 모집합니다. 업장 경력자를 우대합니다.",
+		promo: "premium",
+	},
+	{
+		n: 2,
+		org: "org_bambi_mars",
+		ownerKey: "ownerMars",
+		status: "published",
+		category: "라운지",
+		region: "서울 강남구",
+		pay: 200_000,
+		unit: "일급",
+		schedule: "금/토, 20:00-02:00",
+		title: "강남 라운지 주말 홀 스태프",
+		desc: "주말 홀 응대와 테이블 세팅을 담당합니다. 친절한 분이면 누구나 환영합니다.",
+		promo: "recommended",
+	},
+	{
+		n: 3,
+		org: "org_bambi_mars",
+		ownerKey: "ownerMars",
+		status: "published",
+		category: "라운지",
+		region: "서울 강남구",
+		pay: 15_000,
+		unit: "시급",
+		schedule: "평일 18:00-23:00",
+		title: "강남 라운지 초보 환영 서버",
+		desc: "짧은 교육 후 바로 근무를 시작합니다. 첫 업장 경험을 친절하게 안내해 드립니다.",
+		beginner: true,
+	},
+	{
+		n: 4,
+		org: "org_bambi_velvet",
+		ownerKey: "ownerVelvet",
+		status: "published",
+		category: "바",
+		region: "서울 마포구",
+		pay: 190_000,
+		unit: "일급",
+		schedule: "수~일, 19:00-01:00",
+		title: "마포 칵테일 바 바텐더",
+		desc: "칵테일 제조와 바 응대를 담당합니다. 경력자는 우대하며 레시피 교육을 제공합니다.",
+		promo: "recommended",
+	},
+	{
+		n: 5,
+		org: "org_bambi_velvet",
+		ownerKey: "ownerVelvet",
+		status: "published",
+		category: "바",
+		region: "서울 마포구",
+		pay: 16_000,
+		unit: "시급",
+		schedule: "금/토, 20:00-02:00",
+		title: "홍대 인근 바 주말 파트타임",
+		desc: "주말 바 보조와 음료 서빙을 담당합니다. 활기찬 분위기에서 함께 일할 분을 찾습니다.",
+		beginner: true,
+	},
+	{
+		n: 6,
+		org: "org_bambi_velvet",
+		ownerKey: "ownerVelvet",
+		status: "published",
+		category: "바",
+		region: "서울 마포구",
+		pay: 2_800_000,
+		unit: "월급",
+		schedule: "주 5일, 18:00-02:00",
+		title: "마포 와인바 야간 매니저",
+		desc: "와인 셀렉션 관리와 매장 운영을 책임지는 야간 매니저를 모집합니다.",
+	},
+	{
+		n: 7,
+		org: "org_bambi_horizon",
+		ownerKey: "ownerHorizon",
+		status: "published",
+		category: "클럽",
+		region: "서울 송파구",
+		pay: 230_000,
+		unit: "일급",
+		schedule: "금/토, 21:00-05:00",
+		title: "송파 클럽 VIP 응대 스태프",
+		desc: "VIP 테이블 응대와 예약 관리를 담당합니다. 친화력 있는 분을 우대합니다.",
+		promo: "premium",
+	},
+	{
+		n: 8,
+		org: "org_bambi_horizon",
+		ownerKey: "ownerHorizon",
+		status: "published",
+		category: "클럽",
+		region: "서울 송파구",
+		pay: 180_000,
+		unit: "일급",
+		schedule: "토/일, 21:00-04:00",
+		title: "잠실 클럽 주말 플로어 스태프",
+		desc: "플로어 안내와 음료 전달을 담당합니다. 체력 좋은 분 환영합니다.",
+	},
+	{
+		n: 9,
+		org: "org_bambi_horizon",
+		ownerKey: "ownerHorizon",
+		status: "published",
+		category: "클럽",
+		region: "서울 송파구",
+		pay: 14_000,
+		unit: "시급",
+		schedule: "주 3일, 20:00-01:00",
+		title: "송파 클럽 음향 보조",
+		desc: "DJ 부스 음향 셋업과 장비 정리를 보조합니다. 음향에 관심 있는 분이면 좋습니다.",
+		beginner: true,
+	},
+	{
+		n: 10,
+		org: "org_bambi_soda",
+		ownerKey: "ownerSoda",
+		status: "published",
+		category: "카페",
+		region: "인천 부평구",
+		pay: 12_000,
+		unit: "시급",
+		schedule: "평일 09:00-15:00",
+		title: "부평 카페 오전 바리스타",
+		desc: "에스프레소 음료 제조와 매장 청결을 담당합니다. 바리스타 자격증 소지자 우대.",
+		beginner: true,
+		promo: "standard",
+	},
+	{
+		n: 11,
+		org: "org_bambi_soda",
+		ownerKey: "ownerSoda",
+		status: "published",
+		category: "카페",
+		region: "인천 부평구",
+		pay: 110_000,
+		unit: "일급",
+		schedule: "주말 15:00-23:00",
+		title: "인천 카페 주말 마감 담당",
+		desc: "주말 마감과 재료 정리를 담당합니다. 책임감 있는 분을 찾습니다.",
+	},
+	{
+		n: 12,
+		org: "org_bambi_soda",
+		ownerKey: "ownerSoda",
+		status: "hidden",
+		category: "카페",
+		region: "인천 부평구",
+		pay: 11_500,
+		unit: "시급",
+		schedule: "평일 13:00-19:00",
+		title: "부평 디저트 카페 평일 파트",
+		desc: "디저트 진열과 포장을 담당합니다. 현재는 모집이 잠시 중단된 공고입니다.",
+	},
+	{
+		n: 13,
+		org: "org_bambi_prism",
+		ownerKey: "ownerPrism",
+		status: "published",
+		category: "호스트바",
+		region: "경기 부천시",
+		pay: 250_000,
+		unit: "일급",
+		schedule: "수~토, 20:00-03:00",
+		title: "부천 호스트바 신규 멤버 모집",
+		desc: "고객 응대와 테이블 매니징을 담당합니다. 신입은 선배가 1:1로 안내합니다.",
+		promo: "premium",
+	},
+	{
+		n: 14,
+		org: "org_bambi_prism",
+		ownerKey: "ownerPrism",
+		status: "published",
+		category: "호스트바",
+		region: "경기 부천시",
+		pay: 170_000,
+		unit: "일급",
+		schedule: "주 4일, 19:00-01:00",
+		title: "부천 라운지바 주중 스태프",
+		desc: "주중 홀 응대와 예약 관리를 담당합니다. 성실한 분이면 누구나 지원 가능합니다.",
+	},
+	{
+		n: 15,
+		org: "org_bambi_prism",
+		ownerKey: "ownerPrism",
+		status: "pending_review",
+		category: "호스트바",
+		region: "경기 부천시",
+		pay: 200_000,
+		unit: "일급",
+		schedule: "협의",
+		title: "부천 신규 업장 오픈 멤버 (검수 대기)",
+		desc: "신규 오픈 업장의 멤버를 모집합니다. 운영팀 검수가 완료되면 공개됩니다.",
+	},
+	{
+		n: 16,
+		org: "org_bambi_prism",
+		ownerKey: "ownerPrism",
+		status: "rejected",
+		category: "호스트바",
+		region: "경기 부천시",
+		pay: 300_000,
+		unit: "일급",
+		schedule: "협의",
+		title: "부천 고수익 보장 멤버 (반려됨)",
+		desc: "과장된 수익 표현으로 운영팀에서 반려한 공고 샘플입니다.",
+		rejectionReason: "검증되지 않은 고수익 보장 문구로 반려되었습니다.",
+	},
+	{
+		n: 17,
+		org: "org_bambi_aqua",
+		ownerKey: "ownerAqua",
+		status: "published",
+		category: "라운지",
+		region: "부산 해운대구",
+		pay: 3_000_000,
+		unit: "월급",
+		schedule: "주 5일, 19:00-03:00",
+		title: "해운대 오션뷰 라운지 매니저",
+		desc: "해운대 바다가 보이는 라운지의 홀 운영 매니저를 모집합니다. 업장 경력자를 우대합니다.",
+		promo: "premium",
+	},
+	{
+		n: 18,
+		org: "org_bambi_aqua",
+		ownerKey: "ownerAqua",
+		status: "published",
+		category: "라운지",
+		region: "부산 해운대구",
+		pay: 190_000,
+		unit: "일급",
+		schedule: "금/토, 20:00-02:00",
+		title: "해운대 라운지 주말 홀 스태프",
+		desc: "주말 홀 응대와 예약 관리를 담당합니다. 바다 근처 분위기 좋은 매장입니다.",
+		promo: "recommended",
+	},
+	{
+		n: 19,
+		org: "org_bambi_aqua",
+		ownerKey: "ownerAqua",
+		status: "published",
+		category: "라운지",
+		region: "부산 해운대구",
+		pay: 13_000,
+		unit: "시급",
+		schedule: "평일 18:00-23:00",
+		title: "부산 라운지 평일 초보 서버",
+		desc: "평일 저녁 서빙 보조를 담당합니다. 첫 업장 경험도 친절하게 안내합니다.",
+		beginner: true,
+	},
+	{
+		n: 20,
+		org: "org_bambi_ember",
+		ownerKey: "ownerEmber",
+		status: "published",
+		category: "바",
+		region: "대구 중구",
+		pay: 185_000,
+		unit: "일급",
+		schedule: "수~일, 19:00-01:00",
+		title: "대구 동성로 칵테일 바 바텐더",
+		desc: "동성로 중심가 칵테일 바의 바텐더를 모집합니다. 레시피 교육을 제공합니다.",
+		promo: "recommended",
+	},
+	{
+		n: 21,
+		org: "org_bambi_ember",
+		ownerKey: "ownerEmber",
+		status: "published",
+		category: "바",
+		region: "대구 중구",
+		pay: 14_000,
+		unit: "시급",
+		schedule: "금/토, 20:00-02:00",
+		title: "대구 바 주말 파트타임",
+		desc: "주말 바 보조와 음료 서빙을 담당합니다. 활기찬 분위기를 좋아하는 분 환영합니다.",
+		beginner: true,
+	},
+	{
+		n: 22,
+		org: "org_bambi_ember",
+		ownerKey: "ownerEmber",
+		status: "published",
+		category: "바",
+		region: "대구 중구",
+		pay: 2_700_000,
+		unit: "월급",
+		schedule: "주 5일, 18:00-02:00",
+		title: "대구 와인바 야간 매니저",
+		desc: "와인 셀렉션 관리와 매장 운영을 책임지는 야간 매니저를 모집합니다.",
+	},
+	{
+		n: 23,
+		org: "org_bambi_nova",
+		ownerKey: "ownerNova",
+		status: "published",
+		category: "클럽",
+		region: "대전 서구",
+		pay: 220_000,
+		unit: "일급",
+		schedule: "금/토, 21:00-05:00",
+		title: "대전 둔산 클럽 VIP 응대 스태프",
+		desc: "VIP 테이블 응대와 예약 관리를 담당합니다. 친화력 있는 분을 우대합니다.",
+		promo: "premium",
+	},
+	{
+		n: 24,
+		org: "org_bambi_nova",
+		ownerKey: "ownerNova",
+		status: "published",
+		category: "클럽",
+		region: "대전 서구",
+		pay: 175_000,
+		unit: "일급",
+		schedule: "토/일, 21:00-04:00",
+		title: "대전 클럽 주말 플로어 스태프",
+		desc: "플로어 안내와 음료 전달을 담당합니다. 체력 좋은 분 환영합니다.",
+	},
+	{
+		n: 25,
+		org: "org_bambi_nova",
+		ownerKey: "ownerNova",
+		status: "published",
+		category: "클럽",
+		region: "대전 서구",
+		pay: 13_500,
+		unit: "시급",
+		schedule: "주 3일, 20:00-01:00",
+		title: "대전 클럽 음향 보조",
+		desc: "DJ 부스 음향 셋업과 장비 정리를 보조합니다. 음향에 관심 있는 분이면 좋습니다.",
+		beginner: true,
+	},
+	{
+		n: 26,
+		org: "org_bambi_lumi",
+		ownerKey: "ownerLumi",
+		status: "published",
+		category: "노래방",
+		region: "광주 동구",
+		pay: 11_000,
+		unit: "시급",
+		schedule: "평일 16:00-22:00",
+		title: "광주 노래방 카운터 직원",
+		desc: "예약 관리와 룸 안내, 간단한 청소를 담당합니다. 초보자도 지원 가능합니다.",
+		beginner: true,
+	},
+	{
+		n: 27,
+		org: "org_bambi_lumi",
+		ownerKey: "ownerLumi",
+		status: "published",
+		category: "노래방",
+		region: "광주 동구",
+		pay: 130_000,
+		unit: "일급",
+		schedule: "금/토/일, 18:00-02:00",
+		title: "광주 노래방 주말 매니저",
+		desc: "주말 매장 운영과 직원 관리를 담당합니다. 서비스업 경력자를 우대합니다.",
+		promo: "recommended",
+	},
+	{
+		n: 28,
+		org: "org_bambi_lumi",
+		ownerKey: "ownerLumi",
+		status: "published",
+		category: "노래방",
+		region: "광주 동구",
+		pay: 10_500,
+		unit: "시급",
+		schedule: "평일 13:00-19:00",
+		title: "광주 코인노래방 평일 파트",
+		desc: "코인노래방 청소와 기기 점검을 담당합니다. 조용한 환경에서 일할 분을 찾습니다.",
+	},
+	{
+		n: 29,
+		org: "org_bambi_comet",
+		ownerKey: "ownerComet",
+		status: "published",
+		category: "라운지",
+		region: "경기 수원시",
+		pay: 175_000,
+		unit: "일급",
+		schedule: "수~일, 19:00-01:00",
+		title: "수원 라운지 홀 스태프",
+		desc: "수원 인계동 라운지의 홀 응대와 테이블 세팅을 담당합니다.",
+		promo: "recommended",
+	},
+	{
+		n: 30,
+		org: "org_bambi_comet",
+		ownerKey: "ownerComet",
+		status: "published",
+		category: "라운지",
+		region: "경기 수원시",
+		pay: 13_000,
+		unit: "시급",
+		schedule: "평일 18:00-23:00",
+		title: "수원 라운지 주중 초보 서버",
+		desc: "평일 저녁 서빙 보조를 담당합니다. 짧은 교육 후 바로 시작합니다.",
+		beginner: true,
+	},
+	{
+		n: 31,
+		org: "org_bambi_comet",
+		ownerKey: "ownerComet",
+		status: "published",
+		category: "라운지",
+		region: "경기 수원시",
+		pay: 2_900_000,
+		unit: "월급",
+		schedule: "주 5일, 18:00-02:00",
+		title: "수원 라운지 야간 매니저",
+		desc: "매장 운영 총괄과 직원 스케줄 관리를 담당하는 정규직 매니저를 모집합니다.",
+		promo: "premium",
+	},
+	{
+		n: 32,
+		org: "org_bambi_mars",
+		ownerKey: "ownerMars",
+		status: "published",
+		category: "라운지",
+		region: "서울 강남구",
+		pay: 170_000,
+		unit: "일급",
+		schedule: "수/목, 19:00-01:00",
+		title: "강남 라운지 평일 매니저 보조",
+		desc: "평일 매니저 업무를 보조합니다. 라운지 경력자를 우대합니다.",
+	},
+	{
+		n: 33,
+		org: "org_bambi_velvet",
+		ownerKey: "ownerVelvet",
+		status: "published",
+		category: "바",
+		region: "서울 마포구",
+		pay: 150_000,
+		unit: "일급",
+		schedule: "토/일, 18:00-24:00",
+		title: "마포 와인바 주말 서버",
+		desc: "주말 와인 서빙과 고객 안내를 담당합니다. 와인에 관심 있는 분 환영합니다.",
+		beginner: true,
+	},
+	{
+		n: 34,
+		org: "org_bambi_horizon",
+		ownerKey: "ownerHorizon",
+		status: "published",
+		category: "클럽",
+		region: "서울 송파구",
+		pay: 13_000,
+		unit: "시급",
+		schedule: "평일 20:00-01:00",
+		title: "송파 클럽 평일 플로어 보조",
+		desc: "평일 플로어 안내와 정리를 담당합니다. 체력 좋은 분 환영합니다.",
+		beginner: true,
+	},
+	{
+		n: 35,
+		org: "org_bambi_soda",
+		ownerKey: "ownerSoda",
+		status: "published",
+		category: "카페",
+		region: "인천 부평구",
+		pay: 12_500,
+		unit: "시급",
+		schedule: "평일 15:00-21:00",
+		title: "부평 카페 오후 바리스타",
+		desc: "오후 음료 제조와 매장 관리를 담당합니다. 바리스타 경험자를 우대합니다.",
+	},
+	{
+		n: 36,
+		org: "org_bambi_prism",
+		ownerKey: "ownerPrism",
+		status: "published",
+		category: "호스트바",
+		region: "경기 부천시",
+		pay: 180_000,
+		unit: "일급",
+		schedule: "수~토, 20:00-02:00",
+		title: "부천 라운지바 신규 멤버 추가 모집",
+		desc: "신규 멤버를 추가 모집합니다. 선배가 1:1로 친절하게 안내합니다.",
+	},
+	{
+		n: 37,
+		org: "org_bambi_nova",
+		ownerKey: "ownerNova",
+		status: "pending_review",
+		category: "클럽",
+		region: "대전 서구",
+		pay: 240_000,
+		unit: "일급",
+		schedule: "협의",
+		title: "대전 신규 클럽 오픈 멤버 (검수 대기)",
+		desc: "신규 오픈 클럽의 멤버를 모집합니다. 운영팀 검수가 완료되면 공개됩니다.",
+	},
+	{
+		n: 38,
+		org: "org_bambi_mars",
+		ownerKey: "ownerMars",
+		status: "draft",
+		category: "라운지",
+		region: "서울 강남구",
+		pay: 160_000,
+		unit: "일급",
+		schedule: "협의",
+		title: "강남 라운지 임시저장 공고",
+		desc: "작성 중인 임시저장 상태의 공고 샘플입니다.",
+	},
+];
+
+interface RichRoomDef {
+	employerKey: DevUserKey;
+	jobPostId: string;
+	messages: { senderKey: DevUserKey; body: string }[];
+	n: number;
+	organizationId: string;
+	rating: number;
+	reviewBody: string;
+	seekerKey: DevUserKey;
+	teamId: string | null;
+}
+
+const richRooms: RichRoomDef[] = [
+	{
+		n: 1,
+		jobPostId: richId("2a2a2a2a", 2),
+		organizationId: "org_bambi_mars",
+		employerKey: "ownerMars",
+		seekerKey: "seekerB",
+		teamId: null,
+		rating: 5,
+		reviewBody: "면접도 친절했고 근무 환경이 깔끔했어요. 정산도 정확합니다.",
+		messages: [
+			{
+				senderKey: "seekerB",
+				body: "안녕하세요, 주말 홀 스태프 지원하고 싶어요.",
+			},
+			{
+				senderKey: "ownerMars",
+				body: "네 반갑습니다! 이번 주 토요일 오후 면접 가능하실까요?",
+			},
+			{ senderKey: "seekerB", body: "토요일 좋습니다. 시간 맞춰 방문할게요." },
+		],
+	},
+	{
+		n: 2,
+		jobPostId: richId("2a2a2a2a", 4),
+		organizationId: "org_bambi_velvet",
+		employerKey: "ownerVelvet",
+		seekerKey: "seekerC",
+		teamId: null,
+		rating: 4,
+		reviewBody: "바텐딩 교육이 체계적이었어요. 페이는 약속대로 지급됐습니다.",
+		messages: [
+			{ senderKey: "seekerC", body: "바텐더 경력 1년 있는데 지원 가능할까요?" },
+			{
+				senderKey: "ownerVelvet",
+				body: "경력자시면 환영입니다. 포트폴리오 있으시면 채팅으로 보내주세요.",
+			},
+		],
+	},
+	{
+		n: 3,
+		jobPostId: richId("2a2a2a2a", 8),
+		organizationId: "org_bambi_horizon",
+		employerKey: "ownerHorizon",
+		seekerKey: "seekerD",
+		teamId: null,
+		rating: 5,
+		reviewBody:
+			"주말 단기였는데 매니저님이 일을 잘 알려주셨어요. 또 일하고 싶어요.",
+		messages: [
+			{
+				senderKey: "seekerD",
+				body: "이번 주말 플로어 스태프 자리 아직 있나요?",
+			},
+			{
+				senderKey: "ownerHorizon",
+				body: "네 모집 중입니다. 토요일 21시까지 오실 수 있나요?",
+			},
+			{ senderKey: "seekerD", body: "가능합니다. 복장은 어떻게 하면 될까요?" },
+		],
+	},
+	{
+		n: 4,
+		jobPostId: richId("2a2a2a2a", 10),
+		organizationId: "org_bambi_soda",
+		employerKey: "ownerSoda",
+		seekerKey: "seekerE",
+		teamId: null,
+		rating: 3,
+		reviewBody:
+			"일은 무난했는데 오픈 준비가 조금 바빴어요. 사장님은 친절하셨습니다.",
+		messages: [
+			{
+				senderKey: "seekerE",
+				body: "오전 바리스타 지원합니다. 주 며칠 근무인가요?",
+			},
+			{
+				senderKey: "ownerSoda",
+				body: "평일 주 5일 오전 타임이에요. 가능하실까요?",
+			},
+		],
+	},
+	{
+		n: 5,
+		jobPostId: richId("2a2a2a2a", 14),
+		organizationId: "org_bambi_prism",
+		employerKey: "ownerPrism",
+		seekerKey: "seekerB",
+		teamId: null,
+		rating: 4,
+		reviewBody: "신입도 배려해 주는 분위기였어요. 면접 때 안내가 정확했습니다.",
+		messages: [
+			{ senderKey: "seekerB", body: "주중 스태프 자리 문의드립니다." },
+			{
+				senderKey: "ownerPrism",
+				body: "지원 감사합니다. 근무 가능한 요일 알려주실 수 있을까요?",
+			},
+		],
+	},
+	{
+		n: 6,
+		jobPostId: ids.lunaPublishedJob,
+		organizationId: ids.lunaOrganization,
+		employerKey: "owner",
+		seekerKey: "seekerC",
+		teamId: null,
+		rating: 5,
+		reviewBody: "클럽 루나는 응대 매뉴얼이 잘 잡혀 있어서 적응이 빨랐어요.",
+		messages: [
+			{
+				senderKey: "seekerC",
+				body: "홀 스태프 지원하고 싶어요. 초보도 괜찮을까요?",
+			},
+			{
+				senderKey: "owner",
+				body: "물론입니다. 교육 후 시작하니 편하게 지원하세요.",
+			},
+		],
+	},
+	{
+		n: 7,
+		jobPostId: ids.lunaOrganicPublishedJob,
+		organizationId: ids.lunaOrganization,
+		employerKey: "owner",
+		seekerKey: "seekerD",
+		teamId: null,
+		rating: 4,
+		reviewBody: "카운터 보조 업무가 명확했어요. 면접 장소 안내도 친절했습니다.",
+		messages: [
+			{ senderKey: "seekerD", body: "서초 카운터 보조 지원합니다." },
+			{
+				senderKey: "owner",
+				body: "지원 감사합니다. 면접 시간 채팅으로 잡아드릴게요.",
+			},
+		],
+	},
+	{
+		n: 8,
+		jobPostId: richId("2a2a2a2a", 18),
+		organizationId: "org_bambi_aqua",
+		employerKey: "ownerAqua",
+		seekerKey: "seekerF",
+		teamId: null,
+		rating: 5,
+		reviewBody: "오션뷰 매장이라 분위기가 좋았어요. 페이 정산도 정확했습니다.",
+		messages: [
+			{ senderKey: "seekerF", body: "해운대 주말 홀 스태프 지원하고 싶어요." },
+			{
+				senderKey: "ownerAqua",
+				body: "반갑습니다! 이번 주 토요일 오후 면접 가능하실까요?",
+			},
+			{ senderKey: "seekerF", body: "네 가능합니다. 시간 맞춰 갈게요." },
+		],
+	},
+	{
+		n: 9,
+		jobPostId: richId("2a2a2a2a", 20),
+		organizationId: "org_bambi_ember",
+		employerKey: "ownerEmber",
+		seekerKey: "seekerG",
+		teamId: null,
+		rating: 4,
+		reviewBody: "바텐딩 교육이 꼼꼼했어요. 동성로라 접근성도 좋습니다.",
+		messages: [
+			{
+				senderKey: "seekerG",
+				body: "칵테일 바 바텐더 지원합니다. 경력 2년이에요.",
+			},
+			{
+				senderKey: "ownerEmber",
+				body: "경력자시면 환영입니다. 가능한 근무 요일 알려주세요.",
+			},
+		],
+	},
+	{
+		n: 10,
+		jobPostId: richId("2a2a2a2a", 24),
+		organizationId: "org_bambi_nova",
+		employerKey: "ownerNova",
+		seekerKey: "seekerH",
+		teamId: null,
+		rating: 5,
+		reviewBody: "주말 단기였는데 매니저님이 친절하게 알려주셨어요.",
+		messages: [
+			{ senderKey: "seekerH", body: "주말 플로어 스태프 자리 있나요?" },
+			{
+				senderKey: "ownerNova",
+				body: "네 모집 중입니다. 토요일 21시까지 오실 수 있나요?",
+			},
+			{ senderKey: "seekerH", body: "가능합니다. 복장 안내 부탁드려요." },
+		],
+	},
+	{
+		n: 11,
+		jobPostId: richId("2a2a2a2a", 27),
+		organizationId: "org_bambi_lumi",
+		employerKey: "ownerLumi",
+		seekerKey: "seekerF",
+		teamId: null,
+		rating: 4,
+		reviewBody: "노래방 매니저 업무가 깔끔했어요. 주말 페이도 좋았습니다.",
+		messages: [
+			{
+				senderKey: "seekerF",
+				body: "주말 매니저 지원합니다. 서비스업 경력 있어요.",
+			},
+			{
+				senderKey: "ownerLumi",
+				body: "지원 감사합니다. 면접 일정 채팅으로 잡아드릴게요.",
+			},
+		],
+	},
+	{
+		n: 12,
+		jobPostId: richId("2a2a2a2a", 29),
+		organizationId: "org_bambi_comet",
+		employerKey: "ownerComet",
+		seekerKey: "seekerG",
+		teamId: null,
+		rating: 5,
+		reviewBody: "인계동 라운지 분위기가 좋고 사장님이 친절하셨어요.",
+		messages: [
+			{ senderKey: "seekerG", body: "수원 홀 스태프 지원합니다." },
+			{
+				senderKey: "ownerComet",
+				body: "반갑습니다. 근무 가능한 요일 알려주실 수 있을까요?",
+			},
+		],
+	},
+	{
+		n: 13,
+		jobPostId: richId("2a2a2a2a", 3),
+		organizationId: "org_bambi_mars",
+		employerKey: "ownerMars",
+		seekerKey: "seekerH",
+		teamId: null,
+		rating: 3,
+		reviewBody: "초보라 걱정했는데 교육이 있어서 적응했어요. 다소 바빴습니다.",
+		messages: [
+			{
+				senderKey: "seekerH",
+				body: "초보 환영 서버 지원합니다. 처음이라 떨려요.",
+			},
+			{
+				senderKey: "ownerMars",
+				body: "교육 후 시작하니 편하게 지원하세요. 친절히 안내드릴게요.",
+			},
+		],
+	},
+];
 
 const assertDevPasswordWorks = async (devUser: DevUser): Promise<void> => {
 	try {
@@ -835,12 +1908,398 @@ const seedConversation = async (
 		});
 };
 
+const seedRichOrganizations = async (
+	userIds: Record<DevUserKey, string>,
+	now: Date
+): Promise<void> => {
+	await db
+		.insert(organization)
+		.values(
+			richOrganizations.map((org) => ({
+				id: org.id,
+				name: org.name,
+				slug: org.slug,
+				logo: null,
+				metadata: JSON.stringify({ seed: "bambi-dev" }),
+				createdAt: now,
+			}))
+		)
+		.onConflictDoUpdate({
+			target: organization.id,
+			set: { metadata: JSON.stringify({ seed: "bambi-dev" }) },
+		});
+
+	for (const org of richOrganizations) {
+		await db
+			.insert(member)
+			.values({
+				id: org.memberId,
+				organizationId: org.id,
+				userId: userIds[org.ownerKey],
+				role: "owner",
+				createdAt: now,
+			})
+			.onConflictDoUpdate({
+				target: member.id,
+				set: {
+					organizationId: org.id,
+					userId: userIds[org.ownerKey],
+					role: "owner",
+				},
+			});
+
+		await db
+			.insert(employerOrganizationProfile)
+			.values({
+				id: org.profileId,
+				organizationId: org.id,
+				displayName: org.name,
+				businessRegistrationNumber: org.businessRegistrationNumber,
+				verificationStatus: "verified",
+				verificationNote: "개발 seed 인증 사업장",
+			})
+			.onConflictDoUpdate({
+				target: employerOrganizationProfile.organizationId,
+				set: {
+					displayName: org.name,
+					businessRegistrationNumber: org.businessRegistrationNumber,
+					verificationStatus: "verified",
+					verificationNote: "개발 seed 인증 사업장",
+					updatedAt: now,
+				},
+			});
+	}
+};
+
+const buildRichJobRow = (
+	def: RichJobDef,
+	userIds: Record<DevUserKey, string>
+): SeedJobPost => {
+	const id = richId("2a2a2a2a", def.n);
+	const beginnerBlock = def.beginner
+		? [
+				{
+					id: `${id}-c`,
+					text: "초보자도 친절하게 안내해 드려요.",
+					type: "callout" as const,
+				},
+			]
+		: [];
+
+	return {
+		id,
+		organizationId: def.org,
+		teamId: null,
+		createdByUserId: userIds[def.ownerKey],
+		status: def.status,
+		industryCategory: def.category,
+		region: def.region,
+		payAmount: def.pay,
+		payUnit: def.unit,
+		workSchedule: def.schedule,
+		title: def.title,
+		description: def.desc,
+		descriptionBlocks: [
+			{ id: `${id}-h`, text: "주요 업무", type: "heading" as const },
+			{ id: `${id}-p`, text: def.desc, type: "paragraph" as const },
+			...beginnerBlock,
+		],
+		interviewNotes: "면접 일정은 밤비 채팅에서 확정합니다.",
+		rejectionReason: def.rejectionReason ?? null,
+		riskFlags: def.status === "pending_review" ? ["needs_review"] : [],
+		publishedAt: def.status === "published" ? jobPublishedAt(def.n) : null,
+	};
+};
+
+const seedRichJobs = async (
+	userIds: Record<DevUserKey, string>,
+	now: Date
+): Promise<void> => {
+	const jobIds = richJobs.map((def) => richId("2a2a2a2a", def.n));
+
+	await db
+		.delete(jobPerformanceEvent)
+		.where(inArray(jobPerformanceEvent.jobPostId, jobIds));
+	await db.delete(jobPostMedia).where(inArray(jobPostMedia.jobPostId, jobIds));
+
+	const jobRows = richJobs.map((def) => buildRichJobRow(def, userIds));
+
+	await db
+		.insert(jobPost)
+		.values(jobRows)
+		.onConflictDoUpdate({ target: jobPost.id, set: { updatedAt: now } });
+
+	for (const row of jobRows) {
+		const { id, ...rest } = row;
+		await db
+			.update(jobPost)
+			.set({ ...rest, updatedAt: now })
+			.where(eq(jobPost.id, id));
+	}
+
+	const mediaRows = richJobs
+		.filter((def) => def.status === "published")
+		.map((def) => ({
+			id: richId("9a9a9a9a", def.n),
+			jobPostId: richId("2a2a2a2a", def.n),
+			organizationId: def.org,
+			uploadedByUserId: userIds[def.ownerKey],
+			usage: "cover" as const,
+			position: 0,
+			fileName: `${def.org}-${def.n}-cover.jpg`,
+			mimeType: "image/jpeg",
+			byteSize: 480_000,
+			storageKey: `bambi-job-post-media/${def.org}/seed/${def.n}-cover.jpg`,
+			altText: `${def.title} 대표 이미지`,
+		}));
+
+	if (mediaRows.length > 0) {
+		await db.insert(jobPostMedia).values(mediaRows);
+	}
+};
+
+type RichEvent = typeof jobPerformanceEvent.$inferInsert;
+
+const buildPromotionEvents = (
+	def: RichJobDef,
+	userIds: Record<DevUserKey, string>,
+	startSeq: number
+): RichEvent[] => {
+	const jobPostId = richId("2a2a2a2a", def.n);
+	const isPremium = def.promo === "premium";
+	const events: RichEvent[] = [];
+	let seq = startSeq;
+
+	const impressions = isPremium ? 14 : 8;
+	for (let k = 0; k < impressions; k++) {
+		events.push({
+			id: richId("6a6a6a6a", seq),
+			jobPostId,
+			organizationId: def.org,
+			actorUserId: null,
+			eventType: "impression",
+			createdAt: new Date(
+				`2026-06-${(20 + (k % 8)).toString().padStart(2, "0")}T${(8 + (k % 10)).toString().padStart(2, "0")}:15:00.000Z`
+			),
+		});
+		seq++;
+	}
+
+	const detailViews = isPremium ? 5 : 3;
+	for (let k = 0; k < detailViews; k++) {
+		events.push({
+			id: richId("6a6a6a6a", seq),
+			jobPostId,
+			organizationId: def.org,
+			actorUserId: userIds.seeker,
+			eventType: "detail_view",
+			createdAt: new Date(
+				`2026-06-${(21 + (k % 6)).toString().padStart(2, "0")}T13:${(10 + k).toString().padStart(2, "0")}:00.000Z`
+			),
+		});
+		seq++;
+	}
+
+	events.push({
+		id: richId("6a6a6a6a", seq),
+		jobPostId,
+		organizationId: def.org,
+		actorUserId: userIds.seekerB,
+		eventType: "chat_start",
+		createdAt: new Date("2026-06-24T15:00:00.000Z"),
+	});
+	seq++;
+
+	if (isPremium) {
+		events.push({
+			id: richId("6a6a6a6a", seq),
+			jobPostId,
+			organizationId: def.org,
+			actorUserId: userIds.seekerB,
+			eventType: "contact_reveal",
+			createdAt: new Date("2026-06-25T16:00:00.000Z"),
+		});
+	}
+
+	return events;
+};
+
+const seedRichPromotions = async (
+	userIds: Record<DevUserKey, string>,
+	now: Date
+): Promise<void> => {
+	const promotedJobs = richJobs.filter((def) => def.promo);
+	const eventRows: RichEvent[] = [];
+
+	for (const def of promotedJobs) {
+		const tier = def.promo as "premium" | "recommended" | "standard";
+		const isPremium = tier === "premium";
+
+		await db
+			.insert(jobPromotionCampaign)
+			.values({
+				id: richId("8a8a8a8a", def.n),
+				jobPostId: richId("2a2a2a2a", def.n),
+				organizationId: def.org,
+				tier,
+				status: "active",
+				startsAt: new Date("2026-06-20T09:00:00.000Z"),
+				endsAt: new Date("2026-07-20T09:00:00.000Z"),
+				manualBoostsTotal: isPremium ? 5 : 3,
+				manualBoostsUsed: isPremium ? 2 : 0,
+				autoBoostsPerDay: isPremium ? 1 : 0,
+				lastBoostedAt: isPremium ? new Date("2026-06-26T08:00:00.000Z") : null,
+			})
+			.onConflictDoUpdate({
+				target: jobPromotionCampaign.id,
+				set: {
+					tier,
+					status: "active",
+					endsAt: new Date("2026-07-20T09:00:00.000Z"),
+					updatedAt: now,
+				},
+			});
+
+		eventRows.push(...buildPromotionEvents(def, userIds, eventRows.length + 1));
+	}
+
+	if (eventRows.length > 0) {
+		await db.insert(jobPerformanceEvent).values(eventRows);
+	}
+};
+
+const seedRichConversations = async (
+	userIds: Record<DevUserKey, string>,
+	now: Date
+): Promise<void> => {
+	const roomIds = richRooms.map((room) => richId("3a3a3a3a", room.n));
+
+	await db.delete(review).where(inArray(review.chatRoomId, roomIds));
+	await db.delete(chatMessage).where(inArray(chatMessage.chatRoomId, roomIds));
+
+	for (const room of richRooms) {
+		const roomId = richId("3a3a3a3a", room.n);
+
+		await db
+			.insert(chatRoom)
+			.values({
+				id: roomId,
+				jobPostId: room.jobPostId,
+				organizationId: room.organizationId,
+				teamId: room.teamId,
+				employerUserId: userIds[room.employerKey],
+				jobSeekerUserId: userIds[room.seekerKey],
+				isBlocked: false,
+			})
+			.onConflictDoUpdate({
+				target: chatRoom.id,
+				set: { isBlocked: false, updatedAt: now },
+			});
+
+		const messageRows = room.messages.map((message, index) => ({
+			id: richId("4a4a4a4a", room.n * 100 + index),
+			chatRoomId: roomId,
+			senderUserId: userIds[message.senderKey],
+			body: message.body,
+			riskFlags: [] as string[],
+			createdAt: new Date(
+				`2026-06-${(15 + room.n).toString().padStart(2, "0")}T0${index}:30:00.000Z`
+			),
+		}));
+		await db.insert(chatMessage).values(messageRows);
+
+		await db.insert(review).values({
+			id: richId("5a5a5a5a", room.n),
+			jobPostId: room.jobPostId,
+			organizationId: room.organizationId,
+			chatRoomId: roomId,
+			reviewerUserId: userIds[room.seekerKey],
+			rating: room.rating,
+			body: room.reviewBody,
+			status: "published",
+			riskFlags: [],
+		});
+	}
+};
+
+const seedRichReports = async (
+	userIds: Record<DevUserKey, string>,
+	now: Date
+): Promise<void> => {
+	await db
+		.insert(report)
+		.values([
+			{
+				id: richId("7a7a7a7a", 1),
+				reporterUserId: userIds.seekerC,
+				targetType: "job_post",
+				targetId: richId("2a2a2a2a", 16),
+				reason: "고수익 보장 문구가 의심됩니다",
+				details: "반려된 공고에 대한 추가 신고 샘플입니다.",
+				status: "reviewing",
+			},
+			{
+				id: richId("7a7a7a7a", 2),
+				reporterUserId: userIds.seekerB,
+				targetType: "chat_message",
+				targetId: richId("4a4a4a4a", 500),
+				reason: "외부 메신저 유도 의심",
+				details: "개발 seed용 채팅 신고 샘플입니다.",
+				status: "open",
+			},
+			{
+				id: richId("7a7a7a7a", 3),
+				reporterUserId: userIds.seekerF,
+				targetType: "review",
+				targetId: richId("5a5a5a5a", 9),
+				reason: "허위 후기로 의심됩니다",
+				details: "리뷰 신고 샘플입니다. 운영팀 확인이 필요합니다.",
+				status: "open",
+			},
+			{
+				id: richId("7a7a7a7a", 4),
+				reporterUserId: userIds.seekerG,
+				targetType: "job_post",
+				targetId: richId("2a2a2a2a", 37),
+				reason: "사업장 인증 전 공고로 보입니다",
+				details: "검수 대기 공고에 대한 신고 샘플입니다.",
+				status: "reviewing",
+			},
+			{
+				id: richId("7a7a7a7a", 5),
+				reporterUserId: userIds.seekerH,
+				targetType: "user",
+				targetId: userIds.pendingOwner,
+				reason: "반복적인 부적절 응대 신고",
+				details: "이미 처리 완료된 신고 샘플입니다.",
+				status: "resolved",
+			},
+		])
+		.onConflictDoUpdate({
+			target: report.id,
+			set: { updatedAt: now },
+		});
+};
+
+const seedRichCatalog = async (
+	userIds: Record<DevUserKey, string>
+): Promise<void> => {
+	const now = new Date();
+
+	await seedRichOrganizations(userIds, now);
+	await seedRichJobs(userIds, now);
+	await seedRichPromotions(userIds, now);
+	await seedRichConversations(userIds, now);
+	await seedRichReports(userIds, now);
+};
+
 const main = async (): Promise<void> => {
 	const userIds = await seedUsers();
 	await seedOrganizations(userIds);
 	await seedEmployerProfiles();
 	await seedJobs(userIds);
 	await seedConversation(userIds);
+	await seedRichCatalog(userIds);
 
 	console.log("Bambi development seed completed.");
 	console.log(`Password for all dev accounts: ${DEV_PASSWORD}`);
@@ -849,6 +2308,9 @@ const main = async (): Promise<void> => {
 	}
 	console.log(`Verified organization: ${ids.lunaOrganization}`);
 	console.log(`Pending organization: ${ids.pendingOrganization}`);
+	console.log(
+		`Rich catalog: ${richOrganizations.length} extra orgs, ${richJobs.length} extra job posts, ${richRooms.length} chat rooms with reviews.`
+	);
 };
 
 main()
