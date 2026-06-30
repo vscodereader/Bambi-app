@@ -30,6 +30,7 @@ export interface MarketplaceFilters {
 	category: string;
 	minimumPay: number;
 	onlyBeginnerFriendly: boolean;
+	onlyToday: boolean;
 	onlyVerified: boolean;
 	query: string;
 	region: string;
@@ -39,6 +40,7 @@ export const DEFAULT_MARKETPLACE_FILTERS: MarketplaceFilters = {
 	category: "전체",
 	minimumPay: 0,
 	onlyBeginnerFriendly: false,
+	onlyToday: false,
 	onlyVerified: false,
 	query: "",
 	region: "전체",
@@ -95,6 +97,11 @@ function jobMatchesBeginner(job: Job): boolean {
 	return text.includes("초보");
 }
 
+function jobMatchesToday(job: Job): boolean {
+	const text = `${job.desc} ${job.pref} ${job.tags.join(" ")}`;
+	return text.includes("오늘 면접");
+}
+
 export function filterMarketplaceJobs(
 	jobs: Job[],
 	filters: MarketplaceFilters
@@ -113,6 +120,9 @@ export function filterMarketplaceJobs(
 			return false;
 		}
 		if (filters.onlyBeginnerFriendly && !jobMatchesBeginner(job)) {
+			return false;
+		}
+		if (filters.onlyToday && !jobMatchesToday(job)) {
 			return false;
 		}
 		return parsePayAmount(job.pay) >= filters.minimumPay;
