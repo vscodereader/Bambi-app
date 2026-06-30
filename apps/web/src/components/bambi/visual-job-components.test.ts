@@ -31,9 +31,9 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("추천 채용");
 		expect(source).toContain("전체 공고");
 		expect(source).toContain("<VisualJobCard");
-		// 모든 섹션이 콘텐츠 폭 기반 auto-fill 그리드를 공유해 카드가 좁아지지 않도록 보장
-		expect(source).toContain("auto-fill");
-		expect(source).toContain("minmax(340px,1fr)");
+		// 모든 섹션이 동일 반응형 그리드를 공유해 최대 4열까지 카드를 보여줌
+		expect(source).toContain("lg:grid-cols-3");
+		expect(source).toContain("2xl:grid-cols-4");
 	});
 
 	it("wires the seeker marketplace to visual exposure sections", () => {

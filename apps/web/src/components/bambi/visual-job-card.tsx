@@ -38,68 +38,64 @@ export function VisualJobCard({
 	return (
 		<article
 			className={cn(
-				"flex items-center gap-3 rounded-lg border bg-card p-3 transition-colors",
+				"flex flex-col gap-2 rounded-lg border bg-card p-2.5 transition-colors",
 				toneClassName[tone],
 				active && "border-coral-400 ring-2 ring-coral-100"
 			)}
 		>
 			<button
-				className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 border-none bg-transparent p-0 text-left"
+				className="flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
 				onClick={() => onOpen(job)}
 				type="button"
 			>
 				{job.coverImage ? (
 					<Image
 						alt={job.coverImage.altText || job.coverImage.fileName}
-						className="size-20 shrink-0 rounded-md border border-white object-cover"
-						height={80}
+						className="h-24 w-full rounded-md border border-white object-cover"
+						height={96}
 						src={job.coverImage.url}
 						unoptimized
-						width={80}
+						width={320}
 					/>
 				) : (
-					<div className="flex size-20 shrink-0 items-center justify-center rounded-md border border-white bg-secondary font-extrabold text-coral-700 text-sm">
+					<div className="flex h-24 w-full items-center justify-center rounded-md border border-white bg-secondary font-extrabold text-coral-700 text-lg">
 						{job.company.slice(0, 2)}
 					</div>
 				)}
-				<div className="flex min-w-0 flex-1 flex-col gap-1">
-					<div className="flex flex-wrap items-center gap-1">
-						<Badge tone="pending">
-							{job.promotionLabel ?? toneLabel[tone]}
+				<div className="flex flex-wrap items-center gap-1">
+					<Badge tone="pending">{job.promotionLabel ?? toneLabel[tone]}</Badge>
+					{job.verified ? (
+						<Badge tone="success">
+							<span className="inline-flex size-3">
+								<CheckIcon />
+							</span>
+							검수
 						</Badge>
-						{job.verified ? (
-							<Badge tone="success">
-								<span className="inline-flex size-3">
-									<CheckIcon />
-								</span>
-								검수
-							</Badge>
-						) : null}
-					</div>
-					<h3 className="m-0 line-clamp-2 font-extrabold text-sm leading-snug">
-						{job.company} {job.title}
-					</h3>
+					) : null}
+				</div>
+				<h3 className="m-0 line-clamp-2 font-extrabold text-sm leading-snug">
+					{job.company} {job.title}
+				</h3>
+				<div className="flex flex-col gap-1 text-xs">
 					<span className="truncate font-bold text-foreground text-sm">
 						{job.pay}
 					</span>
-					<div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-muted-foreground text-xs">
-						<span className="inline-flex min-w-0 items-center gap-1">
-							<span className="inline-flex size-3">
-								<MapPinIcon />
-							</span>
-							<span className="truncate">{job.location}</span>
+					<span className="flex min-w-0 items-center gap-1 text-muted-foreground">
+						<span className="inline-flex size-3 shrink-0">
+							<MapPinIcon />
 						</span>
-						<span className="inline-flex items-center gap-1">
-							<span className="inline-flex size-3">
-								<ShieldIcon />
-							</span>
-							연락처 보호
+						<span className="truncate">{job.location}</span>
+					</span>
+					<span className="flex items-center gap-1 text-muted-foreground">
+						<span className="inline-flex size-3 shrink-0">
+							<ShieldIcon />
 						</span>
-					</div>
+						연락처 보호
+					</span>
 				</div>
 			</button>
 			<Button
-				className="h-8 shrink-0 justify-center"
+				className="mt-auto h-8 justify-center"
 				onClick={() => onChat(job)}
 				rightIcon={<Message />}
 				size="sm"
