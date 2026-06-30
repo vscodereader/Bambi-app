@@ -39,7 +39,12 @@ export function ResponsiveAppShell({
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
 				<header className="sticky top-0 z-30 hidden border-border border-b bg-background/95 backdrop-blur md:block">
-					<div className="mx-auto flex h-16 max-w-[1180px] items-center gap-7 px-6">
+					<div
+						className={cn(
+							"mx-auto flex h-16 items-center gap-7 px-6",
+							isPublic ? "max-w-7xl" : "max-w-[1180px]"
+						)}
+					>
 						<Link aria-label="밤비 홈" className="no-underline" href="/">
 							<Logo lang="ko" size="md" />
 						</Link>
