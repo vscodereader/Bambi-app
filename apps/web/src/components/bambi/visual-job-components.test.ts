@@ -47,6 +47,21 @@ describe("visual job marketplace components", () => {
 		// 로그인 마켓플레이스도 공개 홈과 동일하게 80% 폭, 히어로 카피 제거
 		expect(source).toContain("max-w-[80%]");
 		expect(source).not.toContain("조건에 맞는 안전한 자리를 찾아요");
+		// 검색은 헤더(SeekerAppShell)와 필터를 공유하고, 본문 검색은 모바일 전용
+		expect(source).toContain("useSeekerFilters");
+		expect(source).toContain('searchFieldClassName="md:hidden"');
+	});
+
+	it("hosts the seeker marketplace search in the shared header only on /seeker", () => {
+		const source = readComponent("seeker-app-shell.tsx");
+
+		expect(source).toContain("export function SeekerAppShell");
+		expect(source).toContain("useSeekerFilters");
+		expect(source).toContain('pathname === "/seeker"');
+		// 마켓플레이스에서만 헤더에 검색창을 끼운다
+		expect(source).toContain(
+			"headerSlot={isMarketplace ? <SeekerHeaderSearch />"
+		);
 	});
 
 	it("wires the public marketplace to visual exposure sections", () => {

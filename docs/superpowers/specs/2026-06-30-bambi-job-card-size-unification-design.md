@@ -218,6 +218,22 @@ max-w-[min(92dvw,1600px)]
 - **히어로 제거:** `seeker-marketplace.tsx`의 인트로 블록(익명 보호 중 배지 + "조건에 맞는 안전한
   자리를 찾아요" h1 + 설명)을 삭제하고 미사용 `Badge`/`ShieldIcon` import 정리. 탐색 탭(전체/지역별/
   업종별 등)과 검색은 유지.
-- **검색창:** 사용자 결정에 따라 구직자 화면 검색창은 **본문 상단에 유지**한다. 구직자 상단 헤더는
-  `/seeker/chats`·`/seeker/me`와 공유되므로 검색을 헤더로 옮기면 다른 페이지에도 노출되거나 별도
-  context 작업이 필요해, 폭·히어로·카드만 공개 홈과 통일하고 검색 위치는 본문으로 둔다.
+- **검색창:** (8.8 시점) 본문 상단 유지. → 8.9에서 헤더로 이동.
+
+### 8.9 재조정 (2026-06-30) — 로그인 검색창도 헤더로 이동
+
+사용자 요청에 따라 구직자(로그인) 마켓플레이스 검색창도 공개 홈과 동일하게 헤더의 `연락처 보호`
+**왼쪽**으로 옮긴다. 다만 구직자 헤더는 `/seeker/chats`·`/seeker/me`와 공유되므로, 마켓플레이스
+(`/seeker`)에서만 검색이 노출되도록 한다.
+
+- **공유 필터 컨텍스트:** 새 client 컴포넌트 `seeker-app-shell.tsx`에 `SeekerAppShell`을 두고,
+  `MarketplaceFilters` 상태(`filters`/`setFilters`)를 `SeekerFiltersContext`로 제공한다. 헤더 검색
+  입력(`SeekerHeaderSearch`)과 본문(`SeekerMarketplaceScreen`)이 **같은 필터 상태**를 읽고 써서
+  입력 포커스/동기화 문제가 없다(노드를 state로 넘기지 않음).
+- **라우트 스코프:** `SeekerAppShell`이 `usePathname()`으로 `pathname === "/seeker"`일 때만
+  `ResponsiveAppShell`의 `headerSlot`에 검색을 끼운다. 채팅·내정보 페이지에는 검색이 뜨지 않는다.
+- **레이아웃 연결:** `app/seeker/layout.tsx`가 `ResponsiveAppShell` 직접 사용 대신 `SeekerAppShell`로
+  감싼다. `SeekerMarketplaceScreen`은 로컬 `useState` 필터를 제거하고 `useSeekerFilters()`를 쓴다.
+- **모바일:** 데스크톱 헤더는 모바일에서 숨겨지므로 본문 `MarketplaceSearch`에
+  `searchFieldClassName="md:hidden"`을 줘 검색 입력은 모바일에만, 빠른 필터 칩은 항상 노출한다
+  (공개 홈과 동일 패턴).

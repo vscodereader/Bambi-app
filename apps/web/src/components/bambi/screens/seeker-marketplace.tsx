@@ -5,17 +5,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMarketplaceJobs } from "@/lib/bambi/api-jobs";
 import { JOBS } from "@/lib/bambi/data";
-import {
-	DEFAULT_MARKETPLACE_FILTERS,
-	getSelectedMarketplaceJob,
-	type MarketplaceFilters,
-} from "@/lib/bambi/marketplace";
+import { getSelectedMarketplaceJob } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
 import {
 	MarketplaceFilterSidebar,
 	MarketplaceSearch,
 	SelectedJobPanel,
 } from "../marketplace";
+import { useSeekerFilters } from "../seeker-app-shell";
 import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 
 const discoveryTabs = [
@@ -31,9 +28,8 @@ type DiscoveryTabId = (typeof discoveryTabs)[number]["id"];
 export function SeekerMarketplaceScreen() {
 	const router = useRouter();
 	const [discoveryTabId, setDiscoveryTabId] = useState<DiscoveryTabId>("all");
-	const [filters, setFilters] = useState<MarketplaceFilters>(
-		DEFAULT_MARKETPLACE_FILTERS
-	);
+	// 필터는 헤더 검색창과 공유하기 위해 SeekerAppShell 컨텍스트에서 가져온다
+	const { filters, setFilters } = useSeekerFilters();
 	const [selectedJobId, setSelectedJobId] = useState(JOBS[0]?.id);
 	const { isApiBacked, isError, jobs, refetch, sections } =
 		useMarketplaceJobs(filters);
@@ -73,7 +69,11 @@ export function SeekerMarketplaceScreen() {
 							</button>
 						))}
 					</div>
-					<MarketplaceSearch filters={filters} onChange={setFilters} />
+					<MarketplaceSearch
+						filters={filters}
+						onChange={setFilters}
+						searchFieldClassName="md:hidden"
+					/>
 				</div>
 				{isError ? (
 					<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
