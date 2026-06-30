@@ -44,6 +44,9 @@ describe("visual job marketplace components", () => {
 
 		expect(source).toContain("VisualJobExposureSections");
 		expect(source).not.toContain("<JobList");
+		// 로그인 마켓플레이스도 공개 홈과 동일하게 80% 폭, 히어로 카피 제거
+		expect(source).toContain("max-w-[80%]");
+		expect(source).not.toContain("조건에 맞는 안전한 자리를 찾아요");
 	});
 
 	it("wires the public marketplace to visual exposure sections", () => {

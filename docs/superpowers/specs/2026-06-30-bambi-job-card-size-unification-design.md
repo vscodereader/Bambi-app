@@ -203,3 +203,21 @@ max-w-[min(92dvw,1600px)]
 
 `pnpm exec vitest run .../visual-job-components.test.ts`(80% 폭·3열·최신 배지·헤더 검색·히어로 제거
 회귀 가드 갱신) 6개 통과, `pnpm --filter web check-types`, `pnpm --filter web build`, ultracite lint 모두 통과.
+
+### 8.8 재조정 (2026-06-30) — 로그인(구직자) 마켓플레이스 동일 적용
+
+8.7은 공개 홈(`/`, `PublicMarketplaceScreen`, `variant="public"`)에만 반영됐다. 로그인 후 보이는
+구직자 마켓플레이스(`/seeker`, `SeekerMarketplaceScreen`, `app/seeker/layout.tsx`의 `variant="seeker"`)는
+별도 화면·레이아웃이라 폭(`max-w-[1180px]`)·자체 히어로 블록이 남아 요구사항이 반영되지 않았다.
+(3열 그리드·최신 배지는 공유 컴포넌트 `VisualJobExposureSections`/`VisualJobCard`라 이미 적용됨.)
+
+- **폭 80%:** `responsive-shell.tsx`에서 `isPublic` 단독 분기를 `isWideMarketplace = isPublic ||
+  variant === "seeker"`로 확장해 public·seeker 헤더를 모두 `max-w-[80%]`로. (employer/moderator는
+  `max-w-[1180px]` 유지.) `seeker-marketplace.tsx` 본문도 `max-w-[1180px]` → `max-w-[80%]`로 맞춰
+  헤더와 정렬.
+- **히어로 제거:** `seeker-marketplace.tsx`의 인트로 블록(익명 보호 중 배지 + "조건에 맞는 안전한
+  자리를 찾아요" h1 + 설명)을 삭제하고 미사용 `Badge`/`ShieldIcon` import 정리. 탐색 탭(전체/지역별/
+  업종별 등)과 검색은 유지.
+- **검색창:** 사용자 결정에 따라 구직자 화면 검색창은 **본문 상단에 유지**한다. 구직자 상단 헤더는
+  `/seeker/chats`·`/seeker/me`와 공유되므로 검색을 헤더로 옮기면 다른 페이지에도 노출되거나 별도
+  context 작업이 필요해, 폭·히어로·카드만 공개 홈과 통일하고 검색 위치는 본문으로 둔다.
