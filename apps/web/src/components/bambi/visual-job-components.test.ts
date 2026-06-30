@@ -48,8 +48,8 @@ describe("visual job marketplace components", () => {
 
 		expect(source).toContain("VisualJobExposureSections");
 		expect(source).not.toContain("<JobList");
-		// 본문 컨테이너는 고정폭이 아닌 유동 폭(뷰포트 비례, 상한 1600px)을 사용
-		expect(source).toContain("max-w-[min(92dvw,1600px)]");
+		// 본문 컨테이너는 고정폭이 아닌 유동 폭(뷰포트 비례)을 사용하며 헤더와 동일하게 맞춘다
+		expect(source).toContain("max-w-[90%]");
 	});
 
 	it("defines employer listing preview with cover fallback and preview copy", () => {
