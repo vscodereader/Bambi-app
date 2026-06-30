@@ -643,7 +643,7 @@ Expected: all commands pass.
 
 - Modify: `apps/web/src/components/bambi/screens/public-marketplace.tsx`
 
-- [ ] **Step 1: Inspect current public marketplace screen**
+- [x] **Step 1: Inspect current public marketplace screen**
 
 Run:
 
@@ -653,7 +653,7 @@ sed -n '1,260p' apps/web/src/components/bambi/screens/public-marketplace.tsx
 
 Expected: `PublicMarketplaceScreen` renders the public home job discovery surface and currently imports `JobList` from `marketplace.tsx`.
 
-- [ ] **Step 2: Reuse the same visual exposure surface**
+- [x] **Step 2: Reuse the same visual exposure surface**
 
 Modify `apps/web/src/components/bambi/screens/public-marketplace.tsx`:
 
@@ -671,7 +671,7 @@ Modify `apps/web/src/components/bambi/screens/public-marketplace.tsx`:
 
 Keep `apps/web/src/app/page.tsx` unchanged unless its only import path changes. The first screen should remain actual job discovery, not a new marketing landing page.
 
-- [ ] **Step 3: Browser smoke public home**
+- [x] **Step 3: Browser smoke public home**
 
 Start dev servers if needed:
 
@@ -912,4 +912,10 @@ git commit -m "feat: 채용정보 시각 노출 UI 개선" \
   - Added `apps/web/src/components/bambi/visual-job-exposure-sections.tsx`.
   - Replaced `/seeker` marketplace `JobList` rendering with `VisualJobExposureSections`.
   - Kept `JobList` in `marketplace.tsx` because `PublicMarketplaceScreen` still uses it before Task 4.
+  - Post-task verification passed: `pnpm vitest run apps/web/src/components/bambi/visual-job-components.test.ts apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `git diff --check`.
+- 2026-06-30 Task 4 completed:
+  - Extended `apps/web/src/components/bambi/visual-job-components.test.ts` and verified RED while public marketplace still used `JobList`.
+  - Replaced public home marketplace `JobList` rendering with `VisualJobExposureSections`.
+  - Verified public home with Playwright at `http://localhost:23001/`; snapshot showed `스페셜 채용`, `급구 채용`, `추천 채용`, and `전체 공고`.
+  - Console output only showed React DevTools and HMR informational messages.
   - Post-task verification passed: `pnpm vitest run apps/web/src/components/bambi/visual-job-components.test.ts apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `git diff --check`.

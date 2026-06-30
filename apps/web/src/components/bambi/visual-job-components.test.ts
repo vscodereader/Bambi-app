@@ -48,4 +48,11 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("VisualJobExposureSections");
 		expect(source).not.toContain("<JobList");
 	});
+
+	it("wires the public marketplace to visual exposure sections", () => {
+		const source = readComponent("screens/public-marketplace.tsx");
+
+		expect(source).toContain("VisualJobExposureSections");
+		expect(source).not.toContain("<JobList");
+	});
 });

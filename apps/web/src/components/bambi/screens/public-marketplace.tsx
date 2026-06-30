@@ -12,12 +12,12 @@ import type { Job } from "@/lib/bambi/types";
 import { Badge, Button } from "../ds";
 import { ShieldIcon } from "../icons";
 import {
-	JobList,
 	MarketplaceFilterSidebar,
 	MarketplaceSearch,
 	SelectedJobPanel,
 } from "../marketplace";
 import { ResponsiveAppShell } from "../responsive-shell";
+import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 
 export function PublicMarketplaceScreen() {
 	const router = useRouter();
@@ -86,7 +86,7 @@ export function PublicMarketplaceScreen() {
 							{jobs.length}개{isApiBacked ? " · 실시간" : ""}
 						</span>
 					</div>
-					<JobList
+					<VisualJobExposureSections
 						jobs={jobs}
 						onChat={startChat}
 						onOpen={openJob}
