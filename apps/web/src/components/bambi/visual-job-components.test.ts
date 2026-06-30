@@ -13,7 +13,9 @@ describe("visual job marketplace components", () => {
 		const source = readComponent("visual-job-card.tsx");
 
 		expect(source).toContain("export function VisualJobCard");
-		expect(source).toContain('tone: "recommended" | "special" | "urgent"');
+		expect(source).toContain(
+			'tone: "organic" | "recommended" | "special" | "urgent"'
+		);
 		expect(source).toContain("연락처 보호");
 		expect(source).toContain("job.promotionLabel ?? toneLabel[tone]");
 		expect(source).toContain("rightIcon={<Message />}");

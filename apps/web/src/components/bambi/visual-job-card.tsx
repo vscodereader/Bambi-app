@@ -7,25 +7,29 @@ import { Badge, Button } from "./ds";
 import { CheckIcon, MapPinIcon, Message, ShieldIcon } from "./icons";
 
 interface VisualJobCardProps {
+	active?: boolean;
 	job: Job;
 	onChat: (job: Job) => void;
 	onOpen: (job: Job) => void;
-	tone: "recommended" | "special" | "urgent";
+	tone: "organic" | "recommended" | "special" | "urgent";
 }
 
 const toneClassName = {
+	organic: "border-border bg-card",
 	recommended: "border-sky-200 bg-sky-50/50",
 	special: "border-coral-200 bg-coral-50/70",
 	urgent: "border-amber-200 bg-amber-50/70",
 } as const;
 
 const toneLabel = {
+	organic: "최신",
 	recommended: "추천",
 	special: "스페셜",
 	urgent: "급구",
 } as const;
 
 export function VisualJobCard({
+	active = false,
 	job,
 	onChat,
 	onOpen,
@@ -35,7 +39,8 @@ export function VisualJobCard({
 		<article
 			className={cn(
 				"grid min-h-[148px] rounded-lg border bg-card p-2.5 transition-colors",
-				toneClassName[tone]
+				toneClassName[tone],
+				active && "border-coral-400 ring-2 ring-coral-100"
 			)}
 		>
 			<button
