@@ -574,11 +574,13 @@ export function SeekerMe() {
 				</h1>
 			</div>
 			<div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-[18px] overflow-y-auto px-5 py-4 md:max-w-[80%] md:px-6">
-				<div className="flex items-center gap-[14px] rounded-[18px] bg-ink-800 p-[18px]">
+				<div className="flex items-center gap-[14px] rounded-[18px] border border-primary p-[18px]">
 					<Avatar name="김하늘" ring size="lg" />
 					<div className="flex-1">
-						<div className="font-extrabold text-[18px] text-white">김하늘</div>
-						<div className="mt-0.5 text-[13px] text-[color:var(--text-on-dark-muted)]">
+						<div className="font-extrabold text-[18px] text-foreground">
+							김하늘
+						</div>
+						<div className="mt-0.5 text-[13px] text-muted-foreground">
 							구직자 · 강남 활동
 						</div>
 					</div>
