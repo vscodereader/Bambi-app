@@ -55,4 +55,28 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("VisualJobExposureSections");
 		expect(source).not.toContain("<JobList");
 	});
+
+	it("defines employer listing preview with cover fallback and preview copy", () => {
+		const source = readComponent("employer-listing-preview.tsx");
+
+		expect(source).toContain("export function EmployerListingPreview");
+		expect(source).toContain("목록 노출 미리보기");
+		expect(source).toContain("대표 이미지 반영");
+		expect(source).toContain("coverImageUrl");
+		expect(source).toContain("displayCompanyName");
+	});
+
+	it("wires employer create and edit pages to listing preview", () => {
+		const newSource = readComponent("../../app/employer/new/page.tsx");
+		const editSource = readComponent(
+			"../../app/employer/jobs/[id]/edit/page.tsx"
+		);
+
+		expect(newSource).toContain("EmployerListingPreview");
+		expect(newSource).toContain("previewPay");
+		expect(newSource).toContain("previewCompanyName");
+		expect(editSource).toContain("EmployerListingPreview");
+		expect(editSource).toContain("previewPay");
+		expect(editSource).toContain("previewCompanyName");
+	});
 });

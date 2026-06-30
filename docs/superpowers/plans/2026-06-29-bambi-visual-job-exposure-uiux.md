@@ -696,7 +696,7 @@ Expected: public home renders job discovery with visual exposure sections or int
 - Modify: `apps/web/src/app/employer/new/page.tsx`
 - Modify: `apps/web/src/app/employer/jobs/[id]/edit/page.tsx`
 
-- [ ] **Step 1: Create listing preview component**
+- [x] **Step 1: Create listing preview component**
 
 Create `apps/web/src/components/bambi/employer-listing-preview.tsx`:
 
@@ -760,7 +760,7 @@ export function EmployerListingPreview({
 }
 ```
 
-- [ ] **Step 2: Wire preview into create page**
+- [x] **Step 2: Wire preview into create page**
 
 Inspect form state in `apps/web/src/app/employer/new/page.tsx`. Render `EmployerListingPreview` near the media uploader using the current title, region, pay amount/unit, and selected cover preview URL.
 
@@ -771,11 +771,11 @@ const previewPay =
 	form.payAmount > 0 ? `${form.payUnit} ${form.payAmount.toLocaleString("ko-KR")}원` : "";
 ```
 
-- [ ] **Step 3: Wire preview into edit page**
+- [x] **Step 3: Wire preview into edit page**
 
 Inspect form state in `apps/web/src/app/employer/jobs/[id]/edit/page.tsx`. Render `EmployerListingPreview` with existing cover image URL when no new local cover preview is selected.
 
-- [ ] **Step 4: Run Web checks**
+- [x] **Step 4: Run Web checks**
 
 Run:
 
@@ -918,4 +918,10 @@ git commit -m "feat: 채용정보 시각 노출 UI 개선" \
   - Replaced public home marketplace `JobList` rendering with `VisualJobExposureSections`.
   - Verified public home with Playwright at `http://localhost:23001/`; snapshot showed `스페셜 채용`, `급구 채용`, `추천 채용`, and `전체 공고`.
   - Console output only showed React DevTools and HMR informational messages.
+  - Post-task verification passed: `pnpm vitest run apps/web/src/components/bambi/visual-job-components.test.ts apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `git diff --check`.
+- 2026-06-30 Task 5 completed:
+  - Extended `apps/web/src/components/bambi/visual-job-components.test.ts` and verified RED for missing `EmployerListingPreview` plus unconnected create/edit pages.
+  - Added `apps/web/src/components/bambi/employer-listing-preview.tsx` with cover image, fallback initials, title, region, and pay preview.
+  - Wired `/employer/new` to preview the selected posting scope, current title/region/pay, and local cover image.
+  - Wired `/employer/jobs/[id]/edit` to preview the current title/region/pay and existing or newly selected cover image through the local job media route.
   - Post-task verification passed: `pnpm vitest run apps/web/src/components/bambi/visual-job-components.test.ts apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `git diff --check`.

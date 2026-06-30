@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { EmployerListingPreview } from "@/components/bambi/employer-listing-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { FieldError, FormError } from "@/components/bambi/form-message";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
@@ -62,6 +63,20 @@ const getPostingScopeLabel = (scope: PostingScope) => {
 	}
 
 	return `${scope.organizationDisplayName} / ${scope.teamDisplayName ?? scope.teamId}`;
+};
+
+const getPostingScopeDisplayName = (scope?: PostingScope) =>
+	scope?.teamDisplayName ?? scope?.organizationDisplayName ?? "검증 업체";
+
+const formatPreviewPay = ({
+	payAmount,
+	payUnit,
+}: Pick<JobForm, "payAmount" | "payUnit">): string => {
+	const numericPay = Number(payAmount);
+
+	return Number.isFinite(numericPay) && numericPay > 0
+		? `${payUnit} ${numericPay.toLocaleString("ko-KR")}원`
+		: "";
 };
 
 interface NewEmployerJobFormProps {
@@ -260,6 +275,11 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			}));
 		}
 	}, [postingScopeOptions, selectedPostingScope]);
+
+	const previewCompanyName = getPostingScopeDisplayName(
+		selectedPostingScope?.scope
+	);
+	const previewPay = formatPreviewPay(form);
 
 	const updatePostingScope = (value: string) => {
 		const nextScope = postingScopeOptions.find(
@@ -601,6 +621,14 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 						}));
 						setFormError(null);
 					}}
+				/>
+
+				<EmployerListingPreview
+					companyName={previewCompanyName}
+					coverImageUrl={media.cover?.previewUrl}
+					location={form.region}
+					pay={previewPay}
+					title={form.title}
 				/>
 
 				<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

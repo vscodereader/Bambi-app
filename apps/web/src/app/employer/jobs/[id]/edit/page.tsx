@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { EmployerListingPreview } from "@/components/bambi/employer-listing-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { FieldError, FormError } from "@/components/bambi/form-message";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
@@ -48,7 +49,61 @@ const getErrorCode = (error: Error | null): string | undefined =>
 		? error.code
 		: undefined;
 
+const isEditJobLoading = (sessionPending: boolean, jobLoading: boolean) =>
+	sessionPending || jobLoading;
+
+const needsLogin = ({
+	error,
+	isSignedIn,
+}: {
+	error: Error | null;
+	isSignedIn: boolean;
+}) => !isSignedIn || getErrorCode(error) === "UNAUTHORIZED";
+
 const getFieldErrorId = (field: keyof JobForm) => `${field}-error`;
+
+interface PostingScope {
+	organizationDisplayName: string;
+	organizationId: string;
+	scopeType: "organization" | "team";
+	teamDisplayName: null | string;
+	teamId: null | string;
+}
+
+const getPostingScopeDisplayName = (scope?: PostingScope) =>
+	scope?.teamDisplayName ?? scope?.organizationDisplayName ?? "검증 업체";
+
+const findPostingScope = (postingScopes: PostingScope[], form: JobForm) =>
+	postingScopes.find(
+		(scope) =>
+			scope.organizationId === form.organizationId &&
+			(scope.teamId ?? "") === form.teamId
+	);
+
+const formatPreviewPay = ({
+	payAmount,
+	payUnit,
+}: Pick<JobForm, "payAmount" | "payUnit">): string => {
+	const numericPay = Number(payAmount);
+
+	return Number.isFinite(numericPay) && numericPay > 0
+		? `${payUnit} ${numericPay.toLocaleString("ko-KR")}원`
+		: "";
+};
+
+const getLocalJobMediaPreviewUrl = (item: {
+	fileName: string;
+	storageKey: string;
+	usage: "cover" | "detail";
+}): string => {
+	const params = new URLSearchParams({
+		fileName: item.fileName,
+		key: item.storageKey,
+		usage: item.usage,
+	});
+
+	return `/bambi/local-job-media?${params.toString()}`;
+};
 
 const toJobFormMediaItem = (item: {
 	altText: string;
@@ -56,11 +111,13 @@ const toJobFormMediaItem = (item: {
 	fileName: string;
 	mimeType: string;
 	storageKey: string;
+	usage: "cover" | "detail";
 }): JobFormMediaItem => ({
 	altText: item.altText,
 	byteSize: item.byteSize,
 	fileName: item.fileName,
 	mimeType: item.mimeType,
+	previewUrl: getLocalJobMediaPreviewUrl(item),
 	storageKey: item.storageKey,
 });
 
@@ -88,6 +145,10 @@ export default function EditEmployerJobPage({
 		...orpc.bambi.jobs.getEditableById.queryOptions({ input: { id } }),
 		enabled: isSignedIn,
 	});
+	const mineQuery = useQuery({
+		...orpc.bambi.onboarding.getMine.queryOptions(),
+		enabled: isSignedIn,
+	});
 	const updateMutation = useMutation(
 		orpc.bambi.jobs.update.mutationOptions({
 			onError: (error) => {
@@ -112,6 +173,10 @@ export default function EditEmployerJobPage({
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
 	);
 	const job = jobQuery.data;
+	const postingScopes = mineQuery.data?.employerJobPostingScopes ?? [];
+	const selectedPostingScope = findPostingScope(postingScopes, form);
+	const previewCompanyName = getPostingScopeDisplayName(selectedPostingScope);
+	const previewPay = formatPreviewPay(form);
 
 	useEffect(() => {
 		if (!job) {
@@ -193,11 +258,11 @@ export default function EditEmployerJobPage({
 		}
 	};
 
-	if (session.isPending || jobQuery.isLoading) {
+	if (isEditJobLoading(session.isPending, jobQuery.isLoading)) {
 		return <Loader />;
 	}
 
-	if (!isSignedIn || getErrorCode(jobQuery.error) === "UNAUTHORIZED") {
+	if (needsLogin({ error: jobQuery.error, isSignedIn })) {
 		return (
 			<PageShell
 				description="공고 수정은 로그인 후 이용할 수 있습니다."
@@ -527,6 +592,14 @@ export default function EditEmployerJobPage({
 						}));
 						setFormError(null);
 					}}
+				/>
+
+				<EmployerListingPreview
+					companyName={previewCompanyName}
+					coverImageUrl={media.cover?.previewUrl}
+					location={form.region}
+					pay={previewPay}
+					title={form.title}
 				/>
 
 				<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
