@@ -427,13 +427,13 @@ export function EmployerMe() {
 				<h1 className="font-extrabold text-2xl text-foreground">매장 정보</h1>
 			</div>
 			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 py-4">
-				<div className="flex items-center gap-[14px] rounded-[18px] bg-ink-800 p-[18px]">
+				<div className="flex items-center gap-[14px] rounded-[18px] border border-primary p-[18px]">
 					<Avatar name="달밤 라운지" size="lg" square />
 					<div className="flex-1">
-						<div className="font-extrabold text-[18px] text-white">
+						<div className="font-extrabold text-[18px] text-foreground">
 							달밤 라운지
 						</div>
-						<div className="mt-0.5 text-[13px] text-[color:var(--text-on-dark-muted)]">
+						<div className="mt-0.5 text-[13px] text-muted-foreground">
 							구인자 · 강남
 						</div>
 					</div>
