@@ -2,7 +2,7 @@
 
 작성일: 2026-06-23
 
-갱신일: 2026-06-29
+갱신일: 2026-06-30
 
 ## 1. 프로젝트 방향
 
@@ -224,7 +224,7 @@ Native App은 Web 최종 기준선이 마련되었더라도 즉시 재개하지 
 
 다음 작업 방향은 Native App 재개가 아니라 새로 들어오는 Web 추가 기능과 디자인/UI·UX 개선이다. 구체 요구사항이 들어오면 기능 단위로 별도 plan을 작성하고, UI/UX 개선은 실제 화면 검증과 함께 진행한다.
 
-## 12. 신규 Web UI/UX 개선 후보
+## 12. 신규 Web UI/UX 개선 완료
 
 2026-06-29에 사용자가 Queenalba PC 웹 캡처를 제공했고, 고객이 첨부 자료처럼 채용정보를 더 강하게 노출하고 싶다는 요구를 전달했다.
 
@@ -236,4 +236,14 @@ Native App은 Web 최종 기준선이 마련되었더라도 즉시 재개하지 
 - [Visual Job Exposure UI/UX Design](./superpowers/specs/2026-06-29-bambi-visual-job-exposure-uiux-design.md)
 - [Visual Job Exposure UI/UX Implementation Plan](./superpowers/plans/2026-06-29-bambi-visual-job-exposure-uiux.md)
 
-권장 다음 작업은 `Visual Job Exposure UI/UX Implementation Plan`을 실행해 `/`와 `/seeker`의 채용정보 노출을 `스페셜`, `급구`, `추천`, `전체` 섹션 중심으로 재구성하는 것이다.
+2026-06-30에 `Visual Job Exposure UI/UX Implementation Plan`을 완료했다. `/`와 `/seeker`의 채용정보 노출은 `스페셜`, `급구`, `추천`, `전체` 섹션 중심으로 재구성되었고, promoted 공고는 compact visual card로, 일반 공고는 dense row로 표시된다.
+
+구인자 공고 등록/수정 화면에는 목록 노출 미리보기를 추가했다. 공고 제목, 지역, 급여, 대표 이미지가 marketplace 노출 형태에 가깝게 보이며, 수정 화면에서는 기존 대표 이미지도 미리보기로 확인된다.
+
+검증 결과:
+
+- `pnpm vitest run apps/web/src/lib/bambi/visual-job-exposure.test.ts` 통과
+- `pnpm run check-types` 통과
+- `pnpm run check` 통과
+- `pnpm --filter web build` 통과
+- Browser smoke 통과: `/`, `/seeker`, `/employer/new`, `/employer/jobs/22222222-2222-4222-8222-222222222201/edit`

@@ -794,7 +794,7 @@ Expected: both commands pass.
 - Modify: `docs/superpowers/plans/2026-06-23-bambi-post-mvp-roadmap.md`
 - Modify this plan with verification notes.
 
-- [ ] **Step 1: Run full Web verification**
+- [x] **Step 1: Run full Web verification**
 
 Run:
 
@@ -807,7 +807,7 @@ pnpm --filter web build
 
 Expected: all commands pass.
 
-- [ ] **Step 2: Browser smoke `/` and `/seeker`**
+- [x] **Step 2: Browser smoke `/` and `/seeker`**
 
 With local API and Web servers running, verify:
 
@@ -823,7 +823,7 @@ Expected:
 - Clicking a visual card opens the same job detail/selection behavior as existing cards.
 - Chat button routes to the same chat entry path as before.
 
-- [ ] **Step 3: Browser smoke employer create/edit preview**
+- [x] **Step 3: Browser smoke employer create/edit preview**
 
 Use `owner@bambi.dev` / `Bambi1234!`.
 
@@ -840,7 +840,7 @@ Expected:
 - Cover image preview updates when a cover image is selected.
 - Existing edit cover image appears when available.
 
-- [ ] **Step 4: Record verification notes**
+- [x] **Step 4: Record verification notes**
 
 Append exact command and browser results under this plan:
 
@@ -855,14 +855,14 @@ Append exact command and browser results under this plan:
   - Browser smoke passed for `/`, `/seeker`, `/employer/new`, and `/employer/jobs/[id]/edit`.
 ```
 
-- [ ] **Step 5: Update roadmap status after implementation**
+- [x] **Step 5: Update roadmap status after implementation**
 
 After implementation and verification, update:
 
 - `docs/result.md`: mark Visual Job Exposure UI/UX as completed.
 - `docs/superpowers/plans/2026-06-23-bambi-post-mvp-roadmap.md`: mark this UI/UX improvement as completed if it is listed as active.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Commit with Korean Conventional Commit format:
 
@@ -886,6 +886,21 @@ git commit -m "feat: 채용정보 시각 노출 UI 개선" \
 	-m "- 구직자 탐색과 공개 홈에 compact 채용 카드 노출 추가" \
 	-m "- 구인자 공고 작성 화면에 목록 노출 미리보기 추가"
 ```
+
+## Verification Notes
+
+- 2026-06-30 implementation verification:
+  - `pnpm vitest run apps/web/src/lib/bambi/visual-job-exposure.test.ts` passed with 1 file and 3 tests.
+  - `pnpm run check-types` passed.
+  - `pnpm run check` passed.
+  - `pnpm --filter web build` passed.
+  - Browser smoke passed for `/` desktop and mobile: `스페셜 채용`, `급구 채용`, `추천 채용`, and `전체 공고` rendered with no horizontal overflow.
+  - Browser smoke passed for `/seeker` desktop and mobile: visual exposure sections rendered with no horizontal overflow.
+  - Public home visual card click opened `/seeker/jobs/22222222-2222-4222-8222-222222222202`; the selected detail changed to the clicked job.
+  - Public home chat button routed to `/seeker/jobs/22222222-2222-4222-8222-222222222202/chat?entry=public`.
+  - `owner@bambi.dev` / `Bambi1234!` browser smoke passed for `/employer/new`: listing preview rendered, and selecting a cover image produced a preview image.
+  - `owner@bambi.dev` / `Bambi1234!` browser smoke passed for `/employer/jobs/22222222-2222-4222-8222-222222222201/edit`: listing preview rendered with the existing cover image and existing title.
+  - Browser console error check returned 0 errors for the public/seeker and employer smoke sessions.
 
 ## Self-Review Notes
 
@@ -925,3 +940,7 @@ git commit -m "feat: 채용정보 시각 노출 UI 개선" \
   - Wired `/employer/new` to preview the selected posting scope, current title/region/pay, and local cover image.
   - Wired `/employer/jobs/[id]/edit` to preview the current title/region/pay and existing or newly selected cover image through the local job media route.
   - Post-task verification passed: `pnpm vitest run apps/web/src/components/bambi/visual-job-components.test.ts apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `git diff --check`.
+- 2026-06-30 Task 6 completed:
+  - Full verification passed: `pnpm vitest run apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `pnpm --filter web build`.
+  - Browser smoke passed for `/`, `/seeker`, `/employer/new`, and `/employer/jobs/22222222-2222-4222-8222-222222222201/edit`.
+  - Updated `docs/result.md` and `docs/superpowers/plans/2026-06-23-bambi-post-mvp-roadmap.md` to mark Visual Job Exposure UI/UX as completed.

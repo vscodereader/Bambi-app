@@ -22,7 +22,7 @@
 | 6 | [Reviews And Ratings](./2026-06-23-bambi-reviews-ratings.md) | Post-interview reviews and public rating summaries | Completed 2026-06-25 |
 | 7 | [Employer Analytics And Paid Placement](./2026-06-23-bambi-employer-analytics-paid-placement.md) | Employer metrics, billing-ready events, analytics over promoted listings | Completed 2026-06-25 |
 | 8 | [Job Post Media And Block Editor](./2026-06-26-bambi-job-post-media-block-editor.md) | Employer cover/detail images and safe structured job detail blocks | Completed 2026-06-29 |
-| 9 | [Visual Job Exposure UI/UX](./2026-06-29-bambi-visual-job-exposure-uiux.md) | Queenalba-informed visual job exposure sections for Web marketplace | Active Web UI/UX improvement |
+| 9 | [Visual Job Exposure UI/UX](./2026-06-29-bambi-visual-job-exposure-uiux.md) | Queenalba-informed visual job exposure sections for Web marketplace | Completed 2026-06-30 |
 | 10 | [Native App](./2026-06-23-bambi-native-app.md) | Mobile native seeker/employer/admin shell and MVP flows, deferred until explicit resume | Web/native parity after explicit resume |
 
 ## Benchmark Inputs
@@ -46,9 +46,9 @@
 
 The Web final QA gate is tracked in [Web Final QA Acceptance](./2026-06-26-bambi-web-final-qa-acceptance.md). The Web baseline is documented as complete as of 2026-06-29 after Web MVP, Post-MVP Web work, Foxalba-informed Web adoption, and final QA verification.
 
-The native app is paused as of 2026-06-25 and remains deferred as of 2026-06-29. Do not select Native App as the next roadmap task unless the user explicitly asks to resume it. The next product direction is new Web feature requests and design/UI/UX improvement work; create or update a focused plan under `docs/superpowers/plans/` before implementation.
+The native app is paused as of 2026-06-25 and remains deferred as of 2026-06-30. Do not select Native App as the next roadmap task unless the user explicitly asks to resume it. The next product direction is new Web feature requests and design/UI/UX improvement work; create or update a focused plan under `docs/superpowers/plans/` before implementation.
 
-The first post-baseline Web UI/UX improvement is [Visual Job Exposure UI/UX](./2026-06-29-bambi-visual-job-exposure-uiux.md), based on the [Queenalba benchmark](../../queenalba-benchmark-2026-06-29.md). This plan should run before any Native App resume because it changes the Web source-of-truth marketplace presentation.
+The first post-baseline Web UI/UX improvement, [Visual Job Exposure UI/UX](./2026-06-29-bambi-visual-job-exposure-uiux.md), was completed on 2026-06-30 based on the [Queenalba benchmark](../../queenalba-benchmark-2026-06-29.md). Future Web feature or UI/UX work should be tracked in a new focused plan unless it directly extends this completed marketplace presentation work.
 
 Dense Marketplace And Promotion Ops should run before Employer Analytics And Paid Placement if promotion tables or boost events are needed as analytics dimensions. If Analytics runs first, its promotion foundation task should be reconciled with the dense marketplace promotion schema before implementation.
 
@@ -106,10 +106,10 @@ Progress: Native app shell, seeker/employer/moderator screens, native oRPC clien
 
 Historical status 2026-06-25: Paused while Web final completion was pending. This step stayed unchecked while the Web experience was being finalized and accepted.
 
-Status 2026-06-29: Web final baseline is documented, but Native App is still not the next task. Keep this step unchecked. Continue with incoming Web feature plans and UI/UX improvement plans unless the user explicitly resumes native work.
+Status 2026-06-30: Web final baseline and the Visual Job Exposure UI/UX improvement are documented, but Native App is still not the next task. Keep this step unchecked. Continue with incoming Web feature plans and UI/UX improvement plans unless the user explicitly resumes native work.
 
-- [ ] **Step 10: Execute Visual Job Exposure UI/UX plan**
+- [x] **Step 10: Execute Visual Job Exposure UI/UX plan**
 
 Open [Visual Job Exposure UI/UX](./2026-06-29-bambi-visual-job-exposure-uiux.md), complete every task, then return here and check this step.
 
-Status 2026-06-29: Added as the active Web UI/UX improvement after the Queenalba benchmark. This is the recommended next implementation task.
+Status 2026-06-30: Completed. Public home and seeker marketplace now use visual exposure sections, and employer create/edit pages include listing preview checks.
