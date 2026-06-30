@@ -48,20 +48,6 @@ export function VisualJobCard({
 				onClick={() => onOpen(job)}
 				type="button"
 			>
-				{job.coverImage ? (
-					<Image
-						alt={job.coverImage.altText || job.coverImage.fileName}
-						className="h-24 w-full rounded-md border border-white object-cover"
-						height={96}
-						src={job.coverImage.url}
-						unoptimized
-						width={320}
-					/>
-				) : (
-					<div className="flex h-24 w-full items-center justify-center rounded-md border border-white bg-secondary font-extrabold text-coral-700 text-lg">
-						{job.company.slice(0, 2)}
-					</div>
-				)}
 				<div className="flex flex-wrap items-center gap-1">
 					<Badge tone="pending">{job.promotionLabel ?? toneLabel[tone]}</Badge>
 					{job.verified ? (
@@ -73,25 +59,41 @@ export function VisualJobCard({
 						</Badge>
 					) : null}
 				</div>
-				<h3 className="m-0 line-clamp-2 font-extrabold text-sm leading-snug">
-					{job.company} {job.title}
-				</h3>
-				<div className="flex flex-col gap-1 text-xs">
-					<span className="truncate font-bold text-foreground text-sm">
-						{job.pay}
-					</span>
-					<span className="flex min-w-0 items-center gap-1 text-muted-foreground">
-						<span className="inline-flex size-3 shrink-0">
-							<MapPinIcon />
+				<div className="flex items-start gap-2.5">
+					{job.coverImage ? (
+						<Image
+							alt={job.coverImage.altText || job.coverImage.fileName}
+							className="size-14 shrink-0 rounded-md border border-white object-cover"
+							height={56}
+							src={job.coverImage.url}
+							unoptimized
+							width={56}
+						/>
+					) : (
+						<div className="flex size-14 shrink-0 items-center justify-center rounded-md border border-white bg-secondary font-extrabold text-coral-700 text-xs">
+							{job.company.slice(0, 2)}
+						</div>
+					)}
+					<div className="flex min-w-0 flex-1 flex-col gap-1">
+						<h3 className="m-0 line-clamp-2 font-extrabold text-sm leading-snug">
+							{job.company} {job.title}
+						</h3>
+						<span className="truncate font-bold text-foreground text-sm">
+							{job.pay}
 						</span>
-						<span className="truncate">{job.location}</span>
-					</span>
-					<span className="flex items-center gap-1 text-muted-foreground">
-						<span className="inline-flex size-3 shrink-0">
-							<ShieldIcon />
+						<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
+							<span className="inline-flex size-3 shrink-0">
+								<MapPinIcon />
+							</span>
+							<span className="truncate">{job.location}</span>
 						</span>
-						연락처 보호
-					</span>
+						<span className="flex items-center gap-1 text-muted-foreground text-xs">
+							<span className="inline-flex size-3 shrink-0">
+								<ShieldIcon />
+							</span>
+							연락처 보호
+						</span>
+					</div>
 				</div>
 			</button>
 			<Button
