@@ -104,7 +104,10 @@ export function ResponsiveAppShell({
 				</div>
 			</header>
 			<main
-				className={cn("mx-auto min-h-[calc(100dvh-56px)] w-full", className)}
+				className={cn(
+					"mx-auto flex min-h-[calc(100dvh-56px)] w-full flex-col",
+					className
+				)}
 			>
 				{children}
 			</main>

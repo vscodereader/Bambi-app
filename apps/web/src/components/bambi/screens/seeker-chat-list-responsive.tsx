@@ -24,7 +24,7 @@ const formatDateTime = (value: Date | string): string =>
 
 const getRoomButtonClassName = (unreadCount: number): string =>
 	[
-		"flex cursor-pointer items-center gap-3 rounded-lg border bg-card p-4 text-left shadow-sm transition-colors hover:border-coral-200",
+		"flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-lg border bg-card p-4 text-left shadow-sm transition-colors hover:border-coral-200",
 		unreadCount > 0
 			? "border-coral-300 ring-1 ring-coral-200"
 			: "border-border",
@@ -133,9 +133,14 @@ export function SeekerChatListResponsive({
 							onClick={() => onOpen(room.id)}
 							type="button"
 						>
-							<Avatar name={room.jobPostId} size="lg" square />
+							<Avatar
+								className="shrink-0"
+								name={room.jobPostId}
+								size="lg"
+								square
+							/>
 							<div className="min-w-0 flex-1">
-								<div className="flex flex-wrap items-center gap-2">
+								<div className="flex min-w-0 flex-wrap items-center gap-2">
 									<h2 className="m-0 truncate font-extrabold text-base">
 										공고 채팅
 									</h2>
