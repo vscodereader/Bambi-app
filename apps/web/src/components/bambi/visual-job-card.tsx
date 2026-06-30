@@ -30,9 +30,9 @@ const toneLabel = {
 
 const toneBadge = {
 	organic: "primary",
-	recommended: "pending",
-	special: "pending",
-	urgent: "pending",
+	recommended: "primary",
+	special: "primary",
+	urgent: "primary",
 } as const;
 
 export function VisualJobCard({
