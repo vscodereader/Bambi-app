@@ -48,6 +48,8 @@ Excluded:
   - Render compact promoted job cards.
 - Create: `apps/web/src/components/bambi/dense-job-row.tsx`
   - Render condensed organic rows.
+- Create: `apps/web/src/components/bambi/visual-job-components.test.ts`
+  - Guard the compact card and dense row source-level structure.
 - Create: `apps/web/src/components/bambi/visual-job-exposure-sections.tsx`
   - Compose grouped sections and route click/chat handlers.
 - Create: `apps/web/src/components/bambi/employer-listing-preview.tsx`
@@ -235,7 +237,7 @@ Expected: PASS with 3 tests.
 - Create: `apps/web/src/components/bambi/visual-job-card.tsx`
 - Create: `apps/web/src/components/bambi/dense-job-row.tsx`
 
-- [ ] **Step 1: Create `VisualJobCard`**
+- [x] **Step 1: Create `VisualJobCard`**
 
 Create `apps/web/src/components/bambi/visual-job-card.tsx`:
 
@@ -349,7 +351,7 @@ export function VisualJobCard({
 }
 ```
 
-- [ ] **Step 2: Create `DenseJobRow`**
+- [x] **Step 2: Create `DenseJobRow`**
 
 Create `apps/web/src/components/bambi/dense-job-row.tsx`:
 
@@ -446,7 +448,7 @@ export function DenseJobRow({
 }
 ```
 
-- [ ] **Step 3: Run typecheck for component imports**
+- [x] **Step 3: Run typecheck for component imports**
 
 Run:
 
@@ -900,3 +902,8 @@ git commit -m "feat: 채용정보 시각 노출 UI 개선" \
   - Verified GREEN with `pnpm vitest run apps/web/src/lib/bambi/visual-job-exposure.test.ts`; 1 file and 3 tests passed.
   - Fixed a TypeScript duplicate `id` assignment warning in the test helper.
   - Post-task verification passed: `pnpm vitest run apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `git diff --check`.
+- 2026-06-30 Task 2 completed:
+  - Added `apps/web/src/components/bambi/visual-job-components.test.ts` and verified RED with missing component files.
+  - Added `apps/web/src/components/bambi/visual-job-card.tsx`.
+  - Added `apps/web/src/components/bambi/dense-job-row.tsx`.
+  - Post-task verification passed: `pnpm vitest run apps/web/src/components/bambi/visual-job-components.test.ts apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `git diff --check`.
