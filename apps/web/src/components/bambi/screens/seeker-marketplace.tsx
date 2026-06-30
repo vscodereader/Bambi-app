@@ -14,11 +14,11 @@ import type { Job } from "@/lib/bambi/types";
 import { Badge } from "../ds";
 import { ShieldIcon } from "../icons";
 import {
-	JobList,
 	MarketplaceFilterSidebar,
 	MarketplaceSearch,
 	SelectedJobPanel,
 } from "../marketplace";
+import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 
 const discoveryTabs = [
 	{ id: "all", label: "전체", disabled: false },
@@ -110,7 +110,7 @@ export function SeekerMarketplaceScreen() {
 						{jobs.length}개{isApiBacked ? " · 실시간" : ""}
 					</span>
 				</div>
-				<JobList
+				<VisualJobExposureSections
 					jobs={jobs}
 					onChat={chatJob}
 					onOpen={openJob}

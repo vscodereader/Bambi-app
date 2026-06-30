@@ -466,7 +466,7 @@ Expected: PASS. If icon or badge tone names differ, adjust to existing exported 
 - Modify: `apps/web/src/components/bambi/screens/seeker-marketplace.tsx`
 - Modify: `apps/web/src/components/bambi/marketplace.tsx`
 
-- [ ] **Step 1: Create section composition component**
+- [x] **Step 1: Create section composition component**
 
 Create `apps/web/src/components/bambi/visual-job-exposure-sections.tsx`:
 
@@ -598,7 +598,7 @@ export function VisualJobExposureSections({
 }
 ```
 
-- [ ] **Step 2: Wire seeker marketplace screen**
+- [x] **Step 2: Wire seeker marketplace screen**
 
 Modify `apps/web/src/components/bambi/screens/seeker-marketplace.tsx`:
 
@@ -615,7 +615,7 @@ Modify `apps/web/src/components/bambi/screens/seeker-marketplace.tsx`:
 />
 ```
 
-- [ ] **Step 3: Keep old `JobList` export stable or remove only when unused**
+- [x] **Step 3: Keep old `JobList` export stable or remove only when unused**
 
 Search:
 
@@ -625,7 +625,7 @@ rg -n "JobList" apps/web/src
 
 If only `marketplace.tsx` defines it and no route imports it, remove `JobList`, `marketplaceSectionMeta`, and `ResponsiveJobCard` from `apps/web/src/components/bambi/marketplace.tsx`. Keep `MarketplaceFilterSidebar`, `MarketplaceSearch`, and `SelectedJobPanel`.
 
-- [ ] **Step 4: Run checks**
+- [x] **Step 4: Run checks**
 
 Run:
 
@@ -906,4 +906,10 @@ git commit -m "feat: 채용정보 시각 노출 UI 개선" \
   - Added `apps/web/src/components/bambi/visual-job-components.test.ts` and verified RED with missing component files.
   - Added `apps/web/src/components/bambi/visual-job-card.tsx`.
   - Added `apps/web/src/components/bambi/dense-job-row.tsx`.
+  - Post-task verification passed: `pnpm vitest run apps/web/src/components/bambi/visual-job-components.test.ts apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `git diff --check`.
+- 2026-06-30 Task 3 completed:
+  - Extended `apps/web/src/components/bambi/visual-job-components.test.ts` and verified RED for missing `VisualJobExposureSections` plus seeker still using `JobList`.
+  - Added `apps/web/src/components/bambi/visual-job-exposure-sections.tsx`.
+  - Replaced `/seeker` marketplace `JobList` rendering with `VisualJobExposureSections`.
+  - Kept `JobList` in `marketplace.tsx` because `PublicMarketplaceScreen` still uses it before Task 4.
   - Post-task verification passed: `pnpm vitest run apps/web/src/components/bambi/visual-job-components.test.ts apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `git diff --check`.

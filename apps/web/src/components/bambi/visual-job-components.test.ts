@@ -28,4 +28,24 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("검수");
 		expect(source).toContain("rightIcon={<Message />}");
 	});
+
+	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {
+		const source = readComponent("visual-job-exposure-sections.tsx");
+
+		expect(source).toContain("export function VisualJobExposureSections");
+		expect(source).toContain("getVisualJobExposureSections");
+		expect(source).toContain("스페셜 채용");
+		expect(source).toContain("급구 채용");
+		expect(source).toContain("추천 채용");
+		expect(source).toContain("전체 공고");
+		expect(source).toContain("<VisualJobCard");
+		expect(source).toContain("<DenseJobRow");
+	});
+
+	it("wires the seeker marketplace to visual exposure sections", () => {
+		const source = readComponent("screens/seeker-marketplace.tsx");
+
+		expect(source).toContain("VisualJobExposureSections");
+		expect(source).not.toContain("<JobList");
+	});
 });
