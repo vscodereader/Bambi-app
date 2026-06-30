@@ -47,7 +47,7 @@ export function SeekerMarketplaceScreen() {
 	};
 
 	return (
-		<div className="mx-auto flex w-full max-w-[80%] gap-5 px-4 py-5 pb-24 md:px-6 md:py-7 lg:pb-8">
+		<div className="mx-auto flex w-full max-w-[80%] gap-5 px-4 py-5 pb-24 md:px-6 md:py-10">
 			<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
 			<section className="min-w-0 flex-1">
 				<div className="mb-5 flex flex-col gap-4">
