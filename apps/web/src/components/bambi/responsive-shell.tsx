@@ -37,18 +37,11 @@ export function ResponsiveAppShell({
 	variant = "public",
 }: ResponsiveAppShellProps) {
 	const isPublic = variant === "public";
-	// 공개 홈·구직자·구인자 화면은 헤더와 본문을 80% 폭으로 맞춘다(운영자 콘솔 제외)
-	const isWide = variant !== "moderator";
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
 				<header className="sticky top-0 z-30 hidden border-border border-b bg-background/95 backdrop-blur md:block">
-					<div
-						className={cn(
-							"mx-auto flex h-16 items-center gap-7 px-6",
-							isWide ? "max-w-[80%]" : "max-w-[1180px]"
-						)}
-					>
+					<div className="mx-auto flex h-16 max-w-[80%] items-center gap-7 px-6">
 						<Link aria-label="밤비 홈" className="no-underline" href="/">
 							<Logo lang="ko" size="md" />
 						</Link>

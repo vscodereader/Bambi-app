@@ -247,3 +247,10 @@ max-w-[min(92dvw,1600px)]
   seeker·employer 헤더를 모두 `max-w-[80%]`로, 운영자 콘솔(moderator)만 `max-w-[1180px]` 유지.
 - **본문:** `page-shell.tsx`(구인자 전용, 8개 employer 페이지에서만 사용)의 `max-w-6xl` → `max-w-[80%]`.
   헤더와 본문이 정렬된다.
+
+### 8.11 정리 (2026-06-30) — 헤더 폭 분기 제거
+
+`max-w-[1180px]`는 앞으로 쓰지 않기로 했다(신규/수정 UI는 `max-w-[80%]` 또는 계산형 폭 사용).
+`responsive-shell.tsx`의 `isWide ? "max-w-[80%]" : "max-w-[1180px]"` 분기와 `isWide` 변수를 제거하고
+헤더 컨테이너를 항상 `max-w-[80%]`로 고정한다(운영자 콘솔 포함 전 variant 동일). `isPublic`은 CTA/
+로그인 링크 분기에 계속 쓰여 유지.
