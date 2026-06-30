@@ -919,7 +919,7 @@ export function SeekerChatRoomResponsive({
 
 	return (
 		<div className="mx-auto grid w-full max-w-[80%] gap-5 px-4 py-5 pb-28 md:px-6 md:py-7 lg:grid-cols-[minmax(0,1fr)_320px] lg:pb-8">
-			<main className="min-w-0 rounded-lg bg-card shadow-sm ring-1 ring-border">
+			<main className="min-w-0 rounded-lg bg-card shadow-sm ring-1 ring-border lg:self-start">
 				<header className="flex items-center gap-3 border-border border-b p-4">
 					<button
 						className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 font-bold text-sm"
