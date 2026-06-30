@@ -47,7 +47,7 @@ export function PublicMarketplaceScreen() {
 	);
 	return (
 		<ResponsiveAppShell headerSlot={headerSearch} variant="public">
-			<div className="mx-auto flex w-full max-w-[80%] gap-5 px-4 py-6 pb-16 md:px-6 md:py-10">
+			<div className="mx-auto flex w-full gap-5 px-5 py-6 pb-16 md:max-w-[80%] md:px-6 md:py-10">
 				<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
 				<section className="min-w-0 flex-1">
 					<div className="mb-4">

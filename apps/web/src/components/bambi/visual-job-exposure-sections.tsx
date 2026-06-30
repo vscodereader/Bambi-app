@@ -5,7 +5,7 @@ import { getVisualJobExposureSections } from "@/lib/bambi/visual-job-exposure";
 import { Card } from "./ds";
 import { VisualJobCard } from "./visual-job-card";
 
-const CARD_GRID_CLASS = "grid grid-cols-2 gap-3 lg:grid-cols-3";
+const CARD_GRID_CLASS = "grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-3";
 
 interface VisualJobExposureSectionsProps {
 	jobs: Job[];
