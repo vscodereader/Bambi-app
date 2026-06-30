@@ -115,7 +115,7 @@ export const getVisualJobExposureSections = (
 - Create: `apps/web/src/lib/bambi/visual-job-exposure.ts`
 - Create: `apps/web/src/lib/bambi/visual-job-exposure.test.ts`
 
-- [ ] **Step 1: Write the failing grouping tests**
+- [x] **Step 1: Write the failing grouping tests**
 
 Create `apps/web/src/lib/bambi/visual-job-exposure.test.ts`:
 
@@ -204,7 +204,7 @@ describe("getVisualJobExposureSections", () => {
 });
 ```
 
-- [ ] **Step 2: Run grouping tests and verify failure**
+- [x] **Step 2: Run grouping tests and verify failure**
 
 Run:
 
@@ -214,11 +214,11 @@ pnpm vitest run apps/web/src/lib/bambi/visual-job-exposure.test.ts
 
 Expected: FAIL because `apps/web/src/lib/bambi/visual-job-exposure.ts` does not exist.
 
-- [ ] **Step 3: Implement the grouping helper**
+- [x] **Step 3: Implement the grouping helper**
 
 Create `apps/web/src/lib/bambi/visual-job-exposure.ts` using the code from the `Display Group Rules` section.
 
-- [ ] **Step 4: Run grouping tests and verify pass**
+- [x] **Step 4: Run grouping tests and verify pass**
 
 Run:
 
@@ -890,3 +890,13 @@ git commit -m "feat: 채용정보 시각 노출 UI 개선" \
 - Spec coverage: Queenalba의 광고형 채용 노출, Bambi 톤 유지, 기존 promotion 데이터 재사용, Native 제외, employer preview를 모두 task로 연결했다.
 - Completeness scan: 계획 안의 모든 구현 단계는 파일, 명령, 기대 결과를 함께 제시한다.
 - Type consistency: `VisualJobExposureSections`, `VisualJobCard`, `DenseJobRow`, `EmployerListingPreview` 이름을 spec과 plan에서 동일하게 사용한다.
+
+## Progress Notes
+
+- 2026-06-30 Task 1 completed:
+  - Added `apps/web/src/lib/bambi/visual-job-exposure.test.ts`.
+  - Verified RED with `pnpm vitest run apps/web/src/lib/bambi/visual-job-exposure.test.ts`; it failed because `./visual-job-exposure` did not exist.
+  - Added `apps/web/src/lib/bambi/visual-job-exposure.ts`.
+  - Verified GREEN with `pnpm vitest run apps/web/src/lib/bambi/visual-job-exposure.test.ts`; 1 file and 3 tests passed.
+  - Fixed a TypeScript duplicate `id` assignment warning in the test helper.
+  - Post-task verification passed: `pnpm vitest run apps/web/src/lib/bambi/visual-job-exposure.test.ts`, `pnpm run check-types`, `pnpm run check`, and `git diff --check`.
