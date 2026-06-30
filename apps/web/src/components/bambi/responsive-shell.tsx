@@ -42,7 +42,7 @@ export function ResponsiveAppShell({
 					<div
 						className={cn(
 							"mx-auto flex h-16 items-center gap-7 px-6",
-							isPublic ? "max-w-7xl" : "max-w-[1180px]"
+							isPublic ? "max-w-[min(92dvw,1600px)]" : "max-w-[1180px]"
 						)}
 					>
 						<Link aria-label="밤비 홈" className="no-underline" href="/">

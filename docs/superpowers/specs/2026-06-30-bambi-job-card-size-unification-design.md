@@ -101,3 +101,51 @@ grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4
 - 고정 `max-w-[1180px]`가 public 홈 경로에서 `max-w-7xl`로 바뀌고 다른 화면 정렬은 그대로다.
 - 데드코드(`DenseJobRow`)가 남지 않는다.
 - 모든 검증 명령이 통과한다.
+
+## 8. 후속 개선 (2026-06-30 추가) — 가로형 카드 + 유동 폭
+
+초기 구현(4섹션 동일 콤팩트 카드 + `max-w-7xl`) 적용 후, 좁은 구간에서 카드가 짜부되어
+제목이 잘리고 `whitespace-nowrap`인 Badge가 카드 밖으로 삐져나오는 문제가 확인됐다.
+
+근본 원인: 고정 `grid-cols-N`이 가용 폭 대비 카드를 ~150–165px로 강제. 특히
+(a) 폰(<640px)의 `grid-cols-2`, (b) xl(≥1280px)에서 필터 사이드바(236px)+선택 패널(292px)이
+중앙 열을 ~664px로 압축한 상태의 `grid-cols-4`.
+
+사용자 결정에 따라 두 가지로 해결한다.
+
+### 8.1 콘텐츠 폭 기반 auto-fill 그리드
+
+`CARD_GRID_CLASS`를 고정 열 수에서 콘텐츠 폭 기반으로 변경한다.
+
+```
+grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-3
+```
+
+→ 카드는 항상 ≥340px가 보장되고, 가용 폭만큼만 열이 생긴다(좁으면 1열, 넓으면 2–3열).
+모든 섹션이 동일 규칙으로 유연하게 채워진다.
+
+### 8.2 가로형(landscape) 카드
+
+`VisualJobCard`를 세로형 콤팩트 카드에서 **가로형 카드**로 재설계한다.
+- 좌측: 커버 이미지(80px, `size-20`) 또는 이니셜 fallback.
+- 중앙: 배지 행 + 제목(`line-clamp-2`) + 급여 + (위치 · 연락처 보호) — `flex flex-col`, `min-w-0`.
+- 우측: `채팅` 버튼(`shrink-0`, 세로 중앙).
+- `min-h-[148px]` 제거(콘텐츠가 높이를 결정). 톤/배지/검수/연락처 보호 신호는 유지.
+
+### 8.3 유동 컨테이너 폭
+
+`max-w-7xl`(1280px 고정)을 뷰포트 비례 유동 폭으로 변경한다.
+(`dvh`는 높이 단위라 부적합 → 너비용 `dvw` 사용.)
+
+```
+max-w-[min(92dvw,1600px)]
+```
+
+- `public-marketplace.tsx` 본문 컨테이너, `responsive-shell.tsx` 헤더(public 변형만)에 적용.
+- 큰 모니터에서 화면을 더 쓰되 1600px 상한으로 울트라와이드 과확장을 막는다.
+
+### 8.4 검증 (8장 기준)
+
+`pnpm exec vitest run .../visual-job-components.test.ts`(auto-fill 그리드·유동 폭 회귀 가드 추가),
+`pnpm --filter web check-types`, `pnpm --filter web build` 모두 통과. 브라우저에서 카드 잘림·삐져나옴
+해소 및 헤더/본문 정렬 확인.

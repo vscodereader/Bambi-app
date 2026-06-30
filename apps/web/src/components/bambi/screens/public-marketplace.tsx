@@ -32,7 +32,7 @@ export function PublicMarketplaceScreen() {
 		router.push(`/seeker/jobs/${job.id}/chat?entry=public` as Route);
 	return (
 		<ResponsiveAppShell variant="public">
-			<div className="mx-auto flex w-full max-w-7xl gap-5 px-4 py-6 pb-16 md:px-6 md:py-10">
+			<div className="mx-auto flex w-full max-w-[min(92dvw,1600px)] gap-5 px-4 py-6 pb-16 md:px-6 md:py-10">
 				<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
 				<section className="min-w-0 flex-1">
 					<div className="mb-6 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border md:p-8">

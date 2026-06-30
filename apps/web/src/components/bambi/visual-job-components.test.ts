@@ -31,6 +31,9 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("추천 채용");
 		expect(source).toContain("전체 공고");
 		expect(source).toContain("<VisualJobCard");
+		// 모든 섹션이 콘텐츠 폭 기반 auto-fill 그리드를 공유해 카드가 좁아지지 않도록 보장
+		expect(source).toContain("auto-fill");
+		expect(source).toContain("minmax(340px,1fr)");
 	});
 
 	it("wires the seeker marketplace to visual exposure sections", () => {
@@ -45,6 +48,8 @@ describe("visual job marketplace components", () => {
 
 		expect(source).toContain("VisualJobExposureSections");
 		expect(source).not.toContain("<JobList");
+		// 본문 컨테이너는 고정폭이 아닌 유동 폭(뷰포트 비례, 상한 1600px)을 사용
+		expect(source).toContain("max-w-[min(92dvw,1600px)]");
 	});
 
 	it("defines employer listing preview with cover fallback and preview copy", () => {
