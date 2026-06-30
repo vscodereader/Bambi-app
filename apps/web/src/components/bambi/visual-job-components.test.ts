@@ -78,6 +78,14 @@ describe("visual job marketplace components", () => {
 		expect(source).not.toContain("밤비 안에서 먼저 대화해요");
 	});
 
+	it("uses 80% width for the employer page shell", () => {
+		const source = readComponent("page-shell.tsx");
+
+		// 구인자 화면 본문도 헤더(80%)와 동일 폭으로 맞춘다
+		expect(source).toContain("max-w-[80%]");
+		expect(source).not.toContain("max-w-6xl");
+	});
+
 	it("defines employer listing preview with cover fallback and preview copy", () => {
 		const source = readComponent("employer-listing-preview.tsx");
 

@@ -37,8 +37,8 @@ export function ResponsiveAppShell({
 	variant = "public",
 }: ResponsiveAppShellProps) {
 	const isPublic = variant === "public";
-	// 공개 홈·구직자 마켓플레이스는 헤더와 본문을 80% 폭으로 맞춘다
-	const isWideMarketplace = isPublic || variant === "seeker";
+	// 공개 홈·구직자·구인자 화면은 헤더와 본문을 80% 폭으로 맞춘다(운영자 콘솔 제외)
+	const isWide = variant !== "moderator";
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
@@ -46,7 +46,7 @@ export function ResponsiveAppShell({
 					<div
 						className={cn(
 							"mx-auto flex h-16 items-center gap-7 px-6",
-							isWideMarketplace ? "max-w-[80%]" : "max-w-[1180px]"
+							isWide ? "max-w-[80%]" : "max-w-[1180px]"
 						)}
 					>
 						<Link aria-label="밤비 홈" className="no-underline" href="/">

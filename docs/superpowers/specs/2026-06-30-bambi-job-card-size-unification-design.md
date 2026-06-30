@@ -237,3 +237,13 @@ max-w-[min(92dvw,1600px)]
 - **모바일:** 데스크톱 헤더는 모바일에서 숨겨지므로 본문 `MarketplaceSearch`에
   `searchFieldClassName="md:hidden"`을 줘 검색 입력은 모바일에만, 빠른 필터 칩은 항상 노출한다
   (공개 홈과 동일 패턴).
+
+### 8.10 재조정 (2026-06-30) — 구인자(업체) 화면도 80% 폭
+
+구인자(`/employer/*`) 화면은 헤더(`max-w-[1180px]`)와 본문(`PageShell`의 `max-w-6xl`)이 80% 통일에서
+빠져 있었다. 사용자 요청에 따라 동일하게 맞춘다.
+
+- **헤더:** `responsive-shell.tsx`의 분기를 `isWide = variant !== "moderator"`로 일반화해 public·
+  seeker·employer 헤더를 모두 `max-w-[80%]`로, 운영자 콘솔(moderator)만 `max-w-[1180px]` 유지.
+- **본문:** `page-shell.tsx`(구인자 전용, 8개 employer 페이지에서만 사용)의 `max-w-6xl` → `max-w-[80%]`.
+  헤더와 본문이 정렬된다.
