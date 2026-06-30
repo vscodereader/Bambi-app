@@ -1,5 +1,13 @@
 "use client";
 
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
 import {
@@ -53,38 +61,54 @@ export function MarketplaceFilterSidebar({
 						<h2 className="m-0 font-extrabold text-base">빠른 탐색</h2>
 					</div>
 					<div className="flex flex-col gap-4">
-						<label className="flex flex-col gap-2">
+						<div className="flex flex-col gap-2">
 							<span className="font-bold text-muted-foreground text-xs">
 								지역
 							</span>
-							<select
-								className="h-11 rounded-lg border border-border bg-background px-3 font-semibold text-sm"
-								onChange={(event) => update({ region: event.target.value })}
+							<Select
+								onValueChange={(value) => {
+									if (value) {
+										update({ region: value });
+									}
+								}}
 								value={filters.region}
 							>
-								{MARKETPLACE_REGIONS.map((region) => (
-									<option key={region} value={region}>
-										{region}
-									</option>
-								))}
-							</select>
-						</label>
-						<label className="flex flex-col gap-2">
+								<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+									<SelectValue>{(value) => value}</SelectValue>
+								</SelectTrigger>
+								<SelectContent>
+									{MARKETPLACE_REGIONS.map((region) => (
+										<SelectItem key={region} value={region}>
+											{region}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="flex flex-col gap-2">
 							<span className="font-bold text-muted-foreground text-xs">
 								업종
 							</span>
-							<select
-								className="h-11 rounded-lg border border-border bg-background px-3 font-semibold text-sm"
-								onChange={(event) => update({ category: event.target.value })}
+							<Select
+								onValueChange={(value) => {
+									if (value) {
+										update({ category: value });
+									}
+								}}
 								value={filters.category}
 							>
-								{MARKETPLACE_CATEGORIES.map((category) => (
-									<option key={category} value={category}>
-										{category}
-									</option>
-								))}
-							</select>
-						</label>
+								<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+									<SelectValue>{(value) => value}</SelectValue>
+								</SelectTrigger>
+								<SelectContent>
+									{MARKETPLACE_CATEGORIES.map((category) => (
+										<SelectItem key={category} value={category}>
+											{category}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
 						<div className="flex flex-col gap-2">
 							<span className="font-bold text-muted-foreground text-xs">
 								최소 시급
@@ -98,23 +122,38 @@ export function MarketplaceFilterSidebar({
 								type="number"
 							/>
 						</div>
-						<label className="flex items-center gap-2 font-bold text-sm">
-							<input
+						<label
+							className="flex items-center gap-2 font-bold text-sm"
+							htmlFor="filter-only-verified"
+						>
+							<Checkbox
 								checked={filters.onlyVerified}
-								onChange={(event) =>
-									update({ onlyVerified: event.target.checked })
-								}
-								type="checkbox"
+								id="filter-only-verified"
+								onCheckedChange={(checked) => update({ onlyVerified: checked })}
 							/>
 							검증 완료만 보기
 						</label>
-						<label className="flex items-center gap-2 font-bold text-sm">
-							<input
+						<label
+							className="flex items-center gap-2 font-bold text-sm"
+							htmlFor="filter-only-today"
+						>
+							<Checkbox
+								checked={filters.onlyToday}
+								id="filter-only-today"
+								onCheckedChange={(checked) => update({ onlyToday: checked })}
+							/>
+							오늘 면접 가능만 보기
+						</label>
+						<label
+							className="flex items-center gap-2 font-bold text-sm"
+							htmlFor="filter-only-beginner"
+						>
+							<Checkbox
 								checked={filters.onlyBeginnerFriendly}
-								onChange={(event) =>
-									update({ onlyBeginnerFriendly: event.target.checked })
+								id="filter-only-beginner"
+								onCheckedChange={(checked) =>
+									update({ onlyBeginnerFriendly: checked })
 								}
-								type="checkbox"
 							/>
 							초보 가능만 보기
 						</label>
@@ -189,6 +228,7 @@ export function MarketplaceSearch({
 				{MARKETPLACE_QUICK_FILTERS.map((filter) => {
 					const selected =
 						(filter.id === "verified" && filters.onlyVerified) ||
+						(filter.id === "today" && filters.onlyToday) ||
 						(filter.id === "beginner" && filters.onlyBeginnerFriendly);
 					return (
 						<Tag
@@ -196,6 +236,9 @@ export function MarketplaceSearch({
 							onClick={() => {
 								if (filter.id === "verified") {
 									update({ onlyVerified: !filters.onlyVerified });
+								}
+								if (filter.id === "today") {
+									update({ onlyToday: !filters.onlyToday });
 								}
 								if (filter.id === "beginner") {
 									update({

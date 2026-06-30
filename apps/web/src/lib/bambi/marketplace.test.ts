@@ -27,12 +27,22 @@ describe("filterMarketplaceJobs", () => {
 			category: "라운지",
 			minimumPay: 17_000,
 			onlyBeginnerFriendly: true,
+			onlyToday: false,
 			onlyVerified: true,
 			query: "",
 			region: "강남",
 		});
 
 		expect(result.map((job) => job.id)).toEqual(["j1"]);
+	});
+
+	it("filters jobs to today-interview listings when the chip is on", () => {
+		const result = filterMarketplaceJobs(JOBS, {
+			...DEFAULT_MARKETPLACE_FILTERS,
+			onlyToday: true,
+		});
+
+		expect(result.map((job) => job.id)).toEqual(["j3", "j4"]);
 	});
 });
 
