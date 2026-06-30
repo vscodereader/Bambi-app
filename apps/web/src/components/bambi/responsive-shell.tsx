@@ -22,6 +22,7 @@ const DEFAULT_NAV_ITEMS: NavItem[] = [
 interface ResponsiveAppShellProps {
 	children: ReactNode;
 	className?: string;
+	headerSlot?: ReactNode;
 	navItems?: readonly NavItem[];
 	showDesktopNav?: boolean;
 	variant?: "public" | "seeker" | "employer" | "moderator";
@@ -30,6 +31,7 @@ interface ResponsiveAppShellProps {
 export function ResponsiveAppShell({
 	children,
 	className,
+	headerSlot,
 	navItems = DEFAULT_NAV_ITEMS,
 	showDesktopNav = true,
 	variant = "public",
@@ -42,7 +44,7 @@ export function ResponsiveAppShell({
 					<div
 						className={cn(
 							"mx-auto flex h-16 items-center gap-7 px-6",
-							isPublic ? "max-w-[90%]" : "max-w-[1180px]"
+							isPublic ? "max-w-[80%]" : "max-w-[1180px]"
 						)}
 					>
 						<Link aria-label="밤비 홈" className="no-underline" href="/">
@@ -60,6 +62,7 @@ export function ResponsiveAppShell({
 							))}
 						</nav>
 						<div className="ml-auto flex items-center gap-2">
+							{headerSlot}
 							<span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-green-50 px-3 font-bold text-green-600 text-xs">
 								<span className="inline-flex size-3.5">
 									<ShieldIcon />

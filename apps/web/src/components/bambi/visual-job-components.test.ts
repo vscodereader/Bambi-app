@@ -19,6 +19,9 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("연락처 보호");
 		expect(source).toContain("job.promotionLabel ?? toneLabel[tone]");
 		expect(source).toContain("rightIcon={<Message />}");
+		// 최신(organic) 배지는 메인 코럴(primary) 컬러를 쓴다 — 사용 색상 최소화
+		expect(source).toContain("tone={toneBadge[tone]}");
+		expect(source).toContain('organic: "primary"');
 	});
 
 	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {
@@ -31,9 +34,9 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("추천 채용");
 		expect(source).toContain("전체 공고");
 		expect(source).toContain("<VisualJobCard");
-		// 모든 섹션이 동일 반응형 그리드를 공유해 최대 4열까지 카드를 보여줌
+		// 모든 섹션이 동일 반응형 그리드를 공유해 한 행에 최대 3열까지 카드를 보여줌
 		expect(source).toContain("lg:grid-cols-3");
-		expect(source).toContain("2xl:grid-cols-4");
+		expect(source).not.toContain("2xl:grid-cols-4");
 	});
 
 	it("wires the seeker marketplace to visual exposure sections", () => {
@@ -49,7 +52,12 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("VisualJobExposureSections");
 		expect(source).not.toContain("<JobList");
 		// 본문 컨테이너는 고정폭이 아닌 유동 폭(뷰포트 비례)을 사용하며 헤더와 동일하게 맞춘다
-		expect(source).toContain("max-w-[90%]");
+		expect(source).toContain("max-w-[80%]");
+		// 검색창을 헤더(연락처 보호 왼쪽)로 옮기고 본문 검색은 모바일 전용으로 둔다
+		expect(source).toContain("headerSlot={headerSearch}");
+		expect(source).toContain('searchFieldClassName="md:hidden"');
+		// 히어로 카피 블록은 제거됨
+		expect(source).not.toContain("밤비 안에서 먼저 대화해요");
 	});
 
 	it("defines employer listing preview with cover fallback and preview copy", () => {

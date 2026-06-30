@@ -176,3 +176,30 @@ max-w-[min(92dvw,1600px)]
   제목·급여·위치·연락처 보호)** 가로 배치.
 - 카드 하단: `채팅` 버튼을 `mt-auto` 전체폭으로 둬 행 내 카드 높이를 맞춘다.
 - 좁은 열에서는 제목 `line-clamp-2`, 급여·위치 `truncate`로 넘침을 흡수한다.
+
+### 8.7 재조정 (2026-06-30) — 80% 폭 · 3열 · 히어로 제거 · 배지 색 단순화 · 검색창 헤더 이동
+
+공개 홈을 더 정돈하기 위한 후속 조정.
+
+- **컨테이너 폭:** 본문·헤더(public) `max-w-[90%]` → `max-w-[80%]`. 90%가 너무 넓다는
+  피드백 반영. `public-marketplace.tsx`, `responsive-shell.tsx`(public 변형) 동일 적용.
+- **그리드 3열 상한:** `CARD_GRID_CLASS`에서 `2xl:grid-cols-4`를 제거해
+  `grid grid-cols-2 gap-3 lg:grid-cols-3` — 한 행 최대 3열(이전 4열). 80% 폭에서 카드가
+  더 넉넉해진다.
+- **히어로 블록 제거:** `public-marketplace.tsx`의 인트로 카드(면접 전 연락처 비공개 배지 +
+  "밤비 안에서 먼저 대화해요" h1 + 설명 + 공고둘러보기/업체로 시작하기 버튼)를 삭제.
+  미사용이 된 `Badge`/`Button`/`ShieldIcon` import 정리.
+- **최신 배지 색 단순화:** `visual-job-card.tsx`에 `toneBadge` 맵 추가. `최신`(organic) 배지를
+  `tone="pending"`(앰버)에서 `tone="primary"`(코럴 메인, 삭제된 공고둘러보기 버튼과 동일 색)로
+  변경. 나머지 톤은 `pending` 유지. 화면에서 쓰는 색 수를 줄이는 방향.
+- **검색창 헤더 이동:** `ResponsiveAppShell`에 optional `headerSlot?: ReactNode` prop 추가,
+  데스크톱 헤더 우측 그룹의 `연락처 보호` pill **왼쪽**에 렌더한다. public 홈이 콤팩트 검색
+  입력(`filters.query` 바인딩)을 `headerSlot`으로 전달. 데스크톱 헤더는 모바일에서 숨겨지므로
+  모바일 회귀 방지를 위해 본문 `MarketplaceSearch`에 `searchFieldClassName="md:hidden"`을 줘
+  검색 입력은 모바일에만, 빠른 필터 칩은 항상 노출한다. `MarketplaceSearch`는 seeker와 공유하므로
+  optional prop만 추가(기본 동작 불변).
+
+#### 8.7 검증
+
+`pnpm exec vitest run .../visual-job-components.test.ts`(80% 폭·3열·최신 배지·헤더 검색·히어로 제거
+회귀 가드 갱신) 6개 통과, `pnpm --filter web check-types`, `pnpm --filter web build`, ultracite lint 모두 통과.

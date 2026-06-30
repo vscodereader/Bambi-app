@@ -28,6 +28,13 @@ const toneLabel = {
 	urgent: "급구",
 } as const;
 
+const toneBadge = {
+	organic: "primary",
+	recommended: "pending",
+	special: "pending",
+	urgent: "pending",
+} as const;
+
 export function VisualJobCard({
 	active = false,
 	job,
@@ -49,7 +56,9 @@ export function VisualJobCard({
 				type="button"
 			>
 				<div className="flex flex-wrap items-center gap-1">
-					<Badge tone="pending">{job.promotionLabel ?? toneLabel[tone]}</Badge>
+					<Badge tone={toneBadge[tone]}>
+						{job.promotionLabel ?? toneLabel[tone]}
+					</Badge>
 					{job.verified ? (
 						<Badge tone="success">
 							<span className="inline-flex size-3">

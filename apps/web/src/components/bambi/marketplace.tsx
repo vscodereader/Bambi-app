@@ -150,18 +150,20 @@ interface MarketplaceSearchProps {
 	filters: MarketplaceFilters;
 	onChange: FilterChange;
 	onOpenFilters?: () => void;
+	searchFieldClassName?: string;
 }
 
 export function MarketplaceSearch({
 	filters,
 	onChange,
 	onOpenFilters,
+	searchFieldClassName,
 }: MarketplaceSearchProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
 	return (
 		<div className="flex flex-col gap-3">
-			<div className="flex items-center gap-2.5">
+			<div className={cn("flex items-center gap-2.5", searchFieldClassName)}>
 				<label className="flex h-14 flex-1 items-center gap-3 rounded-lg bg-secondary px-[18px]">
 					<span className="inline-flex size-5 text-[color:var(--text-subtle)]">
 						<Search2 />
