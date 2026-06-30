@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonVariants } from "@bambi-app/ui/components/button";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import Link from "next/link";
@@ -66,10 +67,11 @@ export function ResponsiveAppShell({
 							</span>
 							<Link
 								className={cn(
-									"inline-flex h-10 items-center rounded-lg px-4 font-bold text-sm no-underline",
-									isPublic
-										? "bg-ink-800 text-white"
-										: "border border-border bg-card text-foreground"
+									buttonVariants({
+										variant: isPublic ? "default" : "outline",
+									}),
+									"h-10 px-4 font-bold text-sm no-underline",
+									isPublic && "bg-ink-800 text-white hover:bg-ink-800/90"
 								)}
 								href={(isPublic ? "/login" : "/seeker/me") as Route}
 							>
