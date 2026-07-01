@@ -3,8 +3,10 @@
 // 밤비 — 구인자(Employer) 화면: 실시간 콘텐츠 가드가 붙은 공고 등록 + 내 공고.
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { scan, verdict } from "@/lib/bambi/scanner";
 import type { ModerationModel, VisualTone } from "@/lib/bambi/types";
 import {
@@ -445,11 +447,15 @@ export function EmployerPostings({ onNew }: { onNew: () => void }) {
 }
 
 export function EmployerMe() {
+	const router = useRouter();
 	const rows = [
 		{ icon: <ClipboardListIcon />, label: "공고 검수 정책", meta: "" },
 		{ icon: <AlertCircle />, label: "받은 경고", meta: "0회" },
 		{ icon: <SettingsIcon />, label: "매장 정보", meta: "" },
 	];
+	const handleSignOut = async () => {
+		await signOutToHome(router);
+	};
 	return (
 		<div className="mx-auto flex min-h-0 w-full max-w-[min(80%,72rem)] flex-1 flex-col py-5">
 			<div className="px-6 pt-2 pb-1">
@@ -496,6 +502,9 @@ export function EmployerMe() {
 						</div>
 					))}
 				</div>
+				<Button className="w-full" onClick={handleSignOut} variant="secondary">
+					로그아웃
+				</Button>
 			</div>
 		</div>
 	);

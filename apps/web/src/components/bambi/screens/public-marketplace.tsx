@@ -14,20 +14,29 @@ import {
 } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
 import {
+	MarketplaceDiscoveryAxisChips,
+	MarketplaceDiscoveryTabs,
+	MarketplaceFilterSheet,
 	MarketplaceFilterSidebar,
-	MarketplaceRegionChips,
 	MarketplaceSearch,
+	useMarketplaceDiscovery,
 } from "../marketplace";
+import { MobileTabBar } from "../mobile-tab-bar";
 import { ResponsiveAppShell } from "../responsive-shell";
 import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 
 export function PublicMarketplaceScreen() {
 	const router = useRouter();
+	const [filtersOpen, setFiltersOpen] = useState(false);
 	const [filters, setFilters] = useState<MarketplaceFilters>(
 		DEFAULT_MARKETPLACE_FILTERS
 	);
 	const { isApiBacked, isError, jobs, refetch, sections } =
 		useMarketplaceJobs(filters);
+	const { discoveryTabId, selectDiscoveryTab } = useMarketplaceDiscovery(
+		filters,
+		setFilters
+	);
 	const openJob = (job: Job) => router.push(`/seeker/jobs/${job.id}` as Route);
 	const startChat = (job: Job) =>
 		router.push(`/seeker/jobs/${job.id}/chat?entry=public` as Route);
@@ -47,16 +56,25 @@ export function PublicMarketplaceScreen() {
 	);
 	return (
 		<ResponsiveAppShell headerSlot={headerSearch} variant="public">
-			<div className="mx-auto flex w-full gap-5 px-5 py-6 pb-16 md:max-w-[80%] md:px-6 md:py-10">
+			<div className="mx-auto flex w-full gap-5 px-5 py-6 pb-24 md:max-w-[80%] md:px-6 md:py-10">
 				<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
 				<section className="min-w-0 flex-1">
 					<div className="mb-4 flex flex-col gap-3">
+						<MarketplaceDiscoveryTabs
+							onSelect={selectDiscoveryTab}
+							value={discoveryTabId}
+						/>
 						<MarketplaceSearch
 							filters={filters}
 							onChange={setFilters}
+							onOpenFilters={() => setFiltersOpen(true)}
 							searchFieldClassName="md:hidden"
 						/>
-						<MarketplaceRegionChips filters={filters} onChange={setFilters} />
+						<MarketplaceDiscoveryAxisChips
+							discoveryTabId={discoveryTabId}
+							filters={filters}
+							onChange={setFilters}
+						/>
 					</div>
 					{isError ? (
 						<Alert className="mb-4" variant="warning">
@@ -88,6 +106,13 @@ export function PublicMarketplaceScreen() {
 					/>
 				</section>
 			</div>
+			<MarketplaceFilterSheet
+				filters={filters}
+				onChange={setFilters}
+				onOpenChange={setFiltersOpen}
+				open={filtersOpen}
+			/>
+			<MobileTabBar homeHref="/" />
 		</ResponsiveAppShell>
 	);
 }
