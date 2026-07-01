@@ -69,7 +69,7 @@ export function VisualJobCard({
 	return (
 		<article
 			className={cn(
-				"flex flex-col gap-2 rounded-lg border bg-card p-3 transition-colors",
+				"flex flex-col gap-2 rounded-lg border bg-card p-2 transition-colors",
 				toneClassName[tone],
 				active && "border-coral-400 ring-2 ring-coral-100"
 			)}
