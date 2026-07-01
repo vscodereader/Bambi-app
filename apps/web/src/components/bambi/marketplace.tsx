@@ -536,7 +536,12 @@ export function SelectedJobPanel({
 						</p>
 					</div>
 					<div className="mt-5 grid gap-2">
-						<Button block onClick={() => onChat(job)} size="md">
+						<Button
+							block
+							className="shadow-none"
+							onClick={() => onChat(job)}
+							size="md"
+						>
 							1:1 채팅 시작
 						</Button>
 						<Button
