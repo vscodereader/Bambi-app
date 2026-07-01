@@ -135,14 +135,14 @@ export function SeekerChatListResponsive({
 						>
 							<Avatar
 								className="shrink-0"
-								name={room.jobPostId}
+								name={room.jobTitle ?? "공고 채팅"}
 								size="lg"
 								square
 							/>
 							<div className="min-w-0 flex-1">
 								<div className="flex min-w-0 flex-wrap items-center gap-2">
 									<h2 className="m-0 truncate font-extrabold text-base">
-										공고 채팅
+										{room.jobTitle ?? "공고 채팅"}
 									</h2>
 									<Badge tone={room.isBlocked ? "danger" : "success"}>
 										{room.isBlocked ? "차단됨" : "대화 가능"}
@@ -152,7 +152,7 @@ export function SeekerChatListResponsive({
 									) : null}
 								</div>
 								<p className="mt-1 mb-0 truncate text-muted-foreground text-sm">
-									공고 {room.jobPostId}
+									{room.lastMessageBody ?? "아직 주고받은 메시지가 없어요"}
 								</p>
 							</div>
 							<div className="hidden text-right md:block">
