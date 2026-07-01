@@ -20,6 +20,7 @@ import { SELECTED_JOB_CARD_CLASS } from "@/lib/bambi/selection-style";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
 import { Badge, Button, Card, Input, Tag } from "./ds";
 import {
+	BriefcaseIcon,
 	CheckIcon,
 	ClockIcon,
 	MapPinIcon,
@@ -238,28 +239,57 @@ interface MarketplaceRegionChipsProps {
 	onChange: FilterChange;
 }
 
-// 지역별 퀵칩 — 밤알바 도메인에서 가장 많이 쓰는 필터를 한 줄로 노출한다.
+interface MarketplaceAxisChipsProps {
+	axis: "category" | "region";
+	filters: MarketplaceFilters;
+	onChange: FilterChange;
+}
+
+const MARKETPLACE_AXIS_CONFIG = {
+	category: { Icon: BriefcaseIcon, options: MARKETPLACE_CATEGORIES },
+	region: { Icon: MapPinIcon, options: MARKETPLACE_REGIONS },
+} as const;
+
+// 지역/업종 공용 퀵칩 — 축에 따라 옵션·아이콘·대상 필드를 바꾼다.
+export function MarketplaceAxisChips({
+	axis,
+	filters,
+	onChange,
+}: MarketplaceAxisChipsProps) {
+	const { Icon, options } = MARKETPLACE_AXIS_CONFIG[axis];
+	return (
+		<div className="flex items-center gap-2">
+			<span className="inline-flex size-4 shrink-0 text-coral-600">
+				<Icon />
+			</span>
+			<div className="flex min-w-0 gap-2 overflow-x-auto [scrollbar-width:none]">
+				{options.map((option) => (
+					<Tag
+						key={option}
+						onClick={() =>
+							onChange(
+								axis === "region"
+									? { ...filters, region: option }
+									: { ...filters, category: option }
+							)
+						}
+						selected={filters[axis] === option}
+					>
+						{option}
+					</Tag>
+				))}
+			</div>
+		</div>
+	);
+}
+
+// 지역 전용 사용처(홈 PublicMarketplaceScreen)를 위한 얇은 래퍼.
 export function MarketplaceRegionChips({
 	filters,
 	onChange,
 }: MarketplaceRegionChipsProps) {
 	return (
-		<div className="flex items-center gap-2">
-			<span className="inline-flex size-4 shrink-0 text-coral-600">
-				<MapPinIcon />
-			</span>
-			<div className="flex min-w-0 gap-2 overflow-x-auto [scrollbar-width:none]">
-				{MARKETPLACE_REGIONS.map((region) => (
-					<Tag
-						key={region}
-						onClick={() => onChange({ ...filters, region })}
-						selected={filters.region === region}
-					>
-						{region}
-					</Tag>
-				))}
-			</div>
-		</div>
+		<MarketplaceAxisChips axis="region" filters={filters} onChange={onChange} />
 	);
 }
 
