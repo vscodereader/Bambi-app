@@ -154,7 +154,12 @@ export function AuthScreen() {
 								{message}
 							</div>
 						) : null}
-						<Button block disabled={isSubmitting} onClick={handleSubmit}>
+						<Button
+							block
+							className="shadow-none"
+							disabled={isSubmitting}
+							onClick={handleSubmit}
+						>
 							{isSubmitting ? "처리 중" : submitLabel}
 						</Button>
 						<Button
