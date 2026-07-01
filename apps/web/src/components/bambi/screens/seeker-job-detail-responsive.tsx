@@ -227,7 +227,7 @@ export function SeekerJobDetailResponsive({
 					</div>
 					<Button
 						block
-						className="mt-5"
+						className="mt-5 shadow-none"
 						onClick={onStartChat}
 						rightIcon={<Message />}
 					>
@@ -245,7 +245,12 @@ export function SeekerJobDetailResponsive({
 				</div>
 			</aside>
 			<div className="fixed right-0 bottom-0 left-0 z-30 border-border border-t bg-background p-4 lg:hidden">
-				<Button block onClick={onStartChat} rightIcon={<Message />}>
+				<Button
+					block
+					className="shadow-none"
+					onClick={onStartChat}
+					rightIcon={<Message />}
+				>
 					1:1 채팅 시작
 				</Button>
 			</div>
