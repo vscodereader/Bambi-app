@@ -14,10 +14,12 @@ import {
 } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
 import {
+	MarketplaceDiscoveryAxisChips,
+	MarketplaceDiscoveryTabs,
 	MarketplaceFilterSheet,
 	MarketplaceFilterSidebar,
-	MarketplaceRegionChips,
 	MarketplaceSearch,
+	useMarketplaceDiscovery,
 } from "../marketplace";
 import { MobileTabBar } from "../mobile-tab-bar";
 import { ResponsiveAppShell } from "../responsive-shell";
@@ -31,6 +33,10 @@ export function PublicMarketplaceScreen() {
 	);
 	const { isApiBacked, isError, jobs, refetch, sections } =
 		useMarketplaceJobs(filters);
+	const { discoveryTabId, selectDiscoveryTab } = useMarketplaceDiscovery(
+		filters,
+		setFilters
+	);
 	const openJob = (job: Job) => router.push(`/seeker/jobs/${job.id}` as Route);
 	const startChat = (job: Job) =>
 		router.push(`/seeker/jobs/${job.id}/chat?entry=public` as Route);
@@ -54,13 +60,21 @@ export function PublicMarketplaceScreen() {
 				<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
 				<section className="min-w-0 flex-1">
 					<div className="mb-4 flex flex-col gap-3">
+						<MarketplaceDiscoveryTabs
+							onSelect={selectDiscoveryTab}
+							value={discoveryTabId}
+						/>
 						<MarketplaceSearch
 							filters={filters}
 							onChange={setFilters}
 							onOpenFilters={() => setFiltersOpen(true)}
 							searchFieldClassName="md:hidden"
 						/>
-						<MarketplaceRegionChips filters={filters} onChange={setFilters} />
+						<MarketplaceDiscoveryAxisChips
+							discoveryTabId={discoveryTabId}
+							filters={filters}
+							onChange={setFilters}
+						/>
 					</div>
 					{isError ? (
 						<Alert className="mb-4" variant="warning">

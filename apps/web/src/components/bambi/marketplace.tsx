@@ -15,8 +15,11 @@ import {
 } from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
+import { useState } from "react";
 import {
 	ALL_OPTION,
+	applyDiscoveryAxis,
+	discoveryAxisForTab,
 	MARKETPLACE_CATEGORIES,
 	MARKETPLACE_QUICK_FILTERS,
 	MARKETPLACE_REGIONS,
@@ -343,6 +346,90 @@ export function MarketplaceAxisChips({
 			</div>
 		</div>
 	);
+}
+
+export const MARKETPLACE_DISCOVERY_TABS = [
+	{ disabled: false, id: "all", label: "전체" },
+	{ disabled: false, id: "region", label: "지역별" },
+	{ disabled: false, id: "category", label: "업종별" },
+	{ disabled: true, id: "map", label: "지도" },
+	{ disabled: true, id: "recent", label: "오늘 본 공고" },
+] as const;
+
+export type MarketplaceDiscoveryTabId =
+	(typeof MARKETPLACE_DISCOVERY_TABS)[number]["id"];
+
+export function useMarketplaceDiscovery(
+	filters: MarketplaceFilters,
+	onChange: FilterChange
+) {
+	const [discoveryTabId, setDiscoveryTabId] =
+		useState<MarketplaceDiscoveryTabId>("all");
+	const selectDiscoveryTab = (tabId: MarketplaceDiscoveryTabId) => {
+		setDiscoveryTabId(tabId);
+		onChange(applyDiscoveryAxis(filters, discoveryAxisForTab(tabId)));
+	};
+	return { discoveryTabId, selectDiscoveryTab };
+}
+
+export function MarketplaceDiscoveryTabs({
+	onSelect,
+	value,
+}: {
+	onSelect: (tabId: MarketplaceDiscoveryTabId) => void;
+	value: MarketplaceDiscoveryTabId;
+}) {
+	return (
+		<div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
+			{MARKETPLACE_DISCOVERY_TABS.map((tab) => (
+				<button
+					aria-pressed={value === tab.id}
+					className={cn(
+						"h-9 shrink-0 rounded-lg px-3 font-bold text-sm disabled:opacity-50",
+						value === tab.id
+							? "bg-foreground text-background"
+							: "border border-border bg-card text-muted-foreground"
+					)}
+					disabled={tab.disabled}
+					key={tab.id}
+					onClick={() => onSelect(tab.id)}
+					type="button"
+				>
+					{tab.label}
+				</button>
+			))}
+		</div>
+	);
+}
+
+export function MarketplaceDiscoveryAxisChips({
+	discoveryTabId,
+	filters,
+	onChange,
+}: {
+	discoveryTabId: MarketplaceDiscoveryTabId;
+	filters: MarketplaceFilters;
+	onChange: FilterChange;
+}) {
+	if (discoveryTabId === "region") {
+		return (
+			<MarketplaceAxisChips
+				axis="region"
+				filters={filters}
+				onChange={onChange}
+			/>
+		);
+	}
+	if (discoveryTabId === "category") {
+		return (
+			<MarketplaceAxisChips
+				axis="category"
+				filters={filters}
+				onChange={onChange}
+			/>
+		);
+	}
+	return null;
 }
 
 // 지역 전용 사용처(홈 PublicMarketplaceScreen)를 위한 얇은 래퍼.
