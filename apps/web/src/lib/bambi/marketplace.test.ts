@@ -33,9 +33,24 @@ describe("filterMarketplaceJobs", () => {
 			onlyVerified: true,
 			query: "",
 			region: "강남",
+			subcategory: "전체",
 		});
 
 		expect(result.map((job) => job.id)).toEqual(["j1"]);
+	});
+
+	it("narrows results by the selected subcategory keyword", () => {
+		const result = filterMarketplaceJobs(JOBS, {
+			...DEFAULT_MARKETPLACE_FILTERS,
+			subcategory: "매니저",
+		});
+
+		expect(result.length).toBeGreaterThan(0);
+		expect(result.length).toBeLessThan(JOBS.length);
+		for (const job of result) {
+			const haystack = `${job.title} ${job.company} ${job.type} ${job.desc} ${job.tags.join(" ")}`;
+			expect(haystack).toContain("매니저");
+		}
 	});
 
 	it("filters jobs to today-interview listings when the chip is on", () => {

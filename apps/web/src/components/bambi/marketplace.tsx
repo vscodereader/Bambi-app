@@ -11,10 +11,12 @@ import {
 import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
 import {
+	ALL_OPTION,
 	MARKETPLACE_CATEGORIES,
 	MARKETPLACE_QUICK_FILTERS,
 	MARKETPLACE_REGIONS,
 	type MarketplaceFilters,
+	subcategoriesForCategory,
 } from "@/lib/bambi/marketplace";
 import { SELECTED_JOB_CARD_CLASS } from "@/lib/bambi/selection-style";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
@@ -48,6 +50,8 @@ export function MarketplaceFilterSidebar({
 }: MarketplaceFilterSidebarProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
+	const subcategoryOptions = subcategoriesForCategory(filters.category);
+	const subcategoryDisabled = subcategoryOptions.length <= 1;
 	return (
 		<aside className="hidden w-[236px] shrink-0 lg:block">
 			<div className="sticky top-20 flex flex-col gap-4">
@@ -90,7 +94,8 @@ export function MarketplaceFilterSidebar({
 							<Select
 								onValueChange={(value) => {
 									if (value) {
-										update({ category: value });
+										// 업종이 바뀌면 세부 업종은 다시 전체로 초기화한다.
+										update({ category: value, subcategory: ALL_OPTION });
 									}
 								}}
 								value={filters.category}
@@ -102,6 +107,31 @@ export function MarketplaceFilterSidebar({
 									{MARKETPLACE_CATEGORIES.map((category) => (
 										<SelectItem key={category} value={category}>
 											{category}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="flex flex-col gap-2">
+							<span className="font-bold text-muted-foreground text-xs">
+								세부 업종
+							</span>
+							<Select
+								disabled={subcategoryDisabled}
+								onValueChange={(value) => {
+									if (value) {
+										update({ subcategory: value });
+									}
+								}}
+								value={filters.subcategory}
+							>
+								<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+									<SelectValue>{(value) => value}</SelectValue>
+								</SelectTrigger>
+								<SelectContent>
+									{subcategoryOptions.map((subcategory) => (
+										<SelectItem key={subcategory} value={subcategory}>
+											{subcategory}
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -270,7 +300,7 @@ export function MarketplaceAxisChips({
 							onChange(
 								axis === "region"
 									? { ...filters, region: option }
-									: { ...filters, category: option }
+									: { ...filters, category: option, subcategory: ALL_OPTION }
 							)
 						}
 						selected={filters[axis] === option}
