@@ -14,11 +14,12 @@ interface VisualJobCardProps {
 	tone: "organic" | "recommended" | "special" | "urgent";
 }
 
+// 등급 카드는 배경 틴트 없이 테두리 색상만으로 구분한다.
 const toneClassName = {
 	organic: "border-border bg-card",
-	recommended: "border-sky-200 bg-sky-50/50",
-	special: "border-coral-200 bg-coral-50/70",
-	urgent: "border-amber-200 bg-amber-50/70",
+	recommended: "border-sky-300 bg-card",
+	special: "border-coral-300 bg-card",
+	urgent: "border-amber-300 bg-card",
 } as const;
 
 const toneLabel = {
@@ -53,6 +54,16 @@ function splitPay(pay: string): { amount: string; unit: null | string } {
 	return { amount: trimmed.slice(spaceIndex + 1), unit: head };
 }
 
+const DESC_MAX_LENGTH = 15;
+
+// 설명은 15자 초과 시 말줄임(…) 처리한다.
+function truncateDesc(desc: string): string {
+	const trimmed = desc.trim();
+	return trimmed.length > DESC_MAX_LENGTH
+		? `${trimmed.slice(0, DESC_MAX_LENGTH)}…`
+		: trimmed;
+}
+
 interface Marker {
 	label: string;
 	tone: "danger" | "dark" | "success";
@@ -82,6 +93,7 @@ export function VisualJobCard({
 }: VisualJobCardProps) {
 	const { amount: payAmount, unit: payUnit } = splitPay(job.pay);
 	const markers = getMarkers(job, tone);
+	const shortDesc = truncateDesc(job.desc);
 	return (
 		<article
 			className={cn(
@@ -130,32 +142,28 @@ export function VisualJobCard({
 						</div>
 					)}
 					<div className="flex min-w-0 flex-1 flex-col gap-1">
-						<h3 className="m-0 line-clamp-1 font-extrabold text-[15px] leading-snug">
-							{job.company} {job.title}
+						<h3 className="m-0 truncate font-extrabold text-[15px] leading-snug">
+							{job.company}
 						</h3>
 						<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
 							<span className="inline-flex size-3 shrink-0">
 								<MapPinIcon />
 							</span>
-							<span className="truncate">{job.location}</span>
+							<span className="truncate">
+								{job.location}
+								{job.type ? ` · ${job.type}` : ""}
+							</span>
 						</span>
-						<p className="m-0 line-clamp-2 text-muted-foreground text-xs leading-relaxed">
-							{job.desc}
+						<p className="m-0 truncate text-muted-foreground text-xs leading-relaxed">
+							{shortDesc}
 						</p>
 					</div>
 				</div>
 			</button>
 			<div className="flex items-center justify-between gap-2">
-				<span className="flex min-w-0 items-baseline gap-1">
-					{payUnit ? (
-						<span className="shrink-0 font-semibold text-muted-foreground text-xs">
-							{payUnit}
-						</span>
-					) : null}
-					<span className="truncate font-extrabold text-base text-coral-600 leading-none">
-						{payAmount}
-					</span>
-				</span>
+				<Badge className="shrink-0" tone="primary">
+					{payUnit ? `${payUnit} ${payAmount}` : payAmount}
+				</Badge>
 				<Button
 					className="h-9 shrink-0 justify-center"
 					onClick={() => onChat(job)}
