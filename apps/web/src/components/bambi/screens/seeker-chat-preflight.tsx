@@ -190,7 +190,7 @@ export function SeekerChatPreflight({
 					</div>
 					<Button
 						block
-						className="mt-5"
+						className="mt-5 shadow-none"
 						disabled={continueDisabled || isContinuing}
 						onClick={onContinue}
 						rightIcon={<Message />}
@@ -202,6 +202,7 @@ export function SeekerChatPreflight({
 			<div className="fixed right-0 bottom-0 left-0 z-30 border-border border-t bg-background p-4 lg:hidden">
 				<Button
 					block
+					className="shadow-none"
 					disabled={continueDisabled || isContinuing}
 					onClick={onContinue}
 					rightIcon={<Message />}
