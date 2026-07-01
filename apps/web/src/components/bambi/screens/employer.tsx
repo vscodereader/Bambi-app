@@ -451,7 +451,7 @@ export function EmployerMe() {
 		{ icon: <SettingsIcon />, label: "매장 정보", meta: "" },
 	];
 	return (
-		<div className="mx-auto flex min-h-0 w-full max-w-[80%] flex-1 flex-col">
+		<div className="mx-auto flex min-h-0 w-full max-w-[min(80%,72rem)] flex-1 flex-col">
 			<div className="px-6 pt-2 pb-1">
 				<h1 className="font-extrabold text-2xl text-foreground">매장 정보</h1>
 			</div>
