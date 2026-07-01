@@ -457,11 +457,11 @@ export function EmployerMe() {
 		await signOutToHome(router);
 	};
 	return (
-		<div className="mx-auto flex min-h-0 w-full max-w-[min(80%,72rem)] flex-1 flex-col py-5">
-			<div className="px-6 pt-2 pb-1">
+		<div className="mx-auto flex min-h-0 w-full max-w-full flex-1 flex-col py-5 md:max-w-[min(80%,72rem)]">
+			<div className="px-5 pt-2 pb-1 md:px-6">
 				<h1 className="font-extrabold text-2xl text-foreground">매장 정보</h1>
 			</div>
-			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 py-4">
+			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-5 py-4 md:px-6">
 				<div className="flex items-center gap-[14px] rounded-[18px] border border-primary p-[18px]">
 					<Avatar name="달밤 라운지" size="lg" square />
 					<div className="flex-1">

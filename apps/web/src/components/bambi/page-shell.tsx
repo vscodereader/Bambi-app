@@ -13,7 +13,7 @@ export function PageShell({
 	title,
 }: PageShellProps) {
 	return (
-		<main className="mx-auto flex w-full max-w-[min(80%,72rem)] flex-col gap-6 px-4 py-6 sm:px-6">
+		<main className="mx-auto flex w-full max-w-full flex-col gap-6 px-5 py-6 md:max-w-[min(80%,72rem)] md:px-6">
 			<header className="flex flex-wrap items-start justify-between gap-3">
 				<div className="flex flex-col gap-1">
 					<h1 className="font-semibold text-2xl tracking-normal">{title}</h1>
