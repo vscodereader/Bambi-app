@@ -8,12 +8,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
-import {
-	Sheet,
-	SheetClose,
-	SheetContent,
-	SheetTitle,
-} from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
 import {
@@ -24,18 +18,14 @@ import {
 } from "@/lib/bambi/marketplace";
 import { SELECTED_JOB_CARD_CLASS } from "@/lib/bambi/selection-style";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
-import { Badge, Button, Card, Input, Logo, Tag } from "./ds";
+import { Badge, Button, Card, Input, Tag } from "./ds";
 import {
 	CheckIcon,
-	ChevronRightIcon,
 	ClockIcon,
-	DollarCircle,
 	MapPinIcon,
 	Message,
 	Search2,
-	ShieldIcon,
 	StarIcon,
-	XIcon,
 } from "./icons";
 
 type FilterChange = (nextFilters: MarketplaceFilters) => void;
@@ -484,106 +474,5 @@ export function JobList({
 				</section>
 			))}
 		</div>
-	);
-}
-
-interface SelectedJobPanelProps {
-	job?: Job;
-	onChat: (job: Job) => void;
-	onOpenChange: (open: boolean) => void;
-	onViewDetail: (job: Job) => void;
-	open: boolean;
-}
-
-// 상시 컬럼 대신 온디맨드 우측 드로어 — 기본은 넓은 그리드, 카드 선택 시 오버레이로 뜬다.
-export function SelectedJobPanel({
-	job,
-	onChat,
-	onOpenChange,
-	onViewDetail,
-	open,
-}: SelectedJobPanelProps) {
-	return (
-		<Sheet modal onOpenChange={onOpenChange} open={open && Boolean(job)}>
-			<SheetContent>
-				{job ? (
-					<>
-						<div className="mb-10 flex items-center justify-between gap-3">
-							<Logo lang="ko" size="sm" wordmark={false} />
-							<SheetClose
-								aria-label="닫기"
-								className="inline-flex size-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-muted-foreground hover:bg-secondary"
-							>
-								<span className="inline-flex size-4">
-									<XIcon />
-								</span>
-							</SheetClose>
-						</div>
-						<div className="mb-4 flex flex-wrap gap-1.5">
-							{job.promotionLabel ? (
-								<Badge tone="pending">{job.promotionLabel}</Badge>
-							) : null}
-							{job.verified ? <Badge tone="success">검수 통과</Badge> : null}
-						</div>
-						<SheetTitle>
-							{job.company} {job.title}
-						</SheetTitle>
-						<p className="mt-2 mb-4 text-muted-foreground text-sm leading-relaxed">
-							{job.desc}
-						</p>
-						<div className="grid gap-3">
-							<div className="flex items-center gap-2 font-bold text-sm">
-								<span className="inline-flex size-4 text-coral-600">
-									<DollarCircle />
-								</span>
-								{job.pay}
-							</div>
-							<div className="flex items-center gap-2 font-bold text-sm">
-								<span className="inline-flex size-4 text-coral-600">
-									<MapPinIcon />
-								</span>
-								{job.location}
-							</div>
-							<div className="flex items-center gap-2 font-bold text-sm">
-								<span className="inline-flex size-4 text-coral-600">
-									<ClockIcon />
-								</span>
-								{job.hours}
-							</div>
-						</div>
-						<div className="mt-5 rounded-lg bg-coral-50 p-3 text-coral-700">
-							<div className="flex items-center gap-2 font-extrabold text-sm">
-								<span className="inline-flex size-4">
-									<ShieldIcon />
-								</span>
-								연락처 보호 중
-							</div>
-							<p className="mt-1 mb-0 text-xs leading-relaxed">
-								면접 확정 전까지 전화번호는 공개되지 않아요.
-							</p>
-						</div>
-						<div className="mt-5 grid gap-2">
-							<Button
-								block
-								className="shadow-none"
-								onClick={() => onChat(job)}
-								size="md"
-							>
-								1:1 채팅 시작
-							</Button>
-							<Button
-								block
-								onClick={() => onViewDetail(job)}
-								rightIcon={<ChevronRightIcon />}
-								size="md"
-								variant="secondary"
-							>
-								상세 보기
-							</Button>
-						</div>
-					</>
-				) : null}
-			</SheetContent>
-		</Sheet>
 	);
 }
