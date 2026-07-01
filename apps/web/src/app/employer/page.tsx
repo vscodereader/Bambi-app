@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@bambi-app/ui/components/badge";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	Card,
@@ -434,11 +435,19 @@ export default function EmployerPage() {
 							내 공고
 						</h2>
 						<p className="mt-1 text-muted-foreground text-sm">
-							최근 수정된 공고부터 표시됩니다. 진행 중인 프로모션{" "}
-							{promotionSummary.activeCount}개 · 결제 대기{" "}
-							{promotionSummary.pendingCount}개 · 남은 끌어올리기{" "}
-							{promotionSummary.remainingBoostCount}회
+							최근 수정된 공고부터 표시됩니다.
 						</p>
+						<div className="mt-2 flex flex-wrap gap-2">
+							<Badge className="rounded-full" variant="secondary">
+								진행 중 프로모션 {promotionSummary.activeCount}개
+							</Badge>
+							<Badge className="rounded-full" variant="secondary">
+								결제 대기 {promotionSummary.pendingCount}개
+							</Badge>
+							<Badge className="rounded-full" variant="secondary">
+								남은 끌어올리기 {promotionSummary.remainingBoostCount}회
+							</Badge>
+						</div>
 					</div>
 					<div className="flex flex-wrap gap-2">
 						<Link
