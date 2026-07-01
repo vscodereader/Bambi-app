@@ -15,6 +15,7 @@ import {
 import type { Job } from "@/lib/bambi/types";
 import {
 	MarketplaceFilterSidebar,
+	MarketplaceRegionChips,
 	MarketplaceSearch,
 	SelectedJobPanel,
 } from "../marketplace";
@@ -51,12 +52,13 @@ export function PublicMarketplaceScreen() {
 			<div className="mx-auto flex w-full gap-5 px-5 py-6 pb-16 md:max-w-[80%] md:px-6 md:py-10">
 				<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
 				<section className="min-w-0 flex-1">
-					<div className="mb-4">
+					<div className="mb-4 flex flex-col gap-3">
 						<MarketplaceSearch
 							filters={filters}
 							onChange={setFilters}
 							searchFieldClassName="md:hidden"
 						/>
+						<MarketplaceRegionChips filters={filters} onChange={setFilters} />
 					</div>
 					{isError ? (
 						<Alert className="mb-4" variant="warning">

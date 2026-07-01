@@ -257,6 +257,36 @@ export function MarketplaceSearch({
 	);
 }
 
+interface MarketplaceRegionChipsProps {
+	filters: MarketplaceFilters;
+	onChange: FilterChange;
+}
+
+// 지역별 퀵칩 — 밤알바 도메인에서 가장 많이 쓰는 필터를 한 줄로 노출한다.
+export function MarketplaceRegionChips({
+	filters,
+	onChange,
+}: MarketplaceRegionChipsProps) {
+	return (
+		<div className="flex items-center gap-2">
+			<span className="inline-flex size-4 shrink-0 text-coral-600">
+				<MapPinIcon />
+			</span>
+			<div className="flex min-w-0 gap-2 overflow-x-auto [scrollbar-width:none]">
+				{MARKETPLACE_REGIONS.map((region) => (
+					<Tag
+						key={region}
+						onClick={() => onChange({ ...filters, region })}
+						selected={filters.region === region}
+					>
+						{region}
+					</Tag>
+				))}
+			</div>
+		</div>
+	);
+}
+
 interface ResponsiveJobCardProps {
 	active?: boolean;
 	job: Job;

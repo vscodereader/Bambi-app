@@ -28,6 +28,7 @@ import {
 	ChevronRightIcon,
 	ClipboardListIcon,
 	ClockIcon,
+	Flash,
 	PlusIcon,
 	SettingsIcon,
 	ShieldIcon,
@@ -239,6 +240,7 @@ interface Posting {
 	pay: string;
 	reason?: string;
 	state: "published" | "review" | "rejected";
+	tier?: "premium" | "recommended";
 	title: string;
 	views: number;
 }
@@ -250,6 +252,7 @@ const MY_POSTINGS: Posting[] = [
 		id: "p1",
 		title: "홀 서빙 · 주말 야간",
 		state: "published",
+		tier: "premium",
 		area: "강남 · 청담",
 		pay: "시급 18,000원",
 		views: 128,
@@ -289,9 +292,20 @@ const POSTING_STATE: Record<
 	rejected: { tone: "danger", label: "반려됨" },
 };
 
+// 마켓플레이스 노출 등급을 구인자 화면에도 동일 언어로 보여준다(유료 홍보 체감).
+const POSTING_TIER: Record<
+	NonNullable<Posting["tier"]>,
+	{ tone: "primary" | "info"; label: string; note: string }
+> = {
+	premium: { tone: "primary", label: "프리미엄", note: "상단 고정 노출 중" },
+	recommended: { tone: "info", label: "추천", note: "추천 영역 노출 중" },
+};
+
 function PostingRow({ p }: { p: Posting }) {
 	const stateConf = POSTING_STATE[p.state];
 	const rejected = p.state === "rejected";
+	const tierConf = p.tier ? POSTING_TIER[p.tier] : null;
+	const promoted = p.state === "published" && tierConf;
 	return (
 		<div
 			className={cn(
@@ -311,10 +325,25 @@ function PostingRow({ p }: { p: Posting }) {
 						<span>{p.pay}</span>
 					</div>
 				</div>
-				<Badge dot tone={stateConf.tone}>
-					{stateConf.label}
-				</Badge>
+				<div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+					{tierConf ? (
+						<Badge tone={tierConf.tone}>{tierConf.label}</Badge>
+					) : null}
+					<Badge dot tone={stateConf.tone}>
+						{stateConf.label}
+					</Badge>
+				</div>
 			</div>
+			{promoted ? (
+				<div className="flex items-center gap-2 rounded-xl bg-coral-50 px-3 py-2 text-coral-700">
+					<span className="inline-flex size-4 shrink-0">
+						<Flash />
+					</span>
+					<span className="font-bold text-[12.5px] leading-normal">
+						{tierConf.note} · 일반 대비 조회 3.2배
+					</span>
+				</div>
+			) : null}
 			<div className="border-border border-t pt-2.5">
 				<span className="text-[color:var(--text-subtle)] text-xs">
 					조회 {p.views} · 지원 {p.applicants} · {p.dateLabel}

@@ -9,6 +9,7 @@ import { getSelectedMarketplaceJob } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
 import {
 	MarketplaceFilterSidebar,
+	MarketplaceRegionChips,
 	MarketplaceSearch,
 	SelectedJobPanel,
 } from "../marketplace";
@@ -74,6 +75,7 @@ export function SeekerMarketplaceScreen() {
 						onChange={setFilters}
 						searchFieldClassName="md:hidden"
 					/>
+					<MarketplaceRegionChips filters={filters} onChange={setFilters} />
 				</div>
 				{isError ? (
 					<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
