@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { JOBS } from "./data";
 import {
+	applyDiscoveryAxis,
 	DEFAULT_MARKETPLACE_FILTERS,
+	discoveryAxisForTab,
 	filterMarketplaceJobs,
 	getSelectedMarketplaceJob,
 } from "./marketplace";
@@ -57,5 +59,57 @@ describe("getSelectedMarketplaceJob", () => {
 		const result = getSelectedMarketplaceJob(JOBS, "missing");
 
 		expect(result?.id).toBe("j1");
+	});
+});
+
+describe("applyDiscoveryAxis", () => {
+	const base = {
+		...DEFAULT_MARKETPLACE_FILTERS,
+		category: "라운지",
+		minimumPay: 20_000,
+		query: "청담",
+		region: "강남",
+	};
+
+	it("resets both region and category for the all axis", () => {
+		expect(applyDiscoveryAxis(base, "all")).toEqual({
+			...base,
+			category: "전체",
+			region: "전체",
+		});
+	});
+
+	it("keeps region but clears category for the region axis", () => {
+		expect(applyDiscoveryAxis(base, "region")).toEqual({
+			...base,
+			category: "전체",
+		});
+	});
+
+	it("keeps category but clears region for the category axis", () => {
+		expect(applyDiscoveryAxis(base, "category")).toEqual({
+			...base,
+			region: "전체",
+		});
+	});
+
+	it("preserves unrelated filters like query and minimumPay", () => {
+		const result = applyDiscoveryAxis(base, "region");
+
+		expect(result.query).toBe("청담");
+		expect(result.minimumPay).toBe(20_000);
+	});
+});
+
+describe("discoveryAxisForTab", () => {
+	it("maps region and category tab ids to their axis", () => {
+		expect(discoveryAxisForTab("region")).toBe("region");
+		expect(discoveryAxisForTab("category")).toBe("category");
+	});
+
+	it("maps all and disabled tabs to the all axis", () => {
+		expect(discoveryAxisForTab("all")).toBe("all");
+		expect(discoveryAxisForTab("map")).toBe("all");
+		expect(discoveryAxisForTab("recent")).toBe("all");
 	});
 });
