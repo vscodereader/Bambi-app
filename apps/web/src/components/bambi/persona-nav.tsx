@@ -7,14 +7,8 @@ import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
 import { BottomNav } from "./ds";
-import {
-	ClipboardListIcon,
-	Message,
-	PlusIcon,
-	Search2,
-	SettingsIcon,
-	UserIcon,
-} from "./icons";
+import { ClipboardListIcon, PlusIcon, SettingsIcon, UserIcon } from "./icons";
+import { MobileTabBar } from "./mobile-tab-bar";
 import {
 	ConsoleToast,
 	ConsoleTop,
@@ -38,41 +32,12 @@ function NavBar({ children }: { children: ReactNode }) {
 // ---- 구직자 ----------------------------------------------------------------
 export function SeekerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
-	const router = useRouter();
 	const showNav =
 		path === "/seeker" || path === "/seeker/chats" || path === "/seeker/me";
-	let value = "home";
-	if (path === "/seeker/me") {
-		value = "me";
-	} else if (path === "/seeker/chats") {
-		value = "chat";
-	}
-	const go = (v: string) => {
-		if (v === "chat") {
-			router.push("/seeker/chats");
-		} else if (v === "me") {
-			router.push("/seeker/me");
-		} else {
-			router.push("/seeker");
-		}
-	};
 	return (
 		<>
 			<Content>{children}</Content>
-			{showNav ? (
-				<NavBar>
-					<BottomNav
-						badges={{ chat: 1 }}
-						items={[
-							{ value: "home", label: "탐색", icon: Search2 },
-							{ value: "chat", label: "채팅", icon: Message },
-							{ value: "me", label: "내 정보", icon: UserIcon },
-						]}
-						onChange={go}
-						value={value}
-					/>
-				</NavBar>
-			) : null}
+			{showNav ? <MobileTabBar homeHref="/seeker" /> : null}
 		</>
 	);
 }

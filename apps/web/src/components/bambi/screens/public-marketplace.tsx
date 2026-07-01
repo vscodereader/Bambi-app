@@ -18,6 +18,7 @@ import {
 	MarketplaceRegionChips,
 	MarketplaceSearch,
 } from "../marketplace";
+import { MobileTabBar } from "../mobile-tab-bar";
 import { ResponsiveAppShell } from "../responsive-shell";
 import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 
@@ -47,7 +48,7 @@ export function PublicMarketplaceScreen() {
 	);
 	return (
 		<ResponsiveAppShell headerSlot={headerSearch} variant="public">
-			<div className="mx-auto flex w-full gap-5 px-5 py-6 pb-16 md:max-w-[80%] md:px-6 md:py-10">
+			<div className="mx-auto flex w-full gap-5 px-5 py-6 pb-24 md:max-w-[80%] md:px-6 md:py-10">
 				<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
 				<section className="min-w-0 flex-1">
 					<div className="mb-4 flex flex-col gap-3">
@@ -88,6 +89,7 @@ export function PublicMarketplaceScreen() {
 					/>
 				</section>
 			</div>
+			<MobileTabBar homeHref="/" />
 		</ResponsiveAppShell>
 	);
 }
