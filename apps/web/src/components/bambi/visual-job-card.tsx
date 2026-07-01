@@ -161,9 +161,16 @@ export function VisualJobCard({
 				</div>
 			</button>
 			<div className="flex items-center justify-between gap-2">
-				<Badge className="shrink-0" tone="primary">
-					{payUnit ? `${payUnit} ${payAmount}` : payAmount}
-				</Badge>
+				<span className="flex min-w-0 items-center gap-1.5">
+					{payUnit ? (
+						<Badge className="shrink-0" tone="neutral">
+							{payUnit}
+						</Badge>
+					) : null}
+					<span className="truncate font-extrabold text-base text-coral-600 leading-none">
+						{payAmount}
+					</span>
+				</span>
 				<Button
 					className="h-9 shrink-0 justify-center"
 					onClick={() => onChat(job)}
