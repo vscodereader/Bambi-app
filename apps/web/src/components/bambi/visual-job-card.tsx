@@ -4,7 +4,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
 import type { Job } from "@/lib/bambi/types";
 import { Badge, Button } from "./ds";
-import { CheckIcon, MapPinIcon, Message } from "./icons";
+import { MapPinIcon, Message } from "./icons";
 
 interface VisualJobCardProps {
 	active?: boolean;
@@ -20,13 +20,6 @@ const toneClassName = {
 	recommended: "border-sky-300 bg-card",
 	special: "border-coral-300 bg-card",
 	urgent: "border-amber-300 bg-card",
-} as const;
-
-const toneLabel = {
-	organic: "최신",
-	recommended: "추천",
-	special: "스페셜",
-	urgent: "급구",
 } as const;
 
 // 티어 배지 색을 등급별로 구분해 유료 노출 사다리를 시각화한다.
@@ -64,26 +57,6 @@ function truncateDesc(desc: string): string {
 		: trimmed;
 }
 
-interface Marker {
-	label: string;
-	tone: "danger" | "dark" | "success";
-}
-
-// HOT/오늘면접/신규 마커를 기존 필드에서 파생한다(스키마 변경 없음).
-function getMarkers(job: Job, tone: VisualJobCardProps["tone"]): Marker[] {
-	const markers: Marker[] = [];
-	if (tone === "urgent") {
-		markers.push({ label: "HOT", tone: "danger" });
-	}
-	if (job.tags.includes("오늘 면접")) {
-		markers.push({ label: "오늘면접", tone: "success" });
-	}
-	if (job.featured) {
-		markers.push({ label: "신규", tone: "dark" });
-	}
-	return markers;
-}
-
 export function VisualJobCard({
 	active = false,
 	job,
@@ -92,7 +65,6 @@ export function VisualJobCard({
 	tone,
 }: VisualJobCardProps) {
 	const { amount: payAmount, unit: payUnit } = splitPay(job.pay);
-	const markers = getMarkers(job, tone);
 	const shortDesc = truncateDesc(job.desc);
 	return (
 		<article
@@ -107,25 +79,6 @@ export function VisualJobCard({
 				onClick={() => onOpen(job)}
 				type="button"
 			>
-				{/* 배지는 항상 한 줄 — flex-wrap 금지, 넘치면 클립 */}
-				<div className="flex items-center gap-1 overflow-hidden">
-					<Badge className="shrink-0" tone={toneBadge[tone]}>
-						{job.promotionLabel ?? toneLabel[tone]}
-					</Badge>
-					{markers.map((marker) => (
-						<Badge className="shrink-0" key={marker.label} tone={marker.tone}>
-							{marker.label}
-						</Badge>
-					))}
-					{job.verified ? (
-						<Badge className="shrink-0" tone="success">
-							<span className="inline-flex size-3">
-								<CheckIcon />
-							</span>
-							검수
-						</Badge>
-					) : null}
-				</div>
 				<div className="flex items-start gap-3">
 					{job.coverImage ? (
 						<Image
@@ -160,8 +113,8 @@ export function VisualJobCard({
 					</div>
 				</div>
 			</button>
-			<div className="flex items-center justify-between gap-2">
-				<span className="flex min-w-0 items-center gap-1.5">
+			<div className="flex items-end justify-between gap-2">
+				<span className="flex min-w-0 items-end gap-1.5">
 					{payUnit ? (
 						<Badge className="shrink-0" tone={toneBadge[tone]}>
 							{payUnit}
