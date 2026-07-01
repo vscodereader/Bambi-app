@@ -42,7 +42,14 @@ export function ResponsiveAppShell({
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
 				<header className="sticky top-0 z-30 hidden border-border border-b bg-background/95 backdrop-blur md:block">
-					<div className="mx-auto flex h-16 max-w-[80%] items-center gap-7 px-6">
+					<div
+						className={cn(
+							"mx-auto flex h-16 items-center gap-7 px-6",
+							// 구인자 전용: 헤더 좌우 엣지를 캡된 PageShell 본문
+							// (max-w-[min(80%,72rem)])과 정렬. 그 외 variant는 기존 80% 유지.
+							variant === "employer" ? "max-w-[min(80%,72rem)]" : "max-w-[80%]"
+						)}
+					>
 						<Link aria-label="밤비 홈" className="no-underline" href="/">
 							<Logo lang="ko" size="md" />
 						</Link>
