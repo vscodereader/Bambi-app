@@ -1031,6 +1031,7 @@ export function SeekerChatRoomResponsive({
 							/>
 							<Button
 								block
+								className="shadow-none"
 								disabled={proposeInterviewMutation.isPending}
 								size="md"
 								type="submit"
