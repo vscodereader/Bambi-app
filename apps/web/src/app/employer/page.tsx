@@ -311,7 +311,7 @@ export default function EmployerPage() {
 			<section aria-labelledby="organizations" className="flex flex-col gap-3">
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div>
-						<h2 className="font-medium text-base" id="organizations">
+						<h2 className="font-semibold text-lg" id="organizations">
 							조직 프로필
 						</h2>
 						<p className="mt-1 text-muted-foreground text-sm">
@@ -384,7 +384,7 @@ export default function EmployerPage() {
 			<Separator />
 
 			<section aria-labelledby="teams" className="flex flex-col gap-3">
-				<h2 className="font-medium text-base" id="teams">
+				<h2 className="font-semibold text-lg" id="teams">
 					팀 프로필
 				</h2>
 				{teamProfiles.length > 0 ? (
@@ -428,7 +428,7 @@ export default function EmployerPage() {
 			<section aria-labelledby="owned-jobs" className="flex flex-col gap-3">
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div>
-						<h2 className="font-medium text-base" id="owned-jobs">
+						<h2 className="font-semibold text-lg" id="owned-jobs">
 							내 공고
 						</h2>
 						<p className="mt-1 text-muted-foreground text-sm">
