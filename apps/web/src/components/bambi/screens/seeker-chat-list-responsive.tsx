@@ -72,7 +72,7 @@ export function SeekerChatListResponsive({
 
 	if (chatsQuery.isError) {
 		return (
-			<div className="mx-auto w-full max-w-[760px] px-4 py-5 pb-24 md:px-6">
+			<div className="mx-auto w-full px-5 py-5 pb-24 md:max-w-[80%] md:px-6">
 				<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
 					실제 채팅 목록을 불러오지 못해 샘플 대화를 표시하고 있어요.
 					<button
@@ -90,14 +90,14 @@ export function SeekerChatListResponsive({
 
 	if (chatsQuery.isLoading) {
 		return (
-			<div className="mx-auto w-full max-w-[760px] px-4 py-10 text-center font-bold text-muted-foreground">
+			<div className="mx-auto w-full px-5 py-10 text-center font-bold text-muted-foreground md:max-w-[80%] md:px-6">
 				채팅 목록을 불러오고 있어요.
 			</div>
 		);
 	}
 
 	return (
-		<div className="mx-auto w-full max-w-[860px] px-4 py-5 pb-24 md:px-6 md:py-7 lg:pb-8">
+		<div className="mx-auto w-full px-5 py-5 pb-24 md:max-w-[80%] md:px-6 md:py-7 lg:pb-8">
 			<div className="mb-5">
 				<Badge tone="success">
 					<span className="inline-flex size-3.5">
