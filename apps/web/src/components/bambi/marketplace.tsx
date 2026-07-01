@@ -508,7 +508,7 @@ export function SelectedJobPanel({
 			<SheetContent>
 				{job ? (
 					<>
-						<div className="mb-3 flex items-center justify-between gap-3">
+						<div className="mb-10 flex items-center justify-between gap-3">
 							<Logo lang="ko" size="sm" wordmark={false} />
 							<SheetClose
 								aria-label="닫기"
