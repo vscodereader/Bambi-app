@@ -519,7 +519,7 @@ export function SelectedJobPanel({
 								</span>
 							</SheetClose>
 						</div>
-						<div className="mb-3 flex flex-wrap gap-1.5">
+						<div className="mb-4 flex flex-wrap gap-1.5">
 							{job.promotionLabel ? (
 								<Badge tone="pending">{job.promotionLabel}</Badge>
 							) : null}
