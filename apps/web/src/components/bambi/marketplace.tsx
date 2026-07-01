@@ -8,6 +8,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
+import {
+	Sheet,
+	SheetClose,
+	SheetContent,
+	SheetTitle,
+} from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
 import {
@@ -29,6 +35,7 @@ import {
 	Search2,
 	ShieldIcon,
 	StarIcon,
+	XIcon,
 } from "./icons";
 
 type FilterChange = (nextFilters: MarketplaceFilters) => void;
@@ -159,29 +166,8 @@ export function MarketplaceFilterSidebar({
 						</label>
 					</div>
 				</Card>
-				<TrustMiniPanel />
 			</div>
 		</aside>
-	);
-}
-
-function TrustMiniPanel() {
-	return (
-		<Card
-			className="rounded-lg border-coral-100 bg-coral-50 text-coral-700"
-			pad="lg"
-			tone="outline"
-		>
-			<span className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-coral-200 bg-card text-coral-600">
-				<span className="inline-flex size-5">
-					<ShieldIcon />
-				</span>
-			</span>
-			<h2 className="m-0 font-extrabold text-lg">연락처는 보호돼요</h2>
-			<p className="mt-2 mb-0 text-[13px] text-coral-700/80 leading-relaxed">
-				면접 일정 확정 전까지 전화번호와 외부 연락처는 공개되지 않아요.
-			</p>
-		</Card>
 	);
 }
 
@@ -504,88 +490,100 @@ export function JobList({
 interface SelectedJobPanelProps {
 	job?: Job;
 	onChat: (job: Job) => void;
-	onOpen: (job: Job) => void;
+	onOpenChange: (open: boolean) => void;
+	onViewDetail: (job: Job) => void;
+	open: boolean;
 }
 
+// 상시 컬럼 대신 온디맨드 우측 드로어 — 기본은 넓은 그리드, 카드 선택 시 오버레이로 뜬다.
 export function SelectedJobPanel({
 	job,
 	onChat,
-	onOpen,
+	onOpenChange,
+	onViewDetail,
+	open,
 }: SelectedJobPanelProps) {
-	if (!job) {
-		return null;
-	}
 	return (
-		<aside className="hidden w-[292px] shrink-0 xl:block">
-			<div className="sticky top-20">
-				<Card className="rounded-lg" pad="lg" tone="outline">
-					<div className="mb-3 flex items-center justify-between gap-3">
-						<Logo lang="ko" size="sm" wordmark={false} />
-						<div className="flex flex-wrap justify-end gap-1.5">
+		<Sheet modal onOpenChange={onOpenChange} open={open && Boolean(job)}>
+			<SheetContent>
+				{job ? (
+					<>
+						<div className="mb-3 flex items-center justify-between gap-3">
+							<Logo lang="ko" size="sm" wordmark={false} />
+							<SheetClose
+								aria-label="닫기"
+								className="inline-flex size-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-muted-foreground hover:bg-secondary"
+							>
+								<span className="inline-flex size-4">
+									<XIcon />
+								</span>
+							</SheetClose>
+						</div>
+						<div className="mb-3 flex flex-wrap gap-1.5">
 							{job.promotionLabel ? (
 								<Badge tone="pending">{job.promotionLabel}</Badge>
 							) : null}
 							{job.verified ? <Badge tone="success">검수 통과</Badge> : null}
 						</div>
-					</div>
-					<h2 className="m-0 font-extrabold text-xl leading-snug">
-						{job.company} {job.title}
-					</h2>
-					<p className="mt-2 mb-4 text-muted-foreground text-sm leading-relaxed">
-						{job.desc}
-					</p>
-					<div className="grid gap-3">
-						<div className="flex items-center gap-2 font-bold text-sm">
-							<span className="inline-flex size-4 text-coral-600">
-								<DollarCircle />
-							</span>
-							{job.pay}
-						</div>
-						<div className="flex items-center gap-2 font-bold text-sm">
-							<span className="inline-flex size-4 text-coral-600">
-								<MapPinIcon />
-							</span>
-							{job.location}
-						</div>
-						<div className="flex items-center gap-2 font-bold text-sm">
-							<span className="inline-flex size-4 text-coral-600">
-								<ClockIcon />
-							</span>
-							{job.hours}
-						</div>
-					</div>
-					<div className="mt-5 rounded-lg bg-coral-50 p-3 text-coral-700">
-						<div className="flex items-center gap-2 font-extrabold text-sm">
-							<span className="inline-flex size-4">
-								<ShieldIcon />
-							</span>
-							연락처 보호 중
-						</div>
-						<p className="mt-1 mb-0 text-xs leading-relaxed">
-							면접 확정 전까지 전화번호는 공개되지 않아요.
+						<SheetTitle>
+							{job.company} {job.title}
+						</SheetTitle>
+						<p className="mt-2 mb-4 text-muted-foreground text-sm leading-relaxed">
+							{job.desc}
 						</p>
-					</div>
-					<div className="mt-5 grid gap-2">
-						<Button
-							block
-							className="shadow-none"
-							onClick={() => onChat(job)}
-							size="md"
-						>
-							1:1 채팅 시작
-						</Button>
-						<Button
-							block
-							onClick={() => onOpen(job)}
-							rightIcon={<ChevronRightIcon />}
-							size="md"
-							variant="secondary"
-						>
-							상세 보기
-						</Button>
-					</div>
-				</Card>
-			</div>
-		</aside>
+						<div className="grid gap-3">
+							<div className="flex items-center gap-2 font-bold text-sm">
+								<span className="inline-flex size-4 text-coral-600">
+									<DollarCircle />
+								</span>
+								{job.pay}
+							</div>
+							<div className="flex items-center gap-2 font-bold text-sm">
+								<span className="inline-flex size-4 text-coral-600">
+									<MapPinIcon />
+								</span>
+								{job.location}
+							</div>
+							<div className="flex items-center gap-2 font-bold text-sm">
+								<span className="inline-flex size-4 text-coral-600">
+									<ClockIcon />
+								</span>
+								{job.hours}
+							</div>
+						</div>
+						<div className="mt-5 rounded-lg bg-coral-50 p-3 text-coral-700">
+							<div className="flex items-center gap-2 font-extrabold text-sm">
+								<span className="inline-flex size-4">
+									<ShieldIcon />
+								</span>
+								연락처 보호 중
+							</div>
+							<p className="mt-1 mb-0 text-xs leading-relaxed">
+								면접 확정 전까지 전화번호는 공개되지 않아요.
+							</p>
+						</div>
+						<div className="mt-5 grid gap-2">
+							<Button
+								block
+								className="shadow-none"
+								onClick={() => onChat(job)}
+								size="md"
+							>
+								1:1 채팅 시작
+							</Button>
+							<Button
+								block
+								onClick={() => onViewDetail(job)}
+								rightIcon={<ChevronRightIcon />}
+								size="md"
+								variant="secondary"
+							>
+								상세 보기
+							</Button>
+						</div>
+					</>
+				) : null}
+			</SheetContent>
+		</Sheet>
 	);
 }

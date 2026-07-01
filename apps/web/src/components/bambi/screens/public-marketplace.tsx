@@ -17,7 +17,6 @@ import {
 	MarketplaceFilterSidebar,
 	MarketplaceRegionChips,
 	MarketplaceSearch,
-	SelectedJobPanel,
 } from "../marketplace";
 import { ResponsiveAppShell } from "../responsive-shell";
 import { VisualJobExposureSections } from "../visual-job-exposure-sections";
@@ -29,7 +28,6 @@ export function PublicMarketplaceScreen() {
 	);
 	const { isApiBacked, isError, jobs, refetch, sections } =
 		useMarketplaceJobs(filters);
-	const selectedJob = jobs[0];
 	const openJob = (job: Job) => router.push(`/seeker/jobs/${job.id}` as Route);
 	const startChat = (job: Job) =>
 		router.push(`/seeker/jobs/${job.id}/chat?entry=public` as Route);
@@ -89,11 +87,6 @@ export function PublicMarketplaceScreen() {
 						sections={sections}
 					/>
 				</section>
-				<SelectedJobPanel
-					job={selectedJob}
-					onChat={startChat}
-					onOpen={openJob}
-				/>
 			</div>
 		</ResponsiveAppShell>
 	);
