@@ -896,6 +896,234 @@ git commit -m "feat: 모바일 필터 시트 추가로 데스크톱 사이드바
 
 ---
 
+## Task 6: 공개 마켓 discovery 탭 파리티 (새 요구사항)
+
+**배경:** 데스크톱 로그인 상태 채용정보(`/seeker`)에는 전체·지역별·업종별 discovery 탭이 있으나, 비로그인 채용정보(공개 마켓 `/`)에는 지역 칩만 있고 탭이 없다. 비로그인도 로그인과 동일한 탭/축 칩을 갖도록 discovery 로직을 공용화해 양쪽에 적용한다. **이 태스크는 Task 5 완료 이후 실행**하며, Task 5가 두 화면에 추가한 `filtersOpen` 상태·`MarketplaceFilterSheet`는 그대로 보존한다.
+
+**Files:**
+- Modify: `apps/web/src/components/bambi/marketplace.tsx` (공용 discovery 추출)
+- Modify: `apps/web/src/components/bambi/screens/seeker-marketplace.tsx` (공용 컴포넌트 사용으로 리팩터)
+- Modify: `apps/web/src/components/bambi/screens/public-marketplace.tsx` (discovery 탭 도입)
+
+**Interfaces:**
+- Consumes: `applyDiscoveryAxis`/`discoveryAxisForTab`(`@/lib/bambi/marketplace`), 기존 `MarketplaceAxisChips`.
+- Produces:
+  - `MARKETPLACE_DISCOVERY_TABS`, `MarketplaceDiscoveryTabId` 타입.
+  - `useMarketplaceDiscovery(filters, onChange)` → `{ discoveryTabId, selectDiscoveryTab }`.
+  - `MarketplaceDiscoveryTabs({ onSelect, value })`, `MarketplaceDiscoveryAxisChips({ discoveryTabId, filters, onChange })`.
+
+- [ ] **Step 1: marketplace.tsx에 react/lib import 추가**
+
+`apps/web/src/components/bambi/marketplace.tsx` 상단 import 보강:
+- `import { useState } from "react";` 추가.
+- `@/lib/bambi/marketplace` import에 `applyDiscoveryAxis`, `discoveryAxisForTab` 추가(기존 `ALL_OPTION` 등과 같은 블록).
+
+- [ ] **Step 2: 공용 discovery 컴포넌트/훅 추가**
+
+`marketplace.tsx`의 `MarketplaceAxisChips`/`MarketplaceRegionChips` 정의 아래(즉 `MarketplaceAxisChips`가 정의된 이후 어느 위치)에 추가:
+
+```tsx
+export const MARKETPLACE_DISCOVERY_TABS = [
+	{ disabled: false, id: "all", label: "전체" },
+	{ disabled: false, id: "region", label: "지역별" },
+	{ disabled: false, id: "category", label: "업종별" },
+	{ disabled: true, id: "map", label: "지도" },
+	{ disabled: true, id: "recent", label: "오늘 본 공고" },
+] as const;
+
+export type MarketplaceDiscoveryTabId =
+	(typeof MARKETPLACE_DISCOVERY_TABS)[number]["id"];
+
+export function useMarketplaceDiscovery(
+	filters: MarketplaceFilters,
+	onChange: FilterChange
+) {
+	const [discoveryTabId, setDiscoveryTabId] =
+		useState<MarketplaceDiscoveryTabId>("all");
+	const selectDiscoveryTab = (tabId: MarketplaceDiscoveryTabId) => {
+		setDiscoveryTabId(tabId);
+		onChange(applyDiscoveryAxis(filters, discoveryAxisForTab(tabId)));
+	};
+	return { discoveryTabId, selectDiscoveryTab };
+}
+
+export function MarketplaceDiscoveryTabs({
+	onSelect,
+	value,
+}: {
+	onSelect: (tabId: MarketplaceDiscoveryTabId) => void;
+	value: MarketplaceDiscoveryTabId;
+}) {
+	return (
+		<div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
+			{MARKETPLACE_DISCOVERY_TABS.map((tab) => (
+				<button
+					aria-pressed={value === tab.id}
+					className={cn(
+						"h-9 shrink-0 rounded-lg px-3 font-bold text-sm disabled:opacity-50",
+						value === tab.id
+							? "bg-foreground text-background"
+							: "border border-border bg-card text-muted-foreground"
+					)}
+					disabled={tab.disabled}
+					key={tab.id}
+					onClick={() => onSelect(tab.id)}
+					type="button"
+				>
+					{tab.label}
+				</button>
+			))}
+		</div>
+	);
+}
+
+export function MarketplaceDiscoveryAxisChips({
+	discoveryTabId,
+	filters,
+	onChange,
+}: {
+	discoveryTabId: MarketplaceDiscoveryTabId;
+	filters: MarketplaceFilters;
+	onChange: FilterChange;
+}) {
+	if (discoveryTabId === "region") {
+		return (
+			<MarketplaceAxisChips
+				axis="region"
+				filters={filters}
+				onChange={onChange}
+			/>
+		);
+	}
+	if (discoveryTabId === "category") {
+		return (
+			<MarketplaceAxisChips
+				axis="category"
+				filters={filters}
+				onChange={onChange}
+			/>
+		);
+	}
+	return null;
+}
+```
+
+- [ ] **Step 3: seeker-marketplace.tsx를 공용 컴포넌트 사용으로 리팩터(동작 동일)**
+
+`apps/web/src/components/bambi/screens/seeker-marketplace.tsx` 수정(기능 변화 없음, 중복 제거):
+
+(a) import 정리:
+- `@/lib/bambi/marketplace` import에서 `applyDiscoveryAxis`, `discoveryAxisForTab` 제거.
+- `../marketplace` import에서 `MarketplaceAxisChips` 제거, `MarketplaceDiscoveryAxisChips`·`MarketplaceDiscoveryTabs`·`useMarketplaceDiscovery` 추가.(Task 5에서 추가된 `MarketplaceFilterSheet`, 기존 `MarketplaceFilterSidebar`·`MarketplaceSearch`는 유지.)
+
+(b) 파일 상단의 로컬 `discoveryTabs` 상수와 `DiscoveryTabId` 타입 정의(20~28행 부근) 제거.
+
+(c) 컴포넌트 본문에서 로컬 상태·핸들러를 훅으로 교체:
+- `const [discoveryTabId, setDiscoveryTabId] = useState<DiscoveryTabId>("all");` 제거.
+- `selectDiscoveryTab` 함수 정의 제거.
+- 대신 추가: `const { discoveryTabId, selectDiscoveryTab } = useMarketplaceDiscovery(filters, setFilters);`
+  (`filters`/`setFilters`는 기존 `useSeekerFilters()`에서 가져온 값. `useState`는 Task 5의 `filtersOpen`에서 계속 쓰이므로 import 유지.)
+
+(d) 탭 버튼 블록 교체 — 기존:
+
+```tsx
+						<div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
+							{discoveryTabs.map((tab) => (
+								<button ...>
+									{tab.label}
+								</button>
+							))}
+						</div>
+```
+
+를 다음으로:
+
+```tsx
+						<MarketplaceDiscoveryTabs
+							onSelect={selectDiscoveryTab}
+							value={discoveryTabId}
+						/>
+```
+
+(e) 조건부 축 칩 블록 교체 — 기존 두 블록:
+
+```tsx
+						{discoveryTabId === "region" ? (
+							<MarketplaceAxisChips axis="region" filters={filters} onChange={setFilters} />
+						) : null}
+						{discoveryTabId === "category" ? (
+							<MarketplaceAxisChips axis="category" filters={filters} onChange={setFilters} />
+						) : null}
+```
+
+를 다음 한 줄로:
+
+```tsx
+						<MarketplaceDiscoveryAxisChips
+							discoveryTabId={discoveryTabId}
+							filters={filters}
+							onChange={setFilters}
+						/>
+```
+
+- [ ] **Step 4: public-marketplace.tsx에 discovery 탭 도입**
+
+`apps/web/src/components/bambi/screens/public-marketplace.tsx` 수정:
+
+(a) `../marketplace` import 정리: `MarketplaceRegionChips` 제거, `MarketplaceDiscoveryAxisChips`·`MarketplaceDiscoveryTabs`·`useMarketplaceDiscovery` 추가.(Task 5에서 추가된 `MarketplaceFilterSheet`, 기존 `MarketplaceFilterSidebar`·`MarketplaceSearch` 유지.)
+
+(b) 컴포넌트 본문 상단(Task 5의 `const [filtersOpen, setFiltersOpen] = useState(false);` 부근)에 훅 추가:
+
+```tsx
+	const { discoveryTabId, selectDiscoveryTab } = useMarketplaceDiscovery(
+		filters,
+		setFilters
+	);
+```
+
+(c) `<div className="mb-4 flex flex-col gap-3">` 블록에서 `MarketplaceSearch` 앞에 탭을 추가하고, 기존 `<MarketplaceRegionChips .../>`를 discovery 축 칩으로 교체. 최종 형태:
+
+```tsx
+					<div className="mb-4 flex flex-col gap-3">
+						<MarketplaceDiscoveryTabs
+							onSelect={selectDiscoveryTab}
+							value={discoveryTabId}
+						/>
+						<MarketplaceSearch
+							filters={filters}
+							onChange={setFilters}
+							onOpenFilters={() => setFiltersOpen(true)}
+							searchFieldClassName="md:hidden"
+						/>
+						<MarketplaceDiscoveryAxisChips
+							discoveryTabId={discoveryTabId}
+							filters={filters}
+							onChange={setFilters}
+						/>
+					</div>
+```
+
+> 주의: `MarketplaceSearch`의 `onOpenFilters`는 Task 5에서 이미 연결됨 — 위 스니펫은 그 상태를 유지한다. `section` 내부의 다른 요소(에러 알림·헤더·`VisualJobExposureSections`)는 그대로 둔다.
+
+- [ ] **Step 5: 타입체크**
+
+Run: `pnpm --filter web check-types`
+Expected: 통과.
+
+- [ ] **Step 6: 린트**
+
+Run: `pnpm dlx ultracite fix`
+Expected: 미사용 import 없음(예: seeker-marketplace의 `MarketplaceAxisChips`, public-marketplace의 `MarketplaceRegionChips`), 잔여 에러 0.
+
+- [ ] **Step 7: 커밋**
+
+```bash
+git add apps/web/src/components/bambi/marketplace.tsx apps/web/src/components/bambi/screens/seeker-marketplace.tsx apps/web/src/components/bambi/screens/public-marketplace.tsx
+git commit -m "feat: 공개 마켓 채용정보에 전체·지역별·업종별 discovery 탭 파리티 추가"
+```
+
+---
+
 ## 최종 검증 (전 태스크 완료 후)
 
 - [ ] **전체 타입체크**: `pnpm --filter web check-types` → 통과.
