@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { clearSigningOut, isSigningOut } from "@/lib/bambi/auth-actions";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
 	const router = useRouter();
@@ -14,6 +15,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
 	useEffect(() => {
 		if (session.isPending || isSignedIn || redirected.current) {
+			return;
+		}
+		if (isSigningOut()) {
+			clearSigningOut();
 			return;
 		}
 		redirected.current = true;

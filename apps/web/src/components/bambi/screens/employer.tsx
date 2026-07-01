@@ -6,7 +6,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { authClient } from "@/lib/auth-client";
+import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { scan, verdict } from "@/lib/bambi/scanner";
 import type { ModerationModel, VisualTone } from "@/lib/bambi/types";
 import {
@@ -454,9 +454,7 @@ export function EmployerMe() {
 		{ icon: <SettingsIcon />, label: "매장 정보", meta: "" },
 	];
 	const handleSignOut = async () => {
-		await authClient.signOut();
-		router.push("/");
-		router.refresh();
+		await signOutToHome(router);
 	};
 	return (
 		<div className="mx-auto flex min-h-0 w-full max-w-[min(80%,72rem)] flex-1 flex-col py-5">

@@ -5,7 +5,7 @@
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { authClient } from "@/lib/auth-client";
+import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { JOBS } from "@/lib/bambi/data";
 import type { Job, ReportMode, VisualTone } from "@/lib/bambi/types";
 import {
@@ -570,9 +570,7 @@ export function SeekerMe() {
 		{ icon: <SettingsIcon />, label: "계정 설정", meta: "" },
 	];
 	const handleSignOut = async () => {
-		await authClient.signOut();
-		router.push("/");
-		router.refresh();
+		await signOutToHome(router);
 	};
 	return (
 		<div className="flex min-h-0 flex-1 flex-col py-5">
