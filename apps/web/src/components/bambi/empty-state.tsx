@@ -5,16 +5,23 @@ import {
 	EmptyHeader,
 	EmptyTitle,
 } from "@bambi-app/ui/components/empty";
+import { cn } from "@bambi-app/ui/lib/utils";
 
 interface EmptyStateProps {
 	action?: React.ReactNode;
+	className?: string;
 	description: string;
 	title: string;
 }
 
-export function EmptyState({ action, description, title }: EmptyStateProps) {
+export function EmptyState({
+	action,
+	className,
+	description,
+	title,
+}: EmptyStateProps) {
 	return (
-		<Empty className="min-h-48">
+		<Empty className={cn("min-h-48", className)}>
 			<EmptyHeader>
 				<EmptyTitle>{title}</EmptyTitle>
 				<EmptyDescription>{description}</EmptyDescription>
