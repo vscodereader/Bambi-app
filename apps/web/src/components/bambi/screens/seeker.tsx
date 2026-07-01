@@ -567,7 +567,7 @@ export function SeekerMe() {
 		{ icon: <SettingsIcon />, label: "계정 설정", meta: "" },
 	];
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
+		<div className="flex min-h-0 flex-1 flex-col py-5">
 			<div className="mx-auto w-full max-w-[860px] px-4 pt-2 pb-1 md:px-6">
 				<h1 className="m-0 font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
 					내 정보
