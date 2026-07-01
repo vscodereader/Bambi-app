@@ -3,7 +3,9 @@
 // 밤비 — 구직자(Seeker) 화면: 탐색 → 상세 → 채팅 → 신고.
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { authClient } from "@/lib/auth-client";
 import { JOBS } from "@/lib/bambi/data";
 import type { Job, ReportMode, VisualTone } from "@/lib/bambi/types";
 import {
@@ -560,12 +562,18 @@ export function SeekerChat({
 }
 
 export function SeekerMe() {
+	const router = useRouter();
 	const rows = [
 		{ icon: <ClipboardListIcon />, label: "내 신고 내역", meta: "0건" },
 		{ icon: <ClockIcon />, label: "예정된 면접", meta: "1건" },
 		{ icon: <LockIcon />, label: "차단한 상대", meta: "0명" },
 		{ icon: <SettingsIcon />, label: "계정 설정", meta: "" },
 	];
+	const handleSignOut = async () => {
+		await authClient.signOut();
+		router.push("/");
+		router.refresh();
+	};
 	return (
 		<div className="flex min-h-0 flex-1 flex-col py-5">
 			<div className="mx-auto w-full max-w-[860px] px-4 pt-2 pb-1 md:px-6">
@@ -612,6 +620,9 @@ export function SeekerMe() {
 						</div>
 					))}
 				</div>
+				<Button className="w-full" onClick={handleSignOut} variant="secondary">
+					로그아웃
+				</Button>
 			</div>
 		</div>
 	);
