@@ -568,12 +568,12 @@ export function SeekerMe() {
 	];
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="mx-auto w-full px-5 pt-2 pb-1 md:max-w-[80%] md:px-6">
+			<div className="mx-auto w-full max-w-[860px] px-4 pt-2 pb-1 md:px-6">
 				<h1 className="m-0 font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
 					내 정보
 				</h1>
 			</div>
-			<div className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-[18px] overflow-y-auto px-5 py-4 md:max-w-[80%] md:px-6">
+			<div className="mx-auto flex min-h-0 w-full max-w-[860px] flex-1 flex-col gap-[18px] overflow-y-auto px-4 py-4 md:px-6">
 				<div className="flex items-center gap-[14px] rounded-[18px] border border-primary p-[18px]">
 					<Avatar name="김하늘" ring size="lg" />
 					<div className="flex-1">
