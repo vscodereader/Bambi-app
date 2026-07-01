@@ -420,6 +420,7 @@ export default function EmployerPage() {
 					</div>
 				) : (
 					<EmptyState
+						className="min-h-0 py-8"
 						description="팀 프로필이 생기면 지역별 소속 정보를 확인할 수 있습니다."
 						title="팀 프로필이 없습니다"
 					/>
