@@ -300,6 +300,11 @@ export default function EmployerPage() {
 
 	return (
 		<PageShell
+			actions={
+				<Link className={buttonVariants()} href="/employer/new">
+					새 공고 등록
+				</Link>
+			}
 			description="조직과 팀 프로필 상태를 확인하고 소유한 공고를 관리합니다."
 			title="구인자 관리"
 		>
@@ -319,15 +324,6 @@ export default function EmployerPage() {
 							href={"/employer/settings" as Route}
 						>
 							조직 설정
-						</Link>
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href={"/employer/analytics" as Route}
-						>
-							성과 분석
-						</Link>
-						<Link className={buttonVariants()} href="/employer/new">
-							새 공고 등록
 						</Link>
 					</div>
 				</div>
