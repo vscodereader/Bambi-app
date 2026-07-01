@@ -48,6 +48,7 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 	const router = useRouter();
 	const showNav =
 		path === "/employer" ||
+		path === "/employer/new" ||
 		path === "/employer/me" ||
 		path.startsWith("/employer/settings");
 	let value = "postings";
@@ -55,6 +56,8 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 		value = "me";
 	} else if (path.startsWith("/employer/settings")) {
 		value = "settings";
+	} else if (path === "/employer/new") {
+		value = "post";
 	}
 	const go = (v: string) => {
 		if (v === "post") {
