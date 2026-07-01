@@ -69,10 +69,11 @@ interface PageShellProps {
    (`flex flex-col items-end gap-2`)로 묶어 높이 어긋남 해소. 그리드는
    `sm:grid-cols-[minmax(0,1fr)_auto]` 유지하되 우측 셀 내부를 재구성. 배지는 제목줄에서
    우측 컬럼으로 이동.
-6. **팀 빈상태 축소(문제 4)**: 팀 프로필 `EmptyState`를 컴팩트하게. `EmptyState`가 공용
-   컴포넌트이므로 컴포넌트 자체는 수정하지 않고, 관리 페이지 사용처에서 `className`(높이/패딩
-   축소)만 전달해 축소한다. (공용 컴포넌트가 `className`을 병합 수용하지 않으면 이 항목은
-   보류하고 사용자와 재협의)
+6. **팀 빈상태 축소(문제 4)**: 팀 프로필 `EmptyState`를 컴팩트하게. 검증 결과 `EmptyState`는
+   현재 `className`을 받지 않고 `Empty`에 `min-h-48`을 하드코딩한다. 따라서 `EmptyState`에
+   선택적 `className?: string` prop을 추가하고 `cn("min-h-48", className)`으로 병합한다(순수
+   가산적·하위호환 — 미전달 시 기존 4개 사용처는 `min-h-48` 그대로). 팀 빈상태에서만
+   `min-h-0`(또는 더 작은 값)로 override해 축소한다. `cn`은 `@bambi-app/ui/lib/utils`.
 7. **프로모션 stat chip(문제 7)**: 내 공고 섹션 설명의 "진행 중인 프로모션 N개 · 결제 대기
    N개 · 남은 끌어올리기 N회" muted 문장을 shadcn `Badge` 칩 3개로 시각화. 반경은 `full`.
 
@@ -96,4 +97,4 @@ interface PageShellProps {
 - 나머지 6개 employer 페이지의 헤더 버튼을 actions 슬롯으로 이관 → 점진 이관 대상, 별도 작업.
 - 구인자 서브내비/breadcrumb.
 - seeker 등 비-employer 화면.
-- `EmptyState` 공용 컴포넌트 자체의 API/기본 크기 변경.
+- `EmptyState` 기본 크기(`min-h-48`) 변경 — 선택적 `className` prop만 가산하고 기본값은 유지.
