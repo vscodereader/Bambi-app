@@ -339,14 +339,36 @@ export const chatsRouter = {
 			)
 			.orderBy(desc(chatRoom.updatedAt));
 
+		if (rooms.length === 0) {
+			return [];
+		}
+
+		const jobPostIds = [...new Set(rooms.map((room) => room.jobPostId))];
+		const posts = await db
+			.select({ id: jobPost.id, title: jobPost.title })
+			.from(jobPost)
+			.where(inArray(jobPost.id, jobPostIds));
+		const jobTitleById = new Map(posts.map((post) => [post.id, post.title]));
+
 		return await Promise.all(
-			rooms.map(async (room) => ({
-				...room,
-				unreadCount: await getUnreadMessageCount({
-					chatRoomId: room.id,
-					userId: profile.userId,
-				}),
-			}))
+			rooms.map(async (room) => {
+				const [lastMessage] = await db
+					.select({ body: chatMessage.body })
+					.from(chatMessage)
+					.where(eq(chatMessage.chatRoomId, room.id))
+					.orderBy(desc(chatMessage.createdAt))
+					.limit(1);
+
+				return {
+					...room,
+					jobTitle: jobTitleById.get(room.jobPostId) ?? null,
+					lastMessageBody: lastMessage?.body ?? null,
+					unreadCount: await getUnreadMessageCount({
+						chatRoomId: room.id,
+						userId: profile.userId,
+					}),
+				};
+			})
 		);
 	}),
 
