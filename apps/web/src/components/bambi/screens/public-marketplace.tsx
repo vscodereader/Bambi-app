@@ -14,6 +14,7 @@ import {
 } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
 import {
+	MarketplaceFilterSheet,
 	MarketplaceFilterSidebar,
 	MarketplaceRegionChips,
 	MarketplaceSearch,
@@ -24,6 +25,7 @@ import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 
 export function PublicMarketplaceScreen() {
 	const router = useRouter();
+	const [filtersOpen, setFiltersOpen] = useState(false);
 	const [filters, setFilters] = useState<MarketplaceFilters>(
 		DEFAULT_MARKETPLACE_FILTERS
 	);
@@ -55,6 +57,7 @@ export function PublicMarketplaceScreen() {
 						<MarketplaceSearch
 							filters={filters}
 							onChange={setFilters}
+							onOpenFilters={() => setFiltersOpen(true)}
 							searchFieldClassName="md:hidden"
 						/>
 						<MarketplaceRegionChips filters={filters} onChange={setFilters} />
@@ -89,6 +92,12 @@ export function PublicMarketplaceScreen() {
 					/>
 				</section>
 			</div>
+			<MarketplaceFilterSheet
+				filters={filters}
+				onChange={setFilters}
+				onOpenChange={setFiltersOpen}
+				open={filtersOpen}
+			/>
 			<MobileTabBar homeHref="/" />
 		</ResponsiveAppShell>
 	);

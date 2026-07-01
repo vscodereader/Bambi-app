@@ -11,6 +11,7 @@ import {
 import type { Job } from "@/lib/bambi/types";
 import {
 	MarketplaceAxisChips,
+	MarketplaceFilterSheet,
 	MarketplaceFilterSidebar,
 	MarketplaceSearch,
 } from "../marketplace";
@@ -29,6 +30,7 @@ type DiscoveryTabId = (typeof discoveryTabs)[number]["id"];
 
 export function SeekerMarketplaceScreen() {
 	const router = useRouter();
+	const [filtersOpen, setFiltersOpen] = useState(false);
 	const [discoveryTabId, setDiscoveryTabId] = useState<DiscoveryTabId>("all");
 	// 필터는 헤더 검색창과 공유하기 위해 SeekerAppShell 컨텍스트에서 가져온다
 	const { filters, setFilters } = useSeekerFilters();
@@ -76,6 +78,7 @@ export function SeekerMarketplaceScreen() {
 					<MarketplaceSearch
 						filters={filters}
 						onChange={setFilters}
+						onOpenFilters={() => setFiltersOpen(true)}
 						searchFieldClassName="md:hidden"
 					/>
 					{discoveryTabId === "region" ? (
@@ -118,6 +121,12 @@ export function SeekerMarketplaceScreen() {
 					sections={sections}
 				/>
 			</section>
+			<MarketplaceFilterSheet
+				filters={filters}
+				onChange={setFilters}
+				onOpenChange={setFiltersOpen}
+				open={filtersOpen}
+			/>
 		</div>
 	);
 }
