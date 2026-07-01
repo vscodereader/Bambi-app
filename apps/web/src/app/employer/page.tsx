@@ -256,14 +256,25 @@ export default function EmployerPage() {
 				<CardContent className="divide-y p-0">
 					{jobs.map((job) => (
 						<div
-							className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+							className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
 							key={job.id}
 						>
-							<div className="flex min-w-0 flex-col gap-2">
-								<div className="flex flex-wrap items-center gap-2">
-									<h3 className="min-w-0 flex-1 break-words font-medium text-base">
-										{job.title}
-									</h3>
+							<div className="flex min-w-0 flex-col gap-1">
+								<h3 className="min-w-0 break-words font-medium text-base">
+									{job.title}
+								</h3>
+								<p className="break-words text-foreground text-sm">
+									{job.industryCategory} · {job.region} ·{" "}
+									{formatPay(job.payAmount, job.payUnit)}
+								</p>
+								<p className="break-words text-muted-foreground text-xs">
+									{getOrganizationLabel(job.organizationId)} ·{" "}
+									{getTeamLabel(job.teamId)} · 수정{" "}
+									{formatDateTime(job.updatedAt)}
+								</p>
+							</div>
+							<div className="flex flex-col items-start gap-2 sm:items-end">
+								<div className="flex flex-wrap gap-2 sm:justify-end">
 									<StatusBadge tone={getJobStatusTone(job.status)}>
 										{getJobStatusLabel(job.status)}
 									</StatusBadge>
@@ -275,22 +286,13 @@ export default function EmployerPage() {
 										{getVerificationStatusLabel(job.employerVerificationStatus)}
 									</StatusBadge>
 								</div>
-								<p className="text-muted-foreground text-sm">
-									{job.industryCategory} · {job.region} ·{" "}
-									{formatPay(job.payAmount, job.payUnit)}
-								</p>
-								<p className="break-words text-muted-foreground text-xs">
-									{getOrganizationLabel(job.organizationId)} ·{" "}
-									{getTeamLabel(job.teamId)} · 수정{" "}
-									{formatDateTime(job.updatedAt)}
-								</p>
+								<Link
+									className={buttonVariants({ variant: "outline" })}
+									href={`/employer/jobs/${job.id}/edit` as Route}
+								>
+									수정
+								</Link>
 							</div>
-							<Link
-								className={buttonVariants({ variant: "outline" })}
-								href={`/employer/jobs/${job.id}/edit` as Route}
-							>
-								수정
-							</Link>
 						</div>
 					))}
 				</CardContent>
