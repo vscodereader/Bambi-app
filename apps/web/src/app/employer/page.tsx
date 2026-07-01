@@ -1,6 +1,14 @@
 "use client";
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+} from "@bambi-app/ui/components/card";
+import { Separator } from "@bambi-app/ui/components/separator";
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
@@ -8,7 +16,6 @@ import Link from "next/link";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
-import Loader from "@/components/loader";
 import { authClient } from "@/lib/auth-client";
 import { formatDateTime, formatNullable, formatPay } from "@/lib/bambi-format";
 import { jobStatusLabels, verificationStatusLabels } from "@/lib/bambi-options";
@@ -120,7 +127,14 @@ export default function EmployerPage() {
 	};
 
 	if (session.isPending || mineQuery.isLoading) {
-		return <Loader />;
+		return (
+			<PageShell title="구인자 관리">
+				<div className="grid gap-3 md:grid-cols-2">
+					<Skeleton className="h-24 w-full rounded-lg" />
+					<Skeleton className="h-24 w-full rounded-lg" />
+				</div>
+			</PageShell>
+		);
 	}
 
 	if (!isSignedIn || getErrorCode(mineQuery.error) === "UNAUTHORIZED") {
@@ -205,7 +219,13 @@ export default function EmployerPage() {
 	let jobsContent: React.ReactNode;
 
 	if (jobsQuery.isLoading) {
-		jobsContent = <Loader />;
+		jobsContent = (
+			<div className="flex flex-col gap-3">
+				<Skeleton className="h-20 w-full rounded-lg" />
+				<Skeleton className="h-20 w-full rounded-lg" />
+				<Skeleton className="h-20 w-full rounded-lg" />
+			</div>
+		);
 	} else if (jobsQuery.isError) {
 		jobsContent = (
 			<EmptyState
@@ -232,14 +252,14 @@ export default function EmployerPage() {
 		);
 	} else {
 		jobsContent = (
-			<section aria-labelledby="owned-jobs" className="overflow-hidden border">
-				<div className="divide-y">
+			<Card aria-labelledby="owned-jobs">
+				<CardContent className="divide-y p-0">
 					{jobs.map((job) => (
 						<div
 							className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
 							key={job.id}
 						>
-							<div className="min-w-0 space-y-2">
+							<div className="flex min-w-0 flex-col gap-2">
 								<div className="flex flex-wrap items-center gap-2">
 									<h3 className="min-w-0 flex-1 break-words font-medium text-base">
 										{job.title}
@@ -273,8 +293,8 @@ export default function EmployerPage() {
 							</Link>
 						</div>
 					))}
-				</div>
-			</section>
+				</CardContent>
+			</Card>
 		);
 	}
 
@@ -283,7 +303,7 @@ export default function EmployerPage() {
 			description="조직과 팀 프로필 상태를 확인하고 소유한 공고를 관리합니다."
 			title="구인자 관리"
 		>
-			<section aria-labelledby="organizations" className="space-y-3">
+			<section aria-labelledby="organizations" className="flex flex-col gap-3">
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div>
 						<h2 className="font-medium text-base" id="organizations">
@@ -315,40 +335,46 @@ export default function EmployerPage() {
 				{organizationProfiles.length > 0 ? (
 					<div className="grid gap-3 md:grid-cols-2">
 						{organizationProfiles.map((organizationProfile) => (
-							<article className="border p-4" key={organizationProfile.id}>
-								<div className="flex flex-wrap items-center gap-2">
-									<h3 className="break-words font-medium text-base">
-										{organizationProfile.displayName}
-									</h3>
-									<StatusBadge
-										tone={getVerificationStatusTone(
-											organizationProfile.verificationStatus
-										)}
-									>
-										{getVerificationStatusLabel(
-											organizationProfile.verificationStatus
-										)}
-									</StatusBadge>
-								</div>
-								<dl className="mt-3 grid gap-2 text-sm">
-									<div>
-										<dt className="text-muted-foreground text-xs">
-											사업자 등록 번호
-										</dt>
-										<dd className="mt-1 break-words">
-											{formatNullable(
-												organizationProfile.businessRegistrationNumber
+							<Card key={organizationProfile.id}>
+								<CardHeader>
+									<CardTitle className="flex flex-wrap items-center gap-2">
+										<span className="break-words font-medium text-base">
+											{organizationProfile.displayName}
+										</span>
+										<StatusBadge
+											tone={getVerificationStatusTone(
+												organizationProfile.verificationStatus
 											)}
-										</dd>
-									</div>
-									<div>
-										<dt className="text-muted-foreground text-xs">검수 메모</dt>
-										<dd className="mt-1 break-words">
-											{formatNullable(organizationProfile.verificationNote)}
-										</dd>
-									</div>
-								</dl>
-							</article>
+										>
+											{getVerificationStatusLabel(
+												organizationProfile.verificationStatus
+											)}
+										</StatusBadge>
+									</CardTitle>
+								</CardHeader>
+								<CardContent>
+									<dl className="grid gap-2 text-sm">
+										<div>
+											<dt className="text-muted-foreground text-xs">
+												사업자 등록 번호
+											</dt>
+											<dd className="mt-1 break-words">
+												{formatNullable(
+													organizationProfile.businessRegistrationNumber
+												)}
+											</dd>
+										</div>
+										<div>
+											<dt className="text-muted-foreground text-xs">
+												검수 메모
+											</dt>
+											<dd className="mt-1 break-words">
+												{formatNullable(organizationProfile.verificationNote)}
+											</dd>
+										</div>
+									</dl>
+								</CardContent>
+							</Card>
 						))}
 					</div>
 				) : (
@@ -359,32 +385,38 @@ export default function EmployerPage() {
 				)}
 			</section>
 
-			<section aria-labelledby="teams" className="space-y-3">
+			<Separator />
+
+			<section aria-labelledby="teams" className="flex flex-col gap-3">
 				<h2 className="font-medium text-base" id="teams">
 					팀 프로필
 				</h2>
 				{teamProfiles.length > 0 ? (
 					<div className="grid gap-3 md:grid-cols-2">
 						{teamProfiles.map((teamProfile) => (
-							<article className="border p-4" key={teamProfile.id}>
-								<h3 className="break-words font-medium text-base">
-									{teamProfile.displayName}
-								</h3>
-								<dl className="mt-3 grid gap-2 text-sm">
-									<div>
-										<dt className="text-muted-foreground text-xs">지역</dt>
-										<dd className="mt-1 break-words">
-											{formatNullable(teamProfile.region)}
-										</dd>
-									</div>
-									<div>
-										<dt className="text-muted-foreground text-xs">조직</dt>
-										<dd className="mt-1 break-words">
-											{getOrganizationLabel(teamProfile.organizationId)}
-										</dd>
-									</div>
-								</dl>
-							</article>
+							<Card key={teamProfile.id}>
+								<CardHeader>
+									<CardTitle className="break-words font-medium text-base">
+										{teamProfile.displayName}
+									</CardTitle>
+								</CardHeader>
+								<CardContent>
+									<dl className="grid gap-2 text-sm">
+										<div>
+											<dt className="text-muted-foreground text-xs">지역</dt>
+											<dd className="mt-1 break-words">
+												{formatNullable(teamProfile.region)}
+											</dd>
+										</div>
+										<div>
+											<dt className="text-muted-foreground text-xs">조직</dt>
+											<dd className="mt-1 break-words">
+												{getOrganizationLabel(teamProfile.organizationId)}
+											</dd>
+										</div>
+									</dl>
+								</CardContent>
+							</Card>
 						))}
 					</div>
 				) : (
@@ -395,7 +427,9 @@ export default function EmployerPage() {
 				)}
 			</section>
 
-			<section aria-labelledby="owned-jobs" className="space-y-3">
+			<Separator />
+
+			<section aria-labelledby="owned-jobs" className="flex flex-col gap-3">
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div>
 						<h2 className="font-medium text-base" id="owned-jobs">
