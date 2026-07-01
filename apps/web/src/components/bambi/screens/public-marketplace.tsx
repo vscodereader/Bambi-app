@@ -1,5 +1,9 @@
 "use client";
 
+import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
+import { Button } from "@bambi-app/ui/components/button";
+import { Input } from "@bambi-app/ui/components/input";
+import { Search } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -9,7 +13,6 @@ import {
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
-import { Search2 } from "../icons";
 import {
 	MarketplaceFilterSidebar,
 	MarketplaceSearch,
@@ -30,20 +33,18 @@ export function PublicMarketplaceScreen() {
 	const startChat = (job: Job) =>
 		router.push(`/seeker/jobs/${job.id}/chat?entry=public` as Route);
 	const headerSearch = (
-		<label className="flex h-10 w-64 items-center gap-2 rounded-lg bg-secondary px-3">
-			<span className="inline-flex size-4 text-[color:var(--text-subtle)]">
-				<Search2 />
-			</span>
-			<input
+		<div className="relative w-64">
+			<Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+			<Input
 				aria-label="업종, 지역, 공고 제목 검색"
-				className="min-w-0 flex-1 border-none bg-transparent font-medium text-foreground text-sm outline-none"
+				className="h-10 rounded-lg bg-secondary pl-9 font-medium"
 				onChange={(event) =>
 					setFilters({ ...filters, query: event.target.value })
 				}
 				placeholder="검색"
 				value={filters.query}
 			/>
-		</label>
+		</div>
 	);
 	return (
 		<ResponsiveAppShell headerSlot={headerSearch} variant="public">
@@ -58,16 +59,18 @@ export function PublicMarketplaceScreen() {
 						/>
 					</div>
 					{isError ? (
-						<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
-							서버 공고를 불러오지 못해 샘플 공고를 먼저 보여드려요.
-							<button
-								className="ml-2 cursor-pointer border-none bg-transparent p-0 font-extrabold text-amber-900 underline"
-								onClick={refetch}
-								type="button"
-							>
-								다시 연결
-							</button>
-						</div>
+						<Alert className="mb-4" variant="warning">
+							<AlertDescription className="text-sm">
+								서버 공고를 불러오지 못해 샘플 공고를 먼저 보여드려요.
+								<Button
+									className="ml-2 h-auto p-0 align-baseline font-extrabold text-amber-500 underline"
+									onClick={refetch}
+									variant="link"
+								>
+									다시 연결
+								</Button>
+							</AlertDescription>
+						</Alert>
 					) : null}
 					<div className="mb-3 flex items-center justify-between">
 						<h2 className="m-0 font-extrabold text-lg">
