@@ -70,8 +70,21 @@ const filterSections = (
 const buildFallbackSections = (
 	filters: MarketplaceFilters
 ): MarketplaceJobSections => ({
-	...EMPTY_SECTIONS,
-	organic: filterMarketplaceJobs(JOBS, filters),
+	premium: filterMarketplaceJobs(
+		JOBS.filter((job) => job.promotionTier === "premium"),
+		filters
+	),
+	recommended: filterMarketplaceJobs(
+		JOBS.filter((job) => job.promotionTier === "recommended"),
+		filters
+	),
+	organic: filterMarketplaceJobs(
+		JOBS.filter(
+			(job) =>
+				job.promotionTier !== "premium" && job.promotionTier !== "recommended"
+		),
+		filters
+	),
 });
 
 export function useMarketplaceJobs(

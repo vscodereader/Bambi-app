@@ -28,12 +28,50 @@ const toneLabel = {
 	urgent: "급구",
 } as const;
 
+// 티어 배지 색을 등급별로 구분해 유료 노출 사다리를 시각화한다.
 const toneBadge = {
-	organic: "primary",
+	organic: "neutral",
 	recommended: "primary",
 	special: "primary",
-	urgent: "primary",
+	urgent: "danger",
 } as const;
+
+// 알려진 급여 단위(시급·일급 등)를 금액과 분리해 금액을 카드 앵커로 강조한다.
+const PAY_UNITS = ["시급", "일급", "주급", "월급", "급여", "연봉"] as const;
+
+function splitPay(pay: string): { amount: string; unit: null | string } {
+	const trimmed = pay.trim();
+	const spaceIndex = trimmed.indexOf(" ");
+	if (spaceIndex === -1) {
+		return { amount: trimmed, unit: null };
+	}
+	const head = trimmed.slice(0, spaceIndex);
+	const isKnownUnit = PAY_UNITS.some((unit) => unit === head);
+	if (!isKnownUnit) {
+		return { amount: trimmed, unit: null };
+	}
+	return { amount: trimmed.slice(spaceIndex + 1), unit: head };
+}
+
+interface Marker {
+	label: string;
+	tone: "danger" | "dark" | "success";
+}
+
+// HOT/오늘면접/신규 마커를 기존 필드에서 파생한다(스키마 변경 없음).
+function getMarkers(job: Job, tone: VisualJobCardProps["tone"]): Marker[] {
+	const markers: Marker[] = [];
+	if (tone === "urgent") {
+		markers.push({ label: "HOT", tone: "danger" });
+	}
+	if (job.tags.includes("오늘 면접")) {
+		markers.push({ label: "오늘면접", tone: "success" });
+	}
+	if (job.featured) {
+		markers.push({ label: "신규", tone: "dark" });
+	}
+	return markers;
+}
 
 export function VisualJobCard({
 	active = false,
@@ -42,6 +80,8 @@ export function VisualJobCard({
 	onOpen,
 	tone,
 }: VisualJobCardProps) {
+	const { amount: payAmount, unit: payUnit } = splitPay(job.pay);
+	const markers = getMarkers(job, tone);
 	return (
 		<article
 			className={cn(
@@ -59,6 +99,11 @@ export function VisualJobCard({
 					<Badge tone={toneBadge[tone]}>
 						{job.promotionLabel ?? toneLabel[tone]}
 					</Badge>
+					{markers.map((marker) => (
+						<Badge key={marker.label} tone={marker.tone}>
+							{marker.label}
+						</Badge>
+					))}
 					{job.verified ? (
 						<Badge tone="success">
 							<span className="inline-flex size-3">
@@ -87,8 +132,15 @@ export function VisualJobCard({
 						<h3 className="m-0 line-clamp-2 font-extrabold text-sm leading-snug">
 							{job.company} {job.title}
 						</h3>
-						<span className="truncate font-bold text-foreground text-sm">
-							{job.pay}
+						<span className="flex min-w-0 items-baseline gap-1">
+							{payUnit ? (
+								<span className="shrink-0 font-semibold text-muted-foreground text-xs">
+									{payUnit}
+								</span>
+							) : null}
+							<span className="truncate font-extrabold text-base text-coral-600 leading-none">
+								{payAmount}
+							</span>
 						</span>
 						<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
 							<span className="inline-flex size-3 shrink-0">
