@@ -24,7 +24,7 @@ const formatDateTime = (value: Date | string): string =>
 
 const getRoomButtonClassName = (unreadCount: number): string =>
 	[
-		"flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-lg border bg-card p-4 text-left shadow-sm transition-colors hover:border-coral-200",
+		"flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:border-coral-200",
 		unreadCount > 0
 			? "border-coral-300 ring-1 ring-coral-200"
 			: "border-border",
