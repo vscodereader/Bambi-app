@@ -114,18 +114,18 @@ export function VisualJobCard({
 						</Badge>
 					) : null}
 				</div>
-				<div className="flex items-center gap-3">
+				<div className="flex items-start gap-3">
 					{job.coverImage ? (
 						<Image
 							alt={job.coverImage.altText || job.coverImage.fileName}
-							className="size-14 shrink-0 rounded-md border border-white object-cover"
-							height={56}
+							className="size-20 shrink-0 rounded-lg border border-white object-cover"
+							height={80}
 							src={job.coverImage.url}
 							unoptimized
-							width={56}
+							width={80}
 						/>
 					) : (
-						<div className="flex size-14 shrink-0 items-center justify-center rounded-md border border-white bg-secondary font-extrabold text-coral-700 text-sm">
+						<div className="flex size-20 shrink-0 items-center justify-center rounded-lg border border-white bg-secondary font-extrabold text-base text-coral-700">
 							{job.company.slice(0, 2)}
 						</div>
 					)}
@@ -139,11 +139,11 @@ export function VisualJobCard({
 							</span>
 							<span className="truncate">{job.location}</span>
 						</span>
+						<p className="m-0 line-clamp-2 text-muted-foreground text-xs leading-relaxed">
+							{job.desc}
+						</p>
 					</div>
 				</div>
-				<p className="m-0 line-clamp-2 text-muted-foreground text-xs leading-relaxed">
-					{job.desc}
-				</p>
 			</button>
 			<div className="flex items-center justify-between gap-2">
 				<span className="flex min-w-0 items-baseline gap-1">
