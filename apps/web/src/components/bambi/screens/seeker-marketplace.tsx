@@ -4,10 +4,14 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMarketplaceJobs } from "@/lib/bambi/api-jobs";
+import {
+	applyDiscoveryAxis,
+	discoveryAxisForTab,
+} from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
 import {
+	MarketplaceAxisChips,
 	MarketplaceFilterSidebar,
-	MarketplaceRegionChips,
 	MarketplaceSearch,
 } from "../marketplace";
 import { useSeekerFilters } from "../seeker-app-shell";
@@ -40,6 +44,12 @@ export function SeekerMarketplaceScreen() {
 		router.push(`/seeker/jobs/${job.id}/chat` as Route);
 	};
 
+	// 탭 전환 시 비활성 축을 리셋해(축 배타성) 화면 칩과 결과를 일치시킨다.
+	const selectDiscoveryTab = (tabId: DiscoveryTabId) => {
+		setDiscoveryTabId(tabId);
+		setFilters(applyDiscoveryAxis(filters, discoveryAxisForTab(tabId)));
+	};
+
 	return (
 		<div className="mx-auto flex w-full gap-5 px-5 py-5 pb-24 md:max-w-[80%] md:px-6 md:py-10">
 			<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
@@ -56,7 +66,7 @@ export function SeekerMarketplaceScreen() {
 								}
 								disabled={tab.disabled}
 								key={tab.id}
-								onClick={() => setDiscoveryTabId(tab.id)}
+								onClick={() => selectDiscoveryTab(tab.id)}
 								type="button"
 							>
 								{tab.label}
@@ -68,7 +78,20 @@ export function SeekerMarketplaceScreen() {
 						onChange={setFilters}
 						searchFieldClassName="md:hidden"
 					/>
-					<MarketplaceRegionChips filters={filters} onChange={setFilters} />
+					{discoveryTabId === "region" ? (
+						<MarketplaceAxisChips
+							axis="region"
+							filters={filters}
+							onChange={setFilters}
+						/>
+					) : null}
+					{discoveryTabId === "category" ? (
+						<MarketplaceAxisChips
+							axis="category"
+							filters={filters}
+							onChange={setFilters}
+						/>
+					) : null}
 				</div>
 				{isError ? (
 					<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
