@@ -163,7 +163,7 @@ export function VisualJobCard({
 			<div className="flex items-center justify-between gap-2">
 				<span className="flex min-w-0 items-center gap-1.5">
 					{payUnit ? (
-						<Badge className="shrink-0" tone="neutral">
+						<Badge className="shrink-0" tone={toneBadge[tone]}>
 							{payUnit}
 						</Badge>
 					) : null}
