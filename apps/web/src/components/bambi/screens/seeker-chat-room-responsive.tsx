@@ -724,7 +724,7 @@ export function SeekerChatRoomResponsive({
 
 	if (roomQuery.isLoading) {
 		return (
-			<div className="mx-auto w-full max-w-[80%] px-4 py-10 text-center font-bold text-muted-foreground md:px-6">
+			<div className="mx-auto w-full px-5 py-10 text-center font-bold text-muted-foreground md:max-w-[80%] md:px-6">
 				채팅방을 불러오고 있어요.
 			</div>
 		);
@@ -732,7 +732,7 @@ export function SeekerChatRoomResponsive({
 
 	if (roomQuery.isError || !roomQuery.data) {
 		return (
-			<div className="mx-auto w-full max-w-[80%] px-4 py-10 md:px-6">
+			<div className="mx-auto w-full px-5 py-10 md:max-w-[80%] md:px-6">
 				<Card className="rounded-lg text-center" pad="lg" tone="outline">
 					<h1 className="m-0 font-extrabold text-xl">
 						채팅방을 불러올 수 없어요
@@ -918,7 +918,7 @@ export function SeekerChatRoomResponsive({
 	};
 
 	return (
-		<div className="mx-auto grid w-full max-w-[80%] gap-5 px-4 py-5 pb-28 md:px-6 md:py-7 lg:grid-cols-[minmax(0,1fr)_320px] lg:pb-8">
+		<div className="mx-auto grid w-full gap-5 px-5 py-5 pb-28 md:max-w-[80%] md:px-6 md:py-7 lg:grid-cols-[minmax(0,1fr)_320px] lg:pb-8">
 			<main className="min-w-0 rounded-lg bg-card shadow-sm ring-1 ring-border lg:self-start">
 				<header className="flex items-center gap-3 border-border border-b p-4">
 					<button
