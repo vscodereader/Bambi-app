@@ -85,63 +85,54 @@ export function VisualJobCard({
 	return (
 		<article
 			className={cn(
-				"flex items-center gap-3 rounded-lg border bg-card p-3 transition-colors",
+				"flex flex-col gap-2 rounded-lg border bg-card p-3 transition-colors",
 				toneClassName[tone],
 				active && "border-coral-400 ring-2 ring-coral-100"
 			)}
 		>
 			<button
-				className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 border-none bg-transparent p-0 text-left"
+				className="flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
 				onClick={() => onOpen(job)}
 				type="button"
 			>
-				{job.coverImage ? (
-					<Image
-						alt={job.coverImage.altText || job.coverImage.fileName}
-						className="size-20 shrink-0 rounded-lg border border-white object-cover"
-						height={80}
-						src={job.coverImage.url}
-						unoptimized
-						width={80}
-					/>
-				) : (
-					<div className="flex size-20 shrink-0 items-center justify-center rounded-lg border border-white bg-secondary font-extrabold text-base text-coral-700">
-						{job.company.slice(0, 2)}
-					</div>
-				)}
-				<div className="flex min-w-0 flex-1 flex-col gap-1.5">
-					<div className="flex flex-wrap items-center gap-1">
-						<Badge tone={toneBadge[tone]}>
-							{job.promotionLabel ?? toneLabel[tone]}
+				{/* 배지는 항상 한 줄 — flex-wrap 금지, 넘치면 클립 */}
+				<div className="flex items-center gap-1 overflow-hidden">
+					<Badge className="shrink-0" tone={toneBadge[tone]}>
+						{job.promotionLabel ?? toneLabel[tone]}
+					</Badge>
+					{markers.map((marker) => (
+						<Badge className="shrink-0" key={marker.label} tone={marker.tone}>
+							{marker.label}
 						</Badge>
-						{markers.map((marker) => (
-							<Badge key={marker.label} tone={marker.tone}>
-								{marker.label}
-							</Badge>
-						))}
-						{job.verified ? (
-							<Badge tone="success">
-								<span className="inline-flex size-3">
-									<CheckIcon />
-								</span>
-								검수
-							</Badge>
-						) : null}
-					</div>
-					<h3 className="m-0 line-clamp-1 font-extrabold text-[15px] leading-snug">
-						{job.company} {job.title}
-					</h3>
-					<div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-						<span className="flex shrink-0 items-baseline gap-1">
-							{payUnit ? (
-								<span className="font-semibold text-muted-foreground text-xs">
-									{payUnit}
-								</span>
-							) : null}
-							<span className="font-extrabold text-base text-coral-600 leading-none">
-								{payAmount}
+					))}
+					{job.verified ? (
+						<Badge className="shrink-0" tone="success">
+							<span className="inline-flex size-3">
+								<CheckIcon />
 							</span>
-						</span>
+							검수
+						</Badge>
+					) : null}
+				</div>
+				<div className="flex items-center gap-3">
+					{job.coverImage ? (
+						<Image
+							alt={job.coverImage.altText || job.coverImage.fileName}
+							className="size-14 shrink-0 rounded-md border border-white object-cover"
+							height={56}
+							src={job.coverImage.url}
+							unoptimized
+							width={56}
+						/>
+					) : (
+						<div className="flex size-14 shrink-0 items-center justify-center rounded-md border border-white bg-secondary font-extrabold text-coral-700 text-sm">
+							{job.company.slice(0, 2)}
+						</div>
+					)}
+					<div className="flex min-w-0 flex-1 flex-col gap-1">
+						<h3 className="m-0 line-clamp-1 font-extrabold text-[15px] leading-snug">
+							{job.company} {job.title}
+						</h3>
 						<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
 							<span className="inline-flex size-3 shrink-0">
 								<MapPinIcon />
@@ -150,16 +141,31 @@ export function VisualJobCard({
 						</span>
 					</div>
 				</div>
+				<p className="m-0 line-clamp-2 text-muted-foreground text-xs leading-relaxed">
+					{job.desc}
+				</p>
 			</button>
-			<Button
-				className="h-9 shrink-0 justify-center"
-				onClick={() => onChat(job)}
-				rightIcon={<Message />}
-				size="sm"
-				variant="secondary"
-			>
-				채팅
-			</Button>
+			<div className="flex items-center justify-between gap-2">
+				<span className="flex min-w-0 items-baseline gap-1">
+					{payUnit ? (
+						<span className="shrink-0 font-semibold text-muted-foreground text-xs">
+							{payUnit}
+						</span>
+					) : null}
+					<span className="truncate font-extrabold text-base text-coral-600 leading-none">
+						{payAmount}
+					</span>
+				</span>
+				<Button
+					className="h-9 shrink-0 justify-center"
+					onClick={() => onChat(job)}
+					rightIcon={<Message />}
+					size="sm"
+					variant="secondary"
+				>
+					채팅
+				</Button>
+			</div>
 		</article>
 	);
 }
