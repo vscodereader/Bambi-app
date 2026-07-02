@@ -128,7 +128,11 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 
 	const isDetail = MOD_DETAIL_RE.test(path);
 	if (isDetail) {
-		return <Content>{children}</Content>;
+		return (
+			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+				<Content>{children}</Content>
+			</div>
+		);
 	}
 
 	let tab = "queue";
@@ -151,22 +155,24 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 
 	return (
 		<>
-			<ConsoleTop
-				counts={{
-					queue: queue.length,
-					reports: openReports,
-					warned: warnedUsers,
-				}}
-			/>
-			<Content>{children}</Content>
-			{showActionBar ? (
-				<QueueActionBar
-					count={selected.length}
-					isApplying={isBulkApplying}
-					onAction={bulkAction}
-					scope={bulkScope}
+			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+				<ConsoleTop
+					counts={{
+						queue: queue.length,
+						reports: openReports,
+						warned: warnedUsers,
+					}}
 				/>
-			) : null}
+				<Content>{children}</Content>
+				{showActionBar ? (
+					<QueueActionBar
+						count={selected.length}
+						isApplying={isBulkApplying}
+						onAction={bulkAction}
+						scope={bulkScope}
+					/>
+				) : null}
+			</div>
 			<NavBar>
 				<ModTabs setTab={go} tab={tab} />
 			</NavBar>
