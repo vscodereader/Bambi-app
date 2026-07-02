@@ -104,6 +104,24 @@ const getJobStatusCounts = (jobPosts: { status: string }[]) => ({
 	rejected: jobPosts.filter((job) => job.status === "rejected").length,
 });
 
+const getJobLeadingStatus = (
+	status: string
+): { icon: LucideIcon; tile: string } => {
+	if (status === "published") {
+		return { icon: Check, tile: "bg-green-50 text-green-600" };
+	}
+
+	if (status === "rejected") {
+		return { icon: CircleAlert, tile: "bg-red-50 text-red-600" };
+	}
+
+	if (status === "pending_review") {
+		return { icon: Clock, tile: "bg-amber-50 text-amber-500" };
+	}
+
+	return { icon: Clock, tile: "bg-secondary text-muted-foreground" };
+};
+
 const quickLinks: {
 	description: string;
 	href: Route;
@@ -161,8 +179,8 @@ function OverviewStat({
 			>
 				<Icon className="size-5" />
 			</span>
-			<div className="flex flex-col gap-1">
-				<dt className="text-muted-foreground text-xs">{label}</dt>
+			<div className="flex min-w-0 flex-col gap-1">
+				<dt className="break-keep text-muted-foreground text-xs">{label}</dt>
 				<dd className="font-semibold text-2xl leading-none">{value}</dd>
 			</div>
 		</div>
@@ -363,51 +381,76 @@ export default function EmployerPage() {
 		jobsContent = (
 			<Card aria-labelledby="owned-jobs">
 				<CardContent className="divide-y p-0">
-					{jobs.map((job) => (
-						<div
-							className={cn(
-								"grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start",
-								job.status === "rejected" && "bg-red-50",
-								job.status === "pending_review" && "bg-amber-50"
-							)}
-							key={job.id}
-						>
-							<div className="flex min-w-0 flex-col gap-1">
-								<h3 className="min-w-0 break-words font-medium text-base">
-									{job.title}
-								</h3>
-								<p className="break-words text-foreground text-sm">
-									{job.industryCategory} · {job.region} ·{" "}
-									{formatPay(job.payAmount, job.payUnit)}
-								</p>
-								<p className="break-words text-muted-foreground text-xs">
-									{getOrganizationLabel(job.organizationId)} ·{" "}
-									{getTeamLabel(job.teamId)} · 수정{" "}
-									{formatDateTime(job.updatedAt)}
-								</p>
-							</div>
-							<div className="flex flex-col items-start gap-2 sm:items-end">
-								<div className="flex flex-wrap gap-2 sm:justify-end">
-									<StatusBadge tone={getJobStatusTone(job.status)}>
-										{getJobStatusLabel(job.status)}
-									</StatusBadge>
-									<StatusBadge
-										tone={getVerificationStatusTone(
-											job.employerVerificationStatus
-										)}
-									>
-										{getVerificationStatusLabel(job.employerVerificationStatus)}
-									</StatusBadge>
-								</div>
-								<Link
-									className={buttonVariants({ variant: "outline" })}
-									href={`/employer/jobs/${job.id}/edit` as Route}
+					{jobs.map((job) => {
+						const leading = getJobLeadingStatus(job.status);
+						const LeadingIcon = leading.icon;
+
+						return (
+							<div
+								className={cn(
+									"flex items-start gap-3 border-l-2 border-l-transparent p-4",
+									job.status === "rejected" && "border-l-red-500"
+								)}
+								key={job.id}
+							>
+								<span
+									className={cn(
+										"mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md",
+										leading.tile
+									)}
 								>
-									수정
-								</Link>
+									<LeadingIcon className="size-5" />
+								</span>
+								<div className="flex min-w-0 flex-1 flex-col gap-2">
+									<div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+										<div className="flex min-w-0 flex-col gap-1">
+											<h3 className="min-w-0 break-words font-medium text-base">
+												{job.title}
+											</h3>
+											<p className="break-words text-foreground text-sm">
+												{job.industryCategory} · {job.region} ·{" "}
+												{formatPay(job.payAmount, job.payUnit)}
+											</p>
+										</div>
+										<Link
+											className={cn(
+												buttonVariants({ variant: "outline" }),
+												"shrink-0"
+											)}
+											href={`/employer/jobs/${job.id}/edit` as Route}
+										>
+											수정
+										</Link>
+									</div>
+									<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+										<span className="flex items-center gap-1.5">
+											<span className="text-muted-foreground">공고</span>
+											<StatusBadge tone={getJobStatusTone(job.status)}>
+												{getJobStatusLabel(job.status)}
+											</StatusBadge>
+										</span>
+										<span className="flex items-center gap-1.5">
+											<span className="text-muted-foreground">사업자</span>
+											<StatusBadge
+												tone={getVerificationStatusTone(
+													job.employerVerificationStatus
+												)}
+											>
+												{getVerificationStatusLabel(
+													job.employerVerificationStatus
+												)}
+											</StatusBadge>
+										</span>
+									</div>
+									<p className="break-words text-muted-foreground text-xs">
+										{getOrganizationLabel(job.organizationId)} ·{" "}
+										{getTeamLabel(job.teamId)} · 수정{" "}
+										{formatDateTime(job.updatedAt)}
+									</p>
+								</div>
 							</div>
-						</div>
-					))}
+						);
+					})}
 				</CardContent>
 			</Card>
 		);
@@ -428,7 +471,7 @@ export default function EmployerPage() {
 					<h2 className="sr-only" id="job-overview">
 						공고 현황
 					</h2>
-					<Card className="shadow-[var(--shadow-card)]">
+					<Card>
 						<CardContent className="flex flex-col gap-4">
 							<dl className="grid grid-cols-3 gap-4">
 								<OverviewStat
@@ -451,10 +494,10 @@ export default function EmployerPage() {
 								/>
 							</dl>
 							<Separator />
-							<dl className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+							<dl className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
 								<div className="flex items-center gap-1.5">
-									<Zap className="size-4 text-coral-500" />
-									<dt className="text-muted-foreground">진행 중 프로모션</dt>
+									<Zap className="size-4 shrink-0 text-coral-500" />
+									<dt className="text-muted-foreground">진행 중인 프로모션</dt>
 									<dd className="font-medium text-foreground">
 										{promotionSummary.activeCount}개
 									</dd>
