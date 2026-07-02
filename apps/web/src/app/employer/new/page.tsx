@@ -1,8 +1,10 @@
 "use client";
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -35,10 +37,7 @@ import {
 import { orpc } from "@/utils/orpc";
 
 const selectClassName =
-	"h-10 w-full min-w-0 rounded-none border border-input bg-background px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 md:h-8 md:text-xs";
-
-const textareaClassName =
-	"min-h-28 w-full min-w-0 rounded-none border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50";
+	"h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20";
 
 const getFieldErrorId = (field: keyof JobForm) => `${field}-error`;
 const getErrorCode = (error: Error | null): string | undefined =>
@@ -359,296 +358,311 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			description="조직과 팀을 선택하고 공개할 공고 정보를 입력합니다."
 			title="새 공고 등록"
 		>
-			<form className="space-y-6 border p-4" onSubmit={handleSubmit}>
-				<FormError message={formError} />
-				<section aria-label="소속 정보" className="grid gap-4 md:grid-cols-2">
-					<div className="space-y-2 md:col-span-2">
-						<Label htmlFor="postingScope">공고 등록 범위</Label>
-						<select
-							aria-describedby={
-								fieldErrors.organizationId || fieldErrors.teamId
-									? getFieldErrorId("organizationId")
-									: undefined
-							}
-							aria-invalid={Boolean(
-								fieldErrors.organizationId || fieldErrors.teamId
-							)}
-							className={selectClassName}
-							id="postingScope"
-							name="postingScope"
-							onChange={(event) => updatePostingScope(event.target.value)}
-							required
-							value={selectedPostingScope?.value ?? ""}
+			<form onSubmit={handleSubmit}>
+				<Card>
+					<CardContent className="flex flex-col gap-6">
+						<FormError message={formError} />
+						<section
+							aria-label="소속 정보"
+							className="grid gap-4 md:grid-cols-2"
 						>
-							{postingScopeOptions.map((option) => (
-								<option key={option.value} value={option.value}>
-									{option.label}
-								</option>
-							))}
-						</select>
-						<FieldError
-							id={getFieldErrorId("organizationId")}
-							message={fieldErrors.organizationId ?? fieldErrors.teamId}
-						/>
-					</div>
-				</section>
+							<div className="flex flex-col gap-2 md:col-span-2">
+								<Label htmlFor="postingScope">공고 등록 범위</Label>
+								<select
+									aria-describedby={
+										fieldErrors.organizationId || fieldErrors.teamId
+											? getFieldErrorId("organizationId")
+											: undefined
+									}
+									aria-invalid={Boolean(
+										fieldErrors.organizationId || fieldErrors.teamId
+									)}
+									className={selectClassName}
+									id="postingScope"
+									name="postingScope"
+									onChange={(event) => updatePostingScope(event.target.value)}
+									required
+									value={selectedPostingScope?.value ?? ""}
+								>
+									{postingScopeOptions.map((option) => (
+										<option key={option.value} value={option.value}>
+											{option.label}
+										</option>
+									))}
+								</select>
+								<FieldError
+									id={getFieldErrorId("organizationId")}
+									message={fieldErrors.organizationId ?? fieldErrors.teamId}
+								/>
+							</div>
+						</section>
 
-				<section aria-label="공고 조건" className="grid gap-4 md:grid-cols-2">
-					<div className="space-y-2 md:col-span-2">
-						<Label htmlFor="title">공고 제목</Label>
-						<Input
-							aria-describedby={
-								fieldErrors.title ? getFieldErrorId("title") : undefined
-							}
-							aria-invalid={Boolean(fieldErrors.title)}
-							id="title"
-							name="title"
-							onChange={(event) => updateFormValue("title", event.target.value)}
-							placeholder="예: 금요일 라운지 홀 스태프 모집…"
-							required
-							value={form.title}
-						/>
-						<FieldError
-							id={getFieldErrorId("title")}
-							message={fieldErrors.title}
-						/>
-					</div>
-					<div className="space-y-2">
-						<Label htmlFor="industryCategory">업종</Label>
-						<select
-							aria-describedby={
-								fieldErrors.industryCategory
-									? getFieldErrorId("industryCategory")
-									: undefined
-							}
-							aria-invalid={Boolean(fieldErrors.industryCategory)}
-							className={selectClassName}
-							id="industryCategory"
-							name="industryCategory"
-							onChange={(event) =>
-								updateFormValue("industryCategory", event.target.value)
-							}
-							required
-							value={form.industryCategory}
+						<section
+							aria-label="공고 조건"
+							className="grid gap-4 md:grid-cols-2"
 						>
-							{industryOptions.map((option) => (
-								<option key={option} value={option}>
-									{option}
-								</option>
-							))}
-						</select>
-						<FieldError
-							id={getFieldErrorId("industryCategory")}
-							message={fieldErrors.industryCategory}
-						/>
-					</div>
-					<div className="space-y-2">
-						<Label htmlFor="region">지역</Label>
-						<select
-							aria-describedby={
-								fieldErrors.region ? getFieldErrorId("region") : undefined
-							}
-							aria-invalid={Boolean(fieldErrors.region)}
-							className={selectClassName}
-							id="region"
-							name="region"
-							onChange={(event) =>
-								updateFormValue("region", event.target.value)
-							}
-							required
-							value={form.region}
-						>
-							{regionOptions.map((option) => (
-								<option key={option} value={option}>
-									{option}
-								</option>
-							))}
-						</select>
-						<FieldError
-							id={getFieldErrorId("region")}
-							message={fieldErrors.region}
-						/>
-					</div>
-					<div className="space-y-2">
-						<Label htmlFor="payAmount">급여 금액</Label>
-						<Input
-							aria-describedby={
-								fieldErrors.payAmount ? getFieldErrorId("payAmount") : undefined
-							}
-							aria-invalid={Boolean(fieldErrors.payAmount)}
-							id="payAmount"
-							inputMode="numeric"
-							min="1"
-							name="payAmount"
-							onChange={(event) =>
-								updateFormValue("payAmount", event.target.value)
-							}
-							placeholder="예: 12000…"
-							required
-							type="number"
-							value={form.payAmount}
-						/>
-						<FieldError
-							id={getFieldErrorId("payAmount")}
-							message={fieldErrors.payAmount}
-						/>
-					</div>
-					<div className="space-y-2">
-						<Label htmlFor="payUnit">급여 단위</Label>
-						<select
-							aria-describedby={
-								fieldErrors.payUnit ? getFieldErrorId("payUnit") : undefined
-							}
-							aria-invalid={Boolean(fieldErrors.payUnit)}
-							className={selectClassName}
-							id="payUnit"
-							name="payUnit"
-							onChange={(event) =>
-								updateFormValue("payUnit", event.target.value)
-							}
-							required
-							value={form.payUnit}
-						>
-							{payUnitOptions.map((option) => (
-								<option key={option} value={option}>
-									{option}
-								</option>
-							))}
-						</select>
-						<FieldError
-							id={getFieldErrorId("payUnit")}
-							message={fieldErrors.payUnit}
-						/>
-					</div>
-					<div className="space-y-2 md:col-span-2">
-						<Label htmlFor="workSchedule">근무 일정</Label>
-						<Input
-							aria-describedby={
-								fieldErrors.workSchedule
-									? getFieldErrorId("workSchedule")
-									: undefined
-							}
-							aria-invalid={Boolean(fieldErrors.workSchedule)}
-							id="workSchedule"
-							name="workSchedule"
-							onChange={(event) =>
-								updateFormValue("workSchedule", event.target.value)
-							}
-							placeholder="예: 금/토 20:00-02:00…"
-							required
-							value={form.workSchedule}
-						/>
-						<FieldError
-							id={getFieldErrorId("workSchedule")}
-							message={fieldErrors.workSchedule}
-						/>
-					</div>
-				</section>
+							<div className="flex flex-col gap-2 md:col-span-2">
+								<Label htmlFor="title">공고 제목</Label>
+								<Input
+									aria-describedby={
+										fieldErrors.title ? getFieldErrorId("title") : undefined
+									}
+									aria-invalid={Boolean(fieldErrors.title)}
+									id="title"
+									name="title"
+									onChange={(event) =>
+										updateFormValue("title", event.target.value)
+									}
+									placeholder="예: 금요일 라운지 홀 스태프 모집…"
+									required
+									value={form.title}
+								/>
+								<FieldError
+									id={getFieldErrorId("title")}
+									message={fieldErrors.title}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="industryCategory">업종</Label>
+								<select
+									aria-describedby={
+										fieldErrors.industryCategory
+											? getFieldErrorId("industryCategory")
+											: undefined
+									}
+									aria-invalid={Boolean(fieldErrors.industryCategory)}
+									className={selectClassName}
+									id="industryCategory"
+									name="industryCategory"
+									onChange={(event) =>
+										updateFormValue("industryCategory", event.target.value)
+									}
+									required
+									value={form.industryCategory}
+								>
+									{industryOptions.map((option) => (
+										<option key={option} value={option}>
+											{option}
+										</option>
+									))}
+								</select>
+								<FieldError
+									id={getFieldErrorId("industryCategory")}
+									message={fieldErrors.industryCategory}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="region">지역</Label>
+								<select
+									aria-describedby={
+										fieldErrors.region ? getFieldErrorId("region") : undefined
+									}
+									aria-invalid={Boolean(fieldErrors.region)}
+									className={selectClassName}
+									id="region"
+									name="region"
+									onChange={(event) =>
+										updateFormValue("region", event.target.value)
+									}
+									required
+									value={form.region}
+								>
+									{regionOptions.map((option) => (
+										<option key={option} value={option}>
+											{option}
+										</option>
+									))}
+								</select>
+								<FieldError
+									id={getFieldErrorId("region")}
+									message={fieldErrors.region}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="payAmount">급여 금액</Label>
+								<Input
+									aria-describedby={
+										fieldErrors.payAmount
+											? getFieldErrorId("payAmount")
+											: undefined
+									}
+									aria-invalid={Boolean(fieldErrors.payAmount)}
+									id="payAmount"
+									inputMode="numeric"
+									min="1"
+									name="payAmount"
+									onChange={(event) =>
+										updateFormValue("payAmount", event.target.value)
+									}
+									placeholder="예: 12000…"
+									required
+									type="number"
+									value={form.payAmount}
+								/>
+								<FieldError
+									id={getFieldErrorId("payAmount")}
+									message={fieldErrors.payAmount}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="payUnit">급여 단위</Label>
+								<select
+									aria-describedby={
+										fieldErrors.payUnit ? getFieldErrorId("payUnit") : undefined
+									}
+									aria-invalid={Boolean(fieldErrors.payUnit)}
+									className={selectClassName}
+									id="payUnit"
+									name="payUnit"
+									onChange={(event) =>
+										updateFormValue("payUnit", event.target.value)
+									}
+									required
+									value={form.payUnit}
+								>
+									{payUnitOptions.map((option) => (
+										<option key={option} value={option}>
+											{option}
+										</option>
+									))}
+								</select>
+								<FieldError
+									id={getFieldErrorId("payUnit")}
+									message={fieldErrors.payUnit}
+								/>
+							</div>
+							<div className="flex flex-col gap-2 md:col-span-2">
+								<Label htmlFor="workSchedule">근무 일정</Label>
+								<Input
+									aria-describedby={
+										fieldErrors.workSchedule
+											? getFieldErrorId("workSchedule")
+											: undefined
+									}
+									aria-invalid={Boolean(fieldErrors.workSchedule)}
+									id="workSchedule"
+									name="workSchedule"
+									onChange={(event) =>
+										updateFormValue("workSchedule", event.target.value)
+									}
+									placeholder="예: 금/토 20:00-02:00…"
+									required
+									value={form.workSchedule}
+								/>
+								<FieldError
+									id={getFieldErrorId("workSchedule")}
+									message={fieldErrors.workSchedule}
+								/>
+							</div>
+						</section>
 
-				<section aria-label="상세 내용" className="grid gap-4">
-					<div className="space-y-2">
-						<Label htmlFor="description">상세 설명</Label>
-						<textarea
-							aria-describedby={
-								fieldErrors.description
-									? getFieldErrorId("description")
-									: undefined
-							}
-							aria-invalid={Boolean(fieldErrors.description)}
-							className={textareaClassName}
-							id="description"
-							maxLength={2000}
-							minLength={10}
-							name="description"
-							onChange={(event) =>
-								updateFormValue("description", event.target.value)
-							}
-							placeholder="업무 내용, 지원 조건, 준비 사항을 입력해 주세요…"
-							required
-							value={form.description}
-						/>
-						<FieldError
-							id={getFieldErrorId("description")}
-							message={fieldErrors.description}
-						/>
-					</div>
-					<JobPostBlockEditor
-						blocks={descriptionBlocks}
-						error={fieldErrors.descriptionBlocks}
-						onChange={(blocks) => {
-							setDescriptionBlocks(blocks);
-							setFieldErrors((currentErrors) => ({
-								...currentErrors,
-								descriptionBlocks: undefined,
-							}));
-							setFormError(null);
-						}}
-					/>
-					<div className="space-y-2">
-						<Label htmlFor="interviewNotes">면접 안내</Label>
-						<textarea
-							aria-describedby={
-								fieldErrors.interviewNotes
-									? getFieldErrorId("interviewNotes")
-									: undefined
-							}
-							aria-invalid={Boolean(fieldErrors.interviewNotes)}
-							className={textareaClassName}
-							id="interviewNotes"
-							maxLength={500}
-							name="interviewNotes"
-							onChange={(event) =>
-								updateFormValue("interviewNotes", event.target.value)
-							}
-							placeholder="면접 장소, 준비물, 연락 가능 시간을 입력해 주세요…"
-							value={form.interviewNotes}
-						/>
-						<FieldError
-							id={getFieldErrorId("interviewNotes")}
-							message={fieldErrors.interviewNotes}
-						/>
-					</div>
-				</section>
+						<section aria-label="상세 내용" className="grid gap-4">
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="description">상세 설명</Label>
+								<Textarea
+									aria-describedby={
+										fieldErrors.description
+											? getFieldErrorId("description")
+											: undefined
+									}
+									aria-invalid={Boolean(fieldErrors.description)}
+									className="min-h-28"
+									id="description"
+									maxLength={2000}
+									minLength={10}
+									name="description"
+									onChange={(event) =>
+										updateFormValue("description", event.target.value)
+									}
+									placeholder="업무 내용, 지원 조건, 준비 사항을 입력해 주세요…"
+									required
+									value={form.description}
+								/>
+								<FieldError
+									id={getFieldErrorId("description")}
+									message={fieldErrors.description}
+								/>
+							</div>
+							<JobPostBlockEditor
+								blocks={descriptionBlocks}
+								error={fieldErrors.descriptionBlocks}
+								onChange={(blocks) => {
+									setDescriptionBlocks(blocks);
+									setFieldErrors((currentErrors) => ({
+										...currentErrors,
+										descriptionBlocks: undefined,
+									}));
+									setFormError(null);
+								}}
+							/>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="interviewNotes">면접 안내</Label>
+								<Textarea
+									aria-describedby={
+										fieldErrors.interviewNotes
+											? getFieldErrorId("interviewNotes")
+											: undefined
+									}
+									aria-invalid={Boolean(fieldErrors.interviewNotes)}
+									className="min-h-28"
+									id="interviewNotes"
+									maxLength={500}
+									name="interviewNotes"
+									onChange={(event) =>
+										updateFormValue("interviewNotes", event.target.value)
+									}
+									placeholder="면접 장소, 준비물, 연락 가능 시간을 입력해 주세요…"
+									value={form.interviewNotes}
+								/>
+								<FieldError
+									id={getFieldErrorId("interviewNotes")}
+									message={fieldErrors.interviewNotes}
+								/>
+							</div>
+						</section>
 
-				<JobPostMediaUploader
-					error={fieldErrors.media}
-					media={media}
-					onChange={(nextMedia) => {
-						setMedia(nextMedia);
-						setFieldErrors((currentErrors) => ({
-							...currentErrors,
-							media: undefined,
-						}));
-						setFormError(null);
-					}}
-				/>
+						<JobPostMediaUploader
+							error={fieldErrors.media}
+							media={media}
+							onChange={(nextMedia) => {
+								setMedia(nextMedia);
+								setFieldErrors((currentErrors) => ({
+									...currentErrors,
+									media: undefined,
+								}));
+								setFormError(null);
+							}}
+						/>
 
-				<EmployerListingPreview
-					companyName={previewCompanyName}
-					coverImageUrl={media.cover?.previewUrl}
-					location={form.region}
-					pay={previewPay}
-					title={form.title}
-				/>
+						<EmployerListingPreview
+							companyName={previewCompanyName}
+							coverImageUrl={media.cover?.previewUrl}
+							location={form.region}
+							pay={previewPay}
+							title={form.title}
+						/>
 
-				<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-					<Link
-						className={buttonVariants({ variant: "outline" })}
-						href="/employer"
-					>
-						취소
-					</Link>
-					<Button
-						disabled={
-							createMutation.isPending || createMediaUploadMutation.isPending
-						}
-						type="submit"
-					>
-						{createMutation.isPending || createMediaUploadMutation.isPending
-							? "등록 중…"
-							: "공고 등록"}
-					</Button>
-				</div>
+						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+							<Link
+								className={buttonVariants({ variant: "outline" })}
+								href="/employer"
+							>
+								취소
+							</Link>
+							<Button
+								disabled={
+									createMutation.isPending ||
+									createMediaUploadMutation.isPending
+								}
+								type="submit"
+							>
+								{createMutation.isPending || createMediaUploadMutation.isPending
+									? "등록 중…"
+									: "공고 등록"}
+							</Button>
+						</div>
+					</CardContent>
+				</Card>
 			</form>
 		</PageShell>
 	);

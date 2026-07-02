@@ -1,6 +1,6 @@
 "use client";
 
-import { buttonVariants } from "@bambi-app/ui/components/button";
+import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
@@ -60,13 +60,9 @@ export default function EmployerSettingsPage() {
 			>
 				<EmptyState
 					action={
-						<button
-							className={buttonVariants()}
-							onClick={() => organizationsQuery.refetch()}
-							type="button"
-						>
+						<Button onClick={() => organizationsQuery.refetch()} type="button">
 							다시 시도
-						</button>
+						</Button>
 					}
 					description="로그인 상태와 연결 상태를 확인한 뒤 다시 시도해 주세요."
 					title="조직 설정을 불러올 수 없습니다"
@@ -95,7 +91,10 @@ export default function EmployerSettingsPage() {
 				</Link>
 			</div>
 
-			<section aria-labelledby="organization-profiles" className="space-y-3">
+			<section
+				aria-labelledby="organization-profiles"
+				className="flex flex-col gap-3"
+			>
 				<div>
 					<h2 className="font-medium text-base" id="organization-profiles">
 						조직 프로필

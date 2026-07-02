@@ -1,6 +1,8 @@
 "use client";
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import { Card, CardContent } from "@bambi-app/ui/components/card";
+import { Label } from "@bambi-app/ui/components/label";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
@@ -117,50 +119,52 @@ export default function EmployerTeamSettingsPage() {
 		);
 	} else if (teams.length > 0) {
 		teamsContent = (
-			<div className="divide-y border">
-				{teams.map((team) => {
-					const isEditing = editingTeamId === team.teamId;
+			<Card>
+				<CardContent className="divide-y p-0">
+					{teams.map((team) => {
+						const isEditing = editingTeamId === team.teamId;
 
-					return (
-						<div className="p-4" key={team.teamId}>
-							{isEditing ? (
-								<TeamForm
-									onCancel={() => setEditingTeamId(null)}
-									organizations={organizations}
-									team={{
-										displayName: team.displayName,
-										organizationId: team.organizationId,
-										region: team.region,
-										teamId: team.teamId,
-									}}
-								/>
-							) : (
-								<div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-									<div className="min-w-0">
-										<h3 className="break-words font-medium text-sm">
-											{team.displayName}
-										</h3>
-										<p className="mt-1 text-muted-foreground text-xs">
-											{formatNullable(team.region)} · 수정{" "}
-											{team.updatedAt
-												? formatDateTime(team.updatedAt)
-												: "미입력"}
-										</p>
+						return (
+							<div className="p-4" key={team.teamId}>
+								{isEditing ? (
+									<TeamForm
+										onCancel={() => setEditingTeamId(null)}
+										organizations={organizations}
+										team={{
+											displayName: team.displayName,
+											organizationId: team.organizationId,
+											region: team.region,
+											teamId: team.teamId,
+										}}
+									/>
+								) : (
+									<div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+										<div className="min-w-0">
+											<h3 className="break-words font-medium text-sm">
+												{team.displayName}
+											</h3>
+											<p className="mt-1 text-muted-foreground text-xs">
+												{formatNullable(team.region)} · 수정{" "}
+												{team.updatedAt
+													? formatDateTime(team.updatedAt)
+													: "미입력"}
+											</p>
+										</div>
+										<Button
+											onClick={() => setEditingTeamId(team.teamId)}
+											size="sm"
+											type="button"
+											variant="outline"
+										>
+											수정
+										</Button>
 									</div>
-									<Button
-										onClick={() => setEditingTeamId(team.teamId)}
-										size="sm"
-										type="button"
-										variant="outline"
-									>
-										수정
-									</Button>
-								</div>
-							)}
-						</div>
-					);
-				})}
-			</div>
+								)}
+							</div>
+						);
+					})}
+				</CardContent>
+			</Card>
 		);
 	} else {
 		teamsContent = (
@@ -193,16 +197,11 @@ export default function EmployerTeamSettingsPage() {
 
 			{organizations.length > 0 ? (
 				<>
-					<section aria-labelledby="team-scope" className="space-y-3">
+					<section aria-labelledby="team-scope" className="flex flex-col gap-3">
 						<div className="grid gap-2 sm:max-w-sm">
-							<label
-								className="font-medium text-sm"
-								htmlFor="team-scope-organization"
-							>
-								관리 조직
-							</label>
+							<Label htmlFor="team-scope-organization">관리 조직</Label>
 							<select
-								className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
+								className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
 								id="team-scope-organization"
 								onChange={(event) => {
 									setSelectedOrganizationId(event.target.value);
@@ -224,7 +223,7 @@ export default function EmployerTeamSettingsPage() {
 
 					<TeamForm organizations={organizations} />
 
-					<section aria-labelledby="teams-list" className="space-y-3">
+					<section aria-labelledby="teams-list" className="flex flex-col gap-3">
 						<div>
 							<h2 className="font-medium text-base" id="teams-list">
 								팀 목록

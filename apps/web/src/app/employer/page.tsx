@@ -150,7 +150,7 @@ export default function EmployerPage() {
 							로그인
 						</Link>
 					}
-					description="seed 구인자 계정으로 로그인하면 조직과 공고 상태를 확인할 수 있습니다."
+					description="구인자 계정으로 로그인하면 조직과 공고 상태를 확인할 수 있습니다."
 					title="로그인이 필요합니다"
 				/>
 			</PageShell>
