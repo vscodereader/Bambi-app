@@ -157,8 +157,6 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 					reports: openReports,
 					warned: warnedUsers,
 				}}
-				onTab={go}
-				tab={tab}
 			/>
 			<Content>{children}</Content>
 			{showActionBar ? (

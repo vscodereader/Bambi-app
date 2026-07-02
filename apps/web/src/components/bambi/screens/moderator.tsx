@@ -16,18 +16,9 @@ import type {
 	UserStatus,
 	VisualTone,
 } from "@/lib/bambi/types";
-import {
-	AppBar,
-	Avatar,
-	Badge,
-	Button,
-	IconButton,
-	Logo,
-	StatGroup,
-} from "../ds";
+import { AppBar, Avatar, Badge, Button, StatGroup } from "../ds";
 import {
 	AlertCircle,
-	BellIcon,
 	CheckIcon,
 	ChevronDownIcon,
 	ChevronRightIcon,
@@ -196,73 +187,16 @@ function EmptyState({ icon, text }: { icon: ReactNode; text: string }) {
 	);
 }
 
-function ConsoleTabs({
-	tab,
-	onTab,
-}: {
-	tab: string;
-	onTab: (v: string) => void;
-}) {
-	const items = [
-		{ v: "queue", label: "공고 검수" },
-		{ v: "reports", label: "신고" },
-		{ v: "users", label: "사용자" },
-	];
-	return (
-		<div className="flex gap-1.5 rounded-xl bg-muted p-1">
-			{items.map((it) => {
-				const on = tab === it.v;
-				return (
-					<button
-						className={cn(
-							"h-10 flex-1 cursor-pointer rounded-lg border-none text-[14px] transition-all",
-							on
-								? "bg-ink-800 font-extrabold text-white shadow-sm"
-								: "bg-transparent font-semibold text-muted-foreground"
-						)}
-						key={it.v}
-						onClick={() => onTab(it.v)}
-						type="button"
-					>
-						{it.label}
-					</button>
-				);
-			})}
-		</div>
-	);
-}
-
 export function ConsoleTop({
-	tab,
-	onTab,
 	counts,
 }: {
-	tab: string;
-	onTab: (v: string) => void;
 	counts: { queue: number; reports: number; warned: number };
 }) {
 	return (
-		<div className="flex flex-col gap-[14px] px-5 pt-1.5 pb-3">
-			<div className="flex items-center justify-between">
-				<Logo lang="ko" size="md" />
-				<div className="flex items-center gap-2">
-					<span className="inline-flex h-[30px] items-center gap-[5px] whitespace-nowrap rounded-full bg-secondary px-[11px] font-bold text-[12px] text-[color:var(--text-default)]">
-						<span className="inline-flex size-[14px] text-[color:var(--ink-700)]">
-							<ShieldIcon />
-						</span>
-						운영자 모드
-					</span>
-					<IconButton badge variant="subtle">
-						<BellIcon />
-					</IconButton>
-				</div>
-			</div>
+		<div className="flex flex-col gap-[14px] px-6 pt-3 pb-3">
 			<h1 className="m-0 px-1 font-extrabold text-[24px] text-foreground">
 				운영자 콘솔
 			</h1>
-			<div className="px-1">
-				<ConsoleTabs onTab={onTab} tab={tab} />
-			</div>
 			<div className="px-1">
 				<StatGroup
 					items={[
@@ -1580,8 +1514,6 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 							reports: openReports,
 							warned: warnedUsers,
 						}}
-						onTab={setTab}
-						tab={tab}
 					/>
 					<div className="flex min-h-0 flex-1 flex-col">{listBody}</div>
 				</>
