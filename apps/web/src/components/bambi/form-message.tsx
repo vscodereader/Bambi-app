@@ -1,3 +1,6 @@
+import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
+import { CircleAlert } from "lucide-react";
+
 interface FieldErrorProps {
 	id: string;
 	message?: string;
@@ -25,11 +28,9 @@ export function FormError({ message }: FormErrorProps) {
 	}
 
 	return (
-		<div
-			className="border border-destructive/30 bg-destructive/5 p-3 text-destructive text-sm"
-			role="alert"
-		>
-			{message}
-		</div>
+		<Alert variant="destructive">
+			<CircleAlert />
+			<AlertDescription>{message}</AlertDescription>
+		</Alert>
 	);
 }

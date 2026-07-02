@@ -4,6 +4,13 @@ import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -37,8 +44,7 @@ import {
 } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
-const selectClassName =
-	"h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20";
+const selectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
 
 const readOnlyValueClassName =
 	"min-h-9 break-words rounded-md border bg-muted/30 px-3 py-2 text-muted-foreground text-sm";
@@ -428,28 +434,34 @@ export default function EditEmployerJobPage({
 							</div>
 							<div className="flex flex-col gap-2">
 								<Label htmlFor="industryCategory">업종</Label>
-								<select
-									aria-describedby={
-										fieldErrors.industryCategory
-											? getFieldErrorId("industryCategory")
-											: undefined
-									}
-									aria-invalid={Boolean(fieldErrors.industryCategory)}
-									className={selectClassName}
-									id="industryCategory"
+								<Select
 									name="industryCategory"
-									onChange={(event) =>
-										updateFormValue("industryCategory", event.target.value)
+									onValueChange={(value) =>
+										updateFormValue("industryCategory", value ?? "")
 									}
 									required
 									value={form.industryCategory}
 								>
-									{industryOptions.map((option) => (
-										<option key={option} value={option}>
-											{option}
-										</option>
-									))}
-								</select>
+									<SelectTrigger
+										aria-describedby={
+											fieldErrors.industryCategory
+												? getFieldErrorId("industryCategory")
+												: undefined
+										}
+										aria-invalid={Boolean(fieldErrors.industryCategory)}
+										className={selectTriggerClassName}
+										id="industryCategory"
+									>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{industryOptions.map((option) => (
+											<SelectItem key={option} value={option}>
+												{option}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 								<FieldError
 									id={getFieldErrorId("industryCategory")}
 									message={fieldErrors.industryCategory}
@@ -457,26 +469,32 @@ export default function EditEmployerJobPage({
 							</div>
 							<div className="flex flex-col gap-2">
 								<Label htmlFor="region">지역</Label>
-								<select
-									aria-describedby={
-										fieldErrors.region ? getFieldErrorId("region") : undefined
-									}
-									aria-invalid={Boolean(fieldErrors.region)}
-									className={selectClassName}
-									id="region"
+								<Select
 									name="region"
-									onChange={(event) =>
-										updateFormValue("region", event.target.value)
+									onValueChange={(value) =>
+										updateFormValue("region", value ?? "")
 									}
 									required
 									value={form.region}
 								>
-									{regionOptions.map((option) => (
-										<option key={option} value={option}>
-											{option}
-										</option>
-									))}
-								</select>
+									<SelectTrigger
+										aria-describedby={
+											fieldErrors.region ? getFieldErrorId("region") : undefined
+										}
+										aria-invalid={Boolean(fieldErrors.region)}
+										className={selectTriggerClassName}
+										id="region"
+									>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{regionOptions.map((option) => (
+											<SelectItem key={option} value={option}>
+												{option}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 								<FieldError
 									id={getFieldErrorId("region")}
 									message={fieldErrors.region}
@@ -510,26 +528,34 @@ export default function EditEmployerJobPage({
 							</div>
 							<div className="flex flex-col gap-2">
 								<Label htmlFor="payUnit">급여 단위</Label>
-								<select
-									aria-describedby={
-										fieldErrors.payUnit ? getFieldErrorId("payUnit") : undefined
-									}
-									aria-invalid={Boolean(fieldErrors.payUnit)}
-									className={selectClassName}
-									id="payUnit"
+								<Select
 									name="payUnit"
-									onChange={(event) =>
-										updateFormValue("payUnit", event.target.value)
+									onValueChange={(value) =>
+										updateFormValue("payUnit", value ?? "")
 									}
 									required
 									value={form.payUnit}
 								>
-									{payUnitOptions.map((option) => (
-										<option key={option} value={option}>
-											{option}
-										</option>
-									))}
-								</select>
+									<SelectTrigger
+										aria-describedby={
+											fieldErrors.payUnit
+												? getFieldErrorId("payUnit")
+												: undefined
+										}
+										aria-invalid={Boolean(fieldErrors.payUnit)}
+										className={selectTriggerClassName}
+										id="payUnit"
+									>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{payUnitOptions.map((option) => (
+											<SelectItem key={option} value={option}>
+												{option}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 								<FieldError
 									id={getFieldErrorId("payUnit")}
 									message={fieldErrors.payUnit}
