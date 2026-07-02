@@ -174,14 +174,16 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 				onTab={go}
 				tab={tab}
 			/>
-			<Content>{children}</Content>
+			<Content withBottomNav>{children}</Content>
 			{showActionBar ? (
-				<QueueActionBar
-					count={selected.length}
-					isApplying={isBulkApplying}
-					onAction={bulkAction}
-					scope={bulkScope}
-				/>
+				<div className="max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] max-md:z-30">
+					<QueueActionBar
+						count={selected.length}
+						isApplying={isBulkApplying}
+						onAction={bulkAction}
+						scope={bulkScope}
+					/>
+				</div>
 			) : null}
 			<NavBar>
 				<ModTabs setTab={go} tab={tab} />
