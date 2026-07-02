@@ -676,7 +676,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					title={form.title}
 				/>
 
-				<div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t bg-background py-3 sm:flex-row sm:justify-end">
+				<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 					<Link
 						className={buttonVariants({ variant: "outline" })}
 						href="/employer"
