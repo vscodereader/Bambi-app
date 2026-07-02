@@ -77,27 +77,29 @@ export function VisualJobCard({
 	return (
 		<article
 			className={cn(
-				"flex flex-col gap-2 rounded-lg border bg-card p-2 transition-colors",
+				"relative flex flex-col gap-2 overflow-hidden rounded-lg border bg-card p-2 transition-colors",
 				toneClassName[tone],
 				active && "border-coral-400 ring-2 ring-coral-100"
 			)}
 		>
+			{showHitRibbon ? (
+				// 카드 우측 상단을 가로지르는 대각선 코너 리본. overflow-hidden으로 삼각 코너를
+				// 만들고, pointer-events-none으로 아래 카드 클릭을 가리지 않는다.
+				<span
+					className={cn(
+						"pointer-events-none absolute top-3.5 -right-5 z-10 w-22 rotate-45 py-0.5 text-center font-extrabold text-[10px] leading-none tracking-wider shadow-[var(--shadow-card)]",
+						hitRibbonClassName
+					)}
+				>
+					<span aria-hidden="true">HIT</span>
+					<span className="sr-only">인기 공고</span>
+				</span>
+			) : null}
 			<button
-				className="relative flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
+				className="flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
 				onClick={() => onOpen(job)}
 				type="button"
 			>
-				{showHitRibbon ? (
-					<span
-						className={cn(
-							"absolute -top-2 -right-2 z-10 rounded-tr-lg rounded-bl-md px-1.5 py-0.5 font-extrabold text-[10px] leading-none tracking-wide shadow-[var(--shadow-card)]",
-							hitRibbonClassName
-						)}
-					>
-						<span aria-hidden="true">HIT</span>
-						<span className="sr-only">인기 공고</span>
-					</span>
-				) : null}
 				<div className="flex items-start gap-3">
 					{job.coverImage ? (
 						<Image
