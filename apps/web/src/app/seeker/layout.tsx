@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
-import { AppShell } from "@/components/bambi/app-shell";
 import { SeekerNav } from "@/components/bambi/persona-nav";
+import { SeekerAppShell } from "@/components/bambi/seeker-app-shell";
 
 export default function SeekerLayout({ children }: { children: ReactNode }) {
 	return (
-		<AppShell>
+		<SeekerAppShell>
 			<SeekerNav>{children}</SeekerNav>
-		</AppShell>
+		</SeekerAppShell>
 	);
 }

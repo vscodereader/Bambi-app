@@ -1,5 +1,4 @@
 @import "../../../packages/ui/src/styles/globals.css";
-@import "./styles/bambi/fonts.css";
 @import "./styles/bambi/tokens.css";
 
 /* ---- web 브랜드: shadcn 시맨틱 토큰을 밤비 팔레트로 매핑 ---- */
@@ -33,6 +32,8 @@
 		"Pretendard Variable", Pretendard, "Inter", -apple-system,
 		BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI",
 		Roboto, sans-serif;
+	/* 카드 그리드 1→2열 전환 분기점 (450px) — sm(640px)보다 좁은 모바일 경계 */
+	--breakpoint-xs: 28.125rem;
 	--color-coral-50: var(--coral-50);
 	--color-coral-100: var(--coral-100);
 	--color-coral-200: var(--coral-200);

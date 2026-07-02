@@ -3,7 +3,9 @@
 // 밤비 — 구직자(Seeker) 화면: 탐색 → 상세 → 채팅 → 신고.
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { JOBS } from "@/lib/bambi/data";
 import type { Job, ReportMode, VisualTone } from "@/lib/bambi/types";
 import {
@@ -560,25 +562,31 @@ export function SeekerChat({
 }
 
 export function SeekerMe() {
+	const router = useRouter();
 	const rows = [
 		{ icon: <ClipboardListIcon />, label: "내 신고 내역", meta: "0건" },
 		{ icon: <ClockIcon />, label: "예정된 면접", meta: "1건" },
 		{ icon: <LockIcon />, label: "차단한 상대", meta: "0명" },
 		{ icon: <SettingsIcon />, label: "계정 설정", meta: "" },
 	];
+	const handleSignOut = async () => {
+		await signOutToHome(router);
+	};
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="px-6 pt-2 pb-1">
+		<div className="flex min-h-0 flex-1 flex-col py-5">
+			<div className="mx-auto w-full max-w-[860px] px-4 pt-2 pb-1 md:px-6">
 				<h1 className="m-0 font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
 					내 정보
 				</h1>
 			</div>
-			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 py-4">
-				<div className="flex items-center gap-[14px] rounded-[18px] bg-ink-800 p-[18px]">
+			<div className="mx-auto flex min-h-0 w-full max-w-[860px] flex-1 flex-col gap-[18px] overflow-y-auto px-4 py-4 md:px-6">
+				<div className="flex items-center gap-[14px] rounded-[18px] border border-primary p-[18px]">
 					<Avatar name="김하늘" ring size="lg" />
 					<div className="flex-1">
-						<div className="font-extrabold text-[18px] text-white">김하늘</div>
-						<div className="mt-0.5 text-[13px] text-[color:var(--text-on-dark-muted)]">
+						<div className="font-extrabold text-[18px] text-foreground">
+							김하늘
+						</div>
+						<div className="mt-0.5 text-[13px] text-muted-foreground">
 							구직자 · 강남 활동
 						</div>
 					</div>
@@ -610,6 +618,9 @@ export function SeekerMe() {
 						</div>
 					))}
 				</div>
+				<Button className="w-full" onClick={handleSignOut} variant="secondary">
+					로그아웃
+				</Button>
 			</div>
 		</div>
 	);

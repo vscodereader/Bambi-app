@@ -12,6 +12,18 @@ Biome (the underlying engine) provides robust linting and formatting. Most issue
 
 ---
 
+## Project Documentation Workflow
+
+Before starting any project task, inspect the relevant files under `docs/`, especially active plans in `docs/superpowers/plans/`.
+
+- Keep roadmap and plan checkboxes in sync with completed work.
+- Update plan/spec documents when implementation scope, sequencing, verification results, or migration filenames change.
+- Before adding a database migration, check `packages/db/src/migrations/` and use the next available migration number in docs and implementation.
+- When a task completes, record verification notes in the relevant plan before committing.
+- Do not leave documentation stale when code behavior or project workflow changes.
+
+---
+
 ## Core Principles
 
 Write code that is **accessible, performant, type-safe, and maintainable**. Focus on clarity and explicit intent over brevity.

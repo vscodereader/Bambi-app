@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 23001",
+    "dev": "WATCHPACK_POLLING=true next dev --port 23001",
     "build": "next build",
     "check-types": "tsc --noEmit",
     "start": "next start"
@@ -28,6 +28,7 @@
     "next-themes": "catalog:",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "socket.io-client": "^4.8.3",
     "sonner": "catalog:",
     "streamdown": "^1.6.10",
     "zod": "catalog:"

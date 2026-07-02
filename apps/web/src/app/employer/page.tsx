@@ -1,9 +1,478 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { EmployerPostings } from "@/components/bambi/screens/employer";
+import { Badge } from "@bambi-app/ui/components/badge";
+import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+} from "@bambi-app/ui/components/card";
+import { Separator } from "@bambi-app/ui/components/separator";
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import { useQuery } from "@tanstack/react-query";
+import type { Route } from "next";
+import Link from "next/link";
+
+import { EmptyState } from "@/components/bambi/empty-state";
+import { PageShell } from "@/components/bambi/page-shell";
+import { StatusBadge } from "@/components/bambi/status-badge";
+import { authClient } from "@/lib/auth-client";
+import { formatDateTime, formatNullable, formatPay } from "@/lib/bambi-format";
+import { jobStatusLabels, verificationStatusLabels } from "@/lib/bambi-options";
+import { orpc } from "@/utils/orpc";
+
+const getJobStatusLabel = (status: string): string =>
+	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
+
+const getVerificationStatusLabel = (status: string): string =>
+	verificationStatusLabels[status as keyof typeof verificationStatusLabels] ??
+	status;
+
+const getJobStatusTone = (
+	status: string
+): React.ComponentProps<typeof StatusBadge>["tone"] => {
+	if (status === "published") {
+		return "good";
+	}
+
+	if (status === "pending_review") {
+		return "warning";
+	}
+
+	if (status === "rejected") {
+		return "danger";
+	}
+
+	return "default";
+};
+
+const getVerificationStatusTone = (
+	status: string
+): React.ComponentProps<typeof StatusBadge>["tone"] => {
+	if (status === "verified") {
+		return "good";
+	}
+
+	if (status === "pending") {
+		return "warning";
+	}
+
+	if (status === "rejected") {
+		return "danger";
+	}
+
+	return "default";
+};
+
+const getErrorCode = (error: Error | null): string | undefined =>
+	error && "code" in error && typeof error.code === "string"
+		? error.code
+		: undefined;
+
+interface PromotionSummaryItem {
+	remainingManualBoosts: number;
+	status: string;
+}
+
+const getPromotionSummary = (promotions: PromotionSummaryItem[]) => ({
+	activeCount: promotions.filter((promotion) => promotion.status === "active")
+		.length,
+	pendingCount: promotions.filter(
+		(promotion) => promotion.status === "pending_payment"
+	).length,
+	remainingBoostCount: promotions.reduce(
+		(total, promotion) => total + promotion.remainingManualBoosts,
+		0
+	),
+});
 
 export default function EmployerPage() {
-	const router = useRouter();
-	return <EmployerPostings onNew={() => router.push("/employer/new")} />;
+	const session = authClient.useSession();
+	const isSignedIn = Boolean(session.data?.user);
+	const mineQuery = useQuery({
+		...orpc.bambi.onboarding.getMine.queryOptions(),
+		enabled: isSignedIn,
+	});
+	const profile = mineQuery.data?.bambiProfile ?? null;
+	const canLoadJobs = Boolean(profile && profile.role !== "job_seeker");
+	const jobsQuery = useQuery({
+		...orpc.bambi.jobs.listMine.queryOptions(),
+		enabled: canLoadJobs,
+	});
+	const promotionsQuery = useQuery({
+		...orpc.bambi.promotions.listMine.queryOptions(),
+		enabled: canLoadJobs,
+	});
+	const organizationProfiles =
+		mineQuery.data?.employerOrganizationProfiles ?? [];
+	const teamProfiles = mineQuery.data?.employerTeamProfiles ?? [];
+	const jobs = jobsQuery.data ?? [];
+	const promotionSummary = getPromotionSummary(promotionsQuery.data ?? []);
+
+	const getOrganizationLabel = (organizationId: string): string =>
+		organizationProfiles.find(
+			(organizationProfile) =>
+				organizationProfile.organizationId === organizationId
+		)?.displayName ?? organizationId;
+
+	const getTeamLabel = (teamId: null | string): string => {
+		if (!teamId) {
+			return "전체 조직";
+		}
+
+		return (
+			teamProfiles.find((teamProfile) => teamProfile.teamId === teamId)
+				?.displayName ?? teamId
+		);
+	};
+
+	if (session.isPending || mineQuery.isLoading) {
+		return (
+			<PageShell title="구인자 관리">
+				<div className="grid gap-3 md:grid-cols-2">
+					<Skeleton className="h-24 w-full rounded-lg" />
+					<Skeleton className="h-24 w-full rounded-lg" />
+				</div>
+			</PageShell>
+		);
+	}
+
+	if (!isSignedIn || getErrorCode(mineQuery.error) === "UNAUTHORIZED") {
+		return (
+			<PageShell
+				description="구인자 관리는 로그인 후 이용할 수 있습니다."
+				title="구인자 관리"
+			>
+				<EmptyState
+					action={
+						<Link className={buttonVariants()} href="/login">
+							로그인
+						</Link>
+					}
+					description="seed 구인자 계정으로 로그인하면 조직과 공고 상태를 확인할 수 있습니다."
+					title="로그인이 필요합니다"
+				/>
+			</PageShell>
+		);
+	}
+
+	if (mineQuery.isError) {
+		return (
+			<PageShell
+				description="구인자 관리 정보를 불러오지 못했습니다."
+				title="구인자 관리"
+			>
+				<EmptyState
+					action={
+						<Button onClick={() => mineQuery.refetch()} type="button">
+							다시 시도
+						</Button>
+					}
+					description="로그인 상태와 연결 상태를 확인한 뒤 다시 시도해 주세요."
+					title="관리 정보를 불러올 수 없습니다"
+				/>
+			</PageShell>
+		);
+	}
+
+	if (!profile) {
+		return (
+			<PageShell
+				description="공고를 등록하려면 밤비 프로필 설정이 필요합니다."
+				title="구인자 관리"
+			>
+				<EmptyState
+					action={
+						<Link className={buttonVariants()} href="/onboarding">
+							온보딩으로 이동
+						</Link>
+					}
+					description="구인자 프로필을 만든 뒤 조직과 팀의 공고를 관리할 수 있습니다."
+					title="밤비 프로필이 없습니다"
+				/>
+			</PageShell>
+		);
+	}
+
+	if (profile.role === "job_seeker") {
+		return (
+			<PageShell
+				description="현재 계정은 구직자 프로필로 설정되어 있습니다."
+				title="구인자 관리"
+			>
+				<EmptyState
+					action={
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href="/seeker"
+						>
+							공고 탐색으로 이동
+						</Link>
+					}
+					description="구직자 계정은 공개 공고를 탐색하고 지원 대화를 시작할 수 있습니다."
+					title="구인자 관리 권한이 없습니다"
+				/>
+			</PageShell>
+		);
+	}
+
+	let jobsContent: React.ReactNode;
+
+	if (jobsQuery.isLoading) {
+		jobsContent = (
+			<div className="flex flex-col gap-3">
+				<Skeleton className="h-20 w-full rounded-lg" />
+				<Skeleton className="h-20 w-full rounded-lg" />
+				<Skeleton className="h-20 w-full rounded-lg" />
+			</div>
+		);
+	} else if (jobsQuery.isError) {
+		jobsContent = (
+			<EmptyState
+				action={
+					<Button onClick={() => jobsQuery.refetch()} type="button">
+						다시 시도
+					</Button>
+				}
+				description="공고 목록을 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요."
+				title="공고를 불러올 수 없습니다"
+			/>
+		);
+	} else if (jobs.length === 0) {
+		jobsContent = (
+			<EmptyState
+				action={
+					<Link className={buttonVariants()} href="/employer/new">
+						새 공고 등록
+					</Link>
+				}
+				description="조직 프로필을 선택해 첫 공고를 등록해 보세요."
+				title="등록한 공고가 없습니다"
+			/>
+		);
+	} else {
+		jobsContent = (
+			<Card aria-labelledby="owned-jobs">
+				<CardContent className="divide-y p-0">
+					{jobs.map((job) => (
+						<div
+							className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+							key={job.id}
+						>
+							<div className="flex min-w-0 flex-col gap-1">
+								<h3 className="min-w-0 break-words font-medium text-base">
+									{job.title}
+								</h3>
+								<p className="break-words text-foreground text-sm">
+									{job.industryCategory} · {job.region} ·{" "}
+									{formatPay(job.payAmount, job.payUnit)}
+								</p>
+								<p className="break-words text-muted-foreground text-xs">
+									{getOrganizationLabel(job.organizationId)} ·{" "}
+									{getTeamLabel(job.teamId)} · 수정{" "}
+									{formatDateTime(job.updatedAt)}
+								</p>
+							</div>
+							<div className="flex flex-col items-start gap-2 sm:items-end">
+								<div className="flex flex-wrap gap-2 sm:justify-end">
+									<StatusBadge tone={getJobStatusTone(job.status)}>
+										{getJobStatusLabel(job.status)}
+									</StatusBadge>
+									<StatusBadge
+										tone={getVerificationStatusTone(
+											job.employerVerificationStatus
+										)}
+									>
+										{getVerificationStatusLabel(job.employerVerificationStatus)}
+									</StatusBadge>
+								</div>
+								<Link
+									className={buttonVariants({ variant: "outline" })}
+									href={`/employer/jobs/${job.id}/edit` as Route}
+								>
+									수정
+								</Link>
+							</div>
+						</div>
+					))}
+				</CardContent>
+			</Card>
+		);
+	}
+
+	return (
+		<PageShell
+			actions={
+				<Link className={buttonVariants()} href="/employer/new">
+					새 공고 등록
+				</Link>
+			}
+			description="조직과 팀 프로필 상태를 확인하고 소유한 공고를 관리합니다."
+			title="구인자 관리"
+		>
+			<section aria-labelledby="organizations" className="flex flex-col gap-3">
+				<div className="flex flex-wrap items-center justify-between gap-3">
+					<div>
+						<h2 className="font-semibold text-lg" id="organizations">
+							조직 프로필
+						</h2>
+						<p className="mt-1 text-muted-foreground text-sm">
+							검수 상태는 공고 공개 여부에 영향을 줄 수 있습니다.
+						</p>
+					</div>
+					<div className="flex flex-wrap gap-2">
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href={"/employer/settings" as Route}
+						>
+							조직 설정
+						</Link>
+					</div>
+				</div>
+
+				{organizationProfiles.length > 0 ? (
+					<div className="grid gap-3 md:grid-cols-2">
+						{organizationProfiles.map((organizationProfile) => (
+							<Card key={organizationProfile.id}>
+								<CardHeader>
+									<CardTitle className="flex flex-wrap items-center gap-2">
+										<span className="break-words font-medium text-base">
+											{organizationProfile.displayName}
+										</span>
+										<StatusBadge
+											tone={getVerificationStatusTone(
+												organizationProfile.verificationStatus
+											)}
+										>
+											{getVerificationStatusLabel(
+												organizationProfile.verificationStatus
+											)}
+										</StatusBadge>
+									</CardTitle>
+								</CardHeader>
+								<CardContent>
+									<dl className="grid gap-2 text-sm">
+										<div>
+											<dt className="text-muted-foreground text-xs">
+												사업자 등록 번호
+											</dt>
+											<dd className="mt-1 break-words">
+												{formatNullable(
+													organizationProfile.businessRegistrationNumber
+												)}
+											</dd>
+										</div>
+										<div>
+											<dt className="text-muted-foreground text-xs">
+												검수 메모
+											</dt>
+											<dd className="mt-1 break-words">
+												{formatNullable(organizationProfile.verificationNote)}
+											</dd>
+										</div>
+									</dl>
+								</CardContent>
+							</Card>
+						))}
+					</div>
+				) : (
+					<EmptyState
+						description="소속된 조직 프로필이 생기면 이곳에서 검수 상태를 확인할 수 있습니다."
+						title="조직 프로필이 없습니다"
+					/>
+				)}
+			</section>
+
+			<Separator />
+
+			<section aria-labelledby="teams" className="flex flex-col gap-3">
+				<h2 className="font-semibold text-lg" id="teams">
+					팀 프로필
+				</h2>
+				{teamProfiles.length > 0 ? (
+					<div className="grid gap-3 md:grid-cols-2">
+						{teamProfiles.map((teamProfile) => (
+							<Card key={teamProfile.id}>
+								<CardHeader>
+									<CardTitle className="break-words font-medium text-base">
+										{teamProfile.displayName}
+									</CardTitle>
+								</CardHeader>
+								<CardContent>
+									<dl className="grid gap-2 text-sm">
+										<div>
+											<dt className="text-muted-foreground text-xs">지역</dt>
+											<dd className="mt-1 break-words">
+												{formatNullable(teamProfile.region)}
+											</dd>
+										</div>
+										<div>
+											<dt className="text-muted-foreground text-xs">조직</dt>
+											<dd className="mt-1 break-words">
+												{getOrganizationLabel(teamProfile.organizationId)}
+											</dd>
+										</div>
+									</dl>
+								</CardContent>
+							</Card>
+						))}
+					</div>
+				) : (
+					<EmptyState
+						className="min-h-0 py-8"
+						description="팀 프로필이 생기면 지역별 소속 정보를 확인할 수 있습니다."
+						title="팀 프로필이 없습니다"
+					/>
+				)}
+			</section>
+
+			<Separator />
+
+			<section aria-labelledby="owned-jobs" className="flex flex-col gap-3">
+				<div className="flex flex-wrap items-center justify-between gap-3">
+					<div>
+						<h2 className="font-semibold text-lg" id="owned-jobs">
+							내 공고
+						</h2>
+						<p className="mt-1 text-muted-foreground text-sm">
+							최근 수정된 공고부터 표시됩니다.
+						</p>
+						<div className="mt-2 flex flex-wrap gap-2">
+							<Badge className="rounded-full" variant="secondary">
+								진행 중 프로모션 {promotionSummary.activeCount}개
+							</Badge>
+							<Badge className="rounded-full" variant="secondary">
+								결제 대기 {promotionSummary.pendingCount}개
+							</Badge>
+							<Badge className="rounded-full" variant="secondary">
+								남은 끌어올리기 {promotionSummary.remainingBoostCount}회
+							</Badge>
+						</div>
+					</div>
+					<div className="flex flex-wrap gap-2">
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href={"/employer/promotions" as Route}
+						>
+							프로모션 관리
+						</Link>
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href={"/employer/analytics" as Route}
+						>
+							성과 분석
+						</Link>
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href="/seeker"
+						>
+							공개 공고 보기
+						</Link>
+					</div>
+				</div>
+				{jobsContent}
+			</section>
+		</PageShell>
+	);
 }

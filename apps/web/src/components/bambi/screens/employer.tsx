@@ -3,8 +3,10 @@
 // 밤비 — 구인자(Employer) 화면: 실시간 콘텐츠 가드가 붙은 공고 등록 + 내 공고.
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { scan, verdict } from "@/lib/bambi/scanner";
 import type { ModerationModel, VisualTone } from "@/lib/bambi/types";
 import {
@@ -28,6 +30,7 @@ import {
 	ChevronRightIcon,
 	ClipboardListIcon,
 	ClockIcon,
+	Flash,
 	PlusIcon,
 	SettingsIcon,
 	ShieldIcon,
@@ -239,6 +242,7 @@ interface Posting {
 	pay: string;
 	reason?: string;
 	state: "published" | "review" | "rejected";
+	tier?: "premium" | "recommended";
 	title: string;
 	views: number;
 }
@@ -250,6 +254,7 @@ const MY_POSTINGS: Posting[] = [
 		id: "p1",
 		title: "홀 서빙 · 주말 야간",
 		state: "published",
+		tier: "premium",
 		area: "강남 · 청담",
 		pay: "시급 18,000원",
 		views: 128,
@@ -289,9 +294,20 @@ const POSTING_STATE: Record<
 	rejected: { tone: "danger", label: "반려됨" },
 };
 
+// 마켓플레이스 노출 등급을 구인자 화면에도 동일 언어로 보여준다(유료 홍보 체감).
+const POSTING_TIER: Record<
+	NonNullable<Posting["tier"]>,
+	{ tone: "primary" | "info"; label: string; note: string }
+> = {
+	premium: { tone: "primary", label: "프리미엄", note: "상단 고정 노출 중" },
+	recommended: { tone: "info", label: "추천", note: "추천 영역 노출 중" },
+};
+
 function PostingRow({ p }: { p: Posting }) {
 	const stateConf = POSTING_STATE[p.state];
 	const rejected = p.state === "rejected";
+	const tierConf = p.tier ? POSTING_TIER[p.tier] : null;
+	const promoted = p.state === "published" && tierConf;
 	return (
 		<div
 			className={cn(
@@ -311,10 +327,25 @@ function PostingRow({ p }: { p: Posting }) {
 						<span>{p.pay}</span>
 					</div>
 				</div>
-				<Badge dot tone={stateConf.tone}>
-					{stateConf.label}
-				</Badge>
+				<div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+					{tierConf ? (
+						<Badge tone={tierConf.tone}>{tierConf.label}</Badge>
+					) : null}
+					<Badge dot tone={stateConf.tone}>
+						{stateConf.label}
+					</Badge>
+				</div>
 			</div>
+			{promoted ? (
+				<div className="flex items-center gap-2 rounded-xl bg-coral-50 px-3 py-2 text-coral-700">
+					<span className="inline-flex size-4 shrink-0">
+						<Flash />
+					</span>
+					<span className="font-bold text-[12.5px] leading-normal">
+						{tierConf.note} · 일반 대비 조회 3.2배
+					</span>
+				</div>
+			) : null}
 			<div className="border-border border-t pt-2.5">
 				<span className="text-[color:var(--text-subtle)] text-xs">
 					조회 {p.views} · 지원 {p.applicants} · {p.dateLabel}
@@ -416,24 +447,28 @@ export function EmployerPostings({ onNew }: { onNew: () => void }) {
 }
 
 export function EmployerMe() {
+	const router = useRouter();
 	const rows = [
 		{ icon: <ClipboardListIcon />, label: "공고 검수 정책", meta: "" },
 		{ icon: <AlertCircle />, label: "받은 경고", meta: "0회" },
 		{ icon: <SettingsIcon />, label: "매장 정보", meta: "" },
 	];
+	const handleSignOut = async () => {
+		await signOutToHome(router);
+	};
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="px-6 pt-2 pb-1">
+		<div className="mx-auto flex min-h-0 w-full max-w-full flex-1 flex-col py-5 md:max-w-[min(80%,72rem)]">
+			<div className="px-5 pt-2 pb-1 md:px-6">
 				<h1 className="font-extrabold text-2xl text-foreground">매장 정보</h1>
 			</div>
-			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 py-4">
-				<div className="flex items-center gap-[14px] rounded-[18px] bg-ink-800 p-[18px]">
+			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-5 py-4 md:px-6">
+				<div className="flex items-center gap-[14px] rounded-[18px] border border-primary p-[18px]">
 					<Avatar name="달밤 라운지" size="lg" square />
 					<div className="flex-1">
-						<div className="font-extrabold text-[18px] text-white">
+						<div className="font-extrabold text-[18px] text-foreground">
 							달밤 라운지
 						</div>
-						<div className="mt-0.5 text-[13px] text-[color:var(--text-on-dark-muted)]">
+						<div className="mt-0.5 text-[13px] text-muted-foreground">
 							구인자 · 강남
 						</div>
 					</div>
@@ -467,6 +502,9 @@ export function EmployerMe() {
 						</div>
 					))}
 				</div>
+				<Button className="w-full" onClick={handleSignOut} variant="secondary">
+					로그아웃
+				</Button>
 			</div>
 		</div>
 	);

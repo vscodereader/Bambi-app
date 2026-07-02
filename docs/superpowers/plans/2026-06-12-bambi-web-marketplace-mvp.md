@@ -8,6 +8,12 @@
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS, @bambi-app/ui, lucide-react, Better Auth, oRPC, TanStack Query, TanStack Form, Drizzle ORM, Vitest, Ultracite.
 
+**Current Status:** The responsive marketplace pass is complete and the Web MVP now has active `/login` and `/onboarding` entry points. Seed users can sign in through Better Auth, then continue into Bambi profile confirmation or creation before entering seeker/employer flows.
+
+**Execution Note, 2026-06-23:** This file is historical context for the first Web MVP plan. The current route structure uses `/seeker`, `/seeker/jobs/[id]`, `/seeker/chats/[id]`, `/employer/new`, and `/employer/jobs/[id]/edit`. Continue remaining 1st Web MVP work from `docs/superpowers/plans/2026-06-23-bambi-web-mvp-completion.md`.
+
+**Tracking Note, 2026-06-26:** The unchecked task boxes below are archival implementation instructions, not active roadmap tracking. Use the Web MVP completion plan and the Web final QA/acceptance plan for current Web completion status.
+
 ---
 
 ## Scope

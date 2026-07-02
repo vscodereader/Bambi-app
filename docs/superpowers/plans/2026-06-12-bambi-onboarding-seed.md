@@ -8,6 +8,8 @@
 
 **Tech Stack:** TypeScript, oRPC, Drizzle ORM, PostgreSQL, Better Auth email/password and organization teams, Vitest, Ultracite.
 
+**Current Status, 2026-06-26:** Historical context. The login-capable Bambi development seed is active and is used by later Web MVP, Post-MVP, and QA verification flows. The unchecked commit item below is preserved from the original execution recipe and is not an active roadmap task.
+
 ---
 
 ## File Structure

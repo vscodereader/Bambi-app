@@ -15,6 +15,55 @@
       "when": 1781265406036,
       "tag": "0001_striped_molecule_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782264348222,
+      "tag": "0002_nappy_night_nurse",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782282090655,
+      "tag": "0003_outgoing_wolf_cub",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782285734200,
+      "tag": "0004_bambi_chat_media",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782287001330,
+      "tag": "0005_bambi_org_team_management",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782362610103,
+      "tag": "0006_bambi_reviews_ratings",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782365077049,
+      "tag": "0007_bambi_analytics_paid_placement",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782697929572,
+      "tag": "0008_bambi_job_post_media_blocks",
+      "breakpoints": true
     }
   ]
 }

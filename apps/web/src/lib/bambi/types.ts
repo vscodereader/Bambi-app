@@ -35,13 +35,20 @@ export interface Verdict {
 
 export interface Job {
 	company: string;
+	coverImage?: JobMedia | null;
 	desc: string;
+	descriptionBlocks?: JobDescriptionBlock[];
+	detailImages?: JobMedia[];
 	featured: boolean;
 	hours: string;
 	id: string;
+	isPromoted?: boolean;
+	lastBoostedAt?: Date | null | string;
 	location: string;
 	pay: string;
 	pref: string;
+	promotionLabel?: null | string;
+	promotionTier?: "premium" | "recommended" | "standard" | null;
 	rating: number;
 	reviews: number;
 	status: string;
@@ -49,6 +56,35 @@ export interface Job {
 	title: string;
 	type: string;
 	verified: boolean;
+}
+
+export type JobDescriptionBlockType =
+	| "bullet_list"
+	| "callout"
+	| "heading"
+	| "paragraph";
+
+export interface JobDescriptionBlock {
+	id: string;
+	text: string;
+	type: JobDescriptionBlockType;
+}
+
+export interface JobMedia {
+	altText: string;
+	byteSize: number;
+	fileName: string;
+	id?: string;
+	mimeType: string;
+	storageKey: string;
+	url: string;
+	usage: "cover" | "detail";
+}
+
+export interface MarketplaceJobSections {
+	organic: Job[];
+	premium: Job[];
+	recommended: Job[];
 }
 
 export interface QueueFlag {

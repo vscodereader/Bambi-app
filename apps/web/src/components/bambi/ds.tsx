@@ -21,6 +21,10 @@ import {
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import {
+	SELECTED_JOB_CARD_CLASS,
+	SELECTED_TAG_CLASS,
+} from "@/lib/bambi/selection-style";
+import {
 	ArrowNarrowLeft,
 	BookmarkIcon,
 	CheckIcon,
@@ -206,6 +210,7 @@ interface ButtonProps {
 	onClick?: () => void;
 	rightIcon?: ReactNode;
 	size?: ButtonSize;
+	type?: "button" | "reset" | "submit";
 	variant?: ButtonVariant;
 }
 
@@ -219,6 +224,7 @@ export function Button({
 	children,
 	className,
 	onClick,
+	type = "button",
 }: ButtonProps) {
 	const v = BTN_VARIANT_PROPS[variant] || BTN_VARIANT_PROPS.primary;
 	const s = BTN_SIZE_PROPS[size] || BTN_SIZE_PROPS.lg;
@@ -234,7 +240,7 @@ export function Button({
 			disabled={disabled}
 			onClick={onClick}
 			size={s.size}
-			type="button"
+			type={type}
 			variant={v.variant}
 		>
 			{leftIcon ? (
@@ -341,7 +347,8 @@ export function IconButton({
 			<UiButton
 				className={cn(
 					"rounded-lg",
-					active && "bg-coral-50 text-coral-700 hover:bg-coral-100",
+					active &&
+						"border-coral-500 bg-card text-coral-700 ring-2 ring-coral-100 hover:bg-card",
 					variant === "inverse" && "bg-white/10 text-white hover:bg-white/20",
 					className
 				)}
@@ -538,7 +545,7 @@ export function Tag({
 			className={cn(
 				"inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-4 font-semibold text-sm leading-none transition-colors",
 				selected
-					? "border border-transparent bg-ink-800 text-white"
+					? SELECTED_TAG_CLASS
 					: "border border-[color:var(--border-default)] bg-card text-muted-foreground",
 				className
 			)}
@@ -577,10 +584,13 @@ export function Switch({
 
 // ---- Input -----------------------------------------------------------------
 interface InputProps {
+	autoComplete?: string;
 	className?: string;
 	defaultValue?: string;
 	error?: boolean;
+	id?: string;
 	inputClassName?: string;
+	inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
 	leadingIcon?: ReactNode;
 	onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 	placeholder?: string;
@@ -594,6 +604,9 @@ export function Input({
 	error = false,
 	className,
 	inputClassName,
+	autoComplete,
+	id,
+	inputMode,
 	value,
 	defaultValue,
 	placeholder,
@@ -608,8 +621,11 @@ export function Input({
 				<UiInput
 					aria-invalid={error}
 					aria-label={placeholder}
+					autoComplete={autoComplete}
 					className={cn("h-11 rounded-lg pl-10", inputClassName)}
 					defaultValue={defaultValue}
+					id={id}
+					inputMode={inputMode}
 					onChange={onChange}
 					placeholder={placeholder}
 					type={type}
@@ -622,8 +638,11 @@ export function Input({
 		<UiInput
 			aria-invalid={error}
 			aria-label={placeholder}
+			autoComplete={autoComplete}
 			className={cn("h-11 rounded-lg", className, inputClassName)}
 			defaultValue={defaultValue}
+			id={id}
+			inputMode={inputMode}
 			onChange={onChange}
 			placeholder={placeholder}
 			type={type}
@@ -906,17 +925,15 @@ export function JobCard({
 	onClick,
 	onChat,
 }: JobCardProps) {
-	const headFg = featured ? "text-white" : "text-foreground";
-	const subFg = featured
-		? "text-[color:var(--text-on-dark-muted)]"
-		: "text-muted-foreground";
+	const headFg = featured ? "text-coral-700" : "text-foreground";
+	const subFg = "text-muted-foreground";
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: 카드 내부에 채팅 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
 		<div
 			className={cn(
 				"flex cursor-pointer items-center gap-3 rounded-lg p-[14px]",
 				featured
-					? "border border-[color:var(--border-inverse)] bg-ink-800 text-white shadow-none"
+					? `${SELECTED_JOB_CARD_CLASS} shadow-none`
 					: "border border-border bg-card text-foreground shadow-[var(--shadow-card)]",
 				className
 			)}
@@ -961,7 +978,7 @@ export function JobCard({
 						<span className={cn("text-xs", subFg)}>후기 {reviews}개</span>
 						{typeof rating === "number" ? (
 							<span className={cn("font-bold text-xs", headFg)}>
-								{rating.toFixed(1)}
+								{reviews > 0 ? rating.toFixed(1) : "신규"}
 							</span>
 						) : null}
 					</div>
@@ -970,9 +987,7 @@ export function JobCard({
 			<button
 				className={cn(
 					"h-9 flex-[0_0_auto] cursor-pointer whitespace-nowrap rounded-lg px-[18px] font-bold text-sm",
-					featured
-						? "border border-transparent bg-primary text-primary-foreground shadow-lg"
-						: "border border-[color:var(--border-default)] bg-card text-foreground"
+					"border border-[color:var(--border-default)] bg-card text-foreground"
 				)}
 				onClick={(e) => {
 					e.stopPropagation();

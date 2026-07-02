@@ -37,6 +37,10 @@ import {
 	UserIcon,
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
+import type {
+	ModerationBulkAction,
+	ModerationBulkScope,
+} from "./moderator-context";
 
 const HI_CLASS: Record<string, string> = {
 	block: "bg-[rgba(255,90,95,0.22)] shadow-[inset_0_-2px_0_var(--red-500)]",
@@ -616,53 +620,79 @@ function ReportRow({
 	r,
 	onOpen,
 	done,
+	selected = false,
+	onToggle,
 }: {
 	r: Report;
 	onOpen: (r: Report) => void;
 	done?: boolean;
+	selected?: boolean;
+	onToggle?: () => void;
 }) {
+	let borderClass = "border border-border";
+	if (selected) {
+		borderClass = "border border-primary bg-coral-50";
+	} else if (r.sev === "high" && !done) {
+		borderClass = "border border-[color:var(--red-500)]";
+	}
+
 	return (
-		<button
+		// biome-ignore lint/a11y/useSemanticElements: 행 내부에 체크박스 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
+		<div
 			className={cn(
-				"flex flex-col gap-2.5 rounded-2xl bg-card p-4 text-left shadow-card",
+				"flex cursor-pointer gap-3 rounded-2xl bg-card p-4 text-left shadow-card",
 				done ? "cursor-pointer opacity-60" : "cursor-pointer opacity-100",
-				r.sev === "high" && !done
-					? "border border-[color:var(--red-500)]"
-					: "border border-border"
+				borderClass
 			)}
 			onClick={() => onOpen(r)}
-			type="button"
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onOpen(r);
+				}
+			}}
+			role="button"
+			tabIndex={0}
 		>
-			<div className="flex items-center gap-2">
-				<SevPill sev={r.sev} />
-				<span className="flex-1 font-extrabold text-[14.5px] text-foreground">
-					{r.reason}
-				</span>
-				{done ? (
-					<Badge tone="neutral">완료</Badge>
-				) : (
-					<span className="text-[11px] text-[color:var(--text-subtle)]">
-						{r.time}
+			{onToggle ? (
+				<QueueCheckbox checked={selected} dark={false} onToggle={onToggle} />
+			) : null}
+			<div className="min-w-0 flex-1">
+				<div className="flex items-center gap-2">
+					<SevPill sev={r.sev} />
+					<span className="flex-1 font-extrabold text-[14.5px] text-foreground">
+						{r.reason}
 					</span>
-				)}
+					{done ? (
+						<Badge tone="neutral">완료</Badge>
+					) : (
+						<span className="text-[11px] text-[color:var(--text-subtle)]">
+							{r.time}
+						</span>
+					)}
+				</div>
+				<div className="mt-2.5 text-[12.5px] text-muted-foreground">
+					<b className="text-[color:var(--text-default)]">{r.target}</b>(
+					{r.targetRole}) · 신고 {r.reporter}({r.reporterRole})
+				</div>
+				<div className="mt-2.5 rounded-[10px] bg-secondary px-2.5 py-2 text-[12.5px] text-[color:var(--text-default)] leading-[1.45]">
+					"{r.note}"
+				</div>
 			</div>
-			<div className="text-[12.5px] text-muted-foreground">
-				<b className="text-[color:var(--text-default)]">{r.target}</b>(
-				{r.targetRole}) · 신고 {r.reporter}({r.reporterRole})
-			</div>
-			<div className="rounded-[10px] bg-secondary px-2.5 py-2 text-[12.5px] text-[color:var(--text-default)] leading-[1.45]">
-				"{r.note}"
-			</div>
-		</button>
+		</div>
 	);
 }
 
 export function ReportList({
 	items,
 	onOpen,
+	selected = [],
+	onToggle,
 }: {
 	items: Report[];
 	onOpen: (r: Report) => void;
+	selected?: string[];
+	onToggle?: (id: string) => void;
 }) {
 	const open = items.filter((r) => r.status === "open");
 	const closed = items.filter((r) => r.status !== "open");
@@ -670,7 +700,13 @@ export function ReportList({
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pt-1 pb-5">
 				{open.map((r) => (
-					<ReportRow key={r.id} onOpen={onOpen} r={r} />
+					<ReportRow
+						key={r.id}
+						onOpen={onOpen}
+						onToggle={onToggle ? () => onToggle(r.id) : undefined}
+						r={r}
+						selected={selected.includes(r.id)}
+					/>
 				))}
 				{closed.length ? (
 					<div className="mt-1.5 font-bold text-[12px] text-[color:var(--text-subtle)]">
@@ -678,7 +714,14 @@ export function ReportList({
 					</div>
 				) : null}
 				{closed.map((r) => (
-					<ReportRow done key={r.id} onOpen={onOpen} r={r} />
+					<ReportRow
+						done
+						key={r.id}
+						onOpen={onOpen}
+						onToggle={onToggle ? () => onToggle(r.id) : undefined}
+						r={r}
+						selected={selected.includes(r.id)}
+					/>
 				))}
 			</div>
 		</div>
@@ -834,17 +877,35 @@ const STATUS_CONF: Record<
 function UserRow({
 	u,
 	onOpen,
+	selected = false,
+	onToggle,
 }: {
 	u: ManagedUser;
 	onOpen: (u: ManagedUser) => void;
+	selected?: boolean;
+	onToggle?: () => void;
 }) {
 	const c = STATUS_CONF[u.status];
 	return (
-		<button
-			className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-card"
+		// biome-ignore lint/a11y/useSemanticElements: 행 내부에 체크박스 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
+		<div
+			className={cn(
+				"flex cursor-pointer items-center gap-3 rounded-2xl border bg-card p-4 text-left shadow-card",
+				selected ? "border-primary bg-coral-50" : "border-border"
+			)}
 			onClick={() => onOpen(u)}
-			type="button"
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onOpen(u);
+				}
+			}}
+			role="button"
+			tabIndex={0}
 		>
+			{onToggle ? (
+				<QueueCheckbox checked={selected} dark={false} onToggle={onToggle} />
+			) : null}
 			<Avatar name={u.name} square={u.role === "구인자"} />
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-2">
@@ -862,22 +923,32 @@ function UserRow({
 			<span className="inline-flex size-[18px] text-[color:var(--text-subtle)]">
 				<ChevronRightIcon />
 			</span>
-		</button>
+		</div>
 	);
 }
 
 export function UserList({
 	items,
 	onOpen,
+	selected = [],
+	onToggle,
 }: {
 	items: ManagedUser[];
 	onOpen: (u: ManagedUser) => void;
+	selected?: string[];
+	onToggle?: (id: string) => void;
 }) {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pt-1 pb-5">
 				{items.map((u) => (
-					<UserRow key={u.id} onOpen={onOpen} u={u} />
+					<UserRow
+						key={u.id}
+						onOpen={onOpen}
+						onToggle={onToggle ? () => onToggle(u.id) : undefined}
+						selected={selected.includes(u.id)}
+						u={u}
+					/>
 				))}
 			</div>
 		</div>
@@ -1110,11 +1181,76 @@ export function ModTabs({
 }
 
 // ---- 일괄 처리 액션 바 -----------------------------------------------------
+interface BulkActionConfig {
+	action: ModerationBulkAction;
+	defaultReason: string;
+	label: string;
+	scope: ModerationBulkScope;
+	tone?: "danger" | "success";
+}
+
+const BULK_ACTIONS: Record<ModerationBulkScope, BulkActionConfig[]> = {
+	queue: [
+		{
+			action: "reject",
+			defaultReason: "정책 위반 표현이 포함되어 공고를 반려합니다.",
+			label: "반려",
+			scope: "queue",
+			tone: "danger",
+		},
+		{
+			action: "hold",
+			defaultReason: "추가 확인이 필요해 공고를 보류합니다.",
+			label: "보류",
+			scope: "queue",
+		},
+		{
+			action: "approve",
+			defaultReason: "운영 검수 기준을 충족해 공고를 승인합니다.",
+			label: "승인",
+			scope: "queue",
+			tone: "success",
+		},
+	],
+	reports: [
+		{
+			action: "dismiss",
+			defaultReason: "정책 위반으로 보기 어려워 신고를 기각합니다.",
+			label: "기각",
+			scope: "reports",
+		},
+		{
+			action: "resolve",
+			defaultReason: "신고 내용을 확인하고 필요한 조치를 완료했습니다.",
+			label: "해결",
+			scope: "reports",
+			tone: "success",
+		},
+	],
+	users: [
+		{
+			action: "warn",
+			defaultReason: "정책 위반 가능성을 안내하고 경고를 발송합니다.",
+			label: "경고",
+			scope: "users",
+		},
+		{
+			action: "suspend",
+			defaultReason: "정책 위반이 확인되어 계정 이용을 정지합니다.",
+			label: "정지",
+			scope: "users",
+			tone: "danger",
+		},
+	],
+};
+
 function ActionBtn({
+	disabled = false,
 	label,
 	tone,
 	onClick,
 }: {
+	disabled?: boolean;
 	label: string;
 	tone?: "danger" | "success";
 	onClick: () => void;
@@ -1129,8 +1265,10 @@ function ActionBtn({
 		<button
 			className={cn(
 				"h-[34px] cursor-pointer whitespace-nowrap rounded-[10px] border border-white/[0.14] bg-white/[0.08] px-[11px] font-bold text-[12.5px]",
-				color
+				color,
+				disabled && "cursor-not-allowed opacity-50"
 			)}
+			disabled={disabled}
 			onClick={onClick}
 			type="button"
 		>
@@ -1139,46 +1277,147 @@ function ActionBtn({
 	);
 }
 
-export function QueueActionBar({
+function BulkConfirmSheet({
+	config,
 	count,
-	onAction,
+	isApplying,
+	onCancel,
+	onConfirm,
+	reason,
+	setReason,
 }: {
+	config: BulkActionConfig;
 	count: number;
-	onAction: (action: "reject" | "hold" | "approve" | "sanction") => void;
+	isApplying: boolean;
+	onCancel: () => void;
+	onConfirm: () => void;
+	reason: string;
+	setReason: (value: string) => void;
 }) {
+	const reasonId = `bulk-reason-${config.scope}-${config.action}`;
+	const canConfirm = reason.trim().length >= 2 && !isApplying;
+
 	return (
-		<div className="px-4 pt-2 pb-1">
-			<div className="flex items-center gap-2 rounded-2xl bg-ink-800 px-3 py-2.5 shadow-lg">
-				<span className="whitespace-nowrap font-bold text-[12.5px] text-white">
-					{count}개 선택됨
-				</span>
-				<div className="ml-auto flex gap-1.5">
-					<ActionBtn
-						label="반려"
-						onClick={() => onAction("reject")}
-						tone="danger"
-					/>
-					<ActionBtn label="보류" onClick={() => onAction("hold")} />
-					<ActionBtn
-						label="승인"
-						onClick={() => onAction("approve")}
-						tone="success"
-					/>
-					<ActionBtn label="경고/제재" onClick={() => onAction("sanction")} />
+		<div className="fixed inset-0 z-50 flex flex-col justify-end">
+			<button
+				aria-label="닫기"
+				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
+				onClick={onCancel}
+				type="button"
+			/>
+			<div className="relative mx-auto w-full max-w-[520px] animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
+				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
+					{config.label} 확인
+				</h2>
+				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
+					{count}건 선택됨
+				</p>
+				<label
+					className="mb-2 block font-bold text-[13px] text-foreground"
+					htmlFor={reasonId}
+				>
+					처리 사유
+				</label>
+				<textarea
+					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+					id={reasonId}
+					onChange={(event) => setReason(event.target.value)}
+					placeholder={config.defaultReason}
+					value={reason}
+				/>
+				<div className="mt-4 flex gap-2.5">
+					<Button block onClick={onCancel} size="lg" variant="secondary">
+						취소
+					</Button>
+					<Button
+						block
+						disabled={!canConfirm}
+						onClick={onConfirm}
+						size="lg"
+						variant={config.tone === "danger" ? "danger" : "primary"}
+					>
+						{isApplying ? "처리 중" : `${config.label} 적용`}
+					</Button>
 				</div>
 			</div>
 		</div>
 	);
 }
 
+export function QueueActionBar({
+	count,
+	isApplying = false,
+	onAction,
+	scope = "queue",
+}: {
+	count: number;
+	isApplying?: boolean;
+	onAction: (
+		scope: ModerationBulkScope,
+		action: ModerationBulkAction,
+		reason: string
+	) => void;
+	scope?: ModerationBulkScope;
+}) {
+	const [pendingAction, setPendingAction] = useState<BulkActionConfig | null>(
+		null
+	);
+	const [reason, setReason] = useState("");
+	const actions = BULK_ACTIONS[scope];
+	const openConfirm = (config: BulkActionConfig) => {
+		setPendingAction(config);
+		setReason(config.defaultReason);
+	};
+	const confirm = () => {
+		if (!pendingAction) {
+			return;
+		}
+
+		onAction(pendingAction.scope, pendingAction.action, reason.trim());
+		setPendingAction(null);
+	};
+
+	return (
+		<div className="px-4 pt-2 pb-1">
+			<div className="flex items-center gap-2 rounded-2xl bg-ink-800 px-3 py-2.5 shadow-lg">
+				<span className="whitespace-nowrap font-bold text-[12.5px] text-white">
+					{count}개 선택됨
+				</span>
+				<div className="ml-auto flex min-w-0 gap-1.5 overflow-x-auto">
+					{actions.map((action) => (
+						<ActionBtn
+							disabled={isApplying}
+							key={`${action.scope}-${action.action}`}
+							label={action.label}
+							onClick={() => openConfirm(action)}
+							tone={action.tone}
+						/>
+					))}
+				</div>
+			</div>
+			{pendingAction ? (
+				<BulkConfirmSheet
+					config={pendingAction}
+					count={count}
+					isApplying={isApplying}
+					onCancel={() => setPendingAction(null)}
+					onConfirm={confirm}
+					reason={reason}
+					setReason={setReason}
+				/>
+			) : null}
+		</div>
+	);
+}
+
 export function ConsoleToast({ message }: { message: string }) {
 	return (
-		<div className="pointer-events-none absolute right-0 bottom-[84px] left-0 z-30 flex justify-center">
-			<div className="flex items-center gap-2 rounded-full bg-ink-800 px-[18px] py-[11px] font-bold text-[13px] text-white shadow-lg">
-				<span className="inline-flex size-4 text-green-500">
+		<div className="pointer-events-none absolute right-0 bottom-[84px] left-0 z-30 flex justify-center px-4">
+			<div className="flex max-w-[420px] items-center gap-2 rounded-[18px] bg-ink-800 px-[18px] py-[11px] font-bold text-[13px] text-white shadow-lg">
+				<span className="inline-flex size-4 flex-[0_0_16px] text-green-500">
 					<CheckIcon />
 				</span>
-				{message}
+				<span className="min-w-0 leading-[1.35]">{message}</span>
 			</div>
 		</div>
 	);
@@ -1249,7 +1488,11 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 		flash(label);
 	};
 
-	const bulkAction = (action: "reject" | "hold" | "approve" | "sanction") => {
+	const bulkAction = (
+		_scope: ModerationBulkScope,
+		action: ModerationBulkAction,
+		_reason: string
+	) => {
 		const n = selected.length;
 		if (action === "approve") {
 			setQueue((q) => q.filter((x) => !selected.includes(x.id)));
@@ -1260,7 +1503,7 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 		} else if (action === "hold") {
 			flash(`${n}건을 보류했어요`);
 		} else {
-			flash(`${n}건에 경고를 보냈어요`);
+			flash(`${n}건을 처리했어요`);
 		}
 		setSelected([]);
 	};

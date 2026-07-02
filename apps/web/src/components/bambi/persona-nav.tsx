@@ -5,15 +5,10 @@
 
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { BottomNav } from "./ds";
-import {
-	ClipboardListIcon,
-	Message,
-	PlusIcon,
-	Search2,
-	UserIcon,
-} from "./icons";
+import { ClipboardListIcon, PlusIcon, SettingsIcon, UserIcon } from "./icons";
+import { MobileTabBar } from "./mobile-tab-bar";
 import {
 	ConsoleToast,
 	ConsoleTop,
@@ -27,47 +22,22 @@ function Content({ children }: { children: ReactNode }) {
 }
 
 function NavBar({ children }: { children: ReactNode }) {
-	return <div className="border-border border-t bg-background">{children}</div>;
+	return (
+		<div className="sticky bottom-0 z-30 border-border border-t bg-background md:hidden">
+			{children}
+		</div>
+	);
 }
 
 // ---- 구직자 ----------------------------------------------------------------
 export function SeekerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
-	const router = useRouter();
 	const showNav =
 		path === "/seeker" || path === "/seeker/chats" || path === "/seeker/me";
-	let value = "home";
-	if (path === "/seeker/me") {
-		value = "me";
-	} else if (path === "/seeker/chats") {
-		value = "chat";
-	}
-	const go = (v: string) => {
-		if (v === "chat") {
-			router.push("/seeker/chats");
-		} else if (v === "me") {
-			router.push("/seeker/me");
-		} else {
-			router.push("/seeker");
-		}
-	};
 	return (
 		<>
 			<Content>{children}</Content>
-			{showNav ? (
-				<NavBar>
-					<BottomNav
-						badges={{ chat: 1 }}
-						items={[
-							{ value: "home", label: "탐색", icon: Search2 },
-							{ value: "chat", label: "채팅", icon: Message },
-							{ value: "me", label: "내 정보", icon: UserIcon },
-						]}
-						onChange={go}
-						value={value}
-					/>
-				</NavBar>
-			) : null}
+			{showNav ? <MobileTabBar homeHref="/seeker" /> : null}
 		</>
 	);
 }
@@ -76,11 +46,24 @@ export function SeekerNav({ children }: { children: ReactNode }) {
 export function EmployerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const router = useRouter();
-	const showNav = path === "/employer" || path === "/employer/me";
-	const value = path === "/employer/me" ? "me" : "postings";
+	const showNav =
+		path === "/employer" ||
+		path === "/employer/new" ||
+		path === "/employer/me" ||
+		path.startsWith("/employer/settings");
+	let value = "postings";
+	if (path === "/employer/me") {
+		value = "me";
+	} else if (path.startsWith("/employer/settings")) {
+		value = "settings";
+	} else if (path === "/employer/new") {
+		value = "post";
+	}
 	const go = (v: string) => {
 		if (v === "post") {
 			router.push("/employer/new");
+		} else if (v === "settings") {
+			router.push("/employer/settings" as Route);
 		} else if (v === "me") {
 			router.push("/employer/me");
 		} else {
@@ -96,6 +79,7 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 						items={[
 							{ value: "postings", label: "내 공고", icon: ClipboardListIcon },
 							{ value: "post", label: "등록", icon: PlusIcon },
+							{ value: "settings", label: "설정", icon: SettingsIcon },
 							{ value: "me", label: "내 정보", icon: UserIcon },
 						]}
 						onChange={go}
@@ -118,8 +102,26 @@ const MOD_DETAIL_RE = /^\/moderator\/(?:queue|reports|users)\/[^/]+/;
 export function ModeratorShell({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const router = useRouter();
-	const { queue, selected, openReports, warnedUsers, toast, bulkAction } =
-		useMod();
+	const previousPath = useRef(path);
+	const {
+		bulkAction,
+		clearSelection,
+		isBulkApplying,
+		openReports,
+		queue,
+		selected,
+		toast,
+		warnedUsers,
+	} = useMod();
+
+	useEffect(() => {
+		if (previousPath.current === path) {
+			return;
+		}
+
+		previousPath.current = path;
+		clearSelection();
+	}, [clearSelection, path]);
 
 	const isDetail = MOD_DETAIL_RE.test(path);
 	if (isDetail) {
@@ -132,8 +134,17 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 	} else if (path.startsWith("/moderator/users")) {
 		tab = "users";
 	}
-	const go = (v: string) => router.push(MOD_ROUTES[v] ?? MOD_ROUTES.queue);
-	const showActionBar = tab === "queue" && selected.length > 0;
+	const go = (v: string) => {
+		clearSelection();
+		router.push(MOD_ROUTES[v] ?? MOD_ROUTES.queue);
+	};
+	let bulkScope: "queue" | "reports" | "users" = "queue";
+	if (tab === "reports") {
+		bulkScope = "reports";
+	} else if (tab === "users") {
+		bulkScope = "users";
+	}
+	const showActionBar = selected.length > 0;
 
 	return (
 		<>
@@ -148,7 +159,12 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 			/>
 			<Content>{children}</Content>
 			{showActionBar ? (
-				<QueueActionBar count={selected.length} onAction={bulkAction} />
+				<QueueActionBar
+					count={selected.length}
+					isApplying={isBulkApplying}
+					onAction={bulkAction}
+					scope={bulkScope}
+				/>
 			) : null}
 			<NavBar>
 				<ModTabs setTab={go} tab={tab} />

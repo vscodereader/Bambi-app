@@ -54,6 +54,12 @@ export const reportStatus = pgEnum("report_status", [
 	"dismissed",
 ]);
 
+export const reviewStatus = pgEnum("review_status", [
+	"published",
+	"pending_review",
+	"hidden",
+]);
+
 export const moderationTargetType = pgEnum("moderation_target_type", [
 	"job_post",
 	"chat_room",
@@ -61,6 +67,53 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"review",
 	"user",
 ]);
+
+export const promotionTier = pgEnum("promotion_tier", [
+	"premium",
+	"recommended",
+	"standard",
+]);
+
+export const promotionStatus = pgEnum("promotion_status", [
+	"draft",
+	"pending_payment",
+	"active",
+	"paused",
+	"expired",
+	"canceled",
+]);
+
+export const jobPerformanceEventType = pgEnum("job_performance_event_type", [
+	"impression",
+	"detail_view",
+	"chat_start",
+	"contact_reveal",
+]);
+
+export const jobPostMediaUsage = pgEnum("job_post_media_usage", [
+	"cover",
+	"detail",
+]);
+
+export const chatAttachmentCategory = pgEnum("chat_attachment_category", [
+	"image",
+	"pdf",
+]);
+
+export const jobDescriptionBlockTypes = [
+	"paragraph",
+	"heading",
+	"bullet_list",
+	"callout",
+] as const;
+
+export type JobDescriptionBlockType = (typeof jobDescriptionBlockTypes)[number];
+
+export interface JobDescriptionBlock {
+	id: string;
+	text: string;
+	type: JobDescriptionBlockType;
+}
 
 export const bambiProfile = pgTable(
 	"bambi_profile",
@@ -159,6 +212,10 @@ export const jobPost = pgTable(
 		workSchedule: text("work_schedule").notNull(),
 		title: text("title").notNull(),
 		description: text("description").notNull(),
+		descriptionBlocks: jsonb("description_blocks")
+			.$type<JobDescriptionBlock[]>()
+			.default([])
+			.notNull(),
 		interviewNotes: text("interview_notes"),
 		rejectionReason: text("rejection_reason"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
@@ -179,6 +236,134 @@ export const jobPost = pgTable(
 			table.industryCategory,
 			table.region,
 			table.payAmount
+		),
+	]
+);
+
+export const jobPostMedia = pgTable(
+	"job_post_media",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		uploadedByUserId: text("uploaded_by_user_id")
+			.notNull()
+			.references(() => user.id),
+		usage: jobPostMediaUsage("usage").notNull(),
+		position: integer("position").notNull(),
+		fileName: text("file_name").notNull(),
+		mimeType: text("mime_type").notNull(),
+		byteSize: integer("byte_size").notNull(),
+		storageKey: text("storage_key").notNull(),
+		altText: text("alt_text").default("").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("job_post_media_job_post_id_idx").on(table.jobPostId),
+		index("job_post_media_organization_id_idx").on(table.organizationId),
+		index("job_post_media_usage_position_idx").on(table.usage, table.position),
+		uniqueIndex("job_post_media_storage_key_uidx").on(table.storageKey),
+	]
+);
+
+export const jobPromotionCampaign = pgTable(
+	"job_promotion_campaign",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		tier: promotionTier("tier").notNull(),
+		status: promotionStatus("status").default("draft").notNull(),
+		startsAt: timestamp("starts_at").notNull(),
+		endsAt: timestamp("ends_at").notNull(),
+		manualBoostsTotal: integer("manual_boosts_total").default(0).notNull(),
+		manualBoostsUsed: integer("manual_boosts_used").default(0).notNull(),
+		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
+		lastBoostedAt: timestamp("last_boosted_at"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("job_promotion_campaign_job_post_id_idx").on(table.jobPostId),
+		index("job_promotion_campaign_organization_id_idx").on(
+			table.organizationId
+		),
+		index("job_promotion_campaign_status_idx").on(table.status),
+		index("job_promotion_campaign_active_listing_idx").on(
+			table.status,
+			table.tier,
+			table.endsAt,
+			table.lastBoostedAt
+		),
+	]
+);
+
+export const jobPromotionBoostEvent = pgTable(
+	"job_promotion_boost_event",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		campaignId: uuid("campaign_id")
+			.notNull()
+			.references(() => jobPromotionCampaign.id, { onDelete: "cascade" }),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		actorUserId: text("actor_user_id")
+			.notNull()
+			.references(() => user.id),
+		boostType: text("boost_type").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_promotion_boost_event_campaign_id_idx").on(table.campaignId),
+		index("job_promotion_boost_event_job_post_id_idx").on(table.jobPostId),
+		index("job_promotion_boost_event_organization_id_idx").on(
+			table.organizationId
+		),
+	]
+);
+
+export const jobPerformanceEvent = pgTable(
+	"job_performance_event",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		actorUserId: text("actor_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		eventType: jobPerformanceEventType("event_type").notNull(),
+		metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_performance_event_job_post_id_idx").on(table.jobPostId),
+		index("job_performance_event_organization_id_idx").on(table.organizationId),
+		index("job_performance_event_type_created_at_idx").on(
+			table.eventType,
+			table.createdAt
 		),
 	]
 );
@@ -238,6 +423,62 @@ export const chatMessage = pgTable(
 	(table) => [
 		index("chat_message_chat_room_id_idx").on(table.chatRoomId),
 		index("chat_message_sender_user_id_idx").on(table.senderUserId),
+	]
+);
+
+export const chatAttachment = pgTable(
+	"chat_attachment",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
+		messageId: uuid("message_id")
+			.notNull()
+			.references(() => chatMessage.id, { onDelete: "cascade" }),
+		storageKey: text("storage_key").notNull(),
+		fileName: text("file_name").notNull(),
+		mimeType: text("mime_type").notNull(),
+		byteSize: integer("byte_size").notNull(),
+		category: chatAttachmentCategory("category").notNull(),
+		createdByUserId: text("created_by_user_id")
+			.notNull()
+			.references(() => user.id),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("chat_attachment_chat_room_id_idx").on(table.chatRoomId),
+		index("chat_attachment_message_id_idx").on(table.messageId),
+		uniqueIndex("chat_attachment_storage_key_uidx").on(table.storageKey),
+		index("chat_attachment_created_by_user_id_idx").on(table.createdByUserId),
+	]
+);
+
+export const chatMessageReadReceipt = pgTable(
+	"chat_message_read_receipt",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		messageId: uuid("message_id")
+			.notNull()
+			.references(() => chatMessage.id, { onDelete: "cascade" }),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
+		readerUserId: text("reader_user_id")
+			.notNull()
+			.references(() => user.id),
+		readAt: timestamp("read_at").defaultNow().notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("chat_message_read_receipt_message_id_reader_user_id_uidx").on(
+			table.messageId,
+			table.readerUserId
+		),
+		index("chat_message_read_receipt_chat_room_id_idx").on(table.chatRoomId),
+		index("chat_message_read_receipt_reader_user_id_idx").on(
+			table.readerUserId
+		),
 	]
 );
 
@@ -316,26 +557,33 @@ export const review = pgTable(
 	"review",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		interviewScheduleId: uuid("interview_schedule_id")
+		jobPostId: uuid("job_post_id")
 			.notNull()
-			.references(() => interviewSchedule.id, { onDelete: "cascade" }),
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
 		reviewerUserId: text("reviewer_user_id")
 			.notNull()
 			.references(() => user.id),
-		targetUserId: text("target_user_id")
-			.notNull()
-			.references(() => user.id),
 		rating: integer("rating").notNull(),
-		body: text("body"),
-		isHidden: boolean("is_hidden").default(false).notNull(),
+		body: text("body").notNull(),
+		status: reviewStatus("status").default("published").notNull(),
+		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
 	(table) => [
-		uniqueIndex("review_interview_schedule_id_reviewer_user_id_uidx").on(
-			table.interviewScheduleId,
+		uniqueIndex("review_chat_room_id_reviewer_user_id_uidx").on(
+			table.chatRoomId,
 			table.reviewerUserId
 		),
-		index("review_target_user_id_idx").on(table.targetUserId),
+		index("review_job_post_id_status_idx").on(table.jobPostId, table.status),
+		index("review_organization_id_idx").on(table.organizationId),
+		index("review_reviewer_user_id_idx").on(table.reviewerUserId),
 	]
 );
 
@@ -388,6 +636,35 @@ export const adminModerationAction = pgTable(
 	]
 );
 
+export const bambiNotification = pgTable(
+	"bambi_notification",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		recipientUserId: text("recipient_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		actorUserId: text("actor_user_id")
+			.notNull()
+			.references(() => user.id),
+		targetType: moderationTargetType("target_type").notNull(),
+		targetId: text("target_id").notNull(),
+		chatRoomId: uuid("chat_room_id").references(() => chatRoom.id, {
+			onDelete: "cascade",
+		}),
+		readAt: timestamp("read_at"),
+		metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("bambi_notification_recipient_user_id_idx").on(table.recipientUserId),
+		index("bambi_notification_chat_room_id_idx").on(table.chatRoomId),
+		index("bambi_notification_target_type_target_id_idx").on(
+			table.targetType,
+			table.targetId
+		),
+	]
+);
+
 export const bambiProfileRelations = relations(bambiProfile, ({ one }) => ({
 	user: one(user, {
 		fields: [bambiProfile.userId],
@@ -414,4 +691,66 @@ export const employerTeamProfileRelations = relations(
 
 export const jobPostRelations = relations(jobPost, ({ many }) => ({
 	chatRooms: many(chatRoom),
+	media: many(jobPostMedia),
+	promotionCampaigns: many(jobPromotionCampaign),
+}));
+
+export const jobPostMediaRelations = relations(jobPostMedia, ({ one }) => ({
+	jobPost: one(jobPost, {
+		fields: [jobPostMedia.jobPostId],
+		references: [jobPost.id],
+	}),
+}));
+
+export const jobPromotionCampaignRelations = relations(
+	jobPromotionCampaign,
+	({ many, one }) => ({
+		boostEvents: many(jobPromotionBoostEvent),
+		jobPost: one(jobPost, {
+			fields: [jobPromotionCampaign.jobPostId],
+			references: [jobPost.id],
+		}),
+	})
+);
+
+export const jobPromotionBoostEventRelations = relations(
+	jobPromotionBoostEvent,
+	({ one }) => ({
+		campaign: one(jobPromotionCampaign, {
+			fields: [jobPromotionBoostEvent.campaignId],
+			references: [jobPromotionCampaign.id],
+		}),
+		jobPost: one(jobPost, {
+			fields: [jobPromotionBoostEvent.jobPostId],
+			references: [jobPost.id],
+		}),
+	})
+);
+
+export const chatRoomRelations = relations(chatRoom, ({ many, one }) => ({
+	attachments: many(chatAttachment),
+	jobPost: one(jobPost, {
+		fields: [chatRoom.jobPostId],
+		references: [jobPost.id],
+	}),
+	messages: many(chatMessage),
+}));
+
+export const chatMessageRelations = relations(chatMessage, ({ many, one }) => ({
+	attachments: many(chatAttachment),
+	room: one(chatRoom, {
+		fields: [chatMessage.chatRoomId],
+		references: [chatRoom.id],
+	}),
+}));
+
+export const chatAttachmentRelations = relations(chatAttachment, ({ one }) => ({
+	message: one(chatMessage, {
+		fields: [chatAttachment.messageId],
+		references: [chatMessage.id],
+	}),
+	room: one(chatRoom, {
+		fields: [chatAttachment.chatRoomId],
+		references: [chatRoom.id],
+	}),
 }));
