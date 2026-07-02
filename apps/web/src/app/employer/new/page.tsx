@@ -1,9 +1,13 @@
 "use client";
 
+import {
+	Alert,
+	AlertDescription,
+	AlertTitle,
+} from "@bambi-app/ui/components/alert";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Input } from "@bambi-app/ui/components/input";
-import { Label } from "@bambi-app/ui/components/label";
 import {
 	Select,
 	SelectContent,
@@ -13,19 +17,27 @@ import {
 } from "@bambi-app/ui/components/select";
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Clock } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EmployerListingPreview } from "@/components/bambi/employer-listing-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { FieldError, FormError } from "@/components/bambi/form-message";
+import {
+	FieldError,
+	FieldHint,
+	FieldLabel,
+	FormError,
+} from "@/components/bambi/form-message";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
 import { PageShell } from "@/components/bambi/page-shell";
+import { PayAmountHint } from "@/components/bambi/pay-amount-hint";
 import Loader from "@/components/loader";
 import { authClient } from "@/lib/auth-client";
+import { JOB_REVIEW_SLA_TEXT } from "@/lib/bambi-job-copy";
 import {
 	emptyJobForm,
 	emptyJobFormMedia,
@@ -82,6 +94,23 @@ const formatPreviewPay = ({
 	return Number.isFinite(numericPay) && numericPay > 0
 		? `${payUnit} ${numericPay.toLocaleString("ko-KR")}원`
 		: "";
+};
+
+const focusFirstInvalidField = (form: HTMLFormElement | null) => {
+	if (!form) {
+		return;
+	}
+
+	requestAnimationFrame(() => {
+		const firstInvalid = form.querySelector<HTMLElement>(
+			'[aria-invalid="true"]'
+		);
+
+		if (firstInvalid) {
+			firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+			firstInvalid.focus({ preventScroll: true });
+		}
+	});
 };
 
 interface NewEmployerJobFormProps {
@@ -222,6 +251,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	});
 	const [fieldErrors, setFieldErrors] = useState<JobFormErrors>({});
 	const [formError, setFormError] = useState<null | string>(null);
+	const formRef = useRef<HTMLFormElement>(null);
 	const createMediaUploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
 	);
@@ -235,7 +265,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 				toast.error(error.message || message);
 			},
 			onSuccess: async () => {
-				toast.success("공고가 등록되었습니다.");
+				toast.success("공고를 등록했습니다. 검수 후 공개됩니다.");
 				await utils.invalidateQueries({
 					queryKey: orpc.bambi.jobs.listMine.queryKey(),
 				});
@@ -333,6 +363,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			setFieldErrors(validation.errors);
 			setFormError(validation.message);
 			toast.error(validation.message);
+			focusFirstInvalidField(formRef.current);
 			return;
 		}
 
@@ -364,7 +395,11 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			description="조직과 팀을 선택하고 공개할 공고 정보를 입력합니다."
 			title="새 공고 등록"
 		>
-			<form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+			<form
+				className="flex flex-col gap-6"
+				onSubmit={handleSubmit}
+				ref={formRef}
+			>
 				<FormError message={formError} />
 				<section
 					aria-labelledby="new-affiliation"
@@ -381,7 +416,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					<Card>
 						<CardContent className="grid gap-4 md:grid-cols-2">
 							<div className="flex flex-col gap-2 md:col-span-2">
-								<Label htmlFor="postingScope">공고 등록 범위</Label>
+								<FieldLabel htmlFor="postingScope">공고 등록 범위</FieldLabel>
 								<Select
 									items={postingScopeOptions}
 									name="postingScope"
@@ -435,7 +470,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					<Card>
 						<CardContent className="grid gap-4 md:grid-cols-2">
 							<div className="flex flex-col gap-2 md:col-span-2">
-								<Label htmlFor="title">공고 제목</Label>
+								<FieldLabel htmlFor="title">공고 제목</FieldLabel>
 								<Input
 									aria-describedby={
 										fieldErrors.title ? getFieldErrorId("title") : undefined
@@ -456,7 +491,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="industryCategory">업종</Label>
+								<FieldLabel htmlFor="industryCategory">업종</FieldLabel>
 								<Select
 									name="industryCategory"
 									onValueChange={(value) =>
@@ -491,7 +526,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="region">지역</Label>
+								<FieldLabel htmlFor="region">지역</FieldLabel>
 								<Select
 									name="region"
 									onValueChange={(value) =>
@@ -524,7 +559,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="payAmount">급여 금액</Label>
+								<FieldLabel htmlFor="payAmount">급여 금액</FieldLabel>
 								<Input
 									aria-describedby={
 										fieldErrors.payAmount
@@ -544,13 +579,17 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 									type="number"
 									value={form.payAmount}
 								/>
+								<PayAmountHint
+									payAmount={form.payAmount}
+									payUnit={form.payUnit}
+								/>
 								<FieldError
 									id={getFieldErrorId("payAmount")}
 									message={fieldErrors.payAmount}
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="payUnit">급여 단위</Label>
+								<FieldLabel htmlFor="payUnit">급여 단위</FieldLabel>
 								<Select
 									name="payUnit"
 									onValueChange={(value) =>
@@ -585,7 +624,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 								/>
 							</div>
 							<div className="flex flex-col gap-2 md:col-span-2">
-								<Label htmlFor="workSchedule">근무 일정</Label>
+								<FieldLabel htmlFor="workSchedule">근무 일정</FieldLabel>
 								<Input
 									aria-describedby={
 										fieldErrors.workSchedule
@@ -617,13 +656,18 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 							상세 내용
 						</h2>
 						<p className="mt-1 text-muted-foreground text-sm">
-							업무 설명과 면접 안내를 작성하세요.
+							기본 상세 설명은 필수예요. 블록형 상세 설명과 면접 안내는
+							선택이며, 블록을 추가하면 기본 설명 대신 공개됩니다.
 						</p>
 					</div>
 					<Card>
 						<CardContent className="grid gap-4">
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="description">상세 설명</Label>
+								<FieldLabel htmlFor="description">상세 설명</FieldLabel>
+								<FieldHint>
+									지원자가 가장 먼저 읽는 기본 소개예요. 업무·근무 조건·우대
+									사항을 자유롭게 적어 주세요.
+								</FieldHint>
 								<Textarea
 									aria-describedby={
 										fieldErrors.description
@@ -661,7 +705,13 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 								}}
 							/>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="interviewNotes">면접 안내</Label>
+								<FieldLabel htmlFor="interviewNotes" optional>
+									면접 안내
+								</FieldLabel>
+								<FieldHint>
+									면접 장소·준비물·연락 가능 시간처럼 지원이 확정된 뒤 필요한
+									정보를 적어 주세요.
+								</FieldHint>
 								<Textarea
 									aria-describedby={
 										fieldErrors.interviewNotes
@@ -708,6 +758,15 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					pay={previewPay}
 					title={form.title}
 				/>
+
+				<Alert>
+					<Clock />
+					<AlertTitle>등록하면 검수를 거쳐 공개됩니다</AlertTitle>
+					<AlertDescription>
+						제출하면 {JOB_REVIEW_SLA_TEXT}에 검수가 완료되며, 검수 중에는 내
+						공고 화면에서 진행 상태를 확인할 수 있습니다.
+					</AlertDescription>
+				</Alert>
 
 				<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 					<Link
