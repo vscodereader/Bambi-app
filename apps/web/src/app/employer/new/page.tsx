@@ -358,14 +358,22 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			description="조직과 팀을 선택하고 공개할 공고 정보를 입력합니다."
 			title="새 공고 등록"
 		>
-			<form onSubmit={handleSubmit}>
-				<Card>
-					<CardContent className="flex flex-col gap-6">
-						<FormError message={formError} />
-						<section
-							aria-label="소속 정보"
-							className="grid gap-4 md:grid-cols-2"
-						>
+			<form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+				<FormError message={formError} />
+				<section
+					aria-labelledby="new-affiliation"
+					className="flex flex-col gap-3"
+				>
+					<div>
+						<h2 className="font-semibold text-lg" id="new-affiliation">
+							소속 정보
+						</h2>
+						<p className="mt-1 text-muted-foreground text-sm">
+							공고를 등록할 조직·팀 범위를 선택하세요.
+						</p>
+					</div>
+					<Card>
+						<CardContent className="grid gap-4 md:grid-cols-2">
 							<div className="flex flex-col gap-2 md:col-span-2">
 								<Label htmlFor="postingScope">공고 등록 범위</Label>
 								<select
@@ -395,12 +403,24 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 									message={fieldErrors.organizationId ?? fieldErrors.teamId}
 								/>
 							</div>
-						</section>
+						</CardContent>
+					</Card>
+				</section>
 
-						<section
-							aria-label="공고 조건"
-							className="grid gap-4 md:grid-cols-2"
-						>
+				<section
+					aria-labelledby="new-conditions"
+					className="flex flex-col gap-3"
+				>
+					<div>
+						<h2 className="font-semibold text-lg" id="new-conditions">
+							공고 조건
+						</h2>
+						<p className="mt-1 text-muted-foreground text-sm">
+							제목·업종·지역·급여 등 핵심 조건을 입력하세요.
+						</p>
+					</div>
+					<Card>
+						<CardContent className="grid gap-4 md:grid-cols-2">
 							<div className="flex flex-col gap-2 md:col-span-2">
 								<Label htmlFor="title">공고 제목</Label>
 								<Input
@@ -554,9 +574,21 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 									message={fieldErrors.workSchedule}
 								/>
 							</div>
-						</section>
+						</CardContent>
+					</Card>
+				</section>
 
-						<section aria-label="상세 내용" className="grid gap-4">
+				<section aria-labelledby="new-details" className="flex flex-col gap-3">
+					<div>
+						<h2 className="font-semibold text-lg" id="new-details">
+							상세 내용
+						</h2>
+						<p className="mt-1 text-muted-foreground text-sm">
+							업무 설명과 면접 안내를 작성하세요.
+						</p>
+					</div>
+					<Card>
+						<CardContent className="grid gap-4">
 							<div className="flex flex-col gap-2">
 								<Label htmlFor="description">상세 설명</Label>
 								<Textarea
@@ -619,50 +651,49 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 									message={fieldErrors.interviewNotes}
 								/>
 							</div>
-						</section>
+						</CardContent>
+					</Card>
+				</section>
 
-						<JobPostMediaUploader
-							error={fieldErrors.media}
-							media={media}
-							onChange={(nextMedia) => {
-								setMedia(nextMedia);
-								setFieldErrors((currentErrors) => ({
-									...currentErrors,
-									media: undefined,
-								}));
-								setFormError(null);
-							}}
-						/>
+				<JobPostMediaUploader
+					error={fieldErrors.media}
+					media={media}
+					onChange={(nextMedia) => {
+						setMedia(nextMedia);
+						setFieldErrors((currentErrors) => ({
+							...currentErrors,
+							media: undefined,
+						}));
+						setFormError(null);
+					}}
+				/>
 
-						<EmployerListingPreview
-							companyName={previewCompanyName}
-							coverImageUrl={media.cover?.previewUrl}
-							location={form.region}
-							pay={previewPay}
-							title={form.title}
-						/>
+				<EmployerListingPreview
+					companyName={previewCompanyName}
+					coverImageUrl={media.cover?.previewUrl}
+					location={form.region}
+					pay={previewPay}
+					title={form.title}
+				/>
 
-						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-							<Link
-								className={buttonVariants({ variant: "outline" })}
-								href="/employer"
-							>
-								취소
-							</Link>
-							<Button
-								disabled={
-									createMutation.isPending ||
-									createMediaUploadMutation.isPending
-								}
-								type="submit"
-							>
-								{createMutation.isPending || createMediaUploadMutation.isPending
-									? "등록 중…"
-									: "공고 등록"}
-							</Button>
-						</div>
-					</CardContent>
-				</Card>
+				<div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t bg-background py-3 sm:flex-row sm:justify-end">
+					<Link
+						className={buttonVariants({ variant: "outline" })}
+						href="/employer"
+					>
+						취소
+					</Link>
+					<Button
+						disabled={
+							createMutation.isPending || createMediaUploadMutation.isPending
+						}
+						type="submit"
+					>
+						{createMutation.isPending || createMediaUploadMutation.isPending
+							? "등록 중…"
+							: "공고 등록"}
+					</Button>
+				</div>
 			</form>
 		</PageShell>
 	);
