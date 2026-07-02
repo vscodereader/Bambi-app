@@ -402,25 +402,14 @@ export default function EmployerPage() {
 									<LeadingIcon className="size-5" />
 								</span>
 								<div className="flex min-w-0 flex-1 flex-col gap-2">
-									<div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-										<div className="flex min-w-0 flex-col gap-1">
-											<h3 className="min-w-0 break-words font-medium text-base">
-												{job.title}
-											</h3>
-											<p className="break-words text-foreground text-sm">
-												{job.industryCategory} · {job.region} ·{" "}
-												{formatPay(job.payAmount, job.payUnit)}
-											</p>
-										</div>
-										<Link
-											className={cn(
-												buttonVariants({ variant: "outline" }),
-												"shrink-0"
-											)}
-											href={`/employer/jobs/${job.id}/edit` as Route}
-										>
-											수정
-										</Link>
+									<div className="flex min-w-0 flex-col gap-1">
+										<h3 className="min-w-0 break-words font-medium text-base">
+											{job.title}
+										</h3>
+										<p className="break-words text-foreground text-sm">
+											{job.industryCategory} · {job.region} ·{" "}
+											{formatPay(job.payAmount, job.payUnit)}
+										</p>
 									</div>
 									<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
 										<span className="flex items-center gap-1.5">
@@ -448,6 +437,15 @@ export default function EmployerPage() {
 										{formatDateTime(job.updatedAt)}
 									</p>
 								</div>
+								<Link
+									className={cn(
+										buttonVariants({ variant: "outline" }),
+										"shrink-0"
+									)}
+									href={`/employer/jobs/${job.id}/edit` as Route}
+								>
+									수정
+								</Link>
 							</div>
 						);
 					})}
