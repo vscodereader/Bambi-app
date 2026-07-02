@@ -1,7 +1,10 @@
 "use client";
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import { Card, CardContent } from "@bambi-app/ui/components/card";
+import { Separator } from "@bambi-app/ui/components/separator";
 import { useQuery } from "@tanstack/react-query";
+import { Users } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 
@@ -73,34 +76,19 @@ export default function EmployerSettingsPage() {
 
 	return (
 		<PageShell
-			description="조직 표시 정보, 사업자 정보, 팀과 멤버 권한을 관리합니다."
+			description="공고에 노출되는 사업자 정보를 확인·수정하고, 팀과 멤버를 관리합니다."
 			title="조직 설정"
 		>
-			<div className="flex flex-wrap gap-2">
-				<Link
-					className={buttonVariants({ variant: "outline" })}
-					href={"/employer" as Route}
-				>
-					내 공고
-				</Link>
-				<Link
-					className={buttonVariants()}
-					href={"/employer/settings/teams" as Route}
-				>
-					팀 관리
-				</Link>
-			</div>
-
 			<section
 				aria-labelledby="organization-profiles"
 				className="flex flex-col gap-3"
 			>
 				<div>
-					<h2 className="font-medium text-base" id="organization-profiles">
+					<h2 className="font-semibold text-lg" id="organization-profiles">
 						조직 프로필
 					</h2>
 					<p className="mt-1 text-muted-foreground text-sm">
-						검증 상태와 공개 표시 정보를 확인하고 소유자 권한으로 수정합니다.
+						공고에 노출되는 조직 이름과 사업자 정보를 관리합니다.
 					</p>
 				</div>
 				{organizations.length > 0 ? (
@@ -123,6 +111,41 @@ export default function EmployerSettingsPage() {
 						title="관리 가능한 조직이 없습니다"
 					/>
 				)}
+			</section>
+
+			<Separator />
+
+			<section
+				aria-labelledby="team-management"
+				className="flex flex-col gap-3"
+			>
+				<div>
+					<h2 className="font-semibold text-lg" id="team-management">
+						팀 관리
+					</h2>
+					<p className="mt-1 text-muted-foreground text-sm">
+						팀을 나눠 지역·매장별로 공고 등록 권한을 관리합니다.
+					</p>
+				</div>
+				<Card>
+					<CardContent className="flex flex-wrap items-center gap-4">
+						<span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-secondary text-foreground">
+							<Users className="size-5" />
+						</span>
+						<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+							<p className="font-medium text-sm">팀과 멤버</p>
+							<p className="text-muted-foreground text-xs">
+								팀을 만들고 멤버를 초대해 권한을 나눠요.
+							</p>
+						</div>
+						<Link
+							className={buttonVariants({ size: "sm", variant: "outline" })}
+							href={"/employer/settings/teams" as Route}
+						>
+							팀 관리로 이동
+						</Link>
+					</CardContent>
+				</Card>
 			</section>
 		</PageShell>
 	);
