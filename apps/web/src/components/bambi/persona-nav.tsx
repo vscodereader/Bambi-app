@@ -33,7 +33,10 @@ function NavBar({ children }: { children: ReactNode }) {
 export function SeekerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const showNav =
-		path === "/seeker" || path === "/seeker/chats" || path === "/seeker/me";
+		path === "/seeker" ||
+		path === "/seeker/chats" ||
+		path === "/seeker/community" ||
+		path === "/seeker/me";
 	return (
 		<>
 			<Content>{children}</Content>
