@@ -26,6 +26,14 @@ const toneClassName = {
 	urgent: "border-amber-300 bg-card",
 } as const;
 
+// HIT 공고는 테두리를 한 단계 진하게 + 얇은 링으로 과하지 않게 강조한다.
+const hitBorderClassName = {
+	organic: "",
+	recommended: "border-sky-400 ring-1 ring-sky-200",
+	special: "border-coral-400 ring-1 ring-coral-200",
+	urgent: "border-amber-400 ring-1 ring-amber-200",
+} as const;
+
 // 티어 배지 색을 등급별로 구분해 유료 노출 사다리를 시각화한다.
 const toneBadge = {
 	organic: "neutral",
@@ -79,20 +87,23 @@ export function VisualJobCard({
 			className={cn(
 				"relative flex flex-col gap-2 overflow-hidden rounded-lg border bg-card p-2 transition-colors",
 				toneClassName[tone],
+				showHitRibbon && hitBorderClassName[tone],
 				active && "border-coral-400 ring-2 ring-coral-100"
 			)}
 		>
 			{showHitRibbon ? (
-				// 카드 우측 상단을 가로지르는 대각선 코너 리본. overflow-hidden으로 삼각 코너를
-				// 만들고, pointer-events-none으로 아래 카드 클릭을 가리지 않는다.
-				<span
-					className={cn(
-						"pointer-events-none absolute top-3.5 -right-5 z-10 w-22 rotate-45 py-0.5 text-center font-extrabold text-[10px] leading-none tracking-wider shadow-[var(--shadow-card)]",
-						hitRibbonClassName
-					)}
-				>
-					<span aria-hidden="true">HIT</span>
-					<span className="sr-only">인기 공고</span>
+				// 카드 우측 상단 코너 박스(overflow-hidden)로 삼각 리본을 만든다. 안쪽 밴드는
+				// 좌우 대칭 오버행으로 HIT를 코너 중앙에 놓고, pointer-events-none으로 클릭을 가리지 않는다.
+				<span className="pointer-events-none absolute top-0 right-0 z-10 size-12 overflow-hidden">
+					<span
+						className={cn(
+							"absolute top-3 -right-4 -left-4 rotate-45 py-0.5 text-center font-extrabold text-[10px] leading-none tracking-wider shadow-[var(--shadow-card)]",
+							hitRibbonClassName
+						)}
+					>
+						<span aria-hidden="true">HIT</span>
+						<span className="sr-only">인기 공고</span>
+					</span>
 				</span>
 			) : null}
 			<button
