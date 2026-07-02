@@ -1,19 +1,21 @@
 "use client";
 
-import { buttonVariants } from "@bambi-app/ui/components/button";
+import { Badge } from "@bambi-app/ui/components/badge";
+import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Logo } from "./ds";
 import { BellIcon, ShieldIcon } from "./icons";
 
-interface NavItem {
+export interface NavItem {
 	href: Route;
 	label: string;
 }
 
-const DEFAULT_NAV_ITEMS: NavItem[] = [
+export const DEFAULT_NAV_ITEMS: NavItem[] = [
 	{ href: "/seeker", label: "채용정보" },
 	{ href: "/seeker/chats", label: "채팅" },
 	{ href: "/", label: "안전가이드" },
@@ -29,6 +31,23 @@ interface ResponsiveAppShellProps {
 	variant?: "public" | "seeker" | "employer" | "moderator";
 }
 
+// 현재 경로와 가장 길게 일치하는 nav 항목만 활성 처리한다(/seeker·/seeker/chats 중복 방지).
+function findActiveHref(
+	pathname: string,
+	navItems: readonly NavItem[]
+): Route | undefined {
+	let active: NavItem | undefined;
+	for (const item of navItems) {
+		const matches =
+			pathname === item.href ||
+			(item.href !== "/" && pathname.startsWith(`${item.href}/`));
+		if (matches && item.href.length > (active?.href.length ?? 0)) {
+			active = item;
+		}
+	}
+	return active?.href;
+}
+
 export function ResponsiveAppShell({
 	children,
 	className,
@@ -37,7 +56,9 @@ export function ResponsiveAppShell({
 	showDesktopNav = true,
 	variant = "public",
 }: ResponsiveAppShellProps) {
+	const pathname = usePathname();
 	const isPublic = variant === "public";
+	const activeHref = findActiveHref(pathname, navItems);
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
@@ -47,31 +68,38 @@ export function ResponsiveAppShell({
 							<Logo lang="ko" size="md" />
 						</Link>
 						<nav className="flex items-center gap-1">
-							{navItems.map((item) => (
-								<Link
-									className="rounded-lg px-3 py-2 font-bold text-muted-foreground text-sm no-underline transition-colors hover:bg-secondary hover:text-foreground"
-									href={item.href}
-									key={`${item.href}-${item.label}`}
-								>
-									{item.label}
-								</Link>
-							))}
+							{navItems.map((item) => {
+								const isActive = item.href === activeHref;
+								return (
+									<Link
+										aria-current={isActive ? "page" : undefined}
+										className={cn(
+											buttonVariants({ variant: "ghost" }),
+											"h-auto px-3 py-2 font-bold text-muted-foreground text-sm no-underline",
+											isActive && "bg-muted text-foreground"
+										)}
+										href={item.href}
+										key={`${item.href}-${item.label}`}
+									>
+										{item.label}
+									</Link>
+								);
+							})}
 						</nav>
 						<div className="ml-auto flex items-center gap-2">
 							{headerSlot}
-							<span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-green-50 px-3 font-bold text-green-600 text-xs">
+							<Badge className="h-9 gap-1.5 px-3 font-bold" variant="success">
 								<span className="inline-flex size-3.5">
 									<ShieldIcon />
 								</span>
 								연락처 보호
-							</span>
+							</Badge>
 							<Link
 								className={cn(
 									buttonVariants({
-										variant: isPublic ? "default" : "outline",
+										variant: isPublic ? "dark" : "outline",
 									}),
-									"h-10 px-4 font-bold text-sm no-underline",
-									isPublic && "bg-ink-800 text-white hover:bg-ink-800/90"
+									"h-10 px-4 font-bold text-sm no-underline"
 								)}
 								href={(isPublic ? "/login" : "/seeker/me") as Route}
 							>
@@ -87,21 +115,20 @@ export function ResponsiveAppShell({
 						<Logo lang="ko" size="sm" />
 					</Link>
 					<div className="flex items-center gap-2">
-						<span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-secondary px-3 font-bold text-foreground text-xs">
+						<Badge className="h-8 gap-1.5 px-3 font-bold" variant="secondary">
 							<span className="inline-flex size-3.5 text-green-600">
 								<ShieldIcon />
 							</span>
 							보호 중
-						</span>
-						<button
+						</Badge>
+						<Button
 							aria-label="알림"
-							className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground"
-							type="button"
+							className="bg-card"
+							size="icon-lg"
+							variant="outline"
 						>
-							<span className="inline-flex size-4">
-								<BellIcon />
-							</span>
-						</button>
+							<BellIcon />
+						</Button>
 					</div>
 				</div>
 			</header>
