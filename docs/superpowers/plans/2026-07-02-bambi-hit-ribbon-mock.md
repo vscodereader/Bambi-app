@@ -1,6 +1,6 @@
 # 밤비 HIT 리본 (섹션 tone 색상) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 최근 7일 상세 조회수·CTR이 높은 공고에 노출 섹션 테두리 tone(스페셜=coral, 급구=amber, 추천=sky)과 일치하는 "HIT" 코너 리본을 표시한다. 전체(organic)에는 표시하지 않는다.
 
@@ -190,7 +190,7 @@ Task 1 코드 작성 + server type-check 완료 후 사용자에게 보고하고
 - Produces: `getRecentJobPerformanceMetrics(jobPostIds: string[], now?: Date): Promise<Map<string, { detailViews: number; impressions: number }>>`
 - Produces 상수: `RECENT_PERFORMANCE_WINDOW_DAYS = 7`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `packages/api/src/services/bambi-analytics.test.ts` — 실 DB fixture(기존 `jobs-analytics.test.ts` 패턴: dotenv + db import). 이벤트를 직접 insert하고 집계를 검증한다.
 
@@ -323,12 +323,12 @@ describe("getRecentJobPerformanceMetrics", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인**
 
 Run: `pnpm --filter @bambi-app/api test bambi-analytics`
 Expected: FAIL — `getRecentJobPerformanceMetrics is not a function`
 
-- [ ] **Step 3: 집계 함수 구현**
+- [x] **Step 3: 집계 함수 구현**
 
 `packages/api/src/services/bambi-analytics.ts` 상단 import에 `and, gte, sql` 추가:
 
@@ -406,7 +406,7 @@ export const getRecentJobPerformanceMetrics = async (
 };
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `pnpm --filter @bambi-app/api test bambi-analytics`
 Expected: PASS
@@ -422,7 +422,7 @@ Expected: PASS
 - Consumes: `getRecentJobPerformanceMetrics` (Task 2)
 - Produces: `jobs.list` 응답의 각 섹션 item에 `performance: { impressions, detailViews }` 포함.
 
-- [ ] **Step 1: import 추가**
+- [x] **Step 1: import 추가**
 
 ```ts
 import {
@@ -432,7 +432,7 @@ import {
 } from "../../services/bambi-analytics";
 ```
 
-- [ ] **Step 2: 집계 후 부착 (impression 기록 이전)**
+- [x] **Step 2: 집계 후 부착 (impression 기록 이전)**
 
 `list` 핸들러에서 `buildPublicJobSections` 이후, `recordJobListingImpressions` **이전**에 삽입:
 
@@ -481,7 +481,7 @@ return {
 
 정렬·섹션 구성은 변경하지 않으며 `recordJobListingImpressions`는 여전히 원본 `result.sections`를 받는다(성과는 위에서 이미 집계됨).
 
-- [ ] **Step 3: api type-check + 기존 analytics 테스트 회귀 확인**
+- [x] **Step 3: api type-check + 기존 analytics 테스트 회귀 확인**
 
 Run: `pnpm --filter @bambi-app/api check-types`
 Run: `pnpm --filter @bambi-app/api test jobs-analytics`
@@ -499,7 +499,7 @@ Expected: 둘 다 PASS (impression 기록/메타데이터 테스트 그대로 �
 **Interfaces:**
 - Produces: `JobPerformanceMetrics { impressions: number; detailViews: number }`, `Job.performance?: JobPerformanceMetrics`.
 
-- [ ] **Step 1: 실패하는 mapper 테스트 추가**
+- [x] **Step 1: 실패하는 mapper 테스트 추가**
 
 `apps/web/src/lib/bambi/api-jobs.test.ts`에 추가:
 
@@ -540,12 +540,12 @@ it("keeps performance undefined when the API omits it", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인**
 
 Run: `pnpm exec vitest run apps/web/src/lib/bambi/api-jobs.test.ts`
 Expected: FAIL — `job.performance` 미정의(타입/런타임)
 
-- [ ] **Step 3: 타입 추가 (`types.ts`)**
+- [x] **Step 3: 타입 추가 (`types.ts`)**
 
 `Job` 인터페이스 위에 타입 추가하고, `Job`에 `performance?` 필드 추가(알파벳 순서 위치 = `pref` 다음, `promotionLabel` 앞):
 
@@ -564,7 +564,7 @@ export interface JobPerformanceMetrics {
 	pref: string;
 ```
 
-- [ ] **Step 4: mapper 연결 (`api-job-mapper.ts`)**
+- [x] **Step 4: mapper 연결 (`api-job-mapper.ts`)**
 
 `ApiMarketplaceJob`에 `performance?` 추가(정렬 위치: `payUnit` 다음):
 
@@ -589,7 +589,7 @@ import type { Job, JobDescriptionBlock, JobMedia, JobPerformanceMetrics } from "
 		pref: "면접 전 연락처 보호",
 ```
 
-- [ ] **Step 5: 테스트 통과 확인**
+- [x] **Step 5: 테스트 통과 확인**
 
 Run: `pnpm exec vitest run apps/web/src/lib/bambi/api-jobs.test.ts`
 Expected: PASS
@@ -611,7 +611,7 @@ Expected: PASS
   - `shouldShowHitRibbon(job, tone): boolean` — tone이 organic이 아니고(=HitRibbonTone) `isJobHit`이 true일 때만 true
   - `HIT_RIBBON_CLASS_BY_TONE: Record<HitRibbonTone, string>` — tone별 리본 색 className
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `apps/web/src/lib/bambi/job-hit.test.ts`:
 
@@ -686,12 +686,12 @@ describe("HIT_RIBBON_CLASS_BY_TONE", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인**
 
 Run: `pnpm exec vitest run apps/web/src/lib/bambi/job-hit.test.ts`
 Expected: FAIL — 모듈/함수 없음
 
-- [ ] **Step 3: 구현 (`job-hit.ts`)**
+- [x] **Step 3: 구현 (`job-hit.ts`)**
 
 ```ts
 import type { Job } from "./types";
@@ -749,7 +749,7 @@ export const HIT_RIBBON_CLASS_BY_TONE: Record<HitRibbonTone, string> = {
 };
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `pnpm exec vitest run apps/web/src/lib/bambi/job-hit.test.ts`
 Expected: PASS
@@ -766,7 +766,7 @@ Expected: PASS
 
 **설계 결정 (클릭 비간섭):** 리본은 `onOpen` 버튼의 자식으로 렌더한다. 그러면 리본 영역 클릭도 카드 열기(onOpen)로 이어져 클릭을 "가로채지" 않고, `pointer-events-none` 없이도 요구사항을 만족한다. 버튼을 `relative`로 두고 리본을 `absolute`로 배치하되, 음수 오프셋으로 카드 실제 우측 상단 모서리에 붙인다(카드 패딩 `p-2` 상쇄). 텍스트 컬럼에는 Hit일 때만 우측 패딩을 추가해 회사명/지역을 가리지 않게 공간을 확보한다. 카드 높이는 불변(absolute 오버레이).
 
-- [ ] **Step 1: import + 리본 tone 계산**
+- [x] **Step 1: import + 리본 tone 계산**
 
 파일 상단 import 추가:
 
@@ -782,7 +782,7 @@ import { HIT_RIBBON_CLASS_BY_TONE, shouldShowHitRibbon } from "@/lib/bambi/job-h
 		tone === "organic" ? "" : HIT_RIBBON_CLASS_BY_TONE[tone];
 ```
 
-- [ ] **Step 2: `onOpen` 버튼을 relative로 만들고 리본·텍스트 여백 추가**
+- [x] **Step 2: `onOpen` 버튼을 relative로 만들고 리본·텍스트 여백 추가**
 
 버튼 `className`에 `relative` 추가:
 
@@ -821,12 +821,12 @@ import { HIT_RIBBON_CLASS_BY_TONE, shouldShowHitRibbon } from "@/lib/bambi/job-h
 					>
 ```
 
-- [ ] **Step 3: web type-check**
+- [x] **Step 3: web type-check**
 
 Run: `pnpm --filter web check-types`
 Expected: PASS
 
-- [ ] **Step 4: 정적 확인**
+- [x] **Step 4: 정적 확인**
 
 - `tone === "organic"`이면 `showHitRibbon`이 false → 리본 없음.
 - 리본이 `onOpen` 버튼 자식이라 클릭이 onOpen으로 이어짐(비간섭), `pointer-events-none` 미사용.
@@ -840,12 +840,12 @@ Expected: PASS
 **Files:**
 - Modify: 본 계획 문서(verification notes 갱신)
 
-- [ ] **Step 1: 체크포인트 이전 자동 검사**
+- [x] **Step 1: 체크포인트 이전 자동 검사**
 
 Run: `pnpm --filter server check-types` → PASS
 (seed 정적 검사 완료, `pnpm db:seed:bambi` 미실행)
 
-- [ ] **Step 2: (사용자 DB 반영 후) 전체 자동 검사**
+- [x] **Step 2: (사용자 DB 반영 후) 전체 자동 검사**
 
 Run 순서 및 기대치:
 - `pnpm --filter @bambi-app/api test` → PASS
@@ -863,7 +863,7 @@ Run 순서 및 기대치:
 - n=4 공고에는 HIT 미표시.
 - 리본이 회사명/지역 텍스트와 클릭 영역을 방해하지 않음(리본 클릭 시 카드가 열림).
 
-- [ ] **Step 4: verification notes 기록**
+- [x] **Step 4: verification notes 기록**
 
 아래 "Verification Notes"에 자동 검사 출력과 브라우저 결과를 기록한다.
 
@@ -872,10 +872,19 @@ Run 순서 및 기대치:
 ## Verification Notes
 
 - (체크포인트) server type-check: ✅ PASS (`pnpm --filter server check-types`, tsc -b 에러 0) — 2026-07-02
-- API 집계 테스트: _pending_
-- Web Vitest (job-hit, api-jobs): _pending_
-- check-types / check / builds: _pending_
-- 브라우저(/, /seeker, 데스크톱·모바일): _pending (사용자 확인)_
+- 사용자 DB 반영: ✅ 확인(`pnpm db:seed:bambi` 사용자 실행 완료) — 2026-07-02
+- API 전체 테스트: ✅ PASS `pnpm --filter @bambi-app/api test` → 21 files, 100 tests. 신규 `bambi-analytics.test.ts`(최근7일 집계·chat_start/contact_reveal 제외·7일 이전 제외·이벤트 없음 0·다건 batch·빈 배열) + 기존 `jobs-analytics.test.ts`(impression 기록/메타데이터) 회귀 통과.
+- Web Vitest: ✅ PASS `vitest run job-hit.test.ts api-jobs.test.ts` → 2 files, 15 tests. isJobHit 경계값(A/B, 독립, 0 나눗셈, performance 없음) + shouldShowHitRibbon(organic 제외) + tone 색 매핑.
+- check-types: ✅ PASS `pnpm run check-types` → 7 tasks 성공.
+- lint: ✅ PASS `ultracite check`(변경 9파일) — 클래스 정렬 자동수정 1건 적용 후 clean.
+- server build: ✅ PASS `pnpm --filter server build`.
+- web build: ✅ PASS `pnpm --filter web build`(모든 라우트 생성).
+- 브라우저(/, /seeker, 데스크톱·모바일): ⏳ 사용자 확인 대기 — n=1 스페셜(coral)+급구(amber), n=2 추천(sky), n=4 미표시, 리본 클릭 비간섭.
+
+### 설계 메모 (검증 관련)
+- 리본은 `onOpen` 버튼의 자식 span으로 배치 → 리본 영역 클릭도 카드 열기로 이어져 클릭을 가로채지 않음(`pointer-events-none` 미사용).
+- 같은 premium 공고(n=1)가 special/urgent 두 섹션에서 각각 tone prop으로 렌더되므로 coral/amber 리본이 자연히 분리됨(`getVisualJobExposureSections`가 premium을 special·urgent 양쪽에 배치).
+- UI 시각/클릭 최종 확인은 프로젝트 관례상 사용자가 브라우저에서 수행(자동 스크린샷/DOM 테스트 미도입).
 
 ## Self-Review (spec coverage)
 

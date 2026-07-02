@@ -2,6 +2,10 @@
 
 import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
+import {
+	HIT_RIBBON_CLASS_BY_TONE,
+	shouldShowHitRibbon,
+} from "@/lib/bambi/job-hit";
 import type { Job } from "@/lib/bambi/types";
 import { Badge, Button } from "./ds";
 import { MapPinIcon, Message } from "./icons";
@@ -66,6 +70,10 @@ export function VisualJobCard({
 }: VisualJobCardProps) {
 	const { amount: payAmount, unit: payUnit } = splitPay(job.pay);
 	const shortDesc = truncateDesc(job.desc);
+	// organic엔 리본 없음. Hit이고 tone이 special/urgent/recommended일 때만 표시.
+	const showHitRibbon = shouldShowHitRibbon(job, tone);
+	const hitRibbonClassName =
+		tone === "organic" ? "" : HIT_RIBBON_CLASS_BY_TONE[tone];
 	return (
 		<article
 			className={cn(
@@ -75,10 +83,21 @@ export function VisualJobCard({
 			)}
 		>
 			<button
-				className="flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
+				className="relative flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
 				onClick={() => onOpen(job)}
 				type="button"
 			>
+				{showHitRibbon ? (
+					<span
+						className={cn(
+							"absolute -top-2 -right-2 z-10 rounded-tr-lg rounded-bl-md px-1.5 py-0.5 font-extrabold text-[10px] leading-none tracking-wide shadow-[var(--shadow-card)]",
+							hitRibbonClassName
+						)}
+					>
+						<span aria-hidden="true">HIT</span>
+						<span className="sr-only">인기 공고</span>
+					</span>
+				) : null}
 				<div className="flex items-start gap-3">
 					{job.coverImage ? (
 						<Image
@@ -94,7 +113,12 @@ export function VisualJobCard({
 							{job.company.slice(0, 2)}
 						</div>
 					)}
-					<div className="flex min-w-0 flex-1 flex-col gap-1">
+					<div
+						className={cn(
+							"flex min-w-0 flex-1 flex-col gap-1",
+							showHitRibbon && "pr-8"
+						)}
+					>
 						<h3 className="m-0 truncate font-extrabold text-[15px] leading-snug">
 							{job.company}
 						</h3>
