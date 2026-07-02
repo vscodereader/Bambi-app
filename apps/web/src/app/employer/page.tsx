@@ -10,6 +10,7 @@ import {
 } from "@bambi-app/ui/components/card";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
@@ -87,6 +88,40 @@ const getPromotionSummary = (promotions: PromotionSummaryItem[]) => ({
 	),
 });
 
+const getJobStatusCounts = (jobPosts: { status: string }[]) => ({
+	pendingReview: jobPosts.filter((job) => job.status === "pending_review")
+		.length,
+	published: jobPosts.filter((job) => job.status === "published").length,
+	rejected: jobPosts.filter((job) => job.status === "rejected").length,
+});
+
+function JobStatTile({
+	accent,
+	label,
+	value,
+}: {
+	accent?: "amber" | "red";
+	label: string;
+	value: number;
+}) {
+	return (
+		<Card size="sm">
+			<CardContent className="flex flex-col gap-1">
+				<dt className="text-muted-foreground text-xs">{label}</dt>
+				<dd
+					className={cn(
+						"font-semibold text-2xl",
+						accent === "amber" && value > 0 && "text-amber-500",
+						accent === "red" && value > 0 && "text-red-500"
+					)}
+				>
+					{value}
+				</dd>
+			</CardContent>
+		</Card>
+	);
+}
+
 export default function EmployerPage() {
 	const session = authClient.useSession();
 	const isSignedIn = Boolean(session.data?.user);
@@ -109,6 +144,7 @@ export default function EmployerPage() {
 	const teamProfiles = mineQuery.data?.employerTeamProfiles ?? [];
 	const jobs = jobsQuery.data ?? [];
 	const promotionSummary = getPromotionSummary(promotionsQuery.data ?? []);
+	const jobStatusCounts = getJobStatusCounts(jobs);
 
 	const getOrganizationLabel = (organizationId: string): string =>
 		organizationProfiles.find(
@@ -257,7 +293,11 @@ export default function EmployerPage() {
 				<CardContent className="divide-y p-0">
 					{jobs.map((job) => (
 						<div
-							className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+							className={cn(
+								"grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start",
+								job.status === "rejected" && "bg-red-50",
+								job.status === "pending_review" && "bg-amber-50"
+							)}
 							key={job.id}
 						>
 							<div className="flex min-w-0 flex-col gap-1">
@@ -311,24 +351,61 @@ export default function EmployerPage() {
 			description="조직과 팀 프로필 상태를 확인하고 소유한 공고를 관리합니다."
 			title="구인자 관리"
 		>
+			{jobs.length > 0 ? (
+				<section aria-labelledby="job-overview" className="flex flex-col gap-3">
+					<h2 className="sr-only" id="job-overview">
+						공고 현황
+					</h2>
+					<dl className="grid gap-3 sm:grid-cols-3">
+						<JobStatTile label="게시" value={jobStatusCounts.published} />
+						<JobStatTile
+							accent="amber"
+							label="검수 대기"
+							value={jobStatusCounts.pendingReview}
+						/>
+						<JobStatTile
+							accent="red"
+							label="반려"
+							value={jobStatusCounts.rejected}
+						/>
+					</dl>
+				</section>
+			) : null}
+
+			<nav aria-label="구인자 관리 바로가기" className="flex flex-wrap gap-2">
+				<Link
+					className={buttonVariants({ variant: "ghost" })}
+					href={"/employer/promotions" as Route}
+				>
+					프로모션 관리
+				</Link>
+				<Link
+					className={buttonVariants({ variant: "ghost" })}
+					href={"/employer/analytics" as Route}
+				>
+					성과 분석
+				</Link>
+				<Link
+					className={buttonVariants({ variant: "ghost" })}
+					href={"/employer/settings" as Route}
+				>
+					조직 설정
+				</Link>
+				<Link className={buttonVariants({ variant: "ghost" })} href="/seeker">
+					공개 공고 보기
+				</Link>
+			</nav>
+
+			<Separator />
+
 			<section aria-labelledby="organizations" className="flex flex-col gap-3">
-				<div className="flex flex-wrap items-center justify-between gap-3">
-					<div>
-						<h2 className="font-semibold text-lg" id="organizations">
-							조직 프로필
-						</h2>
-						<p className="mt-1 text-muted-foreground text-sm">
-							검수 상태는 공고 공개 여부에 영향을 줄 수 있습니다.
-						</p>
-					</div>
-					<div className="flex flex-wrap gap-2">
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href={"/employer/settings" as Route}
-						>
-							조직 설정
-						</Link>
-					</div>
+				<div>
+					<h2 className="font-semibold text-lg" id="organizations">
+						조직 프로필
+					</h2>
+					<p className="mt-1 text-muted-foreground text-sm">
+						검수 상태는 공고 공개 여부에 영향을 줄 수 있습니다.
+					</p>
 				</div>
 
 				{organizationProfiles.length > 0 ? (
@@ -430,45 +507,23 @@ export default function EmployerPage() {
 			<Separator />
 
 			<section aria-labelledby="owned-jobs" className="flex flex-col gap-3">
-				<div className="flex flex-wrap items-center justify-between gap-3">
-					<div>
-						<h2 className="font-semibold text-lg" id="owned-jobs">
-							내 공고
-						</h2>
-						<p className="mt-1 text-muted-foreground text-sm">
-							최근 수정된 공고부터 표시됩니다.
-						</p>
-						<div className="mt-2 flex flex-wrap gap-2">
-							<Badge className="rounded-full" variant="secondary">
-								진행 중 프로모션 {promotionSummary.activeCount}개
-							</Badge>
-							<Badge className="rounded-full" variant="secondary">
-								결제 대기 {promotionSummary.pendingCount}개
-							</Badge>
-							<Badge className="rounded-full" variant="secondary">
-								남은 끌어올리기 {promotionSummary.remainingBoostCount}회
-							</Badge>
-						</div>
-					</div>
-					<div className="flex flex-wrap gap-2">
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href={"/employer/promotions" as Route}
-						>
-							프로모션 관리
-						</Link>
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href={"/employer/analytics" as Route}
-						>
-							성과 분석
-						</Link>
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href="/seeker"
-						>
-							공개 공고 보기
-						</Link>
+				<div>
+					<h2 className="font-semibold text-lg" id="owned-jobs">
+						내 공고
+					</h2>
+					<p className="mt-1 text-muted-foreground text-sm">
+						최근 수정된 공고부터 표시됩니다.
+					</p>
+					<div className="mt-2 flex flex-wrap gap-2">
+						<Badge className="rounded-full" variant="secondary">
+							진행 중 프로모션 {promotionSummary.activeCount}개
+						</Badge>
+						<Badge className="rounded-full" variant="secondary">
+							결제 대기 {promotionSummary.pendingCount}개
+						</Badge>
+						<Badge className="rounded-full" variant="secondary">
+							남은 끌어올리기 {promotionSummary.remainingBoostCount}회
+						</Badge>
 					</div>
 				</div>
 				{jobsContent}
