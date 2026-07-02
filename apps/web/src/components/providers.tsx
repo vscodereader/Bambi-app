@@ -13,7 +13,7 @@ export function Providers({ children }: ProvidersProps) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			{children}
-			<Toaster richColors />
+			<Toaster position="top-center" richColors />
 		</QueryClientProvider>
 	);
 }
