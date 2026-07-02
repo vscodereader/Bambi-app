@@ -401,7 +401,7 @@ export function QueueDetail({
 			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-1 pb-5">
 				<div className="flex items-center gap-3">
 					<Avatar name={item.company} size="lg" square />
-					<div>
+					<div className="min-w-0 flex-1">
 						<div className="font-extrabold text-[19px] text-foreground">
 							{item.title}
 						</div>
@@ -452,7 +452,7 @@ export function QueueDetail({
 					소지는 승인 후 안내해요.
 				</div>
 			</div>
-			<div className="flex gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
+			<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
 				<Button
 					block
 					onClick={() => setReject(true)}
@@ -537,7 +537,7 @@ function RejectSheet({
 						);
 					})}
 				</div>
-				<div className="flex gap-2.5">
+				<div className="grid grid-cols-2 gap-2.5">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
 					</Button>
@@ -710,7 +710,7 @@ export function ReportDetail({
 			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pt-1 pb-5">
 				<div className="flex items-center gap-2">
 					<SevPill sev={item.sev} />
-					<h2 className="m-0 font-extrabold text-[19px] text-foreground">
+					<h2 className="m-0 min-w-0 flex-1 font-extrabold text-[19px] text-foreground">
 						{item.reason}
 					</h2>
 				</div>
@@ -770,7 +770,7 @@ export function ReportDetail({
 				)}
 			</div>
 			{item.status === "open" ? (
-				<div className="flex gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
+				<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
 					<Button
 						block
 						onClick={() => onResolve(item.id, "dismiss")}
