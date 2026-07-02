@@ -20,6 +20,7 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
 	{ href: "/seeker/chats", label: "채팅" },
 	{ href: "/", label: "안전가이드" },
 	{ href: "/employer", label: "업체 인증" },
+	{ href: "/seeker/community", label: "수다방" },
 ];
 
 interface ResponsiveAppShellProps {

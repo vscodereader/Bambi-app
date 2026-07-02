@@ -8,17 +8,7 @@ import {
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
 import { Search2 } from "./icons";
-import {
-	DEFAULT_NAV_ITEMS,
-	type NavItem,
-	ResponsiveAppShell,
-} from "./responsive-shell";
-
-// 구직자 셸 전용 데스크톱 nav — 기본 항목 오른쪽(업체 인증 다음)에 수다방을 노출한다.
-const SEEKER_NAV_ITEMS: NavItem[] = [
-	...DEFAULT_NAV_ITEMS,
-	{ href: "/seeker/community", label: "수다방" },
-];
+import { ResponsiveAppShell } from "./responsive-shell";
 
 interface SeekerFiltersContextValue {
 	filters: MarketplaceFilters;
@@ -68,7 +58,6 @@ export function SeekerAppShell({ children }: { children: ReactNode }) {
 		<SeekerFiltersContext.Provider value={{ filters, setFilters }}>
 			<ResponsiveAppShell
 				headerSlot={isMarketplace ? <SeekerHeaderSearch /> : undefined}
-				navItems={SEEKER_NAV_ITEMS}
 				variant="seeker"
 			>
 				{children}
