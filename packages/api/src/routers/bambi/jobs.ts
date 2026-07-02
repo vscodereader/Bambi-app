@@ -25,6 +25,7 @@ import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
 import {
+	getRecentJobPerformanceMetrics,
 	recordJobListingImpressions,
 	recordJobPerformanceEvent,
 } from "../../services/bambi-analytics";
@@ -430,12 +431,38 @@ export const jobsRouter = {
 			recommendedRows,
 		});
 
+		// 현재 요청에서 새로 기록하는 impression 때문에 판정이 왜곡되지 않도록,
+		// recordJobListingImpressions 이전에 최근 7일 성과를 집계해 각 item에 붙인다.
+		const performanceJobIds = [
+			...result.sections.premium,
+			...result.sections.recommended,
+			...result.sections.organic,
+		].map((item) => item.id);
+		const performanceByJobId = await getRecentJobPerformanceMetrics(
+			performanceJobIds,
+			now
+		);
+		const withPerformance = <TItem extends { id: string }>(item: TItem) => ({
+			...item,
+			performance: performanceByJobId.get(item.id) ?? {
+				detailViews: 0,
+				impressions: 0,
+			},
+		});
+
 		await recordJobListingImpressions({
 			actorUserId: context.session?.user.id,
 			sections: result.sections,
 		});
 
-		return result;
+		return {
+			...result,
+			sections: {
+				organic: result.sections.organic.map(withPerformance),
+				premium: result.sections.premium.map(withPerformance),
+				recommended: result.sections.recommended.map(withPerformance),
+			},
+		};
 	}),
 
 	legacyList: publicProcedure.input(listInput).handler(async ({ input }) => {

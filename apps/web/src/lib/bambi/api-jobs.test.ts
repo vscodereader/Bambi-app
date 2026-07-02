@@ -22,4 +22,39 @@ describe("toMarketplaceJob", () => {
 		expect(job.rating).toBe(4.8);
 		expect(job.reviews).toBe(12);
 	});
+
+	it("passes API performance metrics onto the mapped job", () => {
+		const job = toMarketplaceJob({
+			description: "성과가 있는 공고입니다.",
+			employerVerificationStatus: "verified",
+			id: "22222222-2222-4222-8222-222222222201",
+			industryCategory: "라운지",
+			payAmount: 180_000,
+			payUnit: "일급",
+			performance: { detailViews: 100, impressions: 1000 },
+			region: "서울 강남구",
+			status: "published",
+			title: "성과 공고",
+			workSchedule: "20:00-02:00",
+		});
+
+		expect(job.performance).toEqual({ detailViews: 100, impressions: 1000 });
+	});
+
+	it("keeps performance undefined when the API omits it", () => {
+		const job = toMarketplaceJob({
+			description: "성과가 없는 공고입니다.",
+			employerVerificationStatus: "verified",
+			id: "22222222-2222-4222-8222-222222222299",
+			industryCategory: "라운지",
+			payAmount: 150_000,
+			payUnit: "일급",
+			region: "서울 강남구",
+			status: "published",
+			title: "성과 없는 공고",
+			workSchedule: "20:00-02:00",
+		});
+
+		expect(job.performance).toBeUndefined();
+	});
 });

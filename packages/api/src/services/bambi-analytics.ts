@@ -1,7 +1,7 @@
 import { db } from "@bambi-app/db";
 import { member } from "@bambi-app/db/schema/auth";
 import { jobPerformanceEvent, jobPost } from "@bambi-app/db/schema/bambi";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
 import type {
 	PromotionTier,
@@ -147,6 +147,72 @@ export const recordJobListingImpressions = async ({
 	}
 
 	await db.insert(jobPerformanceEvent).values(values);
+};
+
+export const RECENT_PERFORMANCE_WINDOW_DAYS = 7;
+
+export interface RecentJobPerformanceMetrics {
+	detailViews: number;
+	impressions: number;
+}
+
+const RECENT_PERFORMANCE_EVENT_TYPES = [
+	"impression",
+	"detail_view",
+] as const satisfies JobPerformanceEventType[];
+
+// 여러 공고의 최근 7일 impression/detail_view를 단일 group-by 쿼리로 집계한다(N+1 없음).
+// chat_start/contact_reveal은 제외하고, 이벤트가 없는 공고는 0으로 채운다.
+export const getRecentJobPerformanceMetrics = async (
+	jobPostIds: string[],
+	now: Date = new Date()
+): Promise<Map<string, RecentJobPerformanceMetrics>> => {
+	const metrics = new Map<string, RecentJobPerformanceMetrics>();
+
+	if (jobPostIds.length === 0) {
+		return metrics;
+	}
+
+	const windowStart = new Date(
+		now.getTime() - RECENT_PERFORMANCE_WINDOW_DAYS * 24 * 60 * 60 * 1000
+	);
+	const rows = await db
+		.select({
+			eventType: jobPerformanceEvent.eventType,
+			jobPostId: jobPerformanceEvent.jobPostId,
+			total: sql<number>`count(*)::int`,
+		})
+		.from(jobPerformanceEvent)
+		.where(
+			and(
+				inArray(jobPerformanceEvent.jobPostId, jobPostIds),
+				inArray(jobPerformanceEvent.eventType, [
+					...RECENT_PERFORMANCE_EVENT_TYPES,
+				]),
+				gte(jobPerformanceEvent.createdAt, windowStart)
+			)
+		)
+		.groupBy(jobPerformanceEvent.jobPostId, jobPerformanceEvent.eventType);
+
+	for (const id of jobPostIds) {
+		metrics.set(id, { detailViews: 0, impressions: 0 });
+	}
+
+	for (const row of rows) {
+		const entry = metrics.get(row.jobPostId);
+
+		if (!entry) {
+			continue;
+		}
+
+		if (row.eventType === "impression") {
+			entry.impressions = row.total;
+		} else if (row.eventType === "detail_view") {
+			entry.detailViews = row.total;
+		}
+	}
+
+	return metrics;
 };
 
 export interface JobPerformanceMetrics {
