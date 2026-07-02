@@ -92,18 +92,17 @@ export function VisualJobCard({
 			)}
 		>
 			{showHitRibbon ? (
-				// 카드 우측 상단 코너 박스(overflow-hidden)로 삼각 리본을 만든다. 안쪽 밴드는
-				// 좌우 대칭 오버행으로 HIT를 코너 중앙에 놓고, pointer-events-none으로 클릭을 가리지 않는다.
-				<span className="pointer-events-none absolute top-0 right-0 z-10 size-12 overflow-hidden">
-					<span
-						className={cn(
-							"absolute top-3 -right-4 -left-4 rotate-45 py-0.5 text-center font-extrabold text-[10px] leading-none tracking-wider shadow-[var(--shadow-card)]",
-							hitRibbonClassName
-						)}
-					>
-						<span aria-hidden="true">HIT</span>
-						<span className="sr-only">인기 공고</span>
-					</span>
+				// 카드 우측 상단을 대각선으로 가로지르는 얇은 코너 리본. article의 overflow-hidden이
+				// 양끝을 삼각 코너로 잘라주고, 코너에 대칭 배치해 HIT를 중앙에 둔다.
+				// pointer-events-none으로 아래 카드 클릭을 가리지 않는다.
+				<span
+					className={cn(
+						"pointer-events-none absolute top-4 -right-6 z-10 w-24 rotate-45 py-0.5 text-center font-extrabold text-[10px] leading-none tracking-wider",
+						hitRibbonClassName
+					)}
+				>
+					<span aria-hidden="true">HIT</span>
+					<span className="sr-only">인기 공고</span>
 				</span>
 			) : null}
 			<button
