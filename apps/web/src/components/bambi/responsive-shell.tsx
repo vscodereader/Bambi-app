@@ -49,6 +49,27 @@ function findActiveHref(
 	return active?.href;
 }
 
+function ModeratorHeaderActions() {
+	return (
+		<>
+			<Badge className="h-9 gap-1.5 px-3 font-bold" variant="secondary">
+				<span className="inline-flex size-3.5">
+					<ShieldIcon />
+				</span>
+				운영자 모드
+			</Badge>
+			<Button
+				aria-label="알림"
+				className="bg-card"
+				size="icon-lg"
+				variant="outline"
+			>
+				<BellIcon />
+			</Button>
+		</>
+	);
+}
+
 export function ResponsiveAppShell({
 	children,
 	className,
@@ -59,6 +80,7 @@ export function ResponsiveAppShell({
 }: ResponsiveAppShellProps) {
 	const pathname = usePathname();
 	const isPublic = variant === "public";
+	const isModerator = variant === "moderator";
 	const activeHref = findActiveHref(pathname, navItems);
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
@@ -89,23 +111,32 @@ export function ResponsiveAppShell({
 						</nav>
 						<div className="ml-auto flex items-center gap-2">
 							{headerSlot}
-							<Badge className="h-9 gap-1.5 px-3 font-bold" variant="success">
-								<span className="inline-flex size-3.5">
-									<ShieldIcon />
-								</span>
-								연락처 보호
-							</Badge>
-							<Link
-								className={cn(
-									buttonVariants({
-										variant: isPublic ? "dark" : "outline",
-									}),
-									"h-10 px-4 font-bold text-sm no-underline"
-								)}
-								href={(isPublic ? "/login" : "/seeker/me") as Route}
-							>
-								{isPublic ? "시작하기" : "내 정보"}
-							</Link>
+							{isModerator ? (
+								<ModeratorHeaderActions />
+							) : (
+								<>
+									<Badge
+										className="h-9 gap-1.5 px-3 font-bold"
+										variant="success"
+									>
+										<span className="inline-flex size-3.5">
+											<ShieldIcon />
+										</span>
+										연락처 보호
+									</Badge>
+									<Link
+										className={cn(
+											buttonVariants({
+												variant: isPublic ? "dark" : "outline",
+											}),
+											"h-10 px-4 font-bold text-sm no-underline"
+										)}
+										href={(isPublic ? "/login" : "/seeker/me") as Route}
+									>
+										{isPublic ? "시작하기" : "내 정보"}
+									</Link>
+								</>
+							)}
 						</div>
 					</div>
 				</header>
@@ -116,20 +147,29 @@ export function ResponsiveAppShell({
 						<Logo lang="ko" size="sm" />
 					</Link>
 					<div className="flex items-center gap-2">
-						<Badge className="h-8 gap-1.5 px-3 font-bold" variant="secondary">
-							<span className="inline-flex size-3.5 text-green-600">
-								<ShieldIcon />
-							</span>
-							보호 중
-						</Badge>
-						<Button
-							aria-label="알림"
-							className="bg-card"
-							size="icon-lg"
-							variant="outline"
-						>
-							<BellIcon />
-						</Button>
+						{isModerator ? (
+							<ModeratorHeaderActions />
+						) : (
+							<>
+								<Badge
+									className="h-8 gap-1.5 px-3 font-bold"
+									variant="secondary"
+								>
+									<span className="inline-flex size-3.5 text-green-600">
+										<ShieldIcon />
+									</span>
+									보호 중
+								</Badge>
+								<Button
+									aria-label="알림"
+									className="bg-card"
+									size="icon-lg"
+									variant="outline"
+								>
+									<BellIcon />
+								</Button>
+							</>
+						)}
 					</div>
 				</div>
 			</header>
