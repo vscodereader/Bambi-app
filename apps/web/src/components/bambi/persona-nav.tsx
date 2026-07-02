@@ -142,7 +142,11 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 
 	const isDetail = MOD_DETAIL_RE.test(path);
 	if (isDetail) {
-		return <Content>{children}</Content>;
+		return (
+			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+				<Content>{children}</Content>
+			</div>
+		);
 	}
 
 	let tab = "queue";
@@ -165,26 +169,26 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 
 	return (
 		<>
-			<ConsoleTop
-				counts={{
-					queue: queue.length,
-					reports: openReports,
-					warned: warnedUsers,
-				}}
-				onTab={go}
-				tab={tab}
-			/>
-			<Content withBottomNav>{children}</Content>
-			{showActionBar ? (
-				<div className="max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] max-md:z-30">
-					<QueueActionBar
-						count={selected.length}
-						isApplying={isBulkApplying}
-						onAction={bulkAction}
-						scope={bulkScope}
-					/>
-				</div>
-			) : null}
+			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+				<ConsoleTop
+					counts={{
+						queue: queue.length,
+						reports: openReports,
+						warned: warnedUsers,
+					}}
+				/>
+				<Content withBottomNav>{children}</Content>
+				{showActionBar ? (
+					<div className="max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] max-md:z-30">
+						<QueueActionBar
+							count={selected.length}
+							isApplying={isBulkApplying}
+							onAction={bulkAction}
+							scope={bulkScope}
+						/>
+					</div>
+				) : null}
+			</div>
 			<NavBar>
 				<ModTabs setTab={go} tab={tab} />
 			</NavBar>
