@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@bambi-app/ui/components/input";
 import { usePathname } from "next/navigation";
 import { createContext, type ReactNode, useContext, useState } from "react";
 import {
@@ -29,20 +30,20 @@ export function useSeekerFilters(): SeekerFiltersContextValue {
 function SeekerHeaderSearch() {
 	const { filters, setFilters } = useSeekerFilters();
 	return (
-		<label className="flex h-10 w-64 items-center gap-2 rounded-lg bg-secondary px-3">
-			<span className="inline-flex size-4 text-[color:var(--text-subtle)]">
+		<div className="relative w-64">
+			<span className="pointer-events-none absolute top-1/2 left-3 inline-flex size-4 -translate-y-1/2 text-muted-foreground">
 				<Search2 />
 			</span>
-			<input
+			<Input
 				aria-label="업종, 지역, 공고 제목 검색"
-				className="min-w-0 flex-1 border-none bg-transparent font-medium text-foreground text-sm outline-none"
+				className="h-10 rounded-lg border-none bg-secondary pl-9 font-medium"
 				onChange={(event) =>
 					setFilters({ ...filters, query: event.target.value })
 				}
 				placeholder="검색"
 				value={filters.query}
 			/>
-		</label>
+		</div>
 	);
 }
 
