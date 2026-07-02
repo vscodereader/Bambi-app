@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@bambi-app/ui/components/button";
+import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -10,7 +11,6 @@ import { toast } from "sonner";
 
 import { FieldError, FormError } from "@/components/bambi/form-message";
 import { StatusBadge } from "@/components/bambi/status-badge";
-import { formatNullable } from "@/lib/bambi-format";
 import { verificationStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
@@ -100,77 +100,90 @@ export function OrgProfileForm({ organization }: OrgProfileFormProps) {
 	};
 
 	return (
-		<form className="border p-4" onSubmit={submit}>
-			<div className="flex flex-wrap items-start justify-between gap-3">
-				<div className="min-w-0">
-					<div className="flex flex-wrap items-center gap-2">
-						<h2 className="break-words font-medium text-base">
-							{organization.displayName}
-						</h2>
-						<StatusBadge
-							tone={getVerificationTone(organization.verificationStatus)}
+		<form onSubmit={submit}>
+			<Card>
+				<CardContent className="flex flex-col gap-4">
+					<div className="flex flex-wrap items-start justify-between gap-3">
+						<div className="flex min-w-0 flex-col gap-1">
+							<div className="flex flex-wrap items-center gap-2">
+								<h3 className="break-words font-medium text-base">
+									{organization.displayName}
+								</h3>
+								<StatusBadge
+									tone={getVerificationTone(organization.verificationStatus)}
+								>
+									{verificationStatusLabels[
+										organization.verificationStatus as keyof typeof verificationStatusLabels
+									] ?? organization.verificationStatus}
+								</StatusBadge>
+							</div>
+							<p className="text-muted-foreground text-xs">
+								내 권한 · {roleLabels[organization.role ?? ""] ?? "권한 없음"}
+							</p>
+						</div>
+						<Button
+							disabled={!canSubmit || updateMutation.isPending}
+							size="sm"
+							type="submit"
 						>
-							{verificationStatusLabels[
-								organization.verificationStatus as keyof typeof verificationStatusLabels
-							] ?? organization.verificationStatus}
-						</StatusBadge>
+							<Save aria-hidden="true" data-icon="inline-start" />
+							저장
+						</Button>
 					</div>
-					<p className="mt-1 text-muted-foreground text-xs">
-						{roleLabels[organization.role ?? ""] ?? "권한 없음"} ·{" "}
-						{formatNullable(organization.verificationNote)}
-					</p>
-				</div>
-				<Button
-					disabled={!canSubmit || updateMutation.isPending}
-					size="sm"
-					type="submit"
-				>
-					<Save aria-hidden="true" data-icon="inline-start" />
-					저장
-				</Button>
-			</div>
 
-			<div className="mt-4 grid gap-3 sm:grid-cols-2">
-				<div className="space-y-1.5">
-					<Label htmlFor={`${organization.organizationId}-display-name`}>
-						조직 표시 이름
-					</Label>
-					<Input
-						aria-invalid={Boolean(displayNameError)}
-						disabled={!organization.canManageOrganization}
-						id={`${organization.organizationId}-display-name`}
-						onChange={(event) => setDisplayName(event.target.value)}
-						value={displayName}
-					/>
-					<FieldError
-						id={`${organization.organizationId}-display-name-error`}
-						message={displayNameError}
-					/>
-				</div>
-				<div className="space-y-1.5">
-					<Label htmlFor={`${organization.organizationId}-business-number`}>
-						사업자 등록 번호
-					</Label>
-					<Input
-						disabled={!organization.canManageOrganization}
-						id={`${organization.organizationId}-business-number`}
-						onChange={(event) =>
-							setBusinessRegistrationNumber(event.target.value)
-						}
-						placeholder="000-00-00000"
-						value={businessRegistrationNumber}
-					/>
-				</div>
-			</div>
+					<div className="grid gap-3 sm:grid-cols-2">
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor={`${organization.organizationId}-display-name`}>
+								조직 표시 이름
+							</Label>
+							<Input
+								aria-invalid={Boolean(displayNameError)}
+								disabled={!organization.canManageOrganization}
+								id={`${organization.organizationId}-display-name`}
+								onChange={(event) => setDisplayName(event.target.value)}
+								value={displayName}
+							/>
+							<FieldError
+								id={`${organization.organizationId}-display-name-error`}
+								message={displayNameError}
+							/>
+						</div>
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor={`${organization.organizationId}-business-number`}>
+								사업자 등록 번호
+							</Label>
+							<Input
+								disabled={!organization.canManageOrganization}
+								id={`${organization.organizationId}-business-number`}
+								onChange={(event) =>
+									setBusinessRegistrationNumber(event.target.value)
+								}
+								placeholder="000-00-00000"
+								value={businessRegistrationNumber}
+							/>
+						</div>
+					</div>
 
-			{organization.canManageOrganization ? null : (
-				<p className="mt-3 text-muted-foreground text-xs">
-					조직 프로필 수정은 소유자만 할 수 있습니다.
-				</p>
-			)}
-			<div className="mt-3">
-				<FormError message={formError} />
-			</div>
+					{organization.verificationNote ? (
+						<div className="flex flex-col gap-1">
+							<span className="font-medium text-foreground text-xs">
+								검수 메모
+							</span>
+							<p className="break-words text-muted-foreground text-xs">
+								{organization.verificationNote}
+							</p>
+						</div>
+					) : null}
+
+					{organization.canManageOrganization ? null : (
+						<p className="text-muted-foreground text-xs">
+							조직 프로필 수정은 소유자만 할 수 있습니다.
+						</p>
+					)}
+
+					<FormError message={formError} />
+				</CardContent>
+			</Card>
 		</form>
 	);
 }
