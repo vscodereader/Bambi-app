@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@bambi-app/ui/components/badge";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	Card,
@@ -12,6 +11,16 @@ import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import {
+	ChartColumn,
+	Check,
+	CircleAlert,
+	Clock,
+	Eye,
+	type LucideIcon,
+	Settings,
+	Zap,
+} from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 
@@ -95,30 +104,93 @@ const getJobStatusCounts = (jobPosts: { status: string }[]) => ({
 	rejected: jobPosts.filter((job) => job.status === "rejected").length,
 });
 
-function JobStatTile({
-	accent,
+const quickLinks: {
+	description: string;
+	href: Route;
+	icon: LucideIcon;
+	label: string;
+}[] = [
+	{
+		description: "공고 노출을 끌어올려요",
+		href: "/employer/promotions" as Route,
+		icon: Zap,
+		label: "프로모션 관리",
+	},
+	{
+		description: "조회·지원 지표를 확인해요",
+		href: "/employer/analytics" as Route,
+		icon: ChartColumn,
+		label: "성과 분석",
+	},
+	{
+		description: "사업자·팀 정보를 관리해요",
+		href: "/employer/settings" as Route,
+		icon: Settings,
+		label: "조직 설정",
+	},
+	{
+		description: "지원자 화면을 미리 봐요",
+		href: "/seeker" as Route,
+		icon: Eye,
+		label: "공개 공고 보기",
+	},
+];
+
+function OverviewStat({
+	icon: Icon,
 	label,
+	tone,
 	value,
 }: {
-	accent?: "amber" | "red";
+	icon: LucideIcon;
 	label: string;
+	tone: "amber" | "green" | "red";
 	value: number;
 }) {
+	const highlighted = tone === "green" || value > 0;
+
 	return (
-		<Card size="sm">
-			<CardContent className="flex flex-col gap-1">
+		<div className="flex items-center gap-3">
+			<span
+				className={cn(
+					"flex size-10 items-center justify-center rounded-md bg-secondary text-muted-foreground",
+					highlighted && tone === "green" && "bg-green-50 text-green-600",
+					highlighted && tone === "amber" && "bg-amber-50 text-amber-500",
+					highlighted && tone === "red" && "bg-red-50 text-red-600"
+				)}
+			>
+				<Icon className="size-5" />
+			</span>
+			<div className="flex flex-col gap-1">
 				<dt className="text-muted-foreground text-xs">{label}</dt>
-				<dd
-					className={cn(
-						"font-semibold text-2xl",
-						accent === "amber" && value > 0 && "text-amber-500",
-						accent === "red" && value > 0 && "text-red-500"
-					)}
-				>
-					{value}
-				</dd>
-			</CardContent>
-		</Card>
+				<dd className="font-semibold text-2xl leading-none">{value}</dd>
+			</div>
+		</div>
+	);
+}
+
+function QuickLinkTile({
+	description,
+	href,
+	icon: Icon,
+	label,
+}: {
+	description: string;
+	href: Route;
+	icon: LucideIcon;
+	label: string;
+}) {
+	return (
+		<Link
+			className="group flex flex-col gap-2 rounded-lg border bg-card p-4 transition-colors hover:border-coral-200 hover:bg-coral-50"
+			href={href}
+		>
+			<span className="flex size-9 items-center justify-center rounded-md bg-secondary text-foreground transition-colors group-hover:bg-coral-100 group-hover:text-coral-600">
+				<Icon className="size-5" />
+			</span>
+			<span className="font-medium text-foreground text-sm">{label}</span>
+			<span className="text-muted-foreground text-xs">{description}</span>
+		</Link>
 	);
 }
 
@@ -356,45 +428,83 @@ export default function EmployerPage() {
 					<h2 className="sr-only" id="job-overview">
 						공고 현황
 					</h2>
-					<dl className="grid gap-3 sm:grid-cols-3">
-						<JobStatTile label="게시" value={jobStatusCounts.published} />
-						<JobStatTile
-							accent="amber"
-							label="검수 대기"
-							value={jobStatusCounts.pendingReview}
-						/>
-						<JobStatTile
-							accent="red"
-							label="반려"
-							value={jobStatusCounts.rejected}
-						/>
-					</dl>
+					<Card className="shadow-[var(--shadow-card)]">
+						<CardContent className="flex flex-col gap-4">
+							<dl className="grid grid-cols-3 gap-4">
+								<OverviewStat
+									icon={Check}
+									label="게시"
+									tone="green"
+									value={jobStatusCounts.published}
+								/>
+								<OverviewStat
+									icon={Clock}
+									label="검수 대기"
+									tone="amber"
+									value={jobStatusCounts.pendingReview}
+								/>
+								<OverviewStat
+									icon={CircleAlert}
+									label="반려"
+									tone="red"
+									value={jobStatusCounts.rejected}
+								/>
+							</dl>
+							<Separator />
+							<dl className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+								<div className="flex items-center gap-1.5">
+									<Zap className="size-4 text-coral-500" />
+									<dt className="text-muted-foreground">진행 중 프로모션</dt>
+									<dd className="font-medium text-foreground">
+										{promotionSummary.activeCount}개
+									</dd>
+								</div>
+								<div className="flex items-center gap-1.5">
+									<dt className="text-muted-foreground">결제 대기</dt>
+									<dd className="font-medium text-foreground">
+										{promotionSummary.pendingCount}개
+									</dd>
+								</div>
+								<div className="flex items-center gap-1.5">
+									<dt className="text-muted-foreground">남은 끌어올리기</dt>
+									<dd className="font-medium text-foreground">
+										{promotionSummary.remainingBoostCount}회
+									</dd>
+								</div>
+							</dl>
+						</CardContent>
+					</Card>
 				</section>
 			) : null}
 
-			<nav aria-label="구인자 관리 바로가기" className="flex flex-wrap gap-2">
-				<Link
-					className={buttonVariants({ variant: "ghost" })}
-					href={"/employer/promotions" as Route}
-				>
-					프로모션 관리
-				</Link>
-				<Link
-					className={buttonVariants({ variant: "ghost" })}
-					href={"/employer/analytics" as Route}
-				>
-					성과 분석
-				</Link>
-				<Link
-					className={buttonVariants({ variant: "ghost" })}
-					href={"/employer/settings" as Route}
-				>
-					조직 설정
-				</Link>
-				<Link className={buttonVariants({ variant: "ghost" })} href="/seeker">
-					공개 공고 보기
-				</Link>
+			<nav
+				aria-label="구인자 관리 바로가기"
+				className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+			>
+				{quickLinks.map((link) => (
+					<QuickLinkTile
+						description={link.description}
+						href={link.href}
+						icon={link.icon}
+						key={link.href}
+						label={link.label}
+					/>
+				))}
 			</nav>
+
+			<Separator />
+
+			<section aria-labelledby="owned-jobs" className="flex flex-col gap-3">
+				<div>
+					<h2 className="font-semibold text-lg" id="owned-jobs">
+						내 공고
+					</h2>
+					<p className="mt-1 text-muted-foreground text-sm">
+						최근 수정된 공고부터 표시됩니다.
+					</p>
+				</div>
+				{jobsContent}
+			</section>
 
 			<Separator />
 
@@ -502,31 +612,6 @@ export default function EmployerPage() {
 						title="팀 프로필이 없습니다"
 					/>
 				)}
-			</section>
-
-			<Separator />
-
-			<section aria-labelledby="owned-jobs" className="flex flex-col gap-3">
-				<div>
-					<h2 className="font-semibold text-lg" id="owned-jobs">
-						내 공고
-					</h2>
-					<p className="mt-1 text-muted-foreground text-sm">
-						최근 수정된 공고부터 표시됩니다.
-					</p>
-					<div className="mt-2 flex flex-wrap gap-2">
-						<Badge className="rounded-full" variant="secondary">
-							진행 중 프로모션 {promotionSummary.activeCount}개
-						</Badge>
-						<Badge className="rounded-full" variant="secondary">
-							결제 대기 {promotionSummary.pendingCount}개
-						</Badge>
-						<Badge className="rounded-full" variant="secondary">
-							남은 끌어올리기 {promotionSummary.remainingBoostCount}회
-						</Badge>
-					</div>
-				</div>
-				{jobsContent}
 			</section>
 		</PageShell>
 	);
