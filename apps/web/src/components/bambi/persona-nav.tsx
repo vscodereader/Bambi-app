@@ -3,9 +3,11 @@
 // 밤비 — 페르소나별 앱 셸(하단 탭 내비게이션 + 운영자 콘솔 셸).
 // 라우트 경로(usePathname)로 활성 탭과 셸 노출 여부를 결정한다.
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
+import { BOTTOM_NAV_CONTENT_SPACER, BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
 import { ClipboardListIcon, PlusIcon, SettingsIcon, UserIcon } from "./icons";
 import { MobileTabBar } from "./mobile-tab-bar";
@@ -17,16 +19,28 @@ import {
 } from "./screens/moderator";
 import { useMod } from "./screens/moderator-context";
 
-function Content({ children }: { children: ReactNode }) {
-	return <div className="flex min-h-0 flex-1 flex-col">{children}</div>;
-}
-
-function NavBar({ children }: { children: ReactNode }) {
+function Content({
+	children,
+	withBottomNav = false,
+}: {
+	children: ReactNode;
+	withBottomNav?: boolean;
+}) {
 	return (
-		<div className="sticky bottom-0 z-30 border-border border-t bg-background md:hidden">
+		<div
+			className={cn(
+				"flex min-h-0 flex-1 flex-col",
+				withBottomNav && BOTTOM_NAV_CONTENT_SPACER,
+				withBottomNav && "md:pb-0"
+			)}
+		>
 			{children}
 		</div>
 	);
+}
+
+function NavBar({ children }: { children: ReactNode }) {
+	return <BottomNavShell>{children}</BottomNavShell>;
 }
 
 // ---- 구직자 ----------------------------------------------------------------
@@ -39,7 +53,7 @@ export function SeekerNav({ children }: { children: ReactNode }) {
 		path === "/seeker/me";
 	return (
 		<>
-			<Content>{children}</Content>
+			<Content withBottomNav={showNav}>{children}</Content>
 			{showNav ? <MobileTabBar homeHref="/seeker" /> : null}
 		</>
 	);
@@ -75,7 +89,7 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 	};
 	return (
 		<>
-			<Content>{children}</Content>
+			<Content withBottomNav={showNav}>{children}</Content>
 			{showNav ? (
 				<NavBar>
 					<BottomNav
