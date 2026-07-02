@@ -16,6 +16,7 @@ import type {
 	UserStatus,
 	VisualTone,
 } from "@/lib/bambi/types";
+import { BOTTOM_NAV_STACK_OFFSET } from "../bottom-nav-shell";
 import {
 	AppBar,
 	Avatar,
@@ -1412,7 +1413,12 @@ export function QueueActionBar({
 
 export function ConsoleToast({ message }: { message: string }) {
 	return (
-		<div className="pointer-events-none absolute right-0 bottom-[84px] left-0 z-30 flex justify-center px-4">
+		<div
+			className={cn(
+				"pointer-events-none absolute right-0 left-0 z-30 flex justify-center px-4",
+				BOTTOM_NAV_STACK_OFFSET
+			)}
+		>
 			<div className="flex max-w-[420px] items-center gap-2 rounded-[18px] bg-ink-800 px-[18px] py-[11px] font-bold text-[13px] text-white shadow-lg">
 				<span className="inline-flex size-4 flex-[0_0_16px] text-green-500">
 					<CheckIcon />

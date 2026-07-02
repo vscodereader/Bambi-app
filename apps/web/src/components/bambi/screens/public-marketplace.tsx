@@ -3,6 +3,7 @@
 import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { Search } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -13,6 +14,7 @@ import {
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
+import { BOTTOM_NAV_CONTENT_SPACER } from "../bottom-nav-shell";
 import {
 	MarketplaceDiscoveryAxisChips,
 	MarketplaceDiscoveryTabs,
@@ -56,7 +58,12 @@ export function PublicMarketplaceScreen() {
 	);
 	return (
 		<ResponsiveAppShell headerSlot={headerSearch} variant="public">
-			<div className="mx-auto flex w-full gap-5 px-5 py-6 pb-24 md:max-w-[80%] md:px-6 md:py-10">
+			<div
+				className={cn(
+					"mx-auto flex w-full gap-5 px-5 py-6 md:max-w-[80%] md:px-6 md:py-10",
+					BOTTOM_NAV_CONTENT_SPACER
+				)}
+			>
 				<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
 				<section className="min-w-0 flex-1">
 					<div className="mb-4 flex flex-col gap-3">

@@ -8,6 +8,7 @@ import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
+import { BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
 import {
 	BriefcaseIcon,
@@ -49,7 +50,7 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 		}
 	};
 	return (
-		<div className="sticky bottom-0 z-30 border-border border-t bg-background md:hidden">
+		<BottomNavShell>
 			<BottomNav
 				badges={{ chat: 1 }}
 				items={[
@@ -64,6 +65,6 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 				onChange={go}
 				value={value}
 			/>
-		</div>
+		</BottomNavShell>
 	);
 }
