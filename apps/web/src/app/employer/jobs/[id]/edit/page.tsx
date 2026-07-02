@@ -3,7 +3,6 @@
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Input } from "@bambi-app/ui/components/input";
-import { Label } from "@bambi-app/ui/components/label";
 import {
 	Select,
 	SelectContent,
@@ -15,15 +14,21 @@ import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EmployerListingPreview } from "@/components/bambi/employer-listing-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { FieldError, FormError } from "@/components/bambi/form-message";
+import {
+	FieldError,
+	FieldHint,
+	FieldLabel,
+	FormError,
+} from "@/components/bambi/form-message";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
 import { PageShell } from "@/components/bambi/page-shell";
+import { PayAmountHint } from "@/components/bambi/pay-amount-hint";
 import Loader from "@/components/loader";
 import { authClient } from "@/lib/auth-client";
 import {
@@ -104,6 +109,23 @@ const formatPreviewPay = ({
 		: "";
 };
 
+const focusFirstInvalidField = (form: HTMLFormElement | null) => {
+	if (!form) {
+		return;
+	}
+
+	requestAnimationFrame(() => {
+		const firstInvalid = form.querySelector<HTMLElement>(
+			'[aria-invalid="true"]'
+		);
+
+		if (firstInvalid) {
+			firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+			firstInvalid.focus({ preventScroll: true });
+		}
+	});
+};
+
 const getLocalJobMediaPreviewUrl = (item: {
 	fileName: string;
 	storageKey: string;
@@ -154,6 +176,7 @@ export default function EditEmployerJobPage({
 	});
 	const [fieldErrors, setFieldErrors] = useState<JobFormErrors>({});
 	const [formError, setFormError] = useState<null | string>(null);
+	const formRef = useRef<HTMLFormElement>(null);
 	const jobQuery = useQuery({
 		...orpc.bambi.jobs.getEditableById.queryOptions({ input: { id } }),
 		enabled: isSignedIn,
@@ -242,6 +265,7 @@ export default function EditEmployerJobPage({
 			setFieldErrors(validation.errors);
 			setFormError(validation.message);
 			toast.error(validation.message);
+			focusFirstInvalidField(formRef.current);
 			return;
 		}
 
@@ -362,7 +386,11 @@ export default function EditEmployerJobPage({
 			description="소속 조직과 팀은 유지한 채 공개 공고 내용을 수정합니다."
 			title="공고 수정"
 		>
-			<form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+			<form
+				className="flex flex-col gap-6"
+				onSubmit={handleSubmit}
+				ref={formRef}
+			>
 				<FormError message={formError} />
 				<section
 					aria-labelledby="edit-affiliation"
@@ -412,7 +440,7 @@ export default function EditEmployerJobPage({
 					<Card>
 						<CardContent className="grid gap-4 md:grid-cols-2">
 							<div className="flex flex-col gap-2 md:col-span-2">
-								<Label htmlFor="title">공고 제목</Label>
+								<FieldLabel htmlFor="title">공고 제목</FieldLabel>
 								<Input
 									aria-describedby={
 										fieldErrors.title ? getFieldErrorId("title") : undefined
@@ -433,7 +461,7 @@ export default function EditEmployerJobPage({
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="industryCategory">업종</Label>
+								<FieldLabel htmlFor="industryCategory">업종</FieldLabel>
 								<Select
 									name="industryCategory"
 									onValueChange={(value) =>
@@ -468,7 +496,7 @@ export default function EditEmployerJobPage({
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="region">지역</Label>
+								<FieldLabel htmlFor="region">지역</FieldLabel>
 								<Select
 									name="region"
 									onValueChange={(value) =>
@@ -501,7 +529,7 @@ export default function EditEmployerJobPage({
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="payAmount">급여 금액</Label>
+								<FieldLabel htmlFor="payAmount">급여 금액</FieldLabel>
 								<Input
 									aria-describedby={
 										fieldErrors.payAmount
@@ -521,13 +549,17 @@ export default function EditEmployerJobPage({
 									type="number"
 									value={form.payAmount}
 								/>
+								<PayAmountHint
+									payAmount={form.payAmount}
+									payUnit={form.payUnit}
+								/>
 								<FieldError
 									id={getFieldErrorId("payAmount")}
 									message={fieldErrors.payAmount}
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="payUnit">급여 단위</Label>
+								<FieldLabel htmlFor="payUnit">급여 단위</FieldLabel>
 								<Select
 									name="payUnit"
 									onValueChange={(value) =>
@@ -562,7 +594,7 @@ export default function EditEmployerJobPage({
 								/>
 							</div>
 							<div className="flex flex-col gap-2 md:col-span-2">
-								<Label htmlFor="workSchedule">근무 일정</Label>
+								<FieldLabel htmlFor="workSchedule">근무 일정</FieldLabel>
 								<Input
 									aria-describedby={
 										fieldErrors.workSchedule
@@ -594,13 +626,18 @@ export default function EditEmployerJobPage({
 							상세 내용
 						</h2>
 						<p className="mt-1 text-muted-foreground text-sm">
-							업무 설명과 면접 안내를 작성하세요.
+							기본 상세 설명은 필수예요. 블록형 상세 설명과 면접 안내는
+							선택이며, 블록을 추가하면 기본 설명 대신 공개됩니다.
 						</p>
 					</div>
 					<Card>
 						<CardContent className="grid gap-4">
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="description">상세 설명</Label>
+								<FieldLabel htmlFor="description">상세 설명</FieldLabel>
+								<FieldHint>
+									지원자가 가장 먼저 읽는 기본 소개예요. 업무·근무 조건·우대
+									사항을 자유롭게 적어 주세요.
+								</FieldHint>
 								<Textarea
 									aria-describedby={
 										fieldErrors.description
@@ -638,7 +675,13 @@ export default function EditEmployerJobPage({
 								}}
 							/>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="interviewNotes">면접 안내</Label>
+								<FieldLabel htmlFor="interviewNotes" optional>
+									면접 안내
+								</FieldLabel>
+								<FieldHint>
+									면접 장소·준비물·연락 가능 시간처럼 지원이 확정된 뒤 필요한
+									정보를 적어 주세요.
+								</FieldHint>
 								<Textarea
 									aria-describedby={
 										fieldErrors.interviewNotes
