@@ -54,6 +54,21 @@ interface ShouldPrioritizeJobPostInput {
 	jobPostStatus: JobPostStatus;
 }
 
+const employerVerificationStatusLabels = {
+	none: "미인증",
+	pending: "인증 대기",
+	verified: "인증 완료",
+	rejected: "인증 반려",
+} as const satisfies Record<EmployerVerificationStatus, string>;
+
+const jobPostStatusLabels = {
+	draft: "임시 저장",
+	pending_review: "검수 대기",
+	published: "공개",
+	hidden: "숨김",
+	rejected: "반려",
+} as const satisfies Record<JobPostStatus, string>;
+
 export const getInitialJobPostStatus = ({
 	employerVerificationStatus,
 	hasRiskFlags,
@@ -104,6 +119,13 @@ export const canRevealContact = ({
 	ownerPhoneVerified,
 }: CanRevealContactInput): boolean =>
 	interviewStatus === "confirmed" && ownerConsented && ownerPhoneVerified;
+
+export const getEmployerVerificationStatusLabel = (
+	status: EmployerVerificationStatus
+): string => employerVerificationStatusLabels[status];
+
+export const getJobPostStatusLabel = (status: JobPostStatus): string =>
+	jobPostStatusLabels[status];
 
 export const shouldPrioritizeJobPost = ({
 	employerVerificationStatus,
