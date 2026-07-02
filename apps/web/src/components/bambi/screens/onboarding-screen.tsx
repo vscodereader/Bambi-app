@@ -179,6 +179,7 @@ export function OnboardingScreen() {
 						{profile ? (
 							<div className="mt-5 flex flex-col gap-2 sm:flex-row">
 								<Button
+									className="shadow-none"
 									disabled={updateProfileMutation.isPending}
 									onClick={handleUpdate}
 								>
@@ -194,22 +195,31 @@ export function OnboardingScreen() {
 								</Button>
 							</div>
 						) : (
-							<div className="mt-5 grid gap-3 sm:grid-cols-2">
-								<Button
-									disabled={createJobSeekerMutation.isPending}
-									leftIcon={<Search2 />}
-									onClick={() => handleCreate("job_seeker")}
-								>
-									구직자로 시작
-								</Button>
-								<Button
-									disabled={createEmployerMutation.isPending}
-									leftIcon={<BriefcaseIcon />}
-									onClick={() => handleCreate("employer")}
-									variant="secondary"
-								>
-									구인자로 시작
-								</Button>
+							<div className="mt-5 flex flex-col gap-3">
+								<span className="font-bold text-sm">
+									어떤 목적으로 오셨나요?
+								</span>
+								<div className="grid gap-3 sm:grid-cols-2">
+									<Button
+										disabled={createJobSeekerMutation.isPending}
+										leftIcon={<Search2 />}
+										onClick={() => handleCreate("job_seeker")}
+									>
+										구직자로 시작
+									</Button>
+									<Button
+										disabled={createEmployerMutation.isPending}
+										leftIcon={<BriefcaseIcon />}
+										onClick={() => handleCreate("employer")}
+										variant="secondary"
+									>
+										구인자로 시작
+									</Button>
+								</div>
+								<p className="m-0 text-muted-foreground text-xs leading-relaxed">
+									일자리를 찾는 분은 구직자로, 공고를 등록할 매장·업주는
+									구인자로 시작하세요. 설정은 언제든 바꿀 수 있어요.
+								</p>
 							</div>
 						)}
 					</Card>

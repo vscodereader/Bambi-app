@@ -66,7 +66,7 @@ export default function SeekerJobChatPreflightPage() {
 
 	if (isJobLoading) {
 		return (
-			<div className="mx-auto w-full max-w-[720px] px-4 py-10 text-center font-bold text-muted-foreground">
+			<div className="mx-auto w-full px-5 py-10 text-center font-bold text-muted-foreground md:max-w-[80%] md:px-6">
 				보호 확인 정보를 준비하고 있어요.
 			</div>
 		);

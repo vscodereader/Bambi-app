@@ -1,5 +1,9 @@
 "use client";
 
+import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
+import { Button } from "@bambi-app/ui/components/button";
+import { Input } from "@bambi-app/ui/components/input";
+import { Search } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -9,74 +13,82 @@ import {
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
-import { Badge, Button } from "../ds";
-import { ShieldIcon } from "../icons";
 import {
+	MarketplaceDiscoveryAxisChips,
+	MarketplaceDiscoveryTabs,
+	MarketplaceFilterSheet,
 	MarketplaceFilterSidebar,
 	MarketplaceSearch,
-	SelectedJobPanel,
+	useMarketplaceDiscovery,
 } from "../marketplace";
+import { MobileTabBar } from "../mobile-tab-bar";
 import { ResponsiveAppShell } from "../responsive-shell";
 import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 
 export function PublicMarketplaceScreen() {
 	const router = useRouter();
+	const [filtersOpen, setFiltersOpen] = useState(false);
 	const [filters, setFilters] = useState<MarketplaceFilters>(
 		DEFAULT_MARKETPLACE_FILTERS
 	);
 	const { isApiBacked, isError, jobs, refetch, sections } =
 		useMarketplaceJobs(filters);
-	const selectedJob = jobs[0];
+	const { discoveryTabId, selectDiscoveryTab } = useMarketplaceDiscovery(
+		filters,
+		setFilters
+	);
 	const openJob = (job: Job) => router.push(`/seeker/jobs/${job.id}` as Route);
 	const startChat = (job: Job) =>
 		router.push(`/seeker/jobs/${job.id}/chat?entry=public` as Route);
+	const headerSearch = (
+		<div className="relative w-64">
+			<Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+			<Input
+				aria-label="업종, 지역, 공고 제목 검색"
+				className="h-10 rounded-lg bg-secondary pl-9 font-medium"
+				onChange={(event) =>
+					setFilters({ ...filters, query: event.target.value })
+				}
+				placeholder="검색"
+				value={filters.query}
+			/>
+		</div>
+	);
 	return (
-		<ResponsiveAppShell variant="public">
-			<div className="mx-auto flex w-full max-w-[1180px] gap-5 px-4 py-6 pb-16 md:px-6 md:py-10">
+		<ResponsiveAppShell headerSlot={headerSearch} variant="public">
+			<div className="mx-auto flex w-full gap-5 px-5 py-6 pb-24 md:max-w-[80%] md:px-6 md:py-10">
 				<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
 				<section className="min-w-0 flex-1">
-					<div className="mb-6 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border md:p-8">
-						<Badge tone="success">
-							<span className="inline-flex size-3.5">
-								<ShieldIcon />
-							</span>
-							면접 전 연락처 비공개
-						</Badge>
-						<h1 className="mt-4 mb-3 font-extrabold text-[30px] leading-tight md:text-[42px]">
-							안전하게 비교하고,
-							<br />
-							밤비 안에서 먼저 대화해요
-						</h1>
-						<p className="m-0 max-w-[620px] text-muted-foreground leading-relaxed">
-							지역, 업종, 급여로 빠르게 찾고 검수된 공고를 먼저 확인하세요. 채팅
-							시작 전 필요한 인증과 보호 안내를 함께 제공합니다.
-						</p>
-						<div className="mt-5 flex flex-col gap-3 sm:flex-row">
-							<Button onClick={() => router.push("/seeker")}>
-								공고 둘러보기
-							</Button>
-							<Button
-								onClick={() => router.push("/employer")}
-								variant="secondary"
-							>
-								업체로 시작하기
-							</Button>
-						</div>
-					</div>
-					<div className="mb-4">
-						<MarketplaceSearch filters={filters} onChange={setFilters} />
+					<div className="mb-4 flex flex-col gap-3">
+						<MarketplaceDiscoveryTabs
+							onSelect={selectDiscoveryTab}
+							value={discoveryTabId}
+						/>
+						<MarketplaceSearch
+							filters={filters}
+							onChange={setFilters}
+							onOpenFilters={() => setFiltersOpen(true)}
+							searchFieldClassName="md:hidden"
+						/>
+						<MarketplaceDiscoveryAxisChips
+							discoveryTabId={discoveryTabId}
+							filters={filters}
+							onChange={setFilters}
+						/>
 					</div>
 					{isError ? (
-						<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
-							서버 공고를 불러오지 못해 샘플 공고를 먼저 보여드려요.
-							<button
-								className="ml-2 cursor-pointer border-none bg-transparent p-0 font-extrabold text-amber-900 underline"
-								onClick={refetch}
-								type="button"
-							>
-								다시 연결
-							</button>
-						</div>
+						<Alert className="mb-4" variant="warning">
+							<AlertDescription className="text-sm">
+								서버 공고를 불러오지 못해 샘플 공고를 먼저 보여드려요.
+								<Button
+									className="ml-2 h-auto p-0 align-baseline font-extrabold text-amber-500 underline"
+									onClick={refetch}
+									variant="link"
+								>
+									다시 연결
+								</Button>
+							</AlertDescription>
+						</Alert>
 					) : null}
 					<div className="mb-3 flex items-center justify-between">
 						<h2 className="m-0 font-extrabold text-lg">
@@ -93,12 +105,14 @@ export function PublicMarketplaceScreen() {
 						sections={sections}
 					/>
 				</section>
-				<SelectedJobPanel
-					job={selectedJob}
-					onChat={startChat}
-					onOpen={openJob}
-				/>
 			</div>
+			<MarketplaceFilterSheet
+				filters={filters}
+				onChange={setFilters}
+				onOpenChange={setFiltersOpen}
+				open={filtersOpen}
+			/>
+			<MobileTabBar homeHref="/" />
 		</ResponsiveAppShell>
 	);
 }

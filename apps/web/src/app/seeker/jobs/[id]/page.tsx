@@ -11,7 +11,7 @@ export default function SeekerJobPage() {
 	const { isError, isLoading, job, refetch } = useMarketplaceJob(id);
 	if (isLoading) {
 		return (
-			<div className="mx-auto w-full max-w-[720px] px-4 py-10 text-center font-bold text-muted-foreground">
+			<div className="mx-auto w-full px-5 py-10 text-center font-bold text-muted-foreground md:max-w-[80%] md:px-6">
 				공고 정보를 불러오고 있어요.
 			</div>
 		);
@@ -22,7 +22,7 @@ export default function SeekerJobPage() {
 	return (
 		<>
 			{isError ? (
-				<div className="mx-auto mt-4 w-full max-w-[720px] rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
+				<div className="mx-5 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm md:mx-auto md:max-w-[80%] md:px-6">
 					실제 공고 상세를 불러오지 못했어요.
 					<button
 						className="ml-2 cursor-pointer border-none bg-transparent p-0 font-extrabold text-amber-900 underline"

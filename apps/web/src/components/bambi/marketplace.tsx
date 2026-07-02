@@ -1,25 +1,41 @@
 "use client";
 
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
+import {
+	Sheet,
+	SheetContent,
+	SheetTitle,
+} from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
+import { useState } from "react";
 import {
+	ALL_OPTION,
+	applyDiscoveryAxis,
+	discoveryAxisForTab,
 	MARKETPLACE_CATEGORIES,
 	MARKETPLACE_QUICK_FILTERS,
 	MARKETPLACE_REGIONS,
 	type MarketplaceFilters,
+	subcategoriesForCategory,
 } from "@/lib/bambi/marketplace";
 import { SELECTED_JOB_CARD_CLASS } from "@/lib/bambi/selection-style";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
-import { Badge, Button, Card, Input, Logo, Tag } from "./ds";
+import { Badge, Button, Card, Input, Tag } from "./ds";
 import {
+	BriefcaseIcon,
 	CheckIcon,
-	ChevronRightIcon,
 	ClockIcon,
-	DollarCircle,
 	MapPinIcon,
 	Message,
 	Search2,
-	ShieldIcon,
 	StarIcon,
 } from "./icons";
 
@@ -36,12 +52,141 @@ interface MarketplaceFilterSidebarProps {
 	onChange: FilterChange;
 }
 
-export function MarketplaceFilterSidebar({
+export function MarketplaceFilterControls({
 	filters,
 	onChange,
 }: MarketplaceFilterSidebarProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
+	const subcategoryOptions = subcategoriesForCategory(filters.category);
+	const subcategoryDisabled = subcategoryOptions.length <= 1;
+	return (
+		<div className="flex flex-col gap-4">
+			<div className="flex flex-col gap-2">
+				<span className="font-bold text-muted-foreground text-xs">지역</span>
+				<Select
+					onValueChange={(value) => {
+						if (value) {
+							update({ region: value });
+						}
+					}}
+					value={filters.region}
+				>
+					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+						<SelectValue>{(value) => value}</SelectValue>
+					</SelectTrigger>
+					<SelectContent>
+						{MARKETPLACE_REGIONS.map((region) => (
+							<SelectItem key={region} value={region}>
+								{region}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+			<div className="flex flex-col gap-2">
+				<span className="font-bold text-muted-foreground text-xs">업종</span>
+				<Select
+					onValueChange={(value) => {
+						if (value) {
+							update({ category: value, subcategory: ALL_OPTION });
+						}
+					}}
+					value={filters.category}
+				>
+					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+						<SelectValue>{(value) => value}</SelectValue>
+					</SelectTrigger>
+					<SelectContent>
+						{MARKETPLACE_CATEGORIES.map((category) => (
+							<SelectItem key={category} value={category}>
+								{category}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+			<div className="flex flex-col gap-2">
+				<span className="font-bold text-muted-foreground text-xs">
+					세부 업종
+				</span>
+				<Select
+					disabled={subcategoryDisabled}
+					onValueChange={(value) => {
+						if (value) {
+							update({ subcategory: value });
+						}
+					}}
+					value={filters.subcategory}
+				>
+					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+						<SelectValue>{(value) => value}</SelectValue>
+					</SelectTrigger>
+					<SelectContent>
+						{subcategoryOptions.map((subcategory) => (
+							<SelectItem key={subcategory} value={subcategory}>
+								{subcategory}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+			<div className="flex flex-col gap-2">
+				<span className="font-bold text-muted-foreground text-xs">
+					최소 시급
+				</span>
+				<Input
+					defaultValue={String(filters.minimumPay || "")}
+					onChange={(event) =>
+						update({ minimumPay: Number(event.target.value || 0) })
+					}
+					placeholder="예: 17000"
+					type="number"
+				/>
+			</div>
+			<label
+				className="flex items-center gap-2 font-bold text-sm"
+				htmlFor="filter-only-verified"
+			>
+				<Checkbox
+					checked={filters.onlyVerified}
+					id="filter-only-verified"
+					onCheckedChange={(checked) => update({ onlyVerified: checked })}
+				/>
+				검증 완료만 보기
+			</label>
+			<label
+				className="flex items-center gap-2 font-bold text-sm"
+				htmlFor="filter-only-today"
+			>
+				<Checkbox
+					checked={filters.onlyToday}
+					id="filter-only-today"
+					onCheckedChange={(checked) => update({ onlyToday: checked })}
+				/>
+				오늘 면접 가능만 보기
+			</label>
+			<label
+				className="flex items-center gap-2 font-bold text-sm"
+				htmlFor="filter-only-beginner"
+			>
+				<Checkbox
+					checked={filters.onlyBeginnerFriendly}
+					id="filter-only-beginner"
+					onCheckedChange={(checked) =>
+						update({ onlyBeginnerFriendly: checked })
+					}
+				/>
+				초보 가능만 보기
+			</label>
+		</div>
+	);
+}
+
+export function MarketplaceFilterSidebar({
+	filters,
+	onChange,
+}: MarketplaceFilterSidebarProps) {
 	return (
 		<aside className="hidden w-[236px] shrink-0 lg:block">
 			<div className="sticky top-20 flex flex-col gap-4">
@@ -52,97 +197,33 @@ export function MarketplaceFilterSidebar({
 						</span>
 						<h2 className="m-0 font-extrabold text-base">빠른 탐색</h2>
 					</div>
-					<div className="flex flex-col gap-4">
-						<label className="flex flex-col gap-2">
-							<span className="font-bold text-muted-foreground text-xs">
-								지역
-							</span>
-							<select
-								className="h-11 rounded-lg border border-border bg-background px-3 font-semibold text-sm"
-								onChange={(event) => update({ region: event.target.value })}
-								value={filters.region}
-							>
-								{MARKETPLACE_REGIONS.map((region) => (
-									<option key={region} value={region}>
-										{region}
-									</option>
-								))}
-							</select>
-						</label>
-						<label className="flex flex-col gap-2">
-							<span className="font-bold text-muted-foreground text-xs">
-								업종
-							</span>
-							<select
-								className="h-11 rounded-lg border border-border bg-background px-3 font-semibold text-sm"
-								onChange={(event) => update({ category: event.target.value })}
-								value={filters.category}
-							>
-								{MARKETPLACE_CATEGORIES.map((category) => (
-									<option key={category} value={category}>
-										{category}
-									</option>
-								))}
-							</select>
-						</label>
-						<div className="flex flex-col gap-2">
-							<span className="font-bold text-muted-foreground text-xs">
-								최소 시급
-							</span>
-							<Input
-								defaultValue={String(filters.minimumPay || "")}
-								onChange={(event) =>
-									update({ minimumPay: Number(event.target.value || 0) })
-								}
-								placeholder="예: 17000"
-								type="number"
-							/>
-						</div>
-						<label className="flex items-center gap-2 font-bold text-sm">
-							<input
-								checked={filters.onlyVerified}
-								onChange={(event) =>
-									update({ onlyVerified: event.target.checked })
-								}
-								type="checkbox"
-							/>
-							검증 완료만 보기
-						</label>
-						<label className="flex items-center gap-2 font-bold text-sm">
-							<input
-								checked={filters.onlyBeginnerFriendly}
-								onChange={(event) =>
-									update({ onlyBeginnerFriendly: event.target.checked })
-								}
-								type="checkbox"
-							/>
-							초보 가능만 보기
-						</label>
-					</div>
+					<MarketplaceFilterControls filters={filters} onChange={onChange} />
 				</Card>
-				<TrustMiniPanel />
 			</div>
 		</aside>
 	);
 }
 
-function TrustMiniPanel() {
+interface MarketplaceFilterSheetProps {
+	filters: MarketplaceFilters;
+	onChange: FilterChange;
+	onOpenChange: (open: boolean) => void;
+	open: boolean;
+}
+
+export function MarketplaceFilterSheet({
+	filters,
+	onChange,
+	onOpenChange,
+	open,
+}: MarketplaceFilterSheetProps) {
 	return (
-		<Card
-			className="rounded-lg border-coral-100 bg-coral-50 text-coral-700"
-			pad="lg"
-			tone="outline"
-		>
-			<span className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-coral-200 bg-card text-coral-600">
-				<span className="inline-flex size-5">
-					<ShieldIcon />
-				</span>
-			</span>
-			<h2 className="m-0 font-extrabold text-lg">연락처는 보호돼요</h2>
-			<p className="mt-2 mb-0 text-[13px] text-coral-700/80 leading-relaxed">
-				면접 일정 확정 전까지 전화번호와 외부 연락처는 공개되지 않아요.
-			</p>
-		</Card>
+		<Sheet onOpenChange={onOpenChange} open={open}>
+			<SheetContent>
+				<SheetTitle className="mb-4">빠른 탐색</SheetTitle>
+				<MarketplaceFilterControls filters={filters} onChange={onChange} />
+			</SheetContent>
+		</Sheet>
 	);
 }
 
@@ -150,18 +231,20 @@ interface MarketplaceSearchProps {
 	filters: MarketplaceFilters;
 	onChange: FilterChange;
 	onOpenFilters?: () => void;
+	searchFieldClassName?: string;
 }
 
 export function MarketplaceSearch({
 	filters,
 	onChange,
 	onOpenFilters,
+	searchFieldClassName,
 }: MarketplaceSearchProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
 	return (
 		<div className="flex flex-col gap-3">
-			<div className="flex items-center gap-2.5">
+			<div className={cn("flex items-center gap-2.5", searchFieldClassName)}>
 				<label className="flex h-14 flex-1 items-center gap-3 rounded-lg bg-secondary px-[18px]">
 					<span className="inline-flex size-5 text-[color:var(--text-subtle)]">
 						<Search2 />
@@ -187,6 +270,7 @@ export function MarketplaceSearch({
 				{MARKETPLACE_QUICK_FILTERS.map((filter) => {
 					const selected =
 						(filter.id === "verified" && filters.onlyVerified) ||
+						(filter.id === "today" && filters.onlyToday) ||
 						(filter.id === "beginner" && filters.onlyBeginnerFriendly);
 					return (
 						<Tag
@@ -194,6 +278,9 @@ export function MarketplaceSearch({
 							onClick={() => {
 								if (filter.id === "verified") {
 									update({ onlyVerified: !filters.onlyVerified });
+								}
+								if (filter.id === "today") {
+									update({ onlyToday: !filters.onlyToday });
 								}
 								if (filter.id === "beginner") {
 									update({
@@ -209,6 +296,149 @@ export function MarketplaceSearch({
 				})}
 			</div>
 		</div>
+	);
+}
+
+interface MarketplaceRegionChipsProps {
+	filters: MarketplaceFilters;
+	onChange: FilterChange;
+}
+
+interface MarketplaceAxisChipsProps {
+	axis: "category" | "region";
+	filters: MarketplaceFilters;
+	onChange: FilterChange;
+}
+
+const MARKETPLACE_AXIS_CONFIG = {
+	category: { Icon: BriefcaseIcon, options: MARKETPLACE_CATEGORIES },
+	region: { Icon: MapPinIcon, options: MARKETPLACE_REGIONS },
+} as const;
+
+// 지역/업종 공용 퀵칩 — 축에 따라 옵션·아이콘·대상 필드를 바꾼다.
+export function MarketplaceAxisChips({
+	axis,
+	filters,
+	onChange,
+}: MarketplaceAxisChipsProps) {
+	const { Icon, options } = MARKETPLACE_AXIS_CONFIG[axis];
+	return (
+		<div className="flex items-center gap-2">
+			<span className="inline-flex size-4 shrink-0 text-coral-600">
+				<Icon />
+			</span>
+			<div className="flex min-w-0 gap-2 overflow-x-auto [scrollbar-width:none]">
+				{options.map((option) => (
+					<Tag
+						key={option}
+						onClick={() =>
+							onChange(
+								axis === "region"
+									? { ...filters, region: option }
+									: { ...filters, category: option, subcategory: ALL_OPTION }
+							)
+						}
+						selected={filters[axis] === option}
+					>
+						{option}
+					</Tag>
+				))}
+			</div>
+		</div>
+	);
+}
+
+export const MARKETPLACE_DISCOVERY_TABS = [
+	{ disabled: false, id: "all", label: "전체" },
+	{ disabled: false, id: "region", label: "지역별" },
+	{ disabled: false, id: "category", label: "업종별" },
+	{ disabled: true, id: "map", label: "지도" },
+	{ disabled: true, id: "recent", label: "오늘 본 공고" },
+] as const;
+
+export type MarketplaceDiscoveryTabId =
+	(typeof MARKETPLACE_DISCOVERY_TABS)[number]["id"];
+
+export function useMarketplaceDiscovery(
+	filters: MarketplaceFilters,
+	onChange: FilterChange
+) {
+	const [discoveryTabId, setDiscoveryTabId] =
+		useState<MarketplaceDiscoveryTabId>("all");
+	const selectDiscoveryTab = (tabId: MarketplaceDiscoveryTabId) => {
+		setDiscoveryTabId(tabId);
+		onChange(applyDiscoveryAxis(filters, discoveryAxisForTab(tabId)));
+	};
+	return { discoveryTabId, selectDiscoveryTab };
+}
+
+export function MarketplaceDiscoveryTabs({
+	onSelect,
+	value,
+}: {
+	onSelect: (tabId: MarketplaceDiscoveryTabId) => void;
+	value: MarketplaceDiscoveryTabId;
+}) {
+	return (
+		<div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
+			{MARKETPLACE_DISCOVERY_TABS.map((tab) => (
+				<button
+					aria-pressed={value === tab.id}
+					className={cn(
+						"h-9 shrink-0 rounded-lg px-3 font-bold text-sm disabled:opacity-50",
+						value === tab.id
+							? "bg-foreground text-background"
+							: "border border-border bg-card text-muted-foreground"
+					)}
+					disabled={tab.disabled}
+					key={tab.id}
+					onClick={() => onSelect(tab.id)}
+					type="button"
+				>
+					{tab.label}
+				</button>
+			))}
+		</div>
+	);
+}
+
+export function MarketplaceDiscoveryAxisChips({
+	discoveryTabId,
+	filters,
+	onChange,
+}: {
+	discoveryTabId: MarketplaceDiscoveryTabId;
+	filters: MarketplaceFilters;
+	onChange: FilterChange;
+}) {
+	if (discoveryTabId === "region") {
+		return (
+			<MarketplaceAxisChips
+				axis="region"
+				filters={filters}
+				onChange={onChange}
+			/>
+		);
+	}
+	if (discoveryTabId === "category") {
+		return (
+			<MarketplaceAxisChips
+				axis="category"
+				filters={filters}
+				onChange={onChange}
+			/>
+		);
+	}
+	return null;
+}
+
+// 지역 전용 사용처(홈 PublicMarketplaceScreen)를 위한 얇은 래퍼.
+export function MarketplaceRegionChips({
+	filters,
+	onChange,
+}: MarketplaceRegionChipsProps) {
+	return (
+		<MarketplaceAxisChips axis="region" filters={filters} onChange={onChange} />
 	);
 }
 
@@ -423,89 +653,5 @@ export function JobList({
 				</section>
 			))}
 		</div>
-	);
-}
-
-interface SelectedJobPanelProps {
-	job?: Job;
-	onChat: (job: Job) => void;
-	onOpen: (job: Job) => void;
-}
-
-export function SelectedJobPanel({
-	job,
-	onChat,
-	onOpen,
-}: SelectedJobPanelProps) {
-	if (!job) {
-		return null;
-	}
-	return (
-		<aside className="hidden w-[292px] shrink-0 xl:block">
-			<div className="sticky top-20">
-				<Card className="rounded-lg" pad="lg" tone="outline">
-					<div className="mb-3 flex items-center justify-between gap-3">
-						<Logo lang="ko" size="sm" wordmark={false} />
-						<div className="flex flex-wrap justify-end gap-1.5">
-							{job.promotionLabel ? (
-								<Badge tone="pending">{job.promotionLabel}</Badge>
-							) : null}
-							{job.verified ? <Badge tone="success">검수 통과</Badge> : null}
-						</div>
-					</div>
-					<h2 className="m-0 font-extrabold text-xl leading-snug">
-						{job.company} {job.title}
-					</h2>
-					<p className="mt-2 mb-4 text-muted-foreground text-sm leading-relaxed">
-						{job.desc}
-					</p>
-					<div className="grid gap-3">
-						<div className="flex items-center gap-2 font-bold text-sm">
-							<span className="inline-flex size-4 text-coral-600">
-								<DollarCircle />
-							</span>
-							{job.pay}
-						</div>
-						<div className="flex items-center gap-2 font-bold text-sm">
-							<span className="inline-flex size-4 text-coral-600">
-								<MapPinIcon />
-							</span>
-							{job.location}
-						</div>
-						<div className="flex items-center gap-2 font-bold text-sm">
-							<span className="inline-flex size-4 text-coral-600">
-								<ClockIcon />
-							</span>
-							{job.hours}
-						</div>
-					</div>
-					<div className="mt-5 rounded-lg bg-coral-50 p-3 text-coral-700">
-						<div className="flex items-center gap-2 font-extrabold text-sm">
-							<span className="inline-flex size-4">
-								<ShieldIcon />
-							</span>
-							연락처 보호 중
-						</div>
-						<p className="mt-1 mb-0 text-xs leading-relaxed">
-							면접 확정 전까지 전화번호는 공개되지 않아요.
-						</p>
-					</div>
-					<div className="mt-5 grid gap-2">
-						<Button block onClick={() => onChat(job)} size="md">
-							1:1 채팅 시작
-						</Button>
-						<Button
-							block
-							onClick={() => onOpen(job)}
-							rightIcon={<ChevronRightIcon />}
-							size="md"
-							variant="secondary"
-						>
-							상세 보기
-						</Button>
-					</div>
-				</Card>
-			</div>
-		</aside>
 	);
 }

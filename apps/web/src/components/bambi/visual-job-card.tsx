@@ -4,104 +4,136 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
 import type { Job } from "@/lib/bambi/types";
 import { Badge, Button } from "./ds";
-import { CheckIcon, MapPinIcon, Message, ShieldIcon } from "./icons";
+import { MapPinIcon, Message } from "./icons";
 
 interface VisualJobCardProps {
+	active?: boolean;
 	job: Job;
 	onChat: (job: Job) => void;
 	onOpen: (job: Job) => void;
-	tone: "recommended" | "special" | "urgent";
+	tone: "organic" | "recommended" | "special" | "urgent";
 }
 
+// 등급 카드는 배경 틴트 없이 테두리 색상만으로 구분한다.
 const toneClassName = {
-	recommended: "border-sky-200 bg-sky-50/50",
-	special: "border-coral-200 bg-coral-50/70",
-	urgent: "border-amber-200 bg-amber-50/70",
+	organic: "border-border bg-card",
+	recommended: "border-sky-300 bg-card",
+	special: "border-coral-300 bg-card",
+	urgent: "border-amber-300 bg-card",
 } as const;
 
-const toneLabel = {
-	recommended: "추천",
-	special: "스페셜",
-	urgent: "급구",
+// 티어 배지 색을 등급별로 구분해 유료 노출 사다리를 시각화한다.
+const toneBadge = {
+	organic: "neutral",
+	recommended: "primary",
+	special: "primary",
+	urgent: "danger",
 } as const;
+
+// 알려진 급여 단위(시급·일급 등)를 금액과 분리해 금액을 카드 앵커로 강조한다.
+const PAY_UNITS = ["시급", "일급", "주급", "월급", "급여", "연봉"] as const;
+
+function splitPay(pay: string): { amount: string; unit: null | string } {
+	const trimmed = pay.trim();
+	const spaceIndex = trimmed.indexOf(" ");
+	if (spaceIndex === -1) {
+		return { amount: trimmed, unit: null };
+	}
+	const head = trimmed.slice(0, spaceIndex);
+	const isKnownUnit = PAY_UNITS.some((unit) => unit === head);
+	if (!isKnownUnit) {
+		return { amount: trimmed, unit: null };
+	}
+	return { amount: trimmed.slice(spaceIndex + 1), unit: head };
+}
+
+const DESC_MAX_LENGTH = 15;
+
+// 설명은 15자 초과 시 말줄임(…) 처리한다.
+function truncateDesc(desc: string): string {
+	const trimmed = desc.trim();
+	return trimmed.length > DESC_MAX_LENGTH
+		? `${trimmed.slice(0, DESC_MAX_LENGTH)}…`
+		: trimmed;
+}
 
 export function VisualJobCard({
+	active = false,
 	job,
 	onChat,
 	onOpen,
 	tone,
 }: VisualJobCardProps) {
+	const { amount: payAmount, unit: payUnit } = splitPay(job.pay);
+	const shortDesc = truncateDesc(job.desc);
 	return (
 		<article
 			className={cn(
-				"grid min-h-[148px] rounded-lg border bg-card p-2.5 transition-colors",
-				toneClassName[tone]
+				"flex flex-col gap-2 rounded-lg border bg-card p-2 transition-colors",
+				toneClassName[tone],
+				active && "border-coral-400 ring-2 ring-coral-100"
 			)}
 		>
 			<button
-				className="grid cursor-pointer gap-2 border-none bg-transparent p-0 text-left"
+				className="flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
 				onClick={() => onOpen(job)}
 				type="button"
 			>
-				<div className="flex items-start gap-2">
+				<div className="flex items-start gap-3">
 					{job.coverImage ? (
 						<Image
 							alt={job.coverImage.altText || job.coverImage.fileName}
-							className="size-12 shrink-0 rounded-md border border-white object-cover"
-							height={48}
+							className="size-20 shrink-0 rounded-lg border border-white object-cover"
+							height={80}
 							src={job.coverImage.url}
 							unoptimized
-							width={48}
+							width={80}
 						/>
 					) : (
-						<div className="flex size-12 shrink-0 items-center justify-center rounded-md border border-white bg-card font-extrabold text-coral-700 text-xs">
+						<div className="flex size-20 shrink-0 items-center justify-center rounded-lg border border-white bg-secondary font-extrabold text-base text-coral-700">
 							{job.company.slice(0, 2)}
 						</div>
 					)}
-					<div className="min-w-0 flex-1">
-						<div className="flex flex-wrap items-center gap-1">
-							<Badge tone="pending">
-								{job.promotionLabel ?? toneLabel[tone]}
-							</Badge>
-							{job.verified ? (
-								<Badge tone="success">
-									<span className="inline-flex size-3">
-										<CheckIcon />
-									</span>
-									검수
-								</Badge>
-							) : null}
-						</div>
-						<h3 className="mt-1 mb-0 line-clamp-2 font-extrabold text-[13px] leading-snug">
-							{job.company} {job.title}
+					<div className="flex min-w-0 flex-1 flex-col gap-1">
+						<h3 className="m-0 truncate font-extrabold text-[15px] leading-snug">
+							{job.company}
 						</h3>
+						<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
+							<span className="inline-flex size-3 shrink-0">
+								<MapPinIcon />
+							</span>
+							<span className="truncate">
+								{job.location}
+								{job.type ? ` · ${job.type}` : ""}
+							</span>
+						</span>
+						<p className="m-0 truncate text-muted-foreground text-xs leading-relaxed">
+							{shortDesc}
+						</p>
 					</div>
 				</div>
-				<div className="grid gap-1 text-xs">
-					<span className="truncate font-bold text-foreground">{job.pay}</span>
-					<span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground">
-						<span className="inline-flex size-3">
-							<MapPinIcon />
-						</span>
-						<span className="truncate">{job.location}</span>
-					</span>
-					<span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground">
-						<span className="inline-flex size-3">
-							<ShieldIcon />
-						</span>
-						<span className="truncate">연락처 보호</span>
-					</span>
-				</div>
 			</button>
-			<Button
-				className="mt-2 h-8 justify-center"
-				onClick={() => onChat(job)}
-				rightIcon={<Message />}
-				size="sm"
-				variant="secondary"
-			>
-				채팅
-			</Button>
+			<div className="flex items-end justify-between gap-2">
+				<span className="flex min-w-0 items-end gap-1.5">
+					{payUnit ? (
+						<Badge className="shrink-0" tone={toneBadge[tone]}>
+							{payUnit}
+						</Badge>
+					) : null}
+					<span className="truncate font-extrabold text-base text-coral-600 leading-none">
+						{payAmount}
+					</span>
+				</span>
+				<Button
+					className="h-9 shrink-0 justify-center"
+					onClick={() => onChat(job)}
+					rightIcon={<Message />}
+					size="sm"
+					variant="secondary"
+				>
+					채팅
+				</Button>
+			</div>
 		</article>
 	);
 }

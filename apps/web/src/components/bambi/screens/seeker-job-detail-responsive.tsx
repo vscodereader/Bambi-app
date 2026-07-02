@@ -71,7 +71,7 @@ export function SeekerJobDetailResponsive({
 	onStartChat,
 }: SeekerJobDetailResponsiveProps) {
 	return (
-		<div className="mx-auto w-full max-w-[1120px] px-4 py-5 pb-28 md:px-6 md:py-7 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8">
+		<div className="mx-auto w-full px-5 py-5 pb-28 md:max-w-[80%] md:px-6 md:py-7 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8">
 			<main className="min-w-0">
 				<button
 					className="mb-4 cursor-pointer rounded-lg border border-border bg-card px-3 py-2 font-bold text-sm"
@@ -227,7 +227,7 @@ export function SeekerJobDetailResponsive({
 					</div>
 					<Button
 						block
-						className="mt-5"
+						className="mt-5 shadow-none"
 						onClick={onStartChat}
 						rightIcon={<Message />}
 					>
@@ -245,7 +245,12 @@ export function SeekerJobDetailResponsive({
 				</div>
 			</aside>
 			<div className="fixed right-0 bottom-0 left-0 z-30 border-border border-t bg-background p-4 lg:hidden">
-				<Button block onClick={onStartChat} rightIcon={<Message />}>
+				<Button
+					block
+					className="shadow-none"
+					onClick={onStartChat}
+					rightIcon={<Message />}
+				>
 					1:1 채팅 시작
 				</Button>
 			</div>

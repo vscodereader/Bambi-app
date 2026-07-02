@@ -1,10 +1,68 @@
 "use client";
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
 import { getVisualJobExposureSections } from "@/lib/bambi/visual-job-exposure";
-import { DenseJobRow } from "./dense-job-row";
 import { Card } from "./ds";
 import { VisualJobCard } from "./visual-job-card";
+
+const CARD_GRID_CLASS = "grid grid-cols-1 gap-3 lg:grid-cols-3 xl:grid-cols-4";
+
+type ExposureTone = "organic" | "recommended" | "special" | "urgent";
+
+// 등급별 색 액센트 바 — 유료 노출 사다리(스페셜>급구>추천>전체)를 클린하게 시각화한다.
+const accentClassName: Record<ExposureTone, string> = {
+	special: "bg-coral-500",
+	urgent: "bg-amber-500",
+	recommended: "bg-sky-400",
+	organic: "bg-gray-300",
+};
+
+interface ExposureSectionProps {
+	jobs: Job[];
+	meta: string;
+	onChat: (job: Job) => void;
+	onOpen: (job: Job) => void;
+	selectedJobId?: string;
+	title: string;
+	tone: ExposureTone;
+}
+
+function ExposureSection({
+	jobs,
+	meta,
+	onChat,
+	onOpen,
+	selectedJobId,
+	title,
+	tone,
+}: ExposureSectionProps) {
+	return (
+		<section className="grid gap-2">
+			<div className="flex items-center justify-between">
+				<h2 className="m-0 flex items-center gap-2 font-extrabold text-base">
+					<span className={cn("h-4 w-1 rounded-full", accentClassName[tone])} />
+					{title}
+				</h2>
+				<span className="font-semibold text-muted-foreground text-xs">
+					{jobs.length}개 · {meta}
+				</span>
+			</div>
+			<div className={CARD_GRID_CLASS}>
+				{jobs.map((job) => (
+					<VisualJobCard
+						active={job.id === selectedJobId}
+						job={job}
+						key={`${tone}-${job.id}`}
+						onChat={onChat}
+						onOpen={onOpen}
+						tone={tone}
+					/>
+				))}
+			</div>
+		</section>
+	);
+}
 
 interface VisualJobExposureSectionsProps {
 	jobs: Job[];
@@ -39,87 +97,44 @@ export function VisualJobExposureSections({
 	return (
 		<div className="grid gap-5">
 			{visualSections.special.length > 0 ? (
-				<section className="grid gap-2">
-					<div className="flex items-center justify-between">
-						<h2 className="m-0 font-extrabold text-base">스페셜 채용</h2>
-						<span className="font-semibold text-muted-foreground text-xs">
-							{visualSections.special.length}개 · 프리미엄 노출
-						</span>
-					</div>
-					<div className="grid grid-cols-2 gap-2 md:grid-cols-3 2xl:grid-cols-4">
-						{visualSections.special.map((job) => (
-							<VisualJobCard
-								job={job}
-								key={`special-${job.id}`}
-								onChat={onChat}
-								onOpen={onOpen}
-								tone="special"
-							/>
-						))}
-					</div>
-				</section>
+				<ExposureSection
+					jobs={visualSections.special}
+					meta="프리미엄 노출"
+					onChat={onChat}
+					onOpen={onOpen}
+					title="스페셜 채용"
+					tone="special"
+				/>
 			) : null}
 			{visualSections.urgent.length > 0 ? (
-				<section className="grid gap-2">
-					<div className="flex items-center justify-between">
-						<h2 className="m-0 font-extrabold text-base">급구 채용</h2>
-						<span className="font-semibold text-muted-foreground text-xs">
-							{visualSections.urgent.length}개 · 최근 끌어올림
-						</span>
-					</div>
-					<div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-						{visualSections.urgent.map((job) => (
-							<VisualJobCard
-								job={job}
-								key={`urgent-${job.id}`}
-								onChat={onChat}
-								onOpen={onOpen}
-								tone="urgent"
-							/>
-						))}
-					</div>
-				</section>
+				<ExposureSection
+					jobs={visualSections.urgent}
+					meta="최근 끌어올림"
+					onChat={onChat}
+					onOpen={onOpen}
+					title="급구 채용"
+					tone="urgent"
+				/>
 			) : null}
 			{visualSections.recommended.length > 0 ? (
-				<section className="grid gap-2">
-					<div className="flex items-center justify-between">
-						<h2 className="m-0 font-extrabold text-base">추천 채용</h2>
-						<span className="font-semibold text-muted-foreground text-xs">
-							{visualSections.recommended.length}개 · 상단 추천
-						</span>
-					</div>
-					<div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-						{visualSections.recommended.map((job) => (
-							<VisualJobCard
-								job={job}
-								key={`recommended-${job.id}`}
-								onChat={onChat}
-								onOpen={onOpen}
-								tone="recommended"
-							/>
-						))}
-					</div>
-				</section>
+				<ExposureSection
+					jobs={visualSections.recommended}
+					meta="상단 추천"
+					onChat={onChat}
+					onOpen={onOpen}
+					title="추천 채용"
+					tone="recommended"
+				/>
 			) : null}
-			<section className="grid gap-2">
-				<div className="flex items-center justify-between">
-					<h2 className="m-0 font-extrabold text-base">전체 공고</h2>
-					<span className="font-semibold text-muted-foreground text-xs">
-						{visualSections.organic.length}개 · 최신순
-					</span>
-				</div>
-				<div className="grid gap-2">
-					{visualSections.organic.map((job) => (
-						<DenseJobRow
-							active={job.id === selectedJobId}
-							job={job}
-							key={`organic-${job.id}`}
-							onChat={onChat}
-							onOpen={onOpen}
-						/>
-					))}
-				</div>
-			</section>
+			<ExposureSection
+				jobs={visualSections.organic}
+				meta="최신순"
+				onChat={onChat}
+				onOpen={onOpen}
+				selectedJobId={selectedJobId}
+				title="전체 공고"
+				tone="organic"
+			/>
 		</div>
 	);
 }

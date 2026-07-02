@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonVariants } from "@bambi-app/ui/components/button";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import Link from "next/link";
@@ -22,6 +23,7 @@ const DEFAULT_NAV_ITEMS: NavItem[] = [
 interface ResponsiveAppShellProps {
 	children: ReactNode;
 	className?: string;
+	headerSlot?: ReactNode;
 	navItems?: readonly NavItem[];
 	showDesktopNav?: boolean;
 	variant?: "public" | "seeker" | "employer" | "moderator";
@@ -30,6 +32,7 @@ interface ResponsiveAppShellProps {
 export function ResponsiveAppShell({
 	children,
 	className,
+	headerSlot,
 	navItems = DEFAULT_NAV_ITEMS,
 	showDesktopNav = true,
 	variant = "public",
@@ -39,7 +42,7 @@ export function ResponsiveAppShell({
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
 				<header className="sticky top-0 z-30 hidden border-border border-b bg-background/95 backdrop-blur md:block">
-					<div className="mx-auto flex h-16 max-w-[1180px] items-center gap-7 px-6">
+					<div className="mx-auto flex h-16 max-w-[80%] items-center gap-7 px-6">
 						<Link aria-label="밤비 홈" className="no-underline" href="/">
 							<Logo lang="ko" size="md" />
 						</Link>
@@ -55,6 +58,7 @@ export function ResponsiveAppShell({
 							))}
 						</nav>
 						<div className="ml-auto flex items-center gap-2">
+							{headerSlot}
 							<span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-green-50 px-3 font-bold text-green-600 text-xs">
 								<span className="inline-flex size-3.5">
 									<ShieldIcon />
@@ -63,10 +67,11 @@ export function ResponsiveAppShell({
 							</span>
 							<Link
 								className={cn(
-									"inline-flex h-10 items-center rounded-lg px-4 font-bold text-sm no-underline",
-									isPublic
-										? "bg-ink-800 text-white"
-										: "border border-border bg-card text-foreground"
+									buttonVariants({
+										variant: isPublic ? "default" : "outline",
+									}),
+									"h-10 px-4 font-bold text-sm no-underline",
+									isPublic && "bg-ink-800 text-white hover:bg-ink-800/90"
 								)}
 								href={(isPublic ? "/login" : "/seeker/me") as Route}
 							>
@@ -101,7 +106,10 @@ export function ResponsiveAppShell({
 				</div>
 			</header>
 			<main
-				className={cn("mx-auto min-h-[calc(100dvh-56px)] w-full", className)}
+				className={cn(
+					"mx-auto flex min-h-[calc(100dvh-56px)] w-full flex-col",
+					className
+				)}
 			>
 				{children}
 			</main>
