@@ -3,6 +3,13 @@
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
 import { useState } from "react";
@@ -10,6 +17,8 @@ import { toast } from "sonner";
 
 import { FieldError, FormError } from "@/components/bambi/form-message";
 import { orpc } from "@/utils/orpc";
+
+const selectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
 
 interface TeamFormOrganization {
 	displayName: string;
@@ -185,22 +194,38 @@ export function TeamForm({ onCancel, organizations, team }: TeamFormProps) {
 			<div className="mt-4 grid gap-3 sm:grid-cols-3">
 				<div className="space-y-1.5">
 					<Label htmlFor={fieldIds.organization}>조직</Label>
-					<select
-						className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
+					<Select
 						disabled={isEditMode}
-						id={fieldIds.organization}
-						onChange={(event) => setOrganizationId(event.target.value)}
+						items={organizations.map((organization) => ({
+							label: organization.displayName,
+							value: organization.organizationId,
+						}))}
+						onValueChange={(value) => setOrganizationId(value ?? "")}
 						value={organizationId}
 					>
-						{organizations.map((organization) => (
-							<option
-								key={organization.organizationId}
-								value={organization.organizationId}
-							>
-								{organization.displayName}
-							</option>
-						))}
-					</select>
+						<SelectTrigger
+							aria-describedby={
+								showValidation && organizationError
+									? fieldIds.organizationError
+									: undefined
+							}
+							aria-invalid={showValidation && Boolean(organizationError)}
+							className={selectTriggerClassName}
+							id={fieldIds.organization}
+						>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{organizations.map((organization) => (
+								<SelectItem
+									key={organization.organizationId}
+									value={organization.organizationId}
+								>
+									{organization.displayName}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
 					<FieldError
 						id={fieldIds.organizationError}
 						message={showValidation ? organizationError : ""}

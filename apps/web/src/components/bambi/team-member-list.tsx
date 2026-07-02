@@ -3,6 +3,13 @@
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MailPlus } from "lucide-react";
 import { useState } from "react";
@@ -32,6 +39,8 @@ interface TeamMemberListProps {
 	organization: TeamMemberListOrganization;
 	teams: TeamMemberListTeam[];
 }
+
+const selectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
 
 const roleLabels: Record<OrganizationRole, string> = {
 	manager: "매니저",
@@ -183,33 +192,51 @@ export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 					</div>
 					<div className="space-y-1.5">
 						<Label htmlFor="invite-role">권한</Label>
-						<select
-							className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
-							id="invite-role"
-							onChange={(event) =>
-								setRole(event.target.value as OrganizationRole)
-							}
+						<Select
+							items={roleLabels}
+							onValueChange={(value) => setRole(value as OrganizationRole)}
 							value={role}
 						>
-							<option value="staff">스태프</option>
-							<option value="manager">매니저</option>
-						</select>
+							<SelectTrigger
+								className={selectTriggerClassName}
+								id="invite-role"
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="staff">스태프</SelectItem>
+								<SelectItem value="manager">매니저</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 					<div className="space-y-1.5">
 						<Label htmlFor="invite-team">팀</Label>
-						<select
-							className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
-							id="invite-team"
-							onChange={(event) => setTeamId(event.target.value)}
+						<Select
+							items={[
+								{ label: "전체 조직", value: "" },
+								...teams.map((team) => ({
+									label: team.displayName,
+									value: team.teamId,
+								})),
+							]}
+							onValueChange={(value) => setTeamId(value ?? "")}
 							value={teamId}
 						>
-							<option value="">전체 조직</option>
-							{teams.map((team) => (
-								<option key={team.teamId} value={team.teamId}>
-									{team.displayName}
-								</option>
-							))}
-						</select>
+							<SelectTrigger
+								className={selectTriggerClassName}
+								id="invite-team"
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="">전체 조직</SelectItem>
+								{teams.map((team) => (
+									<SelectItem key={team.teamId} value={team.teamId}>
+										{team.displayName}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
 					</div>
 					<Button disabled={inviteMutation.isPending} type="submit">
 						<MailPlus aria-hidden="true" data-icon="inline-start" />
@@ -246,23 +273,30 @@ export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 							</div>
 							{organization.canManageOrganization &&
 							member.kind === "active" ? (
-								<select
-									aria-label={`${getMemberLabel(member)} 권한 변경`}
-									className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
+								<Select
 									disabled={setRoleMutation.isPending}
-									onChange={(event) =>
+									items={roleLabels}
+									onValueChange={(value) =>
 										setRoleMutation.mutate({
 											memberId: member.id,
 											organizationId: organization.organizationId,
-											role: event.target.value as OrganizationRole,
+											role: value as OrganizationRole,
 										})
 									}
 									value={member.role}
 								>
-									<option value="owner">소유자</option>
-									<option value="manager">매니저</option>
-									<option value="staff">스태프</option>
-								</select>
+									<SelectTrigger
+										aria-label={`${getMemberLabel(member)} 권한 변경`}
+										className={selectTriggerClassName}
+									>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="owner">소유자</SelectItem>
+										<SelectItem value="manager">매니저</SelectItem>
+										<SelectItem value="staff">스태프</SelectItem>
+									</SelectContent>
+								</Select>
 							) : (
 								<span className="text-muted-foreground text-xs">
 									권한 변경 불가

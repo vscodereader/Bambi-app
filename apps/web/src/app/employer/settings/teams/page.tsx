@@ -3,6 +3,13 @@
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
@@ -16,6 +23,8 @@ import Loader from "@/components/loader";
 import { authClient } from "@/lib/auth-client";
 import { formatDateTime, formatNullable } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
+
+const selectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
 
 const getErrorCode = (error: Error | null): string | undefined =>
 	error && "code" in error && typeof error.code === "string"
@@ -200,24 +209,34 @@ export default function EmployerTeamSettingsPage() {
 					<section aria-labelledby="team-scope" className="flex flex-col gap-3">
 						<div className="grid gap-2 sm:max-w-sm">
 							<Label htmlFor="team-scope-organization">관리 조직</Label>
-							<select
-								className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
-								id="team-scope-organization"
-								onChange={(event) => {
-									setSelectedOrganizationId(event.target.value);
+							<Select
+								items={organizations.map((organization) => ({
+									label: organization.displayName,
+									value: organization.organizationId,
+								}))}
+								onValueChange={(value) => {
+									setSelectedOrganizationId(value ?? "");
 									setEditingTeamId(null);
 								}}
 								value={selectedOrganizationId}
 							>
-								{organizations.map((organization) => (
-									<option
-										key={organization.organizationId}
-										value={organization.organizationId}
-									>
-										{organization.displayName}
-									</option>
-								))}
-							</select>
+								<SelectTrigger
+									className={selectTriggerClassName}
+									id="team-scope-organization"
+								>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{organizations.map((organization) => (
+										<SelectItem
+											key={organization.organizationId}
+											value={organization.organizationId}
+										>
+											{organization.displayName}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</div>
 					</section>
 
