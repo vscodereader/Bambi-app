@@ -126,7 +126,8 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 				organizationName: orgName.trim() || displayName,
 			});
 			queryClient.invalidateQueries();
-			router.push("/employer/pending" as Route);
+			// 미검증 구인자는 /employer 레이아웃이 승인 대기 화면을 인라인 렌더한다.
+			router.push("/employer" as Route);
 			return;
 		}
 		await client.bambi.onboarding.createJobSeekerProfile({ displayName });
