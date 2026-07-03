@@ -11,7 +11,7 @@ import { useMemo, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { client, queryClient } from "@/utils/orpc";
 import { Badge, Button, Card, Input, Logo } from "../ds";
-import { ShieldIcon } from "../icons";
+import { PhoneIcon, ShieldIcon } from "../icons";
 
 type AuthMode = "sign-in" | "sign-up";
 type SignupRole = "job_seeker" | "employer";
@@ -40,7 +40,63 @@ function Spinner() {
 	);
 }
 
-export function AuthScreen() {
+// 비회원(휴대폰 인증) 진입 — 게스트 쿠키를 세팅하고 공고 목록으로 이동한다.
+// 지금은 실제 인증 없이 버튼만으로 게스트 열람을 허용한다.
+function GuestBrowseButton() {
+	const router = useRouter();
+	const [isEntering, setIsEntering] = useState(false);
+
+	const enterAsGuest = async () => {
+		setIsEntering(true);
+		try {
+			await fetch("/api/guest", { method: "POST" });
+			router.push("/seeker" as Route);
+			router.refresh();
+		} finally {
+			setIsEntering(false);
+		}
+	};
+
+	return (
+		<div className="mt-5 flex flex-col gap-3">
+			<div className="flex items-center gap-3">
+				<span className="h-px flex-1 bg-border" />
+				<span className="text-muted-foreground text-xs">또는</span>
+				<span className="h-px flex-1 bg-border" />
+			</div>
+			<Button
+				block
+				disabled={isEntering}
+				leftIcon={<PhoneIcon />}
+				onClick={() => {
+					enterAsGuest().catch(() => setIsEntering(false));
+				}}
+				variant="secondary"
+			>
+				{isEntering ? "입장 중" : "휴대폰 인증"}
+			</Button>
+			<p className="m-0 text-center text-muted-foreground text-xs">
+				비회원은 공고 목록만 볼 수 있어요. 상세 열람·채팅은 회원가입이 필요해요.
+			</p>
+		</div>
+	);
+}
+
+// embedded=true(게이트 화면 내부 삽입)일 때는 부모가 배경·여백을 제공하므로 전체
+// 뷰포트 높이/센터링을 벗겨 상단에 컴팩트하게 붙는다. false(독립 /login)일 때만 풀높이 센터.
+const authWrapperClass = (embedded: boolean) =>
+	cn(
+		"text-foreground",
+		embedded ? "w-full" : "min-h-[100dvh] bg-secondary px-4 py-6"
+	);
+
+const authGridClass = (embedded: boolean) =>
+	cn(
+		"mx-auto grid w-full max-w-[980px] gap-6 lg:grid-cols-[minmax(0,1fr)_390px]",
+		embedded ? "items-start" : "min-h-[calc(100dvh-48px)] items-center"
+	);
+
+export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const initialMode = useMemo(
@@ -159,8 +215,8 @@ export function AuthScreen() {
 	};
 
 	return (
-		<div className="min-h-[100dvh] bg-secondary px-4 py-6 text-foreground">
-			<div className="mx-auto grid min-h-[calc(100dvh-48px)] w-full max-w-[980px] items-center gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
+		<div className={authWrapperClass(embedded)}>
+			<div className={authGridClass(embedded)}>
 				<section className="hidden lg:block">
 					<Logo lang="ko" size="lg" />
 					<div className="mt-6">
@@ -172,7 +228,8 @@ export function AuthScreen() {
 						밤비 안에서 안전하게
 					</h1>
 					<p className="m-0 max-w-[560px] text-muted-foreground leading-relaxed">
-						공고를 둘러보고, 연락처 걱정 없이 채팅으로 이어가세요.
+						번호 노출 걱정 없이 마음에 드는 공고에 바로 채팅하고, 면접까지
+						안전하게 이어가세요.
 					</p>
 				</section>
 				<Card className="rounded-lg" pad="lg" tone="outline">
@@ -312,6 +369,7 @@ export function AuthScreen() {
 							</button>
 						</p>
 					</form>
+					<GuestBrowseButton />
 				</Card>
 			</div>
 		</div>

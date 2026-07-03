@@ -12,6 +12,9 @@ describe("resolveGate", () => {
 	it("lets logged-in users pass", () => {
 		expect(resolveGate({ pathname: "/employer", ...authed }).type).toBe("next");
 	});
+	it("lets /login pass without re-gating to /welcome", () => {
+		expect(resolveGate({ pathname: "/login", ...fresh }).type).toBe("next");
+	});
 	it("sends fresh visitor to /welcome", () => {
 		expect(resolveGate({ pathname: "/seeker", ...fresh })).toEqual({
 			type: "redirect",
