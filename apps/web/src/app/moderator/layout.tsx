@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { ModeratorShell } from "@/components/bambi/persona-nav";
 import { ResponsiveAppShell } from "@/components/bambi/responsive-shell";
 import { ModProvider } from "@/components/bambi/screens/moderator-context";
-import { enforceRoleRouting } from "@/lib/bambi/require-role";
+import { enforceModeratorAccess } from "@/lib/bambi/require-role";
 
 const MODERATOR_NAV_ITEMS = [
 	{ href: "/moderator", label: "검수 큐" },
@@ -17,7 +17,7 @@ export default async function ModeratorLayout({
 }: {
 	children: ReactNode;
 }) {
-	await enforceRoleRouting();
+	await enforceModeratorAccess();
 	return (
 		<ResponsiveAppShell navItems={MODERATOR_NAV_ITEMS} variant="moderator">
 			<ModProvider>

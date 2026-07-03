@@ -1,6 +1,6 @@
-import { enforceRoleRouting } from "@/lib/bambi/require-role";
+import { redirectToRoleHome } from "@/lib/bambi/require-role";
 
 export default async function Home() {
-	await enforceRoleRouting();
+	await redirectToRoleHome();
 	return null;
 }

@@ -9,7 +9,9 @@ import { Button } from "@bambi-app/ui/components/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
 
-export default function EmployerPendingPage() {
+// 미검증 구인자에게 보여주는 승인 대기/반려 화면. /employer 레이아웃이 미검증일 때
+// children 대신 이 컴포넌트를 렌더한다(리다이렉트 없이 인라인) — 무한 리다이렉트 방지.
+export function EmployerPending() {
 	const queryClient = useQueryClient();
 	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
 	const orgProfile = mineQuery.data?.employerOrganizationProfiles?.[0] ?? null;
