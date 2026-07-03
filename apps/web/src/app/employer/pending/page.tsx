@@ -26,7 +26,7 @@ export default function EmployerPendingPage() {
 	);
 
 	return (
-		<div className="mx-auto flex w-full max-w-[560px] flex-col gap-4 px-4 py-10">
+		<div className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 py-10">
 			{status === "rejected" ? (
 				<Alert variant="destructive">
 					<AlertTitle>가입이 반려되었어요</AlertTitle>

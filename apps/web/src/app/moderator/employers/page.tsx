@@ -11,6 +11,7 @@ import { Input } from "@bambi-app/ui/components/input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/bambi/empty-state";
 import { orpc } from "@/utils/orpc";
 
 export default function ModeratorEmployersPage() {
@@ -33,12 +34,13 @@ export default function ModeratorEmployersPage() {
 	const employers = pendingQuery.data ?? [];
 
 	return (
-		<div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 px-4 py-6">
+		<div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
 			<h1 className="m-0 font-extrabold text-2xl">업소 승인 대기</h1>
 			{employers.length === 0 ? (
-				<p className="text-muted-foreground text-sm">
-					대기 중인 업소가 없어요.
-				</p>
+				<EmptyState
+					description="새로운 가입 신청이 들어오면 이곳에서 심사할 수 있어요."
+					title="대기 중인 업소가 없어요"
+				/>
 			) : null}
 			{employers.map((employer) => (
 				<Card key={employer.organizationId}>
