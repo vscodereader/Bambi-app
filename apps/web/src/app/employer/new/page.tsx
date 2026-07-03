@@ -846,7 +846,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 						</div>
 					)}
 				</form>
-				<aside className="hidden w-80 shrink-0 xl:sticky xl:top-6 xl:block">
+				<aside className="hidden w-80 shrink-0 xl:sticky xl:top-24 xl:block">
 					<div className="flex flex-col gap-2">
 						<p className="font-medium text-muted-foreground text-xs">
 							작성 중 실시간 미리보기
