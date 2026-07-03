@@ -12,6 +12,7 @@ import {
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
 import { scan } from "@/lib/bambi/scanner";
 import type {
@@ -1446,17 +1447,20 @@ export function QueueActionBar({
 					))}
 				</div>
 			</div>
-			{pendingAction ? (
-				<BulkConfirmSheet
-					config={pendingAction}
-					count={count}
-					isApplying={isApplying}
-					onCancel={() => setPendingAction(null)}
-					onConfirm={confirm}
-					reason={reason}
-					setReason={setReason}
-				/>
-			) : null}
+			{pendingAction
+				? createPortal(
+						<BulkConfirmSheet
+							config={pendingAction}
+							count={count}
+							isApplying={isApplying}
+							onCancel={() => setPendingAction(null)}
+							onConfirm={confirm}
+							reason={reason}
+							setReason={setReason}
+						/>,
+						document.body
+					)
+				: null}
 		</div>
 	);
 }
