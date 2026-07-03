@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMarketplaceJobs } from "@/lib/bambi/api-jobs";
 import type { Job } from "@/lib/bambi/types";
+import { useBambiAuth } from "../auth-client-provider";
 import {
 	MarketplaceDiscoveryAxisChips,
 	MarketplaceDiscoveryTabs,
@@ -18,6 +19,7 @@ import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 
 export function SeekerMarketplaceScreen() {
 	const router = useRouter();
+	const { isGuest } = useBambiAuth();
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	// 필터는 헤더 검색창과 공유하기 위해 SeekerAppShell 컨텍스트에서 가져온다
 	const { filters, setFilters } = useSeekerFilters();
@@ -29,7 +31,12 @@ export function SeekerMarketplaceScreen() {
 	);
 
 	// 카드를 누르면 우측 드로어 미리보기 없이 상세 페이지로 바로 이동한다.
+	// 게스트는 상세 대신 가입 유도 화면으로 보낸다.
 	const openJob = (job: Job) => {
+		if (isGuest) {
+			router.push("/welcome?signup");
+			return;
+		}
 		router.push(`/seeker/jobs/${job.id}` as Route);
 	};
 
