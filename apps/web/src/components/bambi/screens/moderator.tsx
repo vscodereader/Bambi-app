@@ -1307,17 +1307,17 @@ function ActionBtn({
 	tone?: "danger" | "success";
 	onClick: () => void;
 }) {
-	let color = "text-white";
+	let toneClass = "bg-secondary text-foreground";
 	if (tone === "danger") {
-		color = "text-coral-400";
+		toneClass = "bg-coral-500 text-white";
 	} else if (tone === "success") {
-		color = "text-green-500";
+		toneClass = "bg-green-600 text-white";
 	}
 	return (
 		<button
 			className={cn(
-				"h-[34px] cursor-pointer whitespace-nowrap rounded-[10px] border border-white/[0.14] bg-white/[0.08] px-[11px] font-bold text-[12.5px]",
-				color,
+				"h-[34px] cursor-pointer whitespace-nowrap rounded-[10px] px-[11px] font-bold text-[12.5px]",
+				toneClass,
 				disabled && "cursor-not-allowed opacity-50"
 			)}
 			disabled={disabled}
@@ -1431,8 +1431,8 @@ export function QueueActionBar({
 
 	return (
 		<div className="px-4 pt-2 pb-1">
-			<div className="flex items-center gap-2 rounded-2xl bg-ink-800 px-3 py-2.5 shadow-lg">
-				<span className="whitespace-nowrap font-bold text-[12.5px] text-white">
+			<div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-3 py-2.5 shadow-[var(--shadow-card)]">
+				<span className="whitespace-nowrap font-bold text-[12.5px] text-foreground">
 					{count}개 선택됨
 				</span>
 				<div className="ml-auto flex min-w-0 gap-1.5 overflow-x-auto">
