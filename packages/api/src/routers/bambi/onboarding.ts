@@ -16,6 +16,7 @@ import {
 	assertCanManageEmployerProfile,
 	assertCanUpdateOwnBambiProfile,
 	type BambiProfileRole,
+	deriveEmployerApprovalStatus,
 	type OrganizationRole,
 } from "../../services/bambi-onboarding";
 
@@ -215,6 +216,43 @@ export const onboardingRouter = {
 					teamId: scope.teamId ?? null,
 				};
 			}),
+		};
+	}),
+
+	getMyRouting: protectedProcedure.handler(async ({ context }) => {
+		const userId = context.session.user.id;
+		const [profile] = await db
+			.select({ role: bambiProfile.role })
+			.from(bambiProfile)
+			.where(eq(bambiProfile.userId, userId))
+			.limit(1);
+
+		if (!profile) {
+			return { role: null, employerApprovalStatus: "none" as const };
+		}
+
+		if (profile.role !== "employer") {
+			return { role: profile.role, employerApprovalStatus: "none" as const };
+		}
+
+		const orgProfiles = await db
+			.select({
+				verificationStatus: employerOrganizationProfile.verificationStatus,
+			})
+			.from(employerOrganizationProfile)
+			.innerJoin(
+				member,
+				and(
+					eq(member.organizationId, employerOrganizationProfile.organizationId),
+					eq(member.userId, userId)
+				)
+			);
+
+		return {
+			role: profile.role,
+			employerApprovalStatus: deriveEmployerApprovalStatus(
+				orgProfiles.map((row) => row.verificationStatus)
+			),
 		};
 	}),
 
