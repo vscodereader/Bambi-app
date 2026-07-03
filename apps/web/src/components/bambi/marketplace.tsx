@@ -136,12 +136,12 @@ export function MarketplaceFilterControls({
 					최소 시급
 				</span>
 				<Input
-					defaultValue={String(filters.minimumPay || "")}
 					onChange={(event) =>
 						update({ minimumPay: Number(event.target.value || 0) })
 					}
 					placeholder="예: 17000"
 					type="number"
+					value={String(filters.minimumPay || "")}
 				/>
 			</div>
 			<label
