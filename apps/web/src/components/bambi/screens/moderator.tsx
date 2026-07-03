@@ -578,6 +578,7 @@ export function QueueDetail({
 				</Button>
 				<Button
 					block
+					className="shadow-none"
 					onClick={() => onResolve(item.id, "approve")}
 					size="lg"
 					variant="primary"
