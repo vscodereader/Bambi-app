@@ -76,3 +76,24 @@ export const assertCanManageEmployerProfile = ({
 		message: "Organization owner or admin role is required.",
 	});
 };
+
+export type EmployerApprovalStatus =
+	| "none"
+	| "pending"
+	| "verified"
+	| "rejected";
+
+export const deriveEmployerApprovalStatus = (
+	statuses: string[]
+): EmployerApprovalStatus => {
+	if (statuses.includes("verified")) {
+		return "verified";
+	}
+	if (statuses.includes("pending")) {
+		return "pending";
+	}
+	if (statuses.includes("rejected")) {
+		return "rejected";
+	}
+	return "none";
+};
