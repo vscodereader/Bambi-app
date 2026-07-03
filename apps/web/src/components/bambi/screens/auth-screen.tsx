@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -9,9 +10,30 @@ import { Badge, Button, Card, Input, Logo } from "../ds";
 import { ShieldIcon } from "../icons";
 
 type AuthMode = "sign-in" | "sign-up";
+interface Notice {
+	text: string;
+	tone: "error" | "info";
+}
 
 const getInitialMode = (mode: string | null): AuthMode =>
 	mode === "sign-up" ? "sign-up" : "sign-in";
+
+function TrustBadge() {
+	return (
+		<Badge tone="success">
+			<span className="inline-flex size-3.5">
+				<ShieldIcon />
+			</span>
+			면접 전 연락처 보호
+		</Badge>
+	);
+}
+
+function Spinner() {
+	return (
+		<span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+	);
+}
 
 export function AuthScreen() {
 	const router = useRouter();
@@ -24,22 +46,25 @@ export function AuthScreen() {
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("seeker@bambi.dev");
 	const [password, setPassword] = useState("Bambi1234!");
-	const [message, setMessage] = useState<null | string>(null);
+	const [notice, setNotice] = useState<Notice | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const isSignUp = mode === "sign-up";
 	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
 	const submitLabel = isSignUp ? "회원가입" : "로그인";
 
 	const handleSubmit = async () => {
-		setMessage(null);
+		setNotice(null);
 
 		if (isSignUp && name.trim().length < 2) {
-			setMessage("이름을 2자 이상 입력해 주세요.");
+			setNotice({ text: "이름을 2자 이상 입력해 주세요.", tone: "error" });
 			return;
 		}
 
 		if (!email.includes("@") || password.length < 8) {
-			setMessage("이메일과 8자 이상 비밀번호를 확인해 주세요.");
+			setNotice({
+				text: "이메일과 8자 이상 비밀번호를 확인해 주세요.",
+				tone: "error",
+			});
 			return;
 		}
 
@@ -48,11 +73,13 @@ export function AuthScreen() {
 			onError: (error: {
 				error: { message?: string; statusText?: string };
 			}) => {
-				setMessage(
-					error.error.message ??
+				setNotice({
+					text:
+						error.error.message ??
 						error.error.statusText ??
-						"요청을 처리하지 못했어요."
-				);
+						"요청을 처리하지 못했어요.",
+					tone: "error",
+				});
 			},
 			onSuccess: () => {
 				queryClient.invalidateQueries();
@@ -81,17 +108,26 @@ export function AuthScreen() {
 		setIsSubmitting(false);
 	};
 
+	const toggleMode = () => {
+		setNotice(null);
+		setMode(isSignUp ? "sign-in" : "sign-up");
+	};
+
+	const handleForgotPassword = () => {
+		setNotice({
+			text: "비밀번호 재설정 기능은 곧 제공될 예정이에요.",
+			tone: "info",
+		});
+	};
+
 	return (
 		<div className="min-h-[100dvh] bg-secondary px-4 py-6 text-foreground">
 			<div className="mx-auto grid min-h-[calc(100dvh-48px)] w-full max-w-[980px] items-center gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
 				<section className="hidden lg:block">
 					<Logo lang="ko" size="lg" />
-					<Badge className="mt-6" tone="success">
-						<span className="inline-flex size-3.5">
-							<ShieldIcon />
-						</span>
-						면접 전 연락처 보호
-					</Badge>
+					<div className="mt-6">
+						<TrustBadge />
+					</div>
 					<h1 className="mt-5 mb-3 font-extrabold text-[42px] leading-tight">
 						공고 탐색부터 채팅까지
 						<br />
@@ -103,8 +139,9 @@ export function AuthScreen() {
 					</p>
 				</section>
 				<Card className="rounded-lg" pad="lg" tone="outline">
-					<div className="mb-5 lg:hidden">
+					<div className="mb-5 flex flex-col items-start gap-3 lg:hidden">
 						<Logo lang="ko" size="md" />
+						<TrustBadge />
 					</div>
 					<h2 className="m-0 font-extrabold text-2xl">{title}</h2>
 					<p className="mt-2 mb-5 text-muted-foreground text-sm">
@@ -139,8 +176,21 @@ export function AuthScreen() {
 								value={email}
 							/>
 						</label>
-						<label className="grid gap-2" htmlFor="auth-password">
-							<span className="font-bold text-sm">비밀번호</span>
+						<div className="grid gap-2">
+							<div className="flex items-center justify-between gap-2">
+								<label className="font-bold text-sm" htmlFor="auth-password">
+									비밀번호
+								</label>
+								{isSignUp ? null : (
+									<button
+										className="font-semibold text-muted-foreground text-xs underline-offset-2 hover:text-foreground hover:underline"
+										onClick={handleForgotPassword}
+										type="button"
+									>
+										비밀번호를 잊으셨나요?
+									</button>
+								)}
+							</div>
 							<Input
 								autoComplete={isSignUp ? "new-password" : "current-password"}
 								id="auth-password"
@@ -148,30 +198,40 @@ export function AuthScreen() {
 								type="password"
 								value={password}
 							/>
-						</label>
-						{message ? (
-							<div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 font-semibold text-amber-800 text-sm">
-								{message}
+						</div>
+						{notice ? (
+							<div
+								className={cn(
+									"rounded-lg border px-4 py-3 font-semibold text-sm",
+									notice.tone === "error"
+										? "border-destructive/30 bg-destructive/10 text-destructive"
+										: "border-border bg-secondary text-muted-foreground"
+								)}
+								role={notice.tone === "error" ? "alert" : "status"}
+							>
+								{notice.text}
 							</div>
 						) : null}
 						<Button
 							block
 							className="shadow-none"
 							disabled={isSubmitting}
-							onClick={handleSubmit}
+							leftIcon={isSubmitting ? <Spinner /> : undefined}
+							type="submit"
 						>
 							{isSubmitting ? "처리 중" : submitLabel}
 						</Button>
-						<Button
-							block
-							onClick={() => {
-								setMessage(null);
-								setMode(isSignUp ? "sign-in" : "sign-up");
-							}}
-							variant="secondary"
-						>
-							{isSignUp ? "이미 계정이 있어요" : "새 계정 만들기"}
-						</Button>
+						<p className="m-0 text-center text-muted-foreground text-sm">
+							{isSignUp ? "이미 계정이 있으신가요? " : "밤비가 처음이신가요? "}
+							<button
+								className="font-bold text-primary underline-offset-2 hover:underline disabled:opacity-50"
+								disabled={isSubmitting}
+								onClick={toggleMode}
+								type="button"
+							>
+								{isSignUp ? "로그인" : "회원가입"}
+							</button>
+						</p>
 					</form>
 				</Card>
 			</div>
