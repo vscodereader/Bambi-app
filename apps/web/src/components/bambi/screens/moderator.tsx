@@ -1311,7 +1311,7 @@ function ActionBtn({
 	if (tone === "danger") {
 		toneClass = "bg-coral-500 text-white";
 	} else if (tone === "success") {
-		toneClass = "bg-green-600 text-white";
+		toneClass = "bg-primary text-primary-foreground";
 	}
 	return (
 		<button
@@ -1383,6 +1383,7 @@ function BulkConfirmSheet({
 					</Button>
 					<Button
 						block
+						className="shadow-none"
 						disabled={!canConfirm}
 						onClick={onConfirm}
 						size="lg"
