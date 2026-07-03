@@ -1376,7 +1376,7 @@ function BulkConfirmSheet({
 					placeholder={config.defaultReason}
 					value={reason}
 				/>
-				<div className="mt-4 flex gap-2.5">
+				<div className="mt-4 grid grid-cols-2 gap-2.5">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
 					</Button>
