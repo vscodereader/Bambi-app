@@ -119,7 +119,7 @@ export default function SeekerJobChatPreflightPage() {
 		}
 
 		if (!hasJobSeekerProfile) {
-			router.push("/onboarding" as Route);
+			router.push("/welcome" as Route);
 			return;
 		}
 

@@ -3,11 +3,9 @@
 // 밤비 — 모바일 하단 탭바(탐색·채팅·수다방·내 정보). 공개 마켓과 구직자 셸이 공유한다.
 // 구인자 계정으로 로그인한 경우 채팅과 수다방 사이에 구인자 관리 탭을 노출한다.
 
-import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
-import { orpc } from "@/utils/orpc";
+import { useBambiAuth } from "./auth-client-provider";
 import { BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
 import {
@@ -21,13 +19,8 @@ import {
 export function MobileTabBar({ homeHref }: { homeHref: string }) {
 	const path = usePathname();
 	const router = useRouter();
-	const session = authClient.useSession();
-	const isSignedIn = Boolean(session.data?.user);
-	const mineQuery = useQuery({
-		...orpc.bambi.onboarding.getMine.queryOptions(),
-		enabled: isSignedIn,
-	});
-	const isEmployer = mineQuery.data?.bambiProfile?.role === "employer";
+	const { role } = useBambiAuth();
+	const isEmployer = role === "employer";
 	let value = "home";
 	if (path === "/seeker/me") {
 		value = "me";

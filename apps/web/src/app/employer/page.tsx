@@ -310,8 +310,8 @@ export default function EmployerPage() {
 			>
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/onboarding">
-							온보딩으로 이동
+						<Link className={buttonVariants()} href="/welcome">
+							회원가입으로 이동
 						</Link>
 					}
 					description="구인자 프로필을 만든 뒤 조직과 팀의 공고를 관리할 수 있습니다."

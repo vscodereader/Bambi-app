@@ -5,6 +5,7 @@ import {
 	assertCanCreateBambiProfile,
 	assertCanManageEmployerProfile,
 	assertCanUpdateOwnBambiProfile,
+	deriveEmployerApprovalStatus,
 	isEmployerProfileManagerRole,
 } from "./bambi-onboarding";
 
@@ -110,5 +111,27 @@ describe("bambi onboarding", () => {
 				requestedRole: undefined,
 			})
 		).toThrow("At least one personal profile field is required.");
+	});
+});
+
+describe("deriveEmployerApprovalStatus", () => {
+	it("returns none for empty list", () => {
+		expect(deriveEmployerApprovalStatus([])).toBe("none");
+	});
+	it("prioritizes verified over everything", () => {
+		expect(
+			deriveEmployerApprovalStatus(["pending", "rejected", "verified"])
+		).toBe("verified");
+	});
+	it("returns pending when any pending and no verified", () => {
+		expect(deriveEmployerApprovalStatus(["rejected", "pending"])).toBe(
+			"pending"
+		);
+	});
+	it("returns rejected when only rejected/none", () => {
+		expect(deriveEmployerApprovalStatus(["none", "rejected"])).toBe("rejected");
+	});
+	it("returns none when only none", () => {
+		expect(deriveEmployerApprovalStatus(["none", "none"])).toBe("none");
 	});
 });

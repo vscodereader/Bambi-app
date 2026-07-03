@@ -1,5 +1,5 @@
 import { db } from "@bambi-app/db";
-import { user } from "@bambi-app/db/schema/auth";
+import { member, user } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
 	bambiProfile,
@@ -13,7 +13,7 @@ import {
 	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -94,6 +94,14 @@ const setJobPostStatusInput = z.object({
 const setUserStatusInput = z.object({
 	targetUserId: z.string().min(1),
 	status: accountStatusSchema,
+	reason: z.string().min(2).max(500),
+});
+
+const employerVerificationDecisionSchema = z.enum(["verified", "rejected"]);
+
+const setEmployerVerificationStatusInput = z.object({
+	organizationId: z.string().min(1),
+	status: employerVerificationDecisionSchema,
 	reason: z.string().min(2).max(500),
 });
 
@@ -614,5 +622,79 @@ export const moderationRouter = {
 						targetIds: input.targetUserIds,
 					})
 			);
+		}),
+
+	listPendingEmployers: protectedProcedure.handler(async ({ context }) => {
+		await requireAdminProfile(context.session);
+
+		return await db
+			.select({
+				organizationId: employerOrganizationProfile.organizationId,
+				displayName: employerOrganizationProfile.displayName,
+				businessRegistrationNumber:
+					employerOrganizationProfile.businessRegistrationNumber,
+				verificationStatus: employerOrganizationProfile.verificationStatus,
+				verificationNote: employerOrganizationProfile.verificationNote,
+				ownerUserId: member.userId,
+				ownerEmail: user.email,
+				createdAt: employerOrganizationProfile.createdAt,
+			})
+			.from(employerOrganizationProfile)
+			.innerJoin(
+				member,
+				and(
+					eq(member.organizationId, employerOrganizationProfile.organizationId),
+					eq(member.role, "owner")
+				)
+			)
+			.innerJoin(user, eq(user.id, member.userId))
+			.where(eq(employerOrganizationProfile.verificationStatus, "pending"))
+			.orderBy(desc(employerOrganizationProfile.createdAt));
+	}),
+
+	setEmployerVerificationStatus: protectedProcedure
+		.input(setEmployerVerificationStatusInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(async (tx) => {
+				const [owner] = await tx
+					.select({ userId: member.userId })
+					.from(member)
+					.where(
+						and(
+							eq(member.organizationId, input.organizationId),
+							eq(member.role, "owner")
+						)
+					)
+					.limit(1);
+
+				const [updated] = await tx
+					.update(employerOrganizationProfile)
+					.set({
+						verificationStatus: input.status,
+						verificationNote: input.status === "rejected" ? input.reason : null,
+						updatedAt: new Date(),
+					})
+					.where(
+						eq(employerOrganizationProfile.organizationId, input.organizationId)
+					)
+					.returning();
+
+				if (!updated) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx.insert(adminModerationAction).values({
+					adminUserId: admin.userId,
+					targetType: "user",
+					targetId: owner?.userId ?? input.organizationId,
+					action: `set_employer_verification:${input.status}`,
+					reason: input.reason,
+					metadata: { organizationId: input.organizationId },
+				});
+
+				return updated;
+			});
 		}),
 };

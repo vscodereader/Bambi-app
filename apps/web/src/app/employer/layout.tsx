@@ -2,6 +2,7 @@ import type { Route } from "next";
 import type { ReactNode } from "react";
 import { EmployerNav } from "@/components/bambi/persona-nav";
 import { ResponsiveAppShell } from "@/components/bambi/responsive-shell";
+import { enforceRoleRouting } from "@/lib/bambi/require-role";
 
 const EMPLOYER_NAV_ITEMS = [
 	{ href: "/employer", label: "내 공고" },
@@ -11,7 +12,12 @@ const EMPLOYER_NAV_ITEMS = [
 	{ href: "/seeker", label: "채용정보" },
 ] as const;
 
-export default function EmployerLayout({ children }: { children: ReactNode }) {
+export default async function EmployerLayout({
+	children,
+}: {
+	children: ReactNode;
+}) {
+	await enforceRoleRouting();
 	return (
 		<ResponsiveAppShell navItems={EMPLOYER_NAV_ITEMS} variant="employer">
 			<EmployerNav>{children}</EmployerNav>

@@ -181,8 +181,8 @@ export default function NewEmployerJobPage() {
 			>
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/onboarding">
-							온보딩으로 이동
+						<Link className={buttonVariants()} href="/welcome">
+							회원가입으로 이동
 						</Link>
 					}
 					description="구인자 프로필을 만든 뒤 공고를 등록할 수 있습니다."

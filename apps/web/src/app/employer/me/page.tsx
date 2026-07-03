@@ -185,8 +185,8 @@ export default function EmployerMePage() {
 			>
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/onboarding">
-							온보딩으로 이동
+						<Link className={buttonVariants()} href="/welcome">
+							회원가입으로 이동
 						</Link>
 					}
 					description="구인자 프로필을 만든 뒤 계정과 사업자 정보를 확인할 수 있습니다."

@@ -1,5 +1,6 @@
-import { PublicMarketplaceScreen } from "@/components/bambi/screens/public-marketplace";
+import { enforceRoleRouting } from "@/lib/bambi/require-role";
 
-export default function Home() {
-	return <PublicMarketplaceScreen />;
+export default async function Home() {
+	await enforceRoleRouting();
+	return null;
 }
