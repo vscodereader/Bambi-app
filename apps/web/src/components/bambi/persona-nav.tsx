@@ -179,7 +179,7 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 				/>
 				<Content withBottomNav>{children}</Content>
 				{showActionBar ? (
-					<div className="max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] max-md:z-30">
+					<div className="max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] max-md:z-30 md:sticky md:bottom-6 md:z-30">
 						<QueueActionBar
 							count={selected.length}
 							isApplying={isBulkApplying}
