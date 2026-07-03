@@ -1,15 +1,20 @@
 "use client";
 
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@bambi-app/ui/components/toggle-group";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { queryClient } from "@/utils/orpc";
+import { client, queryClient } from "@/utils/orpc";
 import { Badge, Button, Card, Input, Logo } from "../ds";
 import { ShieldIcon } from "../icons";
 
 type AuthMode = "sign-in" | "sign-up";
+type SignupRole = "job_seeker" | "employer";
 interface Notice {
 	text: string;
 	tone: "error" | "info";
@@ -48,12 +53,30 @@ export function AuthScreen() {
 	const [password, setPassword] = useState("Bambi1234!");
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [signupRole, setSignupRole] = useState<SignupRole>("job_seeker");
+	const [orgName, setOrgName] = useState("");
 	const isSignUp = mode === "sign-up";
 	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
 	const subtitle = isSignUp
 		? "기본 정보를 입력하고 밤비를 시작하세요."
 		: "이메일과 비밀번호를 입력해 로그인하세요.";
 	const submitLabel = isSignUp ? "회원가입" : "로그인";
+
+	const finishSignup = async () => {
+		const displayName = name.trim();
+		if (signupRole === "employer") {
+			await client.bambi.onboarding.registerEmployer({
+				displayName,
+				organizationName: orgName.trim() || displayName,
+			});
+			queryClient.invalidateQueries();
+			router.push("/employer/pending" as Route);
+			return;
+		}
+		await client.bambi.onboarding.createJobSeekerProfile({ displayName });
+		queryClient.invalidateQueries();
+		router.push("/seeker" as Route);
+	};
 
 	const handleSubmit = async () => {
 		setNotice(null);
@@ -85,8 +108,20 @@ export function AuthScreen() {
 				});
 			},
 			onSuccess: () => {
+				if (isSignUp) {
+					finishSignup().catch((error: unknown) => {
+						setNotice({
+							text:
+								error instanceof Error
+									? error.message
+									: "프로필 생성에 실패했어요.",
+							tone: "error",
+						});
+					});
+					return;
+				}
 				queryClient.invalidateQueries();
-				router.push("/onboarding" as Route);
+				router.push("/" as Route);
 			},
 		};
 
@@ -165,6 +200,50 @@ export function AuthScreen() {
 									value={name}
 								/>
 							</label>
+						) : null}
+						{isSignUp ? (
+							<div className="grid gap-2">
+								<span className="font-bold text-sm" id="auth-role-label">
+									가입 유형
+								</span>
+								<ToggleGroup
+									aria-labelledby="auth-role-label"
+									className="grid w-full grid-cols-2 gap-2"
+									onValueChange={(value) => {
+										const next = value.at(-1);
+										if (next === "job_seeker" || next === "employer") {
+											setSignupRole(next);
+										}
+									}}
+									value={[signupRole]}
+								>
+									<ToggleGroupItem className="w-full" value="job_seeker">
+										개인회원
+									</ToggleGroupItem>
+									<ToggleGroupItem className="w-full" value="employer">
+										업소회원
+									</ToggleGroupItem>
+								</ToggleGroup>
+							</div>
+						) : null}
+						{isSignUp && signupRole === "employer" ? (
+							<label className="grid gap-2" htmlFor="auth-org-name">
+								<span className="font-bold text-sm">업체명</span>
+								<Input
+									id="auth-org-name"
+									onChange={(event) => setOrgName(event.target.value)}
+									placeholder="예: 밤비 라운지"
+									value={orgName}
+								/>
+							</label>
+						) : null}
+						{isSignUp && signupRole === "employer" ? (
+							<p
+								className="m-0 rounded-lg border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm"
+								role="note"
+							>
+								가입 후 운영자 승인이 완료되어야 이용할 수 있어요.
+							</p>
 						) : null}
 						<label className="grid gap-2" htmlFor="auth-email">
 							<span className="font-bold text-sm">이메일</span>
