@@ -6,7 +6,7 @@ export interface GateInput {
 
 export type GateDecision = { type: "next" } | { type: "redirect"; to: string };
 
-const PUBLIC_PREFIXES = ["/welcome", "/api", "/bambi"];
+const PUBLIC_PREFIXES = ["/welcome", "/login", "/api", "/bambi"];
 
 const GUEST_BLOCKED_SEEKER_PREFIXES = [
 	"/seeker/jobs",
