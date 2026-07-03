@@ -50,6 +50,9 @@ export function AuthScreen() {
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const isSignUp = mode === "sign-up";
 	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
+	const subtitle = isSignUp
+		? "기본 정보를 입력하고 밤비를 시작하세요."
+		: "이메일과 비밀번호를 입력해 로그인하세요.";
 	const submitLabel = isSignUp ? "회원가입" : "로그인";
 
 	const handleSubmit = async () => {
@@ -134,8 +137,7 @@ export function AuthScreen() {
 						밤비 안에서 안전하게
 					</h1>
 					<p className="m-0 max-w-[560px] text-muted-foreground leading-relaxed">
-						seed 계정으로 로그인하면 구직자 공고 탐색, 채팅 시작, 구인자 관리
-						흐름을 바로 확인할 수 있어요.
+						공고를 둘러보고, 연락처 걱정 없이 채팅으로 이어가세요.
 					</p>
 				</section>
 				<Card className="rounded-lg" pad="lg" tone="outline">
@@ -144,9 +146,7 @@ export function AuthScreen() {
 						<TrustBadge />
 					</div>
 					<h2 className="m-0 font-extrabold text-2xl">{title}</h2>
-					<p className="mt-2 mb-5 text-muted-foreground text-sm">
-						구직자 테스트 계정은 기본값으로 입력해두었어요.
-					</p>
+					<p className="mt-2 mb-5 text-muted-foreground text-sm">{subtitle}</p>
 					<form
 						className="grid gap-4"
 						onSubmit={(event) => {
