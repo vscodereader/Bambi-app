@@ -19,9 +19,16 @@ export default async function EmployerLayout({
 	children: ReactNode;
 }) {
 	const access = await resolveEmployerAccess();
+	// 미승인 구인자는 구인 관리 기능을 쓸 수 없다 — 헤더 nav·하단 탭을 숨기고
+	// 로고와 "내 정보"만 남겨(gated) 승인 대기 화면만 보게 한다.
+	const gated = !access.verified;
 	return (
-		<ResponsiveAppShell navItems={EMPLOYER_NAV_ITEMS} variant="employer">
-			<EmployerNav>
+		<ResponsiveAppShell
+			gated={gated}
+			navItems={gated ? [] : EMPLOYER_NAV_ITEMS}
+			variant="employer"
+		>
+			<EmployerNav gated={gated}>
 				{access.verified ? children : <EmployerPending />}
 			</EmployerNav>
 		</ResponsiveAppShell>

@@ -26,6 +26,9 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
 interface ResponsiveAppShellProps {
 	children: ReactNode;
 	className?: string;
+	// gated: 접근이 제한된 상태(예: 미승인 구인자). nav·상태 배지를 숨기고 로고와
+	// "내 정보"만 남긴다.
+	gated?: boolean;
 	headerSlot?: ReactNode;
 	navItems?: readonly NavItem[];
 	showDesktopNav?: boolean;
@@ -73,6 +76,7 @@ function ModeratorHeaderActions() {
 export function ResponsiveAppShell({
 	children,
 	className,
+	gated = false,
 	headerSlot,
 	navItems = DEFAULT_NAV_ITEMS,
 	showDesktopNav = true,
@@ -90,40 +94,44 @@ export function ResponsiveAppShell({
 						<Link aria-label="밤비 홈" className="no-underline" href="/">
 							<Logo lang="ko" size="md" />
 						</Link>
-						<nav className="flex items-center gap-1">
-							{navItems.map((item) => {
-								const isActive = item.href === activeHref;
-								return (
-									<Link
-										aria-current={isActive ? "page" : undefined}
-										className={cn(
-											buttonVariants({ variant: "ghost" }),
-											"h-auto px-3 py-2 font-bold text-muted-foreground text-sm no-underline",
-											isActive && "bg-muted text-foreground"
-										)}
-										href={item.href}
-										key={`${item.href}-${item.label}`}
-									>
-										{item.label}
-									</Link>
-								);
-							})}
-						</nav>
+						{navItems.length > 0 ? (
+							<nav className="flex items-center gap-1">
+								{navItems.map((item) => {
+									const isActive = item.href === activeHref;
+									return (
+										<Link
+											aria-current={isActive ? "page" : undefined}
+											className={cn(
+												buttonVariants({ variant: "ghost" }),
+												"h-auto px-3 py-2 font-bold text-muted-foreground text-sm no-underline",
+												isActive && "bg-muted text-foreground"
+											)}
+											href={item.href}
+											key={`${item.href}-${item.label}`}
+										>
+											{item.label}
+										</Link>
+									);
+								})}
+							</nav>
+						) : null}
 						<div className="ml-auto flex items-center gap-2">
 							{headerSlot}
 							{isModerator ? (
 								<ModeratorHeaderActions />
 							) : (
 								<>
-									<Badge
-										className="h-9 gap-1.5 px-3 font-bold"
-										variant="success"
-									>
-										<span className="inline-flex size-3.5">
-											<ShieldIcon />
-										</span>
-										연락처 보호
-									</Badge>
+									{gated ? null : (
+										<Badge
+											className="h-9 gap-1.5 px-3 font-bold"
+											variant="success"
+										>
+											<span className="inline-flex size-3.5">
+												<ShieldIcon />
+											</span>
+											연락처 보호
+										</Badge>
+									)}
 									<Link
 										className={cn(
 											buttonVariants({
@@ -147,29 +155,45 @@ export function ResponsiveAppShell({
 						<Logo lang="ko" size="sm" />
 					</Link>
 					<div className="flex items-center gap-2">
-						{isModerator ? (
-							<ModeratorHeaderActions />
-						) : (
-							<>
-								<Badge
-									className="h-8 gap-1.5 px-3 font-bold"
-									variant="secondary"
-								>
-									<span className="inline-flex size-3.5 text-green-600">
-										<ShieldIcon />
-									</span>
-									보호 중
-								</Badge>
-								<Button
-									aria-label="알림"
-									className="bg-card"
-									size="icon-lg"
-									variant="outline"
-								>
-									<BellIcon />
-								</Button>
-							</>
-						)}
+						{(() => {
+							if (isModerator) {
+								return <ModeratorHeaderActions />;
+							}
+							if (gated) {
+								return (
+									<Link
+										className={cn(
+											buttonVariants({ variant: "outline" }),
+											"h-9 px-4 font-bold text-sm no-underline"
+										)}
+										href={"/seeker/me" as Route}
+									>
+										내 정보
+									</Link>
+								);
+							}
+							return (
+								<>
+									<Badge
+										className="h-8 gap-1.5 px-3 font-bold"
+										variant="secondary"
+									>
+										<span className="inline-flex size-3.5 text-green-600">
+											<ShieldIcon />
+										</span>
+										보호 중
+									</Badge>
+									<Button
+										aria-label="알림"
+										className="bg-card"
+										size="icon-lg"
+										variant="outline"
+									>
+										<BellIcon />
+									</Button>
+								</>
+							);
+						})()}
 					</div>
 				</div>
 			</header>
