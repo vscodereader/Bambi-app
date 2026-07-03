@@ -1,5 +1,12 @@
+import { randomUUID } from "node:crypto";
+
 import { db } from "@bambi-app/db";
-import { member, team, teamMember } from "@bambi-app/db/schema/auth";
+import {
+	member,
+	organization,
+	team,
+	teamMember,
+} from "@bambi-app/db/schema/auth";
 import {
 	bambiProfile,
 	employerOrganizationProfile,
@@ -45,6 +52,22 @@ const teamProfileInput = z.object({
 const requestEmployerVerificationInput = z.object({
 	organizationId: z.string().min(1),
 });
+
+const registerEmployerInput = z.object({
+	displayName: z.string().min(1).max(80),
+	organizationName: z.string().min(1).max(120),
+	businessRegistrationNumber: z.string().min(1).max(40).optional(),
+	phoneNumber: z.string().min(3).max(30).optional(),
+});
+
+const toOrganizationSlug = (name: string): string => {
+	const base = name
+		.toLowerCase()
+		.replace(/[^a-z0-9가-힣]+/g, "-")
+		.replace(/(^-|-$)/g, "")
+		.slice(0, 40);
+	return `${base || "org"}-${randomUUID().slice(0, 8)}`;
+};
 
 const ORGANIZATION_ROLES = new Set<OrganizationRole>([
 	"owner",
@@ -413,5 +436,52 @@ export const onboardingRouter = {
 				.returning();
 
 			return updatedProfile;
+		}),
+
+	registerEmployer: protectedProcedure
+		.input(registerEmployerInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+
+			const [existingProfile] = await db
+				.select({ role: bambiProfile.role })
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, userId))
+				.limit(1);
+
+			assertCanCreateBambiProfile({ existingRole: existingProfile?.role });
+
+			const organizationId = `org_${randomUUID()}`;
+			const now = new Date();
+
+			await db.transaction(async (tx) => {
+				await tx.insert(organization).values({
+					id: organizationId,
+					name: input.organizationName,
+					slug: toOrganizationSlug(input.organizationName),
+					createdAt: now,
+				});
+				await tx.insert(member).values({
+					id: `member_${randomUUID()}`,
+					organizationId,
+					userId,
+					role: "owner",
+					createdAt: now,
+				});
+				await tx.insert(bambiProfile).values({
+					userId,
+					role: "employer",
+					displayName: input.displayName,
+					phoneNumber: input.phoneNumber,
+				});
+				await tx.insert(employerOrganizationProfile).values({
+					organizationId,
+					displayName: input.organizationName,
+					businessRegistrationNumber: input.businessRegistrationNumber,
+					verificationStatus: "pending",
+				});
+			});
+
+			return { organizationId };
 		}),
 };
