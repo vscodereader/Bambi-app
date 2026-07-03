@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import type { Context } from "../../context";
 
@@ -16,10 +16,18 @@ const [{ db }, authSchema, bambiSchema, { moderationRouter }] =
 	]);
 
 const { user, organization, member } = authSchema;
-const { bambiProfile, employerOrganizationProfile } = bambiSchema;
+const { adminModerationAction, bambiProfile, employerOrganizationProfile } =
+	bambiSchema;
 
 const ctx = (userId: string): Context =>
 	({ auth: null, session: { user: { id: userId } } }) as Context;
+
+const expectOrpcCode = async (
+	promise: Promise<unknown>,
+	code: string
+): Promise<void> => {
+	await expect(promise).rejects.toMatchObject({ code });
+};
 
 const seedAdmin = async () => {
 	const adminId = `user_admin_${randomUUID()}`;
@@ -83,6 +91,9 @@ describe("setEmployerVerificationStatus", () => {
 		});
 		expect(result.verificationStatus).toBe("verified");
 
+		await db
+			.delete(adminModerationAction)
+			.where(inArray(adminModerationAction.adminUserId, [adminId]));
 		await db.delete(user).where(eq(user.id, adminId));
 		await db.delete(user).where(eq(user.id, ownerId));
 		await db.delete(organization).where(eq(organization.id, orgId));
@@ -108,9 +119,14 @@ describe("setEmployerVerificationStatus", () => {
 			}
 		);
 
-		await expect(
-			setStatus({ organizationId: orgId, status: "verified", reason: "x" })
-		).rejects.toThrow();
+		await expectOrpcCode(
+			setStatus({
+				organizationId: orgId,
+				status: "verified",
+				reason: "권한 테스트",
+			}),
+			"FORBIDDEN"
+		);
 
 		await db.delete(user).where(eq(user.id, nonAdmin));
 		await db.delete(user).where(eq(user.id, ownerId));
