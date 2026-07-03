@@ -2,9 +2,16 @@
 
 // 밤비 — 운영자(Moderator) 콘솔: 검수 큐, 신고 인박스, 사용자 제재.
 
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { ReactNode } from "react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
 import { scan } from "@/lib/bambi/scanner";
 import type {
@@ -21,7 +28,6 @@ import { AppBar, Avatar, Badge, Button, StatGroup } from "../ds";
 import {
 	AlertCircle,
 	CheckIcon,
-	ChevronDownIcon,
 	ChevronRightIcon,
 	FlagIcon,
 	ShieldIcon,
@@ -212,21 +218,98 @@ export function ConsoleTop({
 }
 
 // ---- 큐 --------------------------------------------------------------------
-function QueueFilterRow() {
+// 검수 큐 필터·정렬 상태. 상태는 공고 위험도(riskLevel) 기준, 정렬은 접수 시각·위험도 기준.
+type QueueStatusFilter = "all" | RiskLevel;
+type QueueSortKey = "reply" | "recent" | "risk";
+
+const QUEUE_STATUS_OPTIONS: { value: QueueStatusFilter; label: string }[] = [
+	{ value: "all", label: "전체 상태" },
+	{ value: "high", label: "높은 위험" },
+	{ value: "mid", label: "중간 위험" },
+	{ value: "low", label: "낮은 위험" },
+];
+const QUEUE_STATUS_LABEL: Record<QueueStatusFilter, string> = {
+	all: "전체 상태",
+	high: "높은 위험",
+	mid: "중간 위험",
+	low: "낮은 위험",
+};
+
+const QUEUE_SORT_OPTIONS: { value: QueueSortKey; label: string }[] = [
+	{ value: "reply", label: "회신순" },
+	{ value: "recent", label: "최신순" },
+	{ value: "risk", label: "위험도순" },
+];
+const QUEUE_SORT_LABEL: Record<QueueSortKey, string> = {
+	reply: "회신순",
+	recent: "최신순",
+	risk: "위험도순",
+};
+
+// 위험도 정렬 우선순위 (높음이 먼저).
+const RISK_ORDER: Record<RiskLevel, number> = { high: 0, mid: 1, low: 2 };
+
+const QUEUE_TRIGGER_CLASS =
+	"h-10 gap-1.5 rounded-xl border-[color:var(--border-default)] bg-card px-[14px] font-semibold text-[13px] text-[color:var(--text-default)]";
+
+function QueueFilterRow({
+	status,
+	sort,
+	onStatusChange,
+	onSortChange,
+}: {
+	status: QueueStatusFilter;
+	sort: QueueSortKey;
+	onStatusChange: (value: QueueStatusFilter) => void;
+	onSortChange: (value: QueueSortKey) => void;
+}) {
 	return (
 		<div className="flex gap-2">
-			<div className="flex h-10 flex-1 items-center justify-between rounded-xl border border-[color:var(--border-default)] bg-card px-[14px] font-semibold text-[13px] text-[color:var(--text-default)]">
-				전체 상태
-				<span className="inline-flex size-4 text-muted-foreground">
-					<ChevronDownIcon />
-				</span>
-			</div>
-			<div className="flex h-10 items-center gap-1.5 rounded-xl border border-[color:var(--border-default)] bg-card px-[14px] font-semibold text-[13px] text-[color:var(--text-default)]">
-				회신순
-				<span className="inline-flex size-[15px] text-muted-foreground">
-					<SortIcon />
-				</span>
-			</div>
+			<Select
+				onValueChange={(value) => {
+					if (value) {
+						onStatusChange(value as QueueStatusFilter);
+					}
+				}}
+				value={status}
+			>
+				<SelectTrigger className={cn(QUEUE_TRIGGER_CLASS, "flex-1")}>
+					<SelectValue>
+						{(value) => QUEUE_STATUS_LABEL[value as QueueStatusFilter]}
+					</SelectValue>
+				</SelectTrigger>
+				<SelectContent>
+					{QUEUE_STATUS_OPTIONS.map((option) => (
+						<SelectItem key={option.value} value={option.value}>
+							{option.label}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+			<Select
+				onValueChange={(value) => {
+					if (value) {
+						onSortChange(value as QueueSortKey);
+					}
+				}}
+				value={sort}
+			>
+				<SelectTrigger className={QUEUE_TRIGGER_CLASS}>
+					<span className="inline-flex size-[15px] text-muted-foreground">
+						<SortIcon />
+					</span>
+					<SelectValue>
+						{(value) => QUEUE_SORT_LABEL[value as QueueSortKey]}
+					</SelectValue>
+				</SelectTrigger>
+				<SelectContent>
+					{QUEUE_SORT_OPTIONS.map((option) => (
+						<SelectItem key={option.value} value={option.value}>
+							{option.label}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
 		</div>
 	);
 }
@@ -363,22 +446,54 @@ export function QueueList({
 	onToggle: (id: string) => void;
 	onOpen: (item: QueueItem) => void;
 }) {
+	const [status, setStatus] = useState<QueueStatusFilter>("all");
+	const [sort, setSort] = useState<QueueSortKey>("reply");
+
+	const visibleItems = useMemo(() => {
+		const filtered =
+			status === "all" ? items : items.filter((q) => q.riskLevel === status);
+		return [...filtered].sort((a, b) => {
+			if (sort === "risk") {
+				return RISK_ORDER[a.riskLevel] - RISK_ORDER[b.riskLevel];
+			}
+			if (sort === "recent") {
+				// 접수 최신 순 (receivedAt: "YYYY.MM.DD HH:mm" 은 사전식 비교로 시간순 정렬 가능)
+				return b.receivedAt.localeCompare(a.receivedAt);
+			}
+			// 회신순: 먼저 접수된 공고부터 회신 (접수 오래된 순)
+			return a.receivedAt.localeCompare(b.receivedAt);
+		});
+	}, [items, status, sort]);
+
+	let empty: ReactNode = null;
+	if (visibleItems.length === 0) {
+		empty =
+			items.length === 0 ? (
+				<EmptyState icon={<CheckIcon />} text="검수할 공고가 없어요" />
+			) : (
+				<EmptyState icon={<CheckIcon />} text="해당 상태의 공고가 없어요" />
+			);
+	}
+
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pb-5">
-			<QueueFilterRow />
-			{items.length ? (
-				items.map((q) => (
-					<QueueRow
-						key={q.id}
-						onOpen={() => onOpen(q)}
-						onToggle={() => onToggle(q.id)}
-						q={q}
-						selected={selected.includes(q.id)}
-					/>
-				))
-			) : (
-				<EmptyState icon={<CheckIcon />} text="검수할 공고가 없어요" />
-			)}
+			<QueueFilterRow
+				onSortChange={setSort}
+				onStatusChange={setStatus}
+				sort={sort}
+				status={status}
+			/>
+			{empty
+				? empty
+				: visibleItems.map((q) => (
+						<QueueRow
+							key={q.id}
+							onOpen={() => onOpen(q)}
+							onToggle={() => onToggle(q.id)}
+							q={q}
+							selected={selected.includes(q.id)}
+						/>
+					))}
 		</div>
 	);
 }
