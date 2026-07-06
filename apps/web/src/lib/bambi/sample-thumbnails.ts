@@ -11,6 +11,20 @@ const SAMPLE_THUMBNAILS: ReadonlyArray<{ fileName: string; mimeType: string }> =
 		{ fileName: "sample-4.jpeg", mimeType: "image/jpeg" },
 		{ fileName: "sample-5.jpeg", mimeType: "image/jpeg" },
 		{ fileName: "sample-6.jpeg", mimeType: "image/jpeg" },
+		{ fileName: "sample-7.jpg", mimeType: "image/jpg" },
+		{ fileName: "sample-8.jpg", mimeType: "image/jpg" },
+		{ fileName: "sample-9.png", mimeType: "image/png" },
+		{ fileName: "sample-10.png", mimeType: "image/png" },
+		{ fileName: "sample-11.gif", mimeType: "image/gif" },
+		{ fileName: "sample-12.png", mimeType: "image/png" },
+		{ fileName: "sample-13.jpg", mimeType: "image/jpg" },
+		{ fileName: "sample-14.jpg", mimeType: "image/jpg" },
+		{ fileName: "sample-15.gif", mimeType: "image/gif" },
+		{ fileName: "sample-16.jpg", mimeType: "image/jpg" },
+		{ fileName: "sample-17.jpg", mimeType: "image/jpg" },
+		{ fileName: "sample-18.jpg", mimeType: "image/jpg" },
+		{ fileName: "sample-19.gif", mimeType: "image/gif" },
+		{ fileName: "sample-20.png", mimeType: "image/png" },
 	];
 
 // 키(공고 id·storageKey 등) 기반 결정적 해시 — 같은 키는 항상 같은 샘플을 고른다.

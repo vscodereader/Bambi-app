@@ -114,11 +114,11 @@ export function VisualJobCard({
 					{job.coverImage ? (
 						<Image
 							alt={job.coverImage.altText || job.coverImage.fileName}
-							className="size-20 shrink-0 rounded-lg border border-white object-cover"
-							height={80}
+							className="h-14 w-32 shrink-0 rounded-lg border border-white object-cover"
+							height={56}
 							src={job.coverImage.url}
 							unoptimized
-							width={80}
+							width={128}
 						/>
 					) : (
 						<div className="flex size-20 shrink-0 items-center justify-center rounded-lg border border-white bg-secondary font-extrabold text-base text-coral-700">
