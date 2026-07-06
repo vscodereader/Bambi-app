@@ -27,8 +27,10 @@ import {
 	markChatMessagesRead,
 } from "../../services/bambi-chat-read-state";
 import {
+	emitChatListUpdated,
 	emitMessageCreated,
 	emitMessageRead,
+	emitRoomUpdated,
 	emitUnreadUpdated,
 	isParticipantActiveInRoom,
 } from "../../services/bambi-chat-realtime";
@@ -229,6 +231,11 @@ const notifyChatMessageCreated = async ({
 		roomId: room.id,
 		unreadCount: recipientUnreadCount,
 		userId: recipientUserId,
+	});
+	// 방 소켓룸에 입장하지 않은 목록 화면도 새 방/새 메시지를 반영하도록
+	// 양쪽 참여자의 유저 채널로 목록 갱신 신호를 보낸다.
+	emitChatListUpdated([room.employerUserId, room.jobSeekerUserId], {
+		roomId: room.id,
 	});
 
 	if (!isParticipantActiveInRoom(room.id, recipientUserId)) {
@@ -803,6 +810,8 @@ export const chatsRouter = {
 				})
 				.returning();
 
+			emitRoomUpdated({ roomId: room.id });
+
 			return schedule;
 		}),
 
@@ -862,6 +871,8 @@ export const chatsRouter = {
 					message: "Interview schedule status has changed.",
 				});
 			}
+
+			emitRoomUpdated({ roomId: room.id });
 
 			return updatedSchedule;
 		}),

@@ -654,6 +654,7 @@ export function SeekerChatRoomResponsive({
 		socket.on("chat:error", handleRealtimeError);
 		socket.on("chat:message:created", refreshIfCurrentRoom);
 		socket.on("chat:message:read", refreshIfCurrentRoom);
+		socket.on("chat:room:updated", refreshIfCurrentRoom);
 		socket.on("chat:unread:updated", refreshIfCurrentRoom);
 		socket.on("chat:typing:started", handleTypingStarted);
 		socket.on("chat:typing:stopped", handleTypingStopped);
@@ -673,6 +674,7 @@ export function SeekerChatRoomResponsive({
 			socket.off("chat:error", handleRealtimeError);
 			socket.off("chat:message:created", refreshIfCurrentRoom);
 			socket.off("chat:message:read", refreshIfCurrentRoom);
+			socket.off("chat:room:updated", refreshIfCurrentRoom);
 			socket.off("chat:unread:updated", refreshIfCurrentRoom);
 			socket.off("chat:typing:started", handleTypingStarted);
 			socket.off("chat:typing:stopped", handleTypingStopped);

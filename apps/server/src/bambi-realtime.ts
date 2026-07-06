@@ -12,6 +12,7 @@ import {
 	emitMessageRead,
 	emitUnreadUpdated,
 	getChatRoomSocketRoom,
+	getUserSocketRoom,
 	isParticipantActiveInRoom,
 	markParticipantActive,
 	markParticipantInactive,
@@ -202,6 +203,10 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 	});
 
 	io.on("connection", (socket) => {
+		// 목록 화면 등 특정 방에 입장하지 않은 클라이언트도 새 방/새 메시지를
+		// 실시간으로 받도록, 연결 시 유저 채널에 자동 입장한다.
+		socket.join(getUserSocketRoom(socket.data.userId));
+
 		socket.on("chat:join", async (rawPayload, ack) => {
 			try {
 				const { roomId } = roomPayloadSchema.parse(rawPayload);

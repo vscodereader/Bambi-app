@@ -1,12 +1,8 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
-import {
-	connectBambiChatSocket,
-	joinBambiChatRoom,
-	leaveBambiChatRoom,
-} from "@/lib/bambi-chat-realtime";
+import { useEffect } from "react";
+import { connectBambiChatSocket } from "@/lib/bambi-chat-realtime";
 import { orpc } from "@/utils/orpc";
 import { Avatar, Badge, Card } from "../ds";
 import { Message, ShieldIcon } from "../icons";
@@ -37,38 +33,25 @@ export function SeekerChatListResponsive({
 	const queryClient = useQueryClient();
 	const chatsQuery = useQuery(orpc.bambi.chats.listMine.queryOptions());
 	const rooms = chatsQuery.data ?? [];
-	const roomIds = useMemo(() => rooms.map((room) => room.id), [rooms]);
 
 	useEffect(() => {
-		if (roomIds.length === 0) {
-			return;
-		}
-
 		const socket = connectBambiChatSocket();
-		const refreshList = (payload: { roomId: string }) => {
-			if (roomIds.includes(payload.roomId)) {
-				queryClient
-					.invalidateQueries({
-						queryKey: orpc.bambi.chats.listMine.queryKey(),
-					})
-					.catch(() => undefined);
-			}
+		// 유저 채널(user:${userId})로 오는 목록 갱신 신호를 받아, 특정 방에
+		// 입장하지 않아도 새 방 생성·새 메시지를 실시간으로 반영한다.
+		const refreshList = () => {
+			queryClient
+				.invalidateQueries({
+					queryKey: orpc.bambi.chats.listMine.queryKey(),
+				})
+				.catch(() => undefined);
 		};
 
-		socket.on("chat:message:created", refreshList);
-		socket.on("chat:unread:updated", refreshList);
-		for (const roomId of roomIds) {
-			joinBambiChatRoom(roomId).catch(() => undefined);
-		}
+		socket.on("chat:list:updated", refreshList);
 
 		return () => {
-			socket.off("chat:message:created", refreshList);
-			socket.off("chat:unread:updated", refreshList);
-			for (const roomId of roomIds) {
-				leaveBambiChatRoom(roomId);
-			}
+			socket.off("chat:list:updated", refreshList);
 		};
-	}, [queryClient, roomIds]);
+	}, [queryClient]);
 
 	if (chatsQuery.isError) {
 		return (

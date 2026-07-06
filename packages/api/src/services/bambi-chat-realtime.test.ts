@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
 	configureBambiChatRealtime,
+	emitChatListUpdated,
 	emitMessageCreated,
+	emitRoomUpdated,
 	getActiveParticipantIds,
 	getChatRoomSocketRoom,
+	getUserSocketRoom,
 	isParticipantActiveInRoom,
 	markParticipantActive,
 	markParticipantInactive,
@@ -121,5 +124,46 @@ describe("bambi chat realtime", () => {
 		expect(JSON.stringify(server.events[0]?.payload)).not.toContain("body");
 		expect(JSON.stringify(server.events[0]?.payload)).not.toContain("contact");
 		expect(JSON.stringify(server.events[0]?.payload)).not.toContain("location");
+	});
+
+	it("uses stable Socket.IO room names for user channels", () => {
+		expect(getUserSocketRoom("user-1")).toBe("user:user-1");
+	});
+
+	it("emits list-updated to each participant's user channel without duplicates", () => {
+		resetBambiChatRealtimeForTests();
+		const server = new FakeRealtimeServer();
+		configureBambiChatRealtime(server);
+
+		emitChatListUpdated(["user-1", "user-2", "user-1"], { roomId: "room-1" });
+
+		expect(server.events).toEqual([
+			{
+				event: "chat:list:updated",
+				payload: { roomId: "room-1" },
+				room: "user:user-1",
+			},
+			{
+				event: "chat:list:updated",
+				payload: { roomId: "room-1" },
+				room: "user:user-2",
+			},
+		]);
+	});
+
+	it("emits room-updated to the chat room socket room", () => {
+		resetBambiChatRealtimeForTests();
+		const server = new FakeRealtimeServer();
+		configureBambiChatRealtime(server);
+
+		emitRoomUpdated({ roomId: "room-1" });
+
+		expect(server.events).toEqual([
+			{
+				event: "chat:room:updated",
+				payload: { roomId: "room-1" },
+				room: "chat:room-1",
+			},
+		]);
 	});
 });
