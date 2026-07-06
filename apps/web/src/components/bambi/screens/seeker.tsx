@@ -2,12 +2,16 @@
 
 // 밤비 — 구직자(Seeker) 화면: 탐색 → 상세 → 채팅 → 신고.
 
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { JOBS } from "@/lib/bambi/data";
 import type { Job, ReportMode, VisualTone } from "@/lib/bambi/types";
+import { orpc } from "@/utils/orpc";
 import {
 	AppBar,
 	Avatar,
@@ -561,13 +565,33 @@ export function SeekerChat({
 	);
 }
 
+const seekerRoleLabels: Record<string, string> = {
+	admin: "관리자",
+	employer: "구인자",
+	job_seeker: "구직자",
+};
+
 export function SeekerMe() {
 	const router = useRouter();
+	const session = authClient.useSession();
+	const isSignedIn = Boolean(session.data?.user);
+	const mineQuery = useQuery({
+		...orpc.bambi.onboarding.getMine.queryOptions(),
+		enabled: isSignedIn,
+	});
+	const profile = mineQuery.data?.bambiProfile ?? null;
+	const sessionUser = session.data?.user;
+	const displayName =
+		profile?.displayName?.trim() || sessionUser?.name?.trim() || "구직자 회원";
+	const roleLabel = profile
+		? (seekerRoleLabels[profile.role] ?? profile.role)
+		: "구직자";
+	const isPhoneVerified = Boolean(profile?.isPhoneVerified);
 	const rows = [
-		{ icon: <ClipboardListIcon />, label: "내 신고 내역", meta: "0건" },
-		{ icon: <ClockIcon />, label: "예정된 면접", meta: "1건" },
-		{ icon: <LockIcon />, label: "차단한 상대", meta: "0명" },
-		{ icon: <SettingsIcon />, label: "계정 설정", meta: "" },
+		{ icon: <ClipboardListIcon />, label: "내 신고 내역" },
+		{ icon: <ClockIcon />, label: "예정된 면접" },
+		{ icon: <LockIcon />, label: "차단한 상대" },
+		{ icon: <SettingsIcon />, label: "계정 설정" },
 	];
 	const handleSignOut = async () => {
 		await signOutToHome(router);
@@ -580,18 +604,30 @@ export function SeekerMe() {
 				</h1>
 			</div>
 			<div className="mx-auto flex min-h-0 w-full max-w-[860px] flex-1 flex-col gap-[18px] overflow-y-auto px-4 py-4 md:px-6">
-				<div className="flex items-center gap-[14px] rounded-[18px] border border-primary p-[18px]">
-					<Avatar name="김하늘" ring size="lg" />
-					<div className="flex-1">
-						<div className="font-extrabold text-[18px] text-foreground">
-							김하늘
-						</div>
-						<div className="mt-0.5 text-[13px] text-muted-foreground">
-							구직자 · 강남 활동
+				{mineQuery.isLoading ? (
+					<div className="flex items-center gap-[14px] rounded-[18px] border border-border p-[18px]">
+						<Skeleton className="size-14 rounded-full" />
+						<div className="flex-1">
+							<Skeleton className="h-5 w-28 rounded-md" />
+							<Skeleton className="mt-2 h-4 w-40 rounded-md" />
 						</div>
 					</div>
-					<Badge tone="primary">인증완료</Badge>
-				</div>
+				) : (
+					<div className="flex items-center gap-[14px] rounded-[18px] border border-primary p-[18px]">
+						<Avatar name={displayName} ring size="lg" />
+						<div className="min-w-0 flex-1">
+							<div className="break-words font-extrabold text-[18px] text-foreground">
+								{displayName}
+							</div>
+							<div className="mt-0.5 text-[13px] text-muted-foreground">
+								{roleLabel}
+							</div>
+						</div>
+						<Badge tone={isPhoneVerified ? "primary" : "neutral"}>
+							{isPhoneVerified ? "인증완료" : "인증 필요"}
+						</Badge>
+					</div>
+				)}
 				<div className="flex flex-col overflow-hidden rounded-2xl border border-border">
 					{rows.map((r, i) => (
 						<div
@@ -607,11 +643,6 @@ export function SeekerMe() {
 							<span className="flex-1 font-semibold text-[15px] text-foreground">
 								{r.label}
 							</span>
-							{r.meta ? (
-								<span className="text-[13px] text-muted-foreground">
-									{r.meta}
-								</span>
-							) : null}
 							<span className="inline-flex size-[18px] text-[color:var(--text-subtle)]">
 								<ChevronRightIcon />
 							</span>
