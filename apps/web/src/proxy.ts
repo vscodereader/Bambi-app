@@ -7,7 +7,7 @@ export const config = {
 	matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
 	const { pathname } = request.nextUrl;
 
 	// RSC prefetch 요청은 게이트 리다이렉트를 건너뛴다. 한 화면에 있는 다수의 <Link>가
