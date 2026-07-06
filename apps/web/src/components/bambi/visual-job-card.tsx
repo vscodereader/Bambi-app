@@ -35,10 +35,11 @@ const hitBorderClassName = {
 } as const;
 
 // 티어 배지 색을 등급별로 구분해 유료 노출 사다리를 시각화한다.
+// 단위 배지는 스페셜·추천도 급구와 동일하게 danger 톤으로 통일한다.
 const toneBadge = {
 	organic: "neutral",
-	recommended: "primary",
-	special: "primary",
+	recommended: "danger",
+	special: "danger",
 	urgent: "danger",
 } as const;
 
