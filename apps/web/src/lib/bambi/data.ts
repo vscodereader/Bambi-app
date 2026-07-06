@@ -1,5 +1,6 @@
 // 밤비 신뢰·안전 흐름 — 샘플 데이터
 
+import { sampleCoverMedia } from "./sample-thumbnails";
 import type {
 	Job,
 	ManagedUser,
@@ -8,7 +9,7 @@ import type {
 	ReportReason,
 } from "./types";
 
-export const JOBS: Job[] = [
+const JOBS_SEED: Job[] = [
 	// ── 스페셜(프리미엄) 노출 ──────────────────────────────────
 	{
 		id: "j2",
@@ -219,6 +220,12 @@ export const JOBS: Job[] = [
 		reviews: 4,
 	},
 ];
+
+// 각 공고에 샘플 썸네일을 랜덤(결정적)으로 배분한다. 실제 이미지 연동 전까지의 임시 처리.
+export const JOBS: Job[] = JOBS_SEED.map((job) => ({
+	...job,
+	coverImage: sampleCoverMedia(job.id, `${job.company} 대표 이미지`),
+}));
 
 // 운영자 검수 큐 — 자동 필터에 걸려 사람 검수로 넘어온 공고
 export const QUEUE: QueueItem[] = [
