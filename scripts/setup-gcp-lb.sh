@@ -7,7 +7,8 @@ set -euo pipefail
 PROJECT_ID="${PROJECT_ID:-bambi-app-501604}"
 REGION="${REGION:-asia-northeast3}"
 DOMAIN_PROD="api.bambialba.com"
-DOMAIN_TEST="test.bambialba.com"
+# 웹이 test.bambialba.com(Vercel)이라 서버 test 환경은 dev 서브도메인을 쓴다.
+DOMAIN_TEST="dev.bambialba.com"
 
 gcloud config set project "${PROJECT_ID}" >/dev/null
 
