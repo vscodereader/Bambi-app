@@ -151,6 +151,11 @@ export function SeekerChatListResponsive({
 										<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
 									) : null}
 								</div>
+								{room.counterpartName ? (
+									<p className="mt-1 mb-0 truncate font-bold text-foreground text-sm">
+										{room.counterpartName}
+									</p>
+								) : null}
 								<p className="mt-1 mb-0 truncate text-muted-foreground text-sm">
 									{room.lastMessageBody ?? "아직 주고받은 메시지가 없어요"}
 								</p>

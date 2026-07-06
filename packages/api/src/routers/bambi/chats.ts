@@ -1,9 +1,12 @@
 import { db } from "@bambi-app/db";
 import {
+	bambiProfile,
 	chatAttachment,
 	chatMessage,
 	chatRoom,
 	contactRevealConsent,
+	employerOrganizationProfile,
+	employerTeamProfile,
 	interviewSchedule,
 	jobPost,
 	userBlock,
@@ -239,6 +242,106 @@ const notifyChatMessageCreated = async ({
 	}
 };
 
+interface CounterpartRoom {
+	employerUserId: string;
+	id: string;
+	jobSeekerUserId: string;
+	organizationId: string;
+	teamId: string | null;
+}
+
+/**
+ * 현재 보는 사람(viewer) 기준으로 대화 상대방의 표시 이름을 방마다 해석한다.
+ * - 구인자가 볼 때 → 상대는 구직자(bambi_profile.display_name)
+ * - 구직자가 볼 때 → 상대는 구인자(팀 프로필 → 조직 프로필 → 구인자 개인 프로필 순)
+ */
+const resolveCounterpartNames = async (
+	rooms: CounterpartRoom[],
+	viewerUserId: string
+): Promise<Map<string, string | null>> => {
+	const profileUserIds = new Set<string>();
+	const teamIds = new Set<string>();
+	const organizationIds = new Set<string>();
+
+	for (const room of rooms) {
+		if (room.employerUserId === viewerUserId) {
+			profileUserIds.add(room.jobSeekerUserId);
+		} else {
+			profileUserIds.add(room.employerUserId);
+			organizationIds.add(room.organizationId);
+			if (room.teamId) {
+				teamIds.add(room.teamId);
+			}
+		}
+	}
+
+	const [profiles, teamProfiles, organizationProfiles] = await Promise.all([
+		profileUserIds.size > 0
+			? db
+					.select({
+						userId: bambiProfile.userId,
+						displayName: bambiProfile.displayName,
+					})
+					.from(bambiProfile)
+					.where(inArray(bambiProfile.userId, [...profileUserIds]))
+			: Promise.resolve([]),
+		teamIds.size > 0
+			? db
+					.select({
+						teamId: employerTeamProfile.teamId,
+						displayName: employerTeamProfile.displayName,
+					})
+					.from(employerTeamProfile)
+					.where(inArray(employerTeamProfile.teamId, [...teamIds]))
+			: Promise.resolve([]),
+		organizationIds.size > 0
+			? db
+					.select({
+						organizationId: employerOrganizationProfile.organizationId,
+						displayName: employerOrganizationProfile.displayName,
+					})
+					.from(employerOrganizationProfile)
+					.where(
+						inArray(employerOrganizationProfile.organizationId, [
+							...organizationIds,
+						])
+					)
+			: Promise.resolve([]),
+	]);
+
+	const nameByUserId = new Map(
+		profiles.map((entry) => [entry.userId, entry.displayName])
+	);
+	const nameByTeamId = new Map(
+		teamProfiles.map((entry) => [entry.teamId, entry.displayName])
+	);
+	const nameByOrganizationId = new Map(
+		organizationProfiles.map((entry) => [
+			entry.organizationId,
+			entry.displayName,
+		])
+	);
+
+	const namesByRoomId = new Map<string, string | null>();
+	for (const room of rooms) {
+		if (room.employerUserId === viewerUserId) {
+			namesByRoomId.set(
+				room.id,
+				nameByUserId.get(room.jobSeekerUserId) ?? null
+			);
+		} else {
+			const employerName =
+				(room.teamId ? nameByTeamId.get(room.teamId) : undefined) ??
+				nameByOrganizationId.get(room.organizationId) ??
+				nameByUserId.get(room.employerUserId) ??
+				null;
+			namesByRoomId.set(room.id, employerName);
+		}
+	}
+
+	return namesByRoomId;
+};
+
 export const chatsRouter = {
 	startFromJobPost: protectedProcedure
 		.input(startFromJobPostInput)
@@ -343,32 +446,53 @@ export const chatsRouter = {
 			return [];
 		}
 
-		const jobPostIds = [...new Set(rooms.map((room) => room.jobPostId))];
+		// 아직 메시지가 하나도 오가지 않은 방(구직자가 채팅 시작만 하고 첫
+		// 메시지를 보내지 않은 빈 방)은 목록에서 숨긴다.
+		const roomsWithLastMessage = await Promise.all(
+			rooms.map(async (room) => {
+				const [lastMessage] = await db
+					.select({ id: chatMessage.id, body: chatMessage.body })
+					.from(chatMessage)
+					.where(eq(chatMessage.chatRoomId, room.id))
+					.orderBy(desc(chatMessage.createdAt))
+					.limit(1);
+
+				return { lastMessage, room };
+			})
+		);
+		const visibleRooms = roomsWithLastMessage.filter(
+			({ lastMessage }) => lastMessage
+		);
+
+		if (visibleRooms.length === 0) {
+			return [];
+		}
+
+		const jobPostIds = [
+			...new Set(visibleRooms.map(({ room }) => room.jobPostId)),
+		];
 		const posts = await db
 			.select({ id: jobPost.id, title: jobPost.title })
 			.from(jobPost)
 			.where(inArray(jobPost.id, jobPostIds));
 		const jobTitleById = new Map(posts.map((post) => [post.id, post.title]));
 
-		return await Promise.all(
-			rooms.map(async (room) => {
-				const [lastMessage] = await db
-					.select({ body: chatMessage.body })
-					.from(chatMessage)
-					.where(eq(chatMessage.chatRoomId, room.id))
-					.orderBy(desc(chatMessage.createdAt))
-					.limit(1);
+		const counterpartNames = await resolveCounterpartNames(
+			visibleRooms.map(({ room }) => room),
+			profile.userId
+		);
 
-				return {
-					...room,
-					jobTitle: jobTitleById.get(room.jobPostId) ?? null,
-					lastMessageBody: lastMessage?.body ?? null,
-					unreadCount: await getUnreadMessageCount({
-						chatRoomId: room.id,
-						userId: profile.userId,
-					}),
-				};
-			})
+		return await Promise.all(
+			visibleRooms.map(async ({ lastMessage, room }) => ({
+				...room,
+				counterpartName: counterpartNames.get(room.id) ?? null,
+				jobTitle: jobTitleById.get(room.jobPostId) ?? null,
+				lastMessageBody: lastMessage?.body ?? null,
+				unreadCount: await getUnreadMessageCount({
+					chatRoomId: room.id,
+					userId: profile.userId,
+				}),
+			}))
 		);
 	}),
 
@@ -443,7 +567,13 @@ export const chatsRouter = {
 				.where(eq(interviewSchedule.chatRoomId, room.id))
 				.orderBy(desc(interviewSchedule.createdAt));
 
+			const counterpartNames = await resolveCounterpartNames(
+				[room],
+				profile.userId
+			);
+
 			return {
+				counterpartName: counterpartNames.get(room.id) ?? null,
 				currentUserId: profile.userId,
 				jobPost: post ?? null,
 				messages: messages.map((message) => ({

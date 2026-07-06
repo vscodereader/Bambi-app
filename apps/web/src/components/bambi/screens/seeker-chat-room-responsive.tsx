@@ -449,6 +449,18 @@ function ReviewSidebarCard({
 	);
 }
 
+function ChatCounterpartName({ name }: { name: string | null }) {
+	if (!name) {
+		return null;
+	}
+
+	return (
+		<p className="mt-0.5 mb-0 truncate font-bold text-foreground text-sm">
+			{name}
+		</p>
+	);
+}
+
 export function SeekerChatRoomResponsive({
 	onBack,
 	onReveal,
@@ -748,7 +760,8 @@ export function SeekerChatRoomResponsive({
 		);
 	}
 
-	const { currentUserId, jobPost, messages, room, schedules } = roomQuery.data;
+	const { counterpartName, currentUserId, jobPost, messages, room, schedules } =
+		roomQuery.data;
 	const isAttachmentSubmitting =
 		createAttachmentUploadMutation.isPending ||
 		sendMediaMessageMutation.isPending;
@@ -932,6 +945,7 @@ export function SeekerChatRoomResponsive({
 						<h1 className="m-0 truncate font-extrabold text-lg">
 							{jobPost?.title ?? "공고 채팅"}
 						</h1>
+						<ChatCounterpartName name={counterpartName} />
 						<p className="mt-1 mb-0 truncate text-muted-foreground text-xs">
 							{jobPost?.industryCategory ?? "공고"} ·{" "}
 							{jobPost?.region ?? "지역 확인"}
