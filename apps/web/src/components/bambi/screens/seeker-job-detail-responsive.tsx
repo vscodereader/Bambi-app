@@ -51,14 +51,14 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 
 	if (block.type === "callout") {
 		return (
-			<p className="m-0 border border-coral-200 bg-coral-50 p-3 text-[15px] text-coral-800 leading-relaxed">
+			<p className="m-0 whitespace-pre-line border border-coral-200 bg-coral-50 p-3 text-[15px] text-coral-800 leading-relaxed">
 				{block.text}
 			</p>
 		);
 	}
 
 	return (
-		<p className="m-0 text-[15px] text-foreground leading-relaxed">
+		<p className="m-0 whitespace-pre-line text-[15px] text-foreground leading-relaxed">
 			{block.text}
 		</p>
 	);
@@ -143,7 +143,7 @@ export function SeekerJobDetailResponsive({
 							))}
 						</div>
 					) : (
-						<p className="mt-3 mb-0 text-[15px] text-foreground leading-relaxed">
+						<p className="mt-3 mb-0 whitespace-pre-line text-[15px] text-foreground leading-relaxed">
 							{job.desc}
 						</p>
 					)}
