@@ -110,43 +110,40 @@ export function VisualJobCard({
 				onClick={() => onOpen(job)}
 				type="button"
 			>
-				<div className="flex items-start gap-3">
-					{job.coverImage ? (
+				{job.coverImage ? (
+					<div className="relative aspect-[7/3] w-full overflow-hidden rounded-lg border border-white">
 						<Image
 							alt={job.coverImage.altText || job.coverImage.fileName}
-							className="size-20 shrink-0 rounded-lg border border-white object-cover"
-							height={80}
+							className="object-cover"
+							fill
+							sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, 100vw"
 							src={job.coverImage.url}
 							unoptimized
-							width={80}
 						/>
-					) : (
-						<div className="flex size-20 shrink-0 items-center justify-center rounded-lg border border-white bg-secondary font-extrabold text-base text-coral-700">
-							{job.company.slice(0, 2)}
-						</div>
-					)}
-					<div
-						className={cn(
-							"flex min-w-0 flex-1 flex-col gap-1",
-							showHitRibbon && "pr-8"
-						)}
-					>
-						<h3 className="m-0 truncate font-extrabold text-[15px] leading-snug">
-							{job.company}
-						</h3>
-						<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
-							<span className="inline-flex size-3 shrink-0">
-								<MapPinIcon />
-							</span>
-							<span className="truncate">
-								{job.location}
-								{job.type ? ` · ${job.type}` : ""}
-							</span>
-						</span>
-						<p className="m-0 truncate text-muted-foreground text-xs leading-relaxed">
-							{shortDesc}
-						</p>
 					</div>
+				) : (
+					<div className="flex aspect-[7/3] w-full items-center justify-center rounded-lg border border-white bg-secondary font-extrabold text-coral-700 text-xl">
+						{job.company.slice(0, 2)}
+					</div>
+				)}
+				<div
+					className={cn("flex min-w-0 flex-col gap-1", showHitRibbon && "pr-8")}
+				>
+					<h3 className="m-0 truncate font-extrabold text-[15px] leading-snug">
+						{job.company}
+					</h3>
+					<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
+						<span className="inline-flex size-3 shrink-0">
+							<MapPinIcon />
+						</span>
+						<span className="truncate">
+							{job.location}
+							{job.type ? ` · ${job.type}` : ""}
+						</span>
+					</span>
+					<p className="m-0 truncate text-muted-foreground text-xs leading-relaxed">
+						{shortDesc}
+					</p>
 				</div>
 			</button>
 			<div className="flex items-end justify-between gap-2">
