@@ -9,6 +9,7 @@ import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { clearGuestCookie } from "@/lib/bambi/guest";
 import { client, queryClient } from "@/utils/orpc";
 import { Badge, Button, Card, Input, Logo } from "../ds";
 import { PhoneIcon, ShieldIcon } from "../icons";
@@ -164,7 +165,11 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 					tone: "error",
 				});
 			},
-			onSuccess: () => {
+			onSuccess: async () => {
+				// 실제 세션이 생겼으니 게스트 열람 권한(쿠키)을 회수한다. 남겨두면
+				// 로그아웃·세션 만료 후에도 게스트로 마켓을 볼 수 있게 된다. 게이트가
+				// 쿠키 없는 상태를 보도록 내비게이션 전에 삭제를 기다린다.
+				await clearGuestCookie();
 				if (isSignUp) {
 					finishSignup().catch((error: unknown) => {
 						setNotice({
