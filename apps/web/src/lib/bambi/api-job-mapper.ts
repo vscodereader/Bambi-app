@@ -1,3 +1,4 @@
+import { sampleCoverMedia, sampleThumbnailUrl } from "./sample-thumbnails";
 import type {
 	Job,
 	JobDescriptionBlock,
@@ -44,15 +45,11 @@ export interface ApiMarketplaceJob {
 	workSchedule?: string | null;
 }
 
-const toJobMediaUrl = (media: ApiJobMedia): string => {
-	const params = new URLSearchParams({
-		fileName: media.fileName,
-		key: media.storageKey,
-		usage: media.usage,
-	});
-
-	return `/bambi/local-job-media?${params.toString()}`;
-};
+// 실제 스토리지 이미지 연동 전까지, API 미디어도 storageKey 기준으로 결정적
+// 샘플 썸네일을 쓴다. (기존 /bambi/local-job-media 는 "COVER" 라벨 SVG 플레이스홀더라
+// mock 샘플이 떴다가 회색 박스로 덮이는 문제가 있었다.)
+const toJobMediaUrl = (media: ApiJobMedia): string =>
+	sampleThumbnailUrl(media.storageKey);
 
 const toJobMedia = (media?: ApiJobMedia | null): JobMedia | null => {
 	if (!media) {
@@ -102,7 +99,9 @@ const toRating = ({
 
 export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 	const company = getMarketplaceJobCompany(job);
-	const coverImage = toJobMedia(job.media?.cover ?? job.coverImage ?? null);
+	const coverImage =
+		toJobMedia(job.media?.cover ?? job.coverImage ?? null) ??
+		sampleCoverMedia(job.id, `${company} 대표 이미지`);
 	const detailImages = (job.media?.detail ?? [])
 		.map(toJobMedia)
 		.filter((media): media is JobMedia => media !== null);

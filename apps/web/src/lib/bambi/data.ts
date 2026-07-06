@@ -1,50 +1,13 @@
 // 밤비 신뢰·안전 흐름 — 샘플 데이터
 
+import { sampleCoverMedia } from "./sample-thumbnails";
 import type {
 	Job,
-	JobMedia,
 	ManagedUser,
 	QueueItem,
 	Report,
 	ReportReason,
 } from "./types";
-
-// 샘플 썸네일(테스트용) — apps/web/public/bambi/sample-thumbnails 에 실제 파일 존재.
-const SAMPLE_THUMBNAILS: ReadonlyArray<{ fileName: string; mimeType: string }> =
-	[
-		{ fileName: "sample-1.gif", mimeType: "image/gif" },
-		{ fileName: "sample-2.jpeg", mimeType: "image/jpeg" },
-		{ fileName: "sample-3.jpeg", mimeType: "image/jpeg" },
-		{ fileName: "sample-4.jpeg", mimeType: "image/jpeg" },
-		{ fileName: "sample-5.jpeg", mimeType: "image/jpeg" },
-		{ fileName: "sample-6.jpeg", mimeType: "image/jpeg" },
-	];
-
-// 공고 id 기반 결정적 해시 — 새로고침해도 값이 고정돼 SSR/CSR hydration이 어긋나지 않는다.
-// (런타임 Math.random 은 매 렌더 달라져 Next hydration mismatch 를 일으키므로 사용하지 않는다.)
-function hashJobId(id: string): number {
-	let hash = 0;
-	for (const char of id) {
-		hash = (hash * 31 + char.charCodeAt(0)) % 100_000;
-	}
-	return hash;
-}
-
-// 각 공고에 샘플 썸네일을 랜덤(결정적)으로 배분한다. 실제 이미지 연동 전까지의 임시 처리.
-function withSampleThumbnail(job: Job): Job {
-	const sample =
-		SAMPLE_THUMBNAILS[hashJobId(job.id) % SAMPLE_THUMBNAILS.length];
-	const coverImage: JobMedia = {
-		altText: `${job.company} 대표 이미지`,
-		byteSize: 0,
-		fileName: sample.fileName,
-		mimeType: sample.mimeType,
-		storageKey: `bambi/sample-thumbnails/${sample.fileName}`,
-		url: `/bambi/sample-thumbnails/${sample.fileName}`,
-		usage: "cover",
-	};
-	return { ...job, coverImage };
-}
 
 const JOBS_SEED: Job[] = [
 	// ── 스페셜(프리미엄) 노출 ──────────────────────────────────
@@ -258,7 +221,11 @@ const JOBS_SEED: Job[] = [
 	},
 ];
 
-export const JOBS: Job[] = JOBS_SEED.map(withSampleThumbnail);
+// 각 공고에 샘플 썸네일을 랜덤(결정적)으로 배분한다. 실제 이미지 연동 전까지의 임시 처리.
+export const JOBS: Job[] = JOBS_SEED.map((job) => ({
+	...job,
+	coverImage: sampleCoverMedia(job.id, `${job.company} 대표 이미지`),
+}));
 
 // 운영자 검수 큐 — 자동 필터에 걸려 사람 검수로 넘어온 공고
 export const QUEUE: QueueItem[] = [
