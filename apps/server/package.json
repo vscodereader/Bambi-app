@@ -27,6 +27,7 @@
     "drizzle-orm": "catalog:",
     "evlog": "catalog:",
     "fastify": "^5.3.3",
+    "fastify-plugin": "^6.0.0",
     "socket.io": "^4.8.3",
     "zod": "catalog:"
   },
