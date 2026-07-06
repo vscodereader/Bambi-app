@@ -13,6 +13,7 @@
     "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
+    "db:proxy": "cloud-sql-proxy --gcloud-auth --port 15432 bambi-app-501604:asia-northeast3:bambi-dev",
     "db:push": "turbo -F @bambi-app/db db:push",
     "db:studio": "turbo -F @bambi-app/db db:studio",
     "db:generate": "turbo -F @bambi-app/db db:generate",
