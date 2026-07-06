@@ -40,6 +40,9 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
 	--member="serviceAccount:${SA_EMAIL}" --role="roles/run.admin" --condition=None >/dev/null
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
 	--member="serviceAccount:${SA_EMAIL}" --role="roles/artifactregistry.writer" --condition=None >/dev/null
+# CI에서 cloud-sql-proxy로 마이그레이션을 돌리기 위한 권한
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+	--member="serviceAccount:${SA_EMAIL}" --role="roles/cloudsql.client" --condition=None >/dev/null
 
 PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
 RUNTIME_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
@@ -79,6 +82,12 @@ for SVC in bambi-server bambi-server-dev; do
 		gcloud secrets add-iam-policy-binding "${SID}" \
 			--member="serviceAccount:${RUNTIME_SA}" \
 			--role="roles/secretmanager.secretAccessor" >/dev/null
+		# 배포 SA는 CI 마이그레이션에 DATABASE_URL만 필요
+		if [ "${KEY}" = "database-url" ]; then
+			gcloud secrets add-iam-policy-binding "${SID}" \
+				--member="serviceAccount:${SA_EMAIL}" \
+				--role="roles/secretmanager.secretAccessor" >/dev/null
+		fi
 	done
 done
 

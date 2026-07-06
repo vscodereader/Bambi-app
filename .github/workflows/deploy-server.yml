@@ -66,6 +66,36 @@ jobs:
           cache-from: type=gha,scope=server-${{ github.ref_name }}
           cache-to: type=gha,mode=max,scope=server-${{ github.ref_name }}
 
+      # ── DB 마이그레이션 (배포 전) ──────────────────────────────
+      # cloud-sql-proxy를 유닉스 소켓 모드(/cloudsql)로 띄우면 Secret Manager의
+      # DATABASE_URL(소켓 형식)을 그대로 사용할 수 있다. 마이그레이션이 실패하면
+      # 배포 스텝이 실행되지 않아 이전 revision이 그대로 유지된다.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install db workspace deps
+        run: pnpm install --frozen-lockfile --filter @bambi-app/db...
+
+      - name: Run DB migrations
+        run: |
+          DBURL="$(gcloud secrets versions access latest --secret="${SERVICE}-database-url")"
+          echo "::add-mask::${DBURL}"
+          sudo mkdir -p /cloudsql && sudo chown "$USER" /cloudsql
+          curl -sSfL -o /tmp/cloud-sql-proxy \
+            "https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.23.0/cloud-sql-proxy.linux.amd64"
+          chmod +x /tmp/cloud-sql-proxy
+          /tmp/cloud-sql-proxy --unix-socket /cloudsql "${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" --quiet &
+          PROXY_PID=$!
+          SOCKET="/cloudsql/${PROJECT_ID}:${REGION}:${SQL_INSTANCE}/.s.PGSQL.5432"
+          for i in $(seq 1 30); do [ -S "${SOCKET}" ] && break; sleep 1; done
+          [ -S "${SOCKET}" ] || { echo "프록시 소켓 준비 실패"; exit 1; }
+          (cd packages/db && DATABASE_URL="${DBURL}" pnpm exec drizzle-kit migrate)
+          kill "${PROXY_PID}"
+
       # 서버는 23000에 listen → --port=23000 으로 Cloud Run 프로브를 맞춘다.
       # socket.io가 인메모리(어댑터 없음)라 당분간 --max-instances=1 로 고정.
       # 웹소켓 유지를 위해 --timeout=3600(최대), --session-affinity 설정.
