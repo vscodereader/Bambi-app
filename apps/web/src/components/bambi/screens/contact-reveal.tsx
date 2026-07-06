@@ -23,6 +23,12 @@ const contactMethodLabels: Record<ContactMethod, string> = {
 	phone: "전화번호",
 };
 
+const contactMethodPlaceholders: Record<ContactMethod, string> = {
+	email: "예: bambi@example.com",
+	kakao: "예: 카카오톡 ID",
+	phone: "예: 010-0000-0000",
+};
+
 const formatDateTime = (value: Date | string): string =>
 	new Intl.DateTimeFormat("ko-KR", {
 		dateStyle: "medium",
@@ -117,7 +123,7 @@ function ContactRevealApi({
 
 	if (roomQuery.isLoading) {
 		return (
-			<div className="mx-auto w-full max-w-[720px] px-4 py-10 text-center font-bold text-muted-foreground">
+			<div className="mx-auto w-full px-6 py-10 text-center font-bold text-muted-foreground md:max-w-[80%]">
 				연락처 공개 조건을 확인하고 있어요.
 			</div>
 		);
@@ -125,8 +131,8 @@ function ContactRevealApi({
 
 	if (roomQuery.isError || !roomQuery.data) {
 		return (
-			<div className="flex min-h-0 flex-1 flex-col">
-				<AppBar onBack={onBack} title="연락처 공개" />
+			<div className="mx-auto flex min-h-0 w-full flex-1 flex-col md:max-w-[80%]">
+				<AppBar className="md:px-6" onBack={onBack} title="연락처 공개" />
 				<div className="px-6 py-6">
 					<Card className="rounded-lg text-center" pad="lg" tone="outline">
 						<h1 className="m-0 font-extrabold text-xl">
@@ -147,8 +153,8 @@ function ContactRevealApi({
 	const latestSchedule = roomQuery.data.schedules[0];
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<AppBar onBack={onBack} title="연락처 공개" />
+		<div className="mx-auto flex min-h-0 w-full flex-1 flex-col md:max-w-[80%]">
+			<AppBar className="md:px-6" onBack={onBack} title="연락처 공개" />
 			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-2 pb-5">
 				<div className="flex flex-col items-center gap-2.5 pt-2 pb-1 text-center">
 					<div className="flex size-16 items-center justify-center rounded-[20px] bg-coral-50 text-coral-700">
@@ -225,7 +231,7 @@ function ContactRevealApi({
 							className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
 							id="contact-value"
 							onChange={(event) => setContactValue(event.target.value)}
-							placeholder="예: 010-0000-0000"
+							placeholder={contactMethodPlaceholders[contactMethod]}
 							value={contactValue}
 						/>
 						{errorMessage ? (
@@ -297,8 +303,8 @@ function ContactRevealPreview({
 	const company = job?.company ?? "달밤 라운지";
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<AppBar onBack={onBack} title="연락처 공개" />
+		<div className="mx-auto flex min-h-0 w-full flex-1 flex-col md:max-w-[80%]">
+			<AppBar className="md:px-6" onBack={onBack} title="연락처 공개" />
 			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-2 pb-5">
 				<div className="flex flex-col items-center gap-2.5 pt-2 pb-1 text-center">
 					<div className="flex size-16 items-center justify-center rounded-[20px] bg-coral-50 text-coral-700">
