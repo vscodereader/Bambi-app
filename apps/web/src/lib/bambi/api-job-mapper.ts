@@ -1,4 +1,9 @@
-import type { Job, JobDescriptionBlock, JobMedia } from "./types";
+import type {
+	Job,
+	JobDescriptionBlock,
+	JobMedia,
+	JobPerformanceMetrics,
+} from "./types";
 
 export interface ApiJobMedia {
 	altText?: null | string;
@@ -27,6 +32,7 @@ export interface ApiMarketplaceJob {
 	media?: ApiJobMediaSet;
 	payAmount: number;
 	payUnit: string;
+	performance?: JobPerformanceMetrics;
 	promotionLabel?: null | string;
 	promotionTier?: "premium" | "recommended" | "standard" | null;
 	ratingAverage?: null | number | string;
@@ -122,6 +128,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		lastBoostedAt: job.lastBoostedAt ?? null,
 		location: job.region,
 		pay: formatMarketplacePay(job),
+		...(job.performance ? { performance: job.performance } : {}),
 		pref: "면접 전 연락처 보호",
 		promotionLabel: job.promotionLabel ?? null,
 		promotionTier: job.promotionTier ?? null,

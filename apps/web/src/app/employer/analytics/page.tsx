@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
@@ -37,10 +38,12 @@ const formatRate = (numerator: number, denominator: number): string => {
 
 function MetricCard({ label, value }: MetricCardProps) {
 	return (
-		<div className="border p-4">
-			<dt className="text-muted-foreground text-sm">{label}</dt>
-			<dd className="mt-2 font-semibold text-2xl">{value}</dd>
-		</div>
+		<Card size="sm">
+			<CardContent className="flex flex-col gap-2">
+				<dt className="text-muted-foreground text-sm">{label}</dt>
+				<dd className="font-semibold text-2xl">{value}</dd>
+			</CardContent>
+		</Card>
 	);
 }
 
@@ -135,7 +138,10 @@ export default function EmployerAnalyticsPage() {
 				/>
 			</dl>
 
-			<section aria-labelledby="placement-metrics" className="space-y-3">
+			<section
+				aria-labelledby="placement-metrics"
+				className="flex flex-col gap-3"
+			>
 				<h2 className="font-medium text-base" id="placement-metrics">
 					노출 구분
 				</h2>
@@ -166,80 +172,79 @@ export default function EmployerAnalyticsPage() {
 					title="분석할 공고가 없습니다"
 				/>
 			) : (
-				<section
-					aria-labelledby="job-performance-table"
-					className="overflow-x-auto border"
-				>
-					<table className="w-full min-w-[820px] border-collapse text-left text-sm">
-						<thead className="border-b bg-muted/40">
-							<tr>
-								<th className="px-4 py-3 font-medium" scope="col">
-									공고
-								</th>
-								<th className="px-4 py-3 font-medium" scope="col">
-									노출
-								</th>
-								<th className="px-4 py-3 font-medium" scope="col">
-									상세
-								</th>
-								<th className="px-4 py-3 font-medium" scope="col">
-									채팅
-								</th>
-								<th className="px-4 py-3 font-medium" scope="col">
-									연락처
-								</th>
-								<th className="px-4 py-3 font-medium" scope="col">
-									상세 전환
-								</th>
-								<th className="px-4 py-3 font-medium" scope="col">
-									게재 구분
-								</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y">
-							{summaries.map((summary) => (
-								<tr key={summary.jobPostId}>
-									<th className="px-4 py-3 font-medium" scope="row">
-										<div className="max-w-[280px]">
-											<p className="m-0 break-words">{summary.title}</p>
-											<StatusBadge tone={getJobStatusTone(summary.status)}>
-												{getJobStatusLabel(summary.status)}
-											</StatusBadge>
-										</div>
+				<Card>
+					<CardContent className="overflow-x-auto p-0">
+						<table className="w-full min-w-[820px] border-collapse text-left text-sm">
+							<thead className="border-b bg-muted/40">
+								<tr>
+									<th className="px-4 py-3 font-medium" scope="col">
+										공고
 									</th>
-									<td className="px-4 py-3">
-										{formatNumber(summary.metrics.impressions)}
-									</td>
-									<td className="px-4 py-3">
-										{formatNumber(summary.metrics.detailViews)}
-									</td>
-									<td className="px-4 py-3">
-										{formatNumber(summary.metrics.chatStarts)}
-									</td>
-									<td className="px-4 py-3">
-										{formatNumber(summary.metrics.contactReveals)}
-									</td>
-									<td className="px-4 py-3">
-										{formatRate(
-											summary.metrics.detailViews,
-											summary.metrics.impressions
-										)}
-									</td>
-									<td className="px-4 py-3">
-										프리미엄{" "}
-										{formatNumber(summary.sectionMetrics.premiumImpressions)} ·
-										추천{" "}
-										{formatNumber(
-											summary.sectionMetrics.recommendedImpressions
-										)}{" "}
-										· 일반{" "}
-										{formatNumber(summary.sectionMetrics.organicImpressions)}
-									</td>
+									<th className="px-4 py-3 font-medium" scope="col">
+										노출
+									</th>
+									<th className="px-4 py-3 font-medium" scope="col">
+										상세
+									</th>
+									<th className="px-4 py-3 font-medium" scope="col">
+										채팅
+									</th>
+									<th className="px-4 py-3 font-medium" scope="col">
+										연락처
+									</th>
+									<th className="px-4 py-3 font-medium" scope="col">
+										상세 전환
+									</th>
+									<th className="px-4 py-3 font-medium" scope="col">
+										게재 구분
+									</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
-				</section>
+							</thead>
+							<tbody className="divide-y">
+								{summaries.map((summary) => (
+									<tr key={summary.jobPostId}>
+										<th className="px-4 py-3 font-medium" scope="row">
+											<div className="max-w-[280px]">
+												<p className="m-0 break-words">{summary.title}</p>
+												<StatusBadge tone={getJobStatusTone(summary.status)}>
+													{getJobStatusLabel(summary.status)}
+												</StatusBadge>
+											</div>
+										</th>
+										<td className="px-4 py-3">
+											{formatNumber(summary.metrics.impressions)}
+										</td>
+										<td className="px-4 py-3">
+											{formatNumber(summary.metrics.detailViews)}
+										</td>
+										<td className="px-4 py-3">
+											{formatNumber(summary.metrics.chatStarts)}
+										</td>
+										<td className="px-4 py-3">
+											{formatNumber(summary.metrics.contactReveals)}
+										</td>
+										<td className="px-4 py-3">
+											{formatRate(
+												summary.metrics.detailViews,
+												summary.metrics.impressions
+											)}
+										</td>
+										<td className="px-4 py-3">
+											프리미엄{" "}
+											{formatNumber(summary.sectionMetrics.premiumImpressions)}{" "}
+											· 추천{" "}
+											{formatNumber(
+												summary.sectionMetrics.recommendedImpressions
+											)}{" "}
+											· 일반{" "}
+											{formatNumber(summary.sectionMetrics.organicImpressions)}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</CardContent>
+				</Card>
 			)}
 		</PageShell>
 	);

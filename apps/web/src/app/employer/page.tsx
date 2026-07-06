@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@bambi-app/ui/components/badge";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	Card,
@@ -10,7 +9,18 @@ import {
 } from "@bambi-app/ui/components/card";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import {
+	ChartColumn,
+	Check,
+	CircleAlert,
+	Clock,
+	Eye,
+	type LucideIcon,
+	Settings,
+	Zap,
+} from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 
@@ -87,6 +97,121 @@ const getPromotionSummary = (promotions: PromotionSummaryItem[]) => ({
 	),
 });
 
+const getJobStatusCounts = (jobPosts: { status: string }[]) => ({
+	pendingReview: jobPosts.filter((job) => job.status === "pending_review")
+		.length,
+	published: jobPosts.filter((job) => job.status === "published").length,
+	rejected: jobPosts.filter((job) => job.status === "rejected").length,
+});
+
+const getJobLeadingStatus = (
+	status: string
+): { icon: LucideIcon; tile: string } => {
+	if (status === "published") {
+		return { icon: Check, tile: "bg-green-50 text-green-600" };
+	}
+
+	if (status === "rejected") {
+		return { icon: CircleAlert, tile: "bg-red-50 text-red-600" };
+	}
+
+	if (status === "pending_review") {
+		return { icon: Clock, tile: "bg-amber-50 text-amber-500" };
+	}
+
+	return { icon: Clock, tile: "bg-secondary text-muted-foreground" };
+};
+
+const quickLinks: {
+	description: string;
+	href: Route;
+	icon: LucideIcon;
+	label: string;
+}[] = [
+	{
+		description: "공고 노출을 끌어올려요",
+		href: "/employer/promotions" as Route,
+		icon: Zap,
+		label: "프로모션 관리",
+	},
+	{
+		description: "조회·지원 지표를 확인해요",
+		href: "/employer/analytics" as Route,
+		icon: ChartColumn,
+		label: "성과 분석",
+	},
+	{
+		description: "사업자·팀 정보를 관리해요",
+		href: "/employer/settings" as Route,
+		icon: Settings,
+		label: "조직 설정",
+	},
+	{
+		description: "지원자 화면을 미리 봐요",
+		href: "/seeker" as Route,
+		icon: Eye,
+		label: "공개 공고 보기",
+	},
+];
+
+function OverviewStat({
+	icon: Icon,
+	label,
+	tone,
+	value,
+}: {
+	icon: LucideIcon;
+	label: string;
+	tone: "amber" | "green" | "red";
+	value: number;
+}) {
+	const highlighted = tone === "green" || value > 0;
+
+	return (
+		<div className="flex items-center gap-3">
+			<span
+				className={cn(
+					"flex size-10 items-center justify-center rounded-md bg-secondary text-muted-foreground",
+					highlighted && tone === "green" && "bg-green-50 text-green-600",
+					highlighted && tone === "amber" && "bg-amber-50 text-amber-500",
+					highlighted && tone === "red" && "bg-red-50 text-red-600"
+				)}
+			>
+				<Icon className="size-5" />
+			</span>
+			<div className="flex min-w-0 flex-col gap-1">
+				<dt className="break-keep text-muted-foreground text-xs">{label}</dt>
+				<dd className="font-semibold text-2xl leading-none">{value}</dd>
+			</div>
+		</div>
+	);
+}
+
+function QuickLinkTile({
+	description,
+	href,
+	icon: Icon,
+	label,
+}: {
+	description: string;
+	href: Route;
+	icon: LucideIcon;
+	label: string;
+}) {
+	return (
+		<Link
+			className="group flex flex-col gap-2 rounded-lg border bg-card p-4 transition-colors hover:border-coral-200 hover:bg-coral-50"
+			href={href}
+		>
+			<span className="flex size-9 items-center justify-center rounded-md bg-secondary text-foreground transition-colors group-hover:bg-coral-100 group-hover:text-coral-600">
+				<Icon className="size-5" />
+			</span>
+			<span className="font-medium text-foreground text-sm">{label}</span>
+			<span className="text-muted-foreground text-xs">{description}</span>
+		</Link>
+	);
+}
+
 export default function EmployerPage() {
 	const session = authClient.useSession();
 	const isSignedIn = Boolean(session.data?.user);
@@ -109,6 +234,7 @@ export default function EmployerPage() {
 	const teamProfiles = mineQuery.data?.employerTeamProfiles ?? [];
 	const jobs = jobsQuery.data ?? [];
 	const promotionSummary = getPromotionSummary(promotionsQuery.data ?? []);
+	const jobStatusCounts = getJobStatusCounts(jobs);
 
 	const getOrganizationLabel = (organizationId: string): string =>
 		organizationProfiles.find(
@@ -150,7 +276,7 @@ export default function EmployerPage() {
 							로그인
 						</Link>
 					}
-					description="seed 구인자 계정으로 로그인하면 조직과 공고 상태를 확인할 수 있습니다."
+					description="구인자 계정으로 로그인하면 조직과 공고 상태를 확인할 수 있습니다."
 					title="로그인이 필요합니다"
 				/>
 			</PageShell>
@@ -184,8 +310,8 @@ export default function EmployerPage() {
 			>
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/onboarding">
-							온보딩으로 이동
+						<Link className={buttonVariants()} href="/welcome">
+							회원가입으로 이동
 						</Link>
 					}
 					description="구인자 프로필을 만든 뒤 조직과 팀의 공고를 관리할 수 있습니다."
@@ -255,47 +381,74 @@ export default function EmployerPage() {
 		jobsContent = (
 			<Card aria-labelledby="owned-jobs">
 				<CardContent className="divide-y p-0">
-					{jobs.map((job) => (
-						<div
-							className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
-							key={job.id}
-						>
-							<div className="flex min-w-0 flex-col gap-1">
-								<h3 className="min-w-0 break-words font-medium text-base">
-									{job.title}
-								</h3>
-								<p className="break-words text-foreground text-sm">
-									{job.industryCategory} · {job.region} ·{" "}
-									{formatPay(job.payAmount, job.payUnit)}
-								</p>
-								<p className="break-words text-muted-foreground text-xs">
-									{getOrganizationLabel(job.organizationId)} ·{" "}
-									{getTeamLabel(job.teamId)} · 수정{" "}
-									{formatDateTime(job.updatedAt)}
-								</p>
-							</div>
-							<div className="flex flex-col items-start gap-2 sm:items-end">
-								<div className="flex flex-wrap gap-2 sm:justify-end">
-									<StatusBadge tone={getJobStatusTone(job.status)}>
-										{getJobStatusLabel(job.status)}
-									</StatusBadge>
-									<StatusBadge
-										tone={getVerificationStatusTone(
-											job.employerVerificationStatus
-										)}
-									>
-										{getVerificationStatusLabel(job.employerVerificationStatus)}
-									</StatusBadge>
+					{jobs.map((job) => {
+						const leading = getJobLeadingStatus(job.status);
+						const LeadingIcon = leading.icon;
+
+						return (
+							<div
+								className={cn(
+									"flex items-start gap-3 border-l-2 border-l-transparent p-4",
+									job.status === "rejected" && "border-l-red-500"
+								)}
+								key={job.id}
+							>
+								<span
+									className={cn(
+										"mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md",
+										leading.tile
+									)}
+								>
+									<LeadingIcon className="size-5" />
+								</span>
+								<div className="flex min-w-0 flex-1 flex-col gap-2">
+									<div className="flex min-w-0 flex-col gap-1">
+										<h3 className="min-w-0 break-words font-medium text-base">
+											{job.title}
+										</h3>
+										<p className="break-words text-foreground text-sm">
+											{job.industryCategory} · {job.region} ·{" "}
+											{formatPay(job.payAmount, job.payUnit)}
+										</p>
+									</div>
+									<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+										<span className="flex items-center gap-1.5">
+											<span className="text-muted-foreground">공고</span>
+											<StatusBadge tone={getJobStatusTone(job.status)}>
+												{getJobStatusLabel(job.status)}
+											</StatusBadge>
+										</span>
+										<span className="flex items-center gap-1.5">
+											<span className="text-muted-foreground">사업자</span>
+											<StatusBadge
+												tone={getVerificationStatusTone(
+													job.employerVerificationStatus
+												)}
+											>
+												{getVerificationStatusLabel(
+													job.employerVerificationStatus
+												)}
+											</StatusBadge>
+										</span>
+									</div>
+									<p className="break-words text-muted-foreground text-xs">
+										{getOrganizationLabel(job.organizationId)} ·{" "}
+										{getTeamLabel(job.teamId)} · 수정{" "}
+										{formatDateTime(job.updatedAt)}
+									</p>
 								</div>
 								<Link
-									className={buttonVariants({ variant: "outline" })}
+									className={cn(
+										buttonVariants({ variant: "outline" }),
+										"shrink-0"
+									)}
 									href={`/employer/jobs/${job.id}/edit` as Route}
 								>
 									수정
 								</Link>
 							</div>
-						</div>
-					))}
+						);
+					})}
 				</CardContent>
 			</Card>
 		);
@@ -311,24 +464,99 @@ export default function EmployerPage() {
 			description="조직과 팀 프로필 상태를 확인하고 소유한 공고를 관리합니다."
 			title="구인자 관리"
 		>
+			{jobs.length > 0 ? (
+				<section aria-labelledby="job-overview" className="flex flex-col gap-3">
+					<h2 className="sr-only" id="job-overview">
+						공고 현황
+					</h2>
+					<Card>
+						<CardContent className="flex flex-col gap-4">
+							<dl className="grid grid-cols-3 gap-4">
+								<OverviewStat
+									icon={Check}
+									label="게시"
+									tone="green"
+									value={jobStatusCounts.published}
+								/>
+								<OverviewStat
+									icon={Clock}
+									label="검수 대기"
+									tone="amber"
+									value={jobStatusCounts.pendingReview}
+								/>
+								<OverviewStat
+									icon={CircleAlert}
+									label="반려"
+									tone="red"
+									value={jobStatusCounts.rejected}
+								/>
+							</dl>
+							<Separator />
+							<dl className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
+								<div className="flex items-center gap-1.5">
+									<Zap className="size-4 shrink-0 text-coral-500" />
+									<dt className="text-muted-foreground">진행 중인 프로모션</dt>
+									<dd className="font-medium text-foreground">
+										{promotionSummary.activeCount}개
+									</dd>
+								</div>
+								<div className="flex items-center gap-1.5">
+									<dt className="text-muted-foreground">결제 대기</dt>
+									<dd className="font-medium text-foreground">
+										{promotionSummary.pendingCount}개
+									</dd>
+								</div>
+								<div className="flex items-center gap-1.5">
+									<dt className="text-muted-foreground">남은 끌어올리기</dt>
+									<dd className="font-medium text-foreground">
+										{promotionSummary.remainingBoostCount}회
+									</dd>
+								</div>
+							</dl>
+						</CardContent>
+					</Card>
+				</section>
+			) : null}
+
+			<nav
+				aria-label="구인자 관리 바로가기"
+				className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+			>
+				{quickLinks.map((link) => (
+					<QuickLinkTile
+						description={link.description}
+						href={link.href}
+						icon={link.icon}
+						key={link.href}
+						label={link.label}
+					/>
+				))}
+			</nav>
+
+			<Separator />
+
+			<section aria-labelledby="owned-jobs" className="flex flex-col gap-3">
+				<div>
+					<h2 className="font-semibold text-lg" id="owned-jobs">
+						내 공고
+					</h2>
+					<p className="mt-1 text-muted-foreground text-sm">
+						최근 수정된 공고부터 표시됩니다.
+					</p>
+				</div>
+				{jobsContent}
+			</section>
+
+			<Separator />
+
 			<section aria-labelledby="organizations" className="flex flex-col gap-3">
-				<div className="flex flex-wrap items-center justify-between gap-3">
-					<div>
-						<h2 className="font-semibold text-lg" id="organizations">
-							조직 프로필
-						</h2>
-						<p className="mt-1 text-muted-foreground text-sm">
-							검수 상태는 공고 공개 여부에 영향을 줄 수 있습니다.
-						</p>
-					</div>
-					<div className="flex flex-wrap gap-2">
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href={"/employer/settings" as Route}
-						>
-							조직 설정
-						</Link>
-					</div>
+				<div>
+					<h2 className="font-semibold text-lg" id="organizations">
+						조직 프로필
+					</h2>
+					<p className="mt-1 text-muted-foreground text-sm">
+						검수 상태는 공고 공개 여부에 영향을 줄 수 있습니다.
+					</p>
 				</div>
 
 				{organizationProfiles.length > 0 ? (
@@ -425,53 +653,6 @@ export default function EmployerPage() {
 						title="팀 프로필이 없습니다"
 					/>
 				)}
-			</section>
-
-			<Separator />
-
-			<section aria-labelledby="owned-jobs" className="flex flex-col gap-3">
-				<div className="flex flex-wrap items-center justify-between gap-3">
-					<div>
-						<h2 className="font-semibold text-lg" id="owned-jobs">
-							내 공고
-						</h2>
-						<p className="mt-1 text-muted-foreground text-sm">
-							최근 수정된 공고부터 표시됩니다.
-						</p>
-						<div className="mt-2 flex flex-wrap gap-2">
-							<Badge className="rounded-full" variant="secondary">
-								진행 중 프로모션 {promotionSummary.activeCount}개
-							</Badge>
-							<Badge className="rounded-full" variant="secondary">
-								결제 대기 {promotionSummary.pendingCount}개
-							</Badge>
-							<Badge className="rounded-full" variant="secondary">
-								남은 끌어올리기 {promotionSummary.remainingBoostCount}회
-							</Badge>
-						</div>
-					</div>
-					<div className="flex flex-wrap gap-2">
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href={"/employer/promotions" as Route}
-						>
-							프로모션 관리
-						</Link>
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href={"/employer/analytics" as Route}
-						>
-							성과 분석
-						</Link>
-						<Link
-							className={buttonVariants({ variant: "outline" })}
-							href="/seeker"
-						>
-							공개 공고 보기
-						</Link>
-					</div>
-				</div>
-				{jobsContent}
 			</section>
 		</PageShell>
 	);

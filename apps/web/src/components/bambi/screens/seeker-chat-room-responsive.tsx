@@ -16,7 +16,7 @@ import {
 	joinBambiChatRoom,
 	leaveBambiChatRoom,
 } from "@/lib/bambi-chat-realtime";
-import { interviewStatusLabels } from "@/lib/bambi-options";
+import { interviewStatusLabels, jobStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import {
 	ChatAttachmentPreview,
@@ -994,7 +994,11 @@ export function SeekerChatRoomResponsive({
 								<span className="inline-flex size-4 text-coral-600">
 									<ClockIcon />
 								</span>
-								{jobPost?.status ?? "상태 확인"}
+								{jobPost?.status
+									? (jobStatusLabels[
+											jobPost.status as keyof typeof jobStatusLabels
+										] ?? jobPost.status)
+									: "상태 확인"}
 							</div>
 						</div>
 					</Card>

@@ -2060,17 +2060,39 @@ const seedRichJobs = async (
 
 type RichEvent = typeof jobPerformanceEvent.$inferInsert;
 
+// 최근 7일 성과 profile — Hit 리본 데모용. n → 최근 7일 최종 총량(impressions/detailViews).
+// Hit 여부는 boolean으로 저장하지 않고 이 metrics로만 계산한다.
+const richJobHitProfiles: Record<
+	number,
+	{ detailViews: number; impressions: number }
+> = {
+	1: { detailViews: 100, impressions: 1000 }, // CTR 10% → 조건 A(detailViews>=100)로 Hit
+	2: { detailViews: 24, impressions: 200 }, // CTR 12% → 조건 B로 Hit
+	4: { detailViews: 23, impressions: 200 }, // CTR 11.5% → 비-Hit 대조군
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// now 기준 최근 7일(6일 이내)에 결정론적으로 분산된 createdAt. 고정 2026 날짜로
+// 만료되는 구조를 피하기 위해 전달된 now에서 상대 오프셋으로 계산한다.
+const recentPerformanceDate = (now: Date, k: number): Date =>
+	new Date(now.getTime() - (k % 6) * DAY_MS - (k % 240) * 60 * 1000);
+
 const buildPromotionEvents = (
 	def: RichJobDef,
 	userIds: Record<DevUserKey, string>,
-	startSeq: number
+	startSeq: number,
+	now: Date
 ): RichEvent[] => {
 	const jobPostId = richId("2a2a2a2a", def.n);
 	const isPremium = def.promo === "premium";
+	const profile = richJobHitProfiles[def.n];
 	const events: RichEvent[] = [];
 	let seq = startSeq;
 
-	const impressions = isPremium ? 14 : 8;
+	const defaultImpressions = isPremium ? 14 : 8;
+	const defaultDetailViews = isPremium ? 5 : 3;
+	const impressions = profile ? profile.impressions : defaultImpressions;
 	for (let k = 0; k < impressions; k++) {
 		events.push({
 			id: richId("6a6a6a6a", seq),
@@ -2078,14 +2100,16 @@ const buildPromotionEvents = (
 			organizationId: def.org,
 			actorUserId: null,
 			eventType: "impression",
-			createdAt: new Date(
-				`2026-06-${(20 + (k % 8)).toString().padStart(2, "0")}T${(8 + (k % 10)).toString().padStart(2, "0")}:15:00.000Z`
-			),
+			createdAt: profile
+				? recentPerformanceDate(now, k)
+				: new Date(
+						`2026-06-${(20 + (k % 8)).toString().padStart(2, "0")}T${(8 + (k % 10)).toString().padStart(2, "0")}:15:00.000Z`
+					),
 		});
 		seq++;
 	}
 
-	const detailViews = isPremium ? 5 : 3;
+	const detailViews = profile ? profile.detailViews : defaultDetailViews;
 	for (let k = 0; k < detailViews; k++) {
 		events.push({
 			id: richId("6a6a6a6a", seq),
@@ -2093,9 +2117,11 @@ const buildPromotionEvents = (
 			organizationId: def.org,
 			actorUserId: userIds.seeker,
 			eventType: "detail_view",
-			createdAt: new Date(
-				`2026-06-${(21 + (k % 6)).toString().padStart(2, "0")}T13:${(10 + k).toString().padStart(2, "0")}:00.000Z`
-			),
+			createdAt: profile
+				? recentPerformanceDate(now, k + 1)
+				: new Date(
+						`2026-06-${(21 + (k % 6)).toString().padStart(2, "0")}T13:${(10 + k).toString().padStart(2, "0")}:00.000Z`
+					),
 		});
 		seq++;
 	}
@@ -2160,7 +2186,9 @@ const seedRichPromotions = async (
 				},
 			});
 
-		eventRows.push(...buildPromotionEvents(def, userIds, eventRows.length + 1));
+		eventRows.push(
+			...buildPromotionEvents(def, userIds, eventRows.length + 1, now)
+		);
 	}
 
 	if (eventRows.length > 0) {
