@@ -114,7 +114,7 @@ export function VisualJobCard({
 					{job.coverImage ? (
 						<Image
 							alt={job.coverImage.altText || job.coverImage.fileName}
-							className="h-16 w-32 shrink-0 rounded-lg border border-white object-cover"
+							className="h-16 w-32 shrink-0 rounded-sm border border-white object-cover"
 							height={64}
 							src={job.coverImage.url}
 							unoptimized
@@ -150,7 +150,7 @@ export function VisualJobCard({
 				</div>
 			</button>
 			<div className="flex items-end justify-between gap-2">
-				<span className="flex min-w-0 items-end gap-1.5">
+				<span className="flex h-9 min-w-0 items-center gap-1.5 rounded-md border border-border bg-background px-[14px]">
 					{payUnit ? (
 						<Badge className="shrink-0" tone={toneBadge[tone]}>
 							{payUnit}
