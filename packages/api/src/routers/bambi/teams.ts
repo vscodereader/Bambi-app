@@ -402,7 +402,7 @@ export const teamsRouter = {
 			});
 
 			const [targetMember] = await db
-				.select({ id: member.id })
+				.select({ id: member.id, role: member.role })
 				.from(member)
 				.where(
 					and(
@@ -414,6 +414,11 @@ export const teamsRouter = {
 
 			if (!targetMember) {
 				throw new ORPCError("NOT_FOUND");
+			}
+
+			// 소유자(owner)의 권한은 변경할 수 없다. 실수로 소유권을 잃는 것을 막는다.
+			if (normalizeOrganizationManagementRole(targetMember.role) === "owner") {
+				throw forbidden("소유자의 권한은 변경할 수 없습니다.");
 			}
 
 			const normalizedRole = normalizeOrganizationManagementRole(input.role);
