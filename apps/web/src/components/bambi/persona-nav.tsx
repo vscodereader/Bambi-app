@@ -9,7 +9,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
 import { BOTTOM_NAV_CONTENT_SPACER, BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
-import { ClipboardListIcon, PlusIcon, SettingsIcon, UserIcon } from "./icons";
+import {
+	ClipboardListIcon,
+	PlusIcon,
+	SettingsIcon,
+	StoreIcon,
+	UserIcon,
+} from "./icons";
 import { MobileTabBar } from "./mobile-tab-bar";
 import {
 	ConsoleToast,
@@ -71,7 +77,7 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 		path.startsWith("/employer/settings");
 	let value = "postings";
 	if (path === "/employer/me") {
-		value = "me";
+		value = "business";
 	} else if (path.startsWith("/employer/settings")) {
 		value = "settings";
 	} else if (path === "/employer/new") {
@@ -82,8 +88,12 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 			router.push("/employer/new");
 		} else if (v === "settings") {
 			router.push("/employer/settings" as Route);
-		} else if (v === "me") {
+		} else if (v === "business") {
 			router.push("/employer/me");
+		} else if (v === "me") {
+			// 개인 계정은 role 공용 페이지(/seeker/me)를 재사용한다. 라우트
+			// 세그먼트가 달라 SeekerNav 셸로 전환되는 것은 의도된 동작이다.
+			router.push("/seeker/me");
 		} else {
 			router.push("/employer");
 		}
@@ -98,6 +108,7 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 							{ value: "postings", label: "내 공고", icon: ClipboardListIcon },
 							{ value: "post", label: "등록", icon: PlusIcon },
 							{ value: "settings", label: "설정", icon: SettingsIcon },
+							{ value: "business", label: "업체 정보", icon: StoreIcon },
 							{ value: "me", label: "내 정보", icon: UserIcon },
 						]}
 						onChange={go}
