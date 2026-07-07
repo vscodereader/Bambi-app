@@ -120,6 +120,7 @@ export function EmployerNav({
 const MOD_ROUTES: Record<string, Route> = {
 	queue: "/moderator",
 	reports: "/moderator/reports",
+	employers: "/moderator/employers",
 	users: "/moderator/users",
 };
 const MOD_DETAIL_RE = /^\/moderator\/(?:queue|reports|users)\/[^/]+/;
@@ -160,6 +161,8 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 	let tab = "queue";
 	if (path.startsWith("/moderator/reports")) {
 		tab = "reports";
+	} else if (path.startsWith("/moderator/employers")) {
+		tab = "employers";
 	} else if (path.startsWith("/moderator/users")) {
 		tab = "users";
 	}
@@ -198,7 +201,7 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 				) : null}
 			</div>
 			<NavBar>
-				<ModTabs setTab={go} tab={tab} />
+				<ModTabs setTab={go} showEmployers tab={tab} />
 			</NavBar>
 			{toast ? <ConsoleToast message={toast} /> : null}
 		</>
