@@ -33,6 +33,7 @@ import {
 	FlagIcon,
 	ShieldIcon,
 	SortIcon,
+	StoreIcon,
 	UserIcon,
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
@@ -1193,13 +1194,19 @@ export function UserDetail({
 export function ModTabs({
 	tab,
 	setTab,
+	showEmployers = false,
 }: {
 	tab: string;
 	setTab: (v: string) => void;
+	// 라이브 운영자 콘솔에서만 업소 승인 탭을 노출한다(프리뷰 목업은 3탭 유지).
+	showEmployers?: boolean;
 }) {
 	const items = [
 		{ v: "queue", label: "검수", icon: <ShieldIcon /> },
 		{ v: "reports", label: "신고", icon: <FlagIcon /> },
+		...(showEmployers
+			? [{ v: "employers", label: "업소 승인", icon: <StoreIcon /> }]
+			: []),
 		{ v: "users", label: "사용자", icon: <UserIcon /> },
 	];
 	return (
