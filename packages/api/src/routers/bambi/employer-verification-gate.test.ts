@@ -9,13 +9,19 @@ import type { Context } from "../../context";
 
 dotenv.config({ path: "../../apps/server/.env" });
 
-const [{ db }, authSchema, bambiSchema, { organizationsRouter }] =
-	await Promise.all([
-		import("@bambi-app/db"),
-		import("@bambi-app/db/schema/auth"),
-		import("@bambi-app/db/schema/bambi"),
-		import("./organizations"),
-	]);
+const [
+	{ db },
+	authSchema,
+	bambiSchema,
+	{ organizationsRouter },
+	{ teamsRouter },
+] = await Promise.all([
+	import("@bambi-app/db"),
+	import("@bambi-app/db/schema/auth"),
+	import("@bambi-app/db/schema/bambi"),
+	import("./organizations"),
+	import("./teams"),
+]);
 
 const { user, organization, member } = authSchema;
 const { bambiProfile, employerOrganizationProfile } = bambiSchema;
@@ -96,6 +102,63 @@ describe("verification gate — organizations.updateProfile", () => {
 			displayName: "정상변경",
 		});
 		expect(updated.displayName).toBe("정상변경");
+
+		await db.delete(user).where(eq(user.id, userId));
+		await db.delete(organization).where(eq(organization.id, organizationId));
+	});
+});
+
+describe("verification gate — teams mutations", () => {
+	it("forbids team creation while not verified", async () => {
+		const { userId, organizationId } = await seedPendingOwner();
+
+		const createTeam = createProcedureClient(teamsRouter.create, {
+			context: ctx(userId),
+			path: ["bambi", "teams", "create"],
+		});
+
+		await expect(
+			createTeam({ displayName: "새 팀", organizationId })
+		).rejects.toThrow();
+
+		await db.delete(user).where(eq(user.id, userId));
+		await db.delete(organization).where(eq(organization.id, organizationId));
+	});
+
+	it("allows team creation once verified", async () => {
+		const { userId, organizationId } = await seedPendingOwner();
+		await db
+			.update(employerOrganizationProfile)
+			.set({ verificationStatus: "verified" })
+			.where(eq(employerOrganizationProfile.organizationId, organizationId));
+
+		const createTeam = createProcedureClient(teamsRouter.create, {
+			context: ctx(userId),
+			path: ["bambi", "teams", "create"],
+		});
+
+		const created = await createTeam({ displayName: "새 팀", organizationId });
+		expect(created.displayName).toBe("새 팀");
+
+		await db.delete(user).where(eq(user.id, userId));
+		await db.delete(organization).where(eq(organization.id, organizationId));
+	});
+
+	it("forbids member invitation while not verified", async () => {
+		const { userId, organizationId } = await seedPendingOwner();
+
+		const inviteMember = createProcedureClient(teamsRouter.inviteMember, {
+			context: ctx(userId),
+			path: ["bambi", "teams", "inviteMember"],
+		});
+
+		await expect(
+			inviteMember({
+				email: "invitee@bambi.test",
+				organizationId,
+				role: "staff",
+			})
+		).rejects.toThrow();
 
 		await db.delete(user).where(eq(user.id, userId));
 		await db.delete(organization).where(eq(organization.id, organizationId));

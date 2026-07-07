@@ -8,7 +8,10 @@ import { and, asc, eq, ilike, notInArray, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
-import { requireActiveBambiProfile } from "../../services/bambi-authz";
+import {
+	isEmployerOrganizationVerified,
+	requireActiveBambiProfile,
+} from "../../services/bambi-authz";
 import {
 	canInviteMembers,
 	canManageOrganization,
@@ -49,6 +52,22 @@ const searchEmployerInviteesInput = organizationIdInput.extend({
 });
 
 const forbidden = (message: string) => new ORPCError("FORBIDDEN", { message });
+
+// 승인(verified)되지 않은 조직은 팀 관리 조작을 막는다. admin(bambi role)은 예외.
+const assertOrganizationVerified = async ({
+	organizationId,
+	profile,
+}: {
+	organizationId: string;
+	profile: { role: string };
+}): Promise<void> => {
+	if (
+		profile.role !== "admin" &&
+		!(await isEmployerOrganizationVerified(organizationId))
+	) {
+		throw forbidden("운영자 승인 후 팀을 관리할 수 있습니다.");
+	}
+};
 
 const requireEmployerLikeProfile = async (
 	session: Parameters<typeof requireActiveBambiProfile>[0]
@@ -167,9 +186,13 @@ export const teamsRouter = {
 	create: protectedProcedure
 		.input(createTeamInput)
 		.handler(async ({ context, input }) => {
-			await requireOrganizationTeamManagementAccess({
+			const { profile } = await requireOrganizationTeamManagementAccess({
 				organizationId: input.organizationId,
 				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
 			});
 
 			const now = new Date();
@@ -204,9 +227,13 @@ export const teamsRouter = {
 	update: protectedProcedure
 		.input(updateTeamInput)
 		.handler(async ({ context, input }) => {
-			await requireOrganizationTeamManagementAccess({
+			const { profile } = await requireOrganizationTeamManagementAccess({
 				organizationId: input.organizationId,
 				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
 			});
 			await assertTeamBelongsToOrganization({
 				organizationId: input.organizationId,
@@ -245,6 +272,10 @@ export const teamsRouter = {
 			const { profile } = await requireOrganizationTeamManagementAccess({
 				organizationId: input.organizationId,
 				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
 			});
 
 			if (input.teamId) {
@@ -356,9 +387,13 @@ export const teamsRouter = {
 	setMemberRole: protectedProcedure
 		.input(setMemberRoleInput)
 		.handler(async ({ context, input }) => {
-			await requireOrganizationOwnerAccess({
+			const { profile } = await requireOrganizationOwnerAccess({
 				organizationId: input.organizationId,
 				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
 			});
 
 			const [targetMember] = await db

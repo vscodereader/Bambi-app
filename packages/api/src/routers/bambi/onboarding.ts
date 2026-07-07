@@ -17,6 +17,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
+import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
 import {
 	getJobPostingScopes,
 	ORGANIZATION_WIDE_POSTING_ROLES,
@@ -372,7 +373,16 @@ export const onboardingRouter = {
 				organizationId: input.organizationId,
 				userId,
 			});
-			await requireEmployerBambiProfile(userId);
+			const employerProfile = await requireEmployerBambiProfile(userId);
+
+			if (
+				employerProfile.role !== "admin" &&
+				!(await isEmployerOrganizationVerified(input.organizationId))
+			) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "운영자 승인 후 조직 설정을 변경할 수 있습니다.",
+				});
+			}
 
 			const [profile] = await db
 				.insert(employerOrganizationProfile)
@@ -399,7 +409,16 @@ export const onboardingRouter = {
 				organizationId: input.organizationId,
 				userId,
 			});
-			await requireEmployerBambiProfile(userId);
+			const employerProfile = await requireEmployerBambiProfile(userId);
+
+			if (
+				employerProfile.role !== "admin" &&
+				!(await isEmployerOrganizationVerified(input.organizationId))
+			) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "운영자 승인 후 팀 설정을 변경할 수 있습니다.",
+				});
+			}
 
 			const [selectedTeam] = await db
 				.select({ id: team.id })

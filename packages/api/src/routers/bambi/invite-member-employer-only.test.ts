@@ -17,7 +17,7 @@ const [{ db }, authSchema, bambiSchema, { teamsRouter }] = await Promise.all([
 ]);
 
 const { user, organization, member } = authSchema;
-const { bambiProfile } = bambiSchema;
+const { bambiProfile, employerOrganizationProfile } = bambiSchema;
 
 const ctx = (userId: string): Context =>
 	({ auth: null, session: { user: { id: userId } } }) as Context;
@@ -45,6 +45,12 @@ const seedOwner = async () => {
 		userId: ownerId,
 		role: "owner",
 		createdAt: new Date(),
+	});
+	// 초대는 승인(verified)된 조직만 가능하므로 fixture를 verified로 둔다.
+	await db.insert(employerOrganizationProfile).values({
+		organizationId,
+		displayName: "org",
+		verificationStatus: "verified",
 	});
 	return { ownerId, organizationId };
 };
