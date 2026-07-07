@@ -13,11 +13,14 @@ import {
 	employerTeamProfile,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
-import { getJobPostingScopes } from "../../services/bambi-job-access";
+import {
+	getJobPostingScopes,
+	ORGANIZATION_WIDE_POSTING_ROLES,
+} from "../../services/bambi-job-access";
 import {
 	assertCanCreateBambiProfile,
 	assertCanManageEmployerProfile,
@@ -178,16 +181,17 @@ export const onboardingRouter = {
 				)
 			);
 
+		const teamProfileColumns = {
+			id: employerTeamProfile.id,
+			organizationId: employerTeamProfile.organizationId,
+			teamId: employerTeamProfile.teamId,
+			displayName: employerTeamProfile.displayName,
+			region: employerTeamProfile.region,
+			createdAt: employerTeamProfile.createdAt,
+			updatedAt: employerTeamProfile.updatedAt,
+		};
 		const teamProfiles = await db
-			.select({
-				id: employerTeamProfile.id,
-				organizationId: employerTeamProfile.organizationId,
-				teamId: employerTeamProfile.teamId,
-				displayName: employerTeamProfile.displayName,
-				region: employerTeamProfile.region,
-				createdAt: employerTeamProfile.createdAt,
-				updatedAt: employerTeamProfile.updatedAt,
-			})
+			.select(teamProfileColumns)
 			.from(employerTeamProfile)
 			.innerJoin(
 				teamMember,
@@ -196,6 +200,35 @@ export const onboardingRouter = {
 					eq(teamMember.userId, userId)
 				)
 			);
+
+		// owner/admin(조직 전체 공고를 낼 수 있는 역할)인 조직의 팀은 본인이
+		// teamMember인지와 무관하게 공고 등록 범위에 노출한다.
+		const organizationWidePostingOrganizationIds = organizationProfiles
+			.filter(({ role }) => ORGANIZATION_WIDE_POSTING_ROLES.has(role))
+			.map(({ organizationId }) => organizationId);
+		const organizationWideTeamProfiles =
+			organizationWidePostingOrganizationIds.length > 0
+				? await db
+						.select(teamProfileColumns)
+						.from(employerTeamProfile)
+						.where(
+							inArray(
+								employerTeamProfile.organizationId,
+								organizationWidePostingOrganizationIds
+							)
+						)
+				: [];
+
+		// 내 공고 팀 프로필(teamMember 기준)과 owner/admin 조직 전체 팀을 합쳐
+		// teamId 기준으로 중복을 제거한다. 공고 등록 범위 계산과 라벨 조회에 쓴다.
+		const teamProfileById = new Map(
+			[...teamProfiles, ...organizationWideTeamProfiles].map((teamProfile) => [
+				teamProfile.teamId,
+				teamProfile,
+			])
+		);
+		const postingScopeTeamProfiles = [...teamProfileById.values()];
+
 		const postingScopes = getJobPostingScopes({
 			organizationMemberships: organizationProfiles.map(
 				({ organizationId, role }) => ({
@@ -203,19 +236,18 @@ export const onboardingRouter = {
 					role,
 				})
 			),
-			teamMemberships: teamProfiles.map(({ organizationId, teamId }) => ({
-				organizationId,
-				teamId,
-			})),
+			teamMemberships: postingScopeTeamProfiles.map(
+				({ organizationId, teamId }) => ({
+					organizationId,
+					teamId,
+				})
+			),
 		});
 		const organizationProfileById = new Map(
 			organizationProfiles.map((organizationProfile) => [
 				organizationProfile.organizationId,
 				organizationProfile,
 			])
-		);
-		const teamProfileById = new Map(
-			teamProfiles.map((teamProfile) => [teamProfile.teamId, teamProfile])
 		);
 
 		return {
