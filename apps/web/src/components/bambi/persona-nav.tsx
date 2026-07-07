@@ -12,7 +12,7 @@ import { BottomNav } from "./ds";
 import {
 	ClipboardListIcon,
 	PlusIcon,
-	SettingsIcon,
+	ShieldIcon,
 	StoreIcon,
 	UserIcon,
 } from "./icons";
@@ -106,9 +106,9 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 					<BottomNav
 						items={[
 							{ value: "postings", label: "내 공고", icon: ClipboardListIcon },
-							{ value: "post", label: "등록", icon: PlusIcon },
-							{ value: "settings", label: "설정", icon: SettingsIcon },
 							{ value: "business", label: "업체 정보", icon: StoreIcon },
+							{ value: "post", label: "공고 등록", icon: PlusIcon },
+							{ value: "settings", label: "조직 설정", icon: ShieldIcon },
 							{ value: "me", label: "내 정보", icon: UserIcon },
 						]}
 						onChange={go}
