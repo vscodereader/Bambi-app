@@ -1103,6 +1103,7 @@ export function SeekerChatRoomResponsive({
 										schedule.proposedByUserId !== currentUserId ? (
 											<div className="mt-3 grid grid-cols-2 gap-2">
 												<Button
+													className="shadow-none"
 													disabled={setInterviewStatusMutation.isPending}
 													onClick={() =>
 														setScheduleStatus(schedule.id, "confirmed")
