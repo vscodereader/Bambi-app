@@ -793,6 +793,11 @@ export const chatsRouter = {
 				context.session
 			);
 
+			// 면접 일정은 구인자만 제안할 수 있다. 구직자는 제안을 받기만 한다.
+			if (profile.userId !== room.employerUserId) {
+				throw new ORPCError("FORBIDDEN");
+			}
+
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
 				employerUserId: room.employerUserId,
