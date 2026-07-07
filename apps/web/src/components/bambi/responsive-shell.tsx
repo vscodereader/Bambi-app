@@ -26,9 +26,6 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
 interface ResponsiveAppShellProps {
 	children: ReactNode;
 	className?: string;
-	// gated: 접근이 제한된 상태(예: 미승인 구인자). nav·상태 배지를 숨기고 로고와
-	// "내 정보"만 남긴다.
-	gated?: boolean;
 	headerSlot?: ReactNode;
 	navItems?: readonly NavItem[];
 	showDesktopNav?: boolean;
@@ -76,7 +73,6 @@ function ModeratorHeaderActions() {
 export function ResponsiveAppShell({
 	children,
 	className,
-	gated = false,
 	headerSlot,
 	navItems = DEFAULT_NAV_ITEMS,
 	showDesktopNav = true,
@@ -121,17 +117,15 @@ export function ResponsiveAppShell({
 								<ModeratorHeaderActions />
 							) : (
 								<>
-									{gated ? null : (
-										<Badge
-											className="h-9 gap-1.5 px-3 font-bold"
-											variant="success"
-										>
-											<span className="inline-flex size-3.5">
-												<ShieldIcon />
-											</span>
-											연락처 보호
-										</Badge>
-									)}
+									<Badge
+										className="h-9 gap-1.5 px-3 font-bold"
+										variant="success"
+									>
+										<span className="inline-flex size-3.5">
+											<ShieldIcon />
+										</span>
+										연락처 보호
+									</Badge>
 									<Link
 										className={cn(
 											buttonVariants({
@@ -158,19 +152,6 @@ export function ResponsiveAppShell({
 						{(() => {
 							if (isModerator) {
 								return <ModeratorHeaderActions />;
-							}
-							if (gated) {
-								return (
-									<Link
-										className={cn(
-											buttonVariants({ variant: "outline" }),
-											"h-9 px-4 font-bold text-sm no-underline"
-										)}
-										href={"/seeker/me" as Route}
-									>
-										내 정보
-									</Link>
-								);
 							}
 							return (
 								<>

@@ -60,22 +60,15 @@ export function SeekerNav({ children }: { children: ReactNode }) {
 }
 
 // ---- 구인자 ----------------------------------------------------------------
-export function EmployerNav({
-	children,
-	gated = false,
-}: {
-	children: ReactNode;
-	gated?: boolean;
-}) {
+export function EmployerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const router = useRouter();
-	// 미승인 구인자는 하단 탭도 숨긴다 — 승인 대기 화면만 보게 한다.
+	// 하단 탭은 구인자 주요 라우트에서 항상 노출한다(승인 상태와 무관).
 	const showNav =
-		!gated &&
-		(path === "/employer" ||
-			path === "/employer/new" ||
-			path === "/employer/me" ||
-			path.startsWith("/employer/settings"));
+		path === "/employer" ||
+		path === "/employer/new" ||
+		path === "/employer/me" ||
+		path.startsWith("/employer/settings");
 	let value = "postings";
 	if (path === "/employer/me") {
 		value = "me";
