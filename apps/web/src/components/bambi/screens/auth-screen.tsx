@@ -183,6 +183,11 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 					return;
 				}
 				queryClient.invalidateQueries();
+				// 로그아웃은 push("/")로 "/"→/welcome 리다이렉트 결과를 Router Cache에
+				// 남긴다. 재로그인 후 이 stale 엔트리를 그대로 재생하면 세션이 생겼는데도
+				// /welcome에 머문다. refresh()로 Router Cache를 비워 "/"가 서버에서 새
+				// 세션으로 role 홈을 다시 계산하도록 한다.
+				router.refresh();
 				router.push("/" as Route);
 			},
 		};
