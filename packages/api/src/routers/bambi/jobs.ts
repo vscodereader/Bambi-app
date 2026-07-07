@@ -928,4 +928,28 @@ export const jobsRouter = {
 				};
 			});
 		}),
+	delete: protectedProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.handler(async ({ context, input }) => {
+			const [existing] = await db
+				.select()
+				.from(jobPost)
+				.where(eq(jobPost.id, input.id))
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			await requireEmployerPostingAccess({
+				organizationId: existing.organizationId,
+				teamId: existing.teamId,
+				session: context.session,
+			});
+
+			// 연관 미디어·프로모션·성과 이벤트는 FK onDelete cascade로 함께 제거된다.
+			await db.delete(jobPost).where(eq(jobPost.id, input.id));
+
+			return { id: input.id };
+		}),
 };
