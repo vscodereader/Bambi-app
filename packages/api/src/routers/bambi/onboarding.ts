@@ -63,6 +63,16 @@ const registerEmployerInput = z.object({
 	phoneNumber: z.string().min(3).max(30).optional(),
 });
 
+const submitEmployerBusinessInfoInput = z.object({
+	displayName: z.string().min(1).max(120),
+	businessRegistrationNumber: z
+		.string()
+		.regex(
+			/^\d{3}-\d{2}-\d{5}$/,
+			"사업자등록번호는 000-00-00000 형식이어야 합니다."
+		),
+});
+
 const toOrganizationSlug = (name: string): string => {
 	const base = name
 		.toLowerCase()
@@ -468,6 +478,81 @@ export const onboardingRouter = {
 				.returning();
 
 			return updatedProfile;
+		}),
+
+	submitEmployerBusinessInfo: protectedProcedure
+		.input(submitEmployerBusinessInfoInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			await requireEmployerBambiProfile(userId);
+
+			// 본인이 owner인 조직이 이미 있으면 그 조직 프로필을 갱신하고 재심사(pending)로 돌린다.
+			const [ownedOrg] = await db
+				.select({
+					organizationId: employerOrganizationProfile.organizationId,
+				})
+				.from(employerOrganizationProfile)
+				.innerJoin(
+					member,
+					and(
+						eq(
+							member.organizationId,
+							employerOrganizationProfile.organizationId
+						),
+						eq(member.userId, userId),
+						eq(member.role, "owner")
+					)
+				)
+				.limit(1);
+
+			if (ownedOrg) {
+				await db
+					.update(employerOrganizationProfile)
+					.set({
+						displayName: input.displayName,
+						businessRegistrationNumber: input.businessRegistrationNumber,
+						verificationStatus: "pending",
+						updatedAt: new Date(),
+					})
+					.where(
+						eq(
+							employerOrganizationProfile.organizationId,
+							ownedOrg.organizationId
+						)
+					);
+
+				return {
+					organizationId: ownedOrg.organizationId,
+					verificationStatus: "pending" as const,
+				};
+			}
+
+			const organizationId = `org_${randomUUID()}`;
+			const now = new Date();
+
+			await db.transaction(async (tx) => {
+				await tx.insert(organization).values({
+					id: organizationId,
+					name: input.displayName,
+					slug: toOrganizationSlug(input.displayName),
+					createdAt: now,
+				});
+				await tx.insert(member).values({
+					id: `member_${randomUUID()}`,
+					organizationId,
+					userId,
+					role: "owner",
+					createdAt: now,
+				});
+				await tx.insert(employerOrganizationProfile).values({
+					organizationId,
+					displayName: input.displayName,
+					businessRegistrationNumber: input.businessRegistrationNumber,
+					verificationStatus: "pending",
+				});
+			});
+
+			return { organizationId, verificationStatus: "pending" as const };
 		}),
 
 	registerEmployer: protectedProcedure
