@@ -183,12 +183,13 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 					return;
 				}
 				queryClient.invalidateQueries();
-				// 로그아웃은 push("/")로 "/"→/welcome 리다이렉트 결과를 Router Cache에
-				// 남긴다. 재로그인 후 이 stale 엔트리를 그대로 재생하면 세션이 생겼는데도
-				// /welcome에 머문다. refresh()로 Router Cache를 비워 "/"가 서버에서 새
-				// 세션으로 role 홈을 다시 계산하도록 한다.
-				router.refresh();
-				router.push("/" as Route);
+				// 로그아웃(push("/"))이 "/"→/welcome 리다이렉트 결과를 Router Cache에
+				// 남긴다. router.push("/")는 이 stale 엔트리를 재생할 수 있고, 이를 비우는
+				// router.refresh()는 비동기·논블로킹이라 바로 뒤의 push()와 경쟁해 간헐적으로
+				// /welcome에 머문다(재로그인이 "간혹" 되고 "간혹" 안 되는 원인).
+				// 하드 내비게이션으로 Router Cache를 통째로 우회한다: 브라우저가 갓 설정된
+				// 세션 쿠키로 "/"를 새로 요청 → 미들웨어 통과 → 서버가 role 홈을 계산한다.
+				window.location.assign("/");
 			},
 		};
 
