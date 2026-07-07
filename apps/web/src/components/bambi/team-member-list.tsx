@@ -48,6 +48,7 @@ interface TeamMemberListTeam {
 }
 
 interface TeamMemberListProps {
+	disabled?: boolean;
 	organization: TeamMemberListOrganization;
 	teams: TeamMemberListTeam[];
 }
@@ -132,7 +133,11 @@ function renderInviteeOptions({
 	);
 }
 
-export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
+export function TeamMemberList({
+	disabled = false,
+	organization,
+	teams,
+}: TeamMemberListProps) {
 	const queryClient = useQueryClient();
 	const [email, setEmail] = useState("");
 	const [search, setSearch] = useState("");
@@ -197,6 +202,10 @@ export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 	const submitInvite = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
+		if (disabled) {
+			return;
+		}
+
 		if (emailError) {
 			setShowValidation(true);
 			return;
@@ -251,6 +260,7 @@ export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 								render={
 									<Input
 										aria-invalid={showValidation && Boolean(emailError)}
+										disabled={disabled}
 										id="invite-email"
 										onChange={(event) => {
 											setSearch(event.target.value);
@@ -290,6 +300,7 @@ export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 					<div className="space-y-1.5">
 						<Label htmlFor="invite-role">권한</Label>
 						<Select
+							disabled={disabled}
 							items={roleLabels}
 							onValueChange={(value) => setRole(value as OrganizationRole)}
 							value={role}
@@ -309,6 +320,7 @@ export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 					<div className="space-y-1.5">
 						<Label htmlFor="invite-team">팀</Label>
 						<Select
+							disabled={disabled}
 							items={[
 								{ label: "전체 조직", value: "" },
 								...teams.map((team) => ({
@@ -335,7 +347,7 @@ export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 							</SelectContent>
 						</Select>
 					</div>
-					<Button disabled={inviteMutation.isPending} type="submit">
+					<Button disabled={disabled || inviteMutation.isPending} type="submit">
 						<MailPlus aria-hidden="true" data-icon="inline-start" />
 						초대
 					</Button>
@@ -371,7 +383,7 @@ export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 							{organization.canManageOrganization &&
 							member.kind === "active" ? (
 								<Select
-									disabled={setRoleMutation.isPending}
+									disabled={disabled || setRoleMutation.isPending}
 									items={roleLabels}
 									onValueChange={(value) =>
 										setRoleMutation.mutate({
