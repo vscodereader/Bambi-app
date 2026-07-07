@@ -314,7 +314,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 								autoComplete="email"
 								id="auth-email"
 								onChange={(event) => setEmail(event.target.value)}
-								placeholder="예: hello@bambi.dev"
+								placeholder="이메일을 입력해주세요."
 								type="email"
 								value={email}
 							/>
@@ -338,7 +338,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 								autoComplete={isSignUp ? "new-password" : "current-password"}
 								id="auth-password"
 								onChange={(event) => setPassword(event.target.value)}
-								placeholder="8자 이상 입력"
+								placeholder="비밀번호를 입력해주세요."
 								type="password"
 								value={password}
 							/>
