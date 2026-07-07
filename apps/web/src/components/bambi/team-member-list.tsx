@@ -1,8 +1,20 @@
 "use client";
 
 import { Button } from "@bambi-app/ui/components/button";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandItem,
+	CommandList,
+} from "@bambi-app/ui/components/command";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@bambi-app/ui/components/popover";
 import {
 	Select,
 	SelectContent,
@@ -77,15 +89,70 @@ const getMemberLabel = (member: {
 	invitedEmail: null | string;
 }) => member.displayName ?? member.invitedEmail ?? member.email;
 
+interface EmployerInvitee {
+	email: string;
+	name: string;
+	userId: string;
+}
+
+function renderInviteeOptions({
+	invitees,
+	isLoading,
+	onSelect,
+}: {
+	invitees: EmployerInvitee[];
+	isLoading: boolean;
+	onSelect: (invitee: EmployerInvitee) => void;
+}) {
+	if (isLoading) {
+		return <CommandEmpty>검색 중…</CommandEmpty>;
+	}
+
+	if (invitees.length === 0) {
+		return <CommandEmpty>일치하는 구인자 계정이 없습니다.</CommandEmpty>;
+	}
+
+	return (
+		<CommandGroup>
+			{invitees.map((invitee) => (
+				<CommandItem
+					key={invitee.userId}
+					onSelect={() => onSelect(invitee)}
+					value={invitee.email}
+				>
+					<span className="flex min-w-0 flex-col">
+						<span className="truncate font-medium text-sm">{invitee.name}</span>
+						<span className="truncate text-muted-foreground text-xs">
+							{invitee.email}
+						</span>
+					</span>
+				</CommandItem>
+			))}
+		</CommandGroup>
+	);
+}
+
 export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 	const queryClient = useQueryClient();
 	const [email, setEmail] = useState("");
+	const [search, setSearch] = useState("");
+	const [popoverOpen, setPopoverOpen] = useState(false);
 	const [role, setRole] = useState<OrganizationRole>("staff");
 	const [teamId, setTeamId] = useState(teams[0]?.teamId ?? "");
 	const [formError, setFormError] = useState<null | string>(null);
 	const [showValidation, setShowValidation] = useState(false);
 	const emailError =
 		email.trim().length === 0 ? "초대할 이메일을 입력해 주세요." : "";
+	const inviteesQuery = useQuery(
+		orpc.bambi.teams.searchEmployerInvitees.queryOptions({
+			enabled: popoverOpen,
+			input: {
+				organizationId: organization.organizationId,
+				query: search.trim() || undefined,
+			},
+		})
+	);
+	const invitees = inviteesQuery.data ?? [];
 	const membersQuery = useQuery(
 		orpc.bambi.organizations.listMembers.queryOptions({
 			input: { organizationId: organization.organizationId },
@@ -107,6 +174,7 @@ export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 			},
 			onSuccess: async () => {
 				setEmail("");
+				setSearch("");
 				setRole("staff");
 				setFormError(null);
 				setShowValidation(false);
@@ -177,14 +245,43 @@ export function TeamMemberList({ organization, teams }: TeamMemberListProps) {
 				<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_180px_auto] lg:items-end">
 					<div className="space-y-1.5">
 						<Label htmlFor="invite-email">이메일</Label>
-						<Input
-							aria-invalid={showValidation && Boolean(emailError)}
-							id="invite-email"
-							onChange={(event) => setEmail(event.target.value)}
-							placeholder="staff@example.com"
-							type="email"
-							value={email}
-						/>
+						<Popover onOpenChange={setPopoverOpen} open={popoverOpen}>
+							<PopoverTrigger
+								nativeButton={false}
+								render={
+									<Input
+										aria-invalid={showValidation && Boolean(emailError)}
+										id="invite-email"
+										onChange={(event) => {
+											setSearch(event.target.value);
+											setEmail(event.target.value);
+											setPopoverOpen(true);
+										}}
+										placeholder="구인자 이메일 검색"
+										value={search}
+									/>
+								}
+							/>
+							<PopoverContent
+								align="start"
+								className="w-(--anchor-width) p-0"
+								initialFocus={false}
+							>
+								<Command shouldFilter={false}>
+									<CommandList>
+										{renderInviteeOptions({
+											invitees,
+											isLoading: inviteesQuery.isLoading,
+											onSelect: (invitee) => {
+												setEmail(invitee.email);
+												setSearch(invitee.email);
+												setPopoverOpen(false);
+											},
+										})}
+									</CommandList>
+								</Command>
+							</PopoverContent>
+						</Popover>
 						<FieldError
 							id="invite-email-error"
 							message={showValidation ? emailError : ""}
