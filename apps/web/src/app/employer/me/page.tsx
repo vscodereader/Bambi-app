@@ -21,6 +21,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
+import { FieldError } from "@/components/bambi/form-message";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { authClient } from "@/lib/auth-client";
@@ -436,40 +437,50 @@ function BusinessInfoForm({
 	};
 
 	return (
-		<form className="flex flex-col gap-3 border p-4" onSubmit={handleSubmit}>
-			<div className="flex flex-col gap-1.5">
-				<Label htmlFor="business-name">업체명</Label>
-				<Input
-					aria-invalid={showValidation && Boolean(nameError)}
-					id="business-name"
-					onChange={(event) => setDisplayName(event.target.value)}
-					placeholder="예: 밤비 라운지"
-					value={displayName}
-				/>
-				{showValidation && nameError ? (
-					<p className="text-destructive text-xs">{nameError}</p>
-				) : null}
-			</div>
-			<div className="flex flex-col gap-1.5">
-				<Label htmlFor="business-brn">사업자 등록 번호</Label>
-				<Input
-					aria-invalid={showValidation && Boolean(brnError)}
-					id="business-brn"
-					onChange={(event) => setBrn(event.target.value)}
-					placeholder="000-00-00000"
-					value={brn}
-				/>
-				{showValidation && brnError ? (
-					<p className="text-destructive text-xs">{brnError}</p>
-				) : null}
-			</div>
-			<Button
-				className="w-full sm:w-auto"
-				disabled={submitMutation.isPending}
-				type="submit"
-			>
-				업체 정보 제출
-			</Button>
+		<form onSubmit={handleSubmit}>
+			<Card>
+				<CardContent className="flex flex-col gap-4">
+					<div className="grid gap-4 sm:grid-cols-2">
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="business-name">업체명</Label>
+							<Input
+								aria-invalid={showValidation && Boolean(nameError)}
+								id="business-name"
+								onChange={(event) => setDisplayName(event.target.value)}
+								placeholder="예: 밤비 라운지"
+								value={displayName}
+							/>
+							<FieldError
+								id="business-name-error"
+								message={showValidation ? nameError : ""}
+							/>
+						</div>
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="business-brn">사업자 등록 번호</Label>
+							<Input
+								aria-invalid={showValidation && Boolean(brnError)}
+								id="business-brn"
+								onChange={(event) => setBrn(event.target.value)}
+								placeholder="000-00-00000"
+								value={brn}
+							/>
+							<FieldError
+								id="business-brn-error"
+								message={showValidation ? brnError : ""}
+							/>
+						</div>
+					</div>
+					<div className="flex justify-end">
+						<Button
+							className="w-full sm:w-auto"
+							disabled={submitMutation.isPending}
+							type="submit"
+						>
+							업체 정보 제출
+						</Button>
+					</div>
+				</CardContent>
+			</Card>
 		</form>
 	);
 }
