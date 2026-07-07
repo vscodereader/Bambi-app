@@ -149,4 +149,37 @@ describe("searchEmployerInvitees", () => {
 		await db.delete(user).where(eq(user.id, candidateId));
 		await db.delete(organization).where(eq(organization.id, organizationId));
 	});
+
+	it("returns empty when query is blank or missing", async () => {
+		const { userId: ownerId } = await makeEmployer("빈검색오너");
+		const { userId: candidateId } = await makeEmployer("빈검색후보");
+
+		const organizationId = `org_${randomUUID()}`;
+		await db.insert(organization).values({
+			createdAt: new Date(),
+			id: organizationId,
+			name: "org",
+			slug: `org-${randomUUID().slice(0, 8)}`,
+		});
+		await db.insert(member).values({
+			createdAt: new Date(),
+			id: `member_${randomUUID()}`,
+			organizationId,
+			userId: ownerId,
+			role: "owner",
+		});
+
+		const search = createProcedureClient(teamsRouter.searchEmployerInvitees, {
+			context: ctx(ownerId),
+			path: ["bambi", "teams", "searchEmployerInvitees"],
+		});
+
+		// 검색어가 없거나 공백이면 후보가 있어도 전체를 노출하지 않는다.
+		expect(await search({ organizationId })).toEqual([]);
+		expect(await search({ organizationId, query: "   " })).toEqual([]);
+
+		await db.delete(user).where(eq(user.id, ownerId));
+		await db.delete(user).where(eq(user.id, candidateId));
+		await db.delete(organization).where(eq(organization.id, organizationId));
+	});
 });

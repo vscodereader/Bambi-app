@@ -323,6 +323,11 @@ export const teamsRouter = {
 				session: context.session,
 			});
 
+			// 검색어가 비어 있으면 전체 구인자를 노출하지 않고 빈 결과를 반환한다.
+			if (!input.query?.trim()) {
+				return [];
+			}
+
 			// 제외 대상: 이미 이 조직의 멤버인 유저.
 			const existingMembers = await db
 				.select({ userId: member.userId })

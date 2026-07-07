@@ -97,14 +97,20 @@ interface EmployerInvitee {
 }
 
 function renderInviteeOptions({
+	hasQuery,
 	invitees,
 	isLoading,
 	onSelect,
 }: {
+	hasQuery: boolean;
 	invitees: EmployerInvitee[];
 	isLoading: boolean;
 	onSelect: (invitee: EmployerInvitee) => void;
 }) {
+	if (!hasQuery) {
+		return <CommandEmpty>구인자 이메일을 입력해 검색하세요.</CommandEmpty>;
+	}
+
 	if (isLoading) {
 		return <CommandEmpty>검색 중…</CommandEmpty>;
 	}
@@ -150,7 +156,7 @@ export function TeamMemberList({
 		email.trim().length === 0 ? "초대할 이메일을 입력해 주세요." : "";
 	const inviteesQuery = useQuery(
 		orpc.bambi.teams.searchEmployerInvitees.queryOptions({
-			enabled: popoverOpen,
+			enabled: popoverOpen && search.trim().length > 0,
 			input: {
 				organizationId: organization.organizationId,
 				query: search.trim() || undefined,
@@ -280,6 +286,7 @@ export function TeamMemberList({
 								<Command shouldFilter={false}>
 									<CommandList>
 										{renderInviteeOptions({
+											hasQuery: search.trim().length > 0,
 											invitees,
 											isLoading: inviteesQuery.isLoading,
 											onSelect: (invitee) => {
