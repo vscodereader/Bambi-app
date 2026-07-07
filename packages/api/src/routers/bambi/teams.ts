@@ -254,10 +254,23 @@ export const teamsRouter = {
 				});
 			}
 
+			// 초대 대상은 현재 employer로 가입된 계정만 허용한다.
+			const normalizedEmail = input.email.toLowerCase();
+			const [invitee] = await db
+				.select({ role: bambiProfile.role })
+				.from(user)
+				.innerJoin(bambiProfile, eq(bambiProfile.userId, user.id))
+				.where(eq(user.email, normalizedEmail))
+				.limit(1);
+
+			if (invitee?.role !== "employer") {
+				throw forbidden("구인자로 가입된 계정만 초대할 수 있습니다.");
+			}
+
 			const [created] = await db
 				.insert(invitation)
 				.values({
-					email: input.email.toLowerCase(),
+					email: normalizedEmail,
 					expiresAt: getExpiresAt(),
 					id: `invitation_${randomUUID()}`,
 					inviterId: profile.userId,
