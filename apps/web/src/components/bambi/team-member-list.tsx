@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Command,
@@ -136,6 +137,32 @@ function renderInviteeOptions({
 				</CommandItem>
 			))}
 		</CommandGroup>
+	);
+}
+
+function MemberTeams({
+	role,
+	teams,
+}: {
+	role: string;
+	teams: { id: string; name: string }[];
+}) {
+	if (role === "owner") {
+		return <span className="text-muted-foreground text-xs">—</span>;
+	}
+
+	if (teams.length === 0) {
+		return <span className="text-muted-foreground text-xs">소속 팀 없음</span>;
+	}
+
+	return (
+		<div className="flex flex-wrap gap-1">
+			{teams.map((team) => (
+				<Badge key={team.id} variant="secondary">
+					{team.name}
+				</Badge>
+			))}
+		</div>
 	);
 }
 
@@ -380,7 +407,7 @@ export function TeamMemberList({
 				<div className="divide-y border">
 					{members.map((member) => (
 						<div
-							className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_150px_150px] md:items-center"
+							className="grid gap-3 p-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_110px_150px] md:items-center"
 							key={`${member.kind}-${member.id}`}
 						>
 							<div className="min-w-0">
@@ -395,6 +422,9 @@ export function TeamMemberList({
 								<p className="mt-1 break-words text-muted-foreground text-xs">
 									{member.email} · {formatDateTime(member.createdAt)}
 								</p>
+							</div>
+							<div className="min-w-0">
+								<MemberTeams role={member.role} teams={member.teams} />
 							</div>
 							<div className="text-sm">
 								{roleLabels[member.role as OrganizationRole] ?? member.role}
