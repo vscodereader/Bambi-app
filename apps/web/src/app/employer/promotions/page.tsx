@@ -1,6 +1,8 @@
 "use client";
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import { Card, CardContent } from "@bambi-app/ui/components/card";
+import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
@@ -118,7 +120,7 @@ function PromotionCard({
 
 	return (
 		<article className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-			<div className="min-w-0 space-y-3">
+			<div className="flex min-w-0 flex-col gap-3">
 				<div className="flex flex-wrap items-center gap-2">
 					<StatusBadge tone={getPromotionStatusTone(promotion.status)}>
 						{getPromotionStatusLabel(promotion.status)}
@@ -308,8 +310,8 @@ export default function EmployerPromotionsPage() {
 		);
 	} else {
 		promotionContent = (
-			<section aria-label="프로모션 목록" className="overflow-hidden border">
-				<div className="divide-y">
+			<Card aria-label="프로모션 목록">
+				<CardContent className="divide-y p-0">
 					{visiblePromotions.map((promotion) => (
 						<PromotionCard
 							isActivatePending={activateMutation.isPending}
@@ -324,8 +326,8 @@ export default function EmployerPromotionsPage() {
 							promotion={promotion}
 						/>
 					))}
-				</div>
-			</section>
+				</CardContent>
+			</Card>
 		);
 	}
 
@@ -346,19 +348,20 @@ export default function EmployerPromotionsPage() {
 					공고 관리
 				</Link>
 			</div>
-			<div className="flex flex-wrap gap-2" role="tablist">
-				{promotionStatusGroups.map((group) => (
-					<Button
-						aria-selected={selectedGroupId === group.id}
-						key={group.id}
-						onClick={() => setSelectedGroupId(group.id)}
-						type="button"
-						variant={selectedGroupId === group.id ? "default" : "secondary"}
-					>
-						{group.label}
-					</Button>
-				))}
-			</div>
+			<Tabs
+				onValueChange={(value) =>
+					setSelectedGroupId(value as PromotionStatusGroupId)
+				}
+				value={selectedGroupId}
+			>
+				<TabsList className="max-w-full flex-wrap">
+					{promotionStatusGroups.map((group) => (
+						<TabsTrigger key={group.id} value={group.id}>
+							{group.label}
+						</TabsTrigger>
+					))}
+				</TabsList>
+			</Tabs>
 
 			{promotionContent}
 		</PageShell>

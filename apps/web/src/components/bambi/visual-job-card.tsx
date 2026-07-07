@@ -2,6 +2,10 @@
 
 import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
+import {
+	HIT_RIBBON_CLASS_BY_TONE,
+	shouldShowHitRibbon,
+} from "@/lib/bambi/job-hit";
 import type { Job } from "@/lib/bambi/types";
 import { Badge, Button } from "./ds";
 import { MapPinIcon, Message } from "./icons";
@@ -22,11 +26,20 @@ const toneClassName = {
 	urgent: "border-amber-300 bg-card",
 } as const;
 
+// HIT 공고는 테두리를 한 단계 진하게 + 얇은 링으로 과하지 않게 강조한다.
+const hitBorderClassName = {
+	organic: "",
+	recommended: "border-sky-400 ring-1 ring-sky-200",
+	special: "border-coral-400 ring-1 ring-coral-200",
+	urgent: "border-amber-400 ring-1 ring-amber-200",
+} as const;
+
 // 티어 배지 색을 등급별로 구분해 유료 노출 사다리를 시각화한다.
+// 단위 배지는 스페셜·추천도 급구와 동일하게 danger 톤으로 통일한다.
 const toneBadge = {
 	organic: "neutral",
-	recommended: "primary",
-	special: "primary",
+	recommended: "danger",
+	special: "danger",
 	urgent: "danger",
 } as const;
 
@@ -66,14 +79,33 @@ export function VisualJobCard({
 }: VisualJobCardProps) {
 	const { amount: payAmount, unit: payUnit } = splitPay(job.pay);
 	const shortDesc = truncateDesc(job.desc);
+	// organic엔 리본 없음. Hit이고 tone이 special/urgent/recommended일 때만 표시.
+	const showHitRibbon = shouldShowHitRibbon(job, tone);
+	const hitRibbonClassName =
+		tone === "organic" ? "" : HIT_RIBBON_CLASS_BY_TONE[tone];
 	return (
 		<article
 			className={cn(
-				"flex flex-col gap-2 rounded-lg border bg-card p-2 transition-colors",
+				"relative flex flex-col gap-2 overflow-hidden rounded-lg border bg-card p-2 transition-colors",
 				toneClassName[tone],
+				showHitRibbon && hitBorderClassName[tone],
 				active && "border-coral-400 ring-2 ring-coral-100"
 			)}
 		>
+			{showHitRibbon ? (
+				// 카드 우측 상단을 대각선으로 가로지르는 얇은 코너 리본. article의 overflow-hidden이
+				// 양끝을 삼각 코너로 잘라주고, 코너에 대칭 배치해 HIT를 중앙에 둔다.
+				// pointer-events-none으로 아래 카드 클릭을 가리지 않는다.
+				<span
+					className={cn(
+						"pointer-events-none absolute top-4 -right-6 z-10 w-24 rotate-45 py-0.5 text-center font-extrabold text-[10px] leading-none tracking-wider",
+						hitRibbonClassName
+					)}
+				>
+					<span aria-hidden="true">HIT</span>
+					<span className="sr-only">인기 공고</span>
+				</span>
+			) : null}
 			<button
 				className="flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
 				onClick={() => onOpen(job)}
@@ -83,18 +115,23 @@ export function VisualJobCard({
 					{job.coverImage ? (
 						<Image
 							alt={job.coverImage.altText || job.coverImage.fileName}
-							className="size-20 shrink-0 rounded-lg border border-white object-cover"
-							height={80}
+							className="h-16 w-32 shrink-0 rounded-sm border border-white object-cover"
+							height={64}
 							src={job.coverImage.url}
 							unoptimized
-							width={80}
+							width={128}
 						/>
 					) : (
 						<div className="flex size-20 shrink-0 items-center justify-center rounded-lg border border-white bg-secondary font-extrabold text-base text-coral-700">
 							{job.company.slice(0, 2)}
 						</div>
 					)}
-					<div className="flex min-w-0 flex-1 flex-col gap-1">
+					<div
+						className={cn(
+							"flex min-w-0 flex-1 flex-col gap-1",
+							showHitRibbon && "pr-8"
+						)}
+					>
 						<h3 className="m-0 truncate font-extrabold text-[15px] leading-snug">
 							{job.company}
 						</h3>
@@ -114,7 +151,7 @@ export function VisualJobCard({
 				</div>
 			</button>
 			<div className="flex items-end justify-between gap-2">
-				<span className="flex min-w-0 items-end gap-1.5">
+				<span className="flex h-9 min-w-0 items-center gap-1.5 rounded-md border border-border bg-background px-[14px]">
 					{payUnit ? (
 						<Badge className="shrink-0" tone={toneBadge[tone]}>
 							{payUnit}

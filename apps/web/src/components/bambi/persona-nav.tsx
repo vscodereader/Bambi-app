@@ -3,9 +3,11 @@
 // 밤비 — 페르소나별 앱 셸(하단 탭 내비게이션 + 운영자 콘솔 셸).
 // 라우트 경로(usePathname)로 활성 탭과 셸 노출 여부를 결정한다.
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
+import { BOTTOM_NAV_CONTENT_SPACER, BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
 import { ClipboardListIcon, PlusIcon, SettingsIcon, UserIcon } from "./icons";
 import { MobileTabBar } from "./mobile-tab-bar";
@@ -17,40 +19,63 @@ import {
 } from "./screens/moderator";
 import { useMod } from "./screens/moderator-context";
 
-function Content({ children }: { children: ReactNode }) {
-	return <div className="flex min-h-0 flex-1 flex-col">{children}</div>;
-}
-
-function NavBar({ children }: { children: ReactNode }) {
+function Content({
+	children,
+	withBottomNav = false,
+}: {
+	children: ReactNode;
+	withBottomNav?: boolean;
+}) {
 	return (
-		<div className="sticky bottom-0 z-30 border-border border-t bg-background md:hidden">
+		<div
+			className={cn(
+				"flex min-h-0 flex-1 flex-col",
+				withBottomNav && BOTTOM_NAV_CONTENT_SPACER,
+				withBottomNav && "md:pb-0"
+			)}
+		>
 			{children}
 		</div>
 	);
+}
+
+function NavBar({ children }: { children: ReactNode }) {
+	return <BottomNavShell>{children}</BottomNavShell>;
 }
 
 // ---- 구직자 ----------------------------------------------------------------
 export function SeekerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const showNav =
-		path === "/seeker" || path === "/seeker/chats" || path === "/seeker/me";
+		path === "/seeker" ||
+		path === "/seeker/chats" ||
+		path === "/seeker/community" ||
+		path === "/seeker/me";
 	return (
 		<>
-			<Content>{children}</Content>
+			<Content withBottomNav={showNav}>{children}</Content>
 			{showNav ? <MobileTabBar homeHref="/seeker" /> : null}
 		</>
 	);
 }
 
 // ---- 구인자 ----------------------------------------------------------------
-export function EmployerNav({ children }: { children: ReactNode }) {
+export function EmployerNav({
+	children,
+	gated = false,
+}: {
+	children: ReactNode;
+	gated?: boolean;
+}) {
 	const path = usePathname();
 	const router = useRouter();
+	// 미승인 구인자는 하단 탭도 숨긴다 — 승인 대기 화면만 보게 한다.
 	const showNav =
-		path === "/employer" ||
-		path === "/employer/new" ||
-		path === "/employer/me" ||
-		path.startsWith("/employer/settings");
+		!gated &&
+		(path === "/employer" ||
+			path === "/employer/new" ||
+			path === "/employer/me" ||
+			path.startsWith("/employer/settings"));
 	let value = "postings";
 	if (path === "/employer/me") {
 		value = "me";
@@ -72,7 +97,7 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 	};
 	return (
 		<>
-			<Content>{children}</Content>
+			<Content withBottomNav={showNav}>{children}</Content>
 			{showNav ? (
 				<NavBar>
 					<BottomNav
@@ -125,7 +150,11 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 
 	const isDetail = MOD_DETAIL_RE.test(path);
 	if (isDetail) {
-		return <Content>{children}</Content>;
+		return (
+			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+				<Content>{children}</Content>
+			</div>
+		);
 	}
 
 	let tab = "queue";
@@ -148,24 +177,26 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 
 	return (
 		<>
-			<ConsoleTop
-				counts={{
-					queue: queue.length,
-					reports: openReports,
-					warned: warnedUsers,
-				}}
-				onTab={go}
-				tab={tab}
-			/>
-			<Content>{children}</Content>
-			{showActionBar ? (
-				<QueueActionBar
-					count={selected.length}
-					isApplying={isBulkApplying}
-					onAction={bulkAction}
-					scope={bulkScope}
+			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+				<ConsoleTop
+					counts={{
+						queue: queue.length,
+						reports: openReports,
+						warned: warnedUsers,
+					}}
 				/>
-			) : null}
+				<Content withBottomNav>{children}</Content>
+				{showActionBar ? (
+					<div className="max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] max-md:z-30 md:sticky md:bottom-6 md:z-30">
+						<QueueActionBar
+							count={selected.length}
+							isApplying={isBulkApplying}
+							onAction={bulkAction}
+							scope={bulkScope}
+						/>
+					</div>
+				) : null}
+			</div>
 			<NavBar>
 				<ModTabs setTab={go} tab={tab} />
 			</NavBar>

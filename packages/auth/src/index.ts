@@ -65,8 +65,17 @@ export function createAuth() {
 		secret: env.BETTER_AUTH_SECRET,
 		baseURL: env.BETTER_AUTH_URL,
 		advanced: {
+			// 서버(api.bambialba.com / test.bambialba.com)와 웹(bambialba.com 서브도메인)이
+			// 같은 세션 쿠키를 보도록 apex로 스코프. domain 미지정 시 baseURL 호스트네임
+			// (api.…)으로 잡혀 웹과 공유되지 않으므로 반드시 명시한다. 로컬(dev)은 비활성.
+			crossSubDomainCookies: {
+				enabled: env.NODE_ENV === "production",
+				domain: ".bambialba.com",
+			},
 			defaultCookieAttributes: {
-				sameSite: "none",
+				// 웹↔서버가 같은 사이트(bambialba.com)라 lax로 충분 — none(3rd-party 전제)은
+				// Safari 차단 + CSRF 노출이라 쓰지 않는다.
+				sameSite: "lax",
 				secure: true,
 				httpOnly: true,
 			},

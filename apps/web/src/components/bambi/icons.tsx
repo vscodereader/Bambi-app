@@ -28,6 +28,7 @@ import {
 	type LucideProps,
 	MapPin,
 	MessageCircle,
+	MessagesSquare,
 	Paperclip,
 	Phone,
 	Plus,
@@ -75,6 +76,7 @@ export const ImageIcon = fill(ImageIconBase);
 export const LockIcon = fill(Lock);
 export const MapPinIcon = fill(MapPin);
 export const Message = fill(MessageCircle);
+export const MessagesIcon = fill(MessagesSquare);
 export const PaperclipIcon = fill(Paperclip);
 export const PhoneIcon = fill(Phone);
 export const PlusIcon = fill(Plus);

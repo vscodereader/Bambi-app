@@ -2,9 +2,17 @@
 
 // 밤비 — 운영자(Moderator) 콘솔: 검수 큐, 신고 인박스, 사용자 제재.
 
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { ReactNode } from "react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
 import { scan } from "@/lib/bambi/scanner";
 import type {
@@ -16,20 +24,11 @@ import type {
 	UserStatus,
 	VisualTone,
 } from "@/lib/bambi/types";
-import {
-	AppBar,
-	Avatar,
-	Badge,
-	Button,
-	IconButton,
-	Logo,
-	StatGroup,
-} from "../ds";
+import { BOTTOM_NAV_STACK_OFFSET } from "../bottom-nav-shell";
+import { AppBar, Avatar, Badge, Button, StatGroup } from "../ds";
 import {
 	AlertCircle,
-	BellIcon,
 	CheckIcon,
-	ChevronDownIcon,
 	ChevronRightIcon,
 	FlagIcon,
 	ShieldIcon,
@@ -196,73 +195,16 @@ function EmptyState({ icon, text }: { icon: ReactNode; text: string }) {
 	);
 }
 
-function ConsoleTabs({
-	tab,
-	onTab,
-}: {
-	tab: string;
-	onTab: (v: string) => void;
-}) {
-	const items = [
-		{ v: "queue", label: "공고 검수" },
-		{ v: "reports", label: "신고" },
-		{ v: "users", label: "사용자" },
-	];
-	return (
-		<div className="flex gap-1.5 rounded-xl bg-muted p-1">
-			{items.map((it) => {
-				const on = tab === it.v;
-				return (
-					<button
-						className={cn(
-							"h-10 flex-1 cursor-pointer rounded-lg border-none text-[14px] transition-all",
-							on
-								? "bg-ink-800 font-extrabold text-white shadow-sm"
-								: "bg-transparent font-semibold text-muted-foreground"
-						)}
-						key={it.v}
-						onClick={() => onTab(it.v)}
-						type="button"
-					>
-						{it.label}
-					</button>
-				);
-			})}
-		</div>
-	);
-}
-
 export function ConsoleTop({
-	tab,
-	onTab,
 	counts,
 }: {
-	tab: string;
-	onTab: (v: string) => void;
 	counts: { queue: number; reports: number; warned: number };
 }) {
 	return (
-		<div className="flex flex-col gap-[14px] px-5 pt-1.5 pb-3">
-			<div className="flex items-center justify-between">
-				<Logo lang="ko" size="md" />
-				<div className="flex items-center gap-2">
-					<span className="inline-flex h-[30px] items-center gap-[5px] whitespace-nowrap rounded-full bg-secondary px-[11px] font-bold text-[12px] text-[color:var(--text-default)]">
-						<span className="inline-flex size-[14px] text-[color:var(--ink-700)]">
-							<ShieldIcon />
-						</span>
-						운영자 모드
-					</span>
-					<IconButton badge variant="subtle">
-						<BellIcon />
-					</IconButton>
-				</div>
-			</div>
+		<div className="flex flex-col gap-[14px] px-6 pt-3 pb-3">
 			<h1 className="m-0 px-1 font-extrabold text-[24px] text-foreground">
 				운영자 콘솔
 			</h1>
-			<div className="px-1">
-				<ConsoleTabs onTab={onTab} tab={tab} />
-			</div>
 			<div className="px-1">
 				<StatGroup
 					items={[
@@ -277,21 +219,98 @@ export function ConsoleTop({
 }
 
 // ---- 큐 --------------------------------------------------------------------
-function QueueFilterRow() {
+// 검수 큐 필터·정렬 상태. 상태는 공고 위험도(riskLevel) 기준, 정렬은 접수 시각·위험도 기준.
+type QueueStatusFilter = "all" | RiskLevel;
+type QueueSortKey = "reply" | "recent" | "risk";
+
+const QUEUE_STATUS_OPTIONS: { value: QueueStatusFilter; label: string }[] = [
+	{ value: "all", label: "전체 상태" },
+	{ value: "high", label: "높은 위험" },
+	{ value: "mid", label: "중간 위험" },
+	{ value: "low", label: "낮은 위험" },
+];
+const QUEUE_STATUS_LABEL: Record<QueueStatusFilter, string> = {
+	all: "전체 상태",
+	high: "높은 위험",
+	mid: "중간 위험",
+	low: "낮은 위험",
+};
+
+const QUEUE_SORT_OPTIONS: { value: QueueSortKey; label: string }[] = [
+	{ value: "reply", label: "회신순" },
+	{ value: "recent", label: "최신순" },
+	{ value: "risk", label: "위험도순" },
+];
+const QUEUE_SORT_LABEL: Record<QueueSortKey, string> = {
+	reply: "회신순",
+	recent: "최신순",
+	risk: "위험도순",
+};
+
+// 위험도 정렬 우선순위 (높음이 먼저).
+const RISK_ORDER: Record<RiskLevel, number> = { high: 0, mid: 1, low: 2 };
+
+const QUEUE_TRIGGER_CLASS =
+	"h-10 gap-1.5 rounded-xl border-[color:var(--border-default)] bg-card px-[14px] font-semibold text-[13px] text-[color:var(--text-default)]";
+
+function QueueFilterRow({
+	status,
+	sort,
+	onStatusChange,
+	onSortChange,
+}: {
+	status: QueueStatusFilter;
+	sort: QueueSortKey;
+	onStatusChange: (value: QueueStatusFilter) => void;
+	onSortChange: (value: QueueSortKey) => void;
+}) {
 	return (
 		<div className="flex gap-2">
-			<div className="flex h-10 flex-1 items-center justify-between rounded-xl border border-[color:var(--border-default)] bg-card px-[14px] font-semibold text-[13px] text-[color:var(--text-default)]">
-				전체 상태
-				<span className="inline-flex size-4 text-muted-foreground">
-					<ChevronDownIcon />
-				</span>
-			</div>
-			<div className="flex h-10 items-center gap-1.5 rounded-xl border border-[color:var(--border-default)] bg-card px-[14px] font-semibold text-[13px] text-[color:var(--text-default)]">
-				회신순
-				<span className="inline-flex size-[15px] text-muted-foreground">
-					<SortIcon />
-				</span>
-			</div>
+			<Select
+				onValueChange={(value) => {
+					if (value) {
+						onStatusChange(value as QueueStatusFilter);
+					}
+				}}
+				value={status}
+			>
+				<SelectTrigger className={cn(QUEUE_TRIGGER_CLASS, "flex-1")}>
+					<SelectValue>
+						{(value) => QUEUE_STATUS_LABEL[value as QueueStatusFilter]}
+					</SelectValue>
+				</SelectTrigger>
+				<SelectContent>
+					{QUEUE_STATUS_OPTIONS.map((option) => (
+						<SelectItem key={option.value} value={option.value}>
+							{option.label}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+			<Select
+				onValueChange={(value) => {
+					if (value) {
+						onSortChange(value as QueueSortKey);
+					}
+				}}
+				value={sort}
+			>
+				<SelectTrigger className={QUEUE_TRIGGER_CLASS}>
+					<span className="inline-flex size-[15px] text-muted-foreground">
+						<SortIcon />
+					</span>
+					<SelectValue>
+						{(value) => QUEUE_SORT_LABEL[value as QueueSortKey]}
+					</SelectValue>
+				</SelectTrigger>
+				<SelectContent>
+					{QUEUE_SORT_OPTIONS.map((option) => (
+						<SelectItem key={option.value} value={option.value}>
+							{option.label}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
 		</div>
 	);
 }
@@ -428,22 +447,54 @@ export function QueueList({
 	onToggle: (id: string) => void;
 	onOpen: (item: QueueItem) => void;
 }) {
+	const [status, setStatus] = useState<QueueStatusFilter>("all");
+	const [sort, setSort] = useState<QueueSortKey>("reply");
+
+	const visibleItems = useMemo(() => {
+		const filtered =
+			status === "all" ? items : items.filter((q) => q.riskLevel === status);
+		return [...filtered].sort((a, b) => {
+			if (sort === "risk") {
+				return RISK_ORDER[a.riskLevel] - RISK_ORDER[b.riskLevel];
+			}
+			if (sort === "recent") {
+				// 접수 최신 순 (receivedAt: "YYYY.MM.DD HH:mm" 은 사전식 비교로 시간순 정렬 가능)
+				return b.receivedAt.localeCompare(a.receivedAt);
+			}
+			// 회신순: 먼저 접수된 공고부터 회신 (접수 오래된 순)
+			return a.receivedAt.localeCompare(b.receivedAt);
+		});
+	}, [items, status, sort]);
+
+	let empty: ReactNode = null;
+	if (visibleItems.length === 0) {
+		empty =
+			items.length === 0 ? (
+				<EmptyState icon={<CheckIcon />} text="검수할 공고가 없어요" />
+			) : (
+				<EmptyState icon={<CheckIcon />} text="해당 상태의 공고가 없어요" />
+			);
+	}
+
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pb-5">
-			<QueueFilterRow />
-			{items.length ? (
-				items.map((q) => (
-					<QueueRow
-						key={q.id}
-						onOpen={() => onOpen(q)}
-						onToggle={() => onToggle(q.id)}
-						q={q}
-						selected={selected.includes(q.id)}
-					/>
-				))
-			) : (
-				<EmptyState icon={<CheckIcon />} text="검수할 공고가 없어요" />
-			)}
+			<QueueFilterRow
+				onSortChange={setSort}
+				onStatusChange={setStatus}
+				sort={sort}
+				status={status}
+			/>
+			{empty
+				? empty
+				: visibleItems.map((q) => (
+						<QueueRow
+							key={q.id}
+							onOpen={() => onOpen(q)}
+							onToggle={() => onToggle(q.id)}
+							q={q}
+							selected={selected.includes(q.id)}
+						/>
+					))}
 		</div>
 	);
 }
@@ -466,7 +517,7 @@ export function QueueDetail({
 			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-1 pb-5">
 				<div className="flex items-center gap-3">
 					<Avatar name={item.company} size="lg" square />
-					<div>
+					<div className="min-w-0 flex-1">
 						<div className="font-extrabold text-[19px] text-foreground">
 							{item.title}
 						</div>
@@ -517,7 +568,7 @@ export function QueueDetail({
 					소지는 승인 후 안내해요.
 				</div>
 			</div>
-			<div className="flex gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
+			<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
 				<Button
 					block
 					onClick={() => setReject(true)}
@@ -528,6 +579,7 @@ export function QueueDetail({
 				</Button>
 				<Button
 					block
+					className="shadow-none"
 					onClick={() => onResolve(item.id, "approve")}
 					size="lg"
 					variant="primary"
@@ -602,7 +654,7 @@ function RejectSheet({
 						);
 					})}
 				</div>
-				<div className="flex gap-2.5">
+				<div className="grid grid-cols-2 gap-2.5">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
 					</Button>
@@ -775,7 +827,7 @@ export function ReportDetail({
 			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pt-1 pb-5">
 				<div className="flex items-center gap-2">
 					<SevPill sev={item.sev} />
-					<h2 className="m-0 font-extrabold text-[19px] text-foreground">
+					<h2 className="m-0 min-w-0 flex-1 font-extrabold text-[19px] text-foreground">
 						{item.reason}
 					</h2>
 				</div>
@@ -835,7 +887,7 @@ export function ReportDetail({
 				)}
 			</div>
 			{item.status === "open" ? (
-				<div className="flex gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
+				<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
 					<Button
 						block
 						onClick={() => onResolve(item.id, "dismiss")}
@@ -1255,17 +1307,17 @@ function ActionBtn({
 	tone?: "danger" | "success";
 	onClick: () => void;
 }) {
-	let color = "text-white";
+	let toneClass = "bg-secondary text-foreground";
 	if (tone === "danger") {
-		color = "text-coral-400";
+		toneClass = "bg-coral-500 text-white";
 	} else if (tone === "success") {
-		color = "text-green-500";
+		toneClass = "bg-primary text-primary-foreground";
 	}
 	return (
 		<button
 			className={cn(
-				"h-[34px] cursor-pointer whitespace-nowrap rounded-[10px] border border-white/[0.14] bg-white/[0.08] px-[11px] font-bold text-[12.5px]",
-				color,
+				"h-[34px] cursor-pointer whitespace-nowrap rounded-[10px] px-[11px] font-bold text-[12.5px]",
+				toneClass,
 				disabled && "cursor-not-allowed opacity-50"
 			)}
 			disabled={disabled}
@@ -1325,12 +1377,13 @@ function BulkConfirmSheet({
 					placeholder={config.defaultReason}
 					value={reason}
 				/>
-				<div className="mt-4 flex gap-2.5">
+				<div className="mt-4 grid grid-cols-2 gap-2.5">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
 					</Button>
 					<Button
 						block
+						className="shadow-none"
 						disabled={!canConfirm}
 						onClick={onConfirm}
 						size="lg"
@@ -1379,8 +1432,8 @@ export function QueueActionBar({
 
 	return (
 		<div className="px-4 pt-2 pb-1">
-			<div className="flex items-center gap-2 rounded-2xl bg-ink-800 px-3 py-2.5 shadow-lg">
-				<span className="whitespace-nowrap font-bold text-[12.5px] text-white">
+			<div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-3 py-2.5 shadow-[var(--shadow-card)]">
+				<span className="whitespace-nowrap font-bold text-[12.5px] text-foreground">
 					{count}개 선택됨
 				</span>
 				<div className="ml-auto flex min-w-0 gap-1.5 overflow-x-auto">
@@ -1395,24 +1448,32 @@ export function QueueActionBar({
 					))}
 				</div>
 			</div>
-			{pendingAction ? (
-				<BulkConfirmSheet
-					config={pendingAction}
-					count={count}
-					isApplying={isApplying}
-					onCancel={() => setPendingAction(null)}
-					onConfirm={confirm}
-					reason={reason}
-					setReason={setReason}
-				/>
-			) : null}
+			{pendingAction
+				? createPortal(
+						<BulkConfirmSheet
+							config={pendingAction}
+							count={count}
+							isApplying={isApplying}
+							onCancel={() => setPendingAction(null)}
+							onConfirm={confirm}
+							reason={reason}
+							setReason={setReason}
+						/>,
+						document.body
+					)
+				: null}
 		</div>
 	);
 }
 
 export function ConsoleToast({ message }: { message: string }) {
 	return (
-		<div className="pointer-events-none absolute right-0 bottom-[84px] left-0 z-30 flex justify-center px-4">
+		<div
+			className={cn(
+				"pointer-events-none absolute right-0 left-0 z-30 flex justify-center px-4",
+				BOTTOM_NAV_STACK_OFFSET
+			)}
+		>
 			<div className="flex max-w-[420px] items-center gap-2 rounded-[18px] bg-ink-800 px-[18px] py-[11px] font-bold text-[13px] text-white shadow-lg">
 				<span className="inline-flex size-4 flex-[0_0_16px] text-green-500">
 					<CheckIcon />
@@ -1580,8 +1641,6 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 							reports: openReports,
 							warned: warnedUsers,
 						}}
-						onTab={setTab}
-						tab={tab}
 					/>
 					<div className="flex min-h-0 flex-1 flex-col">{listBody}</div>
 				</>

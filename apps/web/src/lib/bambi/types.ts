@@ -33,6 +33,11 @@ export interface Verdict {
 	state: VerdictState;
 }
 
+export interface JobPerformanceMetrics {
+	detailViews: number;
+	impressions: number;
+}
+
 export interface Job {
 	company: string;
 	coverImage?: JobMedia | null;
@@ -46,6 +51,7 @@ export interface Job {
 	lastBoostedAt?: Date | null | string;
 	location: string;
 	pay: string;
+	performance?: JobPerformanceMetrics;
 	pref: string;
 	promotionLabel?: null | string;
 	promotionTier?: "premium" | "recommended" | "standard" | null;

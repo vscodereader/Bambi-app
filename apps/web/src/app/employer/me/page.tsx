@@ -1,5 +1,380 @@
-import { EmployerMe } from "@/components/bambi/screens/employer";
+"use client";
+
+import { Avatar, AvatarFallback } from "@bambi-app/ui/components/avatar";
+import { Badge } from "@bambi-app/ui/components/badge";
+import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+} from "@bambi-app/ui/components/card";
+import { Separator } from "@bambi-app/ui/components/separator";
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import { useQuery } from "@tanstack/react-query";
+import type { Route } from "next";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+import { EmptyState } from "@/components/bambi/empty-state";
+import { PageShell } from "@/components/bambi/page-shell";
+import { StatusBadge } from "@/components/bambi/status-badge";
+import { authClient } from "@/lib/auth-client";
+import { signOutToHome } from "@/lib/bambi/auth-actions";
+import { formatDateTime, formatNullable } from "@/lib/bambi-format";
+import { verificationStatusLabels } from "@/lib/bambi-options";
+import { orpc } from "@/utils/orpc";
+
+const roleLabels: Record<string, string> = {
+	admin: "관리자",
+	employer: "구인자",
+	job_seeker: "구직자",
+};
+
+const accountStatusLabels: Record<string, string> = {
+	active: "정상",
+	suspended: "정지",
+	warned: "주의",
+};
+
+const membershipRoleLabels: Record<string, string> = {
+	admin: "관리자",
+	member: "멤버",
+	owner: "대표",
+};
+
+const getRoleLabel = (role: string): string => roleLabels[role] ?? role;
+
+const getMembershipRoleLabel = (role: null | string): string => {
+	if (!role) {
+		return "멤버";
+	}
+
+	return membershipRoleLabels[role] ?? role;
+};
+
+const getAccountStatusLabel = (status: string): string =>
+	accountStatusLabels[status] ?? status;
+
+const getAccountStatusTone = (
+	status: string
+): React.ComponentProps<typeof StatusBadge>["tone"] => {
+	if (status === "active") {
+		return "good";
+	}
+
+	if (status === "warned") {
+		return "warning";
+	}
+
+	if (status === "suspended") {
+		return "danger";
+	}
+
+	return "default";
+};
+
+const getVerificationStatusLabel = (status: string): string =>
+	verificationStatusLabels[status as keyof typeof verificationStatusLabels] ??
+	status;
+
+const getVerificationStatusTone = (
+	status: string
+): React.ComponentProps<typeof StatusBadge>["tone"] => {
+	if (status === "verified") {
+		return "good";
+	}
+
+	if (status === "pending") {
+		return "warning";
+	}
+
+	if (status === "rejected") {
+		return "danger";
+	}
+
+	return "default";
+};
+
+const getErrorCode = (error: Error | null): string | undefined =>
+	error && "code" in error && typeof error.code === "string"
+		? error.code
+		: undefined;
+
+const getInitials = (name: null | string): string => {
+	const trimmed = name?.trim();
+
+	if (!trimmed) {
+		return "구인";
+	}
+
+	return trimmed.slice(0, 2);
+};
 
 export default function EmployerMePage() {
-	return <EmployerMe />;
+	const router = useRouter();
+	const session = authClient.useSession();
+	const isSignedIn = Boolean(session.data?.user);
+	const mineQuery = useQuery({
+		...orpc.bambi.onboarding.getMine.queryOptions(),
+		enabled: isSignedIn,
+	});
+	const profile = mineQuery.data?.bambiProfile ?? null;
+	const organizationProfiles =
+		mineQuery.data?.employerOrganizationProfiles ?? [];
+
+	const handleSignOut = async () => {
+		await signOutToHome(router);
+	};
+
+	if (session.isPending || mineQuery.isLoading) {
+		return (
+			<PageShell title="매장 정보">
+				<Skeleton className="h-28 w-full rounded-lg" />
+				<div className="grid gap-3 md:grid-cols-2">
+					<Skeleton className="h-40 w-full rounded-lg" />
+					<Skeleton className="h-40 w-full rounded-lg" />
+				</div>
+			</PageShell>
+		);
+	}
+
+	if (!isSignedIn || getErrorCode(mineQuery.error) === "UNAUTHORIZED") {
+		return (
+			<PageShell
+				description="매장 정보는 로그인 후 이용할 수 있습니다."
+				title="매장 정보"
+			>
+				<EmptyState
+					action={
+						<Link className={buttonVariants()} href="/login">
+							로그인
+						</Link>
+					}
+					description="구인자 계정으로 로그인하면 계정과 사업자 인증 상태를 확인할 수 있습니다."
+					title="로그인이 필요합니다"
+				/>
+			</PageShell>
+		);
+	}
+
+	if (mineQuery.isError) {
+		return (
+			<PageShell
+				description="매장 정보를 불러오지 못했습니다."
+				title="매장 정보"
+			>
+				<EmptyState
+					action={
+						<Button onClick={() => mineQuery.refetch()} type="button">
+							다시 시도
+						</Button>
+					}
+					description="로그인 상태와 연결 상태를 확인한 뒤 다시 시도해 주세요."
+					title="매장 정보를 불러올 수 없습니다"
+				/>
+			</PageShell>
+		);
+	}
+
+	if (!profile) {
+		return (
+			<PageShell
+				description="매장 정보를 보려면 밤비 프로필 설정이 필요합니다."
+				title="매장 정보"
+			>
+				<EmptyState
+					action={
+						<Link className={buttonVariants()} href="/welcome">
+							회원가입으로 이동
+						</Link>
+					}
+					description="구인자 프로필을 만든 뒤 계정과 사업자 정보를 확인할 수 있습니다."
+					title="밤비 프로필이 없습니다"
+				/>
+			</PageShell>
+		);
+	}
+
+	if (profile.role === "job_seeker") {
+		return (
+			<PageShell
+				description="현재 계정은 구직자 프로필로 설정되어 있습니다."
+				title="매장 정보"
+			>
+				<EmptyState
+					action={
+						<Link
+							className={buttonVariants({ variant: "outline" })}
+							href="/seeker"
+						>
+							공고 탐색으로 이동
+						</Link>
+					}
+					description="구직자 계정은 공개 공고를 탐색하고 지원 대화를 시작할 수 있습니다."
+					title="매장 정보 권한이 없습니다"
+				/>
+			</PageShell>
+		);
+	}
+
+	return (
+		<PageShell
+			description="계정과 사업자 인증 상태를 확인하고 설정을 관리합니다."
+			title="매장 정보"
+		>
+			<section aria-labelledby="account" className="flex flex-col gap-3">
+				<h2 className="sr-only" id="account">
+					계정 정보
+				</h2>
+				<Card>
+					<CardContent className="flex flex-wrap items-center gap-4">
+						<Avatar size="lg">
+							<AvatarFallback>
+								{getInitials(profile.displayName)}
+							</AvatarFallback>
+						</Avatar>
+						<div className="flex min-w-0 flex-col gap-1">
+							<div className="flex flex-wrap items-center gap-2">
+								<span className="break-words font-semibold text-lg">
+									{profile.displayName ?? "구인자 회원"}
+								</span>
+								<Badge className="rounded-full" variant="secondary">
+									{getRoleLabel(profile.role)}
+								</Badge>
+								<StatusBadge tone={getAccountStatusTone(profile.status)}>
+									{getAccountStatusLabel(profile.status)}
+								</StatusBadge>
+							</div>
+							<p className="text-muted-foreground text-sm">
+								{profile.isPhoneVerified ? "전화 인증 완료" : "전화 미인증"} ·
+								연락처 {formatNullable(profile.phoneNumber)}
+							</p>
+							<p className="text-muted-foreground text-xs">
+								가입 {formatDateTime(profile.createdAt)}
+							</p>
+						</div>
+					</CardContent>
+				</Card>
+			</section>
+
+			<Separator />
+
+			<section aria-labelledby="businesses" className="flex flex-col gap-3">
+				<div>
+					<h2 className="font-semibold text-lg" id="businesses">
+						사업자 인증
+					</h2>
+					<p className="mt-1 text-muted-foreground text-sm">
+						인증 상태는 공고 공개 여부에 영향을 줄 수 있습니다.
+					</p>
+				</div>
+				{organizationProfiles.length > 0 ? (
+					<div className="grid gap-3 md:grid-cols-2">
+						{organizationProfiles.map((organizationProfile) => (
+							<Card key={organizationProfile.id}>
+								<CardHeader>
+									<CardTitle className="flex flex-wrap items-center gap-2">
+										<span className="break-words font-medium text-base">
+											{organizationProfile.displayName}
+										</span>
+										<StatusBadge
+											tone={getVerificationStatusTone(
+												organizationProfile.verificationStatus
+											)}
+										>
+											{getVerificationStatusLabel(
+												organizationProfile.verificationStatus
+											)}
+										</StatusBadge>
+									</CardTitle>
+								</CardHeader>
+								<CardContent>
+									<dl className="grid gap-2 text-sm">
+										<div>
+											<dt className="text-muted-foreground text-xs">
+												사업자 등록 번호
+											</dt>
+											<dd className="mt-1 break-words">
+												{formatNullable(
+													organizationProfile.businessRegistrationNumber
+												)}
+											</dd>
+										</div>
+										<div>
+											<dt className="text-muted-foreground text-xs">내 권한</dt>
+											<dd className="mt-1 break-words">
+												{getMembershipRoleLabel(organizationProfile.role)}
+											</dd>
+										</div>
+										<div>
+											<dt className="text-muted-foreground text-xs">
+												검수 메모
+											</dt>
+											<dd className="mt-1 break-words">
+												{formatNullable(organizationProfile.verificationNote)}
+											</dd>
+										</div>
+									</dl>
+								</CardContent>
+							</Card>
+						))}
+					</div>
+				) : (
+					<EmptyState
+						action={
+							<Link
+								className={buttonVariants({ variant: "outline" })}
+								href={"/employer/settings" as Route}
+							>
+								조직 설정으로 이동
+							</Link>
+						}
+						className="min-h-0 py-8"
+						description="소속된 조직이 생기면 이곳에서 사업자 인증 상태를 확인할 수 있습니다."
+						title="등록된 사업자 정보가 없습니다"
+					/>
+				)}
+			</section>
+
+			<Separator />
+
+			<section aria-labelledby="shortcuts" className="flex flex-col gap-3">
+				<h2 className="font-semibold text-lg" id="shortcuts">
+					설정 바로가기
+				</h2>
+				<div className="flex flex-wrap gap-2">
+					<Link
+						className={buttonVariants({ variant: "outline" })}
+						href={"/employer/settings" as Route}
+					>
+						조직 설정
+					</Link>
+					<Link
+						className={buttonVariants({ variant: "outline" })}
+						href={"/employer/settings/teams" as Route}
+					>
+						팀 관리
+					</Link>
+					<Link
+						className={buttonVariants({ variant: "outline" })}
+						href="/employer"
+					>
+						공고 관리
+					</Link>
+				</div>
+			</section>
+
+			<Separator />
+
+			<Button
+				className="w-full sm:w-auto"
+				onClick={handleSignOut}
+				type="button"
+				variant="secondary"
+			>
+				로그아웃
+			</Button>
+		</PageShell>
+	);
 }
