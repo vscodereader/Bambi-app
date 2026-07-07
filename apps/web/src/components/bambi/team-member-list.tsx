@@ -257,8 +257,8 @@ export function TeamMemberList({
 			</div>
 
 			<form className="border p-4" onSubmit={submitInvite}>
-				<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_180px_auto] lg:items-end">
-					<div className="space-y-1.5">
+				<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_180px_auto] lg:items-start">
+					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="invite-email">이메일</Label>
 						<Popover onOpenChange={setPopoverOpen} open={popoverOpen}>
 							<PopoverTrigger
@@ -304,7 +304,7 @@ export function TeamMemberList({
 							message={showValidation ? emailError : ""}
 						/>
 					</div>
-					<div className="space-y-1.5">
+					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="invite-role">권한</Label>
 						<Select
 							disabled={disabled}
@@ -324,7 +324,7 @@ export function TeamMemberList({
 							</SelectContent>
 						</Select>
 					</div>
-					<div className="space-y-1.5">
+					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="invite-team">팀</Label>
 						<Select
 							disabled={disabled}
@@ -354,10 +354,22 @@ export function TeamMemberList({
 							</SelectContent>
 						</Select>
 					</div>
-					<Button disabled={disabled || inviteMutation.isPending} type="submit">
-						<MailPlus aria-hidden="true" data-icon="inline-start" />
-						초대
-					</Button>
+					<div className="flex flex-col gap-1.5">
+						<Label
+							aria-hidden="true"
+							className="hidden select-none lg:block lg:opacity-0"
+						>
+							초대
+						</Label>
+						<Button
+							className="w-full lg:w-auto"
+							disabled={disabled || inviteMutation.isPending}
+							type="submit"
+						>
+							<MailPlus aria-hidden="true" data-icon="inline-start" />
+							초대
+						</Button>
+					</div>
 				</div>
 				<div className="mt-3">
 					<FormError message={formError} />
@@ -388,7 +400,8 @@ export function TeamMemberList({
 								{roleLabels[member.role as OrganizationRole] ?? member.role}
 							</div>
 							{organization.canManageOrganization &&
-							member.kind === "active" ? (
+							member.kind === "active" &&
+							member.role !== "owner" ? (
 								<Select
 									disabled={disabled || setRoleMutation.isPending}
 									items={roleLabels}
