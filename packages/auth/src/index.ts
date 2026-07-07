@@ -20,9 +20,11 @@ import {
 } from "@bambi-app/db/schema/auth";
 import { env } from "@bambi-app/env/server";
 import { expo } from "@better-auth/expo";
+import { i18n } from "@better-auth/i18n";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
+import { koTranslations } from "./locales/ko";
 
 const schema = {
 	account,
@@ -87,6 +89,14 @@ export function createAuth() {
 					enabled: true,
 					allowRemovingAllTeams: false,
 				},
+			}),
+			// 한국 대상 서비스라 브라우저 언어와 무관하게 항상 한국어 에러를 낸다:
+			// 감지된 locale은 translations에 등록된 것 중에서만 채택되고 없으면
+			// defaultLocale로 폴백하므로, ko만 등록하면 모든 요청이 ko가 된다.
+			// 사전에 없는 코드는 영어 원문 유지(번역돼도 원문은 originalMessage에 보존).
+			i18n({
+				translations: { ko: koTranslations },
+				defaultLocale: "ko",
 			}),
 		],
 	});
