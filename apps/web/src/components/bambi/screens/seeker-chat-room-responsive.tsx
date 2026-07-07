@@ -1176,7 +1176,7 @@ export function SeekerChatRoomResponsive({
 						)}
 						<Button
 							block
-							className="mt-4"
+							className="mt-4 shadow-none"
 							disabled={!confirmedSchedule}
 							onClick={onReveal}
 							size="md"
