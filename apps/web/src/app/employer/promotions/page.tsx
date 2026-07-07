@@ -111,9 +111,14 @@ function PromotionCard({
 	onPause,
 	promotion,
 }: PromotionCardProps) {
+	const now = Date.now();
+	const isWithinSchedule =
+		new Date(promotion.startsAt).getTime() <= now &&
+		new Date(promotion.endsAt).getTime() > now;
 	const canBoost =
 		promotion.status === "active" &&
 		promotion.jobStatus === "published" &&
+		isWithinSchedule &&
 		promotion.remainingManualBoosts > 0;
 	const canActivate =
 		promotion.status === "draft" || promotion.status === "pending_payment";

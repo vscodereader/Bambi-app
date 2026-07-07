@@ -22,6 +22,7 @@ import type { JobPostStatus } from "../../services/bambi-policy";
 import {
 	canConsumeManualBoost,
 	getCampaignEmployerAccessScope,
+	getEffectivePromotionStatus,
 	getManualBoostConsumption,
 	getPromotionLabel,
 	getRemainingManualBoosts,
@@ -187,10 +188,16 @@ export const promotionsRouter = {
 			.where(or(...accessFilters))
 			.orderBy(desc(jobPromotionCampaign.updatedAt));
 
+		const now = new Date();
+
 		return rows.map((row) => ({
 			...row,
 			promotionLabel: getPromotionLabel(row.tier as PromotionTier),
 			remainingManualBoosts: getRemainingManualBoosts(row),
+			status: getEffectivePromotionStatus(
+				{ endsAt: row.endsAt, status: row.status as PromotionStatus },
+				now
+			),
 		}));
 	}),
 
