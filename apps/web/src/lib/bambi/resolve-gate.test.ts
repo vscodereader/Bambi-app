@@ -48,4 +48,16 @@ describe("resolveGate", () => {
 			resolveGate({ pathname: "/bambi/local-job-media/x", ...fresh }).type
 		).toBe("next");
 	});
+	it("lets metadata/static files pass for fresh visitors", () => {
+		for (const pathname of [
+			"/icon.svg",
+			"/apple-icon.png",
+			"/og-image.png",
+			"/robots.txt",
+			"/sitemap.xml",
+			"/favicon.ico",
+		]) {
+			expect(resolveGate({ pathname, ...fresh }).type).toBe("next");
+		}
+	});
 });
