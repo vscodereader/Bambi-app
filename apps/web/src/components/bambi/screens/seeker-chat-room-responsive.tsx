@@ -1,5 +1,7 @@
 "use client";
 
+import { Button as UiButton } from "@bambi-app/ui/components/button";
+import { Input } from "@bambi-app/ui/components/input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	type ReactNode,
@@ -23,6 +25,7 @@ import {
 	type ChatAttachmentPreviewItem,
 } from "../chat-attachment-preview";
 import { Badge, Button, Card } from "../ds";
+import { FieldLabel } from "../form-message";
 import {
 	ClockIcon,
 	DollarCircle,
@@ -478,44 +481,33 @@ function InterviewProposalForm({
 	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
 	return (
-		<form className="mt-4 grid gap-2" onSubmit={onSubmit}>
-			<label
-				className="font-bold text-muted-foreground text-xs"
-				htmlFor="interview-at"
-			>
-				면접 일시
-			</label>
-			<input
-				className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
-				id="interview-at"
-				min={new Date().toISOString().slice(0, 16)}
-				onChange={(event) => onScheduledAtChange(event.target.value)}
-				type="datetime-local"
-				value={interviewAt}
-			/>
-			<label
-				className="font-bold text-muted-foreground text-xs"
-				htmlFor="location-note"
-			>
-				장소 메모
-			</label>
-			<input
-				className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
-				id="location-note"
-				maxLength={300}
-				onChange={(event) => onLocationNoteChange(event.target.value)}
-				placeholder="예: 역삼역 3번 출구 근처"
-				value={locationNote}
-			/>
-			<Button
-				block
-				className="shadow-none"
-				disabled={isPending}
-				size="md"
-				type="submit"
-			>
+		<form className="mt-4 grid gap-3" onSubmit={onSubmit}>
+			<div className="flex flex-col gap-2">
+				<FieldLabel htmlFor="interview-at">면접 일시</FieldLabel>
+				<Input
+					id="interview-at"
+					min={new Date().toISOString().slice(0, 16)}
+					onChange={(event) => onScheduledAtChange(event.target.value)}
+					required
+					type="datetime-local"
+					value={interviewAt}
+				/>
+			</div>
+			<div className="flex flex-col gap-2">
+				<FieldLabel htmlFor="location-note" optional>
+					장소 메모
+				</FieldLabel>
+				<Input
+					id="location-note"
+					maxLength={300}
+					onChange={(event) => onLocationNoteChange(event.target.value)}
+					placeholder="예: 역삼역 3번 출구 근처"
+					value={locationNote}
+				/>
+			</div>
+			<UiButton className="w-full" disabled={isPending} size="lg" type="submit">
 				{isPending ? "제안 중" : "면접 일정 제안"}
-			</Button>
+			</UiButton>
 		</form>
 	);
 }
