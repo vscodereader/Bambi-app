@@ -22,7 +22,6 @@ const organizationIdInput = z.object({
 });
 
 const updateProfileInput = organizationIdInput.extend({
-	businessRegistrationNumber: z.string().min(1).max(40).optional(),
 	displayName: z.string().min(1).max(120),
 });
 
@@ -178,7 +177,6 @@ export const organizationsRouter = {
 			const [updated] = await db
 				.update(employerOrganizationProfile)
 				.set({
-					businessRegistrationNumber: input.businessRegistrationNumber,
 					displayName: input.displayName,
 				})
 				.where(
