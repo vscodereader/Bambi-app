@@ -9,12 +9,16 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@bambi-app/ui/components/card";
+import { Input } from "@bambi-app/ui/components/input";
+import { Label } from "@bambi-app/ui/components/label";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
@@ -269,6 +273,12 @@ export default function EmployerMePage() {
 						인증 상태는 공고 공개 여부에 영향을 줄 수 있습니다.
 					</p>
 				</div>
+				<BusinessInfoForm
+					defaultBusinessRegistrationNumber={
+						organizationProfiles[0]?.businessRegistrationNumber ?? ""
+					}
+					defaultDisplayName={organizationProfiles[0]?.displayName ?? ""}
+				/>
 				{organizationProfiles.length > 0 ? (
 					<div className="grid gap-3 md:grid-cols-2">
 						{organizationProfiles.map((organizationProfile) => (
@@ -331,7 +341,7 @@ export default function EmployerMePage() {
 							</Link>
 						}
 						className="min-h-0 py-8"
-						description="소속된 조직이 생기면 이곳에서 사업자 인증 상태를 확인할 수 있습니다."
+						description="위 양식으로 업체 정보를 제출하면 사업자 인증을 신청할 수 있습니다."
 						title="등록된 사업자 정보가 없습니다"
 					/>
 				)}
@@ -376,5 +386,90 @@ export default function EmployerMePage() {
 				로그아웃
 			</Button>
 		</PageShell>
+	);
+}
+
+const BRN_PATTERN = /^\d{3}-\d{2}-\d{5}$/;
+
+function BusinessInfoForm({
+	defaultDisplayName,
+	defaultBusinessRegistrationNumber,
+}: {
+	defaultDisplayName: string;
+	defaultBusinessRegistrationNumber: string;
+}) {
+	const queryClient = useQueryClient();
+	const [displayName, setDisplayName] = useState(defaultDisplayName);
+	const [brn, setBrn] = useState(defaultBusinessRegistrationNumber);
+	const [showValidation, setShowValidation] = useState(false);
+
+	const submitMutation = useMutation(
+		orpc.bambi.onboarding.submitEmployerBusinessInfo.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "업체 정보를 제출하지 못했습니다.");
+			},
+			onSuccess: async () => {
+				toast.success("업체 정보를 제출했습니다. 운영자 승인을 기다려 주세요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.onboarding.getMine.queryKey(),
+				});
+			},
+		})
+	);
+
+	const nameError =
+		displayName.trim().length === 0 ? "업체명을 입력해 주세요." : "";
+	const brnError = BRN_PATTERN.test(brn.trim())
+		? ""
+		: "사업자등록번호는 000-00-00000 형식으로 입력해 주세요.";
+
+	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (nameError || brnError) {
+			setShowValidation(true);
+			return;
+		}
+		submitMutation.mutate({
+			displayName: displayName.trim(),
+			businessRegistrationNumber: brn.trim(),
+		});
+	};
+
+	return (
+		<form className="flex flex-col gap-3 border p-4" onSubmit={handleSubmit}>
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="business-name">업체명</Label>
+				<Input
+					aria-invalid={showValidation && Boolean(nameError)}
+					id="business-name"
+					onChange={(event) => setDisplayName(event.target.value)}
+					placeholder="예: 밤비 라운지"
+					value={displayName}
+				/>
+				{showValidation && nameError ? (
+					<p className="text-destructive text-xs">{nameError}</p>
+				) : null}
+			</div>
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="business-brn">사업자 등록 번호</Label>
+				<Input
+					aria-invalid={showValidation && Boolean(brnError)}
+					id="business-brn"
+					onChange={(event) => setBrn(event.target.value)}
+					placeholder="000-00-00000"
+					value={brn}
+				/>
+				{showValidation && brnError ? (
+					<p className="text-destructive text-xs">{brnError}</p>
+				) : null}
+			</div>
+			<Button
+				className="w-full sm:w-auto"
+				disabled={submitMutation.isPending}
+				type="submit"
+			>
+				업체 정보 제출
+			</Button>
+		</form>
 	);
 }
