@@ -218,6 +218,13 @@ describe("bambi jobs router media and block content", () => {
 		const fixture = await createJobPostMediaFixture();
 
 		try {
+			await db
+				.update(employerOrganizationProfile)
+				.set({ verificationStatus: "verified" })
+				.where(
+					eq(employerOrganizationProfile.organizationId, fixture.organizationId)
+				);
+
 			const createMediaUpload = createProcedureClient(
 				jobsRouter.createMediaUpload,
 				{
