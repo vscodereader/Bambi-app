@@ -6,12 +6,25 @@ import {
 	AlertTitle,
 } from "@bambi-app/ui/components/alert";
 import { buttonVariants } from "@bambi-app/ui/components/button";
+import { Clock, Store, TriangleAlert } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
+import type { ComponentType } from "react";
 
 import { useEmployerApproval } from "@/components/bambi/employer-approval-context";
 
-const getGateTitle = (status: "none" | "pending" | "rejected"): string => {
+type GateStatus = "none" | "pending" | "rejected";
+
+const GATE_STYLE: Record<
+	GateStatus,
+	{ variant: "brand" | "warning" | "destructive"; icon: ComponentType }
+> = {
+	none: { variant: "brand", icon: Store },
+	pending: { variant: "warning", icon: Clock },
+	rejected: { variant: "destructive", icon: TriangleAlert },
+};
+
+const getGateTitle = (status: GateStatus): string => {
 	if (status === "pending") {
 		return "운영자 승인 대기 중";
 	}
@@ -23,10 +36,7 @@ const getGateTitle = (status: "none" | "pending" | "rejected"): string => {
 	return "업체 정보 등록이 필요합니다";
 };
 
-const getGateDescription = (
-	status: "none" | "pending" | "rejected",
-	action: string
-): string => {
+const getGateDescription = (status: GateStatus, action: string): string => {
 	if (status === "pending") {
 		return `${action}하려면 운영자 승인이 완료되어야 합니다.`;
 	}
@@ -46,17 +56,25 @@ export function EmployerGateBanner({ action }: { action: string }) {
 		return null;
 	}
 
+	const { variant, icon: Icon } = GATE_STYLE[status];
+
 	return (
-		<Alert>
-			<AlertTitle>{getGateTitle(status)}</AlertTitle>
-			<AlertDescription className="flex flex-col items-start gap-2">
+		<Alert
+			className="items-center gap-x-3 px-3.5 py-3 text-sm shadow-[var(--shadow-card)]"
+			variant={variant}
+		>
+			<Icon />
+			<AlertTitle className="font-semibold text-sm">
+				{getGateTitle(status)}
+			</AlertTitle>
+			<AlertDescription className="flex flex-col items-start gap-2.5 text-sm/relaxed">
 				<span>{getGateDescription(status, action)}</span>
 				{status === "pending" ? null : (
 					<Link
-						className={buttonVariants({ size: "sm", variant: "outline" })}
+						className={buttonVariants({ size: "sm" })}
 						href={"/employer/me" as Route}
 					>
-						업체 정보 입력
+						{status === "rejected" ? "업체 정보 다시 제출" : "업체 정보 입력"}
 					</Link>
 				)}
 			</AlertDescription>
