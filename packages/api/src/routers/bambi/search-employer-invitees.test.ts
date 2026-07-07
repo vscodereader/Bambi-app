@@ -16,7 +16,7 @@ const [{ db }, authSchema, bambiSchema, { teamsRouter }] = await Promise.all([
 	import("./teams"),
 ]);
 
-const { user, organization, member } = authSchema;
+const { user, organization, member, invitation } = authSchema;
 const { bambiProfile } = bambiSchema;
 
 const ctx = (userId: string): Context =>
@@ -24,21 +24,22 @@ const ctx = (userId: string): Context =>
 
 const makeEmployer = async (label: string) => {
 	const userId = `user_inv_${randomUUID()}`;
+	const email = `${label}_${userId}@bambi.test`;
 	await db.insert(user).values({
 		id: userId,
 		name: label,
-		email: `${label}_${userId}@bambi.test`,
+		email,
 	});
 	await db
 		.insert(bambiProfile)
 		.values({ userId, role: "employer", displayName: label });
-	return userId;
+	return { userId, email };
 };
 
 describe("searchEmployerInvitees", () => {
 	it("returns employer accounts filtered by query, excluding self and members", async () => {
-		const ownerId = await makeEmployer("소유자");
-		const targetId = await makeEmployer("김초대");
+		const { userId: ownerId } = await makeEmployer("소유자");
+		const { userId: targetId } = await makeEmployer("김초대");
 		const seekerId = `user_inv_${randomUUID()}`;
 		await db.insert(user).values({
 			id: seekerId,
@@ -82,6 +83,70 @@ describe("searchEmployerInvitees", () => {
 		await db.delete(user).where(eq(user.id, ownerId));
 		await db.delete(user).where(eq(user.id, targetId));
 		await db.delete(user).where(eq(user.id, seekerId));
+		await db.delete(organization).where(eq(organization.id, organizationId));
+	});
+
+	it("excludes employers with a pending invitation and existing non-caller members", async () => {
+		// 고유 태그로 이 테스트가 시드한 employer만 검색되게 좁힌다.
+		const tag = `t${randomUUID().slice(0, 8)}`;
+		const { userId: ownerId } = await makeEmployer(`${tag}오너`);
+		const { userId: pendingId, email: pendingEmail } = await makeEmployer(
+			`${tag}대기`
+		);
+		const { userId: memberId } = await makeEmployer(`${tag}멤버`);
+		const { userId: candidateId } = await makeEmployer(`${tag}후보`);
+
+		const organizationId = `org_${randomUUID()}`;
+		await db.insert(organization).values({
+			createdAt: new Date(),
+			id: organizationId,
+			name: "org",
+			slug: `org-${randomUUID().slice(0, 8)}`,
+		});
+		// 호출자(owner)와, 호출자가 아닌 기존 멤버(memberId)를 조직에 넣는다.
+		await db.insert(member).values([
+			{
+				createdAt: new Date(),
+				id: `member_${randomUUID()}`,
+				organizationId,
+				userId: ownerId,
+				role: "owner",
+			},
+			{
+				createdAt: new Date(),
+				id: `member_${randomUUID()}`,
+				organizationId,
+				userId: memberId,
+				role: "staff",
+			},
+		]);
+		// pendingId 이메일로 pending 초대를 만들어 둔다.
+		await db.insert(invitation).values({
+			id: `invitation_${randomUUID()}`,
+			organizationId,
+			email: pendingEmail.toLowerCase(),
+			status: "pending",
+			expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+			inviterId: ownerId,
+			role: "staff",
+		});
+
+		const search = createProcedureClient(teamsRouter.searchEmployerInvitees, {
+			context: ctx(ownerId),
+			path: ["bambi", "teams", "searchEmployerInvitees"],
+		});
+
+		const results = await search({ organizationId, query: tag });
+		const ids = results.map((r) => r.userId);
+		expect(ids).toContain(candidateId); // 후보는 노출
+		expect(ids).not.toContain(pendingId); // pending 초대 이메일 제외
+		expect(ids).not.toContain(memberId); // 호출자 아닌 기존 멤버 제외
+		expect(ids).not.toContain(ownerId); // 본인 제외
+
+		await db.delete(user).where(eq(user.id, ownerId));
+		await db.delete(user).where(eq(user.id, pendingId));
+		await db.delete(user).where(eq(user.id, memberId));
+		await db.delete(user).where(eq(user.id, candidateId));
 		await db.delete(organization).where(eq(organization.id, organizationId));
 	});
 });

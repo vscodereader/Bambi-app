@@ -301,9 +301,14 @@ export const teamsRouter = {
 						eq(invitation.status, "pending")
 					)
 				);
-			const excludedEmails = new Set(
-				pendingInvites.map((row) => row.email.toLowerCase())
+			const pendingEmails = pendingInvites.map((row) =>
+				row.email.toLowerCase()
 			);
+			// 빈 배열이면 notInArray가 안전하지 않으므로 조건 자체를 생략한다.
+			const pendingEmailFilter =
+				pendingEmails.length > 0
+					? notInArray(user.email, pendingEmails)
+					: undefined;
 
 			const trimmed = input.query?.trim();
 			const searchFilter = trimmed
@@ -313,7 +318,9 @@ export const teamsRouter = {
 					)
 				: undefined;
 
-			const rows = await db
+			// pending 초대 이메일 제외를 SQL WHERE로 넣어 LIMIT 10이 완전히
+			// 필터된 집합에 적용되게 한다(이름순 자른 뒤 후처리로 버리지 않음).
+			return await db
 				.select({
 					userId: user.id,
 					email: user.email,
@@ -325,13 +332,12 @@ export const teamsRouter = {
 					and(
 						eq(bambiProfile.role, "employer"),
 						notInArray(user.id, excludedUserIds),
-						searchFilter
+						searchFilter,
+						pendingEmailFilter
 					)
 				)
 				.orderBy(asc(user.name))
 				.limit(10);
-
-			return rows.filter((row) => !excludedEmails.has(row.email.toLowerCase()));
 		}),
 
 	setMemberRole: protectedProcedure
