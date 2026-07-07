@@ -79,7 +79,7 @@ export default function EmployerSettingsPage() {
 
 	return (
 		<PageShell
-			description="공고에 노출되는 사업자 정보를 확인·수정하고, 팀과 멤버를 관리합니다."
+			description="공고에 노출되는 조직 이름을 관리하고, 팀과 멤버를 관리합니다."
 			title="조직 설정"
 		>
 			<EmployerGateBanner action="조직 설정을 변경" />
@@ -92,7 +92,7 @@ export default function EmployerSettingsPage() {
 						조직 프로필
 					</h2>
 					<p className="mt-1 text-muted-foreground text-sm">
-						공고에 노출되는 조직 이름과 사업자 정보를 관리합니다.
+						공고에 노출되는 조직 이름을 관리합니다.
 					</p>
 				</div>
 				{organizations.length > 0 ? (
