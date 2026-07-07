@@ -25,6 +25,7 @@ interface OrganizationProfileFormValue {
 }
 
 interface OrgProfileFormProps {
+	disabled?: boolean;
 	organization: OrganizationProfileFormValue;
 }
 
@@ -52,7 +53,10 @@ const roleLabels: Record<string, string> = {
 	staff: "스태프",
 };
 
-export function OrgProfileForm({ organization }: OrgProfileFormProps) {
+export function OrgProfileForm({
+	disabled = false,
+	organization,
+}: OrgProfileFormProps) {
 	const queryClient = useQueryClient();
 	const [displayName, setDisplayName] = useState(organization.displayName);
 	const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState(
@@ -61,7 +65,8 @@ export function OrgProfileForm({ organization }: OrgProfileFormProps) {
 	const [formError, setFormError] = useState<null | string>(null);
 	const displayNameError =
 		displayName.trim().length === 0 ? "조직 표시 이름을 입력해 주세요." : "";
-	const canSubmit = organization.canManageOrganization && !displayNameError;
+	const canEdit = organization.canManageOrganization && !disabled;
+	const canSubmit = canEdit && !displayNameError;
 	const updateMutation = useMutation(
 		orpc.bambi.organizations.updateProfile.mutationOptions({
 			onError: (error) => {
@@ -138,7 +143,7 @@ export function OrgProfileForm({ organization }: OrgProfileFormProps) {
 							</Label>
 							<Input
 								aria-invalid={Boolean(displayNameError)}
-								disabled={!organization.canManageOrganization}
+								disabled={!canEdit}
 								id={`${organization.organizationId}-display-name`}
 								onChange={(event) => setDisplayName(event.target.value)}
 								value={displayName}
@@ -153,7 +158,7 @@ export function OrgProfileForm({ organization }: OrgProfileFormProps) {
 								사업자 등록 번호
 							</Label>
 							<Input
-								disabled={!organization.canManageOrganization}
+								disabled={!canEdit}
 								id={`${organization.organizationId}-business-number`}
 								onChange={(event) =>
 									setBusinessRegistrationNumber(event.target.value)

@@ -30,6 +30,7 @@ const { bambiProfile, employerOrganizationProfile, employerTeamProfile } =
 	bambiSchema;
 
 interface OrganizationFixture {
+	inviteeUserId: string;
 	managerMemberId: string;
 	managerUserId: string;
 	organizationId: string;
@@ -40,6 +41,9 @@ interface OrganizationFixture {
 	teamId: string;
 	userIds: string[];
 }
+
+// 초대 대상 이메일은 employer로 가입된 계정만 허용되므로 고정 이메일로 픽스처 생성.
+const INVITEE_EMAIL = "new-staff@bambi.test";
 
 const createContextForUser = (userId: string): Context =>
 	({
@@ -63,6 +67,7 @@ const createOrganizationFixture = async (): Promise<OrganizationFixture> => {
 	const managerUserId = `user_test_manager_${randomUUID()}`;
 	const staffUserId = `user_test_staff_${randomUUID()}`;
 	const otherOwnerUserId = `user_test_other_owner_${randomUUID()}`;
+	const inviteeUserId = `user_test_invitee_${randomUUID()}`;
 	const managerMemberId = `member_test_manager_${randomUUID()}`;
 	const userRows = [
 		{ email: makeEmail("owner"), id: ownerUserId, name: "조직 소유자" },
@@ -73,6 +78,7 @@ const createOrganizationFixture = async (): Promise<OrganizationFixture> => {
 			id: otherOwnerUserId,
 			name: "다른 조직 소유자",
 		},
+		{ email: INVITEE_EMAIL, id: inviteeUserId, name: "초대 대상 스태프" },
 	];
 
 	await db.insert(user).values(userRows);
@@ -164,6 +170,7 @@ const createOrganizationFixture = async (): Promise<OrganizationFixture> => {
 	});
 
 	return {
+		inviteeUserId,
 		managerMemberId,
 		managerUserId,
 		organizationId,
@@ -172,7 +179,13 @@ const createOrganizationFixture = async (): Promise<OrganizationFixture> => {
 		ownerUserId,
 		staffUserId,
 		teamId,
-		userIds: [ownerUserId, managerUserId, staffUserId, otherOwnerUserId],
+		userIds: [
+			ownerUserId,
+			managerUserId,
+			staffUserId,
+			otherOwnerUserId,
+			inviteeUserId,
+		],
 	};
 };
 

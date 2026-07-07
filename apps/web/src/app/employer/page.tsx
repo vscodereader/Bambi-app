@@ -23,7 +23,8 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-
+import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
+import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
@@ -187,6 +188,22 @@ function OverviewStat({
 	);
 }
 
+function NewJobButton({ verified }: { verified: boolean }) {
+	if (verified) {
+		return (
+			<Link className={buttonVariants()} href="/employer/new">
+				새 공고 등록
+			</Link>
+		);
+	}
+
+	return (
+		<Button disabled type="button">
+			새 공고 등록
+		</Button>
+	);
+}
+
 function QuickLinkTile({
 	description,
 	href,
@@ -214,6 +231,7 @@ function QuickLinkTile({
 
 export default function EmployerPage() {
 	const session = authClient.useSession();
+	const verified = useEmployerVerified();
 	const isSignedIn = Boolean(session.data?.user);
 	const mineQuery = useQuery({
 		...orpc.bambi.onboarding.getMine.queryOptions(),
@@ -368,11 +386,7 @@ export default function EmployerPage() {
 	} else if (jobs.length === 0) {
 		jobsContent = (
 			<EmptyState
-				action={
-					<Link className={buttonVariants()} href="/employer/new">
-						새 공고 등록
-					</Link>
-				}
+				action={<NewJobButton verified={verified} />}
 				description="조직 프로필을 선택해 첫 공고를 등록해 보세요."
 				title="등록한 공고가 없습니다"
 			/>
@@ -456,14 +470,11 @@ export default function EmployerPage() {
 
 	return (
 		<PageShell
-			actions={
-				<Link className={buttonVariants()} href="/employer/new">
-					새 공고 등록
-				</Link>
-			}
+			actions={<NewJobButton verified={verified} />}
 			description="조직과 팀 프로필 상태를 확인하고 소유한 공고를 관리합니다."
 			title="구인자 관리"
 		>
+			<EmployerGateBanner action="공고를 등록" />
 			{jobs.length > 0 ? (
 				<section aria-labelledby="job-overview" className="flex flex-col gap-3">
 					<h2 className="sr-only" id="job-overview">

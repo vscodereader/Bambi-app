@@ -111,7 +111,6 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [signupRole, setSignupRole] = useState<SignupRole>("job_seeker");
-	const [orgName, setOrgName] = useState("");
 	const isSignUp = mode === "sign-up";
 	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
 	const subtitle = isSignUp
@@ -122,12 +121,9 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	const finishSignup = async () => {
 		const displayName = name.trim();
 		if (signupRole === "employer") {
-			await client.bambi.onboarding.registerEmployer({
-				displayName,
-				organizationName: orgName.trim() || displayName,
-			});
+			await client.bambi.onboarding.createEmployerProfile({ displayName });
 			queryClient.invalidateQueries();
-			// 미검증 구인자는 /employer 레이아웃이 승인 대기 화면을 인라인 렌더한다.
+			// 조직은 업체정보 제출 시 생성된다. /employer 대시보드가 업체정보 입력을 유도한다.
 			router.push("/employer" as Route);
 			return;
 		}
@@ -296,22 +292,12 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 							</div>
 						) : null}
 						{isSignUp && signupRole === "employer" ? (
-							<label className="grid gap-2" htmlFor="auth-org-name">
-								<span className="font-bold text-sm">업체명</span>
-								<Input
-									id="auth-org-name"
-									onChange={(event) => setOrgName(event.target.value)}
-									placeholder="예: 밤비 라운지"
-									value={orgName}
-								/>
-							</label>
-						) : null}
-						{isSignUp && signupRole === "employer" ? (
 							<p
 								className="m-0 rounded-lg border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm"
 								role="note"
 							>
-								가입 후 운영자 승인이 완료되어야 이용할 수 있어요.
+								가입 후 업체 정보를 입력하고 운영자 승인을 받으면 구인 기능을
+								이용할 수 있어요.
 							</p>
 						) : null}
 						<label className="grid gap-2" htmlFor="auth-email">

@@ -1,14 +1,17 @@
 import { randomUUID } from "node:crypto";
 
 import { db } from "@bambi-app/db";
-import { invitation, member, team } from "@bambi-app/db/schema/auth";
-import { employerTeamProfile } from "@bambi-app/db/schema/bambi";
+import { invitation, member, team, user } from "@bambi-app/db/schema/auth";
+import { bambiProfile, employerTeamProfile } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ilike, notInArray, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
-import { requireActiveBambiProfile } from "../../services/bambi-authz";
+import {
+	isEmployerOrganizationVerified,
+	requireActiveBambiProfile,
+} from "../../services/bambi-authz";
 import {
 	canInviteMembers,
 	canManageOrganization,
@@ -44,7 +47,27 @@ const setMemberRoleInput = organizationIdInput.extend({
 	role: organizationRoleSchema,
 });
 
+const searchEmployerInviteesInput = organizationIdInput.extend({
+	query: z.string().max(320).optional(),
+});
+
 const forbidden = (message: string) => new ORPCError("FORBIDDEN", { message });
+
+// 승인(verified)되지 않은 조직은 팀 관리 조작을 막는다. admin(bambi role)은 예외.
+const assertOrganizationVerified = async ({
+	organizationId,
+	profile,
+}: {
+	organizationId: string;
+	profile: { role: string };
+}): Promise<void> => {
+	if (
+		profile.role !== "admin" &&
+		!(await isEmployerOrganizationVerified(organizationId))
+	) {
+		throw forbidden("운영자 승인 후 팀을 관리할 수 있습니다.");
+	}
+};
 
 const requireEmployerLikeProfile = async (
 	session: Parameters<typeof requireActiveBambiProfile>[0]
@@ -163,9 +186,13 @@ export const teamsRouter = {
 	create: protectedProcedure
 		.input(createTeamInput)
 		.handler(async ({ context, input }) => {
-			await requireOrganizationTeamManagementAccess({
+			const { profile } = await requireOrganizationTeamManagementAccess({
 				organizationId: input.organizationId,
 				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
 			});
 
 			const now = new Date();
@@ -200,9 +227,13 @@ export const teamsRouter = {
 	update: protectedProcedure
 		.input(updateTeamInput)
 		.handler(async ({ context, input }) => {
-			await requireOrganizationTeamManagementAccess({
+			const { profile } = await requireOrganizationTeamManagementAccess({
 				organizationId: input.organizationId,
 				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
 			});
 			await assertTeamBelongsToOrganization({
 				organizationId: input.organizationId,
@@ -242,6 +273,10 @@ export const teamsRouter = {
 				organizationId: input.organizationId,
 				session: context.session,
 			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
+			});
 
 			if (input.teamId) {
 				await assertTeamBelongsToOrganization({
@@ -250,10 +285,23 @@ export const teamsRouter = {
 				});
 			}
 
+			// 초대 대상은 현재 employer로 가입된 계정만 허용한다.
+			const normalizedEmail = input.email.toLowerCase();
+			const [invitee] = await db
+				.select({ role: bambiProfile.role })
+				.from(user)
+				.innerJoin(bambiProfile, eq(bambiProfile.userId, user.id))
+				.where(eq(user.email, normalizedEmail))
+				.limit(1);
+
+			if (invitee?.role !== "employer") {
+				throw forbidden("구인자로 가입된 계정만 초대할 수 있습니다.");
+			}
+
 			const [created] = await db
 				.insert(invitation)
 				.values({
-					email: input.email.toLowerCase(),
+					email: normalizedEmail,
 					expiresAt: getExpiresAt(),
 					id: `invitation_${randomUUID()}`,
 					inviterId: profile.userId,
@@ -267,12 +315,85 @@ export const teamsRouter = {
 			return created;
 		}),
 
+	searchEmployerInvitees: protectedProcedure
+		.input(searchEmployerInviteesInput)
+		.handler(async ({ context, input }) => {
+			const { profile } = await requireOrganizationTeamManagementAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+
+			// 제외 대상: 이미 이 조직의 멤버인 유저.
+			const existingMembers = await db
+				.select({ userId: member.userId })
+				.from(member)
+				.where(eq(member.organizationId, input.organizationId));
+			const excludedUserIds = [
+				profile.userId,
+				...existingMembers
+					.map((row) => row.userId)
+					.filter((id): id is string => Boolean(id)),
+			];
+
+			// 제외 대상: 이미 pending 초대가 있는 이메일.
+			const pendingInvites = await db
+				.select({ email: invitation.email })
+				.from(invitation)
+				.where(
+					and(
+						eq(invitation.organizationId, input.organizationId),
+						eq(invitation.status, "pending")
+					)
+				);
+			const pendingEmails = pendingInvites.map((row) =>
+				row.email.toLowerCase()
+			);
+			// 빈 배열이면 notInArray가 안전하지 않으므로 조건 자체를 생략한다.
+			const pendingEmailFilter =
+				pendingEmails.length > 0
+					? notInArray(user.email, pendingEmails)
+					: undefined;
+
+			const trimmed = input.query?.trim();
+			const searchFilter = trimmed
+				? or(
+						ilike(user.email, `%${trimmed}%`),
+						ilike(user.name, `%${trimmed}%`)
+					)
+				: undefined;
+
+			// pending 초대 이메일 제외를 SQL WHERE로 넣어 LIMIT 10이 완전히
+			// 필터된 집합에 적용되게 한다(이름순 자른 뒤 후처리로 버리지 않음).
+			return await db
+				.select({
+					userId: user.id,
+					email: user.email,
+					name: user.name,
+				})
+				.from(bambiProfile)
+				.innerJoin(user, eq(user.id, bambiProfile.userId))
+				.where(
+					and(
+						eq(bambiProfile.role, "employer"),
+						notInArray(user.id, excludedUserIds),
+						searchFilter,
+						pendingEmailFilter
+					)
+				)
+				.orderBy(asc(user.name))
+				.limit(10);
+		}),
+
 	setMemberRole: protectedProcedure
 		.input(setMemberRoleInput)
 		.handler(async ({ context, input }) => {
-			await requireOrganizationOwnerAccess({
+			const { profile } = await requireOrganizationOwnerAccess({
 				organizationId: input.organizationId,
 				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
 			});
 
 			const [targetMember] = await db

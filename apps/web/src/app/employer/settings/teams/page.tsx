@@ -15,6 +15,8 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
+import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { TeamForm } from "@/components/bambi/team-form";
@@ -33,6 +35,7 @@ const getErrorCode = (error: Error | null): string | undefined =>
 
 export default function EmployerTeamSettingsPage() {
 	const session = authClient.useSession();
+	const verified = useEmployerVerified();
 	const isSignedIn = Boolean(session.data?.user);
 	const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
 	const [editingTeamId, setEditingTeamId] = useState<null | string>(null);
@@ -137,6 +140,7 @@ export default function EmployerTeamSettingsPage() {
 							<div className="p-4" key={team.teamId}>
 								{isEditing ? (
 									<TeamForm
+										disabled={!verified}
 										onCancel={() => setEditingTeamId(null)}
 										organizations={organizations}
 										team={{
@@ -204,6 +208,8 @@ export default function EmployerTeamSettingsPage() {
 				</Link>
 			</div>
 
+			<EmployerGateBanner action="팀을 관리" />
+
 			{organizations.length > 0 ? (
 				<>
 					<section aria-labelledby="team-scope" className="flex flex-col gap-3">
@@ -240,7 +246,7 @@ export default function EmployerTeamSettingsPage() {
 						</div>
 					</section>
 
-					<TeamForm organizations={organizations} />
+					<TeamForm disabled={!verified} organizations={organizations} />
 
 					<section aria-labelledby="teams-list" className="flex flex-col gap-3">
 						<div>
@@ -255,7 +261,11 @@ export default function EmployerTeamSettingsPage() {
 					</section>
 
 					{selectedOrganization ? (
-						<TeamMemberList organization={selectedOrganization} teams={teams} />
+						<TeamMemberList
+							disabled={!verified}
+							organization={selectedOrganization}
+							teams={teams}
+						/>
 					) : null}
 				</>
 			) : (

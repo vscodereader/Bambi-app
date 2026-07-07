@@ -6,7 +6,10 @@ import { and, asc, eq } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
-import { requireActiveBambiProfile } from "../../services/bambi-authz";
+import {
+	isEmployerOrganizationVerified,
+	requireActiveBambiProfile,
+} from "../../services/bambi-authz";
 import {
 	canInviteMembers,
 	canManageOrganization,
@@ -165,6 +168,12 @@ export const organizationsRouter = {
 				organizationId: input.organizationId,
 				session: context.session,
 			});
+
+			if (!(await isEmployerOrganizationVerified(input.organizationId))) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "운영자 승인 후 조직 설정을 변경할 수 있습니다.",
+				});
+			}
 
 			const [updated] = await db
 				.update(employerOrganizationProfile)
