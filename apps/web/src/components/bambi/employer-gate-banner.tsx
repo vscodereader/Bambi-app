@@ -6,11 +6,11 @@ import {
 	AlertTitle,
 } from "@bambi-app/ui/components/alert";
 import { buttonVariants } from "@bambi-app/ui/components/button";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { Clock, Store, TriangleAlert } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import type { ComponentType } from "react";
-
 import { useEmployerApproval } from "@/components/bambi/employer-approval-context";
 
 type GateStatus = "none" | "pending" | "rejected";
@@ -60,7 +60,7 @@ export function EmployerGateBanner({ action }: { action: string }) {
 
 	return (
 		<Alert
-			className="items-center gap-x-3 px-3.5 py-3 text-sm shadow-[var(--shadow-card)]"
+			className="items-center gap-x-3 px-3.5 py-3 text-sm"
 			variant={variant}
 		>
 			<Icon />
@@ -71,7 +71,7 @@ export function EmployerGateBanner({ action }: { action: string }) {
 				<span>{getGateDescription(status, action)}</span>
 				{status === "pending" ? null : (
 					<Link
-						className={buttonVariants({ size: "sm" })}
+						className={cn(buttonVariants({ size: "sm" }), "no-underline!")}
 						href={"/employer/me" as Route}
 					>
 						{status === "rejected" ? "업체 정보 다시 제출" : "업체 정보 입력"}
