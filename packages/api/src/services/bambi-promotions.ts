@@ -139,6 +139,14 @@ export const isCampaignPubliclyActive = (
 	campaign.startsAt.getTime() <= now.getTime() &&
 	campaign.endsAt.getTime() > now.getTime();
 
+export const getEffectivePromotionStatus = (
+	campaign: Pick<PromotionCampaignForListing, "endsAt" | "status">,
+	now: Date
+): PromotionStatus =>
+	campaign.status === "active" && campaign.endsAt.getTime() <= now.getTime()
+		? "expired"
+		: campaign.status;
+
 export const getPromotionSection = (
 	campaign: PromotionCampaignForListing,
 	now: Date
