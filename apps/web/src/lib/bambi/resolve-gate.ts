@@ -20,6 +20,15 @@ const isPublic = (pathname: string): boolean =>
 		(prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
 	);
 
+// 확장자가 붙은 경로는 정적 파일이다. App Router 메타데이터 파일(icon.svg,
+// apple-icon.png, og-image.png, robots.txt, sitemap.xml 등)이 여기 해당한다.
+// 이런 요청은 세션이 없어도 게이트 리다이렉트 없이 통과시켜야 한다. 그러지 않으면
+// 비로그인 방문자·크롤러가 파비콘/OG 이미지를 요청할 때 /welcome으로 307 리다이렉트되어
+// 아이콘·미리보기가 표시되지 않는다.
+const STATIC_FILE_PATTERN = /\.[^/]+$/;
+const isStaticFile = (pathname: string): boolean =>
+	STATIC_FILE_PATTERN.test(pathname);
+
 const next: GateDecision = { type: "next" };
 const redirect = (to: string): GateDecision => ({ type: "redirect", to });
 
@@ -28,6 +37,9 @@ export const resolveGate = ({
 	hasSession,
 	isGuest,
 }: GateInput): GateDecision => {
+	if (isStaticFile(pathname)) {
+		return next;
+	}
 	if (isPublic(pathname)) {
 		return next;
 	}
