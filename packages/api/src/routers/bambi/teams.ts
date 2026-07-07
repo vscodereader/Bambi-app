@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 
 import { db } from "@bambi-app/db";
-import { invitation, member, team } from "@bambi-app/db/schema/auth";
-import { employerTeamProfile } from "@bambi-app/db/schema/bambi";
+import { invitation, member, team, user } from "@bambi-app/db/schema/auth";
+import { bambiProfile, employerTeamProfile } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ilike, notInArray, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -42,6 +42,10 @@ const inviteMemberInput = organizationIdInput.extend({
 const setMemberRoleInput = organizationIdInput.extend({
 	memberId: z.string().min(1),
 	role: organizationRoleSchema,
+});
+
+const searchEmployerInviteesInput = organizationIdInput.extend({
+	query: z.string().max(320).optional(),
 });
 
 const forbidden = (message: string) => new ORPCError("FORBIDDEN", { message });
@@ -265,6 +269,69 @@ export const teamsRouter = {
 				.returning();
 
 			return created;
+		}),
+
+	searchEmployerInvitees: protectedProcedure
+		.input(searchEmployerInviteesInput)
+		.handler(async ({ context, input }) => {
+			const { profile } = await requireOrganizationTeamManagementAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+
+			// 제외 대상: 이미 이 조직의 멤버인 유저.
+			const existingMembers = await db
+				.select({ userId: member.userId })
+				.from(member)
+				.where(eq(member.organizationId, input.organizationId));
+			const excludedUserIds = [
+				profile.userId,
+				...existingMembers
+					.map((row) => row.userId)
+					.filter((id): id is string => Boolean(id)),
+			];
+
+			// 제외 대상: 이미 pending 초대가 있는 이메일.
+			const pendingInvites = await db
+				.select({ email: invitation.email })
+				.from(invitation)
+				.where(
+					and(
+						eq(invitation.organizationId, input.organizationId),
+						eq(invitation.status, "pending")
+					)
+				);
+			const excludedEmails = new Set(
+				pendingInvites.map((row) => row.email.toLowerCase())
+			);
+
+			const trimmed = input.query?.trim();
+			const searchFilter = trimmed
+				? or(
+						ilike(user.email, `%${trimmed}%`),
+						ilike(user.name, `%${trimmed}%`)
+					)
+				: undefined;
+
+			const rows = await db
+				.select({
+					userId: user.id,
+					email: user.email,
+					name: user.name,
+				})
+				.from(bambiProfile)
+				.innerJoin(user, eq(user.id, bambiProfile.userId))
+				.where(
+					and(
+						eq(bambiProfile.role, "employer"),
+						notInArray(user.id, excludedUserIds),
+						searchFilter
+					)
+				)
+				.orderBy(asc(user.name))
+				.limit(10);
+
+			return rows.filter((row) => !excludedEmails.has(row.email.toLowerCase()));
 		}),
 
 	setMemberRole: protectedProcedure
