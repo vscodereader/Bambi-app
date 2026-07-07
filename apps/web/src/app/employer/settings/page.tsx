@@ -8,6 +8,8 @@ import { Users } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 
+import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
+import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { OrgProfileForm } from "@/components/bambi/org-profile-form";
 import { PageShell } from "@/components/bambi/page-shell";
@@ -22,6 +24,7 @@ const getErrorCode = (error: Error | null): string | undefined =>
 
 export default function EmployerSettingsPage() {
 	const session = authClient.useSession();
+	const verified = useEmployerVerified();
 	const isSignedIn = Boolean(session.data?.user);
 	const organizationsQuery = useQuery({
 		...orpc.bambi.organizations.getMine.queryOptions(),
@@ -79,6 +82,7 @@ export default function EmployerSettingsPage() {
 			description="공고에 노출되는 사업자 정보를 확인·수정하고, 팀과 멤버를 관리합니다."
 			title="조직 설정"
 		>
+			<EmployerGateBanner action="조직 설정을 변경" />
 			<section
 				aria-labelledby="organization-profiles"
 				className="flex flex-col gap-3"
@@ -95,6 +99,7 @@ export default function EmployerSettingsPage() {
 					<div className="grid gap-3">
 						{organizations.map((organization) => (
 							<OrgProfileForm
+								disabled={!verified}
 								key={organization.organizationId}
 								organization={organization}
 							/>
@@ -138,12 +143,18 @@ export default function EmployerSettingsPage() {
 								팀을 만들고 멤버를 초대해 권한을 나눠요.
 							</p>
 						</div>
-						<Link
-							className={buttonVariants({ size: "sm", variant: "outline" })}
-							href={"/employer/settings/teams" as Route}
-						>
-							팀 관리로 이동
-						</Link>
+						{verified ? (
+							<Link
+								className={buttonVariants({ size: "sm", variant: "outline" })}
+								href={"/employer/settings/teams" as Route}
+							>
+								팀 관리로 이동
+							</Link>
+						) : (
+							<Button disabled size="sm" type="button" variant="outline">
+								팀 관리로 이동
+							</Button>
+						)}
 					</CardContent>
 				</Card>
 			</section>
