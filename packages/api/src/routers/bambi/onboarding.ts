@@ -253,7 +253,9 @@ export const onboardingRouter = {
 		return {
 			bambiProfile: profile ?? null,
 			employerOrganizationProfiles: organizationProfiles,
-			employerTeamProfiles: teamProfiles,
+			// teamMember 기준 팀에 더해 owner/admin 조직 전체 팀까지 포함해야
+			// owner가 본인이 멤버가 아닌 팀으로 낸 공고도 팀명 라벨을 조회할 수 있다.
+			employerTeamProfiles: postingScopeTeamProfiles,
 			employerJobPostingScopes: postingScopes.map((scope) => {
 				const organizationProfile = organizationProfileById.get(
 					scope.organizationId
