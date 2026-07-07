@@ -56,13 +56,6 @@ const requestEmployerVerificationInput = z.object({
 	organizationId: z.string().min(1),
 });
 
-const registerEmployerInput = z.object({
-	displayName: z.string().min(1).max(80),
-	organizationName: z.string().min(1).max(120),
-	businessRegistrationNumber: z.string().min(1).max(40).optional(),
-	phoneNumber: z.string().min(3).max(30).optional(),
-});
-
 const submitEmployerBusinessInfoInput = z.object({
 	displayName: z.string().min(1).max(120),
 	businessRegistrationNumber: z
@@ -553,52 +546,5 @@ export const onboardingRouter = {
 			});
 
 			return { organizationId, verificationStatus: "pending" as const };
-		}),
-
-	registerEmployer: protectedProcedure
-		.input(registerEmployerInput)
-		.handler(async ({ context, input }) => {
-			const userId = context.session.user.id;
-
-			const [existingProfile] = await db
-				.select({ role: bambiProfile.role })
-				.from(bambiProfile)
-				.where(eq(bambiProfile.userId, userId))
-				.limit(1);
-
-			assertCanCreateBambiProfile({ existingRole: existingProfile?.role });
-
-			const organizationId = `org_${randomUUID()}`;
-			const now = new Date();
-
-			await db.transaction(async (tx) => {
-				await tx.insert(organization).values({
-					id: organizationId,
-					name: input.organizationName,
-					slug: toOrganizationSlug(input.organizationName),
-					createdAt: now,
-				});
-				await tx.insert(member).values({
-					id: `member_${randomUUID()}`,
-					organizationId,
-					userId,
-					role: "owner",
-					createdAt: now,
-				});
-				await tx.insert(bambiProfile).values({
-					userId,
-					role: "employer",
-					displayName: input.displayName,
-					phoneNumber: input.phoneNumber,
-				});
-				await tx.insert(employerOrganizationProfile).values({
-					organizationId,
-					displayName: input.organizationName,
-					businessRegistrationNumber: input.businessRegistrationNumber,
-					verificationStatus: "pending",
-				});
-			});
-
-			return { organizationId };
 		}),
 };
