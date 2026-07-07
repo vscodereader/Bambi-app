@@ -424,6 +424,11 @@ function BusinessInfoForm({
 		? ""
 		: "사업자등록번호는 000-00-00000 형식으로 입력해 주세요.";
 
+	// 기존 값에서 바뀐 게 없으면 제출을 막는다(불필요한 재심사 요청 방지).
+	const isUnchanged =
+		displayName.trim() === defaultDisplayName.trim() &&
+		brn.trim() === defaultBusinessRegistrationNumber.trim();
+
 	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		if (nameError || brnError) {
@@ -473,7 +478,7 @@ function BusinessInfoForm({
 					<div className="flex justify-end">
 						<Button
 							className="w-full sm:w-auto"
-							disabled={submitMutation.isPending}
+							disabled={submitMutation.isPending || isUnchanged}
 							type="submit"
 						>
 							업체 정보 제출

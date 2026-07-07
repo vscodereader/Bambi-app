@@ -128,6 +128,105 @@ describe("submitEmployerBusinessInfo", () => {
 			.where(eq(organization.id, first.organizationId));
 	});
 
+	it("keeps verified status when resubmitting unchanged business info", async () => {
+		const userId = `user_sub_${randomUUID()}`;
+		await db.insert(user).values({
+			id: userId,
+			name: "인증완료",
+			email: `${userId}@bambi.test`,
+		});
+		await db
+			.insert(bambiProfile)
+			.values({ userId, role: "employer", displayName: "인증완료" });
+
+		const submit = callSubmit(userId);
+		const first = await submit({
+			displayName: "인증업체",
+			businessRegistrationNumber: "333-33-33333",
+		});
+		// 운영자 승인을 흉내: 상태를 verified로 바꿔둔다.
+		await db
+			.update(employerOrganizationProfile)
+			.set({ verificationStatus: "verified" })
+			.where(
+				eq(employerOrganizationProfile.organizationId, first.organizationId)
+			);
+
+		// 아무것도 바꾸지 않고 그대로 재제출한다.
+		const second = await submit({
+			displayName: "인증업체",
+			businessRegistrationNumber: "333-33-33333",
+		});
+
+		expect(second.organizationId).toBe(first.organizationId);
+		expect(second.verificationStatus).toBe("verified");
+
+		const [orgProfile] = await db
+			.select({
+				status: employerOrganizationProfile.verificationStatus,
+			})
+			.from(employerOrganizationProfile)
+			.where(
+				eq(employerOrganizationProfile.organizationId, first.organizationId)
+			);
+		expect(orgProfile?.status).toBe("verified");
+
+		await db.delete(user).where(eq(user.id, userId));
+		await db
+			.delete(organization)
+			.where(eq(organization.id, first.organizationId));
+	});
+
+	it("resets verified status to pending when business info changes", async () => {
+		const userId = `user_sub_${randomUUID()}`;
+		await db.insert(user).values({
+			id: userId,
+			name: "정보변경",
+			email: `${userId}@bambi.test`,
+		});
+		await db
+			.insert(bambiProfile)
+			.values({ userId, role: "employer", displayName: "정보변경" });
+
+		const submit = callSubmit(userId);
+		const first = await submit({
+			displayName: "인증업체",
+			businessRegistrationNumber: "444-44-44444",
+		});
+		await db
+			.update(employerOrganizationProfile)
+			.set({ verificationStatus: "verified" })
+			.where(
+				eq(employerOrganizationProfile.organizationId, first.organizationId)
+			);
+
+		// 사업자등록번호를 바꿔서 재제출하면 재심사(pending)로 돌아가야 한다.
+		const second = await submit({
+			displayName: "인증업체",
+			businessRegistrationNumber: "555-55-55555",
+		});
+
+		expect(second.organizationId).toBe(first.organizationId);
+		expect(second.verificationStatus).toBe("pending");
+
+		const [orgProfile] = await db
+			.select({
+				status: employerOrganizationProfile.verificationStatus,
+				brn: employerOrganizationProfile.businessRegistrationNumber,
+			})
+			.from(employerOrganizationProfile)
+			.where(
+				eq(employerOrganizationProfile.organizationId, first.organizationId)
+			);
+		expect(orgProfile?.status).toBe("pending");
+		expect(orgProfile?.brn).toBe("555-55-55555");
+
+		await db.delete(user).where(eq(user.id, userId));
+		await db
+			.delete(organization)
+			.where(eq(organization.id, first.organizationId));
+	});
+
 	it("rejects invalid business registration number format", async () => {
 		const userId = `user_sub_${randomUUID()}`;
 		await db.insert(user).values({

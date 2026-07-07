@@ -500,10 +500,16 @@ export const onboardingRouter = {
 			const userId = context.session.user.id;
 			await requireEmployerBambiProfile(userId);
 
-			// 본인이 owner인 조직이 이미 있으면 그 조직 프로필을 갱신하고 재심사(pending)로 돌린다.
+			// 본인이 owner인 조직이 이미 있으면 그 조직 프로필을 갱신한다.
+			// 단, 이미 인증(verified)된 조직이 업체명·사업자번호를 그대로 재제출한 경우
+			// 재심사로 강등하지 않고 verified를 유지한다(변경이 있을 때만 pending 재심사).
 			const [ownedOrg] = await db
 				.select({
 					organizationId: employerOrganizationProfile.organizationId,
+					displayName: employerOrganizationProfile.displayName,
+					businessRegistrationNumber:
+						employerOrganizationProfile.businessRegistrationNumber,
+					verificationStatus: employerOrganizationProfile.verificationStatus,
 				})
 				.from(employerOrganizationProfile)
 				.innerJoin(
@@ -520,6 +526,19 @@ export const onboardingRouter = {
 				.limit(1);
 
 			if (ownedOrg) {
+				const isUnchanged =
+					ownedOrg.displayName === input.displayName &&
+					ownedOrg.businessRegistrationNumber ===
+						input.businessRegistrationNumber;
+
+				// 인증 완료 상태에서 변경 없이 재제출한 경우: 상태를 건드리지 않고 유지한다.
+				if (ownedOrg.verificationStatus === "verified" && isUnchanged) {
+					return {
+						organizationId: ownedOrg.organizationId,
+						verificationStatus: "verified" as const,
+					};
+				}
+
 				await db
 					.update(employerOrganizationProfile)
 					.set({
