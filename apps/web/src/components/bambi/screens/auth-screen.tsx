@@ -106,8 +106,8 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	);
 	const [mode, setMode] = useState<AuthMode>(initialMode);
 	const [name, setName] = useState("");
-	const [email, setEmail] = useState("seeker@bambi.dev");
-	const [password, setPassword] = useState("Bambi1234!");
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [signupRole, setSignupRole] = useState<SignupRole>("job_seeker");
@@ -314,6 +314,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 								autoComplete="email"
 								id="auth-email"
 								onChange={(event) => setEmail(event.target.value)}
+								placeholder="예: hello@bambi.dev"
 								type="email"
 								value={email}
 							/>
@@ -337,6 +338,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 								autoComplete={isSignUp ? "new-password" : "current-password"}
 								id="auth-password"
 								onChange={(event) => setPassword(event.target.value)}
+								placeholder="8자 이상 입력"
 								type="password"
 								value={password}
 							/>
