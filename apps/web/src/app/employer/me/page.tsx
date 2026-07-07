@@ -279,6 +279,9 @@ export default function EmployerMePage() {
 						organizationProfiles[0]?.businessRegistrationNumber ?? ""
 					}
 					defaultDisplayName={organizationProfiles[0]?.displayName ?? ""}
+					isRejected={
+						organizationProfiles[0]?.verificationStatus === "rejected"
+					}
 				/>
 				{organizationProfiles.length > 0 ? (
 					<div className="grid gap-3 md:grid-cols-2">
@@ -395,9 +398,11 @@ const BRN_PATTERN = /^\d{3}-\d{2}-\d{5}$/;
 function BusinessInfoForm({
 	defaultDisplayName,
 	defaultBusinessRegistrationNumber,
+	isRejected,
 }: {
 	defaultDisplayName: string;
 	defaultBusinessRegistrationNumber: string;
+	isRejected: boolean;
 }) {
 	const queryClient = useQueryClient();
 	const [displayName, setDisplayName] = useState(defaultDisplayName);
@@ -425,9 +430,11 @@ function BusinessInfoForm({
 		: "사업자등록번호는 000-00-00000 형식으로 입력해 주세요.";
 
 	// 기존 값에서 바뀐 게 없으면 제출을 막는다(불필요한 재심사 요청 방지).
+	// 단, 반려된 경우엔 동일 정보라도 재제출(재심사 신청)을 허용한다.
 	const isUnchanged =
 		displayName.trim() === defaultDisplayName.trim() &&
 		brn.trim() === defaultBusinessRegistrationNumber.trim();
+	const blockUnchanged = isUnchanged && !isRejected;
 
 	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
@@ -478,10 +485,10 @@ function BusinessInfoForm({
 					<div className="flex justify-end">
 						<Button
 							className="w-full sm:w-auto"
-							disabled={submitMutation.isPending || isUnchanged}
+							disabled={submitMutation.isPending || blockUnchanged}
 							type="submit"
 						>
-							업체 정보 제출
+							{isRejected ? "업체 정보 재제출" : "업체 정보 제출"}
 						</Button>
 					</div>
 				</CardContent>
