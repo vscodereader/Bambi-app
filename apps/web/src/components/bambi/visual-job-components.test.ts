@@ -16,12 +16,14 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain(
 			'tone: "organic" | "recommended" | "special" | "urgent"'
 		);
-		expect(source).toContain("연락처 보호");
-		expect(source).toContain("job.promotionLabel ?? toneLabel[tone]");
+		expect(source).toContain("채팅");
+		expect(source).toContain("splitPay");
 		expect(source).toContain("rightIcon={<Message />}");
-		// 최신(organic) 배지는 메인 코럴(primary) 컬러를 쓴다 — 사용 색상 최소화
+		// 최신(organic) 배지는 중립 톤 — 사용 색상 최소화
 		expect(source).toContain("tone={toneBadge[tone]}");
-		expect(source).toContain('organic: "primary"');
+		expect(source).toContain('organic: "neutral"');
+		// 4열 컴팩트화로 설명(shortDesc) 줄과 truncateDesc는 제거됨
+		expect(source).not.toContain("truncateDesc");
 	});
 
 	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {
@@ -44,8 +46,9 @@ describe("visual job marketplace components", () => {
 
 		expect(source).toContain("VisualJobExposureSections");
 		expect(source).not.toContain("<JobList");
-		// 로그인 마켓플레이스도 공개 홈과 동일하게 80% 폭, 히어로 카피 제거
-		expect(source).toContain("max-w-[80%]");
+		// 로그인 마켓플레이스는 채용 전용 고정폭을 쓴다(SEEKER_CONTENT_WIDTH = min(92%,1120px))
+		expect(source).toContain("SEEKER_CONTENT_WIDTH");
+		expect(source).not.toContain("max-w-[80%]");
 		expect(source).not.toContain("조건에 맞는 안전한 자리를 찾아요");
 		// 검색은 헤더(SeekerAppShell)와 필터를 공유하고, 본문 검색은 모바일 전용
 		expect(source).toContain("useSeekerFilters");
@@ -81,8 +84,8 @@ describe("visual job marketplace components", () => {
 	it("uses 80% width for the employer page shell", () => {
 		const source = readComponent("page-shell.tsx");
 
-		// 구인자 화면 본문도 헤더(80%)와 동일 폭으로 맞춘다
-		expect(source).toContain("max-w-[80%]");
+		// 구인자 화면 본문도 헤더와 동일 폭(min(80%,72rem))으로 맞춘다
+		expect(source).toContain("max-w-[min(80%,72rem)]");
 		expect(source).not.toContain("max-w-6xl");
 	});
 
