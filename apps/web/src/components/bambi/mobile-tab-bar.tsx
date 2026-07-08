@@ -19,7 +19,7 @@ import {
 export function MobileTabBar({ homeHref }: { homeHref: string }) {
 	const path = usePathname();
 	const router = useRouter();
-	const { role } = useBambiAuth();
+	const { canAccessCommunity, role } = useBambiAuth();
 	const isEmployer = role === "employer";
 	let value = "home";
 	if (path === "/seeker/me") {
@@ -52,7 +52,9 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 					...(isEmployer
 						? [{ value: "employer", label: "구인 관리", icon: BriefcaseIcon }]
 						: []),
-					{ value: "community", label: "수다방", icon: MessagesIcon },
+					...(canAccessCommunity
+						? [{ value: "community", label: "수다방", icon: MessagesIcon }]
+						: []),
 					{ value: "me", label: "내 정보", icon: UserIcon },
 				]}
 				onChange={go}

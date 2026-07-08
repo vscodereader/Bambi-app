@@ -71,6 +71,13 @@
       "when": 1783475151113,
       "tag": "0009_bambi_profile_gender",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783488448717,
+      "tag": "0010_opposite_gunslinger",
+      "breakpoints": true
     }
   ]
 }

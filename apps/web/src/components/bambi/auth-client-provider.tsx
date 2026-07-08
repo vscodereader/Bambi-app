@@ -7,8 +7,11 @@ import { readGuestFromCookieString } from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
 
 type BambiRole = "job_seeker" | "employer" | "admin" | null;
+type CommunityNotice = "unverified" | "male_employer" | "male_seeker" | null;
 
 interface BambiAuthValue {
+	canAccessCommunity: boolean;
+	communityNotice: CommunityNotice;
 	isAuthenticated: boolean;
 	isGuest: boolean;
 	isPending: boolean;
@@ -31,6 +34,7 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 		typeof document !== "undefined" &&
 		readGuestFromCookieString(document.cookie);
 
+	const community = mineQuery.data?.community;
 	const value: BambiAuthValue = {
 		user: session.data?.user
 			? {
@@ -40,6 +44,8 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 				}
 			: null,
 		role: (mineQuery.data?.bambiProfile?.role ?? null) as BambiRole,
+		canAccessCommunity: community?.canAccess ?? false,
+		communityNotice: (community?.notice ?? null) as CommunityNotice,
 		isAuthenticated,
 		isGuest,
 		isPending: session.isPending || (isAuthenticated && mineQuery.isLoading),

@@ -1,0 +1,1 @@
+ALTER TABLE "bambi_profile" ADD COLUMN "is_advertiser" boolean DEFAULT false NOT NULL;
