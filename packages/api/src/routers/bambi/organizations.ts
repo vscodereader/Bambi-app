@@ -233,6 +233,7 @@ export const organizationsRouter = {
 							createdAt: invitation.createdAt,
 							email: invitation.email,
 							id: invitation.id,
+							rejectionReason: invitation.rejectionReason,
 							role: invitation.role,
 							status: invitation.status,
 							teamId: invitation.teamId,

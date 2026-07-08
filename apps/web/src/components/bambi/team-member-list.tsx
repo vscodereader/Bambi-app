@@ -67,8 +67,8 @@ const statusLabels: Record<string, string> = {
 	accepted: "수락됨",
 	cancelled: "취소",
 	expired: "만료",
-	pending: "초대 대기",
-	rejected: "거절",
+	pending: "운영자 승인 대기",
+	rejected: "반려됨",
 };
 
 const getStatusTone = (
@@ -422,6 +422,13 @@ export function TeamMemberList({
 								<p className="mt-1 break-words text-muted-foreground text-xs">
 									{member.email} · {formatDateTime(member.createdAt)}
 								</p>
+								{member.kind === "invitation" &&
+								member.status === "rejected" &&
+								member.rejectionReason ? (
+									<p className="mt-1 break-words text-destructive text-xs">
+										반려 사유: {member.rejectionReason}
+									</p>
+								) : null}
 							</div>
 							<div className="min-w-0">
 								<MemberTeams role={member.role} teams={member.teams} />
