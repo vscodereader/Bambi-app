@@ -76,7 +76,7 @@ export function SeekerJobDetailResponsive({
 	return (
 		<div className="mx-auto flex w-full justify-center gap-5 py-5 pb-28 md:py-7">
 			{/* 좌 여백 배너 — 넓은 화면 전용, 스크롤 추종 */}
-			<aside className="hidden w-[272px] shrink-0 min-[1720px]:block">
+			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
 					<HorizontalAdBannerRail
 						keys={["detail-left-1", "detail-left-2", "detail-left-3"]}
@@ -269,7 +269,7 @@ export function SeekerJobDetailResponsive({
 				</aside>
 			</div>
 			{/* 우 여백 배너 — 넓은 화면 전용, 스크롤 추종 */}
-			<aside className="hidden w-[272px] shrink-0 min-[1720px]:block">
+			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
 					<AdBannerRail count={2} offset={3} />
 				</div>

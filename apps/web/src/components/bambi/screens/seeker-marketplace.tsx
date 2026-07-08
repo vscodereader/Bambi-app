@@ -56,7 +56,7 @@ export function SeekerMarketplaceScreen() {
 			    콘텐츠를 justify-center로 중앙에 두어 헤더(동일 고정폭)와 정렬한다.
 			    좌우 여백 컬럼은 매우 넓은 화면에서만 노출한다. */}
 			<div className="mx-auto flex w-full justify-center gap-5 py-5 pb-24 md:py-10">
-				<aside className="hidden w-[272px] shrink-0 min-[1720px]:block">
+				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 					<div className="sticky top-20 flex flex-col gap-4">
 						<Card className="rounded-lg" pad="lg" tone="outline">
 							<div className="mb-4 flex items-center gap-2">
@@ -121,7 +121,7 @@ export function SeekerMarketplaceScreen() {
 						sections={sections}
 					/>
 				</div>
-				<aside className="hidden w-[272px] shrink-0 min-[1720px]:block">
+				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 					<div className="sticky top-20">
 						<AdBannerRail count={3} offset={0} />
 					</div>
