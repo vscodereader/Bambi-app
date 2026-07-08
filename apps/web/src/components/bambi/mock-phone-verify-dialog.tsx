@@ -17,7 +17,7 @@ import {
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { BambiGenderValue } from "@/lib/bambi/guest";
+import type { BambiGenderValue, MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { Button, Input } from "./ds";
 import { PhoneIcon } from "./icons";
 
@@ -30,56 +30,99 @@ const isPhoneValid = (phone: string): boolean =>
 const isBirthValid = (birth: string): boolean =>
 	BIRTH_PATTERN.test(birth.replace(NON_DIGIT, ""));
 
-export function MockPhoneVerifyDialog() {
+interface MockPhoneVerifyDialogProps {
+	// 이미 성별이 있는 사용자(예: 회원)를 위해 선택 상태를 미리 채운다.
+	defaultGender?: BambiGenderValue | null;
+	description?: string;
+	// 인증 성공 시 호출. 제공하면 게스트 쿠키 흐름 대신 이 콜백으로 결과를 넘겨
+	// 호출부(예: 계정설정)가 저장을 담당한다. 실인증 API 도입 시 이 콜백 경계는 유지된다.
+	onVerified?: (input: MockPhoneVerifyInput) => Promise<void> | void;
+	title?: string;
+	triggerLabel?: string;
+}
+
+export function MockPhoneVerifyDialog({
+	onVerified,
+	triggerLabel = "휴대폰 인증",
+	title = "휴대폰 본인인증",
+	description = "본인인증 후 공고 목록을 열람할 수 있어요. (지금은 목 인증 단계예요)",
+	defaultGender = null,
+}: MockPhoneVerifyDialogProps = {}) {
 	const router = useRouter();
 	const [open, setOpen] = useState(false);
 	const [name, setName] = useState("");
 	const [birth, setBirth] = useState("");
 	const [phone, setPhone] = useState("");
-	const [gender, setGender] = useState<BambiGenderValue | null>(null);
+	const [gender, setGender] = useState<BambiGenderValue | null>(defaultGender);
 	const [error, setError] = useState<string | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	const submit = async () => {
-		setError(null);
+	const validate = (): string | null => {
 		if (name.trim().length < 2) {
-			setError("이름을 2자 이상 입력해 주세요.");
-			return;
+			return "이름을 2자 이상 입력해 주세요.";
 		}
 		if (!isBirthValid(birth)) {
-			setError("생년월일 8자리(YYYYMMDD)를 입력해 주세요.");
-			return;
+			return "생년월일 8자리(YYYYMMDD)를 입력해 주세요.";
 		}
 		if (!isPhoneValid(phone)) {
-			setError("휴대폰 번호를 정확히 입력해 주세요.");
-			return;
+			return "휴대폰 번호를 정확히 입력해 주세요.";
 		}
 		if (gender === null) {
-			setError("성별을 선택해 주세요.");
+			return "성별을 선택해 주세요.";
+		}
+		return null;
+	};
+
+	// onVerified 미제공 시의 기본 동작: 게스트 인증 쿠키 세팅 후 공고 화면으로 이동.
+	const runGuestFlow = async (verified: MockPhoneVerifyInput) => {
+		const response = await fetch("/api/guest", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(verified),
+		});
+		if (!response.ok) {
+			setError("인증 처리에 실패했어요. 입력을 확인해 주세요.");
+			return;
+		}
+		setOpen(false);
+		router.push("/seeker" as Route);
+		router.refresh();
+	};
+
+	const resolveSubmitError = (err: unknown): string => {
+		if (onVerified) {
+			return err instanceof Error && err.message
+				? err.message
+				: "인증에 실패했어요. 다시 시도해 주세요.";
+		}
+		return "네트워크 오류로 인증에 실패했어요. 다시 시도해 주세요.";
+	};
+
+	const submit = async () => {
+		setError(null);
+		const validationError = validate();
+		if (validationError !== null || gender === null) {
+			setError(validationError);
 			return;
 		}
 
+		const verified: MockPhoneVerifyInput = {
+			name: name.trim(),
+			birth: birth.replace(NON_DIGIT, ""),
+			phone: phone.trim(),
+			gender,
+		};
+
 		setIsSubmitting(true);
 		try {
-			const response = await fetch("/api/guest", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					name: name.trim(),
-					birth: birth.replace(NON_DIGIT, ""),
-					phone: phone.trim(),
-					gender,
-				}),
-			});
-			if (!response.ok) {
-				setError("인증 처리에 실패했어요. 입력을 확인해 주세요.");
-				return;
+			if (onVerified) {
+				await onVerified(verified);
+				setOpen(false);
+			} else {
+				await runGuestFlow(verified);
 			}
-			setOpen(false);
-			router.push("/seeker" as Route);
-			router.refresh();
-		} catch {
-			setError("네트워크 오류로 인증에 실패했어요. 다시 시도해 주세요.");
+		} catch (err) {
+			setError(resolveSubmitError(err));
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -93,14 +136,12 @@ export function MockPhoneVerifyDialog() {
 				onClick={() => setOpen(true)}
 				variant="secondary"
 			>
-				휴대폰 인증
+				{triggerLabel}
 			</Button>
 			<DialogContent>
 				<div className="flex flex-col gap-2">
-					<DialogTitle>휴대폰 본인인증</DialogTitle>
-					<DialogDescription>
-						본인인증 후 공고 목록을 열람할 수 있어요. (지금은 목 인증 단계예요)
-					</DialogDescription>
+					<DialogTitle>{title}</DialogTitle>
+					<DialogDescription>{description}</DialogDescription>
 				</div>
 				<form
 					className="grid gap-4"
