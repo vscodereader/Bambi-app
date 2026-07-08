@@ -43,6 +43,14 @@ const profileUpdateInput = profileInput.omit({ gender: true }).extend({
 	role: z.enum(["job_seeker", "employer", "admin"]).optional(),
 });
 
+// 목(mock) 휴대폰 본인인증 입력. 실제 인증 API가 없어 번호를 그대로 받아 인증 완료로
+// 저장한다. gender는 커뮤니티 게이팅용 불변값이라 아직 없을 때만 채운다(성인인증 목 폼과
+// 동일 규격). 실인증 도입 시 verifyMyPhoneMock 핸들러와 함께 교체한다.
+const mockPhoneVerificationInput = z.object({
+	phoneNumber: z.string().min(3).max(30),
+	gender: z.enum(["male", "female"]).optional(),
+});
+
 const organizationProfileInput = z.object({
 	organizationId: z.string().min(1),
 	displayName: z.string().min(1).max(120),
@@ -357,6 +365,38 @@ export const onboardingRouter = {
 				.set({
 					displayName: input.displayName,
 					phoneNumber: input.phoneNumber,
+				})
+				.where(eq(bambiProfile.userId, userId))
+				.returning();
+
+			return updatedProfile;
+		}),
+
+	// 목 휴대폰 본인인증 — 실제 인증 API가 없어 입력받은 번호를 그대로 저장하고 인증 완료로
+	// 표시한다. gender는 커뮤니티 게이팅용 불변값이라 아직 없을 때만 채운다. 실인증 도입 시
+	// 이 핸들러를 실제 인증 결과 저장으로 교체한다.
+	verifyMyPhoneMock: protectedProcedure
+		.input(mockPhoneVerificationInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			const [existingProfile] = await db
+				.select({ gender: bambiProfile.gender })
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, userId))
+				.limit(1);
+
+			if (!existingProfile) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "프로필을 찾을 수 없습니다.",
+				});
+			}
+
+			const [updatedProfile] = await db
+				.update(bambiProfile)
+				.set({
+					phoneNumber: input.phoneNumber,
+					isPhoneVerified: true,
+					gender: existingProfile.gender ?? input.gender,
 				})
 				.where(eq(bambiProfile.userId, userId))
 				.returning();

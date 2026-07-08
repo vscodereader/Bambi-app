@@ -1,7 +1,8 @@
 "use client";
 
-// 계정 설정 — 표시 이름 수정, 본인인증 상태, 로그아웃. 휴대폰 본인인증으로 실명·생년월일·
-// 성별·번호를 DB에 저장하는 기능은 후속(배치 2, gender 컬럼·인증 다이얼로그 의존)에서 이 화면에 붙는다.
+// 계정 설정 — 표시 이름(프로필) 수정, 휴대폰 본인인증(목), 로그아웃. 본인인증은 게스트용
+// MockPhoneVerifyDialog를 재사용한 목 단계이며, 성공 시 verifyMyPhoneMock로 번호·인증여부
+// (+미설정 시 성별)를 프로필에 저장한다. 실인증 API 도입 시 다이얼로그·뮤테이션을 교체한다.
 
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,8 +10,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
+import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
 import { Badge, Button, Input } from "../ds";
+import { MockPhoneVerifyDialog } from "../mock-phone-verify-dialog";
 
 export function AccountSettingsScreen() {
 	const router = useRouter();
@@ -37,6 +40,24 @@ export function AccountSettingsScreen() {
 			},
 		})
 	);
+
+	const verifyMutation = useMutation(
+		orpc.bambi.onboarding.verifyMyPhoneMock.mutationOptions({
+			onSuccess: async () => {
+				toast.success("휴대폰 인증을 완료했어요.");
+				await queryClient.invalidateQueries();
+			},
+		})
+	);
+
+	// 목 다이얼로그 입력 중 계정설정에서 저장하는 값은 번호·성별뿐(실명·생년월일은 목 표시용).
+	// 실패 시 mutateAsync가 throw → 다이얼로그가 에러 메시지를 인라인으로 노출한다.
+	const handleVerified = async (input: MockPhoneVerifyInput) => {
+		await verifyMutation.mutateAsync({
+			phoneNumber: input.phone,
+			gender: input.gender,
+		});
+	};
 
 	const trimmedName = displayName.trim();
 	const canSave =
@@ -85,17 +106,35 @@ export function AccountSettingsScreen() {
 					</section>
 				)}
 
-				<section className="flex items-center gap-3 rounded-2xl border border-border p-5">
-					<div className="min-w-0 flex-1">
-						<div className="font-bold text-foreground text-sm">본인인증</div>
-						<p className="m-0 mt-1 text-muted-foreground text-xs">
-							휴대폰 본인인증으로 실명·생년월일·성별을 저장하는 기능은 곧 제공될
-							예정이에요.
-						</p>
+				<section className="flex flex-col gap-4 rounded-2xl border border-border p-5">
+					<div className="flex items-center gap-3">
+						<div className="min-w-0 flex-1">
+							<div className="font-bold text-foreground text-sm">본인인증</div>
+							<p className="m-0 mt-1 text-muted-foreground text-xs">
+								{isPhoneVerified
+									? "휴대폰 본인인증이 완료됐어요."
+									: "휴대폰 본인인증을 완료하면 안심 서비스를 이용할 수 있어요."}
+							</p>
+						</div>
+						<Badge tone={isPhoneVerified ? "primary" : "neutral"}>
+							{isPhoneVerified ? "인증완료" : "인증 필요"}
+						</Badge>
 					</div>
-					<Badge tone={isPhoneVerified ? "primary" : "neutral"}>
-						{isPhoneVerified ? "인증완료" : "인증 필요"}
-					</Badge>
+					{isPhoneVerified && profile?.phoneNumber ? (
+						<div className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-4 py-3">
+							<span className="text-muted-foreground text-xs">인증된 번호</span>
+							<span className="font-semibold text-foreground text-sm">
+								{profile.phoneNumber}
+							</span>
+						</div>
+					) : null}
+					<MockPhoneVerifyDialog
+						defaultGender={profile?.gender ?? null}
+						description="계정에 휴대폰 번호를 등록해요. (지금은 목 인증 단계예요)"
+						onVerified={handleVerified}
+						title={isPhoneVerified ? "휴대폰 재인증" : "휴대폰 본인인증"}
+						triggerLabel={isPhoneVerified ? "휴대폰 재인증" : "휴대폰 인증하기"}
+					/>
 				</section>
 
 				<Button className="w-full" onClick={handleSignOut} variant="secondary">
