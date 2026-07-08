@@ -64,8 +64,9 @@ interface HorizontalAdBannerProps {
 	className?: string;
 }
 
-// 가로형 광고 배너(좌측 사이드·상단 프리미엄용) — 공고 카드 크기의 가로 이미지.
-// 공고 썸네일 샘플(가로형 200x89)을 결정적으로 사용한다.
+// 가로형 광고 배너(좌측 사이드·상단 프리미엄용) — 공고 카드와 동일한 크기.
+// 폭은 그리드/컬럼(공고 카드와 동일)으로 정해지고, 높이는 공고 카드 렌더 높이(약 118px)에
+// 고정해 카드와 정확히 맞춘다. 공고 썸네일 샘플(가로형 200x89)을 결정적으로 크롭해 채운다.
 export function HorizontalAdBanner({
 	adKey,
 	className,
@@ -74,7 +75,7 @@ export function HorizontalAdBanner({
 		<Image
 			alt="광고 배너"
 			className={cn(
-				"aspect-[200/89] w-full rounded-lg border border-border object-cover",
+				"h-[118px] w-full rounded-lg border border-border object-cover",
 				className
 			)}
 			height={89}
