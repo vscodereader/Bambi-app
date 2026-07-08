@@ -882,7 +882,8 @@ export const moderationRouter = {
 					.select()
 					.from(invitation)
 					.where(eq(invitation.id, input.invitationId))
-					.limit(1);
+					.limit(1)
+					.for("update");
 
 				if (!invite) {
 					throw new ORPCError("NOT_FOUND");
