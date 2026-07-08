@@ -7,6 +7,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
 import { BellIcon, ShieldIcon } from "./icons";
 
@@ -79,9 +80,13 @@ export function ResponsiveAppShell({
 	variant = "public",
 }: ResponsiveAppShellProps) {
 	const pathname = usePathname();
+	const { canAccessCommunity } = useBambiAuth();
+	const visibleNavItems = canAccessCommunity
+		? navItems
+		: navItems.filter((item) => item.href !== "/seeker/community");
 	const isPublic = variant === "public";
 	const isModerator = variant === "moderator";
-	const activeHref = findActiveHref(pathname, navItems);
+	const activeHref = findActiveHref(pathname, visibleNavItems);
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
@@ -90,9 +95,9 @@ export function ResponsiveAppShell({
 						<Link aria-label="밤비 홈" className="no-underline" href="/">
 							<Logo lang="ko" size="md" />
 						</Link>
-						{navItems.length > 0 ? (
+						{visibleNavItems.length > 0 ? (
 							<nav className="flex items-center gap-1">
-								{navItems.map((item) => {
+								{visibleNavItems.map((item) => {
 									const isActive = item.href === activeHref;
 									return (
 										<Link
