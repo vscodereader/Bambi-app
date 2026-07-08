@@ -40,7 +40,7 @@ interface AdBannerRailProps {
 	offset?: number;
 }
 
-// 세로 배너 스택(우측). 컬럼 안에서 가운데 정렬한다.
+// 세로 배너 스택(우측). 컬럼 안에서 왼쪽(콘텐츠 쪽)에 붙여 정렬한다.
 export function AdBannerRail({
 	className,
 	count = 3,
@@ -51,7 +51,7 @@ export function AdBannerRail({
 		return { index, src: SAMPLE_BANNERS[index] };
 	});
 	return (
-		<div className={cn("flex flex-col items-center gap-3", className)}>
+		<div className={cn("flex flex-col items-start gap-3", className)}>
 			{banners.map((banner) => (
 				<AdBanner key={banner.index} src={banner.src} />
 			))}
