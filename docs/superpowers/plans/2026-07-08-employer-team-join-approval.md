@@ -1,5 +1,11 @@
 # 구인자 팀 합류 — 운영자 승인 Implementation Plan
 
+> **실행 완료 (2026-07-08, subagent-driven).** Task 1–6 전부 구현·태스크리뷰·최종 whole-branch 리뷰 통과.
+> - Task 1 `1fec8a5` 스키마+마이그레이션 0009 · Task 2 `0dff0bd` listPendingTeamInvitations · Task 3 `aa23227`(+레이스수정 `1083a45`) setTeamInvitationStatus · Task 4 `1f645ba` 운영자 페이지·nav · Task 5 `318d544` 구인자 문구·반려사유.
+> - 검증: 테스트 8/8 통과(실 DB), biome 클린, check-types(db/api/web) 통과(`@bambi-app/auth`는 사전존재 TS2883, 우리 미변경).
+> - 최종 리뷰 Important(동시 이중 승인 레이스) → `1083a45` `.for("update")` 행잠금으로 해결. Minor는 후속(비차단).
+> - db:migrate는 사용자 실행 대상(0009는 dev DB에 이미 적용됨). push/PR 미실행(사용자 지시 대기).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 구인자(owner/manager)가 employer 계정을 팀에 초대하면, 운영자(admin)가 승인하는 순간 그 계정이 `member`(조직)+`teamMember`(팀)로 자동 합류하는 흐름을 구현한다.
