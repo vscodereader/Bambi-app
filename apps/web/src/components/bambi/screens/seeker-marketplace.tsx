@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useMarketplaceJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job } from "@/lib/bambi/types";
-import { AdBannerRail } from "../ad-banner";
+import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { useBambiAuth } from "../auth-client-provider";
 import { Card } from "../ds";
 import { Search2 } from "../icons";
@@ -55,8 +55,8 @@ export function SeekerMarketplaceScreen() {
 			{/* 3컬럼: 좌 여백(필터+배너) · 중앙 고정폭 콘텐츠 · 우 여백(배너).
 			    콘텐츠를 justify-center로 중앙에 두어 헤더(동일 고정폭)와 정렬한다.
 			    좌우 여백 컬럼은 매우 넓은 화면에서만 노출한다. */}
-			<div className="mx-auto flex w-full justify-center gap-5 px-5 py-5 pb-24 md:px-6 md:py-10">
-				<aside className="hidden w-[220px] shrink-0 min-[1600px]:block">
+			<div className="mx-auto flex w-full justify-center gap-5 py-5 pb-24 md:py-10">
+				<aside className="hidden w-[272px] shrink-0 min-[1720px]:block">
 					<div className="sticky top-20 flex flex-col gap-4">
 						<Card className="rounded-lg" pad="lg" tone="outline">
 							<div className="mb-4 flex items-center gap-2">
@@ -70,10 +70,14 @@ export function SeekerMarketplaceScreen() {
 								onChange={setFilters}
 							/>
 						</Card>
-						<AdBannerRail count={2} offset={0} />
+						<HorizontalAdBannerRail
+							keys={["left-ad-1", "left-ad-2", "left-ad-3"]}
+						/>
 					</div>
 				</aside>
-				<div className={cn("w-full min-w-0", SEEKER_CONTENT_WIDTH)}>
+				<div
+					className={cn("w-full min-w-0 px-5 md:px-6", SEEKER_CONTENT_WIDTH)}
+				>
 					<PremiumAdBannerSection className="mb-6" />
 					<div className="mb-5 flex flex-col gap-4">
 						<MarketplaceDiscoveryTabs
@@ -117,9 +121,9 @@ export function SeekerMarketplaceScreen() {
 						sections={sections}
 					/>
 				</div>
-				<aside className="hidden w-[220px] shrink-0 min-[1600px]:block">
+				<aside className="hidden w-[272px] shrink-0 min-[1720px]:block">
 					<div className="sticky top-20">
-						<AdBannerRail count={3} offset={2} />
+						<AdBannerRail count={3} offset={0} />
 					</div>
 				</aside>
 			</div>
