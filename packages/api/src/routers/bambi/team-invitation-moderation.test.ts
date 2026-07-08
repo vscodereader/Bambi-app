@@ -15,7 +15,7 @@ const [{ db }, authSchema, bambiSchema, { moderationRouter }] =
 		import("./moderation"),
 	]);
 
-const { user, organization, member, team, invitation } = authSchema;
+const { user, organization, member, team, teamMember, invitation } = authSchema;
 const { adminModerationAction, bambiProfile, employerOrganizationProfile } =
 	bambiSchema;
 
@@ -174,6 +174,123 @@ describe("listPendingTeamInvitations", () => {
 		);
 
 		await expectOrpcCode(list({}), "FORBIDDEN");
+		await cleanup(seed);
+	});
+});
+
+describe("setTeamInvitationStatus", () => {
+	const callSet = (adminId: string) =>
+		createProcedureClient(moderationRouter.setTeamInvitationStatus, {
+			context: ctx(adminId),
+			path: ["bambi", "moderation", "setTeamInvitationStatus"],
+		});
+
+	it("accepts an invite and creates member + teamMember", async () => {
+		const adminId = await seedAdmin();
+		const seed = await seedPendingInvite({ withTeam: true });
+
+		const result = (await callSet(adminId)({
+			invitationId: seed.inviteId,
+			status: "accepted",
+		})) as { status: string; acceptedUserId: string | null };
+		expect(result.status).toBe("accepted");
+		expect(result.acceptedUserId).toBe(seed.inviteeId);
+
+		const memberRows = await db
+			.select()
+			.from(member)
+			.where(eq(member.userId, seed.inviteeId));
+		expect(memberRows.some((m) => m.organizationId === seed.orgId)).toBe(true);
+
+		const teamMemberRows = await db
+			.select()
+			.from(teamMember)
+			.where(eq(teamMember.userId, seed.inviteeId));
+		expect(teamMemberRows.some((t) => t.teamId === seed.teamId)).toBe(true);
+
+		await cleanup({ ...seed, adminId });
+	});
+
+	it("accepts an org-only invite (no teamId) creating member only", async () => {
+		const adminId = await seedAdmin();
+		const seed = await seedPendingInvite({ withTeam: false });
+
+		await callSet(adminId)({ invitationId: seed.inviteId, status: "accepted" });
+
+		const teamMemberRows = await db
+			.select()
+			.from(teamMember)
+			.where(eq(teamMember.userId, seed.inviteeId));
+		expect(teamMemberRows.length).toBe(0);
+
+		await cleanup({ ...seed, adminId });
+	});
+
+	it("does not duplicate member when invitee already a member", async () => {
+		const adminId = await seedAdmin();
+		const seed = await seedPendingInvite({
+			withTeam: true,
+			inviteeAlreadyMember: true,
+		});
+
+		await callSet(adminId)({ invitationId: seed.inviteId, status: "accepted" });
+
+		const memberRows = await db
+			.select()
+			.from(member)
+			.where(eq(member.userId, seed.inviteeId));
+		const orgMembers = memberRows.filter(
+			(m) => m.organizationId === seed.orgId
+		);
+		expect(orgMembers.length).toBe(1);
+
+		await cleanup({ ...seed, adminId });
+	});
+
+	it("rejects an invite with reason and stores it", async () => {
+		const adminId = await seedAdmin();
+		const seed = await seedPendingInvite();
+
+		const result = (await callSet(adminId)({
+			invitationId: seed.inviteId,
+			status: "rejected",
+			reason: "부적합",
+		})) as { status: string; rejectionReason: string | null };
+		expect(result.status).toBe("rejected");
+		expect(result.rejectionReason).toBe("부적합");
+
+		const memberRows = await db
+			.select()
+			.from(member)
+			.where(eq(member.userId, seed.inviteeId));
+		expect(memberRows.some((m) => m.organizationId === seed.orgId)).toBe(false);
+
+		await cleanup({ ...seed, adminId });
+	});
+
+	it("blocks accepting an expired invite", async () => {
+		const adminId = await seedAdmin();
+		const seed = await seedPendingInvite({ expired: true });
+
+		await expectOrpcCode(
+			callSet(adminId)({ invitationId: seed.inviteId, status: "accepted" }),
+			"CONFLICT"
+		);
+
+		await cleanup({ ...seed, adminId });
+	});
+
+	it("forbids non-admin", async () => {
+		const seed = await seedPendingInvite();
+
+		await expectOrpcCode(
+			callSet(seed.ownerId)({
+				invitationId: seed.inviteId,
+				status: "accepted",
+			}),
+			"FORBIDDEN"
+		);
+
 		await cleanup(seed);
 	});
 });
