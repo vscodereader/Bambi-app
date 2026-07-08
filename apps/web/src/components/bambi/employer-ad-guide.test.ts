@@ -42,6 +42,8 @@ describe("employer ad guide (광고 상품 안내)", () => {
 		expect(source).toContain('const APPLY_HREF = "/employer/new"');
 		// primary 위계: 상품 신청 버튼은 outline, 상단 문의 CTA만 primary
 		expect(source).toContain('buttonVariants({ variant: "outline" })');
+		// 신청 버튼은 이용 요금과 분리해 카드 하단(Separator 아래)에 배치
+		expect(source).toContain("<Separator");
 	});
 
 	it("provides an ad placement mini diagram", () => {

@@ -1,6 +1,7 @@
 import { Badge } from "@bambi-app/ui/components/badge";
 import { buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
+import { Separator } from "@bambi-app/ui/components/separator";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { Check, Megaphone } from "lucide-react";
 import Link from "next/link";
@@ -39,38 +40,41 @@ function ProductSection({ product }: { product: AdProduct }) {
 			<Card
 				className={cn(highlighted && "border-coral-200 ring-1 ring-coral-100")}
 			>
-				<CardContent className="grid gap-5 lg:grid-cols-[13rem_minmax(0,1fr)_auto]">
-					{/* 노출 위치 */}
-					<div className="flex flex-col gap-2">
-						<span className="font-medium text-muted-foreground text-xs">
-							노출 위치
-						</span>
-						<AdPlacementDiagram
-							accentClassName={product.diagram.accentClassName}
-							highlightRows={product.diagram.highlightRows}
-							totalRows={product.diagram.totalRows}
-						/>
-						<p className="text-muted-foreground text-xs leading-relaxed">
-							{product.placementCaption}
-						</p>
-					</div>
-					{/* 서비스 내용 */}
-					<div className="flex flex-col gap-2">
-						<span className="font-medium text-muted-foreground text-xs">
-							서비스 내용
-						</span>
-						<ul className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
-							{product.benefits.map((benefit) => (
-								<li className="flex items-start gap-1.5 text-sm" key={benefit}>
-									<Check className="mt-0.5 size-4 shrink-0 text-coral-500" />
-									<span className="break-keep">{benefit}</span>
-								</li>
-							))}
-						</ul>
-					</div>
-					{/* 이용 요금 + 신청 */}
-					<div className="flex flex-col gap-4 lg:w-52">
+				<CardContent className="flex flex-col gap-5">
+					<div className="grid gap-5 lg:grid-cols-[13rem_minmax(0,1fr)_auto]">
+						{/* 노출 위치 */}
 						<div className="flex flex-col gap-2">
+							<span className="font-medium text-muted-foreground text-xs">
+								노출 위치
+							</span>
+							<AdPlacementDiagram
+								accentClassName={product.diagram.accentClassName}
+								highlightRows={product.diagram.highlightRows}
+								totalRows={product.diagram.totalRows}
+							/>
+							<p className="text-muted-foreground text-xs leading-relaxed">
+								{product.placementCaption}
+							</p>
+						</div>
+						{/* 서비스 내용 */}
+						<div className="flex flex-col gap-2">
+							<span className="font-medium text-muted-foreground text-xs">
+								서비스 내용
+							</span>
+							<ul className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+								{product.benefits.map((benefit) => (
+									<li
+										className="flex items-start gap-1.5 text-sm"
+										key={benefit}
+									>
+										<Check className="mt-0.5 size-4 shrink-0 text-coral-500" />
+										<span className="break-keep">{benefit}</span>
+									</li>
+								))}
+							</ul>
+						</div>
+						{/* 이용 요금 */}
+						<div className="flex flex-col gap-2 lg:w-52">
 							<span className="font-medium text-muted-foreground text-xs">
 								이용 요금
 							</span>
@@ -90,8 +94,15 @@ function ProductSection({ product }: { product: AdProduct }) {
 								))}
 							</ul>
 						</div>
+					</div>
+					{/* 신청 — 카드 맨 하단에 배치해 이용 요금과 분리한다. */}
+					<Separator />
+					<div className="flex sm:justify-end">
 						<Link
-							className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+							className={cn(
+								buttonVariants({ variant: "outline" }),
+								"w-full sm:w-52"
+							)}
 							href={APPLY_HREF}
 						>
 							신청하기
