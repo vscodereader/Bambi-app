@@ -1,10 +1,13 @@
 "use client";
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMarketplaceJobs } from "@/lib/bambi/api-jobs";
+import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job } from "@/lib/bambi/types";
+import { AdBanner, AdBannerRail } from "../ad-banner";
 import { useBambiAuth } from "../auth-client-provider";
 import {
 	MarketplaceDiscoveryAxisChips,
@@ -14,6 +17,7 @@ import {
 	MarketplaceSearch,
 	useMarketplaceDiscovery,
 } from "../marketplace";
+import { PremiumAdBannerSection } from "../premium-ad-banner-section";
 import { useSeekerFilters } from "../seeker-app-shell";
 import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 
@@ -45,57 +49,80 @@ export function SeekerMarketplaceScreen() {
 	};
 
 	return (
-		<div className="mx-auto flex w-full gap-5 px-5 py-5 pb-24 md:max-w-[80%] md:px-6 md:py-10">
-			<MarketplaceFilterSidebar filters={filters} onChange={setFilters} />
-			<section className="min-w-0 flex-1">
-				<div className="mb-5 flex flex-col gap-4">
-					<MarketplaceDiscoveryTabs
-						onSelect={selectDiscoveryTab}
-						value={discoveryTabId}
-					/>
-					<MarketplaceSearch
+		<>
+			<div
+				className={cn(
+					"relative mx-auto w-full px-5 py-5 pb-24 md:px-6 md:py-10",
+					SEEKER_CONTENT_WIDTH
+				)}
+			>
+				<PremiumAdBannerSection className="mb-6" />
+				<div className="flex w-full gap-5">
+					<MarketplaceFilterSidebar
 						filters={filters}
+						footer={
+							<>
+								<AdBanner />
+								<AdBanner />
+							</>
+						}
 						onChange={setFilters}
-						onOpenFilters={() => setFiltersOpen(true)}
-						searchFieldClassName="md:hidden"
 					/>
-					<MarketplaceDiscoveryAxisChips
-						discoveryTabId={discoveryTabId}
-						filters={filters}
-						onChange={setFilters}
-					/>
+					<section className="min-w-0 flex-1">
+						<div className="mb-5 flex flex-col gap-4">
+							<MarketplaceDiscoveryTabs
+								onSelect={selectDiscoveryTab}
+								value={discoveryTabId}
+							/>
+							<MarketplaceSearch
+								filters={filters}
+								onChange={setFilters}
+								onOpenFilters={() => setFiltersOpen(true)}
+								searchFieldClassName="md:hidden"
+							/>
+							<MarketplaceDiscoveryAxisChips
+								discoveryTabId={discoveryTabId}
+								filters={filters}
+								onChange={setFilters}
+							/>
+						</div>
+						{isError ? (
+							<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
+								실제 공고 API를 불러오지 못해 샘플 공고를 표시하고 있어요.
+								<button
+									className="ml-2 cursor-pointer border-none bg-transparent p-0 font-extrabold text-amber-900 underline"
+									onClick={refetch}
+									type="button"
+								>
+									다시 연결
+								</button>
+							</div>
+						) : null}
+						<div className="mb-3 flex items-center justify-between">
+							<h2 className="m-0 font-extrabold text-lg">추천 공고</h2>
+							<span className="font-semibold text-muted-foreground text-sm">
+								{jobs.length}개{isApiBacked ? " · 실시간" : ""}
+							</span>
+						</div>
+						<VisualJobExposureSections
+							jobs={jobs}
+							onChat={chatJob}
+							onOpen={openJob}
+							sections={sections}
+						/>
+					</section>
 				</div>
-				{isError ? (
-					<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
-						실제 공고 API를 불러오지 못해 샘플 공고를 표시하고 있어요.
-						<button
-							className="ml-2 cursor-pointer border-none bg-transparent p-0 font-extrabold text-amber-900 underline"
-							onClick={refetch}
-							type="button"
-						>
-							다시 연결
-						</button>
-					</div>
-				) : null}
-				<div className="mb-3 flex items-center justify-between">
-					<h2 className="m-0 font-extrabold text-lg">추천 공고</h2>
-					<span className="font-semibold text-muted-foreground text-sm">
-						{jobs.length}개{isApiBacked ? " · 실시간" : ""}
-					</span>
+				{/* 우측 여백 세로 배너 — 콘텐츠 바깥에 앵커, 넓은 화면 전용, 스크롤 추종 */}
+				<div className="absolute inset-y-0 left-full ml-5 hidden 2xl:block">
+					<AdBannerRail count={2} />
 				</div>
-				<VisualJobExposureSections
-					jobs={jobs}
-					onChat={chatJob}
-					onOpen={openJob}
-					sections={sections}
-				/>
-			</section>
+			</div>
 			<MarketplaceFilterSheet
 				filters={filters}
 				onChange={setFilters}
 				onOpenChange={setFiltersOpen}
 				open={filtersOpen}
 			/>
-		</div>
+		</>
 	);
 }
