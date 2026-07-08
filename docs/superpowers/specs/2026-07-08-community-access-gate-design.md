@@ -7,17 +7,21 @@
 ## 목표 / 스코프
 
 수다방(커뮤니티)에 **여성회원**과 **광고 중인 업소 회원**만 입장할 수 있도록 접근 제어를 도입한다.
-이번 작업은 **여성회원 판정 우선** 스코프로 한정한다.
+여성회원 판정과 **광고 업소(is_advertiser) 동기화·만료 처리**를 함께 포함한다.
 
 포함:
 - 회원 `gender` 배선 (온보딩 시 게스트 성인인증 쿠키에서 이전)
 - 서버 접근 자격 판정 헬퍼 + `getMine` 응답 플래그 노출
 - 프론트 탭 게이팅(3곳) + 페이지 가드 + 입장 자격 안내 화면
-- `bambi_profile.is_advertiser` **컬럼만** 추가(default false)
+- `bambi_profile.is_advertiser` 컬럼 추가 + **광고 캠페인 상태 동기화 + 기간 만료 처리**
+  - 자격 판정은 **조회 시점 파생 계산(lazy)** — `member(owner/admin)→조직→캠페인(active,
+    startsAt≤now<endsAt)` 조인으로 라이브 계산(권위값). 스케줄러 불필요, 만료는 `endsAt` 필터로 처리.
+  - `is_advertiser` 컬럼은 **이벤트(activate/pause) 시 동기화되는 denormalized 캐시**.
+  - 자격 부여 범위: 조직 멤버 중 **owner/admin만**.
 
 제외(후속 이슈):
-- `is_advertiser` ↔ 광고 캠페인 상태 동기화 / 기간 만료 처리
-- 조직 다중 멤버 중 광고 자격 부여 범위 (플래그가 profile 단위라 자연 해소)
+- 광고 결제 웹훅/PG 연동, `canceled`/`pending_payment` 상태 전이(현재 코드에 경로 없음)
+- 회원 대상 휴대폰 본인인증 흐름(gender null 회원 보완)
 - 게시판 실기능(글·댓글 CRUD·신고·정렬)
 
 ## 전제 / 현황
@@ -41,14 +45,21 @@ canAccessCommunity(profile) =
 ```
 
 - 미인증 회원(`gender = null`)은 광고 업소가 아니면 입장 불가.
-- 이번 스코프에서 `isAdvertiser`는 항상 false(default)이므로 광고 업소 입장 경로는 실질적으로 아직 작동하지 않는다(후속 동기화 시 자동 작동). 헬퍼 로직에는 조건을 포함해 둔다.
+- `isAdvertiser`는 자격 판정 시점에 **라이브로 파생 계산**한 값을 `resolveCommunityAccess`에 넣는다(저장 컬럼을 진실값으로 신뢰하지 않음). owner/admin으로 속한 조직 중 지금 활성(active, `startsAt≤now<endsAt`)인 캠페인이 하나라도 있으면 true. 만료는 `endsAt` 필터로 조회 시 자연 처리된다.
+- `is_advertiser` 컬럼은 캠페인 activate/pause 이벤트에서 해당 조직 owner/admin 멤버들에 대해 재계산·동기화되는 캐시다.
 
 ## 컴포넌트별 설계
 
 ### 1. DB / 마이그레이션
 - `gender`는 그대로 사용(이미 완료).
-- `bambi_profile`에 `is_advertiser boolean NOT NULL DEFAULT false` 컬럼 추가.
+- `bambi_profile`에 `is_advertiser boolean NOT NULL DEFAULT false` 컬럼 추가(동기화 캐시).
 - `packages/db/src/schema/bambi.ts`의 `bambiProfile` 정의에 컬럼 추가 후 drizzle `generate`로 신규 마이그레이션(`0010_*`) 생성. (DB 마이그레이션 워크플로우: `db:push` 금지, generate→migrate만.)
+
+### 1-b. 광고 자격 파생·동기화 (`packages/api/src/services/bambi-advertiser.ts`)
+- `isAdvertiserEligibleRole(role)` 순수 헬퍼: `owner`/`admin`만 자격.
+- `hasActiveAdvertiserCampaign({ userId, now })` 라이브 판정: `jobPromotionCampaign`(status=active, `startsAt≤now<endsAt`)과 `member`(role owner/admin, userId)를 조인해 boolean 반환. **자격 판정의 권위값**이자 만료(lazy) 처리 지점.
+- `syncAdvertiserFlagForOrganization({ organizationId, now })`: 해당 조직 owner/admin 멤버들의 `is_advertiser`를 각자 전체 소속 기준으로 재계산해 UPDATE. 캠페인 `activateForManualPayment`/`pause` 핸들러에서 호출.
+- 캠페인은 조직 단위, 자격은 회원 단위이며 한 회원이 여러 조직에 속할 수 있으므로 동기화는 **회원별 집계**(어느 조직이든 active 캠페인 보유 시 true)로 계산한다.
 
 ### 2. gender 배선 (온보딩 쿠키 이전)
 - `packages/api/src/routers/bambi/onboarding.ts`의 `createBambiProfile`에서 요청 컨텍스트의 `ADULT_SEX_COOKIE`를 읽어 `adultSexToGender()`로 변환 → `profile.gender`로 기록.
@@ -62,7 +73,8 @@ canAccessCommunity(profile) =
 - (선택) `requireCommunityAccess` — 후속 게시판 CRUD 프로시저 가드용. 이번엔 헬퍼만 두고 실사용은 후속.
 
 ### 4. `getMine` 응답 플래그 노출
-- `onboarding.getMine` 반환에 `canAccessCommunity: boolean` 필드 추가(profile 기반 계산).
+- `onboarding.getMine` 반환에 `community: { canAccess, notice }` 필드 추가.
+- `isAdvertiser`는 `hasActiveAdvertiserCampaign`로 **라이브 계산**한 값을 `resolveCommunityAccess`에 넣는다(저장 컬럼이 아님 → 만료 안전).
 - 프론트에 gender 원값을 노출하지 않고 플래그만 소비하게 한다.
 
 ### 5. 프론트 컨텍스트 · 탭 게이팅
