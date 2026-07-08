@@ -55,13 +55,12 @@ export function SeekerAppShell({ children }: { children: ReactNode }) {
 	);
 	// 검색창은 마켓플레이스(/seeker)에서만 헤더에 노출하고 채팅·내정보엔 두지 않는다
 	const isMarketplace = pathname === "/seeker";
-	// 채용 목록(/seeker)·상세(/seeker/jobs/*)만 고정폭 헤더로 정렬한다. 그 외 seeker 화면은 기존 80% 유지.
-	const isJobArea =
-		pathname === "/seeker" || pathname.startsWith("/seeker/jobs/");
 	return (
 		<SeekerFiltersContext.Provider value={{ filters, setFilters }}>
 			<ResponsiveAppShell
-				contentWidthClassName={isJobArea ? SEEKER_CONTENT_MAX_W : undefined}
+				// 모든 seeker 페이지(채용 목록·상세·채팅·수다방·내 정보) 헤더를
+				// /seeker와 동일한 고정폭·여백으로 통일한다.
+				contentWidthClassName={SEEKER_CONTENT_MAX_W}
 				headerSlot={isMarketplace ? <SeekerHeaderSearch /> : undefined}
 				variant="seeker"
 			>
