@@ -26,6 +26,11 @@ export const accountStatus = pgEnum("account_status", [
 	"suspended",
 ]);
 
+// 성별. 휴대폰 본인인증 결과로 채워진다(1남/2여 → male/female). 게스트는 프로필이
+// 없어 쿠키에만 남고, 정식 회원은 이 컬럼에 저장된다. 여성/광고 업소 회원만 입장하는
+// 수다방 접근 판정에 쓰인다.
+export const bambiGender = pgEnum("bambi_gender", ["male", "female"]);
+
 export const employerVerificationStatus = pgEnum(
 	"employer_verification_status",
 	["none", "pending", "verified", "rejected"]
@@ -125,6 +130,7 @@ export const bambiProfile = pgTable(
 		status: accountStatus("status").default("active").notNull(),
 		isPhoneVerified: boolean("is_phone_verified").default(false).notNull(),
 		phoneNumber: text("phone_number"),
+		gender: bambiGender("gender"),
 		displayName: text("display_name"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
