@@ -37,6 +37,21 @@ export const adultSexToGender = (sex: string): BambiGenderValue | null => {
 	return null;
 };
 
+// 쿠키 문자열에서 성인인증 성별(adultsex)을 읽는다. clearGuestCookie가 adultsex를
+// 만료시키기 전에 회원 프로필로 성별을 옮길 때 쓴다.
+export const readAdultGenderFromCookieString = (
+	cookie: string
+): BambiGenderValue | null => {
+	const entry = cookie
+		.split(";")
+		.map((part) => part.trim())
+		.find((part) => part.startsWith(`${ADULT_SEX_COOKIE}=`));
+	if (!entry) {
+		return null;
+	}
+	return adultSexToGender(entry.slice(ADULT_SEX_COOKIE.length + 1));
+};
+
 // 목 인증 폼이 서버 라우트로 보내는 입력. adultcode(CI/DI)는 사용자가 입력하지 않고
 // 서버가 목 랜덤 문자열로 생성한다.
 export interface MockPhoneVerifyInput {
