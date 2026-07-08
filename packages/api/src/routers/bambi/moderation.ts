@@ -336,6 +336,22 @@ export const moderationRouter = {
 			return await withReportTargetContexts(reportRows);
 		}),
 
+	// 내가 접수한 신고 목록. 관리자용 listReports와 달리 reporterUserId=본인으로 한정한다.
+	listMyReports: protectedProcedure
+		.input(z.object({ limit: z.number().int().min(1).max(100).default(50) }))
+		.handler(async ({ context, input }) => {
+			const profile = await requireActiveBambiProfile(context.session);
+
+			const reportRows = await db
+				.select()
+				.from(report)
+				.where(eq(report.reporterUserId, profile.userId))
+				.orderBy(desc(report.createdAt))
+				.limit(input.limit);
+
+			return await withReportTargetContexts(reportRows);
+		}),
+
 	listJobPosts: protectedProcedure
 		.input(listJobPostsInput)
 		.handler(async ({ context, input }) => {
