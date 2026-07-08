@@ -131,6 +131,9 @@ export const bambiProfile = pgTable(
 		isPhoneVerified: boolean("is_phone_verified").default(false).notNull(),
 		phoneNumber: text("phone_number"),
 		gender: bambiGender("gender"),
+		// 광고(프로모션) 중인 업소(owner/admin) 표시 캐시. 진실값은 조회 시 캠페인 조인으로
+		// 파생 계산하며(bambi-advertiser), 이 컬럼은 activate/pause 이벤트에서 동기화된다.
+		isAdvertiser: boolean("is_advertiser").default(false).notNull(),
 		displayName: text("display_name"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
