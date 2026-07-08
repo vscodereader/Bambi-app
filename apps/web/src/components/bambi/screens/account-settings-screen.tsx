@@ -1,8 +1,9 @@
 "use client";
 
-// 계정 설정 — 표시 이름(프로필) 수정, 휴대폰 본인인증(목), 로그아웃. 본인인증은 게스트용
-// MockPhoneVerifyDialog를 재사용한 목 단계이며, 성공 시 verifyMyPhoneMock로 번호·인증여부
-// (+미설정 시 성별)를 프로필에 저장한다. 실인증 API 도입 시 다이얼로그·뮤테이션을 교체한다.
+// 계정 설정 — 표시 이름(프로필) 수정, 기본 정보(성별·생년월일) 표시, 휴대폰 본인인증(목),
+// 로그아웃. 본인인증은 게스트용 MockPhoneVerifyDialog를 재사용한 목 단계이며, 성공 시
+// verifyMyPhoneMock로 번호·인증여부·생년월일(+미설정 시 성별)을 프로필에 저장한다. 실인증
+// API 도입 시 다이얼로그·뮤테이션을 교체한다.
 
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +15,26 @@ import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
 import { Badge, Button, Input } from "../ds";
 import { MockPhoneVerifyDialog } from "../mock-phone-verify-dialog";
+
+const BIRTH_PATTERN = /^\d{8}$/;
+
+const formatGender = (gender: string | null | undefined): string => {
+	if (gender === "male") {
+		return "남성";
+	}
+	if (gender === "female") {
+		return "여성";
+	}
+	return "미설정";
+};
+
+// 8자리 YYYYMMDD 문자열을 YYYY.MM.DD로 표시. 인증 전이거나 형식이 어긋나면 미입력 처리.
+const formatBirthDate = (birth: string | null | undefined): string => {
+	if (!(birth && BIRTH_PATTERN.test(birth))) {
+		return "미입력";
+	}
+	return `${birth.slice(0, 4)}.${birth.slice(4, 6)}.${birth.slice(6, 8)}`;
+};
 
 export function AccountSettingsScreen() {
 	const router = useRouter();
@@ -50,12 +71,13 @@ export function AccountSettingsScreen() {
 		})
 	);
 
-	// 목 다이얼로그 입력 중 계정설정에서 저장하는 값은 번호·성별뿐(실명·생년월일은 목 표시용).
+	// 목 다이얼로그 입력 중 계정설정에서 저장하는 값은 번호·성별·생년월일(실명은 목 표시용).
 	// 실패 시 mutateAsync가 throw → 다이얼로그가 에러 메시지를 인라인으로 노출한다.
 	const handleVerified = async (input: MockPhoneVerifyInput) => {
 		await verifyMutation.mutateAsync({
 			phoneNumber: input.phone,
 			gender: input.gender,
+			birthDate: input.birth,
 		});
 	};
 
@@ -105,6 +127,27 @@ export function AccountSettingsScreen() {
 						</Button>
 					</section>
 				)}
+
+				<section className="flex flex-col gap-3 rounded-2xl border border-border p-5">
+					<span className="font-bold text-foreground text-sm">기본 정보</span>
+					<dl className="m-0 flex flex-col gap-2">
+						<div className="flex items-center justify-between gap-3">
+							<dt className="text-muted-foreground text-xs">성별</dt>
+							<dd className="m-0 font-semibold text-foreground text-sm">
+								{formatGender(profile?.gender)}
+							</dd>
+						</div>
+						<div className="flex items-center justify-between gap-3">
+							<dt className="text-muted-foreground text-xs">생년월일</dt>
+							<dd className="m-0 font-semibold text-foreground text-sm">
+								{formatBirthDate(profile?.birthDate)}
+							</dd>
+						</div>
+					</dl>
+					<p className="m-0 text-muted-foreground text-xs">
+						성별·생년월일은 휴대폰 본인인증으로 확인돼요.
+					</p>
+				</section>
 
 				<section className="flex flex-col gap-4 rounded-2xl border border-border p-5">
 					<div className="flex items-center gap-3">

@@ -49,6 +49,10 @@ const profileUpdateInput = profileInput.omit({ gender: true }).extend({
 const mockPhoneVerificationInput = z.object({
 	phoneNumber: z.string().min(3).max(30),
 	gender: z.enum(["male", "female"]).optional(),
+	birthDate: z
+		.string()
+		.regex(/^\d{8}$/, "생년월일은 8자리(YYYYMMDD)여야 합니다.")
+		.optional(),
 });
 
 const organizationProfileInput = z.object({
@@ -397,6 +401,7 @@ export const onboardingRouter = {
 					phoneNumber: input.phoneNumber,
 					isPhoneVerified: true,
 					gender: existingProfile.gender ?? input.gender,
+					birthDate: input.birthDate,
 				})
 				.where(eq(bambiProfile.userId, userId))
 				.returning();
