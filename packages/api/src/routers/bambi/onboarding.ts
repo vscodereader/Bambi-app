@@ -17,7 +17,9 @@ import { and, eq, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
+import { hasActiveAdvertiserCampaign } from "../../services/bambi-advertiser";
 import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
+import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import {
 	getJobPostingScopes,
 	ORGANIZATION_WIDE_POSTING_ROLES,
@@ -167,6 +169,17 @@ export const onboardingRouter = {
 			.where(eq(bambiProfile.userId, userId))
 			.limit(1);
 
+		const now = new Date();
+		const isAdvertiser = profile
+			? await hasActiveAdvertiserCampaign({ now, userId })
+			: false;
+		const community = resolveCommunityAccess({
+			gender: profile?.gender ?? null,
+			isAdvertiser,
+			role: profile?.role ?? "job_seeker",
+			status: profile?.status ?? "active",
+		});
+
 		const organizationProfiles = await db
 			.select({
 				id: employerOrganizationProfile.id,
@@ -260,6 +273,7 @@ export const onboardingRouter = {
 
 		return {
 			bambiProfile: profile ?? null,
+			community,
 			employerOrganizationProfiles: organizationProfiles,
 			// teamMember 기준 팀에 더해 owner/admin 조직 전체 팀까지 포함해야
 			// owner가 본인이 멤버가 아닌 팀으로 낸 공고도 팀명 라벨을 조회할 수 있다.
