@@ -1,7 +1,10 @@
 "use client";
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
+import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
+import { AdBannerRail } from "../ad-banner";
 import { Badge, Button, Card, InfoTile } from "../ds";
 import {
 	AlertCircle,
@@ -71,7 +74,12 @@ export function SeekerJobDetailResponsive({
 	onStartChat,
 }: SeekerJobDetailResponsiveProps) {
 	return (
-		<div className="mx-auto w-full px-5 py-5 pb-28 md:max-w-[80%] md:px-6 md:py-7 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8">
+		<div
+			className={cn(
+				"relative mx-auto w-full px-5 py-5 pb-28 md:px-6 md:py-7 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8",
+				SEEKER_CONTENT_WIDTH
+			)}
+		>
 			<main className="min-w-0">
 				<button
 					className="mb-4 cursor-pointer rounded-lg border border-border bg-card px-3 py-2 font-bold text-sm"
@@ -244,6 +252,13 @@ export function SeekerJobDetailResponsive({
 					</Button>
 				</div>
 			</aside>
+			{/* 좌·우 콘텐츠 바깥 여백 세로 배너 — 넓은 화면 전용, 스크롤 추종 */}
+			<div className="absolute inset-y-0 right-full mr-5 hidden 2xl:block">
+				<AdBannerRail count={2} />
+			</div>
+			<div className="absolute inset-y-0 left-full ml-5 hidden 2xl:block">
+				<AdBannerRail count={2} />
+			</div>
 			<div className="fixed right-0 bottom-0 left-0 z-30 border-border border-t bg-background p-4 lg:hidden">
 				<Button
 					block
