@@ -477,60 +477,68 @@ function resolveBlockedUserId(
 	return room.jobSeekerUserId;
 }
 
-// 채팅방에서 상대를 차단하는 액션. 실수 방지를 위해 "차단하기" → 인라인 확인 단계를
-// 거친다. 이미 차단된 방에서는 아무것도 노출하지 않는다.
-function ChatBlockAction({
+// "차단하기" 트리거 버튼. 안전 안내 헤딩과 같은 줄 우측에 배치한다.
+// 이미 차단됐거나 확인 단계가 열려 있으면 노출하지 않는다.
+function ChatBlockTrigger({
 	isBlocked,
 	isConfirmOpen,
-	isPending,
-	onCancel,
-	onConfirm,
 	onOpen,
 }: {
 	isBlocked: boolean;
 	isConfirmOpen: boolean;
-	isPending: boolean;
-	onCancel: () => void;
-	onConfirm: () => void;
 	onOpen: () => void;
 }) {
-	if (isBlocked) {
+	if (isBlocked || isConfirmOpen) {
 		return null;
 	}
 
-	if (isConfirmOpen) {
-		return (
-			<div className="mt-3 flex flex-col gap-2 border-coral-100 border-t pt-3">
-				<p className="m-0 font-bold text-coral-700 text-xs">
-					이 상대를 정말 차단할까요? 차단하면 서로 대화할 수 없어요.
-				</p>
-				<div className="flex gap-2">
-					<Button
-						disabled={isPending}
-						onClick={onCancel}
-						size="sm"
-						variant="secondary"
-					>
-						취소
-					</Button>
-					<Button
-						disabled={isPending}
-						onClick={onConfirm}
-						size="sm"
-						variant="danger"
-					>
-						{isPending ? "차단 중" : "차단"}
-					</Button>
-				</div>
-			</div>
-		);
+	return (
+		<Button onClick={onOpen} size="sm" variant="secondary">
+			차단하기
+		</Button>
+	);
+}
+
+// 차단 확인 패널. 실수 방지를 위해 "차단하기" → 인라인 확인 단계를 거친다.
+// 안전 안내 문구 아래에 전체 폭으로 펼쳐진다.
+function ChatBlockConfirm({
+	isConfirmOpen,
+	isPending,
+	onCancel,
+	onConfirm,
+}: {
+	isConfirmOpen: boolean;
+	isPending: boolean;
+	onCancel: () => void;
+	onConfirm: () => void;
+}) {
+	if (!isConfirmOpen) {
+		return null;
 	}
 
 	return (
-		<div className="mt-3 flex justify-end">
-			<Button onClick={onOpen} size="sm" variant="secondary">
-				차단하기
-			</Button>
+		<div className="mt-3 flex flex-col gap-2 border-coral-100 border-t pt-3">
+			<p className="m-0 font-bold text-coral-700 text-xs">
+				이 상대를 정말 차단할까요? 차단하면 서로 대화할 수 없어요.
+			</p>
+			<div className="flex gap-2">
+				<Button
+					disabled={isPending}
+					onClick={onCancel}
+					size="sm"
+					variant="secondary"
+				>
+					취소
+				</Button>
+				<Button
+					disabled={isPending}
+					onClick={onConfirm}
+					size="sm"
+					variant="danger"
+				>
+					{isPending ? "차단 중" : "차단"}
+				</Button>
+			</div>
 		</div>
 	);
 }
@@ -1098,24 +1106,29 @@ export function SeekerChatRoomResponsive({
 					</Badge>
 				</header>
 				<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
-					<div className="flex items-center gap-2 font-extrabold text-sm">
-						<span className="inline-flex size-4">
-							<ShieldIcon />
-						</span>
-						면접 확정 전 연락처 보호 중
+					<div className="flex items-center justify-between gap-3">
+						<div className="flex items-center gap-2 font-extrabold text-sm">
+							<span className="inline-flex size-4">
+								<ShieldIcon />
+							</span>
+							면접 확정 전 연락처 보호 중
+						</div>
+						<ChatBlockTrigger
+							isBlocked={room.isBlocked}
+							isConfirmOpen={isBlockConfirmOpen}
+							onOpen={() => setIsBlockConfirmOpen(true)}
+						/>
 					</div>
 					<p className="mt-1 mb-0 text-xs leading-relaxed">
 						외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요.
 					</p>
-					<ChatBlockAction
-						isBlocked={room.isBlocked}
+					<ChatBlockConfirm
 						isConfirmOpen={isBlockConfirmOpen}
 						isPending={blockMutation.isPending}
 						onCancel={() => setIsBlockConfirmOpen(false)}
 						onConfirm={() =>
 							blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
 						}
-						onOpen={() => setIsBlockConfirmOpen(true)}
 					/>
 				</div>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
