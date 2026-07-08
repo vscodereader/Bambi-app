@@ -8,6 +8,7 @@ import { resolveEmployerAccess } from "@/lib/bambi/require-role";
 const EMPLOYER_NAV_ITEMS = [
 	{ href: "/employer", label: "내 공고" },
 	{ href: "/employer/new", label: "공고 등록" },
+	{ href: "/employer/ad-guide" as Route, label: "광고 안내" },
 	{ href: "/employer/settings" as Route, label: "조직 설정" },
 	{ href: "/employer/me", label: "업체 정보" },
 	{ href: "/seeker", label: "채용정보" },
