@@ -4,7 +4,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
-import { AdBannerRail } from "../ad-banner";
+import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { Badge, Button, Card, InfoTile } from "../ds";
 import {
 	AlertCircle,
@@ -74,17 +74,19 @@ export function SeekerJobDetailResponsive({
 	onStartChat,
 }: SeekerJobDetailResponsiveProps) {
 	return (
-		<div className="mx-auto flex w-full justify-center gap-5 px-5 py-5 pb-28 md:px-6 md:py-7">
+		<div className="mx-auto flex w-full justify-center gap-5 py-5 pb-28 md:py-7">
 			{/* 좌 여백 배너 — 넓은 화면 전용, 스크롤 추종 */}
-			<aside className="hidden w-[220px] shrink-0 min-[1600px]:block">
+			<aside className="hidden w-[272px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					<AdBannerRail count={2} offset={0} />
+					<HorizontalAdBannerRail
+						keys={["detail-left-1", "detail-left-2", "detail-left-3"]}
+					/>
 				</div>
 			</aside>
 			{/* 중앙 콘텐츠: 본문 + CTA 고정폭 그리드 */}
 			<div
 				className={cn(
-					"w-full min-w-0 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8",
+					"w-full min-w-0 px-5 md:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8",
 					SEEKER_CONTENT_WIDTH
 				)}
 			>
@@ -267,7 +269,7 @@ export function SeekerJobDetailResponsive({
 				</aside>
 			</div>
 			{/* 우 여백 배너 — 넓은 화면 전용, 스크롤 추종 */}
-			<aside className="hidden w-[220px] shrink-0 min-[1600px]:block">
+			<aside className="hidden w-[272px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
 					<AdBannerRail count={2} offset={3} />
 				</div>
