@@ -80,6 +80,9 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain(
 			"headerSlot={isMarketplace ? <SeekerHeaderSearch />"
 		);
+		// 모든 seeker 페이지 헤더를 /seeker와 동일한 고정폭으로 통일한다(경로별 분기 없음)
+		expect(source).toContain("contentWidthClassName={SEEKER_CONTENT_MAX_W}");
+		expect(source).not.toContain("isJobArea");
 	});
 
 	it("wires the public marketplace to visual exposure sections", () => {
