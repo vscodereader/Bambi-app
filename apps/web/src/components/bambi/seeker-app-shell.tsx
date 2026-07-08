@@ -3,6 +3,7 @@
 import { Input } from "@bambi-app/ui/components/input";
 import { usePathname } from "next/navigation";
 import { createContext, type ReactNode, useContext, useState } from "react";
+import { SEEKER_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import {
 	DEFAULT_MARKETPLACE_FILTERS,
 	type MarketplaceFilters,
@@ -54,9 +55,13 @@ export function SeekerAppShell({ children }: { children: ReactNode }) {
 	);
 	// 검색창은 마켓플레이스(/seeker)에서만 헤더에 노출하고 채팅·내정보엔 두지 않는다
 	const isMarketplace = pathname === "/seeker";
+	// 채용 목록(/seeker)·상세(/seeker/jobs/*)만 고정폭 헤더로 정렬한다. 그 외 seeker 화면은 기존 80% 유지.
+	const isJobArea =
+		pathname === "/seeker" || pathname.startsWith("/seeker/jobs/");
 	return (
 		<SeekerFiltersContext.Provider value={{ filters, setFilters }}>
 			<ResponsiveAppShell
+				contentWidthClassName={isJobArea ? SEEKER_CONTENT_MAX_W : undefined}
 				headerSlot={isMarketplace ? <SeekerHeaderSearch /> : undefined}
 				variant="seeker"
 			>
