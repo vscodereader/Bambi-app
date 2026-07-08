@@ -5,8 +5,10 @@
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import type { Route } from "next";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { JOBS } from "@/lib/bambi/data";
@@ -587,11 +589,27 @@ export function SeekerMe() {
 		? (seekerRoleLabels[profile.role] ?? profile.role)
 		: "구직자";
 	const isPhoneVerified = Boolean(profile?.isPhoneVerified);
-	const rows = [
-		{ icon: <ClipboardListIcon />, label: "내 신고 내역" },
-		{ icon: <ClockIcon />, label: "예정된 면접" },
-		{ icon: <LockIcon />, label: "차단한 상대" },
-		{ icon: <SettingsIcon />, label: "계정 설정" },
+	const rows: { href: Route; icon: ReactNode; label: string }[] = [
+		{
+			href: "/seeker/me/reports" as Route,
+			icon: <ClipboardListIcon />,
+			label: "내 신고 내역",
+		},
+		{
+			href: "/seeker/me/interviews" as Route,
+			icon: <ClockIcon />,
+			label: "예정된 면접",
+		},
+		{
+			href: "/seeker/me/blocks" as Route,
+			icon: <LockIcon />,
+			label: "차단한 상대",
+		},
+		{
+			href: "/seeker/me/settings" as Route,
+			icon: <SettingsIcon />,
+			label: "계정 설정",
+		},
 	];
 	const handleSignOut = async () => {
 		await signOutToHome(router);
@@ -630,11 +648,12 @@ export function SeekerMe() {
 				)}
 				<div className="flex flex-col overflow-hidden rounded-2xl border border-border">
 					{rows.map((r, i) => (
-						<div
+						<Link
 							className={cn(
-								"flex items-center gap-3 p-4",
+								"flex items-center gap-3 p-4 transition-colors hover:bg-secondary",
 								i ? "border-border border-t" : "border-none"
 							)}
+							href={r.href}
 							key={r.label}
 						>
 							<span className="inline-flex size-[22px] text-muted-foreground">
@@ -646,7 +665,7 @@ export function SeekerMe() {
 							<span className="inline-flex size-[18px] text-[color:var(--text-subtle)]">
 								<ChevronRightIcon />
 							</span>
-						</div>
+						</Link>
 					))}
 				</div>
 				<Button className="w-full" onClick={handleSignOut} variant="secondary">
