@@ -33,6 +33,7 @@ import {
 
 const profileInput = z.object({
 	displayName: z.string().min(1).max(80).optional(),
+	gender: z.enum(["male", "female"]).optional(),
 	phoneNumber: z.string().min(3).max(30).optional(),
 });
 
@@ -124,11 +125,13 @@ const requireEmployerBambiProfile = async (userId: string) => {
 
 const createBambiProfile = async ({
 	displayName,
+	gender,
 	phoneNumber,
 	role,
 	userId,
 }: {
 	displayName?: string;
+	gender?: "male" | "female";
 	phoneNumber?: string;
 	role: BambiProfileRole;
 	userId: string;
@@ -148,6 +151,7 @@ const createBambiProfile = async ({
 			role,
 			displayName,
 			phoneNumber,
+			gender,
 		})
 		.returning();
 
