@@ -2,6 +2,50 @@ export const GUEST_COOKIE_NAME = "bambi_guest";
 export const GUEST_COOKIE_VALUE = "1";
 export const GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 
+// 휴대폰 본인인증 결과 쿠키. 지금은 실제 인증 API가 없어 목(mock) 폼 입력으로 세팅한다.
+// 실인증 도입 시 이 상수·매핑과 목 폼을 함께 걷어낸다. 쿠키명은 인증 규격을 그대로
+// 따른다(생년월일 adultbrith는 규격상 철자 유지).
+export const ADULT_NAME_COOKIE = "adultname";
+export const ADULT_BIRTH_COOKIE = "adultbrith";
+export const ADULT_PHONE_COOKIE = "adultphone";
+export const ADULT_SEX_COOKIE = "adultsex";
+export const ADULT_CODE_COOKIE = "adultcode";
+
+// 세션이 생기거나 로그아웃할 때 게스트 쿠키와 함께 만료시킬 인증 쿠키 목록.
+export const ADULT_COOKIE_NAMES = [
+	ADULT_NAME_COOKIE,
+	ADULT_BIRTH_COOKIE,
+	ADULT_PHONE_COOKIE,
+	ADULT_SEX_COOKIE,
+	ADULT_CODE_COOKIE,
+] as const;
+
+export type BambiGenderValue = "male" | "female";
+// adultsex 규격: 1=남, 2=여.
+export type AdultSexCode = "1" | "2";
+
+export const genderToAdultSex = (gender: BambiGenderValue): AdultSexCode =>
+	gender === "male" ? "1" : "2";
+
+export const adultSexToGender = (sex: string): BambiGenderValue | null => {
+	if (sex === "1") {
+		return "male";
+	}
+	if (sex === "2") {
+		return "female";
+	}
+	return null;
+};
+
+// 목 인증 폼이 서버 라우트로 보내는 입력. adultcode(CI/DI)는 사용자가 입력하지 않고
+// 서버가 목 랜덤 문자열로 생성한다.
+export interface MockPhoneVerifyInput {
+	birth: string;
+	gender: BambiGenderValue;
+	name: string;
+	phone: string;
+}
+
 export const readGuestFromCookieString = (cookie: string): boolean =>
 	cookie
 		.split(";")

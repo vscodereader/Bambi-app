@@ -12,7 +12,8 @@ import { authClient } from "@/lib/auth-client";
 import { clearGuestCookie } from "@/lib/bambi/guest";
 import { client, queryClient } from "@/utils/orpc";
 import { Badge, Button, Card, Input, Logo } from "../ds";
-import { PhoneIcon, ShieldIcon } from "../icons";
+import { ShieldIcon } from "../icons";
+import { MockPhoneVerifyDialog } from "../mock-phone-verify-dialog";
 
 type AuthMode = "sign-in" | "sign-up";
 type SignupRole = "job_seeker" | "employer";
@@ -41,23 +42,9 @@ function Spinner() {
 	);
 }
 
-// 비회원(휴대폰 인증) 진입 — 게스트 쿠키를 세팅하고 공고 목록으로 이동한다.
-// 지금은 실제 인증 없이 버튼만으로 게스트 열람을 허용한다.
+// 비회원(휴대폰 인증) 진입 — 목 본인인증 다이얼로그로 이름·생년월일·휴대폰·성별을
+// 입력받아 인증 결과 쿠키를 세팅하고 공고 목록으로 이동한다.
 function GuestBrowseButton() {
-	const router = useRouter();
-	const [isEntering, setIsEntering] = useState(false);
-
-	const enterAsGuest = async () => {
-		setIsEntering(true);
-		try {
-			await fetch("/api/guest", { method: "POST" });
-			router.push("/seeker" as Route);
-			router.refresh();
-		} finally {
-			setIsEntering(false);
-		}
-	};
-
 	return (
 		<div className="mt-5 flex flex-col gap-3">
 			<div className="flex items-center gap-3">
@@ -65,17 +52,7 @@ function GuestBrowseButton() {
 				<span className="text-muted-foreground text-xs">또는</span>
 				<span className="h-px flex-1 bg-border" />
 			</div>
-			<Button
-				block
-				disabled={isEntering}
-				leftIcon={<PhoneIcon />}
-				onClick={() => {
-					enterAsGuest().catch(() => setIsEntering(false));
-				}}
-				variant="secondary"
-			>
-				{isEntering ? "입장 중" : "휴대폰 인증"}
-			</Button>
+			<MockPhoneVerifyDialog />
 			<p className="m-0 text-center text-muted-foreground text-xs">
 				비회원은 공고 목록만 볼 수 있어요. 상세 열람·채팅은 회원가입이 필요해요.
 			</p>
