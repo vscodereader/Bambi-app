@@ -1,5 +1,5 @@
 import { db } from "@bambi-app/db";
-import { member, user } from "@bambi-app/db/schema/auth";
+import { invitation, member, team, user } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
 	bambiProfile,
@@ -7,6 +7,7 @@ import {
 	chatMessage,
 	chatRoom,
 	employerOrganizationProfile,
+	employerTeamProfile,
 	jobPost,
 	jobPostMedia,
 	report,
@@ -14,6 +15,7 @@ import {
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -22,6 +24,7 @@ import {
 	requireAdminProfile,
 } from "../../services/bambi-authz";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
+import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 
 export const targetTypeSchema = z.enum([
 	"job_post",
@@ -651,6 +654,68 @@ export const moderationRouter = {
 			.where(eq(employerOrganizationProfile.verificationStatus, "pending"))
 			.orderBy(desc(employerOrganizationProfile.createdAt));
 	}),
+
+	listPendingTeamInvitations: protectedProcedure.handler(
+		async ({ context }) => {
+			await requireAdminProfile(context.session);
+
+			const inviterUser = alias(user, "inviter_user");
+			const inviteeUser = alias(user, "invitee_user");
+
+			const rows = await db
+				.select({
+					id: invitation.id,
+					organizationId: invitation.organizationId,
+					organizationName: employerOrganizationProfile.displayName,
+					email: invitation.email,
+					inviteeName: inviteeUser.name,
+					inviterName: inviterUser.name,
+					inviterEmail: inviterUser.email,
+					role: invitation.role,
+					teamId: invitation.teamId,
+					teamNameRaw: team.name,
+					teamProfileName: employerTeamProfile.displayName,
+					status: invitation.status,
+					createdAt: invitation.createdAt,
+					expiresAt: invitation.expiresAt,
+				})
+				.from(invitation)
+				.leftJoin(
+					employerOrganizationProfile,
+					eq(
+						employerOrganizationProfile.organizationId,
+						invitation.organizationId
+					)
+				)
+				.leftJoin(inviterUser, eq(inviterUser.id, invitation.inviterId))
+				.leftJoin(inviteeUser, eq(inviteeUser.email, invitation.email))
+				.leftJoin(team, eq(team.id, invitation.teamId))
+				.leftJoin(
+					employerTeamProfile,
+					eq(employerTeamProfile.teamId, invitation.teamId)
+				)
+				.where(eq(invitation.status, "pending"))
+				.orderBy(desc(invitation.createdAt));
+
+			const now = Date.now();
+			return rows.map((row) => ({
+				id: row.id,
+				organizationId: row.organizationId,
+				organizationName: row.organizationName,
+				email: row.email,
+				inviteeName: row.inviteeName,
+				inviterName: row.inviterName,
+				inviterEmail: row.inviterEmail,
+				role: normalizeOrganizationManagementRole(row.role) ?? "staff",
+				teamId: row.teamId,
+				teamName: row.teamProfileName ?? row.teamNameRaw ?? null,
+				status: row.status,
+				createdAt: row.createdAt,
+				expiresAt: row.expiresAt,
+				isExpired: row.expiresAt.getTime() < now,
+			}));
+		}
+	),
 
 	setEmployerVerificationStatus: protectedProcedure
 		.input(setEmployerVerificationStatusInput)
