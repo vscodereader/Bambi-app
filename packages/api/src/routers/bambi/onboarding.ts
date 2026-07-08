@@ -39,7 +39,7 @@ const profileInput = z.object({
 	phoneNumber: z.string().min(3).max(30).optional(),
 });
 
-const profileUpdateInput = profileInput.extend({
+const profileUpdateInput = profileInput.omit({ gender: true }).extend({
 	role: z.enum(["job_seeker", "employer", "admin"]).optional(),
 });
 
