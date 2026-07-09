@@ -66,6 +66,7 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"chat_message",
 	"review",
 	"user",
+	"team_invitation",
 ]);
 
 export const promotionTier = pgEnum("promotion_tier", [

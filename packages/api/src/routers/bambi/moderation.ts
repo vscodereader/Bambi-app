@@ -1,5 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { db } from "@bambi-app/db";
-import { member, user } from "@bambi-app/db/schema/auth";
+import {
+	invitation,
+	member,
+	team,
+	teamMember,
+	user,
+} from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
 	bambiProfile,
@@ -7,6 +14,7 @@ import {
 	chatMessage,
 	chatRoom,
 	employerOrganizationProfile,
+	employerTeamProfile,
 	jobPost,
 	jobPostMedia,
 	report,
@@ -14,6 +22,7 @@ import {
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -22,6 +31,7 @@ import {
 	requireAdminProfile,
 } from "../../services/bambi-authz";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
+import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 
 export const targetTypeSchema = z.enum([
 	"job_post",
@@ -104,6 +114,20 @@ const setEmployerVerificationStatusInput = z.object({
 	status: employerVerificationDecisionSchema,
 	reason: z.string().min(2).max(500),
 });
+
+const teamInvitationDecisionSchema = z.enum(["accepted", "rejected"]);
+
+const setTeamInvitationStatusInput = z
+	.object({
+		invitationId: z.string().min(1),
+		status: teamInvitationDecisionSchema,
+		reason: z.string().max(500).optional(),
+	})
+	.refine(
+		(value) =>
+			value.status !== "rejected" || (value.reason?.trim().length ?? 0) >= 2,
+		{ message: "반려 사유를 입력하세요.", path: ["reason"] }
+	);
 
 const bulkSetReportStatusInput = z.object({
 	reportIds: z.array(z.string().uuid()),
@@ -288,6 +312,140 @@ const assertReportTargetExists = async (
 	if (!target) {
 		throw new ORPCError("NOT_FOUND");
 	}
+};
+
+type ModerationTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type InvitationRow = typeof invitation.$inferSelect;
+
+const rejectTeamInvitation = async (
+	tx: ModerationTx,
+	adminUserId: string,
+	invite: InvitationRow,
+	reason: string | undefined
+) => {
+	const [updated] = await tx
+		.update(invitation)
+		.set({
+			status: "rejected",
+			rejectionReason: reason ?? null,
+			updatedAt: new Date(),
+		})
+		.where(eq(invitation.id, invite.id))
+		.returning();
+
+	await tx.insert(adminModerationAction).values({
+		adminUserId,
+		targetType: "team_invitation",
+		targetId: invite.id,
+		action: "set_team_invitation:rejected",
+		reason: reason ?? "반려",
+		metadata: {
+			organizationId: invite.organizationId,
+			teamId: invite.teamId,
+			invitedEmail: invite.email,
+		},
+	});
+	return updated;
+};
+
+const acceptTeamInvitation = async (
+	tx: ModerationTx,
+	adminUserId: string,
+	invite: InvitationRow,
+	reason: string | undefined
+) => {
+	if (invite.expiresAt.getTime() < Date.now()) {
+		throw new ORPCError("CONFLICT", { message: "만료된 초대입니다." });
+	}
+
+	const [invitee] = await tx
+		.select({ userId: user.id })
+		.from(user)
+		.innerJoin(bambiProfile, eq(bambiProfile.userId, user.id))
+		.where(
+			and(
+				eq(user.email, invite.email.toLowerCase()),
+				eq(bambiProfile.role, "employer")
+			)
+		)
+		.limit(1);
+
+	if (!invitee) {
+		throw new ORPCError("NOT_FOUND", {
+			message: "초대 대상 구인자 계정을 찾을 수 없습니다.",
+		});
+	}
+
+	const [existingMember] = await tx
+		.select({ id: member.id })
+		.from(member)
+		.where(
+			and(
+				eq(member.organizationId, invite.organizationId),
+				eq(member.userId, invitee.userId)
+			)
+		)
+		.limit(1);
+
+	if (!existingMember) {
+		await tx.insert(member).values({
+			id: `member_${randomUUID()}`,
+			organizationId: invite.organizationId,
+			userId: invitee.userId,
+			role: normalizeOrganizationManagementRole(invite.role) ?? "staff",
+			status: "active",
+			invitedEmail: invite.email,
+			acceptedUserId: invitee.userId,
+			createdAt: new Date(),
+		});
+	}
+
+	if (invite.teamId) {
+		const [existingTeamMember] = await tx
+			.select({ id: teamMember.id })
+			.from(teamMember)
+			.where(
+				and(
+					eq(teamMember.teamId, invite.teamId),
+					eq(teamMember.userId, invitee.userId)
+				)
+			)
+			.limit(1);
+		if (!existingTeamMember) {
+			await tx.insert(teamMember).values({
+				id: `team_member_${randomUUID()}`,
+				teamId: invite.teamId,
+				userId: invitee.userId,
+				createdAt: new Date(),
+			});
+		}
+	}
+
+	const [updated] = await tx
+		.update(invitation)
+		.set({
+			status: "accepted",
+			acceptedUserId: invitee.userId,
+			updatedAt: new Date(),
+		})
+		.where(eq(invitation.id, invite.id))
+		.returning();
+
+	await tx.insert(adminModerationAction).values({
+		adminUserId,
+		targetType: "team_invitation",
+		targetId: invite.id,
+		action: "set_team_invitation:accepted",
+		reason: reason?.trim() || "승인",
+		metadata: {
+			organizationId: invite.organizationId,
+			teamId: invite.teamId,
+			invitedEmail: invite.email,
+			joinedUserId: invitee.userId,
+		},
+	});
+
+	return updated;
 };
 
 export const moderationRouter = {
@@ -651,6 +809,96 @@ export const moderationRouter = {
 			.where(eq(employerOrganizationProfile.verificationStatus, "pending"))
 			.orderBy(desc(employerOrganizationProfile.createdAt));
 	}),
+
+	listPendingTeamInvitations: protectedProcedure.handler(
+		async ({ context }) => {
+			await requireAdminProfile(context.session);
+
+			const inviterUser = alias(user, "inviter_user");
+			const inviteeUser = alias(user, "invitee_user");
+
+			const rows = await db
+				.select({
+					id: invitation.id,
+					organizationId: invitation.organizationId,
+					organizationName: employerOrganizationProfile.displayName,
+					email: invitation.email,
+					inviteeName: inviteeUser.name,
+					inviterName: inviterUser.name,
+					inviterEmail: inviterUser.email,
+					role: invitation.role,
+					teamId: invitation.teamId,
+					teamNameRaw: team.name,
+					teamProfileName: employerTeamProfile.displayName,
+					status: invitation.status,
+					createdAt: invitation.createdAt,
+					expiresAt: invitation.expiresAt,
+				})
+				.from(invitation)
+				.leftJoin(
+					employerOrganizationProfile,
+					eq(
+						employerOrganizationProfile.organizationId,
+						invitation.organizationId
+					)
+				)
+				.leftJoin(inviterUser, eq(inviterUser.id, invitation.inviterId))
+				.leftJoin(inviteeUser, eq(inviteeUser.email, invitation.email))
+				.leftJoin(team, eq(team.id, invitation.teamId))
+				.leftJoin(
+					employerTeamProfile,
+					eq(employerTeamProfile.teamId, invitation.teamId)
+				)
+				.where(eq(invitation.status, "pending"))
+				.orderBy(desc(invitation.createdAt));
+
+			const now = Date.now();
+			return rows.map((row) => ({
+				id: row.id,
+				organizationId: row.organizationId,
+				organizationName: row.organizationName,
+				email: row.email,
+				inviteeName: row.inviteeName,
+				inviterName: row.inviterName,
+				inviterEmail: row.inviterEmail,
+				role: normalizeOrganizationManagementRole(row.role) ?? "staff",
+				teamId: row.teamId,
+				teamName: row.teamProfileName ?? row.teamNameRaw ?? null,
+				status: row.status,
+				createdAt: row.createdAt,
+				expiresAt: row.expiresAt,
+				isExpired: row.expiresAt.getTime() < now,
+			}));
+		}
+	),
+
+	setTeamInvitationStatus: protectedProcedure
+		.input(setTeamInvitationStatusInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(async (tx) => {
+				const [invite] = await tx
+					.select()
+					.from(invitation)
+					.where(eq(invitation.id, input.invitationId))
+					.limit(1)
+					.for("update");
+
+				if (!invite) {
+					throw new ORPCError("NOT_FOUND");
+				}
+				if (invite.status !== "pending") {
+					throw new ORPCError("CONFLICT", {
+						message: "이미 처리된 초대입니다.",
+					});
+				}
+
+				return input.status === "rejected"
+					? await rejectTeamInvitation(tx, admin.userId, invite, input.reason)
+					: await acceptTeamInvitation(tx, admin.userId, invite, input.reason);
+			});
+		}),
 
 	setEmployerVerificationStatus: protectedProcedure
 		.input(setEmployerVerificationStatusInput)
