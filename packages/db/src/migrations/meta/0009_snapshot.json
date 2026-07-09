@@ -1,5 +1,5 @@
 {
-  "id": "7d08fe12-0665-45bd-ab87-3fd353c66339",
+  "id": "3c40c6d2-5728-4db1-aa52-e10439e29a5a",
   "prevId": "b8d5a164-f93a-4a52-a323-99db8493e6dc",
   "version": "7",
   "dialect": "postgresql",
@@ -162,12 +162,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'pending'"
-        },
-        "rejection_reason": {
-          "name": "rejection_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "expires_at": {
           "name": "expires_at",
@@ -1188,6 +1182,13 @@
         "phone_number": {
           "name": "phone_number",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gender": {
+          "name": "gender",
+          "type": "bambi_gender",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
@@ -3660,6 +3661,11 @@
       "schema": "public",
       "values": ["active", "warned", "suspended"]
     },
+    "public.bambi_gender": {
+      "name": "bambi_gender",
+      "schema": "public",
+      "values": ["male", "female"]
+    },
     "public.bambi_user_role": {
       "name": "bambi_user_role",
       "schema": "public",
@@ -3698,14 +3704,7 @@
     "public.moderation_target_type": {
       "name": "moderation_target_type",
       "schema": "public",
-      "values": [
-        "job_post",
-        "chat_room",
-        "chat_message",
-        "review",
-        "user",
-        "team_invitation"
-      ]
+      "values": ["job_post", "chat_room", "chat_message", "review", "user"]
     },
     "public.promotion_status": {
       "name": "promotion_status",

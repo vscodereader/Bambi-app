@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ModeratorShell } from "@/components/bambi/persona-nav";
 import { ResponsiveAppShell } from "@/components/bambi/responsive-shell";
 import { ModProvider } from "@/components/bambi/screens/moderator-context";
+import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import { enforceModeratorAccess } from "@/lib/bambi/require-role";
 
 const MODERATOR_NAV_ITEMS = [
@@ -10,6 +11,8 @@ const MODERATOR_NAV_ITEMS = [
 	{ href: "/moderator/users", label: "사용자" },
 	{ href: "/moderator/employers", label: "업소 승인" },
 	{ href: "/moderator/team-invites", label: "팀 합류 승인" },
+	{ href: "/moderator/ad-products", label: "광고 상품" },
+	{ href: "/moderator/payments", label: "결제 관리" },
 	{ href: "/seeker", label: "채용정보" },
 ] as const;
 
@@ -20,7 +23,12 @@ export default async function ModeratorLayout({
 }) {
 	await enforceModeratorAccess();
 	return (
-		<ResponsiveAppShell navItems={MODERATOR_NAV_ITEMS} variant="moderator">
+		<ResponsiveAppShell
+			// 헤더 바를 채용(/seeker)과 동일한 고정폭으로 정렬한다(콘솔 본문 폭은 그대로).
+			contentWidthClassName={APP_CONTENT_MAX_W}
+			navItems={MODERATOR_NAV_ITEMS}
+			variant="moderator"
+		>
 			<ModProvider>
 				<ModeratorShell>{children}</ModeratorShell>
 			</ModProvider>

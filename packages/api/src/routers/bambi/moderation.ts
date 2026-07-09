@@ -21,7 +21,7 @@ import {
 	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import z from "zod";
 
@@ -100,6 +100,18 @@ const setJobPostStatusInput = z.object({
 	status: jobPostModerationStatusSchema,
 	reason: z.string().min(2).max(500),
 });
+
+const setJobPostPaymentInput = z.object({
+	jobPostId: z.string().uuid(),
+	paymentStatus: z.enum(["unpaid", "paid"]),
+});
+
+const listJobsForPaymentInput = z.object({
+	onlyUnpaid: z.boolean().default(false),
+	limit: z.number().int().min(1).max(100).default(50),
+});
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const setUserStatusInput = z.object({
 	targetUserId: z.string().min(1),
@@ -494,6 +506,22 @@ export const moderationRouter = {
 			return await withReportTargetContexts(reportRows);
 		}),
 
+	// 내가 접수한 신고 목록. 관리자용 listReports와 달리 reporterUserId=본인으로 한정한다.
+	listMyReports: protectedProcedure
+		.input(z.object({ limit: z.number().int().min(1).max(100).default(50) }))
+		.handler(async ({ context, input }) => {
+			const profile = await requireActiveBambiProfile(context.session);
+
+			const reportRows = await db
+				.select()
+				.from(report)
+				.where(eq(report.reporterUserId, profile.userId))
+				.orderBy(desc(report.createdAt))
+				.limit(input.limit);
+
+			return await withReportTargetContexts(reportRows);
+		}),
+
 	listJobPosts: protectedProcedure
 		.input(listJobPostsInput)
 		.handler(async ({ context, input }) => {
@@ -516,6 +544,11 @@ export const moderationRouter = {
 					status: jobPost.status,
 					riskFlags: jobPost.riskFlags,
 					rejectionReason: jobPost.rejectionReason,
+					exposureType: jobPost.exposureType,
+					exposureAmount: jobPost.exposureAmount,
+					paymentStatus: jobPost.paymentStatus,
+					exposureDurationDays: jobPost.exposureDurationDays,
+					exposureEndsAt: jobPost.exposureEndsAt,
 					organizationDisplayName: employerOrganizationProfile.displayName,
 					createdAt: jobPost.createdAt,
 					updatedAt: jobPost.updatedAt,
@@ -670,6 +703,80 @@ export const moderationRouter = {
 
 				return updated;
 			});
+		}),
+
+	setJobPostPayment: protectedProcedure
+		.input(setJobPostPaymentInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			const [existing] = await db
+				.select({ exposureDurationDays: jobPost.exposureDurationDays })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const exposureEndsAt =
+				input.paymentStatus === "paid" && existing.exposureDurationDays !== null
+					? new Date(Date.now() + existing.exposureDurationDays * MS_PER_DAY)
+					: null;
+
+			const [updated] = await db
+				.update(jobPost)
+				.set({
+					exposureEndsAt,
+					paymentStatus: input.paymentStatus,
+				})
+				.where(eq(jobPost.id, input.jobPostId))
+				.returning();
+
+			if (!updated) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			return updated;
+		}),
+
+	// 결제 처리가 의미있는 공고 목록(초안 제외: pending_review·published).
+	// 인증 업체 공고는 검수 큐 없이 자동 published라 여기서 결제를 처리한다.
+	listJobsForPayment: protectedProcedure
+		.input(listJobsForPaymentInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			const conditions = [
+				inArray(jobPost.status, ["pending_review", "published"]),
+			];
+
+			if (input.onlyUnpaid) {
+				conditions.push(eq(jobPost.paymentStatus, "unpaid"));
+			}
+
+			return await db
+				.select({
+					id: jobPost.id,
+					title: jobPost.title,
+					status: jobPost.status,
+					exposureType: jobPost.exposureType,
+					exposureAmount: jobPost.exposureAmount,
+					paymentStatus: jobPost.paymentStatus,
+					exposureDurationDays: jobPost.exposureDurationDays,
+					exposureEndsAt: jobPost.exposureEndsAt,
+					organizationDisplayName: employerOrganizationProfile.displayName,
+					createdAt: jobPost.createdAt,
+				})
+				.from(jobPost)
+				.innerJoin(
+					employerOrganizationProfile,
+					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+				)
+				.where(and(...conditions))
+				.orderBy(desc(jobPost.createdAt))
+				.limit(input.limit);
 		}),
 
 	bulkSetJobPostStatus: protectedProcedure

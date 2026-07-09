@@ -1,0 +1,1 @@
+ALTER TABLE "bambi_profile" ADD COLUMN "birth_date" text;

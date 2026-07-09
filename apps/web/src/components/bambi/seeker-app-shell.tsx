@@ -3,6 +3,7 @@
 import { Input } from "@bambi-app/ui/components/input";
 import { usePathname } from "next/navigation";
 import { createContext, type ReactNode, useContext, useState } from "react";
+import { SEEKER_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import {
 	DEFAULT_MARKETPLACE_FILTERS,
 	type MarketplaceFilters,
@@ -57,6 +58,9 @@ export function SeekerAppShell({ children }: { children: ReactNode }) {
 	return (
 		<SeekerFiltersContext.Provider value={{ filters, setFilters }}>
 			<ResponsiveAppShell
+				// 모든 seeker 페이지(채용 목록·상세·채팅·수다방·내 정보) 헤더를
+				// /seeker와 동일한 고정폭·여백으로 통일한다.
+				contentWidthClassName={SEEKER_CONTENT_MAX_W}
 				headerSlot={isMarketplace ? <SeekerHeaderSearch /> : undefined}
 				variant="seeker"
 			>

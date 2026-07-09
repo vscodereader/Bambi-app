@@ -26,6 +26,11 @@ export const accountStatus = pgEnum("account_status", [
 	"suspended",
 ]);
 
+// 성별. 휴대폰 본인인증 결과로 채워진다(1남/2여 → male/female). 게스트는 프로필이
+// 없어 쿠키에만 남고, 정식 회원은 이 컬럼에 저장된다. 여성/광고 업소 회원만 입장하는
+// 수다방 접근 판정에 쓰인다.
+export const bambiGender = pgEnum("bambi_gender", ["male", "female"]);
+
 export const employerVerificationStatus = pgEnum(
 	"employer_verification_status",
 	["none", "pending", "verified", "rejected"]
@@ -37,6 +42,26 @@ export const jobPostStatus = pgEnum("job_post_status", [
 	"published",
 	"hidden",
 	"rejected",
+]);
+
+export const jobExposureType = pgEnum("job_exposure_type", [
+	"premium-banner",
+	"left-banner",
+	"right-banner",
+	"special",
+	"urgent",
+	"recommended",
+	"standard",
+]);
+
+export const jobPaymentMethod = pgEnum("job_payment_method", [
+	"card",
+	"bank_transfer",
+]);
+
+export const jobPaymentStatus = pgEnum("job_payment_status", [
+	"unpaid",
+	"paid",
 ]);
 
 export const interviewStatus = pgEnum("interview_status", [
@@ -84,6 +109,21 @@ export const promotionStatus = pgEnum("promotion_status", [
 	"canceled",
 ]);
 
+export const adPlacementKind = pgEnum("ad_placement_kind", [
+	"listing",
+	"banner",
+]);
+
+export const adPreviewTemplate = pgEnum("ad_preview_template", [
+	"premium-top",
+	"special-list",
+	"urgent-list",
+	"recommended-list",
+	"side-vertical",
+	"side-horizontal",
+	"none",
+]);
+
 export const jobPerformanceEventType = pgEnum("job_performance_event_type", [
 	"impression",
 	"detail_view",
@@ -126,6 +166,12 @@ export const bambiProfile = pgTable(
 		status: accountStatus("status").default("active").notNull(),
 		isPhoneVerified: boolean("is_phone_verified").default(false).notNull(),
 		phoneNumber: text("phone_number"),
+		gender: bambiGender("gender"),
+		// 본인인증 시 입력받는 생년월일. 목 인증 폼과 동일하게 8자리 YYYYMMDD 문자열로 저장한다.
+		birthDate: text("birth_date"),
+		// 광고(프로모션) 중인 업소(owner/admin) 표시 캐시. 진실값은 조회 시 캠페인 조인으로
+		// 파생 계산하며(bambi-advertiser), 이 컬럼은 activate/pause 이벤트에서 동기화된다.
+		isAdvertiser: boolean("is_advertiser").default(false).notNull(),
 		displayName: text("display_name"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -220,6 +266,19 @@ export const jobPost = pgTable(
 		interviewNotes: text("interview_notes"),
 		rejectionReason: text("rejection_reason"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
+		exposureType: jobExposureType("exposure_type")
+			.default("standard")
+			.notNull(),
+		exposureDurationDays: integer("exposure_duration_days"),
+		adProductId: uuid("ad_product_id").references(() => adProduct.id, {
+			onDelete: "set null",
+		}),
+		exposureAmount: integer("exposure_amount"),
+		paymentMethod: jobPaymentMethod("payment_method"),
+		paymentStatus: jobPaymentStatus("payment_status")
+			.default("unpaid")
+			.notNull(),
+		exposureEndsAt: timestamp("exposure_ends_at"),
 		publishedAt: timestamp("published_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -338,6 +397,60 @@ export const jobPromotionBoostEvent = pgTable(
 		index("job_promotion_boost_event_job_post_id_idx").on(table.jobPostId),
 		index("job_promotion_boost_event_organization_id_idx").on(
 			table.organizationId
+		),
+	]
+);
+
+export const adPlacement = pgTable(
+	"ad_placement",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		name: text("name").notNull(),
+		description: text("description"),
+		kind: adPlacementKind("kind").default("listing").notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("ad_placement_active_sort_idx").on(table.isActive, table.sortOrder),
+	]
+);
+
+export const adProduct = pgTable(
+	"ad_product",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		placementId: uuid("placement_id")
+			.notNull()
+			.references(() => adPlacement.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		tagline: text("tagline"),
+		previewTemplate: adPreviewTemplate("preview_template")
+			.default("none")
+			.notNull(),
+		benefits: jsonb("benefits").$type<string[]>().default([]).notNull(),
+		priceOptions: jsonb("price_options")
+			.$type<{ amount: number; days: number }[]>()
+			.default([])
+			.notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("ad_product_placement_idx").on(
+			table.placementId,
+			table.isActive,
+			table.sortOrder
 		),
 	]
 );
@@ -727,6 +840,17 @@ export const jobPromotionBoostEventRelations = relations(
 		}),
 	})
 );
+
+export const adPlacementRelations = relations(adPlacement, ({ many }) => ({
+	products: many(adProduct),
+}));
+
+export const adProductRelations = relations(adProduct, ({ one }) => ({
+	placement: one(adPlacement, {
+		fields: [adProduct.placementId],
+		references: [adPlacement.id],
+	}),
+}));
 
 export const chatRoomRelations = relations(chatRoom, ({ many, one }) => ({
 	attachments: many(chatAttachment),

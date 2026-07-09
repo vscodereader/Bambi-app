@@ -9,6 +9,7 @@ import { orpc } from "@/utils/orpc";
 type BambiRole = "job_seeker" | "employer" | "admin" | null;
 
 interface BambiAuthValue {
+	canAccessCommunity: boolean;
 	isAuthenticated: boolean;
 	isGuest: boolean;
 	isPending: boolean;
@@ -31,6 +32,7 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 		typeof document !== "undefined" &&
 		readGuestFromCookieString(document.cookie);
 
+	const community = mineQuery.data?.community;
 	const value: BambiAuthValue = {
 		user: session.data?.user
 			? {
@@ -40,6 +42,7 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 				}
 			: null,
 		role: (mineQuery.data?.bambiProfile?.role ?? null) as BambiRole,
+		canAccessCommunity: community?.canAccess ?? false,
 		isAuthenticated,
 		isGuest,
 		isPending: session.isPending || (isAuthenticated && mineQuery.isLoading),

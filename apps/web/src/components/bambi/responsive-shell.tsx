@@ -26,6 +26,8 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
 interface ResponsiveAppShellProps {
 	children: ReactNode;
 	className?: string;
+	// 데스크톱 헤더 바의 콘텐츠 폭. 기본은 유동 80%, 채용 경로는 고정폭을 주입한다.
+	contentWidthClassName?: string;
 	headerSlot?: ReactNode;
 	navItems?: readonly NavItem[];
 	showDesktopNav?: boolean;
@@ -73,6 +75,7 @@ function ModeratorHeaderActions() {
 export function ResponsiveAppShell({
 	children,
 	className,
+	contentWidthClassName = "max-w-[80%]",
 	headerSlot,
 	navItems = DEFAULT_NAV_ITEMS,
 	showDesktopNav = true,
@@ -86,7 +89,12 @@ export function ResponsiveAppShell({
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
 				<header className="sticky top-0 z-30 hidden border-border border-b bg-background/95 backdrop-blur md:block">
-					<div className="mx-auto flex h-16 max-w-[80%] items-center gap-7 px-6">
+					<div
+						className={cn(
+							"mx-auto flex h-16 items-center gap-7 px-6",
+							contentWidthClassName
+						)}
+					>
 						<Link aria-label="밤비 홈" className="no-underline" href="/">
 							<Logo lang="ko" size="md" />
 						</Link>

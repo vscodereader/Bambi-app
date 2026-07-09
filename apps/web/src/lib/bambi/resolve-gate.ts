@@ -32,6 +32,10 @@ const isStaticFile = (pathname: string): boolean =>
 const next: GateDecision = { type: "next" };
 const redirect = (to: string): GateDecision => ({ type: "redirect", to });
 
+// 게스트가 공고 목록(/seeker) 외 허용되지 않은 경로로 진입할 때의 리다이렉트.
+// guestBlocked 신호를 실어 랜딩(/welcome)에서 "회원가입 후에 볼 수 있어요" 토스트를 띄운다.
+const GUEST_BLOCKED_REDIRECT = "/welcome?signup&guestBlocked=1";
+
 export const resolveGate = ({
 	pathname,
 	hasSession,
@@ -60,9 +64,9 @@ export const resolveGate = ({
 			pathname.startsWith("/employer") ||
 			pathname.startsWith("/moderator")
 		) {
-			return redirect("/welcome?signup");
+			return redirect(GUEST_BLOCKED_REDIRECT);
 		}
-		return redirect("/welcome?signup");
+		return redirect(GUEST_BLOCKED_REDIRECT);
 	}
 	return redirect("/welcome");
 };
