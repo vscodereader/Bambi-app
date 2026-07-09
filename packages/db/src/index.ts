@@ -22,6 +22,10 @@ import {
 } from "./schema/auth";
 import {
 	adminModerationAction,
+	adPlacement,
+	adPlacementRelations,
+	adProduct,
+	adProductRelations,
 	bambiNotification,
 	bambiProfile,
 	bambiProfileRelations,
@@ -54,6 +58,10 @@ const schema = {
 	account,
 	accountRelations,
 	adminModerationAction,
+	adPlacement,
+	adPlacementRelations,
+	adProduct,
+	adProductRelations,
 	bambiNotification,
 	chatAttachment,
 	chatAttachmentRelations,
