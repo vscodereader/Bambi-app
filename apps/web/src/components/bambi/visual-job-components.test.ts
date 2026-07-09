@@ -183,4 +183,10 @@ describe("visual job marketplace components", () => {
 		expect(productNew).toContain("createProduct");
 		expect(productNew).toContain("AdProductForm");
 	});
+
+	it("renders the employer ad guide from the dynamic catalog", () => {
+		const source = readComponent("screens/employer-ad-guide.tsx");
+		expect(source).toContain("adProducts.getCatalog");
+		expect(source).not.toContain("AD_PRODUCTS");
+	});
 });
