@@ -10,7 +10,6 @@ import { Button } from "@bambi-app/ui/components/button";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
-import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -24,7 +23,6 @@ import {
 	PAYMENT_STATUS_LABELS,
 	remainingDays,
 } from "@/lib/bambi/exposure";
-import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { formatDateTime } from "@/lib/bambi-format";
 import { jobStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
@@ -247,12 +245,7 @@ export default function ModeratorPaymentsPage() {
 	const jobs = jobsQuery.data ?? [];
 
 	return (
-		<div
-			className={cn(
-				"mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6",
-				APP_CONTENT_WIDTH
-			)}
-		>
+		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div className="flex flex-col gap-1">
 					<h1 className="m-0 font-extrabold text-2xl">결제 관리</h1>

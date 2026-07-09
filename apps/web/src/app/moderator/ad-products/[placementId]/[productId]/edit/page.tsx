@@ -1,14 +1,11 @@
 "use client";
 
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
-import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { PreviewTemplate } from "@/components/bambi/ad-placement-preview";
 import { AdProductForm } from "@/components/bambi/ad-product-form";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { orpc } from "@/utils/orpc";
 
 export default function EditAdProductPage() {
@@ -38,12 +35,7 @@ export default function EditAdProductPage() {
 	);
 
 	return (
-		<div
-			className={cn(
-				"mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6",
-				APP_CONTENT_WIDTH
-			)}
-		>
+		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<h1 className="m-0 font-extrabold text-2xl">광고 상품 수정</h1>
 			{catalogQuery.isLoading ? (
 				<div className="flex flex-col gap-4">
@@ -65,7 +57,7 @@ export default function EditAdProductPage() {
 						tagline: product.tagline ?? "",
 						benefits: product.benefits,
 						priceOptions: product.priceOptions,
-						previewTemplate: product.previewTemplate as PreviewTemplate,
+						previewImageUrl: product.previewImageUrl ?? null,
 					}}
 					onSubmit={(draft) =>
 						updateProduct.mutate({
@@ -74,7 +66,7 @@ export default function EditAdProductPage() {
 							tagline: draft.tagline.trim() || null,
 							benefits: draft.benefits,
 							priceOptions: draft.priceOptions,
-							previewTemplate: draft.previewTemplate,
+							previewImageUrl: draft.previewImageUrl,
 						})
 					}
 					pending={updateProduct.isPending}

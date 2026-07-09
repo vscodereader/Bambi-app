@@ -8,12 +8,10 @@ import {
 	CardTitle,
 } from "@bambi-app/ui/components/card";
 import { Input } from "@bambi-app/ui/components/input";
-import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { orpc } from "@/utils/orpc";
 
 export default function ModeratorEmployersPage() {
@@ -36,12 +34,7 @@ export default function ModeratorEmployersPage() {
 	const employers = pendingQuery.data ?? [];
 
 	return (
-		<div
-			className={cn(
-				"mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6",
-				APP_CONTENT_WIDTH
-			)}
-		>
+		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<h1 className="m-0 font-extrabold text-2xl">업소 승인 대기</h1>
 			{employers.length === 0 ? (
 				<EmptyState

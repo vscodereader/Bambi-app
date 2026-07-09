@@ -46,8 +46,12 @@ describe("moderator payments management page", () => {
 		expect(source).toContain("미결제만 보기");
 	});
 
-	it("uses the shared content width container", () => {
-		expect(source).toContain("APP_CONTENT_WIDTH");
+	it("aligns to the shared moderator content width via header-matched padding", () => {
+		// 폭은 ModeratorShell이 단일 권한으로 담당하므로, 페이지는 자체 max-width 없이
+		// 헤더와 맞춘 좌우 여백(px-5 md:px-6)만 사용한다.
+		expect(source).toContain("px-5");
+		expect(source).toContain("md:px-6");
+		expect(source).not.toContain("APP_CONTENT_WIDTH");
 	});
 });
 

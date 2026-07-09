@@ -1,11 +1,9 @@
 "use client";
 
-import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AdPlacementForm } from "@/components/bambi/ad-placement-form";
-import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { orpc } from "@/utils/orpc";
 
 export default function NewAdPlacementPage() {
@@ -21,12 +19,7 @@ export default function NewAdPlacementPage() {
 	);
 
 	return (
-		<div
-			className={cn(
-				"mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6",
-				APP_CONTENT_WIDTH
-			)}
-		>
+		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<h1 className="m-0 font-extrabold text-2xl">노출 위치 추가</h1>
 			<AdPlacementForm
 				onSubmit={(draft) =>

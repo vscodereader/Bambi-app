@@ -433,6 +433,7 @@ export const adProduct = pgTable(
 		previewTemplate: adPreviewTemplate("preview_template")
 			.default("none")
 			.notNull(),
+		previewImageUrl: text("preview_image_url"),
 		benefits: jsonb("benefits").$type<string[]>().default([]).notNull(),
 		priceOptions: jsonb("price_options")
 			.$type<{ amount: number; days: number }[]>()

@@ -37,8 +37,15 @@ const paymentOptions: { label: string; value: JobPaymentMethod }[] = [
 
 // 카드 내부 텍스트가 카드 밖으로 넘치지 않도록 min-w-0 + whitespace-normal + break-words로
 // 줄바꿈을 허용한다.
+// h-full: 같은 그리드 행에서 부모(ToggleGroup)가 items-stretch일 때 행 안의 가장 높은 카드에
+// 맞춰 모든 카드 높이가 같아진다(그리드 행 트랙 자체는 항상 최대 콘텐츠 높이로 결정되므로,
+// stretch가 걸려야 나머지 카드도 그 트랙 높이를 실제로 채운다).
+// min-h-16: tagline 유무와 무관하게 카드가 시각적으로 너무 낮아지지 않도록 하는 바닥값(로딩
+// Skeleton의 h-16과 맞춤). min-height라서 콘텐츠가 넘치면 자연히 더 커지고 텍스트는 잘리지 않는다.
+// justify-start: 기본 toggleVariants가 justify-center를 주므로, 카드가 늘어났을 때도
+// 상품명이 항상 위쪽에 고정되고 소개가 그 아래로 이어지도록 명시적으로 덮어쓴다.
 const exposureToggleItemClassName =
-	"h-auto w-full min-w-0 flex-col items-start gap-1 whitespace-normal px-3 py-2.5 text-left";
+	"h-full min-h-16 w-full min-w-0 flex-col items-start justify-start gap-1 whitespace-normal px-3 py-2.5 text-left";
 
 const durationSelectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
 
@@ -122,7 +129,7 @@ export function JobExposureFields({
 						) : (
 							<ToggleGroup
 								aria-label="노출 상품"
-								className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
+								className="grid w-full grid-cols-1 items-stretch gap-2 sm:grid-cols-2 lg:grid-cols-3"
 								onValueChange={handleExposureValueChange}
 								value={[toggleValue]}
 								variant="outline"
