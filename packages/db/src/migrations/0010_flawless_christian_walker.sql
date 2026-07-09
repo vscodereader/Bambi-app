@@ -1,0 +1,2 @@
+CREATE TYPE "public"."ad_preview_template" AS ENUM('premium-top', 'special-list', 'urgent-list', 'recommended-list', 'side-vertical', 'side-horizontal', 'none');--> statement-breakpoint
+ALTER TABLE "ad_placement" ADD COLUMN "preview_template" "ad_preview_template" DEFAULT 'none' NOT NULL;

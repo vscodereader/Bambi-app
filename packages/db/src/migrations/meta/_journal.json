@@ -71,6 +71,13 @@
       "when": 1783568075105,
       "tag": "0009_flashy_beyonder",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783573103863,
+      "tag": "0010_flawless_christian_walker",
+      "breakpoints": true
     }
   ]
 }
