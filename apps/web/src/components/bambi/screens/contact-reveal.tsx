@@ -1,7 +1,9 @@
 "use client";
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job } from "@/lib/bambi/types";
 import { interviewStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
@@ -123,7 +125,12 @@ function ContactRevealApi({
 
 	if (roomQuery.isLoading) {
 		return (
-			<div className="mx-auto w-full px-6 py-10 text-center font-bold text-muted-foreground md:max-w-[80%]">
+			<div
+				className={cn(
+					"mx-auto w-full px-5 py-10 text-center font-bold text-muted-foreground md:px-6",
+					SEEKER_CONTENT_WIDTH
+				)}
+			>
 				연락처 공개 조건을 확인하고 있어요.
 			</div>
 		);
@@ -131,7 +138,12 @@ function ContactRevealApi({
 
 	if (roomQuery.isError || !roomQuery.data) {
 		return (
-			<div className="mx-auto flex min-h-0 w-full flex-1 flex-col md:max-w-[80%]">
+			<div
+				className={cn(
+					"mx-auto flex min-h-0 w-full flex-1 flex-col",
+					SEEKER_CONTENT_WIDTH
+				)}
+			>
 				<AppBar className="md:px-6" onBack={onBack} title="연락처 공개" />
 				<div className="px-6 py-6">
 					<Card className="rounded-lg text-center" pad="lg" tone="outline">
@@ -153,7 +165,12 @@ function ContactRevealApi({
 	const latestSchedule = roomQuery.data.schedules[0];
 
 	return (
-		<div className="mx-auto flex min-h-0 w-full flex-1 flex-col md:max-w-[80%]">
+		<div
+			className={cn(
+				"mx-auto flex min-h-0 w-full flex-1 flex-col",
+				SEEKER_CONTENT_WIDTH
+			)}
+		>
 			<AppBar className="md:px-6" onBack={onBack} title="연락처 공개" />
 			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-2 pb-5">
 				<div className="flex flex-col items-center gap-2.5 pt-2 pb-1 text-center">
@@ -303,7 +320,12 @@ function ContactRevealPreview({
 	const company = job?.company ?? "달밤 라운지";
 
 	return (
-		<div className="mx-auto flex min-h-0 w-full flex-1 flex-col md:max-w-[80%]">
+		<div
+			className={cn(
+				"mx-auto flex min-h-0 w-full flex-1 flex-col",
+				SEEKER_CONTENT_WIDTH
+			)}
+		>
 			<AppBar className="md:px-6" onBack={onBack} title="연락처 공개" />
 			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-2 pb-5">
 				<div className="flex flex-col items-center gap-2.5 pt-2 pb-1 text-center">
