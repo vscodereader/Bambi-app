@@ -66,7 +66,7 @@ export default function EditAdPlacementPage() {
 						updatePlacement.mutate({
 							id: placementId,
 							name: draft.name,
-							description: draft.description || undefined,
+							description: draft.description.trim() || null,
 							kind: draft.kind,
 							previewTemplate: draft.previewTemplate,
 						})

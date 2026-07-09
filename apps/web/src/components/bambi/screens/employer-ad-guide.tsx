@@ -62,7 +62,7 @@ function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
 				{/* 데스크톱 컬럼 헤더(광고위치는 위 미리보기가 담당) */}
 				<div
 					className={cn(
-						"hidden text-muted-foreground text-xs md:block",
+						"hidden text-muted-foreground text-xs",
 						PRODUCT_ROW_GRID
 					)}
 				>

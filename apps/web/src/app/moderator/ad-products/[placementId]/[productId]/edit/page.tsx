@@ -69,7 +69,7 @@ export default function EditAdProductPage() {
 						updateProduct.mutate({
 							id: productId,
 							name: draft.name,
-							tagline: draft.tagline || undefined,
+							tagline: draft.tagline.trim() || null,
 							benefits: draft.benefits,
 							priceOptions: draft.priceOptions,
 						})
