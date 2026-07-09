@@ -97,6 +97,19 @@ const jobPostInput = z.object({
 	description: z.string().min(10).max(2000),
 	descriptionBlocks: z.array(jobDescriptionBlockInput).max(12).optional(),
 	interviewNotes: z.string().max(500).optional(),
+	exposureType: z
+		.enum([
+			"premium-banner",
+			"left-banner",
+			"right-banner",
+			"special",
+			"urgent",
+			"recommended",
+			"standard",
+		])
+		.optional(),
+	exposureDurationDays: z.number().int().min(1).max(365).nullish(),
+	paymentMethod: z.enum(["card", "bank_transfer"]).nullish(),
 	media: jobPostMediaSetInput,
 });
 
@@ -314,7 +327,10 @@ const coverImageSql = sql<{
 export const jobsRouter = {
 	list: publicProcedure.input(listInput).handler(async ({ context, input }) => {
 		const now = new Date();
-		const filters = [eq(jobPost.status, "published" as JobPostStatus)];
+		const filters = [
+			eq(jobPost.status, "published" as JobPostStatus),
+			eq(jobPost.paymentStatus, "paid"),
+		];
 
 		if (input.industryCategory) {
 			filters.push(eq(jobPost.industryCategory, input.industryCategory));
@@ -467,7 +483,10 @@ export const jobsRouter = {
 	}),
 
 	legacyList: publicProcedure.input(listInput).handler(async ({ input }) => {
-		const filters = [eq(jobPost.status, "published" as JobPostStatus)];
+		const filters = [
+			eq(jobPost.status, "published" as JobPostStatus),
+			eq(jobPost.paymentStatus, "paid"),
+		];
 
 		if (input.industryCategory) {
 			filters.push(eq(jobPost.industryCategory, input.industryCategory));
@@ -526,6 +545,7 @@ export const jobsRouter = {
 					teamId: jobPost.teamId,
 					createdByUserId: jobPost.createdByUserId,
 					status: jobPost.status,
+					paymentStatus: jobPost.paymentStatus,
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
 					payAmount: jobPost.payAmount,
@@ -559,7 +579,7 @@ export const jobsRouter = {
 				.where(eq(jobPost.id, input.id))
 				.limit(1);
 
-			if (post?.status !== "published") {
+			if (post?.status !== "published" || post.paymentStatus !== "paid") {
 				throw new ORPCError("NOT_FOUND");
 			}
 
@@ -646,6 +666,10 @@ export const jobsRouter = {
 				organizationId: jobPost.organizationId,
 				teamId: jobPost.teamId,
 				createdByUserId: jobPost.createdByUserId,
+				exposureType: jobPost.exposureType,
+				paymentStatus: jobPost.paymentStatus,
+				exposureDurationDays: jobPost.exposureDurationDays,
+				exposureEndsAt: jobPost.exposureEndsAt,
 				employerVerificationStatus:
 					employerOrganizationProfile.verificationStatus,
 				createdAt: jobPost.createdAt,
@@ -767,6 +791,9 @@ export const jobsRouter = {
 						descriptionBlocks: preparedContent.descriptionBlocks,
 						status,
 						riskFlags: riskDetected ? ["risky_term"] : [],
+						exposureType: input.exposureType ?? "standard",
+						exposureDurationDays: input.exposureDurationDays ?? null,
+						paymentMethod: input.paymentMethod ?? null,
 						publishedAt: status === "published" ? now : null,
 					})
 					.returning();

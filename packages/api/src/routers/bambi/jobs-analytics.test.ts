@@ -105,6 +105,7 @@ const createJobsAnalyticsFixture = async (): Promise<JobsAnalyticsFixture> => {
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",
+		paymentStatus: "paid",
 		publishedAt: now,
 		region: "서울 강남구",
 		status: "published",
@@ -215,6 +216,61 @@ describe("bambi jobs analytics", () => {
 				promotionTier: "premium",
 				section: "premium",
 			});
+		} finally {
+			await cleanupJobsAnalyticsFixture(fixture);
+		}
+	});
+
+	it("hides an unpaid published job from public detail (getById)", async () => {
+		const fixture = await createJobsAnalyticsFixture();
+
+		try {
+			await db
+				.update(jobPost)
+				.set({ paymentStatus: "unpaid" })
+				.where(eq(jobPost.id, fixture.jobPostId));
+
+			const getJobById = createProcedureClient(jobsRouter.getById, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "jobs", "getById"],
+			});
+
+			await expect(getJobById({ id: fixture.jobPostId })).rejects.toThrow();
+		} finally {
+			await cleanupJobsAnalyticsFixture(fixture);
+		}
+	});
+
+	it("excludes an unpaid published job from the public list", async () => {
+		const fixture = await createJobsAnalyticsFixture();
+
+		try {
+			await db
+				.update(jobPost)
+				.set({ paymentStatus: "unpaid" })
+				.where(eq(jobPost.id, fixture.jobPostId));
+
+			const listJobs = createProcedureClient(jobsRouter.list, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "jobs", "list"],
+			});
+
+			const result = await listJobs({ limit: 10 });
+			const allIds = [
+				...result.sections.premium,
+				...result.sections.recommended,
+				...result.sections.organic,
+			].map((item) => item.id);
+
+			expect(allIds).not.toContain(fixture.jobPostId);
+
+			const [event] = await db
+				.select()
+				.from(jobPerformanceEvent)
+				.where(eq(jobPerformanceEvent.jobPostId, fixture.jobPostId))
+				.limit(1);
+
+			expect(event).toBeUndefined();
 		} finally {
 			await cleanupJobsAnalyticsFixture(fixture);
 		}

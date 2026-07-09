@@ -18,6 +18,7 @@
     "@orpc/tanstack-query": "catalog:",
     "@tanstack/react-form": "catalog:",
     "@tanstack/react-query": "catalog:",
+    "@tanstack/react-table": "^8.21.3",
     "ai": "catalog:",
     "babel-plugin-react-compiler": "^1.0.0",
     "better-auth": "catalog:",

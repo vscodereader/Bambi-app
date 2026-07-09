@@ -31,6 +31,25 @@ export const jobDescriptionBlockTypes = [
 
 export type JobDescriptionBlockType = (typeof jobDescriptionBlockTypes)[number];
 
+export const jobExposureTypes = [
+	"premium-banner",
+	"left-banner",
+	"right-banner",
+	"special",
+	"urgent",
+	"recommended",
+	"standard",
+] as const;
+
+export type JobExposureType = (typeof jobExposureTypes)[number];
+
+export const jobPaymentMethods = ["card", "bank_transfer"] as const;
+
+export type JobPaymentMethod = (typeof jobPaymentMethods)[number];
+
+const isJobExposureType = (value: string): value is JobExposureType =>
+	jobExposureTypes.includes(value as JobExposureType);
+
 export interface JobDescriptionBlockFormValue {
 	id: string;
 	text: string;
@@ -84,10 +103,13 @@ export interface JobPostMediaApiSetInput {
 
 export interface JobForm {
 	description: string;
+	exposureDurationDays: number | null;
+	exposureType: JobExposureType;
 	industryCategory: string;
 	interviewNotes: string;
 	organizationId: string;
 	payAmount: string;
+	paymentMethod: JobPaymentMethod | null;
 	payUnit: string;
 	region: string;
 	teamId: string;
@@ -98,6 +120,8 @@ export interface JobForm {
 export interface JobPostInput {
 	description: string;
 	descriptionBlocks: JobDescriptionBlockFormValue[];
+	exposureDurationDays: number | null;
+	exposureType: JobExposureType;
 	industryCategory: string;
 	interviewNotes?: string;
 	media?: {
@@ -106,6 +130,7 @@ export interface JobPostInput {
 	};
 	organizationId: string;
 	payAmount: number;
+	paymentMethod: JobPaymentMethod | null;
 	payUnit: string;
 	region: string;
 	teamId?: string;
@@ -135,10 +160,13 @@ type JobFormValidationResult =
 
 export const emptyJobForm: JobForm = {
 	description: "",
+	exposureDurationDays: null,
+	exposureType: "standard",
 	industryCategory: industryOptions[0] ?? "",
 	interviewNotes: "",
 	organizationId: "",
 	payAmount: "",
+	paymentMethod: null,
 	payUnit: payUnitOptions[0] ?? "",
 	region: regionOptions[0] ?? "",
 	teamId: "",
@@ -453,6 +481,37 @@ const getContentErrors = ({
 	return errors;
 };
 
+const getExposureErrors = ({
+	exposureDurationDays,
+	exposureType,
+	paymentMethod,
+}: {
+	exposureDurationDays: number | null;
+	exposureType: string;
+	paymentMethod: JobPaymentMethod | null;
+}): JobFormErrors => {
+	const errors: JobFormErrors = {};
+
+	if (!isJobExposureType(exposureType)) {
+		errors.exposureType = "노출 상품을 선택해 주세요.";
+		return errors;
+	}
+
+	if (exposureType === "standard") {
+		return errors;
+	}
+
+	if (!(typeof exposureDurationDays === "number" && exposureDurationDays > 0)) {
+		errors.exposureDurationDays = "이용 기간을 선택해 주세요.";
+	}
+
+	if (paymentMethod !== "card" && paymentMethod !== "bank_transfer") {
+		errors.paymentMethod = "결제 방법을 선택해 주세요.";
+	}
+
+	return errors;
+};
+
 export const validateJobForm = (
 	form: JobForm,
 	options: {
@@ -484,6 +543,11 @@ export const validateJobForm = (
 			? getDescriptionBlockError(options.descriptionBlocks)
 			: undefined;
 	const mediaError = getMediaError(options.media);
+	const isStandardExposure = form.exposureType === "standard";
+	const exposureDurationDays = isStandardExposure
+		? null
+		: form.exposureDurationDays;
+	const paymentMethod = isStandardExposure ? null : form.paymentMethod;
 	Object.assign(
 		errors,
 		getPostingScopeErrors({
@@ -504,6 +568,11 @@ export const validateJobForm = (
 			description,
 			interviewNotes,
 			mediaError,
+		}),
+		getExposureErrors({
+			exposureDurationDays,
+			exposureType: form.exposureType,
+			paymentMethod,
 		})
 	);
 
@@ -521,6 +590,8 @@ export const validateJobForm = (
 		input: {
 			description,
 			descriptionBlocks: normalizedBlocks,
+			exposureDurationDays,
+			exposureType: form.exposureType,
 			industryCategory,
 			interviewNotes: interviewNotes || undefined,
 			media: options.media
@@ -531,6 +602,7 @@ export const validateJobForm = (
 				: undefined,
 			organizationId,
 			payAmount,
+			paymentMethod,
 			payUnit,
 			region,
 			teamId: teamId || undefined,
