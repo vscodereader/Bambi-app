@@ -60,16 +60,6 @@ function splitPay(pay: string): { amount: string; unit: null | string } {
 	return { amount: trimmed.slice(spaceIndex + 1), unit: head };
 }
 
-const DESC_MAX_LENGTH = 15;
-
-// 설명은 15자 초과 시 말줄임(…) 처리한다.
-function truncateDesc(desc: string): string {
-	const trimmed = desc.trim();
-	return trimmed.length > DESC_MAX_LENGTH
-		? `${trimmed.slice(0, DESC_MAX_LENGTH)}…`
-		: trimmed;
-}
-
 export function VisualJobCard({
 	active = false,
 	job,
@@ -78,7 +68,6 @@ export function VisualJobCard({
 	tone,
 }: VisualJobCardProps) {
 	const { amount: payAmount, unit: payUnit } = splitPay(job.pay);
-	const shortDesc = truncateDesc(job.desc);
 	// organic엔 리본 없음. Hit이고 tone이 special/urgent/recommended일 때만 표시.
 	const showHitRibbon = shouldShowHitRibbon(job, tone);
 	const hitRibbonClassName =
@@ -115,14 +104,14 @@ export function VisualJobCard({
 					{job.coverImage ? (
 						<Image
 							alt={job.coverImage.altText || job.coverImage.fileName}
-							className="h-16 w-32 shrink-0 rounded-sm border border-white object-cover"
-							height={64}
+							className="h-14 w-30 shrink-0 rounded-md border border-white object-cover"
+							height={56}
 							src={job.coverImage.url}
 							unoptimized
-							width={128}
+							width={56}
 						/>
 					) : (
-						<div className="flex size-20 shrink-0 items-center justify-center rounded-lg border border-white bg-secondary font-extrabold text-base text-coral-700">
+						<div className="flex size-14 shrink-0 items-center justify-center rounded-md border border-white bg-secondary font-extrabold text-coral-700 text-sm">
 							{job.company.slice(0, 2)}
 						</div>
 					)}
@@ -144,9 +133,6 @@ export function VisualJobCard({
 								{job.type ? ` · ${job.type}` : ""}
 							</span>
 						</span>
-						<p className="m-0 truncate text-muted-foreground text-xs leading-relaxed">
-							{shortDesc}
-						</p>
 					</div>
 				</div>
 			</button>

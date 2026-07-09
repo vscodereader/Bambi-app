@@ -16,12 +16,29 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain(
 			'tone: "organic" | "recommended" | "special" | "urgent"'
 		);
-		expect(source).toContain("연락처 보호");
-		expect(source).toContain("job.promotionLabel ?? toneLabel[tone]");
+		expect(source).toContain("채팅");
+		expect(source).toContain("splitPay");
 		expect(source).toContain("rightIcon={<Message />}");
-		// 최신(organic) 배지는 메인 코럴(primary) 컬러를 쓴다 — 사용 색상 최소화
+		// 최신(organic) 배지는 중립 톤 — 사용 색상 최소화
 		expect(source).toContain("tone={toneBadge[tone]}");
-		expect(source).toContain('organic: "primary"');
+		expect(source).toContain('organic: "neutral"');
+		// 4열 컴팩트화로 설명(shortDesc) 줄과 truncateDesc는 제거됨
+		expect(source).not.toContain("truncateDesc");
+	});
+
+	it("makes every ad banner link to the advertised job detail page", () => {
+		const banner = readComponent("ad-banner.tsx");
+		const links = readComponent("../../lib/bambi/ad-links.ts");
+
+		// 가로·세로 배너 모두 next/link로 감싸 광고 공고 상세로 이동한다
+		expect(banner).toContain('from "next/link"');
+		expect(banner).toContain("adJobHref");
+		expect(banner).toContain("<Link");
+		// 세로 배너도 클릭 대상 — seed로 결정적 공고 매핑
+		expect(banner).toContain("seed={banner.src}");
+		// 링크는 실제 공고 상세(/seeker/jobs/{id})이며 프로모션 공고를 광고 대상으로 삼는다
+		expect(links).toContain("/seeker/jobs/");
+		expect(links).toContain("isPromoted");
 	});
 
 	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {
@@ -44,8 +61,9 @@ describe("visual job marketplace components", () => {
 
 		expect(source).toContain("VisualJobExposureSections");
 		expect(source).not.toContain("<JobList");
-		// 로그인 마켓플레이스도 공개 홈과 동일하게 80% 폭, 히어로 카피 제거
-		expect(source).toContain("max-w-[80%]");
+		// 로그인 마켓플레이스는 채용 전용 고정폭을 쓴다(SEEKER_CONTENT_WIDTH = min(92%,1120px))
+		expect(source).toContain("SEEKER_CONTENT_WIDTH");
+		expect(source).not.toContain("max-w-[80%]");
 		expect(source).not.toContain("조건에 맞는 안전한 자리를 찾아요");
 		// 검색은 헤더(SeekerAppShell)와 필터를 공유하고, 본문 검색은 모바일 전용
 		expect(source).toContain("useSeekerFilters");
@@ -62,6 +80,9 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain(
 			"headerSlot={isMarketplace ? <SeekerHeaderSearch />"
 		);
+		// 모든 seeker 페이지 헤더를 /seeker와 동일한 고정폭으로 통일한다(경로별 분기 없음)
+		expect(source).toContain("contentWidthClassName={SEEKER_CONTENT_MAX_W}");
+		expect(source).not.toContain("isJobArea");
 	});
 
 	it("wires the public marketplace to visual exposure sections", () => {
@@ -78,12 +99,44 @@ describe("visual job marketplace components", () => {
 		expect(source).not.toContain("밤비 안에서 먼저 대화해요");
 	});
 
-	it("uses 80% width for the employer page shell", () => {
+	it("aligns the employer page shell to the shared fixed content width", () => {
 		const source = readComponent("page-shell.tsx");
 
-		// 구인자 화면 본문도 헤더(80%)와 동일 폭으로 맞춘다
-		expect(source).toContain("max-w-[80%]");
+		// 구인자 본문도 채용(/seeker) 헤더와 동일한 고정폭(APP_CONTENT_WIDTH = min(92%,1120px))을 쓴다
+		expect(source).toContain("APP_CONTENT_WIDTH");
+		expect(source).not.toContain("max-w-[min(80%,72rem)]");
 		expect(source).not.toContain("max-w-6xl");
+	});
+
+	it("aligns the employer header to the shared fixed content width", () => {
+		const source = readComponent("../../app/employer/layout.tsx");
+
+		// 구인자 헤더 바를 채용(/seeker)과 동일한 고정폭으로 통일한다
+		expect(source).toContain("contentWidthClassName={APP_CONTENT_MAX_W}");
+	});
+
+	it("aligns seeker chat and profile content to the shared fixed width", () => {
+		const chatList = readComponent("screens/seeker-chat-list-responsive.tsx");
+		const chatRoom = readComponent("screens/seeker-chat-room-responsive.tsx");
+		const contactReveal = readComponent("screens/contact-reveal.tsx");
+		const seeker = readComponent("screens/seeker.tsx");
+
+		// 채팅 목록·상세·연락처 공개·내 정보 본문을 헤더와 동일한 고정폭으로 맞춘다
+		for (const source of [chatList, chatRoom, contactReveal, seeker]) {
+			expect(source).toContain("SEEKER_CONTENT_WIDTH");
+		}
+		// 개별 하드코딩 폭은 제거됐다(공유 상수로 대체)
+		expect(chatList).not.toContain("max-w-[860px]");
+		expect(chatList).not.toContain("max-w-[760px]");
+		expect(chatRoom).not.toContain("md:max-w-[80%]");
+		expect(contactReveal).not.toContain("md:max-w-[80%]");
+	});
+
+	it("aligns the moderator header to the shared fixed content width", () => {
+		const source = readComponent("../../app/moderator/layout.tsx");
+
+		// 운영자 헤더 바도 채용(/seeker)과 동일한 고정폭으로 통일한다(콘솔 본문 폭은 그대로)
+		expect(source).toContain("contentWidthClassName={APP_CONTENT_MAX_W}");
 	});
 
 	it("defines employer listing preview with cover fallback and preview copy", () => {

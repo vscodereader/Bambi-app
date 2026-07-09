@@ -23,6 +23,7 @@ import {
 	Clock,
 	Eye,
 	type LucideIcon,
+	Megaphone,
 	Settings,
 	Trash2,
 	TriangleAlert,
@@ -143,6 +144,12 @@ const quickLinks: {
 		href: "/employer/promotions" as Route,
 		icon: Zap,
 		label: "프로모션 관리",
+	},
+	{
+		description: "유료 광고 상품을 확인해요",
+		href: "/employer/ad-guide" as Route,
+		icon: Megaphone,
+		label: "광고 상품 안내",
 	},
 	{
 		description: "조회·지원 지표를 확인해요",

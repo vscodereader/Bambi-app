@@ -15,7 +15,7 @@ import {
 } from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
 	ALL_OPTION,
 	applyDiscoveryAxis,
@@ -49,6 +49,8 @@ const formatReviewValue = ({
 
 interface MarketplaceFilterSidebarProps {
 	filters: MarketplaceFilters;
+	// 사이드바 하단(sticky 컬럼 안)에 덧붙일 슬롯 — 광고 배너 등.
+	footer?: ReactNode;
 	onChange: FilterChange;
 }
 
@@ -185,6 +187,7 @@ export function MarketplaceFilterControls({
 
 export function MarketplaceFilterSidebar({
 	filters,
+	footer,
 	onChange,
 }: MarketplaceFilterSidebarProps) {
 	return (
@@ -199,6 +202,7 @@ export function MarketplaceFilterSidebar({
 					</div>
 					<MarketplaceFilterControls filters={filters} onChange={onChange} />
 				</Card>
+				{footer}
 			</div>
 		</aside>
 	);
