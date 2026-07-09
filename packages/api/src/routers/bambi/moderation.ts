@@ -13,7 +13,7 @@ import {
 	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -94,6 +94,11 @@ const setJobPostStatusInput = z.object({
 const setJobPostPaymentInput = z.object({
 	jobPostId: z.string().uuid(),
 	paymentStatus: z.enum(["unpaid", "paid"]),
+});
+
+const listJobsForPaymentInput = z.object({
+	onlyUnpaid: z.boolean().default(false),
+	limit: z.number().int().min(1).max(100).default(50),
 });
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -559,6 +564,43 @@ export const moderationRouter = {
 			}
 
 			return updated;
+		}),
+
+	// 결제 처리가 의미있는 공고 목록(초안 제외: pending_review·published).
+	// 인증 업체 공고는 검수 큐 없이 자동 published라 여기서 결제를 처리한다.
+	listJobsForPayment: protectedProcedure
+		.input(listJobsForPaymentInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			const conditions = [
+				inArray(jobPost.status, ["pending_review", "published"]),
+			];
+
+			if (input.onlyUnpaid) {
+				conditions.push(eq(jobPost.paymentStatus, "unpaid"));
+			}
+
+			return await db
+				.select({
+					id: jobPost.id,
+					title: jobPost.title,
+					status: jobPost.status,
+					exposureType: jobPost.exposureType,
+					paymentStatus: jobPost.paymentStatus,
+					exposureDurationDays: jobPost.exposureDurationDays,
+					exposureEndsAt: jobPost.exposureEndsAt,
+					organizationDisplayName: employerOrganizationProfile.displayName,
+					createdAt: jobPost.createdAt,
+				})
+				.from(jobPost)
+				.innerJoin(
+					employerOrganizationProfile,
+					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+				)
+				.where(and(...conditions))
+				.orderBy(desc(jobPost.createdAt))
+				.limit(input.limit);
 		}),
 
 	bulkSetJobPostStatus: protectedProcedure

@@ -11,6 +11,7 @@ const MODERATOR_NAV_ITEMS = [
 	{ href: "/moderator/users", label: "사용자" },
 	{ href: "/moderator/employers", label: "업소 승인" },
 	{ href: "/moderator/ad-products", label: "광고 상품" },
+	{ href: "/moderator/payments", label: "결제 관리" },
 	{ href: "/seeker", label: "채용정보" },
 ] as const;
 
