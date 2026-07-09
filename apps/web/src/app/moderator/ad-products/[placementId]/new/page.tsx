@@ -1,11 +1,9 @@
 "use client";
 
-import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AdProductForm } from "@/components/bambi/ad-product-form";
-import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { orpc } from "@/utils/orpc";
 
 export default function NewAdProductPage() {
@@ -22,12 +20,7 @@ export default function NewAdProductPage() {
 	);
 
 	return (
-		<div
-			className={cn(
-				"mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6",
-				APP_CONTENT_WIDTH
-			)}
-		>
+		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<h1 className="m-0 font-extrabold text-2xl">광고 상품 추가</h1>
 			<AdProductForm
 				onSubmit={(draft) =>
@@ -37,7 +30,7 @@ export default function NewAdProductPage() {
 						tagline: draft.tagline || undefined,
 						benefits: draft.benefits,
 						priceOptions: draft.priceOptions,
-						previewTemplate: draft.previewTemplate,
+						previewImageUrl: draft.previewImageUrl,
 					})
 				}
 				pending={create.isPending}

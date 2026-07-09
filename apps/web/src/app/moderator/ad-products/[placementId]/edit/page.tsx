@@ -1,13 +1,11 @@
 "use client";
 
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
-import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AdPlacementForm } from "@/components/bambi/ad-placement-form";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { orpc } from "@/utils/orpc";
 
 export default function EditAdPlacementPage() {
@@ -33,12 +31,7 @@ export default function EditAdPlacementPage() {
 	);
 
 	return (
-		<div
-			className={cn(
-				"mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6",
-				APP_CONTENT_WIDTH
-			)}
-		>
+		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<h1 className="m-0 font-extrabold text-2xl">노출 위치 수정</h1>
 			{catalogQuery.isLoading ? (
 				<div className="flex flex-col gap-4">

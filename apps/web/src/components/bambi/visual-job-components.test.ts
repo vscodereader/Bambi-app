@@ -193,21 +193,23 @@ describe("visual job marketplace components", () => {
 	it("lays out the ad guide as a reference-style placement table with a preview", () => {
 		const source = readComponent("screens/employer-ad-guide.tsx");
 
-		// 광고위치 열은 위치 미리보기가 담당한다
-		expect(source).toContain("AdPlacementPreview");
-		expect(source).toContain("template={placement.previewTemplate}");
-		// previewTemplate === "none"이면 미리보기를 생략한다
-		expect(source).toContain('placement.previewTemplate !== "none"');
-		// 표 컬럼 라벨(광고위치·서비스내용·비용·신청)
-		expect(source).toContain("광고위치");
-		expect(source).toContain("서비스내용");
+		// 광고 위치 열은 운영자가 올린 미리보기 이미지가 담당한다
+		expect(source).toContain("previewImageUrl");
+		expect(source).toContain("src={product.previewImageUrl}");
+		// previewImageUrl이 없으면 "미리보기 없음"을 표시한다
+		expect(source).toContain("미리보기 없음");
+		// 표 컬럼 라벨(광고 위치·서비스 내용·비용·신청)
+		expect(source).toContain("광고 위치");
+		expect(source).toContain("서비스 내용");
 		expect(source).toContain("비용");
 		expect(source).toContain("신청");
 		// 비용은 기간별 가격 강조 표기
 		expect(source).toContain("formatAdPrice(option.amount)");
 		expect(source).toContain("formatAdDuration(option.days)");
-		// 데스크톱은 3열 그리드 행으로 전환
-		expect(source).toContain("md:grid-cols-[1fr_auto_auto]");
+		// 데스크톱은 그리드 행으로 전환
+		expect(source).toContain(
+			"md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto_auto]"
+		);
 		// 신청 버튼은 기존 공고 등록 링크(/employer/new)를 유지
 		expect(source).toContain('const APPLY_HREF = "/employer/new"');
 	});

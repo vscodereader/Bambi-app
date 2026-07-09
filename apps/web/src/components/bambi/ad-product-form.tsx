@@ -3,18 +3,10 @@
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@bambi-app/ui/components/select";
+import { X } from "lucide-react";
+import Image from "next/image";
 import { useRef, useState } from "react";
-import {
-	PREVIEW_TEMPLATE_OPTIONS,
-	type PreviewTemplate,
-} from "@/components/bambi/ad-placement-preview";
+import { toast } from "sonner";
 
 export interface PriceOption {
 	amount: number;
@@ -24,7 +16,7 @@ export interface PriceOption {
 export interface AdProductDraft {
 	benefits: string[];
 	name: string;
-	previewTemplate: PreviewTemplate;
+	previewImageUrl: string | null;
 	priceOptions: PriceOption[];
 	tagline: string;
 }
@@ -36,6 +28,8 @@ interface BenefitField {
 interface PriceOptionField extends PriceOption {
 	id: number;
 }
+
+const MAX_PREVIEW_IMAGE_BYTES = 1_500_000;
 
 export function AdProductForm({
 	initialValue,
@@ -64,8 +58,8 @@ export function AdProductForm({
 			: [{ amount: 0, days: 30 }]
 		).map((o) => ({ id: makeId(), ...o }))
 	);
-	const [previewTemplate, setPreviewTemplate] = useState<PreviewTemplate>(
-		initialValue?.previewTemplate ?? "none"
+	const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(
+		initialValue?.previewImageUrl ?? null
 	);
 
 	const setPrice = (id: number, patch: Partial<PriceOption>) =>
@@ -79,6 +73,20 @@ export function AdProductForm({
 			items.map((item) => (item.id === id ? { ...item, value } : item))
 		);
 
+	const handlePreviewImageChange = (file: File) => {
+		if (file.size > MAX_PREVIEW_IMAGE_BYTES) {
+			toast.error("이미지 용량은 1.5MB 이하만 업로드할 수 있습니다.");
+			return;
+		}
+		const reader = new FileReader();
+		reader.onload = () => {
+			if (typeof reader.result === "string") {
+				setPreviewImageUrl(reader.result);
+			}
+		};
+		reader.readAsDataURL(file);
+	};
+
 	const submit = () =>
 		onSubmit({
 			name: name.trim(),
@@ -89,7 +97,7 @@ export function AdProductForm({
 			priceOptions: priceOptions
 				.filter((option) => option.days > 0)
 				.map(({ amount, days }) => ({ amount, days })),
-			previewTemplate,
+			previewImageUrl,
 		});
 
 	return (
@@ -191,22 +199,45 @@ export function AdProductForm({
 			</div>
 
 			<div className="flex flex-col gap-1.5">
-				<Label>게시 위치 미리보기</Label>
-				<Select
-					onValueChange={(v) => setPreviewTemplate(v as PreviewTemplate)}
-					value={previewTemplate}
-				>
-					<SelectTrigger>
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						{PREVIEW_TEMPLATE_OPTIONS.map((option) => (
-							<SelectItem key={option.value} value={option.value}>
-								{option.label}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
+				<Label htmlFor="p-preview-image">게시 위치 미리보기</Label>
+				{previewImageUrl ? (
+					<div className="flex flex-col gap-2">
+						<div className="relative flex max-h-48 items-center justify-center overflow-hidden rounded-lg border border-border p-2">
+							<Image
+								alt="게시 위치 미리보기"
+								className="max-h-44 w-auto object-contain"
+								height={176}
+								src={previewImageUrl}
+								unoptimized
+								width={320}
+							/>
+						</div>
+						<Button
+							onClick={() => setPreviewImageUrl(null)}
+							size="sm"
+							variant="ghost"
+						>
+							<X data-icon="inline-start" />
+							이미지 제거
+						</Button>
+					</div>
+				) : (
+					<div className="flex min-h-16 items-center justify-center rounded-lg border border-border border-dashed bg-muted/30 p-3 text-muted-foreground text-xs">
+						미리보기 없음
+					</div>
+				)}
+				<Input
+					accept="image/*"
+					id="p-preview-image"
+					onChange={(e) => {
+						const file = e.target.files?.[0];
+						if (file) {
+							handlePreviewImageChange(file);
+						}
+						e.target.value = "";
+					}}
+					type="file"
+				/>
 			</div>
 
 			<Button disabled={pending || name.trim().length === 0} onClick={submit}>
