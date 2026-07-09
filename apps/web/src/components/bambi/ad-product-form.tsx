@@ -123,7 +123,7 @@ export function AdProductForm({
 						<Input
 							className="w-24"
 							onChange={(e) =>
-								setPrice(option.id, { days: Number(e.target.value) })
+								setPrice(option.id, { days: Number(e.target.value) || 0 })
 							}
 							type="number"
 							value={option.days}
@@ -132,7 +132,7 @@ export function AdProductForm({
 						<Input
 							className="w-40"
 							onChange={(e) =>
-								setPrice(option.id, { amount: Number(e.target.value) })
+								setPrice(option.id, { amount: Number(e.target.value) || 0 })
 							}
 							type="number"
 							value={option.amount}

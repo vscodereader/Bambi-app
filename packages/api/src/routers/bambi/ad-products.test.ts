@@ -300,4 +300,41 @@ describe("adProducts product mutations", () => {
 			await cleanupCatalogFixture(fixture);
 		}
 	});
+
+	it("reorderProducts only touches products in the given placement", async () => {
+		const fixture = await createCatalogFixture();
+		try {
+			const [other] = await db
+				.insert(adProduct)
+				.values({
+					placementId: fixture.inactivePlacementId,
+					name: "다른 위치 상품",
+					benefits: [],
+					priceOptions: [{ amount: 1000, days: 7 }],
+					sortOrder: 5,
+				})
+				.returning();
+			if (!other) {
+				throw new Error("reorder fixture insert failed");
+			}
+
+			const reorder = createProcedureClient(adProductsRouter.reorderProducts, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "reorderProducts"],
+			});
+			// activePlacementId로 스코프하면 다른 위치 상품(other)의 sortOrder는 변하지 않아야 한다
+			await reorder({
+				placementId: fixture.activePlacementId,
+				ids: [other.id],
+			});
+
+			const [after] = await db
+				.select({ sortOrder: adProduct.sortOrder })
+				.from(adProduct)
+				.where(eq(adProduct.id, other.id));
+			expect(after?.sortOrder).toBe(5);
+		} finally {
+			await cleanupCatalogFixture(fixture);
+		}
+	});
 });

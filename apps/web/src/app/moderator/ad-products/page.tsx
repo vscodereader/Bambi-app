@@ -193,7 +193,7 @@ export default function ModeratorAdProductsPage() {
 								</div>
 								<div className="flex flex-wrap gap-2 text-muted-foreground text-sm">
 									{product.priceOptions.map((option) => (
-										<span key={`${product.id}-${option.days}`}>
+										<span key={`${product.id}-${option.days}-${option.amount}`}>
 											{formatAdDuration(option.days)} ·{" "}
 											{formatAdPrice(option.amount)}
 										</span>

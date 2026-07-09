@@ -71,7 +71,7 @@ function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
 								{product.priceOptions.map((option) => (
 									<span
 										className="rounded-lg bg-secondary px-3 py-1.5 font-bold text-sm"
-										key={`${product.id}-${option.days}`}
+										key={`${product.id}-${option.days}-${option.amount}`}
 									>
 										{formatAdDuration(option.days)} ·{" "}
 										{formatAdPrice(option.amount)}
