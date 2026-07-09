@@ -92,6 +92,13 @@
       "when": 1783580946171,
       "tag": "0012_lazy_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783582721638,
+      "tag": "0013_free_thunderbird",
+      "breakpoints": true
     }
   ]
 }
