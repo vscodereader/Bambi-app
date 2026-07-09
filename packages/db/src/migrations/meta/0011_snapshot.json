@@ -1,6 +1,6 @@
 {
-  "id": "3c40c6d2-5728-4db1-aa52-e10439e29a5a",
-  "prevId": "b8d5a164-f93a-4a52-a323-99db8493e6dc",
+  "id": "8f5f80ce-82fb-4bee-88bb-341a5dfc22df",
+  "prevId": "d423024b-8afd-4e0c-a7b1-7c0ea4d79abd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1191,6 +1191,19 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
+        },
+        "birth_date": {
+          "name": "birth_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_advertiser": {
+          "name": "is_advertiser",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "display_name": {
           "name": "display_name",

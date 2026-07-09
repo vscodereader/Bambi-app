@@ -17,7 +17,9 @@ import { and, eq, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
+import { hasActiveAdvertiserCampaign } from "../../services/bambi-advertiser";
 import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
+import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import {
 	getJobPostingScopes,
 	ORGANIZATION_WIDE_POSTING_ROLES,
@@ -33,11 +35,24 @@ import {
 
 const profileInput = z.object({
 	displayName: z.string().min(1).max(80).optional(),
+	gender: z.enum(["male", "female"]).optional(),
 	phoneNumber: z.string().min(3).max(30).optional(),
 });
 
-const profileUpdateInput = profileInput.extend({
+const profileUpdateInput = profileInput.omit({ gender: true }).extend({
 	role: z.enum(["job_seeker", "employer", "admin"]).optional(),
+});
+
+// 목(mock) 휴대폰 본인인증 입력. 실제 인증 API가 없어 번호를 그대로 받아 인증 완료로
+// 저장한다. gender는 커뮤니티 게이팅용 불변값이라 아직 없을 때만 채운다(성인인증 목 폼과
+// 동일 규격). 실인증 도입 시 verifyMyPhoneMock 핸들러와 함께 교체한다.
+const mockPhoneVerificationInput = z.object({
+	phoneNumber: z.string().min(3).max(30),
+	gender: z.enum(["male", "female"]).optional(),
+	birthDate: z
+		.string()
+		.regex(/^\d{8}$/, "생년월일은 8자리(YYYYMMDD)여야 합니다.")
+		.optional(),
 });
 
 const organizationProfileInput = z.object({
@@ -124,11 +139,13 @@ const requireEmployerBambiProfile = async (userId: string) => {
 
 const createBambiProfile = async ({
 	displayName,
+	gender,
 	phoneNumber,
 	role,
 	userId,
 }: {
 	displayName?: string;
+	gender?: "male" | "female";
 	phoneNumber?: string;
 	role: BambiProfileRole;
 	userId: string;
@@ -148,6 +165,7 @@ const createBambiProfile = async ({
 			role,
 			displayName,
 			phoneNumber,
+			gender,
 		})
 		.returning();
 
@@ -162,6 +180,17 @@ export const onboardingRouter = {
 			.from(bambiProfile)
 			.where(eq(bambiProfile.userId, userId))
 			.limit(1);
+
+		const now = new Date();
+		const isAdvertiser = profile
+			? await hasActiveAdvertiserCampaign({ now, userId })
+			: false;
+		const community = resolveCommunityAccess({
+			gender: profile?.gender ?? null,
+			isAdvertiser,
+			role: profile?.role ?? "job_seeker",
+			status: profile?.status ?? "active",
+		});
 
 		const organizationProfiles = await db
 			.select({
@@ -256,6 +285,7 @@ export const onboardingRouter = {
 
 		return {
 			bambiProfile: profile ?? null,
+			community,
 			employerOrganizationProfiles: organizationProfiles,
 			// teamMember 기준 팀에 더해 owner/admin 조직 전체 팀까지 포함해야
 			// owner가 본인이 멤버가 아닌 팀으로 낸 공고도 팀명 라벨을 조회할 수 있다.
@@ -339,6 +369,39 @@ export const onboardingRouter = {
 				.set({
 					displayName: input.displayName,
 					phoneNumber: input.phoneNumber,
+				})
+				.where(eq(bambiProfile.userId, userId))
+				.returning();
+
+			return updatedProfile;
+		}),
+
+	// 목 휴대폰 본인인증 — 실제 인증 API가 없어 입력받은 번호를 그대로 저장하고 인증 완료로
+	// 표시한다. gender는 커뮤니티 게이팅용 불변값이라 아직 없을 때만 채운다. 실인증 도입 시
+	// 이 핸들러를 실제 인증 결과 저장으로 교체한다.
+	verifyMyPhoneMock: protectedProcedure
+		.input(mockPhoneVerificationInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			const [existingProfile] = await db
+				.select({ gender: bambiProfile.gender })
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, userId))
+				.limit(1);
+
+			if (!existingProfile) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "프로필을 찾을 수 없습니다.",
+				});
+			}
+
+			const [updatedProfile] = await db
+				.update(bambiProfile)
+				.set({
+					phoneNumber: input.phoneNumber,
+					isPhoneVerified: true,
+					gender: existingProfile.gender ?? input.gender,
+					birthDate: input.birthDate,
 				})
 				.where(eq(bambiProfile.userId, userId))
 				.returning();

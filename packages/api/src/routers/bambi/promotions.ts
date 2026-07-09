@@ -12,6 +12,7 @@ import { and, desc, eq, inArray, or, type SQL } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
+import { syncAdvertiserFlagForOrganization } from "../../services/bambi-advertiser";
 import {
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
@@ -246,7 +247,10 @@ export const promotionsRouter = {
 	activateForManualPayment: protectedProcedure
 		.input(campaignIdInput)
 		.handler(async ({ context, input }) => {
-			await getCampaignForAccess(input.campaignId, context.session);
+			const { campaign } = await getCampaignForAccess(
+				input.campaignId,
+				context.session
+			);
 			const now = new Date();
 			const [updated] = await db
 				.update(jobPromotionCampaign)
@@ -258,21 +262,35 @@ export const promotionsRouter = {
 				.where(eq(jobPromotionCampaign.id, input.campaignId))
 				.returning();
 
+			await syncAdvertiserFlagForOrganization({
+				now,
+				organizationId: campaign.organizationId,
+			});
+
 			return updated;
 		}),
 
 	pause: protectedProcedure
 		.input(campaignIdInput)
 		.handler(async ({ context, input }) => {
-			await getCampaignForAccess(input.campaignId, context.session);
+			const { campaign } = await getCampaignForAccess(
+				input.campaignId,
+				context.session
+			);
+			const now = new Date();
 			const [updated] = await db
 				.update(jobPromotionCampaign)
 				.set({
 					status: "paused",
-					updatedAt: new Date(),
+					updatedAt: now,
 				})
 				.where(eq(jobPromotionCampaign.id, input.campaignId))
 				.returning();
+
+			await syncAdvertiserFlagForOrganization({
+				now,
+				organizationId: campaign.organizationId,
+			});
 
 			return updated;
 		}),

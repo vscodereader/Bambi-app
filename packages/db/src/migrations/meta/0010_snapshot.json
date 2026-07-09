@@ -1,6 +1,6 @@
 {
-  "id": "dafb1cdb-a8bf-4811-8b39-3b8e90114028",
-  "prevId": "c1aca551-31f5-4aa4-a1c8-c0d3fc6c88b8",
+  "id": "d423024b-8afd-4e0c-a7b1-7c0ea4d79abd",
+  "prevId": "3c40c6d2-5728-4db1-aa52-e10439e29a5a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -901,222 +901,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.ad_placement": {
-      "name": "ad_placement",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "ad_placement_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'listing'"
-        },
-        "preview_template": {
-          "name": "preview_template",
-          "type": "ad_preview_template",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'none'"
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "ad_placement_active_sort_idx": {
-          "name": "ad_placement_active_sort_idx",
-          "columns": [
-            {
-              "expression": "is_active",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "sort_order",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.ad_product": {
-      "name": "ad_product",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "placement_id": {
-          "name": "placement_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tagline": {
-          "name": "tagline",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "benefits": {
-          "name": "benefits",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "price_options": {
-          "name": "price_options",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "ad_product_placement_idx": {
-          "name": "ad_product_placement_idx",
-          "columns": [
-            {
-              "expression": "placement_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "is_active",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "sort_order",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "ad_product_placement_id_ad_placement_id_fk": {
-          "name": "ad_product_placement_id_ad_placement_id_fk",
-          "tableFrom": "ad_product",
-          "tableTo": "ad_placement",
-          "columnsFrom": ["placement_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.admin_moderation_action": {
       "name": "admin_moderation_action",
       "schema": "",
@@ -1400,6 +1184,20 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "gender": {
+          "name": "gender",
+          "type": "bambi_gender",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_advertiser": {
+          "name": "is_advertiser",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "display_name": {
           "name": "display_name",
@@ -3870,23 +3668,10 @@
       "schema": "public",
       "values": ["active", "warned", "suspended"]
     },
-    "public.ad_placement_kind": {
-      "name": "ad_placement_kind",
+    "public.bambi_gender": {
+      "name": "bambi_gender",
       "schema": "public",
-      "values": ["listing", "banner"]
-    },
-    "public.ad_preview_template": {
-      "name": "ad_preview_template",
-      "schema": "public",
-      "values": [
-        "premium-top",
-        "special-list",
-        "urgent-list",
-        "recommended-list",
-        "side-vertical",
-        "side-horizontal",
-        "none"
-      ]
+      "values": ["male", "female"]
     },
     "public.bambi_user_role": {
       "name": "bambi_user_role",

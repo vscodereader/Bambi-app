@@ -1,11 +1,11 @@
 import { EmptyState } from "@/components/bambi/empty-state";
-import { RequireAuth } from "@/components/bambi/require-auth";
+import { RequireCommunityAccess } from "@/components/bambi/require-community-access";
 
-// 수다방 — 커뮤니티 자리(네비게이션 배선용 placeholder). 게시판 UI·백엔드는 후속 작업.
-// 로그인 사용자 전용: 비로그인 진입 시 RequireAuth가 /login으로 리다이렉트한다.
+// 수다방 — 여성회원·광고 중 업소만 입장. 게시판 UI·백엔드는 후속 작업.
+// 비로그인은 RequireAuth가, 미자격자는 안내 화면이 막는다.
 export default function SeekerCommunityPage() {
 	return (
-		<RequireAuth>
+		<RequireCommunityAccess>
 			<div className="mx-auto flex w-full max-w-full flex-1 flex-col px-5 py-6 md:max-w-[min(80%,72rem)] md:px-6">
 				<EmptyState
 					className="flex-1"
@@ -13,6 +13,6 @@ export default function SeekerCommunityPage() {
 					title="수다방 준비 중"
 				/>
 			</div>
-		</RequireAuth>
+		</RequireCommunityAccess>
 	);
 }

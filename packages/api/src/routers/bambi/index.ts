@@ -1,5 +1,6 @@
 import { adProductsRouter } from "./ad-products";
 import { analyticsRouter } from "./analytics";
+import { blocksRouter } from "./blocks";
 import { chatsRouter } from "./chats";
 import { jobsRouter } from "./jobs";
 import { moderationRouter } from "./moderation";
@@ -12,6 +13,7 @@ import { teamsRouter } from "./teams";
 export const bambiRouter = {
 	adProducts: adProductsRouter,
 	analytics: analyticsRouter,
+	blocks: blocksRouter,
 	chats: chatsRouter,
 	jobs: jobsRouter,
 	moderation: moderationRouter,
