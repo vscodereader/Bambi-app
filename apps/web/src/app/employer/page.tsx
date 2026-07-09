@@ -25,7 +25,6 @@ import {
 	type LucideIcon,
 	Megaphone,
 	Settings,
-	Trash2,
 	TriangleAlert,
 	Zap,
 } from "lucide-react";
@@ -33,40 +32,24 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { DataTable } from "@/components/bambi/data-table";
 import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
 import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
+import {
+	type EmployerJob,
+	getEmployerJobsColumns,
+} from "@/components/bambi/employer-jobs-columns";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { authClient } from "@/lib/auth-client";
-import { formatDateTime, formatNullable, formatPay } from "@/lib/bambi-format";
-import { jobStatusLabels, verificationStatusLabels } from "@/lib/bambi-options";
+import { formatNullable } from "@/lib/bambi-format";
+import { verificationStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
-
-const getJobStatusLabel = (status: string): string =>
-	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
 
 const getVerificationStatusLabel = (status: string): string =>
 	verificationStatusLabels[status as keyof typeof verificationStatusLabels] ??
 	status;
-
-const getJobStatusTone = (
-	status: string
-): React.ComponentProps<typeof StatusBadge>["tone"] => {
-	if (status === "published") {
-		return "good";
-	}
-
-	if (status === "pending_review") {
-		return "warning";
-	}
-
-	if (status === "rejected") {
-		return "danger";
-	}
-
-	return "default";
-};
 
 const getVerificationStatusTone = (
 	status: string
@@ -114,24 +97,6 @@ const getJobStatusCounts = (jobPosts: { status: string }[]) => ({
 	published: jobPosts.filter((job) => job.status === "published").length,
 	rejected: jobPosts.filter((job) => job.status === "rejected").length,
 });
-
-const getJobLeadingStatus = (
-	status: string
-): { icon: LucideIcon; tile: string } => {
-	if (status === "published") {
-		return { icon: Check, tile: "bg-green-50 text-green-600" };
-	}
-
-	if (status === "rejected") {
-		return { icon: CircleAlert, tile: "bg-red-50 text-red-600" };
-	}
-
-	if (status === "pending_review") {
-		return { icon: Clock, tile: "bg-amber-50 text-amber-500" };
-	}
-
-	return { icon: Clock, tile: "bg-secondary text-muted-foreground" };
-};
 
 const quickLinks: {
 	description: string;
@@ -245,6 +210,110 @@ function QuickLinkTile({
 	);
 }
 
+function OwnedJobsPanel({
+	deletingJobId,
+	isDeleting,
+	isError,
+	isLoading,
+	jobs,
+	onCancelDelete,
+	onConfirmDelete,
+	onRequestDelete,
+	onRetry,
+	verified,
+}: {
+	deletingJobId: null | string;
+	isDeleting: boolean;
+	isError: boolean;
+	isLoading: boolean;
+	jobs: EmployerJob[];
+	onCancelDelete: () => void;
+	onConfirmDelete: (jobId: string) => void;
+	onRequestDelete: (jobId: string) => void;
+	onRetry: () => void;
+	verified: boolean;
+}) {
+	if (isLoading) {
+		return (
+			<div className="flex flex-col gap-3">
+				<Skeleton className="h-20 w-full rounded-lg" />
+				<Skeleton className="h-20 w-full rounded-lg" />
+				<Skeleton className="h-20 w-full rounded-lg" />
+			</div>
+		);
+	}
+
+	if (isError) {
+		return (
+			<EmptyState
+				action={
+					<Button onClick={onRetry} type="button">
+						다시 시도
+					</Button>
+				}
+				description="공고 목록을 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요."
+				title="공고를 불러올 수 없습니다"
+			/>
+		);
+	}
+
+	if (jobs.length === 0) {
+		return (
+			<EmptyState
+				action={<NewJobButton verified={verified} />}
+				description="조직 프로필을 선택해 첫 공고를 등록해 보세요."
+				title="등록한 공고가 없습니다"
+			/>
+		);
+	}
+
+	const jobToDelete = jobs.find((job) => job.id === deletingJobId) ?? null;
+
+	return (
+		<div className="flex flex-col gap-3">
+			{jobToDelete ? (
+				<Alert variant="destructive">
+					<TriangleAlert />
+					<AlertTitle>“{jobToDelete.title}” 공고를 삭제할까요?</AlertTitle>
+					<AlertDescription>
+						삭제한 공고와 연결된 프로모션·성과 기록은 되돌릴 수 없어요.
+					</AlertDescription>
+					<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+						<Button
+							disabled={isDeleting}
+							onClick={onCancelDelete}
+							type="button"
+							variant="outline"
+						>
+							취소
+						</Button>
+						<Button
+							disabled={isDeleting}
+							onClick={() => onConfirmDelete(jobToDelete.id)}
+							type="button"
+							variant="destructive"
+						>
+							{isDeleting ? "삭제 중…" : "삭제"}
+						</Button>
+					</div>
+				</Alert>
+			) : null}
+			<Card aria-labelledby="owned-jobs">
+				<CardContent className="overflow-x-auto p-0">
+					<DataTable
+						columns={getEmployerJobsColumns({
+							deletingJobId,
+							onRequestDelete,
+						})}
+						data={jobs}
+						emptyMessage="등록한 공고가 없습니다."
+					/>
+				</CardContent>
+			</Card>
+		</div>
+	);
+}
+
 export default function EmployerPage() {
 	const session = authClient.useSession();
 	const verified = useEmployerVerified();
@@ -299,17 +368,6 @@ export default function EmployerPage() {
 			(organizationProfile) =>
 				organizationProfile.organizationId === organizationId
 		)?.displayName ?? organizationId;
-
-	const getTeamLabel = (teamId: null | string): string => {
-		if (!teamId) {
-			return "전체 조직";
-		}
-
-		return (
-			teamProfiles.find((teamProfile) => teamProfile.teamId === teamId)
-				?.displayName ?? teamId
-		);
-	};
 
 	if (session.isPending || mineQuery.isLoading) {
 		return (
@@ -401,154 +459,23 @@ export default function EmployerPage() {
 		);
 	}
 
-	let jobsContent: React.ReactNode;
-
-	if (jobsQuery.isLoading) {
-		jobsContent = (
-			<div className="flex flex-col gap-3">
-				<Skeleton className="h-20 w-full rounded-lg" />
-				<Skeleton className="h-20 w-full rounded-lg" />
-				<Skeleton className="h-20 w-full rounded-lg" />
-			</div>
-		);
-	} else if (jobsQuery.isError) {
-		jobsContent = (
-			<EmptyState
-				action={
-					<Button onClick={() => jobsQuery.refetch()} type="button">
-						다시 시도
-					</Button>
-				}
-				description="공고 목록을 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요."
-				title="공고를 불러올 수 없습니다"
-			/>
-		);
-	} else if (jobs.length === 0) {
-		jobsContent = (
-			<EmptyState
-				action={<NewJobButton verified={verified} />}
-				description="조직 프로필을 선택해 첫 공고를 등록해 보세요."
-				title="등록한 공고가 없습니다"
-			/>
-		);
-	} else {
-		jobsContent = (
-			<Card aria-labelledby="owned-jobs">
-				<CardContent className="divide-y p-0">
-					{jobs.map((job) => {
-						const leading = getJobLeadingStatus(job.status);
-						const LeadingIcon = leading.icon;
-						const isConfirmingDelete = deletingJobId === job.id;
-						const isDeletingJob =
-							deleteMutation.isPending &&
-							deleteMutation.variables?.id === job.id;
-
-						return (
-							<div
-								className={cn(
-									"flex flex-col gap-3 border-l-2 border-l-transparent p-4",
-									job.status === "rejected" && "border-l-red-500"
-								)}
-								key={job.id}
-							>
-								<div className="flex items-start gap-3">
-									<span
-										className={cn(
-											"mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md",
-											leading.tile
-										)}
-									>
-										<LeadingIcon className="size-5" />
-									</span>
-									<div className="flex min-w-0 flex-1 flex-col gap-2">
-										<div className="flex min-w-0 flex-col gap-1">
-											<h3 className="min-w-0 break-words font-medium text-base">
-												{job.title}
-											</h3>
-											<p className="break-words text-foreground text-sm">
-												{job.industryCategory} · {job.region} ·{" "}
-												{formatPay(job.payAmount, job.payUnit)}
-											</p>
-										</div>
-										<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-											<span className="flex items-center gap-1.5">
-												<span className="text-muted-foreground">공고</span>
-												<StatusBadge tone={getJobStatusTone(job.status)}>
-													{getJobStatusLabel(job.status)}
-												</StatusBadge>
-											</span>
-											<span className="flex items-center gap-1.5">
-												<span className="text-muted-foreground">사업자</span>
-												<StatusBadge
-													tone={getVerificationStatusTone(
-														job.employerVerificationStatus
-													)}
-												>
-													{getVerificationStatusLabel(
-														job.employerVerificationStatus
-													)}
-												</StatusBadge>
-											</span>
-										</div>
-										<p className="break-words text-muted-foreground text-xs">
-											{getOrganizationLabel(job.organizationId)} ·{" "}
-											{getTeamLabel(job.teamId)} · 수정{" "}
-											{formatDateTime(job.updatedAt)}
-										</p>
-									</div>
-									<div className="flex shrink-0 flex-col gap-2">
-										<Link
-											className={cn(buttonVariants({ variant: "outline" }))}
-											href={`/employer/jobs/${job.id}/edit` as Route}
-										>
-											수정
-										</Link>
-										<Button
-											disabled={isConfirmingDelete}
-											onClick={() => setDeletingJobId(job.id)}
-											type="button"
-											variant="destructive"
-										>
-											<Trash2 data-icon="inline-start" />
-											삭제
-										</Button>
-									</div>
-								</div>
-								{isConfirmingDelete ? (
-									<Alert variant="destructive">
-										<TriangleAlert />
-										<AlertTitle>이 공고를 삭제할까요?</AlertTitle>
-										<AlertDescription>
-											삭제한 공고와 연결된 프로모션·성과 기록은 되돌릴 수
-											없어요.
-										</AlertDescription>
-										<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-											<Button
-												disabled={isDeletingJob}
-												onClick={() => setDeletingJobId(null)}
-												type="button"
-												variant="outline"
-											>
-												취소
-											</Button>
-											<Button
-												disabled={isDeletingJob}
-												onClick={() => deleteMutation.mutate({ id: job.id })}
-												type="button"
-												variant="destructive"
-											>
-												{isDeletingJob ? "삭제 중…" : "삭제"}
-											</Button>
-										</div>
-									</Alert>
-								) : null}
-							</div>
-						);
-					})}
-				</CardContent>
-			</Card>
-		);
-	}
+	const jobsContent = (
+		<OwnedJobsPanel
+			deletingJobId={deletingJobId}
+			isDeleting={
+				deleteMutation.isPending &&
+				deleteMutation.variables?.id === deletingJobId
+			}
+			isError={jobsQuery.isError}
+			isLoading={jobsQuery.isLoading}
+			jobs={jobs}
+			onCancelDelete={() => setDeletingJobId(null)}
+			onConfirmDelete={(id) => deleteMutation.mutate({ id })}
+			onRequestDelete={setDeletingJobId}
+			onRetry={() => jobsQuery.refetch()}
+			verified={verified}
+		/>
+	);
 
 	return (
 		<PageShell
