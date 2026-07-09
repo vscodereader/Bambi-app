@@ -91,6 +91,13 @@ const setJobPostStatusInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
+const setJobPostPaymentInput = z.object({
+	jobPostId: z.string().uuid(),
+	paymentStatus: z.enum(["unpaid", "paid"]),
+});
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 const setUserStatusInput = z.object({
 	targetUserId: z.string().min(1),
 	status: accountStatusSchema,
@@ -358,6 +365,10 @@ export const moderationRouter = {
 					status: jobPost.status,
 					riskFlags: jobPost.riskFlags,
 					rejectionReason: jobPost.rejectionReason,
+					exposureType: jobPost.exposureType,
+					paymentStatus: jobPost.paymentStatus,
+					exposureDurationDays: jobPost.exposureDurationDays,
+					exposureEndsAt: jobPost.exposureEndsAt,
 					organizationDisplayName: employerOrganizationProfile.displayName,
 					createdAt: jobPost.createdAt,
 					updatedAt: jobPost.updatedAt,
@@ -512,6 +523,42 @@ export const moderationRouter = {
 
 				return updated;
 			});
+		}),
+
+	setJobPostPayment: protectedProcedure
+		.input(setJobPostPaymentInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			const [existing] = await db
+				.select({ exposureDurationDays: jobPost.exposureDurationDays })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const exposureEndsAt =
+				input.paymentStatus === "paid" && existing.exposureDurationDays !== null
+					? new Date(Date.now() + existing.exposureDurationDays * MS_PER_DAY)
+					: null;
+
+			const [updated] = await db
+				.update(jobPost)
+				.set({
+					exposureEndsAt,
+					paymentStatus: input.paymentStatus,
+				})
+				.where(eq(jobPost.id, input.jobPostId))
+				.returning();
+
+			if (!updated) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			return updated;
 		}),
 
 	bulkSetJobPostStatus: protectedProcedure
