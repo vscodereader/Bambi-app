@@ -232,40 +232,32 @@ function RejectedInvitationActions({
 	);
 }
 
-function MemberRowActions({
-	actionPending,
-	canManage,
+function ActiveMemberActions({
 	disabled,
-	member,
 	memberLabel,
-	onDelete,
-	onResubmit,
+	onRemove,
 	onRoleChange,
+	removePending,
+	role,
 	roleChangePending,
 }: {
-	actionPending: boolean;
-	canManage: boolean;
 	disabled: boolean;
-	member: { kind: string; role: string; status: string };
 	memberLabel: string;
-	onDelete: () => void;
-	onResubmit: () => void;
+	onRemove: () => void;
 	onRoleChange: (role: OrganizationRole) => void;
+	removePending: boolean;
+	role: string;
 	roleChangePending: boolean;
 }) {
-	if (!canManage) {
-		return (
-			<span className="text-muted-foreground text-xs">권한 변경 불가</span>
-		);
-	}
+	const [confirming, setConfirming] = useState(false);
 
-	if (member.kind === "active" && member.role !== "owner") {
-		return (
+	return (
+		<div className="flex flex-col gap-1.5">
 			<Select
 				disabled={disabled || roleChangePending}
 				items={roleLabels}
 				onValueChange={(value) => onRoleChange(value as OrganizationRole)}
-				value={member.role}
+				value={role}
 			>
 				<SelectTrigger
 					aria-label={`${memberLabel} 권한 변경`}
@@ -279,6 +271,85 @@ function MemberRowActions({
 					<SelectItem value="staff">스태프</SelectItem>
 				</SelectContent>
 			</Select>
+			{confirming ? (
+				<div className="flex gap-2">
+					<Button
+						disabled={removePending}
+						onClick={() => setConfirming(false)}
+						size="sm"
+						type="button"
+						variant="outline"
+					>
+						취소
+					</Button>
+					<Button
+						disabled={removePending}
+						onClick={onRemove}
+						size="sm"
+						type="button"
+						variant="destructive"
+					>
+						내보내기
+					</Button>
+				</div>
+			) : (
+				<Button
+					className="text-destructive"
+					disabled={disabled || removePending}
+					onClick={() => setConfirming(true)}
+					size="sm"
+					type="button"
+					variant="ghost"
+				>
+					내보내기
+				</Button>
+			)}
+		</div>
+	);
+}
+
+function MemberRowActions({
+	actionPending,
+	canManage,
+	disabled,
+	member,
+	memberLabel,
+	onDelete,
+	onRemove,
+	onResubmit,
+	onRoleChange,
+	removePending,
+	roleChangePending,
+}: {
+	actionPending: boolean;
+	canManage: boolean;
+	disabled: boolean;
+	member: { kind: string; role: string; status: string };
+	memberLabel: string;
+	onDelete: () => void;
+	onRemove: () => void;
+	onResubmit: () => void;
+	onRoleChange: (role: OrganizationRole) => void;
+	removePending: boolean;
+	roleChangePending: boolean;
+}) {
+	if (!canManage) {
+		return (
+			<span className="text-muted-foreground text-xs">권한 변경 불가</span>
+		);
+	}
+
+	if (member.kind === "active" && member.role !== "owner") {
+		return (
+			<ActiveMemberActions
+				disabled={disabled}
+				memberLabel={memberLabel}
+				onRemove={onRemove}
+				onRoleChange={onRoleChange}
+				removePending={removePending}
+				role={member.role}
+				roleChangePending={roleChangePending}
+			/>
 		);
 	}
 
@@ -380,6 +451,17 @@ export function TeamMemberList({
 			},
 			onSuccess: async () => {
 				toast.success("반려된 초대를 삭제했습니다.");
+				await invalidateMembers();
+			},
+		})
+	);
+	const removeMemberMutation = useMutation(
+		orpc.bambi.teams.removeMember.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "멤버를 내보내지 못했습니다.");
+			},
+			onSuccess: async () => {
+				toast.success("멤버를 내보냈습니다.");
 				await invalidateMembers();
 			},
 		})
@@ -602,6 +684,12 @@ export function TeamMemberList({
 										organizationId: organization.organizationId,
 									})
 								}
+								onRemove={() =>
+									removeMemberMutation.mutate({
+										memberId: member.id,
+										organizationId: organization.organizationId,
+									})
+								}
 								onResubmit={() =>
 									resubmitMutation.mutate({
 										invitationId: member.id,
@@ -615,6 +703,7 @@ export function TeamMemberList({
 										role: value,
 									})
 								}
+								removePending={removeMemberMutation.isPending}
 								roleChangePending={setRoleMutation.isPending}
 							/>
 						</div>
