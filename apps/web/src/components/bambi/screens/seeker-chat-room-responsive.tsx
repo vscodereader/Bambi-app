@@ -1,5 +1,7 @@
 "use client";
 
+import { Button as UiButton } from "@bambi-app/ui/components/button";
+import { Input } from "@bambi-app/ui/components/input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	type ReactNode,
@@ -23,6 +25,7 @@ import {
 	type ChatAttachmentPreviewItem,
 } from "../chat-attachment-preview";
 import { Badge, Button, Card } from "../ds";
+import { FieldLabel } from "../form-message";
 import {
 	ClockIcon,
 	DollarCircle,
@@ -461,6 +464,54 @@ function ChatCounterpartName({ name }: { name: string | null }) {
 	);
 }
 
+// 면접 일정 제안 폼은 구인자에게만 노출된다. 구직자는 제안을 받기만 한다.
+function InterviewProposalForm({
+	interviewAt,
+	isPending,
+	locationNote,
+	onLocationNoteChange,
+	onScheduledAtChange,
+	onSubmit,
+}: {
+	interviewAt: string;
+	isPending: boolean;
+	locationNote: string;
+	onLocationNoteChange: (value: string) => void;
+	onScheduledAtChange: (value: string) => void;
+	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+	return (
+		<form className="mt-4 grid gap-3" onSubmit={onSubmit}>
+			<div className="flex flex-col gap-2">
+				<FieldLabel htmlFor="interview-at">면접 일시</FieldLabel>
+				<Input
+					id="interview-at"
+					min={new Date().toISOString().slice(0, 16)}
+					onChange={(event) => onScheduledAtChange(event.target.value)}
+					required
+					type="datetime-local"
+					value={interviewAt}
+				/>
+			</div>
+			<div className="flex flex-col gap-2">
+				<FieldLabel htmlFor="location-note" optional>
+					장소 메모
+				</FieldLabel>
+				<Input
+					id="location-note"
+					maxLength={300}
+					onChange={(event) => onLocationNoteChange(event.target.value)}
+					placeholder="예: 역삼역 3번 출구 근처"
+					value={locationNote}
+				/>
+			</div>
+			<UiButton className="w-full" disabled={isPending} size="lg" type="submit">
+				{isPending ? "제안 중" : "면접 일정 제안"}
+			</UiButton>
+		</form>
+	);
+}
+
 export function SeekerChatRoomResponsive({
 	onBack,
 	onReveal,
@@ -764,6 +815,7 @@ export function SeekerChatRoomResponsive({
 
 	const { counterpartName, currentUserId, jobPost, messages, room, schedules } =
 		roomQuery.data;
+	const isJobSeeker = currentUserId === room.jobSeekerUserId;
 	const isAttachmentSubmitting =
 		createAttachmentUploadMutation.isPending ||
 		sendMediaMessageMutation.isPending;
@@ -780,7 +832,7 @@ export function SeekerChatRoomResponsive({
 		(item) => item.chatRoomId === room.id
 	);
 	const canCreateReview =
-		currentUserId === room.jobSeekerUserId &&
+		isJobSeeker &&
 		Boolean(reviewEligibleSchedule) &&
 		!existingReview &&
 		!room.isBlocked &&
@@ -1020,47 +1072,16 @@ export function SeekerChatRoomResponsive({
 					</Card>
 					<Card className="rounded-lg" pad="lg" tone="outline">
 						<h2 className="m-0 font-extrabold text-lg">면접 일정</h2>
-						<form className="mt-4 grid gap-2" onSubmit={handleInterviewSubmit}>
-							<label
-								className="font-bold text-muted-foreground text-xs"
-								htmlFor="interview-at"
-							>
-								면접 일시
-							</label>
-							<input
-								className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
-								id="interview-at"
-								min={new Date().toISOString().slice(0, 16)}
-								onChange={(event) => setInterviewAt(event.target.value)}
-								type="datetime-local"
-								value={interviewAt}
+						{isJobSeeker ? null : (
+							<InterviewProposalForm
+								interviewAt={interviewAt}
+								isPending={proposeInterviewMutation.isPending}
+								locationNote={locationNote}
+								onLocationNoteChange={setLocationNote}
+								onScheduledAtChange={setInterviewAt}
+								onSubmit={handleInterviewSubmit}
 							/>
-							<label
-								className="font-bold text-muted-foreground text-xs"
-								htmlFor="location-note"
-							>
-								장소 메모
-							</label>
-							<input
-								className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
-								id="location-note"
-								maxLength={300}
-								onChange={(event) => setLocationNote(event.target.value)}
-								placeholder="예: 역삼역 3번 출구 근처"
-								value={locationNote}
-							/>
-							<Button
-								block
-								className="shadow-none"
-								disabled={proposeInterviewMutation.isPending}
-								size="md"
-								type="submit"
-							>
-								{proposeInterviewMutation.isPending
-									? "제안 중"
-									: "면접 일정 제안"}
-							</Button>
-						</form>
+						)}
 						{scheduleErrorMessage ? (
 							<p className="mt-3 mb-0 font-semibold text-red-600 text-xs">
 								{scheduleErrorMessage}
@@ -1103,6 +1124,7 @@ export function SeekerChatRoomResponsive({
 										schedule.proposedByUserId !== currentUserId ? (
 											<div className="mt-3 grid grid-cols-2 gap-2">
 												<Button
+													className="shadow-none"
 													disabled={setInterviewStatusMutation.isPending}
 													onClick={() =>
 														setScheduleStatus(schedule.id, "confirmed")
@@ -1154,7 +1176,7 @@ export function SeekerChatRoomResponsive({
 						)}
 						<Button
 							block
-							className="mt-4"
+							className="mt-4 shadow-none"
 							disabled={!confirmedSchedule}
 							onClick={onReveal}
 							size="md"
@@ -1169,10 +1191,7 @@ export function SeekerChatRoomResponsive({
 						existingReview={existingReview}
 						isLoading={reviewListQuery.isLoading}
 						isSubmitting={createReviewMutation.isPending}
-						isVisible={
-							currentUserId === room.jobSeekerUserId &&
-							Boolean(reviewEligibleSchedule)
-						}
+						isVisible={isJobSeeker && Boolean(reviewEligibleSchedule)}
 						onSubmit={handleReviewSubmit}
 						successMessage={reviewSuccessMessage}
 					/>

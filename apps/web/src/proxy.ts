@@ -4,7 +4,10 @@ import { GUEST_COOKIE_NAME } from "@/lib/bambi/guest";
 import { resolveGate } from "@/lib/bambi/resolve-gate";
 
 export const config = {
-	matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+	// 마지막 세그먼트에 확장자가 있는 경로(icon.svg, og-image.png, favicon.ico,
+	// robots.txt, sitemap.xml 등 정적·메타데이터 파일)는 프록시를 아예 거치지 않는다.
+	// 게이트 리다이렉트 대상은 페이지 경로뿐이다.
+	matcher: ["/((?!_next/static|_next/image|.*\\.[^/]+$).*)"],
 };
 
 export function proxy(request: NextRequest) {

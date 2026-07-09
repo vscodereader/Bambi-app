@@ -23,6 +23,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
+import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
 import { EmployerListingPreview } from "@/components/bambi/employer-listing-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
@@ -242,6 +244,7 @@ export default function NewEmployerJobPage() {
 function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const router = useRouter();
 	const utils = useQueryClient();
+	const verified = useEmployerVerified();
 	const [form, setForm] = useState(emptyJobForm);
 	const [descriptionBlocks, setDescriptionBlocks] = useState<
 		JobDescriptionBlockFormValue[]
@@ -432,6 +435,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					onSubmit={handleSubmit}
 					ref={formRef}
 				>
+					<EmployerGateBanner action="공고를 등록" />
 					<FormError message={formError} />
 					<section
 						aria-labelledby="new-affiliation"
@@ -835,7 +839,8 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 							<Button
 								disabled={
 									createMutation.isPending ||
-									createMediaUploadMutation.isPending
+									createMediaUploadMutation.isPending ||
+									!verified
 								}
 								type="submit"
 							>

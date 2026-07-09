@@ -1,8 +1,8 @@
 import type { Route } from "next";
 import type { ReactNode } from "react";
+import { EmployerApprovalProvider } from "@/components/bambi/employer-approval-context";
 import { EmployerNav } from "@/components/bambi/persona-nav";
 import { ResponsiveAppShell } from "@/components/bambi/responsive-shell";
-import { EmployerPending } from "@/components/bambi/screens/employer-pending";
 import { resolveEmployerAccess } from "@/lib/bambi/require-role";
 
 const EMPLOYER_NAV_ITEMS = [
@@ -19,18 +19,15 @@ export default async function EmployerLayout({
 }: {
 	children: ReactNode;
 }) {
-	const access = await resolveEmployerAccess();
-	// 미승인 구인자는 구인 관리 기능을 쓸 수 없다 — 헤더 nav·하단 탭을 숨기고
-	// 로고와 "내 정보"만 남겨(gated) 승인 대기 화면만 보게 한다.
-	const gated = !access.verified;
+	const { approvalStatus } = await resolveEmployerAccess();
+	// 미승인이어도 화면과 nav는 그대로 노출한다. 각 페이지가 approval 상태로
+	// 조작 요소를 비활성화하고 안내 배너를 띄운다.
 	return (
-		<ResponsiveAppShell
-			gated={gated}
-			navItems={gated ? [] : EMPLOYER_NAV_ITEMS}
-			variant="employer"
-		>
-			<EmployerNav gated={gated}>
-				{access.verified ? children : <EmployerPending />}
+		<ResponsiveAppShell navItems={EMPLOYER_NAV_ITEMS} variant="employer">
+			<EmployerNav>
+				<EmployerApprovalProvider value={approvalStatus}>
+					{children}
+				</EmployerApprovalProvider>
 			</EmployerNav>
 		</ResponsiveAppShell>
 	);

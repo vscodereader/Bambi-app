@@ -296,6 +296,62 @@ describe("bambi chats router media", () => {
 	});
 });
 
+describe("bambi chats router interview proposals", () => {
+	const futureScheduledAt = () =>
+		new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+	it("rejects interview proposals from the job seeker", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const proposeInterview = createProcedureClient(
+				chatsRouter.proposeInterview,
+				{
+					context: createContextForUser(fixture.jobSeekerUserId),
+					path: ["bambi", "chats", "proposeInterview"],
+				}
+			);
+
+			await expectOrpcCode(
+				proposeInterview({
+					chatRoomId: fixture.chatRoomId,
+					scheduledAt: futureScheduledAt(),
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("allows the employer to propose an interview", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const proposeInterview = createProcedureClient(
+				chatsRouter.proposeInterview,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "chats", "proposeInterview"],
+				}
+			);
+
+			const schedule = await proposeInterview({
+				chatRoomId: fixture.chatRoomId,
+				scheduledAt: futureScheduledAt(),
+			});
+
+			expect(schedule).toMatchObject({
+				chatRoomId: fixture.chatRoomId,
+				proposedByUserId: fixture.employerUserId,
+				status: "proposed",
+			});
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
 describe("bambi chats router analytics", () => {
 	it("records a chat_start event when a seeker starts a chat from a job post", async () => {
 		const fixture = await createChatFixture();

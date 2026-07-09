@@ -15,7 +15,6 @@ import { verificationStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
 interface OrganizationProfileFormValue {
-	businessRegistrationNumber: null | string;
 	canManageOrganization: boolean;
 	displayName: string;
 	organizationId: string;
@@ -25,6 +24,7 @@ interface OrganizationProfileFormValue {
 }
 
 interface OrgProfileFormProps {
+	disabled?: boolean;
 	organization: OrganizationProfileFormValue;
 }
 
@@ -52,16 +52,17 @@ const roleLabels: Record<string, string> = {
 	staff: "스태프",
 };
 
-export function OrgProfileForm({ organization }: OrgProfileFormProps) {
+export function OrgProfileForm({
+	disabled = false,
+	organization,
+}: OrgProfileFormProps) {
 	const queryClient = useQueryClient();
 	const [displayName, setDisplayName] = useState(organization.displayName);
-	const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState(
-		organization.businessRegistrationNumber ?? ""
-	);
 	const [formError, setFormError] = useState<null | string>(null);
 	const displayNameError =
 		displayName.trim().length === 0 ? "조직 표시 이름을 입력해 주세요." : "";
-	const canSubmit = organization.canManageOrganization && !displayNameError;
+	const canEdit = organization.canManageOrganization && !disabled;
+	const canSubmit = canEdit && !displayNameError;
 	const updateMutation = useMutation(
 		orpc.bambi.organizations.updateProfile.mutationOptions({
 			onError: (error) => {
@@ -92,8 +93,6 @@ export function OrgProfileForm({ organization }: OrgProfileFormProps) {
 		}
 
 		updateMutation.mutate({
-			businessRegistrationNumber:
-				businessRegistrationNumber.trim() || undefined,
 			displayName: displayName.trim(),
 			organizationId: organization.organizationId,
 		});
@@ -131,37 +130,21 @@ export function OrgProfileForm({ organization }: OrgProfileFormProps) {
 						</Button>
 					</div>
 
-					<div className="grid gap-3 sm:grid-cols-2">
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor={`${organization.organizationId}-display-name`}>
-								조직 표시 이름
-							</Label>
-							<Input
-								aria-invalid={Boolean(displayNameError)}
-								disabled={!organization.canManageOrganization}
-								id={`${organization.organizationId}-display-name`}
-								onChange={(event) => setDisplayName(event.target.value)}
-								value={displayName}
-							/>
-							<FieldError
-								id={`${organization.organizationId}-display-name-error`}
-								message={displayNameError}
-							/>
-						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor={`${organization.organizationId}-business-number`}>
-								사업자 등록 번호
-							</Label>
-							<Input
-								disabled={!organization.canManageOrganization}
-								id={`${organization.organizationId}-business-number`}
-								onChange={(event) =>
-									setBusinessRegistrationNumber(event.target.value)
-								}
-								placeholder="000-00-00000"
-								value={businessRegistrationNumber}
-							/>
-						</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor={`${organization.organizationId}-display-name`}>
+							조직 표시 이름
+						</Label>
+						<Input
+							aria-invalid={Boolean(displayNameError)}
+							disabled={!canEdit}
+							id={`${organization.organizationId}-display-name`}
+							onChange={(event) => setDisplayName(event.target.value)}
+							value={displayName}
+						/>
+						<FieldError
+							id={`${organization.organizationId}-display-name-error`}
+							message={displayNameError}
+						/>
 					</div>
 
 					{organization.verificationNote ? (

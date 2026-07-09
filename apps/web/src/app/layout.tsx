@@ -29,15 +29,14 @@ export const metadata: Metadata = {
 		title: "밤비 - 유흥·접객 | 룸알바·구인구직 사이트",
 		description:
 			"밤비는 유흥·접객 구인구직 플랫폼입니다. 룸알바, 밤알바, 노래방, 라운지 등 고소득 채용 정보를 1:1 채팅으로 빠르고 안전하게 연결합니다.",
-		// TODO: 실제 OG 이미지 PNG(1200x630) 전달받으면 아래 주석 해제. 현재 public/og-image.png는 임시 placeholder.
-		// images: [
-		// 	{
-		// 		url: "/og-image.png",
-		// 		width: 1200,
-		// 		height: 630,
-		// 		alt: "밤비 - 유흥·접객 룸알바·구인구직 사이트",
-		// 	},
-		// ],
+		images: [
+			{
+				url: "/og-image.png",
+				width: 1200,
+				height: 630,
+				alt: "밤비 - 유흥·접객 룸알바·구인구직 사이트",
+			},
+		],
 	},
 };
 

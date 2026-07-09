@@ -106,12 +106,11 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	);
 	const [mode, setMode] = useState<AuthMode>(initialMode);
 	const [name, setName] = useState("");
-	const [email, setEmail] = useState("seeker@bambi.dev");
-	const [password, setPassword] = useState("Bambi1234!");
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [signupRole, setSignupRole] = useState<SignupRole>("job_seeker");
-	const [orgName, setOrgName] = useState("");
 	const isSignUp = mode === "sign-up";
 	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
 	const subtitle = isSignUp
@@ -122,12 +121,9 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	const finishSignup = async () => {
 		const displayName = name.trim();
 		if (signupRole === "employer") {
-			await client.bambi.onboarding.registerEmployer({
-				displayName,
-				organizationName: orgName.trim() || displayName,
-			});
+			await client.bambi.onboarding.createEmployerProfile({ displayName });
 			queryClient.invalidateQueries();
-			// 미검증 구인자는 /employer 레이아웃이 승인 대기 화면을 인라인 렌더한다.
+			// 조직은 업체정보 제출 시 생성된다. /employer 대시보드가 업체정보 입력을 유도한다.
 			router.push("/employer" as Route);
 			return;
 		}
@@ -183,7 +179,13 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 					return;
 				}
 				queryClient.invalidateQueries();
-				router.push("/" as Route);
+				// 로그아웃(push("/"))이 "/"→/welcome 리다이렉트 결과를 Router Cache에
+				// 남긴다. router.push("/")는 이 stale 엔트리를 재생할 수 있고, 이를 비우는
+				// router.refresh()는 비동기·논블로킹이라 바로 뒤의 push()와 경쟁해 간헐적으로
+				// /welcome에 머문다(재로그인이 "간혹" 되고 "간혹" 안 되는 원인).
+				// 하드 내비게이션으로 Router Cache를 통째로 우회한다: 브라우저가 갓 설정된
+				// 세션 쿠키로 "/"를 새로 요청 → 미들웨어 통과 → 서버가 role 홈을 계산한다.
+				window.location.assign("/");
 			},
 		};
 
@@ -290,22 +292,12 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 							</div>
 						) : null}
 						{isSignUp && signupRole === "employer" ? (
-							<label className="grid gap-2" htmlFor="auth-org-name">
-								<span className="font-bold text-sm">업체명</span>
-								<Input
-									id="auth-org-name"
-									onChange={(event) => setOrgName(event.target.value)}
-									placeholder="예: 밤비 라운지"
-									value={orgName}
-								/>
-							</label>
-						) : null}
-						{isSignUp && signupRole === "employer" ? (
 							<p
 								className="m-0 rounded-lg border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm"
 								role="note"
 							>
-								가입 후 운영자 승인이 완료되어야 이용할 수 있어요.
+								가입 후 업체 정보를 입력하고 운영자 승인을 받으면 구인 기능을
+								이용할 수 있어요.
 							</p>
 						) : null}
 						<label className="grid gap-2" htmlFor="auth-email">
@@ -314,6 +306,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 								autoComplete="email"
 								id="auth-email"
 								onChange={(event) => setEmail(event.target.value)}
+								placeholder="이메일을 입력해주세요."
 								type="email"
 								value={email}
 							/>
@@ -337,6 +330,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 								autoComplete={isSignUp ? "new-password" : "current-password"}
 								id="auth-password"
 								onChange={(event) => setPassword(event.target.value)}
+								placeholder="비밀번호를 입력해주세요."
 								type="password"
 								value={password}
 							/>

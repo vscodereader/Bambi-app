@@ -14,7 +14,7 @@ export function Providers({ children }: ProvidersProps) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<AuthClientProvider>{children}</AuthClientProvider>
-			<Toaster position="top-center" richColors />
+			<Toaster position="top-center" richColors theme="light" />
 		</QueryClientProvider>
 	);
 }
