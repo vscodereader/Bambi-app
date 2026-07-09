@@ -1238,10 +1238,24 @@ const ensureAuthUser = async (devUser: DevUser): Promise<string> => {
 	return authUser.id;
 };
 
+// 구직자(개인회원)에 성별을 세팅해 gender 컬럼이 실제로 채워지도록 한다. 업소·관리자
+// 계정은 개인 성별 개념이 없어 null로 둔다. 여성 구직자는 후속 수다방(#2) 입장 테스트에 쓰인다.
+const seederGenderByKey: Partial<Record<DevUserKey, "female" | "male">> = {
+	seeker: "female",
+	seekerB: "male",
+	seekerC: "female",
+	seekerD: "female",
+	seekerE: "male",
+	seekerF: "female",
+	seekerG: "male",
+	seekerH: "female",
+};
+
 const ensureBambiProfile = async (
 	devUser: DevUser,
 	userId: string
 ): Promise<void> => {
+	const gender = seederGenderByKey[devUser.key] ?? null;
 	await db
 		.insert(bambiProfile)
 		.values({
@@ -1250,6 +1264,7 @@ const ensureBambiProfile = async (
 			status: "active",
 			isPhoneVerified: true,
 			phoneNumber: devUser.phoneNumber,
+			gender,
 			displayName: devUser.displayName,
 		})
 		.onConflictDoUpdate({
@@ -1259,6 +1274,7 @@ const ensureBambiProfile = async (
 				status: "active",
 				isPhoneVerified: true,
 				phoneNumber: devUser.phoneNumber,
+				gender,
 				displayName: devUser.displayName,
 				updatedAt: new Date(),
 			},

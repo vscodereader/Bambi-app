@@ -24,16 +24,22 @@ describe("resolveGate", () => {
 	it("allows guest on seeker list root", () => {
 		expect(resolveGate({ pathname: "/seeker", ...guest }).type).toBe("next");
 	});
-	it("sends guest from job detail to signup", () => {
+	it("sends guest from job detail to signup with guestBlocked signal", () => {
 		expect(resolveGate({ pathname: "/seeker/jobs/abc", ...guest })).toEqual({
 			type: "redirect",
-			to: "/welcome?signup",
+			to: "/welcome?signup&guestBlocked=1",
 		});
 	});
-	it("sends guest from employer area to signup", () => {
+	it("sends guest from community to signup with guestBlocked signal", () => {
+		expect(resolveGate({ pathname: "/seeker/community", ...guest })).toEqual({
+			type: "redirect",
+			to: "/welcome?signup&guestBlocked=1",
+		});
+	});
+	it("sends guest from employer area to signup with guestBlocked signal", () => {
 		expect(resolveGate({ pathname: "/employer", ...guest })).toEqual({
 			type: "redirect",
-			to: "/welcome?signup",
+			to: "/welcome?signup&guestBlocked=1",
 		});
 	});
 	it("sends guest at root to seeker", () => {

@@ -4,6 +4,7 @@ import { Button as UiButton } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import {
 	type ReactNode,
 	useCallback,
@@ -13,6 +14,7 @@ import {
 	useState,
 } from "react";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { toast } from "sonner";
 import {
 	connectBambiChatSocket,
 	emitBambiChatTypingStarted,
@@ -466,6 +468,83 @@ function ChatCounterpartName({ name }: { name: string | null }) {
 	);
 }
 
+// 차단 대상 userId 유도: 구직자 관점이면 상대는 구인자, 아니면 구직자.
+function resolveBlockedUserId(
+	isJobSeeker: boolean,
+	room: { employerUserId: string; jobSeekerUserId: string }
+): string {
+	if (isJobSeeker) {
+		return room.employerUserId;
+	}
+	return room.jobSeekerUserId;
+}
+
+// "차단하기" 트리거 버튼. 안전 안내 헤딩과 같은 줄 우측에 배치한다.
+// 이미 차단됐거나 확인 단계가 열려 있으면 노출하지 않는다.
+function ChatBlockTrigger({
+	isBlocked,
+	isConfirmOpen,
+	onOpen,
+}: {
+	isBlocked: boolean;
+	isConfirmOpen: boolean;
+	onOpen: () => void;
+}) {
+	if (isBlocked || isConfirmOpen) {
+		return null;
+	}
+
+	return (
+		<Button onClick={onOpen} size="sm" variant="secondary">
+			차단하기
+		</Button>
+	);
+}
+
+// 차단 확인 패널. 실수 방지를 위해 "차단하기" → 인라인 확인 단계를 거친다.
+// 안전 안내 문구 아래에 전체 폭으로 펼쳐진다.
+function ChatBlockConfirm({
+	isConfirmOpen,
+	isPending,
+	onCancel,
+	onConfirm,
+}: {
+	isConfirmOpen: boolean;
+	isPending: boolean;
+	onCancel: () => void;
+	onConfirm: () => void;
+}) {
+	if (!isConfirmOpen) {
+		return null;
+	}
+
+	return (
+		<div className="mt-3 flex flex-col gap-2 border-coral-100 border-t pt-3">
+			<p className="m-0 font-bold text-coral-700 text-xs">
+				이 상대를 정말 차단할까요? 차단하면 서로 대화할 수 없어요.
+			</p>
+			<div className="flex gap-2">
+				<Button
+					disabled={isPending}
+					onClick={onCancel}
+					size="sm"
+					variant="secondary"
+				>
+					취소
+				</Button>
+				<Button
+					disabled={isPending}
+					onClick={onConfirm}
+					size="sm"
+					variant="danger"
+				>
+					{isPending ? "차단 중" : "차단"}
+				</Button>
+			</div>
+		</div>
+	);
+}
+
 // 면접 일정 제안 폼은 구인자에게만 노출된다. 구직자는 제안을 받기만 한다.
 function InterviewProposalForm({
 	interviewAt,
@@ -520,7 +599,9 @@ export function SeekerChatRoomResponsive({
 	roomId,
 }: SeekerChatRoomResponsiveProps) {
 	const queryClient = useQueryClient();
+	const router = useRouter();
 	const [message, setMessage] = useState("");
+	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
 	const [attachmentDraft, setAttachmentDraft] =
 		useState<AttachmentDraft | null>(null);
 	const [interviewAt, setInterviewAt] = useState("");
@@ -642,6 +723,17 @@ export function SeekerChatRoomResponsive({
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.reviews.listMine.queryKey(),
 				});
+			},
+		})
+	);
+	const blockMutation = useMutation(
+		orpc.bambi.blocks.blockUser.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "차단하지 못했어요.");
+			},
+			onSuccess: () => {
+				toast.success("상대를 차단했어요.");
+				router.push("/seeker/chats");
 			},
 		})
 	);
@@ -828,6 +920,7 @@ export function SeekerChatRoomResponsive({
 	const { counterpartName, currentUserId, jobPost, messages, room, schedules } =
 		roomQuery.data;
 	const isJobSeeker = currentUserId === room.jobSeekerUserId;
+	const blockedUserId = resolveBlockedUserId(isJobSeeker, room);
 	const isAttachmentSubmitting =
 		createAttachmentUploadMutation.isPending ||
 		sendMediaMessageMutation.isPending;
@@ -1030,15 +1123,30 @@ export function SeekerChatRoomResponsive({
 					</Badge>
 				</header>
 				<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
-					<div className="flex items-center gap-2 font-extrabold text-sm">
-						<span className="inline-flex size-4">
-							<ShieldIcon />
-						</span>
-						면접 확정 전 연락처 보호 중
+					<div className="flex items-center justify-between gap-3">
+						<div className="flex items-center gap-2 font-extrabold text-sm">
+							<span className="inline-flex size-4">
+								<ShieldIcon />
+							</span>
+							면접 확정 전 연락처 보호 중
+						</div>
+						<ChatBlockTrigger
+							isBlocked={room.isBlocked}
+							isConfirmOpen={isBlockConfirmOpen}
+							onOpen={() => setIsBlockConfirmOpen(true)}
+						/>
 					</div>
 					<p className="mt-1 mb-0 text-xs leading-relaxed">
 						외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요.
 					</p>
+					<ChatBlockConfirm
+						isConfirmOpen={isBlockConfirmOpen}
+						isPending={blockMutation.isPending}
+						onCancel={() => setIsBlockConfirmOpen(false)}
+						onConfirm={() =>
+							blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
+						}
+					/>
 				</div>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
 					<ChatMessageList

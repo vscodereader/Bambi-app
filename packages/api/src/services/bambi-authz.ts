@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	type accountStatus,
+	type bambiGender,
 	bambiProfile,
 	type bambiUserRole,
 	chatRoom,
@@ -18,8 +19,10 @@ export interface SessionLike {
 
 type BambiRole = (typeof bambiUserRole.enumValues)[number];
 type AccountStatus = (typeof accountStatus.enumValues)[number];
+type BambiGender = (typeof bambiGender.enumValues)[number];
 
 export interface BambiAccessProfile {
+	gender: BambiGender | null;
 	isPhoneVerified: boolean;
 	role: BambiRole;
 	status: AccountStatus;
@@ -57,6 +60,7 @@ export const getBambiAccessProfile = async (
 			role: bambiProfile.role,
 			status: bambiProfile.status,
 			isPhoneVerified: bambiProfile.isPhoneVerified,
+			gender: bambiProfile.gender,
 		})
 		.from(bambiProfile)
 		.where(eq(bambiProfile.userId, userId))

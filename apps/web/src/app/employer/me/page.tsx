@@ -353,6 +353,34 @@ export default function EmployerMePage() {
 
 			<Separator />
 
+			<section aria-labelledby="activities" className="flex flex-col gap-3">
+				<h2 className="font-semibold text-lg" id="activities">
+					내 활동
+				</h2>
+				<div className="flex flex-wrap gap-2">
+					<Link
+						className={buttonVariants({ variant: "outline" })}
+						href={"/seeker/me/reports" as Route}
+					>
+						내 신고 내역
+					</Link>
+					<Link
+						className={buttonVariants({ variant: "outline" })}
+						href={"/seeker/me/interviews" as Route}
+					>
+						예정된 면접
+					</Link>
+					<Link
+						className={buttonVariants({ variant: "outline" })}
+						href={"/seeker/me/blocks" as Route}
+					>
+						차단한 상대
+					</Link>
+				</div>
+			</section>
+
+			<Separator />
+
 			<section aria-labelledby="shortcuts" className="flex flex-col gap-3">
 				<h2 className="font-semibold text-lg" id="shortcuts">
 					설정 바로가기

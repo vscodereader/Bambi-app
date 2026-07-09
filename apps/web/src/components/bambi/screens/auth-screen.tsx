@@ -9,10 +9,15 @@ import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { clearGuestCookie } from "@/lib/bambi/guest";
+import {
+	type BambiGenderValue,
+	clearGuestCookie,
+	readAdultGenderFromCookieString,
+} from "@/lib/bambi/guest";
 import { client, queryClient } from "@/utils/orpc";
 import { Badge, Button, Card, Input, Logo } from "../ds";
-import { PhoneIcon, ShieldIcon } from "../icons";
+import { ShieldIcon } from "../icons";
+import { MockPhoneVerifyDialog } from "../mock-phone-verify-dialog";
 
 type AuthMode = "sign-in" | "sign-up";
 type SignupRole = "job_seeker" | "employer";
@@ -41,23 +46,9 @@ function Spinner() {
 	);
 }
 
-// 비회원(휴대폰 인증) 진입 — 게스트 쿠키를 세팅하고 공고 목록으로 이동한다.
-// 지금은 실제 인증 없이 버튼만으로 게스트 열람을 허용한다.
+// 비회원(휴대폰 인증) 진입 — 목 본인인증 다이얼로그로 이름·생년월일·휴대폰·성별을
+// 입력받아 인증 결과 쿠키를 세팅하고 공고 목록으로 이동한다.
 function GuestBrowseButton() {
-	const router = useRouter();
-	const [isEntering, setIsEntering] = useState(false);
-
-	const enterAsGuest = async () => {
-		setIsEntering(true);
-		try {
-			await fetch("/api/guest", { method: "POST" });
-			router.push("/seeker" as Route);
-			router.refresh();
-		} finally {
-			setIsEntering(false);
-		}
-	};
-
 	return (
 		<div className="mt-5 flex flex-col gap-3">
 			<div className="flex items-center gap-3">
@@ -65,17 +56,7 @@ function GuestBrowseButton() {
 				<span className="text-muted-foreground text-xs">또는</span>
 				<span className="h-px flex-1 bg-border" />
 			</div>
-			<Button
-				block
-				disabled={isEntering}
-				leftIcon={<PhoneIcon />}
-				onClick={() => {
-					enterAsGuest().catch(() => setIsEntering(false));
-				}}
-				variant="secondary"
-			>
-				{isEntering ? "입장 중" : "휴대폰 인증"}
-			</Button>
+			<MockPhoneVerifyDialog />
 			<p className="m-0 text-center text-muted-foreground text-xs">
 				비회원은 공고 목록만 볼 수 있어요. 상세 열람·채팅은 회원가입이 필요해요.
 			</p>
@@ -118,16 +99,22 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 		: "이메일과 비밀번호를 입력해 로그인하세요.";
 	const submitLabel = isSignUp ? "회원가입" : "로그인";
 
-	const finishSignup = async () => {
+	const finishSignup = async (gender: BambiGenderValue | null) => {
 		const displayName = name.trim();
 		if (signupRole === "employer") {
-			await client.bambi.onboarding.createEmployerProfile({ displayName });
+			await client.bambi.onboarding.createEmployerProfile({
+				displayName,
+				...(gender ? { gender } : {}),
+			});
 			queryClient.invalidateQueries();
 			// 조직은 업체정보 제출 시 생성된다. /employer 대시보드가 업체정보 입력을 유도한다.
 			router.push("/employer" as Route);
 			return;
 		}
-		await client.bambi.onboarding.createJobSeekerProfile({ displayName });
+		await client.bambi.onboarding.createJobSeekerProfile({
+			displayName,
+			...(gender ? { gender } : {}),
+		});
 		queryClient.invalidateQueries();
 		router.push("/seeker" as Route);
 	};
@@ -162,12 +149,17 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 				});
 			},
 			onSuccess: async () => {
+				// clearGuestCookie가 adultsex를 만료시키기 전에 성별을 읽어 둔다.
+				const gender =
+					typeof document === "undefined"
+						? null
+						: readAdultGenderFromCookieString(document.cookie);
 				// 실제 세션이 생겼으니 게스트 열람 권한(쿠키)을 회수한다. 남겨두면
 				// 로그아웃·세션 만료 후에도 게스트로 마켓을 볼 수 있게 된다. 게이트가
 				// 쿠키 없는 상태를 보도록 내비게이션 전에 삭제를 기다린다.
 				await clearGuestCookie();
 				if (isSignUp) {
-					finishSignup().catch((error: unknown) => {
+					finishSignup(gender).catch((error: unknown) => {
 						setNotice({
 							text:
 								error instanceof Error
