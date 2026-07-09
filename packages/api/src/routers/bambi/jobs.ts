@@ -97,6 +97,19 @@ const jobPostInput = z.object({
 	description: z.string().min(10).max(2000),
 	descriptionBlocks: z.array(jobDescriptionBlockInput).max(12).optional(),
 	interviewNotes: z.string().max(500).optional(),
+	exposureType: z
+		.enum([
+			"premium-banner",
+			"left-banner",
+			"right-banner",
+			"special",
+			"urgent",
+			"recommended",
+			"standard",
+		])
+		.default("standard"),
+	exposureDurationDays: z.number().int().min(1).max(365).nullish(),
+	paymentMethod: z.enum(["card", "bank_transfer"]).nullish(),
 	media: jobPostMediaSetInput,
 });
 
@@ -646,6 +659,10 @@ export const jobsRouter = {
 				organizationId: jobPost.organizationId,
 				teamId: jobPost.teamId,
 				createdByUserId: jobPost.createdByUserId,
+				exposureType: jobPost.exposureType,
+				paymentStatus: jobPost.paymentStatus,
+				exposureDurationDays: jobPost.exposureDurationDays,
+				exposureEndsAt: jobPost.exposureEndsAt,
 				employerVerificationStatus:
 					employerOrganizationProfile.verificationStatus,
 				createdAt: jobPost.createdAt,
@@ -767,6 +784,9 @@ export const jobsRouter = {
 						descriptionBlocks: preparedContent.descriptionBlocks,
 						status,
 						riskFlags: riskDetected ? ["risky_term"] : [],
+						exposureType: input.exposureType,
+						exposureDurationDays: input.exposureDurationDays ?? null,
+						paymentMethod: input.paymentMethod ?? null,
 						publishedAt: status === "published" ? now : null,
 					})
 					.returning();

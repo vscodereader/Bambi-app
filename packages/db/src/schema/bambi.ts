@@ -39,6 +39,26 @@ export const jobPostStatus = pgEnum("job_post_status", [
 	"rejected",
 ]);
 
+export const jobExposureType = pgEnum("job_exposure_type", [
+	"premium-banner",
+	"left-banner",
+	"right-banner",
+	"special",
+	"urgent",
+	"recommended",
+	"standard",
+]);
+
+export const jobPaymentMethod = pgEnum("job_payment_method", [
+	"card",
+	"bank_transfer",
+]);
+
+export const jobPaymentStatus = pgEnum("job_payment_status", [
+	"unpaid",
+	"paid",
+]);
+
 export const interviewStatus = pgEnum("interview_status", [
 	"proposed",
 	"confirmed",
@@ -234,6 +254,15 @@ export const jobPost = pgTable(
 		interviewNotes: text("interview_notes"),
 		rejectionReason: text("rejection_reason"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
+		exposureType: jobExposureType("exposure_type")
+			.default("standard")
+			.notNull(),
+		exposureDurationDays: integer("exposure_duration_days"),
+		paymentMethod: jobPaymentMethod("payment_method"),
+		paymentStatus: jobPaymentStatus("payment_status")
+			.default("unpaid")
+			.notNull(),
+		exposureEndsAt: timestamp("exposure_ends_at"),
 		publishedAt: timestamp("published_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
