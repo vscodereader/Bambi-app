@@ -37,6 +37,7 @@ export default function NewAdProductPage() {
 						tagline: draft.tagline || undefined,
 						benefits: draft.benefits,
 						priceOptions: draft.priceOptions,
+						previewTemplate: draft.previewTemplate,
 					})
 				}
 				pending={create.isPending}

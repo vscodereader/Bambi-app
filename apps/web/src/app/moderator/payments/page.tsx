@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { StatusBadge } from "@/components/bambi/status-badge";
+import { formatAdPrice } from "@/lib/bambi/ad-catalog";
 import {
 	EXPOSURE_TYPE_LABELS,
 	expiryLabel,
@@ -108,6 +109,19 @@ function getPaymentColumns({
 			cell: (job) => (
 				<StatusBadge>{EXPOSURE_TYPE_LABELS[job.exposureType]}</StatusBadge>
 			),
+		},
+		{
+			id: "exposureAmount",
+			header: "결제 금액",
+			sortValue: (job) => job.exposureAmount ?? 0,
+			cell: (job) =>
+				job.exposureAmount === null ? (
+					<span className="text-muted-foreground">무료</span>
+				) : (
+					<span className="whitespace-nowrap font-medium text-foreground">
+						{formatAdPrice(job.exposureAmount)}
+					</span>
+				),
 		},
 		{
 			id: "paymentStatus",

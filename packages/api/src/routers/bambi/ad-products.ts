@@ -23,7 +23,6 @@ const createPlacementInput = z.object({
 	name: z.string().min(1).max(120),
 	description: z.string().max(500).optional(),
 	kind: placementKindSchema.default("listing"),
-	previewTemplate: previewTemplateSchema.default("none"),
 	sortOrder: z.number().int().min(0).default(0),
 });
 
@@ -32,7 +31,6 @@ const updatePlacementInput = z.object({
 	name: z.string().min(1).max(120).optional(),
 	description: z.string().max(500).nullish(),
 	kind: placementKindSchema.optional(),
-	previewTemplate: previewTemplateSchema.optional(),
 	sortOrder: z.number().int().min(0).optional(),
 	isActive: z.boolean().optional(),
 });
@@ -48,6 +46,7 @@ const createProductInput = z.object({
 	tagline: z.string().max(200).optional(),
 	benefits: z.array(z.string().min(1)).default([]),
 	priceOptions: z.array(priceOptionSchema).min(1),
+	previewTemplate: previewTemplateSchema.default("none"),
 	sortOrder: z.number().int().min(0).default(0),
 });
 
@@ -57,6 +56,7 @@ const updateProductInput = z.object({
 	tagline: z.string().max(200).nullish(),
 	benefits: z.array(z.string().min(1)).optional(),
 	priceOptions: z.array(priceOptionSchema).min(1).optional(),
+	previewTemplate: previewTemplateSchema.optional(),
 	sortOrder: z.number().int().min(0).optional(),
 	isActive: z.boolean().optional(),
 });

@@ -22,15 +22,13 @@ import { orpc } from "@/utils/orpc";
 // 광고 상품 신청 = 공고 등록 화면으로 이동(밤비엔 별도 광고 결제 흐름이 없음).
 const APPLY_HREF = "/employer/new";
 
-// 레퍼런스형 표: 광고위치 · 서비스내용 · 비용 · 신청.
-// 데스크톱은 상품 1개당 3열 그리드 행(서비스내용/비용/신청)이고,
-// 광고위치 열은 위치 헤더의 미리보기가 대신한다. 모바일은 세로 스택.
+// 레퍼런스형 표: 광고 위치 · 서비스 내용 · 비용 및 기간 · 신청.
+// 상품 1개 = 표의 한 행. 데스크톱은 4열 그리드, 모바일은 세로 스택 카드.
+// px 대신 fr 비율로 열 너비를 잡아 반응형·토큰 규칙을 지킨다.
 const PRODUCT_ROW_GRID =
-	"md:grid md:grid-cols-[1fr_auto_auto] md:items-center md:gap-6";
+	"md:grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto_auto] md:items-start md:gap-6";
 
 function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
-	const hasPreview = placement.previewTemplate !== "none";
-
 	return (
 		<Card>
 			<CardContent className="flex flex-col gap-4">
@@ -50,24 +48,18 @@ function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
 					) : null}
 				</div>
 
-				{hasPreview ? (
-					<div className="flex flex-col gap-1.5">
-						<span className="text-muted-foreground text-xs">광고위치</span>
-						<AdPlacementPreview template={placement.previewTemplate} />
-					</div>
-				) : null}
-
 				<Separator />
 
-				{/* 데스크톱 컬럼 헤더(광고위치는 위 미리보기가 담당) */}
+				{/* 데스크톱 표 헤더 */}
 				<div
 					className={cn(
-						"hidden text-muted-foreground text-xs",
+						"hidden font-medium text-muted-foreground text-xs",
 						PRODUCT_ROW_GRID
 					)}
 				>
-					<span>서비스내용</span>
-					<span>비용</span>
+					<span>광고 위치</span>
+					<span>서비스 내용</span>
+					<span>비용 및 기간</span>
 					<span>신청</span>
 				</div>
 
@@ -80,7 +72,21 @@ function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
 							)}
 							key={product.id}
 						>
-							{/* 서비스내용 */}
+							{/* 광고 위치 */}
+							<div className="flex flex-col gap-1.5">
+								<span className="font-medium text-muted-foreground text-xs md:hidden">
+									광고 위치
+								</span>
+								{product.previewTemplate === "none" ? (
+									<div className="flex min-h-16 items-center justify-center rounded-lg border border-border border-dashed bg-muted/30 p-3 text-muted-foreground text-xs">
+										미리보기 없음
+									</div>
+								) : (
+									<AdPlacementPreview template={product.previewTemplate} />
+								)}
+							</div>
+
+							{/* 서비스 내용 */}
 							<div className="flex flex-col gap-1.5">
 								<span className="font-bold text-base">{product.name}</span>
 								{product.tagline ? (
@@ -105,8 +111,11 @@ function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
 								) : null}
 							</div>
 
-							{/* 비용 */}
+							{/* 비용 및 기간 */}
 							<div className="flex flex-col gap-1">
+								<span className="font-medium text-muted-foreground text-xs md:hidden">
+									비용 및 기간
+								</span>
 								{product.priceOptions.map((option) => (
 									<div
 										className="flex items-baseline gap-1"

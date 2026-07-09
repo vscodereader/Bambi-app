@@ -47,9 +47,6 @@ export const jobPaymentMethods = ["card", "bank_transfer"] as const;
 
 export type JobPaymentMethod = (typeof jobPaymentMethods)[number];
 
-const isJobExposureType = (value: string): value is JobExposureType =>
-	jobExposureTypes.includes(value as JobExposureType);
-
 export interface JobDescriptionBlockFormValue {
 	id: string;
 	text: string;
@@ -102,7 +99,9 @@ export interface JobPostMediaApiSetInput {
 }
 
 export interface JobForm {
+	adProductId: string | null;
 	description: string;
+	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
 	industryCategory: string;
@@ -118,8 +117,10 @@ export interface JobForm {
 }
 
 export interface JobPostInput {
+	adProductId: string | null;
 	description: string;
 	descriptionBlocks: JobDescriptionBlockFormValue[];
+	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
 	industryCategory: string;
@@ -159,7 +160,9 @@ type JobFormValidationResult =
 	  };
 
 export const emptyJobForm: JobForm = {
+	adProductId: null,
 	description: "",
+	exposureAmount: null,
 	exposureDurationDays: null,
 	exposureType: "standard",
 	industryCategory: industryOptions[0] ?? "",
@@ -482,22 +485,18 @@ const getContentErrors = ({
 };
 
 const getExposureErrors = ({
+	adProductId,
 	exposureDurationDays,
-	exposureType,
 	paymentMethod,
 }: {
+	adProductId: string | null;
 	exposureDurationDays: number | null;
-	exposureType: string;
 	paymentMethod: JobPaymentMethod | null;
 }): JobFormErrors => {
 	const errors: JobFormErrors = {};
 
-	if (!isJobExposureType(exposureType)) {
-		errors.exposureType = "노출 상품을 선택해 주세요.";
-		return errors;
-	}
-
-	if (exposureType === "standard") {
+	// 광고 상품을 고르지 않으면 무료 일반 구인(standard)으로 통과한다.
+	if (!adProductId) {
 		return errors;
 	}
 
@@ -543,11 +542,18 @@ export const validateJobForm = (
 			? getDescriptionBlockError(options.descriptionBlocks)
 			: undefined;
 	const mediaError = getMediaError(options.media);
-	const isStandardExposure = form.exposureType === "standard";
-	const exposureDurationDays = isStandardExposure
+	// 광고 상품 선택 여부로 유료/무료를 판정한다. 상품이 없으면 무료 일반 구인으로
+	// 강제해 노출 관련 값을 모두 비운다.
+	const isFreeExposure = !form.adProductId;
+	const adProductId = isFreeExposure ? null : form.adProductId;
+	const exposureType: JobExposureType = isFreeExposure
+		? "standard"
+		: form.exposureType;
+	const exposureDurationDays = isFreeExposure
 		? null
 		: form.exposureDurationDays;
-	const paymentMethod = isStandardExposure ? null : form.paymentMethod;
+	const exposureAmount = isFreeExposure ? null : form.exposureAmount;
+	const paymentMethod = isFreeExposure ? null : form.paymentMethod;
 	Object.assign(
 		errors,
 		getPostingScopeErrors({
@@ -570,8 +576,8 @@ export const validateJobForm = (
 			mediaError,
 		}),
 		getExposureErrors({
+			adProductId,
 			exposureDurationDays,
-			exposureType: form.exposureType,
 			paymentMethod,
 		})
 	);
@@ -588,10 +594,12 @@ export const validateJobForm = (
 
 	return {
 		input: {
+			adProductId,
 			description,
 			descriptionBlocks: normalizedBlocks,
+			exposureAmount,
 			exposureDurationDays,
-			exposureType: form.exposureType,
+			exposureType,
 			industryCategory,
 			interviewNotes: interviewNotes || undefined,
 			media: options.media

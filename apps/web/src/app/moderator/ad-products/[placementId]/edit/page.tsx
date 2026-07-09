@@ -6,7 +6,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AdPlacementForm } from "@/components/bambi/ad-placement-form";
-import type { PreviewTemplate } from "@/components/bambi/ad-placement-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { orpc } from "@/utils/orpc";
@@ -60,7 +59,6 @@ export default function EditAdPlacementPage() {
 						name: placement.name,
 						description: placement.description ?? "",
 						kind: placement.kind,
-						previewTemplate: placement.previewTemplate as PreviewTemplate,
 					}}
 					onSubmit={(draft) =>
 						updatePlacement.mutate({
@@ -68,7 +66,6 @@ export default function EditAdPlacementPage() {
 							name: draft.name,
 							description: draft.description.trim() || null,
 							kind: draft.kind,
-							previewTemplate: draft.previewTemplate,
 						})
 					}
 					pending={updatePlacement.isPending}

@@ -43,7 +43,6 @@ import {
 	emptyJobForm,
 	emptyJobFormMedia,
 	type JobDescriptionBlockFormValue,
-	type JobExposureType,
 	type JobForm,
 	type JobFormErrors,
 	type JobFormMedia,
@@ -234,7 +233,9 @@ export default function EditEmployerJobPage({
 		}
 
 		setForm({
+			adProductId: job.adProductId ?? null,
 			description: job.description,
+			exposureAmount: job.exposureAmount ?? null,
 			exposureDurationDays: job.exposureDurationDays ?? null,
 			exposureType: job.exposureType,
 			industryCategory: job.industryCategory,
@@ -270,7 +271,14 @@ export default function EditEmployerJobPage({
 
 	const updateExposureFields = (
 		patch: Partial<
-			Pick<JobForm, "exposureDurationDays" | "exposureType" | "paymentMethod">
+			Pick<
+				JobForm,
+				| "adProductId"
+				| "exposureAmount"
+				| "exposureDurationDays"
+				| "exposureType"
+				| "paymentMethod"
+			>
 		>
 	) => {
 		setIsDirty(true);
@@ -280,6 +288,7 @@ export default function EditEmployerJobPage({
 		}));
 		setFieldErrors((currentErrors) => ({
 			...currentErrors,
+			adProductId: undefined,
 			exposureDurationDays: undefined,
 			exposureType: undefined,
 			paymentMethod: undefined,
@@ -287,15 +296,21 @@ export default function EditEmployerJobPage({
 		setFormError(null);
 	};
 
-	const handleExposureTypeChange = (value: JobExposureType) => {
+	const handleProductChange = (productId: string | null) => {
 		updateExposureFields(
-			value === "standard"
+			productId
 				? {
+						adProductId: productId,
+						exposureAmount: null,
 						exposureDurationDays: null,
-						exposureType: value,
+					}
+				: {
+						adProductId: null,
+						exposureAmount: null,
+						exposureDurationDays: null,
+						exposureType: "standard",
 						paymentMethod: null,
 					}
-				: { exposureType: value }
 		);
 	};
 
@@ -303,8 +318,11 @@ export default function EditEmployerJobPage({
 		updateExposureFields({ paymentMethod: value });
 	};
 
-	const handleExposureDurationDaysChange = (value: number | null) => {
-		updateExposureFields({ exposureDurationDays: value });
+	const handleDurationChange = (days: number | null, amount: number | null) => {
+		updateExposureFields({
+			exposureAmount: amount,
+			exposureDurationDays: days,
+		});
 	};
 
 	const handleCancel = () => {
@@ -811,16 +829,17 @@ export default function EditEmployerJobPage({
 					/>
 
 					<JobExposureFields
+						adProductId={form.adProductId}
 						errors={{
 							exposureDurationDays: fieldErrors.exposureDurationDays,
 							exposureType: fieldErrors.exposureType,
 							paymentMethod: fieldErrors.paymentMethod,
 						}}
+						exposureAmount={form.exposureAmount}
 						exposureDurationDays={form.exposureDurationDays}
-						exposureType={form.exposureType}
-						onExposureDurationDaysChange={handleExposureDurationDaysChange}
-						onExposureTypeChange={handleExposureTypeChange}
+						onDurationChange={handleDurationChange}
 						onPaymentMethodChange={handlePaymentMethodChange}
+						onProductChange={handleProductChange}
 						paymentMethod={form.paymentMethod}
 					/>
 

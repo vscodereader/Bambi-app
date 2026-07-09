@@ -46,7 +46,6 @@ import {
 	emptyJobForm,
 	emptyJobFormMedia,
 	type JobDescriptionBlockFormValue,
-	type JobExposureType,
 	type JobForm,
 	type JobFormErrors,
 	type JobFormMedia,
@@ -365,7 +364,14 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 
 	const updateExposureFields = (
 		patch: Partial<
-			Pick<JobForm, "exposureDurationDays" | "exposureType" | "paymentMethod">
+			Pick<
+				JobForm,
+				| "adProductId"
+				| "exposureAmount"
+				| "exposureDurationDays"
+				| "exposureType"
+				| "paymentMethod"
+			>
 		>
 	) => {
 		setIsDirty(true);
@@ -375,6 +381,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		}));
 		setFieldErrors((currentErrors) => ({
 			...currentErrors,
+			adProductId: undefined,
 			exposureDurationDays: undefined,
 			exposureType: undefined,
 			paymentMethod: undefined,
@@ -382,15 +389,21 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		setFormError(null);
 	};
 
-	const handleExposureTypeChange = (value: JobExposureType) => {
+	const handleProductChange = (productId: string | null) => {
 		updateExposureFields(
-			value === "standard"
+			productId
 				? {
+						adProductId: productId,
+						exposureAmount: null,
 						exposureDurationDays: null,
-						exposureType: value,
+					}
+				: {
+						adProductId: null,
+						exposureAmount: null,
+						exposureDurationDays: null,
+						exposureType: "standard",
 						paymentMethod: null,
 					}
-				: { exposureType: value }
 		);
 	};
 
@@ -398,8 +411,11 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		updateExposureFields({ paymentMethod: value });
 	};
 
-	const handleExposureDurationDaysChange = (value: number | null) => {
-		updateExposureFields({ exposureDurationDays: value });
+	const handleDurationChange = (days: number | null, amount: number | null) => {
+		updateExposureFields({
+			exposureAmount: amount,
+			exposureDurationDays: days,
+		});
 	};
 
 	const handleCancel = () => {
@@ -837,16 +853,17 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					/>
 
 					<JobExposureFields
+						adProductId={form.adProductId}
 						errors={{
 							exposureDurationDays: fieldErrors.exposureDurationDays,
 							exposureType: fieldErrors.exposureType,
 							paymentMethod: fieldErrors.paymentMethod,
 						}}
+						exposureAmount={form.exposureAmount}
 						exposureDurationDays={form.exposureDurationDays}
-						exposureType={form.exposureType}
-						onExposureDurationDaysChange={handleExposureDurationDaysChange}
-						onExposureTypeChange={handleExposureTypeChange}
+						onDurationChange={handleDurationChange}
 						onPaymentMethodChange={handlePaymentMethodChange}
+						onProductChange={handleProductChange}
 						paymentMethod={form.paymentMethod}
 					/>
 
