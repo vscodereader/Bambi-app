@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import type { Context } from "../../context";
@@ -191,6 +191,60 @@ describe("adProducts read", () => {
 				true
 			);
 		} finally {
+			await cleanupCatalogFixture(fixture);
+		}
+	});
+});
+
+describe("adProducts placement mutations", () => {
+	it("blocks non-admins and creates/updates/deletes placements for admins", async () => {
+		const fixture = await createCatalogFixture();
+		let createdId: string | undefined;
+		try {
+			const asEmployer = createProcedureClient(
+				adProductsRouter.createPlacement,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "adProducts", "createPlacement"],
+				}
+			);
+			await expectOrpcCode(
+				asEmployer({ name: "권한 테스트", kind: "listing" }),
+				"FORBIDDEN"
+			);
+
+			const create = createProcedureClient(adProductsRouter.createPlacement, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "createPlacement"],
+			});
+			const created = await create({ name: "사이드 배너", kind: "banner" });
+			createdId = created.id;
+			expect(created.name).toBe("사이드 배너");
+			expect(created.isActive).toBe(true);
+
+			const update = createProcedureClient(adProductsRouter.updatePlacement, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "updatePlacement"],
+			});
+			const updated = await update({
+				id: created.id,
+				isActive: false,
+				name: "사이드 배너(중단)",
+			});
+			expect(updated.isActive).toBe(false);
+			expect(updated.name).toBe("사이드 배너(중단)");
+
+			const remove = createProcedureClient(adProductsRouter.deletePlacement, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "deletePlacement"],
+			});
+			const removed = await remove({ id: created.id });
+			expect(removed).toEqual({ id: created.id });
+			createdId = undefined;
+		} finally {
+			if (createdId) {
+				await db.delete(adPlacement).where(eq(adPlacement.id, createdId));
+			}
 			await cleanupCatalogFixture(fixture);
 		}
 	});
