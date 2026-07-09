@@ -72,28 +72,36 @@ async function main() {
 		if (existing.length > 0) {
 			continue;
 		}
-		const [placement] = await db
-			.insert(adPlacement)
-			.values({
-				name: entry.name,
-				description: entry.description,
-				kind: entry.kind,
-				sortOrder: i,
-			})
-			.returning();
-		if (!placement) {
-			continue;
-		}
-		await db.insert(adProduct).values(
-			entry.products.map((p, idx) => ({
-				...p,
-				placementId: placement.id,
-				sortOrder: idx,
-			}))
-		);
+		await db.transaction(async (tx) => {
+			const [placement] = await tx
+				.insert(adPlacement)
+				.values({
+					name: entry.name,
+					description: entry.description,
+					kind: entry.kind,
+					sortOrder: i,
+				})
+				.returning();
+			if (!placement) {
+				throw new Error("failed to insert ad placement");
+			}
+			await tx.insert(adProduct).values(
+				entry.products.map((p, idx) => ({
+					...p,
+					placementId: placement.id,
+					sortOrder: idx,
+				}))
+			);
+		});
 	}
 	// biome-ignore lint/suspicious/noConsole: 시드 스크립트 로그
 	console.log("ad catalog seeded");
 }
 
-main().then(() => process.exit(0));
+main()
+	.then(() => process.exit(0))
+	.catch((error) => {
+		// biome-ignore lint/suspicious/noConsole: 시드 스크립트 로그
+		console.error(error);
+		process.exit(1);
+	});
