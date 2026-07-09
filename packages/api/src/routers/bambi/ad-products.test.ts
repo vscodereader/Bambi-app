@@ -249,3 +249,55 @@ describe("adProducts placement mutations", () => {
 		}
 	});
 });
+
+describe("adProducts product mutations", () => {
+	it("validates priceOptions and creates products for admins", async () => {
+		const fixture = await createCatalogFixture();
+		try {
+			const create = createProcedureClient(adProductsRouter.createProduct, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "createProduct"],
+			});
+
+			// 빈 priceOptions는 거부
+			await expect(
+				create({
+					placementId: fixture.activePlacementId,
+					name: "잘못된 상품",
+					benefits: [],
+					priceOptions: [],
+				})
+			).rejects.toBeTruthy();
+
+			const created = await create({
+				placementId: fixture.activePlacementId,
+				name: "추천 광고",
+				tagline: "추천 섹션 노출",
+				benefits: ["추천 섹션 상단"],
+				priceOptions: [
+					{ amount: 220_000, days: 30 },
+					{ amount: 400_000, days: 60 },
+				],
+			});
+			expect(created.name).toBe("추천 광고");
+			expect(created.priceOptions).toHaveLength(2);
+
+			const asEmployer = createProcedureClient(adProductsRouter.createProduct, {
+				context: createContextForUser(fixture.employerUserId),
+				path: ["bambi", "adProducts", "createProduct"],
+			});
+			await expectOrpcCode(
+				asEmployer({
+					placementId: fixture.activePlacementId,
+					name: "권한 테스트",
+					benefits: [],
+					priceOptions: [{ amount: 1000, days: 7 }],
+				}),
+				"FORBIDDEN"
+			);
+			// createProduct로 만든 행은 placement cascade로 fixture cleanup 시 함께 삭제됨
+		} finally {
+			await cleanupCatalogFixture(fixture);
+		}
+	});
+});

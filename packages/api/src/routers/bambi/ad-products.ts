@@ -25,6 +25,30 @@ const updatePlacementInput = z.object({
 	isActive: z.boolean().optional(),
 });
 
+const priceOptionSchema = z.object({
+	amount: z.number().int().min(0),
+	days: z.number().int().min(1),
+});
+
+const createProductInput = z.object({
+	placementId: z.string().uuid(),
+	name: z.string().min(1).max(120),
+	tagline: z.string().max(200).optional(),
+	benefits: z.array(z.string().min(1)).default([]),
+	priceOptions: z.array(priceOptionSchema).min(1),
+	sortOrder: z.number().int().min(0).default(0),
+});
+
+const updateProductInput = z.object({
+	id: z.string().uuid(),
+	name: z.string().min(1).max(120).optional(),
+	tagline: z.string().max(200).nullish(),
+	benefits: z.array(z.string().min(1)).optional(),
+	priceOptions: z.array(priceOptionSchema).min(1).optional(),
+	sortOrder: z.number().int().min(0).optional(),
+	isActive: z.boolean().optional(),
+});
+
 export const adProductsRouter = {
 	getCatalog: protectedProcedure.handler(
 		async () =>
@@ -103,6 +127,67 @@ export const adProductsRouter = {
 						.update(adPlacement)
 						.set({ sortOrder: i })
 						.where(eq(adPlacement.id, id));
+				}
+			});
+			return { ok: true as const };
+		}),
+
+	createProduct: protectedProcedure
+		.input(createProductInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+			const [created] = await db.insert(adProduct).values(input).returning();
+			if (!created) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR");
+			}
+			return created;
+		}),
+
+	updateProduct: protectedProcedure
+		.input(updateProductInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+			const { id, ...patch } = input;
+			const [updated] = await db
+				.update(adProduct)
+				.set(patch)
+				.where(eq(adProduct.id, id))
+				.returning();
+			if (!updated) {
+				throw new ORPCError("NOT_FOUND");
+			}
+			return updated;
+		}),
+
+	deleteProduct: protectedProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+			const [deleted] = await db
+				.delete(adProduct)
+				.where(eq(adProduct.id, input.id))
+				.returning({ id: adProduct.id });
+			if (!deleted) {
+				throw new ORPCError("NOT_FOUND");
+			}
+			return deleted;
+		}),
+
+	reorderProducts: protectedProcedure
+		.input(
+			z.object({
+				placementId: z.string().uuid(),
+				ids: z.array(z.string().uuid()).min(1),
+			})
+		)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+			await db.transaction(async (tx) => {
+				for (const [i, id] of input.ids.entries()) {
+					await tx
+						.update(adProduct)
+						.set({ sortOrder: i })
+						.where(eq(adProduct.id, id));
 				}
 			});
 			return { ok: true as const };
