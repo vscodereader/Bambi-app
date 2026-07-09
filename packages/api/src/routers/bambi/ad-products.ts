@@ -1,7 +1,7 @@
 import { db } from "@bambi-app/db";
 import { adPlacement, adProduct } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -187,7 +187,12 @@ export const adProductsRouter = {
 					await tx
 						.update(adProduct)
 						.set({ sortOrder: i })
-						.where(eq(adProduct.id, id));
+						.where(
+							and(
+								eq(adProduct.id, id),
+								eq(adProduct.placementId, input.placementId)
+							)
+						);
 				}
 			});
 			return { ok: true as const };
