@@ -121,7 +121,7 @@ export function JobExposureFields({
 					<div className="flex flex-col gap-2">
 						<FieldLabel htmlFor="exposureType">노출 상품</FieldLabel>
 						<ToggleGroup
-							aria-labelledby="exposureType"
+							aria-label="노출 상품"
 							className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
 							onValueChange={(value) => {
 								const next = value.at(-1);
@@ -193,7 +193,7 @@ export function JobExposureFields({
 						<div className="flex flex-col gap-2">
 							<FieldLabel htmlFor="paymentMethod">결제 방법</FieldLabel>
 							<ToggleGroup
-								aria-labelledby="paymentMethod"
+								aria-label="결제 방법"
 								className="grid w-full grid-cols-2 gap-2"
 								onValueChange={(value) => {
 									const next = value.at(-1);

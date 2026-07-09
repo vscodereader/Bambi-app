@@ -148,7 +148,8 @@ export function getEmployerJobsColumns({
 		},
 		{
 			id: "remainingDays",
-			accessorFn: (job) => remainingDays(job.exposureEndsAt) ?? Number.NaN,
+			accessorFn: (job) =>
+				remainingDays(job.exposureEndsAt) ?? Number.POSITIVE_INFINITY,
 			header: "남은 기간",
 			cell: ({ row }) => {
 				const days = remainingDays(row.original.exposureEndsAt);

@@ -8,7 +8,6 @@ import {
 	TableHeader,
 	TableRow,
 } from "@bambi-app/ui/components/table";
-import { cn } from "@bambi-app/ui/lib/utils";
 import {
 	type ColumnDef,
 	flexRender,
@@ -71,9 +70,7 @@ export function DataTable<TData, TValue>({
 							return (
 								<TableHead key={header.id}>
 									<button
-										className={cn(
-											"-mx-2 flex items-center gap-1 rounded-md px-2 py-1 font-medium hover:bg-muted/50"
-										)}
+										className="-mx-2 flex items-center gap-1 rounded-md px-2 py-1 font-medium hover:bg-muted/50"
 										onClick={header.column.getToggleSortingHandler()}
 										type="button"
 									>
