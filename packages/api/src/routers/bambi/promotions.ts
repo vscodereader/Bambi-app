@@ -12,6 +12,7 @@ import { and, desc, eq, inArray, or, type SQL } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
+import { syncAdvertiserFlagForOrganization } from "../../services/bambi-advertiser";
 import {
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
@@ -22,6 +23,7 @@ import type { JobPostStatus } from "../../services/bambi-policy";
 import {
 	canConsumeManualBoost,
 	getCampaignEmployerAccessScope,
+	getEffectivePromotionStatus,
 	getManualBoostConsumption,
 	getPromotionLabel,
 	getRemainingManualBoosts,
@@ -187,10 +189,16 @@ export const promotionsRouter = {
 			.where(or(...accessFilters))
 			.orderBy(desc(jobPromotionCampaign.updatedAt));
 
+		const now = new Date();
+
 		return rows.map((row) => ({
 			...row,
 			promotionLabel: getPromotionLabel(row.tier as PromotionTier),
 			remainingManualBoosts: getRemainingManualBoosts(row),
+			status: getEffectivePromotionStatus(
+				{ endsAt: row.endsAt, status: row.status as PromotionStatus },
+				now
+			),
 		}));
 	}),
 
@@ -239,7 +247,10 @@ export const promotionsRouter = {
 	activateForManualPayment: protectedProcedure
 		.input(campaignIdInput)
 		.handler(async ({ context, input }) => {
-			await getCampaignForAccess(input.campaignId, context.session);
+			const { campaign } = await getCampaignForAccess(
+				input.campaignId,
+				context.session
+			);
 			const now = new Date();
 			const [updated] = await db
 				.update(jobPromotionCampaign)
@@ -251,21 +262,35 @@ export const promotionsRouter = {
 				.where(eq(jobPromotionCampaign.id, input.campaignId))
 				.returning();
 
+			await syncAdvertiserFlagForOrganization({
+				now,
+				organizationId: campaign.organizationId,
+			});
+
 			return updated;
 		}),
 
 	pause: protectedProcedure
 		.input(campaignIdInput)
 		.handler(async ({ context, input }) => {
-			await getCampaignForAccess(input.campaignId, context.session);
+			const { campaign } = await getCampaignForAccess(
+				input.campaignId,
+				context.session
+			);
+			const now = new Date();
 			const [updated] = await db
 				.update(jobPromotionCampaign)
 				.set({
 					status: "paused",
-					updatedAt: new Date(),
+					updatedAt: now,
 				})
 				.where(eq(jobPromotionCampaign.id, input.campaignId))
 				.returning();
+
+			await syncAdvertiserFlagForOrganization({
+				now,
+				organizationId: campaign.organizationId,
+			});
 
 			return updated;
 		}),

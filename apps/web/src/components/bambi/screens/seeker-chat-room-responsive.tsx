@@ -1,6 +1,9 @@
 "use client";
 
+import { Button as UiButton } from "@bambi-app/ui/components/button";
+import { Input } from "@bambi-app/ui/components/input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import {
 	type ReactNode,
 	useCallback,
@@ -9,6 +12,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { toast } from "sonner";
 import {
 	connectBambiChatSocket,
 	emitBambiChatTypingStarted,
@@ -23,6 +27,7 @@ import {
 	type ChatAttachmentPreviewItem,
 } from "../chat-attachment-preview";
 import { Badge, Button, Card } from "../ds";
+import { FieldLabel } from "../form-message";
 import {
 	ClockIcon,
 	DollarCircle,
@@ -461,13 +466,140 @@ function ChatCounterpartName({ name }: { name: string | null }) {
 	);
 }
 
+// 차단 대상 userId 유도: 구직자 관점이면 상대는 구인자, 아니면 구직자.
+function resolveBlockedUserId(
+	isJobSeeker: boolean,
+	room: { employerUserId: string; jobSeekerUserId: string }
+): string {
+	if (isJobSeeker) {
+		return room.employerUserId;
+	}
+	return room.jobSeekerUserId;
+}
+
+// "차단하기" 트리거 버튼. 안전 안내 헤딩과 같은 줄 우측에 배치한다.
+// 이미 차단됐거나 확인 단계가 열려 있으면 노출하지 않는다.
+function ChatBlockTrigger({
+	isBlocked,
+	isConfirmOpen,
+	onOpen,
+}: {
+	isBlocked: boolean;
+	isConfirmOpen: boolean;
+	onOpen: () => void;
+}) {
+	if (isBlocked || isConfirmOpen) {
+		return null;
+	}
+
+	return (
+		<Button onClick={onOpen} size="sm" variant="secondary">
+			차단하기
+		</Button>
+	);
+}
+
+// 차단 확인 패널. 실수 방지를 위해 "차단하기" → 인라인 확인 단계를 거친다.
+// 안전 안내 문구 아래에 전체 폭으로 펼쳐진다.
+function ChatBlockConfirm({
+	isConfirmOpen,
+	isPending,
+	onCancel,
+	onConfirm,
+}: {
+	isConfirmOpen: boolean;
+	isPending: boolean;
+	onCancel: () => void;
+	onConfirm: () => void;
+}) {
+	if (!isConfirmOpen) {
+		return null;
+	}
+
+	return (
+		<div className="mt-3 flex flex-col gap-2 border-coral-100 border-t pt-3">
+			<p className="m-0 font-bold text-coral-700 text-xs">
+				이 상대를 정말 차단할까요? 차단하면 서로 대화할 수 없어요.
+			</p>
+			<div className="flex gap-2">
+				<Button
+					disabled={isPending}
+					onClick={onCancel}
+					size="sm"
+					variant="secondary"
+				>
+					취소
+				</Button>
+				<Button
+					disabled={isPending}
+					onClick={onConfirm}
+					size="sm"
+					variant="danger"
+				>
+					{isPending ? "차단 중" : "차단"}
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+// 면접 일정 제안 폼은 구인자에게만 노출된다. 구직자는 제안을 받기만 한다.
+function InterviewProposalForm({
+	interviewAt,
+	isPending,
+	locationNote,
+	onLocationNoteChange,
+	onScheduledAtChange,
+	onSubmit,
+}: {
+	interviewAt: string;
+	isPending: boolean;
+	locationNote: string;
+	onLocationNoteChange: (value: string) => void;
+	onScheduledAtChange: (value: string) => void;
+	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+	return (
+		<form className="mt-4 grid gap-3" onSubmit={onSubmit}>
+			<div className="flex flex-col gap-2">
+				<FieldLabel htmlFor="interview-at">면접 일시</FieldLabel>
+				<Input
+					id="interview-at"
+					min={new Date().toISOString().slice(0, 16)}
+					onChange={(event) => onScheduledAtChange(event.target.value)}
+					required
+					type="datetime-local"
+					value={interviewAt}
+				/>
+			</div>
+			<div className="flex flex-col gap-2">
+				<FieldLabel htmlFor="location-note" optional>
+					장소 메모
+				</FieldLabel>
+				<Input
+					id="location-note"
+					maxLength={300}
+					onChange={(event) => onLocationNoteChange(event.target.value)}
+					placeholder="예: 역삼역 3번 출구 근처"
+					value={locationNote}
+				/>
+			</div>
+			<UiButton className="w-full" disabled={isPending} size="lg" type="submit">
+				{isPending ? "제안 중" : "면접 일정 제안"}
+			</UiButton>
+		</form>
+	);
+}
+
 export function SeekerChatRoomResponsive({
 	onBack,
 	onReveal,
 	roomId,
 }: SeekerChatRoomResponsiveProps) {
 	const queryClient = useQueryClient();
+	const router = useRouter();
 	const [message, setMessage] = useState("");
+	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
 	const [attachmentDraft, setAttachmentDraft] =
 		useState<AttachmentDraft | null>(null);
 	const [interviewAt, setInterviewAt] = useState("");
@@ -589,6 +721,17 @@ export function SeekerChatRoomResponsive({
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.reviews.listMine.queryKey(),
 				});
+			},
+		})
+	);
+	const blockMutation = useMutation(
+		orpc.bambi.blocks.blockUser.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "차단하지 못했어요.");
+			},
+			onSuccess: () => {
+				toast.success("상대를 차단했어요.");
+				router.push("/seeker/chats");
 			},
 		})
 	);
@@ -764,6 +907,8 @@ export function SeekerChatRoomResponsive({
 
 	const { counterpartName, currentUserId, jobPost, messages, room, schedules } =
 		roomQuery.data;
+	const isJobSeeker = currentUserId === room.jobSeekerUserId;
+	const blockedUserId = resolveBlockedUserId(isJobSeeker, room);
 	const isAttachmentSubmitting =
 		createAttachmentUploadMutation.isPending ||
 		sendMediaMessageMutation.isPending;
@@ -780,7 +925,7 @@ export function SeekerChatRoomResponsive({
 		(item) => item.chatRoomId === room.id
 	);
 	const canCreateReview =
-		currentUserId === room.jobSeekerUserId &&
+		isJobSeeker &&
 		Boolean(reviewEligibleSchedule) &&
 		!existingReview &&
 		!room.isBlocked &&
@@ -961,15 +1106,30 @@ export function SeekerChatRoomResponsive({
 					</Badge>
 				</header>
 				<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
-					<div className="flex items-center gap-2 font-extrabold text-sm">
-						<span className="inline-flex size-4">
-							<ShieldIcon />
-						</span>
-						면접 확정 전 연락처 보호 중
+					<div className="flex items-center justify-between gap-3">
+						<div className="flex items-center gap-2 font-extrabold text-sm">
+							<span className="inline-flex size-4">
+								<ShieldIcon />
+							</span>
+							면접 확정 전 연락처 보호 중
+						</div>
+						<ChatBlockTrigger
+							isBlocked={room.isBlocked}
+							isConfirmOpen={isBlockConfirmOpen}
+							onOpen={() => setIsBlockConfirmOpen(true)}
+						/>
 					</div>
 					<p className="mt-1 mb-0 text-xs leading-relaxed">
 						외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요.
 					</p>
+					<ChatBlockConfirm
+						isConfirmOpen={isBlockConfirmOpen}
+						isPending={blockMutation.isPending}
+						onCancel={() => setIsBlockConfirmOpen(false)}
+						onConfirm={() =>
+							blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
+						}
+					/>
 				</div>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
 					<ChatMessageList
@@ -1020,47 +1180,16 @@ export function SeekerChatRoomResponsive({
 					</Card>
 					<Card className="rounded-lg" pad="lg" tone="outline">
 						<h2 className="m-0 font-extrabold text-lg">면접 일정</h2>
-						<form className="mt-4 grid gap-2" onSubmit={handleInterviewSubmit}>
-							<label
-								className="font-bold text-muted-foreground text-xs"
-								htmlFor="interview-at"
-							>
-								면접 일시
-							</label>
-							<input
-								className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
-								id="interview-at"
-								min={new Date().toISOString().slice(0, 16)}
-								onChange={(event) => setInterviewAt(event.target.value)}
-								type="datetime-local"
-								value={interviewAt}
+						{isJobSeeker ? null : (
+							<InterviewProposalForm
+								interviewAt={interviewAt}
+								isPending={proposeInterviewMutation.isPending}
+								locationNote={locationNote}
+								onLocationNoteChange={setLocationNote}
+								onScheduledAtChange={setInterviewAt}
+								onSubmit={handleInterviewSubmit}
 							/>
-							<label
-								className="font-bold text-muted-foreground text-xs"
-								htmlFor="location-note"
-							>
-								장소 메모
-							</label>
-							<input
-								className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
-								id="location-note"
-								maxLength={300}
-								onChange={(event) => setLocationNote(event.target.value)}
-								placeholder="예: 역삼역 3번 출구 근처"
-								value={locationNote}
-							/>
-							<Button
-								block
-								className="shadow-none"
-								disabled={proposeInterviewMutation.isPending}
-								size="md"
-								type="submit"
-							>
-								{proposeInterviewMutation.isPending
-									? "제안 중"
-									: "면접 일정 제안"}
-							</Button>
-						</form>
+						)}
 						{scheduleErrorMessage ? (
 							<p className="mt-3 mb-0 font-semibold text-red-600 text-xs">
 								{scheduleErrorMessage}
@@ -1103,6 +1232,7 @@ export function SeekerChatRoomResponsive({
 										schedule.proposedByUserId !== currentUserId ? (
 											<div className="mt-3 grid grid-cols-2 gap-2">
 												<Button
+													className="shadow-none"
 													disabled={setInterviewStatusMutation.isPending}
 													onClick={() =>
 														setScheduleStatus(schedule.id, "confirmed")
@@ -1154,7 +1284,7 @@ export function SeekerChatRoomResponsive({
 						)}
 						<Button
 							block
-							className="mt-4"
+							className="mt-4 shadow-none"
 							disabled={!confirmedSchedule}
 							onClick={onReveal}
 							size="md"
@@ -1169,10 +1299,7 @@ export function SeekerChatRoomResponsive({
 						existingReview={existingReview}
 						isLoading={reviewListQuery.isLoading}
 						isSubmitting={createReviewMutation.isPending}
-						isVisible={
-							currentUserId === room.jobSeekerUserId &&
-							Boolean(reviewEligibleSchedule)
-						}
+						isVisible={isJobSeeker && Boolean(reviewEligibleSchedule)}
 						onSubmit={handleReviewSubmit}
 						successMessage={reviewSuccessMessage}
 					/>

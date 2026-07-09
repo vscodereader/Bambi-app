@@ -30,6 +30,7 @@ import {
 	recordJobPerformanceEvent,
 } from "../../services/bambi-analytics";
 import {
+	isEmployerOrganizationVerified,
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
 } from "../../services/bambi-authz";
@@ -722,6 +723,16 @@ export const jobsRouter = {
 				teamId: input.teamId,
 				session: context.session,
 			});
+
+			if (
+				actor.role !== "admin" &&
+				!(await isEmployerOrganizationVerified(input.organizationId))
+			) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "운영자 승인 후 공고를 등록할 수 있습니다.",
+				});
+			}
+
 			const [organizationProfile] = await db
 				.select()
 				.from(employerOrganizationProfile)
@@ -916,5 +927,29 @@ export const jobsRouter = {
 					media: await getJobPostMediaSet(updated.id),
 				};
 			});
+		}),
+	delete: protectedProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.handler(async ({ context, input }) => {
+			const [existing] = await db
+				.select()
+				.from(jobPost)
+				.where(eq(jobPost.id, input.id))
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			await requireEmployerPostingAccess({
+				organizationId: existing.organizationId,
+				teamId: existing.teamId,
+				session: context.session,
+			});
+
+			// 연관 미디어·프로모션·성과 이벤트는 FK onDelete cascade로 함께 제거된다.
+			await db.delete(jobPost).where(eq(jobPost.id, input.id));
+
+			return { id: input.id };
 		}),
 };

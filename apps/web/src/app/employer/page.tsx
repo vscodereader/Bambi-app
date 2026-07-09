@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	Alert,
+	AlertDescription,
+	AlertTitle,
+} from "@bambi-app/ui/components/alert";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	Card,
@@ -10,7 +15,7 @@ import {
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	ChartColumn,
 	Check,
@@ -19,11 +24,16 @@ import {
 	Eye,
 	type LucideIcon,
 	Settings,
+	Trash2,
+	TriangleAlert,
 	Zap,
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-
+import { useState } from "react";
+import { toast } from "sonner";
+import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
+import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
@@ -187,6 +197,22 @@ function OverviewStat({
 	);
 }
 
+function NewJobButton({ verified }: { verified: boolean }) {
+	if (verified) {
+		return (
+			<Link className={buttonVariants()} href="/employer/new">
+				새 공고 등록
+			</Link>
+		);
+	}
+
+	return (
+		<Button disabled type="button">
+			새 공고 등록
+		</Button>
+	);
+}
+
 function QuickLinkTile({
 	description,
 	href,
@@ -214,6 +240,7 @@ function QuickLinkTile({
 
 export default function EmployerPage() {
 	const session = authClient.useSession();
+	const verified = useEmployerVerified();
 	const isSignedIn = Boolean(session.data?.user);
 	const mineQuery = useQuery({
 		...orpc.bambi.onboarding.getMine.queryOptions(),
@@ -235,6 +262,30 @@ export default function EmployerPage() {
 	const jobs = jobsQuery.data ?? [];
 	const promotionSummary = getPromotionSummary(promotionsQuery.data ?? []);
 	const jobStatusCounts = getJobStatusCounts(jobs);
+	const queryClient = useQueryClient();
+	const [deletingJobId, setDeletingJobId] = useState<null | string>(null);
+	const deleteMutation = useMutation(
+		orpc.bambi.jobs.delete.mutationOptions({
+			onError: (error) => {
+				toast.error(
+					error.message ||
+						"공고를 삭제하지 못했습니다. 삭제 권한을 확인한 뒤 다시 시도해 주세요."
+				);
+			},
+			onSuccess: async () => {
+				setDeletingJobId(null);
+				toast.success("공고가 삭제되었습니다.");
+				await Promise.all([
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.jobs.listMine.queryKey(),
+					}),
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.promotions.listMine.queryKey(),
+					}),
+				]);
+			},
+		})
+	);
 
 	const getOrganizationLabel = (organizationId: string): string =>
 		organizationProfiles.find(
@@ -368,11 +419,7 @@ export default function EmployerPage() {
 	} else if (jobs.length === 0) {
 		jobsContent = (
 			<EmptyState
-				action={
-					<Link className={buttonVariants()} href="/employer/new">
-						새 공고 등록
-					</Link>
-				}
+				action={<NewJobButton verified={verified} />}
 				description="조직 프로필을 선택해 첫 공고를 등록해 보세요."
 				title="등록한 공고가 없습니다"
 			/>
@@ -384,68 +431,110 @@ export default function EmployerPage() {
 					{jobs.map((job) => {
 						const leading = getJobLeadingStatus(job.status);
 						const LeadingIcon = leading.icon;
+						const isConfirmingDelete = deletingJobId === job.id;
+						const isDeletingJob =
+							deleteMutation.isPending &&
+							deleteMutation.variables?.id === job.id;
 
 						return (
 							<div
 								className={cn(
-									"flex items-start gap-3 border-l-2 border-l-transparent p-4",
+									"flex flex-col gap-3 border-l-2 border-l-transparent p-4",
 									job.status === "rejected" && "border-l-red-500"
 								)}
 								key={job.id}
 							>
-								<span
-									className={cn(
-										"mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md",
-										leading.tile
-									)}
-								>
-									<LeadingIcon className="size-5" />
-								</span>
-								<div className="flex min-w-0 flex-1 flex-col gap-2">
-									<div className="flex min-w-0 flex-col gap-1">
-										<h3 className="min-w-0 break-words font-medium text-base">
-											{job.title}
-										</h3>
-										<p className="break-words text-foreground text-sm">
-											{job.industryCategory} · {job.region} ·{" "}
-											{formatPay(job.payAmount, job.payUnit)}
+								<div className="flex items-start gap-3">
+									<span
+										className={cn(
+											"mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md",
+											leading.tile
+										)}
+									>
+										<LeadingIcon className="size-5" />
+									</span>
+									<div className="flex min-w-0 flex-1 flex-col gap-2">
+										<div className="flex min-w-0 flex-col gap-1">
+											<h3 className="min-w-0 break-words font-medium text-base">
+												{job.title}
+											</h3>
+											<p className="break-words text-foreground text-sm">
+												{job.industryCategory} · {job.region} ·{" "}
+												{formatPay(job.payAmount, job.payUnit)}
+											</p>
+										</div>
+										<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+											<span className="flex items-center gap-1.5">
+												<span className="text-muted-foreground">공고</span>
+												<StatusBadge tone={getJobStatusTone(job.status)}>
+													{getJobStatusLabel(job.status)}
+												</StatusBadge>
+											</span>
+											<span className="flex items-center gap-1.5">
+												<span className="text-muted-foreground">사업자</span>
+												<StatusBadge
+													tone={getVerificationStatusTone(
+														job.employerVerificationStatus
+													)}
+												>
+													{getVerificationStatusLabel(
+														job.employerVerificationStatus
+													)}
+												</StatusBadge>
+											</span>
+										</div>
+										<p className="break-words text-muted-foreground text-xs">
+											{getOrganizationLabel(job.organizationId)} ·{" "}
+											{getTeamLabel(job.teamId)} · 수정{" "}
+											{formatDateTime(job.updatedAt)}
 										</p>
 									</div>
-									<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-										<span className="flex items-center gap-1.5">
-											<span className="text-muted-foreground">공고</span>
-											<StatusBadge tone={getJobStatusTone(job.status)}>
-												{getJobStatusLabel(job.status)}
-											</StatusBadge>
-										</span>
-										<span className="flex items-center gap-1.5">
-											<span className="text-muted-foreground">사업자</span>
-											<StatusBadge
-												tone={getVerificationStatusTone(
-													job.employerVerificationStatus
-												)}
-											>
-												{getVerificationStatusLabel(
-													job.employerVerificationStatus
-												)}
-											</StatusBadge>
-										</span>
+									<div className="flex shrink-0 flex-col gap-2">
+										<Link
+											className={cn(buttonVariants({ variant: "outline" }))}
+											href={`/employer/jobs/${job.id}/edit` as Route}
+										>
+											수정
+										</Link>
+										<Button
+											disabled={isConfirmingDelete}
+											onClick={() => setDeletingJobId(job.id)}
+											type="button"
+											variant="destructive"
+										>
+											<Trash2 data-icon="inline-start" />
+											삭제
+										</Button>
 									</div>
-									<p className="break-words text-muted-foreground text-xs">
-										{getOrganizationLabel(job.organizationId)} ·{" "}
-										{getTeamLabel(job.teamId)} · 수정{" "}
-										{formatDateTime(job.updatedAt)}
-									</p>
 								</div>
-								<Link
-									className={cn(
-										buttonVariants({ variant: "outline" }),
-										"shrink-0"
-									)}
-									href={`/employer/jobs/${job.id}/edit` as Route}
-								>
-									수정
-								</Link>
+								{isConfirmingDelete ? (
+									<Alert variant="destructive">
+										<TriangleAlert />
+										<AlertTitle>이 공고를 삭제할까요?</AlertTitle>
+										<AlertDescription>
+											삭제한 공고와 연결된 프로모션·성과 기록은 되돌릴 수
+											없어요.
+										</AlertDescription>
+										<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+											<Button
+												disabled={isDeletingJob}
+												onClick={() => setDeletingJobId(null)}
+												type="button"
+												variant="outline"
+											>
+												취소
+											</Button>
+											<Button
+												disabled={isDeletingJob}
+												onClick={() => deleteMutation.mutate({ id: job.id })}
+												type="button"
+												variant="destructive"
+											>
+												{isDeletingJob ? "삭제 중…" : "삭제"}
+											</Button>
+										</div>
+									</Alert>
+								) : null}
 							</div>
 						);
 					})}
@@ -456,14 +545,11 @@ export default function EmployerPage() {
 
 	return (
 		<PageShell
-			actions={
-				<Link className={buttonVariants()} href="/employer/new">
-					새 공고 등록
-				</Link>
-			}
+			actions={<NewJobButton verified={verified} />}
 			description="조직과 팀 프로필 상태를 확인하고 소유한 공고를 관리합니다."
 			title="구인자 관리"
 		>
+			<EmployerGateBanner action="공고를 등록" />
 			{jobs.length > 0 ? (
 				<section aria-labelledby="job-overview" className="flex flex-col gap-3">
 					<h2 className="sr-only" id="job-overview">

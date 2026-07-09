@@ -12,7 +12,7 @@ import {
 	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -503,6 +503,67 @@ export const chatsRouter = {
 		);
 	}),
 
+	// 내가 참여한 방들의 "다가오는" 면접 목록. status가 proposed·confirmed이고
+	// scheduledAt이 현재 이후인 일정만 시간순으로 모아 방을 넘나들며 보여준다.
+	listMyUpcomingInterviews: protectedProcedure.handler(async ({ context }) => {
+		const profile = await requireActiveBambiProfile(context.session);
+
+		const rooms = await db
+			.select()
+			.from(chatRoom)
+			.where(
+				or(
+					eq(chatRoom.employerUserId, profile.userId),
+					eq(chatRoom.jobSeekerUserId, profile.userId)
+				)
+			);
+		if (rooms.length === 0) {
+			return [];
+		}
+
+		const roomById = new Map(rooms.map((room) => [room.id, room]));
+		const schedules = await db
+			.select()
+			.from(interviewSchedule)
+			.where(
+				and(
+					inArray(interviewSchedule.chatRoomId, [...roomById.keys()]),
+					inArray(interviewSchedule.status, ["proposed", "confirmed"]),
+					gte(interviewSchedule.scheduledAt, new Date())
+				)
+			)
+			.orderBy(asc(interviewSchedule.scheduledAt));
+		if (schedules.length === 0) {
+			return [];
+		}
+
+		const involvedRooms = schedules
+			.map((schedule) => roomById.get(schedule.chatRoomId))
+			.filter((room): room is (typeof rooms)[number] => room !== undefined);
+
+		const counterpartNames = await resolveCounterpartNames(
+			involvedRooms,
+			profile.userId
+		);
+		const jobPostIds = [
+			...new Set(involvedRooms.map((room) => room.jobPostId)),
+		];
+		const posts = await db
+			.select({ id: jobPost.id, title: jobPost.title })
+			.from(jobPost)
+			.where(inArray(jobPost.id, jobPostIds));
+		const jobTitleById = new Map(posts.map((post) => [post.id, post.title]));
+
+		return schedules.map((schedule) => {
+			const room = roomById.get(schedule.chatRoomId);
+			return {
+				...schedule,
+				counterpartName: room ? (counterpartNames.get(room.id) ?? null) : null,
+				jobTitle: room ? (jobTitleById.get(room.jobPostId) ?? null) : null,
+			};
+		});
+	}),
+
 	getById: protectedProcedure
 		.input(z.object({ id: z.string().uuid() }))
 		.handler(async ({ context, input }) => {
@@ -792,6 +853,11 @@ export const chatsRouter = {
 				input.chatRoomId,
 				context.session
 			);
+
+			// 면접 일정은 구인자만 제안할 수 있다. 구직자는 제안을 받기만 한다.
+			if (profile.userId !== room.employerUserId) {
+				throw new ORPCError("FORBIDDEN");
+			}
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,

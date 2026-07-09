@@ -9,10 +9,15 @@ import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { clearGuestCookie } from "@/lib/bambi/guest";
+import {
+	type BambiGenderValue,
+	clearGuestCookie,
+	readAdultGenderFromCookieString,
+} from "@/lib/bambi/guest";
 import { client, queryClient } from "@/utils/orpc";
 import { Badge, Button, Card, Input, Logo } from "../ds";
-import { PhoneIcon, ShieldIcon } from "../icons";
+import { ShieldIcon } from "../icons";
+import { MockPhoneVerifyDialog } from "../mock-phone-verify-dialog";
 
 type AuthMode = "sign-in" | "sign-up";
 type SignupRole = "job_seeker" | "employer";
@@ -41,23 +46,9 @@ function Spinner() {
 	);
 }
 
-// 비회원(휴대폰 인증) 진입 — 게스트 쿠키를 세팅하고 공고 목록으로 이동한다.
-// 지금은 실제 인증 없이 버튼만으로 게스트 열람을 허용한다.
+// 비회원(휴대폰 인증) 진입 — 목 본인인증 다이얼로그로 이름·생년월일·휴대폰·성별을
+// 입력받아 인증 결과 쿠키를 세팅하고 공고 목록으로 이동한다.
 function GuestBrowseButton() {
-	const router = useRouter();
-	const [isEntering, setIsEntering] = useState(false);
-
-	const enterAsGuest = async () => {
-		setIsEntering(true);
-		try {
-			await fetch("/api/guest", { method: "POST" });
-			router.push("/seeker" as Route);
-			router.refresh();
-		} finally {
-			setIsEntering(false);
-		}
-	};
-
 	return (
 		<div className="mt-5 flex flex-col gap-3">
 			<div className="flex items-center gap-3">
@@ -65,17 +56,7 @@ function GuestBrowseButton() {
 				<span className="text-muted-foreground text-xs">또는</span>
 				<span className="h-px flex-1 bg-border" />
 			</div>
-			<Button
-				block
-				disabled={isEntering}
-				leftIcon={<PhoneIcon />}
-				onClick={() => {
-					enterAsGuest().catch(() => setIsEntering(false));
-				}}
-				variant="secondary"
-			>
-				{isEntering ? "입장 중" : "휴대폰 인증"}
-			</Button>
+			<MockPhoneVerifyDialog />
 			<p className="m-0 text-center text-muted-foreground text-xs">
 				비회원은 공고 목록만 볼 수 있어요. 상세 열람·채팅은 회원가입이 필요해요.
 			</p>
@@ -106,12 +87,11 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	);
 	const [mode, setMode] = useState<AuthMode>(initialMode);
 	const [name, setName] = useState("");
-	const [email, setEmail] = useState("seeker@bambi.dev");
-	const [password, setPassword] = useState("Bambi1234!");
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [signupRole, setSignupRole] = useState<SignupRole>("job_seeker");
-	const [orgName, setOrgName] = useState("");
 	const isSignUp = mode === "sign-up";
 	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
 	const subtitle = isSignUp
@@ -119,19 +99,22 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 		: "이메일과 비밀번호를 입력해 로그인하세요.";
 	const submitLabel = isSignUp ? "회원가입" : "로그인";
 
-	const finishSignup = async () => {
+	const finishSignup = async (gender: BambiGenderValue | null) => {
 		const displayName = name.trim();
 		if (signupRole === "employer") {
-			await client.bambi.onboarding.registerEmployer({
+			await client.bambi.onboarding.createEmployerProfile({
 				displayName,
-				organizationName: orgName.trim() || displayName,
+				...(gender ? { gender } : {}),
 			});
 			queryClient.invalidateQueries();
-			// 미검증 구인자는 /employer 레이아웃이 승인 대기 화면을 인라인 렌더한다.
+			// 조직은 업체정보 제출 시 생성된다. /employer 대시보드가 업체정보 입력을 유도한다.
 			router.push("/employer" as Route);
 			return;
 		}
-		await client.bambi.onboarding.createJobSeekerProfile({ displayName });
+		await client.bambi.onboarding.createJobSeekerProfile({
+			displayName,
+			...(gender ? { gender } : {}),
+		});
 		queryClient.invalidateQueries();
 		router.push("/seeker" as Route);
 	};
@@ -166,12 +149,17 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 				});
 			},
 			onSuccess: async () => {
+				// clearGuestCookie가 adultsex를 만료시키기 전에 성별을 읽어 둔다.
+				const gender =
+					typeof document === "undefined"
+						? null
+						: readAdultGenderFromCookieString(document.cookie);
 				// 실제 세션이 생겼으니 게스트 열람 권한(쿠키)을 회수한다. 남겨두면
 				// 로그아웃·세션 만료 후에도 게스트로 마켓을 볼 수 있게 된다. 게이트가
 				// 쿠키 없는 상태를 보도록 내비게이션 전에 삭제를 기다린다.
 				await clearGuestCookie();
 				if (isSignUp) {
-					finishSignup().catch((error: unknown) => {
+					finishSignup(gender).catch((error: unknown) => {
 						setNotice({
 							text:
 								error instanceof Error
@@ -183,7 +171,13 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 					return;
 				}
 				queryClient.invalidateQueries();
-				router.push("/" as Route);
+				// 로그아웃(push("/"))이 "/"→/welcome 리다이렉트 결과를 Router Cache에
+				// 남긴다. router.push("/")는 이 stale 엔트리를 재생할 수 있고, 이를 비우는
+				// router.refresh()는 비동기·논블로킹이라 바로 뒤의 push()와 경쟁해 간헐적으로
+				// /welcome에 머문다(재로그인이 "간혹" 되고 "간혹" 안 되는 원인).
+				// 하드 내비게이션으로 Router Cache를 통째로 우회한다: 브라우저가 갓 설정된
+				// 세션 쿠키로 "/"를 새로 요청 → 미들웨어 통과 → 서버가 role 홈을 계산한다.
+				window.location.assign("/");
 			},
 		};
 
@@ -290,22 +284,12 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 							</div>
 						) : null}
 						{isSignUp && signupRole === "employer" ? (
-							<label className="grid gap-2" htmlFor="auth-org-name">
-								<span className="font-bold text-sm">업체명</span>
-								<Input
-									id="auth-org-name"
-									onChange={(event) => setOrgName(event.target.value)}
-									placeholder="예: 밤비 라운지"
-									value={orgName}
-								/>
-							</label>
-						) : null}
-						{isSignUp && signupRole === "employer" ? (
 							<p
 								className="m-0 rounded-lg border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm"
 								role="note"
 							>
-								가입 후 운영자 승인이 완료되어야 이용할 수 있어요.
+								가입 후 업체 정보를 입력하고 운영자 승인을 받으면 구인 기능을
+								이용할 수 있어요.
 							</p>
 						) : null}
 						<label className="grid gap-2" htmlFor="auth-email">
@@ -314,6 +298,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 								autoComplete="email"
 								id="auth-email"
 								onChange={(event) => setEmail(event.target.value)}
+								placeholder="이메일을 입력해주세요."
 								type="email"
 								value={email}
 							/>
@@ -337,6 +322,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 								autoComplete={isSignUp ? "new-password" : "current-password"}
 								id="auth-password"
 								onChange={(event) => setPassword(event.target.value)}
+								placeholder="비밀번호를 입력해주세요."
 								type="password"
 								value={password}
 							/>

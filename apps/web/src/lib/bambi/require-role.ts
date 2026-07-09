@@ -39,12 +39,14 @@ export async function enforceModeratorAccess(): Promise<void> {
 	}
 }
 
-// 구인자 영역: 구인자가 아니면 각자 홈으로. 구인자면 승인 여부만 돌려준다(리다이렉트 없음 →
-// 미검증이어도 레이아웃이 승인 대기 화면을 인라인 렌더하므로 루프가 생기지 않는다).
-export async function resolveEmployerAccess(): Promise<{ verified: boolean }> {
+// 구인자 영역: 구인자가 아니면 각자 홈으로. 구인자면 승인 상태를 돌려준다(리다이렉트 없음).
+// 미승인이어도 화면은 렌더하고, 조작 요소만 approval 상태로 disabled 처리한다.
+export async function resolveEmployerAccess(): Promise<{
+	approvalStatus: Routing["employerApprovalStatus"];
+}> {
 	const routing = await getRouting();
 	if (routing.role !== "employer") {
 		redirect(homePathForRole(routing.role));
 	}
-	return { verified: routing.employerApprovalStatus === "verified" };
+	return { approvalStatus: routing.employerApprovalStatus };
 }

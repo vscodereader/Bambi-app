@@ -37,6 +37,7 @@ import {
 	ShieldCheck,
 	SlidersHorizontal,
 	Star,
+	Store,
 	User,
 	X,
 	Zap,
@@ -86,5 +87,6 @@ export const SettingsIcon = fill(Settings);
 export const ShieldIcon = fill(ShieldCheck);
 export const SortIcon = fill(ArrowUpDown);
 export const StarIcon = fill(Star);
+export const StoreIcon = fill(Store);
 export const UserIcon = fill(User);
 export const XIcon = fill(X);
