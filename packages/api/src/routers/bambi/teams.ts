@@ -51,6 +51,10 @@ const searchEmployerInviteesInput = organizationIdInput.extend({
 	query: z.string().max(320).optional(),
 });
 
+const invitationActionInput = organizationIdInput.extend({
+	invitationId: z.string().min(1),
+});
+
 const forbidden = (message: string) => new ORPCError("FORBIDDEN", { message });
 
 // 승인(verified)되지 않은 조직은 팀 관리 조작을 막는다. admin(bambi role)은 예외.
@@ -313,6 +317,87 @@ export const teamsRouter = {
 				.returning();
 
 			return created;
+		}),
+
+	resubmitInvitation: protectedProcedure
+		.input(invitationActionInput)
+		.handler(async ({ context, input }) => {
+			const { profile } = await requireOrganizationTeamManagementAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
+			});
+
+			const [existing] = await db
+				.select({ status: invitation.status })
+				.from(invitation)
+				.where(
+					and(
+						eq(invitation.id, input.invitationId),
+						eq(invitation.organizationId, input.organizationId)
+					)
+				)
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			if (existing.status !== "rejected") {
+				throw new ORPCError("CONFLICT", {
+					message: "반려된 초대만 재제출할 수 있습니다.",
+				});
+			}
+
+			const [updated] = await db
+				.update(invitation)
+				.set({
+					expiresAt: getExpiresAt(),
+					inviterId: profile.userId,
+					rejectionReason: null,
+					status: "pending",
+				})
+				.where(eq(invitation.id, input.invitationId))
+				.returning();
+
+			return updated;
+		}),
+
+	deleteInvitation: protectedProcedure
+		.input(invitationActionInput)
+		.handler(async ({ context, input }) => {
+			await requireOrganizationTeamManagementAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+
+			const [existing] = await db
+				.select({ status: invitation.status })
+				.from(invitation)
+				.where(
+					and(
+						eq(invitation.id, input.invitationId),
+						eq(invitation.organizationId, input.organizationId)
+					)
+				)
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			if (existing.status !== "rejected") {
+				throw new ORPCError("CONFLICT", {
+					message: "반려된 초대만 삭제할 수 있습니다.",
+				});
+			}
+
+			await db.delete(invitation).where(eq(invitation.id, input.invitationId));
+
+			return { success: true };
 		}),
 
 	searchEmployerInvitees: protectedProcedure
