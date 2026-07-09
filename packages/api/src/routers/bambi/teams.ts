@@ -1,10 +1,16 @@
 import { randomUUID } from "node:crypto";
 
 import { db } from "@bambi-app/db";
-import { invitation, member, team, user } from "@bambi-app/db/schema/auth";
+import {
+	invitation,
+	member,
+	team,
+	teamMember,
+	user,
+} from "@bambi-app/db/schema/auth";
 import { bambiProfile, employerTeamProfile } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, ilike, notInArray, or } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, notInArray, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -45,6 +51,10 @@ const inviteMemberInput = organizationIdInput.extend({
 const setMemberRoleInput = organizationIdInput.extend({
 	memberId: z.string().min(1),
 	role: organizationRoleSchema,
+});
+
+const removeMemberInput = organizationIdInput.extend({
+	memberId: z.string().min(1),
 });
 
 const searchEmployerInviteesInput = organizationIdInput.extend({
@@ -524,5 +534,63 @@ export const teamsRouter = {
 				.returning();
 
 			return updated;
+		}),
+
+	removeMember: protectedProcedure
+		.input(removeMemberInput)
+		.handler(async ({ context, input }) => {
+			const { profile } = await requireOrganizationOwnerAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
+			});
+
+			const [targetMember] = await db
+				.select({ role: member.role, userId: member.userId })
+				.from(member)
+				.where(
+					and(
+						eq(member.id, input.memberId),
+						eq(member.organizationId, input.organizationId)
+					)
+				)
+				.limit(1);
+
+			if (!targetMember) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			// 소유자(owner)는 내보낼 수 없다.
+			if (normalizeOrganizationManagementRole(targetMember.role) === "owner") {
+				throw forbidden("소유자는 내보낼 수 없습니다.");
+			}
+
+			await db.transaction(async (tx) => {
+				if (targetMember.userId) {
+					const orgTeams = await tx
+						.select({ id: team.id })
+						.from(team)
+						.where(eq(team.organizationId, input.organizationId));
+					const teamIds = orgTeams.map((row) => row.id);
+
+					if (teamIds.length > 0) {
+						await tx
+							.delete(teamMember)
+							.where(
+								and(
+									eq(teamMember.userId, targetMember.userId),
+									inArray(teamMember.teamId, teamIds)
+								)
+							);
+					}
+				}
+
+				await tx.delete(member).where(eq(member.id, input.memberId));
+			});
+
+			return { success: true };
 		}),
 };
