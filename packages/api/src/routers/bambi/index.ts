@@ -1,3 +1,4 @@
+import { adProductsRouter } from "./ad-products";
 import { analyticsRouter } from "./analytics";
 import { chatsRouter } from "./chats";
 import { jobsRouter } from "./jobs";
@@ -9,6 +10,7 @@ import { reviewsRouter } from "./reviews";
 import { teamsRouter } from "./teams";
 
 export const bambiRouter = {
+	adProducts: adProductsRouter,
 	analytics: analyticsRouter,
 	chats: chatsRouter,
 	jobs: jobsRouter,

@@ -1,0 +1,173 @@
+"use client";
+
+import { Button } from "@bambi-app/ui/components/button";
+import { Input } from "@bambi-app/ui/components/input";
+import { Label } from "@bambi-app/ui/components/label";
+import { useRef, useState } from "react";
+
+export interface PriceOption {
+	amount: number;
+	days: number;
+}
+
+export interface AdProductDraft {
+	benefits: string[];
+	name: string;
+	priceOptions: PriceOption[];
+	tagline: string;
+}
+
+interface BenefitField {
+	id: number;
+	value: string;
+}
+interface PriceOptionField extends PriceOption {
+	id: number;
+}
+
+export function AdProductForm({
+	onSubmit,
+	pending,
+}: {
+	onSubmit: (draft: AdProductDraft) => void;
+	pending: boolean;
+}) {
+	const nextFieldId = useRef(0);
+	const makeId = () => nextFieldId.current++;
+
+	const [name, setName] = useState("");
+	const [tagline, setTagline] = useState("");
+	const [benefits, setBenefits] = useState<BenefitField[]>(() => [
+		{ id: makeId(), value: "" },
+	]);
+	const [priceOptions, setPriceOptions] = useState<PriceOptionField[]>(() => [
+		{ id: makeId(), amount: 0, days: 30 },
+	]);
+
+	const setPrice = (id: number, patch: Partial<PriceOption>) =>
+		setPriceOptions((options) =>
+			options.map((option) =>
+				option.id === id ? { ...option, ...patch } : option
+			)
+		);
+	const setBenefit = (id: number, value: string) =>
+		setBenefits((items) =>
+			items.map((item) => (item.id === id ? { ...item, value } : item))
+		);
+
+	const submit = () =>
+		onSubmit({
+			name: name.trim(),
+			tagline: tagline.trim(),
+			benefits: benefits
+				.map((item) => item.value.trim())
+				.filter((value) => value.length > 0),
+			priceOptions: priceOptions
+				.filter((option) => option.days > 0)
+				.map(({ amount, days }) => ({ amount, days })),
+		});
+
+	return (
+		<div className="flex flex-col gap-4">
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-name">상품명</Label>
+				<Input
+					id="p-name"
+					onChange={(e) => setName(e.target.value)}
+					value={name}
+				/>
+			</div>
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-tagline">한 줄 소개</Label>
+				<Input
+					id="p-tagline"
+					onChange={(e) => setTagline(e.target.value)}
+					value={tagline}
+				/>
+			</div>
+
+			<div className="flex flex-col gap-2">
+				<Label>서비스 내용</Label>
+				{benefits.map((item) => (
+					<div className="flex gap-2" key={item.id}>
+						<Input
+							onChange={(e) => setBenefit(item.id, e.target.value)}
+							value={item.value}
+						/>
+						<Button
+							onClick={() =>
+								setBenefits((items) => items.filter((b) => b.id !== item.id))
+							}
+							size="sm"
+							variant="ghost"
+						>
+							삭제
+						</Button>
+					</div>
+				))}
+				<Button
+					onClick={() =>
+						setBenefits((items) => [...items, { id: makeId(), value: "" }])
+					}
+					size="sm"
+					variant="secondary"
+				>
+					내용 추가
+				</Button>
+			</div>
+
+			<div className="flex flex-col gap-2">
+				<Label>가격 옵션(이용기간 · 금액)</Label>
+				{priceOptions.map((option) => (
+					<div className="flex items-center gap-2" key={option.id}>
+						<Input
+							className="w-24"
+							onChange={(e) =>
+								setPrice(option.id, { days: Number(e.target.value) || 0 })
+							}
+							type="number"
+							value={option.days}
+						/>
+						<span className="text-muted-foreground text-sm">일</span>
+						<Input
+							className="w-40"
+							onChange={(e) =>
+								setPrice(option.id, { amount: Number(e.target.value) || 0 })
+							}
+							type="number"
+							value={option.amount}
+						/>
+						<span className="text-muted-foreground text-sm">원</span>
+						<Button
+							onClick={() =>
+								setPriceOptions((options) =>
+									options.filter((o) => o.id !== option.id)
+								)
+							}
+							size="sm"
+							variant="ghost"
+						>
+							삭제
+						</Button>
+					</div>
+				))}
+				<Button
+					onClick={() =>
+						setPriceOptions((options) => [
+							...options,
+							{ id: makeId(), amount: 0, days: 30 },
+						])
+					}
+					size="sm"
+					variant="secondary"
+				>
+					가격 옵션 추가
+				</Button>
+			</div>
+
+			<Button disabled={pending || name.trim().length === 0} onClick={submit}>
+				저장
+			</Button>
+		</div>
+	);
+}

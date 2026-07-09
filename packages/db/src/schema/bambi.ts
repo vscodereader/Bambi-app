@@ -83,6 +83,11 @@ export const promotionStatus = pgEnum("promotion_status", [
 	"canceled",
 ]);
 
+export const adPlacementKind = pgEnum("ad_placement_kind", [
+	"listing",
+	"banner",
+]);
+
 export const jobPerformanceEventType = pgEnum("job_performance_event_type", [
 	"impression",
 	"detail_view",
@@ -337,6 +342,57 @@ export const jobPromotionBoostEvent = pgTable(
 		index("job_promotion_boost_event_job_post_id_idx").on(table.jobPostId),
 		index("job_promotion_boost_event_organization_id_idx").on(
 			table.organizationId
+		),
+	]
+);
+
+export const adPlacement = pgTable(
+	"ad_placement",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		name: text("name").notNull(),
+		description: text("description"),
+		kind: adPlacementKind("kind").default("listing").notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("ad_placement_active_sort_idx").on(table.isActive, table.sortOrder),
+	]
+);
+
+export const adProduct = pgTable(
+	"ad_product",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		placementId: uuid("placement_id")
+			.notNull()
+			.references(() => adPlacement.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		tagline: text("tagline"),
+		benefits: jsonb("benefits").$type<string[]>().default([]).notNull(),
+		priceOptions: jsonb("price_options")
+			.$type<{ amount: number; days: number }[]>()
+			.default([])
+			.notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("ad_product_placement_idx").on(
+			table.placementId,
+			table.isActive,
+			table.sortOrder
 		),
 	]
 );
@@ -726,6 +782,17 @@ export const jobPromotionBoostEventRelations = relations(
 		}),
 	})
 );
+
+export const adPlacementRelations = relations(adPlacement, ({ many }) => ({
+	products: many(adProduct),
+}));
+
+export const adProductRelations = relations(adProduct, ({ one }) => ({
+	placement: one(adPlacement, {
+		fields: [adProduct.placementId],
+		references: [adPlacement.id],
+	}),
+}));
 
 export const chatRoomRelations = relations(chatRoom, ({ many, one }) => ({
 	attachments: many(chatAttachment),

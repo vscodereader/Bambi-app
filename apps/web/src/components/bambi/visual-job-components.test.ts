@@ -162,4 +162,46 @@ describe("visual job marketplace components", () => {
 		expect(editSource).toContain("previewPay");
 		expect(editSource).toContain("previewCompanyName");
 	});
+
+	it("wires the moderator ad-products console and nav", () => {
+		const page = readComponent("../../app/moderator/ad-products/page.tsx");
+		const layout = readComponent("../../app/moderator/layout.tsx");
+		const nav = readComponent("persona-nav.tsx");
+		expect(page).toContain("listCatalogAdmin");
+		expect(layout).toContain("/moderator/ad-products");
+		expect(nav).toContain("adProducts");
+	});
+
+	it("wires ad-product create forms to catalog mutations", () => {
+		const placementNew = readComponent(
+			"../../app/moderator/ad-products/new/page.tsx"
+		);
+		const productNew = readComponent(
+			"../../app/moderator/ad-products/[placementId]/new/page.tsx"
+		);
+		expect(placementNew).toContain("createPlacement");
+		expect(productNew).toContain("createProduct");
+		expect(productNew).toContain("AdProductForm");
+	});
+
+	it("renders the employer ad guide from the dynamic catalog", () => {
+		const source = readComponent("screens/employer-ad-guide.tsx");
+		expect(source).toContain("adProducts.getCatalog");
+		expect(source).not.toContain("AD_PRODUCTS");
+	});
+
+	it("wires the /employer/ad-guide entry points", () => {
+		const route = readComponent("../../app/employer/ad-guide/page.tsx");
+		const layout = readComponent("../../app/employer/layout.tsx");
+		const dashboard = readComponent("../../app/employer/page.tsx");
+
+		// 라우트가 광고 안내 화면을 렌더링한다
+		expect(route).toContain("EmployerAdGuideScreen");
+		// 구인자 헤더 nav 항목
+		expect(layout).toContain("/employer/ad-guide");
+		expect(layout).toContain("광고 안내");
+		// 대시보드 바로가기 타일
+		expect(dashboard).toContain("/employer/ad-guide");
+		expect(dashboard).toContain("광고 상품 안내");
+	});
 });
