@@ -22,6 +22,9 @@ import { orpc } from "@/utils/orpc";
 export default function ModeratorAdProductsPage() {
 	const queryClient = useQueryClient();
 	const [confirmingId, setConfirmingId] = useState<null | string>(null);
+	const [confirmingProductId, setConfirmingProductId] = useState<null | string>(
+		null
+	);
 	const catalogQuery = useQuery(
 		orpc.bambi.adProducts.listCatalogAdmin.queryOptions()
 	);
@@ -56,6 +59,7 @@ export default function ModeratorAdProductsPage() {
 		orpc.bambi.adProducts.deleteProduct.mutationOptions({
 			onSuccess: async () => {
 				toast.success("상품을 삭제했어요.");
+				setConfirmingProductId(null);
 				await invalidate();
 			},
 			onError: (error) => toast.error(error.message),
@@ -156,13 +160,35 @@ export default function ModeratorAdProductsPage() {
 												})
 											}
 										/>
-										<Button
-											onClick={() => deleteProduct.mutate({ id: product.id })}
-											size="sm"
-											variant="ghost"
-										>
-											삭제
-										</Button>
+										{confirmingProductId === product.id ? (
+											<div className="flex gap-1">
+												<Button
+													disabled={deleteProduct.isPending}
+													onClick={() =>
+														deleteProduct.mutate({ id: product.id })
+													}
+													size="sm"
+													variant="destructive"
+												>
+													삭제 확인
+												</Button>
+												<Button
+													onClick={() => setConfirmingProductId(null)}
+													size="sm"
+													variant="ghost"
+												>
+													취소
+												</Button>
+											</div>
+										) : (
+											<Button
+												onClick={() => setConfirmingProductId(product.id)}
+												size="sm"
+												variant="ghost"
+											>
+												삭제
+											</Button>
+										)}
 									</div>
 								</div>
 								<div className="flex flex-wrap gap-2 text-muted-foreground text-sm">

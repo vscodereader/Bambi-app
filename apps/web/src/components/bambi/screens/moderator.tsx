@@ -1209,7 +1209,9 @@ export function ModTabs({
 			? [{ v: "employers", label: "업소 승인", icon: <StoreIcon /> }]
 			: []),
 		{ v: "users", label: "사용자", icon: <UserIcon /> },
-		{ v: "adProducts", label: "광고 상품", icon: <ClipboardListIcon /> },
+		...(showEmployers
+			? [{ v: "adProducts", label: "광고 상품", icon: <ClipboardListIcon /> }]
+			: []),
 	];
 	return (
 		<nav className="flex px-2 pt-2.5 pb-2">
