@@ -171,4 +171,16 @@ describe("visual job marketplace components", () => {
 		expect(layout).toContain("/moderator/ad-products");
 		expect(nav).toContain("adProducts");
 	});
+
+	it("wires ad-product create forms to catalog mutations", () => {
+		const placementNew = readComponent(
+			"../../app/moderator/ad-products/new/page.tsx"
+		);
+		const productNew = readComponent(
+			"../../app/moderator/ad-products/[placementId]/new/page.tsx"
+		);
+		expect(placementNew).toContain("createPlacement");
+		expect(productNew).toContain("createProduct");
+		expect(productNew).toContain("AdProductForm");
+	});
 });
