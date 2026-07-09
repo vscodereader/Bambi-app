@@ -9,6 +9,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Megaphone } from "lucide-react";
 import Link from "next/link";
+import { AdPlacementPreview } from "@/components/bambi/ad-placement-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import {
@@ -21,77 +22,122 @@ import { orpc } from "@/utils/orpc";
 // 광고 상품 신청 = 공고 등록 화면으로 이동(밤비엔 별도 광고 결제 흐름이 없음).
 const APPLY_HREF = "/employer/new";
 
+// 레퍼런스형 표: 광고위치 · 서비스내용 · 비용 · 신청.
+// 데스크톱은 상품 1개당 3열 그리드 행(서비스내용/비용/신청)이고,
+// 광고위치 열은 위치 헤더의 미리보기가 대신한다. 모바일은 세로 스택.
+const PRODUCT_ROW_GRID =
+	"md:grid md:grid-cols-[1fr_auto_auto] md:items-center md:gap-6";
+
 function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
+	const hasPreview = placement.previewTemplate !== "none";
+
 	return (
-		<section className="flex flex-col gap-4">
-			<div className="flex flex-col gap-1">
-				<div className="flex items-center gap-2">
-					<Badge
-						variant={placement.kind === "banner" ? "secondary" : "success"}
-					>
-						{placement.kind === "banner" ? "배너 광고" : "리스팅 노출"}
-					</Badge>
-					<h2 className="m-0 font-extrabold text-xl">{placement.name}</h2>
+		<Card>
+			<CardContent className="flex flex-col gap-4">
+				<div className="flex flex-col gap-1">
+					<div className="flex items-center gap-2">
+						<Badge
+							variant={placement.kind === "banner" ? "secondary" : "success"}
+						>
+							{placement.kind === "banner" ? "배너 광고" : "리스팅 노출"}
+						</Badge>
+						<h2 className="m-0 font-extrabold text-xl">{placement.name}</h2>
+					</div>
+					{placement.description ? (
+						<p className="m-0 text-muted-foreground text-sm">
+							{placement.description}
+						</p>
+					) : null}
 				</div>
-				{placement.description ? (
-					<p className="m-0 text-muted-foreground text-sm">
-						{placement.description}
-					</p>
+
+				{hasPreview ? (
+					<div className="flex flex-col gap-1.5">
+						<span className="text-muted-foreground text-xs">광고위치</span>
+						<AdPlacementPreview template={placement.previewTemplate} />
+					</div>
 				) : null}
-			</div>
-			<div className="flex flex-col gap-3">
-				{placement.products.map((product) => (
-					<Card key={product.id}>
-						<CardContent className="flex flex-col gap-3">
-							<div className="flex flex-col gap-1">
-								<span className="font-extrabold text-lg">{product.name}</span>
+
+				<Separator />
+
+				{/* 데스크톱 컬럼 헤더(광고위치는 위 미리보기가 담당) */}
+				<div
+					className={cn(
+						"hidden text-muted-foreground text-xs md:block",
+						PRODUCT_ROW_GRID
+					)}
+				>
+					<span>서비스내용</span>
+					<span>비용</span>
+					<span>신청</span>
+				</div>
+
+				<div className="flex flex-col gap-3">
+					{placement.products.map((product) => (
+						<div
+							className={cn(
+								"flex flex-col gap-3 rounded-lg border border-border p-3 md:border-0 md:p-0",
+								PRODUCT_ROW_GRID
+							)}
+							key={product.id}
+						>
+							{/* 서비스내용 */}
+							<div className="flex flex-col gap-1.5">
+								<span className="font-bold text-base">{product.name}</span>
 								{product.tagline ? (
 									<span className="text-muted-foreground text-sm">
 										{product.tagline}
 									</span>
 								) : null}
+								{product.benefits.length > 0 ? (
+									<ul className="m-0 flex flex-col gap-1.5 p-0">
+										{product.benefits.map((benefit) => (
+											<li
+												className="flex items-center gap-2 text-sm"
+												key={benefit}
+											>
+												<span className="inline-flex size-4 text-primary">
+													<Check size={16} />
+												</span>
+												{benefit}
+											</li>
+										))}
+									</ul>
+								) : null}
 							</div>
-							{product.benefits.length > 0 ? (
-								<ul className="m-0 flex flex-col gap-1.5 p-0">
-									{product.benefits.map((benefit) => (
-										<li
-											className="flex items-center gap-2 text-sm"
-											key={benefit}
-										>
-											<span className="inline-flex size-4 text-primary">
-												<Check size={16} />
-											</span>
-											{benefit}
-										</li>
-									))}
-								</ul>
-							) : null}
-							<Separator />
-							<div className="flex flex-wrap gap-2">
+
+							{/* 비용 */}
+							<div className="flex flex-col gap-1">
 								{product.priceOptions.map((option) => (
-									<span
-										className="rounded-lg bg-secondary px-3 py-1.5 font-bold text-sm"
+									<div
+										className="flex items-baseline gap-1"
 										key={`${product.id}-${option.days}-${option.amount}`}
 									>
-										{formatAdDuration(option.days)} ·{" "}
-										{formatAdPrice(option.amount)}
-									</span>
+										<span className="font-bold text-base text-coral-600">
+											{formatAdPrice(option.amount)}
+										</span>
+										<span className="text-muted-foreground text-xs">
+											({formatAdDuration(option.days)})
+										</span>
+									</div>
 								))}
 							</div>
+
+							{/* 신청 */}
 							<Link
 								className={cn(
-									buttonVariants({ variant: "secondary" }),
-									"no-underline"
+									buttonVariants({ variant: "default" }),
+									"no-underline",
+									"w-full md:w-auto"
 								)}
 								href={APPLY_HREF}
 							>
 								신청하기
 							</Link>
-						</CardContent>
-					</Card>
-				))}
-			</div>
-		</section>
+						</div>
+					))}
+				</div>
+			</CardContent>
+		</Card>
 	);
 }
 

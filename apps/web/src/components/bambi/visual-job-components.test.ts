@@ -190,6 +190,28 @@ describe("visual job marketplace components", () => {
 		expect(source).not.toContain("AD_PRODUCTS");
 	});
 
+	it("lays out the ad guide as a reference-style placement table with a preview", () => {
+		const source = readComponent("screens/employer-ad-guide.tsx");
+
+		// 광고위치 열은 위치 미리보기가 담당한다
+		expect(source).toContain("AdPlacementPreview");
+		expect(source).toContain("template={placement.previewTemplate}");
+		// previewTemplate === "none"이면 미리보기를 생략한다
+		expect(source).toContain('placement.previewTemplate !== "none"');
+		// 표 컬럼 라벨(광고위치·서비스내용·비용·신청)
+		expect(source).toContain("광고위치");
+		expect(source).toContain("서비스내용");
+		expect(source).toContain("비용");
+		expect(source).toContain("신청");
+		// 비용은 기간별 가격 강조 표기
+		expect(source).toContain("formatAdPrice(option.amount)");
+		expect(source).toContain("formatAdDuration(option.days)");
+		// 데스크톱은 3열 그리드 행으로 전환
+		expect(source).toContain("md:grid-cols-[1fr_auto_auto]");
+		// 신청 버튼은 기존 공고 등록 링크(/employer/new)를 유지
+		expect(source).toContain('const APPLY_HREF = "/employer/new"');
+	});
+
 	it("wires the /employer/ad-guide entry points", () => {
 		const route = readComponent("../../app/employer/ad-guide/page.tsx");
 		const layout = readComponent("../../app/employer/layout.tsx");
