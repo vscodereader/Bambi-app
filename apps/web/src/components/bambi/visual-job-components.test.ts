@@ -189,4 +189,19 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("adProducts.getCatalog");
 		expect(source).not.toContain("AD_PRODUCTS");
 	});
+
+	it("wires the /employer/ad-guide entry points", () => {
+		const route = readComponent("../../app/employer/ad-guide/page.tsx");
+		const layout = readComponent("../../app/employer/layout.tsx");
+		const dashboard = readComponent("../../app/employer/page.tsx");
+
+		// 라우트가 광고 안내 화면을 렌더링한다
+		expect(route).toContain("EmployerAdGuideScreen");
+		// 구인자 헤더 nav 항목
+		expect(layout).toContain("/employer/ad-guide");
+		expect(layout).toContain("광고 안내");
+		// 대시보드 바로가기 타일
+		expect(dashboard).toContain("/employer/ad-guide");
+		expect(dashboard).toContain("광고 상품 안내");
+	});
 });
