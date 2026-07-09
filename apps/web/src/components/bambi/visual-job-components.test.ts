@@ -226,4 +226,33 @@ describe("visual job marketplace components", () => {
 		expect(dashboard).toContain("/employer/ad-guide");
 		expect(dashboard).toContain("광고 상품 안내");
 	});
+
+	it("wires the ad-products console edit links to the edit routes", () => {
+		const page = readComponent("../../app/moderator/ad-products/page.tsx");
+
+		// 위치 카드에는 위치 수정 라우트 링크가 있다
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: 소스의 라우트 리터럴을 검증
+		expect(page).toContain("/moderator/ad-products/${placement.id}/edit");
+		// 상품 행에는 상품 수정 라우트 링크가 있다
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: 소스의 라우트 리터럴을 검증
+		expect(page).toContain("${product.id}/edit");
+	});
+
+	it("wires the ad-products edit pages to catalog update mutations", () => {
+		const placementEdit = readComponent(
+			"../../app/moderator/ad-products/[placementId]/edit/page.tsx"
+		);
+		const productEdit = readComponent(
+			"../../app/moderator/ad-products/[placementId]/[productId]/edit/page.tsx"
+		);
+
+		// 위치 수정 페이지는 프리필 폼과 updatePlacement 뮤테이션을 연결한다
+		expect(placementEdit).toContain("updatePlacement");
+		expect(placementEdit).toContain("AdPlacementForm");
+		expect(placementEdit).toContain("initialValue");
+		// 상품 수정 페이지는 프리필 폼과 updateProduct 뮤테이션을 연결한다
+		expect(productEdit).toContain("updateProduct");
+		expect(productEdit).toContain("AdProductForm");
+		expect(productEdit).toContain("initialValue");
+	});
 });

@@ -109,6 +109,12 @@ export default function ModeratorAdProductsPage() {
 									togglePlacement.mutate({ id: placement.id, isActive: next })
 								}
 							/>
+							<Link
+								className={cn(buttonVariants({ size: "sm", variant: "ghost" }))}
+								href={`/moderator/ad-products/${placement.id}/edit` as Route}
+							>
+								수정
+							</Link>
 							{confirmingId === placement.id ? (
 								<div className="flex gap-1">
 									<Button
@@ -166,6 +172,16 @@ export default function ModeratorAdProductsPage() {
 												})
 											}
 										/>
+										<Link
+											className={cn(
+												buttonVariants({ size: "sm", variant: "ghost" })
+											)}
+											href={
+												`/moderator/ad-products/${placement.id}/${product.id}/edit` as Route
+											}
+										>
+											수정
+										</Link>
 										{confirmingProductId === product.id ? (
 											<div className="flex gap-1">
 												<Button
