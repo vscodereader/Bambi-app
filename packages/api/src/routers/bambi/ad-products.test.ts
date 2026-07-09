@@ -89,6 +89,14 @@ const createCatalogFixture = async (): Promise<CatalogFixture> => {
 	await db.insert(adProduct).values([
 		{
 			placementId: activePlacementId,
+			name: "프리미엄 배너 60일",
+			benefits: ["상단 노출 연장"],
+			priceOptions: [{ amount: 550_000, days: 60 }],
+			sortOrder: 1,
+			isActive: true,
+		},
+		{
+			placementId: activePlacementId,
 			name: "프리미엄 배너",
 			benefits: ["상단 노출"],
 			priceOptions: [{ amount: 330_000, days: 30 }],
@@ -141,11 +149,12 @@ describe("adProducts read", () => {
 			expect(ids).toContain(fixture.activePlacementId);
 			expect(ids).not.toContain(fixture.inactivePlacementId);
 			const active = catalog.find((p) => p.id === fixture.activePlacementId);
-			expect(active?.products).toHaveLength(1);
+			expect(active?.products).toHaveLength(2);
 			expect(active?.products[0]?.name).toBe("프리미엄 배너");
 			expect(active?.products[0]?.priceOptions).toEqual([
 				{ amount: 330_000, days: 30 },
 			]);
+			expect(active?.products[1]?.name).toBe("프리미엄 배너 60일");
 		} finally {
 			await cleanupCatalogFixture(fixture);
 		}
@@ -176,6 +185,10 @@ describe("adProducts read", () => {
 					fixture.activePlacementId,
 					fixture.inactivePlacementId,
 				])
+			);
+			const activeP = all.find((p) => p.id === fixture.activePlacementId);
+			expect(activeP?.products.some((pr) => pr.name === "숨김 상품")).toBe(
+				true
 			);
 		} finally {
 			await cleanupCatalogFixture(fixture);
