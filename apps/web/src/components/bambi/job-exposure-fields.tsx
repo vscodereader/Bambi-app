@@ -9,102 +9,94 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
+import { useQuery } from "@tanstack/react-query";
 import { Info } from "lucide-react";
+import { useMemo } from "react";
 
 import { FieldError, FieldLabel } from "@/components/bambi/form-message";
-import type {
-	JobExposureType,
-	JobFormErrors,
-	JobPaymentMethod,
-} from "@/lib/bambi-job-form";
+import {
+	type AdCatalogProduct,
+	formatAdDuration,
+	formatAdPrice,
+} from "@/lib/bambi/ad-catalog";
+import type { JobFormErrors, JobPaymentMethod } from "@/lib/bambi-job-form";
+import { orpc } from "@/utils/orpc";
 
-const exposureOptions: {
-	description: string;
-	label: string;
-	value: JobExposureType;
-}[] = [
-	{
-		description: "최상단 대형 배너로 최대 노출합니다.",
-		label: "프리미엄 배너",
-		value: "premium-banner",
-	},
-	{
-		description: "목록 좌측 고정 배너로 노출합니다.",
-		label: "좌측 배너",
-		value: "left-banner",
-	},
-	{
-		description: "목록 우측 고정 배너로 노출합니다.",
-		label: "우측 배너",
-		value: "right-banner",
-	},
-	{
-		description: "스페셜 채용 영역 상단에 노출합니다.",
-		label: "스페셜 채용",
-		value: "special",
-	},
-	{
-		description: "급구 채용 영역에 우선 노출합니다.",
-		label: "급구 채용",
-		value: "urgent",
-	},
-	{
-		description: "추천 채용 영역에 노출합니다.",
-		label: "추천 채용",
-		value: "recommended",
-	},
-	{
-		description: "일반 목록에 노출합니다. 추가 비용이 없습니다.",
-		label: "일반 구인",
-		value: "standard",
-	},
-];
+// 광고 상품을 고르지 않은 "일반 구인(무료)" 선택지를 나타내는 센티넬 값.
+const FREE_EXPOSURE_VALUE = "__free__";
 
 const paymentOptions: { label: string; value: JobPaymentMethod }[] = [
 	{ label: "신용카드", value: "card" },
 	{ label: "무통장입금", value: "bank_transfer" },
 ];
 
-const durationOptions = [30, 60, 90];
-
+// 카드 내부 텍스트가 카드 밖으로 넘치지 않도록 min-w-0 + whitespace-normal + break-words로
+// 줄바꿈을 허용한다.
 const exposureToggleItemClassName =
-	"h-auto min-w-0 flex-col items-start gap-1 px-3 py-2.5 text-left";
+	"h-auto w-full min-w-0 flex-col items-start gap-1 whitespace-normal px-3 py-2.5 text-left";
+
+const durationSelectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
 
 interface JobExposureFieldsProps {
+	adProductId: string | null;
 	errors?: Pick<
 		JobFormErrors,
 		"exposureDurationDays" | "exposureType" | "paymentMethod"
 	>;
+	exposureAmount: number | null;
 	exposureDurationDays: number | null;
-	exposureType: JobExposureType;
-	onExposureDurationDaysChange: (value: number | null) => void;
-	onExposureTypeChange: (value: JobExposureType) => void;
+	onDurationChange: (days: number | null, amount: number | null) => void;
 	onPaymentMethodChange: (value: JobPaymentMethod) => void;
+	onProductChange: (productId: string | null) => void;
 	paymentMethod: JobPaymentMethod | null;
 }
 
 const isJobPaymentMethod = (value: string): value is JobPaymentMethod =>
 	value === "card" || value === "bank_transfer";
 
-const isJobExposureValue = (
-	value: string | undefined
-): value is JobExposureType =>
-	exposureOptions.some((option) => option.value === value);
-
 export function JobExposureFields({
+	adProductId,
 	errors,
+	exposureAmount,
 	exposureDurationDays,
-	exposureType,
-	onExposureDurationDaysChange,
-	onExposureTypeChange,
+	onDurationChange,
 	onPaymentMethodChange,
+	onProductChange,
 	paymentMethod,
 }: JobExposureFieldsProps) {
-	const showPaidOptions = exposureType !== "standard";
+	const catalogQuery = useQuery(
+		orpc.bambi.adProducts.getCatalog.queryOptions()
+	);
+	const products = useMemo<AdCatalogProduct[]>(
+		() => (catalogQuery.data ?? []).flatMap((placement) => placement.products),
+		[catalogQuery.data]
+	);
+	const selectedProduct =
+		products.find((product) => product.id === adProductId) ?? null;
+	const toggleValue = adProductId ?? FREE_EXPOSURE_VALUE;
+	const showPaidOptions = Boolean(selectedProduct);
+	const showTotal =
+		showPaidOptions &&
+		typeof exposureDurationDays === "number" &&
+		typeof exposureAmount === "number";
+
+	const handleExposureValueChange = (value: string[]) => {
+		const next = value.at(-1);
+
+		if (!next || next === FREE_EXPOSURE_VALUE) {
+			onProductChange(null);
+			return;
+		}
+
+		if (products.some((product) => product.id === next)) {
+			onProductChange(next);
+		}
+	};
 
 	return (
 		<section aria-labelledby="new-exposure" className="flex flex-col gap-3">
@@ -113,39 +105,57 @@ export function JobExposureFields({
 					노출 상품·결제
 				</h2>
 				<p className="mt-1 text-muted-foreground text-sm">
-					공고를 어디에 노출할지 상품을 고르고 결제 방법을 선택하세요.
+					운영자가 등록한 노출 상품 중에서 고르고, 이용 기간과 결제 방법을
+					선택하세요.
 				</p>
 			</div>
 			<Card>
 				<CardContent className="grid gap-6">
 					<div className="flex flex-col gap-2">
 						<FieldLabel htmlFor="exposureType">노출 상품</FieldLabel>
-						<ToggleGroup
-							aria-label="노출 상품"
-							className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
-							onValueChange={(value) => {
-								const next = value.at(-1);
-
-								if (isJobExposureValue(next)) {
-									onExposureTypeChange(next);
-								}
-							}}
-							value={[exposureType]}
-							variant="outline"
-						>
-							{exposureOptions.map((option) => (
+						{catalogQuery.isLoading ? (
+							<div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+								<Skeleton className="h-16 w-full" />
+								<Skeleton className="h-16 w-full" />
+								<Skeleton className="h-16 w-full" />
+							</div>
+						) : (
+							<ToggleGroup
+								aria-label="노출 상품"
+								className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
+								onValueChange={handleExposureValueChange}
+								value={[toggleValue]}
+								variant="outline"
+							>
+								{products.map((product) => (
+									<ToggleGroupItem
+										className={exposureToggleItemClassName}
+										key={product.id}
+										value={product.id}
+									>
+										<span className="w-full text-balance break-words font-medium text-sm">
+											{product.name}
+										</span>
+										{product.tagline ? (
+											<span className="w-full break-words text-muted-foreground text-xs">
+												{product.tagline}
+											</span>
+										) : null}
+									</ToggleGroupItem>
+								))}
 								<ToggleGroupItem
 									className={exposureToggleItemClassName}
-									key={option.value}
-									value={option.value}
+									value={FREE_EXPOSURE_VALUE}
 								>
-									<span className="font-medium text-sm">{option.label}</span>
-									<span className="text-muted-foreground text-xs">
-										{option.description}
+									<span className="w-full text-balance break-words font-medium text-sm">
+										일반 구인(무료)
+									</span>
+									<span className="w-full break-words text-muted-foreground text-xs">
+										일반 목록에 노출합니다. 추가 비용이 없습니다.
 									</span>
 								</ToggleGroupItem>
-							))}
-						</ToggleGroup>
+							</ToggleGroup>
+						)}
 						<FieldError
 							id="exposureType-error"
 							message={errors?.exposureType}
@@ -157,9 +167,19 @@ export function JobExposureFields({
 							<FieldLabel htmlFor="exposureDurationDays">이용 기간</FieldLabel>
 							<Select
 								name="exposureDurationDays"
-								onValueChange={(value) =>
-									onExposureDurationDaysChange(value ? Number(value) : null)
-								}
+								onValueChange={(value) => {
+									const days = value ? Number(value) : null;
+									const option =
+										days === null
+											? undefined
+											: selectedProduct?.priceOptions.find(
+													(priceOption) => priceOption.days === days
+												);
+									onDurationChange(
+										option?.days ?? null,
+										option?.amount ?? null
+									);
+								}}
 								value={exposureDurationDays ? String(exposureDurationDays) : ""}
 							>
 								<SelectTrigger
@@ -169,15 +189,19 @@ export function JobExposureFields({
 											: undefined
 									}
 									aria-invalid={Boolean(errors?.exposureDurationDays)}
-									className="w-full text-sm data-[size=default]:h-9"
+									className={durationSelectTriggerClassName}
 									id="exposureDurationDays"
 								>
 									<SelectValue placeholder="이용 기간을 선택하세요" />
 								</SelectTrigger>
 								<SelectContent>
-									{durationOptions.map((days) => (
-										<SelectItem key={days} value={String(days)}>
-											{days}일
+									{selectedProduct?.priceOptions.map((priceOption) => (
+										<SelectItem
+											key={priceOption.days}
+											value={String(priceOption.days)}
+										>
+											{formatAdDuration(priceOption.days)} ·{" "}
+											{formatAdPrice(priceOption.amount)}
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -186,6 +210,17 @@ export function JobExposureFields({
 								id="exposureDurationDays-error"
 								message={errors?.exposureDurationDays}
 							/>
+						</div>
+					) : null}
+
+					{showTotal ? (
+						<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+							<span className="font-medium text-muted-foreground text-sm">
+								결제 예정 금액
+							</span>
+							<span className="min-w-0 break-words font-semibold text-lg text-primary">
+								{formatAdPrice(exposureAmount)}
+							</span>
 						</div>
 					) : null}
 

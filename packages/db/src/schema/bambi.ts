@@ -269,6 +269,10 @@ export const jobPost = pgTable(
 			.default("standard")
 			.notNull(),
 		exposureDurationDays: integer("exposure_duration_days"),
+		adProductId: uuid("ad_product_id").references(() => adProduct.id, {
+			onDelete: "set null",
+		}),
+		exposureAmount: integer("exposure_amount"),
 		paymentMethod: jobPaymentMethod("payment_method"),
 		paymentStatus: jobPaymentStatus("payment_status")
 			.default("unpaid")
@@ -403,9 +407,6 @@ export const adPlacement = pgTable(
 		name: text("name").notNull(),
 		description: text("description"),
 		kind: adPlacementKind("kind").default("listing").notNull(),
-		previewTemplate: adPreviewTemplate("preview_template")
-			.default("none")
-			.notNull(),
 		sortOrder: integer("sort_order").default(0).notNull(),
 		isActive: boolean("is_active").default(true).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -428,6 +429,9 @@ export const adProduct = pgTable(
 			.references(() => adPlacement.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
 		tagline: text("tagline"),
+		previewTemplate: adPreviewTemplate("preview_template")
+			.default("none")
+			.notNull(),
 		benefits: jsonb("benefits").$type<string[]>().default([]).notNull(),
 		priceOptions: jsonb("price_options")
 			.$type<{ amount: number; days: number }[]>()

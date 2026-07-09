@@ -9,6 +9,14 @@ const SEED: {
 	products: {
 		name: string;
 		tagline: string;
+		previewTemplate:
+			| "premium-top"
+			| "special-list"
+			| "urgent-list"
+			| "recommended-list"
+			| "side-vertical"
+			| "side-horizontal"
+			| "none";
 		benefits: string[];
 		priceOptions: { amount: number; days: number }[];
 	}[];
@@ -21,6 +29,7 @@ const SEED: {
 			{
 				name: "프리미엄 광고",
 				tagline: "스페셜 섹션 상단 고정",
+				previewTemplate: "special-list",
 				benefits: ["스페셜 채용 섹션 노출", "상단 고정"],
 				priceOptions: [
 					{ amount: 330_000, days: 30 },
@@ -38,6 +47,7 @@ const SEED: {
 			{
 				name: "추천 광고",
 				tagline: "추천 섹션 노출",
+				previewTemplate: "recommended-list",
 				benefits: ["추천 채용 섹션 노출"],
 				priceOptions: [
 					{ amount: 220_000, days: 30 },
@@ -55,6 +65,7 @@ const SEED: {
 			{
 				name: "프리미엄 배너",
 				tagline: "상단 배너 노출",
+				previewTemplate: "premium-top",
 				benefits: ["상단 프리미엄 배너"],
 				priceOptions: [{ amount: 500_000, days: 30 }],
 			},

@@ -7,6 +7,7 @@ import { Button } from "@bambi-app/ui/components/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/bambi/status-badge";
+import { formatAdPrice } from "@/lib/bambi/ad-catalog";
 import {
 	EXPOSURE_TYPE_LABELS,
 	expiryLabel,
@@ -56,6 +57,8 @@ export function ModeratorPaymentPanel({ jobPostId }: { jobPostId: string }) {
 	const nextStatus = isPaid ? "unpaid" : "paid";
 	const expiry = expiryLabel(post.exposureEndsAt);
 	const days = remainingDays(post.exposureEndsAt);
+	const amountText =
+		post.exposureAmount === null ? "무료" : formatAdPrice(post.exposureAmount);
 	const durationText = post.exposureDurationDays
 		? `${post.exposureDurationDays}일`
 		: "해당 없음";
@@ -108,6 +111,10 @@ export function ModeratorPaymentPanel({ jobPostId }: { jobPostId: string }) {
 				</Button>
 			</div>
 			<div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground text-xs">
+				<span>
+					결제 금액{" "}
+					<span className="font-semibold text-foreground">{amountText}</span>
+				</span>
 				<span>이용 기간 {durationText}</span>
 				<span>만료일 {endsAtText}</span>
 				{days === null ? null : <span>남은 기간 {Math.max(0, days)}일</span>}

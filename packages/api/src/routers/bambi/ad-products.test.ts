@@ -248,65 +248,6 @@ describe("adProducts placement mutations", () => {
 			await cleanupCatalogFixture(fixture);
 		}
 	});
-
-	it("stores and updates previewTemplate; defaults to none; rejects invalid values", async () => {
-		const fixture = await createCatalogFixture();
-		let createdId: string | undefined;
-		let defaultedId: string | undefined;
-		try {
-			const create = createProcedureClient(adProductsRouter.createPlacement, {
-				context: createContextForUser(fixture.adminUserId),
-				path: ["bambi", "adProducts", "createPlacement"],
-			});
-
-			// (a) previewTemplate 지정 시 반환/조회에 반영
-			const created = await create({
-				name: "프리미엄 상단",
-				kind: "banner",
-				previewTemplate: "premium-top",
-			});
-			createdId = created.id;
-			expect(created.previewTemplate).toBe("premium-top");
-			const [reloaded] = await db
-				.select({ previewTemplate: adPlacement.previewTemplate })
-				.from(adPlacement)
-				.where(eq(adPlacement.id, created.id));
-			expect(reloaded?.previewTemplate).toBe("premium-top");
-
-			const update = createProcedureClient(adProductsRouter.updatePlacement, {
-				context: createContextForUser(fixture.adminUserId),
-				path: ["bambi", "adProducts", "updatePlacement"],
-			});
-			const updated = await update({
-				id: created.id,
-				previewTemplate: "side-vertical",
-			});
-			expect(updated.previewTemplate).toBe("side-vertical");
-
-			// (b) 미지정 시 기본 "none"
-			const defaulted = await create({ name: "기본 위치", kind: "listing" });
-			defaultedId = defaulted.id;
-			expect(defaulted.previewTemplate).toBe("none");
-
-			// (c) 잘못된 enum 값이면 zod가 거부(입력 파싱 레벨)
-			await expect(
-				create({
-					name: "잘못된 미리보기",
-					kind: "listing",
-					// @ts-expect-error 유효하지 않은 previewTemplate 값
-					previewTemplate: "invalid-template",
-				})
-			).rejects.toBeTruthy();
-		} finally {
-			const cleanupIds = [createdId, defaultedId].filter((id): id is string =>
-				Boolean(id)
-			);
-			if (cleanupIds.length > 0) {
-				await db.delete(adPlacement).where(inArray(adPlacement.id, cleanupIds));
-			}
-			await cleanupCatalogFixture(fixture);
-		}
-	});
 });
 
 describe("adProducts product mutations", () => {
@@ -354,6 +295,65 @@ describe("adProducts product mutations", () => {
 				}),
 				"FORBIDDEN"
 			);
+			// createProduct로 만든 행은 placement cascade로 fixture cleanup 시 함께 삭제됨
+		} finally {
+			await cleanupCatalogFixture(fixture);
+		}
+	});
+
+	it("stores and updates previewTemplate; defaults to none; rejects invalid values", async () => {
+		const fixture = await createCatalogFixture();
+		try {
+			const create = createProcedureClient(adProductsRouter.createProduct, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "createProduct"],
+			});
+
+			// (a) previewTemplate 지정 시 반환/조회에 반영
+			const created = await create({
+				placementId: fixture.activePlacementId,
+				name: "프리미엄 상단",
+				benefits: [],
+				priceOptions: [{ amount: 1000, days: 7 }],
+				previewTemplate: "premium-top",
+			});
+			expect(created.previewTemplate).toBe("premium-top");
+			const [reloaded] = await db
+				.select({ previewTemplate: adProduct.previewTemplate })
+				.from(adProduct)
+				.where(eq(adProduct.id, created.id));
+			expect(reloaded?.previewTemplate).toBe("premium-top");
+
+			const update = createProcedureClient(adProductsRouter.updateProduct, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "updateProduct"],
+			});
+			const updated = await update({
+				id: created.id,
+				previewTemplate: "side-vertical",
+			});
+			expect(updated.previewTemplate).toBe("side-vertical");
+
+			// (b) 미지정 시 기본 "none"
+			const defaulted = await create({
+				placementId: fixture.activePlacementId,
+				name: "기본 상품",
+				benefits: [],
+				priceOptions: [{ amount: 1000, days: 7 }],
+			});
+			expect(defaulted.previewTemplate).toBe("none");
+
+			// (c) 잘못된 enum 값이면 zod가 거부(입력 파싱 레벨)
+			await expect(
+				create({
+					placementId: fixture.activePlacementId,
+					name: "잘못된 미리보기",
+					benefits: [],
+					priceOptions: [{ amount: 1000, days: 7 }],
+					// @ts-expect-error 유효하지 않은 previewTemplate 값
+					previewTemplate: "invalid-template",
+				})
+			).rejects.toBeTruthy();
 			// createProduct로 만든 행은 placement cascade로 fixture cleanup 시 함께 삭제됨
 		} finally {
 			await cleanupCatalogFixture(fixture);

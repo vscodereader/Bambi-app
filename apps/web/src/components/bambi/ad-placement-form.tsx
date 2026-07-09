@@ -12,16 +12,11 @@ import {
 } from "@bambi-app/ui/components/select";
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useState } from "react";
-import {
-	PREVIEW_TEMPLATE_OPTIONS,
-	type PreviewTemplate,
-} from "@/components/bambi/ad-placement-preview";
 
 export interface AdPlacementDraft {
 	description: string;
 	kind: "listing" | "banner";
 	name: string;
-	previewTemplate: PreviewTemplate;
 }
 
 export function AdPlacementForm({
@@ -42,16 +37,12 @@ export function AdPlacementForm({
 	const [kind, setKind] = useState<"banner" | "listing">(
 		initialValue?.kind ?? "listing"
 	);
-	const [previewTemplate, setPreviewTemplate] = useState<PreviewTemplate>(
-		initialValue?.previewTemplate ?? "none"
-	);
 
 	const submit = () =>
 		onSubmit({
 			name: name.trim(),
 			description: description.trim(),
 			kind,
-			previewTemplate,
 		});
 
 	return (
@@ -84,24 +75,6 @@ export function AdPlacementForm({
 					<SelectContent>
 						<SelectItem value="listing">리스팅 노출</SelectItem>
 						<SelectItem value="banner">배너 광고</SelectItem>
-					</SelectContent>
-				</Select>
-			</div>
-			<div className="flex flex-col gap-1.5">
-				<Label>게시 위치 미리보기</Label>
-				<Select
-					onValueChange={(v) => setPreviewTemplate(v as PreviewTemplate)}
-					value={previewTemplate}
-				>
-					<SelectTrigger>
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						{PREVIEW_TEMPLATE_OPTIONS.map((option) => (
-							<SelectItem key={option.value} value={option.value}>
-								{option.label}
-							</SelectItem>
-						))}
 					</SelectContent>
 				</Select>
 			</div>

@@ -34,7 +34,6 @@ export default function NewAdPlacementPage() {
 						name: draft.name,
 						description: draft.description || undefined,
 						kind: draft.kind,
-						previewTemplate: draft.previewTemplate,
 					})
 				}
 				pending={createPlacement.isPending}

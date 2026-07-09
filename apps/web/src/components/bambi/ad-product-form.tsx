@@ -3,7 +3,18 @@
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { useRef, useState } from "react";
+import {
+	PREVIEW_TEMPLATE_OPTIONS,
+	type PreviewTemplate,
+} from "@/components/bambi/ad-placement-preview";
 
 export interface PriceOption {
 	amount: number;
@@ -13,6 +24,7 @@ export interface PriceOption {
 export interface AdProductDraft {
 	benefits: string[];
 	name: string;
+	previewTemplate: PreviewTemplate;
 	priceOptions: PriceOption[];
 	tagline: string;
 }
@@ -52,6 +64,9 @@ export function AdProductForm({
 			: [{ amount: 0, days: 30 }]
 		).map((o) => ({ id: makeId(), ...o }))
 	);
+	const [previewTemplate, setPreviewTemplate] = useState<PreviewTemplate>(
+		initialValue?.previewTemplate ?? "none"
+	);
 
 	const setPrice = (id: number, patch: Partial<PriceOption>) =>
 		setPriceOptions((options) =>
@@ -74,6 +89,7 @@ export function AdProductForm({
 			priceOptions: priceOptions
 				.filter((option) => option.days > 0)
 				.map(({ amount, days }) => ({ amount, days })),
+			previewTemplate,
 		});
 
 	return (
@@ -172,6 +188,25 @@ export function AdProductForm({
 				>
 					가격 옵션 추가
 				</Button>
+			</div>
+
+			<div className="flex flex-col gap-1.5">
+				<Label>게시 위치 미리보기</Label>
+				<Select
+					onValueChange={(v) => setPreviewTemplate(v as PreviewTemplate)}
+					value={previewTemplate}
+				>
+					<SelectTrigger>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						{PREVIEW_TEMPLATE_OPTIONS.map((option) => (
+							<SelectItem key={option.value} value={option.value}>
+								{option.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
 			</div>
 
 			<Button disabled={pending || name.trim().length === 0} onClick={submit}>

@@ -5,6 +5,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import type { PreviewTemplate } from "@/components/bambi/ad-placement-preview";
 import { AdProductForm } from "@/components/bambi/ad-product-form";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
@@ -64,6 +65,7 @@ export default function EditAdProductPage() {
 						tagline: product.tagline ?? "",
 						benefits: product.benefits,
 						priceOptions: product.priceOptions,
+						previewTemplate: product.previewTemplate as PreviewTemplate,
 					}}
 					onSubmit={(draft) =>
 						updateProduct.mutate({
@@ -72,6 +74,7 @@ export default function EditAdProductPage() {
 							tagline: draft.tagline.trim() || null,
 							benefits: draft.benefits,
 							priceOptions: draft.priceOptions,
+							previewTemplate: draft.previewTemplate,
 						})
 					}
 					pending={updateProduct.isPending}
