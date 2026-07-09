@@ -26,23 +26,32 @@ interface PriceOptionField extends PriceOption {
 }
 
 export function AdProductForm({
+	initialValue,
 	onSubmit,
 	pending,
+	submitLabel = "저장",
 }: {
+	initialValue?: AdProductDraft;
 	onSubmit: (draft: AdProductDraft) => void;
 	pending: boolean;
+	submitLabel?: string;
 }) {
 	const nextFieldId = useRef(0);
 	const makeId = () => nextFieldId.current++;
 
-	const [name, setName] = useState("");
-	const [tagline, setTagline] = useState("");
-	const [benefits, setBenefits] = useState<BenefitField[]>(() => [
-		{ id: makeId(), value: "" },
-	]);
-	const [priceOptions, setPriceOptions] = useState<PriceOptionField[]>(() => [
-		{ id: makeId(), amount: 0, days: 30 },
-	]);
+	const [name, setName] = useState(initialValue?.name ?? "");
+	const [tagline, setTagline] = useState(initialValue?.tagline ?? "");
+	const [benefits, setBenefits] = useState<BenefitField[]>(() =>
+		(initialValue?.benefits.length ? initialValue.benefits : [""]).map(
+			(value) => ({ id: makeId(), value })
+		)
+	);
+	const [priceOptions, setPriceOptions] = useState<PriceOptionField[]>(() =>
+		(initialValue?.priceOptions.length
+			? initialValue.priceOptions
+			: [{ amount: 0, days: 30 }]
+		).map((o) => ({ id: makeId(), ...o }))
+	);
 
 	const setPrice = (id: number, patch: Partial<PriceOption>) =>
 		setPriceOptions((options) =>
@@ -166,7 +175,7 @@ export function AdProductForm({
 			</div>
 
 			<Button disabled={pending || name.trim().length === 0} onClick={submit}>
-				저장
+				{submitLabel}
 			</Button>
 		</div>
 	);

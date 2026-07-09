@@ -88,6 +88,16 @@ export const adPlacementKind = pgEnum("ad_placement_kind", [
 	"banner",
 ]);
 
+export const adPreviewTemplate = pgEnum("ad_preview_template", [
+	"premium-top",
+	"special-list",
+	"urgent-list",
+	"recommended-list",
+	"side-vertical",
+	"side-horizontal",
+	"none",
+]);
+
 export const jobPerformanceEventType = pgEnum("job_performance_event_type", [
 	"impression",
 	"detail_view",
@@ -353,6 +363,9 @@ export const adPlacement = pgTable(
 		name: text("name").notNull(),
 		description: text("description"),
 		kind: adPlacementKind("kind").default("listing").notNull(),
+		previewTemplate: adPreviewTemplate("preview_template")
+			.default("none")
+			.notNull(),
 		sortOrder: integer("sort_order").default(0).notNull(),
 		isActive: boolean("is_active").default(true).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),

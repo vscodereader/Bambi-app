@@ -9,10 +9,21 @@ import { requireAdminProfile } from "../../services/bambi-authz";
 
 const placementKindSchema = z.enum(["listing", "banner"]);
 
+const previewTemplateSchema = z.enum([
+	"premium-top",
+	"special-list",
+	"urgent-list",
+	"recommended-list",
+	"side-vertical",
+	"side-horizontal",
+	"none",
+]);
+
 const createPlacementInput = z.object({
 	name: z.string().min(1).max(120),
 	description: z.string().max(500).optional(),
 	kind: placementKindSchema.default("listing"),
+	previewTemplate: previewTemplateSchema.default("none"),
 	sortOrder: z.number().int().min(0).default(0),
 });
 
@@ -21,6 +32,7 @@ const updatePlacementInput = z.object({
 	name: z.string().min(1).max(120).optional(),
 	description: z.string().max(500).nullish(),
 	kind: placementKindSchema.optional(),
+	previewTemplate: previewTemplateSchema.optional(),
 	sortOrder: z.number().int().min(0).optional(),
 	isActive: z.boolean().optional(),
 });

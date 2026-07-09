@@ -17,6 +17,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { formatAdDuration, formatAdPrice } from "@/lib/bambi/ad-catalog";
+import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { orpc } from "@/utils/orpc";
 
 export default function ModeratorAdProductsPage() {
@@ -69,7 +70,12 @@ export default function ModeratorAdProductsPage() {
 	const placements = catalogQuery.data ?? [];
 
 	return (
-		<div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 py-6">
+		<div
+			className={cn(
+				"mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6",
+				APP_CONTENT_WIDTH
+			)}
+		>
 			<div className="flex items-center justify-between">
 				<h1 className="m-0 font-extrabold text-2xl">광고 상품 관리</h1>
 				<Link
@@ -103,6 +109,12 @@ export default function ModeratorAdProductsPage() {
 									togglePlacement.mutate({ id: placement.id, isActive: next })
 								}
 							/>
+							<Link
+								className={cn(buttonVariants({ size: "sm", variant: "ghost" }))}
+								href={`/moderator/ad-products/${placement.id}/edit` as Route}
+							>
+								수정
+							</Link>
 							{confirmingId === placement.id ? (
 								<div className="flex gap-1">
 									<Button
@@ -160,6 +172,16 @@ export default function ModeratorAdProductsPage() {
 												})
 											}
 										/>
+										<Link
+											className={cn(
+												buttonVariants({ size: "sm", variant: "ghost" })
+											)}
+											href={
+												`/moderator/ad-products/${placement.id}/${product.id}/edit` as Route
+											}
+										>
+											수정
+										</Link>
 										{confirmingProductId === product.id ? (
 											<div className="flex gap-1">
 												<Button
