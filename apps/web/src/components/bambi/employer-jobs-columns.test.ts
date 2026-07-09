@@ -9,8 +9,9 @@ describe("employer jobs DataTable columns", () => {
 	it("defines the exposure/payment/duration/expiry columns via a factory", () => {
 		const source = read("employer-jobs-columns.tsx");
 
-		// 컬럼 팩토리 + 삭제 위임 콜백
+		// 컬럼 팩토리 + 삭제 위임 콜백 (raw shadcn DataColumn 기반)
 		expect(source).toContain("export function getEmployerJobsColumns");
+		expect(source).toContain("DataColumn<EmployerJob>");
 		expect(source).toContain("onRequestDelete");
 		expect(source).toContain("deletingJobId");
 
@@ -43,6 +44,8 @@ describe("employer jobs DataTable columns", () => {
 
 		expect(source).toContain("DataTable");
 		expect(source).toContain("getEmployerJobsColumns");
+		// 행 key 전달
+		expect(source).toContain("getRowKey={(job) => job.id}");
 		// 모바일 가로 스크롤 래퍼
 		expect(source).toContain("overflow-x-auto");
 		// 삭제 확인 흐름 유지

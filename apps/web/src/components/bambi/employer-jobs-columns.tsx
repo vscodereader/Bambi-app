@@ -3,10 +3,10 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { cn } from "@bambi-app/ui/lib/utils";
-import type { ColumnDef } from "@tanstack/react-table";
 import { Trash2 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
+import type { DataColumn } from "@/components/bambi/data-table";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import {
 	EXPOSURE_TYPE_LABELS,
@@ -85,74 +85,76 @@ interface EmployerJobsColumnsOptions {
 export function getEmployerJobsColumns({
 	deletingJobId,
 	onRequestDelete,
-}: EmployerJobsColumnsOptions): ColumnDef<EmployerJob>[] {
+}: EmployerJobsColumnsOptions): DataColumn<EmployerJob>[] {
 	return [
 		{
-			accessorKey: "title",
+			id: "title",
 			header: "제목",
-			cell: ({ row }) => (
+			sortValue: (job) => job.title,
+			cell: (job) => (
 				<Link
 					className="font-medium text-foreground underline-offset-4 hover:underline"
-					href={`/employer/jobs/${row.original.id}/edit` as Route}
+					href={`/employer/jobs/${job.id}/edit` as Route}
 				>
-					{row.original.title}
+					{job.title}
 				</Link>
 			),
 		},
 		{
 			id: "categoryRegion",
-			accessorFn: (job) => `${job.industryCategory} · ${job.region}`,
 			header: "직종·지역",
-			cell: ({ getValue }) => (
+			sortValue: (job) => `${job.industryCategory} · ${job.region}`,
+			cell: (job) => (
 				<span className="break-keep text-muted-foreground">
-					{getValue<string>()}
+					{`${job.industryCategory} · ${job.region}`}
 				</span>
 			),
 		},
 		{
 			id: "pay",
-			accessorFn: (job) => job.payAmount,
 			header: "급여",
-			cell: ({ row }) => (
+			sortValue: (job) => job.payAmount,
+			cell: (job) => (
 				<span className="whitespace-nowrap">
-					{formatPay(row.original.payAmount, row.original.payUnit)}
+					{formatPay(job.payAmount, job.payUnit)}
 				</span>
 			),
 		},
 		{
-			accessorKey: "exposureType",
+			id: "exposureType",
 			header: "노출 상품",
-			cell: ({ row }) => (
-				<StatusBadge>
-					{EXPOSURE_TYPE_LABELS[row.original.exposureType]}
-				</StatusBadge>
+			sortValue: (job) => EXPOSURE_TYPE_LABELS[job.exposureType],
+			cell: (job) => (
+				<StatusBadge>{EXPOSURE_TYPE_LABELS[job.exposureType]}</StatusBadge>
 			),
 		},
 		{
-			accessorKey: "status",
+			id: "status",
 			header: "공고 상태",
-			cell: ({ row }) => (
-				<StatusBadge tone={getJobStatusTone(row.original.status)}>
-					{getJobStatusLabel(row.original.status)}
+			sortValue: (job) => getJobStatusLabel(job.status),
+			cell: (job) => (
+				<StatusBadge tone={getJobStatusTone(job.status)}>
+					{getJobStatusLabel(job.status)}
 				</StatusBadge>
 			),
 		},
 		{
-			accessorKey: "paymentStatus",
+			id: "paymentStatus",
 			header: "결제 상태",
-			cell: ({ row }) => (
-				<StatusBadge tone={getPaymentStatusTone(row.original.paymentStatus)}>
-					{PAYMENT_STATUS_LABELS[row.original.paymentStatus]}
+			sortValue: (job) => PAYMENT_STATUS_LABELS[job.paymentStatus],
+			cell: (job) => (
+				<StatusBadge tone={getPaymentStatusTone(job.paymentStatus)}>
+					{PAYMENT_STATUS_LABELS[job.paymentStatus]}
 				</StatusBadge>
 			),
 		},
 		{
 			id: "remainingDays",
-			accessorFn: (job) =>
-				remainingDays(job.exposureEndsAt) ?? Number.POSITIVE_INFINITY,
 			header: "남은 기간",
-			cell: ({ row }) => {
-				const days = remainingDays(row.original.exposureEndsAt);
+			sortValue: (job) =>
+				remainingDays(job.exposureEndsAt) ?? Number.POSITIVE_INFINITY,
+			cell: (job) => {
+				const days = remainingDays(job.exposureEndsAt);
 
 				if (days === null) {
 					return <span className="text-muted-foreground">-</span>;
@@ -165,64 +167,60 @@ export function getEmployerJobsColumns({
 		},
 		{
 			id: "expiry",
-			accessorFn: (job) => expiryLabel(job.exposureEndsAt),
 			header: "만료 상태",
-			cell: ({ row }) => {
-				const label = expiryLabel(row.original.exposureEndsAt);
+			sortValue: (job) => expiryLabel(job.exposureEndsAt),
+			cell: (job) => {
+				const label = expiryLabel(job.exposureEndsAt);
 
 				return <StatusBadge tone={getExpiryTone(label)}>{label}</StatusBadge>;
 			},
 		},
 		{
-			accessorKey: "employerVerificationStatus",
+			id: "employerVerificationStatus",
 			header: "사업자 인증",
-			cell: ({ row }) => (
+			sortValue: (job) =>
+				getVerificationStatusLabel(job.employerVerificationStatus),
+			cell: (job) => (
 				<StatusBadge
-					tone={getVerificationStatusTone(
-						row.original.employerVerificationStatus
-					)}
+					tone={getVerificationStatusTone(job.employerVerificationStatus)}
 				>
-					{getVerificationStatusLabel(row.original.employerVerificationStatus)}
+					{getVerificationStatusLabel(job.employerVerificationStatus)}
 				</StatusBadge>
 			),
 		},
 		{
-			accessorKey: "updatedAt",
+			id: "updatedAt",
 			header: "수정일",
-			cell: ({ row }) => (
+			sortValue: (job) => job.updatedAt.getTime(),
+			cell: (job) => (
 				<span className="whitespace-nowrap text-muted-foreground">
-					{formatDateTime(row.original.updatedAt)}
+					{formatDateTime(job.updatedAt)}
 				</span>
 			),
 		},
 		{
 			id: "actions",
 			header: "관리",
-			enableSorting: false,
-			cell: ({ row }) => {
-				const job = row.original;
-
-				return (
-					<div className="flex items-center gap-2">
-						<Link
-							className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
-							href={`/employer/jobs/${job.id}/edit` as Route}
-						>
-							수정
-						</Link>
-						<Button
-							disabled={deletingJobId === job.id}
-							onClick={() => onRequestDelete(job.id)}
-							size="sm"
-							type="button"
-							variant="destructive"
-						>
-							<Trash2 data-icon="inline-start" />
-							삭제
-						</Button>
-					</div>
-				);
-			},
+			cell: (job) => (
+				<div className="flex items-center gap-2">
+					<Link
+						className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+						href={`/employer/jobs/${job.id}/edit` as Route}
+					>
+						수정
+					</Link>
+					<Button
+						disabled={deletingJobId === job.id}
+						onClick={() => onRequestDelete(job.id)}
+						size="sm"
+						type="button"
+						variant="destructive"
+					>
+						<Trash2 data-icon="inline-start" />
+						삭제
+					</Button>
+				</div>
+			),
 		},
 	];
 }

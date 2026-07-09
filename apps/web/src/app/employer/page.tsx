@@ -307,6 +307,7 @@ function OwnedJobsPanel({
 						})}
 						data={jobs}
 						emptyMessage="등록한 공고가 없습니다."
+						getRowKey={(job) => job.id}
 					/>
 				</CardContent>
 			</Card>

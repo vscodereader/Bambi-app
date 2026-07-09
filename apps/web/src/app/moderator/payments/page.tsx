@@ -12,10 +12,9 @@ import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { DataTable } from "@/components/bambi/data-table";
+import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import {
@@ -70,62 +69,63 @@ interface PaymentColumnsOptions {
 function getPaymentColumns({
 	onToggle,
 	pendingId,
-}: PaymentColumnsOptions): ColumnDef<PaymentJob>[] {
+}: PaymentColumnsOptions): DataColumn<PaymentJob>[] {
 	return [
 		{
-			accessorKey: "title",
+			id: "title",
 			header: "공고 제목",
-			cell: ({ row }) => (
+			sortValue: (job) => job.title,
+			cell: (job) => (
 				<span className="break-keep font-medium text-foreground">
-					{row.original.title}
+					{job.title}
 				</span>
 			),
 		},
 		{
-			accessorKey: "organizationDisplayName",
+			id: "organizationDisplayName",
 			header: "업체",
-			cell: ({ row }) => (
+			sortValue: (job) => job.organizationDisplayName,
+			cell: (job) => (
 				<span className="break-keep text-muted-foreground">
-					{row.original.organizationDisplayName}
+					{job.organizationDisplayName}
 				</span>
 			),
 		},
 		{
-			accessorKey: "status",
+			id: "status",
 			header: "공고 상태",
-			cell: ({ row }) => (
-				<StatusBadge tone={getJobStatusTone(row.original.status)}>
-					{getJobStatusLabel(row.original.status)}
+			sortValue: (job) => getJobStatusLabel(job.status),
+			cell: (job) => (
+				<StatusBadge tone={getJobStatusTone(job.status)}>
+					{getJobStatusLabel(job.status)}
 				</StatusBadge>
 			),
 		},
 		{
-			accessorKey: "exposureType",
+			id: "exposureType",
 			header: "노출 상품",
-			cell: ({ row }) => (
-				<StatusBadge>
-					{EXPOSURE_TYPE_LABELS[row.original.exposureType]}
-				</StatusBadge>
+			sortValue: (job) => EXPOSURE_TYPE_LABELS[job.exposureType],
+			cell: (job) => (
+				<StatusBadge>{EXPOSURE_TYPE_LABELS[job.exposureType]}</StatusBadge>
 			),
 		},
 		{
-			accessorKey: "paymentStatus",
+			id: "paymentStatus",
 			header: "결제 상태",
-			cell: ({ row }) => (
-				<StatusBadge
-					tone={row.original.paymentStatus === "paid" ? "good" : "warning"}
-				>
-					{PAYMENT_STATUS_LABELS[row.original.paymentStatus]}
+			sortValue: (job) => PAYMENT_STATUS_LABELS[job.paymentStatus],
+			cell: (job) => (
+				<StatusBadge tone={job.paymentStatus === "paid" ? "good" : "warning"}>
+					{PAYMENT_STATUS_LABELS[job.paymentStatus]}
 				</StatusBadge>
 			),
 		},
 		{
 			id: "remainingDays",
-			accessorFn: (job) =>
-				remainingDays(job.exposureEndsAt) ?? Number.POSITIVE_INFINITY,
 			header: "남은 기간",
-			cell: ({ row }) => {
-				const days = remainingDays(row.original.exposureEndsAt);
+			sortValue: (job) =>
+				remainingDays(job.exposureEndsAt) ?? Number.POSITIVE_INFINITY,
+			cell: (job) => {
+				const days = remainingDays(job.exposureEndsAt);
 
 				if (days === null) {
 					return <span className="text-muted-foreground">-</span>;
@@ -138,29 +138,28 @@ function getPaymentColumns({
 		},
 		{
 			id: "expiry",
-			accessorFn: (job) => expiryLabel(job.exposureEndsAt),
 			header: "만료 상태",
-			cell: ({ row }) => {
-				const label = expiryLabel(row.original.exposureEndsAt);
+			sortValue: (job) => expiryLabel(job.exposureEndsAt),
+			cell: (job) => {
+				const label = expiryLabel(job.exposureEndsAt);
 
 				return <StatusBadge tone={getExpiryTone(label)}>{label}</StatusBadge>;
 			},
 		},
 		{
-			accessorKey: "createdAt",
+			id: "createdAt",
 			header: "등록일",
-			cell: ({ row }) => (
+			sortValue: (job) => job.createdAt.getTime(),
+			cell: (job) => (
 				<span className="whitespace-nowrap text-muted-foreground">
-					{formatDateTime(row.original.createdAt)}
+					{formatDateTime(job.createdAt)}
 				</span>
 			),
 		},
 		{
 			id: "actions",
 			header: "결제 처리",
-			enableSorting: false,
-			cell: ({ row }) => {
-				const job = row.original;
+			cell: (job) => {
 				const isPaid = job.paymentStatus === "paid";
 
 				return (
@@ -286,7 +285,11 @@ export default function ModeratorPaymentsPage() {
 
 			{jobsQuery.isSuccess && jobs.length > 0 ? (
 				<div className="overflow-x-auto rounded-xl border border-border">
-					<DataTable columns={columns} data={jobs} />
+					<DataTable
+						columns={columns}
+						data={jobs}
+						getRowKey={(job) => job.id}
+					/>
 				</div>
 			) : null}
 		</div>

@@ -31,16 +31,16 @@ describe("moderator payments management page", () => {
 
 	it("renders payment/exposure badges and the paid toggle buttons", () => {
 		expect(source).toContain("StatusBadge");
-		expect(source).toContain(
-			"PAYMENT_STATUS_LABELS[row.original.paymentStatus]"
-		);
-		expect(source).toContain("EXPOSURE_TYPE_LABELS[row.original.exposureType]");
+		expect(source).toContain("PAYMENT_STATUS_LABELS[job.paymentStatus]");
+		expect(source).toContain("EXPOSURE_TYPE_LABELS[job.exposureType]");
 		expect(source).toContain("결제완료 처리");
 		expect(source).toContain("미결제로 되돌리기");
 	});
 
 	it("lists rows in a DataTable with an unpaid-only filter", () => {
 		expect(source).toContain("DataTable");
+		expect(source).toContain("DataColumn<PaymentJob>");
+		expect(source).toContain("getRowKey={(job) => job.id}");
 		expect(source).toContain("Switch");
 		expect(source).toContain("onlyUnpaid");
 		expect(source).toContain("미결제만 보기");
