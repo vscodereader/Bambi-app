@@ -162,4 +162,13 @@ describe("visual job marketplace components", () => {
 		expect(editSource).toContain("previewPay");
 		expect(editSource).toContain("previewCompanyName");
 	});
+
+	it("wires the moderator ad-products console and nav", () => {
+		const page = readComponent("../../app/moderator/ad-products/page.tsx");
+		const layout = readComponent("../../app/moderator/layout.tsx");
+		const nav = readComponent("persona-nav.tsx");
+		expect(page).toContain("listCatalogAdmin");
+		expect(layout).toContain("/moderator/ad-products");
+		expect(nav).toContain("adProducts");
+	});
 });
