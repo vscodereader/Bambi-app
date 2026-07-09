@@ -232,10 +232,13 @@ export default function EditEmployerJobPage({
 
 		setForm({
 			description: job.description,
+			exposureDurationDays: job.exposureDurationDays ?? null,
+			exposureType: job.exposureType,
 			industryCategory: job.industryCategory,
 			interviewNotes: job.interviewNotes ?? "",
 			organizationId: job.organizationId,
 			payAmount: String(job.payAmount),
+			paymentMethod: job.paymentMethod ?? null,
 			payUnit: job.payUnit,
 			region: job.region,
 			teamId: job.teamId ?? "",
