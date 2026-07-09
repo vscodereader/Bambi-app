@@ -102,9 +102,23 @@ describe("visual job marketplace components", () => {
 	it("uses 80% width for the employer page shell", () => {
 		const source = readComponent("page-shell.tsx");
 
-		// 구인자 화면 본문도 헤더와 동일 폭(min(80%,72rem))으로 맞춘다
+		// 구인자 화면 본문은 헤더와 별개로 기존 폭(min(80%,72rem))을 유지한다
 		expect(source).toContain("max-w-[min(80%,72rem)]");
 		expect(source).not.toContain("max-w-6xl");
+	});
+
+	it("aligns the employer header to the shared fixed content width", () => {
+		const source = readComponent("../../app/employer/layout.tsx");
+
+		// 구인자 헤더 바를 채용(/seeker)과 동일한 고정폭으로 통일한다(본문 폭은 그대로)
+		expect(source).toContain("contentWidthClassName={APP_CONTENT_MAX_W}");
+	});
+
+	it("aligns the moderator header to the shared fixed content width", () => {
+		const source = readComponent("../../app/moderator/layout.tsx");
+
+		// 운영자 헤더 바도 채용(/seeker)과 동일한 고정폭으로 통일한다(콘솔 본문 폭은 그대로)
+		expect(source).toContain("contentWidthClassName={APP_CONTENT_MAX_W}");
 	});
 
 	it("defines employer listing preview with cover fallback and preview copy", () => {
