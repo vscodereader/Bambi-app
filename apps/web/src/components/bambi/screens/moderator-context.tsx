@@ -317,13 +317,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			hasApiData: hasUsersApiData || moderationUsersQuery.isSuccess,
 			previewData: users,
 		});
+		// 초기 로딩만 로딩으로 취급한다. 백그라운드 refetch(isFetching)를 포함하면
+		// 상세 페이지(queue/[id])의 `if (isLoading) return null`이 결제 패널을 언마운트하고,
+		// 언마운트→리마운트 때 동일 쿼리를 다시 refetch해 listJobPosts를 무한 호출한다.
 		const isLoading =
 			moderationQueueQuery.isPending ||
-			moderationQueueQuery.isFetching ||
 			moderationReportsQuery.isPending ||
-			moderationReportsQuery.isFetching ||
-			moderationUsersQuery.isPending ||
-			moderationUsersQuery.isFetching;
+			moderationUsersQuery.isPending;
 		const isBulkApplying =
 			bulkSetJobPostStatusMutation.isPending ||
 			bulkSetReportStatusMutation.isPending ||
@@ -641,15 +641,12 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		hasReportsApiData,
 		hasUsersApiData,
 		moderationQueueQuery.data,
-		moderationQueueQuery.isFetching,
 		moderationQueueQuery.isPending,
 		moderationQueueQuery.isSuccess,
 		moderationReportsQuery.data,
-		moderationReportsQuery.isFetching,
 		moderationReportsQuery.isPending,
 		moderationReportsQuery.isSuccess,
 		moderationUsersQuery.data,
-		moderationUsersQuery.isFetching,
 		moderationUsersQuery.isPending,
 		moderationUsersQuery.isSuccess,
 		queue,
