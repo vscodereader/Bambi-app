@@ -237,19 +237,23 @@ function ActiveMemberActions({
 	memberLabel,
 	onRemove,
 	onRoleChange,
+	onTransfer,
 	removePending,
 	role,
 	roleChangePending,
+	transferPending,
 }: {
 	disabled: boolean;
 	memberLabel: string;
 	onRemove: () => void;
 	onRoleChange: (role: OrganizationRole) => void;
+	onTransfer: () => void;
 	removePending: boolean;
 	role: string;
 	roleChangePending: boolean;
+	transferPending: boolean;
 }) {
-	const [confirming, setConfirming] = useState(false);
+	const [mode, setMode] = useState<"idle" | "remove" | "transfer">("idle");
 
 	return (
 		<div className="flex flex-col gap-1.5">
@@ -266,16 +270,15 @@ function ActiveMemberActions({
 					<SelectValue />
 				</SelectTrigger>
 				<SelectContent>
-					<SelectItem value="owner">소유자</SelectItem>
 					<SelectItem value="manager">매니저</SelectItem>
 					<SelectItem value="staff">스태프</SelectItem>
 				</SelectContent>
 			</Select>
-			{confirming ? (
+			{mode === "remove" && (
 				<div className="flex gap-2">
 					<Button
 						disabled={removePending}
-						onClick={() => setConfirming(false)}
+						onClick={() => setMode("idle")}
 						size="sm"
 						type="button"
 						variant="outline"
@@ -292,17 +295,56 @@ function ActiveMemberActions({
 						내보내기
 					</Button>
 				</div>
-			) : (
-				<Button
-					className="text-destructive"
-					disabled={disabled || removePending}
-					onClick={() => setConfirming(true)}
-					size="sm"
-					type="button"
-					variant="ghost"
-				>
-					내보내기
-				</Button>
+			)}
+			{mode === "transfer" && (
+				<div className="flex flex-col gap-1.5">
+					<p className="text-muted-foreground text-xs">
+						{memberLabel} 님에게 소유권을 넘기면 회원님은 매니저로 전환됩니다.
+						계속할까요?
+					</p>
+					<div className="flex gap-2">
+						<Button
+							disabled={transferPending}
+							onClick={() => setMode("idle")}
+							size="sm"
+							type="button"
+							variant="outline"
+						>
+							취소
+						</Button>
+						<Button
+							disabled={transferPending}
+							onClick={onTransfer}
+							size="sm"
+							type="button"
+						>
+							소유권 이전
+						</Button>
+					</div>
+				</div>
+			)}
+			{mode === "idle" && (
+				<div className="flex flex-wrap gap-2">
+					<Button
+						disabled={disabled || transferPending}
+						onClick={() => setMode("transfer")}
+						size="sm"
+						type="button"
+						variant="outline"
+					>
+						소유권 이전
+					</Button>
+					<Button
+						className="text-destructive"
+						disabled={disabled || removePending}
+						onClick={() => setMode("remove")}
+						size="sm"
+						type="button"
+						variant="ghost"
+					>
+						내보내기
+					</Button>
+				</div>
 			)}
 		</div>
 	);
@@ -318,8 +360,10 @@ function MemberRowActions({
 	onRemove,
 	onResubmit,
 	onRoleChange,
+	onTransfer,
 	removePending,
 	roleChangePending,
+	transferPending,
 }: {
 	actionPending: boolean;
 	canManage: boolean;
@@ -330,8 +374,10 @@ function MemberRowActions({
 	onRemove: () => void;
 	onResubmit: () => void;
 	onRoleChange: (role: OrganizationRole) => void;
+	onTransfer: () => void;
 	removePending: boolean;
 	roleChangePending: boolean;
+	transferPending: boolean;
 }) {
 	if (!canManage) {
 		return (
@@ -346,9 +392,11 @@ function MemberRowActions({
 				memberLabel={memberLabel}
 				onRemove={onRemove}
 				onRoleChange={onRoleChange}
+				onTransfer={onTransfer}
 				removePending={removePending}
 				role={member.role}
 				roleChangePending={roleChangePending}
+				transferPending={transferPending}
 			/>
 		);
 	}
@@ -430,6 +478,26 @@ export function TeamMemberList({
 			onSuccess: async () => {
 				toast.success("멤버 권한을 변경했습니다.");
 				await invalidateMembers();
+			},
+		})
+	);
+	const transferOwnershipMutation = useMutation(
+		orpc.bambi.teams.transferOwnership.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "소유권을 이전하지 못했습니다.");
+			},
+			onSuccess: async () => {
+				toast.success(
+					"소유권을 이전했습니다. 회원님은 매니저로 전환되었습니다."
+				);
+				// 소유권이 넘어가면 요청자의 canManageOrganization도 바뀌므로 조직
+				// 정보까지 무효화해 화면 권한 상태를 즉시 갱신한다.
+				await Promise.all([
+					invalidateMembers(),
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.organizations.getMine.queryKey(),
+					}),
+				]);
 			},
 		})
 	);
@@ -703,8 +771,15 @@ export function TeamMemberList({
 										role: value,
 									})
 								}
+								onTransfer={() =>
+									transferOwnershipMutation.mutate({
+										memberId: member.id,
+										organizationId: organization.organizationId,
+									})
+								}
 								removePending={removeMemberMutation.isPending}
 								roleChangePending={setRoleMutation.isPending}
+								transferPending={transferOwnershipMutation.isPending}
 							/>
 						</div>
 					))}
