@@ -23,8 +23,6 @@ import {
 	Clock,
 	Eye,
 	type LucideIcon,
-	Megaphone,
-	Settings,
 	TriangleAlert,
 	Zap,
 } from "lucide-react";
@@ -111,22 +109,10 @@ const quickLinks: {
 		label: "프로모션 관리",
 	},
 	{
-		description: "유료 광고 상품을 확인해요",
-		href: "/employer/ad-guide" as Route,
-		icon: Megaphone,
-		label: "광고 상품 안내",
-	},
-	{
 		description: "조회·지원 지표를 확인해요",
 		href: "/employer/analytics" as Route,
 		icon: ChartColumn,
 		label: "성과 분석",
-	},
-	{
-		description: "사업자·팀 정보를 관리해요",
-		href: "/employer/settings" as Route,
-		icon: Settings,
-		label: "조직 설정",
 	},
 	{
 		description: "지원자 화면을 미리 봐요",

@@ -1,9 +1,16 @@
 "use client";
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
-import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import { buttonVariants } from "@bambi-app/ui/components/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@bambi-app/ui/components/dropdown-menu";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { Trash2 } from "lucide-react";
+import { EllipsisIcon, PencilIcon, Trash2 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import type { DataColumn } from "@/components/bambi/data-table";
@@ -14,8 +21,8 @@ import {
 	PAYMENT_STATUS_LABELS,
 	remainingDays,
 } from "@/lib/bambi/exposure";
-import { formatDateTime, formatPay } from "@/lib/bambi-format";
-import { jobStatusLabels, verificationStatusLabels } from "@/lib/bambi-options";
+import { formatPay } from "@/lib/bambi-format";
+import { jobStatusLabels } from "@/lib/bambi-options";
 
 export type EmployerJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["jobs"]["listMine"]>
@@ -26,32 +33,12 @@ type Tone = React.ComponentProps<typeof StatusBadge>["tone"];
 const getJobStatusLabel = (status: string): string =>
 	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
 
-const getVerificationStatusLabel = (status: string): string =>
-	verificationStatusLabels[status as keyof typeof verificationStatusLabels] ??
-	status;
-
 const getJobStatusTone = (status: string): Tone => {
 	if (status === "published") {
 		return "good";
 	}
 
 	if (status === "pending_review") {
-		return "warning";
-	}
-
-	if (status === "rejected") {
-		return "danger";
-	}
-
-	return "default";
-};
-
-const getVerificationStatusTone = (status: string): Tone => {
-	if (status === "verified") {
-		return "good";
-	}
-
-	if (status === "pending") {
 		return "warning";
 	}
 
@@ -121,14 +108,6 @@ export function getEmployerJobsColumns({
 			),
 		},
 		{
-			id: "exposureType",
-			header: "노출 상품",
-			sortValue: (job) => EXPOSURE_TYPE_LABELS[job.exposureType],
-			cell: (job) => (
-				<StatusBadge>{EXPOSURE_TYPE_LABELS[job.exposureType]}</StatusBadge>
-			),
-		},
-		{
 			id: "status",
 			header: "공고 상태",
 			sortValue: (job) => getJobStatusLabel(job.status),
@@ -136,6 +115,14 @@ export function getEmployerJobsColumns({
 				<StatusBadge tone={getJobStatusTone(job.status)}>
 					{getJobStatusLabel(job.status)}
 				</StatusBadge>
+			),
+		},
+		{
+			id: "exposureType",
+			header: "노출 상품",
+			sortValue: (job) => EXPOSURE_TYPE_LABELS[job.exposureType],
+			cell: (job) => (
+				<StatusBadge>{EXPOSURE_TYPE_LABELS[job.exposureType]}</StatusBadge>
 			),
 		},
 		{
@@ -149,77 +136,55 @@ export function getEmployerJobsColumns({
 			),
 		},
 		{
-			id: "remainingDays",
-			header: "남은 기간",
+			id: "period",
+			header: "기간",
 			sortValue: (job) =>
 				remainingDays(job.exposureEndsAt) ?? Number.POSITIVE_INFINITY,
 			cell: (job) => {
+				const label = expiryLabel(job.exposureEndsAt);
 				const days = remainingDays(job.exposureEndsAt);
-
-				if (days === null) {
-					return <span className="text-muted-foreground">-</span>;
-				}
+				const showDays = days !== null && days > 0;
 
 				return (
-					<span className="whitespace-nowrap">{`${Math.max(0, days)}일`}</span>
+					<StatusBadge tone={getExpiryTone(label)}>
+						{showDays ? `${label} · ${days}일` : label}
+					</StatusBadge>
 				);
 			},
 		},
 		{
-			id: "expiry",
-			header: "만료 상태",
-			sortValue: (job) => expiryLabel(job.exposureEndsAt),
-			cell: (job) => {
-				const label = expiryLabel(job.exposureEndsAt);
-
-				return <StatusBadge tone={getExpiryTone(label)}>{label}</StatusBadge>;
-			},
-		},
-		{
-			id: "employerVerificationStatus",
-			header: "사업자 인증",
-			sortValue: (job) =>
-				getVerificationStatusLabel(job.employerVerificationStatus),
-			cell: (job) => (
-				<StatusBadge
-					tone={getVerificationStatusTone(job.employerVerificationStatus)}
-				>
-					{getVerificationStatusLabel(job.employerVerificationStatus)}
-				</StatusBadge>
-			),
-		},
-		{
-			id: "updatedAt",
-			header: "수정일",
-			sortValue: (job) => job.updatedAt.getTime(),
-			cell: (job) => (
-				<span className="whitespace-nowrap text-muted-foreground">
-					{formatDateTime(job.updatedAt)}
-				</span>
-			),
-		},
-		{
 			id: "actions",
 			header: "관리",
+			headerClassName: "text-right",
+			cellClassName: "text-right",
 			cell: (job) => (
-				<div className="flex items-center gap-2">
-					<Link
-						className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
-						href={`/employer/jobs/${job.id}/edit` as Route}
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						aria-label="공고 관리 메뉴"
+						className={cn(
+							buttonVariants({ size: "icon-sm", variant: "ghost" })
+						)}
 					>
-						수정
-					</Link>
-					<Button
-						disabled={deletingJobId === job.id}
-						onClick={() => onRequestDelete(job.id)}
-						size="sm"
-						type="button"
-						variant="destructive"
-					>
-						<Trash2 data-icon="inline-start" />
-						삭제
-					</Button>
-				</div>
+						<EllipsisIcon />
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem
+							render={<Link href={`/employer/jobs/${job.id}/edit` as Route} />}
+						>
+							<PencilIcon />
+							수정
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							disabled={deletingJobId === job.id}
+							onClick={() => onRequestDelete(job.id)}
+							variant="destructive"
+						>
+							<Trash2 />
+							삭제
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			),
 		},
 	];
