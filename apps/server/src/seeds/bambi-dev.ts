@@ -1469,7 +1469,7 @@ const seedJobs = async (userIds: Record<DevUserKey, string>): Promise<void> => {
 		.delete(jobPostMedia)
 		.where(inArray(jobPostMedia.jobPostId, seedJobIds));
 
-	const jobs: SeedJobPost[] = [
+	const baseJobs: SeedJobPost[] = [
 		{
 			id: ids.lunaPublishedJob,
 			organizationId: ids.lunaOrganization,
@@ -1587,6 +1587,13 @@ const seedJobs = async (userIds: Record<DevUserKey, string>): Promise<void> => {
 			publishedAt,
 		},
 	];
+
+	// 무료 공고 즉시 노출 정책: 게시(published) 공고는 결제완료(paid)로 시드해 마켓
+	// 목록·상세에 바로 노출되게 한다. pending_review는 미결제로 결제관리 큐에 남는다.
+	const jobs: SeedJobPost[] = baseJobs.map((job) => ({
+		...job,
+		paymentStatus: job.status === "published" ? "paid" : "unpaid",
+	}));
 
 	await db
 		.insert(jobPost)
@@ -2023,6 +2030,8 @@ const buildRichJobRow = (
 		interviewNotes: "면접 일정은 밤비 채팅에서 확정합니다.",
 		rejectionReason: def.rejectionReason ?? null,
 		riskFlags: def.status === "pending_review" ? ["needs_review"] : [],
+		// 무료 공고 즉시 노출 정책: 게시 공고는 결제완료로 시드해 바로 노출되게 한다.
+		paymentStatus: def.status === "published" ? "paid" : "unpaid",
 		publishedAt: def.status === "published" ? jobPublishedAt(def.n) : null,
 	};
 };
