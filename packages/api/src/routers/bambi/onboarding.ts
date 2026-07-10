@@ -8,6 +8,7 @@ import {
 	teamMember,
 } from "@bambi-app/db/schema/auth";
 import {
+	bambiLegalConsent,
 	bambiProfile,
 	employerOrganizationProfile,
 	employerTeamProfile,
@@ -38,6 +39,14 @@ const profileInput = z.object({
 	gender: z.enum(["male", "female"]).optional(),
 	phoneNumber: z.string().min(3).max(30).optional(),
 });
+
+// 현재 유효한 법적 문서 버전. 웹 약관(/terms)·개인정보 처리방침(/privacy) 페이지의
+// 시행일(2026-07-10)과 일치시킨다. 문서를 개정하면 이 값을 올린다 — 재동의가 새 이력
+// 행으로 쌓인다.
+const LEGAL_CONSENT_VERSIONS = {
+	terms_of_service: "2026-07-10",
+	privacy_policy: "2026-07-10",
+} as const;
 
 const profileUpdateInput = profileInput.omit({ gender: true }).extend({
 	role: z.enum(["job_seeker", "employer", "admin"]).optional(),
@@ -428,6 +437,22 @@ export const onboardingRouter = {
 				userId: context.session.user.id,
 			})
 		),
+
+	// 회원가입 시 이용약관·개인정보 처리방침 동의 이력을 저장한다. 현재 유효한 두 문서
+	// 버전에 대한 동의를 남기며, 같은 버전 중복 저장은 unique index로 무시한다(재호출 안전).
+	recordLegalConsent: protectedProcedure.handler(async ({ context }) => {
+		const userId = context.session.user.id;
+		const rows = (
+			Object.entries(LEGAL_CONSENT_VERSIONS) as [
+				"terms_of_service" | "privacy_policy",
+				string,
+			][]
+		).map(([document, version]) => ({ userId, document, version }));
+
+		await db.insert(bambiLegalConsent).values(rows).onConflictDoNothing();
+
+		return { recorded: rows.length };
+	}),
 
 	upsertEmployerOrganizationProfile: protectedProcedure
 		.input(organizationProfileInput)
