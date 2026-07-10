@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
 import { BellIcon, ShieldIcon } from "./icons";
+import { SiteFooter } from "./site-footer";
 
 export interface NavItem {
 	href: Route;
@@ -110,6 +111,8 @@ export function ResponsiveAppShell({
 	const pathname = usePathname();
 	const isPublic = variant === "public";
 	const isModerator = variant === "moderator";
+	// 푸터는 구직자·구인자 셸에만 노출한다(운영자·공개 셸 제외).
+	const showFooter = variant === "seeker" || variant === "employer";
 	const activeHref = findActiveHref(pathname, navItems);
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
@@ -220,6 +223,12 @@ export function ResponsiveAppShell({
 				)}
 			>
 				{children}
+				{showFooter ? (
+					<SiteFooter
+						contentWidthClassName={contentWidthClassName}
+						withBottomNavClearance
+					/>
+				) : null}
 			</main>
 		</div>
 	);
