@@ -385,6 +385,7 @@ export default function ModeratorPaymentsPage() {
 						columns={columns}
 						data={jobs}
 						getRowKey={(job) => job.id}
+						pageSize={10}
 					/>
 				</div>
 			) : null}

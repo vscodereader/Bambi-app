@@ -273,6 +273,7 @@ export function ModeratorUsersTable({
 				data={users}
 				emptyMessage="사용자가 없습니다"
 				getRowKey={(user) => user.id}
+				pageSize={10}
 			/>
 		</div>
 	);
