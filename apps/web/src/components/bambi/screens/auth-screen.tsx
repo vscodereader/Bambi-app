@@ -107,8 +107,9 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 				...(gender ? { gender } : {}),
 			});
 			queryClient.invalidateQueries();
-			// 조직은 업체정보 제출 시 생성된다. /employer 대시보드가 업체정보 입력을 유도한다.
-			router.push("/employer" as Route);
+			// 역할과 무관하게 구직자 홈으로 진입한다. 구인자는 헤더/탭바의 "구인 관리"
+			// 버튼으로 /employer에 들어가고, 대시보드가 업체정보 입력을 유도한다.
+			router.push("/seeker" as Route);
 			return;
 		}
 		await client.bambi.onboarding.createJobSeekerProfile({
