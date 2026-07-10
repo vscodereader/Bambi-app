@@ -30,6 +30,9 @@ export type EmployerJob = Awaited<
 
 type Tone = React.ComponentProps<typeof StatusBadge>["tone"];
 
+// 제목이 이 길이를 넘으면 말줄임(…)으로 처리한다.
+const TITLE_MAX_LENGTH = 17;
+
 const getJobStatusLabel = (status: string): string =>
 	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
 
@@ -81,9 +84,12 @@ export function getEmployerJobsColumns({
 			cell: (job) => (
 				<Link
 					className="font-medium text-foreground underline-offset-4 hover:underline"
-					href={`/employer/jobs/${job.id}/edit` as Route}
+					href={`/seeker/jobs/${job.id}` as Route}
+					title={job.title}
 				>
-					{job.title}
+					{job.title.length > TITLE_MAX_LENGTH
+						? `${job.title.slice(0, TITLE_MAX_LENGTH)}…`
+						: job.title}
 				</Link>
 			),
 		},
