@@ -53,11 +53,14 @@ function NavBar({ children }: { children: ReactNode }) {
 // ---- 구직자 ----------------------------------------------------------------
 export function SeekerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
+	// 내 정보 하위 페이지(신고 내역·예정된 면접·차단 목록·계정 설정)도 하단 탭을
+	// 유지한다 → /seeker/me 및 그 하위 경로 전체에서 노출.
 	const showNav =
 		path === "/seeker" ||
 		path === "/seeker/chats" ||
 		path === "/seeker/community" ||
-		path === "/seeker/me";
+		path === "/seeker/me" ||
+		path.startsWith("/seeker/me/");
 	return (
 		<>
 			<Content withBottomNav={showNav}>{children}</Content>
