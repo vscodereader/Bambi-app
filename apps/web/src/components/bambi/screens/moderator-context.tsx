@@ -206,8 +206,10 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		})
 	);
 	const moderationUsersQuery = useQuery(
+		// 운영자 콘솔은 전체 계정을 관리해야 하므로 넉넉한 상한으로 조회한다(목록은
+		// DataTable에서 클라이언트 페이징). 계정이 이 상한을 넘어서면 서버 페이징 필요.
 		orpc.bambi.moderation.listUsers.queryOptions({
-			input: { limit: 50 },
+			input: { limit: 1000 },
 		})
 	);
 	const setJobPostStatusMutation = useMutation(
@@ -368,7 +370,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		const invalidateUsers = async () => {
 			await queryClient.invalidateQueries({
 				queryKey: orpc.bambi.moderation.listUsers.queryKey({
-					input: { limit: 50 },
+					input: { limit: 1000 },
 				}),
 			});
 		};
@@ -443,7 +445,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 						onSuccess: async () => {
 							await queryClient.invalidateQueries({
 								queryKey: orpc.bambi.moderation.listUsers.queryKey({
-									input: { limit: 50 },
+									input: { limit: 1000 },
 								}),
 							});
 						},

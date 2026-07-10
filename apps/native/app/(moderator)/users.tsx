@@ -14,7 +14,7 @@ import { orpc } from "@/src/lib/orpc";
 
 export default function ModeratorUsersScreen() {
 	const usersQuery = useQuery(
-		orpc.bambi.moderation.listUsers.queryOptions({ input: { limit: 50 } })
+		orpc.bambi.moderation.listUsers.queryOptions({ input: { limit: 1000 } })
 	);
 	const setStatusMutation = useMutation(
 		orpc.bambi.moderation.setUserStatus.mutationOptions({

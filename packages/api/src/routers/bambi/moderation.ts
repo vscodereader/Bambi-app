@@ -86,7 +86,8 @@ const listJobPostsInput = z.object({
 
 const listUsersInput = z.object({
 	status: accountStatusSchema.optional(),
-	limit: z.number().int().min(1).max(100).default(50),
+	// 운영자 콘솔은 전체 계정 관리가 목적이라 상한을 넉넉히 둔다(기본도 전체 조회).
+	limit: z.number().int().min(1).max(1000).default(1000),
 });
 
 const setReportStatusInput = z.object({
