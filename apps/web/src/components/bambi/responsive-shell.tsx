@@ -2,6 +2,15 @@
 
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import {
+	NavigationMenu,
+	NavigationMenuContent,
+	NavigationMenuItem,
+	NavigationMenuLink,
+	NavigationMenuList,
+	NavigationMenuTrigger,
+	navigationMenuTriggerStyle,
+} from "@bambi-app/ui/components/navigation-menu";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import Link from "next/link";
@@ -16,11 +25,22 @@ export interface NavItem {
 	label: string;
 }
 
-export const DEFAULT_NAV_ITEMS: NavItem[] = [
+// 여러 하위 링크를 하나의 드롭다운으로 접는 nav 그룹.
+export interface NavGroup {
+	items: NavItem[];
+	label: string;
+}
+
+export type NavEntry = NavItem | NavGroup;
+
+function isNavGroup(entry: NavEntry): entry is NavGroup {
+	return "items" in entry;
+}
+
+export const DEFAULT_NAV_ITEMS: NavEntry[] = [
 	{ href: "/seeker", label: "채용정보" },
 	{ href: "/seeker/chats", label: "채팅" },
-	{ href: "/", label: "안전가이드" },
-	{ href: "/employer", label: "업체 인증" },
+	{ href: "/", label: "업체 인증" },
 	{ href: "/seeker/community", label: "수다방" },
 ];
 
@@ -30,18 +50,31 @@ interface ResponsiveAppShellProps {
 	// 데스크톱 헤더 바의 콘텐츠 폭. 기본은 유동 80%, 채용 경로는 고정폭을 주입한다.
 	contentWidthClassName?: string;
 	headerSlot?: ReactNode;
-	navItems?: readonly NavItem[];
+	navItems?: readonly NavEntry[];
 	showDesktopNav?: boolean;
 	variant?: "public" | "seeker" | "employer" | "moderator";
 }
 
-// 현재 경로와 가장 길게 일치하는 nav 항목만 활성 처리한다(/seeker·/seeker/chats 중복 방지).
+// 그룹을 포함한 nav 목록에서 실제 링크만 평탄화한다.
+function collectNavLinks(entries: readonly NavEntry[]): NavItem[] {
+	const links: NavItem[] = [];
+	for (const entry of entries) {
+		if (isNavGroup(entry)) {
+			links.push(...entry.items);
+		} else {
+			links.push(entry);
+		}
+	}
+	return links;
+}
+
+// 현재 경로와 가장 길게 일치하는 nav 링크만 활성 처리한다(/seeker·/seeker/chats 중복 방지).
 function findActiveHref(
 	pathname: string,
-	navItems: readonly NavItem[]
+	entries: readonly NavEntry[]
 ): Route | undefined {
 	let active: NavItem | undefined;
-	for (const item of navItems) {
+	for (const item of collectNavLinks(entries)) {
 		const matches =
 			pathname === item.href ||
 			(item.href !== "/" && pathname.startsWith(`${item.href}/`));
@@ -50,6 +83,49 @@ function findActiveHref(
 		}
 	}
 	return active?.href;
+}
+
+// 데스크톱 헤더 nav 링크·그룹 트리거 공통 톤(밤비 헤더: 굵게·muted).
+function navItemClassName(isActive: boolean): string {
+	return cn(
+		"h-auto px-3 py-2 font-bold text-muted-foreground text-sm no-underline",
+		isActive && "bg-muted text-foreground"
+	);
+}
+
+// 여러 하위 링크를 접는 nav 그룹. NavigationMenu 트리거로 펼친다.
+function NavGroupItem({
+	activeHref,
+	group,
+}: {
+	activeHref?: Route;
+	group: NavGroup;
+}) {
+	const isActive = group.items.some((item) => item.href === activeHref);
+	return (
+		<NavigationMenuItem>
+			<NavigationMenuTrigger className={navItemClassName(isActive)}>
+				{group.label}
+			</NavigationMenuTrigger>
+			<NavigationMenuContent>
+				<ul className="grid w-44 gap-1">
+					{group.items.map((item) => (
+						<li key={`${item.href}-${item.label}`}>
+							<NavigationMenuLink
+								className={cn(
+									"font-bold text-sm",
+									item.href === activeHref && "bg-muted/50"
+								)}
+								render={<Link href={item.href} />}
+							>
+								{item.label}
+							</NavigationMenuLink>
+						</li>
+					))}
+				</ul>
+			</NavigationMenuContent>
+		</NavigationMenuItem>
+	);
 }
 
 // 구직자 홈(seeker/public 셸) 헤더에서 "내 정보" 왼쪽에 노출되는 역할 전환 버튼.
@@ -125,25 +201,36 @@ export function ResponsiveAppShell({
 							<Logo lang="ko" size="md" />
 						</Link>
 						{navItems.length > 0 ? (
-							<nav className="flex items-center gap-1">
-								{navItems.map((item) => {
-									const isActive = item.href === activeHref;
-									return (
-										<Link
-											aria-current={isActive ? "page" : undefined}
-											className={cn(
-												buttonVariants({ variant: "ghost" }),
-												"h-auto px-3 py-2 font-bold text-muted-foreground text-sm no-underline",
-												isActive && "bg-muted text-foreground"
-											)}
-											href={item.href}
-											key={`${item.href}-${item.label}`}
-										>
-											{item.label}
-										</Link>
-									);
-								})}
-							</nav>
+							<NavigationMenu>
+								<NavigationMenuList className="gap-1">
+									{navItems.map((entry) => {
+										if (isNavGroup(entry)) {
+											return (
+												<NavGroupItem
+													activeHref={activeHref}
+													group={entry}
+													key={`group-${entry.label}`}
+												/>
+											);
+										}
+										const isActive = entry.href === activeHref;
+										return (
+											<NavigationMenuItem key={`${entry.href}-${entry.label}`}>
+												<NavigationMenuLink
+													aria-current={isActive ? "page" : undefined}
+													className={cn(
+														navigationMenuTriggerStyle(),
+														navItemClassName(isActive)
+													)}
+													render={<Link href={entry.href} />}
+												>
+													{entry.label}
+												</NavigationMenuLink>
+											</NavigationMenuItem>
+										);
+									})}
+								</NavigationMenuList>
+							</NavigationMenu>
 						) : null}
 						<div className="ml-auto flex items-center gap-2">
 							{headerSlot}
