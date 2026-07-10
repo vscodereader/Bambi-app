@@ -25,7 +25,7 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 	const isEmployer = role === "employer";
 	const isModerator = role === "admin";
 	let value = "home";
-	if (path === "/seeker/me") {
+	if (path === "/seeker/me" || path.startsWith("/seeker/me/")) {
 		value = "me";
 	} else if (path === "/seeker/chats") {
 		value = "chat";
