@@ -293,14 +293,15 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		const apiUsers = moderationUsersQuery.data?.map<ManagedUser>((item) => ({
 			id: item.userId,
 			joined: formatDate(item.createdAt),
-			name: item.displayName ?? item.email,
+			name: item.name,
+			displayName: item.displayName ?? "",
 			note: item.isPhoneVerified
 				? "휴대폰 인증 완료"
 				: "휴대폰 인증이 필요합니다.",
-			reports: 0,
+			reports: item.reportsCount,
 			role: getRoleLabel(item.role),
 			status: item.status,
-			warnings: item.status === "warned" ? 1 : 0,
+			warnings: item.warningsCount,
 		}));
 		const visibleQueue = getVisibleModerationData({
 			apiData: apiQueue,
