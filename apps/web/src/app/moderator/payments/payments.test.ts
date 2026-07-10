@@ -8,16 +8,16 @@ const readSource = (relativePath: string) =>
 describe("moderator payments management page", () => {
 	const source = readSource("page.tsx");
 
-	it("loads the payment queue and toggles payment via setJobPostPayment", () => {
-		// 결제 대상 목록 조회 + 결제 상태 전환 뮤테이션 연결
+	it("loads the payment queue and processes bulk payments via bulkSetJobPostPayment", () => {
+		// 결제 대상 목록 조회 + 일괄 결제 상태 전환 뮤테이션 연결
 		expect(source).toContain(
 			"orpc.bambi.moderation.listJobsForPayment.queryOptions"
 		);
 		expect(source).toContain(
-			"orpc.bambi.moderation.setJobPostPayment.mutationOptions()"
+			"orpc.bambi.moderation.bulkSetJobPostPayment.mutationOptions()"
 		);
-		expect(source).toContain("setPayment(");
-		expect(source).toContain("paymentStatus: nextStatus");
+		expect(source).toContain("bulkSetPayment(");
+		expect(source).toContain("{ jobPostIds, paymentStatus }");
 
 		// 성공 시 목록 무효화 + 토스트
 		expect(source).toContain(
@@ -25,8 +25,8 @@ describe("moderator payments management page", () => {
 		);
 		expect(source).toContain("invalidateQueries");
 		expect(source).toContain('from "sonner"');
-		expect(source).toContain("결제완료로 처리했어요");
-		expect(source).toContain("미결제로 되돌렸어요");
+		expect(source).toContain("처리했어요");
+		expect(source).toContain("미결제로 되돌리기");
 	});
 
 	it("renders payment/exposure badges and the paid toggle buttons", () => {
