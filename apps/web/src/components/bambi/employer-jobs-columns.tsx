@@ -55,6 +55,16 @@ const getJobStatusTone = (status: string): Tone => {
 const getPaymentStatusTone = (status: string): Tone =>
 	status === "paid" ? "good" : "warning";
 
+// 공개 상세(/seeker/jobs/[id])는 published+paid 게이트를 통과해야만 열린다. 그렇지 않은
+// 공고 제목을 링크로 걸면 클릭 시 404가 나므로, 공개 가능한 공고만 링크로 노출한다.
+const isPubliclyViewable = (job: EmployerJob): boolean =>
+	job.status === "published" && job.paymentStatus === "paid";
+
+const getTruncatedTitle = (title: string): string =>
+	title.length > TITLE_MAX_LENGTH
+		? `${title.slice(0, TITLE_MAX_LENGTH)}…`
+		: title;
+
 const getExpiryTone = (label: string): Tone => {
 	if (label === "진행중") {
 		return "good";
@@ -81,17 +91,20 @@ export function getEmployerJobsColumns({
 			id: "title",
 			header: "제목",
 			sortValue: (job) => job.title,
-			cell: (job) => (
-				<Link
-					className="font-medium text-foreground underline-offset-4 hover:underline"
-					href={`/seeker/jobs/${job.id}` as Route}
-					title={job.title}
-				>
-					{job.title.length > TITLE_MAX_LENGTH
-						? `${job.title.slice(0, TITLE_MAX_LENGTH)}…`
-						: job.title}
-				</Link>
-			),
+			cell: (job) =>
+				isPubliclyViewable(job) ? (
+					<Link
+						className="font-medium text-foreground underline-offset-4 hover:underline"
+						href={`/seeker/jobs/${job.id}` as Route}
+						title={job.title}
+					>
+						{getTruncatedTitle(job.title)}
+					</Link>
+				) : (
+					<span className="font-medium text-foreground" title={job.title}>
+						{getTruncatedTitle(job.title)}
+					</span>
+				),
 		},
 		{
 			id: "categoryRegion",
