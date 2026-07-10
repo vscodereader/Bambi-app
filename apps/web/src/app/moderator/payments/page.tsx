@@ -1,12 +1,13 @@
 "use client";
 
 // 밤비 — 운영자 전용 결제 관리 목록.
-// 공개 노출은 published + paymentStatus=paid 게이트를 통과해야 하는데, 인증 업체
-// 공고는 검수 큐 없이 자동 published라 검수 상세의 결제 패널로는 처리할 수 없다.
-// 이 목록에서 draft를 제외한 공고의 결제 상태를 직접 전환한다.
+// 공개 노출은 published + paymentStatus=paid 게이트를 통과해야 하는데, 유료 노출상품을
+// 선택한 공고는 결제완료 처리 전까지 노출되지 않는다. 무료 공고는 등록 즉시 paid라 여기엔
+// 유료(미결제) 공고 위주로 남는다. 제목 왼쪽 체크박스로 다중 선택해 일괄 결제 처리한다.
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { Button } from "@bambi-app/ui/components/button";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
@@ -61,15 +62,41 @@ const getExpiryTone = (label: string): Tone => {
 };
 
 interface PaymentColumnsOptions {
-	onToggle: (job: PaymentJob) => void;
-	pendingId: null | string;
+	allSelected: boolean;
+	onToggleAll: (checked: boolean) => void;
+	onToggleRow: (id: string) => void;
+	selectedIds: Set<string>;
+	someSelected: boolean;
 }
 
 function getPaymentColumns({
-	onToggle,
-	pendingId,
+	allSelected,
+	onToggleAll,
+	onToggleRow,
+	selectedIds,
+	someSelected,
 }: PaymentColumnsOptions): DataColumn<PaymentJob>[] {
 	return [
+		{
+			id: "select",
+			headerClassName: "w-10",
+			cellClassName: "w-10",
+			header: (
+				<Checkbox
+					aria-label="전체 선택"
+					checked={allSelected}
+					indeterminate={someSelected && !allSelected}
+					onCheckedChange={(checked) => onToggleAll(checked === true)}
+				/>
+			),
+			cell: (job) => (
+				<Checkbox
+					aria-label="공고 선택"
+					checked={selectedIds.has(job.id)}
+					onCheckedChange={() => onToggleRow(job.id)}
+				/>
+			),
+		},
 		{
 			id: "title",
 			header: "공고 제목",
@@ -168,31 +195,13 @@ function getPaymentColumns({
 				</span>
 			),
 		},
-		{
-			id: "actions",
-			header: "결제 처리",
-			cell: (job) => {
-				const isPaid = job.paymentStatus === "paid";
-
-				return (
-					<Button
-						disabled={pendingId === job.id}
-						onClick={() => onToggle(job)}
-						size="sm"
-						type="button"
-						variant={isPaid ? "outline" : "default"}
-					>
-						{isPaid ? "미결제로 되돌리기" : "결제완료 처리"}
-					</Button>
-				);
-			},
-		},
 	];
 }
 
 export default function ModeratorPaymentsPage() {
 	const queryClient = useQueryClient();
 	const [onlyUnpaid, setOnlyUnpaid] = useState(false);
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
 	const queryInput = { onlyUnpaid } as const;
 	const jobsQuery = useQuery(
@@ -200,49 +209,91 @@ export default function ModeratorPaymentsPage() {
 			input: queryInput,
 		})
 	);
-	const setPaymentMutation = useMutation(
-		orpc.bambi.moderation.setJobPostPayment.mutationOptions()
+	const bulkPaymentMutation = useMutation(
+		orpc.bambi.moderation.bulkSetJobPostPayment.mutationOptions()
 	);
 
-	const pendingId = setPaymentMutation.isPending
-		? (setPaymentMutation.variables?.jobPostId ?? null)
-		: null;
+	const jobs = jobsQuery.data ?? [];
 
-	const { mutate: setPayment } = setPaymentMutation;
-	const handleToggle = useCallback(
-		(job: PaymentJob) => {
-			const nextStatus = job.paymentStatus === "paid" ? "unpaid" : "paid";
+	const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
-			setPayment(
-				{ jobPostId: job.id, paymentStatus: nextStatus },
+	const toggleRow = useCallback((id: string) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+
+			if (next.has(id)) {
+				next.delete(id);
+			} else {
+				next.add(id);
+			}
+
+			return next;
+		});
+	}, []);
+
+	const toggleAll = useCallback(
+		(checked: boolean) => {
+			setSelectedIds(checked ? new Set(jobs.map((job) => job.id)) : new Set());
+		},
+		[jobs]
+	);
+
+	// 현재 목록 기준으로 전체/부분 선택 여부를 판정한다(필터가 바뀌어도 정확).
+	const allSelected =
+		jobs.length > 0 && jobs.every((job) => selectedIds.has(job.id));
+	const someSelected = jobs.some((job) => selectedIds.has(job.id));
+
+	const { mutate: bulkSetPayment, isPending: isBulkPending } =
+		bulkPaymentMutation;
+	const handleBulkPayment = useCallback(
+		(paymentStatus: "paid" | "unpaid") => {
+			const jobPostIds = Array.from(selectedIds);
+
+			if (jobPostIds.length === 0) {
+				return;
+			}
+
+			bulkSetPayment(
+				{ jobPostIds, paymentStatus },
 				{
 					onError: () =>
 						toast("결제 상태를 변경하지 못했어요. 다시 시도해 주세요."),
-					onSuccess: async () => {
+					onSuccess: async (result) => {
 						await queryClient.invalidateQueries({
 							queryKey: orpc.bambi.moderation.listJobsForPayment.queryKey({
 								input: { onlyUnpaid },
 							}),
 						});
+						clearSelection();
+
+						const actionLabel =
+							paymentStatus === "paid" ? "결제완료" : "미결제 전환";
 						toast(
-							nextStatus === "paid"
-								? "결제완료로 처리했어요"
-								: "미결제로 되돌렸어요"
+							result.failed > 0
+								? `${result.succeeded}건 ${actionLabel} 처리, ${result.failed}건 실패`
+								: `${result.succeeded}건 ${actionLabel} 처리했어요`
 						);
 					},
 				}
 			);
 		},
-		[onlyUnpaid, queryClient, setPayment]
+		[selectedIds, bulkSetPayment, queryClient, onlyUnpaid, clearSelection]
 	);
 
-	// pendingId(진행 중 결제 대상)와 handleToggle 변화에만 컬럼을 재생성한다.
+	// 선택 상태·전체선택 판정·토글 핸들러 변화에만 컬럼을 재생성한다.
 	const columns = useMemo(
-		() => getPaymentColumns({ onToggle: handleToggle, pendingId }),
-		[pendingId, handleToggle]
+		() =>
+			getPaymentColumns({
+				allSelected,
+				onToggleAll: toggleAll,
+				onToggleRow: toggleRow,
+				selectedIds,
+				someSelected,
+			}),
+		[allSelected, someSelected, selectedIds, toggleAll, toggleRow]
 	);
 
-	const jobs = jobsQuery.data ?? [];
+	const selectedCount = selectedIds.size;
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
@@ -258,11 +309,49 @@ export default function ModeratorPaymentsPage() {
 					<Switch
 						checked={onlyUnpaid}
 						id="only-unpaid"
-						onCheckedChange={setOnlyUnpaid}
+						onCheckedChange={(checked) => {
+							setOnlyUnpaid(checked);
+							clearSelection();
+						}}
 					/>
 					<Label htmlFor="only-unpaid">미결제만 보기</Label>
 				</div>
 			</div>
+
+			{selectedCount > 0 ? (
+				<div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3">
+					<span className="font-medium text-foreground text-sm">
+						{selectedCount}개 선택됨
+					</span>
+					<div className="flex flex-wrap items-center gap-2">
+						<Button
+							disabled={isBulkPending}
+							onClick={() => handleBulkPayment("paid")}
+							size="sm"
+							type="button"
+						>
+							결제완료 처리
+						</Button>
+						<Button
+							disabled={isBulkPending}
+							onClick={() => handleBulkPayment("unpaid")}
+							size="sm"
+							type="button"
+							variant="outline"
+						>
+							미결제로 되돌리기
+						</Button>
+						<Button
+							onClick={clearSelection}
+							size="sm"
+							type="button"
+							variant="ghost"
+						>
+							선택 해제
+						</Button>
+					</div>
+				</div>
+			) : null}
 
 			{jobsQuery.isPending ? (
 				<div className="flex flex-col gap-2">

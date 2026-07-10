@@ -159,6 +159,11 @@ const bulkSetUserStatusInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
+const bulkSetJobPostPaymentInput = z.object({
+	jobPostIds: z.array(z.string().uuid()),
+	paymentStatus: z.enum(["unpaid", "paid"]),
+});
+
 type ReportTargetType = z.infer<typeof targetTypeSchema>;
 type ReportRow = typeof report.$inferSelect;
 type JobPostModerationStatus = z.infer<typeof jobPostModerationStatusSchema>;
@@ -820,6 +825,52 @@ export const moderationRouter = {
 								reason: input.reason,
 								metadata: { bulk: true },
 							});
+						},
+						targetIds: input.jobPostIds,
+					})
+			);
+		}),
+
+	// 결제관리 목록에서 선택한 공고들의 결제 상태를 일괄 전환한다.
+	// 단건 setJobPostPayment와 동일하게 paid 전환 시 노출 만료일(exposureEndsAt)을 계산한다.
+	bulkSetJobPostPayment: protectedProcedure
+		.input(bulkSetJobPostPaymentInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			return await db.transaction(
+				async (tx) =>
+					await executeBulkModeration({
+						processTarget: async (jobPostId) => {
+							const [existing] = await tx
+								.select({
+									exposureDurationDays: jobPost.exposureDurationDays,
+								})
+								.from(jobPost)
+								.where(eq(jobPost.id, jobPostId))
+								.limit(1);
+
+							if (!existing) {
+								throw new ORPCError("NOT_FOUND", {
+									message: "Job post was not found.",
+								});
+							}
+
+							const exposureEndsAt =
+								input.paymentStatus === "paid" &&
+								existing.exposureDurationDays !== null
+									? new Date(
+											Date.now() + existing.exposureDurationDays * MS_PER_DAY
+										)
+									: null;
+
+							await tx
+								.update(jobPost)
+								.set({
+									exposureEndsAt,
+									paymentStatus: input.paymentStatus,
+								})
+								.where(eq(jobPost.id, jobPostId));
 						},
 						targetIds: input.jobPostIds,
 					})
