@@ -48,6 +48,12 @@ describe("resolveGate", () => {
 			to: "/seeker",
 		});
 	});
+	it("lets terms/privacy pass for logged-out visitors", () => {
+		expect(resolveGate({ pathname: "/terms", ...fresh }).type).toBe("next");
+		expect(resolveGate({ pathname: "/privacy", ...fresh }).type).toBe("next");
+		expect(resolveGate({ pathname: "/terms", ...guest }).type).toBe("next");
+		expect(resolveGate({ pathname: "/privacy", ...guest }).type).toBe("next");
+	});
 	it("lets api and media pass", () => {
 		expect(resolveGate({ pathname: "/api/guest", ...fresh }).type).toBe("next");
 		expect(

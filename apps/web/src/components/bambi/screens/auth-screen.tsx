@@ -1,13 +1,16 @@
 "use client";
 
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import {
 	type BambiGenderValue,
@@ -92,6 +95,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [signupRole, setSignupRole] = useState<SignupRole>("job_seeker");
+	const [agreedToTerms, setAgreedToTerms] = useState(false);
 	const isSignUp = mode === "sign-up";
 	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
 	const subtitle = isSignUp
@@ -133,6 +137,11 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 				text: "이메일과 8자 이상 비밀번호를 확인해 주세요.",
 				tone: "error",
 			});
+			return;
+		}
+
+		if (isSignUp && !agreedToTerms) {
+			toast("이용약관과 개인정보 처리방침에 동의해주세요");
 			return;
 		}
 
@@ -339,6 +348,41 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 								role={notice.tone === "error" ? "alert" : "status"}
 							>
 								{notice.text}
+							</div>
+						) : null}
+						{isSignUp ? (
+							<div className="flex items-start gap-2.5">
+								<Checkbox
+									checked={agreedToTerms}
+									className="mt-0.5"
+									id="auth-agree-terms"
+									onCheckedChange={(checked) =>
+										setAgreedToTerms(checked === true)
+									}
+								/>
+								<label
+									className="text-muted-foreground text-sm leading-relaxed"
+									htmlFor="auth-agree-terms"
+								>
+									<Link
+										className="font-bold text-foreground underline-offset-2 hover:underline"
+										href={"/terms" as Route}
+										rel="noreferrer"
+										target="_blank"
+									>
+										이용약관
+									</Link>
+									{" 및 "}
+									<Link
+										className="font-bold text-foreground underline-offset-2 hover:underline"
+										href={"/privacy" as Route}
+										rel="noreferrer"
+										target="_blank"
+									>
+										개인정보 처리방침
+									</Link>
+									에 동의합니다.
+								</label>
 							</div>
 						) : null}
 						<Button
