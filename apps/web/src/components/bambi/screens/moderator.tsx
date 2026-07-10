@@ -1274,6 +1274,8 @@ function ModMoreTab({ active }: { active: boolean }) {
 													: "text-foreground hover:bg-muted/50"
 											)}
 											key={item.href}
+											// Link는 <a>라 네이티브 버튼이 아니므로 base-ui에 명시(경고 방지).
+											nativeButton={false}
 											render={<Link href={item.href} />}
 										>
 											{item.label}
