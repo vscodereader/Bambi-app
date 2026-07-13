@@ -122,17 +122,8 @@ export function SeekerJobDetailResponsive({
 									{job.location} · {job.type}
 								</p>
 							</div>
-							{job.coverImage ? (
-								<Image
-									alt={job.coverImage.altText || job.coverImage.fileName}
-									className="aspect-[16/9] w-full rounded-lg border object-cover"
-									height={360}
-									src={job.coverImage.url}
-									unoptimized
-									width={640}
-								/>
-							) : null}
-							<div className="grid gap-3 sm:grid-cols-2">
+							{/* 대표 이미지는 목록·카드 썸네일 전용이라 상세에서는 노출하지 않는다. */}
+							<div className="flex flex-col gap-3">
 								<InfoTile
 									icon={<DollarCircle />}
 									label="급여"
