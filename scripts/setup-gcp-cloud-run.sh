@@ -11,19 +11,21 @@ GITHUB_REPO="${GITHUB_REPO:-beyondsoft-kr/bambi-app}"
 SA_NAME="github-deployer"
 POOL_ID="github-pool"
 PROVIDER_ID="github-provider"
+GCS_PUBLIC_BUCKET="${GCS_PUBLIC_BUCKET:-bambi-storage-public}"
 
 echo "▶ 프로젝트: ${PROJECT_ID} / 리전: ${REGION} / GitHub: ${GITHUB_REPO}"
 gcloud config set project "${PROJECT_ID}" >/dev/null
 
-echo "▶ 1/6 API 활성화"
+echo "▶ 1/7 API 활성화"
 gcloud services enable \
 	run.googleapis.com \
 	artifactregistry.googleapis.com \
 	iamcredentials.googleapis.com \
 	sts.googleapis.com \
-	secretmanager.googleapis.com
+	secretmanager.googleapis.com \
+	storage.googleapis.com
 
-echo "▶ 2/6 Artifact Registry(docker) 저장소: ${REPOSITORY}"
+echo "▶ 2/7 Artifact Registry(docker) 저장소: ${REPOSITORY}"
 if ! gcloud artifacts repositories describe "${REPOSITORY}" --location="${REGION}" >/dev/null 2>&1; then
 	gcloud artifacts repositories create "${REPOSITORY}" \
 		--repository-format=docker \
@@ -31,7 +33,7 @@ if ! gcloud artifacts repositories describe "${REPOSITORY}" --location="${REGION
 		--description="bambi container images"
 fi
 
-echo "▶ 3/6 배포용 서비스계정: ${SA_NAME}"
+echo "▶ 3/7 배포용 서비스계정: ${SA_NAME}"
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 if ! gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1; then
 	gcloud iam service-accounts create "${SA_NAME}" --display-name="GitHub Actions deployer"
@@ -50,7 +52,17 @@ RUNTIME_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 gcloud iam service-accounts add-iam-policy-binding "${RUNTIME_SA}" \
 	--member="serviceAccount:${SA_EMAIL}" --role="roles/iam.serviceAccountUser" >/dev/null
 
-echo "▶ 4/6 Workload Identity Federation (키리스 GitHub 인증)"
+echo "▶ 4/7 런타임 SA의 GCS 권한: gs://${GCS_PUBLIC_BUCKET}"
+# 공고 이미지·광고 배너 CRUD. 버킷 스코프로만 부여해 다른 버킷에는 손대지 못하게 한다.
+# (objectUser = objects create/get/list/update/delete)
+gcloud storage buckets add-iam-policy-binding "gs://${GCS_PUBLIC_BUCKET}" \
+	--member="serviceAccount:${RUNTIME_SA}" --role="roles/storage.objectUser" >/dev/null
+# 업로드용 V4 서명 URL은 JSON 키 없이 IAM signBlob으로 서명한다. 서명자와 대상이 같은 SA라
+# 런타임 SA가 "자기 자신"에 대해 TokenCreator를 가져야 한다. 없으면 createMediaUpload가 500.
+gcloud iam service-accounts add-iam-policy-binding "${RUNTIME_SA}" \
+	--member="serviceAccount:${RUNTIME_SA}" --role="roles/iam.serviceAccountTokenCreator" >/dev/null
+
+echo "▶ 5/7 Workload Identity Federation (키리스 GitHub 인증)"
 if ! gcloud iam workload-identity-pools describe "${POOL_ID}" --location=global >/dev/null 2>&1; then
 	gcloud iam workload-identity-pools create "${POOL_ID}" \
 		--location=global --display-name="GitHub Actions"
@@ -71,7 +83,7 @@ gcloud iam service-accounts add-iam-policy-binding "${SA_EMAIL}" \
 
 WIF_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/providers/${PROVIDER_ID}"
 
-echo "▶ 5/6 Secret Manager: 서비스별 시크릿 생성 + 런타임 SA 접근권한"
+echo "▶ 6/7 Secret Manager: 서비스별 시크릿 생성 + 런타임 SA 접근권한"
 # 값은 넣지 않는다(버전 등록은 사람이 실제 값으로). Cloud Run이 env로 마운트한다.
 for SVC in bambi-server bambi-server-dev; do
 	for KEY in database-url better-auth-secret google-ai-key; do
@@ -91,7 +103,7 @@ for SVC in bambi-server bambi-server-dev; do
 	done
 done
 
-echo "▶ 6/6 남은 수동 단계 안내"
+echo "▶ 7/7 남은 수동 단계 안내"
 cat <<CMDS
 
 # ── ① 시크릿 실제 값 등록 (필수 — 없으면 배포 시 revision 생성 실패) ──
@@ -112,6 +124,18 @@ gh variable set BETTER_AUTH_URL --repo ${GITHUB_REPO} --env production --body "h
 gh variable set CORS_ORIGIN     --repo ${GITHUB_REPO} --env production --body "https://(웹 도메인)"
 gh variable set BETTER_AUTH_URL --repo ${GITHUB_REPO} --env test --body "https://bambi-server-dev-${PROJECT_NUMBER}.${REGION}.run.app"
 gh variable set CORS_ORIGIN     --repo ${GITHUB_REPO} --env test --body "https://(웹 프리뷰 도메인)"
+
+# ── ③ Vercel(웹) 환경변수 — 빌드타임에 필요 ──
+# next.config.ts가 이 값으로 images.remotePatterns를 만든다. 없으면 배포된 웹에서
+# next/image가 GCS 호스트를 거부한다. Production/Preview/Development 모두에 등록.
+# NEXT_PUBLIC_GCS_PUBLIC_BASE_URL=https://storage.googleapis.com/${GCS_PUBLIC_BUCKET}
+
+# ── ④ 버킷 CORS — 이미 적용됨(실서비스·테스트·로컬 오리진) ──
+# 브라우저가 서명 URL로 직접 PUT 하므로 웹 오리진이 CORS에 있어야 한다. 콘솔 UI가 없어
+# gcloud로만 설정하며, --cors-file은 병합이 아니라 전체 교체다. 오리진 추가가 필요하면
+# 현재 값을 먼저 확인한 뒤 갱신한다:
+#   gcloud storage buckets describe gs://${GCS_PUBLIC_BUCKET} --format="value(cors_config)"
+#   gcloud storage buckets update   gs://${GCS_PUBLIC_BUCKET} --cors-file=<json>
 # ──────────────────────────────────────────────────────────
 
 CMDS
