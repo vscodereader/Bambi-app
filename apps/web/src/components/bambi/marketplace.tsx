@@ -14,7 +14,6 @@ import {
 	SheetTitle,
 } from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
-import Image from "next/image";
 import { type ReactNode, useState } from "react";
 import {
 	ALL_OPTION,
@@ -38,6 +37,7 @@ import {
 	Search2,
 	StarIcon,
 } from "./icons";
+import { JobCoverImage } from "./job-cover-image";
 
 type FilterChange = (nextFilters: MarketplaceFilters) => void;
 
@@ -473,15 +473,13 @@ export function ResponsiveJobCard({
 			>
 				<div className="flex items-start gap-3">
 					{job.coverImage ? (
-						<Image
-							alt={job.coverImage.altText || job.coverImage.fileName}
+						<JobCoverImage
 							className={cn(
 								"size-10 shrink-0 rounded-lg border object-cover",
 								active ? "border-coral-200" : "border-border"
 							)}
 							height={40}
-							src={job.coverImage.url}
-							unoptimized
+							media={job.coverImage}
 							width={40}
 						/>
 					) : (
