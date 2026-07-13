@@ -27,20 +27,21 @@ export function EmployerListingPreview({
 		<Card className="rounded-lg" pad="md" tone="outline">
 			<div className="mb-3 flex items-center justify-between gap-3">
 				<h2 className="m-0 font-extrabold text-sm">목록 노출 미리보기</h2>
-				<Badge tone="pending">대표 이미지 반영</Badge>
+				<Badge tone="pending">공고 썸네일 반영</Badge>
 			</div>
+			{/* 썸네일 크기·비율을 실제 공고 카드(visual-job-card)와 동일하게 맞춘다. */}
 			<div className="flex items-start gap-3 rounded-lg border border-border bg-secondary/40 p-3">
 				{coverImageUrl ? (
 					<Image
-						alt={`${displayCompanyName} 대표 이미지 미리보기`}
-						className="size-14 shrink-0 rounded-md border border-border object-cover"
+						alt={`${displayCompanyName} 공고 썸네일 미리보기`}
+						className="h-14 w-30 shrink-0 rounded-md border border-border object-cover"
 						height={56}
 						src={coverImageUrl}
 						unoptimized
-						width={56}
+						width={120}
 					/>
 				) : (
-					<div className="flex size-14 shrink-0 items-center justify-center rounded-md bg-coral-50 font-extrabold text-coral-700 text-sm">
+					<div className="flex h-14 w-30 shrink-0 items-center justify-center rounded-md bg-coral-50 font-extrabold text-coral-700 text-sm">
 						{getInitials(displayCompanyName)}
 					</div>
 				)}
@@ -53,7 +54,8 @@ export function EmployerListingPreview({
 						<strong className="text-foreground">{pay || "급여"}</strong>
 					</div>
 					<p className="mt-2 mb-0 text-muted-foreground text-xs">
-						대표 이미지는 스페셜/추천 채용 카드와 전체 공고 row에 함께 사용돼요.
+						공고 썸네일은 카드에서는 가로형으로, 전체 공고 목록에서는
+						정사각형으로 잘려 보여요. 중요한 내용은 가운데에 두세요.
 					</p>
 				</div>
 			</div>

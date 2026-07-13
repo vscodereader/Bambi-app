@@ -5,6 +5,7 @@ import type {
 	Job,
 	JobDescriptionBlock,
 	JobMedia,
+	JobMediaUsage,
 	JobPerformanceMetrics,
 } from "./types";
 
@@ -12,13 +13,17 @@ export interface ApiJobMedia {
 	altText?: null | string;
 	byteSize: number;
 	fileName: string;
+	height?: null | number;
 	id?: string;
 	mimeType: string;
 	storageKey: string;
-	usage: "cover" | "detail";
+	usage: JobMediaUsage;
+	width?: null | number;
 }
 
 export interface ApiJobMediaSet {
+	adHorizontal?: ApiJobMedia | null;
+	adVertical?: ApiJobMedia | null;
 	cover?: ApiJobMedia | null;
 	detail?: ApiJobMedia[];
 }

@@ -135,19 +135,24 @@ const focusFirstInvalidField = (form: HTMLFormElement | null) => {
 };
 
 // 이미 저장된 이미지의 미리보기는 공개 버킷 URL을 그대로 쓴다(마켓플레이스 표시 경로와 동일).
+// width/height는 배너 비율 검증에 쓰이며, 컬럼 추가 전에 저장된 행에는 없을 수 있다.
 const toJobFormMediaItem = (item: {
 	altText: string;
 	byteSize: number;
 	fileName: string;
+	height?: null | number;
 	mimeType: string;
 	storageKey: string;
+	width?: null | number;
 }): JobFormMediaItem => ({
 	altText: item.altText,
 	byteSize: item.byteSize,
 	fileName: item.fileName,
+	height: item.height ?? undefined,
 	mimeType: item.mimeType,
 	previewUrl: jobMediaPublicUrl(item.storageKey),
 	storageKey: item.storageKey,
+	width: item.width ?? undefined,
 });
 
 export default function EditEmployerJobPage({
@@ -231,6 +236,12 @@ export default function EditEmployerJobPage({
 		});
 		setDescriptionBlocks(job.descriptionBlocks ?? []);
 		setMedia({
+			adHorizontal: job.media.adHorizontal
+				? toJobFormMediaItem(job.media.adHorizontal)
+				: null,
+			adVertical: job.media.adVertical
+				? toJobFormMediaItem(job.media.adVertical)
+				: null,
 			cover: job.media.cover ? toJobFormMediaItem(job.media.cover) : null,
 			detail: job.media.detail.map(toJobFormMediaItem),
 		});
