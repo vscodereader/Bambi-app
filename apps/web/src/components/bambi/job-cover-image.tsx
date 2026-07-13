@@ -26,13 +26,24 @@ export function JobCoverImage({
 	const [failedUrl, setFailedUrl] = useState<null | string>(null);
 	const isFailed = failedUrl === media.url;
 	const src = isFailed ? sampleThumbnailUrl(media.storageKey) : media.url;
+	// 폴백이 실패를 완전히 가려서, 잘못된 버킷 URL·업로드 누락도 "남의 샘플 사진"으로만
+	// 보인다. 개발 중에는 콘솔에 남겨 원인을 추적할 수 있게 한다.
+	const handleError = () => {
+		if (process.env.NODE_ENV === "development") {
+			console.warn(
+				`[JobCoverImage] 이미지를 불러오지 못해 샘플 썸네일로 대체합니다: ${media.url}`
+			);
+		}
+
+		setFailedUrl(media.url);
+	};
 
 	return (
 		<Image
 			alt={media.altText || media.fileName}
 			className={className}
 			height={height}
-			onError={() => setFailedUrl(media.url)}
+			onError={handleError}
 			src={src}
 			unoptimized
 			width={width}

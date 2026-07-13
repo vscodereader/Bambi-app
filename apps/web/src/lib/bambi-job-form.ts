@@ -205,6 +205,14 @@ const uploadFileToSignedUrl = async ({
 	uploadIntent: JobPostMediaUploadIntent;
 }): Promise<void> => {
 	if (!isSignedUploadUrl(uploadIntent.uploadUrl)) {
+		// 개발 환경의 플레이스홀더는 건너뛰지만, 프로덕션에서 서명되지 않은 URL이 왔다면
+		// 서버 구성이 잘못된 것이다. 조용히 넘기면 업로드 없이 공고만 저장된다.
+		if (process.env.NODE_ENV === "production") {
+			throw new Error(
+				"이미지 업로드를 사용할 수 없습니다. 관리자에게 문의해 주세요."
+			);
+		}
+
 		return;
 	}
 

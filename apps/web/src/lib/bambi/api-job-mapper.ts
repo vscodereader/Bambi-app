@@ -51,6 +51,8 @@ const TRAILING_SLASH_PATTERN = /\/$/;
 
 // 공개 버킷의 객체는 브라우저가 직접 조회한다(서버·서명 URL을 거치지 않는다).
 // 버킷이 구성되지 않은 개발 환경에서는 storageKey 기준 결정적 샘플 썸네일로 폴백한다.
+// 프로덕션 빌드는 packages/env/src/web.ts가 base URL 누락 시 빌드를 실패시키므로,
+// 이 폴백은 개발에서만 도달한다(배포된 화면에 샘플이 뜨는 일은 없다).
 export const jobMediaPublicUrl = (storageKey: string): string => {
 	const publicBaseUrl = env.NEXT_PUBLIC_GCS_PUBLIC_BASE_URL;
 
