@@ -46,6 +46,7 @@ import {
 	JOB_POST_DETAIL_IMAGE_LIMIT,
 	JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH,
 	type JobPostMediaPolicyInput,
+	type JobPostMediaUsage,
 	validateJobPostImageUpload,
 	validateJobPostMediaSet,
 } from "../../services/bambi-job-media-policy";
@@ -59,7 +60,10 @@ import {
 	buildPublicJobSections,
 	type PublicPromotedJobListRow,
 } from "../../services/bambi-promotions";
-import { createJobPostMediaUploadIntent } from "../../services/bambi-storage";
+import {
+	createJobPostMediaUploadIntent,
+	isOwnedJobPostMediaKey,
+} from "../../services/bambi-storage";
 import { deletePublicObjects } from "../../services/gcs";
 
 const jobDescriptionBlockInput = z.object({
@@ -72,12 +76,16 @@ const jobPostMediaInput = z.object({
 	altText: z.string().max(JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH).default(""),
 	byteSize: z.number().int().min(1),
 	fileName: z.string().max(180),
+	height: z.number().int().min(1).max(20_000).optional(),
 	mimeType: z.string().min(1).max(120),
 	storageKey: z.string().min(1).max(512),
+	width: z.number().int().min(1).max(20_000).optional(),
 });
 
 const jobPostMediaSetInput = z
 	.object({
+		adHorizontal: jobPostMediaInput.optional(),
+		adVertical: jobPostMediaInput.optional(),
 		cover: jobPostMediaInput.optional(),
 		detail: z
 			.array(jobPostMediaInput)
@@ -160,6 +168,12 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 	switch (code) {
 		case "alt_text_too_long":
 			return "Job post media alt text is too long.";
+		case "banner_aspect_ratio_mismatch":
+			return "광고 배너 비율이 규격과 맞지 않습니다. 가로형 7:3, 세로형 4:9 이미지를 등록해 주세요.";
+		case "banner_dimensions_required":
+			return "광고 배너 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.";
+		case "too_many_ad_banners":
+			return "광고 배너는 가로형·세로형 각 1장만 등록할 수 있습니다.";
 		case "block_text_too_long":
 			return "Job description block text is too long.";
 		case "empty_block_text":
@@ -235,12 +249,33 @@ const getMediaSetItems = (
 		});
 	}
 
+	// 광고 배너는 usage당 1장이므로 position은 항상 0이다.
+	if (media.adHorizontal) {
+		rows.push({
+			...media.adHorizontal,
+			usage: "ad_horizontal",
+			position: 0,
+		});
+	}
+
+	if (media.adVertical) {
+		rows.push({
+			...media.adVertical,
+			usage: "ad_vertical",
+			position: 0,
+		});
+	}
+
 	return rows;
 };
 
-const requireValidJobPostMediaSet = (
-	media: JobPostMediaSetInput
-): JobPostMediaRowInput[] => {
+const requireValidJobPostMediaSet = ({
+	media,
+	organizationId,
+}: {
+	media: JobPostMediaSetInput;
+	organizationId: string;
+}): JobPostMediaRowInput[] => {
 	const rows = getMediaSetItems(media);
 	const result = validateJobPostMediaSet(rows);
 
@@ -248,6 +283,19 @@ const requireValidJobPostMediaSet = (
 		throw new ORPCError("BAD_REQUEST", {
 			message: getJobPostPolicyErrorMessage(result.issues[0]?.code ?? ""),
 		});
+	}
+
+	// 서명 발급은 조직 소유권을 검사하지만, 저장 단계에서 클라이언트가 임의 키를 보내면
+	// 그 검사가 무의미해진다. 공고 삭제·교체 시 이 키로 GCS 객체를 실제로 지우므로
+	// 남의 조직 키가 섞이면 원본이 삭제된다. 자기 조직 prefix가 아닌 키는 전부 거부한다.
+	for (const row of rows) {
+		if (
+			!isOwnedJobPostMediaKey({ organizationId, storageKey: row.storageKey })
+		) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "Job post media does not belong to this organization.",
+			});
+		}
 	}
 
 	return rows;
@@ -259,10 +307,11 @@ const buildJobPostMediaInsertRows = ({
 	media,
 	organizationId,
 }: BuildJobPostMediaRowsInput) =>
-	requireValidJobPostMediaSet(media).map((item) => ({
+	requireValidJobPostMediaSet({ media, organizationId }).map((item) => ({
 		altText: item.altText.trim(),
 		byteSize: item.byteSize,
 		fileName: item.fileName.trim(),
+		height: item.height ?? null,
 		jobPostId,
 		mimeType: item.mimeType,
 		organizationId,
@@ -270,7 +319,20 @@ const buildJobPostMediaInsertRows = ({
 		storageKey: item.storageKey,
 		uploadedByUserId: actorUserId,
 		usage: item.usage,
+		width: item.width ?? null,
 	}));
+
+interface JobPostMediaRow {
+	usage: JobPostMediaUsage;
+}
+
+// 응답 형태는 폼 입력 형태와 대칭이다(cover/detail/adHorizontal/adVertical).
+const toJobPostMediaSet = <Row extends JobPostMediaRow>(rows: Row[]) => ({
+	adHorizontal: rows.find((item) => item.usage === "ad_horizontal") ?? null,
+	adVertical: rows.find((item) => item.usage === "ad_vertical") ?? null,
+	cover: rows.find((item) => item.usage === "cover") ?? null,
+	detail: rows.filter((item) => item.usage === "detail"),
+});
 
 const getJobPostMediaStorageKeys = async (
 	jobPostId: string
@@ -290,10 +352,7 @@ const getJobPostMediaSet = async (jobPostId: string) => {
 		.where(eq(jobPostMedia.jobPostId, jobPostId))
 		.orderBy(asc(jobPostMedia.usage), asc(jobPostMedia.position));
 
-	return {
-		cover: rows.find((item) => item.usage === "cover") ?? null,
-		detail: rows.filter((item) => item.usage === "detail"),
-	};
+	return toJobPostMediaSet(rows);
 };
 
 const ratingAverageSql = sql<number>`coalesce((select avg(${review.rating}) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::double precision`;
@@ -760,7 +819,10 @@ export const jobsRouter = {
 			}
 
 			const preparedContent = prepareJobPostContent(input);
-			const mediaRows = requireValidJobPostMediaSet(media);
+			const mediaRows = requireValidJobPostMediaSet({
+				media,
+				organizationId: input.organizationId,
+			});
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status = getInitialJobPostStatus({
 				employerVerificationStatus:
@@ -806,10 +868,7 @@ export const jobsRouter = {
 
 				return {
 					...created,
-					media: {
-						cover: insertedMedia.find((item) => item.usage === "cover") ?? null,
-						detail: insertedMedia.filter((item) => item.usage === "detail"),
-					},
+					media: toJobPostMediaSet(insertedMedia),
 				};
 			});
 		}),
@@ -870,7 +929,12 @@ export const jobsRouter = {
 			}
 
 			const preparedContent = prepareJobPostContent(input.data);
-			const mediaRows = media ? requireValidJobPostMediaSet(media) : null;
+			const mediaRows = media
+				? requireValidJobPostMediaSet({
+						media,
+						organizationId: existing.organizationId,
+					})
+				: null;
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status: JobPostStatus = riskDetected
 				? "pending_review"
@@ -931,11 +995,7 @@ export const jobsRouter = {
 
 					return {
 						...updated,
-						media: {
-							cover:
-								insertedMedia.find((item) => item.usage === "cover") ?? null,
-							detail: insertedMedia.filter((item) => item.usage === "detail"),
-						},
+						media: toJobPostMediaSet(insertedMedia),
 					};
 				}
 

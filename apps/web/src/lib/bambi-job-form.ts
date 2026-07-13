@@ -1,4 +1,9 @@
 import {
+	isAllowedJobAdBannerAspectRatio,
+	JOB_AD_BANNER_SPECS,
+	type JobAdBannerUsage,
+} from "./bambi/job-ad-banner-spec";
+import {
 	industryOptions,
 	payUnitOptions,
 	regionOptions,
@@ -16,6 +21,7 @@ const DESCRIPTION_BLOCK_MAX_COUNT = 12;
 const DESCRIPTION_BLOCK_TEXT_MAX_LENGTH = 800;
 const DETAIL_IMAGE_MAX_COUNT = 5;
 const IMAGE_ALT_TEXT_MAX_LENGTH = 120;
+const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
 	"image/jpeg",
 	"image/png",
@@ -42,13 +48,18 @@ export interface JobFormMediaItem {
 	byteSize: number;
 	file?: File;
 	fileName: string;
+	height?: number;
 	mimeType: string;
 	previewUrl?: string;
 	storageKey?: string;
 	uploadUrl?: string;
+	width?: number;
 }
 
 export interface JobFormMedia {
+	// 광고 상품을 신청·결제한 공고만 노출되지만, 이미지는 공고 등록 시 함께 받는다.
+	adHorizontal: JobFormMediaItem | null;
+	adVertical: JobFormMediaItem | null;
 	cover: JobFormMediaItem | null;
 	detail: JobFormMediaItem[];
 }
@@ -73,11 +84,15 @@ export interface JobPostMediaApiInput {
 	altText: string;
 	byteSize: number;
 	fileName: string;
+	height?: number;
 	mimeType: string;
 	storageKey: string;
+	width?: number;
 }
 
 export interface JobPostMediaApiSetInput {
+	adHorizontal?: JobPostMediaApiInput;
+	adVertical?: JobPostMediaApiInput;
 	cover?: JobPostMediaApiInput;
 	detail: JobPostMediaApiInput[];
 }
@@ -101,6 +116,8 @@ export interface JobPostInput {
 	industryCategory: string;
 	interviewNotes?: string;
 	media?: {
+		adHorizontal?: JobFormMediaItem;
+		adVertical?: JobFormMediaItem;
 		cover?: JobFormMediaItem;
 		detail: JobFormMediaItem[];
 	};
@@ -147,6 +164,8 @@ export const emptyJobForm: JobForm = {
 };
 
 export const emptyJobFormMedia: JobFormMedia = {
+	adHorizontal: null,
+	adVertical: null,
 	cover: null,
 	detail: [],
 };
@@ -205,6 +224,14 @@ const uploadFileToSignedUrl = async ({
 	uploadIntent: JobPostMediaUploadIntent;
 }): Promise<void> => {
 	if (!isSignedUploadUrl(uploadIntent.uploadUrl)) {
+		// 개발 환경의 플레이스홀더는 건너뛰지만, 프로덕션에서 서명되지 않은 URL이 왔다면
+		// 서버 구성이 잘못된 것이다. 조용히 넘기면 업로드 없이 공고만 저장된다.
+		if (process.env.NODE_ENV === "production") {
+			throw new Error(
+				"이미지 업로드를 사용할 수 없습니다. 관리자에게 문의해 주세요."
+			);
+		}
+
 		return;
 	}
 
@@ -221,6 +248,11 @@ const uploadFileToSignedUrl = async ({
 	}
 };
 
+interface ResolvedJobPostMediaItem {
+	apiInput: JobPostMediaApiInput;
+	item: JobFormMediaItem;
+}
+
 const resolveMediaItemForSubmit = async ({
 	createUploadIntent,
 	item,
@@ -233,14 +265,19 @@ const resolveMediaItemForSubmit = async ({
 	item: JobFormMediaItem;
 	organizationId: string;
 	teamId?: string;
-}): Promise<JobPostMediaApiInput> => {
+}): Promise<ResolvedJobPostMediaItem> => {
 	if (item.storageKey) {
 		return {
-			altText: trim(item.altText),
-			byteSize: item.byteSize,
-			fileName: trim(item.fileName),
-			mimeType: item.mimeType,
-			storageKey: item.storageKey,
+			apiInput: {
+				altText: trim(item.altText),
+				byteSize: item.byteSize,
+				fileName: trim(item.fileName),
+				height: item.height,
+				mimeType: item.mimeType,
+				storageKey: item.storageKey,
+				width: item.width,
+			},
+			item,
 		};
 	}
 
@@ -258,18 +295,69 @@ const resolveMediaItemForSubmit = async ({
 
 	await uploadFileToSignedUrl({ file: item.file, uploadIntent });
 
-	return {
+	const apiInput: JobPostMediaApiInput = {
 		altText: trim(item.altText),
 		byteSize: uploadIntent.byteSize,
 		fileName: uploadIntent.fileName,
+		height: item.height,
 		mimeType: uploadIntent.mimeType,
 		storageKey: uploadIntent.storageKey,
+		width: item.width,
+	};
+
+	return {
+		apiInput,
+		item: {
+			...item,
+			byteSize: apiInput.byteSize,
+			fileName: apiInput.fileName,
+			mimeType: apiInput.mimeType,
+			storageKey: apiInput.storageKey,
+		},
 	};
 };
 
+type JobFormMediaSlotKind = "adHorizontal" | "adVertical" | "cover" | "detail";
+
+interface JobFormMediaSlot {
+	item: JobFormMediaItem;
+	kind: JobFormMediaSlotKind;
+}
+
+const toMediaSlots = (media: {
+	adHorizontal?: JobFormMediaItem;
+	adVertical?: JobFormMediaItem;
+	cover?: JobFormMediaItem;
+	detail: JobFormMediaItem[];
+}): JobFormMediaSlot[] => {
+	const slots: JobFormMediaSlot[] = [];
+
+	if (media.cover) {
+		slots.push({ item: media.cover, kind: "cover" });
+	}
+
+	for (const item of media.detail) {
+		slots.push({ item, kind: "detail" });
+	}
+
+	if (media.adHorizontal) {
+		slots.push({ item: media.adHorizontal, kind: "adHorizontal" });
+	}
+
+	if (media.adVertical) {
+		slots.push({ item: media.adVertical, kind: "adVertical" });
+	}
+
+	return slots;
+};
+
+// onMediaResolved로 업로드된 storageKey를 폼 상태에 되돌린다. 이게 없으면 공고 저장이
+// 실패했을 때 재시도마다 같은 파일이 새 키로 다시 올라가, DB 행 없는 고아 객체가 쌓인다.
+// 일부만 실패해도 성공분의 키는 남기므로 재시도는 실패한 이미지만 다시 올린다.
 export const resolveJobPostMediaForSubmit = async ({
 	createUploadIntent,
 	media,
+	onMediaResolved,
 	organizationId,
 	teamId,
 }: {
@@ -277,9 +365,12 @@ export const resolveJobPostMediaForSubmit = async ({
 		input: JobPostMediaUploadRequest
 	) => Promise<JobPostMediaUploadIntent>;
 	media?: {
+		adHorizontal?: JobFormMediaItem;
+		adVertical?: JobFormMediaItem;
 		cover?: JobFormMediaItem;
 		detail: JobFormMediaItem[];
 	};
+	onMediaResolved?: (media: JobFormMedia) => void;
 	organizationId: string;
 	teamId?: string;
 }): Promise<JobPostMediaApiSetInput | undefined> => {
@@ -287,16 +378,9 @@ export const resolveJobPostMediaForSubmit = async ({
 		return;
 	}
 
-	const cover = media.cover
-		? await resolveMediaItemForSubmit({
-				createUploadIntent,
-				item: media.cover,
-				organizationId,
-				teamId,
-			})
-		: undefined;
-	const detail = await Promise.all(
-		media.detail.map((item) =>
+	const slots = toMediaSlots(media);
+	const settled = await Promise.allSettled(
+		slots.map(({ item }) =>
 			resolveMediaItemForSubmit({
 				createUploadIntent,
 				item,
@@ -305,11 +389,44 @@ export const resolveJobPostMediaForSubmit = async ({
 			})
 		)
 	);
+	const resolvedMedia: JobFormMedia = { ...emptyJobFormMedia, detail: [] };
+	const apiSet: JobPostMediaApiSetInput = { detail: [] };
 
-	return {
-		cover,
-		detail,
-	};
+	for (const [index, { item, kind }] of slots.entries()) {
+		const result = settled[index];
+		const resolvedItem =
+			result?.status === "fulfilled" ? result.value.item : item;
+
+		if (kind === "detail") {
+			resolvedMedia.detail.push(resolvedItem);
+		} else {
+			resolvedMedia[kind] = resolvedItem;
+		}
+
+		if (result?.status !== "fulfilled") {
+			continue;
+		}
+
+		if (kind === "detail") {
+			apiSet.detail.push(result.value.apiInput);
+		} else {
+			apiSet[kind] = result.value.apiInput;
+		}
+	}
+
+	onMediaResolved?.(resolvedMedia);
+
+	const failed = settled.find(
+		(result): result is PromiseRejectedResult => result.status === "rejected"
+	);
+
+	if (failed) {
+		throw failed.reason instanceof Error
+			? failed.reason
+			: new Error("이미지 업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+	}
+
+	return apiSet;
 };
 
 const getDescriptionBlockError = (
@@ -338,6 +455,34 @@ const getDescriptionBlockError = (
 	return;
 };
 
+const getAdBannerError = (
+	item: JobFormMediaItem | null,
+	usage: JobAdBannerUsage
+): string | undefined => {
+	if (!item) {
+		return;
+	}
+
+	const { label, recommendedHeight, recommendedWidth } =
+		JOB_AD_BANNER_SPECS[usage];
+
+	if (!(item.width && item.height)) {
+		return `${label} 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.`;
+	}
+
+	if (
+		!isAllowedJobAdBannerAspectRatio({
+			height: item.height,
+			usage,
+			width: item.width,
+		})
+	) {
+		return `${label}는 규격 비율에 맞아야 합니다. ${recommendedWidth}×${recommendedHeight}px 비율의 이미지를 등록해 주세요.`;
+	}
+
+	return;
+};
+
 const getMediaError = (media?: JobFormMedia): string | undefined => {
 	if (!media) {
 		return;
@@ -347,9 +492,12 @@ const getMediaError = (media?: JobFormMedia): string | undefined => {
 		return "상세 이미지는 최대 5장까지 등록할 수 있습니다.";
 	}
 
-	const items = [media.cover, ...media.detail].filter(
-		(item): item is JobFormMediaItem => Boolean(item)
-	);
+	const items = [
+		media.cover,
+		...media.detail,
+		media.adHorizontal,
+		media.adVertical,
+	].filter((item): item is JobFormMediaItem => Boolean(item));
 
 	for (const item of items) {
 		if (!trim(item.fileName)) {
@@ -360,12 +508,20 @@ const getMediaError = (media?: JobFormMedia): string | undefined => {
 			return "이미지는 JPG, PNG, WebP 형식만 등록할 수 있습니다.";
 		}
 
+		// 서버 정책과 같은 상한. 여기서 막지 않으면 폼을 다 채워 제출한 뒤에야 거부당한다.
+		if (item.byteSize > IMAGE_MAX_BYTES) {
+			return "이미지는 한 장당 8MB 이하만 등록할 수 있습니다.";
+		}
+
 		if (trim(item.altText).length > IMAGE_ALT_TEXT_MAX_LENGTH) {
 			return "이미지 설명은 120자 이하로 입력해 주세요.";
 		}
 	}
 
-	return;
+	return (
+		getAdBannerError(media.adHorizontal, "ad_horizontal") ??
+		getAdBannerError(media.adVertical, "ad_vertical")
+	);
 };
 
 const getPostingScopeErrors = ({
@@ -558,6 +714,8 @@ export const validateJobForm = (
 			interviewNotes: interviewNotes || undefined,
 			media: options.media
 				? {
+						adHorizontal: options.media.adHorizontal ?? undefined,
+						adVertical: options.media.adVertical ?? undefined,
 						cover: options.media.cover ?? undefined,
 						detail: options.media.detail,
 					}

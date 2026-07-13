@@ -95,9 +95,14 @@ export const jobPerformanceEventType = pgEnum("job_performance_event_type", [
 	"contact_reveal",
 ]);
 
+// cover = 목록 카드 썸네일, detail = 상세 이미지.
+// ad_horizontal(7:3) = 좌측·프리미엄 슬롯, ad_vertical(4:9) = 우측 사이드 슬롯.
+// 광고 배너는 광고 상품을 신청·결제한 공고만 노출되지만, 이미지는 공고 등록 시 함께 받는다.
 export const jobPostMediaUsage = pgEnum("job_post_media_usage", [
 	"cover",
 	"detail",
+	"ad_horizontal",
+	"ad_vertical",
 ]);
 
 export const chatAttachmentCategory = pgEnum("chat_attachment_category", [
@@ -269,6 +274,11 @@ export const jobPostMedia = pgTable(
 		fileName: text("file_name").notNull(),
 		mimeType: text("mime_type").notNull(),
 		byteSize: integer("byte_size").notNull(),
+		// 광고 배너는 비율이 어긋나면 슬롯에서 잘려 상품 가치가 훼손된다. 업로드 시 브라우저가
+		// 읽은 원본 치수를 저장해 비율을 검증하고, 이후 레이아웃 시프트 방지에도 쓴다.
+		// 기존 행에는 값이 없으므로 nullable이다.
+		width: integer("width"),
+		height: integer("height"),
 		storageKey: text("storage_key").notNull(),
 		altText: text("alt_text").default("").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -5,6 +5,7 @@ import type {
 	Job,
 	JobDescriptionBlock,
 	JobMedia,
+	JobMediaUsage,
 	JobPerformanceMetrics,
 } from "./types";
 
@@ -12,13 +13,17 @@ export interface ApiJobMedia {
 	altText?: null | string;
 	byteSize: number;
 	fileName: string;
+	height?: null | number;
 	id?: string;
 	mimeType: string;
 	storageKey: string;
-	usage: "cover" | "detail";
+	usage: JobMediaUsage;
+	width?: null | number;
 }
 
 export interface ApiJobMediaSet {
+	adHorizontal?: ApiJobMedia | null;
+	adVertical?: ApiJobMedia | null;
 	cover?: ApiJobMedia | null;
 	detail?: ApiJobMedia[];
 }
@@ -51,15 +56,20 @@ const TRAILING_SLASH_PATTERN = /\/$/;
 
 // 공개 버킷의 객체는 브라우저가 직접 조회한다(서버·서명 URL을 거치지 않는다).
 // 버킷이 구성되지 않은 개발 환경에서는 storageKey 기준 결정적 샘플 썸네일로 폴백한다.
-const toJobMediaUrl = (media: ApiJobMedia): string => {
+// 프로덕션 빌드는 packages/env/src/web.ts가 base URL 누락 시 빌드를 실패시키므로,
+// 이 폴백은 개발에서만 도달한다(배포된 화면에 샘플이 뜨는 일은 없다).
+export const jobMediaPublicUrl = (storageKey: string): string => {
 	const publicBaseUrl = env.NEXT_PUBLIC_GCS_PUBLIC_BASE_URL;
 
 	if (!publicBaseUrl) {
-		return sampleThumbnailUrl(media.storageKey);
+		return sampleThumbnailUrl(storageKey);
 	}
 
-	return `${publicBaseUrl.replace(TRAILING_SLASH_PATTERN, "")}/${media.storageKey}`;
+	return `${publicBaseUrl.replace(TRAILING_SLASH_PATTERN, "")}/${storageKey}`;
 };
+
+const toJobMediaUrl = (media: ApiJobMedia): string =>
+	jobMediaPublicUrl(media.storageKey);
 
 const toJobMedia = (media?: ApiJobMedia | null): JobMedia | null => {
 	if (!media) {

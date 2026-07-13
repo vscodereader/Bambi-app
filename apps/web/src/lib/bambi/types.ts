@@ -76,15 +76,23 @@ export interface JobDescriptionBlock {
 	type: JobDescriptionBlockType;
 }
 
+export type JobMediaUsage =
+	| "ad_horizontal"
+	| "ad_vertical"
+	| "cover"
+	| "detail";
+
 export interface JobMedia {
 	altText: string;
 	byteSize: number;
 	fileName: string;
+	height?: null | number;
 	id?: string;
 	mimeType: string;
 	storageKey: string;
 	url: string;
-	usage: "cover" | "detail";
+	usage: JobMediaUsage;
+	width?: null | number;
 }
 
 export interface MarketplaceJobSections {

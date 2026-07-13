@@ -144,7 +144,9 @@ describe("visual job marketplace components", () => {
 
 		expect(source).toContain("export function EmployerListingPreview");
 		expect(source).toContain("목록 노출 미리보기");
-		expect(source).toContain("대표 이미지 반영");
+		expect(source).toContain("공고 썸네일 반영");
+		// 썸네일 미리보기는 실제 공고 카드(visual-job-card)와 같은 h-14 w-30 규격이어야 한다.
+		expect(source).toContain("h-14 w-30");
 		expect(source).toContain("coverImageUrl");
 		expect(source).toContain("displayCompanyName");
 	});

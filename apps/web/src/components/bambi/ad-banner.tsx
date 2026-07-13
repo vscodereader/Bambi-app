@@ -23,8 +23,9 @@ interface AdBannerProps {
 	src: string;
 }
 
-// 세로형 광고 배너(우측 사이드용) — 상단 프리미엄 배너와 같은 높이(h-52).
-// 클릭하면 광고 공고 상세로 이동한다. Link는 이미지 크기에 맞춰(w-fit) 좌측 정렬을 유지한다.
+// 세로형 광고 배너(우측 사이드용) — 규격 4:9(권장 400×900).
+// 슬롯 비율은 업로드 규격(lib/bambi/job-ad-banner-spec.ts)과 같아야 배너가 잘리지 않는다.
+// 클릭하면 광고 공고 상세로 이동한다.
 export function AdBanner({ className, seed, src }: AdBannerProps) {
 	return (
 		<Link
@@ -34,12 +35,15 @@ export function AdBanner({ className, seed, src }: AdBannerProps) {
 		>
 			<Image
 				alt="광고 배너"
-				className={cn("h-52 w-auto rounded-lg", className)}
-				height={180}
+				className={cn(
+					"aspect-[4/9] h-52 w-auto rounded-lg object-cover",
+					className
+				)}
+				height={900}
 				sizes="120px"
 				src={src}
 				unoptimized
-				width={80}
+				width={400}
 			/>
 		</Link>
 	);
@@ -75,9 +79,9 @@ interface HorizontalAdBannerProps {
 	className?: string;
 }
 
-// 가로형 광고 배너(좌측 사이드·상단 프리미엄용) — 공고 카드와 동일한 크기.
-// 폭은 그리드/컬럼(공고 카드와 동일)으로 정해지고, 높이는 공고 카드 렌더 높이(약 118px)에
-// 고정해 카드와 정확히 맞춘다. 공고 썸네일 샘플(가로형 200x89)을 결정적으로 크롭해 채운다.
+// 가로형 광고 배너(좌측 사이드·상단 프리미엄용) — 규격 7:3(권장 1400×600).
+// 폭은 그리드/컬럼(공고 카드와 동일)으로 정해지고 높이는 비율로 따라온다. 슬롯 비율은
+// 업로드 규격(lib/bambi/job-ad-banner-spec.ts)과 같아야 배너가 잘리지 않는다.
 // 클릭하면 광고 공고 상세로 이동한다.
 export function HorizontalAdBanner({
 	adKey,
@@ -92,14 +96,14 @@ export function HorizontalAdBanner({
 			<Image
 				alt="광고 배너"
 				className={cn(
-					"h-[118px] w-full rounded-lg border border-border object-cover",
+					"aspect-[7/3] w-full rounded-lg border border-border object-cover",
 					className
 				)}
-				height={89}
+				height={600}
 				sizes="272px"
 				src={sampleThumbnailUrl(adKey)}
 				unoptimized
-				width={200}
+				width={1400}
 			/>
 		</Link>
 	);

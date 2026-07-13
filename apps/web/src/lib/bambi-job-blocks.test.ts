@@ -32,6 +32,18 @@ const createDetailImage = (
 	...overrides,
 });
 
+const createBannerImage = (
+	usage: "ad_horizontal" | "ad_vertical",
+	overrides: Partial<JobFormMediaItem> = {}
+): JobFormMediaItem => ({
+	altText: "광고 배너",
+	byteSize: 256_000,
+	fileName: `${usage}.jpg`,
+	mimeType: "image/jpeg",
+	storageKey: `bambi-job-post-media/org-1/user-1/${usage}.jpg`,
+	...overrides,
+});
+
 describe("bambi job block form helpers", () => {
 	it("falls back to the current description when the block list is empty", () => {
 		const result = validateJobForm(baseForm, { descriptionBlocks: [] });
@@ -75,6 +87,8 @@ describe("bambi job block form helpers", () => {
 	it("allows an omitted cover image", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
+				adHorizontal: null,
+				adVertical: null,
 				cover: null,
 				detail: [createDetailImage(0)],
 			},
@@ -83,6 +97,8 @@ describe("bambi job block form helpers", () => {
 		expect(result).toMatchObject({
 			input: {
 				media: {
+					adHorizontal: undefined,
+					adVertical: undefined,
 					cover: undefined,
 					detail: [createDetailImage(0)],
 				},
@@ -94,6 +110,8 @@ describe("bambi job block form helpers", () => {
 	it("rejects more than five detail images", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
+				adHorizontal: null,
+				adVertical: null,
 				cover: null,
 				detail: Array.from({ length: 6 }, (_, index) =>
 					createDetailImage(index)
@@ -112,6 +130,8 @@ describe("bambi job block form helpers", () => {
 	it("rejects alt text over 120 characters", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
+				adHorizontal: null,
+				adVertical: null,
 				cover: createDetailImage(0, {
 					altText: "가".repeat(121),
 					fileName: "cover.jpg",
@@ -123,6 +143,85 @@ describe("bambi job block form helpers", () => {
 		expect(result).toMatchObject({
 			errors: {
 				media: "이미지 설명은 120자 이하로 입력해 주세요.",
+			},
+			ok: false,
+		});
+	});
+
+	it("accepts ad banners that match the 7:3 and 4:9 specs", () => {
+		const result = validateJobForm(baseForm, {
+			media: {
+				adHorizontal: createBannerImage("ad_horizontal", {
+					height: 600,
+					width: 1400,
+				}),
+				adVertical: createBannerImage("ad_vertical", {
+					height: 900,
+					width: 400,
+				}),
+				cover: null,
+				detail: [],
+			},
+		});
+
+		expect(result).toMatchObject({ ok: true });
+	});
+
+	it("rejects an ad banner whose aspect ratio is off spec", () => {
+		const result = validateJobForm(baseForm, {
+			media: {
+				// 7:3이어야 하는데 정사각형 → 슬롯에서 좌우가 잘려 나간다.
+				adHorizontal: createBannerImage("ad_horizontal", {
+					height: 1000,
+					width: 1000,
+				}),
+				adVertical: null,
+				cover: null,
+				detail: [],
+			},
+		});
+
+		expect(result).toMatchObject({
+			errors: {
+				media:
+					"가로형 광고 배너는 규격 비율에 맞아야 합니다. 1400×600px 비율의 이미지를 등록해 주세요.",
+			},
+			ok: false,
+		});
+	});
+
+	it("rejects an ad banner with unknown dimensions", () => {
+		const result = validateJobForm(baseForm, {
+			media: {
+				adHorizontal: null,
+				adVertical: createBannerImage("ad_vertical"),
+				cover: null,
+				detail: [],
+			},
+		});
+
+		expect(result).toMatchObject({
+			errors: {
+				media:
+					"세로형 광고 배너 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.",
+			},
+			ok: false,
+		});
+	});
+
+	it("rejects an image larger than 8MB before submission", () => {
+		const result = validateJobForm(baseForm, {
+			media: {
+				adHorizontal: null,
+				adVertical: null,
+				cover: createDetailImage(0, { byteSize: 9 * 1024 * 1024 }),
+				detail: [],
+			},
+		});
+
+		expect(result).toMatchObject({
+			errors: {
+				media: "이미지는 한 장당 8MB 이하만 등록할 수 있습니다.",
 			},
 			ok: false,
 		});
