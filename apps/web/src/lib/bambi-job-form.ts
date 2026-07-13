@@ -190,6 +190,37 @@ export const toPlainJobDescription = (
 		.map((block) => block.text)
 		.join("\n\n");
 
+// 서버가 GCS 없이 도는 개발 환경에서는 인텐트가 local:// 플레이스홀더를 돌려준다.
+// 이때는 실제 전송할 대상이 없으므로 업로드를 건너뛴다.
+const isSignedUploadUrl = (uploadUrl: string): boolean =>
+	uploadUrl.startsWith("https://");
+
+// 서명 URL로 브라우저가 GCS에 직접 PUT 한다. Content-Type은 서명에 묶여 있어
+// 인텐트에서 선언한 값과 정확히 일치해야 GCS가 받아준다.
+const uploadFileToSignedUrl = async ({
+	file,
+	uploadIntent,
+}: {
+	file: File;
+	uploadIntent: JobPostMediaUploadIntent;
+}): Promise<void> => {
+	if (!isSignedUploadUrl(uploadIntent.uploadUrl)) {
+		return;
+	}
+
+	const response = await fetch(uploadIntent.uploadUrl, {
+		body: file,
+		headers: { "Content-Type": uploadIntent.mimeType },
+		method: "PUT",
+	});
+
+	if (!response.ok) {
+		throw new Error(
+			"이미지 업로드에 실패했습니다. 잠시 후 다시 시도해 주세요."
+		);
+	}
+};
+
 const resolveMediaItemForSubmit = async ({
 	createUploadIntent,
 	item,
@@ -224,6 +255,8 @@ const resolveMediaItemForSubmit = async ({
 		organizationId,
 		teamId,
 	});
+
+	await uploadFileToSignedUrl({ file: item.file, uploadIntent });
 
 	return {
 		altText: trim(item.altText),

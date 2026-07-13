@@ -11,6 +11,10 @@ export const env = createEnv({
 		NODE_ENV: z
 			.enum(["development", "production", "test"])
 			.default("development"),
+		// GCS는 선택 구성이다. 버킷이 비어 있으면 업로드 인텐트가 로컬 플레이스홀더로
+		// 폴백하므로, GCP 자격 증명 없이도 개발·테스트가 그대로 돌아간다.
+		GCP_PROJECT_ID: z.string().min(1).optional(),
+		GCS_PUBLIC_BUCKET: z.string().min(1).optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,

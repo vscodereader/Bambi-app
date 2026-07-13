@@ -60,6 +60,7 @@ import {
 	type PublicPromotedJobListRow,
 } from "../../services/bambi-promotions";
 import { createJobPostMediaUploadIntent } from "../../services/bambi-storage";
+import { deletePublicObjects } from "../../services/gcs";
 
 const jobDescriptionBlockInput = z.object({
 	id: z.string().min(1).max(80),
@@ -270,6 +271,17 @@ const buildJobPostMediaInsertRows = ({
 		uploadedByUserId: actorUserId,
 		usage: item.usage,
 	}));
+
+const getJobPostMediaStorageKeys = async (
+	jobPostId: string
+): Promise<string[]> => {
+	const rows = await db
+		.select({ storageKey: jobPostMedia.storageKey })
+		.from(jobPostMedia)
+		.where(eq(jobPostMedia.jobPostId, jobPostId));
+
+	return rows.map((row) => row.storageKey);
+};
 
 const getJobPostMediaSet = async (jobPostId: string) => {
 	const rows = await db
@@ -701,7 +713,7 @@ export const jobsRouter = {
 				});
 			}
 
-			return createJobPostMediaUploadIntent({
+			return await createJobPostMediaUploadIntent({
 				actorUserId: actor.userId,
 				byteSize: input.byteSize,
 				fileName: input.fileName,
@@ -869,7 +881,12 @@ export const jobsRouter = {
 						publicContentChanged: true,
 					});
 
-			return await db.transaction(async (tx) => {
+			// 교체 대상에서 빠진 이미지만 GCS에서 지우기 위해, 갱신 전 키를 확보한다.
+			const previousStorageKeys = mediaRows
+				? await getJobPostMediaStorageKeys(input.id)
+				: [];
+
+			const result = await db.transaction(async (tx) => {
 				const [updated] = await tx
 					.update(jobPost)
 					.set({
@@ -927,6 +944,17 @@ export const jobsRouter = {
 					media: await getJobPostMediaSet(updated.id),
 				};
 			});
+
+			// 트랜잭션이 커밋된 뒤에만 객체를 지운다. 롤백된 변경으로 원본을 잃지 않는다.
+			if (mediaRows) {
+				const retainedKeys = new Set(mediaRows.map((row) => row.storageKey));
+
+				await deletePublicObjects(
+					previousStorageKeys.filter((key) => !retainedKeys.has(key))
+				);
+			}
+
+			return result;
 		}),
 	delete: protectedProcedure
 		.input(z.object({ id: z.string().uuid() }))
@@ -947,8 +975,12 @@ export const jobsRouter = {
 				session: context.session,
 			});
 
-			// 연관 미디어·프로모션·성과 이벤트는 FK onDelete cascade로 함께 제거된다.
+			// 연관 미디어·프로모션·성과 이벤트 행은 FK onDelete cascade로 함께 제거되지만,
+			// GCS 객체는 cascade 대상이 아니므로 키를 미리 확보해 직접 지운다.
+			const storageKeys = await getJobPostMediaStorageKeys(input.id);
+
 			await db.delete(jobPost).where(eq(jobPost.id, input.id));
+			await deletePublicObjects(storageKeys);
 
 			return { id: input.id };
 		}),
