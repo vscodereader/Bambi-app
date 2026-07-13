@@ -170,16 +170,18 @@ export function SeekerJobDetailResponsive({
 							</p>
 						)}
 						{job.detailImages?.length ? (
-							<div className="mt-5 grid gap-3 sm:grid-cols-2">
+							// 상세 이미지는 업체가 만든 세로로 긴 홍보 이미지가 대부분이라
+							// 크롭·타일링 없이 본문 폭에 맞춰 원본 비율 그대로 세로로 이어 붙인다.
+							<div className="mt-5 flex flex-col gap-3">
 								{job.detailImages.map((image) => (
 									<Image
 										alt={image.altText || image.fileName}
-										className="aspect-[16/9] w-full rounded-lg border object-cover"
-										height={240}
+										className="h-auto w-full rounded-lg border"
+										height={1600}
 										key={image.storageKey}
 										src={image.url}
 										unoptimized
-										width={420}
+										width={1200}
 									/>
 								))}
 							</div>
