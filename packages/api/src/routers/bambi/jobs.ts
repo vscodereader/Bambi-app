@@ -59,7 +59,10 @@ import {
 	buildPublicJobSections,
 	type PublicPromotedJobListRow,
 } from "../../services/bambi-promotions";
-import { createJobPostMediaUploadIntent } from "../../services/bambi-storage";
+import {
+	createJobPostMediaUploadIntent,
+	isOwnedJobPostMediaKey,
+} from "../../services/bambi-storage";
 import { deletePublicObjects } from "../../services/gcs";
 
 const jobDescriptionBlockInput = z.object({
@@ -238,9 +241,13 @@ const getMediaSetItems = (
 	return rows;
 };
 
-const requireValidJobPostMediaSet = (
-	media: JobPostMediaSetInput
-): JobPostMediaRowInput[] => {
+const requireValidJobPostMediaSet = ({
+	media,
+	organizationId,
+}: {
+	media: JobPostMediaSetInput;
+	organizationId: string;
+}): JobPostMediaRowInput[] => {
 	const rows = getMediaSetItems(media);
 	const result = validateJobPostMediaSet(rows);
 
@@ -248,6 +255,19 @@ const requireValidJobPostMediaSet = (
 		throw new ORPCError("BAD_REQUEST", {
 			message: getJobPostPolicyErrorMessage(result.issues[0]?.code ?? ""),
 		});
+	}
+
+	// 서명 발급은 조직 소유권을 검사하지만, 저장 단계에서 클라이언트가 임의 키를 보내면
+	// 그 검사가 무의미해진다. 공고 삭제·교체 시 이 키로 GCS 객체를 실제로 지우므로
+	// 남의 조직 키가 섞이면 원본이 삭제된다. 자기 조직 prefix가 아닌 키는 전부 거부한다.
+	for (const row of rows) {
+		if (
+			!isOwnedJobPostMediaKey({ organizationId, storageKey: row.storageKey })
+		) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "Job post media does not belong to this organization.",
+			});
+		}
 	}
 
 	return rows;
@@ -259,7 +279,7 @@ const buildJobPostMediaInsertRows = ({
 	media,
 	organizationId,
 }: BuildJobPostMediaRowsInput) =>
-	requireValidJobPostMediaSet(media).map((item) => ({
+	requireValidJobPostMediaSet({ media, organizationId }).map((item) => ({
 		altText: item.altText.trim(),
 		byteSize: item.byteSize,
 		fileName: item.fileName.trim(),
@@ -760,7 +780,10 @@ export const jobsRouter = {
 			}
 
 			const preparedContent = prepareJobPostContent(input);
-			const mediaRows = requireValidJobPostMediaSet(media);
+			const mediaRows = requireValidJobPostMediaSet({
+				media,
+				organizationId: input.organizationId,
+			});
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status = getInitialJobPostStatus({
 				employerVerificationStatus:
@@ -870,7 +893,12 @@ export const jobsRouter = {
 			}
 
 			const preparedContent = prepareJobPostContent(input.data);
-			const mediaRows = media ? requireValidJobPostMediaSet(media) : null;
+			const mediaRows = media
+				? requireValidJobPostMediaSet({
+						media,
+						organizationId: existing.organizationId,
+					})
+				: null;
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status: JobPostStatus = riskDetected
 				? "pending_review"

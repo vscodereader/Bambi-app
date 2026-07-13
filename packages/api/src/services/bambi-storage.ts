@@ -54,6 +54,23 @@ const normalizeFileNameForStorage = (fileName: string): string => {
 	return normalized || "attachment";
 };
 
+const JOB_POST_MEDIA_KEY_ROOT = "bambi-job-post-media";
+
+const buildJobPostMediaKeyPrefix = (organizationId: string): string =>
+	`${JOB_POST_MEDIA_KEY_ROOT}/${organizationId}/`;
+
+// storageKey는 공개 API 응답에 그대로 실려 나가므로 비밀이 아니다. 공고를 저장할 때
+// 클라이언트가 보낸 키를 그대로 믿으면 남의 조직 키를 자기 공고에 붙였다가 지워
+// 원본 객체를 삭제할 수 있다. 그래서 발급 시점의 prefix 규칙으로 소유권을 다시 확인한다.
+export const isOwnedJobPostMediaKey = ({
+	organizationId,
+	storageKey,
+}: {
+	organizationId: string;
+	storageKey: string;
+}): boolean =>
+	storageKey.startsWith(buildJobPostMediaKeyPrefix(organizationId));
+
 const buildLocalObjectUrl = ({
 	category,
 	fileName,
@@ -107,12 +124,7 @@ export const createJobPostMediaUploadIntent = async ({
 }: JobPostMediaStorageInput): Promise<JobPostMediaUploadIntent> => {
 	const storageFileName = normalizeFileNameForStorage(fileName);
 	// 키를 서버가 정한다. 클라이언트가 경로를 고르지 못하므로 남의 객체를 덮어쓸 수 없다.
-	const storageKey = [
-		"bambi-job-post-media",
-		organizationId,
-		actorUserId,
-		`${randomUUID()}-${storageFileName}`,
-	].join("/");
+	const storageKey = `${buildJobPostMediaKeyPrefix(organizationId)}${actorUserId}/${randomUUID()}-${storageFileName}`;
 	const uploadUrl = isPublicBucketConfigured()
 		? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
 		: `local://upload/${storageKey}`;

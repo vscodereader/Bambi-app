@@ -221,6 +221,11 @@ const uploadFileToSignedUrl = async ({
 	}
 };
 
+interface ResolvedJobPostMediaItem {
+	apiInput: JobPostMediaApiInput;
+	item: JobFormMediaItem;
+}
+
 const resolveMediaItemForSubmit = async ({
 	createUploadIntent,
 	item,
@@ -233,14 +238,17 @@ const resolveMediaItemForSubmit = async ({
 	item: JobFormMediaItem;
 	organizationId: string;
 	teamId?: string;
-}): Promise<JobPostMediaApiInput> => {
+}): Promise<ResolvedJobPostMediaItem> => {
 	if (item.storageKey) {
 		return {
-			altText: trim(item.altText),
-			byteSize: item.byteSize,
-			fileName: trim(item.fileName),
-			mimeType: item.mimeType,
-			storageKey: item.storageKey,
+			apiInput: {
+				altText: trim(item.altText),
+				byteSize: item.byteSize,
+				fileName: trim(item.fileName),
+				mimeType: item.mimeType,
+				storageKey: item.storageKey,
+			},
+			item,
 		};
 	}
 
@@ -258,18 +266,33 @@ const resolveMediaItemForSubmit = async ({
 
 	await uploadFileToSignedUrl({ file: item.file, uploadIntent });
 
-	return {
+	const apiInput: JobPostMediaApiInput = {
 		altText: trim(item.altText),
 		byteSize: uploadIntent.byteSize,
 		fileName: uploadIntent.fileName,
 		mimeType: uploadIntent.mimeType,
 		storageKey: uploadIntent.storageKey,
 	};
+
+	return {
+		apiInput,
+		item: {
+			...item,
+			byteSize: apiInput.byteSize,
+			fileName: apiInput.fileName,
+			mimeType: apiInput.mimeType,
+			storageKey: apiInput.storageKey,
+		},
+	};
 };
 
+// onMediaResolved로 업로드된 storageKey를 폼 상태에 되돌린다. 이게 없으면 공고 저장이
+// 실패했을 때 재시도마다 같은 파일이 새 키로 다시 올라가, DB 행 없는 고아 객체가 쌓인다.
+// 일부만 실패해도 성공분의 키는 남기므로 재시도는 실패한 이미지만 다시 올린다.
 export const resolveJobPostMediaForSubmit = async ({
 	createUploadIntent,
 	media,
+	onMediaResolved,
 	organizationId,
 	teamId,
 }: {
@@ -280,6 +303,7 @@ export const resolveJobPostMediaForSubmit = async ({
 		cover?: JobFormMediaItem;
 		detail: JobFormMediaItem[];
 	};
+	onMediaResolved?: (media: JobFormMedia) => void;
 	organizationId: string;
 	teamId?: string;
 }): Promise<JobPostMediaApiSetInput | undefined> => {
@@ -287,16 +311,10 @@ export const resolveJobPostMediaForSubmit = async ({
 		return;
 	}
 
-	const cover = media.cover
-		? await resolveMediaItemForSubmit({
-				createUploadIntent,
-				item: media.cover,
-				organizationId,
-				teamId,
-			})
-		: undefined;
-	const detail = await Promise.all(
-		media.detail.map((item) =>
+	const hasCover = Boolean(media.cover);
+	const items = [...(media.cover ? [media.cover] : []), ...media.detail];
+	const settled = await Promise.allSettled(
+		items.map((item) =>
 			resolveMediaItemForSubmit({
 				createUploadIntent,
 				item,
@@ -305,10 +323,34 @@ export const resolveJobPostMediaForSubmit = async ({
 			})
 		)
 	);
+	const resolvedItems = items.map((item, index) => {
+		const result = settled[index];
+
+		return result?.status === "fulfilled" ? result.value.item : item;
+	});
+
+	onMediaResolved?.({
+		cover: hasCover ? (resolvedItems[0] ?? null) : null,
+		detail: resolvedItems.slice(hasCover ? 1 : 0),
+	});
+
+	const failed = settled.find(
+		(result): result is PromiseRejectedResult => result.status === "rejected"
+	);
+
+	if (failed) {
+		throw failed.reason instanceof Error
+			? failed.reason
+			: new Error("이미지 업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+	}
+
+	const apiInputs = settled.flatMap((result) =>
+		result.status === "fulfilled" ? [result.value.apiInput] : []
+	);
 
 	return {
-		cover,
-		detail,
+		cover: hasCover ? apiInputs[0] : undefined,
+		detail: apiInputs.slice(hasCover ? 1 : 0),
 	};
 };
 
