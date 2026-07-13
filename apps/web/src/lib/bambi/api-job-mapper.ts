@@ -1,3 +1,5 @@
+import { env } from "@bambi-app/env/web";
+
 import { sampleCoverMedia, sampleThumbnailUrl } from "./sample-thumbnails";
 import type {
 	Job,
@@ -45,11 +47,19 @@ export interface ApiMarketplaceJob {
 	workSchedule?: string | null;
 }
 
-// 실제 스토리지 이미지 연동 전까지, API 미디어도 storageKey 기준으로 결정적
-// 샘플 썸네일을 쓴다. (기존 /bambi/local-job-media 는 "COVER" 라벨 SVG 플레이스홀더라
-// mock 샘플이 떴다가 회색 박스로 덮이는 문제가 있었다.)
-const toJobMediaUrl = (media: ApiJobMedia): string =>
-	sampleThumbnailUrl(media.storageKey);
+const TRAILING_SLASH_PATTERN = /\/$/;
+
+// 공개 버킷의 객체는 브라우저가 직접 조회한다(서버·서명 URL을 거치지 않는다).
+// 버킷이 구성되지 않은 개발 환경에서는 storageKey 기준 결정적 샘플 썸네일로 폴백한다.
+const toJobMediaUrl = (media: ApiJobMedia): string => {
+	const publicBaseUrl = env.NEXT_PUBLIC_GCS_PUBLIC_BASE_URL;
+
+	if (!publicBaseUrl) {
+		return sampleThumbnailUrl(media.storageKey);
+	}
+
+	return `${publicBaseUrl.replace(TRAILING_SLASH_PATTERN, "")}/${media.storageKey}`;
+};
 
 const toJobMedia = (media?: ApiJobMedia | null): JobMedia | null => {
 	if (!media) {

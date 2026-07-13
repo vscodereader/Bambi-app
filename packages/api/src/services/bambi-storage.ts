@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { ChatMediaCategory } from "./bambi-media-policy";
+import { createSignedUploadUrl, isPublicBucketConfigured } from "./gcs";
 
 export interface ChatAttachmentStorageInput {
 	byteSize: number;
@@ -97,26 +98,30 @@ export const getChatAttachmentObjectUrl = (
 	input: ChatAttachmentObjectInput
 ): string => buildLocalObjectUrl(input);
 
-export const createJobPostMediaUploadIntent = ({
+export const createJobPostMediaUploadIntent = async ({
 	actorUserId,
 	byteSize,
 	fileName,
 	mimeType,
 	organizationId,
-}: JobPostMediaStorageInput): JobPostMediaUploadIntent => {
+}: JobPostMediaStorageInput): Promise<JobPostMediaUploadIntent> => {
 	const storageFileName = normalizeFileNameForStorage(fileName);
+	// 키를 서버가 정한다. 클라이언트가 경로를 고르지 못하므로 남의 객체를 덮어쓸 수 없다.
 	const storageKey = [
 		"bambi-job-post-media",
 		organizationId,
 		actorUserId,
 		`${randomUUID()}-${storageFileName}`,
 	].join("/");
+	const uploadUrl = isPublicBucketConfigured()
+		? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
+		: `local://upload/${storageKey}`;
 
 	return {
 		byteSize,
 		fileName: fileName.trim(),
 		mimeType,
 		storageKey,
-		uploadUrl: `local://upload/${storageKey}`,
+		uploadUrl,
 	};
 };
