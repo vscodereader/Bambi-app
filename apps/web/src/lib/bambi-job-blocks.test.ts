@@ -183,11 +183,49 @@ describe("bambi job block form helpers", () => {
 
 		expect(result).toMatchObject({
 			errors: {
-				media:
-					"가로형 광고 배너는 규격 비율에 맞아야 합니다. 1400×600px 비율의 이미지를 등록해 주세요.",
+				media: "가로형 광고 배너는 7:3 비율에 맞아야 합니다.",
 			},
 			ok: false,
 		});
+	});
+
+	it("rejects a horizontal banner below the 259x111 minimum", () => {
+		const result = validateJobForm(baseForm, {
+			media: {
+				// 189×81도 정확히 7:3이라 비율은 통과하지만 하한에 미달한다.
+				adHorizontal: createBannerImage("ad_horizontal", {
+					height: 81,
+					width: 189,
+				}),
+				adVertical: null,
+				cover: null,
+				detail: [],
+			},
+		});
+
+		expect(result).toMatchObject({
+			errors: {
+				media:
+					"가로형 광고 배너 이미지가 너무 작습니다. 259×111px 이상으로 등록해 주세요.",
+			},
+			ok: false,
+		});
+	});
+
+	it("accepts a horizontal banner at the 259x111 minimum", () => {
+		const result = validateJobForm(baseForm, {
+			media: {
+				adHorizontal: createBannerImage("ad_horizontal", {
+					height: 111,
+					width: 259,
+				}),
+				adVertical: null,
+				cover: null,
+				detail: [],
+			},
+		});
+
+		expect(result).toMatchObject({ ok: true });
 	});
 
 	it("rejects an ad banner with unknown dimensions", () => {

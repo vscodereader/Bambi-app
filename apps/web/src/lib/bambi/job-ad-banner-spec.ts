@@ -5,30 +5,34 @@ export type JobAdBannerUsage = "ad_horizontal" | "ad_vertical";
 
 export interface JobAdBannerSpec {
 	aspectClassName: string;
+	// 문구용 비율 표기. 안내·오류 메시지는 특정 해상도가 아니라 비율로 말한다.
+	aspectLabel: string;
 	aspectRatio: number;
 	description: string;
 	label: string;
 	// 하한. 비율이 맞아도 이보다 작으면 슬롯에서 늘어나 뭉개진다. 미설정이면 크기는 안 본다.
 	minHeight?: number;
 	minWidth?: number;
-	recommendedHeight: number;
-	recommendedWidth: number;
+	// 안내용 권장 해상도. 강제하지 않으며, 하한(min*)이 있으면 그쪽을 대신 안내한다.
+	recommendedHeight?: number;
+	recommendedWidth?: number;
 }
 
 export const JOB_AD_BANNER_SPECS: Record<JobAdBannerUsage, JobAdBannerSpec> = {
 	ad_horizontal: {
 		aspectClassName: "aspect-[7/3]",
+		aspectLabel: "7:3",
 		aspectRatio: 7 / 3,
 		description: "좌측·상단 프리미엄 슬롯에 노출됩니다.",
 		label: "가로형 광고 배너",
-		// 259×111은 정확히 7:3(259=7×37, 111=3×37)이라 비율 규칙은 그대로 통과한다.
+		// 크기 규칙은 이 하한 하나뿐이다. 259×111은 정확히 7:3(259=7×37, 111=3×37)이라
+		// 비율 규칙과도 모순이 없다.
 		minHeight: 111,
 		minWidth: 259,
-		recommendedHeight: 600,
-		recommendedWidth: 1400,
 	},
 	ad_vertical: {
 		aspectClassName: "aspect-[4/9]",
+		aspectLabel: "4:9",
 		aspectRatio: 4 / 9,
 		description: "우측 사이드 슬롯에 노출됩니다.",
 		label: "세로형 광고 배너",
@@ -79,14 +83,23 @@ export const isAllowedJobAdBannerSize = ({
 };
 
 export const formatJobAdBannerSpec = (usage: JobAdBannerUsage): string => {
-	const { minHeight, minWidth, recommendedHeight, recommendedWidth } =
-		JOB_AD_BANNER_SPECS[usage];
+	const {
+		aspectLabel,
+		minHeight,
+		minWidth,
+		recommendedHeight,
+		recommendedWidth,
+	} = JOB_AD_BANNER_SPECS[usage];
 
 	if (minWidth && minHeight) {
-		return `최소 ${minWidth}×${minHeight}px (권장 ${recommendedWidth}×${recommendedHeight}px)`;
+		return `비율 ${aspectLabel} · 최소 ${minWidth}×${minHeight}px`;
 	}
 
-	return `권장 ${recommendedWidth}×${recommendedHeight}px`;
+	if (recommendedWidth && recommendedHeight) {
+		return `비율 ${aspectLabel} · 권장 ${recommendedWidth}×${recommendedHeight}px`;
+	}
+
+	return `비율 ${aspectLabel}`;
 };
 
 // 브라우저가 원본 치수를 읽는다. 서버는 바이트를 열지 않으므로 이 값이 비율 검증의 근거다.

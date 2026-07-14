@@ -41,27 +41,31 @@ export const getAllowedJobPostMimeTypes = (
 		: ALLOWED_JOB_POST_IMAGE_MIME_TYPES;
 
 export interface JobAdBannerSpec {
+	// 문구용 비율 표기. 안내·오류 메시지는 특정 해상도가 아니라 비율로 말한다.
+	aspectLabel: string;
 	aspectRatio: number;
 	label: string;
 	// 하한. 비율이 맞아도 이보다 작으면 슬롯에서 늘어나 뭉개진다. 미설정이면 크기는 안 본다.
 	minHeight?: number;
 	minWidth?: number;
-	recommendedHeight: number;
-	recommendedWidth: number;
+	// 안내용 권장 해상도. 강제하지 않으며, 하한(min*)이 있으면 그쪽을 대신 안내한다.
+	recommendedHeight?: number;
+	recommendedWidth?: number;
 }
 
 // 슬롯 CSS(aspect-[7/3], aspect-[4/9])와 같은 값을 쓴다. 둘이 어긋나면 광고가 잘려 나간다.
 export const JOB_AD_BANNER_SPECS: Record<JobAdBannerUsage, JobAdBannerSpec> = {
 	ad_horizontal: {
+		aspectLabel: "7:3",
 		aspectRatio: 7 / 3,
 		label: "가로형 광고 배너",
-		// 259×111은 정확히 7:3(259=7×37, 111=3×37)이라 비율 규칙은 그대로 통과한다.
+		// 크기 규칙은 이 하한 하나뿐이다. 259×111은 정확히 7:3(259=7×37, 111=3×37)이라
+		// 비율 규칙과도 모순이 없다.
 		minHeight: 111,
 		minWidth: 259,
-		recommendedHeight: 600,
-		recommendedWidth: 1400,
 	},
 	ad_vertical: {
+		aspectLabel: "4:9",
 		aspectRatio: 4 / 9,
 		label: "세로형 광고 배너",
 		recommendedHeight: 900,
