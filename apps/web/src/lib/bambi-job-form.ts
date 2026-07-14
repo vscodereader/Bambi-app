@@ -22,11 +22,32 @@ const DESCRIPTION_BLOCK_TEXT_MAX_LENGTH = 800;
 const DETAIL_IMAGE_MAX_COUNT = 5;
 const IMAGE_ALT_TEXT_MAX_LENGTH = 120;
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
-const ALLOWED_IMAGE_MIME_TYPES = new Set([
-	"image/jpeg",
-	"image/png",
-	"image/webp",
-]);
+const ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+// 서버 정책(ALLOWED_JOB_AD_BANNER_MIME_TYPES)과 같은 목록. 광고 배너만 움직이는 GIF를 받는다.
+const ALLOWED_AD_BANNER_MIME_TYPES = [...ALLOWED_IMAGE_MIME_TYPES, "image/gif"];
+
+export const jobPostMediaUsages = [
+	"cover",
+	"detail",
+	"ad_horizontal",
+	"ad_vertical",
+] as const;
+
+export type JobPostMediaUsage = (typeof jobPostMediaUsages)[number];
+
+const isAdBannerUsage = (usage: JobPostMediaUsage): boolean =>
+	usage === "ad_horizontal" || usage === "ad_vertical";
+
+export const getAllowedMimeTypesForUsage = (
+	usage: JobPostMediaUsage
+): string[] =>
+	isAdBannerUsage(usage)
+		? ALLOWED_AD_BANNER_MIME_TYPES
+		: ALLOWED_IMAGE_MIME_TYPES;
+
+// <input accept>에 그대로 넣는 값.
+export const getFileAcceptForUsage = (usage: JobPostMediaUsage): string =>
+	getAllowedMimeTypesForUsage(usage).join(",");
 
 export const jobDescriptionBlockTypes = [
 	"paragraph",
@@ -70,6 +91,7 @@ export interface JobPostMediaUploadRequest {
 	mimeType: string;
 	organizationId: string;
 	teamId?: string;
+	usage: JobPostMediaUsage;
 }
 
 export interface JobPostMediaUploadIntent {
@@ -258,6 +280,7 @@ const resolveMediaItemForSubmit = async ({
 	item,
 	organizationId,
 	teamId,
+	usage,
 }: {
 	createUploadIntent: (
 		input: JobPostMediaUploadRequest
@@ -265,6 +288,7 @@ const resolveMediaItemForSubmit = async ({
 	item: JobFormMediaItem;
 	organizationId: string;
 	teamId?: string;
+	usage: JobPostMediaUsage;
 }): Promise<ResolvedJobPostMediaItem> => {
 	if (item.storageKey) {
 		return {
@@ -291,6 +315,7 @@ const resolveMediaItemForSubmit = async ({
 		mimeType: item.file.type,
 		organizationId,
 		teamId,
+		usage,
 	});
 
 	await uploadFileToSignedUrl({ file: item.file, uploadIntent });
@@ -318,6 +343,13 @@ const resolveMediaItemForSubmit = async ({
 };
 
 type JobFormMediaSlotKind = "adHorizontal" | "adVertical" | "cover" | "detail";
+
+const SLOT_KIND_USAGES: Record<JobFormMediaSlotKind, JobPostMediaUsage> = {
+	adHorizontal: "ad_horizontal",
+	adVertical: "ad_vertical",
+	cover: "cover",
+	detail: "detail",
+};
 
 interface JobFormMediaSlot {
 	item: JobFormMediaItem;
@@ -380,12 +412,13 @@ export const resolveJobPostMediaForSubmit = async ({
 
 	const slots = toMediaSlots(media);
 	const settled = await Promise.allSettled(
-		slots.map(({ item }) =>
+		slots.map(({ item, kind }) =>
 			resolveMediaItemForSubmit({
 				createUploadIntent,
 				item,
 				organizationId,
 				teamId,
+				usage: SLOT_KIND_USAGES[kind],
 			})
 		)
 	);
@@ -492,20 +525,26 @@ const getMediaError = (media?: JobFormMedia): string | undefined => {
 		return "상세 이미지는 최대 5장까지 등록할 수 있습니다.";
 	}
 
-	const items = [
-		media.cover,
-		...media.detail,
-		media.adHorizontal,
-		media.adVertical,
-	].filter((item): item is JobFormMediaItem => Boolean(item));
+	const entries: { item: JobFormMediaItem; usage: JobPostMediaUsage }[] = [
+		...(media.cover ? [{ item: media.cover, usage: "cover" as const }] : []),
+		...media.detail.map((item) => ({ item, usage: "detail" as const })),
+		...(media.adHorizontal
+			? [{ item: media.adHorizontal, usage: "ad_horizontal" as const }]
+			: []),
+		...(media.adVertical
+			? [{ item: media.adVertical, usage: "ad_vertical" as const }]
+			: []),
+	];
 
-	for (const item of items) {
+	for (const { item, usage } of entries) {
 		if (!trim(item.fileName)) {
 			return "이미지 파일명을 확인해 주세요.";
 		}
 
-		if (!ALLOWED_IMAGE_MIME_TYPES.has(item.mimeType)) {
-			return "이미지는 JPG, PNG, WebP 형식만 등록할 수 있습니다.";
+		if (!getAllowedMimeTypesForUsage(usage).includes(item.mimeType)) {
+			return isAdBannerUsage(usage)
+				? "광고 배너는 JPG, PNG, WebP, GIF 형식만 등록할 수 있습니다."
+				: "이미지는 JPG, PNG, WebP 형식만 등록할 수 있습니다.";
 		}
 
 		// 서버 정책과 같은 상한. 여기서 막지 않으면 폼을 다 채워 제출한 뒤에야 거부당한다.

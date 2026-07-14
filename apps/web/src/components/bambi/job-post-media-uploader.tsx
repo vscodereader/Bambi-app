@@ -12,7 +12,11 @@ import {
 	type JobAdBannerUsage,
 	readImageDimensions,
 } from "@/lib/bambi/job-ad-banner-spec";
-import type { JobFormMedia, JobFormMediaItem } from "@/lib/bambi-job-form";
+import {
+	getFileAcceptForUsage,
+	type JobFormMedia,
+	type JobFormMediaItem,
+} from "@/lib/bambi-job-form";
 
 interface JobPostMediaUploaderProps {
 	error?: string;
@@ -20,7 +24,8 @@ interface JobPostMediaUploaderProps {
 	onChange: (media: JobFormMedia) => void;
 }
 
-const acceptImageTypes = "image/jpeg,image/png,image/webp";
+// 썸네일·상세는 정적 이미지만, 광고 배너는 GIF까지 받는다.
+const staticImageAccept = getFileAcceptForUsage("cover");
 const detailSlots = [
 	{ index: 0, key: "detail-image-slot-1" },
 	{ index: 1, key: "detail-image-slot-2" },
@@ -73,6 +78,7 @@ const updateDetailAt = (
 };
 
 interface MediaSlotProps {
+	accept: string;
 	hint?: string;
 	id: string;
 	item: JobFormMediaItem | null;
@@ -84,6 +90,7 @@ interface MediaSlotProps {
 }
 
 function MediaSlot({
+	accept,
 	hint,
 	id,
 	item,
@@ -140,7 +147,7 @@ function MediaSlot({
 				</div>
 				<div className="flex flex-col gap-2">
 					<Input
-						accept={acceptImageTypes}
+						accept={accept}
 						id={id}
 						onChange={(event) => {
 							const file = event.target.files?.[0];
@@ -177,6 +184,7 @@ function AdBannerSlot({ item, onChange, usage }: AdBannerSlotProps) {
 
 	return (
 		<MediaSlot
+			accept={getFileAcceptForUsage(usage)}
 			hint={`${description} ${formatJobAdBannerSpec(usage)}`}
 			id={`job-${usage.replace("_", "-")}-image`}
 			item={item}
@@ -207,6 +215,7 @@ export function JobPostMediaUploader({
 				</p>
 			</div>
 			<MediaSlot
+				accept={staticImageAccept}
 				hint="목록 카드에 노출되는 이미지입니다."
 				id="job-cover-image"
 				item={media.cover}
@@ -231,6 +240,7 @@ export function JobPostMediaUploader({
 
 					return (
 						<MediaSlot
+							accept={staticImageAccept}
 							id={`job-detail-image-${index}`}
 							item={item}
 							key={key}
@@ -262,7 +272,7 @@ export function JobPostMediaUploader({
 				<h2 className="font-medium text-sm">광고 배너 이미지</h2>
 				<p className="text-muted-foreground text-xs">
 					광고 상품을 신청한 공고에만 노출됩니다. 규격 비율과 다르면 등록할 수
-					없습니다.
+					없습니다. 움직이는 GIF도 등록할 수 있습니다.
 				</p>
 			</div>
 			<div className="grid gap-3 lg:grid-cols-2">

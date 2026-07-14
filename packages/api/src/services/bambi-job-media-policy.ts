@@ -26,6 +26,20 @@ export const ALLOWED_JOB_POST_IMAGE_MIME_TYPES = [
 	"image/webp",
 ] as const;
 
+// 광고 배너에 한해 움직이는 GIF를 허용한다. 썸네일·상세는 목록/본문에서 정적으로 쓰이므로
+// 애니메이션을 받지 않는다. 용량 상한(8MB)은 배너도 그대로 적용된다.
+export const ALLOWED_JOB_AD_BANNER_MIME_TYPES = [
+	...ALLOWED_JOB_POST_IMAGE_MIME_TYPES,
+	"image/gif",
+] as const;
+
+export const getAllowedJobPostMimeTypes = (
+	usage?: JobPostMediaUsage
+): readonly string[] =>
+	usage && isJobAdBannerUsage(usage)
+		? ALLOWED_JOB_AD_BANNER_MIME_TYPES
+		: ALLOWED_JOB_POST_IMAGE_MIME_TYPES;
+
 export interface JobAdBannerSpec {
 	aspectRatio: number;
 	label: string;
@@ -66,6 +80,7 @@ export interface JobPostImageUploadInput {
 	byteSize: number;
 	fileName: string;
 	mimeType: string;
+	usage?: JobPostMediaUsage;
 }
 
 export type JobPostImageUploadPolicyResult =
@@ -114,10 +129,10 @@ export interface JobPostMediaPolicyResult {
 	ok: boolean;
 }
 
-const isAllowedImageMimeType = (mimeType: string): boolean =>
-	ALLOWED_JOB_POST_IMAGE_MIME_TYPES.includes(
-		mimeType as (typeof ALLOWED_JOB_POST_IMAGE_MIME_TYPES)[number]
-	);
+const isAllowedImageMimeType = (
+	mimeType: string,
+	usage?: JobPostMediaUsage
+): boolean => getAllowedJobPostMimeTypes(usage).includes(mimeType);
 
 const isSupportedUsage = (
 	usage: JobPostMediaPolicyInput["usage"]
@@ -149,12 +164,13 @@ export const validateJobPostImageUpload = ({
 	byteSize,
 	fileName,
 	mimeType,
+	usage,
 }: JobPostImageUploadInput): JobPostImageUploadPolicyResult => {
 	if (!fileName.trim()) {
 		return { code: "empty_file_name", ok: false };
 	}
 
-	if (!isAllowedImageMimeType(mimeType)) {
+	if (!isAllowedImageMimeType(mimeType, usage)) {
 		return { code: "unsupported_type", ok: false };
 	}
 
