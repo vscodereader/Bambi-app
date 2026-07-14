@@ -78,6 +78,93 @@ describe("bambi job media policy", () => {
 		).toEqual({ code: "unsupported_type", ok: false });
 	});
 
+	it("allows animated GIF for ad banners only", () => {
+		for (const usage of ["ad_horizontal", "ad_vertical"] as const) {
+			expect(
+				validateJobPostImageUpload({
+					byteSize: 2_000_000,
+					fileName: "banner.gif",
+					mimeType: "image/gif",
+					usage,
+				})
+			).toEqual({ ok: true });
+		}
+
+		for (const usage of ["cover", "detail"] as const) {
+			expect(
+				validateJobPostImageUpload({
+					byteSize: 2_000_000,
+					fileName: "banner.gif",
+					mimeType: "image/gif",
+					usage,
+				})
+			).toEqual({ code: "unsupported_type", ok: false });
+		}
+	});
+
+	it("rejects GIF when the upload intent omits the usage", () => {
+		// usage를 못 받으면 가장 좁은 규칙(썸네일·상세)으로 검사한다. 배너에 GIF를 올리려면
+		// 클라이언트가 usage를 반드시 함께 보내야 한다.
+		expect(
+			validateJobPostImageUpload({
+				byteSize: 2_000_000,
+				fileName: "banner.gif",
+				mimeType: "image/gif",
+			})
+		).toEqual({ code: "unsupported_type", ok: false });
+	});
+
+	it("still enforces the size cap and aspect ratio for GIF banners", () => {
+		expect(
+			validateJobPostImageUpload({
+				byteSize: JOB_POST_IMAGE_MAX_BYTES + 1,
+				fileName: "banner.gif",
+				mimeType: "image/gif",
+				usage: "ad_horizontal",
+			})
+		).toEqual({
+			code: "file_too_large",
+			maxBytes: JOB_POST_IMAGE_MAX_BYTES,
+			ok: false,
+		});
+
+		expect(
+			validateJobPostMediaSet([
+				createMedia({
+					fileName: "banner.gif",
+					height: 600,
+					mimeType: "image/gif",
+					usage: "ad_horizontal",
+					width: 1400,
+				}),
+			]).ok
+		).toBe(true);
+
+		expect(
+			validateJobPostMediaSet([
+				createMedia({
+					fileName: "banner.gif",
+					height: 600,
+					mimeType: "image/gif",
+					usage: "ad_horizontal",
+					width: 600,
+				}),
+			]).issues.map((issue) => issue.code)
+		).toContain("banner_aspect_ratio_mismatch");
+	});
+
+	it("rejects a GIF submitted through a detail slot in the media set", () => {
+		expect(
+			validateJobPostMediaSet([
+				createMedia({
+					fileName: "detail.gif",
+					mimeType: "image/gif",
+					usage: "detail",
+				}),
+			]).issues.map((issue) => issue.code)
+		).toContain("unsupported_type");
+	});
+
 	it("rejects empty filenames before upload intent creation", () => {
 		expect(
 			validateJobPostImageUpload({

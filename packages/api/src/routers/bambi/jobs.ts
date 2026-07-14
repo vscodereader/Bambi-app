@@ -47,6 +47,7 @@ import {
 	JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH,
 	type JobPostMediaPolicyInput,
 	type JobPostMediaUsage,
+	jobPostMediaUsages,
 	validateJobPostImageUpload,
 	validateJobPostMediaSet,
 } from "../../services/bambi-job-media-policy";
@@ -115,6 +116,9 @@ const createMediaUploadInput = z.object({
 	fileName: z.string().max(180),
 	mimeType: z.string().min(1).max(120),
 	byteSize: z.number().int().min(1),
+	// 허용 MIME이 슬롯마다 다르다(광고 배너만 GIF). usage를 안 보내면 가장 좁은
+	// 규칙(썸네일·상세)으로 검사하므로, GIF를 올리려면 배너 usage를 함께 보내야 한다.
+	usage: z.enum(jobPostMediaUsages).optional(),
 });
 
 const listInput = z.object({
