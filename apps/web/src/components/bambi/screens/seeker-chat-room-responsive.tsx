@@ -13,8 +13,8 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { toast } from "sonner";
+import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import {
 	connectBambiChatSocket,
 	emitBambiChatTypingStarted,
@@ -143,6 +143,11 @@ const getReviewMutationErrorMessage = (error: Error): string => {
 };
 
 type RealtimeStatus = "connected" | "connecting" | "offline";
+
+// 양쪽 동의가 끝난 방은 더 이상 "공개"가 아니라 "확인"하는 화면으로 들어간다.
+const getRevealButtonLabel = (
+	reveal?: { canViewCounterpart: boolean } | null
+): string => (reveal?.canViewCounterpart ? "연락처 보기" : "연락처 공개하기");
 
 const getRealtimeStatusLabel = (status: RealtimeStatus): string => {
 	switch (status) {
@@ -624,6 +629,11 @@ export function SeekerChatRoomResponsive({
 	const typingActiveRef = useRef(false);
 	const roomQuery = useQuery(
 		orpc.bambi.chats.getById.queryOptions({ input: { id: roomId } })
+	);
+	const revealQuery = useQuery(
+		orpc.bambi.chats.getContactReveal.queryOptions({
+			input: { chatRoomId: roomId },
+		})
 	);
 	const currentSessionUserId = roomQuery.data?.currentUserId;
 	const reviewListQuery = useQuery({
@@ -1307,7 +1317,7 @@ export function SeekerChatRoomResponsive({
 							size="md"
 							variant={confirmedSchedule ? "primary" : "secondary"}
 						>
-							연락처 공개하기
+							{getRevealButtonLabel(revealQuery.data)}
 						</Button>
 					</Card>
 					<ReviewSidebarCard

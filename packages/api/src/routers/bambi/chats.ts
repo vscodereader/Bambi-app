@@ -40,7 +40,11 @@ import {
 	validateChatMediaUpload,
 } from "../../services/bambi-media-policy";
 import { createBambiNotification } from "../../services/bambi-notifications";
-import { canRevealContact, canStartChat } from "../../services/bambi-policy";
+import {
+	canRevealContact,
+	canStartChat,
+	canViewCounterpartContact,
+} from "../../services/bambi-policy";
 import {
 	createChatAttachmentUploadIntent,
 	getChatAttachmentObjectUrl,
@@ -97,6 +101,10 @@ const revealContactInput = z.object({
 	interviewScheduleId: z.string().uuid(),
 	contactMethod: z.enum(["phone", "kakao", "email"]),
 	contactValue: z.string().min(3).max(120),
+});
+
+const getContactRevealInput = z.object({
+	chatRoomId: z.string().uuid(),
 });
 
 type RequestedInterviewStatus = z.infer<
@@ -941,6 +949,91 @@ export const chatsRouter = {
 			emitRoomUpdated({ roomId: room.id });
 
 			return updatedSchedule;
+		}),
+
+	// 조회 전용. 상대 연락처는 canViewCounterpart가 true일 때만 응답에 싣는다.
+	getContactReveal: protectedProcedure
+		.input(getContactRevealInput)
+		.handler(async ({ context, input }) => {
+			const { profile, room } = await requireChatParticipant(
+				input.chatRoomId,
+				context.session
+			);
+
+			await throwIfChatBlocked({
+				actorUserId: profile.userId,
+				employerUserId: room.employerUserId,
+				isBlocked: room.isBlocked,
+				jobSeekerUserId: room.jobSeekerUserId,
+			});
+
+			const [confirmedSchedule] = await db
+				.select({
+					id: interviewSchedule.id,
+					locationNote: interviewSchedule.locationNote,
+					scheduledAt: interviewSchedule.scheduledAt,
+				})
+				.from(interviewSchedule)
+				.where(
+					and(
+						eq(interviewSchedule.chatRoomId, room.id),
+						eq(interviewSchedule.status, "confirmed")
+					)
+				)
+				.limit(1);
+
+			if (!confirmedSchedule) {
+				return {
+					canViewCounterpart: false,
+					confirmedSchedule: null,
+					counterpartContacts: [],
+					mineContacts: [],
+				};
+			}
+
+			const counterpartUserId =
+				profile.userId === room.jobSeekerUserId
+					? room.employerUserId
+					: room.jobSeekerUserId;
+
+			const consents = await db
+				.select({
+					contactMethod: contactRevealConsent.contactMethod,
+					contactValue: contactRevealConsent.contactValue,
+					userId: contactRevealConsent.userId,
+				})
+				.from(contactRevealConsent)
+				.where(
+					eq(contactRevealConsent.interviewScheduleId, confirmedSchedule.id)
+				);
+
+			const mineContacts = consents
+				.filter((row) => row.userId === profile.userId)
+				.map(({ contactMethod, contactValue }) => ({
+					contactMethod,
+					contactValue,
+				}));
+			const counterpartRows = consents.filter(
+				(row) => row.userId === counterpartUserId
+			);
+
+			const canViewCounterpart = canViewCounterpartContact({
+				counterpartConsented: counterpartRows.length > 0,
+				interviewStatus: "confirmed",
+				mineConsented: mineContacts.length > 0,
+			});
+
+			return {
+				canViewCounterpart,
+				confirmedSchedule,
+				counterpartContacts: canViewCounterpart
+					? counterpartRows.map(({ contactMethod, contactValue }) => ({
+							contactMethod,
+							contactValue,
+						}))
+					: [],
+				mineContacts,
+			};
 		}),
 
 	revealContact: protectedProcedure

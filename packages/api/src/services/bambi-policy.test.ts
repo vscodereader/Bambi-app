@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	canRevealContact,
 	canStartChat,
+	canViewCounterpartContact,
 	getEmployerVerificationStatusLabel,
 	getInitialJobPostStatus,
 	getJobPostStatusLabel,
@@ -170,5 +171,50 @@ describe("bambi policy", () => {
 		expect(getEmployerVerificationStatusLabel("pending")).toBe("인증 대기");
 		expect(getJobPostStatusLabel("published")).toBe("공개");
 		expect(getJobPostStatusLabel("pending_review")).toBe("검수 대기");
+	});
+});
+
+describe("canViewCounterpartContact", () => {
+	it("allows viewing only when the interview is confirmed and both sides consented", () => {
+		expect(
+			canViewCounterpartContact({
+				counterpartConsented: true,
+				interviewStatus: "confirmed",
+				mineConsented: true,
+			})
+		).toBe(true);
+	});
+
+	it("hides the counterpart contact until I consent myself", () => {
+		// 무임승차 차단: 내가 동의하지 않으면 상대가 동의했어도 못 본다.
+		expect(
+			canViewCounterpartContact({
+				counterpartConsented: true,
+				interviewStatus: "confirmed",
+				mineConsented: false,
+			})
+		).toBe(false);
+	});
+
+	it("hides the counterpart contact while the counterpart has not consented", () => {
+		expect(
+			canViewCounterpartContact({
+				counterpartConsented: false,
+				interviewStatus: "confirmed",
+				mineConsented: true,
+			})
+		).toBe(false);
+	});
+
+	it("requires a confirmed interview", () => {
+		for (const interviewStatus of ["proposed", "rejected", "cancelled"]) {
+			expect(
+				canViewCounterpartContact({
+					counterpartConsented: true,
+					interviewStatus,
+					mineConsented: true,
+				})
+			).toBe(false);
+		}
 	});
 });

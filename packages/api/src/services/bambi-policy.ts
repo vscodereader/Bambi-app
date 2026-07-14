@@ -120,6 +120,21 @@ export const canRevealContact = ({
 }: CanRevealContactInput): boolean =>
 	interviewStatus === "confirmed" && ownerConsented && ownerPhoneVerified;
 
+export interface CanViewCounterpartContactInput {
+	counterpartConsented: boolean;
+	interviewStatus: string;
+	mineConsented: boolean;
+}
+
+// 상대 연락처는 양쪽이 모두 동의해야 보인다. 내가 동의하지 않은 채 상대 것만 받아가는
+// 무임승차를 막으려고 mineConsented를 함께 요구한다.
+export const canViewCounterpartContact = ({
+	counterpartConsented,
+	interviewStatus,
+	mineConsented,
+}: CanViewCounterpartContactInput): boolean =>
+	interviewStatus === "confirmed" && mineConsented && counterpartConsented;
+
 export const getEmployerVerificationStatusLabel = (
 	status: EmployerVerificationStatus
 ): string => employerVerificationStatusLabels[status];
