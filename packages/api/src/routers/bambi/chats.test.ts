@@ -155,7 +155,12 @@ const cleanupChatFixture = async (fixture: ChatFixture): Promise<void> => {
 		.where(eq(chatMessageReadReceipt.chatRoomId, fixture.chatRoomId));
 	await db
 		.delete(contactRevealConsent)
-		.where(eq(contactRevealConsent.userId, fixture.jobSeekerUserId));
+		.where(
+			inArray(contactRevealConsent.userId, [
+				fixture.employerUserId,
+				fixture.jobSeekerUserId,
+			])
+		);
 	await db
 		.delete(jobPerformanceEvent)
 		.where(eq(jobPerformanceEvent.jobPostId, fixture.jobPostId));
@@ -431,6 +436,119 @@ describe("bambi chats router analytics", () => {
 				contactMethod: "phone",
 				interviewScheduleId: scheduleId,
 			});
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+describe("bambi chats router contact reveal", () => {
+	const confirmInterview = async (fixture: ChatFixture): Promise<string> => {
+		const [schedule] = await db
+			.insert(interviewSchedule)
+			.values({
+				chatRoomId: fixture.chatRoomId,
+				proposedByUserId: fixture.employerUserId,
+				scheduledAt: new Date(Date.now() + 86_400_000),
+				status: "confirmed",
+			})
+			.returning();
+
+		if (!schedule) {
+			throw new Error("면접 일정 픽스처를 만들지 못했습니다.");
+		}
+
+		return schedule.id;
+	};
+
+	const consent = async (
+		scheduleId: string,
+		userId: string,
+		contactValue: string
+	): Promise<void> => {
+		await db.insert(contactRevealConsent).values({
+			contactMethod: "phone",
+			contactValue,
+			interviewScheduleId: scheduleId,
+			userId,
+		});
+	};
+
+	it("hides the counterpart contact when only the counterpart consented", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const scheduleId = await confirmInterview(fixture);
+			await consent(scheduleId, fixture.employerUserId, "010-1111-2222");
+
+			const getContactReveal = createProcedureClient(
+				chatsRouter.getContactReveal,
+				{
+					context: createContextForUser(fixture.jobSeekerUserId),
+					path: ["bambi", "chats", "getContactReveal"],
+				}
+			);
+			const result = await getContactReveal({
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			expect(result.canViewCounterpart).toBe(false);
+			expect(result.counterpartContacts).toEqual([]);
+			expect(result.mineContacts).toEqual([]);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("returns the counterpart contact once both sides consented", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const scheduleId = await confirmInterview(fixture);
+			await consent(scheduleId, fixture.employerUserId, "010-1111-2222");
+			await consent(scheduleId, fixture.jobSeekerUserId, "010-3333-4444");
+
+			const getContactReveal = createProcedureClient(
+				chatsRouter.getContactReveal,
+				{
+					context: createContextForUser(fixture.jobSeekerUserId),
+					path: ["bambi", "chats", "getContactReveal"],
+				}
+			);
+			const result = await getContactReveal({
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			expect(result.canViewCounterpart).toBe(true);
+			expect(result.counterpartContacts).toEqual([
+				{ contactMethod: "phone", contactValue: "010-1111-2222" },
+			]);
+			expect(result.mineContacts).toEqual([
+				{ contactMethod: "phone", contactValue: "010-3333-4444" },
+			]);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("hides everything when no interview is confirmed", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const getContactReveal = createProcedureClient(
+				chatsRouter.getContactReveal,
+				{
+					context: createContextForUser(fixture.jobSeekerUserId),
+					path: ["bambi", "chats", "getContactReveal"],
+				}
+			);
+			const result = await getContactReveal({
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			expect(result.canViewCounterpart).toBe(false);
+			expect(result.confirmedSchedule).toBeNull();
+			expect(result.counterpartContacts).toEqual([]);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}
