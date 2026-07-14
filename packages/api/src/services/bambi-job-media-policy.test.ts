@@ -165,6 +165,44 @@ describe("bambi job media policy", () => {
 		).toContain("unsupported_type");
 	});
 
+	it("accepts a horizontal banner at the 259x111 minimum", () => {
+		expect(
+			validateJobPostMediaSet([
+				createMedia({
+					height: 111,
+					usage: "ad_horizontal",
+					width: 259,
+				}),
+			]).ok
+		).toBe(true);
+	});
+
+	it("rejects a horizontal banner smaller than the minimum even when the ratio matches", () => {
+		// 189×81도 정확히 7:3이라 비율 검사는 통과한다. 크기 하한이 없으면 슬롯에서 늘어나 뭉개진다.
+		const { issues } = validateJobPostMediaSet([
+			createMedia({
+				height: 81,
+				usage: "ad_horizontal",
+				width: 189,
+			}),
+		]);
+
+		expect(issues.map((issue) => issue.code)).toEqual(["banner_too_small"]);
+		expect(issues[0]).toMatchObject({ minHeight: 111, minWidth: 259 });
+	});
+
+	it("does not apply a size floor to vertical banners", () => {
+		expect(
+			validateJobPostMediaSet([
+				createMedia({
+					height: 90,
+					usage: "ad_vertical",
+					width: 40,
+				}),
+			]).ok
+		).toBe(true);
+	});
+
 	it("rejects empty filenames before upload intent creation", () => {
 		expect(
 			validateJobPostImageUpload({

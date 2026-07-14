@@ -1,5 +1,6 @@
 import {
 	isAllowedJobAdBannerAspectRatio,
+	isAllowedJobAdBannerSize,
 	JOB_AD_BANNER_SPECS,
 	type JobAdBannerUsage,
 } from "./bambi/job-ad-banner-spec";
@@ -511,6 +512,18 @@ const getAdBannerError = (
 		})
 	) {
 		return `${label}는 규격 비율에 맞아야 합니다. ${recommendedWidth}×${recommendedHeight}px 비율의 이미지를 등록해 주세요.`;
+	}
+
+	if (
+		!isAllowedJobAdBannerSize({
+			height: item.height,
+			usage,
+			width: item.width,
+		})
+	) {
+		const { minHeight, minWidth } = JOB_AD_BANNER_SPECS[usage];
+
+		return `${label} 이미지가 너무 작습니다. ${minWidth}×${minHeight}px 이상으로 등록해 주세요.`;
 	}
 
 	return;
