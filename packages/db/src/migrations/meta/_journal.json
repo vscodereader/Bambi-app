@@ -85,6 +85,13 @@
       "when": 1783497631342,
       "tag": "0011_melted_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784013831544,
+      "tag": "0012_lumpy_starbolt",
+      "breakpoints": true
     }
   ]
 }
