@@ -497,7 +497,7 @@ const getAdBannerError = (
 		return;
 	}
 
-	const { label, recommendedHeight, recommendedWidth } =
+	const { aspectLabel, label, minHeight, minWidth } =
 		JOB_AD_BANNER_SPECS[usage];
 
 	if (!(item.width && item.height)) {
@@ -511,7 +511,7 @@ const getAdBannerError = (
 			width: item.width,
 		})
 	) {
-		return `${label}는 규격 비율에 맞아야 합니다. ${recommendedWidth}×${recommendedHeight}px 비율의 이미지를 등록해 주세요.`;
+		return `${label}는 ${aspectLabel} 비율에 맞아야 합니다.`;
 	}
 
 	if (
@@ -521,8 +521,6 @@ const getAdBannerError = (
 			width: item.width,
 		})
 	) {
-		const { minHeight, minWidth } = JOB_AD_BANNER_SPECS[usage];
-
 		return `${label} 이미지가 너무 작습니다. ${minWidth}×${minHeight}px 이상으로 등록해 주세요.`;
 	}
 

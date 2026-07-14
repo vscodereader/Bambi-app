@@ -191,6 +191,22 @@ describe("bambi job media policy", () => {
 		expect(issues[0]).toMatchObject({ minHeight: 111, minWidth: 259 });
 	});
 
+	it("does not require any particular resolution above the minimum", () => {
+		// 하한(259×111) 이상이고 7:3이면 통과한다. 1400×600 같은 특정 해상도를 요구하지 않는다.
+		for (const [width, height] of [
+			[259, 111],
+			[700, 300],
+			[1400, 600],
+			[2800, 1200],
+		]) {
+			expect(
+				validateJobPostMediaSet([
+					createMedia({ height, usage: "ad_horizontal", width }),
+				]).ok
+			).toBe(true);
+		}
+	});
+
 	it("does not apply a size floor to vertical banners", () => {
 		expect(
 			validateJobPostMediaSet([
