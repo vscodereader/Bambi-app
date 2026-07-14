@@ -176,6 +176,8 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 			return "광고 배너 비율이 규격과 맞지 않습니다. 가로형 7:3, 세로형 4:9 이미지를 등록해 주세요.";
 		case "banner_dimensions_required":
 			return "광고 배너 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.";
+		case "banner_too_small":
+			return "광고 배너 이미지가 너무 작습니다. 가로형은 259×111px 이상으로 등록해 주세요.";
 		case "too_many_ad_banners":
 			return "광고 배너는 가로형·세로형 각 1장만 등록할 수 있습니다.";
 		case "block_text_too_long":

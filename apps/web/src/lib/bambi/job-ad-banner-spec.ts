@@ -8,6 +8,9 @@ export interface JobAdBannerSpec {
 	aspectRatio: number;
 	description: string;
 	label: string;
+	// 하한. 비율이 맞아도 이보다 작으면 슬롯에서 늘어나 뭉개진다. 미설정이면 크기는 안 본다.
+	minHeight?: number;
+	minWidth?: number;
 	recommendedHeight: number;
 	recommendedWidth: number;
 }
@@ -18,6 +21,9 @@ export const JOB_AD_BANNER_SPECS: Record<JobAdBannerUsage, JobAdBannerSpec> = {
 		aspectRatio: 7 / 3,
 		description: "좌측·상단 프리미엄 슬롯에 노출됩니다.",
 		label: "가로형 광고 배너",
+		// 259×111은 정확히 7:3(259=7×37, 111=3×37)이라 비율 규칙은 그대로 통과한다.
+		minHeight: 111,
+		minWidth: 259,
 		recommendedHeight: 600,
 		recommendedWidth: 1400,
 	},
@@ -54,8 +60,31 @@ export const isAllowedJobAdBannerAspectRatio = ({
 	);
 };
 
+export const isAllowedJobAdBannerSize = ({
+	height,
+	usage,
+	width,
+}: {
+	height: number;
+	usage: JobAdBannerUsage;
+	width: number;
+}): boolean => {
+	const { minHeight, minWidth } = JOB_AD_BANNER_SPECS[usage];
+
+	if (!(minWidth && minHeight)) {
+		return true;
+	}
+
+	return width >= minWidth && height >= minHeight;
+};
+
 export const formatJobAdBannerSpec = (usage: JobAdBannerUsage): string => {
-	const { recommendedHeight, recommendedWidth } = JOB_AD_BANNER_SPECS[usage];
+	const { minHeight, minWidth, recommendedHeight, recommendedWidth } =
+		JOB_AD_BANNER_SPECS[usage];
+
+	if (minWidth && minHeight) {
+		return `최소 ${minWidth}×${minHeight}px (권장 ${recommendedWidth}×${recommendedHeight}px)`;
+	}
 
 	return `권장 ${recommendedWidth}×${recommendedHeight}px`;
 };

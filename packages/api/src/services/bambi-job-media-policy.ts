@@ -43,6 +43,9 @@ export const getAllowedJobPostMimeTypes = (
 export interface JobAdBannerSpec {
 	aspectRatio: number;
 	label: string;
+	// 하한. 비율이 맞아도 이보다 작으면 슬롯에서 늘어나 뭉개진다. 미설정이면 크기는 안 본다.
+	minHeight?: number;
+	minWidth?: number;
 	recommendedHeight: number;
 	recommendedWidth: number;
 }
@@ -52,6 +55,9 @@ export const JOB_AD_BANNER_SPECS: Record<JobAdBannerUsage, JobAdBannerSpec> = {
 	ad_horizontal: {
 		aspectRatio: 7 / 3,
 		label: "가로형 광고 배너",
+		// 259×111은 정확히 7:3(259=7×37, 111=3×37)이라 비율 규칙은 그대로 통과한다.
+		minHeight: 111,
+		minWidth: 259,
 		recommendedHeight: 600,
 		recommendedWidth: 1400,
 	},
@@ -105,6 +111,7 @@ export type JobPostMediaPolicyCode =
 	| "alt_text_too_long"
 	| "banner_aspect_ratio_mismatch"
 	| "banner_dimensions_required"
+	| "banner_too_small"
 	| "empty_file_name"
 	| "file_too_large"
 	| "too_many_ad_banners"
@@ -120,6 +127,8 @@ export interface JobPostMediaPolicyIssue {
 	maxCoverImages?: number;
 	maxDetailImages?: number;
 	maxLength?: number;
+	minHeight?: number;
+	minWidth?: number;
 	storageKey?: string;
 	usage?: JobPostMediaUsage;
 }
@@ -158,6 +167,24 @@ export const isAllowedJobAdBannerAspectRatio = ({
 		Math.abs(width / height - aspectRatio) / aspectRatio <=
 		JOB_AD_BANNER_ASPECT_RATIO_TOLERANCE
 	);
+};
+
+export const isAllowedJobAdBannerSize = ({
+	height,
+	usage,
+	width,
+}: {
+	height: number;
+	usage: JobAdBannerUsage;
+	width: number;
+}): boolean => {
+	const { minHeight, minWidth } = JOB_AD_BANNER_SPECS[usage];
+
+	if (!(minWidth && minHeight)) {
+		return true;
+	}
+
+	return width >= minWidth && height >= minHeight;
 };
 
 export const validateJobPostImageUpload = ({
@@ -200,18 +227,30 @@ const collectAdBannerIssues = (
 		return [{ code: "banner_dimensions_required", storageKey, usage }];
 	}
 
-	if (isAllowedJobAdBannerAspectRatio({ height, usage, width })) {
-		return [];
-	}
+	const issues: JobPostMediaPolicyIssue[] = [];
 
-	return [
-		{
+	if (!isAllowedJobAdBannerAspectRatio({ height, usage, width })) {
+		issues.push({
 			code: "banner_aspect_ratio_mismatch",
 			expectedAspectRatio: JOB_AD_BANNER_SPECS[usage].aspectRatio,
 			storageKey,
 			usage,
-		},
-	];
+		});
+	}
+
+	if (!isAllowedJobAdBannerSize({ height, usage, width })) {
+		const { minHeight, minWidth } = JOB_AD_BANNER_SPECS[usage];
+
+		issues.push({
+			code: "banner_too_small",
+			minHeight,
+			minWidth,
+			storageKey,
+			usage,
+		});
+	}
+
+	return issues;
 };
 
 const collectUsageCountIssues = (
