@@ -10,6 +10,7 @@ import type { Job } from "@/lib/bambi/types";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { useBambiAuth } from "../auth-client-provider";
 import { Card } from "../ds";
+import { HomeCommunitySection } from "../home-community-section";
 import { Search2 } from "../icons";
 import {
 	MarketplaceDiscoveryAxisChips,
@@ -115,6 +116,7 @@ export function SeekerMarketplaceScreen() {
 						</span>
 					</div>
 					<VisualJobExposureSections
+						communitySlot={<HomeCommunitySection />}
 						jobs={jobs}
 						onChat={chatJob}
 						onOpen={openJob}
