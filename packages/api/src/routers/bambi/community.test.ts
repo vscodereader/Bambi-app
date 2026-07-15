@@ -343,6 +343,56 @@ describe("bambi community router — 조회", () => {
 			await cleanupCommunityFixture(fixture);
 		}
 	});
+
+	it("응답에는 작성자 userId가 노출되지 않는다(익명성 보호)", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+			const listComments = clientFor(
+				communityRouter.listComments,
+				fixture.femaleUserId,
+				["listComments"]
+			);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `익명성 ${randomUUID()}`,
+			});
+
+			const listed = await listPosts({ board: "free", page: 1 });
+			const summary = listed.items.find(
+				(item: { id: string }) => item.id === created.id
+			);
+			expect(summary && "authorUserId" in summary).toBe(false);
+
+			const detail = await getPost({ postId: created.id });
+			expect("authorUserId" in detail).toBe(false);
+
+			await createComment({ body: "익명 댓글", postId: created.id });
+			const comments = await listComments({ postId: created.id });
+			expect(comments[0] && "authorUserId" in comments[0]).toBe(false);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
 });
 
 const baseUpdateInput = {

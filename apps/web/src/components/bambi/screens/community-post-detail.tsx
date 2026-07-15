@@ -83,8 +83,35 @@ function PostDetailView({
 	const queryClient = useQueryClient();
 	const [commentBody, setCommentBody] = useState("");
 
-	const invalidatePost = () =>
-		queryClient.invalidateQueries({ queryKey: orpc.bambi.community.key() });
+	// 상세(getPost)는 조회 시 view_count를 올리므로 추천·댓글 뮤테이션에서 재요청하지
+	// 않는다. getPost 캐시는 setQueryData로 직접 갱신하고, 목록/오버뷰만 무효화한다.
+	const getPostQueryKey = orpc.bambi.community.getPost.queryKey({
+		input: { password: appliedPassword, postId },
+	});
+	const invalidateBoards = () =>
+		Promise.all([
+			queryClient.invalidateQueries({
+				queryKey: orpc.bambi.community.listPosts.key(),
+			}),
+			queryClient.invalidateQueries({
+				queryKey: orpc.bambi.community.overview.key(),
+			}),
+		]);
+	const invalidateComments = () =>
+		queryClient.invalidateQueries({
+			queryKey: orpc.bambi.community.listComments.key(),
+		});
+	// getQueryData로 먼저 읽어 잠금 해제 상태를 좁힌 뒤 구체 값으로 갱신한다
+	// (setQueryData 업데이터 인자는 판별 유니온 narrowing이 막혀 있어 우회).
+	const bumpCommentCount = (delta: number) => {
+		const current = queryClient.getQueryData(getPostQueryKey);
+		if (current?.locked === false) {
+			queryClient.setQueryData(getPostQueryKey, {
+				...current,
+				commentCount: Math.max(0, current.commentCount + delta),
+			});
+		}
+	};
 
 	const commentsQuery = useQuery(
 		orpc.bambi.community.listComments.queryOptions({
@@ -94,22 +121,36 @@ function PostDetailView({
 	const likeMutation = useMutation(
 		orpc.bambi.community.toggleLike.mutationOptions({
 			onError: (error) => toast(error.message || "추천하지 못했어요."),
-			onSuccess: () => invalidatePost(),
+			onSuccess: (data) => {
+				const current = queryClient.getQueryData(getPostQueryKey);
+				if (current?.locked === false) {
+					queryClient.setQueryData(getPostQueryKey, {
+						...current,
+						isLiked: data.isLiked,
+						likeCount: data.likeCount,
+					});
+				}
+				return invalidateBoards();
+			},
 		})
 	);
 	const createCommentMutation = useMutation(
 		orpc.bambi.community.createComment.mutationOptions({
 			onError: (error) => toast(error.message || "댓글을 등록하지 못했어요."),
-			onSuccess: async () => {
+			onSuccess: () => {
 				setCommentBody("");
-				await invalidatePost();
+				bumpCommentCount(1);
+				return Promise.all([invalidateComments(), invalidateBoards()]);
 			},
 		})
 	);
 	const deleteCommentMutation = useMutation(
 		orpc.bambi.community.deleteComment.mutationOptions({
 			onError: (error) => toast(error.message || "댓글을 삭제하지 못했어요."),
-			onSuccess: () => invalidatePost(),
+			onSuccess: () => {
+				bumpCommentCount(-1);
+				return Promise.all([invalidateComments(), invalidateBoards()]);
+			},
 		})
 	);
 
@@ -118,9 +159,11 @@ function PostDetailView({
 	const canSubmitComment =
 		trimmedComment.length >= 1 && !createCommentMutation.isPending;
 
+	// 화면 이탈 후 목록/오버뷰만 무효화한다. getPost는 재요청하지 않아(이탈 전
+	// view_count +1 방지) 삭제된 글의 상세를 다시 부르지 않는다.
 	const handleDeleted = async () => {
-		await invalidatePost();
 		router.replace(communityBoardPath(board.slug) as Route);
+		await invalidateBoards();
 	};
 
 	return (

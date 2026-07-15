@@ -176,6 +176,22 @@ const selectBoardPosts = (
 		.limit(limit)
 		.offset(offset);
 
+type PostSummaryRow = Awaited<ReturnType<typeof selectBoardPosts>>[number];
+
+// authorUserId는 마스킹·bypass 계산엔 필요하지만 익명성 보호를 위해 클라이언트
+// 응답에서는 제외한다(명시적 화이트리스트 매핑).
+const toPublicSummary = (summary: PostSummaryRow) => ({
+	authorName: summary.authorName,
+	board: summary.board,
+	commentCount: summary.commentCount,
+	createdAt: summary.createdAt,
+	id: summary.id,
+	isLocked: summary.isLocked,
+	likeCount: summary.likeCount,
+	title: summary.title,
+	viewCount: summary.viewCount,
+});
+
 const findPublishedPost = async (postId: string) => {
 	const [post] = await db
 		.select()
@@ -211,7 +227,7 @@ export const communityRouter = {
 			]);
 
 			return {
-				items: maskLockedSummaries(items, profile),
+				items: maskLockedSummaries(items, profile).map(toPublicSummary),
 				page: input.page,
 				pageSize: PAGE_SIZE,
 				totalCount: total?.value ?? 0,
@@ -229,10 +245,10 @@ export const communityRouter = {
 		]);
 
 		return {
-			best: maskLockedSummaries(best, profile),
-			free: maskLockedSummaries(free, profile),
-			market: maskLockedSummaries(market, profile),
-			workTalk: maskLockedSummaries(workTalk, profile),
+			best: maskLockedSummaries(best, profile).map(toPublicSummary),
+			free: maskLockedSummaries(free, profile).map(toPublicSummary),
+			market: maskLockedSummaries(market, profile).map(toPublicSummary),
+			workTalk: maskLockedSummaries(workTalk, profile).map(toPublicSummary),
 		};
 	}),
 
@@ -283,7 +299,6 @@ export const communityRouter = {
 
 			return {
 				authorName: post.authorDisplayName,
-				authorUserId: post.authorUserId,
 				board: post.board,
 				body: post.body,
 				canDelete: isMine || profile.role === "admin",
@@ -458,10 +473,14 @@ export const communityRouter = {
 				.orderBy(asc(communityComment.createdAt))
 				.limit(COMMENTS_CAP);
 
+			// authorUserId는 canDelete 계산에만 쓰고 응답에서는 제외한다(익명성 보호).
 			return rows.map((row) => ({
-				...row,
+				authorName: row.authorName,
+				body: row.body,
 				canDelete:
 					row.authorUserId === profile.userId || profile.role === "admin",
+				createdAt: row.createdAt,
+				id: row.id,
 			}));
 		}),
 

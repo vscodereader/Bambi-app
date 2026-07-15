@@ -71,7 +71,6 @@ export interface CommunityPostDetail {
 
 export interface CommunityCommentItem {
 	authorName: string | null;
-	authorUserId: string;
 	body: string;
 	canDelete: boolean;
 	createdAt: Date | string;
