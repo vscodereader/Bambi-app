@@ -31,6 +31,7 @@ export default function NewAdProductPage() {
 						benefits: draft.benefits,
 						priceOptions: draft.priceOptions,
 						previewImageUrl: draft.previewImageUrl,
+						previewTemplate: draft.previewTemplate,
 					})
 				}
 				pending={create.isPending}
