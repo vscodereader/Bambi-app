@@ -33,6 +33,7 @@ interface JobsAnalyticsFixture {
 	jobSeekerUserId: string;
 	organizationId: string;
 	promotionCampaignId: string;
+	region: string;
 	userIds: string[];
 }
 
@@ -51,6 +52,8 @@ const makeEmail = (prefix: string): string =>
 
 const createJobsAnalyticsFixture = async (): Promise<JobsAnalyticsFixture> => {
 	const now = new Date();
+	// 공개 jobs.list는 전역 조회라, 병렬 테스트 픽스처가 섞이지 않도록 고유 region으로 격리한다.
+	const region = `jobs-analytics-${randomUUID()}`;
 	const organizationId = `org_test_${randomUUID()}`;
 	const employerUserId = `user_test_employer_${randomUUID()}`;
 	const jobSeekerUserId = `user_test_seeker_${randomUUID()}`;
@@ -100,6 +103,8 @@ const createJobsAnalyticsFixture = async (): Promise<JobsAnalyticsFixture> => {
 	await db.insert(jobPost).values({
 		createdByUserId: employerUserId,
 		description: "상세 조회 이벤트를 검증하기 위한 공고입니다.",
+		exposureEndsAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+		exposureType: "special",
 		id: jobPostId,
 		industryCategory: "라운지",
 		organizationId,
@@ -107,7 +112,7 @@ const createJobsAnalyticsFixture = async (): Promise<JobsAnalyticsFixture> => {
 		payUnit: "일급",
 		paymentStatus: "paid",
 		publishedAt: now,
-		region: "서울 강남구",
+		region,
 		status: "published",
 		title: "상세 조회 테스트 공고",
 		workSchedule: "20:00-02:00",
@@ -130,6 +135,7 @@ const createJobsAnalyticsFixture = async (): Promise<JobsAnalyticsFixture> => {
 		jobSeekerUserId,
 		organizationId,
 		promotionCampaignId,
+		region,
 		userIds: [employerUserId, jobSeekerUserId],
 	};
 };
@@ -187,7 +193,7 @@ describe("bambi jobs analytics", () => {
 		}
 	});
 
-	it("records promoted listing impressions with transparent placement metadata", async () => {
+	it("records paid listing impressions with exposure placement metadata", async () => {
 		const fixture = await createJobsAnalyticsFixture();
 
 		try {
@@ -196,7 +202,7 @@ describe("bambi jobs analytics", () => {
 				path: ["bambi", "jobs", "list"],
 			});
 
-			await listJobs({ limit: 10 });
+			await listJobs({ limit: 10, region: fixture.region });
 
 			const [event] = await db
 				.select()
@@ -211,10 +217,9 @@ describe("bambi jobs analytics", () => {
 				organizationId: fixture.organizationId,
 			});
 			expect(event?.metadata).toMatchObject({
-				campaignId: fixture.promotionCampaignId,
+				exposureType: "special",
 				position: 0,
-				promotionTier: "premium",
-				section: "premium",
+				section: "special",
 			});
 		} finally {
 			await cleanupJobsAnalyticsFixture(fixture);
@@ -255,9 +260,10 @@ describe("bambi jobs analytics", () => {
 				path: ["bambi", "jobs", "list"],
 			});
 
-			const result = await listJobs({ limit: 10 });
+			const result = await listJobs({ limit: 10, region: fixture.region });
 			const allIds = [
-				...result.sections.premium,
+				...result.sections.special,
+				...result.sections.urgent,
 				...result.sections.recommended,
 				...result.sections.organic,
 			].map((item) => item.id);

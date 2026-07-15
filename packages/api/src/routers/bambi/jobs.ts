@@ -6,7 +6,6 @@ import {
 	employerTeamProfile,
 	jobPost,
 	jobPostMedia,
-	jobPromotionCampaign,
 	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -17,7 +16,7 @@ import {
 	eq,
 	gt,
 	inArray,
-	lte,
+	isNull,
 	or,
 	type SQL,
 	sql,
@@ -26,7 +25,11 @@ import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
 import {
+	buildExposureJobSections,
+	EXPOSURE_SECTION_LIMITS,
+	EXPOSURE_TYPE_LABELS,
 	type JobExposureType,
+	type ListingSectionExposureType,
 	previewTemplateToExposureType,
 } from "../../services/bambi-ad-exposure";
 import {
@@ -60,10 +63,6 @@ import {
 	getUpdatedJobPostStatus,
 	type JobPostStatus,
 } from "../../services/bambi-policy";
-import {
-	buildPublicJobSections,
-	type PublicPromotedJobListRow,
-} from "../../services/bambi-promotions";
 import { createJobPostMediaUploadIntent } from "../../services/bambi-storage";
 
 const jobDescriptionBlockInput = z.object({
@@ -406,38 +405,33 @@ export const jobsRouter = {
 			filters.push(sql`${jobPost.payAmount} >= ${input.minPayAmount}`);
 		}
 
-		const getPromotedJobs = async (
-			tier: "premium" | "recommended"
-		): Promise<PublicPromotedJobListRow[]> =>
+		const exposureSelection = {
+			description: jobPost.description,
+			coverImage: coverImageSql,
+			employerDisplayName: employerOrganizationProfile.displayName,
+			employerVerificationStatus:
+				employerOrganizationProfile.verificationStatus,
+			exposureEndsAt: jobPost.exposureEndsAt,
+			exposureType: jobPost.exposureType,
+			id: jobPost.id,
+			industryCategory: jobPost.industryCategory,
+			organizationId: jobPost.organizationId,
+			payAmount: jobPost.payAmount,
+			payUnit: jobPost.payUnit,
+			publishedAt: jobPost.publishedAt,
+			ratingAverage: ratingAverageSql,
+			ratingCount: ratingCountSql,
+			region: jobPost.region,
+			status: jobPost.status,
+			teamDisplayName: employerTeamProfile.displayName,
+			title: jobPost.title,
+			workSchedule: jobPost.workSchedule,
+		};
+
+		const getExposedJobs = async (type: ListingSectionExposureType) =>
 			await db
-				.select({
-					description: jobPost.description,
-					coverImage: coverImageSql,
-					employerDisplayName: employerOrganizationProfile.displayName,
-					employerVerificationStatus:
-						employerOrganizationProfile.verificationStatus,
-					id: jobPost.id,
-					industryCategory: jobPost.industryCategory,
-					lastBoostedAt: jobPromotionCampaign.lastBoostedAt,
-					organizationId: jobPost.organizationId,
-					payAmount: jobPost.payAmount,
-					payUnit: jobPost.payUnit,
-					promotionCampaignId: jobPromotionCampaign.id,
-					promotionEndsAt: jobPromotionCampaign.endsAt,
-					promotionStartsAt: jobPromotionCampaign.startsAt,
-					promotionStatus: jobPromotionCampaign.status,
-					promotionTier: jobPromotionCampaign.tier,
-					publishedAt: jobPost.publishedAt,
-					ratingAverage: ratingAverageSql,
-					ratingCount: ratingCountSql,
-					region: jobPost.region,
-					status: jobPost.status,
-					teamDisplayName: employerTeamProfile.displayName,
-					title: jobPost.title,
-					workSchedule: jobPost.workSchedule,
-				})
-				.from(jobPromotionCampaign)
-				.innerJoin(jobPost, eq(jobPromotionCampaign.jobPostId, jobPost.id))
+				.select(exposureSelection)
+				.from(jobPost)
 				.innerJoin(
 					employerOrganizationProfile,
 					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
@@ -449,71 +443,54 @@ export const jobsRouter = {
 				.where(
 					and(
 						...filters,
-						eq(jobPromotionCampaign.status, "active"),
-						eq(jobPromotionCampaign.tier, tier),
-						lte(jobPromotionCampaign.startsAt, now),
-						gt(jobPromotionCampaign.endsAt, now)
+						eq(jobPost.exposureType, type),
+						or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
 					)
 				)
-				.orderBy(
-					desc(jobPromotionCampaign.lastBoostedAt),
-					desc(jobPromotionCampaign.startsAt)
-				)
-				.limit(tier === "premium" ? 5 : 10);
+				.orderBy(desc(jobPost.publishedAt))
+				.limit(EXPOSURE_SECTION_LIMITS[type]);
 
-		const [premiumRows, recommendedRows, organicRows] = await Promise.all([
-			getPromotedJobs("premium"),
-			getPromotedJobs("recommended"),
-			db
-				.select({
-					description: jobPost.description,
-					coverImage: coverImageSql,
-					employerDisplayName: employerOrganizationProfile.displayName,
-					employerVerificationStatus:
-						employerOrganizationProfile.verificationStatus,
-					id: jobPost.id,
-					industryCategory: jobPost.industryCategory,
-					organizationId: jobPost.organizationId,
-					payAmount: jobPost.payAmount,
-					payUnit: jobPost.payUnit,
-					publishedAt: jobPost.publishedAt,
-					ratingAverage: ratingAverageSql,
-					ratingCount: ratingCountSql,
-					region: jobPost.region,
-					status: jobPost.status,
-					teamDisplayName: employerTeamProfile.displayName,
-					title: jobPost.title,
-					workSchedule: jobPost.workSchedule,
-				})
-				.from(jobPost)
-				.innerJoin(
-					employerOrganizationProfile,
-					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
-				)
-				.leftJoin(
-					employerTeamProfile,
-					eq(jobPost.teamId, employerTeamProfile.teamId)
-				)
-				.where(and(...filters))
-				.orderBy(
-					sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
-					desc(jobPost.publishedAt)
-				)
-				.limit(input.limit + 15),
-		]);
+		const [specialRows, urgentRows, recommendedRows, organicRows] =
+			await Promise.all([
+				getExposedJobs("special"),
+				getExposedJobs("urgent"),
+				getExposedJobs("recommended"),
+				db
+					.select(exposureSelection)
+					.from(jobPost)
+					.innerJoin(
+						employerOrganizationProfile,
+						eq(
+							jobPost.organizationId,
+							employerOrganizationProfile.organizationId
+						)
+					)
+					.leftJoin(
+						employerTeamProfile,
+						eq(jobPost.teamId, employerTeamProfile.teamId)
+					)
+					.where(and(...filters))
+					.orderBy(
+						sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
+						desc(jobPost.publishedAt)
+					)
+					.limit(input.limit + 15),
+			]);
 
-		const result = buildPublicJobSections({
+		const result = buildExposureJobSections({
 			limit: input.limit,
 			now,
 			organicRows,
-			premiumRows,
 			recommendedRows,
+			specialRows,
+			urgentRows,
 		});
 
 		// 현재 요청에서 새로 기록하는 impression 때문에 판정이 왜곡되지 않도록,
 		// recordJobListingImpressions 이전에 최근 7일 성과를 집계해 각 item에 붙인다.
 		const performanceJobIds = [
-			...result.sections.premium,
+			...result.sections.special,
+			...result.sections.urgent,
 			...result.sections.recommended,
 			...result.sections.organic,
 		].map((item) => item.id);
@@ -521,8 +498,15 @@ export const jobsRouter = {
 			performanceJobIds,
 			now
 		);
-		const withPerformance = <TItem extends { id: string }>(item: TItem) => ({
+		const toListItem = <TItem extends { exposureType: string; id: string }>(
+			item: TItem,
+			inPaidSection: boolean
+		) => ({
 			...item,
+			isPromoted: inPaidSection,
+			promotionLabel: inPaidSection
+				? EXPOSURE_TYPE_LABELS[item.exposureType as JobExposureType]
+				: null,
 			performance: performanceByJobId.get(item.id) ?? {
 				detailViews: 0,
 				impressions: 0,
@@ -535,11 +519,14 @@ export const jobsRouter = {
 		});
 
 		return {
-			...result,
+			totalCount: result.totalCount,
 			sections: {
-				organic: result.sections.organic.map(withPerformance),
-				premium: result.sections.premium.map(withPerformance),
-				recommended: result.sections.recommended.map(withPerformance),
+				organic: result.sections.organic.map((item) => toListItem(item, false)),
+				recommended: result.sections.recommended.map((item) =>
+					toListItem(item, true)
+				),
+				special: result.sections.special.map((item) => toListItem(item, true)),
+				urgent: result.sections.urgent.map((item) => toListItem(item, true)),
 			},
 		};
 	}),

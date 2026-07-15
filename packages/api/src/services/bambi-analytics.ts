@@ -3,13 +3,6 @@ import { member } from "@bambi-app/db/schema/auth";
 import { jobPerformanceEvent, jobPost } from "@bambi-app/db/schema/bambi";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
-import type {
-	PromotionTier,
-	PublicJobSections,
-	PublicOrganicJobListItem,
-	PublicPromotedJobListItem,
-} from "./bambi-promotions";
-
 export const jobPerformanceEventTypes = [
 	"impression",
 	"detail_view",
@@ -48,25 +41,33 @@ export const recordJobPerformanceEvent = async ({
 	return event;
 };
 
+interface ListingImpressionItem {
+	exposureType?: string;
+	id: string;
+	organizationId: string;
+}
+
 interface RecordJobListingImpressionsInput {
 	actorUserId?: null | string;
-	sections: PublicJobSections["sections"];
+	sections: {
+		organic: ListingImpressionItem[];
+		recommended: ListingImpressionItem[];
+		special: ListingImpressionItem[];
+		urgent: ListingImpressionItem[];
+	};
 }
 
 const toImpressionMetadata = ({
-	campaignId,
+	exposureType,
 	position,
-	promotionTier,
 	section,
 }: {
-	campaignId?: string;
+	exposureType?: string;
 	position: number;
-	promotionTier?: PromotionTier;
-	section: "organic" | "premium" | "recommended";
+	section: "organic" | "recommended" | "special" | "urgent";
 }): Record<string, unknown> => ({
-	...(campaignId ? { campaignId } : {}),
+	...(exposureType ? { exposureType } : {}),
 	position,
-	...(promotionTier ? { promotionTier } : {}),
 	section,
 });
 
@@ -77,17 +78,16 @@ const toPromotedImpressionValue = ({
 	section,
 }: {
 	actorUserId?: null | string;
-	item: PublicPromotedJobListItem;
+	item: ListingImpressionItem;
 	position: number;
-	section: "premium" | "recommended";
+	section: "recommended" | "special" | "urgent";
 }) => ({
 	actorUserId: actorUserId ?? null,
 	eventType: "impression" as const,
 	jobPostId: item.id,
 	metadata: toImpressionMetadata({
-		campaignId: item.promotionCampaignId,
+		exposureType: item.exposureType,
 		position,
-		promotionTier: item.promotionTier,
 		section,
 	}),
 	organizationId: item.organizationId,
@@ -99,7 +99,7 @@ const toOrganicImpressionValue = ({
 	position,
 }: {
 	actorUserId?: null | string;
-	item: PublicOrganicJobListItem;
+	item: ListingImpressionItem;
 	position: number;
 }) => ({
 	actorUserId: actorUserId ?? null,
@@ -117,12 +117,20 @@ export const recordJobListingImpressions = async ({
 	sections,
 }: RecordJobListingImpressionsInput): Promise<void> => {
 	const values = [
-		...sections.premium.map((item, position) =>
+		...sections.special.map((item, position) =>
 			toPromotedImpressionValue({
 				actorUserId,
 				item,
 				position,
-				section: "premium",
+				section: "special",
+			})
+		),
+		...sections.urgent.map((item, position) =>
+			toPromotedImpressionValue({
+				actorUserId,
+				item,
+				position,
+				section: "urgent",
 			})
 		),
 		...sections.recommended.map((item, position) =>

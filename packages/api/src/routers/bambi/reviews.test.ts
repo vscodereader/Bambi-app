@@ -38,6 +38,7 @@ interface ReviewFixture {
 	jobPostId: string;
 	jobSeekerUserId: string;
 	organizationId: string;
+	region: string;
 	scheduleId: string;
 	userIds: string[];
 }
@@ -60,6 +61,8 @@ const makeEmail = (prefix: string): string =>
 
 const createReviewFixture = async (): Promise<ReviewFixture> => {
 	const now = new Date();
+	// 공개 jobs.list는 전역 조회라, 병렬 테스트 픽스처가 섞이지 않도록 고유 region으로 격리한다.
+	const region = `reviews-${randomUUID()}`;
 	const organizationId = `org_test_${randomUUID()}`;
 	const employerUserId = `user_test_employer_${randomUUID()}`;
 	const jobSeekerUserId = `user_test_seeker_${randomUUID()}`;
@@ -129,8 +132,9 @@ const createReviewFixture = async (): Promise<ReviewFixture> => {
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",
+		paymentStatus: "paid",
 		publishedAt: now,
-		region: "서울 강남구",
+		region,
 		status: "published",
 		title: "후기 테스트 공고",
 		workSchedule: "20:00-02:00",
@@ -167,6 +171,7 @@ const createReviewFixture = async (): Promise<ReviewFixture> => {
 		jobPostId,
 		jobSeekerUserId,
 		organizationId,
+		region,
 		scheduleId,
 		userIds: [employerUserId, jobSeekerUserId, alternateSeekerUserId],
 	};
@@ -333,9 +338,10 @@ describe("bambi jobs review aggregates", () => {
 				path: ["bambi", "jobs", "getById"],
 			});
 
-			const listResult = await listJobs({ limit: 20 });
+			const listResult = await listJobs({ limit: 20, region: fixture.region });
 			const listedJob = [
-				...listResult.sections.premium,
+				...listResult.sections.special,
+				...listResult.sections.urgent,
 				...listResult.sections.recommended,
 				...listResult.sections.organic,
 			].find((job) => job.id === fixture.jobPostId);
