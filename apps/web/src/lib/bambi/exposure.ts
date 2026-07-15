@@ -37,13 +37,13 @@ const getBaseJobStatusTone = (status: string): StatusTone => {
 };
 
 /**
- * 구인자에게 보이는 "공고 상태"는 검수 축(status)이 아니라 실제 공개 여부를 반영한다.
+ * 화면에 보이는 "공고 상태"는 검수 축(status)이 아니라 실제 공개 여부를 반영한다(구인자·운영자 공용).
  * 공개 게이트 = status "published" AND paymentStatus "paid"(packages/api의 jobs.list/getById에서
  * 강제). 인증 업체는 등록 즉시 published가 되지만 무통장입금은 결제 확인 전까지 비공개이므로
  * published + 미결제는 "미공개"(warning)로 표기한다. 그 외 상태(검수 대기·반려·숨김·임시 저장)는
  * 결제와 무관하게 기존 라벨·tone을 유지한다.
  */
-export const getEmployerJobDisplayStatus = ({
+export const getJobDisplayStatus = ({
 	paymentStatus,
 	status,
 }: {

@@ -21,11 +21,11 @@ import { formatAdPrice } from "@/lib/bambi/ad-catalog";
 import {
 	EXPOSURE_TYPE_LABELS,
 	expiryLabel,
+	getJobDisplayStatus,
 	PAYMENT_STATUS_LABELS,
 	remainingDays,
 } from "@/lib/bambi/exposure";
 import { formatDateTime } from "@/lib/bambi-format";
-import { jobStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
 type PaymentJob = Awaited<
@@ -33,21 +33,6 @@ type PaymentJob = Awaited<
 >[number];
 
 type Tone = React.ComponentProps<typeof StatusBadge>["tone"];
-
-const getJobStatusLabel = (status: string): string =>
-	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
-
-const getJobStatusTone = (status: string): Tone => {
-	if (status === "published") {
-		return "good";
-	}
-
-	if (status === "pending_review") {
-		return "warning";
-	}
-
-	return "default";
-};
 
 const getExpiryTone = (label: string): Tone => {
 	if (label === "진행중") {
@@ -120,12 +105,19 @@ function getPaymentColumns({
 		{
 			id: "status",
 			header: "공고 상태",
-			sortValue: (job) => getJobStatusLabel(job.status),
-			cell: (job) => (
-				<StatusBadge tone={getJobStatusTone(job.status)}>
-					{getJobStatusLabel(job.status)}
-				</StatusBadge>
-			),
+			sortValue: (job) =>
+				getJobDisplayStatus({
+					paymentStatus: job.paymentStatus,
+					status: job.status,
+				}).label,
+			cell: (job) => {
+				const display = getJobDisplayStatus({
+					paymentStatus: job.paymentStatus,
+					status: job.status,
+				});
+
+				return <StatusBadge tone={display.tone}>{display.label}</StatusBadge>;
+			},
 		},
 		{
 			id: "exposureType",
