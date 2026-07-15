@@ -15,6 +15,7 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
+	AD_PREVIEW_TEMPLATE_LABELS,
 	AD_PREVIEW_TEMPLATE_OPTIONS,
 	type AdPreviewTemplateValue,
 } from "@/lib/bambi/ad-preview-templates";
@@ -101,19 +102,26 @@ export function AdProductForm({
 		reader.readAsDataURL(file);
 	};
 
-	const submit = () =>
+	const submit = () => {
+		const normalizedPriceOptions = priceOptions
+			.filter((option) => option.days > 0)
+			.map(({ amount, days }) => ({ amount, days }));
+		const dayValues = normalizedPriceOptions.map((option) => option.days);
+		if (new Set(dayValues).size !== dayValues.length) {
+			toast.error("같은 이용 기간이 중복됩니다. 기간별로 하나만 등록해주세요.");
+			return;
+		}
 		onSubmit({
 			name: name.trim(),
 			tagline: tagline.trim(),
 			benefits: benefits
 				.map((item) => item.value.trim())
 				.filter((value) => value.length > 0),
-			priceOptions: priceOptions
-				.filter((option) => option.days > 0)
-				.map(({ amount, days }) => ({ amount, days })),
+			priceOptions: normalizedPriceOptions,
 			previewImageUrl,
 			previewTemplate,
 		});
+	};
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -136,6 +144,7 @@ export function AdProductForm({
 			<div className="flex flex-col gap-1.5">
 				<Label htmlFor="p-preview-template">노출 영역(게시 위치)</Label>
 				<Select
+					items={AD_PREVIEW_TEMPLATE_LABELS}
 					onValueChange={(value) =>
 						setPreviewTemplate(value as AdPreviewTemplateValue)
 					}
@@ -198,7 +207,7 @@ export function AdProductForm({
 								setPrice(option.id, { days: Number(e.target.value) || 0 })
 							}
 							type="number"
-							value={option.days}
+							value={option.days === 0 ? "" : option.days}
 						/>
 						<span className="text-muted-foreground text-sm">일</span>
 						<Input
@@ -207,7 +216,7 @@ export function AdProductForm({
 								setPrice(option.id, { amount: Number(e.target.value) || 0 })
 							}
 							type="number"
-							value={option.amount}
+							value={option.amount === 0 ? "" : option.amount}
 						/>
 						<span className="text-muted-foreground text-sm">원</span>
 						<Button

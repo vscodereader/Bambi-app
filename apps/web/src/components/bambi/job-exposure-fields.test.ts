@@ -72,4 +72,10 @@ describe("job exposure and payment fields", () => {
 			"결제는 운영자 확인 후 완료되며, 검수·결제완료 시 게시됩니다."
 		);
 	});
+
+	it("maps the duration select to labeled items so the trigger shows the label", () => {
+		const source = readComponent("job-exposure-fields.tsx");
+		// base-ui Select는 items 매핑이 있어야 트리거에 원값(일수) 대신 라벨을 표시한다
+		expect(source).toContain("items={(selectedProduct?.priceOptions");
+	});
 });
