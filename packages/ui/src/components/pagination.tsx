@@ -13,7 +13,7 @@ import type { ComponentProps } from "react";
 function Pagination({ className, ...props }: ComponentProps<"nav">) {
 	return (
 		<nav
-			aria-label="pagination"
+			aria-label="페이지네이션"
 			className={cn("mx-auto flex w-full justify-center", className)}
 			data-slot="pagination"
 			{...props}
@@ -113,7 +113,6 @@ function PaginationEllipsis({ className, ...props }: ComponentProps<"span">) {
 			{...props}
 		>
 			<MoreHorizontalIcon className="size-4" />
-			<span className="sr-only">더 많은 페이지</span>
 		</span>
 	);
 }
