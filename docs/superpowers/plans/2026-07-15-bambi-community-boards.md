@@ -23,7 +23,10 @@
 - **자격 규칙(verbatim):** `canAccess = status !== "suspended" AND (role === "admin" OR gender === "female" OR (role === "employer" AND isAdvertiser))`. isAdvertiser는 라이브 파생(`hasActiveAdvertiserCampaign`).
 - **베스트글 규칙(verbatim):** `status = "published" AND createdAt >= now − 30일 AND likeCount >= 1`, 정렬 `likeCount DESC, createdAt DESC`.
 - **권한(verbatim):** 수정=작성자 본인만. 삭제(글·댓글)=작성자 본인 또는 admin. 삭제는 소프트(`status = "deleted"`).
-- **상수(verbatim):** PAGE_SIZE=20, OVERVIEW_LIMIT=4, 댓글 조회 캡 200, 제목 2–100자, 본문 2–5000자, 댓글 1–1000자.
+- **상수(verbatim):** PAGE_SIZE=20, OVERVIEW_LIMIT=4, 댓글 조회 캡 200, 제목 2–100자, 댓글 1–1000자.
+- **[개정 2026-07-15] 글 필드(verbatim):** 작성인 `authorName` 1–30자(기본값 프로필 displayName), 비밀번호 `password` 4–30자 필수(scrypt `salt:hash` 저장), 잠금 `isLocked` boolean. 본문 `body`는 **Tiptap JSON 문자열** 2–30000자, 서버 검증 = JSON.parse 성공 + 최상위 `type === "doc"`.
+- **[개정] 잠금 의미(verbatim):** 목록·오버뷰는 잠긴 글 제목을 서버에서 `"비밀글입니다"`로 마스킹(작성자·admin 제외). 상세·댓글조회·댓글작성·추천은 작성자·admin 외 비밀번호 일치 필요. getPost는 열람 불가 시 throw 대신 `{ locked: true, ... }` 축소 응답. 수정=작성자 또는 비밀번호 일치, 삭제=작성자·admin 또는 비밀번호 일치.
+- **[개정] Tiptap 예외:** 본문 에디터는 Tiptap Simple Editor 템플릿. `@tiptap/*`(필요시 `sass` devDep 포함) 의존성 추가는 사용자 명시 허용 — 그 외 라이브러리는 여전히 금지. HTML 저장·`dangerouslySetInnerHTML` 금지, 상세 렌더는 read-only Tiptap.
 
 ## Prerequisites
 
@@ -836,7 +839,446 @@ feat(api): 커뮤니티 라우터 조회 계열 추가
 
 ---
 
+## Task 13: [개정] 클래식 보드 필드 — 작성인·비밀번호·잠금 (DB+API)
+
+> 실행 순서: **Task 3 직후, Task 4 전.** 2026-07-15 사용자 지시로 추가된 개정 태스크.
+> 이 태스크 이후의 모든 태스크에서 이 태스크의 정의가 원본 코드 블록과 충돌하면 **이 태스크가 우선**한다.
+
+**Files:**
+- Modify: `packages/db/src/schema/bambi.ts` — `communityPost`에 컬럼 3개
+- Create: `packages/db/src/migrations/0013_*.sql` — 컨트롤러가 db:generate/migrate 실행(사용자 허용)
+- Create: `packages/api/src/services/bambi-community-password.ts`
+- Test: `packages/api/src/services/bambi-community-password.test.ts`
+- Modify: `packages/api/src/routers/bambi/community.ts`
+- Modify: `packages/api/src/routers/bambi/community.test.ts`
+
+**Interfaces:**
+- Consumes: Task 3의 `communityRouter`·`findPublishedPost`·`postSummarySelection`.
+- Produces:
+  - `hashCommunityPassword(password: string): string` (`salt:hash`), `verifyCommunityPassword(password: string, stored: string): boolean` (scrypt + timingSafeEqual)
+  - `communityPost.authorDisplayName`(notNull)·`passwordHash`(notNull)·`isLocked`(default false)
+  - `createPost` input: `{ authorName 1–30, board, body(JSON 2–30000), isLocked, password 4–30, title 2–100 }`, 응답 `{ id, board }`(passwordHash 비노출)
+  - `getPost` input: `{ postId, password? }`, 응답 union: 열람 가능 시 기존 full 형태 + `locked: false` / 잠김+비번없음 시 `{ locked: true, id, board, authorName, createdAt }` / 비번 불일치 시 FORBIDDEN("비밀번호가 일치하지 않습니다.")
+  - `PostSummary`에 `isLocked: boolean` 추가, `authorName`은 `authorDisplayName` 컬럼 값(프로필 조인 제거), 잠긴 글 제목은 서버 마스킹 `"비밀글입니다"`(작성자·admin 제외)
+  - 내부 헬퍼(Task 4·5가 사용): `canBypassLock(post, profile)`, `requirePostReadAccess(post, profile, password?)` — 잠금 게이트 공용, `LOCKED_TITLE = "비밀글입니다"`, `assertTiptapDoc(body)` — JSON.parse + `type === "doc"` 검증(실패 시 BAD_REQUEST "본문 형식이 올바르지 않습니다.")
+
+- [ ] **Step 1: 스키마 컬럼 추가**
+
+`communityPost`의 `authorUserId` 정의 다음에:
+
+```ts
+		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
+		authorDisplayName: text("author_display_name").notNull(),
+		passwordHash: text("password_hash").notNull(),
+		isLocked: boolean("is_locked").default(false).notNull(),
+```
+
+- [ ] **Step 2: 컨트롤러 게이트 — 마이그레이션**
+
+컨트롤러가 `pnpm db:generate`(0013 산출: ALTER TABLE community_post ADD COLUMN 3건) → `pnpm db:migrate` 실행 후 커밋. (테이블이 비어 있어 notNull 컬럼 추가 가능. 만약 개발 DB에 기존 행이 있으면 생성된 SQL에 DEFAULT 보정이 필요한지 컨트롤러가 확인.)
+
+- [ ] **Step 3: 비밀번호 서비스 TDD**
+
+`packages/api/src/services/bambi-community-password.test.ts` (순수 단위 테스트 — DB 불필요):
+
+```ts
+import { describe, expect, it } from "vitest";
+
+import {
+	hashCommunityPassword,
+	verifyCommunityPassword,
+} from "./bambi-community-password";
+
+describe("community password hashing", () => {
+	it("해시는 salt:hash 형태이고 원문과 다르다", () => {
+		const stored = hashCommunityPassword("pw1234");
+		expect(stored).toContain(":");
+		expect(stored).not.toContain("pw1234");
+	});
+
+	it("같은 비밀번호는 검증에 성공하고 다른 비밀번호·손상된 저장값은 실패한다", () => {
+		const stored = hashCommunityPassword("pw1234");
+		expect(verifyCommunityPassword("pw1234", stored)).toBe(true);
+		expect(verifyCommunityPassword("wrong!", stored)).toBe(false);
+		expect(verifyCommunityPassword("pw1234", "broken")).toBe(false);
+	});
+
+	it("같은 비밀번호라도 salt가 달라 저장값이 매번 다르다", () => {
+		expect(hashCommunityPassword("pw1234")).not.toBe(
+			hashCommunityPassword("pw1234")
+		);
+	});
+});
+```
+
+구현 `packages/api/src/services/bambi-community-password.ts`:
+
+```ts
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+
+const KEY_LENGTH = 64;
+const SALT_BYTES = 16;
+
+// 커뮤니티 글 비밀번호 저장 형식: "<salt hex>:<scrypt hash hex>".
+export const hashCommunityPassword = (password: string): string => {
+	const salt = randomBytes(SALT_BYTES).toString("hex");
+	const hash = scryptSync(password, salt, KEY_LENGTH).toString("hex");
+	return `${salt}:${hash}`;
+};
+
+export const verifyCommunityPassword = (
+	password: string,
+	stored: string
+): boolean => {
+	const [salt, hash] = stored.split(":");
+	if (!salt || !hash) {
+		return false;
+	}
+	const candidate = scryptSync(password, salt, KEY_LENGTH);
+	const expected = Buffer.from(hash, "hex");
+	return (
+		candidate.length === expected.length && timingSafeEqual(candidate, expected)
+	);
+};
+```
+
+- [ ] **Step 4: community.ts 개정**
+
+변경 목록(전부 이 파일 안):
+
+1. import 추가: `hashCommunityPassword`, `verifyCommunityPassword` (../../services/bambi-community-password), `boolean`은 불필요(zod), `BambiAccessProfile` 타입 import (../../services/bambi-authz).
+2. 상수·헬퍼 추가:
+
+```ts
+const LOCKED_TITLE = "비밀글입니다";
+const BODY_MAX = 30_000;
+
+const assertTiptapDoc = (body: string) => {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(body);
+	} catch {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "본문 형식이 올바르지 않습니다.",
+		});
+	}
+	if (
+		typeof parsed !== "object" ||
+		parsed === null ||
+		(parsed as { type?: unknown }).type !== "doc"
+	) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "본문 형식이 올바르지 않습니다.",
+		});
+	}
+};
+
+const canBypassLock = (
+	post: { authorUserId: string },
+	profile: BambiAccessProfile
+): boolean =>
+	post.authorUserId === profile.userId || profile.role === "admin";
+
+const requirePostReadAccess = (
+	post: { authorUserId: string; isLocked: boolean; passwordHash: string },
+	profile: BambiAccessProfile,
+	password?: string
+): void => {
+	if (!post.isLocked || canBypassLock(post, profile)) {
+		return;
+	}
+	if (password && verifyCommunityPassword(password, post.passwordHash)) {
+		return;
+	}
+	throw new ORPCError("FORBIDDEN", {
+		message: "비밀글입니다. 비밀번호를 확인해 주세요.",
+	});
+};
+
+const maskLockedSummaries = <
+	T extends { authorUserId: string; isLocked: boolean; title: string },
+>(
+	items: T[],
+	profile: BambiAccessProfile
+): T[] =>
+	items.map((item) =>
+		item.isLocked && !canBypassLock(item, profile)
+			? { ...item, title: LOCKED_TITLE }
+			: item
+	);
+```
+
+3. `createPostInput` 교체:
+
+```ts
+const createPostInput = z.object({
+	authorName: z.string().trim().min(1).max(30),
+	board: communityWritableBoardSchema,
+	body: z.string().min(2).max(BODY_MAX),
+	isLocked: z.boolean().default(false),
+	password: z.string().min(4).max(30),
+	title: z.string().trim().min(2).max(100),
+});
+```
+
+4. `postSummarySelection` 교체 — 프로필 조인 제거, 컬럼 사용:
+
+```ts
+const postSummarySelection = {
+	authorName: communityPost.authorDisplayName,
+	authorUserId: communityPost.authorUserId,
+	board: communityPost.board,
+	commentCount: communityPost.commentCount,
+	createdAt: communityPost.createdAt,
+	id: communityPost.id,
+	isLocked: communityPost.isLocked,
+	likeCount: communityPost.likeCount,
+	title: communityPost.title,
+	viewCount: communityPost.viewCount,
+};
+```
+
+`selectBoardPosts`에서 `.leftJoin(bambiProfile, ...)` 제거(다른 사용처 없으면 `bambiProfile` import도 제거).
+
+5. `listPosts`·`overview`: 조회 결과에 `maskLockedSummaries(items, profile)` 적용 — 두 핸들러 모두 `const profile = await requireCommunityMember(...)`로 프로필을 받도록 변경.
+
+6. `getPost` 교체:
+
+```ts
+	getPost: protectedProcedure
+		.input(
+			postIdInput.extend({
+				password: z.string().max(30).optional(),
+			})
+		)
+		.handler(async ({ context, input }) => {
+			const profile = await requireCommunityMember(context.session);
+			const post = await findPublishedPost(input.postId);
+
+			if (post.isLocked && !canBypassLock(post, profile)) {
+				if (!input.password) {
+					return {
+						authorName: post.authorDisplayName,
+						board: post.board,
+						createdAt: post.createdAt,
+						id: post.id,
+						locked: true as const,
+					};
+				}
+				if (!verifyCommunityPassword(input.password, post.passwordHash)) {
+					throw new ORPCError("FORBIDDEN", {
+						message: "비밀번호가 일치하지 않습니다.",
+					});
+				}
+			}
+
+			await db
+				.update(communityPost)
+				.set({ viewCount: sql`${communityPost.viewCount} + 1` })
+				.where(eq(communityPost.id, input.postId));
+
+			const [like] = await db
+				.select({ id: communityPostLike.id })
+				.from(communityPostLike)
+				.where(
+					and(
+						eq(communityPostLike.postId, input.postId),
+						eq(communityPostLike.userId, profile.userId)
+					)
+				)
+				.limit(1);
+
+			const isMine = post.authorUserId === profile.userId;
+
+			return {
+				authorName: post.authorDisplayName,
+				authorUserId: post.authorUserId,
+				board: post.board,
+				body: post.body,
+				canDelete: isMine || profile.role === "admin",
+				canEdit: isMine,
+				commentCount: post.commentCount,
+				createdAt: post.createdAt,
+				id: post.id,
+				isLiked: Boolean(like),
+				isLocked: post.isLocked,
+				likeCount: post.likeCount,
+				locked: false as const,
+				title: post.title,
+				updatedAt: post.updatedAt,
+				viewCount: post.viewCount + 1,
+			};
+		}),
+```
+
+7. `createPost` 교체(응답에서 passwordHash 비노출):
+
+```ts
+	createPost: protectedProcedure
+		.input(createPostInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireCommunityMember(context.session);
+			assertTiptapDoc(input.body);
+
+			const [created] = await db
+				.insert(communityPost)
+				.values({
+					authorDisplayName: input.authorName,
+					authorUserId: profile.userId,
+					board: input.board,
+					body: input.body,
+					isLocked: input.isLocked,
+					passwordHash: hashCommunityPassword(input.password),
+					title: input.title,
+				})
+				.returning({ board: communityPost.board, id: communityPost.id });
+
+			return created;
+		}),
+```
+
+- [ ] **Step 5: 테스트 개정 (TDD — 신규 케이스 먼저 RED)**
+
+`community.test.ts` 개정:
+- 픽스처 헬퍼 추가 후 기존 `createPost(...)` 호출 전부에 스프레드:
+
+```ts
+const TIPTAP_BODY = JSON.stringify({
+	content: [
+		{
+			content: [{ text: "본문입니다.", type: "text" }],
+			type: "paragraph",
+		},
+	],
+	type: "doc",
+});
+
+const basePostInput = {
+	authorName: "달빛토끼",
+	body: TIPTAP_BODY,
+	isLocked: false,
+	password: "pw1234",
+};
+// 사용 예: createPost({ ...basePostInput, board: "free", title: `... ${randomUUID()}` })
+```
+
+- 기존 케이스 기대값 수정: `summary?.authorName`은 이제 `basePostInput.authorName`("달빛토끼" — 프로필 displayName이 아니라 입력값), `createPost` 응답은 `{ id, board }`이므로 `created.id` 사용 유지·`created.updatedAt` 참조는 getPost 경유로 변경(Task 4의 updatedAt 비교 테스트).
+- 신규 케이스 추가:
+
+```ts
+	it("잠긴 글은 타인 목록에서 제목이 마스킹되고, 비밀번호로 열람할 수 있다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				isLocked: true,
+				title: `비밀 제목 ${randomUUID()}`,
+			});
+
+			// 타인(admin 아님) 목록: 제목 마스킹 — adminUserId는 bypass라 femaleUser가 아닌 제3자 필요 없음:
+			// admin은 실제 제목을 본다.
+			const listAsAdmin = clientFor(
+				communityRouter.listPosts,
+				fixture.adminUserId,
+				["listPosts"]
+			);
+			const adminList = await listAsAdmin({ board: "free", page: 1 });
+			expect(
+				adminList.items.find((item) => item.id === created.id)?.title
+			).toContain("비밀 제목");
+
+			const getAsOther = clientFor(
+				communityRouter.getPost,
+				fixture.otherFemaleUserId,
+				["getPost"]
+			);
+			const lockedView = await getAsOther({ postId: created.id });
+			expect(lockedView.locked).toBe(true);
+			expect("body" in lockedView).toBe(false);
+
+			await expectOrpcCode(
+				getAsOther({ password: "wrong!", postId: created.id }),
+				"FORBIDDEN"
+			);
+
+			const unlocked = await getAsOther({
+				password: "pw1234",
+				postId: created.id,
+			});
+			expect(unlocked.locked).toBe(false);
+			if (unlocked.locked === false) {
+				expect(unlocked.body).toBe(TIPTAP_BODY);
+			}
+
+			const listAsOther = clientFor(
+				communityRouter.listPosts,
+				fixture.otherFemaleUserId,
+				["listPosts"]
+			);
+			const otherList = await listAsOther({ board: "free", page: 1 });
+			expect(
+				otherList.items.find((item) => item.id === created.id)?.title
+			).toBe("비밀글입니다");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("본문이 Tiptap doc JSON이 아니면 BAD_REQUEST", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			await expectOrpcCode(
+				createPost({
+					...basePostInput,
+					board: "free",
+					body: "그냥 텍스트",
+					title: `본문검증 ${randomUUID()}`,
+				}),
+				"BAD_REQUEST"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+```
+
+- 픽스처에 `otherFemaleUserId`(gender female, job_seeker — 잠금 게이트 검증용 제3자) 추가: user·bambiProfile 시드와 `userIds`에 포함.
+
+- [ ] **Step 6: 검증 + 커밋(컨트롤러)**
+
+Run: `pnpm --filter @bambi-app/api test -- community` && `pnpm --filter @bambi-app/api exec vitest run src/services/bambi-community-password.test.ts` && `pnpm --filter @bambi-app/api check-types`
+Expected: 전부 PASS.
+
+```
+feat(api): 커뮤니티 글에 작성인·비밀번호·잠금 필드 추가
+- community_post에 author_display_name·password_hash·is_locked 컬럼(0013 마이그레이션)
+- 비밀번호 scrypt salt:hash 서비스(hash/verify, timingSafeEqual) + 단위 테스트
+- createPost 입력 확장(작성인 1-30·비밀번호 4-30·잠금)과 Tiptap doc JSON 본문 검증
+- 잠긴 글: 목록/오버뷰 제목 서버 마스킹(작성자·admin 제외), getPost는 locked 축소 응답→비밀번호 열람
+- 작성자 표시를 프로필 조인에서 글별 author_display_name 컬럼으로 전환
+```
+
+---
+
 ## Task 4: API — 글 쓰기 계열 (updatePost·deletePost) + 권한 테스트
+
+> **[개정 2026-07-15 — 이 블록이 아래 원본 코드와 충돌하면 이 블록이 우선]**
+> Task 13의 클래식 보드 필드가 적용된 뒤 실행된다. 변경 사항:
+> 1. `updatePostInput` 교체: `postIdInput.extend({ authorName: z.string().trim().min(1).max(30), body: z.string().min(2).max(30_000), isLocked: z.boolean(), password: z.string().max(30).optional(), title: z.string().trim().min(2).max(100) })`.
+> 2. `updatePost` 권한: **작성자 본인 OR `input.password`가 `verifyCommunityPassword`로 일치**(admin이라도 작성자 아니고 비번 없으면 FORBIDDEN "본인이 작성한 글만 수정할 수 있습니다. 비밀번호를 확인해 주세요."). 본문은 `assertTiptapDoc(input.body)` 검증. set에 `authorDisplayName: input.authorName, isLocked: input.isLocked` 추가. 응답 `.returning({ board, id })`로 passwordHash 비노출.
+> 3. `deletePost` input: `postIdInput.extend({ password: z.string().max(30).optional() })`. 권한: **작성자 OR admin OR 비밀번호 일치**.
+> 4. 테스트 개정: 기존 케이스의 createPost 호출에 `...basePostInput` 적용. "admin 수정 시도 FORBIDDEN" 케이스는 비번 없이 시도로 유지. 추가 케이스: ① 타인이 **맞는 비밀번호**로 updatePost 성공, ② 타인이 틀린 비번으로 deletePost FORBIDDEN → 맞는 비번으로 성공. `updated.updatedAt` 비교는 updatePost 응답이 축소되므로 getPost 경유로 검증하거나 생략하고 title 반영 확인으로 대체.
 
 **Files:**
 - Modify: `packages/api/src/routers/bambi/community.ts`
@@ -1001,6 +1443,10 @@ feat(api): 커뮤니티 글 수정·삭제 추가
 ---
 
 ## Task 5: API — 추천·댓글 (toggleLike·listComments·createComment·deleteComment) + 신고 대상 확장
+
+> **[개정 2026-07-15 — 이 블록이 아래 원본 코드와 충돌하면 이 블록이 우선]**
+> 1. `toggleLike`·`listComments`·`createComment`의 input에 `password: z.string().max(30).optional()`을 추가하고, 각 핸들러에서 `findPublishedPost` 직후 `requirePostReadAccess(post, profile, input.password)`(Task 13 헬퍼)를 호출한다 — 잠긴 글은 열람 자격자만 댓글·추천 가능.
+> 2. 테스트의 createPost 호출에 `...basePostInput` 적용(Task 13 픽스처). 추가 케이스 1개: 잠긴 글에 타인이 비번 없이 listComments → FORBIDDEN, 맞는 비번으로 → 성공.
 
 **Files:**
 - Modify: `packages/api/src/routers/bambi/community.ts`
@@ -1595,6 +2041,8 @@ feat(ui): shadcn pagination 컴포넌트 추가
 
 ## Task 8: 웹 — 커뮤니티 홈 인덱스 화면
 
+> **[개정 2026-07-15]** `OverviewPost`에 `isLocked: boolean` 추가. 잠긴 글 행은 제목 앞에 `LockIcon`(lucide, `size-3 text-muted-foreground`)을 표시한다(제목 마스킹은 서버가 처리하므로 그대로 렌더). authorName은 서버가 글별 작성인 컬럼 값을 내려주며 null이 아님 — 폴백 코드는 무해하니 유지 가능.
+
 **Files:**
 - Create: `apps/web/src/components/bambi/screens/community-home.tsx`
 - Modify: `apps/web/src/app/seeker/community/page.tsx`
@@ -1821,6 +2269,8 @@ feat(web): 수다방 홈 인덱스 화면 구현
 ---
 
 ## Task 9: 웹 — 게시판 목록 화면 + 번호 페이지네이션
+
+> **[개정 2026-07-15]** 목록 아이템에 `isLocked`가 내려온다. 잠긴 글 행은 제목 앞에 `LockIcon`(lucide, `size-3 text-muted-foreground shrink-0`) 표시(제목 마스킹은 서버 처리). 나머지는 원본대로.
 
 **Files:**
 - Create: `apps/web/src/components/bambi/screens/community-board.tsx`
@@ -2085,6 +2535,20 @@ feat(web): 커뮤니티 게시판 목록 화면 구현
 ---
 
 ## Task 10: 웹 — 글 작성/수정 폼
+
+> **[개정 2026-07-15 — 이 블록이 아래 원본 코드와 충돌하면 이 블록이 우선. 원본 코드는 레이아웃·뮤테이션 배선 참고용]**
+>
+> **A. Tiptap Simple Editor 도입 (사용자 명시 허용 의존성)**
+> 1. apps/web에서 `pnpm dlx @tiptap/cli@latest add simple-editor` 실행(공식 Simple Editor 템플릿 — 컴포넌트·스타일·의존성 자동 추가). CLI 산출 위치를 확인하고 apps/web/src 아래 컨벤션에 맞는 위치(components/tiptap-*)인지 정리. CLI가 실패하면: `pnpm --filter web add @tiptap/react @tiptap/pm @tiptap/starter-kit` 후 StarterKit + 기본 툴바(굵게/기울임/리스트/링크)를 가진 간단한 에디터 컴포넌트를 직접 작성.
+> 2. 스타일이 SCSS로 오면 `pnpm --filter web add -D sass` 허용(Tiptap 예외). CSS 전역 오염 최소화 확인. 다크모드에서 에디터 배경·글자색이 시맨틱 토큰과 어울리는지 확인.
+> 3. 본문 값은 **Tiptap JSON 문자열**: 제출 시 `JSON.stringify(editor.getJSON())`, 초기값은 `JSON.parse(initialPost.body)`. 에디터가 비었는지 판정은 `editor.getText().trim().length >= 2`.
+>
+> **B. 폼 필드 5종** (위→아래 순): 작성인 `Input`(기본값 세션 프로필 displayName — `useBambiAuth`에 노출돼 있으면 사용, 없으면 `orpc.bambi.onboarding.getMine` 쿼리의 `bambiProfile.displayName`; 구현 시 실제 확인) · 비밀번호 `Input type="password"`(4자 미만이면 제출 비활성) · 글 잠금 `Switch` + Label("비밀글로 잠그기") · 제목 `Input` · 본문 Simple Editor.
+>
+> **C. 뮤테이션 입력**: createPost `{ authorName, board, body, isLocked, password, title }` / updatePost `{ postId, authorName, body, isLocked, title, password? }`. createPost 응답은 `{ id, board }` — 성공 시 상세로 이동은 `created.id` 그대로.
+>
+> **D. edit 흐름(비작성자 = 비밀번호 수정)**: edit 페이지는 `getPost({ postId })` 결과가 ① `canEdit: true`면 바로 폼 로드(비번 없이 제출), ② `locked: true`거나 `canEdit: false`면 비밀번호 입력 카드를 먼저 보여주고, 입력된 비번으로 `getPost({ postId, password })` 재조회 성공 시 폼 로드 + 그 비번을 updatePost에 함께 전달. 비번 불일치 FORBIDDEN은 토스트.
+> **E. 검증**: `pnpm --filter web check-types` + `pnpm exec vitest run apps/web/src/lib/bambi/community.test.ts`(루트에서 — web에 test 스크립트 없음).
 
 **Files:**
 - Create: `apps/web/src/components/bambi/community-post-form.tsx`
@@ -2352,6 +2816,13 @@ feat(web): 커뮤니티 글 작성·수정 폼 구현
 ---
 
 ## Task 11: 웹 — 글 상세 화면 (댓글·추천·신고)
+
+> **[개정 2026-07-15 — 이 블록이 아래 원본 코드와 충돌하면 이 블록이 우선. 원본 코드는 레이아웃·신고 다이얼로그·댓글 UI 참고용]**
+> 1. **본문 렌더**: `whitespace-pre-wrap` 문단 대신 **read-only Tiptap**으로 렌더 — Task 10이 설치한 Simple Editor 기반으로 `editable: false`·툴바 없는 뷰어 컴포넌트(예: apps/web/src/components/bambi/community-post-body.tsx)를 만들어 `content: JSON.parse(post.body)`로 표시. `dangerouslySetInnerHTML` 금지. JSON.parse 실패 시 원문 텍스트 폴백.
+> 2. **잠긴 글 흐름**: `getPost({ postId })` 응답이 `locked: true`면 본문 대신 비밀번호 입력 카드(Input type=password + "열람" Button) 표시 → `getPost({ postId, password })`로 재조회(react-query input에 password 포함, 상태로 유지). 불일치 FORBIDDEN은 토스트. 열람 성공 후 댓글 쿼리·추천/댓글 뮤테이션에 같은 password를 전달(`enabled: post?.locked === false`).
+> 3. **삭제 버튼**: 모든 열람자에게 노출. `canDelete`(작성자·admin)면 확인 다이얼로그만, 아니면 비밀번호 입력 다이얼로그 → `deletePost({ postId, password })`. `window.confirm` 대신 shadcn Dialog 사용.
+> 4. **수정 버튼**: 모든 열람자에게 노출, edit 페이지로 이동(비작성자 비번 검증은 Task 10의 edit 흐름이 담당).
+> 5. 잠긴 글(`isLocked`)은 제목 옆 LockIcon 표시. 신고·댓글·추천 UI는 원본대로(댓글/추천 뮤테이션 input에 password 전달만 추가).
 
 **Files:**
 - Create: `apps/web/src/components/bambi/screens/community-post-detail.tsx`

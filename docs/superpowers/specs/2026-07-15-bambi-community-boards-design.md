@@ -110,7 +110,32 @@ likeCount ≥ 1`을 `likeCount DESC, createdAt DESC`로 정렬.
   `lib/bambi/report-labels.ts`로 승격해 공유(해당 화면도 임포트로 전환), 대상 타입 라벨에
   `community_post: "커뮤니티 글"` 추가.
 
-## 7. 테스트·검증
+## 7. 개정 (2026-07-15) — 클래식 보드 필드 + Tiptap 에디터
+
+구현 착수 후 사용자 추가 지시로 확정된 변경.
+
+**글 작성 필드 5종: 작성인 · 비밀번호 · 글 잠금여부 · 제목 · 본문.**
+
+- **작성인**: 글별 자유 입력 표시명(익명성). 기본값은 프로필 displayName. 목록·상세는
+  이 값을 표시(프로필 조인 표시 제거). → `community_post.author_display_name` (notNull).
+- **비밀번호**: 글마다 필수(4–30자). 용도: ① 잠긴 글 열람(타인이 비번 입력 시 열람),
+  ② 수정/삭제 확인(클래식 보드 방식 — 비번을 아는 사람은 수정/삭제 가능).
+  **작성자 본인 세션은 비번 없이 열람/수정/삭제 가능, admin은 열람/삭제 가능(수정 불가).**
+  저장은 scrypt 해시(`salt:hash`, node:crypto — 새 의존성 없음).
+  → `community_post.password_hash` (notNull).
+- **글 잠금여부(비밀글)**: 목록에 노출하되 서버가 제목을 "비밀글입니다"로 마스킹
+  (작성자·admin에게는 실제 제목). 상세는 작성자·admin 외에는 비밀번호 일치 시에만
+  본문 열람(댓글 조회·작성·추천도 동일 게이트). 열람 실패 응답은 throw가 아니라
+  `{ locked: true }` 축소 형태로 내려 UI가 비번 입력을 띄운다.
+  → `community_post.is_locked` (boolean, default false).
+- **본문 에디터**: Tiptap **Simple Editor** 템플릿(공식) 사용 — `@tiptap/*` 의존성 추가는
+  사용자가 명시 허용. 본문 저장 포맷은 **Tiptap JSON 문자열**(HTML 저장·주입 금지 —
+  상세 화면은 read-only Tiptap 에디터로 렌더해 XSS 표면 제거). 서버는
+  `JSON.parse` 가능 + 최상위 `type === "doc"` + 길이 캡(30000자)으로 검증.
+- 마이그레이션 0013 추가(컬럼 3개). 컨트롤러가 db:generate/migrate 직접 실행(사용자 허용).
+- 댓글에는 비밀번호·잠금 없음(글 전용).
+
+## 8. 테스트·검증
 
 - API: `packages/api/src/routers/bambi/community.test.ts` — 실 DB 통합 테스트
   (`reviews.test.ts` 픽스처 패턴). 자격 거부, CRUD, 페이지네이션, 추천 토글 왕복,
