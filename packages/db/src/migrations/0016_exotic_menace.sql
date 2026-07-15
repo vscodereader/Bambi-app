@@ -1,0 +1,1 @@
+ALTER TYPE "public"."moderation_target_type" ADD VALUE 'community_comment';
