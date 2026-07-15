@@ -7,7 +7,13 @@ import { useMod } from "@/components/bambi/screens/moderator-context";
 export default function ModeratorReportDetailPage() {
 	const router = useRouter();
 	const { id } = useParams<{ id: string }>();
-	const { isLoading, reports, resolveReport, sanction } = useMod();
+	const {
+		isLoading,
+		moderateCommunityTarget,
+		reports,
+		resolveReport,
+		sanction,
+	} = useMod();
 	const item = reports.find((r) => r.id === id);
 
 	if (isLoading) {
@@ -35,6 +41,7 @@ export default function ModeratorReportDetailPage() {
 		<ReportDetail
 			item={item}
 			onBack={() => router.push("/moderator/reports")}
+			onModerateCommunity={moderateCommunityTarget}
 			onResolve={(rid, action) => {
 				resolveReport(rid, action);
 				router.push("/moderator/reports");

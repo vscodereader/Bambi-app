@@ -20,8 +20,13 @@ const [{ db }, authSchema, bambiSchema, { communityRouter }] =
 	]);
 
 const { member, organization, user } = authSchema;
-const { bambiProfile, communityPost, jobPost, jobPromotionCampaign } =
-	bambiSchema;
+const {
+	adminModerationAction,
+	bambiProfile,
+	communityPost,
+	jobPost,
+	jobPromotionCampaign,
+} = bambiSchema;
 
 interface CommunityFixture {
 	adminUserId: string;
@@ -186,6 +191,10 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 const cleanupCommunityFixture = async (
 	fixture: CommunityFixture
 ): Promise<void> => {
+	// 운영자 조치 감사 로그는 user(admin_user_id) FK가 RESTRICT라 사용자 삭제 전에 먼저 지운다.
+	await db
+		.delete(adminModerationAction)
+		.where(inArray(adminModerationAction.adminUserId, fixture.userIds));
 	// community_post cascade가 댓글·좋아요를 함께 지운다.
 	await db
 		.delete(communityPost)
@@ -1652,6 +1661,257 @@ describe("bambi community router — 계정유형·광고글·필터·공지사�
 			);
 			expect(adminItem?.authorRole).toBe("admin");
 			expect(seekerItem?.authorRole).toBe("job_seeker");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+});
+
+describe("bambi community router — 운영자 조치(admin)", () => {
+	it("admin이 글을 hidden 처리하면 목록·상세에서 사라지고 감사 로그가 남는다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const setPostStatusByAdmin = clientFor(
+				communityRouter.setPostStatusByAdmin,
+				fixture.adminUserId,
+				["setPostStatusByAdmin"]
+			);
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `운영 숨김 ${randomUUID()}`,
+			});
+
+			const result = await setPostStatusByAdmin({
+				postId: created.id,
+				reason: "정책 위반으로 숨김 처리합니다.",
+				status: "hidden",
+			});
+			expect(result).toEqual({ id: created.id, status: "hidden" });
+
+			await expectOrpcCode(getPost({ postId: created.id }), "NOT_FOUND");
+			const listed = await listPosts({ board: "free", page: 1 });
+			expect(
+				listed.items.some((item: { id: string }) => item.id === created.id)
+			).toBe(false);
+
+			const actions = await db
+				.select()
+				.from(adminModerationAction)
+				.where(eq(adminModerationAction.targetId, created.id));
+			expect(actions).toHaveLength(1);
+			expect(actions[0]).toMatchObject({
+				action: "set_community_post_status:hidden",
+				reason: "정책 위반으로 숨김 처리합니다.",
+				targetType: "community_post",
+			});
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("admin이 hidden 글을 published로 복구하면 다시 노출된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const setPostStatusByAdmin = clientFor(
+				communityRouter.setPostStatusByAdmin,
+				fixture.adminUserId,
+				["setPostStatusByAdmin"]
+			);
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `복구 ${randomUUID()}`,
+			});
+			await setPostStatusByAdmin({
+				postId: created.id,
+				reason: "임시 숨김",
+				status: "hidden",
+			});
+
+			const restored = await setPostStatusByAdmin({
+				postId: created.id,
+				reason: "오조치 복구합니다.",
+				status: "published",
+			});
+			expect(restored).toEqual({ id: created.id, status: "published" });
+
+			const detail = await getPost({ postId: created.id });
+			expect(detail.id).toBe(created.id);
+			const listed = await listPosts({ board: "free", page: 1 });
+			expect(
+				listed.items.some((item: { id: string }) => item.id === created.id)
+			).toBe(true);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("비admin의 운영자 조치는 FORBIDDEN, 없는 글은 NOT_FOUND", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `권한 ${randomUUID()}`,
+			});
+
+			const setAsSeeker = clientFor(
+				communityRouter.setPostStatusByAdmin,
+				fixture.femaleUserId,
+				["setPostStatusByAdmin"]
+			);
+			await expectOrpcCode(
+				setAsSeeker({
+					postId: created.id,
+					reason: "비관리자 시도",
+					status: "hidden",
+				}),
+				"FORBIDDEN"
+			);
+
+			const setAsAdmin = clientFor(
+				communityRouter.setPostStatusByAdmin,
+				fixture.adminUserId,
+				["setPostStatusByAdmin"]
+			);
+			await expectOrpcCode(
+				setAsAdmin({
+					postId: randomUUID(),
+					reason: "없는 글 조치",
+					status: "hidden",
+				}),
+				"NOT_FOUND"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("admin이 댓글을 hidden 처리하면 마스킹되고 commentCount가 감소·복구된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+			const replyAsAdmin = clientFor(
+				communityRouter.createComment,
+				fixture.adminUserId,
+				["createComment"]
+			);
+			const setCommentStatusByAdmin = clientFor(
+				communityRouter.setCommentStatusByAdmin,
+				fixture.adminUserId,
+				["setCommentStatusByAdmin"]
+			);
+			const listComments = clientFor(
+				communityRouter.listComments,
+				fixture.femaleUserId,
+				["listComments"]
+			);
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `댓글 숨김 ${randomUUID()}`,
+			});
+			// 부모+대댓글 → 부모를 숨기면 스레드 유지를 위해 플레이스홀더로 남아 마스킹을 직접 검증한다.
+			const parent = await createComment({
+				body: "부적절 부모 댓글",
+				postId: created.id,
+			});
+			const reply = await replyAsAdmin({
+				body: "답글입니다",
+				parentCommentId: parent.id,
+				postId: created.id,
+			});
+			expect((await getPost({ postId: created.id })).commentCount).toBe(2);
+
+			const result = await setCommentStatusByAdmin({
+				commentId: parent.id,
+				reason: "부적절 댓글 숨김",
+				status: "hidden",
+			});
+			expect(result).toEqual({ id: parent.id, status: "hidden" });
+
+			const comments = await listComments({ postId: created.id });
+			const placeholder = comments.find(
+				(item: { id: string }) => item.id === parent.id
+			);
+			expect(placeholder?.isDeleted).toBe(true);
+			expect(placeholder?.body).toBe("");
+			expect(placeholder?.authorName).toBeNull();
+			expect(
+				comments.some((item: { id: string }) => item.id === reply.id)
+			).toBe(true);
+			expect((await getPost({ postId: created.id })).commentCount).toBe(1);
+
+			// 감사 로그 확인.
+			const actions = await db
+				.select()
+				.from(adminModerationAction)
+				.where(eq(adminModerationAction.targetId, parent.id));
+			expect(actions[0]).toMatchObject({
+				action: "set_community_comment_status:hidden",
+				targetType: "community_comment",
+			});
+
+			// 복구 시 다시 노출되고 commentCount가 회복된다.
+			await setCommentStatusByAdmin({
+				commentId: parent.id,
+				reason: "복구합니다.",
+				status: "published",
+			});
+			const restored = await listComments({ postId: created.id });
+			const item = restored.find(
+				(entry: { id: string }) => entry.id === parent.id
+			);
+			expect(item?.body).toBe("부적절 부모 댓글");
+			expect(item?.isDeleted).toBe(false);
+			expect((await getPost({ postId: created.id })).commentCount).toBe(2);
 		} finally {
 			await cleanupCommunityFixture(fixture);
 		}
