@@ -244,7 +244,9 @@ export function ReportDialog({
 					</DialogDescription>
 				</div>
 				<div className="flex flex-col gap-3">
+					{/* items를 줘야 base-ui Select.Value가 원값 대신 한국어 라벨을 렌더한다. */}
 					<Select
+						items={REPORT_REASON_LABELS}
 						onValueChange={(value) => setReason(value as ReportReason)}
 						value={reason}
 					>

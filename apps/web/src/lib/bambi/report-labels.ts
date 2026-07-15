@@ -16,7 +16,8 @@ export type ReportTargetType =
 	| "chat_message"
 	| "review"
 	| "user"
-	| "community_post";
+	| "community_post"
+	| "community_comment";
 
 export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
 	illegal_or_prohibited_content: "불법·금지 콘텐츠",
@@ -35,4 +36,5 @@ export const REPORT_TARGET_TYPE_LABELS: Record<ReportTargetType, string> = {
 	review: "후기",
 	user: "사용자",
 	community_post: "커뮤니티 글",
+	community_comment: "커뮤니티 댓글",
 };
