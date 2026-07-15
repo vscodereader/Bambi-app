@@ -103,8 +103,7 @@ const buildFallbackSections = (
 	const recommended = JOBS.filter((job) => job.promotionTier === "recommended");
 	const urgent = [...special, ...recommended]
 		.filter((job) => getBoostTime(job) > 0)
-		.toSorted((left, right) => getBoostTime(right) - getBoostTime(left))
-		.slice(0, 6);
+		.toSorted((left, right) => getBoostTime(right) - getBoostTime(left));
 	const organic = JOBS.filter(
 		(job) =>
 			job.promotionTier !== "premium" && job.promotionTier !== "recommended"

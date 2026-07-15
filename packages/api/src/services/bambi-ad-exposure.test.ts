@@ -56,7 +56,7 @@ describe("buildExposureJobSections", () => {
 		expect(sections.special).toEqual([]);
 		expect(sections.organic.map((r) => r.id)).toEqual(["s1"]);
 	});
-	it("섹션 한도(special 5·urgent 6·recommended 10)를 적용한다", () => {
+	it("활성(published·미만료) 매칭 공고를 상한 없이 전부 섹션에 포함한다", () => {
 		const specials = Array.from({ length: 7 }, (_, i) =>
 			row(`s${i}`, "special")
 		);
@@ -68,19 +68,35 @@ describe("buildExposureJobSections", () => {
 			specialRows: specials,
 			urgentRows: [],
 		});
-		expect(sections.special).toHaveLength(5);
+		expect(sections.special).toHaveLength(7);
+	});
+	it("organic 한도는 섹션 규모와 독립적으로 limit을 그대로 쓴다", () => {
+		const specials = Array.from({ length: 3 }, (_, i) =>
+			row(`s${i}`, "special")
+		);
+		const organicOnly = [row("o0", "standard"), row("o1", "standard")];
+		const { sections } = buildExposureJobSections({
+			limit: 2,
+			now: NOW,
+			organicRows: [...specials, ...organicOnly],
+			recommendedRows: [],
+			specialRows: specials,
+			urgentRows: [],
+		});
+		expect(sections.special).toHaveLength(3);
+		expect(sections.organic.map((r) => r.id)).toEqual(["o0", "o1"]);
 	});
 });
 
 describe("groupAdBannerJobs", () => {
-	it("배너 타입별로 슬롯 한도(4·3·3)까지 그룹핑하고 만료를 제외한다", () => {
+	it("배너 타입별 활성 공고를 상한 없이 전부 그룹핑하고 만료를 제외한다", () => {
 		const rows = [
 			...Array.from({ length: 5 }, (_, i) => row(`p${i}`, "premium-banner")),
 			row("l1", "left-banner"),
 			row("r1", "right-banner", { exposureEndsAt: PAST }),
 		];
 		const groups = groupAdBannerJobs(rows, NOW);
-		expect(groups.premiumBanner).toHaveLength(4);
+		expect(groups.premiumBanner).toHaveLength(5);
 		expect(groups.leftBanner.map((r) => r.id)).toEqual(["l1"]);
 		expect(groups.rightBanner).toEqual([]);
 	});

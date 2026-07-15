@@ -54,17 +54,6 @@ export const AD_BANNER_EXPOSURE_TYPES = [
 ] as const;
 export type AdBannerExposureType = (typeof AD_BANNER_EXPOSURE_TYPES)[number];
 
-export const EXPOSURE_SECTION_LIMITS: Record<
-	ListingSectionExposureType,
-	number
-> = { recommended: 10, special: 5, urgent: 6 };
-
-export const AD_BANNER_SLOT_LIMITS: Record<AdBannerExposureType, number> = {
-	"left-banner": 3,
-	"premium-banner": 4,
-	"right-banner": 3,
-};
-
 export const EXPOSURE_TYPE_LABELS: Record<JobExposureType, string> = {
 	"left-banner": "좌측 배너",
 	"premium-banner": "프리미엄 배너",
@@ -98,6 +87,7 @@ export interface ExposureJobSections<TRow extends ExposureSectionRow> {
 }
 
 // 유료 리스팅 섹션(스페셜/급구/추천)을 확정하고, 섹션에 든 공고는 organic에서 제외한다.
+// 슬롯 상한 없이 결제완료·미만료 매칭 공고를 전부 노출한다(그리드가 다음 행으로 확장).
 // 만료된 유료 공고는 섹션에서 빠져 organic으로 강등된다(공고 자체는 계속 게시).
 export const buildExposureJobSections = <TRow extends ExposureSectionRow>({
 	limit,
@@ -118,14 +108,12 @@ export const buildExposureJobSections = <TRow extends ExposureSectionRow>({
 		rows: TRow[],
 		type: ListingSectionExposureType
 	): TRow[] =>
-		rows
-			.filter(
-				(item) =>
-					item.exposureType === type &&
-					item.status === "published" &&
-					isExposureActive(item.exposureEndsAt, now)
-			)
-			.slice(0, EXPOSURE_SECTION_LIMITS[type]);
+		rows.filter(
+			(item) =>
+				item.exposureType === type &&
+				item.status === "published" &&
+				isExposureActive(item.exposureEndsAt, now)
+		);
 
 	const special = activeSection(specialRows, "special");
 	const urgent = activeSection(urgentRows, "urgent");
@@ -133,12 +121,13 @@ export const buildExposureJobSections = <TRow extends ExposureSectionRow>({
 	const sectionJobIds = new Set(
 		[...special, ...urgent, ...recommended].map((item) => item.id)
 	);
-	const organicLimit = Math.max(0, limit - sectionJobIds.size);
+	// organic 한도는 섹션 규모와 독립적으로 limit을 그대로 쓴다(유료 섹션이 커져도
+	// 전체 공고 목록이 고사하지 않게).
 	const organic = organicRows
 		.filter(
 			(item) => item.status === "published" && !sectionJobIds.has(item.id)
 		)
-		.slice(0, organicLimit);
+		.slice(0, limit);
 
 	return {
 		sections: { organic, recommended, special, urgent },
@@ -153,19 +142,17 @@ export interface AdBannerRow {
 	id: string;
 }
 
-// 결제완료된 배너형 공고를 노출 위치별로 슬롯 한도까지 그룹핑한다.
+// 결제완료된 배너형 공고를 노출 위치별로 그룹핑한다. 슬롯 상한 없이 활성(미만료)
+// 배너 공고를 전부 포함한다(프리미엄은 다음 행으로, 좌/우 레일은 아래로 스택 확장).
 export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	rows: TRow[],
 	now: Date
 ): { leftBanner: TRow[]; premiumBanner: TRow[]; rightBanner: TRow[] } => {
 	const pick = (type: AdBannerExposureType): TRow[] =>
-		rows
-			.filter(
-				(item) =>
-					item.exposureType === type &&
-					isExposureActive(item.exposureEndsAt, now)
-			)
-			.slice(0, AD_BANNER_SLOT_LIMITS[type]);
+		rows.filter(
+			(item) =>
+				item.exposureType === type && isExposureActive(item.exposureEndsAt, now)
+		);
 
 	return {
 		leftBanner: pick("left-banner"),

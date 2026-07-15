@@ -27,7 +27,6 @@ import { protectedProcedure, publicProcedure } from "../../index";
 import {
 	AD_BANNER_EXPOSURE_TYPES,
 	buildExposureJobSections,
-	EXPOSURE_SECTION_LIMITS,
 	EXPOSURE_TYPE_LABELS,
 	groupAdBannerJobs,
 	type JobExposureType,
@@ -431,6 +430,7 @@ export const jobsRouter = {
 			workSchedule: jobPost.workSchedule,
 		};
 
+		// 슬롯 상한 없이 결제완료·미만료 유료 공고를 전부 노출한다(행 단위 확장).
 		const getExposedJobs = async (type: ListingSectionExposureType) =>
 			await db
 				.select(exposureSelection)
@@ -450,8 +450,7 @@ export const jobsRouter = {
 						or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
 					)
 				)
-				.orderBy(desc(jobPost.publishedAt))
-				.limit(EXPOSURE_SECTION_LIMITS[type]);
+				.orderBy(desc(jobPost.publishedAt));
 
 		const [specialRows, urgentRows, recommendedRows, organicRows] =
 			await Promise.all([
