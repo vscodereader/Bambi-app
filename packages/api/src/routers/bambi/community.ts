@@ -6,7 +6,18 @@ import {
 	communityPostLike,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, count, desc, eq, gte, ne, type SQL, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	gte,
+	ne,
+	or,
+	type SQL,
+	sql,
+} from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -40,23 +51,15 @@ const communityBoardSchema = z.enum([
 	"notice",
 ]);
 
-// 목록 필터. general/promotion은 is_promotion, employer/job_seeker는 작성 당시
-// author_role 스냅샷 기준. all은 조건 없음.
-const communityListFilterSchema = z.enum([
-	"all",
-	"general",
-	"promotion",
-	"employer",
-	"job_seeker",
-]);
-
 type CommunityBoardInput = z.infer<typeof communityBoardSchema>;
-type CommunityListFilter = z.infer<typeof communityListFilterSchema>;
 
+// 목록 필터 — 독립 On/Off 토글 2개(광고 글보기·업소 회원 글보기). 기본은 둘 다 false=전체.
+// 켜진 토글이 있으면 그 조건들의 합집합(OR)으로 좁힌다(광고=is_promotion, 업소=author_role).
 const listPostsInput = z.object({
 	board: communityBoardSchema,
-	filter: communityListFilterSchema.default("all"),
 	page: z.number().int().min(1).default(1),
+	showEmployer: z.boolean().default(false),
+	showPromotion: z.boolean().default(false),
 });
 
 const postIdInput = z.object({
@@ -196,20 +199,24 @@ const buildBoardFilters = (
 	];
 };
 
-// 목록·count 쿼리에 동일하게 적용되는 필터 조건. all은 조건 없음.
-const buildListFilters = (filter: CommunityListFilter): SQL[] => {
-	switch (filter) {
-		case "general":
-			return [eq(communityPost.isPromotion, false)];
-		case "promotion":
-			return [eq(communityPost.isPromotion, true)];
-		case "employer":
-			return [eq(communityPost.authorRole, "employer")];
-		case "job_seeker":
-			return [eq(communityPost.authorRole, "job_seeker")];
-		default:
-			return [];
+// 목록·count 쿼리에 동일하게 적용되는 필터 조건. 켜진 토글들의 합집합(OR)으로 좁히고,
+// 아무 토글도 없으면 조건 없음(전체)을 돌려준다.
+const buildListFilters = (
+	showPromotion: boolean,
+	showEmployer: boolean
+): SQL[] => {
+	const conditions: SQL[] = [];
+	if (showPromotion) {
+		conditions.push(eq(communityPost.isPromotion, true));
 	}
+	if (showEmployer) {
+		conditions.push(eq(communityPost.authorRole, "employer"));
+	}
+	if (conditions.length === 0) {
+		return [];
+	}
+	const combined = or(...conditions);
+	return combined ? [combined] : [];
 };
 
 const buildBoardOrder = (board: CommunityBoardInput) =>
@@ -294,7 +301,10 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const profile = await requireCommunityMember(context.session);
 
-			const listFilters = buildListFilters(input.filter);
+			const listFilters = buildListFilters(
+				input.showPromotion,
+				input.showEmployer
+			);
 			// 목록·count 쿼리가 같은 30일 컷오프를 쓰도록 한 번만 계산한다.
 			const windowStart = bestWindowStart();
 			const [items, [total]] = await Promise.all([
