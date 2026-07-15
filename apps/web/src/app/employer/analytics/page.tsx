@@ -58,11 +58,13 @@ export default function EmployerAnalyticsPage() {
 			impressions: accumulator.impressions + item.metrics.impressions,
 			organicImpressions:
 				accumulator.organicImpressions + item.sectionMetrics.organicImpressions,
-			premiumImpressions:
-				accumulator.premiumImpressions + item.sectionMetrics.premiumImpressions,
 			recommendedImpressions:
 				accumulator.recommendedImpressions +
 				item.sectionMetrics.recommendedImpressions,
+			specialImpressions:
+				accumulator.specialImpressions + item.sectionMetrics.specialImpressions,
+			urgentImpressions:
+				accumulator.urgentImpressions + item.sectionMetrics.urgentImpressions,
 		}),
 		{
 			chatStarts: 0,
@@ -70,8 +72,9 @@ export default function EmployerAnalyticsPage() {
 			detailViews: 0,
 			impressions: 0,
 			organicImpressions: 0,
-			premiumImpressions: 0,
 			recommendedImpressions: 0,
+			specialImpressions: 0,
+			urgentImpressions: 0,
 		}
 	);
 
@@ -145,10 +148,14 @@ export default function EmployerAnalyticsPage() {
 				<h2 className="font-medium text-base" id="placement-metrics">
 					노출 구분
 				</h2>
-				<dl className="grid gap-3 sm:grid-cols-3">
+				<dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 					<MetricCard
-						label="프리미엄"
-						value={formatNumber(totals.premiumImpressions)}
+						label="스페셜"
+						value={formatNumber(totals.specialImpressions)}
+					/>
+					<MetricCard
+						label="급구"
+						value={formatNumber(totals.urgentImpressions)}
 					/>
 					<MetricCard
 						label="추천"
@@ -230,9 +237,11 @@ export default function EmployerAnalyticsPage() {
 											)}
 										</td>
 										<td className="px-4 py-3">
-											프리미엄{" "}
-											{formatNumber(summary.sectionMetrics.premiumImpressions)}{" "}
-											· 추천{" "}
+											스페셜{" "}
+											{formatNumber(summary.sectionMetrics.specialImpressions)}{" "}
+											· 급구{" "}
+											{formatNumber(summary.sectionMetrics.urgentImpressions)} ·
+											추천{" "}
 											{formatNumber(
 												summary.sectionMetrics.recommendedImpressions
 											)}{" "}

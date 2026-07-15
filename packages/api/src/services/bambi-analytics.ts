@@ -232,8 +232,9 @@ export interface JobPerformanceMetrics {
 
 export interface JobPerformanceSectionMetrics {
 	organicImpressions: number;
-	premiumImpressions: number;
 	recommendedImpressions: number;
+	specialImpressions: number;
+	urgentImpressions: number;
 }
 
 export interface EmployerJobPerformanceSummary {
@@ -254,8 +255,9 @@ const emptyMetrics = (): JobPerformanceMetrics => ({
 
 const emptySectionMetrics = (): JobPerformanceSectionMetrics => ({
 	organicImpressions: 0,
-	premiumImpressions: 0,
 	recommendedImpressions: 0,
+	specialImpressions: 0,
+	urgentImpressions: 0,
 });
 
 const getEventSection = (
@@ -293,8 +295,13 @@ const incrementSectionMetric = (
 	metadata: Record<string, unknown> | null
 ) => {
 	switch (getEventSection(metadata)) {
+		// 하위 호환: 구 캠페인 기반 "premium" 섹션은 광고상품 체계의 스페셜 버킷으로 흡수한다.
 		case "premium":
-			sectionMetrics.premiumImpressions += 1;
+		case "special":
+			sectionMetrics.specialImpressions += 1;
+			break;
+		case "urgent":
+			sectionMetrics.urgentImpressions += 1;
 			break;
 		case "recommended":
 			sectionMetrics.recommendedImpressions += 1;
