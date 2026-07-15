@@ -56,6 +56,7 @@ function BackButton({ board }: { board: CommunityBoardMeta }) {
 	return (
 		<div>
 			<Button
+				nativeButton={false}
 				render={
 					<Link href={communityBoardPath(board.slug) as Route}>
 						<ChevronLeftIcon data-icon="inline-start" />

@@ -277,6 +277,7 @@ export function EditPostButton({
 }) {
 	return (
 		<Button
+			nativeButton={false}
 			render={
 				<Link href={communityEditPath(boardSlug, postId) as Route}>수정</Link>
 			}
