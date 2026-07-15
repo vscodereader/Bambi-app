@@ -73,6 +73,7 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"review",
 	"user",
 	"community_post",
+	"community_comment",
 ]);
 
 // 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.

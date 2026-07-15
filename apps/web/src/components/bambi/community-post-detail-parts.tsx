@@ -31,12 +31,13 @@ import {
 	EyeIcon,
 	FlagIcon,
 	LockIcon,
+	PencilIcon,
 	ThumbsUpIcon,
 	Trash2Icon,
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { type ReactElement, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
 	communityEditorExtensions,
@@ -66,6 +67,7 @@ export interface CommunityPostDetail {
 	board: string;
 	body: string;
 	canDelete: boolean;
+	canEdit: boolean;
 	commentCount: number;
 	createdAt: Date | string;
 	id: string;
@@ -82,6 +84,7 @@ export interface CommunityCommentItem {
 	authorRole: CommunityAuthorRole | null;
 	body: string;
 	canDelete: boolean;
+	canEdit: boolean;
 	createdAt: Date | string;
 	id: string;
 	isDeleted: boolean;
@@ -192,8 +195,23 @@ export function LikeBar({
 	);
 }
 
+// 신고 대상 타입 — 글/댓글 공용. moderation.createReport의 targetType과 맞춘다.
+type ReportTargetType = "community_comment" | "community_post";
+
 // 신고 다이얼로그 — 사유·상세를 자체 상태로 관리하고 moderation.createReport 호출.
-export function ReportDialog({ postId }: { postId: string }) {
+// 대상(글/댓글)에 무관하게 재사용하도록 트리거·타이틀·대상은 props로 받는다.
+export function ReportDialog({
+	targetId,
+	targetType,
+	title,
+	trigger,
+}: {
+	targetId: string;
+	targetType: ReportTargetType;
+	title: string;
+	// base-ui DialogTrigger render는 ReactElement를 요구한다(ReactNode 불가).
+	trigger: ReactElement;
+}) {
 	const [open, setOpen] = useState(false);
 	const [reason, setReason] = useState<ReportReason>("other");
 	const [details, setDetails] = useState("");
@@ -211,17 +229,10 @@ export function ReportDialog({ postId }: { postId: string }) {
 
 	return (
 		<Dialog onOpenChange={setOpen} open={open}>
-			<DialogTrigger
-				render={
-					<Button size="sm" variant="ghost">
-						<FlagIcon data-icon="inline-start" />
-						신고
-					</Button>
-				}
-			/>
+			<DialogTrigger render={trigger} />
 			<DialogContent>
 				<div className="flex flex-col gap-2">
-					<DialogTitle>글 신고</DialogTitle>
+					<DialogTitle>{title}</DialogTitle>
 					<DialogDescription>
 						신고 사유를 선택해 주세요. 운영자가 확인 후 조치해요.
 					</DialogDescription>
@@ -256,8 +267,8 @@ export function ReportDialog({ postId }: { postId: string }) {
 							reportMutation.mutate({
 								details: details.trim() || undefined,
 								reason,
-								targetId: postId,
-								targetType: "community_post",
+								targetId,
+								targetType,
 							})
 						}
 					>
@@ -288,20 +299,15 @@ export function EditPostButton({
 	);
 }
 
-// 삭제 다이얼로그 — canDelete면 확인만, 아니면 글 비밀번호 입력 후 deletePost.
+// 삭제 다이얼로그 — 권한자(canDelete)에게만 마운트되므로 확인만 받고 deletePost.
 export function DeletePostButton({
-	canDelete,
-	lockPassword,
 	onDeleted,
 	postId,
 }: {
-	canDelete: boolean;
-	lockPassword?: string;
 	onDeleted: () => void | Promise<void>;
 	postId: string;
 }) {
 	const [open, setOpen] = useState(false);
-	const [password, setPassword] = useState(lockPassword ?? "");
 
 	const deleteMutation = useMutation(
 		orpc.bambi.community.deletePost.mutationOptions({
@@ -313,19 +319,6 @@ export function DeletePostButton({
 			},
 		})
 	);
-
-	const trimmed = password.trim();
-	const needsPassword = !canDelete;
-	const disabled =
-		deleteMutation.isPending ||
-		(needsPassword && trimmed.length < PASSWORD_MIN);
-
-	const handleDelete = () => {
-		deleteMutation.mutate({
-			postId,
-			...(needsPassword && trimmed ? { password: trimmed } : {}),
-		});
-	};
 
 	return (
 		<Dialog onOpenChange={setOpen} open={open}>
@@ -340,25 +333,9 @@ export function DeletePostButton({
 				<div className="flex flex-col gap-2">
 					<DialogTitle>글 삭제</DialogTitle>
 					<DialogDescription>
-						{needsPassword
-							? "삭제하려면 글 비밀번호를 입력해 주세요. 삭제한 글은 되돌릴 수 없어요."
-							: "이 글을 삭제할까요? 삭제한 글은 되돌릴 수 없어요."}
+						이 글을 삭제할까요? 삭제한 글은 되돌릴 수 없어요.
 					</DialogDescription>
 				</div>
-				{needsPassword ? (
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="community-delete-password">글 비밀번호</Label>
-						<Input
-							autoComplete="off"
-							id="community-delete-password"
-							maxLength={30}
-							onChange={(event) => setPassword(event.target.value)}
-							placeholder="4자 이상"
-							type="password"
-							value={password}
-						/>
-					</div>
-				) : null}
 				<div className="flex justify-end gap-2">
 					<DialogClose
 						render={
@@ -368,8 +345,8 @@ export function DeletePostButton({
 						}
 					/>
 					<Button
-						disabled={disabled}
-						onClick={handleDelete}
+						disabled={deleteMutation.isPending}
+						onClick={() => deleteMutation.mutate({ postId })}
 						variant="destructive"
 					>
 						삭제
@@ -380,17 +357,125 @@ export function DeletePostButton({
 	);
 }
 
-// 단일 댓글 행. 삭제된 항목은 작성자·본문·액션 없이 muted 플레이스홀더로만 표시한다.
-// onReply가 있으면(최상위·published 한정) 본문 아래 답글 버튼을 렌더한다.
-function CommentRow({
+// 댓글 액션 영역(날짜 옆). 본인 댓글이면 수정/삭제, 타인 댓글이면 신고를 노출한다.
+// 삭제된 댓글은 CommentRow에서 이미 걸러지므로 여기 도달하지 않는다.
+function CommentActions({
 	comment,
 	deletePending,
 	onDelete,
-	onReply,
+	onEditOpen,
 }: {
 	comment: CommunityCommentItem;
 	deletePending: boolean;
 	onDelete: (commentId: string) => void;
+	onEditOpen: (commentId: string) => void;
+}) {
+	return (
+		<span className="flex items-center gap-1 text-muted-foreground text-xs">
+			<span className="mr-1">{formatCommunityDate(comment.createdAt)}</span>
+			{comment.canEdit ? (
+				<>
+					<Button
+						aria-label="댓글 수정"
+						onClick={() => onEditOpen(comment.id)}
+						size="icon-sm"
+						variant="ghost"
+					>
+						<PencilIcon />
+					</Button>
+					{comment.canDelete ? (
+						<Button
+							aria-label="댓글 삭제"
+							disabled={deletePending}
+							onClick={() => onDelete(comment.id)}
+							size="icon-sm"
+							variant="ghost"
+						>
+							<Trash2Icon />
+						</Button>
+					) : null}
+				</>
+			) : (
+				<ReportDialog
+					targetId={comment.id}
+					targetType="community_comment"
+					title="댓글 신고"
+					trigger={
+						<Button aria-label="댓글 신고" size="icon-sm" variant="ghost">
+							<FlagIcon />
+						</Button>
+					}
+				/>
+			)}
+		</span>
+	);
+}
+
+// 인라인 댓글 수정 폼. 편집 시작 시점의 본문으로 초기화되고 저장/취소를 제공한다.
+function CommentEditForm({
+	initialBody,
+	maxLength,
+	onCancel,
+	onSubmit,
+	pending,
+}: {
+	initialBody: string;
+	maxLength: number;
+	onCancel: () => void;
+	onSubmit: (body: string) => void;
+	pending: boolean;
+}) {
+	const [body, setBody] = useState(initialBody);
+	const trimmed = body.trim();
+	const canSubmit = trimmed.length >= 1 && !pending;
+
+	return (
+		<div className="flex flex-col gap-2">
+			<Textarea
+				maxLength={maxLength}
+				onChange={(event) => setBody(event.target.value)}
+				value={body}
+			/>
+			<div className="flex justify-end gap-2">
+				<Button onClick={onCancel} size="sm" type="button" variant="outline">
+					취소
+				</Button>
+				<Button
+					disabled={!canSubmit}
+					onClick={() => onSubmit(trimmed)}
+					size="sm"
+				>
+					저장
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+// 단일 댓글 행. 삭제된 항목은 작성자·본문·액션 없이 muted 플레이스홀더로만 표시한다.
+// isEditing이면 본문 대신 인라인 수정 폼을 렌더한다.
+// onReply가 있으면(최상위·published 한정) 본문 아래 답글 버튼을 렌더한다.
+function CommentRow({
+	comment,
+	deletePending,
+	editPending,
+	isEditing,
+	maxLength,
+	onDelete,
+	onEditClose,
+	onEditOpen,
+	onEditSubmit,
+	onReply,
+}: {
+	comment: CommunityCommentItem;
+	deletePending: boolean;
+	editPending: boolean;
+	isEditing: boolean;
+	maxLength: number;
+	onDelete: (commentId: string) => void;
+	onEditClose: () => void;
+	onEditOpen: (commentId: string) => void;
+	onEditSubmit: (commentId: string, body: string) => void;
 	onReply?: () => void;
 }) {
 	if (comment.isDeleted) {
@@ -410,23 +495,27 @@ function CommentRow({
 						<Badge variant="secondary">업소</Badge>
 					) : null}
 				</span>
-				<span className="flex items-center gap-2 text-muted-foreground text-xs">
-					{formatCommunityDate(comment.createdAt)}
-					{comment.canDelete ? (
-						<Button
-							aria-label="댓글 삭제"
-							disabled={deletePending}
-							onClick={() => onDelete(comment.id)}
-							size="icon-sm"
-							variant="ghost"
-						>
-							<Trash2Icon />
-						</Button>
-					) : null}
-				</span>
+				{isEditing ? null : (
+					<CommentActions
+						comment={comment}
+						deletePending={deletePending}
+						onDelete={onDelete}
+						onEditOpen={onEditOpen}
+					/>
+				)}
 			</div>
-			<p className="m-0 whitespace-pre-wrap text-sm">{comment.body}</p>
-			{onReply ? (
+			{isEditing ? (
+				<CommentEditForm
+					initialBody={comment.body}
+					maxLength={maxLength}
+					onCancel={onEditClose}
+					onSubmit={(body) => onEditSubmit(comment.id, body)}
+					pending={editPending}
+				/>
+			) : (
+				<p className="m-0 whitespace-pre-wrap text-sm">{comment.body}</p>
+			)}
+			{onReply && !isEditing ? (
 				<div>
 					<Button onClick={onReply} size="sm" variant="ghost">
 						<CornerDownRightIcon data-icon="inline-start" />
@@ -482,8 +571,13 @@ function ReplyForm({
 // 시각적으로 부모에 귀속시킨다.
 function CommentThread({
 	deletePending,
+	editPending,
+	editingId,
 	maxLength,
 	onDelete,
+	onEditClose,
+	onEditOpen,
+	onEditSubmit,
 	onReplyClose,
 	onReplyOpen,
 	onReplySubmit,
@@ -493,8 +587,13 @@ function CommentThread({
 	replyTo,
 }: {
 	deletePending: boolean;
+	editPending: boolean;
+	editingId: string | null;
 	maxLength: number;
 	onDelete: (commentId: string) => void;
+	onEditClose: () => void;
+	onEditOpen: (commentId: string) => void;
+	onEditSubmit: (commentId: string, body: string) => void;
 	onReplyClose: () => void;
 	onReplyOpen: (parentId: string) => void;
 	onReplySubmit: (parentId: string, body: string) => void;
@@ -511,7 +610,13 @@ function CommentThread({
 			<CommentRow
 				comment={parent}
 				deletePending={deletePending}
+				editPending={editPending}
+				isEditing={editingId === parent.id}
+				maxLength={maxLength}
 				onDelete={onDelete}
+				onEditClose={onEditClose}
+				onEditOpen={onEditOpen}
+				onEditSubmit={onEditSubmit}
 				onReply={canReply ? () => onReplyOpen(parent.id) : undefined}
 			/>
 			{isReplying || replies.length > 0 ? (
@@ -528,8 +633,14 @@ function CommentThread({
 						<CommentRow
 							comment={reply}
 							deletePending={deletePending}
+							editPending={editPending}
+							isEditing={editingId === reply.id}
 							key={reply.id}
+							maxLength={maxLength}
 							onDelete={onDelete}
+							onEditClose={onEditClose}
+							onEditOpen={onEditOpen}
+							onEditSubmit={onEditSubmit}
 						/>
 					))}
 				</div>
@@ -545,9 +656,14 @@ const isEmployerComment = (comment: CommunityCommentItem): boolean =>
 export function CommentList({
 	comments,
 	deletePending,
+	editPending,
+	editingId,
 	hideEmployer,
 	maxLength,
 	onDelete,
+	onEditClose,
+	onEditOpen,
+	onEditSubmit,
 	onReplyClose,
 	onReplyOpen,
 	onReplySubmit,
@@ -556,9 +672,14 @@ export function CommentList({
 }: {
 	comments: CommunityCommentItem[];
 	deletePending: boolean;
+	editPending: boolean;
+	editingId: string | null;
 	hideEmployer: boolean;
 	maxLength: number;
 	onDelete: (commentId: string) => void;
+	onEditClose: () => void;
+	onEditOpen: (commentId: string) => void;
+	onEditSubmit: (commentId: string, body: string) => void;
 	onReplyClose: () => void;
 	onReplyOpen: (parentId: string) => void;
 	onReplySubmit: (parentId: string, body: string) => void;
@@ -599,9 +720,14 @@ export function CommentList({
 			{parents.map((parent) => (
 				<CommentThread
 					deletePending={deletePending}
+					editingId={editingId}
+					editPending={editPending}
 					key={parent.id}
 					maxLength={maxLength}
 					onDelete={onDelete}
+					onEditClose={onEditClose}
+					onEditOpen={onEditOpen}
+					onEditSubmit={onEditSubmit}
 					onReplyClose={onReplyClose}
 					onReplyOpen={onReplyOpen}
 					onReplySubmit={onReplySubmit}

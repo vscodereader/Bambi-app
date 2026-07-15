@@ -109,6 +109,11 @@ const deleteCommentInput = z.object({
 	commentId: z.string().uuid(),
 });
 
+const updateCommentInput = z.object({
+	body: z.string().trim().min(1).max(1000),
+	commentId: z.string().uuid(),
+});
+
 const assertTiptapDoc = (body: string) => {
 	let parsed: unknown;
 	try {
@@ -645,9 +650,11 @@ export const communityRouter = {
 								authorName: row.authorName,
 								authorRole: row.authorRole,
 								body: row.body,
+								// 삭제와 달리 수정은 작성자 본인만 가능하다(admin 제외 — getPost.canEdit와 동일 철학).
 								canDelete:
 									row.authorUserId === profile.userId ||
 									profile.role === "admin",
+								canEdit: row.authorUserId === profile.userId,
 								createdAt: row.createdAt,
 								id: row.id,
 								isDeleted: false,
@@ -658,6 +665,7 @@ export const communityRouter = {
 								authorRole: null,
 								body: "",
 								canDelete: false,
+								canEdit: false,
 								createdAt: row.createdAt,
 								id: row.id,
 								isDeleted: true,
@@ -749,6 +757,36 @@ export const communityRouter = {
 					})
 					.where(eq(communityPost.id, comment.postId));
 			});
+
+			return { id: comment.id };
+		}),
+
+	updateComment: protectedProcedure
+		.input(updateCommentInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireCommunityMember(context.session);
+			const [comment] = await db
+				.select()
+				.from(communityComment)
+				.where(eq(communityComment.id, input.commentId))
+				.limit(1);
+
+			if (comment?.status !== "published") {
+				throw new ORPCError("NOT_FOUND", {
+					message: "댓글을 찾을 수 없습니다.",
+				});
+			}
+			// 삭제와 달리 수정은 작성자 본인만 가능하다(admin도 타인 댓글은 수정 불가).
+			if (comment.authorUserId !== profile.userId) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "본인이 작성한 댓글만 수정할 수 있습니다.",
+				});
+			}
+
+			await db
+				.update(communityComment)
+				.set({ body: input.body, updatedAt: new Date() })
+				.where(eq(communityComment.id, input.commentId));
 
 			return { id: comment.id };
 		}),

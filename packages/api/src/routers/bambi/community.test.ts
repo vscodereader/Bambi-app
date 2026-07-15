@@ -1215,6 +1215,153 @@ describe("bambi community router — 대댓글", () => {
 	});
 });
 
+describe("bambi community router — 댓글 수정", () => {
+	it("작성자 본인은 댓글을 수정할 수 있고 canEdit=true로 노출된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+			const updateComment = clientFor(
+				communityRouter.updateComment,
+				fixture.femaleUserId,
+				["updateComment"]
+			);
+			const listComments = clientFor(
+				communityRouter.listComments,
+				fixture.femaleUserId,
+				["listComments"]
+			);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `댓글 수정 ${randomUUID()}`,
+			});
+			const comment = await createComment({
+				body: "원래 댓글",
+				postId: created.id,
+			});
+
+			const updated = await updateComment({
+				body: "수정된 댓글",
+				commentId: comment.id,
+			});
+			expect(updated.id).toBe(comment.id);
+
+			const comments = await listComments({ postId: created.id });
+			const item = comments.find(
+				(entry: { id: string }) => entry.id === comment.id
+			);
+			expect(item?.body).toBe("수정된 댓글");
+			expect(item?.canEdit).toBe(true);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("타인(비작성자)은 댓글을 수정할 수 없다(FORBIDDEN)", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+			const updateAsAdmin = clientFor(
+				communityRouter.updateComment,
+				fixture.adminUserId,
+				["updateComment"]
+			);
+			const listComments = clientFor(
+				communityRouter.listComments,
+				fixture.adminUserId,
+				["listComments"]
+			);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `댓글 수정 권한 ${randomUUID()}`,
+			});
+			const comment = await createComment({
+				body: "구직자 댓글",
+				postId: created.id,
+			});
+
+			// admin이라도 타인 댓글은 수정할 수 없다(canEdit도 false).
+			const comments = await listComments({ postId: created.id });
+			const item = comments.find(
+				(entry: { id: string }) => entry.id === comment.id
+			);
+			expect(item?.canEdit).toBe(false);
+
+			await expectOrpcCode(
+				updateAsAdmin({ body: "관리자 수정 시도", commentId: comment.id }),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("삭제된 댓글은 수정할 수 없다(NOT_FOUND)", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+			const deleteComment = clientFor(
+				communityRouter.deleteComment,
+				fixture.femaleUserId,
+				["deleteComment"]
+			);
+			const updateComment = clientFor(
+				communityRouter.updateComment,
+				fixture.femaleUserId,
+				["updateComment"]
+			);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `삭제 댓글 수정 ${randomUUID()}`,
+			});
+			const comment = await createComment({
+				body: "삭제될 댓글",
+				postId: created.id,
+			});
+			await deleteComment({ commentId: comment.id });
+
+			await expectOrpcCode(
+				updateComment({ body: "삭제 후 수정", commentId: comment.id }),
+				"NOT_FOUND"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+});
+
 describe("bambi community router — 계정유형·광고글·필터·공지사항", () => {
 	it("업소회원은 광고글을 표시할 수 있고 목록에 authorRole·isPromotion이 스냅샷된다", async () => {
 		const fixture = await createCommunityFixture();
