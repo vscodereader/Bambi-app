@@ -6,7 +6,7 @@ import {
 	communityPostLike,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, count, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ne, type SQL, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -26,13 +26,36 @@ const LOCKED_TITLE = "비밀글입니다";
 const BODY_MAX = 30_000;
 const COMMENTS_CAP = 200;
 
-const communityWritableBoardSchema = z.enum(["free", "work_talk", "market"]);
-const communityBoardSchema = z.enum(["best", "free", "work_talk", "market"]);
+const communityWritableBoardSchema = z.enum([
+	"free",
+	"work_talk",
+	"market",
+	"notice",
+]);
+const communityBoardSchema = z.enum([
+	"best",
+	"free",
+	"work_talk",
+	"market",
+	"notice",
+]);
+
+// 목록 필터. general/promotion은 is_promotion, employer/job_seeker는 작성 당시
+// author_role 스냅샷 기준. all은 조건 없음.
+const communityListFilterSchema = z.enum([
+	"all",
+	"general",
+	"promotion",
+	"employer",
+	"job_seeker",
+]);
 
 type CommunityBoardInput = z.infer<typeof communityBoardSchema>;
+type CommunityListFilter = z.infer<typeof communityListFilterSchema>;
 
 const listPostsInput = z.object({
 	board: communityBoardSchema,
+	filter: communityListFilterSchema.default("all"),
 	page: z.number().int().min(1).default(1),
 });
 
@@ -45,6 +68,7 @@ const createPostInput = z.object({
 	board: communityWritableBoardSchema,
 	body: z.string().min(2).max(BODY_MAX),
 	isLocked: z.boolean().default(false),
+	isPromotion: z.boolean().default(false),
 	password: z.string().min(4).max(30),
 	title: z.string().trim().min(2).max(100),
 });
@@ -53,9 +77,12 @@ const updatePostInput = postIdInput.extend({
 	authorName: z.string().trim().min(1).max(30),
 	body: z.string().min(2).max(BODY_MAX),
 	isLocked: z.boolean(),
+	isPromotion: z.boolean(),
 	password: z.string().max(30).optional(),
 	title: z.string().trim().min(2).max(100),
 });
+
+const PROMOTION_ROLE_ERROR = "광고글은 업소회원만 표시할 수 있습니다.";
 
 const deletePostInput = postIdInput.extend({
 	password: z.string().max(30).optional(),
@@ -132,12 +159,14 @@ const maskLockedSummaries = <
 // 목록·상세 공용 요약 셀렉션. 작성자 표시명은 글별 author_display_name 컬럼 값.
 const postSummarySelection = {
 	authorName: communityPost.authorDisplayName,
+	authorRole: communityPost.authorRole,
 	authorUserId: communityPost.authorUserId,
 	board: communityPost.board,
 	commentCount: communityPost.commentCount,
 	createdAt: communityPost.createdAt,
 	id: communityPost.id,
 	isLocked: communityPost.isLocked,
+	isPromotion: communityPost.isPromotion,
 	likeCount: communityPost.likeCount,
 	title: communityPost.title,
 	viewCount: communityPost.viewCount,
@@ -146,18 +175,36 @@ const postSummarySelection = {
 const bestWindowStart = () => new Date(Date.now() - BEST_WINDOW_DAYS * DAY_MS);
 
 // 베스트글은 저장 게시판이 아니라 최근 30일 추천 상위 큐레이션 가상 게시판이다.
-const buildBoardFilters = (board: CommunityBoardInput) => {
+// 공지사항(notice)은 베스트 큐레이션에서 제외한다.
+const buildBoardFilters = (board: CommunityBoardInput): SQL[] => {
 	if (board === "best") {
 		return [
 			eq(communityPost.status, "published"),
 			gte(communityPost.likeCount, BEST_MIN_LIKES),
 			gte(communityPost.createdAt, bestWindowStart()),
+			ne(communityPost.board, "notice"),
 		];
 	}
 	return [
 		eq(communityPost.status, "published"),
 		eq(communityPost.board, board),
 	];
+};
+
+// 목록·count 쿼리에 동일하게 적용되는 필터 조건. all은 조건 없음.
+const buildListFilters = (filter: CommunityListFilter): SQL[] => {
+	switch (filter) {
+		case "general":
+			return [eq(communityPost.isPromotion, false)];
+		case "promotion":
+			return [eq(communityPost.isPromotion, true)];
+		case "employer":
+			return [eq(communityPost.authorRole, "employer")];
+		case "job_seeker":
+			return [eq(communityPost.authorRole, "job_seeker")];
+		default:
+			return [];
+	}
 };
 
 const buildBoardOrder = (board: CommunityBoardInput) =>
@@ -167,12 +214,16 @@ const buildBoardOrder = (board: CommunityBoardInput) =>
 
 const selectBoardPosts = (
 	board: CommunityBoardInput,
-	{ limit, offset = 0 }: { limit: number; offset?: number }
+	{
+		limit,
+		offset = 0,
+		filters = [],
+	}: { limit: number; offset?: number; filters?: SQL[] }
 ) =>
 	db
 		.select(postSummarySelection)
 		.from(communityPost)
-		.where(and(...buildBoardFilters(board)))
+		.where(and(...buildBoardFilters(board), ...filters))
 		.orderBy(...buildBoardOrder(board))
 		.limit(limit)
 		.offset(offset);
@@ -183,11 +234,13 @@ type PostSummaryRow = Awaited<ReturnType<typeof selectBoardPosts>>[number];
 // 응답에서는 제외한다(명시적 화이트리스트 매핑).
 const toPublicSummary = (summary: PostSummaryRow) => ({
 	authorName: summary.authorName,
+	authorRole: summary.authorRole,
 	board: summary.board,
 	commentCount: summary.commentCount,
 	createdAt: summary.createdAt,
 	id: summary.id,
 	isLocked: summary.isLocked,
+	isPromotion: summary.isPromotion,
 	likeCount: summary.likeCount,
 	title: summary.title,
 	viewCount: summary.viewCount,
@@ -215,16 +268,17 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const profile = await requireCommunityMember(context.session);
 
-			const filters = buildBoardFilters(input.board);
+			const listFilters = buildListFilters(input.filter);
 			const [items, [total]] = await Promise.all([
 				selectBoardPosts(input.board, {
+					filters: listFilters,
 					limit: PAGE_SIZE,
 					offset: (input.page - 1) * PAGE_SIZE,
 				}),
 				db
 					.select({ value: count() })
 					.from(communityPost)
-					.where(and(...filters)),
+					.where(and(...buildBoardFilters(input.board), ...listFilters)),
 			]);
 
 			return {
@@ -238,17 +292,19 @@ export const communityRouter = {
 	overview: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireCommunityMember(context.session);
 
-		const [best, free, workTalk, market] = await Promise.all([
+		const [best, free, workTalk, market, notice] = await Promise.all([
 			selectBoardPosts("best", { limit: OVERVIEW_LIMIT }),
 			selectBoardPosts("free", { limit: OVERVIEW_LIMIT }),
 			selectBoardPosts("work_talk", { limit: OVERVIEW_LIMIT }),
 			selectBoardPosts("market", { limit: OVERVIEW_LIMIT }),
+			selectBoardPosts("notice", { limit: OVERVIEW_LIMIT }),
 		]);
 
 		return {
 			best: maskLockedSummaries(best, profile).map(toPublicSummary),
 			free: maskLockedSummaries(free, profile).map(toPublicSummary),
 			market: maskLockedSummaries(market, profile).map(toPublicSummary),
+			notice: maskLockedSummaries(notice, profile).map(toPublicSummary),
 			workTalk: maskLockedSummaries(workTalk, profile).map(toPublicSummary),
 		};
 	}),
@@ -300,6 +356,7 @@ export const communityRouter = {
 
 			return {
 				authorName: post.authorDisplayName,
+				authorRole: post.authorRole,
 				board: post.board,
 				body: post.body,
 				canDelete: isMine || profile.role === "admin",
@@ -309,6 +366,7 @@ export const communityRouter = {
 				id: post.id,
 				isLiked: Boolean(like),
 				isLocked: post.isLocked,
+				isPromotion: post.isPromotion,
 				likeCount: post.likeCount,
 				locked: false as const,
 				title: post.title,
@@ -323,14 +381,26 @@ export const communityRouter = {
 			const profile = await requireCommunityMember(context.session);
 			assertTiptapDoc(input.body);
 
+			// 공지사항은 운영자만, 광고글 표시는 업소회원만 허용한다.
+			if (input.board === "notice" && profile.role !== "admin") {
+				throw new ORPCError("FORBIDDEN", {
+					message: "공지사항은 운영자만 작성할 수 있습니다.",
+				});
+			}
+			if (input.isPromotion && profile.role !== "employer") {
+				throw new ORPCError("BAD_REQUEST", { message: PROMOTION_ROLE_ERROR });
+			}
+
 			const [created] = await db
 				.insert(communityPost)
 				.values({
 					authorDisplayName: input.authorName,
+					authorRole: profile.role,
 					authorUserId: profile.userId,
 					board: input.board,
 					body: input.body,
 					isLocked: input.isLocked,
+					isPromotion: input.isPromotion,
 					passwordHash: hashCommunityPassword(input.password),
 					title: input.title,
 				})
@@ -345,6 +415,11 @@ export const communityRouter = {
 			const profile = await requireCommunityMember(context.session);
 			const post = await findPublishedPost(input.postId);
 			assertTiptapDoc(input.body);
+
+			// authorRole 스냅샷은 불변 — 업소로 기록된 글만 광고 표시를 유지·전환할 수 있다.
+			if (post.authorRole !== "employer" && input.isPromotion) {
+				throw new ORPCError("BAD_REQUEST", { message: PROMOTION_ROLE_ERROR });
+			}
 
 			// 수정은 작성자 본인 또는 비밀번호 일치만 허용한다(admin이라도 비번 없이는 불가).
 			const isAuthor = post.authorUserId === profile.userId;
@@ -364,6 +439,7 @@ export const communityRouter = {
 					authorDisplayName: input.authorName,
 					body: input.body,
 					isLocked: input.isLocked,
+					isPromotion: input.isPromotion,
 					title: input.title,
 					updatedAt: new Date(),
 				})
@@ -455,6 +531,7 @@ export const communityRouter = {
 			const rows = await db
 				.select({
 					authorName: bambiProfile.displayName,
+					authorRole: communityComment.authorRole,
 					authorUserId: communityComment.authorUserId,
 					body: communityComment.body,
 					createdAt: communityComment.createdAt,
@@ -487,6 +564,7 @@ export const communityRouter = {
 					row.status === "published"
 						? {
 								authorName: row.authorName,
+								authorRole: row.authorRole,
 								body: row.body,
 								canDelete:
 									row.authorUserId === profile.userId ||
@@ -498,6 +576,7 @@ export const communityRouter = {
 							}
 						: {
 								authorName: null,
+								authorRole: null,
 								body: "",
 								canDelete: false,
 								createdAt: row.createdAt,
@@ -543,6 +622,7 @@ export const communityRouter = {
 				const [created] = await tx
 					.insert(communityComment)
 					.values({
+						authorRole: profile.role,
 						authorUserId: profile.userId,
 						body: input.body,
 						parentCommentId: input.parentCommentId ?? null,

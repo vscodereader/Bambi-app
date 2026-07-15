@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import type { Context } from "../../context";
@@ -19,13 +19,16 @@ const [{ db }, authSchema, bambiSchema, { communityRouter }] =
 		import("./community"),
 	]);
 
-const { user } = authSchema;
-const { bambiProfile, communityPost } = bambiSchema;
+const { member, organization, user } = authSchema;
+const { bambiProfile, communityPost, jobPost, jobPromotionCampaign } =
+	bambiSchema;
 
 interface CommunityFixture {
 	adminUserId: string;
+	employerUserId: string;
 	femaleUserId: string;
 	maleUserId: string;
+	organizationId: string;
 	otherFemaleUserId: string;
 	userIds: string[];
 }
@@ -61,11 +64,20 @@ const makeEmail = (prefix: string): string =>
 	`${prefix}-${randomUUID()}@bambi.test`;
 
 const createCommunityFixture = async (): Promise<CommunityFixture> => {
+	const now = new Date();
 	const femaleUserId = `user_test_female_${randomUUID()}`;
 	const maleUserId = `user_test_male_${randomUUID()}`;
 	const adminUserId = `user_test_admin_${randomUUID()}`;
 	const otherFemaleUserId = `user_test_other_female_${randomUUID()}`;
-	const userIds = [femaleUserId, maleUserId, adminUserId, otherFemaleUserId];
+	const employerUserId = `user_test_employer_${randomUUID()}`;
+	const organizationId = `org_test_${randomUUID()}`;
+	const userIds = [
+		femaleUserId,
+		maleUserId,
+		adminUserId,
+		otherFemaleUserId,
+		employerUserId,
+	];
 
 	await db.insert(user).values([
 		{ email: makeEmail("female"), id: femaleUserId, name: "여성 회원" },
@@ -76,6 +88,7 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 			id: otherFemaleUserId,
 			name: "다른 여성 회원",
 		},
+		{ email: makeEmail("employer"), id: employerUserId, name: "업소 담당자" },
 	]);
 	await db.insert(bambiProfile).values([
 		{
@@ -110,9 +123,64 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 			status: "active",
 			userId: otherFemaleUserId,
 		},
+		{
+			displayName: "달빛라운지",
+			isPhoneVerified: true,
+			role: "employer",
+			status: "active",
+			userId: employerUserId,
+		},
 	]);
 
-	return { adminUserId, femaleUserId, maleUserId, otherFemaleUserId, userIds };
+	// employer가 수다방 자격을 얻으려면 owner로 소속된 조직에 라이브(active,
+	// startsAt<=now<endsAt) 광고 캠페인이 있어야 한다(hasActiveAdvertiserCampaign).
+	await db.insert(organization).values({
+		createdAt: now,
+		id: organizationId,
+		name: "수다방 광고 테스트 조직",
+		slug: `community-ad-${randomUUID()}`,
+	});
+	await db.insert(member).values({
+		createdAt: now,
+		id: `member_test_${randomUUID()}`,
+		organizationId,
+		role: "owner",
+		status: "active",
+		userId: employerUserId,
+	});
+	const jobPostId = randomUUID();
+	await db.insert(jobPost).values({
+		createdByUserId: employerUserId,
+		description: "수다방 광고 자격용 공고입니다.",
+		id: jobPostId,
+		industryCategory: "라운지",
+		organizationId,
+		payAmount: 180_000,
+		payUnit: "일급",
+		publishedAt: now,
+		region: "서울 강남구",
+		status: "published",
+		title: "광고 자격 공고",
+		workSchedule: "20:00-02:00",
+	});
+	await db.insert(jobPromotionCampaign).values({
+		endsAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+		jobPostId,
+		organizationId,
+		startsAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+		status: "active",
+		tier: "standard",
+	});
+
+	return {
+		adminUserId,
+		employerUserId,
+		femaleUserId,
+		maleUserId,
+		organizationId,
+		otherFemaleUserId,
+		userIds,
+	};
 };
 
 const cleanupCommunityFixture = async (
@@ -122,10 +190,20 @@ const cleanupCommunityFixture = async (
 	await db
 		.delete(communityPost)
 		.where(inArray(communityPost.authorUserId, fixture.userIds));
+	// jobPost 삭제가 campaign을 cascade로 함께 지운다. member도 조직 기준으로 정리한다.
+	await db
+		.delete(jobPost)
+		.where(eq(jobPost.organizationId, fixture.organizationId));
+	await db
+		.delete(member)
+		.where(eq(member.organizationId, fixture.organizationId));
 	await db
 		.delete(bambiProfile)
 		.where(inArray(bambiProfile.userId, fixture.userIds));
 	await db.delete(user).where(inArray(user.id, fixture.userIds));
+	await db
+		.delete(organization)
+		.where(eq(organization.id, fixture.organizationId));
 };
 
 const clientFor = <T>(procedure: T, userId: string, path: string[]) =>
@@ -399,6 +477,7 @@ const baseUpdateInput = {
 	authorName: "달빛토끼",
 	body: TIPTAP_BODY,
 	isLocked: false,
+	isPromotion: false,
 };
 
 describe("bambi community router — 글 수정·삭제", () => {
@@ -956,6 +1035,264 @@ describe("bambi community router — 대댓글", () => {
 			await deleteReplyAsAdmin({ commentId: reply.id });
 			const afterAllDelete = await listComments({ postId: created.id });
 			expect(afterAllDelete).toHaveLength(0);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+});
+
+describe("bambi community router — 계정유형·광고글·필터·공지사항", () => {
+	it("업소회원은 광고글을 표시할 수 있고 목록에 authorRole·isPromotion이 스냅샷된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createAsEmployer = clientFor(
+				communityRouter.createPost,
+				fixture.employerUserId,
+				["createPost"]
+			);
+			const createAsSeeker = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.employerUserId,
+				["listPosts"]
+			);
+
+			const promoted = await createAsEmployer({
+				...basePostInput,
+				board: "market",
+				isPromotion: true,
+				title: `광고글 ${randomUUID()}`,
+			});
+
+			const listed = await listPosts({ board: "market", page: 1 });
+			const summary = listed.items.find(
+				(item: { id: string }) => item.id === promoted.id
+			);
+			expect(summary?.isPromotion).toBe(true);
+			expect(summary?.authorRole).toBe("employer");
+
+			// 구직자(job_seeker)는 광고글을 표시할 수 없다.
+			await expectOrpcCode(
+				createAsSeeker({
+					...basePostInput,
+					board: "market",
+					isPromotion: true,
+					title: `구직자 광고 시도 ${randomUUID()}`,
+				}),
+				"BAD_REQUEST"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("filter 5종이 해당 글만 반환하고 totalCount가 정합한다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createAsEmployer = clientFor(
+				communityRouter.createPost,
+				fixture.employerUserId,
+				["createPost"]
+			);
+			const createAsSeeker = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.employerUserId,
+				["listPosts"]
+			);
+
+			const promoted = await createAsEmployer({
+				...basePostInput,
+				board: "work_talk",
+				isPromotion: true,
+				title: `필터 광고 ${randomUUID()}`,
+			});
+			const general = await createAsSeeker({
+				...basePostInput,
+				board: "work_talk",
+				title: `필터 일반 ${randomUUID()}`,
+			});
+
+			const all = await listPosts({
+				board: "work_talk",
+				filter: "all",
+				page: 1,
+			});
+			const promotion = await listPosts({
+				board: "work_talk",
+				filter: "promotion",
+				page: 1,
+			});
+			const generalList = await listPosts({
+				board: "work_talk",
+				filter: "general",
+				page: 1,
+			});
+			const employerList = await listPosts({
+				board: "work_talk",
+				filter: "employer",
+				page: 1,
+			});
+			const jobSeekerList = await listPosts({
+				board: "work_talk",
+				filter: "job_seeker",
+				page: 1,
+			});
+
+			// 모든 글은 광고이거나 일반이므로 count가 정확히 쪼개진다.
+			expect(all.totalCount).toBe(
+				promotion.totalCount + generalList.totalCount
+			);
+
+			expect(
+				promotion.items.every(
+					(item: { isPromotion: boolean }) => item.isPromotion === true
+				)
+			).toBe(true);
+			expect(
+				promotion.items.some((item: { id: string }) => item.id === promoted.id)
+			).toBe(true);
+			expect(
+				promotion.items.some((item: { id: string }) => item.id === general.id)
+			).toBe(false);
+
+			expect(
+				generalList.items.every(
+					(item: { isPromotion: boolean }) => item.isPromotion === false
+				)
+			).toBe(true);
+			expect(
+				generalList.items.some((item: { id: string }) => item.id === general.id)
+			).toBe(true);
+
+			expect(
+				employerList.items.every(
+					(item: { authorRole: string }) => item.authorRole === "employer"
+				)
+			).toBe(true);
+			expect(
+				employerList.items.some(
+					(item: { id: string }) => item.id === promoted.id
+				)
+			).toBe(true);
+
+			expect(
+				jobSeekerList.items.every(
+					(item: { authorRole: string }) => item.authorRole === "job_seeker"
+				)
+			).toBe(true);
+			expect(
+				jobSeekerList.items.some(
+					(item: { id: string }) => item.id === general.id
+				)
+			).toBe(true);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("공지사항은 운영자만 작성할 수 있고 overview.notice에 노출된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createAsSeeker = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const createAsAdmin = clientFor(
+				communityRouter.createPost,
+				fixture.adminUserId,
+				["createPost"]
+			);
+			const overview = clientFor(
+				communityRouter.overview,
+				fixture.femaleUserId,
+				["overview"]
+			);
+
+			await expectOrpcCode(
+				createAsSeeker({
+					...basePostInput,
+					board: "notice",
+					title: `구직자 공지 시도 ${randomUUID()}`,
+				}),
+				"FORBIDDEN"
+			);
+
+			const notice = await createAsAdmin({
+				...basePostInput,
+				board: "notice",
+				title: `공지 ${randomUUID()}`,
+			});
+
+			const home = await overview({});
+			expect(
+				home.notice.some((item: { id: string }) => item.id === notice.id)
+			).toBe(true);
+			// 공지는 베스트 큐레이션에서 제외된다(추천 조건과 무관하게).
+			expect(
+				home.best.some((item: { id: string }) => item.id === notice.id)
+			).toBe(false);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("댓글 아이템에 authorRole이 동봉된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const commentAsAdmin = clientFor(
+				communityRouter.createComment,
+				fixture.adminUserId,
+				["createComment"]
+			);
+			const commentAsSeeker = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+			const listComments = clientFor(
+				communityRouter.listComments,
+				fixture.femaleUserId,
+				["listComments"]
+			);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `댓글 신분 ${randomUUID()}`,
+			});
+			const adminComment = await commentAsAdmin({
+				body: "운영자 댓글",
+				postId: created.id,
+			});
+			const seekerComment = await commentAsSeeker({
+				body: "구직자 댓글",
+				postId: created.id,
+			});
+
+			const comments = await listComments({ postId: created.id });
+			const adminItem = comments.find(
+				(item: { id: string }) => item.id === adminComment.id
+			);
+			const seekerItem = comments.find(
+				(item: { id: string }) => item.id === seekerComment.id
+			);
+			expect(adminItem?.authorRole).toBe("admin");
+			expect(seekerItem?.authorRole).toBe("job_seeker");
 		} finally {
 			await cleanupCommunityFixture(fixture);
 		}
