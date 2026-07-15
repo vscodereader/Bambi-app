@@ -1,0 +1,252 @@
+"use client";
+
+// 글 상세 — 잠긴 글 비밀번호 게이트 → 본문(read-only Tiptap)·추천·신고·수정/삭제·평면 댓글.
+// 리프 UI는 community-post-detail-parts로 분리하고, 여기서는 게이트·데이터 흐름만 조율한다.
+
+import { Button } from "@bambi-app/ui/components/button";
+import { Separator } from "@bambi-app/ui/components/separator";
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronLeftIcon } from "lucide-react";
+import type { Route } from "next";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import {
+	CommentForm,
+	CommentList,
+	type CommunityPostDetail,
+	DeletePostButton,
+	EditPostButton,
+	LikeBar,
+	LockedGate,
+	PostBodyViewer,
+	PostHeader,
+	ReportDialog,
+} from "@/components/bambi/community-post-detail-parts";
+import { EmptyState } from "@/components/bambi/empty-state";
+import {
+	type CommunityBoardMeta,
+	communityBoardPath,
+	getBoardBySlug,
+} from "@/lib/bambi/community";
+import { orpc } from "@/utils/orpc";
+
+const COMMENT_MAX = 1000;
+
+interface CommunityPostDetailScreenProps {
+	boardSlug: string;
+	postId: string;
+}
+
+function PostDetailSkeleton() {
+	return (
+		<div className="flex flex-col gap-3">
+			<Skeleton className="h-7 w-2/3" />
+			<Skeleton className="h-4 w-1/3" />
+			<Skeleton className="h-48 w-full" />
+		</div>
+	);
+}
+
+function BackButton({ board }: { board: CommunityBoardMeta }) {
+	return (
+		<div>
+			<Button
+				render={
+					<Link href={communityBoardPath(board.slug) as Route}>
+						<ChevronLeftIcon data-icon="inline-start" />
+						{board.label}
+					</Link>
+				}
+				size="sm"
+				variant="ghost"
+			/>
+		</div>
+	);
+}
+
+// 잠금 해제된 글의 본문·추천·신고·수정/삭제·댓글을 조립한다.
+function PostDetailView({
+	appliedPassword,
+	board,
+	post,
+	postId,
+}: {
+	appliedPassword?: string;
+	board: CommunityBoardMeta;
+	post: CommunityPostDetail;
+	postId: string;
+}) {
+	const router = useRouter();
+	const queryClient = useQueryClient();
+	const [commentBody, setCommentBody] = useState("");
+
+	const invalidatePost = () =>
+		queryClient.invalidateQueries({ queryKey: orpc.bambi.community.key() });
+
+	const commentsQuery = useQuery(
+		orpc.bambi.community.listComments.queryOptions({
+			input: { password: appliedPassword, postId },
+		})
+	);
+	const likeMutation = useMutation(
+		orpc.bambi.community.toggleLike.mutationOptions({
+			onError: (error) => toast(error.message || "추천하지 못했어요."),
+			onSuccess: () => invalidatePost(),
+		})
+	);
+	const createCommentMutation = useMutation(
+		orpc.bambi.community.createComment.mutationOptions({
+			onError: (error) => toast(error.message || "댓글을 등록하지 못했어요."),
+			onSuccess: async () => {
+				setCommentBody("");
+				await invalidatePost();
+			},
+		})
+	);
+	const deleteCommentMutation = useMutation(
+		orpc.bambi.community.deleteComment.mutationOptions({
+			onError: (error) => toast(error.message || "댓글을 삭제하지 못했어요."),
+			onSuccess: () => invalidatePost(),
+		})
+	);
+
+	const comments = commentsQuery.data ?? [];
+	const trimmedComment = commentBody.trim();
+	const canSubmitComment =
+		trimmedComment.length >= 1 && !createCommentMutation.isPending;
+
+	const handleDeleted = async () => {
+		await invalidatePost();
+		router.replace(communityBoardPath(board.slug) as Route);
+	};
+
+	return (
+		<div className="flex flex-col gap-4">
+			<BackButton board={board} />
+			<PostHeader post={post} />
+			<Separator />
+			<PostBodyViewer body={post.body} />
+			<LikeBar
+				disabled={likeMutation.isPending}
+				isLiked={post.isLiked}
+				likeCount={post.likeCount}
+				onToggle={() =>
+					likeMutation.mutate({ password: appliedPassword, postId })
+				}
+			/>
+			<div className="flex items-center justify-between gap-2">
+				<ReportDialog postId={postId} />
+				<div className="flex items-center gap-2">
+					<EditPostButton boardSlug={board.slug} postId={postId} />
+					<DeletePostButton
+						canDelete={post.canDelete}
+						lockPassword={appliedPassword}
+						onDeleted={handleDeleted}
+						postId={postId}
+					/>
+				</div>
+			</div>
+			<Separator />
+			<div className="flex flex-col gap-3">
+				<h2 className="m-0 font-bold text-base">댓글 {post.commentCount}</h2>
+				<CommentList
+					comments={comments}
+					deletePending={deleteCommentMutation.isPending}
+					onDelete={(commentId) => deleteCommentMutation.mutate({ commentId })}
+				/>
+				<CommentForm
+					canSubmit={canSubmitComment}
+					maxLength={COMMENT_MAX}
+					onChange={setCommentBody}
+					onSubmit={() =>
+						createCommentMutation.mutate({
+							body: trimmedComment,
+							password: appliedPassword,
+							postId,
+						})
+					}
+					value={commentBody}
+				/>
+			</div>
+		</div>
+	);
+}
+
+export function CommunityPostDetailScreen({
+	boardSlug,
+	postId,
+}: CommunityPostDetailScreenProps) {
+	const board = getBoardBySlug(boardSlug);
+	const [appliedPassword, setAppliedPassword] = useState<string | undefined>();
+
+	const postQuery = useQuery(
+		orpc.bambi.community.getPost.queryOptions({
+			input: { password: appliedPassword, postId },
+		})
+	);
+
+	// 비밀번호 불일치(FORBIDDEN)는 토스트로 안내하고 게이트에서 재입력을 받는다.
+	useEffect(() => {
+		if (postQuery.isError && appliedPassword) {
+			toast("비밀번호를 확인해 주세요.");
+		}
+	}, [postQuery.isError, appliedPassword]);
+
+	if (!board) {
+		return (
+			<EmptyState
+				className="flex-1"
+				description="존재하지 않는 게시판이에요."
+				title="게시판을 찾을 수 없어요"
+			/>
+		);
+	}
+
+	if (postQuery.isPending) {
+		return <PostDetailSkeleton />;
+	}
+
+	const data = postQuery.data;
+
+	if (data?.locked === false) {
+		return (
+			<PostDetailView
+				appliedPassword={appliedPassword}
+				board={board}
+				post={data}
+				postId={postId}
+			/>
+		);
+	}
+
+	if (data?.locked === true) {
+		return (
+			<LockedGate
+				boardLabel={board.label}
+				hasError={false}
+				onSubmit={setAppliedPassword}
+			/>
+		);
+	}
+
+	if (appliedPassword) {
+		return (
+			<LockedGate
+				boardLabel={board.label}
+				hasError={true}
+				onSubmit={setAppliedPassword}
+			/>
+		);
+	}
+
+	return (
+		<EmptyState
+			className="flex-1"
+			description="글이 삭제됐거나 불러올 수 없어요."
+			title="글을 찾을 수 없어요"
+		/>
+	);
+}
