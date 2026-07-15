@@ -28,17 +28,15 @@ describe("visual job marketplace components", () => {
 
 	it("makes every ad banner link to the advertised job detail page", () => {
 		const banner = readComponent("ad-banner.tsx");
-		const links = readComponent("../../lib/bambi/ad-links.ts");
 
 		// 가로·세로 배너 모두 next/link로 감싸 광고 공고 상세로 이동한다
 		expect(banner).toContain('from "next/link"');
-		expect(banner).toContain("adJobHref");
 		expect(banner).toContain("<Link");
-		// 세로 배너도 클릭 대상 — seed로 결정적 공고 매핑
-		expect(banner).toContain("seed={banner.src}");
-		// 링크는 실제 공고 상세(/seeker/jobs/{id})이며 프로모션 공고를 광고 대상으로 삼는다
-		expect(links).toContain("/seeker/jobs/");
-		expect(links).toContain("isPromoted");
+		// 링크는 결제완료 배너 공고 실데이터의 상세(/seeker/jobs/{id})로 직행한다
+		expect(banner).toContain("/seeker/jobs/");
+		expect(banner).toContain("item.id");
+		// 배너 이미지는 해당 공고 커버(AdBannerItem.coverUrl)를 쓴다
+		expect(banner).toContain("item.coverUrl");
 	});
 
 	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {

@@ -8,7 +8,11 @@ import {
 } from "@/lib/bambi/marketplace";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
 import { orpc } from "@/utils/orpc";
-import { toMarketplaceJob } from "./api-job-mapper";
+import {
+	type AdBannerItem,
+	toAdBannerItem,
+	toMarketplaceJob,
+} from "./api-job-mapper";
 import { JOBS } from "./data";
 
 const UUID_RE =
@@ -53,12 +57,25 @@ const EMPTY_SECTIONS: MarketplaceJobSections = {
 	urgent: [],
 };
 
-const flattenSections = (sections: MarketplaceJobSections): Job[] => [
-	...sections.special,
-	...sections.urgent,
-	...sections.recommended,
-	...sections.organic,
-];
+// mock 폴백 경로에서 urgent는 special/recommended의 부분집합이라 그대로 이으면 같은
+// 공고가 2번 들어가 개수 카운트가 부풀 수 있다. id 기준으로 첫 등장만 남겨 중복을 제거한다
+// (등장 순서 유지: special→urgent→recommended→organic).
+const flattenSections = (sections: MarketplaceJobSections): Job[] => {
+	const seen = new Set<string>();
+	const merged = [
+		...sections.special,
+		...sections.urgent,
+		...sections.recommended,
+		...sections.organic,
+	];
+	return merged.filter((job) => {
+		if (seen.has(job.id)) {
+			return false;
+		}
+		seen.add(job.id);
+		return true;
+	});
+};
 
 const filterSections = (
 	sections: MarketplaceJobSections,
@@ -155,5 +172,20 @@ export function useMarketplaceJob(id: string): UseMarketplaceJobResult {
 		refetch: () => {
 			jobQuery.refetch().catch(() => undefined);
 		},
+	};
+}
+
+export interface AdBannerJobGroups {
+	leftBanner: AdBannerItem[];
+	premiumBanner: AdBannerItem[];
+	rightBanner: AdBannerItem[];
+}
+
+export function useAdBannerJobs(): AdBannerJobGroups {
+	const bannersQuery = useQuery(orpc.bambi.jobs.listAdBanners.queryOptions());
+	return {
+		leftBanner: (bannersQuery.data?.leftBanner ?? []).map(toAdBannerItem),
+		premiumBanner: (bannersQuery.data?.premiumBanner ?? []).map(toAdBannerItem),
+		rightBanner: (bannersQuery.data?.rightBanner ?? []).map(toAdBannerItem),
 	};
 }
