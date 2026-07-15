@@ -17,12 +17,10 @@ import type { DataColumn } from "@/components/bambi/data-table";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import {
 	EXPOSURE_TYPE_LABELS,
-	expiryLabel,
 	getJobDisplayStatus,
 	PAYMENT_STATUS_LABELS,
-	remainingDays,
 } from "@/lib/bambi/exposure";
-import { formatPay } from "@/lib/bambi-format";
+import { formatDate, formatPay } from "@/lib/bambi-format";
 
 export type EmployerJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["jobs"]["listMine"]>
@@ -45,18 +43,6 @@ const getTruncatedTitle = (title: string): string =>
 	title.length > TITLE_MAX_LENGTH
 		? `${title.slice(0, TITLE_MAX_LENGTH)}…`
 		: title;
-
-const getExpiryTone = (label: string): Tone => {
-	if (label === "진행중") {
-		return "good";
-	}
-
-	if (label === "만료") {
-		return "danger";
-	}
-
-	return "default";
-};
 
 interface EmployerJobsColumnsOptions {
 	deletingJobId: null | string;
@@ -139,16 +125,22 @@ export function getEmployerJobsColumns({
 			id: "period",
 			header: "기간",
 			sortValue: (job) =>
-				remainingDays(job.exposureEndsAt) ?? Number.POSITIVE_INFINITY,
+				job.exposureEndsAt === null
+					? Number.POSITIVE_INFINITY
+					: new Date(job.exposureEndsAt).getTime(),
 			cell: (job) => {
-				const label = expiryLabel(job.exposureEndsAt);
-				const days = remainingDays(job.exposureEndsAt);
-				const showDays = days !== null && days > 0;
+				if (job.exposureEndsAt === null) {
+					return <span className="text-muted-foreground">-</span>;
+				}
+
+				const expired = new Date(job.exposureEndsAt).getTime() <= Date.now();
 
 				return (
-					<StatusBadge tone={getExpiryTone(label)}>
-						{showDays ? `${label} · ${days}일` : label}
-					</StatusBadge>
+					<span
+						className={cn("whitespace-nowrap", expired && "text-destructive")}
+					>
+						{formatDate(job.exposureEndsAt)}
+					</span>
 				);
 			},
 		},
