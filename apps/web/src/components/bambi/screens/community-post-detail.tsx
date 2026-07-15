@@ -9,7 +9,7 @@ import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeftIcon } from "lucide-react";
+import { ChevronLeftIcon, FlagIcon } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -86,6 +86,7 @@ function PostDetailView({
 	const queryClient = useQueryClient();
 	const [commentBody, setCommentBody] = useState("");
 	const [replyTo, setReplyTo] = useState<string | null>(null);
+	const [editingId, setEditingId] = useState<string | null>(null);
 	const [hideEmployerComments, setHideEmployerComments] = useState(false);
 
 	// 상세(getPost)는 조회 시 view_count를 올리므로 추천·댓글 뮤테이션에서 재요청하지
@@ -159,6 +160,16 @@ function PostDetailView({
 			},
 		})
 	);
+	const updateCommentMutation = useMutation(
+		orpc.bambi.community.updateComment.mutationOptions({
+			onError: (error) => toast(error.message || "댓글을 수정하지 못했어요."),
+			onSuccess: () => {
+				toast("댓글이 수정됐어요.");
+				setEditingId(null);
+				return invalidateComments();
+			},
+		})
+	);
 
 	const comments = commentsQuery.data ?? [];
 	const hasEmployerComments = comments.some(
@@ -190,15 +201,24 @@ function PostDetailView({
 				}
 			/>
 			<div className="flex items-center justify-between gap-2">
-				<ReportDialog postId={postId} />
+				<ReportDialog
+					targetId={postId}
+					targetType="community_post"
+					title="글 신고"
+					trigger={
+						<Button size="sm" variant="ghost">
+							<FlagIcon data-icon="inline-start" />
+							신고
+						</Button>
+					}
+				/>
 				<div className="flex items-center gap-2">
-					<EditPostButton boardSlug={board.slug} postId={postId} />
-					<DeletePostButton
-						canDelete={post.canDelete}
-						lockPassword={appliedPassword}
-						onDeleted={handleDeleted}
-						postId={postId}
-					/>
+					{post.canEdit ? (
+						<EditPostButton boardSlug={board.slug} postId={postId} />
+					) : null}
+					{post.canDelete ? (
+						<DeletePostButton onDeleted={handleDeleted} postId={postId} />
+					) : null}
 				</div>
 			</div>
 			<Separator />
@@ -225,9 +245,16 @@ function PostDetailView({
 				<CommentList
 					comments={comments}
 					deletePending={deleteCommentMutation.isPending}
+					editingId={editingId}
+					editPending={updateCommentMutation.isPending}
 					hideEmployer={hideEmployerComments}
 					maxLength={COMMENT_MAX}
 					onDelete={(commentId) => deleteCommentMutation.mutate({ commentId })}
+					onEditClose={() => setEditingId(null)}
+					onEditOpen={setEditingId}
+					onEditSubmit={(commentId, body) =>
+						updateCommentMutation.mutate({ body, commentId })
+					}
 					onReplyClose={() => setReplyTo(null)}
 					onReplyOpen={setReplyTo}
 					onReplySubmit={(parentCommentId, body) =>

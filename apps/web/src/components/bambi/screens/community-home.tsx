@@ -36,25 +36,28 @@ export function CommunityHomeScreen() {
 		notice: data?.notice ?? [],
 		work_talk: data?.workTalk ?? [],
 	};
-	// 공지사항은 최상단 전폭 섹션으로 따로 렌더하고, 나머지는 2열 그리드로 배치한다.
+	// 공지사항은 글 유무와 무관하게 항상 최상단 전폭으로 노출하고, 나머지는 2열 그리드로 배치한다.
 	const gridBoards = COMMUNITY_BOARDS.filter((board) => board.key !== "notice");
-	const noticePosts = postsByBoard.notice;
 
 	return (
 		<div className="flex flex-col gap-4">
 			<h1 className="m-0 font-extrabold text-xl">수다방</h1>
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 				{overviewQuery.isPending ? (
-					gridBoards.map((board) => <BoardPreviewSkeleton key={board.key} />)
+					<>
+						<BoardPreviewSkeleton className="md:col-span-2" />
+						{gridBoards.map((board) => (
+							<BoardPreviewSkeleton key={board.key} />
+						))}
+					</>
 				) : (
 					<>
-						{noticePosts.length > 0 ? (
-							<BoardPreviewCard
-								boardKey="notice"
-								className="md:col-span-2"
-								posts={noticePosts}
-							/>
-						) : null}
+						<BoardPreviewCard
+							boardKey="notice"
+							className="md:col-span-2"
+							emptyText="등록된 공지사항이 없어요."
+							posts={postsByBoard.notice}
+						/>
 						{gridBoards.map((board) => (
 							<BoardPreviewCard
 								boardKey={board.key}

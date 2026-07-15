@@ -45,10 +45,13 @@ export const accentClassName: Record<CommunityBoardKey, string> = {
 export function BoardPreviewCard({
 	boardKey,
 	className,
+	emptyText,
 	posts,
 }: {
 	boardKey: CommunityBoardKey;
 	className?: string;
+	// 빈 상태 문구 — 미지정 시 기존 "첫 글" 안내를 그대로 쓴다(운영자 전용 게시판은 별도 문구 주입).
+	emptyText?: string;
 	posts: OverviewPost[];
 }) {
 	const board = COMMUNITY_BOARDS.find((item) => item.key === boardKey);
@@ -82,7 +85,7 @@ export function BoardPreviewCard({
 			<CardContent className="flex flex-col gap-2">
 				{posts.length === 0 ? (
 					<p className="m-0 py-3 text-muted-foreground text-sm">
-						아직 글이 없어요. 첫 글을 남겨보세요.
+						{emptyText ?? "아직 글이 없어요. 첫 글을 남겨보세요."}
 					</p>
 				) : (
 					posts.map((post) => {
@@ -125,9 +128,9 @@ export function BoardPreviewCard({
 	);
 }
 
-export function BoardPreviewSkeleton() {
+export function BoardPreviewSkeleton({ className }: { className?: string }) {
 	return (
-		<Card>
+		<Card className={className}>
 			<CardHeader>
 				<Skeleton className="h-5 w-24" />
 			</CardHeader>

@@ -6,6 +6,8 @@ import {
 	chatAttachment,
 	chatMessage,
 	chatRoom,
+	communityComment,
+	communityPost,
 	employerOrganizationProfile,
 	jobPost,
 	jobPostMedia,
@@ -30,6 +32,7 @@ export const targetTypeSchema = z.enum([
 	"review",
 	"user",
 	"community_post",
+	"community_comment",
 ]);
 
 export const reportReasonSchema = z.enum([
@@ -134,6 +137,8 @@ const uuidTargetTypes = new Set<ReportTargetType>([
 	"chat_room",
 	"chat_message",
 	"review",
+	"community_post",
+	"community_comment",
 ]);
 
 const uuidTargetIdSchema = z.string().uuid();
@@ -280,6 +285,18 @@ const assertReportTargetExists = async (
 					.select({ id: bambiProfile.userId })
 					.from(bambiProfile)
 					.where(eq(bambiProfile.userId, targetId))
+					.limit(1);
+			case "community_post":
+				return await db
+					.select({ id: communityPost.id })
+					.from(communityPost)
+					.where(eq(communityPost.id, targetId))
+					.limit(1);
+			case "community_comment":
+				return await db
+					.select({ id: communityComment.id })
+					.from(communityComment)
+					.where(eq(communityComment.id, targetId))
 					.limit(1);
 			default:
 				return [];

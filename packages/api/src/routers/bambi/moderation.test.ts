@@ -26,6 +26,7 @@ const {
 	chatAttachment,
 	chatMessage,
 	chatRoom,
+	communityPost,
 	jobPost,
 	report,
 } = bambiSchema;
@@ -244,6 +245,104 @@ describe("bambi moderation router media context", () => {
 			});
 			expect(JSON.stringify(targetReport?.targetContext)).not.toContain(
 				"storageKey"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
+
+describe("bambi moderation router community reports", () => {
+	it("존재하는 커뮤니티 글(community_post) 신고가 성공한다(잠재 버그 수정 검증)", async () => {
+		const fixture = await createReportFixture();
+		const postId = randomUUID();
+
+		try {
+			await db.insert(communityPost).values({
+				authorDisplayName: "달빛토끼",
+				authorRole: "job_seeker",
+				authorUserId: fixture.jobSeekerUserId,
+				board: "free",
+				body: "신고 대상 글 본문",
+				id: postId,
+				passwordHash: "",
+				title: "신고 대상 글",
+			});
+
+			const createReport = createProcedureClient(
+				moderationRouter.createReport,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "createReport"],
+				}
+			);
+
+			const created = await createReport({
+				reason: "other",
+				targetId: postId,
+				targetType: "community_post",
+			});
+			// returning() 파생 타입이 undefined를 포함해 좁혀서 사용한다.
+			if (!created) {
+				throw new Error("신고 생성 결과가 비어 있습니다.");
+			}
+			expect(created.targetType).toBe("community_post");
+			expect(created.targetId).toBe(postId);
+
+			// 이 테스트가 새로 만든 report는 fixture.reportId가 아니므로 직접 정리한다.
+			await db.delete(report).where(eq(report.id, created.id));
+		} finally {
+			await db.delete(communityPost).where(eq(communityPost.id, postId));
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("존재하지 않는 커뮤니티 댓글(community_comment) 신고는 NOT_FOUND", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const createReport = createProcedureClient(
+				moderationRouter.createReport,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "createReport"],
+				}
+			);
+
+			// INSERT 전에 존재 검증에서 throw되므로 DB enum에 값이 없어도 안전하다.
+			await expectOrpcCode(
+				createReport({
+					reason: "other",
+					targetId: randomUUID(),
+					targetType: "community_comment",
+				}),
+				"NOT_FOUND"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("커뮤니티 댓글 신고에 uuid가 아닌 targetId를 주면 BAD_REQUEST", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const createReport = createProcedureClient(
+				moderationRouter.createReport,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "createReport"],
+				}
+			);
+
+			// uuidTargetTypes에 포함되므로 uuid 형식 검증에서 INSERT 전에 막힌다.
+			await expectOrpcCode(
+				createReport({
+					reason: "other",
+					targetId: "not-a-uuid",
+					targetType: "community_comment",
+				}),
+				"BAD_REQUEST"
 			);
 		} finally {
 			await cleanupReportFixture(fixture);
