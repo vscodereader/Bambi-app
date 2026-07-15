@@ -93,7 +93,8 @@ const VIEWER_BODY_CLASS = cn(
 	"w-full text-foreground text-sm leading-relaxed outline-none",
 	"[&_a]:text-primary [&_a]:underline",
 	"[&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5",
-	"[&_p]:my-1 [&_strong]:font-semibold"
+	"[&_p]:my-1 [&_strong]:font-semibold",
+	"[&_img]:my-2 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-md"
 );
 
 // 본문을 편집 확장 세트로 read-only 렌더. JSON 파싱 실패 시 원문 텍스트 폴백.
@@ -277,6 +278,7 @@ export function EditPostButton({
 }) {
 	return (
 		<Button
+			nativeButton={false}
 			render={
 				<Link href={communityEditPath(boardSlug, postId) as Route}>수정</Link>
 			}

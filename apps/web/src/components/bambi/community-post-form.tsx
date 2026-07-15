@@ -68,6 +68,8 @@ export function CommunityPostForm({
 	const [title, setTitle] = useState(initialPost?.title ?? "");
 	const [bodyJson, setBodyJson] = useState(initialPost?.body ?? "");
 	const [bodyText, setBodyText] = useState("");
+	// 이미지만 있고 텍스트가 없는 글도 허용(서버 검증과 일치) — 에디터가 이미지 포함 여부를 보고한다.
+	const [bodyHasImage, setBodyHasImage] = useState(false);
 
 	// 작성 모드 작성인 기본값·권한 판정에만 세션 프로필이 필요하므로 수정 모드에서는
 	// getMine을 비활성화한다(작성인 기본값·공지 가드는 create 전용, 광고 게이트는
@@ -133,7 +135,7 @@ export function CommunityPostForm({
 	const canSubmit =
 		authorName.trim().length >= 1 &&
 		title.trim().length >= MIN_TEXT &&
-		bodyText.trim().length >= MIN_TEXT &&
+		(bodyText.trim().length >= MIN_TEXT || bodyHasImage) &&
 		(isEdit || password.length >= PASSWORD_MIN) &&
 		!isSubmitting;
 
@@ -250,6 +252,7 @@ export function CommunityPostForm({
 					onChange={(payload) => {
 						setBodyJson(payload.json);
 						setBodyText(payload.text);
+						setBodyHasImage(payload.hasImage);
 					}}
 					value={bodyJson}
 				/>

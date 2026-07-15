@@ -327,6 +327,7 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 				</div>
 				{canWrite ? (
 					<Button
+						nativeButton={false}
 						render={
 							<Link href={communityWritePath(board.slug) as Route}>
 								<PencilLineIcon data-icon="inline-start" />
