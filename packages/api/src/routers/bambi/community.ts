@@ -72,9 +72,12 @@ const createPostInput = z.object({
 	body: z.string().min(2).max(BODY_MAX),
 	isLocked: z.boolean().default(false),
 	isPromotion: z.boolean().default(false),
-	password: z.string().trim().min(4).max(30),
+	// 비밀번호는 비밀글(잠금)에만 필요하다 — 잠그지 않으면 생략하고 등록할 수 있다.
+	password: z.string().trim().max(30).optional(),
 	title: z.string().trim().min(2).max(100),
 });
+
+const LOCKED_PASSWORD_ERROR = "비밀글은 4자 이상의 비밀번호가 필요합니다.";
 
 const updatePostInput = postIdInput.extend({
 	authorName: z.string().trim().min(1).max(30),
@@ -434,6 +437,10 @@ export const communityRouter = {
 			if (input.isPromotion && profile.role !== "employer") {
 				throw new ORPCError("BAD_REQUEST", { message: PROMOTION_ROLE_ERROR });
 			}
+			// 비밀글(잠금)은 잠금 게이트에 쓸 4자 이상 비밀번호가 필요하다.
+			if (input.isLocked && (input.password?.length ?? 0) < 4) {
+				throw new ORPCError("BAD_REQUEST", { message: LOCKED_PASSWORD_ERROR });
+			}
 
 			const [created] = await db
 				.insert(communityPost)
@@ -445,7 +452,11 @@ export const communityRouter = {
 					body: input.body,
 					isLocked: input.isLocked,
 					isPromotion: input.isPromotion,
-					passwordHash: hashCommunityPassword(input.password),
+					// 비번 미입력(잠그지 않은 글)은 빈 문자열로 저장한다 — verify가 항상 실패해
+					// 잠금 게이트·비작성자 수정이 자연히 차단된다.
+					passwordHash: input.password
+						? hashCommunityPassword(input.password)
+						: "",
 					title: input.title,
 				})
 				.returning({ board: communityPost.board, id: communityPost.id });
@@ -474,6 +485,14 @@ export const communityRouter = {
 				throw new ORPCError("FORBIDDEN", {
 					message:
 						"본인이 작성한 글만 수정할 수 있습니다. 비밀번호를 확인해 주세요.",
+				});
+			}
+
+			// 비밀번호 없이 작성한 글(passwordHash 빈 값)은 잠금 게이트에 쓸 비번이 없어
+			// 비밀글로 전환할 수 없다 — 무결성을 위해 차단한다.
+			if (input.isLocked && post.passwordHash === "") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "비밀번호 없이 작성한 글은 비밀글로 잠글 수 없어요.",
 				});
 			}
 
