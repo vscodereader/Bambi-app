@@ -1,0 +1,227 @@
+"use client";
+
+// 글 작성/수정 공용 폼. 컨트롤드 필드 + Tiptap 본문 에디터, 서버 검증에 위임한다.
+
+import { Button } from "@bambi-app/ui/components/button";
+import { Input } from "@bambi-app/ui/components/input";
+import { Label } from "@bambi-app/ui/components/label";
+import { Switch } from "@bambi-app/ui/components/switch";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Route } from "next";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { CommunityPostEditor } from "@/components/bambi/community-editor";
+import {
+	type CommunityBoardKey,
+	type CommunityBoardMeta,
+	communityBoardPath,
+	communityPostPath,
+} from "@/lib/bambi/community";
+import { orpc } from "@/utils/orpc";
+
+const TITLE_MAX = 100;
+const AUTHOR_MAX = 30;
+const PASSWORD_MIN = 4;
+const PASSWORD_MAX = 30;
+const MIN_TEXT = 2;
+
+type WritableBoardKey = Exclude<CommunityBoardKey, "best">;
+
+const isWritableBoardKey = (key: CommunityBoardKey): key is WritableBoardKey =>
+	key !== "best";
+
+interface CommunityPostInitial {
+	authorName: string;
+	body: string;
+	id: string;
+	isLocked: boolean;
+	title: string;
+}
+
+interface CommunityPostFormProps {
+	board: CommunityBoardMeta;
+	// 수정 모드 초기값. 비작성자(비밀번호 수정)는 editPassword로 게이트 통과 비번을 넘긴다.
+	editPassword?: string;
+	initialPost?: CommunityPostInitial;
+}
+
+export function CommunityPostForm({
+	board,
+	editPassword,
+	initialPost,
+}: CommunityPostFormProps) {
+	const router = useRouter();
+	const queryClient = useQueryClient();
+	const isEdit = Boolean(initialPost);
+
+	const [authorName, setAuthorName] = useState(initialPost?.authorName ?? "");
+	const [password, setPassword] = useState(editPassword ?? "");
+	const [isLocked, setIsLocked] = useState(initialPost?.isLocked ?? false);
+	const [title, setTitle] = useState(initialPost?.title ?? "");
+	const [bodyJson, setBodyJson] = useState(initialPost?.body ?? "");
+	const [bodyText, setBodyText] = useState("");
+
+	// 작성 모드 작성인 기본값 = 세션 프로필 displayName(수정 모드는 기존 값 유지).
+	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	const displayName = mineQuery.data?.bambiProfile?.displayName ?? "";
+	useEffect(() => {
+		if (!isEdit && displayName) {
+			setAuthorName((previous) => (previous === "" ? displayName : previous));
+		}
+	}, [displayName, isEdit]);
+
+	const invalidateAndGo = async (postId: string) => {
+		await queryClient.invalidateQueries({
+			queryKey: orpc.bambi.community.key(),
+		});
+		router.replace(communityPostPath(board.slug, postId) as Route);
+	};
+
+	const createMutation = useMutation(
+		orpc.bambi.community.createPost.mutationOptions({
+			onError: (error) => {
+				toast(error.message || "글을 등록하지 못했어요.");
+			},
+			onSuccess: async (created) => {
+				toast("글이 등록됐어요.");
+				await invalidateAndGo(created.id);
+			},
+		})
+	);
+	const updateMutation = useMutation(
+		orpc.bambi.community.updatePost.mutationOptions({
+			onError: (error) => {
+				toast(error.message || "글을 수정하지 못했어요.");
+			},
+			onSuccess: async (updated) => {
+				toast("글이 수정됐어요.");
+				await invalidateAndGo(updated.id);
+			},
+		})
+	);
+
+	const isSubmitting = createMutation.isPending || updateMutation.isPending;
+	const canSubmit =
+		authorName.trim().length >= 1 &&
+		title.trim().length >= MIN_TEXT &&
+		bodyText.trim().length >= MIN_TEXT &&
+		(isEdit || password.length >= PASSWORD_MIN) &&
+		!isSubmitting;
+
+	const submitEdit = (postId: string) => {
+		const trimmedPassword = password.trim();
+		updateMutation.mutate({
+			authorName: authorName.trim(),
+			body: bodyJson,
+			isLocked,
+			postId,
+			title: title.trim(),
+			...(trimmedPassword ? { password: trimmedPassword } : {}),
+		});
+	};
+
+	const submitCreate = () => {
+		const boardKey = board.key;
+		if (!isWritableBoardKey(boardKey)) {
+			return;
+		}
+		createMutation.mutate({
+			authorName: authorName.trim(),
+			board: boardKey,
+			body: bodyJson,
+			isLocked,
+			password: password.trim(),
+			title: title.trim(),
+		});
+	};
+
+	const handleSubmit = () => {
+		if (!canSubmit) {
+			return;
+		}
+		if (isEdit && initialPost) {
+			submitEdit(initialPost.id);
+			return;
+		}
+		submitCreate();
+	};
+
+	return (
+		<div className="flex flex-col gap-4">
+			<h1 className="m-0 font-extrabold text-xl">
+				{board.label} {isEdit ? "글 수정" : "글쓰기"}
+			</h1>
+
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="community-post-author">작성인</Label>
+				<Input
+					id="community-post-author"
+					maxLength={AUTHOR_MAX}
+					onChange={(event) => setAuthorName(event.target.value)}
+					placeholder="작성인 이름"
+					value={authorName}
+				/>
+			</div>
+
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="community-post-password">
+					{isEdit ? "글 비밀번호" : "비밀번호"}
+				</Label>
+				<Input
+					autoComplete="new-password"
+					id="community-post-password"
+					maxLength={PASSWORD_MAX}
+					onChange={(event) => setPassword(event.target.value)}
+					placeholder={isEdit ? "본인은 비워둘 수 있어요" : "4자 이상"}
+					type="password"
+					value={password}
+				/>
+			</div>
+
+			<div className="flex items-center gap-2">
+				<Switch
+					checked={isLocked}
+					id="community-post-lock"
+					onCheckedChange={setIsLocked}
+				/>
+				<Label htmlFor="community-post-lock">비밀글로 잠그기</Label>
+			</div>
+
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="community-post-title">제목</Label>
+				<Input
+					id="community-post-title"
+					maxLength={TITLE_MAX}
+					onChange={(event) => setTitle(event.target.value)}
+					placeholder="제목을 입력해 주세요 (2자 이상)"
+					value={title}
+				/>
+			</div>
+
+			<div className="flex flex-col gap-2">
+				<Label>본문</Label>
+				<CommunityPostEditor
+					onChange={(payload) => {
+						setBodyJson(payload.json);
+						setBodyText(payload.text);
+					}}
+					value={bodyJson}
+				/>
+			</div>
+
+			<div className="flex justify-end gap-2">
+				<Button
+					onClick={() => router.push(communityBoardPath(board.slug) as Route)}
+					type="button"
+					variant="outline"
+				>
+					취소
+				</Button>
+				<Button disabled={!canSubmit} onClick={handleSubmit} type="button">
+					{isEdit ? "수정하기" : "등록하기"}
+				</Button>
+			</div>
+		</div>
+	);
+}
