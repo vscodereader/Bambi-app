@@ -16,6 +16,12 @@ import {
 import { toast as sonnerToast } from "sonner";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
 import { getVisibleModerationData } from "@/lib/bambi/moderation-data";
+import {
+	REPORT_REASON_LABELS,
+	REPORT_TARGET_TYPE_LABELS,
+	type ReportReason,
+	type ReportTargetType,
+} from "@/lib/bambi/report-labels";
 import type {
 	CommunityTargetStatus,
 	ManagedUser,
@@ -293,10 +299,14 @@ const deriveReportCommunity = (input: {
 		};
 	}
 
+	// 커뮤니티 외 대상(또는 컨텍스트 유실)은 enum 원값 대신 한국어 대상 라벨로 표기한다.
+	const targetTypeLabel =
+		REPORT_TARGET_TYPE_LABELS[input.targetType as ReportTargetType] ??
+		input.targetType;
 	return {
 		communityKind,
 		communityTarget: undefined,
-		target: `${input.targetType} ${input.targetId.slice(0, 8)}`,
+		target: `${targetTypeLabel} ${input.targetId.slice(0, 8)}`,
 	};
 };
 
@@ -398,7 +408,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				communityTarget,
 				id: item.id,
 				note: attachmentNote ? `${baseNote}\n${attachmentNote}` : baseNote,
-				reason: item.reason,
+				// 신고 사유 enum을 한국어 라벨로 변환한다(미지의 값은 원값 폴백).
+				reason:
+					REPORT_REASON_LABELS[item.reason as ReportReason] ?? item.reason,
 				reporter: `신고자 ${item.reporterUserId.slice(0, 6)}`,
 				reporterRole: "사용자",
 				sev: item.status === "open" ? "mid" : "low",
