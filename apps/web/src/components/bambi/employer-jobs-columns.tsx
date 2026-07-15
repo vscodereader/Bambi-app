@@ -18,11 +18,11 @@ import { StatusBadge } from "@/components/bambi/status-badge";
 import {
 	EXPOSURE_TYPE_LABELS,
 	expiryLabel,
+	getEmployerJobDisplayStatus,
 	PAYMENT_STATUS_LABELS,
 	remainingDays,
 } from "@/lib/bambi/exposure";
 import { formatPay } from "@/lib/bambi-format";
-import { jobStatusLabels } from "@/lib/bambi-options";
 
 export type EmployerJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["jobs"]["listMine"]>
@@ -32,25 +32,6 @@ type Tone = React.ComponentProps<typeof StatusBadge>["tone"];
 
 // 제목이 이 길이를 넘으면 말줄임(…)으로 처리한다.
 const TITLE_MAX_LENGTH = 17;
-
-const getJobStatusLabel = (status: string): string =>
-	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
-
-const getJobStatusTone = (status: string): Tone => {
-	if (status === "published") {
-		return "good";
-	}
-
-	if (status === "pending_review") {
-		return "warning";
-	}
-
-	if (status === "rejected") {
-		return "danger";
-	}
-
-	return "default";
-};
 
 const getPaymentStatusTone = (status: string): Tone =>
 	status === "paid" ? "good" : "warning";
@@ -129,12 +110,12 @@ export function getEmployerJobsColumns({
 		{
 			id: "status",
 			header: "공고 상태",
-			sortValue: (job) => getJobStatusLabel(job.status),
-			cell: (job) => (
-				<StatusBadge tone={getJobStatusTone(job.status)}>
-					{getJobStatusLabel(job.status)}
-				</StatusBadge>
-			),
+			sortValue: (job) => getEmployerJobDisplayStatus(job).label,
+			cell: (job) => {
+				const display = getEmployerJobDisplayStatus(job);
+
+				return <StatusBadge tone={display.tone}>{display.label}</StatusBadge>;
+			},
 		},
 		{
 			id: "exposureType",

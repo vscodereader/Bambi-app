@@ -10,21 +10,13 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import Loader from "@/components/loader";
-import { jobStatusLabels } from "@/lib/bambi-options";
+import { getEmployerJobDisplayStatus } from "@/lib/bambi/exposure";
 import { orpc } from "@/utils/orpc";
 
 interface MetricCardProps {
 	label: string;
 	value: string;
 }
-
-const getJobStatusLabel = (status: string): string =>
-	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
-
-const getJobStatusTone = (
-	status: string
-): React.ComponentProps<typeof StatusBadge>["tone"] =>
-	status === "published" ? "good" : "warning";
 
 const formatNumber = (value: number): string => value.toLocaleString("ko-KR");
 
@@ -237,8 +229,10 @@ export default function EmployerAnalyticsPage() {
 										<th className="px-4 py-3 font-medium" scope="row">
 											<div className="max-w-[280px]">
 												<p className="m-0 break-words">{summary.title}</p>
-												<StatusBadge tone={getJobStatusTone(summary.status)}>
-													{getJobStatusLabel(summary.status)}
+												<StatusBadge
+													tone={getEmployerJobDisplayStatus(summary).tone}
+												>
+													{getEmployerJobDisplayStatus(summary).label}
 												</StatusBadge>
 											</div>
 										</th>

@@ -1,3 +1,5 @@
+import { jobStatusLabels } from "../bambi-options";
+
 export const EXPOSURE_TYPE_LABELS = {
 	"premium-banner": "프리미엄 배너",
 	"left-banner": "좌측 배너",
@@ -15,6 +17,48 @@ export const PAYMENT_STATUS_LABELS = {
 
 export type ExposureType = keyof typeof EXPOSURE_TYPE_LABELS;
 export type PaymentStatus = keyof typeof PAYMENT_STATUS_LABELS;
+
+export type StatusTone = "danger" | "default" | "good" | "warning";
+
+const getBaseJobStatusTone = (status: string): StatusTone => {
+	if (status === "published") {
+		return "good";
+	}
+
+	if (status === "pending_review") {
+		return "warning";
+	}
+
+	if (status === "rejected") {
+		return "danger";
+	}
+
+	return "default";
+};
+
+/**
+ * 구인자에게 보이는 "공고 상태"는 검수 축(status)이 아니라 실제 공개 여부를 반영한다.
+ * 공개 게이트 = status "published" AND paymentStatus "paid"(packages/api의 jobs.list/getById에서
+ * 강제). 인증 업체는 등록 즉시 published가 되지만 무통장입금은 결제 확인 전까지 비공개이므로
+ * published + 미결제는 "미공개"(warning)로 표기한다. 그 외 상태(검수 대기·반려·숨김·임시 저장)는
+ * 결제와 무관하게 기존 라벨·tone을 유지한다.
+ */
+export const getEmployerJobDisplayStatus = ({
+	paymentStatus,
+	status,
+}: {
+	paymentStatus: string;
+	status: string;
+}): { label: string; tone: StatusTone } => {
+	if (status === "published" && paymentStatus !== "paid") {
+		return { label: "미공개", tone: "warning" };
+	}
+
+	return {
+		label: jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status,
+		tone: getBaseJobStatusTone(status),
+	};
+};
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

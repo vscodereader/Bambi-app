@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { expiryLabel, remainingDays } from "./exposure";
+import {
+	expiryLabel,
+	getEmployerJobDisplayStatus,
+	remainingDays,
+} from "./exposure";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -44,5 +48,49 @@ describe("expiryLabel", () => {
 
 	it("labels a past expiry as 만료", () => {
 		expect(expiryLabel(daysFromNow(-1))).toBe("만료");
+	});
+});
+
+describe("getEmployerJobDisplayStatus", () => {
+	it("marks a published-but-unpaid job as 미공개 (still gated before payment)", () => {
+		expect(
+			getEmployerJobDisplayStatus({
+				paymentStatus: "unpaid",
+				status: "published",
+			})
+		).toEqual({ label: "미공개", tone: "warning" });
+	});
+
+	it("marks a published and paid job as 공개", () => {
+		expect(
+			getEmployerJobDisplayStatus({
+				paymentStatus: "paid",
+				status: "published",
+			})
+		).toEqual({ label: "공개", tone: "good" });
+	});
+
+	it("keeps 검수 대기 for a pending review job regardless of payment", () => {
+		expect(
+			getEmployerJobDisplayStatus({
+				paymentStatus: "unpaid",
+				status: "pending_review",
+			})
+		).toEqual({ label: "검수 대기", tone: "warning" });
+	});
+
+	it("keeps existing labels/tones for rejected, hidden, and draft states", () => {
+		expect(
+			getEmployerJobDisplayStatus({
+				paymentStatus: "unpaid",
+				status: "rejected",
+			})
+		).toEqual({ label: "반려", tone: "danger" });
+		expect(
+			getEmployerJobDisplayStatus({ paymentStatus: "unpaid", status: "hidden" })
+		).toEqual({ label: "숨김", tone: "default" });
+		expect(
+			getEmployerJobDisplayStatus({ paymentStatus: "unpaid", status: "draft" })
+		).toEqual({ label: "임시 저장", tone: "default" });
 	});
 });
