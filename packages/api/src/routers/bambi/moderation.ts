@@ -21,7 +21,7 @@ import {
 	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import z from "zod";
 
@@ -775,8 +775,9 @@ export const moderationRouter = {
 
 			const conditions = [
 				inArray(jobPost.status, ["pending_review", "published"]),
-				// 일반 구인(무료)은 결제 대상이 아니므로 유료 노출 공고만 남긴다.
-				ne(jobPost.exposureType, "standard"),
+				// 유료 여부의 단일 원천은 광고 상품 연결(adProductId)이다. exposureType은
+				// previewTemplate 'none' 상품에서 standard가 되므로 결제 판별에 쓰면 누락된다.
+				isNotNull(jobPost.adProductId),
 			];
 
 			if (input.onlyUnpaid) {
