@@ -2,6 +2,7 @@
 
 // 게시판 목록 — 글 행 리스트 + 번호 페이지네이션(?page= URL 동기화) + 글쓰기 버튼.
 
+import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Pagination,
@@ -14,6 +15,10 @@ import {
 } from "@bambi-app/ui/components/pagination";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@bambi-app/ui/components/toggle-group";
 import { useQuery } from "@tanstack/react-query";
 import {
 	EyeIcon,
@@ -25,7 +30,7 @@ import {
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Fragment, type MouseEvent } from "react";
+import { Fragment, type MouseEvent, useState } from "react";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
@@ -38,23 +43,64 @@ import {
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
+type CommunityAuthorRole = "admin" | "employer" | "job_seeker";
+
+type CommunityListFilter =
+	| "all"
+	| "employer"
+	| "general"
+	| "job_seeker"
+	| "promotion";
+
+const LIST_FILTER_OPTIONS: { label: string; value: CommunityListFilter }[] = [
+	{ label: "전체", value: "all" },
+	{ label: "일반", value: "general" },
+	{ label: "광고", value: "promotion" },
+	{ label: "업소", value: "employer" },
+	{ label: "구직자", value: "job_seeker" },
+];
+
 interface BoardPostItem {
 	authorName: string | null;
+	authorRole: CommunityAuthorRole | null;
 	commentCount: number;
 	createdAt: Date | string;
 	id: string;
 	isLocked: boolean;
+	isPromotion: boolean;
 	likeCount: number;
 	title: string;
 	viewCount: number;
 }
 
+function BoardPostBadges({ post }: { post: BoardPostItem }) {
+	if (!(post.isPromotion || post.authorRole === "employer")) {
+		return null;
+	}
+	return (
+		<>
+			{post.isPromotion ? (
+				<Badge className="shrink-0" variant="warning">
+					광고
+				</Badge>
+			) : null}
+			{post.authorRole === "employer" ? (
+				<Badge className="shrink-0" variant="secondary">
+					업소
+				</Badge>
+			) : null}
+		</>
+	);
+}
+
 function BoardPostRow({
 	boardSlug,
 	post,
+	showBadges,
 }: {
 	boardSlug: string;
 	post: BoardPostItem;
+	showBadges: boolean;
 }) {
 	return (
 		<Link
@@ -65,6 +111,7 @@ function BoardPostRow({
 				{post.isLocked ? (
 					<LockIcon className="size-3 shrink-0 text-muted-foreground" />
 				) : null}
+				{showBadges ? <BoardPostBadges post={post} /> : null}
 				<span className="truncate font-semibold text-sm">{post.title}</span>
 				{post.commentCount > 0 ? (
 					<span className="flex shrink-0 items-center gap-0.5 font-semibold text-coral-500 text-xs">
@@ -147,6 +194,40 @@ function BoardPagination({
 	);
 }
 
+const getEmptyDescription = (boardKey: string, canWrite: boolean): string => {
+	if (canWrite) {
+		return "아직 글이 없어요. 첫 글을 남겨보세요.";
+	}
+	if (boardKey === "best") {
+		return "최근 30일 추천 글이 아직 없어요.";
+	}
+	return "아직 등록된 글이 없어요.";
+};
+
+function BoardFilterChips({
+	filter,
+	onChange,
+}: {
+	filter: CommunityListFilter;
+	onChange: (next: CommunityListFilter) => void;
+}) {
+	return (
+		<ToggleGroup
+			className="flex-wrap"
+			onValueChange={(value) =>
+				onChange((value[0] as CommunityListFilter | undefined) ?? "all")
+			}
+			value={[filter]}
+		>
+			{LIST_FILTER_OPTIONS.map((option) => (
+				<ToggleGroupItem key={option.value} size="sm" value={option.value}>
+					{option.label}
+				</ToggleGroupItem>
+			))}
+		</ToggleGroup>
+	);
+}
+
 export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 	const router = useRouter();
 	const pathname = usePathname();
@@ -154,17 +235,37 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 	const board = getBoardBySlug(boardSlug);
 	const pageParam = Number(searchParams.get("page"));
 	const page = Number.isInteger(pageParam) && pageParam >= 1 ? pageParam : 1;
+	const [filter, setFilter] = useState<CommunityListFilter>("all");
+
+	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	const isAdmin = mineQuery.data?.bambiProfile?.role === "admin";
 
 	const listQuery = useQuery(
 		orpc.bambi.community.listPosts.queryOptions({
 			enabled: Boolean(board),
-			input: { board: board?.key ?? "free", page },
+			input: { board: board?.key ?? "free", filter, page },
 		})
 	);
 
 	if (!board) {
 		return null;
 	}
+
+	// 일반 게시판(자유·일·중고)만 5칩 필터를 노출한다. 베스트·공지는 필터 없음.
+	const showFilter =
+		board.key === "free" || board.key === "work_talk" || board.key === "market";
+	// 공지 게시판은 글쓰기가 운영자 전용이라 admin에게만 버튼을 노출한다.
+	const canWrite = board.writable && (!board.adminOnly || isAdmin);
+	// 공지 게시판은 배지(광고·업소)를 생략한다.
+	const showBadges = board.key !== "notice";
+
+	const emptyDescription = getEmptyDescription(board.key, canWrite);
+
+	// 칩 변경 시 필터를 바꾸고 페이지는 1로 리셋한다.
+	const handleFilterChange = (next: CommunityListFilter) => {
+		setFilter(next);
+		router.replace(`${pathname}?page=1` as Route);
+	};
 
 	// 페이지 이동은 실제 앵커(href)로 접근성을 유지하되, 클릭 시 router.replace로
 	// ?page= 쿼리만 교체해 히스토리를 늘리지 않는다.
@@ -190,7 +291,7 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 						{board.description}
 					</p>
 				</div>
-				{board.writable ? (
+				{canWrite ? (
 					<Button
 						render={
 							<Link href={communityWritePath(board.slug) as Route}>
@@ -201,6 +302,10 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 					/>
 				) : null}
 			</div>
+
+			{showFilter ? (
+				<BoardFilterChips filter={filter} onChange={handleFilterChange} />
+			) : null}
 
 			{listQuery.isPending ? (
 				<div className="flex flex-col gap-3">
@@ -221,11 +326,7 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 			{listQuery.isSuccess && items.length === 0 ? (
 				<EmptyState
 					className="flex-1"
-					description={
-						board.writable
-							? "아직 글이 없어요. 첫 글을 남겨보세요."
-							: "최근 30일 추천 글이 아직 없어요."
-					}
+					description={emptyDescription}
 					title="글이 없어요"
 				/>
 			) : null}
@@ -235,7 +336,11 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 					{items.map((post, index) => (
 						<Fragment key={post.id}>
 							{index > 0 ? <Separator /> : null}
-							<BoardPostRow boardSlug={board.slug} post={post} />
+							<BoardPostRow
+								boardSlug={board.slug}
+								post={post}
+								showBadges={showBadges}
+							/>
 						</Fragment>
 					))}
 				</div>

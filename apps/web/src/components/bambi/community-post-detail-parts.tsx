@@ -3,6 +3,7 @@
 // 글 상세 화면의 리프 서브컴포넌트 모음. 본문 뷰어·헤더·추천/신고/수정/삭제 액션·
 // 잠긴 글 게이트·댓글 목록/작성 폼을 각자 낮은 복잡도로 분리한다.
 
+import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Dialog,
@@ -55,9 +56,13 @@ import { orpc } from "@/utils/orpc";
 const PASSWORD_MIN = 4;
 const DETAILS_MAX = 1000;
 
+export type CommunityAuthorRole = "admin" | "employer" | "job_seeker";
+
 // 상세 화면이 소비하는 글 필드(잠금 해제 상태).
 export interface CommunityPostDetail {
 	authorName: string;
+	authorRole: CommunityAuthorRole;
+	board: string;
 	body: string;
 	canDelete: boolean;
 	commentCount: number;
@@ -65,6 +70,7 @@ export interface CommunityPostDetail {
 	id: string;
 	isLiked: boolean;
 	isLocked: boolean;
+	isPromotion: boolean;
 	likeCount: number;
 	title: string;
 	viewCount: number;
@@ -72,6 +78,7 @@ export interface CommunityPostDetail {
 
 export interface CommunityCommentItem {
 	authorName: string | null;
+	authorRole: CommunityAuthorRole | null;
 	body: string;
 	canDelete: boolean;
 	createdAt: Date | string;
@@ -110,16 +117,33 @@ export function PostBodyViewer({ body }: { body: string }) {
 	return <EditorContent editor={editor} />;
 }
 
+function PostHeaderBadges({ post }: { post: CommunityPostDetail }) {
+	const isNotice = post.board === "notice";
+	if (!(post.isPromotion || post.authorRole === "employer" || isNotice)) {
+		return null;
+	}
+	return (
+		<span className="flex shrink-0 items-center gap-1">
+			{post.isPromotion ? <Badge variant="warning">광고</Badge> : null}
+			{post.authorRole === "employer" ? (
+				<Badge variant="secondary">업소</Badge>
+			) : null}
+			{isNotice ? <Badge variant="default">운영자</Badge> : null}
+		</span>
+	);
+}
+
 export function PostHeader({ post }: { post: CommunityPostDetail }) {
 	return (
 		<div className="flex flex-col gap-2">
-			<h1 className="m-0 flex items-center gap-1.5 font-extrabold text-xl">
+			<h1 className="m-0 flex flex-wrap items-center gap-1.5 font-extrabold text-xl">
 				{post.isLocked ? (
 					<LockIcon
 						aria-label="비밀글"
 						className="size-4 shrink-0 text-muted-foreground"
 					/>
 				) : null}
+				<PostHeaderBadges post={post} />
 				{post.title}
 			</h1>
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
@@ -376,8 +400,11 @@ function CommentRow({
 	return (
 		<div className="flex flex-col gap-1">
 			<div className="flex items-center justify-between gap-2">
-				<span className="font-semibold text-xs">
+				<span className="flex items-center gap-1.5 font-semibold text-xs">
 					{comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
+					{comment.authorRole === "employer" ? (
+						<Badge variant="secondary">업소</Badge>
+					) : null}
 				</span>
 				<span className="flex items-center gap-2 text-muted-foreground text-xs">
 					{formatCommunityDate(comment.createdAt)}
@@ -507,9 +534,14 @@ function CommentThread({
 	);
 }
 
+// 업소 댓글 숨기기: 업소 최상위 댓글은 스레드째, 업소 답글은 개별로 제외한다.
+const isEmployerComment = (comment: CommunityCommentItem): boolean =>
+	comment.authorRole === "employer";
+
 export function CommentList({
 	comments,
 	deletePending,
+	hideEmployer,
 	maxLength,
 	onDelete,
 	onReplyClose,
@@ -520,6 +552,7 @@ export function CommentList({
 }: {
 	comments: CommunityCommentItem[];
 	deletePending: boolean;
+	hideEmployer: boolean;
 	maxLength: number;
 	onDelete: (commentId: string) => void;
 	onReplyClose: () => void;
@@ -537,8 +570,25 @@ export function CommentList({
 	}
 
 	const parents = comments.filter(
-		(comment) => comment.parentCommentId === null
+		(comment) =>
+			comment.parentCommentId === null &&
+			!(hideEmployer && isEmployerComment(comment))
 	);
+
+	const repliesOf = (parentId: string) =>
+		comments.filter(
+			(comment) =>
+				comment.parentCommentId === parentId &&
+				!(hideEmployer && isEmployerComment(comment))
+		);
+
+	if (parents.length === 0) {
+		return (
+			<p className="m-0 py-2 text-muted-foreground text-sm">
+				표시할 댓글이 없어요.
+			</p>
+		);
+	}
 
 	return (
 		<div className="flex flex-col gap-3">
@@ -552,9 +602,7 @@ export function CommentList({
 					onReplyOpen={onReplyOpen}
 					onReplySubmit={onReplySubmit}
 					parent={parent}
-					replies={comments.filter(
-						(comment) => comment.parentCommentId === parent.id
-					)}
+					replies={repliesOf(parent.id)}
 					replyPending={replyPending}
 					replyTo={replyTo}
 				/>

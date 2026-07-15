@@ -1,9 +1,16 @@
 // 수다방 게시판 메타·경로·표시 유틸. 게시판 목록의 단일 진실원.
 // key는 API enum(community_board + 가상 best), slug는 URL 세그먼트.
 
-export type CommunityBoardKey = "best" | "free" | "work_talk" | "market";
+export type CommunityBoardKey =
+	| "notice"
+	| "best"
+	| "free"
+	| "work_talk"
+	| "market";
 
 export interface CommunityBoardMeta {
+	// 운영자만 글을 쓸 수 있는 게시판(공지사항). 목록/폼에서 글쓰기 권한 게이트에 쓴다.
+	adminOnly?: boolean;
 	description: string;
 	key: CommunityBoardKey;
 	label: string;
@@ -14,6 +21,14 @@ export interface CommunityBoardMeta {
 export const COMMUNITY_AUTHOR_FALLBACK = "회원";
 
 export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
+	{
+		adminOnly: true,
+		description: "밤비 수다방 공지",
+		key: "notice",
+		label: "공지사항",
+		slug: "notice",
+		writable: true,
+	},
 	{
 		description: "최근 30일 동안 추천을 많이 받은 글",
 		key: "best",

@@ -18,13 +18,19 @@ describe("community boards meta", () => {
 		expect(getBoardBySlug("nope")).toBeUndefined();
 	});
 
-	it("게시판은 베스트·자유·일·중고 4개다", () => {
+	it("게시판은 공지·베스트·자유·일·중고 5개이고 공지가 맨 앞이다", () => {
 		expect(COMMUNITY_BOARDS.map((board) => board.key)).toEqual([
+			"notice",
 			"best",
 			"free",
 			"work_talk",
 			"market",
 		]);
+	});
+
+	it("공지사항만 운영자 전용(adminOnly) 게시판이다", () => {
+		expect(getBoardBySlug("notice")?.adminOnly).toBe(true);
+		expect(getBoardBySlug("free")?.adminOnly).toBeUndefined();
 	});
 
 	it("상세 경로를 만든다", () => {

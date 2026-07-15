@@ -4,8 +4,10 @@
 // 리프 UI는 community-post-detail-parts로 분리하고, 여기서는 게이트·데이터 흐름만 조율한다.
 
 import { Button } from "@bambi-app/ui/components/button";
+import { Label } from "@bambi-app/ui/components/label";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeftIcon } from "lucide-react";
 import type { Route } from "next";
@@ -83,6 +85,7 @@ function PostDetailView({
 	const queryClient = useQueryClient();
 	const [commentBody, setCommentBody] = useState("");
 	const [replyTo, setReplyTo] = useState<string | null>(null);
+	const [hideEmployerComments, setHideEmployerComments] = useState(false);
 
 	// 상세(getPost)는 조회 시 view_count를 올리므로 추천·댓글 뮤테이션에서 재요청하지
 	// 않는다. getPost 캐시는 setQueryData로 직접 갱신하고, 목록/오버뷰만 무효화한다.
@@ -157,6 +160,9 @@ function PostDetailView({
 	);
 
 	const comments = commentsQuery.data ?? [];
+	const hasEmployerComments = comments.some(
+		(comment) => comment.authorRole === "employer"
+	);
 	const trimmedComment = commentBody.trim();
 	const canSubmitComment =
 		trimmedComment.length >= 1 && !createCommentMutation.isPending;
@@ -196,10 +202,29 @@ function PostDetailView({
 			</div>
 			<Separator />
 			<div className="flex flex-col gap-3">
-				<h2 className="m-0 font-bold text-base">댓글 {post.commentCount}</h2>
+				<div className="flex flex-wrap items-center justify-between gap-2">
+					<h2 className="m-0 font-bold text-base">댓글 {post.commentCount}</h2>
+					{hasEmployerComments ? (
+						<div className="flex items-center gap-2">
+							<Switch
+								checked={hideEmployerComments}
+								id="community-hide-employer-comments"
+								onCheckedChange={setHideEmployerComments}
+								size="sm"
+							/>
+							<Label
+								className="text-muted-foreground text-xs"
+								htmlFor="community-hide-employer-comments"
+							>
+								업소 댓글 숨기기
+							</Label>
+						</div>
+					) : null}
+				</div>
 				<CommentList
 					comments={comments}
 					deletePending={deleteCommentMutation.isPending}
+					hideEmployer={hideEmployerComments}
 					maxLength={COMMENT_MAX}
 					onDelete={(commentId) => deleteCommentMutation.mutate({ commentId })}
 					onReplyClose={() => setReplyTo(null)}

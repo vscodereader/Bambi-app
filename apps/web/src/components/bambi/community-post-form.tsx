@@ -36,6 +36,8 @@ interface CommunityPostInitial {
 	body: string;
 	id: string;
 	isLocked: boolean;
+	// 수정 모드 광고글 초기값. 편집 페이지가 getPost.isPromotion을 넘겨주면 사용한다.
+	isPromotion?: boolean;
 	title: string;
 }
 
@@ -58,18 +60,33 @@ export function CommunityPostForm({
 	const [authorName, setAuthorName] = useState(initialPost?.authorName ?? "");
 	const [password, setPassword] = useState(editPassword ?? "");
 	const [isLocked, setIsLocked] = useState(initialPost?.isLocked ?? false);
+	const [isPromotion, setIsPromotion] = useState(
+		initialPost?.isPromotion ?? false
+	);
 	const [title, setTitle] = useState(initialPost?.title ?? "");
 	const [bodyJson, setBodyJson] = useState(initialPost?.body ?? "");
 	const [bodyText, setBodyText] = useState("");
 
 	// 작성 모드 작성인 기본값 = 세션 프로필 displayName(수정 모드는 기존 값 유지).
 	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	const role = mineQuery.data?.bambiProfile?.role;
+	const isEmployer = role === "employer";
 	const displayName = mineQuery.data?.bambiProfile?.displayName ?? "";
 	useEffect(() => {
 		if (!isEdit && displayName) {
 			setAuthorName((previous) => (previous === "" ? displayName : previous));
 		}
 	}, [displayName, isEdit]);
+
+	// 공지사항은 운영자만 작성 가능 — 작성 모드에서 비운영자는 안내 후 목록으로 보낸다.
+	const blockedFromNotice =
+		!(isEdit || mineQuery.isPending) && board.adminOnly && role !== "admin";
+	useEffect(() => {
+		if (blockedFromNotice) {
+			toast("공지사항은 운영자만 작성할 수 있어요.");
+			router.replace(communityBoardPath(board.slug) as Route);
+		}
+	}, [blockedFromNotice, board.slug, router]);
 
 	const invalidateAndGo = async (postId: string) => {
 		await queryClient.invalidateQueries({
@@ -115,6 +132,7 @@ export function CommunityPostForm({
 			authorName: authorName.trim(),
 			body: bodyJson,
 			isLocked,
+			isPromotion,
 			postId,
 			title: title.trim(),
 			...(trimmedPassword ? { password: trimmedPassword } : {}),
@@ -131,6 +149,7 @@ export function CommunityPostForm({
 			board: boardKey,
 			body: bodyJson,
 			isLocked,
+			isPromotion,
 			password: password.trim(),
 			title: title.trim(),
 		});
@@ -146,6 +165,10 @@ export function CommunityPostForm({
 		}
 		submitCreate();
 	};
+
+	if (blockedFromNotice) {
+		return null;
+	}
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -187,6 +210,17 @@ export function CommunityPostForm({
 				/>
 				<Label htmlFor="community-post-lock">비밀글로 잠그기</Label>
 			</div>
+
+			{isEmployer ? (
+				<div className="flex items-center gap-2">
+					<Switch
+						checked={isPromotion}
+						id="community-post-promotion"
+						onCheckedChange={setIsPromotion}
+					/>
+					<Label htmlFor="community-post-promotion">광고글로 표시하기</Label>
+				</div>
+			) : null}
 
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="community-post-title">제목</Label>

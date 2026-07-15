@@ -103,6 +103,7 @@ function CommunityEditContent({
 					body: data.body,
 					id: data.id,
 					isLocked: data.isLocked,
+					isPromotion: data.isPromotion,
 					title: data.title,
 				}}
 			/>
