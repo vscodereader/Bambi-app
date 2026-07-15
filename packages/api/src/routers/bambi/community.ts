@@ -43,6 +43,18 @@ const createPostInput = z.object({
 	title: z.string().trim().min(2).max(100),
 });
 
+const updatePostInput = postIdInput.extend({
+	authorName: z.string().trim().min(1).max(30),
+	body: z.string().min(2).max(BODY_MAX),
+	isLocked: z.boolean(),
+	password: z.string().max(30).optional(),
+	title: z.string().trim().min(2).max(100),
+});
+
+const deletePostInput = postIdInput.extend({
+	password: z.string().max(30).optional(),
+});
+
 const assertTiptapDoc = (body: string) => {
 	let parsed: unknown;
 	try {
@@ -289,5 +301,65 @@ export const communityRouter = {
 				.returning({ board: communityPost.board, id: communityPost.id });
 
 			return created;
+		}),
+
+	updatePost: protectedProcedure
+		.input(updatePostInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireCommunityMember(context.session);
+			const post = await findPublishedPost(input.postId);
+			assertTiptapDoc(input.body);
+
+			// 수정은 작성자 본인 또는 비밀번호 일치만 허용한다(admin이라도 비번 없이는 불가).
+			const isAuthor = post.authorUserId === profile.userId;
+			const hasValidPassword =
+				input.password != null &&
+				verifyCommunityPassword(input.password, post.passwordHash);
+			if (!(isAuthor || hasValidPassword)) {
+				throw new ORPCError("FORBIDDEN", {
+					message:
+						"본인이 작성한 글만 수정할 수 있습니다. 비밀번호를 확인해 주세요.",
+				});
+			}
+
+			const [updated] = await db
+				.update(communityPost)
+				.set({
+					authorDisplayName: input.authorName,
+					body: input.body,
+					isLocked: input.isLocked,
+					title: input.title,
+					updatedAt: new Date(),
+				})
+				.where(eq(communityPost.id, input.postId))
+				.returning({ board: communityPost.board, id: communityPost.id });
+
+			return updated;
+		}),
+
+	deletePost: protectedProcedure
+		.input(deletePostInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireCommunityMember(context.session);
+			const post = await findPublishedPost(input.postId);
+
+			// 삭제는 작성자·관리자·비밀번호 일치 중 하나면 허용한다.
+			const isAuthor = post.authorUserId === profile.userId;
+			const hasValidPassword =
+				input.password != null &&
+				verifyCommunityPassword(input.password, post.passwordHash);
+			if (!(isAuthor || profile.role === "admin" || hasValidPassword)) {
+				throw new ORPCError("FORBIDDEN", {
+					message:
+						"본인이 작성한 글만 삭제할 수 있습니다. 비밀번호를 확인해 주세요.",
+				});
+			}
+
+			await db
+				.update(communityPost)
+				.set({ status: "deleted", updatedAt: new Date() })
+				.where(eq(communityPost.id, input.postId));
+
+			return { id: post.id };
 		}),
 };

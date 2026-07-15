@@ -344,3 +344,206 @@ describe("bambi community router — 조회", () => {
 		}
 	});
 });
+
+const baseUpdateInput = {
+	authorName: "달빛토끼",
+	body: TIPTAP_BODY,
+	isLocked: false,
+};
+
+describe("bambi community router — 글 수정·삭제", () => {
+	it("admin은 비번 없이 수정할 수 없고(FORBIDDEN) 삭제만 할 수 있으며, 삭제 후 상세는 NOT_FOUND", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `권한 테스트 ${randomUUID()}`,
+			});
+
+			const updateAsAdmin = clientFor(
+				communityRouter.updatePost,
+				fixture.adminUserId,
+				["updatePost"]
+			);
+			await expectOrpcCode(
+				updateAsAdmin({
+					...baseUpdateInput,
+					postId: created.id,
+					title: "관리자 수정 시도",
+				}),
+				"FORBIDDEN"
+			);
+
+			const deleteAsAdmin = clientFor(
+				communityRouter.deletePost,
+				fixture.adminUserId,
+				["deletePost"]
+			);
+			const deleted = await deleteAsAdmin({ postId: created.id });
+			expect(deleted.id).toBe(created.id);
+
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+			await expectOrpcCode(getPost({ postId: created.id }), "NOT_FOUND");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("작성자는 자기 글을 수정할 수 있고 제목이 반영된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const updatePost = clientFor(
+				communityRouter.updatePost,
+				fixture.femaleUserId,
+				["updatePost"]
+			);
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+			const created = await createPost({
+				...basePostInput,
+				board: "work_talk",
+				title: `수정 테스트 ${randomUUID()}`,
+			});
+			const updated = await updatePost({
+				...baseUpdateInput,
+				postId: created.id,
+				title: "수정된 제목",
+			});
+			expect(updated.id).toBe(created.id);
+
+			const detail = await getPost({ postId: created.id });
+			expect(detail.title).toBe("수정된 제목");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("본문이 Tiptap doc JSON이 아니면 수정이 BAD_REQUEST", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const updatePost = clientFor(
+				communityRouter.updatePost,
+				fixture.femaleUserId,
+				["updatePost"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `수정 본문검증 ${randomUUID()}`,
+			});
+			await expectOrpcCode(
+				updatePost({
+					...baseUpdateInput,
+					body: "그냥 텍스트",
+					postId: created.id,
+					title: "수정 시도",
+				}),
+				"BAD_REQUEST"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("타인도 맞는 비밀번호를 알면 글을 수정할 수 있다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `타인 수정 ${randomUUID()}`,
+			});
+
+			const updateAsOther = clientFor(
+				communityRouter.updatePost,
+				fixture.otherFemaleUserId,
+				["updatePost"]
+			);
+			await expectOrpcCode(
+				updateAsOther({
+					...baseUpdateInput,
+					postId: created.id,
+					title: "비번 없는 수정",
+				}),
+				"FORBIDDEN"
+			);
+			const updated = await updateAsOther({
+				...baseUpdateInput,
+				password: "pw1234",
+				postId: created.id,
+				title: "비번으로 수정됨",
+			});
+			expect(updated.id).toBe(created.id);
+
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+			const detail = await getPost({ postId: created.id });
+			expect(detail.title).toBe("비번으로 수정됨");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("타인은 틀린 비번으로 삭제할 수 없고(FORBIDDEN) 맞는 비번으로는 삭제할 수 있다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `타인 삭제 ${randomUUID()}`,
+			});
+
+			const deleteAsOther = clientFor(
+				communityRouter.deletePost,
+				fixture.otherFemaleUserId,
+				["deletePost"]
+			);
+			await expectOrpcCode(
+				deleteAsOther({ password: "wrong!", postId: created.id }),
+				"FORBIDDEN"
+			);
+			const deleted = await deleteAsOther({
+				password: "pw1234",
+				postId: created.id,
+			});
+			expect(deleted.id).toBe(created.id);
+
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+			await expectOrpcCode(getPost({ postId: created.id }), "NOT_FOUND");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+});
