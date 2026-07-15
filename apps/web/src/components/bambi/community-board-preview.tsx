@@ -62,9 +62,19 @@ export function BoardPreviewCard({
 	const isNotice = boardKey === "notice";
 
 	return (
-		<Card className={cn(isNotice && "border-coral-500/60", className)}>
+		<Card
+			className={cn(
+				isNotice && "border-coral-500/60 bg-coral-50/50",
+				className
+			)}
+		>
 			<CardHeader className="flex flex-row items-center justify-between">
-				<CardTitle className="flex items-center gap-2 text-base">
+				<CardTitle
+					className={cn(
+						"flex items-center gap-2 text-base",
+						isNotice && "text-coral-600"
+					)}
+				>
 					{isNotice ? (
 						<MegaphoneIcon className="size-4 shrink-0 text-coral-500" />
 					) : (
@@ -94,7 +104,10 @@ export function BoardPreviewCard({
 						);
 						return (
 							<Link
-								className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 hover:bg-muted"
+								className={cn(
+									"flex items-center justify-between gap-3 rounded-lg px-2 py-1.5",
+									isNotice ? "hover:bg-coral-100/60" : "hover:bg-muted"
+								)}
 								href={
 									communityPostPath(
 										boardOfPost?.slug ?? board.slug,

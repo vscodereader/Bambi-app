@@ -32,6 +32,7 @@ import {
 	EyeIcon,
 	ListFilterIcon,
 	LockIcon,
+	MegaphoneIcon,
 	MessageSquareIcon,
 	PencilLineIcon,
 	ThumbsUpIcon,
@@ -102,6 +103,9 @@ function BoardPostRow({
 			<span className="flex min-w-0 items-center gap-1.5">
 				{post.isLocked ? (
 					<LockIcon className="size-3 shrink-0 text-muted-foreground" />
+				) : null}
+				{post.board === "notice" ? (
+					<Badge className="shrink-0">공지</Badge>
 				) : null}
 				{showBadges ? <BoardPostBadges post={post} /> : null}
 				<span className="truncate font-semibold text-sm">{post.title}</span>
@@ -356,7 +360,12 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 		<div className="flex flex-col gap-4">
 			<div className="flex items-start justify-between gap-3">
 				<div className="flex flex-col gap-1">
-					<h1 className="m-0 font-extrabold text-xl">{board.label}</h1>
+					<h1 className="m-0 flex items-center gap-2 font-extrabold text-xl">
+						{board.key === "notice" ? (
+							<MegaphoneIcon className="size-5 shrink-0 text-coral-500" />
+						) : null}
+						{board.label}
+					</h1>
 					<p className="m-0 text-muted-foreground text-sm">
 						{board.description}
 					</p>

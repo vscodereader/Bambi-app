@@ -31,6 +31,7 @@ import {
 	EyeIcon,
 	FlagIcon,
 	LockIcon,
+	MegaphoneIcon,
 	PencilIcon,
 	ThumbsUpIcon,
 	Trash2Icon,
@@ -134,7 +135,12 @@ function PostHeaderBadges({ post }: { post: CommunityPostDetail }) {
 			{post.authorRole === "employer" ? (
 				<Badge variant="secondary">업소</Badge>
 			) : null}
-			{isNotice ? <Badge variant="default">운영자</Badge> : null}
+			{isNotice ? (
+				<Badge variant="default">
+					<MegaphoneIcon data-icon="inline-start" />
+					공지
+				</Badge>
+			) : null}
 		</span>
 	);
 }
