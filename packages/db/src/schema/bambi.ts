@@ -76,10 +76,12 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 ]);
 
 // 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.
+// notice(공지사항)는 admin만 작성 가능(API 강제).
 export const communityBoard = pgEnum("community_board", [
 	"free",
 	"work_talk",
 	"market",
+	"notice",
 ]);
 
 // 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
@@ -704,6 +706,10 @@ export const communityPost = pgTable(
 		authorDisplayName: text("author_display_name").notNull(),
 		passwordHash: text("password_hash").notNull(),
 		isLocked: boolean("is_locked").default(false).notNull(),
+		// 작성 시점 계정 유형 스냅샷(서버 기록, 위조 불가). 업소 배지·필터용 — 이후 role 변경과 무관.
+		authorRole: bambiUserRole("author_role").notNull(),
+		// 업소회원 자율 광고 표시. employer만 true 가능(API 강제), 미표시 광고는 신고로 보완.
+		isPromotion: boolean("is_promotion").default(false).notNull(),
 		title: text("title").notNull(),
 		body: text("body").notNull(),
 		viewCount: integer("view_count").default(0).notNull(),
@@ -741,6 +747,8 @@ export const communityComment = pgTable(
 		authorUserId: text("author_user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
+		// 작성 시점 계정 유형 스냅샷(서버 기록). 업소 댓글 배지·숨김 토글용.
+		authorRole: bambiUserRole("author_role").notNull(),
 		// 대댓글(1단계). null이면 최상위 댓글. 1단계 제한은 API에서 강제한다.
 		parentCommentId: uuid("parent_comment_id").references(
 			(): AnyPgColumn => communityComment.id,

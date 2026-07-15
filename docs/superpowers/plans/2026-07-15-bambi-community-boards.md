@@ -3500,6 +3500,68 @@ feat(web): 커뮤니티 대댓글 UI 추가
 
 ---
 
+## Task 16: [개정3] 계정 유형 스냅샷·광고글·필터·공지사항 — DB·API
+
+> 2026-07-15 사용자 추가 요구(광고/필터 + 공지사항 게시판). Task 14 이후 실행. Step 1~2(스키마·0015 마이그레이션)는 컨트롤러 담당.
+
+**Files:**
+- Modify: `packages/db/src/schema/bambi.ts` (컨트롤러) — `communityBoard`에 `"notice"` append, `communityPost.authorRole`(bambiUserRole, notNull)·`isPromotion`(boolean default false notNull), `communityComment.authorRole`(notNull)
+- Create: `packages/db/src/migrations/0015_*.sql` (컨트롤러 — 기존 행 있으면 bambi_profile 조인 backfill 후 NOT NULL)
+- Modify: `packages/api/src/routers/bambi/community.ts`
+- Modify: `packages/api/src/routers/bambi/community.test.ts`
+
+**Interfaces:**
+- Produces:
+  - `createPost`: input `isPromotion: z.boolean().default(false)` 추가. **employer 외 role이 true → BAD_REQUEST "광고글은 업소회원만 표시할 수 있습니다."** `board: "notice"`는 **admin만**(아니면 FORBIDDEN "공지사항은 운영자만 작성할 수 있습니다."). values에 `authorRole: profile.role, isPromotion` 기록.
+  - `updatePost`: input `isPromotion: z.boolean()` 추가 — `post.authorRole !== "employer" && input.isPromotion` → BAD_REQUEST(같은 메시지). `authorRole`은 불변.
+  - `createComment`: values에 `authorRole: profile.role`.
+  - `communityWritableBoardSchema`·`communityBoardSchema`에 `"notice"` 추가. `buildBoardFilters("best")`에 `ne(communityPost.board, "notice")` 추가(공지는 베스트 제외 — `ne` import).
+  - `listPosts` input `filter: z.enum(["all","general","promotion","employer","job_seeker"]).default("all")` — general=`eq(isPromotion,false)`, promotion=`eq(isPromotion,true)`, employer/job_seeker=`eq(authorRole,...)`, all=조건 없음. **목록·count 쿼리 동일 적용**(헬퍼 `buildListFilters(filter)` 분리).
+  - 응답 확장: `toPublicSummary`/`postSummarySelection`·getPost full 응답에 `authorRole`·`isPromotion` 추가(locked 축소 응답은 미변경). `listComments` 아이템에 `authorRole`(플레이스홀더는 null).
+  - `overview` 응답에 `notice` 배열 추가(최신 4개, 다른 게시판과 동일 selectBoardPosts).
+
+- [ ] **Step 1 (컨트롤러): 스키마** — 위 컬럼·enum. 대댓글 컬럼과 동일한 파일 위치 관행.
+- [ ] **Step 2 (컨트롤러): 0015 생성·적용** — community_post/community_comment에 기존 행이 있으면 생성 SQL을 편집해 `ADD COLUMN(nullable) → UPDATE ... FROM bambi_profile(author_user_id 조인, role) → SET NOT NULL` 순으로 backfill.
+- [ ] **Step 3: TDD (RED)** — 신규 케이스: ① employer가 isPromotion true로 작성 → 목록 아이템 `isPromotion === true`·`authorRole === "employer"`, 구직자(female)가 true 시도 → BAD_REQUEST. ② filter=promotion/general/employer/job_seeker 각각이 해당 글만 반환(+totalCount 정합). ③ 구직자가 board "notice" 작성 → FORBIDDEN, admin 작성 → 성공 + overview.notice에 노출. ④ 댓글 아이템에 authorRole 동봉(admin 댓글 → "admin"). 기존 케이스는 createPost 응답·목록 계약 하위호환으로 그대로 통과해야 함.
+- [ ] **Step 4: 구현** — 위 Interfaces 정의 그대로. 인지 복잡도 20 이하(필터 헬퍼 분리).
+- [ ] **Step 5: 검증** — community 테스트 전부 PASS + `pnpm --filter @bambi-app/api check-types`.
+
+커밋(컨트롤러):
+```
+feat(api): 커뮤니티 계정유형 스냅샷·광고글·필터·공지사항 추가
+- 글·댓글에 author_role 서버 스냅샷(작성 당시 신분 보존, 위조 불가), 글에 is_promotion(업소 자율 체크)
+- listPosts filter 5종(all/general/promotion/employer/job_seeker) — 목록·count 동일 적용
+- 공지사항(notice) 게시판: admin만 작성, overview에 동봉, 베스트 큐레이션에서 제외
+- 응답에 authorRole·isPromotion 동봉(댓글 포함), 0015 마이그레이션
+```
+
+---
+
+## Task 17: [개정3] 배지·필터 칩·광고 체크·공지 섹션 — 웹
+
+**Files:**
+- Modify: `apps/web/src/lib/bambi/community.ts` + `community.test.ts` — COMMUNITY_BOARDS 맨 앞에 `{ key: "notice", label: "공지사항", slug: "notice", writable: true, adminOnly: true, description: "밤비 수다방 공지" }`(CommunityBoardMeta에 `adminOnly?: boolean` 추가), **기존 "4개다" 테스트를 5개(notice 포함)로 갱신**
+- Modify: `apps/web/src/components/bambi/screens/community-home.tsx` — 공지 섹션 최상단 전폭(`md:col-span-2`), overview.notice 소비, 액센트 색 추가
+- Modify: `apps/web/src/components/bambi/screens/community-board.tsx` — ① 필터 칩(ToggleGroup 단일, 일반 게시판 free/work_talk/market에만 노출, filter state → listPosts input, 칩 변경 시 page 1로), ② 행 배지: `isPromotion`→"광고" Badge, `authorRole === "employer"`→"업소" Badge(공지판은 배지 생략), ③ 글쓰기 버튼: `board.adminOnly`면 admin에게만(관리자 여부는 useBambiAuth 또는 orpc.bambi.onboarding.getMine의 bambiProfile.role — 구현 시 실제 확인)
+- Modify: `apps/web/src/components/bambi/community-post-form.tsx` — employer일 때만 "광고글" Switch(isPromotion, create/update 전달), notice 게시판 write 페이지는 admin 아니면 안내 후 목록으로
+- Modify: `apps/web/src/components/bambi/screens/community-post-detail.tsx` + `community-post-detail-parts.tsx` — 제목 옆 광고/업소/운영자 배지, 댓글 항목 업소 배지, 댓글 상단 "업소 댓글 숨기기" Switch(업소 최상위 댓글은 스레드째·업소 답글은 개별 숨김)
+
+**Interfaces:**
+- Consumes: Task 16의 응답 확장(authorRole·isPromotion·overview.notice·listPosts filter).
+
+- [ ] **Step 1**: lib 메타·테스트 갱신 → 홈 공지 섹션 → 목록 필터·배지·버튼 → 폼 광고 Switch → 상세 배지·숨김 토글 순으로 구현.
+- [ ] **Step 2: 검증** — `pnpm --filter web check-types` + `pnpm exec vitest run apps/web/src/lib/bambi/community.test.ts`.
+
+커밋(컨트롤러):
+```
+feat(web): 커뮤니티 배지·필터·광고 체크·공지 섹션 추가
+- 게시판 목록 5칩 필터(전체/일반/광고/업소/구직자, 일반 게시판만)·광고/업소 배지
+- 업소회원 폼에 광고글 Switch, 공지사항 게시판(admin 전용 글쓰기) 메타·홈 최상단 공지 섹션
+- 댓글 업소 배지 + 업소 댓글 숨기기 토글(업소 최상위는 스레드째 숨김)
+```
+
+---
+
 ## Self-Review 체크 결과
 
 - 스펙 커버리지: 게시판 4종(가상 베스트 포함) T1/T3, 서버 자격 강제 T2, 번호 페이지네이션 T3/T6/T9, CRUD T3/T4/T10, 댓글 T5/T11, 추천 T5/T11, 신고 연계 T5/T11, 홈 인덱스 T8 — 스펙 §2 범위 전부 대응.

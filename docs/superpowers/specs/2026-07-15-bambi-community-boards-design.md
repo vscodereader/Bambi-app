@@ -146,6 +146,27 @@ likeCount ≥ 1`을 `likeCount DESC, createdAt DESC`로 정렬.
 - 대댓글도 commentCount 캐시 +1/−1 동일 적용.
 - 웹 상세: 최상위 댓글에 "답글" 버튼 → 인라인 답글 폼, 대댓글은 들여쓰기 렌더(대댓글에는 답글 버튼 없음).
 
+**개정 3 (2026-07-15 추가): 계정 유형 스냅샷·광고글·필터·공지사항 게시판.**
+
+- **작성 시점 role 스냅샷**: `community_post.author_role`·`community_comment.author_role`
+  (`bambi_user_role` enum 재사용, **서버가 작성 시 자동 기록** — 클라이언트 입력 아님, 위조 불가).
+  조회 조인 대신 스냅샷을 쓰는 이유: 이후 role 변경과 무관하게 작성 당시 신분 보존 +
+  `authorUserId` 비노출(익명성) 계약 유지. role은 카디널리티가 낮아 익명성 훼손 없음.
+- **광고글(자율 신고 방식)**: `community_post.is_promotion`(default false). 업소회원(employer)
+  글쓰기 폼에만 "광고글" 체크 노출, **employer 외 role이 true를 보내면 BAD_REQUEST**.
+  미표시 광고는 기존 신고 파이프라인(community_post)으로 운영자 조치. 수정 시에도
+  `post.author_role === "employer"`일 때만 true 허용, author_role 자체는 불변.
+- **목록 필터(5칩, 단일 선택)**: 전체 · 일반글(광고 제외) · 광고글만 · 업소회원 글 · 구직자 글.
+  `listPosts` input `filter: all|general|promotion|employer|job_seeker`(default all),
+  목록·count 쿼리 동일 적용. 필터 칩은 일반 게시판(자유·일·중고)에만 노출.
+- **배지**: 목록·홈·상세에 광고 Badge(`is_promotion`)·업소 Badge(`author_role=employer`),
+  공지 글은 운영자 배지. 댓글에는 업소 배지 + 댓글 영역 상단 "업소 댓글 숨기기" 토글
+  (클라이언트 필터 — 업소 최상위 댓글은 스레드째, 업소 답글은 개별 숨김).
+- **공지사항 게시판**: `community_board`에 `notice` 값 append. **작성은 admin만**
+  (서버 FORBIDDEN 강제 + 웹은 admin에게만 글쓰기 버튼). `COMMUNITY_BOARDS` 맨 앞에 배치
+  (adminOnly 메타), 홈 인덱스 최상단 전폭 섹션. 베스트 큐레이션에서 notice는 제외.
+- 마이그레이션 0015 (enum 값 + 컬럼 3개, 기존 행 있으면 bambi_profile 조인 backfill).
+
 ## 8. 테스트·검증
 
 - API: `packages/api/src/routers/bambi/community.test.ts` — 실 DB 통합 테스트
