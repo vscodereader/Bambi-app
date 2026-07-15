@@ -1,7 +1,12 @@
 import { db } from "@bambi-app/db";
-import { communityPost, communityPostLike } from "@bambi-app/db/schema/bambi";
+import {
+	bambiProfile,
+	communityComment,
+	communityPost,
+	communityPostLike,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, count, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -19,6 +24,7 @@ const BEST_MIN_LIKES = 1;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOCKED_TITLE = "비밀글입니다";
 const BODY_MAX = 30_000;
+const COMMENTS_CAP = 200;
 
 const communityWritableBoardSchema = z.enum(["free", "work_talk", "market"]);
 const communityBoardSchema = z.enum(["best", "free", "work_talk", "market"]);
@@ -53,6 +59,20 @@ const updatePostInput = postIdInput.extend({
 
 const deletePostInput = postIdInput.extend({
 	password: z.string().max(30).optional(),
+});
+
+// 잠긴 글의 추천·댓글 열람도 상세 조회와 동일하게 비밀번호 게이트를 통과해야 한다.
+const postReadInput = postIdInput.extend({
+	password: z.string().max(30).optional(),
+});
+
+const createCommentInput = postIdInput.extend({
+	body: z.string().trim().min(1).max(1000),
+	password: z.string().max(30).optional(),
+});
+
+const deleteCommentInput = z.object({
+	commentId: z.string().uuid(),
 });
 
 const assertTiptapDoc = (body: string) => {
@@ -361,5 +381,148 @@ export const communityRouter = {
 				.where(eq(communityPost.id, input.postId));
 
 			return { id: post.id };
+		}),
+
+	toggleLike: protectedProcedure
+		.input(postReadInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireCommunityMember(context.session);
+			const post = await findPublishedPost(input.postId);
+			requirePostReadAccess(post, profile, input.password);
+
+			return await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({ id: communityPostLike.id })
+					.from(communityPostLike)
+					.where(
+						and(
+							eq(communityPostLike.postId, input.postId),
+							eq(communityPostLike.userId, profile.userId)
+						)
+					)
+					.limit(1);
+
+				if (existing) {
+					await tx
+						.delete(communityPostLike)
+						.where(eq(communityPostLike.id, existing.id));
+					const [updated] = await tx
+						.update(communityPost)
+						.set({
+							likeCount: sql`greatest(${communityPost.likeCount} - 1, 0)`,
+						})
+						.where(eq(communityPost.id, input.postId))
+						.returning({ likeCount: communityPost.likeCount });
+					return { isLiked: false, likeCount: updated?.likeCount ?? 0 };
+				}
+
+				await tx.insert(communityPostLike).values({
+					postId: input.postId,
+					userId: profile.userId,
+				});
+				const [updated] = await tx
+					.update(communityPost)
+					.set({ likeCount: sql`${communityPost.likeCount} + 1` })
+					.where(eq(communityPost.id, input.postId))
+					.returning({ likeCount: communityPost.likeCount });
+				return { isLiked: true, likeCount: updated?.likeCount ?? 0 };
+			});
+		}),
+
+	listComments: protectedProcedure
+		.input(postReadInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireCommunityMember(context.session);
+			const post = await findPublishedPost(input.postId);
+			requirePostReadAccess(post, profile, input.password);
+
+			const rows = await db
+				.select({
+					authorName: bambiProfile.displayName,
+					authorUserId: communityComment.authorUserId,
+					body: communityComment.body,
+					createdAt: communityComment.createdAt,
+					id: communityComment.id,
+				})
+				.from(communityComment)
+				.leftJoin(
+					bambiProfile,
+					eq(bambiProfile.userId, communityComment.authorUserId)
+				)
+				.where(
+					and(
+						eq(communityComment.postId, input.postId),
+						eq(communityComment.status, "published")
+					)
+				)
+				.orderBy(asc(communityComment.createdAt))
+				.limit(COMMENTS_CAP);
+
+			return rows.map((row) => ({
+				...row,
+				canDelete:
+					row.authorUserId === profile.userId || profile.role === "admin",
+			}));
+		}),
+
+	createComment: protectedProcedure
+		.input(createCommentInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireCommunityMember(context.session);
+			const post = await findPublishedPost(input.postId);
+			requirePostReadAccess(post, profile, input.password);
+
+			return await db.transaction(async (tx) => {
+				const [created] = await tx
+					.insert(communityComment)
+					.values({
+						authorUserId: profile.userId,
+						body: input.body,
+						postId: input.postId,
+					})
+					.returning();
+				await tx
+					.update(communityPost)
+					.set({ commentCount: sql`${communityPost.commentCount} + 1` })
+					.where(eq(communityPost.id, input.postId));
+				return created;
+			});
+		}),
+
+	deleteComment: protectedProcedure
+		.input(deleteCommentInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireCommunityMember(context.session);
+			const [comment] = await db
+				.select()
+				.from(communityComment)
+				.where(eq(communityComment.id, input.commentId))
+				.limit(1);
+
+			if (comment?.status !== "published") {
+				throw new ORPCError("NOT_FOUND", {
+					message: "댓글을 찾을 수 없습니다.",
+				});
+			}
+			if (comment.authorUserId !== profile.userId && profile.role !== "admin") {
+				throw new ORPCError("FORBIDDEN", {
+					message: "본인이 작성한 댓글만 삭제할 수 있습니다.",
+				});
+			}
+
+			await db.transaction(async (tx) => {
+				await tx
+					.update(communityComment)
+					.set({ status: "deleted", updatedAt: new Date() })
+					.where(eq(communityComment.id, input.commentId));
+				await tx
+					.update(communityPost)
+					.set({
+						commentCount: sql`greatest(${communityPost.commentCount} - 1, 0)`,
+					})
+					.where(eq(communityPost.id, comment.postId));
+			});
+
+			return { id: comment.id };
 		}),
 };

@@ -29,6 +29,7 @@ export const targetTypeSchema = z.enum([
 	"chat_message",
 	"review",
 	"user",
+	"community_post",
 ]);
 
 export const reportReasonSchema = z.enum([

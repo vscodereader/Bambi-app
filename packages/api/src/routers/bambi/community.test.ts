@@ -547,3 +547,161 @@ describe("bambi community router — 글 수정·삭제", () => {
 		}
 	});
 });
+
+describe("bambi community router — 추천·댓글", () => {
+	it("추천 토글은 왕복하고 likeCount 캐시를 증감한다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const toggleLike = clientFor(
+				communityRouter.toggleLike,
+				fixture.adminUserId,
+				["toggleLike"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `추천 테스트 ${randomUUID()}`,
+			});
+
+			const liked = await toggleLike({ postId: created.id });
+			expect(liked).toEqual({ isLiked: true, likeCount: 1 });
+			const unliked = await toggleLike({ postId: created.id });
+			expect(unliked).toEqual({ isLiked: false, likeCount: 0 });
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("추천된 글은 베스트 목록에 나타난다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const toggleLike = clientFor(
+				communityRouter.toggleLike,
+				fixture.adminUserId,
+				["toggleLike"]
+			);
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `베스트 테스트 ${randomUUID()}`,
+			});
+			await toggleLike({ postId: created.id });
+
+			const best = await listPosts({ board: "best", page: 1 });
+			expect(
+				best.items.some((item: { id: string }) => item.id === created.id)
+			).toBe(true);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("댓글 작성·삭제가 commentCount 캐시를 증감하고 남의 댓글 삭제는 거부된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.adminUserId,
+				["createComment"]
+			);
+			const listComments = clientFor(
+				communityRouter.listComments,
+				fixture.femaleUserId,
+				["listComments"]
+			);
+			const deleteAsOther = clientFor(
+				communityRouter.deleteComment,
+				fixture.femaleUserId,
+				["deleteComment"]
+			);
+			const deleteAsAuthor = clientFor(
+				communityRouter.deleteComment,
+				fixture.adminUserId,
+				["deleteComment"]
+			);
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "market",
+				title: `댓글 테스트 ${randomUUID()}`,
+			});
+			const comment = await createComment({
+				body: "첫 댓글입니다.",
+				postId: created.id,
+			});
+
+			const afterCreate = await getPost({ postId: created.id });
+			expect(afterCreate.commentCount).toBe(1);
+			const comments = await listComments({ postId: created.id });
+			expect(comments).toHaveLength(1);
+			expect(comments[0]?.canDelete).toBe(false);
+
+			// femaleUser는 admin의 댓글을 지울 수 없다(글 작성자여도 불가).
+			await expectOrpcCode(
+				deleteAsOther({ commentId: comment.id }),
+				"FORBIDDEN"
+			);
+			await deleteAsAuthor({ commentId: comment.id });
+
+			const afterDelete = await getPost({ postId: created.id });
+			expect(afterDelete.commentCount).toBe(0);
+			expect(await listComments({ postId: created.id })).toHaveLength(0);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("잠긴 글의 댓글은 비번 없이 조회할 수 없고 맞는 비번으로 조회된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const listAsOther = clientFor(
+				communityRouter.listComments,
+				fixture.otherFemaleUserId,
+				["listComments"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				isLocked: true,
+				title: `잠긴 댓글 ${randomUUID()}`,
+			});
+
+			await expectOrpcCode(listAsOther({ postId: created.id }), "FORBIDDEN");
+			const comments = await listAsOther({
+				password: "pw1234",
+				postId: created.id,
+			});
+			expect(comments).toHaveLength(0);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+});
