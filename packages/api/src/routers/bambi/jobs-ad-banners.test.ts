@@ -17,7 +17,12 @@ const [{ db }, authSchema, bambiSchema, { jobsRouter }] = await Promise.all([
 ]);
 
 const { organization, user } = authSchema;
-const { bambiProfile, employerOrganizationProfile, jobPost } = bambiSchema;
+const {
+	bambiProfile,
+	employerOrganizationProfile,
+	jobPerformanceEvent,
+	jobPost,
+} = bambiSchema;
 
 interface AdBannerFixture {
 	expiredLeftJobId: string;
@@ -153,6 +158,9 @@ const createAdBannerFixture = async (): Promise<AdBannerFixture> => {
 const cleanupAdBannerFixture = async (
 	fixture: AdBannerFixture
 ): Promise<void> => {
+	await db
+		.delete(jobPerformanceEvent)
+		.where(inArray(jobPerformanceEvent.jobPostId, fixture.jobPostIds));
 	await db.delete(jobPost).where(inArray(jobPost.id, fixture.jobPostIds));
 	await db
 		.delete(employerOrganizationProfile)
@@ -202,5 +210,54 @@ describe("bambi jobs.listAdBanners", () => {
 		expect(result.leftBanner.map((j) => j.id)).not.toContain(
 			fixture.expiredLeftJobId
 		);
+	});
+
+	it("노출된 각 배너 공고에 section=배너타입 impression을 기록한다", async () => {
+		await listAdBanners();
+
+		const events = await db
+			.select()
+			.from(jobPerformanceEvent)
+			.where(
+				inArray(jobPerformanceEvent.jobPostId, [
+					fixture.premiumJobId,
+					fixture.leftJobId,
+					fixture.rightJobId,
+				])
+			);
+		const impressionsByJob = new Map<string, string[]>();
+
+		for (const event of events) {
+			if (event.eventType !== "impression") {
+				continue;
+			}
+
+			const section = (event.metadata as { section?: string } | null)?.section;
+			const sections = impressionsByJob.get(event.jobPostId) ?? [];
+
+			if (typeof section === "string") {
+				sections.push(section);
+			}
+
+			impressionsByJob.set(event.jobPostId, sections);
+		}
+
+		expect(impressionsByJob.get(fixture.premiumJobId)).toContain(
+			"premium-banner"
+		);
+		expect(impressionsByJob.get(fixture.leftJobId)).toContain("left-banner");
+		expect(impressionsByJob.get(fixture.rightJobId)).toContain("right-banner");
+
+		const excludedEvents = await db
+			.select()
+			.from(jobPerformanceEvent)
+			.where(
+				inArray(jobPerformanceEvent.jobPostId, [
+					fixture.unpaidPremiumJobId,
+					fixture.expiredLeftJobId,
+				])
+			);
+
+		expect(excludedEvents).toHaveLength(0);
 	});
 });

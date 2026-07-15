@@ -157,6 +157,66 @@ export const recordJobListingImpressions = async ({
 	await db.insert(jobPerformanceEvent).values(values);
 };
 
+interface AdBannerImpressionItem {
+	exposureType: string;
+	id: string;
+	organizationId: string;
+}
+
+interface RecordAdBannerImpressionsInput {
+	actorUserId?: null | string;
+	groups: {
+		leftBanner: AdBannerImpressionItem[];
+		premiumBanner: AdBannerImpressionItem[];
+		rightBanner: AdBannerImpressionItem[];
+	};
+}
+
+// 배너 상품 노출은 그룹(위치)별로 impression을 기록한다. metadata.section 값은 해당 배너의
+// exposureType 문자열을 그대로 써서(premium-banner/left-banner/right-banner) 위치별 집계와 정합한다.
+const toAdBannerImpressionValue = ({
+	actorUserId,
+	item,
+	position,
+}: {
+	actorUserId?: null | string;
+	item: AdBannerImpressionItem;
+	position: number;
+}) => ({
+	actorUserId: actorUserId ?? null,
+	eventType: "impression" as const,
+	jobPostId: item.id,
+	metadata: {
+		exposureType: item.exposureType,
+		position,
+		section: item.exposureType,
+	},
+	organizationId: item.organizationId,
+});
+
+export const recordAdBannerImpressions = async ({
+	actorUserId,
+	groups,
+}: RecordAdBannerImpressionsInput): Promise<void> => {
+	const values = [
+		...groups.premiumBanner.map((item, position) =>
+			toAdBannerImpressionValue({ actorUserId, item, position })
+		),
+		...groups.leftBanner.map((item, position) =>
+			toAdBannerImpressionValue({ actorUserId, item, position })
+		),
+		...groups.rightBanner.map((item, position) =>
+			toAdBannerImpressionValue({ actorUserId, item, position })
+		),
+	];
+
+	if (values.length === 0) {
+		return;
+	}
+
+	await db.insert(jobPerformanceEvent).values(values);
+};
+
 export const RECENT_PERFORMANCE_WINDOW_DAYS = 7;
 
 export interface RecentJobPerformanceMetrics {
@@ -231,8 +291,11 @@ export interface JobPerformanceMetrics {
 }
 
 export interface JobPerformanceSectionMetrics {
+	leftBannerImpressions: number;
 	organicImpressions: number;
+	premiumBannerImpressions: number;
 	recommendedImpressions: number;
+	rightBannerImpressions: number;
 	specialImpressions: number;
 	urgentImpressions: number;
 }
@@ -254,8 +317,11 @@ const emptyMetrics = (): JobPerformanceMetrics => ({
 });
 
 const emptySectionMetrics = (): JobPerformanceSectionMetrics => ({
+	leftBannerImpressions: 0,
 	organicImpressions: 0,
+	premiumBannerImpressions: 0,
 	recommendedImpressions: 0,
+	rightBannerImpressions: 0,
 	specialImpressions: 0,
 	urgentImpressions: 0,
 });
@@ -308,6 +374,15 @@ const incrementSectionMetric = (
 			break;
 		case "organic":
 			sectionMetrics.organicImpressions += 1;
+			break;
+		case "premium-banner":
+			sectionMetrics.premiumBannerImpressions += 1;
+			break;
+		case "left-banner":
+			sectionMetrics.leftBannerImpressions += 1;
+			break;
+		case "right-banner":
+			sectionMetrics.rightBannerImpressions += 1;
 			break;
 		default:
 			break;

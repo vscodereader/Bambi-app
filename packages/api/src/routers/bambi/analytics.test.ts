@@ -184,6 +184,36 @@ const createAnalyticsFixture = async (): Promise<AnalyticsFixture> => {
 			organizationId,
 		},
 		{
+			eventType: "impression",
+			jobPostId: primaryJobPostId,
+			metadata: {
+				exposureType: "premium-banner",
+				position: 0,
+				section: "premium-banner",
+			},
+			organizationId,
+		},
+		{
+			eventType: "impression",
+			jobPostId: primaryJobPostId,
+			metadata: {
+				exposureType: "left-banner",
+				position: 0,
+				section: "left-banner",
+			},
+			organizationId,
+		},
+		{
+			eventType: "impression",
+			jobPostId: primaryJobPostId,
+			metadata: {
+				exposureType: "right-banner",
+				position: 0,
+				section: "right-banner",
+			},
+			organizationId,
+		},
+		{
 			actorUserId: ownerUserId,
 			eventType: "detail_view",
 			jobPostId: primaryJobPostId,
@@ -276,12 +306,15 @@ describe("bambi analytics router", () => {
 						chatStarts: 1,
 						contactReveals: 1,
 						detailViews: 1,
-						impressions: 5,
+						impressions: 8,
 					},
 					organizationId: fixture.organizationId,
 					sectionMetrics: {
+						leftBannerImpressions: 1,
 						organicImpressions: 1,
+						premiumBannerImpressions: 1,
 						recommendedImpressions: 1,
+						rightBannerImpressions: 1,
 						// 스페셜(1) + legacy premium(1) 흡수 = 2
 						specialImpressions: 2,
 						urgentImpressions: 1,

@@ -36,6 +36,7 @@ import {
 } from "../../services/bambi-ad-exposure";
 import {
 	getRecentJobPerformanceMetrics,
+	recordAdBannerImpressions,
 	recordJobListingImpressions,
 	recordJobPerformanceEvent,
 } from "../../services/bambi-analytics";
@@ -588,7 +589,7 @@ export const jobsRouter = {
 
 	// seeker 광고 배너 슬롯(상단 프리미엄·좌/우 사이드)에 노출할 결제완료 공고를
 	// 위치별로 내려준다. 목록 필터와 무관해 list와 분리된 공개 조회다.
-	listAdBanners: publicProcedure.handler(async () => {
+	listAdBanners: publicProcedure.handler(async ({ context }) => {
 		const now = new Date();
 		const rows = await db
 			.select({
@@ -597,6 +598,7 @@ export const jobsRouter = {
 				exposureEndsAt: jobPost.exposureEndsAt,
 				exposureType: jobPost.exposureType,
 				id: jobPost.id,
+				organizationId: jobPost.organizationId,
 				publishedAt: jobPost.publishedAt,
 				teamDisplayName: employerTeamProfile.displayName,
 				title: jobPost.title,
@@ -619,8 +621,14 @@ export const jobsRouter = {
 				)
 			)
 			.orderBy(desc(jobPost.publishedAt));
+		const groups = groupAdBannerJobs(rows, now);
 
-		return groupAdBannerJobs(rows, now);
+		await recordAdBannerImpressions({
+			actorUserId: context.session?.user.id,
+			groups,
+		});
+
+		return groups;
 	}),
 
 	getById: publicProcedure

@@ -56,11 +56,20 @@ export default function EmployerAnalyticsPage() {
 			contactReveals: accumulator.contactReveals + item.metrics.contactReveals,
 			detailViews: accumulator.detailViews + item.metrics.detailViews,
 			impressions: accumulator.impressions + item.metrics.impressions,
+			leftBannerImpressions:
+				accumulator.leftBannerImpressions +
+				item.sectionMetrics.leftBannerImpressions,
 			organicImpressions:
 				accumulator.organicImpressions + item.sectionMetrics.organicImpressions,
+			premiumBannerImpressions:
+				accumulator.premiumBannerImpressions +
+				item.sectionMetrics.premiumBannerImpressions,
 			recommendedImpressions:
 				accumulator.recommendedImpressions +
 				item.sectionMetrics.recommendedImpressions,
+			rightBannerImpressions:
+				accumulator.rightBannerImpressions +
+				item.sectionMetrics.rightBannerImpressions,
 			specialImpressions:
 				accumulator.specialImpressions + item.sectionMetrics.specialImpressions,
 			urgentImpressions:
@@ -71,8 +80,11 @@ export default function EmployerAnalyticsPage() {
 			contactReveals: 0,
 			detailViews: 0,
 			impressions: 0,
+			leftBannerImpressions: 0,
 			organicImpressions: 0,
+			premiumBannerImpressions: 0,
 			recommendedImpressions: 0,
+			rightBannerImpressions: 0,
 			specialImpressions: 0,
 			urgentImpressions: 0,
 		}
@@ -165,6 +177,18 @@ export default function EmployerAnalyticsPage() {
 						label="일반"
 						value={formatNumber(totals.organicImpressions)}
 					/>
+					<MetricCard
+						label="프리미엄 배너"
+						value={formatNumber(totals.premiumBannerImpressions)}
+					/>
+					<MetricCard
+						label="좌측 배너"
+						value={formatNumber(totals.leftBannerImpressions)}
+					/>
+					<MetricCard
+						label="우측 배너"
+						value={formatNumber(totals.rightBannerImpressions)}
+					/>
 				</dl>
 			</section>
 
@@ -246,7 +270,19 @@ export default function EmployerAnalyticsPage() {
 												summary.sectionMetrics.recommendedImpressions
 											)}{" "}
 											· 일반{" "}
-											{formatNumber(summary.sectionMetrics.organicImpressions)}
+											{formatNumber(summary.sectionMetrics.organicImpressions)}{" "}
+											· 프리미엄 배너{" "}
+											{formatNumber(
+												summary.sectionMetrics.premiumBannerImpressions
+											)}{" "}
+											· 좌측 배너{" "}
+											{formatNumber(
+												summary.sectionMetrics.leftBannerImpressions
+											)}{" "}
+											· 우측 배너{" "}
+											{formatNumber(
+												summary.sectionMetrics.rightBannerImpressions
+											)}
 										</td>
 									</tr>
 								))}
