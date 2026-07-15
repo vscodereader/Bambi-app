@@ -18,7 +18,7 @@ import { StatusBadge } from "@/components/bambi/status-badge";
 import {
 	EXPOSURE_TYPE_LABELS,
 	expiryLabel,
-	getEmployerJobDisplayStatus,
+	getJobDisplayStatus,
 	PAYMENT_STATUS_LABELS,
 	remainingDays,
 } from "@/lib/bambi/exposure";
@@ -110,9 +110,9 @@ export function getEmployerJobsColumns({
 		{
 			id: "status",
 			header: "공고 상태",
-			sortValue: (job) => getEmployerJobDisplayStatus(job).label,
+			sortValue: (job) => getJobDisplayStatus(job).label,
 			cell: (job) => {
-				const display = getEmployerJobDisplayStatus(job);
+				const display = getJobDisplayStatus(job);
 
 				return <StatusBadge tone={display.tone}>{display.label}</StatusBadge>;
 			},

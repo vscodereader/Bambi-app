@@ -37,6 +37,15 @@ describe("moderator payments management page", () => {
 		expect(source).toContain("미결제로 되돌리기");
 	});
 
+	it("derives the 공고 상태 column from real exposure (published+unpaid → 미공개)", () => {
+		// 검수 축(status)만 보면 published가 "공개"로 오표기되므로, paymentStatus까지 반영하는
+		// getJobDisplayStatus로 실제 공개 여부를 파생한다(published+미결제 → "미공개").
+		expect(source).toContain("getJobDisplayStatus");
+		expect(source).toContain("paymentStatus: job.paymentStatus");
+		expect(source).not.toContain("getJobStatusTone");
+		expect(source).not.toContain("jobStatusLabels");
+	});
+
 	it("lists rows in a DataTable with an unpaid-only filter", () => {
 		expect(source).toContain("DataTable");
 		expect(source).toContain("DataColumn<PaymentJob>");

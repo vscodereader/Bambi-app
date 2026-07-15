@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import Loader from "@/components/loader";
-import { getEmployerJobDisplayStatus } from "@/lib/bambi/exposure";
+import { getJobDisplayStatus } from "@/lib/bambi/exposure";
 import { orpc } from "@/utils/orpc";
 
 interface MetricCardProps {
@@ -229,10 +229,8 @@ export default function EmployerAnalyticsPage() {
 										<th className="px-4 py-3 font-medium" scope="row">
 											<div className="max-w-[280px]">
 												<p className="m-0 break-words">{summary.title}</p>
-												<StatusBadge
-													tone={getEmployerJobDisplayStatus(summary).tone}
-												>
-													{getEmployerJobDisplayStatus(summary).label}
+												<StatusBadge tone={getJobDisplayStatus(summary).tone}>
+													{getJobDisplayStatus(summary).label}
 												</StatusBadge>
 											</div>
 										</th>
