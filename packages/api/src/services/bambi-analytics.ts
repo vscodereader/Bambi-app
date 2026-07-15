@@ -304,6 +304,7 @@ export interface EmployerJobPerformanceSummary {
 	jobPostId: string;
 	metrics: JobPerformanceMetrics;
 	organizationId: string;
+	paymentStatus: string;
 	sectionMetrics: JobPerformanceSectionMetrics;
 	status: string;
 	title: string;
@@ -420,6 +421,7 @@ export const getEmployerJobPerformanceSummary = async (
 		.select({
 			jobPostId: jobPost.id,
 			organizationId: jobPost.organizationId,
+			paymentStatus: jobPost.paymentStatus,
 			status: jobPost.status,
 			title: jobPost.title,
 			updatedAt: jobPost.updatedAt,
