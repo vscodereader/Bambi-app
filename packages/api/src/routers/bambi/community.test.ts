@@ -26,8 +26,26 @@ interface CommunityFixture {
 	adminUserId: string;
 	femaleUserId: string;
 	maleUserId: string;
+	otherFemaleUserId: string;
 	userIds: string[];
 }
+
+const TIPTAP_BODY = JSON.stringify({
+	content: [
+		{
+			content: [{ text: "본문입니다.", type: "text" }],
+			type: "paragraph",
+		},
+	],
+	type: "doc",
+});
+
+const basePostInput = {
+	authorName: "달빛토끼",
+	body: TIPTAP_BODY,
+	isLocked: false,
+	password: "pw1234",
+};
 
 const createContextForUser = (userId: string): Context =>
 	({
@@ -46,12 +64,18 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 	const femaleUserId = `user_test_female_${randomUUID()}`;
 	const maleUserId = `user_test_male_${randomUUID()}`;
 	const adminUserId = `user_test_admin_${randomUUID()}`;
-	const userIds = [femaleUserId, maleUserId, adminUserId];
+	const otherFemaleUserId = `user_test_other_female_${randomUUID()}`;
+	const userIds = [femaleUserId, maleUserId, adminUserId, otherFemaleUserId];
 
 	await db.insert(user).values([
 		{ email: makeEmail("female"), id: femaleUserId, name: "여성 회원" },
 		{ email: makeEmail("male"), id: maleUserId, name: "남성 회원" },
 		{ email: makeEmail("admin"), id: adminUserId, name: "관리자" },
+		{
+			email: makeEmail("other-female"),
+			id: otherFemaleUserId,
+			name: "다른 여성 회원",
+		},
 	]);
 	await db.insert(bambiProfile).values([
 		{
@@ -78,9 +102,17 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 			status: "active",
 			userId: adminUserId,
 		},
+		{
+			displayName: "별빛여우",
+			gender: "female",
+			isPhoneVerified: true,
+			role: "job_seeker",
+			status: "active",
+			userId: otherFemaleUserId,
+		},
 	]);
 
-	return { adminUserId, femaleUserId, maleUserId, userIds };
+	return { adminUserId, femaleUserId, maleUserId, otherFemaleUserId, userIds };
 };
 
 const cleanupCommunityFixture = async (
@@ -148,8 +180,8 @@ describe("bambi community router — 조회", () => {
 			]);
 
 			const created = await createPost({
+				...basePostInput,
 				board: "free",
-				body: "수다방 첫 글 본문입니다.",
 				title: `테스트 자유수다 ${randomUUID()}`,
 			});
 
@@ -188,8 +220,8 @@ describe("bambi community router — 조회", () => {
 			);
 			for (let index = 0; index < 25; index += 1) {
 				await createPost({
+					...basePostInput,
 					board: "market",
-					body: `페이지네이션 테스트 본문 ${index}`,
 					title: `페이지네이션 ${index} ${randomUUID()}`,
 				});
 			}
@@ -220,6 +252,93 @@ describe("bambi community router — 조회", () => {
 				"getPost",
 			]);
 			await expectOrpcCode(getPost({ postId: randomUUID() }), "NOT_FOUND");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("잠긴 글은 타인 목록에서 제목이 마스킹되고, 비밀번호로 열람할 수 있다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				isLocked: true,
+				title: `비밀 제목 ${randomUUID()}`,
+			});
+
+			// admin은 실제 제목을 본다(bypass).
+			const listAsAdmin = clientFor(
+				communityRouter.listPosts,
+				fixture.adminUserId,
+				["listPosts"]
+			);
+			const adminList = await listAsAdmin({ board: "free", page: 1 });
+			expect(
+				adminList.items.find((item: { id: string }) => item.id === created.id)
+					?.title
+			).toContain("비밀 제목");
+
+			const getAsOther = clientFor(
+				communityRouter.getPost,
+				fixture.otherFemaleUserId,
+				["getPost"]
+			);
+			const lockedView = await getAsOther({ postId: created.id });
+			expect(lockedView.locked).toBe(true);
+			expect("body" in lockedView).toBe(false);
+
+			await expectOrpcCode(
+				getAsOther({ password: "wrong!", postId: created.id }),
+				"FORBIDDEN"
+			);
+
+			const unlocked = await getAsOther({
+				password: "pw1234",
+				postId: created.id,
+			});
+			expect(unlocked.locked).toBe(false);
+			if (unlocked.locked === false) {
+				expect(unlocked.body).toBe(TIPTAP_BODY);
+			}
+
+			const listAsOther = clientFor(
+				communityRouter.listPosts,
+				fixture.otherFemaleUserId,
+				["listPosts"]
+			);
+			const otherList = await listAsOther({ board: "free", page: 1 });
+			expect(
+				otherList.items.find((item: { id: string }) => item.id === created.id)
+					?.title
+			).toBe("비밀글입니다");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("본문이 Tiptap doc JSON이 아니면 BAD_REQUEST", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			await expectOrpcCode(
+				createPost({
+					...basePostInput,
+					board: "free",
+					body: "그냥 텍스트",
+					title: `본문검증 ${randomUUID()}`,
+				}),
+				"BAD_REQUEST"
+			);
 		} finally {
 			await cleanupCommunityFixture(fixture);
 		}
