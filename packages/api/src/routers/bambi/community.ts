@@ -69,7 +69,7 @@ const createPostInput = z.object({
 	body: z.string().min(2).max(BODY_MAX),
 	isLocked: z.boolean().default(false),
 	isPromotion: z.boolean().default(false),
-	password: z.string().min(4).max(30),
+	password: z.string().trim().min(4).max(30),
 	title: z.string().trim().min(2).max(100),
 });
 
@@ -78,25 +78,25 @@ const updatePostInput = postIdInput.extend({
 	body: z.string().min(2).max(BODY_MAX),
 	isLocked: z.boolean(),
 	isPromotion: z.boolean(),
-	password: z.string().max(30).optional(),
+	password: z.string().trim().max(30).optional(),
 	title: z.string().trim().min(2).max(100),
 });
 
 const PROMOTION_ROLE_ERROR = "광고글은 업소회원만 표시할 수 있습니다.";
 
 const deletePostInput = postIdInput.extend({
-	password: z.string().max(30).optional(),
+	password: z.string().trim().max(30).optional(),
 });
 
 // 잠긴 글의 추천·댓글 열람도 상세 조회와 동일하게 비밀번호 게이트를 통과해야 한다.
 const postReadInput = postIdInput.extend({
-	password: z.string().max(30).optional(),
+	password: z.string().trim().max(30).optional(),
 });
 
 const createCommentInput = postIdInput.extend({
 	body: z.string().trim().min(1).max(1000),
 	parentCommentId: z.string().uuid().optional(),
-	password: z.string().max(30).optional(),
+	password: z.string().trim().max(30).optional(),
 });
 
 const deleteCommentInput = z.object({
@@ -175,13 +175,18 @@ const postSummarySelection = {
 const bestWindowStart = () => new Date(Date.now() - BEST_WINDOW_DAYS * DAY_MS);
 
 // 베스트글은 저장 게시판이 아니라 최근 30일 추천 상위 큐레이션 가상 게시판이다.
-// 공지사항(notice)은 베스트 큐레이션에서 제외한다.
-const buildBoardFilters = (board: CommunityBoardInput): SQL[] => {
+// 공지사항(notice)은 베스트 큐레이션에서 제외한다. windowStart(30일 컷오프)는
+// 목록·count 쿼리 간 밀리초 오차로 1-off가 나지 않도록 핸들러에서 한 번 계산해
+// 동일 값으로 전달한다.
+const buildBoardFilters = (
+	board: CommunityBoardInput,
+	windowStart: Date
+): SQL[] => {
 	if (board === "best") {
 		return [
 			eq(communityPost.status, "published"),
 			gte(communityPost.likeCount, BEST_MIN_LIKES),
-			gte(communityPost.createdAt, bestWindowStart()),
+			gte(communityPost.createdAt, windowStart),
 			ne(communityPost.board, "notice"),
 		];
 	}
@@ -218,12 +223,18 @@ const selectBoardPosts = (
 		limit,
 		offset = 0,
 		filters = [],
-	}: { limit: number; offset?: number; filters?: SQL[] }
+		windowStart,
+	}: {
+		limit: number;
+		offset?: number;
+		filters?: SQL[];
+		windowStart: Date;
+	}
 ) =>
 	db
 		.select(postSummarySelection)
 		.from(communityPost)
-		.where(and(...buildBoardFilters(board), ...filters))
+		.where(and(...buildBoardFilters(board, windowStart), ...filters))
 		.orderBy(...buildBoardOrder(board))
 		.limit(limit)
 		.offset(offset);
@@ -245,6 +256,21 @@ const toPublicSummary = (summary: PostSummaryRow) => ({
 	title: summary.title,
 	viewCount: summary.viewCount,
 });
+
+// 동시 토글로 행 변화가 없던 경우 캐시를 건드리지 않고 현재 값만 반환하기 위한 조회.
+type CommunityTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+const readLikeCount = async (
+	tx: CommunityTx,
+	postId: string
+): Promise<number> => {
+	const [row] = await tx
+		.select({ likeCount: communityPost.likeCount })
+		.from(communityPost)
+		.where(eq(communityPost.id, postId))
+		.limit(1);
+	return row?.likeCount ?? 0;
+};
 
 const findPublishedPost = async (postId: string) => {
 	const [post] = await db
@@ -269,16 +295,21 @@ export const communityRouter = {
 			const profile = await requireCommunityMember(context.session);
 
 			const listFilters = buildListFilters(input.filter);
+			// 목록·count 쿼리가 같은 30일 컷오프를 쓰도록 한 번만 계산한다.
+			const windowStart = bestWindowStart();
 			const [items, [total]] = await Promise.all([
 				selectBoardPosts(input.board, {
 					filters: listFilters,
 					limit: PAGE_SIZE,
 					offset: (input.page - 1) * PAGE_SIZE,
+					windowStart,
 				}),
 				db
 					.select({ value: count() })
 					.from(communityPost)
-					.where(and(...buildBoardFilters(input.board), ...listFilters)),
+					.where(
+						and(...buildBoardFilters(input.board, windowStart), ...listFilters)
+					),
 			]);
 
 			return {
@@ -292,12 +323,13 @@ export const communityRouter = {
 	overview: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireCommunityMember(context.session);
 
+		const windowStart = bestWindowStart();
 		const [best, free, workTalk, market, notice] = await Promise.all([
-			selectBoardPosts("best", { limit: OVERVIEW_LIMIT }),
-			selectBoardPosts("free", { limit: OVERVIEW_LIMIT }),
-			selectBoardPosts("work_talk", { limit: OVERVIEW_LIMIT }),
-			selectBoardPosts("market", { limit: OVERVIEW_LIMIT }),
-			selectBoardPosts("notice", { limit: OVERVIEW_LIMIT }),
+			selectBoardPosts("best", { limit: OVERVIEW_LIMIT, windowStart }),
+			selectBoardPosts("free", { limit: OVERVIEW_LIMIT, windowStart }),
+			selectBoardPosts("work_talk", { limit: OVERVIEW_LIMIT, windowStart }),
+			selectBoardPosts("market", { limit: OVERVIEW_LIMIT, windowStart }),
+			selectBoardPosts("notice", { limit: OVERVIEW_LIMIT, windowStart }),
 		]);
 
 		return {
@@ -312,7 +344,7 @@ export const communityRouter = {
 	getPost: protectedProcedure
 		.input(
 			postIdInput.extend({
-				password: z.string().max(30).optional(),
+				password: z.string().trim().max(30).optional(),
 			})
 		)
 		.handler(async ({ context, input }) => {
@@ -336,10 +368,12 @@ export const communityRouter = {
 				}
 			}
 
-			await db
+			// 원자 증가 후 값을 응답에 그대로 반영한다(증가 전 스냅샷+1이 아니라 실제 값).
+			const [viewUpdated] = await db
 				.update(communityPost)
 				.set({ viewCount: sql`${communityPost.viewCount} + 1` })
-				.where(eq(communityPost.id, input.postId));
+				.where(eq(communityPost.id, input.postId))
+				.returning({ viewCount: communityPost.viewCount });
 
 			const [like] = await db
 				.select({ id: communityPostLike.id })
@@ -371,7 +405,7 @@ export const communityRouter = {
 				locked: false as const,
 				title: post.title,
 				updatedAt: post.updatedAt,
-				viewCount: post.viewCount + 1,
+				viewCount: viewUpdated?.viewCount ?? post.viewCount + 1,
 			};
 		}),
 
@@ -482,6 +516,9 @@ export const communityRouter = {
 			const post = await findPublishedPost(input.postId);
 			requirePostReadAccess(post, profile, input.password);
 
+			// (post_id,user_id) unique 인덱스에 기대어 동시 호출에서도 캐시 증감이
+			// 실제 행 변화와 1:1이 되게 한다. 삭제는 rowCount(returning 개수)로,
+			// 삽입은 onConflictDoNothing 후 실제 삽입 여부로 판정한다.
 			return await db.transaction(async (tx) => {
 				const [existing] = await tx
 					.select({ id: communityPostLike.id })
@@ -495,9 +532,14 @@ export const communityRouter = {
 					.limit(1);
 
 				if (existing) {
-					await tx
+					const removed = await tx
 						.delete(communityPostLike)
-						.where(eq(communityPostLike.id, existing.id));
+						.where(eq(communityPostLike.id, existing.id))
+						.returning({ id: communityPostLike.id });
+					if (removed.length === 0) {
+						const likeCount = await readLikeCount(tx, input.postId);
+						return { isLiked: false, likeCount };
+					}
 					const [updated] = await tx
 						.update(communityPost)
 						.set({
@@ -508,10 +550,18 @@ export const communityRouter = {
 					return { isLiked: false, likeCount: updated?.likeCount ?? 0 };
 				}
 
-				await tx.insert(communityPostLike).values({
-					postId: input.postId,
-					userId: profile.userId,
-				});
+				const inserted = await tx
+					.insert(communityPostLike)
+					.values({
+						postId: input.postId,
+						userId: profile.userId,
+					})
+					.onConflictDoNothing()
+					.returning({ id: communityPostLike.id });
+				if (inserted.length === 0) {
+					const likeCount = await readLikeCount(tx, input.postId);
+					return { isLiked: true, likeCount };
+				}
 				const [updated] = await tx
 					.update(communityPost)
 					.set({ likeCount: sql`${communityPost.likeCount} + 1` })

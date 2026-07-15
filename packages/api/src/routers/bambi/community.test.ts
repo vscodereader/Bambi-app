@@ -471,6 +471,89 @@ describe("bambi community router — 조회", () => {
 			await cleanupCommunityFixture(fixture);
 		}
 	});
+
+	it("hidden 상태 글은 상세가 NOT_FOUND이고 목록에 노출되지 않는다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `숨김 글 ${randomUUID()}`,
+			});
+
+			// 운영 조치로 status가 hidden이 되면 published가 아니므로 조회에서 빠진다.
+			await db
+				.update(communityPost)
+				.set({ status: "hidden" })
+				.where(eq(communityPost.id, created.id));
+
+			await expectOrpcCode(getPost({ postId: created.id }), "NOT_FOUND");
+			const listed = await listPosts({ board: "free", page: 1 });
+			expect(
+				listed.items.some((item: { id: string }) => item.id === created.id)
+			).toBe(false);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("잠금 축소 응답에는 title이 없고 잠금 열람 실패는 viewCount를 올리지 않는다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const getAsOther = clientFor(
+				communityRouter.getPost,
+				fixture.otherFemaleUserId,
+				["getPost"]
+			);
+			const getAsAuthor = clientFor(
+				communityRouter.getPost,
+				fixture.femaleUserId,
+				["getPost"]
+			);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				isLocked: true,
+				title: `잠금 마스킹 ${randomUUID()}`,
+			});
+
+			// 비번 없는 잠금 열람: 축소 응답에 title/body가 담기지 않는다(마스킹 계약).
+			const lockedView = await getAsOther({ postId: created.id });
+			expect(lockedView.locked).toBe(true);
+			expect("title" in lockedView).toBe(false);
+			expect("body" in lockedView).toBe(false);
+
+			// 잠금 열람 실패는 열람이 아니므로 viewCount를 올리지 않는다. 작성자 본인
+			// bypass 열람만 조회수를 올리므로 첫 정상 열람 값은 1이어야 한다.
+			const authorView = await getAsAuthor({ postId: created.id });
+			expect(authorView.locked).toBe(false);
+			if (authorView.locked === false) {
+				expect(authorView.viewCount).toBe(1);
+			}
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
 });
 
 const baseUpdateInput = {
@@ -1238,6 +1321,53 @@ describe("bambi community router — 계정유형·광고글·필터·공지사�
 				home.notice.some((item: { id: string }) => item.id === notice.id)
 			).toBe(true);
 			// 공지는 베스트 큐레이션에서 제외된다(추천 조건과 무관하게).
+			expect(
+				home.best.some((item: { id: string }) => item.id === notice.id)
+			).toBe(false);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("30일 내 공지에 좋아요가 있어도 best 목록·overview.best에서 제외된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createAsAdmin = clientFor(
+				communityRouter.createPost,
+				fixture.adminUserId,
+				["createPost"]
+			);
+			const toggleLike = clientFor(
+				communityRouter.toggleLike,
+				fixture.femaleUserId,
+				["toggleLike"]
+			);
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+			const overview = clientFor(
+				communityRouter.overview,
+				fixture.femaleUserId,
+				["overview"]
+			);
+
+			const notice = await createAsAdmin({
+				...basePostInput,
+				board: "notice",
+				title: `공지 좋아요 ${randomUUID()}`,
+			});
+			// 별도 유저가 좋아요를 눌러 likeCount>=1·30일 내 조건을 모두 충족시킨다.
+			const liked = await toggleLike({ postId: notice.id });
+			expect(liked).toEqual({ isLiked: true, likeCount: 1 });
+
+			// 그럼에도 ne(board,notice)로 베스트에서 빠진다(like 0이 아닌 실증 경로).
+			const best = await listPosts({ board: "best", page: 1 });
+			expect(
+				best.items.some((item: { id: string }) => item.id === notice.id)
+			).toBe(false);
+			const home = await overview({});
 			expect(
 				home.best.some((item: { id: string }) => item.id === notice.id)
 			).toBe(false);
