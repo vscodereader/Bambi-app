@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+	type AnyPgColumn,
 	boolean,
 	index,
 	integer,
@@ -740,6 +741,11 @@ export const communityComment = pgTable(
 		authorUserId: text("author_user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
+		// 대댓글(1단계). null이면 최상위 댓글. 1단계 제한은 API에서 강제한다.
+		parentCommentId: uuid("parent_comment_id").references(
+			(): AnyPgColumn => communityComment.id,
+			{ onDelete: "cascade" }
+		),
 		body: text("body").notNull(),
 		status: communityContentStatus("status").default("published").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -752,6 +758,7 @@ export const communityComment = pgTable(
 			table.createdAt
 		),
 		index("community_comment_author_user_id_idx").on(table.authorUserId),
+		index("community_comment_parent_comment_id_idx").on(table.parentCommentId),
 	]
 );
 

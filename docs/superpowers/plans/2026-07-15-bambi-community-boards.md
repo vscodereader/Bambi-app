@@ -3315,6 +3315,191 @@ Expected: Task별 한국어 `type:` 커밋. 미커밋 변경 없음(`git status`
 
 ---
 
+## Task 14: [개정2] 대댓글 — DB·API (1단계 답글)
+
+> 2026-07-15 사용자 추가 요구. 전 태스크(1~13) 완료 후 실행. Step 1~2(스키마·마이그레이션)는 컨트롤러 담당.
+
+**Files:**
+- Modify: `packages/db/src/schema/bambi.ts` — `communityComment.parentCommentId` (컨트롤러)
+- Create: `packages/db/src/migrations/0014_*.sql` (컨트롤러 생성·적용)
+- Modify: `packages/api/src/routers/bambi/community.ts`
+- Modify: `packages/api/src/routers/bambi/community.test.ts`
+
+**Interfaces:**
+- Produces:
+  - `createComment` input에 `parentCommentId?: uuid` — 부모는 **같은 글의 published 댓글**이어야 하고(위반 시 NOT_FOUND "답글을 달 댓글을 찾을 수 없습니다."), **부모가 이미 대댓글이면 BAD_REQUEST "답글에는 다시 답글을 달 수 없습니다."** (1단계 제한)
+  - `listComments` 아이템: `{ id, parentCommentId: string | null, authorName, body, canDelete, createdAt, isDeleted: boolean }` — published 댓글 + **published 대댓글을 가진 deleted 부모는 플레이스홀더로 포함**(isDeleted: true, body "", authorName null, canDelete false). 정렬 오래된순, 캡 200 유지.
+  - 대댓글 작성/삭제도 commentCount 캐시 ±1 동일.
+
+- [ ] **Step 1 (컨트롤러): 스키마 컬럼**
+
+`communityComment`의 `authorUserId` 다음에:
+
+```ts
+		// 대댓글(1단계). null이면 최상위 댓글. 1단계 제한은 API에서 강제한다.
+		parentCommentId: uuid("parent_comment_id"),
+```
+
+self-FK는 drizzle 순환 참조 제약 때문에 테이블 콜백의 `foreignKey()` 헬퍼로 건다(또는 `references((): AnyPgColumn => communityComment.id, { onDelete: "cascade" })` — 타입 주석 필수). 인덱스 추가: `index("community_comment_parent_comment_id_idx").on(table.parentCommentId)`.
+
+- [ ] **Step 2 (컨트롤러): 마이그레이션** — `pnpm db:generate`(0014: ADD COLUMN + FK + INDEX) → `pnpm db:migrate` → 커밋.
+
+- [ ] **Step 3: TDD — 신규 테스트 (RED)**
+
+`community.test.ts`에 describe 추가:
+
+```ts
+describe("bambi community router — 대댓글", () => {
+	it("대댓글을 달 수 있고 listComments가 parentCommentId를 내려준다", async () => {
+		// female이 글+댓글 생성 → admin이 그 댓글에 parentCommentId로 답글
+		// listComments에서 답글 아이템의 parentCommentId === 부모 id, isDeleted === false 단언
+	});
+
+	it("대댓글에 다시 답글을 달면 BAD_REQUEST, 다른 글의 댓글을 부모로 지정하면 NOT_FOUND", async () => {});
+
+	it("부모 댓글 삭제 후에도 published 대댓글이 있으면 부모가 isDeleted 플레이스홀더로 남는다", async () => {
+		// 부모 삭제(작성자) → listComments: 부모 { isDeleted: true, body: "" } + 자식 유지 단언
+		// 자식까지 삭제하면 부모 플레이스홀더도 사라짐 단언
+	});
+});
+```
+
+(기존 케이스의 createComment 호출은 parentCommentId 미전달로 그대로 동작해야 한다 — 하위호환.)
+
+- [ ] **Step 4: 구현**
+
+`createCommentInput`에 `parentCommentId: z.string().uuid().optional()` 추가. 핸들러의 `findPublishedPost`/`requirePostReadAccess` 다음에:
+
+```ts
+			if (input.parentCommentId) {
+				const [parent] = await db
+					.select({
+						id: communityComment.id,
+						parentCommentId: communityComment.parentCommentId,
+						postId: communityComment.postId,
+						status: communityComment.status,
+					})
+					.from(communityComment)
+					.where(eq(communityComment.id, input.parentCommentId))
+					.limit(1);
+
+				if (
+					parent?.status !== "published" ||
+					parent.postId !== input.postId
+				) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "답글을 달 댓글을 찾을 수 없습니다.",
+					});
+				}
+				if (parent.parentCommentId) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "답글에는 다시 답글을 달 수 없습니다.",
+					});
+				}
+			}
+```
+
+insert values에 `parentCommentId: input.parentCommentId ?? null` 추가.
+
+`listComments` 개정 — status 필터를 빼고 postId 전체를 가져와 플레이스홀더 정책 적용:
+
+```ts
+			const rows = await db
+				.select({
+					authorName: bambiProfile.displayName,
+					authorUserId: communityComment.authorUserId,
+					body: communityComment.body,
+					createdAt: communityComment.createdAt,
+					id: communityComment.id,
+					parentCommentId: communityComment.parentCommentId,
+					status: communityComment.status,
+				})
+				.from(communityComment)
+				.leftJoin(
+					bambiProfile,
+					eq(bambiProfile.userId, communityComment.authorUserId)
+				)
+				.where(eq(communityComment.postId, input.postId))
+				.orderBy(asc(communityComment.createdAt))
+				.limit(COMMENTS_CAP);
+
+			const liveParentIds = new Set(
+				rows
+					.filter((row) => row.status === "published" && row.parentCommentId)
+					.map((row) => row.parentCommentId)
+			);
+
+			return rows
+				.filter(
+					(row) => row.status === "published" || liveParentIds.has(row.id)
+				)
+				.map((row) =>
+					row.status === "published"
+						? {
+								authorName: row.authorName,
+								body: row.body,
+								canDelete:
+									row.authorUserId === profile.userId ||
+									profile.role === "admin",
+								createdAt: row.createdAt,
+								id: row.id,
+								isDeleted: false,
+								parentCommentId: row.parentCommentId,
+							}
+						: {
+								authorName: null,
+								body: "",
+								canDelete: false,
+								createdAt: row.createdAt,
+								id: row.id,
+								isDeleted: true,
+								parentCommentId: row.parentCommentId,
+							}
+				);
+```
+
+(authorUserId는 응답에 미포함 유지 — 익명성 수정과 일관.)
+
+- [ ] **Step 5: 검증 + 커밋(컨트롤러)** — community 테스트 전부 PASS + `pnpm --filter @bambi-app/api check-types`.
+
+```
+feat(api): 커뮤니티 대댓글(1단계) 추가
+- community_comment에 parent_comment_id self-FK 컬럼(0014 마이그레이션)
+- createComment parentCommentId 지원 — 같은 글 published 댓글만, 대댓글에 재답글 금지(1단계)
+- listComments가 parentCommentId·isDeleted 동봉, 삭제된 부모는 published 답글이 있으면 플레이스홀더 유지
+- 대댓글 왕복·제한·플레이스홀더 통합 테스트 추가
+```
+
+---
+
+## Task 15: [개정2] 대댓글 — 웹 상세 화면
+
+**Files:**
+- Modify: `apps/web/src/components/bambi/screens/community-post-detail.tsx`
+- Modify: `apps/web/src/components/bambi/community-post-detail-parts.tsx`
+
+**Interfaces:**
+- Consumes: Task 14의 `listComments` 아이템(`parentCommentId`·`isDeleted` 추가), `createComment`의 `parentCommentId?`.
+
+- [ ] **Step 1: 그룹핑·렌더**
+
+댓글 목록을 클라이언트에서 그룹핑: 최상위(`parentCommentId === null`) 순회, 각 항목 아래 `items.filter((c) => c.parentCommentId === parent.id)`를 들여쓰기 렌더(`pl-6`류 토큰 + `border-l` 또는 `CornerDownRightIcon` — 임의 px 금지). `isDeleted` 항목은 body 대신 muted 톤으로 "삭제된 댓글입니다" 표시(삭제 버튼·답글 버튼 없음).
+
+- [ ] **Step 2: 답글 작성**
+
+최상위 published 댓글에만 "답글" 버튼(ghost, sm) → 해당 댓글 아래 인라인 답글 폼(Textarea + 등록/취소, `replyTo: string | null` state 하나로 관리, 동시에 하나만 열림). 제출은 `createComment({ postId, body, password?, parentCommentId })`. 성공 시 기존 무효화 경로(listComments key + boards) + getPost commentCount +1 갱신(기존 bumpCommentCount 재사용). 대댓글에는 답글 버튼을 렌더하지 않는다(1단계).
+
+- [ ] **Step 3: 검증 + 커밋(컨트롤러)** — `pnpm --filter web check-types` + 기존 lib 테스트 회귀.
+
+```
+feat(web): 커뮤니티 대댓글 UI 추가
+- 댓글 목록 부모→자식 그룹핑, 대댓글 들여쓰기 렌더·삭제된 부모는 "삭제된 댓글입니다" 플레이스홀더
+- 최상위 댓글에 답글 버튼 + 인라인 답글 폼(동시 1개), createComment parentCommentId 전달
+- 대댓글은 답글 버튼 없음(1단계 제한)
+```
+
+---
+
 ## Self-Review 체크 결과
 
 - 스펙 커버리지: 게시판 4종(가상 베스트 포함) T1/T3, 서버 자격 강제 T2, 번호 페이지네이션 T3/T6/T9, CRUD T3/T4/T10, 댓글 T5/T11, 추천 T5/T11, 신고 연계 T5/T11, 홈 인덱스 T8 — 스펙 §2 범위 전부 대응.

@@ -135,6 +135,17 @@ likeCount ≥ 1`을 `likeCount DESC, createdAt DESC`로 정렬.
 - 마이그레이션 0013 추가(컬럼 3개). 컨트롤러가 db:generate/migrate 직접 실행(사용자 허용).
 - 댓글에는 비밀번호·잠금 없음(글 전용).
 
+**개정 2 (2026-07-15 추가): 대댓글(1단계).**
+
+- `community_comment.parent_comment_id`(nullable self-FK, cascade) 추가 — null이면 최상위 댓글.
+  **1단계만 허용**: 부모가 이미 대댓글이면 BAD_REQUEST. 마이그레이션 0014.
+- `createComment`에 `parentCommentId?` — 부모는 같은 글의 published 댓글이어야 함(아니면 NOT_FOUND).
+- `listComments`는 `parentCommentId`·`isDeleted`를 포함해 내려주고, **삭제된 부모라도 published
+  대댓글이 있으면 플레이스홀더**(isDeleted: true, body 비움)로 유지 — 웹이 "삭제된 댓글입니다"로
+  표시. 정렬은 기존 오래된순, 그룹핑(부모→자식)은 클라이언트가 수행.
+- 대댓글도 commentCount 캐시 +1/−1 동일 적용.
+- 웹 상세: 최상위 댓글에 "답글" 버튼 → 인라인 답글 폼, 대댓글은 들여쓰기 렌더(대댓글에는 답글 버튼 없음).
+
 ## 8. 테스트·검증
 
 - API: `packages/api/src/routers/bambi/community.test.ts` — 실 DB 통합 테스트
