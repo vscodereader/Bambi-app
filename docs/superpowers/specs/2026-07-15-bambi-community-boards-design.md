@@ -1,0 +1,178 @@
+# 수다방(커뮤니티) 게시판 설계
+
+작성일: 2026-07-15
+
+## 1. 목적
+
+접근 게이트만 있고 "준비 중" 자리표시자로 비어 있는 수다방(`/seeker/community`)에 실제
+게시판 UI와 백엔드를 구현한다. 레퍼런스(queenalba 커뮤니티 인덱스 + 게시판 리스트,
+`docs/queenalba-benchmark-2026-06-29.md` 참고)에서 **구조**(인덱스형 홈 + 게시판별 목록 +
+번호 페이지네이션)만 가져오고, 비주얼은 밤비 디자인시스템(shadcn/base-ui + 코럴 토큰)을
+따른다.
+
+## 2. 범위
+
+이번 단계에 포함:
+
+- 게시판 4개: **베스트글**(자동 큐레이션·읽기전용) · **자유수다** · **일 이야기** · **중고거래**
+- 글 목록(번호 페이지네이션) / 글 상세(조회수) / 글 작성·수정·삭제
+- 평면 댓글(작성·삭제, 대댓글 없음)
+- 추천(좋아요) 토글
+- 글 신고(기존 `report` 테이블·`moderation.createReport` 연계)
+
+비범위(후속 작업):
+
+- `/seeker` 홈 급구↔추천 사이 커뮤니티 섹션 삽입 (사용자가 명시적으로 나중에 하기로 함)
+- 대댓글, 댓글 신고, 비밀글, 이미지 첨부, 검색, 운영자 커뮤니티 관리 큐(숨김 처리 UI)
+- native 앱
+
+## 3. 접근 제어
+
+- 자격 규칙은 기존 그대로: `정지 아님 AND (admin | 여성회원 | 광고 중 업소)` —
+  `resolveCommunityAccess` 재사용.
+- 클라이언트 게이트(`RequireCommunityAccess`)와 Edge 게이트(`resolve-gate.ts`,
+  `/seeker/community` prefix)는 이미 완성. 하위 라우트는 prefix 매칭으로 자동 커버.
+- **신규: 서버 강제.** 지금은 서버에 커뮤니티 자격 검사가 없다. 모든 커뮤니티 프로시저가
+  호출하는 `requireCommunityMember(session)` 서비스 헬퍼를 신설한다
+  (`requireActiveBambiProfile` → 라이브 `hasActiveAdvertiserCampaign` →
+  `resolveCommunityAccess`, 미자격 시 FORBIDDEN).
+- 수정은 작성자 본인만, 삭제(글·댓글)는 작성자 본인 + admin.
+
+## 4. 데이터 모델 (packages/db)
+
+- `community_board` pgEnum: `free | work_talk | market`. 베스트글은 DB에 없는 **가상
+  게시판**(추천수 큐레이션 뷰)이다.
+- `community_content_status` pgEnum: `published | hidden | deleted`. 삭제는 소프트
+  삭제(`deleted`), `hidden`은 후속 운영자 기능용으로 값만 확보.
+- `community_post`: id(uuid), board, authorUserId(→user, cascade), title, body,
+  viewCount, likeCount(캐시), commentCount(캐시), status, createdAt, updatedAt.
+  `updatedAt`은 `$onUpdate` 없이 수정 프로시저에서만 명시 갱신(조회수 증가로 "수정됨"이
+  갱신되는 것을 방지).
+- `community_comment`: id, postId(→community_post, cascade), authorUserId, body,
+  status, createdAt, updatedAt.
+- `community_post_like`: id, postId(cascade), userId(cascade), createdAt,
+  `(postId, userId)` unique.
+- `moderation_target_type` enum에 `community_post` 값 추가(맨 뒤 append) — 기존
+  `report`/`admin_moderation_action`/`bambi_notification`이 그대로 커뮤니티 글을 대상으로
+  삼을 수 있다.
+- 캐시 정합성: likeCount/commentCount는 추천 토글·댓글 작성/삭제 트랜잭션에서 함께
+  증감한다. 진실값은 라이크/댓글 테이블 집계.
+
+## 5. API (packages/api — oRPC)
+
+`packages/api/src/routers/bambi/community.ts` 신설, `bambiRouter.community`로 등록.
+전부 `protectedProcedure` + `requireCommunityMember`.
+
+- `overview()` → 홈 인덱스용. 게시판별 최신 4개(베스트는 큐레이션 4개).
+- `listPosts({ board: best|free|work_talk|market, page≥1 })` →
+  `{ items, page, pageSize: 20, totalCount }`. offset 기반 번호 페이지네이션.
+  목록 아이템: id, board, title, authorName(bambiProfile.displayName), viewCount,
+  likeCount, commentCount, createdAt.
+- `getPost({ postId })` → 본문 + `isLiked`, `canEdit`(본인), `canDelete`(본인|admin).
+  호출 시 viewCount 원자 증가(`SET view_count = view_count + 1`).
+- `createPost({ board: free|work_talk|market, title 2–100, body 2–5000 })`
+- `updatePost({ postId, title, body })` — 작성자만.
+- `deletePost({ postId })` — 작성자|admin, status→deleted.
+- `toggleLike({ postId })` → `{ isLiked, likeCount }` — 트랜잭션으로 라이크 행 삽입/삭제
+  + likeCount 캐시 증감.
+- `listComments({ postId })` → published 댓글 오래된순, 최대 200개(페이지네이션 없음,
+  YAGNI). 아이템에 `canDelete`.
+- `createComment({ postId, body 1–1000 })` / `deleteComment({ commentId })` —
+  commentCount 캐시 증감 동반.
+- 신고는 신설하지 않고 기존 `moderation.createReport`에 `targetType: "community_post"`로
+  보낸다(zod enum에 값 추가).
+
+**베스트글 선정 규칙(verbatim):** `status = published AND createdAt ≥ now−30일 AND
+likeCount ≥ 1`을 `likeCount DESC, createdAt DESC`로 정렬.
+
+## 6. 웹 UI (apps/web)
+
+라우트(전부 client screen + `RequireCommunityAccess`, 컨테이너는 `SEEKER_CONTENT_WIDTH`로
+통일 — 기존 `min(80%,72rem)` 교체):
+
+- `/seeker/community` — 홈 인덱스. 게시판별 미리보기 카드 2열 그리드(모바일 1열):
+  섹션 헤더(액센트 바 + 게시판명 + 더보기 링크) + 최신글 4행(제목 truncate·댓글수·날짜).
+  `visual-job-exposure-sections.tsx`의 섹션 헤더 문법을 따른다.
+- `/seeker/community/[board]` — 게시판 목록. slug: `best|free|work-talk|market`.
+  글 행(제목+댓글수 칩 / 작성자·날짜·조회·추천 메타), 번호 페이지네이션(`?page=` URL
+  동기화), 쓰기 가능 게시판이면 "글쓰기" 버튼(primary — 페이지 주 액션).
+- `/seeker/community/[board]/write`, `/seeker/community/[board]/[postId]/edit` —
+  공용 폼(`community-post-form.tsx`): Input(제목) + Textarea(본문), 컨트롤드 상태,
+  새 라이브러리 없음.
+- `/seeker/community/[board]/[postId]` — 상세: 본문, 메타(작성자·날짜·조회·추천),
+  추천 토글 버튼, 신고 Dialog(기존 사유 enum 한국어 라벨), 수정/삭제(권한 시),
+  댓글 목록 + 작성 폼.
+- 게시판 메타(라벨·slug·설명·writable)는 `apps/web/src/lib/bambi/community.ts` 상수.
+  날짜 표기 `YYYY.MM.DD`. authorName null이면 "회원".
+- 페이지네이션 UI는 shadcn `pagination`을 `packages/ui`에 추가(순수 UI, 의존성 없음,
+  base-ui 재테마 컨벤션 적용).
+- 신고 사유 한국어 라벨은 `my-reports-screen.tsx`의 로컬 상수를
+  `lib/bambi/report-labels.ts`로 승격해 공유(해당 화면도 임포트로 전환), 대상 타입 라벨에
+  `community_post: "커뮤니티 글"` 추가.
+
+## 7. 개정 (2026-07-15) — 클래식 보드 필드 + Tiptap 에디터
+
+구현 착수 후 사용자 추가 지시로 확정된 변경.
+
+**글 작성 필드 5종: 작성인 · 비밀번호 · 글 잠금여부 · 제목 · 본문.**
+
+- **작성인**: 글별 자유 입력 표시명(익명성). 기본값은 프로필 displayName. 목록·상세는
+  이 값을 표시(프로필 조인 표시 제거). → `community_post.author_display_name` (notNull).
+- **비밀번호**: 글마다 필수(4–30자). 용도: ① 잠긴 글 열람(타인이 비번 입력 시 열람),
+  ② 수정/삭제 확인(클래식 보드 방식 — 비번을 아는 사람은 수정/삭제 가능).
+  **작성자 본인 세션은 비번 없이 열람/수정/삭제 가능, admin은 열람/삭제 가능(수정 불가).**
+  저장은 scrypt 해시(`salt:hash`, node:crypto — 새 의존성 없음).
+  → `community_post.password_hash` (notNull).
+- **글 잠금여부(비밀글)**: 목록에 노출하되 서버가 제목을 "비밀글입니다"로 마스킹
+  (작성자·admin에게는 실제 제목). 상세는 작성자·admin 외에는 비밀번호 일치 시에만
+  본문 열람(댓글 조회·작성·추천도 동일 게이트). 열람 실패 응답은 throw가 아니라
+  `{ locked: true }` 축소 형태로 내려 UI가 비번 입력을 띄운다.
+  → `community_post.is_locked` (boolean, default false).
+- **본문 에디터**: Tiptap **Simple Editor** 템플릿(공식) 사용 — `@tiptap/*` 의존성 추가는
+  사용자가 명시 허용. 본문 저장 포맷은 **Tiptap JSON 문자열**(HTML 저장·주입 금지 —
+  상세 화면은 read-only Tiptap 에디터로 렌더해 XSS 표면 제거). 서버는
+  `JSON.parse` 가능 + 최상위 `type === "doc"` + 길이 캡(30000자)으로 검증.
+- 마이그레이션 0013 추가(컬럼 3개). 컨트롤러가 db:generate/migrate 직접 실행(사용자 허용).
+- 댓글에는 비밀번호·잠금 없음(글 전용).
+
+**개정 2 (2026-07-15 추가): 대댓글(1단계).**
+
+- `community_comment.parent_comment_id`(nullable self-FK, cascade) 추가 — null이면 최상위 댓글.
+  **1단계만 허용**: 부모가 이미 대댓글이면 BAD_REQUEST. 마이그레이션 0014.
+- `createComment`에 `parentCommentId?` — 부모는 같은 글의 published 댓글이어야 함(아니면 NOT_FOUND).
+- `listComments`는 `parentCommentId`·`isDeleted`를 포함해 내려주고, **삭제된 부모라도 published
+  대댓글이 있으면 플레이스홀더**(isDeleted: true, body 비움)로 유지 — 웹이 "삭제된 댓글입니다"로
+  표시. 정렬은 기존 오래된순, 그룹핑(부모→자식)은 클라이언트가 수행.
+- 대댓글도 commentCount 캐시 +1/−1 동일 적용.
+- 웹 상세: 최상위 댓글에 "답글" 버튼 → 인라인 답글 폼, 대댓글은 들여쓰기 렌더(대댓글에는 답글 버튼 없음).
+
+**개정 3 (2026-07-15 추가): 계정 유형 스냅샷·광고글·필터·공지사항 게시판.**
+
+- **작성 시점 role 스냅샷**: `community_post.author_role`·`community_comment.author_role`
+  (`bambi_user_role` enum 재사용, **서버가 작성 시 자동 기록** — 클라이언트 입력 아님, 위조 불가).
+  조회 조인 대신 스냅샷을 쓰는 이유: 이후 role 변경과 무관하게 작성 당시 신분 보존 +
+  `authorUserId` 비노출(익명성) 계약 유지. role은 카디널리티가 낮아 익명성 훼손 없음.
+- **광고글(자율 신고 방식)**: `community_post.is_promotion`(default false). 업소회원(employer)
+  글쓰기 폼에만 "광고글" 체크 노출, **employer 외 role이 true를 보내면 BAD_REQUEST**.
+  미표시 광고는 기존 신고 파이프라인(community_post)으로 운영자 조치. 수정 시에도
+  `post.author_role === "employer"`일 때만 true 허용, author_role 자체는 불변.
+- **목록 필터(5칩, 단일 선택)**: 전체 · 일반글(광고 제외) · 광고글만 · 업소회원 글 · 구직자 글.
+  `listPosts` input `filter: all|general|promotion|employer|job_seeker`(default all),
+  목록·count 쿼리 동일 적용. 필터 칩은 일반 게시판(자유·일·중고)에만 노출.
+- **배지**: 목록·홈·상세에 광고 Badge(`is_promotion`)·업소 Badge(`author_role=employer`),
+  공지 글은 운영자 배지. 댓글에는 업소 배지 + 댓글 영역 상단 "업소 댓글 숨기기" 토글
+  (클라이언트 필터 — 업소 최상위 댓글은 스레드째, 업소 답글은 개별 숨김).
+- **공지사항 게시판**: `community_board`에 `notice` 값 append. **작성은 admin만**
+  (서버 FORBIDDEN 강제 + 웹은 admin에게만 글쓰기 버튼). `COMMUNITY_BOARDS` 맨 앞에 배치
+  (adminOnly 메타), 홈 인덱스 최상단 전폭 섹션. 베스트 큐레이션에서 notice는 제외.
+- 마이그레이션 0015 (enum 값 + 컬럼 3개, 기존 행 있으면 bambi_profile 조인 backfill).
+
+## 8. 테스트·검증
+
+- API: `packages/api/src/routers/bambi/community.test.ts` — 실 DB 통합 테스트
+  (`reviews.test.ts` 픽스처 패턴). 자격 거부, CRUD, 페이지네이션, 추천 토글 왕복,
+  댓글 카운트 캐시, 권한(남의 글 수정/삭제), 소프트 삭제 후 미노출, 베스트 큐레이션.
+- 웹: `lib/bambi/community.ts` 유틸 단위 테스트(slug 매핑, 날짜 포맷, 페이지 수 계산,
+  페이지 아이템 윈도우).
+- 빌드/실행 금지 — `ultracite fix` + `check-types` + vitest까지만, 시각 확인은 사용자.
+- 마이그레이션: 스키마 코드만 작성하고 `db:generate`/`db:migrate` 실행은 사용자.

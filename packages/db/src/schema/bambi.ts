@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+	type AnyPgColumn,
 	boolean,
 	index,
 	integer,
@@ -71,6 +72,23 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"chat_message",
 	"review",
 	"user",
+	"community_post",
+]);
+
+// 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.
+// notice(공지사항)는 admin만 작성 가능(API 강제).
+export const communityBoard = pgEnum("community_board", [
+	"free",
+	"work_talk",
+	"market",
+	"notice",
+]);
+
+// 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
+export const communityContentStatus = pgEnum("community_content_status", [
+	"published",
+	"hidden",
+	"deleted",
 ]);
 
 export const promotionTier = pgEnum("promotion_tier", [
@@ -676,6 +694,103 @@ export const bambiNotification = pgTable(
 	]
 );
 
+export const communityPost = pgTable(
+	"community_post",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		board: communityBoard("board").notNull(),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
+		authorDisplayName: text("author_display_name").notNull(),
+		passwordHash: text("password_hash").notNull(),
+		isLocked: boolean("is_locked").default(false).notNull(),
+		// 작성 시점 계정 유형 스냅샷(서버 기록, 위조 불가). 업소 배지·필터용 — 이후 role 변경과 무관.
+		authorRole: bambiUserRole("author_role").notNull(),
+		// 업소회원 자율 광고 표시. employer만 true 가능(API 강제), 미표시 광고는 신고로 보완.
+		isPromotion: boolean("is_promotion").default(false).notNull(),
+		title: text("title").notNull(),
+		body: text("body").notNull(),
+		viewCount: integer("view_count").default(0).notNull(),
+		// 추천·댓글 수 캐시. 진실값은 community_post_like/community_comment 집계이며
+		// 토글·작성·삭제 트랜잭션에서 함께 증감한다.
+		likeCount: integer("like_count").default(0).notNull(),
+		commentCount: integer("comment_count").default(0).notNull(),
+		status: communityContentStatus("status").default("published").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		// $onUpdate를 쓰지 않는다 — 조회수 증가가 "수정됨" 시각을 갱신하면 안 되므로
+		// updatePost에서만 명시적으로 갱신한다.
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("community_post_board_status_created_at_idx").on(
+			table.board,
+			table.status,
+			table.createdAt
+		),
+		index("community_post_status_created_at_idx").on(
+			table.status,
+			table.createdAt
+		),
+		index("community_post_author_user_id_idx").on(table.authorUserId),
+	]
+);
+
+export const communityComment = pgTable(
+	"community_comment",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		postId: uuid("post_id")
+			.notNull()
+			.references(() => communityPost.id, { onDelete: "cascade" }),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 작성 시점 계정 유형 스냅샷(서버 기록). 업소 댓글 배지·숨김 토글용.
+		authorRole: bambiUserRole("author_role").notNull(),
+		// 대댓글(1단계). null이면 최상위 댓글. 1단계 제한은 API에서 강제한다.
+		parentCommentId: uuid("parent_comment_id").references(
+			(): AnyPgColumn => communityComment.id,
+			{ onDelete: "cascade" }
+		),
+		body: text("body").notNull(),
+		status: communityContentStatus("status").default("published").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("community_comment_post_id_status_created_at_idx").on(
+			table.postId,
+			table.status,
+			table.createdAt
+		),
+		index("community_comment_author_user_id_idx").on(table.authorUserId),
+		index("community_comment_parent_comment_id_idx").on(table.parentCommentId),
+	]
+);
+
+export const communityPostLike = pgTable(
+	"community_post_like",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		postId: uuid("post_id")
+			.notNull()
+			.references(() => communityPost.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("community_post_like_post_id_user_id_uidx").on(
+			table.postId,
+			table.userId
+		),
+		index("community_post_like_user_id_idx").on(table.userId),
+	]
+);
+
 export const bambiProfileRelations = relations(bambiProfile, ({ one }) => ({
 	user: one(user, {
 		fields: [bambiProfile.userId],
@@ -765,3 +880,28 @@ export const chatAttachmentRelations = relations(chatAttachment, ({ one }) => ({
 		references: [chatRoom.id],
 	}),
 }));
+
+export const communityPostRelations = relations(communityPost, ({ many }) => ({
+	comments: many(communityComment),
+	likes: many(communityPostLike),
+}));
+
+export const communityCommentRelations = relations(
+	communityComment,
+	({ one }) => ({
+		post: one(communityPost, {
+			fields: [communityComment.postId],
+			references: [communityPost.id],
+		}),
+	})
+);
+
+export const communityPostLikeRelations = relations(
+	communityPostLike,
+	({ one }) => ({
+		post: one(communityPost, {
+			fields: [communityPostLike.postId],
+			references: [communityPost.id],
+		}),
+	})
+);

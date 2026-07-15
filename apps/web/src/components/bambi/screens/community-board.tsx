@@ -1,0 +1,393 @@
+"use client";
+
+// 게시판 목록 — 글 행 리스트 + 번호 페이지네이션(?page= URL 동기화) + 글쓰기 버튼.
+
+import type { AppRouter } from "@bambi-app/api/routers/index";
+import { Badge } from "@bambi-app/ui/components/badge";
+import { Button } from "@bambi-app/ui/components/button";
+import {
+	Pagination,
+	PaginationContent,
+	PaginationEllipsis,
+	PaginationItem,
+	PaginationLink,
+	PaginationNext,
+	PaginationPrevious,
+} from "@bambi-app/ui/components/pagination";
+import { Separator } from "@bambi-app/ui/components/separator";
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@bambi-app/ui/components/toggle-group";
+import { cn } from "@bambi-app/ui/lib/utils";
+import type { InferRouterOutputs } from "@orpc/server";
+import { useQuery } from "@tanstack/react-query";
+import {
+	EyeIcon,
+	LockIcon,
+	MessageSquareIcon,
+	PencilLineIcon,
+	ThumbsUpIcon,
+} from "lucide-react";
+import type { Route } from "next";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Fragment, type MouseEvent, useCallback, useEffect } from "react";
+import { EmptyState } from "@/components/bambi/empty-state";
+import {
+	COMMUNITY_AUTHOR_FALLBACK,
+	communityPostPath,
+	communityWritePath,
+	formatCommunityDate,
+	getBoardBySlug,
+	getCommunityPageItems,
+	getCommunityTotalPages,
+} from "@/lib/bambi/community";
+import { orpc } from "@/utils/orpc";
+
+type CommunityListFilter =
+	| "all"
+	| "employer"
+	| "general"
+	| "job_seeker"
+	| "promotion";
+
+const LIST_FILTER_OPTIONS: { label: string; value: CommunityListFilter }[] = [
+	{ label: "전체", value: "all" },
+	{ label: "일반", value: "general" },
+	{ label: "광고", value: "promotion" },
+	{ label: "업소", value: "employer" },
+	{ label: "구직자", value: "job_seeker" },
+];
+
+// 유효하지 않은 ?filter 쿼리 값은 전체(all)로 폴백한다.
+const parseListFilter = (raw: string | null): CommunityListFilter =>
+	LIST_FILTER_OPTIONS.some((option) => option.value === raw)
+		? (raw as CommunityListFilter)
+		: "all";
+
+// 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 목록 글 타입을 파생한다.
+type BoardPostItem =
+	InferRouterOutputs<AppRouter>["bambi"]["community"]["listPosts"]["items"][number];
+
+function BoardPostBadges({ post }: { post: BoardPostItem }) {
+	if (!(post.isPromotion || post.authorRole === "employer")) {
+		return null;
+	}
+	return (
+		<>
+			{post.isPromotion ? (
+				<Badge className="shrink-0" variant="warning">
+					광고
+				</Badge>
+			) : null}
+			{post.authorRole === "employer" ? (
+				<Badge className="shrink-0" variant="secondary">
+					업소
+				</Badge>
+			) : null}
+		</>
+	);
+}
+
+function BoardPostRow({
+	boardSlug,
+	post,
+	showBadges,
+}: {
+	boardSlug: string;
+	post: BoardPostItem;
+	showBadges: boolean;
+}) {
+	return (
+		<Link
+			className="flex flex-col gap-1 rounded-lg px-2 py-3 hover:bg-muted"
+			href={communityPostPath(boardSlug, post.id) as Route}
+		>
+			<span className="flex min-w-0 items-center gap-1.5">
+				{post.isLocked ? (
+					<LockIcon className="size-3 shrink-0 text-muted-foreground" />
+				) : null}
+				{showBadges ? <BoardPostBadges post={post} /> : null}
+				<span className="truncate font-semibold text-sm">{post.title}</span>
+				{post.commentCount > 0 ? (
+					<span className="flex shrink-0 items-center gap-0.5 font-semibold text-coral-500 text-xs">
+						<MessageSquareIcon className="size-3" />
+						{post.commentCount}
+					</span>
+				) : null}
+			</span>
+			<span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-muted-foreground text-xs">
+				<span>{post.authorName ?? COMMUNITY_AUTHOR_FALLBACK}</span>
+				<span>{formatCommunityDate(post.createdAt)}</span>
+				<span className="flex items-center gap-0.5">
+					<EyeIcon className="size-3" />
+					{post.viewCount}
+				</span>
+				<span className="flex items-center gap-0.5">
+					<ThumbsUpIcon className="size-3" />
+					{post.likeCount}
+				</span>
+			</span>
+		</Link>
+	);
+}
+
+function BoardPagination({
+	onNavigate,
+	page,
+	pageHref,
+	totalPages,
+}: {
+	onNavigate: (event: MouseEvent<HTMLAnchorElement>, nextPage: number) => void;
+	page: number;
+	pageHref: (nextPage: number) => Route;
+	totalPages: number;
+}) {
+	const pageItems = getCommunityPageItems(page, totalPages);
+	const prevDisabled = page <= 1;
+	const nextDisabled = page >= totalPages;
+	const prevPage = Math.max(1, page - 1);
+	const nextPage = Math.min(totalPages, page + 1);
+
+	return (
+		<Pagination>
+			<PaginationContent>
+				<PaginationItem>
+					<PaginationPrevious
+						aria-disabled={prevDisabled}
+						className={cn(prevDisabled && "pointer-events-none opacity-50")}
+						href={pageHref(prevPage)}
+						onClick={(event) => {
+							if (prevDisabled) {
+								event.preventDefault();
+								return;
+							}
+							onNavigate(event, prevPage);
+						}}
+						tabIndex={prevDisabled ? -1 : undefined}
+					/>
+				</PaginationItem>
+				{pageItems.map((item) =>
+					typeof item === "number" ? (
+						<PaginationItem key={item}>
+							<PaginationLink
+								href={pageHref(item)}
+								isActive={item === page}
+								onClick={(event) => onNavigate(event, item)}
+							>
+								{item}
+							</PaginationLink>
+						</PaginationItem>
+					) : (
+						<PaginationItem key={item}>
+							<PaginationEllipsis />
+						</PaginationItem>
+					)
+				)}
+				<PaginationItem>
+					<PaginationNext
+						aria-disabled={nextDisabled}
+						className={cn(nextDisabled && "pointer-events-none opacity-50")}
+						href={pageHref(nextPage)}
+						onClick={(event) => {
+							if (nextDisabled) {
+								event.preventDefault();
+								return;
+							}
+							onNavigate(event, nextPage);
+						}}
+						tabIndex={nextDisabled ? -1 : undefined}
+					/>
+				</PaginationItem>
+			</PaginationContent>
+		</Pagination>
+	);
+}
+
+const getEmptyDescription = (boardKey: string, canWrite: boolean): string => {
+	if (canWrite) {
+		return "아직 글이 없어요. 첫 글을 남겨보세요.";
+	}
+	if (boardKey === "best") {
+		return "최근 30일 추천 글이 아직 없어요.";
+	}
+	return "아직 등록된 글이 없어요.";
+};
+
+function BoardFilterChips({
+	filter,
+	onChange,
+}: {
+	filter: CommunityListFilter;
+	onChange: (next: CommunityListFilter) => void;
+}) {
+	return (
+		<ToggleGroup
+			className="flex-wrap"
+			onValueChange={(value) =>
+				onChange((value[0] as CommunityListFilter | undefined) ?? "all")
+			}
+			value={[filter]}
+		>
+			{LIST_FILTER_OPTIONS.map((option) => (
+				<ToggleGroupItem key={option.value} size="sm" value={option.value}>
+					{option.label}
+				</ToggleGroupItem>
+			))}
+		</ToggleGroup>
+	);
+}
+
+export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
+	const router = useRouter();
+	const pathname = usePathname();
+	const searchParams = useSearchParams();
+	const board = getBoardBySlug(boardSlug);
+	// 필터·페이지 모두 URL 쿼리를 단일 진실원으로 파생한다(뒤로가기 복원 부수 이득).
+	const filter = parseListFilter(searchParams.get("filter"));
+	const pageParam = Number(searchParams.get("page"));
+	const page = Number.isInteger(pageParam) && pageParam >= 1 ? pageParam : 1;
+
+	// filter·page를 한 번의 replace로 원자적으로 갱신하는 쿼리 경로 빌더.
+	const buildHref = useCallback(
+		(nextFilter: CommunityListFilter, nextPage: number): Route => {
+			const params = new URLSearchParams();
+			if (nextFilter !== "all") {
+				params.set("filter", nextFilter);
+			}
+			if (nextPage > 1) {
+				params.set("page", String(nextPage));
+			}
+			const query = params.toString();
+			return (query ? `${pathname}?${query}` : pathname) as Route;
+		},
+		[pathname]
+	);
+
+	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	const isAdmin = mineQuery.data?.bambiProfile?.role === "admin";
+
+	const listQuery = useQuery(
+		orpc.bambi.community.listPosts.queryOptions({
+			enabled: Boolean(board),
+			input: { board: board?.key ?? "free", filter, page },
+		})
+	);
+
+	const totalPages = getCommunityTotalPages(
+		listQuery.data?.totalCount ?? 0,
+		listQuery.data?.pageSize ?? 20
+	);
+	const items = listQuery.data?.items ?? [];
+
+	// 데이터 로드 후 ?page가 마지막 페이지를 넘으면 마지막 페이지로 클램프한다.
+	useEffect(() => {
+		if (listQuery.isSuccess && page > totalPages) {
+			router.replace(buildHref(filter, totalPages));
+		}
+	}, [listQuery.isSuccess, page, totalPages, filter, router, buildHref]);
+
+	if (!board) {
+		return null;
+	}
+
+	// 일반 게시판(자유·일·중고)만 5칩 필터를 노출한다. 베스트·공지는 필터 없음.
+	const showFilter =
+		board.key === "free" || board.key === "work_talk" || board.key === "market";
+	// 공지 게시판은 글쓰기가 운영자 전용이라 admin에게만 버튼을 노출한다.
+	const canWrite = board.writable && (!board.adminOnly || isAdmin);
+	// 공지 게시판은 배지(광고·업소)를 생략한다.
+	const showBadges = board.key !== "notice";
+
+	const emptyDescription = getEmptyDescription(board.key, canWrite);
+
+	// 칩 변경 시 filter 설정과 page=1 리셋을 한 번의 replace로 원자적으로 처리한다.
+	const handleFilterChange = (next: CommunityListFilter) => {
+		router.replace(buildHref(next, 1));
+	};
+
+	// 페이지 이동은 실제 앵커(href)로 접근성을 유지하되, 클릭 시 router.replace로
+	// 쿼리만 교체해 히스토리를 늘리지 않는다.
+	const pageHref = (nextPage: number) => buildHref(filter, nextPage);
+	const goToPage = (event: MouseEvent<HTMLAnchorElement>, nextPage: number) => {
+		event.preventDefault();
+		router.replace(pageHref(nextPage));
+	};
+
+	return (
+		<div className="flex flex-col gap-4">
+			<div className="flex items-start justify-between gap-3">
+				<div className="flex flex-col gap-1">
+					<h1 className="m-0 font-extrabold text-xl">{board.label}</h1>
+					<p className="m-0 text-muted-foreground text-sm">
+						{board.description}
+					</p>
+				</div>
+				{canWrite ? (
+					<Button
+						render={
+							<Link href={communityWritePath(board.slug) as Route}>
+								<PencilLineIcon data-icon="inline-start" />
+								글쓰기
+							</Link>
+						}
+					/>
+				) : null}
+			</div>
+
+			{showFilter ? (
+				<BoardFilterChips filter={filter} onChange={handleFilterChange} />
+			) : null}
+
+			{listQuery.isPending ? (
+				<div className="flex flex-col gap-3">
+					<Skeleton className="h-12 w-full" />
+					<Skeleton className="h-12 w-full" />
+					<Skeleton className="h-12 w-full" />
+				</div>
+			) : null}
+
+			{listQuery.isError ? (
+				<EmptyState
+					className="flex-1"
+					description="글 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
+					title="불러오기 실패"
+				/>
+			) : null}
+
+			{listQuery.isSuccess && items.length === 0 ? (
+				<EmptyState
+					className="flex-1"
+					description={emptyDescription}
+					title="글이 없어요"
+				/>
+			) : null}
+
+			{items.length > 0 ? (
+				<div className="flex flex-col">
+					{items.map((post, index) => (
+						<Fragment key={post.id}>
+							{index > 0 ? <Separator /> : null}
+							<BoardPostRow
+								boardSlug={board.slug}
+								post={post}
+								showBadges={showBadges}
+							/>
+						</Fragment>
+					))}
+				</div>
+			) : null}
+
+			{listQuery.isSuccess && totalPages > 1 ? (
+				<BoardPagination
+					onNavigate={goToPage}
+					page={page}
+					pageHref={pageHref}
+					totalPages={totalPages}
+				/>
+			) : null}
+		</div>
+	);
+}
