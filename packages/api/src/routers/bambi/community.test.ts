@@ -755,3 +755,209 @@ describe("bambi community router — 추천·댓글", () => {
 		}
 	});
 });
+
+describe("bambi community router — 대댓글", () => {
+	it("대댓글을 달 수 있고 listComments가 parentCommentId를 내려준다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+			const replyAsAdmin = clientFor(
+				communityRouter.createComment,
+				fixture.adminUserId,
+				["createComment"]
+			);
+			const listComments = clientFor(
+				communityRouter.listComments,
+				fixture.femaleUserId,
+				["listComments"]
+			);
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `대댓글 ${randomUUID()}`,
+			});
+			const parent = await createComment({
+				body: "부모 댓글",
+				postId: created.id,
+			});
+			const reply = await replyAsAdmin({
+				body: "답글입니다",
+				parentCommentId: parent.id,
+				postId: created.id,
+			});
+
+			// 대댓글 작성도 commentCount 캐시를 +1 한다.
+			const afterReply = await getPost({ postId: created.id });
+			expect(afterReply.commentCount).toBe(2);
+
+			const comments = await listComments({ postId: created.id });
+			expect(comments).toHaveLength(2);
+			const parentItem = comments.find(
+				(item: { id: string }) => item.id === parent.id
+			);
+			const replyItem = comments.find(
+				(item: { id: string }) => item.id === reply.id
+			);
+			expect(parentItem?.parentCommentId).toBeNull();
+			expect(parentItem?.isDeleted).toBe(false);
+			expect(replyItem?.parentCommentId).toBe(parent.id);
+			expect(replyItem?.isDeleted).toBe(false);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("대댓글에 다시 답글을 달면 BAD_REQUEST, 다른 글의 댓글을 부모로 지정하면 NOT_FOUND", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+
+			const postA = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `대댓글 제한 A ${randomUUID()}`,
+			});
+			const postB = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `대댓글 제한 B ${randomUUID()}`,
+			});
+			const parent = await createComment({
+				body: "부모 댓글",
+				postId: postA.id,
+			});
+			const reply = await createComment({
+				body: "답글",
+				parentCommentId: parent.id,
+				postId: postA.id,
+			});
+
+			// 대댓글에 다시 답글 → BAD_REQUEST (1단계 제한).
+			await expectOrpcCode(
+				createComment({
+					body: "답글의 답글",
+					parentCommentId: reply.id,
+					postId: postA.id,
+				}),
+				"BAD_REQUEST"
+			);
+
+			// 다른 글의 댓글을 부모로 지정 → NOT_FOUND.
+			await expectOrpcCode(
+				createComment({
+					body: "타 글 부모",
+					parentCommentId: parent.id,
+					postId: postB.id,
+				}),
+				"NOT_FOUND"
+			);
+
+			// 존재하지 않는 부모 → NOT_FOUND.
+			await expectOrpcCode(
+				createComment({
+					body: "없는 부모",
+					parentCommentId: randomUUID(),
+					postId: postA.id,
+				}),
+				"NOT_FOUND"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("부모 댓글 삭제 후에도 published 대댓글이 있으면 부모가 isDeleted 플레이스홀더로 남는다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+			const replyAsAdmin = clientFor(
+				communityRouter.createComment,
+				fixture.adminUserId,
+				["createComment"]
+			);
+			const deleteAsAuthor = clientFor(
+				communityRouter.deleteComment,
+				fixture.femaleUserId,
+				["deleteComment"]
+			);
+			const deleteReplyAsAdmin = clientFor(
+				communityRouter.deleteComment,
+				fixture.adminUserId,
+				["deleteComment"]
+			);
+			const listComments = clientFor(
+				communityRouter.listComments,
+				fixture.femaleUserId,
+				["listComments"]
+			);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `플레이스홀더 ${randomUUID()}`,
+			});
+			const parent = await createComment({
+				body: "부모 댓글",
+				postId: created.id,
+			});
+			const reply = await replyAsAdmin({
+				body: "답글입니다",
+				parentCommentId: parent.id,
+				postId: created.id,
+			});
+
+			// 부모 삭제 → published 답글이 있으므로 플레이스홀더로 남는다.
+			await deleteAsAuthor({ commentId: parent.id });
+			const afterParentDelete = await listComments({ postId: created.id });
+			expect(afterParentDelete).toHaveLength(2);
+			const placeholder = afterParentDelete.find(
+				(item: { id: string }) => item.id === parent.id
+			);
+			expect(placeholder?.isDeleted).toBe(true);
+			expect(placeholder?.body).toBe("");
+			expect(placeholder?.authorName).toBeNull();
+			expect(placeholder?.canDelete).toBe(false);
+			expect(
+				afterParentDelete.some((item: { id: string }) => item.id === reply.id)
+			).toBe(true);
+
+			// 자식까지 삭제 → 부모 플레이스홀더도 사라진다.
+			await deleteReplyAsAdmin({ commentId: reply.id });
+			const afterAllDelete = await listComments({ postId: created.id });
+			expect(afterAllDelete).toHaveLength(0);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+});

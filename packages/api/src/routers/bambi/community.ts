@@ -68,6 +68,7 @@ const postReadInput = postIdInput.extend({
 
 const createCommentInput = postIdInput.extend({
 	body: z.string().trim().min(1).max(1000),
+	parentCommentId: z.string().uuid().optional(),
 	password: z.string().max(30).optional(),
 });
 
@@ -458,30 +459,53 @@ export const communityRouter = {
 					body: communityComment.body,
 					createdAt: communityComment.createdAt,
 					id: communityComment.id,
+					parentCommentId: communityComment.parentCommentId,
+					status: communityComment.status,
 				})
 				.from(communityComment)
 				.leftJoin(
 					bambiProfile,
 					eq(bambiProfile.userId, communityComment.authorUserId)
 				)
-				.where(
-					and(
-						eq(communityComment.postId, input.postId),
-						eq(communityComment.status, "published")
-					)
-				)
+				.where(eq(communityComment.postId, input.postId))
 				.orderBy(asc(communityComment.createdAt))
 				.limit(COMMENTS_CAP);
 
+			// published 대댓글을 가진 삭제 부모는 스레드 유지를 위해 플레이스홀더로 남긴다.
+			const liveParentIds = new Set(
+				rows
+					.filter((row) => row.status === "published" && row.parentCommentId)
+					.map((row) => row.parentCommentId)
+			);
+
 			// authorUserId는 canDelete 계산에만 쓰고 응답에서는 제외한다(익명성 보호).
-			return rows.map((row) => ({
-				authorName: row.authorName,
-				body: row.body,
-				canDelete:
-					row.authorUserId === profile.userId || profile.role === "admin",
-				createdAt: row.createdAt,
-				id: row.id,
-			}));
+			return rows
+				.filter(
+					(row) => row.status === "published" || liveParentIds.has(row.id)
+				)
+				.map((row) =>
+					row.status === "published"
+						? {
+								authorName: row.authorName,
+								body: row.body,
+								canDelete:
+									row.authorUserId === profile.userId ||
+									profile.role === "admin",
+								createdAt: row.createdAt,
+								id: row.id,
+								isDeleted: false,
+								parentCommentId: row.parentCommentId,
+							}
+						: {
+								authorName: null,
+								body: "",
+								canDelete: false,
+								createdAt: row.createdAt,
+								id: row.id,
+								isDeleted: true,
+								parentCommentId: row.parentCommentId,
+							}
+				);
 		}),
 
 	createComment: protectedProcedure
@@ -491,12 +515,37 @@ export const communityRouter = {
 			const post = await findPublishedPost(input.postId);
 			requirePostReadAccess(post, profile, input.password);
 
+			if (input.parentCommentId) {
+				const [parent] = await db
+					.select({
+						id: communityComment.id,
+						parentCommentId: communityComment.parentCommentId,
+						postId: communityComment.postId,
+						status: communityComment.status,
+					})
+					.from(communityComment)
+					.where(eq(communityComment.id, input.parentCommentId))
+					.limit(1);
+
+				if (parent?.status !== "published" || parent.postId !== input.postId) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "답글을 달 댓글을 찾을 수 없습니다.",
+					});
+				}
+				if (parent.parentCommentId) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "답글에는 다시 답글을 달 수 없습니다.",
+					});
+				}
+			}
+
 			return await db.transaction(async (tx) => {
 				const [created] = await tx
 					.insert(communityComment)
 					.values({
 						authorUserId: profile.userId,
 						body: input.body,
+						parentCommentId: input.parentCommentId ?? null,
 						postId: input.postId,
 					})
 					.returning();
