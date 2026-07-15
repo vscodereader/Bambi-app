@@ -82,6 +82,7 @@ function PostDetailView({
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const [commentBody, setCommentBody] = useState("");
+	const [replyTo, setReplyTo] = useState<string | null>(null);
 
 	// 상세(getPost)는 조회 시 view_count를 올리므로 추천·댓글 뮤테이션에서 재요청하지
 	// 않는다. getPost 캐시는 setQueryData로 직접 갱신하고, 목록/오버뷰만 무효화한다.
@@ -139,6 +140,7 @@ function PostDetailView({
 			onError: (error) => toast(error.message || "댓글을 등록하지 못했어요."),
 			onSuccess: () => {
 				setCommentBody("");
+				setReplyTo(null);
 				bumpCommentCount(1);
 				return Promise.all([invalidateComments(), invalidateBoards()]);
 			},
@@ -198,7 +200,20 @@ function PostDetailView({
 				<CommentList
 					comments={comments}
 					deletePending={deleteCommentMutation.isPending}
+					maxLength={COMMENT_MAX}
 					onDelete={(commentId) => deleteCommentMutation.mutate({ commentId })}
+					onReplyClose={() => setReplyTo(null)}
+					onReplyOpen={setReplyTo}
+					onReplySubmit={(parentCommentId, body) =>
+						createCommentMutation.mutate({
+							body,
+							parentCommentId,
+							password: appliedPassword,
+							postId,
+						})
+					}
+					replyPending={createCommentMutation.isPending}
+					replyTo={replyTo}
 				/>
 				<CommentForm
 					canSubmit={canSubmitComment}

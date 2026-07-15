@@ -26,6 +26,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { EditorContent, useEditor } from "@tiptap/react";
 import {
+	CornerDownRightIcon,
 	EyeIcon,
 	FlagIcon,
 	LockIcon,
@@ -75,6 +76,8 @@ export interface CommunityCommentItem {
 	canDelete: boolean;
 	createdAt: Date | string;
 	id: string;
+	isDeleted: boolean;
+	parentCommentId: string | null;
 }
 
 // 읽기 전용 뷰어 타이포그래피 — 에디터 본문과 동일 스키마·시맨틱 토큰만.
@@ -349,15 +352,27 @@ export function DeletePostButton({
 	);
 }
 
+// 단일 댓글 행. 삭제된 항목은 작성자·본문·액션 없이 muted 플레이스홀더로만 표시한다.
+// onReply가 있으면(최상위·published 한정) 본문 아래 답글 버튼을 렌더한다.
 function CommentRow({
 	comment,
 	deletePending,
 	onDelete,
+	onReply,
 }: {
 	comment: CommunityCommentItem;
 	deletePending: boolean;
 	onDelete: (commentId: string) => void;
+	onReply?: () => void;
 }) {
+	if (comment.isDeleted) {
+		return (
+			<p className="m-0 py-1 text-muted-foreground text-sm italic">
+				삭제된 댓글입니다
+			</p>
+		);
+	}
+
 	return (
 		<div className="flex flex-col gap-1">
 			<div className="flex items-center justify-between gap-2">
@@ -380,6 +395,114 @@ function CommentRow({
 				</span>
 			</div>
 			<p className="m-0 whitespace-pre-wrap text-sm">{comment.body}</p>
+			{onReply ? (
+				<div>
+					<Button onClick={onReply} size="sm" variant="ghost">
+						<CornerDownRightIcon data-icon="inline-start" />
+						답글
+					</Button>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
+// 인라인 답글 폼. replyTo 변경으로 mount/unmount되며 입력값은 매 열림마다 초기화된다.
+function ReplyForm({
+	maxLength,
+	onCancel,
+	onSubmit,
+	pending,
+}: {
+	maxLength: number;
+	onCancel: () => void;
+	onSubmit: (body: string) => void;
+	pending: boolean;
+}) {
+	const [body, setBody] = useState("");
+	const trimmed = body.trim();
+	const canSubmit = trimmed.length >= 1 && !pending;
+
+	return (
+		<div className="flex flex-col gap-2">
+			<Textarea
+				maxLength={maxLength}
+				onChange={(event) => setBody(event.target.value)}
+				placeholder="답글을 입력해 주세요"
+				value={body}
+			/>
+			<div className="flex justify-end gap-2">
+				<Button onClick={onCancel} size="sm" type="button" variant="outline">
+					취소
+				</Button>
+				<Button
+					disabled={!canSubmit}
+					onClick={() => onSubmit(trimmed)}
+					size="sm"
+				>
+					답글 등록
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+// 최상위 댓글 + 자식(대댓글) 스레드. 답글 폼과 대댓글은 한 들여쓰기 레일로 묶어
+// 시각적으로 부모에 귀속시킨다.
+function CommentThread({
+	deletePending,
+	maxLength,
+	onDelete,
+	onReplyClose,
+	onReplyOpen,
+	onReplySubmit,
+	parent,
+	replies,
+	replyPending,
+	replyTo,
+}: {
+	deletePending: boolean;
+	maxLength: number;
+	onDelete: (commentId: string) => void;
+	onReplyClose: () => void;
+	onReplyOpen: (parentId: string) => void;
+	onReplySubmit: (parentId: string, body: string) => void;
+	parent: CommunityCommentItem;
+	replies: CommunityCommentItem[];
+	replyPending: boolean;
+	replyTo: string | null;
+}) {
+	const isReplying = replyTo === parent.id;
+	const canReply = !(parent.isDeleted || isReplying);
+
+	return (
+		<div className="flex flex-col gap-3">
+			<CommentRow
+				comment={parent}
+				deletePending={deletePending}
+				onDelete={onDelete}
+				onReply={canReply ? () => onReplyOpen(parent.id) : undefined}
+			/>
+			{isReplying || replies.length > 0 ? (
+				<div className="flex flex-col gap-3 border-border border-l pl-4">
+					{isReplying ? (
+						<ReplyForm
+							maxLength={maxLength}
+							onCancel={onReplyClose}
+							onSubmit={(body) => onReplySubmit(parent.id, body)}
+							pending={replyPending}
+						/>
+					) : null}
+					{replies.map((reply) => (
+						<CommentRow
+							comment={reply}
+							deletePending={deletePending}
+							key={reply.id}
+							onDelete={onDelete}
+						/>
+					))}
+				</div>
+			) : null}
 		</div>
 	);
 }
@@ -387,11 +510,23 @@ function CommentRow({
 export function CommentList({
 	comments,
 	deletePending,
+	maxLength,
 	onDelete,
+	onReplyClose,
+	onReplyOpen,
+	onReplySubmit,
+	replyPending,
+	replyTo,
 }: {
 	comments: CommunityCommentItem[];
 	deletePending: boolean;
+	maxLength: number;
 	onDelete: (commentId: string) => void;
+	onReplyClose: () => void;
+	onReplyOpen: (parentId: string) => void;
+	onReplySubmit: (parentId: string, body: string) => void;
+	replyPending: boolean;
+	replyTo: string | null;
 }) {
 	if (comments.length === 0) {
 		return (
@@ -401,14 +536,27 @@ export function CommentList({
 		);
 	}
 
+	const parents = comments.filter(
+		(comment) => comment.parentCommentId === null
+	);
+
 	return (
 		<div className="flex flex-col gap-3">
-			{comments.map((comment) => (
-				<CommentRow
-					comment={comment}
+			{parents.map((parent) => (
+				<CommentThread
 					deletePending={deletePending}
-					key={comment.id}
+					key={parent.id}
+					maxLength={maxLength}
 					onDelete={onDelete}
+					onReplyClose={onReplyClose}
+					onReplyOpen={onReplyOpen}
+					onReplySubmit={onReplySubmit}
+					parent={parent}
+					replies={comments.filter(
+						(comment) => comment.parentCommentId === parent.id
+					)}
+					replyPending={replyPending}
+					replyTo={replyTo}
 				/>
 			))}
 		</div>
