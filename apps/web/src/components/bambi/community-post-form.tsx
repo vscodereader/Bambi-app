@@ -50,6 +50,58 @@ interface CommunityPostFormProps {
 	initialPost?: CommunityPostInitial;
 }
 
+// 비밀글 잠금 스위치 + (잠금 시) 비밀번호 필드. 작성 모드는 잠금을 켤 때만 비번 필드를 노출하고
+// 잠금을 끄면 잔여 비번을 비운다. 수정 모드는 인증용 비번 필드(글 비밀번호)를 항상 노출한다.
+function PostLockField({
+	isEdit,
+	isLocked,
+	password,
+	setIsLocked,
+	setPassword,
+}: {
+	isEdit: boolean;
+	isLocked: boolean;
+	password: string;
+	setIsLocked: (value: boolean) => void;
+	setPassword: (value: string) => void;
+}) {
+	const showPasswordField = isEdit || isLocked;
+	const handleLockChange = (checked: boolean) => {
+		setIsLocked(checked);
+		if (!(checked || isEdit)) {
+			setPassword("");
+		}
+	};
+	return (
+		<div className="flex flex-col gap-2">
+			<div className="flex items-center gap-2">
+				<Switch
+					checked={isLocked}
+					id="community-post-lock"
+					onCheckedChange={handleLockChange}
+				/>
+				<Label htmlFor="community-post-lock">비밀글로 잠그기</Label>
+			</div>
+			{showPasswordField ? (
+				<div className="flex flex-col gap-2">
+					<Label htmlFor="community-post-password">
+						{isEdit ? "글 비밀번호" : "비밀글 비밀번호"}
+					</Label>
+					<Input
+						autoComplete="new-password"
+						id="community-post-password"
+						maxLength={PASSWORD_MAX}
+						onChange={(event) => setPassword(event.target.value)}
+						placeholder={isEdit ? "본인은 비워둘 수 있어요" : "4자 이상"}
+						type="password"
+						value={password}
+					/>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 export function CommunityPostForm({
 	board,
 	editPassword,
@@ -131,12 +183,15 @@ export function CommunityPostForm({
 		})
 	);
 
+	// 비밀번호는 비밀글(잠금)에만 필요하다 — 작성 모드에서 잠그지 않으면 비번 없이 등록할 수 있다.
+	const requiresPassword = !isEdit && isLocked;
+
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
 	const canSubmit =
 		authorName.trim().length >= 1 &&
 		title.trim().length >= MIN_TEXT &&
 		(bodyText.trim().length >= MIN_TEXT || bodyHasImage) &&
-		(isEdit || password.length >= PASSWORD_MIN) &&
+		(!requiresPassword || password.length >= PASSWORD_MIN) &&
 		!isSubmitting;
 
 	const submitEdit = (postId: string) => {
@@ -157,14 +212,15 @@ export function CommunityPostForm({
 		if (!isWritableBoardKey(boardKey)) {
 			return;
 		}
+		const trimmedPassword = password.trim();
 		createMutation.mutate({
 			authorName: authorName.trim(),
 			board: boardKey,
 			body: bodyJson,
 			isLocked,
 			isPromotion,
-			password: password.trim(),
 			title: title.trim(),
+			...(trimmedPassword ? { password: trimmedPassword } : {}),
 		});
 	};
 
@@ -200,29 +256,13 @@ export function CommunityPostForm({
 				/>
 			</div>
 
-			<div className="flex flex-col gap-2">
-				<Label htmlFor="community-post-password">
-					{isEdit ? "글 비밀번호" : "비밀번호"}
-				</Label>
-				<Input
-					autoComplete="new-password"
-					id="community-post-password"
-					maxLength={PASSWORD_MAX}
-					onChange={(event) => setPassword(event.target.value)}
-					placeholder={isEdit ? "본인은 비워둘 수 있어요" : "4자 이상"}
-					type="password"
-					value={password}
-				/>
-			</div>
-
-			<div className="flex items-center gap-2">
-				<Switch
-					checked={isLocked}
-					id="community-post-lock"
-					onCheckedChange={setIsLocked}
-				/>
-				<Label htmlFor="community-post-lock">비밀글로 잠그기</Label>
-			</div>
+			<PostLockField
+				isEdit={isEdit}
+				isLocked={isLocked}
+				password={password}
+				setIsLocked={setIsLocked}
+				setPassword={setPassword}
+			/>
 
 			{canPromote ? (
 				<div className="flex items-center gap-2">

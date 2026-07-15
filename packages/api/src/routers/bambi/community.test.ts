@@ -400,6 +400,97 @@ describe("bambi community router — 조회", () => {
 		}
 	});
 
+	it("비밀번호 없이 잠그지 않은 글을 작성하고 타인이 비번 없이 열람한다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				isLocked: false,
+				password: undefined,
+				title: `무비번 ${randomUUID()}`,
+			});
+
+			const getAsOther = clientFor(
+				communityRouter.getPost,
+				fixture.otherFemaleUserId,
+				["getPost"]
+			);
+			const view = await getAsOther({ postId: created.id });
+			expect(view.locked).toBe(false);
+			if (view.locked === false) {
+				expect(view.body).toBe(TIPTAP_BODY);
+			}
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("비밀글(잠금)은 비밀번호 없이 작성할 수 없다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			await expectOrpcCode(
+				createPost({
+					...basePostInput,
+					board: "free",
+					isLocked: true,
+					password: undefined,
+					title: `비밀무비번 ${randomUUID()}`,
+				}),
+				"BAD_REQUEST"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("비밀번호 없이 작성한 글은 비밀글로 잠글 수 없다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				isLocked: false,
+				password: undefined,
+				title: `무비번 수정 ${randomUUID()}`,
+			});
+
+			const updatePost = clientFor(
+				communityRouter.updatePost,
+				fixture.femaleUserId,
+				["updatePost"]
+			);
+			await expectOrpcCode(
+				updatePost({
+					authorName: basePostInput.authorName,
+					body: basePostInput.body,
+					isLocked: true,
+					isPromotion: false,
+					postId: created.id,
+					title: `무비번 잠금시도 ${randomUUID()}`,
+				}),
+				"BAD_REQUEST"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
 	it("본문이 Tiptap doc JSON이 아니면 BAD_REQUEST", async () => {
 		const fixture = await createCommunityFixture();
 		try {
