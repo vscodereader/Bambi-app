@@ -58,6 +58,7 @@ export default function EditAdProductPage() {
 						benefits: product.benefits,
 						priceOptions: product.priceOptions,
 						previewImageUrl: product.previewImageUrl ?? null,
+						previewTemplate: product.previewTemplate,
 					}}
 					onSubmit={(draft) =>
 						updateProduct.mutate({
@@ -67,6 +68,7 @@ export default function EditAdProductPage() {
 							benefits: draft.benefits,
 							priceOptions: draft.priceOptions,
 							previewImageUrl: draft.previewImageUrl,
+							previewTemplate: draft.previewTemplate,
 						})
 					}
 					pending={updateProduct.isPending}

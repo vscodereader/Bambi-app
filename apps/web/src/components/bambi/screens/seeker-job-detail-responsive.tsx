@@ -2,6 +2,7 @@
 
 import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
+import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
@@ -73,14 +74,15 @@ export function SeekerJobDetailResponsive({
 	onReport,
 	onStartChat,
 }: SeekerJobDetailResponsiveProps) {
+	const adBanners = useAdBannerJobs();
 	return (
 		<div className="mx-auto flex w-full justify-center gap-5 py-5 pb-28 md:py-7">
 			{/* 좌 여백 배너 — 넓은 화면 전용, 스크롤 추종 */}
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					<HorizontalAdBannerRail
-						keys={["detail-left-1", "detail-left-2", "detail-left-3"]}
-					/>
+					{adBanners.leftBanner.length > 0 ? (
+						<HorizontalAdBannerRail items={adBanners.leftBanner} />
+					) : null}
 				</div>
 			</aside>
 			{/* 중앙 콘텐츠: 본문 + CTA 고정폭 그리드 */}
@@ -271,7 +273,9 @@ export function SeekerJobDetailResponsive({
 			{/* 우 여백 배너 — 넓은 화면 전용, 스크롤 추종 */}
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					<AdBannerRail count={2} offset={3} />
+					{adBanners.rightBanner.length > 0 ? (
+						<AdBannerRail items={adBanners.rightBanner} />
+					) : null}
 				</div>
 			</aside>
 			<div className="fixed right-0 bottom-0 left-0 z-30 border-border border-t bg-background p-4 lg:hidden">
