@@ -45,7 +45,10 @@ describe("visual job marketplace components", () => {
 		const source = readComponent("visual-job-exposure-sections.tsx");
 
 		expect(source).toContain("export function VisualJobExposureSections");
-		expect(source).toContain("getVisualJobExposureSections");
+		// 서버 노출 섹션을 파생 없이 그대로 소비한다(getVisualJobExposureSections 제거)
+		expect(source).not.toContain("getVisualJobExposureSections");
+		expect(source).toContain("sections.special");
+		expect(source).toContain("sections.urgent");
 		expect(source).toContain("스페셜 채용");
 		expect(source).toContain("급구 채용");
 		expect(source).toContain("추천 채용");

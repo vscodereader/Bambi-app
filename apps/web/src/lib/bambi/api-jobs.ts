@@ -48,12 +48,14 @@ const toApiListInput = (filters: MarketplaceFilters) => ({
 
 const EMPTY_SECTIONS: MarketplaceJobSections = {
 	organic: [],
-	premium: [],
 	recommended: [],
+	special: [],
+	urgent: [],
 };
 
 const flattenSections = (sections: MarketplaceJobSections): Job[] => [
-	...sections.premium,
+	...sections.special,
+	...sections.urgent,
 	...sections.recommended,
 	...sections.organic,
 ];
@@ -63,29 +65,41 @@ const filterSections = (
 	filters: MarketplaceFilters
 ): MarketplaceJobSections => ({
 	organic: filterMarketplaceJobs(sections.organic, filters),
-	premium: filterMarketplaceJobs(sections.premium, filters),
 	recommended: filterMarketplaceJobs(sections.recommended, filters),
+	special: filterMarketplaceJobs(sections.special, filters),
+	urgent: filterMarketplaceJobs(sections.urgent, filters),
 });
+
+const getBoostTime = (job: Job): number => {
+	if (!job.lastBoostedAt) {
+		return 0;
+	}
+
+	const value = new Date(job.lastBoostedAt).getTime();
+	return Number.isFinite(value) ? value : 0;
+};
 
 const buildFallbackSections = (
 	filters: MarketplaceFilters
-): MarketplaceJobSections => ({
-	premium: filterMarketplaceJobs(
-		JOBS.filter((job) => job.promotionTier === "premium"),
-		filters
-	),
-	recommended: filterMarketplaceJobs(
-		JOBS.filter((job) => job.promotionTier === "recommended"),
-		filters
-	),
-	organic: filterMarketplaceJobs(
-		JOBS.filter(
-			(job) =>
-				job.promotionTier !== "premium" && job.promotionTier !== "recommended"
-		),
-		filters
-	),
-});
+): MarketplaceJobSections => {
+	const special = JOBS.filter((job) => job.promotionTier === "premium");
+	const recommended = JOBS.filter((job) => job.promotionTier === "recommended");
+	const urgent = [...special, ...recommended]
+		.filter((job) => getBoostTime(job) > 0)
+		.toSorted((left, right) => getBoostTime(right) - getBoostTime(left))
+		.slice(0, 6);
+	const organic = JOBS.filter(
+		(job) =>
+			job.promotionTier !== "premium" && job.promotionTier !== "recommended"
+	);
+
+	return {
+		organic: filterMarketplaceJobs(organic, filters),
+		recommended: filterMarketplaceJobs(recommended, filters),
+		special: filterMarketplaceJobs(special, filters),
+		urgent: filterMarketplaceJobs(urgent, filters),
+	};
+};
 
 export function useMarketplaceJobs(
 	filters: MarketplaceFilters
@@ -97,9 +111,10 @@ export function useMarketplaceJobs(
 		? filterSections(
 				{
 					organic: jobsQuery.data.sections.organic.map(toMarketplaceJob),
-					premium: jobsQuery.data.sections.premium.map(toMarketplaceJob),
 					recommended:
 						jobsQuery.data.sections.recommended.map(toMarketplaceJob),
+					special: jobsQuery.data.sections.special.map(toMarketplaceJob),
+					urgent: jobsQuery.data.sections.urgent.map(toMarketplaceJob),
 				},
 				filters
 			)

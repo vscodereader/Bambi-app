@@ -27,8 +27,10 @@ export interface ApiMarketplaceJob {
 	descriptionBlocks?: JobDescriptionBlock[] | null;
 	employerDisplayName?: string | null;
 	employerVerificationStatus?: string | null;
+	exposureType?: null | string;
 	id: string;
 	industryCategory: string;
+	isPromoted?: boolean;
 	lastBoostedAt?: Date | null | string;
 	media?: ApiJobMediaSet;
 	payAmount: number;
@@ -120,10 +122,11 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 			"공고 상세와 면접 안내는 밤비 채팅에서 안전하게 확인할 수 있어요.",
 		descriptionBlocks: job.descriptionBlocks ?? [],
 		detailImages,
+		exposureType: job.exposureType ?? null,
 		featured: job.employerVerificationStatus === "verified",
 		hours: job.workSchedule ?? "채팅으로 확인",
 		id: job.id,
-		isPromoted: Boolean(job.promotionTier),
+		isPromoted: job.isPromoted ?? Boolean(job.promotionTier),
 		lastBoostedAt: job.lastBoostedAt ?? null,
 		location: job.region,
 		pay: formatMarketplacePay(job),

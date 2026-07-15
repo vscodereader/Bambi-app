@@ -57,4 +57,40 @@ describe("toMarketplaceJob", () => {
 
 		expect(job.performance).toBeUndefined();
 	});
+
+	it("carries the server exposureType and isPromoted flag onto the mapped job", () => {
+		const job = toMarketplaceJob({
+			exposureType: "special",
+			id: "33333333-3333-4333-8333-333333333301",
+			industryCategory: "라운지",
+			isPromoted: true,
+			payAmount: 200_000,
+			payUnit: "일급",
+			promotionLabel: "스페셜",
+			region: "서울 강남구",
+			status: "published",
+			title: "노출 섹션 공고",
+			workSchedule: "20:00-02:00",
+		});
+
+		expect(job.exposureType).toBe("special");
+		expect(job.isPromoted).toBe(true);
+	});
+
+	it("defaults exposureType to null and derives isPromoted from promotionTier for mock jobs", () => {
+		const job = toMarketplaceJob({
+			id: "33333333-3333-4333-8333-333333333302",
+			industryCategory: "라운지",
+			payAmount: 150_000,
+			payUnit: "일급",
+			promotionTier: "premium",
+			region: "서울 강남구",
+			status: "published",
+			title: "폴백 프로모션 공고",
+			workSchedule: "20:00-02:00",
+		});
+
+		expect(job.exposureType).toBeNull();
+		expect(job.isPromoted).toBe(true);
+	});
 });

@@ -2,7 +2,6 @@
 
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
-import { getVisualJobExposureSections } from "@/lib/bambi/visual-job-exposure";
 import { Card } from "./ds";
 import { VisualJobCard } from "./visual-job-card";
 
@@ -92,13 +91,11 @@ export function VisualJobExposureSections({
 		);
 	}
 
-	const visualSections = getVisualJobExposureSections(sections);
-
 	return (
 		<div className="grid gap-5">
-			{visualSections.special.length > 0 ? (
+			{sections.special.length > 0 ? (
 				<ExposureSection
-					jobs={visualSections.special}
+					jobs={sections.special}
 					meta="프리미엄 노출"
 					onChat={onChat}
 					onOpen={onOpen}
@@ -106,9 +103,9 @@ export function VisualJobExposureSections({
 					tone="special"
 				/>
 			) : null}
-			{visualSections.urgent.length > 0 ? (
+			{sections.urgent.length > 0 ? (
 				<ExposureSection
-					jobs={visualSections.urgent}
+					jobs={sections.urgent}
 					meta="최근 끌어올림"
 					onChat={onChat}
 					onOpen={onOpen}
@@ -116,9 +113,9 @@ export function VisualJobExposureSections({
 					tone="urgent"
 				/>
 			) : null}
-			{visualSections.recommended.length > 0 ? (
+			{sections.recommended.length > 0 ? (
 				<ExposureSection
-					jobs={visualSections.recommended}
+					jobs={sections.recommended}
 					meta="상단 추천"
 					onChat={onChat}
 					onOpen={onOpen}
@@ -127,7 +124,7 @@ export function VisualJobExposureSections({
 				/>
 			) : null}
 			<ExposureSection
-				jobs={visualSections.organic}
+				jobs={sections.organic}
 				meta="최신순"
 				onChat={onChat}
 				onOpen={onOpen}
