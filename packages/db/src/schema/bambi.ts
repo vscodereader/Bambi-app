@@ -71,6 +71,21 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"chat_message",
 	"review",
 	"user",
+	"community_post",
+]);
+
+// 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.
+export const communityBoard = pgEnum("community_board", [
+	"free",
+	"work_talk",
+	"market",
+]);
+
+// 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
+export const communityContentStatus = pgEnum("community_content_status", [
+	"published",
+	"hidden",
+	"deleted",
 ]);
 
 export const promotionTier = pgEnum("promotion_tier", [
@@ -676,6 +691,87 @@ export const bambiNotification = pgTable(
 	]
 );
 
+export const communityPost = pgTable(
+	"community_post",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		board: communityBoard("board").notNull(),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		title: text("title").notNull(),
+		body: text("body").notNull(),
+		viewCount: integer("view_count").default(0).notNull(),
+		// 추천·댓글 수 캐시. 진실값은 community_post_like/community_comment 집계이며
+		// 토글·작성·삭제 트랜잭션에서 함께 증감한다.
+		likeCount: integer("like_count").default(0).notNull(),
+		commentCount: integer("comment_count").default(0).notNull(),
+		status: communityContentStatus("status").default("published").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		// $onUpdate를 쓰지 않는다 — 조회수 증가가 "수정됨" 시각을 갱신하면 안 되므로
+		// updatePost에서만 명시적으로 갱신한다.
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("community_post_board_status_created_at_idx").on(
+			table.board,
+			table.status,
+			table.createdAt
+		),
+		index("community_post_status_created_at_idx").on(
+			table.status,
+			table.createdAt
+		),
+		index("community_post_author_user_id_idx").on(table.authorUserId),
+	]
+);
+
+export const communityComment = pgTable(
+	"community_comment",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		postId: uuid("post_id")
+			.notNull()
+			.references(() => communityPost.id, { onDelete: "cascade" }),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		body: text("body").notNull(),
+		status: communityContentStatus("status").default("published").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("community_comment_post_id_status_created_at_idx").on(
+			table.postId,
+			table.status,
+			table.createdAt
+		),
+		index("community_comment_author_user_id_idx").on(table.authorUserId),
+	]
+);
+
+export const communityPostLike = pgTable(
+	"community_post_like",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		postId: uuid("post_id")
+			.notNull()
+			.references(() => communityPost.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("community_post_like_post_id_user_id_uidx").on(
+			table.postId,
+			table.userId
+		),
+		index("community_post_like_user_id_idx").on(table.userId),
+	]
+);
+
 export const bambiProfileRelations = relations(bambiProfile, ({ one }) => ({
 	user: one(user, {
 		fields: [bambiProfile.userId],
@@ -765,3 +861,28 @@ export const chatAttachmentRelations = relations(chatAttachment, ({ one }) => ({
 		references: [chatRoom.id],
 	}),
 }));
+
+export const communityPostRelations = relations(communityPost, ({ many }) => ({
+	comments: many(communityComment),
+	likes: many(communityPostLike),
+}));
+
+export const communityCommentRelations = relations(
+	communityComment,
+	({ one }) => ({
+		post: one(communityPost, {
+			fields: [communityComment.postId],
+			references: [communityPost.id],
+		}),
+	})
+);
+
+export const communityPostLikeRelations = relations(
+	communityPostLike,
+	({ one }) => ({
+		post: one(communityPost, {
+			fields: [communityPostLike.postId],
+			references: [communityPost.id],
+		}),
+	})
+);
