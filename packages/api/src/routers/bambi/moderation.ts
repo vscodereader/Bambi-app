@@ -193,14 +193,135 @@ const jobPostHasCoverImageSql = sql<boolean>`exists(
 		and ${jobPostMedia.usage} = 'cover'
 )`;
 
-const getReportTargetContext = async (reportRow: ReportRow) => {
-	if (reportRow.targetType !== "chat_message") {
+const COMMUNITY_BODY_PREVIEW_MAX = 300;
+
+// Tiptap doc JSON에서 text 노드만 재귀로 걸러 평문을 만든다. doc 하위 블록은 줄바꿈으로
+// 잇고, 블록 내부 text 노드는 붙여 이어 단어가 쪼개지지 않게 한다.
+const collectTiptapText = (node: unknown): string => {
+	if (!node || typeof node !== "object") {
+		return "";
+	}
+	const record = node as { content?: unknown; text?: unknown; type?: unknown };
+	if (record.type === "text" && typeof record.text === "string") {
+		return record.text;
+	}
+	if (Array.isArray(record.content)) {
+		return record.content
+			.map(collectTiptapText)
+			.join(record.type === "doc" ? "\n" : "");
+	}
+	return "";
+};
+
+// 글 본문(Tiptap JSON)에서 평문 발췌를 만든다. 파싱 실패 시 원문 문자열을 그대로 자른다.
+const toCommunityBodyPreview = (body: string): string => {
+	let plain: string;
+	try {
+		plain = collectTiptapText(JSON.parse(body) as unknown).trim();
+	} catch {
+		plain = body;
+	}
+	return plain.slice(0, COMMUNITY_BODY_PREVIEW_MAX);
+};
+
+// community_post 신고 컨텍스트 — 운영자는 hidden/deleted 상태여도 원문 맥락을 봐야 하므로
+// 상태와 무관하게 조회하고 현재 status를 그대로 노출한다.
+const getCommunityPostTargetContext = async (targetId: string) => {
+	const [post] = await db
+		.select({
+			authorDisplayName: communityPost.authorDisplayName,
+			board: communityPost.board,
+			body: communityPost.body,
+			createdAt: communityPost.createdAt,
+			id: communityPost.id,
+			status: communityPost.status,
+			title: communityPost.title,
+		})
+		.from(communityPost)
+		.where(eq(communityPost.id, targetId))
+		.limit(1);
+
+	if (!post) {
 		return null;
 	}
 
-	const message = await getChatMessageTargetContext(reportRow.targetId);
+	return {
+		authorName: post.authorDisplayName,
+		board: post.board,
+		bodyPreview: toCommunityBodyPreview(post.body),
+		createdAt: post.createdAt,
+		id: post.id,
+		status: post.status,
+		title: post.title,
+	};
+};
 
-	return message ? { chatMessage: message } : null;
+// community_comment 신고 컨텍스트 — 작성자 표시명은 listComments와 동일하게 bambi_profile
+// 표시명을 쓰고, 제목·게시판은 부모 글 조인으로 채운다(부모 글이 삭제 상태여도 조인 유지).
+const getCommunityCommentTargetContext = async (targetId: string) => {
+	const [comment] = await db
+		.select({
+			authorName: bambiProfile.displayName,
+			body: communityComment.body,
+			createdAt: communityComment.createdAt,
+			id: communityComment.id,
+			postBoard: communityPost.board,
+			postId: communityComment.postId,
+			postTitle: communityPost.title,
+			status: communityComment.status,
+		})
+		.from(communityComment)
+		.innerJoin(communityPost, eq(communityPost.id, communityComment.postId))
+		.leftJoin(
+			bambiProfile,
+			eq(bambiProfile.userId, communityComment.authorUserId)
+		)
+		.where(eq(communityComment.id, targetId))
+		.limit(1);
+
+	if (!comment) {
+		return null;
+	}
+
+	return {
+		authorName: comment.authorName,
+		bodyPreview: comment.body.slice(0, COMMUNITY_BODY_PREVIEW_MAX),
+		createdAt: comment.createdAt,
+		id: comment.id,
+		postBoard: comment.postBoard,
+		postId: comment.postId,
+		postTitle: comment.postTitle,
+		status: comment.status,
+	};
+};
+
+const getReportTargetContext = async (reportRow: ReportRow) => {
+	// uuid가 아닌 targetId는 대상 조회 자체가 불가하므로 컨텍스트 없이 넘어간다(신고 행은 유지).
+	if (
+		uuidTargetTypes.has(reportRow.targetType) &&
+		!uuidTargetIdSchema.safeParse(reportRow.targetId).success
+	) {
+		return null;
+	}
+
+	switch (reportRow.targetType) {
+		case "chat_message": {
+			const message = await getChatMessageTargetContext(reportRow.targetId);
+			return message ? { chatMessage: message } : null;
+		}
+		case "community_post": {
+			const post = await getCommunityPostTargetContext(reportRow.targetId);
+			return post ? { communityPost: post } : null;
+		}
+		case "community_comment": {
+			const comment = await getCommunityCommentTargetContext(
+				reportRow.targetId
+			);
+			return comment ? { communityComment: comment } : null;
+		}
+		default:
+			return null;
+	}
 };
 
 const withReportTargetContexts = async (reportRows: ReportRow[]) =>

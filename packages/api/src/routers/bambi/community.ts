@@ -1,5 +1,6 @@
 import { db } from "@bambi-app/db";
 import {
+	adminModerationAction,
 	bambiProfile,
 	communityComment,
 	communityPost,
@@ -21,7 +22,10 @@ import {
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
-import type { BambiAccessProfile } from "../../services/bambi-authz";
+import {
+	type BambiAccessProfile,
+	requireAdminProfile,
+} from "../../services/bambi-authz";
 import { requireCommunityMember } from "../../services/bambi-community-authz";
 import {
 	hashCommunityPassword,
@@ -112,6 +116,23 @@ const deleteCommentInput = z.object({
 const updateCommentInput = z.object({
 	body: z.string().trim().min(1).max(1000),
 	commentId: z.string().uuid(),
+});
+
+// 운영자 조치 — 작성자·비밀번호와 무관하게 admin만 글·댓글 상태를 전환한다(published/hidden/deleted).
+const communityAdminStatusSchema = z.enum(["published", "hidden", "deleted"]);
+
+const setPostStatusByAdminInput = z.object({
+	postId: z.string().uuid(),
+	reason: z.string().trim().min(1).max(500),
+	reportId: z.string().uuid().optional(),
+	status: communityAdminStatusSchema,
+});
+
+const setCommentStatusByAdminInput = z.object({
+	commentId: z.string().uuid(),
+	reason: z.string().trim().min(1).max(500),
+	reportId: z.string().uuid().optional(),
+	status: communityAdminStatusSchema,
 });
 
 const assertTiptapDoc = (body: string) => {
@@ -789,5 +810,109 @@ export const communityRouter = {
 				.where(eq(communityComment.id, input.commentId));
 
 			return { id: comment.id };
+		}),
+
+	// 운영자 글 숨김/삭제/복구. deletePost는 글 단위 카운트 부수효과가 없으므로
+	// 상태 전환도 status·updatedAt만 갱신하고, 감사 로그를 남긴다.
+	setPostStatusByAdmin: protectedProcedure
+		.input(setPostStatusByAdminInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(async (tx) => {
+				const [updated] = await tx
+					.update(communityPost)
+					.set({ status: input.status, updatedAt: new Date() })
+					.where(eq(communityPost.id, input.postId))
+					.returning({
+						id: communityPost.id,
+						status: communityPost.status,
+					});
+
+				if (!updated) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "글을 찾을 수 없습니다.",
+					});
+				}
+
+				await tx.insert(adminModerationAction).values({
+					action: `set_community_post_status:${input.status}`,
+					adminUserId: admin.userId,
+					metadata: input.reportId ? { reportId: input.reportId } : {},
+					reason: input.reason,
+					targetId: input.postId,
+					targetType: "community_post",
+				});
+
+				return { id: updated.id, status: updated.status };
+			});
+		}),
+
+	// 운영자 댓글 숨김/삭제/복구. commentCount 캐시는 노출(published)만 세므로
+	// deleteComment/createComment와 동일하게 노출성이 바뀌는 전이에서만 증감한다.
+	setCommentStatusByAdmin: protectedProcedure
+		.input(setCommentStatusByAdminInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({
+						postId: communityComment.postId,
+						status: communityComment.status,
+					})
+					.from(communityComment)
+					.where(eq(communityComment.id, input.commentId))
+					.limit(1);
+
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "댓글을 찾을 수 없습니다.",
+					});
+				}
+
+				const [updated] = await tx
+					.update(communityComment)
+					.set({ status: input.status, updatedAt: new Date() })
+					.where(eq(communityComment.id, input.commentId))
+					.returning({
+						id: communityComment.id,
+						status: communityComment.status,
+					});
+
+				if (!updated) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "댓글을 찾을 수 없습니다.",
+					});
+				}
+
+				// 동일 노출성 전이(예: hidden→deleted, published→published)는 카운트를 건드리지 않는다.
+				const wasVisible = existing.status === "published";
+				const willVisible = input.status === "published";
+				if (wasVisible && !willVisible) {
+					await tx
+						.update(communityPost)
+						.set({
+							commentCount: sql`greatest(${communityPost.commentCount} - 1, 0)`,
+						})
+						.where(eq(communityPost.id, existing.postId));
+				} else if (!wasVisible && willVisible) {
+					await tx
+						.update(communityPost)
+						.set({ commentCount: sql`${communityPost.commentCount} + 1` })
+						.where(eq(communityPost.id, existing.postId));
+				}
+
+				await tx.insert(adminModerationAction).values({
+					action: `set_community_comment_status:${input.status}`,
+					adminUserId: admin.userId,
+					metadata: input.reportId ? { reportId: input.reportId } : {},
+					reason: input.reason,
+					targetId: input.commentId,
+					targetType: "community_comment",
+				});
+
+				return { id: updated.id, status: updated.status };
+			});
 		}),
 };

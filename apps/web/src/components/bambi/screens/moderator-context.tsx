@@ -13,12 +13,15 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { toast as sonnerToast } from "sonner";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
 import { getVisibleModerationData } from "@/lib/bambi/moderation-data";
 import type {
+	CommunityTargetStatus,
 	ManagedUser,
 	QueueItem,
 	Report,
+	ReportCommunityTarget,
 	UserStatus,
 } from "@/lib/bambi/types";
 import { orpc } from "@/utils/orpc";
@@ -42,6 +45,11 @@ interface ModContextValue {
 	clearSelection: () => void;
 	isBulkApplying: boolean;
 	isLoading: boolean;
+	moderateCommunityTarget: (
+		report: Report,
+		status: CommunityTargetStatus,
+		reason: string
+	) => void;
 	openReports: number;
 	queue: QueueItem[];
 	reports: Report[];
@@ -184,6 +192,114 @@ const getRoleLabel = (role: string) => {
 	return "구직자";
 };
 
+const COMMUNITY_TARGET_LABEL_MAX = 18;
+// 대상 라벨에 넣을 제목을 한 줄 길이로 줄인다(초과분은 말줄임).
+const truncateTargetLabel = (value: string): string =>
+	value.length > COMMUNITY_TARGET_LABEL_MAX
+		? `${value.slice(0, COMMUNITY_TARGET_LABEL_MAX)}…`
+		: value;
+
+// 커뮤니티 조치 성공 토스트 문구(숨김·삭제는 대상 종류를 붙이고, 복구는 공통).
+const communityActionMessage = (
+	kind: "post" | "comment",
+	status: CommunityTargetStatus
+): string => {
+	if (status === "published") {
+		return "복구했어요.";
+	}
+	const subject = kind === "post" ? "글을" : "댓글을";
+	if (status === "hidden") {
+		return `${subject} 숨겼어요.`;
+	}
+	return `${subject} 삭제했어요.`;
+};
+
+// 서버 계약(확장된 targetContext)에 맞춘 커뮤니티 대상 컨텍스트 형태. chatMessage는
+// 다른 곳에서 다루므로 여기선 선택 필드로만 둔다(글·댓글 union도 이 형태에 대입 가능).
+interface ReportCommunityContext {
+	communityComment?: {
+		authorName: string | null;
+		bodyPreview: string;
+		createdAt: Date | string;
+		id: string;
+		postBoard: string;
+		postId: string;
+		postTitle: string;
+		status: CommunityTargetStatus;
+	};
+	communityPost?: {
+		authorName: string | null;
+		board: string;
+		bodyPreview: string;
+		createdAt: Date | string;
+		id: string;
+		status: CommunityTargetStatus;
+		title: string;
+	};
+}
+
+// 신고 행에서 커뮤니티 대상 정보를 UI 모델 필드로 변환한다. 대상 종류는 컨텍스트가
+// 유실돼도 targetType으로 알 수 있어 상세의 "대상 없음" 안내에 쓴다.
+const deriveReportCommunity = (input: {
+	targetContext: ReportCommunityContext | null | undefined;
+	targetId: string;
+	targetType: string;
+}): {
+	communityKind: "post" | "comment" | undefined;
+	communityTarget: ReportCommunityTarget | undefined;
+	target: string;
+} => {
+	let communityKind: "post" | "comment" | undefined;
+	if (input.targetType === "community_post") {
+		communityKind = "post";
+	} else if (input.targetType === "community_comment") {
+		communityKind = "comment";
+	}
+
+	const post = input.targetContext?.communityPost;
+	if (post) {
+		return {
+			communityKind,
+			communityTarget: {
+				authorName: post.authorName,
+				board: post.board,
+				bodyPreview: post.bodyPreview,
+				createdAt: post.createdAt,
+				id: post.id,
+				kind: "post",
+				status: post.status,
+				title: post.title,
+			},
+			target: `커뮤니티 글 · ${truncateTargetLabel(post.title)}`,
+		};
+	}
+
+	const comment = input.targetContext?.communityComment;
+	if (comment) {
+		return {
+			communityKind,
+			communityTarget: {
+				authorName: comment.authorName,
+				board: comment.postBoard,
+				bodyPreview: comment.bodyPreview,
+				createdAt: comment.createdAt,
+				id: comment.id,
+				kind: "comment",
+				postId: comment.postId,
+				status: comment.status,
+				title: comment.postTitle,
+			},
+			target: `커뮤니티 댓글 · 원글 ${truncateTargetLabel(comment.postTitle)}`,
+		};
+	}
+
+	return {
+		communityKind,
+		communityTarget: undefined,
+		target: `${input.targetType} ${input.targetId.slice(0, 8)}`,
+	};
+};
+
 export function ModProvider({ children }: { children: ReactNode }) {
 	const queryClient = useQueryClient();
 	const [queue, setQueue] = useState<QueueItem[]>(QUEUE);
@@ -218,6 +334,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	);
 	const setUserStatusMutation = useMutation(
 		orpc.bambi.moderation.setUserStatus.mutationOptions()
+	);
+	// 커뮤니티 대상(글·댓글) 운영자 상태 변경 프로시저.
+	const setPostStatusByAdminMutation = useMutation(
+		orpc.bambi.community.setPostStatusByAdmin.mutationOptions()
+	);
+	const setCommentStatusByAdminMutation = useMutation(
+		orpc.bambi.community.setCommentStatusByAdmin.mutationOptions()
 	);
 	const bulkSetJobPostStatusMutation = useMutation(
 		orpc.bambi.moderation.bulkSetJobPostStatus.mutationOptions()
@@ -266,8 +389,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			const attachmentNote = attachments.length
 				? `첨부 ${attachments.length}개 포함`
 				: null;
+			// 커뮤니티 대상(글·댓글) 컨텍스트·라벨은 별도 헬퍼로 뽑아 콜백 복잡도를 낮춘다.
+			const { communityKind, communityTarget, target } =
+				deriveReportCommunity(item);
 
 			return {
+				communityKind,
+				communityTarget,
 				id: item.id,
 				note: attachmentNote ? `${baseNote}\n${attachmentNote}` : baseNote,
 				reason: item.reason,
@@ -278,7 +406,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 					item.status === "open" || item.status === "reviewing"
 						? "open"
 						: "closed",
-				target: `${item.targetType} ${item.targetId.slice(0, 8)}`,
+				target,
 				targetRole: "대상",
 				thread: [
 					{
@@ -467,6 +595,47 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			);
 			flash(label);
 		};
+		// 커뮤니티 대상(글·댓글) 콘텐츠 조치. 신고 상태 변경(resolveReport)과는 별개로,
+		// kind에 맞는 프로시저를 호출하고 성공 시 신고 목록을 무효화해 상태 배지를 갱신한다.
+		const moderateCommunityTarget = (
+			report: Report,
+			status: CommunityTargetStatus,
+			reason: string
+		) => {
+			const communityTarget = report.communityTarget;
+			if (!communityTarget) {
+				return;
+			}
+
+			const onSuccess = async () => {
+				await invalidateReports();
+				sonnerToast(communityActionMessage(communityTarget.kind, status));
+			};
+			const onError = () =>
+				sonnerToast("조치를 반영하지 못했어요. 다시 시도해 주세요.");
+
+			if (communityTarget.kind === "post") {
+				setPostStatusByAdminMutation.mutate(
+					{
+						postId: communityTarget.id,
+						reason,
+						reportId: report.id,
+						status,
+					},
+					{ onError, onSuccess }
+				);
+			} else {
+				setCommentStatusByAdminMutation.mutate(
+					{
+						commentId: communityTarget.id,
+						reason,
+						reportId: report.id,
+						status,
+					},
+					{ onError, onSuccess }
+				);
+			}
+		};
 		const applyQueueBulkAction = (
 			selectedIds: string[],
 			action: ModerationBulkAction,
@@ -631,6 +800,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			resolveQueue,
 			resolveReport,
 			sanction,
+			moderateCommunityTarget,
 			bulkAction,
 		};
 	}, [
@@ -656,7 +826,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		queryClient,
 		reports,
 		selected,
+		setCommentStatusByAdminMutation,
 		setJobPostStatusMutation,
+		setPostStatusByAdminMutation,
 		setReportStatusMutation,
 		setUserStatusMutation,
 		toast,

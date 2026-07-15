@@ -26,6 +26,7 @@ const {
 	chatAttachment,
 	chatMessage,
 	chatRoom,
+	communityComment,
 	communityPost,
 	jobPost,
 	report,
@@ -345,6 +346,116 @@ describe("bambi moderation router community reports", () => {
 				"BAD_REQUEST"
 			);
 		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
+
+describe("bambi moderation router community target context", () => {
+	it("커뮤니티 글·댓글 신고의 targetContext가 계약 형태로 채워지고 대상 미존재면 null", async () => {
+		const fixture = await createReportFixture();
+		const postId = randomUUID();
+		const commentId = randomUUID();
+		const postReportId = randomUUID();
+		const commentReportId = randomUUID();
+		const missingReportId = randomUUID();
+
+		try {
+			// 글 본문은 Tiptap doc JSON, 댓글 본문은 평문. 글은 hidden 상태여도 컨텍스트가 나와야 한다.
+			await db.insert(communityPost).values({
+				authorDisplayName: "달빛토끼",
+				authorRole: "job_seeker",
+				authorUserId: fixture.jobSeekerUserId,
+				board: "free",
+				body: JSON.stringify({
+					content: [
+						{
+							content: [{ text: "신고 대상 본문입니다.", type: "text" }],
+							type: "paragraph",
+						},
+					],
+					type: "doc",
+				}),
+				id: postId,
+				passwordHash: "",
+				status: "hidden",
+				title: "신고 대상 글",
+			});
+			await db.insert(communityComment).values({
+				authorRole: "job_seeker",
+				authorUserId: fixture.jobSeekerUserId,
+				body: "신고 대상 댓글 본문",
+				id: commentId,
+				postId,
+				status: "published",
+			});
+			await db.insert(report).values([
+				{
+					id: postReportId,
+					reason: "other",
+					reporterUserId: fixture.employerUserId,
+					targetId: postId,
+					targetType: "community_post",
+				},
+				{
+					id: commentReportId,
+					reason: "other",
+					reporterUserId: fixture.employerUserId,
+					targetId: commentId,
+					targetType: "community_comment",
+				},
+				{
+					id: missingReportId,
+					reason: "other",
+					reporterUserId: fixture.employerUserId,
+					targetId: randomUUID(),
+					targetType: "community_post",
+				},
+			]);
+
+			const listReports = createProcedureClient(moderationRouter.listReports, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "moderation", "listReports"],
+			});
+			const reports = await listReports({ limit: 100 });
+
+			const postReport = reports.find((item) => item.id === postReportId);
+			expect(postReport?.targetContext).toMatchObject({
+				communityPost: {
+					authorName: "달빛토끼",
+					board: "free",
+					bodyPreview: "신고 대상 본문입니다.",
+					id: postId,
+					status: "hidden",
+					title: "신고 대상 글",
+				},
+			});
+
+			const commentReport = reports.find((item) => item.id === commentReportId);
+			expect(commentReport?.targetContext).toMatchObject({
+				communityComment: {
+					authorName: "구직자",
+					bodyPreview: "신고 대상 댓글 본문",
+					id: commentId,
+					postBoard: "free",
+					postId,
+					postTitle: "신고 대상 글",
+					status: "published",
+				},
+			});
+
+			const missingReport = reports.find((item) => item.id === missingReportId);
+			expect(missingReport?.targetContext).toBeNull();
+		} finally {
+			await db
+				.delete(report)
+				.where(
+					inArray(report.id, [postReportId, commentReportId, missingReportId])
+				);
+			await db
+				.delete(communityComment)
+				.where(eq(communityComment.id, commentId));
+			await db.delete(communityPost).where(eq(communityPost.id, postId));
 			await cleanupReportFixture(fixture);
 		}
 	});
