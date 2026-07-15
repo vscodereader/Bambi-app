@@ -699,6 +699,10 @@ export const communityPost = pgTable(
 		authorUserId: text("author_user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
+		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
+		authorDisplayName: text("author_display_name").notNull(),
+		passwordHash: text("password_hash").notNull(),
+		isLocked: boolean("is_locked").default(false).notNull(),
 		title: text("title").notNull(),
 		body: text("body").notNull(),
 		viewCount: integer("view_count").default(0).notNull(),
