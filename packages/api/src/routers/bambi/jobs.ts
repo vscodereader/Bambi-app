@@ -25,9 +25,11 @@ import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
 import {
+	AD_BANNER_EXPOSURE_TYPES,
 	buildExposureJobSections,
 	EXPOSURE_SECTION_LIMITS,
 	EXPOSURE_TYPE_LABELS,
+	groupAdBannerJobs,
 	type JobExposureType,
 	type ListingSectionExposureType,
 	previewTemplateToExposureType,
@@ -582,6 +584,43 @@ export const jobsRouter = {
 				desc(jobPost.publishedAt)
 			)
 			.limit(input.limit);
+	}),
+
+	// seeker 광고 배너 슬롯(상단 프리미엄·좌/우 사이드)에 노출할 결제완료 공고를
+	// 위치별로 내려준다. 목록 필터와 무관해 list와 분리된 공개 조회다.
+	listAdBanners: publicProcedure.handler(async () => {
+		const now = new Date();
+		const rows = await db
+			.select({
+				coverImage: coverImageSql,
+				employerDisplayName: employerOrganizationProfile.displayName,
+				exposureEndsAt: jobPost.exposureEndsAt,
+				exposureType: jobPost.exposureType,
+				id: jobPost.id,
+				publishedAt: jobPost.publishedAt,
+				teamDisplayName: employerTeamProfile.displayName,
+				title: jobPost.title,
+			})
+			.from(jobPost)
+			.innerJoin(
+				employerOrganizationProfile,
+				eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+			)
+			.leftJoin(
+				employerTeamProfile,
+				eq(jobPost.teamId, employerTeamProfile.teamId)
+			)
+			.where(
+				and(
+					eq(jobPost.status, "published" as JobPostStatus),
+					eq(jobPost.paymentStatus, "paid"),
+					inArray(jobPost.exposureType, [...AD_BANNER_EXPOSURE_TYPES]),
+					or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
+				)
+			)
+			.orderBy(desc(jobPost.publishedAt));
+
+		return groupAdBannerJobs(rows, now);
 	}),
 
 	getById: publicProcedure
