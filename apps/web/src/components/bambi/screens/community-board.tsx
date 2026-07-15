@@ -2,6 +2,7 @@
 
 // 게시판 목록 — 글 행 리스트 + 번호 페이지네이션(?page= URL 동기화) + 글쓰기 버튼.
 
+import type { AppRouter } from "@bambi-app/api/routers/index";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -19,6 +20,8 @@ import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
+import { cn } from "@bambi-app/ui/lib/utils";
+import type { InferRouterOutputs } from "@orpc/server";
 import { useQuery } from "@tanstack/react-query";
 import {
 	EyeIcon,
@@ -30,7 +33,7 @@ import {
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Fragment, type MouseEvent, useState } from "react";
+import { Fragment, type MouseEvent, useCallback, useEffect } from "react";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
@@ -42,8 +45,6 @@ import {
 	getCommunityTotalPages,
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
-
-type CommunityAuthorRole = "admin" | "employer" | "job_seeker";
 
 type CommunityListFilter =
 	| "all"
@@ -60,18 +61,15 @@ const LIST_FILTER_OPTIONS: { label: string; value: CommunityListFilter }[] = [
 	{ label: "구직자", value: "job_seeker" },
 ];
 
-interface BoardPostItem {
-	authorName: string | null;
-	authorRole: CommunityAuthorRole | null;
-	commentCount: number;
-	createdAt: Date | string;
-	id: string;
-	isLocked: boolean;
-	isPromotion: boolean;
-	likeCount: number;
-	title: string;
-	viewCount: number;
-}
+// 유효하지 않은 ?filter 쿼리 값은 전체(all)로 폴백한다.
+const parseListFilter = (raw: string | null): CommunityListFilter =>
+	LIST_FILTER_OPTIONS.some((option) => option.value === raw)
+		? (raw as CommunityListFilter)
+		: "all";
+
+// 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 목록 글 타입을 파생한다.
+type BoardPostItem =
+	InferRouterOutputs<AppRouter>["bambi"]["community"]["listPosts"]["items"][number];
 
 function BoardPostBadges({ post }: { post: BoardPostItem }) {
 	if (!(post.isPromotion || post.authorRole === "employer")) {
@@ -148,16 +146,27 @@ function BoardPagination({
 	totalPages: number;
 }) {
 	const pageItems = getCommunityPageItems(page, totalPages);
+	const prevDisabled = page <= 1;
+	const nextDisabled = page >= totalPages;
+	const prevPage = Math.max(1, page - 1);
+	const nextPage = Math.min(totalPages, page + 1);
 
 	return (
 		<Pagination>
 			<PaginationContent>
 				<PaginationItem>
 					<PaginationPrevious
-						aria-disabled={page <= 1}
-						className={page <= 1 ? "pointer-events-none opacity-50" : ""}
-						href={pageHref(Math.max(1, page - 1))}
-						onClick={(event) => onNavigate(event, Math.max(1, page - 1))}
+						aria-disabled={prevDisabled}
+						className={cn(prevDisabled && "pointer-events-none opacity-50")}
+						href={pageHref(prevPage)}
+						onClick={(event) => {
+							if (prevDisabled) {
+								event.preventDefault();
+								return;
+							}
+							onNavigate(event, prevPage);
+						}}
+						tabIndex={prevDisabled ? -1 : undefined}
 					/>
 				</PaginationItem>
 				{pageItems.map((item) =>
@@ -179,14 +188,17 @@ function BoardPagination({
 				)}
 				<PaginationItem>
 					<PaginationNext
-						aria-disabled={page >= totalPages}
-						className={
-							page >= totalPages ? "pointer-events-none opacity-50" : ""
-						}
-						href={pageHref(Math.min(totalPages, page + 1))}
-						onClick={(event) =>
-							onNavigate(event, Math.min(totalPages, page + 1))
-						}
+						aria-disabled={nextDisabled}
+						className={cn(nextDisabled && "pointer-events-none opacity-50")}
+						href={pageHref(nextPage)}
+						onClick={(event) => {
+							if (nextDisabled) {
+								event.preventDefault();
+								return;
+							}
+							onNavigate(event, nextPage);
+						}}
+						tabIndex={nextDisabled ? -1 : undefined}
 					/>
 				</PaginationItem>
 			</PaginationContent>
@@ -233,9 +245,26 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const board = getBoardBySlug(boardSlug);
+	// 필터·페이지 모두 URL 쿼리를 단일 진실원으로 파생한다(뒤로가기 복원 부수 이득).
+	const filter = parseListFilter(searchParams.get("filter"));
 	const pageParam = Number(searchParams.get("page"));
 	const page = Number.isInteger(pageParam) && pageParam >= 1 ? pageParam : 1;
-	const [filter, setFilter] = useState<CommunityListFilter>("all");
+
+	// filter·page를 한 번의 replace로 원자적으로 갱신하는 쿼리 경로 빌더.
+	const buildHref = useCallback(
+		(nextFilter: CommunityListFilter, nextPage: number): Route => {
+			const params = new URLSearchParams();
+			if (nextFilter !== "all") {
+				params.set("filter", nextFilter);
+			}
+			if (nextPage > 1) {
+				params.set("page", String(nextPage));
+			}
+			const query = params.toString();
+			return (query ? `${pathname}?${query}` : pathname) as Route;
+		},
+		[pathname]
+	);
 
 	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
 	const isAdmin = mineQuery.data?.bambiProfile?.role === "admin";
@@ -246,6 +275,19 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 			input: { board: board?.key ?? "free", filter, page },
 		})
 	);
+
+	const totalPages = getCommunityTotalPages(
+		listQuery.data?.totalCount ?? 0,
+		listQuery.data?.pageSize ?? 20
+	);
+	const items = listQuery.data?.items ?? [];
+
+	// 데이터 로드 후 ?page가 마지막 페이지를 넘으면 마지막 페이지로 클램프한다.
+	useEffect(() => {
+		if (listQuery.isSuccess && page > totalPages) {
+			router.replace(buildHref(filter, totalPages));
+		}
+	}, [listQuery.isSuccess, page, totalPages, filter, router, buildHref]);
 
 	if (!board) {
 		return null;
@@ -261,26 +303,18 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 
 	const emptyDescription = getEmptyDescription(board.key, canWrite);
 
-	// 칩 변경 시 필터를 바꾸고 페이지는 1로 리셋한다.
+	// 칩 변경 시 filter 설정과 page=1 리셋을 한 번의 replace로 원자적으로 처리한다.
 	const handleFilterChange = (next: CommunityListFilter) => {
-		setFilter(next);
-		router.replace(`${pathname}?page=1` as Route);
+		router.replace(buildHref(next, 1));
 	};
 
 	// 페이지 이동은 실제 앵커(href)로 접근성을 유지하되, 클릭 시 router.replace로
-	// ?page= 쿼리만 교체해 히스토리를 늘리지 않는다.
-	const pageHref = (nextPage: number) =>
-		`${pathname}?page=${nextPage}` as Route;
+	// 쿼리만 교체해 히스토리를 늘리지 않는다.
+	const pageHref = (nextPage: number) => buildHref(filter, nextPage);
 	const goToPage = (event: MouseEvent<HTMLAnchorElement>, nextPage: number) => {
 		event.preventDefault();
 		router.replace(pageHref(nextPage));
 	};
-
-	const totalPages = getCommunityTotalPages(
-		listQuery.data?.totalCount ?? 0,
-		listQuery.data?.pageSize ?? 20
-	);
-	const items = listQuery.data?.items ?? [];
 
 	return (
 		<div className="flex flex-col gap-4">

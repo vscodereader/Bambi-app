@@ -33,6 +33,8 @@ const isWritableBoardKey = (key: CommunityBoardKey): key is WritableBoardKey =>
 
 interface CommunityPostInitial {
 	authorName: string;
+	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
+	authorRole: "admin" | "employer" | "job_seeker";
 	body: string;
 	id: string;
 	isLocked: boolean;
@@ -67,11 +69,20 @@ export function CommunityPostForm({
 	const [bodyJson, setBodyJson] = useState(initialPost?.body ?? "");
 	const [bodyText, setBodyText] = useState("");
 
-	// 작성 모드 작성인 기본값 = 세션 프로필 displayName(수정 모드는 기존 값 유지).
-	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	// 작성 모드 작성인 기본값·권한 판정에만 세션 프로필이 필요하므로 수정 모드에서는
+	// getMine을 비활성화한다(작성인 기본값·공지 가드는 create 전용, 광고 게이트는
+	// 수정 모드에서 글 작성자 role 스냅샷을 쓴다).
+	const mineQuery = useQuery(
+		orpc.bambi.onboarding.getMine.queryOptions({ enabled: !isEdit })
+	);
 	const role = mineQuery.data?.bambiProfile?.role;
-	const isEmployer = role === "employer";
 	const displayName = mineQuery.data?.bambiProfile?.displayName ?? "";
+	// 광고 Switch 노출: 작성 모드는 편집자 role, 수정 모드는 글 작성자 role 기준.
+	// employer가 비번으로 타인(job_seeker) 글을 수정할 때 서버 검증(작성자 role
+	// 기준)과 어긋나 BAD_REQUEST 나던 문제를 막는다.
+	const canPromote = isEdit
+		? initialPost?.authorRole === "employer"
+		: role === "employer";
 	useEffect(() => {
 		if (!isEdit && displayName) {
 			setAuthorName((previous) => (previous === "" ? displayName : previous));
@@ -211,7 +222,7 @@ export function CommunityPostForm({
 				<Label htmlFor="community-post-lock">비밀글로 잠그기</Label>
 			</div>
 
-			{isEmployer ? (
+			{canPromote ? (
 				<div className="flex items-center gap-2">
 					<Switch
 						checked={isPromotion}

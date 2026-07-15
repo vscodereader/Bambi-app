@@ -2,6 +2,7 @@
 
 // 수다방 홈 — 게시판별 최신 글 미리보기 인덱스(레퍼런스: 커뮤니티 인덱스형 홈).
 
+import type { AppRouter } from "@bambi-app/api/routers/index";
 import {
 	Card,
 	CardContent,
@@ -10,6 +11,7 @@ import {
 } from "@bambi-app/ui/components/card";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
+import type { InferRouterOutputs } from "@orpc/server";
 import { useQuery } from "@tanstack/react-query";
 import {
 	ChevronRightIcon,
@@ -30,17 +32,9 @@ import {
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
-interface OverviewPost {
-	authorName: string | null;
-	board: "free" | "market" | "notice" | "work_talk";
-	commentCount: number;
-	createdAt: Date | string;
-	id: string;
-	isLocked: boolean;
-	likeCount: number;
-	title: string;
-	viewCount: number;
-}
+// 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 미리보기 글 타입을 파생한다.
+type OverviewPost =
+	InferRouterOutputs<AppRouter>["bambi"]["community"]["overview"]["free"][number];
 
 // 게시판별 액센트 바 — visual-job-exposure-sections의 섹션 헤더 문법을 따른다.
 const accentClassName: Record<CommunityBoardKey, string> = {

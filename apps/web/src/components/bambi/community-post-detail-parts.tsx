@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
 	communityEditorExtensions,
@@ -44,6 +44,7 @@ import {
 } from "@/components/bambi/community-editor";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
+	communityAuthorName,
 	communityEditPath,
 	formatCommunityDate,
 } from "@/lib/bambi/community";
@@ -96,8 +97,9 @@ const VIEWER_BODY_CLASS = cn(
 );
 
 // 본문을 편집 확장 세트로 read-only 렌더. JSON 파싱 실패 시 원문 텍스트 폴백.
+// 부모(PostDetailView)가 댓글 입력 등으로 잦게 리렌더되므로 파싱을 body 기준으로 메모한다.
 export function PostBodyViewer({ body }: { body: string }) {
-	const parsed = parseCommunityBody(body);
+	const parsed = useMemo(() => parseCommunityBody(body), [body]);
 	const editor = useEditor({
 		content: parsed,
 		editable: false,
@@ -147,7 +149,7 @@ export function PostHeader({ post }: { post: CommunityPostDetail }) {
 				{post.title}
 			</h1>
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
-				<span>{post.authorName}</span>
+				<span>{communityAuthorName(post.authorName)}</span>
 				<span>{formatCommunityDate(post.createdAt)}</span>
 				<span className="flex items-center gap-0.5">
 					<EyeIcon className="size-3" />

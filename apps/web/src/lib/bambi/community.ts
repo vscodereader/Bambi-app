@@ -20,6 +20,15 @@ export interface CommunityBoardMeta {
 
 export const COMMUNITY_AUTHOR_FALLBACK = "회원";
 
+// 작성인 표시명 정규화. null·빈 문자열·공백뿐인 값은 기본값("회원")으로 폴백한다
+// (목록·상세 공통 규칙).
+export const communityAuthorName = (
+	value: string | null | undefined
+): string => {
+	const trimmed = value?.trim();
+	return trimmed ? trimmed : COMMUNITY_AUTHOR_FALLBACK;
+};
+
 export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
 	{
 		adminOnly: true,

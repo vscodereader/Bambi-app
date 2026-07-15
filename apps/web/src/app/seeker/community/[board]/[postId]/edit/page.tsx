@@ -100,6 +100,7 @@ function CommunityEditContent({
 				editPassword={data.canEdit ? undefined : appliedPassword}
 				initialPost={{
 					authorName: data.authorName,
+					authorRole: data.authorRole,
 					body: data.body,
 					id: data.id,
 					isLocked: data.isLocked,

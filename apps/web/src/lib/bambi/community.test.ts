@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	COMMUNITY_AUTHOR_FALLBACK,
 	COMMUNITY_BOARDS,
+	communityAuthorName,
 	communityPostPath,
 	formatCommunityDate,
 	getBoardBySlug,
 	getCommunityPageItems,
 	getCommunityTotalPages,
 } from "./community";
-
-const DATE_FORMAT_RE = /^\d{4}\.\d{2}\.\d{2}$/;
 
 describe("community boards meta", () => {
 	it("slug로 게시판을 찾고 잘못된 slug는 undefined", () => {
@@ -36,14 +36,27 @@ describe("community boards meta", () => {
 	it("상세 경로를 만든다", () => {
 		expect(communityPostPath("free", "abc")).toBe("/seeker/community/free/abc");
 	});
+
+	it("작성인 표시명은 null·공백일 때 기본값으로 폴백한다", () => {
+		expect(communityAuthorName("밤비")).toBe("밤비");
+		expect(communityAuthorName("  밤비  ")).toBe("밤비");
+		expect(communityAuthorName(null)).toBe(COMMUNITY_AUTHOR_FALLBACK);
+		expect(communityAuthorName(undefined)).toBe(COMMUNITY_AUTHOR_FALLBACK);
+		expect(communityAuthorName("")).toBe(COMMUNITY_AUTHOR_FALLBACK);
+		expect(communityAuthorName("   ")).toBe(COMMUNITY_AUTHOR_FALLBACK);
+	});
 });
 
 describe("community list helpers", () => {
-	it("날짜를 YYYY.MM.DD로 포맷한다", () => {
-		expect(formatCommunityDate("2026-07-15T09:30:00.000Z")).toMatch(
-			DATE_FORMAT_RE
-		);
+	it("로컬 타임존 기준으로 YYYY.MM.DD를 만든다(월·일 0 패딩)", () => {
+		// 로컬 구성요소로 만든 Date는 러너 타임존과 무관하게 같은 결과를 낸다.
 		expect(formatCommunityDate(new Date(2026, 0, 5))).toBe("2026.01.05");
+		expect(formatCommunityDate(new Date(2026, 11, 31))).toBe("2026.12.31");
+		// 자정 근처 시각이어도 로컬 날짜 구성요소만 쓰므로 하루가 밀리지 않는다.
+		expect(formatCommunityDate(new Date(2026, 8, 9, 0, 5))).toBe("2026.09.09");
+		expect(formatCommunityDate(new Date(2026, 8, 9, 23, 59))).toBe(
+			"2026.09.09"
+		);
 	});
 
 	it("전체 페이지 수는 최소 1", () => {
