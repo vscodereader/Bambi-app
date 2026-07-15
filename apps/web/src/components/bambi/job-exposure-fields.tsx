@@ -173,6 +173,12 @@ export function JobExposureFields({
 						<div className="flex flex-col gap-2">
 							<FieldLabel htmlFor="exposureDurationDays">이용 기간</FieldLabel>
 							<Select
+								items={(selectedProduct?.priceOptions ?? []).map(
+									(priceOption) => ({
+										label: `${formatAdDuration(priceOption.days)} · ${formatAdPrice(priceOption.amount)}`,
+										value: String(priceOption.days),
+									})
+								)}
 								name="exposureDurationDays"
 								onValueChange={(value) => {
 									const days = value ? Number(value) : null;
