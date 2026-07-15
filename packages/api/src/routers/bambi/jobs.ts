@@ -962,6 +962,20 @@ export const jobsRouter = {
 				exposureDurationDays: input.data.exposureDurationDays,
 				paymentMethod: input.data.paymentMethod,
 			});
+			// 노출 상품·기간이 바뀌면 재결제가 필요하다. 유료 전환/변경은 미결제로 되돌리고,
+			// 무료 전환은 결제 게이트 없이 즉시 게시(paid)로 둔다(생성 시 무료 공고와 동일 규칙).
+			const exposureChanged =
+				exposure.adProductId !== existing.adProductId ||
+				exposure.exposureDurationDays !== existing.exposureDurationDays;
+			const changedPaymentStatus = exposure.adProductId
+				? ("unpaid" as const)
+				: ("paid" as const);
+			const nextPaymentStatus = exposureChanged
+				? changedPaymentStatus
+				: existing.paymentStatus;
+			const nextExposureEndsAt = exposureChanged
+				? null
+				: existing.exposureEndsAt;
 			const mediaRows = media ? requireValidJobPostMediaSet(media) : null;
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status: JobPostStatus = riskDetected
@@ -987,6 +1001,8 @@ export const jobsRouter = {
 						exposureDurationDays: exposure.exposureDurationDays,
 						exposureAmount: exposure.exposureAmount,
 						paymentMethod: exposure.paymentMethod,
+						paymentStatus: nextPaymentStatus,
+						exposureEndsAt: nextExposureEndsAt,
 						publishedAt:
 							status === "published" && !existing.publishedAt
 								? new Date()
