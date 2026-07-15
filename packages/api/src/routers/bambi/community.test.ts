@@ -1173,7 +1173,7 @@ describe("bambi community router — 계정유형·광고글·필터·공지사�
 		}
 	});
 
-	it("filter 5종이 해당 글만 반환하고 totalCount가 정합한다", async () => {
+	it("광고·업소 필터 토글이 합집합(OR)으로 해당 글만 반환한다", async () => {
 		const fixture = await createCommunityFixture();
 		try {
 			const createAsEmployer = clientFor(
@@ -1192,11 +1192,17 @@ describe("bambi community router — 계정유형·광고글·필터·공지사�
 				["listPosts"]
 			);
 
+			// 광고글(업소+광고) · 광고 아닌 업소글 · 구직자 일반글 3종으로 합집합/제외를 검증한다.
 			const promoted = await createAsEmployer({
 				...basePostInput,
 				board: "work_talk",
 				isPromotion: true,
 				title: `필터 광고 ${randomUUID()}`,
+			});
+			const employerPlain = await createAsEmployer({
+				...basePostInput,
+				board: "work_talk",
+				title: `필터 업소일반 ${randomUUID()}`,
 			});
 			const general = await createAsSeeker({
 				...basePostInput,
@@ -1204,77 +1210,62 @@ describe("bambi community router — 계정유형·광고글·필터·공지사�
 				title: `필터 일반 ${randomUUID()}`,
 			});
 
-			const all = await listPosts({
-				board: "work_talk",
-				filter: "all",
-				page: 1,
-			});
+			const idsOf = (list: { items: { id: string }[] }): string[] =>
+				list.items.map((item) => item.id);
+
+			const all = await listPosts({ board: "work_talk", page: 1 });
 			const promotion = await listPosts({
 				board: "work_talk",
-				filter: "promotion",
 				page: 1,
-			});
-			const generalList = await listPosts({
-				board: "work_talk",
-				filter: "general",
-				page: 1,
+				showPromotion: true,
 			});
 			const employerList = await listPosts({
 				board: "work_talk",
-				filter: "employer",
 				page: 1,
+				showEmployer: true,
 			});
-			const jobSeekerList = await listPosts({
+			const union = await listPosts({
 				board: "work_talk",
-				filter: "job_seeker",
 				page: 1,
+				showEmployer: true,
+				showPromotion: true,
 			});
 
-			// 모든 글은 광고이거나 일반이므로 count가 정확히 쪼개진다.
-			expect(all.totalCount).toBe(
-				promotion.totalCount + generalList.totalCount
+			// 전체(토글 off)는 세 글을 모두 포함한다.
+			expect(idsOf(all)).toEqual(
+				expect.arrayContaining([promoted.id, employerPlain.id, general.id])
 			);
 
+			// 광고 글보기: is_promotion=true만.
 			expect(
 				promotion.items.every(
 					(item: { isPromotion: boolean }) => item.isPromotion === true
 				)
 			).toBe(true);
-			expect(
-				promotion.items.some((item: { id: string }) => item.id === promoted.id)
-			).toBe(true);
-			expect(
-				promotion.items.some((item: { id: string }) => item.id === general.id)
-			).toBe(false);
+			expect(idsOf(promotion)).toContain(promoted.id);
+			expect(idsOf(promotion)).not.toContain(employerPlain.id);
+			expect(idsOf(promotion)).not.toContain(general.id);
 
-			expect(
-				generalList.items.every(
-					(item: { isPromotion: boolean }) => item.isPromotion === false
-				)
-			).toBe(true);
-			expect(
-				generalList.items.some((item: { id: string }) => item.id === general.id)
-			).toBe(true);
-
+			// 업소 회원 글보기: author_role=employer만(광고 여부 무관).
 			expect(
 				employerList.items.every(
 					(item: { authorRole: string }) => item.authorRole === "employer"
 				)
 			).toBe(true);
-			expect(
-				employerList.items.some(
-					(item: { id: string }) => item.id === promoted.id
-				)
-			).toBe(true);
+			expect(idsOf(employerList)).toEqual(
+				expect.arrayContaining([promoted.id, employerPlain.id])
+			);
+			expect(idsOf(employerList)).not.toContain(general.id);
 
+			// 둘 다 켜면 합집합(광고 또는 업소) — 업소 일반글까지 포함, 구직자 일반글은 제외.
+			expect(idsOf(union)).toEqual(
+				expect.arrayContaining([promoted.id, employerPlain.id])
+			);
+			expect(idsOf(union)).not.toContain(general.id);
 			expect(
-				jobSeekerList.items.every(
-					(item: { authorRole: string }) => item.authorRole === "job_seeker"
-				)
-			).toBe(true);
-			expect(
-				jobSeekerList.items.some(
-					(item: { id: string }) => item.id === general.id
+				union.items.every(
+					(item: { authorRole: string; isPromotion: boolean }) =>
+						item.isPromotion === true || item.authorRole === "employer"
 				)
 			).toBe(true);
 		} finally {

@@ -6,6 +6,14 @@ import type { AppRouter } from "@bambi-app/api/routers/index";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
+	DropdownMenu,
+	DropdownMenuCheckboxItem,
+	DropdownMenuContent,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@bambi-app/ui/components/dropdown-menu";
+import {
 	Pagination,
 	PaginationContent,
 	PaginationEllipsis,
@@ -16,15 +24,12 @@ import {
 } from "@bambi-app/ui/components/pagination";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
-import {
-	ToggleGroup,
-	ToggleGroupItem,
-} from "@bambi-app/ui/components/toggle-group";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { InferRouterOutputs } from "@orpc/server";
 import { useQuery } from "@tanstack/react-query";
 import {
 	EyeIcon,
+	ListFilterIcon,
 	LockIcon,
 	MessageSquareIcon,
 	PencilLineIcon,
@@ -46,26 +51,14 @@ import {
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
-type CommunityListFilter =
-	| "all"
-	| "employer"
-	| "general"
-	| "job_seeker"
-	| "promotion";
+// 목록 필터는 독립 On/Off 토글 2개(광고 글보기·업소 회원 글보기). 기본은 둘 다 off=전체.
+interface CommunityListFilters {
+	showEmployer: boolean;
+	showPromotion: boolean;
+}
 
-const LIST_FILTER_OPTIONS: { label: string; value: CommunityListFilter }[] = [
-	{ label: "전체", value: "all" },
-	{ label: "일반", value: "general" },
-	{ label: "광고", value: "promotion" },
-	{ label: "업소", value: "employer" },
-	{ label: "구직자", value: "job_seeker" },
-];
-
-// 유효하지 않은 ?filter 쿼리 값은 전체(all)로 폴백한다.
-const parseListFilter = (raw: string | null): CommunityListFilter =>
-	LIST_FILTER_OPTIONS.some((option) => option.value === raw)
-		? (raw as CommunityListFilter)
-		: "all";
+// 각 토글은 ?promotion=1 / ?employer=1 로 URL에 반영해 단일 진실원으로 삼는다.
+const isFlagOn = (value: string | null): boolean => value === "1";
 
 // 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 목록 글 타입을 파생한다.
 type BoardPostItem =
@@ -216,27 +209,54 @@ const getEmptyDescription = (boardKey: string, canWrite: boolean): string => {
 	return "아직 등록된 글이 없어요.";
 };
 
-function BoardFilterChips({
-	filter,
+// 필터 아이콘 버튼 → 드롭다운에서 두 토글을 각각 On/Off. 활성 개수는 배지로 표기한다.
+function BoardFilterMenu({
+	filters,
 	onChange,
 }: {
-	filter: CommunityListFilter;
-	onChange: (next: CommunityListFilter) => void;
+	filters: CommunityListFilters;
+	onChange: (next: CommunityListFilters) => void;
 }) {
+	const activeCount =
+		Number(filters.showPromotion) + Number(filters.showEmployer);
 	return (
-		<ToggleGroup
-			className="flex-wrap"
-			onValueChange={(value) =>
-				onChange((value[0] as CommunityListFilter | undefined) ?? "all")
-			}
-			value={[filter]}
-		>
-			{LIST_FILTER_OPTIONS.map((option) => (
-				<ToggleGroupItem key={option.value} size="sm" value={option.value}>
-					{option.label}
-				</ToggleGroupItem>
-			))}
-		</ToggleGroup>
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				render={
+					<Button size="sm" variant="outline">
+						<ListFilterIcon data-icon="inline-start" />
+						필터
+						{activeCount > 0 ? (
+							<Badge className="ml-0.5" variant="secondary">
+								{activeCount}
+							</Badge>
+						) : null}
+					</Button>
+				}
+			/>
+			<DropdownMenuContent align="start" className="w-48">
+				<DropdownMenuLabel>글 필터</DropdownMenuLabel>
+				<DropdownMenuSeparator />
+				<DropdownMenuCheckboxItem
+					checked={filters.showPromotion}
+					closeOnClick={false}
+					onCheckedChange={(checked) =>
+						onChange({ ...filters, showPromotion: checked })
+					}
+				>
+					광고 글보기
+				</DropdownMenuCheckboxItem>
+				<DropdownMenuCheckboxItem
+					checked={filters.showEmployer}
+					closeOnClick={false}
+					onCheckedChange={(checked) =>
+						onChange({ ...filters, showEmployer: checked })
+					}
+				>
+					업소 회원 글보기
+				</DropdownMenuCheckboxItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 
@@ -245,17 +265,21 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const board = getBoardBySlug(boardSlug);
-	// 필터·페이지 모두 URL 쿼리를 단일 진실원으로 파생한다(뒤로가기 복원 부수 이득).
-	const filter = parseListFilter(searchParams.get("filter"));
+	// 필터 토글·페이지 모두 URL 쿼리를 단일 진실원으로 파생한다(뒤로가기 복원 부수 이득).
+	const showPromotion = isFlagOn(searchParams.get("promotion"));
+	const showEmployer = isFlagOn(searchParams.get("employer"));
 	const pageParam = Number(searchParams.get("page"));
 	const page = Number.isInteger(pageParam) && pageParam >= 1 ? pageParam : 1;
 
-	// filter·page를 한 번의 replace로 원자적으로 갱신하는 쿼리 경로 빌더.
+	// 필터 토글·page를 한 번의 replace로 원자적으로 갱신하는 쿼리 경로 빌더.
 	const buildHref = useCallback(
-		(nextFilter: CommunityListFilter, nextPage: number): Route => {
+		(filters: CommunityListFilters, nextPage: number): Route => {
 			const params = new URLSearchParams();
-			if (nextFilter !== "all") {
-				params.set("filter", nextFilter);
+			if (filters.showPromotion) {
+				params.set("promotion", "1");
+			}
+			if (filters.showEmployer) {
+				params.set("employer", "1");
 			}
 			if (nextPage > 1) {
 				params.set("page", String(nextPage));
@@ -272,7 +296,7 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 	const listQuery = useQuery(
 		orpc.bambi.community.listPosts.queryOptions({
 			enabled: Boolean(board),
-			input: { board: board?.key ?? "free", filter, page },
+			input: { board: board?.key ?? "free", page, showEmployer, showPromotion },
 		})
 	);
 
@@ -285,15 +309,23 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 	// 데이터 로드 후 ?page가 마지막 페이지를 넘으면 마지막 페이지로 클램프한다.
 	useEffect(() => {
 		if (listQuery.isSuccess && page > totalPages) {
-			router.replace(buildHref(filter, totalPages));
+			router.replace(buildHref({ showEmployer, showPromotion }, totalPages));
 		}
-	}, [listQuery.isSuccess, page, totalPages, filter, router, buildHref]);
+	}, [
+		listQuery.isSuccess,
+		page,
+		totalPages,
+		showEmployer,
+		showPromotion,
+		router,
+		buildHref,
+	]);
 
 	if (!board) {
 		return null;
 	}
 
-	// 일반 게시판(자유·일·중고)만 5칩 필터를 노출한다. 베스트·공지는 필터 없음.
+	// 일반 게시판(자유·일·중고)만 필터를 노출한다. 베스트·공지는 필터 없음.
 	const showFilter =
 		board.key === "free" || board.key === "work_talk" || board.key === "market";
 	// 공지 게시판은 글쓰기가 운영자 전용이라 admin에게만 버튼을 노출한다.
@@ -303,14 +335,15 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 
 	const emptyDescription = getEmptyDescription(board.key, canWrite);
 
-	// 칩 변경 시 filter 설정과 page=1 리셋을 한 번의 replace로 원자적으로 처리한다.
-	const handleFilterChange = (next: CommunityListFilter) => {
+	// 필터 토글 변경 시 page=1 리셋을 한 번의 replace로 원자적으로 처리한다.
+	const handleFilterChange = (next: CommunityListFilters) => {
 		router.replace(buildHref(next, 1));
 	};
 
 	// 페이지 이동은 실제 앵커(href)로 접근성을 유지하되, 클릭 시 router.replace로
 	// 쿼리만 교체해 히스토리를 늘리지 않는다.
-	const pageHref = (nextPage: number) => buildHref(filter, nextPage);
+	const pageHref = (nextPage: number) =>
+		buildHref({ showEmployer, showPromotion }, nextPage);
 	const goToPage = (event: MouseEvent<HTMLAnchorElement>, nextPage: number) => {
 		event.preventDefault();
 		router.replace(pageHref(nextPage));
@@ -339,7 +372,12 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 			</div>
 
 			{showFilter ? (
-				<BoardFilterChips filter={filter} onChange={handleFilterChange} />
+				<div className="flex justify-end">
+					<BoardFilterMenu
+						filters={{ showEmployer, showPromotion }}
+						onChange={handleFilterChange}
+					/>
+				</div>
 			) : null}
 
 			{listQuery.isPending ? (
