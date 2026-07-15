@@ -55,11 +55,15 @@ export const parseCommunityBody = (value: string): JSONContent | undefined => {
 };
 
 // EditorContent 본문 영역 타이포그래피(시맨틱 토큰 · Tailwind 스케일만 사용).
+// 높이는 h-72로 고정하고 넘치면 내부 스크롤(overflow-y-auto) — 긴 글에도 폼 레이아웃이
+// 밀리지 않는다. 삽입 이미지는 컨테이너 폭에 맞추고(rounded-md) 세로 비율을 유지한다.
 const EDITOR_BODY_CLASS = cn(
-	"min-h-40 w-full px-3 py-2 text-foreground text-sm leading-relaxed outline-none",
+	"h-72 w-full overflow-y-auto px-3 py-2 text-foreground text-sm leading-relaxed outline-none",
 	"[&_a]:text-primary [&_a]:underline",
 	"[&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5",
-	"[&_p]:my-1 [&_strong]:font-semibold"
+	"[&_p]:my-1 [&_strong]:font-semibold",
+	"[&_img]:my-2 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-md",
+	"[&_img.ProseMirror-selectednode]:outline [&_img.ProseMirror-selectednode]:outline-2 [&_img.ProseMirror-selectednode]:outline-ring"
 );
 
 interface ToggleSpec {
