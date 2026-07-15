@@ -9,6 +9,7 @@ import {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
@@ -235,26 +236,28 @@ function BoardFilterMenu({
 				}
 			/>
 			<DropdownMenuContent align="start" className="w-48">
-				<DropdownMenuLabel>글 필터</DropdownMenuLabel>
-				<DropdownMenuSeparator />
-				<DropdownMenuCheckboxItem
-					checked={filters.showPromotion}
-					closeOnClick={false}
-					onCheckedChange={(checked) =>
-						onChange({ ...filters, showPromotion: checked })
-					}
-				>
-					광고 글보기
-				</DropdownMenuCheckboxItem>
-				<DropdownMenuCheckboxItem
-					checked={filters.showEmployer}
-					closeOnClick={false}
-					onCheckedChange={(checked) =>
-						onChange({ ...filters, showEmployer: checked })
-					}
-				>
-					업소 회원 글보기
-				</DropdownMenuCheckboxItem>
+				<DropdownMenuGroup>
+					<DropdownMenuLabel>글 필터</DropdownMenuLabel>
+					<DropdownMenuSeparator />
+					<DropdownMenuCheckboxItem
+						checked={filters.showPromotion}
+						closeOnClick={false}
+						onCheckedChange={(checked) =>
+							onChange({ ...filters, showPromotion: checked })
+						}
+					>
+						광고 글보기
+					</DropdownMenuCheckboxItem>
+					<DropdownMenuCheckboxItem
+						checked={filters.showEmployer}
+						closeOnClick={false}
+						onCheckedChange={(checked) =>
+							onChange({ ...filters, showEmployer: checked })
+						}
+					>
+						업소 회원 글보기
+					</DropdownMenuCheckboxItem>
+				</DropdownMenuGroup>
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
