@@ -3,17 +3,6 @@
     "baseRef": "head"
   },
   "hooks": {
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-manuals.mjs\"",
-            "type": "command"
-          }
-        ],
-        "matcher": "Bash"
-      }
-    ],
     "PostToolUse": [
       {
         "hooks": [
