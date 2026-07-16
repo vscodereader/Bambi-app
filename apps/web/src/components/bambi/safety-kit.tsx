@@ -459,12 +459,19 @@ export function ReportForm({
 				placeholder="구체적인 상황을 적어주시면 처리가 빨라져요 (선택)"
 				value={detail}
 			/>
-			<div className="flex gap-2.5">
-				<Button block onClick={onCancel} size="lg" variant="secondary">
+			<div className="flex flex-col gap-2.5 sm:flex-row">
+				<Button
+					block
+					className="sm:flex-1"
+					onClick={onCancel}
+					size="lg"
+					variant="secondary"
+				>
 					취소
 				</Button>
 				<Button
 					block
+					className="sm:flex-1"
 					disabled={!sel}
 					onClick={() =>
 						onSubmit(
