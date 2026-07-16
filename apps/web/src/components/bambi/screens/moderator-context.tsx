@@ -15,6 +15,10 @@ import {
 } from "react";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
 import { getVisibleModerationData } from "@/lib/bambi/moderation-data";
+import {
+	jobPostStatusLabel,
+	riskFlagLabel,
+} from "@/lib/bambi/moderation-labels";
 import { targetTypeLabel } from "@/lib/bambi/report-labels";
 import type {
 	ManagedUser,
@@ -132,7 +136,7 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 	const mediaSummaries = getQueueMediaSummaries(item);
 	const policyFlags = item.riskFlags.map((flag) => ({
 		label: "정책 확인",
-		match: flag,
+		match: riskFlagLabel(flag),
 		sev: "review" as const,
 	}));
 	const blockFlags = blockRiskMatches.map((match) => ({
@@ -152,12 +156,12 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 			: [
 					{
 						label: "검수 대기",
-						match: item.status,
+						match: jobPostStatusLabel(item.status),
 						sev: "review" as const,
 					},
 				];
 	const detected = [
-		...item.riskFlags,
+		...item.riskFlags.map(riskFlagLabel),
 		...blockRiskMatches,
 		...mediaSummaries,
 	].filter((summary) => summary.length > 0);
