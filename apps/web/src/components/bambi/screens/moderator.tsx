@@ -1402,13 +1402,15 @@ function SanctionSheet({
 					<SanctionBtn
 						desc="정책 안내와 함께 경고 1회 누적"
 						label="경고 보내기"
-						onClick={() => onPick("warned", "경고를 보냈어요")}
+						onClick={() => onPick("warned", "정책 안내와 함께 경고를 보냈어요")}
 						tone="pending"
 					/>
 					<SanctionBtn
 						desc="기간 동안 공고·채팅 차단"
 						label="이용 정지 (7일)"
-						onClick={() => onPick("suspended", "이용을 정지했어요")}
+						onClick={() =>
+							onPick("suspended", "정책 위반이 확인되어 이용을 정지했어요")
+						}
 						tone="danger"
 					/>
 				</div>
@@ -1462,6 +1464,28 @@ export function UserDetail({
 						{item.note}
 					</span>
 				</div>
+				{item.status === "active" ? null : (
+					<div>
+						<div className="mb-2.5 font-bold text-[13px] text-foreground">
+							계정 상태 복구
+						</div>
+						<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
+							현재 {c.label} 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
+							상태로 되돌릴 수 있어요.
+						</p>
+						<Button
+							block
+							leftIcon={<CheckIcon />}
+							onClick={() =>
+								onSanction(item.id, "active", "계정을 정상으로 복구했어요")
+							}
+							size="lg"
+							variant="primary"
+						>
+							정상으로 복구
+						</Button>
+					</div>
+				)}
 				<div>
 					<div className="mb-2.5 font-bold text-[13px] text-foreground">
 						제재 적용
@@ -1470,14 +1494,24 @@ export function UserDetail({
 						<SanctionBtn
 							desc="정책 안내와 함께 경고를 1회 누적해요"
 							label="경고 보내기"
-							onClick={() => onSanction(item.id, "warned", "경고를 보냈어요")}
+							onClick={() =>
+								onSanction(
+									item.id,
+									"warned",
+									"정책 안내와 함께 경고를 보냈어요"
+								)
+							}
 							tone="pending"
 						/>
 						<SanctionBtn
 							desc="기간 동안 공고·채팅을 막아요"
 							label="이용 정지 (7일)"
 							onClick={() =>
-								onSanction(item.id, "suspended", "이용을 정지했어요")
+								onSanction(
+									item.id,
+									"suspended",
+									"정책 위반이 확인되어 이용을 정지했어요"
+								)
 							}
 							tone="danger"
 						/>
