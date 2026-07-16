@@ -1,0 +1,35 @@
+import fs from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+const source = fs.readFileSync(
+	path.join(import.meta.dirname, "employer-ad-guide.tsx"),
+	"utf8"
+);
+
+describe("employer ad guide screen", () => {
+	it("shows the 금칙어·불량 업소 광고 삭제 warning in full", () => {
+		expect(source).toContain(
+			"광고 상품에 적용할 공고가 금칙어 또는 불량 업소의 경우 수정 중단 및 광고가 삭제됩니다."
+		);
+		// 경고는 muted가 아니라 눈에 띄는 상태 토큰으로 표기한다
+		expect(source).toContain("text-destructive");
+	});
+
+	it("shares one grid template between the header row and product rows", () => {
+		// 헤더와 상품 행 모두 동일한 PRODUCT_ROW_GRID 상수를 소비해야 정렬이 맞는다
+		expect(source).toContain("PRODUCT_ROW_GRID");
+		const usages = source.match(/PRODUCT_ROW_GRID/g) ?? [];
+		// 정의 1 + 헤더 소비 1 + 상품 행 소비 1
+		expect(usages.length).toBeGreaterThanOrEqual(3);
+	});
+
+	it("uses only ratio tracks so column widths do not depend on content", () => {
+		// 4개 열 전부 minmax(0,_fr) 비율 트랙 — 내용 의존 auto 트랙은 정렬을 깬다
+		expect(source).toContain(
+			"md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.9fr)]"
+		);
+		// 헤더·행마다 폭이 달라지던 원인이던 auto_auto 트랙 조합이 없어야 한다
+		expect(source).not.toContain("_auto_auto]");
+	});
+});
