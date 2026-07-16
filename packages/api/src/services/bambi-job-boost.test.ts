@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
 	BOOST_INELIGIBLE_MESSAGES,
 	countDueAutoBoostSlots,
+	getAutoBoostSlotOffsetMs,
 	getKstDayStart,
 	resolveBoostEligibility,
 } from "./bambi-job-boost";
+
+const HOUR_MS = 60 * 60 * 1000;
+const WINDOW_DURATION_MS = 12 * HOUR_MS;
 
 const FUTURE = new Date("2026-08-01T00:00:00Z");
 const NOW = new Date("2026-07-16T05:00:00Z"); // KST 2026-07-16 14:00
@@ -131,5 +135,123 @@ describe("countDueAutoBoostSlots", () => {
 	it("resets at KST midnight (window not yet open)", () => {
 		// KST 2026-07-17 00:00 = UTC 2026-07-16 15:00 — 새 하루의 09:00 창은 아직
 		expect(countDueAutoBoostSlots(3, at("2026-07-16T15:00:00Z"))).toBe(0);
+	});
+
+	// 공고별 오프셋을 반영한 슬롯 계산. offsetMs를 직접 넘겨 해시와 무관하게 경계를 검증한다.
+	// N=2, interval=6h, offset=1h → 슬롯 = 10:00·16:00 KST(= UTC 01:00·07:00).
+	describe("with per-job offset", () => {
+		const OFFSET_1H = HOUR_MS;
+
+		it("returns 0 before the offset first slot (창 시작+offset 이전)", () => {
+			// 09:00 KST(창 시작, UTC 00:00) — 아직 offset(10:00) 이전
+			expect(
+				countDueAutoBoostSlots(2, at("2026-07-16T00:00:00Z"), OFFSET_1H)
+			).toBe(0);
+			// 09:59:59 KST(UTC 00:59:59) — 첫 슬롯 직전
+			expect(
+				countDueAutoBoostSlots(2, at("2026-07-16T00:59:59Z"), OFFSET_1H)
+			).toBe(0);
+		});
+
+		it("counts the first offset slot at 창 시작+offset", () => {
+			// 10:00 KST(UTC 01:00) — 첫 슬롯 직후
+			expect(
+				countDueAutoBoostSlots(2, at("2026-07-16T01:00:00Z"), OFFSET_1H)
+			).toBe(1);
+		});
+
+		it("counts the second offset slot with boundary precision", () => {
+			// 15:59:59 KST(UTC 06:59:59) — 둘째 슬롯(16:00) 직전
+			expect(
+				countDueAutoBoostSlots(2, at("2026-07-16T06:59:59Z"), OFFSET_1H)
+			).toBe(1);
+			// 16:00 KST(UTC 07:00) — 둘째 슬롯 직후
+			expect(
+				countDueAutoBoostSlots(2, at("2026-07-16T07:00:00Z"), OFFSET_1H)
+			).toBe(2);
+		});
+
+		it("caps catch-up at N regardless of offset", () => {
+			// 20:00 KST(UTC 11:00) — 두 슬롯 모두 지남, 상한 N=2
+			expect(
+				countDueAutoBoostSlots(2, at("2026-07-16T11:00:00Z"), OFFSET_1H)
+			).toBe(2);
+		});
+
+		it("defaults offsetMs to 0 preserving legacy slot behavior", () => {
+			// 기본값 0이면 09:00 + k×interval의 기존 동작과 완전히 동일
+			for (const iso of [
+				"2026-07-16T00:00:00Z",
+				"2026-07-16T05:59:59Z",
+				"2026-07-16T06:00:00Z",
+				"2026-07-16T11:00:00Z",
+			]) {
+				expect(countDueAutoBoostSlots(2, at(iso))).toBe(
+					countDueAutoBoostSlots(2, at(iso), 0)
+				);
+			}
+		});
+	});
+});
+
+describe("getAutoBoostSlotOffsetMs", () => {
+	const ids = [
+		"job_1a2b3c",
+		"job_9f8e7d",
+		"e2c5f0a1-0000-4000-8000-000000000000",
+		"e2c5f0a1-0000-4000-8000-000000000001",
+		"short",
+		"another-post-id",
+	];
+
+	it("returns 0 for products without auto boosts", () => {
+		expect(getAutoBoostSlotOffsetMs("job_1a2b3c", 0)).toBe(0);
+		expect(getAutoBoostSlotOffsetMs("job_1a2b3c", -1)).toBe(0);
+	});
+
+	it("is deterministic — same id and N always yields the same offset", () => {
+		for (const id of ids) {
+			for (const n of [1, 2, 3, 4]) {
+				expect(getAutoBoostSlotOffsetMs(id, n)).toBe(
+					getAutoBoostSlotOffsetMs(id, n)
+				);
+			}
+		}
+	});
+
+	it("keeps offset within [0, interval) for every N", () => {
+		for (const id of ids) {
+			for (const n of [1, 2, 3, 4]) {
+				const intervalMs = WINDOW_DURATION_MS / n;
+				const offset = getAutoBoostSlotOffsetMs(id, n);
+				expect(offset).toBeGreaterThanOrEqual(0);
+				expect(offset).toBeLessThan(intervalMs);
+			}
+		}
+	});
+
+	it("spreads different ids across the interval (herd 제거)", () => {
+		// UUID처럼 인접한 두 id도 서로 다른 오프셋을 내야 특정 분에 몰리지 않는다.
+		expect(
+			getAutoBoostSlotOffsetMs("e2c5f0a1-0000-4000-8000-000000000000", 2)
+		).not.toBe(
+			getAutoBoostSlotOffsetMs("e2c5f0a1-0000-4000-8000-000000000001", 2)
+		);
+
+		// 다양한 id의 오프셋이 최소 두 종류 이상으로 분산된다(전부 같은 값이 아님).
+		const offsets = new Set(ids.map((id) => getAutoBoostSlotOffsetMs(id, 3)));
+		expect(offsets.size).toBeGreaterThan(1);
+	});
+
+	it("guarantees the last slot stays inside the 09~21 window", () => {
+		// 마지막 슬롯 = offset + (N-1)×interval < N×interval = 12h(창 길이)여야 한다.
+		for (const id of ids) {
+			for (const n of [1, 2, 3, 4]) {
+				const intervalMs = WINDOW_DURATION_MS / n;
+				const offset = getAutoBoostSlotOffsetMs(id, n);
+				const lastSlotMs = offset + (n - 1) * intervalMs;
+				expect(lastSlotMs).toBeLessThan(WINDOW_DURATION_MS);
+			}
+		}
 	});
 });

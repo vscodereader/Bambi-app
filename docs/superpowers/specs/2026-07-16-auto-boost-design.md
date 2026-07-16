@@ -52,9 +52,20 @@ dev·운영 환경마다 인프라 구성 추가, 현 로컬 dev 중심 환경�
 `packages/api/src/services/bambi-job-boost.ts`에 추가:
 
 - 발동 창 상수: 09:00~21:00 KST(12시간). 변경이 쉬운 단일 상수로 둔다.
-- `countDueAutoBoostSlots(autoBoostsPerDay, now)` 형태 — `now`가 속한 KST 하루
-  기준으로 지금까지 도래한 슬롯 수(dueCount)를 반환. `getKstDayStart` 재사용.
-- 단위 테스트 대상(횟수별 슬롯 경계 직전/직후, KST 자정, 0회).
+- **공고별 슬롯 분산(herd 제거)**: `getAutoBoostSlotOffsetMs(jobPostId,
+  autoBoostsPerDay)` — 공고 id 문자열의 결정적 해시(FNV-1a 32비트, 순수 TS·
+  라이브러리 없음) `% intervalMs`로 오프셋을 산출. 슬롯 = 09:00 + offset +
+  k×interval라, 같은 N을 가진 공고들도 발동 시각이 id별로 어긋나 특정 분에 몰리지
+  않고, 전 공고가 동시에 점프해 서로 상대 우위가 없던 herd 문제도 사라진다.
+  offset ∈ [0, interval)이므로 마지막 슬롯(= 09:00 + offset + (N-1)×interval) <
+  09:00 + N×interval = 21:00이 수학적으로 보장돼 모든 슬롯이 창 안에 든다.
+- `countDueAutoBoostSlots(autoBoostsPerDay, now, offsetMs = 0)` — `now`가 속한 KST
+  하루 기준으로 지금까지 도래한 슬롯 수(dueCount)를 반환. 슬롯 = 창 시작 + offsetMs +
+  k×interval, due = floor((elapsed − offsetMs) ÷ interval) + 1을 [0, N]으로 클램프
+  (elapsed < offsetMs면 0). offsetMs 기본값 0이면 09:00 + k×interval의 기존 동작과
+  동일. `getKstDayStart` 재사용.
+- 단위 테스트 대상(횟수별 슬롯 경계 직전/직후, KST 자정, 0회; 오프셋 결정성·범위
+  [0, interval)·서로 다른 id 분산, offset 반영 경계, offset 기본값 0 동작 보존).
 
 ## 틱 서비스
 
@@ -62,14 +73,22 @@ dev·운영 환경마다 인프라 구성 추가, 현 로컬 dev 중심 환경�
 
 1. 후보 조회: `autoBoostsPerDay > 0` AND `status = 'published'` AND
    `paymentStatus = 'paid'` AND 노출 유효(`exposureEndsAt` null 또는 미래).
-2. 공고별 오늘 `"auto"` 이벤트 수가 dueCount 미만이면 발동 대상.
-3. 발동은 공고별 트랜잭션: jobPost `FOR UPDATE` 잠금 → **잠금 안에서 auto 카운트
-   재확인** → `jobBoostEvent` insert(boostType `"auto"`, actorUserId null) →
-   `boostedAt = now`. 동시 틱·다중 인스턴스에서도 쿼터 초과가 구조적으로 불가능
-   (수동 boost와 같은 직렬화 지점).
-4. 틱당 공고별 최대 1회 발동 — 서버가 오래 꺼졌다 켜지면 이후 틱들이 1분 간격으로
-   순차 캐치업한다(당일 쿼터는 정직하게 소진, 자정이 지나면 소멸).
-5. 개별 공고 실패는 로그만 남기고 다음 공고 진행(틱이 서버를 죽이면 안 됨).
+2. 공고별 오늘 `"auto"` 이벤트 수가 dueCount 미만이면 발동 대상. dueCount는
+   **그 공고의 오프셋**(`getAutoBoostSlotOffsetMs`)을 반영한다 — 사전 필터와 잠금 내
+   재확인 둘 다 동일 오프셋을 써야 재확인이 유의미하다.
+3. 발동은 공고별 트랜잭션: jobPost `FOR UPDATE` 잠금 → **잠금 안에서 (오프셋 반영)
+   auto 카운트 재확인** → `jobBoostEvent` insert(boostType `"auto"`, actorUserId
+   null) → `boostedAt = now`. 동시 틱·다중 인스턴스에서도 쿼터 초과가 구조적으로
+   불가능(수동 boost와 같은 직렬화 지점).
+4. **발동 대상은 동시 실행 상한(`AUTO_BOOST_TICK_CONCURRENCY = 10`)이 있는 워커
+   풀로 병렬 처리**한다 — 공유 인덱스에서 다음 대상을 꺼내는 async 워커를
+   `min(상한, 대상 수)`개 띄우고 `Promise.all`로 대기(청크 Promise.all보다 슬롯
+   활용이 좋음). JS 이벤트 루프가 단일 스레드라 인덱스 소비·`fired` 증가에 경쟁
+   조건이 없다. 대규모 공고에서도 커넥션·잠금 경합을 상한 안에 가두면서 순차
+   for-await보다 처리량을 확대한다(공고별 트랜잭션·재확인·실패 삼킴은 불변).
+5. 틱당 공고별 최대 1회 발동 — 서버가 오래 꺼졌다 켜지면 이후 틱들이 1분 간격으로
+   캐치업한다(당일 쿼터는 정직하게 소진, 자정이 지나면 소멸).
+6. 개별 공고 실패는 로그만 남기고 다음 공고 진행(틱이 서버를 죽이면 안 됨).
 
 Fastify 플러그인: 기존 플러그인 스타일(`FastifyPluginCallback`)로 `setInterval`
 60초, 이전 틱 미완료 시 스킵하는 재진입 가드, `onClose`에서 `clearInterval`.

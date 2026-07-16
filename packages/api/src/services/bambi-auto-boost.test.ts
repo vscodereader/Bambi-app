@@ -39,11 +39,13 @@ const {
 
 const HOUR_MS = 60 * 60 * 1000;
 
-// 실제 real now와 같은 KST 하루에 속하되 시각을 20:00 KST로 고정한 틱 기준 시각.
-// 20:00이면 발동 창(09~21시)의 모든 슬롯이 도래해 dueCount가 결정적이다. DB가 이벤트에
-// 찍는 createdAt(real now)은 같은 KST 하루라 getKstDayStart(tickNow) 이후로 집계된다.
+// 실제 real now와 같은 KST 하루에 속하되 시각을 창 끝(21:00 KST)으로 고정한 틱 기준 시각.
+// 공고별 오프셋은 [0, interval) 범위라 마지막 슬롯(= 09:00 + offset + (N-1)×interval)이 21:00 전에
+// 반드시 도래한다(getAutoBoostSlotOffsetMs 주석의 수학적 보장). 틱 기준을 21:00으로 잡으면 어떤
+// 오프셋의 공고든 전체 자동 쿼터가 due가 되어 하드코딩 없이 결정적이다. DB가 이벤트에 찍는
+// createdAt(real now)은 같은 KST 하루라 getKstDayStart(tickNow) 이후로 집계된다.
 const realNow = new Date();
-const tickNow = new Date(getKstDayStart(realNow).getTime() + 20 * HOUR_MS);
+const tickNow = new Date(getKstDayStart(realNow).getTime() + 21 * HOUR_MS);
 const past = new Date(realNow.getTime() - 24 * HOUR_MS);
 const future = new Date(realNow.getTime() + 24 * HOUR_MS);
 
@@ -242,8 +244,10 @@ describe("runAutoBoostTick", () => {
 	it("fires each due job once per tick with a null-actor auto event and boostedAt", async () => {
 		const fired = await runAutoBoostTick(tickNow);
 
-		// fireJob(due=2)·comboJob(due=1)만 발동한다. 미게시·미결제·만료·쿼터소진은 제외.
-		expect(fired).toBe(2);
+		// 이 fixtures 중에선 fireJob(due=2)·comboJob(due=1)만 발동한다(미게시·미결제·만료·쿼터소진 제외).
+		// dev DB에 무관한 자동 후보(시드 공고 등)가 있으면 global fired가 더 클 수 있어 하한으로 검증하고,
+		// 우리 fixtures의 정확한 발동은 공고별 카운트로 단언한다.
+		expect(fired).toBeGreaterThanOrEqual(2);
 		expect(await autoEventCount(fireJobId)).toBe(1); // 틱당 공고별 최대 1회
 		expect(await autoEventCount(comboJobId)).toBe(1);
 
@@ -301,5 +305,120 @@ describe("runAutoBoostTick", () => {
 		// 쿼터(2) 소진 후 추가 틱은 fireJob을 더 발동하지 않는다.
 		await runAutoBoostTick(tickNow);
 		expect(await autoEventCount(fireJobId)).toBe(2);
+	});
+});
+
+// 워커 풀 병렬 경로 검증: 동시 상한(10)을 넘는 12개 공고를 한 틱에 돌려 각 공고에 auto 이벤트가
+// 정확히 1건씩 생기는지 확인한다(공유 인덱스에서 워커가 다음 대상을 꺼내는 재사용 경로 포함).
+// 앞 describe의 fixtures는 그 블록 afterAll에서 이미 삭제되므로 이 블록의 공고만 auto 후보다.
+describe("runAutoBoostTick (병렬 워커 풀)", () => {
+	const PARALLEL_JOB_COUNT = 12;
+
+	const parallelOrgId = `org_test_${randomUUID()}`;
+	const parallelUserId = `user_test_parallel_${randomUUID()}`;
+	const parallelMemberId = `member_test_${randomUUID()}`;
+	const parallelPlacementId = randomUUID();
+	const parallelProductId = randomUUID();
+	const parallelJobIds = Array.from({ length: PARALLEL_JOB_COUNT }, () =>
+		randomUUID()
+	);
+
+	beforeAll(async () => {
+		await db.insert(user).values({
+			email: `parallel-${randomUUID()}@bambi.test`,
+			id: parallelUserId,
+			name: "병렬 담당자",
+		});
+		await db.insert(organization).values({
+			createdAt: realNow,
+			id: parallelOrgId,
+			name: "병렬 자동 끌어올리기 조직",
+			slug: `auto-boost-parallel-${randomUUID()}`,
+		});
+		await db.insert(member).values({
+			createdAt: realNow,
+			id: parallelMemberId,
+			organizationId: parallelOrgId,
+			role: "owner",
+			userId: parallelUserId,
+		});
+		await db.insert(bambiProfile).values({
+			displayName: "병렬 담당자",
+			isPhoneVerified: true,
+			role: "employer",
+			status: "active",
+			userId: parallelUserId,
+		});
+		await db.insert(employerOrganizationProfile).values({
+			displayName: "병렬 자동 끌어올리기 업체",
+			organizationId: parallelOrgId,
+			verificationStatus: "verified",
+		});
+		await db.insert(adPlacement).values({
+			id: parallelPlacementId,
+			kind: "listing",
+			name: "병렬 목록 상단 노출",
+		});
+		await db.insert(adProduct).values({
+			autoBoostsPerDay: 1,
+			id: parallelProductId,
+			name: "병렬 자동 끌어올리기 상품",
+			placementId: parallelPlacementId,
+			priceOptions: [{ amount: 10_000, days: 7 }],
+		});
+		// 12개 공고 모두 공개·결제완료·노출 유효, 자동 1회. 창 끝(tickNow)이라 각 due=1.
+		await db.insert(jobPost).values(
+			parallelJobIds.map((id, index) => ({
+				adProductId: parallelProductId,
+				autoBoostsPerDay: 1,
+				createdByUserId: parallelUserId,
+				description: "병렬 워커 풀 검증 공고입니다.",
+				exposureEndsAt: future,
+				id,
+				industryCategory: "라운지",
+				manualBoostsPerDay: 0,
+				organizationId: parallelOrgId,
+				payAmount: 180_000,
+				payUnit: "일급",
+				paymentStatus: "paid" as const,
+				publishedAt: realNow,
+				region: `auto-boost-parallel-${index}-${randomUUID()}`,
+				status: "published" as const,
+				title: `병렬 공고 ${index}`,
+				workSchedule: "20:00-02:00",
+			}))
+		);
+	});
+
+	afterAll(async () => {
+		await db
+			.delete(jobBoostEvent)
+			.where(inArray(jobBoostEvent.jobPostId, parallelJobIds));
+		await db.delete(jobPost).where(inArray(jobPost.id, parallelJobIds));
+		await db.delete(adProduct).where(eq(adProduct.id, parallelProductId));
+		await db.delete(adPlacement).where(eq(adPlacement.id, parallelPlacementId));
+		await db
+			.delete(employerOrganizationProfile)
+			.where(eq(employerOrganizationProfile.organizationId, parallelOrgId));
+		await db.delete(member).where(eq(member.id, parallelMemberId));
+		await db
+			.delete(bambiProfile)
+			.where(eq(bambiProfile.userId, parallelUserId));
+		await db.delete(user).where(eq(user.id, parallelUserId));
+		await db.delete(organization).where(eq(organization.id, parallelOrgId));
+	});
+
+	it("fires every due job exactly once in a single tick", async () => {
+		const fired = await runAutoBoostTick(tickNow);
+		// 12개 fixtures 전부 due=1 → 각각 1회. dev DB의 무관한 자동 후보가 있으면 global fired가 더 클 수
+		// 있어 하한으로 검증하고(≥12), 병렬 경로의 핵심인 "각 공고 정확히 1건"은 공고별로 단언한다.
+		expect(fired).toBeGreaterThanOrEqual(PARALLEL_JOB_COUNT);
+
+		const counts = await Promise.all(
+			parallelJobIds.map((id) => autoEventCount(id))
+		);
+		for (const eventCount of counts) {
+			expect(eventCount).toBe(1);
+		}
 	});
 });
