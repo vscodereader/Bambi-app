@@ -123,6 +123,47 @@ const bulkSetUserStatusInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
+const reviewModerationStatusSchema = z.enum([
+	"published",
+	"pending_review",
+	"hidden",
+]);
+
+const listReviewsInput = z.object({
+	status: reviewModerationStatusSchema.optional(),
+	limit: z.number().int().min(1).max(100).default(50),
+});
+
+const setReviewStatusInput = z.object({
+	reviewId: z.string().uuid(),
+	status: reviewModerationStatusSchema,
+	reason: z.string().min(2).max(500),
+});
+
+const bulkSetReviewStatusInput = z.object({
+	reviewIds: z.array(z.string().uuid()),
+	status: reviewModerationStatusSchema,
+	reason: z.string().min(2).max(500),
+});
+
+const employerVerificationStatusSchema = z.enum([
+	"none",
+	"pending",
+	"verified",
+	"rejected",
+]);
+
+const listEmployersInput = z.object({
+	status: employerVerificationStatusSchema.optional(),
+	limit: z.number().int().min(1).max(100).default(50),
+});
+
+const setChatRoomBlockedInput = z.object({
+	chatRoomId: z.string().uuid(),
+	isBlocked: z.boolean(),
+	reason: z.string().min(2).max(500),
+});
+
 type ReportTargetType = z.infer<typeof targetTypeSchema>;
 type ReportRow = typeof report.$inferSelect;
 type JobPostModerationStatus = z.infer<typeof jobPostModerationStatusSchema>;
@@ -187,14 +228,111 @@ const jobPostHasCoverImageSql = sql<boolean>`exists(
 		and ${jobPostMedia.usage} = 'cover'
 )`;
 
-const getReportTargetContext = async (reportRow: ReportRow) => {
-	if (reportRow.targetType !== "chat_message") {
+const getJobPostTargetContext = async (targetId: string) => {
+	const [row] = await db
+		.select({
+			id: jobPost.id,
+			title: jobPost.title,
+			description: jobPost.description,
+			status: jobPost.status,
+			riskFlags: jobPost.riskFlags,
+			rejectionReason: jobPost.rejectionReason,
+			organizationDisplayName: employerOrganizationProfile.displayName,
+		})
+		.from(jobPost)
+		.innerJoin(
+			employerOrganizationProfile,
+			eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+		)
+		.where(eq(jobPost.id, targetId))
+		.limit(1);
+
+	return row ? { jobPost: row } : null;
+};
+
+const getReviewTargetContext = async (targetId: string) => {
+	const [row] = await db
+		.select({
+			id: review.id,
+			body: review.body,
+			rating: review.rating,
+			status: review.status,
+			jobPostId: review.jobPostId,
+			riskFlags: review.riskFlags,
+		})
+		.from(review)
+		.where(eq(review.id, targetId))
+		.limit(1);
+
+	return row ? { review: row } : null;
+};
+
+const getUserTargetContext = async (targetId: string) => {
+	const [row] = await db
+		.select({
+			userId: bambiProfile.userId,
+			displayName: bambiProfile.displayName,
+			role: bambiProfile.role,
+			status: bambiProfile.status,
+			isPhoneVerified: bambiProfile.isPhoneVerified,
+		})
+		.from(bambiProfile)
+		.where(eq(bambiProfile.userId, targetId))
+		.limit(1);
+
+	return row ? { user: row } : null;
+};
+
+const getChatRoomTargetContext = async (targetId: string) => {
+	const [room] = await db
+		.select({
+			id: chatRoom.id,
+			isBlocked: chatRoom.isBlocked,
+			jobPostTitle: jobPost.title,
+		})
+		.from(chatRoom)
+		.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+		.where(eq(chatRoom.id, targetId))
+		.limit(1);
+
+	if (!room) {
 		return null;
 	}
 
-	const message = await getChatMessageTargetContext(reportRow.targetId);
+	// 첨부(storageKey)나 파일 세부는 절대 노출하지 않는다. 최근 메시지 본문만 요약한다.
+	const recentMessages = await db
+		.select({
+			id: chatMessage.id,
+			senderUserId: chatMessage.senderUserId,
+			body: chatMessage.body,
+			createdAt: chatMessage.createdAt,
+		})
+		.from(chatMessage)
+		.where(eq(chatMessage.chatRoomId, targetId))
+		.orderBy(desc(chatMessage.createdAt))
+		.limit(10);
 
-	return message ? { chatMessage: message } : null;
+	return { chatRoom: { ...room, recentMessages } };
+};
+
+const getReportTargetContext = async (reportRow: ReportRow) => {
+	switch (reportRow.targetType) {
+		case "chat_message": {
+			const message = await getChatMessageTargetContext(reportRow.targetId);
+
+			return message ? { chatMessage: message } : null;
+		}
+		case "job_post":
+			return await getJobPostTargetContext(reportRow.targetId);
+		case "review":
+			return await getReviewTargetContext(reportRow.targetId);
+		case "user":
+			return await getUserTargetContext(reportRow.targetId);
+		case "chat_room":
+			return await getChatRoomTargetContext(reportRow.targetId);
+		default:
+			return null;
+	}
 };
 
 const withReportTargetContexts = async (reportRows: ReportRow[]) =>
@@ -295,7 +433,31 @@ export const moderationRouter = {
 		.input(createReportInput)
 		.handler(async ({ context, input }) => {
 			const profile = await requireActiveBambiProfile(context.session);
+
+			if (input.targetType === "user" && input.targetId === profile.userId) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "자기 자신은 신고할 수 없어요.",
+				});
+			}
+
 			await assertReportTargetExists(input.targetType, input.targetId);
+
+			// 동일 신고자·대상의 중복 신고는 멱등 처리한다(스키마 변경 없이 기존 row 반환).
+			const [existing] = await db
+				.select()
+				.from(report)
+				.where(
+					and(
+						eq(report.reporterUserId, profile.userId),
+						eq(report.targetType, input.targetType),
+						eq(report.targetId, input.targetId)
+					)
+				)
+				.limit(1);
+
+			if (existing) {
+				return existing;
+			}
 
 			const [created] = await db
 				.insert(report)
@@ -420,6 +582,105 @@ export const moderationRouter = {
 			}
 
 			return await query;
+		}),
+
+	listReviews: protectedProcedure
+		.input(listReviewsInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			const query = db
+				.select({
+					id: review.id,
+					body: review.body,
+					rating: review.rating,
+					status: review.status,
+					riskFlags: review.riskFlags,
+					reviewerUserId: review.reviewerUserId,
+					reviewerDisplayName: bambiProfile.displayName,
+					organizationDisplayName: employerOrganizationProfile.displayName,
+					jobPostId: review.jobPostId,
+					jobPostTitle: jobPost.title,
+					createdAt: review.createdAt,
+				})
+				.from(review)
+				.innerJoin(jobPost, eq(review.jobPostId, jobPost.id))
+				.innerJoin(
+					employerOrganizationProfile,
+					eq(review.organizationId, employerOrganizationProfile.organizationId)
+				)
+				.leftJoin(bambiProfile, eq(review.reviewerUserId, bambiProfile.userId))
+				.orderBy(desc(review.createdAt))
+				.limit(input.limit);
+
+			if (input.status) {
+				return await query.where(eq(review.status, input.status));
+			}
+
+			return await query;
+		}),
+
+	setReviewStatus: protectedProcedure
+		.input(setReviewStatusInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(async (tx) => {
+				const [updated] = await tx
+					.update(review)
+					.set({ status: input.status })
+					.where(eq(review.id, input.reviewId))
+					.returning();
+
+				if (!updated) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx.insert(adminModerationAction).values({
+					adminUserId: admin.userId,
+					targetType: "review",
+					targetId: input.reviewId,
+					action: `set_status:${input.status}`,
+					reason: input.reason,
+				});
+
+				return updated;
+			});
+		}),
+
+	bulkSetReviewStatus: protectedProcedure
+		.input(bulkSetReviewStatusInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(
+				async (tx) =>
+					await executeBulkModeration({
+						processTarget: async (reviewId) => {
+							const [updated] = await tx
+								.update(review)
+								.set({ status: input.status })
+								.where(eq(review.id, reviewId))
+								.returning();
+
+							if (!updated) {
+								throw new ORPCError("NOT_FOUND", {
+									message: "Review was not found.",
+								});
+							}
+
+							await tx.insert(adminModerationAction).values({
+								adminUserId: admin.userId,
+								targetType: "review",
+								targetId: reviewId,
+								action: `set_status:${input.status}`,
+								reason: input.reason,
+								metadata: { bulk: true },
+							});
+						},
+						targetIds: input.reviewIds,
+					})
+			);
 		}),
 
 	setReportStatus: protectedProcedure
@@ -667,6 +928,75 @@ export const moderationRouter = {
 			.where(eq(employerOrganizationProfile.verificationStatus, "pending"))
 			.orderBy(desc(employerOrganizationProfile.createdAt));
 	}),
+
+	listEmployers: protectedProcedure
+		.input(listEmployersInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			const query = db
+				.select({
+					organizationId: employerOrganizationProfile.organizationId,
+					displayName: employerOrganizationProfile.displayName,
+					businessRegistrationNumber:
+						employerOrganizationProfile.businessRegistrationNumber,
+					verificationStatus: employerOrganizationProfile.verificationStatus,
+					verificationNote: employerOrganizationProfile.verificationNote,
+					ownerUserId: member.userId,
+					ownerEmail: user.email,
+					createdAt: employerOrganizationProfile.createdAt,
+				})
+				.from(employerOrganizationProfile)
+				.innerJoin(
+					member,
+					and(
+						eq(
+							member.organizationId,
+							employerOrganizationProfile.organizationId
+						),
+						eq(member.role, "owner")
+					)
+				)
+				.innerJoin(user, eq(user.id, member.userId))
+				.orderBy(desc(employerOrganizationProfile.createdAt))
+				.limit(input.limit);
+
+			if (input.status) {
+				return await query.where(
+					eq(employerOrganizationProfile.verificationStatus, input.status)
+				);
+			}
+
+			return await query;
+		}),
+
+	setChatRoomBlocked: protectedProcedure
+		.input(setChatRoomBlockedInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(async (tx) => {
+				const [updated] = await tx
+					.update(chatRoom)
+					.set({ isBlocked: input.isBlocked })
+					.where(eq(chatRoom.id, input.chatRoomId))
+					.returning();
+
+				if (!updated) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx.insert(adminModerationAction).values({
+					adminUserId: admin.userId,
+					targetType: "chat_room",
+					targetId: input.chatRoomId,
+					action: `set_blocked:${input.isBlocked}`,
+					reason: input.reason,
+				});
+
+				return updated;
+			});
+		}),
 
 	setEmployerVerificationStatus: protectedProcedure
 		.input(setEmployerVerificationStatusInput)
