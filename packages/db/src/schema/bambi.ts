@@ -285,6 +285,10 @@ export const jobPost = pgTable(
 		// 상품(ad_product.manual_boosts_per_day)을 라이브 참조하지 않고 이 컬럼으로 자격을 판정해,
 		// 운영자가 상품 횟수를 바꿔도 기존 적용 공고에 소급되지 않도록 한다(노출 축 스냅샷과 동일 패턴).
 		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
+		// 공고 구매 시점에 광고 상품에서 복사한 하루 자동 끌어올리기 횟수 스냅샷. 0 = 미제공.
+		// 수동과 동일한 스냅샷 패턴(라이브 상품 미참조)이라 상품 수정이 기존 공고에 소급되지 않는다.
+		// 서버 틱 스케줄러가 09~21시 KST 창을 이 횟수로 균등 분배해 자동 발동한다.
+		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
 		publishedAt: timestamp("published_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -407,8 +411,8 @@ export const jobPromotionBoostEvent = pgTable(
 	]
 );
 
-// 광고 상품 축 끌어올리기 이력. 일일 사용량 판정은 (job_post_id, created_at) 카운트로 한다.
-// boost_type은 1단계에선 'manual'만 쓰고 자동 점프(2단계) 확장을 대비한 필드다.
+// 광고 상품 축 끌어올리기 이력. 일일 사용량 판정은 (job_post_id, boost_type, created_at) 카운트로 한다.
+// boost_type은 수동 클릭('manual')과 서버 틱 자동 발동('auto')을 구분한다.
 export const jobBoostEvent = pgTable(
 	"job_boost_event",
 	{
@@ -419,9 +423,8 @@ export const jobBoostEvent = pgTable(
 		organizationId: text("organization_id")
 			.notNull()
 			.references(() => organization.id, { onDelete: "cascade" }),
-		actorUserId: text("actor_user_id")
-			.notNull()
-			.references(() => user.id),
+		// 자동 발동('auto')은 사람 액터가 없어 null. 수동('manual')은 클릭한 사용자를 저장한다.
+		actorUserId: text("actor_user_id").references(() => user.id),
 		boostType: text("boost_type").default("manual").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
@@ -474,6 +477,8 @@ export const adProduct = pgTable(
 			.notNull(),
 		// 이 상품을 구매한 공고가 하루(KST 자정 리셋)에 쓸 수 있는 수동 끌어올리기 횟수. 0 = 미제공.
 		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
+		// 이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는 횟수(구매 시 공고로 스냅샷). 0 = 미제공.
+		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
 		sortOrder: integer("sort_order").default(0).notNull(),
 		isActive: boolean("is_active").default(true).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),

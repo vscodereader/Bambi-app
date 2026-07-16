@@ -37,6 +37,14 @@ describe("employer ads management page", () => {
 		expect(source).not.toContain("/edit");
 	});
 
+	it("adds an auto-boost column showing today's runs over the daily quota", () => {
+		expect(source).toContain("autoBoostsPerDay: number;");
+		expect(source).toContain("autoBoostsUsedToday: number;");
+		expect(source).toContain('header: "자동 끌어올리기"');
+		// 미포함은 "—", 포함이면 "오늘 M/N회 실행"
+		expect(source).toContain("회 실행");
+	});
+
 	it("shows only the team name as the title subtext, not the employer name", () => {
 		// 자기 조직 화면이라 모든 행이 같은 업체명 → 정보 가치 없음 → 보조 텍스트에서 제거
 		expect(source).not.toContain("ad.employerDisplayName");

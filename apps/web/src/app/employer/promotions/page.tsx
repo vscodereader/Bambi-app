@@ -23,6 +23,8 @@ import { orpc } from "@/utils/orpc";
 
 interface AdListItem {
 	adProductName: null | string;
+	autoBoostsPerDay: number;
+	autoBoostsUsedToday: number;
 	boostedAt: Date | null | string;
 	boostsUsedToday: number;
 	employerDisplayName: string;
@@ -173,6 +175,22 @@ function getAdColumns({
 						)}
 					>
 						{`남은 ${remaining}회 / 일일 ${ad.manualBoostsPerDay}회`}
+					</span>
+				);
+			},
+		},
+		{
+			id: "autoBoostsToday",
+			header: "자동 끌어올리기",
+			sortValue: (ad) => ad.autoBoostsPerDay,
+			cell: (ad) => {
+				if (ad.autoBoostsPerDay === 0) {
+					return <span className="text-muted-foreground">—</span>;
+				}
+
+				return (
+					<span className="whitespace-nowrap">
+						{`오늘 ${ad.autoBoostsUsedToday}/${ad.autoBoostsPerDay}회 실행`}
 					</span>
 				);
 			},

@@ -24,6 +24,12 @@ describe("employer ad guide screen", () => {
 		expect(usages.length).toBeGreaterThanOrEqual(3);
 	});
 
+	it("shows an auto-boost inclusion line when the product has auto boosts", () => {
+		// 자동 횟수>0이면 수동 라인과 동일 스타일의 자동 포함 라인을 표기한다
+		expect(source).toContain("product.autoBoostsPerDay > 0");
+		expect(source).toContain("일일 자동 끌어올리기");
+	});
+
 	it("uses only ratio tracks so column widths do not depend on content", () => {
 		// 4개 열 전부 minmax(0,_fr) 비율 트랙 — 내용 의존 auto 트랙은 정렬을 깬다
 		expect(source).toContain(

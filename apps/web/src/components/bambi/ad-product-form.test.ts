@@ -36,4 +36,12 @@ describe("ad product form", () => {
 			'value={manualBoostsPerDay === 0 ? "" : manualBoostsPerDay}'
 		);
 	});
+
+	it("collects autoBoostsPerDay with the same zero-clearable input pattern", () => {
+		const source = readComponent("ad-product-form.tsx");
+		expect(source).toContain("autoBoostsPerDay: number;");
+		expect(source).toContain(
+			'value={autoBoostsPerDay === 0 ? "" : autoBoostsPerDay}'
+		);
+	});
 });
