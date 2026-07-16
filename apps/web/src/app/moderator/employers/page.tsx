@@ -92,6 +92,9 @@ export default function ModeratorEmployersPage() {
 			) : null}
 			{employers.map((employer) => {
 				const badge = VERIFICATION_BADGE[employer.verificationStatus];
+				// 반려는 다른 조치와 동일하게 사유 2자 이상을 강제한다("반려 시 필수" 안내와 일치).
+				const rejectNote = (notes[employer.organizationId] ?? "").trim();
+				const canReject = rejectNote.length >= 2;
 				return (
 					<Card key={employer.organizationId}>
 						<CardHeader className="gap-2">
@@ -138,13 +141,11 @@ export default function ModeratorEmployersPage() {
 									승인
 								</Button>
 								<Button
-									disabled={decide.isPending}
+									disabled={decide.isPending || !canReject}
 									onClick={() =>
 										decide.mutate({
 											organizationId: employer.organizationId,
-											reason:
-												notes[employer.organizationId]?.trim() ||
-												"정보 확인 불가",
+											reason: rejectNote,
 											status: "rejected",
 										})
 									}

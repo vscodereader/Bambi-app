@@ -34,7 +34,6 @@ export const MARKETPLACE_QUICK_FILTERS = [
 	{ id: "verified", label: "검증 완료" },
 	{ id: "today", label: "오늘 면접 가능" },
 	{ id: "beginner", label: "초보 가능" },
-	{ id: "nearby", label: "내 주변" },
 ] as const;
 
 // 축 미적용(전체) 옵션 — 지역/업종 필터에서 "필터 없음"을 뜻한다.
