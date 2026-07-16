@@ -7,8 +7,11 @@ import { readGuestFromCookieString } from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
 
 type BambiRole = "job_seeker" | "employer" | "admin" | null;
+type BambiAccountStatus = "active" | "warned" | "suspended" | null;
 
 interface BambiAuthValue {
+	accountSanctionReason: string | null;
+	accountStatus: BambiAccountStatus;
 	canAccessCommunity: boolean;
 	isAuthenticated: boolean;
 	isGuest: boolean;
@@ -42,6 +45,9 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 				}
 			: null,
 		role: (mineQuery.data?.bambiProfile?.role ?? null) as BambiRole,
+		accountStatus: (mineQuery.data?.bambiProfile?.status ??
+			null) as BambiAccountStatus,
+		accountSanctionReason: mineQuery.data?.accountSanction?.reason ?? null,
 		canAccessCommunity: community?.canAccess ?? false,
 		isAuthenticated,
 		isGuest,
