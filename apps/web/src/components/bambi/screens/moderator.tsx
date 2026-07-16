@@ -1374,6 +1374,138 @@ function SanctionBtn({
 	);
 }
 
+// 제재 선택지(경고/정지)별 기본 사유·라벨 정의. 사용자 상세와 신고 상세 양쪽에서
+// 같은 기본 문구를 프리필하기 위해 공용화한다. defaultReason은 사유 입력 textarea에
+// 미리 채워지며 운영자가 자유롭게 수정할 수 있다.
+interface SanctionChoice {
+	confirmLabel: string;
+	danger: boolean;
+	defaultReason: string;
+	desc: string;
+	status: UserStatus;
+	title: string;
+	tone: "pending" | "danger";
+}
+
+const SANCTION_CHOICES: SanctionChoice[] = [
+	{
+		confirmLabel: "경고 보내기",
+		danger: false,
+		defaultReason: "정책 안내와 함께 경고를 보냈어요",
+		desc: "정책 안내와 함께 경고를 1회 누적해요",
+		status: "warned",
+		title: "경고 보내기",
+		tone: "pending",
+	},
+	{
+		confirmLabel: "이용 정지",
+		danger: true,
+		defaultReason: "정책 위반이 확인되어 이용을 정지했어요",
+		desc: "기간 동안 공고·채팅을 막아요",
+		status: "suspended",
+		title: "이용 정지 (7일)",
+		tone: "danger",
+	},
+];
+
+// 사유 작성 시트(공용). 일괄 처리·사용자 상세 제재·신고 상세 제재가 모두 이 컴포넌트를
+// 재사용한다. 제목/설명/사유 라벨/기본 문구/확정 버튼 문구를 주입받고, 사유 textarea는
+// defaultReason으로 프리필한 뒤 최소 길이(minLength, 기본 2자)를 만족해야 확정된다.
+// positioning="fixed"는 document.body로 포털된 일괄 시트(전체 화면 중앙 정렬)용,
+// "absolute"는 콘솔 컨테이너 내부(사용자 상세·신고 상세)에서 부모 relative 박스를 덮는 시트용.
+function ReasonConfirmSheet({
+	confirmLabel,
+	danger = false,
+	defaultReason,
+	description,
+	busyLabel = "처리 중",
+	isApplying = false,
+	minLength = 2,
+	placeholder,
+	positioning = "fixed",
+	reasonFieldId,
+	reasonLabel = "처리 사유",
+	title,
+	onCancel,
+	onConfirm,
+}: {
+	confirmLabel: string;
+	danger?: boolean;
+	defaultReason: string;
+	description: ReactNode;
+	busyLabel?: string;
+	isApplying?: boolean;
+	minLength?: number;
+	placeholder?: string;
+	positioning?: "fixed" | "absolute";
+	reasonFieldId: string;
+	reasonLabel?: string;
+	title: string;
+	onCancel: () => void;
+	onConfirm: (reason: string) => void;
+}) {
+	const [reason, setReason] = useState(defaultReason);
+	const canConfirm = reason.trim().length >= minLength && !isApplying;
+	const fixed = positioning === "fixed";
+
+	return (
+		<div
+			className={cn(
+				"inset-0 flex flex-col justify-end",
+				fixed ? "fixed z-50" : "absolute z-20"
+			)}
+		>
+			<button
+				aria-label="닫기"
+				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
+				onClick={onCancel}
+				type="button"
+			/>
+			<div
+				className={cn(
+					"relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]",
+					fixed && "mx-auto w-full max-w-[520px]"
+				)}
+			>
+				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
+					{title}
+				</h2>
+				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
+					{description}
+				</p>
+				<label
+					className="mb-2 block font-bold text-[13px] text-foreground"
+					htmlFor={reasonFieldId}
+				>
+					{reasonLabel}
+				</label>
+				<textarea
+					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+					id={reasonFieldId}
+					onChange={(event) => setReason(event.target.value)}
+					placeholder={placeholder ?? defaultReason}
+					value={reason}
+				/>
+				<div className="mt-4 grid grid-cols-2 gap-2.5">
+					<Button block onClick={onCancel} size="lg" variant="secondary">
+						취소
+					</Button>
+					<Button
+						block
+						className="shadow-none"
+						disabled={!canConfirm}
+						onClick={() => onConfirm(reason.trim())}
+						size="lg"
+						variant={danger ? "danger" : "primary"}
+					>
+						{isApplying ? busyLabel : confirmLabel}
+					</Button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 function SanctionSheet({
 	target,
 	onCancel,
@@ -1383,6 +1515,27 @@ function SanctionSheet({
 	onCancel: () => void;
 	onPick: (status: UserStatus, label: string) => void;
 }) {
+	// 2단계 시트: 1단계에서 경고/정지를 고르면 2단계 사유 작성 시트로 전환한다.
+	// 사유 단계에서 취소하면 1단계(선택)로 돌아가고, 선택 단계에서 취소하면 전체를 닫는다.
+	const [picked, setPicked] = useState<SanctionChoice | null>(null);
+
+	if (picked) {
+		return (
+			<ReasonConfirmSheet
+				confirmLabel={picked.confirmLabel}
+				danger={picked.danger}
+				defaultReason={picked.defaultReason}
+				description={`${target} 님에게 적용돼요`}
+				onCancel={() => setPicked(null)}
+				onConfirm={(reason) => onPick(picked.status, reason)}
+				positioning="absolute"
+				reasonFieldId="report-sanction-reason"
+				reasonLabel="제재 사유"
+				title={picked.title}
+			/>
+		);
+	}
+
 	return (
 		<div className="absolute inset-0 z-20 flex flex-col justify-end">
 			<button
@@ -1399,20 +1552,15 @@ function SanctionSheet({
 					신고가 사실로 확인되면 단계별로 조치해요.
 				</p>
 				<div className="flex flex-col gap-2.5">
-					<SanctionBtn
-						desc="정책 안내와 함께 경고 1회 누적"
-						label="경고 보내기"
-						onClick={() => onPick("warned", "정책 안내와 함께 경고를 보냈어요")}
-						tone="pending"
-					/>
-					<SanctionBtn
-						desc="기간 동안 공고·채팅 차단"
-						label="이용 정지 (7일)"
-						onClick={() =>
-							onPick("suspended", "정책 위반이 확인되어 이용을 정지했어요")
-						}
-						tone="danger"
-					/>
+					{SANCTION_CHOICES.map((choice) => (
+						<SanctionBtn
+							desc={choice.desc}
+							key={choice.status}
+							label={choice.title}
+							onClick={() => setPicked(choice)}
+							tone={choice.tone}
+						/>
+					))}
 				</div>
 				<div className="mt-3">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
@@ -1434,8 +1582,11 @@ export function UserDetail({
 	onSanction: (id: string, status: UserStatus, label: string) => void;
 }) {
 	const c = STATUS_CONF[item.status];
+	// 경고/정지 버튼을 누르면 곧바로 적용하지 않고, 공용 사유 작성 시트를 띄워
+	// 기본 문구가 프리필된 사유를 운영자가 확인·수정한 뒤 확정하게 한다.
+	const [pending, setPending] = useState<SanctionChoice | null>(null);
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
+		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="사용자 상세" />
 			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-2 pb-5">
 				<div className="flex flex-col items-center gap-2.5 py-1 text-center">
@@ -1491,33 +1642,35 @@ export function UserDetail({
 						제재 적용
 					</div>
 					<div className="flex flex-col gap-2.5">
-						<SanctionBtn
-							desc="정책 안내와 함께 경고를 1회 누적해요"
-							label="경고 보내기"
-							onClick={() =>
-								onSanction(
-									item.id,
-									"warned",
-									"정책 안내와 함께 경고를 보냈어요"
-								)
-							}
-							tone="pending"
-						/>
-						<SanctionBtn
-							desc="기간 동안 공고·채팅을 막아요"
-							label="이용 정지 (7일)"
-							onClick={() =>
-								onSanction(
-									item.id,
-									"suspended",
-									"정책 위반이 확인되어 이용을 정지했어요"
-								)
-							}
-							tone="danger"
-						/>
+						{SANCTION_CHOICES.map((choice) => (
+							<SanctionBtn
+								desc={choice.desc}
+								key={choice.status}
+								label={choice.title}
+								onClick={() => setPending(choice)}
+								tone={choice.tone}
+							/>
+						))}
 					</div>
 				</div>
 			</div>
+			{pending ? (
+				<ReasonConfirmSheet
+					confirmLabel={pending.confirmLabel}
+					danger={pending.danger}
+					defaultReason={pending.defaultReason}
+					description={`${item.name} 님에게 적용돼요`}
+					onCancel={() => setPending(null)}
+					onConfirm={(reason) => {
+						onSanction(item.id, pending.status, reason);
+						setPending(null);
+					}}
+					positioning="absolute"
+					reasonFieldId={`user-sanction-reason-${item.id}`}
+					reasonLabel="제재 사유"
+					title={pending.title}
+				/>
+			) : null}
 		</div>
 	);
 }
@@ -1674,74 +1827,6 @@ function ActionBtn({
 	);
 }
 
-function BulkConfirmSheet({
-	config,
-	count,
-	isApplying,
-	onCancel,
-	onConfirm,
-	reason,
-	setReason,
-}: {
-	config: BulkActionConfig;
-	count: number;
-	isApplying: boolean;
-	onCancel: () => void;
-	onConfirm: () => void;
-	reason: string;
-	setReason: (value: string) => void;
-}) {
-	const reasonId = `bulk-reason-${config.scope}-${config.action}`;
-	const canConfirm = reason.trim().length >= 2 && !isApplying;
-
-	return (
-		<div className="fixed inset-0 z-50 flex flex-col justify-end">
-			<button
-				aria-label="닫기"
-				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
-				onClick={onCancel}
-				type="button"
-			/>
-			<div className="relative mx-auto w-full max-w-[520px] animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
-				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
-					{config.label} 확인
-				</h2>
-				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
-					{count}건 선택됨
-				</p>
-				<label
-					className="mb-2 block font-bold text-[13px] text-foreground"
-					htmlFor={reasonId}
-				>
-					처리 사유
-				</label>
-				<textarea
-					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-					id={reasonId}
-					onChange={(event) => setReason(event.target.value)}
-					placeholder={config.defaultReason}
-					value={reason}
-				/>
-				<div className="mt-4 grid grid-cols-2 gap-2.5">
-					<Button block onClick={onCancel} size="lg" variant="secondary">
-						취소
-					</Button>
-					<Button
-						block
-						className="shadow-none"
-						disabled={!canConfirm}
-						onClick={onConfirm}
-						size="lg"
-						variant={config.tone === "danger" ? "danger" : "primary"}
-					>
-						{isApplying ? "처리 중" : `${config.label} 적용`}
-					</Button>
-				</div>
-			</div>
-		</div>
-	);
-}
-
 export function QueueActionBar({
 	count,
 	isApplying = false,
@@ -1760,18 +1845,13 @@ export function QueueActionBar({
 	const [pendingAction, setPendingAction] = useState<BulkActionConfig | null>(
 		null
 	);
-	const [reason, setReason] = useState("");
 	const actions = BULK_ACTIONS[scope];
-	const openConfirm = (config: BulkActionConfig) => {
-		setPendingAction(config);
-		setReason(config.defaultReason);
-	};
-	const confirm = () => {
+	const confirm = (reason: string) => {
 		if (!pendingAction) {
 			return;
 		}
 
-		onAction(pendingAction.scope, pendingAction.action, reason.trim());
+		onAction(pendingAction.scope, pendingAction.action, reason);
 		setPendingAction(null);
 	};
 
@@ -1787,7 +1867,7 @@ export function QueueActionBar({
 							disabled={isApplying}
 							key={`${action.scope}-${action.action}`}
 							label={action.label}
-							onClick={() => openConfirm(action)}
+							onClick={() => setPendingAction(action)}
 							tone={action.tone}
 						/>
 					))}
@@ -1795,14 +1875,17 @@ export function QueueActionBar({
 			</div>
 			{pendingAction
 				? createPortal(
-						<BulkConfirmSheet
-							config={pendingAction}
-							count={count}
+						<ReasonConfirmSheet
+							confirmLabel={`${pendingAction.label} 적용`}
+							danger={pendingAction.tone === "danger"}
+							defaultReason={pendingAction.defaultReason}
+							description={`${count}건 선택됨`}
 							isApplying={isApplying}
 							onCancel={() => setPendingAction(null)}
 							onConfirm={confirm}
-							reason={reason}
-							setReason={setReason}
+							positioning="fixed"
+							reasonFieldId={`bulk-reason-${pendingAction.scope}-${pendingAction.action}`}
+							title={`${pendingAction.label} 확인`}
 						/>,
 						document.body
 					)

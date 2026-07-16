@@ -45,7 +45,7 @@ const SANCTION_COPY: Record<
 		icon: Ban,
 		title: "계정 이용이 정지되었어요",
 		description:
-			"정책 위반이 확인되어 공고 등록·지원·채팅 등 일부 이용이 제한되었어요. 정지 사유에 이의가 있으면 고객센터로 문의해 주세요.",
+			"정책 위반이 확인되어 공고 등록·지원·채팅 등 일부 이용이 제한되었어요.",
 	},
 };
 
@@ -148,7 +148,9 @@ export function AccountStatusBanner() {
 					{accountSanctionReason ? (
 						<span className="font-semibold">사유: {accountSanctionReason}</span>
 					) : null}
-					<span>문의: 고객센터를 통해 조치 내용을 확인할 수 있어요.</span>
+					<span>
+						이 조치에 이의가 있다면 고객센터로 문의해 이의를 신청할 수 있어요.
+					</span>
 				</AlertDescription>
 				{isWarned ? (
 					// AlertAction은 우상단 절대배치 + 컴포넌트가 pr 여백을 자동 확보해
