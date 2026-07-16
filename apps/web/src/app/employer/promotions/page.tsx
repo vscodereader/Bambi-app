@@ -98,10 +98,11 @@ function getAdColumns({
 					<span className="break-keep font-semibold text-foreground">
 						{ad.title}
 					</span>
-					<span className="break-keep text-muted-foreground text-xs">
-						{ad.employerDisplayName}
-						{ad.teamDisplayName ? ` · ${ad.teamDisplayName}` : ""}
-					</span>
+					{ad.teamDisplayName ? (
+						<span className="break-keep text-muted-foreground text-xs">
+							{ad.teamDisplayName}
+						</span>
+					) : null}
 				</div>
 			),
 		},
