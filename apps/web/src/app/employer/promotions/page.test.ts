@@ -36,4 +36,11 @@ describe("employer ads management page", () => {
 		expect(source).not.toContain("공고 수정");
 		expect(source).not.toContain("/edit");
 	});
+
+	it("shows only the team name as the title subtext, not the employer name", () => {
+		// 자기 조직 화면이라 모든 행이 같은 업체명 → 정보 가치 없음 → 보조 텍스트에서 제거
+		expect(source).not.toContain("ad.employerDisplayName");
+		// 팀명만 보조 텍스트로 표시(null이면 줄 자체 미렌더)
+		expect(source).toContain("ad.teamDisplayName");
+	});
 });

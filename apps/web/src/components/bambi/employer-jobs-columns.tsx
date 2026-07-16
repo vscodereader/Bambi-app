@@ -15,24 +15,15 @@ import type { Route } from "next";
 import Link from "next/link";
 import type { DataColumn } from "@/components/bambi/data-table";
 import { StatusBadge } from "@/components/bambi/status-badge";
-import {
-	EXPOSURE_TYPE_LABELS,
-	getJobDisplayStatus,
-	PAYMENT_STATUS_LABELS,
-} from "@/lib/bambi/exposure";
-import { formatDate, formatPay } from "@/lib/bambi-format";
+import { getJobDisplayStatus } from "@/lib/bambi/exposure";
+import { formatPay } from "@/lib/bambi-format";
 
 export type EmployerJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["jobs"]["listMine"]>
 >[number];
 
-type Tone = React.ComponentProps<typeof StatusBadge>["tone"];
-
 // 제목이 이 길이를 넘으면 말줄임(…)으로 처리한다.
 const TITLE_MAX_LENGTH = 17;
-
-const getPaymentStatusTone = (status: string): Tone =>
-	status === "paid" ? "good" : "warning";
 
 // 공개 상세(/seeker/jobs/[id])는 published+paid 게이트를 통과해야만 열린다. 그렇지 않은
 // 공고 제목을 링크로 걸면 클릭 시 404가 나므로, 공개 가능한 공고만 링크로 노출한다.
@@ -101,47 +92,6 @@ export function getEmployerJobsColumns({
 				const display = getJobDisplayStatus(job);
 
 				return <StatusBadge tone={display.tone}>{display.label}</StatusBadge>;
-			},
-		},
-		{
-			id: "exposureType",
-			header: "노출 상품",
-			sortValue: (job) => EXPOSURE_TYPE_LABELS[job.exposureType],
-			cell: (job) => (
-				<StatusBadge>{EXPOSURE_TYPE_LABELS[job.exposureType]}</StatusBadge>
-			),
-		},
-		{
-			id: "paymentStatus",
-			header: "결제 상태",
-			sortValue: (job) => PAYMENT_STATUS_LABELS[job.paymentStatus],
-			cell: (job) => (
-				<StatusBadge tone={getPaymentStatusTone(job.paymentStatus)}>
-					{PAYMENT_STATUS_LABELS[job.paymentStatus]}
-				</StatusBadge>
-			),
-		},
-		{
-			id: "period",
-			header: "기간",
-			sortValue: (job) =>
-				job.exposureEndsAt === null
-					? Number.POSITIVE_INFINITY
-					: new Date(job.exposureEndsAt).getTime(),
-			cell: (job) => {
-				if (job.exposureEndsAt === null) {
-					return <span className="text-muted-foreground">-</span>;
-				}
-
-				const expired = new Date(job.exposureEndsAt).getTime() <= Date.now();
-
-				return (
-					<span
-						className={cn("whitespace-nowrap", expired && "text-destructive")}
-					>
-						{formatDate(job.exposureEndsAt)}
-					</span>
-				);
 			},
 		},
 		{
