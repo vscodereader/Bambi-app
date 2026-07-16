@@ -6,6 +6,7 @@ import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { StatusBadge } from "@/components/bambi/status-badge";
+import { targetTypeLabel } from "@/lib/bambi/report-labels";
 import { orpc } from "@/utils/orpc";
 
 type ReportStatus = "open" | "reviewing" | "resolved" | "dismissed";
@@ -18,13 +19,6 @@ type ReportReason =
 	| "harassment"
 	| "misleading_job_information"
 	| "other";
-
-type ReportTargetType =
-	| "job_post"
-	| "chat_room"
-	| "chat_message"
-	| "review"
-	| "user";
 
 const STATUS_LABELS: Record<ReportStatus, string> = {
 	open: "접수됨",
@@ -53,14 +47,6 @@ const REASON_LABELS: Record<ReportReason, string> = {
 	other: "기타",
 };
 
-const TARGET_TYPE_LABELS: Record<ReportTargetType, string> = {
-	job_post: "공고",
-	chat_room: "채팅방",
-	chat_message: "채팅 메시지",
-	review: "후기",
-	user: "사용자",
-};
-
 function pad2(value: number): string {
 	return value < 10 ? `0${value}` : String(value);
 }
@@ -83,10 +69,6 @@ function statusTone(status: string): "default" | "good" | "warning" | "danger" {
 
 function reasonLabel(reason: string): string {
 	return REASON_LABELS[reason as ReportReason] ?? reason;
-}
-
-function targetTypeLabel(targetType: string): string {
-	return TARGET_TYPE_LABELS[targetType as ReportTargetType] ?? targetType;
 }
 
 export function MyReportsScreen() {
