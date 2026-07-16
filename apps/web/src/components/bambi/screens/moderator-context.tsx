@@ -34,12 +34,18 @@ export type ModerationBulkAction =
 	| "warn";
 
 interface ModContextValue {
+	blockChatRoom: (
+		chatRoomId: string,
+		isBlocked: boolean,
+		reason: string
+	) => void;
 	bulkAction: (
 		scope: ModerationBulkScope,
 		action: ModerationBulkAction,
 		reason: string
 	) => void;
 	clearSelection: () => void;
+	isBlockingChatRoom: boolean;
 	isBulkApplying: boolean;
 	isLoading: boolean;
 	openReports: number;
@@ -228,6 +234,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	const bulkSetUserStatusMutation = useMutation(
 		orpc.bambi.moderation.bulkSetUserStatus.mutationOptions()
 	);
+	const setChatRoomBlockedMutation = useMutation(
+		orpc.bambi.moderation.setChatRoomBlocked.mutationOptions()
+	);
 
 	useEffect(() => {
 		if (moderationQueueQuery.isSuccess) {
@@ -257,7 +266,12 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		};
 		const apiQueue = moderationQueueQuery.data?.map(toApiQueueItem);
 		const apiReports = moderationReportsQuery.data?.map<Report>((item) => {
-			const attachments = item.targetContext?.chatMessage?.attachments ?? [];
+			// targetContext는 targetType별 단일 키 유니온이라 chat_message만 좁혀서 첨부를 읽는다.
+			const targetContext = item.targetContext;
+			const attachments =
+				targetContext && "chatMessage" in targetContext
+					? targetContext.chatMessage.attachments
+					: [];
 			const attachmentMessages = attachments.map((attachment) => ({
 				mine: false,
 				text: `첨부 파일 · ${attachment.fileName} · ${attachment.mimeType} · ${formatByteSize(attachment.byteSize)}`,
@@ -279,7 +293,10 @@ export function ModProvider({ children }: { children: ReactNode }) {
 						? "open"
 						: "closed",
 				target: `${item.targetType} ${item.targetId.slice(0, 8)}`,
+				// 실데이터 신고의 대상 맥락(orpc 추론)을 그대로 전달해 상세에서 타입별 렌더한다.
+				targetContext: item.targetContext,
 				targetRole: "대상",
+				targetType: item.targetType,
 				thread: [
 					{
 						mine: false,
@@ -615,8 +632,34 @@ export function ModProvider({ children }: { children: ReactNode }) {
 
 			setSelected([]);
 		};
+		const blockChatRoom = (
+			chatRoomId: string,
+			isBlocked: boolean,
+			reason: string
+		) => {
+			if (!isUuid(chatRoomId)) {
+				flash("실데이터 대화방에만 차단을 적용할 수 있어요.");
+				return;
+			}
+
+			setChatRoomBlockedMutation.mutate(
+				{ chatRoomId, isBlocked, reason },
+				{
+					onSuccess: async () => {
+						await invalidateReports();
+						flash(
+							isBlocked ? "대화방을 차단했어요" : "대화방 차단을 해제했어요"
+						);
+					},
+					onError: () =>
+						flash("대화방 차단 상태를 반영하지 못했어요. 다시 시도해 주세요."),
+				}
+			);
+		};
 
 		return {
+			blockChatRoom,
+			isBlockingChatRoom: setChatRoomBlockedMutation.isPending,
 			queue: visibleQueue,
 			reports: visibleReports,
 			users: visibleUsers,
@@ -656,6 +699,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		queryClient,
 		reports,
 		selected,
+		setChatRoomBlockedMutation,
 		setJobPostStatusMutation,
 		setReportStatusMutation,
 		setUserStatusMutation,

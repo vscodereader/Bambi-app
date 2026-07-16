@@ -810,18 +810,314 @@ function PartyBox({
 	);
 }
 
+// ---- 신고 대상 맥락(targetType별 분기 렌더) --------------------------------
+const JOB_POST_STATUS_LABEL: Record<string, string> = {
+	hidden: "숨김",
+	pending_review: "검수 대기",
+	published: "게시됨",
+	rejected: "반려",
+};
+const REVIEW_STATUS_LABEL: Record<string, string> = {
+	hidden: "숨김",
+	pending_review: "검수 대기",
+	published: "게시됨",
+};
+const ACCOUNT_STATUS_LABEL: Record<string, string> = {
+	active: "정상",
+	suspended: "정지",
+	warned: "경고",
+};
+const USER_ROLE_LABEL: Record<string, string> = {
+	admin: "운영자",
+	employer: "구인자",
+	seeker: "구직자",
+};
+
+const formatMessageTime = (value: Date | string) =>
+	new Intl.DateTimeFormat("ko-KR", {
+		dateStyle: "short",
+		timeStyle: "short",
+	}).format(new Date(value));
+
+// 대상 맥락 카드의 공통 껍데기(제목 + 회색 박스). 기존 "신고된 대화" 블록과 룩앤필 통일.
+function ContextSection({
+	title,
+	children,
+}: {
+	title: string;
+	children: ReactNode;
+}) {
+	return (
+		<div>
+			<div className="mb-2 font-bold text-[13px] text-foreground">{title}</div>
+			<div className="flex flex-col gap-2.5 rounded-[14px] border border-border bg-secondary p-[14px]">
+				{children}
+			</div>
+		</div>
+	);
+}
+
+function ContextField({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="flex flex-col gap-0.5">
+			<div className="text-[11px] text-muted-foreground">{label}</div>
+			<div className="text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
+				{value}
+			</div>
+		</div>
+	);
+}
+
+function JobPostContext({
+	jobPost,
+}: {
+	jobPost: {
+		description: string;
+		organizationDisplayName: string;
+		rejectionReason: string | null;
+		status: string;
+		title: string;
+	};
+}) {
+	return (
+		<ContextSection title="신고된 공고">
+			<ContextField label="제목" value={jobPost.title} />
+			<ContextField label="업소" value={jobPost.organizationDisplayName} />
+			<ContextField
+				label="상태"
+				value={JOB_POST_STATUS_LABEL[jobPost.status] ?? jobPost.status}
+			/>
+			<div className="flex flex-col gap-0.5">
+				<div className="text-[11px] text-muted-foreground">공고 본문</div>
+				<div className="line-clamp-4 text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
+					{jobPost.description}
+				</div>
+			</div>
+			{jobPost.rejectionReason ? (
+				<ContextField label="반려 사유" value={jobPost.rejectionReason} />
+			) : null}
+		</ContextSection>
+	);
+}
+
+function ReviewContext({
+	review,
+}: {
+	review: { body: string; rating: number; status: string };
+}) {
+	const filled = Math.max(0, Math.min(5, review.rating));
+	return (
+		<ContextSection title="신고된 후기">
+			<div className="flex items-center gap-2">
+				<span className="font-bold text-[13.5px]">
+					<span className="text-amber-500">{"★".repeat(filled)}</span>
+					<span className="text-muted-foreground">
+						{"★".repeat(5 - filled)}
+					</span>
+				</span>
+				<span className="text-[12px] text-muted-foreground">
+					{REVIEW_STATUS_LABEL[review.status] ?? review.status}
+				</span>
+			</div>
+			<div className="whitespace-pre-wrap text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
+				{review.body}
+			</div>
+		</ContextSection>
+	);
+}
+
+function UserContext({
+	user,
+}: {
+	user: {
+		displayName: string | null;
+		isPhoneVerified: boolean;
+		role: string;
+		status: string;
+	};
+}) {
+	return (
+		<ContextSection title="신고된 사용자">
+			<ContextField label="표시명" value={user.displayName ?? "이름 없음"} />
+			<ContextField
+				label="역할"
+				value={USER_ROLE_LABEL[user.role] ?? user.role}
+			/>
+			<ContextField
+				label="계정 상태"
+				value={ACCOUNT_STATUS_LABEL[user.status] ?? user.status}
+			/>
+			<ContextField
+				label="전화 인증"
+				value={user.isPhoneVerified ? "인증 완료" : "미인증"}
+			/>
+		</ContextSection>
+	);
+}
+
+function ChatRoomContext({
+	chatRoom,
+	isBlocking,
+	onBlock,
+}: {
+	chatRoom: {
+		id: string;
+		isBlocked: boolean;
+		jobPostTitle: string;
+		recentMessages: {
+			body: string;
+			createdAt: Date | string;
+			id: string;
+			senderUserId: string;
+		}[];
+	};
+	isBlocking: boolean;
+	onBlock?: (chatRoomId: string, isBlocked: boolean, reason: string) => void;
+}) {
+	const [reason, setReason] = useState("");
+	const nextBlocked = !chatRoom.isBlocked;
+	const canSubmit = reason.trim().length >= 2 && !isBlocking;
+	const reasonId = `chat-room-block-reason-${chatRoom.id}`;
+
+	return (
+		<ContextSection title="신고된 대화방">
+			<div className="flex items-center gap-2">
+				<span className="min-w-0 flex-1 truncate font-bold text-[13.5px] text-foreground">
+					{chatRoom.jobPostTitle}
+				</span>
+				<Badge tone={chatRoom.isBlocked ? "danger" : "success"}>
+					{chatRoom.isBlocked ? "차단됨" : "정상"}
+				</Badge>
+			</div>
+			<div className="flex flex-col gap-1.5">
+				<div className="text-[11px] text-muted-foreground">
+					최근 메시지 {chatRoom.recentMessages.length}건
+				</div>
+				{chatRoom.recentMessages.length ? (
+					chatRoom.recentMessages.map((message) => (
+						<div
+							className="rounded-[10px] border border-border bg-card px-2.5 py-2"
+							key={message.id}
+						>
+							<div className="mb-0.5 flex items-center justify-between gap-2 text-[10.5px] text-[color:var(--text-subtle)]">
+								<span className="truncate">
+									{message.senderUserId.slice(0, 6)}
+								</span>
+								<span className="whitespace-nowrap">
+									{formatMessageTime(message.createdAt)}
+								</span>
+							</div>
+							<div className="text-[13px] text-[color:var(--text-default)] leading-[1.45]">
+								{message.body}
+							</div>
+						</div>
+					))
+				) : (
+					<div className="text-[12.5px] text-muted-foreground">
+						표시할 메시지가 없어요.
+					</div>
+				)}
+			</div>
+			{onBlock ? (
+				<div className="flex flex-col gap-2 border-border border-t pt-2.5">
+					<label
+						className="font-bold text-[12.5px] text-foreground"
+						htmlFor={reasonId}
+					>
+						{nextBlocked ? "방 차단" : "차단 해제"} 사유 (2자 이상)
+					</label>
+					<textarea
+						className="min-h-[72px] w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 text-[13.5px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+						id={reasonId}
+						onChange={(event) => setReason(event.target.value)}
+						placeholder="조치 사유는 감사 로그에 남아요."
+						value={reason}
+					/>
+					<Button
+						block
+						disabled={!canSubmit}
+						onClick={() => onBlock(chatRoom.id, nextBlocked, reason.trim())}
+						size="lg"
+						variant={nextBlocked ? "danger" : "secondary"}
+					>
+						{nextBlocked ? "방 차단" : "차단 해제"}
+					</Button>
+				</div>
+			) : null}
+		</ContextSection>
+	);
+}
+
+// 신고 대상 맥락을 targetType별로 분기 렌더한다. 구조화 맥락이 없으면(채팅 메시지·프리뷰
+// 목업) null을 반환하고, 호출부가 기존 "신고된 대화" 스레드 블록으로 폴백한다.
+function ReportTargetContextView({
+	item,
+	isBlockingChatRoom = false,
+	onBlockChatRoom,
+}: {
+	item: Report;
+	isBlockingChatRoom?: boolean;
+	onBlockChatRoom?: (
+		chatRoomId: string,
+		isBlocked: boolean,
+		reason: string
+	) => void;
+}) {
+	const ctx = item.targetContext;
+	if (!ctx) {
+		return null;
+	}
+	if ("jobPost" in ctx) {
+		return <JobPostContext jobPost={ctx.jobPost} />;
+	}
+	if ("review" in ctx) {
+		return <ReviewContext review={ctx.review} />;
+	}
+	if ("user" in ctx) {
+		return <UserContext user={ctx.user} />;
+	}
+	if ("chatRoom" in ctx) {
+		return (
+			<ChatRoomContext
+				chatRoom={ctx.chatRoom}
+				isBlocking={isBlockingChatRoom}
+				onBlock={onBlockChatRoom}
+			/>
+		);
+	}
+	return null;
+}
+
 export function ReportDetail({
 	item,
 	onBack,
 	onResolve,
 	onSanction,
+	onBlockChatRoom,
+	isBlockingChatRoom = false,
 }: {
 	item: Report;
 	onBack: () => void;
 	onResolve: (id: string, action: "dismiss" | "act") => void;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
+	onBlockChatRoom?: (
+		chatRoomId: string,
+		isBlocked: boolean,
+		reason: string
+	) => void;
+	isBlockingChatRoom?: boolean;
 }) {
 	const [act, setAct] = useState(false);
+	// 구조화된 대상 맥락(공고·후기·사용자·대화방)이 있으면 전용 카드로, 없으면(채팅 메시지·
+	// 프리뷰 목업) 기존 스레드 블록으로 폴백한다.
+	const ctx = item.targetContext;
+	const hasStructuredContext = Boolean(
+		ctx &&
+			("jobPost" in ctx ||
+				"review" in ctx ||
+				"user" in ctx ||
+				"chatRoom" in ctx)
+	);
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="신고 검토" />
@@ -843,41 +1139,49 @@ export function ReportDetail({
 						role={`신고자 · ${item.reporterRole}`}
 					/>
 				</div>
-				<div>
-					<div className="mb-2 font-bold text-[13px] text-foreground">
-						신고된 대화
-					</div>
-					<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
-						{item.thread.map((m) => (
-							<div
-								className={cn(
-									"max-w-[85%]",
-									m.mine ? "self-end" : "self-start"
-								)}
-								key={`${m.mine ? "me" : "them"}-${m.text}`}
-							>
+				{hasStructuredContext ? (
+					<ReportTargetContextView
+						isBlockingChatRoom={isBlockingChatRoom}
+						item={item}
+						onBlockChatRoom={onBlockChatRoom}
+					/>
+				) : (
+					<div>
+						<div className="mb-2 font-bold text-[13px] text-foreground">
+							신고된 대화
+						</div>
+						<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
+							{item.thread.map((m) => (
 								<div
 									className={cn(
-										"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
-										m.mine ? "text-right" : "text-left"
+										"max-w-[85%]",
+										m.mine ? "self-end" : "self-start"
 									)}
+									key={`${m.mine ? "me" : "them"}-${m.text}`}
 								>
-									{m.mine ? item.reporter : item.target}
+									<div
+										className={cn(
+											"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
+											m.mine ? "text-right" : "text-left"
+										)}
+									>
+										{m.mine ? item.reporter : item.target}
+									</div>
+									<div
+										className={cn(
+											"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
+											m.mine
+												? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
+												: "rounded-bl-[4px] bg-ink-800 text-white"
+										)}
+									>
+										{m.text}
+									</div>
 								</div>
-								<div
-									className={cn(
-										"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
-										m.mine
-											? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
-											: "rounded-bl-[4px] bg-ink-800 text-white"
-									)}
-								>
-									{m.text}
-								</div>
-							</div>
-						))}
+							))}
+						</div>
 					</div>
-				</div>
+				)}
 				{item.status === "open" ? null : (
 					<div className="flex items-center gap-2 rounded-[14px] bg-[color:var(--status-success-bg)] p-[14px] text-[color:var(--status-success-fg)]">
 						<span className="inline-flex size-[18px]">

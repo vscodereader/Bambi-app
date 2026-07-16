@@ -13,8 +13,8 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { toast } from "sonner";
+import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import {
 	connectBambiChatSocket,
 	emitBambiChatTypingStarted,
@@ -38,6 +38,7 @@ import {
 	ShieldIcon,
 	XIcon,
 } from "../icons";
+import { ReportDialog } from "../report-dialog";
 import { ReviewForm } from "../review-form";
 
 interface SeekerChatRoomResponsiveProps {
@@ -602,6 +603,7 @@ export function SeekerChatRoomResponsive({
 	const router = useRouter();
 	const [message, setMessage] = useState("");
 	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
+	const [isReportOpen, setIsReportOpen] = useState(false);
 	const [attachmentDraft, setAttachmentDraft] =
 		useState<AttachmentDraft | null>(null);
 	const [interviewAt, setInterviewAt] = useState("");
@@ -1130,11 +1132,20 @@ export function SeekerChatRoomResponsive({
 							</span>
 							면접 확정 전 연락처 보호 중
 						</div>
-						<ChatBlockTrigger
-							isBlocked={room.isBlocked}
-							isConfirmOpen={isBlockConfirmOpen}
-							onOpen={() => setIsBlockConfirmOpen(true)}
-						/>
+						<div className="flex items-center gap-2">
+							<Button
+								onClick={() => setIsReportOpen(true)}
+								size="sm"
+								variant="secondary"
+							>
+								신고
+							</Button>
+							<ChatBlockTrigger
+								isBlocked={room.isBlocked}
+								isConfirmOpen={isBlockConfirmOpen}
+								onOpen={() => setIsBlockConfirmOpen(true)}
+							/>
+						</div>
 					</div>
 					<p className="mt-1 mb-0 text-xs leading-relaxed">
 						외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요.
@@ -1146,6 +1157,12 @@ export function SeekerChatRoomResponsive({
 						onConfirm={() =>
 							blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
 						}
+					/>
+					<ReportDialog
+						onOpenChange={setIsReportOpen}
+						open={isReportOpen}
+						targetId={room.id}
+						targetType="chat_room"
 					/>
 				</div>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">

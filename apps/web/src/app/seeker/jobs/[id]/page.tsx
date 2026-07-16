@@ -2,13 +2,16 @@
 
 import type { Route } from "next";
 import { notFound, useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { ReportDialog } from "@/components/bambi/report-dialog";
 import { SeekerJobDetailResponsive } from "@/components/bambi/screens/seeker-job-detail-responsive";
-import { useMarketplaceJob } from "@/lib/bambi/api-jobs";
+import { isApiJobId, useMarketplaceJob } from "@/lib/bambi/api-jobs";
 
 export default function SeekerJobPage() {
 	const router = useRouter();
 	const { id } = useParams<{ id: string }>();
 	const { isError, isLoading, job, refetch } = useMarketplaceJob(id);
+	const [isReportOpen, setIsReportOpen] = useState(false);
 	if (isLoading) {
 		return (
 			<div className="mx-auto w-full px-5 py-10 text-center font-bold text-muted-foreground md:max-w-[80%] md:px-6">
@@ -19,6 +22,9 @@ export default function SeekerJobPage() {
 	if (!job) {
 		notFound();
 	}
+	// 실공고(uuid)만 신고 대상으로 접수한다. 목업(JOBS) 프리뷰 공고는 대상 uuid가
+	// 없어 서버가 거부하므로 기존 동작(채팅 이동)을 그대로 유지한다.
+	const canReport = isApiJobId(job.id);
 	return (
 		<>
 			{isError ? (
@@ -36,9 +42,23 @@ export default function SeekerJobPage() {
 			<SeekerJobDetailResponsive
 				job={job}
 				onBack={() => router.push("/seeker")}
-				onReport={() => router.push(`/seeker/chats/${job.id}` as Route)}
+				onReport={() => {
+					if (canReport) {
+						setIsReportOpen(true);
+						return;
+					}
+					router.push(`/seeker/chats/${job.id}` as Route);
+				}}
 				onStartChat={() => router.push(`/seeker/jobs/${job.id}/chat` as Route)}
 			/>
+			{canReport ? (
+				<ReportDialog
+					onOpenChange={setIsReportOpen}
+					open={isReportOpen}
+					targetId={job.id}
+					targetType="job_post"
+				/>
+			) : null}
 		</>
 	);
 }
