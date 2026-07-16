@@ -430,6 +430,11 @@ export const jobsRouter = {
 			workSchedule: jobPost.workSchedule,
 		};
 
+		// 노출 정렬 키: 끌어올린(boosted_at) 시각과 게시 시각 중 최신. Postgres GREATEST는
+		// null을 무시하므로 미점프 공고는 publishedAt 그대로이고, 점프 뒤 재검수·재게시로
+		// publishedAt이 더 최신이 되면 자동으로 최신 쪽을 따른다. 배너 쿼리에는 적용하지 않는다.
+		const exposureRankSql = sql`greatest(${jobPost.boostedAt}, ${jobPost.publishedAt})`;
+
 		// 슬롯 상한 없이 결제완료·미만료 유료 공고를 전부 노출한다(행 단위 확장).
 		const getExposedJobs = async (type: ListingSectionExposureType) =>
 			await db
@@ -450,7 +455,7 @@ export const jobsRouter = {
 						or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
 					)
 				)
-				.orderBy(desc(jobPost.publishedAt));
+				.orderBy(desc(exposureRankSql));
 
 		const [specialRows, urgentRows, recommendedRows, organicRows] =
 			await Promise.all([
@@ -474,7 +479,7 @@ export const jobsRouter = {
 					.where(and(...filters))
 					.orderBy(
 						sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
-						desc(jobPost.publishedAt)
+						desc(exposureRankSql)
 					)
 					.limit(input.limit + 15),
 			]);
