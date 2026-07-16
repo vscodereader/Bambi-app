@@ -337,6 +337,9 @@ interface ResolvedJobExposure {
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
+	// 구매 시점 스냅샷: 상품의 하루 수동 끌어올리기 횟수를 공고 컬럼으로 복사한다.
+	// 이후 상품 수정과 무관하게 이 값으로 끌어올리기 자격을 판정한다.
+	manualBoostsPerDay: number;
 	paymentMethod: "bank_transfer" | "card" | null;
 }
 
@@ -354,6 +357,7 @@ const resolveJobPostExposure = async (input: {
 			exposureAmount: null,
 			exposureDurationDays: null,
 			exposureType: "standard",
+			manualBoostsPerDay: 0,
 			paymentMethod: null,
 		};
 	}
@@ -383,6 +387,7 @@ const resolveJobPostExposure = async (input: {
 		exposureAmount: priceOption.amount,
 		exposureDurationDays: priceOption.days,
 		exposureType: previewTemplateToExposureType(product.previewTemplate),
+		manualBoostsPerDay: product.manualBoostsPerDay,
 		paymentMethod: input.paymentMethod ?? null,
 	};
 };
@@ -900,6 +905,7 @@ export const jobsRouter = {
 						exposureType: exposure.exposureType,
 						exposureDurationDays: exposure.exposureDurationDays,
 						exposureAmount: exposure.exposureAmount,
+						manualBoostsPerDay: exposure.manualBoostsPerDay,
 						paymentMethod: exposure.paymentMethod,
 						// 무료 공고(유료 노출상품 미선택)는 결제 게이트 없이 즉시 노출한다.
 						// 유료 노출상품을 선택한 경우에만 운영자 결제완료 처리를 기다린다.
@@ -1038,6 +1044,7 @@ export const jobsRouter = {
 						exposureType: exposure.exposureType,
 						exposureDurationDays: exposure.exposureDurationDays,
 						exposureAmount: exposure.exposureAmount,
+						manualBoostsPerDay: exposure.manualBoostsPerDay,
 						paymentMethod: exposure.paymentMethod,
 						paymentStatus: nextPaymentStatus,
 						exposureEndsAt: nextExposureEndsAt,
