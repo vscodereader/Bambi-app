@@ -121,7 +121,7 @@ export default function EmployerAnalyticsPage() {
 						className={buttonVariants({ variant: "outline" })}
 						href={"/employer/promotions" as Route}
 					>
-						프로모션 관리
+						광고 관리
 					</Link>
 					<Link
 						className={buttonVariants({ variant: "outline" })}
