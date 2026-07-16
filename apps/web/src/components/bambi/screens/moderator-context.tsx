@@ -19,11 +19,12 @@ import {
 	jobPostStatusLabel,
 	riskFlagLabel,
 } from "@/lib/bambi/moderation-labels";
-import { targetTypeLabel } from "@/lib/bambi/report-labels";
+import { reportReasonLabel, targetTypeLabel } from "@/lib/bambi/report-labels";
 import type {
 	ManagedUser,
 	QueueItem,
 	Report,
+	ReportSeverity,
 	UserStatus,
 } from "@/lib/bambi/types";
 import { orpc } from "@/utils/orpc";
@@ -101,6 +102,20 @@ const formatByteSize = (byteSize: number) => {
 	}
 
 	return `${Math.max(1, Math.round(byteSize / 1024))} KB`;
+};
+// 신고 사유 기반 중요도. 안전과 직결된 미처리 신고를 심각으로, 그 외 미처리는 주의,
+// 처리 완료(resolved/dismissed)는 참고로 표시한다(기존 status만 보던 파생을 개선).
+const HIGH_SEVERITY_REPORT_REASONS = new Set([
+	"illegal_or_prohibited_content",
+	"coercion_or_safety",
+	"underage_concern",
+]);
+const getReportSeverity = (reason: string, status: string): ReportSeverity => {
+	if (status !== "open" && status !== "reviewing") {
+		return "low";
+	}
+
+	return HIGH_SEVERITY_REPORT_REASONS.has(reason) ? "high" : "mid";
 };
 const RISKY_BLOCK_TERMS = ["미성년", "성매매", "강요"] as const;
 const getBlockRiskMatches = (
@@ -289,10 +304,10 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			return {
 				id: item.id,
 				note: attachmentNote ? `${baseNote}\n${attachmentNote}` : baseNote,
-				reason: item.reason,
+				reason: reportReasonLabel(item.reason),
 				reporter: `신고자 ${item.reporterUserId.slice(0, 6)}`,
 				reporterRole: "사용자",
-				sev: item.status === "open" ? "mid" : "low",
+				sev: getReportSeverity(item.reason, item.status),
 				status:
 					item.status === "open" || item.status === "reviewing"
 						? "open"
@@ -300,6 +315,8 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				target: `${targetTypeLabel(item.targetType)} ${item.targetId.slice(0, 8)}`,
 				// 실데이터 신고의 대상 맥락(orpc 추론)을 그대로 전달해 상세에서 타입별 렌더한다.
 				targetContext: item.targetContext,
+				// 실제 대상 id(사용자 제재 등에 사용). 프리뷰 목업 신고에는 없다.
+				targetId: item.targetId,
 				targetRole: "대상",
 				targetType: item.targetType,
 				thread: [

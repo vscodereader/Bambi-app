@@ -126,6 +126,7 @@ const MOD_ROUTES: Record<string, Route> = {
 	reports: "/moderator/reports",
 	employers: "/moderator/employers",
 	users: "/moderator/users",
+	reviews: "/moderator/reviews",
 };
 const MOD_DETAIL_RE = /^\/moderator\/(?:queue|reports|users)\/[^/]+/;
 
@@ -169,6 +170,8 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 		tab = "employers";
 	} else if (path.startsWith("/moderator/users")) {
 		tab = "users";
+	} else if (path.startsWith("/moderator/reviews")) {
+		tab = "reviews";
 	}
 	const go = (v: string) => {
 		clearSelection();
@@ -205,7 +208,7 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 				) : null}
 			</div>
 			<NavBar>
-				<ModTabs setTab={go} showEmployers tab={tab} />
+				<ModTabs setTab={go} showEmployers showReviews tab={tab} />
 			</NavBar>
 			{toast ? <ConsoleToast message={toast} /> : null}
 		</>

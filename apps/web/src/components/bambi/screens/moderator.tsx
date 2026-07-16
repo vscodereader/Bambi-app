@@ -39,6 +39,7 @@ import {
 	FlagIcon,
 	ShieldIcon,
 	SortIcon,
+	StarIcon,
 	StoreIcon,
 	UserIcon,
 } from "../icons";
@@ -1094,6 +1095,15 @@ export function ReportDetail({
 				"user" in ctx ||
 				"chatRoom" in ctx)
 	);
+	// 실데이터: 대상이 사용자면 실제 사용자 id로 제재한다. 그 외 유형(공고·후기·채팅 등)은
+	// 사용자 제재 액션을 숨기고 사용자 관리로 안내한다. 프리뷰 목업(targetType 없음)은 기존
+	// 합성 id 동작을 유지한다.
+	let sanctionUserId: string | null = null;
+	if (!item.targetType) {
+		sanctionUserId = `u-${item.id}`;
+	} else if (item.targetType === "user" && item.targetId) {
+		sanctionUserId = item.targetId;
+	}
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="신고 검토" />
@@ -1168,25 +1178,49 @@ export function ReportDetail({
 				)}
 			</div>
 			{item.status === "open" ? (
-				<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
-					<Button
-						block
-						onClick={() => onResolve(item.id, "dismiss")}
-						size="lg"
-						variant="secondary"
-					>
-						기각
-					</Button>
-					<Button block onClick={() => setAct(true)} size="lg" variant="danger">
-						제재 적용
-					</Button>
+				<div className="border-border border-t px-6 pt-3 pb-1.5">
+					{sanctionUserId ? null : (
+						<p className="m-0 mb-2.5 text-[12px] text-muted-foreground leading-[1.5]">
+							이 신고는 사용자 계정이 대상이 아니에요. 사용자 제재가 필요하면
+							사용자 관리에서 진행해 주세요.
+						</p>
+					)}
+					<div className="grid grid-cols-2 gap-2.5">
+						<Button
+							block
+							onClick={() => onResolve(item.id, "dismiss")}
+							size="lg"
+							variant="secondary"
+						>
+							기각
+						</Button>
+						{sanctionUserId ? (
+							<Button
+								block
+								onClick={() => setAct(true)}
+								size="lg"
+								variant="danger"
+							>
+								제재 적용
+							</Button>
+						) : (
+							<Button
+								block
+								onClick={() => onResolve(item.id, "act")}
+								size="lg"
+								variant="primary"
+							>
+								조치 완료
+							</Button>
+						)}
+					</div>
 				</div>
 			) : null}
-			{act ? (
+			{act && sanctionUserId ? (
 				<SanctionSheet
 					onCancel={() => setAct(false)}
 					onPick={(status, label) => {
-						onSanction(`u-${item.id}`, status, label);
+						onSanction(sanctionUserId, status, label);
 						onResolve(item.id, "act");
 					}}
 					target={item.target}
@@ -1377,13 +1411,6 @@ function SanctionSheet({
 						onClick={() => onPick("suspended", "이용을 정지했어요")}
 						tone="danger"
 					/>
-					<SanctionBtn
-						desc="계정 즉시 차단"
-						label="영구 차단"
-						onClick={() => onPick("blocked", "계정을 차단했어요")}
-						strong
-						tone="danger"
-					/>
 				</div>
 				<div className="mt-3">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
@@ -1454,15 +1481,6 @@ export function UserDetail({
 							}
 							tone="danger"
 						/>
-						<SanctionBtn
-							desc="계정을 즉시 차단하고 모든 공고를 내려요"
-							label="영구 차단"
-							onClick={() =>
-								onSanction(item.id, "blocked", "계정을 차단했어요")
-							}
-							strong
-							tone="danger"
-						/>
 					</div>
 				</div>
 			</div>
@@ -1475,11 +1493,14 @@ export function ModTabs({
 	tab,
 	setTab,
 	showEmployers = false,
+	showReviews = false,
 }: {
 	tab: string;
 	setTab: (v: string) => void;
 	// 라이브 운영자 콘솔에서만 업소 승인 탭을 노출한다(프리뷰 목업은 3탭 유지).
 	showEmployers?: boolean;
+	// 라이브 콘솔에서 후기 관리 탭을 노출한다(PC 상단 메뉴와 동일하게).
+	showReviews?: boolean;
 }) {
 	const items = [
 		{ v: "queue", label: "검수", icon: <ShieldIcon /> },
@@ -1488,6 +1509,9 @@ export function ModTabs({
 			? [{ v: "employers", label: "업소 승인", icon: <StoreIcon /> }]
 			: []),
 		{ v: "users", label: "사용자", icon: <UserIcon /> },
+		...(showReviews
+			? [{ v: "reviews", label: "후기", icon: <StarIcon /> }]
+			: []),
 	];
 	return (
 		<nav className="flex px-2 pt-2.5 pb-2">

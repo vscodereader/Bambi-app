@@ -142,6 +142,8 @@ export interface Report {
 	status: "open" | "closed";
 	target: string;
 	targetContext?: ReportTargetContext;
+	// 실데이터 신고의 실제 대상 id(사용자 제재 등에 사용). 프리뷰 목업 신고에는 없다.
+	targetId?: string;
 	targetRole: string;
 	// 실데이터(orpc) 신고에만 존재하는 대상 맥락. 프리뷰 목업 신고에는 없다.
 	targetType?: ReportTargetType;
