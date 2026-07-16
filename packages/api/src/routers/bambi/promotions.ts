@@ -102,7 +102,8 @@ export const promotionsRouter = {
 				exposureEndsAt: jobPost.exposureEndsAt,
 				exposureType: jobPost.exposureType,
 				jobPostId: jobPost.id,
-				manualBoostsPerDay: adProduct.manualBoostsPerDay,
+				// 라이브 상품이 아니라 공고 구매 시점 스냅샷을 노출한다(상품 join은 이름 표기용만 유지).
+				manualBoostsPerDay: jobPost.manualBoostsPerDay,
 				paymentStatus: jobPost.paymentStatus,
 				publishedAt: jobPost.publishedAt,
 				status: jobPost.status,
@@ -157,14 +158,12 @@ export const promotionsRouter = {
 				.select({
 					adProductId: jobPost.adProductId,
 					exposureEndsAt: jobPost.exposureEndsAt,
-					manualBoostsPerDay: adProduct.manualBoostsPerDay,
 					organizationId: jobPost.organizationId,
 					paymentStatus: jobPost.paymentStatus,
 					status: jobPost.status,
 					teamId: jobPost.teamId,
 				})
 				.from(jobPost)
-				.leftJoin(adProduct, eq(jobPost.adProductId, adProduct.id))
 				.where(eq(jobPost.id, input.jobPostId))
 				.limit(1);
 
@@ -183,8 +182,9 @@ export const promotionsRouter = {
 			const boostsUsedToday = await db.transaction(async (tx) => {
 				// jobPost 행 잠금이 동시 클릭의 직렬화 지점: 카운트→검증→기록이
 				// 한 번에 한 요청씩 진행돼 일일 한도 초과 사용을 막는다.
-				await tx
-					.select({ id: jobPost.id })
+				// 끌어올리기 횟수는 라이브 상품이 아니라 잠긴 공고 행의 구매 시점 스냅샷에서 읽는다.
+				const [locked] = await tx
+					.select({ manualBoostsPerDay: jobPost.manualBoostsPerDay })
 					.from(jobPost)
 					.where(eq(jobPost.id, input.jobPostId))
 					.for("update");
@@ -202,7 +202,7 @@ export const promotionsRouter = {
 				const verdict = resolveBoostEligibility({
 					adProductId: post.adProductId,
 					exposureEndsAt: post.exposureEndsAt,
-					manualBoostsPerDay: post.manualBoostsPerDay ?? 0,
+					manualBoostsPerDay: locked?.manualBoostsPerDay ?? 0,
 					now,
 					paymentStatus: post.paymentStatus,
 					status: post.status,

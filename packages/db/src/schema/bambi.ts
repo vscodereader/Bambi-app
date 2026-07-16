@@ -281,6 +281,10 @@ export const jobPost = pgTable(
 		exposureEndsAt: timestamp("exposure_ends_at"),
 		// 마지막 끌어올림(점프) 시각. 노출 정렬 키 GREATEST(boosted_at, published_at)의 재료.
 		boostedAt: timestamp("boosted_at"),
+		// 공고 구매 시점에 광고 상품에서 복사한 하루 수동 끌어올리기 횟수 스냅샷. 0 = 미제공.
+		// 상품(ad_product.manual_boosts_per_day)을 라이브 참조하지 않고 이 컬럼으로 자격을 판정해,
+		// 운영자가 상품 횟수를 바꿔도 기존 적용 공고에 소급되지 않도록 한다(노출 축 스냅샷과 동일 패턴).
+		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
 		publishedAt: timestamp("published_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")

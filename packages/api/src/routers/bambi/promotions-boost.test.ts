@@ -117,6 +117,7 @@ const createBoostFixture = async (): Promise<BoostFixture> => {
 		adProductId: string | null;
 		exposureEndsAt: Date | null;
 		id: string;
+		manualBoostsPerDay: number;
 		paymentStatus: "paid" | "unpaid";
 		title: string;
 	}) => ({
@@ -133,11 +134,13 @@ const createBoostFixture = async (): Promise<BoostFixture> => {
 		...overrides,
 	});
 
+	// 광고 공고는 구매 시점 스냅샷(상품 manualBoostsPerDay=2)을 공고 컬럼에 복사한 상태를 재현한다.
 	await db.insert(jobPost).values([
 		baseJob({
 			adProductId,
 			exposureEndsAt: future,
 			id: adJobId,
+			manualBoostsPerDay: 2,
 			paymentStatus: "paid",
 			title: "광고 결제 완료 공고",
 		}),
@@ -145,6 +148,7 @@ const createBoostFixture = async (): Promise<BoostFixture> => {
 			adProductId,
 			exposureEndsAt: future,
 			id: unpaidAdJobId,
+			manualBoostsPerDay: 2,
 			paymentStatus: "unpaid",
 			title: "광고 미결제 공고",
 		}),
@@ -152,6 +156,7 @@ const createBoostFixture = async (): Promise<BoostFixture> => {
 			adProductId: null,
 			exposureEndsAt: null,
 			id: freeJobId,
+			manualBoostsPerDay: 0,
 			paymentStatus: "paid",
 			title: "무료 일반 공고",
 		}),
@@ -268,9 +273,167 @@ describe("promotions boost/listMyAds", () => {
 			expect(ids).not.toContain(fixture.freeJobId);
 
 			const adJob = ads.find((ad) => ad.jobPostId === fixture.adJobId);
+			// 공고 구매 시점 스냅샷 컬럼(jobPost.manualBoostsPerDay) 값을 그대로 반환한다.
 			expect(adJob?.manualBoostsPerDay).toBe(2);
 			expect(adJob?.boostsUsedToday).toBe(2);
 			expect(adJob?.adProductName).toBeTruthy();
 		});
+	});
+});
+
+// 스냅샷 보존: 공고 구매 시점에 복사된 manualBoostsPerDay가 이후 상품 수정과 무관하게
+// 끌어올리기 자격을 지배하는지 검증한다(라이브 상품 참조였던 소급 버그의 회귀 방지).
+describe("promotions boost 스냅샷 보존", () => {
+	const now = new Date();
+	const future = new Date(now.getTime() + 24 * HOUR_MS);
+	const organizationId = `org_test_${randomUUID()}`;
+	const employerUserId = `user_test_employer_${randomUUID()}`;
+	const memberId = `member_test_${randomUUID()}`;
+	const adPlacementId = randomUUID();
+	const zeroProductId = randomUUID();
+	const boostProductId = randomUUID();
+	const zeroSnapshotJobId = randomUUID();
+	const boostSnapshotJobId = randomUUID();
+	const jobPostIds = [zeroSnapshotJobId, boostSnapshotJobId];
+
+	const snapshotJob = (overrides: {
+		adProductId: string;
+		id: string;
+		manualBoostsPerDay: number;
+		title: string;
+	}) => ({
+		createdByUserId: employerUserId,
+		description: "스냅샷 보존을 검증하기 위한 공고입니다.",
+		exposureEndsAt: future,
+		industryCategory: "라운지",
+		organizationId,
+		payAmount: 180_000,
+		payUnit: "일급",
+		paymentStatus: "paid" as const,
+		publishedAt: now,
+		region: `boost-snapshot-${randomUUID()}`,
+		status: "published" as const,
+		workSchedule: "20:00-02:00",
+		...overrides,
+	});
+
+	beforeAll(async () => {
+		await db.insert(user).values({
+			email: makeEmail("snapshot"),
+			id: employerUserId,
+			name: "스냅샷 담당자",
+		});
+		await db.insert(organization).values({
+			createdAt: now,
+			id: organizationId,
+			name: "스냅샷 테스트 조직",
+			slug: `boost-snapshot-${randomUUID()}`,
+		});
+		await db.insert(member).values({
+			createdAt: now,
+			id: memberId,
+			organizationId,
+			role: "owner",
+			userId: employerUserId,
+		});
+		await db.insert(bambiProfile).values({
+			displayName: "스냅샷 담당자",
+			isPhoneVerified: true,
+			role: "employer",
+			status: "active",
+			userId: employerUserId,
+		});
+		await db.insert(employerOrganizationProfile).values({
+			displayName: "스냅샷 테스트 업체",
+			organizationId,
+			verificationStatus: "verified",
+		});
+		await db.insert(adPlacement).values({
+			id: adPlacementId,
+			kind: "listing",
+			name: "목록 상단 노출",
+		});
+		// 구매 시점 상품 상태: zeroProduct는 끌올 0회, boostProduct는 끌올 3회.
+		await db.insert(adProduct).values([
+			{
+				id: zeroProductId,
+				manualBoostsPerDay: 0,
+				name: "끌올 미포함 광고",
+				placementId: adPlacementId,
+				priceOptions: [{ amount: 10_000, days: 7 }],
+			},
+			{
+				id: boostProductId,
+				manualBoostsPerDay: 3,
+				name: "끌올 포함 광고",
+				placementId: adPlacementId,
+				priceOptions: [{ amount: 20_000, days: 7 }],
+			},
+		]);
+		// 각 공고는 구매 시점 상품 값을 그대로 스냅샷으로 복사한다.
+		await db.insert(jobPost).values([
+			snapshotJob({
+				adProductId: zeroProductId,
+				id: zeroSnapshotJobId,
+				manualBoostsPerDay: 0,
+				title: "끌올 0회 스냅샷 공고",
+			}),
+			snapshotJob({
+				adProductId: boostProductId,
+				id: boostSnapshotJobId,
+				manualBoostsPerDay: 3,
+				title: "끌올 3회 스냅샷 공고",
+			}),
+		]);
+		// 구매 후 운영자가 상품 끌올 횟수를 반대로 수정한다(0→5, 3→0). 스냅샷 공고에는 소급되면 안 된다.
+		await db
+			.update(adProduct)
+			.set({ manualBoostsPerDay: 5 })
+			.where(eq(adProduct.id, zeroProductId));
+		await db
+			.update(adProduct)
+			.set({ manualBoostsPerDay: 0 })
+			.where(eq(adProduct.id, boostProductId));
+	});
+
+	afterAll(async () => {
+		await db
+			.delete(jobBoostEvent)
+			.where(inArray(jobBoostEvent.jobPostId, jobPostIds));
+		await db.delete(jobPost).where(inArray(jobPost.id, jobPostIds));
+		await db
+			.delete(adProduct)
+			.where(inArray(adProduct.id, [zeroProductId, boostProductId]));
+		await db.delete(adPlacement).where(eq(adPlacement.id, adPlacementId));
+		await db
+			.delete(employerOrganizationProfile)
+			.where(eq(employerOrganizationProfile.organizationId, organizationId));
+		await db.delete(member).where(eq(member.id, memberId));
+		await db
+			.delete(bambiProfile)
+			.where(eq(bambiProfile.userId, employerUserId));
+		await db.delete(user).where(eq(user.id, employerUserId));
+		await db.delete(organization).where(eq(organization.id, organizationId));
+	});
+
+	it("상품 끌올 0회로 구매한 공고는 상품을 5회로 올려도 여전히 거부한다", async () => {
+		await expect(
+			boostAs(employerUserId, zeroSnapshotJobId)
+		).rejects.toMatchObject({
+			message: "이 광고 상품에는 끌어올리기가 포함되어 있지 않습니다.",
+		});
+	});
+
+	it("상품 끌올 3회로 구매한 공고는 상품을 0회로 내려도 여전히 성공한다", async () => {
+		const result = await boostAs(employerUserId, boostSnapshotJobId);
+		expect(result.boostsUsedToday).toBe(1);
+	});
+
+	it("listMyAds는 라이브 상품이 아니라 공고 스냅샷 값을 반환한다", async () => {
+		const ads = await listMyAdsAs(employerUserId);
+		const zeroJob = ads.find((ad) => ad.jobPostId === zeroSnapshotJobId);
+		const boostJob = ads.find((ad) => ad.jobPostId === boostSnapshotJobId);
+		expect(zeroJob?.manualBoostsPerDay).toBe(0);
+		expect(boostJob?.manualBoostsPerDay).toBe(3);
 	});
 });
