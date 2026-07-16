@@ -14,6 +14,12 @@ import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
+import {
+	accountStatusLabel,
+	jobPostStatusLabel,
+	reviewStatusLabel,
+	userRoleLabel,
+} from "@/lib/bambi/moderation-labels";
 import { scan } from "@/lib/bambi/scanner";
 import type {
 	ManagedUser,
@@ -811,28 +817,7 @@ function PartyBox({
 }
 
 // ---- 신고 대상 맥락(targetType별 분기 렌더) --------------------------------
-const JOB_POST_STATUS_LABEL: Record<string, string> = {
-	hidden: "숨김",
-	pending_review: "검수 대기",
-	published: "게시됨",
-	rejected: "반려",
-};
-const REVIEW_STATUS_LABEL: Record<string, string> = {
-	hidden: "숨김",
-	pending_review: "검수 대기",
-	published: "게시됨",
-};
-const ACCOUNT_STATUS_LABEL: Record<string, string> = {
-	active: "정상",
-	suspended: "정지",
-	warned: "경고",
-};
-const USER_ROLE_LABEL: Record<string, string> = {
-	admin: "운영자",
-	employer: "구인자",
-	seeker: "구직자",
-};
-
+// 상태·역할 라벨은 공용 moderation-labels 모듈에서 소비한다(원값 노출 금지·중립 폴백).
 const formatMessageTime = (value: Date | string) =>
 	new Intl.DateTimeFormat("ko-KR", {
 		dateStyle: "short",
@@ -883,10 +868,7 @@ function JobPostContext({
 		<ContextSection title="신고된 공고">
 			<ContextField label="제목" value={jobPost.title} />
 			<ContextField label="업소" value={jobPost.organizationDisplayName} />
-			<ContextField
-				label="상태"
-				value={JOB_POST_STATUS_LABEL[jobPost.status] ?? jobPost.status}
-			/>
+			<ContextField label="상태" value={jobPostStatusLabel(jobPost.status)} />
 			<div className="flex flex-col gap-0.5">
 				<div className="text-[11px] text-muted-foreground">공고 본문</div>
 				<div className="line-clamp-4 text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
@@ -916,7 +898,7 @@ function ReviewContext({
 					</span>
 				</span>
 				<span className="text-[12px] text-muted-foreground">
-					{REVIEW_STATUS_LABEL[review.status] ?? review.status}
+					{reviewStatusLabel(review.status)}
 				</span>
 			</div>
 			<div className="whitespace-pre-wrap text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
@@ -939,14 +921,8 @@ function UserContext({
 	return (
 		<ContextSection title="신고된 사용자">
 			<ContextField label="표시명" value={user.displayName ?? "이름 없음"} />
-			<ContextField
-				label="역할"
-				value={USER_ROLE_LABEL[user.role] ?? user.role}
-			/>
-			<ContextField
-				label="계정 상태"
-				value={ACCOUNT_STATUS_LABEL[user.status] ?? user.status}
-			/>
+			<ContextField label="역할" value={userRoleLabel(user.role)} />
+			<ContextField label="계정 상태" value={accountStatusLabel(user.status)} />
 			<ContextField
 				label="전화 인증"
 				value={user.isPhoneVerified ? "인증 완료" : "미인증"}
