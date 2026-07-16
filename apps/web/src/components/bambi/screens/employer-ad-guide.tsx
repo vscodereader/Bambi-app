@@ -116,6 +116,11 @@ function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
 										일일 끌어올리기 {product.manualBoostsPerDay}회 포함
 									</span>
 								) : null}
+								{product.autoBoostsPerDay > 0 ? (
+									<span className="font-medium text-coral-500 text-sm">
+										일일 자동 끌어올리기 {product.autoBoostsPerDay}회 포함
+									</span>
+								) : null}
 								{product.benefits.length > 0 ? (
 									<ul className="m-0 flex flex-col gap-1.5 p-0">
 										{product.benefits.map((benefit) => (

@@ -33,6 +33,7 @@ export default function NewAdProductPage() {
 						previewImageUrl: draft.previewImageUrl,
 						previewTemplate: draft.previewTemplate,
 						manualBoostsPerDay: draft.manualBoostsPerDay,
+						autoBoostsPerDay: draft.autoBoostsPerDay,
 					})
 				}
 				pending={create.isPending}

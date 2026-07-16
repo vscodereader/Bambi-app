@@ -97,12 +97,13 @@ export const promotionsRouter = {
 		const rows = await db
 			.select({
 				adProductName: adProduct.name,
+				// 라이브 상품이 아니라 공고 구매 시점 스냅샷을 노출한다(상품 join은 이름 표기용만 유지).
+				autoBoostsPerDay: jobPost.autoBoostsPerDay,
 				boostedAt: jobPost.boostedAt,
 				employerDisplayName: employerOrganizationProfile.displayName,
 				exposureEndsAt: jobPost.exposureEndsAt,
 				exposureType: jobPost.exposureType,
 				jobPostId: jobPost.id,
-				// 라이브 상품이 아니라 공고 구매 시점 스냅샷을 노출한다(상품 join은 이름 표기용만 유지).
 				manualBoostsPerDay: jobPost.manualBoostsPerDay,
 				paymentStatus: jobPost.paymentStatus,
 				publishedAt: jobPost.publishedAt,
@@ -128,15 +129,15 @@ export const promotionsRouter = {
 		}
 
 		const dayStart = getKstDayStart(new Date());
+		const jobPostIds = rows.map((row) => row.jobPostId);
+		// 수동 사용량은 boostType='manual'만 센다(자동 이벤트가 수동 쿼터를 잠식하지 않도록).
 		const usedRows = await db
 			.select({ jobPostId: jobBoostEvent.jobPostId, used: count() })
 			.from(jobBoostEvent)
 			.where(
 				and(
-					inArray(
-						jobBoostEvent.jobPostId,
-						rows.map((row) => row.jobPostId)
-					),
+					inArray(jobBoostEvent.jobPostId, jobPostIds),
+					eq(jobBoostEvent.boostType, "manual"),
 					gte(jobBoostEvent.createdAt, dayStart)
 				)
 			)
@@ -144,9 +145,25 @@ export const promotionsRouter = {
 		const usedByJobId = new Map(
 			usedRows.map((row) => [row.jobPostId, row.used])
 		);
+		// 자동 사용량은 boostType='auto'만 센다(오늘 실행 현황 표시용).
+		const autoUsedRows = await db
+			.select({ jobPostId: jobBoostEvent.jobPostId, used: count() })
+			.from(jobBoostEvent)
+			.where(
+				and(
+					inArray(jobBoostEvent.jobPostId, jobPostIds),
+					eq(jobBoostEvent.boostType, "auto"),
+					gte(jobBoostEvent.createdAt, dayStart)
+				)
+			)
+			.groupBy(jobBoostEvent.jobPostId);
+		const autoUsedByJobId = new Map(
+			autoUsedRows.map((row) => [row.jobPostId, row.used])
+		);
 
 		return rows.map((row) => ({
 			...row,
+			autoBoostsUsedToday: autoUsedByJobId.get(row.jobPostId) ?? 0,
 			boostsUsedToday: usedByJobId.get(row.jobPostId) ?? 0,
 		}));
 	}),
@@ -195,6 +212,8 @@ export const promotionsRouter = {
 					.where(
 						and(
 							eq(jobBoostEvent.jobPostId, input.jobPostId),
+							// 수동 한도 판정은 boostType='manual'만 센다(자동 이벤트는 별도 쿼터).
+							eq(jobBoostEvent.boostType, "manual"),
 							gte(jobBoostEvent.createdAt, dayStart)
 						)
 					);

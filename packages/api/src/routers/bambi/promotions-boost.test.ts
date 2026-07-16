@@ -437,3 +437,115 @@ describe("promotions boost 스냅샷 보존", () => {
 		expect(boostJob?.manualBoostsPerDay).toBe(3);
 	});
 });
+
+// 수동 카운트 타입 필터 회귀: 자동('auto') 이벤트가 수동 일일 한도를 잠식하면 안 된다.
+// boost 사용량 카운트가 boostType='manual'만 세는지(자동 이벤트 무시) 검증한다.
+describe("promotions boost 수동 카운트 타입 필터", () => {
+	const now = new Date();
+	const future = new Date(now.getTime() + 24 * HOUR_MS);
+	const organizationId = `org_test_${randomUUID()}`;
+	const employerUserId = `user_test_employer_${randomUUID()}`;
+	const memberId = `member_test_${randomUUID()}`;
+	const adPlacementId = randomUUID();
+	const adProductId = randomUUID();
+	const jobId = randomUUID();
+
+	beforeAll(async () => {
+		await db.insert(user).values({
+			email: makeEmail("type-filter"),
+			id: employerUserId,
+			name: "타입 필터 담당자",
+		});
+		await db.insert(organization).values({
+			createdAt: now,
+			id: organizationId,
+			name: "타입 필터 테스트 조직",
+			slug: `type-filter-${randomUUID()}`,
+		});
+		await db.insert(member).values({
+			createdAt: now,
+			id: memberId,
+			organizationId,
+			role: "owner",
+			userId: employerUserId,
+		});
+		await db.insert(bambiProfile).values({
+			displayName: "타입 필터 담당자",
+			isPhoneVerified: true,
+			role: "employer",
+			status: "active",
+			userId: employerUserId,
+		});
+		await db.insert(employerOrganizationProfile).values({
+			displayName: "타입 필터 테스트 업체",
+			organizationId,
+			verificationStatus: "verified",
+		});
+		await db.insert(adPlacement).values({
+			id: adPlacementId,
+			kind: "listing",
+			name: "목록 상단 노출",
+		});
+		await db.insert(adProduct).values({
+			id: adProductId,
+			manualBoostsPerDay: 1,
+			name: "수동 1회 광고",
+			placementId: adPlacementId,
+			priceOptions: [{ amount: 10_000, days: 7 }],
+		});
+		await db.insert(jobPost).values({
+			adProductId,
+			createdByUserId: employerUserId,
+			description: "수동 카운트 타입 필터를 검증하기 위한 공고입니다.",
+			exposureEndsAt: future,
+			id: jobId,
+			industryCategory: "라운지",
+			manualBoostsPerDay: 1,
+			organizationId,
+			payAmount: 180_000,
+			payUnit: "일급",
+			paymentStatus: "paid",
+			publishedAt: now,
+			region: `type-filter-${randomUUID()}`,
+			status: "published",
+			title: "타입 필터 공고",
+			workSchedule: "20:00-02:00",
+		});
+		// 오늘 자동('auto') 이벤트 1건을 미리 심는다. 수동 한도(1) 판정에 포함되면 안 된다.
+		await db.insert(jobBoostEvent).values({
+			actorUserId: employerUserId,
+			boostType: "auto",
+			jobPostId: jobId,
+			organizationId,
+		});
+	});
+
+	afterAll(async () => {
+		await db.delete(jobBoostEvent).where(eq(jobBoostEvent.jobPostId, jobId));
+		await db.delete(jobPost).where(eq(jobPost.id, jobId));
+		await db.delete(adProduct).where(eq(adProduct.id, adProductId));
+		await db.delete(adPlacement).where(eq(adPlacement.id, adPlacementId));
+		await db
+			.delete(employerOrganizationProfile)
+			.where(eq(employerOrganizationProfile.organizationId, organizationId));
+		await db.delete(member).where(eq(member.id, memberId));
+		await db
+			.delete(bambiProfile)
+			.where(eq(bambiProfile.userId, employerUserId));
+		await db.delete(user).where(eq(user.id, employerUserId));
+		await db.delete(organization).where(eq(organization.id, organizationId));
+	});
+
+	it("자동 이벤트는 수동 한도를 잠식하지 않아 수동 끌어올리기가 여전히 가능하다", async () => {
+		// 자동 1건이 이미 있어도 수동 사용량은 0으로 세어 수동 boost가 성공한다.
+		const result = await boostAs(employerUserId, jobId);
+		expect(result.boostsUsedToday).toBe(1);
+	});
+
+	it("수동 한도 소진 후에는 자동 이벤트와 무관하게 거부한다", async () => {
+		// 수동 1회를 쓴 뒤에는 한도 초과로 거부(자동 이벤트는 여전히 카운트에서 제외).
+		await expect(boostAs(employerUserId, jobId)).rejects.toMatchObject({
+			message: "오늘 끌어올리기 횟수를 모두 사용했습니다.",
+		});
+	});
+});
