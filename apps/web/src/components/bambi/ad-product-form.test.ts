@@ -28,4 +28,12 @@ describe("ad product form", () => {
 			'value={option.amount === 0 ? "" : option.amount}'
 		);
 	});
+
+	it("collects manualBoostsPerDay with the zero-clearable input pattern", () => {
+		const source = readComponent("ad-product-form.tsx");
+		expect(source).toContain("manualBoostsPerDay: number;");
+		expect(source).toContain(
+			'value={manualBoostsPerDay === 0 ? "" : manualBoostsPerDay}'
+		);
+	});
 });
