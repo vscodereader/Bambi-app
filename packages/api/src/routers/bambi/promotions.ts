@@ -1,106 +1,42 @@
 import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
+	adProduct,
 	employerOrganizationProfile,
 	employerTeamProfile,
+	jobBoostEvent,
 	jobPost,
-	jobPromotionBoostEvent,
-	jobPromotionCampaign,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, inArray, or, type SQL } from "drizzle-orm";
+import {
+	and,
+	count,
+	desc,
+	eq,
+	gte,
+	inArray,
+	isNotNull,
+	or,
+	type SQL,
+} from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
-import { syncAdvertiserFlagForOrganization } from "../../services/bambi-advertiser";
 import {
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
-	type SessionLike,
 } from "../../services/bambi-authz";
 import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
-import type { JobPostStatus } from "../../services/bambi-policy";
 import {
-	canConsumeManualBoost,
-	getCampaignEmployerAccessScope,
-	getEffectivePromotionStatus,
-	getManualBoostConsumption,
-	getPromotionLabel,
-	getRemainingManualBoosts,
-	type PromotionCampaignForListing,
-	type PromotionStatus,
-	type PromotionTier,
-	promotionTiers,
-} from "../../services/bambi-promotions";
+	BOOST_INELIGIBLE_MESSAGES,
+	getKstDayStart,
+	resolveBoostEligibility,
+} from "../../services/bambi-job-boost";
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-const campaignIdInput = z.object({
-	campaignId: z.string().uuid(),
-});
-
-const createDraftInput = z.object({
-	autoBoostsPerDay: z.number().int().min(0).max(24).default(0),
-	days: z.number().int().min(1).max(30).default(7),
-	jobPostId: z.string().uuid(),
-	manualBoostsTotal: z.number().int().min(0).max(100).default(3),
-	tier: z.enum(promotionTiers),
-});
-
-const getCampaignForAccess = async (
-	campaignId: string,
-	session: SessionLike | null | undefined
-) => {
-	const [row] = await db
-		.select({
-			id: jobPromotionCampaign.id,
-			jobPostId: jobPromotionCampaign.jobPostId,
-			organizationId: jobPromotionCampaign.organizationId,
-			tier: jobPromotionCampaign.tier,
-			status: jobPromotionCampaign.status,
-			startsAt: jobPromotionCampaign.startsAt,
-			endsAt: jobPromotionCampaign.endsAt,
-			manualBoostsTotal: jobPromotionCampaign.manualBoostsTotal,
-			manualBoostsUsed: jobPromotionCampaign.manualBoostsUsed,
-			autoBoostsPerDay: jobPromotionCampaign.autoBoostsPerDay,
-			lastBoostedAt: jobPromotionCampaign.lastBoostedAt,
-			jobStatus: jobPost.status,
-			teamId: jobPost.teamId,
-			title: jobPost.title,
-		})
-		.from(jobPromotionCampaign)
-		.innerJoin(jobPost, eq(jobPromotionCampaign.jobPostId, jobPost.id))
-		.where(eq(jobPromotionCampaign.id, campaignId))
-		.limit(1);
-
-	if (!row) {
-		throw new ORPCError("NOT_FOUND");
-	}
-
-	const actor = await requireEmployerPostingAccess({
-		...getCampaignEmployerAccessScope(row),
-		session,
-	});
-
-	return { actor, campaign: row };
-};
-
-const toCampaignForListing = (
-	campaign: Awaited<ReturnType<typeof getCampaignForAccess>>["campaign"]
-): PromotionCampaignForListing => ({
-	endsAt: campaign.endsAt,
-	id: campaign.id,
-	jobPostStatus: campaign.jobStatus as JobPostStatus,
-	lastBoostedAt: campaign.lastBoostedAt,
-	manualBoostsTotal: campaign.manualBoostsTotal,
-	manualBoostsUsed: campaign.manualBoostsUsed,
-	startsAt: campaign.startsAt,
-	status: campaign.status as PromotionStatus,
-	tier: campaign.tier as PromotionTier,
-});
-
+// 구 jobPromotionCampaign 축 라우터를 광고 상품 축으로 재작성했다.
+// 광고 목록(listMyAds)과 수동 끌어올리기(boost)만 제공한다.
 export const promotionsRouter = {
-	listMine: protectedProcedure.handler(async ({ context }) => {
+	listMyAds: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
 		if (profile.role === "job_seeker") {
@@ -160,24 +96,21 @@ export const promotionsRouter = {
 
 		const rows = await db
 			.select({
-				id: jobPromotionCampaign.id,
-				jobPostId: jobPromotionCampaign.jobPostId,
-				organizationId: jobPromotionCampaign.organizationId,
-				tier: jobPromotionCampaign.tier,
-				status: jobPromotionCampaign.status,
-				startsAt: jobPromotionCampaign.startsAt,
-				endsAt: jobPromotionCampaign.endsAt,
-				manualBoostsTotal: jobPromotionCampaign.manualBoostsTotal,
-				manualBoostsUsed: jobPromotionCampaign.manualBoostsUsed,
-				autoBoostsPerDay: jobPromotionCampaign.autoBoostsPerDay,
-				lastBoostedAt: jobPromotionCampaign.lastBoostedAt,
-				jobTitle: jobPost.title,
-				jobStatus: jobPost.status,
+				adProductName: adProduct.name,
+				boostedAt: jobPost.boostedAt,
 				employerDisplayName: employerOrganizationProfile.displayName,
+				exposureEndsAt: jobPost.exposureEndsAt,
+				exposureType: jobPost.exposureType,
+				jobPostId: jobPost.id,
+				manualBoostsPerDay: adProduct.manualBoostsPerDay,
+				paymentStatus: jobPost.paymentStatus,
+				publishedAt: jobPost.publishedAt,
+				status: jobPost.status,
 				teamDisplayName: employerTeamProfile.displayName,
+				title: jobPost.title,
 			})
-			.from(jobPromotionCampaign)
-			.innerJoin(jobPost, eq(jobPromotionCampaign.jobPostId, jobPost.id))
+			.from(jobPost)
+			.innerJoin(adProduct, eq(jobPost.adProductId, adProduct.id))
 			.innerJoin(
 				employerOrganizationProfile,
 				eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
@@ -186,32 +119,52 @@ export const promotionsRouter = {
 				employerTeamProfile,
 				eq(jobPost.teamId, employerTeamProfile.teamId)
 			)
-			.where(or(...accessFilters))
-			.orderBy(desc(jobPromotionCampaign.updatedAt));
+			.where(and(or(...accessFilters), isNotNull(jobPost.adProductId)))
+			.orderBy(desc(jobPost.updatedAt));
 
-		const now = new Date();
+		if (rows.length === 0) {
+			return [];
+		}
+
+		const dayStart = getKstDayStart(new Date());
+		const usedRows = await db
+			.select({ jobPostId: jobBoostEvent.jobPostId, used: count() })
+			.from(jobBoostEvent)
+			.where(
+				and(
+					inArray(
+						jobBoostEvent.jobPostId,
+						rows.map((row) => row.jobPostId)
+					),
+					gte(jobBoostEvent.createdAt, dayStart)
+				)
+			)
+			.groupBy(jobBoostEvent.jobPostId);
+		const usedByJobId = new Map(
+			usedRows.map((row) => [row.jobPostId, row.used])
+		);
 
 		return rows.map((row) => ({
 			...row,
-			promotionLabel: getPromotionLabel(row.tier as PromotionTier),
-			remainingManualBoosts: getRemainingManualBoosts(row),
-			status: getEffectivePromotionStatus(
-				{ endsAt: row.endsAt, status: row.status as PromotionStatus },
-				now
-			),
+			boostsUsedToday: usedByJobId.get(row.jobPostId) ?? 0,
 		}));
 	}),
 
-	createDraft: protectedProcedure
-		.input(createDraftInput)
+	boost: protectedProcedure
+		.input(z.object({ jobPostId: z.string().uuid() }))
 		.handler(async ({ context, input }) => {
 			const [post] = await db
 				.select({
-					id: jobPost.id,
+					adProductId: jobPost.adProductId,
+					exposureEndsAt: jobPost.exposureEndsAt,
+					manualBoostsPerDay: adProduct.manualBoostsPerDay,
 					organizationId: jobPost.organizationId,
+					paymentStatus: jobPost.paymentStatus,
+					status: jobPost.status,
 					teamId: jobPost.teamId,
 				})
 				.from(jobPost)
+				.leftJoin(adProduct, eq(jobPost.adProductId, adProduct.id))
 				.where(eq(jobPost.id, input.jobPostId))
 				.limit(1);
 
@@ -219,121 +172,63 @@ export const promotionsRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
-			await requireEmployerPostingAccess({
+			const actor = await requireEmployerPostingAccess({
 				organizationId: post.organizationId,
 				teamId: post.teamId,
 				session: context.session,
 			});
 
 			const now = new Date();
-			const [created] = await db
-				.insert(jobPromotionCampaign)
-				.values({
-					autoBoostsPerDay: input.autoBoostsPerDay,
-					endsAt: new Date(now.getTime() + input.days * MS_PER_DAY),
-					jobPostId: post.id,
-					manualBoostsTotal: input.manualBoostsTotal,
-					manualBoostsUsed: 0,
-					organizationId: post.organizationId,
-					startsAt: now,
-					status: "draft",
-					tier: input.tier,
-				})
-				.returning();
+			const dayStart = getKstDayStart(now);
+			const boostsUsedToday = await db.transaction(async (tx) => {
+				// jobPost 행 잠금이 동시 클릭의 직렬화 지점: 카운트→검증→기록이
+				// 한 번에 한 요청씩 진행돼 일일 한도 초과 사용을 막는다.
+				await tx
+					.select({ id: jobPost.id })
+					.from(jobPost)
+					.where(eq(jobPost.id, input.jobPostId))
+					.for("update");
 
-			return created;
-		}),
-
-	activateForManualPayment: protectedProcedure
-		.input(campaignIdInput)
-		.handler(async ({ context, input }) => {
-			const { campaign } = await getCampaignForAccess(
-				input.campaignId,
-				context.session
-			);
-			const now = new Date();
-			const [updated] = await db
-				.update(jobPromotionCampaign)
-				.set({
-					startsAt: now,
-					status: "active",
-					updatedAt: now,
-				})
-				.where(eq(jobPromotionCampaign.id, input.campaignId))
-				.returning();
-
-			await syncAdvertiserFlagForOrganization({
-				now,
-				organizationId: campaign.organizationId,
-			});
-
-			return updated;
-		}),
-
-	pause: protectedProcedure
-		.input(campaignIdInput)
-		.handler(async ({ context, input }) => {
-			const { campaign } = await getCampaignForAccess(
-				input.campaignId,
-				context.session
-			);
-			const now = new Date();
-			const [updated] = await db
-				.update(jobPromotionCampaign)
-				.set({
-					status: "paused",
-					updatedAt: now,
-				})
-				.where(eq(jobPromotionCampaign.id, input.campaignId))
-				.returning();
-
-			await syncAdvertiserFlagForOrganization({
-				now,
-				organizationId: campaign.organizationId,
-			});
-
-			return updated;
-		}),
-
-	boost: protectedProcedure
-		.input(campaignIdInput)
-		.handler(async ({ context, input }) => {
-			const { actor, campaign } = await getCampaignForAccess(
-				input.campaignId,
-				context.session
-			);
-			const now = new Date();
-			const campaignForListing = toCampaignForListing(campaign);
-
-			if (!canConsumeManualBoost(campaignForListing, now)) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "Manual boost is not available for this campaign.",
+				const [usage] = await tx
+					.select({ used: count() })
+					.from(jobBoostEvent)
+					.where(
+						and(
+							eq(jobBoostEvent.jobPostId, input.jobPostId),
+							gte(jobBoostEvent.createdAt, dayStart)
+						)
+					);
+				const usedToday = usage?.used ?? 0;
+				const verdict = resolveBoostEligibility({
+					adProductId: post.adProductId,
+					exposureEndsAt: post.exposureEndsAt,
+					manualBoostsPerDay: post.manualBoostsPerDay ?? 0,
+					now,
+					paymentStatus: post.paymentStatus,
+					status: post.status,
+					usedToday,
 				});
-			}
 
-			const consumption = getManualBoostConsumption(campaignForListing, now);
-			const [updated] = await db.transaction(async (tx) => {
-				const [campaignUpdate] = await tx
-					.update(jobPromotionCampaign)
-					.set({
-						lastBoostedAt: consumption.lastBoostedAt,
-						manualBoostsUsed: consumption.manualBoostsUsed,
-						updatedAt: now,
-					})
-					.where(eq(jobPromotionCampaign.id, input.campaignId))
-					.returning();
+				if (!verdict.eligible) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: BOOST_INELIGIBLE_MESSAGES[verdict.reason],
+					});
+				}
 
-				await tx.insert(jobPromotionBoostEvent).values({
+				await tx.insert(jobBoostEvent).values({
 					actorUserId: actor.userId,
 					boostType: "manual",
-					campaignId: campaign.id,
-					jobPostId: campaign.jobPostId,
-					organizationId: campaign.organizationId,
+					jobPostId: input.jobPostId,
+					organizationId: post.organizationId,
 				});
+				await tx
+					.update(jobPost)
+					.set({ boostedAt: now })
+					.where(eq(jobPost.id, input.jobPostId));
 
-				return [campaignUpdate];
+				return usedToday + 1;
 			});
 
-			return updated;
+			return { boostedAt: now, boostsUsedToday };
 		}),
 };
