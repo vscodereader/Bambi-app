@@ -3,6 +3,7 @@
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
@@ -13,192 +14,163 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import Loader from "@/components/loader";
-import { formatDateTime } from "@/lib/bambi-format";
+import {
+	EXPOSURE_TYPE_LABELS,
+	type ExposureType,
+	getJobDisplayStatus,
+} from "@/lib/bambi/exposure";
+import { formatDate, formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
-const promotionStatusLabels = {
-	active: "진행 중",
-	canceled: "취소",
-	draft: "임시",
-	expired: "종료",
-	paused: "일시정지",
-	pending_payment: "결제 대기",
-} as const;
-
-const jobStatusLabels = {
-	draft: "임시 저장",
-	hidden: "숨김",
-	pending_review: "검수 대기",
-	published: "공개",
-	rejected: "반려",
-} as const;
-
-const promotionStatusGroups = [
-	{ id: "all", label: "전체", statuses: [] },
-	{ id: "active", label: "게재중", statuses: ["active"] },
-	{
-		id: "pending_payment",
-		label: "결제대기",
-		statuses: ["pending_payment"],
-	},
-	{ id: "paused", label: "일시중지", statuses: ["paused"] },
-	{ id: "ended", label: "종료", statuses: ["expired", "canceled"] },
-] as const;
-
-type PromotionStatusGroupId = (typeof promotionStatusGroups)[number]["id"];
-
-const getPromotionStatusLabel = (status: string): string =>
-	promotionStatusLabels[status as keyof typeof promotionStatusLabels] ?? status;
-
-const getJobStatusLabel = (status: string): string =>
-	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
-
-const getPromotionStatusTone = (
-	status: string
-): React.ComponentProps<typeof StatusBadge>["tone"] => {
-	if (status === "active") {
-		return "good";
-	}
-
-	if (status === "draft" || status === "pending_payment") {
-		return "warning";
-	}
-
-	if (status === "paused") {
-		return "default";
-	}
-
-	return "danger";
-};
-
-const getJobStatusTone = (
-	status: string
-): React.ComponentProps<typeof StatusBadge>["tone"] =>
-	status === "published" ? "good" : "warning";
-
-interface PromotionListItem {
+interface AdListItem {
+	adProductName: null | string;
+	boostedAt: Date | null | string;
+	boostsUsedToday: number;
 	employerDisplayName: string;
-	endsAt: Date | string;
-	id: string;
+	exposureEndsAt: Date | null | string;
+	exposureType: string;
 	jobPostId: string;
-	jobStatus: string;
-	jobTitle: string;
-	lastBoostedAt: Date | null | string;
-	manualBoostsTotal: number;
-	promotionLabel: string;
-	remainingManualBoosts: number;
-	startsAt: Date | string;
+	manualBoostsPerDay: number;
+	paymentStatus: string;
+	publishedAt: Date | null | string;
 	status: string;
 	teamDisplayName: null | string;
+	title: string;
 }
 
-interface PromotionCardProps {
-	isActivatePending: boolean;
-	isBoostPending: boolean;
-	isPausePending: boolean;
-	onActivate: (campaignId: string) => void;
-	onBoost: (campaignId: string) => void;
-	onPause: (campaignId: string) => void;
-	promotion: PromotionListItem;
-}
+const adStatusGroups = [
+	{ id: "all", label: "전체" },
+	{ id: "active", label: "진행 중" },
+	{ id: "pending_payment", label: "결제 대기" },
+	{ id: "expired", label: "만료" },
+] as const;
 
-function PromotionCard({
-	isActivatePending,
+type AdStatusGroupId = (typeof adStatusGroups)[number]["id"];
+
+const isExposureActive = (
+	exposureEndsAt: Date | null | string,
+	now: number
+): boolean =>
+	exposureEndsAt === null || new Date(exposureEndsAt).getTime() > now;
+
+// 탭 분류: 노출 만료가 최우선(과거 결제 이력이 있어야 만료가 생김), 그다음 미결제,
+// 공개 중 광고가 "진행 중". 검수 대기·반려·숨김·임시 저장은 "전체"에서만 보인다.
+const getAdGroupId = (
+	ad: AdListItem,
+	now: number
+): "other" | Exclude<AdStatusGroupId, "all"> => {
+	if (ad.exposureEndsAt !== null && !isExposureActive(ad.exposureEndsAt, now)) {
+		return "expired";
+	}
+
+	if (ad.paymentStatus !== "paid") {
+		return "pending_payment";
+	}
+
+	if (ad.status === "published") {
+		return "active";
+	}
+
+	return "other";
+};
+
+function AdCard({
+	ad,
 	isBoostPending,
-	isPausePending,
-	onActivate,
 	onBoost,
-	onPause,
-	promotion,
-}: PromotionCardProps) {
+}: {
+	ad: AdListItem;
+	isBoostPending: boolean;
+	onBoost: (jobPostId: string) => void;
+}) {
 	const now = Date.now();
-	const isWithinSchedule =
-		new Date(promotion.startsAt).getTime() <= now &&
-		new Date(promotion.endsAt).getTime() > now;
+	const displayStatus = getJobDisplayStatus({
+		paymentStatus: ad.paymentStatus,
+		status: ad.status,
+	});
+	const remainingToday = Math.max(
+		0,
+		ad.manualBoostsPerDay - ad.boostsUsedToday
+	);
 	const canBoost =
-		promotion.status === "active" &&
-		promotion.jobStatus === "published" &&
-		isWithinSchedule &&
-		promotion.remainingManualBoosts > 0;
-	const canActivate =
-		promotion.status === "draft" || promotion.status === "pending_payment";
+		ad.status === "published" &&
+		ad.paymentStatus === "paid" &&
+		isExposureActive(ad.exposureEndsAt, now) &&
+		remainingToday > 0;
 
 	return (
 		<article className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
 			<div className="flex min-w-0 flex-col gap-3">
 				<div className="flex flex-wrap items-center gap-2">
-					<StatusBadge tone={getPromotionStatusTone(promotion.status)}>
-						{getPromotionStatusLabel(promotion.status)}
+					<StatusBadge tone={displayStatus.tone}>
+						{displayStatus.label}
 					</StatusBadge>
-					<StatusBadge tone="default">{promotion.promotionLabel}</StatusBadge>
-					<StatusBadge tone={getJobStatusTone(promotion.jobStatus)}>
-						공고 {getJobStatusLabel(promotion.jobStatus)}
+					<StatusBadge tone="default">
+						{EXPOSURE_TYPE_LABELS[ad.exposureType as ExposureType] ??
+							ad.exposureType}
 					</StatusBadge>
+					{ad.adProductName ? (
+						<StatusBadge tone="default">{ad.adProductName}</StatusBadge>
+					) : null}
 				</div>
 				<div>
-					<h2 className="break-words font-semibold text-base">
-						{promotion.jobTitle}
-					</h2>
+					<h2 className="break-words font-semibold text-base">{ad.title}</h2>
 					<p className="mt-1 text-muted-foreground text-sm">
-						{promotion.employerDisplayName}
-						{promotion.teamDisplayName ? ` · ${promotion.teamDisplayName}` : ""}
+						{ad.employerDisplayName}
+						{ad.teamDisplayName ? ` · ${ad.teamDisplayName}` : ""}
 					</p>
 				</div>
 				<dl className="grid gap-3 text-sm sm:grid-cols-3">
 					<div>
-						<dt className="text-muted-foreground text-xs">노출 기간</dt>
+						<dt className="text-muted-foreground text-xs">노출 마감</dt>
 						<dd className="mt-1">
-							{formatDateTime(promotion.startsAt)} -{" "}
-							{formatDateTime(promotion.endsAt)}
+							{ad.exposureEndsAt ? (
+								formatDate(ad.exposureEndsAt)
+							) : (
+								<span className="text-muted-foreground">-</span>
+							)}
 						</dd>
 					</div>
 					<div>
-						<dt className="text-muted-foreground text-xs">남은 끌어올리기</dt>
-						<dd className="mt-1">
-							{promotion.remainingManualBoosts} / {promotion.manualBoostsTotal}
+						<dt className="text-muted-foreground text-xs">오늘 끌어올리기</dt>
+						<dd
+							className={cn(
+								"mt-1",
+								ad.manualBoostsPerDay > 0 &&
+									remainingToday === 0 &&
+									"text-muted-foreground"
+							)}
+						>
+							{ad.manualBoostsPerDay > 0
+								? `남은 ${remainingToday}회 / 일일 ${ad.manualBoostsPerDay}회`
+								: "미포함 상품"}
 						</dd>
 					</div>
 					<div>
 						<dt className="text-muted-foreground text-xs">최근 끌어올림</dt>
 						<dd className="mt-1">
-							{promotion.lastBoostedAt
-								? formatDateTime(promotion.lastBoostedAt)
-								: "없음"}
+							{ad.boostedAt ? formatDateTime(ad.boostedAt) : "없음"}
 						</dd>
 					</div>
 				</dl>
 			</div>
 			<div className="flex flex-wrap gap-2 lg:justify-end">
-				<Button
-					disabled={!canBoost || isBoostPending}
-					onClick={() => onBoost(promotion.id)}
-					type="button"
-				>
-					끌어올리기
-				</Button>
-				{canActivate ? (
+				{ad.manualBoostsPerDay > 0 ? (
 					<Button
-						disabled={isActivatePending}
-						onClick={() => onActivate(promotion.id)}
+						disabled={!canBoost || isBoostPending}
+						onClick={() => onBoost(ad.jobPostId)}
 						type="button"
-						variant="secondary"
 					>
-						활성화
+						끌어올리기
 					</Button>
-				) : null}
-				{promotion.status === "active" ? (
-					<Button
-						disabled={isPausePending}
-						onClick={() => onPause(promotion.id)}
-						type="button"
-						variant="secondary"
-					>
-						일시정지
-					</Button>
-				) : null}
+				) : (
+					<span className="self-center text-muted-foreground text-sm">
+						이 상품은 끌어올리기 미포함
+					</span>
+				)}
 				<Link
 					className={buttonVariants({ variant: "outline" })}
-					href={`/employer/jobs/${promotion.jobPostId}/edit` as Route}
+					href={`/employer/jobs/${ad.jobPostId}/edit` as Route}
 				>
 					공고 수정
 				</Link>
@@ -207,33 +179,17 @@ function PromotionCard({
 	);
 }
 
-export default function EmployerPromotionsPage() {
+export default function EmployerAdsPage() {
 	const queryClient = useQueryClient();
 	const [selectedGroupId, setSelectedGroupId] =
-		useState<PromotionStatusGroupId>("all");
-	const promotionsQuery = useQuery(
-		orpc.bambi.promotions.listMine.queryOptions()
-	);
-	const promotions = promotionsQuery.data ?? [];
-	const selectedGroup = promotionStatusGroups.find(
-		(group) => group.id === selectedGroupId
-	);
-	const selectedStatuses = new Set<string>(selectedGroup?.statuses ?? []);
-	const visiblePromotions =
-		selectedStatuses.size > 0
-			? promotions.filter((promotion) => selectedStatuses.has(promotion.status))
-			: promotions;
-
-	const invalidatePromotionData = async () => {
-		await Promise.all([
-			queryClient.invalidateQueries({
-				queryKey: orpc.bambi.promotions.listMine.queryKey(),
-			}),
-			queryClient.invalidateQueries({
-				queryKey: orpc.bambi.jobs.listMine.queryKey(),
-			}),
-		]);
-	};
+		useState<AdStatusGroupId>("all");
+	const adsQuery = useQuery(orpc.bambi.promotions.listMyAds.queryOptions());
+	const ads: AdListItem[] = adsQuery.data ?? [];
+	const now = Date.now();
+	const visibleAds =
+		selectedGroupId === "all"
+			? ads
+			: ads.filter((ad) => getAdGroupId(ad, now) === selectedGroupId);
 
 	const boostMutation = useMutation(
 		orpc.bambi.promotions.boost.mutationOptions({
@@ -242,93 +198,72 @@ export default function EmployerPromotionsPage() {
 			},
 			onSuccess: async () => {
 				toast.success("공고를 끌어올렸습니다.");
-				await invalidatePromotionData();
-			},
-		})
-	);
-	const pauseMutation = useMutation(
-		orpc.bambi.promotions.pause.mutationOptions({
-			onError: (error) => {
-				toast.error(error.message || "프로모션을 일시정지하지 못했습니다.");
-			},
-			onSuccess: async () => {
-				toast.success("프로모션을 일시정지했습니다.");
-				await invalidatePromotionData();
-			},
-		})
-	);
-	const activateMutation = useMutation(
-		orpc.bambi.promotions.activateForManualPayment.mutationOptions({
-			onError: (error) => {
-				toast.error(error.message || "프로모션을 활성화하지 못했습니다.");
-			},
-			onSuccess: async () => {
-				toast.success("프로모션을 활성화했습니다.");
-				await invalidatePromotionData();
+				await Promise.all([
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.promotions.listMyAds.queryKey(),
+					}),
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.jobs.listMine.queryKey(),
+					}),
+				]);
 			},
 		})
 	);
 
-	if (promotionsQuery.isLoading) {
+	if (adsQuery.isLoading) {
 		return <Loader />;
 	}
 
-	if (promotionsQuery.isError) {
+	if (adsQuery.isError) {
 		return (
 			<PageShell
-				description="구인자 프로모션 정보를 불러오지 못했습니다."
-				title="프로모션 관리"
+				description="광고 공고 정보를 불러오지 못했습니다."
+				title="광고 관리"
 			>
 				<EmptyState
 					action={
-						<Button onClick={() => promotionsQuery.refetch()} type="button">
+						<Button onClick={() => adsQuery.refetch()} type="button">
 							다시 시도
 						</Button>
 					}
 					description="로그인 상태와 조직 권한을 확인한 뒤 다시 시도해 주세요."
-					title="프로모션을 불러올 수 없습니다"
+					title="광고를 불러올 수 없습니다"
 				/>
 			</PageShell>
 		);
 	}
 
-	let promotionContent: React.ReactNode;
+	let content: React.ReactNode;
 
-	if (promotions.length === 0) {
-		promotionContent = (
+	if (ads.length === 0) {
+		content = (
 			<EmptyState
 				action={
-					<Link className={buttonVariants()} href="/employer">
-						내 공고 보기
+					<Link className={buttonVariants()} href="/employer/ad-guide">
+						광고 상품 보기
 					</Link>
 				}
-				description="공고별 프로모션을 만들면 남은 끌어올리기와 노출 종료일을 이곳에서 확인할 수 있습니다."
-				title="운영 중인 프로모션이 없습니다"
+				description="공고에 광고 상품을 적용하면 노출 현황과 끌어올리기를 이곳에서 관리할 수 있습니다."
+				title="운영 중인 광고가 없습니다"
 			/>
 		);
-	} else if (visiblePromotions.length === 0) {
-		promotionContent = (
+	} else if (visibleAds.length === 0) {
+		content = (
 			<EmptyState
-				description="선택한 상태에 해당하는 프로모션이 없습니다."
-				title="표시할 프로모션이 없습니다"
+				description="선택한 상태에 해당하는 광고가 없습니다."
+				title="표시할 광고가 없습니다"
 			/>
 		);
 	} else {
-		promotionContent = (
-			<Card aria-label="프로모션 목록">
+		content = (
+			<Card aria-label="광고 공고 목록">
 				<CardContent className="divide-y p-0">
-					{visiblePromotions.map((promotion) => (
-						<PromotionCard
-							isActivatePending={activateMutation.isPending}
+					{visibleAds.map((ad) => (
+						<AdCard
+							ad={ad}
 							isBoostPending={boostMutation.isPending}
-							isPausePending={pauseMutation.isPending}
-							key={promotion.id}
-							onActivate={(campaignId) =>
-								activateMutation.mutate({ campaignId })
-							}
-							onBoost={(campaignId) => boostMutation.mutate({ campaignId })}
-							onPause={(campaignId) => pauseMutation.mutate({ campaignId })}
-							promotion={promotion}
+							key={ad.jobPostId}
+							onBoost={(jobPostId) => boostMutation.mutate({ jobPostId })}
 						/>
 					))}
 				</CardContent>
@@ -336,15 +271,18 @@ export default function EmployerPromotionsPage() {
 		);
 	}
 
+	const activeCount = ads.filter(
+		(ad) => getAdGroupId(ad, now) === "active"
+	).length;
+
 	return (
 		<PageShell
-			description="프리미엄·추천 노출 상태와 남은 끌어올리기 횟수를 관리합니다."
-			title="프로모션 관리"
+			description="광고 상품이 적용된 공고의 노출 상태와 오늘의 끌어올리기 횟수를 관리합니다."
+			title="광고 관리"
 		>
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<p className="m-0 text-muted-foreground text-sm">
-					진행 중 {promotions.filter((item) => item.status === "active").length}
-					개 · 전체 {promotions.length}개
+					진행 중 {activeCount}개 · 전체 {ads.length}개
 				</p>
 				<Link
 					className={buttonVariants({ variant: "outline" })}
@@ -354,13 +292,11 @@ export default function EmployerPromotionsPage() {
 				</Link>
 			</div>
 			<Tabs
-				onValueChange={(value) =>
-					setSelectedGroupId(value as PromotionStatusGroupId)
-				}
+				onValueChange={(value) => setSelectedGroupId(value as AdStatusGroupId)}
 				value={selectedGroupId}
 			>
 				<TabsList className="max-w-full flex-wrap">
-					{promotionStatusGroups.map((group) => (
+					{adStatusGroups.map((group) => (
 						<TabsTrigger key={group.id} value={group.id}>
 							{group.label}
 						</TabsTrigger>
@@ -368,7 +304,7 @@ export default function EmployerPromotionsPage() {
 				</TabsList>
 			</Tabs>
 
-			{promotionContent}
+			{content}
 		</PageShell>
 	);
 }

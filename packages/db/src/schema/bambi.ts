@@ -279,6 +279,8 @@ export const jobPost = pgTable(
 			.default("unpaid")
 			.notNull(),
 		exposureEndsAt: timestamp("exposure_ends_at"),
+		// 마지막 끌어올림(점프) 시각. 노출 정렬 키 GREATEST(boosted_at, published_at)의 재료.
+		boostedAt: timestamp("boosted_at"),
 		publishedAt: timestamp("published_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -401,6 +403,33 @@ export const jobPromotionBoostEvent = pgTable(
 	]
 );
 
+// 광고 상품 축 끌어올리기 이력. 일일 사용량 판정은 (job_post_id, created_at) 카운트로 한다.
+// boost_type은 1단계에선 'manual'만 쓰고 자동 점프(2단계) 확장을 대비한 필드다.
+export const jobBoostEvent = pgTable(
+	"job_boost_event",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		actorUserId: text("actor_user_id")
+			.notNull()
+			.references(() => user.id),
+		boostType: text("boost_type").default("manual").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_boost_event_job_post_created_at_idx").on(
+			table.jobPostId,
+			table.createdAt
+		),
+		index("job_boost_event_organization_id_idx").on(table.organizationId),
+	]
+);
+
 export const adPlacement = pgTable(
 	"ad_placement",
 	{
@@ -439,6 +468,8 @@ export const adProduct = pgTable(
 			.$type<{ amount: number; days: number }[]>()
 			.default([])
 			.notNull(),
+		// 이 상품을 구매한 공고가 하루(KST 자정 리셋)에 쓸 수 있는 수동 끌어올리기 횟수. 0 = 미제공.
+		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
 		sortOrder: integer("sort_order").default(0).notNull(),
 		isActive: boolean("is_active").default(true).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
