@@ -10,9 +10,11 @@ import {
 	AlertDescription,
 	AlertTitle,
 } from "@bambi-app/ui/components/alert";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { Ban, TriangleAlert } from "lucide-react";
 import type { ComponentType } from "react";
 import { useBambiAuth } from "@/components/bambi/auth-client-provider";
+import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 
 type SanctionStatus = "warned" | "suspended";
 
@@ -55,7 +57,10 @@ export function AccountStatusBanner() {
 	const Icon = copy.icon;
 
 	return (
-		<div className="px-4 pt-4 md:px-6">
+		// 배너 폭·여백을 헤더 바·본문 콘텐츠와 동일 기준으로 정렬한다.
+		// APP_CONTENT_WIDTH(md 이상 min(92%,1120px)) + mx-auto 중앙 정렬 + 본문 지배
+		// 패턴과 같은 px-5 md:px-6 좌우 여백. 모바일은 max-w 없이 좌우 여백만 유지.
+		<div className={cn("mx-auto w-full px-5 pt-4 md:px-6", APP_CONTENT_WIDTH)}>
 			<Alert
 				className="items-center gap-x-3 px-3.5 py-3 text-sm"
 				variant={copy.variant}
