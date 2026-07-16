@@ -15,6 +15,7 @@ import {
 } from "react";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
 import { getVisibleModerationData } from "@/lib/bambi/moderation-data";
+import { targetTypeLabel } from "@/lib/bambi/report-labels";
 import type {
 	ManagedUser,
 	QueueItem,
@@ -292,7 +293,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 					item.status === "open" || item.status === "reviewing"
 						? "open"
 						: "closed",
-				target: `${item.targetType} ${item.targetId.slice(0, 8)}`,
+				target: `${targetTypeLabel(item.targetType)} ${item.targetId.slice(0, 8)}`,
 				// 실데이터 신고의 대상 맥락(orpc 추론)을 그대로 전달해 상세에서 타입별 렌더한다.
 				targetContext: item.targetContext,
 				targetRole: "대상",
