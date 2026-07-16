@@ -60,6 +60,7 @@ const createProductInput = z.object({
 	priceOptions: z.array(priceOptionSchema).min(1),
 	previewTemplate: previewTemplateSchema.optional(),
 	previewImageUrl: previewImageUrlSchema,
+	manualBoostsPerDay: z.number().int().min(0).default(0),
 	sortOrder: z.number().int().min(0).default(0),
 });
 
@@ -71,6 +72,7 @@ const updateProductInput = z.object({
 	priceOptions: z.array(priceOptionSchema).min(1).optional(),
 	previewTemplate: previewTemplateSchema.optional(),
 	previewImageUrl: previewImageUrlSchema,
+	manualBoostsPerDay: z.number().int().min(0).optional(),
 	sortOrder: z.number().int().min(0).optional(),
 	isActive: z.boolean().optional(),
 });
