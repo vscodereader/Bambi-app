@@ -26,4 +26,14 @@ describe("employer ads management page", () => {
 		expect(source).toContain('paymentStatus === "paid"');
 		expect(source).toContain("remainingToday > 0");
 	});
+
+	it("renders the shared DataTable instead of ad cards", () => {
+		expect(source).toContain("DataTable");
+		expect(source).toContain("@/components/bambi/data-table");
+	});
+
+	it("drops the 공고 수정 edit link entirely", () => {
+		expect(source).not.toContain("공고 수정");
+		expect(source).not.toContain("/edit");
+	});
 });

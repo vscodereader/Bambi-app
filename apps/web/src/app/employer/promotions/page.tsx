@@ -1,15 +1,14 @@
 "use client";
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
-import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Route } from "next";
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
@@ -53,6 +52,12 @@ const isExposureActive = (
 ): boolean =>
 	exposureEndsAt === null || new Date(exposureEndsAt).getTime() > now;
 
+const remainingBoosts = (ad: AdListItem): number =>
+	Math.max(0, ad.manualBoostsPerDay - ad.boostsUsedToday);
+
+const exposureLabel = (ad: AdListItem): string =>
+	EXPOSURE_TYPE_LABELS[ad.exposureType as ExposureType] ?? ad.exposureType;
+
 // 탭 분류: 노출 만료가 최우선(과거 결제 이력이 있어야 만료가 생김), 그다음 미결제,
 // 공개 중 광고가 "진행 중". 검수 대기·반려·숨김·임시 저장은 "전체"에서만 보인다.
 const getAdGroupId = (
@@ -74,109 +79,151 @@ const getAdGroupId = (
 	return "other";
 };
 
-function AdCard({
-	ad,
-	isBoostPending,
-	onBoost,
-}: {
-	ad: AdListItem;
+interface AdColumnsOptions {
 	isBoostPending: boolean;
 	onBoost: (jobPostId: string) => void;
-}) {
-	const now = Date.now();
-	const displayStatus = getJobDisplayStatus({
-		paymentStatus: ad.paymentStatus,
-		status: ad.status,
-	});
-	const remainingToday = Math.max(
-		0,
-		ad.manualBoostsPerDay - ad.boostsUsedToday
-	);
-	const canBoost =
-		ad.status === "published" &&
-		ad.paymentStatus === "paid" &&
-		isExposureActive(ad.exposureEndsAt, now) &&
-		remainingToday > 0;
+}
 
-	return (
-		<article className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-			<div className="flex min-w-0 flex-col gap-3">
-				<div className="flex flex-wrap items-center gap-2">
-					<StatusBadge tone={displayStatus.tone}>
-						{displayStatus.label}
-					</StatusBadge>
-					<StatusBadge tone="default">
-						{EXPOSURE_TYPE_LABELS[ad.exposureType as ExposureType] ??
-							ad.exposureType}
-					</StatusBadge>
-					{ad.adProductName ? (
-						<StatusBadge tone="default">{ad.adProductName}</StatusBadge>
-					) : null}
-				</div>
-				<div>
-					<h2 className="break-words font-semibold text-base">{ad.title}</h2>
-					<p className="mt-1 text-muted-foreground text-sm">
+function getAdColumns({
+	isBoostPending,
+	onBoost,
+}: AdColumnsOptions): DataColumn<AdListItem>[] {
+	return [
+		{
+			id: "title",
+			header: "공고",
+			sortValue: (ad) => ad.title,
+			cell: (ad) => (
+				<div className="flex min-w-0 flex-col gap-1">
+					<span className="break-keep font-semibold text-foreground">
+						{ad.title}
+					</span>
+					<span className="break-keep text-muted-foreground text-xs">
 						{ad.employerDisplayName}
 						{ad.teamDisplayName ? ` · ${ad.teamDisplayName}` : ""}
-					</p>
+					</span>
 				</div>
-				<dl className="grid gap-3 text-sm sm:grid-cols-3">
-					<div>
-						<dt className="text-muted-foreground text-xs">노출 마감</dt>
-						<dd className="mt-1">
-							{ad.exposureEndsAt ? (
-								formatDate(ad.exposureEndsAt)
-							) : (
-								<span className="text-muted-foreground">-</span>
-							)}
-						</dd>
-					</div>
-					<div>
-						<dt className="text-muted-foreground text-xs">오늘 끌어올리기</dt>
-						<dd
-							className={cn(
-								"mt-1",
-								ad.manualBoostsPerDay > 0 &&
-									remainingToday === 0 &&
-									"text-muted-foreground"
-							)}
-						>
-							{ad.manualBoostsPerDay > 0
-								? `남은 ${remainingToday}회 / 일일 ${ad.manualBoostsPerDay}회`
-								: "미포함 상품"}
-						</dd>
-					</div>
-					<div>
-						<dt className="text-muted-foreground text-xs">최근 끌어올림</dt>
-						<dd className="mt-1">
-							{ad.boostedAt ? formatDateTime(ad.boostedAt) : "없음"}
-						</dd>
-					</div>
-				</dl>
-			</div>
-			<div className="flex flex-wrap gap-2 lg:justify-end">
-				{ad.manualBoostsPerDay > 0 ? (
+			),
+		},
+		{
+			id: "status",
+			header: "상태",
+			sortValue: (ad) =>
+				getJobDisplayStatus({
+					paymentStatus: ad.paymentStatus,
+					status: ad.status,
+				}).label,
+			cell: (ad) => {
+				const display = getJobDisplayStatus({
+					paymentStatus: ad.paymentStatus,
+					status: ad.status,
+				});
+
+				return <StatusBadge tone={display.tone}>{display.label}</StatusBadge>;
+			},
+		},
+		{
+			id: "exposure",
+			header: "노출 위치/상품",
+			sortValue: (ad) => exposureLabel(ad),
+			cell: (ad) => (
+				<div className="flex flex-wrap items-center gap-2">
+					<StatusBadge>{exposureLabel(ad)}</StatusBadge>
+					{ad.adProductName ? (
+						<span className="break-keep text-muted-foreground text-xs">
+							{ad.adProductName}
+						</span>
+					) : null}
+				</div>
+			),
+		},
+		{
+			id: "exposureEndsAt",
+			header: "노출 마감",
+			sortValue: (ad) =>
+				ad.exposureEndsAt === null
+					? Number.POSITIVE_INFINITY
+					: new Date(ad.exposureEndsAt).getTime(),
+			cell: (ad) =>
+				ad.exposureEndsAt ? (
+					<span className="whitespace-nowrap">
+						{formatDate(ad.exposureEndsAt)}
+					</span>
+				) : (
+					<span className="text-muted-foreground">-</span>
+				),
+		},
+		{
+			id: "boostsToday",
+			header: "오늘 끌어올리기",
+			sortValue: (ad) => remainingBoosts(ad),
+			cell: (ad) => {
+				if (ad.manualBoostsPerDay === 0) {
+					return <span className="text-muted-foreground">미포함</span>;
+				}
+
+				const remaining = remainingBoosts(ad);
+
+				return (
+					<span
+						className={cn(
+							"whitespace-nowrap",
+							remaining === 0 && "text-muted-foreground"
+						)}
+					>
+						{`남은 ${remaining}회 / 일일 ${ad.manualBoostsPerDay}회`}
+					</span>
+				);
+			},
+		},
+		{
+			id: "boostedAt",
+			header: "최근 끌어올림",
+			sortValue: (ad) =>
+				ad.boostedAt === null ? 0 : new Date(ad.boostedAt).getTime(),
+			cell: (ad) =>
+				ad.boostedAt ? (
+					<span className="whitespace-nowrap text-muted-foreground">
+						{formatDateTime(ad.boostedAt)}
+					</span>
+				) : (
+					<span className="text-muted-foreground">없음</span>
+				),
+		},
+		{
+			id: "actions",
+			header: "액션",
+			headerClassName: "text-right",
+			cellClassName: "text-right",
+			cell: (ad) => {
+				if (ad.manualBoostsPerDay === 0) {
+					return (
+						<span className="text-muted-foreground text-xs">
+							끌어올리기 미포함
+						</span>
+					);
+				}
+
+				const remainingToday = remainingBoosts(ad);
+				const canBoost =
+					ad.status === "published" &&
+					ad.paymentStatus === "paid" &&
+					isExposureActive(ad.exposureEndsAt, Date.now()) &&
+					remainingToday > 0;
+
+				return (
 					<Button
 						disabled={!canBoost || isBoostPending}
 						onClick={() => onBoost(ad.jobPostId)}
+						size="sm"
 						type="button"
 					>
 						끌어올리기
 					</Button>
-				) : (
-					<span className="self-center text-muted-foreground text-sm">
-						이 상품은 끌어올리기 미포함
-					</span>
-				)}
-				<Link
-					className={buttonVariants({ variant: "outline" })}
-					href={`/employer/jobs/${ad.jobPostId}/edit` as Route}
-				>
-					공고 수정
-				</Link>
-			</div>
-		</article>
-	);
+				);
+			},
+		},
+	];
 }
 
 export default function EmployerAdsPage() {
@@ -208,6 +255,17 @@ export default function EmployerAdsPage() {
 				]);
 			},
 		})
+	);
+
+	const { mutate: boost, isPending: isBoostPending } = boostMutation;
+	const handleBoost = useCallback(
+		(jobPostId: string) => boost({ jobPostId }),
+		[boost]
+	);
+
+	const columns = useMemo(
+		() => getAdColumns({ isBoostPending, onBoost: handleBoost }),
+		[isBoostPending, handleBoost]
 	);
 
 	if (adsQuery.isLoading) {
@@ -256,18 +314,14 @@ export default function EmployerAdsPage() {
 		);
 	} else {
 		content = (
-			<Card aria-label="광고 공고 목록">
-				<CardContent className="divide-y p-0">
-					{visibleAds.map((ad) => (
-						<AdCard
-							ad={ad}
-							isBoostPending={boostMutation.isPending}
-							key={ad.jobPostId}
-							onBoost={(jobPostId) => boostMutation.mutate({ jobPostId })}
-						/>
-					))}
-				</CardContent>
-			</Card>
+			<div className="overflow-x-auto rounded-xl border border-border">
+				<DataTable
+					columns={columns}
+					data={visibleAds}
+					getRowKey={(ad) => ad.jobPostId}
+					pageSize={10}
+				/>
+			</div>
 		);
 	}
 
