@@ -1464,13 +1464,13 @@ export function UserDetail({
 						{item.note}
 					</span>
 				</div>
-				{item.status === "active" ? null : (
+				{item.status === "suspended" ? (
 					<div>
 						<div className="mb-2.5 font-bold text-[13px] text-foreground">
 							계정 상태 복구
 						</div>
 						<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
-							현재 {c.label} 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
+							현재 이용 정지 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
 							상태로 되돌릴 수 있어요.
 						</p>
 						<Button
@@ -1485,7 +1485,7 @@ export function UserDetail({
 							정상으로 복구
 						</Button>
 					</div>
-				)}
+				) : null}
 				<div>
 					<div className="mb-2.5 font-bold text-[13px] text-foreground">
 						제재 적용
