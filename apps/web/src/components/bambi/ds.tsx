@@ -375,7 +375,11 @@ interface InfoTileProps {
 
 export function InfoTile({ icon, label, value, className }: InfoTileProps) {
 	return (
-		<div className={cn("flex items-center gap-3", className)}>
+		// 루트에 min-w-0 필수: InfoTile은 grid/flex 아이템으로 배치되는데(예: 상세·프리플라이트의
+		// `grid gap-3 sm:grid-cols-2`), 모바일 단일 열은 minmax(0,1fr) 없는 auto 트랙이라 아이템의
+		// 자동 min-width가 남아 안쪽 value의 truncate가 무력화돼 값이 넘친다. min-w-0으로 아이템이
+		// 트랙 폭까지 줄어들 수 있게 해야 안쪽 min-w-0 래퍼 + truncate가 실제로 동작한다.
+		<div className={cn("flex min-w-0 items-center gap-3", className)}>
 			<div className="inline-flex size-12 flex-[0_0_48px] items-center justify-center rounded-md bg-secondary text-foreground">
 				<span className="inline-flex size-[22px]">{icon}</span>
 			</div>
