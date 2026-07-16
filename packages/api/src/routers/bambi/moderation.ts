@@ -13,7 +13,7 @@ import {
 	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -343,6 +343,57 @@ const withReportTargetContexts = async (reportRows: ReportRow[]) =>
 		}))
 	);
 
+// 신고 목록 각 row에 붙일 신고자 표시 정보(실명·이메일 폴백·역할). displayName은 null일 수
+// 있어 클라이언트가 listUsers와 동일하게 displayName ?? email로 표시한다.
+// orpc 추론이 listReports 반환 타입에 이 이름을 참조하므로 export 해 패키지 경계 밖에서
+// 명명 가능하게 한다(비-export 시 TS4023).
+export interface ReportReporter {
+	displayName: string | null;
+	email: string;
+	role: string;
+}
+
+// listReports 전용: 신고자(reporterUserId)의 실명·역할을 배치 조회해 각 row에 reporter로
+// 붙인다. 목록 전체를 N+1로 돌리지 않도록 distinct reporterUserId를 inArray로 한 번에
+// 조회하고 맵으로 합류한다. displayName은 bambiProfile, 폴백용 email은 auth user 테이블에서
+// 가져온다(listUsers와 동일한 조인·폴백 패턴). 대상 row가 없는 신고자는 reporter=null.
+const withReporters = async <T extends ReportRow>(
+	reportRows: T[]
+): Promise<(T & { reporter: ReportReporter | null })[]> => {
+	const reporterIds = [...new Set(reportRows.map((row) => row.reporterUserId))];
+
+	if (reporterIds.length === 0) {
+		return reportRows.map((row) => ({ ...row, reporter: null }));
+	}
+
+	const reporterRows = await db
+		.select({
+			userId: bambiProfile.userId,
+			displayName: bambiProfile.displayName,
+			email: user.email,
+			role: bambiProfile.role,
+		})
+		.from(bambiProfile)
+		.innerJoin(user, eq(bambiProfile.userId, user.id))
+		.where(inArray(bambiProfile.userId, reporterIds));
+
+	const reporterMap = new Map<string, ReportReporter>(
+		reporterRows.map((row) => [
+			row.userId,
+			{ displayName: row.displayName, email: row.email, role: row.role },
+		])
+	);
+
+	return reportRows.map((row) => ({
+		...row,
+		reporter: reporterMap.get(row.reporterUserId) ?? null,
+	}));
+};
+
+// 관리자용 신고 목록: 대상 맥락 + 신고자 정보를 모두 붙여 반환한다(listMyReports는 미적용).
+const listReportsWithDetails = async (reportRows: ReportRow[]) =>
+	await withReporters(await withReportTargetContexts(reportRows));
+
 const getJobPostModerationStatusPatch = ({
 	existing,
 	reason,
@@ -486,7 +537,7 @@ export const moderationRouter = {
 					.orderBy(desc(report.createdAt))
 					.limit(input.limit);
 
-				return await withReportTargetContexts(reportRows);
+				return await listReportsWithDetails(reportRows);
 			}
 
 			const reportRows = await db
@@ -495,7 +546,7 @@ export const moderationRouter = {
 				.orderBy(desc(report.createdAt))
 				.limit(input.limit);
 
-			return await withReportTargetContexts(reportRows);
+			return await listReportsWithDetails(reportRows);
 		}),
 
 	// 내가 접수한 신고 목록. 관리자용 listReports와 달리 reporterUserId=본인으로 한정한다.

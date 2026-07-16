@@ -811,7 +811,7 @@ function PartyBox({
 				<div className="truncate font-bold text-[13.5px] text-foreground">
 					{name}
 				</div>
-				<div className="text-[11px] text-muted-foreground">{role}</div>
+				<div className="truncate text-[11px] text-muted-foreground">{role}</div>
 			</div>
 		</div>
 	);

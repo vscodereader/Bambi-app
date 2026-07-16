@@ -18,6 +18,7 @@ import { getVisibleModerationData } from "@/lib/bambi/moderation-data";
 import {
 	jobPostStatusLabel,
 	riskFlagLabel,
+	userRoleLabel,
 } from "@/lib/bambi/moderation-labels";
 import { reportReasonLabel, targetTypeLabel } from "@/lib/bambi/report-labels";
 import type {
@@ -25,6 +26,8 @@ import type {
 	QueueItem,
 	Report,
 	ReportSeverity,
+	ReportTargetContext,
+	ReportTargetType,
 	UserStatus,
 } from "@/lib/bambi/types";
 import { orpc } from "@/utils/orpc";
@@ -210,6 +213,58 @@ const getRoleLabel = (role: string) => {
 	return "구직자";
 };
 
+// 피신고 대상의 표시 이름·역할을 targetContext 타입별로 계산한다. 사용자는 실명 +
+// userRoleLabel(role), 공고는 제목 + "공고", 대화방은 연결 공고 제목 + "채팅방". 이름을 알 수
+// 없는 대상(후기·채팅 메시지·맥락 없음)은 대상 id 축약(#앞8자)을 이름으로, 유형 라벨을 역할로
+// 채워 "대상" 하드코딩과 이름·역할의 단어 중복을 피한다. enum 원값은 userRoleLabel로 차단한다.
+const resolveReportTargetParty = (
+	targetContext: ReportTargetContext,
+	targetType: ReportTargetType,
+	targetId: string
+): { name: string; role: string } => {
+	const idShort = `#${targetId.slice(0, 8)}`;
+
+	if (targetContext && "user" in targetContext) {
+		return {
+			name: targetContext.user.displayName ?? idShort,
+			role: userRoleLabel(targetContext.user.role),
+		};
+	}
+
+	if (targetContext && "jobPost" in targetContext) {
+		return {
+			name: targetContext.jobPost.title,
+			role: targetTypeLabel(targetType),
+		};
+	}
+
+	if (targetContext && "chatRoom" in targetContext) {
+		return {
+			name: targetContext.chatRoom.jobPostTitle,
+			role: targetTypeLabel(targetType),
+		};
+	}
+
+	return { name: idShort, role: targetTypeLabel(targetType) };
+};
+
+// 신고자 표시 이름·역할. 서버 reporter(실명·이메일·역할)를 우선 쓰고, displayName이 없으면
+// email로, reporter 자체가 없으면(대상 프로필 유실 등) 기존 합성 문자열로 폴백한다. 역할은
+// userRoleLabel로 enum 원값(job_seeker 등) 노출을 막는다.
+const resolveReportReporter = (
+	reporter: { displayName: string | null; email: string; role: string } | null,
+	reporterUserId: string
+): { name: string; role: string } => {
+	if (!reporter) {
+		return { name: `신고자 ${reporterUserId.slice(0, 6)}`, role: "사용자" };
+	}
+
+	return {
+		name: reporter.displayName ?? reporter.email,
+		role: userRoleLabel(reporter.role),
+	};
+};
+
 export function ModProvider({ children }: { children: ReactNode }) {
 	const queryClient = useQueryClient();
 	const [queue, setQueue] = useState<QueueItem[]>(QUEUE);
@@ -300,24 +355,35 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			const attachmentNote = attachments.length
 				? `첨부 ${attachments.length}개 포함`
 				: null;
+			// 신고자·피신고 표시 이름·역할은 각각 전용 헬퍼가 계산한다. 제재·분기용
+			// 원값(targetId/targetType/targetContext)은 반환에서 그대로 전달한다.
+			const { name: reporterName, role: reporterRole } = resolveReportReporter(
+				item.reporter,
+				item.reporterUserId
+			);
+			const { name: targetName, role: targetRole } = resolveReportTargetParty(
+				targetContext,
+				item.targetType,
+				item.targetId
+			);
 
 			return {
 				id: item.id,
 				note: attachmentNote ? `${baseNote}\n${attachmentNote}` : baseNote,
 				reason: reportReasonLabel(item.reason),
-				reporter: `신고자 ${item.reporterUserId.slice(0, 6)}`,
-				reporterRole: "사용자",
+				reporter: reporterName,
+				reporterRole,
 				sev: getReportSeverity(item.reason, item.status),
 				status:
 					item.status === "open" || item.status === "reviewing"
 						? "open"
 						: "closed",
-				target: `${targetTypeLabel(item.targetType)} ${item.targetId.slice(0, 8)}`,
+				target: targetName,
 				// 실데이터 신고의 대상 맥락(orpc 추론)을 그대로 전달해 상세에서 타입별 렌더한다.
 				targetContext: item.targetContext,
 				// 실제 대상 id(사용자 제재 등에 사용). 프리뷰 목업 신고에는 없다.
 				targetId: item.targetId,
-				targetRole: "대상",
+				targetRole,
 				targetType: item.targetType,
 				thread: [
 					{
