@@ -162,4 +162,97 @@ describe("visual job marketplace components", () => {
 		expect(editSource).toContain("previewPay");
 		expect(editSource).toContain("previewCompanyName");
 	});
+
+	it("wires the moderator ad-products console and nav", () => {
+		const page = readComponent("../../app/moderator/ad-products/page.tsx");
+		const layout = readComponent("../../app/moderator/layout.tsx");
+		const nav = readComponent("persona-nav.tsx");
+		expect(page).toContain("listCatalogAdmin");
+		expect(layout).toContain("/moderator/ad-products");
+		expect(nav).toContain("adProducts");
+	});
+
+	it("wires ad-product create forms to catalog mutations", () => {
+		const placementNew = readComponent(
+			"../../app/moderator/ad-products/new/page.tsx"
+		);
+		const productNew = readComponent(
+			"../../app/moderator/ad-products/[placementId]/new/page.tsx"
+		);
+		expect(placementNew).toContain("createPlacement");
+		expect(productNew).toContain("createProduct");
+		expect(productNew).toContain("AdProductForm");
+	});
+
+	it("renders the employer ad guide from the dynamic catalog", () => {
+		const source = readComponent("screens/employer-ad-guide.tsx");
+		expect(source).toContain("adProducts.getCatalog");
+		expect(source).not.toContain("AD_PRODUCTS");
+	});
+
+	it("lays out the ad guide as a reference-style placement table with a preview", () => {
+		const source = readComponent("screens/employer-ad-guide.tsx");
+
+		// 광고위치 열은 위치 미리보기가 담당한다
+		expect(source).toContain("AdPlacementPreview");
+		expect(source).toContain("template={placement.previewTemplate}");
+		// previewTemplate === "none"이면 미리보기를 생략한다
+		expect(source).toContain('placement.previewTemplate !== "none"');
+		// 표 컬럼 라벨(광고위치·서비스내용·비용·신청)
+		expect(source).toContain("광고위치");
+		expect(source).toContain("서비스내용");
+		expect(source).toContain("비용");
+		expect(source).toContain("신청");
+		// 비용은 기간별 가격 강조 표기
+		expect(source).toContain("formatAdPrice(option.amount)");
+		expect(source).toContain("formatAdDuration(option.days)");
+		// 데스크톱은 3열 그리드 행으로 전환
+		expect(source).toContain("md:grid-cols-[1fr_auto_auto]");
+		// 신청 버튼은 기존 공고 등록 링크(/employer/new)를 유지
+		expect(source).toContain('const APPLY_HREF = "/employer/new"');
+	});
+
+	it("wires the /employer/ad-guide entry points", () => {
+		const route = readComponent("../../app/employer/ad-guide/page.tsx");
+		const layout = readComponent("../../app/employer/layout.tsx");
+		const dashboard = readComponent("../../app/employer/page.tsx");
+
+		// 라우트가 광고 안내 화면을 렌더링한다
+		expect(route).toContain("EmployerAdGuideScreen");
+		// 구인자 헤더 nav 항목
+		expect(layout).toContain("/employer/ad-guide");
+		expect(layout).toContain("광고 안내");
+		// 대시보드 바로가기 타일
+		expect(dashboard).toContain("/employer/ad-guide");
+		expect(dashboard).toContain("광고 상품 안내");
+	});
+
+	it("wires the ad-products console edit links to the edit routes", () => {
+		const page = readComponent("../../app/moderator/ad-products/page.tsx");
+
+		// 위치 카드에는 위치 수정 라우트 링크가 있다
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: 소스의 라우트 리터럴을 검증
+		expect(page).toContain("/moderator/ad-products/${placement.id}/edit");
+		// 상품 행에는 상품 수정 라우트 링크가 있다
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: 소스의 라우트 리터럴을 검증
+		expect(page).toContain("${product.id}/edit");
+	});
+
+	it("wires the ad-products edit pages to catalog update mutations", () => {
+		const placementEdit = readComponent(
+			"../../app/moderator/ad-products/[placementId]/edit/page.tsx"
+		);
+		const productEdit = readComponent(
+			"../../app/moderator/ad-products/[placementId]/[productId]/edit/page.tsx"
+		);
+
+		// 위치 수정 페이지는 프리필 폼과 updatePlacement 뮤테이션을 연결한다
+		expect(placementEdit).toContain("updatePlacement");
+		expect(placementEdit).toContain("AdPlacementForm");
+		expect(placementEdit).toContain("initialValue");
+		// 상품 수정 페이지는 프리필 폼과 updateProduct 뮤테이션을 연결한다
+		expect(productEdit).toContain("updateProduct");
+		expect(productEdit).toContain("AdProductForm");
+		expect(productEdit).toContain("initialValue");
+	});
 });

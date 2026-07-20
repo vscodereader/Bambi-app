@@ -1,6 +1,7 @@
 import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
+	adProduct,
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobPost,
@@ -24,6 +25,10 @@ import {
 import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
+import {
+	type JobExposureType,
+	previewTemplateToExposureType,
+} from "../../services/bambi-ad-exposure";
 import {
 	getRecentJobPerformanceMetrics,
 	recordJobListingImpressions,
@@ -97,6 +102,21 @@ const jobPostInput = z.object({
 	description: z.string().min(10).max(2000),
 	descriptionBlocks: z.array(jobDescriptionBlockInput).max(12).optional(),
 	interviewNotes: z.string().max(500).optional(),
+	exposureType: z
+		.enum([
+			"premium-banner",
+			"left-banner",
+			"right-banner",
+			"special",
+			"urgent",
+			"recommended",
+			"standard",
+		])
+		.optional(),
+	exposureDurationDays: z.number().int().min(1).max(365).nullish(),
+	adProductId: z.string().uuid().nullish(),
+	exposureAmount: z.number().int().min(0).nullish(),
+	paymentMethod: z.enum(["card", "bank_transfer"]).nullish(),
 	media: jobPostMediaSetInput,
 });
 
@@ -311,10 +331,68 @@ const coverImageSql = sql<{
 	limit 1
 )`;
 
+interface ResolvedJobExposure {
+	adProductId: string | null;
+	exposureAmount: number | null;
+	exposureDurationDays: number | null;
+	exposureType: JobExposureType;
+	paymentMethod: "bank_transfer" | "card" | null;
+}
+
+// 공고의 노출 상품·기간·금액·노출 타입을 서버에서 확정한다. 운영자가 등록한 광고 상품을
+// 단일 소스로 삼아, 상품의 미리보기 템플릿으로 노출 타입을 도출하고 선택 기간이 상품의
+// 가격 옵션에 존재하는지 검증한 뒤 그 금액을 결제 예정 금액으로 저장한다.
+const resolveJobPostExposure = async (input: {
+	adProductId?: string | null;
+	exposureDurationDays?: number | null;
+	paymentMethod?: "bank_transfer" | "card" | null;
+}): Promise<ResolvedJobExposure> => {
+	if (!input.adProductId) {
+		return {
+			adProductId: null,
+			exposureAmount: null,
+			exposureDurationDays: null,
+			exposureType: "standard",
+			paymentMethod: null,
+		};
+	}
+
+	const product = await db.query.adProduct.findFirst({
+		where: eq(adProduct.id, input.adProductId),
+	});
+
+	if (!product) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "선택한 노출 상품을 찾을 수 없습니다.",
+		});
+	}
+
+	const priceOption = product.priceOptions.find(
+		(option) => option.days === input.exposureDurationDays
+	);
+
+	if (!priceOption) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "선택한 이용 기간이 해당 노출 상품에 없습니다.",
+		});
+	}
+
+	return {
+		adProductId: product.id,
+		exposureAmount: priceOption.amount,
+		exposureDurationDays: priceOption.days,
+		exposureType: previewTemplateToExposureType(product.previewTemplate),
+		paymentMethod: input.paymentMethod ?? null,
+	};
+};
+
 export const jobsRouter = {
 	list: publicProcedure.input(listInput).handler(async ({ context, input }) => {
 		const now = new Date();
-		const filters = [eq(jobPost.status, "published" as JobPostStatus)];
+		const filters = [
+			eq(jobPost.status, "published" as JobPostStatus),
+			eq(jobPost.paymentStatus, "paid"),
+		];
 
 		if (input.industryCategory) {
 			filters.push(eq(jobPost.industryCategory, input.industryCategory));
@@ -467,7 +545,10 @@ export const jobsRouter = {
 	}),
 
 	legacyList: publicProcedure.input(listInput).handler(async ({ input }) => {
-		const filters = [eq(jobPost.status, "published" as JobPostStatus)];
+		const filters = [
+			eq(jobPost.status, "published" as JobPostStatus),
+			eq(jobPost.paymentStatus, "paid"),
+		];
 
 		if (input.industryCategory) {
 			filters.push(eq(jobPost.industryCategory, input.industryCategory));
@@ -526,6 +607,7 @@ export const jobsRouter = {
 					teamId: jobPost.teamId,
 					createdByUserId: jobPost.createdByUserId,
 					status: jobPost.status,
+					paymentStatus: jobPost.paymentStatus,
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
 					payAmount: jobPost.payAmount,
@@ -559,7 +641,7 @@ export const jobsRouter = {
 				.where(eq(jobPost.id, input.id))
 				.limit(1);
 
-			if (post?.status !== "published") {
+			if (post?.status !== "published" || post.paymentStatus !== "paid") {
 				throw new ORPCError("NOT_FOUND");
 			}
 
@@ -646,6 +728,10 @@ export const jobsRouter = {
 				organizationId: jobPost.organizationId,
 				teamId: jobPost.teamId,
 				createdByUserId: jobPost.createdByUserId,
+				exposureType: jobPost.exposureType,
+				paymentStatus: jobPost.paymentStatus,
+				exposureDurationDays: jobPost.exposureDurationDays,
+				exposureEndsAt: jobPost.exposureEndsAt,
 				employerVerificationStatus:
 					employerOrganizationProfile.verificationStatus,
 				createdAt: jobPost.createdAt,
@@ -748,6 +834,11 @@ export const jobsRouter = {
 			}
 
 			const preparedContent = prepareJobPostContent(input);
+			const exposure = await resolveJobPostExposure({
+				adProductId: input.adProductId,
+				exposureDurationDays: input.exposureDurationDays,
+				paymentMethod: input.paymentMethod,
+			});
 			const mediaRows = requireValidJobPostMediaSet(media);
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status = getInitialJobPostStatus({
@@ -767,6 +858,11 @@ export const jobsRouter = {
 						descriptionBlocks: preparedContent.descriptionBlocks,
 						status,
 						riskFlags: riskDetected ? ["risky_term"] : [],
+						adProductId: exposure.adProductId,
+						exposureType: exposure.exposureType,
+						exposureDurationDays: exposure.exposureDurationDays,
+						exposureAmount: exposure.exposureAmount,
+						paymentMethod: exposure.paymentMethod,
 						publishedAt: status === "published" ? now : null,
 					})
 					.returning();
@@ -858,6 +954,11 @@ export const jobsRouter = {
 			}
 
 			const preparedContent = prepareJobPostContent(input.data);
+			const exposure = await resolveJobPostExposure({
+				adProductId: input.data.adProductId,
+				exposureDurationDays: input.data.exposureDurationDays,
+				paymentMethod: input.data.paymentMethod,
+			});
 			const mediaRows = media ? requireValidJobPostMediaSet(media) : null;
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status: JobPostStatus = riskDetected
@@ -878,6 +979,11 @@ export const jobsRouter = {
 						descriptionBlocks: preparedContent.descriptionBlocks,
 						status,
 						riskFlags: riskDetected ? ["risky_term"] : [],
+						adProductId: exposure.adProductId,
+						exposureType: exposure.exposureType,
+						exposureDurationDays: exposure.exposureDurationDays,
+						exposureAmount: exposure.exposureAmount,
+						paymentMethod: exposure.paymentMethod,
 						publishedAt:
 							status === "published" && !existing.publishedAt
 								? new Date()

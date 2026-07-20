@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { ModeratorPaymentPanel } from "@/components/bambi/moderator-payment-panel";
 import { QueueDetail } from "@/components/bambi/screens/moderator";
 import { useMod } from "@/components/bambi/screens/moderator-context";
 
@@ -32,14 +33,17 @@ export default function ModeratorQueueDetailPage() {
 	}
 
 	return (
-		<QueueDetail
-			item={item}
-			onBack={() => router.push("/moderator")}
-			onResolve={(qid, action) => {
-				resolveQueue(qid, action);
-				router.push("/moderator");
-			}}
-			tone="calm"
-		/>
+		<div className="flex min-h-0 flex-1 flex-col">
+			<QueueDetail
+				item={item}
+				onBack={() => router.push("/moderator")}
+				onResolve={(qid, action) => {
+					resolveQueue(qid, action);
+					router.push("/moderator");
+				}}
+				tone="calm"
+			/>
+			<ModeratorPaymentPanel jobPostId={item.id} />
+		</div>
 	);
 }
