@@ -222,13 +222,24 @@ describe("visual job marketplace components", () => {
 	it("wires the /employer/ad-guide entry points", () => {
 		const route = readComponent("../../app/employer/ad-guide/page.tsx");
 		const layout = readComponent("../../app/employer/layout.tsx");
+		const dashboard = readComponent("../../app/employer/page.tsx");
 
 		// 라우트가 광고 안내 화면을 렌더링한다
 		expect(route).toContain("EmployerAdGuideScreen");
-		// 진입점은 구인자 헤더 nav 항목 하나로 일원화됐다 — 홈 대시보드의 "광고 상품 안내"
-		// 바로가기 카드는 구인자 홈 카드 정리(PR #26)에서 걷어냈다.
 		expect(layout).toContain("/employer/ad-guide");
 		expect(layout).toContain("광고 안내");
+		// 진입점을 헤더 nav 하나로 일원화(PR #26)했더니 모바일에서 광고 안내에 닿을 길이
+		// 사라졌다 — 그 헤더는 hidden md:block이고 하단 탭 5개에도 없기 때문이다.
+		// 그래서 대시보드 퀵링크를 되살렸다. 헤더 nav만 남기면 안 된다.
+		expect(dashboard).toContain('href: "/employer/ad-guide" as Route');
+	});
+
+	it("keeps the bottom tab bar visible on /employer/ad-guide", () => {
+		const nav = readComponent("persona-nav.tsx");
+
+		// showNav에서 빠져 있으면 광고 안내에 들어간 순간 하단 탭이 사라져 모바일에서
+		// 되돌아갈 길이 없다(실제로 그 막다른 길이 났었다).
+		expect(nav).toContain('path.startsWith("/employer/ad-guide")');
 	});
 
 	it("wires the ad-products console edit links to the edit routes", () => {
