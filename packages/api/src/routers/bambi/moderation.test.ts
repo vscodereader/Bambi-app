@@ -213,6 +213,10 @@ describe("bambi moderation router media context", () => {
 		expect(moderationRouter.bulkSetUserStatus).toBeDefined();
 	});
 
+	it("exposes the job post payment procedure", () => {
+		expect(moderationRouter.setJobPostPayment).toBeDefined();
+	});
+
 	it("includes safe attachment metadata for reported chat messages", async () => {
 		const fixture = await createReportFixture();
 
@@ -576,6 +580,97 @@ describe("bambi moderation router bulk actions", () => {
 			);
 			expect(actionLogs).not.toContainEqual(
 				expect.objectContaining({ targetId: missingJobPostId })
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("requires an admin profile for setJobPostPayment", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const setJobPostPayment = createProcedureClient(
+				moderationRouter.setJobPostPayment,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "setJobPostPayment"],
+				}
+			);
+
+			await expectOrpcCode(
+				setJobPostPayment({
+					jobPostId: fixture.jobPostId,
+					paymentStatus: "paid",
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("sets exposureEndsAt on paid and clears it on unpaid", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			await db
+				.update(jobPost)
+				.set({ exposureDurationDays: 30 })
+				.where(eq(jobPost.id, fixture.jobPostId));
+
+			const setJobPostPayment = createProcedureClient(
+				moderationRouter.setJobPostPayment,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "setJobPostPayment"],
+				}
+			);
+
+			const beforePaid = Date.now();
+			const paidResult = await setJobPostPayment({
+				jobPostId: fixture.jobPostId,
+				paymentStatus: "paid",
+			});
+
+			expect(paidResult.paymentStatus).toBe("paid");
+			expect(paidResult.exposureEndsAt).toBeInstanceOf(Date);
+			const endsAt = paidResult.exposureEndsAt?.getTime() ?? 0;
+			expect(endsAt).toBeGreaterThanOrEqual(
+				beforePaid + 29 * 24 * 60 * 60 * 1000
+			);
+			expect(endsAt).toBeLessThanOrEqual(Date.now() + 31 * 24 * 60 * 60 * 1000);
+
+			const unpaidResult = await setJobPostPayment({
+				jobPostId: fixture.jobPostId,
+				paymentStatus: "unpaid",
+			});
+
+			expect(unpaidResult.paymentStatus).toBe("unpaid");
+			expect(unpaidResult.exposureEndsAt).toBeNull();
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("returns NOT_FOUND when the job post is missing", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const setJobPostPayment = createProcedureClient(
+				moderationRouter.setJobPostPayment,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "setJobPostPayment"],
+				}
+			);
+
+			await expectOrpcCode(
+				setJobPostPayment({
+					jobPostId: randomUUID(),
+					paymentStatus: "paid",
+				}),
+				"NOT_FOUND"
 			);
 		} finally {
 			await cleanupReportFixture(fixture);

@@ -45,6 +45,26 @@ export const jobPostStatus = pgEnum("job_post_status", [
 	"rejected",
 ]);
 
+export const jobExposureType = pgEnum("job_exposure_type", [
+	"premium-banner",
+	"left-banner",
+	"right-banner",
+	"special",
+	"urgent",
+	"recommended",
+	"standard",
+]);
+
+export const jobPaymentMethod = pgEnum("job_payment_method", [
+	"card",
+	"bank_transfer",
+]);
+
+export const jobPaymentStatus = pgEnum("job_payment_status", [
+	"unpaid",
+	"paid",
+]);
+
 export const interviewStatus = pgEnum("interview_status", [
 	"proposed",
 	"confirmed",
@@ -76,6 +96,7 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"community_comment",
 	"support_inquiry",
 	"support_inquiry_message",
+	"team_invitation",
 ]);
 
 // 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.
@@ -124,6 +145,21 @@ export const promotionStatus = pgEnum("promotion_status", [
 	"paused",
 	"expired",
 	"canceled",
+]);
+
+export const adPlacementKind = pgEnum("ad_placement_kind", [
+	"listing",
+	"banner",
+]);
+
+export const adPreviewTemplate = pgEnum("ad_preview_template", [
+	"premium-top",
+	"special-list",
+	"urgent-list",
+	"recommended-list",
+	"side-vertical",
+	"side-horizontal",
+	"none",
 ]);
 
 export const jobPerformanceEventType = pgEnum("job_performance_event_type", [
@@ -268,6 +304,19 @@ export const jobPost = pgTable(
 		interviewNotes: text("interview_notes"),
 		rejectionReason: text("rejection_reason"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
+		exposureType: jobExposureType("exposure_type")
+			.default("standard")
+			.notNull(),
+		exposureDurationDays: integer("exposure_duration_days"),
+		adProductId: uuid("ad_product_id").references(() => adProduct.id, {
+			onDelete: "set null",
+		}),
+		exposureAmount: integer("exposure_amount"),
+		paymentMethod: jobPaymentMethod("payment_method"),
+		paymentStatus: jobPaymentStatus("payment_status")
+			.default("unpaid")
+			.notNull(),
+		exposureEndsAt: timestamp("exposure_ends_at"),
 		publishedAt: timestamp("published_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -386,6 +435,61 @@ export const jobPromotionBoostEvent = pgTable(
 		index("job_promotion_boost_event_job_post_id_idx").on(table.jobPostId),
 		index("job_promotion_boost_event_organization_id_idx").on(
 			table.organizationId
+		),
+	]
+);
+
+export const adPlacement = pgTable(
+	"ad_placement",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		name: text("name").notNull(),
+		description: text("description"),
+		kind: adPlacementKind("kind").default("listing").notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("ad_placement_active_sort_idx").on(table.isActive, table.sortOrder),
+	]
+);
+
+export const adProduct = pgTable(
+	"ad_product",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		placementId: uuid("placement_id")
+			.notNull()
+			.references(() => adPlacement.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		tagline: text("tagline"),
+		previewTemplate: adPreviewTemplate("preview_template")
+			.default("none")
+			.notNull(),
+		previewImageUrl: text("preview_image_url"),
+		benefits: jsonb("benefits").$type<string[]>().default([]).notNull(),
+		priceOptions: jsonb("price_options")
+			.$type<{ amount: number; days: number }[]>()
+			.default([])
+			.notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("ad_product_placement_idx").on(
+			table.placementId,
+			table.isActive,
+			table.sortOrder
 		),
 	]
 );
@@ -977,6 +1081,17 @@ export const jobPromotionBoostEventRelations = relations(
 		}),
 	})
 );
+
+export const adPlacementRelations = relations(adPlacement, ({ many }) => ({
+	products: many(adProduct),
+}));
+
+export const adProductRelations = relations(adProduct, ({ one }) => ({
+	placement: one(adPlacement, {
+		fields: [adProduct.placementId],
+		references: [adPlacement.id],
+	}),
+}));
 
 export const chatRoomRelations = relations(chatRoom, ({ many, one }) => ({
 	attachments: many(chatAttachment),

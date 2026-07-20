@@ -13,8 +13,8 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { toast } from "sonner";
+import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import {
 	connectBambiChatSocket,
 	emitBambiChatTypingStarted,

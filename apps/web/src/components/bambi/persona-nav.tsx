@@ -7,6 +7,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
+import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { BOTTOM_NAV_CONTENT_SPACER, BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
 import {
@@ -126,6 +127,7 @@ const MOD_ROUTES: Record<string, Route> = {
 	reports: "/moderator/reports",
 	employers: "/moderator/employers",
 	users: "/moderator/users",
+	adProducts: "/moderator/ad-products",
 	// 신규 라우트는 Next typedRoutes 생성 타입(.next/types/routes.d.ts)에 아직 없을 수 있어
 	// 기존 항목들과 같은 관례로 캐스팅한다.
 	content: "/moderator/content" as Route,
@@ -161,7 +163,12 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 	const isDetail = MOD_DETAIL_RE.test(path);
 	if (isDetail) {
 		return (
-			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+			<div
+				className={cn(
+					"mx-auto flex min-h-0 w-full flex-1 flex-col",
+					APP_CONTENT_WIDTH
+				)}
+			>
 				<Content>{children}</Content>
 			</div>
 		);
@@ -174,6 +181,8 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 		tab = "employers";
 	} else if (path.startsWith("/moderator/users")) {
 		tab = "users";
+	} else if (path.startsWith("/moderator/ad-products")) {
+		tab = "adProducts";
 	} else if (path.startsWith("/moderator/content")) {
 		tab = "content";
 	} else if (path.startsWith("/moderator/support")) {
@@ -195,7 +204,12 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 
 	return (
 		<>
-			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+			<div
+				className={cn(
+					"mx-auto flex min-h-0 w-full flex-1 flex-col",
+					APP_CONTENT_WIDTH
+				)}
+			>
 				<ConsoleTop
 					counts={{
 						queue: queue.length,

@@ -11,6 +11,9 @@ const MODERATOR_NAV_ITEMS = [
 	{ href: "/moderator/reports", label: "신고" },
 	{ href: "/moderator/users", label: "사용자" },
 	{ href: "/moderator/employers", label: "업소 승인" },
+	{ href: "/moderator/team-invites", label: "팀 합류 승인" },
+	{ href: "/moderator/ad-products", label: "광고 상품" },
+	{ href: "/moderator/payments", label: "결제 관리" },
 	// 신규 라우트는 Next typedRoutes 생성 타입에 아직 없을 수 있어 캐스팅한다.
 	{ href: "/moderator/content" as Route, label: "게시물" },
 	{ href: "/moderator/support" as Route, label: "고객센터" },

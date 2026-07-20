@@ -1,0 +1,1 @@
+ALTER TABLE "ad_product" ADD COLUMN "preview_image_url" text;
