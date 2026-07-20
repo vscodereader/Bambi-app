@@ -18,6 +18,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
+import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	SUPPORT_CATEGORIES,
@@ -93,9 +94,9 @@ export function FaqList() {
 						<AccordionItem key={item.id} value={item.id}>
 							<AccordionTrigger>{item.question}</AccordionTrigger>
 							<AccordionContent>
-								<p className="m-0 whitespace-pre-wrap text-muted-foreground">
-									{item.answer}
-								</p>
+								{/* 답변은 운영자가 리치 에디터로 쓴 Tiptap JSON이라 뷰어로 렌더한다.
+								    에디터 도입 이전에 저장된 평문 행은 뷰어의 <p> 폴백으로 그대로 나온다. */}
+								<PostBodyViewer body={item.answer} />
 							</AccordionContent>
 						</AccordionItem>
 					))}

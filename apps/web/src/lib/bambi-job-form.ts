@@ -269,7 +269,9 @@ const isSignedUploadUrl = (uploadUrl: string): boolean =>
 
 // 서명 URL로 브라우저가 GCS에 직접 PUT 한다. Content-Type은 서명에 묶여 있어
 // 인텐트에서 선언한 값과 정확히 일치해야 GCS가 받아준다.
-const uploadFileToSignedUrl = async ({
+// 공고 폼 밖(수다방·FAQ 본문 에디터)에서도 같은 인텐트 모양을 그대로 쓰므로 export 한다 —
+// local:// 건너뛰기와 프로덕션 방어를 각자 다시 구현하면 반드시 한쪽이 어긋난다.
+export const uploadFileToSignedUrl = async ({
 	file,
 	uploadIntent,
 }: {

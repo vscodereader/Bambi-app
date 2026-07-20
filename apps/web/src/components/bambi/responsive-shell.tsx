@@ -195,9 +195,12 @@ export function ResponsiveAppShell({
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
 				<header className="sticky top-0 z-30 hidden border-border border-b bg-background/95 backdrop-blur md:block">
+					{/* 좁은 폭에서는 간격부터 줄인다. 내비가 스크롤로 넘어가는 구간을 최대한
+					    뒤로 미뤄, 실제로 스크롤이 필요한 경우를 운영자처럼 항목이 많은
+					    역할로 한정한다. */}
 					<div
 						className={cn(
-							"mx-auto flex h-16 items-center gap-7 px-6",
+							"mx-auto flex h-16 items-center gap-3 px-6 lg:gap-7",
 							contentWidthClassName
 						)}
 					>
@@ -212,8 +215,15 @@ export function ResponsiveAppShell({
 							<Logo lang="ko" size="md" />
 						</Link>
 						{navItems.length > 0 ? (
-							<NavigationMenu>
-								<NavigationMenuList className="gap-1">
+							// 내비 항목은 navigationMenuTriggerStyle의 w-max라 최소폭이 라벨 전체 폭이다.
+							// 그래서 항목이 많은 역할(운영자 7개)은 헤더 폭(min(92%,1120px))을 넘겨
+							// 행 전체가 가로로 넘쳤다. min-w-0으로 내비가 줄어들 수 있게 하고 넘치는
+							// 만큼은 내비 안에서만 가로 스크롤시킨다 — 브랜드·우측 액션은 제자리를 지킨다.
+							// 드롭다운은 Positioner가 Portal 안이라 overflow에 잘리지 않는다.
+							<NavigationMenu className="min-w-0">
+								{/* 기본 justify-center는 넘칠 때 앞쪽 항목이 잘려 스크롤로도 닿지 않는
+								    고전적인 문제가 있다. 헤더에서 내비는 어차피 왼쪽 정렬이라 start로 둔다. */}
+								<NavigationMenuList className="justify-start gap-1 overflow-x-auto [scrollbar-width:none]">
 									{navItems.map((entry) => {
 										if (isNavGroup(entry)) {
 											return (
