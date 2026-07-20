@@ -56,6 +56,22 @@ type TargetType = (typeof TARGET_TABS)[number]["value"];
 // 서버 min(2) 거절을 왕복 없이 막기 위한 UI 선제 검사 기준.
 const REASON_MIN_LENGTH = 2;
 
+// 목록 셀의 제목·발췌 표시 길이. 길면 행마다 높이가 들쭉날쭉해 훑기 어려워진다.
+// 전체 내용은 행을 펼쳐서 본다.
+const CELL_TEXT_MAX = 15;
+
+// 코드 유닛(text.length)이 아니라 코드 포인트로 자른다 — 이모지가 든 제목이 쪼개지면
+// 깨진 문자가 표시된다(employer-listing-preview의 Array.from 관례와 동일).
+const clampCellText = (text: string): string => {
+	const chars = Array.from(text);
+
+	if (chars.length <= CELL_TEXT_MAX) {
+		return text;
+	}
+
+	return `${chars.slice(0, CELL_TEXT_MAX).join("")}…`;
+};
+
 const STATUS_ACTIONS: { status: ContentStatus; label: string }[] = [
 	{ status: "hidden", label: "숨김" },
 	{ status: "published", label: "복구" },
@@ -216,10 +232,15 @@ export default function ModeratorContentPage() {
 												{isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
 											</Button>
 										</TableCell>
-										<TableCell className="max-w-64 whitespace-normal">
-											<span className="block font-medium">{item.title}</span>
-											<span className="block text-muted-foreground">
-												{item.excerpt}
+										<TableCell className="max-w-64">
+											<span className="block font-medium" title={item.title}>
+												{clampCellText(item.title)}
+											</span>
+											<span
+												className="block text-muted-foreground"
+												title={item.excerpt}
+											>
+												{clampCellText(item.excerpt)}
 											</span>
 										</TableCell>
 										<TableCell>{item.authorName}</TableCell>
