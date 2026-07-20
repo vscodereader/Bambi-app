@@ -334,9 +334,14 @@ const coverImageSql = sql<{
 
 interface ResolvedJobExposure {
 	adProductId: string | null;
+	// 구매 시점 스냅샷: 상품의 하루 자동 끌어올리기 횟수를 공고 컬럼으로 복사한다(수동과 동일 패턴).
+	autoBoostsPerDay: number;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
+	// 구매 시점 스냅샷: 상품의 하루 수동 끌어올리기 횟수를 공고 컬럼으로 복사한다.
+	// 이후 상품 수정과 무관하게 이 값으로 끌어올리기 자격을 판정한다.
+	manualBoostsPerDay: number;
 	paymentMethod: "bank_transfer" | "card" | null;
 }
 
@@ -354,6 +359,8 @@ const resolveJobPostExposure = async (input: {
 			exposureAmount: null,
 			exposureDurationDays: null,
 			exposureType: "standard",
+			manualBoostsPerDay: 0,
+			autoBoostsPerDay: 0,
 			paymentMethod: null,
 		};
 	}
@@ -383,6 +390,8 @@ const resolveJobPostExposure = async (input: {
 		exposureAmount: priceOption.amount,
 		exposureDurationDays: priceOption.days,
 		exposureType: previewTemplateToExposureType(product.previewTemplate),
+		manualBoostsPerDay: product.manualBoostsPerDay,
+		autoBoostsPerDay: product.autoBoostsPerDay,
 		paymentMethod: input.paymentMethod ?? null,
 	};
 };
@@ -430,6 +439,11 @@ export const jobsRouter = {
 			workSchedule: jobPost.workSchedule,
 		};
 
+		// 노출 정렬 키: 끌어올린(boosted_at) 시각과 게시 시각 중 최신. Postgres GREATEST는
+		// null을 무시하므로 미점프 공고는 publishedAt 그대로이고, 점프 뒤 재검수·재게시로
+		// publishedAt이 더 최신이 되면 자동으로 최신 쪽을 따른다. 배너 쿼리에는 적용하지 않는다.
+		const exposureRankSql = sql`greatest(${jobPost.boostedAt}, ${jobPost.publishedAt})`;
+
 		// 슬롯 상한 없이 결제완료·미만료 유료 공고를 전부 노출한다(행 단위 확장).
 		const getExposedJobs = async (type: ListingSectionExposureType) =>
 			await db
@@ -450,7 +464,7 @@ export const jobsRouter = {
 						or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
 					)
 				)
-				.orderBy(desc(jobPost.publishedAt));
+				.orderBy(desc(exposureRankSql));
 
 		const [specialRows, urgentRows, recommendedRows, organicRows] =
 			await Promise.all([
@@ -474,7 +488,7 @@ export const jobsRouter = {
 					.where(and(...filters))
 					.orderBy(
 						sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
-						desc(jobPost.publishedAt)
+						desc(exposureRankSql)
 					)
 					.limit(input.limit + 15),
 			]);
@@ -895,6 +909,8 @@ export const jobsRouter = {
 						exposureType: exposure.exposureType,
 						exposureDurationDays: exposure.exposureDurationDays,
 						exposureAmount: exposure.exposureAmount,
+						manualBoostsPerDay: exposure.manualBoostsPerDay,
+						autoBoostsPerDay: exposure.autoBoostsPerDay,
 						paymentMethod: exposure.paymentMethod,
 						// 무료 공고(유료 노출상품 미선택)는 결제 게이트 없이 즉시 노출한다.
 						// 유료 노출상품을 선택한 경우에만 운영자 결제완료 처리를 기다린다.
@@ -1033,6 +1049,8 @@ export const jobsRouter = {
 						exposureType: exposure.exposureType,
 						exposureDurationDays: exposure.exposureDurationDays,
 						exposureAmount: exposure.exposureAmount,
+						manualBoostsPerDay: exposure.manualBoostsPerDay,
+						autoBoostsPerDay: exposure.autoBoostsPerDay,
 						paymentMethod: exposure.paymentMethod,
 						paymentStatus: nextPaymentStatus,
 						exposureEndsAt: nextExposureEndsAt,

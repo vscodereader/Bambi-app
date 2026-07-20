@@ -26,7 +26,9 @@ export interface PriceOption {
 }
 
 export interface AdProductDraft {
+	autoBoostsPerDay: number;
 	benefits: string[];
+	manualBoostsPerDay: number;
 	name: string;
 	previewImageUrl: string | null;
 	previewTemplate: AdPreviewTemplateValue;
@@ -76,6 +78,12 @@ export function AdProductForm({
 	);
 	const [previewTemplate, setPreviewTemplate] =
 		useState<AdPreviewTemplateValue>(initialValue?.previewTemplate ?? "none");
+	const [manualBoostsPerDay, setManualBoostsPerDay] = useState(
+		initialValue?.manualBoostsPerDay ?? 0
+	);
+	const [autoBoostsPerDay, setAutoBoostsPerDay] = useState(
+		initialValue?.autoBoostsPerDay ?? 0
+	);
 
 	const setPrice = (id: number, patch: Partial<PriceOption>) =>
 		setPriceOptions((options) =>
@@ -120,6 +128,8 @@ export function AdProductForm({
 			priceOptions: normalizedPriceOptions,
 			previewImageUrl,
 			previewTemplate,
+			manualBoostsPerDay,
+			autoBoostsPerDay,
 		});
 	};
 
@@ -244,6 +254,36 @@ export function AdProductForm({
 				>
 					가격 옵션 추가
 				</Button>
+			</div>
+
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-manual-boosts">일일 끌어올리기 횟수</Label>
+				<Input
+					className="w-24"
+					id="p-manual-boosts"
+					onChange={(e) => setManualBoostsPerDay(Number(e.target.value) || 0)}
+					type="number"
+					value={manualBoostsPerDay === 0 ? "" : manualBoostsPerDay}
+				/>
+				<p className="m-0 text-muted-foreground text-xs">
+					이 상품을 구매한 공고가 하루에 쓸 수 있는 끌어올리기 횟수입니다.
+					비워두면 미제공(0회)입니다.
+				</p>
+			</div>
+
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-auto-boosts">일일 자동 끌어올리기 횟수</Label>
+				<Input
+					className="w-24"
+					id="p-auto-boosts"
+					onChange={(e) => setAutoBoostsPerDay(Number(e.target.value) || 0)}
+					type="number"
+					value={autoBoostsPerDay === 0 ? "" : autoBoostsPerDay}
+				/>
+				<p className="m-0 text-muted-foreground text-xs">
+					이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는
+					횟수입니다(09~21시 균등 분배). 비워두면 미제공(0회)입니다.
+				</p>
 			</div>
 
 			<div className="flex flex-col gap-1.5">

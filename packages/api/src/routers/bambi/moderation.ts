@@ -39,6 +39,7 @@ import { alias } from "drizzle-orm/pg-core";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure } from "../../index";
+import { syncAdvertiserFlagForOrganization } from "../../services/bambi-advertiser";
 import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
@@ -903,7 +904,10 @@ export const moderationRouter = {
 			await requireAdminProfile(context.session);
 
 			const [existing] = await db
-				.select({ exposureDurationDays: jobPost.exposureDurationDays })
+				.select({
+					exposureDurationDays: jobPost.exposureDurationDays,
+					organizationId: jobPost.organizationId,
+				})
 				.from(jobPost)
 				.where(eq(jobPost.id, input.jobPostId))
 				.limit(1);
@@ -929,6 +933,13 @@ export const moderationRouter = {
 			if (!updated) {
 				throw new ORPCError("NOT_FOUND");
 			}
+
+			// 결제 상태 전환은 공개 게이트(published AND paid)를 넘나들 수 있으므로
+			// 해당 조직 owner/admin의 수다방 광고 자격 캐시를 재동기화한다.
+			await syncAdvertiserFlagForOrganization({
+				now: new Date(),
+				organizationId: existing.organizationId,
+			});
 
 			return updated;
 		}),
@@ -1028,13 +1039,17 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 
-			return await db.transaction(
+			// 갱신에 성공한 공고들의 조직 유니크 집합 — 트랜잭션 커밋 후 광고 자격 캐시 동기화용.
+			const affectedOrganizationIds = new Set<string>();
+
+			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (jobPostId) => {
 							const [existing] = await tx
 								.select({
 									exposureDurationDays: jobPost.exposureDurationDays,
+									organizationId: jobPost.organizationId,
 								})
 								.from(jobPost)
 								.where(eq(jobPost.id, jobPostId))
@@ -1061,10 +1076,21 @@ export const moderationRouter = {
 									paymentStatus: input.paymentStatus,
 								})
 								.where(eq(jobPost.id, jobPostId));
+
+							affectedOrganizationIds.add(existing.organizationId);
 						},
 						targetIds: input.jobPostIds,
 					})
 			);
+
+			// 결제 전환은 공개 게이트를 넘나들 수 있으므로 갱신된 조직들의 수다방 광고
+			// 자격 캐시를 재동기화한다. 트랜잭션 커밋 후 실행한다.
+			const now = new Date();
+			for (const organizationId of affectedOrganizationIds) {
+				await syncAdvertiserFlagForOrganization({ now, organizationId });
+			}
+
+			return result;
 		}),
 
 	setUserStatus: protectedProcedure

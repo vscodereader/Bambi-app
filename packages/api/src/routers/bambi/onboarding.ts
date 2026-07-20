@@ -18,7 +18,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
-import { hasActiveAdvertiserCampaign } from "../../services/bambi-advertiser";
+import { hasActiveAdExposure } from "../../services/bambi-advertiser";
 import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import {
@@ -192,7 +192,7 @@ export const onboardingRouter = {
 
 		const now = new Date();
 		const isAdvertiser = profile
-			? await hasActiveAdvertiserCampaign({ now, userId })
+			? await hasActiveAdExposure({ now, userId })
 			: false;
 		const community = resolveCommunityAccess({
 			gender: profile?.gender ?? null,

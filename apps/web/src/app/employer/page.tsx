@@ -72,22 +72,32 @@ const getErrorCode = (error: Error | null): string | undefined =>
 		? error.code
 		: undefined;
 
-interface PromotionSummaryItem {
-	remainingManualBoosts: number;
+interface AdSummaryItem {
+	boostsUsedToday: number;
+	exposureEndsAt: Date | null | string;
+	manualBoostsPerDay: number;
+	paymentStatus: string;
 	status: string;
 }
 
-const getPromotionSummary = (promotions: PromotionSummaryItem[]) => ({
-	activeCount: promotions.filter((promotion) => promotion.status === "active")
-		.length,
-	pendingCount: promotions.filter(
-		(promotion) => promotion.status === "pending_payment"
-	).length,
-	remainingBoostCount: promotions.reduce(
-		(total, promotion) => total + promotion.remainingManualBoosts,
-		0
-	),
-});
+const getAdSummary = (ads: AdSummaryItem[], now: number) => {
+	const isActive = (ad: AdSummaryItem) =>
+		ad.status === "published" &&
+		ad.paymentStatus === "paid" &&
+		(ad.exposureEndsAt === null || new Date(ad.exposureEndsAt).getTime() > now);
+
+	return {
+		activeCount: ads.filter(isActive).length,
+		pendingCount: ads.filter((ad) => ad.paymentStatus !== "paid").length,
+		remainingBoostCount: ads
+			.filter(isActive)
+			.reduce(
+				(total, ad) =>
+					total + Math.max(0, ad.manualBoostsPerDay - ad.boostsUsedToday),
+				0
+			),
+	};
+};
 
 const getJobStatusCounts = (jobPosts: { status: string }[]) => ({
 	pendingReview: jobPosts.filter((job) => job.status === "pending_review")
@@ -106,7 +116,7 @@ const quickLinks: {
 		description: "공고 노출을 끌어올려요",
 		href: "/employer/promotions" as Route,
 		icon: Zap,
-		label: "프로모션 관리",
+		label: "광고 관리",
 	},
 	{
 		description: "조회·지원 지표를 확인해요",
@@ -262,7 +272,7 @@ function OwnedJobsPanel({
 					<TriangleAlert />
 					<AlertTitle>“{jobToDelete.title}” 공고를 삭제할까요?</AlertTitle>
 					<AlertDescription>
-						삭제한 공고와 연결된 프로모션·성과 기록은 되돌릴 수 없어요.
+						삭제한 공고와 연결된 광고·성과 기록은 되돌릴 수 없어요.
 					</AlertDescription>
 					<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 						<Button
@@ -316,14 +326,14 @@ export default function EmployerPage() {
 		enabled: canLoadJobs,
 	});
 	const promotionsQuery = useQuery({
-		...orpc.bambi.promotions.listMine.queryOptions(),
+		...orpc.bambi.promotions.listMyAds.queryOptions(),
 		enabled: canLoadJobs,
 	});
 	const organizationProfiles =
 		mineQuery.data?.employerOrganizationProfiles ?? [];
 	const teamProfiles = mineQuery.data?.employerTeamProfiles ?? [];
 	const jobs = jobsQuery.data ?? [];
-	const promotionSummary = getPromotionSummary(promotionsQuery.data ?? []);
+	const promotionSummary = getAdSummary(promotionsQuery.data ?? [], Date.now());
 	const jobStatusCounts = getJobStatusCounts(jobs);
 	const queryClient = useQueryClient();
 	const [deletingJobId, setDeletingJobId] = useState<null | string>(null);
@@ -343,7 +353,7 @@ export default function EmployerPage() {
 						queryKey: orpc.bambi.jobs.listMine.queryKey(),
 					}),
 					queryClient.invalidateQueries({
-						queryKey: orpc.bambi.promotions.listMine.queryKey(),
+						queryKey: orpc.bambi.promotions.listMyAds.queryKey(),
 					}),
 				]);
 			},
@@ -502,7 +512,7 @@ export default function EmployerPage() {
 							<dl className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
 								<div className="flex items-center gap-1.5">
 									<Zap className="size-4 shrink-0 text-coral-500" />
-									<dt className="text-muted-foreground">진행 중인 프로모션</dt>
+									<dt className="text-muted-foreground">진행 중인 광고</dt>
 									<dd className="font-medium text-foreground">
 										{promotionSummary.activeCount}개
 									</dd>
@@ -514,7 +524,9 @@ export default function EmployerPage() {
 									</dd>
 								</div>
 								<div className="flex items-center gap-1.5">
-									<dt className="text-muted-foreground">남은 끌어올리기</dt>
+									<dt className="text-muted-foreground">
+										오늘 남은 끌어올리기
+									</dt>
 									<dd className="font-medium text-foreground">
 										{promotionSummary.remainingBoostCount}회
 									</dd>

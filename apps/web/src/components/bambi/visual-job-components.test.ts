@@ -207,9 +207,10 @@ describe("visual job marketplace components", () => {
 		// 비용은 기간별 가격 강조 표기
 		expect(source).toContain("formatAdPrice(option.amount)");
 		expect(source).toContain("formatAdDuration(option.days)");
-		// 데스크톱은 그리드 행으로 전환
+		// 데스크톱은 4열 그리드 행으로 전환. PR #29에서 비용·신청 열을 auto에서
+		// minmax 트랙으로 바꿔(열 폭이 내용에 따라 튀지 않게) 템플릿이 갱신됐다.
 		expect(source).toContain(
-			"md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto_auto]"
+			"md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.9fr)]"
 		);
 		// 신청 버튼은 기존 공고 등록 링크(/employer/new)를 유지
 		expect(source).toContain('const APPLY_HREF = "/employer/new"');

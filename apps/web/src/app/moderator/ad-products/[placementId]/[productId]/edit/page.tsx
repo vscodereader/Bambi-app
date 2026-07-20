@@ -59,6 +59,8 @@ export default function EditAdProductPage() {
 						priceOptions: product.priceOptions,
 						previewImageUrl: product.previewImageUrl ?? null,
 						previewTemplate: product.previewTemplate,
+						manualBoostsPerDay: product.manualBoostsPerDay ?? 0,
+						autoBoostsPerDay: product.autoBoostsPerDay ?? 0,
 					}}
 					onSubmit={(draft) =>
 						updateProduct.mutate({
@@ -69,6 +71,8 @@ export default function EditAdProductPage() {
 							priceOptions: draft.priceOptions,
 							previewImageUrl: draft.previewImageUrl,
 							previewTemplate: draft.previewTemplate,
+							manualBoostsPerDay: draft.manualBoostsPerDay,
+							autoBoostsPerDay: draft.autoBoostsPerDay,
 						})
 					}
 					pending={updateProduct.isPending}

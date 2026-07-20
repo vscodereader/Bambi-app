@@ -27,16 +27,19 @@ const [
 
 const { member, organization, user } = authSchema;
 const {
+	adPlacement,
+	adProduct,
 	adminModerationAction,
 	bambiProfile,
 	bannedWord,
 	communityPost,
 	jobPost,
-	jobPromotionCampaign,
 } = bambiSchema;
 
 interface CommunityFixture {
 	adminUserId: string;
+	adPlacementId: string;
+	adProductId: string;
 	employerUserId: string;
 	femaleUserId: string;
 	maleUserId: string;
@@ -144,8 +147,9 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 		},
 	]);
 
-	// employer가 수다방 자격을 얻으려면 owner로 소속된 조직에 라이브(active,
-	// startsAt<=now<endsAt) 광고 캠페인이 있어야 한다(hasActiveAdvertiserCampaign).
+	// employer가 수다방 자격을 얻으려면 owner로 소속된 조직에 "광고 상품이 적용되고
+	// published·paid이며 노출이 유효한" 공고가 있어야 한다(hasActiveAdExposure).
+	// PR #29에서 판정 축이 광고 캠페인 → 광고 상품 적용 공고로 바뀌었다.
 	await db.insert(organization).values({
 		createdAt: now,
 		id: organizationId,
@@ -160,31 +164,39 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 		status: "active",
 		userId: employerUserId,
 	});
+	const adPlacementId = randomUUID();
+	const adProductId = randomUUID();
+	await db.insert(adPlacement).values({
+		id: adPlacementId,
+		name: `community-ad-placement-${adPlacementId}`,
+	});
+	await db.insert(adProduct).values({
+		id: adProductId,
+		name: `community-ad-product-${adProductId}`,
+		placementId: adPlacementId,
+	});
 	const jobPostId = randomUUID();
 	await db.insert(jobPost).values({
+		adProductId,
 		createdByUserId: employerUserId,
 		description: "수다방 광고 자격용 공고입니다.",
+		// exposureEndsAt은 비워 둔다 — null이면 노출 무기한으로 판정된다.
 		id: jobPostId,
 		industryCategory: "라운지",
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",
+		paymentStatus: "paid",
 		publishedAt: now,
 		region: "서울 강남구",
 		status: "published",
 		title: "광고 자격 공고",
 		workSchedule: "20:00-02:00",
 	});
-	await db.insert(jobPromotionCampaign).values({
-		endsAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
-		jobPostId,
-		organizationId,
-		startsAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
-		status: "active",
-		tier: "standard",
-	});
 
 	return {
+		adPlacementId,
+		adProductId,
 		adminUserId,
 		employerUserId,
 		femaleUserId,
@@ -206,10 +218,13 @@ const cleanupCommunityFixture = async (
 	await db
 		.delete(communityPost)
 		.where(inArray(communityPost.authorUserId, fixture.userIds));
-	// jobPost 삭제가 campaign을 cascade로 함께 지운다. member도 조직 기준으로 정리한다.
+	// 광고 상품·위치는 jobPost.ad_product_id가 참조하므로 공고를 먼저 지운 뒤 정리한다.
+	// member도 조직 기준으로 정리한다.
 	await db
 		.delete(jobPost)
 		.where(eq(jobPost.organizationId, fixture.organizationId));
+	await db.delete(adProduct).where(eq(adProduct.id, fixture.adProductId));
+	await db.delete(adPlacement).where(eq(adPlacement.id, fixture.adPlacementId));
 	await db
 		.delete(member)
 		.where(eq(member.organizationId, fixture.organizationId));
