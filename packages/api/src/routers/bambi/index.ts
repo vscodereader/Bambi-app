@@ -1,4 +1,5 @@
 import { analyticsRouter } from "./analytics";
+import { bannedWordsRouter } from "./banned-words";
 import { blocksRouter } from "./blocks";
 import { chatsRouter } from "./chats";
 import { communityRouter } from "./community";
@@ -12,6 +13,7 @@ import { teamsRouter } from "./teams";
 
 export const bambiRouter = {
 	analytics: analyticsRouter,
+	bannedWords: bannedWordsRouter,
 	blocks: blocksRouter,
 	chats: chatsRouter,
 	community: communityRouter,
