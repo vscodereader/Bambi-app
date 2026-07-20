@@ -44,7 +44,7 @@ const FAQ_QUESTION_MIN = 2;
 
 export default function ModeratorSupportPage() {
 	return (
-		<div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-5 py-6 md:px-6">
+		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<h1 className="m-0 font-extrabold text-2xl">고객센터 관리</h1>
 			<Tabs defaultValue="inquiries">
 				<TabsList className="max-w-full flex-wrap">
