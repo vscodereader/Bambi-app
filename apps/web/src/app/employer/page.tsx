@@ -17,6 +17,7 @@ import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+	BookOpen,
 	ChartColumn,
 	Check,
 	CircleAlert,
@@ -123,6 +124,15 @@ const quickLinks: {
 		href: "/employer/analytics" as Route,
 		icon: ChartColumn,
 		label: "성과 분석",
+	},
+	// 광고 안내는 데스크톱 헤더 nav에만 있었다. 그 헤더는 hidden md:block이고 모바일
+	// 하단 탭 5개에도 없어서, 모바일에서는 도달할 방법이 아예 없었다. 프로모션·성과 분석과
+	// 같은 대시보드 퀵링크 자리를 준다(탭을 6개로 늘리지 않고 기존 패턴을 그대로 쓴다).
+	{
+		description: "노출 상품과 배너 규격을 확인해요",
+		href: "/employer/ad-guide" as Route,
+		icon: BookOpen,
+		label: "광고 안내",
 	},
 	{
 		description: "지원자 화면을 미리 봐요",
