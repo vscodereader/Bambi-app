@@ -44,7 +44,7 @@ describe("extractTiptapText", () => {
 		expect(extractTiptapText(doc)).toContain("둘째");
 	});
 
-	it("노드 사이에 공백을 넣어 단어가 붙지 않게 한다", () => {
+	it("문단 경계는 줄바꿈으로 남겨 단어가 붙지 않게 한다", () => {
 		const doc = JSON.stringify({
 			type: "doc",
 			content: [
@@ -52,7 +52,23 @@ describe("extractTiptapText", () => {
 				{ type: "paragraph", content: [{ type: "text", text: "매매" }] },
 			],
 		});
-		expect(extractTiptapText(doc)).toBe("완성 매매");
+		expect(extractTiptapText(doc)).toBe("완성\n매매");
+	});
+
+	it("한 문단 안에서 마크로 쪼개진 노드는 붙여 원래 단어를 복원한다", () => {
+		const doc = JSON.stringify({
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [
+						{ type: "text", text: "성" },
+						{ type: "text", text: "매매", marks: [{ type: "bold" }] },
+					],
+				},
+			],
+		});
+		expect(extractTiptapText(doc)).toBe("성매매");
 	});
 
 	it("JSON이 아니면 원문을 그대로 돌려준다", () => {

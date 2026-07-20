@@ -26,6 +26,7 @@ import {
 	requireAdminProfile,
 } from "../../services/bambi-authz";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
+import { extractTiptapText } from "../../services/bambi-tiptap-text";
 
 export const targetTypeSchema = z.enum([
 	"job_post",
@@ -232,34 +233,10 @@ const jobPostHasCoverImageSql = sql<boolean>`exists(
 
 const COMMUNITY_BODY_PREVIEW_MAX = 300;
 
-// Tiptap doc JSON에서 text 노드만 재귀로 걸러 평문을 만든다. doc 하위 블록은 줄바꿈으로
-// 잇고, 블록 내부 text 노드는 붙여 이어 단어가 쪼개지지 않게 한다.
-const collectTiptapText = (node: unknown): string => {
-	if (!node || typeof node !== "object") {
-		return "";
-	}
-	const record = node as { content?: unknown; text?: unknown; type?: unknown };
-	if (record.type === "text" && typeof record.text === "string") {
-		return record.text;
-	}
-	if (Array.isArray(record.content)) {
-		return record.content
-			.map(collectTiptapText)
-			.join(record.type === "doc" ? "\n" : "");
-	}
-	return "";
-};
-
-// 글 본문(Tiptap JSON)에서 평문 발췌를 만든다. 파싱 실패 시 원문 문자열을 그대로 자른다.
-const toCommunityBodyPreview = (body: string): string => {
-	let plain: string;
-	try {
-		plain = collectTiptapText(JSON.parse(body) as unknown).trim();
-	} catch {
-		plain = body;
-	}
-	return plain.slice(0, COMMUNITY_BODY_PREVIEW_MAX);
-};
+// 글 본문(Tiptap JSON)에서 평문 발췌를 만든다. 평문 추출 규칙은 금칙어 검사와 공유한다
+// (services/bambi-tiptap-text) — 두 곳에 같은 파서를 두면 규칙이 갈린다.
+const toCommunityBodyPreview = (body: string): string =>
+	extractTiptapText(body).slice(0, COMMUNITY_BODY_PREVIEW_MAX);
 
 // community_post 신고 컨텍스트 — 운영자는 hidden/deleted 상태여도 원문 맥락을 봐야 하므로
 // 상태와 무관하게 조회하고 현재 status를 그대로 노출한다.
