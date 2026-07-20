@@ -18,25 +18,24 @@ describe("employer jobs DataTable columns", () => {
 		// 헤더 라벨
 		expect(source).toContain("노출 상품");
 		expect(source).toContain("결제 상태");
-		expect(source).toContain("남은 기간");
-		expect(source).toContain("만료 상태");
-		expect(source).toContain("사업자 인증");
+		expect(source).toContain("기간");
 
-		// 노출·결제·기간 라벨/유틸 재사용
+		// 노출·결제 라벨/유틸 재사용
 		expect(source).toContain("EXPOSURE_TYPE_LABELS");
 		expect(source).toContain("PAYMENT_STATUS_LABELS");
-		expect(source).toContain("remainingDays");
-		expect(source).toContain("expiryLabel");
 
 		// 기존 라벨/포맷/배지 재사용
 		expect(source).toContain("formatPay");
-		expect(source).toContain("formatDateTime");
+		expect(source).toContain("formatDate");
 		expect(source).toContain("StatusBadge");
 
-		// null 남은 기간은 "-"
+		// 만료 날짜 컬럼: 만료일 텍스트 표시, null(무기한)은 muted "-"
+		expect(source).toContain("formatDate(job.exposureEndsAt)");
 		expect(source).toContain(
 			'return <span className="text-muted-foreground">-</span>'
 		);
+		// 만료가 지난 경우 날짜를 danger 톤으로 시각 구분(뱃지 미사용)
+		expect(source).toContain("text-destructive");
 	});
 
 	it("wires the employer page to render the jobs DataTable", () => {

@@ -600,7 +600,8 @@ interface JobListProps {
 }
 
 const marketplaceSectionMeta = [
-	{ id: "premium", label: "프리미엄", tone: "먼저 확인" },
+	{ id: "special", label: "스페셜", tone: "프리미엄 노출" },
+	{ id: "urgent", label: "급구", tone: "최근 끌어올림" },
 	{ id: "recommended", label: "추천", tone: "상단 노출" },
 	{ id: "organic", label: "전체 공고", tone: "최신순" },
 ] as const;

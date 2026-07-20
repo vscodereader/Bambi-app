@@ -4,8 +4,6 @@ import dotenv from "dotenv";
 import { inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
-import type { PublicOrganicJobListItem } from "./bambi-promotions";
-
 dotenv.config({ path: "../../apps/server/.env" });
 
 const [{ db }, authSchema, bambiSchema, analytics] = await Promise.all([
@@ -206,32 +204,6 @@ describe("getRecentJobPerformanceMetrics", () => {
 	});
 });
 
-const toOrganicItem = (
-	id: string,
-	organizationId: string
-): PublicOrganicJobListItem => ({
-	description: null,
-	employerDisplayName: null,
-	employerVerificationStatus: null,
-	id,
-	industryCategory: "라운지",
-	isPromoted: false,
-	lastBoostedAt: null,
-	organizationId,
-	payAmount: 180_000,
-	payUnit: "일급",
-	promotionLabel: null,
-	promotionTier: null,
-	publishedAt: null,
-	ratingAverage: 0,
-	ratingCount: 0,
-	region: "서울 강남구",
-	status: "published",
-	teamDisplayName: null,
-	title: "기록 직전에 삭제된 공고",
-	workSchedule: null,
-});
-
 describe("job performance writes for a deleted job post", () => {
 	it("drops the event instead of failing the surrounding request", async () => {
 		const fixture = await createFixture();
@@ -252,9 +224,12 @@ describe("job performance writes for a deleted job post", () => {
 			await expect(
 				recordJobListingImpressions({
 					sections: {
-						organic: [toOrganicItem(fixture.jobC, fixture.organizationId)],
-						premium: [],
+						organic: [
+							{ id: fixture.jobC, organizationId: fixture.organizationId },
+						],
 						recommended: [],
+						special: [],
+						urgent: [],
 					},
 				})
 			).resolves.toBeUndefined();

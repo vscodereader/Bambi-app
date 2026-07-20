@@ -171,22 +171,24 @@ export function EmployerAdGuideScreen() {
 			title="광고 상품 안내"
 		>
 			<Card>
-				<CardContent className="flex flex-wrap items-center justify-between gap-3">
+				<CardContent className="flex flex-col gap-3">
 					<div className="flex items-center gap-2">
 						<span className="inline-flex size-5 text-primary">
 							<Megaphone size={20} />
 						</span>
-						<span className="font-bold">광고 등록 문의</span>
+						<span className="font-bold">광고 등록 안내</span>
 					</div>
-					<Link
-						className={cn(
-							buttonVariants({ variant: "default" }),
-							"no-underline"
-						)}
-						href={APPLY_HREF}
-					>
-						공고 등록하기
-					</Link>
+					<p className="m-0 text-muted-foreground text-sm">
+						저희 서비스는 무통장입금만 가능하며 입금 확인 후에 승인이
+						완료됩니다.
+					</p>
+					<div className="flex flex-col gap-1.5">
+						<span className="font-medium text-sm">무통장 입금시</span>
+						<ul className="m-0 list-disc pl-5 text-muted-foreground text-sm">
+							<li>업무 시간일 경우 30분 이내 승인</li>
+							<li>업무 시간이외 일 경우 다음 영업일에 승인</li>
+						</ul>
+					</div>
 				</CardContent>
 			</Card>
 

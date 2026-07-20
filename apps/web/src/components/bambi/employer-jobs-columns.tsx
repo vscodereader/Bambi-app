@@ -17,12 +17,10 @@ import type { DataColumn } from "@/components/bambi/data-table";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import {
 	EXPOSURE_TYPE_LABELS,
-	expiryLabel,
+	getJobDisplayStatus,
 	PAYMENT_STATUS_LABELS,
-	remainingDays,
 } from "@/lib/bambi/exposure";
-import { formatPay } from "@/lib/bambi-format";
-import { jobStatusLabels } from "@/lib/bambi-options";
+import { formatDate, formatPay } from "@/lib/bambi-format";
 
 export type EmployerJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["jobs"]["listMine"]>
@@ -32,25 +30,6 @@ type Tone = React.ComponentProps<typeof StatusBadge>["tone"];
 
 // 제목이 이 길이를 넘으면 말줄임(…)으로 처리한다.
 const TITLE_MAX_LENGTH = 17;
-
-const getJobStatusLabel = (status: string): string =>
-	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
-
-const getJobStatusTone = (status: string): Tone => {
-	if (status === "published") {
-		return "good";
-	}
-
-	if (status === "pending_review") {
-		return "warning";
-	}
-
-	if (status === "rejected") {
-		return "danger";
-	}
-
-	return "default";
-};
 
 const getPaymentStatusTone = (status: string): Tone =>
 	status === "paid" ? "good" : "warning";
@@ -64,18 +43,6 @@ const getTruncatedTitle = (title: string): string =>
 	title.length > TITLE_MAX_LENGTH
 		? `${title.slice(0, TITLE_MAX_LENGTH)}…`
 		: title;
-
-const getExpiryTone = (label: string): Tone => {
-	if (label === "진행중") {
-		return "good";
-	}
-
-	if (label === "만료") {
-		return "danger";
-	}
-
-	return "default";
-};
 
 interface EmployerJobsColumnsOptions {
 	deletingJobId: null | string;
@@ -129,12 +96,12 @@ export function getEmployerJobsColumns({
 		{
 			id: "status",
 			header: "공고 상태",
-			sortValue: (job) => getJobStatusLabel(job.status),
-			cell: (job) => (
-				<StatusBadge tone={getJobStatusTone(job.status)}>
-					{getJobStatusLabel(job.status)}
-				</StatusBadge>
-			),
+			sortValue: (job) => getJobDisplayStatus(job).label,
+			cell: (job) => {
+				const display = getJobDisplayStatus(job);
+
+				return <StatusBadge tone={display.tone}>{display.label}</StatusBadge>;
+			},
 		},
 		{
 			id: "exposureType",
@@ -158,16 +125,22 @@ export function getEmployerJobsColumns({
 			id: "period",
 			header: "기간",
 			sortValue: (job) =>
-				remainingDays(job.exposureEndsAt) ?? Number.POSITIVE_INFINITY,
+				job.exposureEndsAt === null
+					? Number.POSITIVE_INFINITY
+					: new Date(job.exposureEndsAt).getTime(),
 			cell: (job) => {
-				const label = expiryLabel(job.exposureEndsAt);
-				const days = remainingDays(job.exposureEndsAt);
-				const showDays = days !== null && days > 0;
+				if (job.exposureEndsAt === null) {
+					return <span className="text-muted-foreground">-</span>;
+				}
+
+				const expired = new Date(job.exposureEndsAt).getTime() <= Date.now();
 
 				return (
-					<StatusBadge tone={getExpiryTone(label)}>
-						{showDays ? `${label} · ${days}일` : label}
-					</StatusBadge>
+					<span
+						className={cn("whitespace-nowrap", expired && "text-destructive")}
+					>
+						{formatDate(job.exposureEndsAt)}
+					</span>
 				);
 			},
 		},

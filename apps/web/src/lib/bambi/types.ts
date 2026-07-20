@@ -44,6 +44,7 @@ export interface Job {
 	desc: string;
 	descriptionBlocks?: JobDescriptionBlock[];
 	detailImages?: JobMedia[];
+	exposureType?: null | string;
 	featured: boolean;
 	hours: string;
 	id: string;
@@ -89,8 +90,9 @@ export interface JobMedia {
 
 export interface MarketplaceJobSections {
 	organic: Job[];
-	premium: Job[];
 	recommended: Job[];
+	special: Job[];
+	urgent: Job[];
 }
 
 export interface QueueFlag {

@@ -3,7 +3,6 @@
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { ReactNode } from "react";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
-import { getVisualJobExposureSections } from "@/lib/bambi/visual-job-exposure";
 import { Card } from "./ds";
 import { VisualJobCard } from "./visual-job-card";
 
@@ -107,13 +106,11 @@ export function VisualJobExposureSections({
 		);
 	}
 
-	const visualSections = getVisualJobExposureSections(sections);
-
 	return (
 		<div className="grid gap-5">
-			{visualSections.special.length > 0 ? (
+			{sections.special.length > 0 ? (
 				<ExposureSection
-					jobs={visualSections.special}
+					jobs={sections.special}
 					meta="프리미엄 노출"
 					onChat={onChat}
 					onOpen={onOpen}
@@ -121,9 +118,9 @@ export function VisualJobExposureSections({
 					tone="special"
 				/>
 			) : null}
-			{visualSections.urgent.length > 0 ? (
+			{sections.urgent.length > 0 ? (
 				<ExposureSection
-					jobs={visualSections.urgent}
+					jobs={sections.urgent}
 					meta="최근 끌어올림"
 					onChat={onChat}
 					onOpen={onOpen}
@@ -133,9 +130,9 @@ export function VisualJobExposureSections({
 			) : null}
 			{/* 스페셜·급구 뒤, 추천·전체 앞 고정 위치. 급구/추천이 빠져도 이 자리에 항상 렌더된다. */}
 			{communitySlot}
-			{visualSections.recommended.length > 0 ? (
+			{sections.recommended.length > 0 ? (
 				<ExposureSection
-					jobs={visualSections.recommended}
+					jobs={sections.recommended}
 					meta="상단 추천"
 					onChat={onChat}
 					onOpen={onOpen}
@@ -144,7 +141,7 @@ export function VisualJobExposureSections({
 				/>
 			) : null}
 			<ExposureSection
-				jobs={visualSections.organic}
+				jobs={sections.organic}
 				meta="최신순"
 				onChat={onChat}
 				onOpen={onOpen}

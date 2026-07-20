@@ -3,13 +3,6 @@ import { member } from "@bambi-app/db/schema/auth";
 import { jobPerformanceEvent, jobPost } from "@bambi-app/db/schema/bambi";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
-import type {
-	PromotionTier,
-	PublicJobSections,
-	PublicOrganicJobListItem,
-	PublicPromotedJobListItem,
-} from "./bambi-promotions";
-
 export const jobPerformanceEventTypes = [
 	"impression",
 	"detail_view",
@@ -81,25 +74,33 @@ export const recordJobPerformanceEvent = async ({
 	}
 };
 
+interface ListingImpressionItem {
+	exposureType?: string;
+	id: string;
+	organizationId: string;
+}
+
 interface RecordJobListingImpressionsInput {
 	actorUserId?: null | string;
-	sections: PublicJobSections["sections"];
+	sections: {
+		organic: ListingImpressionItem[];
+		recommended: ListingImpressionItem[];
+		special: ListingImpressionItem[];
+		urgent: ListingImpressionItem[];
+	};
 }
 
 const toImpressionMetadata = ({
-	campaignId,
+	exposureType,
 	position,
-	promotionTier,
 	section,
 }: {
-	campaignId?: string;
+	exposureType?: string;
 	position: number;
-	promotionTier?: PromotionTier;
-	section: "organic" | "premium" | "recommended";
+	section: "organic" | "recommended" | "special" | "urgent";
 }): Record<string, unknown> => ({
-	...(campaignId ? { campaignId } : {}),
+	...(exposureType ? { exposureType } : {}),
 	position,
-	...(promotionTier ? { promotionTier } : {}),
 	section,
 });
 
@@ -110,17 +111,16 @@ const toPromotedImpressionValue = ({
 	section,
 }: {
 	actorUserId?: null | string;
-	item: PublicPromotedJobListItem;
+	item: ListingImpressionItem;
 	position: number;
-	section: "premium" | "recommended";
+	section: "recommended" | "special" | "urgent";
 }) => ({
 	actorUserId: actorUserId ?? null,
 	eventType: "impression" as const,
 	jobPostId: item.id,
 	metadata: toImpressionMetadata({
-		campaignId: item.promotionCampaignId,
+		exposureType: item.exposureType,
 		position,
-		promotionTier: item.promotionTier,
 		section,
 	}),
 	organizationId: item.organizationId,
@@ -132,7 +132,7 @@ const toOrganicImpressionValue = ({
 	position,
 }: {
 	actorUserId?: null | string;
-	item: PublicOrganicJobListItem;
+	item: ListingImpressionItem;
 	position: number;
 }) => ({
 	actorUserId: actorUserId ?? null,
@@ -150,12 +150,20 @@ export const recordJobListingImpressions = async ({
 	sections,
 }: RecordJobListingImpressionsInput): Promise<void> => {
 	const values = [
-		...sections.premium.map((item, position) =>
+		...sections.special.map((item, position) =>
 			toPromotedImpressionValue({
 				actorUserId,
 				item,
 				position,
-				section: "premium",
+				section: "special",
+			})
+		),
+		...sections.urgent.map((item, position) =>
+			toPromotedImpressionValue({
+				actorUserId,
+				item,
+				position,
+				section: "urgent",
 			})
 		),
 		...sections.recommended.map((item, position) =>
@@ -189,6 +197,66 @@ export const recordJobListingImpressions = async ({
 		// 목록 조회와 기록 사이에 공고 하나라도 삭제되면 배치 insert 전체가 막힌다.
 		// 노출 기록보다 목록 응답이 우선이라 이번 요청의 기록만 포기한다.
 	}
+};
+
+interface AdBannerImpressionItem {
+	exposureType: string;
+	id: string;
+	organizationId: string;
+}
+
+interface RecordAdBannerImpressionsInput {
+	actorUserId?: null | string;
+	groups: {
+		leftBanner: AdBannerImpressionItem[];
+		premiumBanner: AdBannerImpressionItem[];
+		rightBanner: AdBannerImpressionItem[];
+	};
+}
+
+// 배너 상품 노출은 그룹(위치)별로 impression을 기록한다. metadata.section 값은 해당 배너의
+// exposureType 문자열을 그대로 써서(premium-banner/left-banner/right-banner) 위치별 집계와 정합한다.
+const toAdBannerImpressionValue = ({
+	actorUserId,
+	item,
+	position,
+}: {
+	actorUserId?: null | string;
+	item: AdBannerImpressionItem;
+	position: number;
+}) => ({
+	actorUserId: actorUserId ?? null,
+	eventType: "impression" as const,
+	jobPostId: item.id,
+	metadata: {
+		exposureType: item.exposureType,
+		position,
+		section: item.exposureType,
+	},
+	organizationId: item.organizationId,
+});
+
+export const recordAdBannerImpressions = async ({
+	actorUserId,
+	groups,
+}: RecordAdBannerImpressionsInput): Promise<void> => {
+	const values = [
+		...groups.premiumBanner.map((item, position) =>
+			toAdBannerImpressionValue({ actorUserId, item, position })
+		),
+		...groups.leftBanner.map((item, position) =>
+			toAdBannerImpressionValue({ actorUserId, item, position })
+		),
+		...groups.rightBanner.map((item, position) =>
+			toAdBannerImpressionValue({ actorUserId, item, position })
+		),
+	];
+
+	if (values.length === 0) {
+		return;
+	}
+
+	await db.insert(jobPerformanceEvent).values(values);
 };
 
 export const RECENT_PERFORMANCE_WINDOW_DAYS = 7;
@@ -265,15 +333,20 @@ export interface JobPerformanceMetrics {
 }
 
 export interface JobPerformanceSectionMetrics {
+	leftBannerImpressions: number;
 	organicImpressions: number;
-	premiumImpressions: number;
+	premiumBannerImpressions: number;
 	recommendedImpressions: number;
+	rightBannerImpressions: number;
+	specialImpressions: number;
+	urgentImpressions: number;
 }
 
 export interface EmployerJobPerformanceSummary {
 	jobPostId: string;
 	metrics: JobPerformanceMetrics;
 	organizationId: string;
+	paymentStatus: string;
 	sectionMetrics: JobPerformanceSectionMetrics;
 	status: string;
 	title: string;
@@ -287,9 +360,13 @@ const emptyMetrics = (): JobPerformanceMetrics => ({
 });
 
 const emptySectionMetrics = (): JobPerformanceSectionMetrics => ({
+	leftBannerImpressions: 0,
 	organicImpressions: 0,
-	premiumImpressions: 0,
+	premiumBannerImpressions: 0,
 	recommendedImpressions: 0,
+	rightBannerImpressions: 0,
+	specialImpressions: 0,
+	urgentImpressions: 0,
 });
 
 const getEventSection = (
@@ -327,14 +404,28 @@ const incrementSectionMetric = (
 	metadata: Record<string, unknown> | null
 ) => {
 	switch (getEventSection(metadata)) {
+		// 하위 호환: 구 캠페인 기반 "premium" 섹션은 광고상품 체계의 스페셜 버킷으로 흡수한다.
 		case "premium":
-			sectionMetrics.premiumImpressions += 1;
+		case "special":
+			sectionMetrics.specialImpressions += 1;
+			break;
+		case "urgent":
+			sectionMetrics.urgentImpressions += 1;
 			break;
 		case "recommended":
 			sectionMetrics.recommendedImpressions += 1;
 			break;
 		case "organic":
 			sectionMetrics.organicImpressions += 1;
+			break;
+		case "premium-banner":
+			sectionMetrics.premiumBannerImpressions += 1;
+			break;
+		case "left-banner":
+			sectionMetrics.leftBannerImpressions += 1;
+			break;
+		case "right-banner":
+			sectionMetrics.rightBannerImpressions += 1;
 			break;
 		default:
 			break;
@@ -372,6 +463,7 @@ export const getEmployerJobPerformanceSummary = async (
 		.select({
 			jobPostId: jobPost.id,
 			organizationId: jobPost.organizationId,
+			paymentStatus: jobPost.paymentStatus,
 			status: jobPost.status,
 			title: jobPost.title,
 			updatedAt: jobPost.updatedAt,
