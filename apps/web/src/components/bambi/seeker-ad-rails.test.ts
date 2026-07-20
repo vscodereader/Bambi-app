@@ -20,6 +20,15 @@ const RAIL_SCREENS = [
 		),
 	},
 	{
+		label: "채팅 목록",
+		relativePath: path.join(
+			"components",
+			"bambi",
+			"screens",
+			"seeker-chat-list-responsive.tsx"
+		),
+	},
+	{
 		label: "공고 상세",
 		relativePath: path.join(
 			"components",
