@@ -13,6 +13,7 @@ const EMPLOYER_NAV_ITEMS = [
 	{ href: "/employer/settings" as Route, label: "조직 설정" },
 	{ href: "/employer/me", label: "업체 정보" },
 	{ href: "/seeker", label: "채용정보" },
+	{ href: "/support" as Route, label: "고객센터" },
 ] as const;
 
 export default async function EmployerLayout({
