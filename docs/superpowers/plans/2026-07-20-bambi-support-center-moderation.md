@@ -71,7 +71,7 @@
 **Interfaces:**
 - Produces: `supportInquiryCategory`, `supportInquiryStatus` (pgEnum), `supportInquiry`, `supportInquiryMessage`, `faqEntry`, `bannedWord` (pgTable) — 이후 모든 태스크가 `@bambi-app/db/schema/bambi`에서 import한다.
 
-- [ ] **Step 1: enum 2개를 기존 enum 블록 끝에 추가**
+- [x] **Step 1: enum 2개를 기존 enum 블록 끝에 추가**
 
 `packages/db/src/schema/bambi.ts`의 `communityContentStatus`(89-93행) 정의 아래에 이어 붙인다.
 
@@ -94,7 +94,7 @@ export const supportInquiryStatus = pgEnum("support_inquiry_status", [
 ]);
 ```
 
-- [ ] **Step 2: `moderationTargetType`에 값 2개 추가**
+- [x] **Step 2: `moderationTargetType`에 값 2개 추가**
 
 같은 파일 69-77행의 배열에 두 값을 더한다. 감사로그가 문의를 가리킬 수 있어야 한다.
 
@@ -112,7 +112,7 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 ]);
 ```
 
-- [ ] **Step 3: 테이블 4개를 `communityPostLike`(774-793행) 아래에 추가**
+- [x] **Step 3: 테이블 4개를 `communityPostLike`(774-793행) 아래에 추가**
 
 `relations` 정의 블록(795행 `bambiProfileRelations`) **앞에** 넣는다.
 
@@ -223,7 +223,7 @@ export const bannedWord = pgTable(
 );
 ```
 
-- [ ] **Step 4: relations 추가**
+- [x] **Step 4: relations 추가**
 
 파일 끝의 relations 블록(885-908행 부근)에 이어 붙인다.
 
@@ -246,7 +246,7 @@ export const supportInquiryMessageRelations = relations(
 );
 ```
 
-- [ ] **Step 5: `packages/db/src/index.ts`에 re-export 추가**
+- [x] **Step 5: `packages/db/src/index.ts`에 re-export 추가**
 
 기존 export 목록(24행·62행 부근에 `adminModerationAction`이 있는 형식)과 같은 자리에 알파벳 순서를 지켜 넣는다.
 
@@ -259,12 +259,12 @@ export const supportInquiryMessageRelations = relations(
 	supportInquiryStatus,
 ```
 
-- [ ] **Step 6: 타입체크**
+- [x] **Step 6: 타입체크**
 
 Run: `cd packages/db && pnpm check-types`
 Expected: 에러 없이 종료(exit 0). `uniqueIndex`·`integer`·`boolean`이 이미 파일 상단에서 import되어 있는지 확인하고, 빠진 게 있으면 drizzle-orm/pg-core import에 추가한다.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add packages/db/src/schema/bambi.ts packages/db/src/index.ts
@@ -295,16 +295,16 @@ feat(db): 고객센터·금칙어 테이블과 enum 추가
 - Consumes: Task 1의 스키마 정의
 - Produces: 적용 가능한 마이그레이션 파일
 
-- [ ] **Step 1: 사용자에게 마이그레이션 생성 승인을 요청**
+- [x] **Step 1: 사용자에게 마이그레이션 생성 승인을 요청**
 
 `db:generate`는 사용자의 명시 지시가 있을 때만 실행한다. 승인 없이 다음 단계로 넘어가지 않는다.
 
-- [ ] **Step 2: 승인을 받으면 마이그레이션 생성**
+- [x] **Step 2: 승인을 받으면 마이그레이션 생성**
 
 Run: `cd packages/db && pnpm db:generate`
 Expected: `src/migrations/0017_<random_name>.sql`과 `meta/0017_snapshot.json`이 생성된다. 번호가 0017이 아니면 중단하고 보고한다.
 
-- [ ] **Step 3: 생성된 SQL에서 `ALTER TYPE` 문을 확인**
+- [x] **Step 3: 생성된 SQL에서 `ALTER TYPE` 문을 확인**
 
 `moderation_target_type`에 값을 추가하는 문이 아래 형태로 들어 있어야 한다.
 
@@ -315,11 +315,11 @@ ALTER TYPE "public"."moderation_target_type" ADD VALUE 'support_inquiry_message'
 
 PostgreSQL은 `ALTER TYPE ... ADD VALUE`를 같은 트랜잭션 안에서 추가·사용하는 것을 막는다. 이 마이그레이션에서는 값을 추가만 하고 사용하지 않으므로 그대로 두면 되지만, drizzle이 `CREATE TABLE`과 같은 트랜잭션에 묶었다면 `ALTER TYPE` 문들을 파일 맨 위로 올려 둔다.
 
-- [ ] **Step 4: 설계 문서의 마이그레이션 번호를 실제 파일명으로 갱신**
+- [x] **Step 4: 설계 문서의 마이그레이션 번호를 실제 파일명으로 갱신**
 
 `docs/superpowers/specs/2026-07-20-bambi-support-center-moderation-design.md`의 §4 첫 줄 마이그레이션 번호를 생성된 실제 파일명으로 고친다. AGENTS.md가 요구하는 문서 동기화 항목이다.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```
 feat(db): 고객센터·금칙어 마이그레이션 0017 추가
@@ -340,7 +340,7 @@ feat(db): 고객센터·금칙어 마이그레이션 0017 추가
 
 현재 admin 게이트는 각 핸들러 첫 줄의 `await requireAdminProfile(context.session)` 인라인 호출이다. 신규 프로시저에서 이 한 줄을 빠뜨리면 로그인한 아무나 호출할 수 있으므로 미들웨어로 승격한다.
 
-- [ ] **Step 1: `packages/api/src/index.ts`를 아래 내용으로 수정**
+- [x] **Step 1: `packages/api/src/index.ts`를 아래 내용으로 수정**
 
 ```ts
 import { ORPCError, os } from "@orpc/server";
@@ -375,19 +375,19 @@ const requireAdmin = o.middleware(async ({ context, next }) => {
 export const adminProcedure = protectedProcedure.use(requireAdmin);
 ```
 
-- [ ] **Step 2: 순환 import가 없는지 확인**
+- [x] **Step 2: 순환 import가 없는지 확인**
 
 `services/bambi-authz.ts`는 `../../index`를 import하지 않으므로 순환이 생기지 않는다. 확인:
 
 Run: `cd packages/api && pnpm check-types`
 Expected: 에러 없이 종료.
 
-- [ ] **Step 3: 기존 테스트가 깨지지 않는지 확인**
+- [x] **Step 3: 기존 테스트가 깨지지 않는지 확인**
 
 Run: `cd packages/api && pnpm test`
 Expected: 기존 테스트 결과가 변경 전과 동일. 신규 실패 0건.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```
 feat(api): 운영자 전용 adminProcedure 미들웨어 신설
@@ -413,7 +413,7 @@ feat(api): 운영자 전용 adminProcedure 미들웨어 신설
 
 단순 `includes()`는 공백 하나로 뚫리고, 운영자가 정규식을 직접 넣게 하면 잘못된 패턴 하나로 서비스 전체 글쓰기가 막힌다. 정규화 + 부분문자열이 그 중간이다.
 
-- [ ] **Step 1: 실패하는 테스트를 작성**
+- [x] **Step 1: 실패하는 테스트를 작성**
 
 `packages/api/src/services/bambi-banned-words.test.ts`
 
@@ -488,12 +488,12 @@ describe("findBannedTerm", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트를 실행해 실패를 확인**
+- [x] **Step 2: 테스트를 실행해 실패를 확인**
 
 Run: `cd packages/api && pnpm vitest run src/services/bambi-banned-words.test.ts`
 Expected: FAIL — `Failed to resolve import "./bambi-banned-words"`
 
-- [ ] **Step 3: 최소 구현을 작성**
+- [x] **Step 3: 최소 구현을 작성**
 
 `packages/api/src/services/bambi-banned-words.ts`
 
@@ -545,14 +545,14 @@ export const findBannedTerm = (
 };
 ```
 
-- [ ] **Step 4: 테스트를 실행해 통과를 확인**
+- [x] **Step 4: 테스트를 실행해 통과를 확인**
 
 Run: `cd packages/api && pnpm vitest run src/services/bambi-banned-words.test.ts`
 Expected: PASS — 12 passed
 
 "여러 개가 걸리면 목록에서 먼저 만난 것을 반환한다" 테스트가 실패하면 `entries` 순서 가정이 어긋난 것이다. 테스트의 기대값을 실제 순회 순서(`entries[0]`부터)에 맞춘다.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```
 feat(api): 금칙어 매칭 엔진 추가(정규화 후 부분문자열)
@@ -576,7 +576,7 @@ feat(api): 금칙어 매칭 엔진 추가(정규화 후 부분문자열)
 
 커뮤니티 본문은 TipTap JSON 문자열이라 금칙어를 걸려면 평문을 뽑아야 한다. 고객센터 본문은 평문이므로 이 함수를 쓰지 않는다.
 
-- [ ] **Step 1: 실패하는 테스트를 작성**
+- [x] **Step 1: 실패하는 테스트를 작성**
 
 `packages/api/src/services/bambi-tiptap-text.test.ts`
 
@@ -650,12 +650,12 @@ describe("extractTiptapText", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트를 실행해 실패를 확인**
+- [x] **Step 2: 테스트를 실행해 실패를 확인**
 
 Run: `cd packages/api && pnpm vitest run src/services/bambi-tiptap-text.test.ts`
 Expected: FAIL — `Failed to resolve import "./bambi-tiptap-text"`
 
-- [ ] **Step 3: 최소 구현을 작성**
+- [x] **Step 3: 최소 구현을 작성**
 
 `packages/api/src/services/bambi-tiptap-text.ts`
 
@@ -704,12 +704,12 @@ export const extractTiptapText = (body: string): string => {
 };
 ```
 
-- [ ] **Step 4: 테스트를 실행해 통과를 확인**
+- [x] **Step 4: 테스트를 실행해 통과를 확인**
 
 Run: `cd packages/api && pnpm vitest run src/services/bambi-tiptap-text.test.ts`
 Expected: PASS — 5 passed
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```
 feat(api): TipTap 본문 평문 추출 유틸 추가
@@ -736,7 +736,7 @@ feat(api): TipTap 본문 평문 추출 유틸 추가
   - `assertNoBannedWords(fields: string[]): Promise<void>` — 걸리면 `BAD_REQUEST` throw
   - `bannedWordsRouter`
 
-- [ ] **Step 1: 캐시와 검사 헬퍼를 서비스 파일 끝에 추가**
+- [x] **Step 1: 캐시와 검사 헬퍼를 서비스 파일 끝에 추가**
 
 `packages/api/src/services/bambi-banned-words.ts`에 이어 붙인다.
 
@@ -796,7 +796,7 @@ export const assertNoBannedWords = async (fields: string[]): Promise<void> => {
 };
 ```
 
-- [ ] **Step 2: 라우터를 작성**
+- [x] **Step 2: 라우터를 작성**
 
 `packages/api/src/routers/bambi/banned-words.ts`
 
@@ -911,7 +911,7 @@ export const bannedWordsRouter = {
 };
 ```
 
-- [ ] **Step 3: 라우터를 등록**
+- [x] **Step 3: 라우터를 등록**
 
 `packages/api/src/routers/bambi/index.ts`에 import와 항목을 알파벳 순서로 추가한다.
 
@@ -923,12 +923,12 @@ import { bannedWordsRouter } from "./banned-words";
 	bannedWords: bannedWordsRouter,
 ```
 
-- [ ] **Step 4: 타입체크와 전체 테스트**
+- [x] **Step 4: 타입체크와 전체 테스트**
 
 Run: `cd packages/api && pnpm check-types && pnpm test`
 Expected: 타입 에러 없음. 신규 테스트 실패 0건.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```
 feat(api): 금칙어 캐시와 운영자 CRUD 라우터 추가
@@ -953,7 +953,7 @@ feat(api): 금칙어 캐시와 운영자 CRUD 라우터 추가
 
 커뮤니티에는 지금 키워드 검사가 하나도 없다. 작성·수정 4개 프로시저에 검사를 건다.
 
-- [ ] **Step 1: import 추가**
+- [x] **Step 1: import 추가**
 
 `packages/api/src/routers/bambi/community.ts` 상단 import 블록(24-33행 부근)에 추가한다.
 
@@ -962,7 +962,7 @@ import { assertNoBannedWords } from "../../services/bambi-banned-words";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 ```
 
-- [ ] **Step 2: `createPost` 핸들러에 검사 추가**
+- [x] **Step 2: `createPost` 핸들러에 검사 추가**
 
 `createPost`(451행 부근) 핸들러에서 `requireCommunityMember` 호출 **직후**, DB 쓰기 **이전**에 넣는다. 차단된 글이 부분 저장되면 안 된다.
 
@@ -970,7 +970,7 @@ import { extractTiptapText } from "../../services/bambi-tiptap-text";
 await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 ```
 
-- [ ] **Step 3: `updatePost`·`createComment`·`updateComment`에도 같은 검사 추가**
+- [x] **Step 3: `updatePost`·`createComment`·`updateComment`에도 같은 검사 추가**
 
 `updatePost`(493행 부근):
 
@@ -984,7 +984,7 @@ await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 await assertNoBannedWords([input.body]);
 ```
 
-- [ ] **Step 4: 통합 테스트를 추가**
+- [x] **Step 4: 통합 테스트를 추가**
 
 `packages/api/src/routers/bambi/community.test.ts` 끝에 추가한다. 기존 파일의 픽스처 헬퍼와 `createContextForUser`를 그대로 재사용하고, 동적 import 목록에 `bannedWord`와 금칙어 서비스를 더한다.
 
@@ -1049,14 +1049,14 @@ it("금칙어가 없는 정상 글은 그대로 게시된다", async () => {
 });
 ```
 
-- [ ] **Step 5: 테스트를 실행**
+- [x] **Step 5: 테스트를 실행**
 
 Run: `cd packages/api && pnpm vitest run src/routers/bambi/community.test.ts`
 Expected: 신규 2건 PASS, 기존 케이스 전부 PASS(무회귀).
 
 기존 테스트가 깨지면 금칙어 행이 남아 다른 케이스의 본문이 걸린 것이다. `finally`에서 삭제와 캐시 무효화가 모두 실행되는지 확인한다.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```
 feat(api): 커뮤니티 작성·수정 경로에 금칙어 차단 적용
@@ -1081,7 +1081,7 @@ feat(api): 커뮤니티 작성·수정 경로에 금칙어 차단 적용
 
 고객센터는 커뮤니티의 성별·광고 게이트를 상속하지 않는다. `requireActiveBambiProfile`(정지 회원만 차단)이면 구인자·구직자 전원이 쓴다.
 
-- [ ] **Step 1: 라우터 파일을 작성**
+- [x] **Step 1: 라우터 파일을 작성**
 
 `packages/api/src/routers/bambi/support.ts`
 
@@ -1317,7 +1317,7 @@ export const supportRouter = {
 };
 ```
 
-- [ ] **Step 2: 라우터를 등록**
+- [x] **Step 2: 라우터를 등록**
 
 `packages/api/src/routers/bambi/index.ts`에 알파벳 순서로 추가한다.
 
@@ -1329,7 +1329,7 @@ import { supportRouter } from "./support";
 	support: supportRouter,
 ```
 
-- [ ] **Step 3: 통합 테스트를 작성**
+- [x] **Step 3: 통합 테스트를 작성**
 
 `packages/api/src/routers/bambi/support.test.ts`. dotenv를 최상단에서 먼저 부르고 동적 import를 쓰는 기존 관례를 지킨다.
 
@@ -1479,14 +1479,14 @@ describe("고객센터 문의", () => {
 });
 ```
 
-- [ ] **Step 4: 테스트를 실행**
+- [x] **Step 4: 테스트를 실행**
 
 Run: `cd packages/api && pnpm vitest run src/routers/bambi/support.test.ts`
 Expected: 6 passed
 
 `user` insert에서 컬럼 누락 에러가 나면 `packages/db/src/schema/auth.ts:11-22`의 실제 컬럼을 보고 필수 필드를 채운다.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```
 feat(api): 고객센터 1:1 문의 API 추가
@@ -1510,7 +1510,7 @@ feat(api): 고객센터 1:1 문의 API 추가
 - Consumes: `adminProcedure` (Task 3)
 - Produces: `listFaq` / `listInquiriesByAdmin` / `createFaq` / `updateFaq` / `setFaqPublished` / `removeFaq`
 
-- [ ] **Step 1: import와 zod 스키마를 추가**
+- [x] **Step 1: import와 zod 스키마를 추가**
 
 `support.ts` 상단에 추가한다.
 
@@ -1555,7 +1555,7 @@ const listInquiriesByAdminInput = z.object({
 });
 ```
 
-- [ ] **Step 2: 프로시저 6개를 `supportRouter`에 추가**
+- [x] **Step 2: 프로시저 6개를 `supportRouter`에 추가**
 
 ```ts
 	listFaq: protectedProcedure
@@ -1658,7 +1658,7 @@ const listInquiriesByAdminInput = z.object({
 	}),
 ```
 
-- [ ] **Step 3: 테스트를 추가**
+- [x] **Step 3: 테스트를 추가**
 
 `support.test.ts` 상단 동적 import에 `faqEntry`를 더하고, 아래 describe 블록을 추가한다.
 
@@ -1709,14 +1709,14 @@ describe("고객센터 FAQ", () => {
 });
 ```
 
-- [ ] **Step 4: 테스트를 실행**
+- [x] **Step 4: 테스트를 실행**
 
 Run: `cd packages/api && pnpm vitest run src/routers/bambi/support.test.ts`
 Expected: 8 passed
 
 "일반 회원은 FAQ를 만들 수 없다"가 통과하면 Task 3의 `adminProcedure` 미들웨어가 실제로 작동한다는 증거다.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```
 feat(api): 고객센터 FAQ와 운영자 문의 목록 API 추가
@@ -1741,7 +1741,7 @@ feat(api): 고객센터 FAQ와 운영자 문의 목록 API 추가
 
 기존 조치 패턴(`moderation.ts:628` `setJobPostStatus`)을 그대로 따른다 — 트랜잭션 안에서 대상 확인 → UPDATE → **같은 트랜잭션에서 `adminModerationAction` insert**.
 
-- [ ] **Step 1: import와 zod 스키마를 추가**
+- [x] **Step 1: import와 zod 스키마를 추가**
 
 ```ts
 import {
@@ -1787,7 +1787,7 @@ const MODERATABLE_PAGE_SIZE = 20;
 const EXCERPT_LENGTH = 120;
 ```
 
-- [ ] **Step 2: 조치 프로시저 2개를 추가**
+- [x] **Step 2: 조치 프로시저 2개를 추가**
 
 ```ts
 	setInquiryStatusByAdmin: adminProcedure
@@ -1861,7 +1861,7 @@ const EXCERPT_LENGTH = 120;
 		}),
 ```
 
-- [ ] **Step 3: 통합 목록 프로시저를 추가**
+- [x] **Step 3: 통합 목록 프로시저를 추가**
 
 유형이 달라도 서버에서 공통 형태로 정규화해 반환한다. UI가 유형별 분기를 하지 않아도 되고, 대상이 늘어도 화면을 고치지 않는다.
 
@@ -2004,7 +2004,7 @@ const EXCERPT_LENGTH = 120;
 		}),
 ```
 
-- [ ] **Step 4: 테스트를 작성**
+- [x] **Step 4: 테스트를 작성**
 
 `packages/api/src/routers/bambi/moderation-support.test.ts`. Task 8 테스트의 픽스처 패턴(dotenv 최상단 → 동적 import → `seedUser`)을 그대로 복제하고, 아래 케이스를 넣는다.
 
@@ -2093,14 +2093,14 @@ afterAll(async () => {
 });
 ```
 
-- [ ] **Step 5: 테스트를 실행**
+- [x] **Step 5: 테스트를 실행**
 
 Run: `cd packages/api && pnpm vitest run src/routers/bambi/moderation-support.test.ts`
 Expected: 4 passed
 
 공유 개발 DB라 다른 데이터가 섞일 수 있다. `toHaveLength(1)` 단언이 흔들리면 `targetId`로 좁힌 조회인지 확인하고, 전역 카운트 단언은 하한(`toBeGreaterThan`)으로 완화한다.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```
 feat(api): 고객센터 문의 운영 조치와 통합 게시물 목록 추가
@@ -2125,7 +2125,7 @@ feat(api): 고객센터 문의 운영 조치와 통합 게시물 목록 추가
 **Interfaces:**
 - Produces: `SUPPORT_CATEGORIES`, `SUPPORT_CATEGORY_LABELS`, `INQUIRY_STATUS_LABELS`, `supportInquiryPath(id)`, `SUPPORT_CONTENT_WIDTH` — 이후 모든 고객센터 화면이 여기서 가져온다.
 
-- [ ] **Step 1: 없는 shadcn 컴포넌트 2개를 추가**
+- [x] **Step 1: 없는 shadcn 컴포넌트 2개를 추가**
 
 목록용 `table`과 FAQ용 `accordion`이 `packages/ui/src/components`에 없다. npm 의존성 추가가 아니라 레지스트리 파일 복사다.
 
@@ -2134,7 +2134,7 @@ Expected: `packages/ui/src/components/accordion.tsx`, `table.tsx` 생성.
 
 파일이 레포 루트로 떨어지면 `packages/ui/src/components/`로 옮긴다. 생성된 파일에 하드코딩 `rounded-none`이나 `text-xs` 고밀도 스타일이 있으면 밤비 재테마 관례대로 걷어낸다(반경은 토큰 유틸로).
 
-- [ ] **Step 2: 고객센터 메타 상수를 작성**
+- [x] **Step 2: 고객센터 메타 상수를 작성**
 
 `apps/web/src/lib/bambi/support.ts` — 고객센터 라벨·경로의 단일 진실원이다. enum 원값이 화면에 노출되지 않게 한다(운영자 콘솔에서 같은 실수가 있었다).
 
@@ -2179,7 +2179,7 @@ export const supportInquiryPath = (inquiryId: string): Route =>
 export const SUPPORT_CONTENT_WIDTH = "mx-auto w-full max-w-[min(92%,1120px)]";
 ```
 
-- [ ] **Step 3: `/support` 셸을 작성**
+- [x] **Step 3: `/support` 셸을 작성**
 
 `apps/web/src/app/support/layout.tsx` — 고객센터는 역할 네임스페이스에 묶이지 않으므로 seeker/employer 셸을 쓰지 않고 전용 경량 셸을 둔다.
 
@@ -2202,12 +2202,12 @@ export default function SupportLayout({ children }: { children: ReactNode }) {
 }
 ```
 
-- [ ] **Step 4: 타입체크**
+- [x] **Step 4: 타입체크**
 
 Run: `cd apps/web && pnpm check-types`
 Expected: 에러 없음. `APP_CONTENT_MAX_W`가 `@/lib/bambi/layout`에 없으면 실제 export 이름을 확인해 맞춘다.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```
 feat(web): 고객센터 공통 상수와 /support 셸 추가
@@ -2227,7 +2227,7 @@ feat(web): 고객센터 공통 상수와 /support 셸 추가
 **Interfaces:**
 - Consumes: `orpc.bambi.support.listFaq` (Task 9), `SUPPORT_CATEGORY_LABELS` (Task 11)
 
-- [ ] **Step 1: FAQ 목록 컴포넌트를 작성**
+- [x] **Step 1: FAQ 목록 컴포넌트를 작성**
 
 `apps/web/src/components/bambi/support/faq-list.tsx`
 
@@ -2340,7 +2340,7 @@ export function FaqList() {
 
 `Button`에 `render` prop을 쓰는 이유: 이 레포의 shadcn base는 radix가 아니라 **base-ui**라 `asChild`가 없다.
 
-- [ ] **Step 2: 페이지를 작성**
+- [x] **Step 2: 페이지를 작성**
 
 `apps/web/src/app/support/page.tsx`
 
@@ -2354,12 +2354,12 @@ export default function SupportPage() {
 }
 ```
 
-- [ ] **Step 3: 타입체크**
+- [x] **Step 3: 타입체크**
 
 Run: `cd apps/web && pnpm check-types`
 Expected: 에러 없음. `Accordion`/`Empty`의 실제 prop 이름이 다르면 `pnpm dlx shadcn@latest docs accordion`으로 확인해 맞춘다.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```
 feat(web): 고객센터 FAQ 화면 추가
@@ -2383,7 +2383,7 @@ feat(web): 고객센터 FAQ 화면 추가
 **Interfaces:**
 - Consumes: `orpc.bambi.support.listMyInquiries`, `orpc.bambi.support.createInquiry` (Task 8)
 
-- [ ] **Step 1: 문의 목록 컴포넌트를 작성**
+- [x] **Step 1: 문의 목록 컴포넌트를 작성**
 
 `apps/web/src/components/bambi/support/inquiry-list.tsx`
 
@@ -2465,7 +2465,7 @@ export function InquiryList() {
 }
 ```
 
-- [ ] **Step 2: 문의 작성 폼을 작성**
+- [x] **Step 2: 문의 작성 폼을 작성**
 
 `apps/web/src/components/bambi/support/inquiry-form.tsx` — 웹 폼은 react-hook-form을 쓰지 않고 `useState` + 수동 `canSubmit` + sonner 관례를 따른다.
 
@@ -2588,7 +2588,7 @@ export function InquiryForm() {
 }
 ```
 
-- [ ] **Step 3: 페이지 2개를 작성**
+- [x] **Step 3: 페이지 2개를 작성**
 
 `apps/web/src/app/support/inquiries/page.tsx`
 
@@ -2614,12 +2614,12 @@ export default function SupportInquiryNewPage() {
 }
 ```
 
-- [ ] **Step 4: 타입체크**
+- [x] **Step 4: 타입체크**
 
 Run: `cd apps/web && pnpm check-types`
 Expected: 에러 없음. `Select`가 base-ui 기반이라 `onValueChange` 시그니처가 다르면 `pnpm dlx shadcn@latest docs select`로 확인한다.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```
 feat(web): 고객센터 내 문의 목록·작성 화면 추가
@@ -2640,7 +2640,7 @@ feat(web): 고객센터 내 문의 목록·작성 화면 추가
 **Interfaces:**
 - Consumes: `orpc.bambi.support.getInquiry`, `createInquiryMessage`, `closeInquiry` (Task 8)
 
-- [ ] **Step 1: 스레드 컴포넌트를 작성**
+- [x] **Step 1: 스레드 컴포넌트를 작성**
 
 `apps/web/src/components/bambi/support/inquiry-thread.tsx`
 
@@ -2792,7 +2792,7 @@ export function InquiryThread({ inquiryId }: { inquiryId: string }) {
 }
 ```
 
-- [ ] **Step 2: 페이지를 작성**
+- [x] **Step 2: 페이지를 작성**
 
 `apps/web/src/app/support/inquiries/[id]/page.tsx`
 
@@ -2815,12 +2815,12 @@ export default function SupportInquiryDetailPage({
 
 Next 16에서 `params`는 Promise다. 클라이언트 컴포넌트에서는 `use()`로 푼다. 기존 상세 페이지(`app/seeker/community/[board]/[postId]/page.tsx`)가 어떤 형태인지 확인해 같은 방식으로 맞춘다.
 
-- [ ] **Step 3: 타입체크**
+- [x] **Step 3: 타입체크**
 
 Run: `cd apps/web && pnpm check-types`
 Expected: 에러 없음.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```
 feat(web): 고객센터 문의 상세 스레드 화면 추가
@@ -2843,7 +2843,7 @@ feat(web): 고객센터 문의 상세 스레드 화면 추가
 
 요구사항은 헤더의 **"수다방" 오른쪽**이다. `DEFAULT_NAV_ITEMS`의 마지막 항목이 수다방이므로 그 뒤에 붙이면 정확히 그 위치가 된다.
 
-- [ ] **Step 1: 공통·구직자 네비에 추가**
+- [x] **Step 1: 공통·구직자 네비에 추가**
 
 `apps/web/src/components/bambi/responsive-shell.tsx`
 
@@ -2858,7 +2858,7 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
 ];
 ```
 
-- [ ] **Step 2: 구인자 네비에 추가**
+- [x] **Step 2: 구인자 네비에 추가**
 
 `apps/web/src/app/employer/layout.tsx` — 구인자 셸은 별도 배열을 주입하므로 한 번 더 넣어야 한다.
 
@@ -2874,7 +2874,7 @@ const EMPLOYER_NAV_ITEMS = [
 ] as const;
 ```
 
-- [ ] **Step 3: 모바일 진입점을 확인**
+- [x] **Step 3: 모바일 진입점을 확인**
 
 모바일 하단탭(`mobile-tab-bar.tsx:49-57`)은 탐색·채팅·(구인 관리)·수다방·내 정보로 이미 차 있어 **추가하지 않는다.** 대신 `/seeker/me` 화면에 고객센터 링크가 있는지 확인하고, 없으면 목록 항목 하나를 추가한다.
 
@@ -2884,11 +2884,11 @@ const EMPLOYER_NAV_ITEMS = [
 </Button>
 ```
 
-- [ ] **Step 4: 활성 탭 판정을 확인**
+- [x] **Step 4: 활성 탭 판정을 확인**
 
 `findActiveHref`(`responsive-shell.tsx:38-52`)는 가장 길게 일치하는 항목을 활성 처리한다. `/support/inquiries`에서도 `/support`가 활성으로 잡히는지 확인한다 — `pathname.startsWith("/support/")` 조건에 걸리므로 별도 수정은 필요 없다.
 
-- [ ] **Step 5: 타입체크와 커밋**
+- [x] **Step 5: 타입체크와 커밋**
 
 Run: `cd apps/web && pnpm check-types`
 Expected: 에러 없음.
@@ -2915,7 +2915,7 @@ feat(web): 헤더 네비에 고객센터 추가
 
 기존 운영자 화면(`screens/moderator.tsx`)은 인라인 스타일 프로토타입이라 점진 전환 대상이다. **신규 화면은 `app/moderator/employers/page.tsx` 쪽 표준 shadcn 스타일을 따른다.**
 
-- [ ] **Step 1: 화면을 작성**
+- [x] **Step 1: 화면을 작성**
 
 `apps/web/src/app/moderator/content/page.tsx`
 
@@ -3111,7 +3111,7 @@ export default function ModeratorContentPage() {
 
 테이블은 `overflow-x-auto` 컨테이너로 감싼다 — 모바일에서 페이지 본문이 가로로 밀리면 안 된다.
 
-- [ ] **Step 2: 운영자 네비 4곳을 갱신**
+- [x] **Step 2: 운영자 네비 4곳을 갱신**
 
 메뉴 추가는 등록 지점이 4곳이라 하나라도 빠뜨리면 탭 활성 표시가 깨진다.
 
@@ -3136,12 +3136,12 @@ export default function ModeratorContentPage() {
 
 `persona-nav.tsx:130` `MOD_DETAIL_RE`는 상세 화면 판정용이다. 이번 화면은 목록만 있고 상세 라우트가 없으므로 **정규식은 수정하지 않는다.**
 
-- [ ] **Step 3: 타입체크**
+- [x] **Step 3: 타입체크**
 
 Run: `cd apps/web && pnpm check-types`
 Expected: 에러 없음.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```
 feat(web): 운영자 통합 게시물 조치 화면 추가
@@ -3163,7 +3163,7 @@ feat(web): 운영자 통합 게시물 조치 화면 추가
 **Interfaces:**
 - Consumes: `orpc.bambi.support.listInquiriesByAdmin`, `getInquiry`, `createInquiryMessage`, `listFaq`, `createFaq`, `setFaqPublished`, `removeFaq`, `orpc.bambi.moderation.setInquiryMessageStatusByAdmin`
 
-- [ ] **Step 1: 화면을 작성**
+- [x] **Step 1: 화면을 작성**
 
 `apps/web/src/app/moderator/support/page.tsx` — 탭 2개(문의 답변 / FAQ 관리)로 구성한다. 문의를 선택하면 같은 화면에서 스레드를 열고 답변한다.
 
@@ -3405,11 +3405,11 @@ export default function ModeratorSupportPage() {
 }
 ```
 
-- [ ] **Step 2: 운영자 네비에 등록**
+- [x] **Step 2: 운영자 네비에 등록**
 
 Task 16과 같은 3곳에 `{ href: "/moderator/support", label: "고객센터" }`, `support: "/moderator/support"`, 탭 판정 분기를 추가한다.
 
-- [ ] **Step 3: 타입체크와 커밋**
+- [x] **Step 3: 타입체크와 커밋**
 
 Run: `cd apps/web && pnpm check-types`
 Expected: 에러 없음.
@@ -3434,7 +3434,7 @@ feat(web): 운영자 고객센터 화면 추가(문의 답변·FAQ 관리)
 **Interfaces:**
 - Consumes: `orpc.bambi.bannedWords.list`, `create`, `setActive`, `remove` (Task 6)
 
-- [ ] **Step 1: 화면을 작성**
+- [x] **Step 1: 화면을 작성**
 
 `apps/web/src/app/moderator/banned-words/page.tsx`
 
@@ -3579,16 +3579,16 @@ export default function ModeratorBannedWordsPage() {
 
 정규화형을 함께 보여주는 이유: 운영자가 `성 매매`를 넣었을 때 실제로 무엇과 비교되는지(`성매매`) 보이지 않으면 중복 등록 실패(`CONFLICT`)를 이해할 수 없다.
 
-- [ ] **Step 2: 운영자 네비에 등록**
+- [x] **Step 2: 운영자 네비에 등록**
 
 Task 16과 같은 3곳에 `{ href: "/moderator/banned-words", label: "금칙어" }`, `bannedWords: "/moderator/banned-words"`, 탭 판정 분기를 추가한다.
 
-- [ ] **Step 3: 타입체크**
+- [x] **Step 3: 타입체크**
 
 Run: `cd apps/web && pnpm check-types`
 Expected: 에러 없음. `Switch`의 콜백 이름이 base-ui에서 다르면 `pnpm dlx shadcn@latest docs switch`로 확인한다.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```
 feat(web): 운영자 금칙어 관리 화면 추가
@@ -3652,3 +3652,37 @@ feat(web): 운영자 금칙어 관리 화면 추가
 - Next 16 클라이언트 컴포넌트의 `params` Promise 처리 방식 (Task 14 Step 2)
 - `user` 테이블 insert 필수 컬럼 (Task 8 Step 4)
 - drizzle이 생성한 `ALTER TYPE` 문의 트랜잭션 배치 (Task 2 Step 3)
+
+---
+
+## 실행 결과 (2026-07-20)
+
+18개 태스크 전부 완료. 브랜치 `worktree-support-center`(`feat/community`에서 분기), 태스크별 커밋 분리.
+
+### 검증
+
+- `packages/api`: `pnpm test` → **35 파일 219 tests 전부 통과**(3회 연속 동일). 첫 1회 실행에서 1건 실패가 있었으나 이후 3회 재현되지 않음 — 공유 개발 DB의 일시적 간섭으로 판단.
+- `packages/api`, `packages/db`, `apps/web`: `pnpm check-types` 전부 exit 0.
+- 마이그레이션 `0017_elite_goblin_queen.sql` 생성·적용 후 실제 DB 조회로 검증: 테이블 4종, `moderation_target_type` 신규값 2종, `banned_word_normalized_term_uidx` 유니크 인덱스 존재 확인.
+- 빌드·dev 서버는 프로젝트 규칙에 따라 실행하지 않음. **화면 육안 확인은 사용자 몫으로 남음.**
+
+### 계획과 달라진 점
+
+실행 중 계획의 오류·누락이 드러나 고친 부분:
+
+1. **`SUPPORT_CONTENT_WIDTH` 신설 취소.** 기존 `APP_CONTENT_MAX_W`(헤더)·`SEEKER_CONTENT_WIDTH`(본문)를 재사용했다. 폭 상수를 새로 만들면 헤더와 본문 정렬이 갈린다(채팅 프리플라이트에서 같은 문제 이력). 폭 컨테이너는 `app/support/layout.tsx`에 한 번만 두고 화면은 세로 레이아웃만 담당한다.
+2. **`listFaq`에 `includeUnpublished` 추가**(계획에 없던 수정). 계획대로면 운영자가 FAQ를 비공개로 내리는 순간 목록에서 사라져 되돌릴 진입점이 없는 편도 함정이 된다. 플래그를 더하되 핸들러에서 `role === "admin"`을 함께 확인해 일반 회원의 초안 열람을 막았다.
+3. **TipTap 평문 추출이 중복이었다.** 조사 단계에서 `moderation.ts`의 private `collectTiptapText`를 놓쳐 Task 5로 같은 기능을 또 만들었다. 더 정확한 기존 구현(블록 내부는 붙이고 문단 경계만 줄바꿈)을 서비스로 승격하고 중복을 제거했다.
+4. **통합 목록의 커뮤니티 excerpt**를 raw slice가 아니라 `toCommunityBodyPreview`로 뽑는다. 계획대로면 본문이 TipTap JSON이라 운영자 목록에 `{"type":"doc"...` 원문이 그대로 노출된다.
+5. **`uuidTargetTypes` 타입 기준 변경**(계획에 없던 수정). enum 확장으로 zod 신고 대상 타입과 DB enum이 어긋나 컴파일 에러가 났다. 행 타입 기준으로 넓히고 신규 두 유형도 집합에 포함했다(둘 다 uuid PK라 사실에 부합).
+6. **`updateComment`의 금칙어 검사 위치**를 작성자 확인 뒤로 옮겼다. 계획 위치대로면 남의 댓글을 수정하려는 사람이 금칙어 목록을 떠볼 수 있다.
+7. **UI 컴포넌트 선택**: 카테고리 필터는 Button 수동 토글이 아니라 `ToggleGroup`, 운영자 탭은 `Tabs`. CLAUDE.md가 2~7개 선택지에 ToggleGroup을 요구하고 활성 상태 수동 관리를 금지한다. 빈 상태는 raw `Empty`(슬롯 조합형)가 아니라 기존 `EmptyState` 래퍼를 재사용했다.
+8. **금칙어 순수함수 테스트에 dotenv 선행 로드 추가.** Task 6이 같은 모듈에 `db` import를 올리면서 모듈 평가 시 env가 필요해져 전체 테스트에서 이 파일만 실패했다. 파일 분리 대신 이 패키지의 기존 관례를 따랐다.
+9. **`bambi-banned-words.test.ts`의 기대 통과 수**는 12가 아니라 11이었다(계획의 계산 착오, 테스트 누락 아님).
+
+### 알려진 제약 (후속 판단 필요)
+
+- **운영자 모바일 하단탭**(`screens/moderator.tsx`의 `ModTabs`)은 queue/reports/employers/users 4개만 렌더한다. 신규 3개 화면은 데스크톱 헤더 nav로는 정상 접근되지만 모바일 하단바에 항목이 없다. 탭이 7개가 되면 과밀해져 의도적으로 두었다.
+- **`/support`는 비로그인 시 401**이다. `listFaq`가 `protectedProcedure`이기 때문이며, "FAQ 열람 자격 = 로그인 회원 전체"로 확정한 설계대로다.
+- **`updateFaq`는 UI에 노출하지 않았다.** 서버 프로시저는 있으나 운영자가 오타 수정을 삭제·재등록으로 처리하기 시작하면 화면에 붙인다.
+- 목록 페이지네이션은 문의 목록(사용자)·FAQ 관리에 없다. 서버는 `PAGE_SIZE 20` + `totalCount`를 주므로 필요해지면 `Pagination` 컴포넌트만 붙이면 된다.

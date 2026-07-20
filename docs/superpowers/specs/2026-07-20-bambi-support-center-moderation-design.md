@@ -433,3 +433,35 @@ shadcn 컴포넌트 2개를 추가해야 한다(npm 의존성이 아니라 레�
 6. **고객센터 웹 UI** — `/support` 라우트 + 헤더 네비 "고객센터" 추가
 7. **운영자 통합 조치** — `listModeratableContent` + 문의 조치 프로시저 → `/moderator/content`
 8. **운영자 고객센터 화면** — 문의 답변 + FAQ 관리
+
+## 10. 개정 (2026-07-20) — 구현 중 확정된 변경
+
+구현하면서 §1~§9의 결정 중 세 가지가 바뀌었다. 나머지는 설계대로다.
+
+**§7-a 폭 상수 — 신설하지 않고 기존 것을 재사용한다.**
+설계는 `SUPPORT_CONTENT_WIDTH`를 새로 두려 했으나, `apps/web/src/lib/bambi/layout.ts`에 이미
+`APP_CONTENT_MAX_W`(헤더)와 `SEEKER_CONTENT_WIDTH`(본문)가 있다. 폭 기준이 갈리면 헤더와 본문
+정렬이 어긋난다(seeker 채팅 프리플라이트에서 실제로 발생했던 문제). 폭 컨테이너는
+`app/support/layout.tsx`에 한 번만 두고, 화면 컴포넌트는 세로 레이아웃만 담당한다.
+
+**§6-a `listFaq`에 `includeUnpublished`를 추가한다.**
+설계대로 `listFaq`가 공개분만 반환하면, 운영자 화면도 같은 프로시저를 쓰므로 FAQ를 비공개로
+내리는 순간 목록에서 사라져 다시 공개로 되돌릴 진입점이 없어진다. 입력에 플래그를 더하되
+핸들러에서 `role === "admin"`을 함께 확인해, 일반 회원이 `true`를 보내도 공개분만 반환한다
+(운영자 초안 열람 차단). 새 프로시저를 만들지 않아 라우터 표면은 늘지 않았다.
+
+**§5-d TipTap 텍스트 추출은 신규가 아니라 기존 구현의 승격이다.**
+설계는 추출 헬퍼를 새로 만든다고 했으나, `moderation.ts`에 이미 private `collectTiptapText`가
+있었다(조사 단계 누락). 기존 구현이 더 정확해서 — 블록 내부 text 노드는 붙이고 문단 경계만
+줄바꿈으로 나눈다. 마크(굵게 등)로 쪼개진 노드가 원래 한 단어이기 때문이다 — 그쪽을
+`services/bambi-tiptap-text.ts`로 승격하고 중복을 제거했다. 금칙어 매칭은 정규화가 공백류를
+모두 지우므로 구분자 차이가 결과를 바꾸지 않는다.
+
+**비범위였던 항목 중 하나가 범위에 들어왔다.**
+`moderation.ts`의 `uuidTargetTypes`는 zod 신고 대상 타입을 기준으로 삼고 있어, §4-a의
+`moderation_target_type` 값 추가와 함께 컴파일 에러가 났다. 행 타입 기준으로 넓히고 신규 두
+유형도 집합에 포함했다(둘 다 uuid PK라 사실에 부합). 기존 위험어 배열 중복 제거(`jobs.ts:138`)는
+여전히 비범위다.
+
+구현 결과·검증 내역·알려진 제약은 계획 문서
+`docs/superpowers/plans/2026-07-20-bambi-support-center-moderation.md`의 "실행 결과" 절에 있다.
