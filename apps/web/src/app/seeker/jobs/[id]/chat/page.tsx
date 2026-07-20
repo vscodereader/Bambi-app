@@ -118,8 +118,14 @@ export default function SeekerJobChatPreflightPage() {
 			return;
 		}
 
+		// 역할 판정은 서버 레이아웃(enforceJobSeekerAccess)이 이미 끝냈으므로, 여기까지
+		// 온 사용자는 구직자다. 남는 경우는 프로필 조회가 아직 안 끝난 순간뿐이라
+		// /welcome으로 보내지 않는다 — 로그인한 사용자를 가입 화면으로 튕기면
+		// 로그아웃된 것처럼 보인다.
 		if (!hasJobSeekerProfile) {
-			router.push("/welcome" as Route);
+			setFeedback(
+				"구직자 프로필을 확인하는 중이에요. 잠시 후 다시 눌러 주세요."
+			);
 			return;
 		}
 

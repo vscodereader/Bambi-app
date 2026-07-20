@@ -33,6 +33,18 @@ export async function redirectToRoleHome(): Promise<void> {
 	redirect("/seeker");
 }
 
+// 구직자 전용 영역: 구직자가 아니면 각자 홈으로. 구인자·운영자도 공고 상세까지는 보지만
+// 그 뒤 채팅 흐름은 구직자 것이라 여기서 막는다.
+// /welcome으로 보내지 않는 게 핵심이다 — 세션·프로필이 없는 상태와 역할이 다른 상태는
+// 다른 상황인데, /welcome으로 보내면 로그인한 구인자에게 "가입하라"는 화면이 떠 로그아웃된
+// 것처럼 보인다. getRouting이 세션·프로필 부재는 이미 /welcome으로 처리한다.
+export async function enforceJobSeekerAccess(): Promise<void> {
+	const routing = await getRouting();
+	if (routing.role !== "job_seeker") {
+		redirect(homePathForRole(routing.role));
+	}
+}
+
 // 운영자 영역: 관리자가 아니면 각자 홈으로. 관리자면 통과.
 export async function enforceModeratorAccess(): Promise<void> {
 	const routing = await getRouting();
