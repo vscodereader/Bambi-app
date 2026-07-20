@@ -92,7 +92,7 @@ export const adminProcedure = protectedProcedure.use(requireAdmin);
 
 ## 4. 데이터 모델 (packages/db)
 
-마이그레이션 번호: **`0017`** (현재 `packages/db/src/migrations/`는 `0016_exotic_menace.sql`까지).
+마이그레이션: **`0017_elite_goblin_queen.sql`** (2026-07-20 생성·적용 완료. 직전은 `0016_exotic_menace.sql`).
 스키마는 관례대로 `packages/db/src/schema/bambi.ts`에 이어 붙인다.
 
 ### 4-a. enum
