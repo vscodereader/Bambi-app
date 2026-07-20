@@ -179,6 +179,41 @@ describe("고객센터 FAQ", () => {
 		expect(result.items.some((item) => item.id === created.id)).toBe(false);
 	});
 
+	it("일반 회원은 includeUnpublished로도 비공개 FAQ를 볼 수 없다", async () => {
+		const createCaller = createProcedureClient(supportRouter.createFaq, {
+			context: createContextForUser(adminId),
+		});
+		const created = await createCaller({
+			answer: "답변입니다.",
+			category: "account",
+			question: `우회시도-${randomUUID().slice(0, 8)}`,
+			sortOrder: 0,
+		});
+		createdFaqIds.push(created.id);
+
+		const publishCaller = createProcedureClient(supportRouter.setFaqPublished, {
+			context: createContextForUser(adminId),
+		});
+		await publishCaller({ faqId: created.id, isPublished: false });
+
+		const seekerCaller = createProcedureClient(supportRouter.listFaq, {
+			context: createContextForUser(seekerId),
+		});
+		const seekerResult = await seekerCaller({ includeUnpublished: true });
+
+		expect(seekerResult.items.some((item) => item.id === created.id)).toBe(
+			false
+		);
+
+		// 운영자는 같은 입력으로 비공개 FAQ를 보고 다시 공개로 되돌릴 수 있어야 한다.
+		const adminCaller = createProcedureClient(supportRouter.listFaq, {
+			context: createContextForUser(adminId),
+		});
+		const adminResult = await adminCaller({ includeUnpublished: true });
+
+		expect(adminResult.items.some((item) => item.id === created.id)).toBe(true);
+	});
+
 	it("일반 회원은 FAQ를 만들 수 없다", async () => {
 		const caller = createProcedureClient(supportRouter.createFaq, {
 			context: createContextForUser(seekerId),

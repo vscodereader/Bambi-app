@@ -53,6 +53,9 @@ const createInquiryMessageInput = inquiryIdInput.extend({
 
 const listFaqInput = z.object({
 	category: inquiryCategorySchema.optional(),
+	// 운영자 화면 전용. 비공개 FAQ를 목록에서 감추면 다시 공개로 되돌릴 진입점이 사라진다.
+	// 일반 회원이 true를 보내도 아래 핸들러에서 role로 한 번 더 막는다.
+	includeUnpublished: z.boolean().default(false),
 });
 
 const createFaqInput = z.object({
@@ -280,14 +283,21 @@ export const supportRouter = {
 	listFaq: protectedProcedure
 		.input(listFaqInput)
 		.handler(async ({ context, input }) => {
-			await requireActiveBambiProfile(context.session);
+			const profile = await requireActiveBambiProfile(context.session);
 
-			const where = input.category
-				? and(
-						eq(faqEntry.isPublished, true),
-						eq(faqEntry.category, input.category)
-					)
+			// 비공개 FAQ는 운영자에게만 보인다. 입력값만 믿으면 일반 회원이 초안을 읽는다.
+			const canSeeUnpublished =
+				input.includeUnpublished && profile.role === "admin";
+			const publishedOnly = canSeeUnpublished
+				? undefined
 				: eq(faqEntry.isPublished, true);
+			const categoryMatch = input.category
+				? eq(faqEntry.category, input.category)
+				: undefined;
+			const where =
+				publishedOnly && categoryMatch
+					? and(publishedOnly, categoryMatch)
+					: (publishedOnly ?? categoryMatch);
 
 			const items = await db
 				.select()
