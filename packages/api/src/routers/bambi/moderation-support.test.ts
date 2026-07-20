@@ -168,4 +168,33 @@ describe("고객센터 운영 조치", () => {
 		expect(result.items[0]).toHaveProperty("authorName");
 		expect(result.items[0]).toHaveProperty("excerpt");
 	});
+
+	it("상세 조회가 발췌가 아닌 전체 본문을 돌려준다", async () => {
+		const created = await createInquiryAs(seekerId);
+
+		const caller = createProcedureClient(
+			moderationRouter.getModeratableContentDetail,
+			{ context: createContextForUser(adminId) }
+		);
+
+		const detail = await caller({
+			id: created.id,
+			targetType: "support_inquiry",
+		});
+
+		expect(detail.body).toBe("문의 본문입니다. 확인 부탁드립니다.");
+		expect(detail.category).toBe("account");
+		expect(detail.authorName).toContain("표시명-");
+	});
+
+	it("없는 대상 상세는 NOT_FOUND", async () => {
+		const caller = createProcedureClient(
+			moderationRouter.getModeratableContentDetail,
+			{ context: createContextForUser(adminId) }
+		);
+
+		await expect(
+			caller({ id: randomUUID(), targetType: "support_inquiry" })
+		).rejects.toMatchObject({ code: "NOT_FOUND" });
+	});
 });

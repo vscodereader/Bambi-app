@@ -158,6 +158,11 @@ const listModeratableContentInput = z.object({
 	targetType: moderatableTargetTypeSchema,
 });
 
+const getModeratableContentDetailInput = z.object({
+	id: z.string().uuid(),
+	targetType: moderatableTargetTypeSchema,
+});
+
 const MODERATABLE_PAGE_SIZE = 20;
 const EXCERPT_LENGTH = 120;
 
@@ -1074,6 +1079,107 @@ export const moderationRouter = {
 				page: input.page,
 				pageSize: MODERATABLE_PAGE_SIZE,
 				totalCount: totalRow?.value ?? 0,
+			};
+		}),
+
+	// 목록은 120자 발췌만 주므로 행 펼침용 전체 본문을 따로 내려준다. 목록과 같은 철학으로
+	// 유형별 차이를 서버에서 흡수해 공통 형태(board/category는 해당 없으면 null)로 정규화한다 —
+	// 화면이 유니온 좁히기 없이 한 형태만 렌더한다.
+	getModeratableContentDetail: adminProcedure
+		.input(getModeratableContentDetailInput)
+		.handler(async ({ input }) => {
+			if (input.targetType === "community_post") {
+				const [row] = await db
+					.select({
+						authorDisplayName: communityPost.authorDisplayName,
+						board: communityPost.board,
+						body: communityPost.body,
+						createdAt: communityPost.createdAt,
+						status: communityPost.status,
+						title: communityPost.title,
+					})
+					.from(communityPost)
+					.where(eq(communityPost.id, input.id))
+					.limit(1);
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				return {
+					title: row.title,
+					// 본문은 Tiptap JSON이라 평문화한다 — 원문을 그대로 내보내면 화면에 JSON이 보인다.
+					body: extractTiptapText(row.body),
+					authorName: row.authorDisplayName,
+					createdAt: row.createdAt,
+					status: row.status,
+					board: row.board as string | null,
+					category: null as string | null,
+				};
+			}
+
+			if (input.targetType === "community_comment") {
+				const [row] = await db
+					.select({
+						body: communityComment.body,
+						createdAt: communityComment.createdAt,
+						postAuthorName: communityPost.authorDisplayName,
+						postTitle: communityPost.title,
+						status: communityComment.status,
+					})
+					.from(communityComment)
+					.innerJoin(
+						communityPost,
+						eq(communityComment.postId, communityPost.id)
+					)
+					.where(eq(communityComment.id, input.id))
+					.limit(1);
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				return {
+					// 댓글은 제목이 없으므로 원글 제목·작성자를 맥락으로 보여준다(목록과 동일).
+					title: row.postTitle,
+					body: row.body,
+					authorName: row.postAuthorName,
+					createdAt: row.createdAt,
+					status: row.status,
+					board: null as string | null,
+					category: null as string | null,
+				};
+			}
+
+			const [row] = await db
+				.select({
+					authorName: bambiProfile.displayName,
+					body: supportInquiry.body,
+					category: supportInquiry.category,
+					createdAt: supportInquiry.createdAt,
+					status: supportInquiry.status,
+					title: supportInquiry.title,
+				})
+				.from(supportInquiry)
+				.leftJoin(
+					bambiProfile,
+					eq(supportInquiry.authorUserId, bambiProfile.userId)
+				)
+				.where(eq(supportInquiry.id, input.id))
+				.limit(1);
+
+			if (!row) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			return {
+				title: row.title,
+				body: row.body,
+				authorName: row.authorName ?? "(표시명 없음)",
+				createdAt: row.createdAt,
+				status: row.status,
+				board: null as string | null,
+				category: row.category as string | null,
 			};
 		}),
 };

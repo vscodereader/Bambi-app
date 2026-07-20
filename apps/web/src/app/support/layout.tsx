@@ -6,11 +6,15 @@ import { APP_CONTENT_MAX_W, SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 // 고객센터는 구인자·구직자 공통 창구라 역할 셸(seeker/employer)에 묶지 않는다.
 // 헤더 폭과 본문 폭은 다른 화면과 동일한 공용 상수를 그대로 쓴다 — 폭 기준이 갈리면
 // 헤더와 본문 정렬이 어긋난다(커뮤니티 채팅 프리플라이트에서 같은 문제가 있었다).
+//
+// variant는 "public"이 아니라 "seeker"다. public은 비로그인 마켓 전용이라 헤더 우측이
+// "시작하기"(가입 유도)로 바뀌는데, 고객센터는 로그인 회원만 들어오므로 "내 정보"여야 한다.
+// 셸이 실제로 구분하는 것은 public/moderator뿐이라 구인자가 열어도 동일하게 동작한다.
 export default function SupportLayout({ children }: { children: ReactNode }) {
 	return (
 		<ResponsiveAppShell
 			contentWidthClassName={APP_CONTENT_MAX_W}
-			variant="public"
+			variant="seeker"
 		>
 			<div
 				className={cn(

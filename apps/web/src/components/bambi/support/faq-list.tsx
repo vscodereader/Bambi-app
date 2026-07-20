@@ -9,7 +9,7 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@bambi-app/ui/components/accordion";
-import { Button } from "@bambi-app/ui/components/button";
+import { buttonVariants } from "@bambi-app/ui/components/button";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import {
 	ToggleGroup,
@@ -102,17 +102,21 @@ export function FaqList() {
 				</Accordion>
 			) : null}
 
+			{/* base-ui Button은 nativeButton이 기본 true라 render로 <a>를 넣으면 경고한다.
+			    링크는 이 레포 관례대로 Link에 buttonVariants를 입힌다. */}
 			<div className="flex flex-wrap gap-2">
-				<Button render={<Link href={SUPPORT_INQUIRY_NEW_PATH} />} size="lg">
+				<Link
+					className={buttonVariants({ size: "lg" })}
+					href={SUPPORT_INQUIRY_NEW_PATH}
+				>
 					1:1 문의하기
-				</Button>
-				<Button
-					render={<Link href={SUPPORT_INQUIRIES_PATH} />}
-					size="lg"
-					variant="outline"
+				</Link>
+				<Link
+					className={buttonVariants({ size: "lg", variant: "outline" })}
+					href={SUPPORT_INQUIRIES_PATH}
 				>
 					내 문의 내역
-				</Button>
+				</Link>
 			</div>
 		</div>
 	);
