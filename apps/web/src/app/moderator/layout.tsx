@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import type { ReactNode } from "react";
 import { ModeratorShell } from "@/components/bambi/persona-nav";
 import { ResponsiveAppShell } from "@/components/bambi/responsive-shell";
@@ -10,9 +11,10 @@ const MODERATOR_NAV_ITEMS = [
 	{ href: "/moderator/reports", label: "신고" },
 	{ href: "/moderator/users", label: "사용자" },
 	{ href: "/moderator/employers", label: "업소 승인" },
-	{ href: "/moderator/content", label: "게시물" },
-	{ href: "/moderator/support", label: "고객센터" },
-	{ href: "/moderator/banned-words", label: "금칙어" },
+	// 신규 라우트는 Next typedRoutes 생성 타입에 아직 없을 수 있어 캐스팅한다.
+	{ href: "/moderator/content" as Route, label: "게시물" },
+	{ href: "/moderator/support" as Route, label: "고객센터" },
+	{ href: "/moderator/banned-words" as Route, label: "금칙어" },
 	{ href: "/seeker", label: "채용정보" },
 ] as const;
 
