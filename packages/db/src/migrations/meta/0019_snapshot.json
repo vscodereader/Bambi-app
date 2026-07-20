@@ -1,6 +1,6 @@
 {
-  "id": "36023b81-0522-4d0f-9446-c8725c0ea2bb",
-  "prevId": "0924733b-2425-4248-a6de-c8995df8a9c8",
+  "id": "aecf10c8-cdee-4392-8c12-7e6d00525024",
+  "prevId": "36023b81-0522-4d0f-9446-c8725c0ea2bb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1056,6 +1056,13 @@
         },
         "manual_boosts_per_day": {
           "name": "manual_boosts_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "auto_boosts_per_day": {
+          "name": "auto_boosts_per_day",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -2564,7 +2571,7 @@
           "name": "actor_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "boost_type": {
           "name": "boost_type",
@@ -2952,6 +2959,13 @@
         },
         "manual_boosts_per_day": {
           "name": "manual_boosts_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "auto_boosts_per_day": {
+          "name": "auto_boosts_per_day",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

@@ -1,6 +1,6 @@
 {
-  "id": "36023b81-0522-4d0f-9446-c8725c0ea2bb",
-  "prevId": "0924733b-2425-4248-a6de-c8995df8a9c8",
+  "id": "0924733b-2425-4248-a6de-c8995df8a9c8",
+  "prevId": "06e508ce-ca15-45b3-b120-2bcc66c6417d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2949,13 +2949,6 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
-        },
-        "manual_boosts_per_day": {
-          "name": "manual_boosts_per_day",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
         },
         "published_at": {
           "name": "published_at",
