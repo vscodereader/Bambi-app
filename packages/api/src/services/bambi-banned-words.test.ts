@@ -1,10 +1,15 @@
+import dotenv from "dotenv";
 import { describe, expect, it } from "vitest";
 
-import {
-	type BannedWordEntry,
-	findBannedTerm,
-	normalizeForMatch,
-} from "./bambi-banned-words";
+// 검사 대상은 순수 함수뿐이지만, 같은 모듈이 캐시 조회를 위해 db를 import하므로
+// 모듈 평가 시점에 서버 env가 필요하다. 이 패키지의 다른 테스트와 동일한 관례로
+// dotenv를 먼저 실행하고 동적 import한다(정적 import는 env보다 먼저 평가된다).
+dotenv.config({ path: "../../apps/server/.env" });
+
+const { findBannedTerm, normalizeForMatch } = await import(
+	"./bambi-banned-words"
+);
+type BannedWordEntry = import("./bambi-banned-words").BannedWordEntry;
 
 const entry = (term: string): BannedWordEntry => ({
 	term,
