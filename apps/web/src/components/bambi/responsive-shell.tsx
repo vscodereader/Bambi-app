@@ -7,6 +7,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
 import { BellIcon, ShieldIcon } from "./icons";
 
@@ -50,6 +51,31 @@ function findActiveHref(
 		}
 	}
 	return active?.href;
+}
+
+// 구직자 홈(seeker/public 셸) 헤더에서 "내 정보" 왼쪽에 노출되는 역할 전환 버튼.
+// 구인자는 /employer, 운영자(admin)는 /moderator로 이동한다. 구직자·비로그인은 없음.
+function RoleSwitchLink() {
+	const { role } = useBambiAuth();
+	const linkClassName = cn(
+		buttonVariants({ variant: "outline" }),
+		"h-10 px-4 font-bold text-sm no-underline"
+	);
+	if (role === "employer") {
+		return (
+			<Link className={linkClassName} href={"/employer" as Route}>
+				구인 관리
+			</Link>
+		);
+	}
+	if (role === "admin") {
+		return (
+			<Link className={linkClassName} href={"/moderator" as Route}>
+				운영자 모드
+			</Link>
+		);
+	}
+	return null;
 }
 
 function ModeratorHeaderActions() {
@@ -135,6 +161,7 @@ export function ResponsiveAppShell({
 										</span>
 										연락처 보호
 									</Badge>
+									{isPublic ? null : <RoleSwitchLink />}
 									<Link
 										className={cn(
 											buttonVariants({
