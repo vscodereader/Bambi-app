@@ -1,5 +1,4 @@
 import {
-	isAllowedJobAdBannerAspectRatio,
 	isAllowedJobAdBannerSize,
 	JOB_AD_BANNER_SPECS,
 	type JobAdBannerUsage,
@@ -528,23 +527,14 @@ const getAdBannerError = (
 		return;
 	}
 
-	const { aspectLabel, label, minHeight, minWidth } =
-		JOB_AD_BANNER_SPECS[usage];
+	const { label, minHeight, minWidth } = JOB_AD_BANNER_SPECS[usage];
 
 	if (!(item.width && item.height)) {
 		return `${label} 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.`;
 	}
 
-	if (
-		!isAllowedJobAdBannerAspectRatio({
-			height: item.height,
-			usage,
-			width: item.width,
-		})
-	) {
-		return `${label}는 ${aspectLabel} 비율에 맞아야 합니다.`;
-	}
-
+	// 비율은 막지 않는다. 슬롯이 object-cover라 어긋나면 잘릴 뿐이고, 잘림은 업로더가
+	// 경고로 알려준다. 뭉개지는 원인인 크기 하한만 여기서 막는다.
 	if (
 		!isAllowedJobAdBannerSize({
 			height: item.height,

@@ -194,8 +194,6 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 	switch (code) {
 		case "alt_text_too_long":
 			return "Job post media alt text is too long.";
-		case "banner_aspect_ratio_mismatch":
-			return "광고 배너 비율이 규격과 맞지 않습니다. 가로형 7:3, 세로형 4:9 이미지를 등록해 주세요.";
 		case "banner_dimensions_required":
 			return "광고 배너 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.";
 		// 하한 수치는 정책 상수에서 읽는다. 문구에 숫자를 박아 두면 규격을 바꿀 때 조용히 어긋난다.
