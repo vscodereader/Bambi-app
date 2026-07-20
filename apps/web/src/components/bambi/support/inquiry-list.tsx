@@ -3,7 +3,7 @@
 // 내 문의 목록. 폭·좌우 패딩은 app/support/layout.tsx가 잡으므로 여기선 세로 레이아웃만 다룬다.
 
 import { Badge } from "@bambi-app/ui/components/badge";
-import { Button } from "@bambi-app/ui/components/button";
+import { buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
@@ -39,9 +39,13 @@ export function InquiryList() {
 		<div className="flex flex-col gap-6 py-6">
 			<header className="flex items-center justify-between gap-3">
 				<h1 className="m-0 font-extrabold text-xl">내 문의 내역</h1>
-				<Button render={<Link href={SUPPORT_INQUIRY_NEW_PATH} />} size="sm">
+				{/* base-ui Button은 nativeButton이 기본 true라 render로 <a>를 넣으면 경고한다. */}
+				<Link
+					className={buttonVariants({ size: "sm" })}
+					href={SUPPORT_INQUIRY_NEW_PATH}
+				>
 					문의하기
-				</Button>
+				</Link>
 			</header>
 
 			{inquiriesQuery.isPending ? (
