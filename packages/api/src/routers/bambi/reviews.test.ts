@@ -129,6 +129,8 @@ const createReviewFixture = async (): Promise<ReviewFixture> => {
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",
+		// 공개 목록·상세 조회는 published + paid를 함께 요구한다(jobs.ts의 결제 게이트).
+		paymentStatus: "paid",
 		publishedAt: now,
 		region: "서울 강남구",
 		status: "published",
