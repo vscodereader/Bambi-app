@@ -68,6 +68,12 @@ export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
 	},
 ];
 
+// 게시판 key(DB enum) → 표시 라벨. enum 원값이 화면에 새지 않도록 표시는 이 맵을 거친다.
+// 모르는 key는 원값으로 폴백한다(REPORT_REASON_LABELS와 동일 관례) — 화면이 비는 것보다는 낫다.
+export const COMMUNITY_BOARD_LABELS = Object.fromEntries(
+	COMMUNITY_BOARDS.map((board) => [board.key, board.label])
+) as Record<CommunityBoardKey, string>;
+
 export const getBoardBySlug = (slug: string): CommunityBoardMeta | undefined =>
 	COMMUNITY_BOARDS.find((board) => board.slug === slug);
 

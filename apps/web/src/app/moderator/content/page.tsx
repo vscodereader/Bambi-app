@@ -41,7 +41,16 @@ import {
 import { Fragment, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { CONTENT_STATUS_LABELS, type ContentStatus } from "@/lib/bambi/support";
+import {
+	COMMUNITY_BOARD_LABELS,
+	type CommunityBoardKey,
+} from "@/lib/bambi/community";
+import {
+	CONTENT_STATUS_LABELS,
+	type ContentStatus,
+	SUPPORT_CATEGORY_LABELS,
+	type SupportCategory,
+} from "@/lib/bambi/support";
 import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
@@ -384,6 +393,24 @@ export default function ModeratorContentPage() {
 	);
 }
 
+// 상세 뱃지에 쓸 표시 문구. 서버는 유형에 따라 board(커뮤니티) 또는 category(고객센터) 중
+// 하나만 채워 주는데, 둘 다 DB enum 원값이므로 반드시 라벨 맵을 거쳐 표시한다.
+// 모르는 값은 원값으로 폴백한다 — 빈 뱃지보다는 낫고, 라벨 누락을 눈으로 잡을 수 있다.
+const resolveMetaLabel = (
+	board: string | null | undefined,
+	category: string | null | undefined
+): string | null => {
+	if (board) {
+		return COMMUNITY_BOARD_LABELS[board as CommunityBoardKey] ?? board;
+	}
+
+	if (category) {
+		return SUPPORT_CATEGORY_LABELS[category as SupportCategory] ?? category;
+	}
+
+	return null;
+};
+
 // 펼친 행의 전체 본문 패널. 목록 excerpt와 달리 줄바꿈을 유지해 원문 형태로 보여준다.
 function DetailPanel({
 	body,
@@ -402,11 +429,11 @@ function DetailPanel({
 		);
 	}
 
-	const meta = board ?? category;
+	const metaLabel = resolveMetaLabel(board, category);
 
 	return (
 		<div className="flex flex-col gap-2">
-			{meta ? <Badge variant="outline">{meta}</Badge> : null}
+			{metaLabel ? <Badge variant="outline">{metaLabel}</Badge> : null}
 			<p className="m-0 whitespace-pre-wrap text-sm leading-relaxed">
 				{body ?? "본문을 불러오지 못했어요."}
 			</p>
