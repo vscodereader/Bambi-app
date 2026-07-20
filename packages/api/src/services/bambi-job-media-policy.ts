@@ -59,10 +59,11 @@ export const JOB_AD_BANNER_SPECS: Record<JobAdBannerUsage, JobAdBannerSpec> = {
 		aspectLabel: "7:3",
 		aspectRatio: 7 / 3,
 		label: "가로형 광고 배너",
-		// 크기 규칙은 이 하한 하나뿐이다. 259×111은 정확히 7:3(259=7×37, 111=3×37)이라
-		// 비율 규칙과도 모순이 없다.
-		minHeight: 111,
-		minWidth: 259,
+		// 하한과 비율은 서로 독립인 두 규칙이고 둘 다 통과해야 한다. 150×50 자체는 3:1이라
+		// 비율 검증에 걸리므로, 실질 하한은 "가로 150px 이상"이고 세로는 7:3이 결정한다
+		// (가로 150이면 세로는 약 64 이상). 세로 하한 50은 그래서 사실상 비구속이다.
+		minHeight: 50,
+		minWidth: 150,
 	},
 	ad_vertical: {
 		aspectLabel: "4:9",

@@ -194,13 +194,14 @@ describe("bambi job block form helpers", () => {
 		});
 	});
 
-	it("rejects a horizontal banner below the 259x111 minimum", () => {
+	it("rejects a horizontal banner below the 150px width floor", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
-				// 189×81도 정확히 7:3이라 비율은 통과하지만 하한에 미달한다.
+				// 140×60도 정확히 7:3이라 비율은 통과하지만, 세로 60이 하한 50을 넘는데도
+				// 가로 140이 하한 150에 못 미쳐 걸린다 — 실제로 구속하는 쪽은 가로다.
 				adHorizontal: createBannerImage("ad_horizontal", {
-					height: 81,
-					width: 189,
+					height: 60,
+					width: 140,
 				}),
 				adVertical: null,
 				cover: null,
@@ -211,18 +212,19 @@ describe("bambi job block form helpers", () => {
 		expect(result).toMatchObject({
 			errors: {
 				media:
-					"가로형 광고 배너 이미지가 너무 작습니다. 259×111px 이상으로 등록해 주세요.",
+					"가로형 광고 배너 이미지가 너무 작습니다. 150×50px 이상으로 등록해 주세요.",
 			},
 			ok: false,
 		});
 	});
 
-	it("accepts a horizontal banner at the 259x111 minimum", () => {
+	it("accepts a horizontal banner at the 150px width floor", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
+				// 가로가 정확히 하한일 때 세로는 7:3이 정한다(150/2.333≈64).
 				adHorizontal: createBannerImage("ad_horizontal", {
-					height: 111,
-					width: 259,
+					height: 64,
+					width: 150,
 				}),
 				adVertical: null,
 				cover: null,

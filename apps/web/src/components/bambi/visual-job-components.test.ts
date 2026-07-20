@@ -35,8 +35,9 @@ describe("visual job marketplace components", () => {
 		// 링크는 결제완료 배너 공고 실데이터의 상세(/seeker/jobs/{id})로 직행한다
 		expect(banner).toContain("/seeker/jobs/");
 		expect(banner).toContain("item.id");
-		// 배너 이미지는 해당 공고 커버(AdBannerItem.coverUrl)를 쓴다
-		expect(banner).toContain("item.coverUrl");
+		// 배너 이미지는 슬롯 규격으로 업로드된 배너(AdBannerItem.imageUrl)를 쓴다 — 커버가 아니다
+		expect(banner).toContain("item.imageUrl");
+		expect(banner).not.toContain("item.coverUrl");
 	});
 
 	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {

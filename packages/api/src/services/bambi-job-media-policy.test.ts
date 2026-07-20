@@ -165,36 +165,55 @@ describe("bambi job media policy", () => {
 		).toContain("unsupported_type");
 	});
 
-	it("accepts a horizontal banner at the 259x111 minimum", () => {
+	it("accepts a horizontal banner at the 150px width floor", () => {
+		// 하한은 가로 150·세로 50이지만 7:3도 함께 걸리므로, 가로가 정확히 하한일 때
+		// 세로는 비율이 정한다(150/2.333≈64). 실질 최소 이미지가 이 크기다.
 		expect(
 			validateJobPostMediaSet([
 				createMedia({
-					height: 111,
+					height: 64,
 					usage: "ad_horizontal",
-					width: 259,
+					width: 150,
 				}),
 			]).ok
 		).toBe(true);
 	});
 
-	it("rejects a horizontal banner smaller than the minimum even when the ratio matches", () => {
-		// 189×81도 정확히 7:3이라 비율 검사는 통과한다. 크기 하한이 없으면 슬롯에서 늘어나 뭉개진다.
+	it("rejects an exactly 150x50 banner because 3:1 breaks the ratio rule", () => {
+		// 하한 수치를 그대로 만든 이미지(150×50)는 3:1이라 비율 검사에 걸린다. 하한과 비율은
+		// 독립 규칙이고 둘 다 통과해야 한다는 뜻이라, 이 조합을 테스트로 못박아 둔다.
 		const { issues } = validateJobPostMediaSet([
 			createMedia({
-				height: 81,
+				height: 50,
 				usage: "ad_horizontal",
-				width: 189,
+				width: 150,
+			}),
+		]);
+
+		expect(issues.map((issue) => issue.code)).toEqual([
+			"banner_aspect_ratio_mismatch",
+		]);
+	});
+
+	it("rejects a horizontal banner smaller than the minimum even when the ratio matches", () => {
+		// 140×60도 정확히 7:3이라 비율 검사는 통과한다. 세로 60은 하한 50을 넘지만 가로 140이
+		// 하한 150에 못 미쳐 걸린다 — 실제로 구속하는 쪽은 가로다.
+		const { issues } = validateJobPostMediaSet([
+			createMedia({
+				height: 60,
+				usage: "ad_horizontal",
+				width: 140,
 			}),
 		]);
 
 		expect(issues.map((issue) => issue.code)).toEqual(["banner_too_small"]);
-		expect(issues[0]).toMatchObject({ minHeight: 111, minWidth: 259 });
+		expect(issues[0]).toMatchObject({ minHeight: 50, minWidth: 150 });
 	});
 
 	it("does not require any particular resolution above the minimum", () => {
-		// 하한(259×111) 이상이고 7:3이면 통과한다. 1400×600 같은 특정 해상도를 요구하지 않는다.
+		// 하한(가로 150) 이상이고 7:3이면 통과한다. 1400×600 같은 특정 해상도를 요구하지 않는다.
 		for (const [width, height] of [
-			[259, 111],
+			[154, 66],
 			[700, 300],
 			[1400, 600],
 			[2800, 1200],
