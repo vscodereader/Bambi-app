@@ -22,6 +22,7 @@ const {
 	employerOrganizationProfile,
 	jobPerformanceEvent,
 	jobPost,
+	jobPostMedia,
 } = bambiSchema;
 
 interface AdBannerFixture {
@@ -143,6 +144,50 @@ const createAdBannerFixture = async (): Promise<AdBannerFixture> => {
 		}),
 	]);
 
+	// 배너 슬롯이 커버가 아니라 업로드된 배너를 내려주는지 보기 위한 미디어 픽스처다.
+	// 프리미엄=가로 배너+커버, 우측=세로 배너+커버, 좌측=커버만(배너 미업로드 폴백 케이스).
+	const bannerMedia = (overrides: {
+		jobPostId: string;
+		storageKey: string;
+		usage: "ad_horizontal" | "ad_vertical" | "cover";
+	}) => ({
+		byteSize: 2048,
+		fileName: `${overrides.usage}.png`,
+		mimeType: "image/png",
+		organizationId,
+		position: 0,
+		uploadedByUserId: employerUserId,
+		...overrides,
+	});
+
+	await db.insert(jobPostMedia).values([
+		bannerMedia({
+			jobPostId: premiumJobId,
+			storageKey: `cover/${premiumJobId}.png`,
+			usage: "cover",
+		}),
+		bannerMedia({
+			jobPostId: premiumJobId,
+			storageKey: `ad-h/${premiumJobId}.png`,
+			usage: "ad_horizontal",
+		}),
+		bannerMedia({
+			jobPostId: rightJobId,
+			storageKey: `cover/${rightJobId}.png`,
+			usage: "cover",
+		}),
+		bannerMedia({
+			jobPostId: rightJobId,
+			storageKey: `ad-v/${rightJobId}.png`,
+			usage: "ad_vertical",
+		}),
+		bannerMedia({
+			jobPostId: leftJobId,
+			storageKey: `cover/${leftJobId}.png`,
+			usage: "cover",
+		}),
+	]);
+
 	return {
 		expiredLeftJobId,
 		jobPostIds,
@@ -210,6 +255,33 @@ describe("bambi jobs.listAdBanners", () => {
 		expect(result.leftBanner.map((j) => j.id)).not.toContain(
 			fixture.expiredLeftJobId
 		);
+	});
+
+	it("업로드된 슬롯별 광고 배너를 커버와 함께 내려준다", async () => {
+		const result = await listAdBanners();
+		const premium = result.premiumBanner.find(
+			(j) => j.id === fixture.premiumJobId
+		);
+		const right = result.rightBanner.find((j) => j.id === fixture.rightJobId);
+
+		// 회귀 방지: 예전에는 usage='cover' 서브쿼리만 있어 배너 행이 아예 선택되지 않았다.
+		expect(premium?.adHorizontal?.storageKey).toBe(
+			`ad-h/${fixture.premiumJobId}.png`
+		);
+		expect(right?.adVertical?.storageKey).toBe(
+			`ad-v/${fixture.rightJobId}.png`
+		);
+		expect(premium?.coverImage?.storageKey).toBe(
+			`cover/${fixture.premiumJobId}.png`
+		);
+	});
+
+	it("배너를 올리지 않은 공고는 배너가 null이고 커버로 폴백할 수 있다", async () => {
+		const result = await listAdBanners();
+		const left = result.leftBanner.find((j) => j.id === fixture.leftJobId);
+
+		expect(left?.adHorizontal).toBeNull();
+		expect(left?.coverImage?.storageKey).toBe(`cover/${fixture.leftJobId}.png`);
 	});
 
 	it("노출된 각 배너 공고에 section=배너타입 impression을 기록한다", async () => {

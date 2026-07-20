@@ -32,7 +32,16 @@ import {
 	hashCommunityPassword,
 	verifyCommunityPassword,
 } from "../../services/bambi-community-password";
-import { extractTiptapText } from "../../services/bambi-tiptap-text";
+import {
+	JOB_POST_IMAGE_MAX_BYTES,
+	type JobPostImageUploadPolicyCode,
+	validateJobPostImageUpload,
+} from "../../services/bambi-job-media-policy";
+import { createEditorMediaUploadIntent } from "../../services/bambi-storage";
+import {
+	assertTiptapDoc,
+	extractTiptapText,
+} from "../../services/bambi-tiptap-text";
 
 const PAGE_SIZE = 20;
 const OVERVIEW_LIMIT = 4;
@@ -82,6 +91,26 @@ const createPostInput = z.object({
 	password: z.string().trim().max(30).optional(),
 	title: z.string().trim().min(2).max(100),
 });
+
+// 본문 이미지 업로드 인텐트 입력. userId는 입력으로 받지 않는다 — 세션에서 꺼내야
+// 클라이언트가 남의 userId를 적어 그 사람 네임스페이스에 객체를 심는 경로가 아예 없다.
+// (공고 쪽은 organizationId를 입력으로 받는 탓에 소유권 가드를 한 겹 더 둬야 했다.)
+const createMediaUploadInput = z.object({
+	byteSize: z.number().int().min(1),
+	fileName: z.string().max(180),
+	mimeType: z.string().min(1).max(120),
+});
+
+// 공고 이미지 정책(validateJobPostImageUpload)을 usage 없이 그대로 쓴다 = 가장 좁은 허용
+// 집합(JPG·PNG·WebP, 8MB). 코드는 그쪽 정책이 정본이고 여기서는 한국어 문구만 입힌다.
+const MEDIA_UPLOAD_ERROR_MESSAGES: Record<
+	JobPostImageUploadPolicyCode,
+	string
+> = {
+	empty_file_name: "파일 이름을 확인할 수 없습니다. 다시 선택해 주세요.",
+	file_too_large: `이미지는 ${JOB_POST_IMAGE_MAX_BYTES / 1024 / 1024}MB 이하만 올릴 수 있습니다.`,
+	unsupported_type: "JPG·PNG·WebP 이미지만 올릴 수 있습니다.",
+};
 
 const LOCKED_PASSWORD_ERROR = "비밀글은 4자 이상의 비밀번호가 필요합니다.";
 
@@ -136,26 +165,6 @@ const setCommentStatusByAdminInput = z.object({
 	reportId: z.string().uuid().optional(),
 	status: communityAdminStatusSchema,
 });
-
-const assertTiptapDoc = (body: string) => {
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(body);
-	} catch {
-		throw new ORPCError("BAD_REQUEST", {
-			message: "본문 형식이 올바르지 않습니다.",
-		});
-	}
-	if (
-		typeof parsed !== "object" ||
-		parsed === null ||
-		(parsed as { type?: unknown }).type !== "doc"
-	) {
-		throw new ORPCError("BAD_REQUEST", {
-			message: "본문 형식이 올바르지 않습니다.",
-		});
-	}
-};
 
 const canBypassLock = (
 	post: { authorUserId: string },
@@ -448,6 +457,28 @@ export const communityRouter = {
 				updatedAt: post.updatedAt,
 				viewCount: viewUpdated?.viewCount ?? post.viewCount + 1,
 			};
+		}),
+
+	createMediaUpload: protectedProcedure
+		.input(createMediaUploadInput)
+		.handler(async ({ context, input }) => {
+			// 수다방 자격 가드를 먼저 통과해야 한다 — 글을 못 쓰는 계정이 업로드 URL만
+			// 발급받아 공개 버킷을 이미지 호스팅으로 쓰는 걸 막는다.
+			// 운영자 FAQ 답변 에디터도 같은 절차를 쓴다: resolveCommunityAccess가 admin을
+			// 무조건 통과시키므로(정지 계정 제외) admin 전용 화면에서도 이 게이트로 충분하다.
+			const profile = await requireCommunityMember(context.session);
+			const policy = validateJobPostImageUpload(input);
+
+			if (!policy.ok) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: MEDIA_UPLOAD_ERROR_MESSAGES[policy.code],
+				});
+			}
+
+			return await createEditorMediaUploadIntent({
+				...input,
+				userId: profile.userId,
+			});
 		}),
 
 	createPost: protectedProcedure

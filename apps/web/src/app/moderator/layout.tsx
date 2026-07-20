@@ -34,8 +34,11 @@ const MODERATOR_NAV_ITEMS: NavEntry[] = [
 			{ href: "/moderator/content" as Route, label: "게시물" },
 			{ href: "/moderator/support" as Route, label: "고객센터" },
 			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
+			// 후기 관리는 운영자 관리 분기에서 추가된 콘텐츠 조치 화면이라 같은 그룹에 둔다.
+			{ href: "/moderator/reviews", label: "후기 관리" },
 		],
 	},
+	{ href: "/seeker", label: "채용정보" },
 ];
 
 export default async function ModeratorLayout({

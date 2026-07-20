@@ -78,6 +78,178 @@ describe("bambi job media policy", () => {
 		).toEqual({ code: "unsupported_type", ok: false });
 	});
 
+	it("allows animated GIF for ad banners only", () => {
+		for (const usage of ["ad_horizontal", "ad_vertical"] as const) {
+			expect(
+				validateJobPostImageUpload({
+					byteSize: 2_000_000,
+					fileName: "banner.gif",
+					mimeType: "image/gif",
+					usage,
+				})
+			).toEqual({ ok: true });
+		}
+
+		for (const usage of ["cover", "detail"] as const) {
+			expect(
+				validateJobPostImageUpload({
+					byteSize: 2_000_000,
+					fileName: "banner.gif",
+					mimeType: "image/gif",
+					usage,
+				})
+			).toEqual({ code: "unsupported_type", ok: false });
+		}
+	});
+
+	it("rejects GIF when the upload intent omits the usage", () => {
+		// usage를 못 받으면 가장 좁은 규칙(썸네일·상세)으로 검사한다. 배너에 GIF를 올리려면
+		// 클라이언트가 usage를 반드시 함께 보내야 한다.
+		expect(
+			validateJobPostImageUpload({
+				byteSize: 2_000_000,
+				fileName: "banner.gif",
+				mimeType: "image/gif",
+			})
+		).toEqual({ code: "unsupported_type", ok: false });
+	});
+
+	it("still enforces the size cap for GIF banners", () => {
+		expect(
+			validateJobPostImageUpload({
+				byteSize: JOB_POST_IMAGE_MAX_BYTES + 1,
+				fileName: "banner.gif",
+				mimeType: "image/gif",
+				usage: "ad_horizontal",
+			})
+		).toEqual({
+			code: "file_too_large",
+			maxBytes: JOB_POST_IMAGE_MAX_BYTES,
+			ok: false,
+		});
+
+		expect(
+			validateJobPostMediaSet([
+				createMedia({
+					fileName: "banner.gif",
+					height: 600,
+					mimeType: "image/gif",
+					usage: "ad_horizontal",
+					width: 1400,
+				}),
+			]).ok
+		).toBe(true);
+
+		// 정사각형(600×600) GIF도 이제 통과한다. 비율은 더 이상 거절 사유가 아니다.
+		expect(
+			validateJobPostMediaSet([
+				createMedia({
+					fileName: "banner.gif",
+					height: 600,
+					mimeType: "image/gif",
+					usage: "ad_horizontal",
+					width: 600,
+				}),
+			]).ok
+		).toBe(true);
+	});
+
+	it("rejects a GIF submitted through a detail slot in the media set", () => {
+		expect(
+			validateJobPostMediaSet([
+				createMedia({
+					fileName: "detail.gif",
+					mimeType: "image/gif",
+					usage: "detail",
+				}),
+			]).issues.map((issue) => issue.code)
+		).toContain("unsupported_type");
+	});
+
+	it("accepts a banner at exactly the 150x50 floor", () => {
+		// 비율 검사를 걷어낸 뒤로 하한 수치 그대로인 150×50(3:1)이 통과한다. 이전엔 7:3이
+		// 아니라는 이유로 막혀서, 하한을 만족하는데도 거절되는 모순이 있었다.
+		expect(
+			validateJobPostMediaSet([
+				createMedia({
+					height: 50,
+					usage: "ad_horizontal",
+					width: 150,
+				}),
+			])
+		).toEqual({ issues: [], ok: true });
+	});
+
+	it("accepts real-world creatives that the old aspect ratio gate rejected", () => {
+		// 이 변경을 촉발한 실제 소재들. 세로 표준 1080×1920(9:16)은 4:9가 아니라 거절됐고,
+		// 300×100(3:1)은 7:3 ±2% 밴드를 벗어나 거절됐다. 이제 둘 다 통과하고, 슬롯의
+		// object-cover가 잘라서 채운다.
+		expect(
+			validateJobPostMediaSet([
+				createMedia({ height: 1920, usage: "ad_vertical", width: 1080 }),
+			])
+		).toEqual({ issues: [], ok: true });
+
+		expect(
+			validateJobPostMediaSet([
+				createMedia({ height: 100, usage: "ad_horizontal", width: 300 }),
+			])
+		).toEqual({ issues: [], ok: true });
+	});
+
+	it("rejects a horizontal banner narrower than the minimum width", () => {
+		// 140×60은 세로 60으로 하한 50은 넘지만 가로 140이 하한 150에 못 미쳐 걸린다.
+		// 비율(정확히 7:3)은 이제 판정에 관여하지 않는다.
+		const { issues } = validateJobPostMediaSet([
+			createMedia({
+				height: 60,
+				usage: "ad_horizontal",
+				width: 140,
+			}),
+		]);
+
+		expect(issues.map((issue) => issue.code)).toEqual(["banner_too_small"]);
+		expect(issues[0]).toMatchObject({ minHeight: 50, minWidth: 150 });
+	});
+
+	it("requires banner dimensions to be present", () => {
+		// 하한을 재려면 치수가 있어야 한다. 비율 규칙이 사라져도 이 요구는 그대로다.
+		expect(
+			validateJobPostMediaSet([
+				createMedia({ usage: "ad_horizontal", width: 1400 }),
+			]).issues.map((issue) => issue.code)
+		).toEqual(["banner_dimensions_required"]);
+	});
+
+	it("does not require any particular resolution above the minimum", () => {
+		// 하한(가로 150·세로 50) 이상이면 비율과 무관하게 통과한다.
+		for (const [width, height] of [
+			[154, 66],
+			[700, 300],
+			[1200, 500],
+			[1400, 600],
+			[2800, 1200],
+		]) {
+			expect(
+				validateJobPostMediaSet([
+					createMedia({ height, usage: "ad_horizontal", width }),
+				]).ok
+			).toBe(true);
+		}
+	});
+
+	it("does not apply a size floor to vertical banners", () => {
+		expect(
+			validateJobPostMediaSet([
+				createMedia({
+					height: 90,
+					usage: "ad_vertical",
+					width: 40,
+				}),
+			]).ok
+		).toBe(true);
+	});
+
 	it("rejects empty filenames before upload intent creation", () => {
 		expect(
 			validateJobPostImageUpload({

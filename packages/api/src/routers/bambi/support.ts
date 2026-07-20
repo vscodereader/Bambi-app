@@ -14,6 +14,7 @@ import {
 	type SessionLike,
 } from "../../services/bambi-authz";
 import { assertNoBannedWords } from "../../services/bambi-banned-words";
+import { assertTiptapDoc } from "../../services/bambi-tiptap-text";
 
 const PAGE_SIZE = 20;
 const BODY_MAX = 5000;
@@ -21,7 +22,11 @@ const MESSAGES_CAP = 100;
 const TITLE_MAX = 100;
 const TITLE_MIN = 2;
 const BODY_MIN = 5;
-const FAQ_ANSWER_MAX = 5000;
+// FAQ 답변은 1:1 문의 본문과 달리 리치 에디터(CommunityPostEditor)가 만든 Tiptap JSON이라
+// 마크·노드 래핑 오버헤드(문단당 ~50자, 이미지 노드는 URL까지)가 붙는다. 같은 에디터로
+// 쓰는 수다방 본문 상한(community BODY_MAX=30_000)과 값을 맞춰 두 리치 본문이 하나의
+// 천장을 공유하게 한다 — FAQ만 더 좁게 잡을 근거가 없고, 다르면 에디터 동작이 화면마다 갈린다.
+const FAQ_ANSWER_MAX = 30_000;
 const FAQ_QUESTION_MAX = 300;
 const FAQ_QUESTION_MIN = 2;
 
@@ -59,7 +64,8 @@ const listFaqInput = z.object({
 });
 
 const createFaqInput = z.object({
-	answer: z.string().trim().min(1).max(FAQ_ANSWER_MAX),
+	// 직렬화된 Tiptap JSON이라 .trim()은 의미가 없다(문서 형식은 핸들러의 assertTiptapDoc이 검증).
+	answer: z.string().min(1).max(FAQ_ANSWER_MAX),
 	category: inquiryCategorySchema,
 	question: z.string().trim().min(FAQ_QUESTION_MIN).max(FAQ_QUESTION_MAX),
 	sortOrder: z.number().int().min(0).default(0),
@@ -70,7 +76,7 @@ const faqIdInput = z.object({
 });
 
 const updateFaqInput = faqIdInput.extend({
-	answer: z.string().trim().min(1).max(FAQ_ANSWER_MAX),
+	answer: z.string().min(1).max(FAQ_ANSWER_MAX),
 	category: inquiryCategorySchema,
 	question: z.string().trim().min(FAQ_QUESTION_MIN).max(FAQ_QUESTION_MAX),
 	sortOrder: z.number().int().min(0),
@@ -340,6 +346,8 @@ export const supportRouter = {
 		}),
 
 	createFaq: adminProcedure.input(createFaqInput).handler(async ({ input }) => {
+		assertTiptapDoc(input.answer);
+
 		const [created] = await db
 			.insert(faqEntry)
 			.values({
@@ -360,6 +368,8 @@ export const supportRouter = {
 	}),
 
 	updateFaq: adminProcedure.input(updateFaqInput).handler(async ({ input }) => {
+		assertTiptapDoc(input.answer);
+
 		await db
 			.update(faqEntry)
 			.set({

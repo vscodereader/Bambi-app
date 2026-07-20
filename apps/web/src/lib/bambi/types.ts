@@ -1,5 +1,16 @@
 // 밤비 신뢰·안전 흐름 — 공용 타입
 
+import type { AppRouterClient } from "@bambi-app/api/routers/index";
+
+// 신고 목록의 대상 맥락(targetContext)은 서버 orpc 추론 타입을 그대로 따른다.
+// targetType별로 확장된 단일 키 유니온(job_post·review·user·chat_room·chat_message)
+// 또는 대상 row가 없으면 null.
+type ModerationReportItem = Awaited<
+	ReturnType<AppRouterClient["bambi"]["moderation"]["listReports"]>
+>[number];
+export type ReportTargetType = ModerationReportItem["targetType"];
+export type ReportTargetContext = ModerationReportItem["targetContext"];
+
 export type Severity = "block" | "review" | "warn" | "ok";
 export type ReportSeverity = "high" | "mid" | "low";
 export type RiskLevel = "high" | "mid" | "low";
@@ -77,15 +88,23 @@ export interface JobDescriptionBlock {
 	type: JobDescriptionBlockType;
 }
 
+export type JobMediaUsage =
+	| "ad_horizontal"
+	| "ad_vertical"
+	| "cover"
+	| "detail";
+
 export interface JobMedia {
 	altText: string;
 	byteSize: number;
 	fileName: string;
+	height?: null | number;
 	id?: string;
 	mimeType: string;
 	storageKey: string;
 	url: string;
-	usage: "cover" | "detail";
+	usage: JobMediaUsage;
+	width?: null | number;
 }
 
 export interface MarketplaceJobSections {
@@ -153,7 +172,12 @@ export interface Report {
 	sev: ReportSeverity;
 	status: "open" | "closed";
 	target: string;
+	targetContext?: ReportTargetContext;
+	// 실데이터 신고의 실제 대상 id(사용자 제재 등에 사용). 프리뷰 목업 신고에는 없다.
+	targetId?: string;
 	targetRole: string;
+	// 실데이터(orpc) 신고에만 존재하는 대상 맥락. 프리뷰 목업 신고에는 없다.
+	targetType?: ReportTargetType;
 	thread: ThreadMessage[];
 	time: string;
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
-import Image from "next/image";
 import {
 	HIT_RIBBON_CLASS_BY_TONE,
 	shouldShowHitRibbon,
@@ -9,6 +8,7 @@ import {
 import type { Job } from "@/lib/bambi/types";
 import { Badge, Button } from "./ds";
 import { MapPinIcon, Message } from "./icons";
+import { JobCoverImage } from "./job-cover-image";
 
 interface VisualJobCardProps {
 	active?: boolean;
@@ -102,12 +102,10 @@ export function VisualJobCard({
 			>
 				<div className="flex items-start gap-3">
 					{job.coverImage ? (
-						<Image
-							alt={job.coverImage.altText || job.coverImage.fileName}
+						<JobCoverImage
 							className="h-14 w-30 shrink-0 rounded-md border border-white object-cover"
 							height={56}
-							src={job.coverImage.url}
-							unoptimized
+							media={job.coverImage}
 							width={56}
 						/>
 					) : (

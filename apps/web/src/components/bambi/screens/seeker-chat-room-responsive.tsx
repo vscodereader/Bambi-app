@@ -38,6 +38,7 @@ import {
 	ShieldIcon,
 	XIcon,
 } from "../icons";
+import { ReportDialog } from "../report-dialog";
 import { ReviewForm } from "../review-form";
 
 interface SeekerChatRoomResponsiveProps {
@@ -143,6 +144,11 @@ const getReviewMutationErrorMessage = (error: Error): string => {
 };
 
 type RealtimeStatus = "connected" | "connecting" | "offline";
+
+// 양쪽 동의가 끝난 방은 더 이상 "공개"가 아니라 "확인"하는 화면으로 들어간다.
+const getRevealButtonLabel = (
+	reveal?: { canViewCounterpart: boolean } | null
+): string => (reveal?.canViewCounterpart ? "연락처 보기" : "연락처 공개하기");
 
 const getRealtimeStatusLabel = (status: RealtimeStatus): string => {
 	switch (status) {
@@ -602,6 +608,7 @@ export function SeekerChatRoomResponsive({
 	const router = useRouter();
 	const [message, setMessage] = useState("");
 	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
+	const [isReportOpen, setIsReportOpen] = useState(false);
 	const [attachmentDraft, setAttachmentDraft] =
 		useState<AttachmentDraft | null>(null);
 	const [interviewAt, setInterviewAt] = useState("");
@@ -624,6 +631,11 @@ export function SeekerChatRoomResponsive({
 	const typingActiveRef = useRef(false);
 	const roomQuery = useQuery(
 		orpc.bambi.chats.getById.queryOptions({ input: { id: roomId } })
+	);
+	const revealQuery = useQuery(
+		orpc.bambi.chats.getContactReveal.queryOptions({
+			input: { chatRoomId: roomId },
+		})
 	);
 	const currentSessionUserId = roomQuery.data?.currentUserId;
 	const reviewListQuery = useQuery({
@@ -1130,11 +1142,20 @@ export function SeekerChatRoomResponsive({
 							</span>
 							면접 확정 전 연락처 보호 중
 						</div>
-						<ChatBlockTrigger
-							isBlocked={room.isBlocked}
-							isConfirmOpen={isBlockConfirmOpen}
-							onOpen={() => setIsBlockConfirmOpen(true)}
-						/>
+						<div className="flex items-center gap-2">
+							<Button
+								onClick={() => setIsReportOpen(true)}
+								size="sm"
+								variant="secondary"
+							>
+								신고
+							</Button>
+							<ChatBlockTrigger
+								isBlocked={room.isBlocked}
+								isConfirmOpen={isBlockConfirmOpen}
+								onOpen={() => setIsBlockConfirmOpen(true)}
+							/>
+						</div>
 					</div>
 					<p className="mt-1 mb-0 text-xs leading-relaxed">
 						외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요.
@@ -1146,6 +1167,12 @@ export function SeekerChatRoomResponsive({
 						onConfirm={() =>
 							blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
 						}
+					/>
+					<ReportDialog
+						onOpenChange={setIsReportOpen}
+						open={isReportOpen}
+						targetId={room.id}
+						targetType="chat_room"
 					/>
 				</div>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
@@ -1307,7 +1334,7 @@ export function SeekerChatRoomResponsive({
 							size="md"
 							variant={confirmedSchedule ? "primary" : "secondary"}
 						>
-							연락처 공개하기
+							{getRevealButtonLabel(revealQuery.data)}
 						</Button>
 					</Card>
 					<ReviewSidebarCard

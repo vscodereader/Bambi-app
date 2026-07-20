@@ -50,7 +50,6 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 	return (
 		<BottomNavShell>
 			<BottomNav
-				badges={{ chat: 1 }}
 				items={[
 					{ value: "home", label: "탐색", icon: Search2 },
 					{ value: "chat", label: "채팅", icon: Message },

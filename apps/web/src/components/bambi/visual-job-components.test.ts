@@ -35,8 +35,9 @@ describe("visual job marketplace components", () => {
 		// 링크는 결제완료 배너 공고 실데이터의 상세(/seeker/jobs/{id})로 직행한다
 		expect(banner).toContain("/seeker/jobs/");
 		expect(banner).toContain("item.id");
-		// 배너 이미지는 해당 공고 커버(AdBannerItem.coverUrl)를 쓴다
-		expect(banner).toContain("item.coverUrl");
+		// 배너 이미지는 슬롯 규격으로 업로드된 배너(AdBannerItem.imageUrl)를 쓴다 — 커버가 아니다
+		expect(banner).toContain("item.imageUrl");
+		expect(banner).not.toContain("item.coverUrl");
 	});
 
 	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {
@@ -81,6 +82,10 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain(
 			"headerSlot={isMarketplace ? <SeekerHeaderSearch />"
 		);
+		// 검색창은 헤더에서 가장 큰 고정폭 소비처다. 다시 넓히면 내비가 그만큼 압축돼
+		// 마지막 항목("고객센터")의 끝 글자가 잘린다.
+		expect(source).toContain('className="relative w-48"');
+		expect(source).not.toContain("w-64");
 		// 모든 seeker 페이지 헤더를 /seeker와 동일한 고정폭으로 통일한다(경로별 분기 없음)
 		expect(source).toContain("contentWidthClassName={SEEKER_CONTENT_MAX_W}");
 		expect(source).not.toContain("isJobArea");
@@ -95,6 +100,8 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("max-w-[80%]");
 		// 검색창을 헤더(연락처 보호 왼쪽)로 옮기고 본문 검색은 모바일 전용으로 둔다
 		expect(source).toContain("headerSlot={headerSearch}");
+		// seeker 헤더와 같은 내비 압축 이유로 검색창 폭을 묶어둔다.
+		expect(source).toContain('className="relative w-48"');
 		expect(source).toContain('searchFieldClassName="md:hidden"');
 		// 히어로 카피 블록은 제거됨
 		expect(source).not.toContain("밤비 안에서 먼저 대화해요");
@@ -145,7 +152,9 @@ describe("visual job marketplace components", () => {
 
 		expect(source).toContain("export function EmployerListingPreview");
 		expect(source).toContain("목록 노출 미리보기");
-		expect(source).toContain("대표 이미지 반영");
+		expect(source).toContain("공고 썸네일 반영");
+		// 썸네일 미리보기는 실제 공고 카드(visual-job-card)와 같은 h-14 w-30 규격이어야 한다.
+		expect(source).toContain("h-14 w-30");
 		expect(source).toContain("coverImageUrl");
 		expect(source).toContain("displayCompanyName");
 	});
@@ -219,13 +228,24 @@ describe("visual job marketplace components", () => {
 	it("wires the /employer/ad-guide entry points", () => {
 		const route = readComponent("../../app/employer/ad-guide/page.tsx");
 		const layout = readComponent("../../app/employer/layout.tsx");
+		const dashboard = readComponent("../../app/employer/page.tsx");
 
 		// 라우트가 광고 안내 화면을 렌더링한다
 		expect(route).toContain("EmployerAdGuideScreen");
-		// 진입점은 구인자 헤더 nav 항목 하나로 일원화됐다 — 홈 대시보드의 "광고 상품 안내"
-		// 바로가기 카드는 구인자 홈 카드 정리(PR #26)에서 걷어냈다.
 		expect(layout).toContain("/employer/ad-guide");
 		expect(layout).toContain("광고 안내");
+		// 진입점을 헤더 nav 하나로 일원화(PR #26)했더니 모바일에서 광고 안내에 닿을 길이
+		// 사라졌다 — 그 헤더는 hidden md:block이고 하단 탭 5개에도 없기 때문이다.
+		// 그래서 대시보드 퀵링크를 되살렸다. 헤더 nav만 남기면 안 된다.
+		expect(dashboard).toContain('href: "/employer/ad-guide" as Route');
+	});
+
+	it("keeps the bottom tab bar visible on /employer/ad-guide", () => {
+		const nav = readComponent("persona-nav.tsx");
+
+		// showNav에서 빠져 있으면 광고 안내에 들어간 순간 하단 탭이 사라져 모바일에서
+		// 되돌아갈 길이 없다(실제로 그 막다른 길이 났었다).
+		expect(nav).toContain('path.startsWith("/employer/ad-guide")');
 	});
 
 	it("wires the ad-products console edit links to the edit routes", () => {

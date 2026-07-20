@@ -53,9 +53,12 @@ import {
 	validateJobDescriptionBlocks,
 } from "../../services/bambi-job-description-blocks";
 import {
+	JOB_AD_BANNER_SPECS,
 	JOB_POST_DETAIL_IMAGE_LIMIT,
 	JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH,
 	type JobPostMediaPolicyInput,
+	type JobPostMediaUsage,
+	jobPostMediaUsages,
 	validateJobPostImageUpload,
 	validateJobPostMediaSet,
 } from "../../services/bambi-job-media-policy";
@@ -65,7 +68,11 @@ import {
 	getUpdatedJobPostStatus,
 	type JobPostStatus,
 } from "../../services/bambi-policy";
-import { createJobPostMediaUploadIntent } from "../../services/bambi-storage";
+import {
+	createJobPostMediaUploadIntent,
+	isOwnedJobPostMediaKey,
+} from "../../services/bambi-storage";
+import { deletePublicObjects } from "../../services/gcs";
 
 const jobDescriptionBlockInput = z.object({
 	id: z.string().min(1).max(80),
@@ -77,12 +84,16 @@ const jobPostMediaInput = z.object({
 	altText: z.string().max(JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH).default(""),
 	byteSize: z.number().int().min(1),
 	fileName: z.string().max(180),
+	height: z.number().int().min(1).max(20_000).optional(),
 	mimeType: z.string().min(1).max(120),
 	storageKey: z.string().min(1).max(512),
+	width: z.number().int().min(1).max(20_000).optional(),
 });
 
 const jobPostMediaSetInput = z
 	.object({
+		adHorizontal: jobPostMediaInput.optional(),
+		adVertical: jobPostMediaInput.optional(),
 		cover: jobPostMediaInput.optional(),
 		detail: z
 			.array(jobPostMediaInput)
@@ -127,6 +138,9 @@ const createMediaUploadInput = z.object({
 	fileName: z.string().max(180),
 	mimeType: z.string().min(1).max(120),
 	byteSize: z.number().int().min(1),
+	// 허용 MIME이 슬롯마다 다르다(광고 배너만 GIF). usage를 안 보내면 가장 좁은
+	// 규칙(썸네일·상세)으로 검사하므로, GIF를 올리려면 배너 usage를 함께 보내야 한다.
+	usage: z.enum(jobPostMediaUsages).optional(),
 });
 
 const listInput = z.object({
@@ -180,6 +194,13 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 	switch (code) {
 		case "alt_text_too_long":
 			return "Job post media alt text is too long.";
+		case "banner_dimensions_required":
+			return "광고 배너 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.";
+		// 하한 수치는 정책 상수에서 읽는다. 문구에 숫자를 박아 두면 규격을 바꿀 때 조용히 어긋난다.
+		case "banner_too_small":
+			return `광고 배너 이미지가 너무 작습니다. 가로형은 ${JOB_AD_BANNER_SPECS.ad_horizontal.minWidth}×${JOB_AD_BANNER_SPECS.ad_horizontal.minHeight}px 이상으로 등록해 주세요.`;
+		case "too_many_ad_banners":
+			return "광고 배너는 가로형·세로형 각 1장만 등록할 수 있습니다.";
 		case "block_text_too_long":
 			return "Job description block text is too long.";
 		case "empty_block_text":
@@ -255,12 +276,33 @@ const getMediaSetItems = (
 		});
 	}
 
+	// 광고 배너는 usage당 1장이므로 position은 항상 0이다.
+	if (media.adHorizontal) {
+		rows.push({
+			...media.adHorizontal,
+			usage: "ad_horizontal",
+			position: 0,
+		});
+	}
+
+	if (media.adVertical) {
+		rows.push({
+			...media.adVertical,
+			usage: "ad_vertical",
+			position: 0,
+		});
+	}
+
 	return rows;
 };
 
-const requireValidJobPostMediaSet = (
-	media: JobPostMediaSetInput
-): JobPostMediaRowInput[] => {
+const requireValidJobPostMediaSet = ({
+	media,
+	organizationId,
+}: {
+	media: JobPostMediaSetInput;
+	organizationId: string;
+}): JobPostMediaRowInput[] => {
 	const rows = getMediaSetItems(media);
 	const result = validateJobPostMediaSet(rows);
 
@@ -268,6 +310,19 @@ const requireValidJobPostMediaSet = (
 		throw new ORPCError("BAD_REQUEST", {
 			message: getJobPostPolicyErrorMessage(result.issues[0]?.code ?? ""),
 		});
+	}
+
+	// 서명 발급은 조직 소유권을 검사하지만, 저장 단계에서 클라이언트가 임의 키를 보내면
+	// 그 검사가 무의미해진다. 공고 삭제·교체 시 이 키로 GCS 객체를 실제로 지우므로
+	// 남의 조직 키가 섞이면 원본이 삭제된다. 자기 조직 prefix가 아닌 키는 전부 거부한다.
+	for (const row of rows) {
+		if (
+			!isOwnedJobPostMediaKey({ organizationId, storageKey: row.storageKey })
+		) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "Job post media does not belong to this organization.",
+			});
+		}
 	}
 
 	return rows;
@@ -279,10 +334,11 @@ const buildJobPostMediaInsertRows = ({
 	media,
 	organizationId,
 }: BuildJobPostMediaRowsInput) =>
-	requireValidJobPostMediaSet(media).map((item) => ({
+	requireValidJobPostMediaSet({ media, organizationId }).map((item) => ({
 		altText: item.altText.trim(),
 		byteSize: item.byteSize,
 		fileName: item.fileName.trim(),
+		height: item.height ?? null,
 		jobPostId,
 		mimeType: item.mimeType,
 		organizationId,
@@ -290,7 +346,31 @@ const buildJobPostMediaInsertRows = ({
 		storageKey: item.storageKey,
 		uploadedByUserId: actorUserId,
 		usage: item.usage,
+		width: item.width ?? null,
 	}));
+
+interface JobPostMediaRow {
+	usage: JobPostMediaUsage;
+}
+
+// 응답 형태는 폼 입력 형태와 대칭이다(cover/detail/adHorizontal/adVertical).
+const toJobPostMediaSet = <Row extends JobPostMediaRow>(rows: Row[]) => ({
+	adHorizontal: rows.find((item) => item.usage === "ad_horizontal") ?? null,
+	adVertical: rows.find((item) => item.usage === "ad_vertical") ?? null,
+	cover: rows.find((item) => item.usage === "cover") ?? null,
+	detail: rows.filter((item) => item.usage === "detail"),
+});
+
+const getJobPostMediaStorageKeys = async (
+	jobPostId: string
+): Promise<string[]> => {
+	const rows = await db
+		.select({ storageKey: jobPostMedia.storageKey })
+		.from(jobPostMedia)
+		.where(eq(jobPostMedia.jobPostId, jobPostId));
+
+	return rows.map((row) => row.storageKey);
+};
 
 const getJobPostMediaSet = async (jobPostId: string) => {
 	const rows = await db
@@ -299,23 +379,25 @@ const getJobPostMediaSet = async (jobPostId: string) => {
 		.where(eq(jobPostMedia.jobPostId, jobPostId))
 		.orderBy(asc(jobPostMedia.usage), asc(jobPostMedia.position));
 
-	return {
-		cover: rows.find((item) => item.usage === "cover") ?? null,
-		detail: rows.filter((item) => item.usage === "detail"),
-	};
+	return toJobPostMediaSet(rows);
 };
 
 const ratingAverageSql = sql<number>`coalesce((select avg(${review.rating}) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::double precision`;
 const ratingCountSql = sql<number>`coalesce((select count(*) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::integer`;
-const coverImageSql = sql<{
-	altText: string;
-	byteSize: number;
-	fileName: string;
-	id: string;
-	mimeType: string;
-	storageKey: string;
-	usage: "cover";
-} | null>`(
+// 공고의 특정 usage 미디어 1건을 뽑는 상관 서브쿼리. 커버와 광고 배너가 형태가 같아
+// usage만 갈아끼워 재사용한다(같은 SQL 블록을 usage별로 복붙하면 한쪽만 고쳐지는 사고가 난다).
+const jobPostMediaByUsageSql = <Usage extends JobPostMediaUsage>(
+	usage: Usage
+) =>
+	sql<{
+		altText: string;
+		byteSize: number;
+		fileName: string;
+		id: string;
+		mimeType: string;
+		storageKey: string;
+		usage: Usage;
+	} | null>`(
 	select json_build_object(
 		'id', ${jobPostMedia.id},
 		'usage', ${jobPostMedia.usage},
@@ -327,10 +409,15 @@ const coverImageSql = sql<{
 	)
 	from ${jobPostMedia}
 	where ${jobPostMedia.jobPostId} = ${jobPost.id}
-		and ${jobPostMedia.usage} = 'cover'
+		and ${jobPostMedia.usage} = ${usage}
 	order by ${jobPostMedia.position} asc
 	limit 1
 )`;
+
+const coverImageSql = jobPostMediaByUsageSql("cover");
+// 배너 슬롯은 커버가 아니라 사장님이 그 슬롯 규격(7:3 / 4:9)으로 올린 이미지를 써야 한다.
+const adHorizontalImageSql = jobPostMediaByUsageSql("ad_horizontal");
+const adVerticalImageSql = jobPostMediaByUsageSql("ad_vertical");
 
 interface ResolvedJobExposure {
 	adProductId: string | null;
@@ -606,6 +693,10 @@ export const jobsRouter = {
 		const now = new Date();
 		const rows = await db
 			.select({
+				// 슬롯별 배너 원본. 좌측·프리미엄은 가로형, 우측은 세로형을 쓰며 클라이언트가
+				// 슬롯에 맞는 쪽을 고른다. 미업로드 공고를 위해 coverImage도 폴백용으로 함께 내린다.
+				adHorizontal: adHorizontalImageSql,
+				adVertical: adVerticalImageSql,
 				coverImage: coverImageSql,
 				employerDisplayName: employerOrganizationProfile.displayName,
 				exposureEndsAt: jobPost.exposureEndsAt,
@@ -834,7 +925,7 @@ export const jobsRouter = {
 				});
 			}
 
-			return createJobPostMediaUploadIntent({
+			return await createJobPostMediaUploadIntent({
 				actorUserId: actor.userId,
 				byteSize: input.byteSize,
 				fileName: input.fileName,
@@ -886,7 +977,10 @@ export const jobsRouter = {
 				exposureDurationDays: input.exposureDurationDays,
 				paymentMethod: input.paymentMethod,
 			});
-			const mediaRows = requireValidJobPostMediaSet(media);
+			const mediaRows = requireValidJobPostMediaSet({
+				media,
+				organizationId: input.organizationId,
+			});
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status = getInitialJobPostStatus({
 				employerVerificationStatus:
@@ -942,10 +1036,7 @@ export const jobsRouter = {
 
 				return {
 					...created,
-					media: {
-						cover: insertedMedia.find((item) => item.usage === "cover") ?? null,
-						detail: insertedMedia.filter((item) => item.usage === "detail"),
-					},
+					media: toJobPostMediaSet(insertedMedia),
 				};
 			});
 		}),
@@ -1025,7 +1116,12 @@ export const jobsRouter = {
 			const nextExposureEndsAt = exposureChanged
 				? null
 				: existing.exposureEndsAt;
-			const mediaRows = media ? requireValidJobPostMediaSet(media) : null;
+			const mediaRows = media
+				? requireValidJobPostMediaSet({
+						media,
+						organizationId: existing.organizationId,
+					})
+				: null;
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status: JobPostStatus = riskDetected
 				? "pending_review"
@@ -1036,7 +1132,12 @@ export const jobsRouter = {
 						publicContentChanged: true,
 					});
 
-			return await db.transaction(async (tx) => {
+			// 교체 대상에서 빠진 이미지만 GCS에서 지우기 위해, 갱신 전 키를 확보한다.
+			const previousStorageKeys = mediaRows
+				? await getJobPostMediaStorageKeys(input.id)
+				: [];
+
+			const result = await db.transaction(async (tx) => {
 				const [updated] = await tx
 					.update(jobPost)
 					.set({
@@ -1090,11 +1191,7 @@ export const jobsRouter = {
 
 					return {
 						...updated,
-						media: {
-							cover:
-								insertedMedia.find((item) => item.usage === "cover") ?? null,
-							detail: insertedMedia.filter((item) => item.usage === "detail"),
-						},
+						media: toJobPostMediaSet(insertedMedia),
 					};
 				}
 
@@ -1103,6 +1200,17 @@ export const jobsRouter = {
 					media: await getJobPostMediaSet(updated.id),
 				};
 			});
+
+			// 트랜잭션이 커밋된 뒤에만 객체를 지운다. 롤백된 변경으로 원본을 잃지 않는다.
+			if (mediaRows) {
+				const retainedKeys = new Set(mediaRows.map((row) => row.storageKey));
+
+				await deletePublicObjects(
+					previousStorageKeys.filter((key) => !retainedKeys.has(key))
+				);
+			}
+
+			return result;
 		}),
 	delete: protectedProcedure
 		.input(z.object({ id: z.string().uuid() }))
@@ -1123,8 +1231,12 @@ export const jobsRouter = {
 				session: context.session,
 			});
 
-			// 연관 미디어·프로모션·성과 이벤트는 FK onDelete cascade로 함께 제거된다.
+			// 연관 미디어·프로모션·성과 이벤트 행은 FK onDelete cascade로 함께 제거되지만,
+			// GCS 객체는 cascade 대상이 아니므로 키를 미리 확보해 직접 지운다.
+			const storageKeys = await getJobPostMediaStorageKeys(input.id);
+
 			await db.delete(jobPost).where(eq(jobPost.id, input.id));
+			await deletePublicObjects(storageKeys);
 
 			return { id: input.id };
 		}),

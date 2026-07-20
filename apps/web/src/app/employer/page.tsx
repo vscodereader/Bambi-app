@@ -17,6 +17,7 @@ import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+	BookOpen,
 	ChartColumn,
 	Check,
 	CircleAlert,
@@ -123,6 +124,15 @@ const quickLinks: {
 		href: "/employer/analytics" as Route,
 		icon: ChartColumn,
 		label: "성과 분석",
+	},
+	// 광고 안내는 데스크톱 헤더 nav에만 있었다. 그 헤더는 hidden md:block이고 모바일
+	// 하단 탭 5개에도 없어서, 모바일에서는 도달할 방법이 아예 없었다. 프로모션·성과 분석과
+	// 같은 대시보드 퀵링크 자리를 준다(탭을 6개로 늘리지 않고 기존 패턴을 그대로 쓴다).
+	{
+		description: "노출 상품과 배너 규격을 확인해요",
+		href: "/employer/ad-guide" as Route,
+		icon: BookOpen,
+		label: "광고 안내",
 	},
 	{
 		description: "지원자 화면을 미리 봐요",
@@ -368,7 +378,7 @@ export default function EmployerPage() {
 
 	if (session.isPending || mineQuery.isLoading) {
 		return (
-			<PageShell title="구인자 관리">
+			<PageShell title="내 공고">
 				<div className="grid gap-3 md:grid-cols-2">
 					<Skeleton className="h-24 w-full rounded-lg" />
 					<Skeleton className="h-24 w-full rounded-lg" />
@@ -380,8 +390,8 @@ export default function EmployerPage() {
 	if (!isSignedIn || getErrorCode(mineQuery.error) === "UNAUTHORIZED") {
 		return (
 			<PageShell
-				description="구인자 관리는 로그인 후 이용할 수 있습니다."
-				title="구인자 관리"
+				description="내 공고는 로그인 후 이용할 수 있습니다."
+				title="내 공고"
 			>
 				<EmptyState
 					action={
@@ -399,8 +409,8 @@ export default function EmployerPage() {
 	if (mineQuery.isError) {
 		return (
 			<PageShell
-				description="구인자 관리 정보를 불러오지 못했습니다."
-				title="구인자 관리"
+				description="내 공고 정보를 불러오지 못했습니다."
+				title="내 공고"
 			>
 				<EmptyState
 					action={
@@ -419,7 +429,7 @@ export default function EmployerPage() {
 		return (
 			<PageShell
 				description="공고를 등록하려면 밤비 프로필 설정이 필요합니다."
-				title="구인자 관리"
+				title="내 공고"
 			>
 				<EmptyState
 					action={
@@ -438,7 +448,7 @@ export default function EmployerPage() {
 		return (
 			<PageShell
 				description="현재 계정은 구직자 프로필로 설정되어 있습니다."
-				title="구인자 관리"
+				title="내 공고"
 			>
 				<EmptyState
 					action={
@@ -450,7 +460,7 @@ export default function EmployerPage() {
 						</Link>
 					}
 					description="구직자 계정은 공개 공고를 탐색하고 지원 대화를 시작할 수 있습니다."
-					title="구인자 관리 권한이 없습니다"
+					title="내 공고 권한이 없습니다"
 				/>
 			</PageShell>
 		);
@@ -478,7 +488,7 @@ export default function EmployerPage() {
 		<PageShell
 			actions={<NewJobButton verified={verified} />}
 			description="조직과 팀 프로필 상태를 확인하고 소유한 공고를 관리합니다."
-			title="구인자 관리"
+			title="내 공고"
 		>
 			<EmployerGateBanner action="공고를 등록" />
 			{jobs.length > 0 ? (
@@ -538,7 +548,7 @@ export default function EmployerPage() {
 			) : null}
 
 			<nav
-				aria-label="구인자 관리 바로가기"
+				aria-label="내 공고 바로가기"
 				className="grid grid-cols-2 gap-3 sm:grid-cols-4"
 			>
 				{quickLinks.map((link) => (

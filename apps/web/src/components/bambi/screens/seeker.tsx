@@ -830,7 +830,6 @@ export function SeekerPersona({
 			{showNav && (
 				<div className="border-border border-t bg-background">
 					<BottomNav
-						badges={{ chat: 1 }}
 						items={navItems}
 						onChange={(v) => {
 							if (v === "chat") {

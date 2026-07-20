@@ -454,6 +454,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			const mediaPayload = await resolveJobPostMediaForSubmit({
 				createUploadIntent: createMediaUploadMutation.mutateAsync,
 				media: validatedMedia,
+				onMediaResolved: setMedia,
 				organizationId: jobInput.organizationId,
 				teamId: jobInput.teamId,
 			});
@@ -839,6 +840,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					</section>
 
 					<JobPostMediaUploader
+						adProductId={form.adProductId}
 						error={fieldErrors.media}
 						media={media}
 						onChange={(nextMedia) => {

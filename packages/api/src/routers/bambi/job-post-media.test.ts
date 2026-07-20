@@ -431,6 +431,92 @@ describe("bambi jobs router media and block content", () => {
 		}
 	});
 
+	it("rejects saving a job with another organization's storage key", async () => {
+		const fixture = await createJobPostMediaFixture();
+
+		try {
+			await db
+				.update(employerOrganizationProfile)
+				.set({ verificationStatus: "verified" })
+				.where(
+					eq(employerOrganizationProfile.organizationId, fixture.organizationId)
+				);
+
+			const createJob = createProcedureClient(jobsRouter.create, {
+				context: createContextForUser(fixture.ownerUserId),
+				path: ["bambi", "jobs", "create"],
+			});
+
+			// storageKey는 공개 응답에 실려 나가므로 남의 조직 키를 알아낼 수 있다. 그 키를
+			// 자기 공고에 붙이면 공고 삭제·교체 시 남의 객체가 GCS에서 지워진다.
+			await expectOrpcCode(
+				createJob({
+					...createJobInput(fixture.organizationId),
+					media: {
+						cover: {
+							altText: "탈취한 대표 이미지",
+							byteSize: 128_000,
+							fileName: "victim-cover.jpg",
+							mimeType: "image/jpeg",
+							storageKey: `bambi-job-post-media/${fixture.otherOrganizationId}/${fixture.otherOwnerUserId}/victim-cover.jpg`,
+						},
+					},
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupJobPostMediaFixture(fixture);
+		}
+	});
+
+	it("rejects updating a job with a storage key outside the job post media prefix", async () => {
+		const fixture = await createJobPostMediaFixture();
+		const jobPostId = randomUUID();
+
+		try {
+			await db.insert(jobPost).values({
+				createdByUserId: fixture.ownerUserId,
+				description: "기존 공개 설명입니다.",
+				id: jobPostId,
+				industryCategory: "라운지",
+				organizationId: fixture.organizationId,
+				payAmount: 180_000,
+				payUnit: "일급",
+				region: "서울 강남구",
+				status: "draft",
+				title: "기존 공고",
+				workSchedule: "20:00-02:00",
+			});
+
+			const updateJob = createProcedureClient(jobsRouter.update, {
+				context: createContextForUser(fixture.ownerUserId),
+				path: ["bambi", "jobs", "update"],
+			});
+
+			// 공고 미디어 prefix 밖(예: 채팅 첨부)의 키도 지정할 수 없어야 한다.
+			await expectOrpcCode(
+				updateJob({
+					data: {
+						...createJobInput(fixture.organizationId),
+						media: {
+							cover: {
+								altText: "남의 채팅 첨부",
+								byteSize: 128_000,
+								fileName: "attachment.jpg",
+								mimeType: "image/jpeg",
+								storageKey: `bambi-chat/${randomUUID()}/${fixture.otherOwnerUserId}/attachment.jpg`,
+							},
+						},
+					},
+					id: jobPostId,
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupJobPostMediaFixture(fixture);
+		}
+	});
+
 	it("returns published unverified jobs to review when blocks or media change", async () => {
 		const fixture = await createJobPostMediaFixture();
 		const jobPostId = randomUUID();

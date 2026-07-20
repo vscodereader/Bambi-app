@@ -182,9 +182,17 @@ export interface AdBannerJobGroups {
 
 export function useAdBannerJobs(): AdBannerJobGroups {
 	const bannersQuery = useQuery(orpc.bambi.jobs.listAdBanners.queryOptions());
+	// 슬롯→배너 규격 매핑은 렌더러 비율과 한 몸이다: 좌측·상단 프리미엄은 가로형(7:3),
+	// 우측 레일은 세로형(4:9). 슬롯마다 맞는 usage를 넘겨야 구인자가 올린 배너가 뜬다.
 	return {
-		leftBanner: (bannersQuery.data?.leftBanner ?? []).map(toAdBannerItem),
-		premiumBanner: (bannersQuery.data?.premiumBanner ?? []).map(toAdBannerItem),
-		rightBanner: (bannersQuery.data?.rightBanner ?? []).map(toAdBannerItem),
+		leftBanner: (bannersQuery.data?.leftBanner ?? []).map((job) =>
+			toAdBannerItem(job, "ad_horizontal")
+		),
+		premiumBanner: (bannersQuery.data?.premiumBanner ?? []).map((job) =>
+			toAdBannerItem(job, "ad_horizontal")
+		),
+		rightBanner: (bannersQuery.data?.rightBanner ?? []).map((job) =>
+			toAdBannerItem(job, "ad_vertical")
+		),
 	};
 }

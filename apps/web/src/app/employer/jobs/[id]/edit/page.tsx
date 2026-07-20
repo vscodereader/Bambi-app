@@ -39,6 +39,7 @@ import { PayAmountHint } from "@/components/bambi/pay-amount-hint";
 import Loader from "@/components/loader";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
+import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
 	emptyJobForm,
 	emptyJobFormMedia,
@@ -135,34 +136,25 @@ const focusFirstInvalidField = (form: HTMLFormElement | null) => {
 	});
 };
 
-const getLocalJobMediaPreviewUrl = (item: {
-	fileName: string;
-	storageKey: string;
-	usage: "cover" | "detail";
-}): string => {
-	const params = new URLSearchParams({
-		fileName: item.fileName,
-		key: item.storageKey,
-		usage: item.usage,
-	});
-
-	return `/bambi/local-job-media?${params.toString()}`;
-};
-
+// 이미 저장된 이미지의 미리보기는 공개 버킷 URL을 그대로 쓴다(마켓플레이스 표시 경로와 동일).
+// width/height는 배너 비율 검증에 쓰이며, 컬럼 추가 전에 저장된 행에는 없을 수 있다.
 const toJobFormMediaItem = (item: {
 	altText: string;
 	byteSize: number;
 	fileName: string;
+	height?: null | number;
 	mimeType: string;
 	storageKey: string;
-	usage: "cover" | "detail";
+	width?: null | number;
 }): JobFormMediaItem => ({
 	altText: item.altText,
 	byteSize: item.byteSize,
 	fileName: item.fileName,
+	height: item.height ?? undefined,
 	mimeType: item.mimeType,
-	previewUrl: getLocalJobMediaPreviewUrl(item),
+	previewUrl: jobMediaPublicUrl(item.storageKey),
 	storageKey: item.storageKey,
+	width: item.width ?? undefined,
 });
 
 export default function EditEmployerJobPage({
@@ -251,6 +243,12 @@ export default function EditEmployerJobPage({
 		});
 		setDescriptionBlocks(job.descriptionBlocks ?? []);
 		setMedia({
+			adHorizontal: job.media.adHorizontal
+				? toJobFormMediaItem(job.media.adHorizontal)
+				: null,
+			adVertical: job.media.adVertical
+				? toJobFormMediaItem(job.media.adVertical)
+				: null,
 			cover: job.media.cover ? toJobFormMediaItem(job.media.cover) : null,
 			detail: job.media.detail.map(toJobFormMediaItem),
 		});
@@ -363,6 +361,7 @@ export default function EditEmployerJobPage({
 			const mediaPayload = await resolveJobPostMediaForSubmit({
 				createUploadIntent: createMediaUploadMutation.mutateAsync,
 				media: validatedMedia,
+				onMediaResolved: setMedia,
 				organizationId: jobInput.organizationId,
 				teamId: jobInput.teamId,
 			});
@@ -815,6 +814,7 @@ export default function EditEmployerJobPage({
 					</section>
 
 					<JobPostMediaUploader
+						adProductId={form.adProductId}
 						error={fieldErrors.media}
 						media={media}
 						onChange={(nextMedia) => {

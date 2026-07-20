@@ -6,12 +6,7 @@ import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { StatusBadge } from "@/components/bambi/status-badge";
-import {
-	REPORT_REASON_LABELS,
-	REPORT_TARGET_TYPE_LABELS,
-	type ReportReason,
-	type ReportTargetType,
-} from "@/lib/bambi/report-labels";
+import { reportReasonLabel, targetTypeLabel } from "@/lib/bambi/report-labels";
 import { orpc } from "@/utils/orpc";
 
 type ReportStatus = "open" | "reviewing" | "resolved" | "dismissed";
@@ -53,16 +48,6 @@ function statusTone(status: string): "default" | "good" | "warning" | "danger" {
 	return STATUS_TONES[status as ReportStatus] ?? "default";
 }
 
-function reasonLabel(reason: string): string {
-	return REPORT_REASON_LABELS[reason as ReportReason] ?? reason;
-}
-
-function targetTypeLabel(targetType: string): string {
-	return (
-		REPORT_TARGET_TYPE_LABELS[targetType as ReportTargetType] ?? targetType
-	);
-}
-
 export function MyReportsScreen() {
 	const query = useQuery(
 		orpc.bambi.moderation.listMyReports.queryOptions({ input: { limit: 50 } })
@@ -102,7 +87,7 @@ export function MyReportsScreen() {
 								<div className="flex items-start justify-between gap-3">
 									<div className="flex min-w-0 flex-col gap-1">
 										<span className="font-semibold text-[15px] text-foreground">
-											{reasonLabel(item.reason)}
+											{reportReasonLabel(item.reason)}
 										</span>
 										<span className="text-[13px] text-muted-foreground">
 											{targetTypeLabel(item.targetType)} ·{" "}

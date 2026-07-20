@@ -1,8 +1,12 @@
+import { env } from "@bambi-app/env/web";
+
+import type { JobAdBannerUsage } from "./job-ad-banner-spec";
 import { sampleCoverMedia, sampleThumbnailUrl } from "./sample-thumbnails";
 import type {
 	Job,
 	JobDescriptionBlock,
 	JobMedia,
+	JobMediaUsage,
 	JobPerformanceMetrics,
 } from "./types";
 
@@ -10,13 +14,17 @@ export interface ApiJobMedia {
 	altText?: null | string;
 	byteSize: number;
 	fileName: string;
+	height?: null | number;
 	id?: string;
 	mimeType: string;
 	storageKey: string;
-	usage: "cover" | "detail";
+	usage: JobMediaUsage;
+	width?: null | number;
 }
 
 export interface ApiJobMediaSet {
+	adHorizontal?: ApiJobMedia | null;
+	adVertical?: ApiJobMedia | null;
 	cover?: ApiJobMedia | null;
 	detail?: ApiJobMedia[];
 }
@@ -47,11 +55,24 @@ export interface ApiMarketplaceJob {
 	workSchedule?: string | null;
 }
 
-// 실제 스토리지 이미지 연동 전까지, API 미디어도 storageKey 기준으로 결정적
-// 샘플 썸네일을 쓴다. (기존 /bambi/local-job-media 는 "COVER" 라벨 SVG 플레이스홀더라
-// mock 샘플이 떴다가 회색 박스로 덮이는 문제가 있었다.)
+const TRAILING_SLASH_PATTERN = /\/$/;
+
+// 공개 버킷의 객체는 브라우저가 직접 조회한다(서버·서명 URL을 거치지 않는다).
+// 버킷이 구성되지 않은 개발 환경에서는 storageKey 기준 결정적 샘플 썸네일로 폴백한다.
+// 프로덕션 빌드는 packages/env/src/web.ts가 base URL 누락 시 빌드를 실패시키므로,
+// 이 폴백은 개발에서만 도달한다(배포된 화면에 샘플이 뜨는 일은 없다).
+export const jobMediaPublicUrl = (storageKey: string): string => {
+	const publicBaseUrl = env.NEXT_PUBLIC_GCS_PUBLIC_BASE_URL;
+
+	if (!publicBaseUrl) {
+		return sampleThumbnailUrl(storageKey);
+	}
+
+	return `${publicBaseUrl.replace(TRAILING_SLASH_PATTERN, "")}/${storageKey}`;
+};
+
 const toJobMediaUrl = (media: ApiJobMedia): string =>
-	sampleThumbnailUrl(media.storageKey);
+	jobMediaPublicUrl(media.storageKey);
 
 const toJobMedia = (media?: ApiJobMedia | null): JobMedia | null => {
 	if (!media) {
@@ -145,6 +166,8 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 };
 
 export interface ApiAdBannerJob {
+	adHorizontal?: ApiJobMedia | null;
+	adVertical?: ApiJobMedia | null;
 	coverImage?: ApiJobMedia | null;
 	employerDisplayName?: string | null;
 	id: string;
@@ -154,17 +177,22 @@ export interface ApiAdBannerJob {
 
 export interface AdBannerItem {
 	company: string;
-	coverUrl: string;
 	id: string;
+	// 커버가 아니라 슬롯 배너가 우선이라 coverUrl이 아닌 imageUrl이다.
+	imageUrl: string;
 	title: string;
 }
 
-// 광고 배너는 해당 공고의 커버 이미지를 쓴다 — 실스토리지 연동(toJobMediaUrl 교체) 시
-// 배너도 자동으로 실이미지가 된다. 커버가 없으면 결정적 샘플 커버로 폴백.
-export const toAdBannerItem = (job: ApiAdBannerJob): AdBannerItem => {
+// 배너 슬롯은 규격이 서로 달라(가로 7:3 / 세로 4:9) 슬롯에 맞게 업로드된 배너를 골라 써야 한다.
+// 배너를 올리지 않은 기존 공고는 커버 → 결정적 샘플 커버로 폴백해 슬롯이 비지 않게 한다.
+export const toAdBannerItem = (
+	job: ApiAdBannerJob,
+	usage: JobAdBannerUsage
+): AdBannerItem => {
 	const company = job.teamDisplayName ?? job.employerDisplayName ?? "검증 업체";
+	const banner = usage === "ad_horizontal" ? job.adHorizontal : job.adVertical;
 	const media =
-		toJobMedia(job.coverImage ?? null) ??
+		toJobMedia(banner ?? job.coverImage ?? null) ??
 		sampleCoverMedia(job.id, `${company} 대표 이미지`);
-	return { company, coverUrl: media.url, id: job.id, title: job.title };
+	return { company, id: job.id, imageUrl: media.url, title: job.title };
 };

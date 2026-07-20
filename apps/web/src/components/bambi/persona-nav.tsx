@@ -74,12 +74,14 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const router = useRouter();
 	// 하단 탭은 구인자 주요 라우트에서 항상 노출한다(승인 상태와 무관).
-	// 프로모션·성과 분석은 대시보드 퀵링크로만 닿는 하위 페이지지만, 하단 탭이
+	// 광고 안내·프로모션·성과 분석은 대시보드 퀵링크로만 닿는 하위 페이지지만, 하단 탭이
 	// 사라지면 모바일에서 되돌아갈 길이 없어 함께 노출한다("내 공고" 활성 유지).
+	// 광고 안내는 이 목록에서 빠져 있어 실제로 그 막다른 길이 났었다.
 	const showNav =
 		path === "/employer" ||
 		path === "/employer/new" ||
 		path === "/employer/me" ||
+		path.startsWith("/employer/ad-guide") ||
 		path.startsWith("/employer/promotions") ||
 		path.startsWith("/employer/analytics") ||
 		path.startsWith("/employer/settings");
@@ -135,6 +137,7 @@ const MOD_ROUTES: Record<string, Route> = {
 	employers: "/moderator/employers",
 	users: "/moderator/users",
 	adProducts: "/moderator/ad-products",
+	reviews: "/moderator/reviews",
 };
 // 게시물·고객센터·금칙어는 하단 탭이 아니라 "더보기" 시트에서 Link로 직접 이동하므로
 // 여기(탭 클릭 → router.push 경로 표) 항목이 필요 없다.
@@ -185,6 +188,8 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 		tab = "reports";
 	} else if (path.startsWith("/moderator/users")) {
 		tab = "users";
+	} else if (path.startsWith("/moderator/reviews")) {
+		tab = "reviews";
 	} else if (path.startsWith("/moderator/ad-products")) {
 		tab = "adProducts";
 	} else if (
@@ -237,7 +242,7 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 				) : null}
 			</div>
 			<NavBar>
-				<ModTabs setTab={go} showEmployers tab={tab} />
+				<ModTabs setTab={go} showEmployers showReviews tab={tab} />
 			</NavBar>
 			{toast ? <ConsoleToast message={toast} /> : null}
 		</>

@@ -3,6 +3,12 @@
 // 운영자 고객센터 — 1:1 문의 답변 큐와 FAQ 관리를 탭 2개로 묶는다.
 // 답변을 보내면 서버가 isStaff/inquiryStatus를 갱신하므로 화면에서 상태를 만지지 않는다.
 
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -30,6 +36,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { CommunityPostEditor } from "@/components/bambi/community-editor";
+import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	INQUIRY_STATUS_LABELS,
@@ -222,7 +230,15 @@ function FaqManager() {
 	const invalidate = useInvalidateSupport();
 	const [category, setCategory] = useState<SupportCategory>("account");
 	const [question, setQuestion] = useState("");
+	// answer는 제출용 Tiptap JSON 문자열이라 빈 문서도 40자쯤 된다 — 비어있음 판정에
+	// 쓰면 등록 버튼이 항상 열린다. 판정은 에디터가 같이 주는 text·hasImage로만 한다
+	// (이미지만 넣은 답변도 유효하므로 텍스트 길이 단독 게이트는 쓰지 않는다).
 	const [answer, setAnswer] = useState("");
+	const [answerText, setAnswerText] = useState("");
+	const [answerHasImage, setAnswerHasImage] = useState(false);
+	// 에디터는 마운트 후 비제어라 등록 성공 시 state만 비워서는 본문이 남는다. key를 올려
+	// 강제 리마운트시켜 빈 문서로 되돌린다.
+	const [editorKey, setEditorKey] = useState(0);
 
 	// 운영자 목록은 비공개 초안까지 본다. 감추면 다시 공개로 되돌릴 진입점이 사라진다.
 	const faqQuery = useQuery(
@@ -239,6 +255,9 @@ function FaqManager() {
 				toast.success("FAQ를 등록했어요.");
 				setQuestion("");
 				setAnswer("");
+				setAnswerText("");
+				setAnswerHasImage(false);
+				setEditorKey((previous) => previous + 1);
 				await invalidate();
 			},
 		})
@@ -292,24 +311,26 @@ function FaqManager() {
 						placeholder="자주 묻는 질문을 입력하세요"
 						value={question}
 					/>
-					<Label htmlFor="faq-answer">답변</Label>
-					<Textarea
-						className="min-h-24"
-						id="faq-answer"
-						onChange={(event) => setAnswer(event.target.value)}
-						placeholder="답변을 입력하세요"
+					<Label>답변</Label>
+					<CommunityPostEditor
+						key={editorKey}
+						onChange={(payload) => {
+							setAnswer(payload.json);
+							setAnswerText(payload.text);
+							setAnswerHasImage(payload.hasImage);
+						}}
 						value={answer}
 					/>
 					<Button
 						className="self-start"
 						disabled={
 							question.trim().length < FAQ_QUESTION_MIN ||
-							answer.trim().length === 0 ||
+							(answerText.trim().length === 0 && !answerHasImage) ||
 							createFaq.isPending
 						}
 						onClick={() =>
 							createFaq.mutate({
-								answer: answer.trim(),
+								answer,
 								category,
 								question: question.trim(),
 							})
@@ -329,53 +350,67 @@ function FaqManager() {
 				/>
 			) : null}
 
-			{items.map((item) => (
-				<Card key={item.id}>
-					<CardHeader className="flex min-w-0 flex-col gap-2">
-						<div className="flex flex-wrap items-center gap-2">
-							<Badge variant="secondary">
-								{SUPPORT_CATEGORY_LABELS[item.category]}
-							</Badge>
-							{item.isPublished ? null : (
-								<Badge variant="warning">비공개</Badge>
-							)}
-						</div>
-						<CardTitle>{item.question}</CardTitle>
-					</CardHeader>
-					<CardContent className="flex min-w-0 flex-col gap-3">
-						<p className="m-0 whitespace-pre-wrap text-muted-foreground text-sm">
-							{item.answer}
-						</p>
-						<div className="flex flex-wrap items-center gap-3">
-							<Label
-								className="flex items-center gap-2"
-								htmlFor={`faq-published-${item.id}`}
-							>
-								<Switch
-									checked={item.isPublished}
-									disabled={setPublished.isPending}
-									id={`faq-published-${item.id}`}
-									onCheckedChange={(checked) =>
-										setPublished.mutate({
-											faqId: item.id,
-											isPublished: checked,
-										})
-									}
-								/>
-								{item.isPublished ? "공개 중" : "숨김"}
-							</Label>
-							<Button
-								disabled={removeFaq.isPending}
-								onClick={() => removeFaq.mutate({ faqId: item.id })}
-								size="sm"
-								variant="destructive"
-							>
-								삭제
-							</Button>
-						</div>
-					</CardContent>
-				</Card>
-			))}
+			{/* 답변이 리치 텍스트가 되면서 카드마다 세로가 길어져 목록을 훑기 어려워졌다.
+			    고객센터 공개 목록(support/faq-list)과 같은 아코디언으로 접어, 기본은 질문만
+			    보이고 필요한 항목만 펼치게 한다. 카테고리·비공개 배지는 접힌 상태에서도
+			    보여야 목록에서 상태를 판단할 수 있으므로 트리거 밖(위)에 둔다. */}
+			{items.length > 0 ? (
+				<Accordion className="flex flex-col gap-3">
+					{items.map((item) => (
+						<AccordionItem
+							className="rounded-xl border px-4 pb-1"
+							key={item.id}
+							value={item.id}
+						>
+							<div className="flex flex-wrap items-center gap-2 pt-3">
+								<Badge variant="secondary">
+									{SUPPORT_CATEGORY_LABELS[item.category]}
+								</Badge>
+								{item.isPublished ? null : (
+									<Badge variant="warning">비공개</Badge>
+								)}
+							</div>
+							{/* 질문 자체가 펼침 트리거다. 공개·삭제 조작은 트리거 안에 넣으면
+							    버튼이 중첩돼 접근성이 깨지므로 펼친 내용 쪽에 둔다. */}
+							<AccordionTrigger className="font-bold text-base">
+								{item.question}
+							</AccordionTrigger>
+							<AccordionContent className="flex min-w-0 flex-col gap-3">
+								{/* 답변은 Tiptap JSON이라 뷰어로 렌더한다. JSON이 아닌 기존 평문 행은
+								    뷰어가 whitespace-pre-wrap <p> 폴백으로 그대로 보여준다. */}
+								<PostBodyViewer body={item.answer} />
+								<div className="flex flex-wrap items-center gap-3">
+									<Label
+										className="flex items-center gap-2"
+										htmlFor={`faq-published-${item.id}`}
+									>
+										<Switch
+											checked={item.isPublished}
+											disabled={setPublished.isPending}
+											id={`faq-published-${item.id}`}
+											onCheckedChange={(checked) =>
+												setPublished.mutate({
+													faqId: item.id,
+													isPublished: checked,
+												})
+											}
+										/>
+										{item.isPublished ? "공개 중" : "숨김"}
+									</Label>
+									<Button
+										disabled={removeFaq.isPending}
+										onClick={() => removeFaq.mutate({ faqId: item.id })}
+										size="sm"
+										variant="destructive"
+									>
+										삭제
+									</Button>
+								</div>
+							</AccordionContent>
+						</AccordionItem>
+					))}
+				</Accordion>
+			) : null}
 		</div>
 	);
 }

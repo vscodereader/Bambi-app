@@ -49,6 +49,87 @@ const getMutationErrorMessage = (error: Error): string => {
 	return "연락처 공개 동의를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.";
 };
 
+interface ContactRow {
+	contactMethod: string;
+	contactValue: string;
+}
+
+const formatContact = ({ contactMethod, contactValue }: ContactRow): string =>
+	`${contactMethodLabels[contactMethod as ContactMethod] ?? contactMethod} · ${contactValue}`;
+
+function MineContactCard({ contacts }: { contacts: ContactRow[] }) {
+	return (
+		<Card className="rounded-lg" pad="lg" tone="outline">
+			<div className="flex items-center gap-3">
+				<div className="inline-flex size-11 items-center justify-center rounded-xl bg-coral-50 text-coral-700">
+					<span className="inline-flex size-[22px]">
+						<PhoneIcon />
+					</span>
+				</div>
+				<div className="min-w-0 flex-1">
+					<div className="flex items-center gap-2">
+						<Badge tone="success">
+							<span className="inline-flex size-3">
+								<CheckIcon />
+							</span>
+							내가 공개함
+						</Badge>
+					</div>
+					{contacts.map((contact) => (
+						<p
+							className="mt-2 mb-0 break-words font-extrabold text-foreground text-lg"
+							key={`${contact.contactMethod}-${contact.contactValue}`}
+						>
+							{formatContact(contact)}
+						</p>
+					))}
+				</div>
+			</div>
+		</Card>
+	);
+}
+
+// 상대 연락처는 양쪽이 동의해야 보인다. 서버가 조건 미충족 시 값을 아예 안 싣기 때문에
+// 여기서는 canView만 보고 안내 문구를 고르면 된다.
+function CounterpartContactCard({
+	canView,
+	contacts,
+	hasMineConsent,
+}: {
+	canView: boolean;
+	contacts: ContactRow[];
+	hasMineConsent: boolean;
+}) {
+	return (
+		<Card className="rounded-lg" pad="lg" tone="outline">
+			<div className="flex items-center justify-between gap-3">
+				<h2 className="m-0 font-extrabold text-lg">상대방 연락처</h2>
+				<Badge tone={canView ? "success" : "pending"}>
+					{canView ? "공개됨" : "비공개"}
+				</Badge>
+			</div>
+			{canView ? (
+				<div className="mt-3 flex flex-col gap-2">
+					{contacts.map((contact) => (
+						<p
+							className="m-0 break-words font-extrabold text-foreground text-lg"
+							key={`${contact.contactMethod}-${contact.contactValue}`}
+						>
+							{formatContact(contact)}
+						</p>
+					))}
+				</div>
+			) : (
+				<p className="mt-3 mb-0 text-muted-foreground text-sm">
+					{hasMineConsent
+						? "상대방의 동의를 기다리는 중이에요. 상대가 동의하면 여기에 표시됩니다."
+						: "내 연락처를 먼저 공개해야 상대방 연락처를 볼 수 있어요."}
+				</p>
+			)}
+		</Card>
+	);
+}
+
 export function ContactReveal({
 	job,
 	onBack,
@@ -71,13 +152,19 @@ function ContactRevealApi({
 	const [contactMethod, setContactMethod] = useState<ContactMethod>("phone");
 	const [contactValue, setContactValue] = useState("");
 	const [errorMessage, setErrorMessage] = useState<null | string>(null);
-	const [savedContact, setSavedContact] = useState<null | {
-		contactMethod: ContactMethod;
-		contactValue: string;
-	}>(null);
 	const roomQuery = useQuery(
 		orpc.bambi.chats.getById.queryOptions({ input: { id: roomId } })
 	);
+	// 공개 상태의 진실의 원천. 로컬 state에만 담으면 새로고침 시 내 공개 연락처가 사라진다.
+	const revealQuery = useQuery(
+		orpc.bambi.chats.getContactReveal.queryOptions({
+			input: { chatRoomId: roomId },
+		})
+	);
+	const mineContacts = revealQuery.data?.mineContacts ?? [];
+	const counterpartContacts = revealQuery.data?.counterpartContacts ?? [];
+	const canViewCounterpart = revealQuery.data?.canViewCounterpart ?? false;
+	const hasMineConsent = mineContacts.length > 0;
 	const confirmedSchedule = roomQuery.data?.schedules.find(
 		(schedule) => schedule.status === "confirmed"
 	);
@@ -86,17 +173,20 @@ function ContactRevealApi({
 			onError: (error) => {
 				setErrorMessage(getMutationErrorMessage(error));
 			},
-			onSuccess: async (consent) => {
+			onSuccess: async () => {
 				setErrorMessage(null);
-				setSavedContact({
-					contactMethod: consent.contactMethod as ContactMethod,
-					contactValue: consent.contactValue,
-				});
-				await queryClient.invalidateQueries({
-					queryKey: orpc.bambi.chats.getById.queryKey({
-						input: { id: roomId },
+				await Promise.all([
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.chats.getById.queryKey({
+							input: { id: roomId },
+						}),
 					}),
-				});
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.chats.getContactReveal.queryKey({
+							input: { chatRoomId: roomId },
+						}),
+					}),
+				]);
 			},
 		})
 	);
@@ -183,8 +273,8 @@ function ContactRevealApi({
 						확정된 면접 뒤에만 공개돼요
 					</h1>
 					<p className="m-0 max-w-[320px] text-muted-foreground text-sm leading-[1.55]">
-						내 연락처 공개에 동의하면 해당 면접 일정에 공개 기록이 저장됩니다.
-						상대방 연락처는 상대방이 직접 동의해야 공개돼요.
+						양쪽 모두 동의해야 서로의 연락처가 공개돼요. 내가 먼저 동의해도
+						상대가 동의하기 전까지는 상대 연락처가 보이지 않아요.
 					</p>
 				</div>
 
@@ -271,39 +361,21 @@ function ContactRevealApi({
 					</Card>
 				</form>
 
-				{savedContact ? (
-					<Card className="rounded-lg" pad="lg" tone="outline">
-						<div className="flex items-center gap-3">
-							<div className="inline-flex size-11 items-center justify-center rounded-xl bg-coral-50 text-coral-700">
-								<span className="inline-flex size-[22px]">
-									<PhoneIcon />
-								</span>
-							</div>
-							<div className="min-w-0 flex-1">
-								<div className="flex items-center gap-2">
-									<Badge tone="success">
-										<span className="inline-flex size-3">
-											<CheckIcon />
-										</span>
-										저장됨
-									</Badge>
-								</div>
-								<p className="mt-2 mb-0 break-words font-extrabold text-foreground text-lg">
-									{contactMethodLabels[savedContact.contactMethod]} ·{" "}
-									{savedContact.contactValue}
-								</p>
-							</div>
-						</div>
-					</Card>
-				) : null}
+				{hasMineConsent ? <MineContactCard contacts={mineContacts} /> : null}
+
+				<CounterpartContactCard
+					canView={canViewCounterpart}
+					contacts={counterpartContacts}
+					hasMineConsent={hasMineConsent}
+				/>
 			</div>
 			<div className="border-border border-t px-6 pt-3 pb-1.5">
 				<Button
 					block
-					disabled={!savedContact}
+					disabled={!hasMineConsent}
 					onClick={onDone}
 					size="lg"
-					variant={savedContact ? "primary" : "secondary"}
+					variant={hasMineConsent ? "primary" : "secondary"}
 				>
 					채팅방으로 돌아가기
 				</Button>

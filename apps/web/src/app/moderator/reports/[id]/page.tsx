@@ -8,6 +8,8 @@ export default function ModeratorReportDetailPage() {
 	const router = useRouter();
 	const { id } = useParams<{ id: string }>();
 	const {
+		blockChatRoom,
+		isBlockingChatRoom,
 		isLoading,
 		moderateCommunityTarget,
 		reports,
@@ -39,8 +41,10 @@ export default function ModeratorReportDetailPage() {
 
 	return (
 		<ReportDetail
+			isBlockingChatRoom={isBlockingChatRoom}
 			item={item}
 			onBack={() => router.push("/moderator/reports")}
+			onBlockChatRoom={blockChatRoom}
 			onModerateCommunity={moderateCommunityTarget}
 			onResolve={(rid, action) => {
 				resolveReport(rid, action);

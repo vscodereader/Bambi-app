@@ -1,5 +1,6 @@
 import type { Route } from "next";
 import type { ReactNode } from "react";
+import { AccountStatusBanner } from "@/components/bambi/account-status-banner";
 import { EmployerApprovalProvider } from "@/components/bambi/employer-approval-context";
 import { EmployerNav } from "@/components/bambi/persona-nav";
 import {
@@ -42,6 +43,7 @@ export default async function EmployerLayout({
 		>
 			<EmployerNav>
 				<EmployerApprovalProvider value={approvalStatus}>
+					<AccountStatusBanner />
 					{children}
 				</EmployerApprovalProvider>
 			</EmployerNav>
