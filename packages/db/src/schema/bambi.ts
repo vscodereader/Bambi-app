@@ -683,6 +683,35 @@ export const contactRevealConsent = pgTable(
 	]
 );
 
+// 회원가입 시 이용약관·개인정보 처리방침 동의 이력. 감사 목적으로 동의한 문서 종류·
+// 버전·동의 시각을 남긴다. 문서 개정 후 재동의 시 새 (userId, document, version) 행이
+// 누적된다(같은 버전 중복 저장은 unique index로 방지).
+export const bambiLegalConsentDocument = pgEnum(
+	"bambi_legal_consent_document",
+	["terms_of_service", "privacy_policy"]
+);
+
+export const bambiLegalConsent = pgTable(
+	"bambi_legal_consent",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		document: bambiLegalConsentDocument("document").notNull(),
+		version: text("version").notNull(),
+		agreedAt: timestamp("agreed_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("bambi_legal_consent_user_id_document_version_uidx").on(
+			table.userId,
+			table.document,
+			table.version
+		),
+		index("bambi_legal_consent_user_id_idx").on(table.userId),
+	]
+);
+
 export const userBlock = pgTable(
 	"user_block",
 	{

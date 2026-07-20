@@ -6,7 +6,16 @@ export interface GateInput {
 
 export type GateDecision = { type: "next" } | { type: "redirect"; to: string };
 
-const PUBLIC_PREFIXES = ["/welcome", "/login", "/api", "/bambi"];
+// 약관(/terms)·개인정보 처리방침(/privacy)은 로그인·게스트 여부와 무관하게
+// 누구나 열람할 수 있어야 한다(회원가입 동의 화면에서도 링크로 연다).
+const PUBLIC_PREFIXES = [
+	"/welcome",
+	"/login",
+	"/api",
+	"/bambi",
+	"/terms",
+	"/privacy",
+];
 
 const GUEST_BLOCKED_SEEKER_PREFIXES = [
 	"/seeker/jobs",

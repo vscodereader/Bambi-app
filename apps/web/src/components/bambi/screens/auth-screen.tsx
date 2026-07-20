@@ -1,13 +1,16 @@
 "use client";
 
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import {
 	type BambiGenderValue,
@@ -92,6 +95,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [signupRole, setSignupRole] = useState<SignupRole>("job_seeker");
+	const [agreedToTerms, setAgreedToTerms] = useState(false);
 	const isSignUp = mode === "sign-up";
 	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
 	const subtitle = isSignUp
@@ -101,22 +105,18 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 
 	const finishSignup = async (gender: BambiGenderValue | null) => {
 		const displayName = name.trim();
+		const profilePayload = { displayName, ...(gender ? { gender } : {}) };
 		if (signupRole === "employer") {
-			await client.bambi.onboarding.createEmployerProfile({
-				displayName,
-				...(gender ? { gender } : {}),
-			});
-			queryClient.invalidateQueries();
-			// 역할과 무관하게 구직자 홈으로 진입한다. 구인자는 헤더/탭바의 "구인 관리"
-			// 버튼으로 /employer에 들어가고, 대시보드가 업체정보 입력을 유도한다.
-			router.push("/seeker" as Route);
-			return;
+			await client.bambi.onboarding.createEmployerProfile(profilePayload);
+		} else {
+			await client.bambi.onboarding.createJobSeekerProfile(profilePayload);
 		}
-		await client.bambi.onboarding.createJobSeekerProfile({
-			displayName,
-			...(gender ? { gender } : {}),
-		});
+		// 이용약관·개인정보 처리방침 동의 이력을 저장한다(체크박스로 이미 동의를 받았다).
+		// 감사 로그 성격이라 저장 실패가 가입 완료를 막지 않도록 오류는 삼킨다.
+		await client.bambi.onboarding.recordLegalConsent().catch(() => undefined);
 		queryClient.invalidateQueries();
+		// 역할과 무관하게 구직자 홈으로 진입한다. 구인자는 헤더/탭바의 "구인 관리"
+		// 버튼으로 /employer에 들어가고, 대시보드가 업체정보 입력을 유도한다.
 		router.push("/seeker" as Route);
 	};
 
@@ -133,6 +133,11 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 				text: "이메일과 8자 이상 비밀번호를 확인해 주세요.",
 				tone: "error",
 			});
+			return;
+		}
+
+		if (isSignUp && !agreedToTerms) {
+			toast("이용약관과 개인정보 처리방침에 동의해주세요");
 			return;
 		}
 
@@ -339,6 +344,41 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 								role={notice.tone === "error" ? "alert" : "status"}
 							>
 								{notice.text}
+							</div>
+						) : null}
+						{isSignUp ? (
+							<div className="flex items-start gap-2.5">
+								<Checkbox
+									checked={agreedToTerms}
+									className="mt-0.5"
+									id="auth-agree-terms"
+									onCheckedChange={(checked) =>
+										setAgreedToTerms(checked === true)
+									}
+								/>
+								<label
+									className="text-muted-foreground text-sm leading-relaxed"
+									htmlFor="auth-agree-terms"
+								>
+									<Link
+										className="font-bold text-foreground underline-offset-2 hover:underline"
+										href={"/terms" as Route}
+										rel="noreferrer"
+										target="_blank"
+									>
+										이용약관
+									</Link>
+									{" 및 "}
+									<Link
+										className="font-bold text-foreground underline-offset-2 hover:underline"
+										href={"/privacy" as Route}
+										rel="noreferrer"
+										target="_blank"
+									>
+										개인정보 처리방침
+									</Link>
+									에 동의합니다.
+								</label>
 							</div>
 						) : null}
 						<Button
