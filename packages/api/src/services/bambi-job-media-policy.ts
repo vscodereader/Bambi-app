@@ -41,11 +41,11 @@ export const getAllowedJobPostMimeTypes = (
 		: ALLOWED_JOB_POST_IMAGE_MIME_TYPES;
 
 export interface JobAdBannerSpec {
-	// 문구용 비율 표기. 안내·오류 메시지는 특정 해상도가 아니라 비율로 말한다.
+	// 권장 비율 표기(문구 전용). 더는 검증하지 않고 안내만 한다 — 슬롯의 object-cover가
+	// 잘라 주므로 비율이 어긋나도 오류가 아니라 "잘려 보일 수 있다"는 시각적 트레이드오프다.
 	aspectLabel: string;
-	aspectRatio: number;
 	label: string;
-	// 하한. 비율이 맞아도 이보다 작으면 슬롯에서 늘어나 뭉개진다. 미설정이면 크기는 안 본다.
+	// 하한. 이보다 작으면 슬롯에서 늘어나 뭉개지므로 이 규칙만 강제한다. 미설정이면 크기는 안 본다.
 	minHeight?: number;
 	minWidth?: number;
 	// 안내용 권장 해상도. 강제하지 않으며, 하한(min*)이 있으면 그쪽을 대신 안내한다.
@@ -53,29 +53,23 @@ export interface JobAdBannerSpec {
 	recommendedWidth?: number;
 }
 
-// 슬롯 CSS(aspect-[7/3], aspect-[4/9])와 같은 값을 쓴다. 둘이 어긋나면 광고가 잘려 나간다.
+// aspectLabel은 슬롯 CSS(aspect-[7/3], aspect-[4/9])가 기대하는 비율을 사람에게 알려 주는
+// 안내 문구일 뿐이다. 검증에 쓰이지 않으므로 숫자 비율은 두지 않는다.
 export const JOB_AD_BANNER_SPECS: Record<JobAdBannerUsage, JobAdBannerSpec> = {
 	ad_horizontal: {
 		aspectLabel: "7:3",
-		aspectRatio: 7 / 3,
 		label: "가로형 광고 배너",
-		// 하한과 비율은 서로 독립인 두 규칙이고 둘 다 통과해야 한다. 150×50 자체는 3:1이라
-		// 비율 검증에 걸리므로, 실질 하한은 "가로 150px 이상"이고 세로는 7:3이 결정한다
-		// (가로 150이면 세로는 약 64 이상). 세로 하한 50은 그래서 사실상 비구속이다.
+		// 비율 검증이 사라져 이제 하한이 유일한 구속이다. 가로 150·세로 50 둘 다 독립으로 걸린다.
 		minHeight: 50,
 		minWidth: 150,
 	},
 	ad_vertical: {
 		aspectLabel: "4:9",
-		aspectRatio: 4 / 9,
 		label: "세로형 광고 배너",
 		recommendedHeight: 900,
 		recommendedWidth: 400,
 	},
 };
-
-// 편집기의 반올림 오차는 흡수하되, 눈에 띄는 왜곡·잘림은 막는 폭.
-export const JOB_AD_BANNER_ASPECT_RATIO_TOLERANCE = 0.02;
 
 export const isJobAdBannerUsage = (
 	usage: JobPostMediaUsage
@@ -114,7 +108,6 @@ export interface JobPostMediaPolicyInput extends JobPostImageUploadInput {
 
 export type JobPostMediaPolicyCode =
 	| "alt_text_too_long"
-	| "banner_aspect_ratio_mismatch"
 	| "banner_dimensions_required"
 	| "banner_too_small"
 	| "empty_file_name"
@@ -127,7 +120,6 @@ export type JobPostMediaPolicyCode =
 
 export interface JobPostMediaPolicyIssue {
 	code: JobPostMediaPolicyCode;
-	expectedAspectRatio?: number;
 	maxBytes?: number;
 	maxCoverImages?: number;
 	maxDetailImages?: number;
@@ -152,27 +144,6 @@ const isSupportedUsage = (
 	usage: JobPostMediaPolicyInput["usage"]
 ): usage is JobPostMediaUsage =>
 	jobPostMediaUsages.includes(usage as JobPostMediaUsage);
-
-export const isAllowedJobAdBannerAspectRatio = ({
-	height,
-	usage,
-	width,
-}: {
-	height: number;
-	usage: JobAdBannerUsage;
-	width: number;
-}): boolean => {
-	if (width <= 0 || height <= 0) {
-		return false;
-	}
-
-	const { aspectRatio } = JOB_AD_BANNER_SPECS[usage];
-
-	return (
-		Math.abs(width / height - aspectRatio) / aspectRatio <=
-		JOB_AD_BANNER_ASPECT_RATIO_TOLERANCE
-	);
-};
 
 export const isAllowedJobAdBannerSize = ({
 	height,
@@ -217,8 +188,11 @@ export const validateJobPostImageUpload = ({
 	return { ok: true };
 };
 
-// 광고 배너는 슬롯 비율과 맞아야 잘리지 않는다. 치수는 브라우저가 읽어 보내므로 위조할 수
-// 있지만, 위조해도 손해는 본인 배너가 잘려 보이는 것뿐이라 서버가 바이트를 다시 열지는 않는다.
+// 광고 배너는 크기 하한만 강제한다. 비율은 검사하지 않는다 — 슬롯이 object-cover로 잘라 주므로
+// 비율이 어긋나도 오류가 아니라 "가장자리가 잘려 보인다"는 시각적 트레이드오프일 뿐이고, ±2% 밴드는
+// 1080×1920(세로 표준)·1200×500 같은 실제 소재를 전부 막을 만큼 좁았다.
+// 치수는 브라우저가 읽어 보내므로 위조할 수 있지만, 위조해도 손해는 본인 배너가 뭉개져 보이는
+// 것뿐이라 서버가 바이트를 다시 열지는 않는다.
 const collectAdBannerIssues = (
 	item: JobPostMediaPolicyInput
 ): JobPostMediaPolicyIssue[] => {
@@ -232,30 +206,21 @@ const collectAdBannerIssues = (
 		return [{ code: "banner_dimensions_required", storageKey, usage }];
 	}
 
-	const issues: JobPostMediaPolicyIssue[] = [];
-
-	if (!isAllowedJobAdBannerAspectRatio({ height, usage, width })) {
-		issues.push({
-			code: "banner_aspect_ratio_mismatch",
-			expectedAspectRatio: JOB_AD_BANNER_SPECS[usage].aspectRatio,
-			storageKey,
-			usage,
-		});
+	if (isAllowedJobAdBannerSize({ height, usage, width })) {
+		return [];
 	}
 
-	if (!isAllowedJobAdBannerSize({ height, usage, width })) {
-		const { minHeight, minWidth } = JOB_AD_BANNER_SPECS[usage];
+	const { minHeight, minWidth } = JOB_AD_BANNER_SPECS[usage];
 
-		issues.push({
+	return [
+		{
 			code: "banner_too_small",
 			minHeight,
 			minWidth,
 			storageKey,
 			usage,
-		});
-	}
-
-	return issues;
+		},
+	];
 };
 
 const collectUsageCountIssues = (

@@ -172,33 +172,33 @@ describe("bambi job block form helpers", () => {
 		expect(result).toMatchObject({ ok: true });
 	});
 
-	it("rejects an ad banner whose aspect ratio is off spec", () => {
+	it("accepts ad banners whose aspect ratio is off spec", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
-				// 7:3이어야 하는데 정사각형 → 슬롯에서 좌우가 잘려 나간다.
+				// 300×100(3:1)·1080×1920(9:16) 둘 다 권장 비율에서 벗어나지만, 슬롯이
+				// 가운데를 기준으로 자를 뿐이라 등록은 막지 않는다(업로더가 경고만 띄운다).
+				// 예전 ±2% 반려 규칙이 실제로 튕겨내던 바로 그 실사용 규격들이다.
 				adHorizontal: createBannerImage("ad_horizontal", {
-					height: 1000,
-					width: 1000,
+					height: 100,
+					width: 300,
 				}),
-				adVertical: null,
+				adVertical: createBannerImage("ad_vertical", {
+					height: 1920,
+					width: 1080,
+				}),
 				cover: null,
 				detail: [],
 			},
 		});
 
-		expect(result).toMatchObject({
-			errors: {
-				media: "가로형 광고 배너는 7:3 비율에 맞아야 합니다.",
-			},
-			ok: false,
-		});
+		expect(result).toMatchObject({ ok: true });
 	});
 
 	it("rejects a horizontal banner below the 150px width floor", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
-				// 140×60도 정확히 7:3이라 비율은 통과하지만, 세로 60이 하한 50을 넘는데도
-				// 가로 140이 하한 150에 못 미쳐 걸린다 — 실제로 구속하는 쪽은 가로다.
+				// 세로 60은 하한 50을 넘지만 가로 140이 하한 150에 못 미쳐 걸린다 —
+				// 실제로 구속하는 쪽은 가로다.
 				adHorizontal: createBannerImage("ad_horizontal", {
 					height: 60,
 					width: 140,
@@ -221,7 +221,7 @@ describe("bambi job block form helpers", () => {
 	it("accepts a horizontal banner at the 150px width floor", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
-				// 가로가 정확히 하한일 때 세로는 7:3이 정한다(150/2.333≈64).
+				// 가로가 정확히 하한일 때(세로는 권장 비율 7:3 기준 150/2.333≈64).
 				adHorizontal: createBannerImage("ad_horizontal", {
 					height: 64,
 					width: 150,

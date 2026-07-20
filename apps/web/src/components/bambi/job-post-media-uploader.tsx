@@ -11,6 +11,7 @@ import Image from "next/image";
 import { getAdBannerUsagesForPreviewTemplate } from "@/lib/bambi/ad-preview-templates";
 import {
 	formatJobAdBannerSpec,
+	getJobAdBannerCropDirection,
 	JOB_AD_BANNER_SPECS,
 	type JobAdBannerUsage,
 	readImageDimensions,
@@ -40,8 +41,8 @@ const detailSlots = [
 	{ index: 4, key: "detail-image-slot-5" },
 ] as const;
 
-// 배너는 비율 검증이 필요하므로 원본 치수를 함께 읽는다. 치수를 못 읽어도(손상된 파일 등)
-// 업로드 자체는 막지 않고, 폼 검증이 "크기를 확인하지 못했습니다"로 잡아준다.
+// 배너는 크기 검증·잘림 경고에 원본 치수가 필요해서 함께 읽는다. 치수를 못 읽어도
+// (손상된 파일 등) 업로드 자체는 막지 않고, 폼 검증이 "크기를 확인하지 못했습니다"로 잡아준다.
 const createMediaItemFromFile = async (
 	file: File,
 	altText = ""
@@ -186,24 +187,47 @@ interface AdBannerSlotProps {
 // 미리보기 박스를 실제 노출 슬롯과 같은 비율로 보여준다. 여기서 이상해 보이면 실제 광고도
 // 이상하게 나간다.
 function AdBannerSlot({ item, onChange, usage }: AdBannerSlotProps) {
-	const { aspectClassName, description, label } = JOB_AD_BANNER_SPECS[usage];
+	const { aspectClassName, aspectLabel, description, label } =
+		JOB_AD_BANNER_SPECS[usage];
+	// 비율은 등록을 막지 않으므로(슬롯이 가운데를 기준으로 자른다) 오류가 아니라 경고다.
+	const cropDirection =
+		item?.height && item.width
+			? getJobAdBannerCropDirection({
+					height: item.height,
+					usage,
+					width: item.width,
+				})
+			: null;
 
 	return (
-		<MediaSlot
-			accept={getFileAcceptForUsage(usage)}
-			hint={`${description} ${formatJobAdBannerSpec(usage)}`}
-			id={`job-${usage.replace("_", "-")}-image`}
-			item={item}
-			label={label}
-			onAltTextChange={(altText) =>
-				onChange(item ? { ...item, altText } : null)
-			}
-			onFileChange={async (file) => {
-				onChange(await createMediaItemFromFile(file, item?.altText));
-			}}
-			onRemove={() => onChange(null)}
-			previewClassName={cn("aspect-auto w-full", aspectClassName)}
-		/>
+		<div className="flex flex-col gap-2">
+			<MediaSlot
+				accept={getFileAcceptForUsage(usage)}
+				hint={`${description} ${formatJobAdBannerSpec(usage)}`}
+				id={`job-${usage.replace("_", "-")}-image`}
+				item={item}
+				label={label}
+				onAltTextChange={(altText) =>
+					onChange(item ? { ...item, altText } : null)
+				}
+				onFileChange={async (file) => {
+					onChange(await createMediaItemFromFile(file, item?.altText));
+				}}
+				onRemove={() => onChange(null)}
+				previewClassName={cn("aspect-auto w-full", aspectClassName)}
+			/>
+			{cropDirection ? (
+				<Alert variant="warning">
+					<TriangleAlert />
+					<AlertDescription>
+						{label} 이미지가 권장 비율 {aspectLabel}과 달라 노출 슬롯에서{" "}
+						{cropDirection === "sides" ? "좌우" : "위아래"}가 잘립니다. 그대로
+						등록해도 되지만, 로고·문구가 잘리지 않는지 위 미리보기에서 확인해
+						주세요.
+					</AlertDescription>
+				</Alert>
+			) : null}
+		</div>
 	);
 }
 
@@ -310,8 +334,10 @@ export function JobPostMediaUploader({
 					<div className="flex flex-col gap-1 pt-2">
 						<h2 className="font-medium text-sm">광고 배너 이미지</h2>
 						<p className="text-muted-foreground text-xs">
-							선택한 노출 상품이 사용하는 배너만 등록합니다. 규격 비율과 다르면
-							등록할 수 없습니다. 움직이는 GIF도 등록할 수 있습니다.
+							선택한 노출 상품이 사용하는 배너만 등록합니다. 권장 비율(가로형
+							7:3 · 세로형 4:9)과 다른 이미지도 등록할 수 있으며, 노출 슬롯에
+							맞춰 가운데를 기준으로 잘립니다. 움직이는 GIF도 등록할 수
+							있습니다.
 						</p>
 					</div>
 					{isProductResolved && unusedBannerLabels.length > 0 ? (
