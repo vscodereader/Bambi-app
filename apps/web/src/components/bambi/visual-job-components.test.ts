@@ -82,6 +82,10 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain(
 			"headerSlot={isMarketplace ? <SeekerHeaderSearch />"
 		);
+		// 검색창은 헤더에서 가장 큰 고정폭 소비처다. 다시 넓히면 내비가 그만큼 압축돼
+		// 마지막 항목("고객센터")의 끝 글자가 잘린다.
+		expect(source).toContain('className="relative w-48"');
+		expect(source).not.toContain("w-64");
 		// 모든 seeker 페이지 헤더를 /seeker와 동일한 고정폭으로 통일한다(경로별 분기 없음)
 		expect(source).toContain("contentWidthClassName={SEEKER_CONTENT_MAX_W}");
 		expect(source).not.toContain("isJobArea");
@@ -96,6 +100,8 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("max-w-[80%]");
 		// 검색창을 헤더(연락처 보호 왼쪽)로 옮기고 본문 검색은 모바일 전용으로 둔다
 		expect(source).toContain("headerSlot={headerSearch}");
+		// seeker 헤더와 같은 내비 압축 이유로 검색창 폭을 묶어둔다.
+		expect(source).toContain('className="relative w-48"');
 		expect(source).toContain('searchFieldClassName="md:hidden"');
 		// 히어로 카피 블록은 제거됨
 		expect(source).not.toContain("밤비 안에서 먼저 대화해요");
