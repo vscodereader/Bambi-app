@@ -393,6 +393,7 @@ export const USERS: ManagedUser[] = [
 	{
 		id: "u1",
 		name: "벨벳 나이트",
+		displayName: "벨벳 나이트",
 		role: "구인자",
 		joined: "2026.04",
 		status: "active",
@@ -403,6 +404,7 @@ export const USERS: ManagedUser[] = [
 	{
 		id: "u2",
 		name: "하이드",
+		displayName: "하이드",
 		role: "구인자",
 		joined: "2026.05",
 		status: "warned",
@@ -413,6 +415,7 @@ export const USERS: ManagedUser[] = [
 	{
 		id: "u3",
 		name: "김민재",
+		displayName: "김민재",
 		role: "구직자",
 		joined: "2026.03",
 		status: "active",

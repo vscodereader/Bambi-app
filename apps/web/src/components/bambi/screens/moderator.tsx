@@ -9,7 +9,16 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
+import {
+	Sheet,
+	SheetClose,
+	SheetContent,
+	SheetTitle,
+} from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
+import type { Route } from "next";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -38,9 +47,9 @@ import {
 	ChevronRightIcon,
 	ClipboardListIcon,
 	FlagIcon,
+	MoreIcon,
 	ShieldIcon,
 	SortIcon,
-	StoreIcon,
 	UserIcon,
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
@@ -1408,6 +1417,104 @@ export function UserDetail({
 }
 
 // ---- 콘솔 셸 ---------------------------------------------------------------
+// "더보기" 시트가 노출하는 목적지 — 데스크톱 헤더 nav(승인 관리·광고·결제 그룹,
+// moderator/layout.tsx)를 모바일에서 미러링한다. 하단 평면 탭(검수·신고·사용자·
+// 광고 상품)에 자리가 없어 여기로 접는다. 라우트가 바뀌면 layout.tsx와 함께 갱신.
+const MOD_MORE_GROUPS: {
+	items: { href: Route; label: string }[];
+	label: string;
+}[] = [
+	{
+		label: "승인 관리",
+		items: [
+			{ href: "/moderator/employers", label: "업소 승인" },
+			{ href: "/moderator/team-invites", label: "팀 합류 승인" },
+		],
+	},
+	{
+		label: "광고·결제",
+		items: [
+			{ href: "/moderator/ad-products", label: "광고 상품" },
+			{ href: "/moderator/payments", label: "결제 관리" },
+		],
+	},
+	{
+		label: "콘텐츠·고객센터",
+		items: [
+			{ href: "/moderator/content" as Route, label: "게시물" },
+			{ href: "/moderator/support" as Route, label: "고객센터" },
+			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
+		],
+	},
+];
+
+// 하단 탭 버튼 공통 톤(평면 탭·더보기 탭 공유).
+function modTabButtonClassName(on: boolean): string {
+	return cn(
+		"flex flex-1 cursor-pointer flex-col items-center gap-1 border-none bg-none px-0 py-1",
+		on ? "text-primary" : "text-[color:var(--text-subtle)]"
+	);
+}
+
+function modTabLabelClassName(on: boolean): string {
+	return cn("text-[10px]", on ? "font-extrabold" : "font-medium");
+}
+
+// "더보기" 탭 — 하단 탭에 담기지 않는 목적지를 시트로 펼친다.
+function ModMoreTab({ active }: { active: boolean }) {
+	const [open, setOpen] = useState(false);
+	const pathname = usePathname();
+	return (
+		<>
+			<button
+				className={modTabButtonClassName(active)}
+				onClick={() => setOpen(true)}
+				type="button"
+			>
+				<span className="inline-flex size-6">
+					<MoreIcon />
+				</span>
+				<span className={modTabLabelClassName(active)}>더보기</span>
+			</button>
+			<Sheet onOpenChange={setOpen} open={open}>
+				<SheetContent>
+					<SheetTitle>더보기</SheetTitle>
+					<div className="mt-5 flex flex-col gap-6">
+						{MOD_MORE_GROUPS.map((group) => (
+							<div className="flex flex-col gap-1" key={group.label}>
+								<p className="px-3 font-bold text-muted-foreground text-xs">
+									{group.label}
+								</p>
+								{group.items.map((item) => {
+									const isActive =
+										pathname === item.href ||
+										pathname.startsWith(`${item.href}/`);
+									return (
+										<SheetClose
+											className={cn(
+												"rounded-lg px-3 py-2.5 text-left font-bold text-sm no-underline",
+												isActive
+													? "bg-muted text-foreground"
+													: "text-foreground hover:bg-muted/50"
+											)}
+											key={item.href}
+											// Link는 <a>라 네이티브 버튼이 아니므로 base-ui에 명시(경고 방지).
+											nativeButton={false}
+											render={<Link href={item.href} />}
+										>
+											{item.label}
+										</SheetClose>
+									);
+								})}
+							</div>
+						))}
+					</div>
+				</SheetContent>
+			</Sheet>
+		</>
+	);
+}
+
 export function ModTabs({
 	tab,
 	setTab,
@@ -1415,15 +1522,12 @@ export function ModTabs({
 }: {
 	tab: string;
 	setTab: (v: string) => void;
-	// 라이브 운영자 콘솔에서만 업소 승인 탭을 노출한다(프리뷰 목업은 3탭 유지).
+	// 라이브 운영자 콘솔에서만 광고 상품·더보기 탭을 노출한다(프리뷰 목업은 3탭 유지).
 	showEmployers?: boolean;
 }) {
 	const items = [
 		{ v: "queue", label: "검수", icon: <ShieldIcon /> },
 		{ v: "reports", label: "신고", icon: <FlagIcon /> },
-		...(showEmployers
-			? [{ v: "employers", label: "업소 승인", icon: <StoreIcon /> }]
-			: []),
 		{ v: "users", label: "사용자", icon: <UserIcon /> },
 		...(showEmployers
 			? [{ v: "adProducts", label: "광고 상품", icon: <ClipboardListIcon /> }]
@@ -1435,26 +1539,17 @@ export function ModTabs({
 				const on = tab === it.v;
 				return (
 					<button
-						className={cn(
-							"flex flex-1 cursor-pointer flex-col items-center gap-1 border-none bg-none px-0 py-1",
-							on ? "text-primary" : "text-[color:var(--text-subtle)]"
-						)}
+						className={modTabButtonClassName(on)}
 						key={it.v}
 						onClick={() => setTab(it.v)}
 						type="button"
 					>
 						<span className="inline-flex size-6">{it.icon}</span>
-						<span
-							className={cn(
-								"text-[10px]",
-								on ? "font-extrabold" : "font-medium"
-							)}
-						>
-							{it.label}
-						</span>
+						<span className={modTabLabelClassName(on)}>{it.label}</span>
 					</button>
 				);
 			})}
+			{showEmployers ? <ModMoreTab active={tab === "more"} /> : null}
 		</nav>
 	);
 }

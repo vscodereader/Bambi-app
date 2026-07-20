@@ -159,6 +159,7 @@ export interface Report {
 export type UserStatus = "active" | "warned" | "suspended" | "blocked";
 
 export interface ManagedUser {
+	displayName: string;
 	id: string;
 	joined: string;
 	name: string;

@@ -25,7 +25,7 @@ import {
 	supportInquiryMessage,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import z from "zod";
 
@@ -93,7 +93,8 @@ const listJobPostsInput = z.object({
 
 const listUsersInput = z.object({
 	status: accountStatusSchema.optional(),
-	limit: z.number().int().min(1).max(100).default(50),
+	// 운영자 콘솔은 전체 계정 관리가 목적이라 상한을 넉넉히 둔다(기본도 전체 조회).
+	limit: z.number().int().min(1).max(1000).default(1000),
 });
 
 const setReportStatusInput = z.object({
@@ -201,6 +202,11 @@ const getModeratableContentDetailInput = z.object({
 
 const MODERATABLE_PAGE_SIZE = 20;
 const EXCERPT_LENGTH = 120;
+
+const bulkSetJobPostPaymentInput = z.object({
+	jobPostIds: z.array(z.string().uuid()),
+	paymentStatus: z.enum(["unpaid", "paid"]),
+});
 
 type ReportTargetType = z.infer<typeof targetTypeSchema>;
 type ReportRow = typeof report.$inferSelect;
@@ -731,21 +737,40 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 
+			// 계정 목록의 기준 테이블은 user다. bambi_profile은 좌측 조인해 부가 정보로만
+			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다. name은 계정
+			// 이름(user.name), displayName은 프로필 표시 이름(없으면 null)으로 각각 반환한다.
+			// 누적 신고/경고 횟수는 서브쿼리로 실제 집계한다.
+			const reportsCountSql = sql<number>`(
+				select count(*)::int from ${report}
+				where ${report.targetType} = 'user' and ${report.targetId} = ${user.id}
+			)`;
+			const warningsCountSql = sql<number>`(
+				select count(*)::int from ${adminModerationAction}
+				where ${adminModerationAction.targetType} = 'user'
+					and ${adminModerationAction.targetId} = ${user.id}
+					and ${adminModerationAction.action} = 'set_status:warned'
+			)`;
 			const query = db
 				.select({
-					userId: bambiProfile.userId,
+					userId: user.id,
+					name: user.name,
 					displayName: bambiProfile.displayName,
 					email: user.email,
-					role: bambiProfile.role,
-					status: bambiProfile.status,
-					isPhoneVerified: bambiProfile.isPhoneVerified,
+					role: sql<string>`coalesce(${bambiProfile.role}, 'job_seeker')`,
+					status: sql<
+						"active" | "suspended" | "warned"
+					>`coalesce(${bambiProfile.status}, 'active')`,
+					isPhoneVerified: sql<boolean>`coalesce(${bambiProfile.isPhoneVerified}, false)`,
 					phoneNumber: bambiProfile.phoneNumber,
-					createdAt: bambiProfile.createdAt,
-					updatedAt: bambiProfile.updatedAt,
+					reportsCount: reportsCountSql,
+					warningsCount: warningsCountSql,
+					createdAt: user.createdAt,
+					updatedAt: user.updatedAt,
 				})
-				.from(bambiProfile)
-				.innerJoin(user, eq(bambiProfile.userId, user.id))
-				.orderBy(desc(bambiProfile.updatedAt))
+				.from(user)
+				.leftJoin(bambiProfile, eq(bambiProfile.userId, user.id))
+				.orderBy(desc(user.createdAt))
 				.limit(input.limit);
 
 			if (input.status) {
@@ -908,6 +933,8 @@ export const moderationRouter = {
 
 			const conditions = [
 				inArray(jobPost.status, ["pending_review", "published"]),
+				// 일반 구인(무료)은 결제 대상이 아니므로 유료 노출 공고만 남긴다.
+				ne(jobPost.exposureType, "standard"),
 			];
 
 			if (input.onlyUnpaid) {
@@ -978,6 +1005,52 @@ export const moderationRouter = {
 								reason: input.reason,
 								metadata: { bulk: true },
 							});
+						},
+						targetIds: input.jobPostIds,
+					})
+			);
+		}),
+
+	// 결제관리 목록에서 선택한 공고들의 결제 상태를 일괄 전환한다.
+	// 단건 setJobPostPayment와 동일하게 paid 전환 시 노출 만료일(exposureEndsAt)을 계산한다.
+	bulkSetJobPostPayment: protectedProcedure
+		.input(bulkSetJobPostPaymentInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			return await db.transaction(
+				async (tx) =>
+					await executeBulkModeration({
+						processTarget: async (jobPostId) => {
+							const [existing] = await tx
+								.select({
+									exposureDurationDays: jobPost.exposureDurationDays,
+								})
+								.from(jobPost)
+								.where(eq(jobPost.id, jobPostId))
+								.limit(1);
+
+							if (!existing) {
+								throw new ORPCError("NOT_FOUND", {
+									message: "Job post was not found.",
+								});
+							}
+
+							const exposureEndsAt =
+								input.paymentStatus === "paid" &&
+								existing.exposureDurationDays !== null
+									? new Date(
+											Date.now() + existing.exposureDurationDays * MS_PER_DAY
+										)
+									: null;
+
+							await tx
+								.update(jobPost)
+								.set({
+									exposureEndsAt,
+									paymentStatus: input.paymentStatus,
+								})
+								.where(eq(jobPost.id, jobPostId));
 						},
 						targetIds: input.jobPostIds,
 					})

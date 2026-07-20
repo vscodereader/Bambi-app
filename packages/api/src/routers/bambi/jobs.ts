@@ -863,6 +863,9 @@ export const jobsRouter = {
 						exposureDurationDays: exposure.exposureDurationDays,
 						exposureAmount: exposure.exposureAmount,
 						paymentMethod: exposure.paymentMethod,
+						// 무료 공고(유료 노출상품 미선택)는 결제 게이트 없이 즉시 노출한다.
+						// 유료 노출상품을 선택한 경우에만 운영자 결제완료 처리를 기다린다.
+						paymentStatus: exposure.adProductId ? "unpaid" : "paid",
 						publishedAt: status === "published" ? now : null,
 					})
 					.returning();
