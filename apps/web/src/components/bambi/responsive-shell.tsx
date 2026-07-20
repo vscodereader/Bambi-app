@@ -201,7 +201,14 @@ export function ResponsiveAppShell({
 							contentWidthClassName
 						)}
 					>
-						<Link aria-label="밤비 홈" className="no-underline" href="/">
+						{/* 헤더 행에서 줄어들 수 있는 건 이 브랜드 링크뿐이었다: 내비 항목은 w-max, */}
+						{/* 우측 버튼·배지는 shrink-0이라 폭이 모자라면 압축이 전부 여기로 몰린다. */}
+						{/* shrink-0이 없으면 링크가 한 글자 폭까지 찌그러져 로고가 세로로 쌓인다. */}
+						<Link
+							aria-label="밤비 홈"
+							className="shrink-0 no-underline"
+							href="/"
+						>
 							<Logo lang="ko" size="md" />
 						</Link>
 						{navItems.length > 0 ? (
@@ -271,7 +278,9 @@ export function ResponsiveAppShell({
 			) : null}
 			<header className="sticky top-0 z-30 border-border border-b bg-background/95 backdrop-blur md:hidden">
 				<div className="flex h-14 items-center justify-between px-5">
-					<Link aria-label="밤비 홈" className="no-underline" href="/">
+					{/* 데스크톱과 같은 이유로 shrink-0 — 좁은 화면에서 우측 액션이 늘어나면
+					    브랜드가 압축 대상이 된다. */}
+					<Link aria-label="밤비 홈" className="shrink-0 no-underline" href="/">
 						<Logo lang="ko" size="sm" />
 					</Link>
 					<div className="flex items-center gap-2">

@@ -444,7 +444,11 @@ export function Logo({
 	return (
 		<div
 			className={cn(
-				"inline-flex items-center",
+				// "밤비"는 CJK라 기본 line-break가 밤/비 사이 줄바꿈을 허용한다. 폭이 모자라면
+				// 워드마크가 두 줄로 쪼개져 아이콘 옆에 세로로 쌓이므로 nowrap으로 막는다.
+				// (헤더에서는 브랜드 링크의 shrink-0이 압축 자체를 막지만, 로고는 푸터·인증
+				// 화면 등에서도 쓰이므로 컴포넌트 자체가 줄바꿈에 안전해야 한다.)
+				"inline-flex items-center whitespace-nowrap",
 				LOGO_GAP_CLASS[size] || LOGO_GAP_CLASS.md,
 				className
 			)}

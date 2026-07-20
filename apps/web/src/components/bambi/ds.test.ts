@@ -7,6 +7,15 @@ const source = fs.readFileSync(
 	"utf8"
 );
 
+describe("Logo", () => {
+	it("keeps the wordmark on one line beside the icon", () => {
+		// "밤비"는 CJK라 기본 line-break가 밤/비 사이를 끊을 수 있다. 폭이 모자라면
+		// 워드마크가 세로로 쌓여 로고가 깨지므로 nowrap이 필요하다 —
+		// 구인자·운영자 헤더에서 실제로 세로로 쌓였던 원인이다.
+		expect(source).toContain("inline-flex items-center whitespace-nowrap");
+	});
+});
+
 describe("InfoTile", () => {
 	it("keeps the value on one line without overflowing narrow grid tracks", () => {
 		// value는 truncate로 한 줄 유지한다(공용 컴팩트 타일 관례).
