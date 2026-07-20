@@ -126,9 +126,11 @@ const MOD_ROUTES: Record<string, Route> = {
 	reports: "/moderator/reports",
 	employers: "/moderator/employers",
 	users: "/moderator/users",
-	content: "/moderator/content",
-	support: "/moderator/support",
-	bannedWords: "/moderator/banned-words",
+	// 신규 라우트는 Next typedRoutes 생성 타입(.next/types/routes.d.ts)에 아직 없을 수 있어
+	// 기존 항목들과 같은 관례로 캐스팅한다.
+	content: "/moderator/content" as Route,
+	support: "/moderator/support" as Route,
+	bannedWords: "/moderator/banned-words" as Route,
 };
 const MOD_DETAIL_RE = /^\/moderator\/(?:queue|reports|users)\/[^/]+/;
 
