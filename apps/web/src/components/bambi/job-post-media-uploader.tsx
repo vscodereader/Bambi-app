@@ -1,11 +1,14 @@
 "use client";
 
+import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { ImageIcon, Trash2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ImageIcon, Trash2, TriangleAlert } from "lucide-react";
 import Image from "next/image";
+import { getAdBannerUsagesForPreviewTemplate } from "@/lib/bambi/ad-preview-templates";
 import {
 	formatJobAdBannerSpec,
 	JOB_AD_BANNER_SPECS,
@@ -17,8 +20,11 @@ import {
 	type JobFormMedia,
 	type JobFormMediaItem,
 } from "@/lib/bambi-job-form";
+import { orpc } from "@/utils/orpc";
 
 interface JobPostMediaUploaderProps {
+	// 선택한 노출 상품 id. 상품마다 쓰는 배너 슬롯이 달라서 어떤 업로드 칸을 열지 결정한다.
+	adProductId: null | string;
 	error?: string;
 	media: JobFormMedia;
 	onChange: (media: JobFormMedia) => void;
@@ -202,10 +208,41 @@ function AdBannerSlot({ item, onChange, usage }: AdBannerSlotProps) {
 }
 
 export function JobPostMediaUploader({
+	adProductId,
 	error,
 	media,
 	onChange,
 }: JobPostMediaUploaderProps) {
+	// 노출 상품 카탈로그는 JobExposureFields도 같은 키로 조회하므로 react-query가 캐시를
+	// 공유한다(추가 요청 없음). 상품의 previewTemplate이 곧 배너 슬롯을 정한다.
+	const catalogQuery = useQuery(
+		orpc.bambi.adProducts.getCatalog.queryOptions()
+	);
+	const selectedProduct = (catalogQuery.data ?? [])
+		.flatMap((placement) => placement.products)
+		.find((product) => product.id === adProductId);
+	const allowedUsages = getAdBannerUsagesForPreviewTemplate(
+		selectedProduct?.previewTemplate
+	);
+	// 상품을 골랐는데 카탈로그가 아직 안 왔으면 "이 상품은 배너를 안 쓴다"고 단정할 수 없다.
+	// 이때 경고를 띄우면 로딩 동안 잘못된 안내가 번쩍인다.
+	const isProductResolved = !adProductId || Boolean(selectedProduct);
+	// 선택 상품이 쓰지 않는 슬롯이라도 이미 올린 이미지가 있으면 계속 보여준다. 상품을 바꿨다고
+	// 결제한 이미지를 조용히 지우면 되돌릴 수 없고, 폼 상태에만 남겨두면 보이지 않는 고아가 된다.
+	// 구인자가 직접 삭제하거나 상품을 되돌릴 수 있게 경고와 함께 노출한다.
+	const unusedBannerLabels = [
+		media.adHorizontal && !allowedUsages.includes("ad_horizontal")
+			? JOB_AD_BANNER_SPECS.ad_horizontal.label
+			: null,
+		media.adVertical && !allowedUsages.includes("ad_vertical")
+			? JOB_AD_BANNER_SPECS.ad_vertical.label
+			: null,
+	].filter((label): label is string => label !== null);
+	const showHorizontalBanner =
+		allowedUsages.includes("ad_horizontal") || Boolean(media.adHorizontal);
+	const showVerticalBanner =
+		allowedUsages.includes("ad_vertical") || Boolean(media.adVertical);
+
 	return (
 		<section aria-label="공고 이미지" className="flex flex-col gap-3">
 			<div className="flex flex-col gap-1">
@@ -268,25 +305,43 @@ export function JobPostMediaUploader({
 					);
 				})}
 			</div>
-			<div className="flex flex-col gap-1 pt-2">
-				<h2 className="font-medium text-sm">광고 배너 이미지</h2>
-				<p className="text-muted-foreground text-xs">
-					광고 상품을 신청한 공고에만 노출됩니다. 규격 비율과 다르면 등록할 수
-					없습니다. 움직이는 GIF도 등록할 수 있습니다.
-				</p>
-			</div>
-			<div className="grid gap-3 lg:grid-cols-2">
-				<AdBannerSlot
-					item={media.adHorizontal}
-					onChange={(item) => onChange({ ...media, adHorizontal: item })}
-					usage="ad_horizontal"
-				/>
-				<AdBannerSlot
-					item={media.adVertical}
-					onChange={(item) => onChange({ ...media, adVertical: item })}
-					usage="ad_vertical"
-				/>
-			</div>
+			{showHorizontalBanner || showVerticalBanner ? (
+				<>
+					<div className="flex flex-col gap-1 pt-2">
+						<h2 className="font-medium text-sm">광고 배너 이미지</h2>
+						<p className="text-muted-foreground text-xs">
+							선택한 노출 상품이 사용하는 배너만 등록합니다. 규격 비율과 다르면
+							등록할 수 없습니다. 움직이는 GIF도 등록할 수 있습니다.
+						</p>
+					</div>
+					{isProductResolved && unusedBannerLabels.length > 0 ? (
+						<Alert variant="warning">
+							<TriangleAlert />
+							<AlertDescription>
+								{unusedBannerLabels.join(", ")}는 지금 선택한 노출 상품이 쓰지
+								않습니다. 이미지는 그대로 보관되니 상품을 다시 바꾸면 사용할 수
+								있고, 필요 없으면 삭제해 주세요.
+							</AlertDescription>
+						</Alert>
+					) : null}
+					<div className="grid gap-3 lg:grid-cols-2">
+						{showHorizontalBanner ? (
+							<AdBannerSlot
+								item={media.adHorizontal}
+								onChange={(item) => onChange({ ...media, adHorizontal: item })}
+								usage="ad_horizontal"
+							/>
+						) : null}
+						{showVerticalBanner ? (
+							<AdBannerSlot
+								item={media.adVertical}
+								onChange={(item) => onChange({ ...media, adVertical: item })}
+								usage="ad_vertical"
+							/>
+						) : null}
+					</div>
+				</>
+			) : null}
 			{error ? <p className="text-destructive text-xs">{error}</p> : null}
 		</section>
 	);

@@ -814,6 +814,7 @@ export default function EditEmployerJobPage({
 					</section>
 
 					<JobPostMediaUploader
+						adProductId={form.adProductId}
 						error={fieldErrors.media}
 						media={media}
 						onChange={(nextMedia) => {

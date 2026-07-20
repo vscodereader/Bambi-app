@@ -53,6 +53,7 @@ import {
 	validateJobDescriptionBlocks,
 } from "../../services/bambi-job-description-blocks";
 import {
+	JOB_AD_BANNER_SPECS,
 	JOB_POST_DETAIL_IMAGE_LIMIT,
 	JOB_POST_IMAGE_ALT_TEXT_MAX_LENGTH,
 	type JobPostMediaPolicyInput,
@@ -197,8 +198,9 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 			return "광고 배너 비율이 규격과 맞지 않습니다. 가로형 7:3, 세로형 4:9 이미지를 등록해 주세요.";
 		case "banner_dimensions_required":
 			return "광고 배너 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.";
+		// 하한 수치는 정책 상수에서 읽는다. 문구에 숫자를 박아 두면 규격을 바꿀 때 조용히 어긋난다.
 		case "banner_too_small":
-			return "광고 배너 이미지가 너무 작습니다. 가로형은 259×111px 이상으로 등록해 주세요.";
+			return `광고 배너 이미지가 너무 작습니다. 가로형은 ${JOB_AD_BANNER_SPECS.ad_horizontal.minWidth}×${JOB_AD_BANNER_SPECS.ad_horizontal.minHeight}px 이상으로 등록해 주세요.`;
 		case "too_many_ad_banners":
 			return "광고 배너는 가로형·세로형 각 1장만 등록할 수 있습니다.";
 		case "block_text_too_long":
@@ -384,15 +386,20 @@ const getJobPostMediaSet = async (jobPostId: string) => {
 
 const ratingAverageSql = sql<number>`coalesce((select avg(${review.rating}) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::double precision`;
 const ratingCountSql = sql<number>`coalesce((select count(*) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::integer`;
-const coverImageSql = sql<{
-	altText: string;
-	byteSize: number;
-	fileName: string;
-	id: string;
-	mimeType: string;
-	storageKey: string;
-	usage: "cover";
-} | null>`(
+// 공고의 특정 usage 미디어 1건을 뽑는 상관 서브쿼리. 커버와 광고 배너가 형태가 같아
+// usage만 갈아끼워 재사용한다(같은 SQL 블록을 usage별로 복붙하면 한쪽만 고쳐지는 사고가 난다).
+const jobPostMediaByUsageSql = <Usage extends JobPostMediaUsage>(
+	usage: Usage
+) =>
+	sql<{
+		altText: string;
+		byteSize: number;
+		fileName: string;
+		id: string;
+		mimeType: string;
+		storageKey: string;
+		usage: Usage;
+	} | null>`(
 	select json_build_object(
 		'id', ${jobPostMedia.id},
 		'usage', ${jobPostMedia.usage},
@@ -404,10 +411,15 @@ const coverImageSql = sql<{
 	)
 	from ${jobPostMedia}
 	where ${jobPostMedia.jobPostId} = ${jobPost.id}
-		and ${jobPostMedia.usage} = 'cover'
+		and ${jobPostMedia.usage} = ${usage}
 	order by ${jobPostMedia.position} asc
 	limit 1
 )`;
+
+const coverImageSql = jobPostMediaByUsageSql("cover");
+// 배너 슬롯은 커버가 아니라 사장님이 그 슬롯 규격(7:3 / 4:9)으로 올린 이미지를 써야 한다.
+const adHorizontalImageSql = jobPostMediaByUsageSql("ad_horizontal");
+const adVerticalImageSql = jobPostMediaByUsageSql("ad_vertical");
 
 interface ResolvedJobExposure {
 	adProductId: string | null;
@@ -683,6 +695,10 @@ export const jobsRouter = {
 		const now = new Date();
 		const rows = await db
 			.select({
+				// 슬롯별 배너 원본. 좌측·프리미엄은 가로형, 우측은 세로형을 쓰며 클라이언트가
+				// 슬롯에 맞는 쪽을 고른다. 미업로드 공고를 위해 coverImage도 폴백용으로 함께 내린다.
+				adHorizontal: adHorizontalImageSql,
+				adVertical: adVerticalImageSql,
 				coverImage: coverImageSql,
 				employerDisplayName: employerOrganizationProfile.displayName,
 				exposureEndsAt: jobPost.exposureEndsAt,

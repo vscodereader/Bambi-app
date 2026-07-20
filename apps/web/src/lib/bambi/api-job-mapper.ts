@@ -1,5 +1,6 @@
 import { env } from "@bambi-app/env/web";
 
+import type { JobAdBannerUsage } from "./job-ad-banner-spec";
 import { sampleCoverMedia, sampleThumbnailUrl } from "./sample-thumbnails";
 import type {
 	Job,
@@ -165,6 +166,8 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 };
 
 export interface ApiAdBannerJob {
+	adHorizontal?: ApiJobMedia | null;
+	adVertical?: ApiJobMedia | null;
 	coverImage?: ApiJobMedia | null;
 	employerDisplayName?: string | null;
 	id: string;
@@ -174,17 +177,22 @@ export interface ApiAdBannerJob {
 
 export interface AdBannerItem {
 	company: string;
-	coverUrl: string;
 	id: string;
+	// 커버가 아니라 슬롯 배너가 우선이라 coverUrl이 아닌 imageUrl이다.
+	imageUrl: string;
 	title: string;
 }
 
-// 광고 배너는 해당 공고의 커버 이미지를 쓴다 — 실스토리지 연동(toJobMediaUrl 교체) 시
-// 배너도 자동으로 실이미지가 된다. 커버가 없으면 결정적 샘플 커버로 폴백.
-export const toAdBannerItem = (job: ApiAdBannerJob): AdBannerItem => {
+// 배너 슬롯은 규격이 서로 달라(가로 7:3 / 세로 4:9) 슬롯에 맞게 업로드된 배너를 골라 써야 한다.
+// 배너를 올리지 않은 기존 공고는 커버 → 결정적 샘플 커버로 폴백해 슬롯이 비지 않게 한다.
+export const toAdBannerItem = (
+	job: ApiAdBannerJob,
+	usage: JobAdBannerUsage
+): AdBannerItem => {
 	const company = job.teamDisplayName ?? job.employerDisplayName ?? "검증 업체";
+	const banner = usage === "ad_horizontal" ? job.adHorizontal : job.adVertical;
 	const media =
-		toJobMedia(job.coverImage ?? null) ??
+		toJobMedia(banner ?? job.coverImage ?? null) ??
 		sampleCoverMedia(job.id, `${company} 대표 이미지`);
-	return { company, coverUrl: media.url, id: job.id, title: job.title };
+	return { company, id: job.id, imageUrl: media.url, title: job.title };
 };

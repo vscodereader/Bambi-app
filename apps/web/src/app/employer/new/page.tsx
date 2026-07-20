@@ -840,6 +840,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					</section>
 
 					<JobPostMediaUploader
+						adProductId={form.adProductId}
 						error={fieldErrors.media}
 						media={media}
 						onChange={(nextMedia) => {
