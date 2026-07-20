@@ -104,7 +104,7 @@ export default function ModeratorReviewsPage() {
 	};
 
 	return (
-		<div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 py-6">
+		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<h1 className="m-0 font-extrabold text-2xl">후기 관리</h1>
 			<Tabs
 				onValueChange={(value) => setFilter(value as ReviewFilter)}
