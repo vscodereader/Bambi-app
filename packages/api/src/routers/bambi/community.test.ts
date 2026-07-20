@@ -1940,6 +1940,87 @@ describe("bambi community router — 운영자 조치(admin)", () => {
 	});
 });
 
+describe("bambi community router — 본문 이미지 업로드 인텐트", () => {
+	const imageInput = {
+		byteSize: 256_000,
+		fileName: "photo.jpg",
+		mimeType: "image/jpeg",
+	};
+
+	it("여성 회원은 본인 userId 네임스페이스의 업로드 인텐트를 받는다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createMediaUpload = clientFor(
+				communityRouter.createMediaUpload,
+				fixture.femaleUserId,
+				["createMediaUpload"]
+			);
+
+			const intent = await createMediaUpload(imageInput);
+
+			// 키는 서버가 정한다 — 입력에 userId가 없으므로 세션 주인 외의 경로는 나올 수 없다.
+			const prefix = `bambi-editor-media/${fixture.femaleUserId}/`;
+			expect(intent.storageKey.startsWith(prefix)).toBe(true);
+			expect(intent.mimeType).toBe("image/jpeg");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	// 운영자 FAQ 답변 에디터가 이 프로시저를 그대로 재사용한다. 수다방 자격 규칙이 바뀌어
+	// admin이 빠지면 FAQ 이미지 업로드가 조용히 죽으므로 여기서 먼저 터지게 못 박는다.
+	it("admin도 업로드 인텐트를 받는다(운영자 FAQ 답변 에디터가 공유하는 경로)", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createMediaUpload = clientFor(
+				communityRouter.createMediaUpload,
+				fixture.adminUserId,
+				["createMediaUpload"]
+			);
+
+			const intent = await createMediaUpload(imageInput);
+
+			const prefix = `bambi-editor-media/${fixture.adminUserId}/`;
+			expect(intent.storageKey.startsWith(prefix)).toBe(true);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("수다방 자격이 없는 남성 구직자는 FORBIDDEN으로 거부된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createMediaUpload = clientFor(
+				communityRouter.createMediaUpload,
+				fixture.maleUserId,
+				["createMediaUpload"]
+			);
+
+			await expectOrpcCode(createMediaUpload(imageInput), "FORBIDDEN");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("허용되지 않은 MIME 타입은 인텐트 발급 전에 BAD_REQUEST로 막힌다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createMediaUpload = clientFor(
+				communityRouter.createMediaUpload,
+				fixture.femaleUserId,
+				["createMediaUpload"]
+			);
+
+			await expectOrpcCode(
+				createMediaUpload({ ...imageInput, mimeType: "application/pdf" }),
+				"BAD_REQUEST"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+});
+
 describe("bambi community router — 금칙어", () => {
 	const bodyWith = (text: string): string =>
 		JSON.stringify({

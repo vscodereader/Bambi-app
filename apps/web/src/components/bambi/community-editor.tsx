@@ -10,7 +10,9 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@bambi-app/ui/components/popover";
+import { Separator } from "@bambi-app/ui/components/separator";
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useMutation } from "@tanstack/react-query";
 import Image from "@tiptap/extension-image";
 import {
 	type Editor,
@@ -26,13 +28,18 @@ import {
 	LinkIcon,
 	ListIcon,
 	ListOrderedIcon,
+	Loader2Icon,
 	StrikethroughIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { type ChangeEvent, useState } from "react";
+
+import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
+import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
+import { orpc } from "@/utils/orpc";
 
 // 공유 확장 세트 — 편집기와 읽기 전용 뷰어(T11)가 동일 스키마로 렌더하도록 export.
-// 이미지는 URL 삽입만 지원(allowBase64 기본 false) — 실제 파일 업로드는 GCS 인프라
-// 통합 후 후속 작업이며, 그때 src를 GCS 공개 URL로 바꾸면 스키마 변경 없이 이어진다.
+// 이미지 노드는 src(URL)만 들고 있다(allowBase64 기본 false). 업로드한 파일은 GCS 공개 URL이,
+// 외부 이미지는 그 주소가 그대로 src에 들어가므로 두 경로 모두 스키마 변경이 필요 없다.
 export const communityEditorExtensions = [
 	StarterKit.configure({
 		link: {
@@ -195,19 +202,74 @@ function LinkPopover({ editor }: { editor: Editor }) {
 	);
 }
 
-// 이미지 URL 삽입 팝오버 — 외부 이미지 주소(선택 설명)를 받아 본문에 이미지 노드로 삽입.
-// 실제 파일 업로드는 GCS 인프라 통합 후 후속 작업이라 현재는 URL 삽입만 지원한다.
+// 아래 세 값은 서버 정책(bambi-job-media-policy를 usage 없이 호출 = 가장 좁은 집합)의 사본이다.
+// 클라이언트 필터는 왕복 한 번과 헛된 대기를 줄이는 편의일 뿐 정본은 서버이며, 어긋나도
+// 서버가 BAD_REQUEST로 거절해 에러 문구로 드러난다.
+const UPLOAD_ACCEPT = "image/jpeg,image/png,image/webp";
+const UPLOAD_MAX_MB = 8;
+const ALT_TEXT_MAX_LENGTH = 120;
+
+// 이미지 팝오버 — 파일 업로드(GCS)와 외부 URL 삽입을 함께 제공한다.
+// URL 삽입을 남겨 두는 이유: 기존 글 본문에 이미 외부 URL 이미지가 들어 있어 수정 모드에서
+// 같은 표현이 필요하고, 남의 이미지를 링크로만 참조하려는 쓰임도 정당하기 때문이다.
+// 업로드는 인텐트 발급 → 서명 URL PUT → 공개 URL 삽입 순서이며, 어느 단계든 실패하면
+// 이미지 노드를 넣지 않고 팝오버 안에 사유를 남긴다(깨진 이미지가 본문에 조용히 박히는 걸 막는다).
 function ImagePopover({ editor }: { editor: Editor }) {
 	const [open, setOpen] = useState(false);
 	const [url, setUrl] = useState("");
 	const [alt, setAlt] = useState("");
+	const [error, setError] = useState<null | string>(null);
+	const [isUploading, setIsUploading] = useState(false);
+	const createMediaUpload = useMutation(
+		orpc.bambi.community.createMediaUpload.mutationOptions()
+	);
 
 	function handleOpenChange(next: boolean) {
 		if (next) {
 			setUrl("");
 			setAlt("");
+			setError(null);
 		}
 		setOpen(next);
+	}
+
+	function insertImage(src: string) {
+		editor
+			.chain()
+			.focus()
+			.setImage({ alt: alt.trim() || undefined, src })
+			.run();
+		setOpen(false);
+	}
+
+	async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+		const file = event.target.files?.[0];
+		// 같은 파일을 다시 고를 때도 change가 뜨도록 값을 비운다(실패 후 재시도 경로).
+		event.target.value = "";
+		if (!file) {
+			return;
+		}
+
+		setError(null);
+		setIsUploading(true);
+		try {
+			const intent = await createMediaUpload.mutateAsync({
+				byteSize: file.size,
+				fileName: file.name,
+				mimeType: file.type,
+			});
+			await uploadFileToSignedUrl({ file, uploadIntent: intent });
+			insertImage(jobMediaPublicUrl(intent.storageKey));
+		} catch (caught) {
+			// 서버 정책 위반(용량·타입)도 전송 실패도 여기로 모인다 — 문구는 서버가 준 걸 우선한다.
+			setError(
+				caught instanceof Error && caught.message
+					? caught.message
+					: "이미지를 올리지 못했어요. 잠시 후 다시 시도해 주세요."
+			);
+		} finally {
+			setIsUploading(false);
+		}
 	}
 
 	function applyImage() {
@@ -215,12 +277,7 @@ function ImagePopover({ editor }: { editor: Editor }) {
 		if (trimmedUrl === "") {
 			return;
 		}
-		editor
-			.chain()
-			.focus()
-			.setImage({ alt: alt.trim() || undefined, src: trimmedUrl })
-			.run();
-		setOpen(false);
+		insertImage(trimmedUrl);
 	}
 
 	return (
@@ -237,7 +294,44 @@ function ImagePopover({ editor }: { editor: Editor }) {
 					</Button>
 				}
 			/>
-			<PopoverContent align="start" className="w-72">
+			{/* 모바일에서 팝오버가 화면 밖으로 나가지 않도록 뷰포트 기준 상한을 함께 둔다. */}
+			<PopoverContent
+				align="start"
+				className="flex w-[min(18rem,calc(100vw-2rem))] flex-col gap-3"
+			>
+				{/* 설명(alt)은 업로드·URL 두 경로가 함께 쓰므로 폼 밖 공용 필드로 둔다. */}
+				<Input
+					aria-label="이미지 설명"
+					maxLength={ALT_TEXT_MAX_LENGTH}
+					onChange={(event) => setAlt(event.target.value)}
+					placeholder="이미지 설명(선택)"
+					value={alt}
+				/>
+				<div className="flex flex-col gap-1.5">
+					<Input
+						accept={UPLOAD_ACCEPT}
+						aria-label="이미지 파일"
+						disabled={isUploading}
+						onChange={handleFileChange}
+						type="file"
+					/>
+					{isUploading ? (
+						<p className="flex items-center gap-1.5 text-muted-foreground text-xs">
+							<Loader2Icon className="size-3.5 animate-spin" />
+							업로드 중…
+						</p>
+					) : (
+						<p className="text-muted-foreground text-xs">
+							JPG·PNG·WebP · 최대 {UPLOAD_MAX_MB}MB
+						</p>
+					)}
+					{error ? (
+						<p className="text-destructive text-xs" role="alert">
+							{error}
+						</p>
+					) : null}
+				</div>
+				<Separator />
 				<form
 					className="flex flex-col gap-2"
 					onSubmit={(event) => {
@@ -252,16 +346,13 @@ function ImagePopover({ editor }: { editor: Editor }) {
 						type="url"
 						value={url}
 					/>
-					<Input
-						aria-label="이미지 설명"
-						maxLength={120}
-						onChange={(event) => setAlt(event.target.value)}
-						placeholder="이미지 설명(선택)"
-						value={alt}
-					/>
 					<div className="flex justify-end">
-						<Button disabled={url.trim() === ""} size="sm" type="submit">
-							삽입
+						<Button
+							disabled={isUploading || url.trim() === ""}
+							size="sm"
+							type="submit"
+						>
+							URL 삽입
 						</Button>
 					</div>
 				</form>

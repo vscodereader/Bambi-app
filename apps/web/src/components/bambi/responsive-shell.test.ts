@@ -17,4 +17,13 @@ describe("ResponsiveAppShell brand lockup", () => {
 		// 압축 대상이 되던 원래 형태가 남아 있으면 안 된다.
 		expect(source).not.toContain('className="no-underline"');
 	});
+
+	it("scrolls the nav instead of overflowing the header row", () => {
+		// 항목이 많은 역할(운영자 7개)은 내비 최소폭이 헤더 폭을 넘어 행 전체가 가로로
+		// 넘쳤다. 내비만 줄어들고 스크롤되게 해 브랜드·우측 액션은 제자리를 지킨다.
+		expect(source).toContain('<NavigationMenu className="min-w-0">');
+		expect(source).toContain("overflow-x-auto");
+		// 넘칠 때 앞쪽 항목이 스크롤로도 닿지 않는 justify-center 기본값을 덮는다.
+		expect(source).toContain("justify-start");
+	});
 });

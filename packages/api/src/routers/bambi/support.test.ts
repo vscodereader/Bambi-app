@@ -148,6 +148,14 @@ describe("고객센터 문의", () => {
 describe("고객센터 FAQ", () => {
 	const createdFaqIds: string[] = [];
 
+	// FAQ 답변은 리치 에디터가 만든 Tiptap doc JSON이라 평문은 더 이상 통과하지 않는다.
+	const FAQ_ANSWER = JSON.stringify({
+		content: [
+			{ content: [{ text: "답변입니다.", type: "text" }], type: "paragraph" },
+		],
+		type: "doc",
+	});
+
 	afterAll(async () => {
 		if (createdFaqIds.length > 0) {
 			await db.delete(faqEntry).where(inArray(faqEntry.id, createdFaqIds));
@@ -159,7 +167,7 @@ describe("고객센터 FAQ", () => {
 			context: createContextForUser(adminId),
 		});
 		const created = await createCaller({
-			answer: "답변입니다.",
+			answer: FAQ_ANSWER,
 			category: "account",
 			question: `비공개질문-${randomUUID().slice(0, 8)}`,
 			sortOrder: 0,
@@ -184,7 +192,7 @@ describe("고객센터 FAQ", () => {
 			context: createContextForUser(adminId),
 		});
 		const created = await createCaller({
-			answer: "답변입니다.",
+			answer: FAQ_ANSWER,
 			category: "account",
 			question: `우회시도-${randomUUID().slice(0, 8)}`,
 			sortOrder: 0,
@@ -221,11 +229,26 @@ describe("고객센터 FAQ", () => {
 
 		await expect(
 			caller({
-				answer: "답변",
+				answer: FAQ_ANSWER,
 				category: "etc",
 				question: "질문",
 				sortOrder: 0,
 			})
 		).rejects.toMatchObject({ code: "FORBIDDEN" });
+	});
+
+	it("답변이 Tiptap doc JSON이 아니면 BAD_REQUEST", async () => {
+		const caller = createProcedureClient(supportRouter.createFaq, {
+			context: createContextForUser(adminId),
+		});
+
+		await expect(
+			caller({
+				answer: "그냥 텍스트",
+				category: "etc",
+				question: `본문검증-${randomUUID().slice(0, 8)}`,
+				sortOrder: 0,
+			})
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
 	});
 });

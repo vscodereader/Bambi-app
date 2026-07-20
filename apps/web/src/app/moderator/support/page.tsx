@@ -30,6 +30,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { CommunityPostEditor } from "@/components/bambi/community-editor";
+import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	INQUIRY_STATUS_LABELS,
@@ -222,7 +224,15 @@ function FaqManager() {
 	const invalidate = useInvalidateSupport();
 	const [category, setCategory] = useState<SupportCategory>("account");
 	const [question, setQuestion] = useState("");
+	// answer는 제출용 Tiptap JSON 문자열이라 빈 문서도 40자쯤 된다 — 비어있음 판정에
+	// 쓰면 등록 버튼이 항상 열린다. 판정은 에디터가 같이 주는 text·hasImage로만 한다
+	// (이미지만 넣은 답변도 유효하므로 텍스트 길이 단독 게이트는 쓰지 않는다).
 	const [answer, setAnswer] = useState("");
+	const [answerText, setAnswerText] = useState("");
+	const [answerHasImage, setAnswerHasImage] = useState(false);
+	// 에디터는 마운트 후 비제어라 등록 성공 시 state만 비워서는 본문이 남는다. key를 올려
+	// 강제 리마운트시켜 빈 문서로 되돌린다.
+	const [editorKey, setEditorKey] = useState(0);
 
 	// 운영자 목록은 비공개 초안까지 본다. 감추면 다시 공개로 되돌릴 진입점이 사라진다.
 	const faqQuery = useQuery(
@@ -239,6 +249,9 @@ function FaqManager() {
 				toast.success("FAQ를 등록했어요.");
 				setQuestion("");
 				setAnswer("");
+				setAnswerText("");
+				setAnswerHasImage(false);
+				setEditorKey((previous) => previous + 1);
 				await invalidate();
 			},
 		})
@@ -292,24 +305,26 @@ function FaqManager() {
 						placeholder="자주 묻는 질문을 입력하세요"
 						value={question}
 					/>
-					<Label htmlFor="faq-answer">답변</Label>
-					<Textarea
-						className="min-h-24"
-						id="faq-answer"
-						onChange={(event) => setAnswer(event.target.value)}
-						placeholder="답변을 입력하세요"
+					<Label>답변</Label>
+					<CommunityPostEditor
+						key={editorKey}
+						onChange={(payload) => {
+							setAnswer(payload.json);
+							setAnswerText(payload.text);
+							setAnswerHasImage(payload.hasImage);
+						}}
 						value={answer}
 					/>
 					<Button
 						className="self-start"
 						disabled={
 							question.trim().length < FAQ_QUESTION_MIN ||
-							answer.trim().length === 0 ||
+							(answerText.trim().length === 0 && !answerHasImage) ||
 							createFaq.isPending
 						}
 						onClick={() =>
 							createFaq.mutate({
-								answer: answer.trim(),
+								answer,
 								category,
 								question: question.trim(),
 							})
@@ -343,9 +358,9 @@ function FaqManager() {
 						<CardTitle>{item.question}</CardTitle>
 					</CardHeader>
 					<CardContent className="flex min-w-0 flex-col gap-3">
-						<p className="m-0 whitespace-pre-wrap text-muted-foreground text-sm">
-							{item.answer}
-						</p>
+						{/* 답변은 Tiptap JSON이라 뷰어로 렌더한다. JSON이 아닌 기존 평문 행은
+						    뷰어가 whitespace-pre-wrap <p> 폴백으로 그대로 보여준다. */}
+						<PostBodyViewer body={item.answer} />
 						<div className="flex flex-wrap items-center gap-3">
 							<Label
 								className="flex items-center gap-2"
