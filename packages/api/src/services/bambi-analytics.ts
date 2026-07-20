@@ -19,6 +19,30 @@ export const jobPerformanceEventTypes = [
 
 export type JobPerformanceEventType = (typeof jobPerformanceEventTypes)[number];
 
+// PostgreSQL foreign_key_violation.
+const FOREIGN_KEY_VIOLATION = "23503";
+
+// 성과 이벤트는 요청의 부가 기록이라, 대상 공고가 사라진 것 때문에 원 요청까지
+// 실패해서는 안 된다. jobs.delete는 공고를 hard delete하므로(연관 행은 FK
+// onDelete cascade로 함께 제거) 공고를 읽은 뒤 이벤트를 넣기 전에 삭제되면
+// job_post FK 위반이 난다. 어차피 cascade로 지워질 이벤트라 조용히 버린다.
+// FK 위반이 아닌 오류는 실제 결함이므로 그대로 던진다.
+// drizzle이 드라이버 오류를 DrizzleQueryError로 감싸므로, pg 오류 코드를 찾으려면
+// cause 체인을 끝까지 따라 내려가야 한다.
+const isForeignKeyViolation = (error: unknown): boolean => {
+	let current: unknown = error;
+
+	while (current instanceof Error) {
+		if ("code" in current && current.code === FOREIGN_KEY_VIOLATION) {
+			return true;
+		}
+
+		current = current.cause;
+	}
+
+	return false;
+};
+
 interface RecordJobPerformanceEventInput {
 	actorUserId?: null | string;
 	eventType: JobPerformanceEventType;
@@ -34,18 +58,27 @@ export const recordJobPerformanceEvent = async ({
 	metadata,
 	organizationId,
 }: RecordJobPerformanceEventInput) => {
-	const [event] = await db
-		.insert(jobPerformanceEvent)
-		.values({
-			actorUserId: actorUserId ?? null,
-			eventType,
-			jobPostId,
-			metadata,
-			organizationId,
-		})
-		.returning();
+	try {
+		const [event] = await db
+			.insert(jobPerformanceEvent)
+			.values({
+				actorUserId: actorUserId ?? null,
+				eventType,
+				jobPostId,
+				metadata,
+				organizationId,
+			})
+			.returning();
 
-	return event;
+		return event;
+	} catch (error) {
+		if (isForeignKeyViolation(error)) {
+			// 공고가 이미 삭제됨 — 기록할 대상이 없다.
+			return;
+		}
+
+		throw error;
+	}
 };
 
 interface RecordJobListingImpressionsInput {
@@ -146,7 +179,16 @@ export const recordJobListingImpressions = async ({
 		return;
 	}
 
-	await db.insert(jobPerformanceEvent).values(values);
+	try {
+		await db.insert(jobPerformanceEvent).values(values);
+	} catch (error) {
+		if (!isForeignKeyViolation(error)) {
+			throw error;
+		}
+
+		// 목록 조회와 기록 사이에 공고 하나라도 삭제되면 배치 insert 전체가 막힌다.
+		// 노출 기록보다 목록 응답이 우선이라 이번 요청의 기록만 포기한다.
+	}
 };
 
 export const RECENT_PERFORMANCE_WINDOW_DAYS = 7;
