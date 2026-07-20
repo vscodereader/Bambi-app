@@ -11,18 +11,25 @@ dotenv.config({
 	path: "../../apps/server/.env",
 });
 
-const [{ db }, authSchema, bambiSchema, { communityRouter }] =
-	await Promise.all([
-		import("@bambi-app/db"),
-		import("@bambi-app/db/schema/auth"),
-		import("@bambi-app/db/schema/bambi"),
-		import("./community"),
-	]);
+const [
+	{ db },
+	authSchema,
+	bambiSchema,
+	{ communityRouter },
+	{ invalidateBannedWordCache, normalizeForMatch },
+] = await Promise.all([
+	import("@bambi-app/db"),
+	import("@bambi-app/db/schema/auth"),
+	import("@bambi-app/db/schema/bambi"),
+	import("./community"),
+	import("../../services/bambi-banned-words"),
+]);
 
 const { member, organization, user } = authSchema;
 const {
 	adminModerationAction,
 	bambiProfile,
+	bannedWord,
 	communityPost,
 	jobPost,
 	jobPromotionCampaign,
@@ -1912,6 +1919,107 @@ describe("bambi community router — 운영자 조치(admin)", () => {
 			expect(item?.body).toBe("부적절 부모 댓글");
 			expect(item?.isDeleted).toBe(false);
 			expect((await getPost({ postId: created.id })).commentCount).toBe(2);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+});
+
+describe("bambi community router — 금칙어", () => {
+	const bodyWith = (text: string): string =>
+		JSON.stringify({
+			content: [{ content: [{ text, type: "text" }], type: "paragraph" }],
+			type: "doc",
+		});
+
+	it("금칙어가 포함된 본문·댓글은 BAD_REQUEST로 차단된다", async () => {
+		const fixture = await createCommunityFixture();
+		const term = `금칙${randomUUID().slice(0, 8)}`;
+		await db.insert(bannedWord).values({
+			createdByUserId: fixture.adminUserId,
+			normalizedTerm: normalizeForMatch(term),
+			term,
+		});
+		invalidateBannedWordCache();
+
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			await expectOrpcCode(
+				createPost({
+					...basePostInput,
+					board: "free",
+					body: bodyWith(`${term} 포함 본문`),
+					title: `정상 제목 ${randomUUID()}`,
+				}),
+				"BAD_REQUEST"
+			);
+			// 제목만 걸려도 차단된다.
+			await expectOrpcCode(
+				createPost({
+					...basePostInput,
+					board: "free",
+					title: `제목에 ${term} 포함`,
+				}),
+				"BAD_REQUEST"
+			);
+
+			// 정상 글에 다는 금칙어 댓글도 같은 코드로 차단된다.
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				title: `댓글 금칙어 ${randomUUID()}`,
+			});
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+			await expectOrpcCode(
+				createComment({ body: `${term} 댓글`, postId: created.id }),
+				"BAD_REQUEST"
+			);
+			// 차단된 댓글은 부분 저장되지 않는다(commentCount 캐시 무변).
+			const getPost = clientFor(communityRouter.getPost, fixture.femaleUserId, [
+				"getPost",
+			]);
+			expect((await getPost({ postId: created.id })).commentCount).toBe(0);
+		} finally {
+			await db.delete(bannedWord).where(eq(bannedWord.term, term));
+			invalidateBannedWordCache();
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("금칙어가 없는 정상 글·댓글은 그대로 게시된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				body: bodyWith("주말 근무 문의드립니다"),
+				title: `정상 제목 ${randomUUID()}`,
+			});
+			expect(created.id).toBeTruthy();
+
+			const createComment = clientFor(
+				communityRouter.createComment,
+				fixture.femaleUserId,
+				["createComment"]
+			);
+			const comment = await createComment({
+				body: "정상 댓글입니다",
+				postId: created.id,
+			});
+			expect(comment.id).toBeTruthy();
 		} finally {
 			await cleanupCommunityFixture(fixture);
 		}

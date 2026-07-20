@@ -126,6 +126,9 @@ const MOD_ROUTES: Record<string, Route> = {
 	reports: "/moderator/reports",
 	employers: "/moderator/employers",
 	users: "/moderator/users",
+	content: "/moderator/content",
+	support: "/moderator/support",
+	bannedWords: "/moderator/banned-words",
 };
 const MOD_DETAIL_RE = /^\/moderator\/(?:queue|reports|users)\/[^/]+/;
 
@@ -169,6 +172,12 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 		tab = "employers";
 	} else if (path.startsWith("/moderator/users")) {
 		tab = "users";
+	} else if (path.startsWith("/moderator/content")) {
+		tab = "content";
+	} else if (path.startsWith("/moderator/support")) {
+		tab = "support";
+	} else if (path.startsWith("/moderator/banned-words")) {
+		tab = "bannedWords";
 	}
 	const go = (v: string) => {
 		clearSelection();

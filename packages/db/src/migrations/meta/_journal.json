@@ -120,6 +120,13 @@
       "when": 1784096713819,
       "tag": "0016_exotic_menace",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784510271594,
+      "tag": "0017_elite_goblin_queen",
+      "breakpoints": true
     }
   ]
 }

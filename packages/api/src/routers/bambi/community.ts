@@ -26,11 +26,13 @@ import {
 	type BambiAccessProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
+import { assertNoBannedWords } from "../../services/bambi-banned-words";
 import { requireCommunityMember } from "../../services/bambi-community-authz";
 import {
 	hashCommunityPassword,
 	verifyCommunityPassword,
 } from "../../services/bambi-community-password";
+import { extractTiptapText } from "../../services/bambi-tiptap-text";
 
 const PAGE_SIZE = 20;
 const OVERVIEW_LIMIT = 4;
@@ -453,6 +455,7 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const profile = await requireCommunityMember(context.session);
 			assertTiptapDoc(input.body);
+			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 
 			// 공지사항은 운영자만, 광고글 표시는 업소회원만 허용한다.
 			if (input.board === "notice" && profile.role !== "admin") {
@@ -496,6 +499,7 @@ export const communityRouter = {
 			const profile = await requireCommunityMember(context.session);
 			const post = await findPublishedPost(input.postId);
 			assertTiptapDoc(input.body);
+			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 
 			// authorRole 스냅샷은 불변 — 업소로 기록된 글만 광고 표시를 유지·전환할 수 있다.
 			if (post.authorRole !== "employer" && input.isPromotion) {
@@ -701,6 +705,7 @@ export const communityRouter = {
 			const profile = await requireCommunityMember(context.session);
 			const post = await findPublishedPost(input.postId);
 			requirePostReadAccess(post, profile, input.password);
+			await assertNoBannedWords([input.body]);
 
 			if (input.parentCommentId) {
 				const [parent] = await db
@@ -803,6 +808,7 @@ export const communityRouter = {
 					message: "본인이 작성한 댓글만 수정할 수 있습니다.",
 				});
 			}
+			await assertNoBannedWords([input.body]);
 
 			await db
 				.update(communityComment)

@@ -74,6 +74,8 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"user",
 	"community_post",
 	"community_comment",
+	"support_inquiry",
+	"support_inquiry_message",
 ]);
 
 // 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.
@@ -90,6 +92,23 @@ export const communityContentStatus = pgEnum("community_content_status", [
 	"published",
 	"hidden",
 	"deleted",
+]);
+
+// 고객센터 문의 분류. FAQ도 같은 분류를 재사용한다(사용자가 같은 기준으로 찾게).
+export const supportInquiryCategory = pgEnum("support_inquiry_category", [
+	"account",
+	"job_post",
+	"payment",
+	"report",
+	"etc",
+]);
+
+// 문의 진행 상태. 운영 조치 상태(community_content_status)와는 별개 축이다 —
+// answered면서 hidden일 수 있다.
+export const supportInquiryStatus = pgEnum("support_inquiry_status", [
+	"open",
+	"answered",
+	"closed",
 ]);
 
 export const promotionTier = pgEnum("promotion_tier", [
@@ -792,6 +811,111 @@ export const communityPostLike = pgTable(
 	]
 );
 
+export const supportInquiry = pgTable(
+	"support_inquiry",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 작성 시점 계정 유형 스냅샷(서버 기록). 이후 role 변경과 무관하게 문의 맥락을 보존한다.
+		authorRole: bambiUserRole("author_role").notNull(),
+		category: supportInquiryCategory("category").notNull(),
+		title: text("title").notNull(),
+		// 커뮤니티와 달리 평문이다 — 문의에 서식이 필요 없고 금칙어 검사를 바로 걸 수 있다.
+		body: text("body").notNull(),
+		inquiryStatus: supportInquiryStatus("inquiry_status")
+			.default("open")
+			.notNull(),
+		// 운영 조치 상태. community_content_status를 재사용해 조치 로직·UI 매핑을 공유한다.
+		status: communityContentStatus("status").default("published").notNull(),
+		// 목록 정렬용 — 답변이 달리면 갱신해 위로 올린다.
+		lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("support_inquiry_author_user_id_created_at_idx").on(
+			table.authorUserId,
+			table.createdAt
+		),
+		index("support_inquiry_inquiry_status_last_message_at_idx").on(
+			table.inquiryStatus,
+			table.lastMessageAt
+		),
+		index("support_inquiry_status_created_at_idx").on(
+			table.status,
+			table.createdAt
+		),
+	]
+);
+
+export const supportInquiryMessage = pgTable(
+	"support_inquiry_message",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		inquiryId: uuid("inquiry_id")
+			.notNull()
+			.references(() => supportInquiry.id, { onDelete: "cascade" }),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 작성 시점 운영자 여부 스냅샷. 이후 role이 바뀌어도 스레드 표시가 흔들리지 않는다.
+		isStaff: boolean("is_staff").default(false).notNull(),
+		body: text("body").notNull(),
+		status: communityContentStatus("status").default("published").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("support_inquiry_message_inquiry_id_created_at_idx").on(
+			table.inquiryId,
+			table.createdAt
+		),
+	]
+);
+
+export const faqEntry = pgTable(
+	"faq_entry",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		category: supportInquiryCategory("category").notNull(),
+		question: text("question").notNull(),
+		answer: text("answer").notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		isPublished: boolean("is_published").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("faq_entry_is_published_sort_order_idx").on(
+			table.isPublished,
+			table.sortOrder
+		),
+	]
+);
+
+export const bannedWord = pgTable(
+	"banned_word",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		// 운영자가 입력한 원문(표시용).
+		term: text("term").notNull(),
+		// 정규화형(매칭용). 저장 시 계산해 두고 매 요청 재계산을 피한다.
+		normalizedTerm: text("normalized_term").notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdByUserId: text("created_by_user_id")
+			.notNull()
+			.references(() => user.id),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		// 정규화형에 걸어야 "성 매매"와 "성매매"가 중복 등록되지 않는다.
+		uniqueIndex("banned_word_normalized_term_uidx").on(table.normalizedTerm),
+		index("banned_word_is_active_idx").on(table.isActive),
+	]
+);
+
 export const bambiProfileRelations = relations(bambiProfile, ({ one }) => ({
 	user: one(user, {
 		fields: [bambiProfile.userId],
@@ -903,6 +1027,23 @@ export const communityPostLikeRelations = relations(
 		post: one(communityPost, {
 			fields: [communityPostLike.postId],
 			references: [communityPost.id],
+		}),
+	})
+);
+
+export const supportInquiryRelations = relations(
+	supportInquiry,
+	({ many }) => ({
+		messages: many(supportInquiryMessage),
+	})
+);
+
+export const supportInquiryMessageRelations = relations(
+	supportInquiryMessage,
+	({ one }) => ({
+		inquiry: one(supportInquiry, {
+			fields: [supportInquiryMessage.inquiryId],
+			references: [supportInquiry.id],
 		}),
 	})
 );

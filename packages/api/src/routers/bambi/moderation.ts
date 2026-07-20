@@ -13,17 +13,20 @@ import {
 	jobPostMedia,
 	report,
 	review,
+	supportInquiry,
+	supportInquiryMessage,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import z from "zod";
 
-import { protectedProcedure } from "../../index";
+import { adminProcedure, protectedProcedure } from "../../index";
 import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
+import { extractTiptapText } from "../../services/bambi-tiptap-text";
 
 export const targetTypeSchema = z.enum([
 	"job_post",
@@ -127,18 +130,53 @@ const bulkSetUserStatusInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
+const contentStatusSchema = z.enum(["published", "hidden", "deleted"]);
+
+const setInquiryStatusByAdminInput = z.object({
+	inquiryId: z.string().uuid(),
+	reason: z.string().trim().min(2).max(500),
+	status: contentStatusSchema,
+});
+
+const setInquiryMessageStatusByAdminInput = z.object({
+	messageId: z.string().uuid(),
+	reason: z.string().trim().min(2).max(500),
+	status: contentStatusSchema,
+});
+
+// 통합 목록에 노출하는 유형. support_inquiry_message는 문의 맥락 없이 한 줄만 보면 판단이
+// 불가능하므로 넣지 않는다 — 스레드 메시지 조치는 문의 상세 화면에서 한다.
+const moderatableTargetTypeSchema = z.enum([
+	"community_post",
+	"community_comment",
+	"support_inquiry",
+]);
+
+const listModeratableContentInput = z.object({
+	page: z.number().int().min(1).default(1),
+	status: contentStatusSchema.optional(),
+	targetType: moderatableTargetTypeSchema,
+});
+
+const MODERATABLE_PAGE_SIZE = 20;
+const EXCERPT_LENGTH = 120;
+
 type ReportTargetType = z.infer<typeof targetTypeSchema>;
 type ReportRow = typeof report.$inferSelect;
 type JobPostModerationStatus = z.infer<typeof jobPostModerationStatusSchema>;
 type JobPostRow = typeof jobPost.$inferSelect;
 
-const uuidTargetTypes = new Set<ReportTargetType>([
+// 신고 가능 대상(targetTypeSchema)보다 DB enum이 넓으므로 행 타입을 기준으로 삼는다 —
+// 신고 대상이 아닌 유형도 targetId가 uuid인지 판정해야 하기 때문.
+const uuidTargetTypes = new Set<ReportRow["targetType"]>([
 	"job_post",
 	"chat_room",
 	"chat_message",
 	"review",
 	"community_post",
 	"community_comment",
+	"support_inquiry",
+	"support_inquiry_message",
 ]);
 
 const uuidTargetIdSchema = z.string().uuid();
@@ -195,34 +233,10 @@ const jobPostHasCoverImageSql = sql<boolean>`exists(
 
 const COMMUNITY_BODY_PREVIEW_MAX = 300;
 
-// Tiptap doc JSON에서 text 노드만 재귀로 걸러 평문을 만든다. doc 하위 블록은 줄바꿈으로
-// 잇고, 블록 내부 text 노드는 붙여 이어 단어가 쪼개지지 않게 한다.
-const collectTiptapText = (node: unknown): string => {
-	if (!node || typeof node !== "object") {
-		return "";
-	}
-	const record = node as { content?: unknown; text?: unknown; type?: unknown };
-	if (record.type === "text" && typeof record.text === "string") {
-		return record.text;
-	}
-	if (Array.isArray(record.content)) {
-		return record.content
-			.map(collectTiptapText)
-			.join(record.type === "doc" ? "\n" : "");
-	}
-	return "";
-};
-
-// 글 본문(Tiptap JSON)에서 평문 발췌를 만든다. 파싱 실패 시 원문 문자열을 그대로 자른다.
-const toCommunityBodyPreview = (body: string): string => {
-	let plain: string;
-	try {
-		plain = collectTiptapText(JSON.parse(body) as unknown).trim();
-	} catch {
-		plain = body;
-	}
-	return plain.slice(0, COMMUNITY_BODY_PREVIEW_MAX);
-};
+// 글 본문(Tiptap JSON)에서 평문 발췌를 만든다. 평문 추출 규칙은 금칙어 검사와 공유한다
+// (services/bambi-tiptap-text) — 두 곳에 같은 파서를 두면 규칙이 갈린다.
+const toCommunityBodyPreview = (body: string): string =>
+	extractTiptapText(body).slice(0, COMMUNITY_BODY_PREVIEW_MAX);
 
 // community_post 신고 컨텍스트 — 운영자는 hidden/deleted 상태여도 원문 맥락을 봐야 하므로
 // 상태와 무관하게 조회하고 현재 status를 그대로 노출한다.
@@ -851,5 +865,215 @@ export const moderationRouter = {
 
 				return updated;
 			});
+		}),
+
+	setInquiryStatusByAdmin: adminProcedure
+		.input(setInquiryStatusByAdminInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireAdminProfile(context.session);
+
+			await db.transaction(async (tx) => {
+				const [inquiry] = await tx
+					.select({ id: supportInquiry.id })
+					.from(supportInquiry)
+					.where(eq(supportInquiry.id, input.inquiryId))
+					.limit(1);
+
+				if (!inquiry) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "문의를 찾을 수 없습니다.",
+					});
+				}
+
+				await tx
+					.update(supportInquiry)
+					.set({ status: input.status, updatedAt: new Date() })
+					.where(eq(supportInquiry.id, input.inquiryId));
+
+				await tx.insert(adminModerationAction).values({
+					adminUserId: profile.userId,
+					targetType: "support_inquiry",
+					targetId: input.inquiryId,
+					action: `set_status:${input.status}`,
+					reason: input.reason,
+				});
+			});
+
+			return { ok: true };
+		}),
+
+	setInquiryMessageStatusByAdmin: adminProcedure
+		.input(setInquiryMessageStatusByAdminInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireAdminProfile(context.session);
+
+			await db.transaction(async (tx) => {
+				const [message] = await tx
+					.select({ id: supportInquiryMessage.id })
+					.from(supportInquiryMessage)
+					.where(eq(supportInquiryMessage.id, input.messageId))
+					.limit(1);
+
+				if (!message) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "메시지를 찾을 수 없습니다.",
+					});
+				}
+
+				await tx
+					.update(supportInquiryMessage)
+					.set({ status: input.status })
+					.where(eq(supportInquiryMessage.id, input.messageId));
+
+				await tx.insert(adminModerationAction).values({
+					adminUserId: profile.userId,
+					targetType: "support_inquiry_message",
+					targetId: input.messageId,
+					action: `set_status:${input.status}`,
+					reason: input.reason,
+				});
+			});
+
+			return { ok: true };
+		}),
+
+	// 유형이 달라도 서버에서 공통 형태로 정규화해 반환한다. UI가 유형별 분기를 하지 않아도 되고,
+	// 대상 유형이 늘어도 화면을 고치지 않는다.
+	listModeratableContent: adminProcedure
+		.input(listModeratableContentInput)
+		.handler(async ({ input }) => {
+			const offset = (input.page - 1) * MODERATABLE_PAGE_SIZE;
+			const excerpt = (text: string) => text.slice(0, EXCERPT_LENGTH);
+
+			if (input.targetType === "community_post") {
+				const where = input.status
+					? eq(communityPost.status, input.status)
+					: undefined;
+
+				const [totalRow] = await db
+					.select({ value: count() })
+					.from(communityPost)
+					.where(where);
+
+				const rows = await db
+					.select()
+					.from(communityPost)
+					.where(where)
+					.orderBy(desc(communityPost.createdAt))
+					.limit(MODERATABLE_PAGE_SIZE)
+					.offset(offset);
+
+				return {
+					items: rows.map((row) => ({
+						id: row.id,
+						targetType: "community_post" as const,
+						title: row.title,
+						// 본문은 Tiptap JSON이라 평문을 뽑아 발췌한다(기존 신고 컨텍스트와 동일 규칙).
+						excerpt: excerpt(toCommunityBodyPreview(row.body)),
+						// 커뮤니티는 익명 게시판이라 글별 표시명을 쓴다(실명 표시명 노출 금지).
+						authorName: row.authorDisplayName,
+						authorUserId: row.authorUserId,
+						status: row.status,
+						createdAt: row.createdAt,
+					})),
+					page: input.page,
+					pageSize: MODERATABLE_PAGE_SIZE,
+					totalCount: totalRow?.value ?? 0,
+				};
+			}
+
+			if (input.targetType === "community_comment") {
+				const where = input.status
+					? eq(communityComment.status, input.status)
+					: undefined;
+
+				const [totalRow] = await db
+					.select({ value: count() })
+					.from(communityComment)
+					.where(where);
+
+				const rows = await db
+					.select({
+						id: communityComment.id,
+						body: communityComment.body,
+						status: communityComment.status,
+						createdAt: communityComment.createdAt,
+						authorUserId: communityComment.authorUserId,
+						postTitle: communityPost.title,
+						postAuthorName: communityPost.authorDisplayName,
+					})
+					.from(communityComment)
+					.innerJoin(
+						communityPost,
+						eq(communityComment.postId, communityPost.id)
+					)
+					.where(where)
+					.orderBy(desc(communityComment.createdAt))
+					.limit(MODERATABLE_PAGE_SIZE)
+					.offset(offset);
+
+				return {
+					items: rows.map((row) => ({
+						id: row.id,
+						targetType: "community_comment" as const,
+						// 댓글은 제목이 없으므로 원글 제목을 맥락으로 보여준다.
+						title: row.postTitle,
+						excerpt: excerpt(row.body),
+						authorName: row.postAuthorName,
+						authorUserId: row.authorUserId,
+						status: row.status,
+						createdAt: row.createdAt,
+					})),
+					page: input.page,
+					pageSize: MODERATABLE_PAGE_SIZE,
+					totalCount: totalRow?.value ?? 0,
+				};
+			}
+
+			const where = input.status
+				? eq(supportInquiry.status, input.status)
+				: undefined;
+
+			const [totalRow] = await db
+				.select({ value: count() })
+				.from(supportInquiry)
+				.where(where);
+
+			const rows = await db
+				.select({
+					id: supportInquiry.id,
+					title: supportInquiry.title,
+					body: supportInquiry.body,
+					status: supportInquiry.status,
+					createdAt: supportInquiry.createdAt,
+					authorUserId: supportInquiry.authorUserId,
+					// 고객센터는 익명 표시명이 없으므로 프로필 표시명을 조인한다.
+					authorName: bambiProfile.displayName,
+				})
+				.from(supportInquiry)
+				.leftJoin(
+					bambiProfile,
+					eq(supportInquiry.authorUserId, bambiProfile.userId)
+				)
+				.where(where)
+				.orderBy(desc(supportInquiry.createdAt))
+				.limit(MODERATABLE_PAGE_SIZE)
+				.offset(offset);
+
+			return {
+				items: rows.map((row) => ({
+					id: row.id,
+					targetType: "support_inquiry" as const,
+					title: row.title,
+					excerpt: excerpt(row.body),
+					authorName: row.authorName ?? "(표시명 없음)",
+					authorUserId: row.authorUserId,
+					status: row.status,
+					createdAt: row.createdAt,
+				})),
+				page: input.page,
+				pageSize: MODERATABLE_PAGE_SIZE,
+				totalCount: totalRow?.value ?? 0,
+			};
 		}),
 };
