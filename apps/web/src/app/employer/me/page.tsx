@@ -134,7 +134,7 @@ export default function EmployerMePage() {
 
 	if (session.isPending || mineQuery.isLoading) {
 		return (
-			<PageShell title="매장 정보">
+			<PageShell title="업체 정보">
 				<Skeleton className="h-28 w-full rounded-lg" />
 				<div className="grid gap-3 md:grid-cols-2">
 					<Skeleton className="h-40 w-full rounded-lg" />
@@ -147,8 +147,8 @@ export default function EmployerMePage() {
 	if (!isSignedIn || getErrorCode(mineQuery.error) === "UNAUTHORIZED") {
 		return (
 			<PageShell
-				description="매장 정보는 로그인 후 이용할 수 있습니다."
-				title="매장 정보"
+				description="업체 정보는 로그인 후 이용할 수 있습니다."
+				title="업체 정보"
 			>
 				<EmptyState
 					action={
@@ -166,8 +166,8 @@ export default function EmployerMePage() {
 	if (mineQuery.isError) {
 		return (
 			<PageShell
-				description="매장 정보를 불러오지 못했습니다."
-				title="매장 정보"
+				description="업체 정보를 불러오지 못했습니다."
+				title="업체 정보"
 			>
 				<EmptyState
 					action={
@@ -176,7 +176,7 @@ export default function EmployerMePage() {
 						</Button>
 					}
 					description="로그인 상태와 연결 상태를 확인한 뒤 다시 시도해 주세요."
-					title="매장 정보를 불러올 수 없습니다"
+					title="업체 정보를 불러올 수 없습니다"
 				/>
 			</PageShell>
 		);
@@ -185,8 +185,8 @@ export default function EmployerMePage() {
 	if (!profile) {
 		return (
 			<PageShell
-				description="매장 정보를 보려면 밤비 프로필 설정이 필요합니다."
-				title="매장 정보"
+				description="업체 정보를 보려면 밤비 프로필 설정이 필요합니다."
+				title="업체 정보"
 			>
 				<EmptyState
 					action={
@@ -205,7 +205,7 @@ export default function EmployerMePage() {
 		return (
 			<PageShell
 				description="현재 계정은 구직자 프로필로 설정되어 있습니다."
-				title="매장 정보"
+				title="업체 정보"
 			>
 				<EmptyState
 					action={
@@ -217,7 +217,7 @@ export default function EmployerMePage() {
 						</Link>
 					}
 					description="구직자 계정은 공개 공고를 탐색하고 지원 대화를 시작할 수 있습니다."
-					title="매장 정보 권한이 없습니다"
+					title="업체 정보 권한이 없습니다"
 				/>
 			</PageShell>
 		);
@@ -226,7 +226,7 @@ export default function EmployerMePage() {
 	return (
 		<PageShell
 			description="계정과 사업자 인증 상태를 확인하고 설정을 관리합니다."
-			title="매장 정보"
+			title="업체 정보"
 		>
 			<section aria-labelledby="account" className="flex flex-col gap-3">
 				<h2 className="sr-only" id="account">

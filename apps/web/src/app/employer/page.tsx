@@ -313,7 +313,7 @@ export default function EmployerPage() {
 
 	if (session.isPending || mineQuery.isLoading) {
 		return (
-			<PageShell title="구인자 관리">
+			<PageShell title="내 공고">
 				<div className="grid gap-3 md:grid-cols-2">
 					<Skeleton className="h-24 w-full rounded-lg" />
 					<Skeleton className="h-24 w-full rounded-lg" />
@@ -325,8 +325,8 @@ export default function EmployerPage() {
 	if (!isSignedIn || getErrorCode(mineQuery.error) === "UNAUTHORIZED") {
 		return (
 			<PageShell
-				description="구인자 관리는 로그인 후 이용할 수 있습니다."
-				title="구인자 관리"
+				description="내 공고는 로그인 후 이용할 수 있습니다."
+				title="내 공고"
 			>
 				<EmptyState
 					action={
@@ -344,8 +344,8 @@ export default function EmployerPage() {
 	if (mineQuery.isError) {
 		return (
 			<PageShell
-				description="구인자 관리 정보를 불러오지 못했습니다."
-				title="구인자 관리"
+				description="내 공고 정보를 불러오지 못했습니다."
+				title="내 공고"
 			>
 				<EmptyState
 					action={
@@ -364,7 +364,7 @@ export default function EmployerPage() {
 		return (
 			<PageShell
 				description="공고를 등록하려면 밤비 프로필 설정이 필요합니다."
-				title="구인자 관리"
+				title="내 공고"
 			>
 				<EmptyState
 					action={
@@ -383,7 +383,7 @@ export default function EmployerPage() {
 		return (
 			<PageShell
 				description="현재 계정은 구직자 프로필로 설정되어 있습니다."
-				title="구인자 관리"
+				title="내 공고"
 			>
 				<EmptyState
 					action={
@@ -395,7 +395,7 @@ export default function EmployerPage() {
 						</Link>
 					}
 					description="구직자 계정은 공개 공고를 탐색하고 지원 대화를 시작할 수 있습니다."
-					title="구인자 관리 권한이 없습니다"
+					title="내 공고 권한이 없습니다"
 				/>
 			</PageShell>
 		);
@@ -554,7 +554,7 @@ export default function EmployerPage() {
 		<PageShell
 			actions={<NewJobButton verified={verified} />}
 			description="조직과 팀 프로필 상태를 확인하고 소유한 공고를 관리합니다."
-			title="구인자 관리"
+			title="내 공고"
 		>
 			<EmployerGateBanner action="공고를 등록" />
 			{jobs.length > 0 ? (
@@ -612,7 +612,7 @@ export default function EmployerPage() {
 			) : null}
 
 			<nav
-				aria-label="구인자 관리 바로가기"
+				aria-label="내 공고 바로가기"
 				className="grid grid-cols-2 gap-3 sm:grid-cols-4"
 			>
 				{quickLinks.map((link) => (

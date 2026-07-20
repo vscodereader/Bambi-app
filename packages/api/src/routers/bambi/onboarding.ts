@@ -8,12 +8,13 @@ import {
 	teamMember,
 } from "@bambi-app/db/schema/auth";
 import {
+	adminModerationAction,
 	bambiProfile,
 	employerOrganizationProfile,
 	employerTeamProfile,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -192,6 +193,39 @@ export const onboardingRouter = {
 			status: profile?.status ?? "active",
 		});
 
+		// 계정이 경고·정지 상태면 대상 사용자 화면에 안내 배너를 띄우기 위한 최신 제재 사유를
+		// 함께 내려준다. 별도 알림 테이블 없이 운영자 감사 로그(admin_moderation_action)의
+		// 가장 최근 set_status 기록을 조회한다(정상 계정은 쿼리하지 않음).
+		const accountSanction =
+			profile && (profile.status === "warned" || profile.status === "suspended")
+				? await (async () => {
+						const [latestAction] = await db
+							.select({
+								reason: adminModerationAction.reason,
+								createdAt: adminModerationAction.createdAt,
+							})
+							.from(adminModerationAction)
+							.where(
+								and(
+									eq(adminModerationAction.targetType, "user"),
+									eq(adminModerationAction.targetId, userId),
+									eq(
+										adminModerationAction.action,
+										`set_status:${profile.status}`
+									)
+								)
+							)
+							.orderBy(desc(adminModerationAction.createdAt))
+							.limit(1);
+
+						return {
+							status: profile.status,
+							reason: latestAction?.reason ?? null,
+							createdAt: latestAction?.createdAt ?? null,
+						};
+					})()
+				: null;
+
 		const organizationProfiles = await db
 			.select({
 				id: employerOrganizationProfile.id,
@@ -285,6 +319,7 @@ export const onboardingRouter = {
 
 		return {
 			bambiProfile: profile ?? null,
+			accountSanction,
 			community,
 			employerOrganizationProfiles: organizationProfiles,
 			// teamMember 기준 팀에 더해 owner/admin 조직 전체 팀까지 포함해야

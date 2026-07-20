@@ -91,13 +91,24 @@ export function SeekerJobDetailResponsive({
 				)}
 			>
 				<main className="min-w-0">
-					<button
-						className="mb-4 cursor-pointer rounded-lg border border-border bg-card px-3 py-2 font-bold text-sm"
-						onClick={onBack}
-						type="button"
-					>
-						목록으로
-					</button>
+					<div className="mb-4 flex items-center gap-2">
+						<button
+							className="cursor-pointer rounded-lg border border-border bg-card px-3 py-2 font-bold text-sm"
+							onClick={onBack}
+							type="button"
+						>
+							목록으로
+						</button>
+						{/* 모바일 전용 신고 진입점 — lg+에서는 우측 CTA aside의 "공고 신고"가 담당하므로 lg:hidden으로 중복 노출 방지 */}
+						<Button
+							className="lg:hidden"
+							onClick={onReport}
+							size="sm"
+							variant="secondary"
+						>
+							공고 신고
+						</Button>
+					</div>
 					<section className="rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
 						<div className="flex flex-col gap-4">
 							<div className="flex flex-wrap items-center gap-2">
