@@ -53,6 +53,11 @@ export function ModeratorPaymentPanel({ jobPostId }: { jobPostId: string }) {
 		return null;
 	}
 
+	// 일반 구인(무료)은 결제 관리가 필요 없으므로 유료 노출 공고에서만 패널을 노출한다.
+	if (post.exposureType === "standard") {
+		return null;
+	}
+
 	const isPaid = post.paymentStatus === "paid";
 	const nextStatus = isPaid ? "unpaid" : "paid";
 	const expiry = expiryLabel(post.exposureEndsAt);

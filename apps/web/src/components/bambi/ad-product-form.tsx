@@ -3,10 +3,22 @@
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { X } from "lucide-react";
 import Image from "next/image";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+	AD_PREVIEW_TEMPLATE_LABELS,
+	AD_PREVIEW_TEMPLATE_OPTIONS,
+	type AdPreviewTemplateValue,
+} from "@/lib/bambi/ad-preview-templates";
 
 export interface PriceOption {
 	amount: number;
@@ -14,9 +26,12 @@ export interface PriceOption {
 }
 
 export interface AdProductDraft {
+	autoBoostsPerDay: number;
 	benefits: string[];
+	manualBoostsPerDay: number;
 	name: string;
 	previewImageUrl: string | null;
+	previewTemplate: AdPreviewTemplateValue;
 	priceOptions: PriceOption[];
 	tagline: string;
 }
@@ -61,6 +76,14 @@ export function AdProductForm({
 	const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(
 		initialValue?.previewImageUrl ?? null
 	);
+	const [previewTemplate, setPreviewTemplate] =
+		useState<AdPreviewTemplateValue>(initialValue?.previewTemplate ?? "none");
+	const [manualBoostsPerDay, setManualBoostsPerDay] = useState(
+		initialValue?.manualBoostsPerDay ?? 0
+	);
+	const [autoBoostsPerDay, setAutoBoostsPerDay] = useState(
+		initialValue?.autoBoostsPerDay ?? 0
+	);
 
 	const setPrice = (id: number, patch: Partial<PriceOption>) =>
 		setPriceOptions((options) =>
@@ -87,18 +110,28 @@ export function AdProductForm({
 		reader.readAsDataURL(file);
 	};
 
-	const submit = () =>
+	const submit = () => {
+		const normalizedPriceOptions = priceOptions
+			.filter((option) => option.days > 0)
+			.map(({ amount, days }) => ({ amount, days }));
+		const dayValues = normalizedPriceOptions.map((option) => option.days);
+		if (new Set(dayValues).size !== dayValues.length) {
+			toast.error("같은 이용 기간이 중복됩니다. 기간별로 하나만 등록해주세요.");
+			return;
+		}
 		onSubmit({
 			name: name.trim(),
 			tagline: tagline.trim(),
 			benefits: benefits
 				.map((item) => item.value.trim())
 				.filter((value) => value.length > 0),
-			priceOptions: priceOptions
-				.filter((option) => option.days > 0)
-				.map(({ amount, days }) => ({ amount, days })),
+			priceOptions: normalizedPriceOptions,
 			previewImageUrl,
+			previewTemplate,
+			manualBoostsPerDay,
+			autoBoostsPerDay,
 		});
+	};
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -117,6 +150,31 @@ export function AdProductForm({
 					onChange={(e) => setTagline(e.target.value)}
 					value={tagline}
 				/>
+			</div>
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-preview-template">노출 영역(게시 위치)</Label>
+				<Select
+					items={AD_PREVIEW_TEMPLATE_LABELS}
+					onValueChange={(value) =>
+						setPreviewTemplate(value as AdPreviewTemplateValue)
+					}
+					value={previewTemplate}
+				>
+					<SelectTrigger className="w-full" id="p-preview-template">
+						<SelectValue placeholder="노출 영역 선택" />
+					</SelectTrigger>
+					<SelectContent>
+						{AD_PREVIEW_TEMPLATE_OPTIONS.map((option) => (
+							<SelectItem key={option.value} value={option.value}>
+								{option.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<p className="m-0 text-muted-foreground text-xs">
+					이 상품을 구매한 공고가 노출되는 seeker 페이지 위치입니다. "없음"이면
+					일반 구인과 동일하게 취급됩니다.
+				</p>
 			</div>
 
 			<div className="flex flex-col gap-2">
@@ -159,7 +217,7 @@ export function AdProductForm({
 								setPrice(option.id, { days: Number(e.target.value) || 0 })
 							}
 							type="number"
-							value={option.days}
+							value={option.days === 0 ? "" : option.days}
 						/>
 						<span className="text-muted-foreground text-sm">일</span>
 						<Input
@@ -168,7 +226,7 @@ export function AdProductForm({
 								setPrice(option.id, { amount: Number(e.target.value) || 0 })
 							}
 							type="number"
-							value={option.amount}
+							value={option.amount === 0 ? "" : option.amount}
 						/>
 						<span className="text-muted-foreground text-sm">원</span>
 						<Button
@@ -196,6 +254,36 @@ export function AdProductForm({
 				>
 					가격 옵션 추가
 				</Button>
+			</div>
+
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-manual-boosts">일일 끌어올리기 횟수</Label>
+				<Input
+					className="w-24"
+					id="p-manual-boosts"
+					onChange={(e) => setManualBoostsPerDay(Number(e.target.value) || 0)}
+					type="number"
+					value={manualBoostsPerDay === 0 ? "" : manualBoostsPerDay}
+				/>
+				<p className="m-0 text-muted-foreground text-xs">
+					이 상품을 구매한 공고가 하루에 쓸 수 있는 끌어올리기 횟수입니다.
+					비워두면 미제공(0회)입니다.
+				</p>
+			</div>
+
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-auto-boosts">일일 자동 끌어올리기 횟수</Label>
+				<Input
+					className="w-24"
+					id="p-auto-boosts"
+					onChange={(e) => setAutoBoostsPerDay(Number(e.target.value) || 0)}
+					type="number"
+					value={autoBoostsPerDay === 0 ? "" : autoBoostsPerDay}
+				/>
+				<p className="m-0 text-muted-foreground text-xs">
+					이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는
+					횟수입니다(09~21시 균등 분배). 비워두면 미제공(0회)입니다.
+				</p>
 			</div>
 
 			<div className="flex flex-col gap-1.5">

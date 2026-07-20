@@ -3,13 +3,6 @@ import { member } from "@bambi-app/db/schema/auth";
 import { jobPerformanceEvent, jobPost } from "@bambi-app/db/schema/bambi";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
-import type {
-	PromotionTier,
-	PublicJobSections,
-	PublicOrganicJobListItem,
-	PublicPromotedJobListItem,
-} from "./bambi-promotions";
-
 export const jobPerformanceEventTypes = [
 	"impression",
 	"detail_view",
@@ -18,6 +11,30 @@ export const jobPerformanceEventTypes = [
 ] as const;
 
 export type JobPerformanceEventType = (typeof jobPerformanceEventTypes)[number];
+
+// PostgreSQL foreign_key_violation.
+const FOREIGN_KEY_VIOLATION = "23503";
+
+// 성과 이벤트는 요청의 부가 기록이라, 대상 공고가 사라진 것 때문에 원 요청까지
+// 실패해서는 안 된다. jobs.delete는 공고를 hard delete하므로(연관 행은 FK
+// onDelete cascade로 함께 제거) 공고를 읽은 뒤 이벤트를 넣기 전에 삭제되면
+// job_post FK 위반이 난다. 어차피 cascade로 지워질 이벤트라 조용히 버린다.
+// FK 위반이 아닌 오류는 실제 결함이므로 그대로 던진다.
+// drizzle이 드라이버 오류를 DrizzleQueryError로 감싸므로, pg 오류 코드를 찾으려면
+// cause 체인을 끝까지 따라 내려가야 한다.
+const isForeignKeyViolation = (error: unknown): boolean => {
+	let current: unknown = error;
+
+	while (current instanceof Error) {
+		if ("code" in current && current.code === FOREIGN_KEY_VIOLATION) {
+			return true;
+		}
+
+		current = current.cause;
+	}
+
+	return false;
+};
 
 interface RecordJobPerformanceEventInput {
 	actorUserId?: null | string;
@@ -34,39 +51,56 @@ export const recordJobPerformanceEvent = async ({
 	metadata,
 	organizationId,
 }: RecordJobPerformanceEventInput) => {
-	const [event] = await db
-		.insert(jobPerformanceEvent)
-		.values({
-			actorUserId: actorUserId ?? null,
-			eventType,
-			jobPostId,
-			metadata,
-			organizationId,
-		})
-		.returning();
+	try {
+		const [event] = await db
+			.insert(jobPerformanceEvent)
+			.values({
+				actorUserId: actorUserId ?? null,
+				eventType,
+				jobPostId,
+				metadata,
+				organizationId,
+			})
+			.returning();
 
-	return event;
+		return event;
+	} catch (error) {
+		if (isForeignKeyViolation(error)) {
+			// 공고가 이미 삭제됨 — 기록할 대상이 없다.
+			return;
+		}
+
+		throw error;
+	}
 };
+
+interface ListingImpressionItem {
+	exposureType?: string;
+	id: string;
+	organizationId: string;
+}
 
 interface RecordJobListingImpressionsInput {
 	actorUserId?: null | string;
-	sections: PublicJobSections["sections"];
+	sections: {
+		organic: ListingImpressionItem[];
+		recommended: ListingImpressionItem[];
+		special: ListingImpressionItem[];
+		urgent: ListingImpressionItem[];
+	};
 }
 
 const toImpressionMetadata = ({
-	campaignId,
+	exposureType,
 	position,
-	promotionTier,
 	section,
 }: {
-	campaignId?: string;
+	exposureType?: string;
 	position: number;
-	promotionTier?: PromotionTier;
-	section: "organic" | "premium" | "recommended";
+	section: "organic" | "recommended" | "special" | "urgent";
 }): Record<string, unknown> => ({
-	...(campaignId ? { campaignId } : {}),
+	...(exposureType ? { exposureType } : {}),
 	position,
-	...(promotionTier ? { promotionTier } : {}),
 	section,
 });
 
@@ -77,17 +111,16 @@ const toPromotedImpressionValue = ({
 	section,
 }: {
 	actorUserId?: null | string;
-	item: PublicPromotedJobListItem;
+	item: ListingImpressionItem;
 	position: number;
-	section: "premium" | "recommended";
+	section: "recommended" | "special" | "urgent";
 }) => ({
 	actorUserId: actorUserId ?? null,
 	eventType: "impression" as const,
 	jobPostId: item.id,
 	metadata: toImpressionMetadata({
-		campaignId: item.promotionCampaignId,
+		exposureType: item.exposureType,
 		position,
-		promotionTier: item.promotionTier,
 		section,
 	}),
 	organizationId: item.organizationId,
@@ -99,7 +132,7 @@ const toOrganicImpressionValue = ({
 	position,
 }: {
 	actorUserId?: null | string;
-	item: PublicOrganicJobListItem;
+	item: ListingImpressionItem;
 	position: number;
 }) => ({
 	actorUserId: actorUserId ?? null,
@@ -117,12 +150,20 @@ export const recordJobListingImpressions = async ({
 	sections,
 }: RecordJobListingImpressionsInput): Promise<void> => {
 	const values = [
-		...sections.premium.map((item, position) =>
+		...sections.special.map((item, position) =>
 			toPromotedImpressionValue({
 				actorUserId,
 				item,
 				position,
-				section: "premium",
+				section: "special",
+			})
+		),
+		...sections.urgent.map((item, position) =>
+			toPromotedImpressionValue({
+				actorUserId,
+				item,
+				position,
+				section: "urgent",
 			})
 		),
 		...sections.recommended.map((item, position) =>
@@ -139,6 +180,75 @@ export const recordJobListingImpressions = async ({
 				item,
 				position,
 			})
+		),
+	];
+
+	if (values.length === 0) {
+		return;
+	}
+
+	try {
+		await db.insert(jobPerformanceEvent).values(values);
+	} catch (error) {
+		if (!isForeignKeyViolation(error)) {
+			throw error;
+		}
+
+		// 목록 조회와 기록 사이에 공고 하나라도 삭제되면 배치 insert 전체가 막힌다.
+		// 노출 기록보다 목록 응답이 우선이라 이번 요청의 기록만 포기한다.
+	}
+};
+
+interface AdBannerImpressionItem {
+	exposureType: string;
+	id: string;
+	organizationId: string;
+}
+
+interface RecordAdBannerImpressionsInput {
+	actorUserId?: null | string;
+	groups: {
+		leftBanner: AdBannerImpressionItem[];
+		premiumBanner: AdBannerImpressionItem[];
+		rightBanner: AdBannerImpressionItem[];
+	};
+}
+
+// 배너 상품 노출은 그룹(위치)별로 impression을 기록한다. metadata.section 값은 해당 배너의
+// exposureType 문자열을 그대로 써서(premium-banner/left-banner/right-banner) 위치별 집계와 정합한다.
+const toAdBannerImpressionValue = ({
+	actorUserId,
+	item,
+	position,
+}: {
+	actorUserId?: null | string;
+	item: AdBannerImpressionItem;
+	position: number;
+}) => ({
+	actorUserId: actorUserId ?? null,
+	eventType: "impression" as const,
+	jobPostId: item.id,
+	metadata: {
+		exposureType: item.exposureType,
+		position,
+		section: item.exposureType,
+	},
+	organizationId: item.organizationId,
+});
+
+export const recordAdBannerImpressions = async ({
+	actorUserId,
+	groups,
+}: RecordAdBannerImpressionsInput): Promise<void> => {
+	const values = [
+		...groups.premiumBanner.map((item, position) =>
+			toAdBannerImpressionValue({ actorUserId, item, position })
+		),
+		...groups.leftBanner.map((item, position) =>
+			toAdBannerImpressionValue({ actorUserId, item, position })
+		),
+		...groups.rightBanner.map((item, position) =>
+			toAdBannerImpressionValue({ actorUserId, item, position })
 		),
 	];
 
@@ -223,15 +333,20 @@ export interface JobPerformanceMetrics {
 }
 
 export interface JobPerformanceSectionMetrics {
+	leftBannerImpressions: number;
 	organicImpressions: number;
-	premiumImpressions: number;
+	premiumBannerImpressions: number;
 	recommendedImpressions: number;
+	rightBannerImpressions: number;
+	specialImpressions: number;
+	urgentImpressions: number;
 }
 
 export interface EmployerJobPerformanceSummary {
 	jobPostId: string;
 	metrics: JobPerformanceMetrics;
 	organizationId: string;
+	paymentStatus: string;
 	sectionMetrics: JobPerformanceSectionMetrics;
 	status: string;
 	title: string;
@@ -245,9 +360,13 @@ const emptyMetrics = (): JobPerformanceMetrics => ({
 });
 
 const emptySectionMetrics = (): JobPerformanceSectionMetrics => ({
+	leftBannerImpressions: 0,
 	organicImpressions: 0,
-	premiumImpressions: 0,
+	premiumBannerImpressions: 0,
 	recommendedImpressions: 0,
+	rightBannerImpressions: 0,
+	specialImpressions: 0,
+	urgentImpressions: 0,
 });
 
 const getEventSection = (
@@ -285,14 +404,28 @@ const incrementSectionMetric = (
 	metadata: Record<string, unknown> | null
 ) => {
 	switch (getEventSection(metadata)) {
+		// 하위 호환: 구 캠페인 기반 "premium" 섹션은 광고상품 체계의 스페셜 버킷으로 흡수한다.
 		case "premium":
-			sectionMetrics.premiumImpressions += 1;
+		case "special":
+			sectionMetrics.specialImpressions += 1;
+			break;
+		case "urgent":
+			sectionMetrics.urgentImpressions += 1;
 			break;
 		case "recommended":
 			sectionMetrics.recommendedImpressions += 1;
 			break;
 		case "organic":
 			sectionMetrics.organicImpressions += 1;
+			break;
+		case "premium-banner":
+			sectionMetrics.premiumBannerImpressions += 1;
+			break;
+		case "left-banner":
+			sectionMetrics.leftBannerImpressions += 1;
+			break;
+		case "right-banner":
+			sectionMetrics.rightBannerImpressions += 1;
 			break;
 		default:
 			break;
@@ -330,6 +463,7 @@ export const getEmployerJobPerformanceSummary = async (
 		.select({
 			jobPostId: jobPost.id,
 			organizationId: jobPost.organizationId,
+			paymentStatus: jobPost.paymentStatus,
 			status: jobPost.status,
 			title: jobPost.title,
 			updatedAt: jobPost.updatedAt,

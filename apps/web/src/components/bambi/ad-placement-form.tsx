@@ -66,6 +66,7 @@ export function AdPlacementForm({
 			<div className="flex flex-col gap-1.5">
 				<Label>유형</Label>
 				<Select
+					items={{ listing: "리스팅 노출", banner: "배너 광고" }}
 					onValueChange={(v) => setKind(v as "banner" | "listing")}
 					value={kind}
 				>

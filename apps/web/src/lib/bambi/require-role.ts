@@ -25,10 +25,12 @@ async function getRouting(): Promise<{
 	};
 }
 
-// 루트("/") 진입 시 역할별 홈으로 보낸다.
+// 루트("/") 진입 시 역할과 무관하게 구직자 홈으로 보낸다. 구인자·운영자는
+// 헤더/탭바의 역할 전환 버튼으로 각자 영역(/employer·/moderator)에 진입한다.
+// getRouting()으로 세션·프로필은 여전히 검증한다(없으면 /welcome).
 export async function redirectToRoleHome(): Promise<void> {
-	const routing = await getRouting();
-	redirect(homePathForRole(routing.role));
+	await getRouting();
+	redirect("/seeker");
 }
 
 // 운영자 영역: 관리자가 아니면 각자 홈으로. 관리자면 통과.

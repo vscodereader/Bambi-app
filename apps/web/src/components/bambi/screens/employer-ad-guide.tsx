@@ -22,11 +22,19 @@ import { orpc } from "@/utils/orpc";
 // 광고 상품 신청 = 공고 등록 화면으로 이동(밤비엔 별도 광고 결제 흐름이 없음).
 const APPLY_HREF = "/employer/new";
 
+// 광고 등록 안내 카드의 경고 문구(금칙어·불량 업소 시 광고 삭제). 포매터가
+// JSX 텍스트를 재줄바꿈해도 문자열이 깨지지 않게 상수로 고정한다.
+const AD_POLICY_WARNING =
+	"광고 상품에 적용할 공고가 금칙어 또는 불량 업소의 경우 수정 중단 및 광고가 삭제됩니다.";
+
 // 레퍼런스형 표: 광고 위치 · 서비스 내용 · 비용 및 기간 · 신청.
 // 상품 1개 = 표의 한 행. 데스크톱은 4열 그리드, 모바일은 세로 스택 카드.
-// px 대신 fr 비율로 열 너비를 잡아 반응형·토큰 규칙을 지킨다.
+// 헤더 행과 각 상품 행은 서로 독립된 grid 컨테이너다. 4개 열을 모두
+// minmax(0,_fr) 비율 트랙으로 고정해, 내용 크기와 무관하게 어느 grid에서도
+// 동일한 열 폭이 계산되도록 한다(auto 트랙은 grid마다 내용 폭이 달라 헤더와
+// 값이 어긋나므로 사용하지 않는다). px 대신 fr 비율로 반응형·토큰 규칙을 지킨다.
 const PRODUCT_ROW_GRID =
-	"md:grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto_auto] md:items-start md:gap-6";
+	"md:grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.9fr)] md:items-start md:gap-6";
 
 function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
 	return (
@@ -103,6 +111,16 @@ function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
 										{product.tagline}
 									</span>
 								) : null}
+								{product.manualBoostsPerDay > 0 ? (
+									<span className="font-medium text-coral-500 text-sm">
+										일일 끌어올리기 {product.manualBoostsPerDay}회 포함
+									</span>
+								) : null}
+								{product.autoBoostsPerDay > 0 ? (
+									<span className="font-medium text-coral-500 text-sm">
+										일일 자동 끌어올리기 {product.autoBoostsPerDay}회 포함
+									</span>
+								) : null}
 								{product.benefits.length > 0 ? (
 									<ul className="m-0 flex flex-col gap-1.5 p-0">
 										{product.benefits.map((benefit) => (
@@ -171,22 +189,27 @@ export function EmployerAdGuideScreen() {
 			title="광고 상품 안내"
 		>
 			<Card>
-				<CardContent className="flex flex-wrap items-center justify-between gap-3">
+				<CardContent className="flex flex-col gap-3">
 					<div className="flex items-center gap-2">
 						<span className="inline-flex size-5 text-primary">
 							<Megaphone size={20} />
 						</span>
-						<span className="font-bold">광고 등록 문의</span>
+						<span className="font-bold">광고 등록 안내</span>
 					</div>
-					<Link
-						className={cn(
-							buttonVariants({ variant: "default" }),
-							"no-underline"
-						)}
-						href={APPLY_HREF}
-					>
-						공고 등록하기
-					</Link>
+					<p className="m-0 text-muted-foreground text-sm">
+						저희 서비스는 무통장입금만 가능하며 입금 확인 후에 승인이
+						완료됩니다.
+					</p>
+					<div className="flex flex-col gap-1.5">
+						<span className="font-medium text-sm">무통장 입금시</span>
+						<ul className="m-0 list-disc pl-5 text-muted-foreground text-sm">
+							<li>업무 시간일 경우 30분 이내 승인</li>
+							<li>업무 시간이외 일 경우 다음 영업일에 승인</li>
+						</ul>
+					</div>
+					<p className="m-0 font-medium text-destructive text-sm">
+						{AD_POLICY_WARNING}
+					</p>
 				</CardContent>
 			</Card>
 

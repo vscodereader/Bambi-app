@@ -13,25 +13,40 @@ import {
 	chatAttachment,
 	chatMessage,
 	chatRoom,
+	communityComment,
+	communityPost,
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobPost,
 	jobPostMedia,
 	report,
 	review,
+	supportInquiry,
+	supportInquiryMessage,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	inArray,
+	isNotNull,
+	sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import z from "zod";
 
-import { protectedProcedure } from "../../index";
+import { adminProcedure, protectedProcedure } from "../../index";
+import { syncAdvertiserFlagForOrganization } from "../../services/bambi-advertiser";
 import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
+import { extractTiptapText } from "../../services/bambi-tiptap-text";
 
 export const targetTypeSchema = z.enum([
 	"job_post",
@@ -39,6 +54,8 @@ export const targetTypeSchema = z.enum([
 	"chat_message",
 	"review",
 	"user",
+	"community_post",
+	"community_comment",
 ]);
 
 export const reportReasonSchema = z.enum([
@@ -86,7 +103,8 @@ const listJobPostsInput = z.object({
 
 const listUsersInput = z.object({
 	status: accountStatusSchema.optional(),
-	limit: z.number().int().min(1).max(100).default(50),
+	// 운영자 콘솔은 전체 계정 관리가 목적이라 상한을 넉넉히 둔다(기본도 전체 조회).
+	limit: z.number().int().min(1).max(1000).default(1000),
 });
 
 const setReportStatusInput = z.object({
@@ -159,16 +177,63 @@ const bulkSetUserStatusInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
+const contentStatusSchema = z.enum(["published", "hidden", "deleted"]);
+
+const setInquiryStatusByAdminInput = z.object({
+	inquiryId: z.string().uuid(),
+	reason: z.string().trim().min(2).max(500),
+	status: contentStatusSchema,
+});
+
+const setInquiryMessageStatusByAdminInput = z.object({
+	messageId: z.string().uuid(),
+	reason: z.string().trim().min(2).max(500),
+	status: contentStatusSchema,
+});
+
+// 통합 목록에 노출하는 유형. support_inquiry_message는 문의 맥락 없이 한 줄만 보면 판단이
+// 불가능하므로 넣지 않는다 — 스레드 메시지 조치는 문의 상세 화면에서 한다.
+const moderatableTargetTypeSchema = z.enum([
+	"community_post",
+	"community_comment",
+	"support_inquiry",
+]);
+
+const listModeratableContentInput = z.object({
+	page: z.number().int().min(1).default(1),
+	status: contentStatusSchema.optional(),
+	targetType: moderatableTargetTypeSchema,
+});
+
+const getModeratableContentDetailInput = z.object({
+	id: z.string().uuid(),
+	targetType: moderatableTargetTypeSchema,
+});
+
+const MODERATABLE_PAGE_SIZE = 20;
+const EXCERPT_LENGTH = 120;
+
+const bulkSetJobPostPaymentInput = z.object({
+	jobPostIds: z.array(z.string().uuid()),
+	paymentStatus: z.enum(["unpaid", "paid"]),
+});
+
 type ReportTargetType = z.infer<typeof targetTypeSchema>;
 type ReportRow = typeof report.$inferSelect;
 type JobPostModerationStatus = z.infer<typeof jobPostModerationStatusSchema>;
 type JobPostRow = typeof jobPost.$inferSelect;
 
-const uuidTargetTypes = new Set<ReportTargetType>([
+// 신고 가능 대상(targetTypeSchema)보다 DB enum이 넓으므로 행 타입을 기준으로 삼는다 —
+// 신고 대상이 아닌 유형도 targetId가 uuid인지 판정해야 하기 때문.
+const uuidTargetTypes = new Set<ReportRow["targetType"]>([
 	"job_post",
 	"chat_room",
 	"chat_message",
 	"review",
+	"community_post",
+	"community_comment",
+	"support_inquiry",
+	"support_inquiry_message",
 ]);
 
 const uuidTargetIdSchema = z.string().uuid();
@@ -223,14 +288,111 @@ const jobPostHasCoverImageSql = sql<boolean>`exists(
 		and ${jobPostMedia.usage} = 'cover'
 )`;
 
-const getReportTargetContext = async (reportRow: ReportRow) => {
-	if (reportRow.targetType !== "chat_message") {
+const COMMUNITY_BODY_PREVIEW_MAX = 300;
+
+// 글 본문(Tiptap JSON)에서 평문 발췌를 만든다. 평문 추출 규칙은 금칙어 검사와 공유한다
+// (services/bambi-tiptap-text) — 두 곳에 같은 파서를 두면 규칙이 갈린다.
+const toCommunityBodyPreview = (body: string): string =>
+	extractTiptapText(body).slice(0, COMMUNITY_BODY_PREVIEW_MAX);
+
+// community_post 신고 컨텍스트 — 운영자는 hidden/deleted 상태여도 원문 맥락을 봐야 하므로
+// 상태와 무관하게 조회하고 현재 status를 그대로 노출한다.
+const getCommunityPostTargetContext = async (targetId: string) => {
+	const [post] = await db
+		.select({
+			authorDisplayName: communityPost.authorDisplayName,
+			board: communityPost.board,
+			body: communityPost.body,
+			createdAt: communityPost.createdAt,
+			id: communityPost.id,
+			status: communityPost.status,
+			title: communityPost.title,
+		})
+		.from(communityPost)
+		.where(eq(communityPost.id, targetId))
+		.limit(1);
+
+	if (!post) {
 		return null;
 	}
 
-	const message = await getChatMessageTargetContext(reportRow.targetId);
+	return {
+		authorName: post.authorDisplayName,
+		board: post.board,
+		bodyPreview: toCommunityBodyPreview(post.body),
+		createdAt: post.createdAt,
+		id: post.id,
+		status: post.status,
+		title: post.title,
+	};
+};
 
-	return message ? { chatMessage: message } : null;
+// community_comment 신고 컨텍스트 — 작성자 표시명은 listComments와 동일하게 bambi_profile
+// 표시명을 쓰고, 제목·게시판은 부모 글 조인으로 채운다(부모 글이 삭제 상태여도 조인 유지).
+const getCommunityCommentTargetContext = async (targetId: string) => {
+	const [comment] = await db
+		.select({
+			authorName: bambiProfile.displayName,
+			body: communityComment.body,
+			createdAt: communityComment.createdAt,
+			id: communityComment.id,
+			postBoard: communityPost.board,
+			postId: communityComment.postId,
+			postTitle: communityPost.title,
+			status: communityComment.status,
+		})
+		.from(communityComment)
+		.innerJoin(communityPost, eq(communityPost.id, communityComment.postId))
+		.leftJoin(
+			bambiProfile,
+			eq(bambiProfile.userId, communityComment.authorUserId)
+		)
+		.where(eq(communityComment.id, targetId))
+		.limit(1);
+
+	if (!comment) {
+		return null;
+	}
+
+	return {
+		authorName: comment.authorName,
+		bodyPreview: comment.body.slice(0, COMMUNITY_BODY_PREVIEW_MAX),
+		createdAt: comment.createdAt,
+		id: comment.id,
+		postBoard: comment.postBoard,
+		postId: comment.postId,
+		postTitle: comment.postTitle,
+		status: comment.status,
+	};
+};
+
+const getReportTargetContext = async (reportRow: ReportRow) => {
+	// uuid가 아닌 targetId는 대상 조회 자체가 불가하므로 컨텍스트 없이 넘어간다(신고 행은 유지).
+	if (
+		uuidTargetTypes.has(reportRow.targetType) &&
+		!uuidTargetIdSchema.safeParse(reportRow.targetId).success
+	) {
+		return null;
+	}
+
+	switch (reportRow.targetType) {
+		case "chat_message": {
+			const message = await getChatMessageTargetContext(reportRow.targetId);
+			return message ? { chatMessage: message } : null;
+		}
+		case "community_post": {
+			const post = await getCommunityPostTargetContext(reportRow.targetId);
+			return post ? { communityPost: post } : null;
+		}
+		case "community_comment": {
+			const comment = await getCommunityCommentTargetContext(
+				reportRow.targetId
+			);
+			return comment ? { communityComment: comment } : null;
+		}
+		default:
+			return null;
+	}
 };
 
 const withReportTargetContexts = async (reportRows: ReportRow[]) =>
@@ -315,6 +477,18 @@ const assertReportTargetExists = async (
 					.select({ id: bambiProfile.userId })
 					.from(bambiProfile)
 					.where(eq(bambiProfile.userId, targetId))
+					.limit(1);
+			case "community_post":
+				return await db
+					.select({ id: communityPost.id })
+					.from(communityPost)
+					.where(eq(communityPost.id, targetId))
+					.limit(1);
+			case "community_comment":
+				return await db
+					.select({ id: communityComment.id })
+					.from(communityComment)
+					.where(eq(communityComment.id, targetId))
 					.limit(1);
 			default:
 				return [];
@@ -573,21 +747,40 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 
+			// 계정 목록의 기준 테이블은 user다. bambi_profile은 좌측 조인해 부가 정보로만
+			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다. name은 계정
+			// 이름(user.name), displayName은 프로필 표시 이름(없으면 null)으로 각각 반환한다.
+			// 누적 신고/경고 횟수는 서브쿼리로 실제 집계한다.
+			const reportsCountSql = sql<number>`(
+				select count(*)::int from ${report}
+				where ${report.targetType} = 'user' and ${report.targetId} = ${user.id}
+			)`;
+			const warningsCountSql = sql<number>`(
+				select count(*)::int from ${adminModerationAction}
+				where ${adminModerationAction.targetType} = 'user'
+					and ${adminModerationAction.targetId} = ${user.id}
+					and ${adminModerationAction.action} = 'set_status:warned'
+			)`;
 			const query = db
 				.select({
-					userId: bambiProfile.userId,
+					userId: user.id,
+					name: user.name,
 					displayName: bambiProfile.displayName,
 					email: user.email,
-					role: bambiProfile.role,
-					status: bambiProfile.status,
-					isPhoneVerified: bambiProfile.isPhoneVerified,
+					role: sql<string>`coalesce(${bambiProfile.role}, 'job_seeker')`,
+					status: sql<
+						"active" | "suspended" | "warned"
+					>`coalesce(${bambiProfile.status}, 'active')`,
+					isPhoneVerified: sql<boolean>`coalesce(${bambiProfile.isPhoneVerified}, false)`,
 					phoneNumber: bambiProfile.phoneNumber,
-					createdAt: bambiProfile.createdAt,
-					updatedAt: bambiProfile.updatedAt,
+					reportsCount: reportsCountSql,
+					warningsCount: warningsCountSql,
+					createdAt: user.createdAt,
+					updatedAt: user.updatedAt,
 				})
-				.from(bambiProfile)
-				.innerJoin(user, eq(bambiProfile.userId, user.id))
-				.orderBy(desc(bambiProfile.updatedAt))
+				.from(user)
+				.leftJoin(bambiProfile, eq(bambiProfile.userId, user.id))
+				.orderBy(desc(user.createdAt))
 				.limit(input.limit);
 
 			if (input.status) {
@@ -711,7 +904,10 @@ export const moderationRouter = {
 			await requireAdminProfile(context.session);
 
 			const [existing] = await db
-				.select({ exposureDurationDays: jobPost.exposureDurationDays })
+				.select({
+					exposureDurationDays: jobPost.exposureDurationDays,
+					organizationId: jobPost.organizationId,
+				})
 				.from(jobPost)
 				.where(eq(jobPost.id, input.jobPostId))
 				.limit(1);
@@ -738,6 +934,13 @@ export const moderationRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
+			// 결제 상태 전환은 공개 게이트(published AND paid)를 넘나들 수 있으므로
+			// 해당 조직 owner/admin의 수다방 광고 자격 캐시를 재동기화한다.
+			await syncAdvertiserFlagForOrganization({
+				now: new Date(),
+				organizationId: existing.organizationId,
+			});
+
 			return updated;
 		}),
 
@@ -750,6 +953,9 @@ export const moderationRouter = {
 
 			const conditions = [
 				inArray(jobPost.status, ["pending_review", "published"]),
+				// 유료 여부의 단일 원천은 광고 상품 연결(adProductId)이다. exposureType은
+				// previewTemplate 'none' 상품에서 standard가 되므로 결제 판별에 쓰면 누락된다.
+				isNotNull(jobPost.adProductId),
 			];
 
 			if (input.onlyUnpaid) {
@@ -824,6 +1030,67 @@ export const moderationRouter = {
 						targetIds: input.jobPostIds,
 					})
 			);
+		}),
+
+	// 결제관리 목록에서 선택한 공고들의 결제 상태를 일괄 전환한다.
+	// 단건 setJobPostPayment와 동일하게 paid 전환 시 노출 만료일(exposureEndsAt)을 계산한다.
+	bulkSetJobPostPayment: protectedProcedure
+		.input(bulkSetJobPostPaymentInput)
+		.handler(async ({ context, input }) => {
+			await requireAdminProfile(context.session);
+
+			// 갱신에 성공한 공고들의 조직 유니크 집합 — 트랜잭션 커밋 후 광고 자격 캐시 동기화용.
+			const affectedOrganizationIds = new Set<string>();
+
+			const result = await db.transaction(
+				async (tx) =>
+					await executeBulkModeration({
+						processTarget: async (jobPostId) => {
+							const [existing] = await tx
+								.select({
+									exposureDurationDays: jobPost.exposureDurationDays,
+									organizationId: jobPost.organizationId,
+								})
+								.from(jobPost)
+								.where(eq(jobPost.id, jobPostId))
+								.limit(1);
+
+							if (!existing) {
+								throw new ORPCError("NOT_FOUND", {
+									message: "Job post was not found.",
+								});
+							}
+
+							const exposureEndsAt =
+								input.paymentStatus === "paid" &&
+								existing.exposureDurationDays !== null
+									? new Date(
+											Date.now() + existing.exposureDurationDays * MS_PER_DAY
+										)
+									: null;
+
+							await tx
+								.update(jobPost)
+								.set({
+									exposureEndsAt,
+									paymentStatus: input.paymentStatus,
+								})
+								.where(eq(jobPost.id, jobPostId));
+
+							affectedOrganizationIds.add(existing.organizationId);
+						},
+						targetIds: input.jobPostIds,
+					})
+			);
+
+			// 결제 전환은 공개 게이트를 넘나들 수 있으므로 갱신된 조직들의 수다방 광고
+			// 자격 캐시를 재동기화한다. 트랜잭션 커밋 후 실행한다.
+			const now = new Date();
+			for (const organizationId of affectedOrganizationIds) {
+				await syncAdvertiserFlagForOrganization({ now, organizationId });
+			}
+
+			return result;
 		}),
 
 	setUserStatus: protectedProcedure
@@ -1051,5 +1318,316 @@ export const moderationRouter = {
 
 				return updated;
 			});
+		}),
+
+	setInquiryStatusByAdmin: adminProcedure
+		.input(setInquiryStatusByAdminInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireAdminProfile(context.session);
+
+			await db.transaction(async (tx) => {
+				const [inquiry] = await tx
+					.select({ id: supportInquiry.id })
+					.from(supportInquiry)
+					.where(eq(supportInquiry.id, input.inquiryId))
+					.limit(1);
+
+				if (!inquiry) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "문의를 찾을 수 없습니다.",
+					});
+				}
+
+				await tx
+					.update(supportInquiry)
+					.set({ status: input.status, updatedAt: new Date() })
+					.where(eq(supportInquiry.id, input.inquiryId));
+
+				await tx.insert(adminModerationAction).values({
+					adminUserId: profile.userId,
+					targetType: "support_inquiry",
+					targetId: input.inquiryId,
+					action: `set_status:${input.status}`,
+					reason: input.reason,
+				});
+			});
+
+			return { ok: true };
+		}),
+
+	setInquiryMessageStatusByAdmin: adminProcedure
+		.input(setInquiryMessageStatusByAdminInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireAdminProfile(context.session);
+
+			await db.transaction(async (tx) => {
+				const [message] = await tx
+					.select({ id: supportInquiryMessage.id })
+					.from(supportInquiryMessage)
+					.where(eq(supportInquiryMessage.id, input.messageId))
+					.limit(1);
+
+				if (!message) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "메시지를 찾을 수 없습니다.",
+					});
+				}
+
+				await tx
+					.update(supportInquiryMessage)
+					.set({ status: input.status })
+					.where(eq(supportInquiryMessage.id, input.messageId));
+
+				await tx.insert(adminModerationAction).values({
+					adminUserId: profile.userId,
+					targetType: "support_inquiry_message",
+					targetId: input.messageId,
+					action: `set_status:${input.status}`,
+					reason: input.reason,
+				});
+			});
+
+			return { ok: true };
+		}),
+
+	// 유형이 달라도 서버에서 공통 형태로 정규화해 반환한다. UI가 유형별 분기를 하지 않아도 되고,
+	// 대상 유형이 늘어도 화면을 고치지 않는다.
+	listModeratableContent: adminProcedure
+		.input(listModeratableContentInput)
+		.handler(async ({ input }) => {
+			const offset = (input.page - 1) * MODERATABLE_PAGE_SIZE;
+			const excerpt = (text: string) => text.slice(0, EXCERPT_LENGTH);
+
+			if (input.targetType === "community_post") {
+				const where = input.status
+					? eq(communityPost.status, input.status)
+					: undefined;
+
+				const [totalRow] = await db
+					.select({ value: count() })
+					.from(communityPost)
+					.where(where);
+
+				const rows = await db
+					.select()
+					.from(communityPost)
+					.where(where)
+					.orderBy(desc(communityPost.createdAt))
+					.limit(MODERATABLE_PAGE_SIZE)
+					.offset(offset);
+
+				return {
+					items: rows.map((row) => ({
+						id: row.id,
+						targetType: "community_post" as const,
+						title: row.title,
+						// 본문은 Tiptap JSON이라 평문을 뽑아 발췌한다(기존 신고 컨텍스트와 동일 규칙).
+						excerpt: excerpt(toCommunityBodyPreview(row.body)),
+						// 커뮤니티는 익명 게시판이라 글별 표시명을 쓴다(실명 표시명 노출 금지).
+						authorName: row.authorDisplayName,
+						authorUserId: row.authorUserId,
+						status: row.status,
+						createdAt: row.createdAt,
+					})),
+					page: input.page,
+					pageSize: MODERATABLE_PAGE_SIZE,
+					totalCount: totalRow?.value ?? 0,
+				};
+			}
+
+			if (input.targetType === "community_comment") {
+				const where = input.status
+					? eq(communityComment.status, input.status)
+					: undefined;
+
+				const [totalRow] = await db
+					.select({ value: count() })
+					.from(communityComment)
+					.where(where);
+
+				const rows = await db
+					.select({
+						id: communityComment.id,
+						body: communityComment.body,
+						status: communityComment.status,
+						createdAt: communityComment.createdAt,
+						authorUserId: communityComment.authorUserId,
+						postTitle: communityPost.title,
+						postAuthorName: communityPost.authorDisplayName,
+					})
+					.from(communityComment)
+					.innerJoin(
+						communityPost,
+						eq(communityComment.postId, communityPost.id)
+					)
+					.where(where)
+					.orderBy(desc(communityComment.createdAt))
+					.limit(MODERATABLE_PAGE_SIZE)
+					.offset(offset);
+
+				return {
+					items: rows.map((row) => ({
+						id: row.id,
+						targetType: "community_comment" as const,
+						// 댓글은 제목이 없으므로 원글 제목을 맥락으로 보여준다.
+						title: row.postTitle,
+						excerpt: excerpt(row.body),
+						authorName: row.postAuthorName,
+						authorUserId: row.authorUserId,
+						status: row.status,
+						createdAt: row.createdAt,
+					})),
+					page: input.page,
+					pageSize: MODERATABLE_PAGE_SIZE,
+					totalCount: totalRow?.value ?? 0,
+				};
+			}
+
+			const where = input.status
+				? eq(supportInquiry.status, input.status)
+				: undefined;
+
+			const [totalRow] = await db
+				.select({ value: count() })
+				.from(supportInquiry)
+				.where(where);
+
+			const rows = await db
+				.select({
+					id: supportInquiry.id,
+					title: supportInquiry.title,
+					body: supportInquiry.body,
+					status: supportInquiry.status,
+					createdAt: supportInquiry.createdAt,
+					authorUserId: supportInquiry.authorUserId,
+					// 고객센터는 익명 표시명이 없으므로 프로필 표시명을 조인한다.
+					authorName: bambiProfile.displayName,
+				})
+				.from(supportInquiry)
+				.leftJoin(
+					bambiProfile,
+					eq(supportInquiry.authorUserId, bambiProfile.userId)
+				)
+				.where(where)
+				.orderBy(desc(supportInquiry.createdAt))
+				.limit(MODERATABLE_PAGE_SIZE)
+				.offset(offset);
+
+			return {
+				items: rows.map((row) => ({
+					id: row.id,
+					targetType: "support_inquiry" as const,
+					title: row.title,
+					excerpt: excerpt(row.body),
+					authorName: row.authorName ?? "(표시명 없음)",
+					authorUserId: row.authorUserId,
+					status: row.status,
+					createdAt: row.createdAt,
+				})),
+				page: input.page,
+				pageSize: MODERATABLE_PAGE_SIZE,
+				totalCount: totalRow?.value ?? 0,
+			};
+		}),
+
+	// 목록은 120자 발췌만 주므로 행 펼침용 전체 본문을 따로 내려준다. 목록과 같은 철학으로
+	// 유형별 차이를 서버에서 흡수해 공통 형태(board/category는 해당 없으면 null)로 정규화한다 —
+	// 화면이 유니온 좁히기 없이 한 형태만 렌더한다.
+	getModeratableContentDetail: adminProcedure
+		.input(getModeratableContentDetailInput)
+		.handler(async ({ input }) => {
+			if (input.targetType === "community_post") {
+				const [row] = await db
+					.select({
+						authorDisplayName: communityPost.authorDisplayName,
+						board: communityPost.board,
+						body: communityPost.body,
+						createdAt: communityPost.createdAt,
+						status: communityPost.status,
+						title: communityPost.title,
+					})
+					.from(communityPost)
+					.where(eq(communityPost.id, input.id))
+					.limit(1);
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				return {
+					title: row.title,
+					// 본문은 Tiptap JSON이라 평문화한다 — 원문을 그대로 내보내면 화면에 JSON이 보인다.
+					body: extractTiptapText(row.body),
+					authorName: row.authorDisplayName,
+					createdAt: row.createdAt,
+					status: row.status,
+					board: row.board as string | null,
+					category: null as string | null,
+				};
+			}
+
+			if (input.targetType === "community_comment") {
+				const [row] = await db
+					.select({
+						body: communityComment.body,
+						createdAt: communityComment.createdAt,
+						postAuthorName: communityPost.authorDisplayName,
+						postTitle: communityPost.title,
+						status: communityComment.status,
+					})
+					.from(communityComment)
+					.innerJoin(
+						communityPost,
+						eq(communityComment.postId, communityPost.id)
+					)
+					.where(eq(communityComment.id, input.id))
+					.limit(1);
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				return {
+					// 댓글은 제목이 없으므로 원글 제목·작성자를 맥락으로 보여준다(목록과 동일).
+					title: row.postTitle,
+					body: row.body,
+					authorName: row.postAuthorName,
+					createdAt: row.createdAt,
+					status: row.status,
+					board: null as string | null,
+					category: null as string | null,
+				};
+			}
+
+			const [row] = await db
+				.select({
+					authorName: bambiProfile.displayName,
+					body: supportInquiry.body,
+					category: supportInquiry.category,
+					createdAt: supportInquiry.createdAt,
+					status: supportInquiry.status,
+					title: supportInquiry.title,
+				})
+				.from(supportInquiry)
+				.leftJoin(
+					bambiProfile,
+					eq(supportInquiry.authorUserId, bambiProfile.userId)
+				)
+				.where(eq(supportInquiry.id, input.id))
+				.limit(1);
+
+			if (!row) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			return {
+				title: row.title,
+				body: row.body,
+				authorName: row.authorName ?? "(표시명 없음)",
+				createdAt: row.createdAt,
+				status: row.status,
+				board: null as string | null,
+				category: row.category as string | null,
+			};
 		}),
 };

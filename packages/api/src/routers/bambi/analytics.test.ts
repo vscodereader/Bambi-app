@@ -137,7 +137,38 @@ const createAnalyticsFixture = async (): Promise<AnalyticsFixture> => {
 			eventType: "impression",
 			jobPostId: primaryJobPostId,
 			metadata: {
+				exposureType: "special",
 				position: 0,
+				section: "special",
+			},
+			organizationId,
+		},
+		{
+			eventType: "impression",
+			jobPostId: primaryJobPostId,
+			metadata: {
+				exposureType: "urgent",
+				position: 0,
+				section: "urgent",
+			},
+			organizationId,
+		},
+		{
+			eventType: "impression",
+			jobPostId: primaryJobPostId,
+			metadata: {
+				exposureType: "recommended",
+				position: 0,
+				section: "recommended",
+			},
+			organizationId,
+		},
+		{
+			// 하위 호환: 구 캠페인 기반으로 기록된 legacy "premium" 섹션(스페셜로 흡수)
+			eventType: "impression",
+			jobPostId: primaryJobPostId,
+			metadata: {
+				position: 1,
 				promotionTier: "premium",
 				section: "premium",
 			},
@@ -149,6 +180,36 @@ const createAnalyticsFixture = async (): Promise<AnalyticsFixture> => {
 			metadata: {
 				position: 0,
 				section: "organic",
+			},
+			organizationId,
+		},
+		{
+			eventType: "impression",
+			jobPostId: primaryJobPostId,
+			metadata: {
+				exposureType: "premium-banner",
+				position: 0,
+				section: "premium-banner",
+			},
+			organizationId,
+		},
+		{
+			eventType: "impression",
+			jobPostId: primaryJobPostId,
+			metadata: {
+				exposureType: "left-banner",
+				position: 0,
+				section: "left-banner",
+			},
+			organizationId,
+		},
+		{
+			eventType: "impression",
+			jobPostId: primaryJobPostId,
+			metadata: {
+				exposureType: "right-banner",
+				position: 0,
+				section: "right-banner",
 			},
 			organizationId,
 		},
@@ -245,13 +306,18 @@ describe("bambi analytics router", () => {
 						chatStarts: 1,
 						contactReveals: 1,
 						detailViews: 1,
-						impressions: 2,
+						impressions: 8,
 					},
 					organizationId: fixture.organizationId,
 					sectionMetrics: {
+						leftBannerImpressions: 1,
 						organicImpressions: 1,
-						premiumImpressions: 1,
-						recommendedImpressions: 0,
+						premiumBannerImpressions: 1,
+						recommendedImpressions: 1,
+						rightBannerImpressions: 1,
+						// 스페셜(1) + legacy premium(1) 흡수 = 2
+						specialImpressions: 2,
+						urgentImpressions: 1,
 					},
 					title: "분석 테스트 공고",
 				}),

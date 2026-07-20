@@ -2,18 +2,28 @@ import type { Route } from "next";
 import type { ReactNode } from "react";
 import { EmployerApprovalProvider } from "@/components/bambi/employer-approval-context";
 import { EmployerNav } from "@/components/bambi/persona-nav";
-import { ResponsiveAppShell } from "@/components/bambi/responsive-shell";
+import {
+	type NavEntry,
+	ResponsiveAppShell,
+} from "@/components/bambi/responsive-shell";
 import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import { resolveEmployerAccess } from "@/lib/bambi/require-role";
 
-const EMPLOYER_NAV_ITEMS = [
+const EMPLOYER_NAV_ITEMS: NavEntry[] = [
 	{ href: "/employer", label: "내 공고" },
 	{ href: "/employer/new", label: "공고 등록" },
 	{ href: "/employer/ad-guide" as Route, label: "광고 안내" },
-	{ href: "/employer/settings" as Route, label: "조직 설정" },
-	{ href: "/employer/me", label: "업체 정보" },
-	{ href: "/seeker", label: "채용정보" },
-] as const;
+	{
+		label: "업체 관리",
+		items: [
+			{ href: "/employer/me", label: "업체 정보" },
+			{ href: "/employer/settings" as Route, label: "조직 설정" },
+		],
+	},
+	// 고객센터는 커뮤니티 분기에서 추가된 진입점이라 nav 그룹화(PR #26) 대상에 없었다.
+	// 업체 관리 항목이 아니므로 그룹에 넣지 않고 최상위로 유지한다.
+	{ href: "/support" as Route, label: "고객센터" },
+];
 
 export default async function EmployerLayout({
 	children,

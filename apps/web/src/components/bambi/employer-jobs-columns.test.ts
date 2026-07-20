@@ -6,7 +6,7 @@ const read = (relative: string) =>
 	fs.readFileSync(path.join(import.meta.dirname, relative), "utf8");
 
 describe("employer jobs DataTable columns", () => {
-	it("defines the exposure/payment/duration/expiry columns via a factory", () => {
+	it("keeps the content-axis columns and drops the ad-axis columns", () => {
 		const source = read("employer-jobs-columns.tsx");
 
 		// 컬럼 팩토리 + 삭제 위임 콜백 (raw shadcn DataColumn 기반)
@@ -15,28 +15,23 @@ describe("employer jobs DataTable columns", () => {
 		expect(source).toContain("onRequestDelete");
 		expect(source).toContain("deletingJobId");
 
-		// 헤더 라벨
-		expect(source).toContain("노출 상품");
-		expect(source).toContain("결제 상태");
-		expect(source).toContain("남은 기간");
-		expect(source).toContain("만료 상태");
-		expect(source).toContain("사업자 인증");
+		// 광고 노출·결제 축 컬럼은 광고 관리 페이지로 이관 — 여기선 제거
+		expect(source).not.toContain("노출 상품");
+		expect(source).not.toContain("결제 상태");
+		expect(source).not.toContain("기간");
 
-		// 노출·결제·기간 라벨/유틸 재사용
-		expect(source).toContain("EXPOSURE_TYPE_LABELS");
-		expect(source).toContain("PAYMENT_STATUS_LABELS");
-		expect(source).toContain("remainingDays");
-		expect(source).toContain("expiryLabel");
+		// 이관에 따라 노출·결제 라벨/날짜 유틸도 미사용 → import 제거
+		expect(source).not.toContain("EXPOSURE_TYPE_LABELS");
+		expect(source).not.toContain("PAYMENT_STATUS_LABELS");
+		expect(source).not.toContain("formatDate");
+		// 만료 danger 톤 시각 구분도 기간 컬럼과 함께 제거
+		expect(source).not.toContain("text-destructive");
 
-		// 기존 라벨/포맷/배지 재사용
+		// 공고 콘텐츠 축 컬럼은 유지 — 공고 상태는 파생 배지(published+미결제 "미공개" 신호)
+		expect(source).toContain("공고 상태");
+		expect(source).toContain("getJobDisplayStatus");
 		expect(source).toContain("formatPay");
-		expect(source).toContain("formatDateTime");
 		expect(source).toContain("StatusBadge");
-
-		// null 남은 기간은 "-"
-		expect(source).toContain(
-			'return <span className="text-muted-foreground">-</span>'
-		);
 	});
 
 	it("wires the employer page to render the jobs DataTable", () => {

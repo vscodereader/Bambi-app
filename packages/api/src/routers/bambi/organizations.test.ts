@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import type { Context } from "../../context";
@@ -376,6 +376,96 @@ describe("bambi organization and team routers", () => {
 				id: fixture.managerMemberId,
 				role: "staff",
 			});
+		} finally {
+			await cleanupOrganizationFixture(fixture);
+		}
+	});
+
+	it("rejects promoting a member to owner via setMemberRole", async () => {
+		const fixture = await createOrganizationFixture();
+
+		try {
+			const ownerSetMemberRole = createProcedureClient(
+				teamsRouter.setMemberRole,
+				{
+					context: createContextForUser(fixture.ownerUserId),
+					path: ["bambi", "teams", "setMemberRole"],
+				}
+			);
+
+			// 일반 역할 변경으로는 소유자 승격이 막혀야 한다(소유권 이전 전용 경로만 허용).
+			await expectOrpcCode(
+				ownerSetMemberRole({
+					memberId: fixture.managerMemberId,
+					organizationId: fixture.organizationId,
+					role: "owner",
+				}),
+				"FORBIDDEN"
+			);
+
+			const [managerRow] = await db
+				.select({ role: member.role })
+				.from(member)
+				.where(eq(member.id, fixture.managerMemberId));
+
+			expect(managerRow?.role).toBe("manager");
+		} finally {
+			await cleanupOrganizationFixture(fixture);
+		}
+	});
+
+	it("transfers ownership: demotes the current owner and promotes the target", async () => {
+		const fixture = await createOrganizationFixture();
+
+		try {
+			const managerTransfer = createProcedureClient(
+				teamsRouter.transferOwnership,
+				{
+					context: createContextForUser(fixture.managerUserId),
+					path: ["bambi", "teams", "transferOwnership"],
+				}
+			);
+			const ownerTransfer = createProcedureClient(
+				teamsRouter.transferOwnership,
+				{
+					context: createContextForUser(fixture.ownerUserId),
+					path: ["bambi", "teams", "transferOwnership"],
+				}
+			);
+
+			// 소유자만 이전을 시작할 수 있다.
+			await expectOrpcCode(
+				managerTransfer({
+					memberId: fixture.managerMemberId,
+					organizationId: fixture.organizationId,
+				}),
+				"FORBIDDEN"
+			);
+
+			const result = await ownerTransfer({
+				memberId: fixture.managerMemberId,
+				organizationId: fixture.organizationId,
+			});
+
+			expect(result).toEqual({ success: true });
+
+			// 기존 소유자는 매니저로 강등, 대상은 소유자로 승격된다.
+			const [previousOwner] = await db
+				.select({ role: member.role })
+				.from(member)
+				.where(
+					and(
+						eq(member.organizationId, fixture.organizationId),
+						eq(member.userId, fixture.ownerUserId)
+					)
+				);
+			const [newOwner] = await db
+				.select({ role: member.role })
+				.from(member)
+				.where(eq(member.id, fixture.managerMemberId));
+
+			expect(previousOwner?.role).toBe("manager");
+			expect(newOwner?.role).toBe("owner");
 		} finally {
 			await cleanupOrganizationFixture(fixture);
 		}

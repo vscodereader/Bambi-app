@@ -360,6 +360,52 @@ describe("adProducts product mutations", () => {
 		}
 	});
 
+	it("persists manualBoostsPerDay on create and update; defaults to 0", async () => {
+		const fixture = await createCatalogFixture();
+		try {
+			const create = createProcedureClient(adProductsRouter.createProduct, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "createProduct"],
+			});
+
+			const created = await create({
+				placementId: fixture.activePlacementId,
+				name: "끌어올리기 상품",
+				benefits: [],
+				priceOptions: [{ amount: 1000, days: 7 }],
+				manualBoostsPerDay: 3,
+			});
+			expect(created.manualBoostsPerDay).toBe(3);
+			const [reloaded] = await db
+				.select({ manualBoostsPerDay: adProduct.manualBoostsPerDay })
+				.from(adProduct)
+				.where(eq(adProduct.id, created.id));
+			expect(reloaded?.manualBoostsPerDay).toBe(3);
+
+			const update = createProcedureClient(adProductsRouter.updateProduct, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "updateProduct"],
+			});
+			const updated = await update({
+				id: created.id,
+				manualBoostsPerDay: 5,
+			});
+			expect(updated.manualBoostsPerDay).toBe(5);
+
+			// 미지정 시 기본 0
+			const defaulted = await create({
+				placementId: fixture.activePlacementId,
+				name: "기본 끌어올리기 상품",
+				benefits: [],
+				priceOptions: [{ amount: 1000, days: 7 }],
+			});
+			expect(defaulted.manualBoostsPerDay).toBe(0);
+			// createProduct로 만든 행은 placement cascade로 fixture cleanup 시 함께 삭제됨
+		} finally {
+			await cleanupCatalogFixture(fixture);
+		}
+	});
+
 	it("reorderProducts only touches products in the given placement", async () => {
 		const fixture = await createCatalogFixture();
 		try {

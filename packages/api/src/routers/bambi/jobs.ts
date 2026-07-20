@@ -6,7 +6,6 @@ import {
 	employerTeamProfile,
 	jobPost,
 	jobPostMedia,
-	jobPromotionCampaign,
 	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -17,7 +16,7 @@ import {
 	eq,
 	gt,
 	inArray,
-	lte,
+	isNull,
 	or,
 	type SQL,
 	sql,
@@ -26,11 +25,17 @@ import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
 import {
+	AD_BANNER_EXPOSURE_TYPES,
+	buildExposureJobSections,
+	EXPOSURE_TYPE_LABELS,
+	groupAdBannerJobs,
 	type JobExposureType,
+	type ListingSectionExposureType,
 	previewTemplateToExposureType,
 } from "../../services/bambi-ad-exposure";
 import {
 	getRecentJobPerformanceMetrics,
+	recordAdBannerImpressions,
 	recordJobListingImpressions,
 	recordJobPerformanceEvent,
 } from "../../services/bambi-analytics";
@@ -60,10 +65,6 @@ import {
 	getUpdatedJobPostStatus,
 	type JobPostStatus,
 } from "../../services/bambi-policy";
-import {
-	buildPublicJobSections,
-	type PublicPromotedJobListRow,
-} from "../../services/bambi-promotions";
 import { createJobPostMediaUploadIntent } from "../../services/bambi-storage";
 
 const jobDescriptionBlockInput = z.object({
@@ -333,9 +334,14 @@ const coverImageSql = sql<{
 
 interface ResolvedJobExposure {
 	adProductId: string | null;
+	// 구매 시점 스냅샷: 상품의 하루 자동 끌어올리기 횟수를 공고 컬럼으로 복사한다(수동과 동일 패턴).
+	autoBoostsPerDay: number;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
+	// 구매 시점 스냅샷: 상품의 하루 수동 끌어올리기 횟수를 공고 컬럼으로 복사한다.
+	// 이후 상품 수정과 무관하게 이 값으로 끌어올리기 자격을 판정한다.
+	manualBoostsPerDay: number;
 	paymentMethod: "bank_transfer" | "card" | null;
 }
 
@@ -353,6 +359,8 @@ const resolveJobPostExposure = async (input: {
 			exposureAmount: null,
 			exposureDurationDays: null,
 			exposureType: "standard",
+			manualBoostsPerDay: 0,
+			autoBoostsPerDay: 0,
 			paymentMethod: null,
 		};
 	}
@@ -382,6 +390,8 @@ const resolveJobPostExposure = async (input: {
 		exposureAmount: priceOption.amount,
 		exposureDurationDays: priceOption.days,
 		exposureType: previewTemplateToExposureType(product.previewTemplate),
+		manualBoostsPerDay: product.manualBoostsPerDay,
+		autoBoostsPerDay: product.autoBoostsPerDay,
 		paymentMethod: input.paymentMethod ?? null,
 	};
 };
@@ -406,38 +416,39 @@ export const jobsRouter = {
 			filters.push(sql`${jobPost.payAmount} >= ${input.minPayAmount}`);
 		}
 
-		const getPromotedJobs = async (
-			tier: "premium" | "recommended"
-		): Promise<PublicPromotedJobListRow[]> =>
+		const exposureSelection = {
+			description: jobPost.description,
+			coverImage: coverImageSql,
+			employerDisplayName: employerOrganizationProfile.displayName,
+			employerVerificationStatus:
+				employerOrganizationProfile.verificationStatus,
+			exposureEndsAt: jobPost.exposureEndsAt,
+			exposureType: jobPost.exposureType,
+			id: jobPost.id,
+			industryCategory: jobPost.industryCategory,
+			organizationId: jobPost.organizationId,
+			payAmount: jobPost.payAmount,
+			payUnit: jobPost.payUnit,
+			publishedAt: jobPost.publishedAt,
+			ratingAverage: ratingAverageSql,
+			ratingCount: ratingCountSql,
+			region: jobPost.region,
+			status: jobPost.status,
+			teamDisplayName: employerTeamProfile.displayName,
+			title: jobPost.title,
+			workSchedule: jobPost.workSchedule,
+		};
+
+		// 노출 정렬 키: 끌어올린(boosted_at) 시각과 게시 시각 중 최신. Postgres GREATEST는
+		// null을 무시하므로 미점프 공고는 publishedAt 그대로이고, 점프 뒤 재검수·재게시로
+		// publishedAt이 더 최신이 되면 자동으로 최신 쪽을 따른다. 배너 쿼리에는 적용하지 않는다.
+		const exposureRankSql = sql`greatest(${jobPost.boostedAt}, ${jobPost.publishedAt})`;
+
+		// 슬롯 상한 없이 결제완료·미만료 유료 공고를 전부 노출한다(행 단위 확장).
+		const getExposedJobs = async (type: ListingSectionExposureType) =>
 			await db
-				.select({
-					description: jobPost.description,
-					coverImage: coverImageSql,
-					employerDisplayName: employerOrganizationProfile.displayName,
-					employerVerificationStatus:
-						employerOrganizationProfile.verificationStatus,
-					id: jobPost.id,
-					industryCategory: jobPost.industryCategory,
-					lastBoostedAt: jobPromotionCampaign.lastBoostedAt,
-					organizationId: jobPost.organizationId,
-					payAmount: jobPost.payAmount,
-					payUnit: jobPost.payUnit,
-					promotionCampaignId: jobPromotionCampaign.id,
-					promotionEndsAt: jobPromotionCampaign.endsAt,
-					promotionStartsAt: jobPromotionCampaign.startsAt,
-					promotionStatus: jobPromotionCampaign.status,
-					promotionTier: jobPromotionCampaign.tier,
-					publishedAt: jobPost.publishedAt,
-					ratingAverage: ratingAverageSql,
-					ratingCount: ratingCountSql,
-					region: jobPost.region,
-					status: jobPost.status,
-					teamDisplayName: employerTeamProfile.displayName,
-					title: jobPost.title,
-					workSchedule: jobPost.workSchedule,
-				})
-				.from(jobPromotionCampaign)
-				.innerJoin(jobPost, eq(jobPromotionCampaign.jobPostId, jobPost.id))
+				.select(exposureSelection)
+				.from(jobPost)
 				.innerJoin(
 					employerOrganizationProfile,
 					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
@@ -449,71 +460,53 @@ export const jobsRouter = {
 				.where(
 					and(
 						...filters,
-						eq(jobPromotionCampaign.status, "active"),
-						eq(jobPromotionCampaign.tier, tier),
-						lte(jobPromotionCampaign.startsAt, now),
-						gt(jobPromotionCampaign.endsAt, now)
+						eq(jobPost.exposureType, type),
+						or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
 					)
 				)
-				.orderBy(
-					desc(jobPromotionCampaign.lastBoostedAt),
-					desc(jobPromotionCampaign.startsAt)
-				)
-				.limit(tier === "premium" ? 5 : 10);
+				.orderBy(desc(exposureRankSql));
 
-		const [premiumRows, recommendedRows, organicRows] = await Promise.all([
-			getPromotedJobs("premium"),
-			getPromotedJobs("recommended"),
-			db
-				.select({
-					description: jobPost.description,
-					coverImage: coverImageSql,
-					employerDisplayName: employerOrganizationProfile.displayName,
-					employerVerificationStatus:
-						employerOrganizationProfile.verificationStatus,
-					id: jobPost.id,
-					industryCategory: jobPost.industryCategory,
-					organizationId: jobPost.organizationId,
-					payAmount: jobPost.payAmount,
-					payUnit: jobPost.payUnit,
-					publishedAt: jobPost.publishedAt,
-					ratingAverage: ratingAverageSql,
-					ratingCount: ratingCountSql,
-					region: jobPost.region,
-					status: jobPost.status,
-					teamDisplayName: employerTeamProfile.displayName,
-					title: jobPost.title,
-					workSchedule: jobPost.workSchedule,
-				})
-				.from(jobPost)
-				.innerJoin(
-					employerOrganizationProfile,
-					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
-				)
-				.leftJoin(
-					employerTeamProfile,
-					eq(jobPost.teamId, employerTeamProfile.teamId)
-				)
-				.where(and(...filters))
-				.orderBy(
-					sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
-					desc(jobPost.publishedAt)
-				)
-				.limit(input.limit + 15),
-		]);
+		const [specialRows, urgentRows, recommendedRows, organicRows] =
+			await Promise.all([
+				getExposedJobs("special"),
+				getExposedJobs("urgent"),
+				getExposedJobs("recommended"),
+				db
+					.select(exposureSelection)
+					.from(jobPost)
+					.innerJoin(
+						employerOrganizationProfile,
+						eq(
+							jobPost.organizationId,
+							employerOrganizationProfile.organizationId
+						)
+					)
+					.leftJoin(
+						employerTeamProfile,
+						eq(jobPost.teamId, employerTeamProfile.teamId)
+					)
+					.where(and(...filters))
+					.orderBy(
+						sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
+						desc(exposureRankSql)
+					)
+					.limit(input.limit + 15),
+			]);
 
-		const result = buildPublicJobSections({
+		const result = buildExposureJobSections({
 			limit: input.limit,
 			now,
 			organicRows,
-			premiumRows,
 			recommendedRows,
+			specialRows,
+			urgentRows,
 		});
 
 		// 현재 요청에서 새로 기록하는 impression 때문에 판정이 왜곡되지 않도록,
 		// recordJobListingImpressions 이전에 최근 7일 성과를 집계해 각 item에 붙인다.
 		const performanceJobIds = [
-			...result.sections.premium,
+			...result.sections.special,
+			...result.sections.urgent,
 			...result.sections.recommended,
 			...result.sections.organic,
 		].map((item) => item.id);
@@ -521,8 +514,15 @@ export const jobsRouter = {
 			performanceJobIds,
 			now
 		);
-		const withPerformance = <TItem extends { id: string }>(item: TItem) => ({
+		const toListItem = <TItem extends { exposureType: string; id: string }>(
+			item: TItem,
+			inPaidSection: boolean
+		) => ({
 			...item,
+			isPromoted: inPaidSection,
+			promotionLabel: inPaidSection
+				? EXPOSURE_TYPE_LABELS[item.exposureType as JobExposureType]
+				: null,
 			performance: performanceByJobId.get(item.id) ?? {
 				detailViews: 0,
 				impressions: 0,
@@ -535,11 +535,14 @@ export const jobsRouter = {
 		});
 
 		return {
-			...result,
+			totalCount: result.totalCount,
 			sections: {
-				organic: result.sections.organic.map(withPerformance),
-				premium: result.sections.premium.map(withPerformance),
-				recommended: result.sections.recommended.map(withPerformance),
+				organic: result.sections.organic.map((item) => toListItem(item, false)),
+				recommended: result.sections.recommended.map((item) =>
+					toListItem(item, true)
+				),
+				special: result.sections.special.map((item) => toListItem(item, true)),
+				urgent: result.sections.urgent.map((item) => toListItem(item, true)),
 			},
 		};
 	}),
@@ -595,6 +598,50 @@ export const jobsRouter = {
 				desc(jobPost.publishedAt)
 			)
 			.limit(input.limit);
+	}),
+
+	// seeker 광고 배너 슬롯(상단 프리미엄·좌/우 사이드)에 노출할 결제완료 공고를
+	// 위치별로 내려준다. 목록 필터와 무관해 list와 분리된 공개 조회다.
+	listAdBanners: publicProcedure.handler(async ({ context }) => {
+		const now = new Date();
+		const rows = await db
+			.select({
+				coverImage: coverImageSql,
+				employerDisplayName: employerOrganizationProfile.displayName,
+				exposureEndsAt: jobPost.exposureEndsAt,
+				exposureType: jobPost.exposureType,
+				id: jobPost.id,
+				organizationId: jobPost.organizationId,
+				publishedAt: jobPost.publishedAt,
+				teamDisplayName: employerTeamProfile.displayName,
+				title: jobPost.title,
+			})
+			.from(jobPost)
+			.innerJoin(
+				employerOrganizationProfile,
+				eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+			)
+			.leftJoin(
+				employerTeamProfile,
+				eq(jobPost.teamId, employerTeamProfile.teamId)
+			)
+			.where(
+				and(
+					eq(jobPost.status, "published" as JobPostStatus),
+					eq(jobPost.paymentStatus, "paid"),
+					inArray(jobPost.exposureType, [...AD_BANNER_EXPOSURE_TYPES]),
+					or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
+				)
+			)
+			.orderBy(desc(jobPost.publishedAt));
+		const groups = groupAdBannerJobs(rows, now);
+
+		await recordAdBannerImpressions({
+			actorUserId: context.session?.user.id,
+			groups,
+		});
+
+		return groups;
 	}),
 
 	getById: publicProcedure
@@ -862,7 +909,12 @@ export const jobsRouter = {
 						exposureType: exposure.exposureType,
 						exposureDurationDays: exposure.exposureDurationDays,
 						exposureAmount: exposure.exposureAmount,
+						manualBoostsPerDay: exposure.manualBoostsPerDay,
+						autoBoostsPerDay: exposure.autoBoostsPerDay,
 						paymentMethod: exposure.paymentMethod,
+						// 무료 공고(유료 노출상품 미선택)는 결제 게이트 없이 즉시 노출한다.
+						// 유료 노출상품을 선택한 경우에만 운영자 결제완료 처리를 기다린다.
+						paymentStatus: exposure.adProductId ? "unpaid" : "paid",
 						publishedAt: status === "published" ? now : null,
 					})
 					.returning();
@@ -959,6 +1011,20 @@ export const jobsRouter = {
 				exposureDurationDays: input.data.exposureDurationDays,
 				paymentMethod: input.data.paymentMethod,
 			});
+			// 노출 상품·기간이 바뀌면 재결제가 필요하다. 유료 전환/변경은 미결제로 되돌리고,
+			// 무료 전환은 결제 게이트 없이 즉시 게시(paid)로 둔다(생성 시 무료 공고와 동일 규칙).
+			const exposureChanged =
+				exposure.adProductId !== existing.adProductId ||
+				exposure.exposureDurationDays !== existing.exposureDurationDays;
+			const changedPaymentStatus = exposure.adProductId
+				? ("unpaid" as const)
+				: ("paid" as const);
+			const nextPaymentStatus = exposureChanged
+				? changedPaymentStatus
+				: existing.paymentStatus;
+			const nextExposureEndsAt = exposureChanged
+				? null
+				: existing.exposureEndsAt;
 			const mediaRows = media ? requireValidJobPostMediaSet(media) : null;
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status: JobPostStatus = riskDetected
@@ -983,7 +1049,11 @@ export const jobsRouter = {
 						exposureType: exposure.exposureType,
 						exposureDurationDays: exposure.exposureDurationDays,
 						exposureAmount: exposure.exposureAmount,
+						manualBoostsPerDay: exposure.manualBoostsPerDay,
+						autoBoostsPerDay: exposure.autoBoostsPerDay,
 						paymentMethod: exposure.paymentMethod,
+						paymentStatus: nextPaymentStatus,
+						exposureEndsAt: nextExposureEndsAt,
 						publishedAt:
 							status === "published" && !existing.publishedAt
 								? new Date()

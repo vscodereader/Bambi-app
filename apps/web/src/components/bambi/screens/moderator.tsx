@@ -9,13 +9,28 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
+import {
+	Sheet,
+	SheetClose,
+	SheetContent,
+	SheetTitle,
+} from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
+import type { Route } from "next";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+	COMMUNITY_BOARDS,
+	communityAuthorName,
+	formatCommunityDate,
+} from "@/lib/bambi/community";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
 import { scan } from "@/lib/bambi/scanner";
 import type {
+	CommunityTargetStatus,
 	ManagedUser,
 	QueueItem,
 	Report,
@@ -32,9 +47,9 @@ import {
 	ChevronRightIcon,
 	ClipboardListIcon,
 	FlagIcon,
+	MoreIcon,
 	ShieldIcon,
 	SortIcon,
-	StoreIcon,
 	UserIcon,
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
@@ -811,16 +826,219 @@ function PartyBox({
 	);
 }
 
+// ---- 커뮤니티 대상 미리보기·조치 ------------------------------------------
+// 현재 콘텐츠 상태별 배지(라벨·톤)와 노출 조치 매트릭스.
+const COMMUNITY_STATUS_BADGE: Record<
+	CommunityTargetStatus,
+	{ label: string; tone: "neutral" | "pending" | "danger" }
+> = {
+	published: { label: "게시 중", tone: "neutral" },
+	hidden: { label: "숨김", tone: "pending" },
+	deleted: { label: "삭제됨", tone: "danger" },
+};
+
+interface CommunityActionConfig {
+	label: string;
+	status: CommunityTargetStatus;
+	tone?: "danger";
+}
+
+const COMMUNITY_ACTIONS: Record<
+	CommunityTargetStatus,
+	CommunityActionConfig[]
+> = {
+	published: [
+		{ label: "숨기기", status: "hidden" },
+		{ label: "삭제", status: "deleted", tone: "danger" },
+	],
+	hidden: [
+		{ label: "복구", status: "published" },
+		{ label: "삭제", status: "deleted", tone: "danger" },
+	],
+	deleted: [{ label: "복구", status: "published" }],
+};
+
+// 게시판 키를 사람이 읽는 라벨로. 미지의 키는 원본을 그대로 노출한다.
+const getCommunityBoardLabel = (board: string): string =>
+	COMMUNITY_BOARDS.find((item) => item.key === board)?.label ?? board;
+
+function CommunityDeleteSheet({
+	kindLabel,
+	reason,
+	onCancel,
+	onConfirm,
+}: {
+	kindLabel: string;
+	reason: string;
+	onCancel: () => void;
+	onConfirm: () => void;
+}) {
+	return (
+		<div className="absolute inset-0 z-20 flex flex-col justify-end">
+			<button
+				aria-label="닫기"
+				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
+				onClick={onCancel}
+				type="button"
+			/>
+			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
+				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
+					{kindLabel}을 삭제할까요?
+				</h2>
+				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
+					삭제하면 사용자에게 더 이상 보이지 않아요. 입력한 사유는 기록에
+					남아요.
+				</p>
+				<div className="mb-4 rounded-[14px] bg-secondary px-3 py-2.5 text-[13px] text-[color:var(--text-default)] leading-[1.5]">
+					{reason}
+				</div>
+				<div className="grid grid-cols-2 gap-2.5">
+					<Button block onClick={onCancel} size="lg" variant="secondary">
+						취소
+					</Button>
+					<Button block onClick={onConfirm} size="lg" variant="danger">
+						삭제하기
+					</Button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function CommunityTargetPanel({
+	report,
+	onModerate,
+}: {
+	report: Report;
+	onModerate?: (
+		report: Report,
+		status: CommunityTargetStatus,
+		reason: string
+	) => void;
+}) {
+	const target = report.communityTarget;
+	const [reason, setReason] = useState("");
+	const [pendingDelete, setPendingDelete] = useState(false);
+
+	// 커뮤니티 신고인데 대상 컨텍스트가 유실된 경우: 조치 없이 안내만.
+	if (!target) {
+		return (
+			<div className="flex items-center gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
+				<span className="inline-flex size-[18px] text-muted-foreground">
+					<AlertCircle />
+				</span>
+				<span className="text-[13px] text-muted-foreground">
+					대상 콘텐츠를 찾을 수 없어요.
+				</span>
+			</div>
+		);
+	}
+
+	const kindLabel = target.kind === "post" ? "글" : "댓글";
+	const titleLabel =
+		target.kind === "comment" ? `원글: ${target.title}` : target.title;
+	const statusBadge = COMMUNITY_STATUS_BADGE[target.status];
+	const actions = COMMUNITY_ACTIONS[target.status];
+	const canModerate = reason.trim().length >= 2 && Boolean(onModerate);
+	const reasonId = `community-reason-${target.id}`;
+
+	const runAction = (status: CommunityTargetStatus) => {
+		const trimmed = reason.trim();
+		if (!(onModerate && trimmed)) {
+			return;
+		}
+		onModerate(report, status, trimmed);
+	};
+
+	return (
+		<div className="flex flex-col gap-3">
+			<div className="font-bold text-[13px] text-foreground">
+				신고된 커뮤니티 {kindLabel}
+			</div>
+			<div className="flex flex-col gap-2.5 rounded-[14px] border border-border bg-secondary p-[14px]">
+				<div className="flex flex-wrap items-center gap-2">
+					<Badge tone="neutral">{getCommunityBoardLabel(target.board)}</Badge>
+					<Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
+					<span className="ml-auto text-[11.5px] text-[color:var(--text-subtle)]">
+						{formatCommunityDate(target.createdAt)}
+					</span>
+				</div>
+				<div className="font-extrabold text-[15px] text-foreground leading-[1.4]">
+					{titleLabel}
+				</div>
+				<p className="m-0 whitespace-pre-wrap text-[13px] text-[color:var(--text-default)] leading-[1.6]">
+					{target.bodyPreview}
+				</p>
+				<div className="text-[11.5px] text-muted-foreground">
+					작성자 {communityAuthorName(target.authorName)}
+				</div>
+			</div>
+			<div className="flex flex-col gap-2">
+				<label
+					className="font-bold text-[13px] text-foreground"
+					htmlFor={reasonId}
+				>
+					조치 사유
+				</label>
+				<textarea
+					className="min-h-[72px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+					id={reasonId}
+					maxLength={500}
+					onChange={(event) => setReason(event.target.value)}
+					placeholder="조치 사유를 입력하면 기록에 남아요."
+					value={reason}
+				/>
+				<div className="flex flex-wrap gap-2">
+					{actions.map((action) => (
+						<Button
+							disabled={!canModerate}
+							key={action.status}
+							onClick={() => {
+								if (action.status === "deleted") {
+									setPendingDelete(true);
+									return;
+								}
+								runAction(action.status);
+							}}
+							size="sm"
+							variant={action.tone === "danger" ? "danger" : "secondary"}
+						>
+							{action.label}
+						</Button>
+					))}
+				</div>
+			</div>
+			{pendingDelete ? (
+				<CommunityDeleteSheet
+					kindLabel={kindLabel}
+					onCancel={() => setPendingDelete(false)}
+					onConfirm={() => {
+						setPendingDelete(false);
+						runAction("deleted");
+					}}
+					reason={reason.trim()}
+				/>
+			) : null}
+		</div>
+	);
+}
+
 export function ReportDetail({
 	item,
 	onBack,
 	onResolve,
 	onSanction,
+	onModerateCommunity,
 }: {
 	item: Report;
 	onBack: () => void;
 	onResolve: (id: string, action: "dismiss" | "act") => void;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
+	onModerateCommunity?: (
+		report: Report,
+		status: CommunityTargetStatus,
+		reason: string
+	) => void;
 }) {
 	const [act, setAct] = useState(false);
 	return (
@@ -844,41 +1062,48 @@ export function ReportDetail({
 						role={`신고자 · ${item.reporterRole}`}
 					/>
 				</div>
-				<div>
-					<div className="mb-2 font-bold text-[13px] text-foreground">
-						신고된 대화
-					</div>
-					<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
-						{item.thread.map((m) => (
-							<div
-								className={cn(
-									"max-w-[85%]",
-									m.mine ? "self-end" : "self-start"
-								)}
-								key={`${m.mine ? "me" : "them"}-${m.text}`}
-							>
+				{item.communityKind ? (
+					<CommunityTargetPanel
+						onModerate={onModerateCommunity}
+						report={item}
+					/>
+				) : (
+					<div>
+						<div className="mb-2 font-bold text-[13px] text-foreground">
+							신고된 대화
+						</div>
+						<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
+							{item.thread.map((m) => (
 								<div
 									className={cn(
-										"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
-										m.mine ? "text-right" : "text-left"
+										"max-w-[85%]",
+										m.mine ? "self-end" : "self-start"
 									)}
+									key={`${m.mine ? "me" : "them"}-${m.text}`}
 								>
-									{m.mine ? item.reporter : item.target}
+									<div
+										className={cn(
+											"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
+											m.mine ? "text-right" : "text-left"
+										)}
+									>
+										{m.mine ? item.reporter : item.target}
+									</div>
+									<div
+										className={cn(
+											"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
+											m.mine
+												? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
+												: "rounded-bl-[4px] bg-ink-800 text-white"
+										)}
+									>
+										{m.text}
+									</div>
 								</div>
-								<div
-									className={cn(
-										"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
-										m.mine
-											? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
-											: "rounded-bl-[4px] bg-ink-800 text-white"
-									)}
-								>
-									{m.text}
-								</div>
-							</div>
-						))}
+							))}
+						</div>
 					</div>
-				</div>
+				)}
 				{item.status === "open" ? null : (
 					<div className="flex items-center gap-2 rounded-[14px] bg-[color:var(--status-success-bg)] p-[14px] text-[color:var(--status-success-fg)]">
 						<span className="inline-flex size-[18px]">
@@ -1192,6 +1417,104 @@ export function UserDetail({
 }
 
 // ---- 콘솔 셸 ---------------------------------------------------------------
+// "더보기" 시트가 노출하는 목적지 — 데스크톱 헤더 nav(승인 관리·광고·결제 그룹,
+// moderator/layout.tsx)를 모바일에서 미러링한다. 하단 평면 탭(검수·신고·사용자·
+// 광고 상품)에 자리가 없어 여기로 접는다. 라우트가 바뀌면 layout.tsx와 함께 갱신.
+const MOD_MORE_GROUPS: {
+	items: { href: Route; label: string }[];
+	label: string;
+}[] = [
+	{
+		label: "승인 관리",
+		items: [
+			{ href: "/moderator/employers", label: "업소 승인" },
+			{ href: "/moderator/team-invites", label: "팀 합류 승인" },
+		],
+	},
+	{
+		label: "광고·결제",
+		items: [
+			{ href: "/moderator/ad-products", label: "광고 상품" },
+			{ href: "/moderator/payments", label: "결제 관리" },
+		],
+	},
+	{
+		label: "콘텐츠·고객센터",
+		items: [
+			{ href: "/moderator/content" as Route, label: "게시물" },
+			{ href: "/moderator/support" as Route, label: "고객센터" },
+			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
+		],
+	},
+];
+
+// 하단 탭 버튼 공통 톤(평면 탭·더보기 탭 공유).
+function modTabButtonClassName(on: boolean): string {
+	return cn(
+		"flex flex-1 cursor-pointer flex-col items-center gap-1 border-none bg-none px-0 py-1",
+		on ? "text-primary" : "text-[color:var(--text-subtle)]"
+	);
+}
+
+function modTabLabelClassName(on: boolean): string {
+	return cn("text-[10px]", on ? "font-extrabold" : "font-medium");
+}
+
+// "더보기" 탭 — 하단 탭에 담기지 않는 목적지를 시트로 펼친다.
+function ModMoreTab({ active }: { active: boolean }) {
+	const [open, setOpen] = useState(false);
+	const pathname = usePathname();
+	return (
+		<>
+			<button
+				className={modTabButtonClassName(active)}
+				onClick={() => setOpen(true)}
+				type="button"
+			>
+				<span className="inline-flex size-6">
+					<MoreIcon />
+				</span>
+				<span className={modTabLabelClassName(active)}>더보기</span>
+			</button>
+			<Sheet onOpenChange={setOpen} open={open}>
+				<SheetContent>
+					<SheetTitle>더보기</SheetTitle>
+					<div className="mt-5 flex flex-col gap-6">
+						{MOD_MORE_GROUPS.map((group) => (
+							<div className="flex flex-col gap-1" key={group.label}>
+								<p className="px-3 font-bold text-muted-foreground text-xs">
+									{group.label}
+								</p>
+								{group.items.map((item) => {
+									const isActive =
+										pathname === item.href ||
+										pathname.startsWith(`${item.href}/`);
+									return (
+										<SheetClose
+											className={cn(
+												"rounded-lg px-3 py-2.5 text-left font-bold text-sm no-underline",
+												isActive
+													? "bg-muted text-foreground"
+													: "text-foreground hover:bg-muted/50"
+											)}
+											key={item.href}
+											// Link는 <a>라 네이티브 버튼이 아니므로 base-ui에 명시(경고 방지).
+											nativeButton={false}
+											render={<Link href={item.href} />}
+										>
+											{item.label}
+										</SheetClose>
+									);
+								})}
+							</div>
+						))}
+					</div>
+				</SheetContent>
+			</Sheet>
+		</>
+	);
+}
+
 export function ModTabs({
 	tab,
 	setTab,
@@ -1199,15 +1522,12 @@ export function ModTabs({
 }: {
 	tab: string;
 	setTab: (v: string) => void;
-	// 라이브 운영자 콘솔에서만 업소 승인 탭을 노출한다(프리뷰 목업은 3탭 유지).
+	// 라이브 운영자 콘솔에서만 광고 상품·더보기 탭을 노출한다(프리뷰 목업은 3탭 유지).
 	showEmployers?: boolean;
 }) {
 	const items = [
 		{ v: "queue", label: "검수", icon: <ShieldIcon /> },
 		{ v: "reports", label: "신고", icon: <FlagIcon /> },
-		...(showEmployers
-			? [{ v: "employers", label: "업소 승인", icon: <StoreIcon /> }]
-			: []),
 		{ v: "users", label: "사용자", icon: <UserIcon /> },
 		...(showEmployers
 			? [{ v: "adProducts", label: "광고 상품", icon: <ClipboardListIcon /> }]
@@ -1219,26 +1539,17 @@ export function ModTabs({
 				const on = tab === it.v;
 				return (
 					<button
-						className={cn(
-							"flex flex-1 cursor-pointer flex-col items-center gap-1 border-none bg-none px-0 py-1",
-							on ? "text-primary" : "text-[color:var(--text-subtle)]"
-						)}
+						className={modTabButtonClassName(on)}
 						key={it.v}
 						onClick={() => setTab(it.v)}
 						type="button"
 					>
 						<span className="inline-flex size-6">{it.icon}</span>
-						<span
-							className={cn(
-								"text-[10px]",
-								on ? "font-extrabold" : "font-medium"
-							)}
-						>
-							{it.label}
-						</span>
+						<span className={modTabLabelClassName(on)}>{it.label}</span>
 					</button>
 				);
 			})}
+			{showEmployers ? <ModMoreTab active={tab === "more"} /> : null}
 		</nav>
 	);
 }
