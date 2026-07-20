@@ -1,5 +1,6 @@
 import { db } from "@bambi-app/db";
 import {
+	faqEntry,
 	supportInquiry,
 	supportInquiryMessage,
 } from "@bambi-app/db/schema/bambi";
@@ -7,7 +8,7 @@ import { ORPCError } from "@orpc/server";
 import { and, asc, count, desc, eq } from "drizzle-orm";
 import z from "zod";
 
-import { protectedProcedure } from "../../index";
+import { adminProcedure, protectedProcedure } from "../../index";
 import {
 	requireActiveBambiProfile,
 	type SessionLike,
@@ -20,6 +21,9 @@ const MESSAGES_CAP = 100;
 const TITLE_MAX = 100;
 const TITLE_MIN = 2;
 const BODY_MIN = 5;
+const FAQ_ANSWER_MAX = 5000;
+const FAQ_QUESTION_MAX = 300;
+const FAQ_QUESTION_MIN = 2;
 
 const inquiryCategorySchema = z.enum([
 	"account",
@@ -45,6 +49,37 @@ const inquiryIdInput = z.object({
 
 const createInquiryMessageInput = inquiryIdInput.extend({
 	body: z.string().trim().min(1).max(BODY_MAX),
+});
+
+const listFaqInput = z.object({
+	category: inquiryCategorySchema.optional(),
+});
+
+const createFaqInput = z.object({
+	answer: z.string().trim().min(1).max(FAQ_ANSWER_MAX),
+	category: inquiryCategorySchema,
+	question: z.string().trim().min(FAQ_QUESTION_MIN).max(FAQ_QUESTION_MAX),
+	sortOrder: z.number().int().min(0).default(0),
+});
+
+const faqIdInput = z.object({
+	faqId: z.string().uuid(),
+});
+
+const updateFaqInput = faqIdInput.extend({
+	answer: z.string().trim().min(1).max(FAQ_ANSWER_MAX),
+	category: inquiryCategorySchema,
+	question: z.string().trim().min(FAQ_QUESTION_MIN).max(FAQ_QUESTION_MAX),
+	sortOrder: z.number().int().min(0),
+});
+
+const setFaqPublishedInput = faqIdInput.extend({
+	isPublished: z.boolean(),
+});
+
+const listInquiriesByAdminInput = z.object({
+	inquiryStatus: z.enum(["open", "answered", "closed"]).optional(),
+	page: z.number().int().min(1).default(1),
 });
 
 const INQUIRY_NOT_FOUND = "문의를 찾을 수 없습니다.";
@@ -241,4 +276,109 @@ export const supportRouter = {
 
 			return { ok: true };
 		}),
+
+	listFaq: protectedProcedure
+		.input(listFaqInput)
+		.handler(async ({ context, input }) => {
+			await requireActiveBambiProfile(context.session);
+
+			const where = input.category
+				? and(
+						eq(faqEntry.isPublished, true),
+						eq(faqEntry.category, input.category)
+					)
+				: eq(faqEntry.isPublished, true);
+
+			const items = await db
+				.select()
+				.from(faqEntry)
+				.where(where)
+				.orderBy(asc(faqEntry.sortOrder), asc(faqEntry.createdAt));
+
+			return { items };
+		}),
+
+	listInquiriesByAdmin: adminProcedure
+		.input(listInquiriesByAdminInput)
+		.handler(async ({ input }) => {
+			const where = input.inquiryStatus
+				? and(
+						eq(supportInquiry.status, "published"),
+						eq(supportInquiry.inquiryStatus, input.inquiryStatus)
+					)
+				: eq(supportInquiry.status, "published");
+
+			const [totalRow] = await db
+				.select({ value: count() })
+				.from(supportInquiry)
+				.where(where);
+
+			const items = await db
+				.select()
+				.from(supportInquiry)
+				.where(where)
+				.orderBy(desc(supportInquiry.lastMessageAt))
+				.limit(PAGE_SIZE)
+				.offset((input.page - 1) * PAGE_SIZE);
+
+			return {
+				items,
+				page: input.page,
+				pageSize: PAGE_SIZE,
+				totalCount: totalRow?.value ?? 0,
+			};
+		}),
+
+	createFaq: adminProcedure.input(createFaqInput).handler(async ({ input }) => {
+		const [created] = await db
+			.insert(faqEntry)
+			.values({
+				category: input.category,
+				question: input.question,
+				answer: input.answer,
+				sortOrder: input.sortOrder,
+			})
+			.returning({ id: faqEntry.id });
+
+		if (!created) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "FAQ를 등록하지 못했습니다.",
+			});
+		}
+
+		return { id: created.id };
+	}),
+
+	updateFaq: adminProcedure.input(updateFaqInput).handler(async ({ input }) => {
+		await db
+			.update(faqEntry)
+			.set({
+				category: input.category,
+				question: input.question,
+				answer: input.answer,
+				sortOrder: input.sortOrder,
+				updatedAt: new Date(),
+			})
+			.where(eq(faqEntry.id, input.faqId));
+
+		return { ok: true };
+	}),
+
+	setFaqPublished: adminProcedure
+		.input(setFaqPublishedInput)
+		.handler(async ({ input }) => {
+			await db
+				.update(faqEntry)
+				.set({ isPublished: input.isPublished, updatedAt: new Date() })
+				.where(eq(faqEntry.id, input.faqId));
+
+			return { ok: true };
+		}),
+
+	// FAQ는 운영자가 쓰는 문서라 사용자 콘텐츠와 달리 하드 삭제한다(감사 대상이 아니다).
+	removeFaq: adminProcedure.input(faqIdInput).handler(async ({ input }) => {
+		await db.delete(faqEntry).where(eq(faqEntry.id, input.faqId));
+
+		return { ok: true };
+	}),
 };

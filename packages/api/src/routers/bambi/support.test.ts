@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 dotenv.config({ path: "../../apps/server/.env" });
 
 const { db } = await import("@bambi-app/db");
-const { bambiProfile, supportInquiry } = await import(
+const { bambiProfile, faqEntry, supportInquiry } = await import(
 	"@bambi-app/db/schema/bambi"
 );
 const { user } = await import("@bambi-app/db/schema/auth");
@@ -142,5 +142,55 @@ describe("고객센터 문의", () => {
 		await expect(
 			messageCaller({ inquiryId: created.id, body: "추가 문의" })
 		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+	});
+});
+
+describe("고객센터 FAQ", () => {
+	const createdFaqIds: string[] = [];
+
+	afterAll(async () => {
+		if (createdFaqIds.length > 0) {
+			await db.delete(faqEntry).where(inArray(faqEntry.id, createdFaqIds));
+		}
+	});
+
+	it("비공개 FAQ는 일반 회원 목록에 나오지 않는다", async () => {
+		const createCaller = createProcedureClient(supportRouter.createFaq, {
+			context: createContextForUser(adminId),
+		});
+		const created = await createCaller({
+			answer: "답변입니다.",
+			category: "account",
+			question: `비공개질문-${randomUUID().slice(0, 8)}`,
+			sortOrder: 0,
+		});
+		createdFaqIds.push(created.id);
+
+		const publishCaller = createProcedureClient(supportRouter.setFaqPublished, {
+			context: createContextForUser(adminId),
+		});
+		await publishCaller({ faqId: created.id, isPublished: false });
+
+		const listCaller = createProcedureClient(supportRouter.listFaq, {
+			context: createContextForUser(seekerId),
+		});
+		const result = await listCaller({});
+
+		expect(result.items.some((item) => item.id === created.id)).toBe(false);
+	});
+
+	it("일반 회원은 FAQ를 만들 수 없다", async () => {
+		const caller = createProcedureClient(supportRouter.createFaq, {
+			context: createContextForUser(seekerId),
+		});
+
+		await expect(
+			caller({
+				answer: "답변",
+				category: "etc",
+				question: "질문",
+				sortOrder: 0,
+			})
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
 	});
 });
