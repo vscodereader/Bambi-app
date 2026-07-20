@@ -1,12 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { JsonLd } from "@/components/bambi/json-ld";
 import { Providers } from "@/components/providers";
+import { BAMBI_COMPANY } from "@/lib/bambi/company";
+import { bambiSiteJsonLd, SITE_DESCRIPTION, SITE_TITLE } from "@/lib/bambi/seo";
 import "../index.css";
 
 export const metadata: Metadata = {
-	metadataBase: new URL("https://bambialba.com"),
-	title: "밤비 - 유흥·접객 | 룸알바·구인구직 사이트",
-	description:
-		"밤비는 유흥·접객 구인구직 플랫폼입니다. 룸알바, 밤알바, 노래방, 라운지 등 고소득 채용 정보를 1:1 채팅으로 빠르고 안전하게 연결합니다.",
+	metadataBase: new URL(BAMBI_COMPANY.url),
+	title: SITE_TITLE,
+	description: SITE_DESCRIPTION,
 	keywords: [
 		"유흥알바",
 		"밤비",
@@ -24,11 +26,10 @@ export const metadata: Metadata = {
 	openGraph: {
 		type: "website",
 		locale: "ko_KR",
-		siteName: "밤비",
-		url: "https://bambialba.com",
-		title: "밤비 - 유흥·접객 | 룸알바·구인구직 사이트",
-		description:
-			"밤비는 유흥·접객 구인구직 플랫폼입니다. 룸알바, 밤알바, 노래방, 라운지 등 고소득 채용 정보를 1:1 채팅으로 빠르고 안전하게 연결합니다.",
+		siteName: BAMBI_COMPANY.serviceName,
+		url: BAMBI_COMPANY.url,
+		title: SITE_TITLE,
+		description: SITE_DESCRIPTION,
 		images: [
 			{
 				url: "/og-image.png",
@@ -54,6 +55,7 @@ export default function RootLayout({
 	return (
 		<html lang="ko">
 			<body>
+				<JsonLd data={bambiSiteJsonLd} />
 				<Providers>{children}</Providers>
 			</body>
 		</html>
