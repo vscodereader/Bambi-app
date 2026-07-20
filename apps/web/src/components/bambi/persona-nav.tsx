@@ -7,6 +7,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
+import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { BOTTOM_NAV_CONTENT_SPACER, BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
 import {
@@ -157,7 +158,12 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 	const isDetail = MOD_DETAIL_RE.test(path);
 	if (isDetail) {
 		return (
-			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+			<div
+				className={cn(
+					"mx-auto flex min-h-0 w-full flex-1 flex-col",
+					APP_CONTENT_WIDTH
+				)}
+			>
 				<Content>{children}</Content>
 			</div>
 		);
@@ -187,7 +193,12 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 
 	return (
 		<>
-			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+			<div
+				className={cn(
+					"mx-auto flex min-h-0 w-full flex-1 flex-col",
+					APP_CONTENT_WIDTH
+				)}
+			>
 				<ConsoleTop
 					counts={{
 						queue: queue.length,

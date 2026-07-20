@@ -40,13 +40,26 @@ const priceOptionSchema = z.object({
 	days: z.number().int().min(1),
 });
 
+const previewImageUrlSchema = z
+	.string()
+	.max(3_000_000)
+	.refine(
+		(val) =>
+			val.length === 0 ||
+			val.startsWith("data:image/") ||
+			val.startsWith("http"),
+		{ message: "Invalid preview image" }
+	)
+	.nullish();
+
 const createProductInput = z.object({
 	placementId: z.string().uuid(),
 	name: z.string().min(1).max(120),
 	tagline: z.string().max(200).optional(),
 	benefits: z.array(z.string().min(1)).default([]),
 	priceOptions: z.array(priceOptionSchema).min(1),
-	previewTemplate: previewTemplateSchema.default("none"),
+	previewTemplate: previewTemplateSchema.optional(),
+	previewImageUrl: previewImageUrlSchema,
 	sortOrder: z.number().int().min(0).default(0),
 });
 
@@ -57,6 +70,7 @@ const updateProductInput = z.object({
 	benefits: z.array(z.string().min(1)).optional(),
 	priceOptions: z.array(priceOptionSchema).min(1).optional(),
 	previewTemplate: previewTemplateSchema.optional(),
+	previewImageUrl: previewImageUrlSchema,
 	sortOrder: z.number().int().min(0).optional(),
 	isActive: z.boolean().optional(),
 });

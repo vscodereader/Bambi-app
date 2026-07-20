@@ -8,8 +8,8 @@ import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Megaphone } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
-import { AdPlacementPreview } from "@/components/bambi/ad-placement-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import {
@@ -77,12 +77,21 @@ function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
 								<span className="font-medium text-muted-foreground text-xs md:hidden">
 									광고 위치
 								</span>
-								{product.previewTemplate === "none" ? (
+								{product.previewImageUrl ? (
+									<div className="flex items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/30 p-2">
+										<Image
+											alt={`${product.name} 게시 위치 미리보기`}
+											className="max-h-40 w-auto object-contain"
+											height={160}
+											src={product.previewImageUrl}
+											unoptimized
+											width={280}
+										/>
+									</div>
+								) : (
 									<div className="flex min-h-16 items-center justify-center rounded-lg border border-border border-dashed bg-muted/30 p-3 text-muted-foreground text-xs">
 										미리보기 없음
 									</div>
-								) : (
-									<AdPlacementPreview template={product.previewTemplate} />
 								)}
 							</div>
 
