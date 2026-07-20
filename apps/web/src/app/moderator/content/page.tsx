@@ -188,7 +188,7 @@ export default function ModeratorContentPage() {
 	const hasNextPage = page * pageSize < totalCount;
 
 	return (
-		<div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-6">
+		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<h1 className="m-0 font-extrabold text-2xl">게시물 조치</h1>
 
 			<Tabs onValueChange={switchTargetType} value={targetType}>
