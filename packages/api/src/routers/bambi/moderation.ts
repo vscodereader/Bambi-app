@@ -132,13 +132,17 @@ type ReportRow = typeof report.$inferSelect;
 type JobPostModerationStatus = z.infer<typeof jobPostModerationStatusSchema>;
 type JobPostRow = typeof jobPost.$inferSelect;
 
-const uuidTargetTypes = new Set<ReportTargetType>([
+// 신고 가능 대상(targetTypeSchema)보다 DB enum이 넓으므로 행 타입을 기준으로 삼는다 —
+// 신고 대상이 아닌 유형도 targetId가 uuid인지 판정해야 하기 때문.
+const uuidTargetTypes = new Set<ReportRow["targetType"]>([
 	"job_post",
 	"chat_room",
 	"chat_message",
 	"review",
 	"community_post",
 	"community_comment",
+	"support_inquiry",
+	"support_inquiry_message",
 ]);
 
 const uuidTargetIdSchema = z.string().uuid();
