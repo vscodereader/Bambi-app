@@ -55,6 +55,7 @@ export interface Job {
 	desc: string;
 	descriptionBlocks?: JobDescriptionBlock[];
 	detailImages?: JobMedia[];
+	exposureType?: null | string;
 	featured: boolean;
 	hours: string;
 	id: string;
@@ -108,8 +109,9 @@ export interface JobMedia {
 
 export interface MarketplaceJobSections {
 	organic: Job[];
-	premium: Job[];
 	recommended: Job[];
+	special: Job[];
+	urgent: Job[];
 }
 
 export interface QueueFlag {
@@ -140,7 +142,28 @@ export interface ThreadMessage {
 	text: string;
 }
 
+export type CommunityTargetStatus = "published" | "hidden" | "deleted";
+
+// 신고 대상이 커뮤니티 글·댓글일 때 상세 미리보기·조치에 쓰는 옵션 컨텍스트.
+export interface ReportCommunityTarget {
+	authorName: string | null;
+	board: string;
+	bodyPreview: string;
+	createdAt: Date | string;
+	id: string;
+	kind: "post" | "comment";
+	// 댓글이면 원글 id.
+	postId?: string;
+	status: CommunityTargetStatus;
+	// 댓글이면 원글 제목.
+	title: string;
+}
+
 export interface Report {
+	// 커뮤니티 신고면 대상 종류(post/comment). 컨텍스트 유실 시에도 커뮤니티 신고임을 안다.
+	communityKind?: "post" | "comment";
+	// 커뮤니티 대상 미리보기·조치 컨텍스트(대상이 유실되면 undefined).
+	communityTarget?: ReportCommunityTarget;
 	id: string;
 	note: string;
 	reason: string;
@@ -162,6 +185,7 @@ export interface Report {
 export type UserStatus = "active" | "warned" | "suspended" | "blocked";
 
 export interface ManagedUser {
+	displayName: string;
 	id: string;
 	joined: string;
 	name: string;

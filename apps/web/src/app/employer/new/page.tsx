@@ -33,6 +33,7 @@ import {
 	FieldLabel,
 	FormError,
 } from "@/components/bambi/form-message";
+import { JobExposureFields } from "@/components/bambi/job-exposure-fields";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
 import { PageShell } from "@/components/bambi/page-shell";
@@ -48,6 +49,7 @@ import {
 	type JobForm,
 	type JobFormErrors,
 	type JobFormMedia,
+	type JobPaymentMethod,
 	resolveJobPostMediaForSubmit,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
@@ -358,6 +360,62 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			[field]: undefined,
 		}));
 		setFormError(null);
+	};
+
+	const updateExposureFields = (
+		patch: Partial<
+			Pick<
+				JobForm,
+				| "adProductId"
+				| "exposureAmount"
+				| "exposureDurationDays"
+				| "exposureType"
+				| "paymentMethod"
+			>
+		>
+	) => {
+		setIsDirty(true);
+		setForm((currentForm) => ({
+			...currentForm,
+			...patch,
+		}));
+		setFieldErrors((currentErrors) => ({
+			...currentErrors,
+			adProductId: undefined,
+			exposureDurationDays: undefined,
+			exposureType: undefined,
+			paymentMethod: undefined,
+		}));
+		setFormError(null);
+	};
+
+	const handleProductChange = (productId: string | null) => {
+		updateExposureFields(
+			productId
+				? {
+						adProductId: productId,
+						exposureAmount: null,
+						exposureDurationDays: null,
+					}
+				: {
+						adProductId: null,
+						exposureAmount: null,
+						exposureDurationDays: null,
+						exposureType: "standard",
+						paymentMethod: null,
+					}
+		);
+	};
+
+	const handlePaymentMethodChange = (value: JobPaymentMethod) => {
+		updateExposureFields({ paymentMethod: value });
+	};
+
+	const handleDurationChange = (days: number | null, amount: number | null) => {
+		updateExposureFields({
+			exposureAmount: amount,
+			exposureDurationDays: days,
+		});
 	};
 
 	const handleCancel = () => {
@@ -795,6 +853,21 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 						}}
 					/>
 
+					<JobExposureFields
+						adProductId={form.adProductId}
+						errors={{
+							exposureDurationDays: fieldErrors.exposureDurationDays,
+							exposureType: fieldErrors.exposureType,
+							paymentMethod: fieldErrors.paymentMethod,
+						}}
+						exposureAmount={form.exposureAmount}
+						exposureDurationDays={form.exposureDurationDays}
+						onDurationChange={handleDurationChange}
+						onPaymentMethodChange={handlePaymentMethodChange}
+						onProductChange={handleProductChange}
+						paymentMethod={form.paymentMethod}
+					/>
+
 					<div className="xl:hidden">{listingPreview}</div>
 
 					<Alert>
@@ -802,7 +875,8 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 						<AlertTitle>등록하면 검수를 거쳐 공개됩니다</AlertTitle>
 						<AlertDescription>
 							제출하면 {JOB_REVIEW_SLA_TEXT}에 검수가 완료되며, 검수 중에는 내
-							공고 화면에서 진행 상태를 확인할 수 있습니다.
+							공고 화면에서 진행 상태를 확인할 수 있습니다. 유료 노출 상품은
+							운영자 결제 확인 후 검수·결제완료 시 공개됩니다.
 						</AlertDescription>
 					</Alert>
 

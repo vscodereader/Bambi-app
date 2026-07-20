@@ -11,7 +11,7 @@ import {
 	employerTeamProfile,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -233,13 +233,21 @@ export const organizationsRouter = {
 							createdAt: invitation.createdAt,
 							email: invitation.email,
 							id: invitation.id,
+							rejectionReason: invitation.rejectionReason,
 							role: invitation.role,
 							status: invitation.status,
 							teamId: invitation.teamId,
 							updatedAt: invitation.updatedAt,
 						})
 						.from(invitation)
-						.where(eq(invitation.organizationId, input.organizationId))
+						// accepted 초대는 이미 활성 member로 합류했으므로 목록에서 제외한다
+						// (중복 "수락됨" 잔여 행 방지).
+						.where(
+							and(
+								eq(invitation.organizationId, input.organizationId),
+								ne(invitation.status, "accepted")
+							)
+						)
 						.orderBy(asc(invitation.createdAt)),
 					db
 						.select({

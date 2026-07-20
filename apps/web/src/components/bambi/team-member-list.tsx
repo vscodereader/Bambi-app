@@ -67,8 +67,8 @@ const statusLabels: Record<string, string> = {
 	accepted: "수락됨",
 	cancelled: "취소",
 	expired: "만료",
-	pending: "초대 대기",
-	rejected: "거절",
+	pending: "운영자 승인 대기",
+	rejected: "반려됨",
 };
 
 const getStatusTone = (
@@ -166,6 +166,255 @@ function MemberTeams({
 	);
 }
 
+function RejectedInvitationActions({
+	disabled,
+	onDelete,
+	onResubmit,
+	pending,
+}: {
+	disabled: boolean;
+	onDelete: () => void;
+	onResubmit: () => void;
+	pending: boolean;
+}) {
+	const [confirming, setConfirming] = useState(false);
+
+	if (confirming) {
+		return (
+			<div className="flex flex-col gap-1.5">
+				<p className="text-muted-foreground text-xs">초대를 삭제할까요?</p>
+				<div className="flex gap-2">
+					<Button
+						disabled={pending}
+						onClick={() => setConfirming(false)}
+						size="sm"
+						type="button"
+						variant="outline"
+					>
+						취소
+					</Button>
+					<Button
+						disabled={pending}
+						onClick={onDelete}
+						size="sm"
+						type="button"
+						variant="destructive"
+					>
+						삭제
+					</Button>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="flex flex-wrap gap-2">
+			<Button
+				disabled={disabled || pending}
+				onClick={onResubmit}
+				size="sm"
+				type="button"
+				variant="outline"
+			>
+				재제출
+			</Button>
+			<Button
+				className="text-destructive"
+				disabled={disabled || pending}
+				onClick={() => setConfirming(true)}
+				size="sm"
+				type="button"
+				variant="ghost"
+			>
+				삭제
+			</Button>
+		</div>
+	);
+}
+
+function ActiveMemberActions({
+	disabled,
+	memberLabel,
+	onRemove,
+	onRoleChange,
+	onTransfer,
+	removePending,
+	role,
+	roleChangePending,
+	transferPending,
+}: {
+	disabled: boolean;
+	memberLabel: string;
+	onRemove: () => void;
+	onRoleChange: (role: OrganizationRole) => void;
+	onTransfer: () => void;
+	removePending: boolean;
+	role: string;
+	roleChangePending: boolean;
+	transferPending: boolean;
+}) {
+	const [mode, setMode] = useState<"idle" | "remove" | "transfer">("idle");
+
+	return (
+		<div className="flex flex-col gap-1.5">
+			<Select
+				disabled={disabled || roleChangePending}
+				items={roleLabels}
+				onValueChange={(value) => onRoleChange(value as OrganizationRole)}
+				value={role}
+			>
+				<SelectTrigger
+					aria-label={`${memberLabel} 권한 변경`}
+					className={selectTriggerClassName}
+				>
+					<SelectValue />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="manager">매니저</SelectItem>
+					<SelectItem value="staff">스태프</SelectItem>
+				</SelectContent>
+			</Select>
+			{mode === "remove" && (
+				<div className="flex gap-2">
+					<Button
+						disabled={removePending}
+						onClick={() => setMode("idle")}
+						size="sm"
+						type="button"
+						variant="outline"
+					>
+						취소
+					</Button>
+					<Button
+						disabled={removePending}
+						onClick={onRemove}
+						size="sm"
+						type="button"
+						variant="destructive"
+					>
+						내보내기
+					</Button>
+				</div>
+			)}
+			{mode === "transfer" && (
+				<div className="flex flex-col gap-1.5">
+					<p className="text-muted-foreground text-xs">
+						{memberLabel} 님에게 소유권을 넘기면 회원님은 매니저로 전환됩니다.
+						계속할까요?
+					</p>
+					<div className="flex gap-2">
+						<Button
+							disabled={transferPending}
+							onClick={() => setMode("idle")}
+							size="sm"
+							type="button"
+							variant="outline"
+						>
+							취소
+						</Button>
+						<Button
+							disabled={transferPending}
+							onClick={onTransfer}
+							size="sm"
+							type="button"
+						>
+							소유권 이전
+						</Button>
+					</div>
+				</div>
+			)}
+			{mode === "idle" && (
+				<div className="flex flex-wrap gap-2">
+					<Button
+						disabled={disabled || transferPending}
+						onClick={() => setMode("transfer")}
+						size="sm"
+						type="button"
+						variant="outline"
+					>
+						소유권 이전
+					</Button>
+					<Button
+						className="text-destructive"
+						disabled={disabled || removePending}
+						onClick={() => setMode("remove")}
+						size="sm"
+						type="button"
+						variant="ghost"
+					>
+						내보내기
+					</Button>
+				</div>
+			)}
+		</div>
+	);
+}
+
+function MemberRowActions({
+	actionPending,
+	canManage,
+	disabled,
+	member,
+	memberLabel,
+	onDelete,
+	onRemove,
+	onResubmit,
+	onRoleChange,
+	onTransfer,
+	removePending,
+	roleChangePending,
+	transferPending,
+}: {
+	actionPending: boolean;
+	canManage: boolean;
+	disabled: boolean;
+	member: { kind: string; role: string; status: string };
+	memberLabel: string;
+	onDelete: () => void;
+	onRemove: () => void;
+	onResubmit: () => void;
+	onRoleChange: (role: OrganizationRole) => void;
+	onTransfer: () => void;
+	removePending: boolean;
+	roleChangePending: boolean;
+	transferPending: boolean;
+}) {
+	if (!canManage) {
+		return (
+			<span className="text-muted-foreground text-xs">권한 변경 불가</span>
+		);
+	}
+
+	if (member.kind === "active" && member.role !== "owner") {
+		return (
+			<ActiveMemberActions
+				disabled={disabled}
+				memberLabel={memberLabel}
+				onRemove={onRemove}
+				onRoleChange={onRoleChange}
+				onTransfer={onTransfer}
+				removePending={removePending}
+				role={member.role}
+				roleChangePending={roleChangePending}
+				transferPending={transferPending}
+			/>
+		);
+	}
+
+	if (member.kind === "invitation" && member.status === "rejected") {
+		return (
+			<RejectedInvitationActions
+				disabled={disabled}
+				onDelete={onDelete}
+				onResubmit={onResubmit}
+				pending={actionPending}
+			/>
+		);
+	}
+
+	return <span className="text-muted-foreground text-xs">권한 변경 불가</span>;
+}
+
 export function TeamMemberList({
 	disabled = false,
 	organization,
@@ -228,6 +477,59 @@ export function TeamMemberList({
 			},
 			onSuccess: async () => {
 				toast.success("멤버 권한을 변경했습니다.");
+				await invalidateMembers();
+			},
+		})
+	);
+	const transferOwnershipMutation = useMutation(
+		orpc.bambi.teams.transferOwnership.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "소유권을 이전하지 못했습니다.");
+			},
+			onSuccess: async () => {
+				toast.success(
+					"소유권을 이전했습니다. 회원님은 매니저로 전환되었습니다."
+				);
+				// 소유권이 넘어가면 요청자의 canManageOrganization도 바뀌므로 조직
+				// 정보까지 무효화해 화면 권한 상태를 즉시 갱신한다.
+				await Promise.all([
+					invalidateMembers(),
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.organizations.getMine.queryKey(),
+					}),
+				]);
+			},
+		})
+	);
+	const resubmitMutation = useMutation(
+		orpc.bambi.teams.resubmitInvitation.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "초대를 재제출하지 못했습니다.");
+			},
+			onSuccess: async () => {
+				toast.success("초대를 재제출했습니다. 운영자 승인을 기다립니다.");
+				await invalidateMembers();
+			},
+		})
+	);
+	const deleteMutation = useMutation(
+		orpc.bambi.teams.deleteInvitation.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "초대를 삭제하지 못했습니다.");
+			},
+			onSuccess: async () => {
+				toast.success("반려된 초대를 삭제했습니다.");
+				await invalidateMembers();
+			},
+		})
+	);
+	const removeMemberMutation = useMutation(
+		orpc.bambi.teams.removeMember.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "멤버를 내보내지 못했습니다.");
+			},
+			onSuccess: async () => {
+				toast.success("멤버를 내보냈습니다.");
 				await invalidateMembers();
 			},
 		})
@@ -422,6 +724,13 @@ export function TeamMemberList({
 								<p className="mt-1 break-words text-muted-foreground text-xs">
 									{member.email} · {formatDateTime(member.createdAt)}
 								</p>
+								{member.kind === "invitation" &&
+								member.status === "rejected" &&
+								member.rejectionReason ? (
+									<p className="mt-1 break-words text-destructive text-xs">
+										반려 사유: {member.rejectionReason}
+									</p>
+								) : null}
 							</div>
 							<div className="min-w-0">
 								<MemberTeams role={member.role} teams={member.teams} />
@@ -429,38 +738,49 @@ export function TeamMemberList({
 							<div className="text-sm">
 								{roleLabels[member.role as OrganizationRole] ?? member.role}
 							</div>
-							{organization.canManageOrganization &&
-							member.kind === "active" &&
-							member.role !== "owner" ? (
-								<Select
-									disabled={disabled || setRoleMutation.isPending}
-									items={roleLabels}
-									onValueChange={(value) =>
-										setRoleMutation.mutate({
-											memberId: member.id,
-											organizationId: organization.organizationId,
-											role: value as OrganizationRole,
-										})
-									}
-									value={member.role}
-								>
-									<SelectTrigger
-										aria-label={`${getMemberLabel(member)} 권한 변경`}
-										className={selectTriggerClassName}
-									>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="owner">소유자</SelectItem>
-										<SelectItem value="manager">매니저</SelectItem>
-										<SelectItem value="staff">스태프</SelectItem>
-									</SelectContent>
-								</Select>
-							) : (
-								<span className="text-muted-foreground text-xs">
-									권한 변경 불가
-								</span>
-							)}
+							<MemberRowActions
+								actionPending={
+									resubmitMutation.isPending || deleteMutation.isPending
+								}
+								canManage={organization.canManageOrganization}
+								disabled={disabled}
+								member={member}
+								memberLabel={getMemberLabel(member)}
+								onDelete={() =>
+									deleteMutation.mutate({
+										invitationId: member.id,
+										organizationId: organization.organizationId,
+									})
+								}
+								onRemove={() =>
+									removeMemberMutation.mutate({
+										memberId: member.id,
+										organizationId: organization.organizationId,
+									})
+								}
+								onResubmit={() =>
+									resubmitMutation.mutate({
+										invitationId: member.id,
+										organizationId: organization.organizationId,
+									})
+								}
+								onRoleChange={(value) =>
+									setRoleMutation.mutate({
+										memberId: member.id,
+										organizationId: organization.organizationId,
+										role: value,
+									})
+								}
+								onTransfer={() =>
+									transferOwnershipMutation.mutate({
+										memberId: member.id,
+										organizationId: organization.organizationId,
+									})
+								}
+								removePending={removeMemberMutation.isPending}
+								roleChangePending={setRoleMutation.isPending}
+								transferPending={transferOwnershipMutation.isPending}
+							/>
 						</div>
 					))}
 				</div>

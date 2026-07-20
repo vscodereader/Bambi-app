@@ -6,19 +6,10 @@ import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { StatusBadge } from "@/components/bambi/status-badge";
-import { targetTypeLabel } from "@/lib/bambi/report-labels";
+import { reportReasonLabel, targetTypeLabel } from "@/lib/bambi/report-labels";
 import { orpc } from "@/utils/orpc";
 
 type ReportStatus = "open" | "reviewing" | "resolved" | "dismissed";
-
-type ReportReason =
-	| "illegal_or_prohibited_content"
-	| "coercion_or_safety"
-	| "underage_concern"
-	| "scam_or_fraud"
-	| "harassment"
-	| "misleading_job_information"
-	| "other";
 
 const STATUS_LABELS: Record<ReportStatus, string> = {
 	open: "접수됨",
@@ -35,16 +26,6 @@ const STATUS_TONES: Record<
 	reviewing: "default",
 	resolved: "good",
 	dismissed: "danger",
-};
-
-const REASON_LABELS: Record<ReportReason, string> = {
-	illegal_or_prohibited_content: "불법·금지 콘텐츠",
-	coercion_or_safety: "강요·안전 위협",
-	underage_concern: "미성년 의심",
-	scam_or_fraud: "사기·기만",
-	harassment: "괴롭힘",
-	misleading_job_information: "허위 공고 정보",
-	other: "기타",
 };
 
 function pad2(value: number): string {
@@ -65,10 +46,6 @@ function statusLabel(status: string): string {
 
 function statusTone(status: string): "default" | "good" | "warning" | "danger" {
 	return STATUS_TONES[status as ReportStatus] ?? "default";
-}
-
-function reasonLabel(reason: string): string {
-	return REASON_LABELS[reason as ReportReason] ?? reason;
 }
 
 export function MyReportsScreen() {
@@ -110,7 +87,7 @@ export function MyReportsScreen() {
 								<div className="flex items-start justify-between gap-3">
 									<div className="flex min-w-0 flex-col gap-1">
 										<span className="font-semibold text-[15px] text-foreground">
-											{reasonLabel(item.reason)}
+											{reportReasonLabel(item.reason)}
 										</span>
 										<span className="text-[13px] text-muted-foreground">
 											{targetTypeLabel(item.targetType)} ·{" "}

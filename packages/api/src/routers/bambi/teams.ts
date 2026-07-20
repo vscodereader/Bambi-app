@@ -1,10 +1,16 @@
 import { randomUUID } from "node:crypto";
 
 import { db } from "@bambi-app/db";
-import { invitation, member, team, user } from "@bambi-app/db/schema/auth";
+import {
+	invitation,
+	member,
+	team,
+	teamMember,
+	user,
+} from "@bambi-app/db/schema/auth";
 import { bambiProfile, employerTeamProfile } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, ilike, notInArray, or } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, notInArray, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -47,8 +53,20 @@ const setMemberRoleInput = organizationIdInput.extend({
 	role: organizationRoleSchema,
 });
 
+const transferOwnershipInput = organizationIdInput.extend({
+	memberId: z.string().min(1),
+});
+
+const removeMemberInput = organizationIdInput.extend({
+	memberId: z.string().min(1),
+});
+
 const searchEmployerInviteesInput = organizationIdInput.extend({
 	query: z.string().max(320).optional(),
+});
+
+const invitationActionInput = organizationIdInput.extend({
+	invitationId: z.string().min(1),
 });
 
 const forbidden = (message: string) => new ORPCError("FORBIDDEN", { message });
@@ -315,6 +333,87 @@ export const teamsRouter = {
 			return created;
 		}),
 
+	resubmitInvitation: protectedProcedure
+		.input(invitationActionInput)
+		.handler(async ({ context, input }) => {
+			const { profile } = await requireOrganizationTeamManagementAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
+			});
+
+			const [existing] = await db
+				.select({ status: invitation.status })
+				.from(invitation)
+				.where(
+					and(
+						eq(invitation.id, input.invitationId),
+						eq(invitation.organizationId, input.organizationId)
+					)
+				)
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			if (existing.status !== "rejected") {
+				throw new ORPCError("CONFLICT", {
+					message: "반려된 초대만 재제출할 수 있습니다.",
+				});
+			}
+
+			const [updated] = await db
+				.update(invitation)
+				.set({
+					expiresAt: getExpiresAt(),
+					inviterId: profile.userId,
+					rejectionReason: null,
+					status: "pending",
+				})
+				.where(eq(invitation.id, input.invitationId))
+				.returning();
+
+			return updated;
+		}),
+
+	deleteInvitation: protectedProcedure
+		.input(invitationActionInput)
+		.handler(async ({ context, input }) => {
+			await requireOrganizationTeamManagementAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+
+			const [existing] = await db
+				.select({ status: invitation.status })
+				.from(invitation)
+				.where(
+					and(
+						eq(invitation.id, input.invitationId),
+						eq(invitation.organizationId, input.organizationId)
+					)
+				)
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			if (existing.status !== "rejected") {
+				throw new ORPCError("CONFLICT", {
+					message: "반려된 초대만 삭제할 수 있습니다.",
+				});
+			}
+
+			await db.delete(invitation).where(eq(invitation.id, input.invitationId));
+
+			return { success: true };
+		}),
+
 	searchEmployerInvitees: protectedProcedure
 		.input(searchEmployerInviteesInput)
 		.handler(async ({ context, input }) => {
@@ -429,6 +528,12 @@ export const teamsRouter = {
 				});
 			}
 
+			// 실수로 인한 소유권 상실·논란을 막기 위해, 일반 역할 변경으로는 소유자
+			// 승격을 허용하지 않는다. 소유권은 별도의 '소유권 이전' 절차로만 넘긴다.
+			if (normalizedRole === "owner") {
+				throw forbidden("소유권은 '소유권 이전'으로만 넘길 수 있습니다.");
+			}
+
 			const [updated] = await db
 				.update(member)
 				.set({
@@ -439,5 +544,134 @@ export const teamsRouter = {
 				.returning();
 
 			return updated;
+		}),
+
+	// 소유권 이전: 현재 소유자(요청자)를 매니저로 강등하고 대상 멤버를 소유자로
+	// 승격하는 단일 트랜잭션. '조직당 소유자 1명' 불변식을 유지하며, 실수한 승격을
+	// 되돌릴 수 있는 유일한 소유권 변경 경로다.
+	transferOwnership: protectedProcedure
+		.input(transferOwnershipInput)
+		.handler(async ({ context, input }) => {
+			const { profile } = await requireOrganizationOwnerAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
+			});
+
+			// 요청자(현재 소유자)의 멤버 행.
+			const [ownerMember] = await db
+				.select({ id: member.id })
+				.from(member)
+				.where(
+					and(
+						eq(member.organizationId, input.organizationId),
+						eq(member.userId, profile.userId)
+					)
+				)
+				.limit(1);
+
+			if (!ownerMember) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			// 소유권을 넘길 대상 멤버.
+			const [targetMember] = await db
+				.select({ id: member.id, status: member.status })
+				.from(member)
+				.where(
+					and(
+						eq(member.id, input.memberId),
+						eq(member.organizationId, input.organizationId)
+					)
+				)
+				.limit(1);
+
+			if (!targetMember) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			if (targetMember.id === ownerMember.id) {
+				throw forbidden("이미 소유자입니다.");
+			}
+
+			// 초대 대기 등 비활성 멤버에게는 소유권을 넘길 수 없다.
+			if (targetMember.status !== "active") {
+				throw forbidden("활성 멤버에게만 소유권을 이전할 수 있습니다.");
+			}
+
+			await db.transaction(async (tx) => {
+				const now = new Date();
+				await tx
+					.update(member)
+					.set({ role: toStoredRole("manager"), updatedAt: now })
+					.where(eq(member.id, ownerMember.id));
+				await tx
+					.update(member)
+					.set({ role: toStoredRole("owner"), updatedAt: now })
+					.where(eq(member.id, targetMember.id));
+			});
+
+			return { success: true };
+		}),
+
+	removeMember: protectedProcedure
+		.input(removeMemberInput)
+		.handler(async ({ context, input }) => {
+			const { profile } = await requireOrganizationOwnerAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
+			});
+
+			const [targetMember] = await db
+				.select({ role: member.role, userId: member.userId })
+				.from(member)
+				.where(
+					and(
+						eq(member.id, input.memberId),
+						eq(member.organizationId, input.organizationId)
+					)
+				)
+				.limit(1);
+
+			if (!targetMember) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			// 소유자(owner)는 내보낼 수 없다.
+			if (normalizeOrganizationManagementRole(targetMember.role) === "owner") {
+				throw forbidden("소유자는 내보낼 수 없습니다.");
+			}
+
+			await db.transaction(async (tx) => {
+				if (targetMember.userId) {
+					const orgTeams = await tx
+						.select({ id: team.id })
+						.from(team)
+						.where(eq(team.organizationId, input.organizationId));
+					const teamIds = orgTeams.map((row) => row.id);
+
+					if (teamIds.length > 0) {
+						await tx
+							.delete(teamMember)
+							.where(
+								and(
+									eq(teamMember.userId, targetMember.userId),
+									inArray(teamMember.teamId, teamIds)
+								)
+							);
+					}
+				}
+
+				await tx.delete(member).where(eq(member.id, input.memberId));
+			});
+
+			return { success: true };
 		}),
 };

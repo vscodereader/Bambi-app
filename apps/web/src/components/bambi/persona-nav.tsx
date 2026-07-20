@@ -7,6 +7,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
+import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { BOTTOM_NAV_CONTENT_SPACER, BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
 import {
@@ -52,11 +53,14 @@ function NavBar({ children }: { children: ReactNode }) {
 // ---- 구직자 ----------------------------------------------------------------
 export function SeekerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
+	// 내 정보 하위 페이지(신고 내역·예정된 면접·차단 목록·계정 설정)도 하단 탭을
+	// 유지한다 → /seeker/me 및 그 하위 경로 전체에서 노출.
 	const showNav =
 		path === "/seeker" ||
 		path === "/seeker/chats" ||
 		path === "/seeker/community" ||
-		path === "/seeker/me";
+		path === "/seeker/me" ||
+		path.startsWith("/seeker/me/");
 	return (
 		<>
 			<Content withBottomNav={showNav}>{children}</Content>
@@ -70,10 +74,14 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const router = useRouter();
 	// 하단 탭은 구인자 주요 라우트에서 항상 노출한다(승인 상태와 무관).
+	// 프로모션·성과 분석은 대시보드 퀵링크로만 닿는 하위 페이지지만, 하단 탭이
+	// 사라지면 모바일에서 되돌아갈 길이 없어 함께 노출한다("내 공고" 활성 유지).
 	const showNav =
 		path === "/employer" ||
 		path === "/employer/new" ||
 		path === "/employer/me" ||
+		path.startsWith("/employer/promotions") ||
+		path.startsWith("/employer/analytics") ||
 		path.startsWith("/employer/settings");
 	let value = "postings";
 	if (path === "/employer/me") {
@@ -126,8 +134,11 @@ const MOD_ROUTES: Record<string, Route> = {
 	reports: "/moderator/reports",
 	employers: "/moderator/employers",
 	users: "/moderator/users",
+	adProducts: "/moderator/ad-products",
 	reviews: "/moderator/reviews",
 };
+// 게시물·고객센터·금칙어는 하단 탭이 아니라 "더보기" 시트에서 Link로 직접 이동하므로
+// 여기(탭 클릭 → router.push 경로 표) 항목이 필요 없다.
 const MOD_DETAIL_RE = /^\/moderator\/(?:queue|reports|users)\/[^/]+/;
 
 export function ModeratorShell({ children }: { children: ReactNode }) {
@@ -157,21 +168,37 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 	const isDetail = MOD_DETAIL_RE.test(path);
 	if (isDetail) {
 		return (
-			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+			<div
+				className={cn(
+					"mx-auto flex min-h-0 w-full flex-1 flex-col",
+					APP_CONTENT_WIDTH
+				)}
+			>
 				<Content>{children}</Content>
 			</div>
 		);
 	}
 
+	// 하단 탭은 검수·신고·사용자·광고 상품 4개만 노출하고, 나머지 목적지(업소 승인·팀 합류
+	// 승인·결제 관리·게시물·고객센터·금칙어)는 "더보기" 시트로 접는다 → 그 경로에선 "more" 활성.
 	let tab = "queue";
 	if (path.startsWith("/moderator/reports")) {
 		tab = "reports";
-	} else if (path.startsWith("/moderator/employers")) {
-		tab = "employers";
 	} else if (path.startsWith("/moderator/users")) {
 		tab = "users";
 	} else if (path.startsWith("/moderator/reviews")) {
 		tab = "reviews";
+	} else if (path.startsWith("/moderator/ad-products")) {
+		tab = "adProducts";
+	} else if (
+		path.startsWith("/moderator/employers") ||
+		path.startsWith("/moderator/team-invites") ||
+		path.startsWith("/moderator/payments") ||
+		path.startsWith("/moderator/content") ||
+		path.startsWith("/moderator/support") ||
+		path.startsWith("/moderator/banned-words")
+	) {
+		tab = "more";
 	}
 	const go = (v: string) => {
 		clearSelection();
@@ -187,7 +214,12 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 
 	return (
 		<>
-			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+			<div
+				className={cn(
+					"mx-auto flex min-h-0 w-full flex-1 flex-col",
+					APP_CONTENT_WIDTH
+				)}
+			>
 				<ConsoleTop
 					counts={{
 						queue: queue.length,

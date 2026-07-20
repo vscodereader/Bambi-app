@@ -31,6 +31,7 @@ import {
 	FieldLabel,
 	FormError,
 } from "@/components/bambi/form-message";
+import { JobExposureFields } from "@/components/bambi/job-exposure-fields";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
 import { PageShell } from "@/components/bambi/page-shell";
@@ -47,6 +48,7 @@ import {
 	type JobFormErrors,
 	type JobFormMedia,
 	type JobFormMediaItem,
+	type JobPaymentMethod,
 	resolveJobPostMediaForSubmit,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
@@ -223,11 +225,16 @@ export default function EditEmployerJobPage({
 		}
 
 		setForm({
+			adProductId: job.adProductId ?? null,
 			description: job.description,
+			exposureAmount: job.exposureAmount ?? null,
+			exposureDurationDays: job.exposureDurationDays ?? null,
+			exposureType: job.exposureType,
 			industryCategory: job.industryCategory,
 			interviewNotes: job.interviewNotes ?? "",
 			organizationId: job.organizationId,
 			payAmount: String(job.payAmount),
+			paymentMethod: job.paymentMethod ?? null,
 			payUnit: job.payUnit,
 			region: job.region,
 			teamId: job.teamId ?? "",
@@ -258,6 +265,62 @@ export default function EditEmployerJobPage({
 			[field]: undefined,
 		}));
 		setFormError(null);
+	};
+
+	const updateExposureFields = (
+		patch: Partial<
+			Pick<
+				JobForm,
+				| "adProductId"
+				| "exposureAmount"
+				| "exposureDurationDays"
+				| "exposureType"
+				| "paymentMethod"
+			>
+		>
+	) => {
+		setIsDirty(true);
+		setForm((currentForm) => ({
+			...currentForm,
+			...patch,
+		}));
+		setFieldErrors((currentErrors) => ({
+			...currentErrors,
+			adProductId: undefined,
+			exposureDurationDays: undefined,
+			exposureType: undefined,
+			paymentMethod: undefined,
+		}));
+		setFormError(null);
+	};
+
+	const handleProductChange = (productId: string | null) => {
+		updateExposureFields(
+			productId
+				? {
+						adProductId: productId,
+						exposureAmount: null,
+						exposureDurationDays: null,
+					}
+				: {
+						adProductId: null,
+						exposureAmount: null,
+						exposureDurationDays: null,
+						exposureType: "standard",
+						paymentMethod: null,
+					}
+		);
+	};
+
+	const handlePaymentMethodChange = (value: JobPaymentMethod) => {
+		updateExposureFields({ paymentMethod: value });
+	};
+
+	const handleDurationChange = (days: number | null, amount: number | null) => {
+		updateExposureFields({
+			exposureAmount: amount,
+			exposureDurationDays: days,
+		});
 	};
 
 	const handleCancel = () => {
@@ -762,6 +825,21 @@ export default function EditEmployerJobPage({
 							}));
 							setFormError(null);
 						}}
+					/>
+
+					<JobExposureFields
+						adProductId={form.adProductId}
+						errors={{
+							exposureDurationDays: fieldErrors.exposureDurationDays,
+							exposureType: fieldErrors.exposureType,
+							paymentMethod: fieldErrors.paymentMethod,
+						}}
+						exposureAmount={form.exposureAmount}
+						exposureDurationDays={form.exposureDurationDays}
+						onDurationChange={handleDurationChange}
+						onPaymentMethodChange={handlePaymentMethodChange}
+						onProductChange={handleProductChange}
+						paymentMethod={form.paymentMethod}
 					/>
 
 					<div className="xl:hidden">{listingPreview}</div>

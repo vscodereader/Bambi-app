@@ -23,9 +23,6 @@ import {
 	Clock,
 	Eye,
 	type LucideIcon,
-	Megaphone,
-	Settings,
-	Trash2,
 	TriangleAlert,
 	Zap,
 } from "lucide-react";
@@ -33,40 +30,24 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { DataTable } from "@/components/bambi/data-table";
 import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
 import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
+import {
+	type EmployerJob,
+	getEmployerJobsColumns,
+} from "@/components/bambi/employer-jobs-columns";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { authClient } from "@/lib/auth-client";
-import { formatDateTime, formatNullable, formatPay } from "@/lib/bambi-format";
-import { jobStatusLabels, verificationStatusLabels } from "@/lib/bambi-options";
+import { formatNullable } from "@/lib/bambi-format";
+import { verificationStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
-
-const getJobStatusLabel = (status: string): string =>
-	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
 
 const getVerificationStatusLabel = (status: string): string =>
 	verificationStatusLabels[status as keyof typeof verificationStatusLabels] ??
 	status;
-
-const getJobStatusTone = (
-	status: string
-): React.ComponentProps<typeof StatusBadge>["tone"] => {
-	if (status === "published") {
-		return "good";
-	}
-
-	if (status === "pending_review") {
-		return "warning";
-	}
-
-	if (status === "rejected") {
-		return "danger";
-	}
-
-	return "default";
-};
 
 const getVerificationStatusTone = (
 	status: string
@@ -91,22 +72,32 @@ const getErrorCode = (error: Error | null): string | undefined =>
 		? error.code
 		: undefined;
 
-interface PromotionSummaryItem {
-	remainingManualBoosts: number;
+interface AdSummaryItem {
+	boostsUsedToday: number;
+	exposureEndsAt: Date | null | string;
+	manualBoostsPerDay: number;
+	paymentStatus: string;
 	status: string;
 }
 
-const getPromotionSummary = (promotions: PromotionSummaryItem[]) => ({
-	activeCount: promotions.filter((promotion) => promotion.status === "active")
-		.length,
-	pendingCount: promotions.filter(
-		(promotion) => promotion.status === "pending_payment"
-	).length,
-	remainingBoostCount: promotions.reduce(
-		(total, promotion) => total + promotion.remainingManualBoosts,
-		0
-	),
-});
+const getAdSummary = (ads: AdSummaryItem[], now: number) => {
+	const isActive = (ad: AdSummaryItem) =>
+		ad.status === "published" &&
+		ad.paymentStatus === "paid" &&
+		(ad.exposureEndsAt === null || new Date(ad.exposureEndsAt).getTime() > now);
+
+	return {
+		activeCount: ads.filter(isActive).length,
+		pendingCount: ads.filter((ad) => ad.paymentStatus !== "paid").length,
+		remainingBoostCount: ads
+			.filter(isActive)
+			.reduce(
+				(total, ad) =>
+					total + Math.max(0, ad.manualBoostsPerDay - ad.boostsUsedToday),
+				0
+			),
+	};
+};
 
 const getJobStatusCounts = (jobPosts: { status: string }[]) => ({
 	pendingReview: jobPosts.filter((job) => job.status === "pending_review")
@@ -114,24 +105,6 @@ const getJobStatusCounts = (jobPosts: { status: string }[]) => ({
 	published: jobPosts.filter((job) => job.status === "published").length,
 	rejected: jobPosts.filter((job) => job.status === "rejected").length,
 });
-
-const getJobLeadingStatus = (
-	status: string
-): { icon: LucideIcon; tile: string } => {
-	if (status === "published") {
-		return { icon: Check, tile: "bg-green-50 text-green-600" };
-	}
-
-	if (status === "rejected") {
-		return { icon: CircleAlert, tile: "bg-red-50 text-red-600" };
-	}
-
-	if (status === "pending_review") {
-		return { icon: Clock, tile: "bg-amber-50 text-amber-500" };
-	}
-
-	return { icon: Clock, tile: "bg-secondary text-muted-foreground" };
-};
 
 const quickLinks: {
 	description: string;
@@ -143,25 +116,13 @@ const quickLinks: {
 		description: "공고 노출을 끌어올려요",
 		href: "/employer/promotions" as Route,
 		icon: Zap,
-		label: "프로모션 관리",
-	},
-	{
-		description: "유료 광고 상품을 확인해요",
-		href: "/employer/ad-guide" as Route,
-		icon: Megaphone,
-		label: "광고 상품 안내",
+		label: "광고 관리",
 	},
 	{
 		description: "조회·지원 지표를 확인해요",
 		href: "/employer/analytics" as Route,
 		icon: ChartColumn,
 		label: "성과 분석",
-	},
-	{
-		description: "사업자·팀 정보를 관리해요",
-		href: "/employer/settings" as Route,
-		icon: Settings,
-		label: "조직 설정",
 	},
 	{
 		description: "지원자 화면을 미리 봐요",
@@ -245,6 +206,111 @@ function QuickLinkTile({
 	);
 }
 
+function OwnedJobsPanel({
+	deletingJobId,
+	isDeleting,
+	isError,
+	isLoading,
+	jobs,
+	onCancelDelete,
+	onConfirmDelete,
+	onRequestDelete,
+	onRetry,
+	verified,
+}: {
+	deletingJobId: null | string;
+	isDeleting: boolean;
+	isError: boolean;
+	isLoading: boolean;
+	jobs: EmployerJob[];
+	onCancelDelete: () => void;
+	onConfirmDelete: (jobId: string) => void;
+	onRequestDelete: (jobId: string) => void;
+	onRetry: () => void;
+	verified: boolean;
+}) {
+	if (isLoading) {
+		return (
+			<div className="flex flex-col gap-3">
+				<Skeleton className="h-20 w-full rounded-lg" />
+				<Skeleton className="h-20 w-full rounded-lg" />
+				<Skeleton className="h-20 w-full rounded-lg" />
+			</div>
+		);
+	}
+
+	if (isError) {
+		return (
+			<EmptyState
+				action={
+					<Button onClick={onRetry} type="button">
+						다시 시도
+					</Button>
+				}
+				description="공고 목록을 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요."
+				title="공고를 불러올 수 없습니다"
+			/>
+		);
+	}
+
+	if (jobs.length === 0) {
+		return (
+			<EmptyState
+				action={<NewJobButton verified={verified} />}
+				description="조직 프로필을 선택해 첫 공고를 등록해 보세요."
+				title="등록한 공고가 없습니다"
+			/>
+		);
+	}
+
+	const jobToDelete = jobs.find((job) => job.id === deletingJobId) ?? null;
+
+	return (
+		<div className="flex flex-col gap-3">
+			{jobToDelete ? (
+				<Alert variant="destructive">
+					<TriangleAlert />
+					<AlertTitle>“{jobToDelete.title}” 공고를 삭제할까요?</AlertTitle>
+					<AlertDescription>
+						삭제한 공고와 연결된 광고·성과 기록은 되돌릴 수 없어요.
+					</AlertDescription>
+					<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+						<Button
+							disabled={isDeleting}
+							onClick={onCancelDelete}
+							type="button"
+							variant="outline"
+						>
+							취소
+						</Button>
+						<Button
+							disabled={isDeleting}
+							onClick={() => onConfirmDelete(jobToDelete.id)}
+							type="button"
+							variant="destructive"
+						>
+							{isDeleting ? "삭제 중…" : "삭제"}
+						</Button>
+					</div>
+				</Alert>
+			) : null}
+			<Card aria-labelledby="owned-jobs">
+				<CardContent className="overflow-x-auto p-0">
+					<DataTable
+						columns={getEmployerJobsColumns({
+							deletingJobId,
+							onRequestDelete,
+						})}
+						data={jobs}
+						emptyMessage="등록한 공고가 없습니다."
+						getRowKey={(job) => job.id}
+					/>
+				</CardContent>
+			</Card>
+		</div>
+	);
+}
+
 export default function EmployerPage() {
 	const session = authClient.useSession();
 	const verified = useEmployerVerified();
@@ -260,14 +326,14 @@ export default function EmployerPage() {
 		enabled: canLoadJobs,
 	});
 	const promotionsQuery = useQuery({
-		...orpc.bambi.promotions.listMine.queryOptions(),
+		...orpc.bambi.promotions.listMyAds.queryOptions(),
 		enabled: canLoadJobs,
 	});
 	const organizationProfiles =
 		mineQuery.data?.employerOrganizationProfiles ?? [];
 	const teamProfiles = mineQuery.data?.employerTeamProfiles ?? [];
 	const jobs = jobsQuery.data ?? [];
-	const promotionSummary = getPromotionSummary(promotionsQuery.data ?? []);
+	const promotionSummary = getAdSummary(promotionsQuery.data ?? [], Date.now());
 	const jobStatusCounts = getJobStatusCounts(jobs);
 	const queryClient = useQueryClient();
 	const [deletingJobId, setDeletingJobId] = useState<null | string>(null);
@@ -287,7 +353,7 @@ export default function EmployerPage() {
 						queryKey: orpc.bambi.jobs.listMine.queryKey(),
 					}),
 					queryClient.invalidateQueries({
-						queryKey: orpc.bambi.promotions.listMine.queryKey(),
+						queryKey: orpc.bambi.promotions.listMyAds.queryKey(),
 					}),
 				]);
 			},
@@ -299,17 +365,6 @@ export default function EmployerPage() {
 			(organizationProfile) =>
 				organizationProfile.organizationId === organizationId
 		)?.displayName ?? organizationId;
-
-	const getTeamLabel = (teamId: null | string): string => {
-		if (!teamId) {
-			return "전체 조직";
-		}
-
-		return (
-			teamProfiles.find((teamProfile) => teamProfile.teamId === teamId)
-				?.displayName ?? teamId
-		);
-	};
 
 	if (session.isPending || mineQuery.isLoading) {
 		return (
@@ -401,154 +456,23 @@ export default function EmployerPage() {
 		);
 	}
 
-	let jobsContent: React.ReactNode;
-
-	if (jobsQuery.isLoading) {
-		jobsContent = (
-			<div className="flex flex-col gap-3">
-				<Skeleton className="h-20 w-full rounded-lg" />
-				<Skeleton className="h-20 w-full rounded-lg" />
-				<Skeleton className="h-20 w-full rounded-lg" />
-			</div>
-		);
-	} else if (jobsQuery.isError) {
-		jobsContent = (
-			<EmptyState
-				action={
-					<Button onClick={() => jobsQuery.refetch()} type="button">
-						다시 시도
-					</Button>
-				}
-				description="공고 목록을 불러오지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요."
-				title="공고를 불러올 수 없습니다"
-			/>
-		);
-	} else if (jobs.length === 0) {
-		jobsContent = (
-			<EmptyState
-				action={<NewJobButton verified={verified} />}
-				description="조직 프로필을 선택해 첫 공고를 등록해 보세요."
-				title="등록한 공고가 없습니다"
-			/>
-		);
-	} else {
-		jobsContent = (
-			<Card aria-labelledby="owned-jobs">
-				<CardContent className="divide-y p-0">
-					{jobs.map((job) => {
-						const leading = getJobLeadingStatus(job.status);
-						const LeadingIcon = leading.icon;
-						const isConfirmingDelete = deletingJobId === job.id;
-						const isDeletingJob =
-							deleteMutation.isPending &&
-							deleteMutation.variables?.id === job.id;
-
-						return (
-							<div
-								className={cn(
-									"flex flex-col gap-3 border-l-2 border-l-transparent p-4",
-									job.status === "rejected" && "border-l-red-500"
-								)}
-								key={job.id}
-							>
-								<div className="flex items-start gap-3">
-									<span
-										className={cn(
-											"mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md",
-											leading.tile
-										)}
-									>
-										<LeadingIcon className="size-5" />
-									</span>
-									<div className="flex min-w-0 flex-1 flex-col gap-2">
-										<div className="flex min-w-0 flex-col gap-1">
-											<h3 className="min-w-0 break-words font-medium text-base">
-												{job.title}
-											</h3>
-											<p className="break-words text-foreground text-sm">
-												{job.industryCategory} · {job.region} ·{" "}
-												{formatPay(job.payAmount, job.payUnit)}
-											</p>
-										</div>
-										<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-											<span className="flex items-center gap-1.5">
-												<span className="text-muted-foreground">공고</span>
-												<StatusBadge tone={getJobStatusTone(job.status)}>
-													{getJobStatusLabel(job.status)}
-												</StatusBadge>
-											</span>
-											<span className="flex items-center gap-1.5">
-												<span className="text-muted-foreground">사업자</span>
-												<StatusBadge
-													tone={getVerificationStatusTone(
-														job.employerVerificationStatus
-													)}
-												>
-													{getVerificationStatusLabel(
-														job.employerVerificationStatus
-													)}
-												</StatusBadge>
-											</span>
-										</div>
-										<p className="break-words text-muted-foreground text-xs">
-											{getOrganizationLabel(job.organizationId)} ·{" "}
-											{getTeamLabel(job.teamId)} · 수정{" "}
-											{formatDateTime(job.updatedAt)}
-										</p>
-									</div>
-									<div className="flex shrink-0 flex-col gap-2">
-										<Link
-											className={cn(buttonVariants({ variant: "outline" }))}
-											href={`/employer/jobs/${job.id}/edit` as Route}
-										>
-											수정
-										</Link>
-										<Button
-											disabled={isConfirmingDelete}
-											onClick={() => setDeletingJobId(job.id)}
-											type="button"
-											variant="destructive"
-										>
-											<Trash2 data-icon="inline-start" />
-											삭제
-										</Button>
-									</div>
-								</div>
-								{isConfirmingDelete ? (
-									<Alert variant="destructive">
-										<TriangleAlert />
-										<AlertTitle>이 공고를 삭제할까요?</AlertTitle>
-										<AlertDescription>
-											삭제한 공고와 연결된 프로모션·성과 기록은 되돌릴 수
-											없어요.
-										</AlertDescription>
-										<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-											<Button
-												disabled={isDeletingJob}
-												onClick={() => setDeletingJobId(null)}
-												type="button"
-												variant="outline"
-											>
-												취소
-											</Button>
-											<Button
-												disabled={isDeletingJob}
-												onClick={() => deleteMutation.mutate({ id: job.id })}
-												type="button"
-												variant="destructive"
-											>
-												{isDeletingJob ? "삭제 중…" : "삭제"}
-											</Button>
-										</div>
-									</Alert>
-								) : null}
-							</div>
-						);
-					})}
-				</CardContent>
-			</Card>
-		);
-	}
+	const jobsContent = (
+		<OwnedJobsPanel
+			deletingJobId={deletingJobId}
+			isDeleting={
+				deleteMutation.isPending &&
+				deleteMutation.variables?.id === deletingJobId
+			}
+			isError={jobsQuery.isError}
+			isLoading={jobsQuery.isLoading}
+			jobs={jobs}
+			onCancelDelete={() => setDeletingJobId(null)}
+			onConfirmDelete={(id) => deleteMutation.mutate({ id })}
+			onRequestDelete={setDeletingJobId}
+			onRetry={() => jobsQuery.refetch()}
+			verified={verified}
+		/>
+	);
 
 	return (
 		<PageShell
@@ -588,7 +512,7 @@ export default function EmployerPage() {
 							<dl className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
 								<div className="flex items-center gap-1.5">
 									<Zap className="size-4 shrink-0 text-coral-500" />
-									<dt className="text-muted-foreground">진행 중인 프로모션</dt>
+									<dt className="text-muted-foreground">진행 중인 광고</dt>
 									<dd className="font-medium text-foreground">
 										{promotionSummary.activeCount}개
 									</dd>
@@ -600,7 +524,9 @@ export default function EmployerPage() {
 									</dd>
 								</div>
 								<div className="flex items-center gap-1.5">
-									<dt className="text-muted-foreground">남은 끌어올리기</dt>
+									<dt className="text-muted-foreground">
+										오늘 남은 끌어올리기
+									</dt>
 									<dd className="font-medium text-foreground">
 										{promotionSummary.remainingBoostCount}회
 									</dd>

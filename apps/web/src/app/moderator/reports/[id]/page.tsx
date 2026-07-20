@@ -11,6 +11,7 @@ export default function ModeratorReportDetailPage() {
 		blockChatRoom,
 		isBlockingChatRoom,
 		isLoading,
+		moderateCommunityTarget,
 		reports,
 		resolveReport,
 		sanction,
@@ -44,6 +45,7 @@ export default function ModeratorReportDetailPage() {
 			item={item}
 			onBack={() => router.push("/moderator/reports")}
 			onBlockChatRoom={blockChatRoom}
+			onModerateCommunity={moderateCommunityTarget}
 			onResolve={(rid, action) => {
 				resolveReport(rid, action);
 				router.push("/moderator/reports");

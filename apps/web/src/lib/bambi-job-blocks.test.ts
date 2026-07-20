@@ -8,11 +8,16 @@ import {
 } from "./bambi-job-form";
 
 const baseForm: JobForm = {
+	adProductId: null,
 	description: "기본 상세 설명입니다.",
+	exposureAmount: null,
+	exposureDurationDays: null,
+	exposureType: "standard",
 	industryCategory: "라운지",
 	interviewNotes: "",
 	organizationId: "org-1",
 	payAmount: "180000",
+	paymentMethod: null,
 	payUnit: "일급",
 	region: "서울 강남구",
 	teamId: "",

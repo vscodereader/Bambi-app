@@ -10,21 +10,13 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import Loader from "@/components/loader";
-import { jobStatusLabels } from "@/lib/bambi-options";
+import { getJobDisplayStatus } from "@/lib/bambi/exposure";
 import { orpc } from "@/utils/orpc";
 
 interface MetricCardProps {
 	label: string;
 	value: string;
 }
-
-const getJobStatusLabel = (status: string): string =>
-	jobStatusLabels[status as keyof typeof jobStatusLabels] ?? status;
-
-const getJobStatusTone = (
-	status: string
-): React.ComponentProps<typeof StatusBadge>["tone"] =>
-	status === "published" ? "good" : "warning";
 
 const formatNumber = (value: number): string => value.toLocaleString("ko-KR");
 
@@ -56,22 +48,37 @@ export default function EmployerAnalyticsPage() {
 			contactReveals: accumulator.contactReveals + item.metrics.contactReveals,
 			detailViews: accumulator.detailViews + item.metrics.detailViews,
 			impressions: accumulator.impressions + item.metrics.impressions,
+			leftBannerImpressions:
+				accumulator.leftBannerImpressions +
+				item.sectionMetrics.leftBannerImpressions,
 			organicImpressions:
 				accumulator.organicImpressions + item.sectionMetrics.organicImpressions,
-			premiumImpressions:
-				accumulator.premiumImpressions + item.sectionMetrics.premiumImpressions,
+			premiumBannerImpressions:
+				accumulator.premiumBannerImpressions +
+				item.sectionMetrics.premiumBannerImpressions,
 			recommendedImpressions:
 				accumulator.recommendedImpressions +
 				item.sectionMetrics.recommendedImpressions,
+			rightBannerImpressions:
+				accumulator.rightBannerImpressions +
+				item.sectionMetrics.rightBannerImpressions,
+			specialImpressions:
+				accumulator.specialImpressions + item.sectionMetrics.specialImpressions,
+			urgentImpressions:
+				accumulator.urgentImpressions + item.sectionMetrics.urgentImpressions,
 		}),
 		{
 			chatStarts: 0,
 			contactReveals: 0,
 			detailViews: 0,
 			impressions: 0,
+			leftBannerImpressions: 0,
 			organicImpressions: 0,
-			premiumImpressions: 0,
+			premiumBannerImpressions: 0,
 			recommendedImpressions: 0,
+			rightBannerImpressions: 0,
+			specialImpressions: 0,
+			urgentImpressions: 0,
 		}
 	);
 
@@ -114,7 +121,7 @@ export default function EmployerAnalyticsPage() {
 						className={buttonVariants({ variant: "outline" })}
 						href={"/employer/promotions" as Route}
 					>
-						프로모션 관리
+						광고 관리
 					</Link>
 					<Link
 						className={buttonVariants({ variant: "outline" })}
@@ -145,10 +152,14 @@ export default function EmployerAnalyticsPage() {
 				<h2 className="font-medium text-base" id="placement-metrics">
 					노출 구분
 				</h2>
-				<dl className="grid gap-3 sm:grid-cols-3">
+				<dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 					<MetricCard
-						label="프리미엄"
-						value={formatNumber(totals.premiumImpressions)}
+						label="스페셜"
+						value={formatNumber(totals.specialImpressions)}
+					/>
+					<MetricCard
+						label="급구"
+						value={formatNumber(totals.urgentImpressions)}
 					/>
 					<MetricCard
 						label="추천"
@@ -157,6 +168,18 @@ export default function EmployerAnalyticsPage() {
 					<MetricCard
 						label="일반"
 						value={formatNumber(totals.organicImpressions)}
+					/>
+					<MetricCard
+						label="프리미엄 배너"
+						value={formatNumber(totals.premiumBannerImpressions)}
+					/>
+					<MetricCard
+						label="좌측 배너"
+						value={formatNumber(totals.leftBannerImpressions)}
+					/>
+					<MetricCard
+						label="우측 배너"
+						value={formatNumber(totals.rightBannerImpressions)}
 					/>
 				</dl>
 			</section>
@@ -206,8 +229,8 @@ export default function EmployerAnalyticsPage() {
 										<th className="px-4 py-3 font-medium" scope="row">
 											<div className="max-w-[280px]">
 												<p className="m-0 break-words">{summary.title}</p>
-												<StatusBadge tone={getJobStatusTone(summary.status)}>
-													{getJobStatusLabel(summary.status)}
+												<StatusBadge tone={getJobDisplayStatus(summary).tone}>
+													{getJobDisplayStatus(summary).label}
 												</StatusBadge>
 											</div>
 										</th>
@@ -230,14 +253,28 @@ export default function EmployerAnalyticsPage() {
 											)}
 										</td>
 										<td className="px-4 py-3">
-											프리미엄{" "}
-											{formatNumber(summary.sectionMetrics.premiumImpressions)}{" "}
-											· 추천{" "}
+											스페셜{" "}
+											{formatNumber(summary.sectionMetrics.specialImpressions)}{" "}
+											· 급구{" "}
+											{formatNumber(summary.sectionMetrics.urgentImpressions)} ·
+											추천{" "}
 											{formatNumber(
 												summary.sectionMetrics.recommendedImpressions
 											)}{" "}
 											· 일반{" "}
-											{formatNumber(summary.sectionMetrics.organicImpressions)}
+											{formatNumber(summary.sectionMetrics.organicImpressions)}{" "}
+											· 프리미엄 배너{" "}
+											{formatNumber(
+												summary.sectionMetrics.premiumBannerImpressions
+											)}{" "}
+											· 좌측 배너{" "}
+											{formatNumber(
+												summary.sectionMetrics.leftBannerImpressions
+											)}{" "}
+											· 우측 배너{" "}
+											{formatNumber(
+												summary.sectionMetrics.rightBannerImpressions
+											)}
 										</td>
 									</tr>
 								))}

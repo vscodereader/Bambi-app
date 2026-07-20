@@ -170,6 +170,7 @@ export const invitation = pgTable(
 		role: text("role"),
 		teamId: text("team_id"),
 		status: text("status").default("pending").notNull(),
+		rejectionReason: text("rejection_reason"),
 		expiresAt: timestamp("expires_at").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")

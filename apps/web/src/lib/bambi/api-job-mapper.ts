@@ -34,8 +34,10 @@ export interface ApiMarketplaceJob {
 	descriptionBlocks?: JobDescriptionBlock[] | null;
 	employerDisplayName?: string | null;
 	employerVerificationStatus?: string | null;
+	exposureType?: null | string;
 	id: string;
 	industryCategory: string;
+	isPromoted?: boolean;
 	lastBoostedAt?: Date | null | string;
 	media?: ApiJobMediaSet;
 	payAmount: number;
@@ -140,10 +142,11 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 			"공고 상세와 면접 안내는 밤비 채팅에서 안전하게 확인할 수 있어요.",
 		descriptionBlocks: job.descriptionBlocks ?? [],
 		detailImages,
+		exposureType: job.exposureType ?? null,
 		featured: job.employerVerificationStatus === "verified",
 		hours: job.workSchedule ?? "채팅으로 확인",
 		id: job.id,
-		isPromoted: Boolean(job.promotionTier),
+		isPromoted: job.isPromoted ?? Boolean(job.promotionTier),
 		lastBoostedAt: job.lastBoostedAt ?? null,
 		location: job.region,
 		pay: formatMarketplacePay(job),
@@ -159,4 +162,29 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		type: job.industryCategory,
 		verified: job.employerVerificationStatus === "verified",
 	};
+};
+
+export interface ApiAdBannerJob {
+	coverImage?: ApiJobMedia | null;
+	employerDisplayName?: string | null;
+	id: string;
+	teamDisplayName?: string | null;
+	title: string;
+}
+
+export interface AdBannerItem {
+	company: string;
+	coverUrl: string;
+	id: string;
+	title: string;
+}
+
+// 광고 배너는 해당 공고의 커버 이미지를 쓴다 — 실스토리지 연동(toJobMediaUrl 교체) 시
+// 배너도 자동으로 실이미지가 된다. 커버가 없으면 결정적 샘플 커버로 폴백.
+export const toAdBannerItem = (job: ApiAdBannerJob): AdBannerItem => {
+	const company = job.teamDisplayName ?? job.employerDisplayName ?? "검증 업체";
+	const media =
+		toJobMedia(job.coverImage ?? null) ??
+		sampleCoverMedia(job.id, `${company} 대표 이미지`);
+	return { company, coverUrl: media.url, id: job.id, title: job.title };
 };

@@ -1,8 +1,8 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import type { ReactNode } from "react";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
-import { getVisualJobExposureSections } from "@/lib/bambi/visual-job-exposure";
 import { Card } from "./ds";
 import { VisualJobCard } from "./visual-job-card";
 
@@ -65,6 +65,8 @@ function ExposureSection({
 }
 
 interface VisualJobExposureSectionsProps {
+	// 급구·추천 사이(공고 0개 빈 상태에서도)에 끼워 넣을 임의 콘텐츠 슬롯
+	communitySlot?: ReactNode;
 	jobs: Job[];
 	onChat: (job: Job) => void;
 	onOpen: (job: Job) => void;
@@ -73,6 +75,7 @@ interface VisualJobExposureSectionsProps {
 }
 
 export function VisualJobExposureSections({
+	communitySlot,
 	jobs,
 	onChat,
 	onOpen,
@@ -80,7 +83,7 @@ export function VisualJobExposureSections({
 	selectedJobId,
 }: VisualJobExposureSectionsProps) {
 	if (jobs.length === 0) {
-		return (
+		const emptyCard = (
 			<Card className="rounded-lg text-center" pad="lg" tone="outline">
 				<h2 className="m-0 font-extrabold text-lg">
 					조건에 맞는 공고가 없어요
@@ -90,15 +93,24 @@ export function VisualJobExposureSections({
 				</p>
 			</Card>
 		);
+		// 공고가 없어도 커뮤니티 슬롯은 유지한다. slot이 없으면 기존과 동일한 단일 Card,
+		// 있으면 본 분기와 같은 간격(grid gap-5)으로 쌓는다.
+		if (!communitySlot) {
+			return emptyCard;
+		}
+		return (
+			<div className="grid gap-5">
+				{emptyCard}
+				{communitySlot}
+			</div>
+		);
 	}
-
-	const visualSections = getVisualJobExposureSections(sections);
 
 	return (
 		<div className="grid gap-5">
-			{visualSections.special.length > 0 ? (
+			{sections.special.length > 0 ? (
 				<ExposureSection
-					jobs={visualSections.special}
+					jobs={sections.special}
 					meta="프리미엄 노출"
 					onChat={onChat}
 					onOpen={onOpen}
@@ -106,9 +118,9 @@ export function VisualJobExposureSections({
 					tone="special"
 				/>
 			) : null}
-			{visualSections.urgent.length > 0 ? (
+			{sections.urgent.length > 0 ? (
 				<ExposureSection
-					jobs={visualSections.urgent}
+					jobs={sections.urgent}
 					meta="최근 끌어올림"
 					onChat={onChat}
 					onOpen={onOpen}
@@ -116,9 +128,11 @@ export function VisualJobExposureSections({
 					tone="urgent"
 				/>
 			) : null}
-			{visualSections.recommended.length > 0 ? (
+			{/* 스페셜·급구 뒤, 추천·전체 앞 고정 위치. 급구/추천이 빠져도 이 자리에 항상 렌더된다. */}
+			{communitySlot}
+			{sections.recommended.length > 0 ? (
 				<ExposureSection
-					jobs={visualSections.recommended}
+					jobs={sections.recommended}
 					meta="상단 추천"
 					onChat={onChat}
 					onOpen={onOpen}
@@ -127,7 +141,7 @@ export function VisualJobExposureSections({
 				/>
 			) : null}
 			<ExposureSection
-				jobs={visualSections.organic}
+				jobs={sections.organic}
 				meta="최신순"
 				onChat={onChat}
 				onOpen={onOpen}

@@ -14,27 +14,36 @@ const [{ db }, authSchema, bambiSchema, advertiser] = await Promise.all([
 ]);
 
 const { member, organization, user } = authSchema;
-const { bambiProfile, jobPost, jobPromotionCampaign } = bambiSchema;
+const { adPlacement, adProduct, bambiProfile, jobPost } = bambiSchema;
 
 interface Seed {
-	campaignId: string;
+	adPlacementId: string;
+	adProductId: string;
+	jobPostId: string;
 	organizationId: string;
 	ownerUserId: string;
 }
 
-// endsAt이 미래인 active 캠페인을 소유한 조직 + owner 멤버 + employer 프로필을 시드한다.
+// 광고 상품(adProductId)이 연결되고 published·paid이며 노출이 유효한 공고를 소유한
+// 조직 + owner 멤버 + employer 프로필을 시드한다. status·paymentStatus·exposureEndsAt로
+// 공개 게이트/만료 케이스를 조절한다.
 const seedActiveAdvertiser = async ({
-	endsAt,
+	exposureEndsAt,
 	memberRole,
+	paymentStatus = "paid",
+	status = "published",
 }: {
-	endsAt: Date;
+	exposureEndsAt: Date | null;
 	memberRole: "owner" | "admin" | "member";
+	paymentStatus?: "paid" | "unpaid";
+	status?: "published" | "pending_review";
 }): Promise<Seed> => {
 	const now = new Date();
 	const organizationId = `org_adv_${randomUUID()}`;
 	const ownerUserId = `user_adv_${randomUUID()}`;
 	const jobPostId = randomUUID();
-	const campaignId = randomUUID();
+	const adPlacementId = randomUUID();
+	const adProductId = randomUUID();
 
 	await db.insert(user).values({
 		id: ownerUserId,
@@ -61,6 +70,15 @@ const seedActiveAdvertiser = async ({
 		userId: ownerUserId,
 		role: "employer",
 	});
+	await db.insert(adPlacement).values({
+		id: adPlacementId,
+		name: `placement_${adPlacementId}`,
+	});
+	await db.insert(adProduct).values({
+		id: adProductId,
+		placementId: adPlacementId,
+		name: `product_${adProductId}`,
+	});
 	await db.insert(jobPost).values({
 		id: jobPostId,
 		organizationId,
@@ -72,26 +90,29 @@ const seedActiveAdvertiser = async ({
 		workSchedule: "주 5일",
 		title: "광고 테스트 공고",
 		description: "설명",
-	});
-	await db.insert(jobPromotionCampaign).values({
-		id: campaignId,
-		jobPostId,
-		organizationId,
-		tier: "standard",
-		status: "active",
-		startsAt: new Date(now.getTime() - 60_000),
-		endsAt,
+		adProductId,
+		status,
+		paymentStatus,
+		exposureEndsAt,
 	});
 
-	return { campaignId, organizationId, ownerUserId };
+	return {
+		adPlacementId,
+		adProductId,
+		jobPostId,
+		organizationId,
+		ownerUserId,
+	};
 };
 
 const cleanup = async (seed: Seed): Promise<void> => {
-	// FK cascade(organization/jobPost) + 명시 삭제로 시드 정리.
+	// organization cascade가 jobPost를 지운다. adProduct/adPlacement·profile·user는 명시 삭제.
+	await db.delete(organization).where(eq(organization.id, seed.organizationId));
+	await db.delete(adProduct).where(eq(adProduct.id, seed.adProductId));
+	await db.delete(adPlacement).where(eq(adPlacement.id, seed.adPlacementId));
 	await db
 		.delete(bambiProfile)
 		.where(eq(bambiProfile.userId, seed.ownerUserId));
-	await db.delete(organization).where(eq(organization.id, seed.organizationId));
 	await db.delete(user).where(eq(user.id, seed.ownerUserId));
 };
 
@@ -108,15 +129,15 @@ describe("isAdvertiserEligibleRole", () => {
 	});
 });
 
-describe("hasActiveAdvertiserCampaign", () => {
-	it("returns true for owner of an org with a live active campaign", async () => {
+describe("hasActiveAdExposure", () => {
+	it("returns true for owner of an org with a live paid published ad post", async () => {
 		const seed = await seedActiveAdvertiser({
-			endsAt: new Date(Date.now() + 60 * 60_000),
+			exposureEndsAt: new Date(Date.now() + 60 * 60_000),
 			memberRole: "owner",
 		});
 		try {
 			await expect(
-				advertiser.hasActiveAdvertiserCampaign({
+				advertiser.hasActiveAdExposure({
 					now: new Date(),
 					userId: seed.ownerUserId,
 				})
@@ -126,14 +147,32 @@ describe("hasActiveAdvertiserCampaign", () => {
 		}
 	});
 
-	it("returns false when the campaign already expired (endsAt in the past)", async () => {
+	it("returns false when exposure already ended (exposureEndsAt in the past)", async () => {
 		const seed = await seedActiveAdvertiser({
-			endsAt: new Date(Date.now() - 60_000),
+			exposureEndsAt: new Date(Date.now() - 60_000),
 			memberRole: "owner",
 		});
 		try {
 			await expect(
-				advertiser.hasActiveAdvertiserCampaign({
+				advertiser.hasActiveAdExposure({
+					now: new Date(),
+					userId: seed.ownerUserId,
+				})
+			).resolves.toBe(false);
+		} finally {
+			await cleanup(seed);
+		}
+	});
+
+	it("returns false when the ad post is unpaid", async () => {
+		const seed = await seedActiveAdvertiser({
+			exposureEndsAt: new Date(Date.now() + 60 * 60_000),
+			memberRole: "owner",
+			paymentStatus: "unpaid",
+		});
+		try {
+			await expect(
+				advertiser.hasActiveAdExposure({
 					now: new Date(),
 					userId: seed.ownerUserId,
 				})
@@ -145,12 +184,12 @@ describe("hasActiveAdvertiserCampaign", () => {
 
 	it("returns false for a plain member role", async () => {
 		const seed = await seedActiveAdvertiser({
-			endsAt: new Date(Date.now() + 60 * 60_000),
+			exposureEndsAt: new Date(Date.now() + 60 * 60_000),
 			memberRole: "member",
 		});
 		try {
 			await expect(
-				advertiser.hasActiveAdvertiserCampaign({
+				advertiser.hasActiveAdExposure({
 					now: new Date(),
 					userId: seed.ownerUserId,
 				})
@@ -162,9 +201,9 @@ describe("hasActiveAdvertiserCampaign", () => {
 });
 
 describe("syncAdvertiserFlagForOrganization", () => {
-	it("sets is_advertiser true for owner/admin members with a live campaign", async () => {
+	it("sets is_advertiser true for owner/admin members with a live ad exposure", async () => {
 		const seed = await seedActiveAdvertiser({
-			endsAt: new Date(Date.now() + 60 * 60_000),
+			exposureEndsAt: new Date(Date.now() + 60 * 60_000),
 			memberRole: "owner",
 		});
 		try {

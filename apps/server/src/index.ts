@@ -2,6 +2,7 @@ import Fastify from "fastify";
 
 import { aiPlugin } from "./plugins/ai";
 import { authBridgePlugin } from "./plugins/auth-bridge";
+import { autoBoostPlugin } from "./plugins/auto-boost";
 import { corsPlugin } from "./plugins/cors";
 import { healthPlugin } from "./plugins/health";
 import { observabilityPlugin } from "./plugins/observability";
@@ -19,6 +20,7 @@ fastify.register(orpcPlugin);
 fastify.register(authBridgePlugin);
 fastify.register(aiPlugin);
 fastify.register(healthPlugin);
+fastify.register(autoBoostPlugin);
 
 fastify.listen({ port: 23_000, host: "0.0.0.0" }, (err) => {
 	if (err) {

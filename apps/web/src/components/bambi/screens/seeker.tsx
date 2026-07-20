@@ -611,6 +611,11 @@ export function SeekerMe() {
 			icon: <SettingsIcon />,
 			label: "계정 설정",
 		},
+		{
+			href: "/support" as Route,
+			icon: <Message />,
+			label: "고객센터",
+		},
 	];
 	const handleSignOut = async () => {
 		await signOutToHome(router);

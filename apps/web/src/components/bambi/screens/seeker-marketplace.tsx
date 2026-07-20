@@ -4,12 +4,13 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useMarketplaceJobs } from "@/lib/bambi/api-jobs";
+import { useAdBannerJobs, useMarketplaceJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job } from "@/lib/bambi/types";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { useBambiAuth } from "../auth-client-provider";
 import { Card } from "../ds";
+import { HomeCommunitySection } from "../home-community-section";
 import { Search2 } from "../icons";
 import {
 	MarketplaceDiscoveryAxisChips,
@@ -31,6 +32,7 @@ export function SeekerMarketplaceScreen() {
 	const { filters, setFilters } = useSeekerFilters();
 	const { isApiBacked, isError, jobs, refetch, sections } =
 		useMarketplaceJobs(filters);
+	const adBanners = useAdBannerJobs();
 	const { discoveryTabId, selectDiscoveryTab } = useMarketplaceDiscovery(
 		filters,
 		setFilters
@@ -70,15 +72,18 @@ export function SeekerMarketplaceScreen() {
 								onChange={setFilters}
 							/>
 						</Card>
-						<HorizontalAdBannerRail
-							keys={["left-ad-1", "left-ad-2", "left-ad-3"]}
-						/>
+						{adBanners.leftBanner.length > 0 ? (
+							<HorizontalAdBannerRail items={adBanners.leftBanner} />
+						) : null}
 					</div>
 				</aside>
 				<div
 					className={cn("w-full min-w-0 px-5 md:px-6", SEEKER_CONTENT_WIDTH)}
 				>
-					<PremiumAdBannerSection className="mb-6" />
+					<PremiumAdBannerSection
+						className="mb-6"
+						items={adBanners.premiumBanner}
+					/>
 					<div className="mb-5 flex flex-col gap-4">
 						<MarketplaceDiscoveryTabs
 							onSelect={selectDiscoveryTab}
@@ -115,6 +120,7 @@ export function SeekerMarketplaceScreen() {
 						</span>
 					</div>
 					<VisualJobExposureSections
+						communitySlot={<HomeCommunitySection />}
 						jobs={jobs}
 						onChat={chatJob}
 						onOpen={openJob}
@@ -123,7 +129,9 @@ export function SeekerMarketplaceScreen() {
 				</div>
 				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 					<div className="sticky top-20">
-						<AdBannerRail count={3} offset={0} />
+						{adBanners.rightBanner.length > 0 ? (
+							<AdBannerRail items={adBanners.rightBanner} />
+						) : null}
 					</div>
 				</aside>
 			</div>

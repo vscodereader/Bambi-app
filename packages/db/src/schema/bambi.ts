@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+	type AnyPgColumn,
 	boolean,
 	index,
 	integer,
@@ -44,6 +45,26 @@ export const jobPostStatus = pgEnum("job_post_status", [
 	"rejected",
 ]);
 
+export const jobExposureType = pgEnum("job_exposure_type", [
+	"premium-banner",
+	"left-banner",
+	"right-banner",
+	"special",
+	"urgent",
+	"recommended",
+	"standard",
+]);
+
+export const jobPaymentMethod = pgEnum("job_payment_method", [
+	"card",
+	"bank_transfer",
+]);
+
+export const jobPaymentStatus = pgEnum("job_payment_status", [
+	"unpaid",
+	"paid",
+]);
+
 export const interviewStatus = pgEnum("interview_status", [
 	"proposed",
 	"confirmed",
@@ -71,6 +92,44 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"chat_message",
 	"review",
 	"user",
+	"community_post",
+	"community_comment",
+	"support_inquiry",
+	"support_inquiry_message",
+	"team_invitation",
+]);
+
+// 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.
+// notice(공지사항)는 admin만 작성 가능(API 강제).
+export const communityBoard = pgEnum("community_board", [
+	"free",
+	"work_talk",
+	"market",
+	"notice",
+]);
+
+// 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
+export const communityContentStatus = pgEnum("community_content_status", [
+	"published",
+	"hidden",
+	"deleted",
+]);
+
+// 고객센터 문의 분류. FAQ도 같은 분류를 재사용한다(사용자가 같은 기준으로 찾게).
+export const supportInquiryCategory = pgEnum("support_inquiry_category", [
+	"account",
+	"job_post",
+	"payment",
+	"report",
+	"etc",
+]);
+
+// 문의 진행 상태. 운영 조치 상태(community_content_status)와는 별개 축이다 —
+// answered면서 hidden일 수 있다.
+export const supportInquiryStatus = pgEnum("support_inquiry_status", [
+	"open",
+	"answered",
+	"closed",
 ]);
 
 export const promotionTier = pgEnum("promotion_tier", [
@@ -86,6 +145,21 @@ export const promotionStatus = pgEnum("promotion_status", [
 	"paused",
 	"expired",
 	"canceled",
+]);
+
+export const adPlacementKind = pgEnum("ad_placement_kind", [
+	"listing",
+	"banner",
+]);
+
+export const adPreviewTemplate = pgEnum("ad_preview_template", [
+	"premium-top",
+	"special-list",
+	"urgent-list",
+	"recommended-list",
+	"side-vertical",
+	"side-horizontal",
+	"none",
 ]);
 
 export const jobPerformanceEventType = pgEnum("job_performance_event_type", [
@@ -235,6 +309,29 @@ export const jobPost = pgTable(
 		interviewNotes: text("interview_notes"),
 		rejectionReason: text("rejection_reason"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
+		exposureType: jobExposureType("exposure_type")
+			.default("standard")
+			.notNull(),
+		exposureDurationDays: integer("exposure_duration_days"),
+		adProductId: uuid("ad_product_id").references(() => adProduct.id, {
+			onDelete: "set null",
+		}),
+		exposureAmount: integer("exposure_amount"),
+		paymentMethod: jobPaymentMethod("payment_method"),
+		paymentStatus: jobPaymentStatus("payment_status")
+			.default("unpaid")
+			.notNull(),
+		exposureEndsAt: timestamp("exposure_ends_at"),
+		// 마지막 끌어올림(점프) 시각. 노출 정렬 키 GREATEST(boosted_at, published_at)의 재료.
+		boostedAt: timestamp("boosted_at"),
+		// 공고 구매 시점에 광고 상품에서 복사한 하루 수동 끌어올리기 횟수 스냅샷. 0 = 미제공.
+		// 상품(ad_product.manual_boosts_per_day)을 라이브 참조하지 않고 이 컬럼으로 자격을 판정해,
+		// 운영자가 상품 횟수를 바꿔도 기존 적용 공고에 소급되지 않도록 한다(노출 축 스냅샷과 동일 패턴).
+		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
+		// 공고 구매 시점에 광고 상품에서 복사한 하루 자동 끌어올리기 횟수 스냅샷. 0 = 미제공.
+		// 수동과 동일한 스냅샷 패턴(라이브 상품 미참조)이라 상품 수정이 기존 공고에 소급되지 않는다.
+		// 서버 틱 스케줄러가 09~21시 KST 창을 이 횟수로 균등 분배해 자동 발동한다.
+		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
 		publishedAt: timestamp("published_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -358,6 +455,91 @@ export const jobPromotionBoostEvent = pgTable(
 		index("job_promotion_boost_event_job_post_id_idx").on(table.jobPostId),
 		index("job_promotion_boost_event_organization_id_idx").on(
 			table.organizationId
+		),
+	]
+);
+
+// 광고 상품 축 끌어올리기 이력. 일일 사용량 판정은 (job_post_id, boost_type, created_at) 카운트로 한다.
+// boost_type은 수동 클릭('manual')과 서버 틱 자동 발동('auto')을 구분한다.
+export const jobBoostEvent = pgTable(
+	"job_boost_event",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		// 자동 발동('auto')은 사람 액터가 없어 null. 수동('manual')은 클릭한 사용자를 저장한다.
+		actorUserId: text("actor_user_id").references(() => user.id),
+		boostType: text("boost_type").default("manual").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_boost_event_job_post_created_at_idx").on(
+			table.jobPostId,
+			table.createdAt
+		),
+		index("job_boost_event_organization_id_idx").on(table.organizationId),
+	]
+);
+
+export const adPlacement = pgTable(
+	"ad_placement",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		name: text("name").notNull(),
+		description: text("description"),
+		kind: adPlacementKind("kind").default("listing").notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("ad_placement_active_sort_idx").on(table.isActive, table.sortOrder),
+	]
+);
+
+export const adProduct = pgTable(
+	"ad_product",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		placementId: uuid("placement_id")
+			.notNull()
+			.references(() => adPlacement.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		tagline: text("tagline"),
+		previewTemplate: adPreviewTemplate("preview_template")
+			.default("none")
+			.notNull(),
+		previewImageUrl: text("preview_image_url"),
+		benefits: jsonb("benefits").$type<string[]>().default([]).notNull(),
+		priceOptions: jsonb("price_options")
+			.$type<{ amount: number; days: number }[]>()
+			.default([])
+			.notNull(),
+		// 이 상품을 구매한 공고가 하루(KST 자정 리셋)에 쓸 수 있는 수동 끌어올리기 횟수. 0 = 미제공.
+		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
+		// 이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는 횟수(구매 시 공고로 스냅샷). 0 = 미제공.
+		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("ad_product_placement_idx").on(
+			table.placementId,
+			table.isActive,
+			table.sortOrder
 		),
 	]
 );
@@ -551,6 +733,35 @@ export const contactRevealConsent = pgTable(
 	]
 );
 
+// 회원가입 시 이용약관·개인정보 처리방침 동의 이력. 감사 목적으로 동의한 문서 종류·
+// 버전·동의 시각을 남긴다. 문서 개정 후 재동의 시 새 (userId, document, version) 행이
+// 누적된다(같은 버전 중복 저장은 unique index로 방지).
+export const bambiLegalConsentDocument = pgEnum(
+	"bambi_legal_consent_document",
+	["terms_of_service", "privacy_policy"]
+);
+
+export const bambiLegalConsent = pgTable(
+	"bambi_legal_consent",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		document: bambiLegalConsentDocument("document").notNull(),
+		version: text("version").notNull(),
+		agreedAt: timestamp("agreed_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("bambi_legal_consent_user_id_document_version_uidx").on(
+			table.userId,
+			table.document,
+			table.version
+		),
+		index("bambi_legal_consent_user_id_idx").on(table.userId),
+	]
+);
+
 export const userBlock = pgTable(
 	"user_block",
 	{
@@ -686,6 +897,208 @@ export const bambiNotification = pgTable(
 	]
 );
 
+export const communityPost = pgTable(
+	"community_post",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		board: communityBoard("board").notNull(),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
+		authorDisplayName: text("author_display_name").notNull(),
+		passwordHash: text("password_hash").notNull(),
+		isLocked: boolean("is_locked").default(false).notNull(),
+		// 작성 시점 계정 유형 스냅샷(서버 기록, 위조 불가). 업소 배지·필터용 — 이후 role 변경과 무관.
+		authorRole: bambiUserRole("author_role").notNull(),
+		// 업소회원 자율 광고 표시. employer만 true 가능(API 강제), 미표시 광고는 신고로 보완.
+		isPromotion: boolean("is_promotion").default(false).notNull(),
+		title: text("title").notNull(),
+		body: text("body").notNull(),
+		viewCount: integer("view_count").default(0).notNull(),
+		// 추천·댓글 수 캐시. 진실값은 community_post_like/community_comment 집계이며
+		// 토글·작성·삭제 트랜잭션에서 함께 증감한다.
+		likeCount: integer("like_count").default(0).notNull(),
+		commentCount: integer("comment_count").default(0).notNull(),
+		status: communityContentStatus("status").default("published").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		// $onUpdate를 쓰지 않는다 — 조회수 증가가 "수정됨" 시각을 갱신하면 안 되므로
+		// updatePost에서만 명시적으로 갱신한다.
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("community_post_board_status_created_at_idx").on(
+			table.board,
+			table.status,
+			table.createdAt
+		),
+		index("community_post_status_created_at_idx").on(
+			table.status,
+			table.createdAt
+		),
+		index("community_post_author_user_id_idx").on(table.authorUserId),
+	]
+);
+
+export const communityComment = pgTable(
+	"community_comment",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		postId: uuid("post_id")
+			.notNull()
+			.references(() => communityPost.id, { onDelete: "cascade" }),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 작성 시점 계정 유형 스냅샷(서버 기록). 업소 댓글 배지·숨김 토글용.
+		authorRole: bambiUserRole("author_role").notNull(),
+		// 대댓글(1단계). null이면 최상위 댓글. 1단계 제한은 API에서 강제한다.
+		parentCommentId: uuid("parent_comment_id").references(
+			(): AnyPgColumn => communityComment.id,
+			{ onDelete: "cascade" }
+		),
+		body: text("body").notNull(),
+		status: communityContentStatus("status").default("published").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("community_comment_post_id_status_created_at_idx").on(
+			table.postId,
+			table.status,
+			table.createdAt
+		),
+		index("community_comment_author_user_id_idx").on(table.authorUserId),
+		index("community_comment_parent_comment_id_idx").on(table.parentCommentId),
+	]
+);
+
+export const communityPostLike = pgTable(
+	"community_post_like",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		postId: uuid("post_id")
+			.notNull()
+			.references(() => communityPost.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("community_post_like_post_id_user_id_uidx").on(
+			table.postId,
+			table.userId
+		),
+		index("community_post_like_user_id_idx").on(table.userId),
+	]
+);
+
+export const supportInquiry = pgTable(
+	"support_inquiry",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 작성 시점 계정 유형 스냅샷(서버 기록). 이후 role 변경과 무관하게 문의 맥락을 보존한다.
+		authorRole: bambiUserRole("author_role").notNull(),
+		category: supportInquiryCategory("category").notNull(),
+		title: text("title").notNull(),
+		// 커뮤니티와 달리 평문이다 — 문의에 서식이 필요 없고 금칙어 검사를 바로 걸 수 있다.
+		body: text("body").notNull(),
+		inquiryStatus: supportInquiryStatus("inquiry_status")
+			.default("open")
+			.notNull(),
+		// 운영 조치 상태. community_content_status를 재사용해 조치 로직·UI 매핑을 공유한다.
+		status: communityContentStatus("status").default("published").notNull(),
+		// 목록 정렬용 — 답변이 달리면 갱신해 위로 올린다.
+		lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("support_inquiry_author_user_id_created_at_idx").on(
+			table.authorUserId,
+			table.createdAt
+		),
+		index("support_inquiry_inquiry_status_last_message_at_idx").on(
+			table.inquiryStatus,
+			table.lastMessageAt
+		),
+		index("support_inquiry_status_created_at_idx").on(
+			table.status,
+			table.createdAt
+		),
+	]
+);
+
+export const supportInquiryMessage = pgTable(
+	"support_inquiry_message",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		inquiryId: uuid("inquiry_id")
+			.notNull()
+			.references(() => supportInquiry.id, { onDelete: "cascade" }),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 작성 시점 운영자 여부 스냅샷. 이후 role이 바뀌어도 스레드 표시가 흔들리지 않는다.
+		isStaff: boolean("is_staff").default(false).notNull(),
+		body: text("body").notNull(),
+		status: communityContentStatus("status").default("published").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("support_inquiry_message_inquiry_id_created_at_idx").on(
+			table.inquiryId,
+			table.createdAt
+		),
+	]
+);
+
+export const faqEntry = pgTable(
+	"faq_entry",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		category: supportInquiryCategory("category").notNull(),
+		question: text("question").notNull(),
+		answer: text("answer").notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		isPublished: boolean("is_published").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("faq_entry_is_published_sort_order_idx").on(
+			table.isPublished,
+			table.sortOrder
+		),
+	]
+);
+
+export const bannedWord = pgTable(
+	"banned_word",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		// 운영자가 입력한 원문(표시용).
+		term: text("term").notNull(),
+		// 정규화형(매칭용). 저장 시 계산해 두고 매 요청 재계산을 피한다.
+		normalizedTerm: text("normalized_term").notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdByUserId: text("created_by_user_id")
+			.notNull()
+			.references(() => user.id),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		// 정규화형에 걸어야 "성 매매"와 "성매매"가 중복 등록되지 않는다.
+		uniqueIndex("banned_word_normalized_term_uidx").on(table.normalizedTerm),
+		index("banned_word_is_active_idx").on(table.isActive),
+	]
+);
+
 export const bambiProfileRelations = relations(bambiProfile, ({ one }) => ({
 	user: one(user, {
 		fields: [bambiProfile.userId],
@@ -748,6 +1161,17 @@ export const jobPromotionBoostEventRelations = relations(
 	})
 );
 
+export const adPlacementRelations = relations(adPlacement, ({ many }) => ({
+	products: many(adProduct),
+}));
+
+export const adProductRelations = relations(adProduct, ({ one }) => ({
+	placement: one(adPlacement, {
+		fields: [adProduct.placementId],
+		references: [adPlacement.id],
+	}),
+}));
+
 export const chatRoomRelations = relations(chatRoom, ({ many, one }) => ({
 	attachments: many(chatAttachment),
 	jobPost: one(jobPost, {
@@ -775,3 +1199,45 @@ export const chatAttachmentRelations = relations(chatAttachment, ({ one }) => ({
 		references: [chatRoom.id],
 	}),
 }));
+
+export const communityPostRelations = relations(communityPost, ({ many }) => ({
+	comments: many(communityComment),
+	likes: many(communityPostLike),
+}));
+
+export const communityCommentRelations = relations(
+	communityComment,
+	({ one }) => ({
+		post: one(communityPost, {
+			fields: [communityComment.postId],
+			references: [communityPost.id],
+		}),
+	})
+);
+
+export const communityPostLikeRelations = relations(
+	communityPostLike,
+	({ one }) => ({
+		post: one(communityPost, {
+			fields: [communityPostLike.postId],
+			references: [communityPost.id],
+		}),
+	})
+);
+
+export const supportInquiryRelations = relations(
+	supportInquiry,
+	({ many }) => ({
+		messages: many(supportInquiryMessage),
+	})
+);
+
+export const supportInquiryMessageRelations = relations(
+	supportInquiryMessage,
+	({ one }) => ({
+		inquiry: one(supportInquiry, {
+			fields: [supportInquiryMessage.inquiryId],
+			references: [supportInquiry.id],
+		}),
+	})
+);
