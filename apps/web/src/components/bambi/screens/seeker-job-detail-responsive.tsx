@@ -20,6 +20,10 @@ import {
 } from "../icons";
 
 interface SeekerJobDetailResponsiveProps {
+	// 채팅은 구직자만 시작할 수 있다. 구인자·운영자에게는 CTA 자체를 감춘다 —
+	// 눌러도 서버 가드(enforceJobSeekerAccess)가 각자 홈으로 되돌리므로,
+	// 버튼을 남겨두면 아무 설명 없이 튕기는 것처럼 보인다.
+	canStartChat: boolean;
 	job: Job;
 	onBack: () => void;
 	onReport: () => void;
@@ -69,6 +73,7 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 }
 
 export function SeekerJobDetailResponsive({
+	canStartChat,
 	job,
 	onBack,
 	onReport,
@@ -76,7 +81,14 @@ export function SeekerJobDetailResponsive({
 }: SeekerJobDetailResponsiveProps) {
 	const adBanners = useAdBannerJobs();
 	return (
-		<div className="mx-auto flex w-full justify-center gap-5 py-5 pb-28 md:py-7">
+		// 모바일 하단 고정 CTA 자리를 pb-28로 비워 둔다. CTA를 감추는 역할에서는
+		// 그 여백이 빈 공간으로 남으므로 기본 여백으로 되돌린다.
+		<div
+			className={cn(
+				"mx-auto flex w-full justify-center gap-5 py-5 md:py-7",
+				canStartChat ? "pb-28" : "pb-5"
+			)}
+		>
 			{/* 좌 여백 배너 — 넓은 화면 전용, 스크롤 추종 */}
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
@@ -242,29 +254,33 @@ export function SeekerJobDetailResponsive({
 								{job.hours}
 							</div>
 						</div>
-						<div className="mt-5 rounded-lg bg-coral-50 p-3 text-coral-700">
-							<div className="flex items-center gap-2 font-extrabold text-sm">
-								<span className="inline-flex size-4">
-									<ShieldIcon />
-								</span>
-								안전하게 채팅 시작
-							</div>
-							<p className="mt-1 mb-0 text-xs leading-relaxed">
-								플랫폼 안에서 먼저 대화하고, 면접 확정 뒤 연락처 공개를
-								선택해요.
-							</p>
-						</div>
+						{canStartChat ? (
+							<>
+								<div className="mt-5 rounded-lg bg-coral-50 p-3 text-coral-700">
+									<div className="flex items-center gap-2 font-extrabold text-sm">
+										<span className="inline-flex size-4">
+											<ShieldIcon />
+										</span>
+										안전하게 채팅 시작
+									</div>
+									<p className="mt-1 mb-0 text-xs leading-relaxed">
+										플랫폼 안에서 먼저 대화하고, 면접 확정 뒤 연락처 공개를
+										선택해요.
+									</p>
+								</div>
+								<Button
+									block
+									className="mt-5 shadow-none"
+									onClick={onStartChat}
+									rightIcon={<Message />}
+								>
+									1:1 채팅 시작
+								</Button>
+							</>
+						) : null}
 						<Button
 							block
-							className="mt-5 shadow-none"
-							onClick={onStartChat}
-							rightIcon={<Message />}
-						>
-							1:1 채팅 시작
-						</Button>
-						<Button
-							block
-							className="mt-2"
+							className={cn(canStartChat ? "mt-2" : "mt-5")}
 							onClick={onReport}
 							size="md"
 							variant="secondary"
@@ -282,16 +298,18 @@ export function SeekerJobDetailResponsive({
 					) : null}
 				</div>
 			</aside>
-			<div className="fixed right-0 bottom-0 left-0 z-30 border-border border-t bg-background p-4 lg:hidden">
-				<Button
-					block
-					className="shadow-none"
-					onClick={onStartChat}
-					rightIcon={<Message />}
-				>
-					1:1 채팅 시작
-				</Button>
-			</div>
+			{canStartChat ? (
+				<div className="fixed right-0 bottom-0 left-0 z-30 border-border border-t bg-background p-4 lg:hidden">
+					<Button
+						block
+						className="shadow-none"
+						onClick={onStartChat}
+						rightIcon={<Message />}
+					>
+						1:1 채팅 시작
+					</Button>
+				</div>
+			) : null}
 		</div>
 	);
 }

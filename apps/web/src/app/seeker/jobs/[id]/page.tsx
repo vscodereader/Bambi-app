@@ -3,6 +3,7 @@
 import type { Route } from "next";
 import { notFound, useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { ReportDialog } from "@/components/bambi/report-dialog";
 import { SeekerJobDetailResponsive } from "@/components/bambi/screens/seeker-job-detail-responsive";
 import { isApiJobId, useMarketplaceJob } from "@/lib/bambi/api-jobs";
@@ -11,6 +12,11 @@ export default function SeekerJobPage() {
 	const router = useRouter();
 	const { id } = useParams<{ id: string }>();
 	const { isError, isLoading, job, refetch } = useMarketplaceJob(id);
+	const { role } = useBambiAuth();
+	// 채팅 진입은 구직자만 가능하다(/seeker/jobs/[id]/chat 서버 가드와 같은 기준).
+	// 역할을 아직 못 읽은 동안(role null)에는 감춰 두는 쪽이 안전하다 — 눌렀다가
+	// 가드에 튕기는 것보다 잠깐 안 보이는 편이 낫다.
+	const canStartChat = role === "job_seeker";
 	const [isReportOpen, setIsReportOpen] = useState(false);
 	if (isLoading) {
 		return (
@@ -40,6 +46,7 @@ export default function SeekerJobPage() {
 				</div>
 			) : null}
 			<SeekerJobDetailResponsive
+				canStartChat={canStartChat}
 				job={job}
 				onBack={() => router.push("/seeker")}
 				onReport={() => {
