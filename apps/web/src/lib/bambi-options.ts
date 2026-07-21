@@ -25,6 +25,16 @@ export function districtsForRegion(region: string): readonly string[] {
 }
 export const payUnitOptions = ["시급", "일급", "주급", "월급"] as const;
 
+// 급여 단위 → 시급 환산에 쓰는 근로시간. 최소 시급 필터가 단위가 섞인 공고를
+// 같은 잣대로 비교하려면 필요하다. 일 8시간·주 5일, 월급은 근로기준법 통상임금
+// 산정 기준시간 209시간(주휴 포함)을 따른다.
+export const PAY_UNIT_HOURS: Record<string, number> = {
+	시급: 1,
+	일급: 8,
+	주급: 40,
+	월급: 209,
+};
+
 export const jobStatusLabels = {
 	draft: "임시 저장",
 	pending_review: "검수 대기",

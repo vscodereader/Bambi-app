@@ -66,6 +66,35 @@ describe("filterMarketplaceJobs 지역·업종", () => {
 		expect(result.map((job) => job.id)).toEqual(["t1"]);
 	});
 
+	it("최소 시급은 일급·월급 공고를 시급으로 환산해 비교한다", () => {
+		const jobs = [
+			{ ...baseJob, id: "hourly", pay: "시급 20,000원" },
+			{ ...baseJob, id: "daily", pay: "일급 150,000원" }, // 18,750원/h
+			{ ...baseJob, id: "monthly", pay: "월급 3,500,000원" }, // 16,746원/h
+		];
+
+		const result = filterMarketplaceJobs(jobs, {
+			...DEFAULT_MARKETPLACE_FILTERS,
+			minimumPay: 18_000,
+		});
+
+		expect(result.map((job) => job.id)).toEqual(["hourly", "daily"]);
+	});
+
+	it("금액 없는 공고는 최소 시급을 걸면 빠지고 기본 필터에는 남는다", () => {
+		const jobs = [{ ...baseJob, id: "negotiable", pay: "급여 협의" }];
+
+		expect(
+			filterMarketplaceJobs(jobs, {
+				...DEFAULT_MARKETPLACE_FILTERS,
+				minimumPay: 1,
+			})
+		).toEqual([]);
+		expect(
+			filterMarketplaceJobs(jobs, DEFAULT_MARKETPLACE_FILTERS)
+		).toHaveLength(1);
+	});
+
 	it("초보 가능·당일면접 칩은 필드로 좁힌다", () => {
 		const jobs = [
 			baseJob,
