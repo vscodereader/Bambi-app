@@ -215,6 +215,10 @@ export const bambiProfile = pgTable(
 		// 본인인증 CI(연계정보)의 SHA-256 해시. 원문은 저장하지 않는다. 유니크 인덱스로
 		// 같은 사람이 여러 계정에서 인증하는 것을 막는다(null 다중 허용 — 미인증 계정).
 		ciHash: text("ci_hash"),
+		// 본인인증 DI(사이트별 중복확인정보)의 SHA-256 해시. 원문은 저장하지 않는다.
+		// 중복 가입 판정의 기준 축이며, 유니크 인덱스로 같은 사람이 여러 계정에서
+		// 인증하는 것을 막는다(null 다중 허용 — 미인증 계정).
+		diHash: text("di_hash"),
 		// 광고(프로모션) 중인 업소(owner/admin) 표시 캐시. 진실값은 조회 시 캠페인 조인으로
 		// 파생 계산하며(bambi-advertiser), 이 컬럼은 activate/pause 이벤트에서 동기화된다.
 		isAdvertiser: boolean("is_advertiser").default(false).notNull(),
@@ -229,6 +233,7 @@ export const bambiProfile = pgTable(
 		index("bambi_profile_role_idx").on(table.role),
 		index("bambi_profile_status_idx").on(table.status),
 		uniqueIndex("bambi_profile_ci_hash_unique").on(table.ciHash),
+		uniqueIndex("bambi_profile_di_hash_unique").on(table.diHash),
 	]
 );
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 import {
-	hashCi,
+	hashIdentityValue,
 	isAdultBirth8,
 	mapPortOneGender,
 	toBirth8,
@@ -61,15 +61,17 @@ describe("mapPortOneGender", () => {
 	});
 });
 
-describe("hashCi", () => {
+describe("hashIdentityValue", () => {
 	it("64자리 hex를 결정적으로 만든다", async () => {
-		const first = await hashCi("ci-sample-value");
-		const second = await hashCi("ci-sample-value");
+		const first = await hashIdentityValue("ci-sample-value");
+		const second = await hashIdentityValue("ci-sample-value");
 		expect(first).toBe(second);
 		expect(first).toMatch(SHA256_HEX);
 	});
 
-	it("다른 CI는 다른 해시", async () => {
-		expect(await hashCi("ci-a")).not.toBe(await hashCi("ci-b"));
+	it("다른 값은 다른 해시(CI·DI 공용)", async () => {
+		expect(await hashIdentityValue("ci-a")).not.toBe(
+			await hashIdentityValue("di-a")
+		);
 	});
 });

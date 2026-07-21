@@ -82,12 +82,13 @@ export function isAdultBirth8(birth8: string, now: Date): boolean {
 	return Number(birth8) + ADULT_MIN_AGE * 10_000 <= todayYmd;
 }
 
-// CI(연계정보)는 사람마다 고유한 민감값이라 원문을 저장하지 않고 SHA-256 해시로만
-// 보관한다(중복가입 판정용). CI 자체가 고엔트로피 비공개 값이라 무염 해시로 충분하다.
-export async function hashCi(ci: string): Promise<string> {
+// CI(연계정보)·DI(중복확인정보)는 사람마다/사이트별로 고유한 민감값이라 원문을
+// 저장하지 않고 SHA-256 해시로만 보관한다(중복가입 판정용). 값 자체가 고엔트로피
+// 비공개 값이라 무염 해시로 충분하다. CI·DI 둘 다 이 함수로 처리한다.
+export async function hashIdentityValue(value: string): Promise<string> {
 	const digest = await crypto.subtle.digest(
 		"SHA-256",
-		new TextEncoder().encode(ci)
+		new TextEncoder().encode(value)
 	);
 	return Array.from(new Uint8Array(digest))
 		.map((byte) => byte.toString(16).padStart(2, "0"))

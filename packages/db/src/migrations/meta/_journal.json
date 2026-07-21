@@ -169,6 +169,13 @@
       "when": 1784608161208,
       "tag": "0023_silent_excalibur",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784616899709,
+      "tag": "0024_unique_earthquake",
+      "breakpoints": true
     }
   ]
 }
