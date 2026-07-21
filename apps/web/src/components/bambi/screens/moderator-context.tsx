@@ -33,6 +33,7 @@ import type {
 	ReportTargetType,
 	UserStatus,
 } from "@/lib/bambi/types";
+import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
 export type ModerationBulkScope = "queue" | "reports" | "users";
@@ -87,7 +88,7 @@ interface ApiQueueItem {
 	industryCategory: string;
 	mediaCount: number;
 	organizationDisplayName: string;
-	payAmount: number;
+	payAmount: null | number;
 	payUnit: string;
 	region: string;
 	riskFlags: string[];
@@ -199,7 +200,10 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 		flags,
 		id: item.id,
 		location: item.region,
-		pay: `${item.payUnit} ${item.payAmount.toLocaleString("ko-KR")}원`,
+		pay:
+			item.payAmount === null
+				? NEGOTIABLE_PAY_TEXT
+				: `${item.payUnit} ${item.payAmount.toLocaleString("ko-KR")}원`,
 		receivedAt: formatDate(item.createdAt),
 		refId: `#${item.id.slice(0, 8)}`,
 		risk: reviewFlags.length ? "review" : "warn",

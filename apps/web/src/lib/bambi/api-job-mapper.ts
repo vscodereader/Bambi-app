@@ -1,5 +1,7 @@
 import { env } from "@bambi-app/env/web";
 
+import { NEGOTIABLE_PAY_TEXT } from "../bambi-options";
+
 import type { JobAdBannerUsage } from "./job-ad-banner-spec";
 import { sampleCoverMedia, sampleThumbnailUrl } from "./sample-thumbnails";
 import type {
@@ -44,7 +46,8 @@ export interface ApiMarketplaceJob {
 	isPromoted?: boolean;
 	lastBoostedAt?: Date | null | string;
 	media?: ApiJobMediaSet;
-	payAmount: number;
+	// 급여 단위가 "협의"인 공고는 금액이 없다.
+	payAmount: null | number;
 	payUnit: string;
 	performance?: JobPerformanceMetrics;
 	promotionLabel?: null | string;
@@ -97,11 +100,15 @@ const toJobMedia = (media?: ApiJobMedia | null): JobMedia | null => {
 export const getMarketplaceJobCompany = (job: ApiMarketplaceJob): string =>
 	job.teamDisplayName ?? job.employerDisplayName ?? "검증 업체";
 
+// 금액이 없는 공고(급여 단위 "협의")는 목록·카드에서 "급여 협의"로 보여준다.
+// 카드의 splitPay가 "급여"를 단위 배지로 떼어내므로 이 형식을 지켜야 한다.
 export const formatMarketplacePay = ({
 	payAmount,
 	payUnit,
 }: Pick<ApiMarketplaceJob, "payAmount" | "payUnit">): string =>
-	`${payUnit} ${payAmount.toLocaleString("ko-KR")}원`;
+	payAmount === null || payAmount === undefined
+		? NEGOTIABLE_PAY_TEXT
+		: `${payUnit} ${payAmount.toLocaleString("ko-KR")}원`;
 
 const toFiniteNumber = (value: null | number | string | undefined): number => {
 	const numericValue = Number(value ?? 0);

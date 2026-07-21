@@ -1,0 +1,1 @@
+ALTER TABLE "job_post" ALTER COLUMN "pay_amount" DROP NOT NULL;

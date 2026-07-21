@@ -6,13 +6,13 @@ import {
 import {
 	districtsForRegion,
 	industryOptions,
+	NEGOTIABLE_PAY_UNIT,
 	payUnitOptions,
 	regionOptions,
 } from "./bambi-options";
 
 const TITLE_MIN_LENGTH = 2;
 const TITLE_MAX_LENGTH = 80;
-const PAY_UNIT_MAX_LENGTH = 30;
 const WORK_SCHEDULE_MAX_LENGTH = 200;
 const DESCRIPTION_MIN_LENGTH = 10;
 const DESCRIPTION_MAX_LENGTH = 2000;
@@ -175,7 +175,8 @@ export interface JobPostInput {
 		detail: JobFormMediaItem[];
 	};
 	organizationId: string;
-	payAmount: number;
+	// 급여 단위가 "협의"면 null(금액 없이 게시).
+	payAmount: null | number;
 	paymentMethod: JobPaymentMethod | null;
 	payUnit: string;
 	region: string;
@@ -676,11 +677,15 @@ const getConditionErrors = ({
 		errors.district = "세부지역을 선택해 주세요.";
 	}
 
-	if (!(Number.isInteger(payAmount) && payAmount > 0)) {
+	// "협의"는 금액 없이 내는 단위라 금액 검사를 건너뛴다.
+	if (
+		payUnit !== NEGOTIABLE_PAY_UNIT &&
+		!(Number.isInteger(payAmount) && payAmount > 0)
+	) {
 		errors.payAmount = "급여 금액은 1 이상의 정수로 입력해 주세요.";
 	}
 
-	if (!(payUnit.length > 0 && payUnit.length <= PAY_UNIT_MAX_LENGTH)) {
+	if (!(payUnitOptions as readonly string[]).includes(payUnit)) {
 		errors.payUnit = "급여 단위를 선택해 주세요.";
 	}
 
@@ -865,7 +870,8 @@ export const validateJobForm = (
 					}
 				: undefined,
 			organizationId,
-			payAmount,
+			// 협의 공고는 금액을 저장하지 않는다(서버도 단위·금액 짝을 검사한다).
+			payAmount: payUnit === NEGOTIABLE_PAY_UNIT ? null : payAmount,
 			paymentMethod,
 			payUnit,
 			region,

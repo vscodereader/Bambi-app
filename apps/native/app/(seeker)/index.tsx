@@ -19,7 +19,7 @@ interface JobItem {
 	employerDisplayName: null | string;
 	id: string;
 	industryCategory: string;
-	payAmount: number;
+	payAmount: null | number;
 	payUnit: string;
 	region: string;
 	title: string;
@@ -81,18 +81,18 @@ export default function SeekerHomeScreen() {
 						</Button>
 					</Link>
 				}
-				description="프리미엄, 추천, 일반 공고를 모바일에서 빠르게 확인합니다."
+				description="스페셜, 추천, 일반 공고를 모바일에서 빠르게 확인합니다."
 				title="공고 탐색"
 			/>
 			{sections ? (
 				<View className="gap-5">
-					{sections.premium.length > 0 ? (
+					{sections.special.length > 0 ? (
 						<View className="gap-3">
 							<Text className="font-semibold text-foreground" selectable>
-								프리미엄
+								스페셜
 							</Text>
-							{sections.premium.map((job) => (
-								<JobCard job={job} key={job.id} label="프리미엄" />
+							{sections.special.map((job) => (
+								<JobCard job={job} key={job.id} label="스페셜" />
 							))}
 						</View>
 					) : null}

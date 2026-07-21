@@ -102,14 +102,15 @@ const jobPostMediaSetInput = z
 	})
 	.optional();
 
-const jobPostInput = z.object({
+const jobPostInputShape = z.object({
 	organizationId: z.string().min(1),
 	teamId: z.string().min(1).optional(),
 	title: z.string().min(2).max(80),
 	industryCategory: z.string().min(1).max(80),
 	region: z.string().min(1).max(80),
 	district: z.string().max(80).optional(),
-	payAmount: z.number().int().positive(),
+	// "협의" 단위는 금액이 없다(면접 후 급여 협의). 아래 refine에서 짝을 강제한다.
+	payAmount: z.number().int().positive().nullish(),
 	payUnit: z.string().min(1).max(30),
 	workSchedule: z.string().min(1).max(200),
 	description: z.string().min(10).max(2000),
@@ -134,6 +135,23 @@ const jobPostInput = z.object({
 	paymentMethod: z.enum(["card", "bank_transfer"]).nullish(),
 	media: jobPostMediaSetInput,
 });
+
+// 급여 단위 "협의"는 금액 없이 저장한다. apps/web/src/lib/bambi-options.ts의
+// NEGOTIABLE_PAY_UNIT과 같은 값을 유지할 것.
+const NEGOTIABLE_PAY_UNIT = "협의";
+
+// 단위와 금액의 짝을 강제한다 — 협의인데 금액이 붙거나, 금액 단위인데 금액이 빠지면
+// 목록에서 "협의 0원" 같은 잡음이 되고 최소 시급 필터도 어긋난다.
+const jobPostInput = jobPostInputShape.refine(
+	(input) =>
+		input.payUnit === NEGOTIABLE_PAY_UNIT
+			? input.payAmount == null
+			: typeof input.payAmount === "number",
+	{
+		message: "급여 단위가 '협의'가 아니면 급여 금액이 필요합니다.",
+		path: ["payAmount"],
+	}
+);
 
 const createMediaUploadInput = z.object({
 	organizationId: z.string().min(1),
@@ -1168,6 +1186,9 @@ export const jobsRouter = {
 					.update(jobPost)
 					.set({
 						...jobInput,
+						// 금액 단위 → "협의"로 바꿀 때 undefined면 drizzle이 컬럼을 건너뛰어
+						// 예전 금액이 남는다. null로 명시해 지운다.
+						payAmount: jobInput.payAmount ?? null,
 						description: preparedContent.description,
 						descriptionBlocks: preparedContent.descriptionBlocks,
 						status,
