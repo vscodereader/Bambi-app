@@ -28,7 +28,7 @@ describe("isExposureActive", () => {
 });
 
 describe("buildExposureJobSections", () => {
-	it("exposureType별 섹션에 배치하고 organic에서 중복 제거한다", () => {
+	it("exposureType별 섹션에 배치하고 전체 공고에는 유료 공고도 함께 담는다", () => {
 		const special = row("s1", "special");
 		const organicOnly = row("o1", "standard");
 		const { sections, totalCount } = buildExposureJobSections({
@@ -40,7 +40,8 @@ describe("buildExposureJobSections", () => {
 			urgentRows: [],
 		});
 		expect(sections.special.map((r) => r.id)).toEqual(["s1"]);
-		expect(sections.organic.map((r) => r.id)).toEqual(["o1"]);
+		expect(sections.organic.map((r) => r.id)).toEqual(["s1", "o1"]);
+		// 중복 노출이라도 총계는 고유 공고 수로 센다.
 		expect(totalCount).toBe(2);
 	});
 	it("만료된 유료 공고는 섹션에서 빠지고 organic으로 강등된다", () => {
@@ -70,7 +71,7 @@ describe("buildExposureJobSections", () => {
 		});
 		expect(sections.special).toHaveLength(7);
 	});
-	it("organic 한도는 섹션 규모와 독립적으로 limit을 그대로 쓴다", () => {
+	it("유료 공고가 앞자리를 차지해도 무료 공고가 전체 공고에서 밀리지 않는다", () => {
 		const specials = Array.from({ length: 3 }, (_, i) =>
 			row(`s${i}`, "special")
 		);
@@ -84,7 +85,10 @@ describe("buildExposureJobSections", () => {
 			urgentRows: [],
 		});
 		expect(sections.special).toHaveLength(3);
-		expect(sections.organic.map((r) => r.id)).toEqual(["o0", "o1"]);
+		// organic 상한이 유료 섹션 크기만큼 늘어 무료 2건이 그대로 남는다.
+		const organicIds = sections.organic.map((r) => r.id);
+		expect(organicIds).toContain("o0");
+		expect(organicIds).toContain("o1");
 	});
 });
 
