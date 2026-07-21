@@ -137,9 +137,13 @@ export function MarketplaceFilterControls({
 					최소 시급
 				</span>
 				<Input
-					onChange={(event) =>
-						update({ minimumPay: Number(event.target.value || 0) })
-					}
+					onChange={(event) => {
+						// 음수·빈값·비숫자는 필터 해제(0)로 떨어뜨린다 — 서버 minPayAmount는 양수만 받는다.
+						const parsed = Number(event.target.value);
+						update({
+							minimumPay: Number.isFinite(parsed) && parsed > 0 ? parsed : 0,
+						});
+					}}
 					placeholder="예: 17000"
 					type="number"
 					value={String(filters.minimumPay || "")}
