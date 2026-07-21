@@ -86,9 +86,10 @@ export interface ExposureJobSections<TRow extends ExposureSectionRow> {
 	urgent: TRow[];
 }
 
-// 유료 리스팅 섹션(스페셜/급구/추천)을 확정하고, 섹션에 든 공고는 organic에서 제외한다.
+// 유료 리스팅 섹션(스페셜/급구/추천)을 확정한다. 섹션에 든 공고도 전체 공고(organic)에
+// 함께 담겨 중복 노출된다 — 광고 상품을 적용해도 전체 공고 목록에서 빠지지 않는다.
 // 슬롯 상한 없이 결제완료·미만료 매칭 공고를 전부 노출한다(그리드가 다음 행으로 확장).
-// 만료된 유료 공고는 섹션에서 빠져 organic으로 강등된다(공고 자체는 계속 게시).
+// 만료된 유료 공고는 섹션에서 빠져 organic에만 남는다(공고 자체는 계속 게시).
 export const buildExposureJobSections = <TRow extends ExposureSectionRow>({
 	limit,
 	now,
