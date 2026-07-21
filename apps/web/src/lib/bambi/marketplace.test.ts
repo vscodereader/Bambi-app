@@ -7,6 +7,90 @@ import {
 	filterMarketplaceJobs,
 	getSelectedMarketplaceJob,
 } from "./marketplace";
+import type { Job } from "./types";
+
+const baseJob: Job = {
+	beginnerFriendly: false,
+	company: "테스트",
+	desc: "",
+	district: "강남",
+	featured: false,
+	hours: "",
+	id: "t1",
+	instantInterview: false,
+	location: "서울 · 강남",
+	pay: "시급 20,000원",
+	pref: "",
+	rating: 0,
+	region: "서울",
+	reviews: 0,
+	status: "published",
+	tags: [],
+	title: "공고",
+	type: "클럽",
+	verified: false,
+};
+
+describe("filterMarketplaceJobs 지역·업종", () => {
+	it("시/도 필터는 job.region 필드로 정확 비교", () => {
+		const jobs = [
+			baseJob,
+			{ ...baseJob, district: "해운대", id: "t2", region: "부산" },
+		];
+		const result = filterMarketplaceJobs(jobs, {
+			...DEFAULT_MARKETPLACE_FILTERS,
+			region: "서울",
+		});
+
+		expect(result.map((job) => job.id)).toEqual(["t1"]);
+	});
+
+	it("세부지역 필터는 job.district 필드로 정확 비교", () => {
+		const jobs = [baseJob, { ...baseJob, district: "서초", id: "t2" }];
+		const result = filterMarketplaceJobs(jobs, {
+			...DEFAULT_MARKETPLACE_FILTERS,
+			district: "강남",
+			region: "서울",
+		});
+
+		expect(result.map((job) => job.id)).toEqual(["t1"]);
+	});
+
+	it("업종 필터는 job.type으로 비교", () => {
+		const jobs = [baseJob, { ...baseJob, id: "t2", type: "라운지" }];
+		const result = filterMarketplaceJobs(jobs, {
+			...DEFAULT_MARKETPLACE_FILTERS,
+			category: "클럽",
+		});
+
+		expect(result.map((job) => job.id)).toEqual(["t1"]);
+	});
+
+	it("초보 가능·당일면접 칩은 필드로 좁힌다", () => {
+		const jobs = [
+			baseJob,
+			{
+				...baseJob,
+				beginnerFriendly: true,
+				id: "t2",
+				instantInterview: true,
+			},
+		];
+
+		expect(
+			filterMarketplaceJobs(jobs, {
+				...DEFAULT_MARKETPLACE_FILTERS,
+				onlyBeginnerFriendly: true,
+			}).map((job) => job.id)
+		).toEqual(["t2"]);
+		expect(
+			filterMarketplaceJobs(jobs, {
+				...DEFAULT_MARKETPLACE_FILTERS,
+				onlyToday: true,
+			}).map((job) => job.id)
+		).toEqual(["t2"]);
+	});
+});
 
 describe("filterMarketplaceJobs", () => {
 	it("returns all jobs for the default filter state", () => {
