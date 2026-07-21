@@ -559,6 +559,30 @@ export const adProduct = pgTable(
 	]
 );
 
+// 사이트 전역 설정(단일 행). 지금은 푸터에 노출하는 사업자 정보를 담고, 이후 다른
+// 사이트 설정(무통장입금 계좌 안내 등)이 생기면 컬럼을 추가한다. 도메인을 푸터로 좁히지
+// 않으려고 이름을 site_settings로 둔다. 값이 없으면(null) 코드의 폴백 상수를 쓴다.
+export const bambiSiteSettings = pgTable("bambi_site_settings", {
+	// 단일 행 강제용 고정 키. 조회·수정 모두 이 키 하나만 다룬다.
+	id: text("id").default("default").primaryKey(),
+	// 푸터 서비스 소개 문구
+	footerIntro: text("footer_intro"),
+	// 운영 주체(상호)
+	operator: text("operator"),
+	// 대표자
+	ceo: text("ceo"),
+	// 사업자등록번호
+	bizRegNo: text("biz_reg_no"),
+	// 사업장 주소
+	address: text("address"),
+	// 고객문의 이메일
+	email: text("email"),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
+
 export const jobPerformanceEvent = pgTable(
 	"job_performance_event",
 	{

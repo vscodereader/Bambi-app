@@ -21,6 +21,10 @@ export const BAMBI_COMPANY = {
 	tel: "TODO_고객센터 전화",
 	email: "help@bambialba.com",
 
+	// 푸터 서비스 소개 문구(운영자 콘솔 미설정 시 폴백)
+	footerIntro:
+		"밤비는 유흥·접객 구인구직 정보를 1:1 채팅으로 안전하게 연결하는 플랫폼입니다.",
+
 	// 개인정보 보호책임자
 	privacyOfficer: {
 		dept: "개인정보보호팀",
