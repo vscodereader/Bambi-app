@@ -56,6 +56,7 @@ export interface Job {
 	desc: string;
 	descriptionBlocks?: JobDescriptionBlock[];
 	detailImages?: JobMedia[];
+	district: string;
 	exposureType?: null | string;
 	featured: boolean;
 	hours: string;
@@ -70,6 +71,7 @@ export interface Job {
 	promotionLabel?: null | string;
 	promotionTier?: "premium" | "recommended" | "standard" | null;
 	rating: number;
+	region: string;
 	reviews: number;
 	status: string;
 	tags: string[];

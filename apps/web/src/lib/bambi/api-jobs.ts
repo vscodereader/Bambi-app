@@ -42,6 +42,10 @@ const toApiListInput = (filters: MarketplaceFilters) => ({
 		filters.category === DEFAULT_MARKETPLACE_FILTERS.category
 			? undefined
 			: filters.category,
+	district:
+		filters.district === DEFAULT_MARKETPLACE_FILTERS.district
+			? undefined
+			: filters.district,
 	limit: 30,
 	minPayAmount: filters.minimumPay > 0 ? filters.minimumPay : undefined,
 	region:

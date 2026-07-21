@@ -38,6 +38,7 @@ import {
 import { JobExposureFields } from "@/components/bambi/job-exposure-fields";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
+import { JobRegionFields } from "@/components/bambi/job-region-fields";
 import { PageShell } from "@/components/bambi/page-shell";
 import { PayAmountHint } from "@/components/bambi/pay-amount-hint";
 import Loader from "@/components/loader";
@@ -55,11 +56,7 @@ import {
 	resolveJobPostMediaForSubmit,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
-import {
-	industryOptions,
-	payUnitOptions,
-	regionOptions,
-} from "@/lib/bambi-options";
+import { industryOptions, payUnitOptions } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
 const selectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
@@ -631,41 +628,12 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 										message={fieldErrors.industryCategory}
 									/>
 								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="region">지역</FieldLabel>
-									<Select
-										name="region"
-										onValueChange={(value) =>
-											updateFormValue("region", value ?? "")
-										}
-										required
-										value={form.region}
-									>
-										<SelectTrigger
-											aria-describedby={
-												fieldErrors.region
-													? getFieldErrorId("region")
-													: undefined
-											}
-											aria-invalid={Boolean(fieldErrors.region)}
-											className={selectTriggerClassName}
-											id="region"
-										>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{regionOptions.map((option) => (
-												<SelectItem key={option} value={option}>
-													{option}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									<FieldError
-										id={getFieldErrorId("region")}
-										message={fieldErrors.region}
-									/>
-								</div>
+								<JobRegionFields
+									district={form.district}
+									errors={fieldErrors}
+									onChange={updateFormValue}
+									region={form.region}
+								/>
 								<div className="flex flex-col gap-2">
 									<FieldLabel htmlFor="payAmount">급여 금액</FieldLabel>
 									<Input

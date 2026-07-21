@@ -1,23 +1,21 @@
+import {
+	districtsForRegion,
+	industryOptions,
+	regionOptions,
+} from "../bambi-options";
 import type { Job } from "./types";
 
-export const MARKETPLACE_REGIONS = [
-	"전체",
-	"강남",
-	"서초",
-	"송파",
-	"마포",
-	"부천",
-	"인천",
-] as const;
+// 축 미적용(전체) 옵션 — 지역/업종 필터에서 "필터 없음"을 뜻한다.
+export const ALL_OPTION = "전체";
 
-export const MARKETPLACE_CATEGORIES = [
-	"전체",
-	"라운지",
-	"바",
-	"클럽",
-	"호스트바",
-	"카페",
-] as const;
+export const MARKETPLACE_REGIONS = [ALL_OPTION, ...regionOptions] as const;
+
+export const MARKETPLACE_CATEGORIES = [ALL_OPTION, ...industryOptions] as const;
+
+// 선택한 시/도의 세부지역 필터 목록(맨 앞 전체 + 시/도 하위 세부지역).
+export function districtOptionsForRegion(region: string): readonly string[] {
+	return [ALL_OPTION, ...districtsForRegion(region)];
+}
 
 // 업종별 세부 카테고리 — 선택한 업종에 따라 세부 업종 옵션이 바뀐다(연동형).
 // 각 목록 첫 항목은 "필터 없음"을 뜻하는 전체(ALL_OPTION)다.
@@ -36,9 +34,6 @@ export const MARKETPLACE_QUICK_FILTERS = [
 	{ id: "beginner", label: "초보 가능" },
 ] as const;
 
-// 축 미적용(전체) 옵션 — 지역/업종 필터에서 "필터 없음"을 뜻한다.
-export const ALL_OPTION = "전체";
-
 // 선택한 업종에서 고를 수 있는 세부 업종 목록(정의 없으면 전체만).
 export function subcategoriesForCategory(category: string): readonly string[] {
 	return MARKETPLACE_SUBCATEGORIES[category] ?? [ALL_OPTION];
@@ -46,6 +41,7 @@ export function subcategoriesForCategory(category: string): readonly string[] {
 
 export interface MarketplaceFilters {
 	category: string;
+	district: string;
 	minimumPay: number;
 	onlyBeginnerFriendly: boolean;
 	onlyToday: boolean;
@@ -57,6 +53,7 @@ export interface MarketplaceFilters {
 
 export const DEFAULT_MARKETPLACE_FILTERS: MarketplaceFilters = {
 	category: ALL_OPTION,
+	district: ALL_OPTION,
 	minimumPay: 0,
 	onlyBeginnerFriendly: false,
 	onlyToday: false,
@@ -101,11 +98,7 @@ function jobMatchesQuery(job: Job, query: string): boolean {
 }
 
 function jobMatchesCategory(job: Job, category: string): boolean {
-	if (category === "전체") {
-		return true;
-	}
-	const text = `${job.title} ${job.company} ${job.type} ${job.tags.join(" ")}`;
-	return text.includes(category);
+	return category === ALL_OPTION || job.type === category;
 }
 
 function jobMatchesSubcategory(job: Job, subcategory: string): boolean {
@@ -117,7 +110,11 @@ function jobMatchesSubcategory(job: Job, subcategory: string): boolean {
 }
 
 function jobMatchesRegion(job: Job, region: string): boolean {
-	return region === "전체" || job.location.includes(region);
+	return region === ALL_OPTION || job.region === region;
+}
+
+function jobMatchesDistrict(job: Job, district: string): boolean {
+	return district === ALL_OPTION || job.district === district;
 }
 
 export function filterMarketplaceJobs(
@@ -129,6 +126,9 @@ export function filterMarketplaceJobs(
 			return false;
 		}
 		if (!jobMatchesRegion(job, filters.region)) {
+			return false;
+		}
+		if (!jobMatchesDistrict(job, filters.district)) {
 			return false;
 		}
 		if (!jobMatchesCategory(job, filters.category)) {
@@ -168,11 +168,12 @@ export function applyDiscoveryAxis(
 		return { ...filters, category: ALL_OPTION, subcategory: ALL_OPTION };
 	}
 	if (axis === "category") {
-		return { ...filters, region: ALL_OPTION };
+		return { ...filters, district: ALL_OPTION, region: ALL_OPTION };
 	}
 	return {
 		...filters,
 		category: ALL_OPTION,
+		district: ALL_OPTION,
 		region: ALL_OPTION,
 		subcategory: ALL_OPTION,
 	};
