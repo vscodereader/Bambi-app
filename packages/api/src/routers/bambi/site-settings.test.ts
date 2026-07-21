@@ -183,3 +183,136 @@ describe("siteSettings footer", () => {
 		}
 	});
 });
+
+describe("siteSettings payment accounts", () => {
+	it("getPaymentAccounts는 미설정 시 빈 배열, 운영자 저장 후 계좌를 반환한다", async () => {
+		const fixture = await createFixture();
+		try {
+			await db
+				.delete(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, "default"));
+
+			const getPaymentAccounts = createProcedureClient(
+				siteSettingsRouter.getPaymentAccounts,
+				{
+					context: createContextForUser(null),
+					path: ["bambi", "siteSettings", "getPaymentAccounts"],
+				}
+			);
+			expect(await getPaymentAccounts({})).toEqual([]);
+
+			const update = createProcedureClient(
+				siteSettingsRouter.updatePaymentAccounts,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updatePaymentAccounts"],
+				}
+			);
+			const saved = await update({
+				bankAccounts: [
+					{
+						accountNumber: "  123-456-789  ",
+						bank: "  국민은행  ",
+						holder: "  밤비  ",
+					},
+				],
+			});
+			// 앞뒤 공백은 제거해 저장한다
+			expect(saved).toEqual([
+				{ accountNumber: "123-456-789", bank: "국민은행", holder: "밤비" },
+			]);
+
+			const afterInsert = await getPaymentAccounts({});
+			expect(afterInsert).toHaveLength(1);
+			expect(afterInsert[0]?.bank).toBe("국민은행");
+
+			// 빈 배열로 다시 저장하면 계좌가 비워진다
+			await update({ bankAccounts: [] });
+			expect(await getPaymentAccounts({})).toEqual([]);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("계좌 필드가 비면 거부하고, 푸터 값은 계좌 저장과 독립적으로 보존된다", async () => {
+		const fixture = await createFixture();
+		try {
+			const updateFooter = createProcedureClient(
+				siteSettingsRouter.updateFooter,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updateFooter"],
+				}
+			);
+			const updateAccounts = createProcedureClient(
+				siteSettingsRouter.updatePaymentAccounts,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updatePaymentAccounts"],
+				}
+			);
+
+			await updateFooter({ operator: "밤비 주식회사" });
+			await updateAccounts({
+				bankAccounts: [
+					{ accountNumber: "111", bank: "신한은행", holder: "밤비" },
+				],
+			});
+
+			// 계좌 저장이 푸터 값을 지우지 않는다
+			const getFooter = createProcedureClient(siteSettingsRouter.getFooter, {
+				context: createContextForUser(null),
+				path: ["bambi", "siteSettings", "getFooter"],
+			});
+			expect((await getFooter({}))?.operator).toBe("밤비 주식회사");
+
+			// 빈 필드는 거부
+			await expect(
+				updateAccounts({
+					bankAccounts: [{ accountNumber: "222", bank: "  ", holder: "밤비" }],
+				})
+			).rejects.toBeTruthy();
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("updatePaymentAccounts는 운영자가 아니면 FORBIDDEN, 비로그인은 UNAUTHORIZED", async () => {
+		const fixture = await createFixture();
+		try {
+			const asEmployer = createProcedureClient(
+				siteSettingsRouter.updatePaymentAccounts,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "siteSettings", "updatePaymentAccounts"],
+				}
+			);
+			await expectOrpcCode(
+				asEmployer({
+					bankAccounts: [
+						{ accountNumber: "1", bank: "은행", holder: "예금주" },
+					],
+				}),
+				"FORBIDDEN"
+			);
+
+			const asGuest = createProcedureClient(
+				siteSettingsRouter.updatePaymentAccounts,
+				{
+					context: createContextForUser(null),
+					path: ["bambi", "siteSettings", "updatePaymentAccounts"],
+				}
+			);
+			await expectOrpcCode(
+				asGuest({
+					bankAccounts: [
+						{ accountNumber: "1", bank: "은행", holder: "예금주" },
+					],
+				}),
+				"UNAUTHORIZED"
+			);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+});

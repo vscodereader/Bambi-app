@@ -12,70 +12,77 @@ describe("job exposure and payment fields", () => {
 	it("wires the new job page to the exposure/payment section", () => {
 		const source = readComponent("../../app/employer/new/page.tsx");
 
-		// 노출·결제 섹션 컴포넌트를 렌더한다
+		// 노출·결제 섹션 컴포넌트를 렌더하고 폼 상태를 연결한다
 		expect(source).toContain("JobExposureFields");
-		// 폼 상태(노출 상품·결제 방법)를 컴포넌트에 연결한다
-		expect(source).toContain("exposureType={form.exposureType}");
 		expect(source).toContain("paymentMethod={form.paymentMethod}");
 		expect(source).toContain(
 			"exposureDurationDays={form.exposureDurationDays}"
 		);
-		// 유료 노출 결제 안내 문구를 검수 안내에 보강한다
-		expect(source).toContain("운영자 결제 확인 후");
+		expect(source).toContain(
+			"onPaymentMethodChange={handlePaymentMethodChange}"
+		);
 	});
 
-	it("renders seven exposure products and two payment methods", () => {
+	it("blocks submit when a paid product is paired with the unsupported card method", () => {
+		const source = readComponent("../../app/employer/new/page.tsx");
+		const editSource = readComponent(
+			"../../app/employer/jobs/[id]/edit/page.tsx"
+		);
+
+		// 유료 상품 + 신용카드면 등록/수정 제출을 막는다
+		for (const src of [source, editSource]) {
+			expect(src).toContain("cardPaymentBlocked");
+			expect(src).toContain('form.paymentMethod === "card"');
+			expect(src).toContain("Boolean(form.adProductId)");
+		}
+	});
+
+	it("re-shows the bank transfer guide after a bank-transfer registration", () => {
+		const source = readComponent("../../app/employer/new/page.tsx");
+
+		expect(source).toContain("BankTransferGuide");
+		expect(source).toContain("무통장입금 안내");
+		expect(source).toContain('jobInput.paymentMethod === "bank_transfer"');
+	});
+
+	it("offers card and bank transfer payment methods", () => {
 		const source = readComponent("job-exposure-fields.tsx");
 
 		expect(source).toContain("export function JobExposureFields");
-		// 노출 상품 7종 값
-		for (const value of [
-			"premium-banner",
-			"left-banner",
-			"right-banner",
-			"special",
-			"urgent",
-			"recommended",
-			"standard",
-		]) {
-			expect(source).toContain(`value: "${value}"`);
-		}
-		// 노출 상품 라벨
-		for (const label of [
-			"프리미엄 배너",
-			"좌측 배너",
-			"우측 배너",
-			"스페셜 채용",
-			"급구 채용",
-			"추천 채용",
-			"일반 구인",
-		]) {
-			expect(source).toContain(label);
-		}
-		// 결제 방법 2종
 		expect(source).toContain('value: "card"');
 		expect(source).toContain('value: "bank_transfer"');
 		expect(source).toContain("신용카드");
 		expect(source).toContain("무통장입금");
-	});
-
-	it("shows the duration select only for paid exposure and keeps the payment notice", () => {
-		const source = readComponent("job-exposure-fields.tsx");
-
-		// standard가 아닐 때만 이용 기간·결제 방법 노출
-		expect(source).toContain('exposureType !== "standard"');
-		expect(source).toContain("showPaidOptions");
-		// 이용 기간 30/60/90일
-		expect(source).toContain("[30, 60, 90]");
-		// 결제 안내문
+		// 기존 결제 안내문은 유지한다
 		expect(source).toContain(
 			"결제는 운영자 확인 후 완료되며, 검수·결제완료 시 게시됩니다."
 		);
 	});
 
-	it("maps the duration select to labeled items so the trigger shows the label", () => {
+	it("warns for the unsupported card method and shows the account guide for bank transfer", () => {
 		const source = readComponent("job-exposure-fields.tsx");
-		// base-ui Select는 items 매핑이 있어야 트리거에 원값(일수) 대신 라벨을 표시한다
-		expect(source).toContain("items={(selectedProduct?.priceOptions");
+
+		// 신용카드 선택 시 준비중 안내
+		expect(source).toContain('paymentMethod === "card"');
+		expect(source).toContain("아직 지원하지 않는 결제 방법입니다");
+		expect(source).toContain("곧 지원할");
+		// 무통장입금 선택 시 계좌 안내
+		expect(source).toContain('paymentMethod === "bank_transfer"');
+		expect(source).toContain("BankTransferGuide");
+	});
+
+	it("bank transfer guide lists accounts with copy and deposit instructions", () => {
+		const source = readComponent("bank-transfer-guide.tsx");
+
+		expect(source).toContain("getPaymentAccounts");
+		expect(source).toContain("navigator.clipboard.writeText");
+		expect(source).toContain("계좌번호를 복사했어요");
+		expect(source).toContain("예금주");
+		expect(source).toContain(
+			"입금자명은 업체명(상호)과 동일하게 입금해 주세요"
+		);
+		expect(source).toContain("입금 확인 후 공고가 게시됩니다");
+		// 계좌 미설정 시 고객센터 문의 폴백
+		expect(source).toContain("고객센터");
 	});
 });

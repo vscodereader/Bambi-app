@@ -8,6 +8,12 @@ import {
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogTitle,
+} from "@bambi-app/ui/components/dialog";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import {
@@ -25,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
 import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
 import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
 import { EmployerListingPreview } from "@/components/bambi/employer-listing-preview";
@@ -267,10 +274,21 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const formRef = useRef<HTMLFormElement>(null);
 	const [isDirty, setIsDirty] = useState(false);
 	const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+	// 무통장입금 유료 공고 등록 후 계좌·금액을 한 번 더 안내하는 완료 다이얼로그 상태.
+	const [bankNotice, setBankNotice] = useState<{
+		amount: number | null;
+	} | null>(null);
+	// 제출 시점의 결제 방식을 onSuccess로 넘겨, 등록 성공 후 무통장이면 다이얼로그를 띄운다.
+	const pendingBankNoticeRef = useRef<{ amount: number | null } | null>(null);
 	useUnsavedChangesWarning(isDirty);
 	const createMediaUploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
 	);
+
+	const leaveToEmployer = () => {
+		setBankNotice(null);
+		router.push("/employer");
+	};
 
 	const createMutation = useMutation(
 		orpc.bambi.jobs.create.mutationOptions({
@@ -282,10 +300,16 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			},
 			onSuccess: async () => {
 				setIsDirty(false);
-				toast.success("공고를 등록했습니다. 검수 후 공개됩니다.");
 				await utils.invalidateQueries({
 					queryKey: orpc.bambi.jobs.listMine.queryKey(),
 				});
+				if (pendingBankNoticeRef.current) {
+					setBankNotice(pendingBankNoticeRef.current);
+					pendingBankNoticeRef.current = null;
+					toast.success("공고를 등록했습니다. 입금 확인 후 게시됩니다.");
+					return;
+				}
+				toast.success("공고를 등록했습니다. 검수 후 공개됩니다.");
 				router.push("/employer");
 			},
 		})
@@ -475,6 +499,12 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 				teamId: jobInput.teamId,
 			});
 
+			// 무통장입금 유료 공고면 등록 성공 후 계좌 안내 다이얼로그를 띄우도록 표시해 둔다.
+			pendingBankNoticeRef.current =
+				jobInput.adProductId && jobInput.paymentMethod === "bank_transfer"
+					? { amount: jobInput.exposureAmount }
+					: null;
+
 			createMutation.mutate({
 				...jobInput,
 				media: mediaPayload,
@@ -488,6 +518,10 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			toast.error(message);
 		}
 	};
+
+	// 유료 상품에 신용카드(미지원)를 고른 상태면 제출을 막는다. 사유는 결제 섹션의 안내가 알린다.
+	const cardPaymentBlocked =
+		Boolean(form.adProductId) && form.paymentMethod === "card";
 
 	const listingPreview = (
 		<EmployerListingPreview
@@ -868,6 +902,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 								disabled={
 									createMutation.isPending ||
 									createMediaUploadMutation.isPending ||
+									cardPaymentBlocked ||
 									!verified
 								}
 								type="submit"
@@ -888,6 +923,28 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					</div>
 				</aside>
 			</div>
+
+			<Dialog
+				onOpenChange={(open) => {
+					if (!open) {
+						leaveToEmployer();
+					}
+				}}
+				open={bankNotice !== null}
+			>
+				<DialogContent>
+					<DialogTitle>무통장입금 안내</DialogTitle>
+					<DialogDescription>
+						아래 계좌로 입금하시면 확인 후 공고가 게시됩니다.
+					</DialogDescription>
+					<BankTransferGuide amount={bankNotice?.amount ?? null} />
+					<div className="flex justify-end">
+						<Button onClick={leaveToEmployer} type="button">
+							확인
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
 		</PageShell>
 	);
 }

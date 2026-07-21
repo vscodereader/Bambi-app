@@ -1,6 +1,12 @@
 "use client";
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTitle,
+	PopoverTrigger,
+} from "@bambi-app/ui/components/popover";
 import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,6 +14,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
@@ -29,6 +36,7 @@ interface AdListItem {
 	boostedAt: Date | null | string;
 	boostsUsedToday: number;
 	employerDisplayName: string;
+	exposureAmount: null | number;
 	exposureEndsAt: Date | null | string;
 	exposureType: string;
 	jobPostId: string;
@@ -123,7 +131,26 @@ function getAdColumns({
 					status: ad.status,
 				});
 
-				return <StatusBadge tone={display.tone}>{display.label}</StatusBadge>;
+				return (
+					<div className="flex flex-wrap items-center gap-2">
+						<StatusBadge tone={display.tone}>{display.label}</StatusBadge>
+						{ad.paymentStatus === "unpaid" ? (
+							<Popover>
+								<PopoverTrigger
+									render={
+										<Button size="sm" type="button" variant="outline">
+											입금 안내
+										</Button>
+									}
+								/>
+								<PopoverContent align="start" className="w-80">
+									<PopoverTitle>무통장입금 안내</PopoverTitle>
+									<BankTransferGuide amount={ad.exposureAmount} />
+								</PopoverContent>
+							</Popover>
+						) : null}
+					</div>
+				);
 			},
 		},
 		{

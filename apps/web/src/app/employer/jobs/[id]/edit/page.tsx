@@ -488,6 +488,10 @@ export default function EditEmployerJobPage({
 		);
 	}
 
+	// 유료 상품에 신용카드(미지원)를 고른 상태면 수정 저장을 막는다. 사유는 결제 섹션 안내가 알린다.
+	const cardPaymentBlocked =
+		Boolean(form.adProductId) && form.paymentMethod === "card";
+
 	const listingPreview = (
 		<EmployerListingPreview
 			companyName={previewCompanyName}
@@ -834,7 +838,8 @@ export default function EditEmployerJobPage({
 							<Button
 								disabled={
 									updateMutation.isPending ||
-									createMediaUploadMutation.isPending
+									createMediaUploadMutation.isPending ||
+									cardPaymentBlocked
 								}
 								type="submit"
 							>

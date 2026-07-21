@@ -1,0 +1,1 @@
+ALTER TABLE "bambi_site_settings" ADD COLUMN "bank_accounts" jsonb DEFAULT '[]'::jsonb NOT NULL;
