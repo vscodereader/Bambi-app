@@ -153,6 +153,11 @@ function PortOneVerifyButton({
 				identityVerificationId,
 				redirectUrl: window.location.href,
 				storeId,
+				// windowType 미지정 시 PG 기본 창 방식(리디렉션)이라 현재 탭이 통째로
+				// 이동한다. PC는 팝업 새 창으로 띄우고, 모바일은 팝업 차단이 흔해
+				// 리디렉션을 유지한다(복귀 처리는 위 useEffect가 담당).
+				windowType: { pc: "POPUP", mobile: "REDIRECTION" },
+				popup: { center: true },
 			});
 			// 인증창이 정상 완료되지 못한 경우에만 code가 실린다.
 			if (response?.code !== undefined) {
