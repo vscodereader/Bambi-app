@@ -13,6 +13,8 @@ const JOBS_SEED: Job[] = [
 	// ── 스페셜(프리미엄) 노출 ──────────────────────────────────
 	{
 		id: "j2",
+		beginnerFriendly: false,
+		instantInterview: false,
 		title: "주말 야간 홀",
 		company: "문스톤 라운지",
 		location: "강남 · 논현",
@@ -34,6 +36,8 @@ const JOBS_SEED: Job[] = [
 	},
 	{
 		id: "j6",
+		beginnerFriendly: false,
+		instantInterview: false,
 		title: "클럽 스태프",
 		company: "네온 클럽",
 		location: "강남 · 역삼",
@@ -55,6 +59,8 @@ const JOBS_SEED: Job[] = [
 	},
 	{
 		id: "j7",
+		beginnerFriendly: false,
+		instantInterview: false,
 		title: "홀 매니저",
 		company: "청담 프라이빗 바운스",
 		location: "강남 · 청담",
@@ -76,6 +82,8 @@ const JOBS_SEED: Job[] = [
 	// ── 추천 노출 ─────────────────────────────────────────────
 	{
 		id: "j1",
+		beginnerFriendly: true,
+		instantInterview: false,
 		title: "홀 서빙",
 		company: "달밤 라운지",
 		location: "강남 · 청담",
@@ -96,6 +104,8 @@ const JOBS_SEED: Job[] = [
 	},
 	{
 		id: "j3",
+		beginnerFriendly: false,
+		instantInterview: true,
 		title: "바텐더",
 		company: "시그니처 바",
 		location: "강남 · 역삼",
@@ -116,6 +126,8 @@ const JOBS_SEED: Job[] = [
 	},
 	{
 		id: "j8",
+		beginnerFriendly: false,
+		instantInterview: false,
 		title: "카페 홀",
 		company: "무드 카페",
 		location: "마포 · 홍대",
@@ -136,6 +148,8 @@ const JOBS_SEED: Job[] = [
 	// ── 전체(일반) 노출 ───────────────────────────────────────
 	{
 		id: "j4",
+		beginnerFriendly: false,
+		instantInterview: true,
 		title: "홀 서빙",
 		company: "라운지 엘",
 		location: "서초 · 교대",
@@ -153,6 +167,8 @@ const JOBS_SEED: Job[] = [
 	},
 	{
 		id: "j9",
+		beginnerFriendly: false,
+		instantInterview: false,
 		title: "주말 홀",
 		company: "루비 라운지",
 		location: "송파 · 잠실",
@@ -170,6 +186,8 @@ const JOBS_SEED: Job[] = [
 	},
 	{
 		id: "j10",
+		beginnerFriendly: false,
+		instantInterview: false,
 		title: "바 스태프",
 		company: "하버 바",
 		location: "인천 · 구월",
@@ -187,6 +205,8 @@ const JOBS_SEED: Job[] = [
 	},
 	{
 		id: "j11",
+		beginnerFriendly: false,
+		instantInterview: false,
 		title: "주간 홀",
 		company: "선셋 카페",
 		location: "부천 · 상동",
@@ -204,6 +224,8 @@ const JOBS_SEED: Job[] = [
 	},
 	{
 		id: "j12",
+		beginnerFriendly: false,
+		instantInterview: false,
 		title: "야간 홀",
 		company: "미드나잇 라운지",
 		location: "강남 · 신사",

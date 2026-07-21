@@ -166,7 +166,7 @@ export function MarketplaceFilterControls({
 					id="filter-only-today"
 					onCheckedChange={(checked) => update({ onlyToday: checked })}
 				/>
-				오늘 면접 가능만 보기
+				당일면접 가능만 보기
 			</label>
 			<label
 				className="flex items-center gap-2 font-bold text-sm"

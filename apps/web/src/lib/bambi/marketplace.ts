@@ -32,7 +32,7 @@ export const MARKETPLACE_SUBCATEGORIES: Record<string, readonly string[]> = {
 
 export const MARKETPLACE_QUICK_FILTERS = [
 	{ id: "verified", label: "검증 완료" },
-	{ id: "today", label: "오늘 면접 가능" },
+	{ id: "today", label: "당일면접 가능" },
 	{ id: "beginner", label: "초보 가능" },
 ] as const;
 
@@ -120,16 +120,6 @@ function jobMatchesRegion(job: Job, region: string): boolean {
 	return region === "전체" || job.location.includes(region);
 }
 
-function jobMatchesBeginner(job: Job): boolean {
-	const text = `${job.title} ${job.desc} ${job.tags.join(" ")}`;
-	return text.includes("초보");
-}
-
-function jobMatchesToday(job: Job): boolean {
-	const text = `${job.desc} ${job.pref} ${job.tags.join(" ")}`;
-	return text.includes("오늘 면접");
-}
-
 export function filterMarketplaceJobs(
 	jobs: Job[],
 	filters: MarketplaceFilters
@@ -150,10 +140,10 @@ export function filterMarketplaceJobs(
 		if (filters.onlyVerified && !job.verified) {
 			return false;
 		}
-		if (filters.onlyBeginnerFriendly && !jobMatchesBeginner(job)) {
+		if (filters.onlyBeginnerFriendly && !job.beginnerFriendly) {
 			return false;
 		}
-		if (filters.onlyToday && !jobMatchesToday(job)) {
+		if (filters.onlyToday && !job.instantInterview) {
 			return false;
 		}
 		return parsePayAmount(job.pay) >= filters.minimumPay;
