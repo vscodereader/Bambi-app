@@ -50,6 +50,7 @@ export interface JobPerformanceMetrics {
 }
 
 export interface Job {
+	beginnerFriendly: boolean;
 	company: string;
 	coverImage?: JobMedia | null;
 	desc: string;
@@ -59,6 +60,7 @@ export interface Job {
 	featured: boolean;
 	hours: string;
 	id: string;
+	instantInterview: boolean;
 	isPromoted?: boolean;
 	lastBoostedAt?: Date | null | string;
 	location: string;

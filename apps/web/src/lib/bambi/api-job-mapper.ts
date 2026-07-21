@@ -30,6 +30,7 @@ export interface ApiJobMediaSet {
 }
 
 export interface ApiMarketplaceJob {
+	beginnerFriendly?: boolean | null;
 	coverImage?: ApiJobMedia | null;
 	description?: string | null;
 	descriptionBlocks?: JobDescriptionBlock[] | null;
@@ -38,6 +39,7 @@ export interface ApiMarketplaceJob {
 	exposureType?: null | string;
 	id: string;
 	industryCategory: string;
+	instantInterview?: boolean | null;
 	isPromoted?: boolean;
 	lastBoostedAt?: Date | null | string;
 	media?: ApiJobMediaSet;
@@ -136,6 +138,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 	].filter((tag) => tag.length > 0);
 
 	return {
+		beginnerFriendly: job.beginnerFriendly ?? false,
 		company,
 		coverImage,
 		desc:
@@ -147,6 +150,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		featured: job.employerVerificationStatus === "verified",
 		hours: job.workSchedule ?? "채팅으로 확인",
 		id: job.id,
+		instantInterview: job.instantInterview ?? false,
 		isPromoted: job.isPromoted ?? Boolean(job.promotionTier),
 		lastBoostedAt: job.lastBoostedAt ?? null,
 		location: job.region,

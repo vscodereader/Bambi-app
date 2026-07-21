@@ -53,13 +53,38 @@ describe("filterMarketplaceJobs", () => {
 		}
 	});
 
-	it("filters jobs to today-interview listings when the chip is on", () => {
+	it("filters jobs to instant-interview listings when the chip is on", () => {
 		const result = filterMarketplaceJobs(JOBS, {
 			...DEFAULT_MARKETPLACE_FILTERS,
 			onlyToday: true,
 		});
 
 		expect(result.map((job) => job.id)).toEqual(["j3", "j4"]);
+		for (const job of result) {
+			expect(job.instantInterview).toBe(true);
+		}
+	});
+
+	it("does not match negated text like 초보 사절 / 오늘 면접 불가", () => {
+		const negated = JOBS.map((job) => ({
+			...job,
+			beginnerFriendly: false,
+			desc: `${job.desc} 초보 사절, 오늘 면접 불가`,
+			instantInterview: false,
+		}));
+
+		expect(
+			filterMarketplaceJobs(negated, {
+				...DEFAULT_MARKETPLACE_FILTERS,
+				onlyBeginnerFriendly: true,
+			})
+		).toHaveLength(0);
+		expect(
+			filterMarketplaceJobs(negated, {
+				...DEFAULT_MARKETPLACE_FILTERS,
+				onlyToday: true,
+			})
+		).toHaveLength(0);
 	});
 });
 

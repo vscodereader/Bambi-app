@@ -307,6 +307,10 @@ export const jobPost = pgTable(
 			.default([])
 			.notNull(),
 		interviewNotes: text("interview_notes"),
+		// 채용자가 지정하는 seeker 필터 축. 텍스트 매칭이 아니라 명시 필드로 거른다.
+		beginnerFriendly: boolean("beginner_friendly").default(false).notNull(),
+		// "당일면접 가능" — 시간에 낡지 않는 상시 속성(오늘 날짜 개념 아님).
+		instantInterview: boolean("instant_interview").default(false).notNull(),
 		rejectionReason: text("rejection_reason"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
 		exposureType: jobExposureType("exposure_type")

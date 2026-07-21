@@ -137,11 +137,13 @@ export interface JobPostMediaApiSetInput {
 
 export interface JobForm {
 	adProductId: string | null;
+	beginnerFriendly: boolean;
 	description: string;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
 	industryCategory: string;
+	instantInterview: boolean;
 	interviewNotes: string;
 	organizationId: string;
 	payAmount: string;
@@ -155,12 +157,14 @@ export interface JobForm {
 
 export interface JobPostInput {
 	adProductId: string | null;
+	beginnerFriendly: boolean;
 	description: string;
 	descriptionBlocks: JobDescriptionBlockFormValue[];
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
 	industryCategory: string;
+	instantInterview: boolean;
 	interviewNotes?: string;
 	media?: {
 		adHorizontal?: JobFormMediaItem;
@@ -200,11 +204,13 @@ type JobFormValidationResult =
 
 export const emptyJobForm: JobForm = {
 	adProductId: null,
+	beginnerFriendly: false,
 	description: "",
 	exposureAmount: null,
 	exposureDurationDays: null,
 	exposureType: "standard",
 	industryCategory: industryOptions[0] ?? "",
+	instantInterview: false,
 	interviewNotes: "",
 	organizationId: "",
 	payAmount: "",
@@ -826,12 +832,14 @@ export const validateJobForm = (
 	return {
 		input: {
 			adProductId,
+			beginnerFriendly: form.beginnerFriendly,
 			description,
 			descriptionBlocks: normalizedBlocks,
 			exposureAmount,
 			exposureDurationDays,
 			exposureType,
 			industryCategory,
+			instantInterview: form.instantInterview,
 			interviewNotes: interviewNotes || undefined,
 			media: options.media
 				? {
