@@ -108,6 +108,7 @@ const jobPostInput = z.object({
 	title: z.string().min(2).max(80),
 	industryCategory: z.string().min(1).max(80),
 	region: z.string().min(1).max(80),
+	district: z.string().max(80).optional(),
 	payAmount: z.number().int().positive(),
 	payUnit: z.string().min(1).max(30),
 	workSchedule: z.string().min(1).max(200),
@@ -148,6 +149,7 @@ const createMediaUploadInput = z.object({
 const listInput = z.object({
 	industryCategory: z.string().min(1).max(80).optional(),
 	region: z.string().min(1).max(80).optional(),
+	district: z.string().max(80).optional(),
 	minPayAmount: z.number().int().positive().optional(),
 	limit: z.number().int().min(1).max(50).default(20),
 });
@@ -501,6 +503,10 @@ export const jobsRouter = {
 			filters.push(eq(jobPost.region, input.region));
 		}
 
+		if (input.district) {
+			filters.push(eq(jobPost.district, input.district));
+		}
+
 		if (input.minPayAmount) {
 			filters.push(sql`${jobPost.payAmount} >= ${input.minPayAmount}`);
 		}
@@ -524,6 +530,7 @@ export const jobsRouter = {
 			ratingAverage: ratingAverageSql,
 			ratingCount: ratingCountSql,
 			region: jobPost.region,
+			district: jobPost.district,
 			status: jobPost.status,
 			teamDisplayName: employerTeamProfile.displayName,
 			title: jobPost.title,
@@ -652,6 +659,10 @@ export const jobsRouter = {
 			filters.push(eq(jobPost.region, input.region));
 		}
 
+		if (input.district) {
+			filters.push(eq(jobPost.district, input.district));
+		}
+
 		if (input.minPayAmount) {
 			filters.push(sql`${jobPost.payAmount} >= ${input.minPayAmount}`);
 		}
@@ -662,6 +673,7 @@ export const jobsRouter = {
 				title: jobPost.title,
 				industryCategory: jobPost.industryCategory,
 				region: jobPost.region,
+				district: jobPost.district,
 				payAmount: jobPost.payAmount,
 				payUnit: jobPost.payUnit,
 				workSchedule: jobPost.workSchedule,
@@ -752,6 +764,7 @@ export const jobsRouter = {
 					paymentStatus: jobPost.paymentStatus,
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
+					district: jobPost.district,
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					workSchedule: jobPost.workSchedule,
@@ -866,6 +879,7 @@ export const jobsRouter = {
 				title: jobPost.title,
 				industryCategory: jobPost.industryCategory,
 				region: jobPost.region,
+				district: jobPost.district,
 				payAmount: jobPost.payAmount,
 				payUnit: jobPost.payUnit,
 				status: jobPost.status,
