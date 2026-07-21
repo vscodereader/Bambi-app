@@ -1,8 +1,9 @@
 "use client";
 
-// 목(mock) 휴대폰 본인인증 다이얼로그 — 실제 인증 API가 없어 5개 필드를 직접 입력받아
-// 인증 결과 쿠키를 세팅하는 임시 컴포넌트다. 실인증 도입 시 이 파일과 /api/guest의 목
-// 처리, guest.ts의 adult* 상수를 함께 걷어낸다.
+// 목(mock) 휴대폰 본인인증 다이얼로그 — 포트원 미구성 개발 환경 전용 폴백.
+// PhoneVerifyDialog가 NEXT_PUBLIC_PORTONE_* 부재를 감지하면 이 폼을 렌더한다.
+// 직접 import 하지 말고 항상 PhoneVerifyDialog를 거칠 것(프로덕션은 env 가드가
+// 포트원 구성을 강제하므로 이 폼이 노출되지 않는다).
 
 import {
 	Dialog,
@@ -81,7 +82,13 @@ export function MockPhoneVerifyDialog({
 			body: JSON.stringify(verified),
 		});
 		if (!response.ok) {
-			setError("인증 처리에 실패했어요. 입력을 확인해 주세요.");
+			// 미성년 차단(403) 등 서버가 사유를 보내면 그대로 보여준다.
+			const data = (await response.json().catch(() => null)) as {
+				message?: string;
+			} | null;
+			setError(
+				data?.message ?? "인증 처리에 실패했어요. 입력을 확인해 주세요."
+			);
 			return;
 		}
 		setOpen(false);

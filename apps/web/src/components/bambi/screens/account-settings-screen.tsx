@@ -1,9 +1,9 @@
 "use client";
 
-// 계정 설정 — 표시 이름(프로필) 수정, 기본 정보(성별·생년월일) 표시, 휴대폰 본인인증(목),
-// 로그아웃. 본인인증은 게스트용 MockPhoneVerifyDialog를 재사용한 목 단계이며, 성공 시
-// verifyMyPhoneMock로 번호·인증여부·생년월일(+미설정 시 성별)을 프로필에 저장한다. 실인증
-// API 도입 시 다이얼로그·뮤테이션을 교체한다.
+// 계정 설정 — 표시 이름(프로필) 수정, 기본 정보(성별·생년월일) 표시, 휴대폰 본인인증,
+// 로그아웃. 본인인증은 포트원 인증창(PhoneVerifyDialog)으로 진행하고, 성공 시
+// verifyMyPhone이 포트원 조회 결과(번호·성별·생년월일·CI 해시)를 프로필에 저장한다.
+// 포트원 미구성 개발 환경에서는 목 폼으로 폴백해 verifyMyPhoneMock을 호출한다.
 
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,7 +14,7 @@ import { signOutToHome } from "@/lib/bambi/auth-actions";
 import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
 import { Badge, Button, Input } from "../ds";
-import { MockPhoneVerifyDialog } from "../mock-phone-verify-dialog";
+import { PhoneVerifyDialog } from "../phone-verify-dialog";
 
 const BIRTH_PATTERN = /^\d{8}$/;
 
@@ -63,6 +63,15 @@ export function AccountSettingsScreen() {
 	);
 
 	const verifyMutation = useMutation(
+		orpc.bambi.onboarding.verifyMyPhone.mutationOptions({
+			onSuccess: async () => {
+				toast.success("휴대폰 인증을 완료했어요.");
+				await queryClient.invalidateQueries();
+			},
+		})
+	);
+
+	const mockVerifyMutation = useMutation(
 		orpc.bambi.onboarding.verifyMyPhoneMock.mutationOptions({
 			onSuccess: async () => {
 				toast.success("휴대폰 인증을 완료했어요.");
@@ -71,10 +80,16 @@ export function AccountSettingsScreen() {
 		})
 	);
 
-	// 목 다이얼로그 입력 중 계정설정에서 저장하는 값은 번호·성별·생년월일(실명은 목 표시용).
-	// 실패 시 mutateAsync가 throw → 다이얼로그가 에러 메시지를 인라인으로 노출한다.
-	const handleVerified = async (input: MockPhoneVerifyInput) => {
-		await verifyMutation.mutateAsync({
+	// 실인증: 인증창이 끝나면 identityVerificationId만 넘긴다 — 번호·성별·생년월일은
+	// 서버가 포트원 조회로 직접 확인해 저장한다. 실패(미성년·중복 CI 등) 시 mutateAsync가
+	// throw → 다이얼로그가 토스트로 사유를 노출한다.
+	const handleVerified = async (identityVerificationId: string) => {
+		await verifyMutation.mutateAsync({ identityVerificationId });
+	};
+
+	// 목 폴백(포트원 미구성 개발 환경): 폼 입력을 그대로 저장한다.
+	const handleMockVerified = async (input: MockPhoneVerifyInput) => {
+		await mockVerifyMutation.mutateAsync({
 			phoneNumber: input.phone,
 			gender: input.gender,
 			birthDate: input.birth,
@@ -171,9 +186,10 @@ export function AccountSettingsScreen() {
 							</span>
 						</div>
 					) : null}
-					<MockPhoneVerifyDialog
+					<PhoneVerifyDialog
 						defaultGender={profile?.gender ?? null}
-						description="계정에 휴대폰 번호를 등록해요. (지금은 목 인증 단계예요)"
+						description="본인인증으로 계정에 휴대폰 번호를 등록해요."
+						onMockVerified={handleMockVerified}
 						onVerified={handleVerified}
 						title={isPhoneVerified ? "휴대폰 재인증" : "휴대폰 본인인증"}
 						triggerLabel={isPhoneVerified ? "휴대폰 재인증" : "휴대폰 인증하기"}
