@@ -16,7 +16,7 @@ import {
 } from "@bambi-app/db/schema/bambi";
 import { env } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -37,7 +37,7 @@ import {
 } from "../../services/bambi-onboarding";
 import {
 	fetchIdentityVerification,
-	hashCi,
+	hashIdentityValue,
 	isAdultBirth8,
 	mapPortOneGender,
 	toBirth8,
@@ -435,8 +435,8 @@ export const onboardingRouter = {
 		}),
 
 	// 실 휴대폰 본인인증(포트원 인증창) — 클라이언트가 보낸 identityVerificationId를
-	// 포트원 단건조회로 검증하고, 조회 결과(번호·성별·생년월일·CI)를 프로필에 저장한다.
-	// 만 19세 미만은 법적 요건상 무조건 거부한다. CI 해시 유니크로 중복 계정 인증을 막는다.
+	// 포트원 단건조회로 검증하고, 조회 결과(번호·성별·생년월일·CI·DI)를 프로필에 저장한다.
+	// 만 19세 미만은 법적 요건상 무조건 거부한다. DI 해시 유니크로 중복 계정 인증을 막는다.
 	verifyMyPhone: protectedProcedure
 		.input(phoneVerificationInput)
 		.handler(async ({ context, input }) => {
@@ -478,15 +478,25 @@ export const onboardingRouter = {
 					message: "인증 정보에 개인 식별값(CI)이 없습니다.",
 				});
 			}
+			if (!customer.di) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "인증 정보에 중복확인 식별값(DI)이 없습니다.",
+				});
+			}
 
-			// CI 원문은 저장하지 않는다 — 해시로 중복 계정만 판별한다.
-			const ciHash = await hashCi(customer.ci);
-			const [duplicated] = await db
+			// CI·DI 원문은 저장하지 않는다 — 해시로 중복 계정만 판별한다. 중복 판정의
+			// 기준 축은 DI지만, 과거 CI만 저장된 계정과의 CI 충돌도 유니크 인덱스가
+			// 유지되므로 저장 전에 함께 걸러 같은 안내로 막는다(안 그러면 저장 시
+			// unique violation으로 터진다). 둘 중 하나라도 다른 계정과 겹치면 CONFLICT.
+			const ciHash = await hashIdentityValue(customer.ci);
+			const diHash = await hashIdentityValue(customer.di);
+			const collisions = await db
 				.select({ userId: bambiProfile.userId })
 				.from(bambiProfile)
-				.where(eq(bambiProfile.ciHash, ciHash))
-				.limit(1);
-			if (duplicated && duplicated.userId !== userId) {
+				.where(
+					or(eq(bambiProfile.diHash, diHash), eq(bambiProfile.ciHash, ciHash))
+				);
+			if (collisions.some((row) => row.userId !== userId)) {
 				throw new ORPCError("CONFLICT", {
 					message: "이미 다른 계정에서 본인인증에 사용된 정보예요.",
 				});
@@ -501,6 +511,7 @@ export const onboardingRouter = {
 					gender: mapPortOneGender(customer.gender) ?? existingProfile.gender,
 					birthDate: birth8,
 					ciHash,
+					diHash,
 				})
 				.where(eq(bambiProfile.userId, userId))
 				.returning();
