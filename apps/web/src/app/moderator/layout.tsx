@@ -38,6 +38,7 @@ const MODERATOR_NAV_ITEMS: NavEntry[] = [
 			{ href: "/moderator/reviews", label: "후기 관리" },
 		],
 	},
+	{ href: "/moderator/site-settings" as Route, label: "사이트 정보" },
 	{ href: "/seeker", label: "채용정보" },
 ];
 
