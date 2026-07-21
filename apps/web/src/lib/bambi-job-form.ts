@@ -4,6 +4,7 @@ import {
 	type JobAdBannerUsage,
 } from "./bambi/job-ad-banner-spec";
 import {
+	districtsForRegion,
 	industryOptions,
 	payUnitOptions,
 	regionOptions,
@@ -139,6 +140,7 @@ export interface JobForm {
 	adProductId: string | null;
 	beginnerFriendly: boolean;
 	description: string;
+	district: string;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
@@ -160,6 +162,7 @@ export interface JobPostInput {
 	beginnerFriendly: boolean;
 	description: string;
 	descriptionBlocks: JobDescriptionBlockFormValue[];
+	district: string;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
@@ -202,10 +205,15 @@ type JobFormValidationResult =
 			ok: true;
 	  };
 
+// 선택한 시/도의 기본 세부지역. 목록이 없는 시/도(기타)는 빈 값.
+export const defaultDistrictForRegion = (region: string): string =>
+	districtsForRegion(region)[0] ?? "";
+
 export const emptyJobForm: JobForm = {
 	adProductId: null,
 	beginnerFriendly: false,
 	description: "",
+	district: defaultDistrictForRegion(regionOptions[0] ?? ""),
 	exposureAmount: null,
 	exposureDurationDays: null,
 	exposureType: "standard",
@@ -631,6 +639,7 @@ const getPostingScopeErrors = ({
 };
 
 const getConditionErrors = ({
+	district,
 	industryCategory,
 	payAmount,
 	payUnit,
@@ -638,6 +647,7 @@ const getConditionErrors = ({
 	title,
 	workSchedule,
 }: {
+	district: string;
 	industryCategory: string;
 	payAmount: number;
 	payUnit: string;
@@ -662,6 +672,11 @@ const getConditionErrors = ({
 
 	if (!(region.length > 0 && region.length <= OPTION_MAX_LENGTH)) {
 		errors.region = "지역을 선택해 주세요.";
+	}
+
+	// 세부지역이 정의된 시/도만 필수. "기타"처럼 목록이 빈 시/도는 건너뛴다.
+	if (districtsForRegion(region).length > 0 && district.length === 0) {
+		errors.district = "세부지역을 선택해 주세요.";
 	}
 
 	if (!(Number.isInteger(payAmount) && payAmount > 0)) {
@@ -762,6 +777,7 @@ export const validateJobForm = (
 	const title = trim(form.title);
 	const industryCategory = trim(form.industryCategory);
 	const region = trim(form.region);
+	const district = trim(form.district);
 	const payAmountText = trim(form.payAmount);
 	const payAmount = Number(payAmountText);
 	const payUnit = trim(form.payUnit);
@@ -799,6 +815,7 @@ export const validateJobForm = (
 			teamScopes: options.teamScopes,
 		}),
 		getConditionErrors({
+			district,
 			industryCategory,
 			payAmount,
 			payUnit,
@@ -835,6 +852,7 @@ export const validateJobForm = (
 			beginnerFriendly: form.beginnerFriendly,
 			description,
 			descriptionBlocks: normalizedBlocks,
+			district,
 			exposureAmount,
 			exposureDurationDays,
 			exposureType,
