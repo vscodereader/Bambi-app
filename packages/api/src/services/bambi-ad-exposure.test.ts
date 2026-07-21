@@ -93,7 +93,7 @@ describe("buildExposureJobSections", () => {
 });
 
 describe("groupAdBannerJobs", () => {
-	it("배너 타입별 활성 공고를 상한 없이 전부 그룹핑하고 만료를 제외한다", () => {
+	it("배너 타입별 활성 공고를 그룹핑하고 만료를 제외한다(프리미엄은 상한 없음)", () => {
 		const rows = [
 			...Array.from({ length: 5 }, (_, i) => row(`p${i}`, "premium-banner")),
 			row("l1", "left-banner"),
@@ -103,5 +103,18 @@ describe("groupAdBannerJobs", () => {
 		expect(groups.premiumBanner).toHaveLength(5);
 		expect(groups.leftBanner.map((r) => r.id)).toEqual(["l1"]);
 		expect(groups.rightBanner).toEqual([]);
+	});
+	it("좌/우 사이드 배너는 각각 최대 3개(앞에서부터)만 노출하고 프리미엄은 전부 포함한다", () => {
+		const rows = [
+			...Array.from({ length: 5 }, (_, i) => row(`p${i}`, "premium-banner")),
+			...Array.from({ length: 4 }, (_, i) => row(`l${i}`, "left-banner")),
+			...Array.from({ length: 4 }, (_, i) => row(`r${i}`, "right-banner")),
+		];
+		const groups = groupAdBannerJobs(rows, NOW);
+		// 프리미엄은 상한 없이 5개 전부.
+		expect(groups.premiumBanner).toHaveLength(5);
+		// 좌/우는 SIDE_BANNER_MAX_SLOTS(3)개까지, 정렬상 앞의 3개만.
+		expect(groups.leftBanner.map((r) => r.id)).toEqual(["l0", "l1", "l2"]);
+		expect(groups.rightBanner.map((r) => r.id)).toEqual(["r0", "r1", "r2"]);
 	});
 });

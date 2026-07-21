@@ -6,6 +6,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Context } from "../context";
+// 타입 전용 임포트(런타임 미로드) — jobPost.exposureType 열거 컬럼 값 타이핑용.
+import type { JobExposureType } from "./bambi-ad-exposure";
 
 dotenv.config({
 	path: "../../apps/server/.env",
@@ -61,6 +63,7 @@ const unpublishedJobId = randomUUID();
 const unpaidJobId = randomUUID();
 const expiredJobId = randomUUID();
 const preSeededJobId = randomUUID();
+const bannerJobId = randomUUID();
 const jobPostIds = [
 	fireJobId,
 	comboJobId,
@@ -68,6 +71,7 @@ const jobPostIds = [
 	unpaidJobId,
 	expiredJobId,
 	preSeededJobId,
+	bannerJobId,
 ];
 
 const createContextForUser = (userId: string): Context =>
@@ -95,6 +99,7 @@ const autoEventCount = async (jobPostId: string): Promise<number> => {
 const baseJob = (overrides: {
 	autoBoostsPerDay: number;
 	exposureEndsAt: Date | null;
+	exposureType?: JobExposureType;
 	id: string;
 	manualBoostsPerDay: number;
 	paymentStatus: "paid" | "unpaid";
@@ -104,6 +109,8 @@ const baseJob = (overrides: {
 	adProductId,
 	createdByUserId: employerUserId,
 	description: "자동 끌어올리기 틱을 검증하기 위한 공고입니다.",
+	// 자동 끌어올리기 후보는 리스팅형만 — 기본값을 리스팅(special)로 둔다(배너 케이스는 override).
+	exposureType: "special" as JobExposureType,
 	industryCategory: "라운지",
 	organizationId,
 	payAmount: 180_000,
@@ -213,6 +220,17 @@ describe("runAutoBoostTick", () => {
 				status: "published",
 				title: "쿼터 소진 공고",
 			}),
+			// 배너형 공고: 자동 횟수·공개·미만료라도 리스팅형이 아니라 후보에서 제외돼야 한다.
+			baseJob({
+				autoBoostsPerDay: 2,
+				exposureEndsAt: future,
+				exposureType: "premium-banner",
+				id: bannerJobId,
+				manualBoostsPerDay: 0,
+				paymentStatus: "paid",
+				status: "published",
+				title: "배너형 공고",
+			}),
 		]);
 		// preSeededJob은 오늘 자동 1회(쿼터=1)를 이미 소진한 상태를 만든다(잠금 내 재확인 검증).
 		await db.insert(jobBoostEvent).values({
@@ -272,6 +290,11 @@ describe("runAutoBoostTick", () => {
 		expect(await autoEventCount(unpublishedJobId)).toBe(0);
 		expect(await autoEventCount(unpaidJobId)).toBe(0);
 		expect(await autoEventCount(expiredJobId)).toBe(0);
+	});
+
+	it("excludes banner-type ad jobs (auto-boost is listing-only)", async () => {
+		// 배너형(premium-banner)은 자동 후보 쿼리·잠금 내 재확인 모두에서 제외된다.
+		expect(await autoEventCount(bannerJobId)).toBe(0);
 	});
 
 	it("does not fire a job that already met its daily auto quota (in-lock recheck)", async () => {
@@ -374,6 +397,7 @@ describe("runAutoBoostTick (병렬 워커 풀)", () => {
 				createdByUserId: parallelUserId,
 				description: "병렬 워커 풀 검증 공고입니다.",
 				exposureEndsAt: future,
+				exposureType: "special" as const,
 				id,
 				industryCategory: "라운지",
 				manualBoostsPerDay: 0,

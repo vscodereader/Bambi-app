@@ -35,8 +35,8 @@ const getRoomButtonClassName = (unreadCount: number): string =>
 //
 // 좌우 aside는 판매된 배너가 없어도 폭을 그대로 차지한다. 한쪽만 렌더하면 justify-center가
 // 남은 두 칸 기준으로 정렬해 콘텐츠가 (rail 259px + gap)/2 = 약 139px 밀리고, 같은 고정폭인
-// 헤더·푸터와 눈에 띄게 어긋난다. 그래서 비었는지 판정은 aside 안쪽에서만 하고 바깥 자리는
-// 항상 대칭으로 남긴다 — 수다방 레이아웃·마켓플레이스·공고 상세도 같은 이유로 이 형태다.
+// 헤더·푸터와 눈에 띄게 어긋난다. 그래서 바깥 자리는 항상 대칭으로 남기고, rail은 빈 슬롯을
+// "광고 모집중" 자리표시로 채워 조건 없이 렌더한다 — 수다방·마켓플레이스·공고 상세도 같은 형태다.
 //
 // 세로 여백은 로딩·오류·목록 상태마다 달라(모바일 하단 탭 자리 pb-24 등) className으로 받아
 // 중앙 칸에 얹는다. 가로 여백·고정폭은 셸만 갖게 해 분기별 컨테이너와 이중 적용되지 않게 한다.
@@ -53,9 +53,7 @@ function SeekerChatListRails({
 		<div className="mx-auto flex w-full justify-center gap-5">
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					{adBanners.leftBanner.length > 0 ? (
-						<HorizontalAdBannerRail items={adBanners.leftBanner} />
-					) : null}
+					<HorizontalAdBannerRail items={adBanners.leftBanner} />
 				</div>
 			</aside>
 			<div
@@ -69,9 +67,7 @@ function SeekerChatListRails({
 			</div>
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					{adBanners.rightBanner.length > 0 ? (
-						<AdBannerRail items={adBanners.rightBanner} />
-					) : null}
+					<AdBannerRail items={adBanners.rightBanner} />
 				</div>
 			</aside>
 		</div>

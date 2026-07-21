@@ -17,6 +17,7 @@ import {
 	EXPOSURE_TYPE_LABELS,
 	type ExposureType,
 	getJobDisplayStatus,
+	isBannerExposureType,
 } from "@/lib/bambi/exposure";
 import { formatDate, formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
@@ -161,6 +162,10 @@ function getAdColumns({
 			header: "오늘 끌어올리기",
 			sortValue: (ad) => remainingBoosts(ad),
 			cell: (ad) => {
+				if (isBannerExposureType(ad.exposureType)) {
+					return <span className="text-muted-foreground">—</span>;
+				}
+
 				if (ad.manualBoostsPerDay === 0) {
 					return <span className="text-muted-foreground">미포함</span>;
 				}
@@ -215,6 +220,14 @@ function getAdColumns({
 			headerClassName: "text-right",
 			cellClassName: "text-right",
 			cell: (ad) => {
+				if (isBannerExposureType(ad.exposureType)) {
+					return (
+						<span className="text-muted-foreground text-xs">
+							배너 광고는 끌어올리기 대상이 아닙니다
+						</span>
+					);
+				}
+
 				if (ad.manualBoostsPerDay === 0) {
 					return (
 						<span className="text-muted-foreground text-xs">

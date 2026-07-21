@@ -406,6 +406,55 @@ describe("adProducts product mutations", () => {
 		}
 	});
 
+	it("배너형 상품에 끌어올리기 값을 저장하려 하면 거부한다 (create·update)", async () => {
+		const fixture = await createCatalogFixture();
+		try {
+			const create = createProcedureClient(adProductsRouter.createProduct, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "createProduct"],
+			});
+
+			// (a) 배너 템플릿 + 끌어올리기 > 0 → BAD_REQUEST
+			await expectOrpcCode(
+				create({
+					placementId: fixture.activePlacementId,
+					name: "배너+끌올",
+					benefits: [],
+					priceOptions: [{ amount: 1000, days: 7 }],
+					previewTemplate: "premium-top",
+					manualBoostsPerDay: 2,
+				}),
+				"BAD_REQUEST"
+			);
+
+			// (b) 리스팅 템플릿 + 끌어올리기는 정상 생성
+			const listing = await create({
+				placementId: fixture.activePlacementId,
+				name: "스페셜+끌올",
+				benefits: [],
+				priceOptions: [{ amount: 1000, days: 7 }],
+				previewTemplate: "special-list",
+				manualBoostsPerDay: 2,
+				autoBoostsPerDay: 1,
+			});
+			expect(listing.manualBoostsPerDay).toBe(2);
+
+			// (c) 끌어올리기 값을 가진 리스팅 상품을 배너 템플릿으로만 바꾸면 거부
+			//     (부분 수정이라도 기존 끌올 값 + 배너 템플릿 최종 상태를 잡아낸다)
+			const update = createProcedureClient(adProductsRouter.updateProduct, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "updateProduct"],
+			});
+			await expectOrpcCode(
+				update({ id: listing.id, previewTemplate: "side-vertical" }),
+				"BAD_REQUEST"
+			);
+			// createProduct로 만든 행은 placement cascade로 fixture cleanup 시 함께 삭제됨
+		} finally {
+			await cleanupCatalogFixture(fixture);
+		}
+	});
+
 	it("reorderProducts only touches products in the given placement", async () => {
 		const fixture = await createCatalogFixture();
 		try {

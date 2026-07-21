@@ -89,12 +89,11 @@ export function SeekerJobDetailResponsive({
 				canStartChat ? "pb-28" : "pb-5"
 			)}
 		>
-			{/* 좌 여백 배너 — 넓은 화면 전용, 스크롤 추종 */}
+			{/* 좌 여백 배너 — 넓은 화면 전용, 스크롤 추종. 빈 슬롯은 rail이 "광고 모집중"
+			    자리표시로 채우므로 조건 없이 렌더한다. */}
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					{adBanners.leftBanner.length > 0 ? (
-						<HorizontalAdBannerRail items={adBanners.leftBanner} />
-					) : null}
+					<HorizontalAdBannerRail items={adBanners.leftBanner} />
 				</div>
 			</aside>
 			{/* 중앙 콘텐츠: 본문 + CTA 고정폭 그리드 */}
@@ -290,12 +289,11 @@ export function SeekerJobDetailResponsive({
 					</div>
 				</aside>
 			</div>
-			{/* 우 여백 배너 — 넓은 화면 전용, 스크롤 추종 */}
+			{/* 우 여백 배너 — 넓은 화면 전용, 스크롤 추종. 빈 슬롯은 rail이 "광고 모집중"
+			    자리표시로 채우므로 조건 없이 렌더한다. */}
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					{adBanners.rightBanner.length > 0 ? (
-						<AdBannerRail items={adBanners.rightBanner} />
-					) : null}
+					<AdBannerRail items={adBanners.rightBanner} />
 				</div>
 			</aside>
 			{canStartChat ? (

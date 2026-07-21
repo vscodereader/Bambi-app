@@ -46,6 +46,14 @@ interface PriceOptionField extends PriceOption {
 
 const MAX_PREVIEW_IMAGE_BYTES = 1_500_000;
 
+// 배너형 노출 영역(프리미엄 상단·좌측·우측 사이드 배너)은 끌어올리기 대상이 아니다.
+// 끌어올리기(수동·자동)는 리스팅형(스페셜·급구·추천)에만 제공된다.
+const BANNER_PREVIEW_TEMPLATES: ReadonlySet<AdPreviewTemplateValue> = new Set([
+	"premium-top",
+	"side-horizontal",
+	"side-vertical",
+]);
+
 export function AdProductForm({
 	initialValue,
 	onSubmit,
@@ -84,6 +92,7 @@ export function AdProductForm({
 	const [autoBoostsPerDay, setAutoBoostsPerDay] = useState(
 		initialValue?.autoBoostsPerDay ?? 0
 	);
+	const isBannerTemplate = BANNER_PREVIEW_TEMPLATES.has(previewTemplate);
 
 	const setPrice = (id: number, patch: Partial<PriceOption>) =>
 		setPriceOptions((options) =>
@@ -128,8 +137,9 @@ export function AdProductForm({
 			priceOptions: normalizedPriceOptions,
 			previewImageUrl,
 			previewTemplate,
-			manualBoostsPerDay,
-			autoBoostsPerDay,
+			// 배너형은 끌어올리기 미제공 — 항상 0으로 저장(서버도 거부)
+			manualBoostsPerDay: isBannerTemplate ? 0 : manualBoostsPerDay,
+			autoBoostsPerDay: isBannerTemplate ? 0 : autoBoostsPerDay,
 		});
 	};
 
@@ -155,9 +165,15 @@ export function AdProductForm({
 				<Label htmlFor="p-preview-template">노출 영역(게시 위치)</Label>
 				<Select
 					items={AD_PREVIEW_TEMPLATE_LABELS}
-					onValueChange={(value) =>
-						setPreviewTemplate(value as AdPreviewTemplateValue)
-					}
+					onValueChange={(value) => {
+						const next = value as AdPreviewTemplateValue;
+						setPreviewTemplate(next);
+						// 배너형으로 바꾸면 끌어올리기 횟수를 0으로 리셋(배너엔 미제공)
+						if (BANNER_PREVIEW_TEMPLATES.has(next)) {
+							setManualBoostsPerDay(0);
+							setAutoBoostsPerDay(0);
+						}
+					}}
 					value={previewTemplate}
 				>
 					<SelectTrigger className="w-full" id="p-preview-template">
@@ -256,35 +272,46 @@ export function AdProductForm({
 				</Button>
 			</div>
 
-			<div className="flex flex-col gap-1.5">
-				<Label htmlFor="p-manual-boosts">일일 끌어올리기 횟수</Label>
-				<Input
-					className="w-24"
-					id="p-manual-boosts"
-					onChange={(e) => setManualBoostsPerDay(Number(e.target.value) || 0)}
-					type="number"
-					value={manualBoostsPerDay === 0 ? "" : manualBoostsPerDay}
-				/>
-				<p className="m-0 text-muted-foreground text-xs">
-					이 상품을 구매한 공고가 하루에 쓸 수 있는 끌어올리기 횟수입니다.
-					비워두면 미제공(0회)입니다.
+			{isBannerTemplate ? (
+				<p className="m-0 text-muted-foreground text-sm">
+					배너형 광고는 끌어올리기(수동·자동)를 제공하지 않아 횟수 설정이
+					없습니다. 끌어올리기는 스페셜·급구·추천 리스팅 상품에만 제공됩니다.
 				</p>
-			</div>
+			) : (
+				<>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="p-manual-boosts">일일 끌어올리기 횟수</Label>
+						<Input
+							className="w-24"
+							id="p-manual-boosts"
+							onChange={(e) =>
+								setManualBoostsPerDay(Number(e.target.value) || 0)
+							}
+							type="number"
+							value={manualBoostsPerDay === 0 ? "" : manualBoostsPerDay}
+						/>
+						<p className="m-0 text-muted-foreground text-xs">
+							이 상품을 구매한 공고가 하루에 쓸 수 있는 끌어올리기 횟수입니다.
+							비워두면 미제공(0회)입니다.
+						</p>
+					</div>
 
-			<div className="flex flex-col gap-1.5">
-				<Label htmlFor="p-auto-boosts">일일 자동 끌어올리기 횟수</Label>
-				<Input
-					className="w-24"
-					id="p-auto-boosts"
-					onChange={(e) => setAutoBoostsPerDay(Number(e.target.value) || 0)}
-					type="number"
-					value={autoBoostsPerDay === 0 ? "" : autoBoostsPerDay}
-				/>
-				<p className="m-0 text-muted-foreground text-xs">
-					이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는
-					횟수입니다(09~21시 균등 분배). 비워두면 미제공(0회)입니다.
-				</p>
-			</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="p-auto-boosts">일일 자동 끌어올리기 횟수</Label>
+						<Input
+							className="w-24"
+							id="p-auto-boosts"
+							onChange={(e) => setAutoBoostsPerDay(Number(e.target.value) || 0)}
+							type="number"
+							value={autoBoostsPerDay === 0 ? "" : autoBoostsPerDay}
+						/>
+						<p className="m-0 text-muted-foreground text-xs">
+							이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는
+							횟수입니다(09~21시 균등 분배). 비워두면 미제공(0회)입니다.
+						</p>
+					</div>
+				</>
+			)}
 
 			<div className="flex flex-col gap-1.5">
 				<Label htmlFor="p-preview-image">게시 위치 미리보기</Label>

@@ -144,21 +144,28 @@ export interface AdBannerRow {
 	id: string;
 }
 
-// 결제완료된 배너형 공고를 노출 위치별로 그룹핑한다. 슬롯 상한 없이 활성(미만료)
-// 배너 공고를 전부 포함한다(프리미엄은 다음 행으로, 좌/우 레일은 아래로 스택 확장).
+// 좌/우 사이드 배너의 위치별 최대 슬롯 수. 사이드 레일 공간이 유한해 정렬(호출부에서
+// publishedAt desc)상 앞에서부터 이 수만큼만 노출한다. 프리미엄 배너는 상한 없이 유지한다.
+export const SIDE_BANNER_MAX_SLOTS = 3;
+
+// 결제완료된 배너형 공고를 노출 위치별로 그룹핑한다. 활성(미만료) 배너 공고 중 좌/우 사이드
+// 배너는 각각 최대 SIDE_BANNER_MAX_SLOTS개까지만(정렬상 앞에서부터) 노출하고, 프리미엄은
+// 상한 없이 전부 포함한다(프리미엄은 다음 행으로 확장).
 export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	rows: TRow[],
 	now: Date
 ): { leftBanner: TRow[]; premiumBanner: TRow[]; rightBanner: TRow[] } => {
-	const pick = (type: AdBannerExposureType): TRow[] =>
-		rows.filter(
+	const pick = (type: AdBannerExposureType, maxSlots?: number): TRow[] => {
+		const matched = rows.filter(
 			(item) =>
 				item.exposureType === type && isExposureActive(item.exposureEndsAt, now)
 		);
+		return maxSlots === undefined ? matched : matched.slice(0, maxSlots);
+	};
 
 	return {
-		leftBanner: pick("left-banner"),
+		leftBanner: pick("left-banner", SIDE_BANNER_MAX_SLOTS),
 		premiumBanner: pick("premium-banner"),
-		rightBanner: pick("right-banner"),
+		rightBanner: pick("right-banner", SIDE_BANNER_MAX_SLOTS),
 	};
 };
