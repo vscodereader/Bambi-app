@@ -1,6 +1,7 @@
 import {
 	districtsForRegion,
 	industryOptions,
+	PAY_UNIT_HOURS,
 	regionOptions,
 } from "../bambi-options";
 import type { Job } from "./types";
@@ -47,12 +48,32 @@ export const DEFAULT_MARKETPLACE_FILTERS: MarketplaceFilters = {
 
 const NUMBER_RE = /\d[\d,]*/;
 
-export function parsePayAmount(pay: string): number {
+function parsePayAmount(pay: string): number {
 	const match = NUMBER_RE.exec(pay);
 	if (!match) {
 		return 0;
 	}
 	return Number(match[0].replaceAll(",", ""));
+}
+
+// 표시 문자열("일급 150,000원")의 단위를 읽어 시급 환산 근로시간을 고른다.
+// 단위 접두어가 없으면(예: "급여 협의") 시급으로 본다.
+function payUnitHours(pay: string): number {
+	const unit = Object.keys(PAY_UNIT_HOURS).find((option) =>
+		pay.startsWith(option)
+	);
+	return unit ? (PAY_UNIT_HOURS[unit] ?? 1) : 1;
+}
+
+// 최소 시급 필터는 단위가 섞인 공고를 시급 기준으로 비교한다. 나눗셈(환산 시급) 대신
+// 곱셈으로 비교해야 서버 SQL의 정수 연산과 경계값에서 결과가 어긋나지 않는다.
+// 금액을 못 읽는 공고("급여 협의")는 하한을 걸면 빠지고, 하한 0이면 그대로 남는다.
+function jobMatchesMinimumPay(job: Job, minimumPay: number): boolean {
+	if (minimumPay <= 0) {
+		return true;
+	}
+	const amount = parsePayAmount(job.pay);
+	return amount > 0 && amount >= minimumPay * payUnitHours(job.pay);
 }
 
 function normalizeSearchValue(value: string): string {
@@ -117,7 +138,7 @@ export function filterMarketplaceJobs(
 		if (filters.onlyToday && !job.instantInterview) {
 			return false;
 		}
-		return parsePayAmount(job.pay) >= filters.minimumPay;
+		return jobMatchesMinimumPay(job, filters.minimumPay);
 	});
 }
 

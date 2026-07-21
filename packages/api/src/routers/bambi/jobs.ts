@@ -154,6 +154,12 @@ const listInput = z.object({
 	limit: z.number().int().min(1).max(50).default(20),
 });
 
+// 최소 시급(minPayAmount) 비교 — 공고 급여 단위가 섞여 있으므로 시급 기준으로 환산한다.
+// 나눗셈 대신 하한에 근로시간을 곱해 정수로 비교한다(반올림 오차·정수 나눗셈 절삭 방지).
+// 환산 근로시간은 apps/web/src/lib/bambi-options.ts의 PAY_UNIT_HOURS와 같은 값을 유지할 것.
+const minHourlyPayFilter = (minPayAmount: number) =>
+	sql`${jobPost.payAmount} >= ${minPayAmount} * CASE ${jobPost.payUnit} WHEN '일급' THEN 8 WHEN '주급' THEN 40 WHEN '월급' THEN 209 ELSE 1 END`;
+
 type JobPostInput = z.infer<typeof jobPostInput>;
 type JobPostMediaSetInput = z.infer<typeof jobPostMediaSetInput>;
 
@@ -508,7 +514,7 @@ export const jobsRouter = {
 		}
 
 		if (input.minPayAmount) {
-			filters.push(sql`${jobPost.payAmount} >= ${input.minPayAmount}`);
+			filters.push(minHourlyPayFilter(input.minPayAmount));
 		}
 
 		const exposureSelection = {
@@ -664,7 +670,7 @@ export const jobsRouter = {
 		}
 
 		if (input.minPayAmount) {
-			filters.push(sql`${jobPost.payAmount} >= ${input.minPayAmount}`);
+			filters.push(minHourlyPayFilter(input.minPayAmount));
 		}
 
 		return await db
