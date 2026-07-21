@@ -92,7 +92,7 @@ interface HorizontalAdBannerProps {
 	item: AdBannerItem;
 }
 
-// 가로형 광고 배너(좌측 사이드·상단 프리미엄용) — 규격 7:3, 최소 150×50.
+// 가로형 광고 배너(좌측 사이드·상단 프리미엄용) — 규격 7:3, 최소 700×300.
 // 아래 width/height는 next/image의 비율 힌트일 뿐 요구 해상도가 아니다(실제 폭은 sizes로 결정).
 // 폭은 그리드/컬럼(공고 카드와 동일)으로 정해지고 높이는 비율로 따라온다. 슬롯 비율은
 // 업로드 규격(lib/bambi/job-ad-banner-spec.ts)과 같아야 배너가 잘리지 않는다.

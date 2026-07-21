@@ -1,4 +1,5 @@
 import {
+	isAllowedJobAdBannerAspect,
 	isAllowedJobAdBannerSize,
 	JOB_AD_BANNER_SPECS,
 	type JobAdBannerUsage,
@@ -543,14 +544,14 @@ const getAdBannerError = (
 		return;
 	}
 
-	const { label, minHeight, minWidth } = JOB_AD_BANNER_SPECS[usage];
+	const { aspectLabel, label, minHeight, minWidth } =
+		JOB_AD_BANNER_SPECS[usage];
 
 	if (!(item.width && item.height)) {
 		return `${label} 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.`;
 	}
 
-	// 비율은 막지 않는다. 슬롯이 object-cover라 어긋나면 잘릴 뿐이고, 잘림은 업로더가
-	// 경고로 알려준다. 뭉개지는 원인인 크기 하한만 여기서 막는다.
+	// 뭉개지는 원인인 크기 하한을 먼저 막는다.
 	if (
 		!isAllowedJobAdBannerSize({
 			height: item.height,
@@ -559,6 +560,18 @@ const getAdBannerError = (
 		})
 	) {
 		return `${label} 이미지가 너무 작습니다. ${minWidth}×${minHeight}px 이상으로 등록해 주세요.`;
+	}
+
+	// 비율이 허용 오차를 크게 벗어나면 슬롯에서 로고·문구가 잘려 광고 가치가 훼손되므로
+	// 반려한다. 오차 안쪽의 약간의 차이는 슬롯이 object-cover로 흡수하니 막지 않는다.
+	if (
+		!isAllowedJobAdBannerAspect({
+			height: item.height,
+			usage,
+			width: item.width,
+		})
+	) {
+		return `${label} 이미지가 요구 비율 ${aspectLabel}과 크게 달라 등록할 수 없습니다. ${aspectLabel} 비율에 맞춰 최소 ${minWidth}×${minHeight}px 이상으로 다시 등록해 주세요.`;
 	}
 
 	return;
