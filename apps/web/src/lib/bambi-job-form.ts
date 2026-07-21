@@ -12,7 +12,6 @@ import {
 
 const TITLE_MIN_LENGTH = 2;
 const TITLE_MAX_LENGTH = 80;
-const OPTION_MAX_LENGTH = 80;
 const PAY_UNIT_MAX_LENGTH = 30;
 const WORK_SCHEDULE_MAX_LENGTH = 200;
 const DESCRIPTION_MIN_LENGTH = 10;
@@ -661,21 +660,19 @@ const getConditionErrors = ({
 		errors.title = "공고 제목은 2자 이상 80자 이하로 입력해 주세요.";
 	}
 
-	if (
-		!(
-			industryCategory.length > 0 &&
-			industryCategory.length <= OPTION_MAX_LENGTH
-		)
-	) {
+	// 값이 taxonomy 목록 안에 있어야 한다. 길이만 검사하면 구 taxonomy 값
+	// ("서울 강남구" 등)이 수정 폼에서 그대로 재저장돼 지역 필터에 영영 걸리지 않는다.
+	if (!(industryOptions as readonly string[]).includes(industryCategory)) {
 		errors.industryCategory = "업종을 선택해 주세요.";
 	}
 
-	if (!(region.length > 0 && region.length <= OPTION_MAX_LENGTH)) {
+	if (!(regionOptions as readonly string[]).includes(region)) {
 		errors.region = "지역을 선택해 주세요.";
 	}
 
 	// 세부지역이 정의된 시/도만 필수. "기타"처럼 목록이 빈 시/도는 건너뛴다.
-	if (districtsForRegion(region).length > 0 && district.length === 0) {
+	const districts = districtsForRegion(region);
+	if (districts.length > 0 && !districts.includes(district)) {
 		errors.district = "세부지역을 선택해 주세요.";
 	}
 

@@ -111,7 +111,16 @@ describe("filterMarketplaceJobs", () => {
 		expect(result.length).toBeGreaterThan(0);
 		expect(
 			result.every((job) =>
-				[job.title, job.company, job.location, ...job.tags]
+				[
+					job.title,
+					job.company,
+					job.location,
+					job.pay,
+					job.type,
+					job.hours,
+					job.pref,
+					...job.tags,
+				]
 					.join(" ")
 					.includes(query)
 			)

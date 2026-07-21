@@ -694,7 +694,7 @@ const richJobs: RichJobDef[] = [
 		unit: "일급",
 		schedule: "수~일, 19:00-01:00",
 		title: "성남 칵테일 바 바텐더",
-		desc: "동성로 중심가 칵테일 바의 바텐더를 모집합니다. 레시피 교육을 제공합니다.",
+		desc: "성남 중심가 칵테일 바의 바텐더를 모집합니다. 레시피 교육을 제공합니다.",
 		promo: "recommended",
 	},
 	{
@@ -1135,7 +1135,7 @@ const richRooms: RichRoomDef[] = [
 		seekerKey: "seekerG",
 		teamId: null,
 		rating: 4,
-		reviewBody: "바텐딩 교육이 꼼꼼했어요. 동성로라 접근성도 좋습니다.",
+		reviewBody: "바텐딩 교육이 꼼꼼했어요. 성남이라 접근성도 좋습니다.",
 		messages: [
 			{
 				senderKey: "seekerG",
