@@ -7,7 +7,9 @@ import {
 } from "@bambi-app/ui/components/alert";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Input } from "@bambi-app/ui/components/input";
+import { Label } from "@bambi-app/ui/components/label";
 import {
 	Select,
 	SelectContent,
@@ -361,6 +363,15 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		}));
 		setFormError(null);
 	};
+
+	const updateFormFlag =
+		(field: "beginnerFriendly" | "instantInterview") => (checked: boolean) => {
+			setIsDirty(true);
+			setForm((currentForm) => ({
+				...currentForm,
+				[field]: checked,
+			}));
+		};
 
 	const updateExposureFields = (
 		patch: Partial<
@@ -742,6 +753,30 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 										id={getFieldErrorId("workSchedule")}
 										message={fieldErrors.workSchedule}
 									/>
+								</div>
+								<div className="flex flex-col gap-3 md:col-span-2">
+									<Label
+										className="flex items-center gap-2 font-medium text-sm"
+										htmlFor="beginnerFriendly"
+									>
+										<Checkbox
+											checked={form.beginnerFriendly}
+											id="beginnerFriendly"
+											onCheckedChange={updateFormFlag("beginnerFriendly")}
+										/>
+										초보 가능
+									</Label>
+									<Label
+										className="flex items-center gap-2 font-medium text-sm"
+										htmlFor="instantInterview"
+									>
+										<Checkbox
+											checked={form.instantInterview}
+											id="instantInterview"
+											onCheckedChange={updateFormFlag("instantInterview")}
+										/>
+										당일면접 가능
+									</Label>
 								</div>
 							</CardContent>
 						</Card>

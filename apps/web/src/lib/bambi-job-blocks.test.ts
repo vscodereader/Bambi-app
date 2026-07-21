@@ -9,11 +9,13 @@ import {
 
 const baseForm: JobForm = {
 	adProductId: null,
+	beginnerFriendly: false,
 	description: "기본 상세 설명입니다.",
 	exposureAmount: null,
 	exposureDurationDays: null,
 	exposureType: "standard",
 	industryCategory: "라운지",
+	instantInterview: false,
 	interviewNotes: "",
 	organizationId: "org-1",
 	payAmount: "180000",
