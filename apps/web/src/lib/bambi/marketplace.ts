@@ -17,27 +17,11 @@ export function districtOptionsForRegion(region: string): readonly string[] {
 	return [ALL_OPTION, ...districtsForRegion(region)];
 }
 
-// 업종별 세부 카테고리 — 선택한 업종에 따라 세부 업종 옵션이 바뀐다(연동형).
-// 각 목록 첫 항목은 "필터 없음"을 뜻하는 전체(ALL_OPTION)다.
-export const MARKETPLACE_SUBCATEGORIES: Record<string, readonly string[]> = {
-	전체: ["전체"],
-	라운지: ["전체", "룸", "홀", "미러룸"],
-	바: ["전체", "칵테일바", "스탠딩바", "와인바"],
-	클럽: ["전체", "게스트", "부킹", "MD"],
-	호스트바: ["전체", "선수", "매니저", "실장"],
-	카페: ["전체", "홀", "주방", "바리스타"],
-};
-
 export const MARKETPLACE_QUICK_FILTERS = [
 	{ id: "verified", label: "검증 완료" },
 	{ id: "today", label: "당일면접 가능" },
 	{ id: "beginner", label: "초보 가능" },
 ] as const;
-
-// 선택한 업종에서 고를 수 있는 세부 업종 목록(정의 없으면 전체만).
-export function subcategoriesForCategory(category: string): readonly string[] {
-	return MARKETPLACE_SUBCATEGORIES[category] ?? [ALL_OPTION];
-}
 
 export interface MarketplaceFilters {
 	category: string;
@@ -48,7 +32,6 @@ export interface MarketplaceFilters {
 	onlyVerified: boolean;
 	query: string;
 	region: string;
-	subcategory: string;
 }
 
 export const DEFAULT_MARKETPLACE_FILTERS: MarketplaceFilters = {
@@ -60,7 +43,6 @@ export const DEFAULT_MARKETPLACE_FILTERS: MarketplaceFilters = {
 	onlyVerified: false,
 	query: "",
 	region: ALL_OPTION,
-	subcategory: ALL_OPTION,
 };
 
 const NUMBER_RE = /\d[\d,]*/;
@@ -101,14 +83,6 @@ function jobMatchesCategory(job: Job, category: string): boolean {
 	return category === ALL_OPTION || job.type === category;
 }
 
-function jobMatchesSubcategory(job: Job, subcategory: string): boolean {
-	if (subcategory === "전체") {
-		return true;
-	}
-	const text = `${job.title} ${job.company} ${job.type} ${job.desc} ${job.tags.join(" ")}`;
-	return text.includes(subcategory);
-}
-
 function jobMatchesRegion(job: Job, region: string): boolean {
 	return region === ALL_OPTION || job.region === region;
 }
@@ -132,9 +106,6 @@ export function filterMarketplaceJobs(
 			return false;
 		}
 		if (!jobMatchesCategory(job, filters.category)) {
-			return false;
-		}
-		if (!jobMatchesSubcategory(job, filters.subcategory)) {
 			return false;
 		}
 		if (filters.onlyVerified && !job.verified) {
@@ -165,7 +136,7 @@ export function applyDiscoveryAxis(
 	axis: MarketplaceDiscoveryAxis
 ): MarketplaceFilters {
 	if (axis === "region") {
-		return { ...filters, category: ALL_OPTION, subcategory: ALL_OPTION };
+		return { ...filters, category: ALL_OPTION };
 	}
 	if (axis === "category") {
 		return { ...filters, district: ALL_OPTION, region: ALL_OPTION };
@@ -175,7 +146,6 @@ export function applyDiscoveryAxis(
 		category: ALL_OPTION,
 		district: ALL_OPTION,
 		region: ALL_OPTION,
-		subcategory: ALL_OPTION,
 	};
 }
 

@@ -24,7 +24,6 @@ import {
 	MARKETPLACE_QUICK_FILTERS,
 	MARKETPLACE_REGIONS,
 	type MarketplaceFilters,
-	subcategoriesForCategory,
 } from "@/lib/bambi/marketplace";
 import { SELECTED_JOB_CARD_CLASS } from "@/lib/bambi/selection-style";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
@@ -62,8 +61,6 @@ export function MarketplaceFilterControls({
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
 	const districtOptions = districtOptionsForRegion(filters.region);
-	const subcategoryOptions = subcategoriesForCategory(filters.category);
-	const subcategoryDisabled = subcategoryOptions.length <= 1;
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex flex-col gap-2">
@@ -118,7 +115,7 @@ export function MarketplaceFilterControls({
 				<Select
 					onValueChange={(value) => {
 						if (value) {
-							update({ category: value, subcategory: ALL_OPTION });
+							update({ category: value });
 						}
 					}}
 					value={filters.category}
@@ -130,31 +127,6 @@ export function MarketplaceFilterControls({
 						{MARKETPLACE_CATEGORIES.map((category) => (
 							<SelectItem key={category} value={category}>
 								{category}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-			</div>
-			<div className="flex flex-col gap-2">
-				<span className="font-bold text-muted-foreground text-xs">
-					세부 업종
-				</span>
-				<Select
-					disabled={subcategoryDisabled}
-					onValueChange={(value) => {
-						if (value) {
-							update({ subcategory: value });
-						}
-					}}
-					value={filters.subcategory}
-				>
-					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
-						<SelectValue>{(value) => value}</SelectValue>
-					</SelectTrigger>
-					<SelectContent>
-						{subcategoryOptions.map((subcategory) => (
-							<SelectItem key={subcategory} value={subcategory}>
-								{subcategory}
 							</SelectItem>
 						))}
 					</SelectContent>
@@ -366,7 +338,7 @@ export function MarketplaceAxisChips({
 							onChange(
 								axis === "region"
 									? { ...filters, district: ALL_OPTION, region: option }
-									: { ...filters, category: option, subcategory: ALL_OPTION }
+									: { ...filters, category: option }
 							)
 						}
 						selected={filters[axis] === option}
