@@ -22,7 +22,11 @@ import {
 	joinBambiChatRoom,
 	leaveBambiChatRoom,
 } from "@/lib/bambi-chat-realtime";
-import { interviewStatusLabels, jobStatusLabels } from "@/lib/bambi-options";
+import {
+	interviewStatusLabels,
+	jobStatusLabels,
+	NEGOTIABLE_PAY_TEXT,
+} from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import {
 	ChatAttachmentPreview,
@@ -53,9 +57,13 @@ const formatDateTime = (value: Date | string): string =>
 		timeStyle: "short",
 	}).format(new Date(value));
 
-const formatPay = (amount?: number, unit?: string): string => {
-	if (!(amount && unit)) {
+const formatPay = (amount?: null | number, unit?: string): string => {
+	if (!unit) {
 		return "채팅으로 확인";
+	}
+	// 급여 단위가 "협의"인 공고는 금액이 없다.
+	if (!amount) {
+		return NEGOTIABLE_PAY_TEXT;
 	}
 	return `${unit} ${amount.toLocaleString("ko-KR")}원`;
 };

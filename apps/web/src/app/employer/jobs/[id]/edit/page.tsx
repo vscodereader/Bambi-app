@@ -34,11 +34,11 @@ import {
 	FormError,
 } from "@/components/bambi/form-message";
 import { JobExposureFields } from "@/components/bambi/job-exposure-fields";
+import { JobPayFields } from "@/components/bambi/job-pay-fields";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
 import { JobRegionFields } from "@/components/bambi/job-region-fields";
 import { PageShell } from "@/components/bambi/page-shell";
-import { PayAmountHint } from "@/components/bambi/pay-amount-hint";
 import Loader from "@/components/loader";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
@@ -55,7 +55,11 @@ import {
 	resolveJobPostMediaForSubmit,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
-import { industryOptions, payUnitOptions } from "@/lib/bambi-options";
+import {
+	industryOptions,
+	NEGOTIABLE_PAY_TEXT,
+	NEGOTIABLE_PAY_UNIT,
+} from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
 const selectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
@@ -111,6 +115,10 @@ const formatPreviewPay = ({
 	payAmount,
 	payUnit,
 }: Pick<JobForm, "payAmount" | "payUnit">): string => {
+	if (payUnit === NEGOTIABLE_PAY_UNIT) {
+		return NEGOTIABLE_PAY_TEXT;
+	}
+
 	const numericPay = Number(payAmount);
 
 	return Number.isFinite(numericPay) && numericPay > 0
@@ -611,71 +619,12 @@ export default function EditEmployerJobPage({
 									onChange={updateFormValue}
 									region={form.region}
 								/>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="payAmount">급여 금액</FieldLabel>
-									<Input
-										aria-describedby={
-											fieldErrors.payAmount
-												? getFieldErrorId("payAmount")
-												: undefined
-										}
-										aria-invalid={Boolean(fieldErrors.payAmount)}
-										id="payAmount"
-										inputMode="numeric"
-										min="1"
-										name="payAmount"
-										onChange={(event) =>
-											updateFormValue("payAmount", event.target.value)
-										}
-										placeholder="예: 12000…"
-										required
-										type="number"
-										value={form.payAmount}
-									/>
-									<PayAmountHint
-										payAmount={form.payAmount}
-										payUnit={form.payUnit}
-									/>
-									<FieldError
-										id={getFieldErrorId("payAmount")}
-										message={fieldErrors.payAmount}
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="payUnit">급여 단위</FieldLabel>
-									<Select
-										name="payUnit"
-										onValueChange={(value) =>
-											updateFormValue("payUnit", value ?? "")
-										}
-										required
-										value={form.payUnit}
-									>
-										<SelectTrigger
-											aria-describedby={
-												fieldErrors.payUnit
-													? getFieldErrorId("payUnit")
-													: undefined
-											}
-											aria-invalid={Boolean(fieldErrors.payUnit)}
-											className={selectTriggerClassName}
-											id="payUnit"
-										>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{payUnitOptions.map((option) => (
-												<SelectItem key={option} value={option}>
-													{option}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									<FieldError
-										id={getFieldErrorId("payUnit")}
-										message={fieldErrors.payUnit}
-									/>
-								</div>
+								<JobPayFields
+									errors={fieldErrors}
+									onChange={updateFormValue}
+									payAmount={form.payAmount}
+									payUnit={form.payUnit}
+								/>
 								<div className="flex flex-col gap-2 md:col-span-2">
 									<FieldLabel htmlFor="workSchedule">근무 일정</FieldLabel>
 									<Input

@@ -298,7 +298,8 @@ export const jobPost = pgTable(
 		industryCategory: text("industry_category").notNull(),
 		region: text("region").notNull(),
 		district: text("district"),
-		payAmount: integer("pay_amount").notNull(),
+		// payUnit이 "협의"(면접 후 급여 협의)면 금액이 없다 — 그래서 nullable.
+		payAmount: integer("pay_amount"),
 		payUnit: text("pay_unit").notNull(),
 		workSchedule: text("work_schedule").notNull(),
 		title: text("title").notNull(),

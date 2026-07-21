@@ -77,7 +77,8 @@ export function getEmployerJobsColumns({
 		{
 			id: "pay",
 			header: "급여",
-			sortValue: (job) => job.payAmount,
+			// 금액 없는 협의 공고는 0으로 취급해 금액 오름차순 맨 앞에 모인다.
+			sortValue: (job) => job.payAmount ?? 0,
 			cell: (job) => (
 				<span className="whitespace-nowrap">
 					{formatPay(job.payAmount, job.payUnit)}

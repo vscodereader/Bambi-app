@@ -23,7 +23,19 @@ export const REGION_DISTRICTS: Record<string, readonly string[]> = {
 export function districtsForRegion(region: string): readonly string[] {
 	return REGION_DISTRICTS[region] ?? [];
 }
-export const payUnitOptions = ["시급", "일급", "주급", "월급"] as const;
+// 금액 없이 "면접 후 급여 협의"로 내는 단위. 이 단위면 payAmount를 저장하지 않는다.
+export const NEGOTIABLE_PAY_UNIT = "협의";
+
+export const payUnitOptions = [
+	"시급",
+	"일급",
+	"주급",
+	"월급",
+	NEGOTIABLE_PAY_UNIT,
+] as const;
+
+// 급여가 협의라 금액을 못 읽는 공고의 표시 문구. 목록·카드가 공유한다.
+export const NEGOTIABLE_PAY_TEXT = "급여 협의";
 
 // 급여 단위 → 시급 환산에 쓰는 근로시간. 최소 시급 필터가 단위가 섞인 공고를
 // 같은 잣대로 비교하려면 필요하다. 일 8시간·주 5일, 월급은 근로기준법 통상임금

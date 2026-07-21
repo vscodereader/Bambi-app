@@ -17,7 +17,7 @@ const toNativeJobForm = (job: {
 	industryCategory: string;
 	interviewNotes: null | string;
 	organizationId: string;
-	payAmount: number;
+	payAmount: null | number;
 	payUnit: string;
 	region: string;
 	teamId: null | string;
@@ -28,7 +28,8 @@ const toNativeJobForm = (job: {
 	industryCategory: job.industryCategory,
 	interviewNotes: job.interviewNotes ?? "",
 	organizationId: job.organizationId,
-	payAmount: String(job.payAmount),
+	// 급여 협의 공고는 금액이 없다.
+	payAmount: job.payAmount === null ? "" : String(job.payAmount),
 	payUnit: job.payUnit,
 	region: job.region,
 	teamId: job.teamId ?? "",
