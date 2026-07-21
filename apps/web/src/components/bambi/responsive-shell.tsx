@@ -41,7 +41,6 @@ function isNavGroup(entry: NavEntry): entry is NavGroup {
 export const DEFAULT_NAV_ITEMS: NavEntry[] = [
 	{ href: "/seeker", label: "채용정보" },
 	{ href: "/seeker/chats", label: "채팅" },
-	{ href: "/", label: "업체 인증" },
 	{ href: "/seeker/community", label: "수다방" },
 	{ href: "/support" as Route, label: "고객센터" },
 ];
@@ -259,15 +258,6 @@ export function ResponsiveAppShell({
 								<ModeratorHeaderActions />
 							) : (
 								<>
-									<Badge
-										className="h-9 gap-1.5 px-3 font-bold"
-										variant="success"
-									>
-										<span className="inline-flex size-3.5">
-											<ShieldIcon />
-										</span>
-										연락처 보호
-									</Badge>
 									{isPublic ? null : <RoleSwitchLink />}
 									<Link
 										className={cn(
@@ -299,25 +289,14 @@ export function ResponsiveAppShell({
 								return <ModeratorHeaderActions />;
 							}
 							return (
-								<>
-									<Badge
-										className="h-8 gap-1.5 px-3 font-bold"
-										variant="secondary"
-									>
-										<span className="inline-flex size-3.5 text-green-600">
-											<ShieldIcon />
-										</span>
-										보호 중
-									</Badge>
-									<Button
-										aria-label="알림"
-										className="bg-card"
-										size="icon-lg"
-										variant="outline"
-									>
-										<BellIcon />
-									</Button>
-								</>
+								<Button
+									aria-label="알림"
+									className="bg-card"
+									size="icon-lg"
+									variant="outline"
+								>
+									<BellIcon />
+								</Button>
 							);
 						})()}
 					</div>
