@@ -6,6 +6,7 @@
 // 서버(/api/guest 또는 onboarding.verifyMyPhone)가 포트원 단건조회로 진위·연령을 검증한다.
 
 import { env } from "@bambi-app/env/web";
+import { requestIdentityVerification } from "@portone/browser-sdk/v2";
 import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -14,55 +15,6 @@ import type { BambiGenderValue, MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { Button } from "./ds";
 import { PhoneIcon } from "./icons";
 import { MockPhoneVerifyDialog } from "./mock-phone-verify-dialog";
-
-// npm 의존성 없이 공식 CDN 스크립트를 지연 로드한다(라이브러리 추가 금지 정책).
-const PORTONE_SDK_URL = "https://cdn.portone.io/v2/browser-sdk.js";
-
-interface PortOneIdentityVerificationResponse {
-	code?: string;
-	identityVerificationId?: string;
-	message?: string;
-}
-
-interface PortOneSdk {
-	requestIdentityVerification: (request: {
-		channelKey: string;
-		identityVerificationId: string;
-		redirectUrl: string;
-		storeId: string;
-	}) => Promise<PortOneIdentityVerificationResponse | undefined>;
-}
-
-declare global {
-	interface Window {
-		PortOne?: PortOneSdk;
-	}
-}
-
-let sdkPromise: null | Promise<PortOneSdk> = null;
-
-const loadPortOneSdk = (): Promise<PortOneSdk> => {
-	if (window.PortOne) {
-		return Promise.resolve(window.PortOne);
-	}
-	sdkPromise ??= new Promise<PortOneSdk>((resolve, reject) => {
-		const script = document.createElement("script");
-		script.src = PORTONE_SDK_URL;
-		script.onload = () => {
-			if (window.PortOne) {
-				resolve(window.PortOne);
-			} else {
-				reject(new Error("포트원 SDK를 불러오지 못했어요."));
-			}
-		};
-		script.onerror = () => {
-			sdkPromise = null;
-			reject(new Error("포트원 SDK를 불러오지 못했어요."));
-		};
-		document.head.appendChild(script);
-	});
-	return sdkPromise;
-};
 
 interface PhoneVerifyDialogProps {
 	// 목 폴백 폼의 성별 선택 초기값(실인증에서는 인증 결과가 성별을 결정하므로 미사용).
@@ -195,9 +147,8 @@ function PortOneVerifyButton({
 	const startVerification = async () => {
 		setIsVerifying(true);
 		try {
-			const portone = await loadPortOneSdk();
 			const identityVerificationId = `iv-${crypto.randomUUID()}`;
-			const response = await portone.requestIdentityVerification({
+			const response = await requestIdentityVerification({
 				channelKey,
 				identityVerificationId,
 				redirectUrl: window.location.href,
