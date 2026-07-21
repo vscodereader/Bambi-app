@@ -144,28 +144,82 @@ export interface AdBannerRow {
 	id: string;
 }
 
-// 좌/우 사이드 배너의 위치별 최대 슬롯 수. 사이드 레일 공간이 유한해 정렬(호출부에서
-// publishedAt desc)상 앞에서부터 이 수만큼만 노출한다. 프리미엄 배너는 상한 없이 유지한다.
+// 좌/우 사이드 배너의 위치별 최대 슬롯 수. 프리미엄은 1행 2열 고정이라 2개로 캡한다.
 export const SIDE_BANNER_MAX_SLOTS = 3;
+export const PREMIUM_BANNER_MAX_SLOTS = 2;
 
-// 결제완료된 배너형 공고를 노출 위치별로 그룹핑한다. 활성(미만료) 배너 공고 중 좌/우 사이드
-// 배너는 각각 최대 SIDE_BANNER_MAX_SLOTS개까지만(정렬상 앞에서부터) 노출하고, 프리미엄은
-// 상한 없이 전부 포함한다(프리미엄은 다음 행으로 확장).
+// 로테이션 주기. 같은 버킷 안에서는 어떤 요청·인스턴스든 같은 선발을 돌려준다.
+const ROTATION_INTERVAL_MS = 60 * 60 * 1000;
+
+// 문자열을 32비트 시드로 접는 FNV-1a. 시간 버킷+위치 타입을 시드화하는 용도라
+// 암호학적 강도는 필요 없다. XOR·>>>는 해시 정의상 필수인 의도된 비트 연산이다.
+const hashSeed = (input: string): number => {
+	let hash = 0x81_1c_9d_c5;
+	for (let index = 0; index < input.length; index++) {
+		// biome-ignore lint/suspicious/noBitwiseOperators: FNV-1a 정의상 XOR 필수(의도된 비트 연산).
+		hash ^= input.charCodeAt(index);
+		hash = Math.imul(hash, 0x01_00_01_93);
+	}
+	// biome-ignore lint/suspicious/noBitwiseOperators: 32비트 부호 없는 정수로 정규화(의도된 비트 연산).
+	return hash >>> 0;
+};
+
+// mulberry32 — 의존성 없는 결정적 PRNG. 시드가 같으면 수열이 같다. 시프트·XOR·OR는
+// 알고리즘 정의상 필수인 의도된 비트 연산이다.
+const createSeededRandom = (seed: number): (() => number) => {
+	// biome-ignore lint/suspicious/noBitwiseOperators: 32비트 부호 없는 시드로 정규화(의도된 비트 연산).
+	let state = seed >>> 0;
+	return () => {
+		// biome-ignore lint/suspicious/noBitwiseOperators: mulberry32 상태 전이(32비트 부호 없는 덧셈).
+		state = (state + 0x6d_2b_79_f5) >>> 0;
+		let t = state;
+		// biome-ignore lint/suspicious/noBitwiseOperators: mulberry32 믹싱 단계(의도된 비트 연산).
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		// biome-ignore lint/suspicious/noBitwiseOperators: mulberry32 믹싱 단계(의도된 비트 연산).
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		// biome-ignore lint/suspicious/noBitwiseOperators: 32비트 정규화 후 [0,1) 매핑(의도된 비트 연산).
+		return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+	};
+};
+
+// 시드 고정 Fisher–Yates. 입력을 훼손하지 않고 새 배열을 돌려준다.
+const shuffleWithSeed = <T>(items: T[], seed: number): T[] => {
+	const result = [...items];
+	const random = createSeededRandom(seed);
+	for (let index = result.length - 1; index > 0; index--) {
+		const target = Math.floor(random() * (index + 1));
+		[result[index], result[target]] = [result[target] as T, result[index] as T];
+	}
+	return result;
+};
+
+// 결제완료된 배너형 공고를 노출 위치별로 그룹핑한다. 활성(미만료) 후보가 슬롯을 초과하면
+// 시간 버킷(1시간)+위치 타입을 시드로 한 랜덤 셔플로 매시간 새로 선발한다 — 정해진 순서를
+// 도는 순환이 아니라 매시간 독립 추첨이라 모든 배너가 동일 확률로 노출된다. 후보가 슬롯
+// 이하면 전원 노출되고 표시 순서만 매시간 섞인다.
 export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	rows: TRow[],
 	now: Date
 ): { leftBanner: TRow[]; premiumBanner: TRow[]; rightBanner: TRow[] } => {
-	const pick = (type: AdBannerExposureType, maxSlots?: number): TRow[] => {
-		const matched = rows.filter(
-			(item) =>
-				item.exposureType === type && isExposureActive(item.exposureEndsAt, now)
+	const hourBucket = Math.floor(now.getTime() / ROTATION_INTERVAL_MS);
+	const pick = (type: AdBannerExposureType, maxSlots: number): TRow[] => {
+		// id 정렬로 DB 정렬 순서 의존을 끊어야 같은 버킷=같은 선발이 보장된다.
+		const matched = rows
+			.filter(
+				(item) =>
+					item.exposureType === type &&
+					isExposureActive(item.exposureEndsAt, now)
+			)
+			.sort((a, b) => a.id.localeCompare(b.id));
+		return shuffleWithSeed(matched, hashSeed(`${hourBucket}:${type}`)).slice(
+			0,
+			maxSlots
 		);
-		return maxSlots === undefined ? matched : matched.slice(0, maxSlots);
 	};
 
 	return {
 		leftBanner: pick("left-banner", SIDE_BANNER_MAX_SLOTS),
-		premiumBanner: pick("premium-banner"),
+		premiumBanner: pick("premium-banner", PREMIUM_BANNER_MAX_SLOTS),
 		rightBanner: pick("right-banner", SIDE_BANNER_MAX_SLOTS),
 	};
 };
