@@ -297,6 +297,7 @@ export const jobPost = pgTable(
 		status: jobPostStatus("status").default("pending_review").notNull(),
 		industryCategory: text("industry_category").notNull(),
 		region: text("region").notNull(),
+		district: text("district"),
 		payAmount: integer("pay_amount").notNull(),
 		payUnit: text("pay_unit").notNull(),
 		workSchedule: text("work_schedule").notNull(),
