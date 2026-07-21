@@ -1,3 +1,5 @@
+import { AD_BANNER_EXPOSURE_TYPES } from "./bambi-ad-exposure";
+
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -80,6 +82,7 @@ export const countDueAutoBoostSlots = (
 };
 
 export type BoostIneligibleReason =
+	| "banner_product"
 	| "daily_limit_reached"
 	| "exposure_expired"
 	| "not_ad_job"
@@ -88,6 +91,8 @@ export type BoostIneligibleReason =
 
 export const BOOST_INELIGIBLE_MESSAGES: Record<BoostIneligibleReason, string> =
 	{
+		banner_product:
+			"배너 광고는 끌어올리기 대상이 아닙니다. 리스팅 광고(스페셜·급구·추천)에서만 제공됩니다.",
 		daily_limit_reached: "오늘 끌어올리기 횟수를 모두 사용했습니다.",
 		exposure_expired: "광고 노출 기간이 만료되어 끌어올릴 수 없습니다.",
 		not_ad_job: "광고 상품이 적용된 공고만 끌어올릴 수 있습니다.",
@@ -99,10 +104,12 @@ export const BOOST_INELIGIBLE_MESSAGES: Record<BoostIneligibleReason, string> =
 
 // 끌어올리기 자격: 광고 공고(adProductId 보유) AND 공개 게이트(published+paid) AND
 // 노출 유효(exposureEndsAt null 또는 미래 — isExposureActive와 동일 판정) AND
-// 상품이 점프 제공(manualBoostsPerDay > 0) AND 오늘 사용량이 한도 미만.
+// 리스팅형 노출(배너형은 끌어올리기 비대상) AND 상품이 점프 제공(manualBoostsPerDay > 0)
+// AND 오늘 사용량이 한도 미만.
 export const resolveBoostEligibility = ({
 	adProductId,
 	exposureEndsAt,
+	exposureType,
 	manualBoostsPerDay,
 	now,
 	paymentStatus,
@@ -111,6 +118,7 @@ export const resolveBoostEligibility = ({
 }: {
 	adProductId: string | null;
 	exposureEndsAt: Date | null;
+	exposureType: string;
 	manualBoostsPerDay: number;
 	now: Date;
 	paymentStatus: string;
@@ -127,6 +135,13 @@ export const resolveBoostEligibility = ({
 
 	if (exposureEndsAt !== null && exposureEndsAt.getTime() <= now.getTime()) {
 		return { eligible: false, reason: "exposure_expired" };
+	}
+
+	// 배너형 공고는 끌어올리기 대상이 아니다(리스팅형: 스페셜·급구·추천에서만 제공).
+	// 상태·노출 게이트 뒤에 둬 일시적 사유(미게시·만료)가 먼저 안내되게 하고,
+	// 상품 유형 사유는 그 다음으로 판정한다.
+	if ((AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(exposureType)) {
+		return { eligible: false, reason: "banner_product" };
 	}
 
 	if (manualBoostsPerDay <= 0) {

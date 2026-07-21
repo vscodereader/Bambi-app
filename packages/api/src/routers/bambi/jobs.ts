@@ -500,13 +500,21 @@ const resolveJobPostExposure = async (input: {
 		});
 	}
 
+	const exposureType = previewTemplateToExposureType(product.previewTemplate);
+	// 배너형 광고는 끌어올리기 대상이 아니다. 상품에 끌어올리기 값이 남아 있어도
+	// 스냅샷을 0으로 강제해 배너 공고가 끌어올려지지 않게 한다(리스팅형만 제공 —
+	// resolveBoostEligibility·runAutoBoostTick와 동일 정책).
+	const isBanner = (AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(
+		exposureType
+	);
+
 	return {
 		adProductId: product.id,
 		exposureAmount: priceOption.amount,
 		exposureDurationDays: priceOption.days,
-		exposureType: previewTemplateToExposureType(product.previewTemplate),
-		manualBoostsPerDay: product.manualBoostsPerDay,
-		autoBoostsPerDay: product.autoBoostsPerDay,
+		exposureType,
+		manualBoostsPerDay: isBanner ? 0 : product.manualBoostsPerDay,
+		autoBoostsPerDay: isBanner ? 0 : product.autoBoostsPerDay,
 		paymentMethod: input.paymentMethod ?? null,
 	};
 };

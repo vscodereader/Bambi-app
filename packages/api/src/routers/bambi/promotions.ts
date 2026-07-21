@@ -175,6 +175,7 @@ export const promotionsRouter = {
 				.select({
 					adProductId: jobPost.adProductId,
 					exposureEndsAt: jobPost.exposureEndsAt,
+					exposureType: jobPost.exposureType,
 					organizationId: jobPost.organizationId,
 					paymentStatus: jobPost.paymentStatus,
 					status: jobPost.status,
@@ -221,6 +222,7 @@ export const promotionsRouter = {
 				const verdict = resolveBoostEligibility({
 					adProductId: post.adProductId,
 					exposureEndsAt: post.exposureEndsAt,
+					exposureType: post.exposureType,
 					manualBoostsPerDay: locked?.manualBoostsPerDay ?? 0,
 					now,
 					paymentStatus: post.paymentStatus,

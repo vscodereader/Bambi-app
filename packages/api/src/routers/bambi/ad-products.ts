@@ -5,7 +5,37 @@ import { and, asc, eq } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
+import {
+	AD_BANNER_EXPOSURE_TYPES,
+	type AdPreviewTemplate,
+	previewTemplateToExposureType,
+} from "../../services/bambi-ad-exposure";
 import { requireAdminProfile } from "../../services/bambi-authz";
+
+// 배너형 미리보기 템플릿(premium-top / side-horizontal / side-vertical)은 끌어올리기 비대상이다.
+// 노출 타입으로 환산해 배너 여부를 판정한다(previewTemplate→exposureType 단일 소스 재사용).
+const isBannerTemplate = (template: string): boolean =>
+	(AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(
+		previewTemplateToExposureType(template as AdPreviewTemplate)
+	);
+
+// 배너형 상품에 끌어올리기(수동·자동) 값을 저장하려 하면 거부한다. create·update 모두에서
+// 최종 상태(템플릿·끌어올리기 값)를 기준으로 검증한다.
+const assertBannerHasNoBoost = (finalState: {
+	autoBoostsPerDay: number;
+	manualBoostsPerDay: number;
+	previewTemplate: string;
+}): void => {
+	if (
+		isBannerTemplate(finalState.previewTemplate) &&
+		(finalState.manualBoostsPerDay > 0 || finalState.autoBoostsPerDay > 0)
+	) {
+		throw new ORPCError("BAD_REQUEST", {
+			message:
+				"배너 광고 상품에는 끌어올리기를 설정할 수 없습니다. 끌어올리기는 리스팅 광고(스페셜·급구·추천)에서만 제공됩니다.",
+		});
+	}
+};
 
 const placementKindSchema = z.enum(["listing", "banner"]);
 
@@ -166,6 +196,12 @@ export const adProductsRouter = {
 		.input(createProductInput)
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
+			// previewTemplate 미지정 시 컬럼 기본값 "none"(비배너)로 검증한다.
+			assertBannerHasNoBoost({
+				autoBoostsPerDay: input.autoBoostsPerDay,
+				manualBoostsPerDay: input.manualBoostsPerDay,
+				previewTemplate: input.previewTemplate ?? "none",
+			});
 			const [created] = await db.insert(adProduct).values(input).returning();
 			if (!created) {
 				throw new ORPCError("INTERNAL_SERVER_ERROR");
@@ -178,6 +214,20 @@ export const adProductsRouter = {
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 			const { id, ...patch } = input;
+			// 부분 수정이라 미지정 필드는 기존 값을 유지한다. 템플릿만 배너형으로 바꾸면서
+			// 기존 끌어올리기 값이 남는 경우도 잡으려면 최종 상태를 기존 행과 합쳐 검증해야 한다.
+			const existing = await db.query.adProduct.findFirst({
+				where: eq(adProduct.id, id),
+			});
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+			assertBannerHasNoBoost({
+				autoBoostsPerDay: patch.autoBoostsPerDay ?? existing.autoBoostsPerDay,
+				manualBoostsPerDay:
+					patch.manualBoostsPerDay ?? existing.manualBoostsPerDay,
+				previewTemplate: patch.previewTemplate ?? existing.previewTemplate,
+			});
 			const [updated] = await db
 				.update(adProduct)
 				.set(patch)

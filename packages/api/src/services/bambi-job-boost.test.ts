@@ -17,6 +17,7 @@ const NOW = new Date("2026-07-16T05:00:00Z"); // KST 2026-07-16 14:00
 const eligibleInput = {
 	adProductId: "ad-1",
 	exposureEndsAt: FUTURE,
+	exposureType: "special",
 	manualBoostsPerDay: 3,
 	now: NOW,
 	paymentStatus: "paid",
@@ -72,6 +73,19 @@ describe("resolveBoostEligibility", () => {
 		expect(
 			resolveBoostEligibility({ ...eligibleInput, exposureEndsAt: null })
 		).toEqual({ eligible: true });
+	});
+
+	it("rejects banner-type exposure (boost is listing-only)", () => {
+		// 배너형은 스냅샷에 끌올 값이 남아 있어도 배너 전용 사유로 거부한다.
+		for (const exposureType of [
+			"premium-banner",
+			"left-banner",
+			"right-banner",
+		]) {
+			expect(
+				resolveBoostEligibility({ ...eligibleInput, exposureType })
+			).toEqual({ eligible: false, reason: "banner_product" });
+		}
 	});
 
 	it("rejects products without boosts and exhausted daily limits", () => {

@@ -17,8 +17,8 @@ import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 // 좌우 aside는 판매된 배너가 없어도 폭을 그대로 차지한다. 한쪽만 렌더하면 justify-center가
 // 남은 두 칸을 기준으로 정렬해 콘텐츠가 (rail+gap)/2 = 약 139px 밀리고, 고정폭이 같은
 // 헤더·푸터와 눈에 띄게 어긋난다(우측 배너만 팔린 수다방에서 실제로 발생했다).
-// 그래서 비었는지 판정은 aside 안쪽에서 하고, 바깥 자리는 항상 대칭으로 남긴다 —
-// seeker 마켓플레이스·공고 상세도 같은 이유로 이 형태다.
+// 그래서 바깥 자리는 항상 대칭으로 남기고, rail은 빈 슬롯을 "광고 모집중" 자리표시로
+// 채워 조건 없이 렌더한다 — seeker 마켓플레이스·공고 상세도 같은 이유로 이 형태다.
 // 훅을 쓰려면 클라이언트 모듈이어야 하는데, 이미 게이트(RequireCommunityAccess)가
 // 클라이언트라 경계가 실질적으로 달라지지 않는다.
 export default function SeekerCommunityLayout({
@@ -33,9 +33,7 @@ export default function SeekerCommunityLayout({
 			<div className="mx-auto flex w-full justify-center gap-5 py-6">
 				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 					<div className="sticky top-20">
-						{adBanners.leftBanner.length > 0 ? (
-							<HorizontalAdBannerRail items={adBanners.leftBanner} />
-						) : null}
+						<HorizontalAdBannerRail items={adBanners.leftBanner} />
 					</div>
 				</aside>
 				<div
@@ -48,9 +46,7 @@ export default function SeekerCommunityLayout({
 				</div>
 				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 					<div className="sticky top-20">
-						{adBanners.rightBanner.length > 0 ? (
-							<AdBannerRail items={adBanners.rightBanner} />
-						) : null}
+						<AdBannerRail items={adBanners.rightBanner} />
 					</div>
 				</aside>
 			</div>

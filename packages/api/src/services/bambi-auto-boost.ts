@@ -1,7 +1,8 @@
 import { db } from "@bambi-app/db";
 import { jobBoostEvent, jobPost } from "@bambi-app/db/schema/bambi";
-import { and, count, eq, gt, gte, isNull, or } from "drizzle-orm";
+import { and, count, eq, gt, gte, inArray, isNull, or } from "drizzle-orm";
 
+import { LISTING_SECTION_EXPOSURE_TYPES } from "./bambi-ad-exposure";
 import {
 	countDueAutoBoostSlots,
 	getAutoBoostSlotOffsetMs,
@@ -25,7 +26,8 @@ const AUTO_BOOST_TICK_CONCURRENCY = 10;
 export const runAutoBoostTick = async (now: Date): Promise<number> => {
 	const dayStart = getKstDayStart(now);
 
-	// 후보: 자동 횟수 보유 AND 공개 중(게시+결제완료) AND 노출 유효(만료 안 됨).
+	// 후보: 자동 횟수 보유 AND 리스팅형 노출(배너형은 끌어올리기 비대상) AND
+	// 공개 중(게시+결제완료) AND 노출 유효(만료 안 됨).
 	const candidates = await db
 		.select({
 			autoBoostsPerDay: jobPost.autoBoostsPerDay,
@@ -36,6 +38,7 @@ export const runAutoBoostTick = async (now: Date): Promise<number> => {
 		.where(
 			and(
 				gt(jobPost.autoBoostsPerDay, 0),
+				inArray(jobPost.exposureType, [...LISTING_SECTION_EXPOSURE_TYPES]),
 				eq(jobPost.status, "published"),
 				eq(jobPost.paymentStatus, "paid"),
 				or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
@@ -84,6 +87,7 @@ export const runAutoBoostTick = async (now: Date): Promise<number> => {
 				.select({
 					autoBoostsPerDay: jobPost.autoBoostsPerDay,
 					exposureEndsAt: jobPost.exposureEndsAt,
+					exposureType: jobPost.exposureType,
 					organizationId: jobPost.organizationId,
 					paymentStatus: jobPost.paymentStatus,
 					status: jobPost.status,
@@ -96,9 +100,13 @@ export const runAutoBoostTick = async (now: Date): Promise<number> => {
 				return false;
 			}
 
+			// 사전 필터와 판정을 일치시킨다(리스팅형만 발동, 배너형은 잠금 내에서도 제외).
 			if (
 				locked.status !== "published" ||
 				locked.paymentStatus !== "paid" ||
+				!(LISTING_SECTION_EXPOSURE_TYPES as readonly string[]).includes(
+					locked.exposureType
+				) ||
 				(locked.exposureEndsAt !== null &&
 					locked.exposureEndsAt.getTime() <= now.getTime())
 			) {
