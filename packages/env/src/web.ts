@@ -6,11 +6,28 @@ export const env = createEnv({
 		NEXT_PUBLIC_SERVER_URL: z.url(),
 		// 개발에서만 선택 구성이다. 미설정 시 공고 이미지가 샘플 썸네일로 폴백한다(GCS 없이 개발 가능).
 		NEXT_PUBLIC_GCS_PUBLIC_BASE_URL: z.url().optional(),
+		// 포트원 본인인증(인증창) 공개 식별자. 관리자 콘솔에서 발급. 개발에서는 선택 —
+		// 비어 있으면 본인인증 다이얼로그가 목 폼으로 폴백한다.
+		NEXT_PUBLIC_PORTONE_STORE_ID: z.string().min(1).optional(),
+		NEXT_PUBLIC_PORTONE_CHANNEL_KEY: z.string().min(1).optional(),
+	},
+	server: {
+		// 포트원 V2 API Secret. 게스트 본인인증 라우트(/api/guest)가 인증 결과를 서버에서
+		// 검증할 때 쓴다. 클라이언트에 노출 금지.
+		PORTONE_API_SECRET: z.string().min(1).optional(),
+		// 게스트 인증 쿠키(HMAC 서명 토큰)의 서명 키. 평문 쿠키는 devtools에서 위조되므로
+		// 서명 없이는 게이트를 열 수 없게 한다.
+		BAMBI_GUEST_TOKEN_SECRET: z.string().min(32).optional(),
 	},
 	runtimeEnv: {
 		NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL,
 		NEXT_PUBLIC_GCS_PUBLIC_BASE_URL:
 			process.env.NEXT_PUBLIC_GCS_PUBLIC_BASE_URL,
+		NEXT_PUBLIC_PORTONE_STORE_ID: process.env.NEXT_PUBLIC_PORTONE_STORE_ID,
+		NEXT_PUBLIC_PORTONE_CHANNEL_KEY:
+			process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY,
+		PORTONE_API_SECRET: process.env.PORTONE_API_SECRET,
+		BAMBI_GUEST_TOKEN_SECRET: process.env.BAMBI_GUEST_TOKEN_SECRET,
 	},
 	emptyStringAsUndefined: true,
 });
@@ -26,4 +43,27 @@ if (
 	throw new Error(
 		"NEXT_PUBLIC_GCS_PUBLIC_BASE_URL은 프로덕션 빌드에서 필수입니다. 값이 없으면 업로드된 공고 이미지 대신 샘플 썸네일이 표시됩니다."
 	);
+}
+
+// 본인인증 구성이 빠지면 프로덕션에서 목 폼이 노출되거나 게스트 인증이 통째로 막힌다.
+// 서버 전용 변수는 클라이언트 번들에서 접근하면 t3-env가 throw 하므로, 이 검사는 서버
+// 컨텍스트에서만 수행한다(next.config import 시점 = 빌드 시작 시점에 걸린다).
+if (process.env.NODE_ENV === "production" && typeof window === "undefined") {
+	if (
+		!(env.NEXT_PUBLIC_PORTONE_STORE_ID && env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY)
+	) {
+		throw new Error(
+			"NEXT_PUBLIC_PORTONE_STORE_ID/NEXT_PUBLIC_PORTONE_CHANNEL_KEY는 프로덕션 빌드에서 필수입니다. 값이 없으면 본인인증이 목 폼으로 폴백합니다."
+		);
+	}
+	if (!env.PORTONE_API_SECRET) {
+		throw new Error(
+			"PORTONE_API_SECRET은 프로덕션(web)에서 필수입니다. 게스트 본인인증 결과 검증에 사용됩니다."
+		);
+	}
+	if (!env.BAMBI_GUEST_TOKEN_SECRET) {
+		throw new Error(
+			"BAMBI_GUEST_TOKEN_SECRET은 프로덕션에서 필수입니다. 값이 없으면 게스트 인증 쿠키를 서명할 수 없습니다."
+		);
+	}
 }

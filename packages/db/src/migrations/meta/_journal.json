@@ -162,6 +162,13 @@
       "when": 1784604219600,
       "tag": "0022_dizzy_randall_flagg",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784608161208,
+      "tag": "0023_silent_excalibur",
+      "breakpoints": true
     }
   ]
 }

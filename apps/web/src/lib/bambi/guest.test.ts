@@ -1,45 +1,52 @@
 import { describe, expect, it } from "vitest";
 import {
-	adultSexToGender,
 	GUEST_COOKIE_NAME,
-	genderToAdultSex,
 	readGuestFromCookieString,
+	readGuestGenderFromCookieString,
 } from "./guest";
+import { createGuestToken } from "./guest-token";
+
+const SECRET = "test-secret-key-with-enough-length-123456";
 
 describe("readGuestFromCookieString", () => {
-	it("detects guest cookie", () => {
-		expect(readGuestFromCookieString(`${GUEST_COOKIE_NAME}=1`)).toBe(true);
+	it("게스트 쿠키(토큰)가 있으면 true", async () => {
+		const token = await createGuestToken({
+			gender: "female",
+			maxAgeSeconds: 3600,
+			now: new Date(),
+			secret: SECRET,
+		});
+
+		expect(readGuestFromCookieString(`${GUEST_COOKIE_NAME}=${token}`)).toBe(
+			true
+		);
 	});
-	it("returns false when absent", () => {
+
+	it("없거나 값이 비면 false", () => {
 		expect(readGuestFromCookieString("other=1")).toBe(false);
-	});
-	it("returns false for empty", () => {
+		expect(readGuestFromCookieString(`${GUEST_COOKIE_NAME}=`)).toBe(false);
 		expect(readGuestFromCookieString("")).toBe(false);
 	});
 });
 
-describe("genderToAdultSex", () => {
-	it("maps male to adultsex 1", () => {
-		expect(genderToAdultSex("male")).toBe("1");
-	});
-	it("maps female to adultsex 2", () => {
-		expect(genderToAdultSex("female")).toBe("2");
-	});
-});
+describe("readGuestGenderFromCookieString", () => {
+	it("토큰 페이로드에서 성별을 읽는다", async () => {
+		const token = await createGuestToken({
+			gender: "male",
+			maxAgeSeconds: 3600,
+			now: new Date(),
+			secret: SECRET,
+		});
 
-describe("adultSexToGender", () => {
-	it("maps adultsex 1 to male", () => {
-		expect(adultSexToGender("1")).toBe("male");
+		expect(
+			readGuestGenderFromCookieString(`${GUEST_COOKIE_NAME}=${token}; other=1`)
+		).toBe("male");
 	});
-	it("maps adultsex 2 to female", () => {
-		expect(adultSexToGender("2")).toBe("female");
-	});
-	it("returns null for unknown values", () => {
-		expect(adultSexToGender("0")).toBeNull();
-		expect(adultSexToGender("")).toBeNull();
-	});
-	it("round-trips gender through adultsex", () => {
-		expect(adultSexToGender(genderToAdultSex("male"))).toBe("male");
-		expect(adultSexToGender(genderToAdultSex("female"))).toBe("female");
+
+	it("구 평문 쿠키(1)·부재 시 null", () => {
+		expect(
+			readGuestGenderFromCookieString(`${GUEST_COOKIE_NAME}=1`)
+		).toBeNull();
+		expect(readGuestGenderFromCookieString("")).toBeNull();
 	});
 });
