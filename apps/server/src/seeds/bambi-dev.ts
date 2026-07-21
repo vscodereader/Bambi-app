@@ -381,6 +381,7 @@ interface RichJobDef {
 	beginner?: boolean;
 	category: string;
 	desc: string;
+	instant?: boolean;
 	n: number;
 	org: string;
 	ownerKey: DevUserKey;
@@ -422,6 +423,7 @@ const richJobs: RichJobDef[] = [
 		title: "강남 라운지 주말 홀 스태프",
 		desc: "주말 홀 응대와 테이블 세팅을 담당합니다. 친절한 분이면 누구나 환영합니다.",
 		promo: "recommended",
+		instant: true,
 	},
 	{
 		n: 3,
@@ -464,6 +466,7 @@ const richJobs: RichJobDef[] = [
 		title: "홍대 인근 바 주말 파트타임",
 		desc: "주말 바 보조와 음료 서빙을 담당합니다. 활기찬 분위기에서 함께 일할 분을 찾습니다.",
 		beginner: true,
+		instant: true,
 	},
 	{
 		n: 6,
@@ -504,6 +507,7 @@ const richJobs: RichJobDef[] = [
 		schedule: "토/일, 21:00-04:00",
 		title: "잠실 클럽 주말 플로어 스태프",
 		desc: "플로어 안내와 음료 전달을 담당합니다. 체력 좋은 분 환영합니다.",
+		instant: true,
 	},
 	{
 		n: 9,
@@ -546,6 +550,7 @@ const richJobs: RichJobDef[] = [
 		schedule: "주말 15:00-23:00",
 		title: "인천 카페 주말 마감 담당",
 		desc: "주말 마감과 재료 정리를 담당합니다. 책임감 있는 분을 찾습니다.",
+		instant: true,
 	},
 	{
 		n: 12,
@@ -2028,6 +2033,8 @@ const buildRichJobRow = (
 			...beginnerBlock,
 		],
 		interviewNotes: "면접 일정은 밤비 채팅에서 확정합니다.",
+		beginnerFriendly: def.beginner ?? false,
+		instantInterview: def.instant ?? false,
 		rejectionReason: def.rejectionReason ?? null,
 		riskFlags: def.status === "pending_review" ? ["needs_review"] : [],
 		// 무료 공고 즉시 노출 정책: 게시 공고는 결제완료로 시드해 바로 노출되게 한다.
