@@ -2,73 +2,72 @@ import { describe, expect, it } from "vitest";
 
 import {
 	formatJobAdBannerSpec,
-	getJobAdBannerCropDirection,
+	isAllowedJobAdBannerAspect,
 } from "./job-ad-banner-spec";
 
-describe("getJobAdBannerCropDirection", () => {
-	it("stays quiet for near-spec sizes the old ±2% gate rejected", () => {
-		// 1200×500(2.400)은 7:3(2.333)과 2.9% 차이 — 반려 기준으론 걸렸지만 눈에 띄게
-		// 잘리는 수준은 아니라 경고하지 않는다.
+describe("isAllowedJobAdBannerAspect", () => {
+	it("allows sizes within the ±15% band the object-cover crop absorbs", () => {
+		// 1200×500(2.400)은 7:3(2.333)과 오차 2.9% — 티 없이 잘리므로 통과시킨다.
 		expect(
-			getJobAdBannerCropDirection({
+			isAllowedJobAdBannerAspect({
 				height: 500,
 				usage: "ad_horizontal",
 				width: 1200,
 			})
-		).toBeNull();
+		).toBe(true);
 	});
 
-	it("warns about side cropping when the image is too wide", () => {
-		// 970×250(3.88)은 7:3보다 훨씬 넓적해서 좌우가 잘린다.
+	it("rejects a horizontal banner far too wide for 7:3", () => {
+		// 970×250(3.88)은 7:3보다 훨씬 넓적해 좌우가 크게 잘린다.
 		expect(
-			getJobAdBannerCropDirection({
+			isAllowedJobAdBannerAspect({
 				height: 250,
 				usage: "ad_horizontal",
 				width: 970,
 			})
-		).toBe("sides");
+		).toBe(false);
 	});
 
-	it("warns about side cropping for 9:16 verticals", () => {
-		// 세로 소재 사실상 표준인 1080×1920(0.5625)은 4:9(0.444)보다 넓적해 좌우가 잘린다.
+	it("rejects 9:16 verticals that are off the 4:9 spec", () => {
+		// 세로 표준 1080×1920(0.5625)은 4:9(0.444)보다 넓적해 좌우가 크게 잘린다.
 		expect(
-			getJobAdBannerCropDirection({
+			isAllowedJobAdBannerAspect({
 				height: 1920,
 				usage: "ad_vertical",
 				width: 1080,
 			})
-		).toBe("sides");
+		).toBe(false);
 	});
 
-	it("warns about top/bottom cropping when the image is too tall", () => {
-		// 정사각형(1.0)은 7:3 슬롯보다 길쭉해서 위아래가 잘린다.
+	it("rejects a square image in a 7:3 slot", () => {
 		expect(
-			getJobAdBannerCropDirection({
+			isAllowedJobAdBannerAspect({
 				height: 1000,
 				usage: "ad_horizontal",
 				width: 1000,
 			})
-		).toBe("topBottom");
+		).toBe(false);
 	});
 
-	it("says nothing when dimensions are missing", () => {
+	it("does not judge when dimensions are missing", () => {
+		// 치수를 못 읽었으면 크기 검증이 잡으므로 비율은 판단하지 않는다.
 		expect(
-			getJobAdBannerCropDirection({
+			isAllowedJobAdBannerAspect({
 				height: 0,
 				usage: "ad_horizontal",
 				width: 0,
 			})
-		).toBeNull();
+		).toBe(true);
 	});
 });
 
 describe("formatJobAdBannerSpec", () => {
-	it("presents the ratio as recommended and the size as required", () => {
+	it("shows the ratio plus both the minimum and recommended sizes", () => {
 		expect(formatJobAdBannerSpec("ad_horizontal")).toBe(
-			"권장 비율 7:3 · 최소 150×50px"
+			"권장 비율 7:3 · 최소 700×300px · 권장 1400×600px"
 		);
 		expect(formatJobAdBannerSpec("ad_vertical")).toBe(
-			"권장 비율 4:9 · 권장 크기 400×900px"
+			"권장 비율 4:9 · 최소 400×900px"
 		);
 	});
 });

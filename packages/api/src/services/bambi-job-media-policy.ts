@@ -41,33 +41,32 @@ export const getAllowedJobPostMimeTypes = (
 		: ALLOWED_JOB_POST_IMAGE_MIME_TYPES;
 
 export interface JobAdBannerSpec {
-	// 권장 비율 표기(문구 전용). 더는 검증하지 않고 안내만 한다 — 슬롯의 object-cover가
-	// 잘라 주므로 비율이 어긋나도 오류가 아니라 "잘려 보일 수 있다"는 시각적 트레이드오프다.
+	// 비율 표기(문구 전용). 비율 검증 자체는 클라이언트가 원본 치수로 하고(job-ad-banner-spec),
+	// 서버는 바이트를 열지 않아 크기 하한만 재확인한다.
 	aspectLabel: string;
 	label: string;
-	// 하한. 이보다 작으면 슬롯에서 늘어나 뭉개지므로 이 규칙만 강제한다. 미설정이면 크기는 안 본다.
+	// 하한. 이보다 작으면 슬롯에서 늘어나 뭉개지므로 이 규칙을 강제한다. 미설정이면 크기는 안 본다.
 	minHeight?: number;
 	minWidth?: number;
-	// 안내용 권장 해상도. 강제하지 않으며, 하한(min*)이 있으면 그쪽을 대신 안내한다.
-	recommendedHeight?: number;
-	recommendedWidth?: number;
 }
 
-// aspectLabel은 슬롯 CSS(aspect-[7/3], aspect-[4/9])가 기대하는 비율을 사람에게 알려 주는
-// 안내 문구일 뿐이다. 검증에 쓰이지 않으므로 숫자 비율은 두지 않는다.
+// 크기 하한은 클라이언트 규격(apps/web/src/lib/bambi/job-ad-banner-spec.ts)과 같은 값이어야
+// 한다. aspectLabel은 안내 문구용이며, 비율 반려는 클라이언트가 담당한다(치수가 위조 가능해도
+// 손해는 본인 배너가 잘려 보이는 것뿐이라 서버가 바이트를 다시 열지는 않는다).
 export const JOB_AD_BANNER_SPECS: Record<JobAdBannerUsage, JobAdBannerSpec> = {
 	ad_horizontal: {
 		aspectLabel: "7:3",
 		label: "가로형 광고 배너",
-		// 비율 검증이 사라져 이제 하한이 유일한 구속이다. 가로 150·세로 50 둘 다 독립으로 걸린다.
-		minHeight: 50,
-		minWidth: 150,
+		// 프리미엄 슬롯이 500px+ 폭으로 커져 화질 하한을 700×300으로 올렸다.
+		minHeight: 300,
+		minWidth: 700,
 	},
 	ad_vertical: {
 		aspectLabel: "4:9",
 		label: "세로형 광고 배너",
-		recommendedHeight: 900,
-		recommendedWidth: 400,
+		// 예전엔 권장값(강제 안 함)이던 400×900을 화질을 위해 최소로 승격했다.
+		minHeight: 900,
+		minWidth: 400,
 	},
 };
 
@@ -188,10 +187,8 @@ export const validateJobPostImageUpload = ({
 	return { ok: true };
 };
 
-// 광고 배너는 크기 하한만 강제한다. 비율은 검사하지 않는다 — 슬롯이 object-cover로 잘라 주므로
-// 비율이 어긋나도 오류가 아니라 "가장자리가 잘려 보인다"는 시각적 트레이드오프일 뿐이고, ±2% 밴드는
-// 1080×1920(세로 표준)·1200×500 같은 실제 소재를 전부 막을 만큼 좁았다.
-// 치수는 브라우저가 읽어 보내므로 위조할 수 있지만, 위조해도 손해는 본인 배너가 뭉개져 보이는
+// 서버는 크기 하한만 재확인한다. 비율 반려는 클라이언트가 원본 치수로 판정한다 —
+// 치수는 브라우저가 읽어 보내므로 위조할 수 있지만, 위조해도 손해는 본인 배너가 잘려 보이는
 // 것뿐이라 서버가 바이트를 다시 열지는 않는다.
 const collectAdBannerIssues = (
 	item: JobPostMediaPolicyInput

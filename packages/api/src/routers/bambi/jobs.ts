@@ -226,7 +226,7 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 			return "광고 배너 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.";
 		// 하한 수치는 정책 상수에서 읽는다. 문구에 숫자를 박아 두면 규격을 바꿀 때 조용히 어긋난다.
 		case "banner_too_small":
-			return `광고 배너 이미지가 너무 작습니다. 가로형은 ${JOB_AD_BANNER_SPECS.ad_horizontal.minWidth}×${JOB_AD_BANNER_SPECS.ad_horizontal.minHeight}px 이상으로 등록해 주세요.`;
+			return `광고 배너 이미지가 너무 작습니다. 가로형은 ${JOB_AD_BANNER_SPECS.ad_horizontal.minWidth}×${JOB_AD_BANNER_SPECS.ad_horizontal.minHeight}px, 세로형은 ${JOB_AD_BANNER_SPECS.ad_vertical.minWidth}×${JOB_AD_BANNER_SPECS.ad_vertical.minHeight}px 이상으로 등록해 주세요.`;
 		case "too_many_ad_banners":
 			return "광고 배너는 가로형·세로형 각 1장만 등록할 수 있습니다.";
 		case "block_text_too_long":
