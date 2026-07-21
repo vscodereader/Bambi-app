@@ -121,18 +121,19 @@ export const buildExposureJobSections = <TRow extends ExposureSectionRow>({
 	const sectionJobIds = new Set(
 		[...special, ...urgent, ...recommended].map((item) => item.id)
 	);
-	// organic 한도는 섹션 규모와 독립적으로 limit을 그대로 쓴다(유료 섹션이 커져도
-	// 전체 공고 목록이 고사하지 않게).
+	// 전체 공고에는 광고 상품 적용 여부와 무관하게 게시된 공고를 모두 담는다
+	// (유료 섹션과 중복 노출). 유료 공고가 앞자리를 차지해 무료 공고가 상한에
+	// 밀리지 않도록 organic 한도를 유료 섹션 크기만큼 늘린다.
 	const organic = organicRows
-		.filter(
-			(item) => item.status === "published" && !sectionJobIds.has(item.id)
-		)
-		.slice(0, limit);
+		.filter((item) => item.status === "published")
+		.slice(0, limit + sectionJobIds.size);
 
 	return {
 		sections: { organic, recommended, special, urgent },
-		totalCount:
-			special.length + urgent.length + recommended.length + organic.length,
+		// 유료 공고는 섹션과 전체 공고에 동시에 담기므로 고유 id로 센다.
+		totalCount: new Set(
+			[...special, ...urgent, ...recommended, ...organic].map((item) => item.id)
+		).size,
 	};
 };
 
