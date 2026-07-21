@@ -111,12 +111,13 @@ describe("filterMarketplaceJobs", () => {
 	it("filters jobs by region, category, pay, verification, and beginner-friendly chips", () => {
 		const result = filterMarketplaceJobs(JOBS, {
 			category: "라운지",
+			district: "강남",
 			minimumPay: 17_000,
 			onlyBeginnerFriendly: true,
 			onlyToday: false,
 			onlyVerified: true,
 			query: "",
-			region: "강남",
+			region: "서울",
 			subcategory: "전체",
 		});
 
