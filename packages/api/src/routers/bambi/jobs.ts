@@ -114,6 +114,8 @@ const jobPostInput = z.object({
 	description: z.string().min(10).max(2000),
 	descriptionBlocks: z.array(jobDescriptionBlockInput).max(12).optional(),
 	interviewNotes: z.string().max(500).optional(),
+	beginnerFriendly: z.boolean().optional(),
+	instantInterview: z.boolean().optional(),
 	exposureType: z
 		.enum([
 			"premium-banner",
@@ -505,6 +507,8 @@ export const jobsRouter = {
 
 		const exposureSelection = {
 			description: jobPost.description,
+			beginnerFriendly: jobPost.beginnerFriendly,
+			instantInterview: jobPost.instantInterview,
 			coverImage: coverImageSql,
 			employerDisplayName: employerOrganizationProfile.displayName,
 			employerVerificationStatus:
@@ -755,6 +759,8 @@ export const jobsRouter = {
 					description: jobPost.description,
 					descriptionBlocks: jobPost.descriptionBlocks,
 					interviewNotes: jobPost.interviewNotes,
+					beginnerFriendly: jobPost.beginnerFriendly,
+					instantInterview: jobPost.instantInterview,
 					rejectionReason: jobPost.rejectionReason,
 					riskFlags: jobPost.riskFlags,
 					publishedAt: jobPost.publishedAt,
