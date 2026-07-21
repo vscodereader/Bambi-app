@@ -34,6 +34,7 @@ export interface ApiMarketplaceJob {
 	coverImage?: ApiJobMedia | null;
 	description?: string | null;
 	descriptionBlocks?: JobDescriptionBlock[] | null;
+	district?: string | null;
 	employerDisplayName?: string | null;
 	employerVerificationStatus?: string | null;
 	exposureType?: null | string;
@@ -134,8 +135,11 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		job.promotionLabel ?? "",
 		job.industryCategory,
 		job.region,
+		job.district ?? "",
 		job.employerVerificationStatus === "verified" ? "검증 완료" : "검수 완료",
 	].filter((tag) => tag.length > 0);
+	// 시/도 · 세부지역을 한 줄로 합친다. 세부지역이 없는 공고는 시/도만 남는다.
+	const location = [job.region, job.district].filter(Boolean).join(" · ");
 
 	return {
 		beginnerFriendly: job.beginnerFriendly ?? false,
@@ -146,6 +150,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 			"공고 상세와 면접 안내는 밤비 채팅에서 안전하게 확인할 수 있어요.",
 		descriptionBlocks: job.descriptionBlocks ?? [],
 		detailImages,
+		district: job.district ?? "",
 		exposureType: job.exposureType ?? null,
 		featured: job.employerVerificationStatus === "verified",
 		hours: job.workSchedule ?? "채팅으로 확인",
@@ -153,13 +158,14 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		instantInterview: job.instantInterview ?? false,
 		isPromoted: job.isPromoted ?? Boolean(job.promotionTier),
 		lastBoostedAt: job.lastBoostedAt ?? null,
-		location: job.region,
+		location: location || job.region,
 		pay: formatMarketplacePay(job),
 		...(job.performance ? { performance: job.performance } : {}),
 		pref: "면접 전 연락처 보호",
 		promotionLabel: job.promotionLabel ?? null,
 		promotionTier: job.promotionTier ?? null,
 		rating: toRating(job),
+		region: job.region,
 		reviews: toReviewCount(job.ratingCount),
 		status: job.status,
 		tags,
