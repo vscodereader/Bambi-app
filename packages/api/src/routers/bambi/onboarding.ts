@@ -50,12 +50,12 @@ const profileInput = z.object({
 	phoneNumber: z.string().min(3).max(30).optional(),
 });
 
-// 현재 유효한 법적 문서 버전. 웹 약관(/terms)·개인정보 처리방침(/privacy) 페이지의
-// 시행일(2026-07-10)과 일치시킨다. 문서를 개정하면 이 값을 올린다 — 재동의가 새 이력
-// 행으로 쌓인다.
+// 현재 유효한 법적 문서 버전. 각 웹 페이지의 시행일과 일치시킨다 — 이용약관(/terms)은
+// 2026-07-10, 개인정보 처리방침(/privacy)은 포트원 휴대폰 본인인증 도입 개정으로
+// 2026-07-21. 문서를 개정하면 해당 값을 올린다 — 재동의가 새 이력 행으로 쌓인다.
 const LEGAL_CONSENT_VERSIONS = {
 	terms_of_service: "2026-07-10",
-	privacy_policy: "2026-07-10",
+	privacy_policy: "2026-07-21",
 } as const;
 
 const profileUpdateInput = profileInput.omit({ gender: true }).extend({

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
 	return (
 		<LegalDoc
-			effectiveDate="2026년 7월 10일"
+			effectiveDate="2026년 7월 21일"
 			intro={
 				<>
 					<LegalParagraph>
@@ -86,6 +86,33 @@ export default function PrivacyPage() {
 						"- 계좌이체 시 : 은행명, 계좌번호 등",
 					]}
 				/>
+				<LegalParagraph className="pt-2">
+					마. 성인 전용 서비스 이용을 위한 휴대폰 본인인증(만 19세 이상 확인)
+					과정에서 아래와 같은 정보가 처리됩니다. 본인인증은 포트원(주)의
+					인증창(엔에이치엔케이씨피(NHN KCP) 휴대폰 본인확인)을 통해 이루어지며,
+					이름·주민등록번호 앞자리·통신사 정보는 인증창에 직접 입력되어
+					인증기관에서 처리되고 회사의 시스템을 경유하거나 저장하지 않습니다.
+				</LegalParagraph>
+				<LegalSubheading>
+					인증 완료 후 회사가 전달받아 이용하는 정보
+				</LegalSubheading>
+				<LegalParagraph>
+					- 이름, 생년월일, 성별, 휴대폰번호, 연계정보(CI), 중복가입확인정보(DI)
+				</LegalParagraph>
+				<LegalSubheading>회원 데이터베이스에 저장하는 정보</LegalSubheading>
+				<LegalParagraph>
+					- 휴대폰번호, 성별, 생년월일, 연계정보(CI)를 복호화할 수 없도록 일방향
+					암호화(SHA-256 해시)한 값. 이름·중복가입확인정보(DI)와 연계정보(CI)
+					원문은 저장하지 않습니다.
+				</LegalParagraph>
+				<LegalSubheading>
+					비회원(게스트)으로 성인 인증만 하는 경우
+				</LegalSubheading>
+				<LegalParagraph>
+					- 서버에 어떠한 정보도 저장하지 않으며, 이용자의 브라우저
+					쿠키(bambi_guest, 유효기간 30일)에 서명된 토큰으로 성별과 만료 시각만
+					보관합니다.
+				</LegalParagraph>
 			</LegalSection>
 
 			<LegalSection heading="개인정보의 수집 및 이용 목적">
@@ -98,11 +125,11 @@ export default function PrivacyPage() {
 				</LegalParagraph>
 				<LegalParagraph className="pt-2">나. 회원관리</LegalParagraph>
 				<LegalParagraph>
-					회원제 서비스 이용 및 제한적 본인 확인제에 따른 본인확인, 개인식별,
-					불량회원의 부정 이용방지와 비인가 사용방지, 가입의사 확인, 가입 및
-					가입횟수 제한, 만 14세 미만 아동 개인정보 수집 시 법정대리인 동의여부
-					확인, 추후 법정대리인 본인확인, 분쟁 조정을 위한 기록보존, 불만처리 등
-					민원처리, 고지사항 전달
+					회원제 서비스 이용에 따른 본인확인 및 개인식별, 만 19세 이상 성인 확인
+					및 미성년자 이용 차단(성인 전용 서비스), 연계정보(CI) 해시값 대조를
+					통한 중복 가입 방지, 성별 기반 서비스 접근 관리(커뮤니티 등),
+					불량회원의 부정 이용방지와 비인가 사용방지, 가입의사 확인, 분쟁 조정을
+					위한 기록보존, 불만처리 등 민원처리, 고지사항 전달
 				</LegalParagraph>
 				<LegalParagraph className="pt-2">
 					다. 신규 서비스 개발 및 마케팅·광고에의 활용
@@ -119,6 +146,12 @@ export default function PrivacyPage() {
 					이용자의 개인정보는 원칙적으로 개인정보의 수집 및 이용목적이 달성되면
 					지체 없이 파기합니다. 단, 다음의 정보에 대해서는 아래의 이유로 명시한
 					기간 동안 보존합니다.
+				</LegalParagraph>
+				<LegalParagraph>
+					회원의 본인인증 정보(휴대폰번호·성별·생년월일 및 연계정보(CI)
+					해시값)는 회원 프로필의 일부로 보관하며, 회원 탈퇴 시 프로필과 함께
+					지체 없이 파기합니다. 비회원(게스트) 성인 인증 쿠키(bambi_guest)는
+					발급 후 30일이 지나거나 회원 로그인·로그아웃 시 즉시 만료됩니다.
 				</LegalParagraph>
 				<LegalSubheading>
 					가. 회사 내부 방침에 의한 정보보유 사유
@@ -182,6 +215,17 @@ export default function PrivacyPage() {
 					이용자에게 '개인정보를 제공받는 자, 제공목적, 제공하는 개인정보 항목,
 					제공받는 개인정보의 보유 및 이용기간'을 사전에 고지하고 이에 대해
 					명시적·개별적 동의를 얻습니다.
+				</LegalParagraph>
+				<LegalSubheading>휴대폰 본인확인 서비스</LegalSubheading>
+				<LegalParagraph>
+					회사는 성인 전용 서비스 운영에 필요한 휴대폰 본인확인(만 19세 이상
+					확인)을 위하여 포트원(주)의 본인인증 서비스를 이용하며, 실제 휴대폰
+					본인확인은 인증기관인 엔에이치엔케이씨피(NHN KCP)와 이동통신
+					3사(SK텔레콤·KT·LG U+ 및 이들의 통신망을 사용하는 알뜰폰 사업자)를
+					통해 이루어집니다. 이 과정에서 이름·주민등록번호 앞자리·통신사 정보는
+					인증기관의 인증창에 직접 입력되어 처리되며 회사는 이를 수집·저장하지
+					않고, 인증 완료 결과인 이름, 생년월일, 성별, 휴대폰번호, 연계정보(CI),
+					중복가입확인정보(DI)만 전달받아 본인확인 목적으로 이용합니다.
 				</LegalParagraph>
 				<LegalSubheading>수집한 개인정보의 위탁</LegalSubheading>
 				<LegalParagraph>
