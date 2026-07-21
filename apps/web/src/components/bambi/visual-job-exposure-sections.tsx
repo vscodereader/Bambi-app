@@ -26,18 +26,21 @@ const cardPlaceholderCount = (jobsLength: number): number => {
 };
 
 // 빈 섹션에서 한 행만 남기려고 여분 자리표시를 breakpoint별로 숨긴다. base엔 flex/hidden이
-// 없으므로 display 클래스를 여기서 온전히 지정한다(min-h-32는 공고 카드와 비슷한 높이).
+// 없으므로 display 클래스를 여기서 온전히 지정한다.
+// 공고가 있는 행은 min-h를 주지 않는다 — 행 높이는 항상 실제 카드(자연 높이 약 118px)가
+// 결정하고 자리표시는 stretch로 따라온다(자리표시가 더 높으면 카드가 늘어나 하단 여백이 생긴다).
+// 빈 섹션만 카드 자연 높이에 맞춘 min-h-29(116px)로 스켈레톤 형태를 유지한다.
 const cardPlaceholderClass = (jobsLength: number, index: number): string => {
 	if (jobsLength > 0) {
-		return "flex min-h-32 w-full";
+		return "flex w-full";
 	}
 	if (index === 0) {
-		return "flex min-h-32 w-full";
+		return "flex min-h-29 w-full";
 	}
 	if (index < 3) {
-		return "hidden min-h-32 w-full lg:flex";
+		return "hidden min-h-29 w-full lg:flex";
 	}
-	return "hidden min-h-32 w-full xl:flex";
+	return "hidden min-h-29 w-full xl:flex";
 };
 
 type ExposureTone = "organic" | "recommended" | "special" | "urgent";
