@@ -19,6 +19,7 @@ import {
 	ALL_OPTION,
 	applyDiscoveryAxis,
 	discoveryAxisForTab,
+	districtOptionsForRegion,
 	MARKETPLACE_CATEGORIES,
 	MARKETPLACE_QUICK_FILTERS,
 	MARKETPLACE_REGIONS,
@@ -60,6 +61,7 @@ export function MarketplaceFilterControls({
 }: MarketplaceFilterSidebarProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
+	const districtOptions = districtOptionsForRegion(filters.region);
 	const subcategoryOptions = subcategoriesForCategory(filters.category);
 	const subcategoryDisabled = subcategoryOptions.length <= 1;
 	return (
@@ -69,7 +71,7 @@ export function MarketplaceFilterControls({
 				<Select
 					onValueChange={(value) => {
 						if (value) {
-							update({ region: value });
+							update({ district: ALL_OPTION, region: value });
 						}
 					}}
 					value={filters.region}
@@ -81,6 +83,31 @@ export function MarketplaceFilterControls({
 						{MARKETPLACE_REGIONS.map((region) => (
 							<SelectItem key={region} value={region}>
 								{region}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+			<div className="flex flex-col gap-2">
+				<span className="font-bold text-muted-foreground text-xs">
+					세부지역
+				</span>
+				<Select
+					disabled={districtOptions.length <= 1}
+					onValueChange={(value) => {
+						if (value) {
+							update({ district: value });
+						}
+					}}
+					value={filters.district}
+				>
+					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+						<SelectValue>{(value) => value}</SelectValue>
+					</SelectTrigger>
+					<SelectContent>
+						{districtOptions.map((district) => (
+							<SelectItem key={district} value={district}>
+								{district}
 							</SelectItem>
 						))}
 					</SelectContent>
@@ -338,7 +365,7 @@ export function MarketplaceAxisChips({
 						onClick={() =>
 							onChange(
 								axis === "region"
-									? { ...filters, region: option }
+									? { ...filters, district: ALL_OPTION, region: option }
 									: { ...filters, category: option, subcategory: ALL_OPTION }
 							)
 						}
