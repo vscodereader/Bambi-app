@@ -27,6 +27,31 @@ const optionalText = (max: number) =>
 		.transform((value) => (value.length === 0 ? null : value))
 		.nullish();
 
+// 무통장입금 계좌. 각 필드 필수(공백 불가)이며 앞뒤 공백은 제거해 저장한다.
+const bankAccountInput = z.object({
+	accountNumber: z
+		.string()
+		.trim()
+		.min(1, "계좌번호를 입력해 주세요.")
+		.max(60, "계좌번호는 60자 이내로 입력해 주세요."),
+	bank: z
+		.string()
+		.trim()
+		.min(1, "은행명을 입력해 주세요.")
+		.max(60, "은행명은 60자 이내로 입력해 주세요."),
+	holder: z
+		.string()
+		.trim()
+		.min(1, "예금주를 입력해 주세요.")
+		.max(60, "예금주는 60자 이내로 입력해 주세요."),
+});
+
+const updatePaymentAccountsInput = z.object({
+	bankAccounts: z
+		.array(bankAccountInput)
+		.max(10, "계좌는 최대 10개까지 등록할 수 있습니다."),
+});
+
 const updateFooterInput = z.object({
 	footerIntro: optionalText(500),
 	operator: optionalText(120),
@@ -70,5 +95,31 @@ export const siteSettingsRouter = {
 				})
 				.returning(FOOTER_COLUMNS);
 			return saved ?? null;
+		}),
+
+	// 무통장입금 계좌 공개 조회. 결제 안내(공고 등록·광고 관리)만 소비하므로 푸터 조회와
+	// 분리해, 사이트 전역 푸터 쿼리에 계좌번호가 실려 나가지 않게 한다. 미설정이면 빈 배열.
+	getPaymentAccounts: publicProcedure.handler(async () => {
+		const [row] = await db
+			.select({ bankAccounts: bambiSiteSettings.bankAccounts })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+		return row?.bankAccounts ?? [];
+	}),
+
+	// 운영자 전용 계좌 저장. 같은 단일 행을 upsert 하되 계좌 컬럼만 갱신해 푸터 값은 보존한다.
+	updatePaymentAccounts: adminProcedure
+		.input(updatePaymentAccountsInput)
+		.handler(async ({ input }) => {
+			const [saved] = await db
+				.insert(bambiSiteSettings)
+				.values({ bankAccounts: input.bankAccounts, id: SETTINGS_ROW_ID })
+				.onConflictDoUpdate({
+					target: bambiSiteSettings.id,
+					set: { bankAccounts: input.bankAccounts },
+				})
+				.returning({ bankAccounts: bambiSiteSettings.bankAccounts });
+			return saved?.bankAccounts ?? [];
 		}),
 };

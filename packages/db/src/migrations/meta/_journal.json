@@ -183,6 +183,13 @@
       "when": 1784617728389,
       "tag": "0025_many_ser_duncan",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784618919884,
+      "tag": "0026_ordinary_tarot",
+      "breakpoints": true
     }
   ]
 }

@@ -34,6 +34,23 @@ const EMPTY_FORM: FooterForm = {
 	operator: "",
 };
 
+// 편집용 행에는 안정적인 key를 위해 클라이언트 전용 id를 붙인다(서버 저장 시 제거).
+interface AccountRow {
+	accountNumber: string;
+	bank: string;
+	holder: string;
+	id: string;
+}
+
+const newAccountRow = (
+	account?: Pick<AccountRow, "accountNumber" | "bank" | "holder">
+): AccountRow => ({
+	accountNumber: account?.accountNumber ?? "",
+	bank: account?.bank ?? "",
+	holder: account?.holder ?? "",
+	id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+});
+
 export default function ModeratorSiteSettingsPage() {
 	const queryClient = useQueryClient();
 	const settingsQuery = useQuery(
@@ -76,6 +93,66 @@ export default function ModeratorSiteSettingsPage() {
 	const onSubmit = (event: FormEvent) => {
 		event.preventDefault();
 		saveMutation.mutate(form);
+	};
+
+	const accountsQuery = useQuery(
+		orpc.bambi.siteSettings.getPaymentAccounts.queryOptions()
+	);
+	const [accounts, setAccounts] = useState<AccountRow[]>([]);
+
+	// 저장된 계좌가 오면 편집 행으로 채운다.
+	useEffect(() => {
+		const data = accountsQuery.data;
+		if (!data) {
+			return;
+		}
+		setAccounts(data.map((account) => newAccountRow(account)));
+	}, [accountsQuery.data]);
+
+	const saveAccountsMutation = useMutation(
+		orpc.bambi.siteSettings.updatePaymentAccounts.mutationOptions({
+			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("무통장입금 계좌를 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getPaymentAccounts.queryKey(),
+				});
+			},
+		})
+	);
+
+	const updateAccount =
+		(id: string, key: "accountNumber" | "bank" | "holder") =>
+		(event: { target: { value: string } }) =>
+			setAccounts((prev) =>
+				prev.map((account) =>
+					account.id === id
+						? { ...account, [key]: event.target.value }
+						: account
+				)
+			);
+
+	const addAccount = () => setAccounts((prev) => [...prev, newAccountRow()]);
+
+	const removeAccount = (id: string) =>
+		setAccounts((prev) => prev.filter((account) => account.id !== id));
+
+	const onSubmitAccounts = (event: FormEvent) => {
+		event.preventDefault();
+		// 전부 빈 행(실수로 추가만 한 행)은 제외하고 보낸다. 부분 입력은 서버 검증이 잡는다.
+		const bankAccounts = accounts
+			.filter(
+				(account) =>
+					account.bank.trim() ||
+					account.accountNumber.trim() ||
+					account.holder.trim()
+			)
+			.map((account) => ({
+				accountNumber: account.accountNumber.trim(),
+				bank: account.bank.trim(),
+				holder: account.holder.trim(),
+			}));
+		saveAccountsMutation.mutate({ bankAccounts });
 	};
 
 	return (
@@ -156,6 +233,87 @@ export default function ModeratorSiteSettingsPage() {
 								type="submit"
 							>
 								{saveMutation.isPending ? "저장 중…" : "저장"}
+							</Button>
+						</div>
+					</form>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>무통장입금 계좌</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<form className="flex flex-col gap-5" onSubmit={onSubmitAccounts}>
+						<p className="m-0 text-muted-foreground text-sm">
+							공고 결제 안내에 노출됩니다. 등록된 계좌가 없으면 안내 화면은
+							고객센터 문의 문구로 대체됩니다.
+						</p>
+						{accounts.length === 0 ? (
+							<p className="m-0 text-muted-foreground text-sm">
+								등록된 계좌가 없습니다. 아래에서 계좌를 추가해 주세요.
+							</p>
+						) : (
+							<div className="flex flex-col gap-4">
+								{accounts.map((account, index) => (
+									<div
+										className="grid grid-cols-1 gap-3 rounded-lg border p-4 md:grid-cols-[1fr_1fr_1fr_auto]"
+										key={account.id}
+									>
+										<div className="flex flex-col gap-2">
+											<Label htmlFor={`bank-${account.id}`}>은행명</Label>
+											<Input
+												id={`bank-${account.id}`}
+												onChange={updateAccount(account.id, "bank")}
+												placeholder="예: 국민은행"
+												value={account.bank}
+											/>
+										</div>
+										<div className="flex flex-col gap-2">
+											<Label htmlFor={`accountNumber-${account.id}`}>
+												계좌번호
+											</Label>
+											<Input
+												id={`accountNumber-${account.id}`}
+												onChange={updateAccount(account.id, "accountNumber")}
+												placeholder="예: 123456-01-234567"
+												value={account.accountNumber}
+											/>
+										</div>
+										<div className="flex flex-col gap-2">
+											<Label htmlFor={`holder-${account.id}`}>예금주</Label>
+											<Input
+												id={`holder-${account.id}`}
+												onChange={updateAccount(account.id, "holder")}
+												placeholder="예: 밤비"
+												value={account.holder}
+											/>
+										</div>
+										<div className="flex items-end">
+											<Button
+												aria-label={`계좌 ${index + 1} 삭제`}
+												onClick={() => removeAccount(account.id)}
+												type="button"
+												variant="outline"
+											>
+												삭제
+											</Button>
+										</div>
+									</div>
+								))}
+							</div>
+						)}
+						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+							<Button onClick={addAccount} type="button" variant="outline">
+								계좌 추가
+							</Button>
+							<Button
+								disabled={
+									saveAccountsMutation.isPending || accountsQuery.isLoading
+								}
+								type="submit"
+							>
+								{saveAccountsMutation.isPending ? "저장 중…" : "계좌 저장"}
 							</Button>
 						</div>
 					</form>

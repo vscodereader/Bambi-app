@@ -15,9 +15,10 @@ import {
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
 import { useQuery } from "@tanstack/react-query";
-import { Info } from "lucide-react";
+import { Ban, Info } from "lucide-react";
 import { useMemo } from "react";
 
+import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
 import { FieldError, FieldLabel } from "@/components/bambi/form-message";
 import {
 	type AdCatalogProduct,
@@ -267,6 +268,23 @@ export function JobExposureFields({
 								id="paymentMethod-error"
 								message={errors?.paymentMethod}
 							/>
+							{paymentMethod === "card" ? (
+								<Alert variant="warning">
+									<Ban />
+									<AlertDescription>
+										신용카드는 아직 지원하지 않는 결제 방법입니다. 곧 지원할
+										예정이에요. 지금은 무통장입금으로 진행해 주세요.
+									</AlertDescription>
+								</Alert>
+							) : null}
+							{paymentMethod === "bank_transfer" ? (
+								<Alert>
+									<Info />
+									<AlertDescription>
+										<BankTransferGuide amount={exposureAmount} />
+									</AlertDescription>
+								</Alert>
+							) : null}
 						</div>
 					) : null}
 
