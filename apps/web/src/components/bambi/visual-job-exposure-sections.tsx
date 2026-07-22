@@ -59,7 +59,6 @@ interface ExposureSectionProps {
 	fillEmpty?: boolean;
 	jobs: Job[];
 	meta: string;
-	onChat: (job: Job) => void;
 	onOpen: (job: Job) => void;
 	selectedJobId?: string;
 	title: string;
@@ -70,7 +69,6 @@ function ExposureSection({
 	fillEmpty = false,
 	jobs,
 	meta,
-	onChat,
 	onOpen,
 	selectedJobId,
 	title,
@@ -96,7 +94,6 @@ function ExposureSection({
 						active={job.id === selectedJobId}
 						job={job}
 						key={`${tone}-${job.id}`}
-						onChat={onChat}
 						onOpen={onOpen}
 						tone={tone}
 					/>
@@ -116,7 +113,6 @@ interface VisualJobExposureSectionsProps {
 	// 급구·추천 사이(공고 0개 빈 상태에서도)에 끼워 넣을 임의 콘텐츠 슬롯
 	communitySlot?: ReactNode;
 	jobs: Job[];
-	onChat: (job: Job) => void;
 	onOpen: (job: Job) => void;
 	sections: MarketplaceJobSections;
 	selectedJobId?: string;
@@ -125,7 +121,6 @@ interface VisualJobExposureSectionsProps {
 export function VisualJobExposureSections({
 	communitySlot,
 	jobs,
-	onChat,
 	onOpen,
 	sections,
 	selectedJobId,
@@ -162,7 +157,6 @@ export function VisualJobExposureSections({
 				fillEmpty
 				jobs={sections.special}
 				meta="프리미엄 노출"
-				onChat={onChat}
 				onOpen={onOpen}
 				title="스페셜 채용"
 				tone="special"
@@ -171,7 +165,6 @@ export function VisualJobExposureSections({
 				fillEmpty
 				jobs={sections.urgent}
 				meta="최근 끌어올림"
-				onChat={onChat}
 				onOpen={onOpen}
 				title="급구 채용"
 				tone="urgent"
@@ -182,7 +175,6 @@ export function VisualJobExposureSections({
 				fillEmpty
 				jobs={sections.recommended}
 				meta="상단 추천"
-				onChat={onChat}
 				onOpen={onOpen}
 				title="추천 채용"
 				tone="recommended"
@@ -190,7 +182,6 @@ export function VisualJobExposureSections({
 			<ExposureSection
 				jobs={sections.organic}
 				meta="최신순"
-				onChat={onChat}
 				onOpen={onOpen}
 				selectedJobId={selectedJobId}
 				title="전체 공고"
