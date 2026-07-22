@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@bambi-app/db";
 import {
+	account,
 	invitation,
 	member,
+	session,
 	team,
 	teamMember,
 	user,
@@ -33,6 +35,8 @@ import {
 	eq,
 	inArray,
 	isNotNull,
+	isNull,
+	lte,
 	sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -44,6 +48,7 @@ import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
+import { resolveWithdrawalRetentionDays } from "../../services/bambi-member-policy";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
@@ -2009,4 +2014,60 @@ export const moderationRouter = {
 				category: row.category as string | null,
 			};
 		}),
+
+	// 탈퇴 계정 개인정보 파기 배치. 보존기간(운영자 설정, 기본 30일) 경과분의
+	// PII를 스크럽한다. user 행 자체는 지우지 않는다 — 채팅·리뷰·신고 등 상대방
+	// 데이터가 onDelete 미지정(RESTRICT) FK로 물려 있어 행 삭제는 실패하거나 상대방
+	// 기록까지 깨진다. 파기 후 이메일이 tombstone으로 바뀌어 원 이메일 재가입이
+	// 다시 열린다. cron 인프라가 없어 운영자 수동/외부 호출로 트리거한다.
+	purgeWithdrawnAccounts: adminProcedure.handler(async () => {
+		const retentionDays = await resolveWithdrawalRetentionDays();
+		const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+		const targets = await db
+			.select({ id: user.id })
+			.from(user)
+			.where(
+				and(
+					isNotNull(user.deletedAt),
+					lte(user.deletedAt, cutoff),
+					isNull(user.purgedAt)
+				)
+			);
+		if (targets.length === 0) {
+			return { purgedCount: 0 };
+		}
+		const ids = targets.map((row) => row.id);
+
+		await db.transaction(async (tx) => {
+			await tx.delete(session).where(inArray(session.userId, ids));
+			// 비밀번호 등 자격증명 파기.
+			await tx.delete(account).where(inArray(account.userId, ids));
+			await tx
+				.update(bambiProfile)
+				.set({
+					displayName: "탈퇴한 회원",
+					phoneNumber: null,
+					gender: null,
+					birthDate: null,
+					ciHash: null,
+					diHash: null,
+					isPhoneVerified: false,
+				})
+				.where(inArray(bambiProfile.userId, ids));
+			// 이메일은 unique 제약이라 사용자별 tombstone으로 치환한다.
+			for (const id of ids) {
+				await tx
+					.update(user)
+					.set({
+						email: `withdrawn-${id}@invalid.bambi`,
+						name: "탈퇴한 회원",
+						image: null,
+						purgedAt: new Date(),
+					})
+					.where(eq(user.id, id));
+			}
+		});
+
+		return { purgedCount: ids.length };
+	}),
 };

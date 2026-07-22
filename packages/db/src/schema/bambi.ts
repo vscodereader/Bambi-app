@@ -583,6 +583,9 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 		.$type<{ accountNumber: string; bank: string; holder: string }[]>()
 		.default([])
 		.notNull(),
+	// 회원 탈퇴 후 개인정보 보존기간(일). 운영자 사이트 설정에서 편집한다.
+	// null이면 코드 기본값(DEFAULT_WITHDRAWAL_RETENTION_DAYS=30)으로 폴백한다.
+	withdrawalRetentionDays: integer("withdrawal_retention_days"),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())
