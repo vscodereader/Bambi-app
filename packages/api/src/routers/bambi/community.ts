@@ -21,13 +21,16 @@ import {
 } from "drizzle-orm";
 import z from "zod";
 
-import { protectedProcedure } from "../../index";
+import { protectedProcedure, publicProcedure } from "../../index";
 import {
 	type BambiAccessProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
 import { assertNoBannedWords } from "../../services/bambi-banned-words";
-import { requireCommunityMember } from "../../services/bambi-community-authz";
+import {
+	findCommunityMember,
+	requireCommunityMember,
+} from "../../services/bambi-community-authz";
 import {
 	hashCommunityPassword,
 	verifyCommunityPassword,
@@ -166,10 +169,13 @@ const setCommentStatusByAdminInput = z.object({
 	status: communityAdminStatusSchema,
 });
 
+// profile null은 미자격·비로그인 열람(overview public 경로) — 잠금 우회 없음.
 const canBypassLock = (
 	post: { authorUserId: string },
-	profile: BambiAccessProfile
-): boolean => post.authorUserId === profile.userId || profile.role === "admin";
+	profile: BambiAccessProfile | null
+): boolean =>
+	profile !== null &&
+	(post.authorUserId === profile.userId || profile.role === "admin");
 
 export const requirePostReadAccess = (
 	post: { authorUserId: string; isLocked: boolean; passwordHash: string },
@@ -191,7 +197,7 @@ const maskLockedSummaries = <
 	T extends { authorUserId: string; isLocked: boolean; title: string },
 >(
 	items: T[],
-	profile: BambiAccessProfile
+	profile: BambiAccessProfile | null
 ): T[] =>
 	items.map((item) =>
 		item.isLocked && !canBypassLock(item, profile)
@@ -370,8 +376,11 @@ export const communityRouter = {
 			};
 		}),
 
-	overview: protectedProcedure.handler(async ({ context }) => {
-		const profile = await requireCommunityMember(context.session);
+	// 홈 미리보기는 미자격자(비회원·남성·비광고 업소)에게도 게시판별 상위 4개까지 공개한다.
+	// 상세·목록·쓰기는 여전히 requireCommunityMember 뒤에 있고, 여기서는 요약(제목·작성자
+	// 표시명·카운트)만 나가며 비밀글 제목은 자격 무관하게 마스킹된다(잠금 우회는 자격자만).
+	overview: publicProcedure.handler(async ({ context }) => {
+		const profile = await findCommunityMember(context.session);
 
 		const windowStart = bestWindowStart();
 		const [best, free, workTalk, market, notice] = await Promise.all([
