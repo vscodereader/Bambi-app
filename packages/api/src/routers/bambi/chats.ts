@@ -24,6 +24,7 @@ import {
 import {
 	getChatRecipientUserId,
 	getUnreadMessageCount,
+	getUnreadRoomCount,
 	markChatMessagesRead,
 } from "../../services/bambi-chat-read-state";
 import {
@@ -511,6 +512,17 @@ export const chatsRouter = {
 		);
 	}),
 
+	// 헤더 채팅 버튼 핀·모바일 탭 뱃지용 경량 집계. listMine은 방마다 상대 이름·
+	// 마지막 메시지·안 읽음 수를 모두 조립해 무거우므로 재사용하지 않고, 안 읽은
+	// 방 수만 한 번의 쿼리로 센다.
+	unreadState: protectedProcedure.handler(async ({ context }) => {
+		const profile = await requireActiveBambiProfile(context.session);
+
+		return {
+			unreadRoomCount: await getUnreadRoomCount({ userId: profile.userId }),
+		};
+	}),
+
 	// 내가 참여한 방들의 "다가오는" 면접 목록. status가 proposed·confirmed이고
 	// scheduledAt이 현재 이후인 일정만 시간순으로 모아 방을 넘나들며 보여준다.
 	listMyUpcomingInterviews: protectedProcedure.handler(async ({ context }) => {
@@ -846,6 +858,10 @@ export const chatsRouter = {
 					unreadCount,
 					userId: profile.userId,
 				});
+				// 읽은 본인의 유저 채널로도 목록 갱신 신호를 보내, 방 소켓룸에
+				// 들어가 있지 않은 헤더 채팅 버튼·모바일 탭이 안 읽음 핀/뱃지를
+				// 즉시 끄게 한다(emitUnreadUpdated는 방 소켓룸에만 도달한다).
+				emitChatListUpdated([profile.userId], { roomId: room.id });
 			}
 
 			return {

@@ -1,8 +1,9 @@
 import {
 	chatMessage,
 	chatMessageReadReceipt,
+	chatRoom,
 } from "@bambi-app/db/schema/bambi";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, countDistinct, eq, inArray, isNull, ne, or } from "drizzle-orm";
 
 interface ChatParticipantRoom {
 	employerUserId: string;
@@ -114,6 +115,41 @@ export const getUnreadMessageCount = async ({
 		messageIds,
 		readMessageIds: readReceipts.map(({ messageId }) => messageId),
 	});
+};
+
+// 헤더 채팅 버튼의 안 읽음 핀·모바일 탭 뱃지용 전체 집계. 내가 참여한 방들에서
+// 상대가 보낸 메시지 중 내 읽음 영수증이 없는 게 하나라도 있는 방의 수를 센다.
+// countDistinct로 한 번의 쿼리에서 방 단위로 접어 세므로 listMine처럼 방마다
+// 순회하지 않는다.
+export const getUnreadRoomCount = async ({
+	userId,
+}: {
+	userId: string;
+}): Promise<number> => {
+	const { db } = await import("@bambi-app/db");
+	const [result] = await db
+		.select({ value: countDistinct(chatMessage.chatRoomId) })
+		.from(chatMessage)
+		.innerJoin(chatRoom, eq(chatRoom.id, chatMessage.chatRoomId))
+		.leftJoin(
+			chatMessageReadReceipt,
+			and(
+				eq(chatMessageReadReceipt.messageId, chatMessage.id),
+				eq(chatMessageReadReceipt.readerUserId, userId)
+			)
+		)
+		.where(
+			and(
+				or(
+					eq(chatRoom.employerUserId, userId),
+					eq(chatRoom.jobSeekerUserId, userId)
+				),
+				ne(chatMessage.senderUserId, userId),
+				isNull(chatMessageReadReceipt.messageId)
+			)
+		);
+
+	return result?.value ?? 0;
 };
 
 export const markChatMessagesRead = async ({
