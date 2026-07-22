@@ -155,6 +155,43 @@ export default function ModeratorSiteSettingsPage() {
 		saveAccountsMutation.mutate({ bankAccounts });
 	};
 
+	const memberPolicyQuery = useQuery(
+		orpc.bambi.siteSettings.getMemberPolicy.queryOptions()
+	);
+	const [retentionDays, setRetentionDays] = useState("");
+
+	// 저장된 값이 오면 폼에 채운다(미설정이면 빈 값 → 기본값 placeholder 노출).
+	useEffect(() => {
+		const data = memberPolicyQuery.data;
+		if (!data) {
+			return;
+		}
+		setRetentionDays(data.days === null ? "" : String(data.days));
+	}, [memberPolicyQuery.data]);
+
+	const saveMemberPolicyMutation = useMutation(
+		orpc.bambi.siteSettings.updateMemberPolicy.mutationOptions({
+			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("회원 정책을 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getMemberPolicy.queryKey(),
+				});
+			},
+		})
+	);
+
+	const onSubmitMemberPolicy = (event: FormEvent) => {
+		event.preventDefault();
+		const trimmed = retentionDays.trim();
+		const parsed = trimmed === "" ? null : Number(trimmed);
+		if (parsed !== null && !Number.isInteger(parsed)) {
+			toast.error("보존기간은 일 단위 정수로 입력해 주세요.");
+			return;
+		}
+		saveMemberPolicyMutation.mutate({ withdrawalRetentionDays: parsed });
+	};
+
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<div className="flex flex-col gap-1">
@@ -314,6 +351,43 @@ export default function ModeratorSiteSettingsPage() {
 								type="submit"
 							>
 								{saveAccountsMutation.isPending ? "저장 중…" : "계좌 저장"}
+							</Button>
+						</div>
+					</form>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>회원 정책</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<form className="flex flex-col gap-5" onSubmit={onSubmitMemberPolicy}>
+						<div className="flex flex-col gap-2 md:max-w-xs">
+							<Label htmlFor="withdrawalRetentionDays">
+								탈퇴 개인정보 보존기간(일)
+							</Label>
+							<Input
+								id="withdrawalRetentionDays"
+								inputMode="numeric"
+								onChange={(event) => setRetentionDays(event.target.value)}
+								placeholder={String(memberPolicyQuery.data?.defaultDays ?? 30)}
+								value={retentionDays}
+							/>
+							<p className="m-0 text-muted-foreground text-xs">
+								탈퇴 후 이 기간이 지나면 파기 배치가 개인정보를 삭제해요.
+								비워두면 기본값을 사용하고, 탈퇴 안내 문구에도 그대로 표시돼요.
+							</p>
+						</div>
+						<div className="flex justify-end">
+							<Button
+								disabled={
+									saveMemberPolicyMutation.isPending ||
+									memberPolicyQuery.isLoading
+								}
+								type="submit"
+							>
+								{saveMemberPolicyMutation.isPending ? "저장 중…" : "저장"}
 							</Button>
 						</div>
 					</form>
