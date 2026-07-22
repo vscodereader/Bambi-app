@@ -7,6 +7,13 @@
 // query로 불러오되 폴백 값을 먼저 표시해 로딩 깜빡임을 없앤다.
 "use client";
 
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogTitle,
+	DialogTrigger,
+} from "@bambi-app/ui/components/dialog";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -87,14 +94,20 @@ export function SiteFooter({
 								{link.label}
 							</Link>
 						))}
-						<Link
-							className="text-muted-foreground text-sm no-underline transition-colors hover:text-foreground"
-							href={"/refund" as Route}
-							rel="noreferrer"
-							target="_blank"
-						>
-							환불 정책
-						</Link>
+						{/* 환불 정책은 페이지 이동 대신 안내 다이얼로그로 노출한다. 링크 톤 유지. */}
+						<Dialog>
+							<DialogTrigger className="cursor-pointer border-0 bg-transparent p-0 text-muted-foreground text-sm no-underline transition-colors hover:text-foreground">
+								환불 정책
+							</DialogTrigger>
+							<DialogContent>
+								<div className="flex flex-col gap-2">
+									<DialogTitle>환불 정책</DialogTitle>
+									<DialogDescription>
+										무통장: 수수료 5% + 광고 게재 기간을 제외한 금액
+									</DialogDescription>
+								</div>
+							</DialogContent>
+						</Dialog>
 						<a
 							className="text-muted-foreground text-sm no-underline transition-colors hover:text-foreground"
 							href={`mailto:${email}`}
