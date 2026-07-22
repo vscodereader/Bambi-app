@@ -172,12 +172,15 @@ const TOTAL_RING_SLOTS = RIGHT_RING_BASE + SIDE_BANNER_MAX_SLOTS;
 // 프리미엄 풀을 공유한다 — 후보 = exposureType이 배너 3종(AD_BANNER_EXPOSURE_TYPES) 중
 // 하나이고 활성(미만료)인 공고 전체(레거시 left-banner/right-banner 공고 포함).
 //
-// 화면 전체에서 광고 배너는 언제나 딱 한 칸에만 노출된다. 나머지 칸은 null(호출부가 자리표시로
-// 렌더). 풀을 id 오름차순으로 정렬해 링 기준 순서를 고정하고(DB 정렬 순서 의존 제거), 8칸 링에서
-// 활성 칸이 매 버킷 한 칸씩 전진한다: 좌1→좌2→좌3→중간1→중간2→우1→우2→우3→좌1…. 광고가 여럿이면
-// 칸이 전진할 때마다 표시 광고도 pool[bucket mod n]로 라운드로빈 교체되고, 1개면 그 광고가 칸만
-// 옮겨 다닌다. 같은 버킷이면 어느 인스턴스·요청이든 같은 결과다(다중 인스턴스 정합). 각 그룹은
-// 고정 길이(좌3·중2·우3) 배열이며 활성 칸만 공고, 나머지는 null이다. 풀이 비면 전부 null이다.
+// 컨베이어(밀어내기) 순환: 한 광고는 언제나 정확히 한 칸에만 존재한다. 풀을 id 오름차순으로
+// 정렬해 링 기준 순서를 고정하고(DB 정렬 순서 의존 제거), n개 광고를 길이 L=max(n,8)인 링에
+// 얹어 매 버킷 전체가 한 칸씩 전진시킨다. 슬롯 s(0..7 = 좌0-2·중3-4·우5-7)의 광고는 pool[j],
+// j=(((s−bucket) mod L)+L) mod L 이 n 미만이면, 아니면 null(대기 중, 호출부가 자리표시로 렌더).
+// 각 광고는 좌1→좌2→좌3→중1→중2→우1→우2→우3까지 걸어간 뒤 화면에서 빠지고 L−8버킷 대기했다가
+// 좌1로 재진입한다. n≥8이면 8칸 전부 서로 다른 광고가 동시 노출되고, n<8이면 등록순 연속 칸을
+// 채운 "열차"가 함께 이동하며, n=1이면 그 광고가 슬롯 (bucket mod 8) 한 칸만 옮겨 다닌다. 같은
+// 버킷이면 어느 인스턴스·요청이든 같은 결과다(다중 인스턴스 정합). 각 그룹은 고정 길이(좌3·중2·
+// 우3) 배열이며 대기 칸은 null이다. 풀이 비면 전부 null이다.
 export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	rows: TRow[],
 	now: Date,
@@ -213,19 +216,22 @@ export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 		return { leftBanner, premiumBanner, rightBanner };
 	}
 
-	// 이번 버킷의 활성 칸(0..7)과 표시 광고(라운드로빈). now는 항상 양수라 모듈러는 안전하지만
-	// 음수 안전형으로 감아 둔다.
-	const activeSlot =
-		((bucket % TOTAL_RING_SLOTS) + TOTAL_RING_SLOTS) % TOTAL_RING_SLOTS;
-	const ad = pool[((bucket % n) + n) % n] as TRow;
-
-	if (activeSlot < PREMIUM_RING_BASE) {
-		leftBanner[activeSlot - LEFT_RING_BASE] = ad;
-	} else if (activeSlot < RIGHT_RING_BASE) {
-		premiumBanner[activeSlot - PREMIUM_RING_BASE] = ad;
-	} else {
-		rightBanner[activeSlot - RIGHT_RING_BASE] = ad;
-	}
+	// 컨베이어 링 길이(광고가 8개 미만이어도 8칸 링에 대기 자리를 둔다). 슬롯 s의 광고는
+	// pool[j] (j=((s−bucket) mod ring)), j<n이면 노출·아니면 대기. now는 항상 양수라 모듈러는
+	// 안전하지만 음수 안전형으로 감아 둔다.
+	const ring = Math.max(n, TOTAL_RING_SLOTS);
+	const place = (slots: (TRow | null)[], base: number): void => {
+		for (let i = 0; i < slots.length; i++) {
+			const s = base + i;
+			const j = (((s - bucket) % ring) + ring) % ring;
+			if (j < n) {
+				slots[i] = pool[j] as TRow;
+			}
+		}
+	};
+	place(leftBanner, LEFT_RING_BASE);
+	place(premiumBanner, PREMIUM_RING_BASE);
+	place(rightBanner, RIGHT_RING_BASE);
 
 	return { leftBanner, premiumBanner, rightBanner };
 };
