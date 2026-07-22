@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
 	COMMUNITY_BOARDS,
@@ -43,11 +44,14 @@ export const accentClassName: Record<CommunityBoardKey, string> = {
 };
 
 export function BoardPreviewCard({
+	blockedNotice,
 	boardKey,
 	className,
 	emptyText,
 	posts,
 }: {
+	// 지정 시 글 클릭을 막고 이 문구를 토스트로 안내한다(미자격자 홈 미리보기).
+	blockedNotice?: string;
 	boardKey: CommunityBoardKey;
 	className?: string;
 	// 빈 상태 문구 — 미지정 시 기존 "첫 글" 안내를 그대로 쓴다(운영자 전용 게시판은 별도 문구 주입).
@@ -115,6 +119,12 @@ export function BoardPreviewCard({
 									) as Route
 								}
 								key={post.id}
+								onClick={(event) => {
+									if (blockedNotice) {
+										event.preventDefault();
+										toast(blockedNotice);
+									}
+								}}
 							>
 								<span className="flex min-w-0 items-center gap-1.5">
 									{post.isLocked ? (
