@@ -19,7 +19,7 @@ describe("bambi native helpers", () => {
 		const result = validateNativeJobForm({
 			...emptyNativeJobForm,
 			description: "상세 설명은 10자 이상 입력해야 합니다.",
-			industryCategory: "라운지",
+			industryCategory: "룸싸롱",
 			organizationId: "org-1",
 			payAmount: "180000",
 			payUnit: "일급",
@@ -31,7 +31,7 @@ describe("bambi native helpers", () => {
 		expect(result).toEqual({
 			input: {
 				description: "상세 설명은 10자 이상 입력해야 합니다.",
-				industryCategory: "라운지",
+				industryCategory: "룸싸롱",
 				organizationId: "org-1",
 				payAmount: 180_000,
 				payUnit: "일급",

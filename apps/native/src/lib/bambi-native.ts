@@ -30,7 +30,8 @@ export interface NativeJobForm {
 
 export interface NativeJobPostInput {
 	description: string;
-	industryCategory: string;
+	// 서버 입력이 업종 enum이라 제출 페이로드는 확정 목록 값으로 좁힌다(폼 상태는 string 유지).
+	industryCategory: NativeIndustryOption;
 	interviewNotes?: string;
 	organizationId: string;
 	payAmount: number;
@@ -65,12 +66,18 @@ export interface NativeScheduleSummary {
 }
 
 export const industryOptions = [
-	"라운지",
-	"바",
-	"클럽",
-	"노래방",
-	"기타",
+	"룸싸롱",
+	"텐프로/쩜오",
+	"노래주점",
+	"단란주점",
+	"다방",
+	"BAR",
+	"마사지",
+	"요정",
 ] as const;
+
+export type NativeIndustryOption = (typeof industryOptions)[number];
+
 export const regionOptions = [
 	"서울",
 	"경기",
@@ -168,12 +175,8 @@ export const validateNativeJobForm = (
 		errors.title = "공고 제목은 2자 이상 80자 이하로 입력해 주세요.";
 	}
 
-	if (
-		!(
-			industryCategory.length > 0 &&
-			industryCategory.length <= OPTION_MAX_LENGTH
-		)
-	) {
+	// 서버 입력이 업종 enum이라 길이가 아니라 확정 목록 소속으로 검사한다.
+	if (!(industryOptions as readonly string[]).includes(industryCategory)) {
 		errors.industryCategory = "업종을 선택해 주세요.";
 	}
 
@@ -224,7 +227,8 @@ export const validateNativeJobForm = (
 	return {
 		input: {
 			description,
-			industryCategory,
+			// 위 검증이 industryOptions 소속을 보장한 뒤에만 이 분기에 온다.
+			industryCategory: industryCategory as NativeIndustryOption,
 			interviewNotes: interviewNotes || undefined,
 			organizationId,
 			payAmount,
