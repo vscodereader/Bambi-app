@@ -83,6 +83,21 @@ const seedMembership = async (userId: string, role: "member" | "owner") => {
 		role,
 		createdAt: new Date(),
 	});
+	return organizationId;
+};
+
+// 같은 조직에 다른 멤버를 추가한다(팀에 멤버가 남은 상황 재현).
+const seedOrganizationMember = async (
+	organizationId: string,
+	userId: string
+) => {
+	await db.insert(member).values({
+		id: `member_${randomUUID()}`,
+		organizationId,
+		userId,
+		role: "staff",
+		createdAt: new Date(),
+	});
 };
 
 describe("withdrawMyAccount 회원 탈퇴", () => {
@@ -122,13 +137,38 @@ describe("withdrawMyAccount 회원 탈퇴", () => {
 		expect(memberships).toHaveLength(0);
 	});
 
-	it("조직 소유자는 탈퇴가 차단된다", async () => {
+	it("소유 조직에 다른 멤버가 남아 있으면 탈퇴가 차단되고, 멤버 정리 후 탈퇴할 수 있다", async () => {
+		const ownerId = await seedUser();
+		const organizationId = await seedMembership(ownerId, "owner");
+		const otherUserId = await seedUser();
+		await seedOrganizationMember(organizationId, otherUserId);
+
+		// 다른 멤버가 남아 있으면 거절.
+		await expect(withdrawClient(ownerId)()).rejects.toThrow("다른 멤버");
+
+		const [blocked] = await db.select().from(user).where(eq(user.id, ownerId));
+		expect(blocked?.deletedAt).toBeNull();
+
+		// 멤버를 정리하면 같은 호출이 성공한다.
+		await db.delete(member).where(eq(member.userId, otherUserId));
+		const result = await withdrawClient(ownerId)();
+		expect(result.ok).toBe(true);
+
+		const [withdrawn] = await db
+			.select()
+			.from(user)
+			.where(eq(user.id, ownerId));
+		expect(withdrawn?.deletedAt).not.toBeNull();
+	});
+
+	it("혼자 남은 소유자는 탈퇴할 수 있다", async () => {
 		const userId = await seedUser();
 		await seedMembership(userId, "owner");
 
-		await expect(withdrawClient(userId)()).rejects.toThrow("조직 소유자");
+		const result = await withdrawClient(userId)();
+		expect(result.ok).toBe(true);
 
 		const [row] = await db.select().from(user).where(eq(user.id, userId));
-		expect(row?.deletedAt).toBeNull();
+		expect(row?.deletedAt).not.toBeNull();
 	});
 });

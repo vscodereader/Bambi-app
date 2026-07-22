@@ -18,7 +18,7 @@ import {
 } from "@bambi-app/db/schema/bambi";
 import { env } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -599,22 +599,38 @@ export const onboardingRouter = {
 		return { recorded: rows.length };
 	}),
 
-	// 회원 탈퇴(소프트 삭제). 조직 소유자는 소유권 정리 전까지 차단한다(조직 처리는
-	// 별도 이슈). deletedAt만 세우고 개인정보는 보존기간 동안 유지한다 — 파기는
-	// 운영자 배치(moderation.purgeWithdrawnAccounts)가 보존기간 경과분만 수행한다.
-	// 표시명은 즉시 "탈퇴한 회원"으로 바꿔 채팅·리뷰 등 상대 화면이 바로 익명화된다.
+	// 회원 탈퇴(소프트 삭제). 본인이 소유한 조직에 다른 멤버가 남아 있으면 차단한다 —
+	// 팀 관리에서 멤버를 모두 정리한 뒤 탈퇴할 수 있다(혼자 남은 소유자는 그대로 탈퇴 가능).
+	// deletedAt만 세우고 개인정보는 보존기간 동안 유지한다 — 파기는 운영자 배치
+	// (moderation.purgeWithdrawnAccounts)가 보존기간 경과분만 수행한다. 표시명은 즉시
+	// "탈퇴한 회원"으로 바꿔 채팅·리뷰 등 상대 화면이 바로 익명화된다.
 	withdrawMyAccount: protectedProcedure.handler(async ({ context }) => {
 		const userId = context.session.user.id;
 
-		const memberships = await db
-			.select({ role: member.role })
-			.from(member)
-			.where(eq(member.userId, userId));
-		if (memberships.some((row) => row.role === "owner")) {
-			throw new ORPCError("CONFLICT", {
-				message:
-					"조직 소유자는 바로 탈퇴할 수 없어요. 소유권 이전 또는 조직 정리 후 다시 시도해 주세요.",
-			});
+		// 본인이 소유자인 조직에 본인 외 멤버가 남아 있으면 탈퇴 차단.
+		const ownedOrganizationIds = (
+			await db
+				.select({ organizationId: member.organizationId })
+				.from(member)
+				.where(and(eq(member.userId, userId), eq(member.role, "owner")))
+		).map((row) => row.organizationId);
+		if (ownedOrganizationIds.length > 0) {
+			const [remainingMember] = await db
+				.select({ userId: member.userId })
+				.from(member)
+				.where(
+					and(
+						inArray(member.organizationId, ownedOrganizationIds),
+						ne(member.userId, userId)
+					)
+				)
+				.limit(1);
+			if (remainingMember) {
+				throw new ORPCError("CONFLICT", {
+					message:
+						"팀에 다른 멤버가 남아 있어 탈퇴할 수 없어요. 팀 관리에서 멤버를 모두 정리한 뒤 다시 시도해 주세요.",
+				});
+			}
 		}
 
 		await db.transaction(async (tx) => {
