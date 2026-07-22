@@ -87,6 +87,14 @@ export function SiteFooter({
 								{link.label}
 							</Link>
 						))}
+						<Link
+							className="text-muted-foreground text-sm no-underline transition-colors hover:text-foreground"
+							href={"/refund" as Route}
+							rel="noreferrer"
+							target="_blank"
+						>
+							환불 정책
+						</Link>
 						<a
 							className="text-muted-foreground text-sm no-underline transition-colors hover:text-foreground"
 							href={`mailto:${email}`}
