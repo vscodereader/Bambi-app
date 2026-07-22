@@ -4,8 +4,10 @@ import { db } from "@bambi-app/db";
 import {
 	member,
 	organization,
+	session as sessionTable,
 	team,
 	teamMember,
+	user,
 } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
@@ -16,7 +18,7 @@ import {
 } from "@bambi-app/db/schema/bambi";
 import { env } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -595,6 +597,43 @@ export const onboardingRouter = {
 		await db.insert(bambiLegalConsent).values(rows).onConflictDoNothing();
 
 		return { recorded: rows.length };
+	}),
+
+	// 회원 탈퇴(소프트 삭제). 조직 소유자는 소유권 정리 전까지 차단한다(조직 처리는
+	// 별도 이슈). deletedAt만 세우고 개인정보는 보존기간 동안 유지한다 — 파기는
+	// 운영자 배치(moderation.purgeWithdrawnAccounts)가 보존기간 경과분만 수행한다.
+	// 표시명은 즉시 "탈퇴한 회원"으로 바꿔 채팅·리뷰 등 상대 화면이 바로 익명화된다.
+	withdrawMyAccount: protectedProcedure.handler(async ({ context }) => {
+		const userId = context.session.user.id;
+
+		const memberships = await db
+			.select({ role: member.role })
+			.from(member)
+			.where(eq(member.userId, userId));
+		if (memberships.some((row) => row.role === "owner")) {
+			throw new ORPCError("CONFLICT", {
+				message:
+					"조직 소유자는 바로 탈퇴할 수 없어요. 소유권 이전 또는 조직 정리 후 다시 시도해 주세요.",
+			});
+		}
+
+		await db.transaction(async (tx) => {
+			// isNull 가드로 중복 호출을 no-op으로 만든다(멱등).
+			await tx
+				.update(user)
+				.set({ deletedAt: new Date(), name: "탈퇴한 회원" })
+				.where(and(eq(user.id, userId), isNull(user.deletedAt)));
+			await tx
+				.update(bambiProfile)
+				.set({ displayName: "탈퇴한 회원" })
+				.where(eq(bambiProfile.userId, userId));
+			await tx.delete(teamMember).where(eq(teamMember.userId, userId));
+			await tx.delete(member).where(eq(member.userId, userId));
+			// 전 기기 세션을 지워 즉시 접근을 끊는다. 재로그인은 auth 훅이 차단.
+			await tx.delete(sessionTable).where(eq(sessionTable.userId, userId));
+		});
+
+		return { ok: true } as const;
 	}),
 
 	upsertEmployerOrganizationProfile: protectedProcedure
