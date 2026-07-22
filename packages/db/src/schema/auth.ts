@@ -19,6 +19,11 @@ export const user = pgTable("user", {
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())
 		.notNull(),
+	// 회원 탈퇴(소프트 삭제) 시각. null이면 활성 계정. 값이 서면 로그인이 차단되고
+	// 보존기간(운영자 설정, 기본 30일) 경과 후 파기 배치 대상이 된다.
+	deletedAt: timestamp("deleted_at"),
+	// 개인정보 파기(스크럽) 완료 시각. 파기 배치의 재처리 방지 마커.
+	purgedAt: timestamp("purged_at"),
 });
 
 export const session = pgTable(
