@@ -447,10 +447,10 @@ export default function ModeratorSiteSettingsPage() {
 								value={rotationMinutes}
 							/>
 							<p className="m-0 text-muted-foreground text-xs">
-								프리미엄 광고 배너는 화면 전체에서 한 칸에만 노출되며, 이
-								주기마다 노출 자리가 좌→상단→우 순서로 한 칸씩 이동합니다.
-								비워두면 기본값(60분)을 사용합니다. 주기를 바꾸면 이동 위치가 한
-								번 점프할 수 있어요.
+								프리미엄 광고 배너는 한 광고가 한 칸씩 차지해 최대 8칸까지 동시
+								노출되며, 이 주기마다 각 광고가 좌→상단→우 순서로 한 칸씩
+								전진(밀어내기)합니다. 비워두면 기본값(60분)을 사용합니다. 주기를
+								바꾸면 이동 위치가 한 번 점프할 수 있어요.
 							</p>
 						</div>
 						<div className="flex justify-end">

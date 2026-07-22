@@ -233,12 +233,13 @@ const listAdBanners = () =>
 	})(undefined as never);
 
 // 광고 통합 후 상단·좌·우 세 슬롯은 하나의 프리미엄 풀(배너 3종 전부)을 공유해, 좌→중간(상단
-// 프리미엄)→우 순서로 도는 결정적 링 로테이션으로 채운다 — 화면 전체에서 배너는 언제나 딱 한
-// 칸에만 노출되고 나머지 칸은 null이다(링 배치 상세는 bambi-ad-exposure.test.ts가 유닛으로
-// 커버). 이 테스트는 실 dev DB를 쓰고 DB에 기존 배너 공고가 있어 어떤 공고가 이번 버킷에
-// 노출되는지 절대적으로는 검증할 수 없다. 여기서는 기존 데이터와 공존하는 안정적 술어만
-// 검증한다: 그룹은 고정 길이 배열이고, non-null은 화면 전체에서 최대 한 칸이며, 미결제·만료
-// 공고는 절대 노출되지 않는다. 활성 칸의 광고는 슬롯 방향 배너를 가진 경우에만 노출된다.
+// 프리미엄)→우 순서로 도는 컨베이어(밀어내기) 순환으로 채운다 — 한 광고는 언제나 정확히 한
+// 칸에만 존재하고, 광고가 8개 이상이면 8칸 전부 서로 다른 광고로 채워진다(순환 상세는
+// bambi-ad-exposure.test.ts가 유닛으로 커버). 이 테스트는 실 dev DB를 쓰고 DB에 기존 배너
+// 공고가 있어 어떤 공고가 이번 버킷에 노출되는지 절대적으로는 검증할 수 없다. 여기서는 기존
+// 데이터와 공존하는 안정적 술어만 검증한다: 그룹은 고정 길이 배열이고, non-null 칸은 최대 8개·
+// 서로 다른 공고이며, 미결제·만료 공고는 절대 노출되지 않는다. 활성 칸의 광고는 슬롯 방향
+// 배너를 가진 경우에만 노출된다.
 describe("bambi jobs.listAdBanners", () => {
 	let fixture: AdBannerFixture;
 
@@ -250,7 +251,7 @@ describe("bambi jobs.listAdBanners", () => {
 		await cleanupAdBannerFixture(fixture);
 	});
 
-	// 세 슬롯 중 실제 노출된(non-null) 공고 id의 집합. 화면 전체에서 최대 한 칸이라 0~1개다.
+	// 세 슬롯 중 실제 노출된(non-null) 공고 id의 집합. 컨베이어라 최대 8칸까지 채워질 수 있다.
 	const shownIds = (result: {
 		leftBanner: ({ id: string } | null)[];
 		premiumBanner: ({ id: string } | null)[];
@@ -269,14 +270,16 @@ describe("bambi jobs.listAdBanners", () => {
 		expect(result.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
 	});
 
-	it("화면 전체에서 배너는 최대 한 칸만 노출된다(나머지는 null)", async () => {
+	it("배너는 최대 8칸까지 노출되고 같은 공고가 두 칸에 겹치지 않는다", async () => {
 		const result = await listAdBanners();
-		const filled = [
+		const filledCount = [
 			...result.premiumBanner,
 			...result.leftBanner,
 			...result.rightBanner,
-		].filter((job) => job !== null);
-		expect(filled.length).toBeLessThanOrEqual(1);
+		].filter((job) => job !== null).length;
+		expect(filledCount).toBeLessThanOrEqual(8);
+		// 한 광고는 언제나 정확히 한 칸에만 존재한다(중복 부재) — 고유 id 수 = 채워진 칸 수.
+		expect(shownIds(result).size).toBe(filledCount);
 	});
 
 	it("미결제·만료 배너 공고는 어떤 슬롯에도 포함되지 않는다", async () => {
