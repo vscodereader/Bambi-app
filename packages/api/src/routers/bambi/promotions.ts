@@ -32,6 +32,7 @@ import {
 	getKstDayStart,
 	resolveBoostEligibility,
 } from "../../services/bambi-job-boost";
+import { derivePremiumQueue } from "../../services/bambi-premium-capacity";
 
 // 구 jobPromotionCampaign 축 라우터를 광고 상품 축으로 재작성했다.
 // 광고 목록(listMyAds)과 수동 끌어올리기(boost)만 제공한다.
@@ -163,10 +164,15 @@ export const promotionsRouter = {
 			autoUsedRows.map((row) => [row.jobPostId, row.used])
 		);
 
+		// 배너 미결제 신청의 파생 큐 정보(진행 가능 여부·대기 순번). ranksByJobId는 pending
+		// 배너 공고만 담으므로 결제완료·비배너 행은 자연히 null이 된다.
+		const { ranksByJobId } = await derivePremiumQueue(db, new Date());
+
 		return rows.map((row) => ({
 			...row,
 			autoBoostsUsedToday: autoUsedByJobId.get(row.jobPostId) ?? 0,
 			boostsUsedToday: usedByJobId.get(row.jobPostId) ?? 0,
+			premiumQueue: ranksByJobId.get(row.jobPostId) ?? null,
 		}));
 	}),
 

@@ -260,9 +260,11 @@ export default function ModeratorPaymentsPage() {
 
 						const actionLabel =
 							paymentStatus === "paid" ? "결제완료" : "미결제 전환";
+						// 항목별 실패(예: 프리미엄 정원 초과)는 첫 사유를 함께 노출한다.
+						const failureReason = result.failures[0]?.message;
 						toast(
 							result.failed > 0
-								? `${result.succeeded}건 ${actionLabel} 처리, ${result.failed}건 실패`
+								? `${result.succeeded}건 ${actionLabel} 처리, ${result.failed}건 실패${failureReason ? ` (${failureReason})` : ""}`
 								: `${result.succeeded}건 ${actionLabel} 처리했어요`
 						);
 					},

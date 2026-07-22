@@ -31,6 +31,27 @@ import { orpc } from "@/utils/orpc";
 // 광고 상품을 고르지 않은 "일반 구인(무료)" 선택지를 나타내는 센티넬 값.
 const FREE_EXPOSURE_VALUE = "__free__";
 
+// 프리미엄 배너 풀로 통합된 미리보기 템플릿. 이 상품을 고르면 전체 정원·대기열이 적용된다.
+const BANNER_PREVIEW_TEMPLATES: ReadonlySet<string> = new Set([
+	"premium-top",
+	"side-horizontal",
+	"side-vertical",
+]);
+
+const premiumCapacityNote = (
+	capacity: { capacity: number; remaining: number } | undefined
+): string => {
+	if (!capacity) {
+		return "프리미엄 광고는 전체 정원 안에서 진행되며, 정원이 차면 대기열에 등록됩니다.";
+	}
+
+	if (capacity.remaining === 0) {
+		return `프리미엄 광고 정원(${capacity.capacity}자리)이 가득 차, 신청하면 대기열에 등록됩니다. 자리가 나면 입금 확인 순으로 진행돼요.`;
+	}
+
+	return `프리미엄 광고 남은 자리 ${capacity.remaining}/${capacity.capacity} — 신청 후 입금이 확인되면 노출됩니다.`;
+};
+
 const paymentOptions: { label: string; value: JobPaymentMethod }[] = [
 	{ label: "신용카드", value: "card" },
 	{ label: "무통장입금", value: "bank_transfer" },
@@ -84,8 +105,14 @@ export function JobExposureFields({
 		() => (catalogQuery.data ?? []).flatMap((placement) => placement.products),
 		[catalogQuery.data]
 	);
+	const capacityQuery = useQuery(
+		orpc.bambi.adProducts.premiumCapacity.queryOptions()
+	);
 	const selectedProduct =
 		products.find((product) => product.id === adProductId) ?? null;
+	const isBannerProduct = selectedProduct
+		? BANNER_PREVIEW_TEMPLATES.has(selectedProduct.previewTemplate)
+		: false;
 	const toggleValue = adProductId ?? FREE_EXPOSURE_VALUE;
 	const showPaidOptions = Boolean(selectedProduct);
 	const showTotal =
@@ -168,6 +195,14 @@ export function JobExposureFields({
 							id="exposureType-error"
 							message={errors?.exposureType}
 						/>
+						{isBannerProduct ? (
+							<Alert>
+								<Info />
+								<AlertDescription>
+									{premiumCapacityNote(capacityQuery.data)}
+								</AlertDescription>
+							</Alert>
+						) : null}
 					</div>
 
 					{showPaidOptions ? (
