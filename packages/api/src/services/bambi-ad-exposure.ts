@@ -1,6 +1,13 @@
 // 광고 상품의 미리보기 템플릿(preview_template)을 공고 노출 타입(exposure_type)으로
 // 변환하는 단일 소스. 운영자가 등록한 광고 상품이 어떤 노출 영역을 구동하는지 서버에서
 // 도출할 때 사용한다.
+//
+// 광고 상품 개편: 좌/우 사이드 배너 상품을 프리미엄 광고 하나로 통합했다. 프리미엄을 산
+// 공고는 상단(가로)·좌측(가로)·우측(세로) 슬롯 모두의 노출 후보가 된다. 레거시 side 템플릿
+// (side-horizontal/side-vertical) 상품 구매는 premium-banner로 흡수하고, DB enum 값
+// (left-banner/right-banner, side-*)은 레거시 데이터 때문에 제거하지 않는다 — 통합은 전부
+// 코드 레벨이다. 이미 left-banner/right-banner로 판매된 공고는 프리미엄 풀에 합류해 계속
+// 노출한다(groupAdBannerJobs 참고).
 
 export type AdPreviewTemplate =
 	| "premium-top"
@@ -27,8 +34,9 @@ const PREVIEW_TEMPLATE_TO_EXPOSURE_TYPE: Record<
 	none: "standard",
 	"premium-top": "premium-banner",
 	"recommended-list": "recommended",
-	"side-horizontal": "left-banner",
-	"side-vertical": "right-banner",
+	// 레거시 side 상품 구매도 프리미엄으로 흡수한다(통합 후 신규 판매 경로는 premium-banner 하나).
+	"side-horizontal": "premium-banner",
+	"side-vertical": "premium-banner",
 	"special-list": "special",
 	"urgent-list": "urgent",
 };
@@ -193,33 +201,49 @@ const shuffleWithSeed = <T>(items: T[], seed: number): T[] => {
 	return result;
 };
 
-// 결제완료된 배너형 공고를 노출 위치별로 그룹핑한다. 활성(미만료) 후보가 슬롯을 초과하면
-// 시간 버킷(1시간)+위치 타입을 시드로 한 랜덤 셔플로 매시간 새로 선발한다 — 정해진 순서를
-// 도는 순환이 아니라 매시간 독립 추첨이라 모든 배너가 동일 확률로 노출된다. 후보가 슬롯
-// 이하면 전원 노출되고 표시 순서만 매시간 섞인다.
+// 결제완료된 배너형 공고를 상단·좌·우 슬롯별로 그룹핑한다. 광고 통합 후 세 슬롯은 하나의
+// 프리미엄 풀을 공유한다 — 후보 = exposureType이 배너 3종(AD_BANNER_EXPOSURE_TYPES) 중
+// 하나이고 활성(미만료)인 공고 전체(레거시 left-banner/right-banner 공고 포함). 이 풀을 id로
+// 정렬한 뒤 슬롯별 시드로 독립 셔플해 잘라낸다. 같은 공고가 여러 슬롯에 동시 노출될 수 있는
+// 게 의도다: 프리미엄은 상단+좌+우 모두의 노출 대상이고, 시드에 위치 타입을 섞어 슬롯마다
+// 다른 순열을 뽑으므로 시간당 재추첨으로 각 공고의 기대 노출은 슬롯 전반에 균등해진다.
+// 정해진 순서를 도는 순환이 아니라 매시간 독립 추첨이라 모든 배너가 동일 확률로 노출된다.
+// 후보가 슬롯 이하면 전원 노출되고 표시 순서만 매시간 섞인다.
 export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	rows: TRow[],
 	now: Date
 ): { leftBanner: TRow[]; premiumBanner: TRow[]; rightBanner: TRow[] } => {
 	const hourBucket = Math.floor(now.getTime() / ROTATION_INTERVAL_MS);
-	const pick = (type: AdBannerExposureType, maxSlots: number): TRow[] => {
-		// id 정렬로 DB 정렬 순서 의존을 끊어야 같은 버킷=같은 선발이 보장된다.
-		const matched = rows
-			.filter(
-				(item) =>
-					item.exposureType === type &&
-					isExposureActive(item.exposureEndsAt, now)
-			)
-			.sort((a, b) => a.id.localeCompare(b.id));
-		return shuffleWithSeed(matched, hashSeed(`${hourBucket}:${type}`)).slice(
+	// 배너 3종 전부를 하나의 프리미엄 풀로 모은다. id 정렬로 DB 정렬 순서 의존을 끊어야
+	// 같은 버킷=같은 선발이 보장된다.
+	const bannerExposureTypes = new Set<string>(AD_BANNER_EXPOSURE_TYPES);
+	const pool = rows
+		.filter(
+			(item) =>
+				bannerExposureTypes.has(item.exposureType) &&
+				isExposureActive(item.exposureEndsAt, now)
+		)
+		.sort((a, b) => a.id.localeCompare(b.id));
+	// 슬롯별 시드로 같은 풀을 독립 셔플해 상한만큼 자른다. 슬롯 이름을 시드에 섞어 슬롯마다
+	// 서로 다른 순열을 뽑는다.
+	const pickSlot = (slotSeed: string, maxSlots: number): TRow[] =>
+		shuffleWithSeed(pool, hashSeed(`${hourBucket}:${slotSeed}`)).slice(
 			0,
 			maxSlots
 		);
-	};
 
 	return {
-		leftBanner: pick("left-banner", SIDE_BANNER_MAX_SLOTS),
-		premiumBanner: pick("premium-banner", PREMIUM_BANNER_MAX_SLOTS),
-		rightBanner: pick("right-banner", SIDE_BANNER_MAX_SLOTS),
+		leftBanner: pickSlot("left-banner", SIDE_BANNER_MAX_SLOTS),
+		premiumBanner: pickSlot("premium-banner", PREMIUM_BANNER_MAX_SLOTS),
+		rightBanner: pickSlot("right-banner", SIDE_BANNER_MAX_SLOTS),
 	};
 };
+
+// 배너형 공고가 필요로 하는 광고 이미지 규격. 배너형 공고는 가로(상단·좌측 레일)와
+// 세로(우측 레일) 두 규격을 모두 쓰므로 두 이미지가 모두 필요하다. 배너형이 아니면 없음.
+export const requiredAdBannerUsagesForExposureType = (
+	exposureType: string
+): ("ad_horizontal" | "ad_vertical")[] =>
+	(AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(exposureType)
+		? ["ad_horizontal", "ad_vertical"]
+		: [];
