@@ -45,6 +45,20 @@ export const jobPostStatus = pgEnum("job_post_status", [
 	"rejected",
 ]);
 
+// 업종 카테고리. 운영이 확정한 8종으로 고정하며, 값 자체가 화면 표기(한국어·BAR)다 —
+// 별도 라벨 맵 없이 그대로 렌더한다. 표기를 바꿀 일이 생기면 ALTER TYPE ... RENAME VALUE로
+// 값 자체를 바꾼다(자유 입력이던 기존 text 컬럼을 enum으로 좁혀 오타·비표준 값을 차단).
+export const jobIndustryCategory = pgEnum("job_industry_category", [
+	"룸싸롱",
+	"텐프로/쩜오",
+	"노래주점",
+	"단란주점",
+	"다방",
+	"BAR",
+	"마사지",
+	"요정",
+]);
+
 export const jobExposureType = pgEnum("job_exposure_type", [
 	"premium-banner",
 	"left-banner",
@@ -304,7 +318,7 @@ export const jobPost = pgTable(
 			.notNull()
 			.references(() => user.id),
 		status: jobPostStatus("status").default("pending_review").notNull(),
-		industryCategory: text("industry_category").notNull(),
+		industryCategory: jobIndustryCategory("industry_category").notNull(),
 		region: text("region").notNull(),
 		district: text("district"),
 		// payUnit이 "협의"(면접 후 급여 협의)면 금액이 없다 — 그래서 nullable.
