@@ -244,8 +244,9 @@ export function ResponsiveAppShell({
 	// 채팅 버튼은 기존 nav "채팅"이 뜨던 셸(구직자·고객센터=seeker, 공개 마켓)에만
 	// 노출한다. 구인자·운영자 셸에는 넣지 않는다.
 	const showChatButton = variant === "seeker" || variant === "public";
-	// 푸터는 구직자·구인자 셸에만 노출한다(운영자·공개 셸 제외).
-	const showFooter = variant === "seeker" || variant === "employer";
+	// 푸터는 구직자·구인자·운영자 셸에 노출한다(공개 셸 제외).
+	const showFooter =
+		variant === "seeker" || variant === "employer" || variant === "moderator";
 	const activeHref = findActiveHref(pathname, navItems);
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
