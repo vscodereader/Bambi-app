@@ -106,7 +106,7 @@ const createJobsAnalyticsFixture = async (): Promise<JobsAnalyticsFixture> => {
 		exposureEndsAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
 		exposureType: "special",
 		id: jobPostId,
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱",
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",

@@ -99,7 +99,7 @@ const createAdBannerFixture = async (): Promise<AdBannerFixture> => {
 	}) => ({
 		createdByUserId: employerUserId,
 		description: "배너 슬롯 그룹핑을 검증하기 위한 공고입니다.",
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱" as const,
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",

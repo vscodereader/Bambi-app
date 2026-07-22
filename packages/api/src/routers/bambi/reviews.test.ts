@@ -128,7 +128,7 @@ const createReviewFixture = async (): Promise<ReviewFixture> => {
 		createdByUserId: employerUserId,
 		description: "후기 집계 테스트를 위한 공고입니다.",
 		id: jobPostId,
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱",
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",

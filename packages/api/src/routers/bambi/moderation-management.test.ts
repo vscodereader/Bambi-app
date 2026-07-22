@@ -127,7 +127,7 @@ const createManagementFixture = async (): Promise<ManagementFixture> => {
 		createdByUserId: employerUserId,
 		description: "관리 테스트용 공고입니다.",
 		id: jobPostId,
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱",
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",

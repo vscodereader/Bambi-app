@@ -121,7 +121,7 @@ const createBoostOrderFixture = async (): Promise<BoostOrderFixture> => {
 	}) => ({
 		createdByUserId: employerUserId,
 		description: "끌어올리기 노출 정렬을 검증하기 위한 공고입니다.",
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱" as const,
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",

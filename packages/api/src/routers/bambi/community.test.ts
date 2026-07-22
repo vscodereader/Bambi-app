@@ -182,7 +182,7 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 		description: "수다방 광고 자격용 공고입니다.",
 		// exposureEndsAt은 비워 둔다 — null이면 노출 무기한으로 판정된다.
 		id: jobPostId,
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱",
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",

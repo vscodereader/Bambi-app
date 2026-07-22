@@ -115,7 +115,7 @@ const createChatFixture = async (): Promise<ChatFixture> => {
 		createdByUserId: employerUserId,
 		description: "안전한 채팅으로 자료를 확인합니다.",
 		id: jobPostId,
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱",
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",

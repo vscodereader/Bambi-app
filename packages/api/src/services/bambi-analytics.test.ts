@@ -61,7 +61,7 @@ const createFixture = async (): Promise<Fixture> => {
 			createdByUserId: userId,
 			description: "성과 집계 테스트 공고입니다.",
 			id,
-			industryCategory: "라운지",
+			industryCategory: "룸싸롱" as const,
 			organizationId,
 			payAmount: 180_000,
 			payUnit: "일급",
