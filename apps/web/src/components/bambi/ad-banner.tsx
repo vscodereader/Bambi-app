@@ -14,20 +14,40 @@ const bannerHref = (item: AdBannerItem): Route =>
 const AD_RAIL_SLOT_COUNT = 3;
 const AD_RAIL_SLOT_KEYS = ["slot-1", "slot-2", "slot-3"] as const;
 
-// 빈 광고 슬롯 자리표시 — "광고 모집중 입니다." 문구를 실제 배너와 같은 비율/크기로
-// 보여주는 클릭 불가 장식(aria-hidden). 스켈레톤 "형태"는 muted 배경 + 점선 테두리로
-// 표현한다(pulse 없이 정적). 비율/크기(aspect·h·w)는 호출부가 className으로 넘긴다 —
+// 빈 슬롯 자리표시 이미지(가로 7:3 / 세로 4:9) — 실제 배너/카드가 채워지기 전 자리를
+// 지키는 장식이라 alt은 비운다.
+const PLACEHOLDER_HORIZONTAL_SRC =
+	"/bambi/placeholder/horizontal-placeholder.png";
+const PLACEHOLDER_VERTICAL_SRC = "/bambi/placeholder/vertical-placeholder.png";
+
+// 빈 광고/카드 슬롯 자리표시 — 실제 배너와 같은 비율/크기로 placeholder 이미지를 채우는
+// 클릭 불가 장식(aria-hidden). 비율/크기(aspect·h·w)는 호출부가 className으로 넘긴다 —
 // display 클래스도 반드시 함께 넘겨야 한다(base엔 flex/hidden이 없어 breakpoint 토글이 가능).
-export function AdSlotPlaceholder({ className }: { className?: string }) {
+// variant는 세로형(우측 사이드) 슬롯에서만 "vertical"로 넘긴다(기본은 가로형).
+export function AdSlotPlaceholder({
+	className,
+	variant = "horizontal",
+}: {
+	className?: string;
+	variant?: "horizontal" | "vertical";
+}) {
 	return (
 		<div
 			aria-hidden="true"
-			className={cn(
-				"items-center justify-center rounded-lg border border-border border-dashed bg-muted p-2 text-center font-semibold text-muted-foreground text-xs",
-				className
-			)}
+			className={cn("relative overflow-hidden rounded-lg", className)}
 		>
-			광고 모집중 입니다.
+			<Image
+				alt=""
+				className="object-cover"
+				fill
+				sizes={variant === "vertical" ? "120px" : "272px"}
+				src={
+					variant === "vertical"
+						? PLACEHOLDER_VERTICAL_SRC
+						: PLACEHOLDER_HORIZONTAL_SRC
+				}
+				unoptimized
+			/>
 		</div>
 	);
 }
@@ -81,7 +101,11 @@ export function AdBannerRail({ className, items }: AdBannerRailProps) {
 				<AdBanner item={item} key={item.id} />
 			))}
 			{emptySlotKeys.map((key) => (
-				<AdSlotPlaceholder className="flex aspect-[4/9] h-52" key={key} />
+				<AdSlotPlaceholder
+					className="flex aspect-[4/9] h-52"
+					key={key}
+					variant="vertical"
+				/>
 			))}
 		</div>
 	);
