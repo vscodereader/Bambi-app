@@ -30,7 +30,15 @@ export async function proxy(request: NextRequest) {
 		return NextResponse.next();
 	}
 
-	const hasSession = Boolean(getSessionCookie(request));
+	// 쿠키 prefix를 서버(auth advanced.cookiePrefix)와 맞춘다. dev/prod가 같은 apex를
+	// 공유하므로 prefix가 어긋나면 세션 판정이 틀어진다. edge라 @bambi-app/env 대신
+	// process.env를 직접 읽는다(guestTokenSecret와 동일). 미설정(로컬)이면 undefined →
+	// better-auth 기본 prefix.
+	const hasSession = Boolean(
+		getSessionCookie(request, {
+			cookiePrefix: process.env.BAMBI_COOKIE_PREFIX,
+		})
+	);
 	// 게스트 여부는 쿠키 존재가 아니라 HMAC 서명 검증으로 판정한다. 평문 값 비교였을 때는
 	// devtools에서 document.cookie 한 줄로 성인 게이트가 뚫렸다.
 	const guestToken = request.cookies.get(GUEST_COOKIE_NAME)?.value;

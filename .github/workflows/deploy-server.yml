@@ -108,6 +108,9 @@ jobs:
         env:
           BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
           CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
+          # 세션 쿠키 prefix를 환경별로 분리. dev/prod가 같은 apex(.bambialba.com)를
+          # 공유하므로 prefix가 같으면 쿠키가 서로 덮어써 세션이 충돌한다.
+          BAMBI_COOKIE_PREFIX: ${{ github.ref_name == 'main' && 'bambi' || 'bambi-dev' }}
         run: |
           gcloud run deploy "$SERVICE" \
             --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/server:${GITHUB_SHA}" \
@@ -123,7 +126,7 @@ jobs:
             --timeout=3600 \
             --session-affinity \
             --add-cloudsql-instances="${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" \
-            --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}" \
+            --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}##BAMBI_COOKIE_PREFIX=${BAMBI_COOKIE_PREFIX}" \
             --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest"
 
       - name: Show service URL

@@ -18,6 +18,13 @@ export const env = createEnv({
 		// 포트원 V2 API Secret(본인인증 단건조회). 개발에서는 선택 — 비어 있으면 회원
 		// 본인인증이 목 핸들러(verifyMyPhoneMock)로 폴백한다.
 		PORTONE_API_SECRET: z.string().min(1).optional(),
+		// better-auth 세션 쿠키 prefix. dev/prod가 같은 apex(.bambialba.com)를 공유하므로
+		// 환경별로 다른 값(prod=bambi, dev=bambi-dev)을 줘 쿠키 충돌을 막는다. 미설정(로컬)
+		// 이면 better-auth 기본 prefix를 그대로 써 개발 동작이 변하지 않는다.
+		BAMBI_COOKIE_PREFIX: z.string().optional(),
+		// Google Generative AI(Gemini) 키. /ai 라우트 전용 선택 기능이라 미설정 시 해당
+		// 라우트만 실패한다. @ai-sdk/google 기본 provider가 이 값을 env에서 직접 읽는다.
+		GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,
