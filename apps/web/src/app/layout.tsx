@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { JsonLd } from "@/components/bambi/json-ld";
 import { Providers } from "@/components/providers";
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
@@ -57,6 +58,17 @@ export default function RootLayout({
 			<body>
 				<JsonLd data={bambiSiteJsonLd} />
 				<Providers>{children}</Providers>
+				{process.env.NODE_ENV === "production" && (
+					<>
+						<Script src="https://www.googletagmanager.com/gtag/js?id=G-HNVZKKB0NX" />
+						<Script id="gtag-init">
+							{`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-HNVZKKB0NX');`}
+						</Script>
+					</>
+				)}
 			</body>
 		</html>
 	);
