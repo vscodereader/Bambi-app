@@ -6,16 +6,23 @@ import {
 } from "./ad-preview-templates";
 
 describe("getAdBannerUsagesForPreviewTemplate", () => {
-	it("maps banner templates to the banner slot they actually use", () => {
-		// 서버 PREVIEW_TEMPLATE_TO_EXPOSURE_TYPE와 같은 대응: 프리미엄·좌측은 가로형,
-		// 우측만 세로형이다.
+	it("requires both banner slots for the premium product", () => {
+		// 프리미엄 광고는 상단·좌측(가로형)과 우측(세로형) 슬롯을 모두 구동하므로 두 이미지가 필요하다.
 		expect(getAdBannerUsagesForPreviewTemplate("premium-top")).toEqual([
 			"ad_horizontal",
+			"ad_vertical",
 		]);
+	});
+
+	it("absorbs legacy side products into the premium two-slot requirement", () => {
+		// 좌/우 사이드 배너는 프리미엄으로 통합돼(서버에서 premium-banner로 흡수) 이미 side로 팔린
+		// 레거시 상품도 프리미엄과 똑같이 가로형·세로형 두 슬롯을 요구한다.
 		expect(getAdBannerUsagesForPreviewTemplate("side-horizontal")).toEqual([
 			"ad_horizontal",
+			"ad_vertical",
 		]);
 		expect(getAdBannerUsagesForPreviewTemplate("side-vertical")).toEqual([
+			"ad_horizontal",
 			"ad_vertical",
 		]);
 	});
@@ -34,16 +41,20 @@ describe("getAdBannerUsagesForPreviewTemplate", () => {
 		expect(getAdBannerUsagesForPreviewTemplate(undefined)).toEqual([]);
 	});
 
-	it("gives a banner slot to exactly the three banner templates", () => {
-		// 노출 영역이 추가·변경되면 이 목록이 먼저 깨져 매핑 누락을 잡는다.
+	it("offers premium as the only selectable banner product", () => {
+		// 좌/우 사이드는 통합돼 신규 선택지에서 빠졌으므로, 옵션 중 배너 슬롯을 쓰는 상품은 프리미엄뿐이다.
 		const withBanner = AD_PREVIEW_TEMPLATE_OPTIONS.filter(
 			(option) => getAdBannerUsagesForPreviewTemplate(option.value).length > 0
 		).map((option) => option.value);
 
-		expect(withBanner).toEqual([
-			"premium-top",
-			"side-horizontal",
-			"side-vertical",
-		]);
+		expect(withBanner).toEqual(["premium-top"]);
+	});
+
+	it("no longer lists the legacy side products as selectable options", () => {
+		// 신규 등록 폼에서는 side-horizontal·side-vertical을 고를 수 없어야 한다(레거시 표시만 유지).
+		const values = AD_PREVIEW_TEMPLATE_OPTIONS.map((option) => option.value);
+
+		expect(values).not.toContain("side-horizontal");
+		expect(values).not.toContain("side-vertical");
 	});
 });
