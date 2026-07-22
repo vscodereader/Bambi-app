@@ -58,7 +58,10 @@ export default function RootLayout({
 			<body>
 				<JsonLd data={bambiSiteJsonLd} />
 				<Providers>{children}</Providers>
-				{process.env.NODE_ENV === "production" && (
+				{/* Vercel은 프리뷰·개발 배포도 NODE_ENV=production이라, 프로덕션 배포에서만
+				    참인 VERCEL_ENV로 게이팅해 dev/preview 트래픽이 GA에 섞이지 않게 한다.
+				    루트 레이아웃은 서버 컴포넌트라 이 값이 런타임에 읽힌다. */}
+				{process.env.VERCEL_ENV === "production" && (
 					<>
 						<Script src="https://www.googletagmanager.com/gtag/js?id=G-HNVZKKB0NX" />
 						<Script id="gtag-init">

@@ -68,6 +68,11 @@ export function createAuth() {
 		secret: env.BETTER_AUTH_SECRET,
 		baseURL: env.BETTER_AUTH_URL,
 		advanced: {
+			// dev/prod가 같은 apex(.bambialba.com)로 쿠키를 스코프하므로, 쿠키 이름 prefix를
+			// 환경별로 분리해 충돌을 막는다(prod=bambi, dev=bambi-dev). undefined(로컬)면
+			// better-auth 기본 prefix라 개발 동작 무변경. 웹 미들웨어(proxy)도 같은 값으로
+			// getSessionCookie를 읽어 일치시킨다.
+			cookiePrefix: env.BAMBI_COOKIE_PREFIX,
 			// 서버(api.bambialba.com / test.bambialba.com)와 웹(bambialba.com 서브도메인)이
 			// 같은 세션 쿠키를 보도록 apex로 스코프. domain 미지정 시 baseURL 호스트네임
 			// (api.…)으로 잡혀 웹과 공유되지 않으므로 반드시 명시한다. 로컬(dev)은 비활성.
