@@ -4,6 +4,7 @@ import {
 	adProduct,
 	employerOrganizationProfile,
 	employerTeamProfile,
+	jobIndustryCategory,
 	jobPost,
 	jobPostMedia,
 	review,
@@ -103,11 +104,15 @@ const jobPostMediaSetInput = z
 	})
 	.optional();
 
+// 업종은 DB enum(확정 8종)만 받는다 — 자유 문자열을 받으면 목록 밖 값이 저장 단계에서야
+// (DB 캐스팅 오류로) 터지므로 입력 검증에서 막는다.
+const industryCategorySchema = z.enum(jobIndustryCategory.enumValues);
+
 const jobPostInputShape = z.object({
 	organizationId: z.string().min(1),
 	teamId: z.string().min(1).optional(),
 	title: z.string().min(2).max(80),
-	industryCategory: z.string().min(1).max(80),
+	industryCategory: industryCategorySchema,
 	region: z.string().min(1).max(80),
 	district: z.string().max(80).optional(),
 	// "협의" 단위는 금액이 없다(면접 후 급여 협의). 아래 refine에서 짝을 강제한다.
@@ -166,7 +171,7 @@ const createMediaUploadInput = z.object({
 });
 
 const listInput = z.object({
-	industryCategory: z.string().min(1).max(80).optional(),
+	industryCategory: industryCategorySchema.optional(),
 	region: z.string().min(1).max(80).optional(),
 	district: z.string().max(80).optional(),
 	minPayAmount: z.number().int().positive().optional(),

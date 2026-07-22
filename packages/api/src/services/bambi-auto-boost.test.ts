@@ -111,7 +111,7 @@ const baseJob = (overrides: {
 	description: "자동 끌어올리기 틱을 검증하기 위한 공고입니다.",
 	// 자동 끌어올리기 후보는 리스팅형만 — 기본값을 리스팅(special)로 둔다(배너 케이스는 override).
 	exposureType: "special" as JobExposureType,
-	industryCategory: "라운지",
+	industryCategory: "룸싸롱" as const,
 	organizationId,
 	payAmount: 180_000,
 	payUnit: "일급",
@@ -399,7 +399,7 @@ describe("runAutoBoostTick (병렬 워커 풀)", () => {
 				exposureEndsAt: future,
 				exposureType: "special" as const,
 				id,
-				industryCategory: "라운지",
+				industryCategory: "룸싸롱" as const,
 				manualBoostsPerDay: 0,
 				organizationId: parallelOrgId,
 				payAmount: 180_000,

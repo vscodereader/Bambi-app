@@ -130,7 +130,7 @@ const createListExposureFixture = async (): Promise<ListExposureFixture> => {
 	}) => ({
 		createdByUserId: employerUserId,
 		description: "노출 위치 섹션 배치를 검증하기 위한 공고입니다.",
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱" as const,
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",

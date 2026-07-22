@@ -4,7 +4,7 @@ import { emptyJobForm, validateJobForm } from "./bambi-job-form";
 const baseForm = {
 	...emptyJobForm,
 	description: "상세 설명 열 글자 이상.",
-	industryCategory: "클럽",
+	industryCategory: "BAR",
 	organizationId: "o1",
 	payAmount: "20000",
 	payUnit: "시급",

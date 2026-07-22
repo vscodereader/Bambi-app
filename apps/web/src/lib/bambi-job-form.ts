@@ -6,6 +6,7 @@ import {
 } from "./bambi/job-ad-banner-spec";
 import {
 	districtsForRegion,
+	type IndustryOption,
 	industryOptions,
 	NEGOTIABLE_PAY_UNIT,
 	payUnitOptions,
@@ -166,7 +167,8 @@ export interface JobPostInput {
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
-	industryCategory: string;
+	// 서버 입력이 업종 enum이라 제출 페이로드는 확정 목록 값으로 좁힌다(폼 상태는 string 유지).
+	industryCategory: IndustryOption;
 	instantInterview: boolean;
 	interviewNotes?: string;
 	media?: {
@@ -912,7 +914,8 @@ export const validateJobForm = (
 			exposureAmount,
 			exposureDurationDays,
 			exposureType,
-			industryCategory,
+			// 위 검증(getConditionErrors)이 industryOptions 소속을 보장한 뒤에만 이 분기에 온다.
+			industryCategory: industryCategory as IndustryOption,
 			instantInterview: form.instantInterview,
 			interviewNotes: interviewNotes || undefined,
 			media: options.media
