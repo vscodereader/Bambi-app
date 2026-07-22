@@ -156,32 +156,42 @@ export interface AdBannerRow {
 export const SIDE_BANNER_MAX_SLOTS = 3;
 export const PREMIUM_BANNER_MAX_SLOTS = 2;
 
-// 로테이션 주기. 같은 버킷 안에서는 어떤 요청·인스턴스든 같은 선발을 돌려준다.
-const ROTATION_INTERVAL_MS = 60 * 60 * 1000;
+// 광고 배너 로테이션 기본 주기(분). 운영자가 사이트 설정에서 바꿀 수 있고, 미설정이면 이 값을 쓴다.
+// 같은 버킷 안에서는 어떤 요청·인스턴스든 같은 결과를 돌려준다.
+export const DEFAULT_AD_ROTATION_MINUTES = 60;
+const DEFAULT_AD_ROTATION_INTERVAL_MS = DEFAULT_AD_ROTATION_MINUTES * 60 * 1000;
 
 // 링 위치를 좌→중간(상단 프리미엄)→우 순서로 고정 배치한다. 좌측 3칸(base 0)·상단 2칸(base 3)·
-// 우측 3칸(base 5)으로 총 8칸이며, 이 순서가 배너가 도는 링의 진행 방향이다.
+// 우측 3칸(base 5)으로 총 8칸이며, 이 순서가 활성 칸이 전진하는 방향이다.
 const LEFT_RING_BASE = 0;
 const PREMIUM_RING_BASE = 3;
 const RIGHT_RING_BASE = 5;
+const TOTAL_RING_SLOTS = RIGHT_RING_BASE + SIDE_BANNER_MAX_SLOTS;
 
 // 결제완료된 배너형 공고를 상단·좌·우 슬롯별로 그룹핑한다. 광고 통합 후 세 슬롯은 하나의
 // 프리미엄 풀을 공유한다 — 후보 = exposureType이 배너 3종(AD_BANNER_EXPOSURE_TYPES) 중
 // 하나이고 활성(미만료)인 공고 전체(레거시 left-banner/right-banner 공고 포함).
 //
-// 무작위 추첨을 버리고 결정적 링 로테이션을 쓴다. 풀을 id 오름차순으로 정렬해 기준 순서를
-// 고정하고(DB 정렬 순서 의존 제거), 좌→중간→우 순서의 8칸 링에 배치한다. 각 그룹 i번째 칸에는
-// pool[mod(base + i - bucket, n)]을 넣으므로 공고 k의 링 위치는 (k + bucket) mod n이 되어
-// 매시간(버킷당) 정확히 한 칸씩 전진한다: 좌1→좌2→좌3→중간1→중간2→우1→우2→우3.
-// n > 8이면 우3을 지난 공고는 잠시 비노출 대기하다 다시 좌1로 재진입한다. n ≤ 8이면 전 공고가
-// 항상 노출되고 자리만 순환한다(여러 그룹 동시 노출 허용 — 통합 풀 설계 그대로).
-// 같은 버킷이면 어느 인스턴스·요청이든 같은 결과를 돌려준다(다중 인스턴스 정합).
-// 그룹당 칸 수는 min(그룹 칸수, n)으로 잘라 같은 레일에 같은 공고가 두 번 쌓이지 않게 한다.
+// 화면 전체에서 광고 배너는 언제나 딱 한 칸에만 노출된다. 나머지 칸은 null(호출부가 자리표시로
+// 렌더). 풀을 id 오름차순으로 정렬해 링 기준 순서를 고정하고(DB 정렬 순서 의존 제거), 8칸 링에서
+// 활성 칸이 매 버킷 한 칸씩 전진한다: 좌1→좌2→좌3→중간1→중간2→우1→우2→우3→좌1…. 광고가 여럿이면
+// 칸이 전진할 때마다 표시 광고도 pool[bucket mod n]로 라운드로빈 교체되고, 1개면 그 광고가 칸만
+// 옮겨 다닌다. 같은 버킷이면 어느 인스턴스·요청이든 같은 결과다(다중 인스턴스 정합). 각 그룹은
+// 고정 길이(좌3·중2·우3) 배열이며 활성 칸만 공고, 나머지는 null이다. 풀이 비면 전부 null이다.
 export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	rows: TRow[],
-	now: Date
-): { leftBanner: TRow[]; premiumBanner: TRow[]; rightBanner: TRow[] } => {
-	const bucket = Math.floor(now.getTime() / ROTATION_INTERVAL_MS);
+	now: Date,
+	rotationIntervalMs: number = DEFAULT_AD_ROTATION_INTERVAL_MS
+): {
+	leftBanner: (TRow | null)[];
+	premiumBanner: (TRow | null)[];
+	rightBanner: (TRow | null)[];
+} => {
+	const interval =
+		rotationIntervalMs > 0
+			? rotationIntervalMs
+			: DEFAULT_AD_ROTATION_INTERVAL_MS;
+	const bucket = Math.floor(now.getTime() / interval);
 	// 배너 3종 전부를 하나의 프리미엄 풀로 모으고 id로 정렬해 링 기준 순서를 고정한다.
 	const bannerExposureTypes = new Set<string>(AD_BANNER_EXPOSURE_TYPES);
 	const pool = rows
@@ -192,26 +202,32 @@ export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 		)
 		.sort((a, b) => a.id.localeCompare(b.id));
 	const n = pool.length;
-	// 그룹의 base 링 위치에서 시작해 slotCount칸을 채운다. 음수 안전 모듈러로 링을 감아
-	// 매 버킷 한 칸씩 전진시킨다. 칸 수는 min(slotCount, n)으로 잘라 그룹 내 중복을 막는다.
-	const fillGroup = (base: number, slotCount: number): TRow[] => {
-		const slots = Math.min(slotCount, n);
-		const result: TRow[] = [];
-		for (let i = 0; i < slots; i++) {
-			const index = (((base + i - bucket) % n) + n) % n;
-			result.push(pool[index] as TRow);
-		}
-		return result;
-	};
+
+	const emptySlots = (count: number): (TRow | null)[] =>
+		Array.from({ length: count }, () => null);
+	const leftBanner = emptySlots(SIDE_BANNER_MAX_SLOTS);
+	const premiumBanner = emptySlots(PREMIUM_BANNER_MAX_SLOTS);
+	const rightBanner = emptySlots(SIDE_BANNER_MAX_SLOTS);
 
 	if (n === 0) {
-		return { leftBanner: [], premiumBanner: [], rightBanner: [] };
+		return { leftBanner, premiumBanner, rightBanner };
 	}
-	return {
-		leftBanner: fillGroup(LEFT_RING_BASE, SIDE_BANNER_MAX_SLOTS),
-		premiumBanner: fillGroup(PREMIUM_RING_BASE, PREMIUM_BANNER_MAX_SLOTS),
-		rightBanner: fillGroup(RIGHT_RING_BASE, SIDE_BANNER_MAX_SLOTS),
-	};
+
+	// 이번 버킷의 활성 칸(0..7)과 표시 광고(라운드로빈). now는 항상 양수라 모듈러는 안전하지만
+	// 음수 안전형으로 감아 둔다.
+	const activeSlot =
+		((bucket % TOTAL_RING_SLOTS) + TOTAL_RING_SLOTS) % TOTAL_RING_SLOTS;
+	const ad = pool[((bucket % n) + n) % n] as TRow;
+
+	if (activeSlot < PREMIUM_RING_BASE) {
+		leftBanner[activeSlot - LEFT_RING_BASE] = ad;
+	} else if (activeSlot < RIGHT_RING_BASE) {
+		premiumBanner[activeSlot - PREMIUM_RING_BASE] = ad;
+	} else {
+		rightBanner[activeSlot - RIGHT_RING_BASE] = ad;
+	}
+
+	return { leftBanner, premiumBanner, rightBanner };
 };
 
 // 배너형 공고가 필요로 하는 광고 이미지 규격. 배너형 공고는 가로(상단·좌측 레일)와

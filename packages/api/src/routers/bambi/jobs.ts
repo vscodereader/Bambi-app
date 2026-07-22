@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	adProduct,
+	bambiSiteSettings,
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobIndustryCategory,
@@ -28,6 +29,7 @@ import { protectedProcedure, publicProcedure } from "../../index";
 import {
 	AD_BANNER_EXPOSURE_TYPES,
 	buildExposureJobSections,
+	DEFAULT_AD_ROTATION_MINUTES,
 	EXPOSURE_TYPE_LABELS,
 	groupAdBannerJobs,
 	type JobExposureType,
@@ -813,14 +815,41 @@ export const jobsRouter = {
 				)
 			)
 			.orderBy(desc(jobPost.publishedAt));
-		const groups = groupAdBannerJobs(rows, now);
+
+		// 로테이션 주기는 운영자 사이트 설정값(분)을 따르고, 미설정이면 코드 기본값을 쓴다.
+		const [rotationRow] = await db
+			.select({ minutes: bambiSiteSettings.adBannerRotationMinutes })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"))
+			.limit(1);
+		const rotationMs =
+			(rotationRow?.minutes ?? DEFAULT_AD_ROTATION_MINUTES) * 60 * 1000;
+		const groups = groupAdBannerJobs(rows, now, rotationMs);
+
+		// 활성 칸의 광고가 그 슬롯 방향(좌·중=가로 7:3 / 우=세로 4:9) 배너를 안 올렸으면
+		// 커버로 폴백하지 않고 그 칸을 비운다(자리표시). 노출도 impression 기록도 하지 않는다.
+		// 등록 흐름상 프리미엄은 두 방향이 모두 필수라, 이 홀은 한 방향만 가진 레거시 공고에서만 생긴다.
+		type AdBannerSlotRow = (typeof rows)[number];
+		const requireDirectionImage = (
+			items: (AdBannerSlotRow | null)[],
+			key: "adHorizontal" | "adVertical"
+		): (AdBannerSlotRow | null)[] =>
+			items.map((item) => (item?.[key] ? item : null));
+		const directedGroups = {
+			leftBanner: requireDirectionImage(groups.leftBanner, "adHorizontal"),
+			premiumBanner: requireDirectionImage(
+				groups.premiumBanner,
+				"adHorizontal"
+			),
+			rightBanner: requireDirectionImage(groups.rightBanner, "adVertical"),
+		};
 
 		await recordAdBannerImpressions({
 			actorUserId: context.session?.user.id,
-			groups,
+			groups: directedGroups,
 		});
 
-		return groups;
+		return directedGroups;
 	}),
 
 	getById: publicProcedure
