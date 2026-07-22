@@ -51,6 +51,7 @@ import {
 import { resolveWithdrawalRetentionDays } from "../../services/bambi-member-policy";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
+import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 
 export const targetTypeSchema = z.enum([
@@ -1218,42 +1219,59 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 
-			const [existing] = await db
-				.select({
-					exposureDurationDays: jobPost.exposureDurationDays,
-					organizationId: jobPost.organizationId,
-				})
-				.from(jobPost)
-				.where(eq(jobPost.id, input.jobPostId))
-				.limit(1);
+			// 배너형 승인(unpaid→paid)은 프리미엄 정원 게이트가 필요하므로 트랜잭션 안에서
+			// advisory lock으로 직렬화한다(assertPremiumApprovalWithinCapacity).
+			const { organizationId, updated } = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({
+						exposureDurationDays: jobPost.exposureDurationDays,
+						exposureType: jobPost.exposureType,
+						organizationId: jobPost.organizationId,
+						paymentStatus: jobPost.paymentStatus,
+					})
+					.from(jobPost)
+					.where(eq(jobPost.id, input.jobPostId))
+					.limit(1);
 
-			if (!existing) {
-				throw new ORPCError("NOT_FOUND");
-			}
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND");
+				}
 
-			const exposureEndsAt =
-				input.paymentStatus === "paid" && existing.exposureDurationDays !== null
-					? new Date(Date.now() + existing.exposureDurationDays * MS_PER_DAY)
-					: null;
+				await assertPremiumApprovalWithinCapacity({
+					executor: tx,
+					existingExposureType: existing.exposureType,
+					existingPaymentStatus: existing.paymentStatus,
+					newPaymentStatus: input.paymentStatus,
+					now: new Date(),
+				});
 
-			const [updated] = await db
-				.update(jobPost)
-				.set({
-					exposureEndsAt,
-					paymentStatus: input.paymentStatus,
-				})
-				.where(eq(jobPost.id, input.jobPostId))
-				.returning();
+				const exposureEndsAt =
+					input.paymentStatus === "paid" &&
+					existing.exposureDurationDays !== null
+						? new Date(Date.now() + existing.exposureDurationDays * MS_PER_DAY)
+						: null;
 
-			if (!updated) {
-				throw new ORPCError("NOT_FOUND");
-			}
+				const [row] = await tx
+					.update(jobPost)
+					.set({
+						exposureEndsAt,
+						paymentStatus: input.paymentStatus,
+					})
+					.where(eq(jobPost.id, input.jobPostId))
+					.returning();
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				return { organizationId: existing.organizationId, updated: row };
+			});
 
 			// 결제 상태 전환은 공개 게이트(published AND paid)를 넘나들 수 있으므로
 			// 해당 조직 owner/admin의 수다방 광고 자격 캐시를 재동기화한다.
 			await syncAdvertiserFlagForOrganization({
 				now: new Date(),
-				organizationId: existing.organizationId,
+				organizationId,
 			});
 
 			return updated;
@@ -1364,7 +1382,9 @@ export const moderationRouter = {
 							const [existing] = await tx
 								.select({
 									exposureDurationDays: jobPost.exposureDurationDays,
+									exposureType: jobPost.exposureType,
 									organizationId: jobPost.organizationId,
+									paymentStatus: jobPost.paymentStatus,
 								})
 								.from(jobPost)
 								.where(eq(jobPost.id, jobPostId))
@@ -1375,6 +1395,16 @@ export const moderationRouter = {
 									message: "Job post was not found.",
 								});
 							}
+
+							// 정원 초과 승인은 항목별 실패로 떨어진다(CONFLICT). 같은 트랜잭션에서
+							// 앞선 승인이 반영돼 active가 늘므로, 정원 내 앞 항목만 성공한다.
+							await assertPremiumApprovalWithinCapacity({
+								executor: tx,
+								existingExposureType: existing.exposureType,
+								existingPaymentStatus: existing.paymentStatus,
+								newPaymentStatus: input.paymentStatus,
+								now: new Date(),
+							});
 
 							const exposureEndsAt =
 								input.paymentStatus === "paid" &&
