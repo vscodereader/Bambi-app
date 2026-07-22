@@ -38,3 +38,19 @@ export const requireCommunityMember = async (
 
 	return profile;
 };
+
+// 자격이 없어도 실패하지 않는 판정 — 홈 미리보기(overview)처럼 미자격자·비로그인에게도
+// 요약을 보여주는 public 경로에서 쓴다. 자격 실패(ORPCError)만 null로 접고, DB 오류
+// 같은 예기치 못한 실패는 그대로 던진다.
+export const findCommunityMember = async (
+	session: SessionLike | null | undefined
+): Promise<BambiAccessProfile | null> => {
+	try {
+		return await requireCommunityMember(session);
+	} catch (error) {
+		if (error instanceof ORPCError) {
+			return null;
+		}
+		throw error;
+	}
+};
