@@ -1,7 +1,7 @@
 import { db } from "@bambi-app/db";
 import { adPlacement, adProduct } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, notInArray } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -117,7 +117,16 @@ export const adProductsRouter = {
 				orderBy: [asc(adPlacement.sortOrder), asc(adPlacement.createdAt)],
 				with: {
 					products: {
-						where: eq(adProduct.isActive, true),
+						// 좌/우 사이드 배너(side-horizontal·side-vertical)는 프리미엄 광고로 통합돼
+						// 신규 구매를 차단한다. 레거시 데이터(이미 팔린 공고)는 계속 노출하되
+						// 구인자 구매 카탈로그에서만 제외한다. 운영자 관리(listCatalogAdmin)에는 계속 노출.
+						where: and(
+							eq(adProduct.isActive, true),
+							notInArray(adProduct.previewTemplate, [
+								"side-horizontal",
+								"side-vertical",
+							])
+						),
 						orderBy: [asc(adProduct.sortOrder), asc(adProduct.createdAt)],
 					},
 				},

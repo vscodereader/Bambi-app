@@ -93,6 +93,12 @@ export function AdProductForm({
 		initialValue?.autoBoostsPerDay ?? 0
 	);
 	const isBannerTemplate = BANNER_PREVIEW_TEMPLATES.has(previewTemplate);
+	// 편집 중 상품이 이미 레거시 side 값(좌/우 사이드 배너)이면 표준 옵션 목록에서 빠져
+	// Select 표시가 깨진다. 현재 값이 옵션에 없으면 레거시 항목으로 함께 렌더한다.
+	// AD_PREVIEW_TEMPLATE_LABELS는 레거시 포함 전체 라벨을 계약상 계속 제공한다.
+	const isLegacyTemplate = !AD_PREVIEW_TEMPLATE_OPTIONS.some(
+		(option) => option.value === previewTemplate
+	);
 
 	const setPrice = (id: number, patch: Partial<PriceOption>) =>
 		setPriceOptions((options) =>
@@ -185,6 +191,11 @@ export function AdProductForm({
 								{option.label}
 							</SelectItem>
 						))}
+						{isLegacyTemplate ? (
+							<SelectItem value={previewTemplate}>
+								{AD_PREVIEW_TEMPLATE_LABELS[previewTemplate]}
+							</SelectItem>
+						) : null}
 					</SelectContent>
 				</Select>
 				<p className="m-0 text-muted-foreground text-xs">

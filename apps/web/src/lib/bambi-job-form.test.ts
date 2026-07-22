@@ -107,3 +107,89 @@ describe("validateJobForm taxonomy 화이트리스트", () => {
 		expect(result.ok).toBe(false);
 	});
 });
+
+describe("validateJobForm 프리미엄 광고 필수 배너", () => {
+	// 규격에 맞는 배너 아이템(형식·크기·비율 통과). 필수 검사만 보려는 픽스처.
+	const horizontalItem = {
+		altText: "",
+		byteSize: 1000,
+		fileName: "h.png",
+		height: 600,
+		mimeType: "image/png",
+		width: 1400,
+	};
+	const verticalItem = {
+		altText: "",
+		byteSize: 1000,
+		fileName: "v.png",
+		height: 900,
+		mimeType: "image/png",
+		width: 400,
+	};
+	const paidForm = {
+		...baseForm,
+		district: "강남",
+		adProductId: "premium-1",
+		exposureDurationDays: 7,
+		exposureType: "premium-banner" as const,
+		paymentMethod: "card" as const,
+	};
+	const requiredBannerUsages = ["ad_horizontal", "ad_vertical"] as const;
+
+	it("유료 + 두 종 필수인데 이미지가 없으면 media 오류로 실패한다", () => {
+		const result = validateJobForm(paidForm, {
+			...options,
+			requiredBannerUsages: [...requiredBannerUsages],
+		});
+
+		expect(result.ok).toBe(false);
+		expect(!result.ok && result.errors.media).toBe(
+			"프리미엄 광고는 가로형·세로형 광고 배너 이미지를 모두 등록해야 합니다."
+		);
+	});
+
+	it("가로형만 있으면 세로형 누락으로 실패한다", () => {
+		const result = validateJobForm(paidForm, {
+			...options,
+			media: {
+				adHorizontal: horizontalItem,
+				adVertical: null,
+				cover: null,
+				detail: [],
+			},
+			requiredBannerUsages: [...requiredBannerUsages],
+		});
+
+		expect(result.ok).toBe(false);
+		expect(!result.ok && result.errors.media).toBe(
+			"프리미엄 광고는 가로형·세로형 광고 배너 이미지를 모두 등록해야 합니다."
+		);
+	});
+
+	it("가로형·세로형을 모두 등록하면 통과한다", () => {
+		const result = validateJobForm(paidForm, {
+			...options,
+			media: {
+				adHorizontal: horizontalItem,
+				adVertical: verticalItem,
+				cover: null,
+				detail: [],
+			},
+			requiredBannerUsages: [...requiredBannerUsages],
+		});
+
+		expect(result.ok).toBe(true);
+	});
+
+	it("무료(adProductId null)면 필수 배너가 있어도 통과한다", () => {
+		const result = validateJobForm(
+			{ ...baseForm, district: "강남", adProductId: null },
+			{
+				...options,
+				requiredBannerUsages: [...requiredBannerUsages],
+			}
+		);
+
+		expect(result.ok).toBe(true);
+	});
+});

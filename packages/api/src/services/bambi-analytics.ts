@@ -214,16 +214,20 @@ interface RecordAdBannerImpressionsInput {
 	};
 }
 
-// 배너 상품 노출은 그룹(위치)별로 impression을 기록한다. metadata.section 값은 해당 배너의
-// exposureType 문자열을 그대로 써서(premium-banner/left-banner/right-banner) 위치별 집계와 정합한다.
+// 배너 상품 노출은 그룹(노출 슬롯)별로 impression을 기록한다. 광고 통합 후 프리미엄 공고가
+// 좌·우 슬롯에도 노출돼 슬롯과 공고의 exposureType이 어긋날 수 있으므로, metadata.section에는
+// 실제 노출 슬롯(premium-banner/left-banner/right-banner)을 넣고, metadata.exposureType에는
+// 공고의 실제 exposureType을 그대로 남긴다. 슬롯별 집계는 section 값으로 이뤄진다.
 const toAdBannerImpressionValue = ({
 	actorUserId,
 	item,
 	position,
+	section,
 }: {
 	actorUserId?: null | string;
 	item: AdBannerImpressionItem;
 	position: number;
+	section: "left-banner" | "premium-banner" | "right-banner";
 }) => ({
 	actorUserId: actorUserId ?? null,
 	eventType: "impression" as const,
@@ -231,7 +235,7 @@ const toAdBannerImpressionValue = ({
 	metadata: {
 		exposureType: item.exposureType,
 		position,
-		section: item.exposureType,
+		section,
 	},
 	organizationId: item.organizationId,
 });
@@ -242,13 +246,28 @@ export const recordAdBannerImpressions = async ({
 }: RecordAdBannerImpressionsInput): Promise<void> => {
 	const values = [
 		...groups.premiumBanner.map((item, position) =>
-			toAdBannerImpressionValue({ actorUserId, item, position })
+			toAdBannerImpressionValue({
+				actorUserId,
+				item,
+				position,
+				section: "premium-banner",
+			})
 		),
 		...groups.leftBanner.map((item, position) =>
-			toAdBannerImpressionValue({ actorUserId, item, position })
+			toAdBannerImpressionValue({
+				actorUserId,
+				item,
+				position,
+				section: "left-banner",
+			})
 		),
 		...groups.rightBanner.map((item, position) =>
-			toAdBannerImpressionValue({ actorUserId, item, position })
+			toAdBannerImpressionValue({
+				actorUserId,
+				item,
+				position,
+				section: "right-banner",
+			})
 		),
 	];
 

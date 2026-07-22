@@ -209,7 +209,7 @@ export function EmployerAdGuideScreen() {
 					</div>
 					<p className="m-0 text-muted-foreground text-sm">
 						끌어올리기(수동·자동)는 스페셜·급구·추천 리스팅 광고에만 제공되며,
-						프리미엄·사이드 배너 광고에는 제공되지 않습니다.
+						프리미엄 배너 광고에는 제공되지 않습니다.
 					</p>
 					<p className="m-0 font-medium text-destructive text-sm">
 						{AD_POLICY_WARNING}

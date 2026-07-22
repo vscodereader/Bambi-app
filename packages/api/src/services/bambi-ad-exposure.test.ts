@@ -4,6 +4,7 @@ import {
 	groupAdBannerJobs,
 	isExposureActive,
 	PREMIUM_BANNER_MAX_SLOTS,
+	requiredAdBannerUsagesForExposureType,
 	SIDE_BANNER_MAX_SLOTS,
 } from "./bambi-ad-exposure";
 
@@ -95,33 +96,53 @@ describe("buildExposureJobSections", () => {
 });
 
 describe("groupAdBannerJobs", () => {
-	it("배너 타입별 활성 공고를 그룹핑하고 만료를 제외한다(프리미엄은 2개로 캡)", () => {
+	it("상단·좌·우 슬롯을 하나의 프리미엄 풀에서 채우고 만료를 제외한다", () => {
 		const rows = [
 			...Array.from({ length: 5 }, (_, i) => row(`p${i}`, "premium-banner")),
-			row("l1", "left-banner"),
-			row("r1", "right-banner", { exposureEndsAt: PAST }),
+			row("expired", "premium-banner", { exposureEndsAt: PAST }),
 		];
 		const groups = groupAdBannerJobs(rows, NOW);
-		// 프리미엄 후보가 슬롯을 초과하므로 2개로 캡된다.
+		// 풀(활성 5건) > 슬롯 상한이므로 각 슬롯은 상한까지 찬다.
 		expect(groups.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
-		expect(groups.leftBanner.map((r) => r.id)).toEqual(["l1"]);
-		expect(groups.rightBanner).toEqual([]);
-	});
-	it("좌/우 사이드 배너는 각각 최대 3개, 프리미엄은 2개로 캡된다(집합 기준)", () => {
-		const rows = [
-			...Array.from({ length: 5 }, (_, i) => row(`p${i}`, "premium-banner")),
-			...Array.from({ length: 4 }, (_, i) => row(`l${i}`, "left-banner")),
-			...Array.from({ length: 4 }, (_, i) => row(`r${i}`, "right-banner")),
+		expect(groups.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		expect(groups.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		// 선발은 전부 활성 풀에서만 나온다(만료 공고 배제).
+		const poolIds = Array.from({ length: 5 }, (_, i) => `p${i}`);
+		const selected = [
+			...groups.premiumBanner,
+			...groups.leftBanner,
+			...groups.rightBanner,
 		];
+		for (const r of selected) {
+			expect(poolIds).toContain(r.id);
+		}
+	});
+	it("레거시 left-banner/right-banner 공고도 통합 풀에 합류해 세 슬롯 후보가 된다", () => {
+		const rows = [
+			...Array.from({ length: 3 }, (_, i) => row(`l${i}`, "left-banner")),
+			...Array.from({ length: 3 }, (_, i) => row(`r${i}`, "right-banner")),
+		];
+		const groups = groupAdBannerJobs(rows, NOW);
+		// 프리미엄 상품이 하나도 없어도 레거시 side 공고만으로 프리미엄 슬롯이 채워진다.
+		expect(groups.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
+		expect(groups.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		expect(groups.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		const poolIds = [
+			...Array.from({ length: 3 }, (_, i) => `l${i}`),
+			...Array.from({ length: 3 }, (_, i) => `r${i}`),
+		];
+		for (const r of [...groups.premiumBanner, ...groups.rightBanner]) {
+			expect(poolIds).toContain(r.id);
+		}
+	});
+	it("슬롯 상한은 프리미엄 2개·좌우 각 3개다", () => {
+		const rows = Array.from({ length: 10 }, (_, i) =>
+			row(`p${i}`, "premium-banner")
+		);
 		const groups = groupAdBannerJobs(rows, NOW);
 		expect(groups.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
 		expect(groups.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
 		expect(groups.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
-		// 셔플로 순서는 바뀌므로 선발된 id가 후보 집합에 속하는지만 단정한다.
-		const leftIds = Array.from({ length: 4 }, (_, i) => `l${i}`);
-		for (const r of groups.leftBanner) {
-			expect(leftIds).toContain(r.id);
-		}
 	});
 });
 
@@ -213,5 +234,34 @@ describe("groupAdBannerJobs 1시간 랜덤 로테이션", () => {
 		];
 		const groups = groupAdBannerJobs(rows, now);
 		expect(idsOf(groups.leftBanner)).toEqual(["left-live"]);
+	});
+
+	it("프리미엄만 있는 풀이 좌·우 슬롯도 채운다(통합 풀 공유)", () => {
+		const groups = groupAdBannerJobs(
+			premiumRows,
+			new Date("2026-07-21T03:00:00Z")
+		);
+		const poolIds = premiumRows.map((r) => r.id);
+		for (const r of [...groups.leftBanner, ...groups.rightBanner]) {
+			expect(poolIds).toContain(r.id);
+		}
+		expect(groups.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		expect(groups.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+	});
+});
+
+describe("requiredAdBannerUsagesForExposureType", () => {
+	it("배너형은 가로+세로 두 규격을 모두 요구한다", () => {
+		for (const type of ["premium-banner", "left-banner", "right-banner"]) {
+			expect(requiredAdBannerUsagesForExposureType(type)).toEqual([
+				"ad_horizontal",
+				"ad_vertical",
+			]);
+		}
+	});
+	it("배너형이 아니면 빈 배열이다", () => {
+		for (const type of ["standard", "special", "urgent", "recommended", ""]) {
+			expect(requiredAdBannerUsagesForExposureType(type)).toEqual([]);
+		}
 	});
 });

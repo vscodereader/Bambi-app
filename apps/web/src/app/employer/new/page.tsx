@@ -49,6 +49,7 @@ import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader
 import { JobRegionFields } from "@/components/bambi/job-region-fields";
 import { PageShell } from "@/components/bambi/page-shell";
 import Loader from "@/components/loader";
+import { useRequiredBannerGate } from "@/hooks/use-required-banner-gate";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
 import { JOB_REVIEW_SLA_TEXT } from "@/lib/bambi-job-copy";
@@ -281,6 +282,11 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	// 제출 시점의 결제 방식을 onSuccess로 넘겨, 등록 성공 후 무통장이면 다이얼로그를 띄운다.
 	const pendingBankNoticeRef = useRef<{ amount: number | null } | null>(null);
 	useUnsavedChangesWarning(isDirty);
+	// 프리미엄 광고는 가로형·세로형 배너 이미지가 모두 있어야 등록할 수 있다.
+	const { bannerImagesMissing, requiredBannerUsages } = useRequiredBannerGate({
+		adProductId: form.adProductId,
+		media,
+	});
 	const createMediaUploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
 	);
@@ -478,6 +484,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		const validation = validateJobForm(form, {
 			descriptionBlocks,
 			media,
+			requiredBannerUsages,
 			teamScopes,
 		});
 
@@ -894,23 +901,37 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 							</div>
 						</div>
 					) : (
-						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-							<Button onClick={handleCancel} type="button" variant="outline">
-								취소
-							</Button>
-							<Button
-								disabled={
-									createMutation.isPending ||
-									createMediaUploadMutation.isPending ||
-									cardPaymentBlocked ||
-									!verified
-								}
-								type="submit"
-							>
-								{createMutation.isPending || createMediaUploadMutation.isPending
-									? "등록 중…"
-									: "공고 등록"}
-							</Button>
+						<div className="flex flex-col gap-3">
+							{bannerImagesMissing ? (
+								<Alert variant="warning">
+									<TriangleAlert />
+									<AlertTitle>배너 이미지를 모두 등록해 주세요</AlertTitle>
+									<AlertDescription>
+										프리미엄 광고는 가로형·세로형 광고 배너 이미지를 모두
+										등록해야 공고를 등록할 수 있습니다.
+									</AlertDescription>
+								</Alert>
+							) : null}
+							<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+								<Button onClick={handleCancel} type="button" variant="outline">
+									취소
+								</Button>
+								<Button
+									disabled={
+										createMutation.isPending ||
+										createMediaUploadMutation.isPending ||
+										cardPaymentBlocked ||
+										bannerImagesMissing ||
+										!verified
+									}
+									type="submit"
+								>
+									{createMutation.isPending ||
+									createMediaUploadMutation.isPending
+										? "등록 중…"
+										: "공고 등록"}
+								</Button>
+							</div>
 						</div>
 					)}
 				</form>

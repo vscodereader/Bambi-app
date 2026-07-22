@@ -32,6 +32,7 @@ import {
 	type JobExposureType,
 	type ListingSectionExposureType,
 	previewTemplateToExposureType,
+	requiredAdBannerUsagesForExposureType,
 } from "../../services/bambi-ad-exposure";
 import {
 	getRecentJobPerformanceMetrics,
@@ -398,6 +399,40 @@ const getJobPostMediaStorageKeys = async (
 		.where(eq(jobPostMedia.jobPostId, jobPostId));
 
 	return rows.map((row) => row.storageKey);
+};
+
+const getJobPostMediaUsages = async (
+	jobPostId: string
+): Promise<JobPostMediaUsage[]> => {
+	const rows = await db
+		.select({ usage: jobPostMedia.usage })
+		.from(jobPostMedia)
+		.where(eq(jobPostMedia.jobPostId, jobPostId));
+
+	return rows.map((row) => row.usage);
+};
+
+// 프리미엄(배너형) 광고 공고는 상단·좌측 슬롯용 가로형과 우측 슬롯용 세로형 배너를 모두
+// 갖춰야 한다. 통합 후 한 공고가 세 슬롯 모두의 후보가 되므로, 어느 한쪽이 빠지면 그 슬롯이
+// 빈 채로 노출된다. 최종 저장될 미디어 usage에 필요한 배너 규격이 모두 있는지 검증한다.
+const requireAdBannerMedia = (
+	exposureType: string,
+	usages: JobPostMediaUsage[]
+): void => {
+	const required = requiredAdBannerUsagesForExposureType(exposureType);
+
+	if (required.length === 0) {
+		return;
+	}
+
+	const present = new Set(usages);
+
+	if (!required.every((usage) => present.has(usage))) {
+		throw new ORPCError("BAD_REQUEST", {
+			message:
+				"프리미엄 광고는 가로형·세로형 배너 이미지를 모두 등록해야 합니다.",
+		});
+	}
 };
 
 const getJobPostMediaSet = async (jobPostId: string) => {
@@ -1033,6 +1068,10 @@ export const jobsRouter = {
 				media,
 				organizationId: input.organizationId,
 			});
+			requireAdBannerMedia(
+				exposure.exposureType,
+				mediaRows.map((row) => row.usage)
+			);
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status = getInitialJobPostStatus({
 				employerVerificationStatus:
@@ -1174,6 +1213,14 @@ export const jobsRouter = {
 						organizationId: existing.organizationId,
 					})
 				: null;
+			// update는 media를 안 보내면 기존 미디어를 그대로 두고, 보내면 전량 교체한다.
+			// 배너 검증은 그 "최종 상태"(교체될 rows 또는 유지되는 기존 rows) 기준으로 한다.
+			requireAdBannerMedia(
+				exposure.exposureType,
+				mediaRows
+					? mediaRows.map((row) => row.usage)
+					: await getJobPostMediaUsages(input.id)
+			);
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status: JobPostStatus = riskDetected
 				? "pending_review"
