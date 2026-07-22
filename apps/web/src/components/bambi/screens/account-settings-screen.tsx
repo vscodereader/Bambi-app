@@ -15,6 +15,7 @@ import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
 import { Badge, Button, Input } from "../ds";
 import { PhoneVerifyDialog } from "../phone-verify-dialog";
+import { WithdrawAccountSection } from "../withdraw-account-section";
 
 const BIRTH_PATTERN = /^\d{8}$/;
 
@@ -199,6 +200,7 @@ export function AccountSettingsScreen() {
 				<Button className="w-full" onClick={handleSignOut} variant="secondary">
 					로그아웃
 				</Button>
+				<WithdrawAccountSection />
 			</div>
 		</div>
 	);
