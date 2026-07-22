@@ -232,10 +232,12 @@ const listAdBanners = () =>
 		path: ["bambi", "jobs", "listAdBanners"],
 	})(undefined as never);
 
-// 광고 통합 후 상단·좌·우 세 슬롯은 하나의 프리미엄 풀(배너 3종 전부)을 공유해 슬롯마다
-// 독립 셔플·추첨한다. 이 테스트는 실 dev DB를 쓰고 DB에 기존 배너 공고가 있어 어떤 공고가
-// 어느 슬롯에 뽑히는지 결정적으로 검증할 수 없다(셔플·추첨 상세는 bambi-ad-exposure.test.ts가
-// 유닛으로 커버). 여기서는 기존 데이터와 공존하는 안정적 술어만 검증한다.
+// 광고 통합 후 상단·좌·우 세 슬롯은 하나의 프리미엄 풀(배너 3종 전부)을 공유해, 좌→중간(상단
+// 프리미엄)→우 순서로 도는 결정적 링 로테이션으로 채운다(매시간 한 칸씩 전진). 이 테스트는 실
+// dev DB를 쓰고 DB에 기존 배너 공고가 있어 어떤 공고가 어느 슬롯에 배치되는지 절대적으로는
+// 검증할 수 없다(링 배치 상세는 bambi-ad-exposure.test.ts가 유닛으로 커버). 여기서는 기존
+// 데이터와 공존하는 안정적 술어만 검증한다: 활성 후보가 8칸(좌3+중2+우3) 이하면 전원 노출,
+// 8개 초과면 링 위치에 따라 일부는 이번 버킷 노출 대기다.
 describe("bambi jobs.listAdBanners", () => {
 	let fixture: AdBannerFixture;
 
@@ -247,7 +249,8 @@ describe("bambi jobs.listAdBanners", () => {
 		await cleanupAdBannerFixture(fixture);
 	});
 
-	// 세 슬롯 노출 id의 합집합. 통합 풀에선 한 공고가 여러 슬롯에 동시에 뽑힐 수 있다.
+	// 세 슬롯 노출 id의 합집합. 링 로테이션에서 활성 후보가 8개 이하면 한 공고가 여러 슬롯에
+	// 동시에 배치될 수 있다.
 	const shownIds = (result: {
 		leftBanner: { id: string }[];
 		premiumBanner: { id: string }[];
@@ -261,9 +264,9 @@ describe("bambi jobs.listAdBanners", () => {
 			].map((job) => job.id)
 		);
 
-	// 모든 슬롯이 상한까지 찼는가 — 활성 후보(풀)가 슬롯보다 많다는 뜻이라, 이때는 특정
-	// 활성 공고가 기존 데이터에 밀려 어느 슬롯에도 안 보일 수 있다. 슬롯에 여유가 있으면
-	// (풀이 상한 이하이면) 활성 배너형 공고는 반드시 그 슬롯에 전원 노출된다.
+	// 모든 슬롯이 상한까지 찼는가(좌3·중2·우3). 활성 후보가 8칸을 넘으면 링 순환상 일부
+	// 공고는 이번 버킷엔 어느 슬롯에도 안 보이고 노출 대기하는데, 그때도 슬롯은 가득 차 있다.
+	// 후보가 8칸 이하이면 활성 배너형 공고는 링 순환으로 전원 노출된다.
 	const slotsSaturated = (result: {
 		leftBanner: unknown[];
 		premiumBanner: unknown[];
@@ -296,8 +299,8 @@ describe("bambi jobs.listAdBanners", () => {
 		const shown = shownIds(result);
 		const saturated = slotsSaturated(result);
 
-		// 프리미엄·레거시 좌·레거시 우 픽스처 모두 통합 풀 후보다. 슬롯에 여유가 있으면
-		// 반드시 노출되고, 슬롯이 다 찼으면 기존 데이터에 밀려 빠질 수 있다.
+		// 프리미엄·레거시 좌·레거시 우 픽스처 모두 통합 풀 후보다. 활성 후보가 8칸 이하면
+		// 링 순환으로 반드시 노출되고, 8칸을 넘어 슬롯이 다 차면 링 위치상 이번 버킷엔 빠질 수 있다.
 		for (const id of [
 			fixture.premiumJobId,
 			fixture.leftJobId,
@@ -327,7 +330,7 @@ describe("bambi jobs.listAdBanners", () => {
 		const left = union.find((j) => j.id === fixture.leftJobId);
 
 		// 회귀 방지: 예전에는 usage='cover' 서브쿼리만 있어 배너 행이 아예 선택되지 않았다.
-		// 통합 풀 추첨상 픽스처가 이번 응답에 없을 수 있어, 노출된 경우에만 원본을 검증한다.
+		// 링 순환상 픽스처가 이번 버킷 응답에 없을 수 있어, 노출된 경우에만 원본을 검증한다.
 		if (premium) {
 			expect(premium.adHorizontal?.storageKey).toBe(
 				`ad-h/${fixture.premiumJobId}.png`
@@ -382,7 +385,7 @@ describe("bambi jobs.listAdBanners", () => {
 		}
 
 		// 이번 응답에 노출된 픽스처는 section=슬롯, exposureType=공고 실제값으로 기록돼야 한다.
-		// 통합 후 레거시 좌/우 공고가 프리미엄 슬롯에 뽑히면 section≠exposureType이 정상이다.
+		// 통합 후 레거시 좌/우 공고가 프리미엄 슬롯에 배치되면 section≠exposureType이 정상이다.
 		for (const [section, items] of shownBySlot) {
 			for (const item of items) {
 				if (!fixture.jobPostIds.includes(item.id)) {

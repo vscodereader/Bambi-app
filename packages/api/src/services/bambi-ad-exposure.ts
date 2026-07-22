@@ -159,63 +159,30 @@ export const PREMIUM_BANNER_MAX_SLOTS = 2;
 // 로테이션 주기. 같은 버킷 안에서는 어떤 요청·인스턴스든 같은 선발을 돌려준다.
 const ROTATION_INTERVAL_MS = 60 * 60 * 1000;
 
-// 문자열을 32비트 시드로 접는 FNV-1a. 시간 버킷+위치 타입을 시드화하는 용도라
-// 암호학적 강도는 필요 없다. XOR·>>>는 해시 정의상 필수인 의도된 비트 연산이다.
-const hashSeed = (input: string): number => {
-	let hash = 0x81_1c_9d_c5;
-	for (let index = 0; index < input.length; index++) {
-		// biome-ignore lint/suspicious/noBitwiseOperators: FNV-1a 정의상 XOR 필수(의도된 비트 연산).
-		hash ^= input.charCodeAt(index);
-		hash = Math.imul(hash, 0x01_00_01_93);
-	}
-	// biome-ignore lint/suspicious/noBitwiseOperators: 32비트 부호 없는 정수로 정규화(의도된 비트 연산).
-	return hash >>> 0;
-};
-
-// mulberry32 — 의존성 없는 결정적 PRNG. 시드가 같으면 수열이 같다. 시프트·XOR·OR는
-// 알고리즘 정의상 필수인 의도된 비트 연산이다.
-const createSeededRandom = (seed: number): (() => number) => {
-	// biome-ignore lint/suspicious/noBitwiseOperators: 32비트 부호 없는 시드로 정규화(의도된 비트 연산).
-	let state = seed >>> 0;
-	return () => {
-		// biome-ignore lint/suspicious/noBitwiseOperators: mulberry32 상태 전이(32비트 부호 없는 덧셈).
-		state = (state + 0x6d_2b_79_f5) >>> 0;
-		let t = state;
-		// biome-ignore lint/suspicious/noBitwiseOperators: mulberry32 믹싱 단계(의도된 비트 연산).
-		t = Math.imul(t ^ (t >>> 15), t | 1);
-		// biome-ignore lint/suspicious/noBitwiseOperators: mulberry32 믹싱 단계(의도된 비트 연산).
-		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-		// biome-ignore lint/suspicious/noBitwiseOperators: 32비트 정규화 후 [0,1) 매핑(의도된 비트 연산).
-		return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
-	};
-};
-
-// 시드 고정 Fisher–Yates. 입력을 훼손하지 않고 새 배열을 돌려준다.
-const shuffleWithSeed = <T>(items: T[], seed: number): T[] => {
-	const result = [...items];
-	const random = createSeededRandom(seed);
-	for (let index = result.length - 1; index > 0; index--) {
-		const target = Math.floor(random() * (index + 1));
-		[result[index], result[target]] = [result[target] as T, result[index] as T];
-	}
-	return result;
-};
+// 링 위치를 좌→중간(상단 프리미엄)→우 순서로 고정 배치한다. 좌측 3칸(base 0)·상단 2칸(base 3)·
+// 우측 3칸(base 5)으로 총 8칸이며, 이 순서가 배너가 도는 링의 진행 방향이다.
+const LEFT_RING_BASE = 0;
+const PREMIUM_RING_BASE = 3;
+const RIGHT_RING_BASE = 5;
 
 // 결제완료된 배너형 공고를 상단·좌·우 슬롯별로 그룹핑한다. 광고 통합 후 세 슬롯은 하나의
 // 프리미엄 풀을 공유한다 — 후보 = exposureType이 배너 3종(AD_BANNER_EXPOSURE_TYPES) 중
-// 하나이고 활성(미만료)인 공고 전체(레거시 left-banner/right-banner 공고 포함). 이 풀을 id로
-// 정렬한 뒤 슬롯별 시드로 독립 셔플해 잘라낸다. 같은 공고가 여러 슬롯에 동시 노출될 수 있는
-// 게 의도다: 프리미엄은 상단+좌+우 모두의 노출 대상이고, 시드에 위치 타입을 섞어 슬롯마다
-// 다른 순열을 뽑으므로 시간당 재추첨으로 각 공고의 기대 노출은 슬롯 전반에 균등해진다.
-// 정해진 순서를 도는 순환이 아니라 매시간 독립 추첨이라 모든 배너가 동일 확률로 노출된다.
-// 후보가 슬롯 이하면 전원 노출되고 표시 순서만 매시간 섞인다.
+// 하나이고 활성(미만료)인 공고 전체(레거시 left-banner/right-banner 공고 포함).
+//
+// 무작위 추첨을 버리고 결정적 링 로테이션을 쓴다. 풀을 id 오름차순으로 정렬해 기준 순서를
+// 고정하고(DB 정렬 순서 의존 제거), 좌→중간→우 순서의 8칸 링에 배치한다. 각 그룹 i번째 칸에는
+// pool[mod(base + i - bucket, n)]을 넣으므로 공고 k의 링 위치는 (k + bucket) mod n이 되어
+// 매시간(버킷당) 정확히 한 칸씩 전진한다: 좌1→좌2→좌3→중간1→중간2→우1→우2→우3.
+// n > 8이면 우3을 지난 공고는 잠시 비노출 대기하다 다시 좌1로 재진입한다. n ≤ 8이면 전 공고가
+// 항상 노출되고 자리만 순환한다(여러 그룹 동시 노출 허용 — 통합 풀 설계 그대로).
+// 같은 버킷이면 어느 인스턴스·요청이든 같은 결과를 돌려준다(다중 인스턴스 정합).
+// 그룹당 칸 수는 min(그룹 칸수, n)으로 잘라 같은 레일에 같은 공고가 두 번 쌓이지 않게 한다.
 export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	rows: TRow[],
 	now: Date
 ): { leftBanner: TRow[]; premiumBanner: TRow[]; rightBanner: TRow[] } => {
-	const hourBucket = Math.floor(now.getTime() / ROTATION_INTERVAL_MS);
-	// 배너 3종 전부를 하나의 프리미엄 풀로 모은다. id 정렬로 DB 정렬 순서 의존을 끊어야
-	// 같은 버킷=같은 선발이 보장된다.
+	const bucket = Math.floor(now.getTime() / ROTATION_INTERVAL_MS);
+	// 배너 3종 전부를 하나의 프리미엄 풀로 모으고 id로 정렬해 링 기준 순서를 고정한다.
 	const bannerExposureTypes = new Set<string>(AD_BANNER_EXPOSURE_TYPES);
 	const pool = rows
 		.filter(
@@ -224,18 +191,26 @@ export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 				isExposureActive(item.exposureEndsAt, now)
 		)
 		.sort((a, b) => a.id.localeCompare(b.id));
-	// 슬롯별 시드로 같은 풀을 독립 셔플해 상한만큼 자른다. 슬롯 이름을 시드에 섞어 슬롯마다
-	// 서로 다른 순열을 뽑는다.
-	const pickSlot = (slotSeed: string, maxSlots: number): TRow[] =>
-		shuffleWithSeed(pool, hashSeed(`${hourBucket}:${slotSeed}`)).slice(
-			0,
-			maxSlots
-		);
+	const n = pool.length;
+	// 그룹의 base 링 위치에서 시작해 slotCount칸을 채운다. 음수 안전 모듈러로 링을 감아
+	// 매 버킷 한 칸씩 전진시킨다. 칸 수는 min(slotCount, n)으로 잘라 그룹 내 중복을 막는다.
+	const fillGroup = (base: number, slotCount: number): TRow[] => {
+		const slots = Math.min(slotCount, n);
+		const result: TRow[] = [];
+		for (let i = 0; i < slots; i++) {
+			const index = (((base + i - bucket) % n) + n) % n;
+			result.push(pool[index] as TRow);
+		}
+		return result;
+	};
 
+	if (n === 0) {
+		return { leftBanner: [], premiumBanner: [], rightBanner: [] };
+	}
 	return {
-		leftBanner: pickSlot("left-banner", SIDE_BANNER_MAX_SLOTS),
-		premiumBanner: pickSlot("premium-banner", PREMIUM_BANNER_MAX_SLOTS),
-		rightBanner: pickSlot("right-banner", SIDE_BANNER_MAX_SLOTS),
+		leftBanner: fillGroup(LEFT_RING_BASE, SIDE_BANNER_MAX_SLOTS),
+		premiumBanner: fillGroup(PREMIUM_RING_BASE, PREMIUM_BANNER_MAX_SLOTS),
+		rightBanner: fillGroup(RIGHT_RING_BASE, SIDE_BANNER_MAX_SLOTS),
 	};
 };
 

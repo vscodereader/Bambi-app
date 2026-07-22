@@ -156,97 +156,118 @@ const makeRow = (id: string, exposureType: string) => ({
 
 const idsOf = (rows: { id: string }[]) => rows.map((r) => r.id).sort();
 
-describe("groupAdBannerJobs 1시간 랜덤 로테이션", () => {
-	const leftRows = Array.from({ length: 8 }, (_, i) =>
-		makeRow(`left-${i}`, "left-banner")
-	);
-	const premiumRows = Array.from({ length: 8 }, (_, i) =>
-		makeRow(`prem-${i}`, "premium-banner")
-	);
+describe("groupAdBannerJobs 링 로테이션", () => {
+	// 풀은 id 오름차순으로 정렬되므로 b0..b(n-1)이 그대로 링 기준 순서가 된다.
+	const pool = (n: number) =>
+		Array.from({ length: n }, (_, i) => makeRow(`b${i}`, "premium-banner"));
 
-	it("같은 시간 버킷에서는 몇 번을 호출해도 같은 선발을 돌려준다", () => {
+	it("같은 버킷에서는 몇 번을 호출해도 세 그룹 모두 같은 선발을 돌려준다", () => {
+		const rows = pool(8);
 		const now = new Date("2026-07-21T03:10:00Z");
 		const again = new Date("2026-07-21T03:50:00Z"); // 같은 버킷(03시)
-		const first = groupAdBannerJobs(leftRows, now);
-		const second = groupAdBannerJobs(leftRows, again);
+		const first = groupAdBannerJobs(rows, now);
+		const second = groupAdBannerJobs(rows, again);
 		expect(second.leftBanner.map((r) => r.id)).toEqual(
 			first.leftBanner.map((r) => r.id)
 		);
+		expect(second.premiumBanner.map((r) => r.id)).toEqual(
+			first.premiumBanner.map((r) => r.id)
+		);
+		expect(second.rightBanner.map((r) => r.id)).toEqual(
+			first.rightBanner.map((r) => r.id)
+		);
 	});
 
-	it("시간 버킷이 지나면 선발이 바뀐다(72버킷 중 최소 1회 변화)", () => {
+	it("버킷이 하나 지나면 링이 좌→중간→우로 정확히 한 칸 전진한다(n=8)", () => {
+		const rows = pool(8);
 		const base = new Date("2026-07-21T00:00:00Z").getTime();
-		const selections = new Set<string>();
-		for (let hour = 0; hour < 72; hour++) {
-			const groups = groupAdBannerJobs(
-				leftRows,
-				new Date(base + hour * HOUR_MS)
-			);
-			selections.add(groups.leftBanner.map((r) => r.id).join(","));
-		}
-		expect(selections.size).toBeGreaterThan(1);
+		const a = groupAdBannerJobs(rows, new Date(base));
+		const b = groupAdBannerJobs(rows, new Date(base + HOUR_MS));
+		// 각 칸의 공고가 링 진행 방향으로 다음 칸에 그대로 나타난다.
+		expect(b.leftBanner[2]?.id).toBe(a.leftBanner[1]?.id);
+		expect(b.premiumBanner[0]?.id).toBe(a.leftBanner[2]?.id);
+		expect(b.rightBanner[0]?.id).toBe(a.premiumBanner[1]?.id);
+		expect(b.leftBanner[0]?.id).toBe(a.rightBanner[2]?.id);
 	});
 
-	it("슬롯 초과 후보 전원이 72버킷 안에 최소 1회 선발된다(고정 배제 없음)", () => {
+	it("n=9면 우측 끝 공고는 다음 버킷에 대기하고, 대기하던 공고가 좌측 첫 칸으로 진입한다", () => {
+		const rows = pool(9);
 		const base = new Date("2026-07-21T00:00:00Z").getTime();
-		const seen = new Set<string>();
-		for (let hour = 0; hour < 72; hour++) {
-			const groups = groupAdBannerJobs(
-				leftRows,
-				new Date(base + hour * HOUR_MS)
-			);
-			for (const r of groups.leftBanner) {
-				seen.add(r.id);
-			}
-		}
-		expect([...seen].sort()).toEqual(idsOf(leftRows));
+		const a = groupAdBannerJobs(rows, new Date(base));
+		const b = groupAdBannerJobs(rows, new Date(base + HOUR_MS));
+		const aIds = new Set(
+			[...a.leftBanner, ...a.premiumBanner, ...a.rightBanner].map((r) => r.id)
+		);
+		const bIds = new Set(
+			[...b.leftBanner, ...b.premiumBanner, ...b.rightBanner].map((r) => r.id)
+		);
+		// 8칸뿐이라 매 버킷 정확히 1건이 비노출로 대기한다.
+		expect(aIds.size).toBe(8);
+		// a의 우측 끝 공고는 다음 버킷에 어느 그룹에도 없다(대기 진입).
+		expect(bIds.has(a.rightBanner[2]?.id ?? "")).toBe(false);
+		// a에서 대기하던(어느 그룹에도 없던) 공고가 b의 좌측 첫 칸으로 진입한다.
+		const waiting = rows.map((r) => r.id).find((id) => !aIds.has(id));
+		expect(b.leftBanner[0]?.id).toBe(waiting);
 	});
 
-	it("프리미엄은 2개로 캡되고 좌/우는 3개를 유지한다", () => {
+	it("n<8이면 그룹당 min(칸수,n)개·그룹 내 중복 없이 세 그룹 합집합이 전 공고를 덮는다", () => {
+		const rows = pool(5);
+		const groups = groupAdBannerJobs(rows, new Date("2026-07-21T03:00:00Z"));
+		expect(groups.leftBanner).toHaveLength(3);
+		expect(groups.premiumBanner).toHaveLength(2);
+		expect(groups.rightBanner).toHaveLength(3);
+		// 그룹 내부에 같은 공고가 두 번 쌓이지 않는다.
+		for (const g of [
+			groups.leftBanner,
+			groups.premiumBanner,
+			groups.rightBanner,
+		]) {
+			expect(new Set(g.map((r) => r.id)).size).toBe(g.length);
+		}
+		// 세 그룹의 합집합은 전 공고를 포함한다(n≤8이면 전원 노출).
+		const union = idsOf([
+			...groups.leftBanner,
+			...groups.premiumBanner,
+			...groups.rightBanner,
+		]);
+		expect([...new Set(union)]).toEqual(idsOf(rows));
+	});
+
+	it("만료된 배너는 링 후보에서 빠진다", () => {
 		const rows = [
-			...leftRows,
-			...premiumRows,
-			...Array.from({ length: 8 }, (_, i) =>
-				makeRow(`right-${i}`, "right-banner")
-			),
+			makeRow("live", "left-banner"),
+			{
+				exposureEndsAt: new Date("2026-07-20T00:00:00Z"),
+				exposureType: "left-banner",
+				id: "expired",
+			},
 		];
 		const groups = groupAdBannerJobs(rows, new Date("2026-07-21T03:00:00Z"));
+		const all = new Set(
+			[
+				...groups.leftBanner,
+				...groups.premiumBanner,
+				...groups.rightBanner,
+			].map((r) => r.id)
+		);
+		expect([...all]).toEqual(["live"]);
+	});
+
+	it("슬롯 상한은 프리미엄 2개·좌우 각 3개다", () => {
+		const groups = groupAdBannerJobs(
+			pool(10),
+			new Date("2026-07-21T03:00:00Z")
+		);
 		expect(groups.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
 		expect(groups.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
 		expect(groups.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
 	});
 
-	it("후보가 슬롯 이하면 전원 노출된다(집합 기준)", () => {
-		const few = leftRows.slice(0, 2);
-		const groups = groupAdBannerJobs(few, new Date("2026-07-21T03:00:00Z"));
-		expect(idsOf(groups.leftBanner)).toEqual(idsOf(few));
-	});
-
-	it("만료된 배너는 로테이션 후보에서 빠진다", () => {
-		const now = new Date("2026-07-21T03:00:00Z");
-		const rows = [
-			{ ...makeRow("left-live", "left-banner") },
-			{
-				exposureEndsAt: new Date("2026-07-20T00:00:00Z"),
-				exposureType: "left-banner",
-				id: "left-expired",
-			},
-		];
-		const groups = groupAdBannerJobs(rows, now);
-		expect(idsOf(groups.leftBanner)).toEqual(["left-live"]);
-	});
-
-	it("프리미엄만 있는 풀이 좌·우 슬롯도 채운다(통합 풀 공유)", () => {
-		const groups = groupAdBannerJobs(
-			premiumRows,
-			new Date("2026-07-21T03:00:00Z")
-		);
-		const poolIds = premiumRows.map((r) => r.id);
-		for (const r of [...groups.leftBanner, ...groups.rightBanner]) {
-			expect(poolIds).toContain(r.id);
-		}
-		expect(groups.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
-		expect(groups.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+	it("풀이 비면 세 그룹 모두 빈 배열이다", () => {
+		const groups = groupAdBannerJobs([], new Date("2026-07-21T03:00:00Z"));
+		expect(groups.leftBanner).toEqual([]);
+		expect(groups.premiumBanner).toEqual([]);
+		expect(groups.rightBanner).toEqual([]);
 	});
 });
 

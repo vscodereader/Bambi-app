@@ -8,8 +8,9 @@ import { Badge } from "./ds";
 const PREMIUM_COLUMNS = 2;
 const PREMIUM_PLACEHOLDER_KEYS = ["premium-slot-1", "premium-slot-2"] as const;
 
-// 목록 상단 프리미엄 광고 섹션. 서버가 활성 프리미엄 배너 중 시간당 랜덤 2개를
-// 선발해 내려주므로(1행 2열, 모바일 1열) 여기서는 받은 배열을 그대로 배치한다.
+// 목록 상단 프리미엄 광고 섹션. 서버가 활성 프리미엄 배너 풀을 좌측→상단→우측 링으로
+// 매시간 한 칸씩 순환시키며 이 상단 슬롯 2칸을 뽑아 내려주므로(1행 2열, 모바일 1열)
+// 여기서는 받은 배열을 그대로 배치한다.
 // 판매분이 없어도 섹션을 렌더하고, 빈 칸은 "광고 모집중" 자리표시로 채운다(0개면 2개).
 export function PremiumAdBannerSection({
 	className,
