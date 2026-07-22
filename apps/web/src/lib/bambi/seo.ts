@@ -6,7 +6,7 @@ import { BAMBI_COMPANY } from "./company";
 export const SITE_TITLE = "밤비 - 유흥·접객 | 룸알바·구인구직 사이트";
 
 export const SITE_DESCRIPTION =
-	"밤비는 유흥·접객 구인구직 플랫폼입니다. 룸알바, 밤알바, 노래방, 라운지 등 고소득 채용 정보를 1:1 채팅으로 빠르고 안전하게 연결합니다.";
+	"밤비는 유흥·접객 구인구직 플랫폼입니다. 룸알바, 밤알바, 노래주점, 룸싸롱 등 고소득 채용 정보를 1:1 채팅으로 빠르고 안전하게 연결합니다.";
 
 // OG 배너를 로고로 겸용한다. schema.org logo는 래스터(PNG/JPG)만 인정돼
 // app/icon.svg는 쓸 수 없다. 정사각 브랜드 로고가 생기면 이 경로만 교체한다

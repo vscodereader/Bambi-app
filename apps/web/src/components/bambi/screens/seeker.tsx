@@ -59,7 +59,17 @@ import { ContactReveal } from "./contact-reveal";
 
 function SeekerCategory() {
 	const [sel, setSel] = useState("전체");
-	const cats = ["전체", "라운지", "바", "클럽", "호스트바", "카페"];
+	const cats = [
+		"전체",
+		"룸싸롱",
+		"텐프로/쩜오",
+		"노래주점",
+		"단란주점",
+		"다방",
+		"BAR",
+		"마사지",
+		"요정",
+	];
 	return (
 		<div className="flex gap-2 overflow-x-auto px-6 [scrollbar-width:none]">
 			{cats.map((c) => (

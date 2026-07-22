@@ -7,6 +7,7 @@ import {
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
+import { isIndustryOption } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import {
 	type AdBannerItem,
@@ -38,10 +39,12 @@ interface UseMarketplaceJobResult {
 export const isApiJobId = (id: string): boolean => UUID_RE.test(id);
 
 const toApiListInput = (filters: MarketplaceFilters) => ({
+	// 서버 입력이 업종 enum이라 기본값("전체")이나 목록 밖 값은 필터 없음으로 보낸다.
 	industryCategory:
-		filters.category === DEFAULT_MARKETPLACE_FILTERS.category
-			? undefined
-			: filters.category,
+		filters.category !== DEFAULT_MARKETPLACE_FILTERS.category &&
+		isIndustryOption(filters.category)
+			? filters.category
+			: undefined,
 	district:
 		filters.district === DEFAULT_MARKETPLACE_FILTERS.district
 			? undefined

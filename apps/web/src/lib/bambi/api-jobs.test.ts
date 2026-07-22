@@ -13,7 +13,7 @@ describe("toMarketplaceJob", () => {
 			description: "후기 집계가 반영되는 공고입니다.",
 			employerVerificationStatus: "verified",
 			id: "11111111-1111-4111-8111-111111111111",
-			industryCategory: "라운지",
+			industryCategory: "룸싸롱",
 			payAmount: 180_000,
 			payUnit: "일급",
 			ratingAverage: 4.75,
@@ -34,7 +34,7 @@ describe("toMarketplaceJob", () => {
 			description: "성과가 있는 공고입니다.",
 			employerVerificationStatus: "verified",
 			id: "22222222-2222-4222-8222-222222222201",
-			industryCategory: "라운지",
+			industryCategory: "룸싸롱",
 			payAmount: 180_000,
 			payUnit: "일급",
 			performance: { detailViews: 100, impressions: 1000 },
@@ -52,7 +52,7 @@ describe("toMarketplaceJob", () => {
 			description: "성과가 없는 공고입니다.",
 			employerVerificationStatus: "verified",
 			id: "22222222-2222-4222-8222-222222222299",
-			industryCategory: "라운지",
+			industryCategory: "룸싸롱",
 			payAmount: 150_000,
 			payUnit: "일급",
 			region: "서울 강남구",
@@ -68,7 +68,7 @@ describe("toMarketplaceJob", () => {
 		const job = toMarketplaceJob({
 			exposureType: "special",
 			id: "33333333-3333-4333-8333-333333333301",
-			industryCategory: "라운지",
+			industryCategory: "룸싸롱",
 			isPromoted: true,
 			payAmount: 200_000,
 			payUnit: "일급",
@@ -86,7 +86,7 @@ describe("toMarketplaceJob", () => {
 	it("defaults exposureType to null and derives isPromoted from promotionTier for mock jobs", () => {
 		const job = toMarketplaceJob({
 			id: "33333333-3333-4333-8333-333333333302",
-			industryCategory: "라운지",
+			industryCategory: "룸싸롱",
 			payAmount: 150_000,
 			payUnit: "일급",
 			promotionTier: "premium",
@@ -104,7 +104,7 @@ describe("toMarketplaceJob", () => {
 		const job = toMarketplaceJob({
 			district: "강남",
 			id: "44444444-4444-4444-8444-444444444401",
-			industryCategory: "라운지",
+			industryCategory: "룸싸롱",
 			payAmount: 150_000,
 			payUnit: "일급",
 			region: "서울",
@@ -121,7 +121,7 @@ describe("toMarketplaceJob", () => {
 	it("falls back to region alone when the job has no district", () => {
 		const job = toMarketplaceJob({
 			id: "44444444-4444-4444-8444-444444444402",
-			industryCategory: "라운지",
+			industryCategory: "룸싸롱",
 			payAmount: 150_000,
 			payUnit: "일급",
 			region: "기타",

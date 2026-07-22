@@ -30,15 +30,16 @@ describe("bambi-options taxonomy", () => {
 		expect(districtsForRegion("기타")).toHaveLength(0);
 		expect(districtsForRegion("없는값")).toHaveLength(0);
 	});
-	it("업종은 통일 7종", () => {
+	it("업종은 확정 8종", () => {
 		expect([...industryOptions]).toEqual([
-			"라운지",
-			"바",
-			"클럽",
-			"호스트바",
-			"카페",
-			"노래방",
-			"기타",
+			"룸싸롱",
+			"텐프로/쩜오",
+			"노래주점",
+			"단란주점",
+			"다방",
+			"BAR",
+			"마사지",
+			"요정",
 		]);
 	});
 });
