@@ -101,6 +101,8 @@ export const promotionsRouter = {
 				autoBoostsPerDay: jobPost.autoBoostsPerDay,
 				boostedAt: jobPost.boostedAt,
 				employerDisplayName: employerOrganizationProfile.displayName,
+				// 미결제 행의 무통장입금 재안내에서 결제 예정 금액을 보여주는 데 쓴다.
+				exposureAmount: jobPost.exposureAmount,
 				exposureEndsAt: jobPost.exposureEndsAt,
 				exposureType: jobPost.exposureType,
 				jobPostId: jobPost.id,
@@ -175,6 +177,7 @@ export const promotionsRouter = {
 				.select({
 					adProductId: jobPost.adProductId,
 					exposureEndsAt: jobPost.exposureEndsAt,
+					exposureType: jobPost.exposureType,
 					organizationId: jobPost.organizationId,
 					paymentStatus: jobPost.paymentStatus,
 					status: jobPost.status,
@@ -221,6 +224,7 @@ export const promotionsRouter = {
 				const verdict = resolveBoostEligibility({
 					adProductId: post.adProductId,
 					exposureEndsAt: post.exposureEndsAt,
+					exposureType: post.exposureType,
 					manualBoostsPerDay: locked?.manualBoostsPerDay ?? 0,
 					now,
 					paymentStatus: post.paymentStatus,

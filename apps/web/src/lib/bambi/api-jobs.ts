@@ -42,6 +42,10 @@ const toApiListInput = (filters: MarketplaceFilters) => ({
 		filters.category === DEFAULT_MARKETPLACE_FILTERS.category
 			? undefined
 			: filters.category,
+	district:
+		filters.district === DEFAULT_MARKETPLACE_FILTERS.district
+			? undefined
+			: filters.district,
 	limit: 30,
 	minPayAmount: filters.minimumPay > 0 ? filters.minimumPay : undefined,
 	region:
@@ -104,10 +108,8 @@ const buildFallbackSections = (
 	const urgent = [...special, ...recommended]
 		.filter((job) => getBoostTime(job) > 0)
 		.toSorted((left, right) => getBoostTime(right) - getBoostTime(left));
-	const organic = JOBS.filter(
-		(job) =>
-			job.promotionTier !== "premium" && job.promotionTier !== "recommended"
-	);
+	// 전체 공고는 광고 상품 적용 여부와 무관하게 모든 공고를 담는다(서버 동작과 일치).
+	const organic = JOBS;
 
 	return {
 		organic: filterMarketplaceJobs(organic, filters),

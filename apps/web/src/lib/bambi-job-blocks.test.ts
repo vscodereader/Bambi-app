@@ -9,17 +9,20 @@ import {
 
 const baseForm: JobForm = {
 	adProductId: null,
+	beginnerFriendly: false,
 	description: "기본 상세 설명입니다.",
+	district: "강남",
 	exposureAmount: null,
 	exposureDurationDays: null,
 	exposureType: "standard",
 	industryCategory: "라운지",
+	instantInterview: false,
 	interviewNotes: "",
 	organizationId: "org-1",
 	payAmount: "180000",
 	paymentMethod: null,
 	payUnit: "일급",
-	region: "서울 강남구",
+	region: "서울",
 	teamId: "",
 	title: "블록 테스트 공고",
 	workSchedule: "20:00-02:00",
@@ -172,36 +175,14 @@ describe("bambi job block form helpers", () => {
 		expect(result).toMatchObject({ ok: true });
 	});
 
-	it("accepts ad banners whose aspect ratio is off spec", () => {
+	it("rejects an ad banner whose aspect ratio is far off spec", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
-				// 300×100(3:1)·1080×1920(9:16) 둘 다 권장 비율에서 벗어나지만, 슬롯이
-				// 가운데를 기준으로 자를 뿐이라 등록은 막지 않는다(업로더가 경고만 띄운다).
-				// 예전 ±2% 반려 규칙이 실제로 튕겨내던 바로 그 실사용 규격들이다.
+				// 1400×1400(1:1)은 크기 하한(700×300)은 넘지만 7:3에서 크게 벗어나 슬롯에서
+				// 위아래가 잘린다. 오차 15%를 넘으므로 반려한다.
 				adHorizontal: createBannerImage("ad_horizontal", {
-					height: 100,
-					width: 300,
-				}),
-				adVertical: createBannerImage("ad_vertical", {
-					height: 1920,
-					width: 1080,
-				}),
-				cover: null,
-				detail: [],
-			},
-		});
-
-		expect(result).toMatchObject({ ok: true });
-	});
-
-	it("rejects a horizontal banner below the 150px width floor", () => {
-		const result = validateJobForm(baseForm, {
-			media: {
-				// 세로 60은 하한 50을 넘지만 가로 140이 하한 150에 못 미쳐 걸린다 —
-				// 실제로 구속하는 쪽은 가로다.
-				adHorizontal: createBannerImage("ad_horizontal", {
-					height: 60,
-					width: 140,
+					height: 1400,
+					width: 1400,
 				}),
 				adVertical: null,
 				cover: null,
@@ -212,19 +193,67 @@ describe("bambi job block form helpers", () => {
 		expect(result).toMatchObject({
 			errors: {
 				media:
-					"가로형 광고 배너 이미지가 너무 작습니다. 150×50px 이상으로 등록해 주세요.",
+					"가로형 광고 배너 이미지가 요구 비율 7:3과 크게 달라 등록할 수 없습니다. 7:3 비율에 맞춰 최소 700×300px 이상으로 다시 등록해 주세요.",
 			},
 			ok: false,
 		});
 	});
 
-	it("accepts a horizontal banner at the 150px width floor", () => {
+	it("rejects a horizontal banner below the 700px width floor", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
-				// 가로가 정확히 하한일 때(세로는 권장 비율 7:3 기준 150/2.333≈64).
+				// 300×130(7:3 근처)은 비율은 맞지만 가로 300이 하한 700에 못 미쳐 걸린다.
+				// 크기 검사가 비율 검사보다 먼저 잡는다.
 				adHorizontal: createBannerImage("ad_horizontal", {
-					height: 64,
-					width: 150,
+					height: 130,
+					width: 300,
+				}),
+				adVertical: null,
+				cover: null,
+				detail: [],
+			},
+		});
+
+		expect(result).toMatchObject({
+			errors: {
+				media:
+					"가로형 광고 배너 이미지가 너무 작습니다. 700×300px 이상으로 등록해 주세요.",
+			},
+			ok: false,
+		});
+	});
+
+	it("rejects a vertical banner below the newly enforced 400×900 floor", () => {
+		const result = validateJobForm(baseForm, {
+			media: {
+				// 세로형은 예전엔 크기 하한이 없었지만 이제 400×900을 강제한다. 200×450은
+				// 4:9 비율이지만 하한에 못 미쳐 걸린다.
+				adHorizontal: null,
+				adVertical: createBannerImage("ad_vertical", {
+					height: 450,
+					width: 200,
+				}),
+				cover: null,
+				detail: [],
+			},
+		});
+
+		expect(result).toMatchObject({
+			errors: {
+				media:
+					"세로형 광고 배너 이미지가 너무 작습니다. 400×900px 이상으로 등록해 주세요.",
+			},
+			ok: false,
+		});
+	});
+
+	it("accepts a horizontal banner exactly at the 700×300 floor", () => {
+		const result = validateJobForm(baseForm, {
+			media: {
+				// 700×300은 하한이자 정확히 7:3이라 크기·비율 모두 통과한다.
+				adHorizontal: createBannerImage("ad_horizontal", {
+					height: 300,
+					width: 700,
 				}),
 				adVertical: null,
 				cover: null,

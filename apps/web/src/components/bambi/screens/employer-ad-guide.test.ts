@@ -30,6 +30,12 @@ describe("employer ad guide screen", () => {
 		expect(source).toContain("일일 자동 끌어올리기");
 	});
 
+	it("clarifies boosts are for listing ads only, not banner ads", () => {
+		// 끌어올리기는 리스팅 전용·배너 제외임이 안내 문구로 드러나야 한다
+		expect(source).toContain("리스팅 광고에만 제공되며");
+		expect(source).toContain("배너 광고에는 제공되지 않습니다");
+	});
+
 	it("uses only ratio tracks so column widths do not depend on content", () => {
 		// 4개 열 전부 minmax(0,_fr) 비율 트랙 — 내용 의존 auto 트랙은 정렬을 깬다
 		expect(source).toContain(

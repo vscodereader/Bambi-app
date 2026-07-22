@@ -60,6 +60,9 @@ export function SeekerMarketplaceScreen() {
 			<div className="mx-auto flex w-full justify-center gap-5 py-5 pb-24 md:py-10">
 				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 					<div className="sticky top-20 flex flex-col gap-4">
+						{/* 배너 rail을 "빠른 탐색" 카드 위에 둔다. 빈 슬롯은 rail이 자체
+						    "광고 모집중" 자리표시로 채우므로 조건 없이 항상 렌더한다. */}
+						<HorizontalAdBannerRail items={adBanners.leftBanner} />
 						<Card className="rounded-lg" pad="lg" tone="outline">
 							<div className="mb-4 flex items-center gap-2">
 								<span className="inline-flex size-5 text-coral-600">
@@ -72,9 +75,6 @@ export function SeekerMarketplaceScreen() {
 								onChange={setFilters}
 							/>
 						</Card>
-						{adBanners.leftBanner.length > 0 ? (
-							<HorizontalAdBannerRail items={adBanners.leftBanner} />
-						) : null}
 					</div>
 				</aside>
 				<div
@@ -128,10 +128,9 @@ export function SeekerMarketplaceScreen() {
 					/>
 				</div>
 				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
+					{/* 빈 슬롯은 rail이 "광고 모집중" 자리표시로 채우므로 조건 없이 렌더한다. */}
 					<div className="sticky top-20">
-						{adBanners.rightBanner.length > 0 ? (
-							<AdBannerRail items={adBanners.rightBanner} />
-						) : null}
+						<AdBannerRail items={adBanners.rightBanner} />
 					</div>
 				</aside>
 			</div>

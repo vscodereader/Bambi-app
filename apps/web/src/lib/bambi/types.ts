@@ -50,15 +50,18 @@ export interface JobPerformanceMetrics {
 }
 
 export interface Job {
+	beginnerFriendly: boolean;
 	company: string;
 	coverImage?: JobMedia | null;
 	desc: string;
 	descriptionBlocks?: JobDescriptionBlock[];
 	detailImages?: JobMedia[];
+	district: string;
 	exposureType?: null | string;
 	featured: boolean;
 	hours: string;
 	id: string;
+	instantInterview: boolean;
 	isPromoted?: boolean;
 	lastBoostedAt?: Date | null | string;
 	location: string;
@@ -68,6 +71,7 @@ export interface Job {
 	promotionLabel?: null | string;
 	promotionTier?: "premium" | "recommended" | "standard" | null;
 	rating: number;
+	region: string;
 	reviews: number;
 	status: string;
 	tags: string[];

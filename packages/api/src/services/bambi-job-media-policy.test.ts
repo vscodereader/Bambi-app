@@ -140,15 +140,16 @@ describe("bambi job media policy", () => {
 			]).ok
 		).toBe(true);
 
-		// 정사각형(600×600) GIF도 이제 통과한다. 비율은 더 이상 거절 사유가 아니다.
+		// 정사각형(800×800) GIF도 크기 하한만 넘으면 서버는 통과시킨다. 비율 반려는 클라이언트
+		// 몫이라 서버는 치수 하한만 재확인한다.
 		expect(
 			validateJobPostMediaSet([
 				createMedia({
 					fileName: "banner.gif",
-					height: 600,
+					height: 800,
 					mimeType: "image/gif",
 					usage: "ad_horizontal",
-					width: 600,
+					width: 800,
 				}),
 			]).ok
 		).toBe(true);
@@ -166,24 +167,22 @@ describe("bambi job media policy", () => {
 		).toContain("unsupported_type");
 	});
 
-	it("accepts a banner at exactly the 150x50 floor", () => {
-		// 비율 검사를 걷어낸 뒤로 하한 수치 그대로인 150×50(3:1)이 통과한다. 이전엔 7:3이
-		// 아니라는 이유로 막혀서, 하한을 만족하는데도 거절되는 모순이 있었다.
+	it("accepts a banner at exactly the 700x300 floor", () => {
+		// 하한 수치 그대로인 700×300(정확히 7:3)이 통과한다. 서버는 크기 하한만 재확인한다.
 		expect(
 			validateJobPostMediaSet([
 				createMedia({
-					height: 50,
+					height: 300,
 					usage: "ad_horizontal",
-					width: 150,
+					width: 700,
 				}),
 			])
 		).toEqual({ issues: [], ok: true });
 	});
 
-	it("accepts real-world creatives that the old aspect ratio gate rejected", () => {
-		// 이 변경을 촉발한 실제 소재들. 세로 표준 1080×1920(9:16)은 4:9가 아니라 거절됐고,
-		// 300×100(3:1)은 7:3 ±2% 밴드를 벗어나 거절됐다. 이제 둘 다 통과하고, 슬롯의
-		// object-cover가 잘라서 채운다.
+	it("accepts off-ratio creatives above the floor since the server checks only size", () => {
+		// 서버는 비율을 보지 않는다(비율 반려는 클라이언트 몫). 세로 표준 1080×1920과
+		// 정사각형 900×900은 비율이 어긋나도 크기 하한만 넘으면 서버에선 통과한다.
 		expect(
 			validateJobPostMediaSet([
 				createMedia({ height: 1920, usage: "ad_vertical", width: 1080 }),
@@ -192,24 +191,23 @@ describe("bambi job media policy", () => {
 
 		expect(
 			validateJobPostMediaSet([
-				createMedia({ height: 100, usage: "ad_horizontal", width: 300 }),
+				createMedia({ height: 900, usage: "ad_horizontal", width: 900 }),
 			])
 		).toEqual({ issues: [], ok: true });
 	});
 
 	it("rejects a horizontal banner narrower than the minimum width", () => {
-		// 140×60은 세로 60으로 하한 50은 넘지만 가로 140이 하한 150에 못 미쳐 걸린다.
-		// 비율(정확히 7:3)은 이제 판정에 관여하지 않는다.
+		// 400×320은 세로 320으로 하한 300은 넘지만 가로 400이 하한 700에 못 미쳐 걸린다.
 		const { issues } = validateJobPostMediaSet([
 			createMedia({
-				height: 60,
+				height: 320,
 				usage: "ad_horizontal",
-				width: 140,
+				width: 400,
 			}),
 		]);
 
 		expect(issues.map((issue) => issue.code)).toEqual(["banner_too_small"]);
-		expect(issues[0]).toMatchObject({ minHeight: 50, minWidth: 150 });
+		expect(issues[0]).toMatchObject({ minHeight: 300, minWidth: 700 });
 	});
 
 	it("requires banner dimensions to be present", () => {
@@ -222,9 +220,8 @@ describe("bambi job media policy", () => {
 	});
 
 	it("does not require any particular resolution above the minimum", () => {
-		// 하한(가로 150·세로 50) 이상이면 비율과 무관하게 통과한다.
+		// 하한(가로 700·세로 300) 이상이면 비율과 무관하게 서버에선 통과한다.
 		for (const [width, height] of [
-			[154, 66],
 			[700, 300],
 			[1200, 500],
 			[1400, 600],
@@ -238,14 +235,22 @@ describe("bambi job media policy", () => {
 		}
 	});
 
-	it("does not apply a size floor to vertical banners", () => {
+	it("enforces the 400x900 floor on vertical banners", () => {
+		// 세로형은 예전엔 크기 하한이 없었지만 이제 400×900을 강제한다.
+		const { issues } = validateJobPostMediaSet([
+			createMedia({
+				height: 450,
+				usage: "ad_vertical",
+				width: 200,
+			}),
+		]);
+
+		expect(issues.map((issue) => issue.code)).toEqual(["banner_too_small"]);
+		expect(issues[0]).toMatchObject({ minHeight: 900, minWidth: 400 });
+
 		expect(
 			validateJobPostMediaSet([
-				createMedia({
-					height: 90,
-					usage: "ad_vertical",
-					width: 40,
-				}),
+				createMedia({ height: 900, usage: "ad_vertical", width: 400 }),
 			]).ok
 		).toBe(true);
 	});

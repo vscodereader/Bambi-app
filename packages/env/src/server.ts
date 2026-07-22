@@ -15,6 +15,9 @@ export const env = createEnv({
 		// 플레이스홀더로 폴백하므로, GCP 자격 증명 없이도 개발이 그대로 돌아간다.
 		GCP_PROJECT_ID: z.string().min(1).optional(),
 		GCS_PUBLIC_BUCKET: z.string().min(1).optional(),
+		// 포트원 V2 API Secret(본인인증 단건조회). 개발에서는 선택 — 비어 있으면 회원
+		// 본인인증이 목 핸들러(verifyMyPhoneMock)로 폴백한다.
+		PORTONE_API_SECRET: z.string().min(1).optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,
@@ -26,5 +29,13 @@ export const env = createEnv({
 if (env.NODE_ENV === "production" && !env.GCS_PUBLIC_BUCKET) {
 	throw new Error(
 		"GCS_PUBLIC_BUCKET은 프로덕션에서 필수입니다. 값이 없으면 공고 이미지 업로드가 조용히 무시됩니다."
+	);
+}
+
+// 프로덕션에서 포트원 시크릿이 빠지면 회원 본인인증이 통째로 실패한다(목 폴백은
+// 개발 전용으로 잠겨 있다). 조용한 기능 마비 대신 부팅을 실패시킨다.
+if (env.NODE_ENV === "production" && !env.PORTONE_API_SECRET) {
+	throw new Error(
+		"PORTONE_API_SECRET은 프로덕션에서 필수입니다. 값이 없으면 휴대폰 본인인증이 동작하지 않습니다."
 	);
 }

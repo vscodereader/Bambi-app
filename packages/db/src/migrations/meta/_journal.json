@@ -141,6 +141,55 @@
       "when": 1784523320161,
       "tag": "0019_lumpy_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784595050305,
+      "tag": "0020_simple_warpath",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1784599565000,
+      "tag": "0021_parallel_nebula",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784604219600,
+      "tag": "0022_dizzy_randall_flagg",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784608161208,
+      "tag": "0023_silent_excalibur",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784616899709,
+      "tag": "0024_unique_earthquake",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784617728389,
+      "tag": "0025_many_ser_duncan",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784618919884,
+      "tag": "0026_ordinary_tarot",
+      "breakpoints": true
     }
   ]
 }

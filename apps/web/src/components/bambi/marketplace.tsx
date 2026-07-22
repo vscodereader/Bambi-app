@@ -19,11 +19,11 @@ import {
 	ALL_OPTION,
 	applyDiscoveryAxis,
 	discoveryAxisForTab,
+	districtOptionsForRegion,
 	MARKETPLACE_CATEGORIES,
 	MARKETPLACE_QUICK_FILTERS,
 	MARKETPLACE_REGIONS,
 	type MarketplaceFilters,
-	subcategoriesForCategory,
 } from "@/lib/bambi/marketplace";
 import { SELECTED_JOB_CARD_CLASS } from "@/lib/bambi/selection-style";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
@@ -60,8 +60,7 @@ export function MarketplaceFilterControls({
 }: MarketplaceFilterSidebarProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
-	const subcategoryOptions = subcategoriesForCategory(filters.category);
-	const subcategoryDisabled = subcategoryOptions.length <= 1;
+	const districtOptions = districtOptionsForRegion(filters.region);
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex flex-col gap-2">
@@ -69,7 +68,7 @@ export function MarketplaceFilterControls({
 				<Select
 					onValueChange={(value) => {
 						if (value) {
-							update({ region: value });
+							update({ district: ALL_OPTION, region: value });
 						}
 					}}
 					value={filters.region}
@@ -87,11 +86,36 @@ export function MarketplaceFilterControls({
 				</Select>
 			</div>
 			<div className="flex flex-col gap-2">
+				<span className="font-bold text-muted-foreground text-xs">
+					세부지역
+				</span>
+				<Select
+					disabled={districtOptions.length <= 1}
+					onValueChange={(value) => {
+						if (value) {
+							update({ district: value });
+						}
+					}}
+					value={filters.district}
+				>
+					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
+						<SelectValue>{(value) => value}</SelectValue>
+					</SelectTrigger>
+					<SelectContent>
+						{districtOptions.map((district) => (
+							<SelectItem key={district} value={district}>
+								{district}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+			<div className="flex flex-col gap-2">
 				<span className="font-bold text-muted-foreground text-xs">업종</span>
 				<Select
 					onValueChange={(value) => {
 						if (value) {
-							update({ category: value, subcategory: ALL_OPTION });
+							update({ category: value });
 						}
 					}}
 					value={filters.category}
@@ -110,37 +134,16 @@ export function MarketplaceFilterControls({
 			</div>
 			<div className="flex flex-col gap-2">
 				<span className="font-bold text-muted-foreground text-xs">
-					세부 업종
-				</span>
-				<Select
-					disabled={subcategoryDisabled}
-					onValueChange={(value) => {
-						if (value) {
-							update({ subcategory: value });
-						}
-					}}
-					value={filters.subcategory}
-				>
-					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
-						<SelectValue>{(value) => value}</SelectValue>
-					</SelectTrigger>
-					<SelectContent>
-						{subcategoryOptions.map((subcategory) => (
-							<SelectItem key={subcategory} value={subcategory}>
-								{subcategory}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-			</div>
-			<div className="flex flex-col gap-2">
-				<span className="font-bold text-muted-foreground text-xs">
 					최소 시급
 				</span>
 				<Input
-					onChange={(event) =>
-						update({ minimumPay: Number(event.target.value || 0) })
-					}
+					onChange={(event) => {
+						// 음수·빈값·비숫자는 필터 해제(0)로 떨어뜨린다 — 서버 minPayAmount는 양수만 받는다.
+						const parsed = Number(event.target.value);
+						update({
+							minimumPay: Number.isFinite(parsed) && parsed > 0 ? parsed : 0,
+						});
+					}}
 					placeholder="예: 17000"
 					type="number"
 					value={String(filters.minimumPay || "")}
@@ -166,7 +169,7 @@ export function MarketplaceFilterControls({
 					id="filter-only-today"
 					onCheckedChange={(checked) => update({ onlyToday: checked })}
 				/>
-				오늘 면접 가능만 보기
+				당일면접 가능만 보기
 			</label>
 			<label
 				className="flex items-center gap-2 font-bold text-sm"
@@ -338,8 +341,8 @@ export function MarketplaceAxisChips({
 						onClick={() =>
 							onChange(
 								axis === "region"
-									? { ...filters, region: option }
-									: { ...filters, category: option, subcategory: ALL_OPTION }
+									? { ...filters, district: ALL_OPTION, region: option }
+									: { ...filters, category: option }
 							)
 						}
 						selected={filters[axis] === option}

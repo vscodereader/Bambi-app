@@ -212,6 +212,13 @@ export const bambiProfile = pgTable(
 		gender: bambiGender("gender"),
 		// 본인인증 시 입력받는 생년월일. 목 인증 폼과 동일하게 8자리 YYYYMMDD 문자열로 저장한다.
 		birthDate: text("birth_date"),
+		// 본인인증 CI(연계정보)의 SHA-256 해시. 원문은 저장하지 않는다. 유니크 인덱스로
+		// 같은 사람이 여러 계정에서 인증하는 것을 막는다(null 다중 허용 — 미인증 계정).
+		ciHash: text("ci_hash"),
+		// 본인인증 DI(사이트별 중복확인정보)의 SHA-256 해시. 원문은 저장하지 않는다.
+		// 중복 가입 판정의 기준 축이며, 유니크 인덱스로 같은 사람이 여러 계정에서
+		// 인증하는 것을 막는다(null 다중 허용 — 미인증 계정).
+		diHash: text("di_hash"),
 		// 광고(프로모션) 중인 업소(owner/admin) 표시 캐시. 진실값은 조회 시 캠페인 조인으로
 		// 파생 계산하며(bambi-advertiser), 이 컬럼은 activate/pause 이벤트에서 동기화된다.
 		isAdvertiser: boolean("is_advertiser").default(false).notNull(),
@@ -225,6 +232,8 @@ export const bambiProfile = pgTable(
 	(table) => [
 		index("bambi_profile_role_idx").on(table.role),
 		index("bambi_profile_status_idx").on(table.status),
+		uniqueIndex("bambi_profile_ci_hash_unique").on(table.ciHash),
+		uniqueIndex("bambi_profile_di_hash_unique").on(table.diHash),
 	]
 );
 
@@ -297,7 +306,9 @@ export const jobPost = pgTable(
 		status: jobPostStatus("status").default("pending_review").notNull(),
 		industryCategory: text("industry_category").notNull(),
 		region: text("region").notNull(),
-		payAmount: integer("pay_amount").notNull(),
+		district: text("district"),
+		// payUnit이 "협의"(면접 후 급여 협의)면 금액이 없다 — 그래서 nullable.
+		payAmount: integer("pay_amount"),
 		payUnit: text("pay_unit").notNull(),
 		workSchedule: text("work_schedule").notNull(),
 		title: text("title").notNull(),
@@ -307,6 +318,10 @@ export const jobPost = pgTable(
 			.default([])
 			.notNull(),
 		interviewNotes: text("interview_notes"),
+		// 채용자가 지정하는 seeker 필터 축. 텍스트 매칭이 아니라 명시 필드로 거른다.
+		beginnerFriendly: boolean("beginner_friendly").default(false).notNull(),
+		// "당일면접 가능" — 시간에 낡지 않는 상시 속성(오늘 날짜 개념 아님).
+		instantInterview: boolean("instant_interview").default(false).notNull(),
 		rejectionReason: text("rejection_reason"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
 		exposureType: jobExposureType("exposure_type")
@@ -543,6 +558,36 @@ export const adProduct = pgTable(
 		),
 	]
 );
+
+// 사이트 전역 설정(단일 행). 지금은 푸터에 노출하는 사업자 정보를 담고, 이후 다른
+// 사이트 설정(무통장입금 계좌 안내 등)이 생기면 컬럼을 추가한다. 도메인을 푸터로 좁히지
+// 않으려고 이름을 site_settings로 둔다. 값이 없으면(null) 코드의 폴백 상수를 쓴다.
+export const bambiSiteSettings = pgTable("bambi_site_settings", {
+	// 단일 행 강제용 고정 키. 조회·수정 모두 이 키 하나만 다룬다.
+	id: text("id").default("default").primaryKey(),
+	// 푸터 서비스 소개 문구
+	footerIntro: text("footer_intro"),
+	// 운영 주체(상호)
+	operator: text("operator"),
+	// 대표자
+	ceo: text("ceo"),
+	// 사업자등록번호
+	bizRegNo: text("biz_reg_no"),
+	// 사업장 주소
+	address: text("address"),
+	// 고객문의 이메일
+	email: text("email"),
+	// 무통장입금 안내 계좌 목록. 운영자가 사이트 설정에서 관리하고, 공고 결제 안내에 노출된다.
+	// 미설정이면 빈 배열 → 안내 화면은 고객센터 문의 문구로 폴백한다.
+	bankAccounts: jsonb("bank_accounts")
+		.$type<{ accountNumber: string; bank: string; holder: string }[]>()
+		.default([])
+		.notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
 
 export const jobPerformanceEvent = pgTable(
 	"job_performance_event",

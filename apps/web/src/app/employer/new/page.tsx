@@ -7,7 +7,15 @@ import {
 } from "@bambi-app/ui/components/alert";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogTitle,
+} from "@bambi-app/ui/components/dialog";
 import { Input } from "@bambi-app/ui/components/input";
+import { Label } from "@bambi-app/ui/components/label";
 import {
 	Select,
 	SelectContent,
@@ -23,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
 import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
 import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
 import { EmployerListingPreview } from "@/components/bambi/employer-listing-preview";
@@ -34,10 +43,11 @@ import {
 	FormError,
 } from "@/components/bambi/form-message";
 import { JobExposureFields } from "@/components/bambi/job-exposure-fields";
+import { JobPayFields } from "@/components/bambi/job-pay-fields";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
+import { JobRegionFields } from "@/components/bambi/job-region-fields";
 import { PageShell } from "@/components/bambi/page-shell";
-import { PayAmountHint } from "@/components/bambi/pay-amount-hint";
 import Loader from "@/components/loader";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
@@ -55,8 +65,8 @@ import {
 } from "@/lib/bambi-job-form";
 import {
 	industryOptions,
-	payUnitOptions,
-	regionOptions,
+	NEGOTIABLE_PAY_TEXT,
+	NEGOTIABLE_PAY_UNIT,
 } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
@@ -94,6 +104,10 @@ const formatPreviewPay = ({
 	payAmount,
 	payUnit,
 }: Pick<JobForm, "payAmount" | "payUnit">): string => {
+	if (payUnit === NEGOTIABLE_PAY_UNIT) {
+		return NEGOTIABLE_PAY_TEXT;
+	}
+
 	const numericPay = Number(payAmount);
 
 	return Number.isFinite(numericPay) && numericPay > 0
@@ -260,10 +274,21 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const formRef = useRef<HTMLFormElement>(null);
 	const [isDirty, setIsDirty] = useState(false);
 	const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+	// 무통장입금 유료 공고 등록 후 계좌·금액을 한 번 더 안내하는 완료 다이얼로그 상태.
+	const [bankNotice, setBankNotice] = useState<{
+		amount: number | null;
+	} | null>(null);
+	// 제출 시점의 결제 방식을 onSuccess로 넘겨, 등록 성공 후 무통장이면 다이얼로그를 띄운다.
+	const pendingBankNoticeRef = useRef<{ amount: number | null } | null>(null);
 	useUnsavedChangesWarning(isDirty);
 	const createMediaUploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
 	);
+
+	const leaveToEmployer = () => {
+		setBankNotice(null);
+		router.push("/employer");
+	};
 
 	const createMutation = useMutation(
 		orpc.bambi.jobs.create.mutationOptions({
@@ -275,10 +300,16 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			},
 			onSuccess: async () => {
 				setIsDirty(false);
-				toast.success("공고를 등록했습니다. 검수 후 공개됩니다.");
 				await utils.invalidateQueries({
 					queryKey: orpc.bambi.jobs.listMine.queryKey(),
 				});
+				if (pendingBankNoticeRef.current) {
+					setBankNotice(pendingBankNoticeRef.current);
+					pendingBankNoticeRef.current = null;
+					toast.success("공고를 등록했습니다. 입금 확인 후 게시됩니다.");
+					return;
+				}
+				toast.success("공고를 등록했습니다. 검수 후 공개됩니다.");
 				router.push("/employer");
 			},
 		})
@@ -361,6 +392,15 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		}));
 		setFormError(null);
 	};
+
+	const updateFormFlag =
+		(field: "beginnerFriendly" | "instantInterview") => (checked: boolean) => {
+			setIsDirty(true);
+			setForm((currentForm) => ({
+				...currentForm,
+				[field]: checked,
+			}));
+		};
 
 	const updateExposureFields = (
 		patch: Partial<
@@ -459,6 +499,12 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 				teamId: jobInput.teamId,
 			});
 
+			// 무통장입금 유료 공고면 등록 성공 후 계좌 안내 다이얼로그를 띄우도록 표시해 둔다.
+			pendingBankNoticeRef.current =
+				jobInput.adProductId && jobInput.paymentMethod === "bank_transfer"
+					? { amount: jobInput.exposureAmount }
+					: null;
+
 			createMutation.mutate({
 				...jobInput,
 				media: mediaPayload,
@@ -472,6 +518,10 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			toast.error(message);
 		}
 	};
+
+	// 유료 상품에 신용카드(미지원)를 고른 상태면 제출을 막는다. 사유는 결제 섹션의 안내가 알린다.
+	const cardPaymentBlocked =
+		Boolean(form.adProductId) && form.paymentMethod === "card";
 
 	const listingPreview = (
 		<EmployerListingPreview
@@ -620,106 +670,18 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 										message={fieldErrors.industryCategory}
 									/>
 								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="region">지역</FieldLabel>
-									<Select
-										name="region"
-										onValueChange={(value) =>
-											updateFormValue("region", value ?? "")
-										}
-										required
-										value={form.region}
-									>
-										<SelectTrigger
-											aria-describedby={
-												fieldErrors.region
-													? getFieldErrorId("region")
-													: undefined
-											}
-											aria-invalid={Boolean(fieldErrors.region)}
-											className={selectTriggerClassName}
-											id="region"
-										>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{regionOptions.map((option) => (
-												<SelectItem key={option} value={option}>
-													{option}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									<FieldError
-										id={getFieldErrorId("region")}
-										message={fieldErrors.region}
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="payAmount">급여 금액</FieldLabel>
-									<Input
-										aria-describedby={
-											fieldErrors.payAmount
-												? getFieldErrorId("payAmount")
-												: undefined
-										}
-										aria-invalid={Boolean(fieldErrors.payAmount)}
-										id="payAmount"
-										inputMode="numeric"
-										min="1"
-										name="payAmount"
-										onChange={(event) =>
-											updateFormValue("payAmount", event.target.value)
-										}
-										placeholder="예: 12000…"
-										required
-										type="number"
-										value={form.payAmount}
-									/>
-									<PayAmountHint
-										payAmount={form.payAmount}
-										payUnit={form.payUnit}
-									/>
-									<FieldError
-										id={getFieldErrorId("payAmount")}
-										message={fieldErrors.payAmount}
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="payUnit">급여 단위</FieldLabel>
-									<Select
-										name="payUnit"
-										onValueChange={(value) =>
-											updateFormValue("payUnit", value ?? "")
-										}
-										required
-										value={form.payUnit}
-									>
-										<SelectTrigger
-											aria-describedby={
-												fieldErrors.payUnit
-													? getFieldErrorId("payUnit")
-													: undefined
-											}
-											aria-invalid={Boolean(fieldErrors.payUnit)}
-											className={selectTriggerClassName}
-											id="payUnit"
-										>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{payUnitOptions.map((option) => (
-												<SelectItem key={option} value={option}>
-													{option}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									<FieldError
-										id={getFieldErrorId("payUnit")}
-										message={fieldErrors.payUnit}
-									/>
-								</div>
+								<JobRegionFields
+									district={form.district}
+									errors={fieldErrors}
+									onChange={updateFormValue}
+									region={form.region}
+								/>
+								<JobPayFields
+									errors={fieldErrors}
+									onChange={updateFormValue}
+									payAmount={form.payAmount}
+									payUnit={form.payUnit}
+								/>
 								<div className="flex flex-col gap-2 md:col-span-2">
 									<FieldLabel htmlFor="workSchedule">근무 일정</FieldLabel>
 									<Input
@@ -742,6 +704,30 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 										id={getFieldErrorId("workSchedule")}
 										message={fieldErrors.workSchedule}
 									/>
+								</div>
+								<div className="flex flex-col gap-3 md:col-span-2">
+									<Label
+										className="flex items-center gap-2 font-medium text-sm"
+										htmlFor="beginnerFriendly"
+									>
+										<Checkbox
+											checked={form.beginnerFriendly}
+											id="beginnerFriendly"
+											onCheckedChange={updateFormFlag("beginnerFriendly")}
+										/>
+										초보 가능
+									</Label>
+									<Label
+										className="flex items-center gap-2 font-medium text-sm"
+										htmlFor="instantInterview"
+									>
+										<Checkbox
+											checked={form.instantInterview}
+											id="instantInterview"
+											onCheckedChange={updateFormFlag("instantInterview")}
+										/>
+										당일면접 가능
+									</Label>
 								</div>
 							</CardContent>
 						</Card>
@@ -916,6 +902,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 								disabled={
 									createMutation.isPending ||
 									createMediaUploadMutation.isPending ||
+									cardPaymentBlocked ||
 									!verified
 								}
 								type="submit"
@@ -936,6 +923,28 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					</div>
 				</aside>
 			</div>
+
+			<Dialog
+				onOpenChange={(open) => {
+					if (!open) {
+						leaveToEmployer();
+					}
+				}}
+				open={bankNotice !== null}
+			>
+				<DialogContent>
+					<DialogTitle>무통장입금 안내</DialogTitle>
+					<DialogDescription>
+						아래 계좌로 입금하시면 확인 후 공고가 게시됩니다.
+					</DialogDescription>
+					<BankTransferGuide amount={bankNotice?.amount ?? null} />
+					<div className="flex justify-end">
+						<Button onClick={leaveToEmployer} type="button">
+							확인
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
 		</PageShell>
 	);
 }

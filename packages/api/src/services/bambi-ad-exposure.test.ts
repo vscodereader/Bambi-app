@@ -3,6 +3,8 @@ import {
 	buildExposureJobSections,
 	groupAdBannerJobs,
 	isExposureActive,
+	PREMIUM_BANNER_MAX_SLOTS,
+	SIDE_BANNER_MAX_SLOTS,
 } from "./bambi-ad-exposure";
 
 const NOW = new Date("2026-07-15T00:00:00Z");
@@ -28,7 +30,7 @@ describe("isExposureActive", () => {
 });
 
 describe("buildExposureJobSections", () => {
-	it("exposureType별 섹션에 배치하고 organic에서 중복 제거한다", () => {
+	it("exposureType별 섹션에 배치하고 전체 공고에는 유료 공고도 함께 담는다", () => {
 		const special = row("s1", "special");
 		const organicOnly = row("o1", "standard");
 		const { sections, totalCount } = buildExposureJobSections({
@@ -40,7 +42,8 @@ describe("buildExposureJobSections", () => {
 			urgentRows: [],
 		});
 		expect(sections.special.map((r) => r.id)).toEqual(["s1"]);
-		expect(sections.organic.map((r) => r.id)).toEqual(["o1"]);
+		expect(sections.organic.map((r) => r.id)).toEqual(["s1", "o1"]);
+		// 중복 노출이라도 총계는 고유 공고 수로 센다.
 		expect(totalCount).toBe(2);
 	});
 	it("만료된 유료 공고는 섹션에서 빠지고 organic으로 강등된다", () => {
@@ -70,7 +73,7 @@ describe("buildExposureJobSections", () => {
 		});
 		expect(sections.special).toHaveLength(7);
 	});
-	it("organic 한도는 섹션 규모와 독립적으로 limit을 그대로 쓴다", () => {
+	it("유료 공고가 앞자리를 차지해도 무료 공고가 전체 공고에서 밀리지 않는다", () => {
 		const specials = Array.from({ length: 3 }, (_, i) =>
 			row(`s${i}`, "special")
 		);
@@ -84,20 +87,131 @@ describe("buildExposureJobSections", () => {
 			urgentRows: [],
 		});
 		expect(sections.special).toHaveLength(3);
-		expect(sections.organic.map((r) => r.id)).toEqual(["o0", "o1"]);
+		// organic 상한이 유료 섹션 크기만큼 늘어 무료 2건이 그대로 남는다.
+		const organicIds = sections.organic.map((r) => r.id);
+		expect(organicIds).toContain("o0");
+		expect(organicIds).toContain("o1");
 	});
 });
 
 describe("groupAdBannerJobs", () => {
-	it("배너 타입별 활성 공고를 상한 없이 전부 그룹핑하고 만료를 제외한다", () => {
+	it("배너 타입별 활성 공고를 그룹핑하고 만료를 제외한다(프리미엄은 2개로 캡)", () => {
 		const rows = [
 			...Array.from({ length: 5 }, (_, i) => row(`p${i}`, "premium-banner")),
 			row("l1", "left-banner"),
 			row("r1", "right-banner", { exposureEndsAt: PAST }),
 		];
 		const groups = groupAdBannerJobs(rows, NOW);
-		expect(groups.premiumBanner).toHaveLength(5);
+		// 프리미엄 후보가 슬롯을 초과하므로 2개로 캡된다.
+		expect(groups.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
 		expect(groups.leftBanner.map((r) => r.id)).toEqual(["l1"]);
 		expect(groups.rightBanner).toEqual([]);
+	});
+	it("좌/우 사이드 배너는 각각 최대 3개, 프리미엄은 2개로 캡된다(집합 기준)", () => {
+		const rows = [
+			...Array.from({ length: 5 }, (_, i) => row(`p${i}`, "premium-banner")),
+			...Array.from({ length: 4 }, (_, i) => row(`l${i}`, "left-banner")),
+			...Array.from({ length: 4 }, (_, i) => row(`r${i}`, "right-banner")),
+		];
+		const groups = groupAdBannerJobs(rows, NOW);
+		expect(groups.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
+		expect(groups.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		expect(groups.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		// 셔플로 순서는 바뀌므로 선발된 id가 후보 집합에 속하는지만 단정한다.
+		const leftIds = Array.from({ length: 4 }, (_, i) => `l${i}`);
+		for (const r of groups.leftBanner) {
+			expect(leftIds).toContain(r.id);
+		}
+	});
+});
+
+const HOUR_MS = 60 * 60 * 1000;
+
+const makeRow = (id: string, exposureType: string) => ({
+	exposureEndsAt: null,
+	exposureType,
+	id,
+});
+
+const idsOf = (rows: { id: string }[]) => rows.map((r) => r.id).sort();
+
+describe("groupAdBannerJobs 1시간 랜덤 로테이션", () => {
+	const leftRows = Array.from({ length: 8 }, (_, i) =>
+		makeRow(`left-${i}`, "left-banner")
+	);
+	const premiumRows = Array.from({ length: 8 }, (_, i) =>
+		makeRow(`prem-${i}`, "premium-banner")
+	);
+
+	it("같은 시간 버킷에서는 몇 번을 호출해도 같은 선발을 돌려준다", () => {
+		const now = new Date("2026-07-21T03:10:00Z");
+		const again = new Date("2026-07-21T03:50:00Z"); // 같은 버킷(03시)
+		const first = groupAdBannerJobs(leftRows, now);
+		const second = groupAdBannerJobs(leftRows, again);
+		expect(second.leftBanner.map((r) => r.id)).toEqual(
+			first.leftBanner.map((r) => r.id)
+		);
+	});
+
+	it("시간 버킷이 지나면 선발이 바뀐다(72버킷 중 최소 1회 변화)", () => {
+		const base = new Date("2026-07-21T00:00:00Z").getTime();
+		const selections = new Set<string>();
+		for (let hour = 0; hour < 72; hour++) {
+			const groups = groupAdBannerJobs(
+				leftRows,
+				new Date(base + hour * HOUR_MS)
+			);
+			selections.add(groups.leftBanner.map((r) => r.id).join(","));
+		}
+		expect(selections.size).toBeGreaterThan(1);
+	});
+
+	it("슬롯 초과 후보 전원이 72버킷 안에 최소 1회 선발된다(고정 배제 없음)", () => {
+		const base = new Date("2026-07-21T00:00:00Z").getTime();
+		const seen = new Set<string>();
+		for (let hour = 0; hour < 72; hour++) {
+			const groups = groupAdBannerJobs(
+				leftRows,
+				new Date(base + hour * HOUR_MS)
+			);
+			for (const r of groups.leftBanner) {
+				seen.add(r.id);
+			}
+		}
+		expect([...seen].sort()).toEqual(idsOf(leftRows));
+	});
+
+	it("프리미엄은 2개로 캡되고 좌/우는 3개를 유지한다", () => {
+		const rows = [
+			...leftRows,
+			...premiumRows,
+			...Array.from({ length: 8 }, (_, i) =>
+				makeRow(`right-${i}`, "right-banner")
+			),
+		];
+		const groups = groupAdBannerJobs(rows, new Date("2026-07-21T03:00:00Z"));
+		expect(groups.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
+		expect(groups.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		expect(groups.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+	});
+
+	it("후보가 슬롯 이하면 전원 노출된다(집합 기준)", () => {
+		const few = leftRows.slice(0, 2);
+		const groups = groupAdBannerJobs(few, new Date("2026-07-21T03:00:00Z"));
+		expect(idsOf(groups.leftBanner)).toEqual(idsOf(few));
+	});
+
+	it("만료된 배너는 로테이션 후보에서 빠진다", () => {
+		const now = new Date("2026-07-21T03:00:00Z");
+		const rows = [
+			{ ...makeRow("left-live", "left-banner") },
+			{
+				exposureEndsAt: new Date("2026-07-20T00:00:00Z"),
+				exposureType: "left-banner",
+				id: "left-expired",
+			},
+		];
+		const groups = groupAdBannerJobs(rows, now);
+		expect(idsOf(groups.leftBanner)).toEqual(["left-live"]);
 	});
 });

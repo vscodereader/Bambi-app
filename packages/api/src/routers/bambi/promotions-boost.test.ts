@@ -549,3 +549,106 @@ describe("promotions boost 수동 카운트 타입 필터", () => {
 		});
 	});
 });
+
+// 배너형 공고 거부: exposureType이 배너(premium/left/right-banner)면 스냅샷에 끌올 값이 있어도
+// 배너 전용 사유로 끌어올리기를 거부한다(끌올은 리스팅형에서만 제공).
+describe("promotions boost 배너형 공고 거부", () => {
+	const now = new Date();
+	const future = new Date(now.getTime() + 24 * HOUR_MS);
+	const organizationId = `org_test_${randomUUID()}`;
+	const employerUserId = `user_test_employer_${randomUUID()}`;
+	const memberId = `member_test_${randomUUID()}`;
+	const adPlacementId = randomUUID();
+	const adProductId = randomUUID();
+	const bannerJobId = randomUUID();
+
+	beforeAll(async () => {
+		await db.insert(user).values({
+			email: makeEmail("banner"),
+			id: employerUserId,
+			name: "배너 담당자",
+		});
+		await db.insert(organization).values({
+			createdAt: now,
+			id: organizationId,
+			name: "배너 테스트 조직",
+			slug: `banner-boost-${randomUUID()}`,
+		});
+		await db.insert(member).values({
+			createdAt: now,
+			id: memberId,
+			organizationId,
+			role: "owner",
+			userId: employerUserId,
+		});
+		await db.insert(bambiProfile).values({
+			displayName: "배너 담당자",
+			isPhoneVerified: true,
+			role: "employer",
+			status: "active",
+			userId: employerUserId,
+		});
+		await db.insert(employerOrganizationProfile).values({
+			displayName: "배너 테스트 업체",
+			organizationId,
+			verificationStatus: "verified",
+		});
+		await db.insert(adPlacement).values({
+			id: adPlacementId,
+			kind: "banner",
+			name: "프리미엄 상단 배너",
+		});
+		await db.insert(adProduct).values({
+			id: adProductId,
+			name: "프리미엄 배너 광고",
+			placementId: adPlacementId,
+			previewTemplate: "premium-top",
+			priceOptions: [{ amount: 300_000, days: 30 }],
+		});
+		// 배너형 공고: 끌올 스냅샷이 남아 있어도(2) 배너 사유가 우선해 거부돼야 한다.
+		await db.insert(jobPost).values({
+			adProductId,
+			createdByUserId: employerUserId,
+			description: "배너형 공고의 끌어올리기 거부를 검증하기 위한 공고입니다.",
+			exposureEndsAt: future,
+			exposureType: "premium-banner",
+			id: bannerJobId,
+			industryCategory: "라운지",
+			manualBoostsPerDay: 2,
+			organizationId,
+			payAmount: 180_000,
+			payUnit: "일급",
+			paymentStatus: "paid",
+			publishedAt: now,
+			region: `banner-boost-${randomUUID()}`,
+			status: "published",
+			title: "프리미엄 배너 공고",
+			workSchedule: "20:00-02:00",
+		});
+	});
+
+	afterAll(async () => {
+		await db
+			.delete(jobBoostEvent)
+			.where(eq(jobBoostEvent.jobPostId, bannerJobId));
+		await db.delete(jobPost).where(eq(jobPost.id, bannerJobId));
+		await db.delete(adProduct).where(eq(adProduct.id, adProductId));
+		await db.delete(adPlacement).where(eq(adPlacement.id, adPlacementId));
+		await db
+			.delete(employerOrganizationProfile)
+			.where(eq(employerOrganizationProfile.organizationId, organizationId));
+		await db.delete(member).where(eq(member.id, memberId));
+		await db
+			.delete(bambiProfile)
+			.where(eq(bambiProfile.userId, employerUserId));
+		await db.delete(user).where(eq(user.id, employerUserId));
+		await db.delete(organization).where(eq(organization.id, organizationId));
+	});
+
+	it("배너형 공고는 배너 전용 사유로 끌어올리기를 거부한다", async () => {
+		await expect(boostAs(employerUserId, bannerJobId)).rejects.toMatchObject({
+			message:
+				"배너 광고는 끌어올리기 대상이 아닙니다. 리스팅 광고(스페셜·급구·추천)에서만 제공됩니다.",
+		});
+	});
+});

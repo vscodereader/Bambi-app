@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { toMarketplaceJob } from "./api-job-mapper";
+
+// api-job-mapper는 import 시점에 @bambi-app/env/web를 검증한다. 테스트 러너에는 .env가
+// 없으므로 정적 import 대신 최소 환경을 채운 뒤 동적 import한다(api-job-mapper.test.ts와 동일).
+process.env.NEXT_PUBLIC_SERVER_URL = "http://localhost:3000";
+process.env.NEXT_PUBLIC_GCS_PUBLIC_BASE_URL = "https://cdn.bambi.test";
+
+const { toMarketplaceJob } = await import("./api-job-mapper");
 
 describe("toMarketplaceJob", () => {
 	it("maps API rating aggregates onto marketplace jobs", () => {
@@ -92,5 +98,40 @@ describe("toMarketplaceJob", () => {
 
 		expect(job.exposureType).toBeNull();
 		expect(job.isPromoted).toBe(true);
+	});
+
+	it("maps region/district onto fields, location and tags", () => {
+		const job = toMarketplaceJob({
+			district: "강남",
+			id: "44444444-4444-4444-8444-444444444401",
+			industryCategory: "라운지",
+			payAmount: 150_000,
+			payUnit: "일급",
+			region: "서울",
+			status: "published",
+			title: "세부지역 공고",
+		});
+
+		expect(job.region).toBe("서울");
+		expect(job.district).toBe("강남");
+		expect(job.location).toBe("서울 · 강남");
+		expect(job.tags).toContain("강남");
+	});
+
+	it("falls back to region alone when the job has no district", () => {
+		const job = toMarketplaceJob({
+			id: "44444444-4444-4444-8444-444444444402",
+			industryCategory: "라운지",
+			payAmount: 150_000,
+			payUnit: "일급",
+			region: "기타",
+			status: "published",
+			title: "세부지역 없는 공고",
+		});
+
+		expect(job.district).toBe("");
+		expect(job.location).toBe("기타");
+		// 빈 세부지역이 태그로 새면 칩이 빈 칸으로 렌더된다.
+		expect(job.tags).not.toContain("");
 	});
 });

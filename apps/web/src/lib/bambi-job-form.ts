@@ -1,18 +1,19 @@
 import {
+	isAllowedJobAdBannerAspect,
 	isAllowedJobAdBannerSize,
 	JOB_AD_BANNER_SPECS,
 	type JobAdBannerUsage,
 } from "./bambi/job-ad-banner-spec";
 import {
+	districtsForRegion,
 	industryOptions,
+	NEGOTIABLE_PAY_UNIT,
 	payUnitOptions,
 	regionOptions,
 } from "./bambi-options";
 
 const TITLE_MIN_LENGTH = 2;
 const TITLE_MAX_LENGTH = 80;
-const OPTION_MAX_LENGTH = 80;
-const PAY_UNIT_MAX_LENGTH = 30;
 const WORK_SCHEDULE_MAX_LENGTH = 200;
 const DESCRIPTION_MIN_LENGTH = 10;
 const DESCRIPTION_MAX_LENGTH = 2000;
@@ -137,11 +138,14 @@ export interface JobPostMediaApiSetInput {
 
 export interface JobForm {
 	adProductId: string | null;
+	beginnerFriendly: boolean;
 	description: string;
+	district: string;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
 	industryCategory: string;
+	instantInterview: boolean;
 	interviewNotes: string;
 	organizationId: string;
 	payAmount: string;
@@ -155,12 +159,15 @@ export interface JobForm {
 
 export interface JobPostInput {
 	adProductId: string | null;
+	beginnerFriendly: boolean;
 	description: string;
 	descriptionBlocks: JobDescriptionBlockFormValue[];
+	district: string;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
 	industryCategory: string;
+	instantInterview: boolean;
 	interviewNotes?: string;
 	media?: {
 		adHorizontal?: JobFormMediaItem;
@@ -169,7 +176,8 @@ export interface JobPostInput {
 		detail: JobFormMediaItem[];
 	};
 	organizationId: string;
-	payAmount: number;
+	// 급여 단위가 "협의"면 null(금액 없이 게시).
+	payAmount: null | number;
 	paymentMethod: JobPaymentMethod | null;
 	payUnit: string;
 	region: string;
@@ -198,13 +206,20 @@ type JobFormValidationResult =
 			ok: true;
 	  };
 
+// 선택한 시/도의 기본 세부지역. 목록이 없는 시/도(기타)는 빈 값.
+export const defaultDistrictForRegion = (region: string): string =>
+	districtsForRegion(region)[0] ?? "";
+
 export const emptyJobForm: JobForm = {
 	adProductId: null,
+	beginnerFriendly: false,
 	description: "",
+	district: defaultDistrictForRegion(regionOptions[0] ?? ""),
 	exposureAmount: null,
 	exposureDurationDays: null,
 	exposureType: "standard",
 	industryCategory: industryOptions[0] ?? "",
+	instantInterview: false,
 	interviewNotes: "",
 	organizationId: "",
 	payAmount: "",
@@ -529,14 +544,14 @@ const getAdBannerError = (
 		return;
 	}
 
-	const { label, minHeight, minWidth } = JOB_AD_BANNER_SPECS[usage];
+	const { aspectLabel, label, minHeight, minWidth } =
+		JOB_AD_BANNER_SPECS[usage];
 
 	if (!(item.width && item.height)) {
 		return `${label} 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.`;
 	}
 
-	// 비율은 막지 않는다. 슬롯이 object-cover라 어긋나면 잘릴 뿐이고, 잘림은 업로더가
-	// 경고로 알려준다. 뭉개지는 원인인 크기 하한만 여기서 막는다.
+	// 뭉개지는 원인인 크기 하한을 먼저 막는다.
 	if (
 		!isAllowedJobAdBannerSize({
 			height: item.height,
@@ -545,6 +560,18 @@ const getAdBannerError = (
 		})
 	) {
 		return `${label} 이미지가 너무 작습니다. ${minWidth}×${minHeight}px 이상으로 등록해 주세요.`;
+	}
+
+	// 비율이 허용 오차를 크게 벗어나면 슬롯에서 로고·문구가 잘려 광고 가치가 훼손되므로
+	// 반려한다. 오차 안쪽의 약간의 차이는 슬롯이 object-cover로 흡수하니 막지 않는다.
+	if (
+		!isAllowedJobAdBannerAspect({
+			height: item.height,
+			usage,
+			width: item.width,
+		})
+	) {
+		return `${label} 이미지가 요구 비율 ${aspectLabel}과 크게 달라 등록할 수 없습니다. ${aspectLabel} 비율에 맞춰 최소 ${minWidth}×${minHeight}px 이상으로 다시 등록해 주세요.`;
 	}
 
 	return;
@@ -625,6 +652,7 @@ const getPostingScopeErrors = ({
 };
 
 const getConditionErrors = ({
+	district,
 	industryCategory,
 	payAmount,
 	payUnit,
@@ -632,6 +660,7 @@ const getConditionErrors = ({
 	title,
 	workSchedule,
 }: {
+	district: string;
 	industryCategory: string;
 	payAmount: number;
 	payUnit: string;
@@ -645,24 +674,31 @@ const getConditionErrors = ({
 		errors.title = "공고 제목은 2자 이상 80자 이하로 입력해 주세요.";
 	}
 
-	if (
-		!(
-			industryCategory.length > 0 &&
-			industryCategory.length <= OPTION_MAX_LENGTH
-		)
-	) {
+	// 값이 taxonomy 목록 안에 있어야 한다. 길이만 검사하면 구 taxonomy 값
+	// ("서울 강남구" 등)이 수정 폼에서 그대로 재저장돼 지역 필터에 영영 걸리지 않는다.
+	if (!(industryOptions as readonly string[]).includes(industryCategory)) {
 		errors.industryCategory = "업종을 선택해 주세요.";
 	}
 
-	if (!(region.length > 0 && region.length <= OPTION_MAX_LENGTH)) {
+	if (!(regionOptions as readonly string[]).includes(region)) {
 		errors.region = "지역을 선택해 주세요.";
 	}
 
-	if (!(Number.isInteger(payAmount) && payAmount > 0)) {
+	// 세부지역이 정의된 시/도만 필수. "기타"처럼 목록이 빈 시/도는 건너뛴다.
+	const districts = districtsForRegion(region);
+	if (districts.length > 0 && !districts.includes(district)) {
+		errors.district = "세부지역을 선택해 주세요.";
+	}
+
+	// "협의"는 금액 없이 내는 단위라 금액 검사를 건너뛴다.
+	if (
+		payUnit !== NEGOTIABLE_PAY_UNIT &&
+		!(Number.isInteger(payAmount) && payAmount > 0)
+	) {
 		errors.payAmount = "급여 금액은 1 이상의 정수로 입력해 주세요.";
 	}
 
-	if (!(payUnit.length > 0 && payUnit.length <= PAY_UNIT_MAX_LENGTH)) {
+	if (!(payUnitOptions as readonly string[]).includes(payUnit)) {
 		errors.payUnit = "급여 단위를 선택해 주세요.";
 	}
 
@@ -756,6 +792,7 @@ export const validateJobForm = (
 	const title = trim(form.title);
 	const industryCategory = trim(form.industryCategory);
 	const region = trim(form.region);
+	const district = trim(form.district);
 	const payAmountText = trim(form.payAmount);
 	const payAmount = Number(payAmountText);
 	const payUnit = trim(form.payUnit);
@@ -793,6 +830,7 @@ export const validateJobForm = (
 			teamScopes: options.teamScopes,
 		}),
 		getConditionErrors({
+			district,
 			industryCategory,
 			payAmount,
 			payUnit,
@@ -826,12 +864,15 @@ export const validateJobForm = (
 	return {
 		input: {
 			adProductId,
+			beginnerFriendly: form.beginnerFriendly,
 			description,
 			descriptionBlocks: normalizedBlocks,
+			district,
 			exposureAmount,
 			exposureDurationDays,
 			exposureType,
 			industryCategory,
+			instantInterview: form.instantInterview,
 			interviewNotes: interviewNotes || undefined,
 			media: options.media
 				? {
@@ -842,7 +883,8 @@ export const validateJobForm = (
 					}
 				: undefined,
 			organizationId,
-			payAmount,
+			// 협의 공고는 금액을 저장하지 않는다(서버도 단위·금액 짝을 검사한다).
+			payAmount: payUnit === NEGOTIABLE_PAY_UNIT ? null : payAmount,
 			paymentMethod,
 			payUnit,
 			region,

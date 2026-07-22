@@ -102,18 +102,22 @@ const jobPostMediaSetInput = z
 	})
 	.optional();
 
-const jobPostInput = z.object({
+const jobPostInputShape = z.object({
 	organizationId: z.string().min(1),
 	teamId: z.string().min(1).optional(),
 	title: z.string().min(2).max(80),
 	industryCategory: z.string().min(1).max(80),
 	region: z.string().min(1).max(80),
-	payAmount: z.number().int().positive(),
+	district: z.string().max(80).optional(),
+	// "협의" 단위는 금액이 없다(면접 후 급여 협의). 아래 refine에서 짝을 강제한다.
+	payAmount: z.number().int().positive().nullish(),
 	payUnit: z.string().min(1).max(30),
 	workSchedule: z.string().min(1).max(200),
 	description: z.string().min(10).max(2000),
 	descriptionBlocks: z.array(jobDescriptionBlockInput).max(12).optional(),
 	interviewNotes: z.string().max(500).optional(),
+	beginnerFriendly: z.boolean().optional(),
+	instantInterview: z.boolean().optional(),
 	exposureType: z
 		.enum([
 			"premium-banner",
@@ -132,6 +136,23 @@ const jobPostInput = z.object({
 	media: jobPostMediaSetInput,
 });
 
+// 급여 단위 "협의"는 금액 없이 저장한다. apps/web/src/lib/bambi-options.ts의
+// NEGOTIABLE_PAY_UNIT과 같은 값을 유지할 것.
+const NEGOTIABLE_PAY_UNIT = "협의";
+
+// 단위와 금액의 짝을 강제한다 — 협의인데 금액이 붙거나, 금액 단위인데 금액이 빠지면
+// 목록에서 "협의 0원" 같은 잡음이 되고 최소 시급 필터도 어긋난다.
+const jobPostInput = jobPostInputShape.refine(
+	(input) =>
+		input.payUnit === NEGOTIABLE_PAY_UNIT
+			? input.payAmount == null
+			: typeof input.payAmount === "number",
+	{
+		message: "급여 단위가 '협의'가 아니면 급여 금액이 필요합니다.",
+		path: ["payAmount"],
+	}
+);
+
 const createMediaUploadInput = z.object({
 	organizationId: z.string().min(1),
 	teamId: z.string().min(1).optional(),
@@ -146,9 +167,16 @@ const createMediaUploadInput = z.object({
 const listInput = z.object({
 	industryCategory: z.string().min(1).max(80).optional(),
 	region: z.string().min(1).max(80).optional(),
+	district: z.string().max(80).optional(),
 	minPayAmount: z.number().int().positive().optional(),
 	limit: z.number().int().min(1).max(50).default(20),
 });
+
+// 최소 시급(minPayAmount) 비교 — 공고 급여 단위가 섞여 있으므로 시급 기준으로 환산한다.
+// 나눗셈 대신 하한에 근로시간을 곱해 정수로 비교한다(반올림 오차·정수 나눗셈 절삭 방지).
+// 환산 근로시간은 apps/web/src/lib/bambi-options.ts의 PAY_UNIT_HOURS와 같은 값을 유지할 것.
+const minHourlyPayFilter = (minPayAmount: number) =>
+	sql`${jobPost.payAmount} >= ${minPayAmount} * CASE ${jobPost.payUnit} WHEN '일급' THEN 8 WHEN '주급' THEN 40 WHEN '월급' THEN 209 ELSE 1 END`;
 
 type JobPostInput = z.infer<typeof jobPostInput>;
 type JobPostMediaSetInput = z.infer<typeof jobPostMediaSetInput>;
@@ -198,7 +226,7 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 			return "광고 배너 이미지의 크기를 확인하지 못했습니다. 다시 등록해 주세요.";
 		// 하한 수치는 정책 상수에서 읽는다. 문구에 숫자를 박아 두면 규격을 바꿀 때 조용히 어긋난다.
 		case "banner_too_small":
-			return `광고 배너 이미지가 너무 작습니다. 가로형은 ${JOB_AD_BANNER_SPECS.ad_horizontal.minWidth}×${JOB_AD_BANNER_SPECS.ad_horizontal.minHeight}px 이상으로 등록해 주세요.`;
+			return `광고 배너 이미지가 너무 작습니다. 가로형은 ${JOB_AD_BANNER_SPECS.ad_horizontal.minWidth}×${JOB_AD_BANNER_SPECS.ad_horizontal.minHeight}px, 세로형은 ${JOB_AD_BANNER_SPECS.ad_vertical.minWidth}×${JOB_AD_BANNER_SPECS.ad_vertical.minHeight}px 이상으로 등록해 주세요.`;
 		case "too_many_ad_banners":
 			return "광고 배너는 가로형·세로형 각 1장만 등록할 수 있습니다.";
 		case "block_text_too_long":
@@ -472,13 +500,21 @@ const resolveJobPostExposure = async (input: {
 		});
 	}
 
+	const exposureType = previewTemplateToExposureType(product.previewTemplate);
+	// 배너형 광고는 끌어올리기 대상이 아니다. 상품에 끌어올리기 값이 남아 있어도
+	// 스냅샷을 0으로 강제해 배너 공고가 끌어올려지지 않게 한다(리스팅형만 제공 —
+	// resolveBoostEligibility·runAutoBoostTick와 동일 정책).
+	const isBanner = (AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(
+		exposureType
+	);
+
 	return {
 		adProductId: product.id,
 		exposureAmount: priceOption.amount,
 		exposureDurationDays: priceOption.days,
-		exposureType: previewTemplateToExposureType(product.previewTemplate),
-		manualBoostsPerDay: product.manualBoostsPerDay,
-		autoBoostsPerDay: product.autoBoostsPerDay,
+		exposureType,
+		manualBoostsPerDay: isBanner ? 0 : product.manualBoostsPerDay,
+		autoBoostsPerDay: isBanner ? 0 : product.autoBoostsPerDay,
 		paymentMethod: input.paymentMethod ?? null,
 	};
 };
@@ -499,12 +535,18 @@ export const jobsRouter = {
 			filters.push(eq(jobPost.region, input.region));
 		}
 
+		if (input.district) {
+			filters.push(eq(jobPost.district, input.district));
+		}
+
 		if (input.minPayAmount) {
-			filters.push(sql`${jobPost.payAmount} >= ${input.minPayAmount}`);
+			filters.push(minHourlyPayFilter(input.minPayAmount));
 		}
 
 		const exposureSelection = {
 			description: jobPost.description,
+			beginnerFriendly: jobPost.beginnerFriendly,
+			instantInterview: jobPost.instantInterview,
 			coverImage: coverImageSql,
 			employerDisplayName: employerOrganizationProfile.displayName,
 			employerVerificationStatus:
@@ -520,6 +562,7 @@ export const jobsRouter = {
 			ratingAverage: ratingAverageSql,
 			ratingCount: ratingCountSql,
 			region: jobPost.region,
+			district: jobPost.district,
 			status: jobPost.status,
 			teamDisplayName: employerTeamProfile.displayName,
 			title: jobPost.title,
@@ -648,8 +691,12 @@ export const jobsRouter = {
 			filters.push(eq(jobPost.region, input.region));
 		}
 
+		if (input.district) {
+			filters.push(eq(jobPost.district, input.district));
+		}
+
 		if (input.minPayAmount) {
-			filters.push(sql`${jobPost.payAmount} >= ${input.minPayAmount}`);
+			filters.push(minHourlyPayFilter(input.minPayAmount));
 		}
 
 		return await db
@@ -658,6 +705,7 @@ export const jobsRouter = {
 				title: jobPost.title,
 				industryCategory: jobPost.industryCategory,
 				region: jobPost.region,
+				district: jobPost.district,
 				payAmount: jobPost.payAmount,
 				payUnit: jobPost.payUnit,
 				workSchedule: jobPost.workSchedule,
@@ -748,6 +796,7 @@ export const jobsRouter = {
 					paymentStatus: jobPost.paymentStatus,
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
+					district: jobPost.district,
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					workSchedule: jobPost.workSchedule,
@@ -755,6 +804,8 @@ export const jobsRouter = {
 					description: jobPost.description,
 					descriptionBlocks: jobPost.descriptionBlocks,
 					interviewNotes: jobPost.interviewNotes,
+					beginnerFriendly: jobPost.beginnerFriendly,
+					instantInterview: jobPost.instantInterview,
 					rejectionReason: jobPost.rejectionReason,
 					riskFlags: jobPost.riskFlags,
 					publishedAt: jobPost.publishedAt,
@@ -860,6 +911,7 @@ export const jobsRouter = {
 				title: jobPost.title,
 				industryCategory: jobPost.industryCategory,
 				region: jobPost.region,
+				district: jobPost.district,
 				payAmount: jobPost.payAmount,
 				payUnit: jobPost.payUnit,
 				status: jobPost.status,
@@ -1142,6 +1194,9 @@ export const jobsRouter = {
 					.update(jobPost)
 					.set({
 						...jobInput,
+						// 금액 단위 → "협의"로 바꿀 때 undefined면 drizzle이 컬럼을 건너뛰어
+						// 예전 금액이 남는다. null로 명시해 지운다.
+						payAmount: jobInput.payAmount ?? null,
 						description: preparedContent.description,
 						descriptionBlocks: preparedContent.descriptionBlocks,
 						status,

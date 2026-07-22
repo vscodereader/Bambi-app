@@ -16,6 +16,7 @@
     "@orpc/client": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/tanstack-query": "catalog:",
+    "@portone/browser-sdk": "^0.1.9",
     "@tanstack/react-form": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tiptap/extension-image": "^3.27.4",

@@ -1,59 +1,21 @@
+import { decodeGuestTokenGender } from "./guest-token";
+
 export const GUEST_COOKIE_NAME = "bambi_guest";
-export const GUEST_COOKIE_VALUE = "1";
 export const GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 
-// 휴대폰 본인인증 결과 쿠키. 지금은 실제 인증 API가 없어 목(mock) 폼 입력으로 세팅한다.
-// 실인증 도입 시 이 상수·매핑과 목 폼을 함께 걷어낸다. 쿠키명은 인증 규격을 그대로
-// 따른다(생년월일 adultbrith는 규격상 철자 유지).
-export const ADULT_NAME_COOKIE = "adultname";
-export const ADULT_BIRTH_COOKIE = "adultbrith";
-export const ADULT_PHONE_COOKIE = "adultphone";
-export const ADULT_SEX_COOKIE = "adultsex";
-export const ADULT_CODE_COOKIE = "adultcode";
-
-// 세션이 생기거나 로그아웃할 때 게스트 쿠키와 함께 만료시킬 인증 쿠키 목록.
-export const ADULT_COOKIE_NAMES = [
-	ADULT_NAME_COOKIE,
-	ADULT_BIRTH_COOKIE,
-	ADULT_PHONE_COOKIE,
-	ADULT_SEX_COOKIE,
-	ADULT_CODE_COOKIE,
+// 실인증(포트원) 이전의 목 인증 쿠키들. 더는 발급하지 않지만 기존 방문자 브라우저에
+// 남아 있어 로그인·로그아웃 시 함께 만료시킨다. 신규 코드에서 읽지 말 것.
+export const LEGACY_ADULT_COOKIE_NAMES = [
+	"adultname",
+	"adultbrith",
+	"adultphone",
+	"adultsex",
+	"adultcode",
 ] as const;
 
 export type BambiGenderValue = "male" | "female";
-// adultsex 규격: 1=남, 2=여.
-export type AdultSexCode = "1" | "2";
 
-export const genderToAdultSex = (gender: BambiGenderValue): AdultSexCode =>
-	gender === "male" ? "1" : "2";
-
-export const adultSexToGender = (sex: string): BambiGenderValue | null => {
-	if (sex === "1") {
-		return "male";
-	}
-	if (sex === "2") {
-		return "female";
-	}
-	return null;
-};
-
-// 쿠키 문자열에서 성인인증 성별(adultsex)을 읽는다. clearGuestCookie가 adultsex를
-// 만료시키기 전에 회원 프로필로 성별을 옮길 때 쓴다.
-export const readAdultGenderFromCookieString = (
-	cookie: string
-): BambiGenderValue | null => {
-	const entry = cookie
-		.split(";")
-		.map((part) => part.trim())
-		.find((part) => part.startsWith(`${ADULT_SEX_COOKIE}=`));
-	if (!entry) {
-		return null;
-	}
-	return adultSexToGender(entry.slice(ADULT_SEX_COOKIE.length + 1));
-};
-
-// 목 인증 폼이 서버 라우트로 보내는 입력. adultcode(CI/DI)는 사용자가 입력하지 않고
-// 서버가 목 랜덤 문자열로 생성한다.
+// 포트원 미구성 개발 환경 전용 목 인증 폼이 서버 라우트로 보내는 입력.
 export interface MockPhoneVerifyInput {
 	birth: string;
 	gender: BambiGenderValue;
@@ -61,11 +23,28 @@ export interface MockPhoneVerifyInput {
 	phone: string;
 }
 
-export const readGuestFromCookieString = (cookie: string): boolean =>
-	cookie
+const readGuestTokenFromCookieString = (cookie: string): string | null => {
+	const entry = cookie
 		.split(";")
 		.map((part) => part.trim())
-		.some((part) => part === `${GUEST_COOKIE_NAME}=${GUEST_COOKIE_VALUE}`);
+		.find((part) => part.startsWith(`${GUEST_COOKIE_NAME}=`));
+	const value = entry?.slice(GUEST_COOKIE_NAME.length + 1);
+	return value ? value : null;
+};
+
+// 클라이언트에서 게스트 쿠키의 존재만 본다(내비게이션 UI 분기용). 진위 판정은 서버
+// 미들웨어가 서명 검증으로 한다 — 여기 값은 위조 가능하므로 권한 판단에 쓰지 않는다.
+export const readGuestFromCookieString = (cookie: string): boolean =>
+	readGuestTokenFromCookieString(cookie) !== null;
+
+// 게스트 토큰에서 성별을 읽는다. clearGuestCookie가 쿠키를 만료시키기 전에 회원
+// 프로필로 성별을 옮길 때 쓴다(가입 흐름). 서명 검증 없는 클라이언트 읽기다.
+export const readGuestGenderFromCookieString = (
+	cookie: string
+): BambiGenderValue | null => {
+	const token = readGuestTokenFromCookieString(cookie);
+	return token ? decodeGuestTokenGender(token) : null;
+};
 
 // 게스트 열람 쿠키를 서버 라우트를 통해 만료시킨다. 세팅(POST /api/guest)과 동일
 // 경로로 처리해 쿠키 속성이 어긋나 삭제가 누락되는 일을 막는다. 회원가입·로그인으로

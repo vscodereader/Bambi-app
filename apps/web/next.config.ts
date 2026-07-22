@@ -21,7 +21,10 @@ const nextConfig: NextConfig = {
 	images: { remotePatterns: remoteImagePatterns },
 	typedRoutes: true,
 	reactCompiler: true,
-	transpilePackages: ["shiki"],
+	// @bambi-app/api는 소스 TS를 그대로 export 한다. 웹은 지금까지 타입만 가져왔지만,
+	// /api/guest 라우트가 포트원 본인인증 서비스(services/portone-identity)를 런타임
+	// import 하므로 트랜스파일 대상에 넣는다.
+	transpilePackages: ["shiki", "@bambi-app/api"],
 };
 
 export default nextConfig;

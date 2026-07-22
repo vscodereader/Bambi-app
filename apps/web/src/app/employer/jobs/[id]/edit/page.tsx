@@ -7,7 +7,9 @@ import {
 } from "@bambi-app/ui/components/alert";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Input } from "@bambi-app/ui/components/input";
+import { Label } from "@bambi-app/ui/components/label";
 import {
 	Select,
 	SelectContent,
@@ -32,10 +34,11 @@ import {
 	FormError,
 } from "@/components/bambi/form-message";
 import { JobExposureFields } from "@/components/bambi/job-exposure-fields";
+import { JobPayFields } from "@/components/bambi/job-pay-fields";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
+import { JobRegionFields } from "@/components/bambi/job-region-fields";
 import { PageShell } from "@/components/bambi/page-shell";
-import { PayAmountHint } from "@/components/bambi/pay-amount-hint";
 import Loader from "@/components/loader";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
@@ -54,8 +57,8 @@ import {
 } from "@/lib/bambi-job-form";
 import {
 	industryOptions,
-	payUnitOptions,
-	regionOptions,
+	NEGOTIABLE_PAY_TEXT,
+	NEGOTIABLE_PAY_UNIT,
 } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
@@ -112,6 +115,10 @@ const formatPreviewPay = ({
 	payAmount,
 	payUnit,
 }: Pick<JobForm, "payAmount" | "payUnit">): string => {
+	if (payUnit === NEGOTIABLE_PAY_UNIT) {
+		return NEGOTIABLE_PAY_TEXT;
+	}
+
 	const numericPay = Number(payAmount);
 
 	return Number.isFinite(numericPay) && numericPay > 0
@@ -226,11 +233,14 @@ export default function EditEmployerJobPage({
 
 		setForm({
 			adProductId: job.adProductId ?? null,
+			beginnerFriendly: job.beginnerFriendly ?? false,
 			description: job.description,
+			district: job.district ?? "",
 			exposureAmount: job.exposureAmount ?? null,
 			exposureDurationDays: job.exposureDurationDays ?? null,
 			exposureType: job.exposureType,
 			industryCategory: job.industryCategory,
+			instantInterview: job.instantInterview ?? false,
 			interviewNotes: job.interviewNotes ?? "",
 			organizationId: job.organizationId,
 			payAmount: String(job.payAmount),
@@ -266,6 +276,15 @@ export default function EditEmployerJobPage({
 		}));
 		setFormError(null);
 	};
+
+	const updateFormFlag =
+		(field: "beginnerFriendly" | "instantInterview") => (checked: boolean) => {
+			setIsDirty(true);
+			setForm((currentForm) => ({
+				...currentForm,
+				[field]: checked,
+			}));
+		};
 
 	const updateExposureFields = (
 		patch: Partial<
@@ -469,6 +488,10 @@ export default function EditEmployerJobPage({
 		);
 	}
 
+	// 유료 상품에 신용카드(미지원)를 고른 상태면 수정 저장을 막는다. 사유는 결제 섹션 안내가 알린다.
+	const cardPaymentBlocked =
+		Boolean(form.adProductId) && form.paymentMethod === "card";
+
 	const listingPreview = (
 		<EmployerListingPreview
 			companyName={previewCompanyName}
@@ -594,106 +617,18 @@ export default function EditEmployerJobPage({
 										message={fieldErrors.industryCategory}
 									/>
 								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="region">지역</FieldLabel>
-									<Select
-										name="region"
-										onValueChange={(value) =>
-											updateFormValue("region", value ?? "")
-										}
-										required
-										value={form.region}
-									>
-										<SelectTrigger
-											aria-describedby={
-												fieldErrors.region
-													? getFieldErrorId("region")
-													: undefined
-											}
-											aria-invalid={Boolean(fieldErrors.region)}
-											className={selectTriggerClassName}
-											id="region"
-										>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{regionOptions.map((option) => (
-												<SelectItem key={option} value={option}>
-													{option}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									<FieldError
-										id={getFieldErrorId("region")}
-										message={fieldErrors.region}
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="payAmount">급여 금액</FieldLabel>
-									<Input
-										aria-describedby={
-											fieldErrors.payAmount
-												? getFieldErrorId("payAmount")
-												: undefined
-										}
-										aria-invalid={Boolean(fieldErrors.payAmount)}
-										id="payAmount"
-										inputMode="numeric"
-										min="1"
-										name="payAmount"
-										onChange={(event) =>
-											updateFormValue("payAmount", event.target.value)
-										}
-										placeholder="예: 12000…"
-										required
-										type="number"
-										value={form.payAmount}
-									/>
-									<PayAmountHint
-										payAmount={form.payAmount}
-										payUnit={form.payUnit}
-									/>
-									<FieldError
-										id={getFieldErrorId("payAmount")}
-										message={fieldErrors.payAmount}
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="payUnit">급여 단위</FieldLabel>
-									<Select
-										name="payUnit"
-										onValueChange={(value) =>
-											updateFormValue("payUnit", value ?? "")
-										}
-										required
-										value={form.payUnit}
-									>
-										<SelectTrigger
-											aria-describedby={
-												fieldErrors.payUnit
-													? getFieldErrorId("payUnit")
-													: undefined
-											}
-											aria-invalid={Boolean(fieldErrors.payUnit)}
-											className={selectTriggerClassName}
-											id="payUnit"
-										>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{payUnitOptions.map((option) => (
-												<SelectItem key={option} value={option}>
-													{option}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									<FieldError
-										id={getFieldErrorId("payUnit")}
-										message={fieldErrors.payUnit}
-									/>
-								</div>
+								<JobRegionFields
+									district={form.district}
+									errors={fieldErrors}
+									onChange={updateFormValue}
+									region={form.region}
+								/>
+								<JobPayFields
+									errors={fieldErrors}
+									onChange={updateFormValue}
+									payAmount={form.payAmount}
+									payUnit={form.payUnit}
+								/>
 								<div className="flex flex-col gap-2 md:col-span-2">
 									<FieldLabel htmlFor="workSchedule">근무 일정</FieldLabel>
 									<Input
@@ -716,6 +651,30 @@ export default function EditEmployerJobPage({
 										id={getFieldErrorId("workSchedule")}
 										message={fieldErrors.workSchedule}
 									/>
+								</div>
+								<div className="flex flex-col gap-3 md:col-span-2">
+									<Label
+										className="flex items-center gap-2 font-medium text-sm"
+										htmlFor="beginnerFriendly"
+									>
+										<Checkbox
+											checked={form.beginnerFriendly}
+											id="beginnerFriendly"
+											onCheckedChange={updateFormFlag("beginnerFriendly")}
+										/>
+										초보 가능
+									</Label>
+									<Label
+										className="flex items-center gap-2 font-medium text-sm"
+										htmlFor="instantInterview"
+									>
+										<Checkbox
+											checked={form.instantInterview}
+											id="instantInterview"
+											onCheckedChange={updateFormFlag("instantInterview")}
+										/>
+										당일면접 가능
+									</Label>
 								</div>
 							</CardContent>
 						</Card>
@@ -879,7 +838,8 @@ export default function EditEmployerJobPage({
 							<Button
 								disabled={
 									updateMutation.isPending ||
-									createMediaUploadMutation.isPending
+									createMediaUploadMutation.isPending ||
+									cardPaymentBlocked
 								}
 								type="submit"
 							>

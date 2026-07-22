@@ -14,8 +14,9 @@ import {
 	employerOrganizationProfile,
 	employerTeamProfile,
 } from "@bambi-app/db/schema/bambi";
+import { env } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -34,6 +35,14 @@ import {
 	deriveEmployerApprovalStatus,
 	type OrganizationRole,
 } from "../../services/bambi-onboarding";
+import {
+	fetchIdentityVerification,
+	hashIdentityValue,
+	isAdultBirth8,
+	mapPortOneGender,
+	toBirth8,
+	UNDERAGE_MESSAGE,
+} from "../../services/portone-identity";
 
 const profileInput = z.object({
 	displayName: z.string().min(1).max(80).optional(),
@@ -41,21 +50,20 @@ const profileInput = z.object({
 	phoneNumber: z.string().min(3).max(30).optional(),
 });
 
-// 현재 유효한 법적 문서 버전. 웹 약관(/terms)·개인정보 처리방침(/privacy) 페이지의
-// 시행일(2026-07-10)과 일치시킨다. 문서를 개정하면 이 값을 올린다 — 재동의가 새 이력
-// 행으로 쌓인다.
+// 현재 유효한 법적 문서 버전. 각 웹 페이지의 시행일과 일치시킨다 — 이용약관(/terms)은
+// 2026-07-10, 개인정보 처리방침(/privacy)은 포트원 휴대폰 본인인증 도입 개정으로
+// 2026-07-21. 문서를 개정하면 해당 값을 올린다 — 재동의가 새 이력 행으로 쌓인다.
 const LEGAL_CONSENT_VERSIONS = {
 	terms_of_service: "2026-07-10",
-	privacy_policy: "2026-07-10",
+	privacy_policy: "2026-07-21",
 } as const;
 
 const profileUpdateInput = profileInput.omit({ gender: true }).extend({
 	role: z.enum(["job_seeker", "employer", "admin"]).optional(),
 });
 
-// 목(mock) 휴대폰 본인인증 입력. 실제 인증 API가 없어 번호를 그대로 받아 인증 완료로
-// 저장한다. gender는 커뮤니티 게이팅용 불변값이라 아직 없을 때만 채운다(성인인증 목 폼과
-// 동일 규격). 실인증 도입 시 verifyMyPhoneMock 핸들러와 함께 교체한다.
+// 목(mock) 휴대폰 본인인증 입력 — 포트원 미구성 개발 환경 전용(핸들러에서 잠근다).
+// gender는 커뮤니티 게이팅용 불변값이라 아직 없을 때만 채운다.
 const mockPhoneVerificationInput = z.object({
 	phoneNumber: z.string().min(3).max(30),
 	gender: z.enum(["male", "female"]).optional(),
@@ -63,6 +71,12 @@ const mockPhoneVerificationInput = z.object({
 		.string()
 		.regex(/^\d{8}$/, "생년월일은 8자리(YYYYMMDD)여야 합니다.")
 		.optional(),
+});
+
+// 실인증 입력 — 인증창(SDK)이 완료한 본인인증 건의 식별자. 값 자체는 신뢰하지 않고
+// 서버가 포트원 단건조회로 진위를 확인한다.
+const phoneVerificationInput = z.object({
+	identityVerificationId: z.string().min(1).max(120),
 });
 
 const organizationProfileInput = z.object({
@@ -420,12 +434,106 @@ export const onboardingRouter = {
 			return updatedProfile;
 		}),
 
-	// 목 휴대폰 본인인증 — 실제 인증 API가 없어 입력받은 번호를 그대로 저장하고 인증 완료로
-	// 표시한다. gender는 커뮤니티 게이팅용 불변값이라 아직 없을 때만 채운다. 실인증 도입 시
-	// 이 핸들러를 실제 인증 결과 저장으로 교체한다.
+	// 실 휴대폰 본인인증(포트원 인증창) — 클라이언트가 보낸 identityVerificationId를
+	// 포트원 단건조회로 검증하고, 조회 결과(번호·성별·생년월일·CI·DI)를 프로필에 저장한다.
+	// 만 19세 미만은 법적 요건상 무조건 거부한다. DI 해시 유니크로 중복 계정 인증을 막는다.
+	verifyMyPhone: protectedProcedure
+		.input(phoneVerificationInput)
+		.handler(async ({ context, input }) => {
+			const apiSecret = env.PORTONE_API_SECRET;
+			if (!apiSecret) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "본인인증이 아직 구성되지 않았습니다.",
+				});
+			}
+			const userId = context.session.user.id;
+			const [existingProfile] = await db
+				.select({ gender: bambiProfile.gender })
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, userId))
+				.limit(1);
+			if (!existingProfile) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "프로필을 찾을 수 없습니다.",
+				});
+			}
+
+			const verification = await fetchIdentityVerification(
+				apiSecret,
+				input.identityVerificationId
+			);
+			if (verification.status !== "VERIFIED") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "본인인증이 완료되지 않았습니다. 다시 시도해 주세요.",
+				});
+			}
+			const customer = verification.verifiedCustomer;
+			const birth8 = toBirth8(customer?.birthDate);
+			// 생년월일을 못 읽으면 성인임을 증명할 수 없으므로 거부한다(안전 기본값).
+			if (!(birth8 && isAdultBirth8(birth8, new Date()))) {
+				throw new ORPCError("FORBIDDEN", { message: UNDERAGE_MESSAGE });
+			}
+			if (!customer?.ci) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "인증 정보에 개인 식별값(CI)이 없습니다.",
+				});
+			}
+			if (!customer.di) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "인증 정보에 중복확인 식별값(DI)이 없습니다.",
+				});
+			}
+
+			// CI·DI 원문은 저장하지 않는다 — 해시로 중복 계정만 판별한다. 중복 판정의
+			// 기준 축은 DI지만, 과거 CI만 저장된 계정과의 CI 충돌도 유니크 인덱스가
+			// 유지되므로 저장 전에 함께 걸러 같은 안내로 막는다(안 그러면 저장 시
+			// unique violation으로 터진다). 둘 중 하나라도 다른 계정과 겹치면 CONFLICT.
+			const ciHash = await hashIdentityValue(customer.ci);
+			const diHash = await hashIdentityValue(customer.di);
+			const collisions = await db
+				.select({ userId: bambiProfile.userId })
+				.from(bambiProfile)
+				.where(
+					or(eq(bambiProfile.diHash, diHash), eq(bambiProfile.ciHash, ciHash))
+				);
+			if (collisions.some((row) => row.userId !== userId)) {
+				throw new ORPCError("CONFLICT", {
+					message: "이미 다른 계정에서 본인인증에 사용된 정보예요.",
+				});
+			}
+
+			const [updatedProfile] = await db
+				.update(bambiProfile)
+				.set({
+					phoneNumber: customer.phoneNumber,
+					isPhoneVerified: true,
+					// 실인증 결과가 신뢰 원천이므로 성별을 덮어쓴다(조회 실패 시 기존 유지).
+					gender: mapPortOneGender(customer.gender) ?? existingProfile.gender,
+					birthDate: birth8,
+					ciHash,
+					diHash,
+				})
+				.where(eq(bambiProfile.userId, userId))
+				.returning();
+
+			return updatedProfile;
+		}),
+
+	// 목 휴대폰 본인인증 — 포트원 미구성 개발 환경 전용. 프로덕션·포트원 구성 시에는
+	// 잠긴다(클라이언트도 같은 조건으로 목 폼을 숨기지만, 서버에서도 이중으로 막는다).
 	verifyMyPhoneMock: protectedProcedure
 		.input(mockPhoneVerificationInput)
 		.handler(async ({ context, input }) => {
+			if (env.PORTONE_API_SECRET || env.NODE_ENV === "production") {
+				throw new ORPCError("FORBIDDEN", {
+					message:
+						"목 인증은 포트원 미구성 개발 환경에서만 사용할 수 있습니다.",
+				});
+			}
+			// 실인증과 동일한 연령 기준을 적용해 개발에서도 차단 UX를 검증할 수 있게 한다.
+			if (input.birthDate && !isAdultBirth8(input.birthDate, new Date())) {
+				throw new ORPCError("FORBIDDEN", { message: UNDERAGE_MESSAGE });
+			}
 			const userId = context.session.user.id;
 			const [existingProfile] = await db
 				.select({ gender: bambiProfile.gender })

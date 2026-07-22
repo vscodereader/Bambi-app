@@ -11,7 +11,7 @@ import Image from "next/image";
 import { getAdBannerUsagesForPreviewTemplate } from "@/lib/bambi/ad-preview-templates";
 import {
 	formatJobAdBannerSpec,
-	getJobAdBannerCropDirection,
+	isAllowedJobAdBannerAspect,
 	JOB_AD_BANNER_SPECS,
 	type JobAdBannerUsage,
 	readImageDimensions,
@@ -187,17 +187,24 @@ interface AdBannerSlotProps {
 // 미리보기 박스를 실제 노출 슬롯과 같은 비율로 보여준다. 여기서 이상해 보이면 실제 광고도
 // 이상하게 나간다.
 function AdBannerSlot({ item, onChange, usage }: AdBannerSlotProps) {
-	const { aspectClassName, aspectLabel, description, label } =
-		JOB_AD_BANNER_SPECS[usage];
-	// 비율은 등록을 막지 않으므로(슬롯이 가운데를 기준으로 자른다) 오류가 아니라 경고다.
-	const cropDirection =
+	const {
+		aspectClassName,
+		aspectLabel,
+		description,
+		label,
+		minHeight,
+		minWidth,
+	} = JOB_AD_BANNER_SPECS[usage];
+	// 비율이 허용 오차를 크게 벗어나면 슬롯에서 로고·문구가 잘려 나가므로 반려한다. 폼
+	// 검증(bambi-job-form)이 같은 규칙으로 제출을 막고, 여기선 그 이유를 바로 알려 준다.
+	const aspectRejected =
 		item?.height && item.width
-			? getJobAdBannerCropDirection({
+			? !isAllowedJobAdBannerAspect({
 					height: item.height,
 					usage,
 					width: item.width,
 				})
-			: null;
+			: false;
 
 	return (
 		<div className="flex flex-col gap-2">
@@ -216,14 +223,13 @@ function AdBannerSlot({ item, onChange, usage }: AdBannerSlotProps) {
 				onRemove={() => onChange(null)}
 				previewClassName={cn("aspect-auto w-full", aspectClassName)}
 			/>
-			{cropDirection ? (
-				<Alert variant="warning">
+			{aspectRejected ? (
+				<Alert variant="destructive">
 					<TriangleAlert />
 					<AlertDescription>
-						{label} 이미지가 권장 비율 {aspectLabel}과 달라 노출 슬롯에서{" "}
-						{cropDirection === "sides" ? "좌우" : "위아래"}가 잘립니다. 그대로
-						등록해도 되지만, 로고·문구가 잘리지 않는지 위 미리보기에서 확인해
-						주세요.
+						{label} 이미지({item?.width}×{item?.height})는 요구 비율{" "}
+						{aspectLabel}과 크게 달라 등록할 수 없습니다. {aspectLabel} 비율에
+						맞춰 최소 {minWidth}×{minHeight}px 이상으로 다시 등록해 주세요.
 					</AlertDescription>
 				</Alert>
 			) : null}
@@ -334,10 +340,10 @@ export function JobPostMediaUploader({
 					<div className="flex flex-col gap-1 pt-2">
 						<h2 className="font-medium text-sm">광고 배너 이미지</h2>
 						<p className="text-muted-foreground text-xs">
-							선택한 노출 상품이 사용하는 배너만 등록합니다. 권장 비율(가로형
-							7:3 · 세로형 4:9)과 다른 이미지도 등록할 수 있으며, 노출 슬롯에
-							맞춰 가운데를 기준으로 잘립니다. 움직이는 GIF도 등록할 수
-							있습니다.
+							선택한 노출 상품이 사용하는 배너만 등록합니다. 비율(가로형 7:3 ·
+							세로형 4:9)이 크게 어긋나면 슬롯에서 잘려 등록할 수 없고, 조금
+							다른 정도는 노출 슬롯에 맞춰 가운데를 기준으로 잘립니다. 움직이는
+							GIF도 등록할 수 있습니다.
 						</p>
 					</div>
 					{isProductResolved && unusedBannerLabels.length > 0 ? (

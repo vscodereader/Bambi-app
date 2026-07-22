@@ -45,6 +45,19 @@ describe("employer ads management page", () => {
 		expect(source).toContain("회 실행");
 	});
 
+	it("replaces boost UI with a notice for banner exposure rows", () => {
+		// 배너형(프리미엄·좌측·우측 배너)은 끌어올리기 대상이 아니라 안내 문구만 표시
+		expect(source).toContain("isBannerExposureType");
+		expect(source).toContain("끌어올리기 대상이 아닙니다");
+	});
+
+	it("re-shows the bank transfer guide for unpaid rows", () => {
+		// 미결제 행은 상태 옆 "입금 안내" 팝오버로 계좌 안내를 다시 볼 수 있다
+		expect(source).toContain('ad.paymentStatus === "unpaid"');
+		expect(source).toContain("입금 안내");
+		expect(source).toContain("BankTransferGuide");
+	});
+
 	it("shows only the team name as the title subtext, not the employer name", () => {
 		// 자기 조직 화면이라 모든 행이 같은 업체명 → 정보 가치 없음 → 보조 텍스트에서 제거
 		expect(source).not.toContain("ad.employerDisplayName");

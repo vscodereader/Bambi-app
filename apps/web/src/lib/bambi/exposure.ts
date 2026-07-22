@@ -18,6 +18,17 @@ export const PAYMENT_STATUS_LABELS = {
 export type ExposureType = keyof typeof EXPOSURE_TYPE_LABELS;
 export type PaymentStatus = keyof typeof PAYMENT_STATUS_LABELS;
 
+// 배너형 노출(프리미엄·좌측·우측 배너)은 끌어올리기(수동·자동) 대상이 아니다.
+// 끌어올리기는 리스팅형(스페셜·급구·추천)에만 제공된다.
+const BANNER_EXPOSURE_TYPES: ReadonlySet<string> = new Set([
+	"premium-banner",
+	"left-banner",
+	"right-banner",
+]);
+
+export const isBannerExposureType = (exposureType: string): boolean =>
+	BANNER_EXPOSURE_TYPES.has(exposureType);
+
 export type StatusTone = "danger" | "default" | "good" | "warning";
 
 const getBaseJobStatusTone = (status: string): StatusTone => {
