@@ -9,16 +9,17 @@ const readComponent = (fileName: string) =>
 	fs.readFileSync(componentPath(fileName), "utf8");
 
 describe("visual job marketplace components", () => {
-	it("defines a compact visual job card with promotion, safety, and chat affordances", () => {
+	it("defines a compact visual job card without a chat button", () => {
 		const source = readComponent("visual-job-card.tsx");
 
 		expect(source).toContain("export function VisualJobCard");
 		expect(source).toContain(
 			'tone: "organic" | "recommended" | "special" | "urgent"'
 		);
-		expect(source).toContain("채팅");
 		expect(source).toContain("splitPay");
-		expect(source).toContain("rightIcon={<Message />}");
+		// 카드의 채팅 버튼은 제거됨 — 채팅 진입은 공고 상세에서만 한다
+		expect(source).not.toContain("채팅");
+		expect(source).not.toContain("onChat");
 		// 최신(organic) 배지는 중립 톤 — 사용 색상 최소화
 		expect(source).toContain("tone={toneBadge[tone]}");
 		expect(source).toContain('organic: "neutral"');

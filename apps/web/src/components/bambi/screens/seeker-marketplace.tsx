@@ -48,10 +48,6 @@ export function SeekerMarketplaceScreen() {
 		router.push(`/seeker/jobs/${job.id}` as Route);
 	};
 
-	const chatJob = (job: Job) => {
-		router.push(`/seeker/jobs/${job.id}/chat` as Route);
-	};
-
 	return (
 		<>
 			{/* 3컬럼: 좌 여백(필터+배너) · 중앙 고정폭 콘텐츠 · 우 여백(배너).
@@ -122,7 +118,6 @@ export function SeekerMarketplaceScreen() {
 					<VisualJobExposureSections
 						communitySlot={<HomeCommunitySection />}
 						jobs={jobs}
-						onChat={chatJob}
 						onOpen={openJob}
 						sections={sections}
 					/>

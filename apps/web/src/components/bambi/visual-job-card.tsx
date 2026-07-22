@@ -6,14 +6,13 @@ import {
 	shouldShowHitRibbon,
 } from "@/lib/bambi/job-hit";
 import type { Job } from "@/lib/bambi/types";
-import { Badge, Button } from "./ds";
-import { MapPinIcon, Message } from "./icons";
+import { Badge } from "./ds";
+import { MapPinIcon } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
 
 interface VisualJobCardProps {
 	active?: boolean;
 	job: Job;
-	onChat: (job: Job) => void;
 	onOpen: (job: Job) => void;
 	tone: "organic" | "recommended" | "special" | "urgent";
 }
@@ -63,7 +62,6 @@ function splitPay(pay: string): { amount: string; unit: null | string } {
 export function VisualJobCard({
 	active = false,
 	job,
-	onChat,
 	onOpen,
 	tone,
 }: VisualJobCardProps) {
@@ -135,8 +133,8 @@ export function VisualJobCard({
 				</div>
 			</button>
 			{/* mt-auto: 그리드 행이 늘어나(모집중 placeholder 등) 카드가 stretch 되어도
-			    급여·채팅 행이 항상 카드 하단에 붙도록 고정한다. */}
-			<div className="mt-auto flex items-end justify-between gap-2">
+			    급여 행이 항상 카드 하단에 붙도록 고정한다. */}
+			<div className="mt-auto flex">
 				<span className="flex h-9 min-w-0 items-center gap-1.5 rounded-md border border-border bg-background px-[14px]">
 					{payUnit ? (
 						<Badge className="shrink-0" tone={toneBadge[tone]}>
@@ -147,15 +145,6 @@ export function VisualJobCard({
 						{payAmount}
 					</span>
 				</span>
-				<Button
-					className="h-9 shrink-0 justify-center"
-					onClick={() => onChat(job)}
-					rightIcon={<Message />}
-					size="sm"
-					variant="secondary"
-				>
-					채팅
-				</Button>
 			</div>
 		</article>
 	);
