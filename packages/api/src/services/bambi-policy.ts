@@ -12,6 +12,11 @@ export const jobPostStatuses = [
 	"rejected",
 ] as const;
 export const accountStatuses = ["active", "warned", "suspended"] as const;
+
+// 탈퇴 계정 개인정보 보존기간 기본값(일). 실제 적용값은 운영자 사이트 설정
+// (bambi_site_settings.withdrawal_retention_days)이 우선하고, 미설정이면 이 값을 쓴다.
+// 해석은 bambi-member-policy의 resolveWithdrawalRetentionDays가 담당한다.
+export const DEFAULT_WITHDRAWAL_RETENTION_DAYS = 30;
 export const interviewStatuses = [
 	"proposed",
 	"confirmed",
