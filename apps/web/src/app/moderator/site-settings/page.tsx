@@ -192,6 +192,43 @@ export default function ModeratorSiteSettingsPage() {
 		saveMemberPolicyMutation.mutate({ withdrawalRetentionDays: parsed });
 	};
 
+	const adRotationQuery = useQuery(
+		orpc.bambi.siteSettings.getAdRotation.queryOptions()
+	);
+	const [rotationMinutes, setRotationMinutes] = useState("");
+
+	// 저장된 값이 오면 폼에 채운다(미설정이면 빈 값 → 기본값 placeholder 노출).
+	useEffect(() => {
+		const data = adRotationQuery.data;
+		if (!data) {
+			return;
+		}
+		setRotationMinutes(data.minutes === null ? "" : String(data.minutes));
+	}, [adRotationQuery.data]);
+
+	const saveAdRotationMutation = useMutation(
+		orpc.bambi.siteSettings.updateAdRotation.mutationOptions({
+			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("광고 배너 로테이션 주기를 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getAdRotation.queryKey(),
+				});
+			},
+		})
+	);
+
+	const onSubmitAdRotation = (event: FormEvent) => {
+		event.preventDefault();
+		const trimmed = rotationMinutes.trim();
+		const parsed = trimmed === "" ? null : Number(trimmed);
+		if (parsed !== null && !Number.isInteger(parsed)) {
+			toast.error("로테이션 주기는 분 단위 정수로 입력해 주세요.");
+			return;
+		}
+		saveAdRotationMutation.mutate({ minutes: parsed });
+	};
+
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<div className="flex flex-col gap-1">
@@ -388,6 +425,42 @@ export default function ModeratorSiteSettingsPage() {
 								type="submit"
 							>
 								{saveMemberPolicyMutation.isPending ? "저장 중…" : "저장"}
+							</Button>
+						</div>
+					</form>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>광고 배너 로테이션</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<form className="flex flex-col gap-5" onSubmit={onSubmitAdRotation}>
+						<div className="flex flex-col gap-2 md:max-w-xs">
+							<Label htmlFor="adBannerRotationMinutes">로테이션 주기(분)</Label>
+							<Input
+								id="adBannerRotationMinutes"
+								inputMode="numeric"
+								onChange={(event) => setRotationMinutes(event.target.value)}
+								placeholder={String(adRotationQuery.data?.defaultMinutes ?? 60)}
+								value={rotationMinutes}
+							/>
+							<p className="m-0 text-muted-foreground text-xs">
+								프리미엄 광고 배너는 화면 전체에서 한 칸에만 노출되며, 이
+								주기마다 노출 자리가 좌→상단→우 순서로 한 칸씩 이동합니다.
+								비워두면 기본값(60분)을 사용합니다. 주기를 바꾸면 이동 위치가 한
+								번 점프할 수 있어요.
+							</p>
+						</div>
+						<div className="flex justify-end">
+							<Button
+								disabled={
+									saveAdRotationMutation.isPending || adRotationQuery.isLoading
+								}
+								type="submit"
+							>
+								{saveAdRotationMutation.isPending ? "저장 중…" : "저장"}
 							</Button>
 						</div>
 					</form>

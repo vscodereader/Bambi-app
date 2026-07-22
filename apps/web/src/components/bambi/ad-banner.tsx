@@ -9,9 +9,8 @@ import type { AdBannerItem } from "@/lib/bambi/api-job-mapper";
 const bannerHref = (item: AdBannerItem): Route =>
 	`/seeker/jobs/${item.id}` as Route;
 
-// 좌/우 배너 rail은 슬롯 3개를 기준으로 채운다 — 서버가 좌/우 배너를 최대 3개로
-// 제한하는 상한과 짝이다. 판매분 뒤 빈 슬롯은 아래 자리표시로 메운다.
-const AD_RAIL_SLOT_COUNT = 3;
+// 좌/우 배너 rail은 슬롯 3개를 항상 렌더한다 — 서버가 그룹당 고정 길이(3칸) 배열을 내려주고
+// 활성 칸만 광고, 나머지는 null이다. 데이터가 없거나(로딩) null인 칸은 자리표시로 채운다.
 const AD_RAIL_SLOT_KEYS = ["slot-1", "slot-2", "slot-3"] as const;
 
 // 빈 슬롯 자리표시 이미지(가로 7:3 / 세로 4:9) — 실제 배너/카드가 채워지기 전 자리를
@@ -85,28 +84,26 @@ export function AdBanner({ className, item }: AdBannerProps) {
 
 interface AdBannerRailProps {
 	className?: string;
-	items: AdBannerItem[];
+	items: (AdBannerItem | null)[];
 }
 
-// 세로 배너 스택(우측). 판매된 배너를 먼저 깔고, 남은 슬롯(총 3개)은 "광고 모집중"
-// 자리표시로 채워 빈 상태에서도 영역이 보이게 한다.
+// 세로 배너 스택(우측). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로, 빈 칸은
+// "광고 모집중" 자리표시로 채운다.
 export function AdBannerRail({ className, items }: AdBannerRailProps) {
-	const emptySlotKeys = AD_RAIL_SLOT_KEYS.slice(
-		items.length,
-		AD_RAIL_SLOT_COUNT
-	);
 	return (
 		<div className={cn("flex flex-col items-start gap-3", className)}>
-			{items.map((item) => (
-				<AdBanner item={item} key={item.id} />
-			))}
-			{emptySlotKeys.map((key) => (
-				<AdSlotPlaceholder
-					className="flex aspect-[4/9] h-52"
-					key={key}
-					variant="vertical"
-				/>
-			))}
+			{AD_RAIL_SLOT_KEYS.map((key, index) => {
+				const item = items[index];
+				return item ? (
+					<AdBanner item={item} key={item.id} />
+				) : (
+					<AdSlotPlaceholder
+						className="flex aspect-[4/9] h-52"
+						key={key}
+						variant="vertical"
+					/>
+				);
+			})}
 		</div>
 	);
 }
@@ -149,27 +146,25 @@ export function HorizontalAdBanner({
 
 interface HorizontalAdBannerRailProps {
 	className?: string;
-	items: AdBannerItem[];
+	items: (AdBannerItem | null)[];
 }
 
-// 가로형 배너 세로 스택(좌측 사이드). 판매분 뒤 남은 슬롯(총 3개)은 "광고 모집중"
-// 자리표시로 채워 빈 상태에서도 영역이 보이게 한다.
+// 가로형 배너 세로 스택(좌측 사이드). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로,
+// 빈 칸은 "광고 모집중" 자리표시로 채운다.
 export function HorizontalAdBannerRail({
 	className,
 	items,
 }: HorizontalAdBannerRailProps) {
-	const emptySlotKeys = AD_RAIL_SLOT_KEYS.slice(
-		items.length,
-		AD_RAIL_SLOT_COUNT
-	);
 	return (
 		<div className={cn("flex flex-col gap-3", className)}>
-			{items.map((item) => (
-				<HorizontalAdBanner item={item} key={item.id} />
-			))}
-			{emptySlotKeys.map((key) => (
-				<AdSlotPlaceholder className="flex aspect-[7/3] w-full" key={key} />
-			))}
+			{AD_RAIL_SLOT_KEYS.map((key, index) => {
+				const item = items[index];
+				return item ? (
+					<HorizontalAdBanner item={item} key={item.id} />
+				) : (
+					<AdSlotPlaceholder className="flex aspect-[7/3] w-full" key={key} />
+				);
+			})}
 		</div>
 	);
 }

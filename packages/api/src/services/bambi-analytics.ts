@@ -207,10 +207,11 @@ interface AdBannerImpressionItem {
 
 interface RecordAdBannerImpressionsInput {
 	actorUserId?: null | string;
+	// 슬롯 배열은 고정 길이에 빈 칸이 null이다 — 실제 노출된(non-null) 칸만 기록한다.
 	groups: {
-		leftBanner: AdBannerImpressionItem[];
-		premiumBanner: AdBannerImpressionItem[];
-		rightBanner: AdBannerImpressionItem[];
+		leftBanner: (AdBannerImpressionItem | null)[];
+		premiumBanner: (AdBannerImpressionItem | null)[];
+		rightBanner: (AdBannerImpressionItem | null)[];
 	};
 }
 
@@ -245,29 +246,41 @@ export const recordAdBannerImpressions = async ({
 	groups,
 }: RecordAdBannerImpressionsInput): Promise<void> => {
 	const values = [
-		...groups.premiumBanner.map((item, position) =>
-			toAdBannerImpressionValue({
-				actorUserId,
-				item,
-				position,
-				section: "premium-banner",
-			})
+		...groups.premiumBanner.flatMap((item, position) =>
+			item
+				? [
+						toAdBannerImpressionValue({
+							actorUserId,
+							item,
+							position,
+							section: "premium-banner",
+						}),
+					]
+				: []
 		),
-		...groups.leftBanner.map((item, position) =>
-			toAdBannerImpressionValue({
-				actorUserId,
-				item,
-				position,
-				section: "left-banner",
-			})
+		...groups.leftBanner.flatMap((item, position) =>
+			item
+				? [
+						toAdBannerImpressionValue({
+							actorUserId,
+							item,
+							position,
+							section: "left-banner",
+						}),
+					]
+				: []
 		),
-		...groups.rightBanner.map((item, position) =>
-			toAdBannerImpressionValue({
-				actorUserId,
-				item,
-				position,
-				section: "right-banner",
-			})
+		...groups.rightBanner.flatMap((item, position) =>
+			item
+				? [
+						toAdBannerImpressionValue({
+							actorUserId,
+							item,
+							position,
+							section: "right-banner",
+						}),
+					]
+				: []
 		),
 	];
 

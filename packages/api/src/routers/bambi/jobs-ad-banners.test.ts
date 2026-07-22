@@ -233,11 +233,12 @@ const listAdBanners = () =>
 	})(undefined as never);
 
 // 광고 통합 후 상단·좌·우 세 슬롯은 하나의 프리미엄 풀(배너 3종 전부)을 공유해, 좌→중간(상단
-// 프리미엄)→우 순서로 도는 결정적 링 로테이션으로 채운다(매시간 한 칸씩 전진). 이 테스트는 실
-// dev DB를 쓰고 DB에 기존 배너 공고가 있어 어떤 공고가 어느 슬롯에 배치되는지 절대적으로는
-// 검증할 수 없다(링 배치 상세는 bambi-ad-exposure.test.ts가 유닛으로 커버). 여기서는 기존
-// 데이터와 공존하는 안정적 술어만 검증한다: 활성 후보가 8칸(좌3+중2+우3) 이하면 전원 노출,
-// 8개 초과면 링 위치에 따라 일부는 이번 버킷 노출 대기다.
+// 프리미엄)→우 순서로 도는 결정적 링 로테이션으로 채운다 — 화면 전체에서 배너는 언제나 딱 한
+// 칸에만 노출되고 나머지 칸은 null이다(링 배치 상세는 bambi-ad-exposure.test.ts가 유닛으로
+// 커버). 이 테스트는 실 dev DB를 쓰고 DB에 기존 배너 공고가 있어 어떤 공고가 이번 버킷에
+// 노출되는지 절대적으로는 검증할 수 없다. 여기서는 기존 데이터와 공존하는 안정적 술어만
+// 검증한다: 그룹은 고정 길이 배열이고, non-null은 화면 전체에서 최대 한 칸이며, 미결제·만료
+// 공고는 절대 노출되지 않는다. 활성 칸의 광고는 슬롯 방향 배너를 가진 경우에만 노출된다.
 describe("bambi jobs.listAdBanners", () => {
 	let fixture: AdBannerFixture;
 
@@ -249,65 +250,33 @@ describe("bambi jobs.listAdBanners", () => {
 		await cleanupAdBannerFixture(fixture);
 	});
 
-	// 세 슬롯 노출 id의 합집합. 링 로테이션에서 활성 후보가 8개 이하면 한 공고가 여러 슬롯에
-	// 동시에 배치될 수 있다.
+	// 세 슬롯 중 실제 노출된(non-null) 공고 id의 집합. 화면 전체에서 최대 한 칸이라 0~1개다.
 	const shownIds = (result: {
-		leftBanner: { id: string }[];
-		premiumBanner: { id: string }[];
-		rightBanner: { id: string }[];
+		leftBanner: ({ id: string } | null)[];
+		premiumBanner: ({ id: string } | null)[];
+		rightBanner: ({ id: string } | null)[];
 	}): Set<string> =>
 		new Set(
-			[
-				...result.premiumBanner,
-				...result.leftBanner,
-				...result.rightBanner,
-			].map((job) => job.id)
+			[...result.premiumBanner, ...result.leftBanner, ...result.rightBanner]
+				.filter((job): job is { id: string } => job !== null)
+				.map((job) => job.id)
 		);
 
-	// 모든 슬롯이 상한까지 찼는가(좌3·중2·우3). 활성 후보가 8칸을 넘으면 링 순환상 일부
-	// 공고는 이번 버킷엔 어느 슬롯에도 안 보이고 노출 대기하는데, 그때도 슬롯은 가득 차 있다.
-	// 후보가 8칸 이하이면 활성 배너형 공고는 링 순환으로 전원 노출된다.
-	const slotsSaturated = (result: {
-		leftBanner: unknown[];
-		premiumBanner: unknown[];
-		rightBanner: unknown[];
-	}): boolean =>
-		result.premiumBanner.length === PREMIUM_BANNER_MAX_SLOTS &&
-		result.leftBanner.length === SIDE_BANNER_MAX_SLOTS &&
-		result.rightBanner.length === SIDE_BANNER_MAX_SLOTS;
-
-	it("상단·좌·우 세 슬롯 그룹을 배열로 반환한다", async () => {
+	it("상단·좌·우 세 슬롯을 고정 길이 배열로 반환한다", async () => {
 		const result = await listAdBanners();
-		expect(Array.isArray(result.premiumBanner)).toBe(true);
-		expect(Array.isArray(result.leftBanner)).toBe(true);
-		expect(Array.isArray(result.rightBanner)).toBe(true);
+		expect(result.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
+		expect(result.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		expect(result.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
 	});
 
-	it("슬롯 상한(프리미엄 2, 좌 3, 우 3)을 넘지 않는다", async () => {
+	it("화면 전체에서 배너는 최대 한 칸만 노출된다(나머지는 null)", async () => {
 		const result = await listAdBanners();
-		expect(result.premiumBanner.length).toBeLessThanOrEqual(
-			PREMIUM_BANNER_MAX_SLOTS
-		);
-		expect(result.leftBanner.length).toBeLessThanOrEqual(SIDE_BANNER_MAX_SLOTS);
-		expect(result.rightBanner.length).toBeLessThanOrEqual(
-			SIDE_BANNER_MAX_SLOTS
-		);
-	});
-
-	it("결제완료·게시·미만료 배너형(레거시 좌/우 포함) 공고는 통합 풀 후보가 된다", async () => {
-		const result = await listAdBanners();
-		const shown = shownIds(result);
-		const saturated = slotsSaturated(result);
-
-		// 프리미엄·레거시 좌·레거시 우 픽스처 모두 통합 풀 후보다. 활성 후보가 8칸 이하면
-		// 링 순환으로 반드시 노출되고, 8칸을 넘어 슬롯이 다 차면 링 위치상 이번 버킷엔 빠질 수 있다.
-		for (const id of [
-			fixture.premiumJobId,
-			fixture.leftJobId,
-			fixture.rightJobId,
-		]) {
-			expect(shown.has(id) || saturated).toBe(true);
-		}
+		const filled = [
+			...result.premiumBanner,
+			...result.leftBanner,
+			...result.rightBanner,
+		].filter((job) => job !== null);
+		expect(filled.length).toBeLessThanOrEqual(1);
 	});
 
 	it("미결제·만료 배너 공고는 어떤 슬롯에도 포함되지 않는다", async () => {
@@ -318,13 +287,13 @@ describe("bambi jobs.listAdBanners", () => {
 		expect(shown.has(fixture.expiredLeftJobId)).toBe(false);
 	});
 
-	it("노출되면 슬롯별 광고 배너 원본을 커버와 함께 내려준다", async () => {
+	it("노출되면 슬롯 방향 광고 배너 원본을 커버와 함께 내려준다", async () => {
 		const result = await listAdBanners();
 		const union = [
 			...result.premiumBanner,
 			...result.leftBanner,
 			...result.rightBanner,
-		];
+		].filter((job) => job !== null);
 		const premium = union.find((j) => j.id === fixture.premiumJobId);
 		const right = union.find((j) => j.id === fixture.rightJobId);
 		const left = union.find((j) => j.id === fixture.leftJobId);
@@ -346,13 +315,8 @@ describe("bambi jobs.listAdBanners", () => {
 			);
 		}
 
-		// 배너를 안 올린 공고는 배너가 null이고 커버로 폴백한다.
-		if (left) {
-			expect(left.adHorizontal).toBeNull();
-			expect(left.coverImage?.storageKey).toBe(
-				`cover/${fixture.leftJobId}.png`
-			);
-		}
+		// 배너(가로형)를 안 올린 좌측 픽스처는 방향 이미지가 없어 어떤 슬롯에도 노출되지 않는다.
+		expect(left).toBeUndefined();
 	});
 
 	it("노출된 배너에 section=노출 슬롯·exposureType=공고 실제값 impression을 기록한다", async () => {
@@ -388,7 +352,7 @@ describe("bambi jobs.listAdBanners", () => {
 		// 통합 후 레거시 좌/우 공고가 프리미엄 슬롯에 배치되면 section≠exposureType이 정상이다.
 		for (const [section, items] of shownBySlot) {
 			for (const item of items) {
-				if (!fixture.jobPostIds.includes(item.id)) {
+				if (item === null || !fixture.jobPostIds.includes(item.id)) {
 					continue;
 				}
 
