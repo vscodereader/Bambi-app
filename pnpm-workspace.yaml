@@ -31,3 +31,5 @@ catalog:
   sonner: ^2.0.5
   typescript: ^6
   zod: ^4.1.13
+overrides:
+  google-auth-library: ^10.9.0
