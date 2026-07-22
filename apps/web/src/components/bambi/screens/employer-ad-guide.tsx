@@ -36,7 +36,36 @@ const AD_POLICY_WARNING =
 const PRODUCT_ROW_GRID =
 	"md:grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.9fr)] md:items-start md:gap-6";
 
-function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
+interface PremiumCapacity {
+	capacity: number;
+	remaining: number;
+}
+
+// 프리미엄 광고(배너) 신청 버튼 위 남은 자리 안내. 만석이면 대기열 등록 안내로 바뀐다.
+function PremiumCapacityNote({ capacity }: { capacity: PremiumCapacity }) {
+	if (capacity.remaining === 0) {
+		return (
+			<span className="text-muted-foreground text-xs">
+				현재 정원이 가득 찼어요 — 지금 신청하면 대기열에 등록돼요.
+			</span>
+		);
+	}
+
+	return (
+		<span className="font-medium text-sm">
+			남은 자리 <span className="text-primary">{capacity.remaining}</span>/
+			{capacity.capacity}
+		</span>
+	);
+}
+
+function PlacementSection({
+	capacity,
+	placement,
+}: {
+	capacity: PremiumCapacity | null;
+	placement: AdCatalogPlacement;
+}) {
 	return (
 		<Card>
 			<CardContent className="flex flex-col gap-4">
@@ -159,16 +188,21 @@ function PlacementSection({ placement }: { placement: AdCatalogPlacement }) {
 							</div>
 
 							{/* 신청 */}
-							<Link
-								className={cn(
-									buttonVariants({ variant: "default" }),
-									"no-underline",
-									"w-full md:w-auto"
-								)}
-								href={APPLY_HREF}
-							>
-								신청하기
-							</Link>
+							<div className="flex flex-col gap-2">
+								{placement.kind === "banner" && capacity ? (
+									<PremiumCapacityNote capacity={capacity} />
+								) : null}
+								<Link
+									className={cn(
+										buttonVariants({ variant: "default" }),
+										"no-underline",
+										"w-full md:w-auto"
+									)}
+									href={APPLY_HREF}
+								>
+									신청하기
+								</Link>
+							</div>
 						</div>
 					))}
 				</div>
@@ -181,7 +215,13 @@ export function EmployerAdGuideScreen() {
 	const catalogQuery = useQuery(
 		orpc.bambi.adProducts.getCatalog.queryOptions()
 	);
+	// 남은 자리는 광고 만료로 자동 +1 될 수 있어 30초마다 갱신한다(창 포커스 시에도 재조회).
+	const capacityQuery = useQuery({
+		...orpc.bambi.adProducts.premiumCapacity.queryOptions(),
+		refetchInterval: 30_000,
+	});
 	const placements = catalogQuery.data ?? [];
+	const capacity = capacityQuery.data ?? null;
 
 	return (
 		<PageShell
@@ -209,7 +249,7 @@ export function EmployerAdGuideScreen() {
 					</div>
 					<p className="m-0 text-muted-foreground text-sm">
 						끌어올리기(수동·자동)는 스페셜·급구·추천 리스팅 광고에만 제공되며,
-						프리미엄·사이드 배너 광고에는 제공되지 않습니다.
+						프리미엄 배너 광고에는 제공되지 않습니다.
 					</p>
 					<p className="m-0 font-medium text-destructive text-sm">
 						{AD_POLICY_WARNING}
@@ -232,7 +272,11 @@ export function EmployerAdGuideScreen() {
 			) : null}
 
 			{placements.map((placement) => (
-				<PlacementSection key={placement.id} placement={placement} />
+				<PlacementSection
+					capacity={capacity}
+					key={placement.id}
+					placement={placement}
+				/>
 			))}
 		</PageShell>
 	);

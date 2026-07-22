@@ -13,6 +13,7 @@ import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { OrgProfileForm } from "@/components/bambi/org-profile-form";
 import { PageShell } from "@/components/bambi/page-shell";
+import { WithdrawAccountSection } from "@/components/bambi/withdraw-account-section";
 import Loader from "@/components/loader";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
@@ -158,6 +159,10 @@ export default function EmployerSettingsPage() {
 					</CardContent>
 				</Card>
 			</section>
+
+			<Separator />
+
+			<WithdrawAccountSection />
 		</PageShell>
 	);
 }

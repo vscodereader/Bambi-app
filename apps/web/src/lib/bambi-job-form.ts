@@ -6,6 +6,7 @@ import {
 } from "./bambi/job-ad-banner-spec";
 import {
 	districtsForRegion,
+	type IndustryOption,
 	industryOptions,
 	NEGOTIABLE_PAY_UNIT,
 	payUnitOptions,
@@ -166,7 +167,8 @@ export interface JobPostInput {
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
-	industryCategory: string;
+	// 서버 입력이 업종 enum이라 제출 페이로드는 확정 목록 값으로 좁힌다(폼 상태는 string 유지).
+	industryCategory: IndustryOption;
 	instantInterview: boolean;
 	interviewNotes?: string;
 	media?: {
@@ -236,6 +238,39 @@ export const emptyJobFormMedia: JobFormMedia = {
 	adVertical: null,
 	cover: null,
 	detail: [],
+};
+
+// 프리미엄 광고는 가로형·세로형 배너를 모두 요구한다. requiredUsages 중 media에 없는
+// 슬롯을 돌려준다("ad_horizontal"은 adHorizontal, "ad_vertical"은 adVertical 부재 시 누락).
+export const getMissingAdBannerUsages = (
+	media: JobFormMedia,
+	requiredUsages: JobAdBannerUsage[]
+): JobAdBannerUsage[] =>
+	requiredUsages.filter((usage) =>
+		usage === "ad_horizontal" ? !media.adHorizontal : !media.adVertical
+	);
+
+// 유료 상품이 필수 배너 슬롯을 요구하는데 누락됐으면 에러 문구를 돌려준다.
+// media가 undefined여도 필수가 있으면 두 슬롯 모두 누락으로 잡힌다.
+const getRequiredBannerError = ({
+	adProductId,
+	media,
+	requiredBannerUsages = [],
+}: {
+	adProductId: string | null;
+	media?: JobFormMedia;
+	requiredBannerUsages?: JobAdBannerUsage[];
+}): string | undefined => {
+	if (!adProductId || requiredBannerUsages.length === 0) {
+		return;
+	}
+
+	return getMissingAdBannerUsages(
+		media ?? emptyJobFormMedia,
+		requiredBannerUsages
+	).length > 0
+		? "프리미엄 광고는 가로형·세로형 광고 배너 이미지를 모두 등록해야 합니다."
+		: undefined;
 };
 
 const trim = (value: string) => value.trim();
@@ -783,6 +818,7 @@ export const validateJobForm = (
 	options: {
 		descriptionBlocks?: JobDescriptionBlockFormValue[];
 		media?: JobFormMedia;
+		requiredBannerUsages?: JobAdBannerUsage[];
 		teamScopes?: JobTeamScope[];
 	} = {}
 ): JobFormValidationResult => {
@@ -809,11 +845,18 @@ export const validateJobForm = (
 		options.descriptionBlocks && options.descriptionBlocks.length > 0
 			? getDescriptionBlockError(options.descriptionBlocks)
 			: undefined;
-	const mediaError = getMediaError(options.media);
 	// 광고 상품 선택 여부로 유료/무료를 판정한다. 상품이 없으면 무료 일반 구인으로
 	// 강제해 노출 관련 값을 모두 비운다.
 	const isFreeExposure = !form.adProductId;
 	const adProductId = isFreeExposure ? null : form.adProductId;
+	// 형식·크기 오류가 있으면 그것이 우선. 없을 때만 유료 상품의 필수 배너 누락을 본다.
+	const mediaError =
+		getMediaError(options.media) ??
+		getRequiredBannerError({
+			adProductId,
+			media: options.media,
+			requiredBannerUsages: options.requiredBannerUsages,
+		});
 	const exposureType: JobExposureType = isFreeExposure
 		? "standard"
 		: form.exposureType;
@@ -871,7 +914,8 @@ export const validateJobForm = (
 			exposureAmount,
 			exposureDurationDays,
 			exposureType,
-			industryCategory,
+			// 위 검증(getConditionErrors)이 industryOptions 소속을 보장한 뒤에만 이 분기에 온다.
+			industryCategory: industryCategory as IndustryOption,
 			instantInterview: form.instantInterview,
 			interviewNotes: interviewNotes || undefined,
 			media: options.media

@@ -7,6 +7,7 @@ import {
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
+import { isIndustryOption } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import {
 	type AdBannerItem,
@@ -38,10 +39,12 @@ interface UseMarketplaceJobResult {
 export const isApiJobId = (id: string): boolean => UUID_RE.test(id);
 
 const toApiListInput = (filters: MarketplaceFilters) => ({
+	// 서버 입력이 업종 enum이라 기본값("전체")이나 목록 밖 값은 필터 없음으로 보낸다.
 	industryCategory:
-		filters.category === DEFAULT_MARKETPLACE_FILTERS.category
-			? undefined
-			: filters.category,
+		filters.category !== DEFAULT_MARKETPLACE_FILTERS.category &&
+		isIndustryOption(filters.category)
+			? filters.category
+			: undefined,
 	district:
 		filters.district === DEFAULT_MARKETPLACE_FILTERS.district
 			? undefined
@@ -177,24 +180,26 @@ export function useMarketplaceJob(id: string): UseMarketplaceJobResult {
 }
 
 export interface AdBannerJobGroups {
-	leftBanner: AdBannerItem[];
-	premiumBanner: AdBannerItem[];
-	rightBanner: AdBannerItem[];
+	// 각 그룹은 고정 길이(좌3·중2·우3) 배열이며 빈 칸은 null이다(렌더러가 자리표시로 채운다).
+	leftBanner: (AdBannerItem | null)[];
+	premiumBanner: (AdBannerItem | null)[];
+	rightBanner: (AdBannerItem | null)[];
 }
 
 export function useAdBannerJobs(): AdBannerJobGroups {
 	const bannersQuery = useQuery(orpc.bambi.jobs.listAdBanners.queryOptions());
 	// 슬롯→배너 규격 매핑은 렌더러 비율과 한 몸이다: 좌측·상단 프리미엄은 가로형(7:3),
 	// 우측 레일은 세로형(4:9). 슬롯마다 맞는 usage를 넘겨야 구인자가 올린 배너가 뜬다.
+	// 빈 칸(null)은 그대로 null로 두고 렌더러가 자리표시로 채운다.
 	return {
 		leftBanner: (bannersQuery.data?.leftBanner ?? []).map((job) =>
-			toAdBannerItem(job, "ad_horizontal")
+			job ? toAdBannerItem(job, "ad_horizontal") : null
 		),
 		premiumBanner: (bannersQuery.data?.premiumBanner ?? []).map((job) =>
-			toAdBannerItem(job, "ad_horizontal")
+			job ? toAdBannerItem(job, "ad_horizontal") : null
 		),
 		rightBanner: (bannersQuery.data?.rightBanner ?? []).map((job) =>
-			toAdBannerItem(job, "ad_vertical")
+			job ? toAdBannerItem(job, "ad_vertical") : null
 		),
 	};
 }

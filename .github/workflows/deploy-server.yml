@@ -28,8 +28,6 @@ env:
   PROJECT_ID: bambi-app-501604
   REGION: asia-northeast3
   REPOSITORY: bambi
-  # 공고 이미지·광고 배너용 공개 버킷. prod/dev가 같은 버킷을 공유한다(키 prefix로 구분).
-  GCS_PUBLIC_BUCKET: bambi-storage-public
   SERVICE: ${{ github.ref_name == 'main' && 'bambi-server' || 'bambi-server-dev' }}
   SQL_INSTANCE: ${{ github.ref_name == 'main' && 'bambi-prod' || 'bambi-dev' }}
 
@@ -108,6 +106,12 @@ jobs:
         env:
           BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
           CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
+          # 공고 이미지·광고 배너용 공개 버킷. dev/prod가 다른 버킷을 쓰며, 이름은
+          # 레포에 남기지 않고 GitHub 환경 변수(test/production)로 주입한다.
+          GCS_PUBLIC_BUCKET: ${{ vars.GCS_PUBLIC_BUCKET }}
+          # 세션 쿠키 prefix를 환경별로 분리. dev/prod가 같은 apex(.bambialba.com)를
+          # 공유하므로 prefix가 같으면 쿠키가 서로 덮어써 세션이 충돌한다.
+          BAMBI_COOKIE_PREFIX: ${{ github.ref_name == 'main' && 'bambi' || 'bambi-dev' }}
         run: |
           gcloud run deploy "$SERVICE" \
             --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/server:${GITHUB_SHA}" \
@@ -123,8 +127,8 @@ jobs:
             --timeout=3600 \
             --session-affinity \
             --add-cloudsql-instances="${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" \
-            --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}" \
-            --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest"
+            --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}##BAMBI_COOKIE_PREFIX=${BAMBI_COOKIE_PREFIX}" \
+            --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest,PORTONE_API_SECRET=${SERVICE}-portone-api-secret:latest"
 
       - name: Show service URL
         run: |

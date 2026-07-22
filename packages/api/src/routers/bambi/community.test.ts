@@ -182,7 +182,7 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 		description: "수다방 광고 자격용 공고입니다.",
 		// exposureEndsAt은 비워 둔다 — null이면 노출 무기한으로 판정된다.
 		id: jobPostId,
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱",
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",
@@ -244,6 +244,14 @@ const clientFor = <T>(procedure: T, userId: string, path: string[]) =>
 		path: ["bambi", "community", ...path],
 	});
 
+// 비로그인 열람(public overview) 검증용 — 세션 없는 컨텍스트.
+const clientForAnonymous = <T>(procedure: T, path: string[]) =>
+	// biome-ignore lint/suspicious/noExplicitAny: 테스트 헬퍼 — 프로시저별 제네릭 전개 생략
+	createProcedureClient(procedure as any, {
+		context: { auth: null, session: null } as Context,
+		path: ["bambi", "community", ...path],
+	});
+
 const expectOrpcCode = async (
 	promise: Promise<unknown>,
 	code: string
@@ -261,6 +269,74 @@ describe("bambi community router — 조회", () => {
 				["listPosts"]
 			);
 			await expectOrpcCode(listPosts({ board: "free", page: 1 }), "FORBIDDEN");
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("미자격자·비로그인도 overview 미리보기를 볼 수 있고 비밀글 제목은 마스킹된다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const openTitle = `공개글 ${randomUUID()}`;
+			const open = await createPost({
+				...basePostInput,
+				board: "free",
+				title: openTitle,
+			});
+			const locked = await createPost({
+				...basePostInput,
+				board: "free",
+				isLocked: true,
+				title: `비밀글 ${randomUUID()}`,
+			});
+
+			// 홈 미리보기(overview)는 자격 가드 없이 열람 가능 — 남성 구직자.
+			const overviewAsMale = clientFor(
+				communityRouter.overview,
+				fixture.maleUserId,
+				["overview"]
+			);
+			const maleHome = await overviewAsMale({});
+			expect(
+				maleHome.free.some(
+					(item: { id: string; title: string }) =>
+						item.id === open.id && item.title === openTitle
+				)
+			).toBe(true);
+			expect(
+				maleHome.free.find((item: { id: string }) => item.id === locked.id)
+					?.title
+			).toBe("비밀글입니다");
+
+			// 비로그인(세션 없음)도 동일하게 열람되고 비밀글은 마스킹된다.
+			const overviewAnonymous = clientForAnonymous(communityRouter.overview, [
+				"overview",
+			]);
+			const anonymousHome = await overviewAnonymous({});
+			expect(
+				anonymousHome.free.some((item: { id: string }) => item.id === open.id)
+			).toBe(true);
+			expect(
+				anonymousHome.free.find((item: { id: string }) => item.id === locked.id)
+					?.title
+			).toBe("비밀글입니다");
+
+			// 자격자(작성자 본인)의 잠금 우회 마스킹은 그대로 유지된다.
+			const overviewAsAuthor = clientFor(
+				communityRouter.overview,
+				fixture.femaleUserId,
+				["overview"]
+			);
+			const authorHome = await overviewAsAuthor({});
+			expect(
+				authorHome.free.find((item: { id: string }) => item.id === locked.id)
+					?.title
+			).not.toBe("비밀글입니다");
 		} finally {
 			await cleanupCommunityFixture(fixture);
 		}

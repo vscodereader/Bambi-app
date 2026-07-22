@@ -16,6 +16,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useUnreadRoomCount } from "@/lib/bambi/use-unread-room-count";
 import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
 import { BellIcon, ShieldIcon } from "./icons";
@@ -40,7 +41,6 @@ function isNavGroup(entry: NavEntry): entry is NavGroup {
 
 export const DEFAULT_NAV_ITEMS: NavEntry[] = [
 	{ href: "/seeker", label: "채용정보" },
-	{ href: "/seeker/chats", label: "채팅" },
 	{ href: "/seeker/community", label: "수다방" },
 	{ href: "/support" as Route, label: "고객센터" },
 ];
@@ -154,6 +154,30 @@ function RoleSwitchLink() {
 	return null;
 }
 
+// "내 정보"와 동일한 형태의 헤더 채팅 버튼. 안 읽은 방이 있으면 우상단에
+// primary(coral) 점을 띄운다. 핀은 로그인 셸(withPin)에서만 — 비로그인 public
+// 마켓에서는 버튼만 노출하고(누르면 로그인 벽으로) 핀은 그리지 않는다.
+function ChatNavButton({ withPin }: { withPin: boolean }) {
+	const unreadRoomCount = useUnreadRoomCount();
+	const showPin = withPin && unreadRoomCount > 0;
+	return (
+		<span className="relative inline-flex">
+			<Link
+				className={cn(
+					buttonVariants({ variant: "outline" }),
+					"h-10 px-4 font-bold text-sm no-underline"
+				)}
+				href={"/seeker/chats" as Route}
+			>
+				채팅
+			</Link>
+			{showPin ? (
+				<span className="absolute top-1 right-1 size-2 rounded-full bg-coral-500 ring-2 ring-background" />
+			) : null}
+		</span>
+	);
+}
+
 function ModeratorHeaderActions() {
 	return (
 		<>
@@ -175,6 +199,36 @@ function ModeratorHeaderActions() {
 	);
 }
 
+// 헤더 우측 액션 묶음. 운영자는 전용 액션, 그 외에는 역할 전환·채팅·내 정보/시작하기.
+function HeaderRightActions({
+	isModerator,
+	isPublic,
+	showChatButton,
+}: {
+	isModerator: boolean;
+	isPublic: boolean;
+	showChatButton: boolean;
+}) {
+	if (isModerator) {
+		return <ModeratorHeaderActions />;
+	}
+	return (
+		<>
+			{isPublic ? null : <RoleSwitchLink />}
+			{showChatButton ? <ChatNavButton withPin={!isPublic} /> : null}
+			<Link
+				className={cn(
+					buttonVariants({ variant: isPublic ? "dark" : "outline" }),
+					"h-10 px-4 font-bold text-sm no-underline"
+				)}
+				href={(isPublic ? "/login" : "/seeker/me") as Route}
+			>
+				{isPublic ? "시작하기" : "내 정보"}
+			</Link>
+		</>
+	);
+}
+
 export function ResponsiveAppShell({
 	children,
 	className,
@@ -187,8 +241,12 @@ export function ResponsiveAppShell({
 	const pathname = usePathname();
 	const isPublic = variant === "public";
 	const isModerator = variant === "moderator";
-	// 푸터는 구직자·구인자 셸에만 노출한다(운영자·공개 셸 제외).
-	const showFooter = variant === "seeker" || variant === "employer";
+	// 채팅 버튼은 기존 nav "채팅"이 뜨던 셸(구직자·고객센터=seeker, 공개 마켓)에만
+	// 노출한다. 구인자·운영자 셸에는 넣지 않는다.
+	const showChatButton = variant === "seeker" || variant === "public";
+	// 푸터는 구직자·구인자·운영자 셸에 노출한다(공개 셸 제외).
+	const showFooter =
+		variant === "seeker" || variant === "employer" || variant === "moderator";
 	const activeHref = findActiveHref(pathname, navItems);
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
@@ -254,24 +312,11 @@ export function ResponsiveAppShell({
 						) : null}
 						<div className="ml-auto flex items-center gap-2">
 							{headerSlot}
-							{isModerator ? (
-								<ModeratorHeaderActions />
-							) : (
-								<>
-									{isPublic ? null : <RoleSwitchLink />}
-									<Link
-										className={cn(
-											buttonVariants({
-												variant: isPublic ? "dark" : "outline",
-											}),
-											"h-10 px-4 font-bold text-sm no-underline"
-										)}
-										href={(isPublic ? "/login" : "/seeker/me") as Route}
-									>
-										{isPublic ? "시작하기" : "내 정보"}
-									</Link>
-								</>
-							)}
+							<HeaderRightActions
+								isModerator={isModerator}
+								isPublic={isPublic}
+								showChatButton={showChatButton}
+							/>
 						</div>
 					</div>
 				</header>

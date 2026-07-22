@@ -15,7 +15,7 @@ const baseForm: JobForm = {
 	exposureAmount: null,
 	exposureDurationDays: null,
 	exposureType: "standard",
-	industryCategory: "라운지",
+	industryCategory: "룸싸롱",
 	instantInterview: false,
 	interviewNotes: "",
 	organizationId: "org-1",

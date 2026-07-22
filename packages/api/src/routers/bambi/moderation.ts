@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@bambi-app/db";
 import {
+	account,
 	invitation,
 	member,
+	session,
 	team,
 	teamMember,
 	user,
@@ -33,6 +35,8 @@ import {
 	eq,
 	inArray,
 	isNotNull,
+	isNull,
+	lte,
 	sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -44,8 +48,10 @@ import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
+import { resolveWithdrawalRetentionDays } from "../../services/bambi-member-policy";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
+import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 
 export const targetTypeSchema = z.enum([
@@ -1213,42 +1219,59 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 
-			const [existing] = await db
-				.select({
-					exposureDurationDays: jobPost.exposureDurationDays,
-					organizationId: jobPost.organizationId,
-				})
-				.from(jobPost)
-				.where(eq(jobPost.id, input.jobPostId))
-				.limit(1);
+			// 배너형 승인(unpaid→paid)은 프리미엄 정원 게이트가 필요하므로 트랜잭션 안에서
+			// advisory lock으로 직렬화한다(assertPremiumApprovalWithinCapacity).
+			const { organizationId, updated } = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({
+						exposureDurationDays: jobPost.exposureDurationDays,
+						exposureType: jobPost.exposureType,
+						organizationId: jobPost.organizationId,
+						paymentStatus: jobPost.paymentStatus,
+					})
+					.from(jobPost)
+					.where(eq(jobPost.id, input.jobPostId))
+					.limit(1);
 
-			if (!existing) {
-				throw new ORPCError("NOT_FOUND");
-			}
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND");
+				}
 
-			const exposureEndsAt =
-				input.paymentStatus === "paid" && existing.exposureDurationDays !== null
-					? new Date(Date.now() + existing.exposureDurationDays * MS_PER_DAY)
-					: null;
+				await assertPremiumApprovalWithinCapacity({
+					executor: tx,
+					existingExposureType: existing.exposureType,
+					existingPaymentStatus: existing.paymentStatus,
+					newPaymentStatus: input.paymentStatus,
+					now: new Date(),
+				});
 
-			const [updated] = await db
-				.update(jobPost)
-				.set({
-					exposureEndsAt,
-					paymentStatus: input.paymentStatus,
-				})
-				.where(eq(jobPost.id, input.jobPostId))
-				.returning();
+				const exposureEndsAt =
+					input.paymentStatus === "paid" &&
+					existing.exposureDurationDays !== null
+						? new Date(Date.now() + existing.exposureDurationDays * MS_PER_DAY)
+						: null;
 
-			if (!updated) {
-				throw new ORPCError("NOT_FOUND");
-			}
+				const [row] = await tx
+					.update(jobPost)
+					.set({
+						exposureEndsAt,
+						paymentStatus: input.paymentStatus,
+					})
+					.where(eq(jobPost.id, input.jobPostId))
+					.returning();
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				return { organizationId: existing.organizationId, updated: row };
+			});
 
 			// 결제 상태 전환은 공개 게이트(published AND paid)를 넘나들 수 있으므로
 			// 해당 조직 owner/admin의 수다방 광고 자격 캐시를 재동기화한다.
 			await syncAdvertiserFlagForOrganization({
 				now: new Date(),
-				organizationId: existing.organizationId,
+				organizationId,
 			});
 
 			return updated;
@@ -1359,7 +1382,9 @@ export const moderationRouter = {
 							const [existing] = await tx
 								.select({
 									exposureDurationDays: jobPost.exposureDurationDays,
+									exposureType: jobPost.exposureType,
 									organizationId: jobPost.organizationId,
+									paymentStatus: jobPost.paymentStatus,
 								})
 								.from(jobPost)
 								.where(eq(jobPost.id, jobPostId))
@@ -1370,6 +1395,16 @@ export const moderationRouter = {
 									message: "Job post was not found.",
 								});
 							}
+
+							// 정원 초과 승인은 항목별 실패로 떨어진다(CONFLICT). 같은 트랜잭션에서
+							// 앞선 승인이 반영돼 active가 늘므로, 정원 내 앞 항목만 성공한다.
+							await assertPremiumApprovalWithinCapacity({
+								executor: tx,
+								existingExposureType: existing.exposureType,
+								existingPaymentStatus: existing.paymentStatus,
+								newPaymentStatus: input.paymentStatus,
+								now: new Date(),
+							});
 
 							const exposureEndsAt =
 								input.paymentStatus === "paid" &&
@@ -2009,4 +2044,60 @@ export const moderationRouter = {
 				category: row.category as string | null,
 			};
 		}),
+
+	// 탈퇴 계정 개인정보 파기 배치. 보존기간(운영자 설정, 기본 30일) 경과분의
+	// PII를 스크럽한다. user 행 자체는 지우지 않는다 — 채팅·리뷰·신고 등 상대방
+	// 데이터가 onDelete 미지정(RESTRICT) FK로 물려 있어 행 삭제는 실패하거나 상대방
+	// 기록까지 깨진다. 파기 후 이메일이 tombstone으로 바뀌어 원 이메일 재가입이
+	// 다시 열린다. cron 인프라가 없어 운영자 수동/외부 호출로 트리거한다.
+	purgeWithdrawnAccounts: adminProcedure.handler(async () => {
+		const retentionDays = await resolveWithdrawalRetentionDays();
+		const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+		const targets = await db
+			.select({ id: user.id })
+			.from(user)
+			.where(
+				and(
+					isNotNull(user.deletedAt),
+					lte(user.deletedAt, cutoff),
+					isNull(user.purgedAt)
+				)
+			);
+		if (targets.length === 0) {
+			return { purgedCount: 0 };
+		}
+		const ids = targets.map((row) => row.id);
+
+		await db.transaction(async (tx) => {
+			await tx.delete(session).where(inArray(session.userId, ids));
+			// 비밀번호 등 자격증명 파기.
+			await tx.delete(account).where(inArray(account.userId, ids));
+			await tx
+				.update(bambiProfile)
+				.set({
+					displayName: "탈퇴한 회원",
+					phoneNumber: null,
+					gender: null,
+					birthDate: null,
+					ciHash: null,
+					diHash: null,
+					isPhoneVerified: false,
+				})
+				.where(inArray(bambiProfile.userId, ids));
+			// 이메일은 unique 제약이라 사용자별 tombstone으로 치환한다.
+			for (const id of ids) {
+				await tx
+					.update(user)
+					.set({
+						email: `withdrawn-${id}@invalid.bambi`,
+						name: "탈퇴한 회원",
+						image: null,
+						purgedAt: new Date(),
+					})
+					.where(eq(user.id, id));
+			}
+		});
+
+		return { purgedCount: ids.length };
+	}),
 };

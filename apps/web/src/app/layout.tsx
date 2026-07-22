@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { JsonLd } from "@/components/bambi/json-ld";
 import { Providers } from "@/components/providers";
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
@@ -14,8 +15,8 @@ export const metadata: Metadata = {
 		"밤비",
 		"밤알바",
 		"룸알바",
-		"노래방알바",
-		"라운지알바",
+		"노래주점알바",
+		"룸싸롱알바",
 		"유흥구인구직",
 		"고소득알바",
 		"여성알바",
@@ -57,6 +58,20 @@ export default function RootLayout({
 			<body>
 				<JsonLd data={bambiSiteJsonLd} />
 				<Providers>{children}</Providers>
+				{/* Vercel은 프리뷰·개발 배포도 NODE_ENV=production이라, 프로덕션 배포에서만
+				    참인 VERCEL_ENV로 게이팅해 dev/preview 트래픽이 GA에 섞이지 않게 한다.
+				    루트 레이아웃은 서버 컴포넌트라 이 값이 런타임에 읽힌다. */}
+				{process.env.VERCEL_ENV === "production" && (
+					<>
+						<Script src="https://www.googletagmanager.com/gtag/js?id=G-HNVZKKB0NX" />
+						<Script id="gtag-init">
+							{`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-HNVZKKB0NX');`}
+						</Script>
+					</>
+				)}
 			</body>
 		</html>
 	);

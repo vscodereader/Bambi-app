@@ -59,14 +59,16 @@ const SEED: {
 	},
 	{
 		name: "상단 프리미엄 배너",
-		description: "채용 마켓 상단 프리미엄 배너 4칸 중 1칸.",
+		// name은 시드 멱등성 키(이름으로 존재 확인 후 skip)라 변경 금지.
+		description:
+			"채용 마켓 상단 프리미엄 배너와 좌/우 사이드 배너에 함께 노출됩니다.",
 		kind: "banner",
 		products: [
 			{
 				name: "프리미엄 배너",
-				tagline: "상단 배너 노출",
+				tagline: "상단·좌우 사이드 배너 통합 노출",
 				previewTemplate: "premium-top",
-				benefits: ["상단 프리미엄 배너"],
+				benefits: ["상단 프리미엄 배너 노출", "좌/우 사이드 배너 노출"],
 				priceOptions: [{ amount: 500_000, days: 30 }],
 			},
 		],

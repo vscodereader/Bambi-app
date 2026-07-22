@@ -75,8 +75,12 @@ export function ModeratorPaymentPanel({ jobPostId }: { jobPostId: string }) {
 		setPaymentMutation.mutate(
 			{ jobPostId, paymentStatus: nextStatus },
 			{
-				onError: () =>
-					toast("결제 상태를 변경하지 못했어요. 다시 시도해 주세요."),
+				// 정원 초과 승인 등 서버 거절 사유(예: 프리미엄 정원 만석)를 그대로 노출한다.
+				onError: (error) =>
+					toast(
+						error.message ||
+							"결제 상태를 변경하지 못했어요. 다시 시도해 주세요."
+					),
 				onSuccess: async () => {
 					await queryClient.invalidateQueries({
 						queryKey: orpc.bambi.moderation.listJobPosts.queryKey({

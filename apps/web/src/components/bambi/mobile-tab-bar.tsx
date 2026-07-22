@@ -6,6 +6,7 @@
 
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
+import { useUnreadRoomCount } from "@/lib/bambi/use-unread-room-count";
 import { useBambiAuth } from "./auth-client-provider";
 import { BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
@@ -22,6 +23,7 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 	const path = usePathname();
 	const router = useRouter();
 	const { role } = useBambiAuth();
+	const unreadRoomCount = useUnreadRoomCount();
 	const isEmployer = role === "employer";
 	const isModerator = role === "admin";
 	let value = "home";
@@ -50,6 +52,7 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 	return (
 		<BottomNavShell>
 			<BottomNav
+				badges={unreadRoomCount > 0 ? { chat: unreadRoomCount } : {}}
 				items={[
 					{ value: "home", label: "탐색", icon: Search2 },
 					{ value: "chat", label: "채팅", icon: Message },

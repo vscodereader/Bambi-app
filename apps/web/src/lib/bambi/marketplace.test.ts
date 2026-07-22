@@ -27,7 +27,7 @@ const baseJob: Job = {
 	status: "published",
 	tags: [],
 	title: "공고",
-	type: "클럽",
+	type: "BAR",
 	verified: false,
 };
 
@@ -57,10 +57,10 @@ describe("filterMarketplaceJobs 지역·업종", () => {
 	});
 
 	it("업종 필터는 job.type으로 비교", () => {
-		const jobs = [baseJob, { ...baseJob, id: "t2", type: "라운지" }];
+		const jobs = [baseJob, { ...baseJob, id: "t2", type: "룸싸롱" }];
 		const result = filterMarketplaceJobs(jobs, {
 			...DEFAULT_MARKETPLACE_FILTERS,
-			category: "클럽",
+			category: "BAR",
 		});
 
 		expect(result.map((job) => job.id)).toEqual(["t1"]);
@@ -158,7 +158,7 @@ describe("filterMarketplaceJobs", () => {
 
 	it("filters jobs by region, category, pay, verification, and beginner-friendly chips", () => {
 		const result = filterMarketplaceJobs(JOBS, {
-			category: "라운지",
+			category: "룸싸롱",
 			district: "강남",
 			minimumPay: 17_000,
 			onlyBeginnerFriendly: true,
@@ -223,7 +223,7 @@ describe("getSelectedMarketplaceJob", () => {
 describe("applyDiscoveryAxis", () => {
 	const base = {
 		...DEFAULT_MARKETPLACE_FILTERS,
-		category: "라운지",
+		category: "룸싸롱",
 		minimumPay: 20_000,
 		query: "청담",
 		region: "강남",

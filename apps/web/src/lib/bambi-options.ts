@@ -1,12 +1,22 @@
+// 업종 카테고리 — 서버 DB enum(job_industry_category)과 값이 1:1로 일치해야 한다.
+// 값 자체가 화면 표기라 별도 라벨 맵 없이 그대로 렌더·저장한다.
 export const industryOptions = [
-	"라운지",
-	"바",
-	"클럽",
-	"호스트바",
-	"카페",
-	"노래방",
-	"기타",
+	"룸싸롱",
+	"텐프로/쩜오",
+	"노래주점",
+	"단란주점",
+	"다방",
+	"BAR",
+	"마사지",
+	"요정",
 ] as const;
+
+export type IndustryOption = (typeof industryOptions)[number];
+
+// 서버 입력이 enum으로 좁혀져 자유 문자열을 그대로 못 보낸다. 폼 검증·필터가 이 가드로
+// 좁힌 뒤 전송한다.
+export const isIndustryOption = (value: string): value is IndustryOption =>
+	(industryOptions as readonly string[]).includes(value);
 
 export const regionOptions = ["서울", "경기", "인천", "부산", "기타"] as const;
 

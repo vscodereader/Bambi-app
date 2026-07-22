@@ -1,10 +1,9 @@
 "use client";
 
-// seeker 홈(급구·추천 채용 사이)에 얹는 수다방 섹션. 자격자에게는 게시판 미리보기를,
-// 미자격자에게는 로그인/자격 안내 티저를 노출한다. 홈을 방해하지 않도록 에러 시 조용히 숨긴다.
+// seeker 홈(급구·추천 채용 사이)에 얹는 수다방 섹션. 게시판별 상위 4개 미리보기는 자격과
+// 무관하게 모두에게 노출하고(overview가 public), 미자격자(비회원·남성·비광고 업소)는 글
+// 클릭 시 토스트로 안내하며 이동을 막는다. 홈을 방해하지 않도록 에러 시 조용히 숨긴다.
 
-import { Button } from "@bambi-app/ui/components/button";
-import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
@@ -20,8 +19,7 @@ import { orpc } from "@/utils/orpc";
 // 홈 섹션에 노출할 게시판 순서. 중고거래(market)는 응답에 있어도 홈에서는 제외한다.
 const HOME_BOARD_KEYS = ["best", "free", "work_talk", "notice"] as const;
 
-const COMMUNITY_BLOCKED_MESSAGE =
-	"여성회원과 광고 중인 업소회원만 이용가능합니다";
+const COMMUNITY_BLOCKED_MESSAGE = "여성 회원과 광고 중인 업소회원만 가능합니다";
 
 // 섹션 헤더 — visual-job-exposure-sections의 ExposureSection 헤더 문법을 따른다.
 function SectionHeader() {
@@ -42,8 +40,9 @@ function SectionHeader() {
 	);
 }
 
-// 자격자 콘텐츠 — overview 쿼리를 자격 확인 후에만 조회하고, 게시판 4개를 2×2로 렌더한다.
-function CommunityContent() {
+// 게시판 4개를 2×2로 렌더한다. blocked면 글 클릭을 막고 자격 안내를 토스트로 띄운다
+// (수다방 페이지로 가는 "더보기"는 그대로 두고, 그쪽 자격 게이트가 이어받는다).
+function CommunityContent({ blocked }: { blocked: boolean }) {
 	const overviewQuery = useQuery(
 		orpc.bambi.community.overview.queryOptions({ enabled: true })
 	);
@@ -71,6 +70,7 @@ function CommunityContent() {
 					? HOME_BOARD_KEYS.map((key) => <BoardPreviewSkeleton key={key} />)
 					: HOME_BOARD_KEYS.map((key) => (
 							<BoardPreviewCard
+								blockedNotice={blocked ? COMMUNITY_BLOCKED_MESSAGE : undefined}
 								boardKey={key}
 								key={key}
 								posts={postsByBoard[key]}
@@ -81,40 +81,7 @@ function CommunityContent() {
 	);
 }
 
-// 로그인/자격 안내 티저. 섹션 헤더는 유지하고 카드 하나로 안내한다.
-function CommunityTeaser({ isAuthenticated }: { isAuthenticated: boolean }) {
-	return (
-		<section className="grid gap-2">
-			<SectionHeader />
-			<Card>
-				<CardContent className="flex flex-col items-start gap-3 py-6">
-					{isAuthenticated ? (
-						// 로그인했지만 미자격 — 안내만, CTA 없음.
-						<p className="m-0 text-muted-foreground text-sm">
-							{COMMUNITY_BLOCKED_MESSAGE}
-						</p>
-					) : (
-						// 비로그인 — 로그인 유도 CTA(내비게이션이므로 outline).
-						<>
-							<p className="m-0 text-muted-foreground text-sm">
-								밤비 회원들의 수다방이에요. 로그인하고 함께 이야기해 보세요.
-							</p>
-							<Button
-								nativeButton={false}
-								render={
-									<Link href="/welcome?signup">로그인하고 수다방 참여하기</Link>
-								}
-								variant="outline"
-							/>
-						</>
-					)}
-				</CardContent>
-			</Card>
-		</section>
-	);
-}
-
-// 세션 판정 대기 중 스켈레톤 — 티저/콘텐츠 깜빡임을 막는다.
+// 세션 판정 대기 중 스켈레톤 — 차단/허용 판정 전 잘못된 토스트 동작을 막는다.
 function CommunitySkeleton() {
 	return (
 		<section className="grid gap-2">
@@ -136,7 +103,7 @@ export function HomeCommunitySection() {
 		setMounted(true);
 	}, []);
 
-	const { canAccessCommunity, isAuthenticated, isPending } = useBambiAuth();
+	const { canAccessCommunity, isPending } = useBambiAuth();
 
 	if (!mounted) {
 		return null;
@@ -147,10 +114,5 @@ export function HomeCommunitySection() {
 		return <CommunitySkeleton />;
 	}
 
-	if (canAccessCommunity) {
-		return <CommunityContent />;
-	}
-
-	// 세션 판정이 끝났고 자격이 없는 경우에만 티저를 노출한다.
-	return <CommunityTeaser isAuthenticated={isAuthenticated} />;
+	return <CommunityContent blocked={!canAccessCommunity} />;
 }

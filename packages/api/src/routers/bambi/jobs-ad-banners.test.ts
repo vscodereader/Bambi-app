@@ -5,6 +5,11 @@ import dotenv from "dotenv";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import {
+	PREMIUM_BANNER_MAX_SLOTS,
+	SIDE_BANNER_MAX_SLOTS,
+} from "../../services/bambi-ad-exposure";
+
 dotenv.config({
 	path: "../../apps/server/.env",
 });
@@ -94,7 +99,7 @@ const createAdBannerFixture = async (): Promise<AdBannerFixture> => {
 	}) => ({
 		createdByUserId: employerUserId,
 		description: "배너 슬롯 그룹핑을 검증하기 위한 공고입니다.",
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱" as const,
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",
@@ -227,6 +232,14 @@ const listAdBanners = () =>
 		path: ["bambi", "jobs", "listAdBanners"],
 	})(undefined as never);
 
+// 광고 통합 후 상단·좌·우 세 슬롯은 하나의 프리미엄 풀(배너 3종 전부)을 공유해, 좌→중간(상단
+// 프리미엄)→우 순서로 도는 컨베이어(밀어내기) 순환으로 채운다 — 한 광고는 언제나 정확히 한
+// 칸에만 존재하고, 광고가 8개 이상이면 8칸 전부 서로 다른 광고로 채워진다(순환 상세는
+// bambi-ad-exposure.test.ts가 유닛으로 커버). 이 테스트는 실 dev DB를 쓰고 DB에 기존 배너
+// 공고가 있어 어떤 공고가 이번 버킷에 노출되는지 절대적으로는 검증할 수 없다. 여기서는 기존
+// 데이터와 공존하는 안정적 술어만 검증한다: 그룹은 고정 길이 배열이고, non-null 칸은 최대 8개·
+// 서로 다른 공고이며, 미결제·만료 공고는 절대 노출되지 않는다. 활성 칸의 광고는 슬롯 방향
+// 배너를 가진 경우에만 노출된다.
 describe("bambi jobs.listAdBanners", () => {
 	let fixture: AdBannerFixture;
 
@@ -238,98 +251,122 @@ describe("bambi jobs.listAdBanners", () => {
 		await cleanupAdBannerFixture(fixture);
 	});
 
-	it("결제완료·미만료 배너 공고를 노출 위치별로 그룹핑해 반환한다", async () => {
-		const result = await listAdBanners();
-		expect(result.premiumBanner.map((j) => j.id)).toContain(
-			fixture.premiumJobId
+	// 세 슬롯 중 실제 노출된(non-null) 공고 id의 집합. 컨베이어라 최대 8칸까지 채워질 수 있다.
+	const shownIds = (result: {
+		leftBanner: ({ id: string } | null)[];
+		premiumBanner: ({ id: string } | null)[];
+		rightBanner: ({ id: string } | null)[];
+	}): Set<string> =>
+		new Set(
+			[...result.premiumBanner, ...result.leftBanner, ...result.rightBanner]
+				.filter((job): job is { id: string } => job !== null)
+				.map((job) => job.id)
 		);
-		expect(result.leftBanner.map((j) => j.id)).toContain(fixture.leftJobId);
-		expect(result.rightBanner.map((j) => j.id)).toContain(fixture.rightJobId);
+
+	it("상단·좌·우 세 슬롯을 고정 길이 배열로 반환한다", async () => {
+		const result = await listAdBanners();
+		expect(result.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
+		expect(result.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		expect(result.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
 	});
 
-	it("미결제·만료 배너 공고는 제외한다", async () => {
+	it("배너는 최대 8칸까지 노출되고 같은 공고가 두 칸에 겹치지 않는다", async () => {
 		const result = await listAdBanners();
-		expect(result.premiumBanner.map((j) => j.id)).not.toContain(
-			fixture.unpaidPremiumJobId
-		);
-		expect(result.leftBanner.map((j) => j.id)).not.toContain(
-			fixture.expiredLeftJobId
-		);
+		const filledCount = [
+			...result.premiumBanner,
+			...result.leftBanner,
+			...result.rightBanner,
+		].filter((job) => job !== null).length;
+		expect(filledCount).toBeLessThanOrEqual(8);
+		// 한 광고는 언제나 정확히 한 칸에만 존재한다(중복 부재) — 고유 id 수 = 채워진 칸 수.
+		expect(shownIds(result).size).toBe(filledCount);
 	});
 
-	it("업로드된 슬롯별 광고 배너를 커버와 함께 내려준다", async () => {
+	it("미결제·만료 배너 공고는 어떤 슬롯에도 포함되지 않는다", async () => {
 		const result = await listAdBanners();
-		const premium = result.premiumBanner.find(
-			(j) => j.id === fixture.premiumJobId
-		);
-		const right = result.rightBanner.find((j) => j.id === fixture.rightJobId);
+		const shown = shownIds(result);
+
+		expect(shown.has(fixture.unpaidPremiumJobId)).toBe(false);
+		expect(shown.has(fixture.expiredLeftJobId)).toBe(false);
+	});
+
+	it("노출되면 슬롯 방향 광고 배너 원본을 커버와 함께 내려준다", async () => {
+		const result = await listAdBanners();
+		const union = [
+			...result.premiumBanner,
+			...result.leftBanner,
+			...result.rightBanner,
+		].filter((job) => job !== null);
+		const premium = union.find((j) => j.id === fixture.premiumJobId);
+		const right = union.find((j) => j.id === fixture.rightJobId);
+		const left = union.find((j) => j.id === fixture.leftJobId);
 
 		// 회귀 방지: 예전에는 usage='cover' 서브쿼리만 있어 배너 행이 아예 선택되지 않았다.
-		expect(premium?.adHorizontal?.storageKey).toBe(
-			`ad-h/${fixture.premiumJobId}.png`
-		);
-		expect(right?.adVertical?.storageKey).toBe(
-			`ad-v/${fixture.rightJobId}.png`
-		);
-		expect(premium?.coverImage?.storageKey).toBe(
-			`cover/${fixture.premiumJobId}.png`
-		);
+		// 링 순환상 픽스처가 이번 버킷 응답에 없을 수 있어, 노출된 경우에만 원본을 검증한다.
+		if (premium) {
+			expect(premium.adHorizontal?.storageKey).toBe(
+				`ad-h/${fixture.premiumJobId}.png`
+			);
+			expect(premium.coverImage?.storageKey).toBe(
+				`cover/${fixture.premiumJobId}.png`
+			);
+		}
+
+		if (right) {
+			expect(right.adVertical?.storageKey).toBe(
+				`ad-v/${fixture.rightJobId}.png`
+			);
+		}
+
+		// 배너(가로형)를 안 올린 좌측 픽스처는 방향 이미지가 없어 어떤 슬롯에도 노출되지 않는다.
+		expect(left).toBeUndefined();
 	});
 
-	it("배너를 올리지 않은 공고는 배너가 null이고 커버로 폴백할 수 있다", async () => {
+	it("노출된 배너에 section=노출 슬롯·exposureType=공고 실제값 impression을 기록한다", async () => {
 		const result = await listAdBanners();
-		const left = result.leftBanner.find((j) => j.id === fixture.leftJobId);
-
-		expect(left?.adHorizontal).toBeNull();
-		expect(left?.coverImage?.storageKey).toBe(`cover/${fixture.leftJobId}.png`);
-	});
-
-	it("노출된 각 배너 공고에 section=배너타입 impression을 기록한다", async () => {
-		await listAdBanners();
+		const shownBySlot = [
+			["premium-banner", result.premiumBanner],
+			["left-banner", result.leftBanner],
+			["right-banner", result.rightBanner],
+		] as const;
 
 		const events = await db
 			.select()
 			.from(jobPerformanceEvent)
-			.where(
-				inArray(jobPerformanceEvent.jobPostId, [
-					fixture.premiumJobId,
-					fixture.leftJobId,
-					fixture.rightJobId,
-				])
-			);
-		const impressionsByJob = new Map<string, string[]>();
+			.where(inArray(jobPerformanceEvent.jobPostId, fixture.jobPostIds));
+		// jobPostId → 기록된 "section|exposureType" 집합.
+		const recorded = new Map<string, Set<string>>();
 
 		for (const event of events) {
 			if (event.eventType !== "impression") {
 				continue;
 			}
 
-			const section = (event.metadata as { section?: string } | null)?.section;
-			const sections = impressionsByJob.get(event.jobPostId) ?? [];
-
-			if (typeof section === "string") {
-				sections.push(section);
-			}
-
-			impressionsByJob.set(event.jobPostId, sections);
+			const metadata = event.metadata as {
+				exposureType?: string;
+				section?: string;
+			} | null;
+			const keys = recorded.get(event.jobPostId) ?? new Set<string>();
+			keys.add(`${metadata?.section}|${metadata?.exposureType}`);
+			recorded.set(event.jobPostId, keys);
 		}
 
-		expect(impressionsByJob.get(fixture.premiumJobId)).toContain(
-			"premium-banner"
-		);
-		expect(impressionsByJob.get(fixture.leftJobId)).toContain("left-banner");
-		expect(impressionsByJob.get(fixture.rightJobId)).toContain("right-banner");
+		// 이번 응답에 노출된 픽스처는 section=슬롯, exposureType=공고 실제값으로 기록돼야 한다.
+		// 통합 후 레거시 좌/우 공고가 프리미엄 슬롯에 배치되면 section≠exposureType이 정상이다.
+		for (const [section, items] of shownBySlot) {
+			for (const item of items) {
+				if (item === null || !fixture.jobPostIds.includes(item.id)) {
+					continue;
+				}
 
-		const excludedEvents = await db
-			.select()
-			.from(jobPerformanceEvent)
-			.where(
-				inArray(jobPerformanceEvent.jobPostId, [
-					fixture.unpaidPremiumJobId,
-					fixture.expiredLeftJobId,
-				])
-			);
+				expect(
+					recorded.get(item.id)?.has(`${section}|${item.exposureType}`)
+				).toBe(true);
+			}
+		}
 
-		expect(excludedEvents).toHaveLength(0);
+		// 미결제·만료 공고는 노출도 기록도 없다.
+		expect(recorded.has(fixture.unpaidPremiumJobId)).toBe(false);
+		expect(recorded.has(fixture.expiredLeftJobId)).toBe(false);
 	});
 });

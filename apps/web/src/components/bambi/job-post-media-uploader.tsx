@@ -181,12 +181,14 @@ function MediaSlot({
 interface AdBannerSlotProps {
 	item: JobFormMediaItem | null;
 	onChange: (item: JobFormMediaItem | null) => void;
+	// 프리미엄 광고처럼 가로·세로 배너를 모두 요구하는 상품이면 라벨에 "(필수)"를 붙인다.
+	required?: boolean;
 	usage: JobAdBannerUsage;
 }
 
 // 미리보기 박스를 실제 노출 슬롯과 같은 비율로 보여준다. 여기서 이상해 보이면 실제 광고도
 // 이상하게 나간다.
-function AdBannerSlot({ item, onChange, usage }: AdBannerSlotProps) {
+function AdBannerSlot({ item, onChange, required, usage }: AdBannerSlotProps) {
 	const {
 		aspectClassName,
 		aspectLabel,
@@ -213,7 +215,7 @@ function AdBannerSlot({ item, onChange, usage }: AdBannerSlotProps) {
 				hint={`${description} ${formatJobAdBannerSpec(usage)}`}
 				id={`job-${usage.replace("_", "-")}-image`}
 				item={item}
-				label={label}
+				label={required ? `${label} (필수)` : label}
 				onAltTextChange={(altText) =>
 					onChange(item ? { ...item, altText } : null)
 				}
@@ -272,6 +274,9 @@ export function JobPostMediaUploader({
 		allowedUsages.includes("ad_horizontal") || Boolean(media.adHorizontal);
 	const showVerticalBanner =
 		allowedUsages.includes("ad_vertical") || Boolean(media.adVertical);
+	// 프리미엄 광고는 가로·세로 배너를 모두 요구한다(allowedUsages 2개). 이때 두 슬롯을
+	// 필수로 표시한다. 레거시 side 상품도 프리미엄으로 흡수돼 같은 두 usage를 돌려받는다.
+	const bothBannersRequired = allowedUsages.length === 2;
 
 	return (
 		<section aria-label="공고 이미지" className="flex flex-col gap-3">
@@ -340,10 +345,11 @@ export function JobPostMediaUploader({
 					<div className="flex flex-col gap-1 pt-2">
 						<h2 className="font-medium text-sm">광고 배너 이미지</h2>
 						<p className="text-muted-foreground text-xs">
-							선택한 노출 상품이 사용하는 배너만 등록합니다. 비율(가로형 7:3 ·
-							세로형 4:9)이 크게 어긋나면 슬롯에서 잘려 등록할 수 없고, 조금
-							다른 정도는 노출 슬롯에 맞춰 가운데를 기준으로 잘립니다. 움직이는
-							GIF도 등록할 수 있습니다.
+							프리미엄 광고는 가로형(상단·좌측 슬롯)과 세로형(우측 슬롯) 배너
+							이미지를 모두 등록해야 합니다. 비율(가로형 7:3 · 세로형 4:9)이
+							크게 어긋나면 슬롯에서 잘려 등록할 수 없고, 조금 다른 정도는 노출
+							슬롯에 맞춰 가운데를 기준으로 잘립니다. 움직이는 GIF도 등록할 수
+							있습니다.
 						</p>
 					</div>
 					{isProductResolved && unusedBannerLabels.length > 0 ? (
@@ -361,6 +367,7 @@ export function JobPostMediaUploader({
 							<AdBannerSlot
 								item={media.adHorizontal}
 								onChange={(item) => onChange({ ...media, adHorizontal: item })}
+								required={bothBannersRequired}
 								usage="ad_horizontal"
 							/>
 						) : null}
@@ -368,6 +375,7 @@ export function JobPostMediaUploader({
 							<AdBannerSlot
 								item={media.adVertical}
 								onChange={(item) => onChange({ ...media, adVertical: item })}
+								required={bothBannersRequired}
 								usage="ad_vertical"
 							/>
 						) : null}

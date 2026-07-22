@@ -18,6 +18,10 @@ export const env = createEnv({
 		// 게스트 인증 쿠키(HMAC 서명 토큰)의 서명 키. 평문 쿠키는 devtools에서 위조되므로
 		// 서명 없이는 게이트를 열 수 없게 한다.
 		BAMBI_GUEST_TOKEN_SECRET: z.string().min(32).optional(),
+		// better-auth 세션 쿠키 prefix. 미들웨어(proxy)가 서버(auth)와 같은 prefix로
+		// getSessionCookie를 읽어야 세션 판정이 어긋나지 않는다. 서버 env와 같은 값
+		// (prod=bambi, dev=bambi-dev). 미설정이면 better-auth 기본 prefix.
+		BAMBI_COOKIE_PREFIX: z.string().optional(),
 	},
 	runtimeEnv: {
 		NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL,
@@ -28,6 +32,7 @@ export const env = createEnv({
 			process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY,
 		PORTONE_API_SECRET: process.env.PORTONE_API_SECRET,
 		BAMBI_GUEST_TOKEN_SECRET: process.env.BAMBI_GUEST_TOKEN_SECRET,
+		BAMBI_COOKIE_PREFIX: process.env.BAMBI_COOKIE_PREFIX,
 	},
 	emptyStringAsUndefined: true,
 });

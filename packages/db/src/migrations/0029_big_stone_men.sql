@@ -1,0 +1,1 @@
+ALTER TABLE "bambi_site_settings" ADD COLUMN "ad_banner_rotation_minutes" integer;

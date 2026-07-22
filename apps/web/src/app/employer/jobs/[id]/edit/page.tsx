@@ -40,6 +40,7 @@ import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader
 import { JobRegionFields } from "@/components/bambi/job-region-fields";
 import { PageShell } from "@/components/bambi/page-shell";
 import Loader from "@/components/loader";
+import { useRequiredBannerGate } from "@/hooks/use-required-banner-gate";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
@@ -220,6 +221,11 @@ export default function EditEmployerJobPage({
 	const createMediaUploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
 	);
+	// 프리미엄 광고는 가로형·세로형 배너 이미지가 모두 있어야 저장할 수 있다.
+	const { bannerImagesMissing, requiredBannerUsages } = useRequiredBannerGate({
+		adProductId: form.adProductId,
+		media,
+	});
 	const job = jobQuery.data;
 	const postingScopes = mineQuery.data?.employerJobPostingScopes ?? [];
 	const selectedPostingScope = findPostingScope(postingScopes, form);
@@ -362,6 +368,7 @@ export default function EditEmployerJobPage({
 		const validation = validateJobForm(form, {
 			descriptionBlocks,
 			media,
+			requiredBannerUsages,
 			teamScopes: form.teamId
 				? [{ organizationId: form.organizationId, teamId: form.teamId }]
 				: [],
@@ -831,22 +838,36 @@ export default function EditEmployerJobPage({
 							</div>
 						</div>
 					) : (
-						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-							<Button onClick={handleCancel} type="button" variant="outline">
-								취소
-							</Button>
-							<Button
-								disabled={
-									updateMutation.isPending ||
-									createMediaUploadMutation.isPending ||
-									cardPaymentBlocked
-								}
-								type="submit"
-							>
-								{updateMutation.isPending || createMediaUploadMutation.isPending
-									? "수정 중…"
-									: "공고 수정"}
-							</Button>
+						<div className="flex flex-col gap-3">
+							{bannerImagesMissing ? (
+								<Alert variant="warning">
+									<TriangleAlert />
+									<AlertTitle>배너 이미지를 모두 등록해 주세요</AlertTitle>
+									<AlertDescription>
+										프리미엄 광고는 가로형·세로형 광고 배너 이미지를 모두
+										등록해야 저장할 수 있습니다.
+									</AlertDescription>
+								</Alert>
+							) : null}
+							<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+								<Button onClick={handleCancel} type="button" variant="outline">
+									취소
+								</Button>
+								<Button
+									disabled={
+										updateMutation.isPending ||
+										createMediaUploadMutation.isPending ||
+										cardPaymentBlocked ||
+										bannerImagesMissing
+									}
+									type="submit"
+								>
+									{updateMutation.isPending ||
+									createMediaUploadMutation.isPending
+										? "수정 중…"
+										: "공고 수정"}
+								</Button>
+							</div>
 						</div>
 					)}
 				</form>

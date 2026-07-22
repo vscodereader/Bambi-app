@@ -111,6 +111,17 @@ const createCatalogFixture = async (): Promise<CatalogFixture> => {
 			sortOrder: 1,
 			isActive: false,
 		},
+		{
+			// 레거시 좌측 사이드 배너 상품(프리미엄으로 통합돼 신규 구매 차단 대상).
+			// active지만 getCatalog에서는 숨기고 listCatalogAdmin에서는 노출해야 한다.
+			placementId: activePlacementId,
+			name: "레거시 사이드 배너",
+			benefits: ["좌측 사이드 노출"],
+			priceOptions: [{ amount: 200_000, days: 30 }],
+			previewTemplate: "side-horizontal",
+			sortOrder: 2,
+			isActive: true,
+		},
 	]);
 
 	return {
@@ -155,6 +166,45 @@ describe("adProducts read", () => {
 				{ amount: 330_000, days: 30 },
 			]);
 			expect(active?.products[1]?.name).toBe("프리미엄 배너 60일");
+		} finally {
+			await cleanupCatalogFixture(fixture);
+		}
+	});
+
+	it("getCatalog hides legacy side-banner products; listCatalogAdmin keeps them", async () => {
+		const fixture = await createCatalogFixture();
+		try {
+			const getCatalog = createProcedureClient(adProductsRouter.getCatalog, {
+				context: createContextForUser(fixture.employerUserId),
+				path: ["bambi", "adProducts", "getCatalog"],
+			});
+			const catalog = await getCatalog({});
+			const active = catalog.find((p) => p.id === fixture.activePlacementId);
+			// 좌/우 사이드 배너 템플릿 상품은 구매 카탈로그에서 제외된다.
+			expect(
+				active?.products.some((pr) => pr.name === "레거시 사이드 배너")
+			).toBe(false);
+			expect(
+				active?.products.every(
+					(pr) =>
+						pr.previewTemplate !== "side-horizontal" &&
+						pr.previewTemplate !== "side-vertical"
+				)
+			).toBe(true);
+
+			const listAsAdmin = createProcedureClient(
+				adProductsRouter.listCatalogAdmin,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "adProducts", "listCatalogAdmin"],
+				}
+			);
+			const all = await listAsAdmin({});
+			const adminActive = all.find((p) => p.id === fixture.activePlacementId);
+			// 운영자 관리 목록에는 레거시 사이드 배너 상품이 계속 노출된다.
+			expect(
+				adminActive?.products.some((pr) => pr.name === "레거시 사이드 배너")
+			).toBe(true);
 		} finally {
 			await cleanupCatalogFixture(fixture);
 		}

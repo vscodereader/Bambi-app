@@ -2,8 +2,10 @@ import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	adProduct,
+	bambiSiteSettings,
 	employerOrganizationProfile,
 	employerTeamProfile,
+	jobIndustryCategory,
 	jobPost,
 	jobPostMedia,
 	review,
@@ -27,11 +29,13 @@ import { protectedProcedure, publicProcedure } from "../../index";
 import {
 	AD_BANNER_EXPOSURE_TYPES,
 	buildExposureJobSections,
+	DEFAULT_AD_ROTATION_MINUTES,
 	EXPOSURE_TYPE_LABELS,
 	groupAdBannerJobs,
 	type JobExposureType,
 	type ListingSectionExposureType,
 	previewTemplateToExposureType,
+	requiredAdBannerUsagesForExposureType,
 } from "../../services/bambi-ad-exposure";
 import {
 	getRecentJobPerformanceMetrics,
@@ -102,11 +106,15 @@ const jobPostMediaSetInput = z
 	})
 	.optional();
 
+// 업종은 DB enum(확정 8종)만 받는다 — 자유 문자열을 받으면 목록 밖 값이 저장 단계에서야
+// (DB 캐스팅 오류로) 터지므로 입력 검증에서 막는다.
+const industryCategorySchema = z.enum(jobIndustryCategory.enumValues);
+
 const jobPostInputShape = z.object({
 	organizationId: z.string().min(1),
 	teamId: z.string().min(1).optional(),
 	title: z.string().min(2).max(80),
-	industryCategory: z.string().min(1).max(80),
+	industryCategory: industryCategorySchema,
 	region: z.string().min(1).max(80),
 	district: z.string().max(80).optional(),
 	// "협의" 단위는 금액이 없다(면접 후 급여 협의). 아래 refine에서 짝을 강제한다.
@@ -165,7 +173,7 @@ const createMediaUploadInput = z.object({
 });
 
 const listInput = z.object({
-	industryCategory: z.string().min(1).max(80).optional(),
+	industryCategory: industryCategorySchema.optional(),
 	region: z.string().min(1).max(80).optional(),
 	district: z.string().max(80).optional(),
 	minPayAmount: z.number().int().positive().optional(),
@@ -398,6 +406,40 @@ const getJobPostMediaStorageKeys = async (
 		.where(eq(jobPostMedia.jobPostId, jobPostId));
 
 	return rows.map((row) => row.storageKey);
+};
+
+const getJobPostMediaUsages = async (
+	jobPostId: string
+): Promise<JobPostMediaUsage[]> => {
+	const rows = await db
+		.select({ usage: jobPostMedia.usage })
+		.from(jobPostMedia)
+		.where(eq(jobPostMedia.jobPostId, jobPostId));
+
+	return rows.map((row) => row.usage);
+};
+
+// 프리미엄(배너형) 광고 공고는 상단·좌측 슬롯용 가로형과 우측 슬롯용 세로형 배너를 모두
+// 갖춰야 한다. 통합 후 한 공고가 세 슬롯 모두의 후보가 되므로, 어느 한쪽이 빠지면 그 슬롯이
+// 빈 채로 노출된다. 최종 저장될 미디어 usage에 필요한 배너 규격이 모두 있는지 검증한다.
+const requireAdBannerMedia = (
+	exposureType: string,
+	usages: JobPostMediaUsage[]
+): void => {
+	const required = requiredAdBannerUsagesForExposureType(exposureType);
+
+	if (required.length === 0) {
+		return;
+	}
+
+	const present = new Set(usages);
+
+	if (!required.every((usage) => present.has(usage))) {
+		throw new ORPCError("BAD_REQUEST", {
+			message:
+				"프리미엄 광고는 가로형·세로형 배너 이미지를 모두 등록해야 합니다.",
+		});
+	}
 };
 
 const getJobPostMediaSet = async (jobPostId: string) => {
@@ -773,14 +815,41 @@ export const jobsRouter = {
 				)
 			)
 			.orderBy(desc(jobPost.publishedAt));
-		const groups = groupAdBannerJobs(rows, now);
+
+		// 로테이션 주기는 운영자 사이트 설정값(분)을 따르고, 미설정이면 코드 기본값을 쓴다.
+		const [rotationRow] = await db
+			.select({ minutes: bambiSiteSettings.adBannerRotationMinutes })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"))
+			.limit(1);
+		const rotationMs =
+			(rotationRow?.minutes ?? DEFAULT_AD_ROTATION_MINUTES) * 60 * 1000;
+		const groups = groupAdBannerJobs(rows, now, rotationMs);
+
+		// 활성 칸의 광고가 그 슬롯 방향(좌·중=가로 7:3 / 우=세로 4:9) 배너를 안 올렸으면
+		// 커버로 폴백하지 않고 그 칸을 비운다(자리표시). 노출도 impression 기록도 하지 않는다.
+		// 등록 흐름상 프리미엄은 두 방향이 모두 필수라, 이 홀은 한 방향만 가진 레거시 공고에서만 생긴다.
+		type AdBannerSlotRow = (typeof rows)[number];
+		const requireDirectionImage = (
+			items: (AdBannerSlotRow | null)[],
+			key: "adHorizontal" | "adVertical"
+		): (AdBannerSlotRow | null)[] =>
+			items.map((item) => (item?.[key] ? item : null));
+		const directedGroups = {
+			leftBanner: requireDirectionImage(groups.leftBanner, "adHorizontal"),
+			premiumBanner: requireDirectionImage(
+				groups.premiumBanner,
+				"adHorizontal"
+			),
+			rightBanner: requireDirectionImage(groups.rightBanner, "adVertical"),
+		};
 
 		await recordAdBannerImpressions({
 			actorUserId: context.session?.user.id,
-			groups,
+			groups: directedGroups,
 		});
 
-		return groups;
+		return directedGroups;
 	}),
 
 	getById: publicProcedure
@@ -1033,6 +1102,10 @@ export const jobsRouter = {
 				media,
 				organizationId: input.organizationId,
 			});
+			requireAdBannerMedia(
+				exposure.exposureType,
+				mediaRows.map((row) => row.usage)
+			);
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status = getInitialJobPostStatus({
 				employerVerificationStatus:
@@ -1174,6 +1247,14 @@ export const jobsRouter = {
 						organizationId: existing.organizationId,
 					})
 				: null;
+			// update는 media를 안 보내면 기존 미디어를 그대로 두고, 보내면 전량 교체한다.
+			// 배너 검증은 그 "최종 상태"(교체될 rows 또는 유지되는 기존 rows) 기준으로 한다.
+			requireAdBannerMedia(
+				exposure.exposureType,
+				mediaRows
+					? mediaRows.map((row) => row.usage)
+					: await getJobPostMediaUsages(input.id)
+			);
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status: JobPostStatus = riskDetected
 				? "pending_review"

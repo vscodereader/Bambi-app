@@ -11,6 +11,7 @@ GITHUB_REPO="${GITHUB_REPO:-beyondsoft-kr/bambi-app}"
 SA_NAME="github-deployer"
 POOL_ID="github-pool"
 PROVIDER_ID="github-provider"
+# 프로덕션 버킷 등 추가 버킷은 실행 시 환경변수로 지정한다(레포에 이름을 남기지 않음).
 GCS_PUBLIC_BUCKET="${GCS_PUBLIC_BUCKET:-bambi-storage-public}"
 
 echo "▶ 프로젝트: ${PROJECT_ID} / 리전: ${REGION} / GitHub: ${GITHUB_REPO}"
@@ -55,6 +56,7 @@ gcloud iam service-accounts add-iam-policy-binding "${RUNTIME_SA}" \
 echo "▶ 4/7 런타임 SA의 GCS 권한: gs://${GCS_PUBLIC_BUCKET}"
 # 공고 이미지·광고 배너 CRUD. 버킷 스코프로만 부여해 다른 버킷에는 손대지 못하게 한다.
 # (objectUser = objects create/get/list/update/delete)
+# 다른 버킷(프로덕션 등)에 부여하려면 GCS_PUBLIC_BUCKET=<버킷명>으로 재실행한다.
 gcloud storage buckets add-iam-policy-binding "gs://${GCS_PUBLIC_BUCKET}" \
 	--member="serviceAccount:${RUNTIME_SA}" --role="roles/storage.objectUser" >/dev/null
 # 업로드용 V4 서명 URL은 JSON 키 없이 IAM signBlob으로 서명한다. 서명자와 대상이 같은 SA라
@@ -86,7 +88,7 @@ WIF_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/
 echo "▶ 6/7 Secret Manager: 서비스별 시크릿 생성 + 런타임 SA 접근권한"
 # 값은 넣지 않는다(버전 등록은 사람이 실제 값으로). Cloud Run이 env로 마운트한다.
 for SVC in bambi-server bambi-server-dev; do
-	for KEY in database-url better-auth-secret google-ai-key; do
+	for KEY in database-url better-auth-secret google-ai-key portone-api-secret; do
 		SID="${SVC}-${KEY}"
 		if ! gcloud secrets describe "${SID}" >/dev/null 2>&1; then
 			gcloud secrets create "${SID}" --replication-policy=automatic
@@ -110,10 +112,12 @@ cat <<CMDS
 printf '%s' 'postgresql://...(test DB)' | gcloud secrets versions add bambi-server-dev-database-url --data-file=-
 openssl rand -base64 48 | tr -d '\n'   | gcloud secrets versions add bambi-server-dev-better-auth-secret --data-file=-
 printf '%s' 'AIza...'                  | gcloud secrets versions add bambi-server-dev-google-ai-key --data-file=-
+printf '%s' '(포트원 V2 API Secret)'   | gcloud secrets versions add bambi-server-dev-portone-api-secret --data-file=-
 
 printf '%s' 'postgresql://...(prod DB)' | gcloud secrets versions add bambi-server-database-url --data-file=-
 openssl rand -base64 48 | tr -d '\n'    | gcloud secrets versions add bambi-server-better-auth-secret --data-file=-
 printf '%s' 'AIza...'                   | gcloud secrets versions add bambi-server-google-ai-key --data-file=-
+printf '%s' '(포트원 V2 API Secret)'    | gcloud secrets versions add bambi-server-portone-api-secret --data-file=-
 
 # ── ② GitHub 변수 (인증용 레포 변수 + 환경별 URL/CORS) ──
 gh variable set GCP_WIF_PROVIDER --repo ${GITHUB_REPO} --body "${WIF_PROVIDER}"
@@ -127,15 +131,16 @@ gh variable set CORS_ORIGIN     --repo ${GITHUB_REPO} --env test --body "https:/
 
 # ── ③ Vercel(웹) 환경변수 — 빌드타임에 필요 ──
 # next.config.ts가 이 값으로 images.remotePatterns를 만든다. 없으면 배포된 웹에서
-# next/image가 GCS 호스트를 거부한다. Production/Preview/Development 모두에 등록.
-# NEXT_PUBLIC_GCS_PUBLIC_BASE_URL=https://storage.googleapis.com/${GCS_PUBLIC_BUCKET}
+# next/image가 GCS 호스트를 거부한다. 환경별 버킷이 다르니 프로젝트별로 등록:
+# dev 웹  : NEXT_PUBLIC_GCS_PUBLIC_BASE_URL=https://storage.googleapis.com/${GCS_PUBLIC_BUCKET}
+# prod 웹 : NEXT_PUBLIC_GCS_PUBLIC_BASE_URL=https://storage.googleapis.com/(프로덕션 버킷명)
 
-# ── ④ 버킷 CORS — 이미 적용됨(실서비스·테스트·로컬 오리진) ──
+# ── ④ 버킷 CORS — 버킷별 확인(public은 적용됨, prod는 신규 생성 시 필요) ──
 # 브라우저가 서명 URL로 직접 PUT 하므로 웹 오리진이 CORS에 있어야 한다. 콘솔 UI가 없어
 # gcloud로만 설정하며, --cors-file은 병합이 아니라 전체 교체다. 오리진 추가가 필요하면
 # 현재 값을 먼저 확인한 뒤 갱신한다:
-#   gcloud storage buckets describe gs://${GCS_PUBLIC_BUCKET} --format="value(cors_config)"
-#   gcloud storage buckets update   gs://${GCS_PUBLIC_BUCKET} --cors-file=<json>
+#   gcloud storage buckets describe gs://<버킷> --format="value(cors_config)"
+#   gcloud storage buckets update   gs://<버킷> --cors-file=<json>
 # ──────────────────────────────────────────────────────────
 
 CMDS

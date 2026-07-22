@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, publicProcedure } from "../../index";
+import { DEFAULT_AD_ROTATION_MINUTES } from "../../services/bambi-ad-exposure";
+import { DEFAULT_WITHDRAWAL_RETENTION_DAYS } from "../../services/bambi-policy";
 
 // 단일 행(설정) 고정 키. 조회·수정 모두 이 행 하나만 다룬다.
 const SETTINGS_ROW_ID = "default";
@@ -71,6 +73,31 @@ const updateFooterInput = z.object({
 		.nullish(),
 });
 
+// 회원 정책 — 탈퇴 개인정보 보존기간(일). null이면 기본값으로 복귀한다.
+const updateMemberPolicyInput = z.object({
+	withdrawalRetentionDays: z
+		.number()
+		.int("보존기간은 일 단위 정수로 입력해 주세요.")
+		.min(1, "보존기간은 1일 이상으로 설정해 주세요.")
+		.max(365, "보존기간은 365일 이하로 설정해 주세요.")
+		.nullable(),
+});
+
+// 광고 배너 로테이션 주기(분). null이면 기본값(60분)으로 복귀한다. 트러스트 바운더리라
+// 최소 1분·정수를 서버에서 검증한다(상한은 7일 = 10080분).
+const AD_ROTATION_MAX_MINUTES = 10_080;
+const updateAdRotationInput = z.object({
+	minutes: z
+		.number()
+		.int("로테이션 주기는 분 단위 정수로 입력해 주세요.")
+		.min(1, "로테이션 주기는 1분 이상으로 설정해 주세요.")
+		.max(
+			AD_ROTATION_MAX_MINUTES,
+			"로테이션 주기는 10080분(7일) 이하로 설정해 주세요."
+		)
+		.nullable(),
+});
+
 export const siteSettingsRouter = {
 	// 푸터 렌더용 공개 조회. 행이 없으면 null(웹이 폴백 처리).
 	getFooter: publicProcedure.handler(async () => {
@@ -121,5 +148,70 @@ export const siteSettingsRouter = {
 				})
 				.returning({ bankAccounts: bambiSiteSettings.bankAccounts });
 			return saved?.bankAccounts ?? [];
+		}),
+
+	// 회원 정책 공개 조회 — 탈퇴 안내 카피가 보존기간을 표시하는 데 쓴다.
+	// days가 null이면 미설정(기본값 사용). defaultDays는 코드 기본값으로, 운영자
+	// 폼의 placeholder와 안내 카피 폴백이 같은 값을 보게 한다.
+	getMemberPolicy: publicProcedure.handler(async () => {
+		const [row] = await db
+			.select({ days: bambiSiteSettings.withdrawalRetentionDays })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+		return {
+			days: row?.days ?? null,
+			defaultDays: DEFAULT_WITHDRAWAL_RETENTION_DAYS,
+		};
+	}),
+
+	// 운영자 전용 회원 정책 저장. 같은 단일 행을 upsert 하되 해당 컬럼만 갱신한다.
+	updateMemberPolicy: adminProcedure
+		.input(updateMemberPolicyInput)
+		.handler(async ({ input }) => {
+			const [saved] = await db
+				.insert(bambiSiteSettings)
+				.values({
+					id: SETTINGS_ROW_ID,
+					withdrawalRetentionDays: input.withdrawalRetentionDays,
+				})
+				.onConflictDoUpdate({
+					target: bambiSiteSettings.id,
+					set: { withdrawalRetentionDays: input.withdrawalRetentionDays },
+				})
+				.returning({ days: bambiSiteSettings.withdrawalRetentionDays });
+			return { days: saved?.days ?? null };
+		}),
+
+	// 광고 배너 로테이션 주기 조회. minutes가 null이면 미설정(기본값 사용). defaultMinutes는
+	// 코드 기본값으로, 운영자 폼 placeholder가 실제 폴백값을 보게 한다.
+	getAdRotation: publicProcedure.handler(async () => {
+		const [row] = await db
+			.select({ minutes: bambiSiteSettings.adBannerRotationMinutes })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+		return {
+			defaultMinutes: DEFAULT_AD_ROTATION_MINUTES,
+			minutes: row?.minutes ?? null,
+		};
+	}),
+
+	// 운영자 전용 로테이션 주기 저장. 같은 단일 행을 upsert 하되 해당 컬럼만 갱신한다.
+	updateAdRotation: adminProcedure
+		.input(updateAdRotationInput)
+		.handler(async ({ input }) => {
+			const [saved] = await db
+				.insert(bambiSiteSettings)
+				.values({
+					adBannerRotationMinutes: input.minutes,
+					id: SETTINGS_ROW_ID,
+				})
+				.onConflictDoUpdate({
+					target: bambiSiteSettings.id,
+					set: { adBannerRotationMinutes: input.minutes },
+				})
+				.returning({ minutes: bambiSiteSettings.adBannerRotationMinutes });
+			return { minutes: saved?.minutes ?? null };
 		}),
 };

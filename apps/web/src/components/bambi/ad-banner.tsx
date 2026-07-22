@@ -9,25 +9,44 @@ import type { AdBannerItem } from "@/lib/bambi/api-job-mapper";
 const bannerHref = (item: AdBannerItem): Route =>
 	`/seeker/jobs/${item.id}` as Route;
 
-// 좌/우 배너 rail은 슬롯 3개를 기준으로 채운다 — 서버가 좌/우 배너를 최대 3개로
-// 제한하는 상한과 짝이다. 판매분 뒤 빈 슬롯은 아래 자리표시로 메운다.
-const AD_RAIL_SLOT_COUNT = 3;
+// 좌/우 배너 rail은 슬롯 3개를 항상 렌더한다 — 서버가 그룹당 고정 길이(3칸) 배열을 내려주고
+// 활성 칸만 광고, 나머지는 null이다. 데이터가 없거나(로딩) null인 칸은 자리표시로 채운다.
 const AD_RAIL_SLOT_KEYS = ["slot-1", "slot-2", "slot-3"] as const;
 
-// 빈 광고 슬롯 자리표시 — "광고 모집중 입니다." 문구를 실제 배너와 같은 비율/크기로
-// 보여주는 클릭 불가 장식(aria-hidden). 스켈레톤 "형태"는 muted 배경 + 점선 테두리로
-// 표현한다(pulse 없이 정적). 비율/크기(aspect·h·w)는 호출부가 className으로 넘긴다 —
+// 빈 슬롯 자리표시 이미지(가로 7:3 / 세로 4:9) — 실제 배너/카드가 채워지기 전 자리를
+// 지키는 장식이라 alt은 비운다.
+const PLACEHOLDER_HORIZONTAL_SRC =
+	"/bambi/placeholder/horizontal-placeholder.png";
+const PLACEHOLDER_VERTICAL_SRC = "/bambi/placeholder/vertical-placeholder.png";
+
+// 빈 광고/카드 슬롯 자리표시 — 실제 배너와 같은 비율/크기로 placeholder 이미지를 채우는
+// 클릭 불가 장식(aria-hidden). 비율/크기(aspect·h·w)는 호출부가 className으로 넘긴다 —
 // display 클래스도 반드시 함께 넘겨야 한다(base엔 flex/hidden이 없어 breakpoint 토글이 가능).
-export function AdSlotPlaceholder({ className }: { className?: string }) {
+// variant는 세로형(우측 사이드) 슬롯에서만 "vertical"로 넘긴다(기본은 가로형).
+export function AdSlotPlaceholder({
+	className,
+	variant = "horizontal",
+}: {
+	className?: string;
+	variant?: "horizontal" | "vertical";
+}) {
 	return (
 		<div
 			aria-hidden="true"
-			className={cn(
-				"items-center justify-center rounded-lg border border-border border-dashed bg-muted p-2 text-center font-semibold text-muted-foreground text-xs",
-				className
-			)}
+			className={cn("relative overflow-hidden rounded-lg", className)}
 		>
-			광고 모집중 입니다.
+			<Image
+				alt=""
+				className="object-cover"
+				fill
+				sizes={variant === "vertical" ? "120px" : "272px"}
+				src={
+					variant === "vertical"
+						? PLACEHOLDER_VERTICAL_SRC
+						: PLACEHOLDER_HORIZONTAL_SRC
+				}
+				unoptimized
+			/>
 		</div>
 	);
 }
@@ -65,24 +84,26 @@ export function AdBanner({ className, item }: AdBannerProps) {
 
 interface AdBannerRailProps {
 	className?: string;
-	items: AdBannerItem[];
+	items: (AdBannerItem | null)[];
 }
 
-// 세로 배너 스택(우측). 판매된 배너를 먼저 깔고, 남은 슬롯(총 3개)은 "광고 모집중"
-// 자리표시로 채워 빈 상태에서도 영역이 보이게 한다.
+// 세로 배너 스택(우측). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로, 빈 칸은
+// "광고 모집중" 자리표시로 채운다.
 export function AdBannerRail({ className, items }: AdBannerRailProps) {
-	const emptySlotKeys = AD_RAIL_SLOT_KEYS.slice(
-		items.length,
-		AD_RAIL_SLOT_COUNT
-	);
 	return (
 		<div className={cn("flex flex-col items-start gap-3", className)}>
-			{items.map((item) => (
-				<AdBanner item={item} key={item.id} />
-			))}
-			{emptySlotKeys.map((key) => (
-				<AdSlotPlaceholder className="flex aspect-[4/9] h-52" key={key} />
-			))}
+			{AD_RAIL_SLOT_KEYS.map((key, index) => {
+				const item = items[index];
+				return item ? (
+					<AdBanner item={item} key={item.id} />
+				) : (
+					<AdSlotPlaceholder
+						className="flex aspect-[4/9] h-52"
+						key={key}
+						variant="vertical"
+					/>
+				);
+			})}
 		</div>
 	);
 }
@@ -125,27 +146,25 @@ export function HorizontalAdBanner({
 
 interface HorizontalAdBannerRailProps {
 	className?: string;
-	items: AdBannerItem[];
+	items: (AdBannerItem | null)[];
 }
 
-// 가로형 배너 세로 스택(좌측 사이드). 판매분 뒤 남은 슬롯(총 3개)은 "광고 모집중"
-// 자리표시로 채워 빈 상태에서도 영역이 보이게 한다.
+// 가로형 배너 세로 스택(좌측 사이드). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로,
+// 빈 칸은 "광고 모집중" 자리표시로 채운다.
 export function HorizontalAdBannerRail({
 	className,
 	items,
 }: HorizontalAdBannerRailProps) {
-	const emptySlotKeys = AD_RAIL_SLOT_KEYS.slice(
-		items.length,
-		AD_RAIL_SLOT_COUNT
-	);
 	return (
 		<div className={cn("flex flex-col gap-3", className)}>
-			{items.map((item) => (
-				<HorizontalAdBanner item={item} key={item.id} />
-			))}
-			{emptySlotKeys.map((key) => (
-				<AdSlotPlaceholder className="flex aspect-[7/3] w-full" key={key} />
-			))}
+			{AD_RAIL_SLOT_KEYS.map((key, index) => {
+				const item = items[index];
+				return item ? (
+					<HorizontalAdBanner item={item} key={item.id} />
+				) : (
+					<AdSlotPlaceholder className="flex aspect-[7/3] w-full" key={key} />
+				);
+			})}
 		</div>
 	);
 }

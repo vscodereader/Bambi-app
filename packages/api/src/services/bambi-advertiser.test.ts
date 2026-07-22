@@ -83,7 +83,7 @@ const seedActiveAdvertiser = async ({
 		id: jobPostId,
 		organizationId,
 		createdByUserId: ownerUserId,
-		industryCategory: "cafe",
+		industryCategory: "다방",
 		region: "seoul",
 		payAmount: 12_000,
 		payUnit: "hour",

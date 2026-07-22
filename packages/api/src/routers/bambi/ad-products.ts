@@ -1,7 +1,7 @@
 import { db } from "@bambi-app/db";
 import { adPlacement, adProduct } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, notInArray } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -11,6 +11,7 @@ import {
 	previewTemplateToExposureType,
 } from "../../services/bambi-ad-exposure";
 import { requireAdminProfile } from "../../services/bambi-authz";
+import { derivePremiumQueue } from "../../services/bambi-premium-capacity";
 
 // 배너형 미리보기 템플릿(premium-top / side-horizontal / side-vertical)은 끌어올리기 비대상이다.
 // 노출 타입으로 환산해 배너 여부를 판정한다(previewTemplate→exposureType 단일 소스 재사용).
@@ -117,12 +118,29 @@ export const adProductsRouter = {
 				orderBy: [asc(adPlacement.sortOrder), asc(adPlacement.createdAt)],
 				with: {
 					products: {
-						where: eq(adProduct.isActive, true),
+						// 좌/우 사이드 배너(side-horizontal·side-vertical)는 프리미엄 광고로 통합돼
+						// 신규 구매를 차단한다. 레거시 데이터(이미 팔린 공고)는 계속 노출하되
+						// 구인자 구매 카탈로그에서만 제외한다. 운영자 관리(listCatalogAdmin)에는 계속 노출.
+						where: and(
+							eq(adProduct.isActive, true),
+							notInArray(adProduct.previewTemplate, [
+								"side-horizontal",
+								"side-vertical",
+							])
+						),
 						orderBy: [asc(adProduct.sortOrder), asc(adProduct.createdAt)],
 					},
 				},
 			})
 	),
+
+	// 프리미엄 광고(배너 3종 통합 풀)의 남은 자리·정원. 광고 안내 페이지가 "N/10" 표시와
+	// 정원 만석 안내에 쓴다. getCatalog와 같은 protected 조회다.
+	premiumCapacity: protectedProcedure.handler(async () => {
+		const { activeCount, capacity, pendingCount, remaining } =
+			await derivePremiumQueue(db, new Date());
+		return { activeCount, capacity, pendingCount, remaining };
+	}),
 
 	listCatalogAdmin: protectedProcedure.handler(async ({ context }) => {
 		await requireAdminProfile(context.session);

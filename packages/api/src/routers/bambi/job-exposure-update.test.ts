@@ -22,6 +22,7 @@ const {
 	employerOrganizationProfile,
 	adPlacement,
 	adProduct,
+	jobIndustryCategory,
 	jobPost,
 } = bambiSchema;
 
@@ -33,7 +34,7 @@ interface JobUpdateData {
 	adProductId?: string | null;
 	description: string;
 	exposureDurationDays?: number | null;
-	industryCategory: string;
+	industryCategory: (typeof jobIndustryCategory.enumValues)[number];
 	organizationId: string;
 	payAmount: number;
 	paymentMethod?: "bank_transfer" | "card" | null;
@@ -57,7 +58,7 @@ const now = new Date();
 const buildBaseInput = (organizationId: string) => ({
 	organizationId,
 	title: "테스트 알바 공고",
-	industryCategory: "cafe",
+	industryCategory: "다방" as const,
 	region: "서울 강남구",
 	payAmount: 12_000,
 	payUnit: "시급",
@@ -152,7 +153,7 @@ const seedJobPost = async (
 			createdByUserId: fixture.employerUserId,
 			status: "published",
 			title: "테스트 알바 공고",
-			industryCategory: "cafe",
+			industryCategory: "다방" as const,
 			region: "서울 강남구",
 			payAmount: 12_000,
 			payUnit: "시급",
