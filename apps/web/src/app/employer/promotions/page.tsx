@@ -42,6 +42,12 @@ interface AdListItem {
 	jobPostId: string;
 	manualBoostsPerDay: number;
 	paymentStatus: string;
+	// 배너 미결제 신청의 파생 큐 정보(진행 가능 여부·대기 순번). 그 외엔 null.
+	premiumQueue: {
+		progressable: boolean;
+		queuePosition: number | null;
+		rank: number;
+	} | null;
 	publishedAt: Date | null | string;
 	status: string;
 	teamDisplayName: null | string;
@@ -148,6 +154,15 @@ function getAdColumns({
 									<BankTransferGuide amount={ad.exposureAmount} />
 								</PopoverContent>
 							</Popover>
+						) : null}
+						{ad.premiumQueue ? (
+							<StatusBadge
+								tone={ad.premiumQueue.progressable ? "good" : "warning"}
+							>
+								{ad.premiumQueue.progressable
+									? "진행 가능"
+									: `대기열 ${ad.premiumQueue.queuePosition}번째`}
+							</StatusBadge>
 						) : null}
 					</div>
 				);
