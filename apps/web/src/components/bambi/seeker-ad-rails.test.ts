@@ -11,6 +11,10 @@ const RAIL_SCREENS = [
 		relativePath: path.join("app", "seeker", "community", "layout.tsx"),
 	},
 	{
+		label: "고객센터 레이아웃",
+		relativePath: path.join("app", "support", "layout.tsx"),
+	},
+	{
 		label: "구직자 마켓플레이스",
 		relativePath: path.join(
 			"components",
