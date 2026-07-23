@@ -14,6 +14,7 @@ import {
 	SheetClose,
 	SheetContent,
 	SheetTitle,
+	SheetTrigger,
 } from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
@@ -58,6 +59,7 @@ import {
 	SortIcon,
 	StarIcon,
 	UserIcon,
+	XIcon,
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
 import type {
@@ -1938,6 +1940,12 @@ const MOD_MORE_GROUPS: {
 			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
 		],
 	},
+	{
+		label: "사이트",
+		items: [
+			{ href: "/moderator/site-settings" as Route, label: "사이트 정보" },
+		],
+	},
 ];
 
 // 하단 탭 버튼 공통 톤(평면 탭·더보기 탭 공유).
@@ -1957,53 +1965,51 @@ function ModMoreTab({ active }: { active: boolean }) {
 	const [open, setOpen] = useState(false);
 	const pathname = usePathname();
 	return (
-		<>
-			<button
-				className={modTabButtonClassName(active)}
-				onClick={() => setOpen(true)}
-				type="button"
-			>
+		<Sheet onOpenChange={setOpen} open={open}>
+			{/* base-ui Trigger가 열림/닫힘을 토글하고 outside-press 대상에서 트리거를
+			    제외하므로, "더보기"를 다시 눌러도 재오픈 레이스 없이 확실히 닫힌다. */}
+			<SheetTrigger className={modTabButtonClassName(active)}>
 				<span className="inline-flex size-6">
-					<MoreIcon />
+					{open ? <XIcon /> : <MoreIcon />}
 				</span>
-				<span className={modTabLabelClassName(active)}>더보기</span>
-			</button>
-			<Sheet onOpenChange={setOpen} open={open}>
-				<SheetContent>
-					<SheetTitle>더보기</SheetTitle>
-					<div className="mt-5 flex flex-col gap-6">
-						{MOD_MORE_GROUPS.map((group) => (
-							<div className="flex flex-col gap-1" key={group.label}>
-								<p className="px-3 font-bold text-muted-foreground text-xs">
-									{group.label}
-								</p>
-								{group.items.map((item) => {
-									const isActive =
-										pathname === item.href ||
-										pathname.startsWith(`${item.href}/`);
-									return (
-										<SheetClose
-											className={cn(
-												"rounded-lg px-3 py-2.5 text-left font-bold text-sm no-underline",
-												isActive
-													? "bg-muted text-foreground"
-													: "text-foreground hover:bg-muted/50"
-											)}
-											key={item.href}
-											// Link는 <a>라 네이티브 버튼이 아니므로 base-ui에 명시(경고 방지).
-											nativeButton={false}
-											render={<Link href={item.href} />}
-										>
-											{item.label}
-										</SheetClose>
-									);
-								})}
-							</div>
-						))}
-					</div>
-				</SheetContent>
-			</Sheet>
-		</>
+				<span className={modTabLabelClassName(active)}>
+					{open ? "닫기" : "더보기"}
+				</span>
+			</SheetTrigger>
+			<SheetContent>
+				<SheetTitle>더보기</SheetTitle>
+				<div className="mt-5 flex flex-col gap-6">
+					{MOD_MORE_GROUPS.map((group) => (
+						<div className="flex flex-col gap-1" key={group.label}>
+							<p className="px-3 font-bold text-muted-foreground text-xs">
+								{group.label}
+							</p>
+							{group.items.map((item) => {
+								const isActive =
+									pathname === item.href ||
+									pathname.startsWith(`${item.href}/`);
+								return (
+									<SheetClose
+										className={cn(
+											"rounded-lg px-3 py-2.5 text-left font-bold text-sm no-underline",
+											isActive
+												? "bg-muted text-foreground"
+												: "text-foreground hover:bg-muted/50"
+										)}
+										key={item.href}
+										// Link는 <a>라 네이티브 버튼이 아니므로 base-ui에 명시(경고 방지).
+										nativeButton={false}
+										render={<Link href={item.href} />}
+									>
+										{item.label}
+									</SheetClose>
+								);
+							})}
+						</div>
+					))}
+				</div>
+			</SheetContent>
+		</Sheet>
 	);
 }
 
