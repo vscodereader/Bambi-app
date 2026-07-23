@@ -868,6 +868,7 @@ export const review = pgTable(
 			.references(() => user.id),
 		rating: integer("rating").notNull(),
 		body: text("body").notNull(),
+		isAnonymous: boolean("is_anonymous").default(false).notNull(),
 		status: reviewStatus("status").default("published").notNull(),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -390,7 +390,11 @@ interface ReviewSidebarCardProps {
 	isLoading: boolean;
 	isSubmitting: boolean;
 	isVisible: boolean;
-	onSubmit: (input: { body: string; rating: number }) => void;
+	onSubmit: (input: {
+		body: string;
+		isAnonymous: boolean;
+		rating: number;
+	}) => void;
 	successMessage: null | string;
 }
 
@@ -1096,14 +1100,17 @@ export function SeekerChatRoomResponsive({
 	};
 	const handleReviewSubmit = ({
 		body,
+		isAnonymous,
 		rating,
 	}: {
 		body: string;
+		isAnonymous: boolean;
 		rating: number;
 	}) => {
 		createReviewMutation.mutate({
 			body,
 			chatRoomId: room.id,
+			isAnonymous,
 			rating,
 		});
 	};

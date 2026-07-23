@@ -1019,6 +1019,7 @@ export const moderationRouter = {
 					rating: review.rating,
 					status: review.status,
 					riskFlags: review.riskFlags,
+					isAnonymous: review.isAnonymous,
 					reviewerUserId: review.reviewerUserId,
 					reviewerDisplayName: bambiProfile.displayName,
 					organizationDisplayName: employerOrganizationProfile.displayName,

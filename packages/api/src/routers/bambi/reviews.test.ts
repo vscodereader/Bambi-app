@@ -303,6 +303,93 @@ describe("bambi reviews router", () => {
 	});
 });
 
+describe("bambi reviews.listByJobPost", () => {
+	it("returns only published reviews with masked or anonymous authors and no reviewer id", async () => {
+		const fixture = await createReviewFixture();
+
+		try {
+			const earlier = new Date(Date.now() - 60_000);
+			const later = new Date();
+
+			await db.insert(review).values([
+				// 게시됨 · 비익명 → 마스킹된 표시명("구직자" → "구*자")
+				{
+					body: REVIEW_BODY,
+					chatRoomId: fixture.chatRoomId,
+					createdAt: earlier,
+					isAnonymous: false,
+					jobPostId: fixture.jobPostId,
+					organizationId: fixture.organizationId,
+					rating: 5,
+					reviewerUserId: fixture.jobSeekerUserId,
+					status: "published",
+				},
+				// 게시됨 · 익명 → "익명"
+				{
+					body: `${REVIEW_BODY} 분위기도 좋았어요.`,
+					chatRoomId: fixture.alternateChatRoomId,
+					createdAt: later,
+					isAnonymous: true,
+					jobPostId: fixture.jobPostId,
+					organizationId: fixture.organizationId,
+					rating: 4,
+					reviewerUserId: fixture.alternateSeekerUserId,
+					status: "published",
+				},
+				// 숨김 → 응답에서 제외
+				{
+					body: `${REVIEW_BODY} 숨김 처리된 후기입니다.`,
+					chatRoomId: fixture.chatRoomId,
+					isAnonymous: false,
+					jobPostId: fixture.jobPostId,
+					organizationId: fixture.organizationId,
+					rating: 2,
+					reviewerUserId: fixture.employerUserId,
+					status: "hidden",
+				},
+				// 검수 대기 → 응답에서 제외
+				{
+					body: `${REVIEW_BODY} 검수 대기 후기입니다.`,
+					chatRoomId: fixture.alternateChatRoomId,
+					isAnonymous: false,
+					jobPostId: fixture.jobPostId,
+					organizationId: fixture.organizationId,
+					rating: 3,
+					reviewerUserId: fixture.employerUserId,
+					riskFlags: ["external_messenger"],
+					status: "pending_review",
+				},
+			]);
+
+			const listByJobPost = createProcedureClient(reviewsRouter.listByJobPost, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "reviews", "listByJobPost"],
+			});
+
+			const result = await listByJobPost({
+				jobPostId: fixture.jobPostId,
+				limit: 10,
+				offset: 0,
+			});
+
+			expect(result.hasMore).toBe(false);
+			expect(result.items).toHaveLength(2);
+			// createdAt desc → 익명(later)이 먼저.
+			expect(result.items[0]?.reviewerDisplayName).toBe("익명");
+			expect(result.items[1]?.reviewerDisplayName).toBe("구*자");
+			// 게시되지 않은 후기 본문은 노출되지 않는다.
+			for (const item of result.items) {
+				expect(item.body).not.toContain("숨김 처리된");
+				expect(item.body).not.toContain("검수 대기");
+				// 작성자 식별 정보는 응답에 포함되지 않는다.
+				expect(item).not.toHaveProperty("reviewerUserId");
+			}
+		} finally {
+			await cleanupReviewFixture(fixture);
+		}
+	});
+});
+
 describe("bambi jobs review aggregates", () => {
 	it("includes published review averages in job list and detail responses", async () => {
 		const fixture = await createReviewFixture();

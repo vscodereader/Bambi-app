@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
+import { Label } from "@bambi-app/ui/components/label";
+import { useId, useMemo, useState } from "react";
 import { Button } from "./ds";
 import { StarIcon } from "./icons";
 
@@ -10,6 +12,7 @@ const REVIEW_RATINGS = [1, 2, 3, 4, 5] as const;
 
 interface ReviewFormInput {
 	body: string;
+	isAnonymous: boolean;
 	rating: number;
 }
 
@@ -40,7 +43,9 @@ export function ReviewForm({
 }: ReviewFormProps) {
 	const [body, setBody] = useState("");
 	const [rating, setRating] = useState(0);
+	const [isAnonymous, setIsAnonymous] = useState(false);
 	const [showValidation, setShowValidation] = useState(false);
+	const anonymousCheckboxId = useId();
 	const bodyError = useMemo(() => getBodyError(body), [body]);
 	const ratingError = rating === 0 ? "별점을 선택해 주세요." : null;
 	const bodyLength = body.trim().length;
@@ -56,6 +61,7 @@ export function ReviewForm({
 
 		onSubmit({
 			body: body.trim(),
+			isAnonymous,
 			rating,
 		});
 	};
@@ -127,6 +133,25 @@ export function ReviewForm({
 				{showValidation && bodyError ? (
 					<p className="m-0 font-semibold text-red-600 text-xs">{bodyError}</p>
 				) : null}
+			</div>
+			<div className="flex items-start gap-2">
+				<Checkbox
+					checked={isAnonymous}
+					className="mt-0.5"
+					id={anonymousCheckboxId}
+					onCheckedChange={(checked) => setIsAnonymous(checked === true)}
+				/>
+				<div className="grid gap-1">
+					<Label
+						className="font-bold text-foreground text-sm"
+						htmlFor={anonymousCheckboxId}
+					>
+						익명으로 표시
+					</Label>
+					<p className="m-0 text-muted-foreground text-xs leading-relaxed">
+						선택하지 않으면 이름이 마스킹되어 표시돼요(예: 김*지).
+					</p>
+				</div>
 			</div>
 			{errorMessage ? (
 				<p className="m-0 font-semibold text-red-600 text-xs" role="alert">
