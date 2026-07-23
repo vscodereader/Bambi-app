@@ -516,6 +516,13 @@ describe("bambi chats router contact reveal", () => {
 		return schedule.id;
 	};
 
+	const completeSchedule = async (scheduleId: string): Promise<void> => {
+		await db
+			.update(interviewSchedule)
+			.set({ status: "completed" })
+			.where(eq(interviewSchedule.id, scheduleId));
+	};
+
 	const consent = async (
 		scheduleId: string,
 		userId: string,
@@ -648,6 +655,58 @@ describe("bambi chats router contact reveal", () => {
 			expect(JSON.stringify([seekerResult, employerResult])).not.toContain(
 				"010-9999-8888"
 			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("still lets the employer reveal contact after the interview is completed", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const scheduleId = await confirmInterview(fixture);
+			await completeSchedule(scheduleId);
+
+			const revealContact = createProcedureClient(chatsRouter.revealContact, {
+				context: createContextForUser(fixture.employerUserId),
+				path: ["bambi", "chats", "revealContact"],
+			});
+
+			const consentRow = await revealContact({
+				contactMethod: "phone",
+				contactValue: "010-1111-2222",
+				interviewScheduleId: scheduleId,
+			});
+
+			expect(consentRow?.contactValue).toBe("010-1111-2222");
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("still lets the job seeker view the employer contact after the interview is completed", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const scheduleId = await confirmInterview(fixture);
+			await consent(scheduleId, fixture.employerUserId, "010-1111-2222");
+			await completeSchedule(scheduleId);
+
+			const getContactReveal = createProcedureClient(
+				chatsRouter.getContactReveal,
+				{
+					context: createContextForUser(fixture.jobSeekerUserId),
+					path: ["bambi", "chats", "getContactReveal"],
+				}
+			);
+			const result = await getContactReveal({
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			expect(result.canViewCounterpart).toBe(true);
+			expect(result.counterpartContacts).toEqual([
+				{ contactMethod: "phone", contactValue: "010-1111-2222" },
+			]);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}

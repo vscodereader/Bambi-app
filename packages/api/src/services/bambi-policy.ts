@@ -119,6 +119,13 @@ export const canStartChat = ({
 	isPhoneVerified &&
 	jobPostStatus === "published";
 
+// 완료된 면접도 확정을 거친 것이므로 연락처 흐름을 유지한다(완료 버튼을 눌러도
+// 연락처 보기·공개가 꺼지지 않게). confirmed·completed만 인정하고 declined·canceled는
+// 계속 차단한다. 두 정책이 같은 판정을 쓰도록 이 게이트 한 곳으로 모은다.
+export const isContactRevealEligibleInterviewStatus = (
+	status: string
+): boolean => status === "confirmed" || status === "completed";
+
 export const canRevealContact = ({
 	interviewStatus,
 	ownerConsented,
@@ -126,7 +133,7 @@ export const canRevealContact = ({
 	ownerPhoneVerified,
 }: CanRevealContactInput): boolean =>
 	ownerIsEmployer &&
-	interviewStatus === "confirmed" &&
+	isContactRevealEligibleInterviewStatus(interviewStatus) &&
 	ownerConsented &&
 	ownerPhoneVerified;
 
@@ -143,7 +150,9 @@ export const canViewCounterpartContact = ({
 	interviewStatus,
 	viewerIsEmployer,
 }: CanViewCounterpartContactInput): boolean =>
-	!viewerIsEmployer && interviewStatus === "confirmed" && counterpartConsented;
+	!viewerIsEmployer &&
+	isContactRevealEligibleInterviewStatus(interviewStatus) &&
+	counterpartConsented;
 
 export const getEmployerVerificationStatusLabel = (
 	status: EmployerVerificationStatus

@@ -57,23 +57,17 @@ interface ContactRow {
 const formatContact = ({ contactMethod, contactValue }: ContactRow): string =>
 	`${contactMethodLabels[contactMethod as ContactMethod] ?? contactMethod} · ${contactValue}`;
 
-const getScheduleBadgeLabel = (
-	hasConfirmedSchedule: boolean,
-	latestStatus?: string
-): string => {
-	if (hasConfirmedSchedule) {
-		return interviewStatusLabels.confirmed;
+// 완료된 면접이면 "확정"이 아니라 실제 상태(완료) 라벨을 보여준다. enum 원값은
+// 노출하지 않고 라벨 맵을 거친다.
+const getScheduleBadgeLabel = (status?: string): string => {
+	if (!status) {
+		return "대기";
 	}
 
-	if (latestStatus) {
-		return (
-			interviewStatusLabels[
-				latestStatus as keyof typeof interviewStatusLabels
-			] ?? latestStatus
-		);
-	}
-
-	return "대기";
+	return (
+		interviewStatusLabels[status as keyof typeof interviewStatusLabels] ??
+		status
+	);
 };
 
 function MineContactCard({ contacts }: { contacts: ContactRow[] }) {
@@ -256,8 +250,10 @@ function ContactRevealApi({
 	const canViewCounterpart = revealQuery.data?.canViewCounterpart ?? false;
 	const viewerIsEmployer = revealQuery.data?.viewerIsEmployer ?? false;
 	const hasMineConsent = mineContacts.length > 0;
+	// 완료된 면접도 확정을 거친 것이라 연락처 공개·열람을 계속 허용한다.
 	const confirmedSchedule = roomQuery.data?.schedules.find(
-		(schedule) => schedule.status === "confirmed"
+		(schedule) =>
+			schedule.status === "confirmed" || schedule.status === "completed"
 	);
 	const revealContactMutation = useMutation(
 		orpc.bambi.chats.revealContact.mutationOptions({
@@ -382,8 +378,7 @@ function ContactRevealApi({
 						</div>
 						<Badge tone={confirmedSchedule ? "success" : "pending"}>
 							{getScheduleBadgeLabel(
-								Boolean(confirmedSchedule),
-								latestSchedule?.status
+								confirmedSchedule?.status ?? latestSchedule?.status
 							)}
 						</Badge>
 					</div>
