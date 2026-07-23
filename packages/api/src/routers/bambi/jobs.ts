@@ -66,6 +66,7 @@ import {
 	validateJobPostImageUpload,
 	validateJobPostMediaSet,
 } from "../../services/bambi-job-media-policy";
+import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
 import {
 	type EmployerVerificationStatus,
 	getInitialJobPostStatus,
@@ -942,10 +943,7 @@ export const jobsRouter = {
 			(membership) => membership.organizationId
 		);
 		const manageableOrganizationIds = organizationMemberships
-			.filter(
-				(membership) =>
-					membership.role === "owner" || membership.role === "admin"
-			)
+			.filter((membership) => isOrganizationManagerRole(membership.role))
 			.map((membership) => membership.organizationId);
 		const accessibleTeamPostScopes = getAccessibleTeamPostScopes({
 			organizationIds,

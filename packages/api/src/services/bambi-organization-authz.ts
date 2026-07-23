@@ -55,6 +55,23 @@ export const normalizeOrganizationManagementRole = (
 	return ROLE_ALIASES[role as keyof typeof ROLE_ALIASES] ?? null;
 };
 
+// member.role 저장 원값 중 owner/manager로 정규화되는 값들 — SQL inArray 필터용
+// (레거시 별칭 "admin" 포함, ROLE_ALIASES와 함께 유지).
+export const storedOrganizationManagerRoles = [
+	"owner",
+	"manager",
+	"admin",
+] as const;
+
+// "owner 또는 manager"만 허용하는 조직 단위 접근(공고 목록·광고·성과 등)의 raw role 판정.
+// 저장값에 레거시 별칭이 섞여 있어 정규화 없이 비교하면 canonical "manager"가 누락된다.
+export const isOrganizationManagerRole = (
+	role: null | string | undefined
+): boolean => {
+	const normalized = normalizeOrganizationManagementRole(role);
+	return normalized === "owner" || normalized === "manager";
+};
+
 const getOrganizationRole = ({
 	organizationId,
 	organizationMemberships,

@@ -2,13 +2,18 @@ import { db } from "@bambi-app/db";
 import { member } from "@bambi-app/db/schema/auth";
 import { bambiProfile, jobPost } from "@bambi-app/db/schema/bambi";
 import { and, eq, gt, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import {
+	isOrganizationManagerRole,
+	storedOrganizationManagerRoles,
+} from "./bambi-organization-authz";
 
-// 수다방 "광고 중 업소" 자격을 부여하는 조직 멤버 역할: 소유자·관리자만.
-export const ADVERTISER_MEMBER_ROLES = ["owner", "admin"] as const;
+// 수다방 "광고 중 업소" 자격을 부여하는 조직 멤버 역할: 소유자·매니저만
+// (canonical "manager"와 레거시 별칭 "admin" 모두 매니저로 취급).
+export const ADVERTISER_MEMBER_ROLES = storedOrganizationManagerRoles;
 
 export const isAdvertiserEligibleRole = (
 	role: string | null | undefined
-): boolean => role === "owner" || role === "admin";
+): boolean => isOrganizationManagerRole(role);
 
 // 유저가 owner/admin으로 속한 조직 중, 광고 상품이 적용되고(adProductId 보유) 실제
 // 공개 중(published AND paid)이며 노출이 유효(exposureEndsAt null 또는 미래)한 공고를
