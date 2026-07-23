@@ -7,7 +7,9 @@ import {
 } from "@bambi-app/ui/components/alert";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Input } from "@bambi-app/ui/components/input";
+import { Label } from "@bambi-app/ui/components/label";
 import {
 	Select,
 	SelectContent,
@@ -31,13 +33,17 @@ import {
 	FieldLabel,
 	FormError,
 } from "@/components/bambi/form-message";
+import { JobExposureFields } from "@/components/bambi/job-exposure-fields";
+import { JobPayFields } from "@/components/bambi/job-pay-fields";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
+import { JobRegionFields } from "@/components/bambi/job-region-fields";
 import { PageShell } from "@/components/bambi/page-shell";
-import { PayAmountHint } from "@/components/bambi/pay-amount-hint";
 import Loader from "@/components/loader";
+import { useRequiredBannerGate } from "@/hooks/use-required-banner-gate";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
+import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
 	emptyJobForm,
 	emptyJobFormMedia,
@@ -46,13 +52,14 @@ import {
 	type JobFormErrors,
 	type JobFormMedia,
 	type JobFormMediaItem,
+	type JobPaymentMethod,
 	resolveJobPostMediaForSubmit,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
 import {
 	industryOptions,
-	payUnitOptions,
-	regionOptions,
+	NEGOTIABLE_PAY_TEXT,
+	NEGOTIABLE_PAY_UNIT,
 } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
@@ -109,6 +116,10 @@ const formatPreviewPay = ({
 	payAmount,
 	payUnit,
 }: Pick<JobForm, "payAmount" | "payUnit">): string => {
+	if (payUnit === NEGOTIABLE_PAY_UNIT) {
+		return NEGOTIABLE_PAY_TEXT;
+	}
+
 	const numericPay = Number(payAmount);
 
 	return Number.isFinite(numericPay) && numericPay > 0
@@ -133,34 +144,25 @@ const focusFirstInvalidField = (form: HTMLFormElement | null) => {
 	});
 };
 
-const getLocalJobMediaPreviewUrl = (item: {
-	fileName: string;
-	storageKey: string;
-	usage: "cover" | "detail";
-}): string => {
-	const params = new URLSearchParams({
-		fileName: item.fileName,
-		key: item.storageKey,
-		usage: item.usage,
-	});
-
-	return `/bambi/local-job-media?${params.toString()}`;
-};
-
+// 이미 저장된 이미지의 미리보기는 공개 버킷 URL을 그대로 쓴다(마켓플레이스 표시 경로와 동일).
+// width/height는 배너 비율 검증에 쓰이며, 컬럼 추가 전에 저장된 행에는 없을 수 있다.
 const toJobFormMediaItem = (item: {
 	altText: string;
 	byteSize: number;
 	fileName: string;
+	height?: null | number;
 	mimeType: string;
 	storageKey: string;
-	usage: "cover" | "detail";
+	width?: null | number;
 }): JobFormMediaItem => ({
 	altText: item.altText,
 	byteSize: item.byteSize,
 	fileName: item.fileName,
+	height: item.height ?? undefined,
 	mimeType: item.mimeType,
-	previewUrl: getLocalJobMediaPreviewUrl(item),
+	previewUrl: jobMediaPublicUrl(item.storageKey),
 	storageKey: item.storageKey,
+	width: item.width ?? undefined,
 });
 
 export default function EditEmployerJobPage({
@@ -219,6 +221,11 @@ export default function EditEmployerJobPage({
 	const createMediaUploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
 	);
+	// 프리미엄 광고는 가로형·세로형 배너 이미지가 모두 있어야 저장할 수 있다.
+	const { bannerImagesMissing, requiredBannerUsages } = useRequiredBannerGate({
+		adProductId: form.adProductId,
+		media,
+	});
 	const job = jobQuery.data;
 	const postingScopes = mineQuery.data?.employerJobPostingScopes ?? [];
 	const selectedPostingScope = findPostingScope(postingScopes, form);
@@ -231,11 +238,19 @@ export default function EditEmployerJobPage({
 		}
 
 		setForm({
+			adProductId: job.adProductId ?? null,
+			beginnerFriendly: job.beginnerFriendly ?? false,
 			description: job.description,
+			district: job.district ?? "",
+			exposureAmount: job.exposureAmount ?? null,
+			exposureDurationDays: job.exposureDurationDays ?? null,
+			exposureType: job.exposureType,
 			industryCategory: job.industryCategory,
+			instantInterview: job.instantInterview ?? false,
 			interviewNotes: job.interviewNotes ?? "",
 			organizationId: job.organizationId,
 			payAmount: String(job.payAmount),
+			paymentMethod: job.paymentMethod ?? null,
 			payUnit: job.payUnit,
 			region: job.region,
 			teamId: job.teamId ?? "",
@@ -244,6 +259,12 @@ export default function EditEmployerJobPage({
 		});
 		setDescriptionBlocks(job.descriptionBlocks ?? []);
 		setMedia({
+			adHorizontal: job.media.adHorizontal
+				? toJobFormMediaItem(job.media.adHorizontal)
+				: null,
+			adVertical: job.media.adVertical
+				? toJobFormMediaItem(job.media.adVertical)
+				: null,
 			cover: job.media.cover ? toJobFormMediaItem(job.media.cover) : null,
 			detail: job.media.detail.map(toJobFormMediaItem),
 		});
@@ -260,6 +281,71 @@ export default function EditEmployerJobPage({
 			[field]: undefined,
 		}));
 		setFormError(null);
+	};
+
+	const updateFormFlag =
+		(field: "beginnerFriendly" | "instantInterview") => (checked: boolean) => {
+			setIsDirty(true);
+			setForm((currentForm) => ({
+				...currentForm,
+				[field]: checked,
+			}));
+		};
+
+	const updateExposureFields = (
+		patch: Partial<
+			Pick<
+				JobForm,
+				| "adProductId"
+				| "exposureAmount"
+				| "exposureDurationDays"
+				| "exposureType"
+				| "paymentMethod"
+			>
+		>
+	) => {
+		setIsDirty(true);
+		setForm((currentForm) => ({
+			...currentForm,
+			...patch,
+		}));
+		setFieldErrors((currentErrors) => ({
+			...currentErrors,
+			adProductId: undefined,
+			exposureDurationDays: undefined,
+			exposureType: undefined,
+			paymentMethod: undefined,
+		}));
+		setFormError(null);
+	};
+
+	const handleProductChange = (productId: string | null) => {
+		updateExposureFields(
+			productId
+				? {
+						adProductId: productId,
+						exposureAmount: null,
+						exposureDurationDays: null,
+					}
+				: {
+						adProductId: null,
+						exposureAmount: null,
+						exposureDurationDays: null,
+						exposureType: "standard",
+						paymentMethod: null,
+					}
+		);
+	};
+
+	const handlePaymentMethodChange = (value: JobPaymentMethod) => {
+		updateExposureFields({ paymentMethod: value });
+	};
+
+	const handleDurationChange = (days: number | null, amount: number | null) => {
+		updateExposureFields({
+			exposureAmount: amount,
+			exposureDurationDays: days,
+		});
 	};
 
 	const handleCancel = () => {
@@ -282,6 +368,7 @@ export default function EditEmployerJobPage({
 		const validation = validateJobForm(form, {
 			descriptionBlocks,
 			media,
+			requiredBannerUsages,
 			teamScopes: form.teamId
 				? [{ organizationId: form.organizationId, teamId: form.teamId }]
 				: [],
@@ -300,6 +387,7 @@ export default function EditEmployerJobPage({
 			const mediaPayload = await resolveJobPostMediaForSubmit({
 				createUploadIntent: createMediaUploadMutation.mutateAsync,
 				media: validatedMedia,
+				onMediaResolved: setMedia,
 				organizationId: jobInput.organizationId,
 				teamId: jobInput.teamId,
 			});
@@ -406,6 +494,10 @@ export default function EditEmployerJobPage({
 			</PageShell>
 		);
 	}
+
+	// 유료 상품에 신용카드(미지원)를 고른 상태면 수정 저장을 막는다. 사유는 결제 섹션 안내가 알린다.
+	const cardPaymentBlocked =
+		Boolean(form.adProductId) && form.paymentMethod === "card";
 
 	const listingPreview = (
 		<EmployerListingPreview
@@ -532,106 +624,18 @@ export default function EditEmployerJobPage({
 										message={fieldErrors.industryCategory}
 									/>
 								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="region">지역</FieldLabel>
-									<Select
-										name="region"
-										onValueChange={(value) =>
-											updateFormValue("region", value ?? "")
-										}
-										required
-										value={form.region}
-									>
-										<SelectTrigger
-											aria-describedby={
-												fieldErrors.region
-													? getFieldErrorId("region")
-													: undefined
-											}
-											aria-invalid={Boolean(fieldErrors.region)}
-											className={selectTriggerClassName}
-											id="region"
-										>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{regionOptions.map((option) => (
-												<SelectItem key={option} value={option}>
-													{option}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									<FieldError
-										id={getFieldErrorId("region")}
-										message={fieldErrors.region}
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="payAmount">급여 금액</FieldLabel>
-									<Input
-										aria-describedby={
-											fieldErrors.payAmount
-												? getFieldErrorId("payAmount")
-												: undefined
-										}
-										aria-invalid={Boolean(fieldErrors.payAmount)}
-										id="payAmount"
-										inputMode="numeric"
-										min="1"
-										name="payAmount"
-										onChange={(event) =>
-											updateFormValue("payAmount", event.target.value)
-										}
-										placeholder="예: 12000…"
-										required
-										type="number"
-										value={form.payAmount}
-									/>
-									<PayAmountHint
-										payAmount={form.payAmount}
-										payUnit={form.payUnit}
-									/>
-									<FieldError
-										id={getFieldErrorId("payAmount")}
-										message={fieldErrors.payAmount}
-									/>
-								</div>
-								<div className="flex flex-col gap-2">
-									<FieldLabel htmlFor="payUnit">급여 단위</FieldLabel>
-									<Select
-										name="payUnit"
-										onValueChange={(value) =>
-											updateFormValue("payUnit", value ?? "")
-										}
-										required
-										value={form.payUnit}
-									>
-										<SelectTrigger
-											aria-describedby={
-												fieldErrors.payUnit
-													? getFieldErrorId("payUnit")
-													: undefined
-											}
-											aria-invalid={Boolean(fieldErrors.payUnit)}
-											className={selectTriggerClassName}
-											id="payUnit"
-										>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{payUnitOptions.map((option) => (
-												<SelectItem key={option} value={option}>
-													{option}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									<FieldError
-										id={getFieldErrorId("payUnit")}
-										message={fieldErrors.payUnit}
-									/>
-								</div>
+								<JobRegionFields
+									district={form.district}
+									errors={fieldErrors}
+									onChange={updateFormValue}
+									region={form.region}
+								/>
+								<JobPayFields
+									errors={fieldErrors}
+									onChange={updateFormValue}
+									payAmount={form.payAmount}
+									payUnit={form.payUnit}
+								/>
 								<div className="flex flex-col gap-2 md:col-span-2">
 									<FieldLabel htmlFor="workSchedule">근무 일정</FieldLabel>
 									<Input
@@ -654,6 +658,30 @@ export default function EditEmployerJobPage({
 										id={getFieldErrorId("workSchedule")}
 										message={fieldErrors.workSchedule}
 									/>
+								</div>
+								<div className="flex flex-col gap-3 md:col-span-2">
+									<Label
+										className="flex items-center gap-2 font-medium text-sm"
+										htmlFor="beginnerFriendly"
+									>
+										<Checkbox
+											checked={form.beginnerFriendly}
+											id="beginnerFriendly"
+											onCheckedChange={updateFormFlag("beginnerFriendly")}
+										/>
+										초보 가능
+									</Label>
+									<Label
+										className="flex items-center gap-2 font-medium text-sm"
+										htmlFor="instantInterview"
+									>
+										<Checkbox
+											checked={form.instantInterview}
+											id="instantInterview"
+											onCheckedChange={updateFormFlag("instantInterview")}
+										/>
+										당일면접 가능
+									</Label>
 								</div>
 							</CardContent>
 						</Card>
@@ -752,6 +780,7 @@ export default function EditEmployerJobPage({
 					</section>
 
 					<JobPostMediaUploader
+						adProductId={form.adProductId}
 						error={fieldErrors.media}
 						media={media}
 						onChange={(nextMedia) => {
@@ -763,6 +792,21 @@ export default function EditEmployerJobPage({
 							}));
 							setFormError(null);
 						}}
+					/>
+
+					<JobExposureFields
+						adProductId={form.adProductId}
+						errors={{
+							exposureDurationDays: fieldErrors.exposureDurationDays,
+							exposureType: fieldErrors.exposureType,
+							paymentMethod: fieldErrors.paymentMethod,
+						}}
+						exposureAmount={form.exposureAmount}
+						exposureDurationDays={form.exposureDurationDays}
+						onDurationChange={handleDurationChange}
+						onPaymentMethodChange={handlePaymentMethodChange}
+						onProductChange={handleProductChange}
+						paymentMethod={form.paymentMethod}
 					/>
 
 					<div className="xl:hidden">{listingPreview}</div>
@@ -794,21 +838,36 @@ export default function EditEmployerJobPage({
 							</div>
 						</div>
 					) : (
-						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-							<Button onClick={handleCancel} type="button" variant="outline">
-								취소
-							</Button>
-							<Button
-								disabled={
-									updateMutation.isPending ||
+						<div className="flex flex-col gap-3">
+							{bannerImagesMissing ? (
+								<Alert variant="warning">
+									<TriangleAlert />
+									<AlertTitle>배너 이미지를 모두 등록해 주세요</AlertTitle>
+									<AlertDescription>
+										프리미엄 광고는 가로형·세로형 광고 배너 이미지를 모두
+										등록해야 저장할 수 있습니다.
+									</AlertDescription>
+								</Alert>
+							) : null}
+							<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+								<Button onClick={handleCancel} type="button" variant="outline">
+									취소
+								</Button>
+								<Button
+									disabled={
+										updateMutation.isPending ||
+										createMediaUploadMutation.isPending ||
+										cardPaymentBlocked ||
+										bannerImagesMissing
+									}
+									type="submit"
+								>
+									{updateMutation.isPending ||
 									createMediaUploadMutation.isPending
-								}
-								type="submit"
-							>
-								{updateMutation.isPending || createMediaUploadMutation.isPending
-									? "수정 중…"
-									: "공고 수정"}
-							</Button>
+										? "수정 중…"
+										: "공고 수정"}
+								</Button>
+							</div>
 						</div>
 					)}
 				</form>

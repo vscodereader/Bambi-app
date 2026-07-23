@@ -24,16 +24,22 @@ describe("resolveGate", () => {
 	it("allows guest on seeker list root", () => {
 		expect(resolveGate({ pathname: "/seeker", ...guest }).type).toBe("next");
 	});
-	it("sends guest from job detail to signup", () => {
+	it("sends guest from job detail to signup with guestBlocked signal", () => {
 		expect(resolveGate({ pathname: "/seeker/jobs/abc", ...guest })).toEqual({
 			type: "redirect",
-			to: "/welcome?signup",
+			to: "/welcome?signup&guestBlocked=1",
 		});
 	});
-	it("sends guest from employer area to signup", () => {
+	it("sends guest from community to signup with guestBlocked signal", () => {
+		expect(resolveGate({ pathname: "/seeker/community", ...guest })).toEqual({
+			type: "redirect",
+			to: "/welcome?signup&guestBlocked=1",
+		});
+	});
+	it("sends guest from employer area to signup with guestBlocked signal", () => {
 		expect(resolveGate({ pathname: "/employer", ...guest })).toEqual({
 			type: "redirect",
-			to: "/welcome?signup",
+			to: "/welcome?signup&guestBlocked=1",
 		});
 	});
 	it("sends guest at root to seeker", () => {
@@ -42,10 +48,28 @@ describe("resolveGate", () => {
 			to: "/seeker",
 		});
 	});
+	it("lets terms/privacy pass for logged-out visitors", () => {
+		expect(resolveGate({ pathname: "/terms", ...fresh }).type).toBe("next");
+		expect(resolveGate({ pathname: "/privacy", ...fresh }).type).toBe("next");
+		expect(resolveGate({ pathname: "/terms", ...guest }).type).toBe("next");
+		expect(resolveGate({ pathname: "/privacy", ...guest }).type).toBe("next");
+	});
 	it("lets api and media pass", () => {
 		expect(resolveGate({ pathname: "/api/guest", ...fresh }).type).toBe("next");
 		expect(
 			resolveGate({ pathname: "/bambi/local-job-media/x", ...fresh }).type
 		).toBe("next");
+	});
+	it("lets metadata/static files pass for fresh visitors", () => {
+		for (const pathname of [
+			"/icon.svg",
+			"/apple-icon.png",
+			"/og-image.png",
+			"/robots.txt",
+			"/sitemap.xml",
+			"/favicon.ico",
+		]) {
+			expect(resolveGate({ pathname, ...fresh }).type).toBe("next");
+		}
 	});
 });

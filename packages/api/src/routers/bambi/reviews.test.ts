@@ -38,6 +38,7 @@ interface ReviewFixture {
 	jobPostId: string;
 	jobSeekerUserId: string;
 	organizationId: string;
+	region: string;
 	scheduleId: string;
 	userIds: string[];
 }
@@ -60,6 +61,8 @@ const makeEmail = (prefix: string): string =>
 
 const createReviewFixture = async (): Promise<ReviewFixture> => {
 	const now = new Date();
+	// 공개 jobs.list는 전역 조회라, 병렬 테스트 픽스처가 섞이지 않도록 고유 region으로 격리한다.
+	const region = `reviews-${randomUUID()}`;
 	const organizationId = `org_test_${randomUUID()}`;
 	const employerUserId = `user_test_employer_${randomUUID()}`;
 	const jobSeekerUserId = `user_test_seeker_${randomUUID()}`;
@@ -125,12 +128,14 @@ const createReviewFixture = async (): Promise<ReviewFixture> => {
 		createdByUserId: employerUserId,
 		description: "후기 집계 테스트를 위한 공고입니다.",
 		id: jobPostId,
-		industryCategory: "라운지",
+		industryCategory: "룸싸롱",
 		organizationId,
 		payAmount: 180_000,
 		payUnit: "일급",
+		// 공개 목록·상세 조회는 published + paid를 함께 요구한다(jobs.ts의 결제 게이트).
+		paymentStatus: "paid",
 		publishedAt: now,
-		region: "서울 강남구",
+		region,
 		status: "published",
 		title: "후기 테스트 공고",
 		workSchedule: "20:00-02:00",
@@ -167,6 +172,7 @@ const createReviewFixture = async (): Promise<ReviewFixture> => {
 		jobPostId,
 		jobSeekerUserId,
 		organizationId,
+		region,
 		scheduleId,
 		userIds: [employerUserId, jobSeekerUserId, alternateSeekerUserId],
 	};
@@ -297,6 +303,93 @@ describe("bambi reviews router", () => {
 	});
 });
 
+describe("bambi reviews.listByJobPost", () => {
+	it("returns only published reviews with masked or anonymous authors and no reviewer id", async () => {
+		const fixture = await createReviewFixture();
+
+		try {
+			const earlier = new Date(Date.now() - 60_000);
+			const later = new Date();
+
+			await db.insert(review).values([
+				// 게시됨 · 비익명 → 마스킹된 표시명("구직자" → "구*자")
+				{
+					body: REVIEW_BODY,
+					chatRoomId: fixture.chatRoomId,
+					createdAt: earlier,
+					isAnonymous: false,
+					jobPostId: fixture.jobPostId,
+					organizationId: fixture.organizationId,
+					rating: 5,
+					reviewerUserId: fixture.jobSeekerUserId,
+					status: "published",
+				},
+				// 게시됨 · 익명 → "익명"
+				{
+					body: `${REVIEW_BODY} 분위기도 좋았어요.`,
+					chatRoomId: fixture.alternateChatRoomId,
+					createdAt: later,
+					isAnonymous: true,
+					jobPostId: fixture.jobPostId,
+					organizationId: fixture.organizationId,
+					rating: 4,
+					reviewerUserId: fixture.alternateSeekerUserId,
+					status: "published",
+				},
+				// 숨김 → 응답에서 제외
+				{
+					body: `${REVIEW_BODY} 숨김 처리된 후기입니다.`,
+					chatRoomId: fixture.chatRoomId,
+					isAnonymous: false,
+					jobPostId: fixture.jobPostId,
+					organizationId: fixture.organizationId,
+					rating: 2,
+					reviewerUserId: fixture.employerUserId,
+					status: "hidden",
+				},
+				// 검수 대기 → 응답에서 제외
+				{
+					body: `${REVIEW_BODY} 검수 대기 후기입니다.`,
+					chatRoomId: fixture.alternateChatRoomId,
+					isAnonymous: false,
+					jobPostId: fixture.jobPostId,
+					organizationId: fixture.organizationId,
+					rating: 3,
+					reviewerUserId: fixture.employerUserId,
+					riskFlags: ["external_messenger"],
+					status: "pending_review",
+				},
+			]);
+
+			const listByJobPost = createProcedureClient(reviewsRouter.listByJobPost, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "reviews", "listByJobPost"],
+			});
+
+			const result = await listByJobPost({
+				jobPostId: fixture.jobPostId,
+				limit: 10,
+				offset: 0,
+			});
+
+			expect(result.hasMore).toBe(false);
+			expect(result.items).toHaveLength(2);
+			// createdAt desc → 익명(later)이 먼저.
+			expect(result.items[0]?.reviewerDisplayName).toBe("익명");
+			expect(result.items[1]?.reviewerDisplayName).toBe("구*자");
+			// 게시되지 않은 후기 본문은 노출되지 않는다.
+			for (const item of result.items) {
+				expect(item.body).not.toContain("숨김 처리된");
+				expect(item.body).not.toContain("검수 대기");
+				// 작성자 식별 정보는 응답에 포함되지 않는다.
+				expect(item).not.toHaveProperty("reviewerUserId");
+			}
+		} finally {
+			await cleanupReviewFixture(fixture);
+		}
+	});
+});
+
 describe("bambi jobs review aggregates", () => {
 	it("includes published review averages in job list and detail responses", async () => {
 		const fixture = await createReviewFixture();
@@ -333,9 +426,10 @@ describe("bambi jobs review aggregates", () => {
 				path: ["bambi", "jobs", "getById"],
 			});
 
-			const listResult = await listJobs({ limit: 20 });
+			const listResult = await listJobs({ limit: 20, region: fixture.region });
 			const listedJob = [
-				...listResult.sections.premium,
+				...listResult.sections.special,
+				...listResult.sections.urgent,
 				...listResult.sections.recommended,
 				...listResult.sections.organic,
 			].find((job) => job.id === fixture.jobPostId);

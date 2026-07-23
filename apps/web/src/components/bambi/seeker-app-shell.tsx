@@ -3,6 +3,7 @@
 import { Input } from "@bambi-app/ui/components/input";
 import { usePathname } from "next/navigation";
 import { createContext, type ReactNode, useContext, useState } from "react";
+import { SEEKER_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import {
 	DEFAULT_MARKETPLACE_FILTERS,
 	type MarketplaceFilters,
@@ -30,7 +31,10 @@ export function useSeekerFilters(): SeekerFiltersContextValue {
 function SeekerHeaderSearch() {
 	const { filters, setFilters } = useSeekerFilters();
 	return (
-		<div className="relative w-64">
+		// 헤더 행에서 줄어들 수 있는 건 내비뿐이라(min-w-0 + overflow-x-auto) 폭이 모자라면
+		// 압축이 전부 내비로 몰려 마지막 항목 "고객센터"의 끝 글자가 잘렸다. 검색창이 가장
+		// 큰 고정폭 소비처라 여기를 줄여 내비에 폭을 돌려준다("검색" 2글자 + 아이콘엔 충분).
+		<div className="relative w-48">
 			<span className="pointer-events-none absolute top-1/2 left-3 inline-flex size-4 -translate-y-1/2 text-muted-foreground">
 				<Search2 />
 			</span>
@@ -57,6 +61,9 @@ export function SeekerAppShell({ children }: { children: ReactNode }) {
 	return (
 		<SeekerFiltersContext.Provider value={{ filters, setFilters }}>
 			<ResponsiveAppShell
+				// 모든 seeker 페이지(채용 목록·상세·채팅·수다방·내 정보) 헤더를
+				// /seeker와 동일한 고정폭·여백으로 통일한다.
+				contentWidthClassName={SEEKER_CONTENT_MAX_W}
 				headerSlot={isMarketplace ? <SeekerHeaderSearch /> : undefined}
 				variant="seeker"
 			>

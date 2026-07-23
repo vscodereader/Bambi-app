@@ -7,9 +7,16 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
+import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { BOTTOM_NAV_CONTENT_SPACER, BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
-import { ClipboardListIcon, PlusIcon, SettingsIcon, UserIcon } from "./icons";
+import {
+	ClipboardListIcon,
+	PlusIcon,
+	ShieldIcon,
+	StoreIcon,
+	UserIcon,
+} from "./icons";
 import { MobileTabBar } from "./mobile-tab-bar";
 import {
 	ConsoleToast,
@@ -46,11 +53,14 @@ function NavBar({ children }: { children: ReactNode }) {
 // ---- 구직자 ----------------------------------------------------------------
 export function SeekerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
+	// 내 정보 하위 페이지(신고 내역·예정된 면접·차단 목록·계정 설정)도 하단 탭을
+	// 유지한다 → /seeker/me 및 그 하위 경로 전체에서 노출.
 	const showNav =
 		path === "/seeker" ||
 		path === "/seeker/chats" ||
 		path === "/seeker/community" ||
-		path === "/seeker/me";
+		path === "/seeker/me" ||
+		path.startsWith("/seeker/me/");
 	return (
 		<>
 			<Content withBottomNav={showNav}>{children}</Content>
@@ -60,25 +70,24 @@ export function SeekerNav({ children }: { children: ReactNode }) {
 }
 
 // ---- 구인자 ----------------------------------------------------------------
-export function EmployerNav({
-	children,
-	gated = false,
-}: {
-	children: ReactNode;
-	gated?: boolean;
-}) {
+export function EmployerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const router = useRouter();
-	// 미승인 구인자는 하단 탭도 숨긴다 — 승인 대기 화면만 보게 한다.
+	// 하단 탭은 구인자 주요 라우트에서 항상 노출한다(승인 상태와 무관).
+	// 광고 안내·프로모션·성과 분석은 대시보드 퀵링크로만 닿는 하위 페이지지만, 하단 탭이
+	// 사라지면 모바일에서 되돌아갈 길이 없어 함께 노출한다("내 공고" 활성 유지).
+	// 광고 안내는 이 목록에서 빠져 있어 실제로 그 막다른 길이 났었다.
 	const showNav =
-		!gated &&
-		(path === "/employer" ||
-			path === "/employer/new" ||
-			path === "/employer/me" ||
-			path.startsWith("/employer/settings"));
+		path === "/employer" ||
+		path === "/employer/new" ||
+		path === "/employer/me" ||
+		path.startsWith("/employer/ad-guide") ||
+		path.startsWith("/employer/promotions") ||
+		path.startsWith("/employer/analytics") ||
+		path.startsWith("/employer/settings");
 	let value = "postings";
 	if (path === "/employer/me") {
-		value = "me";
+		value = "business";
 	} else if (path.startsWith("/employer/settings")) {
 		value = "settings";
 	} else if (path === "/employer/new") {
@@ -89,8 +98,12 @@ export function EmployerNav({
 			router.push("/employer/new");
 		} else if (v === "settings") {
 			router.push("/employer/settings" as Route);
-		} else if (v === "me") {
+		} else if (v === "business") {
 			router.push("/employer/me");
+		} else if (v === "me") {
+			// 개인 계정은 role 공용 페이지(/seeker/me)를 재사용한다. 라우트
+			// 세그먼트가 달라 SeekerNav 셸로 전환되는 것은 의도된 동작이다.
+			router.push("/seeker/me");
 		} else {
 			router.push("/employer");
 		}
@@ -103,8 +116,9 @@ export function EmployerNav({
 					<BottomNav
 						items={[
 							{ value: "postings", label: "내 공고", icon: ClipboardListIcon },
-							{ value: "post", label: "등록", icon: PlusIcon },
-							{ value: "settings", label: "설정", icon: SettingsIcon },
+							{ value: "business", label: "업체 정보", icon: StoreIcon },
+							{ value: "post", label: "공고 등록", icon: PlusIcon },
+							{ value: "settings", label: "조직 설정", icon: ShieldIcon },
 							{ value: "me", label: "내 정보", icon: UserIcon },
 						]}
 						onChange={go}
@@ -120,8 +134,13 @@ export function EmployerNav({
 const MOD_ROUTES: Record<string, Route> = {
 	queue: "/moderator",
 	reports: "/moderator/reports",
+	employers: "/moderator/employers",
 	users: "/moderator/users",
+	adProducts: "/moderator/ad-products",
+	reviews: "/moderator/reviews",
 };
+// 게시물·고객센터·금칙어는 하단 탭이 아니라 "더보기" 시트에서 Link로 직접 이동하므로
+// 여기(탭 클릭 → router.push 경로 표) 항목이 필요 없다.
 const MOD_DETAIL_RE = /^\/moderator\/(?:queue|reports|users)\/[^/]+/;
 
 export function ModeratorShell({ children }: { children: ReactNode }) {
@@ -151,17 +170,37 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 	const isDetail = MOD_DETAIL_RE.test(path);
 	if (isDetail) {
 		return (
-			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+			<div
+				className={cn(
+					"mx-auto flex min-h-0 w-full flex-1 flex-col",
+					APP_CONTENT_WIDTH
+				)}
+			>
 				<Content>{children}</Content>
 			</div>
 		);
 	}
 
+	// 하단 탭은 검수·신고·사용자·광고 상품 4개만 노출하고, 나머지 목적지(업소 승인·팀 합류
+	// 승인·결제 관리·게시물·고객센터·금칙어)는 "더보기" 시트로 접는다 → 그 경로에선 "more" 활성.
 	let tab = "queue";
 	if (path.startsWith("/moderator/reports")) {
 		tab = "reports";
 	} else if (path.startsWith("/moderator/users")) {
 		tab = "users";
+	} else if (path.startsWith("/moderator/reviews")) {
+		tab = "reviews";
+	} else if (path.startsWith("/moderator/ad-products")) {
+		tab = "adProducts";
+	} else if (
+		path.startsWith("/moderator/employers") ||
+		path.startsWith("/moderator/team-invites") ||
+		path.startsWith("/moderator/payments") ||
+		path.startsWith("/moderator/content") ||
+		path.startsWith("/moderator/support") ||
+		path.startsWith("/moderator/banned-words")
+	) {
+		tab = "more";
 	}
 	const go = (v: string) => {
 		clearSelection();
@@ -177,7 +216,12 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 
 	return (
 		<>
-			<div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+			<div
+				className={cn(
+					"mx-auto flex min-h-0 w-full flex-1 flex-col",
+					APP_CONTENT_WIDTH
+				)}
+			>
 				<ConsoleTop
 					counts={{
 						queue: queue.length,
@@ -198,7 +242,7 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 				) : null}
 			</div>
 			<NavBar>
-				<ModTabs setTab={go} tab={tab} />
+				<ModTabs setTab={go} showEmployers showReviews tab={tab} />
 			</NavBar>
 			{toast ? <ConsoleToast message={toast} /> : null}
 		</>

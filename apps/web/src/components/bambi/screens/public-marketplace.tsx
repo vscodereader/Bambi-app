@@ -40,10 +40,9 @@ export function PublicMarketplaceScreen() {
 		setFilters
 	);
 	const openJob = (job: Job) => router.push(`/seeker/jobs/${job.id}` as Route);
-	const startChat = (job: Job) =>
-		router.push(`/seeker/jobs/${job.id}/chat?entry=public` as Route);
 	const headerSearch = (
-		<div className="relative w-64">
+		// seeker 헤더와 같은 이유로 축소 — 공개 셸도 같은 5개 내비를 쓰므로 폭 압박이 동일하다.
+		<div className="relative w-48">
 			<Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
 			<Input
 				aria-label="업종, 지역, 공고 제목 검색"
@@ -107,7 +106,6 @@ export function PublicMarketplaceScreen() {
 					</div>
 					<VisualJobExposureSections
 						jobs={jobs}
-						onChat={startChat}
 						onOpen={openJob}
 						sections={sections}
 					/>

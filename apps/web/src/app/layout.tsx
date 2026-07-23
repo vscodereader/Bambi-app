@@ -1,19 +1,22 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
+import { JsonLd } from "@/components/bambi/json-ld";
 import { Providers } from "@/components/providers";
+import { BAMBI_COMPANY } from "@/lib/bambi/company";
+import { bambiSiteJsonLd, SITE_DESCRIPTION, SITE_TITLE } from "@/lib/bambi/seo";
 import "../index.css";
 
 export const metadata: Metadata = {
-	metadataBase: new URL("https://bambialba.com"),
-	title: "밤비 - 유흥·접객 | 룸알바·구인구직 사이트",
-	description:
-		"밤비는 유흥·접객 구인구직 플랫폼입니다. 룸알바, 밤알바, 노래방, 라운지 등 고소득 채용 정보를 1:1 채팅으로 빠르고 안전하게 연결합니다.",
+	metadataBase: new URL(BAMBI_COMPANY.url),
+	title: SITE_TITLE,
+	description: SITE_DESCRIPTION,
 	keywords: [
 		"유흥알바",
 		"밤비",
 		"밤알바",
 		"룸알바",
-		"노래방알바",
-		"라운지알바",
+		"노래주점알바",
+		"룸싸롱알바",
 		"유흥구인구직",
 		"고소득알바",
 		"여성알바",
@@ -24,20 +27,18 @@ export const metadata: Metadata = {
 	openGraph: {
 		type: "website",
 		locale: "ko_KR",
-		siteName: "밤비",
-		url: "https://bambialba.com",
-		title: "밤비 - 유흥·접객 | 룸알바·구인구직 사이트",
-		description:
-			"밤비는 유흥·접객 구인구직 플랫폼입니다. 룸알바, 밤알바, 노래방, 라운지 등 고소득 채용 정보를 1:1 채팅으로 빠르고 안전하게 연결합니다.",
-		// TODO: 실제 OG 이미지 PNG(1200x630) 전달받으면 아래 주석 해제. 현재 public/og-image.png는 임시 placeholder.
-		// images: [
-		// 	{
-		// 		url: "/og-image.png",
-		// 		width: 1200,
-		// 		height: 630,
-		// 		alt: "밤비 - 유흥·접객 룸알바·구인구직 사이트",
-		// 	},
-		// ],
+		siteName: BAMBI_COMPANY.serviceName,
+		url: BAMBI_COMPANY.url,
+		title: SITE_TITLE,
+		description: SITE_DESCRIPTION,
+		images: [
+			{
+				url: "/og-image.png",
+				width: 1200,
+				height: 630,
+				alt: "밤비 - 유흥·접객 룸알바·구인구직 사이트",
+			},
+		],
 	},
 };
 
@@ -55,7 +56,22 @@ export default function RootLayout({
 	return (
 		<html lang="ko">
 			<body>
+				<JsonLd data={bambiSiteJsonLd} />
 				<Providers>{children}</Providers>
+				{/* Vercel은 프리뷰·개발 배포도 NODE_ENV=production이라, 프로덕션 배포에서만
+				    참인 VERCEL_ENV로 게이팅해 dev/preview 트래픽이 GA에 섞이지 않게 한다.
+				    루트 레이아웃은 서버 컴포넌트라 이 값이 런타임에 읽힌다. */}
+				{process.env.VERCEL_ENV === "production" && (
+					<>
+						<Script src="https://www.googletagmanager.com/gtag/js?id=G-HNVZKKB0NX" />
+						<Script id="gtag-init">
+							{`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-HNVZKKB0NX');`}
+						</Script>
+					</>
+				)}
 			</body>
 		</html>
 	);

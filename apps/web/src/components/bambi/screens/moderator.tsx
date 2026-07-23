@@ -9,13 +9,35 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
+import {
+	Sheet,
+	SheetClose,
+	SheetContent,
+	SheetTitle,
+	SheetTrigger,
+} from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
+import type { Route } from "next";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+	COMMUNITY_BOARDS,
+	communityAuthorName,
+	formatCommunityDate,
+} from "@/lib/bambi/community";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
+import {
+	accountStatusLabel,
+	jobPostStatusLabel,
+	reviewStatusLabel,
+	userRoleLabel,
+} from "@/lib/bambi/moderation-labels";
 import { scan } from "@/lib/bambi/scanner";
 import type {
+	CommunityTargetStatus,
 	ManagedUser,
 	QueueItem,
 	Report,
@@ -30,10 +52,14 @@ import {
 	AlertCircle,
 	CheckIcon,
 	ChevronRightIcon,
+	ClipboardListIcon,
 	FlagIcon,
+	MoreIcon,
 	ShieldIcon,
 	SortIcon,
+	StarIcon,
 	UserIcon,
+	XIcon,
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
 import type {
@@ -803,8 +829,466 @@ function PartyBox({
 				<div className="truncate font-bold text-[13.5px] text-foreground">
 					{name}
 				</div>
-				<div className="text-[11px] text-muted-foreground">{role}</div>
+				<div className="truncate text-[11px] text-muted-foreground">{role}</div>
 			</div>
+		</div>
+	);
+}
+
+// ---- 신고 대상 맥락(targetType별 분기 렌더) --------------------------------
+// 상태·역할 라벨은 공용 moderation-labels 모듈에서 소비한다(원값 노출 금지·중립 폴백).
+const formatMessageTime = (value: Date | string) =>
+	new Intl.DateTimeFormat("ko-KR", {
+		dateStyle: "short",
+		timeStyle: "short",
+	}).format(new Date(value));
+
+// 대상 맥락 카드의 공통 껍데기(제목 + 회색 박스). 기존 "신고된 대화" 블록과 룩앤필 통일.
+function ContextSection({
+	title,
+	children,
+}: {
+	title: string;
+	children: ReactNode;
+}) {
+	return (
+		<div>
+			<div className="mb-2 font-bold text-[13px] text-foreground">{title}</div>
+			<div className="flex flex-col gap-2.5 rounded-[14px] border border-border bg-secondary p-[14px]">
+				{children}
+			</div>
+		</div>
+	);
+}
+
+function ContextField({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="flex flex-col gap-0.5">
+			<div className="text-[11px] text-muted-foreground">{label}</div>
+			<div className="text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
+				{value}
+			</div>
+		</div>
+	);
+}
+
+function JobPostContext({
+	jobPost,
+}: {
+	jobPost: {
+		description: string;
+		organizationDisplayName: string;
+		rejectionReason: string | null;
+		status: string;
+		title: string;
+	};
+}) {
+	return (
+		<ContextSection title="신고된 공고">
+			<ContextField label="제목" value={jobPost.title} />
+			<ContextField label="업소" value={jobPost.organizationDisplayName} />
+			<ContextField label="상태" value={jobPostStatusLabel(jobPost.status)} />
+			<div className="flex flex-col gap-0.5">
+				<div className="text-[11px] text-muted-foreground">공고 본문</div>
+				<div className="line-clamp-4 text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
+					{jobPost.description}
+				</div>
+			</div>
+			{jobPost.rejectionReason ? (
+				<ContextField label="반려 사유" value={jobPost.rejectionReason} />
+			) : null}
+		</ContextSection>
+	);
+}
+
+function ReviewContext({
+	review,
+}: {
+	review: { body: string; rating: number; status: string };
+}) {
+	const filled = Math.max(0, Math.min(5, review.rating));
+	return (
+		<ContextSection title="신고된 후기">
+			<div className="flex items-center gap-2">
+				<span className="font-bold text-[13.5px]">
+					<span className="text-amber-500">{"★".repeat(filled)}</span>
+					<span className="text-muted-foreground">
+						{"★".repeat(5 - filled)}
+					</span>
+				</span>
+				<span className="text-[12px] text-muted-foreground">
+					{reviewStatusLabel(review.status)}
+				</span>
+			</div>
+			<div className="whitespace-pre-wrap text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
+				{review.body}
+			</div>
+		</ContextSection>
+	);
+}
+
+function UserContext({
+	user,
+}: {
+	user: {
+		displayName: string | null;
+		isPhoneVerified: boolean;
+		role: string;
+		status: string;
+	};
+}) {
+	return (
+		<ContextSection title="신고된 사용자">
+			<ContextField label="표시명" value={user.displayName ?? "이름 없음"} />
+			<ContextField label="역할" value={userRoleLabel(user.role)} />
+			<ContextField label="계정 상태" value={accountStatusLabel(user.status)} />
+			<ContextField
+				label="전화 인증"
+				value={user.isPhoneVerified ? "인증 완료" : "미인증"}
+			/>
+		</ContextSection>
+	);
+}
+
+function ChatRoomContext({
+	chatRoom,
+	isBlocking,
+	onBlock,
+}: {
+	chatRoom: {
+		id: string;
+		isBlocked: boolean;
+		jobPostTitle: string;
+		recentMessages: {
+			body: string;
+			createdAt: Date | string;
+			id: string;
+			senderUserId: string;
+		}[];
+	};
+	isBlocking: boolean;
+	onBlock?: (chatRoomId: string, isBlocked: boolean, reason: string) => void;
+}) {
+	const [reason, setReason] = useState("");
+	const nextBlocked = !chatRoom.isBlocked;
+	const canSubmit = reason.trim().length >= 2 && !isBlocking;
+	const reasonId = `chat-room-block-reason-${chatRoom.id}`;
+
+	return (
+		<ContextSection title="신고된 대화방">
+			<div className="flex items-center gap-2">
+				<span className="min-w-0 flex-1 truncate font-bold text-[13.5px] text-foreground">
+					{chatRoom.jobPostTitle}
+				</span>
+				<Badge tone={chatRoom.isBlocked ? "danger" : "success"}>
+					{chatRoom.isBlocked ? "차단됨" : "정상"}
+				</Badge>
+			</div>
+			<div className="flex flex-col gap-1.5">
+				<div className="text-[11px] text-muted-foreground">
+					최근 메시지 {chatRoom.recentMessages.length}건
+				</div>
+				{chatRoom.recentMessages.length ? (
+					chatRoom.recentMessages.map((message) => (
+						<div
+							className="rounded-[10px] border border-border bg-card px-2.5 py-2"
+							key={message.id}
+						>
+							<div className="mb-0.5 flex items-center justify-between gap-2 text-[10.5px] text-[color:var(--text-subtle)]">
+								<span className="truncate">
+									{message.senderUserId.slice(0, 6)}
+								</span>
+								<span className="whitespace-nowrap">
+									{formatMessageTime(message.createdAt)}
+								</span>
+							</div>
+							<div className="text-[13px] text-[color:var(--text-default)] leading-[1.45]">
+								{message.body}
+							</div>
+						</div>
+					))
+				) : (
+					<div className="text-[12.5px] text-muted-foreground">
+						표시할 메시지가 없어요.
+					</div>
+				)}
+			</div>
+			{onBlock ? (
+				<div className="flex flex-col gap-2 border-border border-t pt-2.5">
+					<label
+						className="font-bold text-[12.5px] text-foreground"
+						htmlFor={reasonId}
+					>
+						{nextBlocked ? "방 차단" : "차단 해제"} 사유 (2자 이상)
+					</label>
+					<textarea
+						className="min-h-[72px] w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 text-[13.5px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+						id={reasonId}
+						onChange={(event) => setReason(event.target.value)}
+						placeholder="조치 사유는 감사 로그에 남아요."
+						value={reason}
+					/>
+					<Button
+						block
+						disabled={!canSubmit}
+						onClick={() => onBlock(chatRoom.id, nextBlocked, reason.trim())}
+						size="lg"
+						variant={nextBlocked ? "danger" : "secondary"}
+					>
+						{nextBlocked ? "방 차단" : "차단 해제"}
+					</Button>
+				</div>
+			) : null}
+		</ContextSection>
+	);
+}
+
+// 신고 대상 맥락을 targetType별로 분기 렌더한다. 구조화 맥락이 없으면(채팅 메시지·프리뷰
+// 목업) null을 반환하고, 호출부가 기존 "신고된 대화" 스레드 블록으로 폴백한다.
+function ReportTargetContextView({
+	item,
+	isBlockingChatRoom = false,
+	onBlockChatRoom,
+	onModerateCommunity,
+}: {
+	item: Report;
+	isBlockingChatRoom?: boolean;
+	onBlockChatRoom?: (
+		chatRoomId: string,
+		isBlocked: boolean,
+		reason: string
+	) => void;
+	onModerateCommunity?: (
+		report: Report,
+		status: CommunityTargetStatus,
+		reason: string
+	) => void;
+}) {
+	// 커뮤니티 글·댓글은 미리보기와 숨김/삭제 조치를 함께 제공하는 전용 패널로 렌더한다.
+	// 컨텍스트가 유실돼도 패널이 "대상을 찾을 수 없어요"를 안내하므로 targetContext보다 먼저 본다.
+	if (item.communityKind) {
+		return (
+			<CommunityTargetPanel onModerate={onModerateCommunity} report={item} />
+		);
+	}
+	const ctx = item.targetContext;
+	if (!ctx) {
+		return null;
+	}
+	if ("jobPost" in ctx) {
+		return <JobPostContext jobPost={ctx.jobPost} />;
+	}
+	if ("review" in ctx) {
+		return <ReviewContext review={ctx.review} />;
+	}
+	if ("user" in ctx) {
+		return <UserContext user={ctx.user} />;
+	}
+	if ("chatRoom" in ctx) {
+		return (
+			<ChatRoomContext
+				chatRoom={ctx.chatRoom}
+				isBlocking={isBlockingChatRoom}
+				onBlock={onBlockChatRoom}
+			/>
+		);
+	}
+	return null;
+}
+
+// ---- 커뮤니티 대상 미리보기·조치 ------------------------------------------
+// 현재 콘텐츠 상태별 배지(라벨·톤)와 노출 조치 매트릭스.
+const COMMUNITY_STATUS_BADGE: Record<
+	CommunityTargetStatus,
+	{ label: string; tone: "neutral" | "pending" | "danger" }
+> = {
+	published: { label: "게시 중", tone: "neutral" },
+	hidden: { label: "숨김", tone: "pending" },
+	deleted: { label: "삭제됨", tone: "danger" },
+};
+
+interface CommunityActionConfig {
+	label: string;
+	status: CommunityTargetStatus;
+	tone?: "danger";
+}
+
+const COMMUNITY_ACTIONS: Record<
+	CommunityTargetStatus,
+	CommunityActionConfig[]
+> = {
+	published: [
+		{ label: "숨기기", status: "hidden" },
+		{ label: "삭제", status: "deleted", tone: "danger" },
+	],
+	hidden: [
+		{ label: "복구", status: "published" },
+		{ label: "삭제", status: "deleted", tone: "danger" },
+	],
+	deleted: [{ label: "복구", status: "published" }],
+};
+
+// 게시판 키를 사람이 읽는 라벨로. 미지의 키는 원본을 그대로 노출한다.
+const getCommunityBoardLabel = (board: string): string =>
+	COMMUNITY_BOARDS.find((item) => item.key === board)?.label ?? board;
+
+function CommunityDeleteSheet({
+	kindLabel,
+	reason,
+	onCancel,
+	onConfirm,
+}: {
+	kindLabel: string;
+	reason: string;
+	onCancel: () => void;
+	onConfirm: () => void;
+}) {
+	return (
+		<div className="absolute inset-0 z-20 flex flex-col justify-end">
+			<button
+				aria-label="닫기"
+				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
+				onClick={onCancel}
+				type="button"
+			/>
+			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
+				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
+					{kindLabel}을 삭제할까요?
+				</h2>
+				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
+					삭제하면 사용자에게 더 이상 보이지 않아요. 입력한 사유는 기록에
+					남아요.
+				</p>
+				<div className="mb-4 rounded-[14px] bg-secondary px-3 py-2.5 text-[13px] text-[color:var(--text-default)] leading-[1.5]">
+					{reason}
+				</div>
+				<div className="grid grid-cols-2 gap-2.5">
+					<Button block onClick={onCancel} size="lg" variant="secondary">
+						취소
+					</Button>
+					<Button block onClick={onConfirm} size="lg" variant="danger">
+						삭제하기
+					</Button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function CommunityTargetPanel({
+	report,
+	onModerate,
+}: {
+	report: Report;
+	onModerate?: (
+		report: Report,
+		status: CommunityTargetStatus,
+		reason: string
+	) => void;
+}) {
+	const target = report.communityTarget;
+	const [reason, setReason] = useState("");
+	const [pendingDelete, setPendingDelete] = useState(false);
+
+	// 커뮤니티 신고인데 대상 컨텍스트가 유실된 경우: 조치 없이 안내만.
+	if (!target) {
+		return (
+			<div className="flex items-center gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
+				<span className="inline-flex size-[18px] text-muted-foreground">
+					<AlertCircle />
+				</span>
+				<span className="text-[13px] text-muted-foreground">
+					대상 콘텐츠를 찾을 수 없어요.
+				</span>
+			</div>
+		);
+	}
+
+	const kindLabel = target.kind === "post" ? "글" : "댓글";
+	const titleLabel =
+		target.kind === "comment" ? `원글: ${target.title}` : target.title;
+	const statusBadge = COMMUNITY_STATUS_BADGE[target.status];
+	const actions = COMMUNITY_ACTIONS[target.status];
+	const canModerate = reason.trim().length >= 2 && Boolean(onModerate);
+	const reasonId = `community-reason-${target.id}`;
+
+	const runAction = (status: CommunityTargetStatus) => {
+		const trimmed = reason.trim();
+		if (!(onModerate && trimmed)) {
+			return;
+		}
+		onModerate(report, status, trimmed);
+	};
+
+	return (
+		<div className="flex flex-col gap-3">
+			<div className="font-bold text-[13px] text-foreground">
+				신고된 커뮤니티 {kindLabel}
+			</div>
+			<div className="flex flex-col gap-2.5 rounded-[14px] border border-border bg-secondary p-[14px]">
+				<div className="flex flex-wrap items-center gap-2">
+					<Badge tone="neutral">{getCommunityBoardLabel(target.board)}</Badge>
+					<Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
+					<span className="ml-auto text-[11.5px] text-[color:var(--text-subtle)]">
+						{formatCommunityDate(target.createdAt)}
+					</span>
+				</div>
+				<div className="font-extrabold text-[15px] text-foreground leading-[1.4]">
+					{titleLabel}
+				</div>
+				<p className="m-0 whitespace-pre-wrap text-[13px] text-[color:var(--text-default)] leading-[1.6]">
+					{target.bodyPreview}
+				</p>
+				<div className="text-[11.5px] text-muted-foreground">
+					작성자 {communityAuthorName(target.authorName)}
+				</div>
+			</div>
+			<div className="flex flex-col gap-2">
+				<label
+					className="font-bold text-[13px] text-foreground"
+					htmlFor={reasonId}
+				>
+					조치 사유
+				</label>
+				<textarea
+					className="min-h-[72px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+					id={reasonId}
+					maxLength={500}
+					onChange={(event) => setReason(event.target.value)}
+					placeholder="조치 사유를 입력하면 기록에 남아요."
+					value={reason}
+				/>
+				<div className="flex flex-wrap gap-2">
+					{actions.map((action) => (
+						<Button
+							disabled={!canModerate}
+							key={action.status}
+							onClick={() => {
+								if (action.status === "deleted") {
+									setPendingDelete(true);
+									return;
+								}
+								runAction(action.status);
+							}}
+							size="sm"
+							variant={action.tone === "danger" ? "danger" : "secondary"}
+						>
+							{action.label}
+						</Button>
+					))}
+				</div>
+			</div>
+			{pendingDelete ? (
+				<CommunityDeleteSheet
+					kindLabel={kindLabel}
+					onCancel={() => setPendingDelete(false)}
+					onConfirm={() => {
+						setPendingDelete(false);
+						runAction("deleted");
+					}}
+					reason={reason.trim()}
+				/>
+			) : null}
 		</div>
 	);
 }
@@ -814,13 +1298,46 @@ export function ReportDetail({
 	onBack,
 	onResolve,
 	onSanction,
+	onBlockChatRoom,
+	isBlockingChatRoom = false,
+	onModerateCommunity,
 }: {
 	item: Report;
 	onBack: () => void;
 	onResolve: (id: string, action: "dismiss" | "act") => void;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
+	onBlockChatRoom?: (
+		chatRoomId: string,
+		isBlocked: boolean,
+		reason: string
+	) => void;
+	isBlockingChatRoom?: boolean;
+	onModerateCommunity?: (
+		report: Report,
+		status: CommunityTargetStatus,
+		reason: string
+	) => void;
 }) {
 	const [act, setAct] = useState(false);
+	// 구조화된 대상 맥락(공고·후기·사용자·대화방)이 있으면 전용 카드로, 없으면(채팅 메시지·
+	// 프리뷰 목업) 기존 스레드 블록으로 폴백한다.
+	const ctx = item.targetContext;
+	const hasStructuredContext = Boolean(
+		ctx &&
+			("jobPost" in ctx ||
+				"review" in ctx ||
+				"user" in ctx ||
+				"chatRoom" in ctx)
+	);
+	// 실데이터: 대상이 사용자면 실제 사용자 id로 제재한다. 그 외 유형(공고·후기·채팅 등)은
+	// 사용자 제재 액션을 숨기고 사용자 관리로 안내한다. 프리뷰 목업(targetType 없음)은 기존
+	// 합성 id 동작을 유지한다.
+	let sanctionUserId: string | null = null;
+	if (!item.targetType) {
+		sanctionUserId = `u-${item.id}`;
+	} else if (item.targetType === "user" && item.targetId) {
+		sanctionUserId = item.targetId;
+	}
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="신고 검토" />
@@ -842,41 +1359,50 @@ export function ReportDetail({
 						role={`신고자 · ${item.reporterRole}`}
 					/>
 				</div>
-				<div>
-					<div className="mb-2 font-bold text-[13px] text-foreground">
-						신고된 대화
-					</div>
-					<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
-						{item.thread.map((m) => (
-							<div
-								className={cn(
-									"max-w-[85%]",
-									m.mine ? "self-end" : "self-start"
-								)}
-								key={`${m.mine ? "me" : "them"}-${m.text}`}
-							>
+				{item.communityKind || hasStructuredContext ? (
+					<ReportTargetContextView
+						isBlockingChatRoom={isBlockingChatRoom}
+						item={item}
+						onBlockChatRoom={onBlockChatRoom}
+						onModerateCommunity={onModerateCommunity}
+					/>
+				) : (
+					<div>
+						<div className="mb-2 font-bold text-[13px] text-foreground">
+							신고된 대화
+						</div>
+						<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
+							{item.thread.map((m) => (
 								<div
 									className={cn(
-										"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
-										m.mine ? "text-right" : "text-left"
+										"max-w-[85%]",
+										m.mine ? "self-end" : "self-start"
 									)}
+									key={`${m.mine ? "me" : "them"}-${m.text}`}
 								>
-									{m.mine ? item.reporter : item.target}
+									<div
+										className={cn(
+											"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
+											m.mine ? "text-right" : "text-left"
+										)}
+									>
+										{m.mine ? item.reporter : item.target}
+									</div>
+									<div
+										className={cn(
+											"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
+											m.mine
+												? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
+												: "rounded-bl-[4px] bg-ink-800 text-white"
+										)}
+									>
+										{m.text}
+									</div>
 								</div>
-								<div
-									className={cn(
-										"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
-										m.mine
-											? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
-											: "rounded-bl-[4px] bg-ink-800 text-white"
-									)}
-								>
-									{m.text}
-								</div>
-							</div>
-						))}
+							))}
+						</div>
 					</div>
-				</div>
+				)}
 				{item.status === "open" ? null : (
 					<div className="flex items-center gap-2 rounded-[14px] bg-[color:var(--status-success-bg)] p-[14px] text-[color:var(--status-success-fg)]">
 						<span className="inline-flex size-[18px]">
@@ -887,25 +1413,49 @@ export function ReportDetail({
 				)}
 			</div>
 			{item.status === "open" ? (
-				<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
-					<Button
-						block
-						onClick={() => onResolve(item.id, "dismiss")}
-						size="lg"
-						variant="secondary"
-					>
-						기각
-					</Button>
-					<Button block onClick={() => setAct(true)} size="lg" variant="danger">
-						제재 적용
-					</Button>
+				<div className="border-border border-t px-6 pt-3 pb-1.5">
+					{sanctionUserId ? null : (
+						<p className="m-0 mb-2.5 text-[12px] text-muted-foreground leading-[1.5]">
+							이 신고는 사용자 계정이 대상이 아니에요. 사용자 제재가 필요하면
+							사용자 관리에서 진행해 주세요.
+						</p>
+					)}
+					<div className="grid grid-cols-2 gap-2.5">
+						<Button
+							block
+							onClick={() => onResolve(item.id, "dismiss")}
+							size="lg"
+							variant="secondary"
+						>
+							기각
+						</Button>
+						{sanctionUserId ? (
+							<Button
+								block
+								onClick={() => setAct(true)}
+								size="lg"
+								variant="danger"
+							>
+								제재 적용
+							</Button>
+						) : (
+							<Button
+								block
+								onClick={() => onResolve(item.id, "act")}
+								size="lg"
+								variant="primary"
+							>
+								조치 완료
+							</Button>
+						)}
+					</div>
 				</div>
 			) : null}
-			{act ? (
+			{act && sanctionUserId ? (
 				<SanctionSheet
 					onCancel={() => setAct(false)}
 					onPick={(status, label) => {
-						onSanction(`u-${item.id}`, status, label);
+						onSanction(sanctionUserId, status, label);
 						onResolve(item.id, "act");
 					}}
 					target={item.target}
@@ -1059,6 +1609,138 @@ function SanctionBtn({
 	);
 }
 
+// 제재 선택지(경고/정지)별 기본 사유·라벨 정의. 사용자 상세와 신고 상세 양쪽에서
+// 같은 기본 문구를 프리필하기 위해 공용화한다. defaultReason은 사유 입력 textarea에
+// 미리 채워지며 운영자가 자유롭게 수정할 수 있다.
+interface SanctionChoice {
+	confirmLabel: string;
+	danger: boolean;
+	defaultReason: string;
+	desc: string;
+	status: UserStatus;
+	title: string;
+	tone: "pending" | "danger";
+}
+
+const SANCTION_CHOICES: SanctionChoice[] = [
+	{
+		confirmLabel: "경고 보내기",
+		danger: false,
+		defaultReason: "정책 안내와 함께 경고를 보냈어요",
+		desc: "정책 안내와 함께 경고를 1회 누적해요",
+		status: "warned",
+		title: "경고 보내기",
+		tone: "pending",
+	},
+	{
+		confirmLabel: "이용 정지",
+		danger: true,
+		defaultReason: "정책 위반이 확인되어 이용을 정지했어요",
+		desc: "기간 동안 공고·채팅을 막아요",
+		status: "suspended",
+		title: "이용 정지 (7일)",
+		tone: "danger",
+	},
+];
+
+// 사유 작성 시트(공용). 일괄 처리·사용자 상세 제재·신고 상세 제재가 모두 이 컴포넌트를
+// 재사용한다. 제목/설명/사유 라벨/기본 문구/확정 버튼 문구를 주입받고, 사유 textarea는
+// defaultReason으로 프리필한 뒤 최소 길이(minLength, 기본 2자)를 만족해야 확정된다.
+// positioning="fixed"는 document.body로 포털된 일괄 시트(전체 화면 중앙 정렬)용,
+// "absolute"는 콘솔 컨테이너 내부(사용자 상세·신고 상세)에서 부모 relative 박스를 덮는 시트용.
+function ReasonConfirmSheet({
+	confirmLabel,
+	danger = false,
+	defaultReason,
+	description,
+	busyLabel = "처리 중",
+	isApplying = false,
+	minLength = 2,
+	placeholder,
+	positioning = "fixed",
+	reasonFieldId,
+	reasonLabel = "처리 사유",
+	title,
+	onCancel,
+	onConfirm,
+}: {
+	confirmLabel: string;
+	danger?: boolean;
+	defaultReason: string;
+	description: ReactNode;
+	busyLabel?: string;
+	isApplying?: boolean;
+	minLength?: number;
+	placeholder?: string;
+	positioning?: "fixed" | "absolute";
+	reasonFieldId: string;
+	reasonLabel?: string;
+	title: string;
+	onCancel: () => void;
+	onConfirm: (reason: string) => void;
+}) {
+	const [reason, setReason] = useState(defaultReason);
+	const canConfirm = reason.trim().length >= minLength && !isApplying;
+	const fixed = positioning === "fixed";
+
+	return (
+		<div
+			className={cn(
+				"inset-0 flex flex-col justify-end",
+				fixed ? "fixed z-50" : "absolute z-20"
+			)}
+		>
+			<button
+				aria-label="닫기"
+				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
+				onClick={onCancel}
+				type="button"
+			/>
+			<div
+				className={cn(
+					"relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]",
+					fixed && "mx-auto w-full max-w-[520px]"
+				)}
+			>
+				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
+					{title}
+				</h2>
+				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
+					{description}
+				</p>
+				<label
+					className="mb-2 block font-bold text-[13px] text-foreground"
+					htmlFor={reasonFieldId}
+				>
+					{reasonLabel}
+				</label>
+				<textarea
+					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+					id={reasonFieldId}
+					onChange={(event) => setReason(event.target.value)}
+					placeholder={placeholder ?? defaultReason}
+					value={reason}
+				/>
+				<div className="mt-4 grid grid-cols-2 gap-2.5">
+					<Button block onClick={onCancel} size="lg" variant="secondary">
+						취소
+					</Button>
+					<Button
+						block
+						className="shadow-none"
+						disabled={!canConfirm}
+						onClick={() => onConfirm(reason.trim())}
+						size="lg"
+						variant={danger ? "danger" : "primary"}
+					>
+						{isApplying ? busyLabel : confirmLabel}
+					</Button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 function SanctionSheet({
 	target,
 	onCancel,
@@ -1068,6 +1750,27 @@ function SanctionSheet({
 	onCancel: () => void;
 	onPick: (status: UserStatus, label: string) => void;
 }) {
+	// 2단계 시트: 1단계에서 경고/정지를 고르면 2단계 사유 작성 시트로 전환한다.
+	// 사유 단계에서 취소하면 1단계(선택)로 돌아가고, 선택 단계에서 취소하면 전체를 닫는다.
+	const [picked, setPicked] = useState<SanctionChoice | null>(null);
+
+	if (picked) {
+		return (
+			<ReasonConfirmSheet
+				confirmLabel={picked.confirmLabel}
+				danger={picked.danger}
+				defaultReason={picked.defaultReason}
+				description={`${target} 님에게 적용돼요`}
+				onCancel={() => setPicked(null)}
+				onConfirm={(reason) => onPick(picked.status, reason)}
+				positioning="absolute"
+				reasonFieldId="report-sanction-reason"
+				reasonLabel="제재 사유"
+				title={picked.title}
+			/>
+		);
+	}
+
 	return (
 		<div className="absolute inset-0 z-20 flex flex-col justify-end">
 			<button
@@ -1084,25 +1787,15 @@ function SanctionSheet({
 					신고가 사실로 확인되면 단계별로 조치해요.
 				</p>
 				<div className="flex flex-col gap-2.5">
-					<SanctionBtn
-						desc="정책 안내와 함께 경고 1회 누적"
-						label="경고 보내기"
-						onClick={() => onPick("warned", "경고를 보냈어요")}
-						tone="pending"
-					/>
-					<SanctionBtn
-						desc="기간 동안 공고·채팅 차단"
-						label="이용 정지 (7일)"
-						onClick={() => onPick("suspended", "이용을 정지했어요")}
-						tone="danger"
-					/>
-					<SanctionBtn
-						desc="계정 즉시 차단"
-						label="영구 차단"
-						onClick={() => onPick("blocked", "계정을 차단했어요")}
-						strong
-						tone="danger"
-					/>
+					{SANCTION_CHOICES.map((choice) => (
+						<SanctionBtn
+							desc={choice.desc}
+							key={choice.status}
+							label={choice.title}
+							onClick={() => setPicked(choice)}
+							tone={choice.tone}
+						/>
+					))}
 				</div>
 				<div className="mt-3">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
@@ -1124,8 +1817,11 @@ export function UserDetail({
 	onSanction: (id: string, status: UserStatus, label: string) => void;
 }) {
 	const c = STATUS_CONF[item.status];
+	// 경고/정지 버튼을 누르면 곧바로 적용하지 않고, 공용 사유 작성 시트를 띄워
+	// 기본 문구가 프리필된 사유를 운영자가 확인·수정한 뒤 확정하게 한다.
+	const [pending, setPending] = useState<SanctionChoice | null>(null);
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
+		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="사용자 상세" />
 			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-2 pb-5">
 				<div className="flex flex-col items-center gap-2.5 py-1 text-center">
@@ -1154,53 +1850,192 @@ export function UserDetail({
 						{item.note}
 					</span>
 				</div>
+				{item.status === "suspended" ? (
+					<div>
+						<div className="mb-2.5 font-bold text-[13px] text-foreground">
+							계정 상태 복구
+						</div>
+						<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
+							현재 이용 정지 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
+							상태로 되돌릴 수 있어요.
+						</p>
+						<Button
+							block
+							leftIcon={<CheckIcon />}
+							onClick={() =>
+								onSanction(item.id, "active", "계정을 정상으로 복구했어요")
+							}
+							size="lg"
+							variant="primary"
+						>
+							정상으로 복구
+						</Button>
+					</div>
+				) : null}
 				<div>
 					<div className="mb-2.5 font-bold text-[13px] text-foreground">
 						제재 적용
 					</div>
 					<div className="flex flex-col gap-2.5">
-						<SanctionBtn
-							desc="정책 안내와 함께 경고를 1회 누적해요"
-							label="경고 보내기"
-							onClick={() => onSanction(item.id, "warned", "경고를 보냈어요")}
-							tone="pending"
-						/>
-						<SanctionBtn
-							desc="기간 동안 공고·채팅을 막아요"
-							label="이용 정지 (7일)"
-							onClick={() =>
-								onSanction(item.id, "suspended", "이용을 정지했어요")
-							}
-							tone="danger"
-						/>
-						<SanctionBtn
-							desc="계정을 즉시 차단하고 모든 공고를 내려요"
-							label="영구 차단"
-							onClick={() =>
-								onSanction(item.id, "blocked", "계정을 차단했어요")
-							}
-							strong
-							tone="danger"
-						/>
+						{SANCTION_CHOICES.map((choice) => (
+							<SanctionBtn
+								desc={choice.desc}
+								key={choice.status}
+								label={choice.title}
+								onClick={() => setPending(choice)}
+								tone={choice.tone}
+							/>
+						))}
 					</div>
 				</div>
 			</div>
+			{pending ? (
+				<ReasonConfirmSheet
+					confirmLabel={pending.confirmLabel}
+					danger={pending.danger}
+					defaultReason={pending.defaultReason}
+					description={`${item.name} 님에게 적용돼요`}
+					onCancel={() => setPending(null)}
+					onConfirm={(reason) => {
+						onSanction(item.id, pending.status, reason);
+						setPending(null);
+					}}
+					positioning="absolute"
+					reasonFieldId={`user-sanction-reason-${item.id}`}
+					reasonLabel="제재 사유"
+					title={pending.title}
+				/>
+			) : null}
 		</div>
 	);
 }
 
 // ---- 콘솔 셸 ---------------------------------------------------------------
+// "더보기" 시트가 노출하는 목적지 — 데스크톱 헤더 nav(승인 관리·광고·결제 그룹,
+// moderator/layout.tsx)를 모바일에서 미러링한다. 하단 평면 탭(검수·신고·사용자·
+// 광고 상품)에 자리가 없어 여기로 접는다. 라우트가 바뀌면 layout.tsx와 함께 갱신.
+const MOD_MORE_GROUPS: {
+	items: { href: Route; label: string }[];
+	label: string;
+}[] = [
+	{
+		label: "승인 관리",
+		items: [
+			{ href: "/moderator/employers", label: "업소 승인" },
+			{ href: "/moderator/team-invites", label: "팀 합류 승인" },
+		],
+	},
+	{
+		label: "광고·결제",
+		items: [
+			{ href: "/moderator/ad-products", label: "광고 상품" },
+			{ href: "/moderator/payments", label: "결제 관리" },
+		],
+	},
+	{
+		label: "콘텐츠·고객센터",
+		items: [
+			{ href: "/moderator/content" as Route, label: "게시물" },
+			{ href: "/moderator/support" as Route, label: "고객센터" },
+			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
+		],
+	},
+	{
+		label: "사이트",
+		items: [
+			{ href: "/moderator/site-settings" as Route, label: "사이트 정보" },
+		],
+	},
+];
+
+// 하단 탭 버튼 공통 톤(평면 탭·더보기 탭 공유).
+function modTabButtonClassName(on: boolean): string {
+	return cn(
+		"flex flex-1 cursor-pointer flex-col items-center gap-1 border-none bg-none px-0 py-1",
+		on ? "text-primary" : "text-[color:var(--text-subtle)]"
+	);
+}
+
+function modTabLabelClassName(on: boolean): string {
+	return cn("text-[10px]", on ? "font-extrabold" : "font-medium");
+}
+
+// "더보기" 탭 — 하단 탭에 담기지 않는 목적지를 시트로 펼친다.
+function ModMoreTab({ active }: { active: boolean }) {
+	const [open, setOpen] = useState(false);
+	const pathname = usePathname();
+	return (
+		<Sheet onOpenChange={setOpen} open={open}>
+			{/* base-ui Trigger가 열림/닫힘을 토글하고 outside-press 대상에서 트리거를
+			    제외하므로, "더보기"를 다시 눌러도 재오픈 레이스 없이 확실히 닫힌다. */}
+			<SheetTrigger className={modTabButtonClassName(active)}>
+				<span className="inline-flex size-6">
+					{open ? <XIcon /> : <MoreIcon />}
+				</span>
+				<span className={modTabLabelClassName(active)}>
+					{open ? "닫기" : "더보기"}
+				</span>
+			</SheetTrigger>
+			<SheetContent>
+				<SheetTitle>더보기</SheetTitle>
+				<div className="mt-5 flex flex-col gap-6">
+					{MOD_MORE_GROUPS.map((group) => (
+						<div className="flex flex-col gap-1" key={group.label}>
+							<p className="px-3 font-bold text-muted-foreground text-xs">
+								{group.label}
+							</p>
+							{group.items.map((item) => {
+								const isActive =
+									pathname === item.href ||
+									pathname.startsWith(`${item.href}/`);
+								return (
+									<SheetClose
+										className={cn(
+											"rounded-lg px-3 py-2.5 text-left font-bold text-sm no-underline",
+											isActive
+												? "bg-muted text-foreground"
+												: "text-foreground hover:bg-muted/50"
+										)}
+										key={item.href}
+										// Link는 <a>라 네이티브 버튼이 아니므로 base-ui에 명시(경고 방지).
+										nativeButton={false}
+										render={<Link href={item.href} />}
+									>
+										{item.label}
+									</SheetClose>
+								);
+							})}
+						</div>
+					))}
+				</div>
+			</SheetContent>
+		</Sheet>
+	);
+}
+
 export function ModTabs({
 	tab,
 	setTab,
+	showEmployers = false,
+	showReviews = false,
 }: {
 	tab: string;
 	setTab: (v: string) => void;
+	// 라이브 운영자 콘솔에서만 광고 상품·더보기 탭을 노출한다(프리뷰 목업은 3탭 유지).
+	showEmployers?: boolean;
+	// 라이브 콘솔에서 후기 관리 탭을 노출한다(PC 상단 메뉴와 동일하게).
+	showReviews?: boolean;
 }) {
 	const items = [
 		{ v: "queue", label: "검수", icon: <ShieldIcon /> },
 		{ v: "reports", label: "신고", icon: <FlagIcon /> },
 		{ v: "users", label: "사용자", icon: <UserIcon /> },
+		...(showReviews
+			? [{ v: "reviews", label: "후기", icon: <StarIcon /> }]
+			: []),
+		...(showEmployers
+			? [{ v: "adProducts", label: "광고 상품", icon: <ClipboardListIcon /> }]
+			: []),
 	];
 	return (
 		<nav className="flex px-2 pt-2.5 pb-2">
@@ -1208,26 +2043,17 @@ export function ModTabs({
 				const on = tab === it.v;
 				return (
 					<button
-						className={cn(
-							"flex flex-1 cursor-pointer flex-col items-center gap-1 border-none bg-none px-0 py-1",
-							on ? "text-primary" : "text-[color:var(--text-subtle)]"
-						)}
+						className={modTabButtonClassName(on)}
 						key={it.v}
 						onClick={() => setTab(it.v)}
 						type="button"
 					>
 						<span className="inline-flex size-6">{it.icon}</span>
-						<span
-							className={cn(
-								"text-[10px]",
-								on ? "font-extrabold" : "font-medium"
-							)}
-						>
-							{it.label}
-						</span>
+						<span className={modTabLabelClassName(on)}>{it.label}</span>
 					</button>
 				);
 			})}
+			{showEmployers ? <ModMoreTab active={tab === "more"} /> : null}
 		</nav>
 	);
 }
@@ -1329,74 +2155,6 @@ function ActionBtn({
 	);
 }
 
-function BulkConfirmSheet({
-	config,
-	count,
-	isApplying,
-	onCancel,
-	onConfirm,
-	reason,
-	setReason,
-}: {
-	config: BulkActionConfig;
-	count: number;
-	isApplying: boolean;
-	onCancel: () => void;
-	onConfirm: () => void;
-	reason: string;
-	setReason: (value: string) => void;
-}) {
-	const reasonId = `bulk-reason-${config.scope}-${config.action}`;
-	const canConfirm = reason.trim().length >= 2 && !isApplying;
-
-	return (
-		<div className="fixed inset-0 z-50 flex flex-col justify-end">
-			<button
-				aria-label="닫기"
-				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
-				onClick={onCancel}
-				type="button"
-			/>
-			<div className="relative mx-auto w-full max-w-[520px] animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
-				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
-					{config.label} 확인
-				</h2>
-				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
-					{count}건 선택됨
-				</p>
-				<label
-					className="mb-2 block font-bold text-[13px] text-foreground"
-					htmlFor={reasonId}
-				>
-					처리 사유
-				</label>
-				<textarea
-					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-					id={reasonId}
-					onChange={(event) => setReason(event.target.value)}
-					placeholder={config.defaultReason}
-					value={reason}
-				/>
-				<div className="mt-4 grid grid-cols-2 gap-2.5">
-					<Button block onClick={onCancel} size="lg" variant="secondary">
-						취소
-					</Button>
-					<Button
-						block
-						className="shadow-none"
-						disabled={!canConfirm}
-						onClick={onConfirm}
-						size="lg"
-						variant={config.tone === "danger" ? "danger" : "primary"}
-					>
-						{isApplying ? "처리 중" : `${config.label} 적용`}
-					</Button>
-				</div>
-			</div>
-		</div>
-	);
-}
-
 export function QueueActionBar({
 	count,
 	isApplying = false,
@@ -1415,18 +2173,13 @@ export function QueueActionBar({
 	const [pendingAction, setPendingAction] = useState<BulkActionConfig | null>(
 		null
 	);
-	const [reason, setReason] = useState("");
 	const actions = BULK_ACTIONS[scope];
-	const openConfirm = (config: BulkActionConfig) => {
-		setPendingAction(config);
-		setReason(config.defaultReason);
-	};
-	const confirm = () => {
+	const confirm = (reason: string) => {
 		if (!pendingAction) {
 			return;
 		}
 
-		onAction(pendingAction.scope, pendingAction.action, reason.trim());
+		onAction(pendingAction.scope, pendingAction.action, reason);
 		setPendingAction(null);
 	};
 
@@ -1442,7 +2195,7 @@ export function QueueActionBar({
 							disabled={isApplying}
 							key={`${action.scope}-${action.action}`}
 							label={action.label}
-							onClick={() => openConfirm(action)}
+							onClick={() => setPendingAction(action)}
 							tone={action.tone}
 						/>
 					))}
@@ -1450,14 +2203,17 @@ export function QueueActionBar({
 			</div>
 			{pendingAction
 				? createPortal(
-						<BulkConfirmSheet
-							config={pendingAction}
-							count={count}
+						<ReasonConfirmSheet
+							confirmLabel={`${pendingAction.label} 적용`}
+							danger={pendingAction.tone === "danger"}
+							defaultReason={pendingAction.defaultReason}
+							description={`${count}건 선택됨`}
 							isApplying={isApplying}
 							onCancel={() => setPendingAction(null)}
 							onConfirm={confirm}
-							reason={reason}
-							setReason={setReason}
+							positioning="fixed"
+							reasonFieldId={`bulk-reason-${pendingAction.scope}-${pendingAction.action}`}
+							title={`${pendingAction.label} 확인`}
 						/>,
 						document.body
 					)

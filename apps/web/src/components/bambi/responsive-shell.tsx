@@ -2,46 +2,80 @@
 
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import {
+	NavigationMenu,
+	NavigationMenuContent,
+	NavigationMenuItem,
+	NavigationMenuLink,
+	NavigationMenuList,
+	NavigationMenuTrigger,
+	navigationMenuTriggerStyle,
+} from "@bambi-app/ui/components/navigation-menu";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useUnreadRoomCount } from "@/lib/bambi/use-unread-room-count";
+import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
 import { BellIcon, ShieldIcon } from "./icons";
+import { SiteFooter } from "./site-footer";
 
 export interface NavItem {
 	href: Route;
 	label: string;
 }
 
-export const DEFAULT_NAV_ITEMS: NavItem[] = [
+// 여러 하위 링크를 하나의 드롭다운으로 접는 nav 그룹.
+export interface NavGroup {
+	items: NavItem[];
+	label: string;
+}
+
+export type NavEntry = NavItem | NavGroup;
+
+function isNavGroup(entry: NavEntry): entry is NavGroup {
+	return "items" in entry;
+}
+
+export const DEFAULT_NAV_ITEMS: NavEntry[] = [
 	{ href: "/seeker", label: "채용정보" },
-	{ href: "/seeker/chats", label: "채팅" },
-	{ href: "/", label: "안전가이드" },
-	{ href: "/employer", label: "업체 인증" },
 	{ href: "/seeker/community", label: "수다방" },
+	{ href: "/support" as Route, label: "고객센터" },
 ];
 
 interface ResponsiveAppShellProps {
 	children: ReactNode;
 	className?: string;
-	// gated: 접근이 제한된 상태(예: 미승인 구인자). nav·상태 배지를 숨기고 로고와
-	// "내 정보"만 남긴다.
-	gated?: boolean;
+	// 데스크톱 헤더 바의 콘텐츠 폭. 기본은 유동 80%, 채용 경로는 고정폭을 주입한다.
+	contentWidthClassName?: string;
 	headerSlot?: ReactNode;
-	navItems?: readonly NavItem[];
+	navItems?: readonly NavEntry[];
 	showDesktopNav?: boolean;
 	variant?: "public" | "seeker" | "employer" | "moderator";
 }
 
-// 현재 경로와 가장 길게 일치하는 nav 항목만 활성 처리한다(/seeker·/seeker/chats 중복 방지).
+// 그룹을 포함한 nav 목록에서 실제 링크만 평탄화한다.
+function collectNavLinks(entries: readonly NavEntry[]): NavItem[] {
+	const links: NavItem[] = [];
+	for (const entry of entries) {
+		if (isNavGroup(entry)) {
+			links.push(...entry.items);
+		} else {
+			links.push(entry);
+		}
+	}
+	return links;
+}
+
+// 현재 경로와 가장 길게 일치하는 nav 링크만 활성 처리한다(/seeker·/seeker/chats 중복 방지).
 function findActiveHref(
 	pathname: string,
-	navItems: readonly NavItem[]
+	entries: readonly NavEntry[]
 ): Route | undefined {
 	let active: NavItem | undefined;
-	for (const item of navItems) {
+	for (const item of collectNavLinks(entries)) {
 		const matches =
 			pathname === item.href ||
 			(item.href !== "/" && pathname.startsWith(`${item.href}/`));
@@ -50,6 +84,98 @@ function findActiveHref(
 		}
 	}
 	return active?.href;
+}
+
+// 데스크톱 헤더 nav 링크·그룹 트리거 공통 톤(밤비 헤더: 굵게·muted).
+function navItemClassName(isActive: boolean): string {
+	return cn(
+		"h-auto px-3 py-2 font-bold text-muted-foreground text-sm no-underline",
+		isActive && "bg-muted text-foreground"
+	);
+}
+
+// 여러 하위 링크를 접는 nav 그룹. NavigationMenu 트리거로 펼친다.
+function NavGroupItem({
+	activeHref,
+	group,
+}: {
+	activeHref?: Route;
+	group: NavGroup;
+}) {
+	const isActive = group.items.some((item) => item.href === activeHref);
+	return (
+		<NavigationMenuItem>
+			<NavigationMenuTrigger className={navItemClassName(isActive)}>
+				{group.label}
+			</NavigationMenuTrigger>
+			<NavigationMenuContent>
+				<ul className="grid w-44 gap-1">
+					{group.items.map((item) => (
+						<li key={`${item.href}-${item.label}`}>
+							<NavigationMenuLink
+								className={cn(
+									"font-bold text-sm",
+									item.href === activeHref && "bg-muted/50"
+								)}
+								render={<Link href={item.href} />}
+							>
+								{item.label}
+							</NavigationMenuLink>
+						</li>
+					))}
+				</ul>
+			</NavigationMenuContent>
+		</NavigationMenuItem>
+	);
+}
+
+// 구직자 홈(seeker/public 셸) 헤더에서 "내 정보" 왼쪽에 노출되는 역할 전환 버튼.
+// 구인자는 /employer, 운영자(admin)는 /moderator로 이동한다. 구직자·비로그인은 없음.
+function RoleSwitchLink() {
+	const { role } = useBambiAuth();
+	const linkClassName = cn(
+		buttonVariants({ variant: "outline" }),
+		"h-10 px-4 font-bold text-sm no-underline"
+	);
+	if (role === "employer") {
+		return (
+			<Link className={linkClassName} href={"/employer" as Route}>
+				구인 관리
+			</Link>
+		);
+	}
+	if (role === "admin") {
+		return (
+			<Link className={linkClassName} href={"/moderator" as Route}>
+				운영자 모드
+			</Link>
+		);
+	}
+	return null;
+}
+
+// "내 정보"와 동일한 형태의 헤더 채팅 버튼. 안 읽은 방이 있으면 우상단에
+// primary(coral) 점을 띄운다. 핀은 로그인 셸(withPin)에서만 — 비로그인 public
+// 마켓에서는 버튼만 노출하고(누르면 로그인 벽으로) 핀은 그리지 않는다.
+function ChatNavButton({ withPin }: { withPin: boolean }) {
+	const unreadRoomCount = useUnreadRoomCount();
+	const showPin = withPin && unreadRoomCount > 0;
+	return (
+		<span className="relative inline-flex">
+			<Link
+				className={cn(
+					buttonVariants({ variant: "outline" }),
+					"h-10 px-4 font-bold text-sm no-underline"
+				)}
+				href={"/seeker/chats" as Route}
+			>
+				채팅
+			</Link>
+			{showPin ? (
+				<span className="absolute top-1 right-1 size-2 rounded-full bg-coral-500 ring-2 ring-background" />
+			) : null}
+		</span>
+	);
 }
 
 function ModeratorHeaderActions() {
@@ -73,10 +199,40 @@ function ModeratorHeaderActions() {
 	);
 }
 
+// 헤더 우측 액션 묶음. 운영자는 전용 액션, 그 외에는 역할 전환·채팅·내 정보/시작하기.
+function HeaderRightActions({
+	isModerator,
+	isPublic,
+	showChatButton,
+}: {
+	isModerator: boolean;
+	isPublic: boolean;
+	showChatButton: boolean;
+}) {
+	if (isModerator) {
+		return <ModeratorHeaderActions />;
+	}
+	return (
+		<>
+			{isPublic ? null : <RoleSwitchLink />}
+			{showChatButton ? <ChatNavButton withPin={!isPublic} /> : null}
+			<Link
+				className={cn(
+					buttonVariants({ variant: isPublic ? "dark" : "outline" }),
+					"h-10 px-4 font-bold text-sm no-underline"
+				)}
+				href={(isPublic ? "/login" : "/seeker/me") as Route}
+			>
+				{isPublic ? "시작하기" : "내 정보"}
+			</Link>
+		</>
+	);
+}
+
 export function ResponsiveAppShell({
 	children,
 	className,
-	gated = false,
+	contentWidthClassName = "max-w-[80%]",
 	headerSlot,
 	navItems = DEFAULT_NAV_ITEMS,
 	showDesktopNav = true,
@@ -85,73 +241,91 @@ export function ResponsiveAppShell({
 	const pathname = usePathname();
 	const isPublic = variant === "public";
 	const isModerator = variant === "moderator";
+	// 채팅 버튼은 기존 nav "채팅"이 뜨던 셸(구직자·고객센터=seeker, 공개 마켓)에만
+	// 노출한다. 구인자·운영자 셸에는 넣지 않는다.
+	const showChatButton = variant === "seeker" || variant === "public";
+	// 푸터는 구직자·구인자·운영자 셸에 노출한다(공개 셸 제외).
+	const showFooter =
+		variant === "seeker" || variant === "employer" || variant === "moderator";
 	const activeHref = findActiveHref(pathname, navItems);
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
 				<header className="sticky top-0 z-30 hidden border-border border-b bg-background/95 backdrop-blur md:block">
-					<div className="mx-auto flex h-16 max-w-[80%] items-center gap-7 px-6">
-						<Link aria-label="밤비 홈" className="no-underline" href="/">
+					{/* 좁은 폭에서는 간격부터 줄인다. 내비가 스크롤로 넘어가는 구간을 최대한
+					    뒤로 미뤄, 실제로 스크롤이 필요한 경우를 운영자처럼 항목이 많은
+					    역할로 한정한다. */}
+					<div
+						className={cn(
+							"mx-auto flex h-16 items-center gap-3 px-6 lg:gap-7",
+							contentWidthClassName
+						)}
+					>
+						{/* 헤더 행에서 줄어들 수 있는 건 이 브랜드 링크뿐이었다: 내비 항목은 w-max, */}
+						{/* 우측 버튼·배지는 shrink-0이라 폭이 모자라면 압축이 전부 여기로 몰린다. */}
+						{/* shrink-0이 없으면 링크가 한 글자 폭까지 찌그러져 로고가 세로로 쌓인다. */}
+						<Link
+							aria-label="밤비 홈"
+							className="shrink-0 no-underline"
+							href="/"
+						>
 							<Logo lang="ko" size="md" />
 						</Link>
 						{navItems.length > 0 ? (
-							<nav className="flex items-center gap-1">
-								{navItems.map((item) => {
-									const isActive = item.href === activeHref;
-									return (
-										<Link
-											aria-current={isActive ? "page" : undefined}
-											className={cn(
-												buttonVariants({ variant: "ghost" }),
-												"h-auto px-3 py-2 font-bold text-muted-foreground text-sm no-underline",
-												isActive && "bg-muted text-foreground"
-											)}
-											href={item.href}
-											key={`${item.href}-${item.label}`}
-										>
-											{item.label}
-										</Link>
-									);
-								})}
-							</nav>
+							// 내비 항목은 navigationMenuTriggerStyle의 w-max라 최소폭이 라벨 전체 폭이다.
+							// 그래서 항목이 많은 역할(운영자 7개)은 헤더 폭(min(92%,1120px))을 넘겨
+							// 행 전체가 가로로 넘쳤다. min-w-0으로 내비가 줄어들 수 있게 하고 넘치는
+							// 만큼은 내비 안에서만 가로 스크롤시킨다 — 브랜드·우측 액션은 제자리를 지킨다.
+							// 드롭다운은 Positioner가 Portal 안이라 overflow에 잘리지 않는다.
+							<NavigationMenu className="min-w-0">
+								{/* 기본 justify-center는 넘칠 때 앞쪽 항목이 잘려 스크롤로도 닿지 않는
+								    고전적인 문제가 있다. 헤더에서 내비는 어차피 왼쪽 정렬이라 start로 둔다. */}
+								<NavigationMenuList className="justify-start gap-1 overflow-x-auto [scrollbar-width:none]">
+									{navItems.map((entry) => {
+										if (isNavGroup(entry)) {
+											return (
+												<NavGroupItem
+													activeHref={activeHref}
+													group={entry}
+													key={`group-${entry.label}`}
+												/>
+											);
+										}
+										const isActive = entry.href === activeHref;
+										return (
+											<NavigationMenuItem key={`${entry.href}-${entry.label}`}>
+												<NavigationMenuLink
+													aria-current={isActive ? "page" : undefined}
+													className={cn(
+														navigationMenuTriggerStyle(),
+														navItemClassName(isActive)
+													)}
+													render={<Link href={entry.href} />}
+												>
+													{entry.label}
+												</NavigationMenuLink>
+											</NavigationMenuItem>
+										);
+									})}
+								</NavigationMenuList>
+							</NavigationMenu>
 						) : null}
 						<div className="ml-auto flex items-center gap-2">
 							{headerSlot}
-							{isModerator ? (
-								<ModeratorHeaderActions />
-							) : (
-								<>
-									{gated ? null : (
-										<Badge
-											className="h-9 gap-1.5 px-3 font-bold"
-											variant="success"
-										>
-											<span className="inline-flex size-3.5">
-												<ShieldIcon />
-											</span>
-											연락처 보호
-										</Badge>
-									)}
-									<Link
-										className={cn(
-											buttonVariants({
-												variant: isPublic ? "dark" : "outline",
-											}),
-											"h-10 px-4 font-bold text-sm no-underline"
-										)}
-										href={(isPublic ? "/login" : "/seeker/me") as Route}
-									>
-										{isPublic ? "시작하기" : "내 정보"}
-									</Link>
-								</>
-							)}
+							<HeaderRightActions
+								isModerator={isModerator}
+								isPublic={isPublic}
+								showChatButton={showChatButton}
+							/>
 						</div>
 					</div>
 				</header>
 			) : null}
 			<header className="sticky top-0 z-30 border-border border-b bg-background/95 backdrop-blur md:hidden">
 				<div className="flex h-14 items-center justify-between px-5">
-					<Link aria-label="밤비 홈" className="no-underline" href="/">
+					{/* 데스크톱과 같은 이유로 shrink-0 — 좁은 화면에서 우측 액션이 늘어나면
+					    브랜드가 압축 대상이 된다. */}
+					<Link aria-label="밤비 홈" className="shrink-0 no-underline" href="/">
 						<Logo lang="ko" size="sm" />
 					</Link>
 					<div className="flex items-center gap-2">
@@ -159,39 +333,15 @@ export function ResponsiveAppShell({
 							if (isModerator) {
 								return <ModeratorHeaderActions />;
 							}
-							if (gated) {
-								return (
-									<Link
-										className={cn(
-											buttonVariants({ variant: "outline" }),
-											"h-9 px-4 font-bold text-sm no-underline"
-										)}
-										href={"/seeker/me" as Route}
-									>
-										내 정보
-									</Link>
-								);
-							}
 							return (
-								<>
-									<Badge
-										className="h-8 gap-1.5 px-3 font-bold"
-										variant="secondary"
-									>
-										<span className="inline-flex size-3.5 text-green-600">
-											<ShieldIcon />
-										</span>
-										보호 중
-									</Badge>
-									<Button
-										aria-label="알림"
-										className="bg-card"
-										size="icon-lg"
-										variant="outline"
-									>
-										<BellIcon />
-									</Button>
-								</>
+								<Button
+									aria-label="알림"
+									className="bg-card"
+									size="icon-lg"
+									variant="outline"
+								>
+									<BellIcon />
+								</Button>
 							);
 						})()}
 					</div>
@@ -204,6 +354,12 @@ export function ResponsiveAppShell({
 				)}
 			>
 				{children}
+				{showFooter ? (
+					<SiteFooter
+						contentWidthClassName={contentWidthClassName}
+						withBottomNavClearance
+					/>
+				) : null}
 			</main>
 		</div>
 	);

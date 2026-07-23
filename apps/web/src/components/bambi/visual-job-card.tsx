@@ -1,19 +1,18 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
-import Image from "next/image";
 import {
 	HIT_RIBBON_CLASS_BY_TONE,
 	shouldShowHitRibbon,
 } from "@/lib/bambi/job-hit";
 import type { Job } from "@/lib/bambi/types";
-import { Badge, Button } from "./ds";
-import { MapPinIcon, Message } from "./icons";
+import { Badge } from "./ds";
+import { MapPinIcon } from "./icons";
+import { JobCoverImage } from "./job-cover-image";
 
 interface VisualJobCardProps {
 	active?: boolean;
 	job: Job;
-	onChat: (job: Job) => void;
 	onOpen: (job: Job) => void;
 	tone: "organic" | "recommended" | "special" | "urgent";
 }
@@ -60,25 +59,13 @@ function splitPay(pay: string): { amount: string; unit: null | string } {
 	return { amount: trimmed.slice(spaceIndex + 1), unit: head };
 }
 
-const DESC_MAX_LENGTH = 15;
-
-// 설명은 15자 초과 시 말줄임(…) 처리한다.
-function truncateDesc(desc: string): string {
-	const trimmed = desc.trim();
-	return trimmed.length > DESC_MAX_LENGTH
-		? `${trimmed.slice(0, DESC_MAX_LENGTH)}…`
-		: trimmed;
-}
-
 export function VisualJobCard({
 	active = false,
 	job,
-	onChat,
 	onOpen,
 	tone,
 }: VisualJobCardProps) {
 	const { amount: payAmount, unit: payUnit } = splitPay(job.pay);
-	const shortDesc = truncateDesc(job.desc);
 	// organic엔 리본 없음. Hit이고 tone이 special/urgent/recommended일 때만 표시.
 	const showHitRibbon = shouldShowHitRibbon(job, tone);
 	const hitRibbonClassName =
@@ -113,16 +100,14 @@ export function VisualJobCard({
 			>
 				<div className="flex items-start gap-3">
 					{job.coverImage ? (
-						<Image
-							alt={job.coverImage.altText || job.coverImage.fileName}
-							className="h-16 w-32 shrink-0 rounded-sm border border-white object-cover"
-							height={64}
-							src={job.coverImage.url}
-							unoptimized
-							width={128}
+						<JobCoverImage
+							className="h-14 w-30 shrink-0 rounded-md border border-white object-cover"
+							height={56}
+							media={job.coverImage}
+							width={56}
 						/>
 					) : (
-						<div className="flex size-20 shrink-0 items-center justify-center rounded-lg border border-white bg-secondary font-extrabold text-base text-coral-700">
+						<div className="flex size-14 shrink-0 items-center justify-center rounded-md border border-white bg-secondary font-extrabold text-coral-700 text-sm">
 							{job.company.slice(0, 2)}
 						</div>
 					)}
@@ -144,13 +129,12 @@ export function VisualJobCard({
 								{job.type ? ` · ${job.type}` : ""}
 							</span>
 						</span>
-						<p className="m-0 truncate text-muted-foreground text-xs leading-relaxed">
-							{shortDesc}
-						</p>
 					</div>
 				</div>
 			</button>
-			<div className="flex items-end justify-between gap-2">
+			{/* mt-auto: 그리드 행이 늘어나(모집중 placeholder 등) 카드가 stretch 되어도
+			    급여 행이 항상 카드 하단에 붙도록 고정한다. */}
+			<div className="mt-auto flex">
 				<span className="flex h-9 min-w-0 items-center gap-1.5 rounded-md border border-border bg-background px-[14px]">
 					{payUnit ? (
 						<Badge className="shrink-0" tone={toneBadge[tone]}>
@@ -161,15 +145,6 @@ export function VisualJobCard({
 						{payAmount}
 					</span>
 				</span>
-				<Button
-					className="h-9 shrink-0 justify-center"
-					onClick={() => onChat(job)}
-					rightIcon={<Message />}
-					size="sm"
-					variant="secondary"
-				>
-					채팅
-				</Button>
 			</div>
 		</article>
 	);

@@ -10,6 +10,8 @@ allowBuilds:
 catalog:
   "@ai-sdk/react": ^3.0.3
   "@better-auth/expo": 1.6.11
+  "@better-auth/i18n": 1.6.11
+  "@google-cloud/storage": ^7.21.0
   "@orpc/client": ^1.13.14
   "@orpc/openapi": ^1.13.14
   "@orpc/server": ^1.13.14
@@ -29,3 +31,5 @@ catalog:
   sonner: ^2.0.5
   typescript: ^6
   zod: ^4.1.13
+overrides:
+  google-auth-library: ^10.9.0

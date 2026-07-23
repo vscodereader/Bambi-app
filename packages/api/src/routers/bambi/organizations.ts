@@ -1,12 +1,24 @@
 import { db } from "@bambi-app/db";
-import { invitation, member, user } from "@bambi-app/db/schema/auth";
-import { employerOrganizationProfile } from "@bambi-app/db/schema/bambi";
+import {
+	invitation,
+	member,
+	team,
+	teamMember,
+	user,
+} from "@bambi-app/db/schema/auth";
+import {
+	employerOrganizationProfile,
+	employerTeamProfile,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
-import { requireActiveBambiProfile } from "../../services/bambi-authz";
+import {
+	isEmployerOrganizationVerified,
+	requireActiveBambiProfile,
+} from "../../services/bambi-authz";
 import {
 	canInviteMembers,
 	canManageOrganization,
@@ -19,7 +31,6 @@ const organizationIdInput = z.object({
 });
 
 const updateProfileInput = organizationIdInput.extend({
-	businessRegistrationNumber: z.string().min(1).max(40).optional(),
 	displayName: z.string().min(1).max(120),
 });
 
@@ -166,10 +177,15 @@ export const organizationsRouter = {
 				session: context.session,
 			});
 
+			if (!(await isEmployerOrganizationVerified(input.organizationId))) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "운영자 승인 후 조직 설정을 변경할 수 있습니다.",
+				});
+			}
+
 			const [updated] = await db
 				.update(employerOrganizationProfile)
 				.set({
-					businessRegistrationNumber: input.businessRegistrationNumber,
 					displayName: input.displayName,
 				})
 				.where(
@@ -192,39 +208,92 @@ export const organizationsRouter = {
 				session: context.session,
 			});
 
-			const [activeMembers, pendingInvitations] = await Promise.all([
-				db
-					.select({
-						acceptedUserId: member.acceptedUserId,
-						createdAt: member.createdAt,
-						displayName: user.name,
-						email: user.email,
-						id: member.id,
-						invitedEmail: member.invitedEmail,
-						role: member.role,
-						status: member.status,
-						updatedAt: member.updatedAt,
-						userId: member.userId,
-					})
-					.from(member)
-					.innerJoin(user, eq(member.userId, user.id))
-					.where(eq(member.organizationId, input.organizationId))
-					.orderBy(asc(member.createdAt)),
-				db
-					.select({
-						acceptedUserId: invitation.acceptedUserId,
-						createdAt: invitation.createdAt,
-						email: invitation.email,
-						id: invitation.id,
-						role: invitation.role,
-						status: invitation.status,
-						teamId: invitation.teamId,
-						updatedAt: invitation.updatedAt,
-					})
-					.from(invitation)
-					.where(eq(invitation.organizationId, input.organizationId))
-					.orderBy(asc(invitation.createdAt)),
-			]);
+			const [activeMembers, pendingInvitations, orgTeams, teamMemberships] =
+				await Promise.all([
+					db
+						.select({
+							acceptedUserId: member.acceptedUserId,
+							createdAt: member.createdAt,
+							displayName: user.name,
+							email: user.email,
+							id: member.id,
+							invitedEmail: member.invitedEmail,
+							role: member.role,
+							status: member.status,
+							updatedAt: member.updatedAt,
+							userId: member.userId,
+						})
+						.from(member)
+						.innerJoin(user, eq(member.userId, user.id))
+						.where(eq(member.organizationId, input.organizationId))
+						.orderBy(asc(member.createdAt)),
+					db
+						.select({
+							acceptedUserId: invitation.acceptedUserId,
+							createdAt: invitation.createdAt,
+							email: invitation.email,
+							id: invitation.id,
+							rejectionReason: invitation.rejectionReason,
+							role: invitation.role,
+							status: invitation.status,
+							teamId: invitation.teamId,
+							updatedAt: invitation.updatedAt,
+						})
+						.from(invitation)
+						// accepted 초대는 이미 활성 member로 합류했으므로 목록에서 제외한다
+						// (중복 "수락됨" 잔여 행 방지).
+						.where(
+							and(
+								eq(invitation.organizationId, input.organizationId),
+								ne(invitation.status, "accepted")
+							)
+						)
+						.orderBy(asc(invitation.createdAt)),
+					db
+						.select({
+							displayName: employerTeamProfile.displayName,
+							id: team.id,
+							name: team.name,
+						})
+						.from(team)
+						.leftJoin(
+							employerTeamProfile,
+							eq(employerTeamProfile.teamId, team.id)
+						)
+						.where(eq(team.organizationId, input.organizationId)),
+					db
+						.select({
+							teamId: teamMember.teamId,
+							userId: teamMember.userId,
+						})
+						.from(teamMember)
+						.innerJoin(team, eq(teamMember.teamId, team.id))
+						.where(eq(team.organizationId, input.organizationId)),
+				]);
+
+			const teamNameById = new Map(
+				orgTeams.map((row) => [row.id, row.displayName ?? row.name])
+			);
+			const teamsByUserId = new Map<string, { id: string; name: string }[]>();
+			for (const row of teamMemberships) {
+				const name = teamNameById.get(row.teamId);
+				if (!name) {
+					continue;
+				}
+
+				const list = teamsByUserId.get(row.userId) ?? [];
+				list.push({ id: row.teamId, name });
+				teamsByUserId.set(row.userId, list);
+			}
+
+			const resolveInvitationTeams = (teamId: null | string) => {
+				if (!teamId) {
+					return [];
+				}
+
+				const name = teamNameById.get(teamId);
+				return name ? [{ id: teamId, name }] : [];
+			};
 
 			return [
 				...activeMembers.map((row) => ({
@@ -233,7 +302,7 @@ export const organizationsRouter = {
 					invitedEmail: row.invitedEmail,
 					kind: "active" as const,
 					role: normalizeOrganizationManagementRole(row.role) ?? "staff",
-					teamId: null,
+					teams: teamsByUserId.get(row.userId) ?? [],
 				})),
 				...pendingInvitations.map((row) => ({
 					...row,
@@ -243,6 +312,7 @@ export const organizationsRouter = {
 					invitedEmail: row.email,
 					kind: "invitation" as const,
 					role: normalizeOrganizationManagementRole(row.role) ?? "staff",
+					teams: resolveInvitationTeams(row.teamId),
 					userId: null,
 				})),
 			];

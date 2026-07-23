@@ -9,6 +9,7 @@ import {
 	type ChatRealtimeServerToClientEvents,
 	type ChatRealtimeTransport,
 	configureBambiChatRealtime,
+	emitChatListUpdated,
 	emitMessageRead,
 	emitUnreadUpdated,
 	getChatRoomSocketRoom,
@@ -313,6 +314,9 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 						unreadCount,
 						userId: profile.userId,
 					});
+					// 읽은 본인의 유저 채널로 목록 갱신 신호를 보내 헤더 채팅
+					// 버튼·모바일 탭의 안 읽음 핀/뱃지가 즉시 꺼지게 한다.
+					emitChatListUpdated([profile.userId], { roomId: room.id });
 				}
 				ack?.({ ok: true });
 			} catch (error) {

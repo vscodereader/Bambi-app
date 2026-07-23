@@ -32,6 +32,29 @@ export type ReviewPolicyResult =
 export const REVIEW_BODY_MIN_LENGTH = 20;
 export const REVIEW_BODY_MAX_LENGTH = 1000;
 
+// 후기 작성자 표시명을 일반 회원용으로 마스킹한다. 익명 후기가 아닌 경우에만 사용한다.
+// 코드포인트 단위(Array.from)로 세어 한글·이모지 결합 문자도 안전하게 처리한다.
+// 빈값/null → "구직자", 1자 → "*", 2자 → 첫자+"*", 3자+ → 첫자 + "*"×가운데 + 끝자.
+export const maskReviewerDisplayName = (
+	name: null | string | undefined
+): string => {
+	const chars = Array.from((name ?? "").trim());
+
+	if (chars.length === 0) {
+		return "구직자";
+	}
+
+	if (chars.length === 1) {
+		return "*";
+	}
+
+	if (chars.length === 2) {
+		return `${chars[0]}*`;
+	}
+
+	return `${chars[0]}${"*".repeat(chars.length - 2)}${chars.at(-1)}`;
+};
+
 const PHONE_NUMBER_RE = /01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/;
 const EXTERNAL_MESSENGER_RE =
 	/(카톡|카카오|텔레|텔레그램|오픈채팅|오픈톡|라인\s*아이디|라인아이디|디엠|\bdm\b)/i;

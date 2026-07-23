@@ -29,6 +29,7 @@ import {
 	MapPin,
 	MessageCircle,
 	MessagesSquare,
+	MoreHorizontal,
 	Paperclip,
 	Phone,
 	Plus,
@@ -37,6 +38,7 @@ import {
 	ShieldCheck,
 	SlidersHorizontal,
 	Star,
+	Store,
 	User,
 	X,
 	Zap,
@@ -77,6 +79,7 @@ export const LockIcon = fill(Lock);
 export const MapPinIcon = fill(MapPin);
 export const Message = fill(MessageCircle);
 export const MessagesIcon = fill(MessagesSquare);
+export const MoreIcon = fill(MoreHorizontal);
 export const PaperclipIcon = fill(Paperclip);
 export const PhoneIcon = fill(Phone);
 export const PlusIcon = fill(Plus);
@@ -86,5 +89,6 @@ export const SettingsIcon = fill(Settings);
 export const ShieldIcon = fill(ShieldCheck);
 export const SortIcon = fill(ArrowUpDown);
 export const StarIcon = fill(Star);
+export const StoreIcon = fill(Store);
 export const UserIcon = fill(User);
 export const XIcon = fill(X);

@@ -1,12 +1,48 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import type { ReactNode } from "react";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
-import { getVisualJobExposureSections } from "@/lib/bambi/visual-job-exposure";
+import { AdSlotPlaceholder } from "./ad-banner";
 import { Card } from "./ds";
 import { VisualJobCard } from "./visual-job-card";
 
 const CARD_GRID_CLASS = "grid grid-cols-1 gap-3 lg:grid-cols-3 xl:grid-cols-4";
+// xl 4열 기준으로 빈 자리를 채운다. 자리표시 키는 index-in-key 린트를 피해 상수로 둔다.
+const PLACEHOLDER_COLUMNS = 4;
+const CARD_PLACEHOLDER_KEYS = ["ph-1", "ph-2", "ph-3", "ph-4"] as const;
+
+// 유료 노출 섹션(스페셜·급구·추천)의 빈 자리표시 개수·breakpoint 표시 규칙.
+// 이 섹션들의 헤더 meta는 구직자 시점의 "○○ 광고" 고지 표기다(광고 상품 용어 미노출).
+// 빈 섹션은 한 행만 채운다(모바일 1·lg 3·xl 4). 부분 판매 섹션은 xl(4열) 기준
+// 마지막 행 나머지를 채운다(그리드가 반응형이라 lg/모바일 정렬은 단순화 허용).
+const cardPlaceholderCount = (jobsLength: number): number => {
+	if (jobsLength === 0) {
+		return PLACEHOLDER_COLUMNS;
+	}
+	return (
+		(PLACEHOLDER_COLUMNS - (jobsLength % PLACEHOLDER_COLUMNS)) %
+		PLACEHOLDER_COLUMNS
+	);
+};
+
+// 빈 섹션에서 한 행만 남기려고 여분 자리표시를 breakpoint별로 숨긴다. base엔 flex/hidden이
+// 없으므로 display 클래스를 여기서 온전히 지정한다.
+// 공고가 있는 행은 min-h를 주지 않는다 — 행 높이는 항상 실제 카드(자연 높이 약 118px)가
+// 결정하고 자리표시는 stretch로 따라온다(자리표시가 더 높으면 카드가 늘어나 하단 여백이 생긴다).
+// 빈 섹션만 카드 자연 높이에 맞춘 min-h-29(116px)로 스켈레톤 형태를 유지한다.
+const cardPlaceholderClass = (jobsLength: number, index: number): string => {
+	if (jobsLength > 0) {
+		return "flex w-full";
+	}
+	if (index === 0) {
+		return "flex min-h-29 w-full";
+	}
+	if (index < 3) {
+		return "hidden min-h-29 w-full lg:flex";
+	}
+	return "hidden min-h-29 w-full xl:flex";
+};
 
 type ExposureTone = "organic" | "recommended" | "special" | "urgent";
 
@@ -19,9 +55,11 @@ const accentClassName: Record<ExposureTone, string> = {
 };
 
 interface ExposureSectionProps {
+	// 유료 노출 섹션(스페셜·급구·추천)은 공고가 없어도 빈 자리를 "광고 모집중"
+	// 자리표시로 채운다. 전체(organic) 섹션은 채우지 않는다(기존 동작 유지).
+	fillEmpty?: boolean;
 	jobs: Job[];
 	meta: string;
-	onChat: (job: Job) => void;
 	onOpen: (job: Job) => void;
 	selectedJobId?: string;
 	title: string;
@@ -29,14 +67,17 @@ interface ExposureSectionProps {
 }
 
 function ExposureSection({
+	fillEmpty = false,
 	jobs,
 	meta,
-	onChat,
 	onOpen,
 	selectedJobId,
 	title,
 	tone,
 }: ExposureSectionProps) {
+	const placeholderKeys = fillEmpty
+		? CARD_PLACEHOLDER_KEYS.slice(0, cardPlaceholderCount(jobs.length))
+		: [];
 	return (
 		<section className="grid gap-2">
 			<div className="flex items-center justify-between">
@@ -54,9 +95,14 @@ function ExposureSection({
 						active={job.id === selectedJobId}
 						job={job}
 						key={`${tone}-${job.id}`}
-						onChat={onChat}
 						onOpen={onOpen}
 						tone={tone}
+					/>
+				))}
+				{placeholderKeys.map((key, index) => (
+					<AdSlotPlaceholder
+						className={cardPlaceholderClass(jobs.length, index)}
+						key={`${tone}-${key}`}
 					/>
 				))}
 			</div>
@@ -65,22 +111,23 @@ function ExposureSection({
 }
 
 interface VisualJobExposureSectionsProps {
+	// 급구·추천 사이(공고 0개 빈 상태에서도)에 끼워 넣을 임의 콘텐츠 슬롯
+	communitySlot?: ReactNode;
 	jobs: Job[];
-	onChat: (job: Job) => void;
 	onOpen: (job: Job) => void;
 	sections: MarketplaceJobSections;
 	selectedJobId?: string;
 }
 
 export function VisualJobExposureSections({
+	communitySlot,
 	jobs,
-	onChat,
 	onOpen,
 	sections,
 	selectedJobId,
 }: VisualJobExposureSectionsProps) {
 	if (jobs.length === 0) {
-		return (
+		const emptyCard = (
 			<Card className="rounded-lg text-center" pad="lg" tone="outline">
 				<h2 className="m-0 font-extrabold text-lg">
 					조건에 맞는 공고가 없어요
@@ -90,46 +137,52 @@ export function VisualJobExposureSections({
 				</p>
 			</Card>
 		);
+		// 공고가 없어도 커뮤니티 슬롯은 유지한다. slot이 없으면 기존과 동일한 단일 Card,
+		// 있으면 본 분기와 같은 간격(grid gap-5)으로 쌓는다.
+		if (!communitySlot) {
+			return emptyCard;
+		}
+		return (
+			<div className="grid gap-5">
+				{emptyCard}
+				{communitySlot}
+			</div>
+		);
 	}
-
-	const visualSections = getVisualJobExposureSections(sections);
 
 	return (
 		<div className="grid gap-5">
-			{visualSections.special.length > 0 ? (
-				<ExposureSection
-					jobs={visualSections.special}
-					meta="프리미엄 노출"
-					onChat={onChat}
-					onOpen={onOpen}
-					title="스페셜 채용"
-					tone="special"
-				/>
-			) : null}
-			{visualSections.urgent.length > 0 ? (
-				<ExposureSection
-					jobs={visualSections.urgent}
-					meta="최근 끌어올림"
-					onChat={onChat}
-					onOpen={onOpen}
-					title="급구 채용"
-					tone="urgent"
-				/>
-			) : null}
-			{visualSections.recommended.length > 0 ? (
-				<ExposureSection
-					jobs={visualSections.recommended}
-					meta="상단 추천"
-					onChat={onChat}
-					onOpen={onOpen}
-					title="추천 채용"
-					tone="recommended"
-				/>
-			) : null}
+			{/* 스페셜·급구·추천은 공고가 0개여도 섹션을 렌더하고 빈 자리를 "광고 모집중"
+			    자리표시로 채운다(fillEmpty). */}
 			<ExposureSection
-				jobs={visualSections.organic}
+				fillEmpty
+				jobs={sections.special}
+				meta="스페셜 광고"
+				onOpen={onOpen}
+				title="스페셜 채용"
+				tone="special"
+			/>
+			<ExposureSection
+				fillEmpty
+				jobs={sections.urgent}
+				meta="급구 광고"
+				onOpen={onOpen}
+				title="급구 채용"
+				tone="urgent"
+			/>
+			{/* 스페셜·급구 뒤, 추천·전체 앞 고정 위치. */}
+			{communitySlot}
+			<ExposureSection
+				fillEmpty
+				jobs={sections.recommended}
+				meta="추천 광고"
+				onOpen={onOpen}
+				title="추천 채용"
+				tone="recommended"
+			/>
+			<ExposureSection
+				jobs={sections.organic}
 				meta="최신순"
-				onChat={onChat}
 				onOpen={onOpen}
 				selectedJobId={selectedJobId}
 				title="전체 공고"

@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@bambi-app/ui/lib/utils";
+import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job } from "@/lib/bambi/types";
 import { Badge, Button, Card, InfoTile } from "../ds";
 import {
@@ -95,7 +97,15 @@ export function SeekerChatPreflight({
 	const buttonLabel =
 		continueLabel ?? (isContinuing ? "채팅방 만드는 중" : "밤비 채팅으로 이동");
 	return (
-		<div className="mx-auto w-full px-5 py-5 pb-28 md:max-w-[80%] md:px-6 md:py-7 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8">
+		<div
+			className={cn(
+				// 채팅 프리플라이트 본문도 다른 seeker 페이지·헤더와 동일한 고정폭
+				// (SEEKER_CONTENT_WIDTH = md:max-w-[min(92%,1120px)])을 써 헤더와 넓이·여백을 맞춘다.
+				// 기존 뷰포트 80% 단독 폭은 폭 통일 마이그레이션에서 누락돼 헤더와 어긋나던 원인이었다.
+				"mx-auto w-full px-5 py-5 pb-28 md:px-6 md:py-7 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8",
+				SEEKER_CONTENT_WIDTH
+			)}
+		>
 			<main className="min-w-0">
 				<button
 					className="mb-4 cursor-pointer rounded-lg border border-border bg-card px-3 py-2 font-bold text-sm"
@@ -185,7 +195,7 @@ export function SeekerChatPreflight({
 							면접 전 연락처 비공개
 						</div>
 						<p className="mt-1 mb-0 text-xs leading-relaxed">
-							연락처 공개는 면접 일정 확정 뒤 본인이 선택해요.
+							연락처는 면접 일정이 확정된 뒤 구인자가 공개해요.
 						</p>
 					</div>
 					<Button

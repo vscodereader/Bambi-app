@@ -12,7 +12,7 @@ import {
 	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -24,6 +24,7 @@ import {
 import {
 	getChatRecipientUserId,
 	getUnreadMessageCount,
+	getUnreadRoomCount,
 	markChatMessagesRead,
 } from "../../services/bambi-chat-read-state";
 import {
@@ -40,7 +41,11 @@ import {
 	validateChatMediaUpload,
 } from "../../services/bambi-media-policy";
 import { createBambiNotification } from "../../services/bambi-notifications";
-import { canRevealContact, canStartChat } from "../../services/bambi-policy";
+import {
+	canRevealContact,
+	canStartChat,
+	canViewCounterpartContact,
+} from "../../services/bambi-policy";
 import {
 	createChatAttachmentUploadIntent,
 	getChatAttachmentObjectUrl,
@@ -97,6 +102,10 @@ const revealContactInput = z.object({
 	interviewScheduleId: z.string().uuid(),
 	contactMethod: z.enum(["phone", "kakao", "email"]),
 	contactValue: z.string().min(3).max(120),
+});
+
+const getContactRevealInput = z.object({
+	chatRoomId: z.string().uuid(),
 });
 
 type RequestedInterviewStatus = z.infer<
@@ -503,6 +512,78 @@ export const chatsRouter = {
 		);
 	}),
 
+	// 헤더 채팅 버튼 핀·모바일 탭 뱃지용 경량 집계. listMine은 방마다 상대 이름·
+	// 마지막 메시지·안 읽음 수를 모두 조립해 무거우므로 재사용하지 않고, 안 읽은
+	// 방 수만 한 번의 쿼리로 센다.
+	unreadState: protectedProcedure.handler(async ({ context }) => {
+		const profile = await requireActiveBambiProfile(context.session);
+
+		return {
+			unreadRoomCount: await getUnreadRoomCount({ userId: profile.userId }),
+		};
+	}),
+
+	// 내가 참여한 방들의 "다가오는" 면접 목록. status가 proposed·confirmed이고
+	// scheduledAt이 현재 이후인 일정만 시간순으로 모아 방을 넘나들며 보여준다.
+	listMyUpcomingInterviews: protectedProcedure.handler(async ({ context }) => {
+		const profile = await requireActiveBambiProfile(context.session);
+
+		const rooms = await db
+			.select()
+			.from(chatRoom)
+			.where(
+				or(
+					eq(chatRoom.employerUserId, profile.userId),
+					eq(chatRoom.jobSeekerUserId, profile.userId)
+				)
+			);
+		if (rooms.length === 0) {
+			return [];
+		}
+
+		const roomById = new Map(rooms.map((room) => [room.id, room]));
+		const schedules = await db
+			.select()
+			.from(interviewSchedule)
+			.where(
+				and(
+					inArray(interviewSchedule.chatRoomId, [...roomById.keys()]),
+					inArray(interviewSchedule.status, ["proposed", "confirmed"]),
+					gte(interviewSchedule.scheduledAt, new Date())
+				)
+			)
+			.orderBy(asc(interviewSchedule.scheduledAt));
+		if (schedules.length === 0) {
+			return [];
+		}
+
+		const involvedRooms = schedules
+			.map((schedule) => roomById.get(schedule.chatRoomId))
+			.filter((room): room is (typeof rooms)[number] => room !== undefined);
+
+		const counterpartNames = await resolveCounterpartNames(
+			involvedRooms,
+			profile.userId
+		);
+		const jobPostIds = [
+			...new Set(involvedRooms.map((room) => room.jobPostId)),
+		];
+		const posts = await db
+			.select({ id: jobPost.id, title: jobPost.title })
+			.from(jobPost)
+			.where(inArray(jobPost.id, jobPostIds));
+		const jobTitleById = new Map(posts.map((post) => [post.id, post.title]));
+
+		return schedules.map((schedule) => {
+			const room = roomById.get(schedule.chatRoomId);
+			return {
+				...schedule,
+				counterpartName: room ? (counterpartNames.get(room.id) ?? null) : null,
+				jobTitle: room ? (jobTitleById.get(room.jobPostId) ?? null) : null,
+			};
+		});
+	}),
+
 	getById: protectedProcedure
 		.input(z.object({ id: z.string().uuid() }))
 		.handler(async ({ context, input }) => {
@@ -777,6 +858,10 @@ export const chatsRouter = {
 					unreadCount,
 					userId: profile.userId,
 				});
+				// 읽은 본인의 유저 채널로도 목록 갱신 신호를 보내, 방 소켓룸에
+				// 들어가 있지 않은 헤더 채팅 버튼·모바일 탭이 안 읽음 핀/뱃지를
+				// 즉시 끄게 한다(emitUnreadUpdated는 방 소켓룸에만 도달한다).
+				emitChatListUpdated([profile.userId], { roomId: room.id });
 			}
 
 			return {
@@ -792,6 +877,11 @@ export const chatsRouter = {
 				input.chatRoomId,
 				context.session
 			);
+
+			// 면접 일정은 구인자만 제안할 수 있다. 구직자는 제안을 받기만 한다.
+			if (profile.userId !== room.employerUserId) {
+				throw new ORPCError("FORBIDDEN");
+			}
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
@@ -877,6 +967,100 @@ export const chatsRouter = {
 			return updatedSchedule;
 		}),
 
+	// 조회 전용. 상대 연락처는 canViewCounterpart가 true일 때만 응답에 싣는다.
+	getContactReveal: protectedProcedure
+		.input(getContactRevealInput)
+		.handler(async ({ context, input }) => {
+			const { profile, room } = await requireChatParticipant(
+				input.chatRoomId,
+				context.session
+			);
+
+			await throwIfChatBlocked({
+				actorUserId: profile.userId,
+				employerUserId: room.employerUserId,
+				isBlocked: room.isBlocked,
+				jobSeekerUserId: room.jobSeekerUserId,
+			});
+
+			const viewerIsEmployer = profile.userId === room.employerUserId;
+
+			// 완료된 면접도 확정을 거친 것이라 연락처 흐름을 유지한다(완료 버튼을 눌러도
+			// 조기 반환으로 꺼지지 않게). declined·canceled는 계속 제외.
+			const [confirmedSchedule] = await db
+				.select({
+					id: interviewSchedule.id,
+					locationNote: interviewSchedule.locationNote,
+					scheduledAt: interviewSchedule.scheduledAt,
+					status: interviewSchedule.status,
+				})
+				.from(interviewSchedule)
+				.where(
+					and(
+						eq(interviewSchedule.chatRoomId, room.id),
+						inArray(interviewSchedule.status, ["confirmed", "completed"])
+					)
+				)
+				.limit(1);
+
+			if (!confirmedSchedule) {
+				return {
+					canViewCounterpart: false,
+					confirmedSchedule: null,
+					counterpartContacts: [],
+					mineContacts: [],
+					viewerIsEmployer,
+				};
+			}
+
+			// 연락처 공개는 구인자만 한다. 구인자 명의 행만 읽으므로 과거 구직자 동의
+			// 행은 마이그레이션 없이 조회에서 제외된다.
+			const employerContacts = (
+				await db
+					.select({
+						contactMethod: contactRevealConsent.contactMethod,
+						contactValue: contactRevealConsent.contactValue,
+					})
+					.from(contactRevealConsent)
+					.where(
+						and(
+							eq(
+								contactRevealConsent.interviewScheduleId,
+								confirmedSchedule.id
+							),
+							eq(contactRevealConsent.userId, room.employerUserId)
+						)
+					)
+			).map(({ contactMethod, contactValue }) => ({
+				contactMethod,
+				contactValue,
+			}));
+
+			if (viewerIsEmployer) {
+				return {
+					canViewCounterpart: false,
+					confirmedSchedule,
+					counterpartContacts: [],
+					mineContacts: employerContacts,
+					viewerIsEmployer,
+				};
+			}
+
+			const canViewCounterpart = canViewCounterpartContact({
+				counterpartConsented: employerContacts.length > 0,
+				interviewStatus: confirmedSchedule.status,
+				viewerIsEmployer,
+			});
+
+			return {
+				canViewCounterpart,
+				confirmedSchedule,
+				counterpartContacts: canViewCounterpart ? employerContacts : [],
+				mineContacts: [],
+				viewerIsEmployer,
+			};
+		}),
+
 	revealContact: protectedProcedure
 		.input(revealContactInput)
 		.handler(async ({ context, input }) => {
@@ -906,6 +1090,7 @@ export const chatsRouter = {
 				!canRevealContact({
 					interviewStatus: schedule.status,
 					ownerConsented: true,
+					ownerIsEmployer: profile.userId === room.employerUserId,
 					ownerPhoneVerified: profile.isPhoneVerified,
 				})
 			) {

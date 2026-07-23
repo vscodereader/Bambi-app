@@ -33,6 +33,7 @@ interface TeamFormTeam {
 }
 
 interface TeamFormProps {
+	disabled?: boolean;
 	onCancel?: () => void;
 	organizations: TeamFormOrganization[];
 	team?: TeamFormTeam;
@@ -85,7 +86,12 @@ function TeamFormActions({
 	);
 }
 
-export function TeamForm({ onCancel, organizations, team }: TeamFormProps) {
+export function TeamForm({
+	disabled = false,
+	onCancel,
+	organizations,
+	team,
+}: TeamFormProps) {
 	const queryClient = useQueryClient();
 	const [organizationId, setOrganizationId] = useState(
 		team?.organizationId ?? organizations[0]?.organizationId ?? ""
@@ -99,7 +105,7 @@ export function TeamForm({ onCancel, organizations, team }: TeamFormProps) {
 	const organizationError =
 		organizationId.trim().length === 0 ? "조직을 선택해 주세요." : "";
 	const isEditMode = Boolean(team);
-	const canSubmit = !(displayNameError || organizationError);
+	const canSubmit = !(disabled || displayNameError || organizationError);
 	const copy = getTeamFormCopy(isEditMode);
 	const fieldIds = getTeamFormFieldIds(isEditMode);
 
@@ -195,7 +201,7 @@ export function TeamForm({ onCancel, organizations, team }: TeamFormProps) {
 				<div className="space-y-1.5">
 					<Label htmlFor={fieldIds.organization}>조직</Label>
 					<Select
-						disabled={isEditMode}
+						disabled={isEditMode || disabled}
 						items={organizations.map((organization) => ({
 							label: organization.displayName,
 							value: organization.organizationId,
@@ -235,6 +241,7 @@ export function TeamForm({ onCancel, organizations, team }: TeamFormProps) {
 					<Label htmlFor={fieldIds.name}>팀 이름</Label>
 					<Input
 						aria-invalid={showValidation && Boolean(displayNameError)}
+						disabled={disabled}
 						id={fieldIds.name}
 						onChange={(event) => setDisplayName(event.target.value)}
 						placeholder="강남점"
@@ -248,6 +255,7 @@ export function TeamForm({ onCancel, organizations, team }: TeamFormProps) {
 				<div className="space-y-1.5">
 					<Label htmlFor={fieldIds.region}>지역</Label>
 					<Input
+						disabled={disabled}
 						id={fieldIds.region}
 						onChange={(event) => setRegion(event.target.value)}
 						placeholder="서울 강남구"

@@ -12,6 +12,11 @@ export const jobPostStatuses = [
 	"rejected",
 ] as const;
 export const accountStatuses = ["active", "warned", "suspended"] as const;
+
+// 탈퇴 계정 개인정보 보존기간 기본값(일). 실제 적용값은 운영자 사이트 설정
+// (bambi_site_settings.withdrawal_retention_days)이 우선하고, 미설정이면 이 값을 쓴다.
+// 해석은 bambi-member-policy의 resolveWithdrawalRetentionDays가 담당한다.
+export const DEFAULT_WITHDRAWAL_RETENTION_DAYS = 30;
 export const interviewStatuses = [
 	"proposed",
 	"confirmed",
@@ -46,6 +51,7 @@ interface CanStartChatInput {
 interface CanRevealContactInput {
 	interviewStatus: InterviewStatus;
 	ownerConsented: boolean;
+	ownerIsEmployer: boolean;
 	ownerPhoneVerified: boolean;
 }
 
@@ -113,12 +119,40 @@ export const canStartChat = ({
 	isPhoneVerified &&
 	jobPostStatus === "published";
 
+// 완료된 면접도 확정을 거친 것이므로 연락처 흐름을 유지한다(완료 버튼을 눌러도
+// 연락처 보기·공개가 꺼지지 않게). confirmed·completed만 인정하고 declined·canceled는
+// 계속 차단한다. 두 정책이 같은 판정을 쓰도록 이 게이트 한 곳으로 모은다.
+export const isContactRevealEligibleInterviewStatus = (
+	status: string
+): boolean => status === "confirmed" || status === "completed";
+
 export const canRevealContact = ({
 	interviewStatus,
 	ownerConsented,
+	ownerIsEmployer,
 	ownerPhoneVerified,
 }: CanRevealContactInput): boolean =>
-	interviewStatus === "confirmed" && ownerConsented && ownerPhoneVerified;
+	ownerIsEmployer &&
+	isContactRevealEligibleInterviewStatus(interviewStatus) &&
+	ownerConsented &&
+	ownerPhoneVerified;
+
+export interface CanViewCounterpartContactInput {
+	counterpartConsented: boolean;
+	interviewStatus: string;
+	viewerIsEmployer: boolean;
+}
+
+// 연락처 공개는 구인자만 한다. 구직자는 공개할 연락처가 없으므로 구인자 동의만으로
+// 열람하고, 구인자는 상대(구직자) 연락처를 볼 수 없다(공개 주체가 없음).
+export const canViewCounterpartContact = ({
+	counterpartConsented,
+	interviewStatus,
+	viewerIsEmployer,
+}: CanViewCounterpartContactInput): boolean =>
+	!viewerIsEmployer &&
+	isContactRevealEligibleInterviewStatus(interviewStatus) &&
+	counterpartConsented;
 
 export const getEmployerVerificationStatusLabel = (
 	status: EmployerVerificationStatus

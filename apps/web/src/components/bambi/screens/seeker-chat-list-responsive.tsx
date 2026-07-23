@@ -1,9 +1,13 @@
 "use client";
 
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
+import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
+import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { connectBambiChatSocket } from "@/lib/bambi-chat-realtime";
 import { orpc } from "@/utils/orpc";
+import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { Avatar, Badge, Card } from "../ds";
 import { Message, ShieldIcon } from "../icons";
 
@@ -25,6 +29,50 @@ const getRoomButtonClassName = (unreadCount: number): string =>
 			? "border-coral-300 ring-1 ring-coral-200"
 			: "border-border",
 	].join(" ");
+
+// 채팅 목록 3컬럼 셸 — 초광폭(≥1720px)에서만 좌(가로형 7:3)·우(세로형 4:9) 사이드 광고
+// rail을 노출하고, 중앙은 앱 공통 고정폭이라 헤더·푸터와 같은 중앙선에 선다.
+//
+// 좌우 aside는 판매된 배너가 없어도 폭을 그대로 차지한다. 한쪽만 렌더하면 justify-center가
+// 남은 두 칸 기준으로 정렬해 콘텐츠가 (rail 259px + gap)/2 = 약 139px 밀리고, 같은 고정폭인
+// 헤더·푸터와 눈에 띄게 어긋난다. 그래서 바깥 자리는 항상 대칭으로 남기고, rail은 빈 슬롯을
+// "광고 모집중" 자리표시로 채워 조건 없이 렌더한다 — 수다방·마켓플레이스·공고 상세도 같은 형태다.
+//
+// 세로 여백은 로딩·오류·목록 상태마다 달라(모바일 하단 탭 자리 pb-24 등) className으로 받아
+// 중앙 칸에 얹는다. 가로 여백·고정폭은 셸만 갖게 해 분기별 컨테이너와 이중 적용되지 않게 한다.
+function SeekerChatListRails({
+	children,
+	className,
+}: {
+	children: ReactNode;
+	className?: string;
+}) {
+	const adBanners = useAdBannerJobs();
+
+	return (
+		<div className="mx-auto flex w-full justify-center gap-5">
+			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
+				<div className="sticky top-20">
+					<HorizontalAdBannerRail items={adBanners.leftBanner} />
+				</div>
+			</aside>
+			<div
+				className={cn(
+					"flex w-full min-w-0 flex-col px-5 md:px-6",
+					SEEKER_CONTENT_WIDTH,
+					className
+				)}
+			>
+				{children}
+			</div>
+			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
+				<div className="sticky top-20">
+					<AdBannerRail items={adBanners.rightBanner} />
+				</div>
+			</aside>
+		</div>
+	);
+}
 
 export function SeekerChatListResponsive({
 	onFallback,
@@ -55,7 +103,7 @@ export function SeekerChatListResponsive({
 
 	if (chatsQuery.isError) {
 		return (
-			<div className="mx-auto w-full max-w-[760px] px-4 py-5 pb-24 md:px-6">
+			<SeekerChatListRails className="py-5 pb-24">
 				<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
 					실제 채팅 목록을 불러오지 못해 샘플 대화를 표시하고 있어요.
 					<button
@@ -67,20 +115,20 @@ export function SeekerChatListResponsive({
 					</button>
 				</div>
 				{onFallback()}
-			</div>
+			</SeekerChatListRails>
 		);
 	}
 
 	if (chatsQuery.isLoading) {
 		return (
-			<div className="mx-auto w-full max-w-[760px] px-4 py-10 text-center font-bold text-muted-foreground">
+			<SeekerChatListRails className="py-10 text-center font-bold text-muted-foreground">
 				채팅 목록을 불러오고 있어요.
-			</div>
+			</SeekerChatListRails>
 		);
 	}
 
 	return (
-		<div className="mx-auto w-full max-w-[860px] px-4 py-5 pb-24 md:px-6 md:py-7 lg:pb-8">
+		<SeekerChatListRails className="py-5 pb-24 md:py-7 lg:pb-8">
 			<div className="mb-5">
 				<Badge tone="success">
 					<span className="inline-flex size-3.5">
@@ -155,6 +203,6 @@ export function SeekerChatListResponsive({
 					))}
 				</div>
 			)}
-		</div>
+		</SeekerChatListRails>
 	);
 }

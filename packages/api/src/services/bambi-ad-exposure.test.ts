@@ -1,0 +1,324 @@
+import { describe, expect, it } from "vitest";
+import {
+	buildExposureJobSections,
+	groupAdBannerJobs,
+	isExposureActive,
+	PREMIUM_BANNER_MAX_SLOTS,
+	requiredAdBannerUsagesForExposureType,
+	SIDE_BANNER_MAX_SLOTS,
+} from "./bambi-ad-exposure";
+
+const NOW = new Date("2026-07-15T00:00:00Z");
+const FUTURE = new Date("2026-08-01T00:00:00Z");
+const PAST = new Date("2026-07-01T00:00:00Z");
+
+const row = (id: string, exposureType: string, overrides = {}) => ({
+	exposureEndsAt: FUTURE,
+	exposureType,
+	id,
+	publishedAt: NOW,
+	status: "published",
+	...overrides,
+});
+
+describe("isExposureActive", () => {
+	it("만료일 null은 활성으로 본다", () => {
+		expect(isExposureActive(null, NOW)).toBe(true);
+	});
+	it("만료일이 지났으면 비활성이다", () => {
+		expect(isExposureActive(PAST, NOW)).toBe(false);
+	});
+});
+
+describe("buildExposureJobSections", () => {
+	it("exposureType별 섹션에 배치하고 전체 공고에는 유료 공고도 함께 담는다", () => {
+		const special = row("s1", "special");
+		const organicOnly = row("o1", "standard");
+		const { sections, totalCount } = buildExposureJobSections({
+			limit: 30,
+			now: NOW,
+			organicRows: [special, organicOnly],
+			recommendedRows: [],
+			specialRows: [special],
+			urgentRows: [],
+		});
+		expect(sections.special.map((r) => r.id)).toEqual(["s1"]);
+		expect(sections.organic.map((r) => r.id)).toEqual(["s1", "o1"]);
+		// 중복 노출이라도 총계는 고유 공고 수로 센다.
+		expect(totalCount).toBe(2);
+	});
+	it("만료된 유료 공고는 섹션에서 빠지고 organic으로 강등된다", () => {
+		const expired = row("s1", "special", { exposureEndsAt: PAST });
+		const { sections } = buildExposureJobSections({
+			limit: 30,
+			now: NOW,
+			organicRows: [expired],
+			recommendedRows: [],
+			specialRows: [expired],
+			urgentRows: [],
+		});
+		expect(sections.special).toEqual([]);
+		expect(sections.organic.map((r) => r.id)).toEqual(["s1"]);
+	});
+	it("활성(published·미만료) 매칭 공고를 상한 없이 전부 섹션에 포함한다", () => {
+		const specials = Array.from({ length: 7 }, (_, i) =>
+			row(`s${i}`, "special")
+		);
+		const { sections } = buildExposureJobSections({
+			limit: 30,
+			now: NOW,
+			organicRows: [],
+			recommendedRows: [],
+			specialRows: specials,
+			urgentRows: [],
+		});
+		expect(sections.special).toHaveLength(7);
+	});
+	it("유료 공고가 앞자리를 차지해도 무료 공고가 전체 공고에서 밀리지 않는다", () => {
+		const specials = Array.from({ length: 3 }, (_, i) =>
+			row(`s${i}`, "special")
+		);
+		const organicOnly = [row("o0", "standard"), row("o1", "standard")];
+		const { sections } = buildExposureJobSections({
+			limit: 2,
+			now: NOW,
+			organicRows: [...specials, ...organicOnly],
+			recommendedRows: [],
+			specialRows: specials,
+			urgentRows: [],
+		});
+		expect(sections.special).toHaveLength(3);
+		// organic 상한이 유료 섹션 크기만큼 늘어 무료 2건이 그대로 남는다.
+		const organicIds = sections.organic.map((r) => r.id);
+		expect(organicIds).toContain("o0");
+		expect(organicIds).toContain("o1");
+	});
+});
+
+const makeRow = (id: string, exposureType: string) => ({
+	exposureEndsAt: null,
+	exposureType,
+	id,
+});
+
+// 세 그룹을 좌→중→우 순서(8칸)로 이어 붙인 평면 배열. 활성 칸만 non-null이다.
+const flatSlots = <T>(groups: {
+	leftBanner: (T | null)[];
+	premiumBanner: (T | null)[];
+	rightBanner: (T | null)[];
+}): (T | null)[] => [
+	...groups.leftBanner,
+	...groups.premiumBanner,
+	...groups.rightBanner,
+];
+
+const activeIndex = <T>(groups: {
+	leftBanner: (T | null)[];
+	premiumBanner: (T | null)[];
+	rightBanner: (T | null)[];
+}): number => flatSlots(groups).findIndex((slot) => slot !== null);
+
+const activeId = (groups: {
+	leftBanner: ({ id: string } | null)[];
+	premiumBanner: ({ id: string } | null)[];
+	rightBanner: ({ id: string } | null)[];
+}): string | undefined => flatSlots(groups).find((slot) => slot !== null)?.id;
+
+// 8칸(좌0-2·중3-4·우5-7)을 평면화한 id 배열(대기 칸은 null). 컨베이어 검증의 기본 관측면.
+const flatIds = (groups: {
+	leftBanner: ({ id: string } | null)[];
+	premiumBanner: ({ id: string } | null)[];
+	rightBanner: ({ id: string } | null)[];
+}): (string | null)[] => flatSlots(groups).map((slot) => slot?.id ?? null);
+
+const slotOf = (
+	groups: {
+		leftBanner: ({ id: string } | null)[];
+		premiumBanner: ({ id: string } | null)[];
+		rightBanner: ({ id: string } | null)[];
+	},
+	id: string
+): number => flatIds(groups).indexOf(id);
+
+const shownIds = (groups: {
+	leftBanner: ({ id: string } | null)[];
+	premiumBanner: ({ id: string } | null)[];
+	rightBanner: ({ id: string } | null)[];
+}): string[] => flatIds(groups).filter((id): id is string => id !== null);
+
+describe("groupAdBannerJobs", () => {
+	// 풀은 id 오름차순으로 정렬되므로 b0..b(n-1)이 그대로 링 기준 순서가 된다.
+	const pool = (n: number) =>
+		Array.from({ length: n }, (_, i) => makeRow(`b${i}`, "premium-banner"));
+	// interval=1ms·now=버킷값이면 버킷 인덱스를 정수로 직접 지정할 수 있다(결정적 검증용).
+	const atBucket = (rows: ReturnType<typeof pool>, b: number) =>
+		groupAdBannerJobs(rows, new Date(b), 1);
+
+	it("그룹은 고정 길이(좌3·중2·우3) 배열이다", () => {
+		const groups = groupAdBannerJobs(pool(3), NOW);
+		expect(groups.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		expect(groups.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
+		expect(groups.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+	});
+
+	// 성질 ①: 어떤 버킷·어떤 n에서도 같은 광고가 두 칸에 나오지 않는다.
+	it("어떤 버킷에서도 같은 광고가 두 칸에 나오지 않는다", () => {
+		for (const n of [1, 3, 8, 10, 12]) {
+			for (const b of [0, 1, 2, 7, 8, 13, 100]) {
+				const shown = shownIds(atBucket(pool(n), b));
+				expect(new Set(shown).size).toBe(shown.length);
+			}
+		}
+	});
+
+	// 성질 ②: 광고가 8개 이상이면 8칸 전부 서로 다른 광고로 가득 찬다.
+	it("n≥8이면 8칸 전부 서로 다른 광고로 채워진다", () => {
+		for (const n of [8, 12]) {
+			for (const b of [0, 1, 5, 13, 100]) {
+				const ids = flatIds(atBucket(pool(n), b));
+				expect(ids.every((id) => id !== null)).toBe(true);
+				expect(new Set(ids).size).toBe(8);
+			}
+		}
+	});
+
+	// 성질 ④: 광고 1개면 슬롯 (bucket mod 8) 한 칸에만 — 직전 단일칸 동작과 동일.
+	it("n=1이면 슬롯 (bucket mod 8) 한 칸에만 노출된다", () => {
+		const rows = pool(1);
+		for (const b of [0, 1, 7, 8, 15, 100]) {
+			const groups = atBucket(rows, b);
+			expect(shownIds(groups)).toEqual(["b0"]);
+			expect(slotOf(groups, "b0")).toBe(((b % 8) + 8) % 8);
+		}
+	});
+
+	// 성질 ⑤: 광고가 8개 미만이면 등록순 연속 칸을 채운 "열차"로 배치된다.
+	it("n<8이면 광고들이 등록순 연속 칸 '열차'로 배치된다", () => {
+		const rows = pool(3);
+		for (const b of [0, 1, 6, 7, 8]) {
+			const groups = atBucket(rows, b);
+			expect(shownIds(groups)).toHaveLength(3);
+			const head = slotOf(groups, "b0");
+			expect(head).toBe(((b % 8) + 8) % 8);
+			// b0→b1→b2가 진행 방향(mod 8)으로 연속 배치된다.
+			expect(slotOf(groups, "b1")).toBe((head + 1) % 8);
+			expect(slotOf(groups, "b2")).toBe((head + 2) % 8);
+		}
+	});
+
+	it("레거시 left-banner/right-banner 공고도 통합 풀에 합류해 후보가 된다", () => {
+		const rows = [
+			...Array.from({ length: 3 }, (_, i) => makeRow(`l${i}`, "left-banner")),
+			...Array.from({ length: 3 }, (_, i) => makeRow(`r${i}`, "right-banner")),
+		];
+		// n=6<8이라 한 버킷에서 여섯 공고가 모두 열차로 노출된다.
+		const shown = shownIds(groupAdBannerJobs(rows, NOW));
+		expect([...shown].sort()).toEqual(rows.map((r) => r.id).sort());
+	});
+
+	it("만료된 배너는 링 후보에서 빠진다", () => {
+		const rows = [
+			makeRow("live", "left-banner"),
+			{ exposureEndsAt: PAST, exposureType: "left-banner", id: "expired" },
+		];
+		expect(shownIds(groupAdBannerJobs(rows, NOW))).toEqual(["live"]);
+	});
+
+	it("풀이 비면 세 그룹 모두 고정 길이 null 배열이다", () => {
+		const groups = groupAdBannerJobs([], NOW);
+		expect(groups.leftBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		expect(groups.premiumBanner).toHaveLength(PREMIUM_BANNER_MAX_SLOTS);
+		expect(groups.rightBanner).toHaveLength(SIDE_BANNER_MAX_SLOTS);
+		expect(flatSlots(groups).every((slot) => slot === null)).toBe(true);
+	});
+});
+
+describe("groupAdBannerJobs 컨베이어 순환", () => {
+	const pool = (n: number) =>
+		Array.from({ length: n }, (_, i) => makeRow(`b${i}`, "premium-banner"));
+	const atBucket = (rows: ReturnType<typeof pool>, b: number) =>
+		groupAdBannerJobs(rows, new Date(b), 1);
+
+	it("같은 버킷이면 몇 번을 호출해도 같은 슬롯 배치다", () => {
+		const rows = pool(10);
+		const a = groupAdBannerJobs(rows, new Date("2026-07-21T03:10:00Z"));
+		const b = groupAdBannerJobs(rows, new Date("2026-07-21T03:50:00Z"));
+		expect(flatIds(b)).toEqual(flatIds(a));
+	});
+
+	// 성질 ③: 버킷이 1 증가하면 노출 중인 각 광고가 정확히 한 칸 전진한다.
+	it("버킷이 1 증가하면 노출 중인 각 광고가 정확히 한 칸 전진한다", () => {
+		for (const n of [1, 3, 8, 10]) {
+			const rows = pool(n);
+			for (const b of [0, 3, 7, 20]) {
+				const cur = flatIds(atBucket(rows, b));
+				const next = flatIds(atBucket(rows, b + 1));
+				for (let s = 0; s < 7; s++) {
+					const id = cur[s];
+					if (id !== null) {
+						// s<7에 있던 광고는 다음 버킷 s+1 칸으로 이동한다.
+						expect(next[s + 1]).toBe(id);
+					}
+				}
+			}
+		}
+	});
+
+	// 성질 ③(퇴장·재진입): n=10 → 8노출·2대기, 우3(slot7) 다음 L−8=2버킷 대기 후 좌1 재진입.
+	it("n=10: 8칸 노출·2개 대기, 우3 퇴장 후 2버킷 대기했다 좌1로 재진입한다", () => {
+		const rows = pool(10);
+		// 버킷 0에서 b0이 좌1(slot0)에 오도록 j=((s−0) mod 10)=s로 채워진다.
+		expect(shownIds(atBucket(rows, 0))).toHaveLength(8);
+		// b0의 전 생애: 좌1→…→우3(0..7), 이후 2버킷 대기(-1), 버킷 10에서 좌1 재진입.
+		const trail = Array.from({ length: 11 }, (_, b) =>
+			slotOf(atBucket(rows, b), "b0")
+		);
+		expect(trail.slice(0, 8)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+		expect(trail[8]).toBe(-1);
+		expect(trail[9]).toBe(-1);
+		expect(trail[10]).toBe(0);
+		// 대기 중인 두 광고는 b8·b9(등록순 뒤쪽)이고 버킷 0에선 화면에 없다.
+		const shown0 = new Set(shownIds(atBucket(rows, 0)));
+		expect(shown0.has("b8")).toBe(false);
+		expect(shown0.has("b9")).toBe(false);
+	});
+
+	it("광고가 1개면 그 광고가 칸만 옮겨 다닌다", () => {
+		const rows = pool(1);
+		const a = atBucket(rows, 0);
+		const b = atBucket(rows, 1);
+		expect(activeId(a)).toBe("b0");
+		expect(activeId(b)).toBe("b0");
+		expect(activeIndex(b)).toBe(((activeIndex(a) ?? -1) + 1) % 8);
+	});
+
+	it("커스텀 주기(분)를 주면 그 주기 단위로 버킷이 전진한다", () => {
+		const rows = pool(1);
+		const tenMin = 10 * 60 * 1000;
+		const base = new Date("2026-07-21T00:00:00Z").getTime();
+		const a = groupAdBannerJobs(rows, new Date(base), tenMin);
+		// 10분 뒤 = 다음 버킷 → 한 칸 전진.
+		const b = groupAdBannerJobs(rows, new Date(base + tenMin), tenMin);
+		expect(activeIndex(b)).toBe(((activeIndex(a) ?? -1) + 1) % 8);
+		// 기본(1h) 주기라면 10분 뒤는 아직 같은 버킷이라 칸이 그대로다.
+		const c = groupAdBannerJobs(rows, new Date(base + tenMin));
+		const d = groupAdBannerJobs(rows, new Date(base));
+		expect(activeIndex(c)).toBe(activeIndex(d));
+	});
+});
+
+describe("requiredAdBannerUsagesForExposureType", () => {
+	it("배너형은 가로+세로 두 규격을 모두 요구한다", () => {
+		for (const type of ["premium-banner", "left-banner", "right-banner"]) {
+			expect(requiredAdBannerUsagesForExposureType(type)).toEqual([
+				"ad_horizontal",
+				"ad_vertical",
+			]);
+		}
+	});
+	it("배너형이 아니면 빈 배열이다", () => {
+		for (const type of ["standard", "special", "urgent", "recommended", ""]) {
+			expect(requiredAdBannerUsagesForExposureType(type)).toEqual([]);
+		}
+	});
+});

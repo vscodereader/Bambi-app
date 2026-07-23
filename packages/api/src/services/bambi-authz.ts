@@ -2,9 +2,11 @@ import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	type accountStatus,
+	type bambiGender,
 	bambiProfile,
 	type bambiUserRole,
 	chatRoom,
+	employerOrganizationProfile,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, eq, or } from "drizzle-orm";
@@ -17,8 +19,10 @@ export interface SessionLike {
 
 type BambiRole = (typeof bambiUserRole.enumValues)[number];
 type AccountStatus = (typeof accountStatus.enumValues)[number];
+type BambiGender = (typeof bambiGender.enumValues)[number];
 
 export interface BambiAccessProfile {
+	gender: BambiGender | null;
 	isPhoneVerified: boolean;
 	role: BambiRole;
 	status: AccountStatus;
@@ -56,6 +60,7 @@ export const getBambiAccessProfile = async (
 			role: bambiProfile.role,
 			status: bambiProfile.status,
 			isPhoneVerified: bambiProfile.isPhoneVerified,
+			gender: bambiProfile.gender,
 		})
 		.from(bambiProfile)
 		.where(eq(bambiProfile.userId, userId))
@@ -172,6 +177,19 @@ export const requireEmployerPostingAccess = async ({
 	}
 
 	return profile;
+};
+
+// 승인(verified)된 조직만 공고 등록·조직 설정 조작을 허용하기 위한 검사.
+export const isEmployerOrganizationVerified = async (
+	organizationId: string
+): Promise<boolean> => {
+	const [row] = await db
+		.select({ status: employerOrganizationProfile.verificationStatus })
+		.from(employerOrganizationProfile)
+		.where(eq(employerOrganizationProfile.organizationId, organizationId))
+		.limit(1);
+
+	return row?.status === "verified";
 };
 
 export const requireChatParticipant = async (

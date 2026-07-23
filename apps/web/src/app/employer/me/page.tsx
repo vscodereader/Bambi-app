@@ -9,14 +9,19 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@bambi-app/ui/components/card";
+import { Input } from "@bambi-app/ui/components/input";
+import { Label } from "@bambi-app/ui/components/label";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
+import { FieldError } from "@/components/bambi/form-message";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { authClient } from "@/lib/auth-client";
@@ -129,7 +134,7 @@ export default function EmployerMePage() {
 
 	if (session.isPending || mineQuery.isLoading) {
 		return (
-			<PageShell title="매장 정보">
+			<PageShell title="업체 정보">
 				<Skeleton className="h-28 w-full rounded-lg" />
 				<div className="grid gap-3 md:grid-cols-2">
 					<Skeleton className="h-40 w-full rounded-lg" />
@@ -142,8 +147,8 @@ export default function EmployerMePage() {
 	if (!isSignedIn || getErrorCode(mineQuery.error) === "UNAUTHORIZED") {
 		return (
 			<PageShell
-				description="매장 정보는 로그인 후 이용할 수 있습니다."
-				title="매장 정보"
+				description="업체 정보는 로그인 후 이용할 수 있습니다."
+				title="업체 정보"
 			>
 				<EmptyState
 					action={
@@ -161,8 +166,8 @@ export default function EmployerMePage() {
 	if (mineQuery.isError) {
 		return (
 			<PageShell
-				description="매장 정보를 불러오지 못했습니다."
-				title="매장 정보"
+				description="업체 정보를 불러오지 못했습니다."
+				title="업체 정보"
 			>
 				<EmptyState
 					action={
@@ -171,7 +176,7 @@ export default function EmployerMePage() {
 						</Button>
 					}
 					description="로그인 상태와 연결 상태를 확인한 뒤 다시 시도해 주세요."
-					title="매장 정보를 불러올 수 없습니다"
+					title="업체 정보를 불러올 수 없습니다"
 				/>
 			</PageShell>
 		);
@@ -180,8 +185,8 @@ export default function EmployerMePage() {
 	if (!profile) {
 		return (
 			<PageShell
-				description="매장 정보를 보려면 밤비 프로필 설정이 필요합니다."
-				title="매장 정보"
+				description="업체 정보를 보려면 밤비 프로필 설정이 필요합니다."
+				title="업체 정보"
 			>
 				<EmptyState
 					action={
@@ -200,7 +205,7 @@ export default function EmployerMePage() {
 		return (
 			<PageShell
 				description="현재 계정은 구직자 프로필로 설정되어 있습니다."
-				title="매장 정보"
+				title="업체 정보"
 			>
 				<EmptyState
 					action={
@@ -212,7 +217,7 @@ export default function EmployerMePage() {
 						</Link>
 					}
 					description="구직자 계정은 공개 공고를 탐색하고 지원 대화를 시작할 수 있습니다."
-					title="매장 정보 권한이 없습니다"
+					title="업체 정보 권한이 없습니다"
 				/>
 			</PageShell>
 		);
@@ -221,7 +226,7 @@ export default function EmployerMePage() {
 	return (
 		<PageShell
 			description="계정과 사업자 인증 상태를 확인하고 설정을 관리합니다."
-			title="매장 정보"
+			title="업체 정보"
 		>
 			<section aria-labelledby="account" className="flex flex-col gap-3">
 				<h2 className="sr-only" id="account">
@@ -269,6 +274,15 @@ export default function EmployerMePage() {
 						인증 상태는 공고 공개 여부에 영향을 줄 수 있습니다.
 					</p>
 				</div>
+				<BusinessInfoForm
+					defaultBusinessRegistrationNumber={
+						organizationProfiles[0]?.businessRegistrationNumber ?? ""
+					}
+					defaultDisplayName={organizationProfiles[0]?.displayName ?? ""}
+					isRejected={
+						organizationProfiles[0]?.verificationStatus === "rejected"
+					}
+				/>
 				{organizationProfiles.length > 0 ? (
 					<div className="grid gap-3 md:grid-cols-2">
 						{organizationProfiles.map((organizationProfile) => (
@@ -331,10 +345,38 @@ export default function EmployerMePage() {
 							</Link>
 						}
 						className="min-h-0 py-8"
-						description="소속된 조직이 생기면 이곳에서 사업자 인증 상태를 확인할 수 있습니다."
+						description="위 양식으로 업체 정보를 제출하면 사업자 인증을 신청할 수 있습니다."
 						title="등록된 사업자 정보가 없습니다"
 					/>
 				)}
+			</section>
+
+			<Separator />
+
+			<section aria-labelledby="activities" className="flex flex-col gap-3">
+				<h2 className="font-semibold text-lg" id="activities">
+					내 활동
+				</h2>
+				<div className="flex flex-wrap gap-2">
+					<Link
+						className={buttonVariants({ variant: "outline" })}
+						href={"/seeker/me/reports" as Route}
+					>
+						내 신고 내역
+					</Link>
+					<Link
+						className={buttonVariants({ variant: "outline" })}
+						href={"/seeker/me/interviews" as Route}
+					>
+						예정된 면접
+					</Link>
+					<Link
+						className={buttonVariants({ variant: "outline" })}
+						href={"/seeker/me/blocks" as Route}
+					>
+						차단한 상대
+					</Link>
+				</div>
 			</section>
 
 			<Separator />
@@ -376,5 +418,109 @@ export default function EmployerMePage() {
 				로그아웃
 			</Button>
 		</PageShell>
+	);
+}
+
+const BRN_PATTERN = /^\d{3}-\d{2}-\d{5}$/;
+
+function BusinessInfoForm({
+	defaultDisplayName,
+	defaultBusinessRegistrationNumber,
+	isRejected,
+}: {
+	defaultDisplayName: string;
+	defaultBusinessRegistrationNumber: string;
+	isRejected: boolean;
+}) {
+	const queryClient = useQueryClient();
+	const [displayName, setDisplayName] = useState(defaultDisplayName);
+	const [brn, setBrn] = useState(defaultBusinessRegistrationNumber);
+	const [showValidation, setShowValidation] = useState(false);
+
+	const submitMutation = useMutation(
+		orpc.bambi.onboarding.submitEmployerBusinessInfo.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "업체 정보를 제출하지 못했습니다.");
+			},
+			onSuccess: async () => {
+				toast.success("업체 정보를 제출했습니다. 운영자 승인을 기다려 주세요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.onboarding.getMine.queryKey(),
+				});
+			},
+		})
+	);
+
+	const nameError =
+		displayName.trim().length === 0 ? "업체명을 입력해 주세요." : "";
+	const brnError = BRN_PATTERN.test(brn.trim())
+		? ""
+		: "사업자등록번호는 000-00-00000 형식으로 입력해 주세요.";
+
+	// 기존 값에서 바뀐 게 없으면 제출을 막는다(불필요한 재심사 요청 방지).
+	// 단, 반려된 경우엔 동일 정보라도 재제출(재심사 신청)을 허용한다.
+	const isUnchanged =
+		displayName.trim() === defaultDisplayName.trim() &&
+		brn.trim() === defaultBusinessRegistrationNumber.trim();
+	const blockUnchanged = isUnchanged && !isRejected;
+
+	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (nameError || brnError) {
+			setShowValidation(true);
+			return;
+		}
+		submitMutation.mutate({
+			displayName: displayName.trim(),
+			businessRegistrationNumber: brn.trim(),
+		});
+	};
+
+	return (
+		<form onSubmit={handleSubmit}>
+			<Card>
+				<CardContent className="flex flex-col gap-4">
+					<div className="grid gap-4 sm:grid-cols-2">
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="business-name">업체명</Label>
+							<Input
+								aria-invalid={showValidation && Boolean(nameError)}
+								id="business-name"
+								onChange={(event) => setDisplayName(event.target.value)}
+								placeholder="예: 밤비 라운지"
+								value={displayName}
+							/>
+							<FieldError
+								id="business-name-error"
+								message={showValidation ? nameError : ""}
+							/>
+						</div>
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="business-brn">사업자 등록 번호</Label>
+							<Input
+								aria-invalid={showValidation && Boolean(brnError)}
+								id="business-brn"
+								onChange={(event) => setBrn(event.target.value)}
+								placeholder="000-00-00000"
+								value={brn}
+							/>
+							<FieldError
+								id="business-brn-error"
+								message={showValidation ? brnError : ""}
+							/>
+						</div>
+					</div>
+					<div className="flex justify-end">
+						<Button
+							className="w-full sm:w-auto"
+							disabled={submitMutation.isPending || blockUnchanged}
+							type="submit"
+						>
+							{isRejected ? "업체 정보 재제출" : "업체 정보 제출"}
+						</Button>
+					</div>
+				</CardContent>
+			</Card>
+		</form>
 	);
 }

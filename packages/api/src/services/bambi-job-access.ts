@@ -24,7 +24,7 @@ interface JobPostingScopesInput {
 	teamMemberships: TeamPostAccessScope[];
 }
 
-const ORGANIZATION_WIDE_POSTING_ROLES = new Set(["owner", "admin"]);
+export const ORGANIZATION_WIDE_POSTING_ROLES = new Set(["owner", "admin"]);
 
 export const getAccessibleTeamPostScopes = ({
 	organizationIds,

@@ -100,10 +100,18 @@ jobs:
       # socket.io가 인메모리(어댑터 없음)라 당분간 --max-instances=1 로 고정.
       # 웹소켓 유지를 위해 --timeout=3600(최대), --session-affinity 설정.
       # 민감 값은 GCP Secret Manager에서 주입(--set-secrets) — GitHub에는 시크릿 없음.
+      # GCS 자격 증명은 주입하지 않는다(JSON 키 없음). 런타임 SA로 ADC가 해결하고,
+      # 서명 URL은 IAM signBlob으로 만든다 — 권한 부여는 scripts/setup-gcp-cloud-run.sh 참고.
       - name: Deploy to Cloud Run
         env:
           BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
           CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
+          # 공고 이미지·광고 배너용 공개 버킷. dev/prod가 다른 버킷을 쓰며, 이름은
+          # 레포에 남기지 않고 GitHub 환경 변수(test/production)로 주입한다.
+          GCS_PUBLIC_BUCKET: ${{ vars.GCS_PUBLIC_BUCKET }}
+          # 세션 쿠키 prefix를 환경별로 분리. dev/prod가 같은 apex(.bambialba.com)를
+          # 공유하므로 prefix가 같으면 쿠키가 서로 덮어써 세션이 충돌한다.
+          BAMBI_COOKIE_PREFIX: ${{ github.ref_name == 'main' && 'bambi' || 'bambi-dev' }}
         run: |
           gcloud run deploy "$SERVICE" \
             --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/server:${GITHUB_SHA}" \
@@ -119,8 +127,8 @@ jobs:
             --timeout=3600 \
             --session-affinity \
             --add-cloudsql-instances="${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" \
-            --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}" \
-            --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest"
+            --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}##BAMBI_COOKIE_PREFIX=${BAMBI_COOKIE_PREFIX}" \
+            --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest,PORTONE_API_SECRET=${SERVICE}-portone-api-secret:latest"
 
       - name: Show service URL
         run: |

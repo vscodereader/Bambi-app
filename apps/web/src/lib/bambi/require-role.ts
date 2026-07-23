@@ -25,10 +25,24 @@ async function getRouting(): Promise<{
 	};
 }
 
-// 루트("/") 진입 시 역할별 홈으로 보낸다.
+// 루트("/") 진입 시 역할과 무관하게 구직자 홈으로 보낸다. 구인자·운영자는
+// 헤더/탭바의 역할 전환 버튼으로 각자 영역(/employer·/moderator)에 진입한다.
+// getRouting()으로 세션·프로필은 여전히 검증한다(없으면 /welcome).
 export async function redirectToRoleHome(): Promise<void> {
+	await getRouting();
+	redirect("/seeker");
+}
+
+// 구직자 전용 영역: 구직자가 아니면 각자 홈으로. 구인자·운영자도 공고 상세까지는 보지만
+// 그 뒤 채팅 흐름은 구직자 것이라 여기서 막는다.
+// /welcome으로 보내지 않는 게 핵심이다 — 세션·프로필이 없는 상태와 역할이 다른 상태는
+// 다른 상황인데, /welcome으로 보내면 로그인한 구인자에게 "가입하라"는 화면이 떠 로그아웃된
+// 것처럼 보인다. getRouting이 세션·프로필 부재는 이미 /welcome으로 처리한다.
+export async function enforceJobSeekerAccess(): Promise<void> {
 	const routing = await getRouting();
-	redirect(homePathForRole(routing.role));
+	if (routing.role !== "job_seeker") {
+		redirect(homePathForRole(routing.role));
+	}
 }
 
 // 운영자 영역: 관리자가 아니면 각자 홈으로. 관리자면 통과.
@@ -39,12 +53,14 @@ export async function enforceModeratorAccess(): Promise<void> {
 	}
 }
 
-// 구인자 영역: 구인자가 아니면 각자 홈으로. 구인자면 승인 여부만 돌려준다(리다이렉트 없음 →
-// 미검증이어도 레이아웃이 승인 대기 화면을 인라인 렌더하므로 루프가 생기지 않는다).
-export async function resolveEmployerAccess(): Promise<{ verified: boolean }> {
+// 구인자 영역: 구인자가 아니면 각자 홈으로. 구인자면 승인 상태를 돌려준다(리다이렉트 없음).
+// 미승인이어도 화면은 렌더하고, 조작 요소만 approval 상태로 disabled 처리한다.
+export async function resolveEmployerAccess(): Promise<{
+	approvalStatus: Routing["employerApprovalStatus"];
+}> {
 	const routing = await getRouting();
 	if (routing.role !== "employer") {
 		redirect(homePathForRole(routing.role));
 	}
-	return { verified: routing.employerApprovalStatus === "verified" };
+	return { approvalStatus: routing.employerApprovalStatus };
 }

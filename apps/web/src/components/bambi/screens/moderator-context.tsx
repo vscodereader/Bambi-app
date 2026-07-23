@@ -13,14 +13,27 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { toast as sonnerToast } from "sonner";
 import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
 import { getVisibleModerationData } from "@/lib/bambi/moderation-data";
+import {
+	jobPostStatusLabel,
+	riskFlagLabel,
+	userRoleLabel,
+} from "@/lib/bambi/moderation-labels";
+import { reportReasonLabel, targetTypeLabel } from "@/lib/bambi/report-labels";
 import type {
+	CommunityTargetStatus,
 	ManagedUser,
 	QueueItem,
 	Report,
+	ReportCommunityTarget,
+	ReportSeverity,
+	ReportTargetContext,
+	ReportTargetType,
 	UserStatus,
 } from "@/lib/bambi/types";
+import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
 export type ModerationBulkScope = "queue" | "reports" | "users";
@@ -34,14 +47,25 @@ export type ModerationBulkAction =
 	| "warn";
 
 interface ModContextValue {
+	blockChatRoom: (
+		chatRoomId: string,
+		isBlocked: boolean,
+		reason: string
+	) => void;
 	bulkAction: (
 		scope: ModerationBulkScope,
 		action: ModerationBulkAction,
 		reason: string
 	) => void;
 	clearSelection: () => void;
+	isBlockingChatRoom: boolean;
 	isBulkApplying: boolean;
 	isLoading: boolean;
+	moderateCommunityTarget: (
+		report: Report,
+		status: CommunityTargetStatus,
+		reason: string
+	) => void;
 	openReports: number;
 	queue: QueueItem[];
 	reports: Report[];
@@ -64,7 +88,7 @@ interface ApiQueueItem {
 	industryCategory: string;
 	mediaCount: number;
 	organizationDisplayName: string;
-	payAmount: number;
+	payAmount: null | number;
 	payUnit: string;
 	region: string;
 	riskFlags: string[];
@@ -90,6 +114,20 @@ const formatByteSize = (byteSize: number) => {
 	}
 
 	return `${Math.max(1, Math.round(byteSize / 1024))} KB`;
+};
+// 신고 사유 기반 중요도. 안전과 직결된 미처리 신고를 심각으로, 그 외 미처리는 주의,
+// 처리 완료(resolved/dismissed)는 참고로 표시한다(기존 status만 보던 파생을 개선).
+const HIGH_SEVERITY_REPORT_REASONS = new Set([
+	"illegal_or_prohibited_content",
+	"coercion_or_safety",
+	"underage_concern",
+]);
+const getReportSeverity = (reason: string, status: string): ReportSeverity => {
+	if (status !== "open" && status !== "reviewing") {
+		return "low";
+	}
+
+	return HIGH_SEVERITY_REPORT_REASONS.has(reason) ? "high" : "mid";
 };
 const RISKY_BLOCK_TERMS = ["미성년", "성매매", "강요"] as const;
 const getBlockRiskMatches = (
@@ -125,7 +163,7 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 	const mediaSummaries = getQueueMediaSummaries(item);
 	const policyFlags = item.riskFlags.map((flag) => ({
 		label: "정책 확인",
-		match: flag,
+		match: riskFlagLabel(flag),
 		sev: "review" as const,
 	}));
 	const blockFlags = blockRiskMatches.map((match) => ({
@@ -145,12 +183,12 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 			: [
 					{
 						label: "검수 대기",
-						match: item.status,
+						match: jobPostStatusLabel(item.status),
 						sev: "review" as const,
 					},
 				];
 	const detected = [
-		...item.riskFlags,
+		...item.riskFlags.map(riskFlagLabel),
 		...blockRiskMatches,
 		...mediaSummaries,
 	].filter((summary) => summary.length > 0);
@@ -162,7 +200,10 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 		flags,
 		id: item.id,
 		location: item.region,
-		pay: `${item.payUnit} ${item.payAmount.toLocaleString("ko-KR")}원`,
+		pay:
+			item.payAmount === null
+				? NEGOTIABLE_PAY_TEXT
+				: `${item.payUnit} ${item.payAmount.toLocaleString("ko-KR")}원`,
 		receivedAt: formatDate(item.createdAt),
 		refId: `#${item.id.slice(0, 8)}`,
 		risk: reviewFlags.length ? "review" : "warn",
@@ -182,6 +223,147 @@ const getRoleLabel = (role: string) => {
 	}
 
 	return "구직자";
+};
+
+// 피신고 대상의 표시 이름·역할을 targetContext 타입별로 계산한다. 사용자는 실명 +
+// userRoleLabel(role), 공고는 제목 + "공고", 대화방은 연결 공고 제목 + "채팅방". 이름을 알 수
+// 없는 대상(후기·채팅 메시지·맥락 없음)은 대상 id 축약(#앞8자)을 이름으로, 유형 라벨을 역할로
+// 채워 "대상" 하드코딩과 이름·역할의 단어 중복을 피한다. enum 원값은 userRoleLabel로 차단한다.
+const resolveReportTargetParty = (
+	targetContext: ReportTargetContext,
+	targetType: ReportTargetType,
+	targetId: string
+): { name: string; role: string } => {
+	const idShort = `#${targetId.slice(0, 8)}`;
+
+	if (targetContext && "user" in targetContext) {
+		return {
+			name: targetContext.user.displayName ?? idShort,
+			role: userRoleLabel(targetContext.user.role),
+		};
+	}
+
+	if (targetContext && "jobPost" in targetContext) {
+		return {
+			name: targetContext.jobPost.title,
+			role: targetTypeLabel(targetType),
+		};
+	}
+
+	if (targetContext && "chatRoom" in targetContext) {
+		return {
+			name: targetContext.chatRoom.jobPostTitle,
+			role: targetTypeLabel(targetType),
+		};
+	}
+
+	return { name: idShort, role: targetTypeLabel(targetType) };
+};
+
+// 신고자 표시 이름·역할. 서버 reporter(실명·이메일·역할)를 우선 쓰고, displayName이 없으면
+// email로, reporter 자체가 없으면(대상 프로필 유실 등) 기존 합성 문자열로 폴백한다. 역할은
+// userRoleLabel로 enum 원값(job_seeker 등) 노출을 막는다.
+const resolveReportReporter = (
+	reporter: { displayName: string | null; email: string; role: string } | null,
+	reporterUserId: string
+): { name: string; role: string } => {
+	if (!reporter) {
+		return { name: `신고자 ${reporterUserId.slice(0, 6)}`, role: "사용자" };
+	}
+
+	return {
+		name: reporter.displayName ?? reporter.email,
+		role: userRoleLabel(reporter.role),
+	};
+};
+
+const COMMUNITY_TARGET_LABEL_MAX = 18;
+// 대상 라벨에 넣을 제목을 한 줄 길이로 줄인다(초과분은 말줄임).
+const truncateTargetLabel = (value: string): string =>
+	value.length > COMMUNITY_TARGET_LABEL_MAX
+		? `${value.slice(0, COMMUNITY_TARGET_LABEL_MAX)}…`
+		: value;
+
+// 커뮤니티 조치 성공 토스트 문구(숨김·삭제는 대상 종류를 붙이고, 복구는 공통).
+const communityActionMessage = (
+	kind: "post" | "comment",
+	status: CommunityTargetStatus
+): string => {
+	if (status === "published") {
+		return "복구했어요.";
+	}
+	const subject = kind === "post" ? "글을" : "댓글을";
+	if (status === "hidden") {
+		return `${subject} 숨겼어요.`;
+	}
+	return `${subject} 삭제했어요.`;
+};
+
+// 신고 행에서 커뮤니티 대상 정보를 UI 모델 필드로 변환한다. 대상 종류는 컨텍스트가
+// 유실돼도 targetType으로 알 수 있어 상세의 "대상 없음" 안내에 쓴다.
+// targetContext는 targetType별 단일 키 유니온(공고·후기·사용자·대화방·커뮤니티)이라
+// 커뮤니티 키만 `in`으로 좁혀서 읽는다.
+const deriveReportCommunity = (input: {
+	targetContext: ReportTargetContext;
+	targetId: string;
+	targetType: string;
+}): {
+	communityKind: "post" | "comment" | undefined;
+	communityTarget: ReportCommunityTarget | undefined;
+	target: string;
+} => {
+	let communityKind: "post" | "comment" | undefined;
+	if (input.targetType === "community_post") {
+		communityKind = "post";
+	} else if (input.targetType === "community_comment") {
+		communityKind = "comment";
+	}
+
+	const ctx = input.targetContext;
+	const post = ctx && "communityPost" in ctx ? ctx.communityPost : undefined;
+	if (post) {
+		return {
+			communityKind,
+			communityTarget: {
+				authorName: post.authorName,
+				board: post.board,
+				bodyPreview: post.bodyPreview,
+				createdAt: post.createdAt,
+				id: post.id,
+				kind: "post",
+				status: post.status,
+				title: post.title,
+			},
+			target: `커뮤니티 글 · ${truncateTargetLabel(post.title)}`,
+		};
+	}
+
+	const comment =
+		ctx && "communityComment" in ctx ? ctx.communityComment : undefined;
+	if (comment) {
+		return {
+			communityKind,
+			communityTarget: {
+				authorName: comment.authorName,
+				board: comment.postBoard,
+				bodyPreview: comment.bodyPreview,
+				createdAt: comment.createdAt,
+				id: comment.id,
+				kind: "comment",
+				postId: comment.postId,
+				status: comment.status,
+				title: comment.postTitle,
+			},
+			target: `커뮤니티 댓글 · 원글 ${truncateTargetLabel(comment.postTitle)}`,
+		};
+	}
+
+	// 커뮤니티 외 대상(또는 컨텍스트 유실)은 enum 원값 대신 한국어 대상 라벨로 표기한다.
+	return {
+		communityKind,
+		communityTarget: undefined,
+		target: `${targetTypeLabel(input.targetType)} ${input.targetId.slice(0, 8)}`,
+	};
 };
 
 export function ModProvider({ children }: { children: ReactNode }) {
@@ -206,8 +388,10 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		})
 	);
 	const moderationUsersQuery = useQuery(
+		// 운영자 콘솔은 전체 계정을 관리해야 하므로 넉넉한 상한으로 조회한다(목록은
+		// DataTable에서 클라이언트 페이징). 계정이 이 상한을 넘어서면 서버 페이징 필요.
 		orpc.bambi.moderation.listUsers.queryOptions({
-			input: { limit: 50 },
+			input: { limit: 1000 },
 		})
 	);
 	const setJobPostStatusMutation = useMutation(
@@ -219,6 +403,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	const setUserStatusMutation = useMutation(
 		orpc.bambi.moderation.setUserStatus.mutationOptions()
 	);
+	// 커뮤니티 대상(글·댓글) 운영자 상태 변경 프로시저.
+	const setPostStatusByAdminMutation = useMutation(
+		orpc.bambi.community.setPostStatusByAdmin.mutationOptions()
+	);
+	const setCommentStatusByAdminMutation = useMutation(
+		orpc.bambi.community.setCommentStatusByAdmin.mutationOptions()
+	);
 	const bulkSetJobPostStatusMutation = useMutation(
 		orpc.bambi.moderation.bulkSetJobPostStatus.mutationOptions()
 	);
@@ -227,6 +418,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	);
 	const bulkSetUserStatusMutation = useMutation(
 		orpc.bambi.moderation.bulkSetUserStatus.mutationOptions()
+	);
+	const setChatRoomBlockedMutation = useMutation(
+		orpc.bambi.moderation.setChatRoomBlocked.mutationOptions()
 	);
 
 	useEffect(() => {
@@ -257,7 +451,12 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		};
 		const apiQueue = moderationQueueQuery.data?.map(toApiQueueItem);
 		const apiReports = moderationReportsQuery.data?.map<Report>((item) => {
-			const attachments = item.targetContext?.chatMessage?.attachments ?? [];
+			// targetContext는 targetType별 단일 키 유니온이라 chat_message만 좁혀서 첨부를 읽는다.
+			const targetContext = item.targetContext;
+			const attachments =
+				targetContext && "chatMessage" in targetContext
+					? (targetContext.chatMessage?.attachments ?? [])
+					: [];
 			const attachmentMessages = attachments.map((attachment) => ({
 				mine: false,
 				text: `첨부 파일 · ${attachment.fileName} · ${attachment.mimeType} · ${formatByteSize(attachment.byteSize)}`,
@@ -266,20 +465,43 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			const attachmentNote = attachments.length
 				? `첨부 ${attachments.length}개 포함`
 				: null;
+			// 신고자·피신고 표시 이름·역할은 각각 전용 헬퍼가 계산한다. 제재·분기용
+			// 원값(targetId/targetType/targetContext)은 반환에서 그대로 전달한다.
+			const { name: reporterName, role: reporterRole } = resolveReportReporter(
+				item.reporter,
+				item.reporterUserId
+			);
+			const { name: targetName, role: targetRole } = resolveReportTargetParty(
+				targetContext,
+				item.targetType,
+				item.targetId
+			);
+			// 커뮤니티 대상(글·댓글) 컨텍스트·라벨은 별도 헬퍼로 뽑아 콜백 복잡도를 낮춘다.
+			const { communityKind, communityTarget, target } =
+				deriveReportCommunity(item);
 
 			return {
+				communityKind,
+				communityTarget,
 				id: item.id,
 				note: attachmentNote ? `${baseNote}\n${attachmentNote}` : baseNote,
-				reason: item.reason,
-				reporter: `신고자 ${item.reporterUserId.slice(0, 6)}`,
-				reporterRole: "사용자",
-				sev: item.status === "open" ? "mid" : "low",
+				reason: reportReasonLabel(item.reason),
+				reporter: reporterName,
+				reporterRole,
+				sev: getReportSeverity(item.reason, item.status),
 				status:
 					item.status === "open" || item.status === "reviewing"
 						? "open"
 						: "closed",
-				target: `${item.targetType} ${item.targetId.slice(0, 8)}`,
-				targetRole: "대상",
+				// 커뮤니티 대상은 deriveReportCommunity가 만든 라벨("커뮤니티 글 · 제목")이 더
+				// 구체적이고, 그 외 대상은 resolveReportTargetParty가 실명·공고 제목을 찾아준다.
+				target: communityKind ? target : targetName,
+				// 실데이터 신고의 대상 맥락(orpc 추론)을 그대로 전달해 상세에서 타입별 렌더한다.
+				targetContext: item.targetContext,
+				// 실제 대상 id(사용자 제재 등에 사용). 프리뷰 목업 신고에는 없다.
+				targetId: item.targetId,
+				targetRole,
+				targetType: item.targetType,
 				thread: [
 					{
 						mine: false,
@@ -293,14 +515,15 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		const apiUsers = moderationUsersQuery.data?.map<ManagedUser>((item) => ({
 			id: item.userId,
 			joined: formatDate(item.createdAt),
-			name: item.displayName ?? item.email,
+			name: item.name,
+			displayName: item.displayName ?? "",
 			note: item.isPhoneVerified
 				? "휴대폰 인증 완료"
 				: "휴대폰 인증이 필요합니다.",
-			reports: 0,
+			reports: item.reportsCount,
 			role: getRoleLabel(item.role),
 			status: item.status,
-			warnings: item.status === "warned" ? 1 : 0,
+			warnings: item.warningsCount,
 		}));
 		const visibleQueue = getVisibleModerationData({
 			apiData: apiQueue,
@@ -317,13 +540,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			hasApiData: hasUsersApiData || moderationUsersQuery.isSuccess,
 			previewData: users,
 		});
+		// 초기 로딩만 로딩으로 취급한다. 백그라운드 refetch(isFetching)를 포함하면
+		// 상세 페이지(queue/[id])의 `if (isLoading) return null`이 결제 패널을 언마운트하고,
+		// 언마운트→리마운트 때 동일 쿼리를 다시 refetch해 listJobPosts를 무한 호출한다.
 		const isLoading =
 			moderationQueueQuery.isPending ||
-			moderationQueueQuery.isFetching ||
 			moderationReportsQuery.isPending ||
-			moderationReportsQuery.isFetching ||
-			moderationUsersQuery.isPending ||
-			moderationUsersQuery.isFetching;
+			moderationUsersQuery.isPending;
 		const isBulkApplying =
 			bulkSetJobPostStatusMutation.isPending ||
 			bulkSetReportStatusMutation.isPending ||
@@ -367,7 +590,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		const invalidateUsers = async () => {
 			await queryClient.invalidateQueries({
 				queryKey: orpc.bambi.moderation.listUsers.queryKey({
-					input: { limit: 50 },
+					input: { limit: 1000 },
 				}),
 			});
 		};
@@ -442,7 +665,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 						onSuccess: async () => {
 							await queryClient.invalidateQueries({
 								queryKey: orpc.bambi.moderation.listUsers.queryKey({
-									input: { limit: 50 },
+									input: { limit: 1000 },
 								}),
 							});
 						},
@@ -466,6 +689,47 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				)
 			);
 			flash(label);
+		};
+		// 커뮤니티 대상(글·댓글) 콘텐츠 조치. 신고 상태 변경(resolveReport)과는 별개로,
+		// kind에 맞는 프로시저를 호출하고 성공 시 신고 목록을 무효화해 상태 배지를 갱신한다.
+		const moderateCommunityTarget = (
+			report: Report,
+			status: CommunityTargetStatus,
+			reason: string
+		) => {
+			const communityTarget = report.communityTarget;
+			if (!communityTarget) {
+				return;
+			}
+
+			const onSuccess = async () => {
+				await invalidateReports();
+				sonnerToast(communityActionMessage(communityTarget.kind, status));
+			};
+			const onError = () =>
+				sonnerToast("조치를 반영하지 못했어요. 다시 시도해 주세요.");
+
+			if (communityTarget.kind === "post") {
+				setPostStatusByAdminMutation.mutate(
+					{
+						postId: communityTarget.id,
+						reason,
+						reportId: report.id,
+						status,
+					},
+					{ onError, onSuccess }
+				);
+			} else {
+				setCommentStatusByAdminMutation.mutate(
+					{
+						commentId: communityTarget.id,
+						reason,
+						reportId: report.id,
+						status,
+					},
+					{ onError, onSuccess }
+				);
+			}
 		};
 		const applyQueueBulkAction = (
 			selectedIds: string[],
@@ -615,8 +879,34 @@ export function ModProvider({ children }: { children: ReactNode }) {
 
 			setSelected([]);
 		};
+		const blockChatRoom = (
+			chatRoomId: string,
+			isBlocked: boolean,
+			reason: string
+		) => {
+			if (!isUuid(chatRoomId)) {
+				flash("실데이터 대화방에만 차단을 적용할 수 있어요.");
+				return;
+			}
+
+			setChatRoomBlockedMutation.mutate(
+				{ chatRoomId, isBlocked, reason },
+				{
+					onSuccess: async () => {
+						await invalidateReports();
+						flash(
+							isBlocked ? "대화방을 차단했어요" : "대화방 차단을 해제했어요"
+						);
+					},
+					onError: () =>
+						flash("대화방 차단 상태를 반영하지 못했어요. 다시 시도해 주세요."),
+				}
+			);
+		};
 
 		return {
+			blockChatRoom,
+			isBlockingChatRoom: setChatRoomBlockedMutation.isPending,
 			queue: visibleQueue,
 			reports: visibleReports,
 			users: visibleUsers,
@@ -631,6 +921,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			resolveQueue,
 			resolveReport,
 			sanction,
+			moderateCommunityTarget,
 			bulkAction,
 		};
 	}, [
@@ -641,22 +932,22 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		hasReportsApiData,
 		hasUsersApiData,
 		moderationQueueQuery.data,
-		moderationQueueQuery.isFetching,
 		moderationQueueQuery.isPending,
 		moderationQueueQuery.isSuccess,
 		moderationReportsQuery.data,
-		moderationReportsQuery.isFetching,
 		moderationReportsQuery.isPending,
 		moderationReportsQuery.isSuccess,
 		moderationUsersQuery.data,
-		moderationUsersQuery.isFetching,
 		moderationUsersQuery.isPending,
 		moderationUsersQuery.isSuccess,
 		queue,
 		queryClient,
 		reports,
 		selected,
+		setChatRoomBlockedMutation,
+		setCommentStatusByAdminMutation,
 		setJobPostStatusMutation,
+		setPostStatusByAdminMutation,
 		setReportStatusMutation,
 		setUserStatusMutation,
 		toast,
