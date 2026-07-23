@@ -128,7 +128,8 @@ export function ReviewForm({
 					value={body}
 				/>
 				<p className="m-0 text-muted-foreground text-xs" id="review-body-help">
-					개인 연락처나 외부 메신저 아이디는 공개되지 않을 수 있어요.
+					후기는 {REVIEW_BODY_MIN_LENGTH}자 이상 작성해 주세요. 개인 연락처나
+					외부 메신저 아이디는 공개되지 않을 수 있어요.
 				</p>
 				{showValidation && bodyError ? (
 					<p className="m-0 font-semibold text-red-600 text-xs">{bodyError}</p>
