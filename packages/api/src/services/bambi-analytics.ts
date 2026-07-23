@@ -376,6 +376,7 @@ export interface JobPerformanceSectionMetrics {
 }
 
 export interface EmployerJobPerformanceSummary {
+	exposureType: string;
 	jobPostId: string;
 	metrics: JobPerformanceMetrics;
 	organizationId: string;
@@ -492,6 +493,7 @@ export const getEmployerJobPerformanceSummary = async (
 
 	const jobs = await db
 		.select({
+			exposureType: jobPost.exposureType,
 			jobPostId: jobPost.id,
 			organizationId: jobPost.organizationId,
 			paymentStatus: jobPost.paymentStatus,
