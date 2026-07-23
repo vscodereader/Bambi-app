@@ -53,6 +53,7 @@ import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
+import { applyJobPostUpdate, getJobPostMediaSet, jobPostInput } from "./jobs";
 
 export const targetTypeSchema = z.enum([
 	"job_post",
@@ -957,6 +958,61 @@ export const moderationRouter = {
 			}
 
 			return await query;
+		}),
+
+	// 운영자 편집 화면 프리필용. getEditableById(jobs)는 조직 멤버십을 요구해 운영자가
+	// 못 쓰므로, admin 게이트로 임의 공고의 전체 필드+미디어 세트를 그대로 내려준다.
+	getJobPostForAdmin: adminProcedure
+		.input(z.object({ jobPostId: z.string().uuid() }))
+		.handler(async ({ input }) => {
+			const [post] = await db
+				.select()
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!post) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			return {
+				...post,
+				media: await getJobPostMediaSet(post.id),
+			};
+		}),
+
+	// 운영자가 임의 공고 본문/급여/노출/미디어를 직접 수정한다. jobs.update와 동일한 갱신·
+	// 노출확정·미디어 교체 로직(applyJobPostUpdate)을 재사용하되 조직 멤버십 검사만 우회한다.
+	adminUpdateJobPost: adminProcedure
+		.input(z.object({ jobPostId: z.string().uuid(), data: jobPostInput }))
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const [existing] = await db
+				.select()
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const result = await applyJobPostUpdate({
+				actorUserId: admin.userId,
+				data: input.data,
+				existing,
+			});
+
+			await db.insert(adminModerationAction).values({
+				adminUserId: admin.userId,
+				targetType: "job_post",
+				targetId: input.jobPostId,
+				action: "edit_job_post",
+				reason: "운영자 공고 수정",
+			});
+
+			return result;
 		}),
 
 	listUsers: protectedProcedure

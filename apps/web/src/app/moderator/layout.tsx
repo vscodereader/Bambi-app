@@ -11,6 +11,8 @@ import { enforceModeratorAccess } from "@/lib/bambi/require-role";
 
 const MODERATOR_NAV_ITEMS: NavEntry[] = [
 	{ href: "/moderator", label: "검수 큐" },
+	// 신규 라우트는 Next typedRoutes 생성 타입에 아직 없을 수 있어 캐스팅한다.
+	{ href: "/moderator/jobs" as Route, label: "공고 관리" },
 	{ href: "/moderator/reports", label: "신고" },
 	{ href: "/moderator/users", label: "사용자" },
 	{
