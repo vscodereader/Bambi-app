@@ -198,6 +198,33 @@ const createBambiProfile = async ({
 	return createdProfile;
 };
 
+// 본인이 소유자인 조직에 본인 외 멤버가 남아 있으면 true. 탈퇴 차단 판정과
+// 웹의 탈퇴 버튼 사전 비활성화가 같은 규칙을 공유하도록 한 곳에 둔다.
+const hasRemainingMembersInOwnedOrganizations = async (
+	userId: string
+): Promise<boolean> => {
+	const ownedOrganizationIds = (
+		await db
+			.select({ organizationId: member.organizationId })
+			.from(member)
+			.where(and(eq(member.userId, userId), eq(member.role, "owner")))
+	).map((row) => row.organizationId);
+	if (ownedOrganizationIds.length === 0) {
+		return false;
+	}
+	const [remainingMember] = await db
+		.select({ userId: member.userId })
+		.from(member)
+		.where(
+			and(
+				inArray(member.organizationId, ownedOrganizationIds),
+				ne(member.userId, userId)
+			)
+		)
+		.limit(1);
+	return Boolean(remainingMember);
+};
+
 export const onboardingRouter = {
 	getMine: protectedProcedure.handler(async ({ context }) => {
 		const userId = context.session.user.id;
@@ -599,6 +626,14 @@ export const onboardingRouter = {
 		return { recorded: rows.length };
 	}),
 
+	// 탈퇴 가능 여부 조회(입력 없음). 웹은 이 값으로 탈퇴 버튼을 사전 비활성화한다 —
+	// 최종 가드는 withdrawMyAccount의 서버 검사다.
+	getWithdrawEligibility: protectedProcedure.handler(async ({ context }) => ({
+		blockedByTeamMembers: await hasRemainingMembersInOwnedOrganizations(
+			context.session.user.id
+		),
+	})),
+
 	// 회원 탈퇴(소프트 삭제). 본인이 소유한 조직에 다른 멤버가 남아 있으면 차단한다 —
 	// 팀 관리에서 멤버를 모두 정리한 뒤 탈퇴할 수 있다(혼자 남은 소유자는 그대로 탈퇴 가능).
 	// deletedAt만 세우고 개인정보는 보존기간 동안 유지한다 — 파기는 운영자 배치
@@ -608,29 +643,11 @@ export const onboardingRouter = {
 		const userId = context.session.user.id;
 
 		// 본인이 소유자인 조직에 본인 외 멤버가 남아 있으면 탈퇴 차단.
-		const ownedOrganizationIds = (
-			await db
-				.select({ organizationId: member.organizationId })
-				.from(member)
-				.where(and(eq(member.userId, userId), eq(member.role, "owner")))
-		).map((row) => row.organizationId);
-		if (ownedOrganizationIds.length > 0) {
-			const [remainingMember] = await db
-				.select({ userId: member.userId })
-				.from(member)
-				.where(
-					and(
-						inArray(member.organizationId, ownedOrganizationIds),
-						ne(member.userId, userId)
-					)
-				)
-				.limit(1);
-			if (remainingMember) {
-				throw new ORPCError("CONFLICT", {
-					message:
-						"팀에 다른 멤버가 남아 있어 탈퇴할 수 없어요. 팀 관리에서 멤버를 모두 정리한 뒤 다시 시도해 주세요.",
-				});
-			}
+		if (await hasRemainingMembersInOwnedOrganizations(userId)) {
+			throw new ORPCError("CONFLICT", {
+				message:
+					"팀에 다른 멤버가 남아 있어 탈퇴할 수 없어요. 팀 관리에서 멤버를 모두 정리한 뒤 다시 시도해 주세요.",
+			});
 		}
 
 		await db.transaction(async (tx) => {

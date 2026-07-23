@@ -5,6 +5,7 @@
 // 보낸다. 조직 소유자 차단 등 서버 거절 사유는 토스트로 그대로 보여준다.
 // 보존기간은 운영자 설정(siteSettings.getMemberPolicy)을 그대로 표시한다.
 
+import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Dialog,
@@ -29,6 +30,13 @@ export function WithdrawAccountSection() {
 	// 설정값 → 기본값 순 폴백. 쿼리 로딩 중에도 안내가 비지 않게 30을 마지막에 둔다.
 	const retentionDays =
 		memberPolicyQuery.data?.days ?? memberPolicyQuery.data?.defaultDays ?? 30;
+	// 소유 조직에 다른 멤버가 남아 있으면 탈퇴 버튼을 사전 비활성화한다. 로딩 중에는
+	// 활성 유지(서버가 최종 가드) — 명시적 true일 때만 막는다.
+	const eligibilityQuery = useQuery(
+		orpc.bambi.onboarding.getWithdrawEligibility.queryOptions()
+	);
+	const blockedByTeamMembers =
+		eligibilityQuery.data?.blockedByTeamMembers === true;
 
 	const withdrawMutation = useMutation(
 		orpc.bambi.onboarding.withdrawMyAccount.mutationOptions({
@@ -56,8 +64,17 @@ export function WithdrawAccountSection() {
 					보관 기간에는 같은 이메일·본인인증으로 재가입할 수 없어요.
 				</p>
 			</div>
+			{blockedByTeamMembers ? (
+				<Alert variant="destructive">
+					<AlertDescription>
+						팀에 다른 멤버가 남아 있어 지금은 탈퇴할 수 없어요. 팀 관리에서
+						멤버를 모두 정리한 뒤 탈퇴할 수 있어요.
+					</AlertDescription>
+				</Alert>
+			) : null}
 			<Button
 				className="self-start"
+				disabled={blockedByTeamMembers}
 				onClick={() => setOpen(true)}
 				variant="destructive"
 			>
