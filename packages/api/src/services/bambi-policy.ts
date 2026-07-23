@@ -51,6 +51,7 @@ interface CanStartChatInput {
 interface CanRevealContactInput {
 	interviewStatus: InterviewStatus;
 	ownerConsented: boolean;
+	ownerIsEmployer: boolean;
 	ownerPhoneVerified: boolean;
 }
 
@@ -118,27 +119,40 @@ export const canStartChat = ({
 	isPhoneVerified &&
 	jobPostStatus === "published";
 
+// 완료된 면접도 확정을 거친 것이므로 연락처 흐름을 유지한다(완료 버튼을 눌러도
+// 연락처 보기·공개가 꺼지지 않게). confirmed·completed만 인정하고 declined·canceled는
+// 계속 차단한다. 두 정책이 같은 판정을 쓰도록 이 게이트 한 곳으로 모은다.
+export const isContactRevealEligibleInterviewStatus = (
+	status: string
+): boolean => status === "confirmed" || status === "completed";
+
 export const canRevealContact = ({
 	interviewStatus,
 	ownerConsented,
+	ownerIsEmployer,
 	ownerPhoneVerified,
 }: CanRevealContactInput): boolean =>
-	interviewStatus === "confirmed" && ownerConsented && ownerPhoneVerified;
+	ownerIsEmployer &&
+	isContactRevealEligibleInterviewStatus(interviewStatus) &&
+	ownerConsented &&
+	ownerPhoneVerified;
 
 export interface CanViewCounterpartContactInput {
 	counterpartConsented: boolean;
 	interviewStatus: string;
-	mineConsented: boolean;
+	viewerIsEmployer: boolean;
 }
 
-// 상대 연락처는 양쪽이 모두 동의해야 보인다. 내가 동의하지 않은 채 상대 것만 받아가는
-// 무임승차를 막으려고 mineConsented를 함께 요구한다.
+// 연락처 공개는 구인자만 한다. 구직자는 공개할 연락처가 없으므로 구인자 동의만으로
+// 열람하고, 구인자는 상대(구직자) 연락처를 볼 수 없다(공개 주체가 없음).
 export const canViewCounterpartContact = ({
 	counterpartConsented,
 	interviewStatus,
-	mineConsented,
+	viewerIsEmployer,
 }: CanViewCounterpartContactInput): boolean =>
-	interviewStatus === "confirmed" && mineConsented && counterpartConsented;
+	!viewerIsEmployer &&
+	isContactRevealEligibleInterviewStatus(interviewStatus) &&
+	counterpartConsented;
 
 export const getEmployerVerificationStatusLabel = (
 	status: EmployerVerificationStatus

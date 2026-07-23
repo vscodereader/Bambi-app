@@ -117,8 +117,9 @@ const cleanup = async (seed: Seed): Promise<void> => {
 };
 
 describe("isAdvertiserEligibleRole", () => {
-	it("allows owner and admin", () => {
+	it("allows owner and manager (legacy admin included)", () => {
 		expect(advertiser.isAdvertiserEligibleRole("owner")).toBe(true);
+		expect(advertiser.isAdvertiserEligibleRole("manager")).toBe(true);
 		expect(advertiser.isAdvertiserEligibleRole("admin")).toBe(true);
 	});
 

@@ -19,7 +19,7 @@ export function jobPostStatusLabel(status: string): string {
 }
 
 // 후기 검수 상태(review_status): published·pending_review·hidden.
-const REVIEW_STATUS_LABELS: Record<string, string> = {
+export const REVIEW_STATUS_LABELS: Record<string, string> = {
 	published: "게시됨",
 	pending_review: "검수 대기",
 	hidden: "숨김",

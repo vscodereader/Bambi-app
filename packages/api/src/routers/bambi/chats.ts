@@ -983,17 +983,22 @@ export const chatsRouter = {
 				jobSeekerUserId: room.jobSeekerUserId,
 			});
 
+			const viewerIsEmployer = profile.userId === room.employerUserId;
+
+			// 완료된 면접도 확정을 거친 것이라 연락처 흐름을 유지한다(완료 버튼을 눌러도
+			// 조기 반환으로 꺼지지 않게). declined·canceled는 계속 제외.
 			const [confirmedSchedule] = await db
 				.select({
 					id: interviewSchedule.id,
 					locationNote: interviewSchedule.locationNote,
 					scheduledAt: interviewSchedule.scheduledAt,
+					status: interviewSchedule.status,
 				})
 				.from(interviewSchedule)
 				.where(
 					and(
 						eq(interviewSchedule.chatRoomId, room.id),
-						eq(interviewSchedule.status, "confirmed")
+						inArray(interviewSchedule.status, ["confirmed", "completed"])
 					)
 				)
 				.limit(1);
@@ -1004,51 +1009,55 @@ export const chatsRouter = {
 					confirmedSchedule: null,
 					counterpartContacts: [],
 					mineContacts: [],
+					viewerIsEmployer,
 				};
 			}
 
-			const counterpartUserId =
-				profile.userId === room.jobSeekerUserId
-					? room.employerUserId
-					: room.jobSeekerUserId;
+			// 연락처 공개는 구인자만 한다. 구인자 명의 행만 읽으므로 과거 구직자 동의
+			// 행은 마이그레이션 없이 조회에서 제외된다.
+			const employerContacts = (
+				await db
+					.select({
+						contactMethod: contactRevealConsent.contactMethod,
+						contactValue: contactRevealConsent.contactValue,
+					})
+					.from(contactRevealConsent)
+					.where(
+						and(
+							eq(
+								contactRevealConsent.interviewScheduleId,
+								confirmedSchedule.id
+							),
+							eq(contactRevealConsent.userId, room.employerUserId)
+						)
+					)
+			).map(({ contactMethod, contactValue }) => ({
+				contactMethod,
+				contactValue,
+			}));
 
-			const consents = await db
-				.select({
-					contactMethod: contactRevealConsent.contactMethod,
-					contactValue: contactRevealConsent.contactValue,
-					userId: contactRevealConsent.userId,
-				})
-				.from(contactRevealConsent)
-				.where(
-					eq(contactRevealConsent.interviewScheduleId, confirmedSchedule.id)
-				);
-
-			const mineContacts = consents
-				.filter((row) => row.userId === profile.userId)
-				.map(({ contactMethod, contactValue }) => ({
-					contactMethod,
-					contactValue,
-				}));
-			const counterpartRows = consents.filter(
-				(row) => row.userId === counterpartUserId
-			);
+			if (viewerIsEmployer) {
+				return {
+					canViewCounterpart: false,
+					confirmedSchedule,
+					counterpartContacts: [],
+					mineContacts: employerContacts,
+					viewerIsEmployer,
+				};
+			}
 
 			const canViewCounterpart = canViewCounterpartContact({
-				counterpartConsented: counterpartRows.length > 0,
-				interviewStatus: "confirmed",
-				mineConsented: mineContacts.length > 0,
+				counterpartConsented: employerContacts.length > 0,
+				interviewStatus: confirmedSchedule.status,
+				viewerIsEmployer,
 			});
 
 			return {
 				canViewCounterpart,
 				confirmedSchedule,
-				counterpartContacts: canViewCounterpart
-					? counterpartRows.map(({ contactMethod, contactValue }) => ({
-							contactMethod,
-							contactValue,
-						}))
-					: [],
-				mineContacts,
+				counterpartContacts: canViewCounterpart ? employerContacts : [],
+				mineContacts: [],
+				viewerIsEmployer,
 			};
 		}),
 
@@ -1081,6 +1090,7 @@ export const chatsRouter = {
 				!canRevealContact({
 					interviewStatus: schedule.status,
 					ownerConsented: true,
+					ownerIsEmployer: profile.userId === room.employerUserId,
 					ownerPhoneVerified: profile.isPhoneVerified,
 				})
 			) {

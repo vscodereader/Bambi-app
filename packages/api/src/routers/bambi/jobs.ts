@@ -37,6 +37,7 @@ import {
 	previewTemplateToExposureType,
 	requiredAdBannerUsagesForExposureType,
 } from "../../services/bambi-ad-exposure";
+import { discountedAdAmount } from "../../services/bambi-ad-pricing";
 import {
 	getRecentJobPerformanceMetrics,
 	recordAdBannerImpressions,
@@ -66,6 +67,7 @@ import {
 	validateJobPostImageUpload,
 	validateJobPostMediaSet,
 } from "../../services/bambi-job-media-policy";
+import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
 import {
 	type EmployerVerificationStatus,
 	getInitialJobPostStatus,
@@ -552,7 +554,12 @@ const resolveJobPostExposure = async (input: {
 
 	return {
 		adProductId: product.id,
-		exposureAmount: priceOption.amount,
+		// 구매 시점 할인가 스냅샷: 선택한 가격 옵션의 discountPercent(없으면 0)를 적용해 결제
+		// 금액을 확정한다. 이후 상품 할인율이 바뀌어도 이미 확정된 이 금액에는 영향을 주지 않는다.
+		exposureAmount: discountedAdAmount(
+			priceOption.amount,
+			priceOption.discountPercent ?? 0
+		),
 		exposureDurationDays: priceOption.days,
 		exposureType,
 		manualBoostsPerDay: isBanner ? 0 : product.manualBoostsPerDay,
@@ -942,10 +949,7 @@ export const jobsRouter = {
 			(membership) => membership.organizationId
 		);
 		const manageableOrganizationIds = organizationMemberships
-			.filter(
-				(membership) =>
-					membership.role === "owner" || membership.role === "admin"
-			)
+			.filter((membership) => isOrganizationManagerRole(membership.role))
 			.map((membership) => membership.organizationId);
 		const accessibleTeamPostScopes = getAccessibleTeamPostScopes({
 			organizationIds,

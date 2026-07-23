@@ -44,4 +44,26 @@ describe("ad product form", () => {
 			'value={autoBoostsPerDay === 0 ? "" : autoBoostsPerDay}'
 		);
 	});
+
+	it("collects per-option discountPercent as an optional field, clamped 0~100", () => {
+		const source = readComponent("ad-product-form.tsx");
+		// 할인율은 상품이 아니라 가격 옵션(기간)마다 매긴다 — optional 정수
+		expect(source).toContain("discountPercent?: number;");
+		// 상품 레벨 할인 필드·상태는 제거됐다
+		expect(source).not.toContain("setDiscountPercent");
+		expect(source).not.toContain('htmlFor="p-discount"');
+		// 행별 할인율 입력은 zero-clearable 패턴을 재사용한다
+		expect(source).toContain(
+			'value={option.discountPercent ? option.discountPercent : ""}'
+		);
+		// 0~100 정수로 클램프한다
+		expect(source).toContain("Math.max(0, Math.min(100, Math.floor(value)))");
+		expect(source).toContain(
+			"discountPercent: clampPercent(Number(e.target.value) || 0)"
+		);
+		// 옵션 할인율이 0이면 필드를 생략, 1~100이면 포함해 저장한다
+		expect(source).toContain("percent > 0");
+		expect(source).toContain("{ amount, days, discountPercent: percent }");
+		expect(source).toContain("{ amount, days }");
+	});
 });

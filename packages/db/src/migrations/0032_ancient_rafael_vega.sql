@@ -1,0 +1,1 @@
+ALTER TABLE "ad_product" ADD COLUMN "discount_percent" integer DEFAULT 0 NOT NULL;

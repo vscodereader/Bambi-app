@@ -32,6 +32,7 @@ import {
 	getKstDayStart,
 	resolveBoostEligibility,
 } from "../../services/bambi-job-boost";
+import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
 import { derivePremiumQueue } from "../../services/bambi-premium-capacity";
 
 // 구 jobPromotionCampaign 축 라우터를 광고 상품 축으로 재작성했다.
@@ -63,10 +64,7 @@ export const promotionsRouter = {
 			(membership) => membership.organizationId
 		);
 		const manageableOrganizationIds = organizationMemberships
-			.filter(
-				(membership) =>
-					membership.role === "owner" || membership.role === "admin"
-			)
+			.filter((membership) => isOrganizationManagerRole(membership.role))
 			.map((membership) => membership.organizationId);
 		const accessibleTeamPostScopes = getAccessibleTeamPostScopes({
 			organizationIds,

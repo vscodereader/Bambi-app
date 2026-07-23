@@ -2,6 +2,13 @@
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@bambi-app/ui/components/dropdown-menu";
+import {
 	Popover,
 	PopoverContent,
 	PopoverTitle,
@@ -10,6 +17,16 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	ArrowUpToLineIcon,
+	CircleAlertIcon,
+	CirclePlayIcon,
+	ClockIcon,
+	EllipsisIcon,
+	FileTextIcon,
+	ListIcon,
+} from "lucide-react";
+import type { Route } from "next";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -55,10 +72,10 @@ interface AdListItem {
 }
 
 const adStatusGroups = [
-	{ id: "all", label: "전체" },
-	{ id: "active", label: "진행 중" },
-	{ id: "pending_payment", label: "결제 대기" },
-	{ id: "expired", label: "만료" },
+	{ icon: ListIcon, id: "all", label: "전체" },
+	{ icon: CirclePlayIcon, id: "active", label: "진행 중" },
+	{ icon: ClockIcon, id: "pending_payment", label: "결제 대기" },
+	{ icon: CircleAlertIcon, id: "expired", label: "만료" },
 ] as const;
 
 type AdStatusGroupId = (typeof adStatusGroups)[number]["id"];
@@ -74,6 +91,47 @@ const remainingBoosts = (ad: AdListItem): number =>
 
 const exposureLabel = (ad: AdListItem): string =>
 	EXPOSURE_TYPE_LABELS[ad.exposureType as ExposureType] ?? ad.exposureType;
+
+interface BoostState {
+	canBoost: boolean;
+	// 끌어올리기를 누를 수 없을 때 사유. 누를 수 있으면 null.
+	disabledReason: null | string;
+}
+
+// 끌어올리기 버튼의 활성 여부와, 비활성일 때 왜 못 누르는지 사유를 함께 계산한다.
+// (기존 액션 셀이 안내하던 정보량을 드롭다운 안에서 그대로 유지하기 위함)
+const getBoostState = (ad: AdListItem): BoostState => {
+	if (isBannerExposureType(ad.exposureType)) {
+		return {
+			canBoost: false,
+			disabledReason: "배너 광고는 끌어올리기 대상이 아닙니다.",
+		};
+	}
+
+	if (ad.manualBoostsPerDay === 0) {
+		return { canBoost: false, disabledReason: "끌어올리기 미포함 상품입니다." };
+	}
+
+	if (
+		ad.status !== "published" ||
+		ad.paymentStatus !== "paid" ||
+		!isExposureActive(ad.exposureEndsAt, Date.now())
+	) {
+		return {
+			canBoost: false,
+			disabledReason: "노출 중인 공고만 끌어올릴 수 있습니다.",
+		};
+	}
+
+	if (remainingBoosts(ad) === 0) {
+		return {
+			canBoost: false,
+			disabledReason: "오늘 끌어올리기를 모두 사용했습니다.",
+		};
+	}
+
+	return { canBoost: true, disabledReason: null };
+};
 
 // 탭 분류: 노출 만료가 최우선(과거 결제 이력이 있어야 만료가 생김), 그다음 미결제,
 // 공개 중 광고가 "진행 중". 검수 대기·반려·숨김·임시 저장은 "전체"에서만 보인다.
@@ -262,38 +320,44 @@ function getAdColumns({
 			headerClassName: "text-right",
 			cellClassName: "text-right",
 			cell: (ad) => {
-				if (isBannerExposureType(ad.exposureType)) {
-					return (
-						<span className="text-muted-foreground text-xs">
-							배너 광고는 끌어올리기 대상이 아닙니다
-						</span>
-					);
-				}
-
-				if (ad.manualBoostsPerDay === 0) {
-					return (
-						<span className="text-muted-foreground text-xs">
-							끌어올리기 미포함
-						</span>
-					);
-				}
-
-				const remainingToday = remainingBoosts(ad);
-				const canBoost =
-					ad.status === "published" &&
-					ad.paymentStatus === "paid" &&
-					isExposureActive(ad.exposureEndsAt, Date.now()) &&
-					remainingToday > 0;
+				const { canBoost, disabledReason } = getBoostState(ad);
 
 				return (
-					<Button
-						disabled={!canBoost || isBoostPending}
-						onClick={() => onBoost(ad.jobPostId)}
-						size="sm"
-						type="button"
-					>
-						끌어올리기
-					</Button>
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							aria-label="메뉴 열기"
+							className={cn(
+								buttonVariants({ size: "icon-sm", variant: "ghost" })
+							)}
+						>
+							<EllipsisIcon />
+							<span className="sr-only">메뉴 열기</span>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end" className="min-w-48">
+							<DropdownMenuItem
+								disabled={!canBoost || isBoostPending}
+								onClick={() => onBoost(ad.jobPostId)}
+							>
+								<ArrowUpToLineIcon />
+								끌어올리기
+							</DropdownMenuItem>
+							{disabledReason ? (
+								// DropdownMenuLabel(base-ui GroupLabel)은 Menu.Group 밖에서 크래시라 일반 텍스트로 렌더한다.
+								<p className="m-0 px-2 pb-2 text-muted-foreground text-xs">
+									{disabledReason}
+								</p>
+							) : null}
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								render={
+									<Link href={`/employer/jobs/${ad.jobPostId}/edit` as Route} />
+								}
+							>
+								<FileTextIcon />
+								공고 보기
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				);
 			},
 		},
@@ -424,9 +488,10 @@ export default function EmployerAdsPage() {
 				value={selectedGroupId}
 			>
 				<TabsList className="max-w-full flex-wrap">
-					{adStatusGroups.map((group) => (
-						<TabsTrigger key={group.id} value={group.id}>
-							{group.label}
+					{adStatusGroups.map(({ icon: Icon, id, label }) => (
+						<TabsTrigger key={id} value={id}>
+							<Icon />
+							{label}
 						</TabsTrigger>
 					))}
 				</TabsList>

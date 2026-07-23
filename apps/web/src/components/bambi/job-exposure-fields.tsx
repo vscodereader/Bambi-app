@@ -18,12 +18,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Ban, Info } from "lucide-react";
 import { useMemo } from "react";
 
+import { AdPriceTag } from "@/components/bambi/ad-price-tag";
 import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
 import { FieldError, FieldLabel } from "@/components/bambi/form-message";
 import {
 	type AdCatalogProduct,
 	formatAdDuration,
 	formatAdPrice,
+	formatAdPriceLabel,
+	resolveAdPrice,
 } from "@/lib/bambi/ad-catalog";
 import type { JobFormErrors, JobPaymentMethod } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
@@ -88,6 +91,70 @@ interface JobExposureFieldsProps {
 const isJobPaymentMethod = (value: string): value is JobPaymentMethod =>
 	value === "card" || value === "bank_transfer";
 
+type AdPriceOption = AdCatalogProduct["priceOptions"][number];
+
+// 선택된 이용 기간에 해당하는 원가 옵션(없으면 undefined). 결제 예정 금액의 원가 취소선
+// 표기에 쓴다.
+const findDurationOption = (
+	product: AdCatalogProduct | null,
+	days: number | null
+): AdPriceOption | undefined =>
+	product && typeof days === "number"
+		? product.priceOptions.find((priceOption) => priceOption.days === days)
+		: undefined;
+
+// 결제 예정 금액. 할인 옵션이면 원가 취소선+할인가+뱃지, 아니면 원가만 노출한다.
+function PayableTotal({
+	amount,
+	option,
+	show,
+}: {
+	amount: number | null;
+	option: AdPriceOption | undefined;
+	show: boolean;
+}) {
+	if (!show) {
+		return null;
+	}
+
+	return (
+		<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+			<span className="font-medium text-muted-foreground text-sm">
+				결제 예정 금액
+			</span>
+			{option ? (
+				<AdPriceTag
+					amount={option.amount}
+					className="justify-end"
+					discountPercent={option.discountPercent ?? 0}
+					priceClassName="min-w-0 break-words font-semibold text-lg text-primary"
+				/>
+			) : (
+				<span className="min-w-0 break-words font-semibold text-lg text-primary">
+					{amount === null ? "" : formatAdPrice(amount)}
+				</span>
+			)}
+		</div>
+	);
+}
+
+// 이용 기간 선택값 → {기간, 결제 금액}. 결제 금액은 할인가로 확정한다(서버 스냅샷과 동일 계산).
+const resolveDurationSelection = (
+	value: string | null,
+	product: AdCatalogProduct | null
+): { amount: number | null; days: number | null } => {
+	const days = value ? Number(value) : null;
+	const option = findDurationOption(product, days);
+
+	return {
+		amount: option
+			? resolveAdPrice(option.amount, option.discountPercent ?? 0)
+					.discountedAmount
+			: null,
+		days: option?.days ?? null,
+	};
+};
+
 export function JobExposureFields({
 	adProductId,
 	errors,
@@ -115,6 +182,11 @@ export function JobExposureFields({
 		: false;
 	const toggleValue = adProductId ?? FREE_EXPOSURE_VALUE;
 	const showPaidOptions = Boolean(selectedProduct);
+	// 결제 예정 금액의 원가 취소선 표기를 위해 선택된 기간의 원가 옵션을 함께 잡아둔다.
+	const selectedDurationOption = findDurationOption(
+		selectedProduct,
+		exposureDurationDays
+	);
 	const showTotal =
 		showPaidOptions &&
 		typeof exposureDurationDays === "number" &&
@@ -131,6 +203,11 @@ export function JobExposureFields({
 		if (products.some((product) => product.id === next)) {
 			onProductChange(next);
 		}
+	};
+
+	const handleDurationValueChange = (value: string | null) => {
+		const selection = resolveDurationSelection(value, selectedProduct);
+		onDurationChange(selection.days, selection.amount);
 	};
 
 	return (
@@ -211,24 +288,15 @@ export function JobExposureFields({
 							<Select
 								items={(selectedProduct?.priceOptions ?? []).map(
 									(priceOption) => ({
-										label: `${formatAdDuration(priceOption.days)} · ${formatAdPrice(priceOption.amount)}`,
+										label: `${formatAdDuration(priceOption.days)} · ${formatAdPriceLabel(
+											priceOption.amount,
+											priceOption.discountPercent ?? 0
+										)}`,
 										value: String(priceOption.days),
 									})
 								)}
 								name="exposureDurationDays"
-								onValueChange={(value) => {
-									const days = value ? Number(value) : null;
-									const option =
-										days === null
-											? undefined
-											: selectedProduct?.priceOptions.find(
-													(priceOption) => priceOption.days === days
-												);
-									onDurationChange(
-										option?.days ?? null,
-										option?.amount ?? null
-									);
-								}}
+								onValueChange={handleDurationValueChange}
 								value={exposureDurationDays ? String(exposureDurationDays) : ""}
 							>
 								<SelectTrigger
@@ -250,7 +318,11 @@ export function JobExposureFields({
 											value={String(priceOption.days)}
 										>
 											{formatAdDuration(priceOption.days)} ·{" "}
-											{formatAdPrice(priceOption.amount)}
+											<AdPriceTag
+												amount={priceOption.amount}
+												discountPercent={priceOption.discountPercent ?? 0}
+												priceClassName="font-medium"
+											/>
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -262,16 +334,11 @@ export function JobExposureFields({
 						</div>
 					) : null}
 
-					{showTotal ? (
-						<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-							<span className="font-medium text-muted-foreground text-sm">
-								결제 예정 금액
-							</span>
-							<span className="min-w-0 break-words font-semibold text-lg text-primary">
-								{formatAdPrice(exposureAmount)}
-							</span>
-						</div>
-					) : null}
+					<PayableTotal
+						amount={exposureAmount}
+						option={selectedDurationOption}
+						show={showTotal}
+					/>
 
 					{showPaidOptions ? (
 						<div className="flex flex-col gap-2">

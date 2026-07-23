@@ -31,6 +31,10 @@ function SheetClose(props: DialogPrimitive.Close.Props) {
 	return <DialogPrimitive.Close data-slot="sheet-close" {...props} />;
 }
 
+function SheetTrigger(props: DialogPrimitive.Trigger.Props) {
+	return <DialogPrimitive.Trigger data-slot="sheet-trigger" {...props} />;
+}
+
 function SheetTitle({ className, ...props }: DialogPrimitive.Title.Props) {
 	return (
 		<DialogPrimitive.Title
@@ -64,4 +68,4 @@ function SheetContent({
 	);
 }
 
-export { Sheet, SheetClose, SheetContent, SheetTitle };
+export { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger };

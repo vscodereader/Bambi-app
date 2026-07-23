@@ -1,5 +1,9 @@
 import { db } from "@bambi-app/db";
-import { interviewSchedule, review } from "@bambi-app/db/schema/bambi";
+import {
+	bambiProfile,
+	interviewSchedule,
+	review,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq, or } from "drizzle-orm";
 import z from "zod";
@@ -9,12 +13,22 @@ import {
 	requireActiveBambiProfile,
 	requireChatParticipant,
 } from "../../services/bambi-authz";
-import { validateReviewInput } from "../../services/bambi-review-policy";
+import {
+	maskReviewerDisplayName,
+	validateReviewInput,
+} from "../../services/bambi-review-policy";
 
 const createReviewInput = z.object({
 	body: z.string().min(1).max(1200),
 	chatRoomId: z.string().uuid(),
+	isAnonymous: z.boolean().default(false),
 	rating: z.number(),
+});
+
+const listByJobPostInput = z.object({
+	jobPostId: z.string().uuid(),
+	limit: z.number().int().min(1).max(50).default(10),
+	offset: z.number().int().min(0).default(0),
 });
 
 const getPolicyErrorMessage = (code: string): string => {
@@ -93,6 +107,7 @@ export const reviewsRouter = {
 				.values({
 					body: input.body.trim(),
 					chatRoomId: room.id,
+					isAnonymous: input.isAnonymous,
 					jobPostId: room.jobPostId,
 					organizationId: room.organizationId,
 					rating: input.rating,
@@ -103,6 +118,51 @@ export const reviewsRouter = {
 				.returning();
 
 			return created;
+		}),
+
+	// 공고 상세용 후기 목록. 회원(활성 bambi 프로필) 전용이며, 게시된(published) 후기만
+	// 서버에서 강제 필터한다. 작성자 식별 정보(reviewerUserId·원본 표시명)는 응답에 넣지 않고,
+	// 익명이면 "익명", 아니면 마스킹된 표시명만 내려준다.
+	listByJobPost: protectedProcedure
+		.input(listByJobPostInput)
+		.handler(async ({ context, input }) => {
+			await requireActiveBambiProfile(context.session);
+
+			const rows = await db
+				.select({
+					body: review.body,
+					createdAt: review.createdAt,
+					displayName: bambiProfile.displayName,
+					id: review.id,
+					isAnonymous: review.isAnonymous,
+					rating: review.rating,
+				})
+				.from(review)
+				.leftJoin(bambiProfile, eq(review.reviewerUserId, bambiProfile.userId))
+				.where(
+					and(
+						eq(review.jobPostId, input.jobPostId),
+						eq(review.status, "published")
+					)
+				)
+				.orderBy(desc(review.createdAt))
+				.offset(input.offset)
+				.limit(input.limit + 1);
+
+			const hasMore = rows.length > input.limit;
+			const items = (hasMore ? rows.slice(0, input.limit) : rows).map(
+				(row) => ({
+					body: row.body,
+					createdAt: row.createdAt,
+					id: row.id,
+					rating: row.rating,
+					reviewerDisplayName: row.isAnonymous
+						? "익명"
+						: maskReviewerDisplayName(row.displayName),
+				})
+			);
+
+			return { hasMore, items };
 		}),
 
 	listMine: protectedProcedure.handler(async ({ context }) => {

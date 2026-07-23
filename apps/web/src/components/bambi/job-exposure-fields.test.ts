@@ -71,6 +71,24 @@ describe("job exposure and payment fields", () => {
 		expect(source).toContain("BankTransferGuide");
 	});
 
+	it("reflects per-option catalog discounts in duration prices and the payable total", () => {
+		const source = readComponent("job-exposure-fields.tsx");
+
+		// 기간별 가격과 결제 예정 금액을 할인 반영 공용 태그로 렌더한다
+		expect(source).toContain("AdPriceTag");
+		// 트리거 라벨은 문자열이라 할인가+"N% 할인" 병기 포맷터를 쓴다
+		expect(source).toContain("formatAdPriceLabel");
+		// 결제 금액은 할인가로 확정해 서버 스냅샷과 같은 값으로 보낸다
+		expect(source).toContain("resolveAdPrice");
+		expect(source).toContain("discountedAmount");
+		// 할인율은 선택된 상품이 아니라 각 가격 옵션(기간)에서 읽는다
+		expect(source).toContain("priceOption.discountPercent ?? 0");
+		expect(source).toContain("option.discountPercent ?? 0");
+		// 상품 레벨 할인 참조는 남지 않는다
+		expect(source).not.toContain("selectedProduct?.discountPercent");
+		expect(source).not.toContain("product?.discountPercent");
+	});
+
 	it("bank transfer guide lists accounts with copy and deposit instructions", () => {
 		const source = readComponent("bank-transfer-guide.tsx");
 

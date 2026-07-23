@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	Alert,
+	AlertDescription,
+	AlertTitle,
+} from "@bambi-app/ui/components/alert";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Label } from "@bambi-app/ui/components/label";
@@ -10,10 +15,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { TriangleAlert } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
 import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
@@ -37,8 +44,10 @@ export default function EmployerTeamSettingsPage() {
 	const session = authClient.useSession();
 	const verified = useEmployerVerified();
 	const isSignedIn = Boolean(session.data?.user);
+	const queryClient = useQueryClient();
 	const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
 	const [editingTeamId, setEditingTeamId] = useState<null | string>(null);
+	const [deletingTeamId, setDeletingTeamId] = useState<null | string>(null);
 	const organizationsQuery = useQuery({
 		...orpc.bambi.organizations.getMine.queryOptions(),
 		enabled: isSignedIn,
@@ -60,6 +69,22 @@ export default function EmployerTeamSettingsPage() {
 				displayName: team.displayName ?? team.teamId,
 			})),
 		[teamsQuery.data]
+	);
+	const deleteTeamMutation = useMutation(
+		orpc.bambi.teams.deleteTeam.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "팀을 삭제하지 못했습니다.");
+			},
+			onSuccess: async () => {
+				setDeletingTeamId(null);
+				toast.success("팀을 삭제했습니다.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.teams.list.queryKey({
+						input: { organizationId: selectedOrganizationId },
+					}),
+				});
+			},
+		})
 	);
 
 	useEffect(() => {
@@ -113,6 +138,9 @@ export default function EmployerTeamSettingsPage() {
 		);
 	}
 
+	const deletingTeam =
+		teams.find((team) => team.teamId === deletingTeamId) ?? null;
+
 	let teamsContent: React.ReactNode;
 
 	if (teamsQuery.isLoading) {
@@ -162,15 +190,33 @@ export default function EmployerTeamSettingsPage() {
 													? formatDateTime(team.updatedAt)
 													: "미입력"}
 											</p>
+											{team.memberCount > 0 ? (
+												<p className="mt-1 text-muted-foreground text-xs">
+													멤버 {team.memberCount}명 · 멤버를 모두 정리하면
+													삭제할 수 있어요
+												</p>
+											) : null}
 										</div>
-										<Button
-											onClick={() => setEditingTeamId(team.teamId)}
-											size="sm"
-											type="button"
-											variant="outline"
-										>
-											수정
-										</Button>
+										<div className="flex gap-2">
+											<Button
+												onClick={() => setEditingTeamId(team.teamId)}
+												size="sm"
+												type="button"
+												variant="outline"
+											>
+												수정
+											</Button>
+											<Button
+												className="text-destructive"
+												disabled={!verified || team.memberCount > 0}
+												onClick={() => setDeletingTeamId(team.teamId)}
+												size="sm"
+												type="button"
+												variant="ghost"
+											>
+												삭제
+											</Button>
+										</div>
 									</div>
 								)}
 							</div>
@@ -257,6 +303,41 @@ export default function EmployerTeamSettingsPage() {
 								조직에 소속된 팀과 지역 정보를 확인합니다.
 							</p>
 						</div>
+						{deletingTeam ? (
+							<Alert variant="destructive">
+								<TriangleAlert />
+								<AlertTitle>
+									“{deletingTeam.displayName}” 팀을 삭제할까요?
+								</AlertTitle>
+								<AlertDescription>
+									삭제한 팀은 되돌릴 수 없어요. 팀과 연결된 공고는 팀 소속만
+									해제됩니다.
+								</AlertDescription>
+								<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+									<Button
+										disabled={deleteTeamMutation.isPending}
+										onClick={() => setDeletingTeamId(null)}
+										type="button"
+										variant="outline"
+									>
+										취소
+									</Button>
+									<Button
+										disabled={deleteTeamMutation.isPending}
+										onClick={() =>
+											deleteTeamMutation.mutate({
+												organizationId: selectedOrganizationId,
+												teamId: deletingTeam.teamId,
+											})
+										}
+										type="button"
+										variant="destructive"
+									>
+										{deleteTeamMutation.isPending ? "삭제 중…" : "삭제"}
+									</Button>
+								</div>
+							</Alert>
+						) : null}
 						{teamsContent}
 					</section>
 

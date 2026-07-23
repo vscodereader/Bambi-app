@@ -13,6 +13,7 @@ const PLACEHOLDER_COLUMNS = 4;
 const CARD_PLACEHOLDER_KEYS = ["ph-1", "ph-2", "ph-3", "ph-4"] as const;
 
 // 유료 노출 섹션(스페셜·급구·추천)의 빈 자리표시 개수·breakpoint 표시 규칙.
+// 이 섹션들의 헤더 meta는 구직자 시점의 "○○ 광고" 고지 표기다(광고 상품 용어 미노출).
 // 빈 섹션은 한 행만 채운다(모바일 1·lg 3·xl 4). 부분 판매 섹션은 xl(4열) 기준
 // 마지막 행 나머지를 채운다(그리드가 반응형이라 lg/모바일 정렬은 단순화 허용).
 const cardPlaceholderCount = (jobsLength: number): number => {
@@ -156,7 +157,7 @@ export function VisualJobExposureSections({
 			<ExposureSection
 				fillEmpty
 				jobs={sections.special}
-				meta="프리미엄 노출"
+				meta="스페셜 광고"
 				onOpen={onOpen}
 				title="스페셜 채용"
 				tone="special"
@@ -164,7 +165,7 @@ export function VisualJobExposureSections({
 			<ExposureSection
 				fillEmpty
 				jobs={sections.urgent}
-				meta="최근 끌어올림"
+				meta="급구 광고"
 				onOpen={onOpen}
 				title="급구 채용"
 				tone="urgent"
@@ -174,7 +175,7 @@ export function VisualJobExposureSections({
 			<ExposureSection
 				fillEmpty
 				jobs={sections.recommended}
-				meta="상단 추천"
+				meta="추천 광고"
 				onOpen={onOpen}
 				title="추천 채용"
 				tone="recommended"

@@ -18,6 +18,7 @@ import {
 	ShieldIcon,
 	StarIcon,
 } from "../icons";
+import { JobReviewSection } from "../job-review-section";
 
 interface SeekerJobDetailResponsiveProps {
 	// 채팅은 구직자만 시작할 수 있다. 구인자·운영자에게는 CTA 자체를 감춘다 —
@@ -234,6 +235,11 @@ export function SeekerJobDetailResponsive({
 							</Card>
 						</div>
 					</section>
+					<JobReviewSection
+						jobPostId={job.id}
+						ratingAverage={job.rating}
+						reviewCount={job.reviews}
+					/>
 				</main>
 				<aside className="hidden lg:block">
 					<div className="sticky top-20 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border">
@@ -263,8 +269,8 @@ export function SeekerJobDetailResponsive({
 										안전하게 채팅 시작
 									</div>
 									<p className="mt-1 mb-0 text-xs leading-relaxed">
-										플랫폼 안에서 먼저 대화하고, 면접 확정 뒤 연락처 공개를
-										선택해요.
+										플랫폼 안에서 먼저 대화하고, 면접 확정 뒤 구인자가 연락처를
+										공개해요.
 									</p>
 								</div>
 								<Button

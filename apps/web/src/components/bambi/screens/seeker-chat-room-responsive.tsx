@@ -153,10 +153,11 @@ const getReviewMutationErrorMessage = (error: Error): string => {
 
 type RealtimeStatus = "connected" | "connecting" | "offline";
 
-// 양쪽 동의가 끝난 방은 더 이상 "공개"가 아니라 "확인"하는 화면으로 들어간다.
+// 연락처 공개는 구인자만 한다. 구인자는 공개 화면으로, 구직자는 구인자가 공개한
+// 연락처를 확인하는 화면으로 들어간다.
 const getRevealButtonLabel = (
-	reveal?: { canViewCounterpart: boolean } | null
-): string => (reveal?.canViewCounterpart ? "연락처 보기" : "연락처 공개하기");
+	reveal?: { viewerIsEmployer?: boolean } | null
+): string => (reveal?.viewerIsEmployer ? "연락처 공개하기" : "연락처 보기");
 
 const getRealtimeStatusLabel = (status: RealtimeStatus): string => {
 	switch (status) {
@@ -389,7 +390,11 @@ interface ReviewSidebarCardProps {
 	isLoading: boolean;
 	isSubmitting: boolean;
 	isVisible: boolean;
-	onSubmit: (input: { body: string; rating: number }) => void;
+	onSubmit: (input: {
+		body: string;
+		isAnonymous: boolean;
+		rating: number;
+	}) => void;
 	successMessage: null | string;
 }
 
@@ -946,10 +951,8 @@ export function SeekerChatRoomResponsive({
 		sendMediaMessageMutation.isPending;
 	const isComposerSubmitting =
 		sendMessageMutation.isPending || isAttachmentSubmitting;
-	const confirmedSchedule = schedules.find(
-		(schedule) => schedule.status === "confirmed"
-	);
-	const reviewEligibleSchedule = schedules.find(
+	// 완료된 면접도 확정을 거친 것이라 연락처 열람·후기 작성을 계속 허용한다.
+	const eligibleSchedule = schedules.find(
 		(schedule) =>
 			schedule.status === "confirmed" || schedule.status === "completed"
 	);
@@ -958,7 +961,7 @@ export function SeekerChatRoomResponsive({
 	);
 	const canCreateReview =
 		isJobSeeker &&
-		Boolean(reviewEligibleSchedule) &&
+		Boolean(eligibleSchedule) &&
 		!existingReview &&
 		!room.isBlocked &&
 		!reviewListQuery.isError &&
@@ -1097,14 +1100,17 @@ export function SeekerChatRoomResponsive({
 	};
 	const handleReviewSubmit = ({
 		body,
+		isAnonymous,
 		rating,
 	}: {
 		body: string;
+		isAnonymous: boolean;
 		rating: number;
 	}) => {
 		createReviewMutation.mutate({
 			body,
 			chatRoomId: room.id,
+			isAnonymous,
 			rating,
 		});
 	};
@@ -1337,10 +1343,10 @@ export function SeekerChatRoomResponsive({
 						<Button
 							block
 							className="mt-4 shadow-none"
-							disabled={!confirmedSchedule}
+							disabled={!eligibleSchedule}
 							onClick={onReveal}
 							size="md"
-							variant={confirmedSchedule ? "primary" : "secondary"}
+							variant={eligibleSchedule ? "primary" : "secondary"}
 						>
 							{getRevealButtonLabel(revealQuery.data)}
 						</Button>
@@ -1351,7 +1357,7 @@ export function SeekerChatRoomResponsive({
 						existingReview={existingReview}
 						isLoading={reviewListQuery.isLoading}
 						isSubmitting={createReviewMutation.isPending}
-						isVisible={isJobSeeker && Boolean(reviewEligibleSchedule)}
+						isVisible={isJobSeeker && Boolean(eligibleSchedule)}
 						onSubmit={handleReviewSubmit}
 						successMessage={reviewSuccessMessage}
 					/>

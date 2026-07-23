@@ -548,8 +548,10 @@ export const adProduct = pgTable(
 			.notNull(),
 		previewImageUrl: text("preview_image_url"),
 		benefits: jsonb("benefits").$type<string[]>().default([]).notNull(),
+		// 가격 옵션(기간). discountPercent는 옵션별 할인율(0~100 정수 %, optional) — 없거나
+		// 0이면 할인 없음(원값 그대로). 구매(노출 확정) 시점에 결제 금액을 이 비율로 깎아 스냅샷한다.
 		priceOptions: jsonb("price_options")
-			.$type<{ amount: number; days: number }[]>()
+			.$type<{ amount: number; days: number; discountPercent?: number }[]>()
 			.default([])
 			.notNull(),
 		// 이 상품을 구매한 공고가 하루(KST 자정 리셋)에 쓸 수 있는 수동 끌어올리기 횟수. 0 = 미제공.
@@ -603,6 +605,12 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 광고 배너 로테이션 주기(분). 운영자 사이트 설정에서 편집한다. 활성 광고 칸이 이 주기마다
 	// 한 칸씩 전진한다. null이면 코드 기본값(DEFAULT_AD_ROTATION_MINUTES=60)으로 폴백한다.
 	adBannerRotationMinutes: integer("ad_banner_rotation_minutes"),
+	// 개인정보 처리방침에 노출하는 위탁사·관리부서 연락처. 운영자 사이트 설정에서 편집한다.
+	// null이면 프론트가 코드 폴백(BAMBI_PROCESSORS 이름 / BAMBI_COMPANY.privacyOfficer)을 쓴다.
+	privacyPaymentProcessor: text("privacy_payment_processor"),
+	privacySmsProvider: text("privacy_sms_provider"),
+	privacyContactPhone: text("privacy_contact_phone"),
+	privacyContactEmail: text("privacy_contact_email"),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())
@@ -868,6 +876,7 @@ export const review = pgTable(
 			.references(() => user.id),
 		rating: integer("rating").notNull(),
 		body: text("body").notNull(),
+		isAnonymous: boolean("is_anonymous").default(false).notNull(),
 		status: reviewStatus("status").default("published").notNull(),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),

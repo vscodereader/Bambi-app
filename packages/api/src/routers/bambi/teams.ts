@@ -10,7 +10,16 @@ import {
 } from "@bambi-app/db/schema/auth";
 import { bambiProfile, employerTeamProfile } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, ilike, inArray, notInArray, or } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	eq,
+	ilike,
+	inArray,
+	notInArray,
+	or,
+} from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -40,6 +49,15 @@ const createTeamInput = organizationIdInput.extend({
 
 const updateTeamInput = createTeamInput.extend({
 	teamId: z.string().min(1),
+});
+
+const teamActionInput = organizationIdInput.extend({
+	teamId: z.string().min(1),
+});
+
+const setMemberTeamsInput = organizationIdInput.extend({
+	memberId: z.string().min(1),
+	teamIds: z.array(z.string().min(1)),
 });
 
 const inviteMemberInput = organizationIdInput.extend({
@@ -185,7 +203,7 @@ export const teamsRouter = {
 				session: context.session,
 			});
 
-			return await db
+			const teams = await db
 				.select({
 					createdAt: team.createdAt,
 					displayName: employerTeamProfile.displayName,
@@ -199,6 +217,30 @@ export const teamsRouter = {
 				.leftJoin(employerTeamProfile, eq(employerTeamProfile.teamId, team.id))
 				.where(eq(team.organizationId, input.organizationId))
 				.orderBy(asc(team.name));
+
+			if (teams.length === 0) {
+				return teams.map((row) => ({ ...row, memberCount: 0 }));
+			}
+
+			// 팀별 소속 멤버 수(teamMember 행 수) — 삭제 가드 UI에 쓴다.
+			const memberCounts = await db
+				.select({ teamId: teamMember.teamId, value: count() })
+				.from(teamMember)
+				.where(
+					inArray(
+						teamMember.teamId,
+						teams.map((row) => row.id)
+					)
+				)
+				.groupBy(teamMember.teamId);
+			const memberCountByTeamId = new Map(
+				memberCounts.map((row) => [row.teamId, Number(row.value)])
+			);
+
+			return teams.map((row) => ({
+				...row,
+				memberCount: memberCountByTeamId.get(row.id) ?? 0,
+			}));
 		}),
 
 	create: protectedProcedure
@@ -670,6 +712,151 @@ export const teamsRouter = {
 				}
 
 				await tx.delete(member).where(eq(member.id, input.memberId));
+			});
+
+			return { success: true };
+		}),
+
+	// 멤버의 팀 소속을 교체한다. 이 조직의 팀들에 대한 teamMember 행만 지우고 다시
+	// 넣으므로, 같은 유저가 다른 조직의 팀에 든 소속은 건드리지 않는다. teamIds 빈
+	// 배열이면 무소속 처리.
+	setMemberTeams: protectedProcedure
+		.input(setMemberTeamsInput)
+		.handler(async ({ context, input }) => {
+			const { profile } = await requireOrganizationTeamManagementAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
+			});
+
+			const [targetMember] = await db
+				.select({ status: member.status, userId: member.userId })
+				.from(member)
+				.where(
+					and(
+						eq(member.id, input.memberId),
+						eq(member.organizationId, input.organizationId)
+					)
+				)
+				.limit(1);
+
+			if (!targetMember) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			if (targetMember.status !== "active" || !targetMember.userId) {
+				throw forbidden("활성 멤버의 팀 소속만 변경할 수 있습니다.");
+			}
+
+			// 중복 제거 후 모든 팀이 이 조직 소속인지 검증한다.
+			const teamIds = [...new Set(input.teamIds)];
+			for (const teamId of teamIds) {
+				await assertTeamBelongsToOrganization({
+					organizationId: input.organizationId,
+					teamId,
+				});
+			}
+
+			const { userId } = targetMember;
+
+			await db.transaction(async (tx) => {
+				const orgTeams = await tx
+					.select({ id: team.id })
+					.from(team)
+					.where(eq(team.organizationId, input.organizationId));
+				const orgTeamIds = orgTeams.map((row) => row.id);
+
+				if (orgTeamIds.length > 0) {
+					await tx
+						.delete(teamMember)
+						.where(
+							and(
+								eq(teamMember.userId, userId),
+								inArray(teamMember.teamId, orgTeamIds)
+							)
+						);
+				}
+
+				if (teamIds.length > 0) {
+					const now = new Date();
+					await tx.insert(teamMember).values(
+						teamIds.map((teamId) => ({
+							createdAt: now,
+							id: `tm_${randomUUID()}`,
+							teamId,
+							userId,
+						}))
+					);
+				}
+			});
+
+			return { success: true };
+		}),
+
+	// 팀 삭제. 팀에 멤버(teamMember)나 진행 중(pending) 초대가 남아 있으면 CONFLICT로
+	// 막는다. jobPost.teamId·chatRoom.teamId는 FK onDelete=set null이라 공고·채팅방은
+	// 삭제되지 않고 팀 연결만 끊긴다. 종료 상태 초대의 teamId(FK 없음)는 수동으로 null 처리.
+	deleteTeam: protectedProcedure
+		.input(teamActionInput)
+		.handler(async ({ context, input }) => {
+			const { profile } = await requireOrganizationTeamManagementAccess({
+				organizationId: input.organizationId,
+				session: context.session,
+			});
+			await assertOrganizationVerified({
+				organizationId: input.organizationId,
+				profile,
+			});
+			await assertTeamBelongsToOrganization({
+				organizationId: input.organizationId,
+				teamId: input.teamId,
+			});
+
+			const [remainingMember] = await db
+				.select({ id: teamMember.id })
+				.from(teamMember)
+				.where(eq(teamMember.teamId, input.teamId))
+				.limit(1);
+
+			if (remainingMember) {
+				throw new ORPCError("CONFLICT", {
+					message:
+						"팀에 멤버가 남아 있어 삭제할 수 없어요. 멤버를 모두 정리한 뒤 삭제할 수 있어요.",
+				});
+			}
+
+			const [pendingInvitation] = await db
+				.select({ id: invitation.id })
+				.from(invitation)
+				.where(
+					and(
+						eq(invitation.teamId, input.teamId),
+						eq(invitation.status, "pending")
+					)
+				)
+				.limit(1);
+
+			if (pendingInvitation) {
+				throw new ORPCError("CONFLICT", {
+					message:
+						"이 팀으로 진행 중인 초대가 있어 삭제할 수 없어요. 초대가 처리된 뒤 삭제할 수 있어요.",
+				});
+			}
+
+			await db.transaction(async (tx) => {
+				// 종료 상태 초대가 가리키던 팀 참조를 정리한다(invitation.teamId는 FK가
+				// 없어 팀 삭제 후에도 값이 남는다).
+				await tx
+					.update(invitation)
+					.set({ teamId: null })
+					.where(eq(invitation.teamId, input.teamId));
+				await tx
+					.delete(employerTeamProfile)
+					.where(eq(employerTeamProfile.teamId, input.teamId));
+				await tx.delete(team).where(eq(team.id, input.teamId));
 			});
 
 			return { success: true };

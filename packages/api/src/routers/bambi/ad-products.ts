@@ -69,6 +69,8 @@ const updatePlacementInput = z.object({
 const priceOptionSchema = z.object({
 	amount: z.number().int().min(0),
 	days: z.number().int().min(1),
+	// 옵션별 할인율(0~100 정수 %). 없거나 0이면 할인 없음.
+	discountPercent: z.number().int().min(0).max(100).optional(),
 });
 
 const previewImageUrlSchema = z

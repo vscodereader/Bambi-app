@@ -14,6 +14,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { RatingStars } from "@/components/bambi/rating-stars";
+import { REVIEW_STATUS_LABELS } from "@/lib/bambi/moderation-labels";
 import { orpc } from "@/utils/orpc";
 
 // 후기 검수 상태 필터. "all"은 서버에 status 미전달(전체 조회)로 매핑한다.
@@ -27,13 +29,15 @@ const REVIEW_FILTERS: { value: ReviewFilter; label: string }[] = [
 	{ value: "hidden", label: "숨김" },
 ];
 
-const REVIEW_STATUS_BADGE: Record<
+// 라벨은 lib/bambi/moderation-labels의 REVIEW_STATUS_LABELS 공용 맵을 쓰고,
+// 배지 톤(variant)만 화면 로컬로 유지한다.
+const REVIEW_STATUS_BADGE_VARIANT: Record<
 	ReviewStatus,
-	{ label: string; variant: "success" | "warning" | "secondary" }
+	"success" | "warning" | "secondary"
 > = {
-	published: { label: "게시됨", variant: "success" },
-	pending_review: { label: "검수 대기", variant: "warning" },
-	hidden: { label: "숨김", variant: "secondary" },
+	published: "success",
+	pending_review: "warning",
+	hidden: "secondary",
 };
 
 const formatDate = (value: Date | string) =>
@@ -41,21 +45,6 @@ const formatDate = (value: Date | string) =>
 		dateStyle: "short",
 		timeStyle: "short",
 	}).format(new Date(value));
-
-// 별점(1~5)을 채워진 별·빈 별로 표시한다.
-function RatingStars({ rating }: { rating: number }) {
-	const filled = Math.max(0, Math.min(5, rating));
-	return (
-		<span
-			aria-label={`별점 ${filled}점`}
-			className="inline-flex items-center gap-0.5 font-bold text-sm"
-			role="img"
-		>
-			<span className="text-amber-500">{"★".repeat(filled)}</span>
-			<span className="text-muted-foreground">{"★".repeat(5 - filled)}</span>
-		</span>
-	);
-}
 
 // 인라인 조치 확인 대상(어떤 후기를 어떤 상태로 바꾸는지).
 interface PendingAction {
@@ -125,14 +114,15 @@ export default function ModeratorReviewsPage() {
 				/>
 			) : null}
 			{reviews.map((item) => {
-				const badge = REVIEW_STATUS_BADGE[item.status];
 				const isPendingRow = pending?.reviewId === item.id;
 				return (
 					<Card key={item.id}>
 						<CardHeader className="gap-2">
 							<div className="flex flex-wrap items-center gap-2">
 								<RatingStars rating={item.rating} />
-								<Badge variant={badge.variant}>{badge.label}</Badge>
+								<Badge variant={REVIEW_STATUS_BADGE_VARIANT[item.status]}>
+									{REVIEW_STATUS_LABELS[item.status]}
+								</Badge>
 								<span className="ml-auto text-muted-foreground text-xs">
 									{formatDate(item.createdAt)}
 								</span>
