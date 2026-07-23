@@ -13,7 +13,7 @@ import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
+import { BAMBI_COMPANY, BAMBI_PROCESSORS } from "@/lib/bambi/company";
 import { orpc } from "@/utils/orpc";
 
 interface FooterForm {
@@ -32,6 +32,21 @@ const EMPTY_FORM: FooterForm = {
 	email: "",
 	footerIntro: "",
 	operator: "",
+};
+
+// 개인정보 처리방침에 노출되는 위탁사명·관리부서 연락처. 키는 서버 입력 스키마와 동일하게 둔다.
+interface PrivacyForm {
+	privacyContactEmail: string;
+	privacyContactPhone: string;
+	privacyPaymentProcessor: string;
+	privacySmsProvider: string;
+}
+
+const EMPTY_PRIVACY_FORM: PrivacyForm = {
+	privacyContactEmail: "",
+	privacyContactPhone: "",
+	privacyPaymentProcessor: "",
+	privacySmsProvider: "",
 };
 
 // 편집용 행에는 안정적인 key를 위해 클라이언트 전용 id를 붙인다(서버 저장 시 제거).
@@ -93,6 +108,47 @@ export default function ModeratorSiteSettingsPage() {
 	const onSubmit = (event: FormEvent) => {
 		event.preventDefault();
 		saveMutation.mutate(form);
+	};
+
+	const privacyQuery = useQuery(
+		orpc.bambi.siteSettings.getPrivacyContacts.queryOptions()
+	);
+	const [privacyForm, setPrivacyForm] =
+		useState<PrivacyForm>(EMPTY_PRIVACY_FORM);
+
+	// 저장된 값이 오면 폼에 채운다(미설정 필드는 빈 값 → 폴백 placeholder 노출).
+	useEffect(() => {
+		const data = privacyQuery.data;
+		if (!data) {
+			return;
+		}
+		setPrivacyForm({
+			privacyContactEmail: data.privacyContactEmail ?? "",
+			privacyContactPhone: data.privacyContactPhone ?? "",
+			privacyPaymentProcessor: data.privacyPaymentProcessor ?? "",
+			privacySmsProvider: data.privacySmsProvider ?? "",
+		});
+	}, [privacyQuery.data]);
+
+	const savePrivacyMutation = useMutation(
+		orpc.bambi.siteSettings.updatePrivacyContacts.mutationOptions({
+			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("개인정보 처리방침 연락처를 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getPrivacyContacts.queryKey(),
+				});
+			},
+		})
+	);
+
+	const updatePrivacy =
+		(key: keyof PrivacyForm) => (event: { target: { value: string } }) =>
+			setPrivacyForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+	const onSubmitPrivacy = (event: FormEvent) => {
+		event.preventDefault();
+		savePrivacyMutation.mutate(privacyForm);
 	};
 
 	const accountsQuery = useQuery(
@@ -307,6 +363,71 @@ export default function ModeratorSiteSettingsPage() {
 								type="submit"
 							>
 								{saveMutation.isPending ? "저장 중…" : "저장"}
+							</Button>
+						</div>
+					</form>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>개인정보 처리방침 연락처</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<form className="flex flex-col gap-5" onSubmit={onSubmitPrivacy}>
+						<p className="m-0 text-muted-foreground text-sm">
+							개인정보 처리방침 페이지의 위탁사명과 관리부서 연락처에
+							노출됩니다. 비워두면 기본값이 표시됩니다.
+						</p>
+						<div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="privacyPaymentProcessor">
+									결제대행사(수탁사명)
+								</Label>
+								<Input
+									id="privacyPaymentProcessor"
+									onChange={updatePrivacy("privacyPaymentProcessor")}
+									placeholder={BAMBI_PROCESSORS[0].name}
+									value={privacyForm.privacyPaymentProcessor}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="privacySmsProvider">문자발송사(수탁사명)</Label>
+								<Input
+									id="privacySmsProvider"
+									onChange={updatePrivacy("privacySmsProvider")}
+									placeholder={BAMBI_PROCESSORS[1].name}
+									value={privacyForm.privacySmsProvider}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="privacyContactPhone">관리부서 전화</Label>
+								<Input
+									id="privacyContactPhone"
+									onChange={updatePrivacy("privacyContactPhone")}
+									placeholder={BAMBI_COMPANY.privacyOfficer.tel}
+									value={privacyForm.privacyContactPhone}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="privacyContactEmail">관리부서 메일</Label>
+								<Input
+									id="privacyContactEmail"
+									onChange={updatePrivacy("privacyContactEmail")}
+									placeholder={BAMBI_COMPANY.privacyOfficer.email}
+									type="email"
+									value={privacyForm.privacyContactEmail}
+								/>
+							</div>
+						</div>
+						<div className="flex justify-end">
+							<Button
+								disabled={
+									savePrivacyMutation.isPending || privacyQuery.isLoading
+								}
+								type="submit"
+							>
+								{savePrivacyMutation.isPending ? "저장 중…" : "저장"}
 							</Button>
 						</div>
 					</form>
