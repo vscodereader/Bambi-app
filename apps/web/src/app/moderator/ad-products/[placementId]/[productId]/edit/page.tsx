@@ -59,6 +59,7 @@ export default function EditAdProductPage() {
 						priceOptions: product.priceOptions,
 						previewImageUrl: product.previewImageUrl ?? null,
 						previewTemplate: product.previewTemplate,
+						discountPercent: product.discountPercent ?? 0,
 						manualBoostsPerDay: product.manualBoostsPerDay ?? 0,
 						autoBoostsPerDay: product.autoBoostsPerDay ?? 0,
 					}}
@@ -71,6 +72,7 @@ export default function EditAdProductPage() {
 							priceOptions: draft.priceOptions,
 							previewImageUrl: draft.previewImageUrl,
 							previewTemplate: draft.previewTemplate,
+							discountPercent: draft.discountPercent,
 							manualBoostsPerDay: draft.manualBoostsPerDay,
 							autoBoostsPerDay: draft.autoBoostsPerDay,
 						})

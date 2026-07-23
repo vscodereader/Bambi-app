@@ -214,8 +214,9 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("서비스 내용");
 		expect(source).toContain("비용");
 		expect(source).toContain("신청");
-		// 비용은 기간별 가격 강조 표기
-		expect(source).toContain("formatAdPrice(option.amount)");
+		// 비용은 기간별 가격 강조 표기 — 할인 반영 공용 태그(원가 취소선+할인가+뱃지)로 렌더한다
+		expect(source).toContain("AdPriceTag");
+		expect(source).toContain("amount={option.amount}");
 		expect(source).toContain("formatAdDuration(option.days)");
 		// 데스크톱은 4열 그리드 행으로 전환. PR #29에서 비용·신청 열을 auto에서
 		// minmax 트랙으로 바꿔(열 폭이 내용에 따라 튀지 않게) 템플릿이 갱신됐다.

@@ -36,6 +36,13 @@ describe("employer ad guide screen", () => {
 		expect(source).toContain("배너 광고에는 제공되지 않습니다");
 	});
 
+	it("reflects catalog discounts through the shared price tag", () => {
+		// 할인 상품은 원가 취소선+할인가+"N% 할인" 뱃지를 공용 AdPriceTag로 표기한다
+		expect(source).toContain("AdPriceTag");
+		expect(source).toContain("discountPercent={product.discountPercent}");
+		expect(source).toContain("amount={option.amount}");
+	});
+
 	it("uses only ratio tracks so column widths do not depend on content", () => {
 		// 4개 열 전부 minmax(0,_fr) 비율 트랙 — 내용 의존 auto 트랙은 정렬을 깬다
 		expect(source).toContain(

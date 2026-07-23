@@ -37,6 +37,7 @@ import {
 	previewTemplateToExposureType,
 	requiredAdBannerUsagesForExposureType,
 } from "../../services/bambi-ad-exposure";
+import { discountedAdAmount } from "../../services/bambi-ad-pricing";
 import {
 	getRecentJobPerformanceMetrics,
 	recordAdBannerImpressions,
@@ -553,7 +554,12 @@ const resolveJobPostExposure = async (input: {
 
 	return {
 		adProductId: product.id,
-		exposureAmount: priceOption.amount,
+		// 구매 시점 할인가 스냅샷: 상품의 현재 discountPercent를 적용해 결제 금액을 확정한다.
+		// 이후 상품 할인율이 바뀌어도 이미 확정된 이 금액에는 영향을 주지 않는다.
+		exposureAmount: discountedAdAmount(
+			priceOption.amount,
+			product.discountPercent
+		),
 		exposureDurationDays: priceOption.days,
 		exposureType,
 		manualBoostsPerDay: isBanner ? 0 : product.manualBoostsPerDay,

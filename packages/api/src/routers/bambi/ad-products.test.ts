@@ -456,6 +456,69 @@ describe("adProducts product mutations", () => {
 		}
 	});
 
+	it("persists discountPercent on create and update; defaults to 0; rejects out-of-range", async () => {
+		const fixture = await createCatalogFixture();
+		try {
+			const create = createProcedureClient(adProductsRouter.createProduct, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "createProduct"],
+			});
+
+			// 범위 초과(101, -1)는 zod 파싱 레벨에서 거부(핸들러·DB 도달 전)
+			await expect(
+				create({
+					placementId: fixture.activePlacementId,
+					name: "할인 초과",
+					benefits: [],
+					priceOptions: [{ amount: 1000, days: 7 }],
+					discountPercent: 101,
+				})
+			).rejects.toBeTruthy();
+			await expect(
+				create({
+					placementId: fixture.activePlacementId,
+					name: "할인 음수",
+					benefits: [],
+					priceOptions: [{ amount: 1000, days: 7 }],
+					discountPercent: -1,
+				})
+			).rejects.toBeTruthy();
+
+			const created = await create({
+				placementId: fixture.activePlacementId,
+				name: "할인 상품",
+				benefits: [],
+				priceOptions: [{ amount: 50_000, days: 30 }],
+				discountPercent: 20,
+			});
+			expect(created.discountPercent).toBe(20);
+			const [reloaded] = await db
+				.select({ discountPercent: adProduct.discountPercent })
+				.from(adProduct)
+				.where(eq(adProduct.id, created.id));
+			expect(reloaded?.discountPercent).toBe(20);
+
+			const update = createProcedureClient(adProductsRouter.updateProduct, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "adProducts", "updateProduct"],
+			});
+			const updated = await update({ id: created.id, discountPercent: 35 });
+			expect(updated.discountPercent).toBe(35);
+
+			// 미지정 시 기본 0
+			const defaulted = await create({
+				placementId: fixture.activePlacementId,
+				name: "무할인 상품",
+				benefits: [],
+				priceOptions: [{ amount: 1000, days: 7 }],
+			});
+			expect(defaulted.discountPercent).toBe(0);
+			// createProduct로 만든 행은 placement cascade로 fixture cleanup 시 함께 삭제됨
+		} finally {
+			await cleanupCatalogFixture(fixture);
+		}
+	});
+
 	it("배너형 상품에 끌어올리기 값을 저장하려 하면 거부한다 (create·update)", async () => {
 		const fixture = await createCatalogFixture();
 		try {

@@ -28,6 +28,7 @@ export interface PriceOption {
 export interface AdProductDraft {
 	autoBoostsPerDay: number;
 	benefits: string[];
+	discountPercent: number;
 	manualBoostsPerDay: number;
 	name: string;
 	previewImageUrl: string | null;
@@ -92,6 +93,9 @@ export function AdProductForm({
 	const [autoBoostsPerDay, setAutoBoostsPerDay] = useState(
 		initialValue?.autoBoostsPerDay ?? 0
 	);
+	const [discountPercent, setDiscountPercent] = useState(
+		initialValue?.discountPercent ?? 0
+	);
 	const isBannerTemplate = BANNER_PREVIEW_TEMPLATES.has(previewTemplate);
 	// 편집 중 상품이 이미 레거시 side 값(좌/우 사이드 배너)이면 표준 옵션 목록에서 빠져
 	// Select 표시가 깨진다. 현재 값이 옵션에 없으면 레거시 항목으로 함께 렌더한다.
@@ -143,6 +147,7 @@ export function AdProductForm({
 			priceOptions: normalizedPriceOptions,
 			previewImageUrl,
 			previewTemplate,
+			discountPercent,
 			// 배너형은 끌어올리기 미제공 — 항상 0으로 저장(서버도 거부)
 			manualBoostsPerDay: isBannerTemplate ? 0 : manualBoostsPerDay,
 			autoBoostsPerDay: isBannerTemplate ? 0 : autoBoostsPerDay,
@@ -281,6 +286,31 @@ export function AdProductForm({
 				>
 					가격 옵션 추가
 				</Button>
+			</div>
+
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-discount">할인율(%)</Label>
+				<Input
+					className="w-24"
+					id="p-discount"
+					max={100}
+					min={0}
+					onChange={(e) =>
+						setDiscountPercent(
+							Math.max(
+								0,
+								Math.min(100, Math.floor(Number(e.target.value) || 0))
+							)
+						)
+					}
+					type="number"
+					value={discountPercent === 0 ? "" : discountPercent}
+				/>
+				<p className="m-0 text-muted-foreground text-xs">
+					0~100 사이 정수입니다. 값을 넣으면 구인자에게 원가에 취소선을 긋고
+					할인가와 "N% 할인"을 함께 보여줍니다. 비워두면(0) 할인 없이 원가만
+					노출됩니다. 할인가는 10원 단위로 내림합니다.
+				</p>
 			</div>
 
 			{isBannerTemplate ? (
