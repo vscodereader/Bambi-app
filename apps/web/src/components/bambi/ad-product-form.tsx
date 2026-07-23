@@ -23,12 +23,13 @@ import {
 export interface PriceOption {
 	amount: number;
 	days: number;
+	// 옵션(기간)별 할인율. 0~100 정수, 없거나 0이면 할인 없음. 읽는 쪽은 항상 `?? 0`.
+	discountPercent?: number;
 }
 
 export interface AdProductDraft {
 	autoBoostsPerDay: number;
 	benefits: string[];
-	discountPercent: number;
 	manualBoostsPerDay: number;
 	name: string;
 	previewImageUrl: string | null;
@@ -82,6 +83,8 @@ export function AdProductForm({
 			: [{ amount: 0, days: 30 }]
 		).map((o) => ({ id: makeId(), ...o }))
 	);
+	const clampPercent = (value: number) =>
+		Math.max(0, Math.min(100, Math.floor(value)));
 	const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(
 		initialValue?.previewImageUrl ?? null
 	);
@@ -92,9 +95,6 @@ export function AdProductForm({
 	);
 	const [autoBoostsPerDay, setAutoBoostsPerDay] = useState(
 		initialValue?.autoBoostsPerDay ?? 0
-	);
-	const [discountPercent, setDiscountPercent] = useState(
-		initialValue?.discountPercent ?? 0
 	);
 	const isBannerTemplate = BANNER_PREVIEW_TEMPLATES.has(previewTemplate);
 	// 편집 중 상품이 이미 레거시 side 값(좌/우 사이드 배너)이면 표준 옵션 목록에서 빠져
@@ -132,7 +132,13 @@ export function AdProductForm({
 	const submit = () => {
 		const normalizedPriceOptions = priceOptions
 			.filter((option) => option.days > 0)
-			.map(({ amount, days }) => ({ amount, days }));
+			.map(({ amount, days, discountPercent }) => {
+				const percent = discountPercent ? clampPercent(discountPercent) : 0;
+				// 0이면 discountPercent 필드를 생략(undefined), 1~100이면 포함한다.
+				return percent > 0
+					? { amount, days, discountPercent: percent }
+					: { amount, days };
+			});
 		const dayValues = normalizedPriceOptions.map((option) => option.days);
 		if (new Set(dayValues).size !== dayValues.length) {
 			toast.error("같은 이용 기간이 중복됩니다. 기간별로 하나만 등록해주세요.");
@@ -147,7 +153,6 @@ export function AdProductForm({
 			priceOptions: normalizedPriceOptions,
 			previewImageUrl,
 			previewTemplate,
-			discountPercent,
 			// 배너형은 끌어올리기 미제공 — 항상 0으로 저장(서버도 거부)
 			manualBoostsPerDay: isBannerTemplate ? 0 : manualBoostsPerDay,
 			autoBoostsPerDay: isBannerTemplate ? 0 : autoBoostsPerDay,
@@ -240,9 +245,9 @@ export function AdProductForm({
 			</div>
 
 			<div className="flex flex-col gap-2">
-				<Label>가격 옵션(이용기간 · 금액)</Label>
+				<Label>가격 옵션(이용기간 · 금액 · 할인율)</Label>
 				{priceOptions.map((option) => (
-					<div className="flex items-center gap-2" key={option.id}>
+					<div className="flex flex-wrap items-center gap-2" key={option.id}>
 						<Input
 							className="w-24"
 							onChange={(e) =>
@@ -261,6 +266,19 @@ export function AdProductForm({
 							value={option.amount === 0 ? "" : option.amount}
 						/>
 						<span className="text-muted-foreground text-sm">원</span>
+						<Input
+							className="w-20"
+							max={100}
+							min={0}
+							onChange={(e) =>
+								setPrice(option.id, {
+									discountPercent: clampPercent(Number(e.target.value) || 0),
+								})
+							}
+							type="number"
+							value={option.discountPercent ? option.discountPercent : ""}
+						/>
+						<span className="text-muted-foreground text-sm">% 할인</span>
 						<Button
 							onClick={() =>
 								setPriceOptions((options) =>
@@ -286,30 +304,10 @@ export function AdProductForm({
 				>
 					가격 옵션 추가
 				</Button>
-			</div>
-
-			<div className="flex flex-col gap-1.5">
-				<Label htmlFor="p-discount">할인율(%)</Label>
-				<Input
-					className="w-24"
-					id="p-discount"
-					max={100}
-					min={0}
-					onChange={(e) =>
-						setDiscountPercent(
-							Math.max(
-								0,
-								Math.min(100, Math.floor(Number(e.target.value) || 0))
-							)
-						)
-					}
-					type="number"
-					value={discountPercent === 0 ? "" : discountPercent}
-				/>
 				<p className="m-0 text-muted-foreground text-xs">
-					0~100 사이 정수입니다. 값을 넣으면 구인자에게 원가에 취소선을 긋고
-					할인가와 "N% 할인"을 함께 보여줍니다. 비워두면(0) 할인 없이 원가만
-					노출됩니다. 할인가는 10원 단위로 내림합니다.
+					할인율은 0~100 사이 정수입니다. 값을 넣으면 그 기간 옵션에 원가
+					취소선을 긋고 할인가와 "N% 할인"을 함께 보여줍니다. 비워두면(0) 할인
+					없이 원가만 노출됩니다. 할인가는 10원 단위로 내림합니다.
 				</p>
 			</div>
 

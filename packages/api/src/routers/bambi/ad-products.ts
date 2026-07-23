@@ -69,6 +69,8 @@ const updatePlacementInput = z.object({
 const priceOptionSchema = z.object({
 	amount: z.number().int().min(0),
 	days: z.number().int().min(1),
+	// 옵션별 할인율(0~100 정수 %). 없거나 0이면 할인 없음.
+	discountPercent: z.number().int().min(0).max(100).optional(),
 });
 
 const previewImageUrlSchema = z
@@ -89,7 +91,6 @@ const createProductInput = z.object({
 	tagline: z.string().max(200).optional(),
 	benefits: z.array(z.string().min(1)).default([]),
 	priceOptions: z.array(priceOptionSchema).min(1),
-	discountPercent: z.number().int().min(0).max(100).default(0),
 	previewTemplate: previewTemplateSchema.optional(),
 	previewImageUrl: previewImageUrlSchema,
 	manualBoostsPerDay: z.number().int().min(0).default(0),
@@ -103,7 +104,6 @@ const updateProductInput = z.object({
 	tagline: z.string().max(200).nullish(),
 	benefits: z.array(z.string().min(1)).optional(),
 	priceOptions: z.array(priceOptionSchema).min(1).optional(),
-	discountPercent: z.number().int().min(0).max(100).optional(),
 	previewTemplate: previewTemplateSchema.optional(),
 	previewImageUrl: previewImageUrlSchema,
 	manualBoostsPerDay: z.number().int().min(0).optional(),

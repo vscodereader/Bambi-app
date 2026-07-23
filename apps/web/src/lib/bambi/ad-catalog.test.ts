@@ -35,4 +35,19 @@ describe("ad-catalog discount helpers", () => {
 		expect(formatAdPriceLabel(300_000, 10)).toBe("270,000원 (10% 할인)");
 		expect(formatAdPriceLabel(300_000, 0)).toBe("300,000원");
 	});
+
+	it("resolves each price option's own discount independently", () => {
+		// 같은 상품이라도 기간 옵션마다 할인율이 다르다: 7일 10% · 30일 20%
+		const options = [
+			{ amount: 100_000, days: 7, discountPercent: 10 },
+			{ amount: 300_000, days: 30, discountPercent: 20 },
+		];
+		const priced = options.map((option) =>
+			resolveAdPrice(option.amount, option.discountPercent ?? 0)
+		);
+		expect(priced[0].discountedAmount).toBe(90_000);
+		expect(priced[0].discountPercent).toBe(10);
+		expect(priced[1].discountedAmount).toBe(240_000);
+		expect(priced[1].discountPercent).toBe(20);
+	});
 });

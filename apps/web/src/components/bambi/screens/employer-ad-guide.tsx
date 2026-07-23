@@ -179,7 +179,7 @@ function PlacementSection({
 									>
 										<AdPriceTag
 											amount={option.amount}
-											discountPercent={product.discountPercent}
+											discountPercent={option.discountPercent ?? 0}
 											priceClassName="font-bold text-base text-coral-600"
 										/>
 										<span className="text-muted-foreground text-xs">

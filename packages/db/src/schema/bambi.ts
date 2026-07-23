@@ -548,13 +548,12 @@ export const adProduct = pgTable(
 			.notNull(),
 		previewImageUrl: text("preview_image_url"),
 		benefits: jsonb("benefits").$type<string[]>().default([]).notNull(),
+		// 가격 옵션(기간). discountPercent는 옵션별 할인율(0~100 정수 %, optional) — 없거나
+		// 0이면 할인 없음(원값 그대로). 구매(노출 확정) 시점에 결제 금액을 이 비율로 깎아 스냅샷한다.
 		priceOptions: jsonb("price_options")
-			.$type<{ amount: number; days: number }[]>()
+			.$type<{ amount: number; days: number; discountPercent?: number }[]>()
 			.default([])
 			.notNull(),
-		// 모든 가격 옵션에 일괄 적용되는 할인율(0~100 정수 %). 구매(노출 확정) 시점에 결제
-		// 금액을 이 비율로 깎아 스냅샷한다. 0 = 할인 없음(가격 옵션 원값 그대로).
-		discountPercent: integer("discount_percent").default(0).notNull(),
 		// 이 상품을 구매한 공고가 하루(KST 자정 리셋)에 쓸 수 있는 수동 끌어올리기 횟수. 0 = 미제공.
 		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
 		// 이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는 횟수(구매 시 공고로 스냅샷). 0 = 미제공.
