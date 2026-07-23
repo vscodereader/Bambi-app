@@ -45,7 +45,6 @@ export default function EmployerAnalyticsPage() {
 	const totals = summaries.reduce(
 		(accumulator, item) => ({
 			chatStarts: accumulator.chatStarts + item.metrics.chatStarts,
-			contactReveals: accumulator.contactReveals + item.metrics.contactReveals,
 			detailViews: accumulator.detailViews + item.metrics.detailViews,
 			impressions: accumulator.impressions + item.metrics.impressions,
 			leftBannerImpressions:
@@ -69,7 +68,6 @@ export default function EmployerAnalyticsPage() {
 		}),
 		{
 			chatStarts: 0,
-			contactReveals: 0,
 			detailViews: 0,
 			impressions: 0,
 			leftBannerImpressions: 0,
@@ -81,6 +79,13 @@ export default function EmployerAnalyticsPage() {
 			urgentImpressions: 0,
 		}
 	);
+
+	// 프리미엄 배너는 하나의 상품이 상단·좌측·우측 세 슬롯에 노출된 위치별 카운트다.
+	// (상품이 3개가 아니라 슬롯 위치가 3개) → 합계로 묶어 보여준다.
+	const premiumBannerTotal =
+		totals.premiumBannerImpressions +
+		totals.leftBannerImpressions +
+		totals.rightBannerImpressions;
 
 	if (summaryQuery.isLoading) {
 		return <Loader />;
@@ -107,7 +112,7 @@ export default function EmployerAnalyticsPage() {
 
 	return (
 		<PageShell
-			description="공고별 노출, 상세 조회, 채팅 시작, 연락처 공개 흐름을 확인합니다."
+			description="공고별 노출, 상세 조회, 채팅 시작 흐름을 확인합니다."
 			title="성과 분석"
 		>
 			<div className="flex flex-wrap items-center justify-between gap-3">
@@ -132,17 +137,13 @@ export default function EmployerAnalyticsPage() {
 				</div>
 			</div>
 
-			<dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+			<dl className="grid gap-3 sm:grid-cols-3">
 				<MetricCard label="노출" value={formatNumber(totals.impressions)} />
 				<MetricCard
 					label="상세 조회"
 					value={formatNumber(totals.detailViews)}
 				/>
 				<MetricCard label="채팅 시작" value={formatNumber(totals.chatStarts)} />
-				<MetricCard
-					label="연락처 공개"
-					value={formatNumber(totals.contactReveals)}
-				/>
 			</dl>
 
 			<section
@@ -169,18 +170,32 @@ export default function EmployerAnalyticsPage() {
 						label="일반"
 						value={formatNumber(totals.organicImpressions)}
 					/>
-					<MetricCard
-						label="프리미엄 배너"
-						value={formatNumber(totals.premiumBannerImpressions)}
-					/>
-					<MetricCard
-						label="좌측 배너"
-						value={formatNumber(totals.leftBannerImpressions)}
-					/>
-					<MetricCard
-						label="우측 배너"
-						value={formatNumber(totals.rightBannerImpressions)}
-					/>
+					<Card className="sm:col-span-2 lg:col-span-4" size="sm">
+						<CardContent className="flex flex-col gap-3">
+							<div className="flex items-baseline justify-between gap-2">
+								<dt className="text-muted-foreground text-sm">프리미엄 배너</dt>
+								<dd className="font-semibold text-2xl">
+									{formatNumber(premiumBannerTotal)}
+								</dd>
+							</div>
+							<dl className="grid grid-cols-3 gap-3">
+								{[
+									{ label: "상단", value: totals.premiumBannerImpressions },
+									{ label: "좌측", value: totals.leftBannerImpressions },
+									{ label: "우측", value: totals.rightBannerImpressions },
+								].map((slot) => (
+									<div className="flex flex-col gap-1" key={slot.label}>
+										<dt className="text-muted-foreground text-xs">
+											{slot.label}
+										</dt>
+										<dd className="font-medium text-lg">
+											{formatNumber(slot.value)}
+										</dd>
+									</div>
+								))}
+							</dl>
+						</CardContent>
+					</Card>
 				</dl>
 			</section>
 
@@ -213,9 +228,6 @@ export default function EmployerAnalyticsPage() {
 										채팅
 									</th>
 									<th className="px-4 py-3 font-medium" scope="col">
-										연락처
-									</th>
-									<th className="px-4 py-3 font-medium" scope="col">
 										상세 전환
 									</th>
 									<th className="px-4 py-3 font-medium" scope="col">
@@ -244,37 +256,47 @@ export default function EmployerAnalyticsPage() {
 											{formatNumber(summary.metrics.chatStarts)}
 										</td>
 										<td className="px-4 py-3">
-											{formatNumber(summary.metrics.contactReveals)}
-										</td>
-										<td className="px-4 py-3">
 											{formatRate(
 												summary.metrics.detailViews,
 												summary.metrics.impressions
 											)}
 										</td>
 										<td className="px-4 py-3">
-											스페셜{" "}
-											{formatNumber(summary.sectionMetrics.specialImpressions)}{" "}
-											· 급구{" "}
-											{formatNumber(summary.sectionMetrics.urgentImpressions)} ·
-											추천{" "}
-											{formatNumber(
-												summary.sectionMetrics.recommendedImpressions
-											)}{" "}
-											· 일반{" "}
-											{formatNumber(summary.sectionMetrics.organicImpressions)}{" "}
-											· 프리미엄 배너{" "}
-											{formatNumber(
-												summary.sectionMetrics.premiumBannerImpressions
-											)}{" "}
-											· 좌측 배너{" "}
-											{formatNumber(
-												summary.sectionMetrics.leftBannerImpressions
-											)}{" "}
-											· 우측 배너{" "}
-											{formatNumber(
-												summary.sectionMetrics.rightBannerImpressions
-											)}
+											{[
+												{
+													label: "스페셜",
+													value: summary.sectionMetrics.specialImpressions,
+												},
+												{
+													label: "급구",
+													value: summary.sectionMetrics.urgentImpressions,
+												},
+												{
+													label: "추천",
+													value: summary.sectionMetrics.recommendedImpressions,
+												},
+												{
+													label: "일반",
+													value: summary.sectionMetrics.organicImpressions,
+												},
+												{
+													label: "프리미엄 배너·상단",
+													value:
+														summary.sectionMetrics.premiumBannerImpressions,
+												},
+												{
+													label: "프리미엄 배너·좌측",
+													value: summary.sectionMetrics.leftBannerImpressions,
+												},
+												{
+													label: "프리미엄 배너·우측",
+													value: summary.sectionMetrics.rightBannerImpressions,
+												},
+											]
+												.map(
+													(item) => `${item.label} ${formatNumber(item.value)}`
+												)
+												.join(" · ")}
 										</td>
 									</tr>
 								))}
