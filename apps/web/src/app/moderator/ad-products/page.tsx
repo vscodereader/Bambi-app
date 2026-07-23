@@ -217,7 +217,7 @@ export default function ModeratorAdProductsPage() {
 											{formatAdDuration(option.days)} ·{" "}
 											<AdPriceTag
 												amount={option.amount}
-												discountPercent={product.discountPercent}
+												discountPercent={option.discountPercent ?? 0}
 												priceClassName="font-medium text-foreground"
 											/>
 										</span>

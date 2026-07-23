@@ -456,7 +456,7 @@ describe("adProducts product mutations", () => {
 		}
 	});
 
-	it("persists discountPercent on create and update; defaults to 0; rejects out-of-range", async () => {
+	it("가격 옵션별 discountPercent를 저장·수정하고, 범위를 벗어나면(101·-1) 거부한다", async () => {
 		const fixture = await createCatalogFixture();
 		try {
 			const create = createProcedureClient(adProductsRouter.createProduct, {
@@ -464,14 +464,13 @@ describe("adProducts product mutations", () => {
 				path: ["bambi", "adProducts", "createProduct"],
 			});
 
-			// 범위 초과(101, -1)는 zod 파싱 레벨에서 거부(핸들러·DB 도달 전)
+			// 옵션의 범위 초과(101, -1)는 zod 파싱 레벨에서 거부(핸들러·DB 도달 전)
 			await expect(
 				create({
 					placementId: fixture.activePlacementId,
 					name: "할인 초과",
 					benefits: [],
-					priceOptions: [{ amount: 1000, days: 7 }],
-					discountPercent: 101,
+					priceOptions: [{ amount: 1000, days: 7, discountPercent: 101 }],
 				})
 			).rejects.toBeTruthy();
 			await expect(
@@ -479,40 +478,49 @@ describe("adProducts product mutations", () => {
 					placementId: fixture.activePlacementId,
 					name: "할인 음수",
 					benefits: [],
-					priceOptions: [{ amount: 1000, days: 7 }],
-					discountPercent: -1,
+					priceOptions: [{ amount: 1000, days: 7, discountPercent: -1 }],
 				})
 			).rejects.toBeTruthy();
 
+			// 옵션별로 다른 할인율 저장(한쪽은 할인, 다른 쪽은 미설정)
 			const created = await create({
 				placementId: fixture.activePlacementId,
 				name: "할인 상품",
 				benefits: [],
-				priceOptions: [{ amount: 50_000, days: 30 }],
-				discountPercent: 20,
+				priceOptions: [
+					{ amount: 50_000, days: 30, discountPercent: 20 },
+					{ amount: 90_000, days: 60 },
+				],
 			});
-			expect(created.discountPercent).toBe(20);
+			expect(created.priceOptions).toEqual([
+				{ amount: 50_000, days: 30, discountPercent: 20 },
+				{ amount: 90_000, days: 60 },
+			]);
 			const [reloaded] = await db
-				.select({ discountPercent: adProduct.discountPercent })
+				.select({ priceOptions: adProduct.priceOptions })
 				.from(adProduct)
 				.where(eq(adProduct.id, created.id));
-			expect(reloaded?.discountPercent).toBe(20);
+			expect(reloaded?.priceOptions[0]?.discountPercent).toBe(20);
+			expect(reloaded?.priceOptions[1]?.discountPercent).toBeUndefined();
 
 			const update = createProcedureClient(adProductsRouter.updateProduct, {
 				context: createContextForUser(fixture.adminUserId),
 				path: ["bambi", "adProducts", "updateProduct"],
 			});
-			const updated = await update({ id: created.id, discountPercent: 35 });
-			expect(updated.discountPercent).toBe(35);
+			const updated = await update({
+				id: created.id,
+				priceOptions: [{ amount: 50_000, days: 30, discountPercent: 35 }],
+			});
+			expect(updated.priceOptions[0]?.discountPercent).toBe(35);
 
-			// 미지정 시 기본 0
+			// discountPercent 미설정 옵션은 할인 없음(값이 남지 않는다)
 			const defaulted = await create({
 				placementId: fixture.activePlacementId,
 				name: "무할인 상품",
 				benefits: [],
 				priceOptions: [{ amount: 1000, days: 7 }],
 			});
-			expect(defaulted.discountPercent).toBe(0);
+			expect(defaulted.priceOptions[0]?.discountPercent).toBeUndefined();
 			// createProduct로 만든 행은 placement cascade로 fixture cleanup 시 함께 삭제됨
 		} finally {
 			await cleanupCatalogFixture(fixture);

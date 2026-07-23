@@ -258,9 +258,9 @@ describe("jobs.update 노출 결제 상태 정합성", () => {
 		expect(updated.exposureEndsAt).toBeNull();
 	});
 
-	it("상품에 할인율이 설정돼 있으면 노출 결제 금액이 할인가로 확정된다", async () => {
+	it("가격 옵션에 할인율이 설정돼 있으면 노출 결제 금액이 할인가로 확정된다", async () => {
 		const baseInput = buildBaseInput(fixture.organizationId);
-		// 사전: 무료 공고에 유료 상품(할인 10%)을 붙여 할인가가 스냅샷되는지 본다.
+		// 사전: 무료 공고에 유료 상품(옵션 할인 10%)을 붙여 할인가가 스냅샷되는지 본다.
 		const id = await seedJobPost(fixture, {
 			adProductId: null,
 			exposureDurationDays: null,
@@ -269,10 +269,12 @@ describe("jobs.update 노출 결제 상태 정합성", () => {
 			exposureEndsAt: null,
 		});
 
-		// 공유 fixture 상품에 할인율을 걸고, 검증 후 원복한다(다른 테스트에 영향 없게).
+		// 공유 fixture 상품의 30일 옵션에 할인율을 걸고, 검증 후 원복한다(다른 테스트에 영향 없게).
 		await db
 			.update(adProduct)
-			.set({ discountPercent: 10 })
+			.set({
+				priceOptions: [{ amount: 50_000, days: 30, discountPercent: 10 }],
+			})
 			.where(eq(adProduct.id, fixture.productId));
 		try {
 			const updated = await updateJob(id, {
@@ -286,7 +288,7 @@ describe("jobs.update 노출 결제 상태 정합성", () => {
 		} finally {
 			await db
 				.update(adProduct)
-				.set({ discountPercent: 0 })
+				.set({ priceOptions: [{ amount: 50_000, days: 30 }] })
 				.where(eq(adProduct.id, fixture.productId));
 		}
 	});

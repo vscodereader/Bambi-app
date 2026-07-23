@@ -103,15 +103,13 @@ const findDurationOption = (
 		? product.priceOptions.find((priceOption) => priceOption.days === days)
 		: undefined;
 
-// 결제 예정 금액. 할인 상품이면 원가 취소선+할인가+뱃지, 아니면 원가만 노출한다.
+// 결제 예정 금액. 할인 옵션이면 원가 취소선+할인가+뱃지, 아니면 원가만 노출한다.
 function PayableTotal({
 	amount,
-	discountPercent,
 	option,
 	show,
 }: {
 	amount: number | null;
-	discountPercent: number;
 	option: AdPriceOption | undefined;
 	show: boolean;
 }) {
@@ -128,7 +126,7 @@ function PayableTotal({
 				<AdPriceTag
 					amount={option.amount}
 					className="justify-end"
-					discountPercent={discountPercent}
+					discountPercent={option.discountPercent ?? 0}
 					priceClassName="min-w-0 break-words font-semibold text-lg text-primary"
 				/>
 			) : (
@@ -150,7 +148,7 @@ const resolveDurationSelection = (
 
 	return {
 		amount: option
-			? resolveAdPrice(option.amount, product?.discountPercent ?? 0)
+			? resolveAdPrice(option.amount, option.discountPercent ?? 0)
 					.discountedAmount
 			: null,
 		days: option?.days ?? null,
@@ -183,7 +181,6 @@ export function JobExposureFields({
 		? BANNER_PREVIEW_TEMPLATES.has(selectedProduct.previewTemplate)
 		: false;
 	const toggleValue = adProductId ?? FREE_EXPOSURE_VALUE;
-	const discountPercent = selectedProduct?.discountPercent ?? 0;
 	const showPaidOptions = Boolean(selectedProduct);
 	// 결제 예정 금액의 원가 취소선 표기를 위해 선택된 기간의 원가 옵션을 함께 잡아둔다.
 	const selectedDurationOption = findDurationOption(
@@ -293,7 +290,7 @@ export function JobExposureFields({
 									(priceOption) => ({
 										label: `${formatAdDuration(priceOption.days)} · ${formatAdPriceLabel(
 											priceOption.amount,
-											discountPercent
+											priceOption.discountPercent ?? 0
 										)}`,
 										value: String(priceOption.days),
 									})
@@ -323,7 +320,7 @@ export function JobExposureFields({
 											{formatAdDuration(priceOption.days)} ·{" "}
 											<AdPriceTag
 												amount={priceOption.amount}
-												discountPercent={discountPercent}
+												discountPercent={priceOption.discountPercent ?? 0}
 												priceClassName="font-medium"
 											/>
 										</SelectItem>
@@ -339,7 +336,6 @@ export function JobExposureFields({
 
 					<PayableTotal
 						amount={exposureAmount}
-						discountPercent={discountPercent}
 						option={selectedDurationOption}
 						show={showTotal}
 					/>
