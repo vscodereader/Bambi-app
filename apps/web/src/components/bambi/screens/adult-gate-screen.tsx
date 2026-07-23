@@ -2,7 +2,7 @@ import { AuthScreen } from "./auth-screen";
 
 export function AdultGateScreen() {
 	return (
-		<div className="flex min-h-dvh flex-col justify-center bg-secondary">
+		<div className="flex flex-1 flex-col justify-center bg-secondary">
 			<div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
 				<section className="flex items-center gap-4 rounded-xl border border-border bg-background p-5">
 					<span className="flex size-14 shrink-0 items-center justify-center rounded-full border-2 border-destructive font-extrabold text-destructive text-xl">

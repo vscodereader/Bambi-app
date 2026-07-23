@@ -89,9 +89,11 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 		[searchParams]
 	);
 	const [mode, setMode] = useState<AuthMode>(initialMode);
-	const [name, setName] = useState("");
+	const [nickname, setNickname] = useState("");
+	const [username, setUsername] = useState("");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
+	const [passwordConfirm, setPasswordConfirm] = useState("");
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [signupRole, setSignupRole] = useState<SignupRole>("job_seeker");
@@ -104,7 +106,7 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	const submitLabel = isSignUp ? "회원가입" : "로그인";
 
 	const finishSignup = async (gender: BambiGenderValue | null) => {
-		const displayName = name.trim();
+		const displayName = nickname.trim();
 		const profilePayload = { displayName, ...(gender ? { gender } : {}) };
 		if (signupRole === "employer") {
 			await client.bambi.onboarding.createEmployerProfile(profilePayload);
@@ -123,8 +125,13 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	const handleSubmit = async () => {
 		setNotice(null);
 
-		if (isSignUp && name.trim().length < 2) {
-			setNotice({ text: "이름을 2자 이상 입력해 주세요.", tone: "error" });
+		if (isSignUp && nickname.trim().length < 2) {
+			setNotice({ text: "닉네임을 2자 이상 입력해 주세요.", tone: "error" });
+			return;
+		}
+
+		if (isSignUp && username.trim().length < 3) {
+			setNotice({ text: "아이디를 3자 이상 입력해 주세요.", tone: "error" });
 			return;
 		}
 
@@ -133,6 +140,11 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 				text: "이메일과 8자 이상 비밀번호를 확인해 주세요.",
 				tone: "error",
 			});
+			return;
+		}
+
+		if (isSignUp && password !== passwordConfirm) {
+			setNotice({ text: "비밀번호가 일치하지 않아요.", tone: "error" });
 			return;
 		}
 
@@ -191,8 +203,9 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 			await authClient.signUp.email(
 				{
 					email,
-					name,
+					name: nickname,
 					password,
+					username: username.trim(),
 				},
 				callbacks
 			);
@@ -253,86 +266,133 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 						}}
 					>
 						{isSignUp ? (
-							<label className="grid gap-2" htmlFor="auth-name">
-								<span className="font-bold text-sm">이름</span>
-								<Input
-									autoComplete="name"
-									id="auth-name"
-									onChange={(event) => setName(event.target.value)}
-									placeholder="예: 밤비 구직자"
-									value={name}
-								/>
-							</label>
-						) : null}
-						{isSignUp ? (
-							<div className="grid gap-2">
-								<span className="font-bold text-sm" id="auth-role-label">
-									가입 유형
-								</span>
-								<ToggleGroup
-									aria-labelledby="auth-role-label"
-									className="grid w-full grid-cols-2 gap-2"
-									onValueChange={(value) => {
-										const next = value.at(-1);
-										if (next === "job_seeker" || next === "employer") {
-											setSignupRole(next);
-										}
-									}}
-									value={[signupRole]}
-								>
-									<ToggleGroupItem className="w-full" value="job_seeker">
-										개인회원
-									</ToggleGroupItem>
-									<ToggleGroupItem className="w-full" value="employer">
-										업소회원
-									</ToggleGroupItem>
-								</ToggleGroup>
-							</div>
-						) : null}
-						{isSignUp && signupRole === "employer" ? (
-							<p
-								className="m-0 rounded-lg border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm"
-								role="note"
-							>
-								가입 후 업체 정보를 입력하고 운영자 승인을 받으면 구인 기능을
-								이용할 수 있어요.
-							</p>
-						) : null}
-						<label className="grid gap-2" htmlFor="auth-email">
-							<span className="font-bold text-sm">이메일</span>
-							<Input
-								autoComplete="email"
-								id="auth-email"
-								onChange={(event) => setEmail(event.target.value)}
-								placeholder="이메일을 입력해주세요."
-								type="email"
-								value={email}
-							/>
-						</label>
-						<div className="grid gap-2">
-							<div className="flex items-center justify-between gap-2">
-								<label className="font-bold text-sm" htmlFor="auth-password">
-									비밀번호
+							<>
+								<label className="grid gap-2" htmlFor="auth-nickname">
+									<span className="font-bold text-sm">닉네임</span>
+									<Input
+										autoComplete="nickname"
+										id="auth-nickname"
+										onChange={(event) => setNickname(event.target.value)}
+										placeholder="예: 밤비 구직자"
+										value={nickname}
+									/>
 								</label>
-								{isSignUp ? null : (
-									<button
-										className="font-semibold text-muted-foreground text-xs underline-offset-2 hover:text-foreground hover:underline"
-										onClick={handleForgotPassword}
-										type="button"
+								<label className="grid gap-2" htmlFor="auth-username">
+									<span className="font-bold text-sm">아이디</span>
+									<Input
+										autoComplete="username"
+										id="auth-username"
+										onChange={(event) => setUsername(event.target.value)}
+										placeholder="영문·숫자 3자 이상"
+										value={username}
+									/>
+								</label>
+								<label className="grid gap-2" htmlFor="auth-password">
+									<span className="font-bold text-sm">비밀번호</span>
+									<Input
+										autoComplete="new-password"
+										id="auth-password"
+										onChange={(event) => setPassword(event.target.value)}
+										placeholder="비밀번호를 입력해주세요."
+										type="password"
+										value={password}
+									/>
+								</label>
+								<label className="grid gap-2" htmlFor="auth-password-confirm">
+									<span className="font-bold text-sm">비밀번호 확인</span>
+									<Input
+										autoComplete="new-password"
+										id="auth-password-confirm"
+										onChange={(event) => setPasswordConfirm(event.target.value)}
+										placeholder="비밀번호를 다시 입력해주세요."
+										type="password"
+										value={passwordConfirm}
+									/>
+								</label>
+								<label className="grid gap-2" htmlFor="auth-email">
+									<span className="font-bold text-sm">이메일</span>
+									<Input
+										autoComplete="email"
+										id="auth-email"
+										onChange={(event) => setEmail(event.target.value)}
+										placeholder="이메일을 입력해주세요."
+										type="email"
+										value={email}
+									/>
+								</label>
+								<div className="grid gap-2">
+									<span className="font-bold text-sm" id="auth-role-label">
+										가입 유형
+									</span>
+									<ToggleGroup
+										aria-labelledby="auth-role-label"
+										className="grid w-full grid-cols-2 gap-2"
+										onValueChange={(value) => {
+											const next = value.at(-1);
+											if (next === "job_seeker" || next === "employer") {
+												setSignupRole(next);
+											}
+										}}
+										value={[signupRole]}
 									>
-										비밀번호를 잊으셨나요?
-									</button>
-								)}
-							</div>
-							<Input
-								autoComplete={isSignUp ? "new-password" : "current-password"}
-								id="auth-password"
-								onChange={(event) => setPassword(event.target.value)}
-								placeholder="비밀번호를 입력해주세요."
-								type="password"
-								value={password}
-							/>
-						</div>
+										<ToggleGroupItem className="w-full" value="job_seeker">
+											개인회원
+										</ToggleGroupItem>
+										<ToggleGroupItem className="w-full" value="employer">
+											업소회원
+										</ToggleGroupItem>
+									</ToggleGroup>
+								</div>
+								{signupRole === "employer" ? (
+									<p
+										className="m-0 rounded-lg border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm"
+										role="note"
+									>
+										가입 후 업체 정보를 입력하고 운영자 승인을 받으면 구인
+										기능을 이용할 수 있어요.
+									</p>
+								) : null}
+							</>
+						) : (
+							<>
+								<label className="grid gap-2" htmlFor="auth-email">
+									<span className="font-bold text-sm">이메일</span>
+									<Input
+										autoComplete="email"
+										id="auth-email"
+										onChange={(event) => setEmail(event.target.value)}
+										placeholder="이메일을 입력해주세요."
+										type="email"
+										value={email}
+									/>
+								</label>
+								<div className="grid gap-2">
+									<div className="flex items-center justify-between gap-2">
+										<label
+											className="font-bold text-sm"
+											htmlFor="auth-password"
+										>
+											비밀번호
+										</label>
+										<button
+											className="font-semibold text-muted-foreground text-xs underline-offset-2 hover:text-foreground hover:underline"
+											onClick={handleForgotPassword}
+											type="button"
+										>
+											비밀번호를 잊으셨나요?
+										</button>
+									</div>
+									<Input
+										autoComplete="current-password"
+										id="auth-password"
+										onChange={(event) => setPassword(event.target.value)}
+										placeholder="비밀번호를 입력해주세요."
+										type="password"
+										value={password}
+									/>
+								</div>
+							</>
+						)}
 						{notice ? (
 							<div
 								className={cn(

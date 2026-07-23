@@ -14,6 +14,13 @@ export const user = pgTable("user", {
 	email: text("email").notNull().unique(),
 	emailVerified: boolean("email_verified").default(false).notNull(),
 	image: text("image"),
+	// 로그인 아이디(better-auth username 플러그인). 정규화되어 소문자로 저장되며
+	// 유니크. nullable — 기존/소셜 가입 등 아이디 없는 계정 허용(Postgres unique는
+	// NULL 다중 허용이라 미설정 계정끼리 충돌 없음).
+	username: text("username").unique(),
+	// 사용자가 입력한 원형(대소문자 보존) 표시용 아이디. 로그인 매칭은 username으로,
+	// 화면 노출은 이 값으로. nullable.
+	displayUsername: text("display_username"),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
