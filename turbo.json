@@ -5,7 +5,13 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": [
+        "BAMBI_COOKIE_PREFIX",
+        "BAMBI_GUEST_TOKEN_SECRET",
+        "PORTONE_API_SECRET",
+        "VERCEL_ENV"
+      ]
     },
     "lint": {
       "dependsOn": ["^lint"]
