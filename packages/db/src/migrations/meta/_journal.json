@@ -232,6 +232,13 @@
       "when": 1784788194011,
       "tag": "0032_ancient_rafael_vega",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1784789414916,
+      "tag": "0033_majestic_felicia_hardy",
+      "breakpoints": true
     }
   ]
 }
