@@ -5,7 +5,9 @@ import {
 	canManageJobPosts,
 	canManageOrganization,
 	canManageTeam,
+	isOrganizationManagerRole,
 	normalizeOrganizationManagementRole,
+	storedOrganizationManagerRoles,
 } from "./bambi-organization-authz";
 
 describe("bambi organization authorization", () => {
@@ -142,6 +144,21 @@ describe("bambi organization authorization", () => {
 		expect(
 			canInviteMembers({ organizationId: "org-b", organizationMemberships })
 		).toBe(false);
+	});
+
+	it("treats canonical manager and legacy admin as organization managers", () => {
+		expect(isOrganizationManagerRole("owner")).toBe(true);
+		expect(isOrganizationManagerRole("manager")).toBe(true);
+		expect(isOrganizationManagerRole("admin")).toBe(true);
+		expect(isOrganizationManagerRole("staff")).toBe(false);
+		expect(isOrganizationManagerRole("member")).toBe(false);
+		expect(isOrganizationManagerRole("guest")).toBe(false);
+		expect(isOrganizationManagerRole(null)).toBe(false);
+		expect(isOrganizationManagerRole(undefined)).toBe(false);
+		// SQL inArray용 원값 목록과 raw 판정이 서로 어긋나지 않아야 한다.
+		for (const role of storedOrganizationManagerRoles) {
+			expect(isOrganizationManagerRole(role)).toBe(true);
+		}
 	});
 
 	it("normalizes legacy Better Auth organization roles", () => {

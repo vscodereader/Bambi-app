@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import { member } from "@bambi-app/db/schema/auth";
 import { jobPerformanceEvent, jobPost } from "@bambi-app/db/schema/bambi";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { isOrganizationManagerRole } from "./bambi-organization-authz";
 
 export const jobPerformanceEventTypes = [
 	"impression",
@@ -476,9 +477,7 @@ export const getManageableAnalyticsOrganizationIds = async (
 		.where(eq(member.userId, userId));
 
 	return memberships
-		.filter(
-			(membership) => membership.role === "owner" || membership.role === "admin"
-		)
+		.filter((membership) => isOrganizationManagerRole(membership.role))
 		.map((membership) => membership.organizationId);
 };
 
