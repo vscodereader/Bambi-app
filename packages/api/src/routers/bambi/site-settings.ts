@@ -29,6 +29,20 @@ const optionalText = (max: number) =>
 		.transform((value) => (value.length === 0 ? null : value))
 		.nullish();
 
+// optionalText + 이메일 형식 검증. 빈 값은 null(폴백)로 저장한다.
+const optionalEmail = (max: number) =>
+	z
+		.string()
+		.trim()
+		.max(max, `${max}자 이내로 입력해 주세요.`)
+		.refine(
+			(value) =>
+				value.length === 0 || z.string().email().safeParse(value).success,
+			"올바른 이메일 형식이 아닙니다."
+		)
+		.transform((value) => (value.length === 0 ? null : value))
+		.nullish();
+
 // 무통장입금 계좌. 각 필드 필수(공백 불가)이며 앞뒤 공백은 제거해 저장한다.
 const bankAccountInput = z.object({
 	accountNumber: z
@@ -54,23 +68,29 @@ const updatePaymentAccountsInput = z.object({
 		.max(10, "계좌는 최대 10개까지 등록할 수 있습니다."),
 });
 
+// 개인정보 처리방침이 읽는 공개 필드. 위탁사명·관리부서 연락처만 노출하고 민감 설정은 싣지 않는다.
+// 값이 없으면 null → 웹에서 코드 폴백(BAMBI_PROCESSORS / BAMBI_COMPANY.privacyOfficer)을 쓴다.
+const PRIVACY_COLUMNS = {
+	privacyPaymentProcessor: bambiSiteSettings.privacyPaymentProcessor,
+	privacySmsProvider: bambiSiteSettings.privacySmsProvider,
+	privacyContactPhone: bambiSiteSettings.privacyContactPhone,
+	privacyContactEmail: bambiSiteSettings.privacyContactEmail,
+} as const;
+
+const updatePrivacyContactsInput = z.object({
+	privacyPaymentProcessor: optionalText(120),
+	privacySmsProvider: optionalText(120),
+	privacyContactPhone: optionalText(60),
+	privacyContactEmail: optionalEmail(200),
+});
+
 const updateFooterInput = z.object({
 	footerIntro: optionalText(500),
 	operator: optionalText(120),
 	ceo: optionalText(120),
 	bizRegNo: optionalText(60),
 	address: optionalText(200),
-	email: z
-		.string()
-		.trim()
-		.max(200, "200자 이내로 입력해 주세요.")
-		.refine(
-			(value) =>
-				value.length === 0 || z.string().email().safeParse(value).success,
-			"올바른 이메일 형식이 아닙니다."
-		)
-		.transform((value) => (value.length === 0 ? null : value))
-		.nullish(),
+	email: optionalEmail(200),
 });
 
 // 회원 정책 — 탈퇴 개인정보 보존기간(일). null이면 기본값으로 복귀한다.
@@ -121,6 +141,32 @@ export const siteSettingsRouter = {
 					set: input,
 				})
 				.returning(FOOTER_COLUMNS);
+			return saved ?? null;
+		}),
+
+	// 개인정보 처리방침 연락처 공개 조회. 처리방침 페이지가 위탁사명·관리부서 연락처를
+	// 표시하는 데 쓴다. 행이 없으면 null(웹이 코드 폴백 처리).
+	getPrivacyContacts: publicProcedure.handler(async () => {
+		const [row] = await db
+			.select(PRIVACY_COLUMNS)
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+		return row ?? null;
+	}),
+
+	// 운영자 전용 저장. 같은 단일 행을 upsert 하되 처리방침 연락처 컬럼만 갱신한다.
+	updatePrivacyContacts: adminProcedure
+		.input(updatePrivacyContactsInput)
+		.handler(async ({ input }) => {
+			const [saved] = await db
+				.insert(bambiSiteSettings)
+				.values({ id: SETTINGS_ROW_ID, ...input })
+				.onConflictDoUpdate({
+					target: bambiSiteSettings.id,
+					set: input,
+				})
+				.returning(PRIVACY_COLUMNS);
 			return saved ?? null;
 		}),
 

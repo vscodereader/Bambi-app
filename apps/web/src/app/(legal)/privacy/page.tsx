@@ -7,7 +7,11 @@ import {
 	LegalSubheading,
 	LegalTable,
 } from "@/components/bambi/legal-doc";
-import { BAMBI_COMPANY, BAMBI_PROCESSORS } from "@/lib/bambi/company";
+import {
+	PrivacyContactLine,
+	PrivacyProcessorsTable,
+} from "@/components/bambi/privacy-contacts";
+import { BAMBI_COMPANY } from "@/lib/bambi/company";
 
 export const metadata: Metadata = {
 	title: "개인정보 처리방침 | 밤비",
@@ -235,10 +239,7 @@ export default function PrivacyPage() {
 					감독합니다. 회사의 개인정보 위탁처리 기관 및 위탁업무 내용은 다음과
 					같습니다.
 				</LegalParagraph>
-				<LegalTable
-					head={["수탁자", "위탁업무 내용"]}
-					rows={BAMBI_PROCESSORS.map((p): [string, string] => [p.name, p.task])}
-				/>
+				<PrivacyProcessorsTable />
 			</LegalSection>
 
 			<LegalSection heading="개인정보의 파기">
@@ -268,10 +269,7 @@ export default function PrivacyPage() {
 				<LegalParagraph>
 					개인정보 보호책임부서 : {BAMBI_COMPANY.privacyOfficer.dept}
 				</LegalParagraph>
-				<LegalParagraph>
-					전화 : {BAMBI_COMPANY.privacyOfficer.tel} · 메일 :{" "}
-					{BAMBI_COMPANY.privacyOfficer.email}
-				</LegalParagraph>
+				<PrivacyContactLine />
 			</LegalSection>
 
 			<LegalSection heading="개인정보 처리방침 변경 시 고지 의무">

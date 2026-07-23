@@ -184,6 +184,124 @@ describe("siteSettings footer", () => {
 	});
 });
 
+describe("siteSettings privacy contacts", () => {
+	it("getPrivacyContacts는 미설정 시 null, 운영자 저장 후 값을 반환한다", async () => {
+		const fixture = await createFixture();
+		try {
+			await db
+				.delete(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, "default"));
+
+			const getPrivacyContacts = createProcedureClient(
+				siteSettingsRouter.getPrivacyContacts,
+				{
+					context: createContextForUser(null),
+					path: ["bambi", "siteSettings", "getPrivacyContacts"],
+				}
+			);
+			expect(await getPrivacyContacts({})).toBeNull();
+
+			const update = createProcedureClient(
+				siteSettingsRouter.updatePrivacyContacts,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updatePrivacyContacts"],
+				}
+			);
+			const saved = await update({
+				privacyContactEmail: "privacy@bambialba.com",
+				privacyContactPhone: "02-000-0000",
+				privacyPaymentProcessor: "포트원",
+				privacySmsProvider: "NHN Cloud",
+			});
+			expect(saved?.privacyPaymentProcessor).toBe("포트원");
+
+			const afterInsert = await getPrivacyContacts({});
+			expect(afterInsert?.privacySmsProvider).toBe("NHN Cloud");
+			expect(afterInsert?.privacyContactPhone).toBe("02-000-0000");
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("빈 문자열은 null로 저장해 폴백이 뜨도록 한다", async () => {
+		const fixture = await createFixture();
+		try {
+			const update = createProcedureClient(
+				siteSettingsRouter.updatePrivacyContacts,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updatePrivacyContacts"],
+				}
+			);
+			await update({
+				privacyPaymentProcessor: "   ",
+				privacySmsProvider: "다우기술",
+			});
+			const [row] = await db
+				.select({
+					privacyPaymentProcessor: bambiSiteSettings.privacyPaymentProcessor,
+					privacySmsProvider: bambiSiteSettings.privacySmsProvider,
+				})
+				.from(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, "default"));
+			expect(row?.privacyPaymentProcessor).toBeNull();
+			expect(row?.privacySmsProvider).toBe("다우기술");
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("잘못된 이메일 형식은 거부한다", async () => {
+		const fixture = await createFixture();
+		try {
+			const update = createProcedureClient(
+				siteSettingsRouter.updatePrivacyContacts,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updatePrivacyContacts"],
+				}
+			);
+			await expect(
+				update({ privacyContactEmail: "not-an-email" })
+			).rejects.toBeTruthy();
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("updatePrivacyContacts는 운영자가 아니면 FORBIDDEN, 비로그인은 UNAUTHORIZED", async () => {
+		const fixture = await createFixture();
+		try {
+			const asEmployer = createProcedureClient(
+				siteSettingsRouter.updatePrivacyContacts,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "siteSettings", "updatePrivacyContacts"],
+				}
+			);
+			await expectOrpcCode(
+				asEmployer({ privacyPaymentProcessor: "몰래 수정" }),
+				"FORBIDDEN"
+			);
+
+			const asGuest = createProcedureClient(
+				siteSettingsRouter.updatePrivacyContacts,
+				{
+					context: createContextForUser(null),
+					path: ["bambi", "siteSettings", "updatePrivacyContacts"],
+				}
+			);
+			await expectOrpcCode(
+				asGuest({ privacyPaymentProcessor: "몰래 수정" }),
+				"UNAUTHORIZED"
+			);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+});
+
 describe("siteSettings payment accounts", () => {
 	it("getPaymentAccounts는 미설정 시 빈 배열, 운영자 저장 후 계좌를 반환한다", async () => {
 		const fixture = await createFixture();

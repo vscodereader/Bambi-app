@@ -218,6 +218,13 @@
       "when": 1784780485995,
       "tag": "0030_flawless_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1784786103385,
+      "tag": "0031_chubby_killraven",
+      "breakpoints": true
     }
   ]
 }
