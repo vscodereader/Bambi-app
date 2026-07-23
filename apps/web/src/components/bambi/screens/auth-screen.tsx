@@ -67,18 +67,20 @@ function GuestBrowseButton() {
 	);
 }
 
-// embedded=true(게이트 화면 내부 삽입)일 때는 부모가 배경·여백을 제공하므로 전체
-// 뷰포트 높이/센터링을 벗겨 상단에 컴팩트하게 붙는다. false(독립 /login)일 때만 풀높이 센터.
+// embedded=true(게이트 화면 내부 삽입)일 때는 부모가 배경·여백·전체 높이 센터링을
+// 제공하므로 뷰포트 높이/배경만 벗긴다. false(독립 /login)일 때만 풀높이 센터.
 const authWrapperClass = (embedded: boolean) =>
 	cn(
 		"text-foreground",
 		embedded ? "w-full" : "min-h-[100dvh] bg-secondary px-4 py-6"
 	);
 
+// 두 컬럼(로고·문구·서브문구 / 폼 카드)은 항상 세로 중앙 정렬한다 — 좌측 텍스트 블록이
+// 더 짧아도 폼 카드 기준 가운데에 온다. 독립 화면만 추가로 풀높이 센터를 얹는다.
 const authGridClass = (embedded: boolean) =>
 	cn(
-		"mx-auto grid w-full max-w-[980px] gap-6 lg:grid-cols-[minmax(0,1fr)_390px]",
-		embedded ? "items-start" : "min-h-[calc(100dvh-48px)] items-center"
+		"mx-auto grid w-full max-w-[980px] items-center gap-6 lg:grid-cols-[minmax(0,1fr)_390px]",
+		embedded ? "" : "min-h-[calc(100dvh-48px)]"
 	);
 
 export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
