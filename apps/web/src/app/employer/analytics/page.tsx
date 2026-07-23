@@ -11,7 +11,10 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import Loader from "@/components/loader";
-import { getJobDisplayStatus } from "@/lib/bambi/exposure";
+import {
+	getJobDisplayStatus,
+	isBannerExposureType,
+} from "@/lib/bambi/exposure";
 import { orpc } from "@/utils/orpc";
 
 interface MetricCardProps {
@@ -20,6 +23,26 @@ interface MetricCardProps {
 }
 
 const formatNumber = (value: number): string => value.toLocaleString("ko-KR");
+
+// 공고가 구매한 광고 상품에 해당하는 게재 섹션. 배너 3종은 하나의 프리미엄 상품이
+// 상단·좌측·우측 슬롯을 순환하므로 세 슬롯을 함께 켠다. 일반(organic)은 상품과
+// 무관하게 모든 공고가 노출되므로 셀 렌더에서 항상 포함한다.
+const productSectionsFor = (exposureType: string): ReadonlySet<string> => {
+	if (isBannerExposureType(exposureType)) {
+		return new Set(["premiumBanner", "leftBanner", "rightBanner"]);
+	}
+
+	switch (exposureType) {
+		case "special":
+			return new Set(["special"]);
+		case "urgent":
+			return new Set(["urgent"]);
+		case "recommended":
+			return new Set(["recommended"]);
+		default:
+			return new Set();
+	}
+};
 
 const formatRate = (numerator: number, denominator: number): string => {
 	if (denominator === 0) {
@@ -323,41 +346,66 @@ export default function EmployerAnalyticsPage() {
 											)}
 										</td>
 										<td className="px-4 py-3">
-											{[
-												{
-													label: "스페셜",
-													value: summary.sectionMetrics.specialImpressions,
-												},
-												{
-													label: "급구",
-													value: summary.sectionMetrics.urgentImpressions,
-												},
-												{
-													label: "추천",
-													value: summary.sectionMetrics.recommendedImpressions,
-												},
-												{
-													label: "일반",
-													value: summary.sectionMetrics.organicImpressions,
-												},
-												{
-													label: "프리미엄 배너·상단",
-													value:
-														summary.sectionMetrics.premiumBannerImpressions,
-												},
-												{
-													label: "프리미엄 배너·좌측",
-													value: summary.sectionMetrics.leftBannerImpressions,
-												},
-												{
-													label: "프리미엄 배너·우측",
-													value: summary.sectionMetrics.rightBannerImpressions,
-												},
-											]
-												.map(
-													(item) => `${item.label} ${formatNumber(item.value)}`
-												)
-												.join(" · ")}
+											{(() => {
+												// 표시 집합 = {일반} ∪ {현재 상품 섹션} ∪ {카운트 > 0인 섹션}.
+												// 안전장치: 과거에 다른 상품을 산 공고의 실측 카운트를 숨기면 합계가
+												// 어긋나므로, 상품 매핑에 없어도 값이 있으면 남긴다.
+												const productSections = productSectionsFor(
+													summary.exposureType
+												);
+
+												return [
+													{
+														key: "special",
+														label: "스페셜",
+														value: summary.sectionMetrics.specialImpressions,
+													},
+													{
+														key: "urgent",
+														label: "급구",
+														value: summary.sectionMetrics.urgentImpressions,
+													},
+													{
+														key: "recommended",
+														label: "추천",
+														value:
+															summary.sectionMetrics.recommendedImpressions,
+													},
+													{
+														key: "organic",
+														label: "일반",
+														value: summary.sectionMetrics.organicImpressions,
+													},
+													{
+														key: "premiumBanner",
+														label: "프리미엄 배너·상단",
+														value:
+															summary.sectionMetrics.premiumBannerImpressions,
+													},
+													{
+														key: "leftBanner",
+														label: "프리미엄 배너·좌측",
+														value: summary.sectionMetrics.leftBannerImpressions,
+													},
+													{
+														key: "rightBanner",
+														label: "프리미엄 배너·우측",
+														value:
+															summary.sectionMetrics.rightBannerImpressions,
+													},
+												]
+													.filter(
+														(item) =>
+															item.key === "organic" ||
+															productSections.has(item.key) ||
+															item.value > 0
+													)
+													.map(
+														(item) =>
+															`${item.label} ${formatNumber(item.value)}`
+													)
+													.join(" · ");
+											})()}
 										</td>
 									</tr>
 								))}
