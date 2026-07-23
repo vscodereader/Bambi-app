@@ -947,10 +947,8 @@ export function SeekerChatRoomResponsive({
 		sendMediaMessageMutation.isPending;
 	const isComposerSubmitting =
 		sendMessageMutation.isPending || isAttachmentSubmitting;
-	const confirmedSchedule = schedules.find(
-		(schedule) => schedule.status === "confirmed"
-	);
-	const reviewEligibleSchedule = schedules.find(
+	// 완료된 면접도 확정을 거친 것이라 연락처 열람·후기 작성을 계속 허용한다.
+	const eligibleSchedule = schedules.find(
 		(schedule) =>
 			schedule.status === "confirmed" || schedule.status === "completed"
 	);
@@ -959,7 +957,7 @@ export function SeekerChatRoomResponsive({
 	);
 	const canCreateReview =
 		isJobSeeker &&
-		Boolean(reviewEligibleSchedule) &&
+		Boolean(eligibleSchedule) &&
 		!existingReview &&
 		!room.isBlocked &&
 		!reviewListQuery.isError &&
@@ -1338,10 +1336,10 @@ export function SeekerChatRoomResponsive({
 						<Button
 							block
 							className="mt-4 shadow-none"
-							disabled={!confirmedSchedule}
+							disabled={!eligibleSchedule}
 							onClick={onReveal}
 							size="md"
-							variant={confirmedSchedule ? "primary" : "secondary"}
+							variant={eligibleSchedule ? "primary" : "secondary"}
 						>
 							{getRevealButtonLabel(revealQuery.data)}
 						</Button>
@@ -1352,7 +1350,7 @@ export function SeekerChatRoomResponsive({
 						existingReview={existingReview}
 						isLoading={reviewListQuery.isLoading}
 						isSubmitting={createReviewMutation.isPending}
-						isVisible={isJobSeeker && Boolean(reviewEligibleSchedule)}
+						isVisible={isJobSeeker && Boolean(eligibleSchedule)}
 						onSubmit={handleReviewSubmit}
 						successMessage={reviewSuccessMessage}
 					/>

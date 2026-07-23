@@ -147,6 +147,30 @@ describe("bambi policy", () => {
 		).toBe(false);
 	});
 
+	it("keeps revealing contact after the interview is completed", () => {
+		// 완료 버튼을 눌러 상태가 completed가 돼도 확정을 거친 면접이라 공개는 유지된다.
+		expect(
+			canRevealContact({
+				interviewStatus: "completed",
+				ownerConsented: true,
+				ownerIsEmployer: true,
+				ownerPhoneVerified: true,
+			})
+		).toBe(true);
+
+		// declined·canceled는 계속 차단.
+		for (const interviewStatus of ["declined", "canceled"] as const) {
+			expect(
+				canRevealContact({
+					interviewStatus,
+					ownerConsented: true,
+					ownerIsEmployer: true,
+					ownerPhoneVerified: true,
+				})
+			).toBe(false);
+		}
+	});
+
 	it("prioritizes published verified employer posts", () => {
 		expect(
 			shouldPrioritizeJobPost({
@@ -218,8 +242,19 @@ describe("canViewCounterpartContact", () => {
 		).toBe(false);
 	});
 
-	it("requires a confirmed interview", () => {
-		for (const interviewStatus of ["proposed", "rejected", "cancelled"]) {
+	it("still lets the job seeker view the employer contact after the interview is completed", () => {
+		// 완료된 면접도 확정을 거친 것이라 열람이 유지된다.
+		expect(
+			canViewCounterpartContact({
+				counterpartConsented: true,
+				interviewStatus: "completed",
+				viewerIsEmployer: false,
+			})
+		).toBe(true);
+	});
+
+	it("requires a confirmed or completed interview", () => {
+		for (const interviewStatus of ["proposed", "declined", "canceled"]) {
 			expect(
 				canViewCounterpartContact({
 					counterpartConsented: true,

@@ -985,17 +985,20 @@ export const chatsRouter = {
 
 			const viewerIsEmployer = profile.userId === room.employerUserId;
 
+			// 완료된 면접도 확정을 거친 것이라 연락처 흐름을 유지한다(완료 버튼을 눌러도
+			// 조기 반환으로 꺼지지 않게). declined·canceled는 계속 제외.
 			const [confirmedSchedule] = await db
 				.select({
 					id: interviewSchedule.id,
 					locationNote: interviewSchedule.locationNote,
 					scheduledAt: interviewSchedule.scheduledAt,
+					status: interviewSchedule.status,
 				})
 				.from(interviewSchedule)
 				.where(
 					and(
 						eq(interviewSchedule.chatRoomId, room.id),
-						eq(interviewSchedule.status, "confirmed")
+						inArray(interviewSchedule.status, ["confirmed", "completed"])
 					)
 				)
 				.limit(1);
@@ -1045,7 +1048,7 @@ export const chatsRouter = {
 
 			const canViewCounterpart = canViewCounterpartContact({
 				counterpartConsented: employerContacts.length > 0,
-				interviewStatus: "confirmed",
+				interviewStatus: confirmedSchedule.status,
 				viewerIsEmployer,
 			});
 
