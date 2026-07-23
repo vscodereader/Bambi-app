@@ -12,13 +12,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { organizationRoleLabel } from "@/lib/bambi/team-labels";
 import { orpc } from "@/utils/orpc";
-
-const roleLabels: Record<string, string> = {
-	manager: "매니저",
-	owner: "소유자",
-	staff: "스태프",
-};
 
 export default function ModeratorTeamInvitesPage() {
 	const queryClient = useQueryClient();
@@ -62,7 +57,7 @@ export default function ModeratorTeamInvitesPage() {
 						<p className="m-0 text-muted-foreground text-sm">
 							{(invite.inviteeName ? `${invite.inviteeName} · ` : "") +
 								invite.email}{" "}
-							· {roleLabels[invite.role] ?? invite.role}
+							· {organizationRoleLabel(invite.role)}
 							{invite.inviterName ? ` · 초대: ${invite.inviterName}` : ""}
 							{invite.isExpired ? " · 만료됨" : ""}
 						</p>
