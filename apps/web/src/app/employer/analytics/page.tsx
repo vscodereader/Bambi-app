@@ -2,6 +2,7 @@
 
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
@@ -81,11 +82,40 @@ export default function EmployerAnalyticsPage() {
 	);
 
 	// 프리미엄 배너는 하나의 상품이 상단·좌측·우측 세 슬롯에 노출된 위치별 카운트다.
-	// (상품이 3개가 아니라 슬롯 위치가 3개) → 합계로 묶어 보여준다.
+	// (상품이 3개가 아니라 슬롯 위치가 3개) → 합계 + 코럴 농도 3단계의 비중 막대로 묶어 보여준다.
 	const premiumBannerTotal =
 		totals.premiumBannerImpressions +
 		totals.leftBannerImpressions +
 		totals.rightBannerImpressions;
+	const premiumSlots = [
+		{
+			dotClassName: "bg-coral-500",
+			fillClassName: "fill-coral-500",
+			label: "상단",
+			value: totals.premiumBannerImpressions,
+		},
+		{
+			dotClassName: "bg-coral-300",
+			fillClassName: "fill-coral-300",
+			label: "좌측",
+			value: totals.leftBannerImpressions,
+		},
+		{
+			dotClassName: "bg-coral-200",
+			fillClassName: "fill-coral-200",
+			label: "우측",
+			value: totals.rightBannerImpressions,
+		},
+	];
+	let segmentStart = 0;
+	const premiumSegments = premiumSlots
+		.filter((slot) => slot.value > 0)
+		.map((slot) => {
+			const width = (slot.value / premiumBannerTotal) * 100;
+			const segment = { ...slot, width, x: segmentStart };
+			segmentStart += width;
+			return segment;
+		});
 
 	if (summaryQuery.isLoading) {
 		return <Loader />;
@@ -171,29 +201,60 @@ export default function EmployerAnalyticsPage() {
 						value={formatNumber(totals.organicImpressions)}
 					/>
 					<Card className="sm:col-span-2 lg:col-span-4" size="sm">
-						<CardContent className="flex flex-col gap-3">
-							<div className="flex items-baseline justify-between gap-2">
-								<dt className="text-muted-foreground text-sm">프리미엄 배너</dt>
-								<dd className="font-semibold text-2xl">
-									{formatNumber(premiumBannerTotal)}
-								</dd>
+						<CardContent className="flex flex-col gap-4">
+							<div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+								<div className="flex flex-col gap-2">
+									<dt className="text-muted-foreground text-sm">
+										프리미엄 배너
+									</dt>
+									<dd className="font-semibold text-2xl">
+										{formatNumber(premiumBannerTotal)}
+									</dd>
+								</div>
+								<dl className="flex flex-wrap gap-x-5 gap-y-2">
+									{premiumSlots.map((slot) => (
+										<div className="flex items-center gap-2" key={slot.label}>
+											<span
+												aria-hidden
+												className={cn("size-2 rounded-full", slot.dotClassName)}
+											/>
+											<dt className="text-muted-foreground text-xs">
+												{slot.label}
+											</dt>
+											<dd className="font-medium text-sm">
+												{formatNumber(slot.value)}
+											</dd>
+										</div>
+									))}
+								</dl>
 							</div>
-							<dl className="grid grid-cols-3 gap-3">
-								{[
-									{ label: "상단", value: totals.premiumBannerImpressions },
-									{ label: "좌측", value: totals.leftBannerImpressions },
-									{ label: "우측", value: totals.rightBannerImpressions },
-								].map((slot) => (
-									<div className="flex flex-col gap-1" key={slot.label}>
-										<dt className="text-muted-foreground text-xs">
-											{slot.label}
-										</dt>
-										<dd className="font-medium text-lg">
-											{formatNumber(slot.value)}
-										</dd>
-									</div>
-								))}
-							</dl>
+							{premiumBannerTotal > 0 ? (
+								// 비율 막대: 인라인 style 금지 규칙 때문에 동적 비중은 SVG rect 속성으로 그린다.
+								<svg
+									aria-hidden="true"
+									className="h-2 w-full overflow-hidden rounded-full"
+									preserveAspectRatio="none"
+									role="presentation"
+									viewBox="0 0 100 4"
+								>
+									{premiumSegments.map((segment) => (
+										<rect
+											className={segment.fillClassName}
+											height="4"
+											key={segment.label}
+											width={segment.width}
+											x={segment.x}
+											y="0"
+										/>
+									))}
+								</svg>
+							) : (
+								<div aria-hidden className="h-2 w-full rounded-full bg-muted" />
+							)}
+							<p className="m-0 text-muted-foreground text-xs">
+								프리미엄 광고 하나가 상단·좌측·우측 슬롯을 순환하며 노출된
+								위치별 집계예요.
+							</p>
 						</CardContent>
 					</Card>
 				</dl>
