@@ -1,8 +1,7 @@
 "use client";
 
 import { Button } from "@bambi-app/ui/components/button";
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { isApiJobId } from "@/lib/bambi/api-jobs";
 import { formatDate } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
@@ -10,8 +9,6 @@ import { EmptyState } from "./empty-state";
 import { RatingStars } from "./rating-stars";
 
 const PAGE_SIZE = 5;
-// listByJobPost 입력 limit 상한과 맞춘다 — 성장형 limit이 이 값을 넘으면 서버가 거절한다.
-const MAX_LIMIT = 50;
 
 interface JobReviewSectionProps {
 	jobPostId: string;
@@ -21,18 +18,19 @@ interface JobReviewSectionProps {
 
 // 공고 상세의 후기 본문 목록. 회원 전용(서버 requireActiveBambiProfile)이며 게시된
 // 후기만 노출한다. 작성자는 익명 또는 마스킹된 표시명으로만 내려온다.
-// ponytail: 성장형 limit(offset 0 고정)으로 "더보기"를 처리 — 최대 50개까지 노출.
-// 한 공고에 후기가 50개를 넘길 일이 현실적으로 없어 offset 누적 대신 이 방식을 쓴다.
+// "더보기"는 offset 누적(useInfiniteQuery)으로 처리해 개수 제한 없이 이어 볼 수 있다.
 export function JobReviewSection({
 	jobPostId,
 	ratingAverage,
 	reviewCount,
 }: JobReviewSectionProps) {
-	const [limit, setLimit] = useState(PAGE_SIZE);
 	const canQuery = isApiJobId(jobPostId);
-	const reviewsQuery = useQuery({
-		...orpc.bambi.reviews.listByJobPost.queryOptions({
-			input: { jobPostId, limit, offset: 0 },
+	const reviewsQuery = useInfiniteQuery({
+		...orpc.bambi.reviews.listByJobPost.infiniteOptions({
+			getNextPageParam: (lastPage, _allPages, lastOffset) =>
+				lastPage.hasMore ? lastOffset + PAGE_SIZE : undefined,
+			initialPageParam: 0,
+			input: (offset: number) => ({ jobPostId, limit: PAGE_SIZE, offset }),
 		}),
 		enabled: canQuery,
 	});
@@ -42,8 +40,14 @@ export function JobReviewSection({
 		return null;
 	}
 
-	const items = reviewsQuery.data?.items ?? [];
-	const hasMore = reviewsQuery.data?.hasMore ?? false;
+	// 페이지 사이에 새 후기가 끼어들면 offset이 밀려 같은 후기가 중복될 수 있어 id로 걸러낸다.
+	const items = [
+		...new Map(
+			(reviewsQuery.data?.pages.flatMap((page) => page.items) ?? []).map(
+				(item) => [item.id, item] as const
+			)
+		).values(),
+	];
 
 	return (
 		<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
@@ -107,16 +111,14 @@ export function JobReviewSection({
 				</ul>
 			) : null}
 
-			{hasMore && limit < MAX_LIMIT ? (
+			{reviewsQuery.hasNextPage ? (
 				<div className="mt-4 flex justify-center">
 					<Button
-						disabled={reviewsQuery.isFetching}
-						onClick={() =>
-							setLimit((current) => Math.min(current + PAGE_SIZE, MAX_LIMIT))
-						}
+						disabled={reviewsQuery.isFetchingNextPage}
+						onClick={() => reviewsQuery.fetchNextPage()}
 						variant="outline"
 					>
-						{reviewsQuery.isFetching ? "불러오는 중" : "후기 더보기"}
+						{reviewsQuery.isFetchingNextPage ? "불러오는 중" : "후기 더보기"}
 					</Button>
 				</div>
 			) : null}
