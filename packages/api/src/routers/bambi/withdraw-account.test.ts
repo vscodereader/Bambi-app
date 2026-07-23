@@ -38,6 +38,12 @@ const withdrawClient = (userId: string) =>
 		path: ["bambi", "onboarding", "withdrawMyAccount"],
 	});
 
+const eligibilityClient = (userId: string) =>
+	createProcedureClient(onboardingRouter.getWithdrawEligibility, {
+		context: ctx(userId),
+		path: ["bambi", "onboarding", "getWithdrawEligibility"],
+	});
+
 const seedUser = async () => {
 	const userId = `user_withdraw_${randomUUID()}`;
 	createdUserIds.push(userId);
@@ -170,5 +176,32 @@ describe("withdrawMyAccount 회원 탈퇴", () => {
 
 		const [row] = await db.select().from(user).where(eq(user.id, userId));
 		expect(row?.deletedAt).not.toBeNull();
+	});
+});
+
+describe("getWithdrawEligibility 탈퇴 가능 여부", () => {
+	it("소유 조직에 다른 멤버가 있으면 blockedByTeamMembers=true", async () => {
+		const ownerId = await seedUser();
+		const organizationId = await seedMembership(ownerId, "owner");
+		const otherUserId = await seedUser();
+		await seedOrganizationMember(organizationId, otherUserId);
+
+		const result = await eligibilityClient(ownerId)();
+		expect(result.blockedByTeamMembers).toBe(true);
+	});
+
+	it("혼자 남은 소유자는 blockedByTeamMembers=false", async () => {
+		const userId = await seedUser();
+		await seedMembership(userId, "owner");
+
+		const result = await eligibilityClient(userId)();
+		expect(result.blockedByTeamMembers).toBe(false);
+	});
+
+	it("소유 조직이 없으면 blockedByTeamMembers=false", async () => {
+		const userId = await seedUser();
+
+		const result = await eligibilityClient(userId)();
+		expect(result.blockedByTeamMembers).toBe(false);
 	});
 });
