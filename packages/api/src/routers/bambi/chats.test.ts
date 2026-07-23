@@ -409,7 +409,7 @@ describe("bambi chats router analytics", () => {
 			});
 
 			const revealContact = createProcedureClient(chatsRouter.revealContact, {
-				context: createContextForUser(fixture.jobSeekerUserId),
+				context: createContextForUser(fixture.employerUserId),
 				path: ["bambi", "chats", "revealContact"],
 			});
 
@@ -426,7 +426,7 @@ describe("bambi chats router analytics", () => {
 				.limit(1);
 
 			expect(event).toMatchObject({
-				actorUserId: fixture.jobSeekerUserId,
+				actorUserId: fixture.employerUserId,
 				eventType: "contact_reveal",
 				jobPostId: fixture.jobPostId,
 				organizationId: fixture.organizationId,
@@ -529,7 +529,31 @@ describe("bambi chats router contact reveal", () => {
 		});
 	};
 
-	it("hides the counterpart contact when only the counterpart consented", async () => {
+	it("rejects a contact reveal attempt from the job seeker", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const scheduleId = await confirmInterview(fixture);
+
+			const revealContact = createProcedureClient(chatsRouter.revealContact, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "chats", "revealContact"],
+			});
+
+			await expectOrpcCode(
+				revealContact({
+					contactMethod: "phone",
+					contactValue: "010-3333-4444",
+					interviewScheduleId: scheduleId,
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("lets the job seeker view the employer contact once the employer registered it", async () => {
 		const fixture = await createChatFixture();
 
 		try {
@@ -547,26 +571,28 @@ describe("bambi chats router contact reveal", () => {
 				chatRoomId: fixture.chatRoomId,
 			});
 
-			expect(result.canViewCounterpart).toBe(false);
-			expect(result.counterpartContacts).toEqual([]);
+			expect(result.viewerIsEmployer).toBe(false);
+			expect(result.canViewCounterpart).toBe(true);
+			expect(result.counterpartContacts).toEqual([
+				{ contactMethod: "phone", contactValue: "010-1111-2222" },
+			]);
 			expect(result.mineContacts).toEqual([]);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}
 	});
 
-	it("returns the counterpart contact once both sides consented", async () => {
+	it("shows the employer only their own contact, never a counterpart", async () => {
 		const fixture = await createChatFixture();
 
 		try {
 			const scheduleId = await confirmInterview(fixture);
 			await consent(scheduleId, fixture.employerUserId, "010-1111-2222");
-			await consent(scheduleId, fixture.jobSeekerUserId, "010-3333-4444");
 
 			const getContactReveal = createProcedureClient(
 				chatsRouter.getContactReveal,
 				{
-					context: createContextForUser(fixture.jobSeekerUserId),
+					context: createContextForUser(fixture.employerUserId),
 					path: ["bambi", "chats", "getContactReveal"],
 				}
 			);
@@ -574,13 +600,54 @@ describe("bambi chats router contact reveal", () => {
 				chatRoomId: fixture.chatRoomId,
 			});
 
-			expect(result.canViewCounterpart).toBe(true);
-			expect(result.counterpartContacts).toEqual([
+			expect(result.viewerIsEmployer).toBe(true);
+			expect(result.canViewCounterpart).toBe(false);
+			expect(result.counterpartContacts).toEqual([]);
+			expect(result.mineContacts).toEqual([
 				{ contactMethod: "phone", contactValue: "010-1111-2222" },
 			]);
-			expect(result.mineContacts).toEqual([
-				{ contactMethod: "phone", contactValue: "010-3333-4444" },
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("never surfaces a stray job seeker consent row in any view", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const scheduleId = await confirmInterview(fixture);
+			await consent(scheduleId, fixture.employerUserId, "010-1111-2222");
+			// 과거 구직자 명의로 남아 있을 수 있는 동의 행.
+			await consent(scheduleId, fixture.jobSeekerUserId, "010-9999-8888");
+
+			const seekerView = createProcedureClient(chatsRouter.getContactReveal, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "chats", "getContactReveal"],
+			});
+			const seekerResult = await seekerView({
+				chatRoomId: fixture.chatRoomId,
+			});
+			expect(seekerResult.mineContacts).toEqual([]);
+			expect(seekerResult.counterpartContacts).toEqual([
+				{ contactMethod: "phone", contactValue: "010-1111-2222" },
 			]);
+
+			const employerView = createProcedureClient(chatsRouter.getContactReveal, {
+				context: createContextForUser(fixture.employerUserId),
+				path: ["bambi", "chats", "getContactReveal"],
+			});
+			const employerResult = await employerView({
+				chatRoomId: fixture.chatRoomId,
+			});
+			expect(employerResult.counterpartContacts).toEqual([]);
+			expect(employerResult.mineContacts).toEqual([
+				{ contactMethod: "phone", contactValue: "010-1111-2222" },
+			]);
+
+			// 구직자 명의 값은 어느 응답에도 실리지 않는다.
+			expect(JSON.stringify([seekerResult, employerResult])).not.toContain(
+				"010-9999-8888"
+			);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}

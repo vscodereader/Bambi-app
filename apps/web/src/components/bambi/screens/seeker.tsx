@@ -495,7 +495,7 @@ export function SeekerChat({
 									면접 일정 확정
 								</Badge>
 								<p className="mt-2 mr-0 mb-0 ml-0 text-muted-foreground text-xs leading-[1.5]">
-									양쪽이 동의하면 연락처가 공개돼요.
+									구인자가 공개하면 연락처를 볼 수 있어요.
 								</p>
 							</div>
 						)}
@@ -530,7 +530,7 @@ export function SeekerChat({
 				<div className="border-border border-t bg-background px-4 pt-2.5 pb-1.5">
 					{sched === "confirmed" ? (
 						<Button block onClick={onReveal} size="lg" variant="primary">
-							연락처 공개하기
+							연락처 보기
 						</Button>
 					) : (
 						<div className="flex items-center gap-2.5">
