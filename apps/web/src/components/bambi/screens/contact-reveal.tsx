@@ -461,8 +461,8 @@ function ContactRevealPreview({
 						면접 일정이 확정됐어요
 					</h1>
 					<p className="m-0 max-w-[280px] text-muted-foreground text-sm leading-[1.55]">
-						면접이 확정되면 구인자가 연락처를 공개해요. 실제 채팅방에서는 확정
-						일정과 역할을 API로 확인해요.
+						면접이 확정되면 구인자가 연락처를 공개해요. 구인자가 공개한 연락처는
+						이 화면에서 확인할 수 있어요.
 					</p>
 				</div>
 				<Card className="overflow-hidden rounded-lg" pad="none">
