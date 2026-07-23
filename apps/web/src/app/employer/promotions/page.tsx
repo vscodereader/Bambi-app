@@ -5,7 +5,6 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@bambi-app/ui/components/dropdown-menu";
@@ -334,7 +333,7 @@ function getAdColumns({
 							<EllipsisIcon />
 							<span className="sr-only">메뉴 열기</span>
 						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end">
+						<DropdownMenuContent align="end" className="min-w-48">
 							<DropdownMenuItem
 								disabled={!canBoost || isBoostPending}
 								onClick={() => onBoost(ad.jobPostId)}
@@ -343,9 +342,10 @@ function getAdColumns({
 								끌어올리기
 							</DropdownMenuItem>
 							{disabledReason ? (
-								<DropdownMenuLabel className="font-normal">
+								// DropdownMenuLabel(base-ui GroupLabel)은 Menu.Group 밖에서 크래시라 일반 텍스트로 렌더한다.
+								<p className="m-0 px-2 pb-2 text-muted-foreground text-xs">
 									{disabledReason}
-								</DropdownMenuLabel>
+								</p>
 							) : null}
 							<DropdownMenuSeparator />
 							<DropdownMenuItem
