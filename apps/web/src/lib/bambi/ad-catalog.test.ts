@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAdDuration, formatAdPrice } from "./ad-catalog";
+import {
+	formatAdDuration,
+	formatAdPrice,
+	formatAdPriceLabel,
+	resolveAdPrice,
+} from "./ad-catalog";
 
 describe("ad-catalog format helpers", () => {
 	it("formats KRW amount with thousands separator and 원", () => {
@@ -8,5 +13,26 @@ describe("ad-catalog format helpers", () => {
 	});
 	it("formats duration days", () => {
 		expect(formatAdDuration(30)).toBe("30일");
+	});
+});
+
+describe("ad-catalog discount helpers", () => {
+	it("floors the discounted amount to the nearest 10원 and flags a discount", () => {
+		// 333,333 * 90% = 299,999.7 → 10원 단위 내림 = 299,990
+		const price = resolveAdPrice(333_333, 10);
+		expect(price.discountedAmount).toBe(299_990);
+		expect(price.hasDiscount).toBe(true);
+		expect(price.discountPercent).toBe(10);
+	});
+
+	it("treats 0(및 음수) percent as no discount", () => {
+		const price = resolveAdPrice(330_000, 0);
+		expect(price.discountedAmount).toBe(330_000);
+		expect(price.hasDiscount).toBe(false);
+	});
+
+	it("labels discounted prices with the 할인가 + N% 할인 form, plain otherwise", () => {
+		expect(formatAdPriceLabel(300_000, 10)).toBe("270,000원 (10% 할인)");
+		expect(formatAdPriceLabel(300_000, 0)).toBe("300,000원");
 	});
 });

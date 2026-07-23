@@ -15,8 +15,9 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { AdPriceTag } from "@/components/bambi/ad-price-tag";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { formatAdDuration, formatAdPrice } from "@/lib/bambi/ad-catalog";
+import { formatAdDuration } from "@/lib/bambi/ad-catalog";
 import { orpc } from "@/utils/orpc";
 
 export default function ModeratorAdProductsPage() {
@@ -207,11 +208,18 @@ export default function ModeratorAdProductsPage() {
 										)}
 									</div>
 								</div>
-								<div className="flex flex-wrap gap-2 text-muted-foreground text-sm">
+								<div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-sm">
 									{product.priceOptions.map((option) => (
-										<span key={`${product.id}-${option.days}-${option.amount}`}>
+										<span
+											className="flex items-baseline gap-1"
+											key={`${product.id}-${option.days}-${option.amount}`}
+										>
 											{formatAdDuration(option.days)} ·{" "}
-											{formatAdPrice(option.amount)}
+											<AdPriceTag
+												amount={option.amount}
+												discountPercent={product.discountPercent}
+												priceClassName="font-medium text-foreground"
+											/>
 										</span>
 									))}
 								</div>

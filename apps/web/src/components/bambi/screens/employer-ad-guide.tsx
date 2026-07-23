@@ -10,12 +10,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Megaphone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { AdPriceTag } from "@/components/bambi/ad-price-tag";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import {
 	type AdCatalogPlacement,
 	formatAdDuration,
-	formatAdPrice,
 } from "@/lib/bambi/ad-catalog";
 import { orpc } from "@/utils/orpc";
 
@@ -174,12 +174,14 @@ function PlacementSection({
 								</span>
 								{product.priceOptions.map((option) => (
 									<div
-										className="flex items-baseline gap-1"
+										className="flex flex-wrap items-baseline gap-1"
 										key={`${product.id}-${option.days}-${option.amount}`}
 									>
-										<span className="font-bold text-base text-coral-600">
-											{formatAdPrice(option.amount)}
-										</span>
+										<AdPriceTag
+											amount={option.amount}
+											discountPercent={product.discountPercent}
+											priceClassName="font-bold text-base text-coral-600"
+										/>
 										<span className="text-muted-foreground text-xs">
 											({formatAdDuration(option.days)})
 										</span>

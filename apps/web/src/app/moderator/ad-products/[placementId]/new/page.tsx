@@ -32,6 +32,7 @@ export default function NewAdProductPage() {
 						priceOptions: draft.priceOptions,
 						previewImageUrl: draft.previewImageUrl,
 						previewTemplate: draft.previewTemplate,
+						discountPercent: draft.discountPercent,
 						manualBoostsPerDay: draft.manualBoostsPerDay,
 						autoBoostsPerDay: draft.autoBoostsPerDay,
 					})

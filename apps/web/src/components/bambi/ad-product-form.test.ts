@@ -44,4 +44,18 @@ describe("ad product form", () => {
 			'value={autoBoostsPerDay === 0 ? "" : autoBoostsPerDay}'
 		);
 	});
+
+	it("collects discountPercent with the zero-clearable input pattern and clamps 0~100", () => {
+		const source = readComponent("ad-product-form.tsx");
+		expect(source).toContain("discountPercent: number;");
+		expect(source).toContain(
+			'value={discountPercent === 0 ? "" : discountPercent}'
+		);
+		// 0~100 정수로 클램프해 저장한다
+		expect(source).toContain("Math.floor(Number(e.target.value) || 0)");
+		expect(source).toContain("Math.min(100");
+		expect(source).toContain("Math.max(");
+		// create/update 페이로드에 discountPercent를 포함한다
+		expect(source).toContain("discountPercent,");
+	});
 });

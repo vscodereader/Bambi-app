@@ -225,6 +225,13 @@
       "when": 1784786103385,
       "tag": "0031_chubby_killraven",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1784788194011,
+      "tag": "0032_ancient_rafael_vega",
+      "breakpoints": true
     }
   ]
 }
