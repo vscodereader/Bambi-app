@@ -195,7 +195,7 @@ export function SeekerChatPreflight({
 							면접 전 연락처 비공개
 						</div>
 						<p className="mt-1 mb-0 text-xs leading-relaxed">
-							연락처 공개는 면접 일정 확정 뒤 본인이 선택해요.
+							연락처는 면접 일정이 확정된 뒤 구인자가 공개해요.
 						</p>
 					</div>
 					<Button

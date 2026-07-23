@@ -263,8 +263,8 @@ export function SeekerJobDetailResponsive({
 										안전하게 채팅 시작
 									</div>
 									<p className="mt-1 mb-0 text-xs leading-relaxed">
-										플랫폼 안에서 먼저 대화하고, 면접 확정 뒤 연락처 공개를
-										선택해요.
+										플랫폼 안에서 먼저 대화하고, 면접 확정 뒤 구인자가 연락처를
+										공개해요.
 									</p>
 								</div>
 								<Button

@@ -153,10 +153,11 @@ const getReviewMutationErrorMessage = (error: Error): string => {
 
 type RealtimeStatus = "connected" | "connecting" | "offline";
 
-// 양쪽 동의가 끝난 방은 더 이상 "공개"가 아니라 "확인"하는 화면으로 들어간다.
+// 연락처 공개는 구인자만 한다. 구인자는 공개 화면으로, 구직자는 구인자가 공개한
+// 연락처를 확인하는 화면으로 들어간다.
 const getRevealButtonLabel = (
-	reveal?: { canViewCounterpart: boolean } | null
-): string => (reveal?.canViewCounterpart ? "연락처 보기" : "연락처 공개하기");
+	reveal?: { viewerIsEmployer?: boolean } | null
+): string => (reveal?.viewerIsEmployer ? "연락처 공개하기" : "연락처 보기");
 
 const getRealtimeStatusLabel = (status: RealtimeStatus): string => {
 	switch (status) {

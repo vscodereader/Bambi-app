@@ -57,6 +57,25 @@ interface ContactRow {
 const formatContact = ({ contactMethod, contactValue }: ContactRow): string =>
 	`${contactMethodLabels[contactMethod as ContactMethod] ?? contactMethod} · ${contactValue}`;
 
+const getScheduleBadgeLabel = (
+	hasConfirmedSchedule: boolean,
+	latestStatus?: string
+): string => {
+	if (hasConfirmedSchedule) {
+		return interviewStatusLabels.confirmed;
+	}
+
+	if (latestStatus) {
+		return (
+			interviewStatusLabels[
+				latestStatus as keyof typeof interviewStatusLabels
+			] ?? latestStatus
+		);
+	}
+
+	return "대기";
+};
+
 function MineContactCard({ contacts }: { contacts: ContactRow[] }) {
 	return (
 		<Card className="rounded-lg" pad="lg" tone="outline">
@@ -89,21 +108,19 @@ function MineContactCard({ contacts }: { contacts: ContactRow[] }) {
 	);
 }
 
-// 상대 연락처는 양쪽이 동의해야 보인다. 서버가 조건 미충족 시 값을 아예 안 싣기 때문에
-// 여기서는 canView만 보고 안내 문구를 고르면 된다.
-function CounterpartContactCard({
+// 연락처 공개는 구인자만 한다. 서버가 조건 미충족 시 값을 아예 안 싣기 때문에
+// 구직자 화면에서는 canView만 보고 안내 문구를 고르면 된다.
+function EmployerContactCard({
 	canView,
 	contacts,
-	hasMineConsent,
 }: {
 	canView: boolean;
 	contacts: ContactRow[];
-	hasMineConsent: boolean;
 }) {
 	return (
 		<Card className="rounded-lg" pad="lg" tone="outline">
 			<div className="flex items-center justify-between gap-3">
-				<h2 className="m-0 font-extrabold text-lg">상대방 연락처</h2>
+				<h2 className="m-0 font-extrabold text-lg">구인자 연락처</h2>
 				<Badge tone={canView ? "success" : "pending"}>
 					{canView ? "공개됨" : "비공개"}
 				</Badge>
@@ -121,12 +138,85 @@ function CounterpartContactCard({
 				</div>
 			) : (
 				<p className="mt-3 mb-0 text-muted-foreground text-sm">
-					{hasMineConsent
-						? "상대방의 동의를 기다리는 중이에요. 상대가 동의하면 여기에 표시됩니다."
-						: "내 연락처를 먼저 공개해야 상대방 연락처를 볼 수 있어요."}
+					구인자가 아직 연락처를 공개하지 않았어요. 공개되면 여기에 표시돼요.
 				</p>
 			)}
 		</Card>
+	);
+}
+
+function EmployerRevealForm({
+	contactMethod,
+	contactValue,
+	errorMessage,
+	hasConfirmedSchedule,
+	isPending,
+	onContactMethodChange,
+	onContactValueChange,
+	onSubmit,
+}: {
+	contactMethod: ContactMethod;
+	contactValue: string;
+	errorMessage: null | string;
+	hasConfirmedSchedule: boolean;
+	isPending: boolean;
+	onContactMethodChange: (value: ContactMethod) => void;
+	onContactValueChange: (value: string) => void;
+	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+	return (
+		<form className="grid gap-4" onSubmit={onSubmit}>
+			<Card className="rounded-lg" pad="lg" tone="outline">
+				<label
+					className="font-bold text-muted-foreground text-xs"
+					htmlFor="contact-method"
+				>
+					공개할 연락 방식
+				</label>
+				<select
+					className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
+					id="contact-method"
+					onChange={(event) =>
+						onContactMethodChange(event.target.value as ContactMethod)
+					}
+					value={contactMethod}
+				>
+					{Object.entries(contactMethodLabels).map(([value, label]) => (
+						<option key={value} value={value}>
+							{label}
+						</option>
+					))}
+				</select>
+				<label
+					className="mt-4 block font-bold text-muted-foreground text-xs"
+					htmlFor="contact-value"
+				>
+					연락처
+				</label>
+				<input
+					className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
+					id="contact-value"
+					onChange={(event) => onContactValueChange(event.target.value)}
+					placeholder={contactMethodPlaceholders[contactMethod]}
+					value={contactValue}
+				/>
+				{errorMessage ? (
+					<p className="mt-3 mb-0 font-semibold text-red-600 text-xs">
+						{errorMessage}
+					</p>
+				) : null}
+				<Button
+					block
+					className="mt-4"
+					disabled={!hasConfirmedSchedule || isPending}
+					size="lg"
+					type="submit"
+					variant={hasConfirmedSchedule ? "primary" : "secondary"}
+				>
+					{isPending ? "저장 중" : "내 연락처 공개"}
+				</Button>
+			</Card>
+		</form>
 	);
 }
 
@@ -164,6 +254,7 @@ function ContactRevealApi({
 	const mineContacts = revealQuery.data?.mineContacts ?? [];
 	const counterpartContacts = revealQuery.data?.counterpartContacts ?? [];
 	const canViewCounterpart = revealQuery.data?.canViewCounterpart ?? false;
+	const viewerIsEmployer = revealQuery.data?.viewerIsEmployer ?? false;
 	const hasMineConsent = mineContacts.length > 0;
 	const confirmedSchedule = roomQuery.data?.schedules.find(
 		(schedule) => schedule.status === "confirmed"
@@ -213,7 +304,7 @@ function ContactRevealApi({
 		});
 	};
 
-	if (roomQuery.isLoading) {
+	if (roomQuery.isLoading || revealQuery.isLoading) {
 		return (
 			<div
 				className={cn(
@@ -273,8 +364,9 @@ function ContactRevealApi({
 						확정된 면접 뒤에만 공개돼요
 					</h1>
 					<p className="m-0 max-w-[320px] text-muted-foreground text-sm leading-[1.55]">
-						양쪽 모두 동의해야 서로의 연락처가 공개돼요. 내가 먼저 동의해도
-						상대가 동의하기 전까지는 상대 연락처가 보이지 않아요.
+						{viewerIsEmployer
+							? "공개한 연락처는 구직자에게 표시돼요. 면접이 확정된 뒤 공개할 수 있어요."
+							: "면접이 확정되고 구인자가 공개하면 여기에서 연락처를 볼 수 있어요."}
 					</p>
 				</div>
 
@@ -289,14 +381,10 @@ function ContactRevealApi({
 							</p>
 						</div>
 						<Badge tone={confirmedSchedule ? "success" : "pending"}>
-							{confirmedSchedule
-								? interviewStatusLabels.confirmed
-								: (latestSchedule &&
-										(interviewStatusLabels[
-											latestSchedule.status as keyof typeof interviewStatusLabels
-										] ??
-											latestSchedule.status)) ||
-									"대기"}
+							{getScheduleBadgeLabel(
+								Boolean(confirmedSchedule),
+								latestSchedule?.status
+							)}
 						</Badge>
 					</div>
 					{confirmedSchedule?.locationNote ? (
@@ -306,76 +394,44 @@ function ContactRevealApi({
 					) : null}
 				</Card>
 
-				<form className="grid gap-4" onSubmit={handleSubmit}>
-					<Card className="rounded-lg" pad="lg" tone="outline">
-						<label
-							className="font-bold text-muted-foreground text-xs"
-							htmlFor="contact-method"
-						>
-							공개할 연락 방식
-						</label>
-						<select
-							className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
-							id="contact-method"
-							onChange={(event) =>
-								setContactMethod(event.target.value as ContactMethod)
-							}
-							value={contactMethod}
-						>
-							{Object.entries(contactMethodLabels).map(([value, label]) => (
-								<option key={value} value={value}>
-									{label}
-								</option>
-							))}
-						</select>
-						<label
-							className="mt-4 block font-bold text-muted-foreground text-xs"
-							htmlFor="contact-value"
-						>
-							연락처
-						</label>
-						<input
-							className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
-							id="contact-value"
-							onChange={(event) => setContactValue(event.target.value)}
-							placeholder={contactMethodPlaceholders[contactMethod]}
-							value={contactValue}
-						/>
-						{errorMessage ? (
-							<p className="mt-3 mb-0 font-semibold text-red-600 text-xs">
-								{errorMessage}
-							</p>
+				{viewerIsEmployer ? (
+					<EmployerRevealForm
+						contactMethod={contactMethod}
+						contactValue={contactValue}
+						errorMessage={errorMessage}
+						hasConfirmedSchedule={Boolean(confirmedSchedule)}
+						isPending={revealContactMutation.isPending}
+						onContactMethodChange={setContactMethod}
+						onContactValueChange={setContactValue}
+						onSubmit={handleSubmit}
+					/>
+				) : null}
+
+				{viewerIsEmployer ? (
+					<>
+						{hasMineConsent ? (
+							<MineContactCard contacts={mineContacts} />
 						) : null}
-						<Button
-							block
-							className="mt-4"
-							disabled={!confirmedSchedule || revealContactMutation.isPending}
-							size="lg"
-							type="submit"
-							variant={confirmedSchedule ? "primary" : "secondary"}
-						>
-							{revealContactMutation.isPending
-								? "저장 중"
-								: "내 연락처 공개 동의"}
-						</Button>
-					</Card>
-				</form>
-
-				{hasMineConsent ? <MineContactCard contacts={mineContacts} /> : null}
-
-				<CounterpartContactCard
-					canView={canViewCounterpart}
-					contacts={counterpartContacts}
-					hasMineConsent={hasMineConsent}
-				/>
+						<p className="m-0 text-muted-foreground text-sm">
+							구직자 연락처는 제공되지 않아요.
+						</p>
+					</>
+				) : (
+					<EmployerContactCard
+						canView={canViewCounterpart}
+						contacts={counterpartContacts}
+					/>
+				)}
 			</div>
 			<div className="border-border border-t px-6 pt-3 pb-1.5">
 				<Button
 					block
-					disabled={!hasMineConsent}
+					disabled={viewerIsEmployer && !hasMineConsent}
 					onClick={onDone}
 					size="lg"
-					variant={hasMineConsent ? "primary" : "secondary"}
+					variant={
+						viewerIsEmployer && !hasMineConsent ? "secondary" : "primary"
+					}
 				>
 					채팅방으로 돌아가기
 				</Button>
@@ -410,8 +466,8 @@ function ContactRevealPreview({
 						면접 일정이 확정됐어요
 					</h1>
 					<p className="m-0 max-w-[280px] text-muted-foreground text-sm leading-[1.55]">
-						양쪽 모두 동의해야 연락처가 공개됩니다. 실제 채팅방에서는 확정
-						일정과 본인 동의를 API로 확인해요.
+						면접이 확정되면 구인자가 연락처를 공개해요. 실제 채팅방에서는 확정
+						일정과 역할을 API로 확인해요.
 					</p>
 				</div>
 				<Card className="overflow-hidden rounded-lg" pad="none">

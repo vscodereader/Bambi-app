@@ -51,6 +51,7 @@ interface CanStartChatInput {
 interface CanRevealContactInput {
 	interviewStatus: InterviewStatus;
 	ownerConsented: boolean;
+	ownerIsEmployer: boolean;
 	ownerPhoneVerified: boolean;
 }
 
@@ -121,24 +122,28 @@ export const canStartChat = ({
 export const canRevealContact = ({
 	interviewStatus,
 	ownerConsented,
+	ownerIsEmployer,
 	ownerPhoneVerified,
 }: CanRevealContactInput): boolean =>
-	interviewStatus === "confirmed" && ownerConsented && ownerPhoneVerified;
+	ownerIsEmployer &&
+	interviewStatus === "confirmed" &&
+	ownerConsented &&
+	ownerPhoneVerified;
 
 export interface CanViewCounterpartContactInput {
 	counterpartConsented: boolean;
 	interviewStatus: string;
-	mineConsented: boolean;
+	viewerIsEmployer: boolean;
 }
 
-// 상대 연락처는 양쪽이 모두 동의해야 보인다. 내가 동의하지 않은 채 상대 것만 받아가는
-// 무임승차를 막으려고 mineConsented를 함께 요구한다.
+// 연락처 공개는 구인자만 한다. 구직자는 공개할 연락처가 없으므로 구인자 동의만으로
+// 열람하고, 구인자는 상대(구직자) 연락처를 볼 수 없다(공개 주체가 없음).
 export const canViewCounterpartContact = ({
 	counterpartConsented,
 	interviewStatus,
-	mineConsented,
+	viewerIsEmployer,
 }: CanViewCounterpartContactInput): boolean =>
-	interviewStatus === "confirmed" && mineConsented && counterpartConsented;
+	!viewerIsEmployer && interviewStatus === "confirmed" && counterpartConsented;
 
 export const getEmployerVerificationStatusLabel = (
 	status: EmployerVerificationStatus
