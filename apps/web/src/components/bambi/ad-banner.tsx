@@ -39,6 +39,10 @@ export function AdSlotPlaceholder({
 				alt=""
 				className="object-cover"
 				fill
+				// 자리표시는 프리미엄 섹션·좌측 rail 등 첫 화면 최상단에도 깔려 LCP로
+				// 잡힌다. 기본 lazy면 Next가 LCP 경고를 내므로 eager로 로드한다 —
+				// variant당 같은 파일 하나라 아래쪽 슬롯도 캐시를 재사용해 비용이 없다.
+				loading="eager"
 				sizes={variant === "vertical" ? "120px" : "272px"}
 				src={
 					variant === "vertical"
