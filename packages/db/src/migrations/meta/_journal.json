@@ -246,6 +246,20 @@
       "when": 1784794691225,
       "tag": "0034_rainy_rhodey",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1784858225610,
+      "tag": "0035_lumpy_johnny_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1784858248938,
+      "tag": "0036_slippery_wild_pack",
+      "breakpoints": true
     }
   ]
 }
