@@ -507,7 +507,7 @@ interface ResolvedJobExposure {
 // 공고의 노출 상품·기간·금액·노출 타입을 서버에서 확정한다. 운영자가 등록한 광고 상품을
 // 단일 소스로 삼아, 상품의 미리보기 템플릿으로 노출 타입을 도출하고 선택 기간이 상품의
 // 가격 옵션에 존재하는지 검증한 뒤 그 금액을 결제 예정 금액으로 저장한다.
-const resolveJobPostExposure = async (input: {
+export const resolveJobPostExposure = async (input: {
 	adProductId?: string | null;
 	exposureDurationDays?: number | null;
 	paymentMethod?: "bank_transfer" | "card" | null;
@@ -542,6 +542,23 @@ const resolveJobPostExposure = async (input: {
 		throw new ORPCError("BAD_REQUEST", {
 			message: "선택한 이용 기간이 해당 노출 상품에 없습니다.",
 		});
+	}
+
+	// 무통장입금은 운영자가 입금 계좌를 1개 이상 등록해야만 결제를 진행할 수 있다.
+	// (여기 도달 시 유료 상품 — adProductId 없는 무료 공고는 위에서 이미 early-return.)
+	if (input.paymentMethod === "bank_transfer") {
+		const [settings] = await db
+			.select({ bankAccounts: bambiSiteSettings.bankAccounts })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"))
+			.limit(1);
+
+		if (!settings?.bankAccounts.length) {
+			throw new ORPCError("BAD_REQUEST", {
+				message:
+					"무통장입금 계좌가 준비되지 않아 결제를 진행할 수 없습니다. 다른 결제수단을 선택하거나 고객센터로 문의해 주세요.",
+			});
+		}
 	}
 
 	const exposureType = previewTemplateToExposureType(product.previewTemplate);
