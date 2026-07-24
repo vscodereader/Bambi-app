@@ -18,6 +18,7 @@ const FOOTER_COLUMNS = {
 	bizRegNo: bambiSiteSettings.bizRegNo,
 	address: bambiSiteSettings.address,
 	email: bambiSiteSettings.email,
+	tel: bambiSiteSettings.tel,
 } as const;
 
 // 공백만 입력하면 미설정으로 본다(폴백이 뜨도록 null 저장).
@@ -91,6 +92,7 @@ const updateFooterInput = z.object({
 	bizRegNo: optionalText(60),
 	address: optionalText(200),
 	email: optionalEmail(200),
+	tel: optionalText(60),
 });
 
 // 회원 정책 — 탈퇴 개인정보 보존기간(일). null이면 기본값으로 복귀한다.
