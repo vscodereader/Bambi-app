@@ -817,20 +817,22 @@ function ContactRevealAction({
 	}
 
 	return (
-		<div className="mt-4 flex flex-col gap-1 rounded-lg border border-coral-100 bg-coral-50 px-4 py-3">
-			<span className="font-bold text-coral-700 text-xs">
+		<div className="mt-4 flex flex-col gap-1 rounded-lg border border-border bg-card px-4 py-3">
+			<span className="font-medium text-muted-foreground text-xs">
 				구인자 인증 연락처
 			</span>
-			<a
-				className="font-extrabold text-coral-700 text-lg"
-				href={`tel:${employerVerifiedPhone}`}
-			>
-				{employerVerifiedPhone}
-			</a>
-			<p className="m-0 text-coral-700/80 text-xs leading-relaxed">
-				"밤비알바 보고 전화드렸는데요"라고 하시면 정확한 상담 받으실 수
-				있습니다.
-			</p>
+			<span className="font-bold text-base text-foreground leading-relaxed">
+				<a
+					className="underline-offset-2 hover:underline"
+					href={`tel:${employerVerifiedPhone}`}
+				>
+					{employerVerifiedPhone}
+				</a>{" "}
+				<span className="font-medium text-primary text-sm">
+					('밤비알바 보고 연락드렸습니다.'라고 하시면 정확한 상담 받으실 수
+					있습니다.)
+				</span>
+			</span>
 		</div>
 	);
 }
