@@ -74,7 +74,8 @@ interface PendingAction {
 }
 
 function getJobColumns(
-	onRequestStatus: (job: JobRow) => void
+	onRequestStatus: (job: JobRow) => void,
+	onRequestDelete: (job: JobRow) => void
 ): DataColumn<JobRow>[] {
 	return [
 		jobTitleColumn<JobRow>(),
@@ -145,6 +146,12 @@ function getJobColumns(
 							label: "수정",
 							href: `/moderator/jobs/${job.id}/edit` as Route,
 						},
+						{
+							key: "delete",
+							label: "삭제",
+							onSelect: () => onRequestDelete(job),
+							variant: "destructive" as const,
+						},
 					]}
 					ariaLabel={`${job.title} 관리 메뉴`}
 				/>
@@ -159,6 +166,11 @@ export default function ModeratorJobsPage() {
 	const [search, setSearch] = useState("");
 	const [pending, setPending] = useState<PendingAction | null>(null);
 	const [reason, setReason] = useState("");
+	const [pendingDelete, setPendingDelete] = useState<{
+		jobPostId: string;
+		title: string;
+	} | null>(null);
+	const [deleteReason, setDeleteReason] = useState("");
 
 	const jobsQuery = useQuery(
 		orpc.bambi.moderation.listJobPosts.queryOptions({
@@ -187,6 +199,22 @@ export default function ModeratorJobsPage() {
 			},
 			onError: () =>
 				toast.error("공고 상태를 변경하지 못했어요. 다시 시도해 주세요."),
+		})
+	);
+	const deleteMutation = useMutation(
+		orpc.bambi.moderation.adminDeleteJobPost.mutationOptions({
+			onSuccess: async () => {
+				toast.success("공고를 완전히 삭제했어요.");
+				setPendingDelete(null);
+				setDeleteReason("");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.moderation.listJobPosts.queryKey({
+						input: { limit: LIST_LIMIT },
+					}),
+				});
+			},
+			onError: () =>
+				toast.error("공고를 삭제하지 못했어요. 다시 시도해 주세요."),
 		})
 	);
 
@@ -220,12 +248,19 @@ export default function ModeratorJobsPage() {
 		setReason(defaultReason);
 	}, []);
 
+	const requestDelete = useCallback((job: JobRow) => {
+		setPendingDelete({ jobPostId: job.id, title: job.title });
+		setDeleteReason("");
+	}, []);
+
 	const columns = useMemo(
-		() => getJobColumns(requestStatusChange),
-		[requestStatusChange]
+		() => getJobColumns(requestStatusChange, requestDelete),
+		[requestStatusChange, requestDelete]
 	);
 
 	const canConfirm = reason.trim().length >= 2 && !setStatusMutation.isPending;
+	const canConfirmDelete =
+		deleteReason.trim().length >= 2 && !deleteMutation.isPending;
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
@@ -317,7 +352,6 @@ export default function ModeratorJobsPage() {
 					/>
 					<div className="flex justify-end gap-2">
 						<DialogClose
-							nativeButton={false}
 							render={
 								<Button size="sm" type="button" variant="ghost">
 									취소
@@ -342,6 +376,57 @@ export default function ModeratorJobsPage() {
 							variant={pending?.status === "hidden" ? "destructive" : "default"}
 						>
 							{pending?.label} 확정
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setPendingDelete(null);
+						setDeleteReason("");
+					}
+				}}
+				open={pendingDelete !== null}
+			>
+				<DialogContent>
+					<DialogTitle>공고 삭제</DialogTitle>
+					<DialogDescription>
+						"{pendingDelete?.title}" 공고를 완전히 삭제합니다. 연결된
+						채팅방·미디어가 모두 지워지며 되돌릴 수 없어요. 사유는 감사 로그에
+						남아요(2자 이상).
+					</DialogDescription>
+					<Textarea
+						onChange={(event) => setDeleteReason(event.target.value)}
+						placeholder="삭제 사유를 입력해 주세요."
+						value={deleteReason}
+					/>
+					<div className="flex justify-end gap-2">
+						<DialogClose
+							render={
+								<Button size="sm" type="button" variant="ghost">
+									취소
+								</Button>
+							}
+						/>
+						<Button
+							disabled={!canConfirmDelete}
+							onClick={() => {
+								if (!pendingDelete) {
+									return;
+								}
+
+								deleteMutation.mutate({
+									jobPostId: pendingDelete.jobPostId,
+									reason: deleteReason.trim(),
+								});
+							}}
+							size="sm"
+							type="button"
+							variant="destructive"
+						>
+							삭제 확정
 						</Button>
 					</div>
 				</DialogContent>

@@ -74,27 +74,35 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 	);
 }
 
-// 구인자 인증번호는 상세에서 자동 노출한다(면접 왕복 없이 바로 전화). 번호는 코럴로
-// 강조한 tel: 링크, 그 아래 상담 안내를 muted로 둔다.
+// 구인자 인증번호는 상세에서 자동 노출한다(면접 왕복 없이 바로 전화). 급여·근무시간 등
+// 다른 InfoTile과 동일한 룩(secondary 아이콘 타일·muted 라벨·foreground 번호)으로 두고,
+// 번호 바로 옆 상담 안내만 primary 색으로 강조한다. 안내가 길어 wrap되므로 값에는
+// truncate를 걸지 않고 아이콘을 상단 정렬(items-start)한다.
 function EmployerPhoneTile({ phone }: { phone: string }) {
 	return (
-		<div className="flex flex-col gap-2 rounded-lg bg-coral-50 p-4">
-			<InfoTile
-				icon={<PhoneIcon />}
-				label="구인자 연락처"
-				value={
+		<div className="flex min-w-0 items-start gap-3">
+			<div className="inline-flex size-12 flex-[0_0_48px] items-center justify-center rounded-md bg-secondary text-foreground">
+				<span className="inline-flex size-[22px]">
+					<PhoneIcon />
+				</span>
+			</div>
+			<div className="flex min-w-0 flex-col gap-0.5">
+				<span className="font-medium text-muted-foreground text-xs">
+					구인자 연락처
+				</span>
+				<span className="font-bold text-base text-foreground leading-relaxed">
 					<a
-						className="font-extrabold text-coral-600 underline-offset-2 hover:underline"
+						className="underline-offset-2 hover:underline"
 						href={`tel:${phone}`}
 					>
 						{phone}
-					</a>
-				}
-			/>
-			<p className="m-0 text-muted-foreground text-xs leading-relaxed">
-				("밤비알바 보고 전화드렸는데요"라고 하시면 정확한 상담 받으실 수
-				있습니다.)
-			</p>
+					</a>{" "}
+					<span className="font-medium text-primary text-sm">
+						('밤비알바 보고 연락드렸습니다.'라고 하시면 정확한 상담 받으실 수
+						있습니다.)
+					</span>
+				</span>
+			</div>
 		</div>
 	);
 }
