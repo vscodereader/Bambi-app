@@ -15,6 +15,7 @@ import {
 	DollarCircle,
 	MapPinIcon,
 	Message,
+	PhoneIcon,
 	ShieldIcon,
 	StarIcon,
 } from "../icons";
@@ -70,6 +71,31 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 		<p className="m-0 whitespace-pre-line text-[15px] text-foreground leading-relaxed">
 			{block.text}
 		</p>
+	);
+}
+
+// 구인자 인증번호는 상세에서 자동 노출한다(면접 왕복 없이 바로 전화). 번호는 코럴로
+// 강조한 tel: 링크, 그 아래 상담 안내를 muted로 둔다.
+function EmployerPhoneTile({ phone }: { phone: string }) {
+	return (
+		<div className="flex flex-col gap-2 rounded-lg bg-coral-50 p-4">
+			<InfoTile
+				icon={<PhoneIcon />}
+				label="구인자 연락처"
+				value={
+					<a
+						className="font-extrabold text-coral-600 underline-offset-2 hover:underline"
+						href={`tel:${phone}`}
+					>
+						{phone}
+					</a>
+				}
+			/>
+			<p className="m-0 text-muted-foreground text-xs leading-relaxed">
+				("밤비알바 보고 전화드렸는데요"라고 하시면 정확한 상담 받으실 수
+				있습니다.)
+			</p>
+		</div>
 	);
 }
 
@@ -159,6 +185,9 @@ export function SeekerJobDetailResponsive({
 									label="근무시간"
 									value={job.hours}
 								/>
+								{job.employerVerifiedPhone ? (
+									<EmployerPhoneTile phone={job.employerVerifiedPhone} />
+								) : null}
 								<InfoTile
 									icon={<BriefcaseIcon />}
 									label="고용형태"

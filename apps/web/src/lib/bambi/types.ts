@@ -57,6 +57,8 @@ export interface Job {
 	descriptionBlocks?: JobDescriptionBlock[];
 	detailImages?: JobMedia[];
 	district: string;
+	// 공고 상세에서만 채워진다(작성자 인증번호). 목록/카드 매핑에는 없음.
+	employerVerifiedPhone?: string | null;
 	exposureType?: null | string;
 	featured: boolean;
 	hours: string;

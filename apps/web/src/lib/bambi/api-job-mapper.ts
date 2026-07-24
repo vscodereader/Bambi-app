@@ -39,6 +39,8 @@ export interface ApiMarketplaceJob {
 	district?: string | null;
 	employerDisplayName?: string | null;
 	employerVerificationStatus?: string | null;
+	// 공고 상세(getById) 응답에만 존재 — 작성자 인증번호(미인증이면 null).
+	employerVerifiedPhone?: string | null;
 	exposureType?: null | string;
 	id: string;
 	industryCategory: string;
@@ -158,6 +160,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		descriptionBlocks: job.descriptionBlocks ?? [],
 		detailImages,
 		district: job.district ?? "",
+		employerVerifiedPhone: job.employerVerifiedPhone ?? null,
 		exposureType: job.exposureType ?? null,
 		featured: job.employerVerificationStatus === "verified",
 		hours: job.workSchedule ?? "채팅으로 확인",
