@@ -420,14 +420,13 @@ describe("금칙어 관리 페이지", () => {
 - `chatRoom.seekerDeletedAt: timestamp`(nullable), `chatRoom.employerDeletedAt: timestamp`(nullable)
 - `contactRevealConsent` 테이블/export 제거
 
-- [ ] **Step 1: 스키마 편집** — `bambi.ts`
+- [ ] **Step 1: 스키마 편집(additive only)** — `bambi.ts`
   - `chat_message`(686–704)에 추가: `kind: text("kind").notNull().default("text"),` `metadata: jsonb("metadata"),`
   - `chat_room`(648–684)에 추가: `seekerDeletedAt: timestamp("seeker_deleted_at"),` `employerDeletedAt: timestamp("employer_deleted_at"),`
-  - `contactRevealConsent` 테이블 정의(787–808) 및 관련 인덱스 export 제거.
-  - (주의) 스키마에서 `contactRevealConsent`를 지우면 이를 import하던 코드가 깨진다 → C1/C2에서 함께 정리. 이 태스크는 스키마+마이그레이션 생성까지.
+  - **`contactRevealConsent`는 이 태스크에서 제거하지 않는다.** 이 테이블/옛 프로시저를 참조하는 `chats.ts`·`chats.test.ts`가 정리되기 전에 지우면 api 타입체크가 깨지므로, 테이블 drop과 스키마 export 제거는 **C10(참조 제거 후)**로 미룬다. 매 단계 타입체크를 초록으로 유지.
 
 - [ ] **Step 2: 마이그레이션 생성** — `pnpm --filter @bambi-app/db db:generate`
-  - Expected: 새 `00NN_*.sql`에 `ALTER TABLE "chat_message" ADD COLUMN "kind" text NOT NULL DEFAULT 'text';`, `ADD COLUMN "metadata" jsonb;`, `ALTER TABLE "chat_room" ADD COLUMN "seeker_deleted_at" timestamp;`, `ADD COLUMN "employer_deleted_at" timestamp;`, `DROP TABLE "contact_reveal_consent";`(순수 add+drop이라 비대화형). 대화형 rename 프롬프트가 뜨면 중단하고 보고.
+  - Expected: 새 `00NN_*.sql`에 `ALTER TABLE "chat_message" ADD COLUMN "kind" text NOT NULL DEFAULT 'text';`, `ADD COLUMN "metadata" jsonb;`, `ALTER TABLE "chat_room" ADD COLUMN "seeker_deleted_at" timestamp;`, `ADD COLUMN "employer_deleted_at" timestamp;` (순수 add라 비대화형). 대화형 rename 프롬프트가 뜨면 중단하고 보고.
 
 - [ ] **Step 3: 마이그레이션 적용** — `pnpm --filter @bambi-app/db db:migrate` (apps/server/.env의 DATABASE_URL=bambi_dev).
 
@@ -437,9 +436,8 @@ describe("금칙어 관리 페이지", () => {
    WHERE table_name='chat_message' AND column_name IN ('kind','metadata');
   SELECT column_name FROM information_schema.columns
    WHERE table_name='chat_room' AND column_name IN ('seeker_deleted_at','employer_deleted_at');
-  SELECT to_regclass('public.contact_reveal_consent'); -- NULL이어야 함(drop됨)
   ```
-  Expected: kind(text, NO/default), metadata(jsonb, YES), deletedAt 2컬럼 존재, contact_reveal_consent = NULL.
+  Expected: kind(text, NO/default), metadata(jsonb, YES), deletedAt 2컬럼 존재. (contact_reveal_consent는 아직 존재 — C10에서 drop.)
 
 - [ ] **Step 5: check-types** — `pnpm --filter @bambi-app/db check-types` 통과(스키마 자체). (다른 패키지의 contactRevealConsent 참조 오류는 C1/C2에서 해소.)
 
@@ -728,15 +726,20 @@ layout.test.ts에 추가: `expect(source).toContain('label: "채팅"')` 및 `exp
 - Delete: `apps/web/src/components/bambi/screens/contact-reveal.tsx`
 - Modify: `apps/web/src/app/seeker/chats/[id]/page.tsx` (reveal 라우팅 제거)
 - Modify: `packages/api/src/routers/bambi/chats.ts` (`revealContact`/`getContactReveal` 제거)
+- Modify: `packages/api/src/routers/bambi/chats.test.ts` (옛 reveal/consent 테스트·잔존 import 제거)
 - Modify: `packages/api/src/services/bambi-policy.ts` (+ `bambi-policy.test.ts`) — `canRevealContact`/`canViewCounterpartContact`/`isContactRevealEligibleInterviewStatus` 미사용 시 제거
+- Modify: `packages/db/src/schema/bambi.ts` — `contactRevealConsent` 테이블/인덱스 export 제거
+- Create: `packages/db/src/migrations/00NN_*.sql` + meta — `DROP TABLE "contact_reveal_consent";`
 
-- [ ] **Step 1: 참조 스캔** — `getContactReveal`/`revealContact`/`contact-reveal`/`/reveal` grep으로 잔존 참조 0 확인 목표. `contact-reveal.tsx`를 import하는 곳(reveal/page.tsx) 외 없음 확인.
+- [ ] **Step 1: 참조 스캔** — `getContactReveal`/`revealContact`/`contactRevealConsent`/`contact-reveal`/`/reveal` grep으로 잔존 참조 확인. 제거 순서: 먼저 코드(프로시저·페이지·테스트·정책)에서 모든 참조를 없앤 뒤 마지막에 스키마 테이블을 제거해야 타입체크가 유지된다.
 
-- [ ] **Step 2: 삭제·정리** — 위 파일 삭제 + `[id]/page.tsx`에서 reveal push 제거(C5에서 이미 채팅방 버튼은 교체됨; 래퍼의 `onReveal`/route 제거). chats.ts에서 두 프로시저 제거. bambi-policy.ts 미사용 함수 제거 + 해당 정책 테스트 케이스 제거.
+- [ ] **Step 2: 코드 정리** — reveal 페이지·`contact-reveal.tsx` 삭제 + `[id]/page.tsx` reveal push 제거(C5에서 채팅방 버튼은 이미 교체됨; 래퍼의 `onReveal`/route 제거). chats.ts에서 `revealContact`/`getContactReveal` 제거. chats.test.ts에서 잔존 옛 테스트/`contactRevealConsent` import 제거. bambi-policy.ts 미사용 함수 + 정책 테스트 케이스 제거.
 
-- [ ] **Step 3: 전체 검증** — `pnpm check-types`(unpiped, 전 패키지) 통과. 관련 테스트 재실행: `chats.test.ts`, `bambi-policy.test.ts` PASS. `pnpm dlx ultracite fix` 클린.
+- [ ] **Step 3: 스키마 테이블 제거 + drop 마이그레이션** — 위 코드 참조가 0이 된 것을 확인한 뒤 `bambi.ts`에서 `contactRevealConsent` 정의 제거 → `pnpm --filter @bambi-app/db db:generate`(Expected: `DROP TABLE "contact_reveal_consent";`, 비대화형) → `db:migrate` → `SELECT to_regclass('public.contact_reveal_consent');`가 NULL인지 검증.
 
-- [ ] **Step 4: 커밋** — `refactor(chat): 옛 연락처 공개(reveal) 페이지·라우터·정책 제거`
+- [ ] **Step 4: 전체 검증** — `pnpm check-types`(unpiped, 전 패키지 EXIT 0). `chats.test.ts`, `bambi-policy.test.ts` PASS. `pnpm dlx ultracite fix` 클린.
+
+- [ ] **Step 5: 커밋** — `refactor(chat): 옛 연락처 공개(reveal) 페이지·라우터·정책·테이블 제거`
 
 ---
 
