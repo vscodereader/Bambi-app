@@ -1,8 +1,9 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type ReactNode, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { connectBambiChatSocket } from "@/lib/bambi-chat-realtime";
@@ -10,6 +11,8 @@ import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { Avatar, Badge, Card } from "../ds";
 import { Message, ShieldIcon } from "../icons";
+import { ReportDialog } from "../report-dialog";
+import { RowActions } from "../row-actions";
 
 interface SeekerChatListResponsiveProps {
 	onFallback: () => React.ReactNode;
@@ -22,13 +25,88 @@ const formatDateTime = (value: Date | string): string =>
 		timeStyle: "short",
 	}).format(new Date(value));
 
-const getRoomButtonClassName = (unreadCount: number): string =>
-	[
-		"flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:border-coral-200",
-		unreadCount > 0
-			? "border-coral-300 ring-1 ring-coral-200"
-			: "border-border",
-	].join(" ");
+const getRoomItemClassName = (unreadCount: number): string =>
+	cn(
+		"relative flex min-w-0 items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-coral-200",
+		unreadCount > 0 ? "border-coral-300 ring-1 ring-coral-200" : "border-border"
+	);
+
+// 방 항목의 삭제·신고·차단 케밥 메뉴. 목록 항목은 방 열기 클릭 영역이 카드 전체를
+// 덮으므로, 이 메뉴 트리거는 그 열기 버튼과 형제(자식 아님)로 두어 button-in-button을
+// 피하고 상위에 겹쳐(z-10) 자기 클릭만 받는다. 이 목록은 구직자 화면이라 상대(차단
+// 대상)는 항상 구인자(employerUserId)다.
+function ChatRoomActions({
+	room,
+}: {
+	room: { employerUserId: string; id: string };
+}) {
+	const queryClient = useQueryClient();
+	const [isReportOpen, setIsReportOpen] = useState(false);
+
+	const invalidateList = () =>
+		queryClient.invalidateQueries({
+			queryKey: orpc.bambi.chats.listMine.queryKey(),
+		});
+
+	const deleteMutation = useMutation(
+		orpc.bambi.chats.deleteChatRoom.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "채팅방을 삭제하지 못했어요.");
+			},
+			onSuccess: async () => {
+				toast.success("채팅방을 삭제했어요.");
+				await invalidateList();
+			},
+		})
+	);
+	const blockMutation = useMutation(
+		orpc.bambi.blocks.blockUser.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "상대를 차단하지 못했어요.");
+			},
+			onSuccess: async () => {
+				toast.success("상대를 차단했어요.");
+				await invalidateList();
+			},
+		})
+	);
+
+	return (
+		<>
+			<RowActions
+				actions={[
+					{
+						key: "report",
+						label: "신고",
+						onSelect: () => setIsReportOpen(true),
+					},
+					{
+						key: "block",
+						label: "차단",
+						onSelect: () =>
+							blockMutation.mutate({
+								blockedUserId: room.employerUserId,
+								chatRoomId: room.id,
+							}),
+					},
+					{
+						key: "delete",
+						label: "삭제",
+						onSelect: () => deleteMutation.mutate({ chatRoomId: room.id }),
+						variant: "destructive",
+					},
+				]}
+				ariaLabel="채팅방 관리"
+			/>
+			<ReportDialog
+				onOpenChange={setIsReportOpen}
+				open={isReportOpen}
+				targetId={room.id}
+				targetType="chat_room"
+			/>
+		</>
+	);
+}
 
 // 채팅 목록 3컬럼 셸 — 초광폭(≥1720px)에서만 좌(가로형 7:3)·우(세로형 4:9) 사이드 광고
 // rail을 노출하고, 중앙은 앱 공통 고정폭이라 헤더·푸터와 같은 중앙선에 선다.
@@ -158,48 +236,57 @@ export function SeekerChatListResponsive({
 			) : (
 				<div className="grid gap-3">
 					{rooms.map((room) => (
-						<button
-							className={getRoomButtonClassName(room.unreadCount)}
+						<div
+							className={getRoomItemClassName(room.unreadCount)}
 							key={room.id}
-							onClick={() => onOpen(room.id)}
-							type="button"
 						>
-							<Avatar
-								className="shrink-0"
-								name={room.jobTitle ?? "공고 채팅"}
-								size="lg"
-								square
+							<button
+								aria-label={`${room.jobTitle ?? "공고 채팅"} 채팅방 열기`}
+								className="absolute inset-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral-200"
+								onClick={() => onOpen(room.id)}
+								type="button"
 							/>
-							<div className="min-w-0 flex-1">
-								<div className="flex min-w-0 flex-wrap items-center gap-2">
-									<h2 className="m-0 truncate font-extrabold text-base">
-										{room.jobTitle ?? "공고 채팅"}
-									</h2>
-									<Badge tone={room.isBlocked ? "danger" : "success"}>
-										{room.isBlocked ? "차단됨" : "대화 가능"}
-									</Badge>
-									{room.unreadCount > 0 ? (
-										<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
+							<div className="pointer-events-none flex min-w-0 flex-1 items-center gap-3">
+								<Avatar
+									className="shrink-0"
+									name={room.jobTitle ?? "공고 채팅"}
+									size="lg"
+									square
+								/>
+								<div className="min-w-0 flex-1">
+									<div className="flex min-w-0 flex-wrap items-center gap-2">
+										<h2 className="m-0 truncate font-extrabold text-base">
+											{room.jobTitle ?? "공고 채팅"}
+										</h2>
+										<Badge tone={room.isBlocked ? "danger" : "success"}>
+											{room.isBlocked ? "차단됨" : "대화 가능"}
+										</Badge>
+										{room.unreadCount > 0 ? (
+											<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
+										) : null}
+									</div>
+									{room.counterpartName ? (
+										<p className="mt-1 mb-0 truncate font-bold text-foreground text-sm">
+											{room.counterpartName}
+										</p>
 									) : null}
-								</div>
-								{room.counterpartName ? (
-									<p className="mt-1 mb-0 truncate font-bold text-foreground text-sm">
-										{room.counterpartName}
+									<p className="mt-1 mb-0 truncate text-muted-foreground text-sm">
+										{room.lastMessageBody ?? "아직 주고받은 메시지가 없어요"}
 									</p>
-								) : null}
-								<p className="mt-1 mb-0 truncate text-muted-foreground text-sm">
-									{room.lastMessageBody ?? "아직 주고받은 메시지가 없어요"}
-								</p>
+								</div>
+								<div className="hidden text-right md:block">
+									<p className="m-0 text-muted-foreground text-xs">
+										최근 업데이트
+									</p>
+									<p className="mt-1 mb-0 font-bold text-sm">
+										{formatDateTime(room.updatedAt)}
+									</p>
+								</div>
 							</div>
-							<div className="hidden text-right md:block">
-								<p className="m-0 text-muted-foreground text-xs">
-									최근 업데이트
-								</p>
-								<p className="mt-1 mb-0 font-bold text-sm">
-									{formatDateTime(room.updatedAt)}
-								</p>
+							<div className="relative z-10 shrink-0">
+								<ChatRoomActions room={room} />
 							</div>
-						</button>
+						</div>
 					))}
 				</div>
 			)}
