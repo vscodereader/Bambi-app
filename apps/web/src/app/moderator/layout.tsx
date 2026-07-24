@@ -17,6 +17,8 @@ const MODERATOR_NAV_ITEMS: NavEntry[] = [
 		label: "회원 관리",
 		items: [
 			{ href: "/moderator/users", label: "사용자" },
+			// 신규 라우트는 Next typedRoutes 생성 타입에 아직 없을 수 있어 캐스팅한다.
+			{ href: "/moderator/chats" as Route, label: "채팅" },
 			{ href: "/moderator/reports", label: "신고" },
 			{ href: "/moderator/employers", label: "업소 승인" },
 			{ href: "/moderator/team-invites", label: "팀 합류 승인" },
