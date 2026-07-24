@@ -56,7 +56,13 @@ import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
-import { applyJobPostUpdate, getJobPostMediaSet, jobPostInput } from "./jobs";
+import { deletePublicObjects } from "../../services/gcs";
+import {
+	applyJobPostUpdate,
+	getJobPostMediaSet,
+	getJobPostMediaStorageKeys,
+	jobPostInput,
+} from "./jobs";
 
 export const targetTypeSchema = z.enum([
 	"job_post",
@@ -1041,6 +1047,47 @@ export const moderationRouter = {
 			return result;
 		}),
 
+	// 운영자 공고 하드삭제. 자식 행(미디어·프로모션·성과·채팅방→메시지 등)은 job_post FK
+	// onDelete cascade로 함께 지워지지만, GCS 미디어 객체는 cascade 대상이 아니라 키를 미리
+	// 확보해 직접 지운다(jobs.delete와 동일 원칙, 권한만 admin 게이트로 대체).
+	adminDeleteJobPost: adminProcedure
+		.input(
+			z.object({
+				jobPostId: z.string().uuid(),
+				reason: z.string().min(2).max(500),
+			})
+		)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const [existing] = await db
+				.select({ id: jobPost.id })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const storageKeys = await getJobPostMediaStorageKeys(input.jobPostId);
+
+			await db.transaction(async (tx) => {
+				await tx.delete(jobPost).where(eq(jobPost.id, input.jobPostId));
+				await tx.insert(adminModerationAction).values({
+					action: "hard_delete",
+					adminUserId: admin.userId,
+					reason: input.reason,
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+			});
+
+			await deletePublicObjects(storageKeys);
+
+			return { ok: true };
+		}),
+
 	listUsers: protectedProcedure
 		.input(listUsersInput)
 		.handler(async ({ context, input }) => {
@@ -1799,6 +1846,79 @@ export const moderationRouter = {
 				row.lastMessageAt === null ? null : new Date(row.lastMessageAt),
 		}));
 	}),
+
+	// 운영자 채팅 내역 열람: 특정 방의 전체 메시지를 시간순으로 내려준다. contact_request는
+	// body가 이미 사람이 읽는 문구("연락처 공개를 요청했습니다.")라 별도 렌더 없이 그대로 쓴다.
+	// 첨부는 storageKey를 제외하고 파일명만 노출한다(getChatMessageTargetContext와 동일 원칙).
+	getChatMessagesForModeration: adminProcedure
+		.input(z.object({ chatRoomId: z.string().uuid() }))
+		.handler(async ({ input }) => {
+			const employerUser = alias(user, "chat_history_employer_user");
+			const seekerUser = alias(user, "chat_history_seeker_user");
+
+			const [room] = await db
+				.select({
+					chatRoomId: chatRoom.id,
+					employerName: employerUser.name,
+					employerUserId: chatRoom.employerUserId,
+					jobPostTitle: jobPost.title,
+					jobSeekerName: seekerUser.name,
+					jobSeekerUserId: chatRoom.jobSeekerUserId,
+				})
+				.from(chatRoom)
+				.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+				.innerJoin(employerUser, eq(employerUser.id, chatRoom.employerUserId))
+				.innerJoin(seekerUser, eq(seekerUser.id, chatRoom.jobSeekerUserId))
+				.where(eq(chatRoom.id, input.chatRoomId))
+				.limit(1);
+
+			if (!room) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const messages = await db
+				.select({
+					body: chatMessage.body,
+					createdAt: chatMessage.createdAt,
+					id: chatMessage.id,
+					kind: chatMessage.kind,
+					senderUserId: chatMessage.senderUserId,
+				})
+				.from(chatMessage)
+				.where(eq(chatMessage.chatRoomId, input.chatRoomId))
+				.orderBy(asc(chatMessage.createdAt));
+
+			const messageIds = messages.map((message) => message.id);
+			const attachments = messageIds.length
+				? await db
+						.select({
+							fileName: chatAttachment.fileName,
+							id: chatAttachment.id,
+							messageId: chatAttachment.messageId,
+						})
+						.from(chatAttachment)
+						.where(inArray(chatAttachment.messageId, messageIds))
+						.orderBy(asc(chatAttachment.createdAt))
+				: [];
+
+			const attachmentsByMessage = new Map<
+				string,
+				{ fileName: string; id: string }[]
+			>();
+			for (const attachment of attachments) {
+				const list = attachmentsByMessage.get(attachment.messageId) ?? [];
+				list.push({ fileName: attachment.fileName, id: attachment.id });
+				attachmentsByMessage.set(attachment.messageId, list);
+			}
+
+			return {
+				...room,
+				messages: messages.map((message) => ({
+					...message,
+					attachments: attachmentsByMessage.get(message.id) ?? [],
+				})),
+			};
+		}),
 
 	// 운영자 채팅방 하드삭제. FK 순서를 지켜 자식부터 지운다(읽음영수증→첨부→메시지→
 	// 면접일정→방). contact_reveal_consent는 interview_schedule에 cascade로 물려 함께 삭제된다.

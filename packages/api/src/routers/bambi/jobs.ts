@@ -400,7 +400,7 @@ const toJobPostMediaSet = <Row extends JobPostMediaRow>(rows: Row[]) => ({
 	detail: rows.filter((item) => item.usage === "detail"),
 });
 
-const getJobPostMediaStorageKeys = async (
+export const getJobPostMediaStorageKeys = async (
 	jobPostId: string
 ): Promise<string[]> => {
 	const rows = await db

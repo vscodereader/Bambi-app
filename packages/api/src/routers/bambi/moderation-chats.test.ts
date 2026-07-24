@@ -418,3 +418,112 @@ describe("hardDeleteChatRoom", () => {
 		}
 	});
 });
+
+describe("getChatMessagesForModeration", () => {
+	it("방 메시지를 시간순으로 내려주고 참여자 이름·첨부 파일명(스토리지키 제외)을 붙인다", async () => {
+		const fixture = await createFixture();
+		const room = fixture.rooms.normal;
+		const laterMessageId = randomUUID();
+
+		try {
+			// 첫 메시지(구직자)에 첨부 1건 + 이후 구인자 메시지 1건을 더해 순서·매핑을 검증한다.
+			await db.insert(chatAttachment).values({
+				byteSize: 12_345,
+				category: "pdf",
+				chatRoomId: room.chatRoomId,
+				createdByUserId: room.userId,
+				fileName: "resume.pdf",
+				messageId: room.messageId,
+				mimeType: "application/pdf",
+				storageKey: `bambi-chat/${room.chatRoomId}/${randomUUID()}.pdf`,
+			});
+			await db.insert(chatMessage).values({
+				body: "면접 일정 잡을게요.",
+				chatRoomId: room.chatRoomId,
+				createdAt: new Date(Date.now() + 60_000),
+				id: laterMessageId,
+				senderUserId: fixture.employerUserId,
+			});
+
+			const getMessages = createProcedureClient(
+				moderationRouter.getChatMessagesForModeration,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "getChatMessagesForModeration"],
+				}
+			);
+
+			const result = await getMessages({ chatRoomId: room.chatRoomId });
+
+			expect(result).toMatchObject({
+				chatRoomId: room.chatRoomId,
+				employerName: "채용 담당자",
+				employerUserId: fixture.employerUserId,
+				jobPostTitle: "채팅 관리 테스트 공고",
+				jobSeekerName: "구직자-normal",
+				jobSeekerUserId: room.userId,
+			});
+
+			// 시간순: 구직자 첫 메시지 → 구인자 후속 메시지.
+			expect(result.messages.map((message) => message.id)).toEqual([
+				room.messageId,
+				laterMessageId,
+			]);
+			expect(result.messages[0]).toMatchObject({
+				body: "메시지 normal",
+				senderUserId: room.userId,
+			});
+
+			// 첨부는 파일명만, storageKey는 절대 노출하지 않는다.
+			const attachments = result.messages[0]?.attachments ?? [];
+			expect(attachments).toHaveLength(1);
+			expect(attachments[0]?.fileName).toBe("resume.pdf");
+			expect(attachments[0]).not.toHaveProperty("storageKey");
+			expect(result.messages[1]?.attachments).toHaveLength(0);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("비운영자는 FORBIDDEN", async () => {
+		const fixture = await createFixture();
+
+		try {
+			const getMessages = createProcedureClient(
+				moderationRouter.getChatMessagesForModeration,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "getChatMessagesForModeration"],
+				}
+			);
+
+			await expectOrpcCode(
+				getMessages({ chatRoomId: fixture.rooms.normal.chatRoomId }),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("없는 방이면 NOT_FOUND", async () => {
+		const fixture = await createFixture();
+
+		try {
+			const getMessages = createProcedureClient(
+				moderationRouter.getChatMessagesForModeration,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "getChatMessagesForModeration"],
+				}
+			);
+
+			await expectOrpcCode(
+				getMessages({ chatRoomId: randomUUID() }),
+				"NOT_FOUND"
+			);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+});
