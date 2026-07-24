@@ -37,6 +37,18 @@ describe("job exposure and payment fields", () => {
 		}
 	});
 
+	it("무통장입금 계좌 0개면 제출을 막는 게이트가 new/edit에 있다", () => {
+		for (const file of [
+			"../../app/employer/new/page.tsx",
+			"../../app/employer/jobs/[id]/edit/page.tsx",
+		]) {
+			const source = readComponent(file);
+			expect(source).toContain("bankTransferBlocked");
+			expect(source).toContain("getPaymentAccounts");
+			expect(source).toContain('paymentMethod === "bank_transfer"');
+		}
+	});
+
 	it("re-shows the bank transfer guide after a bank-transfer registration", () => {
 		const source = readComponent("../../app/employer/new/page.tsx");
 

@@ -36,9 +36,7 @@ const seedAdmin = async () => {
 		name: "운영자",
 		email: `${adminId}@bambi.test`,
 	});
-	await db
-		.insert(bambiProfile)
-		.values({ userId: adminId, role: "admin", displayName: "운영자" });
+	await db.insert(bambiProfile).values({ userId: adminId, role: "admin" });
 	return adminId;
 };
 
@@ -60,9 +58,7 @@ const seedPendingEmployer = async () => {
 		role: "owner",
 		createdAt: new Date(),
 	});
-	await db
-		.insert(bambiProfile)
-		.values({ userId: ownerId, role: "employer", displayName: "업소" });
+	await db.insert(bambiProfile).values({ userId: ownerId, role: "employer" });
 	await db.insert(employerOrganizationProfile).values({
 		organizationId: orgId,
 		displayName: "업소",
@@ -108,7 +104,7 @@ describe("setEmployerVerificationStatus", () => {
 		});
 		await db
 			.insert(bambiProfile)
-			.values({ userId: nonAdmin, role: "job_seeker", displayName: "일반" });
+			.values({ userId: nonAdmin, role: "job_seeker" });
 		const { ownerId, orgId } = await seedPendingEmployer();
 
 		const setStatus = createProcedureClient(

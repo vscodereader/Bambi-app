@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
@@ -40,16 +41,19 @@ const formatBirthDate = (birth: string | null | undefined): string => {
 export function AccountSettingsScreen() {
 	const router = useRouter();
 	const queryClient = useQueryClient();
+	const session = authClient.useSession();
 	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	const isPhoneVerified = Boolean(profile?.isPhoneVerified);
 
+	// 표시 이름(닉네임)의 정본은 user.name(세션)이다. bambi_profile.display_name은 제거됐다.
+	const currentName = session.data?.user?.name ?? "";
 	const [displayName, setDisplayName] = useState("");
 	useEffect(() => {
-		if (profile?.displayName) {
-			setDisplayName(profile.displayName);
+		if (currentName) {
+			setDisplayName(currentName);
 		}
-	}, [profile?.displayName]);
+	}, [currentName]);
 
 	const updateMutation = useMutation(
 		orpc.bambi.onboarding.updateMyProfile.mutationOptions({
@@ -58,7 +62,8 @@ export function AccountSettingsScreen() {
 			},
 			onSuccess: async () => {
 				toast.success("저장했어요.");
-				await queryClient.invalidateQueries();
+				// updateMyProfile이 user.name을 갱신하므로 세션도 다시 불러와 표시명을 동기화한다.
+				await Promise.all([queryClient.invalidateQueries(), session.refetch()]);
 			},
 		})
 	);
@@ -100,7 +105,7 @@ export function AccountSettingsScreen() {
 	const trimmedName = displayName.trim();
 	const canSave =
 		trimmedName.length >= 2 &&
-		trimmedName !== (profile?.displayName ?? "") &&
+		trimmedName !== currentName &&
 		!updateMutation.isPending;
 
 	const handleSignOut = async () => {
@@ -115,7 +120,7 @@ export function AccountSettingsScreen() {
 				</h1>
 			</div>
 			<div className="mx-auto flex min-h-0 w-full max-w-[860px] flex-1 flex-col gap-[18px] overflow-y-auto px-4 py-4 md:px-6">
-				{mineQuery.isLoading ? (
+				{mineQuery.isLoading || session.isPending ? (
 					<Skeleton className="h-40 w-full rounded-2xl" />
 				) : (
 					<section className="flex flex-col gap-4 rounded-2xl border border-border p-5">

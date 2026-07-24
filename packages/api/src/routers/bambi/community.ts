@@ -1,7 +1,7 @@
 import { db } from "@bambi-app/db";
+import { user } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
-	bambiProfile,
 	communityComment,
 	communityPost,
 	communityPostLike,
@@ -679,7 +679,7 @@ export const communityRouter = {
 
 			const rows = await db
 				.select({
-					authorName: bambiProfile.displayName,
+					authorName: user.name,
 					authorRole: communityComment.authorRole,
 					authorUserId: communityComment.authorUserId,
 					body: communityComment.body,
@@ -689,10 +689,7 @@ export const communityRouter = {
 					status: communityComment.status,
 				})
 				.from(communityComment)
-				.leftJoin(
-					bambiProfile,
-					eq(bambiProfile.userId, communityComment.authorUserId)
-				)
+				.leftJoin(user, eq(user.id, communityComment.authorUserId))
 				.where(eq(communityComment.postId, input.postId))
 				.orderBy(asc(communityComment.createdAt))
 				.limit(COMMENTS_CAP);

@@ -77,7 +77,6 @@ const createExposureFixture = async (): Promise<ExposureFixture> => {
 		email: `emp-${randomUUID()}@bambi.test`,
 	});
 	await db.insert(bambiProfile).values({
-		displayName: "구인자",
 		isPhoneVerified: true,
 		role: "employer",
 		status: "active",

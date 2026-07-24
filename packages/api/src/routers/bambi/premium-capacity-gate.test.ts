@@ -68,14 +68,12 @@ const createGateFixture = async (): Promise<GateFixture> => {
 	]);
 	await db.insert(bambiProfile).values([
 		{
-			displayName: "운영자",
 			isPhoneVerified: true,
 			role: "admin",
 			status: "active",
 			userId: adminUserId,
 		},
 		{
-			displayName: "구인자",
 			isPhoneVerified: true,
 			role: "employer",
 			status: "active",

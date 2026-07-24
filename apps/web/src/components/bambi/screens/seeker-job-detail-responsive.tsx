@@ -15,6 +15,7 @@ import {
 	DollarCircle,
 	MapPinIcon,
 	Message,
+	PhoneIcon,
 	ShieldIcon,
 	StarIcon,
 } from "../icons";
@@ -70,6 +71,39 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 		<p className="m-0 whitespace-pre-line text-[15px] text-foreground leading-relaxed">
 			{block.text}
 		</p>
+	);
+}
+
+// 구인자 인증번호는 상세에서 자동 노출한다(면접 왕복 없이 바로 전화). 급여·근무시간 등
+// 다른 InfoTile과 동일한 룩(secondary 아이콘 타일·muted 라벨·foreground 번호)으로 두고,
+// 번호 바로 옆 상담 안내만 primary 색으로 강조한다. 안내가 길어 wrap되므로 값에는
+// truncate를 걸지 않고 아이콘을 상단 정렬(items-start)한다.
+function EmployerPhoneTile({ phone }: { phone: string }) {
+	return (
+		<div className="flex min-w-0 items-start gap-3">
+			<div className="inline-flex size-12 flex-[0_0_48px] items-center justify-center rounded-md bg-secondary text-foreground">
+				<span className="inline-flex size-[22px]">
+					<PhoneIcon />
+				</span>
+			</div>
+			<div className="flex min-w-0 flex-col gap-0.5">
+				<span className="font-medium text-muted-foreground text-xs">
+					구인자 연락처
+				</span>
+				{/* 모바일은 번호 아래로 안내를 스택(flex-col), md↑는 번호 옆 한 줄(flex-row). */}
+				<span className="flex flex-col gap-0.5 md:flex-row md:items-baseline md:gap-1.5">
+					<a
+						className="font-bold text-base text-foreground underline-offset-2 hover:underline"
+						href={`tel:${phone}`}
+					>
+						{phone}
+					</a>
+					<span className="font-medium text-primary text-sm">
+						('밤비알바 보고 연락드렸다고 하시면 정확한 상담 받으실 수 있어요.')
+					</span>
+				</span>
+			</div>
+		</div>
 	);
 }
 
@@ -159,6 +193,9 @@ export function SeekerJobDetailResponsive({
 									label="근무시간"
 									value={job.hours}
 								/>
+								{job.employerVerifiedPhone ? (
+									<EmployerPhoneTile phone={job.employerVerifiedPhone} />
+								) : null}
 								<InfoTile
 									icon={<BriefcaseIcon />}
 									label="고용형태"

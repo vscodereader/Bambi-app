@@ -8,7 +8,12 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ImageIcon, Trash2, TriangleAlert } from "lucide-react";
 import Image from "next/image";
+import { toast } from "sonner";
 import { getAdBannerUsagesForPreviewTemplate } from "@/lib/bambi/ad-preview-templates";
+import {
+	detectImageSignature,
+	isSignatureMismatch,
+} from "@/lib/bambi/image-signature";
 import {
 	formatJobAdBannerSpec,
 	isAllowedJobAdBannerAspect,
@@ -26,6 +31,9 @@ import { orpc } from "@/utils/orpc";
 interface JobPostMediaUploaderProps {
 	// 선택한 노출 상품 id. 상품마다 쓰는 배너 슬롯이 달라서 어떤 업로드 칸을 열지 결정한다.
 	adProductId: null | string;
+	// false면 새 파일 선택을 숨긴다(운영자 편집: 업로드 인텐트가 조직 멤버십을 요구해 admin은
+	// 새 이미지를 못 올린다). 기존 이미지 삭제·설명 수정은 계속 가능.
+	allowUpload?: boolean;
 	error?: string;
 	media: JobFormMedia;
 	onChange: (media: JobFormMedia) => void;
@@ -41,12 +49,27 @@ const detailSlots = [
 	{ index: 4, key: "detail-image-slot-5" },
 ] as const;
 
+const IMAGE_SIGNATURE_MISMATCH_MESSAGE =
+	"이미지 형식이 올바르지 않습니다. PNG·JPG·WebP·GIF만 업로드할 수 있어요.";
+
 // 배너는 크기 검증·잘림 경고에 원본 치수가 필요해서 함께 읽는다. 치수를 못 읽어도
 // (손상된 파일 등) 업로드 자체는 막지 않고, 폼 검증이 "크기를 확인하지 못했습니다"로 잡아준다.
+// 파일 앞바이트(매직넘버)가 선언 mime과 어긋나면(확장자·File.type 위조) null을 돌려 업로드를
+// 차단한다 — 세 슬롯(썸네일·상세·광고 배너)이 모두 이 함수를 거치므로 여기서 한 번만 막는다.
 const createMediaItemFromFile = async (
 	file: File,
 	altText = ""
-): Promise<JobFormMediaItem> => {
+): Promise<JobFormMediaItem | null> => {
+	if (file.type.startsWith("image/")) {
+		const detected = await detectImageSignature(file);
+
+		if (isSignatureMismatch(file.type, detected)) {
+			toast.error(IMAGE_SIGNATURE_MISMATCH_MESSAGE);
+
+			return null;
+		}
+	}
+
 	const base: JobFormMediaItem = {
 		altText,
 		byteSize: file.size,
@@ -86,6 +109,7 @@ const updateDetailAt = (
 
 interface MediaSlotProps {
 	accept: string;
+	allowUpload?: boolean;
 	hint?: string;
 	id: string;
 	item: JobFormMediaItem | null;
@@ -98,6 +122,7 @@ interface MediaSlotProps {
 
 function MediaSlot({
 	accept,
+	allowUpload = true,
 	hint,
 	id,
 	item,
@@ -153,25 +178,29 @@ function MediaSlot({
 					)}
 				</div>
 				<div className="flex flex-col gap-2">
-					<Input
-						accept={accept}
-						id={id}
-						onChange={(event) => {
-							const file = event.target.files?.[0];
+					{allowUpload ? (
+						<Input
+							accept={accept}
+							id={id}
+							onChange={(event) => {
+								const file = event.target.files?.[0];
 
-							if (file) {
-								onFileChange(file);
-							}
-						}}
-						type="file"
-					/>
-					<Input
-						aria-label={`${label} 설명`}
-						maxLength={120}
-						onChange={(event) => onAltTextChange(event.target.value)}
-						placeholder="이미지 설명"
-						value={item?.altText ?? ""}
-					/>
+								if (file) {
+									onFileChange(file);
+								}
+							}}
+							type="file"
+						/>
+					) : null}
+					{allowUpload || item ? (
+						<Input
+							aria-label={`${label} 설명`}
+							maxLength={120}
+							onChange={(event) => onAltTextChange(event.target.value)}
+							placeholder="이미지 설명"
+							value={item?.altText ?? ""}
+						/>
+					) : null}
 				</div>
 			</div>
 		</div>
@@ -179,6 +208,7 @@ function MediaSlot({
 }
 
 interface AdBannerSlotProps {
+	allowUpload?: boolean;
 	item: JobFormMediaItem | null;
 	onChange: (item: JobFormMediaItem | null) => void;
 	// 프리미엄 광고처럼 가로·세로 배너를 모두 요구하는 상품이면 라벨에 "(필수)"를 붙인다.
@@ -188,7 +218,13 @@ interface AdBannerSlotProps {
 
 // 미리보기 박스를 실제 노출 슬롯과 같은 비율로 보여준다. 여기서 이상해 보이면 실제 광고도
 // 이상하게 나간다.
-function AdBannerSlot({ item, onChange, required, usage }: AdBannerSlotProps) {
+function AdBannerSlot({
+	allowUpload,
+	item,
+	onChange,
+	required,
+	usage,
+}: AdBannerSlotProps) {
 	const {
 		aspectClassName,
 		aspectLabel,
@@ -212,6 +248,7 @@ function AdBannerSlot({ item, onChange, required, usage }: AdBannerSlotProps) {
 		<div className="flex flex-col gap-2">
 			<MediaSlot
 				accept={getFileAcceptForUsage(usage)}
+				allowUpload={allowUpload}
 				hint={`${description} ${formatJobAdBannerSpec(usage)}`}
 				id={`job-${usage.replace("_", "-")}-image`}
 				item={item}
@@ -220,7 +257,11 @@ function AdBannerSlot({ item, onChange, required, usage }: AdBannerSlotProps) {
 					onChange(item ? { ...item, altText } : null)
 				}
 				onFileChange={async (file) => {
-					onChange(await createMediaItemFromFile(file, item?.altText));
+					const created = await createMediaItemFromFile(file, item?.altText);
+
+					if (created) {
+						onChange(created);
+					}
 				}}
 				onRemove={() => onChange(null)}
 				previewClassName={cn("aspect-auto w-full", aspectClassName)}
@@ -241,6 +282,7 @@ function AdBannerSlot({ item, onChange, required, usage }: AdBannerSlotProps) {
 
 export function JobPostMediaUploader({
 	adProductId,
+	allowUpload = true,
 	error,
 	media,
 	onChange,
@@ -286,8 +328,18 @@ export function JobPostMediaUploader({
 					공고 썸네일 1장과 상세 이미지 최대 5장을 등록할 수 있습니다.
 				</p>
 			</div>
+			{allowUpload ? null : (
+				<Alert>
+					<TriangleAlert />
+					<AlertDescription>
+						운영자 편집에서는 새 이미지를 올릴 수 없습니다. 기존 이미지 삭제와
+						설명 수정만 가능해요.
+					</AlertDescription>
+				</Alert>
+			)}
 			<MediaSlot
 				accept={staticImageAccept}
+				allowUpload={allowUpload}
 				hint="목록 카드에 노출되는 이미지입니다."
 				id="job-cover-image"
 				item={media.cover}
@@ -299,10 +351,14 @@ export function JobPostMediaUploader({
 					})
 				}
 				onFileChange={async (file) => {
-					onChange({
-						...media,
-						cover: await createMediaItemFromFile(file, media.cover?.altText),
-					});
+					const created = await createMediaItemFromFile(
+						file,
+						media.cover?.altText
+					);
+
+					if (created) {
+						onChange({ ...media, cover: created });
+					}
 				}}
 				onRemove={() => onChange({ ...media, cover: null })}
 			/>
@@ -310,9 +366,15 @@ export function JobPostMediaUploader({
 				{detailSlots.map(({ index, key }) => {
 					const item = media.detail[index] ?? null;
 
+					// 업로드 불가(운영자) + 빈 슬롯이면 아무것도 못 하는 빈 칸이라 숨긴다.
+					if (!(allowUpload || item)) {
+						return null;
+					}
+
 					return (
 						<MediaSlot
 							accept={staticImageAccept}
+							allowUpload={allowUpload}
 							id={`job-detail-image-${index}`}
 							item={item}
 							key={key}
@@ -327,13 +389,14 @@ export function JobPostMediaUploader({
 								)
 							}
 							onFileChange={async (file) => {
-								onChange(
-									updateDetailAt(
-										media,
-										index,
-										await createMediaItemFromFile(file, item?.altText)
-									)
+								const created = await createMediaItemFromFile(
+									file,
+									item?.altText
 								);
+
+								if (created) {
+									onChange(updateDetailAt(media, index, created));
+								}
 							}}
 							onRemove={() => onChange(updateDetailAt(media, index, null))}
 						/>
@@ -365,6 +428,7 @@ export function JobPostMediaUploader({
 					<div className="grid gap-3 lg:grid-cols-2">
 						{showHorizontalBanner ? (
 							<AdBannerSlot
+								allowUpload={allowUpload}
 								item={media.adHorizontal}
 								onChange={(item) => onChange({ ...media, adHorizontal: item })}
 								required={bothBannersRequired}
@@ -373,6 +437,7 @@ export function JobPostMediaUploader({
 						) : null}
 						{showVerticalBanner ? (
 							<AdBannerSlot
+								allowUpload={allowUpload}
 								item={media.adVertical}
 								onChange={(item) => onChange({ ...media, adVertical: item })}
 								required={bothBannersRequired}

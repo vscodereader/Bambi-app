@@ -78,7 +78,6 @@ const createAdBannerFixture = async (): Promise<AdBannerFixture> => {
 		slug: `ad-banners-${randomUUID()}`,
 	});
 	await db.insert(bambiProfile).values({
-		displayName: "채용 담당자",
 		isPhoneVerified: true,
 		role: "employer",
 		status: "active",

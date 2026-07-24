@@ -47,7 +47,6 @@ import {
 } from "../../services/portone-identity";
 
 const profileInput = z.object({
-	displayName: z.string().min(1).max(80).optional(),
 	gender: z.enum(["male", "female"]).optional(),
 	phoneNumber: z.string().min(3).max(30).optional(),
 });
@@ -60,7 +59,9 @@ const LEGAL_CONSENT_VERSIONS = {
 	privacy_policy: "2026-07-21",
 } as const;
 
+// 표시명(닉네임)은 user.name 정본을 갱신하므로 프로필 입력이 아니라 이 갱신 입력에만 둔다.
 const profileUpdateInput = profileInput.omit({ gender: true }).extend({
+	displayName: z.string().min(1).max(80).optional(),
 	role: z.enum(["job_seeker", "employer", "admin"]).optional(),
 });
 
@@ -164,13 +165,11 @@ const requireEmployerBambiProfile = async (userId: string) => {
 };
 
 const createBambiProfile = async ({
-	displayName,
 	gender,
 	phoneNumber,
 	role,
 	userId,
 }: {
-	displayName?: string;
 	gender?: "male" | "female";
 	phoneNumber?: string;
 	role: BambiProfileRole;
@@ -189,7 +188,6 @@ const createBambiProfile = async ({
 		.values({
 			userId,
 			role,
-			displayName,
 			phoneNumber,
 			gender,
 		})
@@ -451,14 +449,26 @@ export const onboardingRouter = {
 				requestedRole: input.role,
 			});
 
+			// 표시명(닉네임)은 user.name 정본을 갱신한다(프로필 아님).
+			if (input.displayName !== undefined) {
+				await db
+					.update(user)
+					.set({ name: input.displayName })
+					.where(eq(user.id, userId));
+			}
+
+			if (input.phoneNumber !== undefined) {
+				await db
+					.update(bambiProfile)
+					.set({ phoneNumber: input.phoneNumber })
+					.where(eq(bambiProfile.userId, userId));
+			}
+
 			const [updatedProfile] = await db
-				.update(bambiProfile)
-				.set({
-					displayName: input.displayName,
-					phoneNumber: input.phoneNumber,
-				})
+				.select()
+				.from(bambiProfile)
 				.where(eq(bambiProfile.userId, userId))
-				.returning();
+				.limit(1);
 
 			return updatedProfile;
 		}),
@@ -656,10 +666,6 @@ export const onboardingRouter = {
 				.update(user)
 				.set({ deletedAt: new Date(), name: "탈퇴한 회원" })
 				.where(and(eq(user.id, userId), isNull(user.deletedAt)));
-			await tx
-				.update(bambiProfile)
-				.set({ displayName: "탈퇴한 회원" })
-				.where(eq(bambiProfile.userId, userId));
 			await tx.delete(teamMember).where(eq(teamMember.userId, userId));
 			await tx.delete(member).where(eq(member.userId, userId));
 			// 전 기기 세션을 지워 즉시 접근을 끊는다. 재로그인은 auth 훅이 차단.

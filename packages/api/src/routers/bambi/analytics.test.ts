@@ -79,7 +79,6 @@ const createAnalyticsFixture = async (): Promise<AnalyticsFixture> => {
 	]);
 	await db.insert(bambiProfile).values(
 		userRows.map((row) => ({
-			displayName: row.name,
 			isPhoneVerified: true,
 			role: "employer" as const,
 			status: "active" as const,

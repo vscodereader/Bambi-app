@@ -67,8 +67,9 @@ export function BankTransferGuide({ amount }: BankTransferGuideProps) {
 					))}
 				</ul>
 			) : (
-				<p className="text-muted-foreground">
-					입금 계좌 안내는 고객센터로 문의해 주세요.
+				<p className="text-destructive">
+					입금 계좌가 준비되기 전이라 무통장입금으로 등록할 수 없습니다. 다른
+					결제수단을 선택하거나 고객센터로 문의해 주세요.
 				</p>
 			)}
 			{hasAccounts ? (

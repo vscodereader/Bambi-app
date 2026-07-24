@@ -36,9 +36,7 @@ const seedAdmin = async () => {
 		name: "운영자",
 		email: `${adminId}@bambi.test`,
 	});
-	await db
-		.insert(bambiProfile)
-		.values({ userId: adminId, role: "admin", displayName: "운영자" });
+	await db.insert(bambiProfile).values({ userId: adminId, role: "admin" });
 	return adminId;
 };
 
@@ -60,8 +58,8 @@ const seedPendingInvite = async (options?: {
 		{ id: inviteeId, name: "초대대상", email: inviteeEmail },
 	]);
 	await db.insert(bambiProfile).values([
-		{ userId: ownerId, role: "employer", displayName: "업주" },
-		{ userId: inviteeId, role: "employer", displayName: "초대대상" },
+		{ userId: ownerId, role: "employer" },
+		{ userId: inviteeId, role: "employer" },
 	]);
 	await db
 		.insert(organization)

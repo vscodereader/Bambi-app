@@ -96,21 +96,18 @@ const createReportFixture = async (): Promise<ReportFixture> => {
 	});
 	await db.insert(bambiProfile).values([
 		{
-			displayName: "운영자",
 			isPhoneVerified: true,
 			role: "admin",
 			status: "active",
 			userId: adminUserId,
 		},
 		{
-			displayName: "채용 담당자",
 			isPhoneVerified: true,
 			role: "employer",
 			status: "active",
 			userId: employerUserId,
 		},
 		{
-			displayName: "구직자",
 			isPhoneVerified: true,
 			role: "job_seeker",
 			status: "active",
@@ -205,6 +202,80 @@ const expectOrpcCode = async (
 ): Promise<void> => {
 	await expect(promise).rejects.toMatchObject({ code });
 };
+
+describe("adminDeleteJobPost", () => {
+	it("공고를 하드삭제하고 연결 채팅방을 cascade로 지우며 감사 로그를 남긴다", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const adminDeleteJobPost = createProcedureClient(
+				moderationRouter.adminDeleteJobPost,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "adminDeleteJobPost"],
+				}
+			);
+
+			const result = await adminDeleteJobPost({
+				jobPostId: fixture.jobPostId,
+				reason: "정책 위반 공고를 파기합니다.",
+			});
+
+			expect(result).toEqual({ ok: true });
+
+			const remainingJobs = await db
+				.select({ id: jobPost.id })
+				.from(jobPost)
+				.where(eq(jobPost.id, fixture.jobPostId));
+			expect(remainingJobs).toHaveLength(0);
+
+			// job_post FK cascade로 연결 채팅방(+메시지·첨부)도 함께 사라진다.
+			const remainingRooms = await db
+				.select({ id: chatRoom.id })
+				.from(chatRoom)
+				.where(eq(chatRoom.id, fixture.chatRoomId));
+			expect(remainingRooms).toHaveLength(0);
+
+			const logs = await db
+				.select()
+				.from(adminModerationAction)
+				.where(eq(adminModerationAction.targetId, fixture.jobPostId));
+			expect(logs).toHaveLength(1);
+			expect(logs[0]).toMatchObject({
+				action: "hard_delete",
+				adminUserId: fixture.adminUserId,
+				reason: "정책 위반 공고를 파기합니다.",
+				targetType: "job_post",
+			});
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("비운영자는 FORBIDDEN", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const adminDeleteJobPost = createProcedureClient(
+				moderationRouter.adminDeleteJobPost,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "adminDeleteJobPost"],
+				}
+			);
+
+			await expectOrpcCode(
+				adminDeleteJobPost({
+					jobPostId: fixture.jobPostId,
+					reason: "권한 없는 사용자입니다.",
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
 
 describe("bambi moderation router media context", () => {
 	it("exposes bulk moderation procedures", () => {

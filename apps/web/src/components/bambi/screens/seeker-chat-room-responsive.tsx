@@ -2,6 +2,11 @@
 
 import { Button as UiButton } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
+import {
+	Message,
+	MessageContent,
+	MessageGroup,
+} from "@bambi-app/ui/components/message";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -14,6 +19,10 @@ import {
 	useState,
 } from "react";
 import { toast } from "sonner";
+import {
+	detectImageSignature,
+	isSignatureMismatch,
+} from "@/lib/bambi/image-signature";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import {
 	connectBambiChatSocket,
@@ -37,7 +46,7 @@ import { FieldLabel } from "../form-message";
 import {
 	ClockIcon,
 	DollarCircle,
-	Message,
+	Message as MessageIcon,
 	PaperclipIcon,
 	ShieldIcon,
 	XIcon,
@@ -47,7 +56,6 @@ import { ReviewForm } from "../review-form";
 
 interface SeekerChatRoomResponsiveProps {
 	onBack: () => void;
-	onReveal: () => void;
 	roomId: string;
 }
 
@@ -153,11 +161,79 @@ const getReviewMutationErrorMessage = (error: Error): string => {
 
 type RealtimeStatus = "connected" | "connecting" | "offline";
 
-// 연락처 공개는 구인자만 한다. 구인자는 공개 화면으로, 구직자는 구인자가 공개한
-// 연락처를 확인하는 화면으로 들어간다.
-const getRevealButtonLabel = (
-	reveal?: { viewerIsEmployer?: boolean } | null
-): string => (reveal?.viewerIsEmployer ? "연락처 공개하기" : "연락처 보기");
+type ContactRequestStatus = "declined" | "pending" | "revealed";
+type ContactRevealDecision = "decline" | "reveal";
+
+interface ContactRequestMetadata {
+	requesterUserId: string;
+	status: ContactRequestStatus;
+	targetUserId: string;
+}
+
+const CONTACT_REQUEST_STATUSES: readonly string[] = [
+	"declined",
+	"pending",
+	"revealed",
+];
+
+// contact_request 메시지의 jsonb metadata는 unknown이라 좁혀서 읽는다. 형태가
+// 어긋나면 null(특수 렌더를 건너뛴다).
+const readContactRequestMetadata = (
+	value: unknown
+): ContactRequestMetadata | null => {
+	if (typeof value !== "object" || value === null) {
+		return null;
+	}
+
+	const { requesterUserId, status, targetUserId } = value as Record<
+		string,
+		unknown
+	>;
+
+	if (
+		typeof requesterUserId === "string" &&
+		typeof targetUserId === "string" &&
+		typeof status === "string" &&
+		CONTACT_REQUEST_STATUSES.includes(status)
+	) {
+		return {
+			requesterUserId,
+			status: status as ContactRequestStatus,
+			targetUserId,
+		};
+	}
+
+	return null;
+};
+
+// contact_request 인라인 시스템 메시지 문구. 역할(구인자/구직자)과 status 전이로 분기.
+const getContactRequestNotice = ({
+	counterpartName,
+	revealedPhone,
+	status,
+	viewerIsEmployer,
+}: {
+	counterpartName: string;
+	revealedPhone: null | string;
+	status: ContactRequestStatus;
+	viewerIsEmployer: boolean;
+}): string => {
+	if (status === "pending") {
+		return viewerIsEmployer
+			? "연락처 공개를 요청했습니다. (응답 대기 중)"
+			: `${counterpartName}님께서 연락처 공개 요청이 왔습니다. 공개하시겠습니까?`;
+	}
+
+	if (status === "revealed") {
+		return viewerIsEmployer
+			? `${counterpartName}님께서 연락처를 공개했습니다: ${revealedPhone ?? "확인 필요"}`
+			: "연락처를 공개했습니다.";
+	}
+
+	return viewerIsEmployer
+		? `${counterpartName}님께서 연락처 공개를 거절하셨습니다.`
+		: "연락처 공개를 거절했습니다.";
+};
 
 const getRealtimeStatusLabel = (status: RealtimeStatus): string => {
 	switch (status) {
@@ -175,19 +251,135 @@ interface ChatMessageItem {
 	body: string;
 	createdAt: Date | string;
 	id: string;
+	kind: string;
+	metadata: unknown;
+	revealedPhone: null | string;
 	senderUserId: string;
 }
 
-interface ChatMessageListProps {
+// 일반 말풍선. 내(coral-500)/상대(secondary)로 좌우 정렬. shadcn Message 래핑.
+function ChatMessageBubble({
+	currentUserId,
+	message,
+}: {
 	currentUserId: string;
+	message: ChatMessageItem;
+}) {
+	const mine = message.senderUserId === currentUserId;
+	const attachments = message.attachments ?? [];
+
+	return (
+		<Message align={mine ? "end" : "start"}>
+			<MessageContent
+				className={cn(
+					"w-fit max-w-[78%] rounded-lg px-4 py-2",
+					mine ? "bg-coral-500 text-white" : "bg-secondary text-foreground"
+				)}
+			>
+				{attachments.length === 0 ? (
+					<p className="m-0 whitespace-pre-wrap text-sm leading-relaxed">
+						{message.body}
+					</p>
+				) : (
+					<div className="grid gap-2">
+						{attachments.map((attachment) => (
+							<ChatAttachmentPreview
+								attachment={attachment}
+								key={attachment.id}
+								mine={mine}
+							/>
+						))}
+					</div>
+				)}
+				<p className="mt-1 mb-0 text-[11px] opacity-70">
+					{formatDateTime(message.createdAt)}
+				</p>
+			</MessageContent>
+		</Message>
+	);
+}
+
+// contact_request 특수 렌더. 중앙 정렬 시스템 카드 + 대상 구직자의 pending 응답 버튼.
+function ContactRequestMessage({
+	counterpartName,
+	currentUserId,
+	isResponding,
+	message,
+	onRespond,
+	viewerIsEmployer,
+}: {
+	counterpartName: null | string;
+	currentUserId: string;
+	isResponding: boolean;
+	message: ChatMessageItem;
+	onRespond: (messageId: string, decision: ContactRevealDecision) => void;
+	viewerIsEmployer: boolean;
+}) {
+	const metadata = readContactRequestMetadata(message.metadata);
+
+	if (!metadata) {
+		return null;
+	}
+
+	const notice = getContactRequestNotice({
+		counterpartName: counterpartName ?? "상대방",
+		revealedPhone: message.revealedPhone,
+		status: metadata.status,
+		viewerIsEmployer,
+	});
+	const canRespond =
+		metadata.status === "pending" && metadata.targetUserId === currentUserId;
+
+	return (
+		<div className="mx-auto flex w-full max-w-[80%] flex-col gap-3 rounded-lg border border-coral-100 bg-coral-50 px-4 py-3 text-center">
+			<p className="m-0 font-semibold text-coral-800 text-sm leading-relaxed">
+				{notice}
+			</p>
+			{canRespond ? (
+				<div className="flex justify-center gap-2">
+					<Button
+						disabled={isResponding}
+						onClick={() => onRespond(message.id, "reveal")}
+						size="sm"
+						variant="primary"
+					>
+						공개
+					</Button>
+					<Button
+						disabled={isResponding}
+						onClick={() => onRespond(message.id, "decline")}
+						size="sm"
+						variant="secondary"
+					>
+						거절
+					</Button>
+				</div>
+			) : null}
+			<p className="m-0 text-[11px] text-coral-700/70">
+				{formatDateTime(message.createdAt)}
+			</p>
+		</div>
+	);
+}
+
+interface ChatMessageListProps {
+	counterpartName: null | string;
+	currentUserId: string;
+	isResponding: boolean;
 	messages: ChatMessageItem[];
+	onRespond: (messageId: string, decision: ContactRevealDecision) => void;
 	typingUserIds: string[];
+	viewerIsEmployer: boolean;
 }
 
 function ChatMessageList({
+	counterpartName,
 	currentUserId,
+	isResponding,
 	messages,
+	onRespond,
 	typingUserIds,
+	viewerIsEmployer,
 }: ChatMessageListProps) {
 	if (messages.length === 0) {
 		return (
@@ -198,53 +390,34 @@ function ChatMessageList({
 	}
 
 	return (
-		<>
-			{messages.map((chatMessage) => {
-				const mine = chatMessage.senderUserId === currentUserId;
-				const attachments = chatMessage.attachments ?? [];
-
-				return (
-					<div
-						className={mine ? "flex justify-end" : "flex justify-start"}
+		<MessageGroup>
+			{messages.map((chatMessage) =>
+				chatMessage.kind === "contact_request" ? (
+					<ContactRequestMessage
+						counterpartName={counterpartName}
+						currentUserId={currentUserId}
+						isResponding={isResponding}
 						key={chatMessage.id}
-					>
-						<div
-							className={
-								mine
-									? "max-w-[78%] rounded-lg bg-coral-500 px-4 py-2 text-white"
-									: "max-w-[78%] rounded-lg bg-secondary px-4 py-2 text-foreground"
-							}
-						>
-							{attachments.length === 0 ? (
-								<p className="m-0 whitespace-pre-wrap text-sm leading-relaxed">
-									{chatMessage.body}
-								</p>
-							) : (
-								<div className="grid gap-2">
-									{attachments.map((attachment) => (
-										<ChatAttachmentPreview
-											attachment={attachment}
-											key={attachment.id}
-											mine={mine}
-										/>
-									))}
-								</div>
-							)}
-							<p className="mt-1 mb-0 text-[11px] opacity-70">
-								{formatDateTime(chatMessage.createdAt)}
-							</p>
-						</div>
-					</div>
-				);
-			})}
+						message={chatMessage}
+						onRespond={onRespond}
+						viewerIsEmployer={viewerIsEmployer}
+					/>
+				) : (
+					<ChatMessageBubble
+						currentUserId={currentUserId}
+						key={chatMessage.id}
+						message={chatMessage}
+					/>
+				)
+			)}
 			{typingUserIds.length > 0 ? (
-				<div className="flex justify-start">
-					<div className="max-w-[78%] rounded-lg border border-coral-200 px-4 py-2 font-semibold text-coral-700 text-xs">
+				<Message align="start">
+					<MessageContent className="w-fit max-w-[78%] rounded-lg border border-coral-200 px-4 py-2 font-semibold text-coral-700 text-xs">
 						상대가 입력 중이에요
-					</div>
-				</div>
+					</MessageContent>
+				</Message>
 			) : null}
-		</>
+		</MessageGroup>
 	);
 }
 
@@ -366,7 +539,7 @@ function ChatComposer({
 						attachmentDraft?.status === "error" ||
 						!(message.trim() || attachmentDraft)
 					}
-					rightIcon={<Message />}
+					rightIcon={<MessageIcon />}
 					size="md"
 					type="submit"
 				>
@@ -612,9 +785,60 @@ function InterviewProposalForm({
 	);
 }
 
+// 면접 일정 카드 하단. 구인자는 "연락처 공개 요청" 버튼, 구직자는 구인자 인증번호를 본다.
+function ContactRevealAction({
+	employerVerifiedPhone,
+	isJobSeeker,
+	isRequesting,
+	onRequest,
+}: {
+	employerVerifiedPhone: null | string;
+	isJobSeeker: boolean;
+	isRequesting: boolean;
+	onRequest: () => void;
+}) {
+	if (!isJobSeeker) {
+		return (
+			<Button
+				block
+				className="mt-4 shadow-none"
+				disabled={isRequesting}
+				onClick={onRequest}
+				size="md"
+				variant="primary"
+			>
+				연락처 공개 요청
+			</Button>
+		);
+	}
+
+	if (!employerVerifiedPhone) {
+		return null;
+	}
+
+	return (
+		<div className="mt-4 flex flex-col gap-1 rounded-lg border border-border bg-card px-4 py-3">
+			<span className="font-medium text-muted-foreground text-xs">
+				구인자 인증 연락처
+			</span>
+			{/* 모바일은 번호 아래로 안내를 스택(flex-col), md↑는 번호 옆 한 줄(flex-row). */}
+			<span className="flex flex-col gap-0.5 md:flex-row md:items-baseline md:gap-1.5">
+				<a
+					className="font-bold text-base text-foreground underline-offset-2 hover:underline"
+					href={`tel:${employerVerifiedPhone}`}
+				>
+					{employerVerifiedPhone}
+				</a>
+				<span className="font-medium text-primary text-sm">
+					('밤비알바 보고 연락드렸다고 하시면 정확한 상담 받으실 수 있어요.')
+				</span>
+			</span>
+		</div>
+	);
+}
+
 export function SeekerChatRoomResponsive({
 	onBack,
-	onReveal,
 	roomId,
 }: SeekerChatRoomResponsiveProps) {
 	const queryClient = useQueryClient();
@@ -644,11 +868,6 @@ export function SeekerChatRoomResponsive({
 	const typingActiveRef = useRef(false);
 	const roomQuery = useQuery(
 		orpc.bambi.chats.getById.queryOptions({ input: { id: roomId } })
-	);
-	const revealQuery = useQuery(
-		orpc.bambi.chats.getContactReveal.queryOptions({
-			input: { chatRoomId: roomId },
-		})
 	);
 	const currentSessionUserId = roomQuery.data?.currentUserId;
 	const reviewListQuery = useQuery({
@@ -759,6 +978,32 @@ export function SeekerChatRoomResponsive({
 			onSuccess: () => {
 				toast.success("상대를 차단했어요.");
 				router.push("/seeker/chats");
+			},
+		})
+	);
+	const requestContactRevealMutation = useMutation(
+		orpc.bambi.chats.requestContactReveal.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || getMutationErrorMessage(error));
+			},
+			onSuccess: async () => {
+				toast.success("연락처 공개를 요청했어요.");
+				await invalidateRoom();
+			},
+		})
+	);
+	const respondContactRevealMutation = useMutation(
+		orpc.bambi.chats.respondContactReveal.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || getMutationErrorMessage(error));
+			},
+			onSuccess: async (_data, variables) => {
+				toast.success(
+					variables.decision === "reveal"
+						? "연락처를 공개했어요."
+						: "연락처 공개를 거절했어요."
+				);
+				await invalidateRoom();
 			},
 		})
 	);
@@ -942,8 +1187,15 @@ export function SeekerChatRoomResponsive({
 		);
 	}
 
-	const { counterpartName, currentUserId, jobPost, messages, room, schedules } =
-		roomQuery.data;
+	const {
+		counterpartName,
+		currentUserId,
+		employerVerifiedPhone,
+		jobPost,
+		messages,
+		room,
+		schedules,
+	} = roomQuery.data;
 	const isJobSeeker = currentUserId === room.jobSeekerUserId;
 	const blockedUserId = resolveBlockedUserId(isJobSeeker, room);
 	const isAttachmentSubmitting =
@@ -972,7 +1224,7 @@ export function SeekerChatRoomResponsive({
 			attachmentInputRef.current.value = "";
 		}
 	};
-	const handleAttachmentChange = (
+	const handleAttachmentChange = async (
 		event: React.ChangeEvent<HTMLInputElement>
 	) => {
 		const file = event.target.files?.[0];
@@ -982,6 +1234,17 @@ export function SeekerChatRoomResponsive({
 			return;
 		}
 
+		// 이미지는 매직넘버로 실제 형식을 검증해 확장자/MIME 위조를 차단한다(PDF 제외).
+		if (file.type.startsWith("image/")) {
+			const detected = await detectImageSignature(file);
+			if (isSignatureMismatch(file.type, detected)) {
+				toast.error(
+					"이미지 형식이 올바르지 않습니다. PNG·JPG·WebP·GIF만 첨부할 수 있어요."
+				);
+				return;
+			}
+		}
+
 		const error = getAttachmentValidationError(file);
 		setAttachmentDraft({
 			errorMessage: error ?? undefined,
@@ -989,6 +1252,12 @@ export function SeekerChatRoomResponsive({
 			status: error ? "error" : "selected",
 		});
 		setErrorMessage(null);
+	};
+	const handleRespondContact = (
+		messageId: string,
+		decision: ContactRevealDecision
+	) => {
+		respondContactRevealMutation.mutate({ decision, messageId });
 	};
 	const stopTyping = () => {
 		if (typingActiveRef.current) {
@@ -1191,9 +1460,13 @@ export function SeekerChatRoomResponsive({
 				</div>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
 					<ChatMessageList
+						counterpartName={counterpartName}
 						currentUserId={currentUserId}
+						isResponding={respondContactRevealMutation.isPending}
 						messages={messages}
+						onRespond={handleRespondContact}
 						typingUserIds={typingUserIds}
+						viewerIsEmployer={!isJobSeeker}
 					/>
 				</div>
 				<ChatComposer
@@ -1340,16 +1613,14 @@ export function SeekerChatRoomResponsive({
 								))}
 							</div>
 						)}
-						<Button
-							block
-							className="mt-4 shadow-none"
-							disabled={!eligibleSchedule}
-							onClick={onReveal}
-							size="md"
-							variant={eligibleSchedule ? "primary" : "secondary"}
-						>
-							{getRevealButtonLabel(revealQuery.data)}
-						</Button>
+						<ContactRevealAction
+							employerVerifiedPhone={employerVerifiedPhone}
+							isJobSeeker={isJobSeeker}
+							isRequesting={requestContactRevealMutation.isPending}
+							onRequest={() =>
+								requestContactRevealMutation.mutate({ chatRoomId: room.id })
+							}
+						/>
 					</Card>
 					<ReviewSidebarCard
 						canCreateReview={canCreateReview}

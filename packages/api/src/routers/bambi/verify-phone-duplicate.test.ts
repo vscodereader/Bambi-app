@@ -62,7 +62,7 @@ const seedUserWithProfile = async (
 	});
 	await db
 		.insert(bambiProfile)
-		.values({ userId, role: "job_seeker", displayName: "인증대상", ...values });
+		.values({ userId, role: "job_seeker", ...values });
 	return userId;
 };
 

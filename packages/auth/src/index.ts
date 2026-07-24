@@ -24,7 +24,7 @@ import { i18n } from "@better-auth/i18n";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
-import { organization } from "better-auth/plugins";
+import { organization, username } from "better-auth/plugins";
 import { koTranslations } from "./locales/ko";
 
 const schema = {
@@ -125,6 +125,26 @@ export function createAuth() {
 			i18n({
 				translations: { ko: koTranslations },
 				defaultLocale: "ko",
+			}),
+			// 로그인 아이디(username) 지원. 스키마상 username은 required:false라 회원가입 시
+			// 선택 — username 없이 호출하는 기존 경로(개발 시드 signUpEmail, auth 테스트)는
+			// 그대로 동작한다. 기본 검증(min 3·max 30·영숫자+언더스코어, 소문자 정규화 후
+			// 저장)이 한국 서비스에 무리 없어 옵션 오버라이드 없이 기본값 사용.
+			// 논리 필드 username/displayUsername를 각각 user.login_id / user.login_id_display
+			// 컬럼에 매핑한다(drizzle adapter는 이 fieldName으로 schemaModel[fieldName] 컬럼을
+			// 찾으므로 drizzle property 이름도 login_id/login_id_display여야 한다 — schema/auth.ts).
+			// displayUsernameNormalization을 소문자로 걸어 login_id_display가 항상 login_id와
+			// 동일한 소문자 미러가 되게 한다.
+			username({
+				schema: {
+					user: {
+						fields: {
+							username: "login_id",
+							displayUsername: "login_id_display",
+						},
+					},
+				},
+				displayUsernameNormalization: (v) => v.toLowerCase(),
 			}),
 		],
 	});

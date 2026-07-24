@@ -258,6 +258,19 @@ export default function NewEmployerJobPage() {
 	return <NewEmployerJobForm postingScopes={postingScopes} />;
 }
 
+// 유료 상품에 무통장입금을 골랐는데 운영자 입금 계좌가 0개면 제출을 막는다(card와 대칭).
+function isBankTransferBlocked(
+	adProductId: string | null | undefined,
+	paymentMethod: string | null | undefined,
+	accountCount: number | undefined
+): boolean {
+	return (
+		Boolean(adProductId) &&
+		paymentMethod === "bank_transfer" &&
+		(accountCount ?? 0) === 0
+	);
+}
+
 function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const router = useRouter();
 	const utils = useQueryClient();
@@ -529,6 +542,15 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	// 유료 상품에 신용카드(미지원)를 고른 상태면 제출을 막는다. 사유는 결제 섹션의 안내가 알린다.
 	const cardPaymentBlocked =
 		Boolean(form.adProductId) && form.paymentMethod === "card";
+
+	const paymentAccountsQuery = useQuery(
+		orpc.bambi.siteSettings.getPaymentAccounts.queryOptions()
+	);
+	const bankTransferBlocked = isBankTransferBlocked(
+		form.adProductId,
+		form.paymentMethod,
+		paymentAccountsQuery.data?.length
+	);
 
 	const listingPreview = (
 		<EmployerListingPreview
@@ -921,6 +943,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 										createMutation.isPending ||
 										createMediaUploadMutation.isPending ||
 										cardPaymentBlocked ||
+										bankTransferBlocked ||
 										bannerImagesMissing ||
 										!verified
 									}

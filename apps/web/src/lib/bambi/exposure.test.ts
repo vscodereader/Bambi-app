@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { expiryLabel, getJobDisplayStatus, remainingDays } from "./exposure";
+import {
+	expiryLabel,
+	getExpiryTone,
+	getJobDisplayStatus,
+	remainingDays,
+} from "./exposure";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -44,6 +49,18 @@ describe("expiryLabel", () => {
 
 	it("labels a past expiry as 만료", () => {
 		expect(expiryLabel(daysFromNow(-1))).toBe("만료");
+	});
+});
+
+describe("getExpiryTone", () => {
+	it("진행중은 good", () => {
+		expect(getExpiryTone("진행중")).toBe("good");
+	});
+	it("만료는 danger", () => {
+		expect(getExpiryTone("만료")).toBe("danger");
+	});
+	it("그 외는 default", () => {
+		expect(getExpiryTone("대기")).toBe("default");
 	});
 });
 

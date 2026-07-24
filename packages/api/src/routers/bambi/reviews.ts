@@ -1,9 +1,6 @@
 import { db } from "@bambi-app/db";
-import {
-	bambiProfile,
-	interviewSchedule,
-	review,
-} from "@bambi-app/db/schema/bambi";
+import { user } from "@bambi-app/db/schema/auth";
+import { interviewSchedule, review } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq, or } from "drizzle-orm";
 import z from "zod";
@@ -132,13 +129,13 @@ export const reviewsRouter = {
 				.select({
 					body: review.body,
 					createdAt: review.createdAt,
-					displayName: bambiProfile.displayName,
+					displayName: user.name,
 					id: review.id,
 					isAnonymous: review.isAnonymous,
 					rating: review.rating,
 				})
 				.from(review)
-				.leftJoin(bambiProfile, eq(review.reviewerUserId, bambiProfile.userId))
+				.leftJoin(user, eq(review.reviewerUserId, user.id))
 				.where(
 					and(
 						eq(review.jobPostId, input.jobPostId),

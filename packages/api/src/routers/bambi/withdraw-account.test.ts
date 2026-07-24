@@ -55,7 +55,6 @@ const seedUser = async () => {
 	await db.insert(bambiProfile).values({
 		userId,
 		role: "job_seeker",
-		displayName: "탈퇴대상",
 		phoneNumber: "010-1111-2222",
 	});
 	return userId;
@@ -126,7 +125,7 @@ describe("withdrawMyAccount 회원 탈퇴", () => {
 			.select()
 			.from(bambiProfile)
 			.where(eq(bambiProfile.userId, userId));
-		expect(profile?.displayName).toBe("탈퇴한 회원");
+		// 표시명(닉네임)은 user.name 정본에서 익명화된다(위에서 검증).
 		// 개인정보는 보존기간 동안 유지된다 — 파기는 배치가 한다.
 		expect(profile?.phoneNumber).toBe("010-1111-2222");
 

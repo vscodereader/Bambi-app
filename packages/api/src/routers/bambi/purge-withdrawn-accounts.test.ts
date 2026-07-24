@@ -44,9 +44,7 @@ const seedAdmin = async () => {
 		name: "운영자",
 		email: `${userId}@bambi.test`,
 	});
-	await db
-		.insert(bambiProfile)
-		.values({ userId, role: "admin", displayName: "운영자" });
+	await db.insert(bambiProfile).values({ userId, role: "admin" });
 	return userId;
 };
 
@@ -62,7 +60,6 @@ const seedWithdrawnUser = async (daysAgo: number) => {
 	await db.insert(bambiProfile).values({
 		userId,
 		role: "job_seeker",
-		displayName: "탈퇴한 회원",
 		phoneNumber: "010-2222-3333",
 		birthDate: "19900101",
 		ciHash: `ci-${randomUUID()}`,

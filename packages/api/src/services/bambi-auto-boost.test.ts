@@ -142,7 +142,6 @@ describe("runAutoBoostTick", () => {
 			userId: employerUserId,
 		});
 		await db.insert(bambiProfile).values({
-			displayName: "자동 담당자",
 			isPhoneVerified: true,
 			role: "employer",
 			status: "active",
@@ -366,7 +365,6 @@ describe("runAutoBoostTick (병렬 워커 풀)", () => {
 			userId: parallelUserId,
 		});
 		await db.insert(bambiProfile).values({
-			displayName: "병렬 담당자",
 			isPhoneVerified: true,
 			role: "employer",
 			status: "active",

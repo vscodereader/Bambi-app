@@ -23,7 +23,9 @@ const DESCRIPTION_BLOCK_MAX_COUNT = 12;
 const DESCRIPTION_BLOCK_TEXT_MAX_LENGTH = 800;
 const DETAIL_IMAGE_MAX_COUNT = 5;
 const IMAGE_ALT_TEXT_MAX_LENGTH = 120;
-const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+// 공고·커뮤니티·채팅 이미지 공통 상한(세 파일 동기화): bambi-job-media-policy.ts,
+// apps/web/src/lib/bambi-job-form.ts, bambi-media-policy.ts.
+const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // 서버 정책(ALLOWED_JOB_AD_BANNER_MIME_TYPES)과 같은 목록. 광고 배너만 움직이는 GIF를 받는다.
 const ALLOWED_AD_BANNER_MIME_TYPES = [...ALLOWED_IMAGE_MIME_TYPES, "image/gif"];
@@ -645,7 +647,7 @@ const getMediaError = (media?: JobFormMedia): string | undefined => {
 
 		// 서버 정책과 같은 상한. 여기서 막지 않으면 폼을 다 채워 제출한 뒤에야 거부당한다.
 		if (item.byteSize > IMAGE_MAX_BYTES) {
-			return "이미지는 한 장당 8MB 이하만 등록할 수 있습니다.";
+			return "이미지는 한 장당 10MB 이하만 등록할 수 있습니다.";
 		}
 
 		if (trim(item.altText).length > IMAGE_ALT_TEXT_MAX_LENGTH) {

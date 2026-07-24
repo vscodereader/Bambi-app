@@ -45,7 +45,6 @@ const seedUser = async (role: "job_seeker" | "admin"): Promise<string> => {
 	await db.insert(bambiProfile).values({
 		userId: id,
 		role,
-		displayName: `표시명-${id.slice(-8)}`,
 	});
 
 	seedUserIds.push(id);
