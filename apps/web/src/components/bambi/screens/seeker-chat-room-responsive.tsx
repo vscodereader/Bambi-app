@@ -829,8 +829,7 @@ function ContactRevealAction({
 					{employerVerifiedPhone}
 				</a>{" "}
 				<span className="font-medium text-primary text-sm">
-					('밤비알바 보고 연락드렸습니다.'라고 하시면 정확한 상담 받으실 수
-					있습니다.)
+					('밤비알바 보고 연락드렸다고 하시면 정확한 상담 받으실 수 있어요.')
 				</span>
 			</span>
 		</div>
