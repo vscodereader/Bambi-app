@@ -732,3 +732,319 @@ describe("bambi chats router contact reveal", () => {
 		}
 	});
 });
+
+const setProfilePhone = async (
+	userId: string,
+	phoneNumber: string | null,
+	isPhoneVerified: boolean
+): Promise<void> => {
+	await db
+		.update(bambiProfile)
+		.set({ isPhoneVerified, phoneNumber })
+		.where(eq(bambiProfile.userId, userId));
+};
+
+const seedMessage = async (
+	fixture: ChatFixture,
+	senderUserId: string
+): Promise<void> => {
+	await db.insert(chatMessage).values({
+		body: "안녕하세요.",
+		chatRoomId: fixture.chatRoomId,
+		senderUserId,
+	});
+};
+
+const requestReveal = (userId: string) =>
+	createProcedureClient(chatsRouter.requestContactReveal, {
+		context: createContextForUser(userId),
+		path: ["bambi", "chats", "requestContactReveal"],
+	});
+
+const respondReveal = (userId: string) =>
+	createProcedureClient(chatsRouter.respondContactReveal, {
+		context: createContextForUser(userId),
+		path: ["bambi", "chats", "respondContactReveal"],
+	});
+
+const listMineFor = (userId: string) =>
+	createProcedureClient(chatsRouter.listMine, {
+		context: createContextForUser(userId),
+		path: ["bambi", "chats", "listMine"],
+	});
+
+const getByIdFor = (userId: string) =>
+	createProcedureClient(chatsRouter.getById, {
+		context: createContextForUser(userId),
+		path: ["bambi", "chats", "getById"],
+	});
+
+describe("bambi chats router contact reveal request", () => {
+	it("rejects a contact reveal request from the job seeker", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await expectOrpcCode(
+				requestReveal(fixture.jobSeekerUserId)({
+					chatRoomId: fixture.chatRoomId,
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("creates a pending contact_request when the employer requests", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const message = await requestReveal(fixture.employerUserId)({
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			expect(message).toMatchObject({
+				chatRoomId: fixture.chatRoomId,
+				kind: "contact_request",
+				senderUserId: fixture.employerUserId,
+			});
+			expect(message.metadata).toMatchObject({
+				requesterUserId: fixture.employerUserId,
+				status: "pending",
+				targetUserId: fixture.jobSeekerUserId,
+			});
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("rejects a duplicate request while one is still pending", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await requestReveal(fixture.employerUserId)({
+				chatRoomId: fixture.chatRoomId,
+			});
+			await expectOrpcCode(
+				requestReveal(fixture.employerUserId)({
+					chatRoomId: fixture.chatRoomId,
+				}),
+				"CONFLICT"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("rejects a request when the employer is not phone-verified", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await setProfilePhone(fixture.employerUserId, null, false);
+			await expectOrpcCode(
+				requestReveal(fixture.employerUserId)({
+					chatRoomId: fixture.chatRoomId,
+				}),
+				"BAD_REQUEST"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+describe("bambi chats router contact reveal response", () => {
+	const createPendingRequest = async (
+		fixture: ChatFixture
+	): Promise<string> => {
+		const message = await requestReveal(fixture.employerUserId)({
+			chatRoomId: fixture.chatRoomId,
+		});
+
+		return message.id;
+	};
+
+	it("rejects a response from the employer (not the target)", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const messageId = await createPendingRequest(fixture);
+
+			await expectOrpcCode(
+				respondReveal(fixture.employerUserId)({
+					decision: "reveal",
+					messageId,
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("marks the request revealed when the seeker reveals", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const messageId = await createPendingRequest(fixture);
+			const updated = await respondReveal(fixture.jobSeekerUserId)({
+				decision: "reveal",
+				messageId,
+			});
+
+			expect(updated.metadata).toMatchObject({ status: "revealed" });
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("marks the request declined when the seeker declines", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const messageId = await createPendingRequest(fixture);
+			const updated = await respondReveal(fixture.jobSeekerUserId)({
+				decision: "decline",
+				messageId,
+			});
+
+			expect(updated.metadata).toMatchObject({ status: "declined" });
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+describe("bambi chats router soft delete", () => {
+	const hasRoom = (rooms: Array<{ id: string }>, chatRoomId: string): boolean =>
+		rooms.some((room) => room.id === chatRoomId);
+
+	it("hides the room from the seeker after delete while the employer still sees it", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.employerUserId);
+
+			const deleteChatRoom = createProcedureClient(chatsRouter.deleteChatRoom, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "chats", "deleteChatRoom"],
+			});
+
+			expect(await deleteChatRoom({ chatRoomId: fixture.chatRoomId })).toEqual({
+				ok: true,
+			});
+
+			const seekerRooms = await listMineFor(fixture.jobSeekerUserId)({});
+			const employerRooms = await listMineFor(fixture.employerUserId)({});
+
+			expect(hasRoom(seekerRooms, fixture.chatRoomId)).toBe(false);
+			expect(hasRoom(employerRooms, fixture.chatRoomId)).toBe(true);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("re-surfaces the room for the seeker after the employer sends a message", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.employerUserId);
+
+			const deleteChatRoom = createProcedureClient(chatsRouter.deleteChatRoom, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "chats", "deleteChatRoom"],
+			});
+			await deleteChatRoom({ chatRoomId: fixture.chatRoomId });
+
+			const sendMessage = createProcedureClient(chatsRouter.sendMessage, {
+				context: createContextForUser(fixture.employerUserId),
+				path: ["bambi", "chats", "sendMessage"],
+			});
+			await sendMessage({
+				body: "새 메시지입니다.",
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			const seekerRooms = await listMineFor(fixture.jobSeekerUserId)({});
+
+			expect(hasRoom(seekerRooms, fixture.chatRoomId)).toBe(true);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("rejects deleteChatRoom from an outsider", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const deleteChatRoom = createProcedureClient(chatsRouter.deleteChatRoom, {
+				context: createContextForUser(fixture.outsiderUserId),
+				path: ["bambi", "chats", "deleteChatRoom"],
+			});
+
+			await expectOrpcCode(
+				deleteChatRoom({ chatRoomId: fixture.chatRoomId }),
+				"NOT_FOUND"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+describe("bambi chats router employer verified phone", () => {
+	it("returns the employer verified phone in getById, and null when unverified", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await setProfilePhone(fixture.employerUserId, "010-1234-5678", true);
+
+			const verified = await getByIdFor(fixture.jobSeekerUserId)({
+				id: fixture.chatRoomId,
+			});
+			expect(verified.employerVerifiedPhone).toBe("010-1234-5678");
+
+			await setProfilePhone(fixture.employerUserId, "010-1234-5678", false);
+			const unverified = await getByIdFor(fixture.jobSeekerUserId)({
+				id: fixture.chatRoomId,
+			});
+			expect(unverified.employerVerifiedPhone).toBeNull();
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("injects revealedPhone for the employer after reveal, but never for the seeker", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await setProfilePhone(fixture.jobSeekerUserId, "010-9999-0000", true);
+
+			const requestMessage = await requestReveal(fixture.employerUserId)({
+				chatRoomId: fixture.chatRoomId,
+			});
+			await respondReveal(fixture.jobSeekerUserId)({
+				decision: "reveal",
+				messageId: requestMessage.id,
+			});
+
+			const employerView = await getByIdFor(fixture.employerUserId)({
+				id: fixture.chatRoomId,
+			});
+			const seekerView = await getByIdFor(fixture.jobSeekerUserId)({
+				id: fixture.chatRoomId,
+			});
+			const employerMessage = employerView.messages.find(
+				(message) => message.id === requestMessage.id
+			);
+			const seekerMessage = seekerView.messages.find(
+				(message) => message.id === requestMessage.id
+			);
+
+			expect(employerMessage?.revealedPhone).toBe("010-9999-0000");
+			expect(seekerMessage?.revealedPhone).toBeNull();
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});

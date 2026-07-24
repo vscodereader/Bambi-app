@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	adProduct,
+	bambiProfile,
 	bambiSiteSettings,
 	employerOrganizationProfile,
 	employerTeamProfile,
@@ -1097,8 +1098,21 @@ export const jobsRouter = {
 				organizationId: post.organizationId,
 			});
 
+			// 공고 작성자(구인자)의 인증번호를 상세에 노출한다(인증된 경우에만).
+			const [creatorProfile] = await db
+				.select({
+					isPhoneVerified: bambiProfile.isPhoneVerified,
+					phoneNumber: bambiProfile.phoneNumber,
+				})
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, post.createdByUserId))
+				.limit(1);
+
 			return {
 				...post,
+				employerVerifiedPhone: creatorProfile?.isPhoneVerified
+					? (creatorProfile.phoneNumber ?? null)
+					: null,
 				media: await getJobPostMediaSet(post.id),
 			};
 		}),

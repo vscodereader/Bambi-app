@@ -1,6 +1,7 @@
 import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
+	bambiProfile,
 	chatAttachment,
 	chatMessage,
 	chatRoom,
@@ -12,7 +13,7 @@ import {
 	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, gte, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -107,6 +108,62 @@ const revealContactInput = z.object({
 const getContactRevealInput = z.object({
 	chatRoomId: z.string().uuid(),
 });
+
+const requestContactRevealInput = z.object({
+	chatRoomId: z.string().uuid(),
+});
+
+const respondContactRevealInput = z.object({
+	messageId: z.string().uuid(),
+	decision: z.enum(["reveal", "decline"]),
+});
+
+const deleteChatRoomInput = z.object({
+	chatRoomId: z.string().uuid(),
+});
+
+type ContactRequestStatus = "declined" | "pending" | "revealed";
+
+interface ContactRequestMetadata {
+	requesterUserId: string;
+	status: ContactRequestStatus;
+	targetUserId: string;
+}
+
+const CONTACT_REQUEST_STATUSES: readonly string[] = [
+	"declined",
+	"pending",
+	"revealed",
+];
+
+// jsonb 컬럼은 drizzle에서 unknown이라 좁혀서 읽는다. 형태가 어긋나면 null.
+const readContactRequestMetadata = (
+	value: unknown
+): ContactRequestMetadata | null => {
+	if (typeof value !== "object" || value === null) {
+		return null;
+	}
+
+	const { requesterUserId, status, targetUserId } = value as Record<
+		string,
+		unknown
+	>;
+
+	if (
+		typeof requesterUserId === "string" &&
+		typeof targetUserId === "string" &&
+		typeof status === "string" &&
+		CONTACT_REQUEST_STATUSES.includes(status)
+	) {
+		return {
+			requesterUserId,
+			status: status as ContactRequestStatus,
+			targetUserId,
+		};
+	}
+
+	return null;
+};
 
 type RequestedInterviewStatus = z.infer<
 	typeof setInterviewStatusInput
@@ -452,8 +509,14 @@ export const chatsRouter = {
 			.from(chatRoom)
 			.where(
 				or(
-					eq(chatRoom.employerUserId, profile.userId),
-					eq(chatRoom.jobSeekerUserId, profile.userId)
+					and(
+						eq(chatRoom.employerUserId, profile.userId),
+						isNull(chatRoom.employerDeletedAt)
+					),
+					and(
+						eq(chatRoom.jobSeekerUserId, profile.userId),
+						isNull(chatRoom.seekerDeletedAt)
+					)
 				)
 			)
 			.orderBy(desc(chatRoom.updatedAt));
@@ -660,14 +723,50 @@ export const chatsRouter = {
 				profile.userId
 			);
 
+			// 구인자 인증번호는 양쪽에 노출, 구직자 공개번호는 revealed 요청을 보는
+			// 구인자에게만 응답 조립 시점에 실어 준다(DB metadata엔 저장하지 않음).
+			const participantPhones = await db
+				.select({
+					userId: bambiProfile.userId,
+					isPhoneVerified: bambiProfile.isPhoneVerified,
+					phoneNumber: bambiProfile.phoneNumber,
+				})
+				.from(bambiProfile)
+				.where(
+					inArray(bambiProfile.userId, [
+						room.employerUserId,
+						room.jobSeekerUserId,
+					])
+				);
+			const verifiedPhoneFor = (userId: string): string | null => {
+				const entry = participantPhones.find(
+					(candidate) => candidate.userId === userId
+				);
+
+				return entry?.isPhoneVerified ? (entry.phoneNumber ?? null) : null;
+			};
+			const viewerIsEmployer = profile.userId === room.employerUserId;
+			const seekerVerifiedPhone = verifiedPhoneFor(room.jobSeekerUserId);
+
 			return {
 				counterpartName: counterpartNames.get(room.id) ?? null,
 				currentUserId: profile.userId,
+				employerVerifiedPhone: verifiedPhoneFor(room.employerUserId),
 				jobPost: post ?? null,
-				messages: messages.map((message) => ({
-					...message,
-					attachments: attachmentsByMessageId.get(message.id) ?? [],
-				})),
+				messages: messages.map((message) => {
+					const revealedPhone =
+						viewerIsEmployer &&
+						message.kind === "contact_request" &&
+						readContactRequestMetadata(message.metadata)?.status === "revealed"
+							? seekerVerifiedPhone
+							: null;
+
+					return {
+						...message,
+						attachments: attachmentsByMessageId.get(message.id) ?? [],
+						revealedPhone,
+					};
+				}),
 				room,
 				schedules,
 			};
@@ -730,9 +829,14 @@ export const chatsRouter = {
 				});
 			}
 
+			// 새 메시지는 소프트삭제한 방을 양쪽 모두 다시 노출한다(메시지 유실 방지).
 			await db
 				.update(chatRoom)
-				.set({ updatedAt: new Date() })
+				.set({
+					employerDeletedAt: null,
+					seekerDeletedAt: null,
+					updatedAt: new Date(),
+				})
 				.where(eq(chatRoom.id, room.id));
 
 			await notifyChatMessageCreated({
@@ -799,7 +903,11 @@ export const chatsRouter = {
 
 				await tx
 					.update(chatRoom)
-					.set({ updatedAt: new Date() })
+					.set({
+						employerDeletedAt: null,
+						seekerDeletedAt: null,
+						updatedAt: new Date(),
+					})
 					.where(eq(chatRoom.id, room.id));
 
 				return {
@@ -1130,5 +1238,172 @@ export const chatsRouter = {
 			});
 
 			return consent;
+		}),
+
+	// 구인자가 구직자 연락처 공개를 요청한다. 인라인 contact_request 메시지 1건을
+	// 진실원으로 두고, 응답은 같은 메시지의 metadata.status 전이로 표현한다.
+	requestContactReveal: protectedProcedure
+		.input(requestContactRevealInput)
+		.handler(async ({ context, input }) => {
+			const { profile, room } = await requireChatParticipant(
+				input.chatRoomId,
+				context.session
+			);
+
+			if (profile.userId !== room.employerUserId) {
+				throw new ORPCError("FORBIDDEN");
+			}
+
+			if (!profile.isPhoneVerified) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "본인인증 후 이용할 수 있습니다.",
+				});
+			}
+
+			const [pending] = await db
+				.select({ id: chatMessage.id })
+				.from(chatMessage)
+				.where(
+					and(
+						eq(chatMessage.chatRoomId, room.id),
+						eq(chatMessage.kind, "contact_request"),
+						sql`${chatMessage.metadata}->>'status' = 'pending'`
+					)
+				)
+				.limit(1);
+
+			if (pending) {
+				throw new ORPCError("CONFLICT", {
+					message: "이미 연락처 공개 요청이 진행 중입니다.",
+				});
+			}
+
+			const [message] = await db
+				.insert(chatMessage)
+				.values({
+					body: "연락처 공개를 요청했습니다.",
+					chatRoomId: room.id,
+					kind: "contact_request",
+					metadata: {
+						requesterUserId: room.employerUserId,
+						status: "pending",
+						targetUserId: room.jobSeekerUserId,
+					},
+					senderUserId: profile.userId,
+				})
+				.returning();
+
+			if (!message) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Contact request could not be created.",
+				});
+			}
+
+			await db
+				.update(chatRoom)
+				.set({ updatedAt: new Date() })
+				.where(eq(chatRoom.id, room.id));
+
+			await notifyChatMessageCreated({
+				createdAt: message.createdAt,
+				messageId: message.id,
+				profileUserId: profile.userId,
+				room,
+			});
+
+			return message;
+		}),
+
+	// 대상 구직자만 pending 요청에 응답한다. reveal은 status를 revealed로, decline은
+	// declined로 낙관적 전이(where status='pending')한다.
+	respondContactReveal: protectedProcedure
+		.input(respondContactRevealInput)
+		.handler(async ({ context, input }) => {
+			const [message] = await db
+				.select()
+				.from(chatMessage)
+				.where(eq(chatMessage.id, input.messageId))
+				.limit(1);
+
+			if (!message) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const metadata = readContactRequestMetadata(message.metadata);
+
+			if (
+				message.kind !== "contact_request" ||
+				!metadata ||
+				metadata.status !== "pending"
+			) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "처리할 수 있는 연락처 공개 요청이 아닙니다.",
+				});
+			}
+
+			const { profile, room } = await requireChatParticipant(
+				message.chatRoomId,
+				context.session
+			);
+
+			if (profile.userId !== metadata.targetUserId) {
+				throw new ORPCError("FORBIDDEN");
+			}
+
+			if (input.decision === "reveal" && !profile.isPhoneVerified) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "본인인증 후 연락처를 공개할 수 있습니다.",
+				});
+			}
+
+			const nextStatus: ContactRequestStatus =
+				input.decision === "reveal" ? "revealed" : "declined";
+			const [updated] = await db
+				.update(chatMessage)
+				.set({ metadata: { ...metadata, status: nextStatus } })
+				.where(
+					and(
+						eq(chatMessage.id, message.id),
+						sql`${chatMessage.metadata}->>'status' = 'pending'`
+					)
+				)
+				.returning();
+
+			if (!updated) {
+				throw new ORPCError("CONFLICT", {
+					message: "연락처 공개 요청 상태가 이미 변경되었습니다.",
+				});
+			}
+
+			await notifyChatMessageCreated({
+				createdAt: updated.createdAt,
+				messageId: updated.id,
+				profileUserId: profile.userId,
+				room,
+			});
+
+			return updated;
+		}),
+
+	// 회원별 소프트삭제(목록 숨김). 상대는 그대로 보며, 새 메시지가 오면 재노출된다.
+	deleteChatRoom: protectedProcedure
+		.input(deleteChatRoomInput)
+		.handler(async ({ context, input }) => {
+			const { profile, room } = await requireChatParticipant(
+				input.chatRoomId,
+				context.session
+			);
+
+			const deletedAt = new Date();
+			await db
+				.update(chatRoom)
+				.set(
+					profile.userId === room.employerUserId
+						? { employerDeletedAt: deletedAt }
+						: { seekerDeletedAt: deletedAt }
+				)
+				.where(eq(chatRoom.id, room.id));
+
+			return { ok: true as const };
 		}),
 };
