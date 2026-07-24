@@ -379,12 +379,13 @@ const getUserTargetContext = async (targetId: string) => {
 	const [row] = await db
 		.select({
 			userId: bambiProfile.userId,
-			displayName: bambiProfile.displayName,
+			displayName: user.name,
 			role: bambiProfile.role,
 			status: bambiProfile.status,
 			isPhoneVerified: bambiProfile.isPhoneVerified,
 		})
 		.from(bambiProfile)
+		.innerJoin(user, eq(user.id, bambiProfile.userId))
 		.where(eq(bambiProfile.userId, targetId))
 		.limit(1);
 
@@ -462,12 +463,12 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 	};
 };
 
-// community_comment 신고 컨텍스트 — 작성자 표시명은 listComments와 동일하게 bambi_profile
-// 표시명을 쓰고, 제목·게시판은 부모 글 조인으로 채운다(부모 글이 삭제 상태여도 조인 유지).
+// community_comment 신고 컨텍스트 — 작성자 표시명은 listComments와 동일하게 user.name
+// (표시명 정본)을 쓰고, 제목·게시판은 부모 글 조인으로 채운다(부모 글이 삭제 상태여도 조인 유지).
 const getCommunityCommentTargetContext = async (targetId: string) => {
 	const [comment] = await db
 		.select({
-			authorName: bambiProfile.displayName,
+			authorName: user.name,
 			body: communityComment.body,
 			createdAt: communityComment.createdAt,
 			id: communityComment.id,
@@ -478,10 +479,7 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 		})
 		.from(communityComment)
 		.innerJoin(communityPost, eq(communityPost.id, communityComment.postId))
-		.leftJoin(
-			bambiProfile,
-			eq(bambiProfile.userId, communityComment.authorUserId)
-		)
+		.leftJoin(user, eq(user.id, communityComment.authorUserId))
 		.where(eq(communityComment.id, targetId))
 		.limit(1);
 
@@ -558,7 +556,7 @@ export interface ReportReporter {
 
 // listReports 전용: 신고자(reporterUserId)의 실명·역할을 배치 조회해 각 row에 reporter로
 // 붙인다. 목록 전체를 N+1로 돌리지 않도록 distinct reporterUserId를 inArray로 한 번에
-// 조회하고 맵으로 합류한다. displayName은 bambiProfile, 폴백용 email은 auth user 테이블에서
+// 조회하고 맵으로 합류한다. displayName·폴백용 email 모두 auth user 테이블에서
 // 가져온다(listUsers와 동일한 조인·폴백 패턴). 대상 row가 없는 신고자는 reporter=null.
 const withReporters = async <T extends ReportRow>(
 	reportRows: T[]
@@ -572,7 +570,7 @@ const withReporters = async <T extends ReportRow>(
 	const reporterRows = await db
 		.select({
 			userId: bambiProfile.userId,
-			displayName: bambiProfile.displayName,
+			displayName: user.name,
 			email: user.email,
 			role: bambiProfile.role,
 		})
@@ -1038,7 +1036,7 @@ export const moderationRouter = {
 				.select({
 					userId: user.id,
 					name: user.name,
-					displayName: bambiProfile.displayName,
+					displayName: user.name,
 					email: user.email,
 					role: sql<string>`coalesce(${bambiProfile.role}, 'job_seeker')`,
 					status: sql<
@@ -1077,7 +1075,7 @@ export const moderationRouter = {
 					riskFlags: review.riskFlags,
 					isAnonymous: review.isAnonymous,
 					reviewerUserId: review.reviewerUserId,
-					reviewerDisplayName: bambiProfile.displayName,
+					reviewerDisplayName: user.name,
 					organizationDisplayName: employerOrganizationProfile.displayName,
 					jobPostId: review.jobPostId,
 					jobPostTitle: jobPost.title,
@@ -1089,7 +1087,7 @@ export const moderationRouter = {
 					employerOrganizationProfile,
 					eq(review.organizationId, employerOrganizationProfile.organizationId)
 				)
-				.leftJoin(bambiProfile, eq(review.reviewerUserId, bambiProfile.userId))
+				.leftJoin(user, eq(review.reviewerUserId, user.id))
 				.orderBy(desc(review.createdAt))
 				.limit(input.limit);
 
@@ -1971,14 +1969,11 @@ export const moderationRouter = {
 					status: supportInquiry.status,
 					createdAt: supportInquiry.createdAt,
 					authorUserId: supportInquiry.authorUserId,
-					// 고객센터는 익명 표시명이 없으므로 프로필 표시명을 조인한다.
-					authorName: bambiProfile.displayName,
+					// 고객센터는 익명 표시명이 없으므로 user.name(표시명 정본)을 조인한다.
+					authorName: user.name,
 				})
 				.from(supportInquiry)
-				.leftJoin(
-					bambiProfile,
-					eq(supportInquiry.authorUserId, bambiProfile.userId)
-				)
+				.leftJoin(user, eq(supportInquiry.authorUserId, user.id))
 				.where(where)
 				.orderBy(desc(supportInquiry.createdAt))
 				.limit(MODERATABLE_PAGE_SIZE)
@@ -2072,7 +2067,7 @@ export const moderationRouter = {
 
 			const [row] = await db
 				.select({
-					authorName: bambiProfile.displayName,
+					authorName: user.name,
 					body: supportInquiry.body,
 					category: supportInquiry.category,
 					createdAt: supportInquiry.createdAt,
@@ -2080,10 +2075,7 @@ export const moderationRouter = {
 					title: supportInquiry.title,
 				})
 				.from(supportInquiry)
-				.leftJoin(
-					bambiProfile,
-					eq(supportInquiry.authorUserId, bambiProfile.userId)
-				)
+				.leftJoin(user, eq(supportInquiry.authorUserId, user.id))
 				.where(eq(supportInquiry.id, input.id))
 				.limit(1);
 
@@ -2129,10 +2121,11 @@ export const moderationRouter = {
 			await tx.delete(session).where(inArray(session.userId, ids));
 			// 비밀번호 등 자격증명 파기.
 			await tx.delete(account).where(inArray(account.userId, ids));
+			// 표시명(닉네임)은 user.name을 "탈퇴한 회원"으로 치환(아래 user 갱신)하므로
+			// 프로필에서는 연락처·본인인증 식별값만 파기한다.
 			await tx
 				.update(bambiProfile)
 				.set({
-					displayName: "탈퇴한 회원",
 					phoneNumber: null,
 					gender: null,
 					birthDate: null,

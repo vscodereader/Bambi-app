@@ -57,9 +57,7 @@ const seedUserWithRole = async (role: "admin" | "job_seeker") => {
 		name: "정책테스트",
 		email: `${userId}@bambi.test`,
 	});
-	await db
-		.insert(bambiProfile)
-		.values({ userId, role, displayName: "정책테스트" });
+	await db.insert(bambiProfile).values({ userId, role });
 	return userId;
 };
 

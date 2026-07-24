@@ -1,6 +1,6 @@
 import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
-import { bambiProfile, userBlock } from "@bambi-app/db/schema/bambi";
+import { userBlock } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq } from "drizzle-orm";
 import z from "zod";
@@ -59,26 +59,24 @@ export const blocksRouter = {
 			return { ok: true };
 		}),
 
-	// 내가 차단한 사용자 목록. 상대 표시 이름은 bambiProfile.displayName → user.name 순.
+	// 내가 차단한 사용자 목록. 상대 표시 이름은 user.name(표시명 정본).
 	listMine: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
 		const rows = await db
 			.select({
 				blockedUserId: userBlock.blockedUserId,
-				displayName: bambiProfile.displayName,
 				userName: user.name,
 				createdAt: userBlock.createdAt,
 			})
 			.from(userBlock)
-			.leftJoin(bambiProfile, eq(bambiProfile.userId, userBlock.blockedUserId))
 			.leftJoin(user, eq(user.id, userBlock.blockedUserId))
 			.where(eq(userBlock.blockerUserId, profile.userId))
 			.orderBy(desc(userBlock.createdAt));
 
 		return rows.map((row) => ({
 			blockedUserId: row.blockedUserId,
-			name: row.displayName ?? row.userName ?? "알 수 없는 사용자",
+			name: row.userName ?? "알 수 없는 사용자",
 			createdAt: row.createdAt,
 		}));
 	}),

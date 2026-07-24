@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CommunityPostEditor } from "@/components/bambi/community-editor";
+import { authClient } from "@/lib/auth-client";
 import {
 	type CommunityBoardKey,
 	type CommunityBoardMeta,
@@ -126,11 +127,13 @@ export function CommunityPostForm({
 	// 작성 모드 작성인 기본값·권한 판정에만 세션 프로필이 필요하므로 수정 모드에서는
 	// getMine을 비활성화한다(작성인 기본값·공지 가드는 create 전용, 광고 게이트는
 	// 수정 모드에서 글 작성자 role 스냅샷을 쓴다).
+	const session = authClient.useSession();
 	const mineQuery = useQuery(
 		orpc.bambi.onboarding.getMine.queryOptions({ enabled: !isEdit })
 	);
 	const role = mineQuery.data?.bambiProfile?.role;
-	const displayName = mineQuery.data?.bambiProfile?.displayName ?? "";
+	// 작성인 기본값은 표시명(user.name, 세션)에서 가져온다 — bambi_profile.display_name은 제거됐다.
+	const displayName = session.data?.user?.name ?? "";
 	// 광고 Switch 노출: 작성 모드는 편집자 role, 수정 모드는 글 작성자 role 기준.
 	// employer가 비번으로 타인(job_seeker) 글을 수정할 때 서버 검증(작성자 role
 	// 기준)과 어긋나 BAD_REQUEST 나던 문제를 막는다.

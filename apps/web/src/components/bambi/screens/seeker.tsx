@@ -594,8 +594,8 @@ export function SeekerMe() {
 	});
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	const sessionUser = session.data?.user;
-	const displayName =
-		profile?.displayName?.trim() || sessionUser?.name?.trim() || "구직자 회원";
+	// 표시명(닉네임)의 정본은 user.name(세션). bambi_profile.display_name은 제거됐다.
+	const displayName = sessionUser?.name?.trim() || "구직자 회원";
 	const roleLabel = profile
 		? (seekerRoleLabels[profile.role] ?? profile.role)
 		: "구직자";

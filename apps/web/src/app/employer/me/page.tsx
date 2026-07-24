@@ -236,13 +236,14 @@ export default function EmployerMePage() {
 					<CardContent className="flex flex-wrap items-center gap-4">
 						<Avatar size="lg">
 							<AvatarFallback>
-								{getInitials(profile.displayName)}
+								{getInitials(session.data?.user?.name ?? null)}
 							</AvatarFallback>
 						</Avatar>
 						<div className="flex min-w-0 flex-col gap-1">
 							<div className="flex flex-wrap items-center gap-2">
 								<span className="break-words font-semibold text-lg">
-									{profile.displayName ?? "구인자 회원"}
+									{/* 표시명(닉네임)의 정본은 user.name(세션) — bambi_profile.display_name 제거됨 */}
+									{session.data?.user?.name ?? "구인자 회원"}
 								</span>
 								<Badge className="rounded-full" variant="secondary">
 									{getRoleLabel(profile.role)}
