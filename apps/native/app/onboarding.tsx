@@ -70,7 +70,7 @@ export default function OnboardingScreen() {
 			return;
 		}
 
-		setDisplayName(profile?.displayName ?? session.data.user.name ?? "");
+		setDisplayName(session.data.user.name ?? "");
 		setPhoneNumber(profile?.phoneNumber ?? "");
 	}, [profile, session.data?.user]);
 

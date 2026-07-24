@@ -20,19 +20,19 @@ import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
-import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { StatusBadge } from "@/components/bambi/status-badge";
 import {
-	EXPOSURE_TYPE_LABELS,
-	expiryLabel,
-	getJobDisplayStatus,
-	PAYMENT_STATUS_LABELS,
-	remainingDays,
-} from "@/lib/bambi/exposure";
+	expiryColumn,
+	exposureTypeColumn,
+	jobOrganizationColumn,
+	jobStatusColumn,
+	jobTitleColumn,
+	paymentStatusColumn,
+} from "@/components/bambi/job-table-columns";
+import { RowActions } from "@/components/bambi/row-actions";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
@@ -65,18 +65,6 @@ const formatPay = (job: JobRow): string =>
 		? NEGOTIABLE_PAY_TEXT
 		: `${job.payUnit} ${job.payAmount.toLocaleString("ko-KR")}원`;
 
-const getExpiryTone = (label: string): "danger" | "default" | "good" => {
-	if (label === "진행중") {
-		return "good";
-	}
-
-	if (label === "만료") {
-		return "danger";
-	}
-
-	return "default";
-};
-
 // 강제 내림/재공개 확인 대상(어떤 공고를 어떤 상태로 바꾸는지).
 interface PendingAction {
 	jobPostId: string;
@@ -89,26 +77,8 @@ function getJobColumns(
 	onRequestStatus: (job: JobRow) => void
 ): DataColumn<JobRow>[] {
 	return [
-		{
-			id: "title",
-			header: "공고 제목",
-			sortValue: (job) => job.title,
-			cell: (job) => (
-				<span className="break-keep font-medium text-foreground">
-					{job.title}
-				</span>
-			),
-		},
-		{
-			id: "organizationDisplayName",
-			header: "업소",
-			sortValue: (job) => job.organizationDisplayName,
-			cell: (job) => (
-				<span className="break-keep text-muted-foreground">
-					{job.organizationDisplayName}
-				</span>
-			),
-		},
+		jobTitleColumn<JobRow>(),
+		jobOrganizationColumn<JobRow>(),
 		{
 			id: "industryCategory",
 			header: "업종",
@@ -139,88 +109,45 @@ function getJobColumns(
 				</span>
 			),
 		},
-		{
-			id: "status",
-			header: "공고 상태",
-			sortValue: (job) =>
-				getJobDisplayStatus({
-					paymentStatus: job.paymentStatus,
-					status: job.status,
-				}).label,
-			cell: (job) => {
-				const display = getJobDisplayStatus({
-					paymentStatus: job.paymentStatus,
-					status: job.status,
-				});
-
-				return <StatusBadge tone={display.tone}>{display.label}</StatusBadge>;
-			},
-		},
-		{
-			id: "exposureType",
-			header: "노출 상품",
-			sortValue: (job) => EXPOSURE_TYPE_LABELS[job.exposureType],
-			cell: (job) => (
-				<StatusBadge>{EXPOSURE_TYPE_LABELS[job.exposureType]}</StatusBadge>
-			),
-		},
-		{
-			id: "paymentStatus",
-			header: "결제 상태",
-			sortValue: (job) => PAYMENT_STATUS_LABELS[job.paymentStatus],
-			cell: (job) => (
-				<StatusBadge tone={job.paymentStatus === "paid" ? "good" : "warning"}>
-					{PAYMENT_STATUS_LABELS[job.paymentStatus]}
-				</StatusBadge>
-			),
-		},
-		{
-			id: "expiry",
-			header: "노출 마감",
-			sortValue: (job) =>
-				remainingDays(job.exposureEndsAt) ?? Number.POSITIVE_INFINITY,
-			cell: (job) => {
-				const label = expiryLabel(job.exposureEndsAt);
-				const days = remainingDays(job.exposureEndsAt);
-
-				return (
-					<div className="flex items-center gap-2">
-						<StatusBadge tone={getExpiryTone(label)}>{label}</StatusBadge>
-						{days !== null && days > 0 ? (
-							<span className="whitespace-nowrap text-muted-foreground text-xs">
-								{`${days}일`}
-							</span>
-						) : null}
-					</div>
-				);
-			},
-		},
+		jobStatusColumn<JobRow>(),
+		exposureTypeColumn<JobRow>(),
+		paymentStatusColumn<JobRow>(),
+		expiryColumn<JobRow>({ withRemainingDays: true }),
 		{
 			id: "actions",
 			header: "관리",
 			headerClassName: "text-right",
 			cellClassName: "text-right",
 			cell: (job) => (
-				<div className="flex justify-end gap-2">
-					{job.status === "published" || job.status === "hidden" ? (
-						<Button
-							onClick={() => onRequestStatus(job)}
-							size="sm"
-							type="button"
-							variant={job.status === "published" ? "destructive" : "outline"}
-						>
-							{job.status === "published" ? "숨김" : "재공개"}
-						</Button>
-					) : null}
-					<Button
-						nativeButton={false}
-						render={<Link href={`/moderator/jobs/${job.id}/edit` as Route} />}
-						size="sm"
-						variant="outline"
-					>
-						수정
-					</Button>
-				</div>
+				<RowActions
+					actions={[
+						...(job.status === "published"
+							? [
+									{
+										key: "hide",
+										label: "숨김",
+										onSelect: () => onRequestStatus(job),
+										variant: "destructive" as const,
+									},
+								]
+							: []),
+						...(job.status === "hidden"
+							? [
+									{
+										key: "show",
+										label: "재공개",
+										onSelect: () => onRequestStatus(job),
+									},
+								]
+							: []),
+						{
+							key: "edit",
+							label: "수정",
+							href: `/moderator/jobs/${job.id}/edit` as Route,
+						},
+					]}
+					ariaLabel={`${job.title} 관리 메뉴`}
+				/>
 			),
 		},
 	];
