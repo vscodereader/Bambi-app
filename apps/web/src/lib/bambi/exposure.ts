@@ -109,3 +109,16 @@ export const expiryLabel = (
 
 	return days > 0 ? "진행중" : "만료";
 };
+
+// 노출 마감 라벨(expiryLabel 결과)을 StatusBadge tone으로 매핑. 공고 관리·결제 관리 공용.
+export const getExpiryTone = (label: string): "danger" | "default" | "good" => {
+	if (label === "진행중") {
+		return "good";
+	}
+
+	if (label === "만료") {
+		return "danger";
+	}
+
+	return "default";
+};
