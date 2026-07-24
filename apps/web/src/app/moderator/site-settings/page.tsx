@@ -23,6 +23,7 @@ interface FooterForm {
 	email: string;
 	footerIntro: string;
 	operator: string;
+	tel: string;
 }
 
 const EMPTY_FORM: FooterForm = {
@@ -32,6 +33,7 @@ const EMPTY_FORM: FooterForm = {
 	email: "",
 	footerIntro: "",
 	operator: "",
+	tel: "",
 };
 
 // 개인정보 처리방침에 노출되는 위탁사명·관리부서 연락처. 키는 서버 입력 스키마와 동일하게 둔다.
@@ -86,6 +88,7 @@ export default function ModeratorSiteSettingsPage() {
 			email: data.email ?? "",
 			footerIntro: data.footerIntro ?? "",
 			operator: data.operator ?? "",
+			tel: data.tel ?? "",
 		});
 	}, [settingsQuery.data]);
 
@@ -345,6 +348,16 @@ export default function ModeratorSiteSettingsPage() {
 									placeholder={BAMBI_COMPANY.email}
 									type="email"
 									value={form.email}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="tel">고객센터 전화</Label>
+								<Input
+									id="tel"
+									onChange={update("tel")}
+									placeholder={BAMBI_COMPANY.tel}
+									type="tel"
+									value={form.tel}
 								/>
 							</div>
 							<div className="flex flex-col gap-2 md:col-span-2">

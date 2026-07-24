@@ -592,6 +592,8 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	address: text("address"),
 	// 고객문의 이메일
 	email: text("email"),
+	// 고객센터 전화(TEL). 푸터에 노출. null이면 코드 폴백(BAMBI_COMPANY.tel).
+	tel: text("tel"),
 	// 무통장입금 안내 계좌 목록. 운영자가 사이트 설정에서 관리하고, 공고 결제 안내에 노출된다.
 	// 미설정이면 빈 배열 → 안내 화면은 고객센터 문의 문구로 폴백한다.
 	bankAccounts: jsonb("bank_accounts")
