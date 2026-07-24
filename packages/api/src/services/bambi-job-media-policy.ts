@@ -14,7 +14,9 @@ export const jobAdBannerUsages: JobAdBannerUsage[] = [
 	"ad_vertical",
 ];
 
-export const JOB_POST_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+// 공고·커뮤니티·채팅 이미지 공통 상한(세 파일 동기화): bambi-job-media-policy.ts,
+// apps/web/src/lib/bambi-job-form.ts, bambi-media-policy.ts.
+export const JOB_POST_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const JOB_POST_COVER_IMAGE_LIMIT = 1;
 export const JOB_POST_DETAIL_IMAGE_LIMIT = 5;
 export const JOB_AD_BANNER_LIMIT = 1;
@@ -27,7 +29,7 @@ export const ALLOWED_JOB_POST_IMAGE_MIME_TYPES = [
 ] as const;
 
 // 광고 배너에 한해 움직이는 GIF를 허용한다. 썸네일·상세는 목록/본문에서 정적으로 쓰이므로
-// 애니메이션을 받지 않는다. 용량 상한(8MB)은 배너도 그대로 적용된다.
+// 애니메이션을 받지 않는다. 용량 상한(10MB)은 배너도 그대로 적용된다.
 export const ALLOWED_JOB_AD_BANNER_MIME_TYPES = [
 	...ALLOWED_JOB_POST_IMAGE_MIME_TYPES,
 	"image/gif",

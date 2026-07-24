@@ -22,7 +22,9 @@ export type ChatMediaPolicyResult =
 			ok: false;
 	  };
 
-const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+// 공고·커뮤니티·채팅 이미지 공통 상한(세 파일 동기화): bambi-job-media-policy.ts,
+// apps/web/src/lib/bambi-job-form.ts, bambi-media-policy.ts.
+const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 const PDF_MAX_BYTES = 10 * 1024 * 1024;
 
 const MEDIA_POLICY_BY_MIME_TYPE = {

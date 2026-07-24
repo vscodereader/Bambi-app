@@ -34,6 +34,10 @@ import {
 import { type ChangeEvent, useState } from "react";
 
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
+import {
+	detectImageSignature,
+	isSignatureMismatch,
+} from "@/lib/bambi/image-signature";
 import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
 
@@ -206,7 +210,7 @@ function LinkPopover({ editor }: { editor: Editor }) {
 // 클라이언트 필터는 왕복 한 번과 헛된 대기를 줄이는 편의일 뿐 정본은 서버이며, 어긋나도
 // 서버가 BAD_REQUEST로 거절해 에러 문구로 드러난다.
 const UPLOAD_ACCEPT = "image/jpeg,image/png,image/webp";
-const UPLOAD_MAX_MB = 8;
+const UPLOAD_MAX_MB = 10;
 const ALT_TEXT_MAX_LENGTH = 120;
 
 // 이미지 팝오버 — 파일 업로드(GCS)와 외부 URL 삽입을 함께 제공한다.
@@ -251,6 +255,19 @@ function ImagePopover({ editor }: { editor: Editor }) {
 		}
 
 		setError(null);
+
+		// 파일 앞바이트(매직넘버)로 실제 형식을 확인해 확장자·File.type 위조를 업로드 전에 막는다.
+		if (file.type.startsWith("image/")) {
+			const detected = await detectImageSignature(file);
+
+			if (isSignatureMismatch(file.type, detected)) {
+				setError(
+					"이미지 형식이 올바르지 않습니다. 파일이 실제 이미지인지 확인해 주세요."
+				);
+				return;
+			}
+		}
+
 		setIsUploading(true);
 		try {
 			const intent = await createMediaUpload.mutateAsync({
