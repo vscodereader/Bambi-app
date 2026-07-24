@@ -721,6 +721,9 @@ layout.test.ts에 추가: `expect(source).toContain('label: "채팅"')` 및 `exp
 
 ### Task C10: reveal 폐기 정리
 
+> **실제 이탈(스코프 축소)**: 구현 중 확인 결과 옛 `revealContact`/`getContactReveal` 프로시저·`contact_reveal_consent` 테이블·`contact-reveal.tsx` 컴포넌트가 **native 앱(`apps/native/.../reveal.tsx`가 `revealContact` 호출)·dev seed(`bambi-dev.ts`가 consent insert)·db 배럴(`db/index.ts` 재export)·web mock 프로토타입(`seeker.tsx`가 ContactReveal 렌더)**에 아직 결합돼 있다. 이들을 전면 제거하면 native·seed가 깨진다(native 마이그레이션은 이 작업 범위 밖). 따라서 C10은 **사용자가 명시 요청한 웹 `reveal/page.tsx` 삭제 + 래퍼 정리로 한정**하고, 서버 프로시저·테이블·정책·`contact-reveal.tsx`는 native/seed/mock 호환을 위해 **유지**한다(옛 프로시저는 native가 여전히 사용 중이라 죽은 코드가 아님). 전면 폐기는 native 연락처 흐름 마이그레이션 시 후속으로 진행.
+
+
 **Files:**
 - Delete: `apps/web/src/app/seeker/chats/[id]/reveal/page.tsx`
 - Delete: `apps/web/src/components/bambi/screens/contact-reveal.tsx`
