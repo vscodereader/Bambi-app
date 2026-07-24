@@ -40,7 +40,6 @@ const createFixture = async (): Promise<Fixture> => {
 		email: `mgr-${randomUUID()}@bambi.test`,
 	});
 	await db.insert(bambiProfile).values({
-		displayName: "매니저",
 		isPhoneVerified: true,
 		role: "employer",
 		status: "active",

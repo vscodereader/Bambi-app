@@ -1,4 +1,5 @@
 // taxonomy: apps/web/src/lib/bambi-options.ts REGION_DISTRICTS와 값 정합 유지
+import { randomBytes, scryptSync } from "node:crypto";
 import { auth } from "@bambi-app/auth";
 import { db } from "@bambi-app/db";
 import {
@@ -13,6 +14,8 @@ import {
 	bambiProfile,
 	chatMessage,
 	chatRoom,
+	type communityBoard,
+	communityPost,
 	contactRevealConsent,
 	employerOrganizationProfile,
 	employerTeamProfile,
@@ -35,7 +38,6 @@ const devUsers = [
 		name: "밤비 구직자",
 		email: "seeker@bambi.dev",
 		role: "job_seeker",
-		displayName: "익명 구직자 A",
 		phoneNumber: "010-1000-0001",
 	},
 	{
@@ -43,7 +45,6 @@ const devUsers = [
 		name: "클럽 루나 대표",
 		email: "owner@bambi.dev",
 		role: "employer",
-		displayName: "루나 대표",
 		phoneNumber: "010-2000-0001",
 	},
 	{
@@ -51,7 +52,6 @@ const devUsers = [
 		name: "클럽 루나 강남점 직원",
 		email: "staff@bambi.dev",
 		role: "employer",
-		displayName: "강남점 채용담당",
 		phoneNumber: "010-2000-0002",
 	},
 	{
@@ -59,7 +59,6 @@ const devUsers = [
 		name: "네온 라운지 대표",
 		email: "pending-owner@bambi.dev",
 		role: "employer",
-		displayName: "네온 대표",
 		phoneNumber: "010-3000-0001",
 	},
 	{
@@ -67,7 +66,6 @@ const devUsers = [
 		name: "밤비 관리자",
 		email: "admin@bambi.dev",
 		role: "admin",
-		displayName: "운영 관리자",
 		phoneNumber: "010-9000-0001",
 	},
 	{
@@ -75,7 +73,6 @@ const devUsers = [
 		name: "라운지 마르스 대표",
 		email: "mars-owner@bambi.dev",
 		role: "employer",
-		displayName: "마르스 대표",
 		phoneNumber: "010-4000-0001",
 	},
 	{
@@ -83,7 +80,6 @@ const devUsers = [
 		name: "벨벳 바 대표",
 		email: "velvet-owner@bambi.dev",
 		role: "employer",
-		displayName: "벨벳 대표",
 		phoneNumber: "010-4000-0002",
 	},
 	{
@@ -91,7 +87,6 @@ const devUsers = [
 		name: "호라이즌 클럽 대표",
 		email: "horizon-owner@bambi.dev",
 		role: "employer",
-		displayName: "호라이즌 대표",
 		phoneNumber: "010-4000-0003",
 	},
 	{
@@ -99,7 +94,6 @@ const devUsers = [
 		name: "소다 카페 대표",
 		email: "soda-owner@bambi.dev",
 		role: "employer",
-		displayName: "소다 대표",
 		phoneNumber: "010-4000-0004",
 	},
 	{
@@ -107,7 +101,6 @@ const devUsers = [
 		name: "프리즘 대표",
 		email: "prism-owner@bambi.dev",
 		role: "employer",
-		displayName: "프리즘 대표",
 		phoneNumber: "010-4000-0005",
 	},
 	{
@@ -115,7 +108,6 @@ const devUsers = [
 		name: "밤비 구직자 B",
 		email: "seeker-b@bambi.dev",
 		role: "job_seeker",
-		displayName: "익명 구직자 B",
 		phoneNumber: "010-1000-0002",
 	},
 	{
@@ -123,7 +115,6 @@ const devUsers = [
 		name: "밤비 구직자 C",
 		email: "seeker-c@bambi.dev",
 		role: "job_seeker",
-		displayName: "익명 구직자 C",
 		phoneNumber: "010-1000-0003",
 	},
 	{
@@ -131,7 +122,6 @@ const devUsers = [
 		name: "밤비 구직자 D",
 		email: "seeker-d@bambi.dev",
 		role: "job_seeker",
-		displayName: "익명 구직자 D",
 		phoneNumber: "010-1000-0004",
 	},
 	{
@@ -139,7 +129,6 @@ const devUsers = [
 		name: "밤비 구직자 E",
 		email: "seeker-e@bambi.dev",
 		role: "job_seeker",
-		displayName: "익명 구직자 E",
 		phoneNumber: "010-1000-0005",
 	},
 	{
@@ -147,7 +136,6 @@ const devUsers = [
 		name: "아쿠아 라운지 대표",
 		email: "aqua-owner@bambi.dev",
 		role: "employer",
-		displayName: "아쿠아 대표",
 		phoneNumber: "010-4000-0006",
 	},
 	{
@@ -155,7 +143,6 @@ const devUsers = [
 		name: "엠버 바 대표",
 		email: "ember-owner@bambi.dev",
 		role: "employer",
-		displayName: "엠버 대표",
 		phoneNumber: "010-4000-0007",
 	},
 	{
@@ -163,7 +150,6 @@ const devUsers = [
 		name: "노바 클럽 대표",
 		email: "nova-owner@bambi.dev",
 		role: "employer",
-		displayName: "노바 대표",
 		phoneNumber: "010-4000-0008",
 	},
 	{
@@ -171,7 +157,6 @@ const devUsers = [
 		name: "루미 노래방 대표",
 		email: "lumi-owner@bambi.dev",
 		role: "employer",
-		displayName: "루미 대표",
 		phoneNumber: "010-4000-0009",
 	},
 	{
@@ -179,7 +164,6 @@ const devUsers = [
 		name: "코멧 라운지 대표",
 		email: "comet-owner@bambi.dev",
 		role: "employer",
-		displayName: "코멧 대표",
 		phoneNumber: "010-4000-0010",
 	},
 	{
@@ -187,7 +171,6 @@ const devUsers = [
 		name: "밤비 구직자 F",
 		email: "seeker-f@bambi.dev",
 		role: "job_seeker",
-		displayName: "익명 구직자 F",
 		phoneNumber: "010-1000-0006",
 	},
 	{
@@ -195,7 +178,6 @@ const devUsers = [
 		name: "밤비 구직자 G",
 		email: "seeker-g@bambi.dev",
 		role: "job_seeker",
-		displayName: "익명 구직자 G",
 		phoneNumber: "010-1000-0007",
 	},
 	{
@@ -203,7 +185,6 @@ const devUsers = [
 		name: "밤비 구직자 H",
 		email: "seeker-h@bambi.dev",
 		role: "job_seeker",
-		displayName: "익명 구직자 H",
 		phoneNumber: "010-1000-0008",
 	},
 ] as const;
@@ -1226,6 +1207,182 @@ const richRooms: RichRoomDef[] = [
 	},
 ];
 
+// 작성 시점 계정 유형 스냅샷(community_post.author_role)에 쓸 role 조회 맵.
+const devUserRoleByKey = Object.fromEntries(
+	devUsers.map((devUser) => [devUser.key, devUser.role])
+) as Record<DevUserKey, DevUser["role"]>;
+
+const COMMUNITY_KEY_LENGTH = 64;
+const COMMUNITY_SALT_BYTES = 16;
+
+// 커뮤니티 글 비밀번호 저장 형식("<salt hex>:<scrypt hash hex>") — packages/api의
+// hashCommunityPassword와 동일 알고리즘을 seed 자체 완결성을 위해 인라인한다. 비밀글이
+// 아닌 글은 빈 문자열을 저장한다(API 관례: verify가 항상 실패해 잠금 게이트가 자연 차단).
+const hashCommunityPassword = (password: string): string => {
+	const salt = randomBytes(COMMUNITY_SALT_BYTES).toString("hex");
+	const hash = scryptSync(password, salt, COMMUNITY_KEY_LENGTH).toString("hex");
+	return `${salt}:${hash}`;
+};
+
+interface CommunityPostDef {
+	authorDisplayName: string;
+	authorKey: DevUserKey;
+	board: (typeof communityBoard.enumValues)[number];
+	body: string;
+	isLocked?: boolean;
+	isPromotion?: boolean;
+	n: number;
+	// 비밀글(isLocked=true)일 때만 사용하는 평문 비밀번호. 저장 시 scrypt로 해싱한다.
+	password?: string;
+	title: string;
+	viewCount?: number;
+}
+
+// 수다방(자유수다/일 이야기) 시드 글. 구직자(여성·남성 혼합)와 구인자가 모두 작성한다.
+// author_display_name은 글별 익명 표시명(계정 표시명 user.name과 별개), authorRole은
+// 작성 시점 계정 유형 스냅샷이다.
+const communityPosts: CommunityPostDef[] = [
+	{
+		n: 1,
+		authorKey: "seeker",
+		board: "free",
+		authorDisplayName: "달빛토끼",
+		title: "첫 라운지 알바 다녀온 후기 남겨요",
+		body: "긴장 잔뜩 하고 갔는데 매니저님이 하나하나 알려주셔서 생각보다 금방 적응했어요. 처음이라 실수도 했지만 다들 편하게 대해주셔서 다행이었습니다. 첫 출근 앞두신 분들 너무 걱정 마세요!",
+		viewCount: 132,
+	},
+	{
+		n: 2,
+		authorKey: "seekerB",
+		board: "work_talk",
+		authorDisplayName: "야간러버",
+		title: "면접 볼 때 이건 꼭 물어보세요",
+		body: "페이 정산 주기, 지각·결근 규정, 교통비 지원 여부는 면접에서 꼭 확인하세요. 나중에 말 바뀌는 곳도 있어서 채팅 기록 남겨두는 게 안전합니다. 다들 좋은 곳 만나시길!",
+		viewCount: 208,
+	},
+	{
+		n: 3,
+		authorKey: "seekerC",
+		board: "work_talk",
+		authorDisplayName: "민트초코",
+		title: "홀 알바 페이 정산 보통 언제 되나요?",
+		body: "이번에 처음 일당제로 일하게 됐는데 보통 당일 정산인지 주급인지 궁금해요. 업장마다 다른 것 같은데 다들 어떻게 받으세요?",
+		viewCount: 96,
+	},
+	{
+		n: 4,
+		authorKey: "seekerD",
+		board: "free",
+		authorDisplayName: "새벽감성",
+		title: "야간 근무 체력 관리 어떻게들 하세요?",
+		body: "낮밤이 바뀌니까 체력 관리가 제일 힘드네요. 저는 근무 끝나고 스트레칭하고 암막커튼 치고 자는데, 다들 각자 노하우 있으면 공유해주세요.",
+		viewCount: 145,
+	},
+	{
+		n: 5,
+		authorKey: "seekerE",
+		board: "work_talk",
+		authorDisplayName: "레몬소다",
+		title: "바텐더 준비 중인데 조언 부탁드려요",
+		body: "칵테일 기본 레시피는 어느 정도 외웠는데, 실전에서 뭐가 제일 중요한지 궁금합니다. 현직에 계신 분들 팁 있으면 알려주세요!",
+		viewCount: 74,
+	},
+	{
+		n: 6,
+		authorKey: "seekerF",
+		board: "work_talk",
+		authorDisplayName: "해운대갈매기",
+		title: "부산 해운대 쪽 시급 요즘 어떤가요?",
+		body: "해운대 근처에서 주말 홀 알바 알아보는 중인데 시급대가 궁금해요. 최근에 이 지역에서 일해보신 분 계시면 분위기도 같이 알려주시면 감사하겠습니다.",
+		viewCount: 118,
+	},
+	{
+		n: 7,
+		authorKey: "seekerG",
+		board: "free",
+		authorDisplayName: "밤샘장인",
+		title: "면접 노쇼 당했을 때 다들 어떻게 하세요",
+		body: "약속 잡고 갔는데 담당자가 연락도 없이 안 나온 적 있어요. 시간 버린 게 너무 아깝더라고요. 이럴 때 후기 남기는 게 맞을까요?",
+		viewCount: 161,
+	},
+	{
+		n: 8,
+		authorKey: "seekerH",
+		board: "free",
+		authorDisplayName: "코랄피치",
+		title: "초보 서버 3개월차 소소한 팁 모음",
+		body: "이제 겨우 3개월 됐지만 처음의 저 같은 분들께 도움이 될까 해서 적어요. 주문은 꼭 복창하고, 테이블 번호는 미리 외워두고, 모르면 바로 물어보는 게 제일 빠릅니다. 비밀글로 저장해봤어요.",
+		isLocked: true,
+		password: "bambi3month",
+		viewCount: 53,
+	},
+	{
+		n: 9,
+		authorKey: "owner",
+		board: "free",
+		authorDisplayName: "루나운영팀",
+		title: "저희 업장 채용 문화 짧게 공유합니다",
+		body: "지원해주시는 분들이 편하게 오실 수 있게 면접은 근처 카페에서 가볍게 진행하고 있어요. 궁금한 점은 채팅으로 먼저 물어보셔도 됩니다. 좋은 인연 많이 만들고 싶습니다.",
+		viewCount: 187,
+	},
+	{
+		n: 10,
+		authorKey: "ownerMars",
+		board: "work_talk",
+		authorDisplayName: "마르스대표",
+		title: "구직자분들께: 이력서에 이것만 있어도 좋아요",
+		body: "화려한 스펙보다 근무 가능한 요일과 시간, 연락이 잘 되는지가 제일 중요합니다. 짧게라도 자기소개 한 줄 있으면 채용하는 입장에서 훨씬 신뢰가 가요. 참고되셨으면 합니다.",
+		viewCount: 224,
+	},
+	{
+		n: 11,
+		authorKey: "ownerVelvet",
+		board: "work_talk",
+		authorDisplayName: "벨벳바지기",
+		title: "마포에서 칵테일바 운영하며 느낀 점",
+		body: "손님 응대만큼이나 함께 일하는 스태프 분위기가 매장 전체를 좌우하더라고요. 그래서 저희는 교육에 시간을 넉넉히 씁니다. 오래 같이 갈 분들을 늘 찾고 있어요.",
+		viewCount: 139,
+	},
+	{
+		n: 12,
+		authorKey: "ownerAqua",
+		board: "free",
+		authorDisplayName: "아쿠아라운지",
+		title: "해운대 오션뷰 라운지에서 새 멤버 찾아요",
+		body: "바다 보이는 매장에서 주말 홀 스태프로 함께하실 분을 모집합니다. 초보도 교육 후 시작하니 부담 없이 채팅 주세요. 분위기 정말 좋습니다!",
+		isPromotion: true,
+		viewCount: 176,
+	},
+	{
+		n: 13,
+		authorKey: "ownerLumi",
+		board: "free",
+		authorDisplayName: "루미노래방",
+		title: "남동 노래방 주말 매니저 구합니다 (광고)",
+		body: "서비스업 경력자 우대하고, 주말 위주 근무입니다. 페이 조건은 채팅으로 상세히 안내드릴게요. 성실하신 분이면 오래 함께하고 싶습니다.",
+		isPromotion: true,
+		viewCount: 92,
+	},
+	{
+		n: 14,
+		authorKey: "seekerC",
+		board: "free",
+		authorDisplayName: "민트초코",
+		title: "여성 구직자분들 안전하게 일하는 팁",
+		body: "면접 장소는 되도록 사람 많은 공개된 곳에서 잡고, 첫 근무 전에 업장 위치랑 담당자 정보 지인에게 공유해두세요. 조금만 신경 써도 훨씬 안심됩니다.",
+		viewCount: 203,
+	},
+	{
+		n: 15,
+		authorKey: "owner",
+		board: "work_talk",
+		authorDisplayName: "루나운영팀",
+		title: "사장 입장에서 생각하는 좋은 직원",
+		body: "일 잘하는 것도 좋지만 결국 오래 남는 분들은 약속을 잘 지키는 분들이에요. 늦으면 미리 연락 주고, 못 나오면 대체를 같이 고민해주는 분. 그런 신뢰가 제일 큽니다.",
+		viewCount: 158,
+	},
+];
+
 const assertDevPasswordWorks = async (devUser: DevUser): Promise<void> => {
 	try {
 		await auth.api.signInEmail({
@@ -1243,7 +1400,13 @@ const assertDevPasswordWorks = async (devUser: DevUser): Promise<void> => {
 	}
 };
 
+// 로그인 아이디(login_id): dev 유저 key를 소문자로 정규화해 유니크하게 만든다.
+// (seeker→"seeker", ownerMars→"ownermars"). username 플러그인이 signUpEmail에서
+// 이 값을 login_id/login_id_display 컬럼으로 매핑하며, 소문자 정규화라 값도 소문자다.
+const loginIdFor = (devUser: DevUser): string => devUser.key.toLowerCase();
+
 const ensureAuthUser = async (devUser: DevUser): Promise<string> => {
+	const loginId = loginIdFor(devUser);
 	const [existingUser] = await db
 		.select()
 		.from(user)
@@ -1256,6 +1419,7 @@ const ensureAuthUser = async (devUser: DevUser): Promise<string> => {
 				name: devUser.name,
 				email: devUser.email,
 				password: DEV_PASSWORD,
+				username: loginId,
 			},
 		});
 	}
@@ -1270,11 +1434,15 @@ const ensureAuthUser = async (devUser: DevUser): Promise<string> => {
 		throw new Error(`Failed to create dev user: ${devUser.email}`);
 	}
 
+	// login_id/login_id_display를 명시적으로 재확정한다 — 기존 유저(가입 스킵) 경로에서도
+	// 아이디 로그인(signIn.username)이 되도록 멱등하게 채운다. 값은 이미 소문자다.
 	await db
 		.update(user)
 		.set({
 			name: devUser.name,
 			emailVerified: true,
+			login_id: loginId,
+			login_id_display: loginId,
 			updatedAt: new Date(),
 		})
 		.where(eq(user.id, authUser.id));
@@ -1312,7 +1480,6 @@ const ensureBambiProfile = async (
 			isPhoneVerified: true,
 			phoneNumber: devUser.phoneNumber,
 			gender,
-			displayName: devUser.displayName,
 		})
 		.onConflictDoUpdate({
 			target: bambiProfile.userId,
@@ -1322,7 +1489,6 @@ const ensureBambiProfile = async (
 				isPhoneVerified: true,
 				phoneNumber: devUser.phoneNumber,
 				gender,
-				displayName: devUser.displayName,
 				updatedAt: new Date(),
 			},
 		});
@@ -2388,6 +2554,65 @@ const seedRichReports = async (
 		});
 };
 
+// 수다방 글 createdAt: 결정론적 고정 날짜(2026-07). n이 클수록 최신.
+const communityPostDate = (n: number): Date =>
+	new Date(
+		`2026-07-${(5 + n).toString().padStart(2, "0")}T${(9 + (n % 12)).toString().padStart(2, "0")}:00:00.000Z`
+	);
+
+const seedCommunityPosts = async (
+	userIds: Record<DevUserKey, string>
+): Promise<void> => {
+	const rows = communityPosts.map((post) => {
+		const createdAt = communityPostDate(post.n);
+		return {
+			id: richId("cacacaca", post.n),
+			board: post.board,
+			authorUserId: userIds[post.authorKey],
+			authorDisplayName: post.authorDisplayName,
+			passwordHash: post.password ? hashCommunityPassword(post.password) : "",
+			isLocked: post.isLocked ?? false,
+			authorRole: devUserRoleByKey[post.authorKey],
+			isPromotion: post.isPromotion ?? false,
+			title: post.title,
+			body: post.body,
+			viewCount: post.viewCount ?? 0,
+			status: "published" as const,
+			createdAt,
+			updatedAt: createdAt,
+		};
+	});
+
+	await db
+		.insert(communityPost)
+		.values(rows)
+		.onConflictDoUpdate({
+			target: communityPost.id,
+			set: { updatedAt: new Date() },
+		});
+
+	// 배치 insert는 신규 행만 채운다. 재실행 시 변경된 본문·표시명 등을 반영하도록
+	// id별로 개별 갱신한다(seedRichJobs와 동일 패턴). passwordHash는 salt가 매 실행
+	// 달라지므로 갱신에서 제외해 재실행 시 값이 요동치지 않게 유지한다.
+	for (const row of rows) {
+		await db
+			.update(communityPost)
+			.set({
+				board: row.board,
+				authorDisplayName: row.authorDisplayName,
+				isLocked: row.isLocked,
+				authorRole: row.authorRole,
+				isPromotion: row.isPromotion,
+				title: row.title,
+				body: row.body,
+				viewCount: row.viewCount,
+				status: row.status,
+				updatedAt: row.updatedAt,
+			})
+			.where(eq(communityPost.id, row.id));
+	}
+};
+
 const seedRichCatalog = async (
 	userIds: Record<DevUserKey, string>
 ): Promise<void> => {
@@ -2398,6 +2623,7 @@ const seedRichCatalog = async (
 	await seedRichPromotions(userIds, now);
 	await seedRichConversations(userIds, now);
 	await seedRichReports(userIds, now);
+	await seedCommunityPosts(userIds);
 };
 
 const main = async (): Promise<void> => {
@@ -2416,7 +2642,7 @@ const main = async (): Promise<void> => {
 	console.log(`Verified organization: ${ids.lunaOrganization}`);
 	console.log(`Pending organization: ${ids.pendingOrganization}`);
 	console.log(
-		`Rich catalog: ${richOrganizations.length} extra orgs, ${richJobs.length} extra job posts, ${richRooms.length} chat rooms with reviews.`
+		`Rich catalog: ${richOrganizations.length} extra orgs, ${richJobs.length} extra job posts, ${richRooms.length} chat rooms with reviews, ${communityPosts.length} community posts.`
 	);
 };
 

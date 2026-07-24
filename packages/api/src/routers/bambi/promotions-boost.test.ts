@@ -89,7 +89,6 @@ const createBoostFixture = async (): Promise<BoostFixture> => {
 		userId: employerUserId,
 	});
 	await db.insert(bambiProfile).values({
-		displayName: "채용 담당자",
 		isPhoneVerified: true,
 		role: "employer",
 		status: "active",
@@ -337,7 +336,6 @@ describe("promotions boost 스냅샷 보존", () => {
 			userId: employerUserId,
 		});
 		await db.insert(bambiProfile).values({
-			displayName: "스냅샷 담당자",
 			isPhoneVerified: true,
 			role: "employer",
 			status: "active",
@@ -470,7 +468,6 @@ describe("promotions boost 수동 카운트 타입 필터", () => {
 			userId: employerUserId,
 		});
 		await db.insert(bambiProfile).values({
-			displayName: "타입 필터 담당자",
 			isPhoneVerified: true,
 			role: "employer",
 			status: "active",
@@ -582,7 +579,6 @@ describe("promotions boost 배너형 공고 거부", () => {
 			userId: employerUserId,
 		});
 		await db.insert(bambiProfile).values({
-			displayName: "배너 담당자",
 			isPhoneVerified: true,
 			role: "employer",
 			status: "active",

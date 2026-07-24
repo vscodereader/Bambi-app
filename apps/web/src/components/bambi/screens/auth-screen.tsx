@@ -104,12 +104,13 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
 	const subtitle = isSignUp
 		? "기본 정보를 입력하고 밤비를 시작하세요."
-		: "이메일과 비밀번호를 입력해 로그인하세요.";
+		: "아이디와 비밀번호를 입력해 로그인하세요.";
 	const submitLabel = isSignUp ? "회원가입" : "로그인";
 
 	const finishSignup = async (gender: BambiGenderValue | null) => {
-		const displayName = nickname.trim();
-		const profilePayload = { displayName, ...(gender ? { gender } : {}) };
+		// 닉네임(표시명)은 signUp.email의 name(→ user.name)에 저장되므로 프로필 생성
+		// 페이로드에는 표시명을 싣지 않는다. 게스트 쿠키에서 읽은 성별만 선택 전달한다.
+		const profilePayload = gender ? { gender } : {};
 		if (signupRole === "employer") {
 			await client.bambi.onboarding.createEmployerProfile(profilePayload);
 		} else {
@@ -124,29 +125,42 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 		router.push("/seeker" as Route);
 	};
 
+	// 제출 전 필드 검증. 회원가입은 닉네임·아이디·이메일·비번·비번확인을 보고, 로그인은
+	// 아이디(login_id) 비어있지 않음 + 비밀번호 8자만 본다. 통과하면 null을 돌려준다.
+	const getValidationError = (): Notice | null => {
+		if (isSignUp) {
+			if (nickname.trim().length < 2) {
+				return { text: "닉네임을 2자 이상 입력해 주세요.", tone: "error" };
+			}
+			if (username.trim().length < 3) {
+				return { text: "아이디를 3자 이상 입력해 주세요.", tone: "error" };
+			}
+			if (!email.includes("@") || password.length < 8) {
+				return {
+					text: "이메일과 8자 이상 비밀번호를 확인해 주세요.",
+					tone: "error",
+				};
+			}
+			if (password !== passwordConfirm) {
+				return { text: "비밀번호가 일치하지 않아요.", tone: "error" };
+			}
+			return null;
+		}
+		if (username.trim().length === 0 || password.length < 8) {
+			return {
+				text: "아이디와 8자 이상 비밀번호를 확인해 주세요.",
+				tone: "error",
+			};
+		}
+		return null;
+	};
+
 	const handleSubmit = async () => {
 		setNotice(null);
 
-		if (isSignUp && nickname.trim().length < 2) {
-			setNotice({ text: "닉네임을 2자 이상 입력해 주세요.", tone: "error" });
-			return;
-		}
-
-		if (isSignUp && username.trim().length < 3) {
-			setNotice({ text: "아이디를 3자 이상 입력해 주세요.", tone: "error" });
-			return;
-		}
-
-		if (!email.includes("@") || password.length < 8) {
-			setNotice({
-				text: "이메일과 8자 이상 비밀번호를 확인해 주세요.",
-				tone: "error",
-			});
-			return;
-		}
-
-		if (isSignUp && password !== passwordConfirm) {
-			setNotice({ text: "비밀번호가 일치하지 않아요.", tone: "error" });
+		const validationError = getValidationError();
+		if (validationError) {
+			setNotice(validationError);
 			return;
 		}
 
@@ -212,9 +226,9 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 				callbacks
 			);
 		} else {
-			await authClient.signIn.email(
+			await authClient.signIn.username(
 				{
-					email,
+					username: username.trim(),
 					password,
 				},
 				callbacks
@@ -357,15 +371,14 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
 							</>
 						) : (
 							<>
-								<label className="grid gap-2" htmlFor="auth-email">
-									<span className="font-bold text-sm">이메일</span>
+								<label className="grid gap-2" htmlFor="auth-login-id">
+									<span className="font-bold text-sm">아이디</span>
 									<Input
-										autoComplete="email"
-										id="auth-email"
-										onChange={(event) => setEmail(event.target.value)}
-										placeholder="이메일을 입력해주세요."
-										type="email"
-										value={email}
+										autoComplete="username"
+										id="auth-login-id"
+										onChange={(event) => setUsername(event.target.value)}
+										placeholder="아이디를 입력해주세요."
+										value={username}
 									/>
 								</label>
 								<div className="grid gap-2">

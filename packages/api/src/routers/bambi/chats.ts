@@ -1,6 +1,6 @@
 import { db } from "@bambi-app/db";
+import { user } from "@bambi-app/db/schema/auth";
 import {
-	bambiProfile,
 	chatAttachment,
 	chatMessage,
 	chatRoom,
@@ -268,7 +268,7 @@ interface CounterpartRoom {
 
 /**
  * 현재 보는 사람(viewer) 기준으로 대화 상대방의 표시 이름을 방마다 해석한다.
- * - 구인자가 볼 때 → 상대는 구직자(bambi_profile.display_name)
+ * - 구인자가 볼 때 → 상대는 구직자(user.name, 표시명 정본)
  * - 구직자가 볼 때 → 상대는 구인자(팀 프로필 → 조직 프로필 → 구인자 개인 프로필 순)
  */
 const resolveCounterpartNames = async (
@@ -295,11 +295,11 @@ const resolveCounterpartNames = async (
 		profileUserIds.size > 0
 			? db
 					.select({
-						userId: bambiProfile.userId,
-						displayName: bambiProfile.displayName,
+						userId: user.id,
+						displayName: user.name,
 					})
-					.from(bambiProfile)
-					.where(inArray(bambiProfile.userId, [...profileUserIds]))
+					.from(user)
+					.where(inArray(user.id, [...profileUserIds]))
 			: Promise.resolve([]),
 		teamIds.size > 0
 			? db

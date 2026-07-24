@@ -30,9 +30,7 @@ const makeEmployer = async (label: string) => {
 		name: label,
 		email,
 	});
-	await db
-		.insert(bambiProfile)
-		.values({ userId, role: "employer", displayName: label });
+	await db.insert(bambiProfile).values({ userId, role: "employer" });
 	return { userId, email };
 };
 
@@ -48,7 +46,7 @@ describe("searchEmployerInvitees", () => {
 		});
 		await db
 			.insert(bambiProfile)
-			.values({ userId: seekerId, role: "job_seeker", displayName: "김구직" });
+			.values({ userId: seekerId, role: "job_seeker" });
 
 		const organizationId = `org_${randomUUID()}`;
 		await db.insert(organization).values({
