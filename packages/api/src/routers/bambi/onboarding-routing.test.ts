@@ -58,9 +58,7 @@ describe("getMyRouting", () => {
 			role: "owner",
 			createdAt: new Date(),
 		});
-		await db
-			.insert(bambiProfile)
-			.values({ userId, role: "employer", displayName: "업소" });
+		await db.insert(bambiProfile).values({ userId, role: "employer" });
 		await db.insert(employerOrganizationProfile).values({
 			organizationId: orgId,
 			displayName: "업소",

@@ -11,11 +11,15 @@ import { enforceModeratorAccess } from "@/lib/bambi/require-role";
 
 const MODERATOR_NAV_ITEMS: NavEntry[] = [
 	{ href: "/moderator", label: "검수 큐" },
-	{ href: "/moderator/reports", label: "신고" },
-	{ href: "/moderator/users", label: "사용자" },
+	// 신규 라우트는 Next typedRoutes 생성 타입에 아직 없을 수 있어 캐스팅한다.
+	{ href: "/moderator/jobs" as Route, label: "공고 관리" },
 	{
-		label: "승인 관리",
+		label: "회원 관리",
 		items: [
+			{ href: "/moderator/users", label: "사용자" },
+			// 신규 라우트는 Next typedRoutes 생성 타입에 아직 없을 수 있어 캐스팅한다.
+			{ href: "/moderator/chats" as Route, label: "채팅" },
+			{ href: "/moderator/reports", label: "신고" },
 			{ href: "/moderator/employers", label: "업소 승인" },
 			{ href: "/moderator/team-invites", label: "팀 합류 승인" },
 		],
@@ -28,18 +32,16 @@ const MODERATOR_NAV_ITEMS: NavEntry[] = [
 		],
 	},
 	{
-		label: "콘텐츠·고객센터",
+		label: "콘텐츠",
 		items: [
 			// 신규 라우트는 Next typedRoutes 생성 타입에 아직 없을 수 있어 캐스팅한다.
 			{ href: "/moderator/content" as Route, label: "게시물" },
 			{ href: "/moderator/support" as Route, label: "고객센터" },
 			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
-			// 후기 관리는 운영자 관리 분기에서 추가된 콘텐츠 조치 화면이라 같은 그룹에 둔다.
 			{ href: "/moderator/reviews", label: "후기 관리" },
 		],
 	},
 	{ href: "/moderator/site-settings" as Route, label: "사이트 정보" },
-	{ href: "/seeker", label: "채용정보" },
 ];
 
 export default async function ModeratorLayout({

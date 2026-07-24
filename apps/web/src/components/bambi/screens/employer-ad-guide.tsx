@@ -168,23 +168,23 @@ function PlacementSection({
 							</div>
 
 							{/* 비용 및 기간 */}
-							<div className="flex flex-col gap-1">
+							<div className="flex flex-col gap-1.5">
 								<span className="font-medium text-muted-foreground text-xs md:hidden">
 									비용 및 기간
 								</span>
 								{product.priceOptions.map((option) => (
 									<div
-										className="flex flex-wrap items-baseline gap-1"
+										className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-0.5"
 										key={`${product.id}-${option.days}-${option.amount}`}
 									>
+										<span className="whitespace-nowrap text-muted-foreground text-xs">
+											{formatAdDuration(option.days)}
+										</span>
 										<AdPriceTag
 											amount={option.amount}
 											discountPercent={option.discountPercent ?? 0}
 											priceClassName="font-bold text-base text-coral-600"
 										/>
-										<span className="text-muted-foreground text-xs">
-											({formatAdDuration(option.days)})
-										</span>
 									</div>
 								))}
 							</div>

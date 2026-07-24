@@ -14,11 +14,13 @@ import {
 	bambiProfile,
 	chatAttachment,
 	chatMessage,
+	chatMessageReadReceipt,
 	chatRoom,
 	communityComment,
 	communityPost,
 	employerOrganizationProfile,
 	employerTeamProfile,
+	interviewSchedule,
 	jobPost,
 	jobPostMedia,
 	report,
@@ -37,6 +39,7 @@ import {
 	isNotNull,
 	isNull,
 	lte,
+	or,
 	sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -53,6 +56,13 @@ import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
+import { deletePublicObjects } from "../../services/gcs";
+import {
+	applyJobPostUpdate,
+	getJobPostMediaSet,
+	getJobPostMediaStorageKeys,
+	jobPostInput,
+} from "./jobs";
 
 export const targetTypeSchema = z.enum([
 	"job_post",
@@ -224,6 +234,11 @@ const setChatRoomBlockedInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
+const hardDeleteChatRoomInput = z.object({
+	chatRoomId: z.string().uuid(),
+	reason: z.string().min(2).max(500),
+});
+
 const contentStatusSchema = z.enum(["published", "hidden", "deleted"]);
 
 const setInquiryStatusByAdminInput = z.object({
@@ -378,12 +393,13 @@ const getUserTargetContext = async (targetId: string) => {
 	const [row] = await db
 		.select({
 			userId: bambiProfile.userId,
-			displayName: bambiProfile.displayName,
+			displayName: user.name,
 			role: bambiProfile.role,
 			status: bambiProfile.status,
 			isPhoneVerified: bambiProfile.isPhoneVerified,
 		})
 		.from(bambiProfile)
+		.innerJoin(user, eq(user.id, bambiProfile.userId))
 		.where(eq(bambiProfile.userId, targetId))
 		.limit(1);
 
@@ -420,6 +436,26 @@ const getChatRoomTargetContext = async (targetId: string) => {
 		.limit(10);
 
 	return { chatRoom: { ...room, recentMessages } };
+};
+
+// 신고된 채팅방 id 집합 — 방 직접 신고(chat_room)와 방 안 메시지 신고(chat_message)를 합친다.
+// message 신고는 targetId(text)를 message.id::text와 맞춰 방으로 환원한다(uuid 캐스팅 회피).
+const getReportedChatRoomIds = async (): Promise<Set<string>> => {
+	const directRows = await db
+		.selectDistinct({ chatRoomId: report.targetId })
+		.from(report)
+		.where(eq(report.targetType, "chat_room"));
+
+	const viaMessageRows = await db
+		.selectDistinct({ chatRoomId: chatMessage.chatRoomId })
+		.from(report)
+		.innerJoin(chatMessage, eq(sql`${chatMessage.id}::text`, report.targetId))
+		.where(eq(report.targetType, "chat_message"));
+
+	return new Set<string>([
+		...directRows.map((row) => row.chatRoomId),
+		...viaMessageRows.map((row) => row.chatRoomId),
+	]);
 };
 
 const COMMUNITY_BODY_PREVIEW_MAX = 300;
@@ -461,12 +497,12 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 	};
 };
 
-// community_comment 신고 컨텍스트 — 작성자 표시명은 listComments와 동일하게 bambi_profile
-// 표시명을 쓰고, 제목·게시판은 부모 글 조인으로 채운다(부모 글이 삭제 상태여도 조인 유지).
+// community_comment 신고 컨텍스트 — 작성자 표시명은 listComments와 동일하게 user.name
+// (표시명 정본)을 쓰고, 제목·게시판은 부모 글 조인으로 채운다(부모 글이 삭제 상태여도 조인 유지).
 const getCommunityCommentTargetContext = async (targetId: string) => {
 	const [comment] = await db
 		.select({
-			authorName: bambiProfile.displayName,
+			authorName: user.name,
 			body: communityComment.body,
 			createdAt: communityComment.createdAt,
 			id: communityComment.id,
@@ -477,10 +513,7 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 		})
 		.from(communityComment)
 		.innerJoin(communityPost, eq(communityPost.id, communityComment.postId))
-		.leftJoin(
-			bambiProfile,
-			eq(bambiProfile.userId, communityComment.authorUserId)
-		)
+		.leftJoin(user, eq(user.id, communityComment.authorUserId))
 		.where(eq(communityComment.id, targetId))
 		.limit(1);
 
@@ -557,7 +590,7 @@ export interface ReportReporter {
 
 // listReports 전용: 신고자(reporterUserId)의 실명·역할을 배치 조회해 각 row에 reporter로
 // 붙인다. 목록 전체를 N+1로 돌리지 않도록 distinct reporterUserId를 inArray로 한 번에
-// 조회하고 맵으로 합류한다. displayName은 bambiProfile, 폴백용 email은 auth user 테이블에서
+// 조회하고 맵으로 합류한다. displayName·폴백용 email 모두 auth user 테이블에서
 // 가져온다(listUsers와 동일한 조인·폴백 패턴). 대상 row가 없는 신고자는 reporter=null.
 const withReporters = async <T extends ReportRow>(
 	reportRows: T[]
@@ -571,7 +604,7 @@ const withReporters = async <T extends ReportRow>(
 	const reporterRows = await db
 		.select({
 			userId: bambiProfile.userId,
-			displayName: bambiProfile.displayName,
+			displayName: user.name,
 			email: user.email,
 			role: bambiProfile.role,
 		})
@@ -959,6 +992,102 @@ export const moderationRouter = {
 			return await query;
 		}),
 
+	// 운영자 편집 화면 프리필용. getEditableById(jobs)는 조직 멤버십을 요구해 운영자가
+	// 못 쓰므로, admin 게이트로 임의 공고의 전체 필드+미디어 세트를 그대로 내려준다.
+	getJobPostForAdmin: adminProcedure
+		.input(z.object({ jobPostId: z.string().uuid() }))
+		.handler(async ({ input }) => {
+			const [post] = await db
+				.select()
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!post) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			return {
+				...post,
+				media: await getJobPostMediaSet(post.id),
+			};
+		}),
+
+	// 운영자가 임의 공고 본문/급여/노출/미디어를 직접 수정한다. jobs.update와 동일한 갱신·
+	// 노출확정·미디어 교체 로직(applyJobPostUpdate)을 재사용하되 조직 멤버십 검사만 우회한다.
+	adminUpdateJobPost: adminProcedure
+		.input(z.object({ jobPostId: z.string().uuid(), data: jobPostInput }))
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const [existing] = await db
+				.select()
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const result = await applyJobPostUpdate({
+				actorUserId: admin.userId,
+				data: input.data,
+				existing,
+			});
+
+			await db.insert(adminModerationAction).values({
+				adminUserId: admin.userId,
+				targetType: "job_post",
+				targetId: input.jobPostId,
+				action: "edit_job_post",
+				reason: "운영자 공고 수정",
+			});
+
+			return result;
+		}),
+
+	// 운영자 공고 하드삭제. 자식 행(미디어·프로모션·성과·채팅방→메시지 등)은 job_post FK
+	// onDelete cascade로 함께 지워지지만, GCS 미디어 객체는 cascade 대상이 아니라 키를 미리
+	// 확보해 직접 지운다(jobs.delete와 동일 원칙, 권한만 admin 게이트로 대체).
+	adminDeleteJobPost: adminProcedure
+		.input(
+			z.object({
+				jobPostId: z.string().uuid(),
+				reason: z.string().min(2).max(500),
+			})
+		)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const [existing] = await db
+				.select({ id: jobPost.id })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const storageKeys = await getJobPostMediaStorageKeys(input.jobPostId);
+
+			await db.transaction(async (tx) => {
+				await tx.delete(jobPost).where(eq(jobPost.id, input.jobPostId));
+				await tx.insert(adminModerationAction).values({
+					action: "hard_delete",
+					adminUserId: admin.userId,
+					reason: input.reason,
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+			});
+
+			await deletePublicObjects(storageKeys);
+
+			return { ok: true };
+		}),
+
 	listUsers: protectedProcedure
 		.input(listUsersInput)
 		.handler(async ({ context, input }) => {
@@ -982,7 +1111,7 @@ export const moderationRouter = {
 				.select({
 					userId: user.id,
 					name: user.name,
-					displayName: bambiProfile.displayName,
+					displayName: user.name,
 					email: user.email,
 					role: sql<string>`coalesce(${bambiProfile.role}, 'job_seeker')`,
 					status: sql<
@@ -1021,7 +1150,7 @@ export const moderationRouter = {
 					riskFlags: review.riskFlags,
 					isAnonymous: review.isAnonymous,
 					reviewerUserId: review.reviewerUserId,
-					reviewerDisplayName: bambiProfile.displayName,
+					reviewerDisplayName: user.name,
 					organizationDisplayName: employerOrganizationProfile.displayName,
 					jobPostId: review.jobPostId,
 					jobPostTitle: jobPost.title,
@@ -1033,7 +1162,7 @@ export const moderationRouter = {
 					employerOrganizationProfile,
 					eq(review.organizationId, employerOrganizationProfile.organizationId)
 				)
-				.leftJoin(bambiProfile, eq(review.reviewerUserId, bambiProfile.userId))
+				.leftJoin(user, eq(review.reviewerUserId, user.id))
 				.orderBy(desc(review.createdAt))
 				.limit(input.limit);
 
@@ -1661,6 +1790,180 @@ export const moderationRouter = {
 			});
 		}),
 
+	// 운영자 채팅 관리 목록: 삭제됨(seeker/employer deletedAt)·차단됨(isBlocked)·신고됨
+	// (chat_room/chat_message 신고가 참조) 방만 노출한다. 플래그 없는 정상 방은 제외.
+	listChatsForModeration: adminProcedure.handler(async () => {
+		const reportedRoomIds = await getReportedChatRoomIds();
+		const employerUser = alias(user, "chat_moderation_employer_user");
+		const seekerUser = alias(user, "chat_moderation_seeker_user");
+		// 상관 서브쿼리는 타입 파서가 없어 timestamp가 문자열로 온다 → 매핑에서 Date로 되돌린다.
+		const lastMessageAtSql = sql<string | null>`(
+			select max(${chatMessage.createdAt})
+			from ${chatMessage}
+			where ${chatMessage.chatRoomId} = ${chatRoom.id}
+		)`;
+
+		const conditions = [
+			eq(chatRoom.isBlocked, true),
+			isNotNull(chatRoom.seekerDeletedAt),
+			isNotNull(chatRoom.employerDeletedAt),
+		];
+		if (reportedRoomIds.size > 0) {
+			conditions.push(inArray(chatRoom.id, [...reportedRoomIds]));
+		}
+
+		const rows = await db
+			.select({
+				chatRoomId: chatRoom.id,
+				employerDeletedAt: chatRoom.employerDeletedAt,
+				employerName: employerUser.name,
+				employerUserId: chatRoom.employerUserId,
+				isBlocked: chatRoom.isBlocked,
+				jobPostTitle: jobPost.title,
+				jobSeekerName: seekerUser.name,
+				jobSeekerUserId: chatRoom.jobSeekerUserId,
+				lastMessageAt: lastMessageAtSql,
+				seekerDeletedAt: chatRoom.seekerDeletedAt,
+			})
+			.from(chatRoom)
+			.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+			.innerJoin(employerUser, eq(employerUser.id, chatRoom.employerUserId))
+			.innerJoin(seekerUser, eq(seekerUser.id, chatRoom.jobSeekerUserId))
+			.where(or(...conditions))
+			.orderBy(desc(chatRoom.updatedAt));
+
+		return rows.map((row) => ({
+			chatRoomId: row.chatRoomId,
+			employerName: row.employerName,
+			employerUserId: row.employerUserId,
+			isBlocked: row.isBlocked,
+			isDeleted: row.seekerDeletedAt !== null || row.employerDeletedAt !== null,
+			isReported: reportedRoomIds.has(row.chatRoomId),
+			jobPostTitle: row.jobPostTitle,
+			jobSeekerName: row.jobSeekerName,
+			jobSeekerUserId: row.jobSeekerUserId,
+			lastMessageAt:
+				row.lastMessageAt === null ? null : new Date(row.lastMessageAt),
+		}));
+	}),
+
+	// 운영자 채팅 내역 열람: 특정 방의 전체 메시지를 시간순으로 내려준다. contact_request는
+	// body가 이미 사람이 읽는 문구("연락처 공개를 요청했습니다.")라 별도 렌더 없이 그대로 쓴다.
+	// 첨부는 storageKey를 제외하고 파일명만 노출한다(getChatMessageTargetContext와 동일 원칙).
+	getChatMessagesForModeration: adminProcedure
+		.input(z.object({ chatRoomId: z.string().uuid() }))
+		.handler(async ({ input }) => {
+			const employerUser = alias(user, "chat_history_employer_user");
+			const seekerUser = alias(user, "chat_history_seeker_user");
+
+			const [room] = await db
+				.select({
+					chatRoomId: chatRoom.id,
+					employerName: employerUser.name,
+					employerUserId: chatRoom.employerUserId,
+					jobPostTitle: jobPost.title,
+					jobSeekerName: seekerUser.name,
+					jobSeekerUserId: chatRoom.jobSeekerUserId,
+				})
+				.from(chatRoom)
+				.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+				.innerJoin(employerUser, eq(employerUser.id, chatRoom.employerUserId))
+				.innerJoin(seekerUser, eq(seekerUser.id, chatRoom.jobSeekerUserId))
+				.where(eq(chatRoom.id, input.chatRoomId))
+				.limit(1);
+
+			if (!room) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const messages = await db
+				.select({
+					body: chatMessage.body,
+					createdAt: chatMessage.createdAt,
+					id: chatMessage.id,
+					kind: chatMessage.kind,
+					senderUserId: chatMessage.senderUserId,
+				})
+				.from(chatMessage)
+				.where(eq(chatMessage.chatRoomId, input.chatRoomId))
+				.orderBy(asc(chatMessage.createdAt));
+
+			const messageIds = messages.map((message) => message.id);
+			const attachments = messageIds.length
+				? await db
+						.select({
+							fileName: chatAttachment.fileName,
+							id: chatAttachment.id,
+							messageId: chatAttachment.messageId,
+						})
+						.from(chatAttachment)
+						.where(inArray(chatAttachment.messageId, messageIds))
+						.orderBy(asc(chatAttachment.createdAt))
+				: [];
+
+			const attachmentsByMessage = new Map<
+				string,
+				{ fileName: string; id: string }[]
+			>();
+			for (const attachment of attachments) {
+				const list = attachmentsByMessage.get(attachment.messageId) ?? [];
+				list.push({ fileName: attachment.fileName, id: attachment.id });
+				attachmentsByMessage.set(attachment.messageId, list);
+			}
+
+			return {
+				...room,
+				messages: messages.map((message) => ({
+					...message,
+					attachments: attachmentsByMessage.get(message.id) ?? [],
+				})),
+			};
+		}),
+
+	// 운영자 채팅방 하드삭제. FK 순서를 지켜 자식부터 지운다(읽음영수증→첨부→메시지→
+	// 면접일정→방). contact_reveal_consent는 interview_schedule에 cascade로 물려 함께 삭제된다.
+	hardDeleteChatRoom: adminProcedure
+		.input(hardDeleteChatRoomInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			await db.transaction(async (tx) => {
+				const [room] = await tx
+					.select({ id: chatRoom.id })
+					.from(chatRoom)
+					.where(eq(chatRoom.id, input.chatRoomId))
+					.limit(1);
+
+				if (!room) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx
+					.delete(chatMessageReadReceipt)
+					.where(eq(chatMessageReadReceipt.chatRoomId, input.chatRoomId));
+				await tx
+					.delete(chatAttachment)
+					.where(eq(chatAttachment.chatRoomId, input.chatRoomId));
+				await tx
+					.delete(chatMessage)
+					.where(eq(chatMessage.chatRoomId, input.chatRoomId));
+				await tx
+					.delete(interviewSchedule)
+					.where(eq(interviewSchedule.chatRoomId, input.chatRoomId));
+				await tx.delete(chatRoom).where(eq(chatRoom.id, input.chatRoomId));
+
+				await tx.insert(adminModerationAction).values({
+					action: "hard_delete",
+					adminUserId: admin.userId,
+					reason: input.reason,
+					targetId: input.chatRoomId,
+					targetType: "chat_room",
+				});
+			});
+
+			return { ok: true };
+		}),
+
 	setTeamInvitationStatus: protectedProcedure
 		.input(setTeamInvitationStatusInput)
 		.handler(async ({ context, input }) => {
@@ -1915,14 +2218,11 @@ export const moderationRouter = {
 					status: supportInquiry.status,
 					createdAt: supportInquiry.createdAt,
 					authorUserId: supportInquiry.authorUserId,
-					// 고객센터는 익명 표시명이 없으므로 프로필 표시명을 조인한다.
-					authorName: bambiProfile.displayName,
+					// 고객센터는 익명 표시명이 없으므로 user.name(표시명 정본)을 조인한다.
+					authorName: user.name,
 				})
 				.from(supportInquiry)
-				.leftJoin(
-					bambiProfile,
-					eq(supportInquiry.authorUserId, bambiProfile.userId)
-				)
+				.leftJoin(user, eq(supportInquiry.authorUserId, user.id))
 				.where(where)
 				.orderBy(desc(supportInquiry.createdAt))
 				.limit(MODERATABLE_PAGE_SIZE)
@@ -2016,7 +2316,7 @@ export const moderationRouter = {
 
 			const [row] = await db
 				.select({
-					authorName: bambiProfile.displayName,
+					authorName: user.name,
 					body: supportInquiry.body,
 					category: supportInquiry.category,
 					createdAt: supportInquiry.createdAt,
@@ -2024,10 +2324,7 @@ export const moderationRouter = {
 					title: supportInquiry.title,
 				})
 				.from(supportInquiry)
-				.leftJoin(
-					bambiProfile,
-					eq(supportInquiry.authorUserId, bambiProfile.userId)
-				)
+				.leftJoin(user, eq(supportInquiry.authorUserId, user.id))
 				.where(eq(supportInquiry.id, input.id))
 				.limit(1);
 
@@ -2073,10 +2370,11 @@ export const moderationRouter = {
 			await tx.delete(session).where(inArray(session.userId, ids));
 			// 비밀번호 등 자격증명 파기.
 			await tx.delete(account).where(inArray(account.userId, ids));
+			// 표시명(닉네임)은 user.name을 "탈퇴한 회원"으로 치환(아래 user 갱신)하므로
+			// 프로필에서는 연락처·본인인증 식별값만 파기한다.
 			await tx
 				.update(bambiProfile)
 				.set({
-					displayName: "탈퇴한 회원",
 					phoneNumber: null,
 					gender: null,
 					birthDate: null,

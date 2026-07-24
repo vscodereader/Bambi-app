@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	adProduct,
+	bambiProfile,
 	bambiSiteSettings,
 	employerOrganizationProfile,
 	employerTeamProfile,
@@ -152,7 +153,7 @@ const NEGOTIABLE_PAY_UNIT = "협의";
 
 // 단위와 금액의 짝을 강제한다 — 협의인데 금액이 붙거나, 금액 단위인데 금액이 빠지면
 // 목록에서 "협의 0원" 같은 잡음이 되고 최소 시급 필터도 어긋난다.
-const jobPostInput = jobPostInputShape.refine(
+export const jobPostInput = jobPostInputShape.refine(
 	(input) =>
 		input.payUnit === NEGOTIABLE_PAY_UNIT
 			? input.payAmount == null
@@ -399,7 +400,7 @@ const toJobPostMediaSet = <Row extends JobPostMediaRow>(rows: Row[]) => ({
 	detail: rows.filter((item) => item.usage === "detail"),
 });
 
-const getJobPostMediaStorageKeys = async (
+export const getJobPostMediaStorageKeys = async (
 	jobPostId: string
 ): Promise<string[]> => {
 	const rows = await db
@@ -444,7 +445,7 @@ const requireAdBannerMedia = (
 	}
 };
 
-const getJobPostMediaSet = async (jobPostId: string) => {
+export const getJobPostMediaSet = async (jobPostId: string) => {
 	const rows = await db
 		.select()
 		.from(jobPostMedia)
@@ -507,7 +508,7 @@ interface ResolvedJobExposure {
 // 공고의 노출 상품·기간·금액·노출 타입을 서버에서 확정한다. 운영자가 등록한 광고 상품을
 // 단일 소스로 삼아, 상품의 미리보기 템플릿으로 노출 타입을 도출하고 선택 기간이 상품의
 // 가격 옵션에 존재하는지 검증한 뒤 그 금액을 결제 예정 금액으로 저장한다.
-const resolveJobPostExposure = async (input: {
+export const resolveJobPostExposure = async (input: {
 	adProductId?: string | null;
 	exposureDurationDays?: number | null;
 	paymentMethod?: "bank_transfer" | "card" | null;
@@ -544,6 +545,23 @@ const resolveJobPostExposure = async (input: {
 		});
 	}
 
+	// 무통장입금은 운영자가 입금 계좌를 1개 이상 등록해야만 결제를 진행할 수 있다.
+	// (여기 도달 시 유료 상품 — adProductId 없는 무료 공고는 위에서 이미 early-return.)
+	if (input.paymentMethod === "bank_transfer") {
+		const [settings] = await db
+			.select({ bankAccounts: bambiSiteSettings.bankAccounts })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"))
+			.limit(1);
+
+		if (!settings?.bankAccounts.length) {
+			throw new ORPCError("BAD_REQUEST", {
+				message:
+					"무통장입금 계좌가 준비되지 않아 결제를 진행할 수 없습니다. 다른 결제수단을 선택하거나 고객센터로 문의해 주세요.",
+			});
+		}
+	}
+
 	const exposureType = previewTemplateToExposureType(product.previewTemplate);
 	// 배너형 광고는 끌어올리기 대상이 아니다. 상품에 끌어올리기 값이 남아 있어도
 	// 스냅샷을 0으로 강제해 배너 공고가 끌어올려지지 않게 한다(리스팅형만 제공 —
@@ -566,6 +584,169 @@ const resolveJobPostExposure = async (input: {
 		autoBoostsPerDay: isBanner ? 0 : product.autoBoostsPerDay,
 		paymentMethod: input.paymentMethod ?? null,
 	};
+};
+
+// jobs.update와 운영자 편집(moderation.adminUpdateJobPost)이 공유하는 갱신·노출확정 로직.
+// 호출자는 대상 공고(existing)를 먼저 조회·권한 확인한 뒤 넘긴다 — 이 함수는 권한 검사를 하지
+// 않으므로(조직 멤버십 우회가 목적) 반드시 호출부에서 게이트를 통과시켜야 한다.
+export const applyJobPostUpdate = async ({
+	actorUserId,
+	data,
+	existing,
+}: {
+	actorUserId: string;
+	data: JobPostInput;
+	existing: typeof jobPost.$inferSelect;
+}) => {
+	const { descriptionBlocks: _descriptionBlocks, media, ...jobInput } = data;
+
+	if (
+		data.organizationId !== existing.organizationId ||
+		(data.teamId ?? null) !== (existing.teamId ?? null)
+	) {
+		throw new ORPCError("FORBIDDEN", {
+			message: "Changing a job post organization or team is not supported.",
+		});
+	}
+
+	const [organizationProfile] = await db
+		.select()
+		.from(employerOrganizationProfile)
+		.where(
+			eq(employerOrganizationProfile.organizationId, existing.organizationId)
+		)
+		.limit(1);
+
+	if (!organizationProfile) {
+		throw new ORPCError("FORBIDDEN", {
+			message: "Employer organization profile is required.",
+		});
+	}
+
+	const preparedContent = prepareJobPostContent(data);
+	const exposure = await resolveJobPostExposure({
+		adProductId: data.adProductId,
+		exposureDurationDays: data.exposureDurationDays,
+		paymentMethod: data.paymentMethod,
+	});
+	// 노출 상품·기간이 바뀌면 재결제가 필요하다. 유료 전환/변경은 미결제로 되돌리고,
+	// 무료 전환은 결제 게이트 없이 즉시 게시(paid)로 둔다(생성 시 무료 공고와 동일 규칙).
+	const exposureChanged =
+		exposure.adProductId !== existing.adProductId ||
+		exposure.exposureDurationDays !== existing.exposureDurationDays;
+	const changedPaymentStatus = exposure.adProductId
+		? ("unpaid" as const)
+		: ("paid" as const);
+	const nextPaymentStatus = exposureChanged
+		? changedPaymentStatus
+		: existing.paymentStatus;
+	const nextExposureEndsAt = exposureChanged ? null : existing.exposureEndsAt;
+	const mediaRows = media
+		? requireValidJobPostMediaSet({
+				media,
+				organizationId: existing.organizationId,
+			})
+		: null;
+	// update는 media를 안 보내면 기존 미디어를 그대로 두고, 보내면 전량 교체한다.
+	// 배너 검증은 그 "최종 상태"(교체될 rows 또는 유지되는 기존 rows) 기준으로 한다.
+	requireAdBannerMedia(
+		exposure.exposureType,
+		mediaRows
+			? mediaRows.map((row) => row.usage)
+			: await getJobPostMediaUsages(existing.id)
+	);
+	const riskDetected = preparedContent.hasRiskFlags;
+	const status: JobPostStatus = riskDetected
+		? "pending_review"
+		: getUpdatedJobPostStatus({
+				currentStatus: existing.status as JobPostStatus,
+				employerVerificationStatus:
+					organizationProfile.verificationStatus as EmployerVerificationStatus,
+				publicContentChanged: true,
+			});
+
+	// 교체 대상에서 빠진 이미지만 GCS에서 지우기 위해, 갱신 전 키를 확보한다.
+	const previousStorageKeys = mediaRows
+		? await getJobPostMediaStorageKeys(existing.id)
+		: [];
+
+	const result = await db.transaction(async (tx) => {
+		const [updated] = await tx
+			.update(jobPost)
+			.set({
+				...jobInput,
+				// 금액 단위 → "협의"로 바꿀 때 undefined면 drizzle이 컬럼을 건너뛰어
+				// 예전 금액이 남는다. null로 명시해 지운다.
+				payAmount: jobInput.payAmount ?? null,
+				description: preparedContent.description,
+				descriptionBlocks: preparedContent.descriptionBlocks,
+				status,
+				riskFlags: riskDetected ? ["risky_term"] : [],
+				adProductId: exposure.adProductId,
+				exposureType: exposure.exposureType,
+				exposureDurationDays: exposure.exposureDurationDays,
+				exposureAmount: exposure.exposureAmount,
+				manualBoostsPerDay: exposure.manualBoostsPerDay,
+				autoBoostsPerDay: exposure.autoBoostsPerDay,
+				paymentMethod: exposure.paymentMethod,
+				paymentStatus: nextPaymentStatus,
+				exposureEndsAt: nextExposureEndsAt,
+				publishedAt:
+					status === "published" && !existing.publishedAt
+						? new Date()
+						: existing.publishedAt,
+			})
+			.where(eq(jobPost.id, existing.id))
+			.returning();
+
+		if (!updated) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Job post could not be updated.",
+			});
+		}
+
+		if (mediaRows) {
+			await tx
+				.delete(jobPostMedia)
+				.where(eq(jobPostMedia.jobPostId, existing.id));
+
+			const insertedMedia =
+				mediaRows.length > 0
+					? await tx
+							.insert(jobPostMedia)
+							.values(
+								buildJobPostMediaInsertRows({
+									actorUserId,
+									jobPostId: updated.id,
+									media,
+									organizationId: existing.organizationId,
+								})
+							)
+							.returning()
+					: [];
+
+			return {
+				...updated,
+				media: toJobPostMediaSet(insertedMedia),
+			};
+		}
+
+		return {
+			...updated,
+			media: await getJobPostMediaSet(updated.id),
+		};
+	});
+
+	// 트랜잭션이 커밋된 뒤에만 객체를 지운다. 롤백된 변경으로 원본을 잃지 않는다.
+	if (mediaRows) {
+		const retainedKeys = new Set(mediaRows.map((row) => row.storageKey));
+
+		await deletePublicObjects(
+			previousStorageKeys.filter((key) => !retainedKeys.has(key))
+		);
+	}
+
+	return result;
 };
 
 export const jobsRouter = {
@@ -917,8 +1098,21 @@ export const jobsRouter = {
 				organizationId: post.organizationId,
 			});
 
+			// 공고 작성자(구인자)의 인증번호를 상세에 노출한다(인증된 경우에만).
+			const [creatorProfile] = await db
+				.select({
+					isPhoneVerified: bambiProfile.isPhoneVerified,
+					phoneNumber: bambiProfile.phoneNumber,
+				})
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, post.createdByUserId))
+				.limit(1);
+
 			return {
 				...post,
+				employerVerifiedPhone: creatorProfile?.isPhoneVerified
+					? (creatorProfile.phoneNumber ?? null)
+					: null,
 				media: await getJobPostMediaSet(post.id),
 			};
 		}),
@@ -1178,11 +1372,6 @@ export const jobsRouter = {
 			})
 		)
 		.handler(async ({ context, input }) => {
-			const {
-				descriptionBlocks: _descriptionBlocks,
-				media,
-				...jobInput
-			} = input.data;
 			const [existing] = await db
 				.select()
 				.from(jobPost)
@@ -1199,158 +1388,11 @@ export const jobsRouter = {
 				session: context.session,
 			});
 
-			if (
-				input.data.organizationId !== existing.organizationId ||
-				(input.data.teamId ?? null) !== (existing.teamId ?? null)
-			) {
-				throw new ORPCError("FORBIDDEN", {
-					message: "Changing a job post organization or team is not supported.",
-				});
-			}
-
-			const [organizationProfile] = await db
-				.select()
-				.from(employerOrganizationProfile)
-				.where(
-					eq(
-						employerOrganizationProfile.organizationId,
-						existing.organizationId
-					)
-				)
-				.limit(1);
-
-			if (!organizationProfile) {
-				throw new ORPCError("FORBIDDEN", {
-					message: "Employer organization profile is required.",
-				});
-			}
-
-			const preparedContent = prepareJobPostContent(input.data);
-			const exposure = await resolveJobPostExposure({
-				adProductId: input.data.adProductId,
-				exposureDurationDays: input.data.exposureDurationDays,
-				paymentMethod: input.data.paymentMethod,
+			return await applyJobPostUpdate({
+				actorUserId: actor.userId,
+				data: input.data,
+				existing,
 			});
-			// 노출 상품·기간이 바뀌면 재결제가 필요하다. 유료 전환/변경은 미결제로 되돌리고,
-			// 무료 전환은 결제 게이트 없이 즉시 게시(paid)로 둔다(생성 시 무료 공고와 동일 규칙).
-			const exposureChanged =
-				exposure.adProductId !== existing.adProductId ||
-				exposure.exposureDurationDays !== existing.exposureDurationDays;
-			const changedPaymentStatus = exposure.adProductId
-				? ("unpaid" as const)
-				: ("paid" as const);
-			const nextPaymentStatus = exposureChanged
-				? changedPaymentStatus
-				: existing.paymentStatus;
-			const nextExposureEndsAt = exposureChanged
-				? null
-				: existing.exposureEndsAt;
-			const mediaRows = media
-				? requireValidJobPostMediaSet({
-						media,
-						organizationId: existing.organizationId,
-					})
-				: null;
-			// update는 media를 안 보내면 기존 미디어를 그대로 두고, 보내면 전량 교체한다.
-			// 배너 검증은 그 "최종 상태"(교체될 rows 또는 유지되는 기존 rows) 기준으로 한다.
-			requireAdBannerMedia(
-				exposure.exposureType,
-				mediaRows
-					? mediaRows.map((row) => row.usage)
-					: await getJobPostMediaUsages(input.id)
-			);
-			const riskDetected = preparedContent.hasRiskFlags;
-			const status: JobPostStatus = riskDetected
-				? "pending_review"
-				: getUpdatedJobPostStatus({
-						currentStatus: existing.status as JobPostStatus,
-						employerVerificationStatus:
-							organizationProfile.verificationStatus as EmployerVerificationStatus,
-						publicContentChanged: true,
-					});
-
-			// 교체 대상에서 빠진 이미지만 GCS에서 지우기 위해, 갱신 전 키를 확보한다.
-			const previousStorageKeys = mediaRows
-				? await getJobPostMediaStorageKeys(input.id)
-				: [];
-
-			const result = await db.transaction(async (tx) => {
-				const [updated] = await tx
-					.update(jobPost)
-					.set({
-						...jobInput,
-						// 금액 단위 → "협의"로 바꿀 때 undefined면 drizzle이 컬럼을 건너뛰어
-						// 예전 금액이 남는다. null로 명시해 지운다.
-						payAmount: jobInput.payAmount ?? null,
-						description: preparedContent.description,
-						descriptionBlocks: preparedContent.descriptionBlocks,
-						status,
-						riskFlags: riskDetected ? ["risky_term"] : [],
-						adProductId: exposure.adProductId,
-						exposureType: exposure.exposureType,
-						exposureDurationDays: exposure.exposureDurationDays,
-						exposureAmount: exposure.exposureAmount,
-						manualBoostsPerDay: exposure.manualBoostsPerDay,
-						autoBoostsPerDay: exposure.autoBoostsPerDay,
-						paymentMethod: exposure.paymentMethod,
-						paymentStatus: nextPaymentStatus,
-						exposureEndsAt: nextExposureEndsAt,
-						publishedAt:
-							status === "published" && !existing.publishedAt
-								? new Date()
-								: existing.publishedAt,
-					})
-					.where(eq(jobPost.id, input.id))
-					.returning();
-
-				if (!updated) {
-					throw new ORPCError("INTERNAL_SERVER_ERROR", {
-						message: "Job post could not be updated.",
-					});
-				}
-
-				if (mediaRows) {
-					await tx
-						.delete(jobPostMedia)
-						.where(eq(jobPostMedia.jobPostId, input.id));
-
-					const insertedMedia =
-						mediaRows.length > 0
-							? await tx
-									.insert(jobPostMedia)
-									.values(
-										buildJobPostMediaInsertRows({
-											actorUserId: actor.userId,
-											jobPostId: updated.id,
-											media,
-											organizationId: existing.organizationId,
-										})
-									)
-									.returning()
-							: [];
-
-					return {
-						...updated,
-						media: toJobPostMediaSet(insertedMedia),
-					};
-				}
-
-				return {
-					...updated,
-					media: await getJobPostMediaSet(updated.id),
-				};
-			});
-
-			// 트랜잭션이 커밋된 뒤에만 객체를 지운다. 롤백된 변경으로 원본을 잃지 않는다.
-			if (mediaRows) {
-				const retainedKeys = new Set(mediaRows.map((row) => row.storageKey));
-
-				await deletePublicObjects(
-					previousStorageKeys.filter((key) => !retainedKeys.has(key))
-				);
-			}
-
-			return result;
 		}),
 	delete: protectedProcedure
 		.input(z.object({ id: z.string().uuid() }))

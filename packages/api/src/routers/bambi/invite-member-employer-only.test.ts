@@ -29,9 +29,7 @@ const seedOwner = async () => {
 		name: "소유자",
 		email: `${ownerId}@bambi.test`,
 	});
-	await db
-		.insert(bambiProfile)
-		.values({ userId: ownerId, role: "employer", displayName: "소유자" });
+	await db.insert(bambiProfile).values({ userId: ownerId, role: "employer" });
 	const organizationId = `org_${randomUUID()}`;
 	await db.insert(organization).values({
 		id: organizationId,
@@ -67,7 +65,7 @@ describe("inviteMember employer-only", () => {
 		});
 		await db
 			.insert(bambiProfile)
-			.values({ userId: inviteeId, role: "employer", displayName: "초대대상" });
+			.values({ userId: inviteeId, role: "employer" });
 
 		const invite = createProcedureClient(teamsRouter.inviteMember, {
 			context: ctx(ownerId),
@@ -97,7 +95,7 @@ describe("inviteMember employer-only", () => {
 		});
 		await db
 			.insert(bambiProfile)
-			.values({ userId: seekerId, role: "job_seeker", displayName: "구직자" });
+			.values({ userId: seekerId, role: "job_seeker" });
 
 		const invite = createProcedureClient(teamsRouter.inviteMember, {
 			context: ctx(ownerId),

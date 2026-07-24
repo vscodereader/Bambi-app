@@ -236,7 +236,6 @@ export const bambiProfile = pgTable(
 		// 광고(프로모션) 중인 업소(owner/admin) 표시 캐시. 진실값은 조회 시 캠페인 조인으로
 		// 파생 계산하며(bambi-advertiser), 이 컬럼은 activate/pause 이벤트에서 동기화된다.
 		isAdvertiser: boolean("is_advertiser").default(false).notNull(),
-		displayName: text("display_name"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -593,6 +592,8 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	address: text("address"),
 	// 고객문의 이메일
 	email: text("email"),
+	// 고객센터 전화(TEL). 푸터에 노출. null이면 코드 폴백(BAMBI_COMPANY.tel).
+	tel: text("tel"),
 	// 무통장입금 안내 계좌 목록. 운영자가 사이트 설정에서 관리하고, 공고 결제 안내에 노출된다.
 	// 미설정이면 빈 배열 → 안내 화면은 고객센터 문의 문구로 폴백한다.
 	bankAccounts: jsonb("bank_accounts")
@@ -664,6 +665,10 @@ export const chatRoom = pgTable(
 			.notNull()
 			.references(() => user.id),
 		isBlocked: boolean("is_blocked").default(false).notNull(),
+		// 회원별 소프트삭제(목록 숨김). 상대는 그대로 유지되며, 새 메시지 도착 시
+		// sendMessage가 양쪽 값을 NULL로 되돌려 방을 다시 노출한다.
+		seekerDeletedAt: timestamp("seeker_deleted_at"),
+		employerDeletedAt: timestamp("employer_deleted_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -693,6 +698,11 @@ export const chatMessage = pgTable(
 			.notNull()
 			.references(() => user.id),
 		body: text("body").notNull(),
+		// 메시지 종류. "text"=일반, "contact_request"=연락처 공개 요청(인라인 시스템 메시지).
+		kind: text("kind").notNull().default("text"),
+		// contact_request일 때 { status: "pending"|"revealed"|"declined",
+		// requesterUserId, targetUserId }. 공개된 번호는 여기 저장하지 않고 응답 조립 시 주입.
+		metadata: jsonb("metadata"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},

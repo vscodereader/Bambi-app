@@ -1919,6 +1919,10 @@ const MOD_MORE_GROUPS: {
 	label: string;
 }[] = [
 	{
+		label: "공고",
+		items: [{ href: "/moderator/jobs" as Route, label: "공고 관리" }],
+	},
+	{
 		label: "승인 관리",
 		items: [
 			{ href: "/moderator/employers", label: "업소 승인" },

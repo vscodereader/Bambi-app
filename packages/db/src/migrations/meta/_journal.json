@@ -239,6 +239,41 @@
       "when": 1784789414916,
       "tag": "0033_majestic_felicia_hardy",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1784794691225,
+      "tag": "0034_rainy_rhodey",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1784858225610,
+      "tag": "0035_lumpy_johnny_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1784858248938,
+      "tag": "0036_slippery_wild_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1784866162395,
+      "tag": "0037_complete_bloodstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1784873056584,
+      "tag": "0038_icy_polaris",
+      "breakpoints": true
     }
   ]
 }

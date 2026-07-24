@@ -49,9 +49,9 @@ const seedOrg = async () => {
 		{ id: staffId, name: "스태프", email: `${staffId}@bambi.test` },
 	]);
 	await db.insert(bambiProfile).values([
-		{ userId: ownerId, role: "employer", displayName: "업주" },
-		{ userId: managerId, role: "employer", displayName: "매니저" },
-		{ userId: staffId, role: "employer", displayName: "스태프" },
+		{ userId: ownerId, role: "employer" },
+		{ userId: managerId, role: "employer" },
+		{ userId: staffId, role: "employer" },
 	]);
 	await db
 		.insert(organization)

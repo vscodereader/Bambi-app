@@ -16,35 +16,22 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { StatusBadge } from "@/components/bambi/status-badge";
-import { formatAdPrice } from "@/lib/bambi/ad-catalog";
 import {
-	EXPOSURE_TYPE_LABELS,
-	expiryLabel,
-	getJobDisplayStatus,
-	PAYMENT_STATUS_LABELS,
-	remainingDays,
-} from "@/lib/bambi/exposure";
+	expiryColumn,
+	exposureTypeColumn,
+	jobOrganizationColumn,
+	jobStatusColumn,
+	jobTitleColumn,
+	paymentStatusColumn,
+} from "@/components/bambi/job-table-columns";
+import { formatAdPrice } from "@/lib/bambi/ad-catalog";
+import { remainingDays } from "@/lib/bambi/exposure";
 import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
 type PaymentJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["moderation"]["listJobsForPayment"]>
 >[number];
-
-type Tone = React.ComponentProps<typeof StatusBadge>["tone"];
-
-const getExpiryTone = (label: string): Tone => {
-	if (label === "진행중") {
-		return "good";
-	}
-
-	if (label === "만료") {
-		return "danger";
-	}
-
-	return "default";
-};
 
 interface PaymentColumnsOptions {
 	allSelected: boolean;
@@ -82,51 +69,10 @@ function getPaymentColumns({
 				/>
 			),
 		},
-		{
-			id: "title",
-			header: "공고 제목",
-			sortValue: (job) => job.title,
-			cell: (job) => (
-				<span className="break-keep font-medium text-foreground">
-					{job.title}
-				</span>
-			),
-		},
-		{
-			id: "organizationDisplayName",
-			header: "업체",
-			sortValue: (job) => job.organizationDisplayName,
-			cell: (job) => (
-				<span className="break-keep text-muted-foreground">
-					{job.organizationDisplayName}
-				</span>
-			),
-		},
-		{
-			id: "status",
-			header: "공고 상태",
-			sortValue: (job) =>
-				getJobDisplayStatus({
-					paymentStatus: job.paymentStatus,
-					status: job.status,
-				}).label,
-			cell: (job) => {
-				const display = getJobDisplayStatus({
-					paymentStatus: job.paymentStatus,
-					status: job.status,
-				});
-
-				return <StatusBadge tone={display.tone}>{display.label}</StatusBadge>;
-			},
-		},
-		{
-			id: "exposureType",
-			header: "노출 상품",
-			sortValue: (job) => EXPOSURE_TYPE_LABELS[job.exposureType],
-			cell: (job) => (
-				<StatusBadge>{EXPOSURE_TYPE_LABELS[job.exposureType]}</StatusBadge>
-			),
-		},
+		jobTitleColumn<PaymentJob>(),
+		jobOrganizationColumn<PaymentJob>(),
+		jobStatusColumn<PaymentJob>(),
+		exposureTypeColumn<PaymentJob>(),
 		{
 			id: "exposureAmount",
 			header: "결제 금액",
@@ -140,16 +86,7 @@ function getPaymentColumns({
 					</span>
 				),
 		},
-		{
-			id: "paymentStatus",
-			header: "결제 상태",
-			sortValue: (job) => PAYMENT_STATUS_LABELS[job.paymentStatus],
-			cell: (job) => (
-				<StatusBadge tone={job.paymentStatus === "paid" ? "good" : "warning"}>
-					{PAYMENT_STATUS_LABELS[job.paymentStatus]}
-				</StatusBadge>
-			),
-		},
+		paymentStatusColumn<PaymentJob>(),
 		{
 			id: "remainingDays",
 			header: "남은 기간",
@@ -167,16 +104,7 @@ function getPaymentColumns({
 				);
 			},
 		},
-		{
-			id: "expiry",
-			header: "만료 상태",
-			sortValue: (job) => expiryLabel(job.exposureEndsAt),
-			cell: (job) => {
-				const label = expiryLabel(job.exposureEndsAt);
-
-				return <StatusBadge tone={getExpiryTone(label)}>{label}</StatusBadge>;
-			},
-		},
+		expiryColumn<PaymentJob>(),
 		{
 			id: "createdAt",
 			header: "등록일",

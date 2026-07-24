@@ -88,21 +88,18 @@ const createManagementFixture = async (): Promise<ManagementFixture> => {
 	});
 	await db.insert(bambiProfile).values([
 		{
-			displayName: "운영자",
 			isPhoneVerified: true,
 			role: "admin",
 			status: "active",
 			userId: adminUserId,
 		},
 		{
-			displayName: "채용 담당자",
 			isPhoneVerified: true,
 			role: "employer",
 			status: "active",
 			userId: employerUserId,
 		},
 		{
-			displayName: "구직자",
 			isPhoneVerified: true,
 			role: "job_seeker",
 			status: "active",

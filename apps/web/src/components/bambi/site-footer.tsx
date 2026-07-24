@@ -56,6 +56,7 @@ export function SiteFooter({
 	const bizRegNo = data?.bizRegNo ?? BAMBI_COMPANY.bizRegNo;
 	const address = data?.address ?? BAMBI_COMPANY.address;
 	const email = data?.email ?? BAMBI_COMPANY.email;
+	const tel = data?.tel ?? BAMBI_COMPANY.tel;
 
 	return (
 		<footer
@@ -124,7 +125,7 @@ export function SiteFooter({
 						{operator} · 대표 {ceo} · 사업자등록번호 {bizRegNo}
 					</p>
 					<p>
-						{address} · 고객문의 {email}
+						{address} · TEL {tel} · 고객문의 {email}
 					</p>
 					<p className="pt-2 text-muted-foreground/80">
 						© {new Date().getFullYear()} {operator}. All rights reserved.

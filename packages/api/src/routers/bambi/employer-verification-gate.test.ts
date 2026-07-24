@@ -38,9 +38,7 @@ const seedPendingOwner = async () => {
 		name: "미승인",
 		email: `${userId}@bambi.test`,
 	});
-	await db
-		.insert(bambiProfile)
-		.values({ userId, role: "employer", displayName: "미승인" });
+	await db.insert(bambiProfile).values({ userId, role: "employer" });
 	await db.insert(organization).values({
 		createdAt: new Date(),
 		id: organizationId,

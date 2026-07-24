@@ -165,6 +165,19 @@ const toJobFormMediaItem = (item: {
 	width: item.width ?? undefined,
 });
 
+// 유료 상품에 무통장입금을 골랐는데 운영자 입금 계좌가 0개면 저장을 막는다(card와 대칭).
+function isBankTransferBlocked(
+	adProductId: string | null | undefined,
+	paymentMethod: string | null | undefined,
+	accountCount: number | undefined
+): boolean {
+	return (
+		Boolean(adProductId) &&
+		paymentMethod === "bank_transfer" &&
+		(accountCount ?? 0) === 0
+	);
+}
+
 export default function EditEmployerJobPage({
 	params,
 }: {
@@ -220,6 +233,10 @@ export default function EditEmployerJobPage({
 	);
 	const createMediaUploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
+	);
+	// 훅은 조건부 early-return보다 위에서 호출해야 하므로 계좌 쿼리는 여기 둔다(플래그는 아래에서 계산).
+	const paymentAccountsQuery = useQuery(
+		orpc.bambi.siteSettings.getPaymentAccounts.queryOptions()
 	);
 	// 프리미엄 광고는 가로형·세로형 배너 이미지가 모두 있어야 저장할 수 있다.
 	const { bannerImagesMissing, requiredBannerUsages } = useRequiredBannerGate({
@@ -498,6 +515,11 @@ export default function EditEmployerJobPage({
 	// 유료 상품에 신용카드(미지원)를 고른 상태면 수정 저장을 막는다. 사유는 결제 섹션 안내가 알린다.
 	const cardPaymentBlocked =
 		Boolean(form.adProductId) && form.paymentMethod === "card";
+	const bankTransferBlocked = isBankTransferBlocked(
+		form.adProductId,
+		form.paymentMethod,
+		paymentAccountsQuery.data?.length
+	);
 
 	const listingPreview = (
 		<EmployerListingPreview
@@ -858,6 +880,7 @@ export default function EditEmployerJobPage({
 										updateMutation.isPending ||
 										createMediaUploadMutation.isPending ||
 										cardPaymentBlocked ||
+										bankTransferBlocked ||
 										bannerImagesMissing
 									}
 									type="submit"

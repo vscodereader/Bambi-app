@@ -29,9 +29,7 @@ const seedOrgWithInvites = async () => {
 	await db
 		.insert(user)
 		.values({ id: ownerId, name: "업주", email: `${ownerId}@bambi.test` });
-	await db
-		.insert(bambiProfile)
-		.values({ userId: ownerId, role: "employer", displayName: "업주" });
+	await db.insert(bambiProfile).values({ userId: ownerId, role: "employer" });
 	await db
 		.insert(organization)
 		.values({ id: orgId, name: "업소", slug: orgId, createdAt: new Date() });

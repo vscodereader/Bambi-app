@@ -37,9 +37,7 @@ describe("submitEmployerBusinessInfo", () => {
 			name: "가입자",
 			email: `${userId}@bambi.test`,
 		});
-		await db
-			.insert(bambiProfile)
-			.values({ userId, role: "employer", displayName: "가입자" });
+		await db.insert(bambiProfile).values({ userId, role: "employer" });
 
 		const submit = callSubmit(userId);
 		const { organizationId, verificationStatus } = await submit({
@@ -83,9 +81,7 @@ describe("submitEmployerBusinessInfo", () => {
 			name: "재제출",
 			email: `${userId}@bambi.test`,
 		});
-		await db
-			.insert(bambiProfile)
-			.values({ userId, role: "employer", displayName: "재제출" });
+		await db.insert(bambiProfile).values({ userId, role: "employer" });
 
 		const submit = callSubmit(userId);
 		const first = await submit({
@@ -135,9 +131,7 @@ describe("submitEmployerBusinessInfo", () => {
 			name: "인증완료",
 			email: `${userId}@bambi.test`,
 		});
-		await db
-			.insert(bambiProfile)
-			.values({ userId, role: "employer", displayName: "인증완료" });
+		await db.insert(bambiProfile).values({ userId, role: "employer" });
 
 		const submit = callSubmit(userId);
 		const first = await submit({
@@ -184,9 +178,7 @@ describe("submitEmployerBusinessInfo", () => {
 			name: "정보변경",
 			email: `${userId}@bambi.test`,
 		});
-		await db
-			.insert(bambiProfile)
-			.values({ userId, role: "employer", displayName: "정보변경" });
+		await db.insert(bambiProfile).values({ userId, role: "employer" });
 
 		const submit = callSubmit(userId);
 		const first = await submit({
@@ -234,9 +226,7 @@ describe("submitEmployerBusinessInfo", () => {
 			name: "형식오류",
 			email: `${userId}@bambi.test`,
 		});
-		await db
-			.insert(bambiProfile)
-			.values({ userId, role: "employer", displayName: "형식오류" });
+		await db.insert(bambiProfile).values({ userId, role: "employer" });
 
 		const submit = callSubmit(userId);
 		await expect(

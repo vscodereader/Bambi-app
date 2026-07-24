@@ -14,6 +14,18 @@ export const user = pgTable("user", {
 	email: text("email").notNull().unique(),
 	emailVerified: boolean("email_verified").default(false).notNull(),
 	image: text("image"),
+	// 로그인 아이디(better-auth username 플러그인의 `username` 논리 필드). 정규화되어
+	// 소문자로 저장되며 유니크. nullable — 아이디 없는 계정 허용(Postgres unique는
+	// NULL 다중 허용이라 미설정 계정끼리 충돌 없음).
+	// drizzle property 이름은 SQL 컬럼명(login_id)과 반드시 동일해야 한다 — better-auth
+	// drizzle adapter가 논리 필드 `username`을 플러그인 schema 매핑으로 fieldName
+	// "login_id"로 바꾼 뒤 `schemaModel["login_id"]`로 컬럼을 찾기 때문(property key
+	// 불일치 시 signup/로그인 런타임에서 "field does not exist" 예외).
+	login_id: text("login_id").unique(),
+	// 플러그인 `displayUsername` 논리 필드의 미러. displayUsernameNormalization을
+	// 소문자로 걸어 항상 login_id와 동일한 소문자로 채워진다. nullable.
+	// property 이름 = SQL 컬럼명(login_id_display) 규칙은 위와 동일.
+	login_id_display: text("login_id_display"),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()

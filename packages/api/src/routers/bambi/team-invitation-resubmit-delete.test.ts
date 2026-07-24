@@ -39,8 +39,8 @@ const seedRejectedInvite = async (options?: { status?: string }) => {
 		{ id: inviteeId, name: "초대대상", email: inviteeEmail },
 	]);
 	await db.insert(bambiProfile).values([
-		{ userId: ownerId, role: "employer", displayName: "업주" },
-		{ userId: inviteeId, role: "employer", displayName: "초대대상" },
+		{ userId: ownerId, role: "employer" },
+		{ userId: inviteeId, role: "employer" },
 	]);
 	await db
 		.insert(organization)
@@ -101,7 +101,7 @@ const seedOutsider = async () => {
 	});
 	await db
 		.insert(bambiProfile)
-		.values({ userId: outsiderId, role: "employer", displayName: "외부" });
+		.values({ userId: outsiderId, role: "employer" });
 	return outsiderId;
 };
 

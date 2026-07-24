@@ -107,7 +107,6 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 	]);
 	await db.insert(bambiProfile).values([
 		{
-			displayName: "달빛토끼",
 			gender: "female",
 			isPhoneVerified: true,
 			role: "job_seeker",
@@ -115,7 +114,6 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 			userId: femaleUserId,
 		},
 		{
-			displayName: "남성구직자",
 			gender: "male",
 			isPhoneVerified: true,
 			role: "job_seeker",
@@ -123,7 +121,6 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 			userId: maleUserId,
 		},
 		{
-			displayName: "운영자",
 			gender: "female",
 			isPhoneVerified: true,
 			role: "admin",
@@ -131,7 +128,6 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 			userId: adminUserId,
 		},
 		{
-			displayName: "별빛여우",
 			gender: "female",
 			isPhoneVerified: true,
 			role: "job_seeker",
@@ -139,7 +135,6 @@ const createCommunityFixture = async (): Promise<CommunityFixture> => {
 			userId: otherFemaleUserId,
 		},
 		{
-			displayName: "달빛라운지",
 			isPhoneVerified: true,
 			role: "employer",
 			status: "active",
