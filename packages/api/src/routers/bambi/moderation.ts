@@ -14,11 +14,13 @@ import {
 	bambiProfile,
 	chatAttachment,
 	chatMessage,
+	chatMessageReadReceipt,
 	chatRoom,
 	communityComment,
 	communityPost,
 	employerOrganizationProfile,
 	employerTeamProfile,
+	interviewSchedule,
 	jobPost,
 	jobPostMedia,
 	report,
@@ -37,6 +39,7 @@ import {
 	isNotNull,
 	isNull,
 	lte,
+	or,
 	sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -222,6 +225,11 @@ const listEmployersInput = z.object({
 const setChatRoomBlockedInput = z.object({
 	chatRoomId: z.string().uuid(),
 	isBlocked: z.boolean(),
+	reason: z.string().min(2).max(500),
+});
+
+const hardDeleteChatRoomInput = z.object({
+	chatRoomId: z.string().uuid(),
 	reason: z.string().min(2).max(500),
 });
 
@@ -422,6 +430,26 @@ const getChatRoomTargetContext = async (targetId: string) => {
 		.limit(10);
 
 	return { chatRoom: { ...room, recentMessages } };
+};
+
+// 신고된 채팅방 id 집합 — 방 직접 신고(chat_room)와 방 안 메시지 신고(chat_message)를 합친다.
+// message 신고는 targetId(text)를 message.id::text와 맞춰 방으로 환원한다(uuid 캐스팅 회피).
+const getReportedChatRoomIds = async (): Promise<Set<string>> => {
+	const directRows = await db
+		.selectDistinct({ chatRoomId: report.targetId })
+		.from(report)
+		.where(eq(report.targetType, "chat_room"));
+
+	const viaMessageRows = await db
+		.selectDistinct({ chatRoomId: chatMessage.chatRoomId })
+		.from(report)
+		.innerJoin(chatMessage, eq(sql`${chatMessage.id}::text`, report.targetId))
+		.where(eq(report.targetType, "chat_message"));
+
+	return new Set<string>([
+		...directRows.map((row) => row.chatRoomId),
+		...viaMessageRows.map((row) => row.chatRoomId),
+	]);
 };
 
 const COMMUNITY_BODY_PREVIEW_MAX = 300;
@@ -1713,6 +1741,107 @@ export const moderationRouter = {
 
 				return updated;
 			});
+		}),
+
+	// 운영자 채팅 관리 목록: 삭제됨(seeker/employer deletedAt)·차단됨(isBlocked)·신고됨
+	// (chat_room/chat_message 신고가 참조) 방만 노출한다. 플래그 없는 정상 방은 제외.
+	listChatsForModeration: adminProcedure.handler(async () => {
+		const reportedRoomIds = await getReportedChatRoomIds();
+		const employerUser = alias(user, "chat_moderation_employer_user");
+		const seekerUser = alias(user, "chat_moderation_seeker_user");
+		// 상관 서브쿼리는 타입 파서가 없어 timestamp가 문자열로 온다 → 매핑에서 Date로 되돌린다.
+		const lastMessageAtSql = sql<string | null>`(
+			select max(${chatMessage.createdAt})
+			from ${chatMessage}
+			where ${chatMessage.chatRoomId} = ${chatRoom.id}
+		)`;
+
+		const conditions = [
+			eq(chatRoom.isBlocked, true),
+			isNotNull(chatRoom.seekerDeletedAt),
+			isNotNull(chatRoom.employerDeletedAt),
+		];
+		if (reportedRoomIds.size > 0) {
+			conditions.push(inArray(chatRoom.id, [...reportedRoomIds]));
+		}
+
+		const rows = await db
+			.select({
+				chatRoomId: chatRoom.id,
+				employerDeletedAt: chatRoom.employerDeletedAt,
+				employerName: employerUser.name,
+				employerUserId: chatRoom.employerUserId,
+				isBlocked: chatRoom.isBlocked,
+				jobPostTitle: jobPost.title,
+				jobSeekerName: seekerUser.name,
+				jobSeekerUserId: chatRoom.jobSeekerUserId,
+				lastMessageAt: lastMessageAtSql,
+				seekerDeletedAt: chatRoom.seekerDeletedAt,
+			})
+			.from(chatRoom)
+			.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+			.innerJoin(employerUser, eq(employerUser.id, chatRoom.employerUserId))
+			.innerJoin(seekerUser, eq(seekerUser.id, chatRoom.jobSeekerUserId))
+			.where(or(...conditions))
+			.orderBy(desc(chatRoom.updatedAt));
+
+		return rows.map((row) => ({
+			chatRoomId: row.chatRoomId,
+			employerName: row.employerName,
+			employerUserId: row.employerUserId,
+			isBlocked: row.isBlocked,
+			isDeleted: row.seekerDeletedAt !== null || row.employerDeletedAt !== null,
+			isReported: reportedRoomIds.has(row.chatRoomId),
+			jobPostTitle: row.jobPostTitle,
+			jobSeekerName: row.jobSeekerName,
+			jobSeekerUserId: row.jobSeekerUserId,
+			lastMessageAt:
+				row.lastMessageAt === null ? null : new Date(row.lastMessageAt),
+		}));
+	}),
+
+	// 운영자 채팅방 하드삭제. FK 순서를 지켜 자식부터 지운다(읽음영수증→첨부→메시지→
+	// 면접일정→방). contact_reveal_consent는 interview_schedule에 cascade로 물려 함께 삭제된다.
+	hardDeleteChatRoom: adminProcedure
+		.input(hardDeleteChatRoomInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			await db.transaction(async (tx) => {
+				const [room] = await tx
+					.select({ id: chatRoom.id })
+					.from(chatRoom)
+					.where(eq(chatRoom.id, input.chatRoomId))
+					.limit(1);
+
+				if (!room) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx
+					.delete(chatMessageReadReceipt)
+					.where(eq(chatMessageReadReceipt.chatRoomId, input.chatRoomId));
+				await tx
+					.delete(chatAttachment)
+					.where(eq(chatAttachment.chatRoomId, input.chatRoomId));
+				await tx
+					.delete(chatMessage)
+					.where(eq(chatMessage.chatRoomId, input.chatRoomId));
+				await tx
+					.delete(interviewSchedule)
+					.where(eq(interviewSchedule.chatRoomId, input.chatRoomId));
+				await tx.delete(chatRoom).where(eq(chatRoom.id, input.chatRoomId));
+
+				await tx.insert(adminModerationAction).values({
+					action: "hard_delete",
+					adminUserId: admin.userId,
+					reason: input.reason,
+					targetId: input.chatRoomId,
+					targetType: "chat_room",
+				});
+			});
+
+			return { ok: true };
 		}),
 
 	setTeamInvitationStatus: protectedProcedure

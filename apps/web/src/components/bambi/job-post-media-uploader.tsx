@@ -8,7 +8,12 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ImageIcon, Trash2, TriangleAlert } from "lucide-react";
 import Image from "next/image";
+import { toast } from "sonner";
 import { getAdBannerUsagesForPreviewTemplate } from "@/lib/bambi/ad-preview-templates";
+import {
+	detectImageSignature,
+	isSignatureMismatch,
+} from "@/lib/bambi/image-signature";
 import {
 	formatJobAdBannerSpec,
 	isAllowedJobAdBannerAspect,
@@ -44,12 +49,27 @@ const detailSlots = [
 	{ index: 4, key: "detail-image-slot-5" },
 ] as const;
 
+const IMAGE_SIGNATURE_MISMATCH_MESSAGE =
+	"이미지 형식이 올바르지 않습니다. PNG·JPG·WebP·GIF만 업로드할 수 있어요.";
+
 // 배너는 크기 검증·잘림 경고에 원본 치수가 필요해서 함께 읽는다. 치수를 못 읽어도
 // (손상된 파일 등) 업로드 자체는 막지 않고, 폼 검증이 "크기를 확인하지 못했습니다"로 잡아준다.
+// 파일 앞바이트(매직넘버)가 선언 mime과 어긋나면(확장자·File.type 위조) null을 돌려 업로드를
+// 차단한다 — 세 슬롯(썸네일·상세·광고 배너)이 모두 이 함수를 거치므로 여기서 한 번만 막는다.
 const createMediaItemFromFile = async (
 	file: File,
 	altText = ""
-): Promise<JobFormMediaItem> => {
+): Promise<JobFormMediaItem | null> => {
+	if (file.type.startsWith("image/")) {
+		const detected = await detectImageSignature(file);
+
+		if (isSignatureMismatch(file.type, detected)) {
+			toast.error(IMAGE_SIGNATURE_MISMATCH_MESSAGE);
+
+			return null;
+		}
+	}
+
 	const base: JobFormMediaItem = {
 		altText,
 		byteSize: file.size,
@@ -237,7 +257,11 @@ function AdBannerSlot({
 					onChange(item ? { ...item, altText } : null)
 				}
 				onFileChange={async (file) => {
-					onChange(await createMediaItemFromFile(file, item?.altText));
+					const created = await createMediaItemFromFile(file, item?.altText);
+
+					if (created) {
+						onChange(created);
+					}
 				}}
 				onRemove={() => onChange(null)}
 				previewClassName={cn("aspect-auto w-full", aspectClassName)}
@@ -327,10 +351,14 @@ export function JobPostMediaUploader({
 					})
 				}
 				onFileChange={async (file) => {
-					onChange({
-						...media,
-						cover: await createMediaItemFromFile(file, media.cover?.altText),
-					});
+					const created = await createMediaItemFromFile(
+						file,
+						media.cover?.altText
+					);
+
+					if (created) {
+						onChange({ ...media, cover: created });
+					}
 				}}
 				onRemove={() => onChange({ ...media, cover: null })}
 			/>
@@ -361,13 +389,14 @@ export function JobPostMediaUploader({
 								)
 							}
 							onFileChange={async (file) => {
-								onChange(
-									updateDetailAt(
-										media,
-										index,
-										await createMediaItemFromFile(file, item?.altText)
-									)
+								const created = await createMediaItemFromFile(
+									file,
+									item?.altText
 								);
+
+								if (created) {
+									onChange(updateDetailAt(media, index, created));
+								}
 							}}
 							onRemove={() => onChange(updateDetailAt(media, index, null))}
 						/>

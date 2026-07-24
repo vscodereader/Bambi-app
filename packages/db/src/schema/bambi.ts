@@ -665,6 +665,10 @@ export const chatRoom = pgTable(
 			.notNull()
 			.references(() => user.id),
 		isBlocked: boolean("is_blocked").default(false).notNull(),
+		// 회원별 소프트삭제(목록 숨김). 상대는 그대로 유지되며, 새 메시지 도착 시
+		// sendMessage가 양쪽 값을 NULL로 되돌려 방을 다시 노출한다.
+		seekerDeletedAt: timestamp("seeker_deleted_at"),
+		employerDeletedAt: timestamp("employer_deleted_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -694,6 +698,11 @@ export const chatMessage = pgTable(
 			.notNull()
 			.references(() => user.id),
 		body: text("body").notNull(),
+		// 메시지 종류. "text"=일반, "contact_request"=연락처 공개 요청(인라인 시스템 메시지).
+		kind: text("kind").notNull().default("text"),
+		// contact_request일 때 { status: "pending"|"revealed"|"declined",
+		// requesterUserId, targetUserId }. 공개된 번호는 여기 저장하지 않고 응답 조립 시 주입.
+		metadata: jsonb("metadata"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},

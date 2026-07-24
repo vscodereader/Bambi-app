@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { validateChatMediaUpload } from "./bambi-media-policy";
 
 describe("bambi media policy", () => {
-	it("allows JPEG, PNG, and WebP images up to 8 MB", () => {
+	it("allows JPEG, PNG, and WebP images up to 10 MB", () => {
 		expect(
 			validateChatMediaUpload({
-				byteSize: 8 * 1024 * 1024,
+				byteSize: 10 * 1024 * 1024,
 				fileName: "photo.jpg",
 				mimeType: "image/jpeg",
 			})
@@ -42,13 +42,13 @@ describe("bambi media policy", () => {
 	it("rejects oversized images", () => {
 		expect(
 			validateChatMediaUpload({
-				byteSize: 8 * 1024 * 1024 + 1,
+				byteSize: 10 * 1024 * 1024 + 1,
 				fileName: "large.jpg",
 				mimeType: "image/jpeg",
 			})
 		).toEqual({
 			code: "file_too_large",
-			maxBytes: 8 * 1024 * 1024,
+			maxBytes: 10 * 1024 * 1024,
 			ok: false,
 		});
 	});

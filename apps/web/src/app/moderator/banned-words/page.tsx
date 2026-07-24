@@ -1,25 +1,71 @@
 "use client";
 
+import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Switch } from "@bambi-app/ui/components/switch";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@bambi-app/ui/components/table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { UploadIcon } from "lucide-react";
+import { type ChangeEvent, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { type DataColumn, DataTable } from "@/components/bambi/data-table";
+import { parseBannedWordsCsv } from "@/lib/bambi/banned-words-csv";
 import { orpc } from "@/utils/orpc";
+
+type BannedWordRow = Awaited<
+	ReturnType<AppRouterClient["bambi"]["bannedWords"]["list"]>
+>["items"][number];
+
+function getBannedWordColumns(
+	onToggleActive: (id: string, isActive: boolean) => void,
+	onRemove: (id: string) => void
+): DataColumn<BannedWordRow>[] {
+	return [
+		{
+			id: "term",
+			header: "금칙어",
+			sortValue: (row) => row.term,
+			cell: (row) => <span className="font-bold">{row.term}</span>,
+		},
+		{
+			id: "normalizedTerm",
+			header: "정규화형",
+			cell: (row) => <Badge variant="outline">{row.normalizedTerm}</Badge>,
+		},
+		{
+			id: "isActive",
+			header: "사용",
+			cell: (row) => (
+				<Switch
+					checked={row.isActive}
+					onCheckedChange={(checked) => onToggleActive(row.id, checked)}
+				/>
+			),
+		},
+		{
+			id: "actions",
+			header: "삭제",
+			headerClassName: "text-right",
+			cellClassName: "text-right",
+			cell: (row) => (
+				<Button
+					onClick={() => onRemove(row.id)}
+					size="sm"
+					variant="destructive"
+				>
+					삭제
+				</Button>
+			),
+		},
+	];
+}
 
 export default function ModeratorBannedWordsPage() {
 	const queryClient = useQueryClient();
 	const [term, setTerm] = useState("");
+	const [keyword, setKeyword] = useState("");
+	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const listQuery = useQuery(
 		orpc.bambi.bannedWords.list.queryOptions({
@@ -44,6 +90,16 @@ export default function ModeratorBannedWordsPage() {
 		})
 	);
 
+	const createManyMutation = useMutation(
+		orpc.bambi.bannedWords.createMany.mutationOptions({
+			onError: (error) => toast(error.message || "일괄 추가하지 못했어요."),
+			onSuccess: async (result) => {
+				toast(`추가 ${result.added}건 · 제외 ${result.skipped.length}건`);
+				await invalidate();
+			},
+		})
+	);
+
 	const setActiveMutation = useMutation(
 		orpc.bambi.bannedWords.setActive.mutationOptions({
 			onError: (error) => toast(error.message || "상태를 바꾸지 못했어요."),
@@ -62,6 +118,44 @@ export default function ModeratorBannedWordsPage() {
 	);
 
 	const items = listQuery.data?.items ?? [];
+
+	const visibleItems = useMemo(() => {
+		const query = keyword.trim().toLowerCase();
+
+		if (!query) {
+			return items;
+		}
+
+		return items.filter(
+			(item) =>
+				item.term.toLowerCase().includes(query) ||
+				item.normalizedTerm.toLowerCase().includes(query)
+		);
+	}, [items, keyword]);
+
+	const handleCsvChange = async (event: ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0];
+		// 같은 파일을 다시 선택해도 onChange가 발생하도록 값을 비운다.
+		event.target.value = "";
+
+		if (!file) {
+			return;
+		}
+
+		const parsed = parseBannedWordsCsv(await file.text());
+
+		if (parsed.length === 0) {
+			toast("CSV에서 추가할 단어를 찾지 못했어요.");
+			return;
+		}
+
+		createManyMutation.mutate({ terms: parsed });
+	};
+
+	const columns = getBannedWordColumns(
+		(id, isActive) => setActiveMutation.mutate({ id, isActive }),
+		(id) => removeMutation.mutate({ id })
+	);
 
 	return (
 		<div className="flex flex-col gap-5 px-5 py-6 md:px-6">
@@ -88,59 +182,42 @@ export default function ModeratorBannedWordsPage() {
 				>
 					추가
 				</Button>
+				<Button
+					disabled={createManyMutation.isPending}
+					onClick={() => fileInputRef.current?.click()}
+					variant="outline"
+				>
+					<UploadIcon data-icon="inline-start" />
+					CSV로 추가
+				</Button>
+				<input
+					accept=".csv,text/csv"
+					className="hidden"
+					onChange={handleCsvChange}
+					ref={fileInputRef}
+					type="file"
+				/>
 			</div>
 
+			<Input
+				className="max-w-80"
+				onChange={(event) => setKeyword(event.target.value)}
+				placeholder="금칙어·정규화형 검색"
+				value={keyword}
+			/>
+
 			<div className="w-full overflow-x-auto">
-				<Table>
-					<TableHeader>
-						<TableRow>
-							<TableHead>금칙어</TableHead>
-							<TableHead>정규화형</TableHead>
-							<TableHead>사용</TableHead>
-							<TableHead>삭제</TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{items.length === 0 ? (
-							<TableRow>
-								<TableCell
-									className="text-muted-foreground text-sm"
-									colSpan={4}
-								>
-									등록된 금칙어가 없어요.
-								</TableCell>
-							</TableRow>
-						) : null}
-						{items.map((item) => (
-							<TableRow key={item.id}>
-								<TableCell className="font-bold">{item.term}</TableCell>
-								<TableCell className="text-muted-foreground">
-									<Badge variant="outline">{item.normalizedTerm}</Badge>
-								</TableCell>
-								<TableCell>
-									<Switch
-										checked={item.isActive}
-										onCheckedChange={(checked) =>
-											setActiveMutation.mutate({
-												id: item.id,
-												isActive: checked,
-											})
-										}
-									/>
-								</TableCell>
-								<TableCell>
-									<Button
-										onClick={() => removeMutation.mutate({ id: item.id })}
-										size="sm"
-										variant="destructive"
-									>
-										삭제
-									</Button>
-								</TableCell>
-							</TableRow>
-						))}
-					</TableBody>
-				</Table>
+				<DataTable
+					columns={columns}
+					data={visibleItems}
+					emptyMessage={
+						keyword.trim()
+							? "검색 조건에 맞는 금칙어가 없어요."
+							: "등록된 금칙어가 없어요."
+					}
+					getRowKey={(row) => row.id}
+					pageSize={20}
+				/>
 			</div>
 		</div>
 	);

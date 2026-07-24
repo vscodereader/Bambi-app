@@ -21,6 +21,18 @@ const createBannedWordInput = z.object({
 	term: z.string().trim().min(1).max(TERM_MAX),
 });
 
+const createManyBannedWordsInput = z.object({
+	terms: z
+		.array(z.string().trim().min(1).max(TERM_MAX))
+		.min(1, "추가할 단어가 없습니다.")
+		.max(500, "한 번에 최대 500개까지 추가할 수 있습니다."),
+});
+
+export interface SkippedBannedWord {
+	reason: "duplicate" | "empty";
+	term: string;
+}
+
 const bannedWordIdInput = z.object({
 	id: z.string().uuid(),
 });
@@ -87,6 +99,51 @@ export const bannedWordsRouter = {
 			invalidateBannedWordCache();
 
 			return { id: created.id };
+		}),
+
+	createMany: adminProcedure
+		.input(createManyBannedWordsInput)
+		.handler(async ({ context, input }) => {
+			const skipped: SkippedBannedWord[] = [];
+			const seen = new Set<string>();
+			const toInsert: Array<{
+				createdByUserId: string;
+				normalizedTerm: string;
+				term: string;
+			}> = [];
+
+			const existing = await db
+				.select({ normalizedTerm: bannedWord.normalizedTerm })
+				.from(bannedWord);
+			const existingSet = new Set(existing.map((row) => row.normalizedTerm));
+
+			for (const term of input.terms) {
+				const normalizedTerm = normalizeForMatch(term);
+
+				if (normalizedTerm.length === 0) {
+					skipped.push({ reason: "empty", term });
+					continue;
+				}
+
+				if (seen.has(normalizedTerm) || existingSet.has(normalizedTerm)) {
+					skipped.push({ reason: "duplicate", term });
+					continue;
+				}
+
+				seen.add(normalizedTerm);
+				toInsert.push({
+					createdByUserId: context.session.user.id,
+					normalizedTerm,
+					term,
+				});
+			}
+
+			if (toInsert.length > 0) {
+				await db.insert(bannedWord).values(toInsert);
+				invalidateBannedWordCache();
+			}
+
+			return { added: toInsert.length, skipped };
 		}),
 
 	setActive: adminProcedure
