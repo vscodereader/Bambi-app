@@ -90,13 +90,14 @@ function EmployerPhoneTile({ phone }: { phone: string }) {
 				<span className="font-medium text-muted-foreground text-xs">
 					구인자 연락처
 				</span>
-				<span className="font-bold text-base text-foreground leading-relaxed">
+				{/* 모바일은 번호 아래로 안내를 스택(flex-col), md↑는 번호 옆 한 줄(flex-row). */}
+				<span className="flex flex-col gap-0.5 md:flex-row md:items-baseline md:gap-1.5">
 					<a
-						className="underline-offset-2 hover:underline"
+						className="font-bold text-base text-foreground underline-offset-2 hover:underline"
 						href={`tel:${phone}`}
 					>
 						{phone}
-					</a>{" "}
+					</a>
 					<span className="font-medium text-primary text-sm">
 						('밤비알바 보고 연락드렸다고 하시면 정확한 상담 받으실 수 있어요.')
 					</span>
