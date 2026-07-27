@@ -1,13 +1,12 @@
 import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
-	adBannerAnimation,
-	adBannerTheme,
 	adProduct,
 	bambiProfile,
 	bambiSiteSettings,
 	employerOrganizationProfile,
 	employerTeamProfile,
+	jobAdBannerLayout,
 	jobIndustryCategory,
 	jobPost,
 	jobPostMedia,
@@ -29,6 +28,11 @@ import {
 import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
+import {
+	type AdBannerLayoutInput,
+	adBannerLayoutSchema,
+	collectLayoutTexts,
+} from "../../services/bambi-ad-banner-layout";
 import {
 	AD_BANNER_EXPOSURE_TYPES,
 	buildExposureJobSections,
@@ -146,13 +150,10 @@ const jobPostInputShape = z.object({
 	adProductId: z.string().uuid().nullish(),
 	exposureAmount: z.number().int().min(0).nullish(),
 	paymentMethod: z.enum(["card", "bank_transfer"]).nullish(),
-	// 프리미엄 배너에 얹는 문구·연출. 폼 상한(apps/web/src/lib/bambi/ad-banner-animations.ts)과
-	// 같은 값을 서버에서도 강제한다 — 트러스트 바운더리다.
-	adBannerHeadline: z.string().max(20).nullish(),
-	adBannerSubline: z.string().max(30).nullish(),
-	adBannerVerticalText: z.string().max(8).nullish(),
-	adBannerAnimation: z.enum(adBannerAnimation.enumValues).nullish(),
-	adBannerTheme: z.enum(adBannerTheme.enumValues).nullish(),
+	// 프리미엄 배너 에디터가 만든 레이아웃(job_ad_banner_layout.layout). jsonb라 DB 제약이
+	// 없으므로 adBannerLayoutSchema가 유일한 방어선이다 — 트러스트 바운더리다.
+	// 키를 아예 생략하면 기존 레이아웃을 보존하고, 명시적 null이면 지운다.
+	adBannerLayout: adBannerLayoutSchema.nullish(),
 	media: jobPostMediaSetInput,
 });
 
@@ -218,53 +219,89 @@ interface BuildJobPostMediaRowsInput {
 	organizationId: string;
 }
 
-export interface AdBannerTextInput {
-	adBannerAnimation?: (typeof adBannerAnimation.enumValues)[number] | null;
-	adBannerHeadline?: string | null;
-	adBannerSubline?: string | null;
-	adBannerTheme?: (typeof adBannerTheme.enumValues)[number] | null;
-	adBannerVerticalText?: string | null;
-}
+// 레이아웃 저장 결정. "keep"은 클라이언트가 adBannerLayout 키를 아예 보내지 않은 경우다.
+export type AdBannerLayoutWrite =
+	| { kind: "delete" }
+	| { kind: "keep" }
+	| { kind: "upsert"; layout: AdBannerLayoutInput };
 
-// 정규화 결과는 항상 5개 키가 다 있고 값은 확정값이거나 null이다 — 저장 경로가 그대로
-// insert/update 값에 펼쳐 넣는다.
-export interface NormalizedAdBannerText {
-	adBannerAnimation: (typeof adBannerAnimation.enumValues)[number] | null;
-	adBannerHeadline: string | null;
-	adBannerSubline: string | null;
-	adBannerTheme: (typeof adBannerTheme.enumValues)[number] | null;
-	adBannerVerticalText: string | null;
-}
-
-const EMPTY_AD_BANNER_TEXT: NormalizedAdBannerText = {
-	adBannerAnimation: null,
-	adBannerHeadline: null,
-	adBannerSubline: null,
-	adBannerTheme: null,
-	adBannerVerticalText: null,
-};
-
-// 공백만 입력한 문구는 미설정으로 본다(오버레이가 빈 스크림만 덮지 않도록).
-const trimmedOrNull = (value: string | null | undefined): string | null =>
-	value?.trim() ? value.trim() : null;
-
-// 배너 슬롯을 쓰지 않는 노출 타입이면 문구를 통째로 버린다. 저장해두면 나중에 상품이
-// 배너형으로 바뀔 때 검수받지 않은 문구가 조용히 노출된다.
-export const normalizeAdBannerText = (
-	input: AdBannerTextInput,
+// 배너 슬롯을 쓰지 않는 노출 타입이면 레이아웃을 버린다. 저장해두면 나중에 상품이 배너형으로
+// 바뀔 때 검수받지 않은 문구가 조용히 노출된다.
+//
+// 배너형이면 "키가 없으면 건드리지 않는다". 생략을 null로 취급해 무조건 덮으면, 다른 옵셔널
+// 필드는 생략 시 보존되는데 배너 편집물만 저장 한 번에 지워지는 비대칭이 생긴다.
+export const normalizeAdBannerLayout = (
+	input: { adBannerLayout?: AdBannerLayoutInput | null },
 	exposureType: string
-): NormalizedAdBannerText => {
+): AdBannerLayoutWrite => {
 	if (!(AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(exposureType)) {
-		return EMPTY_AD_BANNER_TEXT;
+		return { kind: "delete" };
 	}
 
-	return {
-		adBannerAnimation: input.adBannerAnimation ?? null,
-		adBannerHeadline: trimmedOrNull(input.adBannerHeadline),
-		adBannerSubline: trimmedOrNull(input.adBannerSubline),
-		adBannerTheme: input.adBannerTheme ?? null,
-		adBannerVerticalText: trimmedOrNull(input.adBannerVerticalText),
-	};
+	if (input.adBannerLayout === undefined) {
+		return { kind: "keep" };
+	}
+
+	return input.adBannerLayout === null
+		? { kind: "delete" }
+		: { kind: "upsert", layout: input.adBannerLayout };
+};
+
+export const getStoredAdBannerLayout = async (
+	jobPostId: string
+): Promise<AdBannerLayoutInput | null> => {
+	const [row] = await db
+		.select({ layout: jobAdBannerLayout.layout })
+		.from(jobAdBannerLayout)
+		.where(eq(jobAdBannerLayout.jobPostId, jobPostId))
+		.limit(1);
+
+	// 쓰기 경로가 adBannerLayoutSchema를 통과한 값만 저장한다. 읽는 쪽에서 형태가 어긋나면
+	// collectLayoutTexts가 빈 배열로, 렌더러가 무시로 처리한다.
+	return (row?.layout ?? null) as AdBannerLayoutInput | null;
+};
+
+// 검수 대상 레이아웃. 키를 생략해 기존 레이아웃이 보존되는 경우엔 저장분을 읽어야 남아 있을
+// 문구가 금칙어 검사를 빠져나가지 않는다.
+const resolveModeratedLayout = async (
+	write: AdBannerLayoutWrite,
+	existingJobPostId: null | string
+): Promise<unknown> => {
+	if (write.kind === "upsert") {
+		return write.layout;
+	}
+
+	if (write.kind === "keep" && existingJobPostId) {
+		return await getStoredAdBannerLayout(existingJobPostId);
+	}
+
+	return null;
+};
+
+const writeAdBannerLayout = async (
+	tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+	jobPostId: string,
+	write: AdBannerLayoutWrite
+): Promise<void> => {
+	if (write.kind === "keep") {
+		return;
+	}
+
+	if (write.kind === "delete") {
+		await tx
+			.delete(jobAdBannerLayout)
+			.where(eq(jobAdBannerLayout.jobPostId, jobPostId));
+
+		return;
+	}
+
+	await tx
+		.insert(jobAdBannerLayout)
+		.values({ jobPostId, layout: write.layout })
+		.onConflictDoUpdate({
+			set: { layout: write.layout, updatedAt: new Date() },
+			target: jobAdBannerLayout.jobPostId,
+		});
 };
 
 const RISKY_TERMS = ["미성년", "성매매", "강요"] as const;
@@ -321,11 +358,11 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 	}
 };
 
-// 배너 문구도 구직자에게 노출되는 문구다. 정규화(=실제 저장될) 문구를 넘겨받아 본문과
-// 같은 금칙어·위험어 검사를 태운다 — 버려질 문구로 공고가 검수에 걸리지는 않게 한다.
+// 배너 문구도 구직자에게 노출되는 문구다. 실제로 저장될 레이아웃을 넘겨받아 본문과 같은
+// 금칙어·위험어 검사를 태운다 — 버려질 문구로 공고가 검수에 걸리지는 않게 한다.
 const prepareJobPostContent = (
 	input: JobPostInput,
-	adBannerText: NormalizedAdBannerText
+	adBannerLayout: unknown
 ): PreparedJobPostContent => {
 	const descriptionBlocks = input.descriptionBlocks ?? [];
 	const validation = validateJobDescriptionBlocks(descriptionBlocks);
@@ -347,13 +384,8 @@ const prepareJobPostContent = (
 		description,
 		descriptionBlocks: normalizedBlocks,
 		hasRiskFlags: hasRiskFlags({
-			adBannerText: [
-				adBannerText.adBannerHeadline,
-				adBannerText.adBannerSubline,
-				adBannerText.adBannerVerticalText,
-			]
-				.filter(Boolean)
-				.join(" "),
+			// 가로·세로 두 슬롯을 모두 훑는다 — 한쪽만 보면 반대 슬롯 문구가 검사를 빠져나간다.
+			adBannerText: collectLayoutTexts(adBannerLayout).join(" "),
 			blockRiskTerms,
 			description,
 			interviewNotes: input.interviewNotes,
@@ -670,7 +702,13 @@ export const applyJobPostUpdate = async ({
 	data: JobPostInput;
 	existing: typeof jobPost.$inferSelect;
 }) => {
-	const { descriptionBlocks: _descriptionBlocks, media, ...jobInput } = data;
+	// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다.
+	const {
+		adBannerLayout: _adBannerLayout,
+		descriptionBlocks: _descriptionBlocks,
+		media,
+		...jobInput
+	} = data;
 
 	if (
 		data.organizationId !== existing.organizationId ||
@@ -702,8 +740,11 @@ export const applyJobPostUpdate = async ({
 		exposureDurationDays: data.exposureDurationDays,
 		paymentMethod: data.paymentMethod,
 	});
-	const adBannerText = normalizeAdBannerText(data, exposure.exposureType);
-	const preparedContent = prepareJobPostContent(data, adBannerText);
+	const layoutWrite = normalizeAdBannerLayout(data, exposure.exposureType);
+	const preparedContent = prepareJobPostContent(
+		data,
+		await resolveModeratedLayout(layoutWrite, existing.id)
+	);
 	// 노출 상품·기간이 바뀌면 재결제가 필요하다. 유료 전환/변경은 미결제로 되돌리고,
 	// 무료 전환은 결제 게이트 없이 즉시 게시(paid)로 둔다(생성 시 무료 공고와 동일 규칙).
 	const exposureChanged =
@@ -750,8 +791,6 @@ export const applyJobPostUpdate = async ({
 			.update(jobPost)
 			.set({
 				...jobInput,
-				// 정규화 결과로 원본 입력을 덮는다 — 배너형이 아닌 공고는 여기서 null이 된다.
-				...adBannerText,
 				// 금액 단위 → "협의"로 바꿀 때 undefined면 drizzle이 컬럼을 건너뛰어
 				// 예전 금액이 남는다. null로 명시해 지운다.
 				payAmount: jobInput.payAmount ?? null,
@@ -781,6 +820,8 @@ export const applyJobPostUpdate = async ({
 				message: "Job post could not be updated.",
 			});
 		}
+
+		await writeAdBannerLayout(tx, updated.id, layoutWrite);
 
 		if (mediaRows) {
 			await tx
@@ -1046,15 +1087,11 @@ export const jobsRouter = {
 	// 위치별로 내려준다. 목록 필터와 무관해 list와 분리된 공개 조회다.
 	listAdBanners: publicProcedure.handler(async ({ context }) => {
 		const now = new Date();
-		const rows = await db
+		const selectedRows = await db
 			.select({
-				// 배너 이미지 위에 얹을 문구·연출. 문구가 없는 기존 공고는 전부 null이라
-				// 클라이언트가 예전처럼 이미지만 렌더한다.
-				adBannerAnimation: jobPost.adBannerAnimation,
-				adBannerHeadline: jobPost.adBannerHeadline,
-				adBannerSubline: jobPost.adBannerSubline,
-				adBannerTheme: jobPost.adBannerTheme,
-				adBannerVerticalText: jobPost.adBannerVerticalText,
+				// 배너 이미지 위에 얹을 레이아웃(문구·좌표·연출). 편집한 적 없는 공고는 조인이
+				// 비어 null이라 클라이언트가 예전처럼 이미지만 렌더한다.
+				layout: jobAdBannerLayout.layout,
 				// 슬롯별 배너 원본. 좌측·프리미엄은 가로형, 우측은 세로형을 쓰며 클라이언트가
 				// 슬롯에 맞는 쪽을 고른다. 미업로드 공고를 위해 coverImage도 폴백용으로 함께 내린다.
 				adHorizontal: adHorizontalImageSql,
@@ -1078,6 +1115,7 @@ export const jobsRouter = {
 				employerTeamProfile,
 				eq(jobPost.teamId, employerTeamProfile.teamId)
 			)
+			.leftJoin(jobAdBannerLayout, eq(jobPost.id, jobAdBannerLayout.jobPostId))
 			.where(
 				and(
 					eq(jobPost.status, "published" as JobPostStatus),
@@ -1087,6 +1125,13 @@ export const jobsRouter = {
 				)
 			)
 			.orderBy(desc(jobPost.publishedAt));
+
+		// jsonb 컬럼은 drizzle이 unknown으로 준다. 쓰기 경로가 adBannerLayoutSchema를 통과한
+		// 값만 저장하므로 읽을 때 다시 파싱하지 않고 형태를 명시해 클라이언트로 내린다.
+		const rows = selectedRows.map((row) => ({
+			...row,
+			layout: (row.layout ?? null) as AdBannerLayoutInput | null,
+		}));
 
 		// 로테이션 주기는 운영자 사이트 설정값(분)을 따르고, 미설정이면 코드 기본값을 쓴다.
 		const [rotationRow] = await db
@@ -1306,8 +1351,11 @@ export const jobsRouter = {
 				session: context.session,
 			});
 
+			// 수정 폼 프리필. 레이아웃을 함께 내리지 않으면 폼이 빈 값으로 시작해 저장 시
+			// 기존 배너 편집물이 사라진다.
 			return {
 				...post,
+				adBannerLayout: await getStoredAdBannerLayout(post.id),
 				media: await getJobPostMediaSet(post.id),
 			};
 		}),
@@ -1340,7 +1388,9 @@ export const jobsRouter = {
 	create: protectedProcedure
 		.input(jobPostInput)
 		.handler(async ({ context, input }) => {
+			// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다.
 			const {
+				adBannerLayout: _adBannerLayout,
 				descriptionBlocks: _descriptionBlocks,
 				media,
 				...jobInput
@@ -1381,8 +1431,11 @@ export const jobsRouter = {
 				exposureDurationDays: input.exposureDurationDays,
 				paymentMethod: input.paymentMethod,
 			});
-			const adBannerText = normalizeAdBannerText(input, exposure.exposureType);
-			const preparedContent = prepareJobPostContent(input, adBannerText);
+			const layoutWrite = normalizeAdBannerLayout(input, exposure.exposureType);
+			const preparedContent = prepareJobPostContent(
+				input,
+				await resolveModeratedLayout(layoutWrite, null)
+			);
 			const mediaRows = requireValidJobPostMediaSet({
 				media,
 				organizationId: input.organizationId,
@@ -1404,8 +1457,6 @@ export const jobsRouter = {
 					.insert(jobPost)
 					.values({
 						...jobInput,
-						// 정규화 결과로 원본 입력을 덮는다 — 배너형이 아닌 공고는 여기서 null이 된다.
-						...adBannerText,
 						createdByUserId: actor.userId,
 						description: preparedContent.description,
 						descriptionBlocks: preparedContent.descriptionBlocks,
@@ -1430,6 +1481,8 @@ export const jobsRouter = {
 						message: "Job post could not be created.",
 					});
 				}
+
+				await writeAdBannerLayout(tx, created.id, layoutWrite);
 
 				const insertedMedia =
 					mediaRows.length > 0

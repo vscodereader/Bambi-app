@@ -74,46 +74,46 @@ describe("toAdBannerItem", () => {
 		expect(item.imageUrl.length).toBeGreaterThan(0);
 	});
 
-	it("carries the banner text config for the horizontal slot", () => {
-		const item = toAdBannerItem(
-			{
-				adBannerAnimation: "blur-in",
-				adBannerHeadline: "주말 알바 급구",
-				adBannerSubline: "당일 지급",
-				adBannerTheme: "coral",
-				adBannerVerticalText: "급구",
-				id: "job-1",
-				title: "홀서빙",
+	it("carries the layout through to both slots", () => {
+		// 슬롯별로 잘라내지 않는다 — 렌더러가 슬롯을 보고 가로·세로 중 하나를 고른다.
+		const layout = {
+			horizontal: {
+				background: { type: "image" as const },
+				scrim: { enabled: true, opacity: 65 },
+				texts: [
+					{
+						align: "center" as const,
+						animation: "blur" as const,
+						color: "#ffffff",
+						content: "주말 알바 급구",
+						fontSize: 8,
+						id: "block-1",
+						weight: "bold" as const,
+						x: 50,
+						y: 50,
+					},
+				],
 			},
-			"ad_horizontal"
-		);
+			version: 1 as const,
+			vertical: {
+				background: { type: "image" as const },
+				scrim: { enabled: true, opacity: 65 },
+				texts: [],
+			},
+		};
+		const job = { id: "job-1", layout, title: "홀서빙" };
 
-		expect(item.text?.headline).toBe("주말 알바 급구");
-		expect(item.text?.animation).toBe("blur-in");
+		expect(toAdBannerItem(job, "ad_horizontal").layout).toEqual(layout);
+		expect(toAdBannerItem(job, "ad_vertical").layout).toEqual(layout);
 	});
 
-	it("carries no text when the vertical slot has no vertical copy", () => {
-		// 세로 슬롯은 헤드라인을 잘라 쓰지 않는다 — 20자를 92px 폭에 넣으면 잘린 문구가 노출된다.
-		const item = toAdBannerItem(
-			{
-				adBannerHeadline: "주말 알바 급구",
-				adBannerVerticalText: null,
-				id: "job-1",
-				title: "홀서빙",
-			},
-			"ad_vertical"
-		);
-
-		expect(item.text).toBeNull();
-	});
-
-	it("carries no text for legacy jobs without banner copy", () => {
-		// 기존 프리미엄 공고는 전부 null이라 예전처럼 이미지만 나와야 한다.
+	it("carries no layout for jobs that were never edited", () => {
+		// 배너를 편집하지 않은 공고는 null이라 예전처럼 이미지만 나와야 한다.
 		const item = toAdBannerItem(
 			{ id: "job-1", title: "홀서빙" },
 			"ad_horizontal"
 		);
 
-		expect(item.text).toBeNull();
+		expect(item.layout).toBeNull();
 	});
 });

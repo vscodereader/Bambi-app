@@ -38,6 +38,25 @@ const SLOT_OPTIONS: { label: string; value: AdBannerSlot }[] = [
 	{ label: "세로형", value: "vertical" },
 ];
 
+// 서버 zod는 문구를 trim 후 1자 이상으로 받는다. 빈 블록을 그대로 저장하면 배너가 아니라
+// 공고 저장 전체가 반려되면서 구인자에겐 원인이 안 보이는 에러만 뜬다. 여기서 먼저 잡고,
+// 어느 슬롯의 어느 블록인지까지 짚어 준다.
+const findBlankBlock = (
+	layout: AdBannerLayout
+): { block: AdBannerTextBlock; slot: AdBannerSlot } | null => {
+	for (const slot of ["horizontal", "vertical"] as const) {
+		const block = layout[slot].texts.find(
+			(candidate) => candidate.content.trim().length === 0
+		);
+
+		if (block) {
+			return { block, slot };
+		}
+	}
+
+	return null;
+};
+
 // 배너 문구 자유 배치 에디터. window·postMessage를 모르는 순수 컴포넌트다 — 팝업·다이얼로그
 // 껍데기가 각자 방식으로 onSave·onCancel을 채운다.
 export function AdBannerEditor({
@@ -111,6 +130,19 @@ export function AdBannerEditor({
 			texts: slotLayout.texts.filter((block) => block.id !== selectedBlock.id),
 		});
 		setSelectedId(null);
+	};
+
+	const handleSave = () => {
+		const blank = findBlankBlock(layout);
+
+		if (blank) {
+			setSlot(blank.slot);
+			setSelectedId(blank.block.id);
+			toast.error("내용이 비어 있는 문구가 있어요. 채우거나 삭제해 주세요.");
+			return;
+		}
+
+		onSave(layout);
 	};
 
 	const handleScrimOpacity = (value: string) => {
@@ -285,7 +317,7 @@ export function AdBannerEditor({
 						<Button onClick={onCancel} variant="outline">
 							취소
 						</Button>
-						<Button onClick={() => onSave(layout)}>저장</Button>
+						<Button onClick={handleSave}>저장</Button>
 					</div>
 				</div>
 			</div>
