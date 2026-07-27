@@ -90,7 +90,7 @@
   - `DEFAULT_AD_BANNER_THEME: AdBannerTheme` (= `"dark"`)
   - `AD_BANNER_HEADLINE_MAX_LENGTH = 20`, `AD_BANNER_SUBLINE_MAX_LENGTH = 30`, `AD_BANNER_VERTICAL_TEXT_MAX_LENGTH = 8`
 
-- [ ] **Step 1: 실패하는 테스트를 쓴다**
+- [x] **Step 1: 실패하는 테스트를 쓴다**
 
 `apps/web/src/lib/bambi/ad-banner-animations.test.ts`:
 
@@ -143,12 +143,12 @@ describe("ad banner animation catalog", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
+- [x] **Step 2: 테스트를 돌려 실패를 확인한다**
 
 Run: `pnpm vitest run apps/web/src/lib/bambi/ad-banner-animations.test.ts` (저장소 루트에서)
 Expected: FAIL — `Cannot find module './ad-banner-animations'`
 
-- [ ] **Step 3: 카탈로그를 구현한다**
+- [x] **Step 3: 카탈로그를 구현한다**
 
 `apps/web/src/lib/bambi/ad-banner-animations.ts`:
 
@@ -228,12 +228,12 @@ export const AD_BANNER_SUBLINE_MAX_LENGTH = 30;
 export const AD_BANNER_VERTICAL_TEXT_MAX_LENGTH = 8;
 ```
 
-- [ ] **Step 4: 테스트를 돌려 통과를 확인한다**
+- [x] **Step 4: 테스트를 돌려 통과를 확인한다**
 
 Run: `pnpm vitest run apps/web/src/lib/bambi/ad-banner-animations.test.ts` (저장소 루트에서)
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 pnpm dlx ultracite fix
@@ -253,7 +253,7 @@ git commit -m "feat(web): 광고 배너 텍스트 애니메이션·테마 카탈
 - Consumes: Task 1의 값 목록(문자열이 일치해야 한다)
 - Produces: `jobPost.adBannerHeadline`, `.adBannerSubline`, `.adBannerVerticalText`, `.adBannerAnimation`, `.adBannerTheme`, `bambiSiteSettings.adInquiryTel`, pgEnum `adBannerAnimation`·`adBannerTheme`
 
-- [ ] **Step 1: enum 2개를 추가한다**
+- [x] **Step 1: enum 2개를 추가한다**
 
 `packages/db/src/schema/bambi.ts`의 `jobPostMediaUsage` 선언 아래에 붙인다:
 
@@ -278,7 +278,7 @@ export const adBannerTheme = pgEnum("ad_banner_theme", [
 ]);
 ```
 
-- [ ] **Step 2: `job_post`에 컬럼 5개를 추가한다**
+- [x] **Step 2: `job_post`에 컬럼 5개를 추가한다**
 
 `jobPost` 테이블 정의에서 `exposureEndsAt` 등 노출 관련 컬럼 근처에 넣는다:
 
@@ -296,7 +296,7 @@ export const adBannerTheme = pgEnum("ad_banner_theme", [
 	adBannerTheme: adBannerTheme("ad_banner_theme"),
 ```
 
-- [ ] **Step 3: `bambi_site_settings`에 컬럼 1개를 추가한다**
+- [x] **Step 3: `bambi_site_settings`에 컬럼 1개를 추가한다**
 
 `tel` 컬럼 바로 아래에 넣는다:
 
@@ -306,12 +306,12 @@ export const adBannerTheme = pgEnum("ad_banner_theme", [
 	adInquiryTel: text("ad_inquiry_tel"),
 ```
 
-- [ ] **Step 4: 타입 체크로 스키마를 검증한다**
+- [x] **Step 4: 타입 체크로 스키마를 검증한다**
 
 Run: `pnpm -F @bambi-app/db check-types`
 Expected: EXIT 0
 
-- [ ] **Step 5: 마이그레이션을 생성하고 적용한다**
+- [x] **Step 5: 마이그레이션을 생성하고 적용한다**
 
 사용자가 `db:generate`·`db:migrate` 실행을 명시적으로 허용했다(2026-07-27). `db:push`는 여전히 금지다.
 
@@ -328,7 +328,7 @@ Expected: 0039 적용 성공
 Run: `pnpm -F @bambi-app/db check-types`
 Expected: EXIT 0
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add packages/db/src/schema/bambi.ts packages/db/src/migrations/
@@ -362,7 +362,7 @@ React Bits(MIT + Commons Clause) 소스를 가져와 프로젝트 규칙에 맞�
 - Consumes: `AdBannerAnimation` (Task 1)
 - Produces: `<AdBannerText animation={AdBannerAnimation | null} className?: string text: string />` — 애니메이션 값에 맞는 렌더를 고르고, `prefers-reduced-motion`이거나 `animation`이 null이면 정적 텍스트를 그린다
 
-- [ ] **Step 1: `motion`을 설치한다**
+- [x] **Step 1: `motion`을 설치한다**
 
 ```bash
 pnpm -F web add motion
@@ -370,7 +370,7 @@ pnpm -F web add motion
 
 `apps/web/package.json` dependencies에 들어갔는지 확인한다. 이 저장소는 pnpm workspace + catalog를 쓰므로 catalog 항목이 아닌 일반 버전 지정이 된다.
 
-- [ ] **Step 2: CSS 애니메이션 토큰을 추가한다**
+- [x] **Step 2: CSS 애니메이션 토큰을 추가한다**
 
 `apps/web/src/index.css`의 `@theme` 블록에 넣는다. 새 CSS 파일이나 전역 클래스를 만들지 않는다:
 
@@ -398,7 +398,7 @@ pnpm -F web add motion
 	}
 ```
 
-- [ ] **Step 3: `blur-text.tsx`를 만든다**
+- [x] **Step 3: `blur-text.tsx`를 만든다**
 
 ```tsx
 "use client";
@@ -435,7 +435,7 @@ export function BlurText({
 }
 ```
 
-- [ ] **Step 4: `typing-text.tsx`를 만든다**
+- [x] **Step 4: `typing-text.tsx`를 만든다**
 
 ```tsx
 "use client";
@@ -481,7 +481,7 @@ export function TypingText({
 }
 ```
 
-- [ ] **Step 5: `decrypted-text.tsx`를 만든다**
+- [x] **Step 5: `decrypted-text.tsx`를 만든다**
 
 ```tsx
 "use client";
@@ -536,7 +536,7 @@ export function DecryptedText({
 }
 ```
 
-- [ ] **Step 6: 디스패처 `ad-banner-text.tsx`를 만든다**
+- [x] **Step 6: 디스패처 `ad-banner-text.tsx`를 만든다**
 
 ```tsx
 "use client";
@@ -623,12 +623,12 @@ export function AdBannerText({
 
 `bg-[linear-gradient(...)]`의 raw rgb 값은 흰색 하이라이트라 브랜드 색이 아니다. 코럴은 `var(--color-coral-*)` 토큰을 경유했다.
 
-- [ ] **Step 7: 타입 체크**
+- [x] **Step 7: 타입 체크**
 
 Run: `pnpm -F web check-types`
 Expected: EXIT 0
 
-- [ ] **Step 8: 커밋**
+- [x] **Step 8: 커밋**
 
 ```bash
 pnpm dlx ultracite fix
@@ -658,7 +658,7 @@ feat(web): 배너 텍스트 애니메이션 컴포넌트 5종 추가
   - `<AdBannerTextOverlay config={AdBannerTextConfig} variant="horizontal" | "vertical" />` — 그릴 문구가 없으면 `null` 반환
   - `<AdSlotInquiryContent tel={string} variant="horizontal" | "vertical" />` — 자리표시 내용
 
-- [ ] **Step 1: 오버레이를 구현한다**
+- [x] **Step 1: 오버레이를 구현한다**
 
 ```tsx
 "use client";
@@ -789,12 +789,12 @@ export function AdSlotInquiryContent({
 
 세로형 자리표시는 폭이 약 92px이라 세로쓰기 대신 줄바꿈으로 흘린다 — 번호가 세로로 서면 읽기 어렵다.
 
-- [ ] **Step 2: 타입 체크**
+- [x] **Step 2: 타입 체크**
 
 Run: `pnpm -F web check-types`
 Expected: EXIT 0
 
-- [ ] **Step 3: 커밋**
+- [x] **Step 3: 커밋**
 
 ```bash
 pnpm dlx ultracite fix
@@ -832,7 +832,7 @@ feat(web): 광고 배너 텍스트 오버레이 컴포넌트 추가
 - Consumes: `AdSlotInquiryContent` (Task 4)
 - Produces: `resolveAdInquiryTel({ adInquiryTel, tel }): string` — 자리표시가 쓸 번호를 폴백 체인으로 확정한다
 
-- [ ] **Step 1: 실패하는 폴백 테스트를 쓴다**
+- [x] **Step 1: 실패하는 폴백 테스트를 쓴다**
 
 `apps/web/src/lib/bambi/ad-inquiry-tel.test.ts`:
 
@@ -871,12 +871,12 @@ describe("resolveAdInquiryTel", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
+- [x] **Step 2: 테스트를 돌려 실패를 확인한다**
 
 Run: `pnpm vitest run apps/web/src/lib/bambi/ad-inquiry-tel.test.ts` (저장소 루트에서)
 Expected: FAIL — `resolveAdInquiryTel is not exported`
 
-- [ ] **Step 3: 서버에 `adInquiryTel`을 싣는다**
+- [x] **Step 3: 서버에 `adInquiryTel`을 싣는다**
 
 `packages/api/src/routers/bambi/site-settings.ts`:
 
@@ -902,7 +902,7 @@ const FOOTER_COLUMNS = {
 	adInquiryTel: optionalText(60),
 ```
 
-- [ ] **Step 4: 운영자 폼에 입력칸을 추가한다**
+- [x] **Step 4: 운영자 폼에 입력칸을 추가한다**
 
 `apps/web/src/app/moderator/site-settings/page.tsx`의 "고객센터 전화" 필드 바로 아래에 넣는다. 폼 상태 초기화(`tel: data.tel ?? ""` 근처)에도 `adInquiryTel: data.adInquiryTel ?? ""`를 함께 추가한다:
 
@@ -923,7 +923,7 @@ const FOOTER_COLUMNS = {
 								</div>
 ```
 
-- [ ] **Step 5: `AdSlotPlaceholder`를 컴포넌트 렌더로 바꾼다**
+- [x] **Step 5: `AdSlotPlaceholder`를 컴포넌트 렌더로 바꾼다**
 
 먼저 `apps/web/src/lib/bambi/ad-inquiry-tel.ts`를 만든다:
 
@@ -983,12 +983,12 @@ import { orpc } from "@/utils/orpc";
 import { AdSlotInquiryContent } from "./ad-banner-text-overlay";
 ```
 
-- [ ] **Step 6: 테스트를 돌려 통과를 확인한다**
+- [x] **Step 6: 테스트를 돌려 통과를 확인한다**
 
 Run: `pnpm vitest run apps/web/src/lib/bambi/ad-inquiry-tel.test.ts` (저장소 루트에서)
 Expected: PASS (4 tests)
 
-- [ ] **Step 7: PNG를 삭제한다**
+- [x] **Step 7: PNG를 삭제한다**
 
 ```bash
 git rm apps/web/public/bambi/placeholder/horizontal-placeholder.png apps/web/public/bambi/placeholder/vertical-placeholder.png
@@ -999,12 +999,12 @@ git rm apps/web/public/bambi/placeholder/horizontal-placeholder.png apps/web/pub
 Run: `rg "placeholder/(horizontal|vertical)-placeholder" apps packages`
 Expected: 매치 없음
 
-- [ ] **Step 8: 타입 체크와 전체 web 테스트**
+- [x] **Step 8: 타입 체크와 전체 web 테스트**
 
 Run: `pnpm -F web check-types && pnpm vitest run apps/web`
 Expected: EXIT 0, 전체 PASS
 
-- [ ] **Step 9: 커밋**
+- [x] **Step 9: 커밋**
 
 ```bash
 pnpm dlx ultracite fix
@@ -1039,7 +1039,7 @@ feat(web): 광고 슬롯 자리표시를 컴포넌트화하고 문의 번호를 
   - `normalizeAdBannerText(input, exposureType)` — 배너형 노출이 아니면 전부 null로 만든다
   - `AdBannerItem`에 `text: AdBannerTextConfig | null`
 
-- [ ] **Step 1: 실패하는 정규화 테스트를 쓴다**
+- [x] **Step 1: 실패하는 정규화 테스트를 쓴다**
 
 `packages/api/src/routers/bambi/job-ad-banner-text.test.ts`:
 
@@ -1098,12 +1098,12 @@ describe("normalizeAdBannerText", () => {
 });
 ```
 
-- [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
+- [x] **Step 2: 테스트를 돌려 실패를 확인한다**
 
 Run: `pnpm -F @bambi-app/api test job-ad-banner-text`
 Expected: FAIL — `normalizeAdBannerText is not exported`
 
-- [ ] **Step 3: 입력 스키마에 필드를 추가한다**
+- [x] **Step 3: 입력 스키마에 필드를 추가한다**
 
 `packages/api/src/routers/bambi/jobs.ts`의 `jobPostInputShape`에서 `media` 바로 위에 넣는다:
 
@@ -1119,7 +1119,7 @@ Expected: FAIL — `normalizeAdBannerText is not exported`
 
 `adBannerAnimation`·`adBannerTheme` pgEnum을 `@bambi-app/db/schema/bambi`에서 import 한다. `industryCategorySchema`가 `jobIndustryCategory.enumValues`를 쓰는 방식과 같다.
 
-- [ ] **Step 4: 정규화 함수를 구현한다**
+- [x] **Step 4: 정규화 함수를 구현한다**
 
 `hasRiskFlags` 근처에 둔다:
 
@@ -1174,12 +1174,12 @@ export const normalizeAdBannerText = (
 };
 ```
 
-- [ ] **Step 5: 테스트를 돌려 통과를 확인한다**
+- [x] **Step 5: 테스트를 돌려 통과를 확인한다**
 
 Run: `pnpm -F @bambi-app/api test job-ad-banner-text`
 Expected: PASS (4 tests)
 
-- [ ] **Step 6: 검수 플래그에 배너 문구를 합류시킨다**
+- [x] **Step 6: 검수 플래그에 배너 문구를 합류시킨다**
 
 `hasRiskFlags`가 보는 텍스트에 배너 문구를 더한다. 배너 문구도 구직자에게 노출되는 문구이므로 금칙어·위험어 검사를 똑같이 받아야 한다:
 
@@ -1207,7 +1207,7 @@ const hasRiskFlags = ({
 
 호출부에서 정규화된 배너 문구 3종을 공백으로 이어 넘긴다.
 
-- [ ] **Step 7: 저장·조회 경로를 잇는다**
+- [x] **Step 7: 저장·조회 경로를 잇는다**
 
 - 공고 생성·수정 핸들러에서 `normalizeAdBannerText(input, exposure.exposureType)` 결과를 `jobPost` insert/update 값에 펼쳐 넣는다
 - `listAdBanners`(약 970행)의 select에 5개 컬럼을 추가한다:
@@ -1222,7 +1222,7 @@ const hasRiskFlags = ({
 
 - 공고 단건 조회(수정 폼이 읽는 경로)에도 같은 5개 컬럼을 더한다
 
-- [ ] **Step 8: 매퍼에 텍스트 설정을 싣는다**
+- [x] **Step 8: 매퍼에 텍스트 설정을 싣는다**
 
 `apps/web/src/lib/bambi/api-job-mapper.ts`:
 
@@ -1278,7 +1278,7 @@ export interface AdBannerItem {
 	};
 ```
 
-- [ ] **Step 9: 매퍼 테스트를 보강한다**
+- [x] **Step 9: 매퍼 테스트를 보강한다**
 
 `apps/web/src/lib/bambi/api-job-mapper.test.ts`에 추가한다:
 
@@ -1324,12 +1324,12 @@ export interface AdBannerItem {
 	});
 ```
 
-- [ ] **Step 10: 전체 테스트와 타입 체크**
+- [x] **Step 10: 전체 테스트와 타입 체크**
 
 Run: `pnpm -F @bambi-app/api test && pnpm vitest run apps/web && pnpm check-types`
 Expected: 전부 PASS, EXIT 0
 
-- [ ] **Step 11: 커밋**
+- [x] **Step 11: 커밋**
 
 ```bash
 pnpm dlx ultracite fix
@@ -1362,7 +1362,7 @@ feat(api): 광고 배너 문구·연출 입력과 조회 배선
 - Consumes: `AdBannerTextOverlay`·`AdBannerTextConfig` (Task 4), 카탈로그 옵션 (Task 1)
 - Produces: `<AdBannerTextFields onChange={(value: AdBannerTextConfig) => void} previewImageUrl={{ horizontal?: string; vertical?: string }} value={AdBannerTextConfig} />`
 
-- [ ] **Step 1: 폼 상태 타입을 넓힌다**
+- [x] **Step 1: 폼 상태 타입을 넓힌다**
 
 `apps/web/src/lib/bambi-job-form.ts`의 `JobForm`에 추가한다:
 
@@ -1376,7 +1376,7 @@ feat(api): 광고 배너 문구·연출 입력과 조회 배선
 
 초기값(`paymentMethod: null` 근처의 기본 폼 상수)에 빈 문자열과 null을 넣는다. 제출 페이로드를 만드는 곳에서 빈 문자열은 보내지 않고 그대로 넘긴다 — 서버가 공백을 null로 정규화한다.
 
-- [ ] **Step 2: 입력 컴포넌트를 만든다**
+- [x] **Step 2: 입력 컴포넌트를 만든다**
 
 ```tsx
 "use client";
@@ -1547,11 +1547,11 @@ export function AdBannerTextFields({
 
 미리보기는 모바일에서 세로로 쌓이고(`flex-col sm:flex-row`), 세로형 미리보기는 실제 슬롯과 같은 `h-52`·4:9라 폭 제약이 그대로 재현된다.
 
-- [ ] **Step 3: 업로더에 붙인다**
+- [x] **Step 3: 업로더에 붙인다**
 
 `job-post-media-uploader.tsx`의 광고 배너 슬롯 그룹 아래에 렌더한다. 배너 슬롯이 열리는 조건(`getAdBannerUsagesForPreviewTemplate(...).length > 0`)을 그대로 쓴다. props로 `adBannerText`·`onAdBannerTextChange`를 받아 상위 폼 상태와 잇고, `previewImageUrl`은 `media.adHorizontal?.previewUrl`·`media.adVertical?.previewUrl`을 넘긴다.
 
-- [ ] **Step 4: 등록·수정 페이지를 배선한다**
+- [x] **Step 4: 등록·수정 페이지를 배선한다**
 
 `employer/new/page.tsx`와 `employer/jobs/[id]/edit/page.tsx`에서:
 - 폼 상태에 5개 필드를 추가한다
@@ -1559,12 +1559,12 @@ export function AdBannerTextFields({
 - 제출 페이로드에 5개 필드를 싣는다
 - 수정 페이지는 서버에서 읽은 기존 값으로 초기화한다
 
-- [ ] **Step 5: 타입 체크와 테스트**
+- [x] **Step 5: 타입 체크와 테스트**
 
 Run: `pnpm -F web check-types && pnpm vitest run apps/web`
 Expected: EXIT 0, 전체 PASS
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 pnpm dlx ultracite fix
@@ -1592,7 +1592,7 @@ feat(web): 공고 등록·수정에 배너 문구·연출 입력과 실시간 �
 **Interfaces:**
 - Consumes: `AdBannerTextOverlay` (Task 4), `AdBannerItem.text` (Task 6)
 
-- [ ] **Step 1: 가로형 배너에 오버레이를 얹는다**
+- [x] **Step 1: 가로형 배너에 오버레이를 얹는다**
 
 `HorizontalAdBanner`의 `<Link>` 안에서 `<Image>`를 `relative` 래퍼로 감싸고 오버레이를 더한다:
 
@@ -1616,16 +1616,16 @@ feat(web): 공고 등록·수정에 배너 문구·연출 입력과 실시간 �
 			</div>
 ```
 
-- [ ] **Step 2: 세로형 배너에 오버레이를 얹는다**
+- [x] **Step 2: 세로형 배너에 오버레이를 얹는다**
 
 `AdBanner`도 같은 방식으로 감싸고 `variant="vertical"`을 넘긴다.
 
-- [ ] **Step 3: 타입 체크와 전체 테스트**
+- [x] **Step 3: 타입 체크와 전체 테스트**
 
 Run: `pnpm check-types && pnpm vitest run apps/web && pnpm -F @bambi-app/api test`
 Expected: EXIT 0, 전체 PASS
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 pnpm dlx ultracite fix
@@ -1649,7 +1649,7 @@ feat(web): 프리미엄 배너 슬롯에 텍스트 오버레이 렌더 연결
 - Modify: `docs/superpowers/plans/2026-07-27-premium-ad-text-animation.md` (체크박스)
 - Modify: 광고 관련 매뉴얼 문서가 있으면 함께 갱신
 
-- [ ] **Step 1: 전역 검증을 돌린다**
+- [x] **Step 1: 전역 검증을 돌린다**
 
 Run: `pnpm check-types && pnpm test && pnpm vitest run apps/web`
 Expected: 전역 check-types EXIT 0, 전체 테스트 PASS
@@ -1658,19 +1658,19 @@ Expected: 전역 check-types EXIT 0, 전체 테스트 PASS
 
 실패가 있으면 그 자리에서 고친다. 통과 결과를 이 계획 문서 하단에 검증 노트로 남긴다.
 
-- [ ] **Step 2: 잔여 참조를 확인한다**
+- [x] **Step 2: 잔여 참조를 확인한다**
 
 Run: `rg "horizontal-placeholder|vertical-placeholder" apps packages docs`
 Expected: docs의 과거 계획 문서 외에는 매치 없음
 
-- [ ] **Step 3: 계획 체크박스를 갱신하고 커밋한다**
+- [x] **Step 3: 계획 체크박스를 갱신하고 커밋한다**
 
 ```bash
 git add docs/
 git commit -m "docs: 프리미엄 광고 텍스트 애니메이션 계획 진행 상황 반영"
 ```
 
-- [ ] **Step 4: 사용자에게 시각 확인을 요청한다**
+- [x] **Step 4: 사용자에게 시각 확인을 요청한다**
 
 빌드·dev 서버 기동은 하지 않는다. 사용자에게 확인을 요청할 항목:
 - 마켓플레이스 상단 프리미엄 2칸·좌측 3칸·우측 3칸의 문구 노출과 가독성
@@ -1679,7 +1679,7 @@ git commit -m "docs: 프리미엄 광고 텍스트 애니메이션 계획 진행
 - 모바일 폭에서 오버레이 문구가 넘치지 않는지
 - 등록 폼 미리보기가 실제 배너와 같아 보이는지
 
-- [ ] **Step 5: 로컬 병합**
+- [x] **Step 5: 로컬 병합**
 
 검증이 끝나면 `feat/premium-ad-text-animation`으로 no-ff 병합한다. push·PR은 사용자가 명시적으로 지시할 때만 한다.
 
@@ -1695,3 +1695,58 @@ git merge --no-ff worktree-premium-ad-text-animation -F <메시지 파일>
 ## 검증 노트
 
 (구현 중 각 태스크의 테스트·타입체크 결과를 여기에 기록한다)
+
+## 검증 결과 (2026-07-27)
+
+전체 태스크 완료. 각 태스크는 구현 → 태스크 리뷰 → (필요 시) 수정 라운드 → 재리뷰를 거쳤고,
+마지막에 브랜치 전체 리뷰와 그 지적에 대한 수정·재검증을 마쳤다.
+
+| 검증 | 결과 |
+| --- | --- |
+| 전역 `pnpm check-types` | 7/7 successful, EXIT 0 |
+| web 테스트 (`pnpm vitest run apps/web`) | 273 passed / 5 failed |
+| api 테스트 (`pnpm -F @bambi-app/api test`) | 472 passed / 3 failed |
+| `pnpm install --frozen-lockfile` | 통과, 락파일 미변경 |
+| 마이그레이션 0039 | 로컬 dev DB 적용, `information_schema`·`pg_enum` 직접 조회로 컬럼 6개 nullable·enum 값 순서 검증 |
+
+**실패 8건은 전부 브랜치 이전부터 있던 것이다.** api 2건(`jobs-list-boost-order`)은 `jobs.ts`를
+브랜치 시작점(`c27090c`) 버전으로 되돌려도 동일하게 실패함을 확인해 회귀가 아님을 확정했고,
+api 1건(`moderation-support`)은 표시명 `user.name` 단일화 때 테스트를 갱신하지 않은 잔재다
+(`authorName`이 `표시명-`을 기대하는데 실제는 `테스트-`). web 5건은 `IMAGE_MAX_BYTES`를
+10MB로 올릴 때 8MB 기대 테스트를 안 고친 것 등이다.
+
+### 접근성 (WCAG AA 4.5:1)
+
+오버레이 문구 대비를 세 라운드에 걸쳐 확보했다. 최악 배경 조건(순백/순흑 사진)에서:
+
+| 테마 | 헤드라인 | 서브라인 |
+| --- | --- | --- |
+| dark | 5.65:1 | 5.65:1 |
+| light | 8.62:1 | 8.62:1 |
+| coral | 4.77:1 | 4.77:1 |
+
+가로형은 스크림의 가장 진한 농도를 `from-55%`까지 유지해 글자 대역(높이 25~38%, 두 줄이면
+~56%)이 균일 구간에 들어오게 했다. 세로형은 균일 스크림을 쓴다.
+
+### 사용자 시각 확인 대기
+
+코드로 판정할 수 없어 남긴 항목:
+
+- 세로형 세로쓰기 문구가 약 92px 폭에서 잘림·겹침 없이 읽히는지
+- 가로형 오버레이가 광고 이미지에 이미 박힌 요소와 겹치지 않는지
+- 자리표시가 `<Image fill>`(흐름 밖)에서 인플로우 DOM으로 바뀐 뒤 카드 그리드 행 높이에
+  회귀가 없는지
+- 등록 폼 미리보기가 실제 배너와 같아 보이는지
+
+### 후속 과제
+
+- `none` 테마는 스크림이 없어 대비 하한이 없다(`drop-shadow-md`만 의존). 스펙이 명시적으로
+  승인한 값이고 DB enum에 있어 제거는 스키마 변경이다. 폼의 저대비 조합 경고에
+  `theme === "none"`을 추가하는 것이 가장 싼 처리다
+- 마이그레이션 0039는 로컬 dev DB에만 적용됐다. **배포 전 Cloud SQL 적용이 선행돼야** 새
+  코드가 없는 컬럼을 select 하지 않는다
+- `apps/native`의 공고 수정 화면이 `adProductId` 없이 `jobs.update`를 호출해, 네이티브에서
+  프리미엄 공고를 수정하면 노출 상품·미디어가 통째로 사라진다(선재 결함, 별도 이슈 권장)
+- `site-footer.tsx`가 무가드로 `BAMBI_COMPANY.tel`을 그려 미설정 시 `TODO_고객센터 전화`가
+  푸터에 노출된다(선재). 근본 해결은 상수를 실번호로 교체하는 것이며, 그때 배너 자리표시의
+  `TODO_` 접두 가드도 함께 제거한다
