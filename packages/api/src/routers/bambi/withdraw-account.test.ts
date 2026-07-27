@@ -51,6 +51,8 @@ const seedUser = async () => {
 		id: userId,
 		name: "탈퇴대상",
 		email: `${userId}@bambi.test`,
+		login_id: userId,
+		login_id_display: userId,
 	});
 	await db.insert(bambiProfile).values({
 		userId,
@@ -136,6 +138,9 @@ describe("withdrawMyAccount 회원 탈퇴", () => {
 		expect(updatedUser?.name).toBe("탈퇴한 회원");
 		// 이메일은 notNull·unique라 tombstone으로 치환한다(원 이메일 재가입 재개방).
 		expect(updatedUser?.email).toBe(`withdrawn-${userId}@invalid.bambi`);
+		// 로그인 아이디는 nullable이라 비워서 파기한다(같은 아이디 재사용 개방).
+		expect(updatedUser?.login_id).toBeNull();
+		expect(updatedUser?.login_id_display).toBeNull();
 
 		const [profile] = await db
 			.select()
