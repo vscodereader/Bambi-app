@@ -1,7 +1,4 @@
-import type {
-	AdBannerAnimation,
-	AdBannerTheme,
-} from "./bambi/ad-banner-animations";
+import type { AdBannerLayout } from "./bambi/ad-banner-layout";
 import {
 	isAllowedJobAdBannerAspect,
 	isAllowedJobAdBannerSize,
@@ -144,11 +141,8 @@ export interface JobPostMediaApiSetInput {
 }
 
 export interface JobForm {
-	adBannerAnimation: AdBannerAnimation | null;
-	adBannerHeadline: string;
-	adBannerSubline: string;
-	adBannerTheme: AdBannerTheme | null;
-	adBannerVerticalText: string;
+	// 배너 에디터가 만든 자유 배치 레이아웃. 편집한 적 없는 공고는 null이라 이미지만 나온다.
+	adBannerLayout: AdBannerLayout | null;
 	adProductId: string | null;
 	beginnerFriendly: boolean;
 	description: string;
@@ -169,24 +163,10 @@ export interface JobForm {
 	workSchedule: string;
 }
 
-// 배너 문구 5필드만 뽑은 조각. 입력 컴포넌트·업로더가 이 모양으로 주고받고, 페이지는
-// 폼 상태를 그대로 넘긴 뒤 돌아온 값을 병합한다. jobs.update·adminUpdateJobPost가 입력
-// 전체를 교체하므로 수정 폼이 이 5필드를 프리필해서 되돌려 보내지 않으면 문구가 지워진다.
-export type JobAdBannerTextForm = Pick<
-	JobForm,
-	| "adBannerAnimation"
-	| "adBannerHeadline"
-	| "adBannerSubline"
-	| "adBannerTheme"
-	| "adBannerVerticalText"
->;
-
 export interface JobPostInput {
-	adBannerAnimation: AdBannerAnimation | null;
-	adBannerHeadline: string;
-	adBannerSubline: string;
-	adBannerTheme: AdBannerTheme | null;
-	adBannerVerticalText: string;
+	// 서버는 키를 생략하면 기존 레이아웃을 보존하고 null이면 지운다. 폼은 항상 값을 실어
+	// 보내므로(수정 화면은 프리필된 값) 편집하지 않은 공고의 레이아웃도 그대로 되돌아간다.
+	adBannerLayout: AdBannerLayout | null;
 	adProductId: string | null;
 	beginnerFriendly: boolean;
 	description: string;
@@ -241,11 +221,7 @@ export const defaultDistrictForRegion = (region: string): string =>
 	districtsForRegion(region)[0] ?? "";
 
 export const emptyJobForm: JobForm = {
-	adBannerAnimation: null,
-	adBannerHeadline: "",
-	adBannerSubline: "",
-	adBannerTheme: null,
-	adBannerVerticalText: "",
+	adBannerLayout: null,
 	adProductId: null,
 	beginnerFriendly: false,
 	description: "",
@@ -266,24 +242,16 @@ export const emptyJobForm: JobForm = {
 	workSchedule: "",
 };
 
-// 서버 공고 행의 배너 문구 컬럼을 폼 값으로 옮긴다. 수정 폼 두 곳(구인자·운영자)이 같은
-// 프리필을 거쳐야 저장(입력 전체 교체) 시 기존 문구가 null로 지워지지 않는다.
-// 5필드는 optional(`?:`)이 아니라 필수 + nullable이다. optional로 두면 배너 컬럼이 없는
+// 서버 공고의 배너 레이아웃을 폼 값으로 옮긴다. 수정 폼 세 곳(등록·구인자·운영자)이 같은
+// 프리필을 거쳐야 저장(입력 전체 교체) 시 기존 레이아웃이 지워지지 않는다.
+// 파라미터는 optional(`?:`)이 아니라 필수 + nullable이다. optional로 두면 레이아웃이 없는
 // 객체(예: select({...})로 컬럼을 좁힌 목록 쿼리 결과)를 넘겨도 컴파일이 통과하고 조용히
-// 빈 값을 돌려준다 — 이 함수가 막으려는 문구 삭제와 정확히 같은 사고가 타입에 안 잡힌다.
-// 필수로 두면 그런 프리필 소스는 컴파일에서 걸린다. null은 "값이 없는 공고"라 정상값이다.
-export const toJobAdBannerTextForm = (job: {
-	adBannerAnimation: AdBannerAnimation | null;
-	adBannerHeadline: null | string;
-	adBannerSubline: null | string;
-	adBannerTheme: AdBannerTheme | null;
-	adBannerVerticalText: null | string;
-}): JobAdBannerTextForm => ({
-	adBannerAnimation: job.adBannerAnimation ?? null,
-	adBannerHeadline: job.adBannerHeadline ?? "",
-	adBannerSubline: job.adBannerSubline ?? "",
-	adBannerTheme: job.adBannerTheme ?? null,
-	adBannerVerticalText: job.adBannerVerticalText ?? "",
+// 빈 값을 돌려준다 — 이 함수가 막으려는 배너 삭제와 정확히 같은 사고가 타입에 안 잡힌다.
+// 필수로 두면 그런 프리필 소스는 컴파일에서 걸린다. null은 "편집한 적 없는 공고"라 정상값이다.
+export const toJobAdBannerLayoutForm = (job: {
+	adBannerLayout: AdBannerLayout | null;
+}): Pick<JobForm, "adBannerLayout"> => ({
+	adBannerLayout: job.adBannerLayout ?? null,
 });
 
 export const emptyJobFormMedia: JobFormMedia = {
@@ -959,12 +927,8 @@ export const validateJobForm = (
 
 	return {
 		input: {
-			// 문구는 그대로 넘긴다 — 공백 정규화와 배너 없는 상품일 때의 폐기는 서버가 한다.
-			adBannerAnimation: form.adBannerAnimation,
-			adBannerHeadline: form.adBannerHeadline,
-			adBannerSubline: form.adBannerSubline,
-			adBannerTheme: form.adBannerTheme,
-			adBannerVerticalText: form.adBannerVerticalText,
+			// 레이아웃은 그대로 넘긴다 — 값 범위 검증과 배너 없는 상품일 때의 폐기는 서버가 한다.
+			adBannerLayout: form.adBannerLayout,
 			adProductId,
 			beginnerFriendly: form.beginnerFriendly,
 			description,

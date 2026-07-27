@@ -57,7 +57,7 @@ import {
 	type JobFormMediaItem,
 	type JobPaymentMethod,
 	resolveJobPostMediaForSubmit,
-	toJobAdBannerTextForm,
+	toJobAdBannerLayoutForm,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
 import { industryOptions } from "@/lib/bambi-options";
@@ -180,8 +180,8 @@ export default function ModeratorEditJobPage({
 
 		setForm({
 			// 운영자 편집도 입력 전체 교체다. 여기서 프리필을 빠뜨리면 운영자가 공고를
-			// 한 번 손대는 것만으로 구인자가 넣은 배너 문구가 통째로 지워진다.
-			...toJobAdBannerTextForm(job),
+			// 한 번 손대는 것만으로 구인자가 만든 배너 편집물이 통째로 지워진다.
+			...toJobAdBannerLayoutForm(job),
 			adProductId: job.adProductId ?? null,
 			beginnerFriendly: job.beginnerFriendly ?? false,
 			description: job.description,
@@ -637,14 +637,14 @@ export default function ModeratorEditJobPage({
 				</section>
 
 				<JobPostMediaUploader
-					adBannerText={form}
+					adBannerLayout={form.adBannerLayout}
 					adProductId={form.adProductId}
 					allowUpload={false}
 					error={fieldErrors.media}
 					media={media}
-					onAdBannerTextChange={(next) => {
+					onAdBannerLayoutChange={(adBannerLayout) => {
 						setIsDirty(true);
-						setForm((currentForm) => ({ ...currentForm, ...next }));
+						setForm((currentForm) => ({ ...currentForm, adBannerLayout }));
 						setFormError(null);
 					}}
 					onChange={(nextMedia) => {

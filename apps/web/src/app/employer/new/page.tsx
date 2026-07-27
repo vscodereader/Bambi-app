@@ -855,13 +855,13 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					</section>
 
 					<JobPostMediaUploader
-						adBannerText={form}
+						adBannerLayout={form.adBannerLayout}
 						adProductId={form.adProductId}
 						error={fieldErrors.media}
 						media={media}
-						onAdBannerTextChange={(next) => {
+						onAdBannerLayoutChange={(adBannerLayout) => {
 							setIsDirty(true);
-							setForm((currentForm) => ({ ...currentForm, ...next }));
+							setForm((currentForm) => ({ ...currentForm, adBannerLayout }));
 							setFormError(null);
 						}}
 						onChange={(nextMedia) => {
