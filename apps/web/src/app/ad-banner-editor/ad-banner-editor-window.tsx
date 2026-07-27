@@ -2,24 +2,27 @@
 
 import { Button } from "@bambi-app/ui/components/button";
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AdBannerEditor } from "@/components/bambi/ad-banner-editor/ad-banner-editor";
 import {
 	AD_BANNER_EDITOR_MESSAGE,
 	type AdBannerEditorInit,
+	type AdBannerEditorResult,
+	fromTransferableAdBannerMedia,
 	postAdBannerEditorMessage,
 	readAdBannerEditorMessage,
-	useAdBannerBackgroundUrls,
+	revokeAdBannerEditorMedia,
+	toTransferableAdBannerMedia,
 } from "@/components/bambi/ad-banner-editor/editor-launcher";
 import { EmptyState } from "@/components/bambi/empty-state";
-import type { AdBannerLayout } from "@/lib/bambi/ad-banner-layout";
 
 // 이 화면은 opener와의 postMessage로만 데이터를 주고받는다 — 배너 이미지는 아직 업로드 전이라
 // 서버에서 읽어올 수 없다. 앱 셸 대신 편집 창에 맞는 최소 헤더만 둔다(PageShell 금지).
 export function AdBannerEditorWindow() {
 	const [init, setInit] = useState<AdBannerEditorInit | null>(null);
 	const [hasOpener, setHasOpener] = useState(true);
-	const backgroundUrls = useAdBannerBackgroundUrls(init ?? {});
+	// 여기서 만든 objectURL을 창이 닫힐 때 놓아주기 위한 참조. 정리 함수가 최신 init을 봐야 한다.
+	const initRef = useRef<AdBannerEditorInit | null>(null);
 
 	useEffect(() => {
 		const opener: Window | null = window.opener;
@@ -37,7 +40,16 @@ export function AdBannerEditorWindow() {
 			const message = readAdBannerEditorMessage(event.data);
 
 			if (message?.type === AD_BANNER_EDITOR_MESSAGE.init) {
-				setInit(message);
+				// 넘어온 항목은 previewUrl이 떼여 있다(blob은 창을 못 넘는다). 렌더 전에 여기서
+				// 다시 만든다 — 에디터는 initialMedia로 자기 상태를 한 번만 잡으므로, 렌더 뒤에
+				// 붙이면 배너 이미지가 영영 비어 보인다.
+				const resolved: AdBannerEditorInit = {
+					...message,
+					media: fromTransferableAdBannerMedia(message.media),
+				};
+
+				initRef.current = resolved;
+				setInit(resolved);
 			}
 		};
 
@@ -45,15 +57,21 @@ export function AdBannerEditorWindow() {
 		// 리스너를 먼저 걸고 ready를 보낸다. 순서가 뒤집히면 부모의 init을 놓쳐 영영 대기한다.
 		postAdBannerEditorMessage(opener, { type: AD_BANNER_EDITOR_MESSAGE.ready });
 
-		return () => window.removeEventListener("message", handleMessage);
+		return () => {
+			window.removeEventListener("message", handleMessage);
+			revokeAdBannerEditorMedia(initRef.current?.media);
+		};
 	}, []);
 
-	const handleSave = (layout: AdBannerLayout) => {
+	const handleSave = (result: AdBannerEditorResult) => {
 		const opener: Window | null = window.opener;
 
 		if (opener) {
 			postAdBannerEditorMessage(opener, {
-				layout,
+				layout: result.layout,
+				// 이 창에서 만든 blob previewUrl은 창이 닫히면 죽는다. 파일만 돌려보내고 부모가
+				// 자기 문서에서 다시 만든다.
+				media: toTransferableAdBannerMedia(result.media),
 				type: AD_BANNER_EDITOR_MESSAGE.save,
 			});
 		}
@@ -65,7 +83,7 @@ export function AdBannerEditorWindow() {
 		if (!hasOpener) {
 			return (
 				<EmptyState
-					description="공고 등록 화면의 '배너 문구 편집' 버튼으로 열어 주세요. 편집할 배너 이미지는 그 화면에서 전달받습니다."
+					description="공고 등록 화면의 '배너 이미지·문구 편집' 버튼으로 열어 주세요. 편집할 배너는 그 화면에서 전달받습니다."
 					title="이 화면은 직접 열 수 없어요"
 				/>
 			);
@@ -82,10 +100,11 @@ export function AdBannerEditorWindow() {
 
 		return (
 			<AdBannerEditor
-				backgroundUrls={backgroundUrls}
 				initialLayout={init.layout}
+				initialMedia={init.media}
 				onCancel={() => window.close()}
 				onSave={handleSave}
+				requiredUsages={init.requiredUsages}
 			/>
 		);
 	};

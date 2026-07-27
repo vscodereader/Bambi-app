@@ -1,8 +1,9 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import { ImageOff } from "lucide-react";
 import Image from "next/image";
-import { type KeyboardEvent, type PointerEvent, useRef } from "react";
+import { type KeyboardEvent, useRef } from "react";
 import {
 	type AdBannerSlot,
 	type AdBannerSlotLayout,
@@ -10,6 +11,11 @@ import {
 	clampPercent,
 } from "@/lib/bambi/ad-banner-layout";
 import { useBlockDrag } from "./use-block-drag";
+import {
+	type BlockResizeEdge,
+	resizeBlockWidth,
+	useBlockResize,
+} from "./use-block-resize";
 
 const WEIGHT_CLASS_NAMES = {
 	bold: "font-bold",
@@ -38,23 +44,100 @@ const ARROW_STEPS: Record<string, { x: number; y: number }> = {
 	ArrowUp: { x: 0, y: -1 },
 };
 
-// 문구 블록. 드래그 핸들 자체라서 shadcn Button이 아니라 네이티브 button을 쓴다 — 버튼 룩이
-// 필요한 컨트롤이 아니라 캔버스 위의 자유 배치 요소이고, button 엘리먼트라야 포커스·방향키가 따라온다.
-function CanvasBlock({
+const RESIZE_EDGE_LABELS: Record<BlockResizeEdge, string> = {
+	left: "왼쪽",
+	right: "오른쪽",
+};
+
+// 핸들의 중심을 블록 모서리에 정확히 얹는다(히트 영역은 모서리 양쪽으로 반씩 걸친다).
+const RESIZE_EDGE_CLASS_NAMES: Record<BlockResizeEdge, string> = {
+	left: "left-0 -translate-x-1/2",
+	right: "right-0 translate-x-1/2",
+};
+
+const RESIZE_ARROW_DIRECTIONS: Record<string, number> = {
+	ArrowLeft: -1,
+	ArrowRight: 1,
+};
+
+// 너비 핸들. 드래그만으로는 포인터가 없는 사용자가 폭을 못 바꾸므로 방향키를 같이 받는다
+// (블록 이동과 같은 보폭 — 1%, Shift 5%). 잡은 쪽으로 끌면 넓어지는 감각을 방향키도 따른다.
+function ResizeHandle({
 	block,
-	onMove,
+	edge,
 	onPointerDown,
 	onPointerMove,
 	onPointerUp,
+	onResize,
+}: {
+	block: AdBannerTextBlock;
+	edge: BlockResizeEdge;
+	onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
+	onPointerMove: (event: React.PointerEvent<HTMLElement>) => void;
+	onPointerUp: (event: React.PointerEvent<HTMLElement>) => void;
+	onResize: (id: string, width: number, x: number) => void;
+}) {
+	const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+		const direction = RESIZE_ARROW_DIRECTIONS[event.key];
+
+		if (!direction) {
+			return;
+		}
+
+		event.preventDefault();
+		const next = resizeBlockWidth({
+			edge,
+			width: block.width,
+			// 왼쪽 핸들은 왼쪽으로 갈수록 넓어진다 — 부호를 뒤집어야 핸들을 끄는 감각과 같다.
+			widthDelta:
+				(edge === "left" ? -direction : direction) * (event.shiftKey ? 5 : 1),
+			x: block.x,
+		});
+		onResize(block.id, next.width, next.x);
+	};
+
+	return (
+		<button
+			// 어느 쪽 핸들인지와 지금 너비를 함께 읽어 줘야 방향키로 조절할 때 변화가 전달된다.
+			aria-label={`문구 "${block.content}" ${RESIZE_EDGE_LABELS[edge]} 너비 조절, 현재 너비 ${Math.round(block.width)}%`}
+			className={cn(
+				"absolute top-1/2 flex size-6 -translate-y-1/2 cursor-ew-resize touch-none items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
+				RESIZE_EDGE_CLASS_NAMES[edge]
+			)}
+			onKeyDown={handleKeyDown}
+			onPointerDown={onPointerDown}
+			onPointerMove={onPointerMove}
+			onPointerUp={onPointerUp}
+			type="button"
+		>
+			{/* 보이는 손잡이는 얇게, 히트 영역(size-6)은 손가락에 맞춘다. */}
+			<span
+				aria-hidden="true"
+				className="pointer-events-none block h-5 w-1.5 rounded-full bg-primary shadow-sm ring-1 ring-background"
+			/>
+		</button>
+	);
+}
+
+// 문구 블록. 바깥 상자는 렌더러(ad-banner-layout-renderer)의 TextBlockView와 **같은 클래스**여야
+// 한다 — 폭·줄바꿈 기준이 조금이라도 다르면 "에디터에서 맞춰 놨는데 실제 배너는 다른 모양"이
+// 된다. 그래서 padding 같은 폭을 먹는 스타일은 절대 넣지 않고, 선택 표시는 폭에 영향이 없는
+// ring으로만 한다.
+function CanvasBlock({
+	block,
+	drag,
+	onMove,
+	onResize,
 	onSelect,
+	resize,
 	selected,
 }: {
 	block: AdBannerTextBlock;
+	drag: ReturnType<typeof useBlockDrag>;
 	onMove: (id: string, x: number, y: number) => void;
-	onPointerDown: (event: PointerEvent<HTMLElement>) => void;
-	onPointerMove: (event: PointerEvent<HTMLElement>) => void;
-	onPointerUp: (event: PointerEvent<HTMLElement>) => void;
+	onResize: (id: string, width: number, x: number) => void;
 	onSelect: () => void;
+	resize: ReturnType<typeof useBlockResize>;
 	selected: boolean;
 }) {
 	const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -74,42 +157,65 @@ function CanvasBlock({
 	};
 
 	return (
-		<button
-			// 좌표를 라벨에 넣어야 방향키로 옮길 때마다 스크린리더가 바뀐 위치를 읽어 준다.
-			// 선택 여부도 ring 색만으로는 전달되지 않으므로 aria-pressed로 함께 알린다.
-			aria-label={`문구 "${block.content}" 위치 조정, 가로 ${Math.round(block.x)}% 세로 ${Math.round(block.y)}%`}
-			aria-pressed={selected}
+		<div
 			className={cn(
-				"absolute top-[var(--block-y)] left-[var(--block-x)] max-w-full -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-md px-1 leading-tight outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
-				selected && "ring-2 ring-primary",
+				"absolute top-[var(--block-y)] left-[var(--block-x)] w-[var(--block-width)] max-w-full -translate-x-1/2 -translate-y-1/2 break-words",
 				ALIGN_CLASS_NAMES[block.align],
 				WEIGHT_CLASS_NAMES[block.weight]
 			)}
-			onFocus={onSelect}
-			onKeyDown={handleKeyDown}
-			onPointerDown={(event) => {
-				onSelect();
-				onPointerDown(event);
-			}}
-			onPointerMove={onPointerMove}
-			onPointerUp={onPointerUp}
-			// 좌표·크기·색은 구인자가 정한 런타임 값이라 Tailwind 클래스로 표현할 수 없다.
+			// 좌표·크기·색·너비는 구인자가 정한 런타임 값이라 Tailwind 클래스로 표현할 수 없다.
 			// CSS 변수 주입에만 한정한다(배치·상태 스타일은 전부 className).
 			style={
 				{
 					"--block-color": block.color,
 					"--block-size": `${block.fontSize}cqw`,
+					"--block-width": `${block.width}%`,
 					"--block-x": `${block.x}%`,
 					"--block-y": `${block.y}%`,
 				} as React.CSSProperties
 			}
-			type="button"
 		>
-			{/* 편집 중에는 연출을 재생하지 않는다 — 매 입력마다 gsap이 DOM을 다시 쪼개면 드래그가 끊긴다. */}
-			<span className="text-[color:var(--block-color)] text-[length:var(--block-size)]">
-				{block.content}
-			</span>
-		</button>
+			<button
+				// 좌표를 라벨에 넣어야 방향키로 옮길 때마다 스크린리더가 바뀐 위치를 읽어 준다.
+				// 선택 여부도 ring 색만으로는 전달되지 않으므로 aria-pressed로 함께 알린다.
+				aria-label={`문구 "${block.content}" 위치 조정, 가로 ${Math.round(block.x)}% 세로 ${Math.round(block.y)}%`}
+				aria-pressed={selected}
+				className={cn(
+					"block w-full cursor-grab touch-none rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
+					selected && "ring-2 ring-primary",
+					ALIGN_CLASS_NAMES[block.align]
+				)}
+				onFocus={onSelect}
+				onKeyDown={handleKeyDown}
+				onPointerDown={(event) => {
+					onSelect();
+					drag.handlePointerDown(block.id)(event);
+				}}
+				onPointerMove={drag.handlePointerMove}
+				onPointerUp={drag.handlePointerUp}
+				type="button"
+			>
+				{/* 편집 중에는 연출을 재생하지 않는다 — 매 입력마다 gsap이 DOM을 다시 쪼개면 드래그가 끊긴다. */}
+				<span className="text-[color:var(--block-color)] text-[length:var(--block-size)] leading-tight">
+					{block.content}
+				</span>
+			</button>
+
+			{/* 핸들은 선택된 블록에만 붙인다. 전부 띄우면 캔버스가 손잡이로 뒤덮인다. */}
+			{selected
+				? (["left", "right"] as const).map((edge) => (
+						<ResizeHandle
+							block={block}
+							edge={edge}
+							key={edge}
+							onPointerDown={resize.handlePointerDown(block, edge)}
+							onPointerMove={resize.handlePointerMove}
+							onPointerUp={resize.handlePointerUp}
+							onResize={onResize}
+						/>
+					))
+				: null}
+		</div>
 	);
 }
 
@@ -117,6 +223,7 @@ function CanvasBlock({
 export function EditorCanvas({
 	backgroundUrl,
 	onMove,
+	onResize,
 	onSelect,
 	selectedId,
 	slot,
@@ -124,22 +231,25 @@ export function EditorCanvas({
 }: {
 	backgroundUrl?: string;
 	onMove: (id: string, x: number, y: number) => void;
+	onResize: (id: string, width: number, x: number) => void;
 	onSelect: (id: string) => void;
 	selectedId: null | string;
 	slot: AdBannerSlot;
 	slotLayout: AdBannerSlotLayout;
 }) {
 	const canvasRef = useRef<HTMLDivElement>(null);
-	const { handlePointerDown, handlePointerMove, handlePointerUp } =
-		useBlockDrag({ canvasRef, onMove });
+	const drag = useBlockDrag({ canvasRef, onMove });
+	const resize = useBlockResize({ canvasRef, onResize });
 	const showScrim =
 		slotLayout.background.type === "image" && slotLayout.scrim.enabled;
 
 	return (
 		// cqw의 기준이 되는 컨테이너다. @container가 없으면 조상 컨테이너를 찾아 엉뚱한 크기가 된다.
+		// select-none은 드래그·리사이즈 중 문구가 통째로 선택되는 것을 막는다(캔버스에서 글자를
+		// 긁어 복사할 일은 없다).
 		<div
 			className={cn(
-				"@container relative max-w-full overflow-hidden rounded-xl border border-border bg-muted",
+				"@container relative max-w-full select-none overflow-hidden rounded-xl border border-border bg-muted",
 				SLOT_CLASS_NAMES[slot]
 			)}
 			ref={canvasRef}
@@ -178,21 +288,22 @@ export function EditorCanvas({
 			) : null}
 
 			{slotLayout.background.type === "image" && !backgroundUrl ? (
-				<p className="absolute inset-0 flex items-center justify-center p-4 text-center text-muted-foreground text-xs">
-					배경 이미지를 아직 올리지 않았습니다. 문구 배치는 지금도 할 수
-					있습니다.
+				<p className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center text-muted-foreground text-xs">
+					<ImageOff aria-hidden="true" className="size-5" />
+					옆(모바일은 아래) 패널에서 배너 이미지를 골라 주세요. 문구 배치는
+					지금도 할 수 있습니다.
 				</p>
 			) : null}
 
 			{slotLayout.texts.map((block) => (
 				<CanvasBlock
 					block={block}
+					drag={drag}
 					key={block.id}
 					onMove={onMove}
-					onPointerDown={handlePointerDown(block.id)}
-					onPointerMove={handlePointerMove}
-					onPointerUp={handlePointerUp}
+					onResize={onResize}
 					onSelect={() => onSelect(block.id)}
+					resize={resize}
 					selected={block.id === selectedId}
 				/>
 			))}

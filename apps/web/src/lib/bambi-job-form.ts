@@ -23,7 +23,7 @@ const INTERVIEW_NOTES_MAX_LENGTH = 500;
 const DESCRIPTION_BLOCK_MAX_COUNT = 12;
 const DESCRIPTION_BLOCK_TEXT_MAX_LENGTH = 800;
 const DETAIL_IMAGE_MAX_COUNT = 5;
-const IMAGE_ALT_TEXT_MAX_LENGTH = 120;
+export const IMAGE_ALT_TEXT_MAX_LENGTH = 120;
 // 공고·커뮤니티·채팅 이미지 공통 상한(세 파일 동기화): bambi-job-media-policy.ts,
 // apps/web/src/lib/bambi-job-form.ts, bambi-media-policy.ts.
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024;

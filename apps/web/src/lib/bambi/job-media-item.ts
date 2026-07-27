@@ -7,6 +7,13 @@ import { readImageDimensions } from "./job-ad-banner-spec";
 
 export type MediaItemFailure = "signature-mismatch";
 
+// 실패 사유별 안내. 여기 모아 두는 이유: 파일을 받는 화면이 둘(공고 폼·배너 에디터)이라
+// 각자 문구를 적으면 같은 실패를 다르게 말하게 되고, 구인자는 다른 문제로 읽는다.
+export const MEDIA_ITEM_FAILURE_MESSAGES: Record<MediaItemFailure, string> = {
+	"signature-mismatch":
+		"이미지 형식이 올바르지 않습니다. PNG·JPG·WebP·GIF만 업로드할 수 있어요.",
+};
+
 export type MediaItemResult =
 	| { item: JobFormMediaItem }
 	| { reason: MediaItemFailure };

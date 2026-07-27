@@ -810,9 +810,19 @@ export default function EditEmployerJobPage({
 						adProductId={form.adProductId}
 						error={fieldErrors.media}
 						media={media}
-						onAdBannerLayoutChange={(adBannerLayout) => {
+						onAdBannerChange={({ layout, media: nextMedia }) => {
 							setIsDirty(true);
-							setForm((currentForm) => ({ ...currentForm, adBannerLayout }));
+							setForm((currentForm) => ({
+								...currentForm,
+								adBannerLayout: layout,
+							}));
+							// 배너 이미지도 함께 돌아온다. 폼 media에 반영해야 필수 배너 검증과
+							// 제출 시 업로드가 기존 경로 그대로 동작한다.
+							setMedia(nextMedia);
+							setFieldErrors((currentErrors) => ({
+								...currentErrors,
+								media: undefined,
+							}));
 							setFormError(null);
 						}}
 						onChange={(nextMedia) => {
