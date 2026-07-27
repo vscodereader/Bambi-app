@@ -268,12 +268,16 @@ export const emptyJobForm: JobForm = {
 
 // 서버 공고 행의 배너 문구 컬럼을 폼 값으로 옮긴다. 수정 폼 두 곳(구인자·운영자)이 같은
 // 프리필을 거쳐야 저장(입력 전체 교체) 시 기존 문구가 null로 지워지지 않는다.
+// 5필드는 optional(`?:`)이 아니라 필수 + nullable이다. optional로 두면 배너 컬럼이 없는
+// 객체(예: select({...})로 컬럼을 좁힌 목록 쿼리 결과)를 넘겨도 컴파일이 통과하고 조용히
+// 빈 값을 돌려준다 — 이 함수가 막으려는 문구 삭제와 정확히 같은 사고가 타입에 안 잡힌다.
+// 필수로 두면 그런 프리필 소스는 컴파일에서 걸린다. null은 "값이 없는 공고"라 정상값이다.
 export const toJobAdBannerTextForm = (job: {
-	adBannerAnimation?: AdBannerAnimation | null;
-	adBannerHeadline?: null | string;
-	adBannerSubline?: null | string;
-	adBannerTheme?: AdBannerTheme | null;
-	adBannerVerticalText?: null | string;
+	adBannerAnimation: AdBannerAnimation | null;
+	adBannerHeadline: null | string;
+	adBannerSubline: null | string;
+	adBannerTheme: AdBannerTheme | null;
+	adBannerVerticalText: null | string;
 }): JobAdBannerTextForm => ({
 	adBannerAnimation: job.adBannerAnimation ?? null,
 	adBannerHeadline: job.adBannerHeadline ?? "",
