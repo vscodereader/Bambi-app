@@ -1,6 +1,8 @@
 import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
+	adBannerAnimation,
+	adBannerTheme,
 	adProduct,
 	bambiProfile,
 	bambiSiteSettings,
@@ -144,6 +146,13 @@ const jobPostInputShape = z.object({
 	adProductId: z.string().uuid().nullish(),
 	exposureAmount: z.number().int().min(0).nullish(),
 	paymentMethod: z.enum(["card", "bank_transfer"]).nullish(),
+	// 프리미엄 배너에 얹는 문구·연출. 폼 상한(apps/web/src/lib/bambi/ad-banner-animations.ts)과
+	// 같은 값을 서버에서도 강제한다 — 트러스트 바운더리다.
+	adBannerHeadline: z.string().max(20).nullish(),
+	adBannerSubline: z.string().max(30).nullish(),
+	adBannerVerticalText: z.string().max(8).nullish(),
+	adBannerAnimation: z.enum(adBannerAnimation.enumValues).nullish(),
+	adBannerTheme: z.enum(adBannerTheme.enumValues).nullish(),
 	media: jobPostMediaSetInput,
 });
 
@@ -209,20 +218,71 @@ interface BuildJobPostMediaRowsInput {
 	organizationId: string;
 }
 
+export interface AdBannerTextInput {
+	adBannerAnimation?: (typeof adBannerAnimation.enumValues)[number] | null;
+	adBannerHeadline?: string | null;
+	adBannerSubline?: string | null;
+	adBannerTheme?: (typeof adBannerTheme.enumValues)[number] | null;
+	adBannerVerticalText?: string | null;
+}
+
+// 정규화 결과는 항상 5개 키가 다 있고 값은 확정값이거나 null이다 — 저장 경로가 그대로
+// insert/update 값에 펼쳐 넣는다.
+export interface NormalizedAdBannerText {
+	adBannerAnimation: (typeof adBannerAnimation.enumValues)[number] | null;
+	adBannerHeadline: string | null;
+	adBannerSubline: string | null;
+	adBannerTheme: (typeof adBannerTheme.enumValues)[number] | null;
+	adBannerVerticalText: string | null;
+}
+
+const EMPTY_AD_BANNER_TEXT: NormalizedAdBannerText = {
+	adBannerAnimation: null,
+	adBannerHeadline: null,
+	adBannerSubline: null,
+	adBannerTheme: null,
+	adBannerVerticalText: null,
+};
+
+// 공백만 입력한 문구는 미설정으로 본다(오버레이가 빈 스크림만 덮지 않도록).
+const trimmedOrNull = (value: string | null | undefined): string | null =>
+	value?.trim() ? value.trim() : null;
+
+// 배너 슬롯을 쓰지 않는 노출 타입이면 문구를 통째로 버린다. 저장해두면 나중에 상품이
+// 배너형으로 바뀔 때 검수받지 않은 문구가 조용히 노출된다.
+export const normalizeAdBannerText = (
+	input: AdBannerTextInput,
+	exposureType: string
+): NormalizedAdBannerText => {
+	if (!(AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(exposureType)) {
+		return EMPTY_AD_BANNER_TEXT;
+	}
+
+	return {
+		adBannerAnimation: input.adBannerAnimation ?? null,
+		adBannerHeadline: trimmedOrNull(input.adBannerHeadline),
+		adBannerSubline: trimmedOrNull(input.adBannerSubline),
+		adBannerTheme: input.adBannerTheme ?? null,
+		adBannerVerticalText: trimmedOrNull(input.adBannerVerticalText),
+	};
+};
+
 const RISKY_TERMS = ["미성년", "성매매", "강요"] as const;
 
 const hasRiskFlags = ({
+	adBannerText,
 	blockRiskTerms,
 	description,
 	interviewNotes,
 	title,
 }: {
+	adBannerText: string;
 	blockRiskTerms: string[];
 	description: string;
 	interviewNotes?: string;
 	title: string;
 }): boolean => {
-	const text = `${title} ${description} ${interviewNotes ?? ""}`;
+	const text = `${title} ${description} ${interviewNotes ?? ""} ${adBannerText}`;
 
 	return (
 		blockRiskTerms.length > 0 || RISKY_TERMS.some((term) => text.includes(term))
@@ -261,7 +321,12 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 	}
 };
 
-const prepareJobPostContent = (input: JobPostInput): PreparedJobPostContent => {
+// 배너 문구도 구직자에게 노출되는 문구다. 정규화(=실제 저장될) 문구를 넘겨받아 본문과
+// 같은 금칙어·위험어 검사를 태운다 — 버려질 문구로 공고가 검수에 걸리지는 않게 한다.
+const prepareJobPostContent = (
+	input: JobPostInput,
+	adBannerText: NormalizedAdBannerText
+): PreparedJobPostContent => {
 	const descriptionBlocks = input.descriptionBlocks ?? [];
 	const validation = validateJobDescriptionBlocks(descriptionBlocks);
 
@@ -282,6 +347,13 @@ const prepareJobPostContent = (input: JobPostInput): PreparedJobPostContent => {
 		description,
 		descriptionBlocks: normalizedBlocks,
 		hasRiskFlags: hasRiskFlags({
+			adBannerText: [
+				adBannerText.adBannerHeadline,
+				adBannerText.adBannerSubline,
+				adBannerText.adBannerVerticalText,
+			]
+				.filter(Boolean)
+				.join(" "),
 			blockRiskTerms,
 			description,
 			interviewNotes: input.interviewNotes,
@@ -623,12 +695,15 @@ export const applyJobPostUpdate = async ({
 		});
 	}
 
-	const preparedContent = prepareJobPostContent(data);
+	// 노출 확정이 먼저다 — 배너 문구를 남길지 버릴지가 확정된 노출 타입에 달려 있고,
+	// 검수 검사도 실제로 저장될 문구만 봐야 한다.
 	const exposure = await resolveJobPostExposure({
 		adProductId: data.adProductId,
 		exposureDurationDays: data.exposureDurationDays,
 		paymentMethod: data.paymentMethod,
 	});
+	const adBannerText = normalizeAdBannerText(data, exposure.exposureType);
+	const preparedContent = prepareJobPostContent(data, adBannerText);
 	// 노출 상품·기간이 바뀌면 재결제가 필요하다. 유료 전환/변경은 미결제로 되돌리고,
 	// 무료 전환은 결제 게이트 없이 즉시 게시(paid)로 둔다(생성 시 무료 공고와 동일 규칙).
 	const exposureChanged =
@@ -675,6 +750,8 @@ export const applyJobPostUpdate = async ({
 			.update(jobPost)
 			.set({
 				...jobInput,
+				// 정규화 결과로 원본 입력을 덮는다 — 배너형이 아닌 공고는 여기서 null이 된다.
+				...adBannerText,
 				// 금액 단위 → "협의"로 바꿀 때 undefined면 drizzle이 컬럼을 건너뛰어
 				// 예전 금액이 남는다. null로 명시해 지운다.
 				payAmount: jobInput.payAmount ?? null,
@@ -971,6 +1048,13 @@ export const jobsRouter = {
 		const now = new Date();
 		const rows = await db
 			.select({
+				// 배너 이미지 위에 얹을 문구·연출. 문구가 없는 기존 공고는 전부 null이라
+				// 클라이언트가 예전처럼 이미지만 렌더한다.
+				adBannerAnimation: jobPost.adBannerAnimation,
+				adBannerHeadline: jobPost.adBannerHeadline,
+				adBannerSubline: jobPost.adBannerSubline,
+				adBannerTheme: jobPost.adBannerTheme,
+				adBannerVerticalText: jobPost.adBannerVerticalText,
 				// 슬롯별 배너 원본. 좌측·프리미엄은 가로형, 우측은 세로형을 쓰며 클라이언트가
 				// 슬롯에 맞는 쪽을 고른다. 미업로드 공고를 위해 coverImage도 폴백용으로 함께 내린다.
 				adHorizontal: adHorizontalImageSql,
@@ -1290,12 +1374,15 @@ export const jobsRouter = {
 				});
 			}
 
-			const preparedContent = prepareJobPostContent(input);
+			// 노출 확정이 먼저다 — 배너형이 아니면 문구를 저장 전에 버려야 하고, 검수
+			// 검사도 실제로 저장될 문구만 봐야 한다.
 			const exposure = await resolveJobPostExposure({
 				adProductId: input.adProductId,
 				exposureDurationDays: input.exposureDurationDays,
 				paymentMethod: input.paymentMethod,
 			});
+			const adBannerText = normalizeAdBannerText(input, exposure.exposureType);
+			const preparedContent = prepareJobPostContent(input, adBannerText);
 			const mediaRows = requireValidJobPostMediaSet({
 				media,
 				organizationId: input.organizationId,
@@ -1317,6 +1404,8 @@ export const jobsRouter = {
 					.insert(jobPost)
 					.values({
 						...jobInput,
+						// 정규화 결과로 원본 입력을 덮는다 — 배너형이 아닌 공고는 여기서 null이 된다.
+						...adBannerText,
 						createdByUserId: actor.userId,
 						description: preparedContent.description,
 						descriptionBlocks: preparedContent.descriptionBlocks,

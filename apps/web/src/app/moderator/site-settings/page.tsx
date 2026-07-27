@@ -18,6 +18,7 @@ import { orpc } from "@/utils/orpc";
 
 interface FooterForm {
 	address: string;
+	adInquiryTel: string;
 	bizRegNo: string;
 	ceo: string;
 	email: string;
@@ -28,6 +29,7 @@ interface FooterForm {
 
 const EMPTY_FORM: FooterForm = {
 	address: "",
+	adInquiryTel: "",
 	bizRegNo: "",
 	ceo: "",
 	email: "",
@@ -81,6 +83,7 @@ export default function ModeratorSiteSettingsPage() {
 		}
 		setForm({
 			address: data.address ?? "",
+			adInquiryTel: data.adInquiryTel ?? "",
 			bizRegNo: data.bizRegNo ?? "",
 			ceo: data.ceo ?? "",
 			email: data.email ?? "",
@@ -356,6 +359,20 @@ export default function ModeratorSiteSettingsPage() {
 									type="tel"
 									value={form.tel}
 								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="adInquiryTel">광고 등록 문의 전화</Label>
+								<Input
+									id="adInquiryTel"
+									onChange={update("adInquiryTel")}
+									placeholder={form.tel || BAMBI_COMPANY.tel}
+									type="tel"
+									value={form.adInquiryTel}
+								/>
+								<p className="m-0 text-muted-foreground text-xs">
+									광고 슬롯의 "광고 등록 문의"에 노출됩니다. 비워두면 고객센터
+									전화가 표시됩니다.
+								</p>
 							</div>
 							<div className="flex flex-col gap-2 md:col-span-2">
 								<Label htmlFor="address">사업장 주소</Label>

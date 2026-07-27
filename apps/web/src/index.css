@@ -55,6 +55,29 @@
 	--color-red-300: var(--red-300);
 	--color-red-500: var(--red-500);
 	--color-red-600: var(--red-600);
+
+	/* 프리미엄 광고 배너 문구 연출(shiny·gradient). 배경을 글자에 클리핑해 흐르게 한다. */
+	--animate-shiny: ad-banner-shiny 3s linear infinite;
+	--animate-gradient: ad-banner-gradient 4s ease infinite;
+
+	@keyframes ad-banner-shiny {
+		0% {
+			background-position: 100%;
+		}
+		100% {
+			background-position: -100%;
+		}
+	}
+
+	@keyframes ad-banner-gradient {
+		0%,
+		100% {
+			background-position: 0% 50%;
+		}
+		50% {
+			background-position: 100% 50%;
+		}
+	}
 }
 
 /* ---- 베이스 ---- */

@@ -2,6 +2,7 @@ import { env } from "@bambi-app/env/web";
 
 import { NEGOTIABLE_PAY_TEXT } from "../bambi-options";
 
+import type { AdBannerAnimation, AdBannerTheme } from "./ad-banner-animations";
 import type { JobAdBannerUsage } from "./job-ad-banner-spec";
 import { sampleCoverMedia, sampleThumbnailUrl } from "./sample-thumbnails";
 import type {
@@ -186,6 +187,11 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 };
 
 export interface ApiAdBannerJob {
+	adBannerAnimation?: AdBannerAnimation | null;
+	adBannerHeadline?: string | null;
+	adBannerSubline?: string | null;
+	adBannerTheme?: AdBannerTheme | null;
+	adBannerVerticalText?: string | null;
 	adHorizontal?: ApiJobMedia | null;
 	adVertical?: ApiJobMedia | null;
 	coverImage?: ApiJobMedia | null;
@@ -195,11 +201,23 @@ export interface ApiAdBannerJob {
 	title: string;
 }
 
+// 배너 오버레이 컴포넌트·등록 폼이 함께 쓰는 문구 설정. 슬롯 방향에 따라 headline 쪽이나
+// verticalText 쪽만 채워진다.
+export interface AdBannerTextConfig {
+	animation: AdBannerAnimation | null;
+	headline: string | null;
+	subline: string | null;
+	theme: AdBannerTheme | null;
+	verticalText: string | null;
+}
+
 export interface AdBannerItem {
 	company: string;
 	id: string;
 	// 커버가 아니라 슬롯 배너가 우선이라 coverUrl이 아닌 imageUrl이다.
 	imageUrl: string;
+	// 이미지 위에 얹을 문구·연출. 문구가 없는 공고(기존 공고 포함)는 null이라 이미지만 나온다.
+	text: AdBannerTextConfig | null;
 	title: string;
 }
 
@@ -214,5 +232,26 @@ export const toAdBannerItem = (
 	const media =
 		toJobMedia(banner ?? job.coverImage ?? null) ??
 		sampleCoverMedia(job.id, `${company} 대표 이미지`);
-	return { company, id: job.id, imageUrl: media.url, title: job.title };
+	// 세로 슬롯은 헤드라인을 잘라 쓰지 않는다 — 20자를 92px 폭에 넣으면 잘린 문구가 노출된다.
+	// 그래서 슬롯 방향에 맞는 문구가 있을 때만 오버레이를 얹는다.
+	const hasText =
+		usage === "ad_vertical"
+			? Boolean(job.adBannerVerticalText)
+			: Boolean(job.adBannerHeadline);
+
+	return {
+		company,
+		id: job.id,
+		imageUrl: media.url,
+		text: hasText
+			? {
+					animation: job.adBannerAnimation ?? null,
+					headline: job.adBannerHeadline ?? null,
+					subline: job.adBannerSubline ?? null,
+					theme: job.adBannerTheme ?? null,
+					verticalText: job.adBannerVerticalText ?? null,
+				}
+			: null,
+		title: job.title,
+	};
 };

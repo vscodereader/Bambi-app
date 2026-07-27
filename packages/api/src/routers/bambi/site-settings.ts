@@ -19,6 +19,9 @@ const FOOTER_COLUMNS = {
 	address: bambiSiteSettings.address,
 	email: bambiSiteSettings.email,
 	tel: bambiSiteSettings.tel,
+	// 광고 슬롯 자리표시가 읽는 문의 번호. 푸터 전용은 아니지만 이미 공개 조회이고
+	// 푸터가 모든 페이지에 있어 캐시를 공유하므로 별도 라우터를 만들지 않는다.
+	adInquiryTel: bambiSiteSettings.adInquiryTel,
 } as const;
 
 // 공백만 입력하면 미설정으로 본다(폴백이 뜨도록 null 저장).
@@ -91,6 +94,7 @@ const updateFooterInput = z.object({
 	address: optionalText(200),
 	email: optionalEmail(200),
 	tel: optionalText(60),
+	adInquiryTel: optionalText(60),
 });
 
 // 회원 정책 — 탈퇴 개인정보 보존기간(일). null이면 기본값으로 복귀한다.
