@@ -41,16 +41,21 @@ function TextBlockView({
 	return (
 		<div
 			className={cn(
-				"absolute top-[var(--block-y)] left-[var(--block-x)] max-w-full -translate-x-1/2 -translate-y-1/2",
+				// 폭을 고정해야 정렬이 의미를 갖는다. 폭이 없으면 블록이 글자에 딱 맞게 줄어들어(shrink-to-fit)
+				// 상자와 글자가 같은 폭이 되고, 그 안에서 left/center/right 어느 쪽을 줘도 화면이 그대로다.
+				// max-w-full은 그대로 둔다 — x가 가장자리일 때 블록이 슬롯 밖으로 나가지 않게 한다.
+				// break-words가 없으면 긴 단어(URL·붙여 쓴 영문)가 고정 폭을 뚫고 나간다.
+				"absolute top-[var(--block-y)] left-[var(--block-x)] w-[var(--block-width)] max-w-full -translate-x-1/2 -translate-y-1/2 break-words",
 				ALIGN_CLASS_NAMES[block.align],
 				WEIGHT_CLASS_NAMES[block.weight]
 			)}
-			// 좌표·크기·색은 구인자가 정한 런타임 값이라 Tailwind 클래스로 표현할 수 없다.
+			// 좌표·크기·색·너비는 구인자가 정한 런타임 값이라 Tailwind 클래스로 표현할 수 없다.
 			// CSS 변수 주입에만 한정한다(배치·크기 적용은 전부 위 className이 한다).
 			style={
 				{
 					"--block-color": block.color,
 					"--block-size": `${block.fontSize}cqw`,
+					"--block-width": `${block.width}%`,
 					"--block-x": `${block.x}%`,
 					"--block-y": `${block.y}%`,
 				} as React.CSSProperties

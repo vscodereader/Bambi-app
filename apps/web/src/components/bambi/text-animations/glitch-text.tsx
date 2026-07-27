@@ -20,8 +20,11 @@ export function GlitchText({
 		<span
 			className={cn(
 				"relative inline-block",
-				"before:absolute before:top-0 before:-left-0.5 before:animate-glitch-before before:overflow-hidden before:bg-[var(--glitch-bg)] before:text-glitch-cyan before:content-[attr(data-text)]",
-				"after:absolute after:top-0 after:left-0.5 after:animate-glitch-after after:overflow-hidden after:bg-[var(--glitch-bg)] after:text-glitch-red after:content-[attr(data-text)]",
+				// 복제본에 w-full을 주는 이유: absolute라 기본이 shrink-to-fit인데, 블록 너비가
+				// 고정되면서 본문이 여러 줄로 접힌다. 폭이 다르면 복제본은 다른 지점에서 접혀
+				// 잔상이 본문과 어긋난 자리에 찍힌다.
+				"before:absolute before:top-0 before:-left-0.5 before:w-full before:animate-glitch-before before:overflow-hidden before:bg-[var(--glitch-bg)] before:text-glitch-cyan before:content-[attr(data-text)]",
+				"after:absolute after:top-0 after:left-0.5 after:w-full after:animate-glitch-after after:overflow-hidden after:bg-[var(--glitch-bg)] after:text-glitch-red after:content-[attr(data-text)]",
 				className
 			)}
 			data-text={text}
