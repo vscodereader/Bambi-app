@@ -310,13 +310,22 @@ export const adBannerTheme = pgEnum("ad_banner_theme", [
 Run: `pnpm -F @bambi-app/db check-types`
 Expected: EXIT 0
 
-- [ ] **Step 5: 마이그레이션 생성을 사용자에게 요청한다**
+- [ ] **Step 5: 마이그레이션을 생성하고 적용한다**
 
-`pnpm db:generate`는 사용자가 명시적으로 지시할 때만 실행한다. 아직 지시를 받지 않았다면 여기서 멈추고 요청한다:
+사용자가 `db:generate`·`db:migrate` 실행을 명시적으로 허용했다(2026-07-27). `db:push`는 여전히 금지다.
 
-> 스키마 변경이 끝났습니다. `pnpm db:generate`를 실행해 `0039` 마이그레이션을 만들까요?
+Run: `pnpm db:generate`
+Expected: `packages/db/src/migrations/0039_*.sql` 생성
 
-생성 후에는 `packages/db/src/migrations/0039_*.sql`에 enum 2개 `CREATE TYPE`과 컬럼 6개 `ADD COLUMN`이 들어갔는지 눈으로 확인한다. 컬럼이 전부 nullable이라 기존 행에 영향이 없어야 한다.
+생성된 SQL을 열어 enum 2개 `CREATE TYPE`과 컬럼 6개 `ADD COLUMN`이 들어갔는지, 컬럼이 전부 nullable이라 기존 행에 영향이 없는지 확인한다. `DROP` 문이 하나라도 있으면 멈추고 보고한다.
+
+Run: `pnpm db:migrate`
+Expected: 0039 적용 성공
+
+적용 후 실제 반영을 검증한다 — 마이그레이션은 "적용됐다는 로그"가 아니라 스키마로 확인한다:
+
+Run: `pnpm -F @bambi-app/db check-types`
+Expected: EXIT 0
 
 - [ ] **Step 6: 커밋**
 
@@ -821,8 +830,11 @@ feat(web): 광고 배너 텍스트 오버레이 컴포넌트 추가
 - Modify: `packages/api/src/routers/bambi/site-settings.ts`
 - Modify: `apps/web/src/app/moderator/site-settings/page.tsx`
 - Modify: `apps/web/src/components/bambi/ad-banner.tsx` (`AdSlotPlaceholder`)
-- Create: `apps/web/src/components/bambi/ad-banner.test.ts`
+- Create: `apps/web/src/lib/bambi/ad-inquiry-tel.ts`
+- Create: `apps/web/src/lib/bambi/ad-inquiry-tel.test.ts`
 - Delete: `apps/web/public/bambi/placeholder/horizontal-placeholder.png`, `vertical-placeholder.png`
+
+폴백 함수를 `ad-banner.tsx`가 아니라 `lib/bambi/`의 순수 모듈에 두는 이유: `ad-banner.tsx`는 `useQuery`·`orpc`를 쓰는 클라이언트 컴포넌트라, 거기서 export 하면 테스트가 React·oRPC 전체를 끌고 들어온다.
 
 **Interfaces:**
 - Consumes: `AdSlotInquiryContent` (Task 4)
@@ -830,13 +842,13 @@ feat(web): 광고 배너 텍스트 오버레이 컴포넌트 추가
 
 - [ ] **Step 1: 실패하는 폴백 테스트를 쓴다**
 
-`apps/web/src/components/bambi/ad-banner.test.ts`:
+`apps/web/src/lib/bambi/ad-inquiry-tel.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
 
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
-import { resolveAdInquiryTel } from "./ad-banner";
+import { resolveAdInquiryTel } from "./ad-inquiry-tel";
 
 describe("resolveAdInquiryTel", () => {
 	it("uses the ad inquiry number when the operator set one", () => {
@@ -869,7 +881,7 @@ describe("resolveAdInquiryTel", () => {
 
 - [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
 
-Run: `pnpm -F web test ad-banner`
+Run: `pnpm -F web test ad-inquiry-tel`
 Expected: FAIL — `resolveAdInquiryTel is not exported`
 
 - [ ] **Step 3: 서버에 `adInquiryTel`을 싣는다**
@@ -921,9 +933,11 @@ const FOOTER_COLUMNS = {
 
 - [ ] **Step 5: `AdSlotPlaceholder`를 컴포넌트 렌더로 바꾼다**
 
-`apps/web/src/components/bambi/ad-banner.tsx`에서 `PLACEHOLDER_HORIZONTAL_SRC`·`PLACEHOLDER_VERTICAL_SRC` 상수와 `AdSlotPlaceholder`의 `<Image>`를 걷어내고 아래로 교체한다. `next/image` import가 `AdBanner`·`HorizontalAdBanner`에서 계속 쓰이므로 지우지 않는다:
+먼저 `apps/web/src/lib/bambi/ad-inquiry-tel.ts`를 만든다:
 
-```tsx
+```ts
+import { BAMBI_COMPANY } from "@/lib/bambi/company";
+
 // 광고 문의 번호 폴백 체인. 운영자가 광고 전용 번호를 두지 않았으면 고객센터 번호를,
 // 사이트 설정 행 자체가 없으면 코드 상수를 쓴다 — 자리표시에 번호가 비면 안 된다.
 export const resolveAdInquiryTel = ({
@@ -932,9 +946,14 @@ export const resolveAdInquiryTel = ({
 }: {
 	adInquiryTel: string | null | undefined;
 	tel: string | null | undefined;
-}): string =>
-	adInquiryTel?.trim() || tel?.trim() || BAMBI_COMPANY.tel;
+}): string => adInquiryTel?.trim() || tel?.trim() || BAMBI_COMPANY.tel;
+```
 
+`BAMBI_COMPANY`의 정확한 export 경로는 `apps/web/src/components/bambi/site-footer.tsx`의 import 문을 확인해 그대로 따른다.
+
+이어서 `apps/web/src/components/bambi/ad-banner.tsx`에서 `PLACEHOLDER_HORIZONTAL_SRC`·`PLACEHOLDER_VERTICAL_SRC` 상수와 `AdSlotPlaceholder`의 `<Image>`를 걷어내고 아래로 교체한다. `next/image` import가 `AdBanner`·`HorizontalAdBanner`에서 계속 쓰이므로 지우지 않는다:
+
+```tsx
 // 빈 광고/카드 슬롯 자리표시 — 실제 배너와 같은 비율/크기로 "광고 등록 문의"를 그리는
 // 클릭 불가 장식(aria-hidden). 8칸이 같은 문구를 반복하므로 스크린리더에는 읽히지 않게 두고,
 // 빈 슬롯이 클릭되면 실제 광고와 혼동되므로 링크도 걸지 않는다.
@@ -967,16 +986,14 @@ export function AdSlotPlaceholder({
 
 ```tsx
 import { useQuery } from "@tanstack/react-query";
-import { AdSlotInquiryContent } from "./ad-banner-text-overlay";
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
+import { resolveAdInquiryTel } from "@/lib/bambi/ad-inquiry-tel";
 import { orpc } from "@/utils/orpc";
+import { AdSlotInquiryContent } from "./ad-banner-text-overlay";
 ```
-
-`BAMBI_COMPANY`의 정확한 export 경로는 `apps/web/src/components/bambi/site-footer.tsx`의 import 문을 확인해 그대로 따른다.
 
 - [ ] **Step 6: 테스트를 돌려 통과를 확인한다**
 
-Run: `pnpm -F web test ad-banner`
+Run: `pnpm -F web test ad-inquiry-tel`
 Expected: PASS (4 tests)
 
 - [ ] **Step 7: PNG를 삭제한다**
