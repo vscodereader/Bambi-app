@@ -56,26 +56,35 @@
 	--color-red-500: var(--red-500);
 	--color-red-600: var(--red-600);
 
-	/* 프리미엄 광고 배너 문구 연출(shiny·gradient). 배경을 글자에 클리핑해 흐르게 한다. */
-	--animate-shiny: ad-banner-shiny 3s linear infinite;
-	--animate-gradient: ad-banner-gradient 4s ease infinite;
+	/* 글리치 잔상 두 겹의 색. 색수차를 흉내 내는 효과 전용 색이라 브랜드 팔레트에 대응이 없어
+	   여기서 토큰으로 정의한다(컴포넌트에 raw oklch를 박지 않기 위함). */
+	--color-glitch-cyan: oklch(0.8 0.15 200);
+	--color-glitch-red: oklch(0.7 0.2 25);
 
-	@keyframes ad-banner-shiny {
+	/* 프리미엄 광고 배너 글리치 연출. ::before/::after 복제본을 clip-path로 잘라 어긋나게 보여준다.
+	   반복을 3·2회(약 6초)로 유한하게 둔 것이 핵심이다 — 원본의 infinite는 광고 슬롯이 최대 8칸까지
+	   동시에 뜨는 마켓플레이스 홈에서 상시 리페인트가 된다. */
+	--animate-glitch-before: ad-banner-glitch 2s steps(12, end) 3;
+	--animate-glitch-after: ad-banner-glitch 3s steps(12, end) 2;
+
+	@keyframes ad-banner-glitch {
 		0% {
-			background-position: 100%;
+			clip-path: inset(20% 0 50% 0);
+		}
+		20% {
+			clip-path: inset(30% 0 40% 0);
+		}
+		40% {
+			clip-path: inset(10% 0 60% 0);
+		}
+		60% {
+			clip-path: inset(40% 0 20% 0);
+		}
+		80% {
+			clip-path: inset(15% 0 55% 0);
 		}
 		100% {
-			background-position: -100%;
-		}
-	}
-
-	@keyframes ad-banner-gradient {
-		0%,
-		100% {
-			background-position: 0% 50%;
-		}
-		50% {
-			background-position: 100% 50%;
+			clip-path: inset(25% 0 35% 0);
 		}
 	}
 }
