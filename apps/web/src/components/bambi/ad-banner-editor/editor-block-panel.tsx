@@ -14,7 +14,9 @@ import {
 	AD_BANNER_ANIMATION_OPTIONS,
 	AD_BANNER_FONT_SIZE_MAX,
 	AD_BANNER_FONT_SIZE_MIN,
+	AD_BANNER_TEXT_ALIGN_OPTIONS,
 	AD_BANNER_TEXT_MAX_LENGTH,
+	AD_BANNER_TEXT_WEIGHT_OPTIONS,
 	type AdBannerAnimation,
 	type AdBannerSlotLayout,
 	type AdBannerTextAlign,
@@ -22,18 +24,6 @@ import {
 	type AdBannerTextWeight,
 	isLowContrast,
 } from "@/lib/bambi/ad-banner-layout";
-
-const WEIGHT_OPTIONS: { label: string; value: AdBannerTextWeight }[] = [
-	{ label: "보통", value: "normal" },
-	{ label: "굵게", value: "bold" },
-	{ label: "매우 굵게", value: "extrabold" },
-];
-
-const ALIGN_OPTIONS: { label: string; value: AdBannerTextAlign }[] = [
-	{ label: "왼쪽", value: "left" },
-	{ label: "가운데", value: "center" },
-	{ label: "오른쪽", value: "right" },
-];
 
 const toggleGroupClassName = "grid w-full grid-cols-3 gap-2";
 
@@ -55,6 +45,9 @@ export function EditorBlockPanel({
 	const lowContrast =
 		background.type === "color" && isLowContrast(background.color, block.color);
 	const unprotectedImage = background.type === "image" && !scrimEnabled;
+	const selectedAnimation = AD_BANNER_ANIMATION_OPTIONS.find(
+		(option) => option.value === block.animation
+	);
 
 	const handleFontSize = (value: string) => {
 		const size = Number(value);
@@ -96,15 +89,25 @@ export function EditorBlockPanel({
 			<div className="grid grid-cols-2 gap-4">
 				<div className="flex flex-col gap-2">
 					<Label htmlFor={`block-size-${block.id}`}>글자 크기</Label>
-					<Input
-						id={`block-size-${block.id}`}
-						max={AD_BANNER_FONT_SIZE_MAX}
-						min={AD_BANNER_FONT_SIZE_MIN}
-						onChange={(event) => handleFontSize(event.target.value)}
-						type="number"
-						value={block.fontSize}
-					/>
-					<FieldHint>배너 폭 대비 %라 슬롯 크기에 맞춰 늘어납니다.</FieldHint>
+					{/* 값만 보이면 8이 px인지 %인지 알 수 없다. 단위를 입력 옆에 붙여 둔다. */}
+					<div className="flex items-center gap-2">
+						<Input
+							aria-describedby={`block-size-hint-${block.id}`}
+							className="flex-1"
+							id={`block-size-${block.id}`}
+							max={AD_BANNER_FONT_SIZE_MAX}
+							min={AD_BANNER_FONT_SIZE_MIN}
+							onChange={(event) => handleFontSize(event.target.value)}
+							type="number"
+							value={block.fontSize}
+						/>
+						<span aria-hidden="true" className="text-muted-foreground text-sm">
+							%
+						</span>
+					</div>
+					<FieldHint id={`block-size-hint-${block.id}`}>
+						배너 폭 대비 %라 슬롯 크기에 맞춰 늘어납니다.
+					</FieldHint>
 				</div>
 
 				<div className="flex flex-col gap-2">
@@ -132,7 +135,7 @@ export function EditorBlockPanel({
 					value={[block.weight]}
 					variant="outline"
 				>
-					{WEIGHT_OPTIONS.map((option) => (
+					{AD_BANNER_TEXT_WEIGHT_OPTIONS.map((option) => (
 						<ToggleGroupItem key={option.value} value={option.value}>
 							{option.label}
 						</ToggleGroupItem>
@@ -153,7 +156,7 @@ export function EditorBlockPanel({
 					value={[block.align]}
 					variant="outline"
 				>
-					{ALIGN_OPTIONS.map((option) => (
+					{AD_BANNER_TEXT_ALIGN_OPTIONS.map((option) => (
 						<ToggleGroupItem key={option.value} value={option.value}>
 							{option.label}
 						</ToggleGroupItem>
@@ -180,6 +183,10 @@ export function EditorBlockPanel({
 						</ToggleGroupItem>
 					))}
 				</ToggleGroup>
+				{/* 이름만 보고는 "글리치"가 뭔지 알 수 없다. 고른 연출의 설명을 붙인다. */}
+				{selectedAnimation ? (
+					<FieldHint>{selectedAnimation.description}</FieldHint>
+				) : null}
 				<FieldHint>
 					고른 연출을 다시 누르면 해제됩니다. 편집 화면에서는 연출을 재생하지
 					않습니다.

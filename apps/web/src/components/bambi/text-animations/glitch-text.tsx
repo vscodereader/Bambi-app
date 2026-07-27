@@ -20,8 +20,8 @@ export function GlitchText({
 		<span
 			className={cn(
 				"relative inline-block",
-				"before:absolute before:top-0 before:left-[-2px] before:animate-glitch-before before:overflow-hidden before:bg-[var(--glitch-bg)] before:text-glitch-cyan before:content-[attr(data-text)]",
-				"after:absolute after:top-0 after:left-[2px] after:animate-glitch-after after:overflow-hidden after:bg-[var(--glitch-bg)] after:text-glitch-red after:content-[attr(data-text)]",
+				"before:absolute before:top-0 before:-left-0.5 before:animate-glitch-before before:overflow-hidden before:bg-[var(--glitch-bg)] before:text-glitch-cyan before:content-[attr(data-text)]",
+				"after:absolute after:top-0 after:left-0.5 after:animate-glitch-after after:overflow-hidden after:bg-[var(--glitch-bg)] after:text-glitch-red after:content-[attr(data-text)]",
 				className
 			)}
 			data-text={text}

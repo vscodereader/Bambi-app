@@ -207,7 +207,11 @@ export function AdBannerEditorLauncher({
 				배너 문구 편집
 			</Button>
 			<Dialog onOpenChange={setIsDialogOpen} open={isDialogOpen}>
-				<DialogContent className="inset-2 max-w-none translate-x-0 translate-y-0 gap-4 p-4 md:inset-6 md:p-6">
+				{/* inset으로 폭을 정하므로 base의 w-[420px]를 w-auto로 풀어야 한다. max-w-none만
+				    걸면 max-w-[92vw] 안전망만 사라지고 420px 고정폭이 남아, 375~412px 휴대폰에서
+				    다이얼로그 오른쪽이 화면 밖으로 나간다(fixed라 스크롤로 닿지도 않는다).
+				    모바일에선 이 다이얼로그가 유일한 편집 경로다. */}
+				<DialogContent className="inset-2 w-auto max-w-none translate-x-0 translate-y-0 gap-4 p-4 md:inset-6 md:p-6">
 					<DialogTitle className="sr-only">광고 배너 편집</DialogTitle>
 					<AdBannerEditor
 						backgroundUrls={resolvedBackgroundUrls}

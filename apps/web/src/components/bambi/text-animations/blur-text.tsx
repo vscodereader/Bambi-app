@@ -2,7 +2,7 @@
 
 import { cn } from "@bambi-app/ui/lib/utils";
 import gsap from "gsap";
-import { useLayoutEffect, useRef } from "react";
+import { Fragment, useLayoutEffect, useRef } from "react";
 
 // React Bits BlurText를 배너용으로 줄인 것. 원본의 IntersectionObserver를 걷어내고
 // 마운트 시 1회만 재생한다 — 슬롯이 8칸 동시에 떠도 각자 한 번씩만 돌고 멈춘다.
@@ -42,14 +42,17 @@ export function BlurText({
 		return () => ctx.revert();
 	}, []);
 
+	// flex 컨테이너로 두면 상위 블록의 정렬(text-left/right)이 단어 배치에 전혀 반영되지 않아
+	// 구인자가 고른 정렬이 무시된다. 인라인 흐름으로 두면 text-align이 그대로 먹는다.
+	// 단어 사이는 실제 공백 문자로 띄우고, 단어만 inline-block으로 만든다 —
+	// 인라인 요소에는 transform이 적용되지 않아 gsap의 y 이동이 죽는다.
 	return (
-		<span
-			className={cn("flex flex-wrap justify-center gap-x-1", className)}
-			ref={containerRef}
-		>
+		<span className={cn("inline", className)} ref={containerRef}>
 			{words.map((word, index) => (
 				// biome-ignore lint/suspicious/noArrayIndexKey: 같은 단어가 반복될 수 있어 값으로 키를 못 만든다
-				<span key={`${word}-${index}`}>{word}</span>
+				<Fragment key={`${word}-${index}`}>
+					<span className="inline-block">{word}</span>{" "}
+				</Fragment>
 			))}
 		</span>
 	);

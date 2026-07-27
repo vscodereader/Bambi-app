@@ -31,7 +31,8 @@ import { protectedProcedure, publicProcedure } from "../../index";
 import {
 	type AdBannerLayoutInput,
 	adBannerLayoutSchema,
-	collectLayoutTexts,
+	collectLayoutModerationText,
+	parseStoredAdBannerLayout,
 } from "../../services/bambi-ad-banner-layout";
 import {
 	AD_BANNER_EXPOSURE_TYPES,
@@ -256,9 +257,9 @@ export const getStoredAdBannerLayout = async (
 		.where(eq(jobAdBannerLayout.jobPostId, jobPostId))
 		.limit(1);
 
-	// 쓰기 경로가 adBannerLayoutSchema를 통과한 값만 저장한다. 읽는 쪽에서 형태가 어긋나면
-	// collectLayoutTexts가 빈 배열로, 렌더러가 무시로 처리한다.
-	return (row?.layout ?? null) as AdBannerLayoutInput | null;
+	// 쓰기 경로가 전부 zod를 통과하지만 읽을 때 다시 검증한다 — 수동 DB 편집·부분 복구·훗날의
+	// v2 스키마가 남긴 행 하나가 렌더러를 터뜨려 광고 레일이 붙은 화면을 통째로 내릴 수 있다.
+	return parseStoredAdBannerLayout(row?.layout ?? null);
 };
 
 // 검수 대상 레이아웃. 키를 생략해 기존 레이아웃이 보존되는 경우엔 저장분을 읽어야 남아 있을
@@ -384,8 +385,10 @@ const prepareJobPostContent = (
 		description,
 		descriptionBlocks: normalizedBlocks,
 		hasRiskFlags: hasRiskFlags({
-			// 가로·세로 두 슬롯을 모두 훑는다 — 한쪽만 보면 반대 슬롯 문구가 검사를 빠져나간다.
-			adBannerText: collectLayoutTexts(adBannerLayout).join(" "),
+			// 가로·세로 두 슬롯을 모두 훑고, 블록별 문구와 화면 읽기 순서 조립본을 함께 넘긴다 —
+			// 한쪽 슬롯만 보면 반대 슬롯이 빠져나가고, 블록별로만 보면 "미성"과 "년"을 나란히
+			// 놓아 배너에는 "미성년"으로 보이는 조합이 검사를 통과한다.
+			adBannerText: collectLayoutModerationText(adBannerLayout),
 			blockRiskTerms,
 			description,
 			interviewNotes: input.interviewNotes,
@@ -1126,11 +1129,13 @@ export const jobsRouter = {
 			)
 			.orderBy(desc(jobPost.publishedAt));
 
-		// jsonb 컬럼은 drizzle이 unknown으로 준다. 쓰기 경로가 adBannerLayoutSchema를 통과한
-		// 값만 저장하므로 읽을 때 다시 파싱하지 않고 형태를 명시해 클라이언트로 내린다.
+		// jsonb 컬럼은 drizzle이 unknown으로 준다. 캐스팅만 하면 형태가 어긋난 행 하나가
+		// 렌더러에서 터지는데, 이 배너 레일은 마켓플레이스·공고상세·채팅목록 등 여러 화면에
+		// 붙어 있어 한 광고주의 잘못된 행이 화면 전체를 내린다. 읽을 때마다 다시 검증하고
+		// 실패하면 null로 떨어뜨려 이미지만 나오게 한다.
 		const rows = selectedRows.map((row) => ({
 			...row,
-			layout: (row.layout ?? null) as AdBannerLayoutInput | null,
+			layout: parseStoredAdBannerLayout(row.layout ?? null),
 		}));
 
 		// 로테이션 주기는 운영자 사이트 설정값(분)을 따르고, 미설정이면 코드 기본값을 쓴다.

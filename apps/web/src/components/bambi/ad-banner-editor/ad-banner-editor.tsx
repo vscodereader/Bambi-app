@@ -28,6 +28,7 @@ import {
 	type AdBannerSlot,
 	type AdBannerSlotLayout,
 	type AdBannerTextBlock,
+	clampPercent,
 	createAdBannerTextBlock,
 } from "@/lib/bambi/ad-banner-layout";
 import { EditorBlockPanel } from "./editor-block-panel";
@@ -37,6 +38,9 @@ const SLOT_OPTIONS: { label: string; value: AdBannerSlot }[] = [
 	{ label: "가로형", value: "horizontal" },
 	{ label: "세로형", value: "vertical" },
 ];
+
+// 새 문구를 추가할 때마다 어긋나게 놓는 간격(%). 슬롯당 최대 5개라 마지막 블록도 캔버스 안이다.
+const BLOCK_CASCADE_STEP = 6;
 
 // 서버 zod는 문구를 trim 후 1자 이상으로 받는다. 빈 블록을 그대로 저장하면 배너가 아니라
 // 공고 저장 전체가 반려되면서 구인자에겐 원인이 안 보이는 에러만 뜬다. 여기서 먼저 잡고,
@@ -116,7 +120,15 @@ export function AdBannerEditor({
 	};
 
 	const handleAddBlock = () => {
-		const block = createAdBannerTextBlock(crypto.randomUUID());
+		const created = createAdBannerTextBlock(crypto.randomUUID());
+		// 기본 좌표는 항상 한가운데라 그대로 추가하면 블록이 정확히 포개진다. 포인터 히트는 늘
+		// 맨 위 블록이 가져가 아래 블록은 Tab으로만 잡힌다. 기존 개수만큼 어긋나게 놓는다.
+		const offset = slotLayout.texts.length * BLOCK_CASCADE_STEP;
+		const block = {
+			...created,
+			x: clampPercent(created.x + offset),
+			y: clampPercent(created.y + offset),
+		};
 		updateSlot({ texts: [...slotLayout.texts, block] });
 		setSelectedId(block.id);
 	};
@@ -138,7 +150,9 @@ export function AdBannerEditor({
 		if (blank) {
 			setSlot(blank.slot);
 			setSelectedId(blank.block.id);
-			toast.error("내용이 비어 있는 문구가 있어요. 채우거나 삭제해 주세요.");
+			toast.error(
+				"내용이 비어 있는 문구가 있습니다. 채우거나 삭제해 주십시오."
+			);
 			return;
 		}
 
@@ -192,9 +206,17 @@ export function AdBannerEditor({
 						slotLayout={slotLayout}
 					/>
 					<FieldHint>
-						문구를 끌어 옮기세요. 키보드는 Tab으로 문구를 고른 뒤 방향키(Shift는
-						5%씩)로 옮깁니다.
+						문구를 끌어서 옮깁니다. 키보드로는 Tab으로 문구를 고른 뒤 방향키로
+						1%씩, Shift와 함께 누르면 5%씩 옮깁니다.
 					</FieldHint>
+					{/* 세로 캔버스는 끌기 편하도록 실제 슬롯(폭 약 92px)보다 1.85배 크게 그린다.
+					    비율은 같지만 글자 크기 감각이 어긋나므로 그 사실을 알려 준다. */}
+					{slot === "vertical" ? (
+						<FieldHint>
+							세로형은 실제 노출 폭이 편집 화면의 약 절반입니다. 여기서 작아
+							보이지 않을 정도로 글자 크기를 넉넉히 잡아 주십시오.
+						</FieldHint>
+					) : null}
 				</div>
 
 				{selectedBlock ? (
@@ -291,7 +313,7 @@ export function AdBannerEditor({
 							value={slotLayout.scrim.opacity}
 						/>
 						<FieldHint>
-							0~100%. 사진이 밝을수록 높이면 글자가 또렷합니다.
+							0~100%. 사진이 밝을수록 강도를 높여야 글자가 또렷합니다.
 						</FieldHint>
 					</div>
 				) : null}

@@ -4,6 +4,8 @@ import {
 	AD_BANNER_ANIMATION_LABELS,
 	AD_BANNER_ANIMATION_OPTIONS,
 	AD_BANNER_ANIMATION_VALUES,
+	AD_BANNER_TEXT_ALIGN_OPTIONS,
+	AD_BANNER_TEXT_WEIGHT_OPTIONS,
 	clampPercent,
 	collectAdBannerLayoutTexts,
 	contrastRatio,
@@ -26,6 +28,18 @@ describe("ad banner layout catalog", () => {
 		for (const option of AD_BANNER_ANIMATION_OPTIONS) {
 			expect(option.label).toBeTruthy();
 			expect(option.description).toBeTruthy();
+			expect(option.label).not.toBe(option.value);
+		}
+	});
+
+	it("labels every weight and align option", () => {
+		// 굵기·정렬 토글의 표시 경로도 이 라벨 맵뿐이다. 값이 늘고 라벨이 빠지면 토글에
+		// 빈 칸이 뜬다.
+		for (const option of [
+			...AD_BANNER_TEXT_WEIGHT_OPTIONS,
+			...AD_BANNER_TEXT_ALIGN_OPTIONS,
+		]) {
+			expect(option.label).toBeTruthy();
 			expect(option.label).not.toBe(option.value);
 		}
 	});

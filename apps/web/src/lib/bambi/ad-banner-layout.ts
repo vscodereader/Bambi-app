@@ -36,6 +36,48 @@ export const AD_BANNER_ANIMATION_OPTIONS = AD_BANNER_ANIMATION_VALUES.map(
 	})
 );
 
+// 굵기·정렬도 연출과 같은 카탈로그로 둔다. 에디터 안의 로컬 배열이 원본이면 값을 하나 늘리는
+// 순간 서버 zod가 반려하는데(배너가 아니라 프리미엄 공고 저장 전체가 막힌다) 대조할 대상이
+// 없어 테스트가 전부 통과한다.
+export const AD_BANNER_TEXT_WEIGHT_VALUES = [
+	"normal",
+	"bold",
+	"extrabold",
+] as const satisfies readonly AdBannerTextWeight[];
+
+export const AD_BANNER_TEXT_WEIGHT_LABELS: Record<AdBannerTextWeight, string> =
+	{
+		bold: "굵게",
+		extrabold: "매우 굵게",
+		normal: "보통",
+	};
+
+export const AD_BANNER_TEXT_WEIGHT_OPTIONS = AD_BANNER_TEXT_WEIGHT_VALUES.map(
+	(value) => ({
+		label: AD_BANNER_TEXT_WEIGHT_LABELS[value],
+		value,
+	})
+);
+
+export const AD_BANNER_TEXT_ALIGN_VALUES = [
+	"left",
+	"center",
+	"right",
+] as const satisfies readonly AdBannerTextAlign[];
+
+export const AD_BANNER_TEXT_ALIGN_LABELS: Record<AdBannerTextAlign, string> = {
+	center: "가운데",
+	left: "왼쪽",
+	right: "오른쪽",
+};
+
+export const AD_BANNER_TEXT_ALIGN_OPTIONS = AD_BANNER_TEXT_ALIGN_VALUES.map(
+	(value) => ({
+		label: AD_BANNER_TEXT_ALIGN_LABELS[value],
+		value,
+	})
+);
+
 // 슬롯당 문구 상한. 무제한이면 검수·렌더 비용이 커진다.
 export const AD_BANNER_MAX_BLOCKS = 5;
 export const AD_BANNER_TEXT_MAX_LENGTH = 40;

@@ -63,9 +63,17 @@
 
 	/* 프리미엄 광고 배너 글리치 연출. ::before/::after 복제본을 clip-path로 잘라 어긋나게 보여준다.
 	   반복을 3·2회(약 6초)로 유한하게 둔 것이 핵심이다 — 원본의 infinite는 광고 슬롯이 최대 8칸까지
-	   동시에 뜨는 마켓플레이스 홈에서 상시 리페인트가 된다. */
-	--animate-glitch-before: ad-banner-glitch 2s steps(12, end) 3;
-	--animate-glitch-after: ad-banner-glitch 3s steps(12, end) 2;
+	   동시에 뜨는 마켓플레이스 홈에서 상시 리페인트가 된다.
+	   두 트랙 모두 6s에 끝나는데, 그 순간 clip-path가 사라지면(fill-mode none) 잘리지 않은 복제본
+	   두 겹이 원본 문구를 영구히 덮는다. 그래서 6s 뒤부터 forwards로 복제본을 완전히 걷어내는
+	   트랙(ad-banner-glitch-out)을 뒤에 겹친다 — 재생 중 모습은 위 keyframes 그대로다.
+	   (마지막 keyframe만 감춤 값으로 바꾸면 매 반복의 끝 구간이 사라지며 연출이 달라진다.) */
+	--animate-glitch-before:
+		ad-banner-glitch 2s steps(12, end) 3,
+		ad-banner-glitch-out 1ms linear 6s forwards;
+	--animate-glitch-after:
+		ad-banner-glitch 3s steps(12, end) 2,
+		ad-banner-glitch-out 1ms linear 6s forwards;
 
 	@keyframes ad-banner-glitch {
 		0% {
@@ -85,6 +93,14 @@
 		}
 		100% {
 			clip-path: inset(25% 0 35% 0);
+		}
+	}
+
+	/* 연출이 끝난 뒤의 정지 상태. 복제본을 통째로 잘라내 원본 문구만 남긴다. */
+	@keyframes ad-banner-glitch-out {
+		from,
+		to {
+			clip-path: inset(100% 0 0 0);
 		}
 	}
 }

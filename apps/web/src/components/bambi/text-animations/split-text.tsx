@@ -19,7 +19,13 @@ export function SplitTextAnimation({
 }) {
 	const containerRef = useRef<HTMLSpanElement>(null);
 	// 폰트 로드 전에 글자를 쪼개면 잘못된 위치로 분리된다(원본이 같은 이유로 기다린다).
-	const [fontsReady, setFontsReady] = useState(false);
+	// 초기값을 지연 초기화로 읽는 게 핵심이다 — false로 시작하면 이미 폰트가 로드된 경우에도
+	// "정적 문구 페인트 → useEffect → setState → 다음 커밋에서 리셋" 순서라 매번 한 프레임
+	// 완성된 문구가 보였다 사라진다(아래 useLayoutEffect가 막으려던 바로 그 깜빡임이다).
+	// 이 컴포넌트는 애니메이션 게이트 덕에 클라이언트에서만 마운트돼 document 접근이 안전하다.
+	const [fontsReady, setFontsReady] = useState(
+		() => document.fonts.status === "loaded"
+	);
 
 	useEffect(() => {
 		if (document.fonts.status === "loaded") {

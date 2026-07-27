@@ -75,7 +75,10 @@ function CanvasBlock({
 
 	return (
 		<button
-			aria-label={`문구 "${block.content}" 위치 조정`}
+			// 좌표를 라벨에 넣어야 방향키로 옮길 때마다 스크린리더가 바뀐 위치를 읽어 준다.
+			// 선택 여부도 ring 색만으로는 전달되지 않으므로 aria-pressed로 함께 알린다.
+			aria-label={`문구 "${block.content}" 위치 조정, 가로 ${Math.round(block.x)}% 세로 ${Math.round(block.y)}%`}
+			aria-pressed={selected}
 			className={cn(
 				"absolute top-[var(--block-y)] left-[var(--block-x)] max-w-full -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-md px-1 leading-tight outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
 				selected && "ring-2 ring-primary",
@@ -176,7 +179,8 @@ export function EditorCanvas({
 
 			{slotLayout.background.type === "image" && !backgroundUrl ? (
 				<p className="absolute inset-0 flex items-center justify-center p-4 text-center text-muted-foreground text-xs">
-					배경 이미지를 아직 올리지 않았습니다. 문구 배치는 지금도 할 수 있어요.
+					배경 이미지를 아직 올리지 않았습니다. 문구 배치는 지금도 할 수
+					있습니다.
 				</p>
 			) : null}
 

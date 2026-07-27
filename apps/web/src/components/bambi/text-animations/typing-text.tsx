@@ -34,8 +34,10 @@ export function TypingText({
 	// (광고 8칸이면 그만큼 CLS다) DOM·복사·크롤러에는 문구 전체가 남는다.
 	// 다만 **문구는 한 번 사라진다**: 서버 HTML이 문구 전체를 그린 뒤 하이드레이션에서 이 컴포넌트가
 	// visibleCount=0으로 마운트되므로, 보이던 글자가 지워졌다가 타이핑된다(막는 건 레이아웃 점프뿐이다).
+	// inline-flex로 감싸면 세 조각이 한 줄에 강제로 붙어(flex-wrap 기본값 nowrap) 세로 슬롯처럼
+	// 좁은 곳에서 긴 문구가 슬롯 밖으로 잘려 나간다. 일반 인라인 흐름이라야 줄바꿈이 된다.
 	return (
-		<span className={cn("inline-flex items-center", className)}>
+		<span className={cn("inline", className)}>
 			{text.slice(0, visibleCount)}
 			<span aria-hidden="true" className="ml-0.5 animate-pulse">
 				|
