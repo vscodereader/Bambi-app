@@ -670,13 +670,17 @@ export const onboardingRouter = {
 
 		await db.transaction(async (tx) => {
 			// 이메일은 notNull·unique라 지울 수 없어 tombstone으로 치환한다(원 이메일
-			// 재가입이 바로 열린다). isNull 가드로 중복 호출을 no-op으로 만든다(멱등).
+			// 재가입이 바로 열린다). 로그인 아이디는 nullable이라 그대로 비워 파기하며,
+			// 같은 아이디를 다른 사람이 다시 쓸 수 있게 된다(Postgres unique는 NULL 다중
+			// 허용). isNull 가드로 중복 호출을 no-op으로 만든다(멱등).
 			await tx
 				.update(user)
 				.set({
 					deletedAt: new Date(),
 					email: `withdrawn-${userId}@invalid.bambi`,
 					image: null,
+					login_id: null,
+					login_id_display: null,
 					name: "탈퇴한 회원",
 				})
 				.where(and(eq(user.id, userId), isNull(user.deletedAt)));

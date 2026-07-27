@@ -166,8 +166,8 @@ export default function PrivacyPage() {
 				<LegalSubheading>가. 회원 탈퇴 시</LegalSubheading>
 				<LegalParagraph>
 					탈퇴 신청 즉시 비밀번호 등 인증정보, 휴대폰번호, 성별, 생년월일을
-					파기하고, 이메일 주소는 식별할 수 없는 값으로 치환하며, 프로필
-					표시명은 '탈퇴한 회원'으로 변경합니다.
+					파기하고, 아이디는 삭제하며 이메일 주소는 식별할 수 없는 값으로
+					치환합니다. 프로필 표시명은 '탈퇴한 회원'으로 변경됩니다.
 				</LegalParagraph>
 				<LegalParagraph>
 					다만 이용약관에 따라 이용이 제한된 회원의 부정 재가입을 막기 위하여,

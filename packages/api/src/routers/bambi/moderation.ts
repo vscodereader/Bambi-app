@@ -2386,7 +2386,9 @@ export const moderationRouter = {
 					isPhoneVerified: false,
 				})
 				.where(inArray(bambiProfile.userId, ids));
-			// 이메일은 unique 제약이라 사용자별 tombstone으로 치환한다.
+			// 이메일은 unique 제약이라 사용자별 tombstone으로 치환하고, 로그인 아이디는
+			// nullable이라 비워서 파기한다(탈퇴 시점에 이미 처리되지만 이 변경 이전에
+			// 탈퇴한 계정을 위해 여기서도 수행한다).
 			for (const id of ids) {
 				await tx
 					.update(user)
@@ -2394,6 +2396,8 @@ export const moderationRouter = {
 						email: `withdrawn-${id}@invalid.bambi`,
 						name: "탈퇴한 회원",
 						image: null,
+						login_id: null,
+						login_id_display: null,
 						purgedAt: new Date(),
 					})
 					.where(eq(user.id, id));
