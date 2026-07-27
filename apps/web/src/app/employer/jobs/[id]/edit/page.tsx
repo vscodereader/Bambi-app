@@ -54,6 +54,7 @@ import {
 	type JobFormMediaItem,
 	type JobPaymentMethod,
 	resolveJobPostMediaForSubmit,
+	toJobAdBannerTextForm,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
 import {
@@ -255,6 +256,9 @@ export default function EditEmployerJobPage({
 		}
 
 		setForm({
+			// 저장은 입력 전체를 교체하므로 배너 문구도 반드시 되돌려 보내야 한다.
+			// 프리필을 빠뜨리면 구인자가 다른 항목만 고쳐도 문구가 null로 지워진다.
+			...toJobAdBannerTextForm(job),
 			adProductId: job.adProductId ?? null,
 			beginnerFriendly: job.beginnerFriendly ?? false,
 			description: job.description,
@@ -802,9 +806,15 @@ export default function EditEmployerJobPage({
 					</section>
 
 					<JobPostMediaUploader
+						adBannerText={form}
 						adProductId={form.adProductId}
 						error={fieldErrors.media}
 						media={media}
+						onAdBannerTextChange={(next) => {
+							setIsDirty(true);
+							setForm((currentForm) => ({ ...currentForm, ...next }));
+							setFormError(null);
+						}}
 						onChange={(nextMedia) => {
 							setIsDirty(true);
 							setMedia(nextMedia);

@@ -23,12 +23,17 @@ import {
 } from "@/lib/bambi/job-ad-banner-spec";
 import {
 	getFileAcceptForUsage,
+	type JobAdBannerTextForm,
 	type JobFormMedia,
 	type JobFormMediaItem,
 } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
+import { AdBannerTextFields } from "./ad-banner-text-fields";
 
 interface JobPostMediaUploaderProps {
+	// 배너 문구·연출 5필드. 필수 prop이라 세 호출부(등록·구인자 수정·운영자 수정)가 모두
+	// 값을 잇도록 강제된다 — 잇지 않으면 저장 시 기존 문구가 null로 지워진다.
+	adBannerText: JobAdBannerTextForm;
 	// 선택한 노출 상품 id. 상품마다 쓰는 배너 슬롯이 달라서 어떤 업로드 칸을 열지 결정한다.
 	adProductId: null | string;
 	// false면 새 파일 선택을 숨긴다(운영자 편집: 업로드 인텐트가 조직 멤버십을 요구해 admin은
@@ -36,6 +41,7 @@ interface JobPostMediaUploaderProps {
 	allowUpload?: boolean;
 	error?: string;
 	media: JobFormMedia;
+	onAdBannerTextChange: (value: JobAdBannerTextForm) => void;
 	onChange: (media: JobFormMedia) => void;
 }
 
@@ -281,10 +287,12 @@ function AdBannerSlot({
 }
 
 export function JobPostMediaUploader({
+	adBannerText,
 	adProductId,
 	allowUpload = true,
 	error,
 	media,
+	onAdBannerTextChange,
 	onChange,
 }: JobPostMediaUploaderProps) {
 	// 노출 상품 카탈로그는 JobExposureFields도 같은 키로 조회하므로 react-query가 캐시를
@@ -445,6 +453,14 @@ export function JobPostMediaUploader({
 							/>
 						) : null}
 					</div>
+					<AdBannerTextFields
+						onChange={onAdBannerTextChange}
+						previewImageUrl={{
+							horizontal: media.adHorizontal?.previewUrl,
+							vertical: media.adVertical?.previewUrl,
+						}}
+						value={adBannerText}
+					/>
 				</>
 			) : null}
 			{error ? <p className="text-destructive text-xs">{error}</p> : null}
