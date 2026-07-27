@@ -7,7 +7,9 @@ import {
 	parseStoredAdBannerLayout,
 } from "./bambi-ad-banner-layout";
 
-const validBlock = {
+// width 도입 이전에 저장된 블록의 모양. jsonb라 백필 마이그레이션이 없으므로 운영 DB의
+// 기존 행은 전부 이 형태다.
+const legacyBlock = {
 	align: "center",
 	animation: "blur",
 	color: "#ffffff",
@@ -19,6 +21,8 @@ const validBlock = {
 	y: 50,
 };
 
+const validBlock = { ...legacyBlock, width: 60 };
+
 const validSlot = {
 	background: { type: "image" },
 	scrim: { enabled: true, opacity: 65 },
@@ -29,6 +33,12 @@ const validLayout = {
 	horizontal: validSlot,
 	version: 1,
 	vertical: { ...validSlot, texts: [] },
+};
+
+const createLayoutWithoutWidth = () => {
+	const slot = { ...validSlot, texts: [legacyBlock] };
+
+	return { horizontal: slot, version: 1, vertical: { ...slot, texts: [] } };
 };
 
 describe("adBannerLayoutSchema", () => {
@@ -120,6 +130,19 @@ describe("adBannerLayoutSchema", () => {
 		expect(adBannerLayoutSchema.safeParse(layout).success).toBe(false);
 	});
 
+	it("accepts the width bounds and rejects values outside them", () => {
+		const withWidth = (width: number) =>
+			adBannerLayoutSchema.safeParse({
+				...validLayout,
+				horizontal: { ...validSlot, texts: [{ ...validBlock, width }] },
+			}).success;
+
+		expect(withWidth(10)).toBe(true);
+		expect(withWidth(100)).toBe(true);
+		expect(withWidth(9)).toBe(false);
+		expect(withWidth(101)).toBe(false);
+	});
+
 	it("rejects an unknown animation value", () => {
 		const layout = {
 			...validLayout,
@@ -156,6 +179,15 @@ describe("collectLayoutTexts", () => {
 describe("parseStoredAdBannerLayout", () => {
 	it("returns the stored layout when it is well formed", () => {
 		expect(parseStoredAdBannerLayout(validLayout)).toEqual(validLayout);
+	});
+
+	it("width가 없는 기존 레이아웃을 기본값으로 채워 통과시킨다", () => {
+		// 이 스키마 변경 이전에 저장된 모든 레이아웃이 이 모양이다. 반려하면 읽기 경로가
+		// null로 떨어뜨려 운영 중인 프리미엄 배너가 전부 사라진다.
+		const parsed = parseStoredAdBannerLayout(createLayoutWithoutWidth());
+
+		expect(parsed).not.toBeNull();
+		expect(parsed?.horizontal.texts[0]?.width).toBe(60);
 	});
 
 	it("returns null for a stored row that lost its shape", () => {

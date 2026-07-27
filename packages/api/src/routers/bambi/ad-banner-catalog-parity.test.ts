@@ -206,4 +206,23 @@ describe("ad banner catalog ↔ server zod parity", () => {
 		expect(withOpacity(min - 1)).toBe(false);
 		expect(withOpacity(max + 1)).toBe(false);
 	});
+
+	// 너비는 뒤늦게 추가돼 기존 저장분에 없다. 서버가 채우는 기본값이 웹 카탈로그와 갈리면
+	// 에디터가 보여주는 폭과 저장분이 렌더되는 폭이 달라진다.
+	it("mirrors the block width range and default", () => {
+		const min = numberAfter(CATALOG_SOURCE, "AD_BANNER_WIDTH_MIN = ");
+		const max = numberAfter(CATALOG_SOURCE, "AD_BANNER_WIDTH_MAX = ");
+		const fallback = numberAfter(CATALOG_SOURCE, "AD_BANNER_DEFAULT_WIDTH = ");
+		const withWidth = (width: number) =>
+			accepts(createLayout({ texts: [createBlock({ width })] }));
+
+		expect(withWidth(min)).toBe(true);
+		expect(withWidth(max)).toBe(true);
+		expect(withWidth(min - 1)).toBe(false);
+		expect(withWidth(max + 1)).toBe(false);
+		// createBlock에는 width가 없다 — 스키마 변경 이전 저장분과 같은 모양이다.
+		expect(
+			adBannerLayoutSchema.parse(createLayout()).horizontal.texts[0]?.width
+		).toBe(fallback);
+	});
 });

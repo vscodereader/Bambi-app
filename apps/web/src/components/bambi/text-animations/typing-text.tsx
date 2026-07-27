@@ -36,10 +36,18 @@ export function TypingText({
 	// visibleCount=0으로 마운트되므로, 보이던 글자가 지워졌다가 타이핑된다(막는 건 레이아웃 점프뿐이다).
 	// inline-flex로 감싸면 세 조각이 한 줄에 강제로 붙어(flex-wrap 기본값 nowrap) 세로 슬롯처럼
 	// 좁은 곳에서 긴 문구가 슬롯 밖으로 잘려 나간다. 일반 인라인 흐름이라야 줄바꿈이 된다.
+	// 다 친 뒤에도 커서가 깜빡이면 광고 슬롯 여덟 칸에서 영구히 뛰는 점이 된다. 다만 요소는
+	// 남기고 invisible로만 감춘다 — 빼 버리면 그 폭만큼 마지막에 한 번 줄이 밀린다.
 	return (
 		<span className={cn("inline", className)}>
 			{text.slice(0, visibleCount)}
-			<span aria-hidden="true" className="ml-0.5 animate-pulse">
+			<span
+				aria-hidden="true"
+				className={cn(
+					"ml-0.5",
+					visibleCount < text.length ? "animate-pulse" : "invisible"
+				)}
+			>
 				|
 			</span>
 			<span className="invisible">{text.slice(visibleCount)}</span>

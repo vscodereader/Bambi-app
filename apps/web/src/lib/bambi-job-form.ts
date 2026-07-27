@@ -23,7 +23,7 @@ const INTERVIEW_NOTES_MAX_LENGTH = 500;
 const DESCRIPTION_BLOCK_MAX_COUNT = 12;
 const DESCRIPTION_BLOCK_TEXT_MAX_LENGTH = 800;
 const DETAIL_IMAGE_MAX_COUNT = 5;
-const IMAGE_ALT_TEXT_MAX_LENGTH = 120;
+export const IMAGE_ALT_TEXT_MAX_LENGTH = 120;
 // 공고·커뮤니티·채팅 이미지 공통 상한(세 파일 동기화): bambi-job-media-policy.ts,
 // apps/web/src/lib/bambi-job-form.ts, bambi-media-policy.ts.
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
@@ -94,12 +94,13 @@ export interface JobFormMediaItem {
 	mimeType: string;
 	previewUrl?: string;
 	storageKey?: string;
-	uploadUrl?: string;
 	width?: number;
 }
 
 export interface JobFormMedia {
-	// 광고 상품을 신청·결제한 공고만 노출되지만, 이미지는 공고 등록 시 함께 받는다.
+	// 배너 두 장은 폼이 아니라 배너 에디터에서 고르고, 저장할 때 이 자리로 돌아온다. 폼이
+	// 여전히 소유자인 이유는 등록 버튼 잠금·필수 검증·제출 시 업로드가 전부 이 상태를 보기
+	// 때문이다 — 에디터가 직접 들고 있으면 셋 다 다시 짜야 한다.
 	adHorizontal: JobFormMediaItem | null;
 	adVertical: JobFormMediaItem | null;
 	cover: JobFormMediaItem | null;

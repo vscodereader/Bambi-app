@@ -642,9 +642,19 @@ export default function ModeratorEditJobPage({
 					allowUpload={false}
 					error={fieldErrors.media}
 					media={media}
-					onAdBannerLayoutChange={(adBannerLayout) => {
+					onAdBannerChange={({ layout, media: nextMedia }) => {
 						setIsDirty(true);
-						setForm((currentForm) => ({ ...currentForm, adBannerLayout }));
+						setForm((currentForm) => ({
+							...currentForm,
+							adBannerLayout: layout,
+						}));
+						// 운영자 편집은 편집기 진입이 없지만(구인자 게이트) 배선은 세 화면이 같아야
+						// 한다 — 입력 전체를 교체하는 저장이라 한 곳만 빠져도 배너가 사라진다.
+						setMedia(nextMedia);
+						setFieldErrors((currentErrors) => ({
+							...currentErrors,
+							media: undefined,
+						}));
 						setFormError(null);
 					}}
 					onChange={(nextMedia) => {

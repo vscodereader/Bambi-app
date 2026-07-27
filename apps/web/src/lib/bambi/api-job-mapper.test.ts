@@ -89,6 +89,7 @@ describe("toAdBannerItem", () => {
 						fontSize: 8,
 						id: "block-1",
 						weight: "bold" as const,
+						width: 60,
 						x: 50,
 						y: 50,
 					},

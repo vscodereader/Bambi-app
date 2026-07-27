@@ -1,6 +1,7 @@
 "use client";
 
 import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
+import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
@@ -9,19 +10,22 @@ import { useQuery } from "@tanstack/react-query";
 import { ImageIcon, Trash2, TriangleAlert } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
-import type { AdBannerLayout } from "@/lib/bambi/ad-banner-layout";
+import type {
+	AdBannerLayout,
+	AdBannerSlot,
+} from "@/lib/bambi/ad-banner-layout";
 import { getAdBannerUsagesForPreviewTemplate } from "@/lib/bambi/ad-preview-templates";
-import {
-	detectImageSignature,
-	isSignatureMismatch,
-} from "@/lib/bambi/image-signature";
 import {
 	formatJobAdBannerSpec,
 	isAllowedJobAdBannerAspect,
 	JOB_AD_BANNER_SPECS,
 	type JobAdBannerUsage,
-	readImageDimensions,
 } from "@/lib/bambi/job-ad-banner-spec";
+import {
+	createMediaItemFromFile,
+	MEDIA_ITEM_FAILURE_MESSAGES,
+	revokeMediaItemPreview,
+} from "@/lib/bambi/job-media-item";
 import {
 	getFileAcceptForUsage,
 	type JobFormMedia,
@@ -41,7 +45,12 @@ interface JobPostMediaUploaderProps {
 	allowUpload?: boolean;
 	error?: string;
 	media: JobFormMedia;
-	onAdBannerLayoutChange: (layout: AdBannerLayout) => void;
+	// 배너 에디터 한 번의 저장에 레이아웃과 배너 이미지가 함께 실려 온다. 둘을 따로 흘리면
+	// 저장 사이에 한쪽만 반영된 상태가 생긴다.
+	onAdBannerChange: (next: {
+		layout: AdBannerLayout;
+		media: JobFormMedia;
+	}) => void;
 	onChange: (media: JobFormMedia) => void;
 }
 
@@ -55,43 +64,35 @@ const detailSlots = [
 	{ index: 4, key: "detail-image-slot-5" },
 ] as const;
 
-const IMAGE_SIGNATURE_MISMATCH_MESSAGE =
-	"이미지 형식이 올바르지 않습니다. PNG·JPG·WebP·GIF만 업로드할 수 있어요.";
+// 배너 슬롯 두 개. 폼 미디어 키(key)·레이아웃 슬롯 키(slot)·규격 usage가 이름이 다 달라서
+// 세 곳을 따로 쓰면 가로/세로가 엇갈려도 타입이 안 잡는다.
+const AD_BANNER_SLOTS = [
+	{ key: "adHorizontal", slot: "horizontal", usage: "ad_horizontal" },
+	{ key: "adVertical", slot: "vertical", usage: "ad_vertical" },
+] as const satisfies readonly {
+	key: keyof JobFormMedia;
+	slot: AdBannerSlot;
+	usage: JobAdBannerUsage;
+}[];
 
-// 배너는 크기 검증·잘림 경고에 원본 치수가 필요해서 함께 읽는다. 치수를 못 읽어도
-// (손상된 파일 등) 업로드 자체는 막지 않고, 폼 검증이 "크기를 확인하지 못했습니다"로 잡아준다.
-// 파일 앞바이트(매직넘버)가 선언 mime과 어긋나면(확장자·File.type 위조) null을 돌려 업로드를
-// 차단한다 — 세 슬롯(썸네일·상세·광고 배너)이 모두 이 함수를 거치므로 여기서 한 번만 막는다.
-const createMediaItemFromFile = async (
+// 슬롯 하나가 새 파일을 받았을 때의 처리. 실패 사유는 화면에서 문구로 바뀌고(모듈은 UI를
+// 모른다), 교체가 확정된 뒤에 이전 blob preview를 놓아준다 — 안 놓으면 이미지를 바꿀 때마다
+// 원본 파일이 문서 수명 내내 메모리에 남는다.
+const pickMediaItem = async (
 	file: File,
-	altText = ""
+	previous: JobFormMediaItem | null
 ): Promise<JobFormMediaItem | null> => {
-	if (file.type.startsWith("image/")) {
-		const detected = await detectImageSignature(file);
+	const created = await createMediaItemFromFile(file, previous?.altText);
 
-		if (isSignatureMismatch(file.type, detected)) {
-			toast.error(IMAGE_SIGNATURE_MISMATCH_MESSAGE);
+	if ("reason" in created) {
+		toast.error(MEDIA_ITEM_FAILURE_MESSAGES[created.reason]);
 
-			return null;
-		}
+		return null;
 	}
 
-	const base: JobFormMediaItem = {
-		altText,
-		byteSize: file.size,
-		file,
-		fileName: file.name,
-		mimeType: file.type,
-		previewUrl: URL.createObjectURL(file),
-	};
+	revokeMediaItemPreview(previous);
 
-	try {
-		const { height, width } = await readImageDimensions(file);
-
-		return { ...base, height, width };
-	} catch {
-		return base;
-	}
+	return created.item;
 };
 
 const updateDetailAt = (
@@ -123,7 +124,6 @@ interface MediaSlotProps {
 	onAltTextChange: (altText: string) => void;
 	onFileChange: (file: File) => void;
 	onRemove: () => void;
-	previewClassName?: string;
 }
 
 function MediaSlot({
@@ -136,7 +136,6 @@ function MediaSlot({
 	onAltTextChange,
 	onFileChange,
 	onRemove,
-	previewClassName,
 }: MediaSlotProps) {
 	return (
 		<div className="flex flex-col gap-3 rounded-lg border border-border p-3">
@@ -151,22 +150,17 @@ function MediaSlot({
 					<Button
 						aria-label={`${label} 삭제`}
 						onClick={onRemove}
-						size="icon-xs"
+						size="icon-sm"
 						title={`${label} 삭제`}
 						type="button"
-						variant="destructive"
+						variant="ghost"
 					>
-						<Trash2 />
+						<Trash2 aria-hidden="true" />
 					</Button>
 				) : null}
 			</div>
 			<div className="grid gap-3 sm:grid-cols-[7rem_1fr]">
-				<div
-					className={cn(
-						"flex aspect-square items-center justify-center overflow-hidden rounded-md border border-border bg-muted/30",
-						previewClassName
-					)}
-				>
+				<div className="flex aspect-square items-center justify-center overflow-hidden rounded-md border border-border bg-muted/30">
 					{item?.previewUrl ? (
 						<Image
 							alt={item.altText || item.fileName}
@@ -178,7 +172,7 @@ function MediaSlot({
 						/>
 					) : (
 						<div className="flex flex-col items-center gap-1 text-muted-foreground text-xs">
-							<ImageIcon className="size-4" />
+							<ImageIcon aria-hidden="true" className="size-4" />
 							<span>이미지 없음</span>
 						</div>
 					)}
@@ -203,7 +197,7 @@ function MediaSlot({
 							aria-label={`${label} 설명`}
 							maxLength={120}
 							onChange={(event) => onAltTextChange(event.target.value)}
-							placeholder="이미지 설명"
+							placeholder="가게 외관 사진…"
 							value={item?.altText ?? ""}
 						/>
 					) : null}
@@ -213,24 +207,23 @@ function MediaSlot({
 	);
 }
 
-interface AdBannerSlotProps {
-	allowUpload?: boolean;
+interface AdBannerStatusProps {
 	item: JobFormMediaItem | null;
-	onChange: (item: JobFormMediaItem | null) => void;
-	// 프리미엄 광고처럼 가로·세로 배너를 모두 요구하는 상품이면 라벨에 "(필수)"를 붙인다.
-	required?: boolean;
+	// 운영자 편집(allowUpload=false)은 에디터를 열 수 없으므로 여기서만 배너를 내릴 수 있다.
+	onRemove: null | (() => void);
+	textCount: number;
 	usage: JobAdBannerUsage;
 }
 
-// 미리보기 박스를 실제 노출 슬롯과 같은 비율로 보여준다. 여기서 이상해 보이면 실제 광고도
-// 이상하게 나간다.
-function AdBannerSlot({
-	allowUpload,
+// 배너 이미지는 이제 에디터에서만 고른다. 폼에는 그 결과를 요약해 보여준다 — 썸네일·이미지
+// 유무·문구 개수가 없으면 에디터를 열기 전엔 배너가 어떤 상태인지 폼에서 전혀 안 보인다.
+// 미리보기는 실제 노출 슬롯과 같은 비율로 그린다. 여기서 이상해 보이면 실제 광고도 그렇다.
+function AdBannerStatus({
 	item,
-	onChange,
-	required,
+	onRemove,
+	textCount,
 	usage,
-}: AdBannerSlotProps) {
+}: AdBannerStatusProps) {
 	const {
 		aspectClassName,
 		aspectLabel,
@@ -251,83 +244,72 @@ function AdBannerSlot({
 			: false;
 
 	return (
-		<div className="flex flex-col gap-2">
-			<MediaSlot
-				accept={getFileAcceptForUsage(usage)}
-				allowUpload={allowUpload}
-				hint={`${description} ${formatJobAdBannerSpec(usage)}`}
-				id={`job-${usage.replace("_", "-")}-image`}
-				item={item}
-				label={required ? `${label} (필수)` : label}
-				onAltTextChange={(altText) =>
-					onChange(item ? { ...item, altText } : null)
-				}
-				onFileChange={async (file) => {
-					const created = await createMediaItemFromFile(file, item?.altText);
-
-					if (created) {
-						onChange(created);
-					}
-				}}
-				onRemove={() => onChange(null)}
-				previewClassName={cn("aspect-auto w-full", aspectClassName)}
-			/>
+		<div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+			<div className="flex items-start justify-between gap-2">
+				<div className="flex min-w-0 flex-col gap-1">
+					<h4 className="font-medium text-sm">{label}</h4>
+					<span className="text-muted-foreground text-xs">
+						{description} {formatJobAdBannerSpec(usage)}
+					</span>
+				</div>
+				{onRemove && item ? (
+					<Button
+						aria-label={`${label} 삭제`}
+						onClick={onRemove}
+						size="icon-sm"
+						title={`${label} 삭제`}
+						type="button"
+						variant="ghost"
+					>
+						<Trash2 aria-hidden="true" />
+					</Button>
+				) : null}
+			</div>
+			<div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
+				<div
+					className={cn(
+						"flex items-center justify-center overflow-hidden rounded-md border border-border bg-muted/30",
+						aspectClassName
+					)}
+				>
+					{item?.previewUrl ? (
+						<Image
+							alt={item.altText || item.fileName}
+							className="size-full object-cover"
+							height={112}
+							src={item.previewUrl}
+							unoptimized
+							width={112}
+						/>
+					) : (
+						<div className="flex flex-col items-center gap-1 text-muted-foreground text-xs">
+							<ImageIcon aria-hidden="true" className="size-4" />
+							<span>이미지 없음</span>
+						</div>
+					)}
+				</div>
+				<div className="flex min-w-0 flex-col gap-2">
+					<div className="flex flex-wrap gap-2">
+						<Badge variant={item ? "success" : "outline"}>
+							{item ? "이미지 등록됨" : "이미지 없음"}
+						</Badge>
+						<Badge variant="outline">문구 {textCount}개</Badge>
+					</div>
+					<p className="break-words text-muted-foreground text-xs">
+						{item?.fileName ?? "편집기에서 이미지를 등록해 주십시오."}
+					</p>
+				</div>
+			</div>
 			{aspectRejected ? (
 				<Alert variant="destructive">
-					<TriangleAlert />
-					<AlertDescription>
+					<TriangleAlert aria-hidden="true" />
+					<AlertDescription className="text-pretty">
 						{label} 이미지({item?.width}×{item?.height})는 요구 비율{" "}
 						{aspectLabel}과 크게 달라 등록할 수 없습니다. {aspectLabel} 비율에
-						맞춰 최소 {minWidth}×{minHeight}px 이상으로 다시 등록해 주세요.
+						맞춰 최소 {minWidth}×{minHeight}px 이상으로 다시 등록해 주십시오.
 					</AlertDescription>
 				</Alert>
 			) : null}
-		</div>
-	);
-}
-
-// 배너 문구 편집 진입. 배너 슬롯 업로드와 같은 조건으로만 보여준다 — 운영자 편집
-// (allowUpload=false)에서 열면 팝업이 /employer/ad-banner-editor로 가는데, 그 라우트는 운영자를
-// 자기 홈으로 되돌려 보내 엉뚱한 새 창만 뜨고 부모는 영영 결과를 기다린다. 운영자는 여기서
-// 배너 이미지도 못 올리므로 버튼 자체를 감춘다.
-function AdBannerTextEditorCard({
-	allowUpload,
-	layout,
-	media,
-	onLayoutChange,
-}: {
-	allowUpload: boolean;
-	layout: AdBannerLayout | null;
-	media: JobFormMedia;
-	onLayoutChange: (next: AdBannerLayout) => void;
-}) {
-	if (!allowUpload) {
-		return null;
-	}
-
-	return (
-		<div className="flex flex-col items-start gap-2 rounded-lg border border-border p-3">
-			<div className="flex flex-col gap-1">
-				<h3 className="font-medium text-sm">배너 문구</h3>
-				<p className="text-muted-foreground text-xs">
-					업로드한 배너 이미지 위에 문구를 원하는 위치로 배치하고 색·크기·연출을
-					고를 수 있습니다. 편집하지 않으면 이미지만 그대로 노출됩니다.
-				</p>
-			</div>
-			{/* 아직 업로드 전인 파일(files)이 이미 올라간 이미지(backgroundUrls)보다
-			    우선한다 — 새 이미지를 고른 직후에도 편집 캔버스가 그 이미지를 쓴다. */}
-			<AdBannerEditorLauncher
-				backgroundUrls={{
-					horizontal: media.adHorizontal?.previewUrl,
-					vertical: media.adVertical?.previewUrl,
-				}}
-				files={{
-					horizontal: media.adHorizontal?.file,
-					vertical: media.adVertical?.file,
-				}}
-				layout={layout}
-				onChange={onLayoutChange}
-			/>
 		</div>
 	);
 }
@@ -338,7 +320,7 @@ export function JobPostMediaUploader({
 	allowUpload = true,
 	error,
 	media,
-	onAdBannerLayoutChange,
+	onAdBannerChange,
 	onChange,
 }: JobPostMediaUploaderProps) {
 	// 노출 상품 카탈로그는 JobExposureFields도 같은 키로 조회하므로 react-query가 캐시를
@@ -355,24 +337,6 @@ export function JobPostMediaUploader({
 	// 상품을 골랐는데 카탈로그가 아직 안 왔으면 "이 상품은 배너를 안 쓴다"고 단정할 수 없다.
 	// 이때 경고를 띄우면 로딩 동안 잘못된 안내가 번쩍인다.
 	const isProductResolved = !adProductId || Boolean(selectedProduct);
-	// 선택 상품이 쓰지 않는 슬롯이라도 이미 올린 이미지가 있으면 계속 보여준다. 상품을 바꿨다고
-	// 결제한 이미지를 조용히 지우면 되돌릴 수 없고, 폼 상태에만 남겨두면 보이지 않는 고아가 된다.
-	// 구인자가 직접 삭제하거나 상품을 되돌릴 수 있게 경고와 함께 노출한다.
-	const unusedBannerLabels = [
-		media.adHorizontal && !allowedUsages.includes("ad_horizontal")
-			? JOB_AD_BANNER_SPECS.ad_horizontal.label
-			: null,
-		media.adVertical && !allowedUsages.includes("ad_vertical")
-			? JOB_AD_BANNER_SPECS.ad_vertical.label
-			: null,
-	].filter((label): label is string => label !== null);
-	const showHorizontalBanner =
-		allowedUsages.includes("ad_horizontal") || Boolean(media.adHorizontal);
-	const showVerticalBanner =
-		allowedUsages.includes("ad_vertical") || Boolean(media.adVertical);
-	// 프리미엄 광고는 가로·세로 배너를 모두 요구한다(allowedUsages 2개). 이때 두 슬롯을
-	// 필수로 표시한다. 레거시 side 상품도 프리미엄으로 흡수돼 같은 두 usage를 돌려받는다.
-	const bothBannersRequired = allowedUsages.length === 2;
 
 	return (
 		<section aria-label="공고 이미지" className="flex flex-col gap-3">
@@ -384,10 +348,10 @@ export function JobPostMediaUploader({
 			</div>
 			{allowUpload ? null : (
 				<Alert>
-					<TriangleAlert />
-					<AlertDescription>
+					<TriangleAlert aria-hidden="true" />
+					<AlertDescription className="text-pretty">
 						운영자 편집에서는 새 이미지를 올릴 수 없습니다. 기존 이미지 삭제와
-						설명 수정만 가능해요.
+						설명 수정만 가능합니다.
 					</AlertDescription>
 				</Alert>
 			)}
@@ -405,16 +369,16 @@ export function JobPostMediaUploader({
 					})
 				}
 				onFileChange={async (file) => {
-					const created = await createMediaItemFromFile(
-						file,
-						media.cover?.altText
-					);
+					const created = await pickMediaItem(file, media.cover);
 
 					if (created) {
 						onChange({ ...media, cover: created });
 					}
 				}}
-				onRemove={() => onChange({ ...media, cover: null })}
+				onRemove={() => {
+					revokeMediaItemPreview(media.cover);
+					onChange({ ...media, cover: null });
+				}}
 			/>
 			<div className="grid gap-3 lg:grid-cols-2">
 				{detailSlots.map(({ index, key }) => {
@@ -443,71 +407,134 @@ export function JobPostMediaUploader({
 								)
 							}
 							onFileChange={async (file) => {
-								const created = await createMediaItemFromFile(
-									file,
-									item?.altText
-								);
+								const created = await pickMediaItem(file, item);
 
 								if (created) {
 									onChange(updateDetailAt(media, index, created));
 								}
 							}}
-							onRemove={() => onChange(updateDetailAt(media, index, null))}
+							onRemove={() => {
+								revokeMediaItemPreview(item);
+								onChange(updateDetailAt(media, index, null));
+							}}
 						/>
 					);
 				})}
 			</div>
-			{showHorizontalBanner || showVerticalBanner ? (
-				<>
-					<div className="flex flex-col gap-1 pt-2">
-						<h2 className="font-medium text-sm">광고 배너 이미지</h2>
-						<p className="text-muted-foreground text-xs">
-							프리미엄 광고는 가로형(상단·좌측 슬롯)과 세로형(우측 슬롯) 배너
-							이미지를 모두 등록해야 합니다. 비율(가로형 7:3 · 세로형 4:9)이
-							크게 어긋나면 슬롯에서 잘려 등록할 수 없고, 조금 다른 정도는 노출
-							슬롯에 맞춰 가운데를 기준으로 잘립니다. 움직이는 GIF도 등록할 수
-							있습니다.
-						</p>
-					</div>
-					{isProductResolved && unusedBannerLabels.length > 0 ? (
-						<Alert variant="warning">
-							<TriangleAlert />
-							<AlertDescription>
-								{unusedBannerLabels.join(", ")}는 지금 선택한 노출 상품이 쓰지
-								않습니다. 이미지는 그대로 보관되니 상품을 다시 바꾸면 사용할 수
-								있고, 필요 없으면 삭제해 주세요.
-							</AlertDescription>
-						</Alert>
-					) : null}
-					<div className="grid gap-3 lg:grid-cols-2">
-						{showHorizontalBanner ? (
-							<AdBannerSlot
-								allowUpload={allowUpload}
-								item={media.adHorizontal}
-								onChange={(item) => onChange({ ...media, adHorizontal: item })}
-								required={bothBannersRequired}
-								usage="ad_horizontal"
-							/>
-						) : null}
-						{showVerticalBanner ? (
-							<AdBannerSlot
-								allowUpload={allowUpload}
-								item={media.adVertical}
-								onChange={(item) => onChange({ ...media, adVertical: item })}
-								required={bothBannersRequired}
-								usage="ad_vertical"
-							/>
-						) : null}
-					</div>
-					<AdBannerTextEditorCard
-						allowUpload={allowUpload}
-						layout={adBannerLayout}
-						media={media}
-						onLayoutChange={onAdBannerLayoutChange}
-					/>
-				</>
-			) : null}
+			<AdBannerSection
+				adBannerLayout={adBannerLayout}
+				allowedUsages={allowedUsages}
+				allowUpload={allowUpload}
+				isProductResolved={isProductResolved}
+				media={media}
+				onAdBannerChange={onAdBannerChange}
+				onChange={onChange}
+			/>
 			{error ? <p className="text-destructive text-xs">{error}</p> : null}
 		</section>
+	);
+}
+
+interface AdBannerSectionProps {
+	adBannerLayout: AdBannerLayout | null;
+	allowedUsages: JobAdBannerUsage[];
+	allowUpload: boolean;
+	isProductResolved: boolean;
+	media: JobFormMedia;
+	onAdBannerChange: JobPostMediaUploaderProps["onAdBannerChange"];
+	onChange: (media: JobFormMedia) => void;
+}
+
+// 배너 이미지·문구는 에디터가 한 번에 돌려주므로 폼에서는 현재 상태만 요약해 보여주고 편집
+// 진입만 둔다.
+function AdBannerSection({
+	adBannerLayout,
+	allowedUsages,
+	allowUpload,
+	isProductResolved,
+	media,
+	onAdBannerChange,
+	onChange,
+}: AdBannerSectionProps) {
+	// 선택 상품이 쓰지 않는 슬롯이라도 이미 올린 이미지가 있으면 계속 보여준다. 상품을 바꿨다고
+	// 결제한 이미지를 조용히 지우면 되돌릴 수 없고, 폼 상태에만 남겨두면 보이지 않는 고아가 된다.
+	// 구인자가 직접 삭제하거나 상품을 되돌릴 수 있게 경고와 함께 노출한다. 그래서 "보여줄
+	// 슬롯"은 상품이 요구하는 슬롯 ∪ 이미지가 남아 있는 슬롯이다.
+	// 단 이 목록을 에디터의 requiredUsages로 넘기면 안 된다 — 에디터는 그걸 저장 차단 게이트로
+	// 쓰는데, 그러면 "상품에서 빠진 세로형을 지우세요"라고 안내해 놓고 막상 지우면 "세로형을
+	// 등록해 주십시오"로 저장을 막는 막다른 길이 된다. 에디터는 requiredUsages와 무관하게 두 슬롯
+	// 탭을 모두 그리므로, 편집·삭제 경로는 allowedUsages를 넘겨도 그대로 살아 있다.
+	const shownSlots = AD_BANNER_SLOTS.filter(
+		({ key, usage }) => allowedUsages.includes(usage) || Boolean(media[key])
+	);
+	const unusedBannerLabels = shownSlots
+		.filter(({ usage }) => !allowedUsages.includes(usage))
+		.map(({ usage }) => JOB_AD_BANNER_SPECS[usage].label);
+
+	if (shownSlots.length === 0) {
+		return null;
+	}
+
+	return (
+		<>
+			<div className="flex flex-col gap-1 pt-2">
+				<h2 className="font-medium text-sm">광고 배너</h2>
+				<p className="text-muted-foreground text-xs">
+					프리미엄 광고는 가로형(상단·좌측 슬롯)과 세로형(우측 슬롯) 배너를 모두
+					등록해야 합니다. 이미지 등록과 문구 배치는 배너 편집기에서 함께
+					합니다. 비율(가로형 7:3 · 세로형 4:9)이 크게 어긋나면 슬롯에서 잘려
+					등록할 수 없고, 조금 다른 정도는 노출 슬롯에 맞춰 가운데를 기준으로
+					잘립니다. 움직이는 GIF도 등록할 수 있습니다.
+				</p>
+			</div>
+			{isProductResolved && unusedBannerLabels.length > 0 ? (
+				<Alert variant="warning">
+					<TriangleAlert aria-hidden="true" />
+					<AlertDescription className="text-pretty">
+						{unusedBannerLabels.join(", ")}는 지금 선택한 노출 상품이 쓰지
+						않습니다. 이미지는 그대로 보관되니 상품을 다시 바꾸면 사용할 수
+						있고, 필요 없으면 삭제해 주십시오.
+					</AlertDescription>
+				</Alert>
+			) : null}
+			<div className="grid gap-3 lg:grid-cols-2">
+				{shownSlots.map(({ key, slot, usage }) => (
+					<AdBannerStatus
+						item={media[key]}
+						key={key}
+						onRemove={
+							allowUpload
+								? null
+								: () => {
+										revokeMediaItemPreview(media[key]);
+										onChange({ ...media, [key]: null });
+									}
+						}
+						textCount={adBannerLayout?.[slot].texts.length ?? 0}
+						usage={usage}
+					/>
+				))}
+			</div>
+			{/* 편집 진입은 구인자만. 운영자 편집(allowUpload=false)에서 열면 팝업이
+			    /ad-banner-editor로 가는데 그 라우트는 구인자 게이트라 운영자를 자기 홈으로
+			    되돌려 보내고, 부모는 영영 결과를 기다린다. 운영자는 위 카드에서 배너를
+			    확인하고 내리는 것까지만 한다. */}
+			{allowUpload ? (
+				<AdBannerEditorLauncher
+					layout={adBannerLayout}
+					media={{
+						adHorizontal: media.adHorizontal,
+						adVertical: media.adVertical,
+					}}
+					onChange={({ layout, media: nextBannerMedia }) =>
+						onAdBannerChange({
+							layout,
+							media: { ...media, ...nextBannerMedia },
+						})
+					}
+					requiredUsages={allowedUsages}
+				/>
+			) : null}
+		</>
 	);
 }

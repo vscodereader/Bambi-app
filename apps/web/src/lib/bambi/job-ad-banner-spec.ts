@@ -94,6 +94,31 @@ export const isAllowedJobAdBannerSize = ({
 	return width >= minWidth && height >= minHeight;
 };
 
+// 이 이미지를 실제로 등록할 수 없게 만드는 사유. 슬롯의 경고 문구와 에디터의 저장 가드가
+// 같은 판정을 써야 한다 — 슬롯이 "등록할 수 없습니다"라고 띄우는데 저장이 통과하면, 실제
+// 차단은 폼 제출 시점에 다른 창의 다른 문구로 일어난다.
+// 치수를 못 읽은 항목(width·height 없음)은 여기서 막지 않는다: 폼 검증이 "크기를 확인하지
+// 못했습니다"로 따로 잡는다.
+export const findJobAdBannerRejection = ({
+	height,
+	usage,
+	width,
+}: {
+	height?: number;
+	usage: JobAdBannerUsage;
+	width?: number;
+}): "aspect" | "size" | null => {
+	if (!(width && height)) {
+		return null;
+	}
+
+	if (!isAllowedJobAdBannerAspect({ height, usage, width })) {
+		return "aspect";
+	}
+
+	return isAllowedJobAdBannerSize({ height, usage, width }) ? null : "size";
+};
+
 export const formatJobAdBannerSpec = (usage: JobAdBannerUsage): string => {
 	const {
 		aspectLabel,

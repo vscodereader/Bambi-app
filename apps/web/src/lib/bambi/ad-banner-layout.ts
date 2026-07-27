@@ -94,6 +94,11 @@ export const AD_BANNER_CONTRAST_THRESHOLD = 4.5;
 export const AD_BANNER_SCRIM_OPACITY_MIN = 0;
 export const AD_BANNER_SCRIM_OPACITY_MAX = 100;
 export const AD_BANNER_DEFAULT_SCRIM_OPACITY = 65;
+// 문구 블록의 너비(컨테이너 폭 대비 %). 이 너비 안에서 줄바꿈되고 정렬이 적용된다.
+// 너비가 없으면 블록이 글자에 딱 맞게 줄어들어 정렬 설정이 화면에 아무 영향을 주지 않는다.
+export const AD_BANNER_WIDTH_MIN = 10;
+export const AD_BANNER_WIDTH_MAX = 100;
+export const AD_BANNER_DEFAULT_WIDTH = 60;
 
 export interface AdBannerTextBlock {
 	align: AdBannerTextAlign;
@@ -105,6 +110,8 @@ export interface AdBannerTextBlock {
 	fontSize: number;
 	id: string;
 	weight: AdBannerTextWeight;
+	// 컨테이너 폭 대비 백분율. 이 폭 안에서 줄바꿈되고 align이 적용된다.
+	width: number;
 	// 블록 중심의 위치(%). 좌상단 기준이면 폰트 크기를 바꿀 때 블록이 밀려 편집 중 위치가 흔들린다.
 	x: number;
 	y: number;
@@ -148,9 +155,18 @@ export const createAdBannerTextBlock = (id: string): AdBannerTextBlock => ({
 	fontSize: AD_BANNER_DEFAULT_FONT_SIZE,
 	id,
 	weight: "bold",
+	width: AD_BANNER_DEFAULT_WIDTH,
 	x: 50,
 	y: 50,
 });
+
+// 블록을 사람에게 부르는 이름. 목록 버튼과 캔버스 블록의 접근성 이름이 여기서만 나와야
+// 한다 — 각자 만들면 빈 문구가 목록에서는 "문구 3 (비어 있음)", 캔버스에서는 `문구 ""`로
+// 갈려 같은 블록이 두 이름으로 읽힌다.
+export const formatAdBannerBlockLabel = (
+	block: AdBannerTextBlock,
+	index: number
+): string => block.content.trim() || `문구 ${index + 1} (비어 있음)`;
 
 // NaN만 따로 막는다. 드래그 핸들러는 (clientX - rect.left) / rect.width * 100을 넘기는데,
 // 슬롯 탭이 아직 레이아웃되지 않아 rect.width가 0이면 0/0 = NaN이 나온다. NaN이 좌표에 박히면
@@ -158,6 +174,13 @@ export const createAdBannerTextBlock = (id: string): AdBannerTextBlock => ({
 // ±Infinity는 클램프가 이미 0·100으로 접어 유한하게 만드니 그대로 둔다.
 export const clampPercent = (value: number): number =>
 	Number.isNaN(value) ? 50 : Math.min(100, Math.max(0, value));
+
+// 너비는 0이 될 수 없다 — 0이면 블록이 사라져 다시 잡을 수 없다. 리사이즈 핸들도 좌표와 같은
+// 나눗셈을 거치므로 NaN이 들어올 수 있고, 그때는 기본값으로 되돌린다(clampPercent와 같은 방향).
+export const clampBlockWidth = (value: number): number =>
+	Number.isNaN(value)
+		? AD_BANNER_DEFAULT_WIDTH
+		: Math.min(AD_BANNER_WIDTH_MAX, Math.max(AD_BANNER_WIDTH_MIN, value));
 
 // hex를 6자리 소문자로 정규화한다. null이면 읽을 수 없는 값이다.
 // 트림과 형식 검증을 여기서 다 하는 이유: parseInt는 선행 공백을 건너뛰므로 " #3f3f3f" 같은
