@@ -30,12 +30,15 @@ export function TypingText({
 		return () => clearInterval(timer);
 	}, [text]);
 
+	// 아직 안 친 부분도 invisible로 자리를 잡아 둔다 — 한 글자씩 늘어나며 줄바꿈·폭이 튀는 걸 막고
+	// (광고 8칸이면 그만큼 CLS다) DOM·복사·크롤러에는 문구 전체가 남는다.
 	return (
 		<span className={cn("inline-flex items-center", className)}>
 			{text.slice(0, visibleCount)}
 			<span aria-hidden="true" className="ml-0.5 animate-pulse">
 				|
 			</span>
+			<span className="invisible">{text.slice(visibleCount)}</span>
 		</span>
 	);
 }
