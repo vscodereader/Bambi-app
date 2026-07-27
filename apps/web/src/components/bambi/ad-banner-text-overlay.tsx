@@ -11,10 +11,25 @@ import { AdBannerText } from "./ad-banner-text";
 
 // 이미지 위에 글자를 얹으므로 가독성 확보용 스크림이 필요하다. 강도는 프리셋마다 고정한다 —
 // 구인자가 색을 자유 지정하면 대비가 무너진 배너가 나온다.
-const THEME_SCRIM_CLASS_NAMES: Record<AdBannerTheme, string> = {
+// 가로형은 글자가 아래쪽 한 줄에 가로로 눕고(justify-end) 스크림도 아래가 가장 진해서,
+// 글자가 놓이는 구간과 불투명 구간이 정확히 겹친다. 위쪽은 옅게 둬 배너 이미지가 살아난다.
+const THEME_HORIZONTAL_SCRIM_CLASS_NAMES: Record<AdBannerTheme, string> = {
 	coral: "bg-gradient-to-t from-coral-600/85 via-coral-500/45 to-transparent",
 	dark: "bg-gradient-to-t from-ink-900/85 via-ink-900/40 to-transparent",
 	light: "bg-gradient-to-t from-white/90 via-white/50 to-transparent",
+	none: "",
+};
+
+// 세로형은 글자 축이 세로다(writing-mode: vertical-rl). 8자면 슬롯 높이(h-52) 절반 이상을
+// 세로로 가로질러서, 세로 그라디언트를 쓰면 어디에 정렬하든 글자 일부가 옅은 구간(40%)이나
+// 투명 구간에 걸린다 — 밝은 사진 위에서 흰 글자 대비가 4.5:1 아래로 떨어진다.
+// 정렬을 아래로 옮기는 것으로는 해결되지 않아(글자 축 = 그라디언트 축) 세로형만 균일 스크림을 쓴다.
+// 불투명도는 가로형 그라디언트의 가장 진한 정지점과 같은 값으로 맞춰 새 값을 만들지 않는다.
+// 표시 폭이 약 92px뿐이라 이미지 디테일을 살리는 이득보다 글자 가독성이 우선이다.
+const THEME_VERTICAL_SCRIM_CLASS_NAMES: Record<AdBannerTheme, string> = {
+	coral: "bg-coral-600/85",
+	dark: "bg-ink-900/85",
+	light: "bg-white/90",
 	none: "",
 };
 
@@ -46,7 +61,9 @@ export function AdBannerTextOverlay({
 	// 오버레이는 배너 이미지와 그 아래 공고 상세 링크 위에 깔리므로 클릭을 삼키면 안 된다.
 	const overlayBase = cn(
 		"pointer-events-none absolute inset-0",
-		THEME_SCRIM_CLASS_NAMES[theme],
+		variant === "vertical"
+			? THEME_VERTICAL_SCRIM_CLASS_NAMES[theme]
+			: THEME_HORIZONTAL_SCRIM_CLASS_NAMES[theme],
 		THEME_TEXT_CLASS_NAMES[theme]
 	);
 
