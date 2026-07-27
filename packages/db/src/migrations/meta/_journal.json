@@ -274,6 +274,27 @@
       "when": 1784873056584,
       "tag": "0038_icy_polaris",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1785114089962,
+      "tag": "0039_tranquil_the_hunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785125103308,
+      "tag": "0040_steep_menace",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1785127348666,
+      "tag": "0041_classy_ma_gnuci",
+      "breakpoints": true
     }
   ]
 }

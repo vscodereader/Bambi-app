@@ -15,7 +15,7 @@ const [{ db }, authSchema, bambiSchema, { onboardingRouter }] =
 		import("./onboarding"),
 	]);
 
-const { member, organization, session, user } = authSchema;
+const { account, member, organization, session, user } = authSchema;
 const { bambiProfile } = bambiSchema;
 
 const createdUserIds: string[] = [];
@@ -51,11 +51,27 @@ const seedUser = async () => {
 		id: userId,
 		name: "탈퇴대상",
 		email: `${userId}@bambi.test`,
+		login_id: userId,
+		login_id_display: userId,
 	});
 	await db.insert(bambiProfile).values({
 		userId,
 		role: "job_seeker",
 		phoneNumber: "010-1111-2222",
+		gender: "female",
+		birthDate: "19900101",
+		isPhoneVerified: true,
+		ciHash: `ci_${userId}`,
+		diHash: `di_${userId}`,
+	});
+	// 비밀번호 자격증명. updatedAt은 기본값이 없어 수동 지정이 필요하다.
+	await db.insert(account).values({
+		id: `account_${randomUUID()}`,
+		accountId: userId,
+		providerId: "credential",
+		userId,
+		password: "hashed",
+		updatedAt: new Date(),
 	});
 	return userId;
 };
@@ -106,7 +122,7 @@ const seedOrganizationMember = async (
 };
 
 describe("withdrawMyAccount 회원 탈퇴", () => {
-	it("탈퇴하면 소프트 삭제·즉시 익명화·세션과 멤버십 정리가 이뤄진다", async () => {
+	it("탈퇴하면 개인정보를 즉시 파기하고 CI·DI 해시만 남긴다", async () => {
 		const userId = await seedUser();
 		await seedSession(userId);
 		await seedMembership(userId, "member");
@@ -120,14 +136,31 @@ describe("withdrawMyAccount 회원 탈퇴", () => {
 			.where(eq(user.id, userId));
 		expect(updatedUser?.deletedAt).not.toBeNull();
 		expect(updatedUser?.name).toBe("탈퇴한 회원");
+		// 이메일은 notNull·unique라 tombstone으로 치환한다(원 이메일 재가입 재개방).
+		expect(updatedUser?.email).toBe(`withdrawn-${userId}@invalid.bambi`);
+		// 로그인 아이디는 nullable이라 비워서 파기한다(같은 아이디 재사용 개방).
+		expect(updatedUser?.login_id).toBeNull();
+		expect(updatedUser?.login_id_display).toBeNull();
 
 		const [profile] = await db
 			.select()
 			.from(bambiProfile)
 			.where(eq(bambiProfile.userId, userId));
 		// 표시명(닉네임)은 user.name 정본에서 익명화된다(위에서 검증).
-		// 개인정보는 보존기간 동안 유지된다 — 파기는 배치가 한다.
-		expect(profile?.phoneNumber).toBe("010-1111-2222");
+		// 연락처·본인인증 정보는 즉시 파기하고, 부정 재가입 차단용 해시만 남긴다.
+		expect(profile?.phoneNumber).toBeNull();
+		expect(profile?.gender).toBeNull();
+		expect(profile?.birthDate).toBeNull();
+		expect(profile?.isPhoneVerified).toBe(false);
+		expect(profile?.ciHash).toBe(`ci_${userId}`);
+		expect(profile?.diHash).toBe(`di_${userId}`);
+
+		// 비밀번호 등 자격증명도 즉시 파기된다.
+		const accounts = await db
+			.select()
+			.from(account)
+			.where(eq(account.userId, userId));
+		expect(accounts).toHaveLength(0);
 
 		const sessions = await db
 			.select()

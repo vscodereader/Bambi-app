@@ -73,4 +73,48 @@ describe("toAdBannerItem", () => {
 
 		expect(item.imageUrl.length).toBeGreaterThan(0);
 	});
+
+	it("carries the layout through to both slots", () => {
+		// 슬롯별로 잘라내지 않는다 — 렌더러가 슬롯을 보고 가로·세로 중 하나를 고른다.
+		const layout = {
+			horizontal: {
+				background: { type: "image" as const },
+				scrim: { enabled: true, opacity: 65 },
+				texts: [
+					{
+						align: "center" as const,
+						animation: "blur" as const,
+						color: "#ffffff",
+						content: "주말 알바 급구",
+						fontSize: 8,
+						id: "block-1",
+						weight: "bold" as const,
+						width: 60,
+						x: 50,
+						y: 50,
+					},
+				],
+			},
+			version: 1 as const,
+			vertical: {
+				background: { type: "image" as const },
+				scrim: { enabled: true, opacity: 65 },
+				texts: [],
+			},
+		};
+		const job = { id: "job-1", layout, title: "홀서빙" };
+
+		expect(toAdBannerItem(job, "ad_horizontal").layout).toEqual(layout);
+		expect(toAdBannerItem(job, "ad_vertical").layout).toEqual(layout);
+	});
+
+	it("carries no layout for jobs that were never edited", () => {
+		// 배너를 편집하지 않은 공고는 null이라 예전처럼 이미지만 나와야 한다.
+		const item = toAdBannerItem(
+			{ id: "job-1", title: "홀서빙" },
+			"ad_horizontal"
+		);
+
+		expect(item.layout).toBeNull();
+	});
 });

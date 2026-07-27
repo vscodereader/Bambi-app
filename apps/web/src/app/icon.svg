@@ -1,16 +1,15 @@
+<!--
+	헤더 로고(src/components/bambi/ds.tsx의 Logo)와 같은 그림.
+	정적 SVG라 CSS 토큰을 못 쓰고 값이 박혀 있다 — 토큰이 바뀌면 이 파일도 같이 바꿔야 한다.
+	fill #f94b63 = src/index.css의 --primary (Logo 타일의 bg-primary)
+	rx 19.2 = 64 * 0.3 (LOGO_TILE_CLASS의 타일 반경 비율, xl에서 rounded-[19.2px])
+	글리프 = Logo와 동일한 24 viewBox 원본을 LOGO_GLYPH_DIM 비율(0.56)로 확대해 중앙 배치:
+	  크기 64 * 0.56 = 35.84 → scale(35.84 / 24 = 1.4933), 여백 (64 - 35.84) / 2 = 14.08
+-->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-	<rect width="64" height="64" rx="16" fill="#ff4f6d" />
-	<path
-		d="M32 13 48 20v11c0 10.5-6.5 17.8-16 21-9.5-3.2-16-10.5-16-21V20l16-7Z"
-		fill="#fff"
-		opacity=".95"
-	/>
-	<path
-		d="m25 32 5 5 10-12"
-		fill="none"
-		stroke="#ff4f6d"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-		stroke-width="5"
-	/>
+	<rect width="64" height="64" rx="19.2" fill="#f94b63" />
+	<g fill="#ffffff" transform="translate(14.08 14.08) scale(1.4933)">
+		<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+		<circle cx="16.5" cy="8" r="1.15" />
+	</g>
 </svg>

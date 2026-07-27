@@ -298,6 +298,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	// 프리미엄 광고는 가로형·세로형 배너 이미지가 모두 있어야 등록할 수 있다.
 	const { bannerImagesMissing, requiredBannerUsages } = useRequiredBannerGate({
 		adProductId: form.adProductId,
+		layout: form.adBannerLayout,
 		media,
 	});
 	const createMediaUploadMutation = useMutation(
@@ -855,9 +856,25 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					</section>
 
 					<JobPostMediaUploader
+						adBannerLayout={form.adBannerLayout}
 						adProductId={form.adProductId}
 						error={fieldErrors.media}
 						media={media}
+						onAdBannerChange={({ layout, media: nextMedia }) => {
+							setIsDirty(true);
+							setForm((currentForm) => ({
+								...currentForm,
+								adBannerLayout: layout,
+							}));
+							// 배너 이미지도 함께 돌아온다. 폼 media에 반영해야 필수 배너 검증과
+							// 제출 시 업로드가 기존 경로 그대로 동작한다.
+							setMedia(nextMedia);
+							setFieldErrors((currentErrors) => ({
+								...currentErrors,
+								media: undefined,
+							}));
+							setFormError(null);
+						}}
 						onChange={(nextMedia) => {
 							setIsDirty(true);
 							setMedia(nextMedia);

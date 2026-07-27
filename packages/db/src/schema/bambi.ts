@@ -420,6 +420,21 @@ export const jobPostMedia = pgTable(
 	]
 );
 
+// 프리미엄 광고 배너의 자유 배치 레이아웃. 구조는
+// apps/web/src/lib/bambi/ad-banner-layout.ts의 AdBannerLayout과 같고, 서버 zod가 저장 전에
+// 검증한다. jobPostId가 PK라 공고당 정확히 한 행이며, 행의 존재 여부가 "배너를 편집했는가"다.
+export const jobAdBannerLayout = pgTable("job_ad_banner_layout", {
+	jobPostId: uuid("job_post_id")
+		.primaryKey()
+		.references(() => jobPost.id, { onDelete: "cascade" }),
+	layout: jsonb("layout").notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
+
 export const jobPromotionCampaign = pgTable(
 	"job_promotion_campaign",
 	{
@@ -594,6 +609,9 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	email: text("email"),
 	// 고객센터 전화(TEL). 푸터에 노출. null이면 코드 폴백(BAMBI_COMPANY.tel).
 	tel: text("tel"),
+	// 광고 슬롯 자리표시에 노출하는 광고 등록 문의 전화. 고객센터 전화(tel)와 다를 수 있어
+	// 별도 컬럼이다. null이면 tel → BAMBI_COMPANY.tel 순으로 폴백한다.
+	adInquiryTel: text("ad_inquiry_tel"),
 	// 무통장입금 안내 계좌 목록. 운영자가 사이트 설정에서 관리하고, 공고 결제 안내에 노출된다.
 	// 미설정이면 빈 배열 → 안내 화면은 고객센터 문의 문구로 폴백한다.
 	bankAccounts: jsonb("bank_accounts")
@@ -609,6 +627,10 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 개인정보 처리방침에 노출하는 위탁사·관리부서 연락처. 운영자 사이트 설정에서 편집한다.
 	// null이면 프론트가 코드 폴백(BAMBI_PROCESSORS 이름 / BAMBI_COMPANY.privacyOfficer)을 쓴다.
 	privacyPaymentProcessor: text("privacy_payment_processor"),
+	// 개인정보 보호책임자 성명(개인정보 보호법 제31조 공개 대상).
+	privacyOfficerName: text("privacy_officer_name"),
+	// 문자(SMS) 발송 기능이 없어 수탁자 표에서 SMS 행을 걷어냈다. 컬럼은 마이그레이션
+	// 없이 남겨두고 읽지 않는다 — SMS 위탁이 생기면 다시 노출한다.
 	privacySmsProvider: text("privacy_sms_provider"),
 	privacyContactPhone: text("privacy_contact_phone"),
 	privacyContactEmail: text("privacy_contact_email"),
