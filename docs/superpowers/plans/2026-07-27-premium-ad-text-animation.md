@@ -653,9 +653,8 @@ feat(web): 배너 텍스트 애니메이션 컴포넌트 5종 추가
 - Create: `apps/web/src/components/bambi/ad-banner-text-overlay.tsx`
 
 **Interfaces:**
-- Consumes: `AdBannerText` (Task 3), `AdBannerTheme`·`DEFAULT_AD_BANNER_THEME` (Task 1)
+- Consumes: `AdBannerText` (Task 3), `AdBannerTheme`·`DEFAULT_AD_BANNER_THEME` (Task 1), **`AdBannerTextConfig` (Task 6이 `lib/bambi/api-job-mapper.ts`에 정의·export)**
 - Produces:
-  - `interface AdBannerTextConfig { animation: AdBannerAnimation | null; headline: string | null; subline: string | null; theme: AdBannerTheme | null; verticalText: string | null }`
   - `<AdBannerTextOverlay config={AdBannerTextConfig} variant="horizontal" | "vertical" />` — 그릴 문구가 없으면 `null` 반환
   - `<AdSlotInquiryContent tel={string} variant="horizontal" | "vertical" />` — 자리표시 내용
 
@@ -667,19 +666,11 @@ feat(web): 배너 텍스트 애니메이션 컴포넌트 5종 추가
 import { cn } from "@bambi-app/ui/lib/utils";
 import { Megaphone } from "lucide-react";
 import {
-	type AdBannerAnimation,
 	type AdBannerTheme,
 	DEFAULT_AD_BANNER_THEME,
 } from "@/lib/bambi/ad-banner-animations";
+import type { AdBannerTextConfig } from "@/lib/bambi/api-job-mapper";
 import { AdBannerText } from "./ad-banner-text";
-
-export interface AdBannerTextConfig {
-	animation: AdBannerAnimation | null;
-	headline: string | null;
-	subline: string | null;
-	theme: AdBannerTheme | null;
-	verticalText: string | null;
-}
 
 // 이미지 위에 글자를 얹으므로 가독성 확보용 스크림이 필요하다. 강도는 프리셋마다 고정한다 —
 // 구인자가 색을 자유 지정하면 대비가 무너진 배너가 나온다.
