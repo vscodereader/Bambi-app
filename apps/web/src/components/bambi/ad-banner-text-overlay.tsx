@@ -13,23 +13,35 @@ import { AdBannerText } from "./ad-banner-text";
 // 구인자가 색을 자유 지정하면 대비가 무너진 배너가 나온다.
 // 가로형은 글자가 아래쪽 한 줄에 가로로 눕고(justify-end) 스크림도 아래가 가장 진해서,
 // 글자가 놓이는 구간과 불투명 구간이 정확히 겹친다. 위쪽은 옅게 둬 배너 이미지가 살아난다.
+// coral은 coral-600(#e5304c)이 흰 글자 기준 불투명일 때도 4.32:1이라 4.5:1에 못 미친다 —
+// 아래 세로형과 같은 이유로 한 단계 어두운 coral-700(#c11f39)을 가장 진한 정지점으로 쓴다.
 const THEME_HORIZONTAL_SCRIM_CLASS_NAMES: Record<AdBannerTheme, string> = {
-	coral: "bg-gradient-to-t from-coral-600/85 via-coral-500/45 to-transparent",
+	coral: "bg-gradient-to-t from-coral-700/90 via-coral-600/45 to-transparent",
 	dark: "bg-gradient-to-t from-ink-900/85 via-ink-900/40 to-transparent",
 	light: "bg-gradient-to-t from-white/90 via-white/50 to-transparent",
 	none: "",
 };
 
-// 세로형은 글자 축이 세로다(writing-mode: vertical-rl). 8자면 슬롯 높이(h-52) 절반 이상을
+// 세로형은 글자 축이 세로다(writing-mode: vertical-rl). 8자면 세로 슬롯 높이의 절반 이상을
 // 세로로 가로질러서, 세로 그라디언트를 쓰면 어디에 정렬하든 글자 일부가 옅은 구간(40%)이나
 // 투명 구간에 걸린다 — 밝은 사진 위에서 흰 글자 대비가 4.5:1 아래로 떨어진다.
 // 정렬을 아래로 옮기는 것으로는 해결되지 않아(글자 축 = 그라디언트 축) 세로형만 균일 스크림을 쓴다.
-// 불투명도는 가로형 그라디언트의 가장 진한 정지점과 같은 값으로 맞춰 새 값을 만들지 않는다.
-// 표시 폭이 약 92px뿐이라 이미지 디테일을 살리는 이득보다 글자 가독성이 우선이다.
+//
+// 농도는 "순백(또는 순흑) 사진이 깔린 최악의 경우"에도 4.5:1을 넘기는 선에서 가장 옅게 잡았다.
+// 합성은 sRGB 공간에서 일어나므로 상대휘도를 선형 보간해 계산하면 안 된다(그러면 필요한
+// 농도를 크게 과대평가한다). 실측 대비 — 후임자가 조정할 때 이 값들을 기준으로 삼으면 된다:
+//   ink-900   흰 글자/순백 사진: α=0.585에서 4.52:1(마지노선), 0.65 → 5.65:1, 0.85 → 11.65:1
+//   white     ink-900 글자/순흑 사진: α=0.70 → 8.62:1
+//   coral-600 흰 글자/순백 사진: α=1.0에서도 4.32:1로 **어떤 농도로도 통과 불가**
+// 그래서 coral 세로형만 한 단계 어두운 coral-700을 쓴다(α=0.85 → 4.77:1). ink 계열로 갈아타면
+// 더 옅게 깔 수 있지만, 92px 슬롯에서 코럴 워시가 사라지면 coral 테마가 dark와 구분되지 않아
+// 구인자가 고른 테마가 무의미해진다 — 브랜드 톤을 지키는 쪽을 택했다.
+// ponytail: coral만 농도가 높아 사진이 많이 가려진다. 더 옅게 가려면 coral-800(#9e1b31)을
+// Tailwind 색으로 노출해야 하는데(현재 coral-50~700만 매핑) 그건 토큰 파일 소유자 몫이다.
 const THEME_VERTICAL_SCRIM_CLASS_NAMES: Record<AdBannerTheme, string> = {
-	coral: "bg-coral-600/85",
-	dark: "bg-ink-900/85",
-	light: "bg-white/90",
+	coral: "bg-coral-700/85",
+	dark: "bg-ink-900/65",
+	light: "bg-white/70",
 	none: "",
 };
 
