@@ -73,4 +73,47 @@ describe("toAdBannerItem", () => {
 
 		expect(item.imageUrl.length).toBeGreaterThan(0);
 	});
+
+	it("carries the banner text config for the horizontal slot", () => {
+		const item = toAdBannerItem(
+			{
+				adBannerAnimation: "blur-in",
+				adBannerHeadline: "주말 알바 급구",
+				adBannerSubline: "당일 지급",
+				adBannerTheme: "coral",
+				adBannerVerticalText: "급구",
+				id: "job-1",
+				title: "홀서빙",
+			},
+			"ad_horizontal"
+		);
+
+		expect(item.text?.headline).toBe("주말 알바 급구");
+		expect(item.text?.animation).toBe("blur-in");
+	});
+
+	it("carries no text when the vertical slot has no vertical copy", () => {
+		// 세로 슬롯은 헤드라인을 잘라 쓰지 않는다 — 20자를 92px 폭에 넣으면 잘린 문구가 노출된다.
+		const item = toAdBannerItem(
+			{
+				adBannerHeadline: "주말 알바 급구",
+				adBannerVerticalText: null,
+				id: "job-1",
+				title: "홀서빙",
+			},
+			"ad_vertical"
+		);
+
+		expect(item.text).toBeNull();
+	});
+
+	it("carries no text for legacy jobs without banner copy", () => {
+		// 기존 프리미엄 공고는 전부 null이라 예전처럼 이미지만 나와야 한다.
+		const item = toAdBannerItem(
+			{ id: "job-1", title: "홀서빙" },
+			"ad_horizontal"
+		);
+
+		expect(item.text).toBeNull();
+	});
 });
