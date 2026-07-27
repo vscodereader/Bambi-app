@@ -2343,11 +2343,14 @@ export const moderationRouter = {
 			};
 		}),
 
-	// 탈퇴 계정 개인정보 파기 배치. 보존기간(운영자 설정, 기본 30일) 경과분의
-	// PII를 스크럽한다. user 행 자체는 지우지 않는다 — 채팅·리뷰·신고 등 상대방
-	// 데이터가 onDelete 미지정(RESTRICT) FK로 물려 있어 행 삭제는 실패하거나 상대방
-	// 기록까지 깨진다. 파기 후 이메일이 tombstone으로 바뀌어 원 이메일 재가입이
-	// 다시 열린다. cron 인프라가 없어 운영자 수동/외부 호출로 트리거한다.
+	// 탈퇴 계정의 잔여 식별값 파기 배치. 연락처·자격증명은 이미 탈퇴 시점에
+	// (onboarding.withdrawMyAccount) 파기되고, 부정 재가입 차단용 CI·DI 해시만 남는다 —
+	// 이 배치가 보존기간(운영자 설정, 기본 30일) 경과분의 해시를 마저 지우고 purgedAt을
+	// 찍는다. 스크럽 항목을 전부 유지하는 것은 이 변경 이전에 탈퇴해 PII가 남아 있는
+	// 계정까지 한 번에 정리하기 위해서다(이미 null인 값은 no-op).
+	// user 행 자체는 지우지 않는다 — 채팅·리뷰·신고 등 상대방 데이터가 onDelete 미지정
+	// (RESTRICT) FK로 물려 있어 행 삭제는 실패하거나 상대방 기록까지 깨진다.
+	// cron 인프라가 없어 운영자 사이트 설정의 실행 버튼으로 트리거한다.
 	purgeWithdrawnAccounts: adminProcedure.handler(async () => {
 		const retentionDays = await resolveWithdrawalRetentionDays();
 		const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);

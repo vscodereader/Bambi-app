@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { db } from "@bambi-app/db";
 import {
+	account,
 	member,
 	organization,
 	session as sessionTable,
@@ -644,11 +645,16 @@ export const onboardingRouter = {
 		),
 	})),
 
-	// 회원 탈퇴(소프트 삭제). 본인이 소유한 조직에 다른 멤버가 남아 있으면 차단한다 —
+	// 회원 탈퇴. 본인이 소유한 조직에 다른 멤버가 남아 있으면 차단한다 —
 	// 팀 관리에서 멤버를 모두 정리한 뒤 탈퇴할 수 있다(혼자 남은 소유자는 그대로 탈퇴 가능).
-	// deletedAt만 세우고 개인정보는 보존기간 동안 유지한다 — 파기는 운영자 배치
-	// (moderation.purgeWithdrawnAccounts)가 보존기간 경과분만 수행한다. 표시명은 즉시
-	// "탈퇴한 회원"으로 바꿔 채팅·리뷰 등 상대 화면이 바로 익명화된다.
+	//
+	// 개인정보 보호법 제21조제1항은 목적 달성 시 "지체 없이" 파기하도록 하고, 그 단서의
+	// 예외는 "다른 법령에 따라 보존하여야 하는 경우"뿐이다. 부정 재가입 차단은 법령상
+	// 보존 사유가 아니므로 탈퇴 시점에 PII를 즉시 파기하고, 그 목적에 꼭 필요한 최소
+	// 식별값인 CI·DI 해시만 보존기간 동안 남긴다. 남은 해시는 보존기간 경과 후 운영자
+	// 배치(moderation.purgeWithdrawnAccounts)가 파기한다.
+	// user 행 자체는 지우지 않는다 — 채팅·리뷰·신고 등 상대방 데이터가 onDelete 미지정
+	// (RESTRICT) FK로 물려 있어 행 삭제는 실패하거나 상대방 기록까지 깨진다.
 	withdrawMyAccount: protectedProcedure.handler(async ({ context }) => {
 		const userId = context.session.user.id;
 
@@ -661,11 +667,30 @@ export const onboardingRouter = {
 		}
 
 		await db.transaction(async (tx) => {
-			// isNull 가드로 중복 호출을 no-op으로 만든다(멱등).
+			// 이메일은 notNull·unique라 지울 수 없어 tombstone으로 치환한다(원 이메일
+			// 재가입이 바로 열린다). isNull 가드로 중복 호출을 no-op으로 만든다(멱등).
 			await tx
 				.update(user)
-				.set({ deletedAt: new Date(), name: "탈퇴한 회원" })
+				.set({
+					deletedAt: new Date(),
+					email: `withdrawn-${userId}@invalid.bambi`,
+					image: null,
+					name: "탈퇴한 회원",
+				})
 				.where(and(eq(user.id, userId), isNull(user.deletedAt)));
+			// 비밀번호 등 자격증명 즉시 파기.
+			await tx.delete(account).where(eq(account.userId, userId));
+			// 연락처·본인인증 정보 즉시 파기. ciHash·diHash는 부정 재가입 차단에 필요해
+			// 보존기간 동안만 남기고, 파기 배치가 보존기간 경과 후 지운다.
+			await tx
+				.update(bambiProfile)
+				.set({
+					birthDate: null,
+					gender: null,
+					isPhoneVerified: false,
+					phoneNumber: null,
+				})
+				.where(eq(bambiProfile.userId, userId));
 			await tx.delete(teamMember).where(eq(teamMember.userId, userId));
 			await tx.delete(member).where(eq(member.userId, userId));
 			// 전 기기 세션을 지워 즉시 접근을 끊는다. 재로그인은 auth 훅이 차단.
