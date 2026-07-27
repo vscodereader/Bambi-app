@@ -5,10 +5,10 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import type { AdBannerAnimation } from "@/lib/bambi/ad-banner-animations";
 import { TypingText } from "./text-animations/typing-text";
 
-// motion을 쓰는 연출만 별도 청크로 쪼갠다 — 광고가 없는 페이지에는 번들이 실리지 않는다.
+// gsap을 쓰는 연출만 별도 청크로 쪼갠다 — 광고가 없는 페이지에는 번들이 실리지 않는다.
 // next/dynamic이 아니라 React.lazy를 쓴다: dynamic의 loading 컴포넌트는 props를 못 받아
 // 청크가 도착할 때까지 문구 자리가 빈칸이 되지만, Suspense fallback은 호출부라 문구를 넣을 수 있다.
-// SSR에서 motion이 열릴 일은 없다 — 아래 게이트가 마운트 전에는 항상 정적 문구만 그린다(= ssr:false와 동일).
+// SSR에서 gsap이 열릴 일은 없다 — 아래 게이트가 마운트 전에는 항상 정적 문구만 그린다(= ssr:false와 동일).
 const BlurText = lazy(() =>
 	import("./text-animations/blur-text").then((mod) => ({
 		default: mod.BlurText,
