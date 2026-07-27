@@ -91,8 +91,9 @@ export default function PrivacyPage() {
 				</LegalParagraph>
 				<LegalParagraph>
 					비회원(게스트)으로 성인 인증만 하는 경우 서버에는 어떠한 정보도
-					저장하지 않으며, 이용자의 브라우저 쿠키(bambi_guest, 유효기간 30일)에
-					서명된 토큰으로 성별과 만료 시각만 보관합니다.
+					저장하지 않으며, 이용자의 브라우저에 저장되는 밤비 게스트
+					쿠키(bambi_guest, 유효기간 30일)에 서명된 토큰으로 성별과 만료 시각만
+					보관합니다.
 				</LegalParagraph>
 
 				<LegalSubheading>
@@ -185,8 +186,8 @@ export default function PrivacyPage() {
 
 				<LegalSubheading>나. 비회원 성인 인증</LegalSubheading>
 				<LegalParagraph>
-					비회원(게스트) 성인 인증 쿠키(bambi_guest)는 발급 후 30일이 지나거나
-					회원 로그인·로그아웃 시 즉시 만료됩니다.
+					비회원의 성인 인증에 사용하는 밤비 게스트 쿠키(bambi_guest)는 발급 후
+					30일이 지나거나 회원 로그인·로그아웃 시 즉시 만료됩니다.
 				</LegalParagraph>
 
 				<LegalSubheading>다. 관계 법령에 따른 보존</LegalSubheading>
@@ -311,27 +312,27 @@ export default function PrivacyPage() {
 							"로그아웃 또는 세션 만료 시까지",
 						],
 						[
-							"bambi_guest",
+							"밤비 게스트 쿠키",
 							"비회원의 성인 인증 결과 보관(성별·만료 시각)",
 							"발급 후 30일(로그인·로그아웃 시 즉시 만료)",
 						],
 						[
-							"_ga, _ga_HNVZKKB0NX",
-							"Google Analytics를 통한 방문 통계 분석",
+							"구글 애널리틱스 쿠키",
+							"방문 통계 분석(광고 목적으로는 사용하지 않습니다)",
 							"약 2년",
 						],
 					]}
 				/>
 				<LegalParagraph className="pt-2">
-					회사는 Google Analytics를 방문 통계 확인 목적으로만 사용하며, 광고
-					개인화 및 다른 웹사이트에서의 행태정보 수집 기능은 사용하지 않도록
-					설정하고 있습니다.
+					회사는 구글 애널리틱스(Google Analytics)를 방문 통계 확인 목적으로만
+					사용하며, 광고 개인화 및 다른 웹사이트에서의 행태정보 수집 기능은
+					사용하지 않도록 설정하고 있습니다.
 				</LegalParagraph>
 				<LegalSubheading>쿠키 설치·운영의 거부 방법</LegalSubheading>
 				<LegalList
 					items={[
 						"웹 브라우저 설정에서 쿠키를 허용하거나 차단할 수 있습니다. (예: Chrome — 설정 › 개인 정보 보호 및 보안 › 서드 파티 쿠키, Safari — 설정 › 개인정보 보호)",
-						"Google Analytics의 정보 수집은 Google이 제공하는 차단 브라우저 부가기능(tools.google.com/dlpage/gaoptout)을 설치하여 거부할 수 있습니다.",
+						"구글 애널리틱스의 정보 수집은 구글이 제공하는 차단 브라우저 부가기능(tools.google.com/dlpage/gaoptout)을 설치하여 거부할 수 있습니다.",
 						"쿠키를 차단하면 로그인 상태 유지와 성인 인증이 정상적으로 동작하지 않아 서비스 이용이 제한될 수 있습니다.",
 					]}
 				/>
