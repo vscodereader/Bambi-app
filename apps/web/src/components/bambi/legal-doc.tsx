@@ -83,30 +83,43 @@ export function LegalList({ items }: { items: ReactNode[] }) {
 	);
 }
 
-// 개인정보 위탁·보존기간 등 단순 2열 표.
+// 개인정보 위탁·보존기간·국외이전 등 표. 열 수는 head 길이를 따르며, 좁은 화면에서는
+// 가로 스크롤한다(첫 열만 줄바꿈을 막아 항목명이 쪼개지지 않게 한다).
 export function LegalTable({
 	head,
 	rows,
 }: {
-	head: [string, string];
-	rows: [string, string][];
+	head: string[];
+	rows: string[][];
 }) {
 	return (
 		<div className="overflow-x-auto rounded-lg border border-border">
 			<table className="w-full border-collapse text-sm">
 				<thead>
 					<tr className="bg-muted/50 text-left">
-						<th className="px-4 py-3 font-bold text-foreground">{head[0]}</th>
-						<th className="px-4 py-3 font-bold text-foreground">{head[1]}</th>
+						{head.map((label) => (
+							<th className="px-4 py-3 font-bold text-foreground" key={label}>
+								{label}
+							</th>
+						))}
 					</tr>
 				</thead>
 				<tbody>
 					{rows.map((row) => (
-						<tr className="border-border border-t" key={`${row[0]}-${row[1]}`}>
-							<td className="whitespace-nowrap px-4 py-3 text-foreground">
-								{row[0]}
-							</td>
-							<td className="px-4 py-3 text-muted-foreground">{row[1]}</td>
+						<tr className="border-border border-t" key={row.join("|")}>
+							{row.map((cell, index) => (
+								<td
+									className={cn(
+										"px-4 py-3",
+										index === 0
+											? "whitespace-nowrap text-foreground"
+											: "text-muted-foreground"
+									)}
+									key={cell}
+								>
+									{cell}
+								</td>
+							))}
 						</tr>
 					))}
 				</tbody>
