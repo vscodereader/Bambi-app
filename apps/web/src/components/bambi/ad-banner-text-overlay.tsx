@@ -119,10 +119,11 @@ export function AdBannerTextOverlay({
 				className="font-extrabold text-sm leading-tight tracking-tight sm:text-lg"
 				text={config.headline}
 			/>
+			{/* 서브라인에 투명도를 걸지 않는다 — text-xs는 12px이라 WCAG large text(18.66px)에
+			    해당하지 않아 4.5:1이 그대로 요구된다. opacity-90이면 coral에서 4.15:1로 AA 미달이고,
+			    지우면 헤드라인과 같은 4.77:1이 된다(dark 5.65:1 · light 8.62:1). 위계는 크기로만 준다. */}
 			{config.subline ? (
-				<span className="text-xs leading-tight opacity-90">
-					{config.subline}
-				</span>
+				<span className="text-xs leading-tight">{config.subline}</span>
 			) : null}
 		</div>
 	);

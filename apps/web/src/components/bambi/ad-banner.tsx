@@ -100,7 +100,7 @@ interface AdBannerRailProps {
 }
 
 // 세로 배너 스택(우측). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로, 빈 칸은
-// "광고 모집중" 자리표시로 채운다.
+// "광고 등록 문의" 자리표시로 채운다.
 export function AdBannerRail({ className, items }: AdBannerRailProps) {
 	return (
 		<div className={cn("flex flex-col items-start gap-3", className)}>
@@ -167,7 +167,7 @@ interface HorizontalAdBannerRailProps {
 }
 
 // 가로형 배너 세로 스택(좌측 사이드). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로,
-// 빈 칸은 "광고 모집중" 자리표시로 채운다.
+// 빈 칸은 "광고 등록 문의" 자리표시로 채운다.
 export function HorizontalAdBannerRail({
 	className,
 	items,

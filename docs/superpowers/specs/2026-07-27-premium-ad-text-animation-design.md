@@ -111,18 +111,22 @@ React Bits 컴포넌트는 npm 패키지가 아니라 소스를 복사해 오는
 
 ## 렌더
 
-`components/bambi/ad-banner-text-overlay.tsx` 하나가 세 가지 variant를 담당한다.
+`components/bambi/ad-banner-text-overlay.tsx`가 이미지 위 오버레이 variant 2종을 담당하고,
+자리표시는 같은 파일의 별도 export `AdSlotInquiryContent`가 그린다(구현 시 정정 — 자리표시는
+이미지 위 스크림·문구 설정이 아니라 슬롯 전체를 채우는 독립 렌더라 variant를 공유할 게 없다).
 
 - `horizontal` — 헤드라인 + 서브라인, 기존 `HorizontalAdBanner`의 이미지 위 absolute
 - `vertical` — 세로 전용 문구, `writing-mode: vertical-rl` 세로쓰기로 92px 폭에 흘린다
-- `placeholder` — "광고 등록 문의" + 운영자 설정 전화번호, 애니메이션은 `shiny` 고정
+- `AdSlotInquiryContent` — "광고 등록 문의" + 운영자 설정 전화번호, **애니메이션 없이 정적 렌더**
+  (구현 시 정정 — 자리표시는 빈 슬롯 8칸까지 깔리는데 infinite CSS 애니메이션을 걸면 상시 페인트가 된다)
 
 규칙:
 
-- `motion`은 `next/dynamic`으로 지연 로드한다 — 광고가 없는 페이지엔 번들이 실리지 않는다
+- `motion`은 지연 로드한다 — 광고가 없는 페이지엔 번들이 실리지 않는다
 - `prefers-reduced-motion`이면 애니메이션 없이 최종 상태로 정적 렌더한다
-- 화면에 최대 8칸이 동시에 뜨므로 IntersectionObserver로 뷰포트 진입 시 1회만 재생한다
-  (React Bits 기본 동작)
+- 애니메이션은 **마운트 시 1회** 재생한다. IntersectionObserver는 쓰지 않는다
+  (구현 시 정정 — `blur-text.tsx`에서 React Bits 기본 옵저버를 걷어냈다. 8칸 one-shot 연출이라
+  옵저버 유지 비용이 얻는 이득을 넘는다)
 - 오버레이는 `pointer-events-none` — 아래 깔린 공고 상세 링크가 그대로 동작한다
 
 ### 자리표시 컴포넌트화

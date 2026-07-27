@@ -17,7 +17,28 @@ const CATALOG_SOURCE = fs.readFileSync(
 	"utf8"
 );
 
+const JOBS_SOURCE = fs.readFileSync(
+	path.join(import.meta.dirname, "jobs.ts"),
+	"utf8"
+);
+
 const QUOTED_VALUE_PATTERN = /"([^"]+)"/g;
+
+// 선언 마커 바로 뒤의 숫자를 뽑는다(`... = 20;` / `....max(20)`). 못 찾으면 던진다 —
+// 조용히 undefined를 반환하면 양쪽 다 못 찾았을 때 대조가 통과해버린다.
+const numberAfter = (source: string, marker: string): number => {
+	const start = source.indexOf(marker);
+	const value =
+		start < 0
+			? Number.NaN
+			: Number.parseInt(source.slice(start + marker.length), 10);
+
+	if (Number.isNaN(value)) {
+		throw new Error(`소스에서 "${marker}" 뒤의 숫자를 찾지 못했습니다.`);
+	}
+
+	return value;
+};
 
 // `export const <NAME> = [ ... ]`의 배열 리터럴에서 문자열 값을 선언 순서대로 뽑는다.
 const catalogValues = (constantName: string): string[] => {
@@ -46,5 +67,19 @@ describe("ad banner catalog ↔ DB enum parity", () => {
 		expect(catalogValues("AD_BANNER_THEME_VALUES")).toEqual([
 			...adBannerTheme.enumValues,
 		]);
+	});
+
+	// 길이 상한이 갈리면 "폼은 통과했는데 서버가 반려"라는 사용자에게 보이는 사고가 난다.
+	it.each([
+		["AD_BANNER_HEADLINE_MAX_LENGTH = ", "adBannerHeadline: z.string().max("],
+		["AD_BANNER_SUBLINE_MAX_LENGTH = ", "adBannerSubline: z.string().max("],
+		[
+			"AD_BANNER_VERTICAL_TEXT_MAX_LENGTH = ",
+			"adBannerVerticalText: z.string().max(",
+		],
+	])("mirrors the %s cap in the server zod shape", (constant, zodCall) => {
+		expect(numberAfter(CATALOG_SOURCE, constant)).toBe(
+			numberAfter(JOBS_SOURCE, zodCall)
+		);
 	});
 });
