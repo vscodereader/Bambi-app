@@ -9,6 +9,7 @@ import {
 } from "@bambi-app/ui/components/card";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import { Separator } from "@bambi-app/ui/components/separator";
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
@@ -250,6 +251,22 @@ export default function ModeratorSiteSettingsPage() {
 		}
 		saveMemberPolicyMutation.mutate({ withdrawalRetentionDays: parsed });
 	};
+
+	// 파기 배치 수동 실행. cron 인프라가 없어 이 버튼이 유일한 트리거다.
+	const purgeMutation = useMutation(
+		orpc.bambi.moderation.purgeWithdrawnAccounts.mutationOptions({
+			onError: (error) => toast.error(error.message || "실행하지 못했어요."),
+			onSuccess: (result) => {
+				if (result.purgedCount === 0) {
+					toast.success("보존기간이 지난 탈퇴 계정이 없어요.");
+					return;
+				}
+				toast.success(
+					`탈퇴 계정 ${result.purgedCount}건의 잔여 정보를 파기했어요.`
+				);
+			},
+		})
+	);
 
 	const adRotationQuery = useQuery(
 		orpc.bambi.siteSettings.getAdRotation.queryOptions()
@@ -551,7 +568,8 @@ export default function ModeratorSiteSettingsPage() {
 								value={retentionDays}
 							/>
 							<p className="m-0 text-muted-foreground text-xs">
-								탈퇴 후 이 기간이 지나면 파기 배치가 개인정보를 삭제해요.
+								연락처·비밀번호 등은 탈퇴 즉시 파기하고, 부정 재가입 차단에
+								필요한 본인인증 식별값(CI·DI 해시)만 이 기간 동안 남겨요.
 								비워두면 기본값을 사용하고, 탈퇴 안내 문구에도 그대로 표시돼요.
 							</p>
 						</div>
@@ -567,6 +585,23 @@ export default function ModeratorSiteSettingsPage() {
 							</Button>
 						</div>
 					</form>
+					<Separator className="my-5" />
+					<div className="flex flex-col gap-3">
+						<p className="m-0 text-muted-foreground text-xs">
+							보존기간이 지난 탈퇴 계정의 잔여 식별값을 파기해요. 자동 실행이
+							없어 주기적으로 눌러 주셔야 해요.
+						</p>
+						<div className="flex justify-end">
+							<Button
+								disabled={purgeMutation.isPending}
+								onClick={() => purgeMutation.mutate({})}
+								type="button"
+								variant="outline"
+							>
+								{purgeMutation.isPending ? "파기 중…" : "지금 파기 실행"}
+							</Button>
+						</div>
+					</div>
 				</CardContent>
 			</Card>
 

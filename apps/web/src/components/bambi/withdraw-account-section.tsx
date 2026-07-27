@@ -60,8 +60,9 @@ export function WithdrawAccountSection() {
 				<span className="font-bold text-foreground text-sm">회원 탈퇴</span>
 				<p className="m-0 text-muted-foreground text-xs">
 					탈퇴하면 즉시 로그아웃되고 다시 로그인할 수 없어요. 프로필은 '탈퇴한
-					회원'으로 표시되고, {retentionDays}일 보관 후 개인정보가 파기돼요.
-					보관 기간에는 같은 이메일·본인인증으로 재가입할 수 없어요.
+					회원'으로 표시되고, 연락처·비밀번호 등 개인정보는 탈퇴 즉시 파기돼요.
+					부정 재가입을 막기 위해 본인인증 식별값만 {retentionDays}일 동안
+					남으며, 그동안에는 같은 명의로 본인인증을 다시 할 수 없어요.
 				</p>
 			</div>
 			{blockedByTeamMembers ? (
