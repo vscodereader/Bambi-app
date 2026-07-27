@@ -10,33 +10,41 @@ import { LegalParagraph, LegalTable } from "@/components/bambi/legal-doc";
 import { BAMBI_COMPANY, BAMBI_PROCESSORS } from "@/lib/bambi/company";
 import { orpc } from "@/utils/orpc";
 
-// 위탁 수탁자 표. 위탁업무 내용은 고정이고 수탁사명만 운영자 설정으로 치환한다.
+// 위탁 수탁자 표. 위탁업무 내용은 고정이고, 첫 행(본인인증 대행사)의 수탁사명만
+// 운영자 설정으로 치환한다 — 나머지 수탁사는 계약이 아니라 코드가 정하는 값이다.
 export function PrivacyProcessorsTable() {
 	const { data } = useQuery(
 		orpc.bambi.siteSettings.getPrivacyContacts.queryOptions()
 	);
-	const processorName =
-		data?.privacyPaymentProcessor ?? BAMBI_PROCESSORS[0].name;
 
 	return (
 		<LegalTable
 			head={["수탁자", "위탁업무 내용"]}
-			rows={[[processorName, BAMBI_PROCESSORS[0].task]]}
+			rows={BAMBI_PROCESSORS.map((processor, index) => [
+				index === 0
+					? (data?.privacyPaymentProcessor ?? processor.name)
+					: processor.name,
+				processor.task,
+			])}
 		/>
 	);
 }
 
-// 개인정보 관리부서 전화·메일.
+// 개인정보 보호책임자 성명·전화·메일.
 export function PrivacyContactLine() {
 	const { data } = useQuery(
 		orpc.bambi.siteSettings.getPrivacyContacts.queryOptions()
 	);
+	const name = data?.privacyOfficerName ?? BAMBI_COMPANY.privacyOfficer.name;
 	const tel = data?.privacyContactPhone ?? BAMBI_COMPANY.privacyOfficer.tel;
 	const email = data?.privacyContactEmail ?? BAMBI_COMPANY.privacyOfficer.email;
 
 	return (
-		<LegalParagraph>
-			전화 : {tel} · 메일 : {email}
-		</LegalParagraph>
+		<>
+			<LegalParagraph>개인정보 보호책임자 : {name}</LegalParagraph>
+			<LegalParagraph>
+				전화 : {tel} · 메일 : {email}
+			</LegalParagraph>
+		</>
 	);
 }

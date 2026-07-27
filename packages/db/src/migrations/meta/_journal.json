@@ -281,6 +281,13 @@
       "when": 1785114089962,
       "tag": "0039_tranquil_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785125103308,
+      "tag": "0040_steep_menace",
+      "breakpoints": true
     }
   ]
 }
