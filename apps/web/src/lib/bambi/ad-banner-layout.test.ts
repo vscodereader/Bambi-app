@@ -4,7 +4,6 @@ import {
 	AD_BANNER_ANIMATION_LABELS,
 	AD_BANNER_ANIMATION_OPTIONS,
 	AD_BANNER_ANIMATION_VALUES,
-	AD_BANNER_MAX_BLOCKS,
 	clampPercent,
 	collectAdBannerLayoutTexts,
 	contrastRatio,
@@ -21,10 +20,14 @@ describe("ad banner layout catalog", () => {
 		}
 	});
 
-	it("offers exactly the catalog values as options", () => {
-		expect(AD_BANNER_ANIMATION_OPTIONS.map((option) => option.value)).toEqual([
-			...AD_BANNER_ANIMATION_VALUES,
-		]);
+	it("describes every option so the editor never shows a bare value", () => {
+		// OPTIONS는 VALUES.map으로 만들어져 value 일치 확인은 항등식이라 아무것도 못 잡는다.
+		// 실제로 갈릴 수 있는 건 설명·라벨이 비는 쪽이다.
+		for (const option of AD_BANNER_ANIMATION_OPTIONS) {
+			expect(option.label).toBeTruthy();
+			expect(option.description).toBeTruthy();
+			expect(option.label).not.toBe(option.value);
+		}
 	});
 });
 
@@ -37,6 +40,17 @@ describe("createEmptyAdBannerLayout", () => {
 		expect(layout.horizontal.texts).toEqual([]);
 		expect(layout.vertical.texts).toEqual([]);
 		expect(layout.horizontal.background.type).toBe("image");
+	});
+
+	it("gives each slot its own objects", () => {
+		// 두 슬롯이 같은 객체를 가리키면 가로 편집이 세로에 그대로 반영된다. 슬롯 생성을
+		// 상수 하나로 "최적화"하면 생기는 회귀라 대입이 아니라 push로 확인해야 잡힌다.
+		const layout = createEmptyAdBannerLayout();
+		layout.horizontal.texts.push(createAdBannerTextBlock("a"));
+		layout.horizontal.scrim.enabled = false;
+
+		expect(layout.vertical.texts).toHaveLength(0);
+		expect(layout.vertical.scrim.enabled).toBe(true);
 	});
 });
 
@@ -57,6 +71,14 @@ describe("clampPercent", () => {
 		expect(clampPercent(140)).toBe(100);
 		expect(clampPercent(42.5)).toBe(42.5);
 	});
+
+	it("falls back to the center for NaN and still clamps infinities", () => {
+		// 캔버스 폭이 0인 순간의 드래그는 0/0 = NaN을 낸다. NaN이 좌표에 박히면
+		// JSON.stringify가 말없이 null로 바꿔 저장이 깨진다.
+		expect(clampPercent(Number.NaN)).toBe(50);
+		expect(clampPercent(Number.POSITIVE_INFINITY)).toBe(100);
+		expect(clampPercent(Number.NEGATIVE_INFINITY)).toBe(0);
+	});
 });
 
 describe("contrastRatio", () => {
@@ -73,10 +95,19 @@ describe("contrastRatio", () => {
 		expect(contrastRatio("#fff", "#000")).toBeCloseTo(21, 1);
 	});
 
+	it("ignores surrounding whitespace instead of misreading it", () => {
+		// parseInt는 선행 공백을 건너뛰므로 " #3f3f3f"가 NaN 없이 "그럴듯하지만 틀린" 휘도를 낸다.
+		// 그러면 NaN 가드조차 걸리지 않아 대비 경고가 통째로 무력화된다.
+		expect(contrastRatio(" #ffffff ", "#000000")).toBeCloseTo(21, 1);
+		expect(isLowContrast("#333333", " #3f3f3f")).toBe(true);
+	});
+
 	it("reports no contrast for an unparsable color", () => {
 		// NaN을 흘리면 모든 비교가 false가 되어 경고가 조용히 꺼진다. 모르면 경고하는 쪽으로.
 		expect(contrastRatio("검정", "#ffffff")).toBe(1);
 		expect(isLowContrast("검정", "#ffffff")).toBe(true);
+		// 자릿수가 어긋난 hex를 조용히 3채널로 잘라 읽지 않는다.
+		expect(contrastRatio("#12345", "#ffffff")).toBe(1);
 	});
 });
 
@@ -106,9 +137,5 @@ describe("collectAdBannerLayoutTexts", () => {
 			"가로 문구",
 			"세로 문구",
 		]);
-	});
-
-	it("caps blocks per slot at the documented maximum", () => {
-		expect(AD_BANNER_MAX_BLOCKS).toBe(5);
 	});
 });

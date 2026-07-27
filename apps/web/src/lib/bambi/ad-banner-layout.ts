@@ -47,6 +47,11 @@ export const AD_BANNER_DEFAULT_TEXT_COLOR = "#ffffff";
 export const AD_BANNER_DEFAULT_BACKGROUND_COLOR = "#1f2937";
 // WCAG AA 본문 기준. 에디터 경고 판정에만 쓰고 저장을 막지는 않는다.
 export const AD_BANNER_CONTRAST_THRESHOLD = 4.5;
+// 스크림 불투명도는 0~100 백분율이다. CSS의 0~1이 아니다 — 서버 zod와 렌더러가 이 스케일에서
+// 갈리면 기본값 65가 저장 단계에서 반려되거나 CSS에서 클램프돼 완전 불투명 스크림이 된다.
+export const AD_BANNER_SCRIM_OPACITY_MIN = 0;
+export const AD_BANNER_SCRIM_OPACITY_MAX = 100;
+export const AD_BANNER_DEFAULT_SCRIM_OPACITY = 65;
 
 export interface AdBannerTextBlock {
 	align: AdBannerTextAlign;
@@ -66,6 +71,7 @@ export interface AdBannerTextBlock {
 export interface AdBannerSlotLayout {
 	background: { type: "image" } | { color: string; type: "color" };
 	// 이미지 배경 위 가독성 보조. 색 배경에서는 의미가 없어 렌더러가 무시한다.
+	// opacity는 0~100 백분율(AD_BANNER_SCRIM_OPACITY_MIN/MAX).
 	scrim: { enabled: boolean; opacity: number };
 	texts: AdBannerTextBlock[];
 }
@@ -79,7 +85,7 @@ export interface AdBannerLayout {
 
 const createEmptySlot = (): AdBannerSlotLayout => ({
 	background: { type: "image" },
-	scrim: { enabled: true, opacity: 65 },
+	scrim: { enabled: true, opacity: AD_BANNER_DEFAULT_SCRIM_OPACITY },
 	texts: [],
 });
 
@@ -104,25 +110,37 @@ export const createAdBannerTextBlock = (id: string): AdBannerTextBlock => ({
 	y: 50,
 });
 
+// NaN만 따로 막는다. 드래그 핸들러는 (clientX - rect.left) / rect.width * 100을 넘기는데,
+// 슬롯 탭이 아직 레이아웃되지 않아 rect.width가 0이면 0/0 = NaN이 나온다. NaN이 좌표에 박히면
+// JSON.stringify가 말없이 null로 바꿔 서버 zod가 반려하거나 jsonb에 null이 들어간다.
+// ±Infinity는 클램프가 이미 0·100으로 접어 유한하게 만드니 그대로 둔다.
 export const clampPercent = (value: number): number =>
-	Math.min(100, Math.max(0, value));
+	Number.isNaN(value) ? 50 : Math.min(100, Math.max(0, value));
 
-// #abc → #aabbcc. 축약형을 그대로 파싱하면 NaN이 나오고, NaN은 비교에서 전부 false라
-// isLowContrast가 "대비 충분"으로 오판한다 — 경고가 조용히 사라지는 방향이라 위험하다.
-const expandHex = (hex: string): string => {
-	const value = hex.replace("#", "");
+// hex를 6자리 소문자로 정규화한다. null이면 읽을 수 없는 값이다.
+// 트림과 형식 검증을 여기서 다 하는 이유: parseInt는 선행 공백을 건너뛰므로 " #3f3f3f" 같은
+// 붙여넣기 값이 NaN 없이 "그럴듯하지만 틀린" 휘도를 내고, 그러면 NaN 가드조차 걸리지 않는다.
+// (" #3f3f3f"는 " 3"→15, "f3"→243, "f3"→243으로 읽혀 어두운 회색이 밝은 청록이 된다.)
+const HEX_PREFIX = /^#/;
+const ANY_CHAR = /./g;
+const SIX_DIGIT_HEX = /^[0-9a-f]{6}$/;
 
-	return value.length === 3
-		? value
-				.split("")
-				.map((char) => char + char)
-				.join("")
-		: value;
+const parseHex = (hex: string): string | null => {
+	const value = hex.trim().replace(HEX_PREFIX, "").toLowerCase();
+	const full =
+		value.length === 3 ? value.replace(ANY_CHAR, (char) => char + char) : value;
+
+	return SIX_DIGIT_HEX.test(full) ? full : null;
 };
 
 // sRGB 상대휘도. 알파 합성은 하지 않는다 — 에디터 경고는 단색 배경일 때만 계산한다.
 const relativeLuminance = (hex: string): number => {
-	const value = expandHex(hex);
+	const value = parseHex(hex);
+
+	if (value === null) {
+		return Number.NaN;
+	}
+
 	const channels = [0, 2, 4].map((offset) => {
 		const raw = Number.parseInt(value.slice(offset, offset + 2), 16) / 255;
 		return raw <= 0.039_28 ? raw / 12.92 : ((raw + 0.055) / 1.055) ** 2.4;
@@ -135,7 +153,8 @@ export const contrastRatio = (hexA: string, hexB: string): number => {
 	const a = relativeLuminance(hexA);
 	const b = relativeLuminance(hexB);
 
-	// 파싱 실패(잘못된 hex)는 대비 1로 본다. NaN을 흘리면 경고가 꺼지므로, 모르면 경고하는 쪽으로 판정한다.
+	// 읽을 수 없는 색은 대비 1로 본다. NaN을 흘리면 모든 비교가 false가 되어 경고가 조용히
+	// 꺼지므로, 모르면 경고하는 쪽으로 판정한다.
 	if (Number.isNaN(a) || Number.isNaN(b)) {
 		return 1;
 	}
