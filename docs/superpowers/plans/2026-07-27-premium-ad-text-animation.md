@@ -24,7 +24,8 @@
 - **빌드·dev 서버 기동 금지.** 검증은 `check-types`와 vitest만. 시각 확인은 사용자가 한다
 - 커밋 전 `pnpm dlx ultracite fix`로 Biome 정렬
 - 모바일 반응형을 항상 함께 고려한다
-- 테스트 명령: `pnpm -F web test`, `pnpm -F @bambi-app/api test` (web/server는 scope 없음, db/api만 `@bambi-app/*`)
+- **테스트 명령에 함정이 있다.** `apps/web`에는 `test` 스크립트가 **없다** — `pnpm -F web test`는 아무것도 실행하지 않고 조용히 성공하므로 절대 쓰지 말 것. web 테스트는 저장소 루트에서 `pnpm vitest run <파일경로>`(전체는 `pnpm vitest run apps/web`)로 돌린다. api는 `pnpm -F @bambi-app/api test`가 유효하다(scope 있음). 타입 체크 `pnpm -F web check-types`는 유효하다
+- **web 테스트에서 `@/` alias를 쓰지 말 것.** web용 vitest config가 없어 alias가 해석되지 않는다(기존 web 테스트 20여 개도 alias를 하나도 쓰지 않는다). 테스트와 그 테스트가 import 하는 모듈은 상대 경로(`./company`)를 쓴다. 컴포넌트 등 테스트하지 않는 파일은 기존대로 `@/`를 써도 된다
 - 커밋 메시지는 한국어 `type:` 제목 + 촘촘한 `- ` 블릿 본문(블릿 사이 빈 줄 없음). 다중 행 메시지는 임시 파일 + `git commit -F`
 - **push·PR 생성 금지.** 사용자가 명시적으로 지시할 때만 한다
 
@@ -144,7 +145,7 @@ describe("ad banner animation catalog", () => {
 
 - [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
 
-Run: `pnpm -F web test ad-banner-animations`
+Run: `pnpm vitest run apps/web/src/lib/bambi/ad-banner-animations.test.ts` (저장소 루트에서)
 Expected: FAIL — `Cannot find module './ad-banner-animations'`
 
 - [ ] **Step 3: 카탈로그를 구현한다**
@@ -229,7 +230,7 @@ export const AD_BANNER_VERTICAL_TEXT_MAX_LENGTH = 8;
 
 - [ ] **Step 4: 테스트를 돌려 통과를 확인한다**
 
-Run: `pnpm -F web test ad-banner-animations`
+Run: `pnpm vitest run apps/web/src/lib/bambi/ad-banner-animations.test.ts` (저장소 루트에서)
 Expected: PASS (5 tests)
 
 - [ ] **Step 5: 커밋**
@@ -847,7 +848,7 @@ feat(web): 광고 배너 텍스트 오버레이 컴포넌트 추가
 ```ts
 import { describe, expect, it } from "vitest";
 
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
+import { BAMBI_COMPANY } from "./company";
 import { resolveAdInquiryTel } from "./ad-inquiry-tel";
 
 describe("resolveAdInquiryTel", () => {
@@ -881,7 +882,7 @@ describe("resolveAdInquiryTel", () => {
 
 - [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
 
-Run: `pnpm -F web test ad-inquiry-tel`
+Run: `pnpm vitest run apps/web/src/lib/bambi/ad-inquiry-tel.test.ts` (저장소 루트에서)
 Expected: FAIL — `resolveAdInquiryTel is not exported`
 
 - [ ] **Step 3: 서버에 `adInquiryTel`을 싣는다**
@@ -936,7 +937,7 @@ const FOOTER_COLUMNS = {
 먼저 `apps/web/src/lib/bambi/ad-inquiry-tel.ts`를 만든다:
 
 ```ts
-import { BAMBI_COMPANY } from "@/lib/bambi/company";
+import { BAMBI_COMPANY } from "./company";
 
 // 광고 문의 번호 폴백 체인. 운영자가 광고 전용 번호를 두지 않았으면 고객센터 번호를,
 // 사이트 설정 행 자체가 없으면 코드 상수를 쓴다 — 자리표시에 번호가 비면 안 된다.
@@ -993,7 +994,7 @@ import { AdSlotInquiryContent } from "./ad-banner-text-overlay";
 
 - [ ] **Step 6: 테스트를 돌려 통과를 확인한다**
 
-Run: `pnpm -F web test ad-inquiry-tel`
+Run: `pnpm vitest run apps/web/src/lib/bambi/ad-inquiry-tel.test.ts` (저장소 루트에서)
 Expected: PASS (4 tests)
 
 - [ ] **Step 7: PNG를 삭제한다**
@@ -1009,7 +1010,7 @@ Expected: 매치 없음
 
 - [ ] **Step 8: 타입 체크와 전체 web 테스트**
 
-Run: `pnpm -F web check-types && pnpm -F web test`
+Run: `pnpm -F web check-types && pnpm vitest run apps/web`
 Expected: EXIT 0, 전체 PASS
 
 - [ ] **Step 9: 커밋**
@@ -1334,7 +1335,7 @@ export interface AdBannerItem {
 
 - [ ] **Step 10: 전체 테스트와 타입 체크**
 
-Run: `pnpm -F @bambi-app/api test && pnpm -F web test && pnpm check-types`
+Run: `pnpm -F @bambi-app/api test && pnpm vitest run apps/web && pnpm check-types`
 Expected: 전부 PASS, EXIT 0
 
 - [ ] **Step 11: 커밋**
@@ -1569,7 +1570,7 @@ export function AdBannerTextFields({
 
 - [ ] **Step 5: 타입 체크와 테스트**
 
-Run: `pnpm -F web check-types && pnpm -F web test`
+Run: `pnpm -F web check-types && pnpm vitest run apps/web`
 Expected: EXIT 0, 전체 PASS
 
 - [ ] **Step 6: 커밋**
@@ -1630,7 +1631,7 @@ feat(web): 공고 등록·수정에 배너 문구·연출 입력과 실시간 �
 
 - [ ] **Step 3: 타입 체크와 전체 테스트**
 
-Run: `pnpm check-types && pnpm -F web test && pnpm -F @bambi-app/api test`
+Run: `pnpm check-types && pnpm vitest run apps/web && pnpm -F @bambi-app/api test`
 Expected: EXIT 0, 전체 PASS
 
 - [ ] **Step 4: 커밋**
@@ -1659,8 +1660,10 @@ feat(web): 프리미엄 배너 슬롯에 텍스트 오버레이 렌더 연결
 
 - [ ] **Step 1: 전역 검증을 돌린다**
 
-Run: `pnpm check-types && pnpm test`
+Run: `pnpm check-types && pnpm test && pnpm vitest run apps/web`
 Expected: 전역 check-types EXIT 0, 전체 테스트 PASS
+
+`pnpm test`(turbo)는 `test` 스크립트가 있는 패키지만 돈다 — web은 스크립트가 없어 건너뛰므로 `pnpm vitest run apps/web`을 반드시 함께 돌린다.
 
 실패가 있으면 그 자리에서 고친다. 통과 결과를 이 계획 문서 하단에 검증 노트로 남긴다.
 
