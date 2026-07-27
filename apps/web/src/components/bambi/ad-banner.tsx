@@ -2,16 +2,14 @@
 
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { Megaphone } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { resolveAdInquiryTel } from "@/lib/bambi/ad-inquiry-tel";
 import type { AdBannerItem } from "@/lib/bambi/api-job-mapper";
 import { orpc } from "@/utils/orpc";
-import {
-	AdBannerTextOverlay,
-	AdSlotInquiryContent,
-} from "./ad-banner-text-overlay";
+import { AdBannerLayoutRenderer } from "./ad-banner-layout-renderer";
 
 const bannerHref = (item: AdBannerItem): Route =>
 	`/seeker/jobs/${item.id}` as Route;
@@ -19,6 +17,41 @@ const bannerHref = (item: AdBannerItem): Route =>
 // 좌/우 배너 rail은 슬롯 3개를 항상 렌더한다 — 서버가 그룹당 고정 길이(3칸) 배열을 내려주고
 // 활성 칸만 광고, 나머지는 null이다. 데이터가 없거나(로딩) null인 칸은 자리표시로 채운다.
 const AD_RAIL_SLOT_KEYS = ["slot-1", "slot-2", "slot-3"] as const;
+
+// 빈 광고 슬롯에 들어가는 "광고 등록 문의" 내용. 예전엔 전화번호가 박힌 PNG였고, 번호를
+// 바꾸려면 이미지를 다시 만들어야 했다. 이제 운영자 설정값을 그대로 렌더한다.
+// 세로형은 표시 폭이 약 92px뿐이라 세로쓰기 대신 줄바꿈으로 흘린다 — 번호가 세로로 서면 읽기 어렵다.
+function AdSlotInquiryContent({
+	tel,
+	variant,
+}: {
+	tel: string;
+	variant: "horizontal" | "vertical";
+}) {
+	if (variant === "vertical") {
+		return (
+			<div className="flex size-full flex-col items-center justify-center gap-2 bg-coral-500 p-2 text-center text-white">
+				<Megaphone className="size-4" />
+				<span className="font-bold text-xs leading-tight">광고 등록 문의</span>
+				<span className="font-extrabold text-sm leading-tight tracking-tight">
+					{tel}
+				</span>
+			</div>
+		);
+	}
+
+	return (
+		<div className="flex size-full flex-col items-center justify-center gap-1 bg-coral-500 p-3 text-center text-white">
+			<span className="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
+				<Megaphone className="size-4" />
+				광고 등록 문의
+			</span>
+			<span className="font-extrabold text-lg tracking-tight sm:text-xl">
+				{tel}
+			</span>
+		</div>
+	);
+}
 
 // 빈 광고/카드 슬롯 자리표시 — 실제 배너와 같은 비율/크기로 "광고 등록 문의"를 그리는
 // 클릭 불가 장식(aria-hidden). 8칸이 같은 문구를 반복하므로 스크린리더에는 읽히지 않게 두고,
@@ -65,9 +98,9 @@ interface AdBannerProps {
 // 세로형 광고 배너(우측 사이드용) — 규격 4:9(권장 400×900), 높이는 상단 프리미엄 배너와 같다(h-52).
 // 슬롯 비율은 업로드 규격(lib/bambi/job-ad-banner-spec.ts)과 같아야 배너가 잘리지 않는다.
 // 결제완료된 배너 공고의 이미지를 노출하고, 클릭하면 해당 공고 상세로 이동한다.
-// 문구(item.text)가 있으면 이미지 위에 오버레이로 얹는다 — 오버레이가 absolute inset-0이라
-// Link에 relative가 필요하고(없으면 엉뚱한 조상 기준으로 배치된다), 스크림이 둥근 모서리를
-// 덮지 않도록 overflow-hidden도 함께 둔다.
+// 레이아웃(item.layout)이 있으면 이미지 위에 세로 슬롯 레이아웃을 얹는다 — 오버레이가
+// absolute inset-0이라 Link에 relative가 필요하고(없으면 엉뚱한 조상 기준으로 배치된다),
+// 스크림이 둥근 모서리를 덮지 않도록 overflow-hidden도 함께 둔다.
 export function AdBanner({ className, item }: AdBannerProps) {
 	return (
 		<Link
@@ -87,8 +120,8 @@ export function AdBanner({ className, item }: AdBannerProps) {
 				unoptimized
 				width={400}
 			/>
-			{item.text ? (
-				<AdBannerTextOverlay config={item.text} variant="vertical" />
+			{item.layout ? (
+				<AdBannerLayoutRenderer layout={item.layout} slot="vertical" />
 			) : null}
 		</Link>
 	);
@@ -130,8 +163,8 @@ interface HorizontalAdBannerProps {
 // 폭은 그리드/컬럼(공고 카드와 동일)으로 정해지고 높이는 비율로 따라온다. 슬롯 비율은
 // 업로드 규격(lib/bambi/job-ad-banner-spec.ts)과 같아야 배너가 잘리지 않는다.
 // 클릭하면 광고 공고 상세로 이동한다.
-// 문구(item.text)가 있으면 이미지 위에 오버레이로 얹는다 — 오버레이가 absolute inset-0이라
-// Link에 relative가 필요하다(없으면 엉뚱한 조상 기준으로 배치된다).
+// 레이아웃(item.layout)이 있으면 이미지 위에 가로 슬롯 레이아웃을 얹는다 — 오버레이가
+// absolute inset-0이라 Link에 relative가 필요하다(없으면 엉뚱한 조상 기준으로 배치된다).
 export function HorizontalAdBanner({
 	className,
 	item,
@@ -154,8 +187,8 @@ export function HorizontalAdBanner({
 				unoptimized
 				width={1400}
 			/>
-			{item.text ? (
-				<AdBannerTextOverlay config={item.text} variant="horizontal" />
+			{item.layout ? (
+				<AdBannerLayoutRenderer layout={item.layout} slot="horizontal" />
 			) : null}
 		</Link>
 	);
