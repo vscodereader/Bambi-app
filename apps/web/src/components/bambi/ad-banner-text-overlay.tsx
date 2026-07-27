@@ -11,14 +11,22 @@ import { AdBannerText } from "./ad-banner-text";
 
 // 이미지 위에 글자를 얹으므로 가독성 확보용 스크림이 필요하다. 강도는 프리셋마다 고정한다 —
 // 구인자가 색을 자유 지정하면 대비가 무너진 배너가 나온다.
-// 가로형은 글자가 아래쪽 한 줄에 가로로 눕고(justify-end) 스크림도 아래가 가장 진해서,
-// 글자가 놓이는 구간과 불투명 구간이 정확히 겹친다. 위쪽은 옅게 둬 배너 이미지가 살아난다.
-// coral은 coral-600(#e5304c)이 흰 글자 기준 불투명일 때도 4.32:1이라 4.5:1에 못 미친다 —
-// 아래 세로형과 같은 이유로 한 단계 어두운 coral-700(#c11f39)을 가장 진한 정지점으로 쓴다.
+// 가로형 글자는 아래에 붙지만(justify-end) 패딩·서브라인 때문에 바닥이 아니라 높이의
+// 25~38% 대역(헤드라인이 두 줄로 밀리면 최대 ~56%)에 놓인다. 그래서 "맨 아래가 가장 진한"
+// 그라디언트는 정작 글자가 있는 곳에서 옅어진다 — 아래→위로 곧장 흘리는 스크림은
+// 정지점 색을 아무리 어둡게 잡아도 4.5:1을 보장하지 못한다(바닥에서만 통과한다).
+// 그래서 가장 진한 농도를 55%까지 **유지**하고 그 위로만 투명하게 뺀다. 글자 대역 전체가
+// 균일 구간에 들어와 대비가 아래 농도값 그대로 나오고(보간 구간에 안 걸린다),
+// 위쪽 45%는 비워 배너 이미지가 살아난다. 농도는 세로형과 같은 값을 재사용한다.
+// coral은 coral-600(#e5304c)이 흰 글자 기준 불투명일 때도 4.32:1이라 어떤 농도로도 통과가
+// 불가능해, 세로형과 같은 이유로 한 단계 어두운 coral-700(#c11f39)을 쓴다.
+// ponytail: 55%는 슬롯 비율(7:3)·패딩·서브라인으로 추정한 글자 대역 상한이지 실측이 아니다.
+// 슬롯 높이나 패딩이 바뀌어 글자가 55% 위로 올라가면 다시 보간 구간에 걸린다 — 실기기에서
+// 대역을 재고, 어긋나면 세로형처럼 균일 스크림(inset-0 전체)으로 가는 게 확실한 해법이다.
 const THEME_HORIZONTAL_SCRIM_CLASS_NAMES: Record<AdBannerTheme, string> = {
-	coral: "bg-gradient-to-t from-coral-700/90 via-coral-600/45 to-transparent",
-	dark: "bg-gradient-to-t from-ink-900/85 via-ink-900/40 to-transparent",
-	light: "bg-gradient-to-t from-white/90 via-white/50 to-transparent",
+	coral: "bg-gradient-to-t from-55% from-coral-700/85 to-transparent",
+	dark: "bg-gradient-to-t from-55% from-ink-900/65 to-transparent",
+	light: "bg-gradient-to-t from-55% from-white/70 to-transparent",
 	none: "",
 };
 
@@ -33,7 +41,7 @@ const THEME_HORIZONTAL_SCRIM_CLASS_NAMES: Record<AdBannerTheme, string> = {
 //   ink-900   흰 글자/순백 사진: α=0.585에서 4.52:1(마지노선), 0.65 → 5.65:1, 0.85 → 11.65:1
 //   white     ink-900 글자/순흑 사진: α=0.70 → 8.62:1
 //   coral-600 흰 글자/순백 사진: α=1.0에서도 4.32:1로 **어떤 농도로도 통과 불가**
-// 그래서 coral 세로형만 한 단계 어두운 coral-700을 쓴다(α=0.85 → 4.77:1). ink 계열로 갈아타면
+// 그래서 coral은 가로·세로 모두 한 단계 어두운 coral-700을 쓴다(α=0.85 → 4.77:1). ink 계열로 갈아타면
 // 더 옅게 깔 수 있지만, 92px 슬롯에서 코럴 워시가 사라지면 coral 테마가 dark와 구분되지 않아
 // 구인자가 고른 테마가 무의미해진다 — 브랜드 톤을 지키는 쪽을 택했다.
 // ponytail: coral만 농도가 높아 사진이 많이 가려진다. 더 옅게 가려면 coral-800(#9e1b31)을
