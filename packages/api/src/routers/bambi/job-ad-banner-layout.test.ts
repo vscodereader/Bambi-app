@@ -25,6 +25,7 @@ const layout: AdBannerLayoutInput = {
 				fontSize: 8,
 				id: "block-1",
 				weight: "bold",
+				width: 60,
 				x: 50,
 				y: 50,
 			},

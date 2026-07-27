@@ -14,6 +14,10 @@ const FONT_SIZE_MAX = 20;
 // 스크림 불투명도는 0~100 백분율이다. CSS의 0~1 스케일로 잡으면 기본값 65가 전부 반려된다.
 const SCRIM_OPACITY_MIN = 0;
 const SCRIM_OPACITY_MAX = 100;
+// 문구 블록의 너비(컨테이너 폭 대비 %).
+const WIDTH_MIN = 10;
+const WIDTH_MAX = 100;
+const WIDTH_DEFAULT = 60;
 
 export const AD_BANNER_ANIMATIONS = [
 	"split",
@@ -37,6 +41,9 @@ const textBlockSchema = z
 		fontSize: z.number().min(FONT_SIZE_MIN).max(FONT_SIZE_MAX),
 		id: z.string().min(1).max(64),
 		weight: z.enum(AD_BANNER_TEXT_WEIGHTS),
+		// 기존 저장분에는 width가 없다. strict 스키마에서 필수로 두면 이미 저장된 레이아웃이
+		// parseStoredAdBannerLayout에서 전부 반려돼 운영 중인 배너가 통째로 사라진다.
+		width: z.number().min(WIDTH_MIN).max(WIDTH_MAX).default(WIDTH_DEFAULT),
 		// 좌표는 슬롯 대비 백분율이다. 범위를 벗어나면 렌더에서 슬롯 밖으로 나간다.
 		x: z.number().min(0).max(100),
 		y: z.number().min(0).max(100),
