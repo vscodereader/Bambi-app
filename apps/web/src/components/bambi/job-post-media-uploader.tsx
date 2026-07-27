@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ImageIcon, Trash2, TriangleAlert } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
+import type { AdBannerLayout } from "@/lib/bambi/ad-banner-layout";
 import { getAdBannerUsagesForPreviewTemplate } from "@/lib/bambi/ad-preview-templates";
 import {
 	detectImageSignature,
@@ -23,17 +24,16 @@ import {
 } from "@/lib/bambi/job-ad-banner-spec";
 import {
 	getFileAcceptForUsage,
-	type JobAdBannerTextForm,
 	type JobFormMedia,
 	type JobFormMediaItem,
 } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
-import { AdBannerTextFields } from "./ad-banner-text-fields";
+import { AdBannerEditorLauncher } from "./ad-banner-editor/editor-launcher";
 
 interface JobPostMediaUploaderProps {
-	// 배너 문구·연출 5필드. 필수 prop이라 세 호출부(등록·구인자 수정·운영자 수정)가 모두
-	// 값을 잇도록 강제된다 — 잇지 않으면 저장 시 기존 문구가 null로 지워진다.
-	adBannerText: JobAdBannerTextForm;
+	// 배너 에디터가 만든 레이아웃. 필수 prop이라 세 호출부(등록·구인자 수정·운영자 수정)가
+	// 모두 값을 잇도록 강제된다 — 잇지 않으면 저장 시 기존 배너가 지워진다.
+	adBannerLayout: AdBannerLayout | null;
 	// 선택한 노출 상품 id. 상품마다 쓰는 배너 슬롯이 달라서 어떤 업로드 칸을 열지 결정한다.
 	adProductId: null | string;
 	// false면 새 파일 선택을 숨긴다(운영자 편집: 업로드 인텐트가 조직 멤버십을 요구해 admin은
@@ -41,7 +41,7 @@ interface JobPostMediaUploaderProps {
 	allowUpload?: boolean;
 	error?: string;
 	media: JobFormMedia;
-	onAdBannerTextChange: (value: JobAdBannerTextForm) => void;
+	onAdBannerLayoutChange: (layout: AdBannerLayout) => void;
 	onChange: (media: JobFormMedia) => void;
 }
 
@@ -286,13 +286,59 @@ function AdBannerSlot({
 	);
 }
 
+// 배너 문구 편집 진입. 배너 슬롯 업로드와 같은 조건으로만 보여준다 — 운영자 편집
+// (allowUpload=false)에서 열면 팝업이 /employer/ad-banner-editor로 가는데, 그 라우트는 운영자를
+// 자기 홈으로 되돌려 보내 엉뚱한 새 창만 뜨고 부모는 영영 결과를 기다린다. 운영자는 여기서
+// 배너 이미지도 못 올리므로 버튼 자체를 감춘다.
+function AdBannerTextEditorCard({
+	allowUpload,
+	layout,
+	media,
+	onLayoutChange,
+}: {
+	allowUpload: boolean;
+	layout: AdBannerLayout | null;
+	media: JobFormMedia;
+	onLayoutChange: (next: AdBannerLayout) => void;
+}) {
+	if (!allowUpload) {
+		return null;
+	}
+
+	return (
+		<div className="flex flex-col items-start gap-2 rounded-lg border border-border p-3">
+			<div className="flex flex-col gap-1">
+				<h3 className="font-medium text-sm">배너 문구</h3>
+				<p className="text-muted-foreground text-xs">
+					업로드한 배너 이미지 위에 문구를 원하는 위치로 배치하고 색·크기·연출을
+					고를 수 있습니다. 편집하지 않으면 이미지만 그대로 노출됩니다.
+				</p>
+			</div>
+			{/* 아직 업로드 전인 파일(files)이 이미 올라간 이미지(backgroundUrls)보다
+			    우선한다 — 새 이미지를 고른 직후에도 편집 캔버스가 그 이미지를 쓴다. */}
+			<AdBannerEditorLauncher
+				backgroundUrls={{
+					horizontal: media.adHorizontal?.previewUrl,
+					vertical: media.adVertical?.previewUrl,
+				}}
+				files={{
+					horizontal: media.adHorizontal?.file,
+					vertical: media.adVertical?.file,
+				}}
+				layout={layout}
+				onChange={onLayoutChange}
+			/>
+		</div>
+	);
+}
+
 export function JobPostMediaUploader({
-	adBannerText,
+	adBannerLayout,
 	adProductId,
 	allowUpload = true,
 	error,
 	media,
-	onAdBannerTextChange,
+	onAdBannerLayoutChange,
 	onChange,
 }: JobPostMediaUploaderProps) {
 	// 노출 상품 카탈로그는 JobExposureFields도 같은 키로 조회하므로 react-query가 캐시를
@@ -453,13 +499,11 @@ export function JobPostMediaUploader({
 							/>
 						) : null}
 					</div>
-					<AdBannerTextFields
-						onChange={onAdBannerTextChange}
-						previewImageUrl={{
-							horizontal: media.adHorizontal?.previewUrl,
-							vertical: media.adVertical?.previewUrl,
-						}}
-						value={adBannerText}
+					<AdBannerTextEditorCard
+						allowUpload={allowUpload}
+						layout={adBannerLayout}
+						media={media}
+						onLayoutChange={onAdBannerLayoutChange}
 					/>
 				</>
 			) : null}

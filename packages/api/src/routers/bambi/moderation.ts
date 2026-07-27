@@ -61,6 +61,7 @@ import {
 	applyJobPostUpdate,
 	getJobPostMediaSet,
 	getJobPostMediaStorageKeys,
+	getStoredAdBannerLayout,
 	jobPostInput,
 } from "./jobs";
 
@@ -1007,8 +1008,11 @@ export const moderationRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
+			// 배너 레이아웃도 함께 내린다 — 프리필이 없으면 운영자가 저장하는 순간 기존
+			// 배너 편집물이 사라진다.
 			return {
 				...post,
+				adBannerLayout: await getStoredAdBannerLayout(post.id),
 				media: await getJobPostMediaSet(post.id),
 			};
 		}),

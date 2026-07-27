@@ -193,25 +193,6 @@ export const jobPostMediaUsage = pgEnum("job_post_media_usage", [
 	"ad_vertical",
 ]);
 
-// 프리미엄 광고 배너 문구에 적용하는 애니메이션. 값은
-// apps/web/src/lib/bambi/ad-banner-animations.ts의 AD_BANNER_ANIMATION_VALUES와 1:1이다.
-export const adBannerAnimation = pgEnum("ad_banner_animation", [
-	"blur-in",
-	"decrypt",
-	"typing",
-	"shiny",
-	"gradient",
-]);
-
-// 배너 이미지 위 텍스트 가독성을 위한 오버레이 테마. 구인자가 색을 자유 지정하면 대비가
-// 무너진 배너가 나오므로 프리셋으로 고정한다.
-export const adBannerTheme = pgEnum("ad_banner_theme", [
-	"dark",
-	"light",
-	"coral",
-	"none",
-]);
-
 export const chatAttachmentCategory = pgEnum("chat_attachment_category", [
 	"image",
 	"pdf",
@@ -369,17 +350,6 @@ export const jobPost = pgTable(
 			.default("unpaid")
 			.notNull(),
 		exposureEndsAt: timestamp("exposure_ends_at"),
-		// 프리미엄 광고 배너에 얹는 문구·연출. 전부 null이면 예전처럼 이미지만 렌더한다
-		// (기존 공고 데이터 마이그레이션 불필요). 가로형은 headline이, 세로형은 verticalText가
-		// 있을 때만 오버레이를 그린다 — 세로 슬롯은 표시 폭이 약 92px이라 헤드라인을 잘라 쓰면
-		// 문구가 잘린 채 노출된다.
-		adBannerHeadline: text("ad_banner_headline"),
-		adBannerSubline: text("ad_banner_subline"),
-		adBannerVerticalText: text("ad_banner_vertical_text"),
-		// null이면 애니메이션 없이 정적으로 렌더한다.
-		adBannerAnimation: adBannerAnimation("ad_banner_animation"),
-		// null이면 dark로 렌더한다(DEFAULT_AD_BANNER_THEME).
-		adBannerTheme: adBannerTheme("ad_banner_theme"),
 		// 마지막 끌어올림(점프) 시각. 노출 정렬 키 GREATEST(boosted_at, published_at)의 재료.
 		boostedAt: timestamp("boosted_at"),
 		// 공고 구매 시점에 광고 상품에서 복사한 하루 수동 끌어올리기 횟수 스냅샷. 0 = 미제공.
@@ -449,6 +419,21 @@ export const jobPostMedia = pgTable(
 		uniqueIndex("job_post_media_storage_key_uidx").on(table.storageKey),
 	]
 );
+
+// 프리미엄 광고 배너의 자유 배치 레이아웃. 구조는
+// apps/web/src/lib/bambi/ad-banner-layout.ts의 AdBannerLayout과 같고, 서버 zod가 저장 전에
+// 검증한다. jobPostId가 PK라 공고당 정확히 한 행이며, 행의 존재 여부가 "배너를 편집했는가"다.
+export const jobAdBannerLayout = pgTable("job_ad_banner_layout", {
+	jobPostId: uuid("job_post_id")
+		.primaryKey()
+		.references(() => jobPost.id, { onDelete: "cascade" }),
+	layout: jsonb("layout").notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
 
 export const jobPromotionCampaign = pgTable(
 	"job_promotion_campaign",
