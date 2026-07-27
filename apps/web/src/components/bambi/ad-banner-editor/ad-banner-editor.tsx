@@ -52,6 +52,7 @@ import {
 	clampPercent,
 	createAdBannerTextBlock,
 	formatAdBannerBlockLabel,
+	isAdBannerImageRequired,
 } from "@/lib/bambi/ad-banner-layout";
 import {
 	findJobAdBannerRejection,
@@ -115,6 +116,18 @@ const findBlankBlock = (
 	return null;
 };
 
+// 단색 배경인데 문구가 하나도 없으면 배너가 "그냥 색 사각형"이 된다 — 렌더러는 색을 그리고
+// 업로드 이미지는 그 아래로 완전히 가려지므로, 광고비를 낸 슬롯이 아무 정보도 담지 못한다.
+// 단색 배경은 이 에디터에서만 만들 수 있어 여기가 유일한 관문이다(서버까지 막지 않는 이유:
+// 피해가 광고주 자신에게만 돌아가고, keep/upsert가 섞이는 저장 경로에서 판정을 한 벌 더
+// 두면 두 판정이 어긋날 위험이 이득보다 크다).
+const findEmptyColorSlot = (layout: AdBannerLayout): AdBannerSlot | null =>
+	SLOT_ORDER.find(
+		(slot) =>
+			layout[slot].background.type === "color" &&
+			layout[slot].texts.length === 0
+	) ?? null;
+
 // 이미지 슬롯이 "등록할 수 없습니다"라고 띄우는 사유(비율·최소 크기)는 실제 반려 사유다.
 // 저장 가드가 존재 여부만 보면, 경고를 무시하고 저장한 뒤 공고 제출 시점에 다른 창의 다른
 // 문구로 막히게 된다 — 이 리디자인이 없애려던 흐름이다. 빈 문구와 같은 자리에서 잡는다.
@@ -124,16 +137,21 @@ const REJECTION_MESSAGES: Record<"aspect" | "size", string> = {
 };
 
 const findRejectedImage = (
+	layout: AdBannerLayout,
 	media: AdBannerEditorMedia
 ): { message: string; slot: AdBannerSlot } | null => {
 	for (const slot of SLOT_ORDER) {
 		const { mediaKey, usage } = SLOT_META[slot];
 		const item = media[mediaKey];
-		const rejection = findJobAdBannerRejection({
-			height: item?.height,
-			usage,
-			width: item?.width,
-		});
+		// 배경이 단색이면 이 이미지는 배너에 나오지 않는다. 보이지도 않는 이미지의 비율·크기로
+		// 저장을 막으면 단색을 고른 구인자에게 또 다른 막다른 길이 된다.
+		const rejection = isAdBannerImageRequired(layout, usage)
+			? findJobAdBannerRejection({
+					height: item?.height,
+					usage,
+					width: item?.width,
+				})
+			: null;
 
 		if (rejection) {
 			return {
@@ -175,7 +193,7 @@ export function AdBannerEditor({
 	// 저장 가드가 잡은 사유. 토스트로만 알리면 스크롤 밖의 어느 칸이 문제인지 알 수 없어,
 	// 문제가 난 자리 옆에 붙이고 그 컨트롤로 포커스를 옮긴다.
 	const [saveError, setSaveError] = useState<{
-		field: "image" | "text";
+		field: "background" | "image" | "text";
 		message: string;
 	} | null>(null);
 	const imageInputRef = useRef<HTMLInputElement>(null);
@@ -256,17 +274,27 @@ export function AdBannerEditor({
 	const slotMedia = media[meta.mediaKey];
 
 	// saveError는 실패할 때마다 새 객체라, 같은 사유가 이어져도 포커스가 다시 옮겨 간다.
+	// 배경 사유는 옮길 컨트롤이 없다(ToggleGroup은 포커스 대상이 아니고 고칠 곳이 문구·배경
+	// 둘 다다) — 메시지를 배경 설정 바로 아래 aria-live 영역에 띄우는 것으로 대신한다.
 	useEffect(() => {
 		if (!saveError) {
 			return;
 		}
 
-		const target =
-			saveError.field === "image"
-				? imageInputRef.current
-				: contentInputRef.current;
-		target?.focus();
+		const target = {
+			background: null,
+			image: imageInputRef,
+			text: contentInputRef,
+		}[saveError.field];
+		target?.current?.focus();
 	}, [saveError]);
+
+	// 이 슬롯이 배너 이미지를 실제로 요구하는가. 상품이 그 슬롯을 쓰고(requiredUsages), 배경이
+	// 이미지일 때만이다 — 단색 배경이면 올린 이미지가 배너에 나오지 않으므로 필수가 아니다.
+	// 저장 가드·슬롯 탭 경고·"필수" 배지가 전부 이 하나를 봐야 서로 어긋나지 않는다.
+	const isSlotImageRequired = (candidate: AdBannerSlot): boolean =>
+		requiredUsages.includes(SLOT_META[candidate].usage) &&
+		isAdBannerImageRequired(layout, SLOT_META[candidate].usage);
 
 	const updateSlot = (patch: Partial<AdBannerSlotLayout>) => {
 		setLayout((prev) => ({ ...prev, [slot]: { ...prev[slot], ...patch } }));
@@ -332,14 +360,10 @@ export function AdBannerEditor({
 
 	const handleSave = () => {
 		// 필수 배너 이미지가 없으면 공고 제출 단계에서 반려된다. 그 슬롯으로 옮겨 놓고 막는다.
-		const missing = SLOT_ORDER.find((candidate) => {
-			const candidateMeta = SLOT_META[candidate];
-
-			return (
-				requiredUsages.includes(candidateMeta.usage) &&
-				!media[candidateMeta.mediaKey]
-			);
-		});
+		const missing = SLOT_ORDER.find(
+			(candidate) =>
+				isSlotImageRequired(candidate) && !media[SLOT_META[candidate].mediaKey]
+		);
 
 		if (missing) {
 			setSlot(missing);
@@ -350,7 +374,7 @@ export function AdBannerEditor({
 			return;
 		}
 
-		const rejected = findRejectedImage(media);
+		const rejected = findRejectedImage(layout, media);
 
 		if (rejected) {
 			setSlot(rejected.slot);
@@ -366,6 +390,18 @@ export function AdBannerEditor({
 			setSaveError({
 				field: "text",
 				message: "내용이 비어 있습니다. 채우거나 문구를 삭제해 주십시오.",
+			});
+			return;
+		}
+
+		const emptyColor = findEmptyColorSlot(layout);
+
+		if (emptyColor) {
+			setSlot(emptyColor);
+			setSaveError({
+				field: "background",
+				message:
+					"단색 배경만 있고 문구가 없으면 배너가 빈 색 사각형으로 노출됩니다. 문구를 추가하거나 배경을 이미지로 되돌려 주십시오.",
 			});
 			return;
 		}
@@ -390,7 +426,7 @@ export function AdBannerEditor({
 					{SLOT_ORDER.map((value) => {
 						const option = SLOT_META[value];
 						const incomplete =
-							requiredUsages.includes(option.usage) && !media[option.mediaKey];
+							isSlotImageRequired(value) && !media[option.mediaKey];
 
 						return (
 							<ToggleGroupItem key={value} value={value}>
@@ -483,13 +519,17 @@ export function AdBannerEditor({
 						<CardContent className="flex flex-col gap-4">
 							<EditorImageSlot
 								error={saveError?.field === "image" ? saveError.message : null}
+								// 단색 배경이면 이 이미지는 배너에 나오지 않는다 — "필수" 배지도,
+								// 비율·크기 반려 경고도 띄우지 않는다(둘 다 거짓말이 된다).
+								// 슬롯 자체는 남긴다: 배경을 이미지로 되돌릴 때 다시 쓴다.
+								imageUsed={isAdBannerImageRequired(layout, meta.usage)}
 								inputRef={imageInputRef}
 								item={slotMedia}
 								onChange={(item) => {
 									setSaveError(null);
 									setMedia((prev) => ({ ...prev, [meta.mediaKey]: item }));
 								}}
-								required={requiredUsages.includes(meta.usage)}
+								required={isSlotImageRequired(slot)}
 								usage={meta.usage}
 							/>
 
@@ -546,8 +586,17 @@ export function AdBannerEditor({
 								</div>
 								<FieldHint>
 									단색을 고르면 올린 이미지 대신 이 색이 배너 바탕이 됩니다.
-									이미지는 그대로 보관됩니다.
+									이미지는 그대로 보관되고, 이미지 등록도 필수가 아닙니다.
 								</FieldHint>
+								{/* 리전은 빈 채로 늘 렌더해 둔다 — 갱신 순간에 display:none이면
+								    화면 낭독기가 삽입을 놓친다(EditorImageSlot과 같은 패턴). */}
+								<div aria-live="polite">
+									{saveError?.field === "background" ? (
+										<p className="text-destructive text-xs">
+											{saveError.message}
+										</p>
+									) : null}
+								</div>
 							</div>
 
 							{slotLayout.background.type === "image" ? (

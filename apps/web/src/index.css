@@ -21,6 +21,11 @@
 	--border: #eef0f3;
 	--input: #e5e7eb;
 	--ring: #f94b63;
+	/* 글리치 색수차 두 겹의 색. 색수차를 흉내 내는 효과 전용 색이라 브랜드 팔레트에 대응이 없다.
+	   복제본의 글자색이 아니라 text-shadow 색으로 쓰이므로(원본 React Bits와 같다) 유틸리티가
+	   아니라 CSS 변수로 소비된다 — tokens.css의 --ink-900을 스크림 색으로 쓰는 것과 같은 방식이다. */
+	--glitch-cyan: oklch(0.8 0.15 200);
+	--glitch-red: oklch(0.7 0.2 25);
 	/* 밤비 DS: --radius-lg(buttons·inputs·cards)=16px. 이 16px를 base로 두면
 	   Tailwind 반경 스케일(sm 12·md 14·lg 16·xl 20·2xl 24)이 DS 스케일에 그대로 스냅된다. */
 	--radius: 1rem;
@@ -56,50 +61,162 @@
 	--color-red-500: var(--red-500);
 	--color-red-600: var(--red-600);
 
-	/* 글리치 잔상 두 겹의 색. 색수차를 흉내 내는 효과 전용 색이라 브랜드 팔레트에 대응이 없어
-	   여기서 토큰으로 정의한다(컴포넌트에 raw oklch를 박지 않기 위함). */
-	--color-glitch-cyan: oklch(0.8 0.15 200);
-	--color-glitch-red: oklch(0.7 0.2 25);
+	/* 프리미엄 광고 배너 글리치 연출. React Bits GlitchText 이식본이다 — ::before/::after 복제본에
+	   배경색을 깔아 원본을 가린 뒤 clip-path로 가로 띠만 남겨 어긋나게 보여준다.
+	   한 사이클 5s = 2s 글리치 버스트(0~40%) + 3s 정지(40~100%)를 무한 반복한다. 정지 3s는
+	   lib/bambi/ad-banner-layout.ts의 AD_BANNER_ANIMATION_PAUSE_MS(split·typing·blur가 쓰는 값)를
+	   손으로 맞춘 것이다 — 순수 CSS라 import가 안 되니 한쪽을 바꾸면 다른 쪽도 바꿔야 한다.
+	   버스트를 사이클의 40%로 묶은 것이 핵심이다: 원본의 쉼 없는 infinite는 광고 슬롯이 최대
+	   8칸까지 동시에 뜨는 마켓플레이스 홈에서 상시 리페인트가 된다.
+	   정지 구간을 clip-path: inset(100% 0 0 0)으로 둔 것도 핵심이다. 복제본은 배경색을 깔고 있어
+	   잘리지 않은 채 남으면 두 겹이 원본 문구를 덮어 글자가 안 읽힌다(예전에 별도 -out 트랙을
+	   뒤에 겹쳐 막던 사고다 — 감춤이 키프레임 안으로 들어와 그 트랙은 더 필요 없다).
+	   40% 직후에 감춤 keyframe을 따로 세운 이유: step-end는 구간 끝에서만 값이 바뀌므로 40%를
+	   곧장 100%로 이으면 마지막 띠가 정지 3초 내내 화면에 남는다.
 
-	/* 프리미엄 광고 배너 글리치 연출. ::before/::after 복제본을 clip-path로 잘라 어긋나게 보여준다.
-	   반복을 3·2회(약 6초)로 유한하게 둔 것이 핵심이다 — 원본의 infinite는 광고 슬롯이 최대 8칸까지
-	   동시에 뜨는 마켓플레이스 홈에서 상시 리페인트가 된다.
-	   두 트랙 모두 6s에 끝나는데, 그 순간 clip-path가 사라지면(fill-mode none) 잘리지 않은 복제본
-	   두 겹이 원본 문구를 영구히 덮는다. 그래서 6s 뒤부터 forwards로 복제본을 완전히 걷어내는
-	   트랙(ad-banner-glitch-out)을 뒤에 겹친다 — 재생 중 모습은 위 keyframes 그대로다.
-	   (마지막 keyframe만 감춤 값으로 바꾸면 매 반복의 끝 구간이 사라지며 연출이 달라진다.) */
-	--animate-glitch-before:
-		ad-banner-glitch 2s steps(12, end) 3,
-		ad-banner-glitch-out 1ms linear 6s forwards;
-	--animate-glitch-after:
-		ad-banner-glitch 3s steps(12, end) 2,
-		ad-banner-glitch-out 1ms linear 6s forwards;
+	   타이밍·간격이 이 연출의 질감 전부다. 원본은 linear + 키프레임 5% 간격(=before 100ms,
+	   after 150ms)이라 띠가 눈에 보이기 전에 다음 자리로 튄다. 예전 값은 키프레임이 40% 구간에
+	   6개뿐(=400ms 간격)이었고 steps(12, end)가 그 400ms를 12칸으로 쪼개 보간했다 — 한 칸이
+	   글자 높이의 1%도 안 돼 사실상 linear가 되고, 결국 "두꺼운 색 띠가 위아래로 스르륵
+	   미끄러지는" 그림이 됐다(글리치가 아니라 와이프다). 그래서
+	   (1) 버스트 구간의 키프레임을 원본과 같은 100ms(before)·125ms(after) 간격으로 촘촘히 깔고,
+	   (2) 타이밍을 step-end로 바꿔 보간을 아예 없앴다. 값은 다음 키프레임까지 그대로 붙들었다가
+	   툭 튄다 = 글리치. 덤으로 버스트 2초 동안 리페인트가 20·16회로 끝나 8칸 슬롯에서도 싸다.
+	   정지 구간에는 키프레임이 없어 리페인트가 0이다. */
+	--animate-glitch-before: ad-banner-glitch-before 5s step-end infinite;
+	--animate-glitch-after: ad-banner-glitch-after 5s step-end infinite;
 
-	@keyframes ad-banner-glitch {
+	/* 띠 값 6종은 원본 그대로다(20/50 · 10/60 · 15/55 · 25/35 · 30/40 · 40/20 — 모두 top+bottom
+	   < 100%라 빈 프레임이 없고, 모두 글자 높이 10~80% 안이라 leading 여백만 자르는 프레임이 없다).
+	   원본은 두 복제본이 같은 keyframes를 다른 duration(2s·3s)으로 돌려 위상이 계속 어긋난다.
+	   우리는 정지 구간을 맞춰야 해서 duration을 5s로 통일할 수밖에 없으므로, 대신 트랙마다
+	   키프레임 간격(100ms·125ms)과 값 순서를 다르게 깔아 어긋남을 만든다. 두 순서는 버스트
+	   32개 구간 전부에서 값이 서로 다르도록 짰다 — 같은 띠가 겹치면 위에 그려지는 ::after가
+	   ::before를 완전히 가려(둘 다 불투명 배경) 그 순간 한 겹이 사라진 것처럼 보인다. */
+	@keyframes ad-banner-glitch-before {
 		0% {
 			clip-path: inset(20% 0 50% 0);
 		}
+		2% {
+			clip-path: inset(10% 0 60% 0);
+		}
+		4% {
+			clip-path: inset(15% 0 55% 0);
+		}
+		6% {
+			clip-path: inset(25% 0 35% 0);
+		}
+		8% {
+			clip-path: inset(30% 0 40% 0);
+		}
+		10% {
+			clip-path: inset(40% 0 20% 0);
+		}
+		12% {
+			clip-path: inset(10% 0 60% 0);
+		}
+		14% {
+			clip-path: inset(15% 0 55% 0);
+		}
+		16% {
+			clip-path: inset(25% 0 35% 0);
+		}
+		18% {
+			clip-path: inset(30% 0 40% 0);
+		}
 		20% {
+			clip-path: inset(20% 0 50% 0);
+		}
+		22% {
+			clip-path: inset(10% 0 60% 0);
+		}
+		24% {
+			clip-path: inset(15% 0 55% 0);
+		}
+		26% {
+			clip-path: inset(25% 0 35% 0);
+		}
+		28% {
+			clip-path: inset(30% 0 40% 0);
+		}
+		30% {
+			clip-path: inset(40% 0 20% 0);
+		}
+		32% {
+			clip-path: inset(20% 0 50% 0);
+		}
+		34% {
+			clip-path: inset(10% 0 60% 0);
+		}
+		36% {
+			clip-path: inset(15% 0 55% 0);
+		}
+		38% {
+			clip-path: inset(25% 0 35% 0);
+		}
+		40% {
+			clip-path: inset(30% 0 40% 0);
+		}
+		40.01%,
+		100% {
+			clip-path: inset(100% 0 0 0);
+		}
+	}
+
+	@keyframes ad-banner-glitch-after {
+		0% {
+			clip-path: inset(40% 0 20% 0);
+		}
+		2.5% {
+			clip-path: inset(20% 0 50% 0);
+		}
+		5% {
+			clip-path: inset(30% 0 40% 0);
+		}
+		7.5% {
+			clip-path: inset(10% 0 60% 0);
+		}
+		10% {
+			clip-path: inset(30% 0 40% 0);
+		}
+		12.5% {
+			clip-path: inset(20% 0 50% 0);
+		}
+		15% {
+			clip-path: inset(40% 0 20% 0);
+		}
+		17.5% {
+			clip-path: inset(15% 0 55% 0);
+		}
+		20% {
+			clip-path: inset(25% 0 35% 0);
+		}
+		22.5% {
+			clip-path: inset(30% 0 40% 0);
+		}
+		25% {
+			clip-path: inset(10% 0 60% 0);
+		}
+		27.5% {
+			clip-path: inset(40% 0 20% 0);
+		}
+		30% {
+			clip-path: inset(15% 0 55% 0);
+		}
+		32.5% {
+			clip-path: inset(25% 0 35% 0);
+		}
+		35% {
+			clip-path: inset(40% 0 20% 0);
+		}
+		37.5% {
 			clip-path: inset(30% 0 40% 0);
 		}
 		40% {
 			clip-path: inset(10% 0 60% 0);
 		}
-		60% {
-			clip-path: inset(40% 0 20% 0);
-		}
-		80% {
-			clip-path: inset(15% 0 55% 0);
-		}
+		40.01%,
 		100% {
-			clip-path: inset(25% 0 35% 0);
-		}
-	}
-
-	/* 연출이 끝난 뒤의 정지 상태. 복제본을 통째로 잘라내 원본 문구만 남긴다. */
-	@keyframes ad-banner-glitch-out {
-		from,
-		to {
 			clip-path: inset(100% 0 0 0);
 		}
 	}

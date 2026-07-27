@@ -103,6 +103,31 @@ export const parseStoredAdBannerLayout = (
 	return parsed.success ? parsed.data : null;
 };
 
+// usage(업로드 축) ↔ 슬롯(레이아웃 축) 대응. 웹의 SLOT_FOR_USAGE와 같은 표다.
+const SLOT_FOR_USAGE = {
+	ad_horizontal: "horizontal",
+	ad_vertical: "vertical",
+} as const;
+
+// 이 슬롯의 배너 이미지가 실제로 필요한가. 배경이 단색이면 렌더러가 색으로 덮어 업로드
+// 이미지가 화면에 전혀 나오지 않으므로 요구하지 않는다. 웹의 isAdBannerImageRequired와 판정이
+// 1:1로 같아야 한다 — 한쪽만 열리면 폼은 통과시키는데 서버가 반려하는(또는 그 반대) 막다른
+// 길이 생긴다.
+// 입력이 unknown인 이유: 호출부가 이미 파싱된 레이아웃(후보 필터)과 저장 직전의 원본
+// (create/update)을 섞어 넘긴다. 형태를 못 읽으면 "레이아웃 없음"과 같이 취급해 이미지를
+// 요구한다 — 모르면 막는 쪽이다.
+export const isAdBannerImageRequired = (
+	layout: unknown,
+	usage: "ad_horizontal" | "ad_vertical"
+): boolean => {
+	const parsed = adBannerLayoutSchema.safeParse(layout);
+
+	return (
+		!parsed.success ||
+		parsed.data[SLOT_FOR_USAGE[usage]].background.type === "image"
+	);
+};
+
 // 검수용 문구 수집. 두 슬롯을 모두 훑어야 한쪽 슬롯 문구가 금칙어 검사를 빠져나가지 않는다.
 // 저장된 jsonb를 다시 읽는 경로에서는 형태를 신뢰할 수 없으므로 파싱에 실패하면 던지지 않고
 // 빈 배열을 돌려 호출부가 그냥 넘어가게 한다(그 경우 렌더러도 같은 이유로 아무것도 그리지 않는다).

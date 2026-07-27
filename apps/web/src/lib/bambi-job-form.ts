@@ -1,4 +1,7 @@
-import type { AdBannerLayout } from "./bambi/ad-banner-layout";
+import {
+	type AdBannerLayout,
+	isAdBannerImageRequired,
+} from "./bambi/ad-banner-layout";
 import {
 	isAllowedJobAdBannerAspect,
 	isAllowedJobAdBannerSize,
@@ -264,22 +267,31 @@ export const emptyJobFormMedia: JobFormMedia = {
 
 // 프리미엄 광고는 가로형·세로형 배너를 모두 요구한다. requiredUsages 중 media에 없는
 // 슬롯을 돌려준다("ad_horizontal"은 adHorizontal, "ad_vertical"은 adVertical 부재 시 누락).
+// layout은 필수 여부 자체를 가른다 — 배경이 단색인 슬롯은 이미지가 화면에 나오지 않으므로
+// 누락으로 보지 않는다(isAdBannerImageRequired). optional이 아니라 필수 + nullable인 이유는
+// toJobAdBannerLayoutForm과 같다: 레이아웃을 잊고 넘긴 호출부가 조용히 옛 동작으로 돌아가지
+// 않게 한다.
 export const getMissingAdBannerUsages = (
 	media: JobFormMedia,
-	requiredUsages: JobAdBannerUsage[]
+	requiredUsages: JobAdBannerUsage[],
+	layout: AdBannerLayout | null
 ): JobAdBannerUsage[] =>
-	requiredUsages.filter((usage) =>
-		usage === "ad_horizontal" ? !media.adHorizontal : !media.adVertical
+	requiredUsages.filter(
+		(usage) =>
+			isAdBannerImageRequired(layout, usage) &&
+			(usage === "ad_horizontal" ? !media.adHorizontal : !media.adVertical)
 	);
 
 // 유료 상품이 필수 배너 슬롯을 요구하는데 누락됐으면 에러 문구를 돌려준다.
 // media가 undefined여도 필수가 있으면 두 슬롯 모두 누락으로 잡힌다.
 const getRequiredBannerError = ({
 	adProductId,
+	layout,
 	media,
 	requiredBannerUsages = [],
 }: {
 	adProductId: string | null;
+	layout: AdBannerLayout | null;
 	media?: JobFormMedia;
 	requiredBannerUsages?: JobAdBannerUsage[];
 }): string | undefined => {
@@ -289,7 +301,8 @@ const getRequiredBannerError = ({
 
 	return getMissingAdBannerUsages(
 		media ?? emptyJobFormMedia,
-		requiredBannerUsages
+		requiredBannerUsages,
+		layout
 	).length > 0
 		? "프리미엄 광고는 가로형·세로형 광고 배너 이미지를 모두 등록해야 합니다."
 		: undefined;
@@ -595,9 +608,17 @@ const getDescriptionBlockError = (
 
 const getAdBannerError = (
 	item: JobFormMediaItem | null,
-	usage: JobAdBannerUsage
+	usage: JobAdBannerUsage,
+	layout: AdBannerLayout | null
 ): string | undefined => {
 	if (!item) {
+		return;
+	}
+
+	// 배경이 단색이면 이 이미지는 배너에 나오지 않는다. 보이지도 않는 이미지의 비율·최소 크기로
+	// 저장을 막으면 단색을 고른 구인자가 또 다른 막다른 길에 걸린다(형식·용량은 실제 업로드되는
+	// 바이트라 위에서 그대로 검증한다).
+	if (!isAdBannerImageRequired(layout, usage)) {
 		return;
 	}
 
@@ -634,7 +655,10 @@ const getAdBannerError = (
 	return;
 };
 
-const getMediaError = (media?: JobFormMedia): string | undefined => {
+const getMediaError = (
+	media: JobFormMedia | undefined,
+	layout: AdBannerLayout | null
+): string | undefined => {
 	if (!media) {
 		return;
 	}
@@ -676,8 +700,8 @@ const getMediaError = (media?: JobFormMedia): string | undefined => {
 	}
 
 	return (
-		getAdBannerError(media.adHorizontal, "ad_horizontal") ??
-		getAdBannerError(media.adVertical, "ad_vertical")
+		getAdBannerError(media.adHorizontal, "ad_horizontal", layout) ??
+		getAdBannerError(media.adVertical, "ad_vertical", layout)
 	);
 };
 
@@ -873,9 +897,10 @@ export const validateJobForm = (
 	const adProductId = isFreeExposure ? null : form.adProductId;
 	// 형식·크기 오류가 있으면 그것이 우선. 없을 때만 유료 상품의 필수 배너 누락을 본다.
 	const mediaError =
-		getMediaError(options.media) ??
+		getMediaError(options.media, form.adBannerLayout) ??
 		getRequiredBannerError({
 			adProductId,
+			layout: form.adBannerLayout,
 			media: options.media,
 			requiredBannerUsages: options.requiredBannerUsages,
 		});

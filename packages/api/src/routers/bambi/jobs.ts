@@ -32,6 +32,7 @@ import {
 	type AdBannerLayoutInput,
 	adBannerLayoutSchema,
 	collectLayoutModerationText,
+	isAdBannerImageRequired,
 	parseStoredAdBannerLayout,
 } from "../../services/bambi-ad-banner-layout";
 import {
@@ -43,6 +44,7 @@ import {
 	type JobExposureType,
 	type ListingSectionExposureType,
 	previewTemplateToExposureType,
+	requireDirectionImage,
 	requiredAdBannerUsagesForExposureType,
 } from "../../services/bambi-ad-exposure";
 import { discountedAdAmount } from "../../services/bambi-ad-pricing";
@@ -532,11 +534,16 @@ const getJobPostMediaUsages = async (
 // 프리미엄(배너형) 광고 공고는 상단·좌측 슬롯용 가로형과 우측 슬롯용 세로형 배너를 모두
 // 갖춰야 한다. 통합 후 한 공고가 세 슬롯 모두의 후보가 되므로, 어느 한쪽이 빠지면 그 슬롯이
 // 빈 채로 노출된다. 최종 저장될 미디어 usage에 필요한 배너 규격이 모두 있는지 검증한다.
+// layout은 최종 저장될 레이아웃(upsert면 새 값, keep이면 저장분)이다 — 배경이 단색인 슬롯은
+// 업로드 이미지가 렌더에 쓰이지 않아 요구하지 않는다.
 const requireAdBannerMedia = (
 	exposureType: string,
-	usages: JobPostMediaUsage[]
+	usages: JobPostMediaUsage[],
+	layout: unknown
 ): void => {
-	const required = requiredAdBannerUsagesForExposureType(exposureType);
+	const required = requiredAdBannerUsagesForExposureType(exposureType).filter(
+		(usage) => isAdBannerImageRequired(layout, usage)
+	);
 
 	if (required.length === 0) {
 		return;
@@ -744,10 +751,9 @@ export const applyJobPostUpdate = async ({
 		paymentMethod: data.paymentMethod,
 	});
 	const layoutWrite = normalizeAdBannerLayout(data, exposure.exposureType);
-	const preparedContent = prepareJobPostContent(
-		data,
-		await resolveModeratedLayout(layoutWrite, existing.id)
-	);
+	// 최종 저장될 레이아웃. 검수(금칙어)와 배너 이미지 필수 판정이 같은 값을 봐야 한다.
+	const finalLayout = await resolveModeratedLayout(layoutWrite, existing.id);
+	const preparedContent = prepareJobPostContent(data, finalLayout);
 	// 노출 상품·기간이 바뀌면 재결제가 필요하다. 유료 전환/변경은 미결제로 되돌리고,
 	// 무료 전환은 결제 게이트 없이 즉시 게시(paid)로 둔다(생성 시 무료 공고와 동일 규칙).
 	const exposureChanged =
@@ -772,7 +778,8 @@ export const applyJobPostUpdate = async ({
 		exposure.exposureType,
 		mediaRows
 			? mediaRows.map((row) => row.usage)
-			: await getJobPostMediaUsages(existing.id)
+			: await getJobPostMediaUsages(existing.id),
+		finalLayout
 	);
 	const riskDetected = preparedContent.hasRiskFlags;
 	const status: JobPostStatus = riskDetected
@@ -1148,22 +1155,14 @@ export const jobsRouter = {
 			(rotationRow?.minutes ?? DEFAULT_AD_ROTATION_MINUTES) * 60 * 1000;
 		const groups = groupAdBannerJobs(rows, now, rotationMs);
 
-		// 활성 칸의 광고가 그 슬롯 방향(좌·중=가로 7:3 / 우=세로 4:9) 배너를 안 올렸으면
-		// 커버로 폴백하지 않고 그 칸을 비운다(자리표시). 노출도 impression 기록도 하지 않는다.
-		// 등록 흐름상 프리미엄은 두 방향이 모두 필수라, 이 홀은 한 방향만 가진 레거시 공고에서만 생긴다.
-		type AdBannerSlotRow = (typeof rows)[number];
-		const requireDirectionImage = (
-			items: (AdBannerSlotRow | null)[],
-			key: "adHorizontal" | "adVertical"
-		): (AdBannerSlotRow | null)[] =>
-			items.map((item) => (item?.[key] ? item : null));
+		// 슬롯 방향 배너가 없는 후보는 비운다(단색 배경 슬롯은 예외 — requireDirectionImage 참고).
 		const directedGroups = {
-			leftBanner: requireDirectionImage(groups.leftBanner, "adHorizontal"),
+			leftBanner: requireDirectionImage(groups.leftBanner, "ad_horizontal"),
 			premiumBanner: requireDirectionImage(
 				groups.premiumBanner,
-				"adHorizontal"
+				"ad_horizontal"
 			),
-			rightBanner: requireDirectionImage(groups.rightBanner, "adVertical"),
+			rightBanner: requireDirectionImage(groups.rightBanner, "ad_vertical"),
 		};
 
 		await recordAdBannerImpressions({
@@ -1437,17 +1436,17 @@ export const jobsRouter = {
 				paymentMethod: input.paymentMethod,
 			});
 			const layoutWrite = normalizeAdBannerLayout(input, exposure.exposureType);
-			const preparedContent = prepareJobPostContent(
-				input,
-				await resolveModeratedLayout(layoutWrite, null)
-			);
+			// 최종 저장될 레이아웃. 검수(금칙어)와 배너 이미지 필수 판정이 같은 값을 봐야 한다.
+			const finalLayout = await resolveModeratedLayout(layoutWrite, null);
+			const preparedContent = prepareJobPostContent(input, finalLayout);
 			const mediaRows = requireValidJobPostMediaSet({
 				media,
 				organizationId: input.organizationId,
 			});
 			requireAdBannerMedia(
 				exposure.exposureType,
-				mediaRows.map((row) => row.usage)
+				mediaRows.map((row) => row.usage),
+				finalLayout
 			);
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status = getInitialJobPostStatus({

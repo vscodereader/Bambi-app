@@ -39,6 +39,7 @@ const PREVIEW_WIDTH_CLASS_NAMES: Record<JobAdBannerUsage, string> = {
 // 알려 주지 않으면 구인자는 공고를 제출할 때까지 이유를 모른다.
 export function EditorImageSlot({
 	error,
+	imageUsed,
 	inputRef,
 	item,
 	onChange,
@@ -46,6 +47,9 @@ export function EditorImageSlot({
 	usage,
 }: {
 	error?: null | string;
+	// 이 이미지가 실제 배너에 쓰이는가(=배경이 이미지인가). 단색 배경이면 화면에 나오지
+	// 않으므로 비율·최소 크기 반려 경고를 띄우지 않는다 — 저장 가드도 같은 이유로 통과시킨다.
+	imageUsed: boolean;
 	inputRef?: RefObject<HTMLInputElement | null>;
 	item: JobFormMediaItem | null;
 	onChange: (item: JobFormMediaItem | null) => void;
@@ -62,7 +66,9 @@ export function EditorImageSlot({
 			: null;
 	// 저장 가드(ad-banner-editor)와 같은 판정 함수를 쓴다. 여기서 직접 계산하면 경고는 뜨는데
 	// 저장은 통과하는 어긋남이 다시 생긴다.
-	const rejection = findJobAdBannerRejection({ ...measured, usage });
+	const rejection = imageUsed
+		? findJobAdBannerRejection({ ...measured, usage })
+		: null;
 
 	const handleFile = async (file: File) => {
 		// altText는 교체해도 이어 간다 — 사진만 바꾸는 경우가 대부분이라 매번 다시 쓰게 하면 는다.

@@ -4,6 +4,7 @@ import {
 	groupAdBannerJobs,
 	isExposureActive,
 	PREMIUM_BANNER_MAX_SLOTS,
+	requireDirectionImage,
 	requiredAdBannerUsagesForExposureType,
 	SIDE_BANNER_MAX_SLOTS,
 } from "./bambi-ad-exposure";
@@ -320,5 +321,68 @@ describe("requiredAdBannerUsagesForExposureType", () => {
 		for (const type of ["standard", "special", "urgent", "recommended", ""]) {
 			expect(requiredAdBannerUsagesForExposureType(type)).toEqual([]);
 		}
+	});
+});
+
+describe("requireDirectionImage", () => {
+	const imageLayout = {
+		horizontal: {
+			background: { type: "image" },
+			scrim: { enabled: true, opacity: 65 },
+			texts: [],
+		},
+		version: 1,
+		vertical: {
+			background: { type: "image" },
+			scrim: { enabled: true, opacity: 65 },
+			texts: [],
+		},
+	};
+	const colorLayout = {
+		...imageLayout,
+		horizontal: {
+			...imageLayout.horizontal,
+			background: { color: "#1f2937", type: "color" },
+		},
+	};
+	const media = { storageKey: "ad-h.png" };
+
+	it("방향 이미지가 없으면 후보에서 비운다", () => {
+		// 종전 동작 보존 — 이미지 배경인데 이미지가 없으면 커버로 폴백하지 않고 자리표시로 둔다.
+		expect(
+			requireDirectionImage(
+				[{ adHorizontal: null, id: "a", layout: imageLayout }],
+				"ad_horizontal"
+			)
+		).toEqual([null]);
+		// 레이아웃을 편집한 적 없는 공고(layout null)도 마찬가지다.
+		expect(
+			requireDirectionImage(
+				[{ adHorizontal: null, id: "a", layout: null }],
+				"ad_horizontal"
+			)
+		).toEqual([null]);
+	});
+
+	it("배경이 단색인 슬롯은 이미지가 없어도 후보로 남는다", () => {
+		// 여기서 떨어뜨리면 저장까지 마친 단색 배너가 영영 노출되지 않고 impression도 없다.
+		const row = { adHorizontal: null, id: "a", layout: colorLayout };
+
+		expect(requireDirectionImage([row], "ad_horizontal")).toEqual([row]);
+	});
+
+	it("한쪽만 단색이면 반대쪽은 여전히 이미지를 요구한다", () => {
+		const row = { adVertical: null, id: "a", layout: colorLayout };
+
+		expect(requireDirectionImage([row], "ad_vertical")).toEqual([null]);
+	});
+
+	it("방향 이미지가 있으면 그대로 남고 빈 칸(null)은 그대로 둔다", () => {
+		const row = { adHorizontal: media, id: "a", layout: imageLayout };
+
+		expect(requireDirectionImage([row, null], "ad_horizontal")).toEqual([
+			row,
+			null,
+		]);
 	});
 });
