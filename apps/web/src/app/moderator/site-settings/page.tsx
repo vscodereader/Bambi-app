@@ -41,14 +41,12 @@ interface PrivacyForm {
 	privacyContactEmail: string;
 	privacyContactPhone: string;
 	privacyPaymentProcessor: string;
-	privacySmsProvider: string;
 }
 
 const EMPTY_PRIVACY_FORM: PrivacyForm = {
 	privacyContactEmail: "",
 	privacyContactPhone: "",
 	privacyPaymentProcessor: "",
-	privacySmsProvider: "",
 };
 
 // 편집용 행에는 안정적인 key를 위해 클라이언트 전용 id를 붙인다(서버 저장 시 제거).
@@ -129,7 +127,6 @@ export default function ModeratorSiteSettingsPage() {
 			privacyContactEmail: data.privacyContactEmail ?? "",
 			privacyContactPhone: data.privacyContactPhone ?? "",
 			privacyPaymentProcessor: data.privacyPaymentProcessor ?? "",
-			privacySmsProvider: data.privacySmsProvider ?? "",
 		});
 	}, [privacyQuery.data]);
 
@@ -395,22 +392,13 @@ export default function ModeratorSiteSettingsPage() {
 						<div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 							<div className="flex flex-col gap-2">
 								<Label htmlFor="privacyPaymentProcessor">
-									결제대행사(수탁사명)
+									본인인증 대행사(수탁사명)
 								</Label>
 								<Input
 									id="privacyPaymentProcessor"
 									onChange={updatePrivacy("privacyPaymentProcessor")}
 									placeholder={BAMBI_PROCESSORS[0].name}
 									value={privacyForm.privacyPaymentProcessor}
-								/>
-							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="privacySmsProvider">문자발송사(수탁사명)</Label>
-								<Input
-									id="privacySmsProvider"
-									onChange={updatePrivacy("privacySmsProvider")}
-									placeholder={BAMBI_PROCESSORS[1].name}
-									value={privacyForm.privacySmsProvider}
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
