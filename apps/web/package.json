@@ -29,6 +29,7 @@
     "dotenv": "catalog:",
     "evlog": "catalog:",
     "lucide-react": "catalog:",
+    "motion": "^12.42.2",
     "next": "^16.2.0",
     "next-themes": "catalog:",
     "react": "^19.2.6",
