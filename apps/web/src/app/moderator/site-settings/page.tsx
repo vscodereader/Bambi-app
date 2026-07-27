@@ -43,12 +43,14 @@ const EMPTY_FORM: FooterForm = {
 interface PrivacyForm {
 	privacyContactEmail: string;
 	privacyContactPhone: string;
+	privacyOfficerName: string;
 	privacyPaymentProcessor: string;
 }
 
 const EMPTY_PRIVACY_FORM: PrivacyForm = {
 	privacyContactEmail: "",
 	privacyContactPhone: "",
+	privacyOfficerName: "",
 	privacyPaymentProcessor: "",
 };
 
@@ -130,6 +132,7 @@ export default function ModeratorSiteSettingsPage() {
 		setPrivacyForm({
 			privacyContactEmail: data.privacyContactEmail ?? "",
 			privacyContactPhone: data.privacyContactPhone ?? "",
+			privacyOfficerName: data.privacyOfficerName ?? "",
 			privacyPaymentProcessor: data.privacyPaymentProcessor ?? "",
 		});
 	}, [privacyQuery.data]);
@@ -420,7 +423,7 @@ export default function ModeratorSiteSettingsPage() {
 				<CardContent>
 					<form className="flex flex-col gap-5" onSubmit={onSubmitPrivacy}>
 						<p className="m-0 text-muted-foreground text-sm">
-							개인정보 처리방침 페이지의 위탁사명과 관리부서 연락처에
+							개인정보 처리방침 페이지의 위탁사명과 보호책임자 정보에
 							노출됩니다. 비워두면 기본값이 표시됩니다.
 						</p>
 						<div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -433,6 +436,15 @@ export default function ModeratorSiteSettingsPage() {
 									onChange={updatePrivacy("privacyPaymentProcessor")}
 									placeholder={BAMBI_PROCESSORS[0].name}
 									value={privacyForm.privacyPaymentProcessor}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="privacyOfficerName">보호책임자 성명</Label>
+								<Input
+									id="privacyOfficerName"
+									onChange={updatePrivacy("privacyOfficerName")}
+									placeholder={BAMBI_COMPANY.privacyOfficer.name}
+									value={privacyForm.privacyOfficerName}
 								/>
 							</div>
 							<div className="flex flex-col gap-2">

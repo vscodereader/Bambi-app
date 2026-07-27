@@ -25,18 +25,27 @@ export const BAMBI_COMPANY = {
 	footerIntro:
 		"밤비는 유흥·접객 구인구직 정보를 1:1 채팅으로 안전하게 연결하는 플랫폼입니다.",
 
-	// 개인정보 보호책임자
+	// 개인정보 보호책임자 — 성명·전화·메일은 운영자 콘솔에서 편집하고 여기는 폴백이다.
 	privacyOfficer: {
 		dept: "개인정보보호팀",
+		name: "TODO_보호책임자 성명",
 		tel: "TODO_개인정보 문의 전화",
 		email: "privacy@bambialba.com",
 	},
 } as const;
 
-// 개인정보 처리 위탁(수탁사) — TODO: 실제 계약사로 교체.
-// 결제는 무통장입금만 운영해 PG 위탁이 없고, 문자(SMS) 발송 기능도 없어
-// 현재 위탁은 휴대폰 본인인증 한 건뿐이다. 수탁사가 늘면 행을 추가한다.
+// 개인정보 처리 위탁(수탁사). 결제는 무통장입금만 운영해 PG 위탁이 없고 문자(SMS)
+// 발송 기능도 없다. 첫 행의 수탁사명만 운영자 콘솔에서 편집한다(나머지는 코드 고정).
+// 미사용 엔드포인트(server /ai, Google Gemini)는 화면에 붙는 시점에 행을 추가한다.
 export const BAMBI_PROCESSORS: ReadonlyArray<{
 	name: string;
 	task: string;
-}> = [{ name: "TODO_본인인증 대행사", task: "휴대폰 본인인증" }] as const;
+}> = [
+	// TODO: 실제 계약사로 교체(운영자 콘솔 입력이 우선).
+	{ name: "TODO_본인인증 대행사", task: "휴대폰 본인인증" },
+	{
+		name: "Google LLC",
+		task: "공고·게시글 이미지 저장(Google Cloud Storage), 웹 이용 통계 분석(Google Analytics)",
+	},
+	{ name: "Vercel Inc.", task: "웹 서비스 호스팅" },
+] as const;

@@ -76,12 +76,14 @@ const updatePaymentAccountsInput = z.object({
 // 값이 없으면 null → 웹에서 코드 폴백(BAMBI_PROCESSORS / BAMBI_COMPANY.privacyOfficer)을 쓴다.
 const PRIVACY_COLUMNS = {
 	privacyPaymentProcessor: bambiSiteSettings.privacyPaymentProcessor,
+	privacyOfficerName: bambiSiteSettings.privacyOfficerName,
 	privacyContactPhone: bambiSiteSettings.privacyContactPhone,
 	privacyContactEmail: bambiSiteSettings.privacyContactEmail,
 } as const;
 
 const updatePrivacyContactsInput = z.object({
 	privacyPaymentProcessor: optionalText(120),
+	privacyOfficerName: optionalText(60),
 	privacyContactPhone: optionalText(60),
 	privacyContactEmail: optionalEmail(200),
 });
