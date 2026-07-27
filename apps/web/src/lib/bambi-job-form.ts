@@ -94,7 +94,6 @@ export interface JobFormMediaItem {
 	mimeType: string;
 	previewUrl?: string;
 	storageKey?: string;
-	uploadUrl?: string;
 	width?: number;
 }
 

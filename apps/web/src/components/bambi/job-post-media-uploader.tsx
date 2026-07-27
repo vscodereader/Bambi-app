@@ -12,16 +12,15 @@ import { toast } from "sonner";
 import type { AdBannerLayout } from "@/lib/bambi/ad-banner-layout";
 import { getAdBannerUsagesForPreviewTemplate } from "@/lib/bambi/ad-preview-templates";
 import {
-	detectImageSignature,
-	isSignatureMismatch,
-} from "@/lib/bambi/image-signature";
-import {
 	formatJobAdBannerSpec,
 	isAllowedJobAdBannerAspect,
 	JOB_AD_BANNER_SPECS,
 	type JobAdBannerUsage,
-	readImageDimensions,
 } from "@/lib/bambi/job-ad-banner-spec";
+import {
+	createMediaItemFromFile,
+	revokeMediaItemPreview,
+} from "@/lib/bambi/job-media-item";
 import {
 	getFileAcceptForUsage,
 	type JobFormMedia,
@@ -58,40 +57,24 @@ const detailSlots = [
 const IMAGE_SIGNATURE_MISMATCH_MESSAGE =
 	"이미지 형식이 올바르지 않습니다. PNG·JPG·WebP·GIF만 업로드할 수 있어요.";
 
-// 배너는 크기 검증·잘림 경고에 원본 치수가 필요해서 함께 읽는다. 치수를 못 읽어도
-// (손상된 파일 등) 업로드 자체는 막지 않고, 폼 검증이 "크기를 확인하지 못했습니다"로 잡아준다.
-// 파일 앞바이트(매직넘버)가 선언 mime과 어긋나면(확장자·File.type 위조) null을 돌려 업로드를
-// 차단한다 — 세 슬롯(썸네일·상세·광고 배너)이 모두 이 함수를 거치므로 여기서 한 번만 막는다.
-const createMediaItemFromFile = async (
+// 슬롯 하나가 새 파일을 받았을 때의 처리. 실패 사유는 여기서만 문구로 바뀌고(모듈은 UI를
+// 모른다), 교체가 확정된 뒤에 이전 blob preview를 놓아준다 — 안 놓으면 이미지를 바꿀 때마다
+// 원본 파일이 문서 수명 내내 메모리에 남는다.
+const pickMediaItem = async (
 	file: File,
-	altText = ""
+	previous: JobFormMediaItem | null
 ): Promise<JobFormMediaItem | null> => {
-	if (file.type.startsWith("image/")) {
-		const detected = await detectImageSignature(file);
+	const created = await createMediaItemFromFile(file, previous?.altText);
 
-		if (isSignatureMismatch(file.type, detected)) {
-			toast.error(IMAGE_SIGNATURE_MISMATCH_MESSAGE);
+	if ("reason" in created) {
+		toast.error(IMAGE_SIGNATURE_MISMATCH_MESSAGE);
 
-			return null;
-		}
+		return null;
 	}
 
-	const base: JobFormMediaItem = {
-		altText,
-		byteSize: file.size,
-		file,
-		fileName: file.name,
-		mimeType: file.type,
-		previewUrl: URL.createObjectURL(file),
-	};
+	revokeMediaItemPreview(previous);
 
-	try {
-		const { height, width } = await readImageDimensions(file);
-
-		return { ...base, height, width };
-	} catch {
-		return base;
-	}
+	return created.item;
 };
 
 const updateDetailAt = (
@@ -263,13 +246,16 @@ function AdBannerSlot({
 					onChange(item ? { ...item, altText } : null)
 				}
 				onFileChange={async (file) => {
-					const created = await createMediaItemFromFile(file, item?.altText);
+					const created = await pickMediaItem(file, item);
 
 					if (created) {
 						onChange(created);
 					}
 				}}
-				onRemove={() => onChange(null)}
+				onRemove={() => {
+					revokeMediaItemPreview(item);
+					onChange(null);
+				}}
 				previewClassName={cn("aspect-auto w-full", aspectClassName)}
 			/>
 			{aspectRejected ? (
@@ -405,16 +391,16 @@ export function JobPostMediaUploader({
 					})
 				}
 				onFileChange={async (file) => {
-					const created = await createMediaItemFromFile(
-						file,
-						media.cover?.altText
-					);
+					const created = await pickMediaItem(file, media.cover);
 
 					if (created) {
 						onChange({ ...media, cover: created });
 					}
 				}}
-				onRemove={() => onChange({ ...media, cover: null })}
+				onRemove={() => {
+					revokeMediaItemPreview(media.cover);
+					onChange({ ...media, cover: null });
+				}}
 			/>
 			<div className="grid gap-3 lg:grid-cols-2">
 				{detailSlots.map(({ index, key }) => {
@@ -443,16 +429,16 @@ export function JobPostMediaUploader({
 								)
 							}
 							onFileChange={async (file) => {
-								const created = await createMediaItemFromFile(
-									file,
-									item?.altText
-								);
+								const created = await pickMediaItem(file, item);
 
 								if (created) {
 									onChange(updateDetailAt(media, index, created));
 								}
 							}}
-							onRemove={() => onChange(updateDetailAt(media, index, null))}
+							onRemove={() => {
+								revokeMediaItemPreview(item);
+								onChange(updateDetailAt(media, index, null));
+							}}
 						/>
 					);
 				})}

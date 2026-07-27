@@ -4,8 +4,12 @@ import {
 	AD_BANNER_ANIMATION_LABELS,
 	AD_BANNER_ANIMATION_OPTIONS,
 	AD_BANNER_ANIMATION_VALUES,
+	AD_BANNER_DEFAULT_WIDTH,
 	AD_BANNER_TEXT_ALIGN_OPTIONS,
 	AD_BANNER_TEXT_WEIGHT_OPTIONS,
+	AD_BANNER_WIDTH_MAX,
+	AD_BANNER_WIDTH_MIN,
+	clampBlockWidth,
 	clampPercent,
 	collectAdBannerLayoutTexts,
 	contrastRatio,
@@ -76,6 +80,32 @@ describe("createAdBannerTextBlock", () => {
 		expect(block.id).toBe("block-1");
 		expect(block.x).toBe(50);
 		expect(block.y).toBe(50);
+	});
+
+	it("gives the block a width so align has something to align inside", () => {
+		// 너비가 없으면 블록이 글자에 딱 맞게 줄어들어 정렬 설정이 화면에 아무 영향을 주지 않는다.
+		expect(createAdBannerTextBlock("block-1").width).toBe(
+			AD_BANNER_DEFAULT_WIDTH
+		);
+	});
+});
+
+describe("clampBlockWidth", () => {
+	it("never lets a block collapse to zero width", () => {
+		// 0이면 블록이 화면에서 사라져 다시 잡을 수 없다.
+		expect(clampBlockWidth(0)).toBe(AD_BANNER_WIDTH_MIN);
+		expect(clampBlockWidth(-40)).toBe(AD_BANNER_WIDTH_MIN);
+	});
+
+	it("caps the width at the container width", () => {
+		expect(clampBlockWidth(180)).toBe(AD_BANNER_WIDTH_MAX);
+		expect(clampBlockWidth(42.5)).toBe(42.5);
+	});
+
+	it("falls back to the default width for NaN", () => {
+		// 리사이즈도 좌표와 같은 나눗셈을 거쳐 캔버스 폭이 0인 순간 0/0 = NaN이 나온다.
+		expect(clampBlockWidth(Number.NaN)).toBe(AD_BANNER_DEFAULT_WIDTH);
+		expect(clampBlockWidth(Number.POSITIVE_INFINITY)).toBe(AD_BANNER_WIDTH_MAX);
 	});
 });
 
