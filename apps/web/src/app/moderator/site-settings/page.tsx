@@ -582,7 +582,8 @@ export default function ModeratorSiteSettingsPage() {
 							<p className="m-0 text-muted-foreground text-xs">
 								연락처·비밀번호 등은 탈퇴 즉시 파기하고, 부정 재가입 차단에
 								필요한 본인인증 식별값(CI·DI 해시)만 이 기간 동안 남겨요.
-								비워두면 기본값을 사용하고, 탈퇴 안내 문구에도 그대로 표시돼요.
+								비워두면 기본값을 사용하고, 탈퇴 안내 문구와 개인정보
+								처리방침에도 그대로 표시돼요.
 							</p>
 						</div>
 						<div className="flex justify-end">

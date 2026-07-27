@@ -10,6 +10,7 @@ import {
 import {
 	PrivacyContactLine,
 	PrivacyProcessorsTable,
+	PrivacyRetentionDays,
 } from "@/components/bambi/privacy-contacts";
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
 
@@ -171,9 +172,10 @@ export default function PrivacyPage() {
 				<LegalParagraph>
 					다만 이용약관에 따라 이용이 제한된 회원의 부정 재가입을 막기 위하여,
 					본인확인 식별값(연계정보(CI)·중복가입확인정보(DI)의 일방향 암호화
-					값)만 탈퇴일로부터 30일 동안 보관한 뒤 파기합니다. 이 값은 재가입 차단
-					목적 외에는 이용하지 않습니다. 보관 기간은 회사의 정책에 따라 변경될
-					수 있으며, 변경 시 회원 탈퇴 화면에 안내합니다.
+					값)만 탈퇴일로부터 <PrivacyRetentionDays />일 동안 보관한 뒤
+					파기합니다. 이 값은 재가입 차단 목적 외에는 이용하지 않습니다. 보관
+					기간은 회사의 정책에 따라 변경될 수 있으며, 변경 시 이 처리방침과 회원
+					탈퇴 화면에 표시되는 기간이 함께 갱신됩니다.
 				</LegalParagraph>
 				<LegalParagraph>
 					이용자가 작성한 채용공고, 채팅 메시지, 커뮤니티 게시글, 리뷰는 대화

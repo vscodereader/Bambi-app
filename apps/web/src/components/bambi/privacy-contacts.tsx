@@ -1,7 +1,7 @@
-// 개인정보 처리방침의 동적 값(위탁사명·관리부서 연락처). 운영자 콘솔
+// 개인정보 처리방침의 동적 값(위탁사명·보호책임자 연락처·탈퇴 보존기간). 운영자 콘솔
 // (/moderator/site-settings)에서 저장한 값을 쓰고, 미설정이면 코드 상수로 폴백한다.
 // 처리방침 페이지는 metadata를 export 하는 서버 컴포넌트라 "use client"가 될 수 없어,
-// 값이 들어가는 두 지점만 클라이언트 컴포넌트로 분리해 푸터와 같은 방식으로 조회한다
+// 값이 들어가는 지점만 클라이언트 컴포넌트로 분리해 푸터와 같은 방식으로 조회한다
 // (폴백 값을 먼저 그려 로딩 깜빡임 없음).
 "use client";
 
@@ -47,4 +47,14 @@ export function PrivacyContactLine() {
 			</LegalParagraph>
 		</>
 	);
+}
+
+// 탈퇴 후 본인확인 식별값 보존기간(일). 운영자 설정값을 그대로 문장에 끼워 넣어
+// 처리방침·탈퇴 안내 화면이 같은 숫자를 말하게 한다(탈퇴 화면과 동일한 폴백 순서).
+export function PrivacyRetentionDays() {
+	const { data } = useQuery(
+		orpc.bambi.siteSettings.getMemberPolicy.queryOptions()
+	);
+
+	return <>{data?.days ?? data?.defaultDays ?? 30}</>;
 }
