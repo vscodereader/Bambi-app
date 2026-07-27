@@ -15,16 +15,13 @@ export function PrivacyProcessorsTable() {
 	const { data } = useQuery(
 		orpc.bambi.siteSettings.getPrivacyContacts.queryOptions()
 	);
-	const paymentName = data?.privacyPaymentProcessor ?? BAMBI_PROCESSORS[0].name;
-	const smsName = data?.privacySmsProvider ?? BAMBI_PROCESSORS[1].name;
+	const processorName =
+		data?.privacyPaymentProcessor ?? BAMBI_PROCESSORS[0].name;
 
 	return (
 		<LegalTable
 			head={["수탁자", "위탁업무 내용"]}
-			rows={[
-				[paymentName, BAMBI_PROCESSORS[0].task],
-				[smsName, BAMBI_PROCESSORS[1].task],
-			]}
+			rows={[[processorName, BAMBI_PROCESSORS[0].task]]}
 		/>
 	);
 }

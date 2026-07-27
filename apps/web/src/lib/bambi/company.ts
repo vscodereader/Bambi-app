@@ -2,7 +2,7 @@
 //
 // ⚠️ TODO(운영): 아래 `TODO_` 접두 값은 임시 자리표시자다. 서비스 오픈 전
 // 실제 법인·사업자 정보(사업자등록번호·대표자·주소·고객센터 번호)와
-// 실제 결제/본인인증/문자 수탁사로 반드시 교체한다. 다른 사이트 문안을
+// 실제 본인인증 수탁사로 반드시 교체한다. 다른 사이트 문안을
 // 이식한 것이라 이 값들을 그대로 노출하면 안 된다.
 
 export const BAMBI_COMPANY = {
@@ -34,10 +34,9 @@ export const BAMBI_COMPANY = {
 } as const;
 
 // 개인정보 처리 위탁(수탁사) — TODO: 실제 계약사로 교체.
+// 결제는 무통장입금만 운영해 PG 위탁이 없고, 문자(SMS) 발송 기능도 없어
+// 현재 위탁은 휴대폰 본인인증 한 건뿐이다. 수탁사가 늘면 행을 추가한다.
 export const BAMBI_PROCESSORS: ReadonlyArray<{
 	name: string;
 	task: string;
-}> = [
-	{ name: "TODO_결제대행사", task: "휴대폰 본인인증, 결제서비스 대행" },
-	{ name: "TODO_문자발송사", task: "휴대폰 문자(SMS) 서비스" },
-] as const;
+}> = [{ name: "TODO_본인인증 대행사", task: "휴대폰 본인인증" }] as const;

@@ -609,6 +609,8 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 개인정보 처리방침에 노출하는 위탁사·관리부서 연락처. 운영자 사이트 설정에서 편집한다.
 	// null이면 프론트가 코드 폴백(BAMBI_PROCESSORS 이름 / BAMBI_COMPANY.privacyOfficer)을 쓴다.
 	privacyPaymentProcessor: text("privacy_payment_processor"),
+	// 문자(SMS) 발송 기능이 없어 수탁자 표에서 SMS 행을 걷어냈다. 컬럼은 마이그레이션
+	// 없이 남겨두고 읽지 않는다 — SMS 위탁이 생기면 다시 노출한다.
 	privacySmsProvider: text("privacy_sms_provider"),
 	privacyContactPhone: text("privacy_contact_phone"),
 	privacyContactEmail: text("privacy_contact_email"),

@@ -210,12 +210,11 @@ describe("siteSettings privacy contacts", () => {
 				privacyContactEmail: "privacy@bambialba.com",
 				privacyContactPhone: "02-000-0000",
 				privacyPaymentProcessor: "포트원",
-				privacySmsProvider: "NHN Cloud",
 			});
 			expect(saved?.privacyPaymentProcessor).toBe("포트원");
 
 			const afterInsert = await getPrivacyContacts({});
-			expect(afterInsert?.privacySmsProvider).toBe("NHN Cloud");
+			expect(afterInsert?.privacyPaymentProcessor).toBe("포트원");
 			expect(afterInsert?.privacyContactPhone).toBe("02-000-0000");
 		} finally {
 			await cleanupFixture(fixture);
@@ -234,17 +233,17 @@ describe("siteSettings privacy contacts", () => {
 			);
 			await update({
 				privacyPaymentProcessor: "   ",
-				privacySmsProvider: "다우기술",
+				privacyContactPhone: "02-111-1111",
 			});
 			const [row] = await db
 				.select({
 					privacyPaymentProcessor: bambiSiteSettings.privacyPaymentProcessor,
-					privacySmsProvider: bambiSiteSettings.privacySmsProvider,
+					privacyContactPhone: bambiSiteSettings.privacyContactPhone,
 				})
 				.from(bambiSiteSettings)
 				.where(eq(bambiSiteSettings.id, "default"));
 			expect(row?.privacyPaymentProcessor).toBeNull();
-			expect(row?.privacySmsProvider).toBe("다우기술");
+			expect(row?.privacyContactPhone).toBe("02-111-1111");
 		} finally {
 			await cleanupFixture(fixture);
 		}
