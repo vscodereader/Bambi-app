@@ -1456,4 +1456,149 @@ Expected: `docs/` 외에는 매치 없음(단 `bg-gradient-*` 같은 Tailwind �
 
 ## 검증 노트
 
-(구현 중 각 태스크의 테스트·타입체크 결과를 여기에 기록한다)
+브랜치 `worktree-premium-ad-editor` (BASE `9b710f2`), 구현 커밋 10개 (`1fa619e` … `3ccc81e`).
+아래는 Task 10에서 실제로 돌린 명령의 원문 결과다.
+
+### 전역 검증 결과
+
+`pnpm check-types` — **EXIT 0**
+
+```
+ Tasks:    7 successful, 7 total
+Cached:    1 cached, 7 total
+  Time:    59.477s
+```
+
+`pnpm vitest run apps/web`
+
+```
+ Test Files  3 failed | 45 passed (48)
+      Tests  5 failed | 282 passed (287)
+```
+
+`pnpm -F @bambi-app/api test`
+
+```
+ Test Files  2 failed | 66 passed (68)
+      Tests  3 failed | 487 passed (490)
+```
+
+**베이스라인(web 5 failed / api 3 failed) 대비 실패 증가 0, 통과 감소 0.** 남은 실패 8건은 전부
+이 브랜치와 무관한 기존 실패이며, 배너 관련 파일은 하나도 없다.
+
+| 실패 | 파일 | 성격 |
+| --- | --- | --- |
+| web 1 | `lib/bambi-job-blocks.test.ts` — 8MB 초과 이미지 반려 | 미디어 용량 검증 |
+| web 2 | `app/employer/promotions/page.test.ts` — 끌어올리기 게이팅 / 수정 링크 제거 | 프로모션 |
+| web 2 | `app/moderator/payments/payments.test.ts` — 결제·노출 배지 / 공고 상태 파생 | 결제 |
+| api 2 | `routers/bambi/jobs-list-boost-order.test.ts` — 부스트 정렬 | 프로모션 |
+| api 1 | `routers/bambi/moderation-support.test.ts` — 상세 조회 작성자 표시명 | 고객센터 |
+
+`bambi-job-blocks.test.ts`만 이 브랜치가 건드린 파일이라 따로 대조했다. 브랜치 diff는 `baseForm`
+픽스처의 구 배너 5필드를 `adBannerLayout: null` 한 줄로 바꾼 것이 전부이고, 실패하는 단언은
+이미지 용량 메시지라 무관하다.
+
+### 잔여 참조 확인
+
+`docs/`·`packages/db/src/migrations/`(과거 마이그레이션은 역사) 제외 스캔에서
+`adBannerHeadline` `adBannerSubline` `adBannerVerticalText` `AdBannerTheme` `adBannerTheme`
+`ad_banner_theme` `ad_banner_animation` `AdBannerTextOverlay` `ad-banner-animations`
+`ad-banner-text-fields` `decrypt` `blur-in` 매치 **0건**.
+
+`shiny` 1건은 `packages/api/src/services/bambi-ad-banner-layout.test.ts:112`의
+"rejects an unknown animation value" — 구 연출값이 **거부되는지** 확인하는 네거티브 테스트라
+정상이다. `AdBannerAnimation` 심볼은 살아 있지만 신규 4종(`split`·`typing`·`glitch`·`blur`)
+타입이고 구 카탈로그와 무관하다.
+
+삭제 확인된 파일 7개: `ad-banner-text-fields.tsx`/`.test.ts`, `ad-banner-text-overlay.tsx`,
+`text-animations/decrypted-text.tsx`, `lib/bambi/ad-banner-animations.ts`/`.test.ts`,
+`routers/bambi/job-ad-banner-text.test.ts`.
+
+---
+
+## 계획과 실제가 달랐던 점
+
+계획서를 그대로 따르지 않은 지점만 모았다. 근거는 `.superpowers/sdd/2026-07-27-premium-ad-banner-editor/progress.md`.
+
+**1. 마이그레이션 번호가 0040이 아니라 0041.** 계획서는 `0040_*`을 전제했으나 브랜치에
+`0040_steep_menace`가 이미 있었다. 실제 생성물은 **`0041_classy_ma_gnuci.sql`**
+(+ `meta/0041_snapshot.json`). SQL 내용은 계획 범위와 정확히 일치했다 — CREATE TABLE 1 +
+FK cascade + DROP COLUMN 5 + DROP TYPE 2, 그 외 0건. `db:migrate` 적용 후 pg 카탈로그로 검증했다.
+
+**2. 물결 편성이 계획과 달랐다.** 계획은 `1=[T1] / 2=[T2,T3,T4] / 3=[T5,T7] / 4=[T6,T8] / 5=[T9] / 6=[T10]`이었다.
+- **T4를 물결 2에서 뺐다** — T4는 T3이 `AdBannerText`에 `scrimColor` prop을 추가해야 타입체크가
+  통과한다. 물결 2를 `T2+T3`로 줄이고 T4는 T3 완료 직후로 미뤘다.
+- **이후 T4·T5·T6·T7을 4개 동시 실행했다**(사용자 요청으로 병렬 최대화). T5 브리프의
+  `AdBannerLayoutRenderer`는 Interfaces 줄에만 있고 실제 단계에서 쓰지 않아 T4·T5가 독립이었고,
+  T6은 T5의 `AdBannerEditor` 시그니처가 브리프에 확정돼 있어 미완성 import를 감수하고 붙였다.
+- 최종 실행 순서: `1=[T1] / 2=[T2,T3] / 3=[T4,T5,T6,T7] / 4=[T8] / 5=[T9] / 6=[T10]`.
+
+**3. 중간 상태에서 전체 타입체크가 녹색일 수 없었다.** 구 모듈·컬럼을 지우는 태스크(T2·T3)와
+그 소비자를 고치는 태스크(T7·T8·T9)가 갈라져 있어서다. 각 구현자 브리프에 "예상되는 정상 에러"를
+명시하고 **전역 녹색 게이트를 T9 이후로** 잡았다(계획서는 이 단계를 상정하지 않았다).
+
+**4. T2가 깨뜨린 파일이 계획보다 하나 많았다.** 계획이 지목한 `jobs.ts`·`ad-banner-catalog-parity.test.ts`
+외에 `packages/api/src/routers/bambi/job-ad-banner-text.test.ts`(구 5필드 픽스처)도 깨졌고 T9에서 삭제됐다.
+사라진 export는 `adBannerAnimation`·`adBannerTheme` 2개뿐이며 나머지는 `jobPost.adBannerXxx` 속성
+접근이라 `jobs.ts` select 절은 **런타임에도** 실패하는 상태였다.
+
+**5. 계획 스니펫이 제약을 어겨 구현 단계에서 고쳤다.**
+- T4 스니펫이 `left`/`top`/`backgroundColor`/`opacity`를 일반 인라인 `style`로 넣고 있었다 →
+  CSS 커스텀 프로퍼티 주입 + `className`으로 전환(제약의 "CSS 변수 주입에만 한정" 예외에 맞춤).
+- 글리치 기본색이 raw hex `#111827`로 실제 스크림 `bg-ink-900`(#0f1620)과 어긋났다 → `var(--ink-900)`.
+- 글리치 잔상 색이 raw oklch 하드코딩이었다 → `@theme`의 `--color-glitch-cyan`/`--color-glitch-red` 토큰으로 이관.
+
+**6. T1 유틸에 조용한 오판 경로 3건이 있어 별도 커밋(`48b5ec4`)으로 막았다.** 계획에 없던 작업이다.
+- `clampPercent`가 NaN을 통과시킴 → `Number.isNaN`만 50으로 접는다(`Number.isFinite`를 쓰면 ±Infinity
+  동작이 바뀌므로 일부러 쓰지 않았다).
+- hex 파서가 트림·형식 검증을 안 해 `" #3f3f3f"`가 NaN 없이 **틀린 휘도**를 냄 → `parseHex`로 통합.
+- `scrim.opacity` 단위 미명시 → 0~100 백분율로 못박고 `AD_BANNER_SCRIM_OPACITY_MIN/MAX/DEFAULT` 추가.
+
+**7. 웹↔서버 계약에서 빈 문구 블록 구멍이 드러나 에디터에 가드를 넣었다.** 서버가
+`content: z.string().trim().min(1)`이라 빈 블록을 보내면 배너가 아니라 **공고 저장 전체가 반려**되면서
+원인 불명 에러가 뜬다. 에디터에 저장 전 가드를 추가했다(빈 블록이 있는 슬롯으로 전환 + 블록 선택 +
+토스트 + 저장 중단). 계획에 없던 방어다. 그 외 계약(연출 4종·id 길이·fontSize 2~20·좌표 0~100·6자리 hex·
+texts max 5·version 1·strict 키 집합)은 전부 일치를 확인했다.
+
+**8. 브리프 Files 밖 파일을 두 번 건드렸다(둘 다 정당).**
+- `packages/api/src/routers/bambi/moderation.ts` 2줄 — `getJobPostForAdmin`이 거기 있고 프리필이
+  없으면 운영자 저장 시 배너가 사라진다.
+- `apps/web/src/lib/bambi-job-blocks.test.ts` 5줄 — `JobForm` 리터럴을 안 고치면 타입체크가 불가능하다.
+
+**9. 계획 Task 10의 `.env` 전제가 틀렸다.** 계획은 "워크트리에 `apps/server/.env`가 없어 api 테스트가
+import 단계에서 실패한다"고 적고 환경변수 주입을 지시했지만, 실제로는 워크트리에 `.env`가 존재해
+`pnpm -F @bambi-app/api test`가 그대로 돌았다. 주입 없이 위 결과를 얻었다.
+
+**10. 계획 Task 10 Step 2의 `rg` 패턴에 `gradient`가 들어 있었다.** `bg-gradient-*` Tailwind 유틸이
+대량으로 걸려 무의미하므로 스캔에서 뺐다(계획서 본문도 "무관하니 제외"라고 적고 있다).
+
+### 테스트 커버리지 관련 제약
+
+`apps/web`용 vitest config가 없어 `@/` alias가 해석되지 않는다. 그래서 `AdBannerLayoutRenderer`와
+에디터 컴포넌트는 렌더 테스트를 붙이지 못했고, 대신 `ad-banner-layout-form-wiring.test.ts`가
+세 화면(구인자 등록·구인자 수정·운영자 수정)의 프리필을 **소스 스캔**으로 고정한다(경로가 틀리면
+`readFileSync`가 throw). Tailwind arbitrary value는 타입체크로 잡히지 않으므로 **시각 확인이 필요하다.**
+
+### 최종 리뷰까지 들고 가는 미해결 관찰
+
+전부 컨트롤러가 확인했고 이번 브랜치에서 고치지 않기로 한 것들이다.
+
+- **[UX] 팝업 새창에 구인자 내비게이션이 딸려 온다.** `app/employer/ad-banner-editor/page.tsx`가
+  `app/employer/layout.tsx` 아래라 `ResponsiveAppShell`·`EmployerNav`·`AccountStatusBanner`가 붙는다.
+  route group으로는 부모 레이아웃을 못 벗는다 — 라우트를 `app/` 최상위로 옮기고 `resolveEmployerAccess()`
+  게이트를 서버 래퍼 페이지에 직접 걸어야 한다(현 페이지가 `"use client"`라 래퍼 분리 필요).
+  팝업에서 다른 화면으로 이동하면 postMessage 흐름이 고아가 된다.
+- **[UI] `Slider`·`Field` 미설치라 `Input type="number"`로 대체됐다.** 글자 크기(2~20)·오버레이 강도(0~100)는
+  슬라이더가 자연스럽다. 병렬 실행 중 `shadcn add` 충돌을 피하려 미뤘다.
+- **[UX] 숫자 입력을 비우면 즉시 최솟값으로 클램프된다.** `Number("")`가 0이라 `Number.isFinite` 가드를
+  통과한다. blur 시점 클램프가 정석이다.
+- **[미해결] 드래그 grab offset 없음.** 블록을 잡으면 중심이 포인터로 점프한다. 중심 기준 좌표계라 감수했다.
+- **[설계상 수용] 저장된 jsonb를 읽을 때 재검증 없이 캐스팅한다**(쓰기 경로가 전량 zod 통과).
+  스키마 v2 도입 시 이 지점에 버전 분기가 필요하다.
+
+### 매뉴얼 동기화
+
+`docs/manual/employer-manual.md`에 **배너 문구 편집** 절을 신설했다(목차 항목 추가, `공고 등록` 5단계와
+`공고 수정` 2단계에서 연결). 구 매뉴얼은 배너 이미지 2종 등록만 설명하고 고정 문구 3필드는 아예
+다루지 않았으므로, 이번 변경은 삭제가 아니라 **신규 서술**이다. `docs/manual/moderator-manual.md`에는
+공고 편집 화면 절 자체가 없고, `docs/manual/seeker-manual.md`에는 프리미엄 배너 서술이 없어 손대지 않았다.
