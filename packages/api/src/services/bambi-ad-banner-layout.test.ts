@@ -4,6 +4,7 @@ import {
 	adBannerLayoutSchema,
 	collectLayoutModerationText,
 	collectLayoutTexts,
+	isAdBannerImageRequired,
 	parseStoredAdBannerLayout,
 } from "./bambi-ad-banner-layout";
 
@@ -237,5 +238,32 @@ describe("collectLayoutModerationText", () => {
 
 	it("returns an empty string for a malformed value", () => {
 		expect(collectLayoutModerationText({ nope: true })).toBe("");
+	});
+});
+
+describe("isAdBannerImageRequired", () => {
+	const colorSlot = {
+		...validSlot,
+		background: { color: "#1f2937", type: "color" },
+	};
+
+	it("배경이 이미지면 필수다", () => {
+		// 종전 동작 보존 — 여기가 열리면 이미지 없는 프리미엄 배너가 빈 칸으로 노출된다.
+		expect(isAdBannerImageRequired(validLayout, "ad_horizontal")).toBe(true);
+		expect(isAdBannerImageRequired(validLayout, "ad_vertical")).toBe(true);
+	});
+
+	it("배경이 단색이면 그 슬롯만 면제된다", () => {
+		// usage↔슬롯 매핑이 어긋나면 한쪽을 단색으로 바꾼 순간 반대쪽 이미지까지 면제된다.
+		const layout = { ...validLayout, horizontal: colorSlot };
+
+		expect(isAdBannerImageRequired(layout, "ad_horizontal")).toBe(false);
+		expect(isAdBannerImageRequired(layout, "ad_vertical")).toBe(true);
+	});
+
+	it("레이아웃이 없거나 형태를 못 읽으면 필수로 본다", () => {
+		// 모르면 막는 쪽. null은 "배너를 편집한 적 없는 공고"라 종전대로 이미지가 필요하다.
+		expect(isAdBannerImageRequired(null, "ad_horizontal")).toBe(true);
+		expect(isAdBannerImageRequired({ nope: true }, "ad_vertical")).toBe(true);
 	});
 });

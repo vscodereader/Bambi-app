@@ -169,6 +169,7 @@ export default function ModeratorEditJobPage({
 	// 프리미엄 광고는 가로형·세로형 배너 이미지가 모두 있어야 저장할 수 있다.
 	const { bannerImagesMissing, requiredBannerUsages } = useRequiredBannerGate({
 		adProductId: form.adProductId,
+		layout: form.adBannerLayout,
 		media,
 	});
 	const job = jobQuery.data;

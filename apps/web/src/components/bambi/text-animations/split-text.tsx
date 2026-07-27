@@ -4,11 +4,12 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AD_BANNER_ANIMATION_PAUSE_MS } from "@/lib/bambi/ad-banner-layout";
 
 gsap.registerPlugin(SplitText);
 
-// React Bits SplitText를 배너용으로 줄인 것. 원본의 ScrollTrigger는 걷어냈다 — 이 프로젝트는
-// 마운트 시 1회 재생 정책이고, 애니메이션 게이트(ad-banner-text.tsx)가 그 역할을 이미 한다.
+// React Bits SplitText를 배너용으로 줄인 것. 원본의 ScrollTrigger는 걷어냈다 — 재생 여부는
+// 애니메이션 게이트(ad-banner-text.tsx)가 정한다(모션 최소화 선호면 아예 마운트되지 않는다).
 // @gsap/react(useGSAP)도 쓰지 않는다: gsap.context + useLayoutEffect가 같은 스코핑·정리를 준다.
 export function SplitTextAnimation({
 	className,
@@ -55,10 +56,21 @@ export function SplitTextAnimation({
 		const element = containerRef.current;
 		const split = new SplitText(element, { type: "chars" });
 		const ctx = gsap.context(() => {
+			// repeat: -1 + repeatDelay면 타이머를 직접 굴리지 않아도 "재생 → 정지 → 재생"이 된다.
+			// yoyo를 켜지 않았으므로 매 반복은 되감기가 아니라 from 상태(opacity 0 · y 24)로
+			// 즉시 되돌아간 뒤 다시 to로 간다 — 글자가 거꾸로 흩어졌다 모이는 역재생이 아니다.
 			gsap.fromTo(
 				split.chars,
 				{ opacity: 0, y: 24 },
-				{ duration: 0.6, ease: "power3.out", opacity: 1, stagger: 0.04, y: 0 }
+				{
+					duration: 0.6,
+					ease: "power3.out",
+					opacity: 1,
+					repeat: -1,
+					repeatDelay: AD_BANNER_ANIMATION_PAUSE_MS / 1000,
+					stagger: 0.04,
+					y: 0,
+				}
 			);
 		}, containerRef);
 

@@ -6,6 +6,7 @@ import { Megaphone } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { isAdBannerImageRequired } from "@/lib/bambi/ad-banner-layout";
 import { resolveAdInquiryTel } from "@/lib/bambi/ad-inquiry-tel";
 import type { AdBannerItem } from "@/lib/bambi/api-job-mapper";
 import { orpc } from "@/utils/orpc";
@@ -101,25 +102,35 @@ interface AdBannerProps {
 // 레이아웃(item.layout)이 있으면 이미지 위에 세로 슬롯 레이아웃을 얹는다 — 오버레이가
 // absolute inset-0이라 Link에 relative가 필요하고(없으면 엉뚱한 조상 기준으로 배치된다),
 // 스크림이 둥근 모서리를 덮지 않도록 overflow-hidden도 함께 둔다.
+// 배경이 단색인 슬롯은 이미지를 아예 그리지 않는다. 렌더러가 absolute inset-0으로 색을 덮어
+// 보이지도 않는데다, item.imageUrl은 배너가 없으면 커버·샘플 사진으로 폴백하므로 엉뚱한 사진을
+// 받아 놓고 가리는 낭비가 된다. 대신 같은 크기 클래스를 가진 빈 상자가 슬롯 크기를 만든다
+// (Image가 유일한 크기 소스였다 — 그냥 빼면 슬롯이 무너진다).
 export function AdBanner({ className, item }: AdBannerProps) {
+	const surfaceClassName = cn("aspect-[4/9] h-52 w-auto rounded-lg", className);
+
 	return (
 		<Link
 			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기`}
 			className="relative block w-fit overflow-hidden rounded-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			href={bannerHref(item)}
 		>
-			<Image
-				alt={`${item.company} ${item.title} 광고 배너`}
-				className={cn(
-					"aspect-[4/9] h-52 w-auto rounded-lg object-cover",
-					className
-				)}
-				height={900}
-				sizes="120px"
-				src={item.imageUrl}
-				unoptimized
-				width={400}
-			/>
+			{/* 이미지가 없는 단색 배너의 접근성 이름은 Link의 aria-label이 이미 담당한다 —
+			    빈 상자에는 alt에 해당하는 이름을 줄 것이 없고, 실제 내용인 문구는 레이아웃
+			    렌더러가 텍스트로 그린다. */}
+			{isAdBannerImageRequired(item.layout, "ad_vertical") ? (
+				<Image
+					alt={`${item.company} ${item.title} 광고 배너`}
+					className={cn(surfaceClassName, "object-cover")}
+					height={900}
+					sizes="120px"
+					src={item.imageUrl}
+					unoptimized
+					width={400}
+				/>
+			) : (
+				<div className={surfaceClassName} />
+			)}
 			{item.layout ? (
 				<AdBannerLayoutRenderer layout={item.layout} slot="vertical" />
 			) : null}
@@ -169,24 +180,31 @@ export function HorizontalAdBanner({
 	className,
 	item,
 }: HorizontalAdBannerProps) {
+	// 단색 배경 처리는 AdBanner(세로형)와 같다 — 그쪽 주석 참고.
+	const surfaceClassName = cn(
+		"aspect-[7/3] w-full rounded-lg border border-border",
+		className
+	);
+
 	return (
 		<Link
 			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기`}
 			className="relative block overflow-hidden rounded-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			href={bannerHref(item)}
 		>
-			<Image
-				alt={`${item.company} ${item.title} 광고 배너`}
-				className={cn(
-					"aspect-[7/3] w-full rounded-lg border border-border object-cover",
-					className
-				)}
-				height={600}
-				sizes="272px"
-				src={item.imageUrl}
-				unoptimized
-				width={1400}
-			/>
+			{isAdBannerImageRequired(item.layout, "ad_horizontal") ? (
+				<Image
+					alt={`${item.company} ${item.title} 광고 배너`}
+					className={cn(surfaceClassName, "object-cover")}
+					height={600}
+					sizes="272px"
+					src={item.imageUrl}
+					unoptimized
+					width={1400}
+				/>
+			) : (
+				<div className={surfaceClassName} />
+			)}
 			{item.layout ? (
 				<AdBannerLayoutRenderer layout={item.layout} slot="horizontal" />
 			) : null}

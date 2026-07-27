@@ -9,12 +9,14 @@ import {
 	AD_BANNER_TEXT_WEIGHT_OPTIONS,
 	AD_BANNER_WIDTH_MAX,
 	AD_BANNER_WIDTH_MIN,
+	type AdBannerSlotLayout,
 	clampBlockWidth,
 	clampPercent,
 	collectAdBannerLayoutTexts,
 	contrastRatio,
 	createAdBannerTextBlock,
 	createEmptyAdBannerLayout,
+	isAdBannerImageRequired,
 	isLowContrast,
 } from "./ad-banner-layout";
 
@@ -181,5 +183,50 @@ describe("collectAdBannerLayoutTexts", () => {
 			"가로 문구",
 			"세로 문구",
 		]);
+	});
+});
+
+describe("isAdBannerImageRequired", () => {
+	const withBackground = (
+		slot: "horizontal" | "vertical",
+		background: AdBannerSlotLayout["background"]
+	) => {
+		const layout = createEmptyAdBannerLayout();
+		layout[slot].background = background;
+
+		return layout;
+	};
+
+	it("배경이 이미지면 그 슬롯 이미지는 필수다", () => {
+		// 종전 동작 보존. 여기가 열리면 이미지 없는 프리미엄 배너가 빈 칸으로 노출된다.
+		const layout = createEmptyAdBannerLayout();
+
+		expect(isAdBannerImageRequired(layout, "ad_horizontal")).toBe(true);
+		expect(isAdBannerImageRequired(layout, "ad_vertical")).toBe(true);
+	});
+
+	it("배경이 단색이면 그 슬롯 이미지는 필수가 아니다", () => {
+		const layout = withBackground("horizontal", {
+			color: "#1f2937",
+			type: "color",
+		});
+
+		expect(isAdBannerImageRequired(layout, "ad_horizontal")).toBe(false);
+	});
+
+	it("슬롯별로 따로 판정한다", () => {
+		// usage↔슬롯 매핑이 어긋나면 가로형을 단색으로 바꾼 순간 세로형 이미지까지 면제된다.
+		const layout = withBackground("horizontal", {
+			color: "#1f2937",
+			type: "color",
+		});
+
+		expect(isAdBannerImageRequired(layout, "ad_horizontal")).toBe(false);
+		expect(isAdBannerImageRequired(layout, "ad_vertical")).toBe(true);
+	});
+
+	it("레이아웃이 없으면(편집한 적 없는 공고) 종전대로 필수다", () => {
+		expect(isAdBannerImageRequired(null, "ad_horizontal")).toBe(true);
+		expect(isAdBannerImageRequired(null, "ad_vertical")).toBe(true);
 	});
 });

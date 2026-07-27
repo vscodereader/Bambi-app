@@ -1,11 +1,11 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
-import type {
-	AdBannerLayout,
-	AdBannerSlot,
-	AdBannerSlotLayout,
-	AdBannerTextBlock,
+import {
+	type AdBannerLayout,
+	type AdBannerSlot,
+	type AdBannerTextBlock,
+	resolveAdBannerScrimColor,
 } from "@/lib/bambi/ad-banner-layout";
 import { AdBannerText } from "./ad-banner-text";
 
@@ -20,14 +20,6 @@ const ALIGN_CLASS_NAMES = {
 	left: "text-left",
 	right: "text-right",
 } as const;
-
-// 글리치는 pseudo 요소에 배경색을 깔아야 효과가 성립한다. 색 배경이면 그 색을, 이미지 배경이면
-// 스크림 색을 넘긴다(스크림이 꺼져 있어도 글리치가 뭉개지지 않도록 어두운 기본값을 준다).
-// 기본값은 아래 스크림이 쓰는 bg-ink-900과 같은 토큰이라 스크림이 켜져 있으면 색이 맞아떨어진다.
-const resolveScrimColor = (
-	background: AdBannerSlotLayout["background"]
-): string =>
-	background.type === "color" ? background.color : "var(--ink-900)";
 
 function TextBlockView({
 	block,
@@ -98,7 +90,7 @@ export function AdBannerLayoutRenderer({
 		return null;
 	}
 
-	const scrimColor = resolveScrimColor(slotLayout.background);
+	const scrimColor = resolveAdBannerScrimColor(slotLayout.background);
 	// 스크림은 이미지 배경의 가독성 보조다. 색 배경에서는 색을 흐릴 뿐이라 무시한다.
 	const showScrim =
 		slotLayout.background.type === "image" && slotLayout.scrim.enabled;
