@@ -11,7 +11,7 @@ export type MediaItemFailure = "signature-mismatch";
 // 각자 문구를 적으면 같은 실패를 다르게 말하게 되고, 구인자는 다른 문제로 읽는다.
 export const MEDIA_ITEM_FAILURE_MESSAGES: Record<MediaItemFailure, string> = {
 	"signature-mismatch":
-		"이미지 형식이 올바르지 않습니다. PNG·JPG·WebP·GIF만 업로드할 수 있어요.",
+		"이미지 형식이 올바르지 않습니다. PNG·JPG·WebP·GIF만 업로드할 수 있습니다.",
 };
 
 export type MediaItemResult =

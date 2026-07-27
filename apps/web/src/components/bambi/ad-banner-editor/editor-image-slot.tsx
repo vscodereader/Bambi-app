@@ -12,9 +12,8 @@ import type { RefObject } from "react";
 import { toast } from "sonner";
 import { FieldHint } from "@/components/bambi/form-message";
 import {
+	findJobAdBannerRejection,
 	formatJobAdBannerSpec,
-	isAllowedJobAdBannerAspect,
-	isAllowedJobAdBannerSize,
 	JOB_AD_BANNER_SPECS,
 	type JobAdBannerUsage,
 } from "@/lib/bambi/job-ad-banner-spec";
@@ -61,12 +60,9 @@ export function EditorImageSlot({
 		item?.width && item.height
 			? { height: item.height, width: item.width }
 			: null;
-	const aspectRejected = measured
-		? !isAllowedJobAdBannerAspect({ ...measured, usage })
-		: false;
-	const sizeRejected = measured
-		? !isAllowedJobAdBannerSize({ ...measured, usage })
-		: false;
+	// 저장 가드(ad-banner-editor)와 같은 판정 함수를 쓴다. 여기서 직접 계산하면 경고는 뜨는데
+	// 저장은 통과하는 어긋남이 다시 생긴다.
+	const rejection = findJobAdBannerRejection({ ...measured, usage });
 
 	const handleFile = async (file: File) => {
 		// altText는 교체해도 이어 간다 — 사진만 바꾸는 경우가 대부분이라 매번 다시 쓰게 하면 는다.
@@ -101,6 +97,8 @@ export function EditorImageSlot({
 							onChange(null);
 						}}
 						size="icon-sm"
+						title={`${label} 삭제`}
+						type="button"
 						variant="ghost"
 					>
 						<Trash2 aria-hidden="true" />
@@ -109,7 +107,10 @@ export function EditorImageSlot({
 			</div>
 
 			{/* 파일 입력은 label이 클릭 영역을 대신한다. 입력 자체는 sr-only라 포커스 링이 보이지
-			    않으므로 peer로 라벨에 링을 옮겨 준다(포커스가 안 보이면 키보드로 못 쓴다). */}
+			    않으므로 peer로 라벨에 링을 옮겨 준다(포커스가 안 보이면 키보드로 못 쓴다).
+			    peer-focus-visible이 아니라 peer-focus인 이유: 저장 가드가 이 입력으로 포커스를
+			    옮기는 경로는 마우스 클릭으로 시작하므로 :focus-visible이 매치하지 않는다 —
+			    그러면 포커스는 갔는데 링이 아예 안 떠서 어디로 갔는지 보이지 않는다. */}
 			<Input
 				accept={getFileAcceptForUsage(usage)}
 				aria-describedby={error ? errorId : undefined}
@@ -128,7 +129,7 @@ export function EditorImageSlot({
 			/>
 			<Label
 				className={cn(
-					"relative mx-auto flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-border border-dashed bg-muted/40 transition-colors hover:bg-muted peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
+					"relative mx-auto flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-border border-dashed bg-muted/40 transition-colors hover:bg-muted peer-focus:ring-2 peer-focus:ring-ring",
 					aspectClassName,
 					PREVIEW_WIDTH_CLASS_NAMES[usage],
 					error && "border-destructive"
@@ -147,7 +148,7 @@ export function EditorImageSlot({
 				) : (
 					<span className="flex flex-col items-center gap-1 p-4 text-center text-muted-foreground text-xs">
 						<ImagePlus aria-hidden="true" className="size-5" />
-						이미지를 선택해 주세요
+						이미지를 선택해 주십시오
 					</span>
 				)}
 			</Label>
@@ -164,12 +165,13 @@ export function EditorImageSlot({
 				<div className="flex flex-col gap-1">
 					<Label htmlFor={`${inputId}-alt`}>대체 텍스트</Label>
 					<Input
+						autoComplete="off"
 						id={`${inputId}-alt`}
 						maxLength={IMAGE_ALT_TEXT_MAX_LENGTH}
 						onChange={(event) =>
 							onChange({ ...item, altText: event.target.value })
 						}
-						placeholder="배너 내용을 한 줄로 설명해 주세요"
+						placeholder="주말 알바 급구 문구가 들어간 카페 사진…"
 						value={item.altText}
 					/>
 					<FieldHint>
@@ -179,29 +181,31 @@ export function EditorImageSlot({
 				</div>
 			) : null}
 
-			<div aria-live="polite" className="flex flex-col gap-2 empty:hidden">
+			{/* empty:hidden을 걸면 리전이 갱신되는 순간 display:none이라 스크린리더가 삽입을
+			    놓친다. 리전은 빈 채로 늘 렌더해 두고 자식만 조건부로 둔다. */}
+			<div aria-live="polite" className="flex flex-col gap-2">
 				{error ? (
 					<p className="text-destructive text-xs" id={errorId}>
 						{error}
 					</p>
 				) : null}
-				{aspectRejected ? (
+				{rejection === "aspect" ? (
 					<Alert variant="destructive">
-						<TriangleAlert />
-						<AlertDescription>
+						<TriangleAlert aria-hidden="true" />
+						<AlertDescription className="text-pretty">
 							이 이미지({measured?.width}×{measured?.height})는 요구 비율{" "}
 							{aspectLabel}과 크게 달라 등록할 수 없습니다. {aspectLabel} 비율에
-							맞춰 다시 골라 주세요.
+							맞춰 다시 골라 주십시오.
 						</AlertDescription>
 					</Alert>
 				) : null}
-				{sizeRejected ? (
+				{rejection === "size" ? (
 					<Alert variant="destructive">
-						<TriangleAlert />
-						<AlertDescription>
+						<TriangleAlert aria-hidden="true" />
+						<AlertDescription className="text-pretty">
 							이 이미지({measured?.width}×{measured?.height})는 최소 크기{" "}
 							{minWidth}×{minHeight}px보다 작아 등록할 수 없습니다. 더 큰
-							원본으로 다시 골라 주세요.
+							원본으로 다시 골라 주십시오.
 						</AlertDescription>
 					</Alert>
 				) : null}

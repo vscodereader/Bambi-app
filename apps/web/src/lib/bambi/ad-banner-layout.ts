@@ -160,6 +160,14 @@ export const createAdBannerTextBlock = (id: string): AdBannerTextBlock => ({
 	y: 50,
 });
 
+// 블록을 사람에게 부르는 이름. 목록 버튼과 캔버스 블록의 접근성 이름이 여기서만 나와야
+// 한다 — 각자 만들면 빈 문구가 목록에서는 "문구 3 (비어 있음)", 캔버스에서는 `문구 ""`로
+// 갈려 같은 블록이 두 이름으로 읽힌다.
+export const formatAdBannerBlockLabel = (
+	block: AdBannerTextBlock,
+	index: number
+): string => block.content.trim() || `문구 ${index + 1} (비어 있음)`;
+
 // NaN만 따로 막는다. 드래그 핸들러는 (clientX - rect.left) / rect.width * 100을 넘기는데,
 // 슬롯 탭이 아직 레이아웃되지 않아 rect.width가 0이면 0/0 = NaN이 나온다. NaN이 좌표에 박히면
 // JSON.stringify가 말없이 null로 바꿔 서버 zod가 반려하거나 jsonb에 null이 들어간다.

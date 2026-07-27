@@ -480,4 +480,79 @@ Run: `rg "employer/ad-banner-editor|AdBannerSlot|uploadUrl" apps/web/src`
 
 ## 검증 노트
 
-(구현 중 기록한다)
+구현 완료 후 Task 7에서 기록. 대상: `d6934e0..08508b4` (4커밋), 워크트리 `.claude/worktrees/ad-editor-redesign`.
+
+### 전역 검증 결과
+
+| 명령 | 결과 | 베이스라인 | 판정 |
+| --- | --- | --- | --- |
+| `pnpm check-types` | `Tasks: 7 successful, 7 total` · **EXIT 0** | EXIT 0 | 통과 |
+| `pnpm vitest run apps/web` | **5 failed / 303 passed** (Test Files 3 failed / 48 passed) | 5 failed / 283 passed | 실패 동일, 통과 +20 |
+| `pnpm -F @bambi-app/api test` | **3 failed / 499 passed** (Test Files 2 failed / 66 passed) | 3 failed / 496 passed | 실패 동일, 통과 +3 |
+
+남은 실패 8건은 전부 이 브랜치가 건드리지 않은 파일이고 **배너 관련 실패는 하나도 없다**:
+
+- web(5): `lib/bambi-job-blocks.test.ts`(8MB 반려 기대 — 실제 상한은 `IMAGE_MAX_BYTES = 10MB`라 테스트가 낡음), `app/employer/promotions/page.test.ts` ×2, `app/moderator/payments/payments.test.ts` ×2
+- api(3): `routers/bambi/jobs-list-boost-order.test.ts` ×2, `routers/bambi/moderation-support.test.ts`
+
+구현 중 리포트에 남았던 실패 2건은 HEAD에서 **해소됐다**: `lib/bambi/api-job-mapper.test.ts`의 `width` 누락 픽스처(check-types 2건), `job-post-media-uploader.test.ts`의 소스 스캔(업로더에서 이미지 처리가 걷혀 나가며 갱신됨). Task 6 시점의 "6 failed / 300 passed"가 지금 5/303인 이유다.
+
+**api 테스트 전제:** 이 워크트리에 `apps/server/.env`가 없으면 45개 파일이 import 단계에서 죽는다. 메인 체크아웃의 파일을 복사해 둬야 한다(`apps/server/.gitignore:32`의 `.env*`로 무시되므로 커밋에 영향 없음). 새 워크트리를 팔 때마다 같은 절차가 필요하다.
+
+### 잔여 참조 스캔
+
+`rg "employer/ad-banner-editor|AdBannerSlot|uploadUrl|backgroundUrls|onAdBannerLayoutChange"` — `docs/` 밖에 **죽은 참조 없음**.
+
+- `employer/ad-banner-editor`(구 라우트) · `backgroundUrls` · `onAdBannerLayoutChange`: 매치 0. 구 라우트는 `docs/superpowers/{specs,plans}` 안에만 남아 있고, 그건 당시를 기록한 계획 문서라 그대로 둔다.
+- `AdBannerSlot`: 매치는 전부 **동명의 살아 있는 타입**(`"horizontal" | "vertical"` 유니온과 `AdBannerSlotLayout`)이다. 제거된 것은 `job-post-media-uploader.tsx`의 **컴포넌트** `AdBannerSlot`이고 이건 `AdBannerStatus`로 대체됐다.
+- `uploadUrl`: 매치는 전부 **살아 있는 서명 업로드 인텐트**(`bambi-storage.ts`, `JobPostMediaUploadIntent.uploadUrl`)다. 제거 대상이던 죽은 필드 `JobFormMediaItem.uploadUrl?`은 사라졌다.
+
+세 호출부(`employer/new`, `employer/jobs/[id]/edit`, `moderator/jobs/[id]/edit`)의 `onAdBannerLayoutChange` → `onAdBannerChange` 개명도 빠짐없이 반영됐다.
+
+### 가이드라인 스팟체크
+
+신규·수정 에디터 파일과 `packages/ui/src/components/slider.tsx` 기준: `rounded-none`·`space-x-*`/`space-y-*`·raw hex 매치 0, 임의 px는 주석 안에만. 인라인 `style={}`은 3곳뿐이고 전부 **CSS 커스텀 프로퍼티 주입**(`--block-*`, `--canvas-bg`, `--scrim-opacity`)이라 제약이 허용한 범위다.
+
+### 계획 대비 달라진 점
+
+**1. `app/ad-banner-editor/layout.tsx`를 만들지 않았다.** (계획 File Structure 신규 목록)
+라우트에 페이지가 하나뿐이라 순수 중복이고, 감쌀 것이 `min-h-dvh` + 안전영역 div 하나다. 게다가 래퍼가 세 상태(opener 없음 / init 대기 / 에디터 본문)를 모두 감싸야 해서 클라이언트 본문(`ad-banner-editor-window.tsx`)이 직접 들고 있는 편이 자연스럽다. 앱 셸을 벗는 목적은 **`app/employer/` 밖에 라우트를 둔 것만으로 이미 달성**된다 — 루트 `app/layout.tsx`는 `Providers`뿐이고 헤더·내비는 employer 레이아웃이 얹는다. 대신 employer 레이아웃이 하던 역할 게이트를 `page.tsx`가 `resolveEmployerAccess()`로 직접 건다.
+
+**2. `init` 페이로드에서 `adProductId` → `requiredUsages`.** (계획 Task 6 Step 1)
+에디터 창에서 상품 카탈로그를 다시 조회하면 같은 값을 두 곳에서 유도하게 되고 로딩 동안 슬롯이 비어 보인다. 부모가 이미 상품 `previewTemplate`으로 계산해 갖고 있는 값을 그대로 싣는다(계획 같은 단락 후단 지시와 일치).
+
+**3. 숫자 입력 대신 슬라이더.** (계획 Task 5 Step 4가 "핸들과 별개로 숫자 입력도 둔다"고 지정)
+숫자 입력은 지우는 순간 빈 문자열이 최솟값으로 튀어 "지우고 다시 쓰기"가 안 된다. 슬라이더는 방향키로 1씩 정확히 맞출 수 있어 "정확한 값" 요구를 그대로 충족한다. 글자 크기·문구 폭·오버레이 강도 셋 다 슬라이더다.
+
+**4. `packages/ui/src/components/slider.tsx` 신규 추가**(계획 파일 목록에 없음) — 계획 Task 5 Step 5의 "`Slider` 우선 검토" 지시를 따른 결과. 새 npm 의존성 없음(`@base-ui/react` 기설치). shadcn 원본을 그대로 쓰지 않고 **버그 두 개를 고쳐** 넣었다: (a) base-ui는 단일 값이 배열이 아니라 숫자인데 원본은 `value`가 배열이 아니면 썸을 둘 그렸다 → 썸 하나로 단순화, (b) `aria-label`이 루트 div에 걸려 `role="slider"`인 내부 input이 이름을 못 읽었다 → `getAriaLabel`로 전달.
+
+**5. `backgroundUrls` prop 제거.** 캔버스 배경을 `media[슬롯].previewUrl` 한 곳에서만 받는다. 배경을 두 소스에서 받으면 "패널에서 고른 이미지"와 "캔버스가 그리는 이미지"가 갈린다.
+
+**6. 즉시 경고에 최소 크기도 포함.** 계획 Task 5 Step 1은 비율(`isAllowedJobAdBannerAspect`)만 명시했지만 최소 크기(`isAllowedJobAdBannerSize`)도 똑같이 실제 반려 사유라, 안 알리면 "제출할 때까지 이유를 모른다" 문제가 그대로 남는다.
+
+**7. 캔버스 블록 구조 변경 + `px-1` 제거.** 바깥 `div`(기하 클래스, 렌더러와 동일) + 내부 드래그용 `button`(`block w-full`) + 좌우 핸들. `px-1`이 폭 안쪽을 먹어 줄바꿈 지점이 렌더러와 어긋났고, 예전처럼 `button` 자체가 위치 상자면 핸들을 그 안에 넣을 수 없다(버튼 중첩).
+
+**8. `AdBannerTextBlock.width`가 `weight` 뒤에 있다.** 계획은 알파벳 순서상 앞이라고 했지만 biome `useSortedKeys`가 `weight` → `width`를 강제한다. 되돌리지 말 것.
+
+**9. 브리프 밖 파일 2건을 최소 수정.** `packages/api/src/routers/bambi/job-ad-banner-layout.test.ts`(+`width: 60` 한 줄 — 타입 리터럴 픽스처가 TS2741로 check-types를 깼다), `apps/web/src/lib/bambi/api-job-mapper.test.ts`(+1줄, 같은 사유).
+
+**10. 폼 쪽은 `AdBannerStatus` 요약 카드로 교체하되 운영자 삭제 버튼은 남겼다.** 계획 Task 6 Step 3은 "`AdBannerSlot` 두 개를 지운다"였는데, 그게 운영자(`allowUpload={false}`)에게 있던 유일한 배너 권한이라 그대로 없애면 회귀다. 겸사겸사 배너 블록을 `AdBannerSection`으로 분리하고 슬롯 두 개를 `AD_BANNER_SLOTS` 테이블로 묶었다.
+
+**11. blob previewUrl 변환은 창을 넘는 경로에만.** 다이얼로그(모바일) 폴백은 같은 문서라 변환을 걸면 살아 있는 blob URL을 재생성·폐기하게 되어 오히려 깨진다.
+
+**12. `use-block-resize.test.ts` 추가**(계획 목록에 없음) — 중심 좌표 보정은 부호가 뒤집혀도 화면이 "그럴듯하게" 움직여 눈으로 못 잡는다.
+
+계획대로 간 것 중 눈여겨볼 것: 서버 zod의 `width`는 **`.default(60)`**으로 받는다(기존 저장분에 `width`가 없어 `.strict()` 필수 수신이면 운영 중인 프리미엄 배너가 통째로 사라진다). DDL·마이그레이션은 없다(jsonb).
+
+### 남은 우려
+
+- **백필 없음(의도).** 기존 행은 읽을 때마다 `width: 60`이 채워지고, 구인자가 그 공고를 다시 저장할 때 jsonb에 영구 반영된다. 마이그레이션 금지 제약을 따른 결과.
+- **`x`·`width` 조합이 슬롯을 넘칠 수 있다.** `max-w-full`은 `AD_BANNER_WIDTH_MAX = 100`이라 사실상 무동작이고, `x=90`·`width=60`이면 오른쪽으로 삐져나간다(실제 클리핑은 상위 `overflow-hidden`이 한다). 실제로 막으려면 에디터에서 `x`·`width` 조합을 제한해야 한다. **수용하고 넘긴 항목.**
+- **운영자는 배너 대체 텍스트를 못 고친다.** 에디터 진입이 구인자 게이트라 운영자에겐 상태 카드의 삭제만 남았다. 구인자 쪽은 `editor-image-slot.tsx`에 **대체 텍스트 입력이 들어가 해소**됐다(Task 5 리포트의 "적을 곳이 없다" 우려는 HEAD에서 해결됨).
+- **다이얼로그 경로에서 취소 시 blob URL이 소량 남는다.** 저장 시 항목이 호출부로 넘어가므로 revoke하면 부모 미리보기가 깨진다. 팝업은 창이 닫히며 자동 회수된다.
+- **`glitch` 연출의 다중 줄 육안 확인이 필요하다.** pseudo에 `before:w-full after:w-full`을 넣어 본문과 줄바꿈 지점을 맞췄지만(컨트롤러 수정), 좁은 세로 슬롯 + 좁은 `width`에서 잔상 두 겹이 실제로 맞는지는 화면으로 봐야 한다.
+- `packages/ui`의 `DialogContent`에는 `overflow-y-auto`가 있어 에디터 상단 `sticky top-0`은 다이얼로그 폴백에서도 동작한다(확인함). 다만 제약 목록의 `overscroll-behavior: contain`은 base 컴포넌트에 없다 — 이 브랜치가 만든 문제는 아니다.
+
+### 매뉴얼 동기화
+
+`docs/manual/employer-manual.md`만 갱신했다(운영자·구직자 매뉴얼에는 이 화면 서술이 없다). 절 제목을 실제 버튼 라벨에 맞춰 **"배너 문구 편집" → "배너 이미지·문구 편집"**으로 바꾸고 목차·본문의 앵커 3곳을 함께 고쳤다. 인용한 UI 문구·수치는 전부 소스에서 대조했다(라벨·규격은 `job-ad-banner-spec.ts`, 상수는 `ad-banner-layout.ts`, 허용 형식은 `bambi-job-form.ts`의 `ALLOWED_AD_BANNER_MIME_TYPES`).

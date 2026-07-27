@@ -150,12 +150,12 @@ function MediaSlot({
 					<Button
 						aria-label={`${label} 삭제`}
 						onClick={onRemove}
-						size="icon-xs"
+						size="icon-sm"
 						title={`${label} 삭제`}
 						type="button"
-						variant="destructive"
+						variant="ghost"
 					>
-						<Trash2 />
+						<Trash2 aria-hidden="true" />
 					</Button>
 				) : null}
 			</div>
@@ -172,7 +172,7 @@ function MediaSlot({
 						/>
 					) : (
 						<div className="flex flex-col items-center gap-1 text-muted-foreground text-xs">
-							<ImageIcon className="size-4" />
+							<ImageIcon aria-hidden="true" className="size-4" />
 							<span>이미지 없음</span>
 						</div>
 					)}
@@ -197,7 +197,7 @@ function MediaSlot({
 							aria-label={`${label} 설명`}
 							maxLength={120}
 							onChange={(event) => onAltTextChange(event.target.value)}
-							placeholder="이미지 설명"
+							placeholder="가게 외관 사진…"
 							value={item?.altText ?? ""}
 						/>
 					) : null}
@@ -256,12 +256,12 @@ function AdBannerStatus({
 					<Button
 						aria-label={`${label} 삭제`}
 						onClick={onRemove}
-						size="icon-xs"
+						size="icon-sm"
 						title={`${label} 삭제`}
 						type="button"
-						variant="destructive"
+						variant="ghost"
 					>
-						<Trash2 />
+						<Trash2 aria-hidden="true" />
 					</Button>
 				) : null}
 			</div>
@@ -283,7 +283,7 @@ function AdBannerStatus({
 						/>
 					) : (
 						<div className="flex flex-col items-center gap-1 text-muted-foreground text-xs">
-							<ImageIcon className="size-4" />
+							<ImageIcon aria-hidden="true" className="size-4" />
 							<span>이미지 없음</span>
 						</div>
 					)}
@@ -296,17 +296,17 @@ function AdBannerStatus({
 						<Badge variant="outline">문구 {textCount}개</Badge>
 					</div>
 					<p className="break-words text-muted-foreground text-xs">
-						{item?.fileName ?? "편집기에서 이미지를 등록해 주세요."}
+						{item?.fileName ?? "편집기에서 이미지를 등록해 주십시오."}
 					</p>
 				</div>
 			</div>
 			{aspectRejected ? (
 				<Alert variant="destructive">
-					<TriangleAlert />
-					<AlertDescription>
+					<TriangleAlert aria-hidden="true" />
+					<AlertDescription className="text-pretty">
 						{label} 이미지({item?.width}×{item?.height})는 요구 비율{" "}
 						{aspectLabel}과 크게 달라 등록할 수 없습니다. {aspectLabel} 비율에
-						맞춰 최소 {minWidth}×{minHeight}px 이상으로 다시 등록해 주세요.
+						맞춰 최소 {minWidth}×{minHeight}px 이상으로 다시 등록해 주십시오.
 					</AlertDescription>
 				</Alert>
 			) : null}
@@ -348,10 +348,10 @@ export function JobPostMediaUploader({
 			</div>
 			{allowUpload ? null : (
 				<Alert>
-					<TriangleAlert />
-					<AlertDescription>
+					<TriangleAlert aria-hidden="true" />
+					<AlertDescription className="text-pretty">
 						운영자 편집에서는 새 이미지를 올릴 수 없습니다. 기존 이미지 삭제와
-						설명 수정만 가능해요.
+						설명 수정만 가능합니다.
 					</AlertDescription>
 				</Alert>
 			)}
@@ -459,8 +459,11 @@ function AdBannerSection({
 	// 선택 상품이 쓰지 않는 슬롯이라도 이미 올린 이미지가 있으면 계속 보여준다. 상품을 바꿨다고
 	// 결제한 이미지를 조용히 지우면 되돌릴 수 없고, 폼 상태에만 남겨두면 보이지 않는 고아가 된다.
 	// 구인자가 직접 삭제하거나 상품을 되돌릴 수 있게 경고와 함께 노출한다. 그래서 "보여줄
-	// 슬롯"은 상품이 요구하는 슬롯 ∪ 이미지가 남아 있는 슬롯이고, 에디터에도 같은 목록을
-	// 넘긴다 — 안 그러면 상품에서 빠진 이미지를 지우거나 바꿀 방법이 사라진다.
+	// 슬롯"은 상품이 요구하는 슬롯 ∪ 이미지가 남아 있는 슬롯이다.
+	// 단 이 목록을 에디터의 requiredUsages로 넘기면 안 된다 — 에디터는 그걸 저장 차단 게이트로
+	// 쓰는데, 그러면 "상품에서 빠진 세로형을 지우세요"라고 안내해 놓고 막상 지우면 "세로형을
+	// 등록해 주십시오"로 저장을 막는 막다른 길이 된다. 에디터는 requiredUsages와 무관하게 두 슬롯
+	// 탭을 모두 그리므로, 편집·삭제 경로는 allowedUsages를 넘겨도 그대로 살아 있다.
 	const shownSlots = AD_BANNER_SLOTS.filter(
 		({ key, usage }) => allowedUsages.includes(usage) || Boolean(media[key])
 	);
@@ -486,11 +489,11 @@ function AdBannerSection({
 			</div>
 			{isProductResolved && unusedBannerLabels.length > 0 ? (
 				<Alert variant="warning">
-					<TriangleAlert />
-					<AlertDescription>
+					<TriangleAlert aria-hidden="true" />
+					<AlertDescription className="text-pretty">
 						{unusedBannerLabels.join(", ")}는 지금 선택한 노출 상품이 쓰지
 						않습니다. 이미지는 그대로 보관되니 상품을 다시 바꾸면 사용할 수
-						있고, 필요 없으면 삭제해 주세요.
+						있고, 필요 없으면 삭제해 주십시오.
 					</AlertDescription>
 				</Alert>
 			) : null}
@@ -529,7 +532,7 @@ function AdBannerSection({
 							media: { ...media, ...nextBannerMedia },
 						})
 					}
-					requiredUsages={shownSlots.map(({ usage }) => usage)}
+					requiredUsages={allowedUsages}
 				/>
 			) : null}
 		</>

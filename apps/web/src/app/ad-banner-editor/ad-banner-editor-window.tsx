@@ -23,6 +23,17 @@ export function AdBannerEditorWindow() {
 	const [hasOpener, setHasOpener] = useState(true);
 	// 여기서 만든 objectURL을 창이 닫힐 때 놓아주기 위한 참조. 정리 함수가 최신 init을 봐야 한다.
 	const initRef = useRef<AdBannerEditorInit | null>(null);
+	// 헤더 X는 이 창의 유일한 닫기 버튼이다. 편집 상태를 아는 곳은 에디터뿐이라 닫기 의도를
+	// 거기로 흘려보내고, 에디터가 아직 없으면(대기·직접 열기 화면) 그냥 닫는다.
+	const closeRequestRef = useRef<(() => void) | null>(null);
+	const requestClose = () => {
+		if (closeRequestRef.current) {
+			closeRequestRef.current();
+			return;
+		}
+
+		window.close();
+	};
 
 	useEffect(() => {
 		const opener: Window | null = window.opener;
@@ -83,8 +94,8 @@ export function AdBannerEditorWindow() {
 		if (!hasOpener) {
 			return (
 				<EmptyState
-					description="공고 등록 화면의 '배너 이미지·문구 편집' 버튼으로 열어 주세요. 편집할 배너는 그 화면에서 전달받습니다."
-					title="이 화면은 직접 열 수 없어요"
+					description="공고 등록 화면의 '배너 이미지·문구 편집' 버튼으로 열어 주십시오. 편집할 배너는 그 화면에서 전달받습니다."
+					title="이 화면은 직접 열 수 없습니다"
 				/>
 			);
 		}
@@ -92,14 +103,15 @@ export function AdBannerEditorWindow() {
 		if (!init) {
 			return (
 				<EmptyState
-					description="공고 등록 화면에서 배너 정보를 받아오는 중이에요…"
-					title="에디터를 준비하고 있어요"
+					description="공고 등록 화면에서 배너 정보를 받아오는 중입니다…"
+					title="에디터를 준비하고 있습니다"
 				/>
 			);
 		}
 
 		return (
 			<AdBannerEditor
+				closeRequestRef={closeRequestRef}
 				initialLayout={init.layout}
 				initialMedia={init.media}
 				onCancel={() => window.close()}
@@ -117,14 +129,18 @@ export function AdBannerEditorWindow() {
 					<h1 className="truncate font-semibold text-base md:text-lg">
 						광고 배너 편집
 					</h1>
-					<p className="truncate text-muted-foreground text-xs md:text-sm">
+					{/* truncate를 두면 좁은 창에서 안내가 통째로 잘린다. 줄바꿈을 허용하되
+					    text-pretty로 마지막 줄에 한 단어만 남는 모양을 막는다. */}
+					<p className="text-pretty text-muted-foreground text-xs md:text-sm">
 						저장하면 공고 등록 화면으로 돌아갑니다.
 					</p>
 				</div>
 				<Button
 					aria-label="편집 창 닫기"
-					onClick={() => window.close()}
+					onClick={requestClose}
 					size="icon"
+					title="편집 창 닫기"
+					type="button"
 					variant="ghost"
 				>
 					<X aria-hidden="true" />

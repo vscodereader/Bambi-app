@@ -76,6 +76,12 @@ export const useBlockResize = ({
 	const handlePointerDown = useCallback(
 		(block: { id: string; width: number; x: number }, edge: BlockResizeEdge) =>
 			(event: React.PointerEvent<HTMLElement>) => {
+				// 주 버튼만 끈다(use-block-drag와 같은 이유 — 우클릭이 리사이즈를 시작하면
+				// 컨텍스트 메뉴 위에서 pointerup이 오지 않아 풀리지 않는다).
+				if (event.button !== 0) {
+					return;
+				}
+
 				// 핸들은 블록 위에 얹혀 있다. 전파를 멈추지 않으면 아래 블록의 드래그가 함께
 				// 시작돼 너비를 줄이는 동안 블록이 포인터를 따라다닌다.
 				event.stopPropagation();

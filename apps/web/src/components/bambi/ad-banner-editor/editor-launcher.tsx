@@ -15,23 +15,22 @@ import {
 import type { JobAdBannerUsage } from "@/lib/bambi/job-ad-banner-spec";
 import { revokeMediaItemPreview } from "@/lib/bambi/job-media-item";
 import type { JobFormMediaItem } from "@/lib/bambi-job-form";
-import { AdBannerEditor } from "./ad-banner-editor";
+import {
+	AdBannerEditor,
+	type AdBannerEditorMedia,
+	type AdBannerEditorResult,
+} from "./ad-banner-editor";
 
 // 새창 라우트. 부모 폼과 에디터 창이 같은 오리진이어야 postMessage 핸드셰이크가 성립한다.
 export const AD_BANNER_EDITOR_PATH = "/ad-banner-editor";
 
-// 에디터가 다루는 배너 이미지 두 장. 폼 JobFormMedia에서 배너 슬롯만 떼어낸 모양이라 결과를
-// 폼 상태에 그대로 되꽂을 수 있다 — 그래야 등록 버튼 잠금(useRequiredBannerGate), 필수 검증
-// (validateJobForm), 제출 시 GCS 업로드(resolveJobPostMediaForSubmit)가 한 줄도 안 바뀌고 돈다.
-export interface AdBannerEditorMedia {
-	adHorizontal: JobFormMediaItem | null;
-	adVertical: JobFormMediaItem | null;
-}
-
-export interface AdBannerEditorResult {
-	layout: AdBannerLayout;
-	media: AdBannerEditorMedia;
-}
+// 배너 이미지·결과 타입은 생산자인 AdBannerEditor가 소유한다. 여기서 같은 모양을 다시 선언하면
+// 구조적 타이핑 때문에 한쪽에 슬롯을 추가해도 컴파일이 통과하고, 에디터가 돌려주지 않은 슬롯이
+// 타입 오류 없이 사라진다.
+export type {
+	AdBannerEditorMedia,
+	AdBannerEditorResult,
+} from "./ad-banner-editor";
 
 // 부모 폼 ↔ 에디터 창 메시지 계약.
 //   에디터 → 부모: ready   (마운트 완료. 그전에는 메시지를 받을 수 없다)
@@ -127,8 +126,15 @@ interface AdBannerEditorLauncherProps {
 }
 
 const POPUP_NAME = "bambi-ad-banner-editor";
-const POPUP_FEATURES = "width=1120,height=880";
+const POPUP_WIDTH = 1120;
+const POPUP_HEIGHT = 880;
 const DESKTOP_QUERY = "(min-width: 1024px)";
+
+// 팝업 조건은 폭 1024px 이상이라 1280×800 노트북도 통과한다. 높이를 880으로 못박으면 창이
+// 화면 아래로 넘쳐 저장·취소 버튼이 화면 밖에 남는다(스티키 헤더가 위에 있어도 하단 여백이
+// 잘린다). 실제 작업 영역으로 접는다.
+const popupFeatures = (): string =>
+	`width=${Math.min(POPUP_WIDTH, window.screen.availWidth)},height=${Math.min(POPUP_HEIGHT, window.screen.availHeight)}`;
 
 export function AdBannerEditorLauncher({
 	layout,
@@ -136,7 +142,17 @@ export function AdBannerEditorLauncher({
 	onChange,
 	requiredUsages,
 }: AdBannerEditorLauncherProps) {
+	// 다이얼로그가 편집하는 배너 이미지. 부모가 들고 있는 항목을 그대로 넘기면 에디터가 이미지를
+	// 교체·삭제할 때 revokeMediaItemPreview가 **부모의** blob URL을 놓아버려, 취소하고 나와도
+	// 폼 썸네일이 깨진 채 남는다(파일·storageKey는 살아 있어 업로드는 정상 — 표시 결함이다).
+	// 열 때 한 번만 창을 넘길 때와 같은 변환을 태워 에디터가 자기 blob을 쓰게 한다. 매 렌더
+	// 변환하면 blob이 계속 샌다.
+	const [dialogMedia, setDialogMedia] = useState<AdBannerEditorMedia | null>(
+		null
+	);
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
+	// 에디터의 "정말 닫을까요?" 게이트로 닫기 의도를 흘려보낸다. Esc·백드롭도 여기를 지난다.
+	const closeRequestRef = useRef<(() => void) | null>(null);
 	// 새창에 건 message 리스너를 걷어내는 함수. 창을 두 번 열거나 폼을 떠날 때 쌓이지 않게 한다.
 	const stopListeningRef = useRef<(() => void) | null>(null);
 	// 새창이 열려 있는 동안 부모 폼이 다시 렌더될 수 있다. 클릭 시점의 onChange를 붙들고 있으면
@@ -150,8 +166,19 @@ export function AdBannerEditorLauncher({
 
 	useEffect(() => () => stopListeningRef.current?.(), []);
 
+	// 다이얼로그 저장. 돌려받은 미디어는 이 문서에서 만든 clone이라 그대로 부모에게 넘긴다 —
+	// 자리를 내주는 부모의 이전 blob만 놓아준다(새창 경로의 save와 같은 처리).
 	const handleSave = (result: AdBannerEditorResult) => {
+		revokeAdBannerEditorMedia(media);
+		setDialogMedia(null);
+		setIsDialogOpen(false);
 		onChange(result);
+	};
+
+	// 다이얼로그 취소. 부모의 미디어는 손대지 않았으므로 여기서 만든 clone만 놓아준다.
+	const handleDialogCancel = () => {
+		revokeAdBannerEditorMedia(dialogMedia);
+		setDialogMedia(null);
 		setIsDialogOpen(false);
 	};
 
@@ -159,7 +186,7 @@ export function AdBannerEditorLauncher({
 		const popup = window.open(
 			AD_BANNER_EDITOR_PATH,
 			POPUP_NAME,
-			POPUP_FEATURES
+			popupFeatures()
 		);
 
 		if (!popup) {
@@ -216,30 +243,55 @@ export function AdBannerEditorLauncher({
 			return;
 		}
 
+		setDialogMedia(
+			fromTransferableAdBannerMedia(toTransferableAdBannerMedia(media))
+		);
 		setIsDialogOpen(true);
 	};
 
 	return (
 		<>
 			<Button onClick={handleOpen} type="button" variant="outline">
-				<SquarePen data-icon="inline-start" />
+				<SquarePen aria-hidden="true" data-icon="inline-start" />
 				배너 이미지·문구 편집
 			</Button>
-			<Dialog onOpenChange={setIsDialogOpen} open={isDialogOpen}>
+			{/* Esc·백드롭은 그 자리에서 닫지 않고 에디터의 게이트로 넘긴다. 편집 내용이 있으면
+			    확인을 받고, 없으면 곧바로 닫힌다. */}
+			<Dialog
+				onOpenChange={(open) => {
+					if (open) {
+						setIsDialogOpen(true);
+						return;
+					}
+
+					// 에디터가 아직 안 붙었으면(마운트 직후 한 프레임) 게이트 없이 닫는다 —
+					// 폴백이 없으면 그 순간의 Esc가 아무것도 안 해 모달이 갇힌다.
+					if (closeRequestRef.current) {
+						closeRequestRef.current();
+						return;
+					}
+
+					handleDialogCancel();
+				}}
+				open={isDialogOpen}
+			>
 				{/* inset으로 폭을 정하므로 base의 w-[420px]를 w-auto로 풀어야 한다. max-w-none만
 				    걸면 max-w-[92vw] 안전망만 사라지고 420px 고정폭이 남아, 375~412px 휴대폰에서
 				    다이얼로그 오른쪽이 화면 밖으로 나간다(fixed라 스크롤로 닿지도 않는다).
-				    모바일에선 이 다이얼로그가 유일한 편집 경로다. */}
-				<DialogContent className="inset-2 w-auto max-w-none translate-x-0 translate-y-0 gap-4 p-4 md:inset-6 md:p-6">
+				    모바일에선 이 다이얼로그가 유일한 편집 경로라 안전 영역도 여기서 확보한다 —
+				    inset-2만 두면 노치·홈 인디케이터가 헤더와 하단 버튼을 덮는다. */}
+				<DialogContent className="top-[calc(--spacing(2)+env(safe-area-inset-top))] right-[calc(--spacing(2)+env(safe-area-inset-right))] bottom-[calc(--spacing(2)+env(safe-area-inset-bottom))] left-[calc(--spacing(2)+env(safe-area-inset-left))] w-auto max-w-none translate-x-0 translate-y-0 gap-4 p-4 md:inset-6 md:p-6">
 					<DialogTitle className="sr-only">광고 배너 편집</DialogTitle>
-					{/* 같은 문서라 blob previewUrl이 그대로 통한다 — 변환은 창을 넘는 경로에만 건다. */}
-					<AdBannerEditor
-						initialLayout={editorLayout}
-						initialMedia={media}
-						onCancel={() => setIsDialogOpen(false)}
-						onSave={handleSave}
-						requiredUsages={requiredUsages}
-					/>
+					{dialogMedia ? (
+						<AdBannerEditor
+							closeRequestRef={closeRequestRef}
+							initialLayout={editorLayout}
+							initialMedia={dialogMedia}
+							onCancel={handleDialogCancel}
+							onSave={handleSave}
+							requiredUsages={requiredUsages}
+						/>
+					) : null}
 				</DialogContent>
 			</Dialog>
 		</>

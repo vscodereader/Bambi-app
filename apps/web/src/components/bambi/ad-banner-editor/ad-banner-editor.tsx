@@ -1,5 +1,15 @@
 "use client";
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Card,
@@ -25,8 +35,8 @@ import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
-import { cn } from "@bambi-app/ui/lib/utils";
 import { Plus, TriangleAlert, Type } from "lucide-react";
+import type { RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { FieldHint } from "@/components/bambi/form-message";
@@ -41,8 +51,10 @@ import {
 	type AdBannerTextBlock,
 	clampPercent,
 	createAdBannerTextBlock,
+	formatAdBannerBlockLabel,
 } from "@/lib/bambi/ad-banner-layout";
 import {
+	findJobAdBannerRejection,
 	JOB_AD_BANNER_SPECS,
 	type JobAdBannerUsage,
 } from "@/lib/bambi/job-ad-banner-spec";
@@ -103,16 +115,52 @@ const findBlankBlock = (
 	return null;
 };
 
+// 이미지 슬롯이 "등록할 수 없습니다"라고 띄우는 사유(비율·최소 크기)는 실제 반려 사유다.
+// 저장 가드가 존재 여부만 보면, 경고를 무시하고 저장한 뒤 공고 제출 시점에 다른 창의 다른
+// 문구로 막히게 된다 — 이 리디자인이 없애려던 흐름이다. 빈 문구와 같은 자리에서 잡는다.
+const REJECTION_MESSAGES: Record<"aspect" | "size", string> = {
+	aspect: "비율이 규격과 크게 달라 등록할 수 없습니다.",
+	size: "최소 크기보다 작아 등록할 수 없습니다.",
+};
+
+const findRejectedImage = (
+	media: AdBannerEditorMedia
+): { message: string; slot: AdBannerSlot } | null => {
+	for (const slot of SLOT_ORDER) {
+		const { mediaKey, usage } = SLOT_META[slot];
+		const item = media[mediaKey];
+		const rejection = findJobAdBannerRejection({
+			height: item?.height,
+			usage,
+			width: item?.width,
+		});
+
+		if (rejection) {
+			return {
+				message: `${JOB_AD_BANNER_SPECS[usage].label} 이미지는 ${REJECTION_MESSAGES[rejection]} 다른 이미지로 바꿔 주십시오.`,
+				slot,
+			};
+		}
+	}
+
+	return null;
+};
+
 // 배너 에디터. window·postMessage를 모르는 순수 컴포넌트다 — 팝업·다이얼로그 껍데기가 각자
 // 방식으로 onSave·onCancel을 채운다. 배경 이미지는 initialMedia 하나에서만 온다: 배경 URL을
 // 따로 받으면 "패널에서 고른 이미지"와 "캔버스가 그리는 이미지"가 갈린다.
 export function AdBannerEditor({
+	closeRequestRef,
 	initialLayout,
 	initialMedia,
 	onCancel,
 	onSave,
 	requiredUsages,
 }: {
+	// 껍데기(팝업 창·다이얼로그)가 자기 닫기 경로(X 버튼·Esc·백드롭)를 여기로 흘려보내는
+	// 통로. 편집 상태는 전부 이 컴포넌트 안에 있어 "변경됐는지"를 아는 곳도 여기뿐이다 —
+	// 껍데기마다 확인 창을 따로 두면 세 곳에서 갈린다.
+	closeRequestRef?: RefObject<(() => void) | null>;
 	initialLayout: AdBannerLayout;
 	initialMedia: AdBannerEditorMedia;
 	onCancel: () => void;
@@ -123,6 +171,7 @@ export function AdBannerEditor({
 	const [media, setMedia] = useState<AdBannerEditorMedia>(initialMedia);
 	const [slot, setSlot] = useState<AdBannerSlot>("horizontal");
 	const [selectedId, setSelectedId] = useState<null | string>(null);
+	const [isDiscardOpen, setIsDiscardOpen] = useState(false);
 	// 저장 가드가 잡은 사유. 토스트로만 알리면 스크롤 밖의 어느 칸이 문제인지 알 수 없어,
 	// 문제가 난 자리 옆에 붙이고 그 컨트롤로 포커스를 옮긴다.
 	const [saveError, setSaveError] = useState<{
@@ -131,6 +180,72 @@ export function AdBannerEditor({
 	} | null>(null);
 	const imageInputRef = useRef<HTMLInputElement>(null);
 	const contentInputRef = useRef<HTMLInputElement>(null);
+
+	// 편집 시작 시점의 값. initialLayout은 런처가 매 렌더 새로 만들 수 있어(layout이 null이면
+	// createEmptyAdBannerLayout()) prop을 그대로 비교하면 항상 "변경됨"이 된다. useState로 첫
+	// 렌더의 값을 붙들어 둔다.
+	const [initial] = useState(() => ({
+		layout: initialLayout,
+		media: initialMedia,
+	}));
+	// setLayout·setMedia는 사용자가 실제로 손댈 때만 불리고 매번 새 객체를 만든다. 참조 비교로
+	// "한 번이라도 편집했는가"가 정확히 잡힌다(직접 원래대로 되돌린 경우만 과탐지 — 확인을 한 번
+	// 더 받는 쪽이라 안전하다).
+	const isDirty = layout !== initial.layout || media !== initial.media;
+
+	// 탭 닫기·새로고침·OS 창 닫기. 공용 useUnsavedChangesWarning 대신 직접 거는 이유: 저장과
+	// "버리고 닫기"는 같은 틱에 window.close()를 부르므로 상태로는 경고를 끌 수 없다(리렌더가
+	// 늦어 이미 답한 질문을 브라우저가 한 번 더 묻는다). 리스너가 보는 ref를 떠나기 직전에 내린다.
+	const warnOnUnloadRef = useRef(true);
+
+	useEffect(() => {
+		if (!isDirty) {
+			return;
+		}
+
+		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+			if (!warnOnUnloadRef.current) {
+				return;
+			}
+
+			event.preventDefault();
+			event.returnValue = "";
+		};
+
+		window.addEventListener("beforeunload", handleBeforeUnload);
+
+		return () => {
+			window.removeEventListener("beforeunload", handleBeforeUnload);
+		};
+	}, [isDirty]);
+
+	// 껍데기가 창·다이얼로그를 닫는 경로로 넘기기 직전에 거친다.
+	const leave = (close: () => void) => {
+		warnOnUnloadRef.current = false;
+		close();
+	};
+
+	const requestClose = () => {
+		if (isDirty) {
+			setIsDiscardOpen(true);
+			return;
+		}
+
+		leave(onCancel);
+	};
+
+	// 껍데기가 부르는 시점의 최신 requestClose를 넘겨야 한다. 의존성 배열 없이 매 렌더 갱신한다.
+	useEffect(() => {
+		if (!closeRequestRef) {
+			return;
+		}
+
+		closeRequestRef.current = requestClose;
+
+		return () => {
+			closeRequestRef.current = null;
+		};
+	});
 
 	const meta = SLOT_META[slot];
 	const slotLayout = layout[slot];
@@ -235,6 +350,14 @@ export function AdBannerEditor({
 			return;
 		}
 
+		const rejected = findRejectedImage(media);
+
+		if (rejected) {
+			setSlot(rejected.slot);
+			setSaveError({ field: "image", message: rejected.message });
+			return;
+		}
+
 		const blank = findBlankBlock(layout);
 
 		if (blank) {
@@ -248,7 +371,7 @@ export function AdBannerEditor({
 		}
 
 		setSaveError(null);
-		onSave({ layout, media });
+		leave(() => onSave({ layout, media }));
 	};
 
 	return (
@@ -286,12 +409,41 @@ export function AdBannerEditor({
 				</ToggleGroup>
 
 				<div className="flex items-center gap-2">
-					<Button onClick={onCancel} variant="outline">
+					<Button onClick={requestClose} type="button" variant="outline">
 						취소
 					</Button>
-					<Button onClick={handleSave}>저장</Button>
+					<Button onClick={handleSave} type="button">
+						저장
+					</Button>
 				</div>
 			</div>
+
+			{/* 이 화면의 상태는 전부 로컬이라 닫는 순간 이미지 두 장과 문구 좌표·색·굵기가
+			    복구 불가로 사라진다. 손댄 적이 있을 때만 묻는다 — 아무것도 안 고쳤으면 그냥
+			    닫혀야 한다. */}
+			<AlertDialog onOpenChange={setIsDiscardOpen} open={isDiscardOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>편집 내용을 버릴까요?</AlertDialogTitle>
+						<AlertDialogDescription>
+							저장하지 않은 이미지와 문구 배치가 모두 사라집니다. 되돌릴 수
+							없습니다.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>계속 편집</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								setIsDiscardOpen(false);
+								leave(onCancel);
+							}}
+							variant="destructive"
+						>
+							버리고 닫기
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
 			<div className="grid min-w-0 items-start gap-4 lg:grid-cols-[3fr_2fr]">
 				{/* 캔버스가 주인공이다. 데스크톱에서 더 넓은 칸을 차지하고, 모바일에서는 위로 온다. */}
@@ -324,7 +476,7 @@ export function AdBannerEditor({
 					<Card>
 						<CardHeader>
 							<CardTitle>{meta.label} 배너</CardTitle>
-							<CardDescription>
+							<CardDescription className="text-pretty">
 								{JOB_AD_BANNER_SPECS[meta.usage].description}
 							</CardDescription>
 						</CardHeader>
@@ -412,12 +564,11 @@ export function AdBannerEditor({
 											}
 										/>
 									</div>
-									<div
-										className={cn(
-											"flex items-center gap-3",
-											!slotLayout.scrim.enabled && "opacity-50"
-										)}
-									>
+									{/* 래퍼에 opacity-50을 또 걸면 슬라이더 자신의
+									    data-disabled:opacity-50과 곱해져 실효 0.25가 된다 — 꺼진
+									    상태의 값이 거의 안 보인다. 흐리게 만드는 일은 슬라이더가
+									    이미 한다. */}
+									<div className="flex items-center gap-3">
 										<Slider
 											aria-label="오버레이 강도"
 											disabled={!slotLayout.scrim.enabled}
@@ -431,7 +582,9 @@ export function AdBannerEditor({
 											step={5}
 											value={slotLayout.scrim.opacity}
 										/>
-										<span className="w-10 shrink-0 text-right text-muted-foreground text-xs">
+										{/* 끄는 동안 매 프레임 바뀌는 숫자다. tabular-nums가 없으면
+										    글리프 폭이 달라 값이 좌우로 흔들린다. */}
+										<span className="w-10 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
 											{slotLayout.scrim.opacity}%
 										</span>
 									</div>
@@ -446,7 +599,7 @@ export function AdBannerEditor({
 					<Card>
 						<CardHeader>
 							<CardTitle>문구</CardTitle>
-							<CardDescription>
+							<CardDescription className="text-pretty tabular-nums">
 								{slotLayout.texts.length}/{AD_BANNER_MAX_BLOCKS}개 · 목록에서
 								고르면 아래에서 편집합니다.
 							</CardDescription>
@@ -455,9 +608,10 @@ export function AdBannerEditor({
 									disabled={!canAddBlock}
 									onClick={handleAddBlock}
 									size="sm"
+									type="button"
 									variant="outline"
 								>
-									<Plus data-icon="inline-start" />
+									<Plus aria-hidden="true" data-icon="inline-start" />
 									추가
 								</Button>
 							</CardAction>
@@ -467,34 +621,43 @@ export function AdBannerEditor({
 								<Empty>
 									<EmptyHeader>
 										<EmptyTitle>아직 문구가 없습니다</EmptyTitle>
-										<EmptyDescription>
+										<EmptyDescription className="text-pretty">
 											문구를 추가하면 캔버스에서 위치와 폭을 자유롭게 잡을 수
 											있습니다. 추가하지 않으면 이미지만 그대로 노출됩니다.
 										</EmptyDescription>
 									</EmptyHeader>
 									<EmptyContent>
-										<Button onClick={handleAddBlock} variant="outline">
-											<Plus data-icon="inline-start" />첫 문구 추가
+										<Button
+											onClick={handleAddBlock}
+											type="button"
+											variant="outline"
+										>
+											<Plus aria-hidden="true" data-icon="inline-start" />첫
+											문구 추가
 										</Button>
 									</EmptyContent>
 								</Empty>
 							) : (
 								// 캔버스에서 겹친 블록은 클릭으로 고르기 어렵다. 목록이 확실한 경로다.
+								// 선택은 aria-pressed(토글)가 아니라 aria-current다 — 하나만 고를 수
+								// 있고 같은 항목을 다시 눌러 해제할 수 없다.
 								<ul className="flex flex-col gap-1">
 									{slotLayout.texts.map((block, index) => (
 										<li key={block.id}>
 											<Button
-												aria-pressed={block.id === selectedId}
+												aria-current={
+													block.id === selectedId ? "true" : undefined
+												}
 												className="w-full justify-start overflow-hidden"
 												onClick={() => setSelectedId(block.id)}
+												type="button"
 												variant={
 													block.id === selectedId ? "secondary" : "ghost"
 												}
 											>
-												<Type data-icon="inline-start" />
+												<Type aria-hidden="true" data-icon="inline-start" />
 												<span className="min-w-0 truncate">
-													{block.content.trim() ||
-														`문구 ${index + 1} (비어 있음)`}
+													{formatAdBannerBlockLabel(block, index)}
 												</span>
 											</Button>
 										</li>

@@ -16,6 +16,13 @@ export const useBlockDrag = ({
 
 	const handlePointerDown = useCallback(
 		(id: string) => (event: React.PointerEvent<HTMLElement>) => {
+			// 주 버튼만 끈다. 우클릭·가운데 클릭도 pointerdown을 내므로 가드가 없으면 컨텍스트
+			// 메뉴를 띄우는 사이 블록이 포인터를 따라 움직이고, 메뉴 위에서는 pointerup이 오지
+			// 않아 드래그가 풀리지 않는다. (터치·펜은 button === 0이라 그대로 통과한다.)
+			if (event.button !== 0) {
+				return;
+			}
+
 			draggingIdRef.current = id;
 			event.currentTarget.setPointerCapture(event.pointerId);
 		},

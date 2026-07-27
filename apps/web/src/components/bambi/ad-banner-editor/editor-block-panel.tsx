@@ -62,9 +62,9 @@ export function EditorBlockPanel({
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex items-center justify-between gap-2">
-				<h3 className="font-medium text-sm">문구 속성</h3>
-				<Button onClick={onDelete} size="sm" variant="ghost">
-					<Trash2 data-icon="inline-start" />
+				<h3 className="text-pretty font-medium text-sm">문구 속성</h3>
+				<Button onClick={onDelete} size="sm" type="button" variant="ghost">
+					<Trash2 aria-hidden="true" data-icon="inline-start" />
 					삭제
 				</Button>
 			</div>
@@ -74,15 +74,18 @@ export function EditorBlockPanel({
 				<Input
 					aria-describedby={error ? errorId : undefined}
 					aria-invalid={error ? true : undefined}
+					autoComplete="off"
 					id={contentId}
 					maxLength={AD_BANNER_TEXT_MAX_LENGTH}
 					onChange={(event) => onChange({ content: event.target.value })}
-					placeholder="주말 알바 급구"
+					placeholder="주말 알바 급구…"
 					ref={contentRef}
 					value={block.content}
 				/>
-				{/* 저장 가드가 잡은 사유는 토스트가 아니라 이 필드 옆에서 읽혀야 한다. */}
-				<div aria-live="polite" className="empty:hidden">
+				{/* 저장 가드가 잡은 사유는 토스트가 아니라 이 필드 옆에서 읽혀야 한다.
+				    empty:hidden을 걸면 리전이 갱신 순간 display:none이라 스크린리더가 삽입을
+				    놓친다 — 빈 채로 늘 렌더해 두고 자식만 조건부로 둔다. */}
+				<div aria-live="polite">
 					{error ? (
 						<p className="text-destructive text-xs" id={errorId}>
 							{error}
@@ -97,7 +100,9 @@ export function EditorBlockPanel({
 			<div className="flex flex-col gap-2">
 				<div className="flex items-center justify-between gap-2">
 					<span className="font-medium text-sm">글자 크기</span>
-					<span className="text-muted-foreground text-xs">
+					{/* 슬라이더를 끄는 동안 매 프레임 바뀌는 숫자다. tabular-nums가 없으면 자릿수가
+					    같아도 글리프 폭이 달라 값이 좌우로 흔들린다. */}
+					<span className="text-muted-foreground text-xs tabular-nums">
 						{block.fontSize}%
 					</span>
 				</div>
@@ -114,7 +119,9 @@ export function EditorBlockPanel({
 			<div className="flex flex-col gap-2">
 				<div className="flex items-center justify-between gap-2">
 					<span className="font-medium text-sm">문구 폭</span>
-					<span className="text-muted-foreground text-xs">{block.width}%</span>
+					<span className="text-muted-foreground text-xs tabular-nums">
+						{block.width}%
+					</span>
 				</div>
 				<Slider
 					aria-label="문구 폭"
@@ -213,17 +220,18 @@ export function EditorBlockPanel({
 
 			{lowContrast ? (
 				<Alert variant="warning">
-					<TriangleAlert />
-					<AlertDescription>
-						이 조합은 읽기 어려울 수 있습니다. 배경색이나 글자색을 바꿔 주세요.
+					<TriangleAlert aria-hidden="true" />
+					<AlertDescription className="text-pretty">
+						이 조합은 읽기 어려울 수 있습니다. 배경색이나 글자색을 바꿔
+						주십시오.
 					</AlertDescription>
 				</Alert>
 			) : null}
 
 			{unprotectedImage ? (
 				<Alert variant="warning">
-					<TriangleAlert />
-					<AlertDescription>
+					<TriangleAlert aria-hidden="true" />
+					<AlertDescription className="text-pretty">
 						사진에 따라 글자가 안 보일 수 있습니다. 어두운 오버레이를 켜면
 						안정적입니다.
 					</AlertDescription>
