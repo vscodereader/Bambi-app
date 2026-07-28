@@ -49,15 +49,17 @@ const createStubClient = (): ReturnType<typeof createCrawlClient> => ({
 });
 
 beforeAll(async () => {
-	// 이 테스트는 공유 dev DB를 쓴다. 여우알바를 대상으로 수집을 켜서 돌린다 —
-	// sourceSite를 명시해 컬럼 기본값과 무관하게 여우알바 경로를 타게 한다.
+	// 이 테스트는 공유 dev DB를 쓴다. (여우알바 × 공고)를 대상으로 수집을 켜서 돌린다 —
+	// 사이트·데이터 종류를 명시해 컬럼 기본값과 무관하게 구현된 조합의 경로를 타게 한다.
+	const target = {
+		crawlContentType: "job_post" as const,
+		crawlEnabled: true,
+		crawlSourceSite: "foxalba" as const,
+	};
 	await db
 		.insert(bambiSiteSettings)
-		.values({ crawlEnabled: true, crawlSourceSite: "foxalba", id: "default" })
-		.onConflictDoUpdate({
-			set: { crawlEnabled: true, crawlSourceSite: "foxalba" },
-			target: bambiSiteSettings.id,
-		});
+		.values({ id: "default", ...target })
+		.onConflictDoUpdate({ set: target, target: bambiSiteSettings.id });
 });
 
 afterAll(async () => {

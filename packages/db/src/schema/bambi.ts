@@ -208,6 +208,13 @@ export const crawlSourceSite = pgEnum("crawl_source_site", [
 	"queenalba",
 ]);
 
+// 수집 데이터 종류. 공고는 crawled_job_post, 커뮤니티(게시판)는 crawled_community_topic로
+// 각각 다른 파서·테이블로 간다. 운영자가 사이트와 함께 이 값을 골라, 한 회차에 한 종류만 긁는다.
+export const crawlContentType = pgEnum("crawl_content_type", [
+	"job_post",
+	"community",
+]);
+
 // job_post의 출처. 크롤링 원본은 job_post가 아니라 crawled_job_post에 살기 때문에
 // 여기에는 "crawled"가 없다 — 크롤링 공고가 job_post로 넘어오는 유일한 경로가 전환이다.
 // 이 경계 덕분에 결제·부스트·채팅·리뷰가 "크롤링이면 예외" 분기를 달지 않아도 된다.
@@ -828,6 +835,11 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 기본 foxalba(유일하게 파서가 구현된 사이트).
 	crawlSourceSite: crawlSourceSite("crawl_source_site")
 		.default("foxalba")
+		.notNull(),
+	// 수집 데이터 종류(공고/커뮤니티). 사이트와 함께 (사이트×종류) 조합을 이루고, 파서가
+	// 구현된 조합만 실제로 돈다. 기본 job_post(현재 구현된 조합은 foxalba×job_post뿐).
+	crawlContentType: crawlContentType("crawl_content_type")
+		.default("job_post")
 		.notNull(),
 	// 수집 주기(시간). null이면 코드 기본값(DEFAULT_CRAWL_INTERVAL_HOURS)으로 폴백한다.
 	crawlIntervalHours: integer("crawl_interval_hours"),

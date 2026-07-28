@@ -30,11 +30,14 @@ import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
+	CRAWL_CONTENT_TYPE_LABELS,
+	CRAWL_CONTENT_TYPES,
 	CRAWL_RUN_STATUS_LABELS,
 	CRAWL_RUN_STATUS_VARIANTS,
 	CRAWL_SOURCE_SITE_LABELS,
 	CRAWL_SOURCE_SITES,
 	CRAWLED_POST_STATUS_LABELS,
+	type CrawlContentType,
 	type CrawlSourceSite,
 	formatCrawlTimestamp,
 } from "@/lib/bambi/crawler";
@@ -50,6 +53,7 @@ export default function ModeratorCrawlerPage() {
 	const [enabled, setEnabled] = useState(false);
 	const [intervalHours, setIntervalHours] = useState("");
 	const [sourceSite, setSourceSite] = useState<CrawlSourceSite>("foxalba");
+	const [contentType, setContentType] = useState<CrawlContentType>("job_post");
 
 	// 저장된 값이 오면 폼에 채운다(주기가 미설정이면 빈 값 → 기본값 placeholder 노출).
 	useEffect(() => {
@@ -62,6 +66,7 @@ export default function ModeratorCrawlerPage() {
 			data.intervalHours === null ? "" : String(data.intervalHours)
 		);
 		setSourceSite(data.sourceSite);
+		setContentType(data.contentType);
 	}, [settingsQuery.data]);
 
 	const saveMutation = useMutation(
@@ -97,7 +102,7 @@ export default function ModeratorCrawlerPage() {
 
 				if (result.reason === "not_implemented") {
 					toast.error(
-						"이 사이트 수집기는 아직 준비 중이에요. 여우알바를 선택해 주세요."
+						"이 조합의 수집기는 아직 준비 중이에요. 준비된 사이트·데이터를 선택해 주세요."
 					);
 					return;
 				}
@@ -128,7 +133,12 @@ export default function ModeratorCrawlerPage() {
 			return;
 		}
 
-		saveMutation.mutate({ enabled, intervalHours: parsed, sourceSite });
+		saveMutation.mutate({
+			contentType,
+			enabled,
+			intervalHours: parsed,
+			sourceSite,
+		});
 	};
 
 	const defaultHours = settingsQuery.data?.defaultIntervalHours ?? 6;
@@ -136,9 +146,18 @@ export default function ModeratorCrawlerPage() {
 	const statusKeys = Object.keys(
 		CRAWLED_POST_STATUS_LABELS
 	) as (keyof typeof CRAWLED_POST_STATUS_LABELS)[];
-	// 파서가 구현된 사이트. 선택은 되지만 미구현 사이트는 "준비 중" 안내를 띄운다.
-	const implementedSites = settingsQuery.data?.implementedSites ?? ["foxalba"];
-	const selectedSiteReady = implementedSites.includes(sourceSite);
+	// 파서가 구현된 (사이트 × 데이터 종류) 조합. 선택은 되지만 미구현 조합은 "준비 중"으로
+	// 안내하고 즉시 수집을 잠근다.
+	const implementedTargets = settingsQuery.data?.implementedTargets ?? [
+		{ contentType: "job_post" as const, site: "foxalba" as const },
+	];
+	const siteHasAnyTarget = (site: CrawlSourceSite) =>
+		implementedTargets.some((target) => target.site === site);
+	const targetImplemented = (site: CrawlSourceSite, type: CrawlContentType) =>
+		implementedTargets.some(
+			(target) => target.site === site && target.contentType === type
+		);
+	const selectedTargetReady = targetImplemented(sourceSite, contentType);
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
@@ -164,7 +183,7 @@ export default function ModeratorCrawlerPage() {
 								{CRAWL_SOURCE_SITES.map((site) => (
 									<ToggleGroupItem key={site} value={site}>
 										{CRAWL_SOURCE_SITE_LABELS[site]}
-										{implementedSites.includes(site) ? null : " (준비 중)"}
+										{siteHasAnyTarget(site) ? null : " (준비 중)"}
 									</ToggleGroupItem>
 								))}
 							</ToggleGroup>
@@ -172,10 +191,37 @@ export default function ModeratorCrawlerPage() {
 								한 번에 한 사이트만 수집합니다. 대상을 바꾸면 다음 회차부터
 								적용돼요.
 							</p>
-							{selectedSiteReady ? null : (
+						</div>
+
+						<div className="flex flex-col gap-2">
+							<Label>수집 데이터</Label>
+							<ToggleGroup
+								aria-label="수집 데이터 종류"
+								className="w-full flex-wrap"
+								onValueChange={(value) => {
+									const next = value.at(-1);
+									if (next) {
+										setContentType(next as CrawlContentType);
+									}
+								}}
+								value={[contentType]}
+							>
+								{CRAWL_CONTENT_TYPES.map((type) => (
+									<ToggleGroupItem key={type} value={type}>
+										{CRAWL_CONTENT_TYPE_LABELS[type]}
+										{targetImplemented(sourceSite, type) ? null : " (준비 중)"}
+									</ToggleGroupItem>
+								))}
+							</ToggleGroup>
+							<p className="m-0 text-muted-foreground text-xs">
+								공고는 채용 공고를, 커뮤니티는 게시판 글을 수집합니다.
+								사이트마다 준비된 데이터가 달라요.
+							</p>
+							{selectedTargetReady ? null : (
 								<Alert>
 									<AlertDescription>
-										{CRAWL_SOURCE_SITE_LABELS[sourceSite]} 수집기는 아직 준비
+										{CRAWL_SOURCE_SITE_LABELS[sourceSite]}{" "}
+										{CRAWL_CONTENT_TYPE_LABELS[contentType]} 수집기는 아직 준비
 										중이라, 선택해 저장해도 실제 수집은 돌지 않습니다. 파서가
 										준비되면 자동으로 켜집니다.
 									</AlertDescription>
@@ -226,7 +272,7 @@ export default function ModeratorCrawlerPage() {
 									runNowMutation.isPending ||
 									settingsQuery.isLoading ||
 									!settingsQuery.data?.enabled ||
-									!selectedSiteReady
+									!selectedTargetReady
 								}
 								onClick={() => runNowMutation.mutate({})}
 								type="button"
