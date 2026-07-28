@@ -198,6 +198,39 @@ export const chatAttachmentCategory = pgEnum("chat_attachment_category", [
 	"pdf",
 ]);
 
+// 크롤링 대상 사이트. 파서가 사이트마다 하나씩이라 값이 곧 파서 선택 키다.
+// queenalba는 뺐다 — 사이트 전체가 KCB 본인확인 기반 성인인증 게이트(/okname/phone_popup2.php,
+// /okname/ipin2.php) 뒤에 있어 인증 없이는 목록·게시판 링크조차 노출되지 않는다. 이를 자동으로
+// 통과하려면 실제 사람의 본인확인을 봇에 심어야 하므로 합법적 수집 경로가 없다.
+// 제휴로 데이터를 받게 되면 그때 enum 값 한 줄을 더한다.
+export const crawlSourceSite = pgEnum("crawl_source_site", ["foxalba"]);
+
+// job_post의 출처. 크롤링 원본은 job_post가 아니라 crawled_job_post에 살기 때문에
+// 여기에는 "crawled"가 없다 — 크롤링 공고가 job_post로 넘어오는 유일한 경로가 전환이다.
+// 이 경계 덕분에 결제·부스트·채팅·리뷰가 "크롤링이면 예외" 분기를 달지 않아도 된다.
+export const jobPostSource = pgEnum("job_post_source", [
+	"original",
+	"converted",
+]);
+
+// 수집 공고의 생애. needs_review는 원본 업종이 우리 8종 enum에 매핑되지 않아 운영자가
+// 손으로 이어줘야 하는 상태다(매핑 실패를 버리지 않고 남긴다).
+export const crawledPostStatus = pgEnum("crawled_post_status", [
+	"active",
+	"needs_review",
+	"expired",
+]);
+
+// 수집 회차 결과. aborted_low_yield는 파싱 성공률이 임계치 아래여서 아무것도 커밋하지 않고
+// 중단한 경우다 — 상대가 마크업을 바꿔 0건이 파싱된 것을 "공고가 사라졌다"로 오해해
+// 전량 만료시키는 사고를 막는 장치다.
+export const crawlRunStatus = pgEnum("crawl_run_status", [
+	"running",
+	"success",
+	"failed",
+	"aborted_low_yield",
+]);
+
 export const jobDescriptionBlockTypes = [
 	"paragraph",
 	"heading",
@@ -303,6 +336,139 @@ export const employerTeamProfile = pgTable(
 	]
 );
 
+// 외부 사이트에서 수집한 공고 원본. job_post와 한 테이블에 섞지 않는 이유는 소유자가 없기
+// 때문이다 — job_post는 organization_id와 created_by_user_id가 NOT NULL이라 크롤링 행에
+// 붙일 주인이 없고, 억지로 합성 계정을 붙이면 그 조직이 업소 목록·검색·채팅·통계 전반에
+// 유령으로 섞인다. 업체가 실제로 가입해 전환될 때만 job_post 행이 생긴다.
+export const crawledJobPost = pgTable(
+	"crawled_job_post",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		sourceSite: crawlSourceSite("source_site").notNull(),
+		// 상세 URL에서 뽑은 원본 식별자(foxalba o_idx, queenalba num). 사이트와 묶어 유니크라
+		// 재수집이 멱등이 된다.
+		sourceExternalId: text("source_external_id").notNull(),
+		sourceUrl: text("source_url").notNull(),
+		title: text("title").notNull(),
+		// 공고에 내걸린 업소 표시명(원본 "닉네임/업소명"). 사업자등록 상호인 biz_name과 다른
+		// 축이라 따로 둔다 — 이쪽은 간판이라 공개해도 되고, biz_name은 운영자 전용 리드다.
+		shopName: text("shop_name"),
+		// 정규화 본문. 연락처 마스킹을 적용한 뒤 저장한다 — 유흥 공고는 본문에 연락처를
+		// 대문짝만하게 박아두기 때문에, 필드만 가리고 본문을 그대로 두면 아무것도 가린 게 아니다.
+		// 원문 HTML은 보관하지 않는다(Cheditor 산출물이라 스크립트·인라인 스타일이 섞여 있다).
+		body: text("body").notNull(),
+		region: text("region"),
+		district: text("district"),
+		// 원본 업종 문자열. 우리 8종 enum에 매핑되지 않아도 버리지 않고 남겨서
+		// 운영자가 손으로 잇게 한다(status = needs_review).
+		industryRaw: text("industry_raw"),
+		industryCategory: jobIndustryCategory("industry_category"),
+		// 파싱 전 급여 원문("일 15만원", "협의"). 파싱 결과가 틀렸을 때 근거로 되짚는다.
+		payRaw: text("pay_raw"),
+		payAmount: integer("pay_amount"),
+		payUnit: text("pay_unit"),
+		workSchedule: text("work_schedule"),
+		gender: text("gender"),
+		ageRange: text("age_range"),
+		// 운영자 전용 영업 리드. 공개 API의 select에서 제외한다 — 원본 사이트에 연락처를 올린
+		// 담당자는 그 사이트 이용자에게 연락받는 데 동의했을 뿐 다른 서비스에서의 재공개에
+		// 동의한 적이 없고, 업종 특성상 통제 못 하는 확산은 실제 피해로 이어진다.
+		contactName: text("contact_name"),
+		contactPhone: text("contact_phone"),
+		contactKakao: text("contact_kakao"),
+		bizName: text("biz_name"),
+		address: text("address"),
+		// 정규화 필드 전체의 해시. 값이 같으면 재수집 시 last_seen_at만 갱신하고 UPDATE를 건너뛴다.
+		contentHash: text("content_hash").notNull(),
+		status: crawledPostStatus("status").default("active").notNull(),
+		firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+		// 목록에서 이 공고를 마지막으로 본 시각. 원본에서 사라져도 즉시 지우지 않고 이 값이
+		// 낡으면 expired로 넘긴다(일시 장애로 전량이 날아가는 사고 방어).
+		lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+		// 상세 페이지를 마지막으로 받은 시각. 목록만 보면 생존 여부는 알 수 있어도 내용 변경은
+		// 알 수 없어, 이 값을 기준으로 상세를 다시 받을 대상을 고른다. last_seen_at과 분리한
+		// 이유는 매 회차 목록으로 갱신되는 값과 섞이면 재수집 판정이 무너지기 때문이다.
+		detailFetchedAt: timestamp("detail_fetched_at"),
+		sourcePostedAt: timestamp("source_posted_at"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("crawled_job_post_source_uidx").on(
+			table.sourceSite,
+			table.sourceExternalId
+		),
+		index("crawled_job_post_status_last_seen_at_idx").on(
+			table.status,
+			table.lastSeenAt
+		),
+		index("crawled_job_post_discovery_idx").on(
+			table.status,
+			table.industryCategory,
+			table.region
+		),
+	]
+);
+
+// 외부 게시판에서 뽑는 주제 신호. 제목과 반응 지표만 담고 본문은 저장하지 않는다 —
+// 게시글은 개별 작성자의 저작물이고, 남의 글을 community_post에 넣으려면 우리 회원 ID와
+// 가짜 글 비밀번호를 붙여야 해서 "남이 쓴 글이 우리 회원 얼굴로 서는" 구조가 된다.
+// 대신 "어떤 주제가 실제로 반응을 얻는가"만 운영 참고자료로 쓰고 시드 글은 운영이 직접 쓴다.
+export const crawledCommunityTopic = pgTable(
+	"crawled_community_topic",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		sourceSite: crawlSourceSite("source_site").notNull(),
+		sourceExternalId: text("source_external_id").notNull(),
+		sourceUrl: text("source_url").notNull(),
+		boardName: text("board_name"),
+		title: text("title").notNull(),
+		viewCount: integer("view_count"),
+		commentCount: integer("comment_count"),
+		sourcePostedAt: timestamp("source_posted_at"),
+		firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+		lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("crawled_community_topic_source_uidx").on(
+			table.sourceSite,
+			table.sourceExternalId
+		),
+		index("crawled_community_topic_seen_idx").on(
+			table.sourceSite,
+			table.lastSeenAt
+		),
+	]
+);
+
+// 수집 회차 기록. DOM 크롤링의 운영 비용은 대부분 셀렉터가 소리 없이 깨지는 데서 나오므로,
+// 회차별 수율을 남겨야 파손을 알아챌 수 있다.
+export const crawlRun = pgTable(
+	"crawl_run",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		sourceSite: crawlSourceSite("source_site").notNull(),
+		status: crawlRunStatus("status").default("running").notNull(),
+		startedAt: timestamp("started_at").defaultNow().notNull(),
+		finishedAt: timestamp("finished_at"),
+		pagesFetched: integer("pages_fetched").default(0).notNull(),
+		itemsSeen: integer("items_seen").default(0).notNull(),
+		itemsNew: integer("items_new").default(0).notNull(),
+		itemsUpdated: integer("items_updated").default(0).notNull(),
+		itemsFailed: integer("items_failed").default(0).notNull(),
+		error: text("error"),
+	},
+	(table) => [
+		index("crawl_run_source_site_started_at_idx").on(
+			table.sourceSite,
+			table.startedAt
+		),
+	]
+);
+
 export const jobPost = pgTable(
 	"job_post",
 	{
@@ -316,6 +482,13 @@ export const jobPost = pgTable(
 		createdByUserId: text("created_by_user_id")
 			.notNull()
 			.references(() => user.id),
+		// 출처. 기본값이 "original"이라 기존 행은 백필 없이 그대로 맞는다.
+		source: jobPostSource("source").default("original").notNull(),
+		// 전환의 씨앗이 된 크롤링 원본. 원본이 만료돼 정리돼도 전환된 공고는 남아야 하므로
+		// set null이다. 한 원본은 한 번만 전환되므로 유니크(nullable이라 미전환 행은 제한 없음).
+		crawledFromId: uuid("crawled_from_id").references(() => crawledJobPost.id, {
+			onDelete: "set null",
+		}),
 		status: jobPostStatus("status").default("pending_review").notNull(),
 		industryCategory: jobIndustryCategory("industry_category").notNull(),
 		region: text("region").notNull(),
@@ -378,6 +551,7 @@ export const jobPost = pgTable(
 			table.region,
 			table.payAmount
 		),
+		uniqueIndex("job_post_crawled_from_id_uidx").on(table.crawledFromId),
 	]
 );
 
@@ -634,6 +808,15 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	privacySmsProvider: text("privacy_sms_provider"),
 	privacyContactPhone: text("privacy_contact_phone"),
 	privacyContactEmail: text("privacy_contact_email"),
+	// 크롤링 마스터 스위치. 스케줄러 job은 항상 등록해두고 매 틱 이 값을 읽는다 —
+	// toad-scheduler의 job.stop()은 프로세스 메모리 상태라 서버를 재시작하거나 인스턴스가
+	// 늘면 상태가 갈리지만, DB 플래그는 어디서 켜도 모든 인스턴스에 즉시 반영된다.
+	// 기본이 false라 배포만으로는 아무것도 수집하지 않는다(운영자가 명시적으로 켠다).
+	crawlEnabled: boolean("crawl_enabled").default(false).notNull(),
+	// 수집 주기(시간). null이면 코드 기본값(DEFAULT_CRAWL_INTERVAL_HOURS)으로 폴백한다.
+	crawlIntervalHours: integer("crawl_interval_hours"),
+	// 마지막 수집 시각. 틱 간격보다 이 값을 기준으로 판정해 서버 재시작에도 주기가 밀리지 않는다.
+	crawlLastRunAt: timestamp("crawl_last_run_at"),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())

@@ -25,6 +25,7 @@
     "@orpc/zod": "catalog:",
     "@types/pg": "catalog:",
     "better-auth": "catalog:",
+    "cheerio": "^1.2.0",
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
     "zod": "catalog:"
