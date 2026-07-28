@@ -27,8 +27,9 @@ const isStaticFile = (pathname: string): boolean =>
 const next: GateDecision = { type: "next" };
 const redirect = (to: string): GateDecision => ({ type: "redirect", to });
 
-// 인증 UI는 /seeker 위의 오버레이다. 목록 루트는 비로그인도 통과시키고, 그 위에
-// 뜨는 카드가 게이트 역할을 한다(배경 데이터는 서버에서 마스킹된다).
+// 인증 UI는 /seeker가 직접 그리는 전체 화면 게이트다. 목록 루트는 비로그인도
+// 통과시키되, ?auth= 쿼리가 붙으면 목록 대신 블러 배경 위 인증 카드를 렌더한다
+// (배경 데이터는 서버에서 마스킹된다). 실제 목록 위에 겹치는 다이얼로그는 없다.
 const SEEKER_ROOT = "/seeker";
 // 그냥 들어온 비로그인 방문자에게는 로그인 폼을 먼저 보인다. 재방문자가 다수라
 // 로그인이 기본이고, 가입은 카드 안의 전환 링크로 한 번에 갈 수 있다.

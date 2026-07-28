@@ -16,6 +16,7 @@ import {
 } from "@/lib/bambi/guest";
 import { client, queryClient } from "@/utils/orpc";
 import { Button, Card, Logo } from "../ds";
+import { PhoneVerifyDialog } from "../phone-verify-dialog";
 import { AdultNotice } from "./adult-notice";
 import {
 	type AuthFormValues,
@@ -30,6 +31,10 @@ import { AuthVerifyStep } from "./auth-verify-step";
 type AuthMode = "sign-in" | "sign-up";
 // 회원가입은 본인인증(verify)을 마쳐야 가입 폼(form)이 열리는 2단계다.
 type SignupStep = "form" | "verify";
+
+// 게스트 인증 버튼의 식별자. 회원가입 단계의 SIGNUP_INTENT(auth-verify-step)와 반드시
+// 달라야 한다 — 모바일 리디렉션으로 복귀했을 때 인증을 시작한 버튼만 결과를 처리한다.
+const GUEST_INTENT = "auth-panel:guest";
 
 const EMPTY_FORM: AuthFormValues = {
 	email: "",
@@ -128,12 +133,10 @@ function AuthSteps({ current }: { current: 1 | 2 }) {
 // 카드 머리(브랜드 + 단계 + 제목). 좌측 소개 컬럼이 없어져 이 로고가 브랜드를
 // 대표하는 유일한 자리이고, 단계 표기는 같은 행 반대편에 두어 넓어진 카드 폭을 쓴다.
 function AuthCardHeader({
-	compact,
 	isSignUp,
 	step,
 	title,
 }: {
-	compact: boolean;
 	isSignUp: boolean;
 	step: SignupStep;
 	title: string;
@@ -141,30 +144,17 @@ function AuthCardHeader({
 	return (
 		<>
 			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-				<Logo lang="ko" size={compact ? "md" : "lg"} />
+				<Logo lang="ko" size="lg" />
 				{isSignUp ? <AuthSteps current={step === "verify" ? 1 : 2} /> : null}
 			</div>
-			<h2
-				className={cn(
-					"mt-6 mb-5 font-extrabold tracking-tight",
-					compact ? "text-2xl" : "text-2xl sm:text-3xl"
-				)}
-			>
+			<h2 className="mt-6 mb-5 font-extrabold text-2xl tracking-tight sm:text-3xl">
 				{title}
 			</h2>
 		</>
 	);
 }
 
-export function AuthPanel({
-	compact = false,
-	onDone,
-}: {
-	// Dialog 안처럼 폭이 좁은 자리에서는 좌측 소개 컬럼을 접고 폼만 보여준다.
-	compact?: boolean;
-	// 로그인·가입이 끝나 화면을 떠나기 직전에 감싼 쪽이 정리할 기회를 준다.
-	onDone?: () => void;
-} = {}) {
+export function AuthPanel() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const initialMode = useMemo(
@@ -243,7 +233,6 @@ export function AuthPanel({
 	// 하드 내비게이션으로 Router Cache를 우회해 갓 세팅된 게스트 쿠키가 반영되게 한다.
 	const handleVerifiedForGuest = async (identityVerificationId: string) => {
 		await postGuestVerification({ identityVerificationId });
-		onDone?.();
 		window.location.assign("/seeker");
 	};
 
@@ -256,7 +245,6 @@ export function AuthPanel({
 
 	const handleMockVerifiedForGuest = async (input: MockPhoneVerifyInput) => {
 		await postGuestVerification(input);
-		onDone?.();
 		window.location.assign("/seeker");
 	};
 
@@ -279,7 +267,6 @@ export function AuthPanel({
 		queryClient.invalidateQueries();
 		// 역할과 무관하게 구직자 홈으로 진입한다. 구인자는 헤더/탭바의 "구인 관리"
 		// 버튼으로 /employer에 들어가고, 대시보드가 업체정보 입력을 유도한다.
-		onDone?.();
 		router.push("/seeker" as Route);
 	};
 
@@ -312,7 +299,6 @@ export function AuthPanel({
 		// 간헐적으로 인증 화면에 머문다(재로그인이 "간혹" 되고 "간혹" 안 되는 원인).
 		// 하드 내비게이션으로 Router Cache를 통째로 우회한다: 브라우저가 갓 설정된
 		// 세션 쿠키로 "/"를 새로 요청 → 미들웨어 통과 → 서버가 role 홈을 계산한다.
-		onDone?.();
 		window.location.assign("/");
 	};
 
@@ -387,33 +373,24 @@ export function AuthPanel({
 			    머리는 위, 본문은 남는 높이를 위아래로 나눈 광학 중앙, 19금 고지는 바닥.
 			    인증 단계처럼 내용이 짧아도 남는 높이가 "덩어리 아래의 빈 꼬리"로 몰리지 않는다. */}
 			<Card
-				className={cn(
-					"mx-auto rounded-xl",
-					compact ? "max-w-md" : "min-h-[620px] max-w-[580px] sm:p-7"
-				)}
+				className="mx-auto min-h-[620px] max-w-[580px] rounded-xl sm:p-7"
 				pad="lg"
 			>
-				<AuthCardHeader
-					compact={compact}
-					isSignUp={isSignUp}
-					step={step}
-					title={title}
-				/>
+				<AuthCardHeader isSignUp={isSignUp} step={step} title={title} />
 				{/* my-auto: 카드가 내용보다 클 때(인증 단계처럼 짧을 때) 남는 높이를 본문 위아래로
 				    똑같이 나눠 준다. 한쪽에 몰면 "아래가 텅 빈" 카드가 되지만, 나눠 두면 머리는
 				    위, 액션은 광학 중앙, 고지는 바닥이라는 삼단 구성으로 읽힌다. */}
 				<div className="my-auto">
 					{isVerifyStep ? (
 						<AuthVerifyStep
-							onMockVerifiedForGuest={handleMockVerifiedForGuest}
 							onMockVerifiedForSignup={handleMockVerifiedForSignup}
 							onToggleMode={toggleMode}
-							onVerifiedForGuest={handleVerifiedForGuest}
 							onVerifiedForSignup={handleVerifiedForSignup}
 						/>
 					) : (
-						// @container: 2열 전환 기준은 뷰포트가 아니라 카드 폭이다 — 같은 폼이
-						// 넓은 게이트 카드와 좁은 다이얼로그(compact) 양쪽에 쓰이기 때문이다.
+						// @container: 2열 전환 기준은 뷰포트가 아니라 카드 폭이다 — 카드가
+						// max-w로 뷰포트보다 좁게 고정돼 있어 뷰포트 breakpoint로는 폼이
+						// 실제로 2열을 감당하는 시점을 맞출 수 없다.
 						<form
 							className="@container grid gap-4"
 							onSubmit={(event) => {
@@ -453,6 +430,20 @@ export function AuthPanel({
 							>
 								{isSubmitting ? "처리 중" : submitLabel}
 							</Button>
+							{/* 비회원 둘러보기는 "계정 없이 여기서 나가는 길"이라, 계정을 만드는
+							    회원가입 흐름이 아니라 로그인 실패의 대안으로 붙는 자리가 맞다.
+							    위계는 채운 코럴(로그인) > 테두리 보조(둘러보기) > 텍스트(회원가입).
+							    trigger는 type="button"이라 이 폼을 제출하지 않는다. */}
+							{isSignUp ? null : (
+								<PhoneVerifyDialog
+									intent={GUEST_INTENT}
+									onMockVerified={handleMockVerifiedForGuest}
+									onVerified={handleVerifiedForGuest}
+									size="md"
+									triggerLabel="비회원으로 목록만 보기"
+									variant="secondary"
+								/>
+							)}
 							<p className="m-0 text-center text-muted-foreground text-sm">
 								{isSignUp
 									? "이미 계정이 있으신가요? "
