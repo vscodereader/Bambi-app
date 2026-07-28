@@ -122,7 +122,8 @@ export function SiteFooter({
 
 				<div className="flex flex-col gap-1 text-muted-foreground text-xs leading-relaxed">
 					<p>
-						{operator} · 대표 {ceo} · 사업자등록번호 {bizRegNo}
+						{operator} · 대표 {ceo} · 사업자등록번호 {bizRegNo} ·
+						직업정보제공사업 신고번호 {BAMBI_COMPANY.jobInfoProviderNo}
 					</p>
 					<p>
 						{address} · TEL {tel} · 고객문의 {email}

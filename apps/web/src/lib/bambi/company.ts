@@ -15,6 +15,9 @@ export const BAMBI_COMPANY = {
 	operator: "밤비",
 	ceo: "TODO_대표자",
 	bizRegNo: "TODO_사업자등록번호",
+	// 직업정보제공사업 신고번호. 사업자등록번호와 달리 운영자 콘솔에서 편집하지 않고
+	// 코드에 고정한다 — 사업 신고 단위로 발급되는 값이라 사이트 설정으로 바뀔 일이 없다.
+	jobInfoProviderNo: "J1803020260010",
 	address: "TODO_사업장 주소",
 
 	// 고객센터·문의
