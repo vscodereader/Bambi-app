@@ -26,14 +26,19 @@ import { BOTTOM_NAV_CONTENT_SPACER } from "./bottom-nav-shell";
 import { Logo } from "./ds";
 
 interface FooterLink {
-	emphasis?: boolean;
+	// 개인정보 처리방침만 켠다 — 아래 FOOTER_LINKS 주석 참고(법정 표시 요건).
+	distinct?: boolean;
 	href: Route;
 	label: string;
 }
 
+// 개인정보 처리방침은 표준 개인정보 보호지침(개인정보보호위원회 고시) 제20조에 따라
+// "글자 크기, 색상 등을 활용하여 다른 고지사항과 구분"해야 한다. 구분 수단은 굵기가
+// 아니라 색만 쓴다 — 굵기까지 주면 이용약관이 덜 중요한 문서처럼 읽히는데, 고시가
+// 요구하는 건 "구분"이지 "강조 정도"가 아니다. 색 대비만으로 요건을 만족한다.
 const FOOTER_LINKS: FooterLink[] = [
 	{ href: "/terms" as Route, label: "이용약관" },
-	{ href: "/privacy" as Route, label: "개인정보 처리방침", emphasis: true },
+	{ href: "/privacy" as Route, label: "개인정보 처리방침", distinct: true },
 ];
 
 interface SiteFooterProps {
@@ -87,7 +92,7 @@ export function SiteFooter({
 							<Link
 								className={cn(
 									"text-muted-foreground text-sm no-underline transition-colors hover:text-foreground",
-									link.emphasis && "font-bold text-foreground"
+									link.distinct && "text-foreground"
 								)}
 								href={link.href}
 								key={link.href}
@@ -109,6 +114,17 @@ export function SiteFooter({
 								</div>
 							</DialogContent>
 						</Dialog>
+						{/* 직업정보제공사업자 준수사항: 명단이 공개 중인 체불사업주인지 구직자가
+						    확인할 수 있어야 한다. 명단은 고용노동부가 직접 관리·갱신하므로
+						    사본을 두지 않고 원본을 새 탭으로 연다(밤비를 떠나게 하지 않는다). */}
+						<a
+							className="text-muted-foreground text-sm no-underline transition-colors hover:text-foreground"
+							href="https://www.moel.go.kr/info/defaulter/defaulterList.do"
+							rel="noreferrer"
+							target="_blank"
+						>
+							체불사업주 명단
+						</a>
 						<a
 							className="text-muted-foreground text-sm no-underline transition-colors hover:text-foreground"
 							href={`mailto:${email}`}
