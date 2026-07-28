@@ -17,6 +17,7 @@ import {
 } from "@bambi-app/ui/components/toggle-group";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
+import type { ComponentProps } from "react";
 import { useState } from "react";
 import type { BambiGenderValue, MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { Button, Input } from "./ds";
@@ -40,6 +41,8 @@ interface MockPhoneVerifyDialogProps {
 	onVerified?: (input: MockPhoneVerifyInput) => Promise<void> | void;
 	title?: string;
 	triggerLabel?: string;
+	// 트리거 버튼의 위계(주 액션만 primary). 폼 안의 취소·인증하기 버튼과는 무관하다.
+	variant?: ComponentProps<typeof Button>["variant"];
 }
 
 export function MockPhoneVerifyDialog({
@@ -48,6 +51,7 @@ export function MockPhoneVerifyDialog({
 	title = "휴대폰 본인인증",
 	description = "본인인증 후 공고 목록을 열람할 수 있어요. (지금은 목 인증 단계예요)",
 	defaultGender = null,
+	variant = "secondary",
 }: MockPhoneVerifyDialogProps = {}) {
 	const router = useRouter();
 	const [open, setOpen] = useState(false);
@@ -141,7 +145,7 @@ export function MockPhoneVerifyDialog({
 				block
 				leftIcon={<PhoneIcon />}
 				onClick={() => setOpen(true)}
-				variant="secondary"
+				variant={variant}
 			>
 				{triggerLabel}
 			</Button>
