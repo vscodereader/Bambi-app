@@ -1942,13 +1942,13 @@ const MOD_MORE_GROUPS: {
 			{ href: "/moderator/content" as Route, label: "게시물" },
 			{ href: "/moderator/support" as Route, label: "고객센터" },
 			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
+			{ href: "/moderator/crawler" as Route, label: "크롤링" },
 		],
 	},
 	{
 		label: "사이트",
 		items: [
 			{ href: "/moderator/site-settings" as Route, label: "사이트 정보" },
-			{ href: "/moderator/crawler" as Route, label: "공고 수집" },
 		],
 	},
 ];
