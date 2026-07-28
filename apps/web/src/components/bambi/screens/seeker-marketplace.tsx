@@ -42,7 +42,7 @@ export function SeekerMarketplaceScreen() {
 	// 게스트는 상세 대신 가입 유도 화면으로 보낸다.
 	const openJob = (job: Job) => {
 		if (isGuest) {
-			router.push("/welcome?signup");
+			router.push("/seeker?auth=signup");
 			return;
 		}
 		router.push(`/seeker/jobs/${job.id}` as Route);
