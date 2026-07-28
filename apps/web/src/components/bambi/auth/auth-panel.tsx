@@ -15,8 +15,7 @@ import {
 	readGuestIvIdFromCookieString,
 } from "@/lib/bambi/guest";
 import { client, queryClient } from "@/utils/orpc";
-import { Badge, Button, Card, Logo } from "../ds";
-import { ShieldIcon } from "../icons";
+import { Button, Card, Logo } from "../ds";
 import { AdultNotice } from "./adult-notice";
 import {
 	type AuthFormValues,
@@ -77,41 +76,83 @@ const getValidationError = (
 	return null;
 };
 
-function TrustBadge() {
-	return (
-		<Badge tone="success">
-			<span className="inline-flex size-3.5">
-				<ShieldIcon />
-			</span>
-			면접 전 연락처 보호
-		</Badge>
-	);
-}
-
 function Spinner() {
 	return (
 		<span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
 	);
 }
 
-// 넓은 화면에서 폼 왼쪽에 붙는 소개 컬럼(compact에서는 렌더하지 않는다).
-function AuthIntro() {
+// 회원가입은 인증 → 정보 입력이라는 실제 순서가 있는 흐름이라 단계를 표기한다.
+// 로그인에는 단계가 없으므로 회원가입에서만 렌더한다(장식이 아니라 정보다).
+const SIGNUP_STEPS = ["본인인증", "정보 입력"] as const;
+
+function AuthSteps({ current }: { current: 1 | 2 }) {
 	return (
-		<section className="hidden lg:block">
-			<Logo lang="ko" size="lg" />
-			<div className="mt-6">
-				<TrustBadge />
+		<ol className="flex items-center gap-2">
+			{SIGNUP_STEPS.map((label, index) => {
+				const isCurrent = index + 1 === current;
+				return (
+					<li
+						aria-current={isCurrent ? "step" : undefined}
+						className="flex items-center gap-2"
+						key={label}
+					>
+						{index > 0 ? (
+							<span aria-hidden className="h-px w-4 bg-border" />
+						) : null}
+						<span
+							className={cn(
+								"flex size-5 items-center justify-center rounded-full font-bold text-xs",
+								isCurrent
+									? "bg-primary text-primary-foreground"
+									: "bg-muted text-muted-foreground"
+							)}
+						>
+							{index + 1}
+						</span>
+						<span
+							className={cn(
+								"font-bold text-xs",
+								isCurrent ? "text-foreground" : "text-muted-foreground"
+							)}
+						>
+							{label}
+						</span>
+					</li>
+				);
+			})}
+		</ol>
+	);
+}
+
+// 카드 머리(브랜드 + 단계 + 제목). 좌측 소개 컬럼이 없어져 이 로고가 브랜드를
+// 대표하는 유일한 자리이고, 단계 표기는 같은 행 반대편에 두어 넓어진 카드 폭을 쓴다.
+function AuthCardHeader({
+	compact,
+	isSignUp,
+	step,
+	title,
+}: {
+	compact: boolean;
+	isSignUp: boolean;
+	step: SignupStep;
+	title: string;
+}) {
+	return (
+		<>
+			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+				<Logo lang="ko" size={compact ? "md" : "lg"} />
+				{isSignUp ? <AuthSteps current={step === "verify" ? 1 : 2} /> : null}
 			</div>
-			<h1 className="mt-5 mb-3 font-extrabold text-[42px] leading-tight">
-				공고 탐색부터 채팅까지
-				<br />
-				밤비 안에서 안전하게
-			</h1>
-			<p className="m-0 max-w-[560px] text-muted-foreground leading-relaxed">
-				번호 노출 걱정 없이 마음에 드는 공고에 바로 채팅하고, 면접까지 안전하게
-				이어가세요.
-			</p>
-		</section>
+			<h2
+				className={cn(
+					"mt-6 mb-5 font-extrabold tracking-tight",
+					compact ? "text-2xl" : "text-2xl sm:text-3xl"
+				)}
+			>
+				{title}
+			</h2>
+		</>
 	);
 }
 
@@ -141,13 +182,6 @@ export function AuthPanel({
 	const isSignUp = mode === "sign-up";
 	const isVerifyStep = isSignUp && step === "verify";
 	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
-	const signupSubtitle =
-		step === "verify"
-			? "성인 여부 확인을 위해 본인인증을 먼저 진행해요."
-			: "기본 정보를 입력하고 밤비를 시작하세요.";
-	const subtitle = isSignUp
-		? signupSubtitle
-		: "아이디와 비밀번호를 입력해 로그인하세요.";
 	const submitLabel = isSignUp ? "회원가입" : "로그인";
 
 	const setField =
@@ -348,85 +382,86 @@ export function AuthPanel({
 
 	return (
 		<div className="w-full text-foreground">
-			<div
+			<Card
 				className={cn(
-					"mx-auto grid w-full max-w-[980px] items-center gap-6",
-					compact ? "max-w-md" : "lg:grid-cols-[minmax(0,1fr)_390px]"
+					"mx-auto rounded-xl",
+					compact ? "max-w-md" : "max-w-2xl sm:p-7"
 				)}
+				pad="lg"
 			>
-				{compact ? null : <AuthIntro />}
-				<Card className="rounded-lg" pad="lg" tone="outline">
-					<div className="mb-5 flex flex-col items-start gap-3 lg:hidden">
-						<Logo lang="ko" size="md" />
-						<TrustBadge />
-					</div>
-					{/* 19금 고지는 로그인·회원가입 어느 단계에서도 카드 상단에 상시 노출한다. */}
-					<AdultNotice className="mb-5" />
-					<h2 className="m-0 font-extrabold text-2xl">{title}</h2>
-					<p className="mt-2 mb-5 text-muted-foreground text-sm">{subtitle}</p>
-					{isVerifyStep ? (
-						<AuthVerifyStep
-							onMockVerifiedForGuest={handleMockVerifiedForGuest}
-							onMockVerifiedForSignup={handleMockVerifiedForSignup}
-							onToggleMode={toggleMode}
-							onVerifiedForGuest={handleVerifiedForGuest}
-							onVerifiedForSignup={handleVerifiedForSignup}
-						/>
-					) : (
-						<form
-							className="grid gap-4"
-							onSubmit={(event) => {
-								event.preventDefault();
-								handleSubmit().catch(() => undefined);
-							}}
-						>
-							{isSignUp ? (
+				<AuthCardHeader
+					compact={compact}
+					isSignUp={isSignUp}
+					step={step}
+					title={title}
+				/>
+				{isVerifyStep ? (
+					<AuthVerifyStep
+						onMockVerifiedForGuest={handleMockVerifiedForGuest}
+						onMockVerifiedForSignup={handleMockVerifiedForSignup}
+						onToggleMode={toggleMode}
+						onVerifiedForGuest={handleVerifiedForGuest}
+						onVerifiedForSignup={handleVerifiedForSignup}
+					/>
+				) : (
+					// @container: 2열 전환 기준은 뷰포트가 아니라 카드 폭이다 — 같은 폼이
+					// 넓은 게이트 카드와 좁은 다이얼로그(compact) 양쪽에 쓰이기 때문이다.
+					<form
+						className="@container grid gap-4"
+						onSubmit={(event) => {
+							event.preventDefault();
+							handleSubmit().catch(() => undefined);
+						}}
+					>
+						{isSignUp ? (
+							<div className="grid @md:grid-cols-2 gap-4">
 								<AuthSignupFields
 									onFieldChange={setField}
 									onSignupRoleChange={setSignupRole}
 									signupRole={signupRole}
 									values={form}
 								/>
-							) : (
-								<AuthSigninFields
-									onFieldChange={setField}
-									onForgotPassword={handleForgotPassword}
-									values={form}
-								/>
-							)}
-							<AuthNotice notice={notice} />
-							{isSignUp ? (
-								<AuthTermsAgreement
-									checked={agreedToTerms}
-									onCheckedChange={setAgreedToTerms}
-								/>
-							) : null}
-							<Button
-								block
-								className="shadow-none"
+							</div>
+						) : (
+							<AuthSigninFields
+								onFieldChange={setField}
+								onForgotPassword={handleForgotPassword}
+								values={form}
+							/>
+						)}
+						<AuthNotice notice={notice} />
+						{isSignUp ? (
+							<AuthTermsAgreement
+								checked={agreedToTerms}
+								onCheckedChange={setAgreedToTerms}
+							/>
+						) : null}
+						<Button
+							block
+							className="shadow-none"
+							disabled={isSubmitting}
+							leftIcon={isSubmitting ? <Spinner /> : undefined}
+							type="submit"
+						>
+							{isSubmitting ? "처리 중" : submitLabel}
+						</Button>
+						<p className="m-0 text-center text-muted-foreground text-sm">
+							{isSignUp ? "이미 계정이 있으신가요? " : "밤비가 처음이신가요? "}
+							<button
+								className="font-bold text-primary underline-offset-2 hover:underline disabled:opacity-50"
 								disabled={isSubmitting}
-								leftIcon={isSubmitting ? <Spinner /> : undefined}
-								type="submit"
+								onClick={toggleMode}
+								type="button"
 							>
-								{isSubmitting ? "처리 중" : submitLabel}
-							</Button>
-							<p className="m-0 text-center text-muted-foreground text-sm">
-								{isSignUp
-									? "이미 계정이 있으신가요? "
-									: "밤비가 처음이신가요? "}
-								<button
-									className="font-bold text-primary underline-offset-2 hover:underline disabled:opacity-50"
-									disabled={isSubmitting}
-									onClick={toggleMode}
-									type="button"
-								>
-									{isSignUp ? "로그인" : "회원가입"}
-								</button>
-							</p>
-						</form>
-					)}
-				</Card>
-			</div>
+								{isSignUp ? "로그인" : "회원가입"}
+							</button>
+						</p>
+					</form>
+				)}
+				{/* 19금 고지는 로그인·회원가입 어느 단계에서도 상시 노출한다. 전문은 그대로
+				    두되, 카드에서 가장 낮은 시각 무게를 갖는 하단으로 내렸다. */}
+				<AdultNotice className="mt-6 border-border border-t pt-5" />
+			</Card>
 		</div>
 	);
 }
