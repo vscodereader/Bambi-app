@@ -14,6 +14,7 @@ import {
 	readGuestGenderFromCookieString,
 	readGuestIvIdFromCookieString,
 } from "@/lib/bambi/guest";
+import { isEmailLoginId } from "@/lib/bambi/login-id";
 import { client, queryClient } from "@/utils/orpc";
 import { Button, Card, Logo } from "../ds";
 import { PhoneVerifyDialog } from "../phone-verify-dialog";
@@ -49,7 +50,9 @@ const getInitialMode = (mode: string | null): AuthMode =>
 	mode === "sign-up" || mode === "signup" ? "sign-up" : "sign-in";
 
 // 제출 전 필드 검증. 회원가입은 닉네임·아이디·이메일·비번·비번확인을 보고, 로그인은
-// 아이디(login_id) 비어있지 않음 + 비밀번호 8자만 본다. 통과하면 null을 돌려준다.
+// 아이디/이메일 비어있지 않음 + 비밀번호 8자만 본다. 통과하면 null을 돌려준다.
+// 로그인 쪽에서 이메일 형식까지 따지지는 않는다 — 한 칸으로 아이디도 받으므로
+// 여기서 "@"를 요구하면 아이디 로그인이 막힌다.
 const getValidationError = (
 	values: AuthFormValues,
 	isSignUp: boolean
@@ -57,7 +60,7 @@ const getValidationError = (
 	if (!isSignUp) {
 		if (values.username.trim().length === 0 || values.password.length < 8) {
 			return {
-				text: "아이디와 8자 이상 비밀번호를 확인해 주세요.",
+				text: "아이디(이메일)와 8자 이상 비밀번호를 확인해 주세요.",
 				tone: "error",
 			};
 		}
@@ -343,13 +346,21 @@ export function AuthPanel() {
 				callbacks
 			);
 		} else {
-			await authClient.signIn.username(
-				{
-					username: form.username.trim(),
-					password: form.password,
-				},
-				callbacks
-			);
+			// 로그인 입력 한 칸으로 아이디·이메일을 모두 받는다. 아이디에는 "@"가 들어갈 수
+			// 없으므로(login-id.ts) 그 한 글자로 어느 엔드포인트를 쓸지 가른다. 두 경로 모두
+			// 같은 콜백을 타므로 성공·실패 처리는 갈리지 않는다.
+			const loginId = form.username.trim();
+			if (isEmailLoginId(loginId)) {
+				await authClient.signIn.email(
+					{ email: loginId, password: form.password },
+					callbacks
+				);
+			} else {
+				await authClient.signIn.username(
+					{ username: loginId, password: form.password },
+					callbacks
+				);
+			}
 		}
 		setIsSubmitting(false);
 	};
