@@ -8,6 +8,7 @@ import {
 } from "./bambi-job-form";
 
 const baseForm: JobForm = {
+	adBannerLayout: null,
 	adProductId: null,
 	beginnerFriendly: false,
 	description: "기본 상세 설명입니다.",

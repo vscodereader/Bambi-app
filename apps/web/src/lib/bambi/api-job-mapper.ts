@@ -2,6 +2,7 @@ import { env } from "@bambi-app/env/web";
 
 import { NEGOTIABLE_PAY_TEXT } from "../bambi-options";
 
+import type { AdBannerLayout } from "./ad-banner-layout";
 import type { JobAdBannerUsage } from "./job-ad-banner-spec";
 import { sampleCoverMedia, sampleThumbnailUrl } from "./sample-thumbnails";
 import type {
@@ -191,6 +192,7 @@ export interface ApiAdBannerJob {
 	coverImage?: ApiJobMedia | null;
 	employerDisplayName?: string | null;
 	id: string;
+	layout?: AdBannerLayout | null;
 	teamDisplayName?: string | null;
 	title: string;
 }
@@ -200,6 +202,9 @@ export interface AdBannerItem {
 	id: string;
 	// 커버가 아니라 슬롯 배너가 우선이라 coverUrl이 아닌 imageUrl이다.
 	imageUrl: string;
+	// 이미지 위에 얹을 레이아웃(가로·세로 두 슬롯 전부). 편집한 적 없는 공고는 null이라
+	// 이미지만 나온다.
+	layout: AdBannerLayout | null;
 	title: string;
 }
 
@@ -214,5 +219,14 @@ export const toAdBannerItem = (
 	const media =
 		toJobMedia(banner ?? job.coverImage ?? null) ??
 		sampleCoverMedia(job.id, `${company} 대표 이미지`);
-	return { company, id: job.id, imageUrl: media.url, title: job.title };
+
+	// 슬롯별 판정은 하지 않는다 — 레이아웃은 가로·세로 슬롯을 모두 담고 있고, 어느 쪽을
+	// 그릴지는 렌더러가 슬롯을 보고 정한다.
+	return {
+		company,
+		id: job.id,
+		imageUrl: media.url,
+		layout: job.layout ?? null,
+		title: job.title,
+	};
 };

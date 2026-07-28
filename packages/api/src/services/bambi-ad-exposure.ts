@@ -9,6 +9,8 @@
 // 코드 레벨이다. 이미 left-banner/right-banner로 판매된 공고는 프리미엄 풀에 합류해 계속
 // 노출한다(groupAdBannerJobs 참고).
 
+import { isAdBannerImageRequired } from "./bambi-ad-banner-layout";
+
 export type AdPreviewTemplate =
 	| "premium-top"
 	| "special-list"
@@ -244,3 +246,35 @@ export const requiredAdBannerUsagesForExposureType = (
 	(AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(exposureType)
 		? ["ad_horizontal", "ad_vertical"]
 		: [];
+
+// usage(업로드 축) ↔ 후보 행의 이미지 컬럼 대응.
+const AD_BANNER_MEDIA_KEY = {
+	ad_horizontal: "adHorizontal",
+	ad_vertical: "adVertical",
+} as const;
+
+// 활성 칸의 광고가 그 슬롯 방향(좌·중=가로 7:3 / 우=세로 4:9) 배너를 안 올렸으면 커버로
+// 폴백하지 않고 그 칸을 비운다(자리표시). 노출도 impression 기록도 하지 않는다.
+// 단, 그 슬롯 배경이 단색이면 업로드 이미지는 렌더에 쓰이지 않으므로 이미지 없이도 후보로
+// 남긴다 — 여기서 떨어뜨리면 구인자가 저장까지 마친 단색 배너가 영영 노출되지 않는다.
+export const requireDirectionImage = <
+	Row extends {
+		adHorizontal?: unknown;
+		adVertical?: unknown;
+		layout?: unknown;
+	},
+>(
+	items: (Row | null)[],
+	usage: "ad_horizontal" | "ad_vertical"
+): (Row | null)[] =>
+	items.map((item) => {
+		if (!item) {
+			return null;
+		}
+
+		const hasImage = Boolean(item[AD_BANNER_MEDIA_KEY[usage]]);
+
+		return hasImage || !isAdBannerImageRequired(item.layout, usage)
+			? item
+			: null;
+	});

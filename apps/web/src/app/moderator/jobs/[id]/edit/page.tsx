@@ -57,6 +57,7 @@ import {
 	type JobFormMediaItem,
 	type JobPaymentMethod,
 	resolveJobPostMediaForSubmit,
+	toJobAdBannerLayoutForm,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
 import { industryOptions } from "@/lib/bambi-options";
@@ -168,6 +169,7 @@ export default function ModeratorEditJobPage({
 	// 프리미엄 광고는 가로형·세로형 배너 이미지가 모두 있어야 저장할 수 있다.
 	const { bannerImagesMissing, requiredBannerUsages } = useRequiredBannerGate({
 		adProductId: form.adProductId,
+		layout: form.adBannerLayout,
 		media,
 	});
 	const job = jobQuery.data;
@@ -178,6 +180,9 @@ export default function ModeratorEditJobPage({
 		}
 
 		setForm({
+			// 운영자 편집도 입력 전체 교체다. 여기서 프리필을 빠뜨리면 운영자가 공고를
+			// 한 번 손대는 것만으로 구인자가 만든 배너 편집물이 통째로 지워진다.
+			...toJobAdBannerLayoutForm(job),
 			adProductId: job.adProductId ?? null,
 			beginnerFriendly: job.beginnerFriendly ?? false,
 			description: job.description,
@@ -633,10 +638,26 @@ export default function ModeratorEditJobPage({
 				</section>
 
 				<JobPostMediaUploader
+					adBannerLayout={form.adBannerLayout}
 					adProductId={form.adProductId}
 					allowUpload={false}
 					error={fieldErrors.media}
 					media={media}
+					onAdBannerChange={({ layout, media: nextMedia }) => {
+						setIsDirty(true);
+						setForm((currentForm) => ({
+							...currentForm,
+							adBannerLayout: layout,
+						}));
+						// 운영자 편집은 편집기 진입이 없지만(구인자 게이트) 배선은 세 화면이 같아야
+						// 한다 — 입력 전체를 교체하는 저장이라 한 곳만 빠져도 배너가 사라진다.
+						setMedia(nextMedia);
+						setFieldErrors((currentErrors) => ({
+							...currentErrors,
+							media: undefined,
+						}));
+						setFormError(null);
+					}}
 					onChange={(nextMedia) => {
 						setIsDirty(true);
 						setMedia(nextMedia);

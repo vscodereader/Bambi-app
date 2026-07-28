@@ -28,6 +28,7 @@
     "better-auth": "catalog:",
     "dotenv": "catalog:",
     "evlog": "catalog:",
+    "gsap": "^3.15.0",
     "lucide-react": "catalog:",
     "next": "^16.2.0",
     "next-themes": "catalog:",

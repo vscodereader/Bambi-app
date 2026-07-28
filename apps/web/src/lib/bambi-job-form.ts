@@ -1,4 +1,8 @@
 import {
+	type AdBannerLayout,
+	isAdBannerImageRequired,
+} from "./bambi/ad-banner-layout";
+import {
 	isAllowedJobAdBannerAspect,
 	isAllowedJobAdBannerSize,
 	JOB_AD_BANNER_SPECS,
@@ -22,7 +26,7 @@ const INTERVIEW_NOTES_MAX_LENGTH = 500;
 const DESCRIPTION_BLOCK_MAX_COUNT = 12;
 const DESCRIPTION_BLOCK_TEXT_MAX_LENGTH = 800;
 const DETAIL_IMAGE_MAX_COUNT = 5;
-const IMAGE_ALT_TEXT_MAX_LENGTH = 120;
+export const IMAGE_ALT_TEXT_MAX_LENGTH = 120;
 // 공고·커뮤니티·채팅 이미지 공통 상한(세 파일 동기화): bambi-job-media-policy.ts,
 // apps/web/src/lib/bambi-job-form.ts, bambi-media-policy.ts.
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
@@ -93,12 +97,13 @@ export interface JobFormMediaItem {
 	mimeType: string;
 	previewUrl?: string;
 	storageKey?: string;
-	uploadUrl?: string;
 	width?: number;
 }
 
 export interface JobFormMedia {
-	// 광고 상품을 신청·결제한 공고만 노출되지만, 이미지는 공고 등록 시 함께 받는다.
+	// 배너 두 장은 폼이 아니라 배너 에디터에서 고르고, 저장할 때 이 자리로 돌아온다. 폼이
+	// 여전히 소유자인 이유는 등록 버튼 잠금·필수 검증·제출 시 업로드가 전부 이 상태를 보기
+	// 때문이다 — 에디터가 직접 들고 있으면 셋 다 다시 짜야 한다.
 	adHorizontal: JobFormMediaItem | null;
 	adVertical: JobFormMediaItem | null;
 	cover: JobFormMediaItem | null;
@@ -140,6 +145,8 @@ export interface JobPostMediaApiSetInput {
 }
 
 export interface JobForm {
+	// 배너 에디터가 만든 자유 배치 레이아웃. 편집한 적 없는 공고는 null이라 이미지만 나온다.
+	adBannerLayout: AdBannerLayout | null;
 	adProductId: string | null;
 	beginnerFriendly: boolean;
 	description: string;
@@ -161,6 +168,9 @@ export interface JobForm {
 }
 
 export interface JobPostInput {
+	// 서버는 키를 생략하면 기존 레이아웃을 보존하고 null이면 지운다. 폼은 항상 값을 실어
+	// 보내므로(수정 화면은 프리필된 값) 편집하지 않은 공고의 레이아웃도 그대로 되돌아간다.
+	adBannerLayout: AdBannerLayout | null;
 	adProductId: string | null;
 	beginnerFriendly: boolean;
 	description: string;
@@ -215,6 +225,7 @@ export const defaultDistrictForRegion = (region: string): string =>
 	districtsForRegion(region)[0] ?? "";
 
 export const emptyJobForm: JobForm = {
+	adBannerLayout: null,
 	adProductId: null,
 	beginnerFriendly: false,
 	description: "",
@@ -235,6 +246,18 @@ export const emptyJobForm: JobForm = {
 	workSchedule: "",
 };
 
+// 서버 공고의 배너 레이아웃을 폼 값으로 옮긴다. 수정 폼 세 곳(등록·구인자·운영자)이 같은
+// 프리필을 거쳐야 저장(입력 전체 교체) 시 기존 레이아웃이 지워지지 않는다.
+// 파라미터는 optional(`?:`)이 아니라 필수 + nullable이다. optional로 두면 레이아웃이 없는
+// 객체(예: select({...})로 컬럼을 좁힌 목록 쿼리 결과)를 넘겨도 컴파일이 통과하고 조용히
+// 빈 값을 돌려준다 — 이 함수가 막으려는 배너 삭제와 정확히 같은 사고가 타입에 안 잡힌다.
+// 필수로 두면 그런 프리필 소스는 컴파일에서 걸린다. null은 "편집한 적 없는 공고"라 정상값이다.
+export const toJobAdBannerLayoutForm = (job: {
+	adBannerLayout: AdBannerLayout | null;
+}): Pick<JobForm, "adBannerLayout"> => ({
+	adBannerLayout: job.adBannerLayout ?? null,
+});
+
 export const emptyJobFormMedia: JobFormMedia = {
 	adHorizontal: null,
 	adVertical: null,
@@ -244,22 +267,31 @@ export const emptyJobFormMedia: JobFormMedia = {
 
 // 프리미엄 광고는 가로형·세로형 배너를 모두 요구한다. requiredUsages 중 media에 없는
 // 슬롯을 돌려준다("ad_horizontal"은 adHorizontal, "ad_vertical"은 adVertical 부재 시 누락).
+// layout은 필수 여부 자체를 가른다 — 배경이 단색인 슬롯은 이미지가 화면에 나오지 않으므로
+// 누락으로 보지 않는다(isAdBannerImageRequired). optional이 아니라 필수 + nullable인 이유는
+// toJobAdBannerLayoutForm과 같다: 레이아웃을 잊고 넘긴 호출부가 조용히 옛 동작으로 돌아가지
+// 않게 한다.
 export const getMissingAdBannerUsages = (
 	media: JobFormMedia,
-	requiredUsages: JobAdBannerUsage[]
+	requiredUsages: JobAdBannerUsage[],
+	layout: AdBannerLayout | null
 ): JobAdBannerUsage[] =>
-	requiredUsages.filter((usage) =>
-		usage === "ad_horizontal" ? !media.adHorizontal : !media.adVertical
+	requiredUsages.filter(
+		(usage) =>
+			isAdBannerImageRequired(layout, usage) &&
+			(usage === "ad_horizontal" ? !media.adHorizontal : !media.adVertical)
 	);
 
 // 유료 상품이 필수 배너 슬롯을 요구하는데 누락됐으면 에러 문구를 돌려준다.
 // media가 undefined여도 필수가 있으면 두 슬롯 모두 누락으로 잡힌다.
 const getRequiredBannerError = ({
 	adProductId,
+	layout,
 	media,
 	requiredBannerUsages = [],
 }: {
 	adProductId: string | null;
+	layout: AdBannerLayout | null;
 	media?: JobFormMedia;
 	requiredBannerUsages?: JobAdBannerUsage[];
 }): string | undefined => {
@@ -269,7 +301,8 @@ const getRequiredBannerError = ({
 
 	return getMissingAdBannerUsages(
 		media ?? emptyJobFormMedia,
-		requiredBannerUsages
+		requiredBannerUsages,
+		layout
 	).length > 0
 		? "프리미엄 광고는 가로형·세로형 광고 배너 이미지를 모두 등록해야 합니다."
 		: undefined;
@@ -575,9 +608,17 @@ const getDescriptionBlockError = (
 
 const getAdBannerError = (
 	item: JobFormMediaItem | null,
-	usage: JobAdBannerUsage
+	usage: JobAdBannerUsage,
+	layout: AdBannerLayout | null
 ): string | undefined => {
 	if (!item) {
+		return;
+	}
+
+	// 배경이 단색이면 이 이미지는 배너에 나오지 않는다. 보이지도 않는 이미지의 비율·최소 크기로
+	// 저장을 막으면 단색을 고른 구인자가 또 다른 막다른 길에 걸린다(형식·용량은 실제 업로드되는
+	// 바이트라 위에서 그대로 검증한다).
+	if (!isAdBannerImageRequired(layout, usage)) {
 		return;
 	}
 
@@ -614,7 +655,10 @@ const getAdBannerError = (
 	return;
 };
 
-const getMediaError = (media?: JobFormMedia): string | undefined => {
+const getMediaError = (
+	media: JobFormMedia | undefined,
+	layout: AdBannerLayout | null
+): string | undefined => {
 	if (!media) {
 		return;
 	}
@@ -656,8 +700,8 @@ const getMediaError = (media?: JobFormMedia): string | undefined => {
 	}
 
 	return (
-		getAdBannerError(media.adHorizontal, "ad_horizontal") ??
-		getAdBannerError(media.adVertical, "ad_vertical")
+		getAdBannerError(media.adHorizontal, "ad_horizontal", layout) ??
+		getAdBannerError(media.adVertical, "ad_vertical", layout)
 	);
 };
 
@@ -853,9 +897,10 @@ export const validateJobForm = (
 	const adProductId = isFreeExposure ? null : form.adProductId;
 	// 형식·크기 오류가 있으면 그것이 우선. 없을 때만 유료 상품의 필수 배너 누락을 본다.
 	const mediaError =
-		getMediaError(options.media) ??
+		getMediaError(options.media, form.adBannerLayout) ??
 		getRequiredBannerError({
 			adProductId,
+			layout: form.adBannerLayout,
 			media: options.media,
 			requiredBannerUsages: options.requiredBannerUsages,
 		});
@@ -908,6 +953,8 @@ export const validateJobForm = (
 
 	return {
 		input: {
+			// 레이아웃은 그대로 넘긴다 — 값 범위 검증과 배너 없는 상품일 때의 폐기는 서버가 한다.
+			adBannerLayout: form.adBannerLayout,
 			adProductId,
 			beginnerFriendly: form.beginnerFriendly,
 			description,

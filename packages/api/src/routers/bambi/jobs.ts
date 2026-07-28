@@ -6,6 +6,7 @@ import {
 	bambiSiteSettings,
 	employerOrganizationProfile,
 	employerTeamProfile,
+	jobAdBannerLayout,
 	jobIndustryCategory,
 	jobPost,
 	jobPostMedia,
@@ -28,6 +29,13 @@ import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
 import {
+	type AdBannerLayoutInput,
+	adBannerLayoutSchema,
+	collectLayoutModerationText,
+	isAdBannerImageRequired,
+	parseStoredAdBannerLayout,
+} from "../../services/bambi-ad-banner-layout";
+import {
 	AD_BANNER_EXPOSURE_TYPES,
 	buildExposureJobSections,
 	DEFAULT_AD_ROTATION_MINUTES,
@@ -36,6 +44,7 @@ import {
 	type JobExposureType,
 	type ListingSectionExposureType,
 	previewTemplateToExposureType,
+	requireDirectionImage,
 	requiredAdBannerUsagesForExposureType,
 } from "../../services/bambi-ad-exposure";
 import { discountedAdAmount } from "../../services/bambi-ad-pricing";
@@ -144,6 +153,10 @@ const jobPostInputShape = z.object({
 	adProductId: z.string().uuid().nullish(),
 	exposureAmount: z.number().int().min(0).nullish(),
 	paymentMethod: z.enum(["card", "bank_transfer"]).nullish(),
+	// 프리미엄 배너 에디터가 만든 레이아웃(job_ad_banner_layout.layout). jsonb라 DB 제약이
+	// 없으므로 adBannerLayoutSchema가 유일한 방어선이다 — 트러스트 바운더리다.
+	// 키를 아예 생략하면 기존 레이아웃을 보존하고, 명시적 null이면 지운다.
+	adBannerLayout: adBannerLayoutSchema.nullish(),
 	media: jobPostMediaSetInput,
 });
 
@@ -209,20 +222,107 @@ interface BuildJobPostMediaRowsInput {
 	organizationId: string;
 }
 
+// 레이아웃 저장 결정. "keep"은 클라이언트가 adBannerLayout 키를 아예 보내지 않은 경우다.
+export type AdBannerLayoutWrite =
+	| { kind: "delete" }
+	| { kind: "keep" }
+	| { kind: "upsert"; layout: AdBannerLayoutInput };
+
+// 배너 슬롯을 쓰지 않는 노출 타입이면 레이아웃을 버린다. 저장해두면 나중에 상품이 배너형으로
+// 바뀔 때 검수받지 않은 문구가 조용히 노출된다.
+//
+// 배너형이면 "키가 없으면 건드리지 않는다". 생략을 null로 취급해 무조건 덮으면, 다른 옵셔널
+// 필드는 생략 시 보존되는데 배너 편집물만 저장 한 번에 지워지는 비대칭이 생긴다.
+export const normalizeAdBannerLayout = (
+	input: { adBannerLayout?: AdBannerLayoutInput | null },
+	exposureType: string
+): AdBannerLayoutWrite => {
+	if (!(AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(exposureType)) {
+		return { kind: "delete" };
+	}
+
+	if (input.adBannerLayout === undefined) {
+		return { kind: "keep" };
+	}
+
+	return input.adBannerLayout === null
+		? { kind: "delete" }
+		: { kind: "upsert", layout: input.adBannerLayout };
+};
+
+export const getStoredAdBannerLayout = async (
+	jobPostId: string
+): Promise<AdBannerLayoutInput | null> => {
+	const [row] = await db
+		.select({ layout: jobAdBannerLayout.layout })
+		.from(jobAdBannerLayout)
+		.where(eq(jobAdBannerLayout.jobPostId, jobPostId))
+		.limit(1);
+
+	// 쓰기 경로가 전부 zod를 통과하지만 읽을 때 다시 검증한다 — 수동 DB 편집·부분 복구·훗날의
+	// v2 스키마가 남긴 행 하나가 렌더러를 터뜨려 광고 레일이 붙은 화면을 통째로 내릴 수 있다.
+	return parseStoredAdBannerLayout(row?.layout ?? null);
+};
+
+// 검수 대상 레이아웃. 키를 생략해 기존 레이아웃이 보존되는 경우엔 저장분을 읽어야 남아 있을
+// 문구가 금칙어 검사를 빠져나가지 않는다.
+const resolveModeratedLayout = async (
+	write: AdBannerLayoutWrite,
+	existingJobPostId: null | string
+): Promise<unknown> => {
+	if (write.kind === "upsert") {
+		return write.layout;
+	}
+
+	if (write.kind === "keep" && existingJobPostId) {
+		return await getStoredAdBannerLayout(existingJobPostId);
+	}
+
+	return null;
+};
+
+const writeAdBannerLayout = async (
+	tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+	jobPostId: string,
+	write: AdBannerLayoutWrite
+): Promise<void> => {
+	if (write.kind === "keep") {
+		return;
+	}
+
+	if (write.kind === "delete") {
+		await tx
+			.delete(jobAdBannerLayout)
+			.where(eq(jobAdBannerLayout.jobPostId, jobPostId));
+
+		return;
+	}
+
+	await tx
+		.insert(jobAdBannerLayout)
+		.values({ jobPostId, layout: write.layout })
+		.onConflictDoUpdate({
+			set: { layout: write.layout, updatedAt: new Date() },
+			target: jobAdBannerLayout.jobPostId,
+		});
+};
+
 const RISKY_TERMS = ["미성년", "성매매", "강요"] as const;
 
 const hasRiskFlags = ({
+	adBannerText,
 	blockRiskTerms,
 	description,
 	interviewNotes,
 	title,
 }: {
+	adBannerText: string;
 	blockRiskTerms: string[];
 	description: string;
 	interviewNotes?: string;
 	title: string;
 }): boolean => {
-	const text = `${title} ${description} ${interviewNotes ?? ""}`;
+	const text = `${title} ${description} ${interviewNotes ?? ""} ${adBannerText}`;
 
 	return (
 		blockRiskTerms.length > 0 || RISKY_TERMS.some((term) => text.includes(term))
@@ -261,7 +361,12 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 	}
 };
 
-const prepareJobPostContent = (input: JobPostInput): PreparedJobPostContent => {
+// 배너 문구도 구직자에게 노출되는 문구다. 실제로 저장될 레이아웃을 넘겨받아 본문과 같은
+// 금칙어·위험어 검사를 태운다 — 버려질 문구로 공고가 검수에 걸리지는 않게 한다.
+const prepareJobPostContent = (
+	input: JobPostInput,
+	adBannerLayout: unknown
+): PreparedJobPostContent => {
 	const descriptionBlocks = input.descriptionBlocks ?? [];
 	const validation = validateJobDescriptionBlocks(descriptionBlocks);
 
@@ -282,6 +387,10 @@ const prepareJobPostContent = (input: JobPostInput): PreparedJobPostContent => {
 		description,
 		descriptionBlocks: normalizedBlocks,
 		hasRiskFlags: hasRiskFlags({
+			// 가로·세로 두 슬롯을 모두 훑고, 블록별 문구와 화면 읽기 순서 조립본을 함께 넘긴다 —
+			// 한쪽 슬롯만 보면 반대 슬롯이 빠져나가고, 블록별로만 보면 "미성"과 "년"을 나란히
+			// 놓아 배너에는 "미성년"으로 보이는 조합이 검사를 통과한다.
+			adBannerText: collectLayoutModerationText(adBannerLayout),
 			blockRiskTerms,
 			description,
 			interviewNotes: input.interviewNotes,
@@ -425,11 +534,16 @@ const getJobPostMediaUsages = async (
 // 프리미엄(배너형) 광고 공고는 상단·좌측 슬롯용 가로형과 우측 슬롯용 세로형 배너를 모두
 // 갖춰야 한다. 통합 후 한 공고가 세 슬롯 모두의 후보가 되므로, 어느 한쪽이 빠지면 그 슬롯이
 // 빈 채로 노출된다. 최종 저장될 미디어 usage에 필요한 배너 규격이 모두 있는지 검증한다.
+// layout은 최종 저장될 레이아웃(upsert면 새 값, keep이면 저장분)이다 — 배경이 단색인 슬롯은
+// 업로드 이미지가 렌더에 쓰이지 않아 요구하지 않는다.
 const requireAdBannerMedia = (
 	exposureType: string,
-	usages: JobPostMediaUsage[]
+	usages: JobPostMediaUsage[],
+	layout: unknown
 ): void => {
-	const required = requiredAdBannerUsagesForExposureType(exposureType);
+	const required = requiredAdBannerUsagesForExposureType(exposureType).filter(
+		(usage) => isAdBannerImageRequired(layout, usage)
+	);
 
 	if (required.length === 0) {
 		return;
@@ -598,7 +712,13 @@ export const applyJobPostUpdate = async ({
 	data: JobPostInput;
 	existing: typeof jobPost.$inferSelect;
 }) => {
-	const { descriptionBlocks: _descriptionBlocks, media, ...jobInput } = data;
+	// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다.
+	const {
+		adBannerLayout: _adBannerLayout,
+		descriptionBlocks: _descriptionBlocks,
+		media,
+		...jobInput
+	} = data;
 
 	if (
 		data.organizationId !== existing.organizationId ||
@@ -623,12 +743,17 @@ export const applyJobPostUpdate = async ({
 		});
 	}
 
-	const preparedContent = prepareJobPostContent(data);
+	// 노출 확정이 먼저다 — 배너 문구를 남길지 버릴지가 확정된 노출 타입에 달려 있고,
+	// 검수 검사도 실제로 저장될 문구만 봐야 한다.
 	const exposure = await resolveJobPostExposure({
 		adProductId: data.adProductId,
 		exposureDurationDays: data.exposureDurationDays,
 		paymentMethod: data.paymentMethod,
 	});
+	const layoutWrite = normalizeAdBannerLayout(data, exposure.exposureType);
+	// 최종 저장될 레이아웃. 검수(금칙어)와 배너 이미지 필수 판정이 같은 값을 봐야 한다.
+	const finalLayout = await resolveModeratedLayout(layoutWrite, existing.id);
+	const preparedContent = prepareJobPostContent(data, finalLayout);
 	// 노출 상품·기간이 바뀌면 재결제가 필요하다. 유료 전환/변경은 미결제로 되돌리고,
 	// 무료 전환은 결제 게이트 없이 즉시 게시(paid)로 둔다(생성 시 무료 공고와 동일 규칙).
 	const exposureChanged =
@@ -653,7 +778,8 @@ export const applyJobPostUpdate = async ({
 		exposure.exposureType,
 		mediaRows
 			? mediaRows.map((row) => row.usage)
-			: await getJobPostMediaUsages(existing.id)
+			: await getJobPostMediaUsages(existing.id),
+		finalLayout
 	);
 	const riskDetected = preparedContent.hasRiskFlags;
 	const status: JobPostStatus = riskDetected
@@ -704,6 +830,8 @@ export const applyJobPostUpdate = async ({
 				message: "Job post could not be updated.",
 			});
 		}
+
+		await writeAdBannerLayout(tx, updated.id, layoutWrite);
 
 		if (mediaRows) {
 			await tx
@@ -969,8 +1097,11 @@ export const jobsRouter = {
 	// 위치별로 내려준다. 목록 필터와 무관해 list와 분리된 공개 조회다.
 	listAdBanners: publicProcedure.handler(async ({ context }) => {
 		const now = new Date();
-		const rows = await db
+		const selectedRows = await db
 			.select({
+				// 배너 이미지 위에 얹을 레이아웃(문구·좌표·연출). 편집한 적 없는 공고는 조인이
+				// 비어 null이라 클라이언트가 예전처럼 이미지만 렌더한다.
+				layout: jobAdBannerLayout.layout,
 				// 슬롯별 배너 원본. 좌측·프리미엄은 가로형, 우측은 세로형을 쓰며 클라이언트가
 				// 슬롯에 맞는 쪽을 고른다. 미업로드 공고를 위해 coverImage도 폴백용으로 함께 내린다.
 				adHorizontal: adHorizontalImageSql,
@@ -994,6 +1125,7 @@ export const jobsRouter = {
 				employerTeamProfile,
 				eq(jobPost.teamId, employerTeamProfile.teamId)
 			)
+			.leftJoin(jobAdBannerLayout, eq(jobPost.id, jobAdBannerLayout.jobPostId))
 			.where(
 				and(
 					eq(jobPost.status, "published" as JobPostStatus),
@@ -1003,6 +1135,15 @@ export const jobsRouter = {
 				)
 			)
 			.orderBy(desc(jobPost.publishedAt));
+
+		// jsonb 컬럼은 drizzle이 unknown으로 준다. 캐스팅만 하면 형태가 어긋난 행 하나가
+		// 렌더러에서 터지는데, 이 배너 레일은 마켓플레이스·공고상세·채팅목록 등 여러 화면에
+		// 붙어 있어 한 광고주의 잘못된 행이 화면 전체를 내린다. 읽을 때마다 다시 검증하고
+		// 실패하면 null로 떨어뜨려 이미지만 나오게 한다.
+		const rows = selectedRows.map((row) => ({
+			...row,
+			layout: parseStoredAdBannerLayout(row.layout ?? null),
+		}));
 
 		// 로테이션 주기는 운영자 사이트 설정값(분)을 따르고, 미설정이면 코드 기본값을 쓴다.
 		const [rotationRow] = await db
@@ -1014,22 +1155,14 @@ export const jobsRouter = {
 			(rotationRow?.minutes ?? DEFAULT_AD_ROTATION_MINUTES) * 60 * 1000;
 		const groups = groupAdBannerJobs(rows, now, rotationMs);
 
-		// 활성 칸의 광고가 그 슬롯 방향(좌·중=가로 7:3 / 우=세로 4:9) 배너를 안 올렸으면
-		// 커버로 폴백하지 않고 그 칸을 비운다(자리표시). 노출도 impression 기록도 하지 않는다.
-		// 등록 흐름상 프리미엄은 두 방향이 모두 필수라, 이 홀은 한 방향만 가진 레거시 공고에서만 생긴다.
-		type AdBannerSlotRow = (typeof rows)[number];
-		const requireDirectionImage = (
-			items: (AdBannerSlotRow | null)[],
-			key: "adHorizontal" | "adVertical"
-		): (AdBannerSlotRow | null)[] =>
-			items.map((item) => (item?.[key] ? item : null));
+		// 슬롯 방향 배너가 없는 후보는 비운다(단색 배경 슬롯은 예외 — requireDirectionImage 참고).
 		const directedGroups = {
-			leftBanner: requireDirectionImage(groups.leftBanner, "adHorizontal"),
+			leftBanner: requireDirectionImage(groups.leftBanner, "ad_horizontal"),
 			premiumBanner: requireDirectionImage(
 				groups.premiumBanner,
-				"adHorizontal"
+				"ad_horizontal"
 			),
-			rightBanner: requireDirectionImage(groups.rightBanner, "adVertical"),
+			rightBanner: requireDirectionImage(groups.rightBanner, "ad_vertical"),
 		};
 
 		await recordAdBannerImpressions({
@@ -1222,8 +1355,11 @@ export const jobsRouter = {
 				session: context.session,
 			});
 
+			// 수정 폼 프리필. 레이아웃을 함께 내리지 않으면 폼이 빈 값으로 시작해 저장 시
+			// 기존 배너 편집물이 사라진다.
 			return {
 				...post,
+				adBannerLayout: await getStoredAdBannerLayout(post.id),
 				media: await getJobPostMediaSet(post.id),
 			};
 		}),
@@ -1256,7 +1392,9 @@ export const jobsRouter = {
 	create: protectedProcedure
 		.input(jobPostInput)
 		.handler(async ({ context, input }) => {
+			// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다.
 			const {
+				adBannerLayout: _adBannerLayout,
 				descriptionBlocks: _descriptionBlocks,
 				media,
 				...jobInput
@@ -1290,19 +1428,25 @@ export const jobsRouter = {
 				});
 			}
 
-			const preparedContent = prepareJobPostContent(input);
+			// 노출 확정이 먼저다 — 배너형이 아니면 문구를 저장 전에 버려야 하고, 검수
+			// 검사도 실제로 저장될 문구만 봐야 한다.
 			const exposure = await resolveJobPostExposure({
 				adProductId: input.adProductId,
 				exposureDurationDays: input.exposureDurationDays,
 				paymentMethod: input.paymentMethod,
 			});
+			const layoutWrite = normalizeAdBannerLayout(input, exposure.exposureType);
+			// 최종 저장될 레이아웃. 검수(금칙어)와 배너 이미지 필수 판정이 같은 값을 봐야 한다.
+			const finalLayout = await resolveModeratedLayout(layoutWrite, null);
+			const preparedContent = prepareJobPostContent(input, finalLayout);
 			const mediaRows = requireValidJobPostMediaSet({
 				media,
 				organizationId: input.organizationId,
 			});
 			requireAdBannerMedia(
 				exposure.exposureType,
-				mediaRows.map((row) => row.usage)
+				mediaRows.map((row) => row.usage),
+				finalLayout
 			);
 			const riskDetected = preparedContent.hasRiskFlags;
 			const status = getInitialJobPostStatus({
@@ -1341,6 +1485,8 @@ export const jobsRouter = {
 						message: "Job post could not be created.",
 					});
 				}
+
+				await writeAdBannerLayout(tx, created.id, layoutWrite);
 
 				const insertedMedia =
 					mediaRows.length > 0

@@ -9,6 +9,7 @@ import {
 } from "@bambi-app/ui/components/card";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import { Separator } from "@bambi-app/ui/components/separator";
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
@@ -18,6 +19,7 @@ import { orpc } from "@/utils/orpc";
 
 interface FooterForm {
 	address: string;
+	adInquiryTel: string;
 	bizRegNo: string;
 	ceo: string;
 	email: string;
@@ -28,6 +30,7 @@ interface FooterForm {
 
 const EMPTY_FORM: FooterForm = {
 	address: "",
+	adInquiryTel: "",
 	bizRegNo: "",
 	ceo: "",
 	email: "",
@@ -40,15 +43,15 @@ const EMPTY_FORM: FooterForm = {
 interface PrivacyForm {
 	privacyContactEmail: string;
 	privacyContactPhone: string;
+	privacyOfficerName: string;
 	privacyPaymentProcessor: string;
-	privacySmsProvider: string;
 }
 
 const EMPTY_PRIVACY_FORM: PrivacyForm = {
 	privacyContactEmail: "",
 	privacyContactPhone: "",
+	privacyOfficerName: "",
 	privacyPaymentProcessor: "",
-	privacySmsProvider: "",
 };
 
 // 편집용 행에는 안정적인 key를 위해 클라이언트 전용 id를 붙인다(서버 저장 시 제거).
@@ -83,6 +86,7 @@ export default function ModeratorSiteSettingsPage() {
 		}
 		setForm({
 			address: data.address ?? "",
+			adInquiryTel: data.adInquiryTel ?? "",
 			bizRegNo: data.bizRegNo ?? "",
 			ceo: data.ceo ?? "",
 			email: data.email ?? "",
@@ -128,8 +132,8 @@ export default function ModeratorSiteSettingsPage() {
 		setPrivacyForm({
 			privacyContactEmail: data.privacyContactEmail ?? "",
 			privacyContactPhone: data.privacyContactPhone ?? "",
+			privacyOfficerName: data.privacyOfficerName ?? "",
 			privacyPaymentProcessor: data.privacyPaymentProcessor ?? "",
-			privacySmsProvider: data.privacySmsProvider ?? "",
 		});
 	}, [privacyQuery.data]);
 
@@ -251,6 +255,22 @@ export default function ModeratorSiteSettingsPage() {
 		saveMemberPolicyMutation.mutate({ withdrawalRetentionDays: parsed });
 	};
 
+	// 파기 배치 수동 실행. cron 인프라가 없어 이 버튼이 유일한 트리거다.
+	const purgeMutation = useMutation(
+		orpc.bambi.moderation.purgeWithdrawnAccounts.mutationOptions({
+			onError: (error) => toast.error(error.message || "실행하지 못했어요."),
+			onSuccess: (result) => {
+				if (result.purgedCount === 0) {
+					toast.success("보존기간이 지난 탈퇴 계정이 없어요.");
+					return;
+				}
+				toast.success(
+					`탈퇴 계정 ${result.purgedCount}건의 잔여 정보를 파기했어요.`
+				);
+			},
+		})
+	);
+
 	const adRotationQuery = useQuery(
 		orpc.bambi.siteSettings.getAdRotation.queryOptions()
 	);
@@ -360,6 +380,20 @@ export default function ModeratorSiteSettingsPage() {
 									value={form.tel}
 								/>
 							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="adInquiryTel">광고 등록 문의 전화</Label>
+								<Input
+									id="adInquiryTel"
+									onChange={update("adInquiryTel")}
+									placeholder={form.tel || BAMBI_COMPANY.tel}
+									type="tel"
+									value={form.adInquiryTel}
+								/>
+								<p className="m-0 text-muted-foreground text-xs">
+									광고 슬롯의 "광고 등록 문의"에 노출됩니다. 비워두면 고객센터
+									전화가 표시됩니다.
+								</p>
+							</div>
 							<div className="flex flex-col gap-2 md:col-span-2">
 								<Label htmlFor="address">사업장 주소</Label>
 								<Input
@@ -389,13 +423,13 @@ export default function ModeratorSiteSettingsPage() {
 				<CardContent>
 					<form className="flex flex-col gap-5" onSubmit={onSubmitPrivacy}>
 						<p className="m-0 text-muted-foreground text-sm">
-							개인정보 처리방침 페이지의 위탁사명과 관리부서 연락처에
+							개인정보 처리방침 페이지의 위탁사명과 보호책임자 정보에
 							노출됩니다. 비워두면 기본값이 표시됩니다.
 						</p>
 						<div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 							<div className="flex flex-col gap-2">
 								<Label htmlFor="privacyPaymentProcessor">
-									결제대행사(수탁사명)
+									본인인증 대행사(수탁사명)
 								</Label>
 								<Input
 									id="privacyPaymentProcessor"
@@ -405,12 +439,12 @@ export default function ModeratorSiteSettingsPage() {
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="privacySmsProvider">문자발송사(수탁사명)</Label>
+								<Label htmlFor="privacyOfficerName">보호책임자 성명</Label>
 								<Input
-									id="privacySmsProvider"
-									onChange={updatePrivacy("privacySmsProvider")}
-									placeholder={BAMBI_PROCESSORS[1].name}
-									value={privacyForm.privacySmsProvider}
+									id="privacyOfficerName"
+									onChange={updatePrivacy("privacyOfficerName")}
+									placeholder={BAMBI_COMPANY.privacyOfficer.name}
+									value={privacyForm.privacyOfficerName}
 								/>
 							</div>
 							<div className="flex flex-col gap-2">
@@ -546,8 +580,10 @@ export default function ModeratorSiteSettingsPage() {
 								value={retentionDays}
 							/>
 							<p className="m-0 text-muted-foreground text-xs">
-								탈퇴 후 이 기간이 지나면 파기 배치가 개인정보를 삭제해요.
-								비워두면 기본값을 사용하고, 탈퇴 안내 문구에도 그대로 표시돼요.
+								연락처·비밀번호 등은 탈퇴 즉시 파기하고, 부정 재가입 차단에
+								필요한 본인인증 식별값(CI·DI 해시)만 이 기간 동안 남겨요.
+								비워두면 기본값을 사용하고, 탈퇴 안내 문구와 개인정보
+								처리방침에도 그대로 표시돼요.
 							</p>
 						</div>
 						<div className="flex justify-end">
@@ -562,6 +598,23 @@ export default function ModeratorSiteSettingsPage() {
 							</Button>
 						</div>
 					</form>
+					<Separator className="my-5" />
+					<div className="flex flex-col gap-3">
+						<p className="m-0 text-muted-foreground text-xs">
+							보존기간이 지난 탈퇴 계정의 잔여 식별값을 파기해요. 자동 실행이
+							없어 주기적으로 눌러 주셔야 해요.
+						</p>
+						<div className="flex justify-end">
+							<Button
+								disabled={purgeMutation.isPending}
+								onClick={() => purgeMutation.mutate({})}
+								type="button"
+								variant="outline"
+							>
+								{purgeMutation.isPending ? "파기 중…" : "지금 파기 실행"}
+							</Button>
+						</div>
+					</div>
 				</CardContent>
 			</Card>
 

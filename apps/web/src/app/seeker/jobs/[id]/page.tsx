@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import { notFound, useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { ReportDialog } from "@/components/bambi/report-dialog";
 import { SeekerJobDetailResponsive } from "@/components/bambi/screens/seeker-job-detail-responsive";
@@ -18,6 +18,17 @@ export default function SeekerJobPage() {
 	// 가드에 튕기는 것보다 잠깐 안 보이는 편이 낫다.
 	const canStartChat = role === "job_seeker";
 	const [isReportOpen, setIsReportOpen] = useState(false);
+	// 상세로 들어왔는데 목록에서 내려둔 스크롤 위치가 그대로 남는 문제를 막는다.
+	// App Router의 스크롤 초기화는 세그먼트가 처음 커밋될 때 잡은 DOM 노드 하나에만
+	// 걸려 있고(layout-router의 findDOMNode + scrollRef), 그 앞 조기 이탈 분기에
+	// 걸리면 스크롤을 아예 건드리지 않는다. 하드 로드·하이드레이션 경로에서는 설계상
+	// 아무것도 하지 않고 브라우저 복원에 맡긴다. 이 라우트는 어느 경로로 들어오든
+	// 공고 맨 위에서 읽기 시작해야 하므로 공고가 바뀔 때마다 직접 최상단으로 올린다.
+	// 훅 순서 때문에 아래 isLoading/notFound 조기 반환보다 위에 있어야 한다.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: id는 값을 읽으려는 게 아니라 "다른 공고로 바뀌면 다시 올린다"는 재실행 키다(사이드 배너로 상세→상세 이동이 가능하다).
+	useEffect(() => {
+		window.scrollTo(0, 0);
+	}, [id]);
 	if (isLoading) {
 		return (
 			<div className="mx-auto w-full px-5 py-10 text-center font-bold text-muted-foreground md:max-w-[80%] md:px-6">
