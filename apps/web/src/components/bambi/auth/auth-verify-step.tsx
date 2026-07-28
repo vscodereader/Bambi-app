@@ -23,13 +23,9 @@ export function AuthVerifyStep({
 	onVerifiedForSignup: (identityVerificationId: string) => Promise<void>;
 }) {
 	return (
-		<div className="flex flex-col gap-3">
-			{/* 뒤에 깔린 배경은 md 미만에서 감춰지므로, 문장만으로도 "지금은 가려져
-			    있다 → 인증하면 열린다"가 성립해야 한다. */}
-			<p className="m-0 text-muted-foreground text-sm leading-relaxed">
-				지금은 공고가 흐리게 가려져 있어요. 본인인증을 마치면 업소명·급여·위치가
-				그대로 열려요.
-			</p>
+		// 제목 바로 아래에 버튼이 붙지 않도록 pt로 한 칸 띄운다 — 제목과 첫 액션이
+		// 맞닿으면 카드가 답답해 보인다.
+		<div className="flex flex-col gap-3 pt-4">
 			<PhoneVerifyDialog
 				intent={SIGNUP_INTENT}
 				onMockVerified={onMockVerifiedForSignup}
