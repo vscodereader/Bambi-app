@@ -18,6 +18,7 @@ import { PhoneIcon } from "./icons";
 import { MockPhoneVerifyDialog } from "./mock-phone-verify-dialog";
 
 type ButtonVariant = ComponentProps<typeof Button>["variant"];
+type ButtonSize = ComponentProps<typeof Button>["size"];
 
 // 한 화면에 인증 버튼이 여럿이면(예: "본인인증하고 계속하기" / "비회원으로 둘러보기")
 // 모바일 리디렉션 복귀 시 모든 인스턴스가 같은 인증 건을 동시에 처리해 사용자의 의도가
@@ -44,6 +45,8 @@ const writeVerifyIntent = (intent: string) => {
 };
 
 interface PhoneVerifyDialogProps {
+	// 트리거 버튼에 덧입힐 클래스. 호출 화면의 위계에 맞춰 글로우를 끄는 등의 조정에 쓴다.
+	className?: string;
 	// 목 폴백 폼의 성별 선택 초기값(실인증에서는 인증 결과가 성별을 결정하므로 미사용).
 	defaultGender?: BambiGenderValue | null;
 	description?: string;
@@ -54,17 +57,21 @@ interface PhoneVerifyDialogProps {
 	onMockVerified?: (input: MockPhoneVerifyInput) => Promise<void> | void;
 	// 실인증 성공 시 저장을 담당할 콜백(회원 흐름). 미제공 시 게스트 쿠키 흐름(/api/guest).
 	onVerified?: (identityVerificationId: string) => Promise<void> | void;
+	// 트리거 버튼 크기. 한 화면에 인증 버튼이 둘일 때 위계를 크기로도 구분한다.
+	size?: ButtonSize;
 	title?: string;
 	triggerLabel?: string;
 	variant?: ButtonVariant;
 }
 
 export function PhoneVerifyDialog({
+	className,
 	defaultGender = null,
 	description,
 	intent = "",
 	onMockVerified,
 	onVerified,
+	size,
 	title,
 	triggerLabel = "휴대폰 인증",
 	variant = "secondary",
@@ -75,9 +82,11 @@ export function PhoneVerifyDialog({
 	if (!(storeId && channelKey)) {
 		return (
 			<MockPhoneVerifyDialog
+				className={className}
 				defaultGender={defaultGender}
 				description={description}
 				onVerified={onMockVerified}
+				size={size}
 				title={title}
 				triggerLabel={triggerLabel}
 				variant={variant}
@@ -88,8 +97,10 @@ export function PhoneVerifyDialog({
 	return (
 		<PortOneVerifyButton
 			channelKey={channelKey}
+			className={className}
 			intent={intent}
 			onVerified={onVerified}
+			size={size}
 			storeId={storeId}
 			triggerLabel={triggerLabel}
 			variant={variant}
@@ -99,15 +110,19 @@ export function PhoneVerifyDialog({
 
 function PortOneVerifyButton({
 	channelKey,
+	className,
 	intent,
 	onVerified,
+	size,
 	storeId,
 	triggerLabel,
 	variant,
 }: {
 	channelKey: string;
+	className?: string;
 	intent: string;
 	onVerified?: (identityVerificationId: string) => Promise<void> | void;
+	size?: ButtonSize;
 	storeId: string;
 	triggerLabel: string;
 	variant: ButtonVariant;
@@ -228,11 +243,13 @@ function PortOneVerifyButton({
 	return (
 		<Button
 			block
+			className={className}
 			disabled={isVerifying}
 			leftIcon={<PhoneIcon />}
 			onClick={() => {
 				startVerification().catch(() => undefined);
 			}}
+			size={size}
 			variant={variant}
 		>
 			{isVerifying ? "인증 중" : triggerLabel}

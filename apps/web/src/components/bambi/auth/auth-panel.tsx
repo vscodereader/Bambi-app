@@ -383,14 +383,13 @@ export function AuthPanel({
 	return (
 		<div className="w-full text-foreground">
 			{/* 게이트 카드는 폭·높이를 고정 수치로 잡는다 — 로그인·회원가입·인증 단계를
-			    오가도 카드 덩치가 흔들리지 않아야 한다. min-h라 폼이 더 길어지면 늘어나고,
-			    짧은 로그인 폼에서는 justify-center로 내용이 가운데에 앉는다. */}
+			    오가도 카드 덩치가 흔들리지 않아야 한다. min-h라 폼이 더 길어지면 늘어난다.
+			    머리는 위, 본문은 남는 높이를 위아래로 나눈 광학 중앙, 19금 고지는 바닥.
+			    인증 단계처럼 내용이 짧아도 남는 높이가 "덩어리 아래의 빈 꼬리"로 몰리지 않는다. */}
 			<Card
 				className={cn(
 					"mx-auto rounded-xl",
-					compact
-						? "max-w-md"
-						: "min-h-[620px] max-w-[580px] justify-center sm:p-7"
+					compact ? "max-w-md" : "min-h-[620px] max-w-[580px] sm:p-7"
 				)}
 				pad="lg"
 			>
@@ -400,74 +399,84 @@ export function AuthPanel({
 					step={step}
 					title={title}
 				/>
-				{isVerifyStep ? (
-					<AuthVerifyStep
-						onMockVerifiedForGuest={handleMockVerifiedForGuest}
-						onMockVerifiedForSignup={handleMockVerifiedForSignup}
-						onToggleMode={toggleMode}
-						onVerifiedForGuest={handleVerifiedForGuest}
-						onVerifiedForSignup={handleVerifiedForSignup}
-					/>
-				) : (
-					// @container: 2열 전환 기준은 뷰포트가 아니라 카드 폭이다 — 같은 폼이
-					// 넓은 게이트 카드와 좁은 다이얼로그(compact) 양쪽에 쓰이기 때문이다.
-					<form
-						className="@container grid gap-4"
-						onSubmit={(event) => {
-							event.preventDefault();
-							handleSubmit().catch(() => undefined);
-						}}
-					>
-						{isSignUp ? (
-							<div className="grid @md:grid-cols-2 gap-4">
-								<AuthSignupFields
+				{/* my-auto: 카드가 내용보다 클 때(인증 단계처럼 짧을 때) 남는 높이를 본문 위아래로
+				    똑같이 나눠 준다. 한쪽에 몰면 "아래가 텅 빈" 카드가 되지만, 나눠 두면 머리는
+				    위, 액션은 광학 중앙, 고지는 바닥이라는 삼단 구성으로 읽힌다. */}
+				<div className="my-auto">
+					{isVerifyStep ? (
+						<AuthVerifyStep
+							onMockVerifiedForGuest={handleMockVerifiedForGuest}
+							onMockVerifiedForSignup={handleMockVerifiedForSignup}
+							onToggleMode={toggleMode}
+							onVerifiedForGuest={handleVerifiedForGuest}
+							onVerifiedForSignup={handleVerifiedForSignup}
+						/>
+					) : (
+						// @container: 2열 전환 기준은 뷰포트가 아니라 카드 폭이다 — 같은 폼이
+						// 넓은 게이트 카드와 좁은 다이얼로그(compact) 양쪽에 쓰이기 때문이다.
+						<form
+							className="@container grid gap-4"
+							onSubmit={(event) => {
+								event.preventDefault();
+								handleSubmit().catch(() => undefined);
+							}}
+						>
+							{isSignUp ? (
+								<div className="grid @md:grid-cols-2 gap-4">
+									<AuthSignupFields
+										onFieldChange={setField}
+										onSignupRoleChange={setSignupRole}
+										signupRole={signupRole}
+										values={form}
+									/>
+								</div>
+							) : (
+								<AuthSigninFields
 									onFieldChange={setField}
-									onSignupRoleChange={setSignupRole}
-									signupRole={signupRole}
+									onForgotPassword={handleForgotPassword}
 									values={form}
 								/>
-							</div>
-						) : (
-							<AuthSigninFields
-								onFieldChange={setField}
-								onForgotPassword={handleForgotPassword}
-								values={form}
-							/>
-						)}
-						<AuthNotice notice={notice} />
-						{isSignUp ? (
-							<AuthTermsAgreement
-								checked={agreedToTerms}
-								onCheckedChange={setAgreedToTerms}
-							/>
-						) : null}
-						<Button
-							block
-							className="shadow-none"
-							disabled={isSubmitting}
-							leftIcon={isSubmitting ? <Spinner /> : undefined}
-							type="submit"
-						>
-							{isSubmitting ? "처리 중" : submitLabel}
-						</Button>
-						<p className="m-0 text-center text-muted-foreground text-sm">
-							{isSignUp ? "이미 계정이 있으신가요? " : "밤비가 처음이신가요? "}
-							<button
-								className="font-bold text-primary underline-offset-2 hover:underline disabled:opacity-50"
+							)}
+							<AuthNotice notice={notice} />
+							{isSignUp ? (
+								<AuthTermsAgreement
+									checked={agreedToTerms}
+									onCheckedChange={setAgreedToTerms}
+								/>
+							) : null}
+							<Button
+								block
+								className="shadow-none"
 								disabled={isSubmitting}
-								onClick={toggleMode}
-								type="button"
+								leftIcon={isSubmitting ? <Spinner /> : undefined}
+								type="submit"
 							>
-								{isSignUp ? "로그인" : "회원가입"}
-							</button>
-						</p>
-					</form>
-				)}
-				{/* 19금 고지는 로그인·회원가입 어느 단계에서도 상시 노출한다. 자리는 카드
-				    하단 그대로지만, 자체 면을 가진 패널이라 구분선 없이 그 자체로 떨어진다.
-				    바로 위의 "이미 계정이 있으신가요?" 줄과 붙어 한 덩어리로 읽히지 않도록
-				    간격을 넉넉히 준다. */}
-				<AdultNotice className="mt-10" />
+								{isSubmitting ? "처리 중" : submitLabel}
+							</Button>
+							<p className="m-0 text-center text-muted-foreground text-sm">
+								{isSignUp
+									? "이미 계정이 있으신가요? "
+									: "밤비가 처음이신가요? "}
+								<button
+									className="font-bold text-primary underline-offset-2 hover:underline disabled:opacity-50"
+									disabled={isSubmitting}
+									onClick={toggleMode}
+									type="button"
+								>
+									{isSignUp ? "로그인" : "회원가입"}
+								</button>
+							</p>
+						</form>
+					)}
+				</div>
+				{/* 19금 고지는 로그인·회원가입 어느 단계에서도 상시 노출한다. 간격은 고지 패널
+				    자체가 아니라 래퍼가 갖는다 — 패널에 pt를 주면 p-4로 잡아 둔 패널 안쪽 여백이
+				    깨진다. 바닥 고정은 위 본문의 my-auto가 이미 해 준다(뒤따르는 형제를 끝으로
+				    민다). 여기에 mt-auto를 또 주면 auto 마진이 셋이 되어 남는 높이를 1/3씩
+				    나눠 가져 위아래가 어긋난다. pt-10은 내용이 길 때의 최소 간격이다. */}
+				<div className="pt-10">
+					<AdultNotice />
+				</div>
 			</Card>
 		</div>
 	);
