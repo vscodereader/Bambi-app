@@ -1948,6 +1948,7 @@ const MOD_MORE_GROUPS: {
 		label: "사이트",
 		items: [
 			{ href: "/moderator/site-settings" as Route, label: "사이트 정보" },
+			{ href: "/moderator/crawler" as Route, label: "공고 수집" },
 		],
 	},
 ];
