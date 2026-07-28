@@ -41,9 +41,13 @@ const underageResponse = () =>
 
 // 인증 통과 응답 — 서명 토큰 한 개만 세팅한다. httpOnly:false는 의도된 것: 클라이언트가
 // 성별을 읽어 가입 시 프로필로 옮긴다. 값 위조는 서명 검증(미들웨어)에서 걸린다.
-const verifiedResponse = async (gender: BambiGenderValue | null) => {
+const verifiedResponse = async (
+	gender: BambiGenderValue | null,
+	ivId?: string
+) => {
 	const token = await createGuestToken({
 		gender,
+		ivId,
 		maxAgeSeconds: GUEST_COOKIE_MAX_AGE,
 		now: new Date(),
 		secret: guestTokenSecret(),
@@ -78,7 +82,8 @@ const handleRealVerification = async (identityVerificationId: string) => {
 		return underageResponse();
 	}
 	return await verifiedResponse(
-		mapPortOneGender(verification.verifiedCustomer?.gender)
+		mapPortOneGender(verification.verifiedCustomer?.gender),
+		identityVerificationId
 	);
 };
 
