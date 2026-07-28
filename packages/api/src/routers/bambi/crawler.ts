@@ -12,6 +12,8 @@ import { adminProcedure } from "../../index";
 import { runCrawlTick } from "../../services/bambi-crawl-ingest";
 import {
 	DEFAULT_CRAWL_INTERVAL_HOURS,
+	IMPLEMENTED_CRAWL_SITES,
+	isCrawlSiteImplemented,
 	isRunStale,
 } from "../../services/bambi-crawl-policy";
 
@@ -54,6 +56,8 @@ const listInput = z.object({
 // 주기 상한은 30일. 그보다 길면 사실상 꺼둔 것이므로 토글을 쓰는 게 맞다.
 const MAX_INTERVAL_HOURS = 720;
 
+const sourceSiteInput = z.enum(["foxalba", "queenalba"]);
+
 const updateSettingsInput = z.object({
 	enabled: z.boolean(),
 	intervalHours: z
@@ -62,6 +66,7 @@ const updateSettingsInput = z.object({
 		.min(1, "수집 주기는 1시간 이상으로 설정해 주세요.")
 		.max(MAX_INTERVAL_HOURS, "수집 주기는 720시간(30일) 이하로 설정해 주세요.")
 		.nullable(),
+	sourceSite: sourceSiteInput,
 });
 
 const RECENT_RUN_LIMIT = 20;
@@ -151,6 +156,7 @@ export const crawlerRouter = {
 				enabled: bambiSiteSettings.crawlEnabled,
 				intervalHours: bambiSiteSettings.crawlIntervalHours,
 				lastRunAt: bambiSiteSettings.crawlLastRunAt,
+				sourceSite: bambiSiteSettings.crawlSourceSite,
 			})
 			.from(bambiSiteSettings)
 			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
@@ -160,8 +166,11 @@ export const crawlerRouter = {
 			defaultIntervalHours: DEFAULT_CRAWL_INTERVAL_HOURS,
 			// 행이 없으면 꺼진 상태로 본다. 설정이 없다는 이유로 수집이 시작되면 안 된다.
 			enabled: row?.enabled ?? false,
+			// 파서가 실제로 구현된 사이트. 화면이 "준비 중" 배지를 붙일 근거로 쓴다.
+			implementedSites: [...IMPLEMENTED_CRAWL_SITES],
 			intervalHours: row?.intervalHours ?? null,
 			lastRunAt: row?.lastRunAt ?? null,
+			sourceSite: row?.sourceSite ?? "foxalba",
 		};
 	}),
 
@@ -172,6 +181,7 @@ export const crawlerRouter = {
 			const values = {
 				crawlEnabled: input.enabled,
 				crawlIntervalHours: input.intervalHours,
+				crawlSourceSite: input.sourceSite,
 			};
 
 			const [saved] = await db
@@ -181,6 +191,7 @@ export const crawlerRouter = {
 				.returning({
 					enabled: bambiSiteSettings.crawlEnabled,
 					intervalHours: bambiSiteSettings.crawlIntervalHours,
+					sourceSite: bambiSiteSettings.crawlSourceSite,
 				});
 
 			return saved ?? null;
@@ -192,7 +203,10 @@ export const crawlerRouter = {
 	// 예약 실행과 완전히 같은 경로를 지난다.
 	runNow: adminProcedure.handler(async () => {
 		const [settings] = await db
-			.select({ enabled: bambiSiteSettings.crawlEnabled })
+			.select({
+				enabled: bambiSiteSettings.crawlEnabled,
+				sourceSite: bambiSiteSettings.crawlSourceSite,
+			})
 			.from(bambiSiteSettings)
 			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
 			.limit(1);
@@ -200,6 +214,12 @@ export const crawlerRouter = {
 		// 꺼둔 수집이 버튼 하나로 되살아나면 "껐다"는 말이 거짓이 된다.
 		if (!settings?.enabled) {
 			return { reason: "disabled" as const, started: false };
+		}
+
+		// 파서가 없는 사이트를 골랐으면 회차를 띄우지 않고 화면에 바로 알린다. runCrawlTick도
+		// not_implemented로 빠지지만, 여기서 먼저 걸러야 "시작됨" 토스트가 잘못 뜨지 않는다.
+		if (!isCrawlSiteImplemented(settings.sourceSite)) {
+			return { reason: "not_implemented" as const, started: false };
 		}
 
 		const [active] = await db

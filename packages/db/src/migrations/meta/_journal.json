@@ -302,6 +302,13 @@
       "when": 1785223213099,
       "tag": "0042_complete_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1785226269173,
+      "tag": "0043_tough_doomsday",
+      "breakpoints": true
     }
   ]
 }

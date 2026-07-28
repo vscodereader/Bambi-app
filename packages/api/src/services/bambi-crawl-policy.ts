@@ -32,6 +32,16 @@ export const RUN_STALE_AFTER_MS = 30 * 60 * 1000;
 export const isRunStale = (startedAt: Date, now: Date): boolean =>
 	now.getTime() - startedAt.getTime() > RUN_STALE_AFTER_MS;
 
+// 수집 대상 사이트. DB enum(crawl_source_site)과 값이 같아야 한다.
+export type CrawlSourceSite = "foxalba" | "queenalba";
+
+// 파서가 실제로 구현된 사이트. 이 목록에 없는 사이트를 골라도 수집기는 회차를 만들지 않고
+// "준비 중"으로 빠져나온다 — 빈 결과를 "공고 없음"으로 읽어 만료 처리가 돌면 안 되기 때문이다.
+export const IMPLEMENTED_CRAWL_SITES: readonly CrawlSourceSite[] = ["foxalba"];
+
+export const isCrawlSiteImplemented = (site: CrawlSourceSite): boolean =>
+	IMPLEMENTED_CRAWL_SITES.includes(site);
+
 export interface CrawlSettings {
 	crawlEnabled: boolean;
 	crawlIntervalHours: number | null;

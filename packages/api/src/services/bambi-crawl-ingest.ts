@@ -18,11 +18,13 @@ import {
 import { computeContentHash } from "./bambi-crawl-normalize";
 import {
 	type CrawlSettings,
+	type CrawlSourceSite,
 	DAY_MS,
 	DETAIL_REFRESH_HOURS,
 	EXPIRE_AFTER_DAYS,
 	HOUR_MS,
 	isCrawlDue,
+	isCrawlSiteImplemented,
 	isYieldTrustworthy,
 	MAX_DETAIL_FETCHES_PER_RUN,
 	RUN_STALE_AFTER_MS,
@@ -36,8 +38,18 @@ export interface CrawlTickResult {
 	itemsNew: number;
 	itemsUpdated: number;
 	pendingDetails: number;
-	reason: "aborted_low_yield" | "already_running" | "completed" | "not_due";
+	reason:
+		| "aborted_low_yield"
+		| "already_running"
+		| "completed"
+		| "not_due"
+		// 운영자가 파서 미구현 사이트(예: queenalba)를 골랐을 때. 회차를 만들지 않는다.
+		| "not_implemented";
 }
+
+// readSettings는 사이트 선택까지 읽어야 하지만, isCrawlDue는 사이트를 보지 않는다(주기 판정만).
+// CrawlSettings에 사이트를 넣으면 정책 테스트의 객체 리터럴이 전부 깨지므로 확장 타입으로 둔다.
+type CrawlTickSettings = CrawlSettings & { crawlSourceSite: CrawlSourceSite };
 
 export interface CrawlTickOptions {
 	// 운영자가 "즉시 수집"을 누른 경우. 주기 판정만 건너뛰고 나머지(중복 방지·수율 판정·
@@ -69,12 +81,13 @@ type DetailOutcome =
 	| "unchanged"
 	| "updated";
 
-const readSettings = async (): Promise<CrawlSettings> => {
+const readSettings = async (): Promise<CrawlTickSettings> => {
 	const [row] = await db
 		.select({
 			crawlEnabled: bambiSiteSettings.crawlEnabled,
 			crawlIntervalHours: bambiSiteSettings.crawlIntervalHours,
 			crawlLastRunAt: bambiSiteSettings.crawlLastRunAt,
+			crawlSourceSite: bambiSiteSettings.crawlSourceSite,
 		})
 		.from(bambiSiteSettings)
 		.where(eq(bambiSiteSettings.id, "default"));
@@ -84,6 +97,7 @@ const readSettings = async (): Promise<CrawlSettings> => {
 			crawlEnabled: false,
 			crawlIntervalHours: null,
 			crawlLastRunAt: null,
+			crawlSourceSite: "foxalba",
 		}
 	);
 };
@@ -373,6 +387,13 @@ export const runCrawlTick = async (
 	// "껐다"는 말이 거짓이 된다.
 	if (!settings.crawlEnabled) {
 		return emptyResult("not_due");
+	}
+
+	// 파서가 없는 사이트(예: queenalba)를 골랐으면 회차를 만들지 않고 빠져나온다. 여기서
+	// 회차를 열면 빈 결과가 "공고 없음"으로 읽혀 만료 처리가 돌 수 있다. 파서가 생기면
+	// IMPLEMENTED_CRAWL_SITES에 사이트를 추가하는 것만으로 이 가드가 풀린다.
+	if (!isCrawlSiteImplemented(settings.crawlSourceSite)) {
+		return emptyResult("not_implemented");
 	}
 
 	if (!(options.force || isCrawlDue(settings, now))) {

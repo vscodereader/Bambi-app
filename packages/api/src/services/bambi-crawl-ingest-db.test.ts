@@ -48,30 +48,14 @@ const createStubClient = (): ReturnType<typeof createCrawlClient> => ({
 	isAllowed: () => Promise.resolve(true),
 });
 
-// 테스트가 개발 DB의 실제 설정 행을 망가뜨리지 않도록 원래 값을 보관했다가 되돌린다.
-let originalSettings: {
-	crawlEnabled: boolean;
-	crawlIntervalHours: number | null;
-	crawlLastRunAt: Date | null;
-} | null = null;
-
 beforeAll(async () => {
-	const [row] = await db
-		.select({
-			crawlEnabled: bambiSiteSettings.crawlEnabled,
-			crawlIntervalHours: bambiSiteSettings.crawlIntervalHours,
-			crawlLastRunAt: bambiSiteSettings.crawlLastRunAt,
-		})
-		.from(bambiSiteSettings)
-		.where(eq(bambiSiteSettings.id, "default"));
-
-	originalSettings = row ?? null;
-
+	// 이 테스트는 공유 dev DB를 쓴다. 여우알바를 대상으로 수집을 켜서 돌린다 —
+	// sourceSite를 명시해 컬럼 기본값과 무관하게 여우알바 경로를 타게 한다.
 	await db
 		.insert(bambiSiteSettings)
-		.values({ crawlEnabled: true, id: "default" })
+		.values({ crawlEnabled: true, crawlSourceSite: "foxalba", id: "default" })
 		.onConflictDoUpdate({
-			set: { crawlEnabled: true },
+			set: { crawlEnabled: true, crawlSourceSite: "foxalba" },
 			target: bambiSiteSettings.id,
 		});
 });
@@ -82,16 +66,12 @@ afterAll(async () => {
 		.where(eq(crawledJobPost.sourceSite, "foxalba"));
 	await db.delete(crawlRun).where(eq(crawlRun.sourceSite, "foxalba"));
 
-	if (originalSettings) {
-		await db
-			.update(bambiSiteSettings)
-			.set(originalSettings)
-			.where(eq(bambiSiteSettings.id, "default"));
-	} else {
-		await db
-			.delete(bambiSiteSettings)
-			.where(eq(bambiSiteSettings.id, "default"));
-	}
+	// 원래 값 복원이 아니라 무조건 꺼서 끝낸다. 공유 dev DB를 켜진 채로 남기면 서버 스케줄러가
+	// 실제 사이트를 긁기 시작하므로, 안전한 기본 상태(off)로 두는 것이 원본 복원보다 중요하다.
+	await db
+		.update(bambiSiteSettings)
+		.set({ crawlEnabled: false })
+		.where(eq(bambiSiteSettings.id, "default"));
 });
 
 describe("runCrawlTick against the database", () => {

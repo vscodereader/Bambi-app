@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -19,6 +20,10 @@ import {
 	TableHeader,
 	TableRow,
 } from "@bambi-app/ui/components/table";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@bambi-app/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -28,7 +33,9 @@ import {
 	CRAWL_RUN_STATUS_LABELS,
 	CRAWL_RUN_STATUS_VARIANTS,
 	CRAWL_SOURCE_SITE_LABELS,
+	CRAWL_SOURCE_SITES,
 	CRAWLED_POST_STATUS_LABELS,
+	type CrawlSourceSite,
 	formatCrawlTimestamp,
 } from "@/lib/bambi/crawler";
 import { orpc } from "@/utils/orpc";
@@ -42,6 +49,7 @@ export default function ModeratorCrawlerPage() {
 
 	const [enabled, setEnabled] = useState(false);
 	const [intervalHours, setIntervalHours] = useState("");
+	const [sourceSite, setSourceSite] = useState<CrawlSourceSite>("foxalba");
 
 	// 저장된 값이 오면 폼에 채운다(주기가 미설정이면 빈 값 → 기본값 placeholder 노출).
 	useEffect(() => {
@@ -53,6 +61,7 @@ export default function ModeratorCrawlerPage() {
 		setIntervalHours(
 			data.intervalHours === null ? "" : String(data.intervalHours)
 		);
+		setSourceSite(data.sourceSite);
 	}, [settingsQuery.data]);
 
 	const saveMutation = useMutation(
@@ -86,6 +95,13 @@ export default function ModeratorCrawlerPage() {
 					return;
 				}
 
+				if (result.reason === "not_implemented") {
+					toast.error(
+						"이 사이트 수집기는 아직 준비 중이에요. 여우알바를 선택해 주세요."
+					);
+					return;
+				}
+
 				toast.success(
 					"수집을 시작했어요. 한 회차는 몇 분 걸리니 아래 최근 수집 회차에서 진행 상황을 확인해 주세요."
 				);
@@ -112,7 +128,7 @@ export default function ModeratorCrawlerPage() {
 			return;
 		}
 
-		saveMutation.mutate({ enabled, intervalHours: parsed });
+		saveMutation.mutate({ enabled, intervalHours: parsed, sourceSite });
 	};
 
 	const defaultHours = settingsQuery.data?.defaultIntervalHours ?? 6;
@@ -120,6 +136,9 @@ export default function ModeratorCrawlerPage() {
 	const statusKeys = Object.keys(
 		CRAWLED_POST_STATUS_LABELS
 	) as (keyof typeof CRAWLED_POST_STATUS_LABELS)[];
+	// 파서가 구현된 사이트. 선택은 되지만 미구현 사이트는 "준비 중" 안내를 띄운다.
+	const implementedSites = settingsQuery.data?.implementedSites ?? ["foxalba"];
+	const selectedSiteReady = implementedSites.includes(sourceSite);
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
@@ -129,6 +148,41 @@ export default function ModeratorCrawlerPage() {
 				</CardHeader>
 				<CardContent>
 					<form className="flex flex-col gap-5" onSubmit={onSubmit}>
+						<div className="flex flex-col gap-2">
+							<Label>수집 대상</Label>
+							<ToggleGroup
+								aria-label="수집 대상 사이트"
+								className="w-full flex-wrap"
+								onValueChange={(value) => {
+									const next = value.at(-1);
+									if (next) {
+										setSourceSite(next as CrawlSourceSite);
+									}
+								}}
+								value={[sourceSite]}
+							>
+								{CRAWL_SOURCE_SITES.map((site) => (
+									<ToggleGroupItem key={site} value={site}>
+										{CRAWL_SOURCE_SITE_LABELS[site]}
+										{implementedSites.includes(site) ? null : " (준비 중)"}
+									</ToggleGroupItem>
+								))}
+							</ToggleGroup>
+							<p className="m-0 text-muted-foreground text-xs">
+								한 번에 한 사이트만 수집합니다. 대상을 바꾸면 다음 회차부터
+								적용돼요.
+							</p>
+							{selectedSiteReady ? null : (
+								<Alert>
+									<AlertDescription>
+										{CRAWL_SOURCE_SITE_LABELS[sourceSite]} 수집기는 아직 준비
+										중이라, 선택해 저장해도 실제 수집은 돌지 않습니다. 파서가
+										준비되면 자동으로 켜집니다.
+									</AlertDescription>
+								</Alert>
+							)}
+						</div>
+
 						<div className="flex items-start justify-between gap-4">
 							<div className="flex flex-col gap-1">
 								<Label htmlFor="crawlEnabled">수집 사용</Label>
@@ -155,10 +209,10 @@ export default function ModeratorCrawlerPage() {
 								value={intervalHours}
 							/>
 							<p className="m-0 text-muted-foreground text-xs">
-								이 시간이 지날 때마다 여우알바 공개 공고를 한 회차 수집합니다.
-								비워두면 기본값({defaultHours}시간)을 사용해요. 마지막 실행
-								시각을 기준으로 판단하므로 서버를 재시작해도 주기가 밀리지
-								않습니다.
+								이 시간이 지날 때마다 선택한 사이트의 공개 공고를 한 회차
+								수집합니다. 비워두면 기본값({defaultHours}시간)을 사용해요.
+								마지막 실행 시각을 기준으로 판단하므로 서버를 재시작해도 주기가
+								밀리지 않습니다.
 							</p>
 							<p className="m-0 text-muted-foreground text-xs">
 								마지막 실행:{" "}
@@ -171,7 +225,8 @@ export default function ModeratorCrawlerPage() {
 								disabled={
 									runNowMutation.isPending ||
 									settingsQuery.isLoading ||
-									!settingsQuery.data?.enabled
+									!settingsQuery.data?.enabled ||
+									!selectedSiteReady
 								}
 								onClick={() => runNowMutation.mutate({})}
 								type="button"

@@ -24,7 +24,16 @@ export const CRAWL_RUN_STATUS_VARIANTS = {
 
 export const CRAWL_SOURCE_SITE_LABELS = {
 	foxalba: "여우알바",
+	queenalba: "퀸알바",
 } as const;
+
+export type CrawlSourceSite = keyof typeof CRAWL_SOURCE_SITE_LABELS;
+
+// 선택기가 도는 순서. 라벨 맵은 순서를 보장하지 않으므로 따로 고정한다.
+export const CRAWL_SOURCE_SITES: readonly CrawlSourceSite[] = [
+	"foxalba",
+	"queenalba",
+];
 
 // 미설정이면 서버 기본값을 쓴다는 사실을 폼이 그대로 보여주도록, 표기를 한 곳에 모은다.
 export const formatCrawlTimestamp = (value: Date | string | null): string => {
