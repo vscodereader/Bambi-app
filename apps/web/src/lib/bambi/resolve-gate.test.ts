@@ -12,14 +12,14 @@ describe("resolveGate", () => {
 	it("lets anonymous visitors reach the seeker list root", () => {
 		expect(resolveGate({ pathname: "/seeker", ...fresh }).type).toBe("next");
 	});
-	it("sends anonymous visitors elsewhere to the signup overlay", () => {
+	it("sends anonymous visitors elsewhere to the login overlay", () => {
 		expect(resolveGate({ pathname: "/seeker/jobs/abc", ...fresh })).toEqual({
 			type: "redirect",
-			to: "/seeker?auth=signup",
+			to: "/seeker?auth=login",
 		});
 		expect(resolveGate({ pathname: "/", ...fresh })).toEqual({
 			type: "redirect",
-			to: "/seeker?auth=signup",
+			to: "/seeker?auth=login",
 		});
 	});
 	it("no longer treats /welcome or /login as public", () => {

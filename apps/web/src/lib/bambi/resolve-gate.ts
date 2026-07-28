@@ -30,8 +30,11 @@ const redirect = (to: string): GateDecision => ({ type: "redirect", to });
 // 인증 UI는 /seeker 위의 오버레이다. 목록 루트는 비로그인도 통과시키고, 그 위에
 // 뜨는 카드가 게이트 역할을 한다(배경 데이터는 서버에서 마스킹된다).
 const SEEKER_ROOT = "/seeker";
-const SIGNUP_REDIRECT = "/seeker?auth=signup";
-// 게스트가 허용되지 않은 경로로 진입할 때. guestBlocked 신호로 토스트를 띄운다.
+// 그냥 들어온 비로그인 방문자에게는 로그인 폼을 먼저 보인다. 재방문자가 다수라
+// 로그인이 기본이고, 가입은 카드 안의 전환 링크로 한 번에 갈 수 있다.
+const LOGIN_REDIRECT = "/seeker?auth=login";
+// 게스트가 허용되지 않은 경로로 진입할 때. 이 경우엔 계정이 없는 게 확정이라
+// 가입 쪽을 열고, guestBlocked 신호로 "회원가입 후에 볼 수 있어요" 토스트를 띄운다.
 const GUEST_BLOCKED_REDIRECT = "/seeker?auth=signup&guestBlocked=1";
 
 export const resolveGate = ({
@@ -58,5 +61,5 @@ export const resolveGate = ({
 		}
 		return redirect(GUEST_BLOCKED_REDIRECT);
 	}
-	return redirect(SIGNUP_REDIRECT);
+	return redirect(LOGIN_REDIRECT);
 };
