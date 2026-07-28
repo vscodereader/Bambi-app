@@ -382,10 +382,15 @@ export function AuthPanel({
 
 	return (
 		<div className="w-full text-foreground">
+			{/* 게이트 카드는 폭·높이를 고정 수치로 잡는다 — 로그인·회원가입·인증 단계를
+			    오가도 카드 덩치가 흔들리지 않아야 한다. min-h라 폼이 더 길어지면 늘어나고,
+			    짧은 로그인 폼에서는 justify-center로 내용이 가운데에 앉는다. */}
 			<Card
 				className={cn(
 					"mx-auto rounded-xl",
-					compact ? "max-w-md" : "max-w-2xl sm:p-7"
+					compact
+						? "max-w-md"
+						: "min-h-[620px] max-w-[580px] justify-center sm:p-7"
 				)}
 				pad="lg"
 			>
