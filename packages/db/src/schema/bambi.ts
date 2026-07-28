@@ -199,11 +199,14 @@ export const chatAttachmentCategory = pgEnum("chat_attachment_category", [
 ]);
 
 // 크롤링 대상 사이트. 파서가 사이트마다 하나씩이라 값이 곧 파서 선택 키다.
-// queenalba는 뺐다 — 사이트 전체가 KCB 본인확인 기반 성인인증 게이트(/okname/phone_popup2.php,
-// /okname/ipin2.php) 뒤에 있어 인증 없이는 목록·게시판 링크조차 노출되지 않는다. 이를 자동으로
-// 통과하려면 실제 사람의 본인확인을 봇에 심어야 하므로 합법적 수집 경로가 없다.
-// 제휴로 데이터를 받게 되면 그때 enum 값 한 줄을 더한다.
-export const crawlSourceSite = pgEnum("crawl_source_site", ["foxalba"]);
+// queenalba는 사이트 전체가 KCB 본인확인 기반 성인인증 게이트(/okname/phone_popup2.php,
+// /okname/ipin2.php) 뒤에 있어, 운영자가 본인 인증 세션의 쿠키를 넣어줘야 목록·상세가 열린다.
+// enum 값은 두되 실제 수집기(파서·쿠키 주입)는 아직 미구현이라, 운영자가 이 사이트를 골라도
+// 수집기는 "준비 중"으로 회차를 만들지 않고 빠져나온다(빈 응답을 만료로 오해하지 않게).
+export const crawlSourceSite = pgEnum("crawl_source_site", [
+	"foxalba",
+	"queenalba",
+]);
 
 // job_post의 출처. 크롤링 원본은 job_post가 아니라 crawled_job_post에 살기 때문에
 // 여기에는 "crawled"가 없다 — 크롤링 공고가 job_post로 넘어오는 유일한 경로가 전환이다.
@@ -820,6 +823,12 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 늘면 상태가 갈리지만, DB 플래그는 어디서 켜도 모든 인스턴스에 즉시 반영된다.
 	// 기본이 false라 배포만으로는 아무것도 수집하지 않는다(운영자가 명시적으로 켠다).
 	crawlEnabled: boolean("crawl_enabled").default(false).notNull(),
+	// 수집 대상 사이트. 운영자가 콘솔에서 하나를 고른다. 스케줄러 틱이 이 값을 읽어 해당
+	// 사이트 수집기를 부르므로, 여러 사이트를 동시에 돌리지 않고 한 번에 하나만 수집한다.
+	// 기본 foxalba(유일하게 파서가 구현된 사이트).
+	crawlSourceSite: crawlSourceSite("crawl_source_site")
+		.default("foxalba")
+		.notNull(),
 	// 수집 주기(시간). null이면 코드 기본값(DEFAULT_CRAWL_INTERVAL_HOURS)으로 폴백한다.
 	crawlIntervalHours: integer("crawl_interval_hours"),
 	// 마지막 수집 시각. 틱 간격보다 이 값을 기준으로 판정해 서버 재시작에도 주기가 밀리지 않는다.

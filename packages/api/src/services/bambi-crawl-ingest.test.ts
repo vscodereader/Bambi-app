@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	DEFAULT_CRAWL_INTERVAL_HOURS,
 	isCrawlDue,
+	isCrawlSiteImplemented,
 	isYieldTrustworthy,
 	MAX_LIST_PAGES,
 	resolveListPageCount,
@@ -115,6 +116,14 @@ describe("isYieldTrustworthy", () => {
 				listItems: 50,
 			})
 		).toBe(true);
+	});
+});
+
+describe("isCrawlSiteImplemented", () => {
+	it("treats foxalba as ready and queenalba as not yet built", () => {
+		// 파서가 없는 사이트를 골라도 수집기가 회차를 만들지 않도록, 이 판정이 게이트 역할을 한다.
+		expect(isCrawlSiteImplemented("foxalba")).toBe(true);
+		expect(isCrawlSiteImplemented("queenalba")).toBe(false);
 	});
 });
 
