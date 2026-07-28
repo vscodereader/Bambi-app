@@ -105,6 +105,15 @@ export const formatCommunityDate = (value: Date | string): string => {
 	return `${date.getFullYear()}.${pad2(date.getMonth() + 1)}.${pad2(date.getDate())}`;
 };
 
+// 새 글 "N" 배지 기준 — 작성 후 이틀(48시간). 목록과 미리보기가 같은 기준으로 배지를
+// 달도록 여기에 둔다. now를 인자로 받는 건 테스트에서 시간을 고정하기 위해서다.
+const NEW_POST_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
+
+export const isNewCommunityPost = (
+	value: Date | string,
+	now: number = Date.now()
+): boolean => now - new Date(value).getTime() < NEW_POST_WINDOW_MS;
+
 export const getCommunityTotalPages = (
 	totalCount: number,
 	pageSize: number
