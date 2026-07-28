@@ -159,7 +159,17 @@ const collectListItems = async (client: CrawlClient): Promise<ListPass> => {
 		pagesFetched += 1;
 	}
 
-	return { items, pagesFetched };
+	// 같은 o_idx가 목록에 두 번 실리는 경우가 실제로 있다(한 페이지 50칸 중 49건만 고유했다).
+	// 중복을 두면 같은 상세 페이지를 두 번 받아 상대 서버를 괜히 두드리고, 신규 건수도
+	// 실제 행 수보다 부풀려 집계된다. 첫 등장만 남긴다.
+	const byExternalId = new Map<string, FoxalbaListItem>();
+	for (const item of items) {
+		if (!byExternalId.has(item.sourceExternalId)) {
+			byExternalId.set(item.sourceExternalId, item);
+		}
+	}
+
+	return { items: [...byExternalId.values()], pagesFetched };
 };
 
 const ingestDetail = async (
