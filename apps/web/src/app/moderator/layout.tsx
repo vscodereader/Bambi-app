@@ -39,6 +39,7 @@ const MODERATOR_NAV_ITEMS: NavEntry[] = [
 			{ href: "/moderator/support" as Route, label: "고객센터" },
 			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
 			{ href: "/moderator/reviews", label: "후기 관리" },
+			{ href: "/moderator/crawler" as Route, label: "크롤링" },
 		],
 	},
 	{ href: "/moderator/site-settings" as Route, label: "사이트 정보" },
