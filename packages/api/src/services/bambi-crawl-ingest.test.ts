@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	AVAILABLE_CRAWL_TARGETS,
 	DEFAULT_CRAWL_INTERVAL_HOURS,
 	isCrawlDue,
 	isCrawlSiteImplemented,
@@ -9,6 +10,9 @@ import {
 	MAX_LIST_PAGES,
 	resolveListPageCount,
 } from "./bambi-crawl-policy";
+
+const targetKey = (site: string, contentType: string) =>
+	`${site}:${contentType}`;
 
 const NOW = new Date("2026-07-28T12:00:00Z");
 const hoursAgo = (hours: number): Date =>
@@ -117,6 +121,26 @@ describe("isYieldTrustworthy", () => {
 				listItems: 50,
 			})
 		).toBe(true);
+	});
+});
+
+describe("AVAILABLE_CRAWL_TARGETS", () => {
+	it("offers job postings for foxalba and both types for queenalba", () => {
+		// 사이트가 제공하는 데이터 종류(도메인 사실). 여우알바=공고, 퀸알바=공고·커뮤니티.
+		const keys = new Set(
+			AVAILABLE_CRAWL_TARGETS.map((target) =>
+				targetKey(target.site, target.contentType)
+			)
+		);
+		expect(keys).toEqual(
+			new Set([
+				targetKey("foxalba", "job_post"),
+				targetKey("queenalba", "job_post"),
+				targetKey("queenalba", "community"),
+			])
+		);
+		// 여우알바는 커뮤니티를 제공하지 않는다.
+		expect(keys.has(targetKey("foxalba", "community"))).toBe(false);
 	});
 });
 

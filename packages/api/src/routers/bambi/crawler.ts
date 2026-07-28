@@ -11,6 +11,7 @@ import z from "zod";
 import { adminProcedure } from "../../index";
 import { runCrawlTick } from "../../services/bambi-crawl-ingest";
 import {
+	AVAILABLE_CRAWL_TARGETS,
 	DEFAULT_CRAWL_INTERVAL_HOURS,
 	IMPLEMENTED_CRAWL_TARGETS,
 	isCrawlTargetImplemented,
@@ -166,12 +167,14 @@ export const crawlerRouter = {
 			.limit(1);
 
 		return {
+			// 사이트가 제공하는 (사이트 × 데이터 종류) 조합. 화면이 사이트별로 고를 수 있는
+			// 데이터 종류를 이 목록으로 그린다(여우알바=공고, 퀸알바=공고·커뮤니티).
+			availableTargets: [...AVAILABLE_CRAWL_TARGETS],
 			contentType: row?.contentType ?? "job_post",
 			defaultIntervalHours: DEFAULT_CRAWL_INTERVAL_HOURS,
 			// 행이 없으면 꺼진 상태로 본다. 설정이 없다는 이유로 수집이 시작되면 안 된다.
 			enabled: row?.enabled ?? false,
-			// 파서가 구현된 (사이트 × 데이터 종류) 조합. 화면이 "준비 중" 배지·즉시수집 잠금
-			// 판단에 쓴다.
+			// 파서가 구현된 조합. 화면이 "준비 중" 배지·즉시수집 잠금 판단에 쓴다.
 			implementedTargets: [...IMPLEMENTED_CRAWL_TARGETS],
 			intervalHours: row?.intervalHours ?? null,
 			lastRunAt: row?.lastRunAt ?? null,

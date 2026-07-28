@@ -43,9 +43,19 @@ export interface CrawlTarget {
 	site: CrawlSourceSite;
 }
 
+// 사이트가 제공하는 데이터 종류(도메인 사실). 여우알바는 공고만, 퀸알바는 공고·커뮤니티 둘 다
+// 가지고 있다. 아래 "구현된 조합"과는 다른 축이다 — 사이트에 데이터는 있지만 우리 파서가 아직
+// 없을 수 있다(퀸알바). 운영자 화면은 이 목록으로 "어떤 데이터 종류를 고를 수 있는지"를 그린다.
+export const AVAILABLE_CRAWL_TARGETS: readonly CrawlTarget[] = [
+	{ contentType: "job_post", site: "foxalba" },
+	{ contentType: "job_post", site: "queenalba" },
+	{ contentType: "community", site: "queenalba" },
+];
+
 // 파서가 실제로 구현된 (사이트 × 데이터 종류) 조합. 이 목록에 없는 조합을 골라도 수집기는
 // 회차를 만들지 않고 "준비 중"으로 빠져나온다 — 빈 결과를 "공고 없음"으로 읽어 만료 처리가
 // 돌면 안 되기 때문이다. 파서를 추가하면 여기에 조합 한 줄을 더하는 것만으로 가드가 풀린다.
+// 현재 여우알바×공고만 구현됨. 퀸알바 파서는 별도 작업이라 여기 없어 "준비 중"으로 남는다.
 export const IMPLEMENTED_CRAWL_TARGETS: readonly CrawlTarget[] = [
 	{ contentType: "job_post", site: "foxalba" },
 ];
