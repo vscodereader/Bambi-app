@@ -31,7 +31,6 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	CRAWL_CONTENT_TYPE_LABELS,
-	CRAWL_CONTENT_TYPES,
 	CRAWL_RUN_STATUS_LABELS,
 	CRAWL_RUN_STATUS_VARIANTS,
 	CRAWL_SOURCE_SITE_LABELS,
@@ -146,11 +145,19 @@ export default function ModeratorCrawlerPage() {
 	const statusKeys = Object.keys(
 		CRAWLED_POST_STATUS_LABELS
 	) as (keyof typeof CRAWLED_POST_STATUS_LABELS)[];
-	// 파서가 구현된 (사이트 × 데이터 종류) 조합. 선택은 되지만 미구현 조합은 "준비 중"으로
-	// 안내하고 즉시 수집을 잠근다.
+	// 사이트가 제공하는 (사이트 × 데이터 종류) 조합. 여우알바는 공고만, 퀸알바는 공고·커뮤니티.
+	// 데이터 종류 선택기가 사이트별로 이 목록만 노출한다.
+	const availableTargets = settingsQuery.data?.availableTargets ?? [
+		{ contentType: "job_post" as const, site: "foxalba" as const },
+	];
+	// 파서가 구현된 조합. 선택은 되지만 미구현 조합은 "준비 중"으로 안내하고 즉시 수집을 잠근다.
 	const implementedTargets = settingsQuery.data?.implementedTargets ?? [
 		{ contentType: "job_post" as const, site: "foxalba" as const },
 	];
+	const contentTypesForSite = (site: CrawlSourceSite): CrawlContentType[] =>
+		availableTargets
+			.filter((target) => target.site === site)
+			.map((target) => target.contentType);
 	const siteHasAnyTarget = (site: CrawlSourceSite) =>
 		implementedTargets.some((target) => target.site === site);
 	const targetImplemented = (site: CrawlSourceSite, type: CrawlContentType) =>
@@ -158,6 +165,16 @@ export default function ModeratorCrawlerPage() {
 			(target) => target.site === site && target.contentType === type
 		);
 	const selectedTargetReady = targetImplemented(sourceSite, contentType);
+
+	// 사이트를 바꾸면 그 사이트가 제공하지 않는 데이터 종류가 선택돼 있을 수 있다(예: 퀸알바
+	// 커뮤니티 → 여우알바). 이때 그 사이트의 첫 제공 종류로 되돌린다.
+	const changeSite = (nextSite: CrawlSourceSite) => {
+		setSourceSite(nextSite);
+		const types = contentTypesForSite(nextSite);
+		if (!types.includes(contentType)) {
+			setContentType(types[0] ?? "job_post");
+		}
+	};
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
@@ -175,7 +192,7 @@ export default function ModeratorCrawlerPage() {
 								onValueChange={(value) => {
 									const next = value.at(-1);
 									if (next) {
-										setSourceSite(next as CrawlSourceSite);
+										changeSite(next as CrawlSourceSite);
 									}
 								}}
 								value={[sourceSite]}
@@ -206,7 +223,7 @@ export default function ModeratorCrawlerPage() {
 								}}
 								value={[contentType]}
 							>
-								{CRAWL_CONTENT_TYPES.map((type) => (
+								{contentTypesForSite(sourceSite).map((type) => (
 									<ToggleGroupItem key={type} value={type}>
 										{CRAWL_CONTENT_TYPE_LABELS[type]}
 										{targetImplemented(sourceSite, type) ? null : " (준비 중)"}
