@@ -221,7 +221,7 @@ function HeaderRightActions({
 					buttonVariants({ variant: isPublic ? "dark" : "outline" }),
 					"h-10 px-4 font-bold text-sm no-underline"
 				)}
-				href={(isPublic ? "/login" : "/seeker/me") as Route}
+				href={(isPublic ? "/seeker?auth=login" : "/seeker/me") as Route}
 			>
 				{isPublic ? "시작하기" : "내 정보"}
 			</Link>

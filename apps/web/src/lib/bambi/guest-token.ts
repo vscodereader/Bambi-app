@@ -12,7 +12,11 @@ export interface GuestTokenPayload {
 	exp: number;
 	// 인증에서 확인된 성별. 가입 시 프로필로 이관한다.
 	gender: BambiGenderValue | null;
-	v: 1;
+	// 포트원 인증 건 식별자. 가입 폼 단계에서 서버로 되돌려 프로필에 인증 결과를
+	// 기록하는 데 쓴다. 그 자체로는 개인정보가 아니며 서버 조회 없이는 의미가 없다.
+	ivId?: string;
+	// 1 = ivId 이전 버전(계속 유효), 2 = 현재.
+	v: 1 | 2;
 }
 
 const encoder = new TextEncoder();
@@ -52,11 +56,13 @@ const importHmacKey = (secret: string): Promise<CryptoKey> =>
 
 export async function createGuestToken({
 	gender,
+	ivId,
 	maxAgeSeconds,
 	now,
 	secret,
 }: {
 	gender: BambiGenderValue | null;
+	ivId?: string;
 	maxAgeSeconds: number;
 	now: Date;
 	secret: string;
@@ -64,8 +70,11 @@ export async function createGuestToken({
 	const payload: GuestTokenPayload = {
 		exp: Math.floor(now.getTime() / 1000) + maxAgeSeconds,
 		gender,
-		v: 1,
+		v: 2,
 	};
+	if (ivId) {
+		payload.ivId = ivId;
+	}
 	const payloadPart = toBase64Url(encoder.encode(JSON.stringify(payload)));
 	const key = await importHmacKey(secret);
 	const signature = await crypto.subtle.sign(
@@ -86,14 +95,17 @@ const parsePayload = (payloadPart: string): GuestTokenPayload | null => {
 		if (typeof parsed !== "object" || parsed === null) {
 			return null;
 		}
-		const { exp, gender, v } = parsed as Record<string, unknown>;
-		if (v !== 1 || typeof exp !== "number") {
+		const { exp, gender, ivId, v } = parsed as Record<string, unknown>;
+		if ((v !== 1 && v !== 2) || typeof exp !== "number") {
 			return null;
 		}
 		if (gender !== "male" && gender !== "female" && gender !== null) {
 			return null;
 		}
-		return { exp, gender, v };
+		if (ivId !== undefined && typeof ivId !== "string") {
+			return null;
+		}
+		return ivId === undefined ? { exp, gender, v } : { exp, gender, ivId, v };
 	} catch {
 		return null;
 	}
@@ -138,4 +150,14 @@ export function decodeGuestTokenGender(token: string): BambiGenderValue | null {
 		return null;
 	}
 	return parsePayload(payloadPart)?.gender ?? null;
+}
+
+// 클라이언트에서 서명 검증 없이 인증 ID만 읽는다(가입 폼 단계 복원용). 게이트 판정에
+// 절대 쓰지 않는다 — 위조 가능한 값이며, 서버가 포트원 조회로 다시 검증한다.
+export function decodeGuestTokenIvId(token: string): string | null {
+	const payloadPart = token.split(".")[0];
+	if (!payloadPart) {
+		return null;
+	}
+	return parsePayload(payloadPart)?.ivId ?? null;
 }

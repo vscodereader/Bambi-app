@@ -124,3 +124,98 @@ describe("verifyMyPhone 중복 가입 체크", () => {
 		);
 	});
 });
+
+const checkClient = createProcedureClient(
+	onboardingRouter.checkIdentityForSignup,
+	{
+		context: { auth: null, session: null } as unknown as Context,
+		path: ["bambi", "onboarding", "checkIdentityForSignup"],
+	}
+);
+
+describe("checkIdentityForSignup 가입 전 중복 확인", () => {
+	it("처음 보는 사람이면 hasAccount:false와 성별을 돌려준다", async () => {
+		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
+		const result = await checkClient({
+			identityVerificationId: `iv_${randomUUID()}`,
+		});
+		expect(result).toEqual({ gender: "male", hasAccount: false });
+	});
+
+	it("이미 인증에 쓰인 DI면 hasAccount:true", async () => {
+		const sharedDi = `di-${randomUUID()}`;
+		const existingUser = await seedUserWithProfile();
+		setVerification(`ci-${randomUUID()}`, sharedDi);
+		await runVerify(existingUser);
+
+		setVerification(`ci-${randomUUID()}`, sharedDi);
+		const result = await checkClient({
+			identityVerificationId: `iv_${randomUUID()}`,
+		});
+		expect(result.hasAccount).toBe(true);
+	});
+
+	it("미성년이면 거부한다", async () => {
+		nextVerification = {
+			status: "VERIFIED",
+			verifiedCustomer: {
+				ci: `ci-${randomUUID()}`,
+				di: `di-${randomUUID()}`,
+				birthDate: "2015-01-01",
+				phoneNumber: "010-1234-5678",
+				gender: "FEMALE",
+			},
+		};
+		await expect(
+			checkClient({ identityVerificationId: `iv_${randomUUID()}` })
+		).rejects.toThrow();
+	});
+});
+
+describe("가입 시 인증 결과 반영", () => {
+	it("createJobSeekerProfile이 인증 결과를 프로필에 기록한다", async () => {
+		const userId = `user_signup_${randomUUID()}`;
+		createdUserIds.push(userId);
+		await db.insert(user).values({
+			id: userId,
+			name: "신규가입",
+			email: `${userId}@bambi.test`,
+		});
+
+		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
+		const created = await createProcedureClient(
+			onboardingRouter.createJobSeekerProfile,
+			{
+				context: ctx(userId),
+				path: ["bambi", "onboarding", "createJobSeekerProfile"],
+			}
+		)({ identityVerificationId: `iv_${randomUUID()}` });
+
+		expect(created?.isPhoneVerified).toBe(true);
+		expect(created?.diHash).toMatch(SHA256_HEX);
+		expect(created?.birthDate).toBe("20000101");
+		expect(created?.gender).toBe("male");
+	});
+
+	it("다른 계정이 쓴 DI로는 가입하지 못한다", async () => {
+		const sharedDi = `di-${randomUUID()}`;
+		const existingUser = await seedUserWithProfile();
+		setVerification(`ci-${randomUUID()}`, sharedDi);
+		await runVerify(existingUser);
+
+		const userId = `user_signup_${randomUUID()}`;
+		createdUserIds.push(userId);
+		await db.insert(user).values({
+			id: userId,
+			name: "중복가입",
+			email: `${userId}@bambi.test`,
+		});
+		setVerification(`ci-${randomUUID()}`, sharedDi);
+		await expect(
+			createProcedureClient(onboardingRouter.createJobSeekerProfile, {
+				context: ctx(userId),
+				path: ["bambi", "onboarding", "createJobSeekerProfile"],
+			})({ identityVerificationId: `iv_${randomUUID()}` })
+		).rejects.toThrow("이미 다른 계정에서 본인인증에 사용된 정보예요.");
+	});
+});

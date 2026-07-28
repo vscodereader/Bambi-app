@@ -152,7 +152,7 @@ export default function EmployerMePage() {
 			>
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/login">
+						<Link className={buttonVariants()} href="/seeker?auth=login">
 							로그인
 						</Link>
 					}
@@ -190,7 +190,7 @@ export default function EmployerMePage() {
 			>
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/welcome">
+						<Link className={buttonVariants()} href="/seeker?auth=signup">
 							회원가입으로 이동
 						</Link>
 					}
