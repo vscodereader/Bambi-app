@@ -108,7 +108,7 @@ export default function EmployerTeamSettingsPage() {
 			>
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/login">
+						<Link className={buttonVariants()} href="/seeker?auth=login">
 							로그인
 						</Link>
 					}

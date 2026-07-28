@@ -48,7 +48,7 @@ export default function EmployerSettingsPage() {
 			>
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/login">
+						<Link className={buttonVariants()} href="/seeker?auth=login">
 							로그인
 						</Link>
 					}
