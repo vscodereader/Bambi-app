@@ -1,7 +1,7 @@
 import { db } from "@bambi-app/db";
 import { bannedWord } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure } from "../../index";
@@ -35,6 +35,12 @@ export interface SkippedBannedWord {
 
 const bannedWordIdInput = z.object({
 	id: z.string().uuid(),
+});
+
+// 단건 삭제도 이 입력을 쓴다. 목록에서 하나를 지우는 것과 여럿을 지우는 것은 같은 일이라
+// 프로시저를 나누지 않는다.
+const removeBannedWordsInput = z.object({
+	ids: z.array(z.string().uuid()).min(1),
 });
 
 const setBannedWordActiveInput = bannedWordIdInput.extend({
@@ -159,11 +165,28 @@ export const bannedWordsRouter = {
 			return { ok: true };
 		}),
 
-	remove: adminProcedure.input(bannedWordIdInput).handler(async ({ input }) => {
-		await db.delete(bannedWord).where(eq(bannedWord.id, input.id));
+	remove: adminProcedure
+		.input(removeBannedWordsInput)
+		.handler(async ({ input }) => {
+			const removed = await db
+				.delete(bannedWord)
+				.where(inArray(bannedWord.id, input.ids))
+				.returning({ id: bannedWord.id });
+
+			invalidateBannedWordCache();
+
+			return { removed: removed.length };
+		}),
+
+	// 목록을 통째로 비운다. 잘못 올린 CSV를 되돌리는 유일한 수단이라 별도 프로시저로 둔다 —
+	// remove에 "ids가 비면 전체"를 허용하면 빈 배열 한 번에 목록이 날아간다.
+	removeAll: adminProcedure.handler(async () => {
+		const removed = await db
+			.delete(bannedWord)
+			.returning({ id: bannedWord.id });
 
 		invalidateBannedWordCache();
 
-		return { ok: true };
+		return { removed: removed.length };
 	}),
 };
