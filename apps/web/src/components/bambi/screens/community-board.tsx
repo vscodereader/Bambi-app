@@ -41,6 +41,10 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, type MouseEvent, useCallback, useEffect } from "react";
+import {
+	CommunityNewBadge,
+	CommunityRoleBadges,
+} from "@/components/bambi/community-post-badges";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
@@ -66,26 +70,6 @@ const isFlagOn = (value: string | null): boolean => value === "1";
 type BoardPostItem =
 	InferRouterOutputs<AppRouter>["bambi"]["community"]["listPosts"]["items"][number];
 
-function BoardPostBadges({ post }: { post: BoardPostItem }) {
-	if (!(post.isPromotion || post.authorRole === "employer")) {
-		return null;
-	}
-	return (
-		<>
-			{post.isPromotion ? (
-				<Badge className="shrink-0" variant="warning">
-					광고
-				</Badge>
-			) : null}
-			{post.authorRole === "employer" ? (
-				<Badge className="shrink-0" variant="secondary">
-					업소
-				</Badge>
-			) : null}
-		</>
-	);
-}
-
 function BoardPostRow({
 	boardSlug,
 	post,
@@ -107,7 +91,8 @@ function BoardPostRow({
 				{post.board === "notice" ? (
 					<Badge className="shrink-0">공지</Badge>
 				) : null}
-				{showBadges ? <BoardPostBadges post={post} /> : null}
+				{showBadges ? <CommunityRoleBadges post={post} /> : null}
+				<CommunityNewBadge createdAt={post.createdAt} />
 				<span className="truncate font-semibold text-sm">{post.title}</span>
 				{post.commentCount > 0 ? (
 					<span className="flex shrink-0 items-center gap-0.5 font-semibold text-coral-500 text-xs">

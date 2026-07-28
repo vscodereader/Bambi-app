@@ -22,6 +22,10 @@ import type { Route } from "next";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
+	CommunityNewBadge,
+	CommunityRoleBadges,
+} from "@/components/bambi/community-post-badges";
+import {
 	COMMUNITY_AUTHOR_FALLBACK,
 	COMMUNITY_BOARDS,
 	type CommunityBoardKey,
@@ -130,6 +134,8 @@ export function BoardPreviewCard({
 									{post.isLocked ? (
 										<LockIcon className="size-3 shrink-0 text-muted-foreground" />
 									) : null}
+									{isNotice ? null : <CommunityRoleBadges post={post} />}
+									<CommunityNewBadge createdAt={post.createdAt} />
 									<span className="truncate text-sm">{post.title}</span>
 									{post.commentCount > 0 ? (
 										<span className="flex shrink-0 items-center gap-0.5 font-semibold text-coral-500 text-xs">

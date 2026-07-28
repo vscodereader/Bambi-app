@@ -9,6 +9,7 @@ import {
 	getBoardBySlug,
 	getCommunityPageItems,
 	getCommunityTotalPages,
+	isNewCommunityPost,
 } from "./community";
 
 describe("community boards meta", () => {
@@ -78,5 +79,26 @@ describe("community list helpers", () => {
 			9,
 		]);
 		expect(getCommunityPageItems(9, 9)).toEqual([1, "ellipsis-start", 7, 8, 9]);
+	});
+});
+
+describe("isNewCommunityPost", () => {
+	const now = new Date(2026, 6, 28, 12, 0).getTime();
+	const hoursAgo = (hours: number) => new Date(now - hours * 60 * 60 * 1000);
+
+	it("이틀이 지나지 않은 글에 N을 단다", () => {
+		expect(isNewCommunityPost(hoursAgo(0), now)).toBe(true);
+		expect(isNewCommunityPost(hoursAgo(47), now)).toBe(true);
+	});
+
+	it("이틀이 지난 글에는 N을 달지 않는다", () => {
+		// 정확히 48시간이 되는 순간부터 배지가 사라진다.
+		expect(isNewCommunityPost(hoursAgo(48), now)).toBe(false);
+		expect(isNewCommunityPost(hoursAgo(72), now)).toBe(false);
+	});
+
+	it("문자열 날짜도 받고, 파싱 실패는 N 없음으로 둔다", () => {
+		expect(isNewCommunityPost(hoursAgo(1).toISOString(), now)).toBe(true);
+		expect(isNewCommunityPost("not-a-date", now)).toBe(false);
 	});
 });
