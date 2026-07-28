@@ -38,12 +38,25 @@ const collectStrings = (value: unknown): string[] => {
 	return [];
 };
 
-const MASK_ONLY = /^■*$/;
+// 글자·숫자를 지우고 공백·문장부호만 남긴 골격. 마스킹 전후가 같아야 단어 덩어리와
+// 리듬이 그대로 남은 것이다(블러 아래서 진짜 문장으로 읽히는 근거).
+const LETTER_OR_DIGIT_RE = /[\p{L}\p{Nd}]/gu;
+const skeleton = (value: string) => value.replace(LETTER_OR_DIGIT_RE, "*");
+
+const SOURCE_TEXTS = [
+	job.company,
+	job.title,
+	job.location,
+	job.pay,
+	...job.tags,
+];
 
 describe("maskJobsForBackdrop", () => {
-	it("마스크 문자 외에는 아무 문자도 남기지 않는다", () => {
+	it("원본 문자열이 결과 어디에도 남지 않는다", () => {
 		for (const text of collectStrings(maskJobsForBackdrop([job]))) {
-			expect(text).toMatch(MASK_ONLY);
+			for (const source of SOURCE_TEXTS) {
+				expect(text).not.toContain(source);
+			}
 		}
 	});
 
@@ -51,8 +64,23 @@ describe("maskJobsForBackdrop", () => {
 		const [masked] = maskJobsForBackdrop([job]);
 		expect(masked.company).toHaveLength(job.company.length);
 		expect(masked.title).toHaveLength(job.title.length);
+		expect(masked.pay).toHaveLength(job.pay.length);
 		expect(masked.tags).toHaveLength(job.tags.length);
 		expect(masked.tags[0]).toHaveLength(job.tags[0].length);
+	});
+
+	it("공백·문장부호 위치를 보존한다", () => {
+		const [masked] = maskJobsForBackdrop([job]);
+		expect(skeleton(masked.company)).toBe(skeleton(job.company));
+		expect(skeleton(masked.location)).toBe(skeleton(job.location));
+		// "시급 17,000원"의 쉼표·자릿수가 남아야 급여로 읽힌다.
+		expect(skeleton(masked.pay)).toBe(skeleton(job.pay));
+	});
+
+	it("같은 입력에는 항상 같은 결과를 낸다(난수 사용 안 함)", () => {
+		expect(maskJobsForBackdrop([job, job])).toEqual(
+			maskJobsForBackdrop([job, job])
+		);
 	});
 
 	it("식별자·미디어·설명을 아예 싣지 않는다", () => {

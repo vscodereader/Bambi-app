@@ -458,9 +458,9 @@ export function AuthPanel({
 						</p>
 					</form>
 				)}
-				{/* 19금 고지는 로그인·회원가입 어느 단계에서도 상시 노출한다. 전문은 그대로
-				    두되, 카드에서 가장 낮은 시각 무게를 갖는 하단으로 내렸다. */}
-				<AdultNotice className="mt-6 border-border border-t pt-5" />
+				{/* 19금 고지는 로그인·회원가입 어느 단계에서도 상시 노출한다. 자리는 카드
+				    하단 그대로지만, 자체 면을 가진 패널이라 구분선 없이 그 자체로 떨어진다. */}
+				<AdultNotice className="mt-6" />
 			</Card>
 		</div>
 	);

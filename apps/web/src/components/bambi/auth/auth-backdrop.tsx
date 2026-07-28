@@ -7,8 +7,10 @@
 // 죽은 인터랙션이 생긴다. 같은 토큰·간격·반경을 쓴 정적 복제본만 둔다.
 //
 // 보안 경계: 마스킹이 필요한 건 공고 데이터(업소명·제목·지역·급여)뿐이고, 그건 서버에서
-// 이미 ■로 치환된 BackdropJob으로만 들어온다(lib/bambi/auth-backdrop.ts). 헤더 로고·내비
-// 라벨 같은 정적 UI 문구는 공고 데이터가 아니므로 실제 문자열을 쓴다. 이 경계를 넘지 말 것.
+// 이미 더미 한글로 치환된 BackdropJob으로만 들어온다(lib/bambi/auth-backdrop.ts). 헤더
+// 로고·내비 라벨 같은 정적 UI 문구는 공고 데이터가 아니므로 실제 문자열을 쓴다. 광고
+// 배너도 같은 경계다 — 실제 배너 이미지는 업소명·문구가 픽셀에 박혀 있어 쓰지 않는다.
+// 이 경계를 넘지 말 것.
 //
 // 블러는 연출일 뿐 가드가 아니다. aria-hidden + inert + pointer-events-none으로 클릭·탭
 // 이동·스크린리더 접근을 한 번에 막는다.
@@ -18,7 +20,7 @@
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { BackdropJob } from "@/lib/bambi/auth-backdrop";
 import { SEEKER_CONTENT_MAX_W } from "@/lib/bambi/layout";
-import { Logo } from "../ds";
+import { Badge, Logo } from "../ds";
 import { MapPinIcon, Search2 } from "../icons";
 
 // 실제 헤더(DEFAULT_NAV_ITEMS)·탐색 탭(MARKETPLACE_DISCOVERY_TABS)과 같은 라벨.
@@ -81,6 +83,50 @@ function BackdropHeader() {
 	);
 }
 
+// 프리미엄 배너 면. 실제 광고 이미지(AdBannerItem.imageUrl)는 업소가 올린 사진이라
+// 업소명·문구가 픽셀에 박혀 있고, 그걸 깔면 블러를 걷었을 때 실제 광고가 그대로 읽힌다.
+// 그래서 비율(7:3)·반경·배치만 실제 배너에서 가져오고 내용은 그라디언트 + 마스킹된
+// 공고 문자열로 채운다. 배경은 어디까지나 카드 뒤 장식이라 톤도 한 칸은 코럴, 한 칸은
+// 잉크로 나눠 한쪽으로 과하게 쏠리지 않게 한다.
+const BANNER_TONE_CLASS = [
+	"from-coral-500 to-coral-700",
+	"from-ink-700 to-ink-900",
+] as const;
+
+function BackdropPremiumBanners({ jobs }: { jobs: BackdropJob[] }) {
+	const banners = jobs.slice(0, 2);
+	if (banners.length === 0) {
+		return null;
+	}
+
+	return (
+		<section className="mb-6 flex flex-col gap-3">
+			<div className="flex items-center gap-2">
+				<Badge tone="pending">프리미엄</Badge>
+				<span className="font-extrabold text-base">프리미엄 광고</span>
+			</div>
+			<div className="grid grid-cols-2 gap-3">
+				{banners.map((job, index) => (
+					<div
+						className={cn(
+							"flex aspect-[7/3] w-full flex-col justify-end gap-1 rounded-lg border border-border bg-gradient-to-br p-4 text-white",
+							BANNER_TONE_CLASS[index % BANNER_TONE_CLASS.length]
+						)}
+						key={index}
+					>
+						<span className="truncate font-extrabold text-xl">
+							{job.company}
+						</span>
+						<span className="truncate font-bold text-sm opacity-90">
+							{job.pay} · {job.location}
+						</span>
+					</div>
+				))}
+			</div>
+		</section>
+	);
+}
+
 // VisualJobCard의 리듬을 따른다: 썸네일 + 업소명/지역 + 하단 급여 칩.
 function BackdropCard({ index, job }: { index: number; job: BackdropJob }) {
 	return (
@@ -125,13 +171,21 @@ export function AuthBackdrop({ jobs }: { jobs: BackdropJob[] }) {
 		// 모바일에서는 배경을 감춘다 — 인증 카드를 문서 흐름에 남겨야 긴 가입 폼이
 		// 정상적으로 스크롤되는데, 배경을 깔려면 카드를 absolute로 띄워야 해서 그 흐름이
 		// 깨진다. 좁은 화면에서 뒤에 깔린 목록은 어차피 카드에 거의 다 가린다.
+		//
+		// blur-md(12px)는 본문 글자(12~20px)의 획을 완전히 뭉개 한 글자도 읽히지 않게
+		// 하면서 카드·배너 같은 200px 단위 덩어리의 윤곽은 남긴다. 이전 blur-xs(4px)로는
+		// 마스킹된 글자가 그대로 읽혀 격자 무늬처럼 보였다.
 		<div
 			aria-hidden
-			className="pointer-events-none hidden select-none blur-xs md:block"
+			className="pointer-events-none hidden select-none blur-md md:block"
 			inert
 		>
 			<BackdropHeader />
 			<div className={cn("mx-auto w-full px-6 py-10", SEEKER_CONTENT_MAX_W)}>
+				{/* 실제 목록과 같은 순서: 프리미엄 광고 → 탐색 탭 → 추천 공고.
+				    좌우 사이드 레일은 1720px 이상에서만 뜨는 데다 배경은 3컬럼 셸이
+				    아니라서 생략한다. */}
+				<BackdropPremiumBanners jobs={jobs} />
 				<div className="mb-5 flex gap-2">
 					{DISCOVERY_TABS.map((label, index) => (
 						<span

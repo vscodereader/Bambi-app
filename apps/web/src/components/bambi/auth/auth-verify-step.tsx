@@ -9,23 +9,6 @@ import { PhoneVerifyDialog } from "../phone-verify-dialog";
 const SIGNUP_INTENT = "auth-panel:signup";
 const GUEST_INTENT = "auth-panel:guest";
 
-// 배경 목록의 공고가 실제로 가려져 있는 그 문자다(lib/bambi/auth-backdrop의 마스크).
-// 뒤에 깔린 화면을 문장 안으로 끌어와 "인증 전에는 여기까지만 보인다"를 카드 안에서도
-// 성립시킨다 — 배경이 없는 모바일에서도 이 한 줄만으로 논지가 남는다.
-// 스크린리더에는 "검은 사각형" 반복 대신 뜻으로 읽힌다.
-function MaskedRun() {
-	return (
-		<>
-			{/* coral-500은 흰 배경에서 3.35:1이라 본문 크기 글자로는 대비가 모자란다.
-			    coral-700(5.86:1)이 AA를 넘기고, 더 짙어서 "먹칠"로도 잘 읽힌다. */}
-			<span aria-hidden className="font-extrabold text-coral-700">
-				■■■■
-			</span>
-			<span className="sr-only">가려진 채</span>
-		</>
-	);
-}
-
 export function AuthVerifyStep({
 	onMockVerifiedForGuest,
 	onMockVerifiedForSignup,
@@ -41,8 +24,10 @@ export function AuthVerifyStep({
 }) {
 	return (
 		<div className="flex flex-col gap-3">
+			{/* 뒤에 깔린 배경은 md 미만에서 감춰지므로, 문장만으로도 "지금은 가려져
+			    있다 → 인증하면 열린다"가 성립해야 한다. */}
 			<p className="m-0 text-muted-foreground text-sm leading-relaxed">
-				지금은 업소명·급여·위치가 <MaskedRun />로 보여요. 본인인증을 마치면
+				지금은 공고가 흐리게 가려져 있어요. 본인인증을 마치면 업소명·급여·위치가
 				그대로 열려요.
 			</p>
 			<PhoneVerifyDialog
