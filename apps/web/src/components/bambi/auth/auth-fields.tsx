@@ -140,13 +140,16 @@ export function AuthSigninFields({
 }) {
 	return (
 		<>
+			{/* 로그인은 아이디·이메일 둘 다 받는다(무엇으로 가입했는지 기억 못 해도 들어올 수
+			    있게). type은 text로 둔다 — type="email"이면 아이디 입력이 브라우저 검증에
+			    걸린다. autoComplete="username"은 두 값 모두에 맞는 힌트다. */}
 			<label className="grid gap-2" htmlFor="auth-login-id">
 				<span className="font-bold text-sm">아이디</span>
 				<Input
 					autoComplete="username"
 					id="auth-login-id"
 					onChange={onFieldChange("username")}
-					placeholder="아이디를 입력해주세요."
+					placeholder="아이디(이메일)를 입력해주세요."
 					value={values.username}
 				/>
 			</label>
