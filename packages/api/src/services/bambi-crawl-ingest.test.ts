@@ -4,6 +4,7 @@ import {
 	DEFAULT_CRAWL_INTERVAL_HOURS,
 	isCrawlDue,
 	isCrawlSiteImplemented,
+	isCrawlTargetImplemented,
 	isYieldTrustworthy,
 	MAX_LIST_PAGES,
 	resolveListPageCount,
@@ -119,9 +120,21 @@ describe("isYieldTrustworthy", () => {
 	});
 });
 
+describe("isCrawlTargetImplemented", () => {
+	it("only allows the one built combination (foxalba × job_post)", () => {
+		// 파서가 없는 (사이트 × 데이터 종류) 조합을 골라도 회차를 만들지 않도록 이 판정이 게이트다.
+		expect(isCrawlTargetImplemented("foxalba", "job_post")).toBe(true);
+		// 같은 사이트라도 커뮤니티 파서는 아직 없다.
+		expect(isCrawlTargetImplemented("foxalba", "community")).toBe(false);
+		// 퀸알바는 어느 종류도 아직이다.
+		expect(isCrawlTargetImplemented("queenalba", "job_post")).toBe(false);
+		expect(isCrawlTargetImplemented("queenalba", "community")).toBe(false);
+	});
+});
+
 describe("isCrawlSiteImplemented", () => {
-	it("treats foxalba as ready and queenalba as not yet built", () => {
-		// 파서가 없는 사이트를 골라도 수집기가 회차를 만들지 않도록, 이 판정이 게이트 역할을 한다.
+	it("treats a site as ready when any of its combinations is built", () => {
+		// 사이트 선택 배지가 쓰는 판정. foxalba는 공고 조합이 있어 준비됨, queenalba는 없음.
 		expect(isCrawlSiteImplemented("foxalba")).toBe(true);
 		expect(isCrawlSiteImplemented("queenalba")).toBe(false);
 	});

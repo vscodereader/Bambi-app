@@ -35,6 +35,18 @@ export const CRAWL_SOURCE_SITES: readonly CrawlSourceSite[] = [
 	"queenalba",
 ];
 
+export const CRAWL_CONTENT_TYPE_LABELS = {
+	community: "커뮤니티",
+	job_post: "공고",
+} as const;
+
+export type CrawlContentType = keyof typeof CRAWL_CONTENT_TYPE_LABELS;
+
+export const CRAWL_CONTENT_TYPES: readonly CrawlContentType[] = [
+	"job_post",
+	"community",
+];
+
 // 미설정이면 서버 기본값을 쓴다는 사실을 폼이 그대로 보여주도록, 표기를 한 곳에 모은다.
 export const formatCrawlTimestamp = (value: Date | string | null): string => {
 	if (!value) {

@@ -17,6 +17,7 @@ import {
 } from "./bambi-crawl-foxalba";
 import { computeContentHash } from "./bambi-crawl-normalize";
 import {
+	type CrawlContentType,
 	type CrawlSettings,
 	type CrawlSourceSite,
 	DAY_MS,
@@ -24,7 +25,7 @@ import {
 	EXPIRE_AFTER_DAYS,
 	HOUR_MS,
 	isCrawlDue,
-	isCrawlSiteImplemented,
+	isCrawlTargetImplemented,
 	isYieldTrustworthy,
 	MAX_DETAIL_FETCHES_PER_RUN,
 	RUN_STALE_AFTER_MS,
@@ -47,9 +48,12 @@ export interface CrawlTickResult {
 		| "not_implemented";
 }
 
-// readSettings는 사이트 선택까지 읽어야 하지만, isCrawlDue는 사이트를 보지 않는다(주기 판정만).
-// CrawlSettings에 사이트를 넣으면 정책 테스트의 객체 리터럴이 전부 깨지므로 확장 타입으로 둔다.
-type CrawlTickSettings = CrawlSettings & { crawlSourceSite: CrawlSourceSite };
+// readSettings는 사이트·데이터 종류까지 읽어야 하지만, isCrawlDue는 그 둘을 보지 않는다
+// (주기 판정만). CrawlSettings에 넣으면 정책 테스트의 객체 리터럴이 전부 깨지므로 확장 타입으로 둔다.
+type CrawlTickSettings = CrawlSettings & {
+	crawlContentType: CrawlContentType;
+	crawlSourceSite: CrawlSourceSite;
+};
 
 export interface CrawlTickOptions {
 	// 운영자가 "즉시 수집"을 누른 경우. 주기 판정만 건너뛰고 나머지(중복 방지·수율 판정·
@@ -84,6 +88,7 @@ type DetailOutcome =
 const readSettings = async (): Promise<CrawlTickSettings> => {
 	const [row] = await db
 		.select({
+			crawlContentType: bambiSiteSettings.crawlContentType,
 			crawlEnabled: bambiSiteSettings.crawlEnabled,
 			crawlIntervalHours: bambiSiteSettings.crawlIntervalHours,
 			crawlLastRunAt: bambiSiteSettings.crawlLastRunAt,
@@ -94,6 +99,7 @@ const readSettings = async (): Promise<CrawlTickSettings> => {
 
 	return (
 		row ?? {
+			crawlContentType: "job_post",
 			crawlEnabled: false,
 			crawlIntervalHours: null,
 			crawlLastRunAt: null,
@@ -389,10 +395,15 @@ export const runCrawlTick = async (
 		return emptyResult("not_due");
 	}
 
-	// 파서가 없는 사이트(예: queenalba)를 골랐으면 회차를 만들지 않고 빠져나온다. 여기서
+	// 파서가 없는 (사이트 × 데이터 종류) 조합을 골랐으면 회차를 만들지 않고 빠져나온다. 여기서
 	// 회차를 열면 빈 결과가 "공고 없음"으로 읽혀 만료 처리가 돌 수 있다. 파서가 생기면
-	// IMPLEMENTED_CRAWL_SITES에 사이트를 추가하는 것만으로 이 가드가 풀린다.
-	if (!isCrawlSiteImplemented(settings.crawlSourceSite)) {
+	// IMPLEMENTED_CRAWL_TARGETS에 조합을 추가하는 것만으로 이 가드가 풀린다.
+	if (
+		!isCrawlTargetImplemented(
+			settings.crawlSourceSite,
+			settings.crawlContentType
+		)
+	) {
 		return emptyResult("not_implemented");
 	}
 

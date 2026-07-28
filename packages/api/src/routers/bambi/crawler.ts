@@ -12,8 +12,8 @@ import { adminProcedure } from "../../index";
 import { runCrawlTick } from "../../services/bambi-crawl-ingest";
 import {
 	DEFAULT_CRAWL_INTERVAL_HOURS,
-	IMPLEMENTED_CRAWL_SITES,
-	isCrawlSiteImplemented,
+	IMPLEMENTED_CRAWL_TARGETS,
+	isCrawlTargetImplemented,
 	isRunStale,
 } from "../../services/bambi-crawl-policy";
 
@@ -57,8 +57,10 @@ const listInput = z.object({
 const MAX_INTERVAL_HOURS = 720;
 
 const sourceSiteInput = z.enum(["foxalba", "queenalba"]);
+const contentTypeInput = z.enum(["job_post", "community"]);
 
 const updateSettingsInput = z.object({
+	contentType: contentTypeInput,
 	enabled: z.boolean(),
 	intervalHours: z
 		.number()
@@ -153,6 +155,7 @@ export const crawlerRouter = {
 	getSettings: adminProcedure.handler(async () => {
 		const [row] = await db
 			.select({
+				contentType: bambiSiteSettings.crawlContentType,
 				enabled: bambiSiteSettings.crawlEnabled,
 				intervalHours: bambiSiteSettings.crawlIntervalHours,
 				lastRunAt: bambiSiteSettings.crawlLastRunAt,
@@ -163,11 +166,13 @@ export const crawlerRouter = {
 			.limit(1);
 
 		return {
+			contentType: row?.contentType ?? "job_post",
 			defaultIntervalHours: DEFAULT_CRAWL_INTERVAL_HOURS,
 			// 행이 없으면 꺼진 상태로 본다. 설정이 없다는 이유로 수집이 시작되면 안 된다.
 			enabled: row?.enabled ?? false,
-			// 파서가 실제로 구현된 사이트. 화면이 "준비 중" 배지를 붙일 근거로 쓴다.
-			implementedSites: [...IMPLEMENTED_CRAWL_SITES],
+			// 파서가 구현된 (사이트 × 데이터 종류) 조합. 화면이 "준비 중" 배지·즉시수집 잠금
+			// 판단에 쓴다.
+			implementedTargets: [...IMPLEMENTED_CRAWL_TARGETS],
 			intervalHours: row?.intervalHours ?? null,
 			lastRunAt: row?.lastRunAt ?? null,
 			sourceSite: row?.sourceSite ?? "foxalba",
@@ -179,6 +184,7 @@ export const crawlerRouter = {
 		.input(updateSettingsInput)
 		.handler(async ({ input }) => {
 			const values = {
+				crawlContentType: input.contentType,
 				crawlEnabled: input.enabled,
 				crawlIntervalHours: input.intervalHours,
 				crawlSourceSite: input.sourceSite,
@@ -189,6 +195,7 @@ export const crawlerRouter = {
 				.values({ id: SETTINGS_ROW_ID, ...values })
 				.onConflictDoUpdate({ set: values, target: bambiSiteSettings.id })
 				.returning({
+					contentType: bambiSiteSettings.crawlContentType,
 					enabled: bambiSiteSettings.crawlEnabled,
 					intervalHours: bambiSiteSettings.crawlIntervalHours,
 					sourceSite: bambiSiteSettings.crawlSourceSite,
@@ -204,6 +211,7 @@ export const crawlerRouter = {
 	runNow: adminProcedure.handler(async () => {
 		const [settings] = await db
 			.select({
+				contentType: bambiSiteSettings.crawlContentType,
 				enabled: bambiSiteSettings.crawlEnabled,
 				sourceSite: bambiSiteSettings.crawlSourceSite,
 			})
@@ -216,9 +224,9 @@ export const crawlerRouter = {
 			return { reason: "disabled" as const, started: false };
 		}
 
-		// 파서가 없는 사이트를 골랐으면 회차를 띄우지 않고 화면에 바로 알린다. runCrawlTick도
-		// not_implemented로 빠지지만, 여기서 먼저 걸러야 "시작됨" 토스트가 잘못 뜨지 않는다.
-		if (!isCrawlSiteImplemented(settings.sourceSite)) {
+		// 파서가 없는 (사이트 × 데이터 종류) 조합을 골랐으면 회차를 띄우지 않고 화면에 바로 알린다.
+		// runCrawlTick도 not_implemented로 빠지지만, 여기서 먼저 걸러야 "시작됨" 토스트가 잘못 뜨지 않는다.
+		if (!isCrawlTargetImplemented(settings.sourceSite, settings.contentType)) {
 			return { reason: "not_implemented" as const, started: false };
 		}
 
