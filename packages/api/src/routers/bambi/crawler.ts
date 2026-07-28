@@ -9,7 +9,11 @@ import { and, count, desc, eq, sql } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure } from "../../index";
-import { DEFAULT_CRAWL_INTERVAL_HOURS } from "../../services/bambi-crawl-policy";
+import { runCrawlTick } from "../../services/bambi-crawl-ingest";
+import {
+	DEFAULT_CRAWL_INTERVAL_HOURS,
+	isRunStale,
+} from "../../services/bambi-crawl-policy";
 
 const SETTINGS_ROW_ID = "default";
 
@@ -181,6 +185,43 @@ export const crawlerRouter = {
 
 			return saved ?? null;
 		}),
+
+	// 즉시 수집. 한 회차는 목록 수십 페이지와 상세 수백 건이라 최대 10분쯤 걸리므로 응답을
+	// 붙잡고 기다리지 않고 시작만 시킨 뒤 돌려준다 — 화면은 최근 회차 목록을 다시 불러
+	// 진행 상황을 본다. 주기 판정만 건너뛰고 마스터 스위치·중복 방지·수율 판정·만료 규칙은
+	// 예약 실행과 완전히 같은 경로를 지난다.
+	runNow: adminProcedure.handler(async () => {
+		const [settings] = await db
+			.select({ enabled: bambiSiteSettings.crawlEnabled })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+
+		// 꺼둔 수집이 버튼 하나로 되살아나면 "껐다"는 말이 거짓이 된다.
+		if (!settings?.enabled) {
+			return { reason: "disabled" as const, started: false };
+		}
+
+		const [active] = await db
+			.select({ startedAt: crawlRun.startedAt })
+			.from(crawlRun)
+			.where(eq(crawlRun.status, "running"))
+			.limit(1);
+
+		// 여기서 걸러내는 건 화면에 바로 알려주기 위해서다. 진짜 직렬화는 crawl_run의
+		// 부분 유니크 인덱스가 하므로, 이 검사를 두 요청이 동시에 통과해도 한쪽만 실행된다.
+		if (active && !isRunStale(active.startedAt, new Date())) {
+			return { reason: "already_running" as const, started: false };
+		}
+
+		// 응답을 기다리지 않고 띄운다. 스케줄러 틱과 같은 프로세스라 수명도 같고, 실패는
+		// crawl_run에 기록되므로 여기서는 미처리 거부만 막는다.
+		runCrawlTick(new Date(), undefined, { force: true }).catch(() => {
+			// 실패 사유는 crawl_run.error에 남는다. 화면은 최근 회차 목록에서 확인한다.
+		});
+
+		return { reason: "started" as const, started: true };
+	}),
 
 	// 최근 수집 회차. aborted_low_yield가 보이면 상대 마크업이 바뀐 것이므로 파서 점검이 필요하다 —
 	// 이 화면이 셀렉터 파손을 알아채는 유일한 창구다.

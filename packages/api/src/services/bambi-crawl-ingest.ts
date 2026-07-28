@@ -25,6 +25,7 @@ import {
 	isCrawlDue,
 	isYieldTrustworthy,
 	MAX_DETAIL_FETCHES_PER_RUN,
+	RUN_STALE_AFTER_MS,
 	resolveListPageCount,
 } from "./bambi-crawl-policy";
 
@@ -35,8 +36,22 @@ export interface CrawlTickResult {
 	itemsNew: number;
 	itemsUpdated: number;
 	pendingDetails: number;
-	reason: "aborted_low_yield" | "completed" | "not_due";
+	reason: "aborted_low_yield" | "already_running" | "completed" | "not_due";
 }
+
+export interface CrawlTickOptions {
+	// 운영자가 "즉시 수집"을 누른 경우. 주기 판정만 건너뛰고 나머지(중복 방지·수율 판정·
+	// 만료 규칙)는 예약 실행과 완전히 동일하게 지난다.
+	force?: boolean;
+}
+
+const emptyResult = (reason: CrawlTickResult["reason"]): CrawlTickResult => ({
+	itemsFailed: 0,
+	itemsNew: 0,
+	itemsUpdated: 0,
+	pendingDetails: 0,
+	reason,
+});
 
 interface ExistingRow {
 	contentHash: string;
@@ -307,31 +322,61 @@ const selectDetailTargets = (
 	});
 };
 
+// 서버가 회차 도중 죽으면 running 행이 남아 부분 유니크 인덱스가 새 수집을 영원히 막는다.
+// 오래된 진행 중 회차를 실패로 정리해 스스로 풀리게 한다.
+const reapStaleRuns = (now: Date) =>
+	db
+		.update(crawlRun)
+		.set({
+			error: "진행 중 상태로 방치돼 정리됨(프로세스 중단 추정)",
+			finishedAt: now,
+			status: "failed",
+		})
+		.where(
+			and(
+				eq(crawlRun.status, "running"),
+				lt(crawlRun.startedAt, new Date(now.getTime() - RUN_STALE_AFTER_MS))
+			)
+		);
+
+// 회차를 연다. 이미 진행 중이면 부분 유니크 인덱스가 INSERT를 막으므로 null을 돌려준다.
+const startRun = async (now: Date): Promise<{ id: string } | null> => {
+	const [run] = await db
+		.insert(crawlRun)
+		.values({ sourceSite: SOURCE_SITE, startedAt: now, status: "running" })
+		.onConflictDoNothing()
+		.returning({ id: crawlRun.id });
+
+	return run ?? null;
+};
+
 // 수집 한 회차. 예외는 crawl_run에 기록한 뒤 다시 던지고, 호출자(스케줄러 플러그인)가
 // 로그만 남긴다 — 틱 하나가 서버를 죽이면 안 된다.
 export const runCrawlTick = async (
 	now: Date,
-	client: CrawlClient = createCrawlClient()
+	client: CrawlClient = createCrawlClient(),
+	options: CrawlTickOptions = {}
 ): Promise<CrawlTickResult> => {
 	const settings = await readSettings();
 
-	if (!isCrawlDue(settings, now)) {
-		return {
-			itemsFailed: 0,
-			itemsNew: 0,
-			itemsUpdated: 0,
-			pendingDetails: 0,
-			reason: "not_due",
-		};
+	// 강제 실행이라도 마스터 스위치는 존중한다. 꺼둔 수집이 버튼 하나로 되살아나면
+	// "껐다"는 말이 거짓이 된다.
+	if (!settings.crawlEnabled) {
+		return emptyResult("not_due");
 	}
 
-	const [run] = await db
-		.insert(crawlRun)
-		.values({ sourceSite: SOURCE_SITE, startedAt: now, status: "running" })
-		.returning({ id: crawlRun.id });
+	if (!(options.force || isCrawlDue(settings, now))) {
+		return emptyResult("not_due");
+	}
 
+	await reapStaleRuns(now);
+
+	const run = await startRun(now);
+
+	// 진행 중 회차가 이미 있다. 부분 유니크 인덱스가 두 번째 INSERT를 막은 것이라,
+	// 애플리케이션 검사만 있을 때 남는 경쟁 창이 여기서는 없다.
 	if (!run) {
-		throw new Error("crawl_run 생성 실패");
+		return emptyResult("already_running");
 	}
 
 	try {

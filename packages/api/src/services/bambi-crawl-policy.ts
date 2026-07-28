@@ -23,6 +23,15 @@ export const MAX_LIST_PAGES = 80;
 export const HOUR_MS = 60 * 60 * 1000;
 export const DAY_MS = 24 * HOUR_MS;
 
+// 진행 중으로 남은 회차가 이 시간을 넘기면 죽은 프로세스가 남긴 잔해로 본다. 사이트당 진행
+// 중 회차를 하나로 제한하는 부분 유니크 인덱스가 있어서, 이 정리가 없으면 서버가 회차 도중
+// 죽었을 때 그 행이 영원히 새 수집을 막는다. 한 회차 최대 소요(목록 66페이지 + 상세 300건,
+// 요청 간격 1.5초 기준 약 10분)보다 넉넉히 잡는다.
+export const RUN_STALE_AFTER_MS = 30 * 60 * 1000;
+
+export const isRunStale = (startedAt: Date, now: Date): boolean =>
+	now.getTime() - startedAt.getTime() > RUN_STALE_AFTER_MS;
+
 export interface CrawlSettings {
 	crawlEnabled: boolean;
 	crawlIntervalHours: number | null;

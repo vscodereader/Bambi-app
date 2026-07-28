@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
 	type AnyPgColumn,
 	boolean,
@@ -466,6 +466,13 @@ export const crawlRun = pgTable(
 			table.sourceSite,
 			table.startedAt
 		),
+		// 사이트당 진행 중 회차는 하나뿐이다. 운영자의 "즉시 수집"과 스케줄러 틱이 겹치거나
+		// 버튼을 연달아 누르면 같은 목록을 두 번 긁게 되는데, 애플리케이션 쪽 검사만으로는
+		// 두 요청이 동시에 통과하는 창이 남는다. 부분 유니크 인덱스로 DB가 직렬화 지점을
+		// 잡아주면 두 번째 INSERT가 실패하고, 수집기가 그걸 "이미 실행 중"으로 처리한다.
+		uniqueIndex("crawl_run_active_source_site_uidx")
+			.on(table.sourceSite)
+			.where(sql`${table.status} = 'running'`),
 	]
 );
 
