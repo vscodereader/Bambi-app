@@ -31,6 +31,11 @@ import {
 	type VerifiedIdentity,
 } from "../../services/bambi-identity";
 import {
+	assertIdentityVerificationUsable,
+	consumeIdentityVerification,
+	issueIdentityVerificationId,
+} from "../../services/bambi-identity-ticket";
+import {
 	getJobPostingScopes,
 	ORGANIZATION_WIDE_POSTING_ROLES,
 } from "../../services/bambi-job-access";
@@ -249,6 +254,9 @@ const createBambiProfile = async ({
 		if (await findIdentityCollision(identity, userId)) {
 			throw new ORPCError("CONFLICT", { message: IDENTITY_CONFLICT_MESSAGE });
 		}
+		// 인증 건의 최종 소비 지점. 여기를 지나면 같은 ID로는 다시 가입할 수 없다
+		// (앞선 checkIdentityForSignup·/api/guest는 검증만 하고 소진시키지 않는다).
+		await consumeIdentityVerification(identityVerificationId);
 	}
 
 	const [createdProfile] = await db
@@ -558,6 +566,14 @@ export const onboardingRouter = {
 			return toClientProfile(updatedProfile);
 		}),
 
+	// 본인인증 건 발급 — 클라이언트는 이 ID로만 포트원 인증창을 연다. 가입 전(계정 없는
+	// 방문자)에도 인증을 시작하므로 publicProcedure다. 서버가 발급 시각을 기록해야
+	// "우리가 시작시킨 인증인지 · 유효시간 안인지 · 이미 썼는지"를 나중에 판정할 수 있다.
+	// 무인증 삽입이라 남용되면 표가 부풀 수 있다(레이트리밋은 후속 과제 — 보고 참조).
+	startIdentityVerification: publicProcedure.handler(async () => ({
+		identityVerificationId: await issueIdentityVerificationId(),
+	})),
+
 	// 가입 전 본인인증 확인 — 계정이 없는 상태에서 부르므로 publicProcedure다.
 	// 개인정보는 돌려주지 않는다(성별과 가입 여부 불리언만). 인증 자체는 이미
 	// 끝난 뒤이고 포트원 단건조회는 무료라, 임의 ID로 두드려도 얻을 게 없다
@@ -571,6 +587,9 @@ export const onboardingRouter = {
 					message: "본인인증이 아직 구성되지 않았습니다.",
 				});
 			}
+			// 검증만 하고 소진시키지 않는다 — 이 호출 뒤에 /api/guest와 프로필 생성이
+			// 같은 인증 건을 이어서 쓴다(소진은 프로필 생성이 한다).
+			await assertIdentityVerificationUsable(input.identityVerificationId);
 			const identity = await resolveVerifiedIdentity(
 				apiSecret,
 				input.identityVerificationId
@@ -612,6 +631,8 @@ export const onboardingRouter = {
 			if (await findIdentityCollision(identity, userId)) {
 				throw new ORPCError("CONFLICT", { message: IDENTITY_CONFLICT_MESSAGE });
 			}
+			// 재인증의 최종 소비 지점 — 같은 인증 건으로 두 번 번호를 갈아끼울 수 없다.
+			await consumeIdentityVerification(input.identityVerificationId);
 
 			const [updatedProfile] = await db
 				.update(bambiProfile)

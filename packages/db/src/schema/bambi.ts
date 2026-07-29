@@ -256,6 +256,27 @@ export interface JobDescriptionBlock {
 	type: JobDescriptionBlockType;
 }
 
+// 본인인증 건 발급 기록. 인증창에 넘길 identityVerificationId를 서버가 발급하면서
+// 한 행을 남기고, 그 뒤로는 "우리가 시작시킨 인증인가 · 아직 안 썼는가 · 발급 후
+// 유효시간 안인가"를 이 표로 판정한다. 예전에는 클라이언트가 ID를 직접 만들어서
+// 서버가 발급 사실을 몰랐고, 같은 ID를 몇 번이든 다시 쓸 수 있었다
+// (본인확인서비스 이용기관 취약점 자체점검 항목 4 — 인증정보 재사용 차단).
+// 개인정보는 담지 않는다 — 인증 결과는 프로필로만 들어간다.
+export const bambiIdentityVerification = pgTable(
+	"bambi_identity_verification",
+	{
+		// 서버가 만든 `iv-<uuid>` 값. 포트원 인증 건 식별자와 동일한 값이라 PK로 쓴다.
+		id: text("id").primaryKey(),
+		issuedAt: timestamp("issued_at").defaultNow().notNull(),
+		// 최종 소비(가입·재인증 완료) 시각. null이면 아직 쓰이지 않은 인증 건이다.
+		consumedAt: timestamp("consumed_at"),
+	},
+	(table) => [
+		// 만료·소진된 오래된 행 정리(운영 배치)용. 발급 시각 범위 조회를 받쳐 준다.
+		index("bambi_identity_verification_issued_at_idx").on(table.issuedAt),
+	]
+);
+
 export const bambiProfile = pgTable(
 	"bambi_profile",
 	{

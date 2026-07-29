@@ -1,29 +1,37 @@
 import { randomUUID } from "node:crypto";
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Context } from "../../context";
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
+// 발급 기록 없음·소진·유효시간 초과를 한 문구로 안내한다(bambi-identity-ticket).
+const REUSED = /만료되었거나 이미 사용/;
 
 dotenv.config({ path: "../../apps/server/.env" });
 // 실인증 핸들러는 PORTONE_API_SECRET이 있어야 목 폴백을 건너뛰고 실경로를 탄다.
 // 개발 .env엔 없으므로 테스트에서 주입한다(env 모듈 로드 전에 설정해야 반영된다).
 process.env.PORTONE_API_SECRET = "test-secret";
 
-const [{ db }, authSchema, bambiSchema, { onboardingRouter }, portone] =
+const [{ db }, authSchema, bambiSchema, { onboardingRouter }, portone, ticket] =
 	await Promise.all([
 		import("@bambi-app/db"),
 		import("@bambi-app/db/schema/auth"),
 		import("@bambi-app/db/schema/bambi"),
 		import("./onboarding"),
 		import("../../services/portone-identity"),
+		import("../../services/bambi-identity-ticket"),
 	]);
 
 const { user } = authSchema;
-const { bambiProfile } = bambiSchema;
+const { bambiIdentityVerification, bambiProfile } = bambiSchema;
 const { hashIdentityValue } = portone;
+const {
+	assertIdentityVerificationUsable,
+	IDENTITY_VERIFICATION_TTL_MINUTES,
+	issueIdentityVerificationId,
+} = ticket;
 
 // 포트원 단건조회는 전역 fetch로 나간다 — DB는 소켓을 쓰므로 fetch만 스텁하면 된다.
 let nextVerification: unknown = null;
@@ -35,11 +43,26 @@ beforeAll(() => {
 });
 
 const createdUserIds: string[] = [];
+const issuedIds: string[] = [];
 afterEach(async () => {
 	for (const id of createdUserIds.splice(0)) {
 		await db.delete(user).where(eq(user.id, id));
 	}
+	const usedIds = issuedIds.splice(0);
+	if (usedIds.length > 0) {
+		await db
+			.delete(bambiIdentityVerification)
+			.where(inArray(bambiIdentityVerification.id, usedIds));
+	}
 });
+
+// 서버가 발급한 인증 건. 실인증 경로는 발급 기록이 없는 ID를 거부하므로, 테스트도
+// 실제 발급 절차를 그대로 탄다.
+const issueId = async () => {
+	const identityVerificationId = await issueIdentityVerificationId();
+	issuedIds.push(identityVerificationId);
+	return identityVerificationId;
+};
 
 const ctx = (userId: string): Context =>
 	({ auth: null, session: { user: { id: userId } } }) as Context;
@@ -96,8 +119,8 @@ const setVerification = (ci: string, di: string) => {
 	};
 };
 
-const runVerify = (userId: string) =>
-	verifyClient(userId)({ identityVerificationId: `iv_${randomUUID()}` });
+const runVerify = async (userId: string) =>
+	verifyClient(userId)({ identityVerificationId: await issueId() });
 
 describe("verifyMyPhone 중복 가입 체크", () => {
 	it("고유한 CI·DI면 인증에 성공하고 diHash를 저장한다", async () => {
@@ -158,7 +181,7 @@ describe("checkIdentityForSignup 가입 전 중복 확인", () => {
 	it("처음 보는 사람이면 hasAccount:false와 성별을 돌려준다", async () => {
 		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
 		const result = await checkClient({
-			identityVerificationId: `iv_${randomUUID()}`,
+			identityVerificationId: await issueId(),
 		});
 		expect(result).toEqual({ gender: "male", hasAccount: false });
 	});
@@ -171,7 +194,7 @@ describe("checkIdentityForSignup 가입 전 중복 확인", () => {
 
 		setVerification(`ci-${randomUUID()}`, sharedDi);
 		const result = await checkClient({
-			identityVerificationId: `iv_${randomUUID()}`,
+			identityVerificationId: await issueId(),
 		});
 		expect(result.hasAccount).toBe(true);
 	});
@@ -188,7 +211,7 @@ describe("checkIdentityForSignup 가입 전 중복 확인", () => {
 			},
 		};
 		await expect(
-			checkClient({ identityVerificationId: `iv_${randomUUID()}` })
+			checkClient({ identityVerificationId: await issueId() })
 		).rejects.toThrow();
 	});
 });
@@ -210,7 +233,7 @@ describe("가입 시 인증 결과 반영", () => {
 				context: ctx(userId),
 				path: ["bambi", "onboarding", "createJobSeekerProfile"],
 			}
-		)({ identityVerificationId: `iv_${randomUUID()}` });
+		)({ identityVerificationId: await issueId() });
 
 		expect(created?.isPhoneVerified).toBe(true);
 		expect(created?.birthDate).toBe("20000101");
@@ -237,7 +260,7 @@ describe("가입 시 인증 결과 반영", () => {
 			createProcedureClient(onboardingRouter.createJobSeekerProfile, {
 				context: ctx(userId),
 				path: ["bambi", "onboarding", "createJobSeekerProfile"],
-			})({ identityVerificationId: `iv_${randomUUID()}` })
+			})({ identityVerificationId: await issueId() })
 		).rejects.toThrow("이미 다른 계정에서 본인인증에 사용된 정보예요.");
 	});
 });
@@ -271,5 +294,109 @@ describe("updateMyProfile 인증 번호 보호", () => {
 
 		const stored = await readProfile(userId);
 		expect(stored?.isPhoneVerified).toBe(true);
+	});
+});
+
+// 본인확인서비스 이용기관 취약점 자체점검 항목 4 — 과거에 수집된 인증정보(거래번호)를
+// 재사용하지 못하게 막는다. 서버가 발급하지 않았거나 · 이미 소진됐거나 · 발급 후
+// 유효시간을 넘긴 인증 건은 전부 거부해야 한다.
+describe("본인인증 건 재사용 차단", () => {
+	const seedSignupUser = async () => {
+		const userId = `user_reuse_${randomUUID()}`;
+		createdUserIds.push(userId);
+		await db.insert(user).values({
+			id: userId,
+			name: "재사용검증",
+			email: `${userId}@bambi.test`,
+		});
+		return userId;
+	};
+
+	const createProfile = (userId: string, identityVerificationId: string) =>
+		createProcedureClient(onboardingRouter.createJobSeekerProfile, {
+			context: ctx(userId),
+			path: ["bambi", "onboarding", "createJobSeekerProfile"],
+		})({ identityVerificationId });
+
+	// 발급 시각을 임의로 지정한 인증 건(유효시간 초과 상황 재현용).
+	const issueIdAt = async (issuedAt: Date) => {
+		const identityVerificationId = `iv-${randomUUID()}`;
+		issuedIds.push(identityVerificationId);
+		await db
+			.insert(bambiIdentityVerification)
+			.values({ id: identityVerificationId, issuedAt });
+		return identityVerificationId;
+	};
+
+	it("가입에 쓴 인증 건은 소진되어 다시 쓸 수 없다", async () => {
+		const identityVerificationId = await issueId();
+		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
+		await createProfile(await seedSignupUser(), identityVerificationId);
+
+		// 같은 인증 건으로 두 번째 가입 시도 — 소진 기록에서 걸려야 한다.
+		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
+		await expect(
+			createProfile(await seedSignupUser(), identityVerificationId)
+		).rejects.toThrow(REUSED);
+		// 가입 전 확인(비소진 관문)도 같은 이유로 거부한다.
+		await expect(checkClient({ identityVerificationId })).rejects.toThrow(
+			REUSED
+		);
+	});
+
+	it("재인증(verifyMyPhone)에 쓴 인증 건도 소진된다", async () => {
+		const identityVerificationId = await issueId();
+		const userId = await seedUserWithProfile();
+		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
+		await verifyClient(userId)({ identityVerificationId });
+
+		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
+		await expect(
+			verifyClient(userId)({ identityVerificationId })
+		).rejects.toThrow(REUSED);
+	});
+
+	it("발급 후 유효시간을 넘긴 인증 건은 거부한다", async () => {
+		const identityVerificationId = await issueIdAt(
+			new Date(Date.now() - (IDENTITY_VERIFICATION_TTL_MINUTES + 1) * 60 * 1000)
+		);
+		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
+
+		await expect(checkClient({ identityVerificationId })).rejects.toThrow(
+			REUSED
+		);
+		await expect(
+			createProfile(await seedSignupUser(), identityVerificationId)
+		).rejects.toThrow(REUSED);
+	});
+
+	it("서버가 발급한 적 없는 인증 건은 거부한다", async () => {
+		// 예전처럼 클라이언트가 스스로 만든 ID — 발급 기록이 없다.
+		const identityVerificationId = `iv-${randomUUID()}`;
+		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
+
+		await expect(checkClient({ identityVerificationId })).rejects.toThrow(
+			REUSED
+		);
+		await expect(
+			createProfile(await seedSignupUser(), identityVerificationId)
+		).rejects.toThrow(REUSED);
+	});
+
+	it("정상 가입 1회는 같은 인증 건을 세 번 써도 통과한다", async () => {
+		const identityVerificationId = await issueId();
+		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
+
+		// 1) 가입 전 확인 2) 게스트 쿠키 발급(web /api/guest → 서버 검증 관문)
+		// 3) 실제 가입. 앞의 둘은 소진시키지 않아야 한다.
+		const check = await checkClient({ identityVerificationId });
+		expect(check.hasAccount).toBe(false);
+		await assertIdentityVerificationUsable(identityVerificationId);
+		const created = await createProfile(
+			await seedSignupUser(),
+			identityVerificationId
+		);
+
+		expect(created?.isPhoneVerified).toBe(true);
 	});
 });

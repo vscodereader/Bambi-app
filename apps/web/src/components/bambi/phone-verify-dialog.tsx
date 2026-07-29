@@ -13,6 +13,7 @@ import type { ComponentProps } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { BambiGenderValue, MockPhoneVerifyInput } from "@/lib/bambi/guest";
+import { client } from "@/utils/orpc";
 import { Button } from "./ds";
 import { PhoneIcon } from "./icons";
 import { MockPhoneVerifyDialog } from "./mock-phone-verify-dialog";
@@ -208,7 +209,11 @@ function PortOneVerifyButton({
 	const startVerification = async () => {
 		setIsVerifying(true);
 		try {
-			const identityVerificationId = `iv-${crypto.randomUUID()}`;
+			// 인증 건 ID는 서버가 발급한다(발급 시각 기록 → 재사용·유효시간 검증의 근거).
+			// 모바일은 인증창이 뜨는 순간 페이지가 통째로 떠나므로 발급은 반드시 그 전에
+			// 끝나야 한다 — await로 먼저 받아 둔다.
+			const { identityVerificationId } =
+				await client.bambi.onboarding.startIdentityVerification();
 			// 인증창을 열기 직전에 기록한다. 모바일은 여기서 페이지가 통째로 떠나므로
 			// 이 뒤의 코드는 실행되지 않고, 복귀 후 이 값이 처리 주체를 가린다.
 			writeVerifyIntent(intent);
