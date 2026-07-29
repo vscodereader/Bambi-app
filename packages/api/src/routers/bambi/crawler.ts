@@ -1,6 +1,7 @@
 import { db } from "@bambi-app/db";
 import {
 	bambiSiteSettings,
+	crawledCommunityTopic,
 	crawledJobPost,
 	crawlRun,
 	jobPost,
@@ -73,6 +74,14 @@ const updateSettingsInput = z.object({
 });
 
 const RECENT_RUN_LIMIT = 20;
+
+// 커뮤니티 주제 목록. 정렬 축이 둘인 이유는 이 표를 보는 목적이 둘이라서다 — "지금 무슨 글이
+// 올라오나"(최신순)와 "무슨 주제가 실제로 반응을 얻나"(댓글순).
+const communityListInput = z.object({
+	limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+	offset: z.number().int().min(0).default(0),
+	sort: z.enum(["recent", "comments"]).default("recent"),
+});
 
 export const crawlerRouter = {
 	// 수집 목록. 운영자 전용이며 연락처 계열은 포함하지 않는다(LIST_COLUMNS 주석 참고).
@@ -263,6 +272,42 @@ export const crawlerRouter = {
 			.orderBy(desc(crawlRun.startedAt))
 			.limit(RECENT_RUN_LIMIT)
 	),
+
+	// 수집한 커뮤니티 주제. 공고와 달리 연락처 계열 컬럼이 아예 없어 목록에 전부 내려도 된다.
+	// 본문은 상세를 받은 글만 채워져 있고(수집 직후엔 제목만 있다), 화면이 그 상태를 그대로 보여준다.
+	listCommunityTopics: adminProcedure
+		.input(communityListInput)
+		.handler(async ({ input }) => {
+			// NULLS LAST가 필요하다. 조회수·댓글수는 원본에 없으면 null이라, 기본 정렬로는
+			// 값이 없는 글이 맨 위를 차지한다.
+			const orderBy =
+				input.sort === "comments"
+					? sql`${crawledCommunityTopic.commentCount} desc nulls last`
+					: sql`${crawledCommunityTopic.sourcePostedAt} desc nulls last`;
+
+			const [items, [total]] = await Promise.all([
+				db
+					.select({
+						body: crawledCommunityTopic.body,
+						boardName: crawledCommunityTopic.boardName,
+						commentCount: crawledCommunityTopic.commentCount,
+						firstSeenAt: crawledCommunityTopic.firstSeenAt,
+						id: crawledCommunityTopic.id,
+						sourcePostedAt: crawledCommunityTopic.sourcePostedAt,
+						sourceSite: crawledCommunityTopic.sourceSite,
+						sourceUrl: crawledCommunityTopic.sourceUrl,
+						title: crawledCommunityTopic.title,
+						viewCount: crawledCommunityTopic.viewCount,
+					})
+					.from(crawledCommunityTopic)
+					.orderBy(orderBy)
+					.limit(input.limit)
+					.offset(input.offset),
+				db.select({ value: count() }).from(crawledCommunityTopic),
+			]);
+
+			return { items, pageSize: input.limit, total: total?.value ?? 0 };
+		}),
 
 	// 상태별 건수. 운영자 화면 상단 요약과 needs_review 잔량 확인에 쓴다.
 	getSummary: adminProcedure.handler(async () => {

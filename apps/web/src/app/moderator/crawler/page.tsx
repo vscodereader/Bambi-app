@@ -41,6 +41,7 @@ import {
 	formatCrawlTimestamp,
 } from "@/lib/bambi/crawler";
 import { orpc } from "@/utils/orpc";
+import { CommunityTopicsCard } from "./community-topics-card";
 
 export default function ModeratorCrawlerPage() {
 	const queryClient = useQueryClient();
@@ -417,6 +418,8 @@ export default function ModeratorCrawlerPage() {
 					)}
 				</CardContent>
 			</Card>
+
+			<CommunityTopicsCard />
 		</div>
 	);
 }
