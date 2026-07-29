@@ -42,7 +42,7 @@ const SEEKER_STEPS = [
 		state: "확인됨",
 	},
 	{
-		description: "상대에게 노출되는 정보는 밤비 프로필 기준으로 제한돼요.",
+		description: "상대에게 노출되는 정보는 밤비알바 프로필 기준으로 제한돼요.",
 		label: "구직자 프로필",
 		state: "확인됨",
 	},
@@ -95,7 +95,8 @@ export function SeekerChatPreflight({
 	const steps =
 		overrideSteps ?? (entry === "public" ? PUBLIC_STEPS : SEEKER_STEPS);
 	const buttonLabel =
-		continueLabel ?? (isContinuing ? "채팅방 만드는 중" : "밤비 채팅으로 이동");
+		continueLabel ??
+		(isContinuing ? "채팅방 만드는 중" : "밤비알바 채팅으로 이동");
 	return (
 		<div
 			className={cn(
@@ -126,7 +127,7 @@ export function SeekerChatPreflight({
 					</h1>
 					<p className="m-0 max-w-[620px] text-muted-foreground leading-relaxed">
 						면접 일정이 확정되기 전까지 전화번호와 외부 연락처는 공개되지
-						않아요. 대화는 밤비 채팅방에서 먼저 시작됩니다.
+						않아요. 대화는 밤비알바 채팅방에서 먼저 시작됩니다.
 					</p>
 					<div className="mt-5 grid gap-3 sm:grid-cols-2">
 						<InfoTile icon={<DollarCircle />} label="급여" value={job.pay} />

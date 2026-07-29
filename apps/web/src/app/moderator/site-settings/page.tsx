@@ -527,7 +527,7 @@ export default function ModeratorSiteSettingsPage() {
 											<Input
 												id={`holder-${account.id}`}
 												onChange={updateAccount(account.id, "holder")}
-												placeholder="예: 밤비"
+												placeholder="예: 밤비알바"
 												value={account.holder}
 											/>
 										</div>

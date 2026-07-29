@@ -173,7 +173,7 @@ export function AuthPanel() {
 	const [verifiedId, setVerifiedId] = useState<string | null>(null);
 	const isSignUp = mode === "sign-up";
 	const isVerifyStep = isSignUp && step === "verify";
-	const title = isSignUp ? "밤비 계정 만들기" : "밤비 로그인";
+	const title = isSignUp ? "밤비알바 계정 만들기" : "밤비알바 로그인";
 	const submitLabel = isSignUp ? "회원가입" : "로그인";
 
 	const setField =
@@ -448,7 +448,7 @@ export function AuthPanel() {
 							<p className="m-0 text-center text-muted-foreground text-sm">
 								{isSignUp
 									? "이미 계정이 있으신가요? "
-									: "밤비가 처음이신가요? "}
+									: "밤비알바가 처음이신가요? "}
 								<button
 									className="font-bold text-primary underline-offset-2 hover:underline disabled:opacity-50"
 									disabled={isSubmitting}

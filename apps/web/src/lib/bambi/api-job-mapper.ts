@@ -157,7 +157,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		coverImage,
 		desc:
 			job.description ??
-			"공고 상세와 면접 안내는 밤비 채팅에서 안전하게 확인할 수 있어요.",
+			"공고 상세와 면접 안내는 밤비알바 채팅에서 안전하게 확인할 수 있어요.",
 		descriptionBlocks: job.descriptionBlocks ?? [],
 		detailImages,
 		district: job.district ?? "",

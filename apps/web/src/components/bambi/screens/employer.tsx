@@ -82,7 +82,7 @@ function GuardIntro({ tone }: { tone: VisualTone }) {
 			</span>
 			<div className="text-[12.5px] leading-normal">
 				<b className="font-extrabold">
-					밤비는 합법적인 유흥·접객 채용만 다뤄요.
+					밤비알바는 합법적인 유흥·접객 채용만 다뤄요.
 				</b>
 				<br />
 				불법 성매매·강요·미성년 관련 표현은 등록할 수 없고, 우회·암시 표현은

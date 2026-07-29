@@ -195,7 +195,7 @@ export default function NewEmployerJobPage() {
 	if (!profile) {
 		return (
 			<PageShell
-				description="공고를 등록하려면 밤비 프로필 설정이 필요합니다."
+				description="공고를 등록하려면 밤비알바 프로필 설정이 필요합니다."
 				title="새 공고 등록"
 			>
 				<EmptyState
@@ -205,7 +205,7 @@ export default function NewEmployerJobPage() {
 						</Link>
 					}
 					description="구인자 프로필을 만든 뒤 공고를 등록할 수 있습니다."
-					title="밤비 프로필이 없습니다"
+					title="밤비알바 프로필이 없습니다"
 				/>
 			</PageShell>
 		);

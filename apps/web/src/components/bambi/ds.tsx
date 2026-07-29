@@ -440,7 +440,7 @@ export function Logo({
 }: LogoProps) {
 	const glyphDim = LOGO_GLYPH_DIM[size] || LOGO_GLYPH_DIM.md;
 	const glyph = tone === "inverse" ? "var(--color-primary)" : "var(--white)";
-	const label = lang === "ko" ? "밤비알바" : "Bambi";
+	const label = lang === "ko" ? "밤비알바" : "BambiAlba";
 	return (
 		<div
 			className={cn(
