@@ -57,13 +57,11 @@ const underageResponse = () =>
 // 성별을 읽어 가입 시 프로필로 옮긴다. 값 위조는 서명 검증(미들웨어)에서 걸린다.
 // secure는 본인확인 결과 토큰의 평문 전송을 막기 위해 무조건 켠다(세션 쿠키와 동일 정책 —
 // packages/auth advanced.defaultCookieAttributes). localhost는 secure 컨텍스트라 개발 무영향.
-const verifiedResponse = async (
-	gender: BambiGenderValue | null,
-	ivId?: string
-) => {
+// 인증 건 ID는 싣지 않는다: 유효시간이 30분인 값을 30일짜리 쿠키에 JS로 읽히게 두면
+// 공용 PC·XSS에서 그대로 새어 나가고, 만료 뒤엔 어차피 쓸 수도 없다(자체점검 항목 4).
+const verifiedResponse = async (gender: BambiGenderValue | null) => {
 	const token = await createGuestToken({
 		gender,
-		ivId,
 		maxAgeSeconds: GUEST_COOKIE_MAX_AGE,
 		now: new Date(),
 		secret: guestTokenSecret(),
@@ -91,7 +89,7 @@ const handleRealVerification = async (identityVerificationId: string) => {
 		const { gender } = await rpc.bambi.onboarding.checkIdentityForSignup({
 			identityVerificationId,
 		});
-		return await verifiedResponse(gender, identityVerificationId);
+		return await verifiedResponse(gender);
 	} catch (error) {
 		if (error instanceof ORPCError) {
 			// 미성년(FORBIDDEN)은 전용 코드로 안내하고, 재사용·미완료 인증(BAD_REQUEST)은
