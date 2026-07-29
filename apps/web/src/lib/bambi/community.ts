@@ -32,7 +32,7 @@ export const communityAuthorName = (
 export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
 	{
 		adminOnly: true,
-		description: "밤비 수다방 공지",
+		description: "밤비알바 수다방 공지",
 		key: "notice",
 		label: "공지사항",
 		slug: "notice",
@@ -46,7 +46,7 @@ export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
 		writable: false,
 	},
 	{
-		description: "밤비 회원들의 자유로운 이야기",
+		description: "밤비알바 회원들의 자유로운 이야기",
 		key: "free",
 		label: "자유수다",
 		slug: "free",

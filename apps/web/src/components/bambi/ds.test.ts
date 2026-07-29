@@ -9,7 +9,7 @@ const source = fs.readFileSync(
 
 describe("Logo", () => {
 	it("keeps the wordmark on one line beside the icon", () => {
-		// "밤비"는 CJK라 기본 line-break가 밤/비 사이를 끊을 수 있다. 폭이 모자라면
+		// "밤비알바"는 CJK라 기본 line-break가 글자 사이를 끊을 수 있다. 폭이 모자라면
 		// 워드마크가 세로로 쌓여 로고가 깨지므로 nowrap이 필요하다 —
 		// 구인자·운영자 헤더에서 실제로 세로로 쌓였던 원인이다.
 		expect(source).toContain("inline-flex items-center whitespace-nowrap");

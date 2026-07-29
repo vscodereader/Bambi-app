@@ -185,7 +185,7 @@ export default function EmployerMePage() {
 	if (!profile) {
 		return (
 			<PageShell
-				description="업체 정보를 보려면 밤비 프로필 설정이 필요합니다."
+				description="업체 정보를 보려면 밤비알바 프로필 설정이 필요합니다."
 				title="업체 정보"
 			>
 				<EmptyState
@@ -195,7 +195,7 @@ export default function EmployerMePage() {
 						</Link>
 					}
 					description="구인자 프로필을 만든 뒤 계정과 사업자 정보를 확인할 수 있습니다."
-					title="밤비 프로필이 없습니다"
+					title="밤비알바 프로필이 없습니다"
 				/>
 			</PageShell>
 		);

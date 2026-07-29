@@ -7,12 +7,12 @@
 
 export const BAMBI_COMPANY = {
 	// 서비스 식별
-	serviceName: "밤비",
+	serviceName: "밤비알바",
 	domain: "bambialba.com",
 	url: "https://bambialba.com",
 
 	// 운영 주체(법인) — TODO: 실제 값으로 교체
-	operator: "밤비",
+	operator: "밤비알바",
 	ceo: "TODO_대표자",
 	bizRegNo: "TODO_사업자등록번호",
 	// 직업정보제공사업 신고번호. 사업자등록번호와 달리 운영자 콘솔에서 편집하지 않고
@@ -26,7 +26,7 @@ export const BAMBI_COMPANY = {
 
 	// 푸터 서비스 소개 문구(운영자 콘솔 미설정 시 폴백)
 	footerIntro:
-		"밤비는 유흥·접객 구인구직 정보를 1:1 채팅으로 안전하게 연결하는 플랫폼입니다.",
+		"밤비알바는 유흥·접객 구인구직 정보를 1:1 채팅으로 안전하게 연결하는 플랫폼입니다.",
 
 	// 개인정보 보호책임자 — 성명·전화·메일은 운영자 콘솔에서 편집하고 여기는 폴백이다.
 	privacyOfficer: {

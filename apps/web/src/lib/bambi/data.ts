@@ -402,13 +402,13 @@ export const REPORTS: Report[] = [
 		time: "41분 전",
 		sev: "mid",
 		status: "open",
-		note: "밤비 채팅 대신 계속 텔레그램으로 오라고 해요.",
+		note: "밤비알바 채팅 대신 계속 텔레그램으로 오라고 해요.",
 		thread: [
 			{
 				mine: false,
 				text: "여기 말고 텔레그램으로 연락 주세요. 아이디 알려드릴게요.",
 			},
-			{ mine: true, text: "면접 전에는 밤비 안에서 얘기하고 싶어요." },
+			{ mine: true, text: "면접 전에는 밤비알바 안에서 얘기하고 싶어요." },
 		],
 	},
 	{

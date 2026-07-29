@@ -16,7 +16,7 @@ export default function IndexRoute() {
 	});
 
 	if (session.isPending || mineQuery.isLoading) {
-		return <LoadingState label="밤비 프로필을 확인하고 있습니다." />;
+		return <LoadingState label="밤비알바 프로필을 확인하고 있습니다." />;
 	}
 
 	if (!session.data?.user) {

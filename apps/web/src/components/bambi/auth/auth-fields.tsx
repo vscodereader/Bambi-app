@@ -44,7 +44,7 @@ export function AuthSignupFields({
 					autoComplete="nickname"
 					id="auth-nickname"
 					onChange={onFieldChange("nickname")}
-					placeholder="예: 밤비 구직자"
+					placeholder="예: 밤비알바 구직자"
 					value={values.nickname}
 				/>
 			</label>
