@@ -21,6 +21,7 @@ import {
 	parseFoxalbaList,
 	parseFoxalbaTotalCount,
 } from "./bambi-crawl-foxalba";
+import { mirrorCrawledImage, mirrorCrawledImages } from "./bambi-crawl-media";
 import {
 	type CrawledJobRecord,
 	computeContentHash,
@@ -54,7 +55,7 @@ import {
 	queenalbaListUrl,
 } from "./bambi-crawl-queenalba";
 import {
-	parseQueenalbaMainSections,
+	parseQueenalbaMain,
 	queenalbaMainUrl,
 } from "./bambi-crawl-queenalba-main";
 
@@ -64,7 +65,8 @@ import {
 // 아래 세 필드는 목록·메인페이지에만 있고 상세에는 없다. 상세 패스가 행을 쓸 때 함께 실어야
 // 값이 남는다 — 목록 패스는 생존 표시(last_seen_at)만 갱신하고 행을 만들지 않기 때문이다.
 interface CrawlListItem {
-	bannerImageUrl?: string | null;
+	bannerHorizontalUrl?: string | null;
+	bannerVerticalUrl?: string | null;
 	listingType?: string | null;
 	sourceExternalId: string;
 	thumbnailUrl?: string | null;
@@ -83,7 +85,12 @@ interface JobSiteAdapter {
 	parseDetail: (
 		html: string,
 		sourceExternalId: string
-	) => (CrawledJobRecord & { detailImageUrls?: string[] }) | null;
+	) =>
+		| (CrawledJobRecord & {
+				detailImageUrls?: string[];
+				thumbnailUrl?: null | string;
+		  })
+		| null;
 	parseList: (html: string) => CrawlListItem[];
 	parseTotalCount: (html: string) => number | null;
 	site: CrawlSourceSite;
@@ -182,12 +189,78 @@ const collectQueenalbaMainListings = async (
 
 	assertNotGated("queenalba", html);
 
-	return parseQueenalbaMainSections(html).map((listing) => ({
-		bannerImageUrl: listing.bannerImageUrl,
+	const { listings, skippedBanners } = parseQueenalbaMain(html);
+
+	// 상세 링크가 아닌 배너(이벤트·외부 페이지)는 공고에 매칭할 수 없어 건너뛴다. 정상이지만
+	// 조용히 삼키면 셀렉터가 어긋나 전부 스킵되는 상황과 구분이 안 된다.
+	if (skippedBanners > 0) {
+		console.warn(
+			`퀸알바 메인: 공고에 매칭할 수 없는 배너 ${skippedBanners}건을 건너뜀`
+		);
+	}
+
+	return listings.map((listing) => ({
+		bannerHorizontalUrl: listing.bannerHorizontalUrl,
+		bannerVerticalUrl: listing.bannerVerticalUrl,
 		listingType: listing.listingType,
 		sourceExternalId: listing.sourceExternalId,
 		thumbnailUrl: listing.thumbnailUrl,
 	}));
+};
+
+interface JobImageSources {
+	bannerHorizontalUrl?: string | null;
+	bannerVerticalUrl?: string | null;
+	detailImageUrls?: string[];
+	sourceExternalId: string;
+	thumbnailUrl?: string | null;
+}
+
+interface JobImageUrls {
+	bannerHorizontalUrl: null | string;
+	bannerVerticalUrl: null | string;
+	detailImageUrls: string[];
+	thumbnailUrl: null | string;
+}
+
+// 원본 이미지 URL을 우리 버킷 URL로 바꿔 준다. 미러링 실패는 그 이미지 한 장만 잃고
+// 공고 수집은 계속된다 — 이미지가 없다고 공고를 버리면 남는 게 없다.
+const mirrorJobImages = async (
+	client: CrawlClient,
+	site: CrawlSourceSite,
+	sources: JobImageSources
+): Promise<JobImageUrls> => {
+	const { sourceExternalId } = sources;
+	const one = (url: null | string | undefined) =>
+		url
+			? mirrorCrawledImage({ client, site, sourceExternalId, url })
+			: Promise.resolve(null);
+
+	const [thumbnailUrl, bannerHorizontalUrl, bannerVerticalUrl, detailImages] =
+		await Promise.all([
+			one(sources.thumbnailUrl),
+			one(sources.bannerHorizontalUrl),
+			one(sources.bannerVerticalUrl),
+			mirrorCrawledImages({
+				client,
+				site,
+				sourceExternalId,
+				urls: sources.detailImageUrls ?? [],
+			}),
+		]);
+
+	if (detailImages.failed > 0) {
+		console.warn(
+			`${site} ${sourceExternalId}: 상세 이미지 ${detailImages.failed}장을 미러링하지 못함`
+		);
+	}
+
+	return {
+		bannerHorizontalUrl,
+		bannerVerticalUrl,
+		detailImageUrls: detailImages.urls,
+		thumbnailUrl,
+	};
 };
 
 export interface CrawlTickResult {
@@ -393,11 +466,28 @@ const ingestDetail = async (
 
 	const contentHash = computeContentHash(record);
 
+	// 이미지는 우리 버킷으로 미러링해 저장한다. 원본 URL을 그대로 쓰면 상대가 파일을
+	// 지우거나 핫링크를 막는 순간 우리 화면에서 깨지고, 그 시점을 우리가 통제할 수 없다.
+	// 버킷 미설정(로컬 다수)이면 원본 URL이 그대로 통과한다.
+	const media = await mirrorJobImages(client, adapter.site, {
+		bannerHorizontalUrl: item.bannerHorizontalUrl,
+		bannerVerticalUrl: item.bannerVerticalUrl,
+		detailImageUrls: record.detailImageUrls,
+		sourceExternalId: record.sourceExternalId,
+		// 목록 카드에 이미지가 없는 공고도 상세에는 대표 이미지가 걸려 있다.
+		thumbnailUrl: item.thumbnailUrl ?? record.thumbnailUrl,
+	});
+
 	// 목록·메인에만 있는 값이라 상세 레코드는 이 셋을 모른다. 값이 있을 때만 실어야
 	// 목록이 못 준 회차에 null로 덮어써서 이미 받아둔 값을 지우지 않는다.
 	const listValues = {
-		...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
-		...(item.bannerImageUrl ? { bannerImageUrl: item.bannerImageUrl } : {}),
+		...(media.thumbnailUrl ? { thumbnailUrl: media.thumbnailUrl } : {}),
+		...(media.bannerHorizontalUrl
+			? { bannerHorizontalUrl: media.bannerHorizontalUrl }
+			: {}),
+		...(media.bannerVerticalUrl
+			? { bannerVerticalUrl: media.bannerVerticalUrl }
+			: {}),
 		...(item.listingType ? { listingType: item.listingType } : {}),
 	};
 
@@ -409,7 +499,7 @@ const ingestDetail = async (
 			.update(crawledJobPost)
 			.set({
 				detailFetchedAt: now,
-				detailImageUrls: record.detailImageUrls ?? [],
+				detailImageUrls: media.detailImageUrls,
 				...listValues,
 			})
 			.where(eq(crawledJobPost.id, existingRow.id));
@@ -427,7 +517,7 @@ const ingestDetail = async (
 		contactPhone: record.contactPhone,
 		contentHash,
 		detailFetchedAt: now,
-		detailImageUrls: record.detailImageUrls ?? [],
+		detailImageUrls: media.detailImageUrls,
 		district: record.district,
 		gender: record.gender,
 		industryCategory: record.industryCategory,

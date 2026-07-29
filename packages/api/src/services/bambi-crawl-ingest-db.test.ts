@@ -129,6 +129,7 @@ afterAll(async () => {
 
 // 커뮤니티는 테이블도 수집 흐름도 공고와 다르다(만료 처리 없음, 본문은 글마다 상세 한 번).
 const createCommunityStubClient = (): ReturnType<typeof createCrawlClient> => ({
+	fetchBinary: () => Promise.reject(new Error("이미지를 받지 않는다")),
 	fetchHtml: (url: string) => {
 		if (url.endsWith("/robots.txt")) {
 			return Promise.resolve(ROBOTS);
@@ -273,6 +274,7 @@ describe("runCrawlTick — 커뮤니티(퀸알바)", () => {
 			runCrawlTick(
 				new Date(),
 				{
+					fetchBinary: () => Promise.reject(new Error("이미지를 받지 않는다")),
 					fetchHtml: (url: string) =>
 						Promise.resolve(url.endsWith("/robots.txt") ? ROBOTS : gateStub),
 					isAllowed: () => Promise.resolve(true),
@@ -299,6 +301,7 @@ describe("runCrawlTick — 커뮤니티(퀸알바)", () => {
 const createQueenalbaJobStubClient = (): ReturnType<
 	typeof createCrawlClient
 > => ({
+	fetchBinary: () => Promise.reject(new Error("이미지를 받지 않는다")),
 	fetchHtml: (url: string) => {
 		if (url.endsWith("/robots.txt")) {
 			return Promise.resolve(ROBOTS);
@@ -465,6 +468,7 @@ describe("runCrawlTick — 공고(퀸알바)", () => {
 			runCrawlTick(
 				new Date(),
 				{
+					fetchBinary: () => Promise.reject(new Error("이미지를 받지 않는다")),
 					fetchHtml: (url: string) =>
 						Promise.resolve(url.endsWith("/robots.txt") ? ROBOTS : gateStub),
 					isAllowed: () => Promise.resolve(true),

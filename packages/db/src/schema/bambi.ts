@@ -425,10 +425,13 @@ export const crawledJobPost = pgTable(
 		// (광고 배너·우대채용·스페셜채용)은 같은 공고여도 값어치가 다르다 — 돈을 낸 자리라
 		// 그 사이트가 지금 무엇을 밀고 있는지의 신호가 된다. null은 아직 분류 전(구 수집분).
 		listingType: text("listing_type"),
-		// 목록·카드에 걸린 대표 이미지 URL(절대 URL로 정규화해 저장한다).
+		// 목록·카드에 걸린 대표 이미지 URL. 미러링이 켜져 있으면 우리 버킷 URL이 들어간다.
 		thumbnailUrl: text("thumbnail_url"),
-		// 광고 배너 자리에서 온 공고의 배너 이미지. 썸네일과 다른 크기·디자인이라 따로 둔다.
-		bannerImageUrl: text("banner_image_url"),
+		// 광고 배너 자리에서 온 공고의 배너 이미지. 가로형과 세로형은 자리도 비율도 달라
+		// 서로를 대신할 수 없으므로 한 칸에 섞지 않는다(우리 광고 상품의 ad_horizontal /
+		// ad_vertical과 같은 축이다). 원본이 한쪽만 걸어두는 경우가 흔해 각각 nullable.
+		bannerHorizontalUrl: text("banner_horizontal_url"),
+		bannerVerticalUrl: text("banner_vertical_url"),
 		// 상세 본문에 박혀 있던 이미지들. 유흥 공고는 조건 대부분을 이미지로만 적어두는 경우가
 		// 많아, 본문 텍스트만 저장하면 정작 핵심 정보가 빠진다. 순서를 유지해야 의미가 사므로 배열.
 		detailImageUrls: jsonb("detail_image_urls")

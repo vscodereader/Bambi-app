@@ -58,9 +58,13 @@ export const toQueenalbaAbsoluteUrl = (
 // 장식 이미지를 새로 추가할 때마다 그게 공고 이미지로 새어 들어온다 — 반대로 화이트리스트는
 // 새 경로를 놓칠 뿐 쓰레기를 저장하지 않으므로 이쪽이 안전하다.
 //  - /wys2/file_attach/... : 상세 본문에 업체가 올린 이미지. 실제 응답에서 확인한 경로다.
-//  - /offerphoto/...       : 목록 카드 썸네일. ⚠ 미검증 가정 — 같은 계열 사이트에서 확인한
-//                            경로 모양이고, 퀸알바 목록 카드가 같은지는 성인인증 게이트 때문에
-//                            확인하지 못했다. 쿠키가 생기면 실물 카드의 img src로 대조해라.
+//  - /offerphoto/...       : 목록·메인 카드 썸네일. ⚠ 미검증 가정 — 같은 계열 사이트에서
+//                            확인한 경로 모양이고, 퀸알바 카드가 같은지는 성인인증 게이트
+//                            때문에 확인하지 못했다. 쿠키가 생기면 실물 카드 img src로 대조.
+//
+// 이 화이트리스트를 쓰는 건 "그 자리에 있다고 광고라는 보장이 없는" 곳뿐이다(목록·메인 카드·
+// 상세 본문). 메인의 배너 칸(#main_top_center·#divMenu*)은 위치가 곧 광고라서 경로를 몰라도
+// 되므로 화이트리스트를 적용하지 않는다 — bambi-crawl-queenalba-main.ts를 보라.
 const JOB_IMAGE_PATH_PATTERN = /^\/(?:wys2\/file_attach|offerphoto)\//i;
 
 export const isQueenalbaJobImageUrl = (url: string): boolean => {
@@ -349,11 +353,39 @@ const readDetailImageUrls = (
 	return urls;
 };
 
-// 공통 레코드에 상세에서만 얻는 이미지 목록을 얹은 확장형. 공통 타입(CrawledJobRecord)에
-// 넣지 않은 것은 여우알바 파서가 아직 이 값을 채우지 않고 수집기도 읽지 않기 때문이다 —
-// 공통 타입에 필수 필드로 들어가면 그쪽이 전부 깨진다.
+// 상세 페이지 썸네일. 운영자 확인으로 새로 안 사실 — 썸네일이 본문 이미지와 별개로 상세에도
+// 있고, #sub_center 안에서 본문 영역보다 위에 온다. 그 사이 래퍼 구조는 모르므로 위치 사슬
+// 대신 "본문 범위 밖에 있는 첫 공고 이미지"로 잡는다. 본문 범위의 img는 원소 단위로 빼서
+// 썸네일이 detailImageUrls에 섞이지 않게 한다(같은 파일을 두 칸에 저장하면 중복이 된다).
+const readThumbnailUrl = (
+	$: ReturnType<typeof load>,
+	$section: ReturnType<ReturnType<typeof load>>
+): string | null => {
+	const bodyImages = new Set($section.find("img").toArray());
+
+	for (const element of $("#sub_center img").toArray()) {
+		if (bodyImages.has(element)) {
+			continue;
+		}
+
+		const url = toQueenalbaAbsoluteUrl($(element).attr("src"));
+
+		if (url && isQueenalbaJobImageUrl(url)) {
+			return url;
+		}
+	}
+
+	return null;
+};
+
+// 공통 레코드에 상세에서만 얻는 값(본문 이미지 목록·썸네일)을 얹은 확장형. 공통 타입
+// (CrawledJobRecord)에 넣지 않은 것은 여우알바 파서가 아직 이 값을 채우지 않고 수집기도
+// 읽지 않기 때문이다 — 공통 타입에 필수 필드로 들어가면 그쪽이 전부 깨진다.
 export interface QueenalbaDetailRecord extends CrawledJobRecord {
 	detailImageUrls?: string[];
+	// 목록·메인에서 썸네일을 못 얻은 공고를 상세 것으로 채우기 위한 칸. 상세에 썸네일이
+	// 없는 공고가 있어 null이 정상이다.
+	thumbnailUrl?: string | null;
 }
 
 export const parseQueenalbaDetail = (
@@ -408,6 +440,7 @@ export const parseQueenalbaDetail = (
 		sourceExternalId,
 		sourcePostedAt: parsePostedAt(fields.get("접수기간") ?? null),
 		sourceUrl: queenalbaDetailUrl(sourceExternalId),
+		thumbnailUrl: readThumbnailUrl($, $body),
 		title,
 		workSchedule: fields.get("업무일") ?? null,
 	};

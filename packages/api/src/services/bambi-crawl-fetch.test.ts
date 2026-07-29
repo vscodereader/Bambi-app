@@ -13,6 +13,7 @@ const okResponse = (body: string): Response =>
 	});
 
 const PLAIN_TEXT_ACCEPT_PATTERN = /text\/plain|\*\/\*/;
+const OVER_LIMIT_ERROR_PATTERN = /상한/;
 
 describe("isHeaderValueSafe", () => {
 	it("rejects values that fetch cannot put in a header", () => {
@@ -90,5 +91,53 @@ describe("createCrawlClient 요청 헤더", () => {
 		await client.fetchHtml("https://example.test/page");
 
 		expect(seen[0]?.cookie).toBe("PHPSESSID=abc; adultcode=zzz");
+	});
+});
+
+// 이미지 다운로드는 상대가 크기를 정하는 유일한 경로다. 상한이 새면 공고 하나가 서버 메모리를
+// 통째로 먹는다.
+describe("createCrawlClient fetchBinary", () => {
+	const binaryClient = (response: Response) =>
+		createCrawlClient({
+			fetchImpl: () => Promise.resolve(response),
+			minRequestIntervalMs: 0,
+		});
+
+	it("returns the bytes and the declared content type", async () => {
+		const client = binaryClient(
+			new Response(new Uint8Array([1, 2, 3]), {
+				headers: { "content-type": "image/png" },
+			})
+		);
+
+		const binary = await client.fetchBinary("https://example.test/a.png", 100);
+
+		expect([...binary.bytes]).toEqual([1, 2, 3]);
+		expect(binary.contentType).toBe("image/png");
+	});
+
+	it("refuses a body the header already declares too large", async () => {
+		const client = binaryClient(
+			new Response(new Uint8Array(10), {
+				headers: { "content-length": "999999" },
+			})
+		);
+
+		await expect(
+			client.fetchBinary("https://example.test/a.png", 100)
+		).rejects.toThrow(OVER_LIMIT_ERROR_PATTERN);
+	});
+
+	// content-length는 상대가 적는 값이라 거짓일 수 있다. 실제 읽은 바이트로도 끊어야 한다.
+	it("cuts the stream when the header lied about the size", async () => {
+		const client = binaryClient(
+			new Response(new Uint8Array(500), {
+				headers: { "content-length": "10" },
+			})
+		);
+
+		await expect(
+			client.fetchBinary("https://example.test/a.png", 100)
+		).rejects.toThrow(OVER_LIMIT_ERROR_PATTERN);
 	});
 });

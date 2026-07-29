@@ -113,6 +113,26 @@ describe("parseQueenalbaDetail — 본문 이미지", () => {
 		]);
 	});
 
+	// 썸네일은 본문 이미지와 별개 자리에 있다(운영자 확인). 본문 목록에 섞이면 같은 공고
+	// 상세에 같은 그림이 두 번 뜨고, 목록 썸네일을 채울 때 쓸 값도 못 고른다.
+	it("reads the detail thumbnail without mixing it into the body images", () => {
+		const record = parseQueenalbaDetail(detailHtml, "16100");
+
+		expect(record?.thumbnailUrl).toBe(
+			"https://queenalba.net/offerphoto/16100_main.jpg"
+		);
+		expect(record?.detailImageUrls).not.toContain(
+			"https://queenalba.net/offerphoto/16100_main.jpg"
+		);
+	});
+
+	// 썸네일 없는 공고가 있다. 라벨 표의 아이콘 gif를 대신 집으면 상세 카드가 화살표가 된다.
+	it("leaves the thumbnail null when the detail has none", () => {
+		expect(
+			parseQueenalbaDetail(callpinDetailHtml, "36659")?.thumbnailUrl
+		).toBeNull();
+	});
+
 	// 이상 공고 하나가 행 크기를 흔들지 않도록 천장을 둔다.
 	it("caps the number of stored images", () => {
 		const urls =

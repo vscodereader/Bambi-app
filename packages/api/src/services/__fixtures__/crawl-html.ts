@@ -189,6 +189,10 @@ interface QueenalbaDetailOptions {
 	bodyHtml: string;
 	messengerRows: string;
 	rows: [string, string][];
+	// 상세 썸네일. 본문 이미지와 별개로 #sub_center 안 본문 영역보다 위에 온다는 것은 운영자가
+	// 실물에서 확인해 줬다(그 사이 래퍼 구조는 여전히 가정이라 여기 중첩은 지어낸 것이다).
+	// 썸네일이 없는 공고도 있어 선택 항목으로 둔다.
+	thumbnailSrc?: string;
 	title: string;
 }
 
@@ -196,6 +200,11 @@ const queenalbaDetail = (options: QueenalbaDetailOptions): string =>
 	page(`
 <div id="sub_center">
 	<h1>${options.title}</h1>
+	${
+		options.thumbnailSrc
+			? `<div><table><tbody><tr><td><div><img src="${options.thumbnailSrc}"></div></td></tr></tbody></table></div>`
+			: ""
+	}
 	<h2>업체정보안내</h2>
 	<table><tbody>
 		${options.rows
@@ -240,6 +249,7 @@ export const queenalbaGuinDetailHtml = queenalbaDetail({
 		["회사명", "주식회사 제이유니언"],
 		["회사주소", "서울특별시 송파구 송파대로28길 11, 지하1층"],
 	],
+	thumbnailSrc: "/offerphoto/16100_main.jpg",
 	title: "❤TC인상❤급구❤7T~9T❤빠른회전❤서류無송파구방이동잠실셔츠룸레깅스가락동",
 });
 
@@ -290,24 +300,50 @@ export const queenalbaGuinDetailManyImagesHtml = queenalbaDetail({
 // ---------------------------------------------------------------------------
 // 퀸알바 메인페이지(유료 노출 자리)
 //
-// ⚠ 다른 퀸알바 픽스처와 달리 이건 실물이 아니다. 메인페이지는 성인인증 게이트 뒤라 마크업을
-// 한 번도 보지 못했고, 아래는 bambi-crawl-queenalba-main.ts의 미검증 셀렉터 가정에 맞춰
-// 손으로 지어낸 것이다. 그래서 이 픽스처가 검증하는 건 "퀸알바 마크업을 제대로 읽는가"가
-// 아니라 "섹션 → listingType 매핑·이미지 URL 정규화·중복 접기 로직이 맞는가"뿐이다.
-// 실제 쿠키가 생기면 실물 메인페이지를 보고 셀렉터와 이 픽스처를 함께 고쳐야 한다.
+// ⚠ 실물 응답이 아니다. 어디까지가 실물인지 정확히 갈라 두면:
+//  - 검증됨: 컨테이너 ID 계층. #main_top_center(가로 배너), #divMenu2·#divMenu12(좌·우 세로
+//    배너, 각 최대 3칸), #content1(채용공고 카드). 운영자가 인증된 브라우저의 실물 DOM에서
+//    확인해 알려준 값이다.
+//  - 여전히 가정: 그 컨테이너 안의 세부 마크업(table/div 중첩, 클래스), 배너 이미지의 경로
+//    (/upload/banner/...는 지어낸 것이다 — 실제 경로를 모른다), 섹션 제목 문구.
 //
-// 섹션 밖(헤더)의 상세 링크, 아이콘 이미지가 먼저 오는 배너, 루트 없는 상대경로 이미지,
-// 카드 하나가 이미지 링크와 제목 링크로 갈라지는 구조, 우대·스페셜에 겹쳐 걸린 공고 —
-// 다섯 가지는 실물 퀸알바에서 확인된 관행이라 그대로 재현했다.
+// 그래서 이 픽스처가 못박는 건 "컨테이너 안을 구조로 훑는 로직이 맞는가"이지 "퀸알바 마크업을
+// 그대로 읽는가"가 아니다. 쿠키가 생기면 실물로 갈아끼워야 한다.
+//
+// 아래 관행은 실물 퀸알바(목록·상세)에서 확인된 것이라 그대로 재현했다: 컨테이너 밖(헤더)의
+// 상세 링크, 아이콘 gif가 배너 이미지보다 먼저 오는 것, 루트 없는 상대경로, 카드 하나가
+// 이미지 링크(dt)와 제목 링크(dd.title_ellipse)로 갈라지는 것, 같은 공고가 여러 섹션에
+// 겹쳐 걸리는 것.
+//
+// 일부러 심어둔 함정 셋: 세로 배너 칸의 이벤트 링크(상세가 아니라 붙일 공고가 없다),
+// #divMenu12의 네 번째 배너(칸 상한 초과), 섹션 제목이 없는 일반 카드(listingType null).
 // ---------------------------------------------------------------------------
 export const queenalbaMainHtml = page(`
 <div id="header"><a href="./guin_detail.php?num=99999&pg="><img src="/offerphoto/99999.jpg"></a></div>
-<div id="main_banner">
-	<a href="./guin_detail.php?num=50001&pg="><img src="/upload/banner/50001_top.jpg" alt="❤️에밀리❤️ 강남 최고대우"></a>
-	<a href="https://queenalba.net/guin_detail.php?num=50002"><img src="img/icon_new.gif"><img src="upload/banner/50002_top.jpg" alt="배너"></a>
-</div>
-<div id="main_udae">
+<div id="main_top_center">
 	<table><tbody><tr>
+		<td><a href="./guin_detail.php?num=50001&pg="><img src="/upload/banner/50001_top.jpg" alt="❤️에밀리❤️ 강남 최고대우"></a></td>
+		<td><a href="https://queenalba.net/guin_detail.php?num=50002"><img src="img/icon_new.gif"><img src="upload/banner/50002_top.jpg" alt="배너"></a></td>
+	</tr></tbody></table>
+</div>
+<div id="divMenu2">
+	<div><a href="./event_view.php?ev=summer"><img src="/upload/banner/event_summer.jpg" alt="여름 이벤트"></a></div>
+	<div><a href="./guin_detail.php?num=51001&pg="><img src="/upload/banner/51001_side.jpg" alt="세로배너 에밀리"></a></div>
+	<div><a href="./guin_detail.php?num=51002&pg="><img src="upload/banner/51002_side.jpg" alt="세로배너 카톡 sidekakao"></a></div>
+</div>
+<div id="divMenu12">
+	<div><a href="./guin_detail.php?num=52001&pg="><img src="/upload/banner/52001_side.jpg" alt="세로배너 C"></a></div>
+	<div><a href="./guin_detail.php?num=52002&pg="><img src="/upload/banner/52002_side.jpg" alt="세로배너 D"></a></div>
+	<div><a href="./guin_detail.php?num=52003&pg="><img src="/upload/banner/spacer.gif" width="1" height="1"><img src="/upload/banner/52003_side.jpg" alt="세로배너 E"></a></div>
+	<div><a href="./guin_detail.php?num=52004&pg="><img src="/upload/banner/52004_side.jpg" alt="상한 초과"></a></div>
+</div>
+<div id="content1">
+	<div class="tit_area"><h2>실시간 등록</h2></div>
+	<div><table><tbody><tr>
+		<td><dl><dd><a href="./guin_detail.php?num=40001&pg=" class="title_ellipse"><img src="/offerphoto/40001.jpg" alt="일반카드"><span><font>일반 채용 카드</font></span></a></dd></dl></td>
+	</tr></tbody></table></div>
+	<div class="tit_area"><h2>우대채용</h2></div>
+	<div><table><tbody><tr>
 		<td><dl>
 			<dt><a href="./guin_detail.php?num=36659&pg="><img src="/offerphoto/36659.jpg" alt="❤️에밀리❤️"></a></dt>
 			<dd><a href="./guin_detail.php?num=36659&pg=" class="title_ellipse"><span><font>❤️에밀리❤️ 초보환영</font></span></a></dd>
@@ -316,13 +352,12 @@ export const queenalbaMainHtml = page(`
 			<dt><a href="./guin_detail.php?num=16100&pg="><font><strong>♥The Day♥</strong></font></a></dt>
 			<dd><a href="./guin_detail.php?num=16100&pg=" class="title_ellipse"><span><font>급구 카톡 shopkakao</font></span></a></dd>
 		</dl></td>
-	</tr></tbody></table>
-</div>
-<div id="main_special">
-	<table><tbody><tr>
-		<td><dl><dd><a href="./guin_detail.php?num=25073&pg=" class="title_ellipse"><img src="/offerphoto/25073.jpg" alt="이찌니"><span><font>이찌니 스페셜</font></span></a></dd></dl></td>
+	</tr></tbody></table></div>
+	<div class="tit_area"><h2>스페셜채용</h2></div>
+	<div><table><tbody><tr>
+		<td><dl><dd><a href="./guin_detail.php?num=25073&pg=" class="title_ellipse"><img src="img/icon_medal.gif"><img src="/offerphoto/25073.jpg" alt="이찌니"><span><font>이찌니 스페셜</font></span></a></dd></dl></td>
 		<td><dl><dd><a href="./guin_detail.php?num=36659&pg=" class="title_ellipse"><span><font>❤️에밀리❤️ 초보환영</font></span></a></dd></dl></td>
-	</tr></tbody></table>
+	</tr></tbody></table></div>
 </div>`);
 
 interface QueenalbaTopicRow {
