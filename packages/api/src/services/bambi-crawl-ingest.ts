@@ -215,7 +215,7 @@ const readSettings = async (): Promise<CrawlTickSettings> => {
 			crawlEnabled: false,
 			crawlIntervalHours: null,
 			crawlLastRunAt: null,
-			crawlSourceSite: "foxalba",
+			crawlSourceSite: "queenalba",
 		}
 	);
 };
@@ -503,11 +503,17 @@ const reapStaleRuns = (now: Date) =>
 // 회차를 연다. 이미 진행 중이면 부분 유니크 인덱스가 INSERT를 막으므로 null을 돌려준다.
 const startRun = async (
 	site: CrawlSourceSite,
+	contentType: CrawlContentType,
 	now: Date
 ): Promise<{ id: string } | null> => {
 	const [run] = await db
 		.insert(crawlRun)
-		.values({ sourceSite: site, startedAt: now, status: "running" })
+		.values({
+			contentType,
+			sourceSite: site,
+			startedAt: now,
+			status: "running",
+		})
 		.onConflictDoNothing()
 		.returning({ id: crawlRun.id });
 
@@ -746,9 +752,9 @@ export const runCrawlTick = async (
 ): Promise<CrawlTickResult> => {
 	const settings = await readSettings();
 
-	// 강제 실행이라도 마스터 스위치는 존중한다. 꺼둔 수집이 버튼 하나로 되살아나면
-	// "껐다"는 말이 거짓이 된다.
-	if (!settings.crawlEnabled) {
+	// crawlEnabled는 스케줄러 스위치다. 주기 실행만 통제하고 운영자의 「즉시 수집」은
+	// 막지 않는다 — 수동 실행까지 잠그면 스케줄러를 켜지 않고는 파서를 확인할 방법이 없다.
+	if (!(options.force || settings.crawlEnabled)) {
 		return emptyResult("not_due");
 	}
 
@@ -775,7 +781,7 @@ export const runCrawlTick = async (
 
 	await reapStaleRuns(now);
 
-	const run = await startRun(site, now);
+	const run = await startRun(site, settings.crawlContentType, now);
 
 	// 진행 중 회차가 이미 있다. 부분 유니크 인덱스가 두 번째 INSERT를 막은 것이라,
 	// 애플리케이션 검사만 있을 때 남는 경쟁 창이 여기서는 없다.
