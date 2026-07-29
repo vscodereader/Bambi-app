@@ -21,6 +21,7 @@ const { eq } = await import("drizzle-orm");
 const {
 	foxalbaDetailHtml: detailHtml,
 	foxalbaListHtml: listHtml,
+	queenalbaBbsDetailHtml: queenalbaBbsDetail,
 	queenalbaBbsListHtml: queenalbaBbsHtml,
 } = await import("./__fixtures__/crawl-html");
 
@@ -193,15 +194,27 @@ describe("runCrawlTick against the database", () => {
 	});
 });
 
-// 커뮤니티는 테이블도 수집 흐름도 공고와 다르다(상세 패스 없음, 만료 처리 없음).
-// 상세 패스가 없어 목록 스텁 하나면 회차 전체가 재현된다.
+// 커뮤니티는 테이블도 수집 흐름도 공고와 다르다(만료 처리 없음, 본문은 글마다 상세 한 번).
 const createCommunityStubClient = (): ReturnType<typeof createCrawlClient> => ({
-	fetchHtml: (url: string) =>
-		Promise.resolve(url.endsWith("/robots.txt") ? ROBOTS : queenalbaBbsHtml),
+	fetchHtml: (url: string) => {
+		if (url.endsWith("/robots.txt")) {
+			return Promise.resolve(ROBOTS);
+		}
+		if (url.includes("bbs_detail.php")) {
+			return Promise.resolve(queenalbaBbsDetail);
+		}
+		return Promise.resolve(queenalbaBbsHtml);
+	},
 	isAllowed: () => Promise.resolve(true),
 });
 
 describe("runCrawlTick — 커뮤니티(퀸알바)", () => {
+	// 첫 테스트가 저장한 행을 뒤 테스트들이 이어서 본다(같은 회차 결과를 여러 각도로 검사).
+	let storedRows: {
+		body: string | null;
+		viewCount: number | null;
+	}[] = [];
+
 	beforeAll(async () => {
 		const target = {
 			crawlContentType: "community" as const,
@@ -226,12 +239,16 @@ describe("runCrawlTick — 커뮤니티(퀸알바)", () => {
 		const rows = await db
 			.select({
 				boardName: crawledCommunityTopic.boardName,
+				body: crawledCommunityTopic.body,
 				commentCount: crawledCommunityTopic.commentCount,
 				sourceExternalId: crawledCommunityTopic.sourceExternalId,
 				title: crawledCommunityTopic.title,
+				viewCount: crawledCommunityTopic.viewCount,
 			})
 			.from(crawledCommunityTopic)
 			.where(eq(crawledCommunityTopic.sourceSite, "queenalba"));
+
+		storedRows = rows;
 
 		expect(rows.length).toBe(result.itemsNew);
 		expect(rows[0]?.boardName).toBe("밤문화이야기");
@@ -245,6 +262,30 @@ describe("runCrawlTick — 커뮤니티(퀸알바)", () => {
 
 		expect(run?.status).toBe("success");
 		expect(run?.itemsSeen).toBe(rows.length);
+	});
+
+	// 본문과 조회수는 목록에 없다. 상세 패스가 돌지 않으면 둘 다 영영 null로 남는다.
+	it("fills in the body and view count from the topic detail", () => {
+		expect(storedRows.every((row) => (row.body ?? "").length > 0)).toBe(true);
+		expect(storedRows.every((row) => row.viewCount === 2377)).toBe(true);
+	});
+
+	// 목록 패스가 매 회차 도는데, 거기에 viewCount를 넣으면 상세가 채운 값을 null로 되돌린다.
+	it("does not let the list pass wipe the detail-only fields", async () => {
+		await runCrawlTick(new Date(), createCommunityStubClient(), {
+			force: true,
+		});
+
+		const rows = await db
+			.select({
+				body: crawledCommunityTopic.body,
+				viewCount: crawledCommunityTopic.viewCount,
+			})
+			.from(crawledCommunityTopic)
+			.where(eq(crawledCommunityTopic.sourceSite, "queenalba"));
+
+		expect(rows.every((row) => (row.body ?? "").length > 0)).toBe(true);
+		expect(rows.every((row) => row.viewCount === 2377)).toBe(true);
 	});
 
 	// 같은 주제를 다시 봐도 행이 늘면 안 된다(sourceSite + sourceExternalId 유니크).

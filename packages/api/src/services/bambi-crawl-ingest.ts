@@ -43,11 +43,13 @@ import {
 } from "./bambi-crawl-policy";
 import {
 	isQueenalbaGateStub,
+	parseQueenalbaCommunityDetail,
 	parseQueenalbaCommunityList,
 	parseQueenalbaDetail,
 	parseQueenalbaList,
 	parseQueenalbaTotalCount,
 	queenalbaCommunityListUrl,
+	queenalbaCommunityTopicUrl,
 	queenalbaDetailUrl,
 	queenalbaListUrl,
 } from "./bambi-crawl-queenalba";
@@ -96,9 +98,6 @@ const JOB_ADAPTERS: Readonly<Record<CrawlSourceSite, JobSiteAdapter>> = {
 	},
 };
 
-// 성인인증·로그인 게이트가 있는 소스에 붙일 요청 헤더. 쿠키는 사이트마다 다르고 만료되므로
-// 코드에 박지 않고 운영자가 env로 넣는다. 비어 있으면 헤더 없이 요청하고, 게이트에 막히면
-// 아래 assertNotGated가 회차를 "쿠키 만료"로 이름 붙여 실패시킨다.
 // 퀸알바 성인인증 세션 쿠키. .env를 거치지 않고 여기 값을 바로 바꿔 쓸 수 있게 둔다.
 // 브라우저 개발자도구 → Network → queenalba.net 요청 → Request Headers의 Cookie 한 줄을
 // 통째로 붙여넣는다(이름 하나만 골라 넣으면 게이트가 열리지 않는다).
@@ -536,7 +535,13 @@ const runCommunityPass = async (
 	client: CrawlClient,
 	site: CrawlSourceSite,
 	now: Date
-): Promise<{ itemsNew: number; itemsSeen: number; pagesFetched: number }> => {
+): Promise<{
+	detailsFetched: number;
+	itemsNew: number;
+	itemsSeen: number;
+	pagesFetched: number;
+	pendingDetails: number;
+}> => {
 	const firstUrl = communityListUrl(site, 1);
 
 	if (!firstUrl) {
@@ -577,33 +582,45 @@ const runCommunityPass = async (
 	// 0건이면 "게시글이 없다"가 아니라 "셀렉터가 깨졌다"로 본다. 공고와 달리 만료 처리가
 	// 없어 데이터가 날아가지는 않지만, 조용히 성공으로 남으면 파손을 알아챌 방법이 없다.
 	if (topics.length === 0) {
-		return { itemsNew: 0, itemsSeen: 0, pagesFetched };
+		return {
+			detailsFetched: 0,
+			itemsNew: 0,
+			itemsSeen: 0,
+			pagesFetched,
+			pendingDetails: 0,
+		};
 	}
 
 	const existing = await db
-		.select({ sourceExternalId: crawledCommunityTopic.sourceExternalId })
+		.select({
+			body: crawledCommunityTopic.body,
+			sourceExternalId: crawledCommunityTopic.sourceExternalId,
+		})
 		.from(crawledCommunityTopic)
 		.where(eq(crawledCommunityTopic.sourceSite, site));
-	const known = new Set(existing.map((row) => row.sourceExternalId));
+	const known = new Map(existing.map((row) => [row.sourceExternalId, row]));
 
 	for (const topic of topics) {
-		const values = {
+		// 목록이 실제로 아는 값만 갱신한다. viewCount·body는 상세에서만 나오므로 여기 넣으면
+		// 매 회차 null로 되돌린다(insert 시에만 null로 들어가고, 이후 상세 패스가 채운다).
+		const listValues = {
 			boardName: topic.boardName,
 			commentCount: topic.commentCount,
 			lastSeenAt: now,
-			sourceExternalId: topic.sourceExternalId,
 			sourcePostedAt: topic.sourcePostedAt,
-			sourceSite: site,
 			sourceUrl: topic.sourceUrl,
 			title: topic.title,
-			viewCount: topic.viewCount,
 		};
 
 		await db
 			.insert(crawledCommunityTopic)
-			.values(values)
+			.values({
+				...listValues,
+				sourceExternalId: topic.sourceExternalId,
+				sourceSite: site,
+			})
 			.onConflictDoUpdate({
-				set: values,
+				set: listValues,
 				target: [
 					crawledCommunityTopic.sourceSite,
 					crawledCommunityTopic.sourceExternalId,
@@ -611,11 +628,59 @@ const runCommunityPass = async (
 			});
 	}
 
+	// 본문·조회수는 목록에 없어 글마다 상세를 한 번 더 받아야 한다. 이미 본문이 있는 글은
+	// 건너뛴다 — 게시글 본문은 사실상 안 바뀌고, 매 회차 150건을 다시 받으면 상대 서버를
+	// 이유 없이 두드린다.
+	const pending = topics.filter(
+		(topic) => !known.get(topic.sourceExternalId)?.body
+	);
+	const detailTargets = pending.slice(0, MAX_DETAIL_FETCHES_PER_RUN);
+	let detailsFetched = 0;
+
+	for (const topic of detailTargets) {
+		const url = queenalbaCommunityTopicUrl(topic.sourceExternalId);
+
+		// robots.txt가 개별 글을 URL 통째로 막아둔 경우가 실제로 있다(삭제 요청이 들어간 글 등).
+		// 실패가 아니라 존중해야 할 의사표시라 조용히 건너뛴다.
+		if (!(await client.isAllowed(url))) {
+			continue;
+		}
+
+		try {
+			const html = await client.fetchHtml(url);
+
+			assertNotGated(site, html);
+
+			const detail = parseQueenalbaCommunityDetail(html);
+
+			// 삭제된 글·블라인드 처리된 글이면 null이 온다. 다음 회차가 다시 시도한다.
+			if (!detail) {
+				continue;
+			}
+
+			await db
+				.update(crawledCommunityTopic)
+				.set({ body: detail.body, viewCount: detail.viewCount })
+				.where(
+					and(
+						eq(crawledCommunityTopic.sourceSite, site),
+						eq(crawledCommunityTopic.sourceExternalId, topic.sourceExternalId)
+					)
+				);
+			detailsFetched += 1;
+		} catch {
+			// 글 한 건 실패는 삼키고 다음으로 넘어간다. 게이트에 막힌 것이면 다음 글에서도
+			// 같은 예외가 나므로 회차 전체가 조용히 성공으로 끝나지는 않는다.
+		}
+	}
+
 	return {
+		detailsFetched,
 		itemsNew: topics.filter((topic) => !known.has(topic.sourceExternalId))
 			.length,
 		itemsSeen: topics.length,
 		pagesFetched,
+		pendingDetails: Math.max(0, pending.length - detailTargets.length),
 	};
 };
 
@@ -640,7 +705,9 @@ const finishCommunityRun = async (
 				finishedAt: new Date(),
 				itemsNew: pass.itemsNew,
 				itemsSeen: pass.itemsSeen,
-				itemsUpdated: pass.itemsSeen - pass.itemsNew,
+				// 커뮤니티에는 "내용 변경" 개념이 없다. 이 회차에 본문을 실제로 채운 건수를
+				// 대신 넣어, 회차 목록에서 상세 패스가 돌았는지 보이게 한다.
+				itemsUpdated: pass.detailsFetched,
 				pagesFetched: pass.pagesFetched,
 				status: trustworthy ? "success" : "aborted_low_yield",
 			})
@@ -650,8 +717,8 @@ const finishCommunityRun = async (
 		return {
 			itemsFailed: 0,
 			itemsNew: pass.itemsNew,
-			itemsUpdated: pass.itemsSeen - pass.itemsNew,
-			pendingDetails: 0,
+			itemsUpdated: pass.detailsFetched,
+			pendingDetails: pass.pendingDetails,
 			reason: trustworthy ? "completed" : "aborted_low_yield",
 		};
 	} catch (error) {

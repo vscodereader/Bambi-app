@@ -350,3 +350,36 @@ export const queenalbaBbsListHtml = page(`
 	<h1>밤문화이야기</h1>
 	<table><tbody>${queenalbaTopicRows.map(queenalbaTopicRow).join("")}</tbody></table>
 </div>`);
+
+// 게시글 상세. 목록에 없는 두 가지만 여기서 온다.
+//  - 본문은 #ct 한 덩어리다(댓글은 별도 td#comment_id_N — 업소 홍보글이 대부분이라 읽지 않는다)
+//  - 조회수는 추천 수와 같은 칸에 들어 있어("조회 : 176 추천: 0") 라벨로 끊어 읽어야 한다
+//  - 제목은 목록의 h2(게시판명)가 아니라 .board-title-container h1이다
+export const queenalbaBbsDetailHtml = page(`
+<div id="sub_center">
+	<h2><img src="img/bbs_title_night.gif" alt="밤문화이야기 게시판"> 밤문화이야기</h2>
+	<table><tbody>
+		<tr><td><div class="board-title-container"><h1>일할때 술 안먹는 비결 알려주실 언니..</h1></div></td></tr>
+		<tr>
+			<td>작성인</td>
+			<td align="right" class="smfont2"> 조회 : 2,377<span style="color: #ff0000;">&nbsp;&nbsp;&nbsp;추천: 1</span> </td>
+		</tr>
+	</tbody></table>
+	<div>
+		<div id="ct" align="justify"> 저는 뭔 ㄴㄷ 다니는데도 술을 먹네요<br><br>문의 010-1234-5678<br>카톡 shopkakao </div>
+	</div>
+	<table><tbody>
+		<tr><td id="comment_id_1">[1] 여의도 하퍼 오세요 ⭐010-5000-1507⭐ 카톡:ssiee123aa</td></tr>
+	</tbody></table>
+</div>`);
+
+// 조회수 칸이 비어 있는 글. 실측에서 흔했다 — 칸(td.smfont2)은 그대로 있고 내용만 없다.
+// 본문은 멀쩡한데 조회수만 없는 상태를 파싱 실패로 보면 멀쩡한 글이 매 회차 다시 시도된다.
+export const queenalbaBbsDetailNoViewsHtml = page(`
+<div id="sub_center">
+	<table><tbody>
+		<tr><td><div class="board-title-container"><h1>에이스병 어캐고쳐요..</h1></div></td></tr>
+		<tr><td>작성인</td><td align="right" class="smfont2"></td></tr>
+	</tbody></table>
+	<div><div id="ct"> 하이다니다 개인사정으로 지금 하퍼 나가고있는데 </div></div>
+</div>`);

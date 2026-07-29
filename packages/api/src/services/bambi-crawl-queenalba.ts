@@ -297,6 +297,8 @@ export const QUEENALBA_COMMUNITY_BOARD_NAME = "밤문화이야기";
 export const queenalbaCommunityListUrl = (page: number): string =>
 	`${QUEENALBA_ORIGIN}/bbs_list.php?tb=${QUEENALBA_COMMUNITY_BOARD}&pg=${page}`;
 
+// bbs_num을 맨 앞에 둔다. robots.txt가 개별 글을 `/bbs_detail.php?bbs_num=1064363` 형태로
+// 통째로 막아두는데, 우리 robots 대조는 접두사 일치라 파라미터 순서가 바뀌면 그 차단을 놓친다.
 export const queenalbaCommunityTopicUrl = (
 	sourceExternalId: string
 ): string => {
@@ -407,4 +409,56 @@ export const parseQueenalbaCommunityList = (
 	});
 
 	return topics;
+};
+
+// 게시판 본문 저장 상한. 공고와 같은 이유로 천장을 둔다.
+const MAX_COMMUNITY_BODY_LENGTH = 10_000;
+
+// 조회수는 상세에만 있고, 그나마 글마다 나올 때도 안 나올 때도 있다(칸은 그대로 있고 내용만
+// 빈다 — 실측으로 확인). 같은 칸에 추천 수까지 들어 있어("조회 : 176 추천: 0") 라벨로 끊어 읽고,
+// 없으면 null로 둔다. 본문이 있는데 조회수가 없는 건 파싱 실패가 아니다.
+const VIEW_COUNT_PATTERN = /조회\s*:\s*([\d,]+)/;
+
+export interface CrawledCommunityBody {
+	body: string;
+	title: string | null;
+	viewCount: number | null;
+}
+
+// 게시글 상세. 목록에서 못 얻는 두 가지(본문, 조회수)만 가져온다 — 제목·댓글수·작성일은
+// 목록이 이미 준다.
+//
+// 댓글은 읽지 않는다. 본문과 달리 댓글창은 업소 홍보글이 대부분이라 주제 신호로 쓸모가 없고,
+// 개별 작성자 글을 그만큼 더 복제하게 된다.
+export const parseQueenalbaCommunityDetail = (
+	html: string
+): CrawledCommunityBody | null => {
+	if (isQueenalbaGateStub(html)) {
+		return null;
+	}
+
+	const $ = load(html);
+	const container = $("#ct").first();
+
+	// #ct가 없으면 우리가 아는 상세가 아니다(삭제된 글·블라인드·마크업 변경).
+	if (container.length === 0) {
+		return null;
+	}
+
+	const viewMatch = $("#sub_center td.smfont2")
+		.text()
+		.match(VIEW_COUNT_PATTERN);
+
+	return {
+		// 원문 HTML은 버리고 텍스트만 남긴다. 본문에 박힌 번호·메신저 아이디까지 가려야
+		// 마스킹이 의미가 있다(유흥 커뮤니티 글은 본문에 연락처를 그대로 적는다).
+		body: maskContacts(normalizeText(container.text())).slice(
+			0,
+			MAX_COMMUNITY_BODY_LENGTH
+		),
+		title: cleanText($(".board-title-container h1").first().text()),
+		viewCount: viewMatch?.[1]
+			? Number.parseInt(viewMatch[1].replaceAll(",", ""), 10)
+			: null,
+	};
 };

@@ -1,0 +1,1 @@
+ALTER TABLE "crawled_community_topic" ADD COLUMN "body" text;

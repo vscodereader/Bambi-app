@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	queenalbaGuinDetailCallpinHtml as callpinDetailHtml,
+	queenalbaBbsDetailHtml as communityDetailHtml,
+	queenalbaBbsDetailNoViewsHtml as communityDetailNoViewsHtml,
 	queenalbaBbsListHtml as communityHtml,
 	queenalbaGuinDetailHtml as detailHtml,
 	queenalbaGateStubHtml as GATE_STUB,
@@ -8,6 +10,7 @@ import {
 } from "./__fixtures__/crawl-html";
 import {
 	isQueenalbaGateStub,
+	parseQueenalbaCommunityDetail,
 	parseQueenalbaCommunityList,
 	parseQueenalbaDetail,
 	parseQueenalbaList,
@@ -178,5 +181,55 @@ describe("parseQueenalbaCommunityList", () => {
 
 	it("returns nothing for the gate stub", () => {
 		expect(parseQueenalbaCommunityList(GATE_STUB)).toEqual([]);
+	});
+});
+
+describe("parseQueenalbaCommunityDetail", () => {
+	const detail = parseQueenalbaCommunityDetail(communityDetailHtml);
+
+	// 본문·조회수는 목록에 없어 상세를 따로 받아야 나온다.
+	it("reads the body and the view count the list does not show", () => {
+		expect(detail).not.toBeNull();
+		expect(detail?.body).toContain("저는 뭔 ㄴㄷ 다니는데도 술을 먹네요");
+		expect(detail?.viewCount).toBe(2377);
+	});
+
+	// 조회수 칸에 추천 수가 같이 들어 있다("조회 : 2,377 추천: 1"). 라벨로 끊지 않으면 섞인다.
+	it("does not read the recommend count as the view count", () => {
+		expect(detail?.viewCount).not.toBe(1);
+	});
+
+	it("reads the post title, not the board name", () => {
+		expect(detail?.title).toBe("일할때 술 안먹는 비결 알려주실 언니..");
+	});
+
+	// 커뮤니티 글도 본문에 번호·카톡을 그대로 박아둔다. 공고와 같은 기준으로 가린다.
+	it("masks contacts embedded in the body", () => {
+		expect(detail?.body).not.toContain("010-1234-5678");
+		expect(detail?.body).toContain("[연락처 비공개]");
+	});
+
+	// 댓글창은 업소 홍보글이 대부분이라 주제 신호로 쓸모가 없고, 그만큼 남의 글을 더 복제한다.
+	it("leaves comments out of the body", () => {
+		expect(detail?.body).not.toContain("여의도 하퍼 오세요");
+	});
+
+	it("returns null for a deleted post or the gate stub", () => {
+		expect(
+			parseQueenalbaCommunityDetail("<html><body>없음</body></html>")
+		).toBeNull();
+		expect(parseQueenalbaCommunityDetail(GATE_STUB)).toBeNull();
+	});
+});
+
+// 조회수 칸이 비는 글이 실측에서 흔했다. 본문이 있는데 조회수가 없다고 실패로 보면
+// 멀쩡한 글을 매 회차 다시 받게 된다.
+describe("parseQueenalbaCommunityDetail — 조회수 없는 글", () => {
+	const detail = parseQueenalbaCommunityDetail(communityDetailNoViewsHtml);
+
+	it("keeps the body and leaves the view count null", () => {
+		expect(detail).not.toBeNull();
+		expect(detail?.body.length).toBeGreaterThan(0);
+		expect(detail?.viewCount).toBeNull();
 	});
 });
