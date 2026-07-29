@@ -10,6 +10,12 @@ import { DEFAULT_WITHDRAWAL_RETENTION_DAYS } from "../../services/bambi-policy";
 // 단일 행(설정) 고정 키. 조회·수정 모두 이 행 하나만 다룬다.
 const SETTINGS_ROW_ID = "default";
 
+// 공고 상세가 급여 옆에 붙이는 최저시급. 값이 없으면 null → 웹이 DEFAULT_MINIMUM_WAGE로 폴백한다.
+const MINIMUM_WAGE_COLUMNS = {
+	minimumWageHourly: bambiSiteSettings.minimumWageHourly,
+	minimumWageYear: bambiSiteSettings.minimumWageYear,
+} as const;
+
 // 푸터에 노출하는 사업자 정보. 값이 없으면 null → 웹에서 코드의 폴백 상수를 쓴다.
 const FOOTER_COLUMNS = {
 	footerIntro: bambiSiteSettings.footerIntro,
@@ -22,6 +28,8 @@ const FOOTER_COLUMNS = {
 	// 광고 슬롯 자리표시가 읽는 문의 번호. 푸터 전용은 아니지만 이미 공개 조회이고
 	// 푸터가 모든 페이지에 있어 캐시를 공유하므로 별도 라우터를 만들지 않는다.
 	adInquiryTel: bambiSiteSettings.adInquiryTel,
+	// 최저시급도 같은 이유로 여기에 얹는다(민감 정보 아님 · 이미 캐시된 공개 조회 재사용).
+	...MINIMUM_WAGE_COLUMNS,
 } as const;
 
 // 공백만 입력하면 미설정으로 본다(폴백이 뜨도록 null 저장).
@@ -121,6 +129,26 @@ const updateAdRotationInput = z.object({
 			AD_ROTATION_MAX_MINUTES,
 			"로테이션 주기는 10080분(7일) 이하로 설정해 주세요."
 		)
+		.nullable(),
+});
+
+// 최저시급. 둘 다 nullable이며 null이면 코드 기본값(DEFAULT_MINIMUM_WAGE)으로 복귀한다.
+// 트러스트 바운더리라 연도 범위와 자릿수 오타(103,200원 등)를 서버에서 막는다.
+const MINIMUM_WAGE_MIN_YEAR = 2000;
+const MINIMUM_WAGE_MAX_YEAR = 2100;
+const MINIMUM_WAGE_MAX_HOURLY = 1_000_000;
+const updateMinimumWageInput = z.object({
+	hourly: z
+		.number()
+		.int("시급은 원 단위 정수로 입력해 주세요.")
+		.min(1, "시급은 1원 이상으로 입력해 주세요.")
+		.max(MINIMUM_WAGE_MAX_HOURLY, "시급이 너무 큽니다. 자릿수를 확인해 주세요.")
+		.nullable(),
+	year: z
+		.number()
+		.int("연도는 4자리 정수로 입력해 주세요.")
+		.min(MINIMUM_WAGE_MIN_YEAR, "연도는 2000년 이상으로 입력해 주세요.")
+		.max(MINIMUM_WAGE_MAX_YEAR, "연도는 2100년 이하로 입력해 주세요.")
 		.nullable(),
 });
 
@@ -265,5 +293,25 @@ export const siteSettingsRouter = {
 				})
 				.returning({ minutes: bambiSiteSettings.adBannerRotationMinutes });
 			return { minutes: saved?.minutes ?? null };
+		}),
+
+	// 운영자 전용 최저시급 저장. 같은 단일 행을 upsert 하되 최저시급 컬럼만 갱신한다.
+	// 조회는 getFooter가 겸한다(공개 조회에 이미 실려 있음).
+	updateMinimumWage: adminProcedure
+		.input(updateMinimumWageInput)
+		.handler(async ({ input }) => {
+			const values = {
+				minimumWageHourly: input.hourly,
+				minimumWageYear: input.year,
+			};
+			const [saved] = await db
+				.insert(bambiSiteSettings)
+				.values({ id: SETTINGS_ROW_ID, ...values })
+				.onConflictDoUpdate({
+					target: bambiSiteSettings.id,
+					set: values,
+				})
+				.returning(MINIMUM_WAGE_COLUMNS);
+			return saved ?? null;
 		}),
 };

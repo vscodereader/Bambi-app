@@ -1,10 +1,13 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { formatMinimumWageLabel } from "@/lib/bambi/minimum-wage";
 import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
+import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { Badge, Button, Card, InfoTile } from "../ds";
 import {
@@ -115,6 +118,12 @@ export function SeekerJobDetailResponsive({
 	onStartChat,
 }: SeekerJobDetailResponsiveProps) {
 	const adBanners = useAdBannerJobs();
+	// 최저시급은 사이트 설정 공개 조회에 실려 있다(광고 슬롯이 같은 쿼리를 이미 쓰므로
+	// 추가 요청이 생기지 않는다). 미설정·실패는 헬퍼가 코드 기본값으로 폴백한다.
+	const siteSettings = useQuery(
+		orpc.bambi.siteSettings.getFooter.queryOptions()
+	);
+	const minimumWageLabel = formatMinimumWageLabel(siteSettings.data);
 	return (
 		// 모바일 하단 고정 CTA 자리를 pb-28로 비워 둔다. CTA를 감추는 역할에서는
 		// 그 여백이 빈 공간으로 남으므로 기본 여백으로 되돌린다.
@@ -186,7 +195,16 @@ export function SeekerJobDetailResponsive({
 								<InfoTile
 									icon={<DollarCircle />}
 									label="급여"
-									value={job.pay}
+									value={
+										// 급여 금액 오른쪽에 비교 기준(최저시급)을 약한 위계로 붙인다.
+										// 좁은 화면에서는 wrap으로 아래 줄에 떨어져 금액이 잘리지 않는다.
+										<span className="flex flex-wrap items-baseline gap-x-2">
+											{job.pay}
+											<span className="font-medium text-muted-foreground text-sm">
+												{minimumWageLabel}
+											</span>
+										</span>
+									}
 								/>
 								<InfoTile
 									icon={<ClockIcon />}
@@ -281,7 +299,12 @@ export function SeekerJobDetailResponsive({
 				<aside className="hidden lg:block">
 					<div className="sticky top-20 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border">
 						<Badge tone="success">검증 완료</Badge>
-						<h2 className="mt-3 mb-2 font-extrabold text-xl">{job.pay}</h2>
+						<div className="mt-3 mb-2 flex flex-wrap items-baseline gap-x-2">
+							<h2 className="m-0 font-extrabold text-xl">{job.pay}</h2>
+							<span className="font-medium text-muted-foreground text-sm">
+								{minimumWageLabel}
+							</span>
+						</div>
 						<div className="grid gap-3 text-sm">
 							<div className="flex items-center gap-2 font-bold">
 								<span className="inline-flex size-4 text-coral-600">

@@ -299,6 +299,67 @@ describe("siteSettings privacy contacts", () => {
 	});
 });
 
+describe("siteSettings minimum wage", () => {
+	it("저장한 최저시급을 공개 조회(getFooter)로 읽고, null이면 미설정으로 돌아간다", async () => {
+		const fixture = await createFixture();
+		try {
+			const update = createProcedureClient(
+				siteSettingsRouter.updateMinimumWage,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updateMinimumWage"],
+				}
+			);
+			const getFooter = createProcedureClient(siteSettingsRouter.getFooter, {
+				context: createContextForUser(null),
+				path: ["bambi", "siteSettings", "getFooter"],
+			});
+
+			await update({ hourly: 10_320, year: 2026 });
+			const saved = await getFooter({});
+			expect(saved?.minimumWageYear).toBe(2026);
+			expect(saved?.minimumWageHourly).toBe(10_320);
+
+			// 비우면 null → 웹이 코드 기본값으로 폴백한다.
+			await update({ hourly: null, year: null });
+			const cleared = await getFooter({});
+			expect(cleared?.minimumWageYear).toBeNull();
+			expect(cleared?.minimumWageHourly).toBeNull();
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("범위를 벗어난 연도·시급은 거부하고, 운영자가 아니면 FORBIDDEN", async () => {
+		const fixture = await createFixture();
+		try {
+			const update = createProcedureClient(
+				siteSettingsRouter.updateMinimumWage,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updateMinimumWage"],
+				}
+			);
+			await expect(update({ hourly: 10_320, year: 26 })).rejects.toBeTruthy();
+			await expect(update({ hourly: 0, year: 2026 })).rejects.toBeTruthy();
+			await expect(
+				update({ hourly: 10_320.5, year: 2026 })
+			).rejects.toBeTruthy();
+
+			const asEmployer = createProcedureClient(
+				siteSettingsRouter.updateMinimumWage,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "siteSettings", "updateMinimumWage"],
+				}
+			);
+			await expectOrpcCode(asEmployer({ hourly: 1, year: 2026 }), "FORBIDDEN");
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+});
+
 describe("siteSettings payment accounts", () => {
 	it("getPaymentAccounts는 미설정 시 빈 배열, 운영자 저장 후 계좌를 반환한다", async () => {
 		const fixture = await createFixture();
