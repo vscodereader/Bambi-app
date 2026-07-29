@@ -194,6 +194,23 @@ const findIdentityCollision = async (
 const IDENTITY_CONFLICT_MESSAGE =
 	"이미 다른 계정에서 본인인증에 사용된 정보예요.";
 
+// 본인확인 결과에서 파생된 CI·DI 해시를 응답에서 걷어낸다. 무염 SHA-256이라 값 자체가
+// 서비스 간 연결이 가능한 고정 식별자로 기능하므로 브라우저(개발자도구)에 내려가면 안 된다.
+// 서버 내부는 중복 판정(findIdentityCollision)·재가입 차단에 계속 해시를 쓰므로 DB 조회를
+// 좁히지 않고, 클라이언트로 나가는 경계에서만 제거한다 — 프로필을 돌려주는 모든 프로시저가
+// 이 한 곳을 지나게 해 새 노출 지점이 생기지 않게 한다.
+const toClientProfile = <
+	T extends { ciHash: string | null; diHash: string | null },
+>(
+	profile: T | null | undefined
+): Omit<T, "ciHash" | "diHash"> | null => {
+	if (!profile) {
+		return null;
+	}
+	const { ciHash: _ciHash, diHash: _diHash, ...clientProfile } = profile;
+	return clientProfile;
+};
+
 const createBambiProfile = async ({
 	gender,
 	identityVerificationId,
@@ -249,7 +266,7 @@ const createBambiProfile = async ({
 		})
 		.returning();
 
-	return createdProfile;
+	return toClientProfile(createdProfile);
 };
 
 // 본인이 소유자인 조직에 본인 외 멤버가 남아 있으면 true. 탈퇴 차단 판정과
@@ -424,7 +441,7 @@ export const onboardingRouter = {
 		);
 
 		return {
-			bambiProfile: profile ?? null,
+			bambiProfile: toClientProfile(profile),
 			accountSanction,
 			community,
 			employerOrganizationProfiles: organizationProfiles,
@@ -493,7 +510,10 @@ export const onboardingRouter = {
 		.handler(async ({ context, input }) => {
 			const userId = context.session.user.id;
 			const [existingProfile] = await db
-				.select({ role: bambiProfile.role })
+				.select({
+					phoneNumber: bambiProfile.phoneNumber,
+					role: bambiProfile.role,
+				})
 				.from(bambiProfile)
 				.where(eq(bambiProfile.userId, userId))
 				.limit(1);
@@ -513,10 +533,19 @@ export const onboardingRouter = {
 					.where(eq(user.id, userId));
 			}
 
-			if (input.phoneNumber !== undefined) {
+			// 여기서 들어오는 번호는 본인확인을 거치지 않은 자기신고 값이다. 그대로 덮어쓰면서
+			// isPhoneVerified를 true로 두면 본인확인 결과정보가 사후 변조되고 화면이 그것을
+			// "인증된 번호"로 표시하게 되므로, 번호를 바꿀 때는 인증 상태도 함께 내린다
+			// (다시 인증받아야 인증된 번호가 된다).
+			// 같은 번호 재제출은 아예 건드리지 않는다 — 네이티브 프로필 폼이 기존 번호를 미리
+			// 채워두므로, 표시명만 고쳐 저장해도 인증이 풀리면 안 된다.
+			if (
+				input.phoneNumber !== undefined &&
+				input.phoneNumber !== existingProfile?.phoneNumber
+			) {
 				await db
 					.update(bambiProfile)
-					.set({ phoneNumber: input.phoneNumber })
+					.set({ phoneNumber: input.phoneNumber, isPhoneVerified: false })
 					.where(eq(bambiProfile.userId, userId));
 			}
 
@@ -526,7 +555,7 @@ export const onboardingRouter = {
 				.where(eq(bambiProfile.userId, userId))
 				.limit(1);
 
-			return updatedProfile;
+			return toClientProfile(updatedProfile);
 		}),
 
 	// 가입 전 본인인증 확인 — 계정이 없는 상태에서 부르므로 publicProcedure다.
@@ -598,7 +627,7 @@ export const onboardingRouter = {
 				.where(eq(bambiProfile.userId, userId))
 				.returning();
 
-			return updatedProfile;
+			return toClientProfile(updatedProfile);
 		}),
 
 	// 목 휴대폰 본인인증 — 포트원 미구성 개발 환경 전용. 프로덕션·포트원 구성 시에는
@@ -640,7 +669,7 @@ export const onboardingRouter = {
 				.where(eq(bambiProfile.userId, userId))
 				.returning();
 
-			return updatedProfile;
+			return toClientProfile(updatedProfile);
 		}),
 
 	createJobSeekerProfile: protectedProcedure

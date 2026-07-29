@@ -50,6 +50,12 @@ const verifyClient = (userId: string) =>
 		path: ["bambi", "onboarding", "verifyMyPhone"],
 	});
 
+const updateClient = (userId: string) =>
+	createProcedureClient(onboardingRouter.updateMyProfile, {
+		context: ctx(userId),
+		path: ["bambi", "onboarding", "updateMyProfile"],
+	});
+
 const seedUserWithProfile = async (
 	values: Partial<{ ciHash: string; diHash: string }> = {}
 ) => {
@@ -64,6 +70,17 @@ const seedUserWithProfile = async (
 		.insert(bambiProfile)
 		.values({ userId, role: "job_seeker", ...values });
 	return userId;
+};
+
+// CI·DI 해시는 클라이언트 응답에서 제외되므로(무염 해시라 브라우저 노출 금지) 저장
+// 여부는 프로시저 반환값이 아니라 DB를 직접 읽어 확인한다.
+const readProfile = async (userId: string) => {
+	const [profile] = await db
+		.select()
+		.from(bambiProfile)
+		.where(eq(bambiProfile.userId, userId))
+		.limit(1);
+	return profile;
 };
 
 const setVerification = (ci: string, di: string) => {
@@ -92,8 +109,12 @@ describe("verifyMyPhone 중복 가입 체크", () => {
 			throw new Error("프로필 갱신 결과가 없습니다.");
 		}
 		expect(updated.isPhoneVerified).toBe(true);
-		expect(updated.diHash).toMatch(SHA256_HEX);
-		expect(updated.ciHash).toMatch(SHA256_HEX);
+		// 응답에는 해시가 없어야 하고, DB에는 저장돼 있어야 한다.
+		expect(updated).not.toHaveProperty("ciHash");
+		expect(updated).not.toHaveProperty("diHash");
+		const stored = await readProfile(userId);
+		expect(stored?.diHash).toMatch(SHA256_HEX);
+		expect(stored?.ciHash).toMatch(SHA256_HEX);
 	});
 
 	it("다른 계정의 diHash와 겹치면 CONFLICT", async () => {
@@ -192,9 +213,10 @@ describe("가입 시 인증 결과 반영", () => {
 		)({ identityVerificationId: `iv_${randomUUID()}` });
 
 		expect(created?.isPhoneVerified).toBe(true);
-		expect(created?.diHash).toMatch(SHA256_HEX);
 		expect(created?.birthDate).toBe("20000101");
 		expect(created?.gender).toBe("male");
+		expect(created).not.toHaveProperty("diHash");
+		expect((await readProfile(userId))?.diHash).toMatch(SHA256_HEX);
 	});
 
 	it("다른 계정이 쓴 DI로는 가입하지 못한다", async () => {
@@ -217,5 +239,37 @@ describe("가입 시 인증 결과 반영", () => {
 				path: ["bambi", "onboarding", "createJobSeekerProfile"],
 			})({ identityVerificationId: `iv_${randomUUID()}` })
 		).rejects.toThrow("이미 다른 계정에서 본인인증에 사용된 정보예요.");
+	});
+});
+
+// 프로필 갱신은 본인확인을 거치지 않은 자기신고 번호를 받는다. 인증 상태를 그대로 둔 채
+// 번호만 갈아끼우면 본인확인 결과정보가 사후 변조되고 화면이 "인증된 번호"로 표시하게 된다.
+describe("updateMyProfile 인증 번호 보호", () => {
+	const seedVerifiedUser = async () => {
+		const userId = await seedUserWithProfile();
+		setVerification(`ci-${randomUUID()}`, `di-${randomUUID()}`);
+		await runVerify(userId);
+		return userId;
+	};
+
+	it("번호를 바꾸면 인증 상태가 풀린다", async () => {
+		const userId = await seedVerifiedUser();
+
+		await updateClient(userId)({ phoneNumber: "010-9999-0000" });
+
+		const stored = await readProfile(userId);
+		expect(stored?.phoneNumber).toBe("010-9999-0000");
+		expect(stored?.isPhoneVerified).toBe(false);
+	});
+
+	it("같은 번호를 다시 보내면 인증이 유지된다", async () => {
+		const userId = await seedVerifiedUser();
+
+		// 네이티브 프로필 폼은 기존 번호를 미리 채워 보낸다 — 표시명만 고쳐 저장해도
+		// 인증이 풀리면 안 된다.
+		await updateClient(userId)({ phoneNumber: "010-1234-5678" });
+
+		const stored = await readProfile(userId);
+		expect(stored?.isPhoneVerified).toBe(true);
 	});
 });
