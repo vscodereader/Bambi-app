@@ -1,4 +1,4 @@
-import { decodeGuestTokenGender, decodeGuestTokenIvId } from "./guest-token";
+import { decodeGuestTokenGender } from "./guest-token";
 
 export const GUEST_COOKIE_NAME = "bambi_guest";
 export const GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
@@ -44,15 +44,6 @@ export const readGuestGenderFromCookieString = (
 ): BambiGenderValue | null => {
 	const token = readGuestTokenFromCookieString(cookie);
 	return token ? decodeGuestTokenGender(token) : null;
-};
-
-// 게스트 토큰에서 포트원 인증 ID를 읽는다. 인증을 마친 뒤 새로고침해도 회원가입
-// 폼 단계를 이어가기 위한 용도다.
-export const readGuestIvIdFromCookieString = (
-	cookie: string
-): string | null => {
-	const token = readGuestTokenFromCookieString(cookie);
-	return token ? decodeGuestTokenIvId(token) : null;
 };
 
 // 게스트 열람 쿠키를 서버 라우트를 통해 만료시킨다. 세팅(POST /api/guest)과 동일

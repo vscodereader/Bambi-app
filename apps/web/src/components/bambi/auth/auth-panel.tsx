@@ -4,7 +4,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import {
@@ -12,7 +12,6 @@ import {
 	clearGuestCookie,
 	type MockPhoneVerifyInput,
 	readGuestGenderFromCookieString,
-	readGuestIvIdFromCookieString,
 } from "@/lib/bambi/guest";
 import { isEmailLoginId } from "@/lib/bambi/login-id";
 import { client, queryClient } from "@/utils/orpc";
@@ -183,19 +182,10 @@ export function AuthPanel() {
 			setForm((prev) => ({ ...prev, [field]: value }));
 		};
 
-	// 인증을 마치고 인증 건 ID까지 확보한 방문자만 폼 단계로 바로 들어간다.
-	// 게스트 쿠키가 있어도 ID가 없으면(이 기능 배포 전에 발급된 v1 토큰, 개발용 목
-	// 인증) 서버가 프로필 생성을 거부하는데, 계정 생성은 그보다 먼저 성공해 프로필
-	// 없는 유령 계정이 남는다. 그래서 그 경우엔 인증 단계에 머물러 재인증을 받는다.
-	// 서버 렌더에는 document가 없으므로 effect에서 읽어 하이드레이션 불일치를 피한다.
-	useEffect(() => {
-		const ivId = readGuestIvIdFromCookieString(document.cookie);
-		if (ivId) {
-			setVerifiedId(ivId);
-			setStep("form");
-		}
-	}, []);
-
+	// 새로고침하면 폼 단계는 복원되지 않고 인증 단계(step 초기값 "verify")에서 다시
+	// 시작한다. 인증 건 ID를 쿠키에 보관하지 않기 때문인데(항목 4 — 유효시간 30분),
+	// 어차피 그 ID는 30분이 지나면 서버가 거부한다. 되살렸다면 계정 생성만 성공하고
+	// 프로필 생성이 실패해 프로필 없는 유령 계정이 남았을 자리다.
 	const postGuestVerification = async (
 		body: MockPhoneVerifyInput | { identityVerificationId: string }
 	) => {

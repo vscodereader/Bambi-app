@@ -1,11 +1,11 @@
+import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import {
-	fetchIdentityVerification,
 	isAdultBirth8,
-	mapPortOneGender,
-	toBirth8,
 	UNDERAGE_MESSAGE,
 } from "@bambi-app/api/services/portone-identity";
 import { env } from "@bambi-app/env/web";
+import { createORPCClient, ORPCError } from "@orpc/client";
+import { RPCLink } from "@orpc/client/fetch";
 import { NextResponse } from "next/server";
 import {
 	type BambiGenderValue,
@@ -31,7 +31,21 @@ const RATE_WINDOW_MS = 60 * 60 * 1000;
 const clientIp = (request: Request): string =>
 	request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
 
-const badRequest = () => NextResponse.json({ ok: false }, { status: 400 });
+const badRequest = (message?: string) =>
+	NextResponse.json(message ? { message, ok: false } : { ok: false }, {
+		status: 400,
+	});
+
+// 실인증 검증은 서버(@bambi-app/api)에 맡긴다. 인증 건의 발급 기록·유효시간·소진 여부는
+// DB에 있는데 web은 @bambi-app/db 의존성이 없어(전송 계층만 가진 앱) 직접 볼 수 없다.
+// 여기서 포트원을 다시 조회해 봐야 "이 ID를 우리가 발급했는가"는 알 수 없으므로,
+// 진위·연령·재사용 판정을 한 곳(onboarding.checkIdentityForSignup)에 모은다.
+// utils/orpc의 공용 client를 쓰지 않는 이유: 그 링크는 들어온 요청 헤더를 통째로
+// 전달하는데(SSR 쿠키 전달용), 라우트 핸들러에서는 원 요청의 content-type·content-length가
+// 딸려가 RPC 본문이 깨진다. 이 호출은 로그인 전이라 쿠키도 필요 없다.
+const rpc: AppRouterClient = createORPCClient(
+	new RPCLink({ url: `${env.NEXT_PUBLIC_SERVER_URL}/rpc` })
+);
 
 const underageResponse = () =>
 	NextResponse.json(
@@ -41,13 +55,13 @@ const underageResponse = () =>
 
 // 인증 통과 응답 — 서명 토큰 한 개만 세팅한다. httpOnly:false는 의도된 것: 클라이언트가
 // 성별을 읽어 가입 시 프로필로 옮긴다. 값 위조는 서명 검증(미들웨어)에서 걸린다.
-const verifiedResponse = async (
-	gender: BambiGenderValue | null,
-	ivId?: string
-) => {
+// secure는 본인확인 결과 토큰의 평문 전송을 막기 위해 무조건 켠다(세션 쿠키와 동일 정책 —
+// packages/auth advanced.defaultCookieAttributes). localhost는 secure 컨텍스트라 개발 무영향.
+// 인증 건 ID는 싣지 않는다: 유효시간이 30분인 값을 30일짜리 쿠키에 JS로 읽히게 두면
+// 공용 PC·XSS에서 그대로 새어 나가고, 만료 뒤엔 어차피 쓸 수도 없다(자체점검 항목 4).
+const verifiedResponse = async (gender: BambiGenderValue | null) => {
 	const token = await createGuestToken({
 		gender,
-		ivId,
 		maxAgeSeconds: GUEST_COOKIE_MAX_AGE,
 		now: new Date(),
 		secret: guestTokenSecret(),
@@ -55,6 +69,7 @@ const verifiedResponse = async (
 	const response = NextResponse.json({ ok: true });
 	response.cookies.set(GUEST_COOKIE_NAME, token, {
 		httpOnly: false,
+		secure: true,
 		sameSite: "lax",
 		path: "/",
 		maxAge: GUEST_COOKIE_MAX_AGE,
@@ -62,29 +77,33 @@ const verifiedResponse = async (
 	return response;
 };
 
-// 실인증 흐름 — 클라이언트가 보낸 identityVerificationId의 진위를 포트원 단건조회로
-// 서버가 직접 확인한다. 인증창 결과를 그대로 믿지 않는다.
+// 실인증 흐름 — 클라이언트가 보낸 identityVerificationId를 그대로 믿지 않는다.
+// 서버가 (1) 우리가 발급한 인증 건인지 (2) 아직 소진되지 않았고 유효시간 안인지
+// (3) 포트원 단건조회로 인증이 실제 완료됐고 성인인지를 확인한다. 여기서는 소진시키지
+// 않는다 — 같은 인증 건으로 곧이어 프로필 생성이 이어지고, 그쪽이 최종 소비자다.
 const handleRealVerification = async (identityVerificationId: string) => {
-	const apiSecret = env.PORTONE_API_SECRET;
-	if (!apiSecret) {
+	if (!env.PORTONE_API_SECRET) {
 		return NextResponse.json({ ok: false }, { status: 503 });
 	}
-	const verification = await fetchIdentityVerification(
-		apiSecret,
-		identityVerificationId
-	);
-	if (verification.status !== "VERIFIED") {
-		return badRequest();
+	try {
+		const { gender } = await rpc.bambi.onboarding.checkIdentityForSignup({
+			identityVerificationId,
+		});
+		return await verifiedResponse(gender);
+	} catch (error) {
+		if (error instanceof ORPCError) {
+			// 미성년(FORBIDDEN)은 전용 코드로 안내하고, 재사용·미완료 인증(BAD_REQUEST)은
+			// 서버 문구를 그대로 내려 "다시 인증해 주세요"가 사용자에게 보이게 한다.
+			if (error.code === "FORBIDDEN") {
+				return underageResponse();
+			}
+			if (error.code === "BAD_REQUEST") {
+				return badRequest(error.message);
+			}
+		}
+		// 포트원·서버 장애 등 — 상세를 흘리지 않고 POST의 502 폴백에 맡긴다.
+		throw error;
 	}
-	const birth8 = toBirth8(verification.verifiedCustomer?.birthDate);
-	// 생년월일을 못 읽으면 성인임을 증명할 수 없으므로 차단한다(안전 기본값).
-	if (!(birth8 && isAdultBirth8(birth8, new Date()))) {
-		return underageResponse();
-	}
-	return await verifiedResponse(
-		mapPortOneGender(verification.verifiedCustomer?.gender),
-		identityVerificationId
-	);
 };
 
 const parseMockInput = (
@@ -169,6 +188,7 @@ export function DELETE() {
 	const response = NextResponse.json({ ok: true });
 	response.cookies.set(GUEST_COOKIE_NAME, "", {
 		httpOnly: false,
+		secure: true,
 		sameSite: "lax",
 		path: "/",
 		maxAge: 0,
