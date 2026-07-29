@@ -1,5 +1,3 @@
-import { FOXALBA_ITEMS_PER_PAGE } from "./bambi-crawl-foxalba";
-
 // 수집 정책. DB도 네트워크도 건드리지 않는 순수 판정만 모아 둔다 — 이 결정들이 잘못되면
 // 수집분 전체가 날아가는데, I/O에 묶여 있으면 그걸 검증할 방법이 없다.
 
@@ -19,6 +17,10 @@ export const MAX_DETAIL_FETCHES_PER_RUN = 300;
 // 목록 페이지 절대 상한. 전체 건수로 계산하되, 상대가 이상한 값을 주더라도 요청이 폭주하지
 // 않도록 천장을 둔다.
 export const MAX_LIST_PAGES = 80;
+
+// 게시판에서 매 회차 훑는 페이지 수. 커뮤니티는 "지금 무슨 주제가 반응을 얻는가"를 보려는
+// 것이라 최신 몇 페이지면 충분하다 — 과거 글까지 매번 다시 긁을 이유가 없다(페이지당 30건).
+export const COMMUNITY_LIST_PAGES = 5;
 
 export const HOUR_MS = 60 * 60 * 1000;
 export const DAY_MS = 24 * HOUR_MS;
@@ -55,9 +57,13 @@ export const AVAILABLE_CRAWL_TARGETS: readonly CrawlTarget[] = [
 // 파서가 실제로 구현된 (사이트 × 데이터 종류) 조합. 이 목록에 없는 조합을 골라도 수집기는
 // 회차를 만들지 않고 "준비 중"으로 빠져나온다 — 빈 결과를 "공고 없음"으로 읽어 만료 처리가
 // 돌면 안 되기 때문이다. 파서를 추가하면 여기에 조합 한 줄을 더하는 것만으로 가드가 풀린다.
-// 현재 여우알바×공고만 구현됨. 퀸알바 파서는 별도 작업이라 여기 없어 "준비 중"으로 남는다.
+//
+// 퀸알바는 전 페이지가 성인인증 게이트 뒤에 있어, 파서가 있어도 QUEENALBA_COOKIE가 없으면
+// 회차가 "게이트에 막혔다"로 실패한다. 그건 미구현이 아니라 설정 누락이라 여기서 막지 않는다.
 export const IMPLEMENTED_CRAWL_TARGETS: readonly CrawlTarget[] = [
 	{ contentType: "job_post", site: "foxalba" },
+	{ contentType: "job_post", site: "queenalba" },
+	{ contentType: "community", site: "queenalba" },
 ];
 
 export const isCrawlTargetImplemented = (
@@ -124,14 +130,15 @@ export const isYieldTrustworthy = (stats: CrawlYieldStats): boolean => {
 };
 
 // 수집할 목록 페이지 수. 페이저는 앞쪽 5개와 "다음"만 노출해서 마지막 페이지를 알려주지
-// 않으므로, 페이저가 아니라 전체 건수로 계산한다.
-export const resolveListPageCount = (totalCount: number | null): number => {
-	if (!totalCount || totalCount <= 0) {
+// 않으므로, 페이저가 아니라 전체 건수로 계산한다. 전체 건수를 안 주거나(퀸알바처럼) 전건을
+// 한 번에 주는 사이트는 1페이지로 떨어진다.
+export const resolveListPageCount = (
+	totalCount: number | null,
+	itemsPerPage: number
+): number => {
+	if (!totalCount || totalCount <= 0 || itemsPerPage <= 0) {
 		return 1;
 	}
 
-	return Math.min(
-		Math.ceil(totalCount / FOXALBA_ITEMS_PER_PAGE),
-		MAX_LIST_PAGES
-	);
+	return Math.min(Math.ceil(totalCount / itemsPerPage), MAX_LIST_PAGES);
 };

@@ -1,0 +1,2928 @@
+<!DOCTYPE html>
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
+<body>
+<div id="sub_center">
+<!--검색부분-->
+
+
+
+
+<form method="get" action="guin_list.php" name="a_f_guin" style="margin:0">
+<!--
+2015.11.30 작업자 김형호
+스크롤시 위치문제로 로딩에 이상현상부분 없애기 위해서 주석처리함
+<input type=hidden name='action' value='search'>
+<input type=hidden name='file' value='guin_list_after.html'>
+-->
+
+<div style="background-color:#969694; border:1px solid #6a696f; height:1px; font-size:0;"></div>
+<div style="background-color:#f4f4f4; border:1px solid #dbdbdb; border-top:none; padding:5px;">
+	<div style="position:relative; margin:0 0 5px 5px;">
+	<img src="img/skin_icon/make_icon/skin_icon_541.jpg">
+
+	<!-- 2014.05.22 dmc 이영숙 -->
+	<div style="position:absolute; top:4px; left:130px; color:#ff0066; letter-spacing:-1px; font-weight:bold;">조건 하나만 선택하셔도 검색이 가능합니다!!</div>
+	<!-- // 2014.05.22  -->
+
+	</div>
+	<div style="border-top:1px solid #dbdbdb; background-color:#FFF; font-size:0; height:1px;"></div>
+	<div>
+		<table cellspacing="0" style="width:700px; margin-left:15px;">
+		<tbody><tr>
+			<td valign="top">
+				<table cellspacing="0">
+				<!--
+				<tr>
+					<td style="width:70px; height:30px; color:#6c6c6c;"><img src="img/icon_arrows_01.gif" align="absmiddle"> 채용종류</td>
+					<td><select name=job_type_read><option value=''>--선택--</option><option value='낮'>낮</option><option value='저녁'>저녁</option><option value='풀타임'>풀타임</option><option value='숙식'>숙식</option><option value='협의'>협의</option></select></td>
+				</tr>
+				-->
+				<!--
+				<tr>
+					<td style="width:70px; color:#6c6c6c; height:30px;"><img src="img/icon_arrows_01.gif" align="absmiddle"> 나이</td>
+					<td><select name='guin_age1' id='guin_age1' >
+	  <option value=''>연령선택</option>
+	  <option value='20' >20 세</option>
+	  <option value='21' >21 세</option>
+	  <option value='22' >22 세</option>
+	  <option value='23' >23 세</option>
+	  <option value='24' >24 세</option>
+	  <option value='25' >25 세</option>
+	  <option value='26' >26 세</option>
+	  <option value='27' >27 세</option>
+	  <option value='28' >28 세</option>
+	  <option value='29' >29 세</option>
+	  <option value='30' >30 세</option>
+	  <option value='31' >31 세</option>
+	  <option value='32' >32 세</option>
+	  <option value='33' >33 세</option>
+	  <option value='34' >34 세</option>
+	  <option value='35' >35 세</option>
+	  <option value='36' >36 세</option>
+	  <option value='37' >37 세</option>
+	  <option value='38' >38 세</option>
+	  <option value='39' >39 세</option>
+	  <option value='40' >40 세</option>
+	  <option value='41' >41 세</option>
+	  <option value='42' >42 세</option>
+	  <option value='43' >43 세</option>
+	  <option value='44' >44 세</option>
+	  <option value='45' >45 세</option>
+	  <option value='46' >46 세</option>
+	  <option value='47' >47 세</option>
+	  <option value='48' >48 세</option>
+	  <option value='49' >49 세</option>
+	  <option value='50' >50 세</option>
+	  <option value='51' >51 세</option>
+	  <option value='52' >52 세</option>
+	  <option value='53' >53 세</option>
+	  <option value='54' >54 세</option>
+	  <option value='55' >55 세</option>
+	  <option value='56' >56 세</option>
+	  <option value='57' >57 세</option>
+	  <option value='58' >58 세</option>
+	  <option value='59' >59 세</option>
+	  <option value='60' >60 세</option>
+	  <option value='61' >61 세</option>
+	  <option value='62' >62 세</option>
+	  <option value='63' >63 세</option>
+	  <option value='64' >64 세</option>
+	  <option value='65' >65 세</option>
+	  <option value='66' >66 세</option>
+	  <option value='67' >67 세</option>
+	  <option value='68' >68 세</option>
+	  <option value='69' >69 세</option>
+	  <option value='70' >70 세</option>
+	  <option value='71' >71 세</option>
+	  <option value='72' >72 세</option>
+	  <option value='73' >73 세</option>
+	  <option value='74' >74 세</option>
+	  <option value='75' >75 세</option>
+	  <option value='76' >76 세</option>
+	  <option value='77' >77 세</option>
+	  <option value='78' >78 세</option>
+	  <option value='79' >79 세</option>
+	  <option value='80' >80 세</option>
+</select> </td>
+				</tr>
+				-->
+
+
+				<tbody><tr>
+					<td style="width:70px;  color:#6c6c6c; height:30px;"><img src="img/icon_arrows_01.gif" align="absmiddle"> 지역</td>
+					<td>
+    <select name="search_si" onchange="startRequest(this,'search_gu','100')" style="width:80px !important;height:25px;">
+      <option style="width:80px !important;height:25px;" value="">지역선택</option>
+      <option style="width:80px !important;height:25px;" value="29">서울</option>  <option style="width:80px !important;height:25px;" value="11">경기</option>  <option style="width:80px !important;height:25px;" value="10">인천</option>  <option style="width:80px !important;height:25px;" value="7">부산</option>  <option style="width:80px !important;height:25px;" value="1">대구</option>  <option style="width:80px !important;height:25px;" value="20">광주</option>  <option style="width:80px !important;height:25px;" value="23">대전</option>  <option style="width:80px !important;height:25px;" value="22">울산</option>  <option style="width:80px !important;height:25px;" value="28">강원</option>  <option style="width:80px !important;height:25px;" value="24">경남</option>  <option style="width:80px !important;height:25px;" value="25">경북</option>  <option style="width:80px !important;height:25px;" value="26">전남</option>  <option style="width:80px !important;height:25px;" value="27">전북</option>  <option style="width:80px !important;height:25px;" value="6">충남</option>  <option style="width:80px !important;height:25px;" value="4">충북</option>  <option style="width:80px !important;height:25px;" value="37">세종</option>  <option style="width:80px !important;height:25px;" value="3">제주</option>  <option style="width:80px !important;height:25px;" value="14">===========</option>  
+    </select>
+    <span id="search_gua_f_guin"></span>
+  
+    
+  </td>
+				</tr>
+				<tr>
+					<td style="width:70px;  color:#6c6c6c; height:30px;"><img src="img/icon_arrows_01.gif" align="absmiddle"> 편의사항</td>
+					<td><select name="guin_bokri"><option value="">--선택--</option><option value="선불가능">선불가능</option><option value="순번확실">순번확실</option><option value="원룸제공">원룸제공</option><option value="만근비지원">만근비지원</option><option value="성형지원">성형지원</option><option value="출퇴근지원">출퇴근지원</option><option value="식사제공">식사제공</option><option value="팁별도">팁별도</option><option value="인센티브">인센티브</option><option value="홀복지원">홀복지원</option><option value="갯수보장">갯수보장</option><option value="지명우대">지명우대</option><option value="초이스없음">초이스없음</option><option value="해외여행지원">해외여행지원</option><option value="뒷방없음">뒷방없음</option><option value="따당가능">따당가능</option><option value="푸쉬가능">푸쉬가능</option><option value="밀방없음">밀방없음</option><option value="칼퇴보장">칼퇴보장</option><option value="텃세없음">텃세없음</option><option value="숙식제공">숙식제공</option></select></td>
+				</tr>
+
+				<!--
+				<tr>
+					<td style="color:#6c6c6c; height:30px;"><img src="img/icon_arrows_01.gif" align="absmiddle"> 경력</td>
+					<td><select name=career_read><option value=''>--선택--</option><option value='신입'>신입</option><option value='1년~3년'>1년~3년</option><option value='3년~5년'>3년~5년</option><option value='5년~8년'>5년~8년</option><option value='8년~10년'>8년~10년</option><option value='10년~15년'>10년~15년</option><option value='15년이상'>15년이상</option></select></td>
+				</tr>
+				-->
+				</tbody></table>
+			</td>
+			<td valign="top">
+				<table cellspacing="0">
+				<!--
+				<tr>
+					<td style="width:70px; color:#6c6c6c; height:30px;"><img src="img/icon_arrows_01.gif" align="absmiddle"> 나이</td>
+					<td><select name='guin_age' id='guin_age' >
+	  <option value=''>연령선택</option>
+	  <option value='2010' >2010 년생</option>
+	  <option value='2009' >2009 년생</option>
+	  <option value='2008' >2008 년생</option>
+	  <option value='2007' >2007 년생</option>
+	  <option value='2006' >2006 년생</option>
+	  <option value='2005' >2005 년생</option>
+	  <option value='2004' >2004 년생</option>
+	  <option value='2003' >2003 년생</option>
+	  <option value='2002' >2002 년생</option>
+	  <option value='2001' >2001 년생</option>
+	  <option value='2000' >2000 년생</option>
+	  <option value='1999' >1999 년생</option>
+	  <option value='1998' >1998 년생</option>
+	  <option value='1997' >1997 년생</option>
+	  <option value='1996' >1996 년생</option>
+	  <option value='1995' >1995 년생</option>
+	  <option value='1994' >1994 년생</option>
+	  <option value='1993' >1993 년생</option>
+	  <option value='1992' >1992 년생</option>
+	  <option value='1991' >1991 년생</option>
+	  <option value='1990' >1990 년생</option>
+	  <option value='1989' >1989 년생</option>
+	  <option value='1988' >1988 년생</option>
+	  <option value='1987' >1987 년생</option>
+	  <option value='1986' >1986 년생</option>
+	  <option value='1985' >1985 년생</option>
+	  <option value='1984' >1984 년생</option>
+	  <option value='1983' >1983 년생</option>
+	  <option value='1982' >1982 년생</option>
+	  <option value='1981' >1981 년생</option>
+	  <option value='1980' >1980 년생</option>
+	  <option value='1979' >1979 년생</option>
+	  <option value='1978' >1978 년생</option>
+	  <option value='1977' >1977 년생</option>
+	  <option value='1976' >1976 년생</option>
+	  <option value='1975' >1975 년생</option>
+	  <option value='1974' >1974 년생</option>
+	  <option value='1973' >1973 년생</option>
+	  <option value='1972' >1972 년생</option>
+	  <option value='1971' >1971 년생</option>
+	  <option value='1970' >1970 년생</option>
+	  <option value='1969' >1969 년생</option>
+	  <option value='1968' >1968 년생</option>
+	  <option value='1967' >1967 년생</option>
+	  <option value='1966' >1966 년생</option>
+	  <option value='1965' >1965 년생</option>
+	  <option value='1964' >1964 년생</option>
+	  <option value='1963' >1963 년생</option>
+	  <option value='1962' >1962 년생</option>
+	  <option value='1961' >1961 년생</option>
+	  <option value='1960' >1960 년생</option>
+	  <option value='1959' >1959 년생</option>
+	  <option value='1958' >1958 년생</option>
+	  <option value='1957' >1957 년생</option>
+	  <option value='1956' >1956 년생</option>
+	  <option value='1955' >1955 년생</option>
+	  <option value='1954' >1954 년생</option>
+	  <option value='1953' >1953 년생</option>
+	  <option value='1952' >1952 년생</option>
+	  <option value='1951' >1951 년생</option>
+	  <option value='1950' >1950 년생</option>
+	  <option value='1949' >1949 년생</option>
+	  <option value='1948' >1948 년생</option>
+	  <option value='1947' >1947 년생</option>
+	  <option value='1946' >1946 년생</option>
+	  <option value='1945' >1945 년생</option>
+	  <option value='1944' >1944 년생</option>
+	  <option value='1943' >1943 년생</option>
+	  <option value='1942' >1942 년생</option>
+	  <option value='1941' >1941 년생</option>
+	  <option value='1940' >1940 년생</option>
+	  <option value='1939' >1939 년생</option>
+	  <option value='1938' >1938 년생</option>
+	  <option value='1937' >1937 년생</option>
+	  <option value='1936' >1936 년생</option>
+	  <option value='1935' >1935 년생</option>
+	  <option value='1934' >1934 년생</option>
+	  <option value='1933' >1933 년생</option>
+	  <option value='1932' >1932 년생</option>
+	  <option value='1931' >1931 년생</option>
+	  <option value='1930' >1930 년생</option>
+	  <option value='1929' >1929 년생</option>
+	  <option value='1928' >1928 년생</option>
+	  <option value='1927' >1927 년생</option>
+	  <option value='1926' >1926 년생</option>
+	  <option value='1925' >1925 년생</option>
+	  <option value='1924' >1924 년생</option>
+	  <option value='1923' >1923 년생</option>
+	  <option value='1922' >1922 년생</option>
+	  <option value='1921' >1921 년생</option>
+	  <option value='1920' >1920 년생</option>
+	  <option value='1919' >1919 년생</option>
+	  <option value='1918' >1918 년생</option>
+	  <option value='1917' >1917 년생</option>
+	  <option value='1916' >1916 년생</option>
+	  <option value='1915' >1915 년생</option>
+	  <option value='1914' >1914 년생</option>
+	  <option value='1913' >1913 년생</option>
+	  <option value='1912' >1912 년생</option>
+	  <option value='1911' >1911 년생</option>
+	  <option value='1910' >1910 년생</option>
+	  <option value='1909' >1909 년생</option>
+	  <option value='1908' >1908 년생</option>
+	  <option value='1907' >1907 년생</option>
+	  <option value='1906' >1906 년생</option>
+	  <option value='1905' >1905 년생</option>
+	  <option value='1904' >1904 년생</option>
+	  <option value='1903' >1903 년생</option>
+	  <option value='1902' >1902 년생</option>
+	  <option value='1901' >1901 년생</option>
+	  <option value='1900' >1900 년생</option>
+</select></td>
+				</tr>
+				<tr>
+					<td style="color:#6c6c6c; height:30px;"><img src="img/icon_arrows_01.gif" align="absmiddle"> 역세권</td>
+					<td><SCRIPT language="javascript" src="./js/underground.js"></SCRIPT><script>make_underground('','')</script></td>
+				</tr>
+				-->
+				<tbody><tr>
+					<td style="color:#6c6c6c; height:30px;"><img src="img/icon_arrows_01.gif" align="absmiddle"> 직종</td>
+                    <td>&nbsp;
+					    <select name="search_type" style="width: 140px; height: 25px;">
+        					<option value="">직종선택</option>
+        					<option value="24">룸싸롱</option>
+        					<option value="15">노래주점</option>
+        					<option value="27">마사지</option>
+        					<option value="28">기타</option>
+        				</select>
+					</td>
+					<!--<td>&nbsp;
+    <select name='search_type' onChange="startRequest2(this,'search_type_sub','140')" style='width:140px;;height:25px;'>
+    <option value=''>-1차 직종선택-</option>
+    <option value='24' >룸싸롱</option><option value='15' >노래주점</option><option value='27' >마사지</option><option value='28' >기타</option>
+    </select>
+    <SPAN id='search_type_suba_f_guin'></SPAN>
+  
+    <script>
+    var tmp_div = "<select name='search_type_sub' style='width:140px;;height:25px;'><option value=''>-2차 직종선택-</option></select>";
+    eval('search_type_suba_f_guin.innerHTML=tmp_div');
+    </script>
+  </td>-->
+
+				</tr>
+
+				</tbody></table>
+			</td>
+		</tr>
+		<tr>
+			<td colspan="2">
+				<table cellspacing="0">
+				<tbody><tr>
+					<td style="width:70px; height:30px;"><b>키워드</b></td>
+					<td><input type="text" name="title_read" value="" class="sminput3" style="width:450px; height:22px;"></td>
+					<td><input type="image" src="img/btn_ad_find.png" border="0" value="검색" align="absmiddle" style="margin-left:5px;"></td>
+				</tr>
+                <tr>
+					<td style="width:70px; height:20px;">&nbsp;</td>
+					<td style="color:#6c6c6c; height:20px;">* 제목, 업체명, 담당자명, 닉네임, 편의사항, 키워드로 검색 가능합니다.</td>
+					<td>&nbsp;</td>
+				</tr>
+				</tbody></table>
+			</td>
+		</tr>
+		</tbody></table>
+	</div>
+</div>
+<div style="background-color:#f8f8f8; height:2px; font-size:0; margin-bottom:10px;"></div>
+</form>
+
+
+
+
+
+
+
+
+
+
+
+
+<!--
+<div style="position: absolute; width: 450px; top: 4px; left: 1px; z-index: 80;" id="popup_layer_05" onmouseover="dragObj=popup_layer_05; drag=0;move=0" onmouseout="drag=0">
+-->
+<!-- 이벤트 안내 -->
+	<!--
+    <table cellspacing="0" border="0" cellpadding="0" width="100%" height="100%" bgcolor="ffffff">
+        <tbody><tr>
+            <td height="332" valign="top">
+                <table border="0" cellspacing="0" cellpadding="0">
+                    <tbody><tr>
+                        <td valign="top" style="padding:1px;" align="center">
+                            <a href="/bbs_detail.php?bbs_num=90&tb=board_notice">
+                                <img src="/img/event/doc_event_view_250730.jpg" alt="250730" border="0" />
+                            </a>
+                            <div style="position:absolute; bottom:10px; left:0; width:100%; margin-top:0px;">
+                                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="">
+                                    <tbody><tr>
+                                        <td valign="top" height="25">
+                                            <form name="frm_03">
+                                                <table width="100%" border="0" cellspacing="0" cellpadding="0" class="png24">
+                                                    <tbody><tr>
+                                                        <td width="15" align="left" style="padding-left:5px;">
+                                                            <input type="checkbox" name="no_popup" id="no_popup" value="Y" style="cursor:pointer;">
+                                                        </td>
+                                                        <td style="color:#aaaaaa; padding-top:2px; font-size:11px;" align="left">
+                                                            <label for="no_popup" style="cursor:pointer;">1일동안 안보기.</label>
+                                                        </td>
+                                                        <td align="right" style="padding-right:5px;">
+                                                            <img border="0" src="img/bt_close.gif" align="absmiddle" onclick="closeWin('popup_doc','frm_03','popup_layer_05')" style="cursor:pointer;">
+                                                        </td>
+                                                    </tr>
+                                                </tbody></table>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                </tbody></table>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody></table>
+
+            </td>
+        </tr>
+    </tbody></table>
+</div>
+-->
+
+
+<!--검색부분 끝-->
+
+<!--우대등록채용정보-->
+
+<div style="margin-bottom:10px; ">
+    <table cellspacing="0" style="width:100%; margin-bottom:5px;">
+    <tbody><tr>
+        <td><img src="img/tit_guin_woodae.gif" alt="우대등록 채용정보" width="130px" height="20px"></td>
+        <td align="right"><a href="html_file.php?file=guin_woodae.html&amp;search_si="><img src="img/btn_more_bl.gif" alt="더보기 +" width="63px" height="25px" style="margin-right:5px;"></a><a href="member_option_pay.php?mode=pay"><img src="img/btn_applica.gif" alt="광고신청 +" width="73px" height="25px" title="우대등록 채용정보에 광고등록을 원하시면 클릭해주세요"></a></td>
+    </tr>
+    </tbody></table>
+    <div style="border:1px solid #c60d68; background-color:#e62d8b; height:1px; font-size:0;"></div>
+    <div style="background:#fbe1ef; border:1px solid #f1c3dc; border-top:none;">
+        <div style="padding-top:5px; padding-bottom:5px;padding-right:10px;">
+
+        
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0"><tbody><tr><td valign="top" align="center" width="33%"><dl width="235" height="100%" style="margin:5px 0 5px 10px;border:1px solid #eab4d1; overflow:hidden; position:relative;">
+
+
+	<dt style="display:flow-root;height:26px;padding-top:10px;border-bottom:1px solid #eab4d1;background:url(img/bg_guin_woodae_tit.gif) 0 0 no-repeat;">
+
+<span style="float:left; padding-left:5px;position:relative;z-index:1;">
+
+<a href="./guin_detail.php?num=6708&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" style="vertical-align:center;">
+<font color="70009a"><strong>강남1등 프리미엄 LOVE ATTACK</strong></font></a> <font style="color:#4b4b4b;" class="smfont3">기타</font>
+</span>
+
+<span style="float:right; padding-right:5px;">
+<font class="smfont3" style="color:#919191;">서울 강남구</font>
+</span>
+
+	</dt>
+
+	<dd style="height:60px;padding:5px; border-top:2px solid #ededed;background:#ffffff;overflow:hidden;"><p style="float:left;padding-right:10px;"><a href="./guin_detail.php?num=6708&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="><img src="./upload/happy_member/2026/07/14/1783991976-17050.gif" border="0" style="vertical-align:
+middle;" height="46" width="86"></a></p><a href="./guin_detail.php?num=6708&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+		</a><ul style="font-size:12px;text-align:left;"><a href="./guin_detail.php?num=6708&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+			</a><li style="padding-top:3px;"><a href="./guin_detail.php?num=6708&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="></a><a href="./guin_detail.php?num=6708&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" class="title_ellipse"><font style="color:#000000;">DM보다 빠르고 신속...</font></a></li>
+			<li style="padding-top:5px;"><b><img src="upload/happy_config/WantMoneyArrImg3.gif" border="0" align="absmiddle"> 500,000원</b></li>
+
+			<li align="right" class="smfont4 bg_purple f_right" style="color:#000; padding:3px 5px -30px 4px;"><table class="level_icon_super level_icon">
+                                         <tbody><tr>
+                                             <td class="medal"></td>
+                                               <td class="center">33회 990일</td>
+                                               <td class="last"></td>
+                                           </tr>
+                                       </tbody></table></li>
+
+		</ul>
+	</dd>
+</dl>
+</td>
+<td valign="top" align="center" width="33%"><dl width="235" height="100%" style="margin:5px 0 5px 10px;border:1px solid #eab4d1; overflow:hidden; position:relative;">
+
+
+	<dt style="display:flow-root;height:26px;padding-top:10px;border-bottom:1px solid #eab4d1;background:url(img/bg_guin_woodae_tit.gif) 0 0 no-repeat;">
+
+<span style="float:left; padding-left:5px;position:relative;z-index:1;">
+
+<a href="./guin_detail.php?num=21591&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" style="vertical-align:center;">
+<font color="70009a"><strong>도깨비&amp;워라밸</strong></font></a> <font style="color:#4b4b4b;" class="smfont3">룸싸롱</font>
+</span>
+
+<span style="float:right; padding-right:5px;">
+<font class="smfont3" style="color:#919191;">서울 강남구</font>
+</span>
+
+	</dt>
+
+	<dd style="height:60px;padding:5px; border-top:2px solid #ededed;background:#ffffff;overflow:hidden;"><p style="float:left;padding-right:10px;"><a href="./guin_detail.php?num=21591&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="><img src="./upload/happy_member/2026/06/30/1782794892-62602.gif" border="0" style="vertical-align:
+middle;" height="46" width="86"></a></p><a href="./guin_detail.php?num=21591&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+		</a><ul style="font-size:12px;text-align:left;"><a href="./guin_detail.php?num=21591&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+			</a><li style="padding-top:3px;"><a href="./guin_detail.php?num=21591&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="></a><a href="./guin_detail.php?num=21591&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" class="title_ellipse"><font style="color:#000000;">☆☆☆풀티 이벤트...</font></a></li>
+			<li style="padding-top:5px;"><b><img src="upload/happy_config/WantMoneyArrImg2.gif" border="0" align="absmiddle"> 120,000원</b></li>
+
+			<li align="right" class="smfont4 bg_purple f_right" style="color:#000; padding:3px 5px -30px 4px;"><table class="level_icon_super level_icon">
+                                         <tbody><tr>
+                                             <td class="medal"></td>
+                                               <td class="center">27회 2130일</td>
+                                               <td class="last"></td>
+                                           </tr>
+                                       </tbody></table></li>
+
+		</ul>
+	</dd>
+</dl>
+</td>
+<td valign="top" align="center" width="33%"><dl width="235" height="100%" style="margin:5px 0 5px 10px;border:1px solid #eab4d1; overflow:hidden; position:relative;">
+
+
+	<dt style="display:flow-root;height:26px;padding-top:10px;border-bottom:1px solid #eab4d1;background:url(img/bg_guin_woodae_tit.gif) 0 0 no-repeat;">
+
+<span style="float:left; padding-left:5px;position:relative;z-index:1;">
+
+<a href="./guin_detail.php?num=37505&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" style="vertical-align:center;">
+<font color="70009a"><strong>아레나가라오케</strong></font></a> <font style="color:#4b4b4b;" class="smfont3">룸싸롱</font>
+</span>
+
+<span style="float:right; padding-right:5px;">
+<font class="smfont3" style="color:#919191;">경기 수원시</font>
+</span>
+
+	</dt>
+
+	<dd style="height:60px;padding:5px; border-top:2px solid #ededed;background:#ffffff;overflow:hidden;"><p style="float:left;padding-right:10px;"><a href="./guin_detail.php?num=37505&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="><img src="./upload/happy_member/2026/02/27/1772183063-359679.gif" border="0" style="vertical-align:
+middle;" height="46" width="86"></a></p><a href="./guin_detail.php?num=37505&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+		</a><ul style="font-size:12px;text-align:left;"><a href="./guin_detail.php?num=37505&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+			</a><li style="padding-top:3px;"><a href="./guin_detail.php?num=37505&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="></a><a href="./guin_detail.php?num=37505&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" class="title_ellipse"><font style="color:#000000;">인계동1등태준팀 퇴...</font></a></li>
+			<li style="padding-top:5px;"><b><img src="upload/happy_config/WantMoneyArrImg3.gif" border="0" align="absmiddle"> 500,000원</b></li>
+
+			<li align="right" class="smfont4 bg_purple f_right" style="color:#000; padding:3px 5px -30px 4px;"><table class="level_icon_bronze level_icon">
+                                         <tbody><tr>
+                                             <td class="medal"></td>
+                                               <td class="center">3회 90일</td>
+                                               <td class="last"></td>
+                                           </tr>
+                                       </tbody></table></li>
+
+		</ul>
+	</dd>
+</dl>
+</td></tr>
+<tr><td valign="top" align="center" width="33%"><dl width="235" height="100%" style="margin:5px 0 5px 10px;border:1px solid #eab4d1; overflow:hidden; position:relative;">
+
+
+	<dt style="display:flow-root;height:26px;padding-top:10px;border-bottom:1px solid #eab4d1;background:url(img/bg_guin_woodae_tit.gif) 0 0 no-repeat;">
+
+<span style="float:left; padding-left:5px;position:relative;z-index:1;">
+
+<a href="./guin_detail.php?num=8331&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" style="vertical-align:center;">
+<font color="70009a"><strong>프리미엄 레모네이드</strong></font></a> <font style="color:#4b4b4b;" class="smfont3">기타</font>
+</span>
+
+<span style="float:right; padding-right:5px;">
+<font class="smfont3" style="color:#919191;">서울 강남구</font>
+</span>
+
+	</dt>
+
+	<dd style="height:60px;padding:5px; border-top:2px solid #ededed;background:#ffffff;overflow:hidden;"><p style="float:left;padding-right:10px;"><a href="./guin_detail.php?num=8331&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="><img src="./upload/happy_member/2026/07/14/1783990291-192972.gif" border="0" style="vertical-align:
+middle;" height="46" width="86"></a></p><a href="./guin_detail.php?num=8331&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+		</a><ul style="font-size:12px;text-align:left;"><a href="./guin_detail.php?num=8331&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+			</a><li style="padding-top:3px;"><a href="./guin_detail.php?num=8331&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="></a><a href="./guin_detail.php?num=8331&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" class="title_ellipse"><font style="color:#000000;">다들 왜 여기로 문...</font></a></li>
+			<li style="padding-top:5px;"><b><img src="upload/happy_config/WantMoneyArrImg2.gif" border="0" align="absmiddle"> 150,000원</b></li>
+
+			<li align="right" class="smfont4 bg_purple f_right" style="color:#000; padding:3px 5px -30px 4px;"><table class="level_icon_super level_icon">
+                                         <tbody><tr>
+                                             <td class="medal"></td>
+                                               <td class="center">33회 990일</td>
+                                               <td class="last"></td>
+                                           </tr>
+                                       </tbody></table></li>
+
+		</ul>
+	</dd>
+</dl>
+</td>
+<td valign="top" align="center" width="33%">
+
+
+<dl width="235" height="100%" style="margin:5px 0 5px 10px;border:2px solid #626fd7; overflow:hidden;">
+	<dt style="display:flow-root;position:relative;height:26px;padding-top:10px;border-bottom:1px solid #b4b9ea;background:url(img/bg_guin_woodae_b.gif) 0 0 no-repeat;">
+
+<span style="float:left; padding-left:5px;position:relative;z-index:1;">
+	<a href="./guin_detail.php?num=9154&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" style="vertical-align:center;"><font color="70009a"><strong>러블리</strong></font></a><font style="color:#4b4b4b;" class="smfont3">기타</font>
+</span>
+
+
+<span style="float:right; padding-right:20px;">
+<font class="smfont3" style="color:#919191;">서울 </font>
+</span>
+
+	<p style="position:absolute;right:-1px;top:-1px;"><img src="img/woodae_hit.gif" alt="hit"></p>
+	</dt>
+	<dd style="height:60px;padding:5px;border-top:2px solid #ededed;background:#ffffff;overflow:hidden;"><p style="float:left;padding-right:10px;">
+	<a href="./guin_detail.php?num=9154&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="><img src="./upload/happy_member/2026/07/16/1784200299-595986.gif" border="0" align="absmiddle" height="46" width="86"></a></p><a href="./guin_detail.php?num=9154&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+		</a><ul style="font-size:12px;text-align:left;"><a href="./guin_detail.php?num=9154&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+			</a><li style="padding-top:3px;"><a href="./guin_detail.php?num=9154&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="></a><a href="./guin_detail.php?num=9154&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" class="title_ellipse"><span style="padding:2;background:#00ffff;"><font style="color:#000000; font-weight:bold;">강남최고대우!!갯수...</font></span></a></li>
+			<li style="padding-top:5px;"><b><img src="upload/happy_config/WantMoneyArrImg3.gif" border="0" align="absmiddle"> 500,000원</b></li>
+
+			<li align="right" class="smfont4 f_right" style="color:#000; padding:3px 5px -30px 4px;"><table class="level_icon_super level_icon">
+                                         <tbody><tr>
+                                             <td class="medal"></td>
+                                               <td class="center">105회 3150일</td>
+                                               <td class="last"></td>
+                                           </tr>
+                                       </tbody></table></li>
+
+		</ul>
+	</dd>
+</dl>
+
+</td>
+<td valign="top" align="center" width="33%">
+
+
+<dl width="235" height="100%" style="margin:5px 0 5px 10px;border:2px solid #626fd7; overflow:hidden;">
+	<dt style="display:flow-root;position:relative;height:26px;padding-top:10px;border-bottom:1px solid #b4b9ea;background:url(img/bg_guin_woodae_b.gif) 0 0 no-repeat;">
+
+<span style="float:left; padding-left:5px;position:relative;z-index:1;">
+	<a href="./guin_detail.php?num=13014&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" style="vertical-align:center;"><font color="70009a"><strong>LAST DANCE</strong></font></a><font style="color:#4b4b4b;" class="smfont3">기타</font>
+</span>
+
+
+<span style="float:right; padding-right:20px;">
+<font class="smfont3" style="color:#919191;">서울 </font>
+</span>
+
+	<p style="position:absolute;right:-1px;top:-1px;"><img src="img/woodae_hit.gif" alt="hit"></p>
+	</dt>
+	<dd style="height:60px;padding:5px;border-top:2px solid #ededed;background:#ffffff;overflow:hidden;"><p style="float:left;padding-right:10px;">
+	<a href="./guin_detail.php?num=13014&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="><img src="./upload/happy_member/2026/07/16/1784198366-680617.gif" border="0" align="absmiddle" height="46" width="86"></a></p><a href="./guin_detail.php?num=13014&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+		</a><ul style="font-size:12px;text-align:left;"><a href="./guin_detail.php?num=13014&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=">
+			</a><li style="padding-top:3px;"><a href="./guin_detail.php?num=13014&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu="></a><a href="./guin_detail.php?num=13014&amp;pg=&amp;cou=&amp;clickChk=&amp;ssi=&amp;sgu=" class="title_ellipse"><span style="padding:2;background:#00ffff;"><font style="color:#000000; font-weight:bold;">★하루 100~150만원★...</font></span></a></li>
+			<li style="padding-top:5px;"><b><img src="upload/happy_config/WantMoneyArrImg3.gif" border="0" align="absmiddle"> 500,000원</b></li>
+
+			<li align="right" class="smfont4 f_right" style="color:#000; padding:3px 5px -30px 4px;"><table class="level_icon_super level_icon">
+                                         <tbody><tr>
+                                             <td class="medal"></td>
+                                               <td class="center">96회 2880일</td>
+                                               <td class="last"></td>
+                                           </tr>
+                                       </tbody></table></li>
+
+		</ul>
+	</dd>
+</dl>
+
+</td></tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+
+</tr>
+<tr>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td>
+<td valign="top" align="center" width="33%"></td></tr>
+<tr><td valign="top" align="center" width="33%"></td>
+</tr></tbody></table>
+
+        </div>
+    </div>
+</div>
+<!--우대등록채용정보 끝-->
+<!--프리미엄채용정보-->
+
+<div style="margin-bottom:10px; ">
+    <table cellspacing="0" style="width:100%; margin-bottom:5px;">
+    <tbody><tr>
+        <td><img src="img/tit_guin_premium.gif" alt="프리미엄 채용정보"></td>
+        <td align="right"><a href="html_file.php?file=guin_premium.html&amp;search_si="><img src="img/btn_more_bl.gif" alt="더보기 +" width="63px" height="25px" style="margin-right:5px;"></a><a href="member_option_pay.php?mode=pay"><img src="img/btn_applica.gif" alt="광고신청 +" width="73px" height="25px" title="프리미엄 채용정보에 광고등록을 원하시면 클릭해주세요"></a></td>
+    </tr>
+    </tbody></table>
+    
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0"><tbody><tr><td valign="top" align="center" width="25%">
+<div style="width:185px;height:154px;margin:0 2px 2px 0px;background:url(img/bg_guin_premium_.gif) 0 0 no-repeat;overflow:hidden; position:relative;">
+	<table cellspacing="0" style="width:160px; margin:10px auto 0; ">
+		<tbody>
+		<tr>
+			<td align="center" style="line-height:13px; padding-top:2px;" class="smfont3">
+				<a href="./guin_detail.php?num=32701&amp;pg=&amp;cou=51767&amp;clickChk=&amp;ssi=&amp;sgu=">
+					<img src="./upload/happy_member/2024/01/22/1705900362-441909.gif" alt="" height="46" width="86" style="margin-bottom:4px;">
+					<br>
+					<b style="color:#5b5b5b;">
+						<font class="smfont3" style="color:#919191;">[서울 강남구]</font>&nbsp;멤버십벤츠
+					</b>
+				</a>
+				<br>
+				<table class="level_icon_super level_icon">
+                                         <tbody><tr>
+                                             <td class="medal"></td>
+                                               <td class="center">48회 1620일</td>
+                                               <td class="last"></td>
+                                           </tr>
+                                       </tbody></table>
+				<div style="position:absolute; right:10px; bottom:12px;font-size:11px; color:#7d7d7d;">기타</div>
+			</td>
+		</tr>
+		<tr>
+			<td align="left" colspan="2">
+				<table cellspacing="0" style="margin-top:13px;">
+					<tbody>
+					<tr>
+						<td colspan="2">
+							<a href="./guin_detail.php?num=32701&amp;pg=&amp;cou=51767&amp;clickChk=&amp;ssi=&amp;sgu=">
+                            <font color="#5C5C5C">
+							    <span style="padding:2;"><font style="color:#000000;">★멤버십벤츠★강...</font></span>
+							</font></a>
+						</td>
+					</tr>
+					<tr>
+						<td style="padding-top:7px;">
+							<b><img src="upload/happy_config/WantMoneyArrImg1.gif" border="0" align="absmiddle"> </b>
+						</td>
+					</tr>
+					</tbody>
+				</table>
+			</td>
+		</tr>
+		</tbody>
+	</table>
+</div>
+
+
+</td>
+<td valign="top" align="center" width="25%">
+<div style="width:185px;height:154px;margin:0 2px 2px 0px;background:url(img/bg_guin_premium2_.gif) 0 0 no-repeat;overflow:hidden; position:relative;">
+	<table cellspacing="0" style="width:160px; margin:10px auto 0; ">
+		<tbody>
+		<tr>
+			<td align="center" style="line-height:13px; padding-top:2px;" class="smfont3">
+				<a href="./guin_detail.php?num=14913&amp;pg=&amp;cou=122497&amp;clickChk=&amp;ssi=&amp;sgu=">
+					<img src="./upload/happy_member/2026/05/27/1779875953-360777.gif" alt="" height="46" width="86" style="margin-bottom:4px;">
+					<br>
+					<b style="color:#5b5b5b;">
+						<font class="smfont3" style="color:#919191;">[서울 ]</font>&nbsp;⭕유흥 신세계⭕
+					</b>
+				</a>
+				<br>
+				<table class="level_icon_super level_icon">
+                                         <tbody><tr>
+                                             <td class="medal"></td>
+                                               <td class="center">25회 1110일</td>
+                                               <td class="last"></td>
+                                           </tr>
+                                       </tbody></table>
+				<div style="position:absolute; right:10px; bottom:12px;font-size:11px; color:#7d7d7d;">기타</div>
+			</td>
+		</tr>
+		<tr>
+			<td align="left" colspan="2">
+				<table cellspacing="0" style="margin-top:13px;">
+					<tbody>
+					
+					<tr>
+						<td style="padding-top:7px;">
+							<b><img src="upload/happy_config/WantMoneyArrImg3.gif" border="0" align="absmiddle"> 500,000원</b>
+						</td>
+					</tr>
+					</tbody>
+				</table>
+			</td>
+		</tr>
+		</tbody>
+	</table>
+</div>
+
+</td>
+<td valign="top" align="center" width="25%">
+<div style="width:185px;height:154px;margin:0 2px 2px 0px;background:url(img/bg_guin_premium_.gif) 0 0 no-repeat;overflow:hidden; position:relative;">
+	<table cellspacing="0" style="width:160px; margin:10px auto 0; ">
+		<tbody>
+		
+		
+		</tbody>
+	</table>
+</div>
+
+
+</td>
+<td valign="top" align="center" width="25%">
+<div style="width:185px;height:154px;margin:0 2px 2px 0px;background:url(img/bg_guin_premium_.gif) 0 0 no-repeat;overflow:hidden; position:relative;">
+	<table cellspacing="0" style="width:160px; margin:10px auto 0; ">
+		<tbody>
+		
+		
+		</tbody>
+	</table>
+</div>
+
+
+</td></tr>
+
+
+
+
+
+
+
+
+
+
+
+
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+<tr><td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td>
+<td valign="top" align="center" width="25%"></td></tr>
+</tbody></table>
+</div>
+<!--프리미엄채용정보-->
+<!--스페셜,급구,추천 채용정보-->
+
+<div style="margin-bottom:10px; ">
+    <table cellspacing="0" style="width:100%;">
+    <tbody><tr>
+        <td valign="top" style="padding-right:10px;">
+            <table cellspacing="0" style="width:100%;">
+            <tbody><tr>
+                <td><img src="img/title_special_guin.gif" alt="스페셜 채용정보" width="110px" height="15px"></td>
+                <td align="right"><a href="html_file.php?file=guin_special.html&amp;search_si="><img src="img/btn_sub_more.gif" alt="더보기" width="56px" height="20px"></a></td>
+            </tr>
+            <tr>
+                <td colspan="2" style="padding-top:5px;">
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0"><tbody><tr><td valign="top" align="center" width="100%"><div style="width:530px; height:87px; background:url(img/bg_guin_special2.gif); margin-bottom:10px;">
+	<table cellspacing="0" style="width:100%;">
+		<colgroup>
+			<col width="160px">
+			<col width="268px">
+			<col width="">
+			<col width="">
+		</colgroup>
+	<tbody><tr>
+		<td style="width:160px; height:87px;" align="center"><a href="./guin_detail.php?num=36661&amp;pg=&amp;cou=20374&amp;clickChk=&amp;ssi=&amp;sgu="><font color="#5C5C5C"><img src="./upload/happy_member/2026/07/20/1784541078-757699.gif" border="0" align="absmiddle" height="46" width="86"></font></a></td>
+		<td align="left">
+			<table cellspacing="0" style="margin-left:20px;">
+			<tbody><tr>
+				<td style="padding-bottom:5px;"><a href="./guin_detail.php?num=36661&amp;pg=&amp;cou=20374&amp;clickChk=&amp;ssi=&amp;sgu="><font color="#464646"><strong>❤️다이아몬드❤️</strong></font></a>&nbsp;&nbsp;<font class="smfont3" style="color:#919191;">서울 강남구</font></td>
+			</tr>
+			<tr>
+				<td style="padding-bottom:5px;"><a href="./guin_detail.php?num=36661&amp;pg=&amp;cou=20374&amp;clickChk=&amp;ssi=&amp;sgu="><font color="#5C5C5C"><span style="padding:2;background:#00ffff;"><font style="color:#000000; font-weight:bold;">❤️다이아몬드❤️</font></span></font></a></td>
+			</tr>
+			<tr>
+				<td><b><img src="upload/happy_config/WantMoneyArrImg3.gif" border="0" align="absmiddle"> 500,000원</b></td>
+			</tr>
+			</tbody></table>
+		</td>
+		<td><img src="img/icon_special_bar02.gif" align="absmiddle"></td>
+		<td align="right">
+			<table cellspacing="0">
+			<tbody><tr>
+				<td align="center" class="smfont3" style="width:100px; color:#aeaeae;">기타</td>
+			</tr>
+			<tr>
+				<td align="center" class="smfont3" style="color:#000; padding-top:5px;"><table class="level_icon_super level_icon">
+                                         <tbody><tr>
+                                             <td class="medal"></td>
+                                               <td class="center">93회 2790일</td>
+                                               <td class="last"></td>
+                                           </tr>
+                                       </tbody></table></td>
+			</tr>
+			</tbody></table>
+		</td>
+	</tr>
+	</tbody></table>
+</div>
+
+</td></tr>
+
+
+</tbody></table></td>
+            </tr>
+            </tbody></table>
+        </td>
+        <td style="width:210px;" valign="top">
+            <table cellspacing="0" style="width:100%; margin-bottom:15px;">
+            <tbody><tr>
+                <td><img src="img/title_speed_guin.gif" alt="급구채용정보" width="77px" height="17px"><a href="html_file.php?file=guin_speed.html&amp;search_si="><img src="img/btn_sub_more.gif" alt="더보기" width="56px" height="20px" style="margin-left:5px;"></a></td>
+            </tr>
+            
+            </tbody></table>
+            <table cellspacing="0" style="width:100%;">
+            <tbody><tr>
+                <td><img src="img/title_cucun_guin.gif" alt="추천채용정보" width="76px" height="16px"><a href="html_file.php?file=guin_pick.html&amp;search_si="><img src="img/btn_sub_more.gif" style="margin-left:5px;" alt="더보기" width="56px" height="20px"></a></td>
+            </tr>
+            
+            </tbody></table>
+        </td>
+    </tr>
+    </tbody></table>
+</div>
+<!--스페셜,급구,추천 채용정보 끝-->
+<div>
+    <div>
+        <table cellspacing="0" style="width:100%; margin-bottom:5px;">
+        <tbody><tr>
+            <td><img src="img/title_guin_alllist.gif" alt="줄광고 채용정보" width="137px" height="30px" title="필수옵션인 줄광고 채용정보 리스트입니다"></td>
+            <td align="right" class="smfont3" style="padding-right:5px; color:#aeaeae;"></td>
+        </tr>
+        </tbody></table>
+    </div>
+    <div style="background-color:#969694; border:1px solid #6a696f; height:1px; font-size:0;"></div>
+    <div style="background-color:#f4f4f4; border-bottom:1px solid #dbdbdb; padding:5px;">
+        <table cellspacing="0" style="width:100%; height:25px;">
+        <tbody><tr>
+            <td style="width:150px; color:#8f8f8f;" align="center" class="smfont3">지역</td>
+            <td style="width:95px; color:#8f8f8f;" align="center" class="smfont3">업종</td>
+            <td style="width:75px;  color:#8f8f8f;" align="center" class="smfont3">성별/연령</td>
+            <td style="color:#8f8f8f;" align="center" class="smfont3">채용제목</td>
+            <td style="width:100px; color:#8f8f8f;" align="center" class="smfont3">닉네임</td>
+            <td style="width:90px; color:#8f8f8f;" align="center" class="smfont3">편의사항</td>
+        </tr>
+        </tbody></table>
+    </div>
+    <div>
+
+
+    <table width="100%" border="0" cellspacing="0" cellpadding="0"><tbody><tr><td valign="top" align="center"><table cellspacing="0" style="width:100%; height:35px; border-bottom:1px solid #eeeeee;" onmouseover="this.style.backgroundColor='f9f9f9'; this.style.color='';" onmouseout="this.style.backgroundColor='ffffff'; this.style.color='';">
+<tbody><tr>
+	<td style="width:150px;" align="left">&nbsp;&nbsp;서울 강남구</td>
+	<td style="width:95px;" align="center">기타 - 기타업종</td>
+	<td style="width:75px;" align="center">
+		<table cellspacing="0">
+		<tbody><tr align="center">
+			<td style="padding-bottom:5px;"></td>
+		</tr>
+		<tr>
+			<td class="smfont2"></td>
+		</tr>
+		</tbody></table>
+	</td>
+	<td align="left" style="padding:10px 0 10px 0;">
+
+        <table cellspacing="0">
+		<tbody><tr>
+			<td style="padding:0 0; line-height:130%;"><a href="guin_detail.php?num=6708&amp;pg=&amp;cou=0&amp;action=search&amp;area_read=&amp;jobclass_read=&amp;edu_read=&amp;career_read=&amp;gender_read=&amp;title_read=&amp;type_read=&amp;pay_read=&amp;ssi=&amp;sgu="><font color="#000000">DM보다 빠르고 신속합니다 24시간 대기</font></a> <br>
+            <span><img src="upload/happy_config/WantMoneyArrImg3.gif" border="0" align="absmiddle">&nbsp;<b style="color:#3f3f3f; padding:8px 0 0;">500,000원</b>&nbsp;</span>
+			</td>
+		</tr>
+		</tbody></table>
+
+	</td>
+	<td style="width:100px;" align="center" class="smfont2">
+		<table cellspacing="0">
+		<tbody><tr>
+			<td style="padding-bottom:5px;text-align: center;"><a href="guin_detail.php?num=6708&amp;pg=&amp;cou=0&amp;action=search&amp;area_read=&amp;jobclass_read=&amp;edu_read=&amp;career_read=&amp;gender_read=&amp;title_read=&amp;type_read=&amp;pay_read=&amp;ssi=&amp;sgu="><b>강남1등 프리미엄 LO...</b>
+			<table class="level_icon_super level_icon">
+                                         <tbody><tr>
+                                             <td class="medal"></td>
+                                               <td class="center">33회 990일</td>
+                                               <td class="last"></td>
+                                           </tr>
+                                       </tbody></table>
+			</a> </td>
+		</tr>
+		</tbody></table>
+	</td>
+	<td style="width:90px;" align="center" class="smfont2">
+		<table cellspacing="0">
+		<tbody><tr>
+			<td style="padding-bottom:5px; text-align:center;"><font color="#c80da3"><br>만근비지원<br>출퇴근지원<br>팁별도</font></td>
+		</tr>
+		</tbody></table>
+	</td>
+</tr>
+</tbody></table>
+<!-- { {NEW.guin_gender} }
+{ {NEW.guin_date.0} }-->
+
+</td></tr><tr><td valign="top" align="center"><table cellspacing="0" style="width:100%; height:35px; border-bottom:1px solid #eeeeee;" onmouseover="this.style.backgroundColor='f9f9f9'; this.style.color='';" onmouseout="this.style.backgroundColor='ffffff'; this.style.color='';">
+<tbody><tr>
+	<td style="width:150px;" align="left">&nbsp;&nbsp;서울 강남구</td>
+	<td style="width:95px;" align="center">룸싸롱 - 쩜오</td>
+	<td style="width:75px;" align="center">
+		<table cellspacing="0">
+		<tbody><tr align="center">
+			<td style="padding-bottom:5px;"></td>
+		</tr>
+		<tr>
+			<td class="smfont2"></td>
+		</tr>
+		</tbody></table>
+	</td>
+	<td align="left" style="padding:10px 0 10px 0;">
+
+        <table cellspacing="0">
+		<tbody>
+		</tbody></table>
+
+	</td>
+	<td style="width:100px;" align="center" class="smfont2">
+		<table cellspacing="0">
+		<tbody>
+		</tbody></table>
+	</td>
+	<td style="width:90px;" align="center" class="smfont2">
+		<table cellspacing="0">
+		<tbody><tr>
+			<td style="padding-bottom:5px; text-align:center;"><font color="#c80da3"><br>팁별도<br>지명우대</font></td>
+		</tr>
+		</tbody></table>
+	</td>
+</tr>
+</tbody></table>
+<!-- { {NEW.guin_gender} }
+{ {NEW.guin_date.0} }-->
+
+</td></tr></tbody></table><center><br><table cellpadding="0" cellspacing="2" style="padding:10px 0 20px"><tbody><tr><td><img src="img/btn_pageing_prev.gif" border="0" align="absmiddle"></td><td width="24" height="24" align="center" style="font-size:17px;"><a href="?a=&amp;pg=1&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><font color="red"><b>1</b></font></a></td><td width="24" height="24" align="center" style="font-size:17px;"><a href="?a=&amp;pg=2&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><b>2</b></a></td><td width="24" height="24" align="center" style="font-size:17px;"><a href="?a=&amp;pg=3&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><b>3</b></a></td><td width="24" height="24" align="center" style="font-size:17px;"><a href="?a=&amp;pg=4&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><b>4</b></a></td><td width="24" height="24" align="center" style="font-size:17px;"><a href="?a=&amp;pg=5&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><b>5</b></a></td><td width="24" height="24" align="center" style="font-size:17px;"><a href="?a=&amp;pg=6&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><b>6</b></a></td><td width="24" height="24" align="center" style="font-size:17px;"><a href="?a=&amp;pg=7&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><b>7</b></a></td><td width="24" height="24" align="center" style="font-size:17px;"><a href="?a=&amp;pg=8&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><b>8</b></a></td><td width="24" height="24" align="center" style="font-size:17px;"><a href="?a=&amp;pg=9&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><b>9</b></a></td><td width="24" height="24" align="center" style="font-size:17px;"><a href="?a=&amp;pg=10&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><b>10</b></a></td><td><a href="?a=&amp;pg=2&amp;com_info_id=&amp;search_si=&amp;guin_age2=&amp;action=search&amp;search_si=&amp;search_gu=&amp;search_type=&amp;search_type_sub=&amp;career_read=&amp;gender_read=&amp;pay_read=&amp;edu_read=&amp;job_type_read=%EC%A0%84%EC%B2%B4&amp;grade_read=&amp;title_read=&amp;guzic_jobtype1=&amp;guzic_jobtype2=&amp;file=&amp;underground1=&amp;underground2=&amp;file2=&amp;guin_pay_type=&amp;guzicnational=&amp;guzic_age_start=&amp;guzic_age_end=&amp;diff_regday=&amp;mode="><img src="img/btn_pageing_next.gif" border="0" align="absmiddle"></a></td></tr></tbody></table></center> 
+
+    </div>
+</div>
+<div style="margin:20px 0 20px 0;">
+
+<form method="get" action="guin_list.php" name="s_f_guin" style="border:0 margin:0">
+<div style="border:1px solid #dfdfdf; background-color:#f7f7f7; padding:10px;" align="center">
+	<table cellspacing="0">
+	<tbody><tr>
+		<td style="padding-right:3px;">
+    <select name="search_si" onchange="startRequest(this,'search_gu','100')" style="width:80px !important;height:25px;">
+      <option style="width:80px !important;height:25px;" value="">지역선택</option>
+      <option style="width:80px !important;height:25px;" value="29">서울</option>  <option style="width:80px !important;height:25px;" value="11">경기</option>  <option style="width:80px !important;height:25px;" value="10">인천</option>  <option style="width:80px !important;height:25px;" value="7">부산</option>  <option style="width:80px !important;height:25px;" value="1">대구</option>  <option style="width:80px !important;height:25px;" value="20">광주</option>  <option style="width:80px !important;height:25px;" value="23">대전</option>  <option style="width:80px !important;height:25px;" value="22">울산</option>  <option style="width:80px !important;height:25px;" value="28">강원</option>  <option style="width:80px !important;height:25px;" value="24">경남</option>  <option style="width:80px !important;height:25px;" value="25">경북</option>  <option style="width:80px !important;height:25px;" value="26">전남</option>  <option style="width:80px !important;height:25px;" value="27">전북</option>  <option style="width:80px !important;height:25px;" value="6">충남</option>  <option style="width:80px !important;height:25px;" value="4">충북</option>  <option style="width:80px !important;height:25px;" value="37">세종</option>  <option style="width:80px !important;height:25px;" value="3">제주</option>  <option style="width:80px !important;height:25px;" value="14">===========</option>  
+    </select>
+    <span id="search_gus_f_guin"></span>
+  
+    
+  </td>
+		<td style="padding-right:3px;">
+    <select name="search_type" onchange="startRequest2(this,'search_type_sub','140')" style="width:140px;;height:25px;">
+    <option value="">-1차 직종선택-</option>
+    <option value="24">룸싸롱</option><option value="15">노래주점</option><option value="27">마사지</option><option value="28">기타</option>
+    </select>
+    <span id="search_type_subs_f_guin"></span>
+  
+    
+  </td>
+		<td style="padding-right:3px;"><input type="text" name="title_read" value="" class="sminput3" style="width:200px;"></td>
+		<td><input type="image" src="img/btn_ad_find.gif" border="0" value="검색" align="absmiddle"></td>
+	</tr>
+	</tbody></table>
+</div>
+</form>
+</div>
+
+
+</div>
+</body></html>

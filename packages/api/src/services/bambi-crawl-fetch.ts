@@ -117,6 +117,9 @@ export interface CrawlClientOptions {
 	fetchImpl?: typeof globalThis.fetch;
 	maxAttempts?: number;
 	minRequestIntervalMs?: number;
+	// 성인인증·로그인 게이트가 있는 소스에 붙일 헤더(주로 cookie). 값 자체는 소스마다 다르고
+	// 만료되므로 코드가 아니라 env로 주입한다(bambi-crawl-ingest.ts의 crawlRequestHeaders).
+	requestHeaders?: Record<string, string>;
 	sleep?: (ms: number) => Promise<void>;
 	timeoutMs?: number;
 }
@@ -163,6 +166,7 @@ export const createCrawlClient = (
 				accept: "text/html,application/xhtml+xml",
 				"accept-language": "ko-KR,ko;q=0.9",
 				"user-agent": USER_AGENT,
+				...options.requestHeaders,
 			},
 			redirect: "follow",
 			signal: AbortSignal.timeout(timeoutMs),

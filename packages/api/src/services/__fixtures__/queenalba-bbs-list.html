@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
+<body>
+<div id="sub_center">
+
+
+    
+    
+    <div id="popup-wrap" class="popup-wrap" style="background-color: rgba(0,0,0,0.5); width:100%; height:100%; position: fixed; z-index:10000; top:0; left:0; display: none;"></div>
+    <div id="popup-layer" class="popup-layer" style="display:none; position: fixed; z-index:10000; 		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%)">
+        <div style="color: #000000; height: 50px; line-height: 50px; min-width: 100%;">
+            <div id="date-comment" style="font-weight:800 !important; color:#FFF !important; background:transparent; float:left; width:80%"></div>
+            <div id="popup-close" style="cursor:pointer; color:#FFF; background:transparent; float:right; text-align:right; width:20%; height:100%; padding-top:10px;">
+               <img width="30" src="/img/event/icon_popup_close2.png" alt="event popup close" align="absmiddle">
+            </div>
+        </div>
+        <div><img src="/img/event/260127_comment.jpg?uri_string=68249625" width="350" alt="260127_comment"></div>
+    </div>
+    <div id="popup-wrap-info" class="popup-wrap-info" style="background-color: rgba(0,0,0,0.5); width:100%; height:100%; position: fixed; z-index:10000; top:0; left:0; display: none;"></div>
+	<div id="popup-layer-info" class="popup-layer-info" style="display:none; position: fixed; z-index:10000; top: 12%; left:calc(50%-350px);">
+		<div style="color: #000000; height: 50px; line-height: 50px; min-width: 100%;">
+			<div id="popup-close-info" style="cursor:pointer; color:#FFF; background:transparent; float:right; text-align:right; width:20%; height:100%; padding-top:10px;">
+			   <img width="40" src="/img/event/icon_popup_close3.png" alt="event popup close" align="absmiddle">
+			</div>
+		</div>
+		<div><img src="/img/event/post_sudd_info_2607.jpg?uri_string=98719980" width="350" alt="post_sudd_info_2607"></div>
+	</div>
+	<div id="popup-wrap-sec" class="popup-wrap-sec" style="background-color: rgba(0,0,0,0.5); width:100%; height:100%; position: fixed; z-index:10000; top:0; left:0; display: none;"></div>
+	<div id="popup-layer-sec" class="popup-layer-sec" style="display:none; position: fixed; z-index:10000; top: 12%; left:calc(50%-350px);">
+		<div style="color: #000000; height: 50px; line-height: 50px; min-width: 100%;">
+			<div id="date-comment2" style="font-weight:800 !important; color:#FFF !important; background:transparent; float:left; width:80%"></div>
+			<div id="popup-close-sec" style="cursor:pointer; color:#FFF; background:transparent; float:right; text-align:right; width:20%; height:100%; padding-top:10px;">
+			   <img width="30" src="/img/event/icon_popup_close2.png" alt="event popup close" align="absmiddle">
+			</div>
+		</div>
+        <div><img src="/img/event/post_sudd_result_2607.jpg?uri_string=82980307" width="350" alt="post_sudd_result_2607"></div>
+	</div>
+
+
+
+
+<div style="margin-bottom:15px;"><div style="border:1px solid #787878; height:1px; background:url(img/skin_icon/make_icon/skin_icon_550_1.jpg); font-size:0;"></div>
+
+<div style="width:750px; text-align:center; padding:20px 0 0;">
+     <h2 style="background-image: url('img/bbs_title_night.gif'); background-repeat: no-repeat; font-size: 13px; color: transparent; user-select: none; display: inline;">
+                    <img src="img/bbs_title_night.gif" alt="밤문화이야기 게시판" style="vertical-align: top;">
+                    밤문화이야기</h2></div>
+
+<div style="width:750px; text-align:center; line-height:160%; font-size:13px; font-weight:bold;padding:15px 0; ">
+<p>지금 <span style="color:#ff3333;">유흥업소에 관한 핫이슈나 꼭 알아두어야할 정보</span>들을 올리는곳입니다.<br>
+다른곳에서 말할수 없는 정보들을 우리 퀸알바에서 많이 얻어갈수 있도록 서로서로 공유합시다.</p>
+
+</div></div>
+<div>
+	<table cellspacing="0" style="width:100%; margin-bottom:5px;">
+	<tbody><tr>
+      <td style="display: flex;">
+                  <!-- 두번째줄 버튼 영역 -->
+      <!-- 필터 버튼 -->
+      <!-- 필터 버튼 -->
+      <button id="filter-btn" style="margin:0px 0; padding:6px 16px; border-radius:5px; border:1px solid #880dc5; background:#fff; color:#880dc5; font-weight:bold; cursor:pointer;">
+        <div style="display: flex;align-items: center;">
+          <div>
+            <img src="/img/filter-3-line.svg" alt="filter" style="width:20px;filter: invert(16%) sepia(97%) saturate(7492%) hue-rotate(266deg) brightness(90%) contrast(104%);">
+          </div>
+          <div>필터</div>
+        </div>
+        </button>
+        
+        <!-- 모달(팝업) 필터 영역 -->
+        <div id="filter-modal" style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:9999;">
+          <div style="background:#fff; width:90%; max-width:400px; margin:250px auto 0 auto; border-radius:10px; box-shadow:0 2px 16px rgba(0,0,0,0.2); padding:24px 16px 16px 16px; position:relative;">
+            <div style="font-weight:bold; font-size:18px; margin-bottom:16px;border-bottom: 1px solid;padding-bottom: 10px;font-family:auto;">필터 설정</div>
+            <div class="switch-ad">
+              <span class="switch-label" id="ad-label-on" style="margin-left:8px;">광고 글 보기</span>
+              <label class="switch" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <input type="checkbox" id="ad-switch">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="setting-detail">기업 회원의 <img src="/img/icon/icon_ad.gif" style="vertical-align: middle" alt="광고"> 게시글을 목록에서 확인할 수 있습니다.</div>
+            <div class="switch-biz">
+              <span class="switch-label" id="biz-label-on" style="margin-left:8px;">기업회원 일반 글 보기</span>
+              <label class="switch" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <input type="checkbox" id="biz-switch">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="setting-detail">기업 회원의 일반 게시글을 목록에서 확인할 수 있습니다.</div>
+
+            <div class="switch-biz-comment">
+              <span class="switch-label" id="biz-label-on" style="margin-left:8px;">기업회원 댓글 보기</span>
+              <label class="switch" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <input type="checkbox" id="biz-comment-switch">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="setting-detail">기업 회원의 댓글 내용을 대체 문구 없이 확인할 수 있습니다.</div>
+            <button id="filter-close" style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:35px; color:#888; cursor:pointer;">×</button>
+          </div>
+        </div>
+                </td>
+      
+		<td>
+			<table cellspacing="0">
+			<tbody><tr>
+				<td></td>
+				<td></td>
+			</tr>
+			</tbody></table>
+		</td>
+		<td align="right"><a href="./bbs_regist.php?id=&amp;b_category=&amp;tb=comm_board2"><img src="upload/happy_config/IconWrite1.gif" border="0" align="absmiddle"></a>&nbsp;<a href="./bbs_list.php?id=&amp;b_category=&amp;tb=comm_board2"><img src="upload/happy_config/IconList1.gif" border="0" align="absmiddle"></a></td>
+	</tr>
+	</tbody></table>
+
+        
+
+        <table cellspacing="0" style="width:100%; background:url(img/imgpart_table_bar_02.gif);">
+	<tbody><tr>
+		<td style="width:4px; height:33px; background:url(img/imgpart_table_bar_01.gif) no-repeat;"></td>
+		<td class="smfont3" style="width:50px; color:#979797;" align="center">번호</td>
+		<td class="smfont3" style="width:80px; color:#979797;" align="center">첨부</td>
+		<td class="smfont3" style="color:#979797;" align="center">제   목</td>
+		<td class="smfont3" style="width:100px; color:#979797;" align="center">등록인</td>
+		<td class="smfont3" style="width:100px; color:#979797;" align="center">등록일</td>
+                <td class="smfont3" style="width:40px; color:#979797;" align="center">추천</td>
+		<td class="smfont3" style="width:60px; color:#979797;;" align="center">조회수</td>
+		<td style="width:4px; height:33px; background:url(img/imgpart_table_bar_03.gif) no-repeat;"></td>
+	</tr>
+	</tbody></table>
+	
+	<table cellspacing="0" cellpadding="0" border="0" width="100%"><tbody><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tbody><tr height="30" onmouseover="this.style.backgroundColor='#FFFFFF'" onmouseout="this.style.backgroundColor=''">
+	<td width="54" align="center"><img src="upload/happy_config/IconNotice1.gif" border="0" align="absmiddle"></td>
+	<td width="70" align="center"><a href="bbs_detail.php?top_gonggi=1&amp;bbs_num=67&amp;b_category=&amp;id=&amp;tb=comm_board2" onmouseover="ddrivetip('<IMG src=\'/wys2/file_attach_thumb/2016/07/18/1468820597-98.jpg\' border=0 width=200>','white', 200)" ;="" onmouseout="hideddrivetip()"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+	<td align="left" style="word-break:break-all; font-size:12px; font-weight:bold;"><font color="#FF6D01">[공지]</font> <a href="./bbs_detail.php?bbs_num=67&amp;top_gonggi=1&amp;tb=comm_board2&amp;id=&amp;pg=1"><font color="#6c0391">커뮤니티 운영정책 및 변경사항 안내</font></a> </td>
+	<td width="100" align="center">퀸알바</td>
+	<td width="100" align="center">2016-07-04</td>
+        <td width="40" align="center">21</td>
+        <td width="64" align="center">225033</td>
+</tr>
+</tbody></table>
+
+
+
+<!--
+
+
+
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tr height="35" onMouseOver=this.style.backgroundColor='#FFFFFF' onMouseOut=this.style.backgroundColor=''>
+	<td width="54" align="center"><img src="upload/happy_config/IconNotice1.gif" border="0" align="absmiddle"></td>
+	<td width="70" align="center"><a href=bbs_detail.php?top_gonggi=1&bbs_num=67&b_category=&id=&tb=comm_board2  onMouseover="ddrivetip('<IMG src=\'/wys2/file_attach_thumb/2016/07/18/1468820597-98.jpg\' border=0 width=200>','white', 200)"; onMouseout="hideddrivetip()"><img src='upload/happy_config/IconData2.gif' align=absmiddle border=0></a></td>
+	<td colspan="4" align="left" style="word-break:break-all; font-size:14px; font-weight:bold;"> <font color="#000000;"><a href='./bbs_detail.php?bbs_num=67&top_gonggi=1&tb=comm_board2&id=&pg=1'><font color='#6c0391'>커뮤니티 운영정책 및 변경사항 안내</font></a> </font></td>
+
+</tr>
+</table>
+-->
+
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tbody><tr height="30" onmouseover="this.style.backgroundColor='#FFFFFF'" onmouseout="this.style.backgroundColor=''">
+	<td width="54" align="center"><img src="upload/happy_config/IconNotice1.gif" border="0" align="absmiddle"></td>
+	<td width="70" align="center"><a href="bbs_detail.php?top_gonggi=1&amp;bbs_num=65&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+	<td align="left" style="word-break:break-all; font-size:12px; font-weight:bold;"><font color="#FF6D01">[공지]</font> <a href="./bbs_detail.php?bbs_num=65&amp;top_gonggi=1&amp;tb=comm_board2&amp;id=&amp;pg=1"><font color="#6c0391">커뮤니티 이용개선 및 변경사항 안내</font></a> </td>
+	<td width="100" align="center">퀸알바</td>
+	<td width="100" align="center">2016-05-10</td>
+        <td width="40" align="center">23</td>
+        <td width="64" align="center">282811</td>
+</tr>
+</tbody></table>
+
+
+
+<!--
+
+
+
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tr height="35" onMouseOver=this.style.backgroundColor='#FFFFFF' onMouseOut=this.style.backgroundColor=''>
+	<td width="54" align="center"><img src="upload/happy_config/IconNotice1.gif" border="0" align="absmiddle"></td>
+	<td width="70" align="center"><a href=bbs_detail.php?top_gonggi=1&bbs_num=65&b_category=&id=&tb=comm_board2 ><img src='upload/happy_config/IconData2.gif' align=absmiddle border=0></a></td>
+	<td colspan="4" align="left" style="word-break:break-all; font-size:14px; font-weight:bold;"> <font color="#000000;"><a href='./bbs_detail.php?bbs_num=65&top_gonggi=1&tb=comm_board2&id=&pg=1'><font color='#6c0391'>커뮤니티 이용개선 및 변경사항 안내</font></a> </font></td>
+
+</tr>
+</table>
+-->
+
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tbody><tr height="30" onmouseover="this.style.backgroundColor='#FFFFFF'" onmouseout="this.style.backgroundColor=''">
+	<td width="54" align="center"><img src="upload/happy_config/IconNotice1.gif" border="0" align="absmiddle"></td>
+	<td width="70" align="center"><a href="bbs_detail.php?top_gonggi=1&amp;bbs_num=59&amp;b_category=&amp;id=&amp;tb=comm_board2" onmouseover="ddrivetip('<IMG src=\'/wys2/swf_upload/2016/01/15/14528398789196.jpg\' border=0 width=200>','white', 200)" ;="" onmouseout="hideddrivetip()"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+	<td align="left" style="word-break:break-all; font-size:12px; font-weight:bold;"><font color="#FF6D01">[공지]</font> <a href="./bbs_detail.php?bbs_num=59&amp;top_gonggi=1&amp;tb=comm_board2&amp;id=&amp;pg=1"><font color="#6c0391">커뮤니티 관련 안내사항</font></a> </td>
+	<td width="100" align="center">퀸알바</td>
+	<td width="100" align="center">2016-01-15</td>
+        <td width="40" align="center">24</td>
+        <td width="64" align="center">271045</td>
+</tr>
+</tbody></table>
+
+
+
+<!--
+
+
+
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tr height="35" onMouseOver=this.style.backgroundColor='#FFFFFF' onMouseOut=this.style.backgroundColor=''>
+	<td width="54" align="center"><img src="upload/happy_config/IconNotice1.gif" border="0" align="absmiddle"></td>
+	<td width="70" align="center"><a href=bbs_detail.php?top_gonggi=1&bbs_num=59&b_category=&id=&tb=comm_board2  onMouseover="ddrivetip('<IMG src=\'/wys2/swf_upload/2016/01/15/14528398789196.jpg\' border=0 width=200>','white', 200)"; onMouseout="hideddrivetip()"><img src='upload/happy_config/IconData2.gif' align=absmiddle border=0></a></td>
+	<td colspan="4" align="left" style="word-break:break-all; font-size:14px; font-weight:bold;"> <font color="#000000;"><a href='./bbs_detail.php?bbs_num=59&top_gonggi=1&tb=comm_board2&id=&pg=1'><font color='#6c0391'>커뮤니티 관련 안내사항</font></a> </font></td>
+
+</tr>
+</table>
+-->
+
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tbody>
+</tbody></table>
+
+
+
+<!--
+
+
+
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tr height="35" onMouseOver=this.style.backgroundColor='#FFFFFF' onMouseOut=this.style.backgroundColor=''>
+	<td width="54" align="center"><img src="upload/happy_config/IconNotice1.gif" border="0" align="absmiddle"></td>
+	<td width="70" align="center"><a href=bbs_detail.php?top_gonggi=1&bbs_num=54&b_category=&id=&tb=comm_board2  onMouseover="ddrivetip('<IMG src=\'/wys2/file_attach_thumb/2015/09/25/1443178691-58.jpg\' border=0 width=200>','white', 200)"; onMouseout="hideddrivetip()"><img src='upload/happy_config/IconData2.gif' align=absmiddle border=0></a></td>
+	<td colspan="4" align="left" style="word-break:break-all; font-size:14px; font-weight:bold;"> <font color="#000000;"><a href='./bbs_detail.php?bbs_num=54&top_gonggi=1&tb=comm_board2&id=&pg=1'><font color='#6c0391'>회원님들 꼭 보셔야 해요.퀸알바는 항상 노력합니다.</font></a> </font></td>
+
+</tr>
+</table>
+-->
+
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tbody>
+</tbody></table>
+
+
+
+<!--
+
+
+
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tr height="35" onMouseOver=this.style.backgroundColor='#FFFFFF' onMouseOut=this.style.backgroundColor=''>
+	<td width="54" align="center"><img src="upload/happy_config/IconNotice1.gif" border="0" align="absmiddle"></td>
+	<td width="70" align="center"><a href=bbs_detail.php?top_gonggi=1&bbs_num=50&b_category=&id=&tb=comm_board2  onMouseover="ddrivetip('<IMG src=\'/wys2/file_attach_thumb/2015/07/01/1435710826-22.jpg\' border=0 width=200>','white', 200)"; onMouseout="hideddrivetip()"><img src='upload/happy_config/IconData2.gif' align=absmiddle border=0></a></td>
+	<td colspan="4" align="left" style="word-break:break-all; font-size:14px; font-weight:bold;"> <font color="#000000;"><a href='./bbs_detail.php?bbs_num=50&top_gonggi=1&tb=comm_board2&id=&pg=1'><font color='#6c0391'>[필독]안내드립니다</font></a> </font></td>
+
+</tr>
+</table>
+-->
+
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tbody>
+</tbody></table>
+
+
+
+<!--
+
+
+
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tr height="35" onMouseOver=this.style.backgroundColor='#FFFFFF' onMouseOut=this.style.backgroundColor=''>
+	<td width="54" align="center"><img src="upload/happy_config/IconNotice1.gif" border="0" align="absmiddle"></td>
+	<td width="70" align="center"><a href=bbs_detail.php?top_gonggi=1&bbs_num=46&b_category=&id=&tb=comm_board2  onMouseover="ddrivetip('<IMG src=\'/wys2/file_attach_thumb/2014/11/18/1416277157-57.jpg\' border=0 width=200>','white', 200)"; onMouseout="hideddrivetip()"><img src='upload/happy_config/IconData2.gif' align=absmiddle border=0></a></td>
+	<td colspan="4" align="left" style="word-break:break-all; font-size:14px; font-weight:bold;"> <font color="#000000;"><a href='./bbs_detail.php?bbs_num=46&top_gonggi=1&tb=comm_board2&id=&pg=1'><font color='#6c0391'>공지</font></a> </font></td>
+
+</tr>
+</table>
+-->
+
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tbody>
+</tbody></table>
+
+
+
+<!--
+
+
+
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb; background:#f7edff;">
+<tr height="35" onMouseOver=this.style.backgroundColor='#FFFFFF' onMouseOut=this.style.backgroundColor=''>
+	<td width="54" align="center"><img src="upload/happy_config/IconNotice1.gif" border="0" align="absmiddle"></td>
+	<td width="70" align="center"><a href=bbs_detail.php?top_gonggi=1&bbs_num=38&b_category=&id=&tb=comm_board2 ><img src='upload/happy_config/IconData2.gif' align=absmiddle border=0></a></td>
+	<td colspan="4" align="left" style="word-break:break-all; font-size:14px; font-weight:bold;"> <font color="#000000;"><a href='./bbs_detail.php?bbs_num=38&top_gonggi=1&tb=comm_board2&id=&pg=1'><font color='#6c0391'>좋은 일자리 구하는 팁!!</font></a> </font></td>
+
+</tr>
+</table>
+-->
+
+</td></tr></tbody></table> 
+	<table cellspacing="0" cellpadding="0" border="0" width="100%"><tbody><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+    <tbody><tr style="background-color: #ffffff;" height="30" onmouseover="this.style.backgroundColor=''" onmouseout="this.style.backgroundColor=''">
+        <td width="54" align="center"><div style="display: flex;align-items: center;padding:2px;justify-content: center;border-radius: 5px;">
+         <div>
+            <div class="fixed-board-icon">
+             <svg class="logoIcon" height="1em" viewBox="0 0 576 512"><path d="M309 106c11.4-7 19-19.7 19-34c0-22.1-17.9-40-40-40s-40 17.9-40 40c0 14.4 7.6 27 19 34L209.7 220.6c-9.1 18.2-32.7 23.4-48.6 10.7L72 160c5-6.7 8-15 8-24c0-22.1-17.9-40-40-40S0 113.9 0 136s17.9 40 40 40c.2 0 .5 0 .7 0L86.4 427.4c5.5 30.4 32 52.6 63 52.6H426.6c30.9 0 57.4-22.1 63-52.6L535.3 176c.2 0 .5 0 .7 0c22.1 0 40-17.9 40-40s-17.9-40-40-40s-40 17.9-40 40c0 9 3 17.3 8 24l-89.1 71.3c-15.9 12.7-39.5 7.5-48.6-10.7L309 106z"></path></svg>
+            </div>
+            </div></div><div style="font-family: fantasy;">추천</div></td>
+        <td width="70" align="center"><a href="bbs_detail.php?bbs_num=1370389&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+        <td align="left"> 
+            <div style="display: flex; align-items: center;">
+            <font style="color:#FF6D01; word-break:break-all"></font>
+    
+            
+    
+            <span><a href="./bbs_detail.php?bbs_num=1370389&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; font-weight: bold;;">일할때 술 안먹는 비결 알려주실 언니..</span></a> </span>[21]
+                <div>
+            <img src="/img/gift-solid-full.svg" style="width:20px;" alt="gift-icon-2512">
+                           </div>
+        </div>
+        </td>
+        <td width="100" align="center">바보인간</td>
+        <td width="100" align="center" style="font-size:11px; color:#999999;">2026-07-26   <!--  <br />{ {BOARD.bbs_time} } --></td>
+                <td width="40" align="center"></td>
+        <td width="64" align="center"></td>
+        </tr>
+    </tbody></table>
+    
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+    <tbody><tr style="background-color: #ffffff;" height="30" onmouseover="this.style.backgroundColor=''" onmouseout="this.style.backgroundColor=''">
+        <td width="54" align="center"><div style="display: flex;align-items: center;padding:2px;justify-content: center;border-radius: 5px;">
+         <div>
+            <div class="fixed-board-icon">
+             <svg class="logoIcon" height="1em" viewBox="0 0 576 512"><path d="M309 106c11.4-7 19-19.7 19-34c0-22.1-17.9-40-40-40s-40 17.9-40 40c0 14.4 7.6 27 19 34L209.7 220.6c-9.1 18.2-32.7 23.4-48.6 10.7L72 160c5-6.7 8-15 8-24c0-22.1-17.9-40-40-40S0 113.9 0 136s17.9 40 40 40c.2 0 .5 0 .7 0L86.4 427.4c5.5 30.4 32 52.6 63 52.6H426.6c30.9 0 57.4-22.1 63-52.6L535.3 176c.2 0 .5 0 .7 0c22.1 0 40-17.9 40-40s-17.9-40-40-40s-40 17.9-40 40c0 9 3 17.3 8 24l-89.1 71.3c-15.9 12.7-39.5 7.5-48.6-10.7L309 106z"></path></svg>
+            </div>
+            </div></div><div style="font-family: fantasy;">추천</div></td>
+        <td width="70" align="center"><a href="bbs_detail.php?bbs_num=1370243&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+        <td align="left"> 
+            <div style="display: flex; align-items: center;">
+            <font style="color:#FF6D01; word-break:break-all"></font>
+    
+            
+    
+            <span><a href="./bbs_detail.php?bbs_num=1370243&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; font-weight: bold;;">힘든 시기를 보내고 있는 언니들에게~</span></a> </span>[9]
+                <div>
+            <img src="/img/gift-solid-full.svg" style="width:20px;" alt="gift-icon-2512">
+                           </div>
+        </div>
+        </td>
+        <td width="100" align="center">ㅇㅇ</td>
+        <td width="100" align="center" style="font-size:11px; color:#999999;">2026-07-26   <!--  <br />{ {BOARD.bbs_time} } --></td>
+                <td width="40" align="center"></td>
+        <td width="64" align="center"></td>
+        </tr>
+    </tbody></table>
+    
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+    <tbody><tr style="background-color: #ffffff;" height="30" onmouseover="this.style.backgroundColor=''" onmouseout="this.style.backgroundColor=''">
+        <td width="54" align="center"><div style="display: flex;align-items: center;padding:2px;justify-content: center;border-radius: 5px;">
+         <div>
+            <div class="fixed-board-icon">
+             <svg class="logoIcon" height="1em" viewBox="0 0 576 512"><path d="M309 106c11.4-7 19-19.7 19-34c0-22.1-17.9-40-40-40s-40 17.9-40 40c0 14.4 7.6 27 19 34L209.7 220.6c-9.1 18.2-32.7 23.4-48.6 10.7L72 160c5-6.7 8-15 8-24c0-22.1-17.9-40-40-40S0 113.9 0 136s17.9 40 40 40c.2 0 .5 0 .7 0L86.4 427.4c5.5 30.4 32 52.6 63 52.6H426.6c30.9 0 57.4-22.1 63-52.6L535.3 176c.2 0 .5 0 .7 0c22.1 0 40-17.9 40-40s-17.9-40-40-40s-40 17.9-40 40c0 9 3 17.3 8 24l-89.1 71.3c-15.9 12.7-39.5 7.5-48.6-10.7L309 106z"></path></svg>
+            </div>
+            </div></div><div style="font-family: fantasy;">추천</div></td>
+        <td width="70" align="center"><a href="bbs_detail.php?bbs_num=1370217&amp;b_category=&amp;id=&amp;tb=comm_board2" onmouseover="ddrivetip('<IMG src=\'./data/comm_board2/1785053857-21-thumb.jpeg\' border=0 width=200>','white', 200)" ;="" onmouseout="hideddrivetip()"><img src="upload/happy_config/IconData1.gif" align="absmiddle" border="0"></a></td>
+        <td align="left"> 
+            <div style="display: flex; align-items: center;">
+            <font style="color:#FF6D01; word-break:break-all"></font>
+    
+            
+    
+            <span><a href="./bbs_detail.php?bbs_num=1370217&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; font-weight: bold;;">전 20대 젊손이랑 텐션 안맞아요.</span></a> </span>[11]
+                <div>
+            <img src="/img/gift-solid-full.svg" style="width:20px;" alt="gift-icon-2512">
+                           </div>
+        </div>
+        </td>
+        <td width="100" align="center">ㄴ</td>
+        <td width="100" align="center" style="font-size:11px; color:#999999;">2026-07-26   <!--  <br />{ {BOARD.bbs_time} } --></td>
+                <td width="40" align="center"></td>
+        <td width="64" align="center"></td>
+        </tr>
+    </tbody></table>
+    
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+    <tbody><tr style="background-color: #ffffff;" height="30" onmouseover="this.style.backgroundColor=''" onmouseout="this.style.backgroundColor=''">
+        <td width="54" align="center"><div style="display: flex;align-items: center;padding:2px;justify-content: center;border-radius: 5px;">
+         <div>
+            <div class="fixed-board-icon">
+             <svg class="logoIcon" height="1em" viewBox="0 0 576 512"><path d="M309 106c11.4-7 19-19.7 19-34c0-22.1-17.9-40-40-40s-40 17.9-40 40c0 14.4 7.6 27 19 34L209.7 220.6c-9.1 18.2-32.7 23.4-48.6 10.7L72 160c5-6.7 8-15 8-24c0-22.1-17.9-40-40-40S0 113.9 0 136s17.9 40 40 40c.2 0 .5 0 .7 0L86.4 427.4c5.5 30.4 32 52.6 63 52.6H426.6c30.9 0 57.4-22.1 63-52.6L535.3 176c.2 0 .5 0 .7 0c22.1 0 40-17.9 40-40s-17.9-40-40-40s-40 17.9-40 40c0 9 3 17.3 8 24l-89.1 71.3c-15.9 12.7-39.5 7.5-48.6-10.7L309 106z"></path></svg>
+            </div>
+            </div></div><div style="font-family: fantasy;">추천</div></td>
+        <td width="70" align="center"><a href="bbs_detail.php?bbs_num=1370207&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+        <td align="left"> 
+            <div style="display: flex; align-items: center;">
+            <font style="color:#FF6D01; word-break:break-all"></font>
+    
+            
+    
+            <span><a href="./bbs_detail.php?bbs_num=1370207&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; font-weight: bold;;">갑자기 웃겻던 썰</span></a> </span>[12]
+                <div>
+            <img src="/img/gift-solid-full.svg" style="width:20px;" alt="gift-icon-2512">
+                           </div>
+        </div>
+        </td>
+        <td width="100" align="center">ㅊㅊ</td>
+        <td width="100" align="center" style="font-size:11px; color:#999999;">2026-07-26   <!--  <br />{ {BOARD.bbs_time} } --></td>
+                <td width="40" align="center"></td>
+        <td width="64" align="center"></td>
+        </tr>
+    </tbody></table>
+    
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+    <tbody><tr style="background-color: #ffffff;" height="30" onmouseover="this.style.backgroundColor=''" onmouseout="this.style.backgroundColor=''">
+        <td width="54" align="center"><div style="display: flex;align-items: center;padding:2px;justify-content: center;border-radius: 5px;">
+         <div>
+            <div class="fixed-board-icon">
+             <svg class="logoIcon" height="1em" viewBox="0 0 576 512"><path d="M309 106c11.4-7 19-19.7 19-34c0-22.1-17.9-40-40-40s-40 17.9-40 40c0 14.4 7.6 27 19 34L209.7 220.6c-9.1 18.2-32.7 23.4-48.6 10.7L72 160c5-6.7 8-15 8-24c0-22.1-17.9-40-40-40S0 113.9 0 136s17.9 40 40 40c.2 0 .5 0 .7 0L86.4 427.4c5.5 30.4 32 52.6 63 52.6H426.6c30.9 0 57.4-22.1 63-52.6L535.3 176c.2 0 .5 0 .7 0c22.1 0 40-17.9 40-40s-17.9-40-40-40s-40 17.9-40 40c0 9 3 17.3 8 24l-89.1 71.3c-15.9 12.7-39.5 7.5-48.6-10.7L309 106z"></path></svg>
+            </div>
+            </div></div><div style="font-family: fantasy;">추천</div></td>
+        <td width="70" align="center"><a href="bbs_detail.php?bbs_num=1369758&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+        <td align="left"> 
+            <div style="display: flex; align-items: center;">
+            <font style="color:#FF6D01; word-break:break-all"></font>
+    
+            
+    
+            <span><a href="./bbs_detail.php?bbs_num=1369758&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; font-weight: bold;;">잘되는 하퍼수니 사쥬업 역사</span></a> </span>[31]
+                <div>
+            <img src="/img/gift-solid-full.svg" style="width:20px;" alt="gift-icon-2512">
+                           </div>
+        </div>
+        </td>
+        <td width="100" align="center">ㅇ</td>
+        <td width="100" align="center" style="font-size:11px; color:#999999;">2026-07-26   <!--  <br />{ {BOARD.bbs_time} } --></td>
+                <td width="40" align="center"></td>
+        <td width="64" align="center"></td>
+        </tr>
+    </tbody></table>
+    
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+    <tbody><tr style="background-color: #ffffff;" height="30" onmouseover="this.style.backgroundColor=''" onmouseout="this.style.backgroundColor=''">
+        <td width="54" align="center"><div style="display: flex;align-items: center;padding:2px;justify-content: center;border-radius: 5px;">
+         <div>
+            <div class="fixed-board-icon">
+             <svg class="logoIcon" height="1em" viewBox="0 0 576 512"><path d="M309 106c11.4-7 19-19.7 19-34c0-22.1-17.9-40-40-40s-40 17.9-40 40c0 14.4 7.6 27 19 34L209.7 220.6c-9.1 18.2-32.7 23.4-48.6 10.7L72 160c5-6.7 8-15 8-24c0-22.1-17.9-40-40-40S0 113.9 0 136s17.9 40 40 40c.2 0 .5 0 .7 0L86.4 427.4c5.5 30.4 32 52.6 63 52.6H426.6c30.9 0 57.4-22.1 63-52.6L535.3 176c.2 0 .5 0 .7 0c22.1 0 40-17.9 40-40s-17.9-40-40-40s-40 17.9-40 40c0 9 3 17.3 8 24l-89.1 71.3c-15.9 12.7-39.5 7.5-48.6-10.7L309 106z"></path></svg>
+            </div>
+            </div></div><div style="font-family: fantasy;">추천</div></td>
+        <td width="70" align="center"><a href="bbs_detail.php?bbs_num=1370831&amp;b_category=&amp;id=&amp;tb=comm_board2" onmouseover="ddrivetip('<IMG src=\'./data/comm_board2/1785120653-7-thumb.jpg\' border=0 width=200>','white', 200)" ;="" onmouseout="hideddrivetip()"><img src="upload/happy_config/IconData1.gif" align="absmiddle" border="0"></a></td>
+        <td align="left"> 
+            <div style="display: flex; align-items: center;">
+            <font style="color:#FF6D01; word-break:break-all"></font>
+    
+            
+    
+            <span><a href="./bbs_detail.php?bbs_num=1370831&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; font-weight: bold;;">가락 동경에서 가방 잃어버리신언니!!</span></a> </span>[21]
+                <div>
+            <img src="/img/gift-solid-full.svg" style="width:20px;" alt="gift-icon-2512">
+                           </div>
+        </div>
+        </td>
+        <td width="100" align="center">죄송해요</td>
+        <td width="100" align="center" style="font-size:11px; color:#999999;">2026-07-27   <!--  <br />{ {BOARD.bbs_time} } --></td>
+                <td width="40" align="center"></td>
+        <td width="64" align="center"></td>
+        </tr>
+    </tbody></table>
+    
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+    <tbody><tr style="background-color: #ffffff;" height="30" onmouseover="this.style.backgroundColor=''" onmouseout="this.style.backgroundColor=''">
+        <td width="54" align="center"><div style="display: flex;align-items: center;padding:2px;justify-content: center;border-radius: 5px;">
+         <div>
+            <div class="fixed-board-icon">
+             <svg class="logoIcon" height="1em" viewBox="0 0 576 512"><path d="M309 106c11.4-7 19-19.7 19-34c0-22.1-17.9-40-40-40s-40 17.9-40 40c0 14.4 7.6 27 19 34L209.7 220.6c-9.1 18.2-32.7 23.4-48.6 10.7L72 160c5-6.7 8-15 8-24c0-22.1-17.9-40-40-40S0 113.9 0 136s17.9 40 40 40c.2 0 .5 0 .7 0L86.4 427.4c5.5 30.4 32 52.6 63 52.6H426.6c30.9 0 57.4-22.1 63-52.6L535.3 176c.2 0 .5 0 .7 0c22.1 0 40-17.9 40-40s-17.9-40-40-40s-40 17.9-40 40c0 9 3 17.3 8 24l-89.1 71.3c-15.9 12.7-39.5 7.5-48.6-10.7L309 106z"></path></svg>
+            </div>
+            </div></div><div style="font-family: fantasy;">추천</div></td>
+        <td width="70" align="center"><a href="bbs_detail.php?bbs_num=1371332&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+        <td align="left"> 
+            <div style="display: flex; align-items: center;">
+            <font style="color:#FF6D01; word-break:break-all"></font>
+    
+            
+    
+            <span><a href="./bbs_detail.php?bbs_num=1371332&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; font-weight: bold;;">언니들이봤던~</span></a> </span>[16]
+                <div>
+            <img src="/img/gift-solid-full.svg" style="width:20px;" alt="gift-icon-2512">
+                           </div>
+        </div>
+        </td>
+        <td width="100" align="center">ㅇㅇ</td>
+        <td width="100" align="center" style="font-size:11px; color:#999999;">2026-07-27   <!--  <br />{ {BOARD.bbs_time} } --></td>
+                <td width="40" align="center"></td>
+        <td width="64" align="center"></td>
+        </tr>
+    </tbody></table>
+    
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+    <tbody><tr style="background-color: #ffffff;" height="30" onmouseover="this.style.backgroundColor=''" onmouseout="this.style.backgroundColor=''">
+        <td width="54" align="center"><div style="display: flex;align-items: center;padding:2px;justify-content: center;border-radius: 5px;">
+         <div>
+            <div class="fixed-board-icon">
+             <svg class="logoIcon" height="1em" viewBox="0 0 576 512"><path d="M309 106c11.4-7 19-19.7 19-34c0-22.1-17.9-40-40-40s-40 17.9-40 40c0 14.4 7.6 27 19 34L209.7 220.6c-9.1 18.2-32.7 23.4-48.6 10.7L72 160c5-6.7 8-15 8-24c0-22.1-17.9-40-40-40S0 113.9 0 136s17.9 40 40 40c.2 0 .5 0 .7 0L86.4 427.4c5.5 30.4 32 52.6 63 52.6H426.6c30.9 0 57.4-22.1 63-52.6L535.3 176c.2 0 .5 0 .7 0c22.1 0 40-17.9 40-40s-17.9-40-40-40s-40 17.9-40 40c0 9 3 17.3 8 24l-89.1 71.3c-15.9 12.7-39.5 7.5-48.6-10.7L309 106z"></path></svg>
+            </div>
+            </div></div><div style="font-family: fantasy;">추천</div></td>
+        <td width="70" align="center"><a href="bbs_detail.php?bbs_num=1371076&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+        <td align="left"> 
+            <div style="display: flex; align-items: center;">
+            <font style="color:#FF6D01; word-break:break-all"></font>
+    
+            
+    
+            <span><a href="./bbs_detail.php?bbs_num=1371076&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; font-weight: bold;;">아가씨는 과해서 다 티남</span></a> </span>[48]
+                <div>
+            <img src="/img/gift-solid-full.svg" style="width:20px;" alt="gift-icon-2512">
+                           </div>
+        </div>
+        </td>
+        <td width="100" align="center">아니던데</td>
+        <td width="100" align="center" style="font-size:11px; color:#999999;">2026-07-27   <!--  <br />{ {BOARD.bbs_time} } --></td>
+                <td width="40" align="center"></td>
+        <td width="64" align="center"></td>
+        </tr>
+    </tbody></table>
+    
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+    <tbody><tr style="background-color: #ffffff;" height="30" onmouseover="this.style.backgroundColor=''" onmouseout="this.style.backgroundColor=''">
+        <td width="54" align="center"><div style="display: flex;align-items: center;padding:2px;justify-content: center;border-radius: 5px;">
+         <div>
+            <div class="fixed-board-icon">
+             <svg class="logoIcon" height="1em" viewBox="0 0 576 512"><path d="M309 106c11.4-7 19-19.7 19-34c0-22.1-17.9-40-40-40s-40 17.9-40 40c0 14.4 7.6 27 19 34L209.7 220.6c-9.1 18.2-32.7 23.4-48.6 10.7L72 160c5-6.7 8-15 8-24c0-22.1-17.9-40-40-40S0 113.9 0 136s17.9 40 40 40c.2 0 .5 0 .7 0L86.4 427.4c5.5 30.4 32 52.6 63 52.6H426.6c30.9 0 57.4-22.1 63-52.6L535.3 176c.2 0 .5 0 .7 0c22.1 0 40-17.9 40-40s-17.9-40-40-40s-40 17.9-40 40c0 9 3 17.3 8 24l-89.1 71.3c-15.9 12.7-39.5 7.5-48.6-10.7L309 106z"></path></svg>
+            </div>
+            </div></div><div style="font-family: fantasy;">추천</div></td>
+        <td width="70" align="center"><a href="bbs_detail.php?bbs_num=1371391&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+        <td align="left"> 
+            <div style="display: flex; align-items: center;">
+            <font style="color:#FF6D01; word-break:break-all"></font>
+    
+            
+    
+            <span><a href="./bbs_detail.php?bbs_num=1371391&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; font-weight: bold;;">월에 1500버는데 배달음식 2만원도 고민함</span></a> </span>[19]
+                <div>
+            <img src="/img/gift-solid-full.svg" style="width:20px;" alt="gift-icon-2512">
+                           </div>
+        </div>
+        </td>
+        <td width="100" align="center">ㄹ</td>
+        <td width="100" align="center" style="font-size:11px; color:#999999;">2026-07-27   <!--  <br />{ {BOARD.bbs_time} } --></td>
+                <td width="40" align="center"></td>
+        <td width="64" align="center"></td>
+        </tr>
+    </tbody></table>
+    
+</td></tr><tr><td valign="top" align="center">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+    <tbody><tr style="background-color: #ffffff;" height="30" onmouseover="this.style.backgroundColor=''" onmouseout="this.style.backgroundColor=''">
+        <td width="54" align="center"><div style="display: flex;align-items: center;padding:2px;justify-content: center;border-radius: 5px;">
+         <div>
+            <div class="fixed-board-icon">
+             <svg class="logoIcon" height="1em" viewBox="0 0 576 512"><path d="M309 106c11.4-7 19-19.7 19-34c0-22.1-17.9-40-40-40s-40 17.9-40 40c0 14.4 7.6 27 19 34L209.7 220.6c-9.1 18.2-32.7 23.4-48.6 10.7L72 160c5-6.7 8-15 8-24c0-22.1-17.9-40-40-40S0 113.9 0 136s17.9 40 40 40c.2 0 .5 0 .7 0L86.4 427.4c5.5 30.4 32 52.6 63 52.6H426.6c30.9 0 57.4-22.1 63-52.6L535.3 176c.2 0 .5 0 .7 0c22.1 0 40-17.9 40-40s-17.9-40-40-40s-40 17.9-40 40c0 9 3 17.3 8 24l-89.1 71.3c-15.9 12.7-39.5 7.5-48.6-10.7L309 106z"></path></svg>
+            </div>
+            </div></div><div style="font-family: fantasy;">추천</div></td>
+        <td width="70" align="center"><a href="bbs_detail.php?bbs_num=1370499&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+        <td align="left"> 
+            <div style="display: flex; align-items: center;">
+            <font style="color:#FF6D01; word-break:break-all"></font>
+    
+            
+    
+            <span><a href="./bbs_detail.php?bbs_num=1370499&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; font-weight: bold;;">본가 화류하면서 월4천ㅡ5천버는데</span></a> </span>[62]
+                <div>
+            <img src="/img/gift-solid-full.svg" style="width:20px;" alt="gift-icon-2512">
+                           </div>
+        </div>
+        </td>
+        <td width="100" align="center">그래</td>
+        <td width="100" align="center" style="font-size:11px; color:#999999;">2026-07-27   <!--  <br />{ {BOARD.bbs_time} } --></td>
+                <td width="40" align="center"></td>
+        <td width="64" align="center"></td>
+        </tr>
+    </tbody></table>
+    
+</td></tr></tbody></table> 
+	<table cellspacing="0" cellpadding="0" border="0" width="100%"><tbody><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody><tr height="30" onmouseover="this.style.backgroundColor='#FFFFFF'" onmouseout="this.style.backgroundColor=''">
+	<td width="54" align="center">1121324</td>
+	<td width="70" align="center"><a href="bbs_detail.php?bbs_num=1372826&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+	<td align="left"><font style="color:#FF6D01; word-break:break-all"></font>
+
+        
+
+	    <a href="./bbs_detail.php?bbs_num=1372826&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; ;">퍼펙 술방 점점 많아지는듯</span></a> <img src="upload/happy_config/IconNew1.gif" align="absmiddle">&nbsp; [1]
+        <span><img src="/img/view_mobile.gif" style="vertical-align: middle"></span>
+
+    </td>
+	<td width="100" align="center">ㅇ</td>
+	<td width="100" align="center" style="font-size:11px; color:#999999;"><font color="red">2026-07-29</font>   <!--  <br />{ {BOARD.bbs_time} } --></td>
+        <td width="40" align="center">0</td>
+	<td width="64" align="center">8</td>
+</tr>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody><tr height="30" onmouseover="this.style.backgroundColor='#FFFFFF'" onmouseout="this.style.backgroundColor=''">
+	<td width="54" align="center">1121323</td>
+	<td width="70" align="center"><a href="bbs_detail.php?bbs_num=1372825&amp;b_category=&amp;id=&amp;tb=comm_board2"><img src="upload/happy_config/IconData2.gif" align="absmiddle" border="0"></a></td>
+	<td align="left"><font style="color:#FF6D01; word-break:break-all"></font>
+
+        
+
+	    <a href="./bbs_detail.php?bbs_num=1372825&amp;tb=comm_board2&amp;id=&amp;pg=1"><span style="color: 505050; ;">일할때 술기운 없으면 못하겠는 언니들 없어요?</span></a> <img src="upload/happy_config/IconNew1.gif" align="absmiddle">&nbsp; [2]
+        <span><img src="/img/view_mobile.gif" style="vertical-align: middle"></span>
+
+    </td>
+	<td width="100" align="center">ㅇㅇ</td>
+	<td width="100" align="center" style="font-size:11px; color:#999999;"><font color="red">2026-07-29</font>   <!--  <br />{ {BOARD.bbs_time} } --></td>
+        <td width="40" align="center">0</td>
+	<td width="64" align="center">30</td>
+</tr>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr><tr><td valign="top" align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-bottom:1px dotted #dbdbdb;">
+<tbody>
+</tbody></table>
+
+</td></tr></tbody></table> 
+	
+	<table style="width:100%; margin:10px 0 10px 0;">
+	<tbody><tr>
+		<td align="right"><a href="./bbs_regist.php?id=&amp;b_category=&amp;tb=comm_board2"><img src="upload/happy_config/IconWrite1.gif" border="0" align="absmiddle"></a>&nbsp;<a href="./bbs_list.php?id=&amp;b_category=&amp;tb=comm_board2"><img src="upload/happy_config/IconList1.gif" border="0" align="absmiddle"></a></td>
+	</tr>
+	<tr>
+		<td align="center"><b><a style="color:red;" href="?tb=comm_board2&amp;pg=1&amp;include_ad=N" class="page">1</a></b><a href="?tb=comm_board2&amp;pg=2&amp;include_ad=N" class="page">2</a><a href="?tb=comm_board2&amp;pg=3&amp;include_ad=N" class="page">3</a><a href="?tb=comm_board2&amp;pg=4&amp;include_ad=N" class="page">4</a><a href="?tb=comm_board2&amp;pg=5&amp;include_ad=N" class="page">5</a><a href="?tb=comm_board2&amp;pg=6&amp;include_ad=N" class="page">6</a><a href="?tb=comm_board2&amp;pg=7&amp;include_ad=N" class="page">7</a><a href="?tb=comm_board2&amp;pg=8&amp;include_ad=N" class="page">8</a><a href="?tb=comm_board2&amp;pg=9&amp;include_ad=N" class="page">9</a><a href="?tb=comm_board2&amp;pg=10&amp;include_ad=N" class="page">10</a><a href="?tb=comm_board2&amp;pg=11&amp;include_ad=N" class="page2">다음</a></td>
+	</tr>
+	</tbody></table>
+</div>
+<div align="center" style="margin:20px 0 20px 0;">
+	<!-- 검색폼 // 시작 -->
+	<form method="get" action="./bbs_list.php" name="search_frm" id="search_frm">
+	<input type="hidden" name="action" value="search">
+	<input type="hidden" name="tb" value="comm_board2">
+        <input type="hidden" name="include_ad" value="N">
+	<table border="0" cellspacing="0" cellpadding="0">
+	<tbody><tr>
+		<td style="padding-right:5px;">
+			<select name="search">
+			<option value="bbs_title">제목</option>
+                       <option value="bbs_review">내용</option>
+                       <option value="bbs_title_review">제목+내용</option>
+			</select>
+		</td>
+		<td style="padding-right:5px;"><input type="text" name="keyword" class="sminput4"></td>
+		<td>
+		<input type="image" src="/board_img/bbs_search.gif" border="0" value="검색" align="absmiddle" id="bbs-search-btn" onclick="this.disabled=true; this.style.opacity=0.3; this.form.submit(); return false;">
+		</td>
+	</tr>
+	</tbody></table>
+	</form>
+	<!-- 검색폼 // 끝 -->
+</div>
+<div style="margin-bottom:20px;"></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <form id="include-ad-form" method="get" action="./bbs_list.php">
+        <input type="hidden" id="include-ad" name="include_ad" value="N">
+    </form>
+
+    
+
+
+    
+      
+      
+
+
+
+
+
+<!--
+    EVENT PROCESS
+-->
+
+
+
+</div>
+</body></html>
