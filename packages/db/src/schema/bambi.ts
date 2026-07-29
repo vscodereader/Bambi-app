@@ -436,6 +436,13 @@ export const crawledCommunityTopic = pgTable(
 		sourceUrl: text("source_url").notNull(),
 		boardName: text("board_name"),
 		title: text("title").notNull(),
+		// 정규화 본문. 목록에는 없고 상세를 따로 받아야 채워진다(그래서 nullable —
+		// 아직 상세를 안 받았거나 파싱에 실패한 주제는 null로 남고 다음 회차가 다시 시도한다).
+		// 연락처 마스킹은 공고와 같은 이유로 여기서도 적용한다: 유흥 커뮤니티 글은 본문에
+		// 번호·카톡을 그대로 박아둔다.
+		body: text("body"),
+		// 조회수는 목록에 안 나온다(공지 행에만 채워진다). 상세를 받아야 알 수 있어서
+		// 목록 패스는 이 값을 건드리지 않는다 — 건드리면 매 회차 null로 되돌린다.
 		viewCount: integer("view_count"),
 		commentCount: integer("comment_count"),
 		sourcePostedAt: timestamp("source_posted_at"),
