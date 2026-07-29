@@ -41,6 +41,8 @@ const underageResponse = () =>
 
 // 인증 통과 응답 — 서명 토큰 한 개만 세팅한다. httpOnly:false는 의도된 것: 클라이언트가
 // 성별을 읽어 가입 시 프로필로 옮긴다. 값 위조는 서명 검증(미들웨어)에서 걸린다.
+// secure는 본인확인 결과 토큰의 평문 전송을 막기 위해 무조건 켠다(세션 쿠키와 동일 정책 —
+// packages/auth advanced.defaultCookieAttributes). localhost는 secure 컨텍스트라 개발 무영향.
 const verifiedResponse = async (
 	gender: BambiGenderValue | null,
 	ivId?: string
@@ -55,6 +57,7 @@ const verifiedResponse = async (
 	const response = NextResponse.json({ ok: true });
 	response.cookies.set(GUEST_COOKIE_NAME, token, {
 		httpOnly: false,
+		secure: true,
 		sameSite: "lax",
 		path: "/",
 		maxAge: GUEST_COOKIE_MAX_AGE,
@@ -169,6 +172,7 @@ export function DELETE() {
 	const response = NextResponse.json({ ok: true });
 	response.cookies.set(GUEST_COOKIE_NAME, "", {
 		httpOnly: false,
+		secure: true,
 		sameSite: "lax",
 		path: "/",
 		maxAge: 0,
