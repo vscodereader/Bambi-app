@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -20,12 +18,11 @@ const { bambiSiteSettings, crawledCommunityTopic, crawledJobPost, crawlRun } =
 	bambiSchema;
 const { eq } = await import("drizzle-orm");
 
-const readFixture = (name: string): string =>
-	readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf8");
-
-const listHtml = readFixture("foxalba-list.html");
-const detailHtml = readFixture("foxalba-detail.html");
-const queenalbaBbsHtml = readFixture("queenalba-bbs-list.html");
+const {
+	foxalbaDetailHtml: detailHtml,
+	foxalbaListHtml: listHtml,
+	queenalbaBbsListHtml: queenalbaBbsHtml,
+} = await import("./__fixtures__/crawl-html");
 
 // 목록 픽스처의 총 건수(3,283)를 그대로 두면 66페이지를 요청한다. 테스트에서는 한 페이지만
 // 돌면 충분하므로 카운터만 낮춘 사본을 쓴다.

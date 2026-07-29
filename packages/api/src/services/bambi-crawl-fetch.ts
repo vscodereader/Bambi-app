@@ -3,8 +3,31 @@
 
 // 봇을 숨기지 않는다. 상대 운영자가 로그에서 우리를 알아보고 연락하거나 차단할 수 있어야
 // 정상적인 크롤링이다. 실제 배포 전에 연락처를 운영 이메일로 바꿔야 한다.
+//
+// 반드시 ASCII만 쓴다. HTTP 헤더 값은 ByteString(latin1)이라 한글이 한 글자라도 섞이면
+// fetch가 요청을 보내기도 전에 TypeError를 던진다. 그러면 robots.txt부터 못 받고,
+// "못 받으면 전부 금지" 폴백이 걸려 모든 수집이 "robots.txt가 허용하지 않는다"로 죽는다 —
+// 원인은 상대 사이트가 아닌데 그렇게 보이는, 찾기 고약한 실패다.
 const USER_AGENT =
-	"BambiBot/1.0 (구인공고 수집; 문의 admin@bambi.example; 차단을 원하시면 robots.txt에 Disallow를 추가해 주세요)";
+	"BambiBot/1.0 (job listing crawler; contact admin@bambi.example; to block us add a Disallow to robots.txt)";
+
+// 헤더 값에 넣을 수 있는 문자인지. latin1(0x20~0xFF) 밖은 전부 막는다 — 한글은 물론이고
+// 개행·탭도 fetch가 거부한다. 운영자가 브라우저 쿠키 표를 복사해 붙이면 탭과 개행이 그대로
+// 딸려오기 때문에 이 검사가 실제로 걸린다.
+const HEADER_VALUE_MIN_CODE = 0x20;
+const HEADER_VALUE_MAX_CODE = 0xff;
+
+export const isHeaderValueSafe = (value: string): boolean => {
+	for (let index = 0; index < value.length; index += 1) {
+		const code = value.charCodeAt(index);
+
+		if (code < HEADER_VALUE_MIN_CODE || code > HEADER_VALUE_MAX_CODE) {
+			return false;
+		}
+	}
+
+	return true;
+};
 
 // 요청 간 최소 간격. 상대 서버를 밀지 않기 위한 값이며 동시 요청은 1로 고정한다 —
 // 수집이 몇 시간에 한 번이라 빨라서 얻는 이득이 없다.
@@ -163,7 +186,12 @@ export const createCrawlClient = (
 		return await fetchImpl(url, {
 			headers: {
 				// EUC-KR 사이트가 Accept-Charset을 보고 응답을 바꾸는 경우가 있어 지정하지 않는다.
-				accept: "text/html,application/xhtml+xml",
+				//
+				// text/plain과 */*를 반드시 남겨둔다. 같은 클라이언트로 robots.txt(text/plain)도
+				// 받는데, HTML만 받겠다고 하면 내용 협상하는 서버가 406을 준다(여우알바 IIS가
+				// 실제로 그런다). 그러면 robots를 못 받아 "전부 금지" 폴백이 걸리고, 수집이
+				// 상대 사이트 탓처럼 보이는 메시지로 죽는다.
+				accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
 				"accept-language": "ko-KR,ko;q=0.9",
 				"user-agent": USER_AGENT,
 				...options.requestHeaders,

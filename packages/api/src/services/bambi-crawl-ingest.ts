@@ -8,7 +8,11 @@ import {
 import { env } from "@bambi-app/env/server";
 import { and, eq, inArray, lt, or } from "drizzle-orm";
 
-import { type CrawlClient, createCrawlClient } from "./bambi-crawl-fetch";
+import {
+	type CrawlClient,
+	createCrawlClient,
+	isHeaderValueSafe,
+} from "./bambi-crawl-fetch";
 import {
 	FOXALBA_ITEMS_PER_PAGE,
 	foxalbaDetailUrl,
@@ -97,10 +101,24 @@ const JOB_ADAPTERS: Readonly<Record<CrawlSourceSite, JobSiteAdapter>> = {
 // 아래 assertNotGated가 회차를 "쿠키 만료"로 이름 붙여 실패시킨다.
 const crawlRequestHeaders = (
 	site: CrawlSourceSite
-): Record<string, string> | undefined =>
-	site === "queenalba" && env.QUEENALBA_COOKIE
-		? { cookie: env.QUEENALBA_COOKIE }
-		: undefined;
+): Record<string, string> | undefined => {
+	const cookie = site === "queenalba" ? env.QUEENALBA_COOKIE : undefined;
+
+	if (!cookie) {
+		return;
+	}
+
+	// 헤더 값은 latin1만 받는다. 한글이 섞이면 fetch가 요청 전에 TypeError를 던지고, 그게
+	// robots.txt 실패 → "전부 금지" 폴백으로 번져 원인과 무관한 메시지로 죽는다.
+	// 브라우저에서 쿠키를 복사할 때 실제로 생기는 일이라 여기서 이름을 붙여 세운다.
+	if (!isHeaderValueSafe(cookie)) {
+		throw new Error(
+			"QUEENALBA_COOKIE에 ASCII가 아닌 문자가 있다 — 브라우저 Cookie 헤더 원문(퍼센트 인코딩된 값)을 그대로 넣어야 한다"
+		);
+	}
+
+	return { cookie };
+};
 
 // 게이트에 막힌 응답을 그대로 파싱하면 "공고 0건"이 되어 수율 판정이 "셀렉터 파손"으로
 // 회차를 중단시킨다. 데이터는 지켜지지만 원인이 잘못 기록돼 운영자가 엉뚱한 걸 고치게 된다.

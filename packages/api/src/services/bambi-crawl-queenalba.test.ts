@@ -1,7 +1,11 @@
-import { readFileSync } from "node:fs";
-
 import { describe, expect, it } from "vitest";
-
+import {
+	queenalbaGuinDetailCallpinHtml as callpinDetailHtml,
+	queenalbaBbsListHtml as communityHtml,
+	queenalbaGuinDetailHtml as detailHtml,
+	queenalbaGateStubHtml as GATE_STUB,
+	queenalbaGuinListHtml as listHtml,
+} from "./__fixtures__/crawl-html";
 import {
 	isQueenalbaGateStub,
 	parseQueenalbaCommunityList,
@@ -11,22 +15,6 @@ import {
 	queenalbaDetailUrl,
 	queenalbaListUrl,
 } from "./bambi-crawl-queenalba";
-
-// 픽스처는 실제 응답을 개인정보(담당자 실명·연락처·메신저 아이디)만 치환해 저장한 것이다.
-// 손으로 만든 HTML로는 셀렉터가 실제로 맞는지 검증할 수 없다 — 이 파일이 상대 마크업 변경을
-// 감지하는 유일한 장치다.
-const readFixture = (name: string): string =>
-	readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf8");
-
-const listHtml = readFixture("queenalba-guin-list.html");
-const detailHtml = readFixture("queenalba-guin-detail.html");
-const callpinDetailHtml = readFixture("queenalba-guin-detail-callpin.html");
-const communityHtml = readFixture("queenalba-bbs-list.html");
-
-// 성인인증 게이트가 돌려주는 실제 응답 전문(116바이트).
-const GATE_STUB = `<script type="text/javascript">
-                document.location.replace("/adult_index.php");
-            </script>`;
 
 const NUMERIC_ID_PATTERN = /^\d+$/;
 const PHONE_PATTERN = /01[016-9][-\s.]?\d{3,4}/;
