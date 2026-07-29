@@ -9,7 +9,7 @@
 | 사이트 | 공고 | 커뮤니티 | 비고 |
 | --- | --- | --- | --- |
 | 여우알바 | O | (사이트에 없음) | 게이트 없음 |
-| 퀸알바 | O | O | 전 페이지가 성인인증 게이트 뒤 — `QUEENALBA_COOKIE` 필요 |
+| 퀸알바 | O | O | 전 페이지가 성인인증 게이트 뒤 — 인증 세션 쿠키 필요(③) |
 
 각 소스에서 실제로 채울 곳은 아래 네 이음매다(커뮤니티는 별도 경로 하나 더).
 
@@ -95,19 +95,27 @@ const JOB_ADAPTERS: Readonly<Record<CrawlSourceSite, JobSiteAdapter>> = {
 무엇을 붙일지는 `bambi-crawl-ingest.ts`의 `crawlRequestHeaders(site)` 한 곳에서 정한다.
 
 ```ts
-const crawlRequestHeaders = (site) =>
-  site === "queenalba" && env.QUEENALBA_COOKIE
-    ? { cookie: env.QUEENALBA_COOKIE }
+const cookie =
+  site === "queenalba"
+    ? (env.QUEENALBA_COOKIE ?? QUEENALBA_COOKIE_INLINE)
     : undefined;
 ```
 
-쿠키 문자열은 소스마다 다르고 만료되므로 코드에 박지 않고 env로 넣는다.
+쿠키 문자열은 소스마다 다르고 만료된다. 두 자리 중 하나에 넣는다:
+
+- `QUEENALBA_COOKIE_INLINE` (`bambi-crawl-ingest.ts`) — .env를 안 거치고 바로 고칠 자리.
+  기본값은 자리표시자라 이대로면 게이트에 막혀 회차가 실패한다.
+- `QUEENALBA_COOKIE` (env) — 있으면 이쪽이 이긴다.
+
+**개인정보 주의**: 실제 쿠키의 `adultname`·`adulbrith`·`adulphone`·`adultcode`에는 인증한
+사람의 실명·생년월일·휴대폰번호·KCB 인증코드가 그대로 들어 있다. 코드에 적으면 그 정보가
+git 이력에 영구히 남는다(원격에 push하면 되돌릴 수 없다). 공유 리포·배포 환경이면 env를 쓴다.
 
 **퀸알바 게이트**: 전 페이지(`/`, `guin_list.php`, `bbs_list.php`, 상세)가 KCB 본인확인
 성인인증 뒤에 있다. 인증 세션 쿠키 없이는 어떤 URL도 `adult_index.php`로 보내는 116바이트
 스크립트 스텁만 돌려준다(Wayback 스냅샷도 마찬가지라 아카이브로도 못 본다). 통과에 필요한 건
 `PHPSESSID` 하나가 아니라 인증 결과가 담긴 `adultcode`·`adultname`·`adulbrith`·`adulphone`
-쿠키까지다 — 브라우저 Cookie 헤더를 통째로 `QUEENALBA_COOKIE`에 넣는다.
+쿠키까지다 — 이름 하나만 골라 넣지 말고 브라우저 Cookie 헤더를 통째로 넣는다.
 
 **게이트 감지**: 스텁을 그냥 파싱하면 "공고 0건"이 되고, 수율 판정이 그걸 `aborted_low_yield`로
 잡아 만료 처리는 막지만 원인은 "셀렉터 파손"으로 잘못 기록된다. 그래서 `isQueenalbaGateStub`으로

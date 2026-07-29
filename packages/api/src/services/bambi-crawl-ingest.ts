@@ -99,10 +99,27 @@ const JOB_ADAPTERS: Readonly<Record<CrawlSourceSite, JobSiteAdapter>> = {
 // 성인인증·로그인 게이트가 있는 소스에 붙일 요청 헤더. 쿠키는 사이트마다 다르고 만료되므로
 // 코드에 박지 않고 운영자가 env로 넣는다. 비어 있으면 헤더 없이 요청하고, 게이트에 막히면
 // 아래 assertNotGated가 회차를 "쿠키 만료"로 이름 붙여 실패시킨다.
+// 퀸알바 성인인증 세션 쿠키. .env를 거치지 않고 여기 값을 바로 바꿔 쓸 수 있게 둔다.
+// 브라우저 개발자도구 → Network → queenalba.net 요청 → Request Headers의 Cookie 한 줄을
+// 통째로 붙여넣는다(이름 하나만 골라 넣으면 게이트가 열리지 않는다).
+//
+// 아래는 자리표시자라 이대로면 게이트에 막혀 회차가 실패한다 — 그게 정상이고, 실패 사유가
+// crawl_run.error에 남는다.
+//
+// 채워 넣기 전에 알아둘 것: 실제 값의 adultname·adulbrith·adulphone·adultcode에는 인증한
+// 사람의 실명·생년월일·휴대폰번호·KCB 인증코드가 그대로 들어 있다. 여기 적으면 그 개인정보가
+// git 이력에 영구히 남고, 원격에 push하면 되돌릴 수 없다. 공유 리포·배포 환경이라면
+// QUEENALBA_COOKIE(env)를 쓰는 편이 안전하다 — env가 있으면 그쪽이 이긴다.
+const QUEENALBA_COOKIE_INLINE =
+	"adulbrith=00000000; adulphone=01000000000; adulsex=0; adultcode=000000000000XX000000; adultname=%ED%99%8D%EA%B8%B8%EB%8F%99; happy_mobile=off; PHPSESSID=00000000000000000000000000000000";
+
 const crawlRequestHeaders = (
 	site: CrawlSourceSite
 ): Record<string, string> | undefined => {
-	const cookie = site === "queenalba" ? env.QUEENALBA_COOKIE : undefined;
+	const cookie =
+		site === "queenalba"
+			? (env.QUEENALBA_COOKIE ?? QUEENALBA_COOKIE_INLINE)
+			: undefined;
 
 	if (!cookie) {
 		return;
@@ -113,7 +130,7 @@ const crawlRequestHeaders = (
 	// 브라우저에서 쿠키를 복사할 때 실제로 생기는 일이라 여기서 이름을 붙여 세운다.
 	if (!isHeaderValueSafe(cookie)) {
 		throw new Error(
-			"QUEENALBA_COOKIE에 ASCII가 아닌 문자가 있다 — 브라우저 Cookie 헤더 원문(퍼센트 인코딩된 값)을 그대로 넣어야 한다"
+			"퀸알바 쿠키에 ASCII가 아닌 문자가 있다 — 브라우저 Cookie 헤더 원문(퍼센트 인코딩된 값)을 개행 없이 한 줄로 넣어야 한다"
 		);
 	}
 
@@ -125,7 +142,7 @@ const crawlRequestHeaders = (
 const assertNotGated = (site: CrawlSourceSite, html: string): void => {
 	if (site === "queenalba" && isQueenalbaGateStub(html)) {
 		throw new Error(
-			"퀸알바 성인인증 게이트에 막혔다 — QUEENALBA_COOKIE가 비었거나 만료됐다"
+			"퀸알바 성인인증 게이트에 막혔다 — 쿠키가 자리표시자이거나 만료됐다(bambi-crawl-ingest.ts의 QUEENALBA_COOKIE_INLINE 또는 env QUEENALBA_COOKIE를 갱신)"
 		);
 	}
 };

@@ -51,6 +51,12 @@ const createStubClient = (): ReturnType<typeof createCrawlClient> => ({
 });
 
 beforeAll(async () => {
+	// 앞선 실행이 중간에 끊기면 status='running' 회차가 남고, 부분 유니크 인덱스가 다음
+	// 실행의 첫 회차를 막아 "already_running"으로 떨어뜨린다(30분이 지나야 스스로 정리된다).
+	// 그래서 "첫 실행만 실패하고 두 번째부터 통과"하는 유령 실패가 생긴다 — 시작할 때 치운다.
+	await db.delete(crawlRun).where(eq(crawlRun.sourceSite, "foxalba"));
+	await db.delete(crawlRun).where(eq(crawlRun.sourceSite, "queenalba"));
+
 	// 이 테스트는 공유 dev DB를 쓴다. (여우알바 × 공고)를 대상으로 수집을 켜서 돌린다 —
 	// 사이트·데이터 종류를 명시해 컬럼 기본값과 무관하게 구현된 조합의 경로를 타게 한다.
 	const target = {
