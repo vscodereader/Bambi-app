@@ -22,18 +22,14 @@ export const CRAWL_RUN_STATUS_VARIANTS = {
 	success: "outline",
 } as const;
 
+// 여우알바는 수집 대상에서 내렸지만 라벨은 남긴다 — 과거 회차·수집분이 여전히 이 값을
+// 참조하고 있어, 라벨이 없으면 「최근 수집 회차」가 enum 원값을 그리거나 깨진다.
 export const CRAWL_SOURCE_SITE_LABELS = {
 	foxalba: "여우알바",
 	queenalba: "퀸알바",
 } as const;
 
 export type CrawlSourceSite = keyof typeof CRAWL_SOURCE_SITE_LABELS;
-
-// 선택기가 도는 순서. 라벨 맵은 순서를 보장하지 않으므로 따로 고정한다.
-export const CRAWL_SOURCE_SITES: readonly CrawlSourceSite[] = [
-	"foxalba",
-	"queenalba",
-];
 
 export const CRAWL_CONTENT_TYPE_LABELS = {
 	community: "커뮤니티",

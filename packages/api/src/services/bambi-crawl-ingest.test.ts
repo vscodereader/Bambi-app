@@ -125,8 +125,8 @@ describe("isYieldTrustworthy", () => {
 });
 
 describe("AVAILABLE_CRAWL_TARGETS", () => {
-	it("offers job postings for foxalba and both types for queenalba", () => {
-		// 사이트가 제공하는 데이터 종류(도메인 사실). 여우알바=공고, 퀸알바=공고·커뮤니티.
+	it("offers both content types for queenalba and nothing else", () => {
+		// 수집 대상은 퀸알바 하나뿐이다(공고·커뮤니티).
 		const keys = new Set(
 			AVAILABLE_CRAWL_TARGETS.map((target) =>
 				targetKey(target.site, target.contentType)
@@ -134,34 +134,32 @@ describe("AVAILABLE_CRAWL_TARGETS", () => {
 		);
 		expect(keys).toEqual(
 			new Set([
-				targetKey("foxalba", "job_post"),
 				targetKey("queenalba", "job_post"),
 				targetKey("queenalba", "community"),
 			])
 		);
-		// 여우알바는 커뮤니티를 제공하지 않는다.
-		expect(keys.has(targetKey("foxalba", "community"))).toBe(false);
 	});
 });
 
 describe("isCrawlTargetImplemented", () => {
 	it("allows every combination that has a parser", () => {
 		// 파서가 없는 (사이트 × 데이터 종류) 조합을 골라도 회차를 만들지 않도록 이 판정이 게이트다.
-		expect(isCrawlTargetImplemented("foxalba", "job_post")).toBe(true);
 		expect(isCrawlTargetImplemented("queenalba", "job_post")).toBe(true);
 		expect(isCrawlTargetImplemented("queenalba", "community")).toBe(true);
 	});
 
-	it("still blocks a combination the source does not even provide", () => {
-		// 여우알바에는 커뮤니티가 없다. 골라도 회차가 열리면 안 된다.
+	// 파서 파일은 남아 있지만 대상에서 내렸다. 목록이 게이트라, 옛 설정 행이 foxalba를
+	// 가리키고 있어도 회차가 열리면 안 된다.
+	it("blocks foxalba now that it is off the target list", () => {
+		expect(isCrawlTargetImplemented("foxalba", "job_post")).toBe(false);
 		expect(isCrawlTargetImplemented("foxalba", "community")).toBe(false);
 	});
 });
 
 describe("isCrawlSiteImplemented", () => {
 	it("treats a site as ready when any of its combinations is built", () => {
-		expect(isCrawlSiteImplemented("foxalba")).toBe(true);
 		expect(isCrawlSiteImplemented("queenalba")).toBe(true);
+		expect(isCrawlSiteImplemented("foxalba")).toBe(false);
 	});
 });
 

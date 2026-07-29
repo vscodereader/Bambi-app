@@ -1,7 +1,7 @@
 // 수집 정책. DB도 네트워크도 건드리지 않는 순수 판정만 모아 둔다 — 이 결정들이 잘못되면
 // 수집분 전체가 날아가는데, I/O에 묶여 있으면 그걸 검증할 방법이 없다.
 
-export const DEFAULT_CRAWL_INTERVAL_HOURS = 6;
+export const DEFAULT_CRAWL_INTERVAL_HOURS = 3;
 
 // 원본 목록에서 사라진 공고를 만료 처리하기까지 기다리는 기간. 즉시 만료시키면 상대 서버가
 // 잠깐 흔들린 회차 한 번에 수집분 전체가 날아간다.
@@ -45,11 +45,14 @@ export interface CrawlTarget {
 	site: CrawlSourceSite;
 }
 
-// 사이트가 제공하는 데이터 종류(도메인 사실). 여우알바는 공고만, 퀸알바는 공고·커뮤니티 둘 다
-// 가지고 있다. 아래 "구현된 조합"과는 다른 축이다 — 사이트에 데이터는 있지만 우리 파서가 아직
-// 없을 수 있다(퀸알바). 운영자 화면은 이 목록으로 "어떤 데이터 종류를 고를 수 있는지"를 그린다.
+// 수집 대상이 제공하는 데이터 종류(도메인 사실). 아래 "구현된 조합"과는 다른 축이다 —
+// 사이트에 데이터는 있지만 우리 파서가 아직 없을 수 있다. 운영자 화면은 이 목록으로
+// "어떤 데이터 종류를 고를 수 있는지"를 그린다.
+//
+// 여우알바는 대상에서 뺐다. 파서(bambi-crawl-foxalba.ts)와 DB enum 값은 남겨 뒀으므로
+// 되살릴 때는 아래 두 목록에 줄을 다시 넣는 것만으로 충분하다 — 과거 회차·수집분이 여전히
+// foxalba를 참조하고 있어 enum과 라벨은 지우면 안 된다.
 export const AVAILABLE_CRAWL_TARGETS: readonly CrawlTarget[] = [
-	{ contentType: "job_post", site: "foxalba" },
 	{ contentType: "job_post", site: "queenalba" },
 	{ contentType: "community", site: "queenalba" },
 ];
@@ -61,7 +64,6 @@ export const AVAILABLE_CRAWL_TARGETS: readonly CrawlTarget[] = [
 // 퀸알바는 전 페이지가 성인인증 게이트 뒤에 있어, 파서가 있어도 QUEENALBA_COOKIE가 없으면
 // 회차가 "게이트에 막혔다"로 실패한다. 그건 미구현이 아니라 설정 누락이라 여기서 막지 않는다.
 export const IMPLEMENTED_CRAWL_TARGETS: readonly CrawlTarget[] = [
-	{ contentType: "job_post", site: "foxalba" },
 	{ contentType: "job_post", site: "queenalba" },
 	{ contentType: "community", site: "queenalba" },
 ];
