@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -16,14 +14,15 @@ const [{ db }, bambiSchema, { runCrawlTick }, { createCrawlClient }] =
 		import("./bambi-crawl-fetch"),
 	]);
 
-const { bambiSiteSettings, crawledJobPost, crawlRun } = bambiSchema;
+const { bambiSiteSettings, crawledCommunityTopic, crawledJobPost, crawlRun } =
+	bambiSchema;
 const { eq } = await import("drizzle-orm");
 
-const readFixture = (name: string): string =>
-	readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf8");
-
-const listHtml = readFixture("foxalba-list.html");
-const detailHtml = readFixture("foxalba-detail.html");
+const {
+	foxalbaDetailHtml: detailHtml,
+	foxalbaListHtml: listHtml,
+	queenalbaBbsListHtml: queenalbaBbsHtml,
+} = await import("./__fixtures__/crawl-html");
 
 // 목록 픽스처의 총 건수(3,283)를 그대로 두면 66페이지를 요청한다. 테스트에서는 한 페이지만
 // 돌면 충분하므로 카운터만 낮춘 사본을 쓴다.
@@ -33,6 +32,9 @@ const singlePageListHtml = listHtml.replace(
 );
 
 const ROBOTS = "User-agent: *\nAllow: /\n";
+
+const COMMUNITY_ID_PATTERN = /^comm_board2:\d+$/;
+const GATE_ERROR_PATTERN = /성인인증 게이트/;
 
 // 네트워크 스텁. 요청 간격·재시도를 타지 않도록 createCrawlClient 대신 직접 구현한다.
 const createStubClient = (): ReturnType<typeof createCrawlClient> => ({
@@ -67,6 +69,10 @@ afterAll(async () => {
 		.delete(crawledJobPost)
 		.where(eq(crawledJobPost.sourceSite, "foxalba"));
 	await db.delete(crawlRun).where(eq(crawlRun.sourceSite, "foxalba"));
+	await db
+		.delete(crawledCommunityTopic)
+		.where(eq(crawledCommunityTopic.sourceSite, "queenalba"));
+	await db.delete(crawlRun).where(eq(crawlRun.sourceSite, "queenalba"));
 
 	// 원래 값 복원이 아니라 무조건 꺼서 끝낸다. 공유 dev DB를 켜진 채로 남기면 서버 스케줄러가
 	// 실제 사이트를 긁기 시작하므로, 안전한 기본 상태(off)로 두는 것이 원본 복원보다 중요하다.
@@ -178,5 +184,106 @@ describe("runCrawlTick against the database", () => {
 				.set({ crawlEnabled: true })
 				.where(eq(bambiSiteSettings.id, "default"));
 		}
+	});
+});
+
+// 커뮤니티는 테이블도 수집 흐름도 공고와 다르다(상세 패스 없음, 만료 처리 없음).
+// 상세 패스가 없어 목록 스텁 하나면 회차 전체가 재현된다.
+const createCommunityStubClient = (): ReturnType<typeof createCrawlClient> => ({
+	fetchHtml: (url: string) =>
+		Promise.resolve(url.endsWith("/robots.txt") ? ROBOTS : queenalbaBbsHtml),
+	isAllowed: () => Promise.resolve(true),
+});
+
+describe("runCrawlTick — 커뮤니티(퀸알바)", () => {
+	beforeAll(async () => {
+		const target = {
+			crawlContentType: "community" as const,
+			crawlEnabled: true,
+			crawlSourceSite: "queenalba" as const,
+		};
+
+		await db
+			.update(bambiSiteSettings)
+			.set(target)
+			.where(eq(bambiSiteSettings.id, "default"));
+	});
+
+	it("stores board topics and records the run", async () => {
+		const result = await runCrawlTick(new Date(), createCommunityStubClient(), {
+			force: true,
+		});
+
+		expect(result.reason).toBe("completed");
+		expect(result.itemsNew).toBeGreaterThan(0);
+
+		const rows = await db
+			.select({
+				boardName: crawledCommunityTopic.boardName,
+				commentCount: crawledCommunityTopic.commentCount,
+				sourceExternalId: crawledCommunityTopic.sourceExternalId,
+				title: crawledCommunityTopic.title,
+			})
+			.from(crawledCommunityTopic)
+			.where(eq(crawledCommunityTopic.sourceSite, "queenalba"));
+
+		expect(rows.length).toBe(result.itemsNew);
+		expect(rows[0]?.boardName).toBe("밤문화이야기");
+		// 게시판이 여럿이 되어도 bbs_num이 겹치지 않도록 게시판을 앞에 붙여 저장한다.
+		expect(rows[0]?.sourceExternalId).toMatch(COMMUNITY_ID_PATTERN);
+
+		const [run] = await db
+			.select({ itemsSeen: crawlRun.itemsSeen, status: crawlRun.status })
+			.from(crawlRun)
+			.where(eq(crawlRun.sourceSite, "queenalba"));
+
+		expect(run?.status).toBe("success");
+		expect(run?.itemsSeen).toBe(rows.length);
+	});
+
+	// 같은 주제를 다시 봐도 행이 늘면 안 된다(sourceSite + sourceExternalId 유니크).
+	it("is idempotent — a second run adds no rows", async () => {
+		const before = await db
+			.select({ id: crawledCommunityTopic.id })
+			.from(crawledCommunityTopic)
+			.where(eq(crawledCommunityTopic.sourceSite, "queenalba"));
+
+		const result = await runCrawlTick(new Date(), createCommunityStubClient(), {
+			force: true,
+		});
+
+		expect(result.itemsNew).toBe(0);
+
+		const after = await db
+			.select({ id: crawledCommunityTopic.id })
+			.from(crawledCommunityTopic)
+			.where(eq(crawledCommunityTopic.sourceSite, "queenalba"));
+
+		expect(after.length).toBe(before.length);
+	});
+
+	// 게이트에 막힌 응답을 "게시글 없음"으로 읽고 성공으로 남기면 파손을 알아챌 방법이 없다.
+	it("fails the run when the age gate blocks the fetch", async () => {
+		const gateStub =
+			'<script type="text/javascript">document.location.replace("/adult_index.php");</script>';
+
+		await expect(
+			runCrawlTick(
+				new Date(),
+				{
+					fetchHtml: (url: string) =>
+						Promise.resolve(url.endsWith("/robots.txt") ? ROBOTS : gateStub),
+					isAllowed: () => Promise.resolve(true),
+				},
+				{ force: true }
+			)
+		).rejects.toThrow(GATE_ERROR_PATTERN);
+
+		const runs = await db
+			.select({ error: crawlRun.error, status: crawlRun.status })
+			.from(crawlRun)
+			.where(eq(crawlRun.sourceSite, "queenalba"));
+
+		expect(runs.some((run) => run.status === "failed")).toBe(true);
 	});
 });

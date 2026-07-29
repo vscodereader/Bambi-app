@@ -145,38 +145,44 @@ describe("AVAILABLE_CRAWL_TARGETS", () => {
 });
 
 describe("isCrawlTargetImplemented", () => {
-	it("only allows the one built combination (foxalba × job_post)", () => {
+	it("allows every combination that has a parser", () => {
 		// 파서가 없는 (사이트 × 데이터 종류) 조합을 골라도 회차를 만들지 않도록 이 판정이 게이트다.
 		expect(isCrawlTargetImplemented("foxalba", "job_post")).toBe(true);
-		// 같은 사이트라도 커뮤니티 파서는 아직 없다.
+		expect(isCrawlTargetImplemented("queenalba", "job_post")).toBe(true);
+		expect(isCrawlTargetImplemented("queenalba", "community")).toBe(true);
+	});
+
+	it("still blocks a combination the source does not even provide", () => {
+		// 여우알바에는 커뮤니티가 없다. 골라도 회차가 열리면 안 된다.
 		expect(isCrawlTargetImplemented("foxalba", "community")).toBe(false);
-		// 퀸알바는 어느 종류도 아직이다.
-		expect(isCrawlTargetImplemented("queenalba", "job_post")).toBe(false);
-		expect(isCrawlTargetImplemented("queenalba", "community")).toBe(false);
 	});
 });
 
 describe("isCrawlSiteImplemented", () => {
 	it("treats a site as ready when any of its combinations is built", () => {
-		// 사이트 선택 배지가 쓰는 판정. foxalba는 공고 조합이 있어 준비됨, queenalba는 없음.
 		expect(isCrawlSiteImplemented("foxalba")).toBe(true);
-		expect(isCrawlSiteImplemented("queenalba")).toBe(false);
+		expect(isCrawlSiteImplemented("queenalba")).toBe(true);
 	});
 });
 
 describe("resolveListPageCount", () => {
 	it("derives the page count from the total, not the pager widget", () => {
-		expect(resolveListPageCount(3283)).toBe(66);
-		expect(resolveListPageCount(50)).toBe(1);
-		expect(resolveListPageCount(51)).toBe(2);
+		expect(resolveListPageCount(3283, 50)).toBe(66);
+		expect(resolveListPageCount(50, 50)).toBe(1);
+		expect(resolveListPageCount(51, 50)).toBe(2);
 	});
 
 	it("still fetches one page when the total is unreadable", () => {
-		expect(resolveListPageCount(null)).toBe(1);
-		expect(resolveListPageCount(0)).toBe(1);
+		expect(resolveListPageCount(null, 50)).toBe(1);
+		expect(resolveListPageCount(0, 50)).toBe(1);
+	});
+
+	// 퀸알바처럼 목록이 전건을 한 번에 주는 사이트는 페이지 나눔 자체가 없다.
+	it("fetches one page when the source does not paginate", () => {
+		expect(resolveListPageCount(693, 0)).toBe(1);
 	});
 
 	it("caps the page count so a bad total cannot flood the source", () => {
-		expect(resolveListPageCount(1_000_000)).toBe(MAX_LIST_PAGES);
+		expect(resolveListPageCount(1_000_000, 50)).toBe(MAX_LIST_PAGES);
 	});
 });
