@@ -129,22 +129,44 @@ export function AuthSignupFields({
 	);
 }
 
+// 찾기 링크는 라벨 옆에 붙는 보조 경로다 — 본 액션(로그인)과 위계가 겹치지 않게 텍스트로 둔다.
+const RECOVERY_LINK_CLASS =
+	"font-semibold text-muted-foreground text-xs underline-offset-2 hover:text-foreground hover:underline";
+
 export function AuthSigninFields({
 	onFieldChange,
+	onFindId,
 	onForgotPassword,
 	values,
 }: {
 	onFieldChange: AuthFieldChange;
-	onForgotPassword: () => void;
+	// 본인인증이 불가한 환경(포트원 미구성)에서는 null이 와서 링크 자체를 렌더하지 않는다.
+	onFindId: (() => void) | null;
+	onForgotPassword: (() => void) | null;
 	values: AuthFormValues;
 }) {
 	return (
 		<>
 			{/* 로그인은 아이디·이메일 둘 다 받는다(무엇으로 가입했는지 기억 못 해도 들어올 수
 			    있게). type은 text로 둔다 — type="email"이면 아이디 입력이 브라우저 검증에
-			    걸린다. autoComplete="username"은 두 값 모두에 맞는 힌트다. */}
-			<label className="grid gap-2" htmlFor="auth-login-id">
-				<span className="font-bold text-sm">아이디</span>
+			    걸린다. autoComplete="username"은 두 값 모두에 맞는 힌트다.
+			    아이디 칸은 라벨 옆에 찾기 링크가 붙어 label로 감싸지 않는다 — 감싸면 링크를
+			    눌러도 라벨 클릭으로 번져 입력에 포커스가 간다(비밀번호 칸과 같은 구조). */}
+			<div className="grid gap-2">
+				<div className="flex items-center justify-between gap-2">
+					<label className="font-bold text-sm" htmlFor="auth-login-id">
+						아이디
+					</label>
+					{onFindId ? (
+						<button
+							className={RECOVERY_LINK_CLASS}
+							onClick={onFindId}
+							type="button"
+						>
+							아이디 찾기
+						</button>
+					) : null}
+				</div>
 				<Input
 					autoComplete="username"
 					id="auth-login-id"
@@ -152,19 +174,21 @@ export function AuthSigninFields({
 					placeholder="아이디(이메일)를 입력해주세요."
 					value={values.username}
 				/>
-			</label>
+			</div>
 			<div className="grid gap-2">
 				<div className="flex items-center justify-between gap-2">
 					<label className="font-bold text-sm" htmlFor="auth-password">
 						비밀번호
 					</label>
-					<button
-						className="font-semibold text-muted-foreground text-xs underline-offset-2 hover:text-foreground hover:underline"
-						onClick={onForgotPassword}
-						type="button"
-					>
-						비밀번호를 잊으셨나요?
-					</button>
+					{onForgotPassword ? (
+						<button
+							className={RECOVERY_LINK_CLASS}
+							onClick={onForgotPassword}
+							type="button"
+						>
+							비밀번호를 잊으셨나요?
+						</button>
+					) : null}
 				</div>
 				<Input
 					autoComplete="current-password"

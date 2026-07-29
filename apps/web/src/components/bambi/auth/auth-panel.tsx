@@ -17,6 +17,7 @@ import { isEmailLoginId } from "@/lib/bambi/login-id";
 import { client, queryClient } from "@/utils/orpc";
 import { Button, Card, Logo } from "../ds";
 import { PhoneVerifyDialog } from "../phone-verify-dialog";
+import { useAccountRecovery } from "./account-recovery-dialog";
 import { AdultNotice } from "./adult-notice";
 import {
 	type AuthFormValues,
@@ -173,6 +174,16 @@ export function AuthPanel() {
 	const [verifiedId, setVerifiedId] = useState<string | null>(null);
 	const isSignUp = mode === "sign-up";
 	const isVerifyStep = isSignUp && step === "verify";
+	// 아이디·비밀번호 찾기. 모바일은 인증 리디렉션에서 돌아오며 페이지가 새로 뜨는데,
+	// 그때 쿼리에 auth=signup이 남아 있으면 회원가입 모드로 복귀할 수 있다 — 결과를
+	// 적용할 때 로그인 모드로 되돌려 채운 아이디가 보이는 화면에 남게 한다.
+	const recovery = useAccountRecovery({
+		onSignUp: () => setMode("sign-up"),
+		onUseLoginId: (loginId) => {
+			setMode("sign-in");
+			setForm((prev) => ({ ...prev, username: loginId }));
+		},
+	});
 	const title = isSignUp ? "밤비알바 계정 만들기" : "밤비알바 로그인";
 	const submitLabel = isSignUp ? "회원가입" : "로그인";
 
@@ -360,13 +371,6 @@ export function AuthPanel() {
 		setMode(isSignUp ? "sign-in" : "sign-up");
 	};
 
-	const handleForgotPassword = () => {
-		setNotice({
-			text: "비밀번호 재설정 기능은 곧 제공될 예정이에요.",
-			tone: "info",
-		});
-	};
-
 	return (
 		<div className="w-full text-foreground">
 			{/* 게이트 카드는 폭·높이를 고정 수치로 잡는다 — 로그인·회원가입·인증 단계를
@@ -411,7 +415,8 @@ export function AuthPanel() {
 							) : (
 								<AuthSigninFields
 									onFieldChange={setField}
-									onForgotPassword={handleForgotPassword}
+									onFindId={recovery.findId}
+									onForgotPassword={recovery.resetPassword}
 									values={form}
 								/>
 							)}
@@ -470,6 +475,9 @@ export function AuthPanel() {
 					<AdultNotice />
 				</div>
 			</Card>
+			{/* 찾기 결과 모달. 포털로 뜨므로 위치는 무관하지만, 모바일 인증 리디렉션 복귀 시
+			    회원가입 모드로 돌아올 수도 있어 모드와 무관하게 항상 렌더한다. */}
+			{recovery.dialog}
 		</div>
 	);
 }
