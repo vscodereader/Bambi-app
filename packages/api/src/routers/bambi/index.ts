@@ -1,3 +1,4 @@
+import { accountRecoveryRouter } from "./account-recovery";
 import { adProductsRouter } from "./ad-products";
 import { analyticsRouter } from "./analytics";
 import { bannedWordsRouter } from "./banned-words";
@@ -16,6 +17,7 @@ import { supportRouter } from "./support";
 import { teamsRouter } from "./teams";
 
 export const bambiRouter = {
+	accountRecovery: accountRecoveryRouter,
 	adProducts: adProductsRouter,
 	analytics: analyticsRouter,
 	bannedWords: bannedWordsRouter,
