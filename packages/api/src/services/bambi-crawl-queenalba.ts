@@ -61,12 +61,18 @@ export const toQueenalbaAbsoluteUrl = (
 //  - /upload/happy_member/...  : 목록·메인 카드와 상세 상단의 업체 썸네일(86×46 GIF). 실물
 //                                응답에서 확인. 처음에 /offerphoto/로 가정했던 자리이며,
 //                                그 경로는 이 사이트에 존재하지 않아 걷어냈다.
+//  - /img_up/...               : 상세 본문 이미지의 다른 저장 위치(/img_up/shop_pds/...).
+//                                본문 이미지 48장이 전부 이 경로인 공고가 실재해 0장이
+//                                수집됐고, 그래서 상세 화면이 썸네일 폴백으로 빠졌다.
+//
+// 본문에는 외부 호스트(imgur 등) 장식 gif와 에디터 장식(/cheditor/icons, /Editor/img)도
+// 섞여 있다. 외부 호스트는 아래 origin 대조에서, 에디터 장식은 이 목록에 없어서 걸러진다.
 //
 // 이 화이트리스트를 쓰는 건 "그 자리에 있다고 광고라는 보장이 없는" 곳뿐이다(목록·메인 카드·
 // 상세 본문). 메인의 배너 칸(#main_top_center·#divMenu*)은 위치가 곧 광고이고 경로도 따로
 // (mobile_img/banner/) 있어 여기를 쓰지 않는다 — bambi-crawl-queenalba-main.ts를 보라.
 const JOB_IMAGE_PATH_PATTERN =
-	/^\/(?:wys2\/file_attach|upload\/happy_member)\//i;
+	/^\/(?:wys2\/file_attach|upload\/happy_member|img_up)\//i;
 
 export const isQueenalbaJobImageUrl = (url: string): boolean => {
 	try {
@@ -217,6 +223,41 @@ const stripMinimumWageNotice = (raw: string | null): string | null => {
 	return cleanText(raw.replace(MINIMUM_WAGE_NOTICE_PATTERN, ""));
 };
 
+// 급여 **단위는 텍스트가 아니라 이미지**다. 급여 값 칸에 WantMoneyArrImgN.gif 한 장이 있고
+// 텍스트에는 금액만 남는다("150,000원 2026년 최저시급 10,320원") — 그래서 .text()만 읽던
+// 예전 방식은 수집한 공고의 payUnit을 전부 비웠다. 실물 5건 모두 #sub_center 전체에서 이
+// 이미지가 정확히 한 장이라 페이지에서 첫 장을 찾는 것으로 충분하다.
+const PAY_UNIT_IMAGE_PATTERN = /WantMoneyArrImg(\d+)\.gif/i;
+
+// 파일명의 N → 우리 어휘. 원본 표기는 1=면접 후 협의, 2=시급, 3=당일, 4=주급, 5=월급,
+// 6=건당, 7=연봉이다.
+//  - 3의 "당일"은 하루 단위 당일지급이라 일급으로 본다(normalize의 DAILY 규칙도 "당일"을
+//    일급으로 잡아 폴백 경로와 답이 갈리지 않는다).
+//  - 6·7은 우리 payUnitOptions 5종에 없지만 TABLE_CHARGE_PAY_UNIT과 같은 이유로 원문 의미
+//    그대로 둔다 — 연봉을 월급으로 뭉개면 같은 금액이 12배 다른 뜻이 된다.
+const PAY_UNIT_BY_IMAGE: Readonly<Record<string, string>> = {
+	1: NEGOTIABLE_PAY_UNIT,
+	2: "시급",
+	3: "일급",
+	4: "주급",
+	5: "월급",
+	6: "건당",
+	7: "연봉",
+};
+
+// 모르는 N(사이트가 단위를 늘리는 경우)은 null을 돌려 텍스트 폴백에 맡긴다.
+const readPayUnitImage = ($: ReturnType<typeof load>): string | null => {
+	for (const element of $("#sub_center img").toArray()) {
+		const digit = $(element).attr("src")?.match(PAY_UNIT_IMAGE_PATTERN)?.[1];
+
+		if (digit) {
+			return PAY_UNIT_BY_IMAGE[digit] ?? null;
+		}
+	}
+
+	return null;
+};
+
 // 근무지역은 "서울 - 강남구" 한 칸에 시도와 시군구가 같이 온다.
 const REGION_SEPARATOR = /\s*-\s*/;
 
@@ -235,8 +276,9 @@ const splitRegion = (
 	};
 };
 
-// 전화는 직통이 아니라 콜핀(대표번호 + 내선) 방식이다. 대표번호 칸이 "1566-1945 + 콜핀번호"
-// 라는 안내 문구라, 그 자리에 실제 핀을 끼워 넣어야 걸 수 있는 번호가 된다.
+// 콜핀(대표번호 + 내선) 폴백. 대표번호 칸이 "1566-1945 + 콜핀번호"라는 안내 문구라, 그
+// 자리에 실제 핀을 끼워 넣어야 걸 수 있는 번호가 된다. 실물 다수는 "전화번호" 라벨에 직통
+// 번호를 그대로 적어 두므로 그쪽이 우선이고, 이 두 라벨은 콜핀만 쓰는 공고에만 나타난다.
 const readCallPin = (fields: Map<string, string | null>): string | null => {
 	const representative = fields.get("콜핀대표번호") ?? null;
 	const pin = fields.get("콜핀번호") ?? null;
@@ -273,11 +315,13 @@ const readMessengerId = ($: ReturnType<typeof load>): string | null => {
 	return null;
 };
 
-// 게시일이 따로 없고 "접수기간"의 시작일이 등록 시점 역할을 한다("2026-02-13 ~ 2026-08-24").
-const POSTED_AT_PATTERN = /(\d{4})-(\d{2})-(\d{2})/;
+// 날짜 칸은 어디든 첫 YYYY-MM-DD가 우리가 원하는 날짜다. 게시일이 따로 없어 "접수기간"의
+// 시작일이 등록 시점 역할을 하고("2026-02-13 ~ 2026-08-24"), "마감일자"는 D-day 표기가
+// 뒤에 붙는다("2026-08-05 D-12") — 둘 다 앞을 취하면 되므로 한 함수로 읽는다.
+const DATE_PATTERN = /(\d{4})-(\d{2})-(\d{2})/;
 
-const parsePostedAt = (raw: string | null): Date | null => {
-	const match = raw?.match(POSTED_AT_PATTERN);
+const parseDate = (raw: string | null): Date | null => {
+	const match = raw?.match(DATE_PATTERN);
 
 	if (!match) {
 		return null;
@@ -420,6 +464,7 @@ export const parseQueenalbaDetail = (
 	const payRaw = stripMinimumWageNotice(fields.get("급여") ?? null);
 	const parsedPay = parsePay(payRaw);
 	const industryRaw = fields.get("업무내용") ?? null;
+	const payUnitFromImage = readPayUnitImage($);
 	const $body = readBodySection($);
 
 	return {
@@ -429,7 +474,8 @@ export const parseQueenalbaDetail = (
 		body: readBody($, $body),
 		contactKakao: readMessengerId($),
 		contactName: fields.get("담당자") ?? null,
-		contactPhone: readCallPin(fields),
+		// 직통 번호("전화번호" 라벨)가 실물 다수다. 콜핀은 그게 없는 공고의 폴백이다.
+		contactPhone: fields.get("전화번호") ?? readCallPin(fields),
 		detailImageUrls: readDetailImageUrls($, $body),
 		district: location.district,
 		// 여성 전용 사이트라 상세에 성별 항목 자체가 없다.
@@ -438,17 +484,20 @@ export const parseQueenalbaDetail = (
 		industryRaw,
 		payAmount: parsedPay.amount,
 		payRaw,
-		// 급여 칸이 단위 없이 금액만 준다("150,000원"). 금액을 읽었는데 단위가 기본값
-		// "협의"로 떨어졌다면 그건 협의가 아니라 단위를 모르는 것이므로 비운다 — 금액이
-		// 있는데 "협의"라고 적으면 화면에서 서로 모순된 값이 된다.
+		// 단위 이미지가 있으면 그것이 정본이다(사이트가 단위를 그 gif로만 표기한다).
+		// 폴백은 텍스트 판정인데, 급여 칸이 단위 없이 금액만 주는 경우가 있어("150,000원")
+		// 금액을 읽었는데 단위가 기본값 "협의"로 떨어졌다면 그건 협의가 아니라 단위를 모르는
+		// 것이므로 비운다 — 금액이 있는데 "협의"라고 적으면 화면에서 서로 모순된 값이 된다.
 		payUnit:
-			parsedPay.amount !== null && parsedPay.unit === NEGOTIABLE_PAY_UNIT
+			payUnitFromImage ??
+			(parsedPay.amount !== null && parsedPay.unit === NEGOTIABLE_PAY_UNIT
 				? null
-				: parsedPay.unit,
+				: parsedPay.unit),
 		region: location.region,
 		shopName: fields.get("닉네임") ?? null,
+		sourceDeadlineAt: parseDate(fields.get("마감일자") ?? null),
 		sourceExternalId,
-		sourcePostedAt: parsePostedAt(fields.get("접수기간") ?? null),
+		sourcePostedAt: parseDate(fields.get("접수기간") ?? null),
 		sourceUrl: queenalbaDetailUrl(sourceExternalId),
 		thumbnailUrl: readThumbnailUrl($, $body),
 		title,
@@ -576,7 +625,7 @@ export const parseQueenalbaCommunityList = (
 				? Number.parseInt(commentMatch[1] as string, 10)
 				: parseCount(texts.at(-2)),
 			sourceExternalId,
-			sourcePostedAt: parsePostedAt(texts.at(-3) ?? null),
+			sourcePostedAt: parseDate(texts.at(-3) ?? null),
 			sourceUrl: queenalbaCommunityTopicUrl(sourceExternalId),
 			title,
 			viewCount: parseCount(texts.at(-1)),

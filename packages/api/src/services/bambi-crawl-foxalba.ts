@@ -217,6 +217,8 @@ export const parseFoxalbaDetail = (
 		payUnit: pay.chip ?? parsedPay.unit,
 		region: location.chip,
 		shopName: readFieldValue(fields.get("닉네임/업소명")),
+		// 이 사이트 상세에는 마감일자 항목이 없다.
+		sourceDeadlineAt: null,
 		sourceExternalId,
 		// 원본에 게시일이 없다. 광고기간은 "1,350일" 같은 잔여 기간이라 게시 시각으로 환산할 수
 		// 없어 비워 둔다(수집 시각은 first_seen_at이 따로 들고 있다).

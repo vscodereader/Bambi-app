@@ -355,6 +355,7 @@ describe("runCrawlTick — 공고(퀸알바)", () => {
 				payAmount: crawledJobPost.payAmount,
 				payUnit: crawledJobPost.payUnit,
 				region: crawledJobPost.region,
+				sourceDeadlineAt: crawledJobPost.sourceDeadlineAt,
 				sourceUrl: crawledJobPost.sourceUrl,
 				status: crawledJobPost.status,
 			})
@@ -371,8 +372,14 @@ describe("runCrawlTick — 공고(퀸알바)", () => {
 		expect(first?.district).toBe("송파구");
 		// 최저임금 안내를 잘라낸 뒤의 금액이어야 한다(안 자르면 10,320이 들어온다).
 		expect(first?.payAmount).toBe(150_000);
-		// 원문에 단위 표기가 없으면 비운다 — 금액이 있는데 "협의"라고 적으면 모순이다.
-		expect(first?.payUnit).toBeNull();
+		// 급여 단위는 텍스트가 아니라 급여 칸의 gif(WantMoneyArrImg2=시급)로만 온다.
+		// 파서가 그 이미지를 읽기 때문에 여기까지 단위가 살아 들어온다.
+		expect(first?.payUnit).toBe("시급");
+		// 직통 번호("전화번호" 라벨)와 마감일자도 상세에서만 얻는 값이라 이 경로로만 채워진다.
+		expect(first?.contactPhone).toBe("010-9876-5432");
+		expect(first?.sourceDeadlineAt?.toISOString()).toBe(
+			"2026-08-05T00:00:00.000Z"
+		);
 		expect(first?.industryCategory).toBe("룸싸롱");
 		expect(first?.status).toBe("active");
 		expect(first?.body).toContain("[연락처 비공개]");

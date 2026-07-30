@@ -23,6 +23,7 @@ const PUBLIC_COLUMNS = {
 	payUnit: crawledJobPost.payUnit,
 	region: crawledJobPost.region,
 	shopName: crawledJobPost.shopName,
+	sourceDeadlineAt: crawledJobPost.sourceDeadlineAt,
 	sourcePostedAt: crawledJobPost.sourcePostedAt,
 	thumbnailUrl: crawledJobPost.thumbnailUrl,
 	title: crawledJobPost.title,

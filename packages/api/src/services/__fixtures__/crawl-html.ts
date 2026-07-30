@@ -224,11 +224,16 @@ const queenalbaDetail = (options: QueenalbaDetailOptions): string =>
 // 본문 텍스트가 있고 카톡 아이디를 남긴 공고. 급여 칸에 사이트가 최저임금 안내를 덧붙이는
 // 것과, 본문에 박힌 번호·카톡이 마스킹되는지를 여기서 본다.
 //
-// 본문 이미지 옆에 장식 이미지(1x1 스페이서·아이콘)와 같은 이미지 재게시를 함께 넣어 두었다.
-// 셋 다 실물에서 흔한 조합이고, 이걸 안 거르면 공고 이미지 자리에 투명 gif가 저장된다.
+// 급여 칸의 WantMoneyArrImg2.gif가 실물의 단위 표기다 — 단위는 텍스트로 오지 않고 이
+// gif 파일명(2=시급)에만 있다. 전화번호·마감일자 행도 실물에서 확인한 라벨이고, 마감일자
+// 값에는 D-day 표기가 뒤에 붙는다.
+//
+// 본문 이미지 옆에 장식 이미지(1x1 스페이서·아이콘·외부 호스트 gif)와 같은 이미지 재게시를
+// 함께 넣어 두었다. 전부 실물에서 흔한 조합이고, 이걸 안 거르면 공고 이미지 자리에 투명
+// gif나 남의 서버 장식이 저장된다. /img_up/shop_pds/는 본문 이미지의 다른 저장 위치다.
 export const queenalbaGuinDetailHtml = queenalbaDetail({
 	bodyHtml:
-		'<p>송파1등업소!! 최대소득 장난아니야~~!!</p><p>문의 010-1234-5678</p><p>카톡 shopkakao</p><img src="img/blank.gif" width="1" height="1"><img src="/wys2/file_attach/2025/12/06/sample.jpg"><img src="upload/happy_config/IconData2.gif"><img src="/wys2/file_attach/2025/12/06/sample.jpg">',
+		'<p>송파1등업소!! 최대소득 장난아니야~~!!</p><p>문의 010-1234-5678</p><p>카톡 shopkakao</p><img src="img/blank.gif" width="1" height="1"><img src="/wys2/file_attach/2025/12/06/sample.jpg"><img src="upload/happy_config/IconData2.gif"><img src="/wys2/file_attach/2025/12/06/sample.jpg"><img src="/img_up/shop_pds/2026/07/29/detail_01.jpg"><img src="https://i.imgur.com/decoline.gif">',
 	messengerRows: `
 		<tr class="kakao-wrap"><td><b class="smfont4"><img alt="카카오톡아이디"> ID</b></td><td colspan="3">kakaosample</td></tr>
 		<tr class="line-wrap"><td><b class="smfont4"><img alt="라인 아이디"> ID</b></td><td colspan="3"></td></tr>
@@ -237,14 +242,19 @@ export const queenalbaGuinDetailHtml = queenalbaDetail({
 		["닉네임", "♥The Day♥"],
 		["상호", "주식회사 제이유니언"],
 		["담당자", "홍길동"],
+		["전화번호", "<span>010-9876-5432</span>"],
 		["근무지역", "<span><b>서울</b> - 송파구</span>"],
 		["업무내용", "룸싸롱 - 클럽"],
 		["고용형태", "고용"],
-		["급여", "150,000원 2026년 최저시급 10,320원"],
+		[
+			"급여",
+			'<img src="upload/happy_config/WantMoneyArrImg2.gif"> 150,000원 2026년 최저시급 10,320원',
+		],
 		["경력", "정보없음"],
 		["업무일", "정보없음"],
 		["나이", "제한 없음"],
 		["접수기간", "2026-07-29 ~ 2026-09-01"],
+		["마감일자", "2026-08-05 D-12"],
 		["회사명", "주식회사 제이유니언"],
 		["회사주소", "서울특별시 송파구 송파대로28길 11, 지하1층"],
 	],

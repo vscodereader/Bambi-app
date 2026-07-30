@@ -636,12 +636,16 @@ const ingestDetail = async (
 	// 내용이 그대로면 UPDATE를 건너뛴다. 생존 표시는 목록 패스에서 이미 갱신된다.
 	// 이미지·유료 노출은 content_hash 계산에 들어가지 않아 여기서도 갱신해야 한다 —
 	// 안 그러면 이 기능이 붙기 전에 수집된 행은 내용이 바뀌지 않는 한 영영 비어 있다.
+	// pay_unit·source_deadline_at도 같은 이유로 여기 있다: 둘 다 해시 재료 밖의 파생/신규
+	// 필드라(payUnit은 payRaw에서 파생, 날짜는 규약상 해시 제외) 빠뜨리면 백필이 안 된다.
 	if (existingRow?.contentHash === contentHash) {
 		await db
 			.update(crawledJobPost)
 			.set({
 				detailFetchedAt: now,
 				detailImageUrls: media.detailImageUrls,
+				payUnit: record.payUnit,
+				sourceDeadlineAt: record.sourceDeadlineAt,
 				...listValues,
 			})
 			.where(eq(crawledJobPost.id, existingRow.id));
@@ -670,6 +674,7 @@ const ingestDetail = async (
 		payUnit: record.payUnit,
 		region: record.region,
 		shopName: record.shopName,
+		sourceDeadlineAt: record.sourceDeadlineAt,
 		sourceExternalId: record.sourceExternalId,
 		sourcePostedAt: record.sourcePostedAt,
 		sourceSite: adapter.site,

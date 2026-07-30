@@ -13,10 +13,11 @@ import Image from "next/image";
 import { formatMarketplacePay } from "@/lib/bambi/api-job-mapper";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { formatDate } from "@/lib/bambi-format";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { Button, InfoTile } from "../ds";
-import { ClockIcon, DollarCircle } from "../icons";
+import { CalendarIcon, ClockIcon, DollarCircle } from "../icons";
 
 type CrawledJobDetail =
 	InferRouterOutputs<AppRouter>["bambi"]["crawledJobs"]["getById"];
@@ -98,6 +99,15 @@ export function SeekerCrawledJobDetail({
 										value={job.workSchedule}
 									/>
 								) : null}
+								{/* 마감일자는 원본에 적혀 있을 때만 보여준다 — 없는 마감을 지어내면
+								    이미 끝난 자리에 지원하게 만든다. */}
+								{job.sourceDeadlineAt ? (
+									<InfoTile
+										icon={<CalendarIcon />}
+										label="마감일자"
+										value={formatDate(job.sourceDeadlineAt)}
+									/>
+								) : null}
 							</div>
 						</div>
 					</section>
@@ -124,18 +134,9 @@ export function SeekerCrawledJobDetail({
 								))}
 							</div>
 						) : null}
-						{/* 상세 이미지가 없으면 목록 썸네일이 유일한 시각 정보다 — 본문이 짧은
-						    공고에서 화면이 텅 비는 것을 막는다. */}
-						{job.detailImageUrls.length === 0 && job.thumbnailUrl ? (
-							<Image
-								alt={`${job.title} 대표 이미지`}
-								className="mt-5 h-auto w-full rounded-lg border"
-								height={600}
-								src={job.thumbnailUrl}
-								unoptimized
-								width={800}
-							/>
-						) : null}
+						{/* 목록 썸네일(thumbnailUrl)은 상세에 폴백으로 넣지 않는다 — 상세 내용이
+						    썸네일로 대체돼 버린다. 상세 이미지가 비면 수집 파서 문제이므로
+						    화면에서 대체물을 만들지 말고 파서를 고친다. */}
 					</section>
 				</main>
 			</div>

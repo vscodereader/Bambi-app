@@ -100,7 +100,23 @@ describe("parseQueenalbaDetail — 본문 이미지", () => {
 	it("collects only real posting images, absolute and deduplicated", () => {
 		expect(parseQueenalbaDetail(detailHtml, "16100")?.detailImageUrls).toEqual([
 			"https://queenalba.net/wys2/file_attach/2025/12/06/sample.jpg",
+			"https://queenalba.net/img_up/shop_pds/2026/07/29/detail_01.jpg",
 		]);
+	});
+
+	// 본문 이미지 48장이 전부 /img_up/shop_pds/에 있는 공고가 실재했고, 그 경로가 화이트리스트에
+	// 없어서 0장이 수집됐다(그래서 상세 화면이 썸네일 폴백으로 빠졌다). 반대로 남의 서버에 있는
+	// 장식 gif는 계속 걸러야 한다 — 핫링크한 장식이 공고 이미지 자리에 저장된다.
+	it("collects /img_up/ images but not external decorations", () => {
+		const urls =
+			parseQueenalbaDetail(detailHtml, "16100")?.detailImageUrls ?? [];
+
+		expect(urls).toContain(
+			"https://queenalba.net/img_up/shop_pds/2026/07/29/detail_01.jpg"
+		);
+		expect(urls.every((url) => url.startsWith("https://queenalba.net/"))).toBe(
+			true
+		);
 	});
 
 	// 위에서부터 읽는 순서가 곧 공고의 구성이다(조건표 → 사진 순서가 뒤집히면 뜻이 달라진다).
@@ -172,14 +188,53 @@ describe("parseQueenalbaDetail", () => {
 		expect(record?.payAmount).toBe(150_000);
 	});
 
-	// 금액은 읽었는데 단위 표기가 없으면 "협의"가 아니라 모르는 것이다.
-	it("leaves the pay unit empty when the source gives no unit", () => {
-		expect(record?.payUnit).toBeNull();
+	// 단위는 텍스트가 아니라 급여 칸의 gif 파일명(WantMoneyArrImgN)에만 있다. 이걸 안 읽으면
+	// 수집한 공고의 payUnit이 전부 빈다.
+	it("reads the pay unit from the unit image", () => {
+		expect(record?.payUnit).toBe("시급");
+	});
+
+	// 우리 payUnitOptions 5종에 없는 단위(6=건당, 7=연봉)도 원문 의미 그대로 둔다 —
+	// 연봉을 월급으로 뭉개면 같은 금액이 다른 뜻이 된다.
+	it("keeps units outside our five options as the source means them", () => {
+		const perCase = detailHtml.replace("WantMoneyArrImg2", "WantMoneyArrImg6");
+
+		expect(parseQueenalbaDetail(perCase, "16100")?.payUnit).toBe("건당");
+	});
+
+	// 1은 "면접 후 협의"다. 금액이 함께 적혀 있어도 사이트가 협의라고 표기했으면 그게 정본이다.
+	it("reads the negotiable unit image even when an amount is present", () => {
+		const negotiable = detailHtml.replace(
+			"WantMoneyArrImg2",
+			"WantMoneyArrImg1"
+		);
+
+		expect(parseQueenalbaDetail(negotiable, "16100")?.payUnit).toBe("협의");
+	});
+
+	// 사이트가 단위를 늘리면 모르는 N이 온다. 그때는 텍스트 폴백에 맡긴다(금액만 있으므로 null).
+	it("falls back to the text when the unit image is unknown", () => {
+		const unknown = detailHtml.replace("WantMoneyArrImg2", "WantMoneyArrImg9");
+
+		expect(parseQueenalbaDetail(unknown, "16100")?.payUnit).toBeNull();
 	});
 
 	it("keeps operator-only lead fields", () => {
 		expect(record?.contactName).toBe("홍길동");
 		expect(record?.contactKakao).toBe("kakaosample");
+	});
+
+	// 실물 다수는 "전화번호" 라벨에 직통 번호를 적어둔다. 콜핀 라벨만 찾던 예전 방식은
+	// 그 라벨이 실물에 없어서 contactPhone이 전부 null이었다.
+	it("reads the direct phone number from its label", () => {
+		expect(record?.contactPhone).toBe("010-9876-5432");
+	});
+
+	// 마감일자 값에는 D-day 표기가 뒤에 붙는다("2026-08-05 D-12").
+	it("reads the deadline, ignoring the d-day suffix", () => {
+		expect(record?.sourceDeadlineAt?.toISOString()).toBe(
+			"2026-08-05T00:00:00.000Z"
+		);
 	});
 
 	// "정보없음"은 값이 아니라 값이 없다는 뜻이다.
@@ -220,6 +275,18 @@ describe("parseQueenalbaDetail — 콜핀·이미지 본문", () => {
 	it("treats an image-only posting as a valid record with an empty body", () => {
 		expect(record).not.toBeNull();
 		expect(record?.body).toBe("");
+	});
+
+	// 단위 이미지가 없는 공고. 그때는 텍스트 판정으로 떨어지고, 금액을 읽었는데 단위 표기가
+	// 없으면 "협의"가 아니라 모르는 것이므로 비운다.
+	it("falls back to the text unit rules without a unit image", () => {
+		expect(record?.payAmount).toBe(500_000);
+		expect(record?.payUnit).toBeNull();
+	});
+
+	// 마감일자 행이 없는 공고도 있다.
+	it("leaves the deadline null when the row is absent", () => {
+		expect(record?.sourceDeadlineAt).toBeNull();
 	});
 
 	// 업종 매핑에 실패하면 버리지 않고 null로 남겨 수집기가 needs_review로 넣는다.

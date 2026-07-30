@@ -26,6 +26,8 @@ export interface CrawledJobRecord {
 	// 공개 가능한 업소 표시명(원본의 "닉네임/업소명"). 사업자등록 상호인 bizName과 다르다 —
 	// 이쪽은 공고에 내걸린 간판이라 노출해도 되고, bizName은 운영자 전용 리드다.
 	shopName: string | null;
+	// 원본이 내건 마감일자. 없는 사이트가 있어 null이 정상이다.
+	sourceDeadlineAt: Date | null;
 	sourceExternalId: string;
 	sourcePostedAt: Date | null;
 	sourceUrl: string;

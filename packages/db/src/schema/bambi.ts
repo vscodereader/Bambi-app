@@ -421,6 +421,9 @@ export const crawledJobPost = pgTable(
 		// 이유는 매 회차 목록으로 갱신되는 값과 섞이면 재수집 판정이 무너지기 때문이다.
 		detailFetchedAt: timestamp("detail_fetched_at"),
 		sourcePostedAt: timestamp("source_posted_at"),
+		// 원본이 내건 마감일자. 접수기간의 끝(source_posted_at은 그 시작)이라 "이미 끝난 공고를
+		// 계속 보여주는" 상황을 이 값으로만 가려낼 수 있다. 원본에 없는 사이트가 있어 nullable.
+		sourceDeadlineAt: timestamp("source_deadline_at"),
 		// 원본에서 이 공고가 어느 자리에 걸려 있었는지. 일반 목록 공고와 메인 상단의 유료 노출
 		// (광고 배너·우대채용·스페셜채용)은 같은 공고여도 값어치가 다르다 — 돈을 낸 자리라
 		// 그 사이트가 지금 무엇을 밀고 있는지의 신호가 된다. null은 아직 분류 전(구 수집분).
