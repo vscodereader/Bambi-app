@@ -152,15 +152,18 @@ const updateMinimumWageInput = z.object({
 		.nullable(),
 });
 
-// 수집 콘텐츠 노출 스위치. 배너와 목록을 한 컬럼으로 합치지 않는다 — 문제가 생기는 축이
-// 다르고(배너는 이미지 저작권, 목록은 공고 내용), 한쪽만 내려야 하는 상황이 실제로 온다.
+// 수집 콘텐츠 노출 스위치. 배너·공고 목록·커뮤니티를 한 컬럼으로 합치지 않는다 — 문제가
+// 생기는 축이 다르고(배너는 이미지 저작권, 공고 목록은 공고 내용, 커뮤니티는 게시글 저작권),
+// 한쪽만 내려야 하는 상황이 실제로 온다.
 const CRAWLED_EXPOSURE_COLUMNS = {
 	crawledAdBannerEnabled: bambiSiteSettings.crawledAdBannerEnabled,
+	crawledCommunityFeedEnabled: bambiSiteSettings.crawledCommunityFeedEnabled,
 	crawledJobFeedEnabled: bambiSiteSettings.crawledJobFeedEnabled,
 };
 
 const updateCrawledExposureInput = z.object({
 	adBannerEnabled: z.boolean(),
+	communityFeedEnabled: z.boolean(),
 	jobFeedEnabled: z.boolean(),
 });
 
@@ -386,16 +389,21 @@ export const siteSettingsRouter = {
 			.limit(1);
 
 		return (
-			row ?? { crawledAdBannerEnabled: false, crawledJobFeedEnabled: false }
+			row ?? {
+				crawledAdBannerEnabled: false,
+				crawledCommunityFeedEnabled: false,
+				crawledJobFeedEnabled: false,
+			}
 		);
 	}),
 
-	// 배너와 목록을 따로 끈다 — 한쪽이 문제여도 다른 쪽을 살려 둘 수 있어야 한다.
+	// 배너·공고 목록·커뮤니티를 따로 끈다 — 한쪽이 문제여도 다른 쪽을 살려 둘 수 있어야 한다.
 	updateCrawledExposure: adminProcedure
 		.input(updateCrawledExposureInput)
 		.handler(async ({ input }) => {
 			const values = {
 				crawledAdBannerEnabled: input.adBannerEnabled,
+				crawledCommunityFeedEnabled: input.communityFeedEnabled,
 				crawledJobFeedEnabled: input.jobFeedEnabled,
 			};
 			const [saved] = await db

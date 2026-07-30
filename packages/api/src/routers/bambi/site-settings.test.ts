@@ -360,6 +360,71 @@ describe("siteSettings minimum wage", () => {
 	});
 });
 
+describe("siteSettings crawled exposure", () => {
+	it("세 노출 스위치(배너·공고·커뮤니티)가 각각 왕복하고 미설정 기본은 false", async () => {
+		const fixture = await createFixture();
+		try {
+			await db
+				.delete(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, "default"));
+
+			const get = createProcedureClient(siteSettingsRouter.getCrawledExposure, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "siteSettings", "getCrawledExposure"],
+			});
+			expect(await get({})).toEqual({
+				crawledAdBannerEnabled: false,
+				crawledCommunityFeedEnabled: false,
+				crawledJobFeedEnabled: false,
+			});
+
+			const update = createProcedureClient(
+				siteSettingsRouter.updateCrawledExposure,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updateCrawledExposure"],
+				}
+			);
+			// 커뮤니티만 켠다 — 배너·공고와 독립적으로 껐다 켤 수 있어야 한다.
+			const saved = await update({
+				adBannerEnabled: false,
+				communityFeedEnabled: true,
+				jobFeedEnabled: false,
+			});
+			expect(saved.crawledCommunityFeedEnabled).toBe(true);
+			expect(saved.crawledAdBannerEnabled).toBe(false);
+			expect(saved.crawledJobFeedEnabled).toBe(false);
+
+			expect((await get({})).crawledCommunityFeedEnabled).toBe(true);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("updateCrawledExposure는 운영자가 아니면 FORBIDDEN", async () => {
+		const fixture = await createFixture();
+		try {
+			const asEmployer = createProcedureClient(
+				siteSettingsRouter.updateCrawledExposure,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "siteSettings", "updateCrawledExposure"],
+				}
+			);
+			await expectOrpcCode(
+				asEmployer({
+					adBannerEnabled: true,
+					communityFeedEnabled: true,
+					jobFeedEnabled: true,
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+});
+
 describe("siteSettings payment accounts", () => {
 	it("getPaymentAccounts는 미설정 시 빈 배열, 운영자 저장 후 계좌를 반환한다", async () => {
 		const fixture = await createFixture();
