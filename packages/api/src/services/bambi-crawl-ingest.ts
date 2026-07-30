@@ -21,6 +21,7 @@ import {
 	parseFoxalbaList,
 	parseFoxalbaTotalCount,
 } from "./bambi-crawl-foxalba";
+import { mirrorCrawledImage, mirrorCrawledImages } from "./bambi-crawl-media";
 import {
 	type CrawledJobRecord,
 	computeContentHash,
@@ -53,16 +54,30 @@ import {
 	queenalbaDetailUrl,
 	queenalbaListUrl,
 } from "./bambi-crawl-queenalba";
+import {
+	parseQueenalbaMain,
+	queenalbaMainUrl,
+} from "./bambi-crawl-queenalba-main";
 
 // 목록에서 수집기가 쓰는 최소 규약. 사이트별 목록 파서가 더 많은 필드를 채워도 상관없다 —
 // 상세 패스가 ID 하나만 필요로 하기 때문에 이 경계 덕분에 파서를 추가해도 수집기가 안 바뀐다.
+//
+// 아래 세 필드는 목록·메인페이지에만 있고 상세에는 없다. 상세 패스가 행을 쓸 때 함께 실어야
+// 값이 남는다 — 목록 패스는 생존 표시(last_seen_at)만 갱신하고 행을 만들지 않기 때문이다.
 interface CrawlListItem {
+	bannerHorizontalUrl?: string | null;
+	bannerVerticalUrl?: string | null;
+	listingType?: string | null;
 	sourceExternalId: string;
+	thumbnailUrl?: string | null;
 }
 
 // 사이트 어댑터. 사이트마다 다른 건 URL 모양과 셀렉터뿐이고, 멱등성·수율 판정·만료 규칙은
 // 전부 공통이다. 파서 다섯을 여기 묶어두면 아래 수집 로직이 어느 사이트인지 몰라도 된다.
 interface JobSiteAdapter {
+	// 일반 목록 외에 따로 훑을 자리가 있는 사이트를 위한 갈고리(퀸알바 메인의 유료 노출).
+	// 여기서 나온 항목이 일반 목록 항목보다 앞에 놓여, 중복 제거 시 유료 노출 정보가 이긴다.
+	collectExtraListItems?: (client: CrawlClient) => Promise<CrawlListItem[]>;
 	detailUrl: (sourceExternalId: string) => string;
 	// 전체 건수로 목록 페이지 수를 계산할 때 쓴다. 전건을 한 번에 주는 사이트는 무의미하다.
 	itemsPerPage: number;
@@ -70,7 +85,12 @@ interface JobSiteAdapter {
 	parseDetail: (
 		html: string,
 		sourceExternalId: string
-	) => CrawledJobRecord | null;
+	) =>
+		| (CrawledJobRecord & {
+				detailImageUrls?: string[];
+				thumbnailUrl?: null | string;
+		  })
+		| null;
 	parseList: (html: string) => CrawlListItem[];
 	parseTotalCount: (html: string) => number | null;
 	site: CrawlSourceSite;
@@ -87,6 +107,8 @@ const JOB_ADAPTERS: Readonly<Record<CrawlSourceSite, JobSiteAdapter>> = {
 		site: "foxalba",
 	},
 	queenalba: {
+		// 즉시 참조하면 아래 정의보다 먼저 평가된다. 호출 시점으로 미룬다.
+		collectExtraListItems: (client) => collectQueenalbaMainListings(client),
 		detailUrl: queenalbaDetailUrl,
 		// 목록이 페이지 파라미터를 무시하고 전건을 한 번에 준다. 쓰이지 않는 값이다.
 		itemsPerPage: 0,
@@ -144,6 +166,101 @@ const assertNotGated = (site: CrawlSourceSite, html: string): void => {
 			"퀸알바 성인인증 게이트에 막혔다 — 쿠키가 자리표시자이거나 만료됐다(bambi-crawl-ingest.ts의 QUEENALBA_COOKIE_INLINE 또는 env QUEENALBA_COOKIE를 갱신)"
 		);
 	}
+};
+
+// 퀸알바 메인의 유료 노출(광고배너·우대채용·스페셜채용)을 목록 항목으로 바꿔 준다.
+// 여기서 나온 항목은 일반 목록에도 대개 함께 실리므로 별도 저장 경로를 만들지 않는다 —
+// 상세 패스가 지나는 같은 길에 얹어야 body·content_hash 같은 NOT NULL 값이 채워진다.
+//
+// 이 자리는 상대가 돈을 받고 파는 칸이라, 어떤 공고가 걸려 있는지가 "그 사이트가 지금
+// 무엇을 밀고 있는가"의 신호가 된다. 그래서 일반 목록과 구분해 listing_type으로 남긴다.
+const collectQueenalbaMainListings = async (
+	client: CrawlClient
+): Promise<CrawlListItem[]> => {
+	const url = queenalbaMainUrl();
+
+	// 메인을 못 읽어도 일반 목록 수집은 계속돼야 한다. 유료 노출은 부가 정보지
+	// 회차의 성패를 가를 축이 아니다.
+	if (!(await client.isAllowed(url))) {
+		return [];
+	}
+
+	const html = await client.fetchHtml(url);
+
+	assertNotGated("queenalba", html);
+
+	const { listings, skippedBanners } = parseQueenalbaMain(html);
+
+	// 상세 링크가 아닌 배너(이벤트·외부 페이지)는 공고에 매칭할 수 없어 건너뛴다. 정상이지만
+	// 조용히 삼키면 셀렉터가 어긋나 전부 스킵되는 상황과 구분이 안 된다.
+	if (skippedBanners > 0) {
+		console.warn(
+			`퀸알바 메인: 공고에 매칭할 수 없는 배너 ${skippedBanners}건을 건너뜀`
+		);
+	}
+
+	return listings.map((listing) => ({
+		bannerHorizontalUrl: listing.bannerHorizontalUrl,
+		bannerVerticalUrl: listing.bannerVerticalUrl,
+		listingType: listing.listingType,
+		sourceExternalId: listing.sourceExternalId,
+		thumbnailUrl: listing.thumbnailUrl,
+	}));
+};
+
+interface JobImageSources {
+	bannerHorizontalUrl?: string | null;
+	bannerVerticalUrl?: string | null;
+	detailImageUrls?: string[];
+	sourceExternalId: string;
+	thumbnailUrl?: string | null;
+}
+
+interface JobImageUrls {
+	bannerHorizontalUrl: null | string;
+	bannerVerticalUrl: null | string;
+	detailImageUrls: string[];
+	thumbnailUrl: null | string;
+}
+
+// 원본 이미지 URL을 우리 버킷 URL로 바꿔 준다. 미러링 실패는 그 이미지 한 장만 잃고
+// 공고 수집은 계속된다 — 이미지가 없다고 공고를 버리면 남는 게 없다.
+const mirrorJobImages = async (
+	client: CrawlClient,
+	site: CrawlSourceSite,
+	sources: JobImageSources
+): Promise<JobImageUrls> => {
+	const { sourceExternalId } = sources;
+	const one = (url: null | string | undefined) =>
+		url
+			? mirrorCrawledImage({ client, site, sourceExternalId, url })
+			: Promise.resolve(null);
+
+	const [thumbnailUrl, bannerHorizontalUrl, bannerVerticalUrl, detailImages] =
+		await Promise.all([
+			one(sources.thumbnailUrl),
+			one(sources.bannerHorizontalUrl),
+			one(sources.bannerVerticalUrl),
+			mirrorCrawledImages({
+				client,
+				site,
+				sourceExternalId,
+				urls: sources.detailImageUrls ?? [],
+			}),
+		]);
+
+	if (detailImages.failed > 0) {
+		console.warn(
+			`${site} ${sourceExternalId}: 상세 이미지 ${detailImages.failed}장을 미러링하지 못함`
+		);
+	}
+
+	return {
+		bannerHorizontalUrl,
+		bannerVerticalUrl,
+		detailImageUrls: detailImages.urls,
+		thumbnailUrl,
+	};
 };
 
 export interface CrawlTickResult {
@@ -215,7 +332,7 @@ const readSettings = async (): Promise<CrawlTickSettings> => {
 			crawlEnabled: false,
 			crawlIntervalHours: null,
 			crawlLastRunAt: null,
-			crawlSourceSite: "foxalba",
+			crawlSourceSite: "queenalba",
 		}
 	);
 };
@@ -294,7 +411,12 @@ const collectListItems = async (
 		adapter.parseTotalCount(firstPage),
 		adapter.itemsPerPage
 	);
-	const items = adapter.parseList(firstPage);
+	// 유료 노출을 먼저 담는다. 아래 중복 제거가 첫 항목을 남기므로, 같은 공고가 일반
+	// 목록에도 실려 있어도 listing_type·배너 이미지가 붙은 쪽이 살아남는다.
+	const items = [
+		...((await adapter.collectExtraListItems?.(client)) ?? []),
+		...adapter.parseList(firstPage),
+	];
 	let pagesFetched = 1;
 
 	for (let page = 2; page <= pageCount; page += 1) {
@@ -344,11 +466,42 @@ const ingestDetail = async (
 
 	const contentHash = computeContentHash(record);
 
+	// 이미지는 우리 버킷으로 미러링해 저장한다. 원본 URL을 그대로 쓰면 상대가 파일을
+	// 지우거나 핫링크를 막는 순간 우리 화면에서 깨지고, 그 시점을 우리가 통제할 수 없다.
+	// 버킷 미설정(로컬 다수)이면 원본 URL이 그대로 통과한다.
+	const media = await mirrorJobImages(client, adapter.site, {
+		bannerHorizontalUrl: item.bannerHorizontalUrl,
+		bannerVerticalUrl: item.bannerVerticalUrl,
+		detailImageUrls: record.detailImageUrls,
+		sourceExternalId: record.sourceExternalId,
+		// 목록 카드에 이미지가 없는 공고도 상세에는 대표 이미지가 걸려 있다.
+		thumbnailUrl: item.thumbnailUrl ?? record.thumbnailUrl,
+	});
+
+	// 목록·메인에만 있는 값이라 상세 레코드는 이 셋을 모른다. 값이 있을 때만 실어야
+	// 목록이 못 준 회차에 null로 덮어써서 이미 받아둔 값을 지우지 않는다.
+	const listValues = {
+		...(media.thumbnailUrl ? { thumbnailUrl: media.thumbnailUrl } : {}),
+		...(media.bannerHorizontalUrl
+			? { bannerHorizontalUrl: media.bannerHorizontalUrl }
+			: {}),
+		...(media.bannerVerticalUrl
+			? { bannerVerticalUrl: media.bannerVerticalUrl }
+			: {}),
+		...(item.listingType ? { listingType: item.listingType } : {}),
+	};
+
 	// 내용이 그대로면 UPDATE를 건너뛴다. 생존 표시는 목록 패스에서 이미 갱신된다.
+	// 이미지·유료 노출은 content_hash 계산에 들어가지 않아 여기서도 갱신해야 한다 —
+	// 안 그러면 이 기능이 붙기 전에 수집된 행은 내용이 바뀌지 않는 한 영영 비어 있다.
 	if (existingRow?.contentHash === contentHash) {
 		await db
 			.update(crawledJobPost)
-			.set({ detailFetchedAt: now })
+			.set({
+				detailFetchedAt: now,
+				detailImageUrls: media.detailImageUrls,
+				...listValues,
+			})
 			.where(eq(crawledJobPost.id, existingRow.id));
 
 		return "unchanged";
@@ -364,6 +517,7 @@ const ingestDetail = async (
 		contactPhone: record.contactPhone,
 		contentHash,
 		detailFetchedAt: now,
+		detailImageUrls: media.detailImageUrls,
 		district: record.district,
 		gender: record.gender,
 		industryCategory: record.industryCategory,
@@ -384,6 +538,7 @@ const ingestDetail = async (
 			: ("needs_review" as const),
 		title: record.title,
 		workSchedule: record.workSchedule,
+		...listValues,
 	};
 
 	await db
@@ -503,11 +658,17 @@ const reapStaleRuns = (now: Date) =>
 // 회차를 연다. 이미 진행 중이면 부분 유니크 인덱스가 INSERT를 막으므로 null을 돌려준다.
 const startRun = async (
 	site: CrawlSourceSite,
+	contentType: CrawlContentType,
 	now: Date
 ): Promise<{ id: string } | null> => {
 	const [run] = await db
 		.insert(crawlRun)
-		.values({ sourceSite: site, startedAt: now, status: "running" })
+		.values({
+			contentType,
+			sourceSite: site,
+			startedAt: now,
+			status: "running",
+		})
 		.onConflictDoNothing()
 		.returning({ id: crawlRun.id });
 
@@ -746,9 +907,9 @@ export const runCrawlTick = async (
 ): Promise<CrawlTickResult> => {
 	const settings = await readSettings();
 
-	// 강제 실행이라도 마스터 스위치는 존중한다. 꺼둔 수집이 버튼 하나로 되살아나면
-	// "껐다"는 말이 거짓이 된다.
-	if (!settings.crawlEnabled) {
+	// crawlEnabled는 스케줄러 스위치다. 주기 실행만 통제하고 운영자의 「즉시 수집」은
+	// 막지 않는다 — 수동 실행까지 잠그면 스케줄러를 켜지 않고는 파서를 확인할 방법이 없다.
+	if (!(options.force || settings.crawlEnabled)) {
 		return emptyResult("not_due");
 	}
 
@@ -775,7 +936,7 @@ export const runCrawlTick = async (
 
 	await reapStaleRuns(now);
 
-	const run = await startRun(site, now);
+	const run = await startRun(site, settings.crawlContentType, now);
 
 	// 진행 중 회차가 이미 있다. 부분 유니크 인덱스가 두 번째 INSERT를 막은 것이라,
 	// 애플리케이션 검사만 있을 때 남는 경쟁 창이 여기서는 없다.

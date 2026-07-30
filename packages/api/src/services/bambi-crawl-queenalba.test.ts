@@ -7,6 +7,7 @@ import {
 	queenalbaGuinDetailHtml as detailHtml,
 	queenalbaGateStubHtml as GATE_STUB,
 	queenalbaGuinListHtml as listHtml,
+	queenalbaGuinDetailManyImagesHtml as manyImagesDetailHtml,
 } from "./__fixtures__/crawl-html";
 import {
 	isQueenalbaGateStub,
@@ -14,6 +15,7 @@ import {
 	parseQueenalbaCommunityList,
 	parseQueenalbaDetail,
 	parseQueenalbaList,
+	QUEENALBA_MAX_DETAIL_IMAGES,
 	queenalbaCommunityListUrl,
 	queenalbaDetailUrl,
 	queenalbaListUrl,
@@ -62,9 +64,84 @@ describe("parseQueenalbaList", () => {
 		expect(new Set(ids).size).toBe(ids.length);
 	});
 
+	// 저장한 뒤에는 어느 페이지에서 읽었는지 알 수 없어 상대경로가 쓸모없어진다.
+	it("normalises card thumbnails to absolute urls", () => {
+		const item = items.find((row) => row.sourceExternalId === "36659");
+
+		expect(item?.thumbnailUrl).toBe(
+			"https://queenalba.net/offerphoto/36659.jpg"
+		);
+	});
+
+	// 등급 아이콘·버튼 gif가 썸네일 자리에 들어가면 목록 카드가 아이콘으로 도배된다.
+	it("does not mistake an icon for a thumbnail", () => {
+		expect(items.every((row) => !row.thumbnailUrl?.includes("/img/"))).toBe(
+			true
+		);
+	});
+
+	// 표형 섹션 카드는 이미지 없이 텍스트만이다. 이미지가 없는 게 정상이라 실패로 보면 안 된다.
+	it("leaves the thumbnail null for a text-only row", () => {
+		const item = items.find((row) => row.sourceExternalId === "37428");
+
+		expect(item).toBeDefined();
+		expect(item?.thumbnailUrl).toBeNull();
+	});
+
 	// 게이트에 막힌 응답을 공고 0건으로 읽으면 수율 판정이 "셀렉터 파손"으로 오진한다.
 	it("returns nothing for the gate stub", () => {
 		expect(parseQueenalbaList(GATE_STUB)).toEqual([]);
+	});
+});
+
+// 유흥 공고는 조건 대부분을 이미지로만 적어두는 경우가 많아, 본문 텍스트만 저장하면 정작
+// 핵심 정보가 빠진다.
+describe("parseQueenalbaDetail — 본문 이미지", () => {
+	it("collects only real posting images, absolute and deduplicated", () => {
+		expect(parseQueenalbaDetail(detailHtml, "16100")?.detailImageUrls).toEqual([
+			"https://queenalba.net/wys2/file_attach/2025/12/06/sample.jpg",
+		]);
+	});
+
+	// 위에서부터 읽는 순서가 곧 공고의 구성이다(조건표 → 사진 순서가 뒤집히면 뜻이 달라진다).
+	it("keeps the source order", () => {
+		expect(
+			parseQueenalbaDetail(callpinDetailHtml, "36659")?.detailImageUrls
+		).toEqual([
+			"https://queenalba.net/wys2/file_attach/2025/12/06/a.jpg",
+			"https://queenalba.net/wys2/file_attach/2025/12/06/b.jpg",
+		]);
+	});
+
+	// 썸네일은 본문 이미지와 별개 자리에 있다(운영자 확인). 본문 목록에 섞이면 같은 공고
+	// 상세에 같은 그림이 두 번 뜨고, 목록 썸네일을 채울 때 쓸 값도 못 고른다.
+	it("reads the detail thumbnail without mixing it into the body images", () => {
+		const record = parseQueenalbaDetail(detailHtml, "16100");
+
+		expect(record?.thumbnailUrl).toBe(
+			"https://queenalba.net/offerphoto/16100_main.jpg"
+		);
+		expect(record?.detailImageUrls).not.toContain(
+			"https://queenalba.net/offerphoto/16100_main.jpg"
+		);
+	});
+
+	// 썸네일 없는 공고가 있다. 라벨 표의 아이콘 gif를 대신 집으면 상세 카드가 화살표가 된다.
+	it("leaves the thumbnail null when the detail has none", () => {
+		expect(
+			parseQueenalbaDetail(callpinDetailHtml, "36659")?.thumbnailUrl
+		).toBeNull();
+	});
+
+	// 이상 공고 하나가 행 크기를 흔들지 않도록 천장을 둔다.
+	it("caps the number of stored images", () => {
+		const urls =
+			parseQueenalbaDetail(manyImagesDetailHtml, "1")?.detailImageUrls ?? [];
+
+		expect(urls).toHaveLength(QUEENALBA_MAX_DETAIL_IMAGES);
+		expect(urls[0]).toBe(
+			"https://queenalba.net/wys2/file_attach/2025/12/06/img0.jpg"
+		);
 	});
 });
 

@@ -17,6 +17,12 @@ export const accountStatuses = ["active", "warned", "suspended"] as const;
 // (bambi_site_settings.withdrawal_retention_days)이 우선하고, 미설정이면 이 값을 쓴다.
 // 해석은 bambi-member-policy의 resolveWithdrawalRetentionDays가 담당한다.
 export const DEFAULT_WITHDRAWAL_RETENTION_DAYS = 30;
+
+// 공고 상세의 급여 옆 보조 표기에 쓰는 최저시급 기본값. 실제 적용값은 운영자 사이트 설정
+// (bambi_site_settings.minimum_wage_year / minimum_wage_hourly)이 우선하고, 미설정이면 이 값을 쓴다.
+// 연도를 함께 두는 이유: 최저시급은 매년 바뀌고 다음 해 값이 8월에 미리 고시되므로
+// new Date().getFullYear()로 유추하면 연말에 틀린 연도가 붙는다.
+export const DEFAULT_MINIMUM_WAGE = { hourly: 10_320, year: 2026 } as const;
 export const interviewStatuses = [
 	"proposed",
 	"confirmed",

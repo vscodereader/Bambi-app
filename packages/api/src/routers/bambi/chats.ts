@@ -415,6 +415,62 @@ const resolveCounterpartNames = async (
 	return namesByRoomId;
 };
 
+// 방에서 나의 상대가 누구인지. 구인자로 보면 구직자, 구직자로 보면 구인자다.
+const counterpartUserId = (
+	room: { employerUserId: string; jobSeekerUserId: string },
+	viewerUserId: string
+): string =>
+	room.employerUserId === viewerUserId
+		? room.jobSeekerUserId
+		: room.employerUserId;
+
+/**
+ * 목록에 보이는 상대들 중 나와 차단 관계에 있는 사용자 ID를 한 번에 모은다.
+ *
+ * 방향을 양쪽 다 본다. 내가 차단한 상대뿐 아니라 **상대가 나를 차단한** 경우도
+ * 방 진입 가드(throwIfChatBlocked)가 막기 때문이다. 그쪽은 서버만 알 수 있어서,
+ * 목록이 이 정보를 싣지 않으면 화면은 열리는 방처럼 그려놓고 누르면 에러가 뜬다.
+ */
+const resolveBlockedCounterpartIds = async (
+	rooms: { employerUserId: string; jobSeekerUserId: string }[],
+	viewerUserId: string
+): Promise<Set<string>> => {
+	const counterpartIds = [
+		...new Set(rooms.map((room) => counterpartUserId(room, viewerUserId))),
+	];
+
+	if (counterpartIds.length === 0) {
+		return new Set();
+	}
+
+	const blocks = await db
+		.select({
+			blockedUserId: userBlock.blockedUserId,
+			blockerUserId: userBlock.blockerUserId,
+		})
+		.from(userBlock)
+		.where(
+			or(
+				and(
+					eq(userBlock.blockerUserId, viewerUserId),
+					inArray(userBlock.blockedUserId, counterpartIds)
+				),
+				and(
+					eq(userBlock.blockedUserId, viewerUserId),
+					inArray(userBlock.blockerUserId, counterpartIds)
+				)
+			)
+		);
+
+	return new Set(
+		blocks.map((block) =>
+			block.blockerUserId === viewerUserId
+				? block.blockedUserId
+				: block.blockerUserId
+		)
+	);
+};
+
 export const chatsRouter = {
 	startFromJobPost: protectedProcedure
 		.input(startFromJobPostInput)
@@ -561,9 +617,21 @@ export const chatsRouter = {
 			profile.userId
 		);
 
+		const blockedCounterpartIds = await resolveBlockedCounterpartIds(
+			visibleRooms.map(({ room }) => room),
+			profile.userId
+		);
+
 		return await Promise.all(
 			visibleRooms.map(async ({ lastMessage, room }) => ({
 				...room,
+				// 목록이 쓰는 isBlocked는 방 컬럼이 아니라 "이 방에 들어갈 수 있는가"다.
+				// chatRoom.isBlocked는 운영자 차단만 담고, 사용자 간 차단은 user_block에
+				// 따로 있다 — 방 진입 가드(throwIfChatBlocked)는 둘 다 보므로 목록이 방
+				// 컬럼만 보면 "열리는 것처럼 보이는데 누르면 에러"가 그대로 남는다.
+				isBlocked:
+					room.isBlocked ||
+					blockedCounterpartIds.has(counterpartUserId(room, profile.userId)),
 				counterpartName: counterpartNames.get(room.id) ?? null,
 				jobTitle: jobTitleById.get(room.jobPostId) ?? null,
 				lastMessageBody: lastMessage?.body ?? null,

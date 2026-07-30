@@ -34,14 +34,16 @@ import {
 	CRAWL_RUN_STATUS_LABELS,
 	CRAWL_RUN_STATUS_VARIANTS,
 	CRAWL_SOURCE_SITE_LABELS,
-	CRAWL_SOURCE_SITES,
 	CRAWLED_POST_STATUS_LABELS,
 	type CrawlContentType,
 	type CrawlSourceSite,
 	formatCrawlTimestamp,
 } from "@/lib/bambi/crawler";
 import { orpc } from "@/utils/orpc";
-import { CommunityTopicsCard } from "./community-topics-card";
+
+// 수집 대상은 퀸알바 하나뿐이라 선택기를 두지 않는다. 대상이 다시 늘면 이 상수를 state로
+// 되돌리고 ToggleGroup을 세운다 — 서버 입력 스키마는 사이트를 계속 받는다.
+const SOURCE_SITE: CrawlSourceSite = "queenalba";
 
 export default function ModeratorCrawlerPage() {
 	const queryClient = useQueryClient();
@@ -52,7 +54,6 @@ export default function ModeratorCrawlerPage() {
 
 	const [enabled, setEnabled] = useState(false);
 	const [intervalHours, setIntervalHours] = useState("");
-	const [sourceSite, setSourceSite] = useState<CrawlSourceSite>("foxalba");
 	const [contentType, setContentType] = useState<CrawlContentType>("job_post");
 
 	// 저장된 값이 오면 폼에 채운다(주기가 미설정이면 빈 값 → 기본값 placeholder 노출).
@@ -65,7 +66,6 @@ export default function ModeratorCrawlerPage() {
 		setIntervalHours(
 			data.intervalHours === null ? "" : String(data.intervalHours)
 		);
-		setSourceSite(data.sourceSite);
 		setContentType(data.contentType);
 	}, [settingsQuery.data]);
 
@@ -88,13 +88,6 @@ export default function ModeratorCrawlerPage() {
 			onError: (error) =>
 				toast.error(error.message || "수집을 시작하지 못했어요."),
 			onSuccess: async (result) => {
-				if (result.reason === "disabled") {
-					toast.error(
-						"수집이 꺼져 있어요. 먼저 수집 사용을 켜고 저장해 주세요."
-					);
-					return;
-				}
-
 				if (result.reason === "already_running") {
 					toast.error("이미 수집이 진행 중이에요. 끝난 뒤에 다시 눌러 주세요.");
 					return;
@@ -102,7 +95,7 @@ export default function ModeratorCrawlerPage() {
 
 				if (result.reason === "not_implemented") {
 					toast.error(
-						"이 조합의 수집기는 아직 준비 중이에요. 준비된 사이트·데이터를 선택해 주세요."
+						"이 데이터의 수집기는 아직 준비 중이에요. 준비된 데이터를 선택해 주세요."
 					);
 					return;
 				}
@@ -137,45 +130,32 @@ export default function ModeratorCrawlerPage() {
 			contentType,
 			enabled,
 			intervalHours: parsed,
-			sourceSite,
+			sourceSite: SOURCE_SITE,
 		});
 	};
 
-	const defaultHours = settingsQuery.data?.defaultIntervalHours ?? 6;
+	const defaultHours = settingsQuery.data?.defaultIntervalHours ?? 3;
 	const byStatus = summaryQuery.data?.byStatus ?? {};
 	const statusKeys = Object.keys(
 		CRAWLED_POST_STATUS_LABELS
 	) as (keyof typeof CRAWLED_POST_STATUS_LABELS)[];
-	// 사이트가 제공하는 (사이트 × 데이터 종류) 조합. 여우알바는 공고만, 퀸알바는 공고·커뮤니티.
-	// 데이터 종류 선택기가 사이트별로 이 목록만 노출한다.
-	const availableTargets = settingsQuery.data?.availableTargets ?? [
-		{ contentType: "job_post" as const, site: "foxalba" as const },
-	];
+	// 수집 대상이 제공하는 데이터 종류(퀸알바=공고·커뮤니티). 종류 선택기가 이 목록을 그린다.
+	const availableTypes = (
+		settingsQuery.data?.availableTargets ?? [
+			{ contentType: "job_post" as const, site: SOURCE_SITE },
+		]
+	)
+		.filter((target) => target.site === SOURCE_SITE)
+		.map((target) => target.contentType);
 	// 파서가 구현된 조합. 선택은 되지만 미구현 조합은 "준비 중"으로 안내하고 즉시 수집을 잠근다.
 	const implementedTargets = settingsQuery.data?.implementedTargets ?? [
-		{ contentType: "job_post" as const, site: "foxalba" as const },
+		{ contentType: "job_post" as const, site: SOURCE_SITE },
 	];
-	const contentTypesForSite = (site: CrawlSourceSite): CrawlContentType[] =>
-		availableTargets
-			.filter((target) => target.site === site)
-			.map((target) => target.contentType);
-	const siteHasAnyTarget = (site: CrawlSourceSite) =>
-		implementedTargets.some((target) => target.site === site);
-	const targetImplemented = (site: CrawlSourceSite, type: CrawlContentType) =>
+	const targetImplemented = (type: CrawlContentType) =>
 		implementedTargets.some(
-			(target) => target.site === site && target.contentType === type
+			(target) => target.site === SOURCE_SITE && target.contentType === type
 		);
-	const selectedTargetReady = targetImplemented(sourceSite, contentType);
-
-	// 사이트를 바꾸면 그 사이트가 제공하지 않는 데이터 종류가 선택돼 있을 수 있다(예: 퀸알바
-	// 커뮤니티 → 여우알바). 이때 그 사이트의 첫 제공 종류로 되돌린다.
-	const changeSite = (nextSite: CrawlSourceSite) => {
-		setSourceSite(nextSite);
-		const types = contentTypesForSite(nextSite);
-		if (!types.includes(contentType)) {
-			setContentType(types[0] ?? "job_post");
-		}
-	};
+	const selectedTargetReady = targetImplemented(contentType);
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
@@ -187,27 +167,11 @@ export default function ModeratorCrawlerPage() {
 					<form className="flex flex-col gap-5" onSubmit={onSubmit}>
 						<div className="flex flex-col gap-2">
 							<Label>수집 대상</Label>
-							<ToggleGroup
-								aria-label="수집 대상 사이트"
-								className="w-full flex-wrap"
-								onValueChange={(value) => {
-									const next = value.at(-1);
-									if (next) {
-										changeSite(next as CrawlSourceSite);
-									}
-								}}
-								value={[sourceSite]}
-							>
-								{CRAWL_SOURCE_SITES.map((site) => (
-									<ToggleGroupItem key={site} value={site}>
-										{CRAWL_SOURCE_SITE_LABELS[site]}
-										{siteHasAnyTarget(site) ? null : " (준비 중)"}
-									</ToggleGroupItem>
-								))}
-							</ToggleGroup>
+							<p className="m-0 font-medium text-sm">
+								{CRAWL_SOURCE_SITE_LABELS[SOURCE_SITE]}
+							</p>
 							<p className="m-0 text-muted-foreground text-xs">
-								한 번에 한 사이트만 수집합니다. 대상을 바꾸면 다음 회차부터
-								적용돼요.
+								현재 수집 대상은 퀸알바 한 곳입니다.
 							</p>
 						</div>
 
@@ -224,21 +188,21 @@ export default function ModeratorCrawlerPage() {
 								}}
 								value={[contentType]}
 							>
-								{contentTypesForSite(sourceSite).map((type) => (
+								{availableTypes.map((type) => (
 									<ToggleGroupItem key={type} value={type}>
 										{CRAWL_CONTENT_TYPE_LABELS[type]}
-										{targetImplemented(sourceSite, type) ? null : " (준비 중)"}
+										{targetImplemented(type) ? null : " (준비 중)"}
 									</ToggleGroupItem>
 								))}
 							</ToggleGroup>
 							<p className="m-0 text-muted-foreground text-xs">
-								공고는 채용 공고를, 커뮤니티는 게시판 글을 수집합니다.
-								사이트마다 준비된 데이터가 달라요.
+								공고는 채용 공고를, 커뮤니티는 게시판 글을 수집합니다. 한 번에
+								한 종류만 수집해요.
 							</p>
 							{selectedTargetReady ? null : (
 								<Alert>
 									<AlertDescription>
-										{CRAWL_SOURCE_SITE_LABELS[sourceSite]}{" "}
+										{CRAWL_SOURCE_SITE_LABELS[SOURCE_SITE]}{" "}
 										{CRAWL_CONTENT_TYPE_LABELS[contentType]} 수집기는 아직 준비
 										중이라, 선택해 저장해도 실제 수집은 돌지 않습니다. 파서가
 										준비되면 자동으로 켜집니다.
@@ -249,10 +213,11 @@ export default function ModeratorCrawlerPage() {
 
 						<div className="flex items-start justify-between gap-4">
 							<div className="flex flex-col gap-1">
-								<Label htmlFor="crawlEnabled">수집 사용</Label>
+								<Label htmlFor="crawlEnabled">수집 스케줄러</Label>
 								<p className="m-0 text-muted-foreground text-xs">
-									꺼두면 서버를 재시작하지 않아도 다음 틱부터 즉시 멈춥니다.
-									기본값은 꺼짐이라 배포만으로는 아무것도 수집하지 않아요.
+									켜두면 아래 수집 주기마다 자동으로 한 회차가 돕니다. 꺼도
+									「즉시 수집」은 언제든 실행할 수 있어요. 기본값은 꺼짐이라
+									배포만으로는 자동 수집이 돌지 않습니다.
 								</p>
 							</div>
 							<Switch
@@ -289,7 +254,6 @@ export default function ModeratorCrawlerPage() {
 								disabled={
 									runNowMutation.isPending ||
 									settingsQuery.isLoading ||
-									!settingsQuery.data?.enabled ||
 									!selectedTargetReady
 								}
 								onClick={() => runNowMutation.mutate({})}
@@ -308,7 +272,7 @@ export default function ModeratorCrawlerPage() {
 						<p className="m-0 text-muted-foreground text-xs">
 							즉시 수집은 주기를 기다리지 않고 한 회차를 지금 시작합니다. 저장한
 							설정을 기준으로 돌기 때문에, 방금 바꾼 값이 있다면 먼저 저장해
-							주세요. 수집이 꺼져 있으면 눌러도 실행되지 않습니다.
+							주세요.
 						</p>
 					</form>
 				</CardContent>
@@ -378,8 +342,10 @@ export default function ModeratorCrawlerPage() {
 											<TableCell className="whitespace-nowrap">
 												{formatCrawlTimestamp(run.startedAt)}
 											</TableCell>
-											<TableCell>
-												{CRAWL_SOURCE_SITE_LABELS[run.sourceSite]}
+											{/* 사이트만 적으면 같은 퀸알바 회차가 공고인지 게시판인지 구분되지 않는다. */}
+											<TableCell className="whitespace-nowrap">
+												{CRAWL_SOURCE_SITE_LABELS[run.sourceSite]}/
+												{CRAWL_CONTENT_TYPE_LABELS[run.contentType]}
 											</TableCell>
 											<TableCell>
 												<Badge variant={CRAWL_RUN_STATUS_VARIANTS[run.status]}>
@@ -411,15 +377,13 @@ export default function ModeratorCrawlerPage() {
 							description={
 								runsQuery.isLoading
 									? "불러오는 중이에요."
-									: "수집을 켜고 저장하면 다음 틱에 첫 회차가 시작됩니다. 지금 바로 돌려보려면 위 「즉시 수집」을 눌러 주세요."
+									: "수집 스케줄러를 켜고 저장하면 다음 틱에 첫 회차가 시작됩니다. 지금 바로 돌려보려면 위 「즉시 수집」을 눌러 주세요."
 							}
 							title="아직 수집 기록이 없어요"
 						/>
 					)}
 				</CardContent>
 			</Card>
-
-			<CommunityTopicsCard />
 		</div>
 	);
 }

@@ -1,7 +1,6 @@
 import { db } from "@bambi-app/db";
 import {
 	bambiSiteSettings,
-	crawledCommunityTopic,
 	crawledJobPost,
 	crawlRun,
 	jobPost,
@@ -74,14 +73,6 @@ const updateSettingsInput = z.object({
 });
 
 const RECENT_RUN_LIMIT = 20;
-
-// 커뮤니티 주제 목록. 정렬 축이 둘인 이유는 이 표를 보는 목적이 둘이라서다 — "지금 무슨 글이
-// 올라오나"(최신순)와 "무슨 주제가 실제로 반응을 얻나"(댓글순).
-const communityListInput = z.object({
-	limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
-	offset: z.number().int().min(0).default(0),
-	sort: z.enum(["recent", "comments"]).default("recent"),
-});
 
 export const crawlerRouter = {
 	// 수집 목록. 운영자 전용이며 연락처 계열은 포함하지 않는다(LIST_COLUMNS 주석 참고).
@@ -176,8 +167,8 @@ export const crawlerRouter = {
 			.limit(1);
 
 		return {
-			// 사이트가 제공하는 (사이트 × 데이터 종류) 조합. 화면이 사이트별로 고를 수 있는
-			// 데이터 종류를 이 목록으로 그린다(여우알바=공고, 퀸알바=공고·커뮤니티).
+			// 수집 대상이 제공하는 (사이트 × 데이터 종류) 조합. 화면이 고를 수 있는 데이터
+			// 종류를 이 목록으로 그린다(퀸알바=공고·커뮤니티).
 			availableTargets: [...AVAILABLE_CRAWL_TARGETS],
 			contentType: row?.contentType ?? "job_post",
 			defaultIntervalHours: DEFAULT_CRAWL_INTERVAL_HOURS,
@@ -187,11 +178,11 @@ export const crawlerRouter = {
 			implementedTargets: [...IMPLEMENTED_CRAWL_TARGETS],
 			intervalHours: row?.intervalHours ?? null,
 			lastRunAt: row?.lastRunAt ?? null,
-			sourceSite: row?.sourceSite ?? "foxalba",
+			sourceSite: row?.sourceSite ?? "queenalba",
 		};
 	}),
 
-	// 수집 On/Off·주기 저장. 스케줄러는 이 값을 매 틱 읽으므로 재배포 없이 즉시 반영된다.
+	// 스케줄러 On/Off·주기 저장. 스케줄러는 이 값을 매 틱 읽으므로 재배포 없이 즉시 반영된다.
 	updateSettings: adminProcedure
 		.input(updateSettingsInput)
 		.handler(async ({ input }) => {
@@ -218,27 +209,31 @@ export const crawlerRouter = {
 
 	// 즉시 수집. 한 회차는 목록 수십 페이지와 상세 수백 건이라 최대 10분쯤 걸리므로 응답을
 	// 붙잡고 기다리지 않고 시작만 시킨 뒤 돌려준다 — 화면은 최근 회차 목록을 다시 불러
-	// 진행 상황을 본다. 주기 판정만 건너뛰고 마스터 스위치·중복 방지·수율 판정·만료 규칙은
+	// 진행 상황을 본다. 주기 판정과 스케줄러 스위치만 건너뛰고 중복 방지·수율 판정·만료 규칙은
 	// 예약 실행과 완전히 같은 경로를 지난다.
 	runNow: adminProcedure.handler(async () => {
 		const [settings] = await db
 			.select({
 				contentType: bambiSiteSettings.crawlContentType,
-				enabled: bambiSiteSettings.crawlEnabled,
 				sourceSite: bambiSiteSettings.crawlSourceSite,
 			})
 			.from(bambiSiteSettings)
 			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
 			.limit(1);
 
-		// 꺼둔 수집이 버튼 하나로 되살아나면 "껐다"는 말이 거짓이 된다.
-		if (!settings?.enabled) {
-			return { reason: "disabled" as const, started: false };
-		}
-
+		// crawlEnabled는 보지 않는다. 그 스위치는 스케줄러(주기 실행)만 통제하므로, 꺼둔
+		// 상태에서도 운영자가 파서를 확인할 수 있어야 한다.
+		//
 		// 파서가 없는 (사이트 × 데이터 종류) 조합을 골랐으면 회차를 띄우지 않고 화면에 바로 알린다.
 		// runCrawlTick도 not_implemented로 빠지지만, 여기서 먼저 걸러야 "시작됨" 토스트가 잘못 뜨지 않는다.
-		if (!isCrawlTargetImplemented(settings.sourceSite, settings.contentType)) {
+		// 행이 없을 때의 폴백은 runCrawlTick(readSettings)과 같아야 한다 — 다르면 여기서 막은
+		// 조합이 실제로는 돌거나, 그 반대가 된다.
+		if (
+			!isCrawlTargetImplemented(
+				settings?.sourceSite ?? "queenalba",
+				settings?.contentType ?? "job_post"
+			)
+		) {
 			return { reason: "not_implemented" as const, started: false };
 		}
 
@@ -272,42 +267,6 @@ export const crawlerRouter = {
 			.orderBy(desc(crawlRun.startedAt))
 			.limit(RECENT_RUN_LIMIT)
 	),
-
-	// 수집한 커뮤니티 주제. 공고와 달리 연락처 계열 컬럼이 아예 없어 목록에 전부 내려도 된다.
-	// 본문은 상세를 받은 글만 채워져 있고(수집 직후엔 제목만 있다), 화면이 그 상태를 그대로 보여준다.
-	listCommunityTopics: adminProcedure
-		.input(communityListInput)
-		.handler(async ({ input }) => {
-			// NULLS LAST가 필요하다. 조회수·댓글수는 원본에 없으면 null이라, 기본 정렬로는
-			// 값이 없는 글이 맨 위를 차지한다.
-			const orderBy =
-				input.sort === "comments"
-					? sql`${crawledCommunityTopic.commentCount} desc nulls last`
-					: sql`${crawledCommunityTopic.sourcePostedAt} desc nulls last`;
-
-			const [items, [total]] = await Promise.all([
-				db
-					.select({
-						body: crawledCommunityTopic.body,
-						boardName: crawledCommunityTopic.boardName,
-						commentCount: crawledCommunityTopic.commentCount,
-						firstSeenAt: crawledCommunityTopic.firstSeenAt,
-						id: crawledCommunityTopic.id,
-						sourcePostedAt: crawledCommunityTopic.sourcePostedAt,
-						sourceSite: crawledCommunityTopic.sourceSite,
-						sourceUrl: crawledCommunityTopic.sourceUrl,
-						title: crawledCommunityTopic.title,
-						viewCount: crawledCommunityTopic.viewCount,
-					})
-					.from(crawledCommunityTopic)
-					.orderBy(orderBy)
-					.limit(input.limit)
-					.offset(input.offset),
-				db.select({ value: count() }).from(crawledCommunityTopic),
-			]);
-
-			return { items, pageSize: input.limit, total: total?.value ?? 0 };
-		}),
 
 	// 상태별 건수. 운영자 화면 상단 요약과 needs_review 잔량 확인에 쓴다.
 	getSummary: adminProcedure.handler(async () => {

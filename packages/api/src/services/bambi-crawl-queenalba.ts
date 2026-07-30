@@ -34,6 +34,80 @@ export const queenalbaListUrl = (): string =>
 export const queenalbaDetailUrl = (sourceExternalId: string): string =>
 	`${QUEENALBA_ORIGIN}/guin_detail.php?num=${sourceExternalId}`;
 
+// 원본은 주소를 "/wys2/...", "img/icon_x.gif", "./guin_detail.php"처럼 섞어 쓴다. 저장한 뒤에는
+// 어느 페이지에서 읽었는지 알 수 없어 상대경로가 쓸모없어지므로 파싱 시점에 절대 URL로 굳힌다.
+// 해석 규칙은 표준 URL 파서에 맡긴다(../, //host, 퍼센트 인코딩까지 직접 짜면 틀린다).
+export const toQueenalbaAbsoluteUrl = (
+	raw: string | null | undefined
+): string | null => {
+	const src = normalizeText(raw ?? "");
+
+	if (src.length === 0) {
+		return null;
+	}
+
+	try {
+		return new URL(src, `${QUEENALBA_ORIGIN}/`).toString();
+	} catch {
+		// 이상한 src 하나로 페이지 파싱 전체를 세우지 않는다.
+		return null;
+	}
+};
+
+// 공고 이미지로 인정하는 경로. 아이콘·버튼·스페이서를 하나씩 빼는 블랙리스트로 가면 상대가
+// 장식 이미지를 새로 추가할 때마다 그게 공고 이미지로 새어 들어온다 — 반대로 화이트리스트는
+// 새 경로를 놓칠 뿐 쓰레기를 저장하지 않으므로 이쪽이 안전하다.
+//  - /wys2/file_attach/... : 상세 본문에 업체가 올린 이미지. 실제 응답에서 확인한 경로다.
+//  - /offerphoto/...       : 목록·메인 카드 썸네일. ⚠ 미검증 가정 — 같은 계열 사이트에서
+//                            확인한 경로 모양이고, 퀸알바 카드가 같은지는 성인인증 게이트
+//                            때문에 확인하지 못했다. 쿠키가 생기면 실물 카드 img src로 대조.
+//
+// 이 화이트리스트를 쓰는 건 "그 자리에 있다고 광고라는 보장이 없는" 곳뿐이다(목록·메인 카드·
+// 상세 본문). 메인의 배너 칸(#main_top_center·#divMenu*)은 위치가 곧 광고라서 경로를 몰라도
+// 되므로 화이트리스트를 적용하지 않는다 — bambi-crawl-queenalba-main.ts를 보라.
+const JOB_IMAGE_PATH_PATTERN = /^\/(?:wys2\/file_attach|offerphoto)\//i;
+
+export const isQueenalbaJobImageUrl = (url: string): boolean => {
+	try {
+		const parsed = new URL(url);
+
+		return (
+			parsed.origin === QUEENALBA_ORIGIN &&
+			JOB_IMAGE_PATH_PATTERN.test(parsed.pathname)
+		);
+	} catch {
+		return false;
+	}
+};
+
+// 상세 링크에서 공고 ID를 뽑는다. 목록·메인페이지 파서가 같은 링크 모양을 보므로 한 곳에 둔다.
+const DETAIL_NUM_PATTERN = /[?&]num=(\d+)/;
+
+export const readQueenalbaDetailNum = (
+	href: string | null | undefined
+): string | null => href?.match(DETAIL_NUM_PATTERN)?.[1] ?? null;
+
+export const QUEENALBA_DETAIL_LINK_SELECTOR = 'a[href*="guin_detail.php"]';
+
+// 카드 하나의 경계. 링크 안에 이미지가 없으면 같은 카드의 이미지를 찾아야 하는데, 스코프 없이
+// 올라가면 옆 카드 이미지를 집는다.
+const CARD_CONTAINER_SELECTOR = "dl, li, td";
+
+const firstJobImageUrl = (
+	$: ReturnType<typeof load>,
+	$scope: ReturnType<ReturnType<typeof load>>
+): string | null => {
+	for (const element of $scope.find("img").toArray()) {
+		const url = toQueenalbaAbsoluteUrl($(element).attr("src"));
+
+		if (url && isQueenalbaJobImageUrl(url)) {
+			return url;
+		}
+	}
+
+	return null;
+};
+
 // 본문 저장 상한. 여우알바와 같은 이유다 — 이상 공고 하나가 행 크기와 목록 응답을 흔든다.
 const MAX_BODY_LENGTH = 20_000;
 
@@ -52,30 +126,43 @@ const cleanText = (raw: string | undefined | null): string | null => {
 
 export interface QueenalbaListItem {
 	sourceExternalId: string;
+	// 카드에 걸린 대표 이미지(절대 URL). 이미지 없이 텍스트만 있는 카드가 있어 null이 정상이다.
+	thumbnailUrl?: string | null;
 }
-
-const DETAIL_NUM_PATTERN = /[?&]num=(\d+)/;
 
 // 목록에서 수집기가 쓰는 건 num 하나뿐이다. 한 페이지에 카드형·표형 섹션이 섞여 있고
 // 같은 공고가 여러 섹션에 실리므로, 섹션 구조를 따라가지 않고 상세 링크만 훑어 중복을 접는다.
 // #sub_center로 좁히는 건 헤더·푸터의 배너 링크를 공고로 세지 않기 위해서다.
+//
+// 썸네일은 같은 공고가 실린 섹션마다 있을 수도, 없을 수도 있어(표형 섹션은 텍스트만이다)
+// 먼저 찾은 값을 채우고 그 뒤 등장은 비어 있을 때만 메운다.
 export const parseQueenalbaList = (html: string): QueenalbaListItem[] => {
 	if (isQueenalbaGateStub(html)) {
 		return [];
 	}
 
 	const $ = load(html);
-	const ids = new Set<string>();
+	const thumbnails = new Map<string, string | null>();
 
-	$('#sub_center a[href*="guin_detail.php"]').each((_, element) => {
-		const id = $(element).attr("href")?.match(DETAIL_NUM_PATTERN)?.[1];
+	$(`#sub_center ${QUEENALBA_DETAIL_LINK_SELECTOR}`).each((_, element) => {
+		const $link = $(element);
+		const id = readQueenalbaDetailNum($link.attr("href"));
 
-		if (id) {
-			ids.add(id);
+		if (!id || thumbnails.get(id)) {
+			return;
 		}
+
+		thumbnails.set(
+			id,
+			firstJobImageUrl($, $link) ??
+				firstJobImageUrl($, $link.closest(CARD_CONTAINER_SELECTOR).first())
+		);
 	});
 
-	return [...ids].map((sourceExternalId) => ({ sourceExternalId }));
+	return [...thumbnails].map(([sourceExternalId, thumbnailUrl]) => ({
+		sourceExternalId,
+		thumbnailUrl,
+	}));
 };
 
 // 목록이 전건을 한 번에 주므로 페이지 수 계산이 필요 없다. 수집기 규약을 맞추려 null을 돌린다.
@@ -200,27 +287,33 @@ const parsePostedAt = (raw: string | null): Date | null => {
 	return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-// 본문. "상세 채용정보" 제목 뒤부터 면책 문구(.detail_no_ment) 앞까지가 업체가 쓴 영역이다.
+// 본문 영역. "상세 채용정보" 제목 뒤부터 면책 문구(.detail_no_ment) 앞까지가 업체가 쓴
+// 영역이다. 텍스트와 이미지를 같은 범위에서 읽어야 헤더·푸터의 배너 이미지가 섞이지 않는다.
+// 제목을 못 찾으면 형제가 0개라 자연히 빈 범위가 된다.
+const readBodySection = (
+	$: ReturnType<typeof load>
+): ReturnType<ReturnType<typeof load>> => {
+	const siblings = $("#sub_center h2")
+		.filter((_, element) => $(element).text().includes("상세 채용정보"))
+		.first()
+		.parent()
+		.nextAll()
+		.toArray();
+
+	const stop = siblings.findIndex((element) =>
+		$(element).hasClass("detail_no_ment")
+	);
+
+	return $(stop === -1 ? siblings : siblings.slice(0, stop));
+};
+
 // 이미지만 올리는 공고가 절반 이상이라 본문이 빈 문자열인 경우가 정상이다 — 파싱 실패로
 // 보면 안 된다(수율 판정이 멀쩡한 회차를 중단시킨다).
-const readBody = ($: ReturnType<typeof load>): string => {
-	const heading = $("#sub_center h2")
-		.filter((_, element) => $(element).text().includes("상세 채용정보"))
-		.first();
-
-	if (heading.length === 0) {
-		return "";
-	}
-
-	const parts: string[] = [];
-
-	for (const element of heading.parent().nextAll().toArray()) {
-		if ($(element).hasClass("detail_no_ment")) {
-			break;
-		}
-
-		parts.push($(element).text());
-	}
+const readBody = (
+	$: ReturnType<typeof load>,
+	$section: ReturnType<ReturnType<typeof load>>
+): string => {
+	const parts = $section.toArray().map((element) => $(element).text());
 
 	// 원문 HTML은 버리고 텍스트만 남긴다. 본문에 박힌 번호까지 가려야 마스킹이 의미가 있다.
 	return maskContacts(normalizeText(parts.join("\n"))).slice(
@@ -229,10 +322,76 @@ const readBody = ($: ReturnType<typeof load>): string => {
 	);
 };
 
+// 상세 이미지 저장 상한. 같은 이미지를 수십 번 반복해 붙이는 공고가 있어 천장을 둔다.
+// 몇 장을 버렸는지 세는 필드는 두지 않았다 — 저장할 컬럼도 읽는 쪽도 아직 없다. 대신 상한값을
+// export 해서 호출자가 "길이 == 상한 → 잘렸을 수 있음"을 로그로 드러낼 수 있게 한다.
+export const QUEENALBA_MAX_DETAIL_IMAGES = 20;
+
+// 본문에 박힌 공고 이미지. 유흥 공고는 조건 대부분을 이미지로만 적어두는 경우가 많아 텍스트만
+// 저장하면 정작 핵심이 빠진다. 같은 이미지를 여러 번 붙이는 공고가 흔해 중복은 접되, 순서는
+// 그대로 둔다(위에서부터 읽는 게 곧 공고의 구성이다).
+const readDetailImageUrls = (
+	$: ReturnType<typeof load>,
+	$section: ReturnType<ReturnType<typeof load>>
+): string[] => {
+	const urls: string[] = [];
+	const seen = new Set<string>();
+
+	for (const element of $section.find("img").toArray()) {
+		const url = toQueenalbaAbsoluteUrl($(element).attr("src"));
+
+		if (url && !seen.has(url) && isQueenalbaJobImageUrl(url)) {
+			seen.add(url);
+			urls.push(url);
+
+			if (urls.length >= QUEENALBA_MAX_DETAIL_IMAGES) {
+				break;
+			}
+		}
+	}
+
+	return urls;
+};
+
+// 상세 페이지 썸네일. 운영자 확인으로 새로 안 사실 — 썸네일이 본문 이미지와 별개로 상세에도
+// 있고, #sub_center 안에서 본문 영역보다 위에 온다. 그 사이 래퍼 구조는 모르므로 위치 사슬
+// 대신 "본문 범위 밖에 있는 첫 공고 이미지"로 잡는다. 본문 범위의 img는 원소 단위로 빼서
+// 썸네일이 detailImageUrls에 섞이지 않게 한다(같은 파일을 두 칸에 저장하면 중복이 된다).
+const readThumbnailUrl = (
+	$: ReturnType<typeof load>,
+	$section: ReturnType<ReturnType<typeof load>>
+): string | null => {
+	const bodyImages = new Set($section.find("img").toArray());
+
+	for (const element of $("#sub_center img").toArray()) {
+		if (bodyImages.has(element)) {
+			continue;
+		}
+
+		const url = toQueenalbaAbsoluteUrl($(element).attr("src"));
+
+		if (url && isQueenalbaJobImageUrl(url)) {
+			return url;
+		}
+	}
+
+	return null;
+};
+
+// 공통 레코드에 상세에서만 얻는 값(본문 이미지 목록·썸네일)을 얹은 확장형. 공통 타입
+// (CrawledJobRecord)에 넣지 않은 것은 여우알바 파서가 아직 이 값을 채우지 않고 수집기도
+// 읽지 않기 때문이다 — 공통 타입에 필수 필드로 들어가면 그쪽이 전부 깨진다.
+export interface QueenalbaDetailRecord extends CrawledJobRecord {
+	detailImageUrls?: string[];
+	// 목록·메인에서 썸네일을 못 얻은 공고를 상세 것으로 채우기 위한 칸. 상세에 썸네일이
+	// 없는 공고가 있어 null이 정상이다.
+	thumbnailUrl?: string | null;
+}
+
 export const parseQueenalbaDetail = (
 	html: string,
 	sourceExternalId: string
-): CrawledJobRecord | null => {
+): QueenalbaDetailRecord | null => {
 	if (isQueenalbaGateStub(html)) {
 		return null;
 	}
@@ -251,15 +410,17 @@ export const parseQueenalbaDetail = (
 	const payRaw = stripMinimumWageNotice(fields.get("급여") ?? null);
 	const parsedPay = parsePay(payRaw);
 	const industryRaw = fields.get("업무내용") ?? null;
+	const $body = readBodySection($);
 
 	return {
 		address: fields.get("회사주소") ?? null,
 		ageRange: fields.get("나이") ?? null,
 		bizName: fields.get("회사명") ?? fields.get("상호") ?? null,
-		body: readBody($),
+		body: readBody($, $body),
 		contactKakao: readMessengerId($),
 		contactName: fields.get("담당자") ?? null,
 		contactPhone: readCallPin(fields),
+		detailImageUrls: readDetailImageUrls($, $body),
 		district: location.district,
 		// 여성 전용 사이트라 상세에 성별 항목 자체가 없다.
 		gender: null,
@@ -279,6 +440,7 @@ export const parseQueenalbaDetail = (
 		sourceExternalId,
 		sourcePostedAt: parsePostedAt(fields.get("접수기간") ?? null),
 		sourceUrl: queenalbaDetailUrl(sourceExternalId),
+		thumbnailUrl: readThumbnailUrl($, $body),
 		title,
 		workSchedule: fields.get("업무일") ?? null,
 	};

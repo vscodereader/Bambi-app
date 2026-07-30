@@ -421,6 +421,23 @@ export const crawledJobPost = pgTable(
 		// 이유는 매 회차 목록으로 갱신되는 값과 섞이면 재수집 판정이 무너지기 때문이다.
 		detailFetchedAt: timestamp("detail_fetched_at"),
 		sourcePostedAt: timestamp("source_posted_at"),
+		// 원본에서 이 공고가 어느 자리에 걸려 있었는지. 일반 목록 공고와 메인 상단의 유료 노출
+		// (광고 배너·우대채용·스페셜채용)은 같은 공고여도 값어치가 다르다 — 돈을 낸 자리라
+		// 그 사이트가 지금 무엇을 밀고 있는지의 신호가 된다. null은 아직 분류 전(구 수집분).
+		listingType: text("listing_type"),
+		// 목록·카드에 걸린 대표 이미지 URL. 미러링이 켜져 있으면 우리 버킷 URL이 들어간다.
+		thumbnailUrl: text("thumbnail_url"),
+		// 광고 배너 자리에서 온 공고의 배너 이미지. 가로형과 세로형은 자리도 비율도 달라
+		// 서로를 대신할 수 없으므로 한 칸에 섞지 않는다(우리 광고 상품의 ad_horizontal /
+		// ad_vertical과 같은 축이다). 원본이 한쪽만 걸어두는 경우가 흔해 각각 nullable.
+		bannerHorizontalUrl: text("banner_horizontal_url"),
+		bannerVerticalUrl: text("banner_vertical_url"),
+		// 상세 본문에 박혀 있던 이미지들. 유흥 공고는 조건 대부분을 이미지로만 적어두는 경우가
+		// 많아, 본문 텍스트만 저장하면 정작 핵심 정보가 빠진다. 순서를 유지해야 의미가 사므로 배열.
+		detailImageUrls: jsonb("detail_image_urls")
+			.$type<string[]>()
+			.default([])
+			.notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -489,6 +506,9 @@ export const crawlRun = pgTable(
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
 		sourceSite: crawlSourceSite("source_site").notNull(),
+		// 이 회차가 무엇을 긁었는지. 사이트만 남기면 "퀸알바 회차"가 공고인지 게시판인지
+		// 구분되지 않아, 회차 목록이 파손 신호를 읽는 창구 역할을 못 한다.
+		contentType: crawlContentType("content_type").default("job_post").notNull(),
 		status: crawlRunStatus("status").default("running").notNull(),
 		startedAt: timestamp("started_at").defaultNow().notNull(),
 		finishedAt: timestamp("finished_at"),
@@ -837,6 +857,12 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 		.$type<{ accountNumber: string; bank: string; holder: string }[]>()
 		.default([])
 		.notNull(),
+	// 법정 최저시급과 그 기준 연도. 공고 상세의 급여 옆에 나란히 붙여, 제시 급여가 최저시급
+	// 대비 어느 수준인지를 구직자가 그 자리에서 판단할 수 있게 한다. 매년 바뀌고 다음 해 값이
+	// 8월에 미리 고시되므로 연도도 함께 저장한다(현재 연도로 유추하면 연말에 틀린다).
+	// null이면 코드 기본값(DEFAULT_MINIMUM_WAGE)으로 폴백한다.
+	minimumWageYear: integer("minimum_wage_year"),
+	minimumWageHourly: integer("minimum_wage_hourly"),
 	// 회원 탈퇴 후 개인정보 보존기간(일). 운영자 사이트 설정에서 편집한다.
 	// null이면 코드 기본값(DEFAULT_WITHDRAWAL_RETENTION_DAYS=30)으로 폴백한다.
 	withdrawalRetentionDays: integer("withdrawal_retention_days"),
@@ -853,19 +879,20 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	privacySmsProvider: text("privacy_sms_provider"),
 	privacyContactPhone: text("privacy_contact_phone"),
 	privacyContactEmail: text("privacy_contact_email"),
-	// 크롤링 마스터 스위치. 스케줄러 job은 항상 등록해두고 매 틱 이 값을 읽는다 —
+	// 수집 스케줄러 스위치. 스케줄러 job은 항상 등록해두고 매 틱 이 값을 읽는다 —
 	// toad-scheduler의 job.stop()은 프로세스 메모리 상태라 서버를 재시작하거나 인스턴스가
 	// 늘면 상태가 갈리지만, DB 플래그는 어디서 켜도 모든 인스턴스에 즉시 반영된다.
-	// 기본이 false라 배포만으로는 아무것도 수집하지 않는다(운영자가 명시적으로 켠다).
+	// 기본이 false라 배포만으로는 저절로 돌지 않는다(운영자가 명시적으로 켠다). 이 값은
+	// 주기 실행만 통제하고, 운영자의 「즉시 수집」은 꺼져 있어도 항상 돈다 — 수동 실행까지
+	// 막으면 스케줄러를 켜지 않고는 파서를 확인할 방법이 없어진다.
 	crawlEnabled: boolean("crawl_enabled").default(false).notNull(),
-	// 수집 대상 사이트. 운영자가 콘솔에서 하나를 고른다. 스케줄러 틱이 이 값을 읽어 해당
-	// 사이트 수집기를 부르므로, 여러 사이트를 동시에 돌리지 않고 한 번에 하나만 수집한다.
-	// 기본 foxalba(유일하게 파서가 구현된 사이트).
+	// 수집 대상 사이트. 현재는 퀸알바만 수집한다(여우알바는 대상에서 내렸다). enum 값과
+	// 과거 회차 기록은 남겨두므로 되살릴 때 마이그레이션이 필요 없다.
 	crawlSourceSite: crawlSourceSite("crawl_source_site")
-		.default("foxalba")
+		.default("queenalba")
 		.notNull(),
 	// 수집 데이터 종류(공고/커뮤니티). 사이트와 함께 (사이트×종류) 조합을 이루고, 파서가
-	// 구현된 조합만 실제로 돈다. 기본 job_post(현재 구현된 조합은 foxalba×job_post뿐).
+	// 구현된 조합만 실제로 돈다.
 	crawlContentType: crawlContentType("crawl_content_type")
 		.default("job_post")
 		.notNull(),

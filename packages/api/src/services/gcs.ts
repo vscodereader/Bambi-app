@@ -10,6 +10,12 @@ export interface SignedUploadUrlInput {
 	storageKey: string;
 }
 
+export interface PublicObjectUploadInput {
+	buffer: Uint8Array;
+	mimeType: string;
+	storageKey: string;
+}
+
 let storageClient: null | Storage = null;
 
 // 자격 증명은 ADC(Application Default Credentials)가 해결한다.
@@ -61,6 +67,48 @@ export const createSignedUploadUrl = async ({
 		});
 
 	return signedUrl;
+};
+
+// 서버가 바이트를 직접 올린다(크롤 이미지 미러링). 브라우저 업로드와 달리 서명 URL을 거치지
+// 않으므로 MIME·용량 검증은 호출자가 이미 끝냈다는 전제다.
+//
+// 버킷 미설정 환경(대개 로컬)에서는 deletePublicObjects와 같게 조용히 건너뛴다. 다만 삭제와
+// 달리 호출자가 결과 URL을 쓰므로 void가 아니라 null을 준다 — "미러링 안 됨"을 호출자가
+// 원본 URL로 되돌아갈 신호로 읽을 수 있어야 한다.
+export const uploadPublicObject = async ({
+	buffer,
+	mimeType,
+	storageKey,
+}: PublicObjectUploadInput): Promise<null | string> => {
+	if (!isPublicBucketConfigured()) {
+		return null;
+	}
+
+	await getStorageClient()
+		.bucket(requirePublicBucket())
+		.file(storageKey)
+		// 크롤 이미지는 수 MB 이하라 재개 가능 업로드가 왕복만 늘린다.
+		.save(buffer, { contentType: mimeType, resumable: false });
+
+	return getPublicObjectUrl(storageKey);
+};
+
+// 프리픽스로 이미 올라간 객체를 찾는다. exists()가 아니라 목록 조회인 이유는 확장자가
+// 응답 MIME에서 정해져 다운로드 전에는 전체 키를 알 수 없기 때문이다 — 프리픽스(원본 URL
+// 해시)까지는 결정론적이라, 이 한 번의 조회로 재수집 때 원본 재다운로드까지 통째로 건너뛴다.
+export const findPublicObjectUrl = async (
+	keyPrefix: string
+): Promise<null | string> => {
+	if (!isPublicBucketConfigured()) {
+		return null;
+	}
+
+	const [files] = await getStorageClient()
+		.bucket(requirePublicBucket())
+		.getFiles({ maxResults: 1, prefix: keyPrefix });
+	const name = files[0]?.name;
+
+	return name ? getPublicObjectUrl(name) : null;
 };
 
 // 공고·미디어 삭제는 DB가 정본이므로, 객체 삭제 실패가 API 실패로 번지지 않게 한다.

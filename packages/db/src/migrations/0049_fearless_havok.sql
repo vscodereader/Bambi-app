@@ -1,0 +1,1 @@
+ALTER TABLE "crawled_job_post" DROP COLUMN "banner_image_url";

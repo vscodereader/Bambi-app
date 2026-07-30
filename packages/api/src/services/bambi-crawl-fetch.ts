@@ -1,6 +1,8 @@
 // 크롤러의 HTTP 계층. 셀렉터·스키마와 완전히 분리해 두어 파서는 네트워크를 모르고
 // 문자열만 다루면 된다(파서 테스트가 픽스처만으로 돌아가는 이유).
 
+import { Buffer } from "node:buffer";
+
 // 봇을 숨기지 않는다. 상대 운영자가 로그에서 우리를 알아보고 연락하거나 차단할 수 있어야
 // 정상적인 크롤링이다. 실제 배포 전에 연락처를 운영 이메일로 바꿔야 한다.
 //
@@ -147,7 +149,18 @@ export interface CrawlClientOptions {
 	timeoutMs?: number;
 }
 
+// 이미지 등 바이너리 응답. 리다이렉트를 따라간 뒤의 최종 URL을 함께 준다 — 호출자가
+// 원본 URL에만 검사를 걸면 리다이렉트로 사설망에 들어가는 길이 열리기 때문이다.
+export interface CrawlBinary {
+	bytes: Uint8Array;
+	contentType: null | string;
+	url: string;
+}
+
 export interface CrawlClient {
+	// maxBytes를 넘으면 스트림을 끊고 던진다. 상한을 호출자가 정하는 이유는 이 계층이
+	// 미디어 정책을 모르기 때문이다(정책은 bambi-job-media-policy.ts에 있다).
+	fetchBinary: (url: string, maxBytes: number) => Promise<CrawlBinary>;
 	fetchHtml: (url: string) => Promise<string>;
 	isAllowed: (url: string) => Promise<boolean>;
 }
@@ -201,7 +214,9 @@ export const createCrawlClient = (
 		});
 	};
 
-	const fetchText = async (url: string): Promise<string> => {
+	// 본문은 재시도 밖에서 읽는다. 안에서 읽으면 "상한 초과"로 끊은 이미지를 상한까지 세 번
+	// 더 받아 상대 서버를 그만큼 더 두드리게 된다.
+	const requestWithRetry = async (url: string): Promise<Response> => {
 		let lastError: unknown = null;
 
 		for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -209,10 +224,7 @@ export const createCrawlClient = (
 				const response = await requestOnce(url);
 
 				if (response.ok) {
-					return decodeHtml(
-						await response.arrayBuffer(),
-						response.headers.get("content-type")
-					);
+					return response;
 				}
 
 				if (!isRetryableStatus(response.status)) {
@@ -235,6 +247,63 @@ export const createCrawlClient = (
 			: new Error(`${url} 요청 실패`);
 	};
 
+	const fetchText = async (url: string): Promise<string> => {
+		const response = await requestWithRetry(url);
+
+		return decodeHtml(
+			await response.arrayBuffer(),
+			response.headers.get("content-type")
+		);
+	};
+
+	// content-length는 상대가 적는 값이라 믿지 않는다. 선언값으로 먼저 거르되, 실제로 읽은
+	// 바이트가 상한을 넘는 순간 스트림을 끊는다 — 헤더가 거짓이거나 아예 없어도 메모리는 는다.
+	const fetchBinary = async (
+		url: string,
+		maxBytes: number
+	): Promise<CrawlBinary> => {
+		const response = await requestWithRetry(url);
+		const tooLarge = new Error(`${url} 응답이 상한 ${maxBytes}바이트를 넘는다`);
+		const declared = Number(response.headers.get("content-length"));
+
+		if (Number.isFinite(declared) && declared > maxBytes) {
+			await response.body?.cancel();
+
+			throw tooLarge;
+		}
+
+		const contentType = response.headers.get("content-type");
+		const reader = response.body?.getReader();
+
+		if (!reader) {
+			throw new Error(`${url} 응답 본문이 없다`);
+		}
+
+		const chunks: Uint8Array[] = [];
+		let total = 0;
+		let chunk = await reader.read();
+
+		while (!chunk.done) {
+			total += chunk.value.byteLength;
+
+			if (total > maxBytes) {
+				await reader.cancel();
+
+				throw tooLarge;
+			}
+
+			chunks.push(chunk.value);
+			chunk = await reader.read();
+		}
+
+		// 리다이렉트가 없으면 response.url이 비는 구현이 있다. 요청 URL로 되돌린다.
+		return {
+			bytes: Buffer.concat(chunks),
+			contentType,
+			url: response.url || url,
+		};
+	};
+
 	const loadRobots = (origin: string): Promise<RobotsRules> => {
 		const cached = robotsCache.get(origin);
 		if (cached) {
@@ -253,6 +322,7 @@ export const createCrawlClient = (
 	};
 
 	return {
+		fetchBinary,
 		fetchHtml: fetchText,
 		isAllowed: async (url: string): Promise<boolean> => {
 			const parsed = new URL(url);

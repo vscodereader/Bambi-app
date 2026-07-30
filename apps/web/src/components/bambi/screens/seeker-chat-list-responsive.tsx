@@ -1,6 +1,8 @@
 "use client";
 
+import type { AppRouter } from "@bambi-app/api/routers/index";
 import { cn } from "@bambi-app/ui/lib/utils";
+import type { InferRouterOutputs } from "@orpc/server";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -12,7 +14,10 @@ import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { Avatar, Badge, Card } from "../ds";
 import { Message, ShieldIcon } from "../icons";
 import { ReportDialog } from "../report-dialog";
-import { RowActions } from "../row-actions";
+import { type RowAction, RowActions } from "../row-actions";
+
+type ChatListRoom =
+	InferRouterOutputs<AppRouter>["bambi"]["chats"]["listMine"][number];
 
 interface SeekerChatListResponsiveProps {
 	onFallback: () => React.ReactNode;
@@ -25,24 +30,40 @@ const formatDateTime = (value: Date | string): string =>
 		timeStyle: "short",
 	}).format(new Date(value));
 
-const getRoomItemClassName = (unreadCount: number): string =>
+const getRoomItemClassName = (
+	unreadCount: number,
+	isBlocked: boolean
+): string =>
 	cn(
-		"relative flex min-w-0 items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-coral-200",
-		unreadCount > 0 ? "border-coral-300 ring-1 ring-coral-200" : "border-border"
+		"relative flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors",
+		// 차단된 방은 열 수 없으니 hover 강조·미확인 링 같은 "눌러보세요" 신호를 지운다.
+		isBlocked
+			? null
+			: cn(
+					"hover:border-coral-200",
+					unreadCount > 0 && "border-coral-300 ring-1 ring-coral-200"
+				)
 	);
 
 // 방 항목의 삭제·신고·차단 케밥 메뉴. 목록 항목은 방 열기 클릭 영역이 카드 전체를
 // 덮으므로, 이 메뉴 트리거는 그 열기 버튼과 형제(자식 아님)로 두어 button-in-button을
 // 피하고 상위에 겹쳐(z-10) 자기 클릭만 받는다. 이 목록은 구직자 화면이라 상대(차단
 // 대상)는 항상 구인자(employerUserId)다.
+//
+// 이미 차단된 방에서는 삭제만 남긴다 — 다시 차단하는 항목은 무의미하고, 대화가 막힌
+// 방에서 남은 실질 선택지는 목록에서 치우는 것뿐이다.
 function ChatRoomActions({
+	isBlocked,
 	room,
 }: {
+	isBlocked: boolean;
 	room: { employerUserId: string; id: string };
 }) {
 	const queryClient = useQueryClient();
 	const [isReportOpen, setIsReportOpen] = useState(false);
 
+	// 차단 직후 해당 행이 곧바로 블러 처리되려면 방 목록을 다시 받아야 한다 —
+	// isBlocked는 서버가 운영자 차단과 사용자 간 차단을 합쳐 내려주는 값이다.
 	const invalidateList = () =>
 		queryClient.invalidateQueries({
 			queryKey: orpc.bambi.chats.listMine.queryKey(),
@@ -71,31 +92,37 @@ function ChatRoomActions({
 		})
 	);
 
+	const deleteAction: RowAction = {
+		key: "delete",
+		label: "삭제",
+		onSelect: () => deleteMutation.mutate({ chatRoomId: room.id }),
+		variant: "destructive",
+	};
+
 	return (
 		<>
 			<RowActions
-				actions={[
-					{
-						key: "report",
-						label: "신고",
-						onSelect: () => setIsReportOpen(true),
-					},
-					{
-						key: "block",
-						label: "차단",
-						onSelect: () =>
-							blockMutation.mutate({
-								blockedUserId: room.employerUserId,
-								chatRoomId: room.id,
-							}),
-					},
-					{
-						key: "delete",
-						label: "삭제",
-						onSelect: () => deleteMutation.mutate({ chatRoomId: room.id }),
-						variant: "destructive",
-					},
-				]}
+				actions={
+					isBlocked
+						? [deleteAction]
+						: [
+								{
+									key: "report",
+									label: "신고",
+									onSelect: () => setIsReportOpen(true),
+								},
+								{
+									key: "block",
+									label: "차단",
+									onSelect: () =>
+										blockMutation.mutate({
+											blockedUserId: room.employerUserId,
+											chatRoomId: room.id,
+										}),
+								},
+								deleteAction,
+							]
+				}
 				ariaLabel="채팅방 관리"
 			/>
 			<ReportDialog
@@ -105,6 +132,84 @@ function ChatRoomActions({
 				targetType="chat_room"
 			/>
 		</>
+	);
+}
+
+// 목록의 방 한 칸. 데스크톱·모바일이 같은 마크업을 쓰고(폭에 따라 "최근 업데이트"
+// 칼럼만 md:block으로 붙는다) 차단 처리도 그래서 한 곳에만 있으면 된다.
+function ChatRoomItem({
+	isBlocked,
+	onOpen,
+	room,
+}: {
+	isBlocked: boolean;
+	onOpen: (roomId: string) => void;
+	room: ChatListRoom;
+}) {
+	const jobTitle = room.jobTitle ?? "공고 채팅";
+
+	return (
+		<div className={getRoomItemClassName(room.unreadCount, isBlocked)}>
+			{/* 차단된 방은 열기 버튼 자체를 렌더하지 않는다. 눌러 들어가 봐야 서버가 막아
+			"채팅방을 불러올 수 없어요" 오류만 보게 되므로, 포인터 커서와 키보드 포커스도
+			함께 사라지는 편이 정직하다. */}
+			{isBlocked ? null : (
+				<button
+					aria-label={`${jobTitle} 채팅방 열기`}
+					className="absolute inset-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral-200"
+					onClick={() => onOpen(room.id)}
+					type="button"
+				/>
+			)}
+			<div
+				aria-hidden={isBlocked || undefined}
+				className={cn(
+					"pointer-events-none flex min-w-0 flex-1 items-center gap-3",
+					// 차단된 방의 상대·마지막 메시지는 가린다. 스크린리더에는 아래 오버레이
+					// 문구만 읽히도록 aria-hidden으로 함께 덮는다.
+					isBlocked && "select-none blur-sm"
+				)}
+			>
+				<Avatar className="shrink-0" name={jobTitle} size="lg" square />
+				<div className="min-w-0 flex-1">
+					<div className="flex min-w-0 flex-wrap items-center gap-2">
+						<h2 className="m-0 truncate font-extrabold text-base">
+							{jobTitle}
+						</h2>
+						<Badge tone={isBlocked ? "danger" : "success"}>
+							{isBlocked ? "차단됨" : "대화 가능"}
+						</Badge>
+						{room.unreadCount > 0 ? (
+							<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
+						) : null}
+					</div>
+					{room.counterpartName ? (
+						<p className="mt-1 mb-0 truncate font-bold text-foreground text-sm">
+							{room.counterpartName}
+						</p>
+					) : null}
+					<p className="mt-1 mb-0 truncate text-muted-foreground text-sm">
+						{room.lastMessageBody ?? "아직 주고받은 메시지가 없어요"}
+					</p>
+				</div>
+				<div className="hidden text-right md:block">
+					<p className="m-0 text-muted-foreground text-xs">최근 업데이트</p>
+					<p className="mt-1 mb-0 font-bold text-sm">
+						{formatDateTime(room.updatedAt)}
+					</p>
+				</div>
+			</div>
+			{/* 블러 위에 선명하게 얹는 안내. 블러된 내용 뒤에 두어 별도 z-index 없이 위에
+			그려지고, pointer-events-none이라 케밥 메뉴 클릭을 가로채지 않는다. */}
+			{isBlocked ? (
+				<p className="pointer-events-none absolute inset-0 m-0 flex items-center justify-center px-4 text-center font-extrabold text-foreground text-sm">
+					차단된 채팅입니다.
+				</p>
+			) : null}
+			<div className="relative z-10 shrink-0">
+				<ChatRoomActions isBlocked={isBlocked} room={room} />
+			</div>
+		</div>
 	);
 }
 
@@ -236,57 +341,12 @@ export function SeekerChatListResponsive({
 			) : (
 				<div className="grid gap-3">
 					{rooms.map((room) => (
-						<div
-							className={getRoomItemClassName(room.unreadCount)}
+						<ChatRoomItem
+							isBlocked={room.isBlocked}
 							key={room.id}
-						>
-							<button
-								aria-label={`${room.jobTitle ?? "공고 채팅"} 채팅방 열기`}
-								className="absolute inset-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral-200"
-								onClick={() => onOpen(room.id)}
-								type="button"
-							/>
-							<div className="pointer-events-none flex min-w-0 flex-1 items-center gap-3">
-								<Avatar
-									className="shrink-0"
-									name={room.jobTitle ?? "공고 채팅"}
-									size="lg"
-									square
-								/>
-								<div className="min-w-0 flex-1">
-									<div className="flex min-w-0 flex-wrap items-center gap-2">
-										<h2 className="m-0 truncate font-extrabold text-base">
-											{room.jobTitle ?? "공고 채팅"}
-										</h2>
-										<Badge tone={room.isBlocked ? "danger" : "success"}>
-											{room.isBlocked ? "차단됨" : "대화 가능"}
-										</Badge>
-										{room.unreadCount > 0 ? (
-											<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
-										) : null}
-									</div>
-									{room.counterpartName ? (
-										<p className="mt-1 mb-0 truncate font-bold text-foreground text-sm">
-											{room.counterpartName}
-										</p>
-									) : null}
-									<p className="mt-1 mb-0 truncate text-muted-foreground text-sm">
-										{room.lastMessageBody ?? "아직 주고받은 메시지가 없어요"}
-									</p>
-								</div>
-								<div className="hidden text-right md:block">
-									<p className="m-0 text-muted-foreground text-xs">
-										최근 업데이트
-									</p>
-									<p className="mt-1 mb-0 font-bold text-sm">
-										{formatDateTime(room.updatedAt)}
-									</p>
-								</div>
-							</div>
-							<div className="relative z-10 shrink-0">
-								<ChatRoomActions room={room} />
-							</div>
-						</div>
+							onOpen={onOpen}
+							room={room}
+						/>
 					))}
 				</div>
 			)}
