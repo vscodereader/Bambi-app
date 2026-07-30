@@ -35,6 +35,9 @@ export interface ApiJobMediaSet {
 export interface ApiMarketplaceJob {
 	beginnerFriendly?: boolean | null;
 	coverImage?: ApiJobMedia | null;
+	// 수집 공고의 대표 이미지. job_post_media 행이 아니라 미러링된 URL 한 줄로 오므로
+	// storageKey 기반 조립을 거치지 않는다(버킷이 없는 환경에서는 원본 URL이 그대로 온다).
+	coverImageUrl?: null | string;
 	description?: string | null;
 	descriptionBlocks?: JobDescriptionBlock[] | null;
 	district?: string | null;
@@ -82,6 +85,21 @@ export const jobMediaPublicUrl = (storageKey: string): string => {
 
 const toJobMediaUrl = (media: ApiJobMedia): string =>
 	jobMediaPublicUrl(media.storageKey);
+
+// 이미 완성된 URL 한 줄을 카드가 쓰는 미디어 형태로 감싼다. 파일명·용량·MIME은 알 수 없고
+// 카드도 쓰지 않는다(url과 altText만 읽는다) — 모르는 값을 그럴듯하게 지어내지 않는다.
+const toUrlJobMedia = (url?: null | string): JobMedia | null =>
+	url
+		? {
+				altText: "",
+				byteSize: 0,
+				fileName: "",
+				mimeType: "",
+				storageKey: "",
+				url,
+				usage: "cover",
+			}
+		: null;
 
 const toJobMedia = (media?: ApiJobMedia | null): JobMedia | null => {
 	if (!media) {
@@ -137,6 +155,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 	const company = getMarketplaceJobCompany(job);
 	const coverImage =
 		toJobMedia(job.media?.cover ?? job.coverImage ?? null) ??
+		toUrlJobMedia(job.coverImageUrl) ??
 		sampleCoverMedia(job.id, `${company} 대표 이미지`);
 	const detailImages = (job.media?.detail ?? [])
 		.map(toJobMedia)
