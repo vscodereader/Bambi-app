@@ -10,7 +10,6 @@ import {
 	jobIndustryCategory,
 	jobPost,
 	jobPostMedia,
-	review,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
@@ -67,6 +66,14 @@ import {
 	toPlainJobDescription,
 	validateJobDescriptionBlocks,
 } from "../../services/bambi-job-description-blocks";
+import {
+	adHorizontalImageSql,
+	adVerticalImageSql,
+	coverImageSql,
+	minHourlyPayFilter,
+	ratingAverageSql,
+	ratingCountSql,
+} from "../../services/bambi-job-feed";
 import {
 	JOB_AD_BANNER_SPECS,
 	JOB_POST_DETAIL_IMAGE_LIMIT,
@@ -195,12 +202,6 @@ const listInput = z.object({
 	minPayAmount: z.number().int().positive().optional(),
 	limit: z.number().int().min(1).max(50).default(20),
 });
-
-// 최소 시급(minPayAmount) 비교 — 공고 급여 단위가 섞여 있으므로 시급 기준으로 환산한다.
-// 나눗셈 대신 하한에 근로시간을 곱해 정수로 비교한다(반올림 오차·정수 나눗셈 절삭 방지).
-// 환산 근로시간은 apps/web/src/lib/bambi-options.ts의 PAY_UNIT_HOURS와 같은 값을 유지할 것.
-const minHourlyPayFilter = (minPayAmount: number) =>
-	sql`${jobPost.payAmount} >= ${minPayAmount} * CASE ${jobPost.payUnit} WHEN '일급' THEN 8 WHEN '주급' THEN 40 WHEN '월급' THEN 209 ELSE 1 END`;
 
 type JobPostInput = z.infer<typeof jobPostInput>;
 type JobPostMediaSetInput = z.infer<typeof jobPostMediaSetInput>;
@@ -569,43 +570,6 @@ export const getJobPostMediaSet = async (jobPostId: string) => {
 	return toJobPostMediaSet(rows);
 };
 
-const ratingAverageSql = sql<number>`coalesce((select avg(${review.rating}) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::double precision`;
-const ratingCountSql = sql<number>`coalesce((select count(*) from ${review} where ${review.jobPostId} = ${jobPost.id} and ${review.status} = 'published'), 0)::integer`;
-// 공고의 특정 usage 미디어 1건을 뽑는 상관 서브쿼리. 커버와 광고 배너가 형태가 같아
-// usage만 갈아끼워 재사용한다(같은 SQL 블록을 usage별로 복붙하면 한쪽만 고쳐지는 사고가 난다).
-const jobPostMediaByUsageSql = <Usage extends JobPostMediaUsage>(
-	usage: Usage
-) =>
-	sql<{
-		altText: string;
-		byteSize: number;
-		fileName: string;
-		id: string;
-		mimeType: string;
-		storageKey: string;
-		usage: Usage;
-	} | null>`(
-	select json_build_object(
-		'id', ${jobPostMedia.id},
-		'usage', ${jobPostMedia.usage},
-		'fileName', ${jobPostMedia.fileName},
-		'mimeType', ${jobPostMedia.mimeType},
-		'byteSize', ${jobPostMedia.byteSize},
-		'storageKey', ${jobPostMedia.storageKey},
-		'altText', ${jobPostMedia.altText}
-	)
-	from ${jobPostMedia}
-	where ${jobPostMedia.jobPostId} = ${jobPost.id}
-		and ${jobPostMedia.usage} = ${usage}
-	order by ${jobPostMedia.position} asc
-	limit 1
-)`;
-
-const coverImageSql = jobPostMediaByUsageSql("cover");
-// 배너 슬롯은 커버가 아니라 사장님이 그 슬롯 규격(7:3 / 4:9)으로 올린 이미지를 써야 한다.
-const adHorizontalImageSql = jobPostMediaByUsageSql("ad_horizontal");
-const adVerticalImageSql = jobPostMediaByUsageSql("ad_vertical");
-
 interface ResolvedJobExposure {
 	adProductId: string | null;
 	// 구매 시점 스냅샷: 상품의 하루 자동 끌어올리기 횟수를 공고 컬럼으로 복사한다(수동과 동일 패턴).
@@ -898,7 +862,13 @@ export const jobsRouter = {
 		}
 
 		if (input.minPayAmount) {
-			filters.push(minHourlyPayFilter(input.minPayAmount));
+			filters.push(
+				minHourlyPayFilter(
+					input.minPayAmount,
+					jobPost.payAmount,
+					jobPost.payUnit
+				)
+			);
 		}
 
 		const exposureSelection = {
@@ -1054,7 +1024,13 @@ export const jobsRouter = {
 		}
 
 		if (input.minPayAmount) {
-			filters.push(minHourlyPayFilter(input.minPayAmount));
+			filters.push(
+				minHourlyPayFilter(
+					input.minPayAmount,
+					jobPost.payAmount,
+					jobPost.payUnit
+				)
+			);
 		}
 
 		return await db
