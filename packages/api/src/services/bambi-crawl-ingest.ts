@@ -880,6 +880,54 @@ const communityListUrl = (
 const parseCommunityList = (site: CrawlSourceSite, html: string) =>
 	site === "queenalba" ? parseQueenalbaCommunityList(html) : [];
 
+// 게시판 목록을 상한만큼만 훑는다. db를 건드리지 않아 이 상한·조기 종료는 회차 전체를 돌리지
+// 않고 검증할 수 있다(bambi-crawl-ingest.test.ts) — 그래서 회차 본체에서 떼어 export 한다.
+//
+// 원본 목록은 글 번호 내림차순, 즉 최신순으로 온다(1페이지 첫 행이 가장 최신). 그래서 모은
+// 순서 앞에서 자르면 최신 글이 남는다 — 원본이 정한 순서를 우리가 다시 정렬하지 않는다
+// (목록의 날짜는 일 단위라 같은 날 글을 재정렬하면 오히려 순서가 흔들린다).
+export const collectCommunityTopics = async (
+	client: CrawlClient,
+	site: CrawlSourceSite,
+	limit: number
+): Promise<{
+	pagesFetched: number;
+	topics: ReturnType<typeof parseCommunityList>;
+}> => {
+	const byExternalId = new Map<
+		string,
+		ReturnType<typeof parseCommunityList>[number]
+	>();
+	let pagesFetched = 0;
+
+	for (let page = 1; page <= COMMUNITY_LIST_PAGES; page += 1) {
+		const url = communityListUrl(site, page);
+
+		if (!url) {
+			break;
+		}
+
+		const html = await client.fetchHtml(url);
+
+		assertNotGated(site, html);
+		pagesFetched += 1;
+
+		for (const topic of parseCommunityList(site, html)) {
+			if (!byExternalId.has(topic.sourceExternalId)) {
+				byExternalId.set(topic.sourceExternalId, topic);
+			}
+		}
+
+		// 상한을 채웠으면 남은 페이지는 받지 않는다 — 어차피 잘려 나갈 글 때문에 상대 서버를
+		// 두드릴 이유가 없다(페이지 하나가 요청 하나, 간격 1.5초다).
+		if (byExternalId.size >= limit) {
+			break;
+		}
+	}
+
+	return { pagesFetched, topics: [...byExternalId.values()].slice(0, limit) };
+};
+
 // 게시판 수집 한 회차. 공고와 달리 상세 패스가 없다 — 본문은 개별 작성자의 저작물이라
 // 저장하지 않고 제목·반응 지표만 남기므로(crawled_community_topic), 목록만 훑으면 끝난다.
 // 만료 처리도 없다: 지나간 주제도 "무엇이 반응을 얻었는가"의 기록으로 그대로 쓸모가 있다.
@@ -904,32 +952,17 @@ const runCommunityPass = async (
 		throw new Error("robots.txt가 게시판 수집을 허용하지 않는다");
 	}
 
-	const byExternalId = new Map<
-		string,
-		ReturnType<typeof parseCommunityList>[number]
-	>();
-	let pagesFetched = 0;
-
-	for (let page = 1; page <= COMMUNITY_LIST_PAGES; page += 1) {
-		const url = communityListUrl(site, page);
-
-		if (!url) {
-			break;
-		}
-
-		const html = await client.fetchHtml(url);
-
-		assertNotGated(site, html);
-		pagesFetched += 1;
-
-		for (const topic of parseCommunityList(site, html)) {
-			if (!byExternalId.has(topic.sourceExternalId)) {
-				byExternalId.set(topic.sourceExternalId, topic);
-			}
-		}
-	}
-
-	const topics = [...byExternalId.values()];
+	// 운영자가 정한 수집 상한. 미설정이면 코드 기본값(= 지금까지의 실효 규모 150).
+	//
+	// 상한을 낮춰 밖으로 밀려난 기존 행은 지우지 않는다. lastSeenAt 갱신에서만 빠지고 행은
+	// 그대로 남는다 — 커뮤니티엔 공고의 만료 스윕(expireStale/EXPIRE_AFTER_DAYS)에 해당하는
+	// 것이 없고, 그게 의도다(지나간 주제도 반응 기록으로 쓸모가 있다). 노출 쪽은 원 게시일
+	// 30일 컷오프(community.ts crawledTopicFeedFilters)가 알아서 걷어낸다.
+	const { pagesFetched, topics } = await collectCommunityTopics(
+		client,
+		site,
+		(await readCrawledLimits()).community
+	);
 
 	// 0건이면 "게시글이 없다"가 아니라 "셀렉터가 깨졌다"로 본다. 공고와 달리 만료 처리가
 	// 없어 데이터가 날아가지는 않지만, 조용히 성공으로 남으면 파손을 알아챌 방법이 없다.

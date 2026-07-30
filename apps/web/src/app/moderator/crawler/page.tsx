@@ -58,30 +58,63 @@ import { orpc } from "@/utils/orpc";
 // 되돌리고 ToggleGroup을 세운다 — 서버 입력 스키마는 사이트를 계속 받는다.
 const SOURCE_SITE: CrawlSourceSite = "queenalba";
 
-// 섹션별 수집 상한. placeholder의 기본값은 서버의 DEFAULT_CRAWLED_LIMITS와 같아야 한다 —
+// 수집 상한. placeholder의 기본값은 서버의 DEFAULT_CRAWLED_LIMITS와 같아야 한다 —
 // 빈 칸으로 저장하면 서버가 그 기본값을 쓰므로, 여기 숫자가 실제 폴백을 보여준다.
+//
+// 서버 입력 스키마(updateCrawledLimits)의 범위와 같아야 한다 — 넘겨보내면 400으로 튕긴다.
+// 커뮤니티만 눈금이 다르다: 노출 자리 개수가 아니라 한 회차에 목록에서 담을 글 수다. 목록
+// 5페이지가 주는 전량(150)이 기본값이자 최대라 이 칸은 줄이는 쪽으로만 쓴다. 0은 받지 않는다
+// (수집을 멈추는 건 수집 스케줄러·노출 스위치가 할 일이다).
+const CRAWLED_LIMIT_MAX = 60;
+const CRAWLED_COMMUNITY_LIMIT_MAX = 150;
+
 const CRAWLED_LIMIT_FIELDS = [
 	{
 		defaultValue: 8,
 		key: "adBannerLimit",
 		label: "프리미엄 광고 배너(가로·세로 각각)",
+		max: CRAWLED_LIMIT_MAX,
+		min: 0,
 	},
-	{ defaultValue: 12, key: "specialLimit", label: "스페셜 채용" },
-	{ defaultValue: 12, key: "urgentLimit", label: "급구 채용" },
-	{ defaultValue: 12, key: "recommendedLimit", label: "추천 채용" },
+	{
+		defaultValue: 12,
+		key: "specialLimit",
+		label: "스페셜 채용",
+		max: CRAWLED_LIMIT_MAX,
+		min: 0,
+	},
+	{
+		defaultValue: 12,
+		key: "urgentLimit",
+		label: "급구 채용",
+		max: CRAWLED_LIMIT_MAX,
+		min: 0,
+	},
+	{
+		defaultValue: 12,
+		key: "recommendedLimit",
+		label: "추천 채용",
+		max: CRAWLED_LIMIT_MAX,
+		min: 0,
+	},
+	{
+		defaultValue: CRAWLED_COMMUNITY_LIMIT_MAX,
+		key: "communityLimit",
+		label: "커뮤니티 글(회차당 수집)",
+		max: CRAWLED_COMMUNITY_LIMIT_MAX,
+		min: 1,
+	},
 ] as const;
 
 type CrawledLimitKey = (typeof CRAWLED_LIMIT_FIELDS)[number]["key"];
 
 const EMPTY_CRAWLED_LIMITS: Record<CrawledLimitKey, string> = {
 	adBannerLimit: "",
+	communityLimit: "",
 	recommendedLimit: "",
 	specialLimit: "",
 	urgentLimit: "",
 };
-
-// 서버 입력 스키마(updateCrawledLimits)의 상한과 같아야 한다 — 넘겨보내면 400으로 튕긴다.
-const CRAWLED_LIMIT_MAX = 60;
 
 const REVIEW_PAGE_SIZE = 30;
 
@@ -103,6 +136,8 @@ function CrawledLimitsCard() {
 		setLimits({
 			adBannerLimit:
 				data.adBannerLimit === null ? "" : String(data.adBannerLimit),
+			communityLimit:
+				data.communityLimit === null ? "" : String(data.communityLimit),
 			recommendedLimit:
 				data.recommendedLimit === null ? "" : String(data.recommendedLimit),
 			specialLimit: data.specialLimit === null ? "" : String(data.specialLimit),
@@ -114,7 +149,7 @@ function CrawledLimitsCard() {
 		orpc.bambi.siteSettings.updateCrawledLimits.mutationOptions({
 			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
 			onSuccess: async () => {
-				toast.success("섹션별 수집 상한을 저장했어요.");
+				toast.success("수집 상한을 저장했어요.");
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.siteSettings.getCrawledLimits.queryKey(),
 				});
@@ -127,6 +162,7 @@ function CrawledLimitsCard() {
 
 		const parsed: Record<CrawledLimitKey, number | null> = {
 			adBannerLimit: null,
+			communityLimit: null,
 			recommendedLimit: null,
 			specialLimit: null,
 			urgentLimit: null,
@@ -139,10 +175,10 @@ function CrawledLimitsCard() {
 			// 서버 스키마와 같은 범위를 여기서 먼저 걸러 400 대신 문장으로 알려준다.
 			if (
 				value !== null &&
-				(!Number.isInteger(value) || value < 0 || value > CRAWLED_LIMIT_MAX)
+				(!Number.isInteger(value) || value < field.min || value > field.max)
 			) {
 				toast.error(
-					`${field.label} 노출 개수는 0~${CRAWLED_LIMIT_MAX} 사이 정수로 입력해 주세요.`
+					`${field.label} 개수는 ${field.min}~${field.max} 사이 정수로 입력해 주세요.`
 				);
 				return;
 			}
@@ -156,20 +192,23 @@ function CrawledLimitsCard() {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle>섹션별 수집 상한</CardTitle>
+				<CardTitle>수집 상한</CardTitle>
 			</CardHeader>
 			<CardContent>
 				<form className="flex flex-col gap-5" onSubmit={onSubmit}>
 					<p className="m-0 text-muted-foreground text-xs">
-						각 자리에 들어갈 수집 공고 개수의 상한입니다. 수집할 때와 화면에
-						내보낼 때 모두 이 값으로 자릅니다. 우리 서비스 공고가 항상 먼저
-						나오고, 남은 자리에 수집 공고가 이 개수만큼 붙어요. 광고 배너는
+						공고는 각 자리에 들어갈 수집 공고 개수의 상한입니다. 수집할 때와
+						화면에 내보낼 때 모두 이 값으로 자릅니다. 우리 서비스 공고가 항상
+						먼저 나오고, 남은 자리에 수집 공고가 이 개수만큼 붙어요. 광고 배너는
 						가로·세로가 서로 다른 자리라{" "}
 						<strong className="font-semibold">방향별로 각각</strong> 이 개수만큼
-						모읍니다(8이면 가로 8 + 세로 8).
+						모읍니다(8이면 가로 8 + 세로 8). 커뮤니티 글은 자리 개수가 아니라{" "}
+						<strong className="font-semibold">한 회차에 모을 글 수</strong>로,
+						게시판 목록의 최신 글부터 이 개수만큼만 가져옵니다(다 채우면 남은
+						목록 페이지는 받지 않아요).
 					</p>
 
-					<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+					<div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
 						{CRAWLED_LIMIT_FIELDS.map((field) => (
 							<div className="flex flex-col gap-2" key={field.key}>
 								<Label htmlFor={`crawledLimit-${field.key}`}>
@@ -196,8 +235,11 @@ function CrawledLimitsCard() {
 						{CRAWLED_LIMIT_FIELDS.map((field) => field.defaultValue).join(
 							" / "
 						)}
-						)을 사용합니다. 0으로 두면 그 자리에는 수집 공고가 나오지 않아요.
-						최대 {CRAWLED_LIMIT_MAX}까지 지정할 수 있습니다.
+						)을 사용합니다. 공고 자리는 0으로 두면 그 자리에 수집 공고가 나오지
+						않고, 최대 {CRAWLED_LIMIT_MAX}까지 지정할 수 있어요. 커뮤니티 글은
+						1~{CRAWLED_COMMUNITY_LIMIT_MAX}까지 지정할 수 있습니다(수집을 아예
+						멈추려면 위 「수집 스케줄러」를, 노출만 내리려면 「수집 커뮤니티 글
+						노출」을 끄세요).
 					</p>
 
 					<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

@@ -9,13 +9,19 @@ import type { Context } from "../../context";
 
 dotenv.config({ path: "../../apps/server/.env" });
 
-const [{ db }, authSchema, bambiSchema, { siteSettingsRouter }] =
-	await Promise.all([
-		import("@bambi-app/db"),
-		import("@bambi-app/db/schema/auth"),
-		import("@bambi-app/db/schema/bambi"),
-		import("./site-settings"),
-	]);
+const [
+	{ db },
+	authSchema,
+	bambiSchema,
+	{ siteSettingsRouter },
+	{ DEFAULT_CRAWLED_LIMITS, readCrawledLimits },
+] = await Promise.all([
+	import("@bambi-app/db"),
+	import("@bambi-app/db/schema/auth"),
+	import("@bambi-app/db/schema/bambi"),
+	import("./site-settings"),
+	import("../../services/bambi-crawled-limits"),
+]);
 
 const { user } = authSchema;
 const { bambiProfile, bambiSiteSettings } = bambiSchema;
@@ -419,6 +425,88 @@ describe("siteSettings crawled exposure", () => {
 				}),
 				"FORBIDDEN"
 			);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+});
+
+describe("siteSettings crawled limits", () => {
+	const emptyLimits = {
+		adBannerLimit: null,
+		communityLimit: null,
+		recommendedLimit: null,
+		specialLimit: null,
+		urgentLimit: null,
+	};
+
+	it("다섯 상한이 왕복하고 미설정은 null(코드 기본값)로 나온다", async () => {
+		const fixture = await createFixture();
+		try {
+			await db
+				.delete(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, "default"));
+
+			const get = createProcedureClient(siteSettingsRouter.getCrawledLimits, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "siteSettings", "getCrawledLimits"],
+			});
+			expect(await get({})).toEqual(emptyLimits);
+
+			const update = createProcedureClient(
+				siteSettingsRouter.updateCrawledLimits,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updateCrawledLimits"],
+				}
+			);
+			// 공고 섹션의 0은 "그 자리에는 수집분을 노출하지 않음"이라 유효한 값이고, 폴백으로
+			// 되돌아가면 안 된다(readCrawledLimits가 ??로 0을 지킨다).
+			expect(
+				await update({ ...emptyLimits, communityLimit: 40, specialLimit: 0 })
+			).toEqual({ ...emptyLimits, communityLimit: 40, specialLimit: 0 });
+
+			const limits = await readCrawledLimits();
+			expect(limits.community).toBe(40);
+			expect(limits.special).toBe(0);
+			// 미설정 칸은 코드 기본값으로 돈다.
+			expect(limits.urgent).toBe(DEFAULT_CRAWLED_LIMITS.urgent);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	// 커뮤니티 상한은 수집 규모라 0(수집 정지)을 받지 않고, 목록 페이지가 주는 전량을 넘길 수
+	// 없다. 트러스트 바운더리라 화면 검증만 믿지 않는다.
+	it("커뮤니티 상한은 0과 실효 천장 초과를 거부한다", async () => {
+		const fixture = await createFixture();
+		try {
+			const update = createProcedureClient(
+				siteSettingsRouter.updateCrawledLimits,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "siteSettings", "updateCrawledLimits"],
+				}
+			);
+
+			await expect(
+				update({ ...emptyLimits, communityLimit: 0 })
+			).rejects.toBeTruthy();
+			await expect(
+				update({
+					...emptyLimits,
+					communityLimit: DEFAULT_CRAWLED_LIMITS.community + 1,
+				})
+			).rejects.toBeTruthy();
+
+			const asEmployer = createProcedureClient(
+				siteSettingsRouter.updateCrawledLimits,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "siteSettings", "updateCrawledLimits"],
+				}
+			);
+			await expectOrpcCode(asEmployer({ ...emptyLimits }), "FORBIDDEN");
 		} finally {
 			await cleanupFixture(fixture);
 		}

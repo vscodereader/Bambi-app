@@ -22,6 +22,14 @@ export const MAX_LIST_PAGES = 80;
 // 것이라 최신 몇 페이지면 충분하다 — 과거 글까지 매번 다시 긁을 이유가 없다(페이지당 30건).
 export const COMMUNITY_LIST_PAGES = 5;
 
+// 게시판 한 페이지에 실리는 글 수(실측). 수집 상한의 코드 기본값을 페이지 수에서 끌어내는 데만
+// 쓴다 — 상한과 페이지 수가 따로 놀면 "상한을 올렸는데 안 늘어난다"가 된다.
+export const COMMUNITY_ITEMS_PER_PAGE = 30;
+
+// 위 두 값이 정하는 한 회차 수집 규모. 목록 페이지 수가 천장이라 상한은 이보다 커질 수 없다.
+export const COMMUNITY_TOPICS_PER_RUN =
+	COMMUNITY_LIST_PAGES * COMMUNITY_ITEMS_PER_PAGE;
+
 export const HOUR_MS = 60 * 60 * 1000;
 export const DAY_MS = 24 * HOUR_MS;
 

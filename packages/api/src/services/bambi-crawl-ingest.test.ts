@@ -1,8 +1,12 @@
 import dotenv from "dotenv";
 import { describe, expect, it } from "vitest";
-
+import { queenalbaBbsListHtml } from "./__fixtures__/crawl-html";
+import type { CrawlClient } from "./bambi-crawl-fetch";
 import {
 	AVAILABLE_CRAWL_TARGETS,
+	COMMUNITY_ITEMS_PER_PAGE,
+	COMMUNITY_LIST_PAGES,
+	COMMUNITY_TOPICS_PER_RUN,
 	DEFAULT_CRAWL_INTERVAL_HOURS,
 	isCrawlDue,
 	isCrawlSiteImplemented,
@@ -18,7 +22,9 @@ import {
 // 않는다(모듈 로드 시 pool 객체만 만들어지고 쿼리는 나가지 않아 db 테스트와 경쟁하지 않는다).
 dotenv.config({ path: "../../apps/server/.env" });
 
-const { selectDetailTargets } = await import("./bambi-crawl-ingest");
+const { collectCommunityTopics, selectDetailTargets } = await import(
+	"./bambi-crawl-ingest"
+);
 
 const targetKey = (site: string, contentType: string) =>
 	`${site}:${contentType}`;
@@ -223,6 +229,81 @@ describe("selectDetailTargets", () => {
 		);
 
 		expect(order).toEqual(["kept"]);
+	});
+});
+
+describe("collectCommunityTopics", () => {
+	// 목록 픽스처는 일반 글 5건이다(상단 고정 공지 2건은 파서가 걸러낸다). 모든 페이지에 같은
+	// HTML을 돌려주므로 중복 제거 뒤에도 5건이고, 받은 URL 수가 곧 페이지 요청 수다.
+	const fakeClient = (): { client: CrawlClient; urls: string[] } => {
+		const urls: string[] = [];
+
+		return {
+			client: {
+				fetchBinary: () =>
+					Promise.reject(new Error("게시판 목록은 바이너리를 받지 않는다")),
+				fetchHtml: (url: string) => {
+					urls.push(url);
+					return Promise.resolve(queenalbaBbsListHtml);
+				},
+				isAllowed: () => Promise.resolve(true),
+			},
+			urls,
+		};
+	};
+
+	// 상한을 채우면 남은 페이지를 받지 않는다 — 어차피 잘려 나갈 글 때문에 상대 서버를 두드리면
+	// 요청 간격(1.5초)만 태운다.
+	it("caps the topics and stops fetching once the limit is filled", async () => {
+		const { client, urls } = fakeClient();
+
+		const { pagesFetched, topics } = await collectCommunityTopics(
+			client,
+			"queenalba",
+			3
+		);
+
+		expect(topics).toHaveLength(3);
+		expect(pagesFetched).toBe(1);
+		expect(urls).toHaveLength(1);
+	});
+
+	// 원본 목록은 글 번호 내림차순(최신순)이라 앞에서 자르면 최신 글이 남는다.
+	it("keeps the newest topics the source listed first", async () => {
+		const { client } = fakeClient();
+
+		const { topics } = await collectCommunityTopics(client, "queenalba", 2);
+
+		expect(topics.map((topic) => topic.sourceExternalId)).toEqual([
+			"comm_board2:1370389",
+			"comm_board2:1370243",
+		]);
+	});
+
+	// 상한에 못 미치면 페이지 상한까지 훑는다. 상한을 붙였다고 수집 범위가 좁아지면 안 된다.
+	it("still walks every listing page while under the limit", async () => {
+		const { client, urls } = fakeClient();
+
+		const { pagesFetched } = await collectCommunityTopics(
+			client,
+			"queenalba",
+			COMMUNITY_TOPICS_PER_RUN
+		);
+
+		expect(pagesFetched).toBe(COMMUNITY_LIST_PAGES);
+		expect(urls).toHaveLength(COMMUNITY_LIST_PAGES);
+	});
+});
+
+// 커뮤니티 수집 상한의 코드 기본값이 곧 이 값이다(DEFAULT_CRAWLED_LIMITS.community). 상한이
+// 붙는 것만으로 수집량이 달라지지 않도록 "지금까지의 실효 규모"에 못박는다 — 이 숫자를 바꾸면
+// 회차당 수집량이 바뀐다는 뜻이라 의도한 변경일 때만 함께 고친다.
+describe("COMMUNITY_TOPICS_PER_RUN", () => {
+	it("stays the effective scale of one community run", () => {
+		expect(COMMUNITY_TOPICS_PER_RUN).toBe(150);
+		expect(COMMUNITY_TOPICS_PER_RUN).toBe(
+			COMMUNITY_LIST_PAGES * COMMUNITY_ITEMS_PER_PAGE
+		);
 	});
 });
 
