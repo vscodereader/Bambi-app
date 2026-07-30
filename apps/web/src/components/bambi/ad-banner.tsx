@@ -15,10 +15,12 @@ import { AdBannerLayoutRenderer } from "./ad-banner-layout-renderer";
 
 const AD_BANNER_SURFACE_CLASS = "relative block overflow-hidden rounded-lg";
 
-// next/image의 width·height는 요구 해상도가 아니라 로딩 중 자리를 잡는 비율 힌트다. 수집
-// 배너는 우리 규격이 아니라 원본 비율(실측 약 3:2)로 그리므로, 슬롯 규격(4:9·7:3)을 힌트로
-// 주면 이미지가 로드되는 순간 높이가 크게 튄다. h-auto가 실제 비율을 잡을 때까지의 근사치.
-const CRAWLED_RATIO_HINT = { height: 300, width: 460 } as const;
+// next/image의 width·height는 요구 해상도가 아니라 로딩 중 자리를 잡는 비율 힌트다. 가로형
+// 수집 배너만 우리 규격이 아니라 원본 비율로 그리므로, 슬롯 규격(7:3)을 힌트로 주면 이미지가
+// 로드되는 순간 높이가 튄다. 그래서 실측 원본 크기(240×117 ≈ 2.05)를 그대로 힌트로 준다 —
+// 실제 비율이 잡히기 전까지의 자리도 로드 후와 같아진다.
+// (세로형 수집 배너는 원본이 정확히 4:9라 규격 슬롯을 그대로 쓴다 — AdBanner 주석 참고.)
+const CRAWLED_RATIO_HINT = { height: 117, width: 240 } as const;
 const AD_BANNER_LINK_CLASS =
 	"transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -136,13 +138,10 @@ interface AdBannerProps {
 // 받아 놓고 가리는 낭비가 된다. 대신 같은 크기 클래스를 가진 빈 상자가 슬롯 크기를 만든다
 // (Image가 유일한 크기 소스였다 — 그냥 빼면 슬롯이 무너진다).
 export function AdBanner({ className, item }: AdBannerProps) {
-	// 수집 배너는 원본 규격이 우리 슬롯과 다르다(실측 약 230×150). 4:9 슬롯에 object-cover로
-	// 넣으면 좌우가 통째로 잘려 무슨 광고인지 알 수 없게 되므로 원본 비율 그대로 그린다 —
-	// 레일은 세로 스택이라 높이 가변을 흡수한다. 결제 광고는 업로드 규격이 4:9라 그대로 둔다.
-	const surfaceClassName = cn(
-		item.crawled ? "w-full rounded-lg" : "aspect-[4/9] h-52 w-auto rounded-lg",
-		className
-	);
+	// 수집 배너도 결제 배너와 같은 규격 슬롯으로 그린다. 세로 수집 배너 원본은 실측 80×180 —
+	// 정확히 4:9라 규격 슬롯을 object-cover로 채워도 잘리는 부분이 없다. 반대로 원본 비율로
+	// 그리면 슬롯이 이미지 크기로 줄어들어 옆의 결제 슬롯과 크기가 어긋난다(사용자 확인 사항).
+	const surfaceClassName = cn("aspect-[4/9] h-52 w-auto rounded-lg", className);
 
 	return (
 		<AdBannerFrame className="w-fit" item={item}>
@@ -152,15 +151,12 @@ export function AdBanner({ className, item }: AdBannerProps) {
 			{isAdBannerImageRequired(item.layout, "ad_vertical") ? (
 				<Image
 					alt={`${item.company} ${item.title} 광고 배너`}
-					className={cn(
-						surfaceClassName,
-						item.crawled ? "h-auto w-full" : "object-cover"
-					)}
-					height={item.crawled ? CRAWLED_RATIO_HINT.height : 900}
+					className={cn(surfaceClassName, "object-cover")}
+					height={900}
 					sizes="120px"
 					src={item.imageUrl}
 					unoptimized
-					width={item.crawled ? CRAWLED_RATIO_HINT.width : 400}
+					width={400}
 				/>
 			) : (
 				<div className={surfaceClassName} />
@@ -215,7 +211,8 @@ export function HorizontalAdBanner({
 	item,
 }: HorizontalAdBannerProps) {
 	// 단색 배경 처리는 AdBanner(세로형)와 같다 — 그쪽 주석 참고.
-	// 수집 배너의 원본 비율 렌더도 세로형과 같은 이유다(잘린 배너보다 높이 가변이 낫다).
+	// 원본 비율 렌더는 가로형 수집 배너에만 남는다: 원본이 실측 240×117(≈2.05)로 7:3(≈2.33)과
+	// 달라 object-cover로 채우면 위아래가 잘린다. 잘린 배너보다 높이 가변이 낫다.
 	const surfaceClassName = cn(
 		item.crawled
 			? "w-full rounded-lg border border-border"
