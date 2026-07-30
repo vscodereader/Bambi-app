@@ -40,8 +40,10 @@ import {
 	DEFAULT_AD_ROTATION_MINUTES,
 	EXPOSURE_TYPE_LABELS,
 	groupAdBannerJobs,
+	groupCrawledAdBannerJobs,
 	type JobExposureType,
 	type ListingSectionExposureType,
+	mergeAdBannerSlots,
 	previewTemplateToExposureType,
 	requireDirectionImage,
 	requiredAdBannerUsagesForExposureType,
@@ -58,6 +60,7 @@ import {
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
 } from "../../services/bambi-authz";
+import { loadCrawledAdBannerPools } from "../../services/bambi-crawled-ad-banner-slots";
 import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import {
 	getJobDescriptionBlockRiskTerms,
@@ -1089,6 +1092,9 @@ export const jobsRouter = {
 				id: jobPost.id,
 				organizationId: jobPost.organizationId,
 				publishedAt: jobPost.publishedAt,
+				// 수집 배너와 한 배열에 섞이므로 출처를 함께 내린다 — 클라이언트가 이 값으로
+				// 클릭 대상을 가른다(수집 공고에는 상세 페이지가 없다).
+				source: jobPost.source,
 				teamDisplayName: employerTeamProfile.displayName,
 				title: jobPost.title,
 			})
@@ -1122,13 +1128,16 @@ export const jobsRouter = {
 		}));
 
 		// 로테이션 주기는 운영자 사이트 설정값(분)을 따르고, 미설정이면 코드 기본값을 쓴다.
-		const [rotationRow] = await db
-			.select({ minutes: bambiSiteSettings.adBannerRotationMinutes })
+		const [settingsRow] = await db
+			.select({
+				crawledAdBannerEnabled: bambiSiteSettings.crawledAdBannerEnabled,
+				minutes: bambiSiteSettings.adBannerRotationMinutes,
+			})
 			.from(bambiSiteSettings)
 			.where(eq(bambiSiteSettings.id, "default"))
 			.limit(1);
 		const rotationMs =
-			(rotationRow?.minutes ?? DEFAULT_AD_ROTATION_MINUTES) * 60 * 1000;
+			(settingsRow?.minutes ?? DEFAULT_AD_ROTATION_MINUTES) * 60 * 1000;
 		const groups = groupAdBannerJobs(rows, now, rotationMs);
 
 		// 슬롯 방향 배너가 없는 후보는 비운다(단색 배경 슬롯은 예외 — requireDirectionImage 참고).
@@ -1141,12 +1150,40 @@ export const jobsRouter = {
 			rightBanner: requireDirectionImage(groups.rightBanner, "ad_vertical"),
 		};
 
+		// impression은 결제 광고에만 기록한다. job_performance_event가 job_post를 FK로 잡고
+		// 있어 수집 공고 id를 넣으면 이 공개 조회가 통째로 실패하고, 성과 지표는 광고주에게
+		// 보여주는 값이라 수집 노출을 섞으면 숫자의 의미가 흐려진다.
 		await recordAdBannerImpressions({
 			actorUserId: context.session?.user.id,
 			groups: directedGroups,
 		});
 
-		return directedGroups;
+		if (!settingsRow?.crawledAdBannerEnabled) {
+			return directedGroups;
+		}
+
+		// 수집 배너는 결제 광고가 채우지 못한 칸에만 들어가고, 가로형·세로형이 서로 다른 링을
+		// 돈다(groupCrawledAdBannerJobs 참고).
+		const crawledGroups = groupCrawledAdBannerJobs(
+			await loadCrawledAdBannerPools(),
+			now,
+			rotationMs
+		);
+
+		return {
+			leftBanner: mergeAdBannerSlots(
+				directedGroups.leftBanner,
+				crawledGroups.leftBanner
+			),
+			premiumBanner: mergeAdBannerSlots(
+				directedGroups.premiumBanner,
+				crawledGroups.premiumBanner
+			),
+			rightBanner: mergeAdBannerSlots(
+				directedGroups.rightBanner,
+				crawledGroups.rightBanner
+			),
+		};
 	}),
 
 	getById: publicProcedure

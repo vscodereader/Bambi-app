@@ -6,14 +6,45 @@ import { Megaphone } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { isAdBannerImageRequired } from "@/lib/bambi/ad-banner-layout";
 import { resolveAdInquiryTel } from "@/lib/bambi/ad-inquiry-tel";
 import type { AdBannerItem } from "@/lib/bambi/api-job-mapper";
 import { orpc } from "@/utils/orpc";
 import { AdBannerLayoutRenderer } from "./ad-banner-layout-renderer";
 
-const bannerHref = (item: AdBannerItem): Route =>
-	`/seeker/jobs/${item.id}` as Route;
+const AD_BANNER_SURFACE_CLASS = "relative block overflow-hidden rounded-lg";
+const AD_BANNER_LINK_CLASS =
+	"transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+// 배너 상자. 갈 곳이 있으면 Link, 없으면 같은 크기의 div다 — 수집 공고 배너는 상세 페이지가
+// 없어서 링크를 걸면 누른 사람이 오류 화면을 본다. href 없는 <a>로 두는 것도 같은 문제라
+// (포커스는 먹고 아무 일도 안 한다) 요소 자체를 바꾼다.
+function AdBannerFrame({
+	children,
+	className,
+	item,
+}: {
+	children: ReactNode;
+	className?: string;
+	item: AdBannerItem;
+}) {
+	if (!item.href) {
+		return (
+			<div className={cn(AD_BANNER_SURFACE_CLASS, className)}>{children}</div>
+		);
+	}
+
+	return (
+		<Link
+			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기`}
+			className={cn(AD_BANNER_SURFACE_CLASS, AD_BANNER_LINK_CLASS, className)}
+			href={item.href as Route}
+		>
+			{children}
+		</Link>
+	);
+}
 
 // 좌/우 배너 rail은 슬롯 3개를 항상 렌더한다 — 서버가 그룹당 고정 길이(3칸) 배열을 내려주고
 // 활성 칸만 광고, 나머지는 null이다. 데이터가 없거나(로딩) null인 칸은 자리표시로 채운다.
@@ -110,11 +141,7 @@ export function AdBanner({ className, item }: AdBannerProps) {
 	const surfaceClassName = cn("aspect-[4/9] h-52 w-auto rounded-lg", className);
 
 	return (
-		<Link
-			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기`}
-			className="relative block w-fit overflow-hidden rounded-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			href={bannerHref(item)}
-		>
+		<AdBannerFrame className="w-fit" item={item}>
 			{/* 이미지가 없는 단색 배너의 접근성 이름은 Link의 aria-label이 이미 담당한다 —
 			    빈 상자에는 alt에 해당하는 이름을 줄 것이 없고, 실제 내용인 문구는 레이아웃
 			    렌더러가 텍스트로 그린다. */}
@@ -134,7 +161,7 @@ export function AdBanner({ className, item }: AdBannerProps) {
 			{item.layout ? (
 				<AdBannerLayoutRenderer layout={item.layout} slot="vertical" />
 			) : null}
-		</Link>
+		</AdBannerFrame>
 	);
 }
 
@@ -187,11 +214,7 @@ export function HorizontalAdBanner({
 	);
 
 	return (
-		<Link
-			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기`}
-			className="relative block overflow-hidden rounded-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			href={bannerHref(item)}
-		>
+		<AdBannerFrame item={item}>
 			{isAdBannerImageRequired(item.layout, "ad_horizontal") ? (
 				<Image
 					alt={`${item.company} ${item.title} 광고 배너`}
@@ -208,7 +231,7 @@ export function HorizontalAdBanner({
 			{item.layout ? (
 				<AdBannerLayoutRenderer layout={item.layout} slot="horizontal" />
 			) : null}
-		</Link>
+		</AdBannerFrame>
 	);
 }
 

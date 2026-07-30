@@ -205,7 +205,11 @@ describe("listJobFeed", () => {
 	});
 
 	it("우리 공고와 수집 공고를 한 결과로 합쳐 내린다", async () => {
-		const rows = await listJobFeed({ limit: 20, region: fixture.region });
+		const rows = await listJobFeed({
+			includeCrawled: true,
+			limit: 20,
+			region: fixture.region,
+		});
 		const bySource = new Map(rows.map((row) => [row.source, row]));
 
 		expect(rows).toHaveLength(3);
@@ -219,7 +223,11 @@ describe("listJobFeed", () => {
 	});
 
 	it("수집 공고에 우리 보증·유료 노출·평점을 붙이지 않는다", async () => {
-		const rows = await listJobFeed({ limit: 20, region: fixture.region });
+		const rows = await listJobFeed({
+			includeCrawled: true,
+			limit: 20,
+			region: fixture.region,
+		});
 		const collected = rows.find((row) => row.source === "crawled");
 
 		expect(collected).toMatchObject({
@@ -242,7 +250,11 @@ describe("listJobFeed", () => {
 	});
 
 	it("이미 전환된 원본과 지역이 빈 원본은 목록에서 뺀다", async () => {
-		const rows = await listJobFeed({ limit: 20, region: fixture.region });
+		const rows = await listJobFeed({
+			includeCrawled: true,
+			limit: 20,
+			region: fixture.region,
+		});
 		const ids = rows.map((row) => row.id);
 
 		expect(ids).not.toContain(fixture.convertedCrawledId);
@@ -251,6 +263,7 @@ describe("listJobFeed", () => {
 
 	it("업종·최소 시급 필터를 두 원천에 함께 적용한다", async () => {
 		const barOnly = await listJobFeed({
+			includeCrawled: true,
 			industryCategory: "BAR",
 			limit: 20,
 			region: fixture.region,
@@ -260,11 +273,32 @@ describe("listJobFeed", () => {
 
 		// 일급 150,000원 = 시급 18,750원. 하한을 그 위로 올리면 수집 공고만 걸러진다.
 		const wellPaid = await listJobFeed({
+			includeCrawled: true,
 			limit: 20,
 			minPayAmount: 20_000,
 			region: fixture.region,
 		});
 
 		expect(wellPaid.every((row) => row.source !== "crawled")).toBe(true);
+	});
+
+	// 노출 스위치가 꺼져 있으면 수집 공고가 한 건도 나오지 않아야 한다. 호출부가 플래그를
+	// 잊었을 때 남의 공고가 그대로 공개되는 것이 이 기능에서 가장 비싼 실수다.
+	it("수집 노출이 꺼져 있으면 우리 공고만 내린다", async () => {
+		const rows = await listJobFeed({
+			includeCrawled: false,
+			limit: 20,
+			region: fixture.region,
+		});
+
+		expect(rows.every((row) => row.source !== "crawled")).toBe(true);
+		expect(rows).toHaveLength(2);
+	});
+
+	// 기본값 검증: 플래그를 생략하면 운영자 설정을 읽고, 그 기본은 꺼짐이다.
+	it("플래그를 생략하면 운영자 설정을 따른다", async () => {
+		const rows = await listJobFeed({ limit: 20, region: fixture.region });
+
+		expect(rows.every((row) => row.source !== "crawled")).toBe(true);
 	});
 });

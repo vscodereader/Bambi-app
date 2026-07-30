@@ -88,7 +88,10 @@ const toJobMediaUrl = (media: ApiJobMedia): string =>
 
 // 이미 완성된 URL 한 줄을 카드가 쓰는 미디어 형태로 감싼다. 파일명·용량·MIME은 알 수 없고
 // 카드도 쓰지 않는다(url과 altText만 읽는다) — 모르는 값을 그럴듯하게 지어내지 않는다.
-const toUrlJobMedia = (url?: null | string): JobMedia | null =>
+const toUrlJobMedia = (
+	url?: null | string,
+	usage: JobMediaUsage = "cover"
+): JobMedia | null =>
 	url
 		? {
 				altText: "",
@@ -97,7 +100,7 @@ const toUrlJobMedia = (url?: null | string): JobMedia | null =>
 				mimeType: "",
 				storageKey: "",
 				url,
-				usage: "cover",
+				usage,
 			}
 		: null;
 
@@ -207,17 +210,24 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 
 export interface ApiAdBannerJob {
 	adHorizontal?: ApiJobMedia | null;
+	// 수집 공고의 배너. 업로드 미디어가 아니라 미러링된 URL 한 줄로 온다.
+	adHorizontalUrl?: null | string;
 	adVertical?: ApiJobMedia | null;
+	adVerticalUrl?: null | string;
 	coverImage?: ApiJobMedia | null;
 	employerDisplayName?: string | null;
 	id: string;
 	layout?: AdBannerLayout | null;
+	// "crawled"면 수집 공고다. 상세 페이지가 없으므로 링크를 걸지 않는다.
+	source?: null | string;
 	teamDisplayName?: string | null;
 	title: string;
 }
 
 export interface AdBannerItem {
 	company: string;
+	// 클릭 대상. 수집 배너는 갈 곳이 없어 null이고, 렌더러가 링크 없이 그린다.
+	href: null | string;
 	id: string;
 	// 커버가 아니라 슬롯 배너가 우선이라 coverUrl이 아닌 imageUrl이다.
 	imageUrl: string;
@@ -234,15 +244,21 @@ export const toAdBannerItem = (
 	usage: JobAdBannerUsage
 ): AdBannerItem => {
 	const company = job.teamDisplayName ?? job.employerDisplayName ?? "검증 업체";
+	const isCrawled = job.source === "crawled";
 	const banner = usage === "ad_horizontal" ? job.adHorizontal : job.adVertical;
+	const bannerUrl =
+		usage === "ad_horizontal" ? job.adHorizontalUrl : job.adVerticalUrl;
 	const media =
 		toJobMedia(banner ?? job.coverImage ?? null) ??
+		toUrlJobMedia(bannerUrl, usage) ??
 		sampleCoverMedia(job.id, `${company} 대표 이미지`);
 
 	// 슬롯별 판정은 하지 않는다 — 레이아웃은 가로·세로 슬롯을 모두 담고 있고, 어느 쪽을
 	// 그릴지는 렌더러가 슬롯을 보고 정한다.
 	return {
 		company,
+		// 수집 공고는 /seeker/jobs/[id]에 없다. 링크를 걸면 배너를 누른 사람이 오류 화면을 본다.
+		href: isCrawled ? null : `/seeker/jobs/${job.id}`,
 		id: job.id,
 		imageUrl: media.url,
 		layout: job.layout ?? null,

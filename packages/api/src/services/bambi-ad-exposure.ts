@@ -170,6 +170,34 @@ const PREMIUM_RING_BASE = 3;
 const RIGHT_RING_BASE = 5;
 const TOTAL_RING_SLOTS = RIGHT_RING_BASE + SIDE_BANNER_MAX_SLOTS;
 
+const emptySlots = <TRow>(count: number): (TRow | null)[] =>
+	Array.from({ length: count }, () => null);
+
+// 링 위의 한 그룹을 채운다. 슬롯 s의 광고는 pool[j], j=((s−bucket) mod ring)이며 j가 풀
+// 크기 미만이면 노출, 아니면 대기(null)다. now는 항상 양수라 모듈러는 안전하지만 음수
+// 안전형으로 감아 둔다.
+const placeOnRing = <TRow>({
+	base,
+	bucket,
+	pool,
+	ring,
+	slots,
+}: {
+	base: number;
+	bucket: number;
+	pool: TRow[];
+	ring: number;
+	slots: (TRow | null)[];
+}): void => {
+	for (let i = 0; i < slots.length; i++) {
+		const j = (((base + i - bucket) % ring) + ring) % ring;
+
+		if (j < pool.length) {
+			slots[i] = pool[j] as TRow;
+		}
+	}
+};
+
 // 결제완료된 배너형 공고를 상단·좌·우 슬롯별로 그룹핑한다. 광고 통합 후 세 슬롯은 하나의
 // 프리미엄 풀을 공유한다 — 후보 = exposureType이 배너 3종(AD_BANNER_EXPOSURE_TYPES) 중
 // 하나이고 활성(미만료)인 공고 전체(레거시 left-banner/right-banner 공고 포함).
@@ -208,11 +236,9 @@ export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 		.sort((a, b) => a.id.localeCompare(b.id));
 	const n = pool.length;
 
-	const emptySlots = (count: number): (TRow | null)[] =>
-		Array.from({ length: count }, () => null);
-	const leftBanner = emptySlots(SIDE_BANNER_MAX_SLOTS);
-	const premiumBanner = emptySlots(PREMIUM_BANNER_MAX_SLOTS);
-	const rightBanner = emptySlots(SIDE_BANNER_MAX_SLOTS);
+	const leftBanner = emptySlots<TRow>(SIDE_BANNER_MAX_SLOTS);
+	const premiumBanner = emptySlots<TRow>(PREMIUM_BANNER_MAX_SLOTS);
+	const rightBanner = emptySlots<TRow>(SIDE_BANNER_MAX_SLOTS);
 
 	if (n === 0) {
 		return { leftBanner, premiumBanner, rightBanner };
@@ -222,21 +248,106 @@ export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	// pool[j] (j=((s−bucket) mod ring)), j<n이면 노출·아니면 대기. now는 항상 양수라 모듈러는
 	// 안전하지만 음수 안전형으로 감아 둔다.
 	const ring = Math.max(n, TOTAL_RING_SLOTS);
-	const place = (slots: (TRow | null)[], base: number): void => {
-		for (let i = 0; i < slots.length; i++) {
-			const s = base + i;
-			const j = (((s - bucket) % ring) + ring) % ring;
-			if (j < n) {
-				slots[i] = pool[j] as TRow;
-			}
-		}
-	};
-	place(leftBanner, LEFT_RING_BASE);
-	place(premiumBanner, PREMIUM_RING_BASE);
-	place(rightBanner, RIGHT_RING_BASE);
+	placeOnRing({ base: LEFT_RING_BASE, bucket, pool, ring, slots: leftBanner });
+	placeOnRing({
+		base: PREMIUM_RING_BASE,
+		bucket,
+		pool,
+		ring,
+		slots: premiumBanner,
+	});
+	placeOnRing({
+		base: RIGHT_RING_BASE,
+		bucket,
+		pool,
+		ring,
+		slots: rightBanner,
+	});
 
 	return { leftBanner, premiumBanner, rightBanner };
 };
+
+// 수집 공고 배너의 순환 칸 수. 가로형(좌 3 + 중간 2)과 세로형(우 3)이 서로 다른 링이다.
+const CRAWLED_HORIZONTAL_RING_SLOTS =
+	SIDE_BANNER_MAX_SLOTS + PREMIUM_BANNER_MAX_SLOTS;
+const CRAWLED_VERTICAL_RING_SLOTS = SIDE_BANNER_MAX_SLOTS;
+
+// 수집 공고 배너는 방향별로 **따로** 순환한다. 결제 광고처럼 좌→중간→우 한 줄로 돌리면
+// 우측(세로 4:9) 칸에 가로 이미지밖에 없는 공고가 올라가 그 칸이 비고, 그 반대도 생긴다.
+// 우리 광고주는 두 방향을 다 올려야 판매되지만 수집 공고는 원본이 한쪽만 걸어둔 경우가
+// 흔하고, 세로형은 다른 공고에서 빌려오기까지 한다(resolveCrawledAdBanners).
+//
+// 그래서 가로형은 좌1→좌2→좌3→중1→중2(5칸) 링을, 세로형은 우1→우2→우3(3칸) 링을 돌며
+// 세로형은 좌·중간으로 넘어가지 않는다. 링마다 그 방향 이미지가 실제로 있는 공고만 받으므로
+// (호출부가 pools를 방향별로 나눠 넘긴다) 자리표시로 비는 칸이 생기지 않는다. 두 링이
+// 독립이라 같은 공고가 같은 버킷에 좌측과
+// 우측에 함께 뜰 수 있다 — 수집 공고는 자리를 사서 온 것이 아니라 빈 칸을 채우는 쪽이므로
+// "한 광고는 한 칸에만"이라는 결제 광고의 공정성 규약을 여기까지 끌고 오지 않는다.
+export const groupCrawledAdBannerJobs = <TRow extends { id: string }>(
+	pools: { horizontal: TRow[]; vertical: TRow[] },
+	now: Date,
+	rotationIntervalMs: number = DEFAULT_AD_ROTATION_INTERVAL_MS
+): {
+	leftBanner: (TRow | null)[];
+	premiumBanner: (TRow | null)[];
+	rightBanner: (TRow | null)[];
+} => {
+	const interval =
+		rotationIntervalMs > 0
+			? rotationIntervalMs
+			: DEFAULT_AD_ROTATION_INTERVAL_MS;
+	const bucket = Math.floor(now.getTime() / interval);
+	// 결제 광고와 같은 이유로 id 정렬이다 — DB 정렬 순서에 기대면 인스턴스마다 결과가 갈린다.
+	const byId = (rows: TRow[]): TRow[] =>
+		[...rows].sort((a, b) => a.id.localeCompare(b.id));
+	const horizontal = byId(pools.horizontal);
+	const vertical = byId(pools.vertical);
+	const leftBanner = emptySlots<TRow>(SIDE_BANNER_MAX_SLOTS);
+	const premiumBanner = emptySlots<TRow>(PREMIUM_BANNER_MAX_SLOTS);
+	const rightBanner = emptySlots<TRow>(SIDE_BANNER_MAX_SLOTS);
+	const horizontalRing = Math.max(
+		horizontal.length,
+		CRAWLED_HORIZONTAL_RING_SLOTS
+	);
+
+	if (horizontal.length > 0) {
+		placeOnRing({
+			base: LEFT_RING_BASE,
+			bucket,
+			pool: horizontal,
+			ring: horizontalRing,
+			slots: leftBanner,
+		});
+		placeOnRing({
+			base: PREMIUM_RING_BASE,
+			bucket,
+			pool: horizontal,
+			ring: horizontalRing,
+			slots: premiumBanner,
+		});
+	}
+
+	if (vertical.length > 0) {
+		// 우측은 자기 링의 첫 칸부터 시작한다(가로형 링 뒤에 이어 붙이지 않는다).
+		placeOnRing({
+			base: 0,
+			bucket,
+			pool: vertical,
+			ring: Math.max(vertical.length, CRAWLED_VERTICAL_RING_SLOTS),
+			slots: rightBanner,
+		});
+	}
+
+	return { leftBanner, premiumBanner, rightBanner };
+};
+
+// 결제 광고가 먼저 자리를 잡고, 수집 배너는 남은 빈 칸만 채운다. 돈을 낸 광고를 밀어내면
+// 우리가 판 상품을 우리가 훼손하는 것이다.
+export const mergeAdBannerSlots = <TPaid, TCrawled>(
+	paid: (TPaid | null)[],
+	crawled: (TCrawled | null)[]
+): (TCrawled | TPaid | null)[] =>
+	paid.map((item, index) => item ?? crawled[index] ?? null);
 
 // 배너형 공고가 필요로 하는 광고 이미지 규격. 배너형 공고는 가로(상단·좌측 레일)와
 // 세로(우측 레일) 두 규격을 모두 쓰므로 두 이미지가 모두 필요하다. 배너형이 아니면 없음.

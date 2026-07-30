@@ -152,6 +152,18 @@ const updateMinimumWageInput = z.object({
 		.nullable(),
 });
 
+// 수집 콘텐츠 노출 스위치. 배너와 목록을 한 컬럼으로 합치지 않는다 — 문제가 생기는 축이
+// 다르고(배너는 이미지 저작권, 목록은 공고 내용), 한쪽만 내려야 하는 상황이 실제로 온다.
+const CRAWLED_EXPOSURE_COLUMNS = {
+	crawledAdBannerEnabled: bambiSiteSettings.crawledAdBannerEnabled,
+	crawledJobFeedEnabled: bambiSiteSettings.crawledJobFeedEnabled,
+};
+
+const updateCrawledExposureInput = z.object({
+	adBannerEnabled: z.boolean(),
+	jobFeedEnabled: z.boolean(),
+});
+
 export const siteSettingsRouter = {
 	// 푸터 렌더용 공개 조회. 행이 없으면 null(웹이 폴백 처리).
 	getFooter: publicProcedure.handler(async () => {
@@ -313,5 +325,37 @@ export const siteSettingsRouter = {
 				})
 				.returning(MINIMUM_WAGE_COLUMNS);
 			return saved ?? null;
+		}),
+
+	// 수집 콘텐츠 노출 스위치 조회. 운영자 전용이다 — 공개 조회에 실으면 "이 사이트가 남의
+	// 공고를 긁어 쓰는 중"이라는 사실이 응답으로 새어 나간다(노출 자체는 이미 보이지만,
+	// 켜짐/꺼짐 상태와 정책을 API로 알려줄 이유는 없다).
+	getCrawledExposure: adminProcedure.handler(async () => {
+		const [row] = await db
+			.select(CRAWLED_EXPOSURE_COLUMNS)
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+
+		return (
+			row ?? { crawledAdBannerEnabled: false, crawledJobFeedEnabled: false }
+		);
+	}),
+
+	// 배너와 목록을 따로 끈다 — 한쪽이 문제여도 다른 쪽을 살려 둘 수 있어야 한다.
+	updateCrawledExposure: adminProcedure
+		.input(updateCrawledExposureInput)
+		.handler(async ({ input }) => {
+			const values = {
+				crawledAdBannerEnabled: input.adBannerEnabled,
+				crawledJobFeedEnabled: input.jobFeedEnabled,
+			};
+			const [saved] = await db
+				.insert(bambiSiteSettings)
+				.values({ id: SETTINGS_ROW_ID, ...values })
+				.onConflictDoUpdate({ set: values, target: bambiSiteSettings.id })
+				.returning(CRAWLED_EXPOSURE_COLUMNS);
+
+			return saved ?? values;
 		}),
 };

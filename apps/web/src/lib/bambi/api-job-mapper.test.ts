@@ -74,6 +74,32 @@ describe("toAdBannerItem", () => {
 		expect(item.imageUrl.length).toBeGreaterThan(0);
 	});
 
+	it("links a paid banner to the advertised job detail page", () => {
+		const item = toAdBannerItem(createBannerJob({}), "ad_horizontal");
+
+		expect(item.href).toBe("/seeker/jobs/11111111-1111-4111-8111-111111111111");
+	});
+
+	// 수집 공고의 배너는 미러링된 URL 한 줄로 오고(storageKey가 없다), 상세 페이지가 없어
+	// 링크를 걸면 누른 사람이 오류 화면을 본다.
+	it("uses the mirrored url and no destination for a crawled banner", () => {
+		const crawled = {
+			...createBannerJob({}),
+			adHorizontalUrl: "https://cdn.bambi.test/crawled-h.jpg",
+			adVerticalUrl: "https://cdn.bambi.test/crawled-v.jpg",
+			source: "crawled",
+		} as Parameters<typeof toAdBannerItem>[0];
+
+		expect(toAdBannerItem(crawled, "ad_horizontal")).toMatchObject({
+			href: null,
+			imageUrl: "https://cdn.bambi.test/crawled-h.jpg",
+		});
+		expect(toAdBannerItem(crawled, "ad_vertical")).toMatchObject({
+			href: null,
+			imageUrl: "https://cdn.bambi.test/crawled-v.jpg",
+		});
+	});
+
 	it("carries the layout through to both slots", () => {
 		// 슬롯별로 잘라내지 않는다 — 렌더러가 슬롯을 보고 가로·세로 중 하나를 고른다.
 		const layout = {

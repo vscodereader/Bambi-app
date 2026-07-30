@@ -12,6 +12,7 @@
 
 import { db } from "@bambi-app/db";
 import {
+	bambiSiteSettings,
 	crawledJobPost,
 	employerOrganizationProfile,
 	employerTeamProfile,
@@ -166,11 +167,24 @@ export const crawledJobFeedSelection = {
 
 export interface JobFeedInput {
 	district?: string;
+	// 수집 공고를 목록에 섞을지. 생략하면 운영자 설정(crawled_job_feed_enabled)을 읽는다 —
+	// 호출부가 플래그를 잊으면 남의 공고가 그대로 공개되므로 기본을 "설정을 본다"로 둔다.
+	includeCrawled?: boolean;
 	industryCategory?: JobIndustryCategory;
 	limit: number;
 	minPayAmount?: number;
 	region?: string;
 }
+
+const isCrawledJobFeedEnabled = async (): Promise<boolean> => {
+	const [row] = await db
+		.select({ enabled: bambiSiteSettings.crawledJobFeedEnabled })
+		.from(bambiSiteSettings)
+		.where(eq(bambiSiteSettings.id, "default"))
+		.limit(1);
+
+	return row?.enabled ?? false;
+};
 
 const jobPostFeedConditions = (input: JobFeedInput): SQL[] => {
 	const conditions: SQL[] = [
@@ -201,7 +215,16 @@ const jobPostFeedConditions = (input: JobFeedInput): SQL[] => {
 
 // 수집 공고 쪽 조건. 위 투영이 region·payUnit·workSchedule·industryCategory·shopName을
 // NOT NULL로 단정하므로, 그 단정을 여기서 실제로 보장한다.
-const crawledJobFeedConditions = (input: JobFeedInput): SQL[] => {
+const crawledJobFeedConditions = (
+	input: JobFeedInput,
+	includeCrawled: boolean
+): SQL[] => {
+	// 꺼져 있으면 분기를 지우는 대신 조건으로 막는다 — 쿼리 모양이 그대로라 켜고 끌 때
+	// 컬럼 순서·정렬이 달라질 여지가 없다(플래너도 이 분기를 읽지 않는다).
+	if (!includeCrawled) {
+		return [sql`false`];
+	}
+
 	const conditions: SQL[] = [
 		eq(crawledJobPost.status, "active"),
 		isNotNull(crawledJobPost.industryCategory),
@@ -247,8 +270,11 @@ export type JobFeedRow = Awaited<ReturnType<typeof listJobFeed>>[number];
 // 애플리케이션에서 두 배열을 합치는 대신 UNION ALL을 쓴다(수집 테이블이 커지면 전량을
 // 가져와 자르는 방식은 그대로 무너진다). ALL인 이유는 두 원천에 같은 행이 있을 수 없고,
 // DISTINCT는 json 컬럼에 등호가 없어 실행 자체가 실패하기 때문이다.
-export const listJobFeed = async (input: JobFeedInput) =>
-	await unionAll(
+export const listJobFeed = async (input: JobFeedInput) => {
+	const includeCrawled =
+		input.includeCrawled ?? (await isCrawledJobFeedEnabled());
+
+	return await unionAll(
 		db
 			.select(jobPostFeedSelection)
 			.from(jobPost)
@@ -264,7 +290,8 @@ export const listJobFeed = async (input: JobFeedInput) =>
 		db
 			.select(crawledJobFeedSelection)
 			.from(crawledJobPost)
-			.where(and(...crawledJobFeedConditions(input)))
+			.where(and(...crawledJobFeedConditions(input, includeCrawled)))
 	)
 		.orderBy(sql`published_at desc nulls last`)
 		.limit(input.limit);
+};
