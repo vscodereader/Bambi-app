@@ -5,6 +5,7 @@ import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Card,
+	CardAction,
 	CardContent,
 	CardHeader,
 	CardTitle,
@@ -32,9 +33,13 @@ import {
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { RefreshCwIcon } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
-
+import {
+	CrawledCommunityTopicsCard,
+	CrawledJobPostsCard,
+} from "@/app/moderator/crawler/crawled-content-cards";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	CRAWL_CONTENT_TYPE_LABELS,
@@ -709,9 +714,32 @@ export default function ModeratorCrawlerPage() {
 
 			<IndustryReviewCard />
 
+			<CrawledJobPostsCard />
+
+			<CrawledCommunityTopicsCard />
+
 			<Card>
 				<CardHeader>
 					<CardTitle>최근 수집 회차</CardTitle>
+					{/* 회차는 서버가 뒤에서 돌리는 동안 조용히 바뀐다 — 진행 상황을 보려고
+					    페이지를 통째로 새로 열지 않아도 되게 이 카드만 다시 불러온다. */}
+					<CardAction>
+						<Button
+							disabled={runsQuery.isFetching || summaryQuery.isFetching}
+							onClick={() => {
+								runsQuery.refetch();
+								summaryQuery.refetch();
+							}}
+							size="sm"
+							variant="outline"
+						>
+							<RefreshCwIcon
+								className={runsQuery.isFetching ? "animate-spin" : undefined}
+								data-icon="inline-start"
+							/>
+							새로고침
+						</Button>
+					</CardAction>
 				</CardHeader>
 				<CardContent className="flex flex-col gap-3">
 					<p className="m-0 text-muted-foreground text-xs">

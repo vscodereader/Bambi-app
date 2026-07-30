@@ -4,6 +4,18 @@ export const CRAWLED_POST_STATUS_LABELS = {
 	active: "수집됨",
 	expired: "만료",
 	needs_review: "업종 검토 대기",
+	// 운영자가 내린 공고. 지우지 않고 이 상태로 남겨야 다음 회차가 같은 글을 새로 수집해
+	// 되살리지 않는다(톰스톤).
+	removed: "삭제됨",
+} as const;
+
+// 수집 공고 상태별 배지 색. removed만 destructive로 눈에 띄게 둔다 — 운영자가 내린
+// 상태라, 목록에서 정상 건과 섞여 보이면 왜 노출이 안 되는지 찾는 데 시간이 든다.
+export const CRAWLED_POST_STATUS_VARIANTS = {
+	active: "outline",
+	expired: "secondary",
+	needs_review: "secondary",
+	removed: "destructive",
 } as const;
 
 export const CRAWL_RUN_STATUS_LABELS = {
