@@ -21,7 +21,7 @@ import {
 	parseFoxalbaList,
 	parseFoxalbaTotalCount,
 } from "./bambi-crawl-foxalba";
-import { mirrorCrawledImage, mirrorCrawledImages } from "./bambi-crawl-media";
+import { embedCrawledImage, embedCrawledImages } from "./bambi-crawl-media";
 import {
 	type CrawledJobRecord,
 	computeContentHash,
@@ -55,8 +55,12 @@ import {
 	queenalbaListUrl,
 } from "./bambi-crawl-queenalba";
 import {
+	attachResolvedBanners,
 	parseQueenalbaMain,
+	type QueenalbaMainBanner,
+	queenalbaBannerLinkUrl,
 	queenalbaMainUrl,
+	readQueenalbaBannerTargetId,
 } from "./bambi-crawl-queenalba-main";
 
 // 목록에서 수집기가 쓰는 최소 규약. 사이트별 목록 파서가 더 많은 필드를 채워도 상관없다 —
@@ -174,6 +178,47 @@ const assertNotGated = (site: CrawlSourceSite, html: string): void => {
 //
 // 이 자리는 상대가 돈을 받고 파는 칸이라, 어떤 공고가 걸려 있는지가 "그 사이트가 지금
 // 무엇을 밀고 있는가"의 신호가 된다. 그래서 일반 목록과 구분해 listing_type으로 남긴다.
+// 배너를 공고에 붙이려면 리다이렉터를 한 번 더 조회해야 한다 — 배너 a의 href는
+// banner_link.php?number=NN이고 공고 번호는 그 응답(90바이트짜리 스크립트)에만 있다.
+// 배너는 열 칸 남짓이라 요청 수는 감당된다. 한 건이 실패해도 그 배너만 잃는다.
+const resolveQueenalbaBanners = async (
+	client: CrawlClient,
+	banners: readonly QueenalbaMainBanner[]
+): Promise<{ banner: QueenalbaMainBanner; sourceExternalId: string }[]> => {
+	const resolved: {
+		banner: QueenalbaMainBanner;
+		sourceExternalId: string;
+	}[] = [];
+
+	for (const banner of banners) {
+		const url = queenalbaBannerLinkUrl(banner.linkNumber);
+
+		if (!(await client.isAllowed(url))) {
+			continue;
+		}
+
+		try {
+			const sourceExternalId = readQueenalbaBannerTargetId(
+				await client.fetchHtml(url)
+			);
+
+			if (sourceExternalId) {
+				resolved.push({ banner, sourceExternalId });
+			}
+		} catch {
+			// 배너 하나를 못 따라갔을 뿐이다. 회차를 죽이지 않는다.
+		}
+	}
+
+	if (resolved.length < banners.length) {
+		console.warn(
+			`퀸알바 메인: 배너 ${banners.length}건 중 ${resolved.length}건만 공고에 연결됨`
+		);
+	}
+
+	return resolved;
+};
+
 const collectQueenalbaMainListings = async (
 	client: CrawlClient
 ): Promise<CrawlListItem[]> => {
@@ -189,9 +234,9 @@ const collectQueenalbaMainListings = async (
 
 	assertNotGated("queenalba", html);
 
-	const { listings, skippedBanners } = parseQueenalbaMain(html);
+	const { banners, listings, skippedBanners } = parseQueenalbaMain(html);
 
-	// 상세 링크가 아닌 배너(이벤트·외부 페이지)는 공고에 매칭할 수 없어 건너뛴다. 정상이지만
+	// 리다이렉터 링크가 아닌 배너(외부·이벤트)는 공고에 매칭할 수 없어 건너뛴다. 정상이지만
 	// 조용히 삼키면 셀렉터가 어긋나 전부 스킵되는 상황과 구분이 안 된다.
 	if (skippedBanners > 0) {
 		console.warn(
@@ -199,7 +244,10 @@ const collectQueenalbaMainListings = async (
 		);
 	}
 
-	return listings.map((listing) => ({
+	return attachResolvedBanners(
+		listings,
+		await resolveQueenalbaBanners(client, banners)
+	).map((listing) => ({
 		bannerHorizontalUrl: listing.bannerHorizontalUrl,
 		bannerVerticalUrl: listing.bannerVerticalUrl,
 		listingType: listing.listingType,
@@ -223,42 +271,38 @@ interface JobImageUrls {
 	thumbnailUrl: null | string;
 }
 
-// 원본 이미지 URL을 우리 버킷 URL로 바꿔 준다. 미러링 실패는 그 이미지 한 장만 잃고
-// 공고 수집은 계속된다 — 이미지가 없다고 공고를 버리면 남는 게 없다.
-const mirrorJobImages = async (
+// 원본 이미지를 base64 data URI로 바꿔 준다. 한 장 실패는 그 이미지만 잃고 공고 수집은
+// 계속된다 — 이미지가 없다고 공고를 버리면 남는 게 없다.
+//
+// 순차로 도는 이유: CrawlClient가 요청 간격(1.5초)을 지켜야 하는데 Promise.all로 묶으면
+// 그 규약이 무너진다. 예전 버킷 미러링 코드는 병렬이었고, 그건 실수였다.
+const embedJobImages = async (
 	client: CrawlClient,
 	site: CrawlSourceSite,
 	sources: JobImageSources
 ): Promise<JobImageUrls> => {
 	const { sourceExternalId } = sources;
-	const one = (url: null | string | undefined) =>
-		url
-			? mirrorCrawledImage({ client, site, sourceExternalId, url })
-			: Promise.resolve(null);
+	const one = async (url: null | string | undefined) =>
+		url ? await embedCrawledImage({ client, url }) : null;
 
-	const [thumbnailUrl, bannerHorizontalUrl, bannerVerticalUrl, detailImages] =
-		await Promise.all([
-			one(sources.thumbnailUrl),
-			one(sources.bannerHorizontalUrl),
-			one(sources.bannerVerticalUrl),
-			mirrorCrawledImages({
-				client,
-				site,
-				sourceExternalId,
-				urls: sources.detailImageUrls ?? [],
-			}),
-		]);
+	const thumbnailUrl = await one(sources.thumbnailUrl);
+	const bannerHorizontalUrl = await one(sources.bannerHorizontalUrl);
+	const bannerVerticalUrl = await one(sources.bannerVerticalUrl);
+	const detailImages = await embedCrawledImages({
+		client,
+		urls: sources.detailImageUrls ?? [],
+	});
 
 	if (detailImages.failed > 0) {
 		console.warn(
-			`${site} ${sourceExternalId}: 상세 이미지 ${detailImages.failed}장을 미러링하지 못함`
+			`${site} ${sourceExternalId}: 상세 이미지 ${detailImages.failed}장을 담지 못함(상한 초과 또는 이미지가 아님)`
 		);
 	}
 
 	return {
 		bannerHorizontalUrl,
 		bannerVerticalUrl,
-		detailImageUrls: detailImages.urls,
+		detailImageUrls: detailImages.images,
 		thumbnailUrl,
 	};
 };
@@ -469,7 +513,7 @@ const ingestDetail = async (
 	// 이미지는 우리 버킷으로 미러링해 저장한다. 원본 URL을 그대로 쓰면 상대가 파일을
 	// 지우거나 핫링크를 막는 순간 우리 화면에서 깨지고, 그 시점을 우리가 통제할 수 없다.
 	// 버킷 미설정(로컬 다수)이면 원본 URL이 그대로 통과한다.
-	const media = await mirrorJobImages(client, adapter.site, {
+	const media = await embedJobImages(client, adapter.site, {
 		bannerHorizontalUrl: item.bannerHorizontalUrl,
 		bannerVerticalUrl: item.bannerVerticalUrl,
 		detailImageUrls: record.detailImageUrls,

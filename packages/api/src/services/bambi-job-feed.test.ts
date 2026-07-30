@@ -18,6 +18,7 @@ const [{ db }, authSchema, bambiSchema, feed] = await Promise.all([
 const { organization, user } = authSchema;
 const {
 	bambiProfile,
+	bambiSiteSettings,
 	crawledJobPost,
 	employerOrganizationProfile,
 	jobPost,
@@ -295,10 +296,31 @@ describe("listJobFeed", () => {
 		expect(rows).toHaveLength(2);
 	});
 
-	// 기본값 검증: 플래그를 생략하면 운영자 설정을 읽고, 그 기본은 꺼짐이다.
+	// 플래그를 생략하면 운영자 설정을 읽는다. 설정값을 직접 만들어 확인한다 — 개발 DB의
+	// 현재 값에 기대면 운영자가 콘솔에서 스위치를 켠 순간 이 테스트가 깨진다(실제로 깨졌다).
 	it("플래그를 생략하면 운영자 설정을 따른다", async () => {
-		const rows = await listJobFeed({ limit: 20, region: fixture.region });
+		const [before] = await db
+			.select({ enabled: bambiSiteSettings.crawledJobFeedEnabled })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"));
 
-		expect(rows.every((row) => row.source !== "crawled")).toBe(true);
+		await db
+			.insert(bambiSiteSettings)
+			.values({ crawledJobFeedEnabled: false, id: "default" })
+			.onConflictDoUpdate({
+				set: { crawledJobFeedEnabled: false },
+				target: bambiSiteSettings.id,
+			});
+
+		try {
+			const rows = await listJobFeed({ limit: 20, region: fixture.region });
+
+			expect(rows.every((row) => row.source !== "crawled")).toBe(true);
+		} finally {
+			await db
+				.update(bambiSiteSettings)
+				.set({ crawledJobFeedEnabled: before?.enabled ?? false })
+				.where(eq(bambiSiteSettings.id, "default"));
+		}
 	});
 });

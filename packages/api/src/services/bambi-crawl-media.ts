@@ -1,44 +1,77 @@
-// 크롤로 얻은 이미지 URL을 우리 공개 버킷으로 미러링한다. 원본 사이트의 이미지를 그대로
-// 핫링크하면 상대 트래픽을 우리가 쓰는 셈이고, 상대가 파일을 지우거나 referer로 막는 순간
-// 우리 화면이 통째로 깨진다. 그래서 바이트를 우리 쪽으로 옮겨 공고와 함께 보관한다.
+// 크롤로 얻은 이미지를 **DB에 base64 data URI로** 담는다. 원본 URL을 그대로 저장하면
+// 상대 트래픽을 우리가 쓰는 셈이고, 상대가 파일을 지우거나 referer로 막는 순간 우리 화면이
+// 통째로 깨진다. 버킷 대신 DB를 고른 것은 운영 결정이다 — 버킷 업로드는 로컬 자격증명 없이
+// 조용히 실패해 이미지 컬럼이 전부 null로 남았다.
 //
-// 이 파일은 DB를 모른다. 어떤 컬럼에 어떤 URL을 넣을지는 수집기(bambi-crawl-ingest.ts)가 정한다.
+// 저장 형태는 `data:image/jpeg;base64,...`다. 이 문자열은 그대로 <img src>에 들어가므로
+// 클라이언트가 URL이든 data URI든 구분할 필요가 없고 기존 컬럼 이름을 그대로 쓸 수 있다.
+//
+// ponytail: 행 안에 바이트가 들어가므로 그 컬럼을 고르는 쿼리가 바이트를 함께 끌고 온다.
+// 실측 크기는 썸네일 16KB(→base64 21KB)·상세 이미지 1.4MB(→1.8MB)라 목록에 실리는 썸네일은
+// 문제없고 상세 이미지는 상세 화면에서만 읽어야 한다. 총량이 부담되면 별도 테이블(post_id,
+// usage, bytea)로 빼고 이 컬럼이 그 행을 가리키게 바꾼다 — 그때까지는 컬럼 하나로 끝낸다.
+//
+// 이 파일은 DB를 모른다. 어떤 컬럼에 무엇을 넣을지는 수집기(bambi-crawl-ingest.ts)가 정한다.
 
-import { createHash } from "node:crypto";
+import { Buffer } from "node:buffer";
 import { isIP } from "node:net";
 
 import type { CrawlClient } from "./bambi-crawl-fetch";
-import {
-	type ALLOWED_JOB_AD_BANNER_MIME_TYPES,
-	JOB_POST_IMAGE_MAX_BYTES,
-} from "./bambi-job-media-policy";
-import {
-	findPublicObjectUrl,
-	getPublicObjectUrl,
-	isPublicBucketConfigured,
-	uploadPublicObject,
-} from "./gcs";
 
-// 다른 업로드 경로와 같은 네임스페이스 규칙(bambi-*)을 쓴다. 버킷을 열어봤을 때 이 접두사만
-// 보고 "사람이 올린 것이 아니라 크롤러가 미러링한 것"임을 구분할 수 있어야 한다.
-const CRAWLED_MEDIA_KEY_ROOT = "bambi-crawled-media";
-const KEY_HASH_LENGTH = 16;
-const KEY_SEGMENT_MAX_LENGTH = 64;
+// 한 장 상한. 이보다 큰 이미지는 담지 않는다 — 행 하나가 목록 응답을 흔드는 것을 막는 천장이다.
+// 실측 상세 이미지가 1.4MB여서 2MB로 잡았다(그 위는 전단 여러 장을 이어붙인 경우다).
+export const CRAWLED_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 
-// 확장자는 응답 MIME에서 정한다 — 원본 URL의 확장자는 상대가 적은 값이라 실제 바이트와
-// 다를 수 있다(.jpg로 끝나는 HTML 오류 페이지가 실제로 온다). 이 표가 허용 목록을 겸해서,
-// 여기 없는 MIME이면 버린다.
-//
-// 키를 공고 미디어 정책의 유니온으로 묶어 둔다. 정책에 MIME이 늘면 이 표가 컴파일에서 걸려
-// 두 곳이 조용히 어긋나지 않는다.
-const EXTENSION_BY_MIME: Record<
-	(typeof ALLOWED_JOB_AD_BANNER_MIME_TYPES)[number],
-	string
-> = {
-	"image/gif": "gif",
-	"image/jpeg": "jpg",
-	"image/png": "png",
-	"image/webp": "webp",
+// 공고 한 건에 담는 총량 상한. 상세 이미지를 20장 붙이는 공고가 있어 장수 상한만으로는
+// 행 하나가 수십 MB까지 갈 수 있다.
+export const CRAWLED_IMAGE_TOTAL_MAX_BYTES = 8 * 1024 * 1024;
+
+// 매직 넘버로 실제 이미지인지 본다. content-type을 믿지 않는 이유가 양쪽으로 있다:
+//  - 배너(mobile_img/banner/<md5>)는 확장자가 없고 서버가 text/plain을 준다 → 헤더를 믿으면
+//    정작 목표인 배너를 전부 버린다(실제로 그렇게 버려졌다).
+//  - .jpg로 끝나는 URL이 HTML 오류 페이지를 200으로 주는 경우가 있다 → 헤더·확장자를 믿으면
+//    HTML을 이미지로 저장한다.
+// 바이트는 거짓말을 하지 않으므로 여기서만 판정한다.
+const IMAGE_SIGNATURES: readonly {
+	mimeType: string;
+	test: (bytes: Buffer) => boolean;
+}[] = [
+	{
+		mimeType: "image/jpeg",
+		test: (bytes) =>
+			bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff,
+	},
+	{
+		mimeType: "image/png",
+		test: (bytes) =>
+			bytes[0] === 0x89 &&
+			bytes[1] === 0x50 &&
+			bytes[2] === 0x4e &&
+			bytes[3] === 0x47,
+	},
+	{
+		mimeType: "image/gif",
+		test: (bytes) => bytes.subarray(0, 4).toString("latin1") === "GIF8",
+	},
+	{
+		mimeType: "image/webp",
+		test: (bytes) =>
+			bytes.subarray(0, 4).toString("latin1") === "RIFF" &&
+			bytes.subarray(8, 12).toString("latin1") === "WEBP",
+	},
+];
+
+const SIGNATURE_MIN_BYTES = 12;
+
+export const sniffImageMimeType = (bytes: Buffer): null | string => {
+	if (bytes.length < SIGNATURE_MIN_BYTES) {
+		return null;
+	}
+
+	return (
+		IMAGE_SIGNATURES.find((signature) => signature.test(bytes))?.mimeType ??
+		null
+	);
 };
 
 // 클라우드 메타데이터 서버·내부 전용 이름. 이름만으로 사설망을 가리키는 것이 확실한 것들이다.
@@ -56,7 +89,6 @@ const IPV6_BRACKET_PATTERN = /^\[|]$/g;
 // 10진(2130706433)·16진(0x7f000001) 표기의 IP. isIP가 IP로 인정하지 않아 호스트명으로 새어
 // 나가지만, 스택은 IP로 해석한다.
 const NUMERIC_LABEL_PATTERN = /^(\d+|0x[\da-f]+)$/;
-const UNSAFE_KEY_SEGMENT_PATTERN = /[^A-Za-z0-9._-]/g;
 
 const IPV4_MAPPED_IPV6_PREFIX = "::ffff:";
 
@@ -179,79 +211,26 @@ export const parseCrawledImageUrl = (raw: string): null | string => {
 	return isBlockedHost(parsed.hostname) ? null : parsed.href;
 };
 
-// 스토리지 키에 그대로 들어가는 값이라 경로 문자를 없앤다. site는 우리가 정한 값이지만
-// sourceExternalId는 상대 사이트가 준 값이다.
-const sanitizeKeySegment = (value: string): string =>
-	value
-		.replaceAll(UNSAFE_KEY_SEGMENT_PATTERN, "-")
-		.slice(0, KEY_SEGMENT_MAX_LENGTH) || "unknown";
+const DATA_URI_PREFIX = "data:image/";
 
-export interface CrawledImageKeyInput {
-	site: string;
-	sourceExternalId: string;
+// 이미 담아둔 data URI인지. 재수집 때 같은 이미지를 다시 내려받지 않기 위한 판정이다.
+export const isEmbeddedImage = (value: string): boolean =>
+	value.startsWith(DATA_URI_PREFIX);
+
+export interface EmbedCrawledImageInput {
+	client: CrawlClient;
+	maxBytes?: number;
 	url: string;
 }
 
-// 키는 원본 URL의 해시로 결정론적으로 정한다 — 매 회차 같은 이미지를 다시 올리지 않기 위해서다.
-// 확장자는 응답 MIME이 정하므로 다운로드 전에는 여기까지(끝의 점 포함)만 알 수 있고,
-// 그 프리픽스만으로 이미 올라간 객체를 찾는다.
-//
-// 경로에 site/sourceExternalId를 넣어 객체가 어느 공고의 것인지 키만 보고 알 수 있게 한다.
-// 같은 이미지가 두 공고에 걸리면 두 벌이 생기지만, 공고를 지울 때 프리픽스 하나로 정리할 수
-// 있는 편이 중복 몇 KB보다 낫다.
-export const buildCrawledImageKeyPrefix = ({
-	site,
-	sourceExternalId,
-	url,
-}: CrawledImageKeyInput): string => {
-	const hash = createHash("sha256")
-		.update(url)
-		.digest("hex")
-		.slice(0, KEY_HASH_LENGTH);
-
-	return `${CRAWLED_MEDIA_KEY_ROOT}/${sanitizeKeySegment(site)}/${sanitizeKeySegment(sourceExternalId)}/${hash}.`;
-};
-
-const readMimeType = (contentType: null | string): null | string =>
-	contentType?.split(";")[0]?.trim().toLowerCase() || null;
-
-// 이미 우리 버킷 URL이면 다시 올리지 않는다. 수집기가 저장해 둔 값을 그대로 되돌려주는
-// 경로가 있어야 재수집이 멱등해진다.
-const isMirroredUrl = (url: string): boolean =>
-	url.startsWith(getPublicObjectUrl(""));
-
-export interface MirrorCrawledImageInput extends CrawledImageKeyInput {
-	client: CrawlClient;
-}
-
-export interface MirrorCrawledImagesInput {
-	client: CrawlClient;
-	site: string;
-	sourceExternalId: string;
-	urls: string[];
-}
-
-export interface MirrorCrawledImagesResult {
-	// 못 옮긴 장수. 조용히 삼키면 "이미지가 원래 없는 공고"와 구분되지 않는다.
-	failed: number;
-	urls: string[];
-}
-
-// 원본 이미지 한 장을 버킷으로 옮기고 우리 공개 URL을 돌려준다. 실패·거부는 null이다 —
-// 이미지 한 장 때문에 공고 수집 회차가 죽으면 안 된다.
-export const mirrorCrawledImage = async ({
+// 이미지 한 장을 data URI로 만든다. 실패·거부는 null이다 — 이미지 한 장 때문에 공고 수집
+// 회차가 죽으면 안 된다.
+export const embedCrawledImage = async ({
 	client,
-	site,
-	sourceExternalId,
+	maxBytes = CRAWLED_IMAGE_MAX_BYTES,
 	url,
-}: MirrorCrawledImageInput): Promise<null | string> => {
-	// 버킷이 없는 환경(로컬 대부분)에서는 미러링을 통째로 건너뛰고 원본을 그대로 쓴다.
-	// 이 분기가 없으면 로컬에서 크롤러가 이미지 단계마다 실패한다.
-	if (!isPublicBucketConfigured()) {
-		return url;
-	}
-
-	if (isMirroredUrl(url)) {
+}: EmbedCrawledImageInput): Promise<null | string> => {
+	if (isEmbeddedImage(url)) {
 		return url;
 	}
 
@@ -261,77 +240,80 @@ export const mirrorCrawledImage = async ({
 		return null;
 	}
 
-	const keyPrefix = buildCrawledImageKeyPrefix({ site, sourceExternalId, url });
-
 	try {
-		// 이미 올라가 있으면 원본 서버를 아예 건드리지 않는다. 재수집 때 상대 서버를 다시
-		// 두드리지 않는 것이 이 함수에서 제일 중요한 예의다.
-		const mirrored = await findPublicObjectUrl(keyPrefix);
-
-		if (mirrored) {
-			return mirrored;
-		}
-
 		// 이미지를 받는 것도 크롤링이다. robots.txt를 못 받으면 크롤 클라이언트가 "전부 금지"로
-		// 보므로, 이미지가 robots.txt 없는 CDN에 있으면 미러링이 통째로 비게 된다 —
+		// 보므로, 이미지가 robots.txt 없는 CDN에 있으면 수집이 통째로 비게 된다 —
 		// 그건 버그가 아니라 정책이고, 실패 건수로 드러난다.
 		if (!(await client.isAllowed(target))) {
 			return null;
 		}
 
-		const response = await client.fetchBinary(target, JOB_POST_IMAGE_MAX_BYTES);
+		const response = await client.fetchBinary(target, maxBytes);
 
 		// 리다이렉트 끝이 사설망일 수 있다. 최종 URL도 같은 검사를 통과해야 한다.
 		if (!parseCrawledImageUrl(response.url)) {
 			return null;
 		}
 
-		const mimeType = readMimeType(response.contentType);
-		const extension = mimeType
-			? EXTENSION_BY_MIME[mimeType as keyof typeof EXTENSION_BY_MIME]
-			: undefined;
+		const bytes = Buffer.from(response.bytes);
+		const mimeType = sniffImageMimeType(bytes);
 
 		// 이미지가 아니면 버린다. 로그인 페이지·에러 HTML이 200으로 오는 경우가 흔하다.
-		if (!(mimeType && extension)) {
+		if (!mimeType) {
 			return null;
 		}
 
-		return await uploadPublicObject({
-			buffer: response.bytes,
-			mimeType,
-			storageKey: `${keyPrefix}${extension}`,
-		});
+		return `data:${mimeType};base64,${bytes.toString("base64")}`;
 	} catch {
-		// 상한 초과·타임아웃·GCS 오류. 호출자는 null 개수로 실패를 집계한다.
+		// 상한 초과·타임아웃. 호출자는 null 개수로 실패를 집계한다.
 		return null;
 	}
 };
 
-// 여러 장을 순서 그대로 옮긴다. 순차로 도는 건 CrawlClient가 요청 간격을 지키게 하기
+export interface EmbedCrawledImagesInput {
+	client: CrawlClient;
+	totalMaxBytes?: number;
+	urls: string[];
+}
+
+export interface EmbedCrawledImagesResult {
+	// 담지 못한 장수. 조용히 삼키면 "이미지가 원래 없는 공고"와 구분되지 않는다.
+	failed: number;
+	images: string[];
+}
+
+// 여러 장을 순서 그대로 담는다. 순차로 도는 건 CrawlClient가 요청 간격을 지키게 하기
 // 위해서다(동시 요청을 만들면 그 간격 규약이 무너진다).
-export const mirrorCrawledImages = async ({
+export const embedCrawledImages = async ({
 	client,
-	site,
-	sourceExternalId,
+	totalMaxBytes = CRAWLED_IMAGE_TOTAL_MAX_BYTES,
 	urls,
-}: MirrorCrawledImagesInput): Promise<MirrorCrawledImagesResult> => {
-	const mirrored: string[] = [];
+}: EmbedCrawledImagesInput): Promise<EmbedCrawledImagesResult> => {
+	const images: string[] = [];
 	let failed = 0;
+	let used = 0;
 
 	for (const url of urls) {
-		const result = await mirrorCrawledImage({
+		const remaining = totalMaxBytes - used;
+
+		if (remaining <= 0) {
+			failed += 1;
+			continue;
+		}
+
+		const image = await embedCrawledImage({
 			client,
-			site,
-			sourceExternalId,
+			maxBytes: Math.min(CRAWLED_IMAGE_MAX_BYTES, remaining),
 			url,
 		});
 
-		if (result) {
-			mirrored.push(result);
+		if (image) {
+			images.push(image);
+			used += image.length;
 		} else {
 			failed += 1;
 		}
 	}
 
-	return { failed, urls: mirrored };
+	return { failed, images };
 };

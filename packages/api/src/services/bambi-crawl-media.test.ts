@@ -1,59 +1,28 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Buffer } from "node:buffer";
+import { describe, expect, it, vi } from "vitest";
 
 import type { CrawlBinary, CrawlClient } from "./bambi-crawl-fetch";
 import {
-	buildCrawledImageKeyPrefix,
-	mirrorCrawledImage,
-	mirrorCrawledImages,
+	CRAWLED_IMAGE_MAX_BYTES,
+	embedCrawledImage,
+	embedCrawledImages,
 	parseCrawledImageUrl,
+	sniffImageMimeType,
 } from "./bambi-crawl-media";
 
-// GCS와 네트워크를 전부 대체한다. 실제 버킷·실제 사이트를 때리는 테스트는 만들지 않는다.
-const gcs = vi.hoisted(() => ({
-	bucketConfigured: true,
-	stored: new Map<string, string>(),
-}));
-
-const BUCKET_BASE = "https://storage.googleapis.com/bambi-test/";
-
-vi.mock("./gcs", () => ({
-	findPublicObjectUrl: (prefix: string) => {
-		const key = [...gcs.stored.keys()].find((name) => name.startsWith(prefix));
-
-		return Promise.resolve(key ? `${BUCKET_BASE}${key}` : null);
-	},
-	getPublicObjectUrl: (storageKey: string) => `${BUCKET_BASE}${storageKey}`,
-	isPublicBucketConfigured: () => gcs.bucketConfigured,
-	uploadPublicObject: ({
-		mimeType,
-		storageKey,
-	}: {
-		mimeType: string;
-		storageKey: string;
-	}) => {
-		if (!gcs.bucketConfigured) {
-			return Promise.resolve(null);
-		}
-
-		gcs.stored.set(storageKey, mimeType);
-
-		return Promise.resolve(`${BUCKET_BASE}${storageKey}`);
-	},
-}));
-
-const KEY_PREFIX_PATTERN =
-	/^bambi-crawled-media\/queenalba\/12345\/[\da-f]{16}\.$/;
-const SANITIZED_KEY_PREFIX_PATTERN =
-	/^bambi-crawled-media\/queenalba\/[.a-z-]+\/[\da-f]{16}\.$/;
-const WEBP_KEY_PATTERN = /\.webp$/;
-const PNG_KEY_PATTERN = /\.png$/;
-
-const imageBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+// 실제 사이트를 때리는 테스트는 만들지 않는다. 네트워크는 CrawlClient 스텁으로 대체한다.
+const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);
+const png = new Uint8Array([
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+]);
+const gif = new Uint8Array(Buffer.from("GIF89a__gif_", "latin1"));
+const webp = new Uint8Array(Buffer.from("RIFF____WEBPVP8 ", "latin1"));
+const html = new Uint8Array(Buffer.from("<!doctype html><html>", "latin1"));
 
 const createClient = (overrides: Partial<CrawlClient> = {}): CrawlClient => ({
 	fetchBinary: (url: string) =>
 		Promise.resolve({
-			bytes: imageBytes,
+			bytes: jpeg,
 			contentType: "image/jpeg",
 			url,
 		} satisfies CrawlBinary),
@@ -62,64 +31,27 @@ const createClient = (overrides: Partial<CrawlClient> = {}): CrawlClient => ({
 	...overrides,
 });
 
-const mirror = (client: CrawlClient, url: string) =>
-	mirrorCrawledImage({
-		client,
-		site: "queenalba",
-		sourceExternalId: "12345",
-		url,
+const embed = (client: CrawlClient, url: string) =>
+	embedCrawledImage({ client, url });
+
+const withBytes = (bytes: Uint8Array, contentType: null | string = null) =>
+	createClient({
+		fetchBinary: (url: string) => Promise.resolve({ bytes, contentType, url }),
 	});
 
-beforeEach(() => {
-	gcs.bucketConfigured = true;
-	gcs.stored.clear();
-});
-
-describe("buildCrawledImageKeyPrefix", () => {
-	it("derives the same key from the same source url", () => {
-		const input = {
-			site: "queenalba",
-			sourceExternalId: "12345",
-			url: "https://img.example.test/a.jpg",
-		};
-
-		expect(buildCrawledImageKeyPrefix(input)).toBe(
-			buildCrawledImageKeyPrefix(input)
-		);
-		expect(buildCrawledImageKeyPrefix(input)).toMatch(KEY_PREFIX_PATTERN);
+describe("sniffImageMimeType", () => {
+	// 배너는 확장자가 없고 서버가 text/plain을 준다. 헤더를 믿으면 정작 목표인 배너를 버린다.
+	it("reads the type from the bytes, not the header", () => {
+		expect(sniffImageMimeType(Buffer.from(jpeg))).toBe("image/jpeg");
+		expect(sniffImageMimeType(Buffer.from(png))).toBe("image/png");
+		expect(sniffImageMimeType(Buffer.from(gif))).toBe("image/gif");
+		expect(sniffImageMimeType(Buffer.from(webp))).toBe("image/webp");
 	});
 
-	it("separates different urls and different job posts", () => {
-		const base = { site: "queenalba", sourceExternalId: "12345" };
-		const first = buildCrawledImageKeyPrefix({
-			...base,
-			url: "https://img.example.test/a.jpg",
-		});
-
-		expect(first).not.toBe(
-			buildCrawledImageKeyPrefix({
-				...base,
-				url: "https://img.example.test/b.jpg",
-			})
-		);
-		expect(first).not.toBe(
-			buildCrawledImageKeyPrefix({
-				...base,
-				sourceExternalId: "99999",
-				url: "https://img.example.test/a.jpg",
-			})
-		);
-	});
-
-	// sourceExternalId는 상대 사이트가 준 값이라 경로 문자가 섞여 들어올 수 있다.
-	it("keeps foreign ids from escaping their folder", () => {
-		expect(
-			buildCrawledImageKeyPrefix({
-				site: "queenalba",
-				sourceExternalId: "../../bambi-job-post-media/org",
-				url: "https://img.example.test/a.jpg",
-			})
-		).toMatch(SANITIZED_KEY_PREFIX_PATTERN);
+	it("rejects things that are not images", () => {
+		expect(sniffImageMimeType(Buffer.from(html))).toBeNull();
+		// 시그니처를 판정할 만큼 길지도 않은 응답.
+		expect(sniffImageMimeType(Buffer.from([0xff, 0xd8]))).toBeNull();
 	});
 });
 
@@ -172,57 +104,22 @@ describe("parseCrawledImageUrl", () => {
 	});
 });
 
-describe("mirrorCrawledImage", () => {
-	it("passes the original url through when no bucket is configured", async () => {
-		gcs.bucketConfigured = false;
-
-		const fetchBinary = vi.fn();
-		const client = createClient({ fetchBinary });
-
+describe("embedCrawledImage", () => {
+	it("returns a data uri whose type comes from the bytes", async () => {
+		// content-type이 text/plain인데 바이트는 GIF다 — 실물 배너가 정확히 이 모양이다.
 		await expect(
-			mirror(client, "https://img.example.test/a.jpg")
-		).resolves.toBe("https://img.example.test/a.jpg");
-		expect(fetchBinary).not.toHaveBeenCalled();
-	});
-
-	it("uploads the bytes under the hashed key and returns our url", async () => {
-		const url = "https://img.example.test/a.jpg";
-		const mirrored = await mirror(createClient(), url);
-		const prefix = buildCrawledImageKeyPrefix({
-			site: "queenalba",
-			sourceExternalId: "12345",
-			url,
-		});
-
-		expect(mirrored).toBe(`${BUCKET_BASE}${prefix}jpg`);
-		expect(gcs.stored.get(`${prefix}jpg`)).toBe("image/jpeg");
-	});
-
-	it("does not re-upload an object it already mirrored", async () => {
-		const url = "https://img.example.test/a.jpg";
-		const fetchBinary = vi.fn(() =>
-			Promise.resolve({
-				bytes: imageBytes,
-				contentType: "image/jpeg",
-				url,
-			})
+			embed(withBytes(gif, "text/plain"), "https://img.example.test/banner")
+		).resolves.toBe(
+			`data:image/gif;base64,${Buffer.from(gif).toString("base64")}`
 		);
-		const client = createClient({ fetchBinary });
-
-		const first = await mirror(client, url);
-		const second = await mirror(client, url);
-
-		expect(second).toBe(first);
-		expect(fetchBinary).toHaveBeenCalledTimes(1);
 	});
 
-	it("passes our own bucket urls through untouched", async () => {
+	it("passes an already embedded image through without a request", async () => {
 		const fetchBinary = vi.fn();
 		const client = createClient({ fetchBinary });
+		const stored = `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
 
-		await expect(mirror(client, `${BUCKET_BASE}whatever.jpg`)).resolves.toBe(
-			`${BUCKET_BASE}whatever.jpg`
-		);
+		await expect(embed(client, stored)).resolves.toBe(stored);
 		expect(fetchBinary).not.toHaveBeenCalled();
 	});
 
@@ -231,7 +128,7 @@ describe("mirrorCrawledImage", () => {
 		const client = createClient({ fetchBinary });
 
 		await expect(
-			mirror(client, "http://169.254.169.254/computeMetadata/v1/")
+			embed(client, "http://169.254.169.254/computeMetadata/v1/")
 		).resolves.toBeNull();
 		expect(fetchBinary).not.toHaveBeenCalled();
 	});
@@ -241,61 +138,47 @@ describe("mirrorCrawledImage", () => {
 		const client = createClient({
 			fetchBinary: () =>
 				Promise.resolve({
-					bytes: imageBytes,
+					bytes: jpeg,
 					contentType: "image/jpeg",
 					url: "http://169.254.169.254/computeMetadata/v1/",
 				}),
 		});
 
 		await expect(
-			mirror(client, "https://img.example.test/a.jpg")
+			embed(client, "https://img.example.test/a.jpg")
 		).resolves.toBeNull();
-		expect(gcs.stored.size).toBe(0);
 	});
 
-	it("drops responses that are not an allowed image type", async () => {
-		for (const contentType of [
-			"text/html; charset=utf-8",
-			"image/svg+xml",
-			null,
-		]) {
-			const client = createClient({
-				fetchBinary: (url: string) =>
-					Promise.resolve({ bytes: imageBytes, contentType, url }),
-			});
-
-			await expect(
-				mirror(client, `https://img.example.test/${contentType}.jpg`)
-			).resolves.toBeNull();
-		}
-
-		expect(gcs.stored.size).toBe(0);
-	});
-
-	it("takes the extension from the response, not the url", async () => {
-		const client = createClient({
-			fetchBinary: (url: string) =>
-				Promise.resolve({
-					bytes: imageBytes,
-					contentType: "image/webp",
-					url,
-				}),
-		});
-
+	it("drops responses that are not an image", async () => {
 		await expect(
-			mirror(client, "https://img.example.test/a.jpg")
-		).resolves.toMatch(WEBP_KEY_PATTERN);
+			embed(withBytes(html, "image/jpeg"), "https://img.example.test/a.jpg")
+		).resolves.toBeNull();
+	});
+
+	it("asks the client to cap the download size", async () => {
+		const fetchBinary = vi.fn((url: string) =>
+			Promise.resolve({ bytes: jpeg, contentType: null, url })
+		);
+
+		await embed(
+			createClient({ fetchBinary }),
+			"https://img.example.test/a.jpg"
+		);
+
+		expect(fetchBinary).toHaveBeenCalledWith(
+			"https://img.example.test/a.jpg",
+			CRAWLED_IMAGE_MAX_BYTES
+		);
 	});
 
 	// 상한 초과·타임아웃은 클라이언트가 던진다. 그것이 공고 수집을 죽이면 안 된다.
 	it("returns null instead of throwing when the download fails", async () => {
 		const client = createClient({
-			fetchBinary: () =>
-				Promise.reject(new Error("응답이 상한 10485760바이트를 넘는다")),
+			fetchBinary: () => Promise.reject(new Error("응답이 상한을 넘는다")),
 		});
 
 		await expect(
-			mirror(client, "https://img.example.test/huge.jpg")
+			embed(client, "https://img.example.test/huge.jpg")
 		).resolves.toBeNull();
 	});
 
@@ -307,29 +190,23 @@ describe("mirrorCrawledImage", () => {
 		});
 
 		await expect(
-			mirror(client, "https://img.example.test/a.jpg")
+			embed(client, "https://img.example.test/a.jpg")
 		).resolves.toBeNull();
 		expect(fetchBinary).not.toHaveBeenCalled();
 	});
 });
 
-describe("mirrorCrawledImages", () => {
+describe("embedCrawledImages", () => {
 	it("keeps the order, drops failures and reports how many", async () => {
 		const client = createClient({
 			fetchBinary: (url: string) =>
 				url.includes("bad")
 					? Promise.reject(new Error("실패"))
-					: Promise.resolve({
-							bytes: imageBytes,
-							contentType: "image/png",
-							url,
-						}),
+					: Promise.resolve({ bytes: png, contentType: null, url }),
 		});
 
-		const result = await mirrorCrawledImages({
+		const result = await embedCrawledImages({
 			client,
-			site: "queenalba",
-			sourceExternalId: "12345",
 			urls: [
 				"https://img.example.test/1.png",
 				"https://img.example.test/bad.png",
@@ -339,14 +216,36 @@ describe("mirrorCrawledImages", () => {
 		});
 
 		expect(result.failed).toBe(2);
-		expect(result.urls).toHaveLength(2);
-		expect(result.urls[0]).toBe(
-			`${BUCKET_BASE}${buildCrawledImageKeyPrefix({
-				site: "queenalba",
-				sourceExternalId: "12345",
-				url: "https://img.example.test/1.png",
-			})}png`
+		expect(result.images).toHaveLength(2);
+		expect(
+			result.images.every((image) => image.startsWith("data:image/png;"))
+		).toBe(true);
+	});
+
+	// 상세 이미지를 20장 붙이는 공고가 있어 장수 상한만으로는 행 하나가 수십 MB가 된다.
+	it("stops embedding once the per-post budget is spent", async () => {
+		// 실제 클라이언트처럼 상한을 넘는 응답을 거부하는 스텁이라야 예산이 줄어드는 것을 본다.
+		const fetchBinary = vi.fn((url: string, maxBytes: number) =>
+			png.length > maxBytes
+				? Promise.reject(new Error(`응답이 상한 ${maxBytes}바이트를 넘는다`))
+				: Promise.resolve({ bytes: png, contentType: null, url })
 		);
-		expect(result.urls[1]).toMatch(PNG_KEY_PATTERN);
+		const result = await embedCrawledImages({
+			client: createClient({ fetchBinary }),
+			totalMaxBytes: 40,
+			urls: [
+				"https://img.example.test/1.png",
+				"https://img.example.test/2.png",
+				"https://img.example.test/3.png",
+			],
+		});
+
+		// 첫 장이 예산을 거의 다 쓰므로 남은 예산으로는 어느 장도 담기지 못한다.
+		expect(result.images).toHaveLength(1);
+		expect(result.failed).toBe(2);
+		expect(fetchBinary).toHaveBeenLastCalledWith(
+			"https://img.example.test/3.png",
+			expect.any(Number)
+		);
 	});
 });

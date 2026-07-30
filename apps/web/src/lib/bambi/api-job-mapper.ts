@@ -54,7 +54,8 @@ export interface ApiMarketplaceJob {
 	media?: ApiJobMediaSet;
 	// 급여 단위가 "협의"인 공고는 금액이 없다.
 	payAmount: null | number;
-	payUnit: string;
+	// 수집 공고는 원본이 단위를 주지 않아 null이다.
+	payUnit: null | string;
 	performance?: JobPerformanceMetrics;
 	promotionLabel?: null | string;
 	promotionTier?: "premium" | "recommended" | "standard" | null;
@@ -126,13 +127,21 @@ export const getMarketplaceJobCompany = (job: ApiMarketplaceJob): string =>
 
 // 금액이 없는 공고(급여 단위 "협의")는 목록·카드에서 "급여 협의"로 보여준다.
 // 카드의 splitPay가 "급여"를 단위 배지로 떼어내므로 이 형식을 지켜야 한다.
+//
+// 단위가 없는 경우(수집 공고 — 원본이 "120,000원"처럼 금액만 준다)는 금액만 적는다.
+// 모르는 단위를 지어내면 시급인지 일급인지 화면이 거짓말을 하게 된다.
 export const formatMarketplacePay = ({
 	payAmount,
 	payUnit,
-}: Pick<ApiMarketplaceJob, "payAmount" | "payUnit">): string =>
-	payAmount === null || payAmount === undefined
-		? NEGOTIABLE_PAY_TEXT
-		: `${payUnit} ${payAmount.toLocaleString("ko-KR")}원`;
+}: Pick<ApiMarketplaceJob, "payAmount" | "payUnit">): string => {
+	if (payAmount === null || payAmount === undefined) {
+		return NEGOTIABLE_PAY_TEXT;
+	}
+
+	const amount = `${payAmount.toLocaleString("ko-KR")}원`;
+
+	return payUnit ? `${payUnit} ${amount}` : amount;
+};
 
 const toFiniteNumber = (value: null | number | string | undefined): number => {
 	const numericValue = Number(value ?? 0);
