@@ -66,13 +66,12 @@ describe("visual job marketplace components", () => {
 		expect(banner).not.toContain("item.coverUrl");
 	});
 
-	// 수집 배너 렌더는 방향에 따라 갈린다.
-	// 세로: 원본 실측 80×180 = 정확히 4:9라 우리 세로 규격(aspect-[4/9] h-52)에 object-cover로
-	// 채워도 잘리는 곳이 없다 → 결제 배너와 같은 규격으로 그린다(원본 비율로 그리면 슬롯이
-	// 이미지 크기로 줄어 옆 결제 슬롯과 크기가 어긋난다).
-	// 가로: 원본 실측 240×117(≈2.05)이 7:3(≈2.33)과 달라 cover면 위아래가 잘린다 → 가로형만
-	// 원본 비율(h-auto)로 남긴다. 결제 광고의 고정 비율은 양쪽 다 그대로 둔다.
-	it("renders vertical crawled banners at our spec and horizontal ones at their own ratio", () => {
+	// 수집 배너는 방향과 무관하게 결제 배너와 같은 규격 슬롯 + object-cover로 그린다.
+	// 세로: 원본 실측 80×180 = 정확히 4:9라 규격(aspect-[4/9] h-52)에 채워도 잘리는 곳이 없다.
+	// 가로: 원본 실측 240×117(≈2.05)이 7:3(≈2.33)과 달라 상하가 12%쯤 잘리지만, 슬롯이 이미지
+	// 크기대로 늘었다 줄었다 하면 옆 결제 슬롯·레일과 높이가 어긋난다(사용자 결정) — 그래서
+	// 원본 비율(h-auto) 분기는 양쪽 다 없다.
+	it("renders crawled banners at our spec slots in both orientations", () => {
 		const banner = readComponent("ad-banner.tsx");
 		const vertical = blockBetween(
 			banner,
@@ -90,11 +89,11 @@ describe("visual job marketplace components", () => {
 		expect(vertical).toContain('"object-cover"');
 		expect(vertical).not.toContain("item.crawled");
 		expect(vertical).not.toContain("h-auto");
-		// 가로형만 수집 분기를 남긴다 — 결제는 7:3 cover, 수집은 원본 비율.
+		// 가로형도 수집·결제 구분 없이 규격 슬롯 + cover 하나로 그린다.
 		expect(horizontal).toContain("aspect-[7/3] w-full rounded-lg border");
-		expect(horizontal).toContain(
-			'item.crawled ? "h-auto w-full" : "object-cover"'
-		);
+		expect(horizontal).toContain('"object-cover"');
+		expect(horizontal).not.toContain("item.crawled");
+		expect(horizontal).not.toContain("h-auto");
 		// 갈 곳 없는 배너는 이제 없다(매퍼가 수집 전용 상세 주소를 만든다).
 		expect(banner).not.toContain("if (!item.href)");
 	});

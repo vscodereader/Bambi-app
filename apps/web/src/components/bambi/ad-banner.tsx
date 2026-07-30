@@ -16,12 +16,6 @@ import { AdBannerLayoutRenderer } from "./ad-banner-layout-renderer";
 
 const AD_BANNER_SURFACE_CLASS = "relative block overflow-hidden rounded-lg";
 
-// next/image의 width·height는 요구 해상도가 아니라 로딩 중 자리를 잡는 비율 힌트다. 가로형
-// 수집 배너만 우리 규격이 아니라 원본 비율로 그리므로, 슬롯 규격(7:3)을 힌트로 주면 이미지가
-// 로드되는 순간 높이가 튄다. 그래서 실측 원본 크기(240×117 ≈ 2.05)를 그대로 힌트로 준다 —
-// 실제 비율이 잡히기 전까지의 자리도 로드 후와 같아진다.
-// (세로형 수집 배너는 원본이 정확히 4:9라 규격 슬롯을 그대로 쓴다 — AdBanner 주석 참고.)
-const CRAWLED_RATIO_HINT = { height: 117, width: 240 } as const;
 const AD_BANNER_LINK_CLASS =
 	"transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -224,12 +218,11 @@ export function HorizontalAdBanner({
 	item,
 }: HorizontalAdBannerProps) {
 	// 단색 배경 처리는 AdBanner(세로형)와 같다 — 그쪽 주석 참고.
-	// 원본 비율 렌더는 가로형 수집 배너에만 남는다: 원본이 실측 240×117(≈2.05)로 7:3(≈2.33)과
-	// 달라 object-cover로 채우면 위아래가 잘린다. 잘린 배너보다 높이 가변이 낫다.
+	// 수집 배너도 결제 배너와 똑같은 규격 슬롯에 object-cover로 채운다. 가로 수집 원본은 실측
+	// 240×117(≈2.05)로 7:3(≈2.33)과 달라 상하가 합쳐 12% 정도 잘리지만, 슬롯이 이미지 크기대로
+	// 늘었다 줄었다 하면 옆 결제 슬롯·레일과 높이가 어긋난다(사용자 결정).
 	const surfaceClassName = cn(
-		item.crawled
-			? "w-full rounded-lg border border-border"
-			: "aspect-[7/3] w-full rounded-lg border border-border",
+		"aspect-[7/3] w-full rounded-lg border border-border",
 		className
 	);
 
@@ -238,15 +231,12 @@ export function HorizontalAdBanner({
 			{isAdBannerImageRequired(item.layout, "ad_horizontal") ? (
 				<Image
 					alt={`${item.company} ${item.title} 광고 배너`}
-					className={cn(
-						surfaceClassName,
-						item.crawled ? "h-auto w-full" : "object-cover"
-					)}
-					height={item.crawled ? CRAWLED_RATIO_HINT.height : 600}
+					className={cn(surfaceClassName, "object-cover")}
+					height={600}
 					sizes="272px"
 					src={item.imageUrl}
 					unoptimized
-					width={item.crawled ? CRAWLED_RATIO_HINT.width : 1400}
+					width={1400}
 				/>
 			) : (
 				<div className={surfaceClassName} />
