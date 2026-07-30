@@ -1,11 +1,13 @@
 import { db } from "@bambi-app/db";
 import {
 	bambiSiteSettings,
+	crawledCommunityTopic,
 	crawledJobPost,
 	crawlRun,
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { ORPCError } from "@orpc/server";
+import { and, count, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure } from "../../index";
@@ -51,8 +53,53 @@ const DEFAULT_PAGE_SIZE = 30;
 const listInput = z.object({
 	limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 	offset: z.number().int().min(0).default(0),
-	status: z.enum(["active", "needs_review", "expired"]).nullish(),
+	status: z.enum(["active", "needs_review", "expired", "removed"]).nullish(),
 });
+
+// 운영자 커뮤니티 글 목록. sourceUrl·본문은 내려보내지 않는다 — 원본 링크 한 줄이 원본
+// 전체로 가는 우회로이고(crawled-jobs.ts PUBLIC_COLUMNS와 같은 원칙), 삭제·복구 판단에는
+// 제목과 반응 지표만 있으면 된다.
+const TOPIC_LIST_COLUMNS = {
+	boardName: crawledCommunityTopic.boardName,
+	commentCount: crawledCommunityTopic.commentCount,
+	id: crawledCommunityTopic.id,
+	removedAt: crawledCommunityTopic.removedAt,
+	sourcePostedAt: crawledCommunityTopic.sourcePostedAt,
+	title: crawledCommunityTopic.title,
+	viewCount: crawledCommunityTopic.viewCount,
+} as const;
+
+const listTopicsInput = z.object({
+	limit: z.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+	offset: z.number().int().min(0).default(0),
+	// true면 내린 글만, false면 노출 중인 글만, 생략하면 전체. 공고 쪽 status 필터와 같은 축이다.
+	removed: z.boolean().nullish(),
+});
+
+// 생략(undefined·null)은 "전체"다. 삼항을 겹치지 않으려고 함수로 뺀다.
+const topicRemovedFilter = (removed: boolean | null | undefined) => {
+	if (removed === null || removed === undefined) {
+		return;
+	}
+
+	return removed
+		? isNotNull(crawledCommunityTopic.removedAt)
+		: isNull(crawledCommunityTopic.removedAt);
+};
+
+const idInput = z.object({ id: z.uuid() });
+
+// 삭제·복구의 대상이 없으면 화면이 조용히 성공으로 읽지 않게 세운다 — 목록이 낡아 이미
+// 지워진 행을 가리키는 경우가 실제로 있다.
+const NOT_FOUND_MESSAGE = "대상을 찾을 수 없습니다.";
+
+const requireRow = <T>(row: T | undefined): T => {
+	if (!row) {
+		throw new ORPCError("NOT_FOUND", { message: NOT_FOUND_MESSAGE });
+	}
+
+	return row;
+};
 
 // 주기 상한은 30일. 그보다 길면 사실상 꺼둔 것이므로 토글을 쓰는 게 맞다.
 const MAX_INTERVAL_HOURS = 720;
@@ -150,6 +197,87 @@ export const crawlerRouter = {
 
 			return saved ?? null;
 		}),
+
+	// 공고 삭제. 행을 지우지 않고 status='removed'로 세운다 — 원본 사이트에 글이 살아 있는 한
+	// 다음 회차 upsert가 같은 (사이트, 원본ID)로 행을 되살리므로, 진짜 DELETE는 하루도 못 버틴다.
+	// 이 상태를 재수집·만료 스윕이 덮지 않는 것이 삭제가 유지되는 근거다(bambi-crawl-ingest.ts).
+	removePost: adminProcedure.input(idInput).handler(async ({ input }) => {
+		const [saved] = await db
+			.update(crawledJobPost)
+			.set({ status: "removed" })
+			.where(eq(crawledJobPost.id, input.id))
+			.returning(LIST_COLUMNS);
+
+		return requireRow(saved);
+	}),
+
+	// 공고 복구. 되돌릴 상태는 재수집 CASE와 같은 규칙으로 정한다 — 업종이 있으면 노출,
+	// 없으면 검토 대기. 여기서 무조건 active로 두면 업종 없는 공고가 화면에 서고, 무조건
+	// needs_review로 두면 이미 업종이 지정된 공고가 다시 검토 큐에 쌓인다.
+	restorePost: adminProcedure.input(idInput).handler(async ({ input }) => {
+		const [saved] = await db
+			.update(crawledJobPost)
+			.set({
+				status: sql`case when ${crawledJobPost.industryCategory} is null then 'needs_review'::crawled_post_status else 'active'::crawled_post_status end`,
+			})
+			.where(
+				and(
+					eq(crawledJobPost.id, input.id),
+					// 삭제되지 않은 공고에 복구를 걸면 status를 재계산해 운영자가 손댄 상태를
+					// 흔든다(예: expired 공고가 active로 부활). 대상을 removed로 좁혀 둔다.
+					eq(crawledJobPost.status, "removed")
+				)
+			)
+			.returning(LIST_COLUMNS);
+
+		return requireRow(saved);
+	}),
+
+	// 운영자 커뮤니티 글 목록. 삭제·복구 대상을 고르는 화면용이라 제목·반응 지표만 내려보낸다.
+	listTopics: adminProcedure
+		.input(listTopicsInput)
+		.handler(async ({ input }) => {
+			const where = topicRemovedFilter(input.removed);
+
+			const [rows, [total]] = await Promise.all([
+				db
+					.select(TOPIC_LIST_COLUMNS)
+					.from(crawledCommunityTopic)
+					.where(where)
+					// 원 게시일 최신순. nulls last를 명시하는 이유는 Postgres의 DESC 기본이
+					// NULLS FIRST라, 날짜를 못 읽은 글이 최신 글 앞을 통째로 막기 때문이다.
+					.orderBy(sql`${crawledCommunityTopic.sourcePostedAt} desc nulls last`)
+					.limit(input.limit)
+					.offset(input.offset),
+				db.select({ value: count() }).from(crawledCommunityTopic).where(where),
+			]);
+
+			return { items: rows, total: total?.value ?? 0 };
+		}),
+
+	// 커뮤니티 글 삭제. 공고와 같은 이유로 행을 지우지 않는다 — 다만 이 표에는 상태 enum이
+	// 없어 시각 컬럼 하나로 톰스톤을 세운다. 목록 재수집 upsert의 set 목록에 removed_at이
+	// 없으므로 값이 그대로 살아남는다.
+	removeTopic: adminProcedure.input(idInput).handler(async ({ input }) => {
+		const [saved] = await db
+			.update(crawledCommunityTopic)
+			.set({ removedAt: new Date() })
+			.where(eq(crawledCommunityTopic.id, input.id))
+			.returning(TOPIC_LIST_COLUMNS);
+
+		return requireRow(saved);
+	}),
+
+	// 커뮤니티 글 복구. 공고와 달리 되돌릴 상태 계산이 없다 — 시각을 비우면 곧 노출 중이다.
+	restoreTopic: adminProcedure.input(idInput).handler(async ({ input }) => {
+		const [saved] = await db
+			.update(crawledCommunityTopic)
+			.set({ removedAt: null })
+			.where(eq(crawledCommunityTopic.id, input.id))
+			.returning(TOPIC_LIST_COLUMNS);
+
+		return requireRow(saved);
+	}),
 
 	// 수집 설정 조회. defaultIntervalHours는 코드 기본값으로, 운영자 폼 placeholder가
 	// 실제 폴백값을 보게 한다.

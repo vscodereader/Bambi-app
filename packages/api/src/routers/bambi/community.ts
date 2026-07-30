@@ -16,6 +16,7 @@ import {
 	desc,
 	eq,
 	gte,
+	isNull,
 	ne,
 	or,
 	type SQL,
@@ -275,6 +276,15 @@ const crawledCommunityFeedSelection = {
 	isCrawled: sql<number>`1`,
 };
 
+// 수집 글 노출 자격. 목록 union·총 건수·상세가 같은 기준을 써야 한 곳만 좁혀지는 상태가
+// 생기지 않는다(운영자가 내린 글이 총 건수에만 남아 마지막 페이지가 비는 식).
+// removed_at은 운영자가 글을 내린 시각이며, 재수집이 이 칸을 건드리지 않으므로 톰스톤으로
+// 버틴다(bambi-crawl-ingest.ts runCommunityPass).
+const crawledTopicFeedFilters = (windowStart: Date): SQL[] => [
+	gte(crawledCommunityTopic.sourcePostedAt, windowStart),
+	isNull(crawledCommunityTopic.removedAt),
+];
+
 const bestWindowStart = () => new Date(Date.now() - BEST_WINDOW_DAYS * DAY_MS);
 
 // 베스트글은 저장 게시판이 아니라 최근 30일 추천 상위 큐레이션 가상 게시판이다.
@@ -390,7 +400,7 @@ const selectWorkTalkFeedUnion = ({
 			.from(crawledCommunityTopic)
 			// 수집 글은 원 게시일 30일 이내만 노출한다(순수 work_talk엔 컷오프가 없지만, 남의
 			// 게시판에서 긁어 온 글은 신선한 것만 섞는다). null 게시일은 이 조건이 자연히 걸러낸다.
-			.where(gte(crawledCommunityTopic.sourcePostedAt, windowStart))
+			.where(and(...crawledTopicFeedFilters(windowStart)))
 	)
 		.orderBy(sql`is_crawled asc, created_at desc`)
 		.limit(limit)
@@ -414,7 +424,7 @@ const countCrawledCommunityTopics = async (
 	const [row] = await db
 		.select({ value: count() })
 		.from(crawledCommunityTopic)
-		.where(gte(crawledCommunityTopic.sourcePostedAt, windowStart));
+		.where(and(...crawledTopicFeedFilters(windowStart)));
 	return row?.value ?? 0;
 };
 
@@ -644,7 +654,14 @@ export const communityRouter = {
 					viewCount: crawledCommunityTopic.viewCount,
 				})
 				.from(crawledCommunityTopic)
-				.where(eq(crawledCommunityTopic.id, input.topicId))
+				.where(
+					and(
+						eq(crawledCommunityTopic.id, input.topicId),
+						// 운영자가 내린 글은 상세도 열리지 않는다. 목록에서만 빼면 링크를 아는
+						// 사람에게는 계속 열려 있어 "삭제"가 아니라 "숨김"이 된다.
+						isNull(crawledCommunityTopic.removedAt)
+					)
+				)
 				.limit(1);
 
 			if (!topic) {

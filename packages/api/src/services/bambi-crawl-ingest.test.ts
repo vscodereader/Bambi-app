@@ -176,12 +176,14 @@ describe("selectDetailTargets", () => {
 	const item = (sourceExternalId: string) => ({ sourceExternalId });
 	const existingRow = (
 		sourceExternalId: string,
-		detailFetchedAt: Date | null
+		detailFetchedAt: Date | null,
+		status: "active" | "removed" = "active"
 	) => ({
 		contentHash: "h",
 		detailFetchedAt,
 		id: sourceExternalId,
 		sourceExternalId,
+		status,
 	});
 
 	// 미수집(detailFetchedAt null)이 먼저, 그다음 오래된 순. 목록이 회차 상한을 넘으면 정렬이
@@ -205,6 +207,22 @@ describe("selectDetailTargets", () => {
 		);
 
 		expect(order).toEqual(["new", "older", "old"]);
+	});
+
+	// 운영자가 내린 공고는 원본에 살아 있어 매 회차 목록에 계속 실린다. 상세를 다시 받아도
+	// upsert가 removed를 유지하므로 요청과 회차 상한(300칸)만 태운다.
+	it("skips operator-removed posts even when their detail is stale", () => {
+		const items = [item("removed"), item("kept")];
+		const existing = new Map([
+			["removed", existingRow("removed", hoursAgo(500), "removed")],
+			["kept", existingRow("kept", hoursAgo(500))],
+		]);
+
+		const order = selectDetailTargets(items, existing, NOW).map(
+			(target) => target.sourceExternalId
+		);
+
+		expect(order).toEqual(["kept"]);
 	});
 });
 

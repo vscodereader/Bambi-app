@@ -266,6 +266,67 @@ describe("runCrawlTick — 커뮤니티(퀸알바)", () => {
 		expect(after.length).toBe(before.length);
 	});
 
+	// 커뮤니티 글 삭제도 재수집을 견뎌야 한다. 목록 패스의 upsert set 목록에 removed_at이 없어야
+	// 운영자가 찍은 시각이 남고, 상세 백필도 내린 글을 다시 받지 않아야 한다.
+	it("keeps an operator-removed topic removed across a re-ingest", async () => {
+		// 행 하나만 골라 내린다 — 뒤 테스트들이 나머지 행을 그대로 이어서 본다.
+		const [target] = await db
+			.select({
+				body: crawledCommunityTopic.body,
+				sourceExternalId: crawledCommunityTopic.sourceExternalId,
+			})
+			.from(crawledCommunityTopic)
+			.where(
+				like(
+					crawledCommunityTopic.sourceExternalId,
+					`comm_board2:${TEST_ID_PREFIX}%`
+				)
+			)
+			.limit(1);
+
+		expect(target).toBeDefined();
+
+		const targetId = target?.sourceExternalId ?? "";
+		const whereTarget = and(
+			eq(crawledCommunityTopic.sourceSite, "queenalba"),
+			eq(crawledCommunityTopic.sourceExternalId, targetId)
+		);
+		const readRow = async () => {
+			const [row] = await db
+				.select({
+					body: crawledCommunityTopic.body,
+					removedAt: crawledCommunityTopic.removedAt,
+				})
+				.from(crawledCommunityTopic)
+				.where(whereTarget);
+
+			return row;
+		};
+
+		// 운영자가 글을 내린다(crawler.removeTopic). body를 비워 상세 백필 조건을 일부러
+		// 만족시킨다 — 그래도 내린 글은 상세를 다시 받지 않아야 한다.
+		await db
+			.update(crawledCommunityTopic)
+			.set({ body: null, removedAt: new Date() })
+			.where(whereTarget);
+
+		await runCrawlTick(new Date(), createCommunityStubClient(), {
+			force: true,
+		});
+
+		const after = await readRow();
+
+		expect(after?.removedAt).not.toBeNull();
+		// 상세를 받지 않았다는 증거. 채워졌다면 백필의 removed 제외가 풀린 것이다.
+		expect(after?.body).toBeNull();
+
+		// 뒤 테스트가 본문을 확인하므로 원래 값으로 되돌린다.
+		await db
+			.update(crawledCommunityTopic)
+			.set({ body: target?.body ?? null, removedAt: null })
+			.where(whereTarget);
+	});
+
 	// 게이트에 막힌 응답을 "게시글 없음"으로 읽고 성공으로 남기면 파손을 알아챌 방법이 없다.
 	it("fails the run when the age gate blocks the fetch", async () => {
 		const gateStub =
@@ -820,5 +881,52 @@ describe("runCrawlTick — 메인 유료 노출(퀸알바)", () => {
 			industryCategory: "룸싸롱",
 			status: "active",
 		});
+	});
+
+	// 삭제는 재수집을 견뎌야 한다. 원본에 글이 살아 있으면 이 공고는 매 회차 목록에 그대로
+	// 실리는데, 그때 upsert가 status를 다시 계산하면 삭제 버튼이 하루도 못 버틴다.
+	// 방어는 둘이다 — 상세 대상 선정에서 removed를 빼고(요청 낭비 차단), 그래도 upsert에
+	// 닿는 경우(회차 도중 운영자가 삭제)에는 CASE가 removed를 유지한다.
+	it("keeps an operator-removed post removed across a re-ingest", async () => {
+		const readRow = async () => {
+			const [row] = await db
+				.select({
+					detailFetchedAt: crawledJobPost.detailFetchedAt,
+					status: crawledJobPost.status,
+				})
+				.from(crawledJobPost)
+				.where(
+					and(
+						eq(crawledJobPost.sourceSite, "queenalba"),
+						eq(crawledJobPost.sourceExternalId, UNMAPPED_INDUSTRY_ID)
+					)
+				);
+
+			return row;
+		};
+
+		// 운영자가 공고를 내린다(crawler.removePost가 하는 일). detail_fetched_at을 비워
+		// 다음 회차의 상세 대상 조건(미수집)을 일부러 만족시킨다 — 그래도 건너뛰어야 한다.
+		await db
+			.update(crawledJobPost)
+			.set({ detailFetchedAt: null, status: "removed" })
+			.where(
+				and(
+					eq(crawledJobPost.sourceSite, "queenalba"),
+					eq(crawledJobPost.sourceExternalId, UNMAPPED_INDUSTRY_ID)
+				)
+			);
+
+		await runCrawlTick(
+			new Date(),
+			createQueenalbaMainStubClient({ bodyMark: "삭제후재수집" }),
+			{ force: true }
+		);
+
+		const row = await readRow();
+
+		expect(row?.status).toBe("removed");
+		// 상세를 받지 않았다는 증거. 이 값이 채워졌다면 대상 선정의 removed 제외가 풀린 것이다.
+		expect(row?.detailFetchedAt).toBeNull();
 	});
 });
