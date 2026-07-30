@@ -55,7 +55,9 @@
 
 - `jobs.list`: `crawledJobFeedEnabled`가 켜져 있으면 `crawled_job_post`에서 `status='active'`이고 `listing_type IN ('special','urgent','recommended')`인 행을 **피드 투영(bambi-job-feed의 crawled 프로젝션)** 으로 뽑아 각 섹션의 유료 공고 **뒤에** 붙인다. `exposureType`은 `listing_type` 컬럼 값을 그대로 쓴다(어휘가 이미 우리 자리 어휘). 공개 필터(industryCategory·region·district·minPayAmount)는 수집 행에도 동일 적용.
 - **impression 안전장치**: `recordJobListingImpressions`에 수집 행이 섞이면 `job_performance_event`의 job_post FK 위반으로 공개 조회가 통째로 죽는다. 유료 selection에 `source` 컬럼을 추가하고 `source === 'crawled'` 행은 기록에서 제외한다. 성과 지표 집계 대상에서도 제외.
-- `listAdBanners`는 구조 변경 없음(풀 자격은 D1에서 좁아짐). 일반(라벨 없는) 수집 공고의 organic 노출은 이번 범위 밖 — `listJobFeed`는 계속 미연결로 두고 보고서에 명시한다.
+- **전체 공고(organic)에도 수집 공고를 넣는다**(사용자 지시 2026-07-30): 스위치가 켜져 있으면 `status='active'`인 수집 공고 전부(라벨 무관)를 공개 필터 적용·최신순·`input.limit` 상한으로 뽑아 **우리 공고 뒤에** append. `exposureType`은 `'standard'` 유지(승격 라벨 없음).
+- **우선순위 규칙(모든 섹션·전체 공고 공통)**: 1순위 = 우리 서비스 순수 공고(항상 최상단), 2순위 = 크롤링 공고. 섞어 정렬하지 않고 뒤에 붙인다.
+- `listAdBanners`는 구조 변경 없음(풀 자격은 D1에서 좁아짐). `listJobFeed`(UNION 경로)는 계속 미연결 — append 방식이 우선순위 규칙을 더 단순하게 만족한다.
 
 ### D4. 수집 공고 상세 페이지
 
@@ -114,6 +116,5 @@
 
 ## 이번 범위 밖 (보고서에 플래그)
 
-- 일반(라벨 없는) 수집 공고의 organic 목록 노출(`listJobFeed` 연결) — 상세 페이지가 생겨 막힌 것은 없어졌으나 정렬·필터 통합 설계가 별도 건.
 - 퀸알바 자체 급구·추천 섹션 매핑 — 사용자가 원하면 매핑 한 줄 추가.
 - foxalba 메인 파서(현재 목록만 수집).

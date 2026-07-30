@@ -110,15 +110,17 @@ status: sql`case when coalesce(excluded.industry_category, ${crawledJobPost.indu
 export type CrawledSectionType = "recommended" | "special" | "urgent";
 export const listCrawledSectionRows = async (input: {
 	district?: string; industryCategory?: string; limit: number;
-	minPayAmount?: number; region?: string; type: CrawledSectionType;
-}): Promise<JobFeedRow[]>; // exposureType이 type 값으로 세팅된 crawled 투영 행
+	minPayAmount?: number; region?: string; type?: CrawledSectionType;
+}): Promise<JobFeedRow[]>;
+// type 지정 → listingType = type 조건 + exposureType을 type으로 매핑.
+// type 생략 → 전체 공고용: listingType 조건 없음, exposureType 'standard' 유지.
 ```
 
 - [ ] `listCrawledSectionRows` 구현: 기존 crawled 투영 재사용, 조건 `status='active'` + `listingType = type` + 공개 필터(industryCategory/region/district/minPayAmount — 기존 crawled 조건 빌더 재사용) + `order by coalesce(source_posted_at, first_seen_at) desc` + limit. 반환 시 `exposureType`을 `type`으로 매핑(TS에서 `rows.map(r => ({ ...r, exposureType: type }))` 가능 — 'special'|'urgent'|'recommended'는 JobExposureType의 유효값).
 - [ ] `jobs.ts list`(848–1009):
   - `exposureSelection`에 `source: jobPost.source` 추가.
-  - `isCrawledJobFeedEnabled()`가 true면 `readCrawledLimits()` 후 세 타입 병렬 조회, **`buildExposureJobSections` 결과의 각 섹션 뒤에 append** (유료 먼저 — 돈 낸 공고를 밀지 않는다). `toListItem(item, true)` 경로로 promotionLabel 부여.
-  - `totalCount`에 crawled 행 수 가산.
+  - `isCrawledJobFeedEnabled()`가 true면 `readCrawledLimits()` 후 세 타입 + organic(type 생략, limit는 `input.limit`) 병렬 조회, **`buildExposureJobSections` 결과의 각 섹션 뒤에 append**. **우선순위 규칙(사용자 지시): 1순위 우리 순수 공고가 항상 최상단, 2순위 크롤링 — 섞어 정렬하지 않고 뒤에 붙인다.** 섹션 행은 `toListItem(item, true)`로 promotionLabel 부여, organic 행은 `toListItem(item, false)`.
+  - `totalCount`에 crawled 고유 행 수 가산(섹션·organic 중복 id는 한 번만).
   - `recordJobListingImpressions`·`getRecentJobPerformanceMetrics`에는 **유료 행만**(`source !== 'crawled'` 필터 또는 append 전 스냅샷 사용). 이유 주석: job_performance_event가 job_post FK — 수집 id가 섞이면 공개 조회가 통째로 죽는다.
 - [ ] `loadCrawledAdBannerPools` 자격 축소: where에 `eq(crawledJobPost.listingType, "ad_banner")` 추가, `or(썸네일…)` 자격 제거 → 방향 URL 컬럼만. `resolveCrawledAdBanners` 호출 제거 — `adHorizontalUrl: row.bannerHorizontalUrl`, `adVerticalUrl: row.bannerVerticalUrl` 직결. `verticalBorrowedFrom` 필드 삭제(웹 매퍼는 이 필드를 읽지 않음 확인됨). limit는 `min(60, limits.adBanner)` 대신 `limits.adBanner` 사용.
 - [ ] `bambi-crawl-ad-banners.ts`(+test) 삭제 — 유일 호출자가 사라진다. grep으로 잔여 참조 0 확인.
