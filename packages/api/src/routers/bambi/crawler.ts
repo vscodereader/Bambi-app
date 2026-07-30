@@ -4,6 +4,7 @@ import {
 	crawledCommunityTopic,
 	crawledJobPost,
 	crawlRun,
+	jobIndustryCategory,
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -167,21 +168,14 @@ export const crawlerRouter = {
 			return row ?? null;
 		}),
 
-	// 업종 수동 매핑. 원본 직종이 우리 8종에 안 맞아 needs_review로 남은 공고를 운영자가 잇는다.
+	// 업종 수동 매핑. 원본 직종이 우리 업종 enum에 안 맞아 needs_review로 남은 공고를 운영자가 잇는다.
+	// 허용값은 DB enum에서 그대로 끌어온다 — 손으로 나열하면 enum에 값을 더할 때마다 여기가
+	// 빠져 화면의 Select에는 보이는 항목이 서버에서 거절된다(실제로 "기타" 추가 때 그랬다).
 	setIndustryCategory: adminProcedure
 		.input(
 			z.object({
 				id: z.uuid(),
-				industryCategory: z.enum([
-					"룸싸롱",
-					"텐프로/쩜오",
-					"노래주점",
-					"단란주점",
-					"다방",
-					"BAR",
-					"마사지",
-					"요정",
-				]),
+				industryCategory: z.enum(jobIndustryCategory.enumValues),
 			})
 		)
 		.handler(async ({ input }) => {

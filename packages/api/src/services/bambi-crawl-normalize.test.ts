@@ -75,7 +75,7 @@ describe("parsePay", () => {
 });
 
 describe("mapIndustryCategory", () => {
-	it("maps source job titles onto the fixed eight categories", () => {
+	it("maps source job titles onto the fixed nine categories", () => {
 		expect(mapIndustryCategory("룸살롱")).toBe("룸싸롱");
 		expect(mapIndustryCategory("가라오케")).toBe("노래주점");
 		expect(mapIndustryCategory("단란주점 홀서빙")).toBe("단란주점");
@@ -86,9 +86,21 @@ describe("mapIndustryCategory", () => {
 		expect(mapIndustryCategory("텐프로 룸싸롱")).toBe("텐프로/쩜오");
 	});
 
+	// 원본이 "기타 - 기타업종"으로 내보내는 공고. 운영자 손을 안 거치고 기타로 들어가야 한다.
+	it("maps the source's own catch-all onto 기타", () => {
+		expect(mapIndustryCategory("기타 - 기타업종")).toBe("기타");
+		expect(mapIndustryCategory("기타")).toBe("기타");
+	});
+
+	// 기타 규칙이 맨 끝인 근거. 구체 업종이 함께 적혀 있으면 그쪽이 이겨야 한다.
+	it("prefers the specific category over 기타 when both appear", () => {
+		expect(mapIndustryCategory("기타 룸싸롱")).toBe("룸싸롱");
+		expect(mapIndustryCategory("기타 - 마사지")).toBe("마사지");
+	});
+
 	it("returns null for unmapped input so the row lands in needs_review", () => {
 		// 버리면 공고가 조용히 사라진다. null로 남겨야 운영자가 손으로 이을 수 있다.
-		expect(mapIndustryCategory("기타")).toBeNull();
+		expect(mapIndustryCategory("미분류업종")).toBeNull();
 		expect(mapIndustryCategory("")).toBeNull();
 		expect(mapIndustryCategory(null)).toBeNull();
 	});
