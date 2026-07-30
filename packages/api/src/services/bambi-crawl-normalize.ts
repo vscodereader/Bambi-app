@@ -123,7 +123,7 @@ export const parsePay = (raw: string | null | undefined): ParsedPay => {
 	return { amount: null, unit: unit ?? NEGOTIABLE_PAY_UNIT };
 };
 
-// 원본 사이트의 직종 문자열을 우리 8종 업종 enum에 잇는다. 우리 enum이 고정값이라
+// 원본 사이트의 직종 문자열을 우리 9종 업종 enum에 잇는다. 우리 enum이 고정값이라
 // 매핑되지 않는 직종이 반드시 생기는데, 그때 공고를 버리지 않고 null을 돌려 수집기가
 // needs_review로 남기게 한다(운영자가 손으로 잇는다).
 const INDUSTRY_RULES: readonly {
@@ -143,6 +143,10 @@ const INDUSTRY_RULES: readonly {
 	{ category: "마사지", pattern: /마사지|안마|스파|테라피|아로마/ },
 	{ category: "요정", pattern: /요정|한정식\s*주점/ },
 	{ category: "BAR", pattern: /\bbar\b|바텐더|칵테일|라운지|호프|카페/i },
+	// 반드시 맨 끝. 원본이 "기타 - 기타업종"으로 내보내는 공고를 받는 자리인데, 앞에 두면
+	// "기타 룸싸롱"처럼 구체 업종이 함께 적힌 표기까지 기타로 뭉개진다 — 구체 규칙이 먼저
+	// 이긴 뒤 남은 것만 기타로 떨어져야 한다.
+	{ category: "기타", pattern: /기타/ },
 ];
 
 export const mapIndustryCategory = (

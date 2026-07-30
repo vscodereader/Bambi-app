@@ -321,10 +321,10 @@ describe("parseQueenalbaDetail — 콜핀·이미지 본문", () => {
 		expect(record?.sourceDeadlineAt).toBeNull();
 	});
 
-	// 업종 매핑에 실패하면 버리지 않고 null로 남겨 수집기가 needs_review로 넣는다.
-	it("leaves an unmappable industry null", () => {
+	// 원본의 자체 catch-all은 우리 "기타" 카테고리로 받는다 — 운영자 검토 대기로 쌓이지 않는다.
+	it("maps the source's catch-all industry onto 기타", () => {
 		expect(record?.industryRaw).toBe("기타 - 기타업종");
-		expect(record?.industryCategory).toBeNull();
+		expect(record?.industryCategory).toBe("기타");
 	});
 });
 
