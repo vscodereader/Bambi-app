@@ -202,7 +202,13 @@ describe("embedCrawledImages", () => {
 			fetchBinary: (url: string) =>
 				url.includes("bad")
 					? Promise.reject(new Error("실패"))
-					: Promise.resolve({ bytes: png, contentType: null, url }),
+					: // URL마다 다른 파일이라야 이 테스트가 실패 집계만 본다 — 같은 바이트를 주면
+						// data URI 중복 제거가 걷어내 장수가 줄어든다(그건 아래 전용 테스트가 본다).
+						Promise.resolve({
+							bytes: new Uint8Array([...png, ...Buffer.from(url, "latin1")]),
+							contentType: null,
+							url,
+						}),
 		});
 
 		const result = await embedCrawledImages({
@@ -220,6 +226,24 @@ describe("embedCrawledImages", () => {
 		expect(
 			result.images.every((image) => image.startsWith("data:image/png;"))
 		).toBe(true);
+	});
+
+	// 파서는 원본 URL로만 중복을 접는다. 같은 전단이 다른 URL로 두 번 걸리면 변환 뒤 같은
+	// data URI가 두 번 남고, 화면이 그것을 React key로 써서 중복 key 에러가 났다.
+	it("drops duplicates by the converted data uri, not by url", async () => {
+		const result = await embedCrawledImages({
+			client: withBytes(png),
+			urls: [
+				"https://img.example.test/1.png",
+				"https://img.example.test/copy-of-1.png",
+			],
+		});
+
+		expect(result.images).toEqual([
+			`data:image/png;base64,${Buffer.from(png).toString("base64")}`,
+		]);
+		// 같은 파일을 한 번만 담은 것이지 실패한 게 아니다.
+		expect(result.failed).toBe(0);
 	});
 
 	// 상세 이미지를 20장 붙이는 공고가 있어 장수 상한만으로는 행 하나가 수십 MB가 된다.

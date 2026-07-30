@@ -290,6 +290,10 @@ export const embedCrawledImages = async ({
 	urls,
 }: EmbedCrawledImagesInput): Promise<EmbedCrawledImagesResult> => {
 	const images: string[] = [];
+	// 중복 판정은 **변환 결과**로 한다. 파서는 원본 URL로만 중복을 접는데, 같은 전단 이미지가
+	// 서로 다른 URL로 두 번 걸린 공고가 있어 base64로 바꾸면 같은 data URI가 두 번 남았다 —
+	// 화면이 그 값을 React key로 쓰므로 "two children with the same key"로 터진다.
+	const seen = new Set<string>();
 	let failed = 0;
 	let used = 0;
 
@@ -307,12 +311,20 @@ export const embedCrawledImages = async ({
 			url,
 		});
 
-		if (image) {
-			images.push(image);
-			used += image.length;
-		} else {
+		if (!image) {
 			failed += 1;
+			continue;
 		}
+
+		// 중복은 실패가 아니라 같은 파일이다 — failed로 세지 않고(운영자에게 경고할 일이 아니다),
+		// 한 번만 저장하니 예산도 다시 쓰지 않는다.
+		if (seen.has(image)) {
+			continue;
+		}
+
+		seen.add(image);
+		images.push(image);
+		used += image.length;
 	}
 
 	return { failed, images };
