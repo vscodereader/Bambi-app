@@ -31,8 +31,10 @@ const {
 	adProduct,
 	adminModerationAction,
 	bambiProfile,
+	bambiSiteSettings,
 	bannedWord,
 	communityPost,
+	crawledCommunityTopic,
 	jobPost,
 } = bambiSchema;
 
@@ -2188,6 +2190,247 @@ describe("bambi community router — 금칙어", () => {
 			});
 			expect(comment.id).toBeTruthy();
 		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+});
+
+// 수집 커뮤니티 노출 스위치는 단일 행 설정을 공유하므로, 테스트가 켠 뒤 원래 값으로 되돌린다.
+const readCommunityFeedEnabled = async (): Promise<boolean> => {
+	const [row] = await db
+		.select({ enabled: bambiSiteSettings.crawledCommunityFeedEnabled })
+		.from(bambiSiteSettings)
+		.where(eq(bambiSiteSettings.id, "default"))
+		.limit(1);
+	return row?.enabled ?? false;
+};
+
+const setCommunityFeedEnabled = async (enabled: boolean): Promise<void> => {
+	await db
+		.insert(bambiSiteSettings)
+		.values({ crawledCommunityFeedEnabled: enabled, id: "default" })
+		.onConflictDoUpdate({
+			set: { crawledCommunityFeedEnabled: enabled },
+			target: bambiSiteSettings.id,
+		});
+};
+
+const insertCrawledTopic = async (
+	overrides: Partial<typeof crawledCommunityTopic.$inferInsert> = {}
+): Promise<string> => {
+	const id = randomUUID();
+	await db.insert(crawledCommunityTopic).values({
+		body: "수집 본문입니다.",
+		boardName: "밤문화이야기",
+		commentCount: 2,
+		comments: [
+			{
+				authorName: "익명1",
+				body: "첫 댓글",
+				sourcePostedAt: "2026-07-20 10:00:00",
+			},
+			{ authorName: null, body: "둘째 댓글", sourcePostedAt: null },
+		],
+		id,
+		sourceExternalId: `ext-${id}`,
+		sourcePostedAt: new Date(),
+		sourceSite: "queenalba",
+		sourceUrl: `https://example.test/${id}`,
+		title: `수집 주제 ${id}`,
+		viewCount: 42,
+		...overrides,
+	});
+	return id;
+};
+
+describe("bambi community router — 수집 글 union·상세", () => {
+	it("스위치 ON이면 work_talk 목록·상세에 수집 글이 source=crawled로 섞이고 sourceUrl은 빠진다", async () => {
+		const fixture = await createCommunityFixture();
+		const previousFeed = await readCommunityFeedEnabled();
+		let topicId: string | undefined;
+		try {
+			await setCommunityFeedEnabled(true);
+			topicId = await insertCrawledTopic();
+
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+			const listed = await listPosts({ board: "work_talk", page: 1 });
+			const crawledItem = listed.items.find(
+				(item: { id: string }) => item.id === topicId
+			);
+			expect(crawledItem).toBeTruthy();
+			expect(crawledItem?.source).toBe("crawled");
+			// 작성자 자리에 원본 게시판명, 잠금·광고·추천은 없음.
+			expect(crawledItem?.authorName).toBe("밤문화이야기");
+			expect(crawledItem?.isLocked).toBe(false);
+			expect(crawledItem?.isPromotion).toBe(false);
+			expect(crawledItem?.likeCount).toBe(0);
+			expect(crawledItem?.commentCount).toBe(2);
+			expect(crawledItem?.viewCount).toBe(42);
+			// 순수 글은 source=native.
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			const native = await createPost({
+				...basePostInput,
+				board: "work_talk",
+				title: `순수 수다 ${randomUUID()}`,
+			});
+			const relisted = await listPosts({ board: "work_talk", page: 1 });
+			expect(
+				relisted.items.find((item: { id: string }) => item.id === native.id)
+					?.source
+			).toBe("native");
+
+			const getCrawledTopic = clientFor(
+				communityRouter.getCrawledTopic,
+				fixture.femaleUserId,
+				["getCrawledTopic"]
+			);
+			const detail = await getCrawledTopic({ topicId });
+			expect(detail.title).toContain("수집 주제");
+			expect(detail.body).toBe("수집 본문입니다.");
+			expect(detail.boardName).toBe("밤문화이야기");
+			expect(detail.viewCount).toBe(42);
+			expect(detail.commentCount).toBe(2);
+			expect(detail.comments).toHaveLength(2);
+			expect(detail.comments[0]?.body).toBe("첫 댓글");
+			// 원본 URL은 절대 응답에 실리지 않는다.
+			expect("sourceUrl" in detail).toBe(false);
+		} finally {
+			if (topicId) {
+				await db
+					.delete(crawledCommunityTopic)
+					.where(eq(crawledCommunityTopic.id, topicId));
+			}
+			await setCommunityFeedEnabled(previousFeed);
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("스위치 OFF면 수집 글이 목록에서 빠지고 상세는 NOT_FOUND", async () => {
+		const fixture = await createCommunityFixture();
+		const previousFeed = await readCommunityFeedEnabled();
+		let topicId: string | undefined;
+		try {
+			await setCommunityFeedEnabled(false);
+			topicId = await insertCrawledTopic();
+
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+			const listed = await listPosts({ board: "work_talk", page: 1 });
+			expect(
+				listed.items.some((item: { id: string }) => item.id === topicId)
+			).toBe(false);
+
+			const getCrawledTopic = clientFor(
+				communityRouter.getCrawledTopic,
+				fixture.femaleUserId,
+				["getCrawledTopic"]
+			);
+			await expectOrpcCode(
+				getCrawledTopic({ topicId: topicId as string }),
+				"NOT_FOUND"
+			);
+		} finally {
+			if (topicId) {
+				await db
+					.delete(crawledCommunityTopic)
+					.where(eq(crawledCommunityTopic.id, topicId));
+			}
+			await setCommunityFeedEnabled(previousFeed);
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	// 운영자가 내린 글은 목록에서만 빠져선 안 된다 — 상세가 열리면 링크를 아는 사람에게는
+	// 계속 보여 "삭제"가 아니라 "숨김"이 된다. 총 건수에도 세지 않아야 마지막 페이지가 비지 않는다.
+	it("운영자가 내린 수집 글은 목록·총건수·상세에서 모두 빠진다", async () => {
+		const fixture = await createCommunityFixture();
+		const previousFeed = await readCommunityFeedEnabled();
+		let topicId: string | undefined;
+		try {
+			await setCommunityFeedEnabled(true);
+			topicId = await insertCrawledTopic();
+
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+			const before = await listPosts({ board: "work_talk", page: 1 });
+			expect(
+				before.items.some((item: { id: string }) => item.id === topicId)
+			).toBe(true);
+
+			await db
+				.update(crawledCommunityTopic)
+				.set({ removedAt: new Date() })
+				.where(eq(crawledCommunityTopic.id, topicId));
+
+			const after = await listPosts({ board: "work_talk", page: 1 });
+			expect(
+				after.items.some((item: { id: string }) => item.id === topicId)
+			).toBe(false);
+			expect(after.totalCount).toBe(before.totalCount - 1);
+
+			const getCrawledTopic = clientFor(
+				communityRouter.getCrawledTopic,
+				fixture.femaleUserId,
+				["getCrawledTopic"]
+			);
+			await expectOrpcCode(
+				getCrawledTopic({ topicId: topicId as string }),
+				"NOT_FOUND"
+			);
+		} finally {
+			if (topicId) {
+				await db
+					.delete(crawledCommunityTopic)
+					.where(eq(crawledCommunityTopic.id, topicId));
+			}
+			await setCommunityFeedEnabled(previousFeed);
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("광고·업소 필터가 켜지면 수집 글은 섞이지 않는다", async () => {
+		const fixture = await createCommunityFixture();
+		const previousFeed = await readCommunityFeedEnabled();
+		let topicId: string | undefined;
+		try {
+			await setCommunityFeedEnabled(true);
+			topicId = await insertCrawledTopic();
+
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+			// showPromotion/showEmployer가 켜지면 수집 글(광고도 업소도 아님)은 제외된다.
+			const filtered = await listPosts({
+				board: "work_talk",
+				page: 1,
+				showPromotion: true,
+			});
+			expect(
+				filtered.items.some((item: { id: string }) => item.id === topicId)
+			).toBe(false);
+		} finally {
+			if (topicId) {
+				await db
+					.delete(crawledCommunityTopic)
+					.where(eq(crawledCommunityTopic.id, topicId));
+			}
+			await setCommunityFeedEnabled(previousFeed);
 			await cleanupCommunityFixture(fixture);
 		}
 	});

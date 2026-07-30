@@ -2,9 +2,11 @@ import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
+	bambiSiteSettings,
 	communityComment,
 	communityPost,
 	communityPostLike,
+	crawledCommunityTopic,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
@@ -14,11 +16,13 @@ import {
 	desc,
 	eq,
 	gte,
+	isNull,
 	ne,
 	or,
 	type SQL,
 	sql,
 } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 import z from "zod";
 
 import { protectedProcedure, publicProcedure } from "../../index";
@@ -70,6 +74,20 @@ const communityBoardSchema = z.enum([
 ]);
 
 type CommunityBoardInput = z.infer<typeof communityBoardSchema>;
+
+// 요약 행의 출처. 화면이 이 값으로 "외부 수집" 배지·상세 라우팅을 가른다(공고 목록의
+// JobFeedSource와 같은 판별). 순수 글은 "native", 수집 글은 "crawled".
+type CommunityFeedSource = "crawled" | "native";
+
+// 설계 D4 — 수집 커뮤니티 글이 합류하는 게시판. 상수 하나만 바꾸면 다른 게시판으로 옮길 수 있게 둔다.
+const CRAWLED_COMMUNITY_BOARD: CommunityBoardInput = "work_talk";
+
+// 원본 게시판명이 비어 있을 때 작성자 자리에 세울 값(수집 대상 게시판 이름).
+const CRAWLED_AUTHOR_NAME = "밤문화이야기";
+
+// UNION 상대편 타입의 정본은 순수 글 컬럼이다. 수집 쪽 sql 리터럴이 이 타입을 참조하면
+// enum 값이 늘거나 컬럼이 바뀌어도 두 투영이 함께 움직인다(한쪽만 어긋나 UNION이 깨지지 않는다).
+type CommunityPostColumns = typeof communityPost.$inferSelect;
 
 // 목록 필터 — 독립 On/Off 토글 2개(광고 글보기·업소 회원 글보기). 기본은 둘 다 false=전체.
 // 켜진 토글이 있으면 그 조건들의 합집합(OR)으로 좁힌다(광고=is_promotion, 업소=author_role).
@@ -206,6 +224,9 @@ const maskLockedSummaries = <
 	);
 
 // 목록·상세 공용 요약 셀렉션. 작성자 표시명은 글별 author_display_name 컬럼 값.
+// source·isCrawled는 순수 글 쪽 상수다 — 수집 글 union(crawledCommunityFeedSelection)이
+// 같은 키·순서로 마주 서야 해서 여기에 둔다. isCrawled는 union 정렬 키로만 쓰이고
+// 응답(toPublicSummary)에는 나가지 않는다.
 const postSummarySelection = {
 	authorName: communityPost.authorDisplayName,
 	authorRole: communityPost.authorRole,
@@ -219,7 +240,50 @@ const postSummarySelection = {
 	likeCount: communityPost.likeCount,
 	title: communityPost.title,
 	viewCount: communityPost.viewCount,
+	source: sql<CommunityFeedSource>`'native'`.as("source"),
+	isCrawled: sql<number>`0`.as("is_crawled"),
 };
+
+// 수집 커뮤니티 글을 순수 요약과 같은 모양으로 투영한다. UNION은 이름이 아니라 위치로
+// 컬럼을 맞추므로 postSummarySelection과 **키 순서까지** 같아야 한다(bambi-job-feed.ts와 같은 원칙).
+// 없는 값은 리터럴로 채운다 — 수집 글엔 작성자 계정·잠금·추천·광고가 없다.
+const crawledCommunityFeedSelection = {
+	// 작성자 자리에 원본 게시판명을 노출한다(설계 D4 — "밤문화이야기"). 개인 필명이 아니다.
+	// board_name은 nullable이라 coalesce로 채운다 — UNION 상대(순수 author_display_name)가
+	// NOT NULL이고, 값이 비어도 화면에 빈 작성자가 서면 안 된다.
+	authorName: sql<string>`coalesce(${crawledCommunityTopic.boardName}, ${CRAWLED_AUTHOR_NAME})`,
+	// 수집 글엔 우리 계정 유형 스냅샷이 없어 런타임 값은 null이다. UNION 상대가 NOT NULL enum
+	// 이라 타입만 맞춰 두고 값은 null 그대로 둔다 — 화면은 authorRole이 아니라 source로
+	// 수집 여부를 갈라야 한다(업소 배지가 수집 글에 붙으면 안 된다).
+	authorRole: sql<CommunityPostColumns["authorRole"]>`null`,
+	// 마스킹·잠금 계산용 내부 필드. 수집 글은 잠금이 아니라 실제로 쓰이지 않지만 union 위치를
+	// 맞추려 빈 문자열로 채운다(응답에선 toPublicSummary가 떨군다).
+	authorUserId: sql<string>`''`,
+	// 게시판 enum은 순수 쪽 컬럼 타입을 그대로 쓴다(z 스키마의 "best"는 저장 게시판이 아니라
+	// 가상 큐레이션이라 UNION 타입에 섞이면 안 된다).
+	board: sql<CommunityPostColumns["board"]>`'work_talk'`,
+	commentCount: sql<number>`coalesce(${crawledCommunityTopic.commentCount}, 0)`,
+	// 원 게시일을 작성일 자리에 쓴다. where의 30일 컷오프가 null을 걸러내므로 결과에선
+	// non-null이고, UNION 상대(created_at NOT NULL)와 타입이 맞는다.
+	createdAt: sql<Date>`${crawledCommunityTopic.sourcePostedAt}`,
+	id: crawledCommunityTopic.id,
+	isLocked: sql<boolean>`false`,
+	isPromotion: sql<boolean>`false`,
+	likeCount: sql<number>`0`,
+	title: crawledCommunityTopic.title,
+	viewCount: sql<number>`coalesce(${crawledCommunityTopic.viewCount}, 0)`,
+	source: sql<CommunityFeedSource>`'crawled'`,
+	isCrawled: sql<number>`1`,
+};
+
+// 수집 글 노출 자격. 목록 union·총 건수·상세가 같은 기준을 써야 한 곳만 좁혀지는 상태가
+// 생기지 않는다(운영자가 내린 글이 총 건수에만 남아 마지막 페이지가 비는 식).
+// removed_at은 운영자가 글을 내린 시각이며, 재수집이 이 칸을 건드리지 않으므로 톰스톤으로
+// 버틴다(bambi-crawl-ingest.ts runCommunityPass).
+const crawledTopicFeedFilters = (windowStart: Date): SQL[] => [
+	gte(crawledCommunityTopic.sourcePostedAt, windowStart),
+	isNull(crawledCommunityTopic.removedAt),
+];
 
 const bestWindowStart = () => new Date(Date.now() - BEST_WINDOW_DAYS * DAY_MS);
 
@@ -306,9 +370,63 @@ const toPublicSummary = (summary: PostSummaryRow) => ({
 	isLocked: summary.isLocked,
 	isPromotion: summary.isPromotion,
 	likeCount: summary.likeCount,
+	// 화면이 "외부 수집" 배지·상세 라우팅을 가르는 판별 필드.
+	source: summary.source,
 	title: summary.title,
 	viewCount: summary.viewCount,
 });
+
+// 순수 work_talk + 수집 커뮤니티 글을 한 쿼리로 합쳐 페이지네이션한다. 애플리케이션에서
+// 두 배열을 합치는 대신 UNION ALL을 쓰는 이유는 정렬·limit·offset을 DB에서 끝내야 수집
+// 테이블이 커져도 무너지지 않기 때문이다(bambi-job-feed.listJobFeed와 같은 판단). ALL인
+// 이유는 두 원천에 같은 행이 있을 수 없어 DISTINCT가 불필요해서다. 정렬은 공고와 같은
+// 우선순위 규칙 — 1순위 순수(is_crawled 0), 2순위 수집(1), 각 구간 내 최신순.
+const selectWorkTalkFeedUnion = ({
+	limit,
+	offset,
+	windowStart,
+}: {
+	limit: number;
+	offset: number;
+	windowStart: Date;
+}) =>
+	unionAll(
+		db
+			.select(postSummarySelection)
+			.from(communityPost)
+			.where(and(...buildBoardFilters(CRAWLED_COMMUNITY_BOARD, windowStart))),
+		db
+			.select(crawledCommunityFeedSelection)
+			.from(crawledCommunityTopic)
+			// 수집 글은 원 게시일 30일 이내만 노출한다(순수 work_talk엔 컷오프가 없지만, 남의
+			// 게시판에서 긁어 온 글은 신선한 것만 섞는다). null 게시일은 이 조건이 자연히 걸러낸다.
+			.where(and(...crawledTopicFeedFilters(windowStart)))
+	)
+		.orderBy(sql`is_crawled asc, created_at desc`)
+		.limit(limit)
+		.offset(offset);
+
+// 수집 커뮤니티 노출 스위치. listPosts·overview 두 곳이 같은 값을 읽어야 해서 한 곳에
+// 모은다 — 한쪽만 켜지는 상태를 막는다(isCrawledJobFeedEnabled와 같은 이유).
+const isCrawledCommunityFeedEnabled = async (): Promise<boolean> => {
+	const [row] = await db
+		.select({ enabled: bambiSiteSettings.crawledCommunityFeedEnabled })
+		.from(bambiSiteSettings)
+		.where(eq(bambiSiteSettings.id, "default"))
+		.limit(1);
+	return row?.enabled ?? false;
+};
+
+// 30일 컷오프 안의 수집 글 수. 스위치 ON일 때 totalCount에 합산한다.
+const countCrawledCommunityTopics = async (
+	windowStart: Date
+): Promise<number> => {
+	const [row] = await db
+		.select({ value: count() })
+		.from(crawledCommunityTopic)
+		.where(and(...crawledTopicFeedFilters(windowStart)));
+	return row?.value ?? 0;
+};
 
 // 동시 토글로 행 변화가 없던 경우 캐시를 건드리지 않고 현재 값만 반환하기 위한 조회.
 type CommunityTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -353,11 +471,40 @@ export const communityRouter = {
 			);
 			// 목록·count 쿼리가 같은 30일 컷오프를 쓰도록 한 번만 계산한다.
 			const windowStart = bestWindowStart();
+			const offset = (input.page - 1) * PAGE_SIZE;
+
+			// 수집 글은 광고·업소 필터를 만족할 수 없다 — 그 토글이 켜지면(listFilters가 있으면)
+			// 순수 글만 남기고 수집 union을 끈다. work_talk·스위치 ON·필터 없음일 때만 섞는다.
+			const includeCrawled =
+				input.board === CRAWLED_COMMUNITY_BOARD &&
+				listFilters.length === 0 &&
+				(await isCrawledCommunityFeedEnabled());
+
+			if (includeCrawled) {
+				const [items, [nativeTotal], crawledTotal] = await Promise.all([
+					selectWorkTalkFeedUnion({ limit: PAGE_SIZE, offset, windowStart }),
+					db
+						.select({ value: count() })
+						.from(communityPost)
+						.where(
+							and(...buildBoardFilters(CRAWLED_COMMUNITY_BOARD, windowStart))
+						),
+					countCrawledCommunityTopics(windowStart),
+				]);
+
+				return {
+					items: maskLockedSummaries(items, profile).map(toPublicSummary),
+					page: input.page,
+					pageSize: PAGE_SIZE,
+					totalCount: (nativeTotal?.value ?? 0) + crawledTotal,
+				};
+			}
+
 			const [items, [total]] = await Promise.all([
 				selectBoardPosts(input.board, {
 					filters: listFilters,
 					limit: PAGE_SIZE,
-					offset: (input.page - 1) * PAGE_SIZE,
+					offset,
 					windowStart,
 				}),
 				db
@@ -383,10 +530,21 @@ export const communityRouter = {
 		const profile = await findCommunityMember(context.session);
 
 		const windowStart = bestWindowStart();
+		// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
+		const communityFeedOn = await isCrawledCommunityFeedEnabled();
 		const [best, free, workTalk, market, notice] = await Promise.all([
 			selectBoardPosts("best", { limit: OVERVIEW_LIMIT, windowStart }),
 			selectBoardPosts("free", { limit: OVERVIEW_LIMIT, windowStart }),
-			selectBoardPosts("work_talk", { limit: OVERVIEW_LIMIT, windowStart }),
+			communityFeedOn
+				? selectWorkTalkFeedUnion({
+						limit: OVERVIEW_LIMIT,
+						offset: 0,
+						windowStart,
+					})
+				: selectBoardPosts(CRAWLED_COMMUNITY_BOARD, {
+						limit: OVERVIEW_LIMIT,
+						windowStart,
+					}),
 			selectBoardPosts("market", { limit: OVERVIEW_LIMIT, windowStart }),
 			selectBoardPosts("notice", { limit: OVERVIEW_LIMIT, windowStart }),
 		]);
@@ -465,6 +623,64 @@ export const communityRouter = {
 				title: post.title,
 				updatedAt: post.updatedAt,
 				viewCount: viewUpdated?.viewCount ?? post.viewCount + 1,
+			};
+		}),
+
+	// 수집 커뮤니티 글 상세. 순수 getPost와 테이블이 달라 프로시저를 나눈다(crawledJobsRouter와
+	// 같은 판단 — 한 핸들러에서 두 테이블을 분기시키면 응답에 뭐가 섞일 수 있는지 매번 다시
+	// 읽어 확인해야 한다). 멤버 게이트 + 스위치 게이트를 통과해야 하고, 좋아요·수정·삭제·댓글
+	// 작성은 없다. sourceUrl은 절대 내려보내지 않는다 — 그 링크 한 줄이 원본 전체로 가는
+	// 우회로다(crawled-jobs.ts PUBLIC_COLUMNS 주석의 원칙 그대로).
+	getCrawledTopic: protectedProcedure
+		.input(z.object({ topicId: z.uuid() }))
+		.handler(async ({ context, input }) => {
+			await requireCommunityMember(context.session);
+			// 스위치 OFF면 존재를 숨긴다 — 노출을 내린 글은 상세도 열리지 않아야 한다.
+			if (!(await isCrawledCommunityFeedEnabled())) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "게시글을 찾을 수 없습니다.",
+				});
+			}
+
+			const [topic] = await db
+				.select({
+					boardName: crawledCommunityTopic.boardName,
+					body: crawledCommunityTopic.body,
+					commentCount: crawledCommunityTopic.commentCount,
+					comments: crawledCommunityTopic.comments,
+					id: crawledCommunityTopic.id,
+					sourcePostedAt: crawledCommunityTopic.sourcePostedAt,
+					title: crawledCommunityTopic.title,
+					viewCount: crawledCommunityTopic.viewCount,
+				})
+				.from(crawledCommunityTopic)
+				.where(
+					and(
+						eq(crawledCommunityTopic.id, input.topicId),
+						// 운영자가 내린 글은 상세도 열리지 않는다. 목록에서만 빼면 링크를 아는
+						// 사람에게는 계속 열려 있어 "삭제"가 아니라 "숨김"이 된다.
+						isNull(crawledCommunityTopic.removedAt)
+					)
+				)
+				.limit(1);
+
+			if (!topic) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "게시글을 찾을 수 없습니다.",
+				});
+			}
+
+			return {
+				boardName: topic.boardName,
+				// 본문·댓글은 수집 시점에 이미 마스킹·정규화된 값이라 그대로 내린다.
+				body: topic.body ?? "",
+				commentCount: topic.commentCount ?? 0,
+				// null(아직 미수집)은 빈 목록으로 접어 화면이 분기 없이 렌더한다.
+				comments: topic.comments ?? [],
+				id: topic.id,
+				sourcePostedAt: topic.sourcePostedAt,
+				title: topic.title,
+				viewCount: topic.viewCount ?? 0,
 			};
 		}),
 

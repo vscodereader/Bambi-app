@@ -440,11 +440,11 @@ export function Logo({
 }: LogoProps) {
 	const glyphDim = LOGO_GLYPH_DIM[size] || LOGO_GLYPH_DIM.md;
 	const glyph = tone === "inverse" ? "var(--color-primary)" : "var(--white)";
-	const label = lang === "ko" ? "밤비" : "Bambi";
+	const label = lang === "ko" ? "밤비알바" : "BambiAlba";
 	return (
 		<div
 			className={cn(
-				// "밤비"는 CJK라 기본 line-break가 밤/비 사이 줄바꿈을 허용한다. 폭이 모자라면
+				// "밤비알바"는 CJK라 기본 line-break가 글자 사이 줄바꿈을 허용한다. 폭이 모자라면
 				// 워드마크가 두 줄로 쪼개져 아이콘 옆에 세로로 쌓이므로 nowrap으로 막는다.
 				// (헤더에서는 브랜드 링크의 shrink-0이 압축 자체를 막지만, 로고는 푸터·인증
 				// 화면 등에서도 쓰이므로 컴포넌트 자체가 줄바꿈에 안전해야 한다.)
@@ -467,7 +467,7 @@ export function Logo({
 					viewBox="0 0 24 24"
 					width={glyphDim}
 				>
-					<title>밤비</title>
+					<title>밤비알바</title>
 					<path
 						d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
 						fill={glyph}

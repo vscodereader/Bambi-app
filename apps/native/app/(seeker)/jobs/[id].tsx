@@ -69,7 +69,9 @@ export default function SeekerJobDetailScreen() {
 					onPress={() => startChatMutation.mutate({ jobPostId: job.id })}
 				>
 					<Button.Label>
-						{startChatMutation.isPending ? "채팅 준비 중" : "밤비 채팅 시작"}
+						{startChatMutation.isPending
+							? "채팅 준비 중"
+							: "밤비알바 채팅 시작"}
 					</Button.Label>
 				</Button>
 				{startChatMutation.isError ? (

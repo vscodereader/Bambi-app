@@ -40,7 +40,7 @@ export default function ModeratorUsersScreen() {
 			/>
 			{users.length === 0 ? (
 				<StateCard
-					description="관리할 밤비 프로필이 없습니다."
+					description="관리할 밤비알바 프로필이 없습니다."
 					title="사용자가 없습니다"
 				/>
 			) : (

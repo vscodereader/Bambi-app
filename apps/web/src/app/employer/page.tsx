@@ -395,7 +395,7 @@ export default function EmployerPage() {
 			>
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/login">
+						<Link className={buttonVariants()} href="/seeker?auth=login">
 							로그인
 						</Link>
 					}
@@ -428,17 +428,17 @@ export default function EmployerPage() {
 	if (!profile) {
 		return (
 			<PageShell
-				description="공고를 등록하려면 밤비 프로필 설정이 필요합니다."
+				description="공고를 등록하려면 밤비알바 프로필 설정이 필요합니다."
 				title="내 공고"
 			>
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/welcome">
+						<Link className={buttonVariants()} href="/seeker?auth=signup">
 							회원가입으로 이동
 						</Link>
 					}
 					description="구인자 프로필을 만든 뒤 조직과 팀의 공고를 관리할 수 있습니다."
-					title="밤비 프로필이 없습니다"
+					title="밤비알바 프로필이 없습니다"
 				/>
 			</PageShell>
 		);

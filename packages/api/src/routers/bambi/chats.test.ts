@@ -30,6 +30,7 @@ const {
 	interviewSchedule,
 	jobPerformanceEvent,
 	jobPost,
+	userBlock,
 } = bambiSchema;
 
 interface ChatFixture {
@@ -909,6 +910,73 @@ describe("bambi chats router contact reveal response", () => {
 			});
 
 			expect(updated.metadata).toMatchObject({ status: "declined" });
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+// 목록의 isBlocked는 방 컬럼이 아니라 "이 방에 들어갈 수 있는가"다. 방 컬럼만 보면
+// 화면은 열리는 방처럼 그려놓고 누르면 진입 가드가 FORBIDDEN을 던지는 상태가 남는다.
+describe("bambi chats listMine 차단 판정", () => {
+	const blockedFlagFor = async (
+		fixture: ChatFixture,
+		viewerUserId: string
+	): Promise<boolean | undefined> => {
+		const rooms = await listMineFor(viewerUserId)({});
+
+		return rooms.find((room) => room.id === fixture.chatRoomId)?.isBlocked;
+	};
+
+	it("flags the room when the viewer blocked the counterpart", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.employerUserId);
+			await db.insert(userBlock).values({
+				blockedUserId: fixture.employerUserId,
+				blockerUserId: fixture.jobSeekerUserId,
+			});
+
+			expect(await blockedFlagFor(fixture, fixture.jobSeekerUserId)).toBe(true);
+		} finally {
+			await db
+				.delete(userBlock)
+				.where(inArray(userBlock.blockerUserId, [fixture.jobSeekerUserId]));
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	// 이 방향이 클라이언트에서는 절대 알 수 없는 쪽이다. 서버가 실어주지 않으면
+	// "상대가 나를 차단한" 방은 계속 멀쩡해 보이고 눌러야만 에러가 뜬다.
+	it("flags the room when the counterpart blocked the viewer", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.employerUserId);
+			await db.insert(userBlock).values({
+				blockedUserId: fixture.jobSeekerUserId,
+				blockerUserId: fixture.employerUserId,
+			});
+
+			expect(await blockedFlagFor(fixture, fixture.jobSeekerUserId)).toBe(true);
+		} finally {
+			await db
+				.delete(userBlock)
+				.where(inArray(userBlock.blockerUserId, [fixture.employerUserId]));
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("leaves the room open when neither side blocked", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.employerUserId);
+
+			expect(await blockedFlagFor(fixture, fixture.jobSeekerUserId)).toBe(
+				false
+			);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}

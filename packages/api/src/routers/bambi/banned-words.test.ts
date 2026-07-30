@@ -172,3 +172,62 @@ describe("bambi banned words createMany", () => {
 		}
 	});
 });
+
+// removeAll은 테이블을 통째로 비우므로 개발 DB의 실제 금칙어까지 지운다. 격리할 방법이
+// 없어 테스트하지 않는다 — 대신 선택 삭제(inArray)만 고정한다.
+describe("bambi banned words remove", () => {
+	it("deletes only the selected ids and reports the count", async () => {
+		const admin = await createUserFixture("admin");
+		const base = makeUniqueBase();
+		const terms = [`${base}a`, `${base}b`, `${base}c`];
+
+		try {
+			const context = createContextForUser(admin.userId);
+			const createMany = createProcedureClient(bannedWordsRouter.createMany, {
+				context,
+				path: ["bambi", "bannedWords", "createMany"],
+			});
+			const remove = createProcedureClient(bannedWordsRouter.remove, {
+				context,
+				path: ["bambi", "bannedWords", "remove"],
+			});
+
+			await createMany({ terms });
+
+			const rows = await db
+				.select({ id: bannedWord.id, term: bannedWord.term })
+				.from(bannedWord)
+				.where(inArray(bannedWord.term, terms));
+			const doomed = rows.filter((row) => row.term !== `${base}c`);
+
+			const result = await remove({ ids: doomed.map((row) => row.id) });
+
+			expect(result).toEqual({ removed: 2 });
+
+			const survivors = await db
+				.select({ term: bannedWord.term })
+				.from(bannedWord)
+				.where(inArray(bannedWord.term, terms));
+
+			expect(survivors).toEqual([{ term: `${base}c` }]);
+		} finally {
+			await cleanupTerms(terms);
+			await cleanupUserFixture(admin);
+		}
+	});
+
+	it("rejects non-admin callers with FORBIDDEN", async () => {
+		const seeker = await createUserFixture("job_seeker");
+
+		try {
+			const remove = createProcedureClient(bannedWordsRouter.remove, {
+				context: createContextForUser(seeker.userId),
+				path: ["bambi", "bannedWords", "remove"],
+			});
+
+			await expectOrpcCode(remove({ ids: [randomUUID()] }), "FORBIDDEN");
+		} finally {
+			await cleanupUserFixture(seeker);
+		}
+	});
+});

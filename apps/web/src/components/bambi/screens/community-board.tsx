@@ -41,9 +41,14 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, type MouseEvent, useCallback, useEffect } from "react";
+import {
+	CommunityNewBadge,
+	CommunityRoleBadges,
+} from "@/components/bambi/community-post-badges";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
+	communityCrawledPath,
 	communityPostPath,
 	communityWritePath,
 	formatCommunityDate,
@@ -66,26 +71,6 @@ const isFlagOn = (value: string | null): boolean => value === "1";
 type BoardPostItem =
 	InferRouterOutputs<AppRouter>["bambi"]["community"]["listPosts"]["items"][number];
 
-function BoardPostBadges({ post }: { post: BoardPostItem }) {
-	if (!(post.isPromotion || post.authorRole === "employer")) {
-		return null;
-	}
-	return (
-		<>
-			{post.isPromotion ? (
-				<Badge className="shrink-0" variant="warning">
-					광고
-				</Badge>
-			) : null}
-			{post.authorRole === "employer" ? (
-				<Badge className="shrink-0" variant="secondary">
-					업소
-				</Badge>
-			) : null}
-		</>
-	);
-}
-
 function BoardPostRow({
 	boardSlug,
 	post,
@@ -95,10 +80,17 @@ function BoardPostRow({
 	post: BoardPostItem;
 	showBadges: boolean;
 }) {
+	// 수집 글은 게시판 상세가 아니라 전용 상세로 분기한다(순수 글은 기존 경로 그대로).
+	const isCrawled = post.source === "crawled";
+
 	return (
 		<Link
 			className="flex flex-col gap-1 rounded-lg px-2 py-3 hover:bg-muted"
-			href={communityPostPath(boardSlug, post.id) as Route}
+			href={
+				(isCrawled
+					? communityCrawledPath(post.id)
+					: communityPostPath(boardSlug, post.id)) as Route
+			}
 		>
 			<span className="flex min-w-0 items-center gap-1.5">
 				{post.isLocked ? (
@@ -107,7 +99,13 @@ function BoardPostRow({
 				{post.board === "notice" ? (
 					<Badge className="shrink-0">공지</Badge>
 				) : null}
-				{showBadges ? <BoardPostBadges post={post} /> : null}
+				{isCrawled ? (
+					<Badge className="shrink-0" variant="secondary">
+						외부 수집
+					</Badge>
+				) : null}
+				{showBadges ? <CommunityRoleBadges post={post} /> : null}
+				<CommunityNewBadge createdAt={post.createdAt} />
 				<span className="truncate font-semibold text-sm">{post.title}</span>
 				{post.commentCount > 0 ? (
 					<span className="flex shrink-0 items-center gap-0.5 font-semibold text-coral-500 text-xs">

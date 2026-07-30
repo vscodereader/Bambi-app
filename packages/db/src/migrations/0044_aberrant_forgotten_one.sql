@@ -1,0 +1,2 @@
+CREATE TYPE "public"."crawl_content_type" AS ENUM('job_post', 'community');--> statement-breakpoint
+ALTER TABLE "bambi_site_settings" ADD COLUMN "crawl_content_type" "crawl_content_type" DEFAULT 'job_post' NOT NULL;

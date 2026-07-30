@@ -32,7 +32,7 @@ export const communityAuthorName = (
 export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
 	{
 		adminOnly: true,
-		description: "밤비 수다방 공지",
+		description: "밤비알바 수다방 공지",
 		key: "notice",
 		label: "공지사항",
 		slug: "notice",
@@ -46,7 +46,7 @@ export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
 		writable: false,
 	},
 	{
-		description: "밤비 회원들의 자유로운 이야기",
+		description: "밤비알바 회원들의 자유로운 이야기",
 		key: "free",
 		label: "자유수다",
 		slug: "free",
@@ -91,6 +91,11 @@ export const communityBoardPath = (slug: string): string =>
 export const communityPostPath = (slug: string, postId: string): string =>
 	`/seeker/community/${slug}/${postId}`;
 
+// 수집 글 전용 상세 경로. 순수 글(communityPostPath)과 나란히 두되 게시판 slug 없이
+// 정적 세그먼트 crawled로 분기한다 — 수집 글은 게시판에 종속되지 않고 전용 상세로 간다.
+export const communityCrawledPath = (topicId: string): string =>
+	`/seeker/community/crawled/${topicId}`;
+
 export const communityWritePath = (slug: string): string =>
 	`/seeker/community/${slug}/write`;
 
@@ -104,6 +109,15 @@ export const formatCommunityDate = (value: Date | string): string => {
 	const date = new Date(value);
 	return `${date.getFullYear()}.${pad2(date.getMonth() + 1)}.${pad2(date.getDate())}`;
 };
+
+// 새 글 "N" 배지 기준 — 작성 후 이틀(48시간). 목록과 미리보기가 같은 기준으로 배지를
+// 달도록 여기에 둔다. now를 인자로 받는 건 테스트에서 시간을 고정하기 위해서다.
+const NEW_POST_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
+
+export const isNewCommunityPost = (
+	value: Date | string,
+	now: number = Date.now()
+): boolean => now - new Date(value).getTime() < NEW_POST_WINDOW_MS;
 
 export const getCommunityTotalPages = (
 	totalCount: number,

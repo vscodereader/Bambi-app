@@ -35,6 +35,9 @@ export interface ApiJobMediaSet {
 export interface ApiMarketplaceJob {
 	beginnerFriendly?: boolean | null;
 	coverImage?: ApiJobMedia | null;
+	// 수집 공고의 대표 이미지. job_post_media 행이 아니라 미러링된 URL 한 줄로 오므로
+	// storageKey 기반 조립을 거치지 않는다(버킷이 없는 환경에서는 원본 URL이 그대로 온다).
+	coverImageUrl?: null | string;
 	description?: string | null;
 	descriptionBlocks?: JobDescriptionBlock[] | null;
 	district?: string | null;
@@ -51,13 +54,16 @@ export interface ApiMarketplaceJob {
 	media?: ApiJobMediaSet;
 	// 급여 단위가 "협의"인 공고는 금액이 없다.
 	payAmount: null | number;
-	payUnit: string;
+	// 수집 공고는 원본이 단위를 주지 않아 null이다.
+	payUnit: null | string;
 	performance?: JobPerformanceMetrics;
 	promotionLabel?: null | string;
 	promotionTier?: "premium" | "recommended" | "standard" | null;
 	ratingAverage?: null | number | string;
 	ratingCount?: null | number | string;
 	region: string;
+	// "crawled"면 수집 공고다 — 상세가 job_post 경로에 없어 카드 클릭이 갈 곳이 다르다.
+	source?: null | string;
 	status: string;
 	teamDisplayName?: string | null;
 	title: string;
@@ -83,6 +89,24 @@ export const jobMediaPublicUrl = (storageKey: string): string => {
 const toJobMediaUrl = (media: ApiJobMedia): string =>
 	jobMediaPublicUrl(media.storageKey);
 
+// 이미 완성된 URL 한 줄을 카드가 쓰는 미디어 형태로 감싼다. 파일명·용량·MIME은 알 수 없고
+// 카드도 쓰지 않는다(url과 altText만 읽는다) — 모르는 값을 그럴듯하게 지어내지 않는다.
+const toUrlJobMedia = (
+	url?: null | string,
+	usage: JobMediaUsage = "cover"
+): JobMedia | null =>
+	url
+		? {
+				altText: "",
+				byteSize: 0,
+				fileName: "",
+				mimeType: "",
+				storageKey: "",
+				url,
+				usage,
+			}
+		: null;
+
 const toJobMedia = (media?: ApiJobMedia | null): JobMedia | null => {
 	if (!media) {
 		return null;
@@ -105,13 +129,21 @@ export const getMarketplaceJobCompany = (job: ApiMarketplaceJob): string =>
 
 // 금액이 없는 공고(급여 단위 "협의")는 목록·카드에서 "급여 협의"로 보여준다.
 // 카드의 splitPay가 "급여"를 단위 배지로 떼어내므로 이 형식을 지켜야 한다.
+//
+// 단위가 없는 경우(수집 공고 — 원본이 "120,000원"처럼 금액만 준다)는 금액만 적는다.
+// 모르는 단위를 지어내면 시급인지 일급인지 화면이 거짓말을 하게 된다.
 export const formatMarketplacePay = ({
 	payAmount,
 	payUnit,
-}: Pick<ApiMarketplaceJob, "payAmount" | "payUnit">): string =>
-	payAmount === null || payAmount === undefined
-		? NEGOTIABLE_PAY_TEXT
-		: `${payUnit} ${payAmount.toLocaleString("ko-KR")}원`;
+}: Pick<ApiMarketplaceJob, "payAmount" | "payUnit">): string => {
+	if (payAmount === null || payAmount === undefined) {
+		return NEGOTIABLE_PAY_TEXT;
+	}
+
+	const amount = `${payAmount.toLocaleString("ko-KR")}원`;
+
+	return payUnit ? `${payUnit} ${amount}` : amount;
+};
 
 const toFiniteNumber = (value: null | number | string | undefined): number => {
 	const numericValue = Number(value ?? 0);
@@ -137,6 +169,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 	const company = getMarketplaceJobCompany(job);
 	const coverImage =
 		toJobMedia(job.media?.cover ?? job.coverImage ?? null) ??
+		toUrlJobMedia(job.coverImageUrl) ??
 		sampleCoverMedia(job.id, `${company} 대표 이미지`);
 	const detailImages = (job.media?.detail ?? [])
 		.map(toJobMedia)
@@ -155,9 +188,11 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		beginnerFriendly: job.beginnerFriendly ?? false,
 		company,
 		coverImage,
+		// 카드 클릭이 /seeker/jobs/[id] 대신 수집 전용 상세로 가야 한다(그 id는 job_post에 없다).
+		crawled: job.source === "crawled",
 		desc:
 			job.description ??
-			"공고 상세와 면접 안내는 밤비 채팅에서 안전하게 확인할 수 있어요.",
+			"공고 상세와 면접 안내는 밤비알바 채팅에서 안전하게 확인할 수 있어요.",
 		descriptionBlocks: job.descriptionBlocks ?? [],
 		detailImages,
 		district: job.district ?? "",
@@ -188,17 +223,27 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 
 export interface ApiAdBannerJob {
 	adHorizontal?: ApiJobMedia | null;
+	// 수집 공고의 배너. 업로드 미디어가 아니라 미러링된 URL 한 줄로 온다.
+	adHorizontalUrl?: null | string;
 	adVertical?: ApiJobMedia | null;
+	adVerticalUrl?: null | string;
 	coverImage?: ApiJobMedia | null;
 	employerDisplayName?: string | null;
 	id: string;
 	layout?: AdBannerLayout | null;
+	// "crawled"면 수집 공고다. 상세 경로(수집 전용)와 배너 렌더 비율이 결제 광고와 다르다.
+	source?: null | string;
 	teamDisplayName?: string | null;
 	title: string;
 }
 
 export interface AdBannerItem {
 	company: string;
+	// 수집 공고 배너다. 원본 배너는 규격이 제각각(실측 약 3:2)이라 우리 슬롯 비율로
+	// 자르지 않고 원본 비율로 그린다 — 렌더러가 이 값으로 분기한다.
+	crawled: boolean;
+	// 클릭 대상. 수집 배너도 이제 갈 곳(수집 전용 상세)이 있다.
+	href: string;
 	id: string;
 	// 커버가 아니라 슬롯 배너가 우선이라 coverUrl이 아닌 imageUrl이다.
 	imageUrl: string;
@@ -215,15 +260,24 @@ export const toAdBannerItem = (
 	usage: JobAdBannerUsage
 ): AdBannerItem => {
 	const company = job.teamDisplayName ?? job.employerDisplayName ?? "검증 업체";
+	const isCrawled = job.source === "crawled";
 	const banner = usage === "ad_horizontal" ? job.adHorizontal : job.adVertical;
+	const bannerUrl =
+		usage === "ad_horizontal" ? job.adHorizontalUrl : job.adVerticalUrl;
 	const media =
 		toJobMedia(banner ?? job.coverImage ?? null) ??
+		toUrlJobMedia(bannerUrl, usage) ??
 		sampleCoverMedia(job.id, `${company} 대표 이미지`);
 
 	// 슬롯별 판정은 하지 않는다 — 레이아웃은 가로·세로 슬롯을 모두 담고 있고, 어느 쪽을
 	// 그릴지는 렌더러가 슬롯을 보고 정한다.
 	return {
 		company,
+		crawled: isCrawled,
+		// 수집 공고의 id는 job_post에 없다 — 수집 전용 상세로 보내야 오류 화면이 뜨지 않는다.
+		href: isCrawled
+			? `/seeker/jobs/crawled/${job.id}`
+			: `/seeker/jobs/${job.id}`,
 		id: job.id,
 		imageUrl: media.url,
 		layout: job.layout ?? null,

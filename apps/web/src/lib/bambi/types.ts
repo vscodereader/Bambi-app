@@ -53,6 +53,8 @@ export interface Job {
 	beginnerFriendly: boolean;
 	company: string;
 	coverImage?: JobMedia | null;
+	// 외부에서 수집한 공고. 상세가 job_post 경로에 없어 카드 클릭이 수집 전용 상세로 가야 한다.
+	crawled?: boolean;
 	desc: string;
 	descriptionBlocks?: JobDescriptionBlock[];
 	detailImages?: JobMedia[];

@@ -7,6 +7,7 @@ import {
 	Bell,
 	Bookmark,
 	Briefcase,
+	Calendar,
 	Check,
 	ChevronDown,
 	ChevronLeft,
@@ -58,6 +59,7 @@ export const ArrowNarrowLeft = fill(ArrowLeft);
 export const BellIcon = fill(Bell);
 export const BookmarkIcon = fill(Bookmark);
 export const BriefcaseIcon = fill(Briefcase);
+export const CalendarIcon = fill(Calendar);
 export const CheckIcon = fill(Check);
 export const ChevronDownIcon = fill(ChevronDown);
 export const ChevronLeftIcon = fill(ChevronLeft);

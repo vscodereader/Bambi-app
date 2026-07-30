@@ -221,7 +221,7 @@ function HeaderRightActions({
 					buttonVariants({ variant: isPublic ? "dark" : "outline" }),
 					"h-10 px-4 font-bold text-sm no-underline"
 				)}
-				href={(isPublic ? "/login" : "/seeker/me") as Route}
+				href={(isPublic ? "/seeker?auth=login" : "/seeker/me") as Route}
 			>
 				{isPublic ? "시작하기" : "내 정보"}
 			</Link>
@@ -265,7 +265,7 @@ export function ResponsiveAppShell({
 						{/* 우측 버튼·배지는 shrink-0이라 폭이 모자라면 압축이 전부 여기로 몰린다. */}
 						{/* shrink-0이 없으면 링크가 한 글자 폭까지 찌그러져 로고가 세로로 쌓인다. */}
 						<Link
-							aria-label="밤비 홈"
+							aria-label="밤비알바 홈"
 							className="shrink-0 no-underline"
 							href="/"
 						>
@@ -325,7 +325,11 @@ export function ResponsiveAppShell({
 				<div className="flex h-14 items-center justify-between px-5">
 					{/* 데스크톱과 같은 이유로 shrink-0 — 좁은 화면에서 우측 액션이 늘어나면
 					    브랜드가 압축 대상이 된다. */}
-					<Link aria-label="밤비 홈" className="shrink-0 no-underline" href="/">
+					<Link
+						aria-label="밤비알바 홈"
+						className="shrink-0 no-underline"
+						href="/"
+					>
 						<Logo lang="ko" size="sm" />
 					</Link>
 					<div className="flex items-center gap-2">

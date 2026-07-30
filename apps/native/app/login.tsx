@@ -78,7 +78,7 @@ export default function LoginScreen() {
 		<BambiScreen>
 			<BambiHeader
 				description="seed 계정으로 로그인하면 모바일 공고 탐색, 채팅, 구인자 관리, 관리자 흐름을 확인할 수 있습니다."
-				title="밤비 로그인"
+				title="밤비알바 로그인"
 			/>
 			<Surface className="gap-4 rounded-lg p-4" variant="secondary">
 				<View className="flex-row flex-wrap gap-2">

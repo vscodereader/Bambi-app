@@ -25,6 +25,14 @@ export const env = createEnv({
 		// Google Generative AI(Gemini) 키. /ai 라우트 전용 선택 기능이라 미설정 시 해당
 		// 라우트만 실패한다. @ai-sdk/google 기본 provider가 이 값을 env에서 직접 읽는다.
 		GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
+		// 퀸알바 크롤링용 쿠키 문자열(브라우저 Cookie 헤더 통째). 이 사이트는 전 페이지가
+		// KCB 본인확인 성인인증 게이트 뒤에 있어, 인증 세션 쿠키 없이는 어떤 URL도
+		// adult_index.php 스텁만 돌려준다. 만료되면 회차가 "게이트에 막혔다"로 실패한다.
+		//
+		// 선택 값이다. 비워두면 bambi-crawl-ingest.ts의 QUEENALBA_COOKIE_INLINE을 쓴다 —
+		// 실제 값에는 인증한 사람의 실명·생년월일·휴대폰번호가 들어 있으므로, 공유 리포나
+		// 배포 환경에서는 코드가 아니라 이쪽에 넣는 편이 안전하다(이 값이 코드보다 우선한다).
+		QUEENALBA_COOKIE: z.string().optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,

@@ -42,7 +42,12 @@ export function SeekerMarketplaceScreen() {
 	// 게스트는 상세 대신 가입 유도 화면으로 보낸다.
 	const openJob = (job: Job) => {
 		if (isGuest) {
-			router.push("/welcome?signup");
+			router.push("/seeker?auth=signup");
+			return;
+		}
+		// 수집 공고의 id는 job_post에 없다 — /seeker/jobs/[id]로 보내면 404가 뜬다.
+		if (job.crawled) {
+			router.push(`/seeker/jobs/crawled/${job.id}` as Route);
 			return;
 		}
 		router.push(`/seeker/jobs/${job.id}` as Route);
@@ -58,7 +63,10 @@ export function SeekerMarketplaceScreen() {
 					<div className="sticky top-20 flex flex-col gap-4">
 						{/* 배너 rail을 "빠른 탐색" 카드 위에 둔다. 빈 슬롯은 rail이 자체
 						    "광고 모집중" 자리표시로 채우므로 조건 없이 항상 렌더한다. */}
-						<HorizontalAdBannerRail items={adBanners.leftBanner} />
+						<HorizontalAdBannerRail
+							isLoading={adBanners.isLoading}
+							items={adBanners.leftBanner}
+						/>
 						<Card className="rounded-lg" pad="lg" tone="outline">
 							<div className="mb-4 flex items-center gap-2">
 								<span className="inline-flex size-5 text-coral-600">
@@ -78,6 +86,7 @@ export function SeekerMarketplaceScreen() {
 				>
 					<PremiumAdBannerSection
 						className="mb-6"
+						isLoading={adBanners.isLoading}
 						items={adBanners.premiumBanner}
 					/>
 					<div className="mb-5 flex flex-col gap-4">
@@ -125,7 +134,10 @@ export function SeekerMarketplaceScreen() {
 				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 					{/* 빈 슬롯은 rail이 "광고 모집중" 자리표시로 채우므로 조건 없이 렌더한다. */}
 					<div className="sticky top-20">
-						<AdBannerRail items={adBanners.rightBanner} />
+						<AdBannerRail
+							isLoading={adBanners.isLoading}
+							items={adBanners.rightBanner}
+						/>
 					</div>
 				</aside>
 			</div>

@@ -18,7 +18,7 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
 						APP_CONTENT_MAX_W
 					)}
 				>
-					<Link aria-label="밤비 홈" className="no-underline" href="/">
+					<Link aria-label="밤비알바 홈" className="no-underline" href="/">
 						<Logo lang="ko" size="md" />
 					</Link>
 				</div>

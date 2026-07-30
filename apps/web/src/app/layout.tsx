@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 	description: SITE_DESCRIPTION,
 	keywords: [
 		"유흥알바",
-		"밤비",
+		"밤비알바",
 		"밤알바",
 		"룸알바",
 		"노래주점알바",
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 		"여성알바",
 		"접객알바",
 	],
-	authors: [{ name: "밤비" }],
+	authors: [{ name: "밤비알바" }],
 	classification: "job",
 	openGraph: {
 		type: "website",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
 				url: "/og-image.png",
 				width: 1200,
 				height: 630,
-				alt: "밤비 - 유흥·접객 룸알바·구인구직 사이트",
+				alt: "밤비알바 - 유흥·접객 룸알바·구인구직 사이트",
 			},
 		],
 	},

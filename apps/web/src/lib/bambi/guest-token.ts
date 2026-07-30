@@ -12,7 +12,12 @@ export interface GuestTokenPayload {
 	exp: number;
 	// 인증에서 확인된 성별. 가입 시 프로필로 이관한다.
 	gender: BambiGenderValue | null;
-	v: 1;
+	// 토큰 포맷 버전. 1·2 모두 유효하다. 2는 한때 인증 건 ID(ivId)를 함께 싣던
+	// 포맷인데, 그 필드는 더 이상 쓰지도 읽지도 않는다(자체점검 항목 4 — 인증 건 ID는
+	// 유효시간 30분짜리인데 쿠키는 30일을 들고 있어, JS로 읽히는 채로 남겨둘 이유가
+	// 없다). 이미 발급된 토큰은 여분 필드를 무시하고 그대로 통과시킨다 —
+	// 게스트 열람을 끊지 않기 위해 버전을 올리지 않는다.
+	v: 1 | 2;
 }
 
 const encoder = new TextEncoder();
@@ -64,7 +69,7 @@ export async function createGuestToken({
 	const payload: GuestTokenPayload = {
 		exp: Math.floor(now.getTime() / 1000) + maxAgeSeconds,
 		gender,
-		v: 1,
+		v: 2,
 	};
 	const payloadPart = toBase64Url(encoder.encode(JSON.stringify(payload)));
 	const key = await importHmacKey(secret);
@@ -86,8 +91,10 @@ const parsePayload = (payloadPart: string): GuestTokenPayload | null => {
 		if (typeof parsed !== "object" || parsed === null) {
 			return null;
 		}
+		// 아는 필드만 뽑아 재구성한다 — 구 토큰에 남아 있는 ivId 같은 여분 필드는
+		// 여기서 자연히 떨어져 나가고, 토큰은 계속 유효하다.
 		const { exp, gender, v } = parsed as Record<string, unknown>;
-		if (v !== 1 || typeof exp !== "number") {
+		if ((v !== 1 && v !== 2) || typeof exp !== "number") {
 			return null;
 		}
 		if (gender !== "male" && gender !== "female" && gender !== null) {

@@ -30,7 +30,7 @@ describe("bambi-options taxonomy", () => {
 		expect(districtsForRegion("기타")).toHaveLength(0);
 		expect(districtsForRegion("없는값")).toHaveLength(0);
 	});
-	it("업종은 확정 8종", () => {
+	it("업종은 확정 9종(기타는 맨 끝)", () => {
 		expect([...industryOptions]).toEqual([
 			"룸싸롱",
 			"텐프로/쩜오",
@@ -40,6 +40,7 @@ describe("bambi-options taxonomy", () => {
 			"BAR",
 			"마사지",
 			"요정",
+			"기타",
 		]);
 	});
 });

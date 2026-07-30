@@ -31,7 +31,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 		}
 		redirected.current = true;
 		toast("로그인이 필요해요");
-		router.replace("/login");
+		router.replace("/seeker?auth=login");
 	}, [mounted, session.isPending, isSignedIn, router]);
 
 	if (!mounted || session.isPending) {

@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
 	type AnyPgColumn,
 	boolean,
@@ -45,9 +45,11 @@ export const jobPostStatus = pgEnum("job_post_status", [
 	"rejected",
 ]);
 
-// 업종 카테고리. 운영이 확정한 8종으로 고정하며, 값 자체가 화면 표기(한국어·BAR)다 —
+// 업종 카테고리. 운영이 확정한 9종으로 고정하며, 값 자체가 화면 표기(한국어·BAR)다 —
 // 별도 라벨 맵 없이 그대로 렌더한다. 표기를 바꿀 일이 생기면 ALTER TYPE ... RENAME VALUE로
 // 값 자체를 바꾼다(자유 입력이던 기존 text 컬럼을 enum으로 좁혀 오타·비표준 값을 차단).
+// "기타"는 맨 끝에 둔다 — 원본 사이트가 "기타 - 기타업종"으로 내보내는 공고를 받는 자리이고,
+// 목록·Select에서도 구체 업종 뒤에 오는 게 자연스럽다.
 export const jobIndustryCategory = pgEnum("job_industry_category", [
 	"룸싸롱",
 	"텐프로/쩜오",
@@ -57,6 +59,7 @@ export const jobIndustryCategory = pgEnum("job_industry_category", [
 	"BAR",
 	"마사지",
 	"요정",
+	"기타",
 ]);
 
 export const jobExposureType = pgEnum("job_exposure_type", [
@@ -198,6 +201,55 @@ export const chatAttachmentCategory = pgEnum("chat_attachment_category", [
 	"pdf",
 ]);
 
+// 크롤링 대상 사이트. 파서가 사이트마다 하나씩이라 값이 곧 파서 선택 키다.
+// queenalba는 사이트 전체가 KCB 본인확인 기반 성인인증 게이트(/okname/phone_popup2.php,
+// /okname/ipin2.php) 뒤에 있어, 운영자가 본인 인증 세션의 쿠키를 넣어줘야 목록·상세가 열린다.
+// enum 값은 두되 실제 수집기(파서·쿠키 주입)는 아직 미구현이라, 운영자가 이 사이트를 골라도
+// 수집기는 "준비 중"으로 회차를 만들지 않고 빠져나온다(빈 응답을 만료로 오해하지 않게).
+export const crawlSourceSite = pgEnum("crawl_source_site", [
+	"foxalba",
+	"queenalba",
+]);
+
+// 수집 데이터 종류. 공고는 crawled_job_post, 커뮤니티(게시판)는 crawled_community_topic로
+// 각각 다른 파서·테이블로 간다. 운영자가 사이트와 함께 이 값을 골라, 한 회차에 한 종류만 긁는다.
+export const crawlContentType = pgEnum("crawl_content_type", [
+	"job_post",
+	"community",
+]);
+
+// job_post의 출처. 크롤링 원본은 job_post가 아니라 crawled_job_post에 살기 때문에
+// 여기에는 "crawled"가 없다 — 크롤링 공고가 job_post로 넘어오는 유일한 경로가 전환이다.
+// 이 경계 덕분에 결제·부스트·채팅·리뷰가 "크롤링이면 예외" 분기를 달지 않아도 된다.
+export const jobPostSource = pgEnum("job_post_source", [
+	"original",
+	"converted",
+]);
+
+// 수집 공고의 생애. needs_review는 원본 업종이 우리 8종 enum에 매핑되지 않아 운영자가
+// 손으로 이어줘야 하는 상태다(매핑 실패를 버리지 않고 남긴다).
+//
+// removed는 운영자가 내린 공고다. 행을 실제로 지우지 않는 이유는 원본 사이트에 글이 살아
+// 있는 한 다음 회차 upsert가 같은 (사이트, 원본ID)로 행을 되살리기 때문이다 — 삭제는
+// 재수집을 견디는 톰스톤이어야 한다. 그래서 이 값은 upsert·만료 스윕이 절대 덮지 않는다
+// (bambi-crawl-ingest.ts).
+export const crawledPostStatus = pgEnum("crawled_post_status", [
+	"active",
+	"needs_review",
+	"expired",
+	"removed",
+]);
+
+// 수집 회차 결과. aborted_low_yield는 파싱 성공률이 임계치 아래여서 아무것도 커밋하지 않고
+// 중단한 경우다 — 상대가 마크업을 바꿔 0건이 파싱된 것을 "공고가 사라졌다"로 오해해
+// 전량 만료시키는 사고를 막는 장치다.
+export const crawlRunStatus = pgEnum("crawl_run_status", [
+	"running",
+	"success",
+	"failed",
+	"aborted_low_yield",
+]);
+
 export const jobDescriptionBlockTypes = [
 	"paragraph",
 	"heading",
@@ -212,6 +264,27 @@ export interface JobDescriptionBlock {
 	text: string;
 	type: JobDescriptionBlockType;
 }
+
+// 본인인증 건 발급 기록. 인증창에 넘길 identityVerificationId를 서버가 발급하면서
+// 한 행을 남기고, 그 뒤로는 "우리가 시작시킨 인증인가 · 아직 안 썼는가 · 발급 후
+// 유효시간 안인가"를 이 표로 판정한다. 예전에는 클라이언트가 ID를 직접 만들어서
+// 서버가 발급 사실을 몰랐고, 같은 ID를 몇 번이든 다시 쓸 수 있었다
+// (본인확인서비스 이용기관 취약점 자체점검 항목 4 — 인증정보 재사용 차단).
+// 개인정보는 담지 않는다 — 인증 결과는 프로필로만 들어간다.
+export const bambiIdentityVerification = pgTable(
+	"bambi_identity_verification",
+	{
+		// 서버가 만든 `iv-<uuid>` 값. 포트원 인증 건 식별자와 동일한 값이라 PK로 쓴다.
+		id: text("id").primaryKey(),
+		issuedAt: timestamp("issued_at").defaultNow().notNull(),
+		// 최종 소비(가입·재인증 완료) 시각. null이면 아직 쓰이지 않은 인증 건이다.
+		consumedAt: timestamp("consumed_at"),
+	},
+	(table) => [
+		// 만료·소진된 오래된 행 정리(운영 배치)용. 발급 시각 범위 조회를 받쳐 준다.
+		index("bambi_identity_verification_issued_at_idx").on(table.issuedAt),
+	]
+);
 
 export const bambiProfile = pgTable(
 	"bambi_profile",
@@ -303,6 +376,205 @@ export const employerTeamProfile = pgTable(
 	]
 );
 
+// 외부 사이트에서 수집한 공고 원본. job_post와 한 테이블에 섞지 않는 이유는 소유자가 없기
+// 때문이다 — job_post는 organization_id와 created_by_user_id가 NOT NULL이라 크롤링 행에
+// 붙일 주인이 없고, 억지로 합성 계정을 붙이면 그 조직이 업소 목록·검색·채팅·통계 전반에
+// 유령으로 섞인다. 업체가 실제로 가입해 전환될 때만 job_post 행이 생긴다.
+export const crawledJobPost = pgTable(
+	"crawled_job_post",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		sourceSite: crawlSourceSite("source_site").notNull(),
+		// 상세 URL에서 뽑은 원본 식별자(foxalba o_idx, queenalba num). 사이트와 묶어 유니크라
+		// 재수집이 멱등이 된다.
+		sourceExternalId: text("source_external_id").notNull(),
+		sourceUrl: text("source_url").notNull(),
+		title: text("title").notNull(),
+		// 공고에 내걸린 업소 표시명(원본 "닉네임/업소명"). 사업자등록 상호인 biz_name과 다른
+		// 축이라 따로 둔다 — 이쪽은 간판이라 공개해도 되고, biz_name은 운영자 전용 리드다.
+		shopName: text("shop_name"),
+		// 정규화 본문. 연락처 마스킹을 적용한 뒤 저장한다 — 유흥 공고는 본문에 연락처를
+		// 대문짝만하게 박아두기 때문에, 필드만 가리고 본문을 그대로 두면 아무것도 가린 게 아니다.
+		// 원문 HTML은 보관하지 않는다(Cheditor 산출물이라 스크립트·인라인 스타일이 섞여 있다).
+		body: text("body").notNull(),
+		region: text("region"),
+		district: text("district"),
+		// 원본 업종 문자열. 우리 8종 enum에 매핑되지 않아도 버리지 않고 남겨서
+		// 운영자가 손으로 잇게 한다(status = needs_review).
+		industryRaw: text("industry_raw"),
+		industryCategory: jobIndustryCategory("industry_category"),
+		// 파싱 전 급여 원문("일 15만원", "협의"). 파싱 결과가 틀렸을 때 근거로 되짚는다.
+		payRaw: text("pay_raw"),
+		payAmount: integer("pay_amount"),
+		payUnit: text("pay_unit"),
+		workSchedule: text("work_schedule"),
+		gender: text("gender"),
+		ageRange: text("age_range"),
+		// 운영자 전용 영업 리드. 공개 API의 select에서 제외한다 — 원본 사이트에 연락처를 올린
+		// 담당자는 그 사이트 이용자에게 연락받는 데 동의했을 뿐 다른 서비스에서의 재공개에
+		// 동의한 적이 없고, 업종 특성상 통제 못 하는 확산은 실제 피해로 이어진다.
+		contactName: text("contact_name"),
+		// 예외. 2026-07-30 사용자 결정으로 공개 상세에 자동 노출한다(순수 공고 상세와 같은 구성) —
+		// 원본 사이트에서도 구직자에게 그대로 공개돼 있던 번호다. 나머지 리드 컬럼은 위 원칙 그대로다.
+		contactPhone: text("contact_phone"),
+		contactKakao: text("contact_kakao"),
+		bizName: text("biz_name"),
+		address: text("address"),
+		// 정규화 필드 전체의 해시. 값이 같으면 재수집 시 last_seen_at만 갱신하고 UPDATE를 건너뛴다.
+		contentHash: text("content_hash").notNull(),
+		status: crawledPostStatus("status").default("active").notNull(),
+		firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+		// 목록에서 이 공고를 마지막으로 본 시각. 원본에서 사라져도 즉시 지우지 않고 이 값이
+		// 낡으면 expired로 넘긴다(일시 장애로 전량이 날아가는 사고 방어).
+		lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+		// 상세 페이지를 마지막으로 받은 시각. 목록만 보면 생존 여부는 알 수 있어도 내용 변경은
+		// 알 수 없어, 이 값을 기준으로 상세를 다시 받을 대상을 고른다. last_seen_at과 분리한
+		// 이유는 매 회차 목록으로 갱신되는 값과 섞이면 재수집 판정이 무너지기 때문이다.
+		detailFetchedAt: timestamp("detail_fetched_at"),
+		sourcePostedAt: timestamp("source_posted_at"),
+		// 원본이 내건 마감일자. 접수기간의 끝(source_posted_at은 그 시작)이라 "이미 끝난 공고를
+		// 계속 보여주는" 상황을 이 값으로만 가려낼 수 있다. 원본에 없는 사이트가 있어 nullable.
+		sourceDeadlineAt: timestamp("source_deadline_at"),
+		// 원본에서 이 공고가 어느 자리에 걸려 있었는지. 일반 목록 공고와 메인 상단의 유료 노출
+		// (광고 배너·우대채용·스페셜채용)은 같은 공고여도 값어치가 다르다 — 돈을 낸 자리라
+		// 그 사이트가 지금 무엇을 밀고 있는지의 신호가 된다. null은 아직 분류 전(구 수집분).
+		listingType: text("listing_type"),
+		// 아래 네 칸에는 원본 URL이 아니라 **base64 data URI**가 들어간다
+		// (`data:image/jpeg;base64,...`). 원본을 핫링크하면 상대가 파일을 지우거나 referer로
+		// 막는 순간 우리 화면이 깨지고, 버킷 업로드는 로컬 자격증명 없이 조용히 실패해 네 칸이
+		// 전부 null로 남았다. data URI도 URI라서 컬럼 이름은 그대로 두고 <img src>에 직행한다.
+		// 크기 상한은 bambi-crawl-media.ts(한 장 2MB·공고당 8MB)에서 지킨다.
+		//
+		// 목록·카드에 걸린 대표 이미지(실측 16KB GIF → base64 21KB).
+		thumbnailUrl: text("thumbnail_url"),
+		// 광고 배너 자리에서 온 공고의 배너 이미지. 가로형과 세로형은 자리도 비율도 달라
+		// 서로를 대신할 수 없으므로 한 칸에 섞지 않는다(우리 광고 상품의 ad_horizontal /
+		// ad_vertical과 같은 축이다). 원본이 한쪽만 걸어두는 경우가 흔해 각각 nullable.
+		bannerHorizontalUrl: text("banner_horizontal_url"),
+		bannerVerticalUrl: text("banner_vertical_url"),
+		// 상세 본문에 박혀 있던 이미지들. 유흥 공고는 조건 대부분을 이미지로만 적어두는 경우가
+		// 많아, 본문 텍스트만 저장하면 정작 핵심 정보가 빠진다(실측: 본문 텍스트는 거의 없고
+		// 1.4MB JPG 한 장이 공고 내용 전부였다). 순서를 유지해야 의미가 사므로 배열.
+		//
+		// 이 칸은 목록 쿼리에서 고르지 말 것 — 한 장이 base64 1.8MB다.
+		detailImageUrls: jsonb("detail_image_urls")
+			.$type<string[]>()
+			.default([])
+			.notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("crawled_job_post_source_uidx").on(
+			table.sourceSite,
+			table.sourceExternalId
+		),
+		index("crawled_job_post_status_last_seen_at_idx").on(
+			table.status,
+			table.lastSeenAt
+		),
+		index("crawled_job_post_discovery_idx").on(
+			table.status,
+			table.industryCategory,
+			table.region
+		),
+	]
+);
+
+// 수집 커뮤니티 글의 댓글 한 건. jsonb 컬럼에 통째로 담으므로 날짜는 timestamp가 아니라
+// ISO 문자열로 굳힌다(jsonb에는 Date 타입이 없다). authorName은 원본 공개 필명(실명 아님),
+// 날짜는 대댓글처럼 표기가 없는 경우가 있어 null 허용.
+export interface CrawledCommunityCommentRecord {
+	authorName: string | null;
+	body: string;
+	sourcePostedAt: string | null;
+}
+
+// 외부 게시판에서 뽑는 주제 신호. 제목과 반응 지표만 담고 본문은 저장하지 않는다 —
+// 게시글은 개별 작성자의 저작물이고, 남의 글을 community_post에 넣으려면 우리 회원 ID와
+// 가짜 글 비밀번호를 붙여야 해서 "남이 쓴 글이 우리 회원 얼굴로 서는" 구조가 된다.
+// 대신 "어떤 주제가 실제로 반응을 얻는가"만 운영 참고자료로 쓰고 시드 글은 운영이 직접 쓴다.
+export const crawledCommunityTopic = pgTable(
+	"crawled_community_topic",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		sourceSite: crawlSourceSite("source_site").notNull(),
+		sourceExternalId: text("source_external_id").notNull(),
+		sourceUrl: text("source_url").notNull(),
+		boardName: text("board_name"),
+		title: text("title").notNull(),
+		// 정규화 본문. 목록에는 없고 상세를 따로 받아야 채워진다(그래서 nullable —
+		// 아직 상세를 안 받았거나 파싱에 실패한 주제는 null로 남고 다음 회차가 다시 시도한다).
+		// 연락처 마스킹은 공고와 같은 이유로 여기서도 적용한다: 유흥 커뮤니티 글은 본문에
+		// 번호·카톡을 그대로 박아둔다.
+		body: text("body"),
+		// 조회수는 목록에 안 나온다(공지 행에만 채워진다). 상세를 받아야 알 수 있어서
+		// 목록 패스는 이 값을 건드리지 않는다 — 건드리면 매 회차 null로 되돌린다.
+		viewCount: integer("view_count"),
+		commentCount: integer("comment_count"),
+		// 상세에서 함께 수집하는 댓글. 본문(body)과 같은 이유로 nullable이되, 여기선 null과 []의
+		// 구분이 백필 판정 기준이다: null = 아직 상세를 안 받아 미수집, [] = 상세를 받았고 댓글이
+		// 0개. 이 구분이 없으면 "댓글 없는 글"과 "아직 안 받은 글"이 뭉개져 매 회차 다시 받는다.
+		comments: jsonb("comments").$type<CrawledCommunityCommentRecord[]>(),
+		sourcePostedAt: timestamp("source_posted_at"),
+		// 운영자가 이 글을 내린 시각. null이면 노출 중이다. 공고와 달리 상태 enum이 없어
+		// 컬럼 하나로 톰스톤을 세운다 — 행을 지우면 원본이 살아 있는 한 다음 회차 upsert가
+		// 같은 (사이트, 원본ID)로 되살린다. 목록 패스의 upsert set 목록에 이 칸이 없으므로
+		// 재수집이 자연히 값을 유지한다(bambi-crawl-ingest.ts runCommunityPass).
+		removedAt: timestamp("removed_at"),
+		firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+		lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("crawled_community_topic_source_uidx").on(
+			table.sourceSite,
+			table.sourceExternalId
+		),
+		index("crawled_community_topic_seen_idx").on(
+			table.sourceSite,
+			table.lastSeenAt
+		),
+	]
+);
+
+// 수집 회차 기록. DOM 크롤링의 운영 비용은 대부분 셀렉터가 소리 없이 깨지는 데서 나오므로,
+// 회차별 수율을 남겨야 파손을 알아챌 수 있다.
+export const crawlRun = pgTable(
+	"crawl_run",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		sourceSite: crawlSourceSite("source_site").notNull(),
+		// 이 회차가 무엇을 긁었는지. 사이트만 남기면 "퀸알바 회차"가 공고인지 게시판인지
+		// 구분되지 않아, 회차 목록이 파손 신호를 읽는 창구 역할을 못 한다.
+		contentType: crawlContentType("content_type").default("job_post").notNull(),
+		status: crawlRunStatus("status").default("running").notNull(),
+		startedAt: timestamp("started_at").defaultNow().notNull(),
+		finishedAt: timestamp("finished_at"),
+		pagesFetched: integer("pages_fetched").default(0).notNull(),
+		itemsSeen: integer("items_seen").default(0).notNull(),
+		itemsNew: integer("items_new").default(0).notNull(),
+		itemsUpdated: integer("items_updated").default(0).notNull(),
+		itemsFailed: integer("items_failed").default(0).notNull(),
+		error: text("error"),
+	},
+	(table) => [
+		index("crawl_run_source_site_started_at_idx").on(
+			table.sourceSite,
+			table.startedAt
+		),
+		// 사이트당 진행 중 회차는 하나뿐이다. 운영자의 "즉시 수집"과 스케줄러 틱이 겹치거나
+		// 버튼을 연달아 누르면 같은 목록을 두 번 긁게 되는데, 애플리케이션 쪽 검사만으로는
+		// 두 요청이 동시에 통과하는 창이 남는다. 부분 유니크 인덱스로 DB가 직렬화 지점을
+		// 잡아주면 두 번째 INSERT가 실패하고, 수집기가 그걸 "이미 실행 중"으로 처리한다.
+		uniqueIndex("crawl_run_active_source_site_uidx")
+			.on(table.sourceSite)
+			.where(sql`${table.status} = 'running'`),
+	]
+);
+
 export const jobPost = pgTable(
 	"job_post",
 	{
@@ -316,6 +588,13 @@ export const jobPost = pgTable(
 		createdByUserId: text("created_by_user_id")
 			.notNull()
 			.references(() => user.id),
+		// 출처. 기본값이 "original"이라 기존 행은 백필 없이 그대로 맞는다.
+		source: jobPostSource("source").default("original").notNull(),
+		// 전환의 씨앗이 된 크롤링 원본. 원본이 만료돼 정리돼도 전환된 공고는 남아야 하므로
+		// set null이다. 한 원본은 한 번만 전환되므로 유니크(nullable이라 미전환 행은 제한 없음).
+		crawledFromId: uuid("crawled_from_id").references(() => crawledJobPost.id, {
+			onDelete: "set null",
+		}),
 		status: jobPostStatus("status").default("pending_review").notNull(),
 		industryCategory: jobIndustryCategory("industry_category").notNull(),
 		region: text("region").notNull(),
@@ -378,6 +657,7 @@ export const jobPost = pgTable(
 			table.region,
 			table.payAmount
 		),
+		uniqueIndex("job_post_crawled_from_id_uidx").on(table.crawledFromId),
 	]
 );
 
@@ -618,6 +898,12 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 		.$type<{ accountNumber: string; bank: string; holder: string }[]>()
 		.default([])
 		.notNull(),
+	// 법정 최저시급과 그 기준 연도. 공고 상세의 급여 옆에 나란히 붙여, 제시 급여가 최저시급
+	// 대비 어느 수준인지를 구직자가 그 자리에서 판단할 수 있게 한다. 매년 바뀌고 다음 해 값이
+	// 8월에 미리 고시되므로 연도도 함께 저장한다(현재 연도로 유추하면 연말에 틀린다).
+	// null이면 코드 기본값(DEFAULT_MINIMUM_WAGE)으로 폴백한다.
+	minimumWageYear: integer("minimum_wage_year"),
+	minimumWageHourly: integer("minimum_wage_hourly"),
 	// 회원 탈퇴 후 개인정보 보존기간(일). 운영자 사이트 설정에서 편집한다.
 	// null이면 코드 기본값(DEFAULT_WITHDRAWAL_RETENTION_DAYS=30)으로 폴백한다.
 	withdrawalRetentionDays: integer("withdrawal_retention_days"),
@@ -634,6 +920,55 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	privacySmsProvider: text("privacy_sms_provider"),
 	privacyContactPhone: text("privacy_contact_phone"),
 	privacyContactEmail: text("privacy_contact_email"),
+	// 수집 스케줄러 스위치. 스케줄러 job은 항상 등록해두고 매 틱 이 값을 읽는다 —
+	// toad-scheduler의 job.stop()은 프로세스 메모리 상태라 서버를 재시작하거나 인스턴스가
+	// 늘면 상태가 갈리지만, DB 플래그는 어디서 켜도 모든 인스턴스에 즉시 반영된다.
+	// 기본이 false라 배포만으로는 저절로 돌지 않는다(운영자가 명시적으로 켠다). 이 값은
+	// 주기 실행만 통제하고, 운영자의 「즉시 수집」은 꺼져 있어도 항상 돈다 — 수동 실행까지
+	// 막으면 스케줄러를 켜지 않고는 파서를 확인할 방법이 없어진다.
+	crawlEnabled: boolean("crawl_enabled").default(false).notNull(),
+	// 수집 대상 사이트. 현재는 퀸알바만 수집한다(여우알바는 대상에서 내렸다). enum 값과
+	// 과거 회차 기록은 남겨두므로 되살릴 때 마이그레이션이 필요 없다.
+	crawlSourceSite: crawlSourceSite("crawl_source_site")
+		.default("queenalba")
+		.notNull(),
+	// 수집 데이터 종류(공고/커뮤니티). 사이트와 함께 (사이트×종류) 조합을 이루고, 파서가
+	// 구현된 조합만 실제로 돈다.
+	crawlContentType: crawlContentType("crawl_content_type")
+		.default("job_post")
+		.notNull(),
+	// 수집 주기(시간). null이면 코드 기본값(DEFAULT_CRAWL_INTERVAL_HOURS)으로 폴백한다.
+	crawlIntervalHours: integer("crawl_interval_hours"),
+	// 마지막 수집 시각. 틱 간격보다 이 값을 기준으로 판정해 서버 재시작에도 주기가 밀리지 않는다.
+	crawlLastRunAt: timestamp("crawl_last_run_at"),
+	// 수집 공고를 광고 배너 슬롯에 채울지. 수집 여부와 별개의 스위치다 — 긁어 두는 것과
+	// 남의 업소 이미지를 우리 광고 자리에 거는 것은 판단이 다르고, 문제가 생기면 수집을
+	// 멈추지 않고 노출만 즉시 내려야 한다. 기본이 false라 배포만으로는 노출되지 않는다.
+	crawledAdBannerEnabled: boolean("crawled_ad_banner_enabled")
+		.default(false)
+		.notNull(),
+	// 수집 공고를 공고 목록에 섞을지. 위와 같은 이유로 배너와 따로 끈다 — 배너 한 칸이
+	// 문제여도 목록은 살려 두거나, 그 반대를 택할 수 있어야 한다.
+	crawledJobFeedEnabled: boolean("crawled_job_feed_enabled")
+		.default(false)
+		.notNull(),
+	// 수집 커뮤니티 글을 커뮤니티 목록에 섞을지. 위 공고 스위치와 같은 이유로 수집과 노출을
+	// 따로 끈다 — 긁어 두는 것과 남의 글을 우리 커뮤니티에 세우는 것은 판단이 다르고, 문제가
+	// 생기면 수집을 멈추지 않고 노출만 즉시 내려야 한다. 기본이 false라 배포만으로는 켜지지 않는다.
+	crawledCommunityFeedEnabled: boolean("crawled_community_feed_enabled")
+		.default(false)
+		.notNull(),
+	// 섹션별 수집 공고 노출 상한. 수집할 때(배너 리다이렉터 해석 요청 절약)와 조회할 때(과거
+	// 회차가 남긴 초과 라벨 방어) 같은 값을 쓴다. null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS)
+	// 으로 폴백한다 — 컬럼 default를 박으면 기본값을 조정할 때마다 마이그레이션이 필요해진다.
+	crawledAdBannerLimit: integer("crawled_ad_banner_limit"),
+	crawledSpecialLimit: integer("crawled_special_limit"),
+	crawledUrgentLimit: integer("crawled_urgent_limit"),
+	crawledRecommendedLimit: integer("crawled_recommended_limit"),
+	// 한 회차에 게시판 목록에서 모을 커뮤니티 글 수 상한. 위 네 값이 "노출 자리 개수"라면 이건
+	// "수집 규모"다 — 최신순 앞에서 이 개수만큼만 담고, 채우면 남은 목록 페이지를 받지 않는다.
+	// 같은 이유로 null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS.community)으로 폴백한다.
+	crawledCommunityLimit: integer("crawled_community_limit"),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())

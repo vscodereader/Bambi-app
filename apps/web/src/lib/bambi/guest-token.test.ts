@@ -8,6 +8,28 @@ import {
 const SECRET = "test-secret-key-with-enough-length-123456";
 const NOW = new Date("2026-07-21T03:00:00Z");
 const BASE64_PADDING = /=+$/;
+const BASE64_PLUS = /\+/g;
+const BASE64_SLASH = /\//g;
+
+const BASE64URL_DASH = /-/g;
+const BASE64URL_UNDERSCORE = /_/g;
+
+const toBase64Url = (bytes: Uint8Array): string =>
+	btoa(String.fromCharCode(...bytes))
+		.replace(BASE64_PLUS, "-")
+		.replace(BASE64_SLASH, "_")
+		.replace(BASE64_PADDING, "");
+
+// 쿠키에 실제로 담기는 평문 페이로드. parsePayload는 모르는 필드를 버리므로,
+// "쿠키에 무엇이 들어 있는가"는 원문을 직접 봐야 알 수 있다.
+const rawPayload = (token: string): Record<string, unknown> =>
+	JSON.parse(
+		atob(
+			(token.split(".")[0] ?? "")
+				.replace(BASE64URL_DASH, "+")
+				.replace(BASE64URL_UNDERSCORE, "/")
+		)
+	) as Record<string, unknown>;
 
 const makeToken = () =>
 	createGuestToken({
@@ -64,5 +86,74 @@ describe("guest token", () => {
 
 		expect(decodeGuestTokenGender(token)).toBe("female");
 		expect(decodeGuestTokenGender("1")).toBeNull();
+	});
+});
+
+// 구 버전이 발급한 토큰을 재현한다(현재 createGuestToken으로는 만들 수 없는 페이로드).
+const signLegacyPayload = async (payload: unknown) => {
+	const encoder = new TextEncoder();
+	const payloadPart = toBase64Url(encoder.encode(JSON.stringify(payload)));
+	const key = await crypto.subtle.importKey(
+		"raw",
+		encoder.encode(SECRET),
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["sign"]
+	);
+	const signature = await crypto.subtle.sign(
+		"HMAC",
+		key,
+		encoder.encode(payloadPart)
+	);
+	return `${payloadPart}.${toBase64Url(new Uint8Array(signature))}`;
+};
+
+describe("게스트 토큰 — 인증 건 ID 미탑재", () => {
+	it("발급 토큰에는 인증 건 ID가 실리지 않는다", async () => {
+		const token = await createGuestToken({
+			gender: "female",
+			maxAgeSeconds: 3600,
+			now: NOW,
+			secret: SECRET,
+		});
+		// 쿠키는 httpOnly:false라 document.cookie로 그대로 읽힌다 — 원문 키 목록이
+		// 성별·만료·버전뿐이어야 인증 건 ID가 새지 않는다.
+		expect(Object.keys(rawPayload(token)).sort()).toEqual([
+			"exp",
+			"gender",
+			"v",
+		]);
+		expect(await verifyGuestToken(token, SECRET, NOW)).toMatchObject({
+			gender: "female",
+			v: 2,
+		});
+	});
+
+	it("기존 v1 토큰도 계속 유효하다", async () => {
+		const token = await signLegacyPayload({
+			exp: Math.floor(NOW.getTime() / 1000) + 3600,
+			gender: "male",
+			v: 1,
+		});
+
+		expect(await verifyGuestToken(token, SECRET, NOW)).toMatchObject({
+			gender: "male",
+			v: 1,
+		});
+	});
+
+	it("ivId가 남아 있는 구 v2 토큰도 유효하되 ivId는 버려진다", async () => {
+		const token = await signLegacyPayload({
+			exp: Math.floor(NOW.getTime() / 1000) + 3600,
+			gender: "female",
+			ivId: "iv-abc",
+			v: 2,
+		});
+
+		expect(await verifyGuestToken(token, SECRET, NOW)).toEqual({
+			exp: Math.floor(NOW.getTime() / 1000) + 3600,
+			gender: "female",
+			v: 2,
+		});
 	});
 });

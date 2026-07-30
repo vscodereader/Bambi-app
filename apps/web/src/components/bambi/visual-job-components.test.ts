@@ -8,6 +8,18 @@ const componentPath = (fileName: string) =>
 const readComponent = (fileName: string) =>
 	fs.readFileSync(componentPath(fileName), "utf8");
 
+// 한 파일에 세로형·가로형이 같이 사는 컴포넌트는 소스 전체로 단정하면 한쪽 분기를 지워도
+// 다른 쪽(또는 주석)의 같은 문자열에 걸려 초록으로 남는다. 그래서 함수 블록으로 잘라서 본다.
+// 마커를 못 찾으면 조용히 빈 문자열이 되어 검사가 무의미해지므로 바로 던진다.
+const blockBetween = (source: string, start: string, end: string) => {
+	const from = source.indexOf(start);
+	const to = source.indexOf(end, from);
+	if (from < 0 || to < 0) {
+		throw new Error(`block not found: ${start} … ${end}`);
+	}
+	return source.slice(from, to);
+};
+
 describe("visual job marketplace components", () => {
 	it("defines a compact visual job card without a chat button", () => {
 		const source = readComponent("visual-job-card.tsx");
@@ -17,6 +29,19 @@ describe("visual job marketplace components", () => {
 			'tone: "organic" | "recommended" | "special" | "urgent"'
 		);
 		expect(source).toContain("splitPay");
+		// 급여줄 단위 분리: 알려진 5종 목록은 유지하되(꼬리가 숫자가 아닌 "급여 협의"도 분리),
+		// 목록 밖 수집 공고의 자유 텍스트 단위(건당·TC 등)도 뱃지로 빼도록 일반화됐다.
+		// splitPay는 함수 단언용으로 export되지만, 이 파일은 @/ 별칭을 못 푸는 무설정 vitest라
+		// import 대신 소스 규칙 존재를 grep으로 지킨다(다른 테스트와 동일 방식).
+		expect(source).toContain(
+			'const PAY_UNITS = ["시급", "일급", "주급", "월급", "급여", "연봉"]'
+		);
+		expect(source).toContain("export function splitPay");
+		// 목록 밖 단위 일반화 분기 — 머리 1~4자·숫자 없음 + 꼬리 숫자 시작.
+		expect(source).toContain("looksLikeFreeTextUnit");
+		expect(source).toContain("head.length <= 4");
+		expect(source).toContain("HEAD_HAS_DIGIT.test(head)");
+		expect(source).toContain("TAIL_STARTS_WITH_DIGIT.test(tail)");
 		// 카드의 채팅 버튼은 제거됨 — 채팅 진입은 공고 상세에서만 한다
 		expect(source).not.toContain("채팅");
 		expect(source).not.toContain("onChat");
@@ -33,12 +58,70 @@ describe("visual job marketplace components", () => {
 		// 가로·세로 배너 모두 next/link로 감싸 광고 공고 상세로 이동한다
 		expect(banner).toContain('from "next/link"');
 		expect(banner).toContain("<Link");
-		// 링크는 결제완료 배너 공고 실데이터의 상세(/seeker/jobs/{id})로 직행한다
-		expect(banner).toContain("/seeker/jobs/");
+		// 링크 주소는 매퍼(toAdBannerItem)가 만든다 — 검증은 api-job-mapper.test.ts.
+		expect(banner).toContain("item.href");
 		expect(banner).toContain("item.id");
 		// 배너 이미지는 슬롯 규격으로 업로드된 배너(AdBannerItem.imageUrl)를 쓴다 — 커버가 아니다
 		expect(banner).toContain("item.imageUrl");
 		expect(banner).not.toContain("item.coverUrl");
+	});
+
+	// 수집 배너는 방향과 무관하게 결제 배너와 같은 규격 슬롯 + object-cover로 그린다.
+	// 세로: 원본 실측 80×180 = 정확히 4:9라 규격(aspect-[4/9] h-52)에 채워도 잘리는 곳이 없다.
+	// 가로: 원본 실측 240×117(≈2.05)이 7:3(≈2.33)과 달라 상하가 12%쯤 잘리지만, 슬롯이 이미지
+	// 크기대로 늘었다 줄었다 하면 옆 결제 슬롯·레일과 높이가 어긋난다(사용자 결정) — 그래서
+	// 원본 비율(h-auto) 분기는 양쪽 다 없다.
+	it("renders crawled banners at our spec slots in both orientations", () => {
+		const banner = readComponent("ad-banner.tsx");
+		const vertical = blockBetween(
+			banner,
+			"export function AdBanner({",
+			"interface AdBannerRailProps"
+		);
+		const horizontal = blockBetween(
+			banner,
+			"export function HorizontalAdBanner({",
+			"interface HorizontalAdBannerRailProps"
+		);
+
+		// 세로형은 수집·결제 구분 없이 규격 슬롯 + cover 하나로 그린다.
+		expect(vertical).toContain("aspect-[4/9] h-52 w-auto rounded-lg");
+		expect(vertical).toContain('"object-cover"');
+		expect(vertical).not.toContain("item.crawled");
+		expect(vertical).not.toContain("h-auto");
+		// 가로형도 수집·결제 구분 없이 규격 슬롯 + cover 하나로 그린다.
+		expect(horizontal).toContain("aspect-[7/3] w-full rounded-lg border");
+		expect(horizontal).toContain('"object-cover"');
+		expect(horizontal).not.toContain("item.crawled");
+		expect(horizontal).not.toContain("h-auto");
+		// 갈 곳 없는 배너는 이제 없다(매퍼가 수집 전용 상세 주소를 만든다).
+		expect(banner).not.toContain("if (!item.href)");
+	});
+
+	// 수집 공고는 job_post에 없어 /seeker/jobs/[id]로 보내면 404다 — 카드도 배너와 같은
+	// 수집 전용 상세로 가야 한다.
+	it("routes crawled cards to the crawled detail page", () => {
+		const marketplace = readComponent("screens/seeker-marketplace.tsx");
+
+		expect(marketplace).toContain("job.crawled");
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: 소스의 라우트 리터럴을 검증
+		expect(marketplace).toContain("/seeker/jobs/crawled/${job.id}");
+	});
+
+	// 수집 공고 상세는 우리 검수·인증 배지를 달 수 없다(우리가 본 적 없는 공고다).
+	// 채팅·후기·신고·연락처도 없다 — 응대할 담당자가 우리 서비스에 없다.
+	it("shows the crawled job detail without our verification signals", () => {
+		const source = readComponent("screens/seeker-crawled-job-detail.tsx");
+
+		expect(source).toContain("외부에서 수집된 공고");
+		expect(source).not.toContain("검수 통과");
+		expect(source).not.toContain("검증 완료");
+		expect(source).not.toContain("채팅 시작");
+		expect(source).not.toContain("JobReviewSection");
+		expect(source).not.toContain("ReportDialog");
+		// 좌·우 광고 레일 배치는 우리 공고 상세와 같다.
+		expect(source).toContain("HorizontalAdBannerRail");
+		expect(source).toContain("AdBannerRail");
 	});
 
 	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {

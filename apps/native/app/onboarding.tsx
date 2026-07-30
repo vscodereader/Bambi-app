@@ -87,7 +87,7 @@ export default function OnboardingScreen() {
 							<Button.Label>로그인</Button.Label>
 						</Button>
 					}
-					description="밤비 프로필을 만들려면 먼저 로그인해 주세요."
+					description="밤비알바 프로필을 만들려면 먼저 로그인해 주세요."
 					title="로그인이 필요합니다"
 				/>
 			</BambiScreen>
