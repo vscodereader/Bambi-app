@@ -28,7 +28,6 @@ import {
 	communityAuthorName,
 	formatCommunityDate,
 } from "@/lib/bambi/community";
-import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
 import {
 	accountStatusLabel,
 	jobPostStatusLabel,
@@ -2254,12 +2253,12 @@ type Detail =
 export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 	const [tab, setTabState] = useState("queue");
 	const [detail, setDetail] = useState<Detail>(null);
-	const [queue, setQueue] = useState<QueueItem[]>(QUEUE);
-	const [reports, setReports] = useState<Report[]>(REPORTS);
-	const [users, setUsers] = useState<ManagedUser[]>(USERS);
-	const [selected, setSelected] = useState<string[]>(
-		QUEUE.length ? [QUEUE[0].id] : []
-	);
+	// 프리뷰(프로토타입) 콘솔. 샘플 데이터 제거 후 빈 상태로 시작한다 — 실서비스 콘솔은
+	// /moderator 라우트(ModProvider/useMod)가 API 데이터로 렌더한다.
+	const [queue, setQueue] = useState<QueueItem[]>([]);
+	const [reports, setReports] = useState<Report[]>([]);
+	const [users, setUsers] = useState<ManagedUser[]>([]);
+	const [selected, setSelected] = useState<string[]>([]);
 	const [toast, setToast] = useState<string | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

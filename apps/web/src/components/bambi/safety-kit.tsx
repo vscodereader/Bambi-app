@@ -4,7 +4,7 @@
 
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useRef, useState } from "react";
-import { REPORT_REASONS } from "@/lib/bambi/data";
+import { REPORT_REASONS } from "@/lib/bambi/report-reasons";
 import { scan } from "@/lib/bambi/scanner";
 import type {
 	Finding,

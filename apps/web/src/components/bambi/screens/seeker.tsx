@@ -11,7 +11,6 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
-import { JOBS } from "@/lib/bambi/data";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job, ReportMode, VisualTone } from "@/lib/bambi/types";
 import { orpc } from "@/utils/orpc";
@@ -24,7 +23,6 @@ import {
 	ChatBubble,
 	IconButton,
 	InfoTile,
-	JobCard,
 	Logo,
 	ScheduleCard,
 	SearchField,
@@ -120,15 +118,7 @@ function TrustStrip({ tone }: { tone: VisualTone }) {
 	);
 }
 
-export function SeekerHome({
-	onOpenJob,
-	onChatJob,
-	tone = "calm",
-}: {
-	onOpenJob: (job: Job) => void;
-	onChatJob: (job: Job) => void;
-	tone?: VisualTone;
-}) {
+export function SeekerHome({ tone = "calm" }: { tone?: VisualTone }) {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div className="flex items-center justify-between px-5 pt-1.5 pb-2.5">
@@ -161,27 +151,6 @@ export function SeekerHome({
 					<TrustStrip tone={tone} />
 				</div>
 				<SeekerCategory />
-				<div className="flex items-center justify-between px-6 pt-0.5">
-					<span className="font-bold text-base text-foreground">추천 공고</span>
-					<span className="font-semibold text-primary text-sm">전체보기</span>
-				</div>
-				<div className="flex flex-col gap-3 px-6">
-					{JOBS.map((j) => (
-						<JobCard
-							avatarName={j.company}
-							featured={j.featured}
-							key={j.id}
-							location={j.location}
-							onChat={() => onChatJob(j)}
-							onClick={() => onOpenJob(j)}
-							pay={j.pay}
-							rating={j.rating}
-							reviews={j.reviews}
-							title={`${j.company} ${j.title}`}
-							verified={j.verified}
-						/>
-					))}
-				</div>
 			</div>
 		</div>
 	);
@@ -702,32 +671,9 @@ export function SeekerMe() {
 	);
 }
 
-const CHAT_PREVIEWS = [
-	{
-		jobId: "j1",
-		last: "네 안녕하세요, 가능합니다! 면접은 언제쯤 볼 수 있을까요?",
-		time: "오후 2:14",
-		unread: 1,
-	},
-	{
-		jobId: "j3",
-		last: "좋아요. 이번 주 수요일 저녁 가능하시면 일정 잡아드릴게요.",
-		time: "어제",
-		unread: 0,
-	},
-	{
-		jobId: "j4",
-		last: "지원 감사합니다. 확인 후 채팅으로 안내드릴게요.",
-		time: "2일 전",
-		unread: 0,
-	},
-];
-
-export function SeekerChats({ onOpen }: { onOpen: (jobId: string) => void }) {
-	const rows = CHAT_PREVIEWS.map((c) => ({
-		...c,
-		job: JOBS.find((j) => j.id === c.jobId),
-	})).filter((c) => c.job);
+// 목(프로토타입) 채팅 목록 폴백. 실데이터는 SeekerChatListResponsive가 API로 렌더하며,
+// 이 폴백은 연결된 데이터 소스가 없어 빈 상태만 보여준다.
+export function SeekerChats(_props: { onOpen: (jobId: string) => void }) {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div className="px-6 pt-2 pb-1">
@@ -735,37 +681,10 @@ export function SeekerChats({ onOpen }: { onOpen: (jobId: string) => void }) {
 					채팅
 				</h1>
 			</div>
-			<div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-4 pt-2.5 pb-4">
-				{rows.map((c) => (
-					<button
-						className="flex cursor-pointer items-center gap-3 rounded-[14px] border-none bg-transparent px-2 py-3 text-left"
-						key={c.jobId}
-						onClick={() => onOpen(c.jobId)}
-						type="button"
-					>
-						<Avatar name={c.job?.company} size="lg" square />
-						<div className="min-w-0 flex-1">
-							<div className="flex items-baseline justify-between gap-2">
-								<span className="truncate font-bold text-[15px] text-foreground">
-									{c.job?.company}
-								</span>
-								<span className="flex-[0_0_auto] text-[11.5px] text-[color:var(--text-subtle)]">
-									{c.time}
-								</span>
-							</div>
-							<div className="mt-[3px] flex items-center gap-2">
-								<span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
-									{c.last}
-								</span>
-								{c.unread ? (
-									<span className="inline-flex h-[18px] min-w-[18px] flex-[0_0_auto] items-center justify-center rounded-full bg-coral-500 px-[5px] font-bold text-[11px] text-white">
-										{c.unread}
-									</span>
-								) : null}
-							</div>
-						</div>
-					</button>
-				))}
+			<div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
+				<p className="m-0 text-[13px] text-muted-foreground">
+					아직 진행 중인 채팅이 없어요.
+				</p>
 			</div>
 		</div>
 	);
@@ -793,13 +712,7 @@ export function SeekerPersona({
 
 	let screen: React.ReactNode = null;
 	if (cur.name === "home") {
-		screen = (
-			<SeekerHome
-				onChatJob={(j) => push("chat", { job: j })}
-				onOpenJob={(j) => push("detail", { job: j })}
-				tone={tone}
-			/>
-		);
+		screen = <SeekerHome tone={tone} />;
 	} else if (cur.name === "detail") {
 		screen = (
 			<SeekerDetail
@@ -843,7 +756,7 @@ export function SeekerPersona({
 						items={navItems}
 						onChange={(v) => {
 							if (v === "chat") {
-								push("chat", { job: JOBS[0] });
+								push("chat");
 							} else {
 								setRoot(v);
 							}

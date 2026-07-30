@@ -8,14 +8,11 @@ import {
 	createContext,
 	type ReactNode,
 	useContext,
-	useEffect,
 	useMemo,
 	useRef,
 	useState,
 } from "react";
 import { toast as sonnerToast } from "sonner";
-import { QUEUE, REPORTS, USERS } from "@/lib/bambi/data";
-import { getVisibleModerationData } from "@/lib/bambi/moderation-data";
 import {
 	jobPostStatusLabel,
 	riskFlagLabel,
@@ -99,10 +96,8 @@ interface ApiQueueItem {
 const ModContext = createContext<ModContextValue | null>(null);
 const UUID_PATTERN =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const PREVIEW_ID_PATTERN = /^[qru]\d+$/;
 
 const isUuid = (value: string) => UUID_PATTERN.test(value);
-const isPreviewId = (value: string) => PREVIEW_ID_PATTERN.test(value);
 const formatDate = (value: Date | string) =>
 	new Intl.DateTimeFormat("ko-KR", {
 		dateStyle: "short",
@@ -368,14 +363,8 @@ const deriveReportCommunity = (input: {
 
 export function ModProvider({ children }: { children: ReactNode }) {
 	const queryClient = useQueryClient();
-	const [queue, setQueue] = useState<QueueItem[]>(QUEUE);
-	const [reports, setReports] = useState<Report[]>(REPORTS);
-	const [users, setUsers] = useState<ManagedUser[]>(USERS);
 	const [selected, setSelected] = useState<string[]>([]);
 	const [toast, setToast] = useState<string | null>(null);
-	const [hasQueueApiData, setHasQueueApiData] = useState(false);
-	const [hasReportsApiData, setHasReportsApiData] = useState(false);
-	const [hasUsersApiData, setHasUsersApiData] = useState(false);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const moderationQueueQuery = useQuery(
 		orpc.bambi.moderation.listJobPosts.queryOptions({
@@ -422,24 +411,6 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	const setChatRoomBlockedMutation = useMutation(
 		orpc.bambi.moderation.setChatRoomBlocked.mutationOptions()
 	);
-
-	useEffect(() => {
-		if (moderationQueueQuery.isSuccess) {
-			setHasQueueApiData(true);
-		}
-	}, [moderationQueueQuery.isSuccess]);
-
-	useEffect(() => {
-		if (moderationReportsQuery.isSuccess) {
-			setHasReportsApiData(true);
-		}
-	}, [moderationReportsQuery.isSuccess]);
-
-	useEffect(() => {
-		if (moderationUsersQuery.isSuccess) {
-			setHasUsersApiData(true);
-		}
-	}, [moderationUsersQuery.isSuccess]);
 
 	const value = useMemo<ModContextValue>(() => {
 		const flash = (msg: string) => {
@@ -525,21 +496,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			status: item.status,
 			warnings: item.warningsCount,
 		}));
-		const visibleQueue = getVisibleModerationData({
-			apiData: apiQueue,
-			hasApiData: hasQueueApiData || moderationQueueQuery.isSuccess,
-			previewData: queue,
-		});
-		const visibleReports = getVisibleModerationData({
-			apiData: apiReports,
-			hasApiData: hasReportsApiData || moderationReportsQuery.isSuccess,
-			previewData: reports,
-		});
-		const visibleUsers = getVisibleModerationData({
-			apiData: apiUsers,
-			hasApiData: hasUsersApiData || moderationUsersQuery.isSuccess,
-			previewData: users,
-		});
+		const visibleQueue = apiQueue ?? [];
+		const visibleReports = apiReports ?? [];
+		const visibleUsers = apiUsers ?? [];
 		// 초기 로딩만 로딩으로 취급한다. 백그라운드 refetch(isFetching)를 포함하면
 		// 상세 페이지(queue/[id])의 `if (isLoading) return null`이 결제 패널을 언마운트하고,
 		// 언마운트→리마운트 때 동일 쿼리를 다시 refetch해 listJobPosts를 무한 호출한다.
@@ -595,99 +554,64 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			});
 		};
 		const resolveQueue = (id: string, action: "approve" | "reject") => {
-			if (isUuid(id)) {
-				setJobPostStatusMutation.mutate(
-					{
-						jobPostId: id,
-						reason:
-							action === "approve"
-								? "운영자가 공고를 승인했습니다."
-								: "운영자가 정책 위반으로 공고를 반려했습니다.",
-						status: action === "approve" ? "published" : "rejected",
+			setJobPostStatusMutation.mutate(
+				{
+					jobPostId: id,
+					reason:
+						action === "approve"
+							? "운영자가 공고를 승인했습니다."
+							: "운영자가 정책 위반으로 공고를 반려했습니다.",
+					status: action === "approve" ? "published" : "rejected",
+				},
+				{
+					onSuccess: async () => {
+						await invalidateQueue();
 					},
-					{
-						onSuccess: async () => {
-							await queryClient.invalidateQueries({
-								queryKey: orpc.bambi.moderation.listJobPosts.queryKey({
-									input: { limit: 50, status: "pending_review" },
-								}),
-							});
-						},
-						onError: () =>
-							flash("공고 상태를 API에 반영하지 못했어요. 다시 시도해 주세요."),
-					}
-				);
-			}
+					onError: () =>
+						flash("공고 상태를 API에 반영하지 못했어요. 다시 시도해 주세요."),
+				}
+			);
 
-			setQueue((q) => q.filter((x) => x.id !== id));
 			setSelected((s) => s.filter((x) => x !== id));
 			flash(action === "approve" ? "공고를 승인했어요" : "공고를 반려했어요");
 		};
 		const resolveReport = (id: string, action: "dismiss" | "act") => {
-			if (isUuid(id)) {
-				setReportStatusMutation.mutate(
-					{
-						reason:
-							action === "dismiss"
-								? "운영자가 신고를 기각했습니다."
-								: "운영자가 신고 조치를 완료했습니다.",
-						reportId: id,
-						status: action === "dismiss" ? "dismissed" : "resolved",
+			setReportStatusMutation.mutate(
+				{
+					reason:
+						action === "dismiss"
+							? "운영자가 신고를 기각했습니다."
+							: "운영자가 신고 조치를 완료했습니다.",
+					reportId: id,
+					status: action === "dismiss" ? "dismissed" : "resolved",
+				},
+				{
+					onSuccess: async () => {
+						await invalidateReports();
 					},
-					{
-						onSuccess: async () => {
-							await queryClient.invalidateQueries({
-								queryKey: orpc.bambi.moderation.listReports.queryKey({
-									input: { limit: 50 },
-								}),
-							});
-						},
-						onError: () =>
-							flash("신고 상태를 API에 반영하지 못했어요. 다시 시도해 주세요."),
-					}
-				);
-			}
-
-			setReports((r) =>
-				r.map((x) => (x.id === id ? { ...x, status: "closed" as const } : x))
+					onError: () =>
+						flash("신고 상태를 API에 반영하지 못했어요. 다시 시도해 주세요."),
+				}
 			);
+
 			flash(action === "dismiss" ? "신고를 기각했어요" : "조치를 적용했어요");
 		};
 		const sanction = (id: string, status: UserStatus, label: string) => {
-			if (!isPreviewId(id)) {
-				setUserStatusMutation.mutate(
-					{
-						reason: label,
-						status: status === "blocked" ? "suspended" : status,
-						targetUserId: id,
+			setUserStatusMutation.mutate(
+				{
+					reason: label,
+					status: status === "blocked" ? "suspended" : status,
+					targetUserId: id,
+				},
+				{
+					onSuccess: async () => {
+						await invalidateUsers();
 					},
-					{
-						onSuccess: async () => {
-							await queryClient.invalidateQueries({
-								queryKey: orpc.bambi.moderation.listUsers.queryKey({
-									input: { limit: 1000 },
-								}),
-							});
-						},
-						onError: () =>
-							flash(
-								"사용자 상태를 API에 반영하지 못했어요. 다시 시도해 주세요."
-							),
-					}
-				);
-			}
-
-			setUsers((u) =>
-				u.map((x) =>
-					x.id === id
-						? {
-								...x,
-								status,
-								warnings: status === "warned" ? x.warnings + 1 : x.warnings,
-							}
-						: x
-				)
+					onError: () =>
+						flash("사용자 상태를 API에 반영하지 못했어요. 다시 시도해 주세요."),
+				}
 			);
+
 			flash(label);
 		};
 		// 커뮤니티 대상(글·댓글) 콘텐츠 조치. 신고 상태 변경(resolveReport)과는 별개로,
@@ -748,7 +672,6 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			}
 
 			const apiIds = selectedIds.filter(isUuid);
-			const previewIds = selectedIds.filter((id) => !isUuid(id));
 
 			if (apiIds.length > 0) {
 				bulkSetJobPostStatusMutation.mutate(
@@ -767,13 +690,6 @@ export function ModProvider({ children }: { children: ReactNode }) {
 					}
 				);
 			}
-
-			if (previewIds.length > 0) {
-				setQueue((items) =>
-					items.filter((item) => !previewIds.includes(item.id))
-				);
-				flash(`${actionLabel} · 성공 ${previewIds.length}건 · 실패 0건`);
-			}
 		};
 		const applyReportBulkAction = (
 			selectedIds: string[],
@@ -783,7 +699,6 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			const status = action === "dismiss" ? "dismissed" : "resolved";
 			const actionLabel = action === "dismiss" ? "신고 기각" : "신고 해결";
 			const apiIds = selectedIds.filter(isUuid);
-			const previewIds = selectedIds.filter((id) => !isUuid(id));
 
 			if (apiIds.length > 0) {
 				bulkSetReportStatusMutation.mutate(
@@ -802,17 +717,6 @@ export function ModProvider({ children }: { children: ReactNode }) {
 					}
 				);
 			}
-
-			if (previewIds.length > 0) {
-				setReports((items) =>
-					items.map((item) =>
-						previewIds.includes(item.id)
-							? { ...item, status: "closed" as const }
-							: item
-					)
-				);
-				flash(`${actionLabel} · 성공 ${previewIds.length}건 · 실패 0건`);
-			}
 		};
 		const applyUserBulkAction = (
 			selectedIds: string[],
@@ -821,15 +725,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		) => {
 			const status = action === "suspend" ? "suspended" : "warned";
 			const actionLabel = action === "suspend" ? "사용자 정지" : "사용자 경고";
-			const apiIds = selectedIds.filter((id) => !isPreviewId(id));
-			const previewIds = selectedIds.filter(isPreviewId);
 
-			if (apiIds.length > 0) {
+			if (selectedIds.length > 0) {
 				bulkSetUserStatusMutation.mutate(
 					{
 						reason,
 						status,
-						targetUserIds: apiIds,
+						targetUserIds: selectedIds,
 					},
 					{
 						onSuccess: async (result) => {
@@ -840,22 +742,6 @@ export function ModProvider({ children }: { children: ReactNode }) {
 							flash("사용자 일괄 처리에 실패했어요. 다시 시도해 주세요."),
 					}
 				);
-			}
-
-			if (previewIds.length > 0) {
-				setUsers((items) =>
-					items.map((item) =>
-						previewIds.includes(item.id)
-							? {
-									...item,
-									status,
-									warnings:
-										status === "warned" ? item.warnings + 1 : item.warnings,
-								}
-							: item
-					)
-				);
-				flash(`${actionLabel} · 성공 ${previewIds.length}건 · 실패 0건`);
 			}
 		};
 		const bulkAction = (
@@ -928,21 +814,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		bulkSetJobPostStatusMutation,
 		bulkSetReportStatusMutation,
 		bulkSetUserStatusMutation,
-		hasQueueApiData,
-		hasReportsApiData,
-		hasUsersApiData,
 		moderationQueueQuery.data,
 		moderationQueueQuery.isPending,
-		moderationQueueQuery.isSuccess,
 		moderationReportsQuery.data,
 		moderationReportsQuery.isPending,
-		moderationReportsQuery.isSuccess,
 		moderationUsersQuery.data,
 		moderationUsersQuery.isPending,
-		moderationUsersQuery.isSuccess,
-		queue,
 		queryClient,
-		reports,
 		selected,
 		setChatRoomBlockedMutation,
 		setCommentStatusByAdminMutation,
@@ -951,7 +829,6 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		setReportStatusMutation,
 		setUserStatusMutation,
 		toast,
-		users,
 	]);
 
 	return <ModContext.Provider value={value}>{children}</ModContext.Provider>;
