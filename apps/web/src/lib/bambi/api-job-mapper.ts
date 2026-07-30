@@ -62,6 +62,8 @@ export interface ApiMarketplaceJob {
 	ratingAverage?: null | number | string;
 	ratingCount?: null | number | string;
 	region: string;
+	// "crawled"면 수집 공고다 — 상세가 job_post 경로에 없어 카드 클릭이 갈 곳이 다르다.
+	source?: null | string;
 	status: string;
 	teamDisplayName?: string | null;
 	title: string;
@@ -186,6 +188,8 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		beginnerFriendly: job.beginnerFriendly ?? false,
 		company,
 		coverImage,
+		// 카드 클릭이 /seeker/jobs/[id] 대신 수집 전용 상세로 가야 한다(그 id는 job_post에 없다).
+		crawled: job.source === "crawled",
 		desc:
 			job.description ??
 			"공고 상세와 면접 안내는 밤비알바 채팅에서 안전하게 확인할 수 있어요.",
@@ -227,7 +231,7 @@ export interface ApiAdBannerJob {
 	employerDisplayName?: string | null;
 	id: string;
 	layout?: AdBannerLayout | null;
-	// "crawled"면 수집 공고다. 상세 페이지가 없으므로 링크를 걸지 않는다.
+	// "crawled"면 수집 공고다. 상세 경로(수집 전용)와 배너 렌더 비율이 결제 광고와 다르다.
 	source?: null | string;
 	teamDisplayName?: string | null;
 	title: string;
@@ -235,8 +239,11 @@ export interface ApiAdBannerJob {
 
 export interface AdBannerItem {
 	company: string;
-	// 클릭 대상. 수집 배너는 갈 곳이 없어 null이고, 렌더러가 링크 없이 그린다.
-	href: null | string;
+	// 수집 공고 배너다. 원본 배너는 규격이 제각각(실측 약 3:2)이라 우리 슬롯 비율로
+	// 자르지 않고 원본 비율로 그린다 — 렌더러가 이 값으로 분기한다.
+	crawled: boolean;
+	// 클릭 대상. 수집 배너도 이제 갈 곳(수집 전용 상세)이 있다.
+	href: string;
 	id: string;
 	// 커버가 아니라 슬롯 배너가 우선이라 coverUrl이 아닌 imageUrl이다.
 	imageUrl: string;
@@ -266,8 +273,11 @@ export const toAdBannerItem = (
 	// 그릴지는 렌더러가 슬롯을 보고 정한다.
 	return {
 		company,
-		// 수집 공고는 /seeker/jobs/[id]에 없다. 링크를 걸면 배너를 누른 사람이 오류 화면을 본다.
-		href: isCrawled ? null : `/seeker/jobs/${job.id}`,
+		crawled: isCrawled,
+		// 수집 공고의 id는 job_post에 없다 — 수집 전용 상세로 보내야 오류 화면이 뜨지 않는다.
+		href: isCrawled
+			? `/seeker/jobs/crawled/${job.id}`
+			: `/seeker/jobs/${job.id}`,
 		id: job.id,
 		imageUrl: media.url,
 		layout: job.layout ?? null,

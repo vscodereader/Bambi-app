@@ -5,6 +5,7 @@ import { bannedWordsRouter } from "./banned-words";
 import { blocksRouter } from "./blocks";
 import { chatsRouter } from "./chats";
 import { communityRouter } from "./community";
+import { crawledJobsRouter } from "./crawled-jobs";
 import { crawlerRouter } from "./crawler";
 import { jobsRouter } from "./jobs";
 import { moderationRouter } from "./moderation";
@@ -24,6 +25,7 @@ export const bambiRouter = {
 	blocks: blocksRouter,
 	chats: chatsRouter,
 	community: communityRouter,
+	crawledJobs: crawledJobsRouter,
 	crawler: crawlerRouter,
 	jobs: jobsRouter,
 	moderation: moderationRouter,
