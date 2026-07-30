@@ -91,6 +91,11 @@ export const communityBoardPath = (slug: string): string =>
 export const communityPostPath = (slug: string, postId: string): string =>
 	`/seeker/community/${slug}/${postId}`;
 
+// 수집 글 전용 상세 경로. 순수 글(communityPostPath)과 나란히 두되 게시판 slug 없이
+// 정적 세그먼트 crawled로 분기한다 — 수집 글은 게시판에 종속되지 않고 전용 상세로 간다.
+export const communityCrawledPath = (topicId: string): string =>
+	`/seeker/community/crawled/${topicId}`;
+
 export const communityWritePath = (slug: string): string =>
 	`/seeker/community/${slug}/write`;
 

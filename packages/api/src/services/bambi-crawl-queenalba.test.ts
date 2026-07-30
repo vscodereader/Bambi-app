@@ -398,6 +398,52 @@ describe("parseQueenalbaCommunityDetail", () => {
 	});
 });
 
+// 댓글은 상세 HTML에 인라인으로 렌더된다. 세 변형(마커 span·아이콘 img·대댓글 단일 span)을
+// 한 규칙("직계 자식 span 중 마지막")으로 포괄하고, 비밀댓글은 건너뛴다.
+describe("parseQueenalbaCommunityDetail — 댓글", () => {
+	const comments = parseQueenalbaCommunityDetail(communityDetailHtml)?.comments;
+
+	// 3건: 마커 span형·아이콘 img형·대댓글 단일 span형. 비밀댓글 1건은 빠진다.
+	it("parses the three visible comments and skips the secret one", () => {
+		expect(comments).toHaveLength(3);
+		expect(comments?.some((c) => c.body.includes("비밀 댓글"))).toBe(false);
+	});
+
+	// id의 N 오름차순을 지킨다.
+	it("keeps the comments in id order", () => {
+		expect(comments?.map((c) => c.body)).toEqual([
+			expect.stringContaining("여의도 하퍼 오세요"),
+			expect.stringContaining("맞아요 저도 술 안 먹어요"),
+			expect.stringContaining("저는 대댓글이에요"),
+		]);
+	});
+
+	// 앞의 [N] 마커 span과 아이콘 img는 본문에 섞이지 않는다("직계 자식 span 중 마지막").
+	it("reads only the body span, not the marker or the icon", () => {
+		expect(comments?.[0]?.body.startsWith("[1]")).toBe(false);
+		expect(comments?.[1]?.body).toBe("맞아요 저도 술 안 먹어요");
+	});
+
+	// 커뮤니티 글은 댓글에도 번호·카톡을 그대로 박아둔다. 본문과 같은 기준으로 가린다.
+	it("masks contacts embedded in a comment body", () => {
+		expect(comments?.[0]?.body).not.toContain("010-5000-1507");
+		expect(comments?.[0]?.body).not.toContain("ssiee123aa");
+		expect(comments?.[0]?.body).toContain("[연락처 비공개]");
+	});
+
+	// 작성자 닉네임(원본 공개 필명)은 같은 TR 첫 칸에서 읽는다.
+	it("reads the author nickname from the row", () => {
+		expect(comments?.[0]?.authorName).toBe("여의도언니");
+	});
+
+	// 작성일시는 마지막 칸의 YYYY-MM-DD HH:MM:SS에서 ISO 문자열로 굳히고, 날짜 칸이 비면
+	// (대댓글) null로 폴백한다.
+	it("parses the timestamp to an ISO string and falls back to null", () => {
+		expect(comments?.[0]?.sourcePostedAt).toBe("2026-07-26T14:30:12.000Z");
+		expect(comments?.[2]?.sourcePostedAt).toBeNull();
+	});
+});
+
 // 조회수 칸이 비는 글이 실측에서 흔했다. 본문이 있는데 조회수가 없다고 실패로 보면
 // 멀쩡한 글을 매 회차 다시 받게 된다.
 describe("parseQueenalbaCommunityDetail — 조회수 없는 글", () => {

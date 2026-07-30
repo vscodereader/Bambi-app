@@ -412,18 +412,23 @@ export default function ModeratorCrawlerPage() {
 	);
 	const exposure = exposureQuery.data ?? {
 		crawledAdBannerEnabled: false,
+		crawledCommunityFeedEnabled: false,
 		crawledJobFeedEnabled: false,
 	};
 	// 노출 스위치는 저장 버튼을 두지 않고 토글 즉시 반영한다 — 문제가 생겨 내리러 온 사람이
 	// 스위치만 내리고 저장을 잊으면 그대로 계속 노출된다.
 	const toggleExposure = (
-		key: "crawledAdBannerEnabled" | "crawledJobFeedEnabled",
+		key:
+			| "crawledAdBannerEnabled"
+			| "crawledCommunityFeedEnabled"
+			| "crawledJobFeedEnabled",
 		next: boolean
 	) => {
 		const merged = { ...exposure, [key]: next };
 
 		saveExposureMutation.mutate({
 			adBannerEnabled: merged.crawledAdBannerEnabled,
+			communityFeedEnabled: merged.crawledCommunityFeedEnabled,
 			jobFeedEnabled: merged.crawledJobFeedEnabled,
 		});
 	};
@@ -638,6 +643,28 @@ export default function ModeratorCrawlerPage() {
 							id="crawledJobFeedEnabled"
 							onCheckedChange={(next) =>
 								toggleExposure("crawledJobFeedEnabled", next)
+							}
+						/>
+					</div>
+
+					<div className="flex items-start justify-between gap-4">
+						<div className="flex flex-col gap-1">
+							<Label htmlFor="crawledCommunityFeedEnabled">
+								수집 커뮤니티 글 노출
+							</Label>
+							<p className="m-0 text-muted-foreground text-xs">
+								수집한 커뮤니티 글이 「일 이야기」 게시판과 수다방 홈 미리보기에
+								섞입니다. 우리 회원 글이 항상 먼저 나오고 남은 자리에 붙으며,
+								「외부 수집」 배지가 달립니다. 좋아요·댓글·신고는 제공되지
+								않아요.
+							</p>
+						</div>
+						<Switch
+							checked={exposure.crawledCommunityFeedEnabled}
+							disabled={exposureQuery.isLoading}
+							id="crawledCommunityFeedEnabled"
+							onCheckedChange={(next) =>
+								toggleExposure("crawledCommunityFeedEnabled", next)
 							}
 						/>
 					</div>

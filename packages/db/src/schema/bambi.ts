@@ -475,6 +475,15 @@ export const crawledJobPost = pgTable(
 	]
 );
 
+// 수집 커뮤니티 글의 댓글 한 건. jsonb 컬럼에 통째로 담으므로 날짜는 timestamp가 아니라
+// ISO 문자열로 굳힌다(jsonb에는 Date 타입이 없다). authorName은 원본 공개 필명(실명 아님),
+// 날짜는 대댓글처럼 표기가 없는 경우가 있어 null 허용.
+export interface CrawledCommunityCommentRecord {
+	authorName: string | null;
+	body: string;
+	sourcePostedAt: string | null;
+}
+
 // 외부 게시판에서 뽑는 주제 신호. 제목과 반응 지표만 담고 본문은 저장하지 않는다 —
 // 게시글은 개별 작성자의 저작물이고, 남의 글을 community_post에 넣으려면 우리 회원 ID와
 // 가짜 글 비밀번호를 붙여야 해서 "남이 쓴 글이 우리 회원 얼굴로 서는" 구조가 된다.
@@ -497,6 +506,10 @@ export const crawledCommunityTopic = pgTable(
 		// 목록 패스는 이 값을 건드리지 않는다 — 건드리면 매 회차 null로 되돌린다.
 		viewCount: integer("view_count"),
 		commentCount: integer("comment_count"),
+		// 상세에서 함께 수집하는 댓글. 본문(body)과 같은 이유로 nullable이되, 여기선 null과 []의
+		// 구분이 백필 판정 기준이다: null = 아직 상세를 안 받아 미수집, [] = 상세를 받았고 댓글이
+		// 0개. 이 구분이 없으면 "댓글 없는 글"과 "아직 안 받은 글"이 뭉개져 매 회차 다시 받는다.
+		comments: jsonb("comments").$type<CrawledCommunityCommentRecord[]>(),
 		sourcePostedAt: timestamp("source_posted_at"),
 		firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
 		lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
@@ -923,6 +936,12 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 수집 공고를 공고 목록에 섞을지. 위와 같은 이유로 배너와 따로 끈다 — 배너 한 칸이
 	// 문제여도 목록은 살려 두거나, 그 반대를 택할 수 있어야 한다.
 	crawledJobFeedEnabled: boolean("crawled_job_feed_enabled")
+		.default(false)
+		.notNull(),
+	// 수집 커뮤니티 글을 커뮤니티 목록에 섞을지. 위 공고 스위치와 같은 이유로 수집과 노출을
+	// 따로 끈다 — 긁어 두는 것과 남의 글을 우리 커뮤니티에 세우는 것은 판단이 다르고, 문제가
+	// 생기면 수집을 멈추지 않고 노출만 즉시 내려야 한다. 기본이 false라 배포만으로는 켜지지 않는다.
+	crawledCommunityFeedEnabled: boolean("crawled_community_feed_enabled")
 		.default(false)
 		.notNull(),
 	// 섹션별 수집 공고 노출 상한. 수집할 때(배너 리다이렉터 해석 요청 절약)와 조회할 때(과거

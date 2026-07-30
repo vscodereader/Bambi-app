@@ -3,6 +3,7 @@
 // 게시판별 최신 글 미리보기 카드 — 수다방 홈과 seeker 홈 커뮤니티 섹션이 공유한다.
 
 import type { AppRouter } from "@bambi-app/api/routers/index";
+import { Badge } from "@bambi-app/ui/components/badge";
 import {
 	Card,
 	CardContent,
@@ -30,6 +31,7 @@ import {
 	COMMUNITY_BOARDS,
 	type CommunityBoardKey,
 	communityBoardPath,
+	communityCrawledPath,
 	communityPostPath,
 	formatCommunityDate,
 } from "@/lib/bambi/community";
@@ -110,6 +112,8 @@ export function BoardPreviewCard({
 						const boardOfPost = COMMUNITY_BOARDS.find(
 							(item) => item.key === post.board
 						);
+						// 수집 글은 전용 상세로 분기한다(순수 글은 기존 게시판 상세 경로 그대로).
+						const isCrawled = post.source === "crawled";
 						return (
 							<Link
 								className={cn(
@@ -117,10 +121,12 @@ export function BoardPreviewCard({
 									isNotice ? "hover:bg-coral-100/60" : "hover:bg-muted"
 								)}
 								href={
-									communityPostPath(
-										boardOfPost?.slug ?? board.slug,
-										post.id
-									) as Route
+									(isCrawled
+										? communityCrawledPath(post.id)
+										: communityPostPath(
+												boardOfPost?.slug ?? board.slug,
+												post.id
+											)) as Route
 								}
 								key={post.id}
 								onClick={(event) => {
@@ -133,6 +139,11 @@ export function BoardPreviewCard({
 								<span className="flex min-w-0 items-center gap-1.5">
 									{post.isLocked ? (
 										<LockIcon className="size-3 shrink-0 text-muted-foreground" />
+									) : null}
+									{isCrawled ? (
+										<Badge className="shrink-0" variant="secondary">
+											외부 수집
+										</Badge>
 									) : null}
 									{isNotice ? null : <CommunityRoleBadges post={post} />}
 									<CommunityNewBadge createdAt={post.createdAt} />

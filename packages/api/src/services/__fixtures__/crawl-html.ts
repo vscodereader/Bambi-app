@@ -516,10 +516,15 @@ export const queenalbaBbsListHtml = page(`
 	<table><tbody>${queenalbaTopicRows.map(queenalbaTopicRow).join("")}</tbody></table>
 </div>`);
 
-// 게시글 상세. 목록에 없는 두 가지만 여기서 온다.
-//  - 본문은 #ct 한 덩어리다(댓글은 별도 td#comment_id_N — 업소 홍보글이 대부분이라 읽지 않는다)
+// 게시글 상세. 목록에 없는 세 가지가 여기서 온다.
+//  - 본문은 #ct 한 덩어리다
 //  - 조회수는 추천 수와 같은 칸에 들어 있어("조회 : 176 추천: 0") 라벨로 끊어 읽어야 한다
 //  - 제목은 목록의 h2(게시판명)가 아니라 .board-title-container h1이다
+//  - 댓글은 상세 HTML에 인라인으로 전부 렌더돼 있다. 댓글 하나 = TR 하나, 셀 3개 =
+//    [작성자 | 본문 td#comment_id_N | 작성일시]. 본문 셀의 직계 자식은 세 변형이 있고(마커
+//    span형·아이콘 img형·대댓글 단일 span형) 전부 실물 그대로 재현했다. 파서는 "직계 자식
+//    span 중 마지막 것"을 본문으로 읽으므로 앞의 [N] 마커나 아이콘은 빠져야 한다. secret-comment
+//    (비밀댓글) 한 건을 함께 심어 스킵을, 대댓글의 빈 날짜 칸으로 날짜 null 폴백을 못박는다.
 export const queenalbaBbsDetailHtml = page(`
 <div id="sub_center">
 	<h2><img src="img/bbs_title_night.gif" alt="밤문화이야기 게시판"> 밤문화이야기</h2>
@@ -534,7 +539,26 @@ export const queenalbaBbsDetailHtml = page(`
 		<div id="ct" align="justify"> 저는 뭔 ㄴㄷ 다니는데도 술을 먹네요<br><br>문의 010-1234-5678<br>카톡 shopkakao </div>
 	</div>
 	<table><tbody>
-		<tr><td id="comment_id_1">[1] 여의도 하퍼 오세요 ⭐010-5000-1507⭐ 카톡:ssiee123aa</td></tr>
+		<tr>
+			<td align="center">여의도언니</td>
+			<td id="comment_id_1"><span class="cmt-num">[1]</span><span>여의도 하퍼 오세요 ⭐010-5000-1507⭐ 카톡:ssiee123aa</span></td>
+			<td align="center">2026-07-26 14:30:12</td>
+		</tr>
+		<tr>
+			<td align="center">ㅇㅇ</td>
+			<td id="comment_id_2"><img src="upload/happy_config/re_icon.gif"><span>맞아요 저도 술 안 먹어요</span></td>
+			<td align="center">2026-07-26 15:02:00</td>
+		</tr>
+		<tr>
+			<td align="center">ㅊㅊ</td>
+			<td id="comment_id_3"><span>ㄴ 저는 대댓글이에요</span></td>
+			<td align="center"></td>
+		</tr>
+		<tr class="secret-comment">
+			<td align="center">비밀언니</td>
+			<td id="comment_id_4" class="secret-comment"><span>비밀 댓글 본문입니다</span></td>
+			<td align="center">2026-07-26 16:00:00</td>
+		</tr>
 	</tbody></table>
 </div>`);
 

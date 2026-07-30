@@ -925,6 +925,8 @@ const runCommunityPass = async (
 	const existing = await db
 		.select({
 			body: crawledCommunityTopic.body,
+			// 백필 판정(아래 pending)이 null(미수집)과 [](수집 0개)를 구분해야 해서 함께 읽는다.
+			comments: crawledCommunityTopic.comments,
 			sourceExternalId: crawledCommunityTopic.sourceExternalId,
 		})
 		.from(crawledCommunityTopic)
@@ -959,12 +961,16 @@ const runCommunityPass = async (
 			});
 	}
 
-	// 본문·조회수는 목록에 없어 글마다 상세를 한 번 더 받아야 한다. 이미 본문이 있는 글은
-	// 건너뛴다 — 게시글 본문은 사실상 안 바뀌고, 매 회차 150건을 다시 받으면 상대 서버를
-	// 이유 없이 두드린다.
-	const pending = topics.filter(
-		(topic) => !known.get(topic.sourceExternalId)?.body
-	);
+	// 본문·조회수·댓글은 목록에 없어 글마다 상세를 한 번 더 받아야 한다. 본문이 있고 댓글도
+	// 이미 수집한(comments가 null 아님) 글은 건너뛴다 — 게시글은 사실상 안 바뀌고, 매 회차
+	// 150건을 다시 받으면 상대 서버를 이유 없이 두드린다. comments가 null인 조건이 붙은 건
+	// 이 기능 배포 전에 저장된 행(comments 컬럼 null)을 한 차례 자연 백필하기 위해서다 — 상세를
+	// 한 번 받으면 comments가 [](0개)든 목록이든 null을 벗어나 이후 정상(fetch-once)으로 복귀한다.
+	const pending = topics.filter((topic) => {
+		const row = known.get(topic.sourceExternalId);
+
+		return !row?.body || row.comments === null;
+	});
 	const detailTargets = pending.slice(0, MAX_DETAIL_FETCHES_PER_RUN);
 	let detailsFetched = 0;
 
@@ -991,7 +997,14 @@ const runCommunityPass = async (
 
 			await db
 				.update(crawledCommunityTopic)
-				.set({ body: detail.body, viewCount: detail.viewCount })
+				.set({
+					body: detail.body,
+					// 실제로 수집한 댓글 수로 동기화한다 — 목록의 제목 뒤 [21] 표기보다 정확하고,
+					// commentCount를 comments.length와 한 곳에서 함께 써야 둘이 어긋나지 않는다.
+					commentCount: detail.comments.length,
+					comments: detail.comments,
+					viewCount: detail.viewCount,
+				})
 				.where(
 					and(
 						eq(crawledCommunityTopic.sourceSite, site),
