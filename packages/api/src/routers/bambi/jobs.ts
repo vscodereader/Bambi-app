@@ -61,6 +61,7 @@ import {
 	requireEmployerPostingAccess,
 } from "../../services/bambi-authz";
 import { loadCrawledAdBannerPools } from "../../services/bambi-crawled-ad-banner-slots";
+import { readCrawledLimits } from "../../services/bambi-crawled-limits";
 import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import {
 	getJobDescriptionBlockRiskTerms,
@@ -73,6 +74,9 @@ import {
 	adHorizontalImageSql,
 	adVerticalImageSql,
 	coverImageSql,
+	isCrawledJobFeedEnabled,
+	type JobFeedRow,
+	listCrawledSectionRows,
 	minHourlyPayFilter,
 	ratingAverageSql,
 	ratingCountSql,
@@ -844,6 +848,38 @@ export const applyJobPostUpdate = async ({
 	return result;
 };
 
+// 목록에 주입할 수집 행. 섹션 세 개는 라벨별 상한, 전체 공고는 목록 상한을 쓴다.
+// 스위치가 꺼져 있으면 조회조차 하지 않는다(공개 경로라 쿼리 한 번도 아깝다).
+const loadCrawledJobSections = async (
+	input: z.infer<typeof listInput>
+): Promise<
+	Record<"organic" | "recommended" | "special" | "urgent", JobFeedRow[]>
+> => {
+	if (!(await isCrawledJobFeedEnabled())) {
+		return { organic: [], recommended: [], special: [], urgent: [] };
+	}
+
+	// 과거 회차가 남긴 초과 라벨 방어 — 수집 시에도 같은 값으로 자르지만 조회에서 한 번 더 막는다.
+	const limits = await readCrawledLimits();
+	const [special, urgent, recommended, organic] = await Promise.all([
+		listCrawledSectionRows({
+			...input,
+			limit: limits.special,
+			type: "special",
+		}),
+		listCrawledSectionRows({ ...input, limit: limits.urgent, type: "urgent" }),
+		listCrawledSectionRows({
+			...input,
+			limit: limits.recommended,
+			type: "recommended",
+		}),
+		// 전체 공고에는 라벨 무관 전량이 들어간다(승격 라벨 없이 'standard' 유지).
+		listCrawledSectionRows({ ...input, limit: input.limit }),
+	]);
+
+	return { organic, recommended, special, urgent };
+};
+
 export const jobsRouter = {
 	list: publicProcedure.input(listInput).handler(async ({ context, input }) => {
 		const now = new Date();
@@ -879,6 +915,13 @@ export const jobsRouter = {
 			beginnerFriendly: jobPost.beginnerFriendly,
 			instantInterview: jobPost.instantInterview,
 			coverImage: coverImageSql,
+			// 아래 세 칸은 수집 행(crawledJobFeedSelection)과 모양을 맞추기 위한 자리다 —
+			// 같은 배열에 두 출처가 섞이므로 키가 어긋나면 클라이언트가 출처별로 분기해야 한다.
+			coverImageUrl: sql<null | string>`null::text`,
+			listingType: sql<null | string>`null::text`,
+			// impression·성과 집계에서 수집 행을 걸러내는 근거. job_performance_event가 job_post를
+			// FK로 잡고 있어 수집 id가 섞이면 이 공개 조회가 통째로 죽는다.
+			source: jobPost.source,
 			employerDisplayName: employerOrganizationProfile.displayName,
 			employerVerificationStatus:
 				employerOrganizationProfile.verificationStatus,
@@ -965,6 +1008,8 @@ export const jobsRouter = {
 
 		// 현재 요청에서 새로 기록하는 impression 때문에 판정이 왜곡되지 않도록,
 		// recordJobListingImpressions 이전에 최근 7일 성과를 집계해 각 item에 붙인다.
+		// 집계·기록 대상은 아래 result.sections(유료 행)뿐이다 — 수집 행은 뒤에서 붙이므로
+		// job_performance_event에 수집 id가 들어갈 경로가 없다.
 		const performanceJobIds = [
 			...result.sections.special,
 			...result.sections.urgent,
@@ -995,15 +1040,38 @@ export const jobsRouter = {
 			sections: result.sections,
 		});
 
+		// 우선순위 규칙: 1순위 우리 순수 공고가 항상 최상단, 2순위 크롤링. 섞어 정렬하지 않고
+		// 각 섹션·전체 공고의 **뒤에** 붙인다.
+		const crawled = await loadCrawledJobSections(input);
+		const crawledIds = new Set(
+			[
+				...crawled.special,
+				...crawled.urgent,
+				...crawled.recommended,
+				...crawled.organic,
+			].map((item) => item.id)
+		);
+
 		return {
-			totalCount: result.totalCount,
+			// 수집 행은 섹션과 전체 공고에 동시에 담기므로 고유 id로 센다(유료 쪽과 같은 규칙).
+			totalCount: result.totalCount + crawledIds.size,
 			sections: {
-				organic: result.sections.organic.map((item) => toListItem(item, false)),
-				recommended: result.sections.recommended.map((item) =>
-					toListItem(item, true)
-				),
-				special: result.sections.special.map((item) => toListItem(item, true)),
-				urgent: result.sections.urgent.map((item) => toListItem(item, true)),
+				organic: [
+					...result.sections.organic.map((item) => toListItem(item, false)),
+					...crawled.organic.map((item) => toListItem(item, false)),
+				],
+				recommended: [
+					...result.sections.recommended.map((item) => toListItem(item, true)),
+					...crawled.recommended.map((item) => toListItem(item, true)),
+				],
+				special: [
+					...result.sections.special.map((item) => toListItem(item, true)),
+					...crawled.special.map((item) => toListItem(item, true)),
+				],
+				urgent: [
+					...result.sections.urgent.map((item) => toListItem(item, true)),
+					...crawled.urgent.map((item) => toListItem(item, true)),
+				],
 			},
 		};
 	}),
