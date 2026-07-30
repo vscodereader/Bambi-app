@@ -14,7 +14,6 @@ import {
 	toAdBannerItem,
 	toMarketplaceJob,
 } from "./api-job-mapper";
-import { JOBS } from "./data";
 
 const UUID_RE =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -64,8 +63,8 @@ const EMPTY_SECTIONS: MarketplaceJobSections = {
 	urgent: [],
 };
 
-// mock 폴백 경로에서 urgent는 special/recommended의 부분집합이라 그대로 이으면 같은
-// 공고가 2번 들어가 개수 카운트가 부풀 수 있다. id 기준으로 첫 등장만 남겨 중복을 제거한다
+// urgent는 special/recommended의 부분집합이라 그대로 이으면 같은 공고가 2번 들어가
+// 개수 카운트가 부풀 수 있다. id 기준으로 첫 등장만 남겨 중복을 제거한다
 // (등장 순서 유지: special→urgent→recommended→organic).
 const flattenSections = (sections: MarketplaceJobSections): Job[] => {
 	const seen = new Set<string>();
@@ -94,41 +93,13 @@ const filterSections = (
 	urgent: filterMarketplaceJobs(sections.urgent, filters),
 });
 
-const getBoostTime = (job: Job): number => {
-	if (!job.lastBoostedAt) {
-		return 0;
-	}
-
-	const value = new Date(job.lastBoostedAt).getTime();
-	return Number.isFinite(value) ? value : 0;
-};
-
-const buildFallbackSections = (
-	filters: MarketplaceFilters
-): MarketplaceJobSections => {
-	const special = JOBS.filter((job) => job.promotionTier === "premium");
-	const recommended = JOBS.filter((job) => job.promotionTier === "recommended");
-	const urgent = [...special, ...recommended]
-		.filter((job) => getBoostTime(job) > 0)
-		.toSorted((left, right) => getBoostTime(right) - getBoostTime(left));
-	// 전체 공고는 광고 상품 적용 여부와 무관하게 모든 공고를 담는다(서버 동작과 일치).
-	const organic = JOBS;
-
-	return {
-		organic: filterMarketplaceJobs(organic, filters),
-		recommended: filterMarketplaceJobs(recommended, filters),
-		special: filterMarketplaceJobs(special, filters),
-		urgent: filterMarketplaceJobs(urgent, filters),
-	};
-};
-
 export function useMarketplaceJobs(
 	filters: MarketplaceFilters
 ): UseMarketplaceJobsResult {
 	const jobsQuery = useQuery(
 		orpc.bambi.jobs.list.queryOptions({ input: toApiListInput(filters) })
 	);
-	const apiSections = jobsQuery.data
+	const sections = jobsQuery.data
 		? filterSections(
 				{
 					organic: jobsQuery.data.sections.organic.map(toMarketplaceJob),
@@ -140,17 +111,13 @@ export function useMarketplaceJobs(
 				filters
 			)
 		: EMPTY_SECTIONS;
-	const fallbackSections = buildFallbackSections(filters);
-	const hasApiJobs = flattenSections(apiSections).length > 0;
-	const sections =
-		jobsQuery.isSuccess && hasApiJobs ? apiSections : fallbackSections;
 	const jobs = flattenSections(sections);
+	const hasApiJobs = jobs.length > 0;
 
 	return {
 		isApiBacked: jobsQuery.isSuccess && hasApiJobs,
 		isError: jobsQuery.isError,
-		isLoading:
-			jobsQuery.isLoading && flattenSections(fallbackSections).length === 0,
+		isLoading: jobsQuery.isLoading,
 		jobs,
 		refetch: () => {
 			jobsQuery.refetch().catch(() => undefined);
@@ -165,14 +132,13 @@ export function useMarketplaceJob(id: string): UseMarketplaceJobResult {
 		...orpc.bambi.jobs.getById.queryOptions({ input: { id } }),
 		enabled: canUseApi,
 	});
-	const fallbackJob = JOBS.find((job) => job.id === id);
 	const apiJob = jobQuery.data ? toMarketplaceJob(jobQuery.data) : undefined;
 
 	return {
 		isApiBacked: Boolean(apiJob),
 		isError: jobQuery.isError,
-		isLoading: canUseApi && jobQuery.isLoading && !fallbackJob,
-		job: apiJob ?? fallbackJob,
+		isLoading: canUseApi && jobQuery.isLoading,
+		job: apiJob,
 		refetch: () => {
 			jobQuery.refetch().catch(() => undefined);
 		},

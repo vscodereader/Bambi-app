@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { JOBS } from "./data";
 import {
 	applyDiscoveryAxis,
 	DEFAULT_MARKETPLACE_FILTERS,
@@ -30,6 +29,54 @@ const baseJob: Job = {
 	type: "BAR",
 	verified: false,
 };
+
+// 마켓플레이스 필터/선택 로직 검증용 자체 픽스처. 각 테스트의 기대값(특정 id 집합)에
+// 맞춰 최소한의 공고를 구성한다 — 삭제된 샘플 데이터(data.ts)를 대체한다.
+const sampleJobs: Job[] = [
+	{
+		...baseJob,
+		id: "j1",
+		beginnerFriendly: true,
+		company: "달밤 라운지",
+		district: "강남",
+		location: "서울 · 강남",
+		pay: "시급 18,000원",
+		region: "서울",
+		type: "룸싸롱",
+		verified: true,
+	},
+	{
+		...baseJob,
+		id: "j2",
+		company: "문스톤 라운지",
+		district: "강남",
+		location: "서울 · 강남",
+		pay: "시급 17,000원",
+		region: "서울",
+		type: "룸싸롱",
+		verified: true,
+	},
+	{
+		...baseJob,
+		id: "j3",
+		company: "시그니처 바",
+		district: "용산",
+		instantInterview: true,
+		location: "서울 · 용산",
+		region: "서울",
+		type: "BAR",
+	},
+	{
+		...baseJob,
+		id: "j4",
+		company: "라운지 엘",
+		district: "서초",
+		instantInterview: true,
+		location: "서울 · 서초",
+		region: "서울",
+		type: "단란주점",
+	},
+];
 
 describe("filterMarketplaceJobs 지역·업종", () => {
 	it("시/도 필터는 job.region 필드로 정확 비교", () => {
@@ -123,14 +170,17 @@ describe("filterMarketplaceJobs 지역·업종", () => {
 
 describe("filterMarketplaceJobs", () => {
 	it("returns all jobs for the default filter state", () => {
-		const result = filterMarketplaceJobs(JOBS, DEFAULT_MARKETPLACE_FILTERS);
+		const result = filterMarketplaceJobs(
+			sampleJobs,
+			DEFAULT_MARKETPLACE_FILTERS
+		);
 
-		expect(result).toHaveLength(JOBS.length);
+		expect(result).toHaveLength(sampleJobs.length);
 	});
 
 	it("filters jobs by free text across title, company, location, and tags", () => {
 		const query = "강남";
-		const result = filterMarketplaceJobs(JOBS, {
+		const result = filterMarketplaceJobs(sampleJobs, {
 			...DEFAULT_MARKETPLACE_FILTERS,
 			query,
 		});
@@ -157,7 +207,7 @@ describe("filterMarketplaceJobs", () => {
 	});
 
 	it("filters jobs by region, category, pay, verification, and beginner-friendly chips", () => {
-		const result = filterMarketplaceJobs(JOBS, {
+		const result = filterMarketplaceJobs(sampleJobs, {
 			category: "룸싸롱",
 			district: "강남",
 			minimumPay: 17_000,
@@ -172,7 +222,7 @@ describe("filterMarketplaceJobs", () => {
 	});
 
 	it("filters jobs to instant-interview listings when the chip is on", () => {
-		const result = filterMarketplaceJobs(JOBS, {
+		const result = filterMarketplaceJobs(sampleJobs, {
 			...DEFAULT_MARKETPLACE_FILTERS,
 			onlyToday: true,
 		});
@@ -184,7 +234,7 @@ describe("filterMarketplaceJobs", () => {
 	});
 
 	it("does not match negated text like 초보 사절 / 오늘 면접 불가", () => {
-		const negated = JOBS.map((job) => ({
+		const negated = sampleJobs.map((job) => ({
 			...job,
 			beginnerFriendly: false,
 			desc: `${job.desc} 초보 사절, 오늘 면접 불가`,
@@ -208,15 +258,15 @@ describe("filterMarketplaceJobs", () => {
 
 describe("getSelectedMarketplaceJob", () => {
 	it("returns the requested job when it is still visible", () => {
-		const result = getSelectedMarketplaceJob(JOBS, "j2");
+		const result = getSelectedMarketplaceJob(sampleJobs, "j2");
 
 		expect(result?.id).toBe("j2");
 	});
 
 	it("falls back to the first visible job when the selected id is missing", () => {
-		const result = getSelectedMarketplaceJob(JOBS, "missing");
+		const result = getSelectedMarketplaceJob(sampleJobs, "missing");
 
-		expect(result?.id).toBe(JOBS[0]?.id);
+		expect(result?.id).toBe(sampleJobs[0]?.id);
 	});
 });
 

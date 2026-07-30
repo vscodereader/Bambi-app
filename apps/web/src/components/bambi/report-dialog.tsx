@@ -23,7 +23,7 @@ type ServerReportReason =
 	| "misleading_job_information"
 	| "other";
 
-// REPORT_REASONS(lib/bambi/data.ts)의 사유 id → 서버 enum.
+// REPORT_REASONS(lib/bambi/report-reasons.ts)의 사유 id → 서버 enum.
 // 사유 미선택(reason undefined)이면 "other"로 접수한다.
 const REPORT_REASON_TO_SERVER: Record<string, ServerReportReason> = {
 	sex: "illegal_or_prohibited_content",
