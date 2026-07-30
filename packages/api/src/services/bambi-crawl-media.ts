@@ -19,12 +19,18 @@ import { isIP } from "node:net";
 import type { CrawlClient } from "./bambi-crawl-fetch";
 
 // 한 장 상한. 이보다 큰 이미지는 담지 않는다 — 행 하나가 목록 응답을 흔드는 것을 막는 천장이다.
-// 실측 상세 이미지가 1.4MB여서 2MB로 잡았다(그 위는 전단 여러 장을 이어붙인 경우다).
-export const CRAWLED_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+// 처음엔 2MB였는데, 상세 이미지 0장 공고 107건의 주범이 이 상한이었다: 실패 공고의 전단 JPG가
+// 2.10~4.62MB(32747→4.62MB, 9154→3.30MB, 36655→2.10MB, 전부 HTTP 200 정상 JPG)라 2MB에
+// 걸려 조용히 null이 됐고, 그래서 "이미지가 원래 없는 공고"와 구분되지 않았다. 실측 최대
+// 4.62MB에 여유 2배를 둬 8MB로 올린다. 상세 이미지는 상세 화면 전용 컬럼 규율(목록 쿼리 금지)이
+// 있어 목록 성능과 무관하다.
+export const CRAWLED_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 
 // 공고 한 건에 담는 총량 상한. 상세 이미지를 20장 붙이는 공고가 있어 장수 상한만으로는
-// 행 하나가 수십 MB까지 갈 수 있다.
-export const CRAWLED_IMAGE_TOTAL_MAX_BYTES = 8 * 1024 * 1024;
+// 행 하나가 수십 MB까지 갈 수 있다. 한 장 상한을 8MB로 올린 것에 맞춰 16MB로 둔다 —
+// base64 +33%를 감안해도 상세 응답 상한은 ~21MB이고, 위와 같은 상세 전용 컬럼 규율 덕에
+// 목록 성능과 무관하다.
+export const CRAWLED_IMAGE_TOTAL_MAX_BYTES = 16 * 1024 * 1024;
 
 // 매직 넘버로 실제 이미지인지 본다. content-type을 믿지 않는 이유가 양쪽으로 있다:
 //  - 배너(mobile_img/banner/<md5>)는 확장자가 없고 서버가 text/plain을 준다 → 헤더를 믿으면
@@ -241,9 +247,10 @@ export const embedCrawledImage = async ({
 	}
 
 	try {
-		// 이미지를 받는 것도 크롤링이다. robots.txt를 못 받으면 크롤 클라이언트가 "전부 금지"로
-		// 보므로, 이미지가 robots.txt 없는 CDN에 있으면 수집이 통째로 비게 된다 —
-		// 그건 버그가 아니라 정책이고, 실패 건수로 드러난다.
+		// 이미지를 받는 것도 크롤링이라 robots.txt를 존중한다. robots.txt가 4xx(404 등)인 CDN은
+		// "규칙 없음(허용)"으로 보므로(bambi-crawl-fetch loadRobots) 외부 이미지가 통째로 비지
+		// 않는다 — 다만 5xx·네트워크 오류로 정책을 확인 못 하면 여전히 "전부 금지"라 그 경우엔
+		// 실패 건수로 드러난다.
 		if (!(await client.isAllowed(target))) {
 			return null;
 		}

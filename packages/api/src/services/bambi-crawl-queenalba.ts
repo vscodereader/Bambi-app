@@ -381,30 +381,68 @@ const readBody = (
 // export 해서 호출자가 "길이 == 상한 → 잘렸을 수 있음"을 로그로 드러낼 수 있게 한다.
 export const QUEENALBA_MAX_DETAIL_IMAGES = 20;
 
+// 본문 이미지가 우리 오리진 밖(외부 CDN)에 있는지. 절대 http/https이면서 오리진이 퀸알바가
+// 아니면 외부 후보다. toQueenalbaAbsoluteUrl이 상대경로를 퀸알바 오리진으로 굳히므로, 여기
+// 남는 건 원문이 절대 URL로 박아둔 외부 호스트뿐이다.
+const isExternalImageUrl = (url: string): boolean => {
+	try {
+		const parsed = new URL(url);
+
+		return (
+			(parsed.protocol === "http:" || parsed.protocol === "https:") &&
+			parsed.origin !== QUEENALBA_ORIGIN
+		);
+	} catch {
+		return false;
+	}
+};
+
 // 본문에 박힌 공고 이미지. 유흥 공고는 조건 대부분을 이미지로만 적어두는 경우가 많아 텍스트만
 // 저장하면 정작 핵심이 빠진다. 같은 이미지를 여러 번 붙이는 공고가 흔해 중복은 접되, 순서는
 // 그대로 둔다(위에서부터 읽는 게 곧 공고의 구성이다).
+//
+// 두 버킷으로 모은다: (1) same-origin 화이트리스트, (2) 외부 호스트 후보. 화이트리스트가
+// 한 장이라도 있으면 그것만, 0장일 때만 외부 후보로 폴백한다. 37893은 본문 14장이 전부
+// tksk8080.diskn.com이었다 — 전량 외부 호스팅 공고가 실재해, 폴백이 없으면 그런 공고의
+// 이미지가 통째로 빈다. 반대로 혼합 공고(본문 same-origin + imgur 장식 gif)는 화이트리스트가
+// 이겨 외부 장식이 새지 않는다. same-origin 비화이트리스트(에디터 아이콘·사이트 장식)는 어느
+// 버킷에도 안 들어간다. 상한 20은 두 버킷 모두 같게 적용한다.
 const readDetailImageUrls = (
 	$: ReturnType<typeof load>,
 	$section: ReturnType<ReturnType<typeof load>>
 ): string[] => {
-	const urls: string[] = [];
-	const seen = new Set<string>();
+	const whitelist: string[] = [];
+	const external: string[] = [];
+	const seenWhitelist = new Set<string>();
+	const seenExternal = new Set<string>();
 
 	for (const element of $section.find("img").toArray()) {
 		const url = toQueenalbaAbsoluteUrl($(element).attr("src"));
 
-		if (url && !seen.has(url) && isQueenalbaJobImageUrl(url)) {
-			seen.add(url);
-			urls.push(url);
+		if (!url) {
+			continue;
+		}
 
-			if (urls.length >= QUEENALBA_MAX_DETAIL_IMAGES) {
-				break;
+		if (isQueenalbaJobImageUrl(url)) {
+			if (
+				!seenWhitelist.has(url) &&
+				whitelist.length < QUEENALBA_MAX_DETAIL_IMAGES
+			) {
+				seenWhitelist.add(url);
+				whitelist.push(url);
 			}
+		} else if (
+			isExternalImageUrl(url) &&
+			!seenExternal.has(url) &&
+			external.length < QUEENALBA_MAX_DETAIL_IMAGES
+		) {
+			seenExternal.add(url);
+			external.push(url);
 		}
 	}
 
-	return urls;
+	// 화이트리스트가 한 장이라도 있으면 그것만, 0장일 때만 외부 후보로 폴백한다.
+	return whitelist.length > 0 ? whitelist : external;
 };
 
 // 상세 페이지 썸네일. 운영자 확인으로 새로 안 사실 — 썸네일이 본문 이미지와 별개로 상세에도

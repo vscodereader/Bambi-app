@@ -306,6 +306,22 @@ export const queenalbaGuinDetailManyImagesHtml = queenalbaDetail({
 	title: "이미지만 25장인 공고",
 });
 
+// 본문 이미지가 전량 외부 호스트인 공고. 37893은 본문 14장이 전부 tksk8080.diskn.com이었다 —
+// same-origin 화이트리스트가 한 장도 없으면 외부 후보로 폴백해야 그 공고의 이미지가 산다.
+// 함께 심어둔 것: same-origin 에디터 장식(/cheditor/)은 화이트리스트 밖이라 폴백에서도 빠지고,
+// 같은 외부 URL이 두 번 걸려 중복 접기도 여기서 함께 못박는다.
+export const queenalbaGuinDetailExternalOnlyHtml = queenalbaDetail({
+	bodyHtml:
+		'<img src="/cheditor/icons/deco.gif"><img src="https://tksk8080.diskn.com/2026/07/a.jpg"><img src="https://tksk8080.diskn.com/2026/07/b.jpg"><img src="https://tksk8080.diskn.com/2026/07/a.jpg">',
+	messengerRows: "",
+	rows: [
+		["닉네임", "외부호스팅업소"],
+		["업무내용", "기타 - 기타업종"],
+		["접수기간", "2026-07-29 ~ 2026-08-08"],
+	],
+	title: "본문 이미지가 전부 외부 호스트인 공고",
+});
+
 // ---------------------------------------------------------------------------
 // 퀸알바 메인페이지(유료 노출 자리)
 //
