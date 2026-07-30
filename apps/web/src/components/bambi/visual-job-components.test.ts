@@ -8,6 +8,18 @@ const componentPath = (fileName: string) =>
 const readComponent = (fileName: string) =>
 	fs.readFileSync(componentPath(fileName), "utf8");
 
+// 한 파일에 세로형·가로형이 같이 사는 컴포넌트는 소스 전체로 단정하면 한쪽 분기를 지워도
+// 다른 쪽(또는 주석)의 같은 문자열에 걸려 초록으로 남는다. 그래서 함수 블록으로 잘라서 본다.
+// 마커를 못 찾으면 조용히 빈 문자열이 되어 검사가 무의미해지므로 바로 던진다.
+const blockBetween = (source: string, start: string, end: string) => {
+	const from = source.indexOf(start);
+	const to = source.indexOf(end, from);
+	if (from < 0 || to < 0) {
+		throw new Error(`block not found: ${start} … ${end}`);
+	}
+	return source.slice(from, to);
+};
+
 describe("visual job marketplace components", () => {
 	it("defines a compact visual job card without a chat button", () => {
 		const source = readComponent("visual-job-card.tsx");
@@ -41,16 +53,35 @@ describe("visual job marketplace components", () => {
 		expect(banner).not.toContain("item.coverUrl");
 	});
 
-	// 수집 배너는 원본 규격이 우리 슬롯(4:9·7:3)과 달라(실측 약 3:2) object-cover로 넣으면
-	// 잘려 나간다. 결제 광고의 고정 비율은 그대로 두고 수집만 원본 비율로 그려야 한다.
-	it("renders crawled banners at their own aspect ratio", () => {
+	// 수집 배너 렌더는 방향에 따라 갈린다.
+	// 세로: 원본 실측 80×180 = 정확히 4:9라 우리 세로 규격(aspect-[4/9] h-52)에 object-cover로
+	// 채워도 잘리는 곳이 없다 → 결제 배너와 같은 규격으로 그린다(원본 비율로 그리면 슬롯이
+	// 이미지 크기로 줄어 옆 결제 슬롯과 크기가 어긋난다).
+	// 가로: 원본 실측 240×117(≈2.05)이 7:3(≈2.33)과 달라 cover면 위아래가 잘린다 → 가로형만
+	// 원본 비율(h-auto)로 남긴다. 결제 광고의 고정 비율은 양쪽 다 그대로 둔다.
+	it("renders vertical crawled banners at our spec and horizontal ones at their own ratio", () => {
 		const banner = readComponent("ad-banner.tsx");
+		const vertical = blockBetween(
+			banner,
+			"export function AdBanner({",
+			"interface AdBannerRailProps"
+		);
+		const horizontal = blockBetween(
+			banner,
+			"export function HorizontalAdBanner({",
+			"interface HorizontalAdBannerRailProps"
+		);
 
-		expect(banner).toContain("item.crawled");
-		expect(banner).toContain('item.crawled ? "h-auto w-full" : "object-cover"');
-		// 결제 광고 슬롯 비율은 유지된다.
-		expect(banner).toContain("aspect-[4/9] h-52 w-auto rounded-lg");
-		expect(banner).toContain("aspect-[7/3] w-full rounded-lg border");
+		// 세로형은 수집·결제 구분 없이 규격 슬롯 + cover 하나로 그린다.
+		expect(vertical).toContain("aspect-[4/9] h-52 w-auto rounded-lg");
+		expect(vertical).toContain('"object-cover"');
+		expect(vertical).not.toContain("item.crawled");
+		expect(vertical).not.toContain("h-auto");
+		// 가로형만 수집 분기를 남긴다 — 결제는 7:3 cover, 수집은 원본 비율.
+		expect(horizontal).toContain("aspect-[7/3] w-full rounded-lg border");
+		expect(horizontal).toContain(
+			'item.crawled ? "h-auto w-full" : "object-cover"'
+		);
 		// 갈 곳 없는 배너는 이제 없다(매퍼가 수집 전용 상세 주소를 만든다).
 		expect(banner).not.toContain("if (!item.href)");
 	});
