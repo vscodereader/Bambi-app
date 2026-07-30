@@ -29,7 +29,7 @@ describe("seeker chat role guard", () => {
 		expect(requireRole).toContain(
 			"export async function enforceJobSeekerAccess"
 		);
-		// 역할 불일치를 /welcome으로 보내면 로그인한 구인자에게 가입 화면이 떠
+		// 역할 불일치를 /seeker 인증 오버레이로 보내면 로그인한 구인자에게 가입 화면이 떠
 		// 로그아웃된 것처럼 보인다. 기존 운영자·구인자 가드와 같은 처리를 쓴다.
 		expect(requireRole).toContain('routing.role !== "job_seeker"');
 		expect(requireRole).toContain("redirect(homePathForRole(routing.role))");
@@ -45,8 +45,9 @@ describe("seeker chat role guard", () => {
 			"page.tsx"
 		);
 
-		// 이 리다이렉트가 원래 버그였다: 구인자가 채팅으로 이어가면 /welcome으로 튕겼다.
-		expect(page).not.toContain('router.push("/welcome"');
+		// 이 리다이렉트가 원래 버그였다: 구인자가 채팅으로 이어가면 가입 게이트로 튕겼다.
+		// 로그인 유도(?auth=login)는 정상이므로 가입 경로만 금지한다.
+		expect(page).not.toContain('router.push("/seeker?auth=signup"');
 	});
 
 	it("hides the chat CTA on the job detail page when chatting is not allowed", () => {

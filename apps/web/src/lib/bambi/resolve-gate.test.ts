@@ -6,20 +6,27 @@ const fresh = { hasSession: false, isGuest: false };
 const authed = { hasSession: true, isGuest: false };
 
 describe("resolveGate", () => {
-	it("lets public /welcome pass for everyone", () => {
-		expect(resolveGate({ pathname: "/welcome", ...fresh }).type).toBe("next");
-	});
 	it("lets logged-in users pass", () => {
 		expect(resolveGate({ pathname: "/employer", ...authed }).type).toBe("next");
 	});
-	it("lets /login pass without re-gating to /welcome", () => {
-		expect(resolveGate({ pathname: "/login", ...fresh }).type).toBe("next");
+	it("lets anonymous visitors reach the seeker list root", () => {
+		expect(resolveGate({ pathname: "/seeker", ...fresh }).type).toBe("next");
 	});
-	it("sends fresh visitor to /welcome", () => {
-		expect(resolveGate({ pathname: "/seeker", ...fresh })).toEqual({
+	it("sends anonymous visitors elsewhere to the login overlay", () => {
+		expect(resolveGate({ pathname: "/seeker/jobs/abc", ...fresh })).toEqual({
 			type: "redirect",
-			to: "/welcome",
+			to: "/seeker?auth=login",
 		});
+		expect(resolveGate({ pathname: "/", ...fresh })).toEqual({
+			type: "redirect",
+			to: "/seeker?auth=login",
+		});
+	});
+	it("no longer treats /welcome or /login as public", () => {
+		expect(resolveGate({ pathname: "/welcome", ...fresh }).type).toBe(
+			"redirect"
+		);
+		expect(resolveGate({ pathname: "/login", ...fresh }).type).toBe("redirect");
 	});
 	it("allows guest on seeker list root", () => {
 		expect(resolveGate({ pathname: "/seeker", ...guest }).type).toBe("next");
@@ -27,19 +34,19 @@ describe("resolveGate", () => {
 	it("sends guest from job detail to signup with guestBlocked signal", () => {
 		expect(resolveGate({ pathname: "/seeker/jobs/abc", ...guest })).toEqual({
 			type: "redirect",
-			to: "/welcome?signup&guestBlocked=1",
+			to: "/seeker?auth=signup&guestBlocked=1",
 		});
 	});
 	it("sends guest from community to signup with guestBlocked signal", () => {
 		expect(resolveGate({ pathname: "/seeker/community", ...guest })).toEqual({
 			type: "redirect",
-			to: "/welcome?signup&guestBlocked=1",
+			to: "/seeker?auth=signup&guestBlocked=1",
 		});
 	});
 	it("sends guest from employer area to signup with guestBlocked signal", () => {
 		expect(resolveGate({ pathname: "/employer", ...guest })).toEqual({
 			type: "redirect",
-			to: "/welcome?signup&guestBlocked=1",
+			to: "/seeker?auth=signup&guestBlocked=1",
 		});
 	});
 	it("sends guest at root to seeker", () => {

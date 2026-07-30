@@ -17,6 +17,7 @@ import {
 } from "@bambi-app/ui/components/toggle-group";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
+import type { ComponentProps } from "react";
 import { useState } from "react";
 import type { BambiGenderValue, MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { Button, Input } from "./ds";
@@ -32,22 +33,31 @@ const isBirthValid = (birth: string): boolean =>
 	BIRTH_PATTERN.test(birth.replace(NON_DIGIT, ""));
 
 interface MockPhoneVerifyDialogProps {
+	// 트리거 버튼에 덧입힐 클래스(실인증 경로와 같은 모양을 유지하기 위해 그대로 받는다).
+	className?: string;
 	// 이미 성별이 있는 사용자(예: 회원)를 위해 선택 상태를 미리 채운다.
 	defaultGender?: BambiGenderValue | null;
 	description?: string;
 	// 인증 성공 시 호출. 제공하면 게스트 쿠키 흐름 대신 이 콜백으로 결과를 넘겨
 	// 호출부(예: 계정설정)가 저장을 담당한다. 실인증 API 도입 시 이 콜백 경계는 유지된다.
 	onVerified?: (input: MockPhoneVerifyInput) => Promise<void> | void;
+	// 트리거 버튼 크기(실인증 경로와 동일).
+	size?: ComponentProps<typeof Button>["size"];
 	title?: string;
 	triggerLabel?: string;
+	// 트리거 버튼의 위계(주 액션만 primary). 폼 안의 취소·인증하기 버튼과는 무관하다.
+	variant?: ComponentProps<typeof Button>["variant"];
 }
 
 export function MockPhoneVerifyDialog({
+	className,
 	onVerified,
+	size,
 	triggerLabel = "휴대폰 인증",
 	title = "휴대폰 본인인증",
 	description = "본인인증 후 공고 목록을 열람할 수 있어요. (지금은 목 인증 단계예요)",
 	defaultGender = null,
+	variant = "secondary",
 }: MockPhoneVerifyDialogProps = {}) {
 	const router = useRouter();
 	const [open, setOpen] = useState(false);
@@ -139,9 +149,11 @@ export function MockPhoneVerifyDialog({
 		<Dialog onOpenChange={setOpen} open={open}>
 			<Button
 				block
+				className={className}
 				leftIcon={<PhoneIcon />}
 				onClick={() => setOpen(true)}
-				variant="secondary"
+				size={size}
+				variant={variant}
 			>
 				{triggerLabel}
 			</Button>

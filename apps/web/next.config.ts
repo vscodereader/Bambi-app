@@ -25,6 +25,15 @@ const nextConfig: NextConfig = {
 	// /api/guest 라우트가 포트원 본인인증 서비스(services/portone-identity)를 런타임
 	// import 하므로 트랜스파일 대상에 넣는다.
 	transpilePackages: ["shiki", "@bambi-app/api"],
+	// 옛 진입 경로. 로그인·회원가입 UI가 /seeker 위 오버레이로 옮겨가 두 페이지는
+	// 사라졌지만, 외부 북마크·검색엔진 색인이 남아 있어 영구 리다이렉트로 흡수한다.
+	// next.config의 redirects는 프록시(미들웨어)보다 먼저 실행되므로 게이트에 걸리지 않는다.
+	redirects() {
+		return Promise.resolve([
+			{ source: "/welcome", destination: "/seeker", permanent: true },
+			{ source: "/login", destination: "/seeker?auth=login", permanent: true },
+		]);
+	},
 };
 
 export default nextConfig;

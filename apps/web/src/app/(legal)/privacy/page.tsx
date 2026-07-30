@@ -15,8 +15,8 @@ import {
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
 
 export const metadata: Metadata = {
-	title: "개인정보 처리방침 | 밤비",
-	description: "밤비 개인정보 처리방침",
+	title: "개인정보 처리방침 | 밤비알바",
+	description: "밤비알바 개인정보 처리방침",
 };
 
 export default function PrivacyPage() {
@@ -26,10 +26,10 @@ export default function PrivacyPage() {
 			intro={
 				<>
 					<LegalParagraph>
-						밤비({BAMBI_COMPANY.url} 이하 "회사"라 함)는 이용자의 개인정보를
-						중요하게 생각하며, 이용자가 회사의 서비스(이하 "밤비 서비스" 또는
-						"밤비"라 함)를 이용하면서 제공한 개인정보가 보호받을 수 있도록
-						최선을 다하고 있습니다.
+						밤비알바({BAMBI_COMPANY.url} 이하 "회사"라 함)는 이용자의 개인정보를
+						중요하게 생각하며, 이용자가 회사의 서비스(이하 "밤비알바 서비스"
+						또는 "밤비알바"라 함)를 이용하면서 제공한 개인정보가 보호받을 수
+						있도록 최선을 다하고 있습니다.
 					</LegalParagraph>
 					<LegalParagraph>
 						회사는 「개인정보 보호법」 및 「정보통신망 이용촉진 및 정보보호 등에
@@ -43,9 +43,9 @@ export default function PrivacyPage() {
 						언제든지 확인할 수 있습니다.
 					</LegalParagraph>
 					<LegalParagraph>
-						밤비는 만 19세 이상만 이용할 수 있는 성인 대상 서비스입니다. 회사는
-						휴대폰 본인확인을 통해 만 19세 미만의 가입과 이용을 차단하고 있으며,
-						만 14세 미만 아동의 개인정보를 수집하지 않습니다.
+						밤비알바는 만 19세 이상만 이용할 수 있는 성인 대상 서비스입니다.
+						회사는 휴대폰 본인확인을 통해 만 19세 미만의 가입과 이용을 차단하고
+						있으며, 만 14세 미만 아동의 개인정보를 수집하지 않습니다.
 					</LegalParagraph>
 				</>
 			}
@@ -91,7 +91,7 @@ export default function PrivacyPage() {
 				</LegalParagraph>
 				<LegalParagraph>
 					비회원(게스트)으로 성인 인증만 하는 경우 서버에는 어떠한 정보도
-					저장하지 않으며, 이용자의 브라우저에 저장되는 밤비 게스트
+					저장하지 않으며, 이용자의 브라우저에 저장되는 밤비알바 게스트
 					쿠키(bambi_guest, 유효기간 30일)에 서명된 토큰으로 성별과 만료 시각만
 					보관합니다.
 				</LegalParagraph>
@@ -186,8 +186,8 @@ export default function PrivacyPage() {
 
 				<LegalSubheading>나. 비회원 성인 인증</LegalSubheading>
 				<LegalParagraph>
-					비회원의 성인 인증에 사용하는 밤비 게스트 쿠키(bambi_guest)는 발급 후
-					30일이 지나거나 회원 로그인·로그아웃 시 즉시 만료됩니다.
+					비회원의 성인 인증에 사용하는 밤비알바 게스트 쿠키(bambi_guest)는 발급
+					후 30일이 지나거나 회원 로그인·로그아웃 시 즉시 만료됩니다.
 				</LegalParagraph>
 
 				<LegalSubheading>다. 관계 법령에 따른 보존</LegalSubheading>
@@ -312,7 +312,7 @@ export default function PrivacyPage() {
 							"로그아웃 또는 세션 만료 시까지",
 						],
 						[
-							"밤비 게스트 쿠키",
+							"밤비알바 게스트 쿠키",
 							"비회원의 성인 인증 결과 보관(성별·만료 시각)",
 							"발급 후 30일(로그인·로그아웃 시 즉시 만료)",
 						],

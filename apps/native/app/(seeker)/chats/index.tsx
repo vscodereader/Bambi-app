@@ -35,7 +35,7 @@ export default function SeekerChatsScreen() {
 			/>
 			{rooms.length === 0 ? (
 				<StateCard
-					description="공고 상세에서 밤비 채팅을 시작하면 여기에 표시됩니다."
+					description="공고 상세에서 밤비알바 채팅을 시작하면 여기에 표시됩니다."
 					title="아직 채팅이 없습니다"
 				/>
 			) : (

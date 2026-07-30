@@ -1,10 +1,13 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { formatMinimumWageLabel } from "@/lib/bambi/minimum-wage";
 import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
+import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { Badge, Button, Card, InfoTile } from "../ds";
 import {
@@ -78,7 +81,9 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 // 다른 InfoTile과 동일한 룩(secondary 아이콘 타일·muted 라벨·foreground 번호)으로 두고,
 // 번호 바로 옆 상담 안내만 primary 색으로 강조한다. 안내가 길어 wrap되므로 값에는
 // truncate를 걸지 않고 아이콘을 상단 정렬(items-start)한다.
-function EmployerPhoneTile({ phone }: { phone: string }) {
+// 수집 공고 상세(seeker-crawled-job-detail)도 같은 타일을 쓰므로 export한다 — 연락처 안내
+// 문구가 두 화면에서 갈라지면 한쪽만 고쳐지는 사고가 난다.
+export function EmployerPhoneTile({ phone }: { phone: string }) {
 	return (
 		<div className="flex min-w-0 items-start gap-3">
 			<div className="inline-flex size-12 flex-[0_0_48px] items-center justify-center rounded-md bg-secondary text-foreground">
@@ -115,6 +120,12 @@ export function SeekerJobDetailResponsive({
 	onStartChat,
 }: SeekerJobDetailResponsiveProps) {
 	const adBanners = useAdBannerJobs();
+	// 최저시급은 사이트 설정 공개 조회에 실려 있다(광고 슬롯이 같은 쿼리를 이미 쓰므로
+	// 추가 요청이 생기지 않는다). 미설정·실패는 헬퍼가 코드 기본값으로 폴백한다.
+	const siteSettings = useQuery(
+		orpc.bambi.siteSettings.getFooter.queryOptions()
+	);
+	const minimumWageLabel = formatMinimumWageLabel(siteSettings.data);
 	return (
 		// 모바일 하단 고정 CTA 자리를 pb-28로 비워 둔다. CTA를 감추는 역할에서는
 		// 그 여백이 빈 공간으로 남으므로 기본 여백으로 되돌린다.
@@ -128,7 +139,10 @@ export function SeekerJobDetailResponsive({
 			    자리표시로 채우므로 조건 없이 렌더한다. */}
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					<HorizontalAdBannerRail items={adBanners.leftBanner} />
+					<HorizontalAdBannerRail
+						isLoading={adBanners.isLoading}
+						items={adBanners.leftBanner}
+					/>
 				</div>
 			</aside>
 			{/* 중앙 콘텐츠: 본문 + CTA 고정폭 그리드 */}
@@ -186,7 +200,16 @@ export function SeekerJobDetailResponsive({
 								<InfoTile
 									icon={<DollarCircle />}
 									label="급여"
-									value={job.pay}
+									value={
+										// 급여 금액 오른쪽에 비교 기준(최저시급)을 약한 위계로 붙인다.
+										// 좁은 화면에서는 wrap으로 아래 줄에 떨어져 금액이 잘리지 않는다.
+										<span className="flex flex-wrap items-baseline gap-x-2">
+											{job.pay}
+											<span className="font-medium text-muted-foreground text-sm">
+												{minimumWageLabel}
+											</span>
+										</span>
+									}
 								/>
 								<InfoTile
 									icon={<ClockIcon />}
@@ -281,7 +304,12 @@ export function SeekerJobDetailResponsive({
 				<aside className="hidden lg:block">
 					<div className="sticky top-20 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border">
 						<Badge tone="success">검증 완료</Badge>
-						<h2 className="mt-3 mb-2 font-extrabold text-xl">{job.pay}</h2>
+						<div className="mt-3 mb-2 flex flex-wrap items-baseline gap-x-2">
+							<h2 className="m-0 font-extrabold text-xl">{job.pay}</h2>
+							<span className="font-medium text-muted-foreground text-sm">
+								{minimumWageLabel}
+							</span>
+						</div>
 						<div className="grid gap-3 text-sm">
 							<div className="flex items-center gap-2 font-bold">
 								<span className="inline-flex size-4 text-coral-600">
@@ -336,7 +364,10 @@ export function SeekerJobDetailResponsive({
 			    자리표시로 채우므로 조건 없이 렌더한다. */}
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					<AdBannerRail items={adBanners.rightBanner} />
+					<AdBannerRail
+						isLoading={adBanners.isLoading}
+						items={adBanners.rightBanner}
+					/>
 				</div>
 			</aside>
 			{canStartChat ? (

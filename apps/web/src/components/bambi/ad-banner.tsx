@@ -1,19 +1,45 @@
 "use client";
 
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Megaphone } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { isAdBannerImageRequired } from "@/lib/bambi/ad-banner-layout";
 import { resolveAdInquiryTel } from "@/lib/bambi/ad-inquiry-tel";
 import type { AdBannerItem } from "@/lib/bambi/api-job-mapper";
 import { orpc } from "@/utils/orpc";
 import { AdBannerLayoutRenderer } from "./ad-banner-layout-renderer";
 
-const bannerHref = (item: AdBannerItem): Route =>
-	`/seeker/jobs/${item.id}` as Route;
+const AD_BANNER_SURFACE_CLASS = "relative block overflow-hidden rounded-lg";
+
+const AD_BANNER_LINK_CLASS =
+	"transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+// 배너 상자. 결제 광고는 우리 공고 상세로, 수집 배너는 수집 전용 상세로 간다(매퍼가 주소를
+// 만든다) — 갈 곳 없는 배너는 이제 없으므로 항상 Link다.
+function AdBannerFrame({
+	children,
+	className,
+	item,
+}: {
+	children: ReactNode;
+	className?: string;
+	item: AdBannerItem;
+}) {
+	return (
+		<Link
+			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기`}
+			className={cn(AD_BANNER_SURFACE_CLASS, AD_BANNER_LINK_CLASS, className)}
+			href={item.href as Route}
+		>
+			{children}
+		</Link>
+	);
+}
 
 // 좌/우 배너 rail은 슬롯 3개를 항상 렌더한다 — 서버가 그룹당 고정 길이(3칸) 배열을 내려주고
 // 활성 칸만 광고, 나머지는 null이다. 데이터가 없거나(로딩) null인 칸은 자리표시로 채운다.
@@ -107,14 +133,13 @@ interface AdBannerProps {
 // 받아 놓고 가리는 낭비가 된다. 대신 같은 크기 클래스를 가진 빈 상자가 슬롯 크기를 만든다
 // (Image가 유일한 크기 소스였다 — 그냥 빼면 슬롯이 무너진다).
 export function AdBanner({ className, item }: AdBannerProps) {
+	// 수집 배너도 결제 배너와 같은 규격 슬롯으로 그린다. 세로 수집 배너 원본은 실측 80×180 —
+	// 정확히 4:9라 규격 슬롯을 object-cover로 채워도 잘리는 부분이 없다. 반대로 원본 비율로
+	// 그리면 슬롯이 이미지 크기로 줄어들어 옆의 결제 슬롯과 크기가 어긋난다(사용자 확인 사항).
 	const surfaceClassName = cn("aspect-[4/9] h-52 w-auto rounded-lg", className);
 
 	return (
-		<Link
-			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기`}
-			className="relative block w-fit overflow-hidden rounded-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			href={bannerHref(item)}
-		>
+		<AdBannerFrame className="w-fit" item={item}>
 			{/* 이미지가 없는 단색 배너의 접근성 이름은 Link의 aria-label이 이미 담당한다 —
 			    빈 상자에는 alt에 해당하는 이름을 줄 것이 없고, 실제 내용인 문구는 레이아웃
 			    렌더러가 텍스트로 그린다. */}
@@ -134,21 +159,33 @@ export function AdBanner({ className, item }: AdBannerProps) {
 			{item.layout ? (
 				<AdBannerLayoutRenderer layout={item.layout} slot="vertical" />
 			) : null}
-		</Link>
+		</AdBannerFrame>
 	);
 }
 
 interface AdBannerRailProps {
 	className?: string;
+	// 로딩 중이면 슬롯을 스켈레톤으로 채운다 — 광고 있는 칸도 응답 대기 동안 문의 배너가
+	// 번쩍이는 걸 막는다(로딩 vs "광고 없음" 구분은 useAdBannerJobs.isLoading).
+	isLoading?: boolean;
 	items: (AdBannerItem | null)[];
 }
 
 // 세로 배너 스택(우측). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로, 빈 칸은
-// "광고 등록 문의" 자리표시로 채운다.
-export function AdBannerRail({ className, items }: AdBannerRailProps) {
+// "광고 등록 문의" 자리표시로 채운다. 로딩 중에는 같은 크기 스켈레톤을 그린다.
+export function AdBannerRail({
+	className,
+	isLoading,
+	items,
+}: AdBannerRailProps) {
 	return (
 		<div className={cn("flex flex-col items-start gap-3", className)}>
 			{AD_RAIL_SLOT_KEYS.map((key, index) => {
+				if (isLoading) {
+					return (
+						<Skeleton className="aspect-[4/9] h-52 rounded-lg" key={key} />
+					);
+				}
 				const item = items[index];
 				return item ? (
 					<AdBanner item={item} key={item.id} />
@@ -181,17 +218,16 @@ export function HorizontalAdBanner({
 	item,
 }: HorizontalAdBannerProps) {
 	// 단색 배경 처리는 AdBanner(세로형)와 같다 — 그쪽 주석 참고.
+	// 수집 배너도 결제 배너와 똑같은 규격 슬롯에 object-cover로 채운다. 가로 수집 원본은 실측
+	// 240×117(≈2.05)로 7:3(≈2.33)과 달라 상하가 합쳐 12% 정도 잘리지만, 슬롯이 이미지 크기대로
+	// 늘었다 줄었다 하면 옆 결제 슬롯·레일과 높이가 어긋난다(사용자 결정).
 	const surfaceClassName = cn(
 		"aspect-[7/3] w-full rounded-lg border border-border",
 		className
 	);
 
 	return (
-		<Link
-			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기`}
-			className="relative block overflow-hidden rounded-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			href={bannerHref(item)}
-		>
+		<AdBannerFrame item={item}>
 			{isAdBannerImageRequired(item.layout, "ad_horizontal") ? (
 				<Image
 					alt={`${item.company} ${item.title} 광고 배너`}
@@ -208,24 +244,32 @@ export function HorizontalAdBanner({
 			{item.layout ? (
 				<AdBannerLayoutRenderer layout={item.layout} slot="horizontal" />
 			) : null}
-		</Link>
+		</AdBannerFrame>
 	);
 }
 
 interface HorizontalAdBannerRailProps {
 	className?: string;
+	// 로딩 중이면 슬롯을 스켈레톤으로 채운다(AdBannerRail 주석 참고).
+	isLoading?: boolean;
 	items: (AdBannerItem | null)[];
 }
 
 // 가로형 배너 세로 스택(좌측 사이드). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로,
-// 빈 칸은 "광고 등록 문의" 자리표시로 채운다.
+// 빈 칸은 "광고 등록 문의" 자리표시로 채운다. 로딩 중에는 같은 크기 스켈레톤을 그린다.
 export function HorizontalAdBannerRail({
 	className,
+	isLoading,
 	items,
 }: HorizontalAdBannerRailProps) {
 	return (
 		<div className={cn("flex flex-col gap-3", className)}>
 			{AD_RAIL_SLOT_KEYS.map((key, index) => {
+				if (isLoading) {
+					return (
+						<Skeleton className="aspect-[7/3] w-full rounded-lg" key={key} />
+					);
+				}
 				const item = items[index];
 				return item ? (
 					<HorizontalAdBanner item={item} key={item.id} />

@@ -46,7 +46,7 @@ function JobCard({ job, label }: { job: JobItem; label?: string }) {
 					{job.title}
 				</Text>
 				<Text className="text-muted text-sm" selectable>
-					{job.employerDisplayName ?? "밤비 구인자"} ·{" "}
+					{job.employerDisplayName ?? "밤비알바 구인자"} ·{" "}
 					{job.workSchedule ?? "일정 협의"}
 				</Text>
 				<Text className="font-semibold text-foreground" selectable>

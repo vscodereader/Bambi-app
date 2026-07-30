@@ -4,7 +4,7 @@
 
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useRef, useState } from "react";
-import { REPORT_REASONS } from "@/lib/bambi/data";
+import { REPORT_REASONS } from "@/lib/bambi/report-reasons";
 import { scan } from "@/lib/bambi/scanner";
 import type {
 	Finding,
@@ -318,7 +318,7 @@ export function GuardSummary({
 			</div>
 			<div className="border-[color:var(--border-default)] border-t border-dashed pt-2 text-muted-foreground text-xs leading-normal">
 				{blocked
-					? "밤비는 불법 성매매·강요·미성년 관련 공고를 금지해요. 표현을 수정해야 등록할 수 있어요."
+					? "밤비알바는 불법 성매매·강요·미성년 관련 공고를 금지해요. 표현을 수정해야 등록할 수 있어요."
 					: "게시 전 운영자가 빠르게 확인해요. 보통 10분 이내에 검수가 끝나요."}
 			</div>
 		</div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_MINIMUM_WAGE } from "@bambi-app/api/services/bambi-policy";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Card,
@@ -297,6 +298,53 @@ export default function ModeratorSiteSettingsPage() {
 		})
 	);
 
+	// 최저시급은 푸터와 같은 공개 조회(getFooter)에 실려 있어 별도 쿼리를 두지 않는다.
+	const [minimumWage, setMinimumWage] = useState({ hourly: "", year: "" });
+
+	// 저장된 값이 오면 폼에 채운다(미설정이면 빈 값 → 기본값 placeholder 노출).
+	useEffect(() => {
+		const data = settingsQuery.data;
+		if (!data) {
+			return;
+		}
+		setMinimumWage({
+			hourly:
+				data.minimumWageHourly === null ? "" : String(data.minimumWageHourly),
+			year: data.minimumWageYear === null ? "" : String(data.minimumWageYear),
+		});
+	}, [settingsQuery.data]);
+
+	const saveMinimumWageMutation = useMutation(
+		orpc.bambi.siteSettings.updateMinimumWage.mutationOptions({
+			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("최저시급을 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getFooter.queryKey(),
+				});
+			},
+		})
+	);
+
+	const onSubmitMinimumWage = (event: FormEvent) => {
+		event.preventDefault();
+		// 빈 값은 null(=기본값 사용)로 보낸다. 범위 검증은 서버 스키마가 맡는다.
+		const toNumberOrNull = (raw: string) => {
+			const trimmed = raw.trim();
+			return trimmed === "" ? null : Number(trimmed);
+		};
+		const year = toNumberOrNull(minimumWage.year);
+		const hourly = toNumberOrNull(minimumWage.hourly);
+		if (
+			(year !== null && !Number.isInteger(year)) ||
+			(hourly !== null && !Number.isInteger(hourly))
+		) {
+			toast.error("연도와 시급은 숫자(정수)로 입력해 주세요.");
+			return;
+		}
+		saveMinimumWageMutation.mutate({ hourly, year });
+	};
+
 	const onSubmitAdRotation = (event: FormEvent) => {
 		event.preventDefault();
 		const trimmed = rotationMinutes.trim();
@@ -527,7 +575,7 @@ export default function ModeratorSiteSettingsPage() {
 											<Input
 												id={`holder-${account.id}`}
 												onChange={updateAccount(account.id, "holder")}
-												placeholder="예: 밤비"
+												placeholder="예: 밤비알바"
 												value={account.holder}
 											/>
 										</div>
@@ -615,6 +663,64 @@ export default function ModeratorSiteSettingsPage() {
 							</Button>
 						</div>
 					</div>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>최저시급 표기</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<form className="flex flex-col gap-5" onSubmit={onSubmitMinimumWage}>
+						<div className="grid grid-cols-1 gap-5 md:max-w-md md:grid-cols-2">
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="minimumWageYear">기준 연도</Label>
+								<Input
+									id="minimumWageYear"
+									inputMode="numeric"
+									onChange={(event) =>
+										setMinimumWage((prev) => ({
+											...prev,
+											year: event.target.value,
+										}))
+									}
+									placeholder={String(DEFAULT_MINIMUM_WAGE.year)}
+									value={minimumWage.year}
+								/>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="minimumWageHourly">시급(원)</Label>
+								<Input
+									id="minimumWageHourly"
+									inputMode="numeric"
+									onChange={(event) =>
+										setMinimumWage((prev) => ({
+											...prev,
+											hourly: event.target.value,
+										}))
+									}
+									placeholder={String(DEFAULT_MINIMUM_WAGE.hourly)}
+									value={minimumWage.hourly}
+								/>
+							</div>
+						</div>
+						<p className="m-0 text-muted-foreground text-xs">
+							공고 상세의 급여 옆에 "{DEFAULT_MINIMUM_WAGE.year}년 최저시급{" "}
+							{DEFAULT_MINIMUM_WAGE.hourly.toLocaleString("ko-KR")}원" 형태로
+							노출됩니다. 비워두면 기본값을 사용해요. 다음 해 최저시급이
+							고시되면 연도와 시급을 함께 바꿔 주세요.
+						</p>
+						<div className="flex justify-end">
+							<Button
+								disabled={
+									saveMinimumWageMutation.isPending || settingsQuery.isLoading
+								}
+								type="submit"
+							>
+								{saveMinimumWageMutation.isPending ? "저장 중…" : "저장"}
+							</Button>
+						</div>
+					</form>
 				</CardContent>
 			</Card>
 

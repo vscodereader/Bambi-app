@@ -9,6 +9,9 @@ export const industryOptions = [
 	"BAR",
 	"마사지",
 	"요정",
+	// 맨 끝. 구체 업종에 안 맞는 공고(수집 원본의 "기타 - 기타업종" 포함)를 받는 자리라
+	// 목록·Select에서도 마지막에 와야 한다.
+	"기타",
 ] as const;
 
 export type IndustryOption = (typeof industryOptions)[number];

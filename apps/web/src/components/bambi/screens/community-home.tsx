@@ -46,7 +46,10 @@ export function CommunityHomeScreen() {
 		<div className="flex flex-col gap-4">
 			{/* 마켓플레이스 상단과 동일한 프리미엄(중간) 광고 섹션 — 빈 칸은 자체
 			    "광고 모집중" 자리표시로 채우므로 조건 없이 항상 렌더한다. */}
-			<PremiumAdBannerSection items={adBanners.premiumBanner} />
+			<PremiumAdBannerSection
+				isLoading={adBanners.isLoading}
+				items={adBanners.premiumBanner}
+			/>
 			<h1 className="m-0 font-extrabold text-xl">수다방</h1>
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 				{overviewQuery.isPending ? (

@@ -295,6 +295,111 @@
       "when": 1785127348666,
       "tag": "0041_classy_ma_gnuci",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1785223213099,
+      "tag": "0042_complete_ultimatum",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1785226269173,
+      "tag": "0043_tough_doomsday",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1785227587476,
+      "tag": "0044_aberrant_forgotten_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1785297324370,
+      "tag": "0045_same_psynapse",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1785309313334,
+      "tag": "0046_breezy_war_machine",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1785314355881,
+      "tag": "0047_dry_masque",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1785368755985,
+      "tag": "0048_strange_deathbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1785368770651,
+      "tag": "0049_fearless_havok",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1785371643931,
+      "tag": "0050_omniscient_bloodstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1785381122148,
+      "tag": "0051_loose_shiver_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1785386827656,
+      "tag": "0052_gifted_nicolaos",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1785396502090,
+      "tag": "0053_glorious_matthew_murdock",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1785397902727,
+      "tag": "0054_omniscient_sebastian_shaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1785399318691,
+      "tag": "0055_gorgeous_scrambler",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1785399944710,
+      "tag": "0056_curious_marvex",
+      "breakpoints": true
     }
   ]
 }

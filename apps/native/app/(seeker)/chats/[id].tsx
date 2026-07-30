@@ -138,7 +138,7 @@ export default function SeekerChatRoomScreen() {
 						onPress={() =>
 							proposeInterviewMutation.mutate({
 								chatRoomId: id,
-								locationNote: "밤비 모바일에서 제안",
+								locationNote: "밤비알바 모바일에서 제안",
 								scheduledAt: getNextDayIso(),
 							})
 						}

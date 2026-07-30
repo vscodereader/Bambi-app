@@ -1,0 +1,1 @@
+ALTER TYPE "public"."job_industry_category" ADD VALUE '기타';

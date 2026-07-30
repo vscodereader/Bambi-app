@@ -1,0 +1,1 @@
+ALTER TABLE "bambi_site_settings" ADD COLUMN "crawled_community_limit" integer;

@@ -45,18 +45,34 @@ const toneBadge = {
 // 알려진 급여 단위(시급·일급 등)를 금액과 분리해 금액을 카드 앵커로 강조한다.
 const PAY_UNITS = ["시급", "일급", "주급", "월급", "급여", "연봉"] as const;
 
-function splitPay(pay: string): { amount: string; unit: null | string } {
+// 머리 토큰이 숫자 없는 1~4자이고 꼬리가 숫자로 시작하는지 — 자유 텍스트 단위 판별용.
+const HEAD_HAS_DIGIT = /\d/;
+const TAIL_STARTS_WITH_DIGIT = /^\d/;
+
+// pay를 "단위 + 금액"으로 가른다. 목록에 없어도 수집 공고의 자유 텍스트 단위를 뱃지로 뺀다.
+export function splitPay(pay: string): { amount: string; unit: null | string } {
 	const trimmed = pay.trim();
 	const spaceIndex = trimmed.indexOf(" ");
 	if (spaceIndex === -1) {
 		return { amount: trimmed, unit: null };
 	}
 	const head = trimmed.slice(0, spaceIndex);
-	const isKnownUnit = PAY_UNITS.some((unit) => unit === head);
-	if (!isKnownUnit) {
-		return { amount: trimmed, unit: null };
+	const tail = trimmed.slice(spaceIndex + 1);
+	// 알려진 단위는 꼬리가 숫자가 아니어도 분리한다("급여 협의"의 "급여").
+	if (PAY_UNITS.some((unit) => unit === head)) {
+		return { amount: tail, unit: head };
 	}
-	return { amount: trimmed.slice(spaceIndex + 1), unit: head };
+	// 수집 공고는 payUnitOptions 5종 밖 단위(건당·TC 등, dev DB에 건당만 47건)가 자유
+	// 텍스트로 실재한다. 머리가 숫자 없는 1~4자이고 꼬리가 숫자로 시작하면 단위로 인정해
+	// 뱃지로 뺀다("면접 후 협의"처럼 꼬리가 숫자가 아니면 통째로 금액 자리에 둔다).
+	const looksLikeFreeTextUnit =
+		head.length <= 4 &&
+		!HEAD_HAS_DIGIT.test(head) &&
+		TAIL_STARTS_WITH_DIGIT.test(tail);
+	if (looksLikeFreeTextUnit) {
+		return { amount: tail, unit: head };
+	}
+	return { amount: trimmed, unit: null };
 }
 
 export function VisualJobCard({

@@ -63,6 +63,11 @@ export const createSignedUploadUrl = async ({
 	return signedUrl;
 };
 
+// 서버가 바이트를 직접 올리는 uploadPublicObject와 프리픽스로 기존 객체를 찾는
+// findPublicObjectUrl은 크롤 이미지 미러링 전용이었고, 수집 이미지를 DB에 base64로 담기로
+// 하면서 유일한 호출자가 사라져 걷어냈다. 서버 업로드가 다시 필요해지면 되살릴 것 —
+// 사람이 올리는 미디어는 브라우저가 서명 URL로 직접 올린다(createSignedUploadUrl).
+
 // 공고·미디어 삭제는 DB가 정본이므로, 객체 삭제 실패가 API 실패로 번지지 않게 한다.
 // (이미 지워졌거나 애초에 업로드되지 않은 키가 섞여 들어올 수 있다.)
 export const deletePublicObjects = async (

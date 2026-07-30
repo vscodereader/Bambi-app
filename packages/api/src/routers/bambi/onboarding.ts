@@ -22,10 +22,19 @@ import { ORPCError } from "@orpc/server";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import z from "zod";
 
-import { protectedProcedure } from "../../index";
+import { protectedProcedure, publicProcedure } from "../../index";
 import { hasActiveAdExposure } from "../../services/bambi-advertiser";
 import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
+import {
+	resolveVerifiedIdentity,
+	type VerifiedIdentity,
+} from "../../services/bambi-identity";
+import {
+	assertIdentityVerificationUsable,
+	consumeIdentityVerification,
+	issueIdentityVerificationId,
+} from "../../services/bambi-identity-ticket";
 import {
 	getJobPostingScopes,
 	ORGANIZATION_WIDE_POSTING_ROLES,
@@ -39,16 +48,15 @@ import {
 	type OrganizationRole,
 } from "../../services/bambi-onboarding";
 import {
-	fetchIdentityVerification,
-	hashIdentityValue,
 	isAdultBirth8,
-	mapPortOneGender,
-	toBirth8,
 	UNDERAGE_MESSAGE,
 } from "../../services/portone-identity";
 
 const profileInput = z.object({
 	gender: z.enum(["male", "female"]).optional(),
+	// 가입 직전에 마친 포트원 본인인증 건. 있으면 서버가 다시 조회해 프로필에
+	// 인증 결과(번호·생년월일·성별·CI/DI 해시)를 함께 기록한다.
+	identityVerificationId: z.string().min(1).optional(),
 	phoneNumber: z.string().min(3).max(30).optional(),
 });
 
@@ -63,10 +71,13 @@ const LEGAL_CONSENT_VERSIONS = {
 } as const;
 
 // 표시명(닉네임)은 user.name 정본을 갱신하므로 프로필 입력이 아니라 이 갱신 입력에만 둔다.
-const profileUpdateInput = profileInput.omit({ gender: true }).extend({
-	displayName: z.string().min(1).max(80).optional(),
-	role: z.enum(["job_seeker", "employer", "admin"]).optional(),
-});
+// 인증 건은 가입 시점에만 반영하므로 갱신 입력에서는 뺀다(받아놓고 무시하지 않는다).
+const profileUpdateInput = profileInput
+	.omit({ gender: true, identityVerificationId: true })
+	.extend({
+		displayName: z.string().min(1).max(80).optional(),
+		role: z.enum(["job_seeker", "employer", "admin"]).optional(),
+	});
 
 // 목(mock) 휴대폰 본인인증 입력 — 포트원 미구성 개발 환경 전용(핸들러에서 잠근다).
 // gender는 커뮤니티 게이팅용 불변값이라 아직 없을 때만 채운다.
@@ -167,13 +178,53 @@ const requireEmployerBambiProfile = async (userId: string) => {
 	return profile;
 };
 
+// 다른 계정이 같은 사람으로 인증했는지 본다. 판정 축은 DI지만, 과거 CI만 저장된
+// 계정과의 충돌도 유니크 인덱스가 유지되므로 함께 걸러 같은 안내로 막는다.
+const findIdentityCollision = async (
+	identity: VerifiedIdentity,
+	excludeUserId?: string
+): Promise<boolean> => {
+	const collisions = await db
+		.select({ userId: bambiProfile.userId })
+		.from(bambiProfile)
+		.where(
+			or(
+				eq(bambiProfile.diHash, identity.diHash),
+				eq(bambiProfile.ciHash, identity.ciHash)
+			)
+		);
+	return collisions.some((row) => row.userId !== excludeUserId);
+};
+
+const IDENTITY_CONFLICT_MESSAGE =
+	"이미 다른 계정에서 본인인증에 사용된 정보예요.";
+
+// 본인확인 결과에서 파생된 CI·DI 해시를 응답에서 걷어낸다. 무염 SHA-256이라 값 자체가
+// 서비스 간 연결이 가능한 고정 식별자로 기능하므로 브라우저(개발자도구)에 내려가면 안 된다.
+// 서버 내부는 중복 판정(findIdentityCollision)·재가입 차단에 계속 해시를 쓰므로 DB 조회를
+// 좁히지 않고, 클라이언트로 나가는 경계에서만 제거한다 — 프로필을 돌려주는 모든 프로시저가
+// 이 한 곳을 지나게 해 새 노출 지점이 생기지 않게 한다.
+const toClientProfile = <
+	T extends { ciHash: string | null; diHash: string | null },
+>(
+	profile: T | null | undefined
+): Omit<T, "ciHash" | "diHash"> | null => {
+	if (!profile) {
+		return null;
+	}
+	const { ciHash: _ciHash, diHash: _diHash, ...clientProfile } = profile;
+	return clientProfile;
+};
+
 const createBambiProfile = async ({
 	gender,
+	identityVerificationId,
 	phoneNumber,
 	role,
 	userId,
 }: {
 	gender?: "male" | "female";
+	identityVerificationId?: string;
 	phoneNumber?: string;
 	role: BambiProfileRole;
 	userId: string;
@@ -186,17 +237,44 @@ const createBambiProfile = async ({
 
 	assertCanCreateBambiProfile({ existingRole: existingProfile?.role });
 
+	const apiSecret = env.PORTONE_API_SECRET;
+	// 포트원이 구성된 환경에서는 본인인증 없이 가입할 수 없다. 미구성 개발 환경만
+	// 목 흐름을 위해 인증 없는 가입을 허용한다.
+	if (apiSecret && !identityVerificationId) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "본인인증을 먼저 완료해 주세요.",
+		});
+	}
+
+	let identity: VerifiedIdentity | null = null;
+	if (apiSecret && identityVerificationId) {
+		identity = await resolveVerifiedIdentity(apiSecret, identityVerificationId);
+		// 폼 진입 전에 checkIdentityForSignup이 대부분 걸러내지만, 두 사람이 동시에
+		// 가입하는 경합을 위해 최종 방어선으로 한 번 더 본다.
+		if (await findIdentityCollision(identity, userId)) {
+			throw new ORPCError("CONFLICT", { message: IDENTITY_CONFLICT_MESSAGE });
+		}
+		// 인증 건의 최종 소비 지점. 여기를 지나면 같은 ID로는 다시 가입할 수 없다
+		// (앞선 checkIdentityForSignup·/api/guest는 검증만 하고 소진시키지 않는다).
+		await consumeIdentityVerification(identityVerificationId);
+	}
+
 	const [createdProfile] = await db
 		.insert(bambiProfile)
 		.values({
 			userId,
 			role,
-			phoneNumber,
-			gender,
+			phoneNumber: identity?.phoneNumber ?? phoneNumber,
+			// 실인증 결과가 신뢰 원천이므로 클라이언트가 보낸 성별을 덮어쓴다.
+			gender: identity?.gender ?? gender,
+			birthDate: identity?.birth8,
+			ciHash: identity?.ciHash,
+			diHash: identity?.diHash,
+			isPhoneVerified: identity !== null,
 		})
 		.returning();
 
-	return createdProfile;
+	return toClientProfile(createdProfile);
 };
 
 // 본인이 소유자인 조직에 본인 외 멤버가 남아 있으면 true. 탈퇴 차단 판정과
@@ -371,7 +449,7 @@ export const onboardingRouter = {
 		);
 
 		return {
-			bambiProfile: profile ?? null,
+			bambiProfile: toClientProfile(profile),
 			accountSanction,
 			community,
 			employerOrganizationProfiles: organizationProfiles,
@@ -440,7 +518,10 @@ export const onboardingRouter = {
 		.handler(async ({ context, input }) => {
 			const userId = context.session.user.id;
 			const [existingProfile] = await db
-				.select({ role: bambiProfile.role })
+				.select({
+					phoneNumber: bambiProfile.phoneNumber,
+					role: bambiProfile.role,
+				})
 				.from(bambiProfile)
 				.where(eq(bambiProfile.userId, userId))
 				.limit(1);
@@ -460,10 +541,19 @@ export const onboardingRouter = {
 					.where(eq(user.id, userId));
 			}
 
-			if (input.phoneNumber !== undefined) {
+			// 여기서 들어오는 번호는 본인확인을 거치지 않은 자기신고 값이다. 그대로 덮어쓰면서
+			// isPhoneVerified를 true로 두면 본인확인 결과정보가 사후 변조되고 화면이 그것을
+			// "인증된 번호"로 표시하게 되므로, 번호를 바꿀 때는 인증 상태도 함께 내린다
+			// (다시 인증받아야 인증된 번호가 된다).
+			// 같은 번호 재제출은 아예 건드리지 않는다 — 네이티브 프로필 폼이 기존 번호를 미리
+			// 채워두므로, 표시명만 고쳐 저장해도 인증이 풀리면 안 된다.
+			if (
+				input.phoneNumber !== undefined &&
+				input.phoneNumber !== existingProfile?.phoneNumber
+			) {
 				await db
 					.update(bambiProfile)
-					.set({ phoneNumber: input.phoneNumber })
+					.set({ phoneNumber: input.phoneNumber, isPhoneVerified: false })
 					.where(eq(bambiProfile.userId, userId));
 			}
 
@@ -473,7 +563,41 @@ export const onboardingRouter = {
 				.where(eq(bambiProfile.userId, userId))
 				.limit(1);
 
-			return updatedProfile;
+			return toClientProfile(updatedProfile);
+		}),
+
+	// 본인인증 건 발급 — 클라이언트는 이 ID로만 포트원 인증창을 연다. 가입 전(계정 없는
+	// 방문자)에도 인증을 시작하므로 publicProcedure다. 서버가 발급 시각을 기록해야
+	// "우리가 시작시킨 인증인지 · 유효시간 안인지 · 이미 썼는지"를 나중에 판정할 수 있다.
+	// 무인증 삽입이라 남용되면 표가 부풀 수 있다(레이트리밋은 후속 과제 — 보고 참조).
+	startIdentityVerification: publicProcedure.handler(async () => ({
+		identityVerificationId: await issueIdentityVerificationId(),
+	})),
+
+	// 가입 전 본인인증 확인 — 계정이 없는 상태에서 부르므로 publicProcedure다.
+	// 개인정보는 돌려주지 않는다(성별과 가입 여부 불리언만). 인증 자체는 이미
+	// 끝난 뒤이고 포트원 단건조회는 무료라, 임의 ID로 두드려도 얻을 게 없다
+	// (identityVerificationId는 UUID라 추측이 불가능하다).
+	checkIdentityForSignup: publicProcedure
+		.input(phoneVerificationInput)
+		.handler(async ({ input }) => {
+			const apiSecret = env.PORTONE_API_SECRET;
+			if (!apiSecret) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "본인인증이 아직 구성되지 않았습니다.",
+				});
+			}
+			// 검증만 하고 소진시키지 않는다 — 이 호출 뒤에 /api/guest와 프로필 생성이
+			// 같은 인증 건을 이어서 쓴다(소진은 프로필 생성이 한다).
+			await assertIdentityVerificationUsable(input.identityVerificationId);
+			const identity = await resolveVerifiedIdentity(
+				apiSecret,
+				input.identityVerificationId
+			);
+			return {
+				gender: identity.gender,
+				hasAccount: await findIdentityCollision(identity),
+			};
 		}),
 
 	// 실 휴대폰 본인인증(포트원 인증창) — 클라이언트가 보낸 identityVerificationId를
@@ -500,65 +624,31 @@ export const onboardingRouter = {
 				});
 			}
 
-			const verification = await fetchIdentityVerification(
+			const identity = await resolveVerifiedIdentity(
 				apiSecret,
 				input.identityVerificationId
 			);
-			if (verification.status !== "VERIFIED") {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "본인인증이 완료되지 않았습니다. 다시 시도해 주세요.",
-				});
+			if (await findIdentityCollision(identity, userId)) {
+				throw new ORPCError("CONFLICT", { message: IDENTITY_CONFLICT_MESSAGE });
 			}
-			const customer = verification.verifiedCustomer;
-			const birth8 = toBirth8(customer?.birthDate);
-			// 생년월일을 못 읽으면 성인임을 증명할 수 없으므로 거부한다(안전 기본값).
-			if (!(birth8 && isAdultBirth8(birth8, new Date()))) {
-				throw new ORPCError("FORBIDDEN", { message: UNDERAGE_MESSAGE });
-			}
-			if (!customer?.ci) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "인증 정보에 개인 식별값(CI)이 없습니다.",
-				});
-			}
-			if (!customer.di) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "인증 정보에 중복확인 식별값(DI)이 없습니다.",
-				});
-			}
-
-			// CI·DI 원문은 저장하지 않는다 — 해시로 중복 계정만 판별한다. 중복 판정의
-			// 기준 축은 DI지만, 과거 CI만 저장된 계정과의 CI 충돌도 유니크 인덱스가
-			// 유지되므로 저장 전에 함께 걸러 같은 안내로 막는다(안 그러면 저장 시
-			// unique violation으로 터진다). 둘 중 하나라도 다른 계정과 겹치면 CONFLICT.
-			const ciHash = await hashIdentityValue(customer.ci);
-			const diHash = await hashIdentityValue(customer.di);
-			const collisions = await db
-				.select({ userId: bambiProfile.userId })
-				.from(bambiProfile)
-				.where(
-					or(eq(bambiProfile.diHash, diHash), eq(bambiProfile.ciHash, ciHash))
-				);
-			if (collisions.some((row) => row.userId !== userId)) {
-				throw new ORPCError("CONFLICT", {
-					message: "이미 다른 계정에서 본인인증에 사용된 정보예요.",
-				});
-			}
+			// 재인증의 최종 소비 지점 — 같은 인증 건으로 두 번 번호를 갈아끼울 수 없다.
+			await consumeIdentityVerification(input.identityVerificationId);
 
 			const [updatedProfile] = await db
 				.update(bambiProfile)
 				.set({
-					phoneNumber: customer.phoneNumber,
+					phoneNumber: identity.phoneNumber,
 					isPhoneVerified: true,
 					// 실인증 결과가 신뢰 원천이므로 성별을 덮어쓴다(조회 실패 시 기존 유지).
-					gender: mapPortOneGender(customer.gender) ?? existingProfile.gender,
-					birthDate: birth8,
-					ciHash,
-					diHash,
+					gender: identity.gender ?? existingProfile.gender,
+					birthDate: identity.birth8,
+					ciHash: identity.ciHash,
+					diHash: identity.diHash,
 				})
 				.where(eq(bambiProfile.userId, userId))
 				.returning();
 
-			return updatedProfile;
+			return toClientProfile(updatedProfile);
 		}),
 
 	// 목 휴대폰 본인인증 — 포트원 미구성 개발 환경 전용. 프로덕션·포트원 구성 시에는
@@ -600,7 +690,7 @@ export const onboardingRouter = {
 				.where(eq(bambiProfile.userId, userId))
 				.returning();
 
-			return updatedProfile;
+			return toClientProfile(updatedProfile);
 		}),
 
 	createJobSeekerProfile: protectedProcedure
