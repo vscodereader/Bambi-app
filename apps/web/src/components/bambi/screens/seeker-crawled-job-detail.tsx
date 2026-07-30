@@ -18,12 +18,16 @@ import { formatMinimumWageLabel } from "@/lib/bambi/minimum-wage";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
-import { Badge, Button, InfoTile } from "../ds";
+import { Badge, Button, Card, InfoTile } from "../ds";
+import { EmptyState } from "../empty-state";
 import {
+	AlertCircle,
 	BriefcaseIcon,
+	CheckIcon,
 	ClockIcon,
 	DollarCircle,
 	MapPinIcon,
+	ShieldIcon,
 	StarIcon,
 } from "../icons";
 import { EmployerPhoneTile } from "./seeker-job-detail-responsive";
@@ -153,9 +157,8 @@ export function SeekerCrawledJobDetail({
 										value={employmentType}
 									/>
 								) : null}
-								{/* 우리 공고의 후기 본문 섹션은 붙일 수 없다 — 서버 조회가 회원
-								    전용이고 review.jobPostId가 우리 job_post를 가리켜, 수집 공고 id로는
-								    항상 빈 결과다. 값만 우리 공고와 같은 형식으로 "신규"로 적는다. */}
+								{/* 아래 후기 섹션과 같은 이유로 값은 언제나 0개다. 요약 타일 표기만
+								    우리 공고와 같은 형식으로 "신규"로 적는다. */}
 								<InfoTile icon={<StarIcon />} label="후기" value="0개 · 신규" />
 							</div>
 						</div>
@@ -187,6 +190,64 @@ export function SeekerCrawledJobDetail({
 						{/* 목록 썸네일(thumbnailUrl)은 상세에 폴백으로 넣지 않는다 — 상세 내용이
 						    썸네일로 대체돼 버린다. 상세 이미지가 비면 수집 파서 문제이므로
 						    화면에서 대체물을 만들지 말고 파서를 고친다. */}
+					</section>
+					{/* 우리 공고 상세와 같은 자리·같은 3칸 카드 구성의 안전 확인. 문구만 바꿨다 —
+					    우리 공고의 세 항목(연락처 비공개·공고 검수·신고 가능)은 수집분에선 셋 다
+					    사실이 아니라, 출처 고지와 자기 방어 수칙으로 대체한다. */}
+					<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
+						<h2 className="m-0 font-extrabold text-xl">안전 확인</h2>
+						<div className="mt-4 grid gap-3 md:grid-cols-3">
+							<Card className="rounded-lg" pad="md" tone="subtle">
+								<span className="inline-flex size-5 text-green-600">
+									<ShieldIcon />
+								</span>
+								<h3 className="my-2 font-extrabold text-base">
+									외부 수집 공고
+								</h3>
+								<p className="m-0 text-muted-foreground text-sm leading-relaxed">
+									다른 채용 사이트의 공고를 그대로 옮겨온 것으로, 밤비알바의
+									검수·인증을 거치지 않았어요.
+								</p>
+							</Card>
+							<Card className="rounded-lg" pad="md" tone="subtle">
+								<span className="inline-flex size-5 text-red-600">
+									<AlertCircle />
+								</span>
+								<h3 className="my-2 font-extrabold text-base">
+									조건 직접 확인
+								</h3>
+								<p className="m-0 text-muted-foreground text-sm leading-relaxed">
+									급여·근무 조건은 반드시 원본 게시자에게 직접 확인하고,
+									선입금·보증금 요구는 거절하세요.
+								</p>
+							</Card>
+							<Card className="rounded-lg" pad="md" tone="subtle">
+								<span className="inline-flex size-5 text-green-600">
+									<CheckIcon />
+								</span>
+								<h3 className="my-2 font-extrabold text-base">
+									안전 이용 수칙
+								</h3>
+								<p className="m-0 text-muted-foreground text-sm leading-relaxed">
+									면접은 공개된 장소에서 진행하고, 신분증 사본 등 개인정보
+									전달은 신중하게 결정하세요.
+								</p>
+							</Card>
+						</div>
+					</section>
+					{/* 후기 섹션은 우리 공고 상세의 후기 컴포넌트 마크업(제목 + 빈 상태)을 미러링한
+					    정적 블록이다. 그 컴포넌트를 재사용하지 않는 이유: 후기 조회가 회원 전용이라
+					    비로그인 방문자에게 에러가 뜨고, review.jobPostId는 우리 job_post를 가리켜
+					    수집 공고 id로는 언제나 빈 결과다. 그래서 쿼리 없이 0개 상태만 그린다. */}
+					<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
+						<div className="flex flex-wrap items-center gap-3">
+							<h2 className="m-0 font-extrabold text-xl">후기</h2>
+						</div>
+						<EmptyState
+							className="mt-2"
+							description="외부 수집 공고는 밤비알바 채팅·면접을 거치지 않아 후기가 쌓이지 않아요."
+							title="아직 등록된 후기가 없어요"
+						/>
 					</section>
 				</main>
 				{/* 우리 공고 상세와 같은 위치의 요약 카드. 채팅 CTA는 없고(담당자가 우리 이용자가
