@@ -11,6 +11,13 @@ import {
 } from "@bambi-app/ui/components/card";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { Switch } from "@bambi-app/ui/components/switch";
 import {
 	Table,
@@ -39,11 +46,285 @@ import {
 	type CrawlSourceSite,
 	formatCrawlTimestamp,
 } from "@/lib/bambi/crawler";
+import { industryOptions, isIndustryOption } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
 // 수집 대상은 퀸알바 하나뿐이라 선택기를 두지 않는다. 대상이 다시 늘면 이 상수를 state로
 // 되돌리고 ToggleGroup을 세운다 — 서버 입력 스키마는 사이트를 계속 받는다.
 const SOURCE_SITE: CrawlSourceSite = "queenalba";
+
+// 섹션별 수집 상한. placeholder의 기본값은 서버의 DEFAULT_CRAWLED_LIMITS와 같아야 한다 —
+// 빈 칸으로 저장하면 서버가 그 기본값을 쓰므로, 여기 숫자가 실제 폴백을 보여준다.
+const CRAWLED_LIMIT_FIELDS = [
+	{
+		defaultValue: 8,
+		key: "adBannerLimit",
+		label: "프리미엄 광고 배너(가로·세로 각각)",
+	},
+	{ defaultValue: 12, key: "specialLimit", label: "스페셜 채용" },
+	{ defaultValue: 12, key: "urgentLimit", label: "급구 채용" },
+	{ defaultValue: 12, key: "recommendedLimit", label: "추천 채용" },
+] as const;
+
+type CrawledLimitKey = (typeof CRAWLED_LIMIT_FIELDS)[number]["key"];
+
+const EMPTY_CRAWLED_LIMITS: Record<CrawledLimitKey, string> = {
+	adBannerLimit: "",
+	recommendedLimit: "",
+	specialLimit: "",
+	urgentLimit: "",
+};
+
+// 서버 입력 스키마(updateCrawledLimits)의 상한과 같아야 한다 — 넘겨보내면 400으로 튕긴다.
+const CRAWLED_LIMIT_MAX = 60;
+
+const REVIEW_PAGE_SIZE = 30;
+
+// 상한 폼·검토 대기 목록은 각각 자기 쿼리만 쓰므로 페이지에서 떼어냈다(페이지 본체가
+// 한 함수에 다 담기면 읽기도, 린트 복잡도도 감당이 안 된다).
+function CrawledLimitsCard() {
+	const queryClient = useQueryClient();
+	const limitsQuery = useQuery(
+		orpc.bambi.siteSettings.getCrawledLimits.queryOptions()
+	);
+	const [limits, setLimits] = useState(EMPTY_CRAWLED_LIMITS);
+
+	// 저장된 값이 오면 폼에 채운다(미설정은 빈 값 → placeholder가 기본값을 안내).
+	useEffect(() => {
+		const data = limitsQuery.data;
+		if (!data) {
+			return;
+		}
+		setLimits({
+			adBannerLimit:
+				data.adBannerLimit === null ? "" : String(data.adBannerLimit),
+			recommendedLimit:
+				data.recommendedLimit === null ? "" : String(data.recommendedLimit),
+			specialLimit: data.specialLimit === null ? "" : String(data.specialLimit),
+			urgentLimit: data.urgentLimit === null ? "" : String(data.urgentLimit),
+		});
+	}, [limitsQuery.data]);
+
+	const saveMutation = useMutation(
+		orpc.bambi.siteSettings.updateCrawledLimits.mutationOptions({
+			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("섹션별 수집 상한을 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getCrawledLimits.queryKey(),
+				});
+			},
+		})
+	);
+
+	const onSubmit = (event: FormEvent) => {
+		event.preventDefault();
+
+		const parsed: Record<CrawledLimitKey, number | null> = {
+			adBannerLimit: null,
+			recommendedLimit: null,
+			specialLimit: null,
+			urgentLimit: null,
+		};
+
+		for (const field of CRAWLED_LIMIT_FIELDS) {
+			const trimmed = limits[field.key].trim();
+			const value = trimmed === "" ? null : Number(trimmed);
+
+			// 서버 스키마와 같은 범위를 여기서 먼저 걸러 400 대신 문장으로 알려준다.
+			if (
+				value !== null &&
+				(!Number.isInteger(value) || value < 0 || value > CRAWLED_LIMIT_MAX)
+			) {
+				toast.error(
+					`${field.label} 노출 개수는 0~${CRAWLED_LIMIT_MAX} 사이 정수로 입력해 주세요.`
+				);
+				return;
+			}
+
+			parsed[field.key] = value;
+		}
+
+		saveMutation.mutate(parsed);
+	};
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>섹션별 수집 상한</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<form className="flex flex-col gap-5" onSubmit={onSubmit}>
+					<p className="m-0 text-muted-foreground text-xs">
+						각 자리에 들어갈 수집 공고 개수의 상한입니다. 수집할 때와 화면에
+						내보낼 때 모두 이 값으로 자릅니다. 우리 서비스 공고가 항상 먼저
+						나오고, 남은 자리에 수집 공고가 이 개수만큼 붙어요. 광고 배너는
+						가로·세로가 서로 다른 자리라{" "}
+						<strong className="font-semibold">방향별로 각각</strong> 이 개수만큼
+						모읍니다(8이면 가로 8 + 세로 8).
+					</p>
+
+					<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+						{CRAWLED_LIMIT_FIELDS.map((field) => (
+							<div className="flex flex-col gap-2" key={field.key}>
+								<Label htmlFor={`crawledLimit-${field.key}`}>
+									{field.label}
+								</Label>
+								<Input
+									id={`crawledLimit-${field.key}`}
+									inputMode="numeric"
+									onChange={(event) =>
+										setLimits((prev) => ({
+											...prev,
+											[field.key]: event.target.value,
+										}))
+									}
+									placeholder={String(field.defaultValue)}
+									value={limits[field.key]}
+								/>
+							</div>
+						))}
+					</div>
+
+					<p className="m-0 text-muted-foreground text-xs">
+						비워두면 기본값(
+						{CRAWLED_LIMIT_FIELDS.map((field) => field.defaultValue).join(
+							" / "
+						)}
+						)을 사용합니다. 0으로 두면 그 자리에는 수집 공고가 나오지 않아요.
+						최대 {CRAWLED_LIMIT_MAX}까지 지정할 수 있습니다.
+					</p>
+
+					<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+						<Button
+							disabled={saveMutation.isPending || limitsQuery.isLoading}
+							type="submit"
+						>
+							{saveMutation.isPending ? "저장 중…" : "저장"}
+						</Button>
+					</div>
+				</form>
+			</CardContent>
+		</Card>
+	);
+}
+
+function IndustryReviewCard() {
+	const queryClient = useQueryClient();
+	const reviewQuery = useQuery(
+		orpc.bambi.crawler.list.queryOptions({
+			input: { limit: REVIEW_PAGE_SIZE, status: "needs_review" },
+		})
+	);
+
+	// 업종 지정도 노출 스위치처럼 저장 버튼을 두지 않는다 — 수십 건을 훑으며 고르는 화면에서
+	// 행마다 저장을 누르게 하면 빠뜨린 행이 그대로 검토 대기에 남는다.
+	const setIndustryMutation = useMutation(
+		orpc.bambi.crawler.setIndustryCategory.mutationOptions({
+			onError: (error) =>
+				toast.error(error.message || "업종을 지정하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("업종을 지정했어요. 검토 대기에서 빠집니다.");
+				await Promise.all([
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.crawler.list.key(),
+					}),
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.crawler.getSummary.queryKey(),
+					}),
+				]);
+			},
+		})
+	);
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>업종 검토 대기</CardTitle>
+			</CardHeader>
+			<CardContent className="flex flex-col gap-3">
+				<p className="m-0 text-muted-foreground text-xs">
+					업종을 고르면 바로 저장되고, 그 공고는 검토 대기에서 빠져 노출 대상이
+					됩니다. 원본 업종은 상대 사이트가 적어둔 직종 문구예요. 한 번에 최근{" "}
+					{REVIEW_PAGE_SIZE}건까지 보여줍니다
+					{reviewQuery.data ? ` (전체 ${reviewQuery.data.total}건)` : ""}.
+				</p>
+				{reviewQuery.data?.items.length ? (
+					<div className="overflow-x-auto">
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>제목</TableHead>
+									<TableHead>업소명</TableHead>
+									<TableHead>지역</TableHead>
+									<TableHead>원본 업종</TableHead>
+									<TableHead>마지막 수집</TableHead>
+									<TableHead>업종 지정</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{reviewQuery.data.items.map((item) => (
+									<TableRow key={item.id}>
+										<TableCell>{item.title}</TableCell>
+										<TableCell>{item.shopName ?? "—"}</TableCell>
+										<TableCell className="whitespace-nowrap">
+											{[item.region, item.district].filter(Boolean).join(" ") ||
+												"—"}
+										</TableCell>
+										<TableCell className="text-muted-foreground text-xs">
+											{item.industryRaw ?? "—"}
+										</TableCell>
+										<TableCell className="whitespace-nowrap">
+											{formatCrawlTimestamp(item.lastSeenAt)}
+										</TableCell>
+										<TableCell>
+											<Select
+												disabled={setIndustryMutation.isPending}
+												onValueChange={(value) => {
+													// 서버 입력이 8종 enum이라 가드로 좁힌 뒤 보낸다.
+													if (value && isIndustryOption(value)) {
+														setIndustryMutation.mutate({
+															id: item.id,
+															industryCategory: value,
+														});
+													}
+												}}
+												value={item.industryCategory}
+											>
+												<SelectTrigger
+													aria-label={`${item.title} 업종`}
+													className="w-32"
+												>
+													<SelectValue placeholder="업종 선택" />
+												</SelectTrigger>
+												<SelectContent>
+													{industryOptions.map((option) => (
+														<SelectItem key={option} value={option}>
+															{option}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</div>
+				) : (
+					<EmptyState
+						description={
+							reviewQuery.isLoading
+								? "불러오는 중이에요."
+								: "원본 직종이 우리 8종에 이어지지 않은 공고가 없어요. 수집 회차가 돌면 여기에 쌓입니다."
+						}
+						title="검토 대기 중인 공고가 없어요"
+					/>
+				)}
+			</CardContent>
+		</Card>
+	);
+}
 
 export default function ModeratorCrawlerPage() {
 	const queryClient = useQueryClient();
@@ -363,6 +644,8 @@ export default function ModeratorCrawlerPage() {
 				</CardContent>
 			</Card>
 
+			<CrawledLimitsCard />
+
 			<Card>
 				<CardHeader>
 					<CardTitle>수집 현황</CardTitle>
@@ -391,10 +674,13 @@ export default function ModeratorCrawlerPage() {
 					</div>
 					<p className="m-0 text-muted-foreground text-xs">
 						업종 검토 대기는 원본 직종이 우리 8종 분류에 자동으로 이어지지 않은
-						공고입니다. 버리지 않고 남겨두니 운영자가 직접 업종을 지정해 주세요.
+						공고입니다. 버리지 않고 남겨두니 아래 「업종 검토 대기」 카드에서
+						직접 업종을 지정해 주세요.
 					</p>
 				</CardContent>
 			</Card>
+
+			<IndustryReviewCard />
 
 			<Card>
 				<CardHeader>
