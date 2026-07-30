@@ -24,7 +24,7 @@ import {
 	type jobPostStatus,
 	review,
 } from "@bambi-app/db/schema/bambi";
-import { and, eq, isNotNull, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, type SQL, sql } from "drizzle-orm";
 import { type PgColumn, unionAll } from "drizzle-orm/pg-core";
 
 import type { JobPostMediaUsage } from "./bambi-job-media-policy";
@@ -180,7 +180,9 @@ export interface JobFeedInput {
 	region?: string;
 }
 
-const isCrawledJobFeedEnabled = async (): Promise<boolean> => {
+// 운영자 노출 스위치. jobs.list도 이 값으로 섹션 주입 여부를 가르므로 export한다 —
+// 스위치를 읽는 곳이 두 군데 생기면 한쪽만 켜지는 상태가 만들어진다.
+export const isCrawledJobFeedEnabled = async (): Promise<boolean> => {
 	const [row] = await db
 		.select({ enabled: bambiSiteSettings.crawledJobFeedEnabled })
 		.from(bambiSiteSettings)
@@ -300,4 +302,47 @@ export const listJobFeed = async (input: JobFeedInput) => {
 	)
 		.orderBy(sql`published_at desc nulls last`)
 		.limit(input.limit);
+};
+
+// 섹션 주입용 수집 행의 자리. listing_type은 이미 **우리 서비스 자리** 어휘라 그대로 쓴다.
+export type CrawledSectionType = "recommended" | "special" | "urgent";
+
+export interface CrawledSectionInput {
+	district?: string;
+	industryCategory?: JobIndustryCategory;
+	limit: number;
+	minPayAmount?: number;
+	region?: string;
+	// 지정하면 그 라벨이 붙은 행만 뽑고 노출 어휘도 그 자리로 승격한다. 생략하면 전체 공고용
+	// (라벨 무관 전량, 승격 없음)이다.
+	type?: CrawledSectionType;
+}
+
+// 섹션·전체 공고 뒤에 붙일 수집 행을 뽑는다. UNION(listJobFeed)이 아니라 별도 조회인 이유는
+// 우선순위 규칙이다 — 1순위 우리 순수 공고가 항상 최상단, 2순위 크롤링. 한 쿼리로 섞어
+// 정렬하면 이 규칙을 정렬식으로 재현해야 하지만, 호출부가 뒤에 붙이면 규칙이 코드에 그대로 보인다.
+export const listCrawledSectionRows = async (
+	input: CrawledSectionInput
+): Promise<JobFeedRow[]> => {
+	// 공개 필터(업종·지역·세부지역·최소시급)와 "카드로 세울 수 있는가" 판정은 합친 목록과
+	// 같은 빌더를 쓴다 — 여기서만 조건이 느슨해지면 목록에는 없던 행이 섹션에 뜬다.
+	const conditions = crawledJobFeedConditions(input, true);
+
+	if (input.type) {
+		conditions.push(eq(crawledJobPost.listingType, input.type));
+	}
+
+	const rows = await db
+		.select(crawledJobFeedSelection)
+		.from(crawledJobPost)
+		.where(and(...conditions))
+		.orderBy(
+			desc(
+				sql`coalesce(${crawledJobPost.sourcePostedAt}, ${crawledJobPost.firstSeenAt})`
+			)
+		)
+		.limit(input.limit);
+	const type = input.type;
+
+	return type ? rows.map((row) => ({ ...row, exposureType: type })) : rows;
 };

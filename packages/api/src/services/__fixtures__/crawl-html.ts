@@ -299,7 +299,7 @@ export const queenalbaGuinDetailManyImagesHtml = queenalbaDetail({
 // ---------------------------------------------------------------------------
 // 퀸알바 메인페이지(유료 노출 자리)
 //
-// 아래 세 가지는 인증 쿠키로 받은 실물 메인(364KB)에서 확인한 것을 그대로 재현했다.
+// 아래 네 가지는 인증 쿠키로 받은 실물 메인(364KB)에서 확인한 것을 그대로 재현했다.
 // 처음에 가정으로 짰다가 전부 틀렸던 자리라 특히 그대로 두어야 한다:
 //
 //  1) 배너 이미지 경로는 `../mobile_img/banner/<md5>`다. 확장자가 없고 서버가 content-type을
@@ -309,71 +309,95 @@ export const queenalbaGuinDetailManyImagesHtml = queenalbaDetail({
 //  3) 섹션 제목은 텍스트가 아니라 GIF/SVG이고, 사람이 읽을 이름은 alt에만 있다
 //     (title_premium_use1.gif = "프리미엄 채용정보"). 앞 형제의 글자를 훑던 예전 방식은
 //     한 건도 못 잡았고 그래서 listing_type이 전부 null이었다.
+//  4) 섹션은 #content1의 **직계 자식 div** 하나씩이다. 그래서 스코프를 그 div로 못 박는다 —
+//     "상세 링크를 처음 품는 조상"을 쓰던 예전 방식은 여러 섹션을 감싼 table을 잡아
+//     옆 섹션 공고까지 같은 라벨을 받았다.
 //
 // 함께 재현한 실물 관행: 컨테이너 밖(헤더)의 상세 링크, 아이콘 gif가 카드 이미지보다 먼저
 // 오는 것, 루트 없는 상대경로, 카드 하나가 이미지 링크(dt)와 제목 링크(dd.title_ellipse)로
-// 갈라지는 것, 같은 공고가 여러 섹션에 겹쳐 걸리는 것, 세로 배너 칸에 회원가입·TOP 버튼이
+// 갈라지는 것, 같은 공고가 여러 섹션에 겹쳐 걸리는 것, 배너 칸에 회원가입·TOP 버튼이
 // 섞여 있는 것(경로로 걸러야 한다).
 //
-// 일부러 심어둔 함정: 세로 배너 칸의 외부 링크 배너(리다이렉터가 아니라 붙일 공고가 없다),
-// 세로 배너가 한쪽에 4칸(예전 3칸 상한이라면 조용히 잘렸을 것), 섹션에 안 든 일반 카드.
+// 일부러 심어둔 함정:
+//  - 기준 밖 배너 컨테이너 #main_top_center·#main_left(가로는 #main_center만 수집한다)
+//  - #main_center의 외부 링크 배너(리다이렉터가 아니라 붙일 공고가 없다 → skipped 1건)
+//  - 퀸알바 자체 급구·추천 섹션(우리 자리에 대응이 없어 라벨 없음). 그 안 카드 alt에
+//    "최고우대"를 심어 뒀다 — 우대 매칭이 `채용`을 함께 요구하지 않으면 이 div가 통째로
+//    스페셜로 라벨된다.
+//  - 구직자 섹션 "스페셜인재정보"(제목에 채용이 없다). 실물은 구직자 링크지만, alt 매칭이
+//    느슨해지면 바로 드러나도록 여기서는 일부러 채용 카드를 넣어 뒀다.
+//  - 섹션에 안 든 일반 카드(실시간 등록)
 // ---------------------------------------------------------------------------
+
+// 메인 배너 한 칸.
+const mainBanner = (href: string, hash: string, alt: string): string =>
+	`<a href="${href}"><img src="../mobile_img/banner/${hash}" alt="${alt}"></a>`;
+
+// 메인 섹션 카드 한 칸. 썸네일이 있는 카드는 아이콘 gif가 카드 이미지보다 먼저 온다.
+const mainCard = (id: string, title: string, thumbnail = true): string => `
+<td><dl>
+	<dt><a href="./guin_detail.php?num=${id}&pg=">${
+		thumbnail
+			? `<img src="img/icon_medal.gif"><img src="./upload/happy_member/2026/07/20/${id}.gif" alt="${title}">`
+			: `<font><strong>${title}</strong></font>`
+	}</a></dt>
+	<dd><a href="./guin_detail.php?num=${id}&pg=" class="title_ellipse"><span><font>${title}</font></span></a></dd>
+</dl></td>`;
+
+// 섹션 하나 = #content1의 직계 자식 div 하나. 제목 이미지가 표 안 h2에 들어 있고, 파일명은
+// 뜻을 담지 않아(title_premium_use1.gif) alt만 읽을 수 있다. 자체 급구·추천처럼 제목 둘이
+// 한 div를 나눠 쓰는 자리가 있어 배열로 받는다.
+const mainSection = (
+	titles: readonly [file: string, alt: string][],
+	cards: string
+): string => `
+<div><table><tbody>
+	<tr><td>${titles.map(([file, alt]) => `<h2><img src="img/${file}" alt="${alt}"></h2>`).join("")}</td></tr>
+	<tr>${cards}</tr>
+</tbody></table></div>`;
+
 export const queenalbaMainHtml = page(`
 <div id="header"><a href="./guin_detail.php?num=99999&pg="><img src="./upload/happy_member/2026/07/20/99999.gif"></a></div>
 <div id="main_top_center">
 	<table><tbody><tr>
-		<td><a href="banner_link.php?number=63"><img src="../mobile_img/banner/8b68d5e4425482c53bc6c819192cc562" alt="❤️에밀리❤️ 강남 최고대우"></a></td>
-		<td><a href="banner_link.php?number=64"><img src="img/icon_new.gif"><img src="../mobile_img/banner/a429bcdf625c91542e84c72c4f491211" alt="배너"></a></td>
+		<td>${mainBanner("banner_link.php?number=11", "9f5ba1d6e7e6cf3b3ea0e6ef3f8f0b21", "기준 밖 배너 A")}</td>
+	</tr></tbody></table>
+</div>
+<div id="main_left">
+	<table><tbody><tr>
+		<td>${mainBanner("banner_link.php?number=12", "1b0d3c5a2e2f4a6b8c0d2e4f6a8b0c1d", "기준 밖 배너 B")}</td>
+	</tr></tbody></table>
+</div>
+<div id="main_center">
+	<table><tbody><tr>
+		<td>${mainBanner("banner_link.php?number=77", "8b68d5e4425482c53bc6c819192cc562", "❤️에밀리❤️ 강남 최고대우")}</td>
+		<td><a href="banner_link.php?number=78"><img src="img/icon_new.gif"><img src="../mobile_img/banner/a429bcdf625c91542e84c72c4f491211" alt="배너"></a></td>
+		<td>${mainBanner("./event_view.php?ev=summer", "66cec1d83667dbd343851476f5add24a", "여름 이벤트")}</td>
 	</tr></tbody></table>
 </div>
 <div id="divMenu2">
-	<div><a href="./event_view.php?ev=summer"><img src="../mobile_img/banner/66cec1d83667dbd343851476f5add24a" alt="여름 이벤트"></a></div>
-	<div><a href="banner_link.php?number=53"><img src="../mobile_img/banner/2558b0f5498ce229ba4ee285b1323b3d" alt="세로배너 에밀리"></a></div>
-	<div><a href="banner_link.php?number=55"><img src="../mobile_img/banner/5adc9fffbae16be502df79f6a0fd65c2" alt="세로배너 카톡 sidekakao"></a></div>
+	<div>${mainBanner("banner_link.php?number=53", "2558b0f5498ce229ba4ee285b1323b3d", "세로배너 에밀리")}</div>
+	<div><a href="/happy_member.php?mode=joinus"><img src="img/right_btn_join.png"></a></div>
 </div>
 <div id="divMenu12">
-	<div><a href="banner_link.php?number=74"><img src="../mobile_img/banner/14e561247f0634faaa5fcf05019cfefc" alt="세로배너 C"></a></div>
-	<div><a href="banner_link.php?number=60"><img src="../mobile_img/banner/4b45438e6af37a9731d744cd6fc739bc" alt="세로배너 D"></a></div>
-	<div><a href="banner_link.php?number=47"><img src="../mobile_img/banner/0c594dc5793e0f3d06d882efaf72d3e2" alt="세로배너 E"></a></div>
-	<div><a href="banner_link.php?number=75"><img src="../mobile_img/banner/4c1f75d48180a5cfb60414b52be92cfd" alt="세로배너 F"></a></div>
-	<div><a href="/happy_member.php?mode=joinus"><img src="img/right_btn_join.png"></a></div>
+	<div>${mainBanner("banner_link.php?number=74", "14e561247f0634faaa5fcf05019cfefc", "세로배너 C")}</div>
+	<div>${mainBanner("banner_link.php?number=60", "4b45438e6af37a9731d744cd6fc739bc", "세로배너 카톡 sidekakao")}</div>
 	<div><a href="#"><img src="img/right_btn_top.png"></a></div>
 </div>
 <div id="content1">
 	<div class="tit_area"><h2>실시간 등록</h2></div>
-	<div><table><tbody><tr>
-		<td><dl><dd><a href="./guin_detail.php?num=40001&pg=" class="title_ellipse"><img src="./upload/happy_member/2026/07/20/40001.gif" alt="일반카드"><span><font>일반 채용 카드</font></span></a></dd></dl></td>
-	</tr></tbody></table></div>
-	<div><table><tbody>
-		<tr><td><h2><img src="img/title_premium_use1.gif" alt="프리미엄 채용정보"></h2></td></tr>
-		<tr>
-			<td><dl>
-				<dt><a href="./guin_detail.php?num=36659&pg="><img src="./upload/happy_member/2026/07/20/36659.gif" alt="❤️에밀리❤️"></a></dt>
-				<dd><a href="./guin_detail.php?num=36659&pg=" class="title_ellipse"><span><font>❤️에밀리❤️ 초보환영</font></span></a></dd>
-			</dl></td>
-			<td><dl>
-				<dt><a href="./guin_detail.php?num=16100&pg="><font><strong>♥The Day♥</strong></font></a></dt>
-				<dd><a href="./guin_detail.php?num=16100&pg=" class="title_ellipse"><span><font>급구 카톡 shopkakao</font></span></a></dd>
-			</dl></td>
-		</tr>
-	</tbody></table></div>
-	<div><table><tbody>
-		<tr><td><h2><img src="img/title_special_use1.svg" alt="스페셜 채용정보"></h2></td></tr>
-		<tr>
-			<td><dl><dd><a href="./guin_detail.php?num=25073&pg=" class="title_ellipse"><img src="img/icon_medal.gif"><img src="./upload/happy_member/2026/07/20/25073.gif" alt="이찌니"><span><font>이찌니 스페셜</font></span></a></dd></dl></td>
-			<td><dl><dd><a href="./guin_detail.php?num=36659&pg=" class="title_ellipse"><span><font>❤️에밀리❤️ 초보환영</font></span></a></dd></dl></td>
-		</tr>
-	</tbody></table></div>
-	<table><tbody><tr>
-		<td>
-			<table><tbody><tr><td><h2><img src="img/title_speed_use1.gif" alt="급구채용"></h2></td></tr></tbody></table>
-			<a href="./guin_detail.php?num=37428&pg=">강남1등 도파민</a>
-		</td>
-		<td>
-			<table><tbody><tr><td><h2><img src="img/title_cucun_use1.gif" alt="추천채용"></h2></td></tr></tbody></table>
-			<a href="./guin_detail.php?num=29431&pg=">박서준이사</a>
-		</td>
-	</tr></tbody></table>
+	<div><table><tbody><tr>${mainCard("40001", "일반 채용 카드")}</tr></tbody></table></div>
+	${mainSection([["title_premium_use1.gif", "프리미엄 채용정보"]], `${mainCard("16100", "급구 카톡 shopkakao", false)}${mainCard("37428", "강남1등 도파민")}`)}
+	${mainSection([["title_special_use1.svg", "스페셜 채용정보"]], `${mainCard("29431", "박서준이사")}${mainCard("36659", "❤️에밀리❤️ 초보환영")}`)}
+	${mainSection([["title_use_guin1.gif", "우대등록 채용정보"]], `${mainCard("25073", "이찌니 우대")}${mainCard("36659", "❤️에밀리❤️ 초보환영")}`)}
+	${mainSection(
+		[
+			["title_speed_use1.gif", "급구채용"],
+			["title_cucun_use1.gif", "추천채용"],
+		],
+		`${mainCard("41001", "최고우대 강남")}${mainCard("41002", "추천 카드")}`
+	)}
+	${mainSection([["title_special_person1.gif", "스페셜인재정보"]], mainCard("50501", "구직 섹션 카드"))}
 </div>`);
 
 interface QueenalbaTopicRow {

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 process.env.NEXT_PUBLIC_SERVER_URL = "http://localhost:3000";
 process.env.NEXT_PUBLIC_GCS_PUBLIC_BASE_URL = "https://cdn.bambi.test";
 
-const { toAdBannerItem } = await import("./api-job-mapper");
+const { toAdBannerItem, toMarketplaceJob } = await import("./api-job-mapper");
 
 const createMedia = (usage: string, storageKey: string) => ({
 	altText: "",
@@ -78,11 +78,13 @@ describe("toAdBannerItem", () => {
 		const item = toAdBannerItem(createBannerJob({}), "ad_horizontal");
 
 		expect(item.href).toBe("/seeker/jobs/11111111-1111-4111-8111-111111111111");
+		// 결제 광고는 우리 슬롯 규격으로 업로드된 배너라 고정 비율로 그린다.
+		expect(item.crawled).toBe(false);
 	});
 
-	// 수집 공고의 배너는 미러링된 URL 한 줄로 오고(storageKey가 없다), 상세 페이지가 없어
-	// 링크를 걸면 누른 사람이 오류 화면을 본다.
-	it("uses the mirrored url and no destination for a crawled banner", () => {
+	// 수집 공고의 배너는 미러링된 URL 한 줄로 오고(storageKey가 없다), 그 id는 job_post에
+	// 없으므로 /seeker/jobs/[id]로 보내면 누른 사람이 오류 화면을 본다.
+	it("sends a crawled banner to the crawled detail route", () => {
 		const crawled = {
 			...createBannerJob({}),
 			adHorizontalUrl: "https://cdn.bambi.test/crawled-h.jpg",
@@ -91,11 +93,13 @@ describe("toAdBannerItem", () => {
 		} as Parameters<typeof toAdBannerItem>[0];
 
 		expect(toAdBannerItem(crawled, "ad_horizontal")).toMatchObject({
-			href: null,
+			crawled: true,
+			href: "/seeker/jobs/crawled/11111111-1111-4111-8111-111111111111",
 			imageUrl: "https://cdn.bambi.test/crawled-h.jpg",
 		});
 		expect(toAdBannerItem(crawled, "ad_vertical")).toMatchObject({
-			href: null,
+			crawled: true,
+			href: "/seeker/jobs/crawled/11111111-1111-4111-8111-111111111111",
 			imageUrl: "https://cdn.bambi.test/crawled-v.jpg",
 		});
 	});
@@ -142,5 +146,26 @@ describe("toAdBannerItem", () => {
 		);
 
 		expect(item.layout).toBeNull();
+	});
+});
+
+describe("toMarketplaceJob", () => {
+	const listRow = {
+		id: "22222222-2222-4222-8222-222222222222",
+		industryCategory: "룸싸롱",
+		payAmount: null,
+		payUnit: null,
+		region: "서울",
+		status: "published",
+		title: "홀서빙",
+	} as Parameters<typeof toMarketplaceJob>[0];
+
+	// 섹션 카드도 배너와 같은 판정을 해야 한다 — 카드 클릭이 /seeker/jobs/[id]로 가면
+	// 수집 공고는 그 테이블에 없어 404가 뜬다(seeker-marketplace의 openJob이 이 값으로 분기).
+	it("marks crawled list rows so cards can pick the crawled detail route", () => {
+		expect(toMarketplaceJob(listRow).crawled).toBe(false);
+		expect(toMarketplaceJob({ ...listRow, source: "crawled" }).crawled).toBe(
+			true
+		);
 	});
 });

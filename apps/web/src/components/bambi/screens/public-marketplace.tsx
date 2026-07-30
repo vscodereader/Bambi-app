@@ -39,7 +39,13 @@ export function PublicMarketplaceScreen() {
 		filters,
 		setFilters
 	);
-	const openJob = (job: Job) => router.push(`/seeker/jobs/${job.id}` as Route);
+	// 수집 공고의 id는 job_post에 없다 — /seeker/jobs/[id]로 보내면 404가 뜬다.
+	const openJob = (job: Job) =>
+		router.push(
+			(job.crawled
+				? `/seeker/jobs/crawled/${job.id}`
+				: `/seeker/jobs/${job.id}`) as Route
+		);
 	const headerSearch = (
 		// seeker 헤더와 같은 이유로 축소 — 공개 셸도 같은 5개 내비를 쓰므로 폭 압박이 동일하다.
 		<div className="relative w-48">

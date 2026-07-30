@@ -41,13 +41,44 @@ describe("visual job marketplace components", () => {
 		expect(banner).not.toContain("item.coverUrl");
 	});
 
-	// 수집 공고에는 /seeker/jobs/[id] 상세가 없다. 링크를 걸면 배너를 누른 사람이 오류
-	// 화면을 보므로, href가 없는 배너는 Link가 아닌 요소로 그려야 한다.
-	it("renders banners without a destination as a non-link frame", () => {
+	// 수집 배너는 원본 규격이 우리 슬롯(4:9·7:3)과 달라(실측 약 3:2) object-cover로 넣으면
+	// 잘려 나간다. 결제 광고의 고정 비율은 그대로 두고 수집만 원본 비율로 그려야 한다.
+	it("renders crawled banners at their own aspect ratio", () => {
 		const banner = readComponent("ad-banner.tsx");
 
-		expect(banner).toContain("if (!item.href)");
-		expect(banner).toContain("<AdBannerFrame");
+		expect(banner).toContain("item.crawled");
+		expect(banner).toContain('item.crawled ? "h-auto w-full" : "object-cover"');
+		// 결제 광고 슬롯 비율은 유지된다.
+		expect(banner).toContain("aspect-[4/9] h-52 w-auto rounded-lg");
+		expect(banner).toContain("aspect-[7/3] w-full rounded-lg border");
+		// 갈 곳 없는 배너는 이제 없다(매퍼가 수집 전용 상세 주소를 만든다).
+		expect(banner).not.toContain("if (!item.href)");
+	});
+
+	// 수집 공고는 job_post에 없어 /seeker/jobs/[id]로 보내면 404다 — 카드도 배너와 같은
+	// 수집 전용 상세로 가야 한다.
+	it("routes crawled cards to the crawled detail page", () => {
+		const marketplace = readComponent("screens/seeker-marketplace.tsx");
+
+		expect(marketplace).toContain("job.crawled");
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: 소스의 라우트 리터럴을 검증
+		expect(marketplace).toContain("/seeker/jobs/crawled/${job.id}");
+	});
+
+	// 수집 공고 상세는 우리 검수·인증 배지를 달 수 없다(우리가 본 적 없는 공고다).
+	// 채팅·후기·신고·연락처도 없다 — 응대할 담당자가 우리 서비스에 없다.
+	it("shows the crawled job detail without our verification signals", () => {
+		const source = readComponent("screens/seeker-crawled-job-detail.tsx");
+
+		expect(source).toContain("외부에서 수집된 공고");
+		expect(source).not.toContain("검수 통과");
+		expect(source).not.toContain("검증 완료");
+		expect(source).not.toContain("채팅 시작");
+		expect(source).not.toContain("JobReviewSection");
+		expect(source).not.toContain("ReportDialog");
+		// 좌·우 광고 레일 배치는 우리 공고 상세와 같다.
+		expect(source).toContain("HorizontalAdBannerRail");
+		expect(source).toContain("AdBannerRail");
 	});
 
 	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {

@@ -164,6 +164,54 @@ const updateCrawledExposureInput = z.object({
 	jobFeedEnabled: z.boolean(),
 });
 
+// 섹션별 수집 노출 상한. null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS)으로 복귀한다.
+const CRAWLED_LIMIT_COLUMNS = {
+	crawledAdBannerLimit: bambiSiteSettings.crawledAdBannerLimit,
+	crawledRecommendedLimit: bambiSiteSettings.crawledRecommendedLimit,
+	crawledSpecialLimit: bambiSiteSettings.crawledSpecialLimit,
+	crawledUrgentLimit: bambiSiteSettings.crawledUrgentLimit,
+};
+
+// 트러스트 바운더리라 정수·범위를 서버에서 막는다. 0은 "그 섹션은 수집분을 노출하지 않음"이라
+// 유효한 값이고, 상한 60은 한 섹션이 유료 공고를 밀어낼 만큼 커지지 않도록 두는 안전선이다.
+const CRAWLED_LIMIT_MAX = 60;
+const crawledLimit = z
+	.number()
+	.int("노출 개수는 정수로 입력해 주세요.")
+	.min(0, "노출 개수는 0 이상으로 입력해 주세요.")
+	.max(CRAWLED_LIMIT_MAX, "노출 개수는 60 이하로 입력해 주세요.")
+	.nullable();
+
+const updateCrawledLimitsInput = z.object({
+	adBannerLimit: crawledLimit,
+	recommendedLimit: crawledLimit,
+	specialLimit: crawledLimit,
+	urgentLimit: crawledLimit,
+});
+
+// 입력 키(adBannerLimit)와 컬럼 키(crawledAdBannerLimit)는 층위가 달라 그대로 스프레드할 수
+// 없다. 매핑을 한 곳에 모아 두 프로시저가 같은 변환을 쓰게 한다.
+const toCrawledLimitValues = (
+	input: z.infer<typeof updateCrawledLimitsInput>
+) => ({
+	crawledAdBannerLimit: input.adBannerLimit,
+	crawledRecommendedLimit: input.recommendedLimit,
+	crawledSpecialLimit: input.specialLimit,
+	crawledUrgentLimit: input.urgentLimit,
+});
+
+const toCrawledLimitsOutput = (row: {
+	crawledAdBannerLimit: number | null;
+	crawledRecommendedLimit: number | null;
+	crawledSpecialLimit: number | null;
+	crawledUrgentLimit: number | null;
+}) => ({
+	adBannerLimit: row.crawledAdBannerLimit,
+	recommendedLimit: row.crawledRecommendedLimit,
+	specialLimit: row.crawledSpecialLimit,
+	urgentLimit: row.crawledUrgentLimit,
+});
+
 export const siteSettingsRouter = {
 	// 푸터 렌더용 공개 조회. 행이 없으면 null(웹이 폴백 처리).
 	getFooter: publicProcedure.handler(async () => {
@@ -357,5 +405,38 @@ export const siteSettingsRouter = {
 				.returning(CRAWLED_EXPOSURE_COLUMNS);
 
 			return saved ?? values;
+		}),
+
+	// 섹션별 수집 노출 상한 조회. 노출 스위치와 같은 이유로 운영자 전용이다.
+	// null은 미설정(코드 기본값 사용)이며, 운영자 폼이 placeholder로 기본값을 안내한다.
+	getCrawledLimits: adminProcedure.handler(async () => {
+		const [row] = await db
+			.select(CRAWLED_LIMIT_COLUMNS)
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+
+		return toCrawledLimitsOutput(
+			row ?? {
+				crawledAdBannerLimit: null,
+				crawledRecommendedLimit: null,
+				crawledSpecialLimit: null,
+				crawledUrgentLimit: null,
+			}
+		);
+	}),
+
+	// 네 값을 한 번에 저장한다 — 섹션 간 균형을 보고 함께 조정하는 값이라 개별 저장이 의미가 없다.
+	updateCrawledLimits: adminProcedure
+		.input(updateCrawledLimitsInput)
+		.handler(async ({ input }) => {
+			const values = toCrawledLimitValues(input);
+			const [saved] = await db
+				.insert(bambiSiteSettings)
+				.values({ id: SETTINGS_ROW_ID, ...values })
+				.onConflictDoUpdate({ set: values, target: bambiSiteSettings.id })
+				.returning(CRAWLED_LIMIT_COLUMNS);
+
+			return toCrawledLimitsOutput(saved ?? values);
 		}),
 };

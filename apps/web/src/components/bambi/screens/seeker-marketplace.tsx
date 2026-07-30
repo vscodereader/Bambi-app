@@ -45,6 +45,11 @@ export function SeekerMarketplaceScreen() {
 			router.push("/seeker?auth=signup");
 			return;
 		}
+		// 수집 공고의 id는 job_post에 없다 — /seeker/jobs/[id]로 보내면 404가 뜬다.
+		if (job.crawled) {
+			router.push(`/seeker/jobs/crawled/${job.id}` as Route);
+			return;
+		}
 		router.push(`/seeker/jobs/${job.id}` as Route);
 	};
 

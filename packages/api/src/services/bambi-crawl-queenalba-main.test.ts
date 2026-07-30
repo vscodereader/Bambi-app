@@ -61,12 +61,29 @@ describe("parseQueenalbaMain", () => {
 	);
 
 	// 어느 자리에 걸렸는지가 이 파서의 존재 이유다. 자리를 못 가리면 일반 목록과 구분이 없다.
-	it("labels each section from the title image alt", () => {
-		expect(byId.get("36659")?.listingType).toBe("premium");
-		expect(byId.get("16100")?.listingType).toBe("premium");
-		expect(byId.get("25073")?.listingType).toBe("special");
-		expect(byId.get("37428")?.listingType).toBe("urgent");
+	// 값은 원본 섹션 이름이 아니라 우리 자리 어휘다(스페셜채용→추천, 프리미엄채용→급구,
+	// 우대등록→스페셜).
+	it("maps each section title to our own slot vocabulary", () => {
 		expect(byId.get("29431")?.listingType).toBe("recommended");
+		expect(byId.get("16100")?.listingType).toBe("urgent");
+		expect(byId.get("37428")?.listingType).toBe("urgent");
+		expect(byId.get("25073")?.listingType).toBe("special");
+	});
+
+	// 한 공고 = 한 자리. 원본에서 칸이 희소한 자리가 이긴다(스페셜 12칸 > 우대등록 72칸).
+	it("gives a job listed in two sections the scarcer slot", () => {
+		expect(byId.get("36659")?.listingType).toBe("recommended");
+	});
+
+	// 우리 자리에 대응이 없는 섹션이다. 라벨을 붙이면 급구 자리에 두 종류가 섞인다.
+	it("leaves queenalba's own 급구·추천 sections unlabelled", () => {
+		expect(byId.get("41001")?.listingType).toBeNull();
+		expect(byId.get("41002")?.listingType).toBeNull();
+	});
+
+	// 구직자 섹션이다. alt 매칭이 `채용`을 요구하지 않으면 여기가 스페셜로 라벨된다.
+	it("does not mistake the 스페셜인재정보 job-seeker section for 스페셜 채용", () => {
+		expect(byId.get("50501")?.listingType).toBeNull();
 	});
 
 	it("leaves a card outside every section without a listing type", () => {
@@ -89,16 +106,25 @@ describe("parseQueenalbaMain", () => {
 			(banner) => banner.direction === "vertical"
 		);
 
-		expect(horizontal.map((banner) => banner.linkNumber)).toEqual(["63", "64"]);
-		// 좌 2칸(외부 링크 1건 제외) + 우 4칸. 예전 3칸 상한이라면 마지막이 조용히 잘렸다.
+		// #main_center 3칸 중 외부 링크 1건 제외.
+		expect(horizontal.map((banner) => banner.linkNumber)).toEqual(["77", "78"]);
+		// 좌(#divMenu2) 1칸 + 우(#divMenu12) 2칸. 칸 수 상한은 두지 않는다.
 		expect(vertical.map((banner) => banner.linkNumber)).toEqual([
 			"53",
-			"55",
 			"74",
 			"60",
-			"47",
-			"75",
 		]);
+	});
+
+	// 기준 컨테이너는 가로 #main_center·세로 #divMenu2·#divMenu12뿐이다. 기준 밖 배너가
+	// 섞이면 우리 프리미엄 배너 자리에 값어치가 다른 광고가 오른다.
+	it("ignores banners from containers outside the paid slots", () => {
+		expect(
+			result.banners.map((banner) => banner.linkNumber).includes("11")
+		).toBe(false);
+		expect(
+			result.banners.map((banner) => banner.linkNumber).includes("12")
+		).toBe(false);
 	});
 
 	it("normalises relative banner paths to absolute urls", () => {
@@ -123,6 +149,14 @@ describe("parseQueenalbaMain", () => {
 		expect(result.banners[0]?.title).toBe("❤️에밀리❤️ 강남 최고대우");
 	});
 
+	// 배너 alt에 카톡 아이디를 박아두는 광고가 흔하다.
+	it("masks contacts in the banner alt", () => {
+		expect(
+			result.banners.find((banner) => banner.linkNumber === "60")?.title
+		).toBe("세로배너 [연락처 비공개]");
+	});
+
+	// 같은 공고가 두 섹션에 네 링크로 걸려 있다(섹션마다 이미지 링크 + 제목 링크).
 	it("folds the image link and the title link of one card", () => {
 		expect(
 			result.listings.filter((row) => row.sourceExternalId === "36659")
@@ -184,7 +218,7 @@ describe("attachResolvedBanners", () => {
 		).toBeNull();
 	});
 
-	// 배너 자리가 섹션보다 세다 — 같은 공고가 프리미엄 섹션에도 있으면 배너로 표기해야 한다.
+	// 배너 자리가 섹션보다 세다 — 같은 공고가 섹션에도 걸려 있으면 배너로 표기해야 한다.
 	it("overrides a section label with the banner slot", () => {
 		const attached = attachResolvedBanners(listings, [
 			{ banner: horizontal as never, sourceExternalId: "36659" },

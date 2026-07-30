@@ -16,13 +16,14 @@ const [{ db }, bambiSchema, { runCrawlTick }, { createCrawlClient }] =
 
 const { bambiSiteSettings, crawledCommunityTopic, crawledJobPost, crawlRun } =
 	bambiSchema;
-const { and, desc, eq, like } = await import("drizzle-orm");
+const { and, desc, eq, isNotNull, like, notLike } = await import("drizzle-orm");
 
 const {
 	queenalbaBbsDetailHtml: queenalbaBbsDetail,
 	queenalbaBbsListHtml: queenalbaBbsHtml,
 	queenalbaGuinDetailHtml: queenalbaGuinDetail,
 	queenalbaGuinListHtml: queenalbaGuinList,
+	queenalbaMainHtml: queenalbaMain,
 } = await import("./__fixtures__/crawl-html");
 
 // 이 테스트는 공유 dev DB를 쓴다. 픽스처의 원본 ID를 그대로 저장하면 운영자가 실제로 수집해
@@ -458,6 +459,30 @@ describe("runCrawlTick — 공고(퀸알바)", () => {
 		}
 	});
 
+	// 메인 파싱이 0건인 회차(여기서는 메인 URL에도 목록 HTML이 온다)는 낡은 라벨 리셋을
+	// 건너뛴다. 게이트 만료로 0건이 온 회차에 리셋이 돌면 라벨이 통째로 날아간다.
+	it("does not reset listing labels when the main page parses nothing", async () => {
+		await db
+			.update(crawledJobPost)
+			.set({
+				bannerHorizontalUrl: "data:image/gif;base64,AAA",
+				listingType: "ad_banner",
+			})
+			.where(like(crawledJobPost.sourceExternalId, `${TEST_ID_PREFIX}%`));
+
+		await runCrawlTick(new Date(), createQueenalbaJobStubClient(), {
+			force: true,
+		});
+
+		const rows = await db
+			.select({ listingType: crawledJobPost.listingType })
+			.from(crawledJobPost)
+			.where(like(crawledJobPost.sourceExternalId, `${TEST_ID_PREFIX}%`));
+
+		expect(rows.length).toBeGreaterThan(0);
+		expect(rows.every((row) => row.listingType === "ad_banner")).toBe(true);
+	});
+
 	// 쿠키가 자리표시자이거나 만료되면 목록부터 게이트 스텁이 온다. 그걸 "공고 0건"으로 읽어
 	// 만료 처리가 돌면 수집분이 통째로 날아간다.
 	it("fails the run when the age gate blocks the list", async () => {
@@ -476,5 +501,317 @@ describe("runCrawlTick — 공고(퀸알바)", () => {
 				{ force: true }
 			)
 		).rejects.toThrow(GATE_ERROR_PATTERN);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 메인페이지 유료 노출: 섹션별 리미트 · 낡은 라벨 리셋 · 업종 보존
+// ---------------------------------------------------------------------------
+
+// 배너 리다이렉터가 가리키는 공고 번호. 칸마다 다른 공고로 보내야 "상한만큼만 해석했는가"가
+// 저장된 ad_banner 행 수로 드러난다.
+const bannerTargetId = (linkNumber: string): string =>
+	`${TEST_ID_PREFIX}7${linkNumber}`;
+
+const BANNER_LINK_PATTERN = /banner_link\.php\?number=(\d+)/;
+const EMBEDDED_GIF_PATTERN = /^data:image\/gif;base64,/;
+
+// GIF 매직 넘버 + 패딩. 12바이트 미만이면 이미지 판정 자체가 안 돼서 배너 칸이 null로 남는다.
+const GIF_BYTES = new Uint8Array([
+	0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0, 0,
+]);
+
+// 업종이 우리 8종에 안 맞는 공고. 재수집이 운영자 지정을 지우지 않는지 이 행으로 본다.
+const UNMAPPED_INDUSTRY_ID = `${TEST_ID_PREFIX}40001`;
+
+const unmappedIndustryDetail = (bodyMark: string): string =>
+	queenalbaGuinDetail
+		.replace("룸싸롱 - 클럽", "미분류업종 - 미분류")
+		.replace("송파1등업소!!", `송파1등업소!! ${bodyMark}`);
+
+// 다음 회차의 메인. 광고가 전부 내려가고 카드 한 칸만 남은 상태다(0건이 아니라 리셋이 돈다).
+const shrunkMainHtml = `<!DOCTYPE html><html><body><div id="content1"><div><table><tbody><tr>
+	<td><dl><dd><a href="./guin_detail.php?num=${UNMAPPED_INDUSTRY_ID}&pg=" class="title_ellipse"><span>남은 카드</span></a></dd></dl></td>
+</tr></tbody></table></div></div></body></html>`;
+
+const createQueenalbaMainStubClient = (
+	options: { bodyMark?: string; calls?: string[]; mainHtml?: string } = {}
+): ReturnType<typeof createCrawlClient> => ({
+	fetchBinary: (url: string) =>
+		Promise.resolve({ bytes: GIF_BYTES, contentType: "text/plain", url }),
+	fetchHtml: (url: string) => {
+		options.calls?.push(url);
+
+		if (url.endsWith("/robots.txt")) {
+			return Promise.resolve(ROBOTS);
+		}
+
+		// 리다이렉터 응답은 90바이트짜리 스크립트 한 줄이다.
+		const linkNumber = url.match(BANNER_LINK_PATTERN)?.[1];
+
+		if (linkNumber) {
+			return Promise.resolve(
+				`<script>window.location.href = '/guin_detail.php?num=${bannerTargetId(linkNumber)}';</script>`
+			);
+		}
+
+		if (url.includes(`num=${UNMAPPED_INDUSTRY_ID}`)) {
+			return Promise.resolve(unmappedIndustryDetail(options.bodyMark ?? ""));
+		}
+
+		if (url.includes("guin_detail.php")) {
+			return Promise.resolve(queenalbaGuinDetail);
+		}
+
+		if (url.includes("guin_list.php")) {
+			return Promise.resolve(withTestIds(queenalbaGuinList));
+		}
+
+		return Promise.resolve(options.mainHtml ?? withTestIds(queenalbaMain));
+	},
+	isAllowed: () => Promise.resolve(true),
+});
+
+const countTestListingTypes = async (): Promise<Record<string, number>> => {
+	const rows = await db
+		.select({ listingType: crawledJobPost.listingType })
+		.from(crawledJobPost)
+		.where(like(crawledJobPost.sourceExternalId, `${TEST_ID_PREFIX}%`));
+	const counts: Record<string, number> = {};
+
+	for (const row of rows) {
+		const key = row.listingType ?? "none";
+
+		counts[key] = (counts[key] ?? 0) + 1;
+	}
+
+	return counts;
+};
+
+describe("runCrawlTick — 메인 유료 노출(퀸알바)", () => {
+	// 운영자가 넣어둔 상한. 테스트가 갈아끼우므로 끝나면 되돌린다.
+	let savedLimits: {
+		crawledAdBannerLimit: null | number;
+		crawledRecommendedLimit: null | number;
+		crawledSpecialLimit: null | number;
+		crawledUrgentLimit: null | number;
+	} | null = null;
+
+	// 낡은 라벨 리셋은 설계상 사이트 단위로 돈다(메인에서 내려간 광고를 전부 내려야 한다).
+	// 공유 dev DB라 운영자가 실제로 수집해 둔 행의 라벨·배너까지 함께 지워지므로, 테스트 키가
+	// 아닌 행은 스냅샷을 떠 두고 끝나면 되돌린다.
+	let savedLabels: {
+		bannerHorizontalUrl: null | string;
+		bannerVerticalUrl: null | string;
+		id: string;
+		listingType: null | string;
+	}[] = [];
+
+	beforeAll(async () => {
+		await reapRunningRuns();
+		await deleteTestJobPosts();
+
+		const [current] = await db
+			.select({
+				crawledAdBannerLimit: bambiSiteSettings.crawledAdBannerLimit,
+				crawledRecommendedLimit: bambiSiteSettings.crawledRecommendedLimit,
+				crawledSpecialLimit: bambiSiteSettings.crawledSpecialLimit,
+				crawledUrgentLimit: bambiSiteSettings.crawledUrgentLimit,
+			})
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"));
+
+		savedLimits = current ?? null;
+		savedLabels = await db
+			.select({
+				bannerHorizontalUrl: crawledJobPost.bannerHorizontalUrl,
+				bannerVerticalUrl: crawledJobPost.bannerVerticalUrl,
+				id: crawledJobPost.id,
+				listingType: crawledJobPost.listingType,
+			})
+			.from(crawledJobPost)
+			.where(
+				and(
+					eq(crawledJobPost.sourceSite, "queenalba"),
+					isNotNull(crawledJobPost.listingType),
+					notLike(crawledJobPost.sourceExternalId, `${TEST_ID_PREFIX}%`)
+				)
+			);
+
+		// 상한을 작게 잡아 초과분이 실제로 잘리는지 본다. 배너 상한은 **방향별**이라 2는
+		// "가로 2 + 세로 2" = 4칸을 뜻한다(픽스처는 가로 2 · 세로 3칸이라 세로에서 1칸 잘린다).
+		// 섹션은 타입별 1건.
+		await db
+			.update(bambiSiteSettings)
+			.set({
+				crawlContentType: "job_post",
+				crawlEnabled: true,
+				crawledAdBannerLimit: 2,
+				crawledRecommendedLimit: 1,
+				crawledSpecialLimit: 1,
+				crawledUrgentLimit: 1,
+				crawlSourceSite: "queenalba",
+			})
+			.where(eq(bambiSiteSettings.id, "default"));
+	});
+
+	afterAll(async () => {
+		await deleteTestJobPosts();
+
+		for (const row of savedLabels) {
+			await db
+				.update(crawledJobPost)
+				.set({
+					bannerHorizontalUrl: row.bannerHorizontalUrl,
+					bannerVerticalUrl: row.bannerVerticalUrl,
+					listingType: row.listingType,
+				})
+				.where(eq(crawledJobPost.id, row.id));
+		}
+
+		await db
+			.update(bambiSiteSettings)
+			.set({
+				crawlEnabled: false,
+				crawledAdBannerLimit: savedLimits?.crawledAdBannerLimit ?? null,
+				crawledRecommendedLimit: savedLimits?.crawledRecommendedLimit ?? null,
+				crawledSpecialLimit: savedLimits?.crawledSpecialLimit ?? null,
+				crawledUrgentLimit: savedLimits?.crawledUrgentLimit ?? null,
+			})
+			.where(eq(bambiSiteSettings.id, "default"));
+	});
+
+	it("resolves only as many banners as the limit allows in each direction", async () => {
+		const calls: string[] = [];
+		const result = await runCrawlTick(
+			new Date(),
+			createQueenalbaMainStubClient({ calls }),
+			{ force: true }
+		);
+
+		expect(result.reason).toBe("completed");
+		// 배너 한 칸이 요청 한 번이다. 상한을 리다이렉터 해석 전에 잘라야 초과분 요청이 안 나간다.
+		// 가로 2칸(77·78) + 세로 상한 2칸(53·74) = 4건. 세로 세 번째 칸(60)은 잘려 요청이 없다.
+		const bannerCalls = calls.filter((url) => url.includes("banner_link.php"));
+
+		expect(bannerCalls).toHaveLength(4);
+		expect(bannerCalls.some((url) => url.includes("number=60"))).toBe(false);
+	});
+
+	it("labels the paid slots with our own vocabulary up to each limit", async () => {
+		const counts = await countTestListingTypes();
+
+		// 배너 상한 2는 방향별이라 가로 2 + 세로 2 = 4행이다.
+		expect(counts.ad_banner).toBe(4);
+		expect(counts.recommended).toBe(1);
+		expect(counts.urgent).toBe(1);
+		expect(counts.special).toBe(1);
+		// 상한을 넘은 섹션 카드는 라벨만 떼여 일반 카드로 남는다(행 자체는 수집된다).
+		expect(counts.none).toBeGreaterThan(0);
+	});
+
+	// 배너 이미지가 행에 실제로 담겨야 우리 화면의 배너 자리에 올릴 수 있다. 세로형까지 함께
+	// 보는 이유: 전체에 한 번 자르던 시절엔 가로가 상한을 다 먹어 세로 칸이 통째로 비었다.
+	it("stores the banner image on the job the redirector pointed at", async () => {
+		const readRow = async (linkNumber: string) => {
+			const [row] = await db
+				.select({
+					bannerHorizontalUrl: crawledJobPost.bannerHorizontalUrl,
+					bannerVerticalUrl: crawledJobPost.bannerVerticalUrl,
+				})
+				.from(crawledJobPost)
+				.where(
+					and(
+						eq(crawledJobPost.sourceSite, "queenalba"),
+						eq(crawledJobPost.sourceExternalId, bannerTargetId(linkNumber))
+					)
+				);
+
+			return row;
+		};
+
+		expect((await readRow("77"))?.bannerHorizontalUrl).toMatch(
+			EMBEDDED_GIF_PATTERN
+		);
+		expect((await readRow("53"))?.bannerVerticalUrl).toMatch(
+			EMBEDDED_GIF_PATTERN
+		);
+	});
+
+	// 메인에서 내려간 광고를 우리 화면이 계속 밀어주면 그건 이미 시장 신호가 아니다.
+	it("clears labels and banners for ads that fell off the main page", async () => {
+		await runCrawlTick(
+			new Date(),
+			createQueenalbaMainStubClient({ mainHtml: shrunkMainHtml }),
+			{ force: true }
+		);
+
+		const rows = await db
+			.select({
+				bannerHorizontalUrl: crawledJobPost.bannerHorizontalUrl,
+				bannerVerticalUrl: crawledJobPost.bannerVerticalUrl,
+				listingType: crawledJobPost.listingType,
+			})
+			.from(crawledJobPost)
+			.where(like(crawledJobPost.sourceExternalId, `${TEST_ID_PREFIX}%`));
+
+		expect(rows.length).toBeGreaterThan(0);
+		expect(rows.every((row) => row.listingType === null)).toBe(true);
+		expect(rows.every((row) => row.bannerHorizontalUrl === null)).toBe(true);
+		expect(rows.every((row) => row.bannerVerticalUrl === null)).toBe(true);
+	});
+
+	// 재수집이 운영자가 지정한 업종을 지우고 공고를 다시 검토 대기로 떨어뜨리던 버그.
+	it("keeps the industry category an operator assigned", async () => {
+		const readRow = async () => {
+			const [row] = await db
+				.select({
+					industryCategory: crawledJobPost.industryCategory,
+					status: crawledJobPost.status,
+				})
+				.from(crawledJobPost)
+				.where(
+					and(
+						eq(crawledJobPost.sourceSite, "queenalba"),
+						eq(crawledJobPost.sourceExternalId, UNMAPPED_INDUSTRY_ID)
+					)
+				);
+
+			return row;
+		};
+
+		// 원본 업종이 우리 8종에 안 맞으면 공고를 버리지 않고 검토 대기로 남긴다.
+		expect(await readRow()).toEqual({
+			industryCategory: null,
+			status: "needs_review",
+		});
+
+		// 운영자가 손으로 업종을 잇는다(crawler.setIndustryCategory가 하는 일).
+		// detail_fetched_at을 비우는 건 다음 회차가 이 공고의 상세를 다시 받게 하려는 것이다.
+		await db
+			.update(crawledJobPost)
+			.set({
+				detailFetchedAt: null,
+				industryCategory: "룸싸롱",
+				status: "active",
+			})
+			.where(
+				and(
+					eq(crawledJobPost.sourceSite, "queenalba"),
+					eq(crawledJobPost.sourceExternalId, UNMAPPED_INDUSTRY_ID)
+				)
+			);
+
+		// 본문이 바뀐 회차여야 upsert가 돈다(내용이 같으면 UPDATE를 건너뛴다).
+		await runCrawlTick(
+			new Date(),
+			createQueenalbaMainStubClient({ bodyMark: "재수집" }),
+			{ force: true }
+		);
+
+		expect(await readRow()).toEqual({
+			industryCategory: "룸싸롱",
+			status: "active",
+		});
 	});
 });

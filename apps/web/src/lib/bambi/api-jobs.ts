@@ -179,6 +179,25 @@ export function useMarketplaceJob(id: string): UseMarketplaceJobResult {
 	};
 }
 
+// 수집 공고 상세. 우리 공고와 테이블·필드가 달라 목록 매퍼(toMarketplaceJob)를 거치지 않고
+// 서버 응답을 그대로 화면에 넘긴다 — Job 모양으로 억지로 맞추면 없는 값(후기·검증)이 딸려온다.
+export function useCrawledJob(id: string) {
+	const canUseApi = isApiJobId(id);
+	const jobQuery = useQuery({
+		...orpc.bambi.crawledJobs.getById.queryOptions({ input: { id } }),
+		enabled: canUseApi,
+	});
+
+	return {
+		isError: jobQuery.isError,
+		isLoading: canUseApi && jobQuery.isLoading,
+		job: jobQuery.data,
+		refetch: () => {
+			jobQuery.refetch().catch(() => undefined);
+		},
+	};
+}
+
 export interface AdBannerJobGroups {
 	// 각 그룹은 고정 길이(좌3·중2·우3) 배열이며 빈 칸은 null이다(렌더러가 자리표시로 채운다).
 	leftBanner: (AdBannerItem | null)[];
