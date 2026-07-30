@@ -199,6 +199,9 @@ export function useCrawledJob(id: string) {
 }
 
 export interface AdBannerJobGroups {
+	// 로딩과 "광고 없음"을 구분 못 하면, 광고가 실제 있는 슬롯도 응답 대기 동안 빈 배열이
+	// 되어 문의 배너가 번쩍였다가 광고로 바뀐다. 초기 로딩을 노출해 렌더러가 스켈레톤을 그린다.
+	isLoading: boolean;
 	// 각 그룹은 고정 길이(좌3·중2·우3) 배열이며 빈 칸은 null이다(렌더러가 자리표시로 채운다).
 	leftBanner: (AdBannerItem | null)[];
 	premiumBanner: (AdBannerItem | null)[];
@@ -211,6 +214,8 @@ export function useAdBannerJobs(): AdBannerJobGroups {
 	// 우측 레일은 세로형(4:9). 슬롯마다 맞는 usage를 넘겨야 구인자가 올린 배너가 뜬다.
 	// 빈 칸(null)은 그대로 null로 두고 렌더러가 자리표시로 채운다.
 	return {
+		// isLoading = 데이터 없는 첫 로딩(react-query v5). 로드 후 빈 배열("광고 없음")과 구분된다.
+		isLoading: bannersQuery.isLoading,
 		leftBanner: (bannersQuery.data?.leftBanner ?? []).map((job) =>
 			job ? toAdBannerItem(job, "ad_horizontal") : null
 		),
