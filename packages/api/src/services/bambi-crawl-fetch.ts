@@ -304,17 +304,55 @@ export const createCrawlClient = (
 		};
 	};
 
+	// robots.txt 전용 요청. 응답 상태 코드로 폴백을 가른다:
+	//  - 2xx: robots 규칙 그대로 파싱.
+	//  - 4xx: "규칙 없음(전부 허용)". RFC 9309 §2.3.1.3 — 4xx는 robots.txt가 unavailable,
+	//    즉 우리에게 적용할 제약이 없다는 뜻이다. 외부 CDN은 robots.txt가 404인 경우가
+	//    대부분이라, 이 구분 없이는 외부 이미지 수집이 통째로 빈다.
+	//  - 5xx·네트워크 오류·타임아웃: "전부 금지". 정책을 확인하지 못한 상태에서 계속 긁는
+	//    것이 크롤러가 저지르는 가장 흔한 무례다.
+	// fetchText→requestWithRetry는 404를 상태 코드 없는 Error로 던져 이 구분이 불가능하므로,
+	// 여기서는 requestOnce로 status를 직접 보고 분기한다(재시도는 5xx·네트워크 오류에만).
+	const fetchRobots = async (origin: string): Promise<RobotsRules> => {
+		const url = `${origin}/robots.txt`;
+
+		for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+			try {
+				const response = await requestOnce(url);
+
+				if (response.ok) {
+					return parseRobots(
+						decodeHtml(
+							await response.arrayBuffer(),
+							response.headers.get("content-type")
+						)
+					);
+				}
+
+				// 4xx는 재시도해도 답이 같고 애초에 "규칙 없음"이므로 바로 허용으로 끝낸다.
+				if (!isRetryableStatus(response.status)) {
+					return { allow: [], disallow: [] };
+				}
+			} catch {
+				// AbortSignal.timeout·네트워크 오류. 재시도 대상이라 아래에서 대기 후 다시 돈다.
+			}
+
+			if (attempt < maxAttempts) {
+				await sleep(RETRY_BASE_DELAY_MS * attempt);
+			}
+		}
+
+		// 5xx·네트워크 오류가 끝까지 이어졌다 — 정책을 확인 못했으므로 전부 금지.
+		return { allow: [], disallow: ["/"] };
+	};
+
 	const loadRobots = (origin: string): Promise<RobotsRules> => {
 		const cached = robotsCache.get(origin);
 		if (cached) {
 			return cached;
 		}
 
-		// robots.txt를 못 받으면 "규칙 없음"이 아니라 "전부 금지"로 본다. 정책을 확인하지
-		// 못한 상태에서 계속 긁는 것이 크롤러가 저지르는 가장 흔한 무례다.
-		const pending = fetchText(`${origin}/robots.txt`)
-			.then(parseRobots)
-			.catch((): RobotsRules => ({ allow: [], disallow: ["/"] }));
+		const pending = fetchRobots(origin);
 
 		robotsCache.set(origin, pending);
 

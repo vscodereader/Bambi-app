@@ -94,6 +94,69 @@ describe("createCrawlClient 요청 헤더", () => {
 	});
 });
 
+// robots.txt를 못 받았을 때의 폴백을 상태 코드로 가른다(RFC 9309 §2.3.1.3). 4xx는 "규칙 없음
+// = 전부 허용"이라야 robots.txt가 404인 외부 CDN에서 이미지를 수집할 수 있고, 5xx·네트워크
+// 오류는 정책을 확인 못 한 상태라 "전부 금지"를 유지해야 한다.
+describe("createCrawlClient robots.txt 폴백", () => {
+	const robotsClient = (respond: (url: string) => Promise<Response>) =>
+		createCrawlClient({
+			fetchImpl: (url) => respond(String(url)),
+			minRequestIntervalMs: 0,
+			// 5xx 경로가 재시도 대기를 실제 타이머로 태우지 않게 sleep을 즉시 반환으로 바꾼다.
+			sleep: () => Promise.resolve(),
+		});
+
+	// 외부 CDN은 robots.txt가 404인 경우가 대부분이다. 4xx를 "전부 금지"로 보면 외부 이미지
+	// 수집이 통째로 빈다 — 4xx는 규칙이 없다는 뜻이므로 전부 허용한다.
+	it("allows everything when robots.txt is 4xx", async () => {
+		const client = robotsClient(() =>
+			Promise.resolve(new Response("Not Found", { status: 404 }))
+		);
+
+		await expect(
+			client.isAllowed("https://cdn.example.test/a.jpg")
+		).resolves.toBe(true);
+	});
+
+	// 5xx는 정책을 확인하지 못한 상태다. 계속 긁는 대신 전부 금지로 막는다.
+	it("blocks everything when robots.txt fails with a server error", async () => {
+		const client = robotsClient(() =>
+			Promise.resolve(new Response("boom", { status: 500 }))
+		);
+
+		await expect(
+			client.isAllowed("https://cdn.example.test/a.jpg")
+		).resolves.toBe(false);
+	});
+
+	// robots.txt를 아예 못 받는(네트워크 오류) 경우도 전부 금지 폴백을 유지한다.
+	it("blocks everything when robots.txt cannot be fetched at all", async () => {
+		const client = robotsClient(() => Promise.reject(new Error("ECONNRESET")));
+
+		await expect(
+			client.isAllowed("https://cdn.example.test/a.jpg")
+		).resolves.toBe(false);
+	});
+
+	// 정상 robots.txt(2xx)는 규칙을 그대로 적용한다 — 4xx 완화가 정상 규칙까지 무르게 하지 않는다.
+	it("applies the rules from a normal robots.txt", async () => {
+		const client = robotsClient(() =>
+			Promise.resolve(
+				new Response("User-agent: *\nDisallow: /private/\n", {
+					headers: { "content-type": "text/plain" },
+				})
+			)
+		);
+
+		await expect(
+			client.isAllowed("https://site.example.test/public/a.jpg")
+		).resolves.toBe(true);
+		await expect(
+			client.isAllowed("https://site.example.test/private/secret")
+		).resolves.toBe(false);
+	});
+});
+
 // 이미지 다운로드는 상대가 크기를 정하는 유일한 경로다. 상한이 새면 공고 하나가 서버 메모리를
 // 통째로 먹는다.
 describe("createCrawlClient fetchBinary", () => {

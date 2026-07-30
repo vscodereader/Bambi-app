@@ -5,6 +5,7 @@ import {
 	queenalbaBbsDetailNoViewsHtml as communityDetailNoViewsHtml,
 	queenalbaBbsListHtml as communityHtml,
 	queenalbaGuinDetailHtml as detailHtml,
+	queenalbaGuinDetailExternalOnlyHtml as externalOnlyDetailHtml,
 	queenalbaGateStubHtml as GATE_STUB,
 	queenalbaGuinListHtml as listHtml,
 	queenalbaGuinDetailManyImagesHtml as manyImagesDetailHtml,
@@ -114,6 +115,37 @@ describe("parseQueenalbaDetail — 본문 이미지", () => {
 		expect(urls).toContain(
 			"https://queenalba.net/img_up/shop_pds/2026/07/29/detail_01.jpg"
 		);
+		expect(urls.every((url) => url.startsWith("https://queenalba.net/"))).toBe(
+			true
+		);
+	});
+
+	// 본문 이미지가 전량 외부 호스트면 same-origin 화이트리스트가 0장이라, 그 경우에만 외부
+	// 후보로 폴백한다(37893류). 전량 외부 호스팅 공고가 실재한다. 중복 URL은 접고 순서는 둔다.
+	it("falls back to external-host images only when no whitelisted image exists", () => {
+		expect(
+			parseQueenalbaDetail(externalOnlyDetailHtml, "37893")?.detailImageUrls
+		).toEqual([
+			"https://tksk8080.diskn.com/2026/07/a.jpg",
+			"https://tksk8080.diskn.com/2026/07/b.jpg",
+		]);
+	});
+
+	// same-origin 장식(에디터 아이콘 /cheditor/)은 화이트리스트 밖이라 외부 폴백에도 안 섞인다.
+	it("does not fall back to same-origin decorations", () => {
+		const urls =
+			parseQueenalbaDetail(externalOnlyDetailHtml, "37893")?.detailImageUrls ??
+			[];
+
+		expect(urls.every((url) => !url.includes("/cheditor/"))).toBe(true);
+	});
+
+	// 혼합 공고는 same-origin 화이트리스트가 이겨, 외부 장식(imgur)이 폴백으로 새지 않는다.
+	it("prefers whitelisted images and drops external decorations when both exist", () => {
+		const urls =
+			parseQueenalbaDetail(detailHtml, "16100")?.detailImageUrls ?? [];
+
+		expect(urls.some((url) => url.includes("imgur"))).toBe(false);
 		expect(urls.every((url) => url.startsWith("https://queenalba.net/"))).toBe(
 			true
 		);

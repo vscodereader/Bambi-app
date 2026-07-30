@@ -1,3 +1,4 @@
+import dotenv from "dotenv";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,6 +11,14 @@ import {
 	MAX_LIST_PAGES,
 	resolveListPageCount,
 } from "./bambi-crawl-policy";
+
+// selectDetailTargets는 db 결합 모듈(bambi-crawl-ingest)에 산다. 정적 import로 끌어오면 이 파일
+// 전체가 env 검증(@bambi-app/env/server)을 타고 무너진다 — 그래서 나머지 순수 정책 테스트와
+// 달리 여기만 env를 채운 뒤 동적으로 가져온다. selectDetailTargets는 순수 함수라 dev DB에 붙지
+// 않는다(모듈 로드 시 pool 객체만 만들어지고 쿼리는 나가지 않아 db 테스트와 경쟁하지 않는다).
+dotenv.config({ path: "../../apps/server/.env" });
+
+const { selectDetailTargets } = await import("./bambi-crawl-ingest");
 
 const targetKey = (site: string, contentType: string) =>
 	`${site}:${contentType}`;
@@ -160,6 +169,42 @@ describe("isCrawlSiteImplemented", () => {
 	it("treats a site as ready when any of its combinations is built", () => {
 		expect(isCrawlSiteImplemented("queenalba")).toBe(true);
 		expect(isCrawlSiteImplemented("foxalba")).toBe(false);
+	});
+});
+
+describe("selectDetailTargets", () => {
+	const item = (sourceExternalId: string) => ({ sourceExternalId });
+	const existingRow = (
+		sourceExternalId: string,
+		detailFetchedAt: Date | null
+	) => ({
+		contentHash: "h",
+		detailFetchedAt,
+		id: sourceExternalId,
+		sourceExternalId,
+	});
+
+	// 미수집(detailFetchedAt null)이 먼저, 그다음 오래된 순. 목록이 회차 상한을 넘으면 정렬이
+	// 없을 때 목록 순서 그대로 잘려 신규 공고가 재수집 뒤로 밀리고, 상한에 걸린 신규는 영영
+	// 미수집으로 남는다. 아직 갱신 주기(72h) 안인 건은 애초에 대상에서 빠진다.
+	it("orders unfetched first, then oldest fetched, dropping the still-fresh", () => {
+		const items = [
+			item("fresh"), // 10h 전 수집 → 갱신 주기 안이라 제외
+			item("old"), // 100h 전 수집
+			item("new"), // 미수집(맵에 없음)
+			item("older"), // 200h 전 수집
+		];
+		const existing = new Map([
+			["fresh", existingRow("fresh", hoursAgo(10))],
+			["old", existingRow("old", hoursAgo(100))],
+			["older", existingRow("older", hoursAgo(200))],
+		]);
+
+		const order = selectDetailTargets(items, existing, NOW).map(
+			(target) => target.sourceExternalId
+		);
+
+		expect(order).toEqual(["new", "older", "old"]);
 	});
 });
 

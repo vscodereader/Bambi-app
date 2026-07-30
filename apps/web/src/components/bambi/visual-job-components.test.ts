@@ -29,6 +29,19 @@ describe("visual job marketplace components", () => {
 			'tone: "organic" | "recommended" | "special" | "urgent"'
 		);
 		expect(source).toContain("splitPay");
+		// 급여줄 단위 분리: 알려진 5종 목록은 유지하되(꼬리가 숫자가 아닌 "급여 협의"도 분리),
+		// 목록 밖 수집 공고의 자유 텍스트 단위(건당·TC 등)도 뱃지로 빼도록 일반화됐다.
+		// splitPay는 함수 단언용으로 export되지만, 이 파일은 @/ 별칭을 못 푸는 무설정 vitest라
+		// import 대신 소스 규칙 존재를 grep으로 지킨다(다른 테스트와 동일 방식).
+		expect(source).toContain(
+			'const PAY_UNITS = ["시급", "일급", "주급", "월급", "급여", "연봉"]'
+		);
+		expect(source).toContain("export function splitPay");
+		// 목록 밖 단위 일반화 분기 — 머리 1~4자·숫자 없음 + 꼬리 숫자 시작.
+		expect(source).toContain("looksLikeFreeTextUnit");
+		expect(source).toContain("head.length <= 4");
+		expect(source).toContain("HEAD_HAS_DIGIT.test(head)");
+		expect(source).toContain("TAIL_STARTS_WITH_DIGIT.test(tail)");
 		// 카드의 채팅 버튼은 제거됨 — 채팅 진입은 공고 상세에서만 한다
 		expect(source).not.toContain("채팅");
 		expect(source).not.toContain("onChat");

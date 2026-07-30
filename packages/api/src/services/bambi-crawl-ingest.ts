@@ -780,18 +780,32 @@ const loadExisting = async (
 };
 
 // 상세를 다시 받을 대상: 처음 보는 공고와, 상세가 낡은 공고.
-const selectDetailTargets = (
+//
+// 고른 대상을 미수집(detailFetchedAt null) 먼저, 그다음 오래된 순으로 정렬해 돌려준다.
+// 목록은 681건인데 회차당 상한은 300(MAX_DETAIL_FETCHES_PER_RUN, 상대 서버 부하 정책)이라,
+// 정렬이 없으면 목록 순서 그대로 앞 300만 잘려 신규 공고가 재수집 뒤로 밀리고 — 상한에 걸린
+// 신규는 회차마다 같은 앞부분만 다시 받느라 영영 미수집으로 남는다. 상한 슬라이스는 호출부에
+// 그대로 두고(정책을 한곳에), 여기서는 "무엇을 먼저 소화할지"만 정한다.
+export const selectDetailTargets = (
 	items: CrawlListItem[],
 	existingByExternalId: Map<string, ExistingRow>,
 	now: Date
 ): CrawlListItem[] => {
 	const cutoff = new Date(now.getTime() - DETAIL_REFRESH_HOURS * HOUR_MS);
 
-	return items.filter((item) => {
+	const targets = items.filter((item) => {
 		const row = existingByExternalId.get(item.sourceExternalId);
 
 		return !row?.detailFetchedAt || row.detailFetchedAt < cutoff;
 	});
+
+	// null은 epoch(0)으로 봐 항상 맨 앞, 그다음 getTime 오름차순(오래된 것 먼저).
+	const fetchedAtMs = (item: CrawlListItem): number =>
+		existingByExternalId
+			.get(item.sourceExternalId)
+			?.detailFetchedAt?.getTime() ?? 0;
+
+	return targets.sort((a, b) => fetchedAtMs(a) - fetchedAtMs(b));
 };
 
 // 서버가 회차 도중 죽으면 running 행이 남아 부분 유니크 인덱스가 새 수집을 영원히 막는다.
