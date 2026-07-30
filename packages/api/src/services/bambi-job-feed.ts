@@ -117,7 +117,9 @@ export const jobPostFeedSelection = {
 		"organization_id"
 	),
 	payAmount: jobPost.payAmount,
-	payUnit: jobPost.payUnit,
+	// 합친 목록에서는 nullable이다 — 퀸알바 상세는 급여를 단위 없이 금액만 준다("120,000원").
+	// 단위를 모르는 것을 "협의"로 적으면 금액이 있는데 협의라는 모순된 값이 된다.
+	payUnit: sql<null | string>`${jobPost.payUnit}`.as("pay_unit"),
 	publishedAt: jobPost.publishedAt,
 	ratingAverage: ratingAverageSql.as("rating_average"),
 	ratingCount: ratingCountSql.as("rating_count"),
@@ -126,7 +128,9 @@ export const jobPostFeedSelection = {
 	status: jobPost.status,
 	teamDisplayName: employerTeamProfile.displayName,
 	title: jobPost.title,
-	workSchedule: jobPost.workSchedule,
+	// 합친 목록에서는 nullable이다 — 퀸알바 상세에는 근무시간 항목이 아예 없다. 카드는 값이
+	// 없으면 "채팅으로 확인"으로 떨어지므로 빈 값이 화면을 깨지 않는다.
+	workSchedule: sql<null | string>`${jobPost.workSchedule}`.as("work_schedule"),
 };
 
 export const crawledJobFeedSelection = {
@@ -150,7 +154,7 @@ export const crawledJobFeedSelection = {
 	listingType: crawledJobPost.listingType,
 	organizationId: sql<null | string>`null::text`,
 	payAmount: crawledJobPost.payAmount,
-	payUnit: sql<string>`${crawledJobPost.payUnit}`,
+	payUnit: crawledJobPost.payUnit,
 	// 원본 게시일이 없으면 우리가 처음 본 시각으로 정렬한다(null이면 목록 맨 끝으로 밀린다).
 	publishedAt: sql<Date | null>`coalesce(${crawledJobPost.sourcePostedAt}, ${crawledJobPost.firstSeenAt})`,
 	ratingAverage: sql<number>`0::double precision`,
@@ -162,7 +166,7 @@ export const crawledJobFeedSelection = {
 	status: sql<JobPostStatus>`'published'`,
 	teamDisplayName: sql<null | string>`null::text`,
 	title: crawledJobPost.title,
-	workSchedule: sql<string>`${crawledJobPost.workSchedule}`,
+	workSchedule: crawledJobPost.workSchedule,
 };
 
 export interface JobFeedInput {
@@ -213,8 +217,12 @@ const jobPostFeedConditions = (input: JobFeedInput): SQL[] => {
 	return conditions;
 };
 
-// 수집 공고 쪽 조건. 위 투영이 region·payUnit·workSchedule·industryCategory·shopName을
-// NOT NULL로 단정하므로, 그 단정을 여기서 실제로 보장한다.
+// 수집 공고 쪽 조건. 위 투영이 region·industryCategory·shopName을 NOT NULL로 단정하므로
+// 그 단정을 여기서 실제로 보장한다.
+//
+// payUnit·workSchedule은 요구하지 않는다 — 퀸알바 상세에 근무시간 항목이 없고 급여도 단위
+// 없이 금액만 온다. 요구했더니 수집 공고가 목록에 한 건도 오르지 못했다. 둘은 카드에서
+// 각각 "급여 금액만 표기"와 "채팅으로 확인"으로 떨어진다.
 const crawledJobFeedConditions = (
 	input: JobFeedInput,
 	includeCrawled: boolean
@@ -229,8 +237,6 @@ const crawledJobFeedConditions = (
 		eq(crawledJobPost.status, "active"),
 		isNotNull(crawledJobPost.industryCategory),
 		isNotNull(crawledJobPost.region),
-		isNotNull(crawledJobPost.payUnit),
-		isNotNull(crawledJobPost.workSchedule),
 		isNotNull(crawledJobPost.shopName),
 		// 이미 우리 공고로 전환된 원본은 뺀다. 안 빼면 같은 업소가 "우리 공고"와 "수집 공고"로
 		// 두 번 걸리고, 지원·채팅이 되는 쪽과 안 되는 쪽이 나란히 서게 된다.

@@ -69,7 +69,7 @@ describe("parseQueenalbaList", () => {
 		const item = items.find((row) => row.sourceExternalId === "36659");
 
 		expect(item?.thumbnailUrl).toBe(
-			"https://queenalba.net/offerphoto/36659.jpg"
+			"https://queenalba.net/upload/happy_member/2026/07/20/36659.gif"
 		);
 	});
 
@@ -119,10 +119,10 @@ describe("parseQueenalbaDetail — 본문 이미지", () => {
 		const record = parseQueenalbaDetail(detailHtml, "16100");
 
 		expect(record?.thumbnailUrl).toBe(
-			"https://queenalba.net/offerphoto/16100_main.jpg"
+			"https://queenalba.net/upload/happy_member/2026/07/20/16100_main.gif"
 		);
 		expect(record?.detailImageUrls).not.toContain(
-			"https://queenalba.net/offerphoto/16100_main.jpg"
+			"https://queenalba.net/upload/happy_member/2026/07/20/16100_main.gif"
 		);
 	});
 

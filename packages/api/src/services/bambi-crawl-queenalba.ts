@@ -57,15 +57,16 @@ export const toQueenalbaAbsoluteUrl = (
 // 공고 이미지로 인정하는 경로. 아이콘·버튼·스페이서를 하나씩 빼는 블랙리스트로 가면 상대가
 // 장식 이미지를 새로 추가할 때마다 그게 공고 이미지로 새어 들어온다 — 반대로 화이트리스트는
 // 새 경로를 놓칠 뿐 쓰레기를 저장하지 않으므로 이쪽이 안전하다.
-//  - /wys2/file_attach/... : 상세 본문에 업체가 올린 이미지. 실제 응답에서 확인한 경로다.
-//  - /offerphoto/...       : 목록·메인 카드 썸네일. ⚠ 미검증 가정 — 같은 계열 사이트에서
-//                            확인한 경로 모양이고, 퀸알바 카드가 같은지는 성인인증 게이트
-//                            때문에 확인하지 못했다. 쿠키가 생기면 실물 카드 img src로 대조.
+//  - /wys2/file_attach/...     : 상세 본문에 업체가 올린 이미지. 실물 응답에서 확인.
+//  - /upload/happy_member/...  : 목록·메인 카드와 상세 상단의 업체 썸네일(86×46 GIF). 실물
+//                                응답에서 확인. 처음에 /offerphoto/로 가정했던 자리이며,
+//                                그 경로는 이 사이트에 존재하지 않아 걷어냈다.
 //
 // 이 화이트리스트를 쓰는 건 "그 자리에 있다고 광고라는 보장이 없는" 곳뿐이다(목록·메인 카드·
-// 상세 본문). 메인의 배너 칸(#main_top_center·#divMenu*)은 위치가 곧 광고라서 경로를 몰라도
-// 되므로 화이트리스트를 적용하지 않는다 — bambi-crawl-queenalba-main.ts를 보라.
-const JOB_IMAGE_PATH_PATTERN = /^\/(?:wys2\/file_attach|offerphoto)\//i;
+// 상세 본문). 메인의 배너 칸(#main_top_center·#divMenu*)은 위치가 곧 광고이고 경로도 따로
+// (mobile_img/banner/) 있어 여기를 쓰지 않는다 — bambi-crawl-queenalba-main.ts를 보라.
+const JOB_IMAGE_PATH_PATTERN =
+	/^\/(?:wys2\/file_attach|upload\/happy_member)\//i;
 
 export const isQueenalbaJobImageUrl = (url: string): boolean => {
 	try {
@@ -287,25 +288,26 @@ const parsePostedAt = (raw: string | null): Date | null => {
 	return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-// 본문 영역. "상세 채용정보" 제목 뒤부터 면책 문구(.detail_no_ment) 앞까지가 업체가 쓴
-// 영역이다. 텍스트와 이미지를 같은 범위에서 읽어야 헤더·푸터의 배너 이미지가 섞이지 않는다.
-// 제목을 못 찾으면 형제가 0개라 자연히 빈 범위가 된다.
+// 본문 블록을 여는 제목 이미지. 이 사이트의 섹션 제목은 **텍스트가 아니라 GIF**다 —
+// 처음에 h2의 텍스트에서 "상세 채용정보"를 찾았는데 그 h2 안에는 img 하나뿐이라 한 건도
+// 매칭되지 않았고, 그래서 본문·상세이미지가 198건 전부 비었다. 파일명으로 앵커한다.
+const BODY_TITLE_IMAGE_PATTERN = /title_detail_guin_02/i;
+
+// 본문 블록. "상세 채용정보" 제목 이미지를 품은 #sub_center 직계 자식 div가 그 블록이고,
+// 업체가 올린 이미지와 면책 문구(.detail_no_ment)가 그 안에 함께 들어 있다. 블록을 못 찾으면
+// 빈 선택자가 되어 본문·이미지가 비는데, 그건 파싱 실패가 아니라 이미지만 올린 공고와 구분이
+// 안 된다 — 그래서 상단 수율 판정은 제목·라벨표로 하고 여기서는 조용히 빈 값을 돌린다.
 const readBodySection = (
 	$: ReturnType<typeof load>
-): ReturnType<ReturnType<typeof load>> => {
-	const siblings = $("#sub_center h2")
-		.filter((_, element) => $(element).text().includes("상세 채용정보"))
-		.first()
-		.parent()
-		.nextAll()
-		.toArray();
-
-	const stop = siblings.findIndex((element) =>
-		$(element).hasClass("detail_no_ment")
+): ReturnType<ReturnType<typeof load>> =>
+	$("#sub_center > div").filter((_, element) =>
+		$(element)
+			.find("img")
+			.toArray()
+			.some((image) =>
+				BODY_TITLE_IMAGE_PATTERN.test($(image).attr("src") ?? "")
+			)
 	);
-
-	return $(stop === -1 ? siblings : siblings.slice(0, stop));
-};
 
 // 이미지만 올리는 공고가 절반 이상이라 본문이 빈 문자열인 경우가 정상이다 — 파싱 실패로
 // 보면 안 된다(수율 판정이 멀쩡한 회차를 중단시킨다).
@@ -313,7 +315,15 @@ const readBody = (
 	$: ReturnType<typeof load>,
 	$section: ReturnType<ReturnType<typeof load>>
 ): string => {
-	const parts = $section.toArray().map((element) => $(element).text());
+	// 면책 문구는 사이트가 모든 공고에 붙이는 고정 문장이다. 그대로 담으면 수집한 모든 공고의
+	// 본문이 같은 문장이 되고 content_hash도 그 문장으로 결정돼 변경 감지가 죽는다.
+	const $clone = $section.clone();
+
+	// 섹션 제목(h2)과 면책 문구를 걷어낸다. 둘 다 사이트가 모든 공고에 똑같이 붙이는 것이라
+	// 남겨두면 "본문 = 상세 채용정보 + 면책문구"가 되어 어느 공고든 같은 값이 된다.
+	$clone.find("h2, .detail_no_ment").remove();
+
+	const parts = $clone.toArray().map((element) => $(element).text());
 
 	// 원문 HTML은 버리고 텍스트만 남긴다. 본문에 박힌 번호까지 가려야 마스킹이 의미가 있다.
 	return maskContacts(normalizeText(parts.join("\n"))).slice(
@@ -442,7 +452,10 @@ export const parseQueenalbaDetail = (
 		sourceUrl: queenalbaDetailUrl(sourceExternalId),
 		thumbnailUrl: readThumbnailUrl($, $body),
 		title,
-		workSchedule: fields.get("업무일") ?? null,
+		// 이 사이트의 상세에는 근무시간 항목이 아예 없다(업무내용·고용형태·급여·마감일자·
+		// 편의사항까지가 전부다). "업무일"은 우리가 있을 것으로 가정했던 라벨이라 걷어냈다 —
+		// 없는 라벨을 조회하면 항상 null이면서 마치 읽어보는 것처럼 보인다.
+		workSchedule: null,
 	};
 };
 

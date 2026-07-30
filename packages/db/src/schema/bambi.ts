@@ -425,7 +425,13 @@ export const crawledJobPost = pgTable(
 		// (광고 배너·우대채용·스페셜채용)은 같은 공고여도 값어치가 다르다 — 돈을 낸 자리라
 		// 그 사이트가 지금 무엇을 밀고 있는지의 신호가 된다. null은 아직 분류 전(구 수집분).
 		listingType: text("listing_type"),
-		// 목록·카드에 걸린 대표 이미지 URL. 미러링이 켜져 있으면 우리 버킷 URL이 들어간다.
+		// 아래 네 칸에는 원본 URL이 아니라 **base64 data URI**가 들어간다
+		// (`data:image/jpeg;base64,...`). 원본을 핫링크하면 상대가 파일을 지우거나 referer로
+		// 막는 순간 우리 화면이 깨지고, 버킷 업로드는 로컬 자격증명 없이 조용히 실패해 네 칸이
+		// 전부 null로 남았다. data URI도 URI라서 컬럼 이름은 그대로 두고 <img src>에 직행한다.
+		// 크기 상한은 bambi-crawl-media.ts(한 장 2MB·공고당 8MB)에서 지킨다.
+		//
+		// 목록·카드에 걸린 대표 이미지(실측 16KB GIF → base64 21KB).
 		thumbnailUrl: text("thumbnail_url"),
 		// 광고 배너 자리에서 온 공고의 배너 이미지. 가로형과 세로형은 자리도 비율도 달라
 		// 서로를 대신할 수 없으므로 한 칸에 섞지 않는다(우리 광고 상품의 ad_horizontal /
@@ -433,7 +439,10 @@ export const crawledJobPost = pgTable(
 		bannerHorizontalUrl: text("banner_horizontal_url"),
 		bannerVerticalUrl: text("banner_vertical_url"),
 		// 상세 본문에 박혀 있던 이미지들. 유흥 공고는 조건 대부분을 이미지로만 적어두는 경우가
-		// 많아, 본문 텍스트만 저장하면 정작 핵심 정보가 빠진다. 순서를 유지해야 의미가 사므로 배열.
+		// 많아, 본문 텍스트만 저장하면 정작 핵심 정보가 빠진다(실측: 본문 텍스트는 거의 없고
+		// 1.4MB JPG 한 장이 공고 내용 전부였다). 순서를 유지해야 의미가 사므로 배열.
+		//
+		// 이 칸은 목록 쿼리에서 고르지 말 것 — 한 장이 base64 1.8MB다.
 		detailImageUrls: jsonb("detail_image_urls")
 			.$type<string[]>()
 			.default([])

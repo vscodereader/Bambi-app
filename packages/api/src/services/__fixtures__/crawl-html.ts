@@ -152,17 +152,15 @@ export const queenalbaGateStubHtml = `<script type="text/javascript">
                 document.location.replace("/adult_index.php");
             </script>`;
 
-// 카드 썸네일(img.card_photo)과 등급 아이콘은 ⚠ 미검증 가정이다 — 이 카드 마크업 자체는
-// 실물이지만, 성인인증 게이트 때문에 카드에 걸리는 이미지의 경로 모양은 확인하지 못했다.
-// 여기 쓴 /offerphoto/{num}.jpg는 같은 계열 사이트에서 확인한 형태이고, 실제 쿠키가 생기면
-// 실물 카드의 img src로 대조해 이 픽스처와 파서의 화이트리스트를 함께 고쳐야 한다.
-// 아이콘(img/icon_*.gif)은 상세 픽스처에서 실물로 확인된 경로라, 썸네일로 새어 들어오지
+// 카드 썸네일 경로는 인증 쿠키로 받은 실물에서 확인했다: ./upload/happy_member/YYYY/MM/DD/
+// <n>.gif(86×46). 처음에 /offerphoto/로 가정했었고 그 경로는 이 사이트에 없어서 썸네일이
+// 한 건도 수집되지 않았다. 아이콘(img/icon_*.gif)을 함께 넣어 두어 썸네일로 새어 들어오지
 // 않는지를 이걸로 못박는다.
 const queenalbaCard = (id: string, shop: string): string => `
 <td><dl>
 	<dt><span><a href="./guin_detail.php?num=${id}&pg=&cou=&clickChk=&ssi=&sgu="><font color="70009a"><strong>${shop}</strong></font></a><font class="smfont3">기타</font></span>
 	<span><font class="smfont3">서울 강남구</font></span></dt>
-	<dd><a href="./guin_detail.php?num=${id}&pg=&cou=&clickChk=&ssi=&sgu=" class="title_ellipse"><img src="/offerphoto/${id}.jpg" class="card_photo" alt="${shop}"><span><font>${shop} 급구...</font></span></a>
+	<dd><a href="./guin_detail.php?num=${id}&pg=&cou=&clickChk=&ssi=&sgu=" class="title_ellipse"><img src="./upload/happy_member/2026/07/20/${id}.gif" class="card_photo" alt="${shop}"><span><font>${shop} 급구...</font></span></a>
 	<ul><li><b>500,000원</b></li>
 	<li><table class="level_icon"><tbody><tr><td class="medal"><img src="img/icon_medal.gif"></td><td class="center">97회 2910일</td><td class="last"></td></tr></tbody></table></li></ul></dd>
 </dl></td>`;
@@ -189,9 +187,8 @@ interface QueenalbaDetailOptions {
 	bodyHtml: string;
 	messengerRows: string;
 	rows: [string, string][];
-	// 상세 썸네일. 본문 이미지와 별개로 #sub_center 안 본문 영역보다 위에 온다는 것은 운영자가
-	// 실물에서 확인해 줬다(그 사이 래퍼 구조는 여전히 가정이라 여기 중첩은 지어낸 것이다).
-	// 썸네일이 없는 공고도 있어 선택 항목으로 둔다.
+	// 상세 썸네일. 실물에서 본문 영역보다 위, 업체정보안내 블록 안의 86×46 GIF로 확인했다
+	// (경로 upload/happy_member/...). 썸네일이 없는 공고도 있어 선택 항목으로 둔다.
 	thumbnailSrc?: string;
 	title: string;
 }
@@ -216,10 +213,12 @@ const queenalbaDetail = (options: QueenalbaDetailOptions): string =>
 		${options.messengerRows}
 		<tr><td colspan="4" style="height:1px"></td></tr>
 	</tbody></table>
-	<div><h2>상세 채용정보</h2></div>
-	<div style="background-color:#cdcdcd; height:1px"></div>
-	<div>${options.bodyHtml}</div>
-	<div class="detail_no_ment">본 정보는 업소에서 제공한 자료이며 … 재배포 할 수 없습니다.</div>
+	<div>
+		<h2><img src="img/title_detail_guin_02.gif" alt="상세 채용정보 이미지"></h2>
+		<div style="background-color:#cdcdcd; height:1px"></div>
+		<div>${options.bodyHtml}</div>
+		<div class="detail_no_ment">본 정보는 업소에서 제공한 자료이며 … 재배포 할 수 없습니다.</div>
+	</div>
 </div>`);
 
 // 본문 텍스트가 있고 카톡 아이디를 남긴 공고. 급여 칸에 사이트가 최저임금 안내를 덧붙이는
@@ -249,7 +248,7 @@ export const queenalbaGuinDetailHtml = queenalbaDetail({
 		["회사명", "주식회사 제이유니언"],
 		["회사주소", "서울특별시 송파구 송파대로28길 11, 지하1층"],
 	],
-	thumbnailSrc: "/offerphoto/16100_main.jpg",
+	thumbnailSrc: "./upload/happy_member/2026/07/20/16100_main.gif",
 	title: "❤TC인상❤급구❤7T~9T❤빠른회전❤서류無송파구방이동잠실셔츠룸레깅스가락동",
 });
 
@@ -300,64 +299,81 @@ export const queenalbaGuinDetailManyImagesHtml = queenalbaDetail({
 // ---------------------------------------------------------------------------
 // 퀸알바 메인페이지(유료 노출 자리)
 //
-// ⚠ 실물 응답이 아니다. 어디까지가 실물인지 정확히 갈라 두면:
-//  - 검증됨: 컨테이너 ID 계층. #main_top_center(가로 배너), #divMenu2·#divMenu12(좌·우 세로
-//    배너, 각 최대 3칸), #content1(채용공고 카드). 운영자가 인증된 브라우저의 실물 DOM에서
-//    확인해 알려준 값이다.
-//  - 여전히 가정: 그 컨테이너 안의 세부 마크업(table/div 중첩, 클래스), 배너 이미지의 경로
-//    (/upload/banner/...는 지어낸 것이다 — 실제 경로를 모른다), 섹션 제목 문구.
+// 아래 세 가지는 인증 쿠키로 받은 실물 메인(364KB)에서 확인한 것을 그대로 재현했다.
+// 처음에 가정으로 짰다가 전부 틀렸던 자리라 특히 그대로 두어야 한다:
 //
-// 그래서 이 픽스처가 못박는 건 "컨테이너 안을 구조로 훑는 로직이 맞는가"이지 "퀸알바 마크업을
-// 그대로 읽는가"가 아니다. 쿠키가 생기면 실물로 갈아끼워야 한다.
+//  1) 배너 이미지 경로는 `../mobile_img/banner/<md5>`다. 확장자가 없고 서버가 content-type을
+//     text/plain으로 준다 — 그래서 이미지 판정을 헤더가 아니라 매직 넘버로 한다.
+//  2) 배너 링크는 상세로 바로 가지 않고 `banner_link.php?number=NN` 리다이렉터를 거친다.
+//     공고 번호는 그 응답에만 있어서 파서는 번호만 넘기고 수집기가 한 번 더 조회한다.
+//  3) 섹션 제목은 텍스트가 아니라 GIF/SVG이고, 사람이 읽을 이름은 alt에만 있다
+//     (title_premium_use1.gif = "프리미엄 채용정보"). 앞 형제의 글자를 훑던 예전 방식은
+//     한 건도 못 잡았고 그래서 listing_type이 전부 null이었다.
 //
-// 아래 관행은 실물 퀸알바(목록·상세)에서 확인된 것이라 그대로 재현했다: 컨테이너 밖(헤더)의
-// 상세 링크, 아이콘 gif가 배너 이미지보다 먼저 오는 것, 루트 없는 상대경로, 카드 하나가
-// 이미지 링크(dt)와 제목 링크(dd.title_ellipse)로 갈라지는 것, 같은 공고가 여러 섹션에
-// 겹쳐 걸리는 것.
+// 함께 재현한 실물 관행: 컨테이너 밖(헤더)의 상세 링크, 아이콘 gif가 카드 이미지보다 먼저
+// 오는 것, 루트 없는 상대경로, 카드 하나가 이미지 링크(dt)와 제목 링크(dd.title_ellipse)로
+// 갈라지는 것, 같은 공고가 여러 섹션에 겹쳐 걸리는 것, 세로 배너 칸에 회원가입·TOP 버튼이
+// 섞여 있는 것(경로로 걸러야 한다).
 //
-// 일부러 심어둔 함정 셋: 세로 배너 칸의 이벤트 링크(상세가 아니라 붙일 공고가 없다),
-// #divMenu12의 네 번째 배너(칸 상한 초과), 섹션 제목이 없는 일반 카드(listingType null).
+// 일부러 심어둔 함정: 세로 배너 칸의 외부 링크 배너(리다이렉터가 아니라 붙일 공고가 없다),
+// 세로 배너가 한쪽에 4칸(예전 3칸 상한이라면 조용히 잘렸을 것), 섹션에 안 든 일반 카드.
 // ---------------------------------------------------------------------------
 export const queenalbaMainHtml = page(`
-<div id="header"><a href="./guin_detail.php?num=99999&pg="><img src="/offerphoto/99999.jpg"></a></div>
+<div id="header"><a href="./guin_detail.php?num=99999&pg="><img src="./upload/happy_member/2026/07/20/99999.gif"></a></div>
 <div id="main_top_center">
 	<table><tbody><tr>
-		<td><a href="./guin_detail.php?num=50001&pg="><img src="/upload/banner/50001_top.jpg" alt="❤️에밀리❤️ 강남 최고대우"></a></td>
-		<td><a href="https://queenalba.net/guin_detail.php?num=50002"><img src="img/icon_new.gif"><img src="upload/banner/50002_top.jpg" alt="배너"></a></td>
+		<td><a href="banner_link.php?number=63"><img src="../mobile_img/banner/8b68d5e4425482c53bc6c819192cc562" alt="❤️에밀리❤️ 강남 최고대우"></a></td>
+		<td><a href="banner_link.php?number=64"><img src="img/icon_new.gif"><img src="../mobile_img/banner/a429bcdf625c91542e84c72c4f491211" alt="배너"></a></td>
 	</tr></tbody></table>
 </div>
 <div id="divMenu2">
-	<div><a href="./event_view.php?ev=summer"><img src="/upload/banner/event_summer.jpg" alt="여름 이벤트"></a></div>
-	<div><a href="./guin_detail.php?num=51001&pg="><img src="/upload/banner/51001_side.jpg" alt="세로배너 에밀리"></a></div>
-	<div><a href="./guin_detail.php?num=51002&pg="><img src="upload/banner/51002_side.jpg" alt="세로배너 카톡 sidekakao"></a></div>
+	<div><a href="./event_view.php?ev=summer"><img src="../mobile_img/banner/66cec1d83667dbd343851476f5add24a" alt="여름 이벤트"></a></div>
+	<div><a href="banner_link.php?number=53"><img src="../mobile_img/banner/2558b0f5498ce229ba4ee285b1323b3d" alt="세로배너 에밀리"></a></div>
+	<div><a href="banner_link.php?number=55"><img src="../mobile_img/banner/5adc9fffbae16be502df79f6a0fd65c2" alt="세로배너 카톡 sidekakao"></a></div>
 </div>
 <div id="divMenu12">
-	<div><a href="./guin_detail.php?num=52001&pg="><img src="/upload/banner/52001_side.jpg" alt="세로배너 C"></a></div>
-	<div><a href="./guin_detail.php?num=52002&pg="><img src="/upload/banner/52002_side.jpg" alt="세로배너 D"></a></div>
-	<div><a href="./guin_detail.php?num=52003&pg="><img src="/upload/banner/spacer.gif" width="1" height="1"><img src="/upload/banner/52003_side.jpg" alt="세로배너 E"></a></div>
-	<div><a href="./guin_detail.php?num=52004&pg="><img src="/upload/banner/52004_side.jpg" alt="상한 초과"></a></div>
+	<div><a href="banner_link.php?number=74"><img src="../mobile_img/banner/14e561247f0634faaa5fcf05019cfefc" alt="세로배너 C"></a></div>
+	<div><a href="banner_link.php?number=60"><img src="../mobile_img/banner/4b45438e6af37a9731d744cd6fc739bc" alt="세로배너 D"></a></div>
+	<div><a href="banner_link.php?number=47"><img src="../mobile_img/banner/0c594dc5793e0f3d06d882efaf72d3e2" alt="세로배너 E"></a></div>
+	<div><a href="banner_link.php?number=75"><img src="../mobile_img/banner/4c1f75d48180a5cfb60414b52be92cfd" alt="세로배너 F"></a></div>
+	<div><a href="/happy_member.php?mode=joinus"><img src="img/right_btn_join.png"></a></div>
+	<div><a href="#"><img src="img/right_btn_top.png"></a></div>
 </div>
 <div id="content1">
 	<div class="tit_area"><h2>실시간 등록</h2></div>
 	<div><table><tbody><tr>
-		<td><dl><dd><a href="./guin_detail.php?num=40001&pg=" class="title_ellipse"><img src="/offerphoto/40001.jpg" alt="일반카드"><span><font>일반 채용 카드</font></span></a></dd></dl></td>
+		<td><dl><dd><a href="./guin_detail.php?num=40001&pg=" class="title_ellipse"><img src="./upload/happy_member/2026/07/20/40001.gif" alt="일반카드"><span><font>일반 채용 카드</font></span></a></dd></dl></td>
 	</tr></tbody></table></div>
-	<div class="tit_area"><h2>우대채용</h2></div>
-	<div><table><tbody><tr>
-		<td><dl>
-			<dt><a href="./guin_detail.php?num=36659&pg="><img src="/offerphoto/36659.jpg" alt="❤️에밀리❤️"></a></dt>
-			<dd><a href="./guin_detail.php?num=36659&pg=" class="title_ellipse"><span><font>❤️에밀리❤️ 초보환영</font></span></a></dd>
-		</dl></td>
-		<td><dl>
-			<dt><a href="./guin_detail.php?num=16100&pg="><font><strong>♥The Day♥</strong></font></a></dt>
-			<dd><a href="./guin_detail.php?num=16100&pg=" class="title_ellipse"><span><font>급구 카톡 shopkakao</font></span></a></dd>
-		</dl></td>
-	</tr></tbody></table></div>
-	<div class="tit_area"><h2>스페셜채용</h2></div>
-	<div><table><tbody><tr>
-		<td><dl><dd><a href="./guin_detail.php?num=25073&pg=" class="title_ellipse"><img src="img/icon_medal.gif"><img src="/offerphoto/25073.jpg" alt="이찌니"><span><font>이찌니 스페셜</font></span></a></dd></dl></td>
-		<td><dl><dd><a href="./guin_detail.php?num=36659&pg=" class="title_ellipse"><span><font>❤️에밀리❤️ 초보환영</font></span></a></dd></dl></td>
-	</tr></tbody></table></div>
+	<div><table><tbody>
+		<tr><td><h2><img src="img/title_premium_use1.gif" alt="프리미엄 채용정보"></h2></td></tr>
+		<tr>
+			<td><dl>
+				<dt><a href="./guin_detail.php?num=36659&pg="><img src="./upload/happy_member/2026/07/20/36659.gif" alt="❤️에밀리❤️"></a></dt>
+				<dd><a href="./guin_detail.php?num=36659&pg=" class="title_ellipse"><span><font>❤️에밀리❤️ 초보환영</font></span></a></dd>
+			</dl></td>
+			<td><dl>
+				<dt><a href="./guin_detail.php?num=16100&pg="><font><strong>♥The Day♥</strong></font></a></dt>
+				<dd><a href="./guin_detail.php?num=16100&pg=" class="title_ellipse"><span><font>급구 카톡 shopkakao</font></span></a></dd>
+			</dl></td>
+		</tr>
+	</tbody></table></div>
+	<div><table><tbody>
+		<tr><td><h2><img src="img/title_special_use1.svg" alt="스페셜 채용정보"></h2></td></tr>
+		<tr>
+			<td><dl><dd><a href="./guin_detail.php?num=25073&pg=" class="title_ellipse"><img src="img/icon_medal.gif"><img src="./upload/happy_member/2026/07/20/25073.gif" alt="이찌니"><span><font>이찌니 스페셜</font></span></a></dd></dl></td>
+			<td><dl><dd><a href="./guin_detail.php?num=36659&pg=" class="title_ellipse"><span><font>❤️에밀리❤️ 초보환영</font></span></a></dd></dl></td>
+		</tr>
+	</tbody></table></div>
+	<table><tbody><tr>
+		<td>
+			<table><tbody><tr><td><h2><img src="img/title_speed_use1.gif" alt="급구채용"></h2></td></tr></tbody></table>
+			<a href="./guin_detail.php?num=37428&pg=">강남1등 도파민</a>
+		</td>
+		<td>
+			<table><tbody><tr><td><h2><img src="img/title_cucun_use1.gif" alt="추천채용"></h2></td></tr></tbody></table>
+			<a href="./guin_detail.php?num=29431&pg=">박서준이사</a>
+		</td>
+	</tr></tbody></table>
 </div>`);
 
 interface QueenalbaTopicRow {
