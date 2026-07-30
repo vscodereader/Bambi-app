@@ -920,6 +920,13 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	crawledJobFeedEnabled: boolean("crawled_job_feed_enabled")
 		.default(false)
 		.notNull(),
+	// 섹션별 수집 공고 노출 상한. 수집할 때(배너 리다이렉터 해석 요청 절약)와 조회할 때(과거
+	// 회차가 남긴 초과 라벨 방어) 같은 값을 쓴다. null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS)
+	// 으로 폴백한다 — 컬럼 default를 박으면 기본값을 조정할 때마다 마이그레이션이 필요해진다.
+	crawledAdBannerLimit: integer("crawled_ad_banner_limit"),
+	crawledSpecialLimit: integer("crawled_special_limit"),
+	crawledUrgentLimit: integer("crawled_urgent_limit"),
+	crawledRecommendedLimit: integer("crawled_recommended_limit"),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())
