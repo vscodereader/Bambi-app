@@ -1,0 +1,1 @@
+ALTER TABLE "crawled_job_post" ADD COLUMN "source_deadline_at" timestamp;

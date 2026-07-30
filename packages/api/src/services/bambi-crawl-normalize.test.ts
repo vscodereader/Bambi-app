@@ -29,6 +29,7 @@ const createRecord = (
 	payUnit: null,
 	region: null,
 	shopName: null,
+	sourceDeadlineAt: null,
 	sourceExternalId: "1",
 	sourcePostedAt: null,
 	sourceUrl: "https://example.test/1",
@@ -137,10 +138,15 @@ describe("computeContentHash", () => {
 
 	it("ignores fields that the crawler derives rather than reads", () => {
 		// payAmount·industryCategory는 원문이 아니라 우리 파싱 결과다. 파싱 규칙을 고쳤다고
-		// 전체 행이 "변경됨"으로 뒤집히면 안 되므로 해시 재료에서 뺀다.
+		// 전체 행이 "변경됨"으로 뒤집히면 안 되므로 해시 재료에서 뺀다. 날짜 필드도 같은
+		// 이유로 빼는데, 그래서 수집기가 해시 동일 분기에서 따로 백필한다.
 		expect(
 			computeContentHash(
-				createRecord({ industryCategory: "룸싸롱", payAmount: 150_000 })
+				createRecord({
+					industryCategory: "룸싸롱",
+					payAmount: 150_000,
+					sourceDeadlineAt: new Date("2026-08-05T00:00:00Z"),
+				})
 			)
 		).toBe(computeContentHash(createRecord()));
 	});
