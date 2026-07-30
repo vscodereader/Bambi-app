@@ -1,4 +1,10 @@
+import type { CrawledCommunityCommentRecord } from "@bambi-app/db/schema/bambi";
 import { load } from "cheerio";
+
+// 댓글 레코드 타입의 정본은 db 스키마(jsonb 컬럼의 $type)다 — db는 api를 못 가져오므로
+// 저쪽에 두고 여기서 다시 내보낸다. 파서 결과를 쓰는 라우터(W2)가 어느 쪽에서 import해도 같은
+// 타입을 보게 한다(위 import는 이 파일 안 시그니처용, 아래 re-export는 소비자용).
+export type { CrawledCommunityCommentRecord } from "@bambi-app/db/schema/bambi";
 
 import {
 	type CrawledJobRecord,
@@ -681,17 +687,103 @@ const MAX_COMMUNITY_BODY_LENGTH = 10_000;
 // 없으면 null로 둔다. 본문이 있는데 조회수가 없는 건 파싱 실패가 아니다.
 const VIEW_COUNT_PATTERN = /조회\s*:\s*([\d,]+)/;
 
+// 댓글 저장 상한. 본문과 같은 이유로 천장을 둔다 — 홍보성 댓글이 수백 개 달린 글이 있어
+// 상한이 없으면 한 행의 jsonb 페이로드와 목록 응답이 흔들린다.
+const MAX_COMMENT_LENGTH = 1000;
+const MAX_COMMENTS = 100;
+
+// 댓글 작성일시. 본문 날짜(parseDate)와 달리 시:분:초까지 온다. jsonb에 담으므로 Date가
+// 아니라 ISO 문자열로 굳힌다. 게시일과 같은 규약으로 UTC(Z)로 해석한다 — 저장 후 표시할 때
+// 화면이 로캘을 입히므로 여기서 시간대를 추측하지 않는다. 표기 실패 시 null(대댓글은 날짜
+// 칸이 비기도 한다).
+const COMMENT_DATE_PATTERN =
+	/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/;
+
+const parseCommentDate = (raw: string | undefined): string | null => {
+	const match = raw?.match(COMMENT_DATE_PATTERN);
+
+	if (!match) {
+		return null;
+	}
+
+	const parsed = new Date(
+		`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}Z`
+	);
+
+	return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+};
+
+const COMMENT_ID_NUM_PATTERN = /comment_id_(\d+)/;
+
+// 댓글 파싱. 실측 구조: 댓글 하나 = TR 하나, 셀 3개 = [작성자 닉네임 | 본문 td#comment_id_N |
+// 작성일시]. 본문 td의 직계 자식은 [마커 span 또는 아이콘 img] + 본문 span인데, 대댓글은 본문
+// span 하나뿐이다(사용자 확인 셀렉터: 댓글 #comment_id_N > span:nth-child(2), 대댓글
+// #comment_id_N > span). 세 변형을 한 규칙으로 포괄하려고 "직계 자식 span 중 마지막 것"을
+// 본문으로 읽는다 — 앞의 마커/아이콘은 자연히 빠진다. secret-comment(비밀댓글)는 본문이 가려져
+// 저장할 게 없어 건너뛴다. id의 N 오름차순을 유지하고, 상한(100개·건당 1,000자)을 적용한다.
+const readComments = (
+	$: ReturnType<typeof load>
+): CrawledCommunityCommentRecord[] => {
+	const collected: { num: number; record: CrawledCommunityCommentRecord }[] =
+		[];
+
+	for (const element of $('[id^="comment_id_"]').toArray()) {
+		const $cell = $(element);
+
+		// 비밀댓글 표시는 본문 셀이나 그 행에 붙는다 — 어느 쪽이든 건너뛴다.
+		if (
+			$cell.hasClass("secret-comment") ||
+			$cell.closest("tr").hasClass("secret-comment")
+		) {
+			continue;
+		}
+
+		const spans = $cell.children("span").toArray();
+		const rawBody = spans.length > 0 ? $(spans.at(-1)).text() : $cell.text();
+		const body = maskContacts(normalizeText(rawBody)).slice(
+			0,
+			MAX_COMMENT_LENGTH
+		);
+
+		// 본문이 통째로 비면(빈 셀·파싱 어긋남) 댓글 수만 부풀리므로 세지 않는다.
+		if (body.length === 0) {
+			continue;
+		}
+
+		const cells = $cell.closest("tr").children("td");
+		const num = Number.parseInt(
+			$cell.attr("id")?.match(COMMENT_ID_NUM_PATTERN)?.[1] ?? "",
+			10
+		);
+
+		collected.push({
+			// 파싱 실패 id는 맨 뒤로 보낸다(정상 흐름에선 안 생긴다).
+			num: Number.isNaN(num) ? Number.MAX_SAFE_INTEGER : num,
+			record: {
+				authorName: cleanText($(cells.first()).text()),
+				body,
+				sourcePostedAt: parseCommentDate($(cells.last()).text()),
+			},
+		});
+	}
+
+	return collected
+		.sort((a, b) => a.num - b.num)
+		.slice(0, MAX_COMMENTS)
+		.map((entry) => entry.record);
+};
+
 export interface CrawledCommunityBody {
 	body: string;
+	// null이 아니라 항상 배열이다 — 상세를 파싱한 이상 "댓글 0개"([])와 "미수집"(컬럼 null)은
+	// 수집기(백필 판정)에서만 갈리고, 파서는 언제나 실제로 읽은 목록을 준다.
+	comments: CrawledCommunityCommentRecord[];
 	title: string | null;
 	viewCount: number | null;
 }
 
-// 게시글 상세. 목록에서 못 얻는 두 가지(본문, 조회수)만 가져온다 — 제목·댓글수·작성일은
-// 목록이 이미 준다.
-//
-// 댓글은 읽지 않는다. 본문과 달리 댓글창은 업소 홍보글이 대부분이라 주제 신호로 쓸모가 없고,
-// 개별 작성자 글을 그만큼 더 복제하게 된다.
+// 게시글 상세. 목록에서 못 얻는 것(본문, 조회수, 댓글)을 가져온다 — 제목·댓글수·작성일은
+// 목록도 주지만, 댓글은 상세 HTML에 인라인으로 전부 렌더돼 있어 여기서 함께 파싱한다.
 export const parseQueenalbaCommunityDetail = (
 	html: string
 ): CrawledCommunityBody | null => {
@@ -718,6 +810,7 @@ export const parseQueenalbaCommunityDetail = (
 			0,
 			MAX_COMMUNITY_BODY_LENGTH
 		),
+		comments: readComments($),
 		title: cleanText($(".board-title-container h1").first().text()),
 		viewCount: viewMatch?.[1]
 			? Number.parseInt(viewMatch[1].replaceAll(",", ""), 10)
