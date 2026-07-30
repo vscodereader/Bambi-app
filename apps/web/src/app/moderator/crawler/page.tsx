@@ -115,6 +115,38 @@ export default function ModeratorCrawlerPage() {
 		})
 	);
 
+	const exposureQuery = useQuery(
+		orpc.bambi.siteSettings.getCrawledExposure.queryOptions()
+	);
+	const saveExposureMutation = useMutation(
+		orpc.bambi.siteSettings.updateCrawledExposure.mutationOptions({
+			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("수집 콘텐츠 노출 설정을 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getCrawledExposure.queryKey(),
+				});
+			},
+		})
+	);
+	const exposure = exposureQuery.data ?? {
+		crawledAdBannerEnabled: false,
+		crawledJobFeedEnabled: false,
+	};
+	// 노출 스위치는 저장 버튼을 두지 않고 토글 즉시 반영한다 — 문제가 생겨 내리러 온 사람이
+	// 스위치만 내리고 저장을 잊으면 그대로 계속 노출된다.
+	const toggleExposure = (
+		key: "crawledAdBannerEnabled" | "crawledJobFeedEnabled",
+		next: boolean
+	) => {
+		const merged = { ...exposure, [key]: next };
+
+		saveExposureMutation.mutate({
+			adBannerEnabled: merged.crawledAdBannerEnabled,
+			jobFeedEnabled: merged.crawledJobFeedEnabled,
+		});
+	};
+
 	const onSubmit = (event: FormEvent) => {
 		event.preventDefault();
 
@@ -275,6 +307,59 @@ export default function ModeratorCrawlerPage() {
 							주세요.
 						</p>
 					</form>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>수집 콘텐츠 노출</CardTitle>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-5">
+					<p className="m-0 text-muted-foreground text-xs">
+						수집을 계속 돌리면서 노출만 즉시 내릴 수 있게 수집과 분리된
+						스위치입니다. 두 스위치는 켜는 즉시 저장돼요. 기본값은 꺼짐이라
+						수집만 켜도 화면에는 나오지 않습니다.
+					</p>
+
+					<div className="flex items-start justify-between gap-4">
+						<div className="flex flex-col gap-1">
+							<Label htmlFor="crawledAdBannerEnabled">
+								광고 배너 슬롯 노출
+							</Label>
+							<p className="m-0 text-muted-foreground text-xs">
+								결제 광고가 채우지 못한 빈 칸에만 수집 배너가 들어갑니다.
+								가로형은 좌1→좌2→좌3→중간1→중간2로, 세로형은 우1→우2→우3에서만
+								순환하며 서로 넘어가지 않아요. 결제 광고를 밀어내지는 않습니다.
+							</p>
+						</div>
+						<Switch
+							checked={exposure.crawledAdBannerEnabled}
+							disabled={exposureQuery.isLoading}
+							id="crawledAdBannerEnabled"
+							onCheckedChange={(next) =>
+								toggleExposure("crawledAdBannerEnabled", next)
+							}
+						/>
+					</div>
+
+					<div className="flex items-start justify-between gap-4">
+						<div className="flex flex-col gap-1">
+							<Label htmlFor="crawledJobFeedEnabled">공고 목록 노출</Label>
+							<p className="m-0 text-muted-foreground text-xs">
+								수집 공고가 공고 목록에 섞입니다. 유료 섹션에는 들어가지 않고
+								검증 배지도 붙지 않으며, 지역·급여·근무시간·업종·업소명이 빠진
+								공고는 목록에서 제외돼요.
+							</p>
+						</div>
+						<Switch
+							checked={exposure.crawledJobFeedEnabled}
+							disabled={exposureQuery.isLoading}
+							id="crawledJobFeedEnabled"
+							onCheckedChange={(next) =>
+								toggleExposure("crawledJobFeedEnabled", next)
+							}
+						/>
+					</div>
 				</CardContent>
 			</Card>
 

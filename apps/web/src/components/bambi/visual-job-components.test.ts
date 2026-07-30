@@ -33,12 +33,21 @@ describe("visual job marketplace components", () => {
 		// 가로·세로 배너 모두 next/link로 감싸 광고 공고 상세로 이동한다
 		expect(banner).toContain('from "next/link"');
 		expect(banner).toContain("<Link");
-		// 링크는 결제완료 배너 공고 실데이터의 상세(/seeker/jobs/{id})로 직행한다
-		expect(banner).toContain("/seeker/jobs/");
+		// 링크 주소는 매퍼(toAdBannerItem)가 만든다 — 검증은 api-job-mapper.test.ts.
+		expect(banner).toContain("item.href");
 		expect(banner).toContain("item.id");
 		// 배너 이미지는 슬롯 규격으로 업로드된 배너(AdBannerItem.imageUrl)를 쓴다 — 커버가 아니다
 		expect(banner).toContain("item.imageUrl");
 		expect(banner).not.toContain("item.coverUrl");
+	});
+
+	// 수집 공고에는 /seeker/jobs/[id] 상세가 없다. 링크를 걸면 배너를 누른 사람이 오류
+	// 화면을 보므로, href가 없는 배너는 Link가 아닌 요소로 그려야 한다.
+	it("renders banners without a destination as a non-link frame", () => {
+		const banner = readComponent("ad-banner.tsx");
+
+		expect(banner).toContain("if (!item.href)");
+		expect(banner).toContain("<AdBannerFrame");
 	});
 
 	it("defines visual exposure sections with special, urgent, recommended, and organic groups", () => {

@@ -900,6 +900,17 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	crawlIntervalHours: integer("crawl_interval_hours"),
 	// 마지막 수집 시각. 틱 간격보다 이 값을 기준으로 판정해 서버 재시작에도 주기가 밀리지 않는다.
 	crawlLastRunAt: timestamp("crawl_last_run_at"),
+	// 수집 공고를 광고 배너 슬롯에 채울지. 수집 여부와 별개의 스위치다 — 긁어 두는 것과
+	// 남의 업소 이미지를 우리 광고 자리에 거는 것은 판단이 다르고, 문제가 생기면 수집을
+	// 멈추지 않고 노출만 즉시 내려야 한다. 기본이 false라 배포만으로는 노출되지 않는다.
+	crawledAdBannerEnabled: boolean("crawled_ad_banner_enabled")
+		.default(false)
+		.notNull(),
+	// 수집 공고를 공고 목록에 섞을지. 위와 같은 이유로 배너와 따로 끈다 — 배너 한 칸이
+	// 문제여도 목록은 살려 두거나, 그 반대를 택할 수 있어야 한다.
+	crawledJobFeedEnabled: boolean("crawled_job_feed_enabled")
+		.default(false)
+		.notNull(),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())

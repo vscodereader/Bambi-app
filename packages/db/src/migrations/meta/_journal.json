@@ -351,6 +351,13 @@
       "when": 1785368770651,
       "tag": "0049_fearless_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1785371643931,
+      "tag": "0050_omniscient_bloodstrike",
+      "breakpoints": true
     }
   ]
 }

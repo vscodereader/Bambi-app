@@ -354,7 +354,13 @@ describe("bambi jobs.listAdBanners", () => {
 		// 통합 후 레거시 좌/우 공고가 프리미엄 슬롯에 배치되면 section≠exposureType이 정상이다.
 		for (const [section, items] of shownBySlot) {
 			for (const item of items) {
-				if (item === null || !fixture.jobPostIds.includes(item.id)) {
+				// 응답에는 수집 배너도 섞일 수 있다(exposureType이 없는 행). 픽스처 id로 이미
+				// 걸러지지만 타입상으로도 결제 광고 행임을 좁힌다.
+				if (
+					item === null ||
+					!("exposureType" in item) ||
+					!fixture.jobPostIds.includes(item.id)
+				) {
 					continue;
 				}
 
