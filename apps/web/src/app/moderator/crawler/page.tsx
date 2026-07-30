@@ -1,6 +1,16 @@
 "use client";
 
 import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -33,7 +43,7 @@ import {
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCwIcon } from "lucide-react";
+import { RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -341,6 +351,7 @@ export default function ModeratorCrawlerPage() {
 	const [enabled, setEnabled] = useState(false);
 	const [intervalHours, setIntervalHours] = useState("");
 	const [contentType, setContentType] = useState<CrawlContentType>("job_post");
+	const [isClearRunsOpen, setIsClearRunsOpen] = useState(false);
 
 	// 저장된 값이 오면 폼에 채운다(주기가 미설정이면 빈 값 → 기본값 placeholder 노출).
 	useEffect(() => {
@@ -397,6 +408,24 @@ export default function ModeratorCrawlerPage() {
 						queryKey: orpc.bambi.crawler.getSettings.queryKey(),
 					}),
 				]);
+			},
+		})
+	);
+
+	// 회차 기록 비우기. 성공했을 때만 창을 닫는다 — 실패하면 열린 채로 남아 다시 누를 수 있어야 한다.
+	const clearRunsMutation = useMutation(
+		orpc.bambi.crawler.clearRuns.mutationOptions({
+			onError: (error) => toast.error(error.message || "비우지 못했어요."),
+			onSuccess: async (result) => {
+				toast.success(
+					result.removed > 0
+						? `수집 회차 기록 ${result.removed}건을 비웠어요.`
+						: "지울 회차 기록이 없어요. 진행 중인 회차는 남겨 둡니다."
+				);
+				setIsClearRunsOpen(false);
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.crawler.listRuns.queryKey(),
+				});
 			},
 		})
 	);
@@ -724,21 +753,35 @@ export default function ModeratorCrawlerPage() {
 					{/* 회차는 서버가 뒤에서 돌리는 동안 조용히 바뀐다 — 진행 상황을 보려고
 					    페이지를 통째로 새로 열지 않아도 되게 이 카드만 다시 불러온다. */}
 					<CardAction>
-						<Button
-							disabled={runsQuery.isFetching || summaryQuery.isFetching}
-							onClick={() => {
-								runsQuery.refetch();
-								summaryQuery.refetch();
-							}}
-							size="sm"
-							variant="outline"
-						>
-							<RefreshCwIcon
-								className={runsQuery.isFetching ? "animate-spin" : undefined}
-								data-icon="inline-start"
-							/>
-							새로고침
-						</Button>
+						<div className="flex flex-wrap gap-2">
+							<Button
+								disabled={runsQuery.isFetching || summaryQuery.isFetching}
+								onClick={() => {
+									runsQuery.refetch();
+									summaryQuery.refetch();
+								}}
+								size="sm"
+								variant="outline"
+							>
+								<RefreshCwIcon
+									className={runsQuery.isFetching ? "animate-spin" : undefined}
+									data-icon="inline-start"
+								/>
+								새로고침
+							</Button>
+							<Button
+								// 비울 기록이 없으면 누를 이유가 없다.
+								disabled={
+									!runsQuery.data?.length || clearRunsMutation.isPending
+								}
+								onClick={() => setIsClearRunsOpen(true)}
+								size="sm"
+								variant="outline"
+							>
+								<Trash2Icon data-icon="inline-start" />
+								비우기
+							</Button>
+						</div>
 					</CardAction>
 				</CardHeader>
 				<CardContent className="flex flex-col gap-3">
@@ -808,6 +851,37 @@ export default function ModeratorCrawlerPage() {
 							title="아직 수집 기록이 없어요"
 						/>
 					)}
+
+					<AlertDialog
+						onOpenChange={(open) => {
+							if (!open) {
+								setIsClearRunsOpen(false);
+							}
+						}}
+						open={isClearRunsOpen}
+					>
+						<AlertDialogContent>
+							<AlertDialogHeader>
+								<AlertDialogTitle>회차 기록을 비울까요?</AlertDialogTitle>
+								<AlertDialogDescription>
+									끝난 회차 기록이 모두 지워집니다. 되돌릴 수 없고, 지우면
+									지금까지의 수율·파손 이력으로 파서를 점검할 수 없게 됩니다.
+									수집한 공고·커뮤니티 글은 그대로 남고, 진행 중인 회차도 남겨
+									둡니다.
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel>취소</AlertDialogCancel>
+								<AlertDialogAction
+									disabled={clearRunsMutation.isPending}
+									onClick={() => clearRunsMutation.mutate({})}
+									variant="destructive"
+								>
+									비우기
+								</AlertDialogAction>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
 				</CardContent>
 			</Card>
 		</div>

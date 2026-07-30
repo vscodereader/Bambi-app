@@ -17,7 +17,8 @@ const [{ db }, authSchema, bambiSchema, { crawlerRouter }] = await Promise.all([
 ]);
 
 const { user } = authSchema;
-const { bambiProfile, crawledCommunityTopic, crawledJobPost } = bambiSchema;
+const { bambiProfile, crawledCommunityTopic, crawledJobPost, crawlRun } =
+	bambiSchema;
 const { eq, inArray } = await import("drizzle-orm");
 
 const createContextForUser = (userId: null | string): Context =>
@@ -148,6 +149,21 @@ const listTopicsAs = (userId: string) =>
 		context: createContextForUser(userId),
 		path: ["bambi", "crawler", "listTopics"],
 	});
+
+const clearRunsAs = (userId: string) =>
+	createProcedureClient(crawlerRouter.clearRuns, {
+		context: createContextForUser(userId),
+		path: ["bambi", "crawler", "clearRuns"],
+	});
+
+const runExists = async (id: string) => {
+	const [row] = await db
+		.select({ id: crawlRun.id })
+		.from(crawlRun)
+		.where(eq(crawlRun.id, id));
+
+	return Boolean(row);
+};
 
 const readJobStatus = async (id: string) => {
 	const [row] = await db
@@ -297,6 +313,71 @@ describe("crawler 커뮤니티 글 삭제·복구", () => {
 				false
 			);
 		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+});
+
+// 비우기는 톰스톤이 아니라 진짜 DELETE라, 무엇이 지워지지 *않는지*가 안전성의 전부다.
+//
+// 주의: clearRuns는 조건 하나로 테이블을 통째로 비우므로 이 테스트는 개발 DB에 쌓인 실제
+// 회차 기록까지 지운다(banned-words의 removeAll을 테스트하지 않는 것과 같은 사정). 그래도
+// 테스트를 두는 이유는 남아야 할 행이 남는지가 이 프로시저의 핵심이고, 회차 기록은 다음
+// 수집이 다시 쌓는 운영 로그이기 때문이다 — 수율 이력을 보존해야 하는 DB에서는 돌리지 말 것.
+describe("crawler 회차 기록 비우기", () => {
+	it("끝난 회차는 지우고 진행 중 회차는 남긴다", async () => {
+		const fixture = await createFixture();
+		const [finished] = await db
+			.insert(crawlRun)
+			.values({
+				contentType: "job_post",
+				finishedAt: new Date(),
+				sourceSite: "queenalba",
+				status: "success",
+			})
+			.returning({ id: crawlRun.id });
+		// 진행 중 회차는 사이트당 하나만 존재할 수 있다(status='running' 부분 유니크 인덱스).
+		// 실제로 수집이 도는 queenalba와 부딪히지 않게 foxalba로 심는다.
+		const [running] = await db
+			.insert(crawlRun)
+			.values({
+				contentType: "job_post",
+				sourceSite: "foxalba",
+				status: "running",
+			})
+			.returning({ id: crawlRun.id });
+
+		try {
+			const result = await clearRunsAs(fixture.adminUserId)({});
+
+			expect(result.removed).toBeGreaterThanOrEqual(1);
+			expect(await runExists(finished?.id ?? "")).toBe(false);
+			// 수집기는 회차를 열 때 받은 id로 완료 시 UPDATE하고(bambi-crawl-ingest.ts),
+			// 부분 유니크 인덱스는 이 행이 있는 동안만 중복 회차를 막는다 — 지우면 둘 다 무너진다.
+			expect(await runExists(running?.id ?? "")).toBe(true);
+		} finally {
+			await db.delete(crawlRun).where(eq(crawlRun.id, running?.id ?? ""));
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("운영자가 아니면 호출할 수 없다", async () => {
+		const fixture = await createFixture();
+		const [run] = await db
+			.insert(crawlRun)
+			.values({
+				contentType: "job_post",
+				finishedAt: new Date(),
+				sourceSite: "queenalba",
+				status: "success",
+			})
+			.returning({ id: crawlRun.id });
+
+		try {
+			await expect(clearRunsAs(fixture.memberUserId)({})).rejects.toBeTruthy();
+			expect(await runExists(run?.id ?? "")).toBe(true);
+		} finally {
+			await db.delete(crawlRun).where(eq(crawlRun.id, run?.id ?? ""));
 			await cleanupFixture(fixture);
 		}
 	});

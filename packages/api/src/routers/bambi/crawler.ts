@@ -8,7 +8,7 @@ import {
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, count, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure } from "../../index";
@@ -389,6 +389,25 @@ export const crawlerRouter = {
 			.orderBy(desc(crawlRun.startedAt))
 			.limit(RECENT_RUN_LIMIT)
 	),
+
+	// 회차 기록 비우기. 파손 신호를 읽고 나면 실패·중단 기록이 계속 쌓여 최근 20건이 옛 사고로
+	// 채워지므로, 훑고 나서 지울 수단이 필요하다. 여기서는 톰스톤을 세우지 않고 정말 지운다 —
+	// crawl_run을 참조하는 FK가 없고(수집 공고·커뮤니티 글은 회차 id를 들고 있지 않다),
+	// 재수집이 되살릴 원본도 없는 순수 운영 로그다.
+	//
+	// 단, 진행 중(running) 회차는 남긴다. 두 가지 이유가 다 치명적이다:
+	// 1) runCrawlTick이 회차를 열어 id를 들고 있다가 끝날 때 그 id로 UPDATE하므로
+	//    (bambi-crawl-ingest.ts), 지우면 그 UPDATE가 0행이 되어 수율이 어디에도 남지 않는다.
+	// 2) 사이트당 진행 중 회차를 하나로 묶는 건 status='running' 부분 유니크 인덱스인데,
+	//    그 행을 지우면 잠금이 풀려 같은 목록을 두 번 긁는 회차가 열린다.
+	clearRuns: adminProcedure.handler(async () => {
+		const removed = await db
+			.delete(crawlRun)
+			.where(ne(crawlRun.status, "running"))
+			.returning({ id: crawlRun.id });
+
+		return { removed: removed.length };
+	}),
 
 	// 상태별 건수. 운영자 화면 상단 요약과 needs_review 잔량 확인에 쓴다.
 	getSummary: adminProcedure.handler(async () => {
