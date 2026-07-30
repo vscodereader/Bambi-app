@@ -5,6 +5,7 @@ import z from "zod";
 
 import { adminProcedure, publicProcedure } from "../../index";
 import { DEFAULT_AD_ROTATION_MINUTES } from "../../services/bambi-ad-exposure";
+import { DEFAULT_CRAWLED_LIMITS } from "../../services/bambi-crawled-limits";
 import { DEFAULT_WITHDRAWAL_RETENTION_DAYS } from "../../services/bambi-policy";
 
 // 단일 행(설정) 고정 키. 조회·수정 모두 이 행 하나만 다룬다.
@@ -170,6 +171,7 @@ const updateCrawledExposureInput = z.object({
 // 섹션별 수집 노출 상한. null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS)으로 복귀한다.
 const CRAWLED_LIMIT_COLUMNS = {
 	crawledAdBannerLimit: bambiSiteSettings.crawledAdBannerLimit,
+	crawledCommunityLimit: bambiSiteSettings.crawledCommunityLimit,
 	crawledRecommendedLimit: bambiSiteSettings.crawledRecommendedLimit,
 	crawledSpecialLimit: bambiSiteSettings.crawledSpecialLimit,
 	crawledUrgentLimit: bambiSiteSettings.crawledUrgentLimit,
@@ -185,8 +187,24 @@ const crawledLimit = z
 	.max(CRAWLED_LIMIT_MAX, "노출 개수는 60 이하로 입력해 주세요.")
 	.nullable();
 
+// 커뮤니티는 노출 자리가 아니라 한 회차에 목록에서 담을 글 수라 눈금이 다르다.
+//  - 상한은 목록 페이지 수가 정하는 실효 천장(5페이지 × 30건 = 150)이다. 그보다 큰 값을 받으면
+//    "올렸는데 안 늘어난다"가 되므로 아예 막는다 — 더 늘리려면 COMMUNITY_LIST_PAGES를 올린다.
+//  - 0은 받지 않는다. 수집을 멈추는 건 crawlEnabled·crawledCommunityFeedEnabled가 할 일이고,
+//    여기에 0이 들어오면 목록 0건이 셀렉터 파손으로 읽혀 회차가 aborted_low_yield로 남는다.
+const CRAWLED_COMMUNITY_LIMIT_MAX = DEFAULT_CRAWLED_LIMITS.community;
+
 const updateCrawledLimitsInput = z.object({
 	adBannerLimit: crawledLimit,
+	communityLimit: z
+		.number()
+		.int("수집 개수는 정수로 입력해 주세요.")
+		.min(1, "수집 개수는 1 이상으로 입력해 주세요.")
+		.max(
+			CRAWLED_COMMUNITY_LIMIT_MAX,
+			`수집 개수는 ${CRAWLED_COMMUNITY_LIMIT_MAX} 이하로 입력해 주세요.`
+		)
+		.nullable(),
 	recommendedLimit: crawledLimit,
 	specialLimit: crawledLimit,
 	urgentLimit: crawledLimit,
@@ -198,6 +216,7 @@ const toCrawledLimitValues = (
 	input: z.infer<typeof updateCrawledLimitsInput>
 ) => ({
 	crawledAdBannerLimit: input.adBannerLimit,
+	crawledCommunityLimit: input.communityLimit,
 	crawledRecommendedLimit: input.recommendedLimit,
 	crawledSpecialLimit: input.specialLimit,
 	crawledUrgentLimit: input.urgentLimit,
@@ -205,11 +224,13 @@ const toCrawledLimitValues = (
 
 const toCrawledLimitsOutput = (row: {
 	crawledAdBannerLimit: number | null;
+	crawledCommunityLimit: number | null;
 	crawledRecommendedLimit: number | null;
 	crawledSpecialLimit: number | null;
 	crawledUrgentLimit: number | null;
 }) => ({
 	adBannerLimit: row.crawledAdBannerLimit,
+	communityLimit: row.crawledCommunityLimit,
 	recommendedLimit: row.crawledRecommendedLimit,
 	specialLimit: row.crawledSpecialLimit,
 	urgentLimit: row.crawledUrgentLimit,
@@ -415,7 +436,8 @@ export const siteSettingsRouter = {
 			return saved ?? values;
 		}),
 
-	// 섹션별 수집 노출 상한 조회. 노출 스위치와 같은 이유로 운영자 전용이다.
+	// 수집 상한(공고 섹션별 노출 + 커뮤니티 회차당 수집) 조회. 노출 스위치와 같은 이유로
+	// 운영자 전용이다.
 	// null은 미설정(코드 기본값 사용)이며, 운영자 폼이 placeholder로 기본값을 안내한다.
 	getCrawledLimits: adminProcedure.handler(async () => {
 		const [row] = await db
@@ -427,6 +449,7 @@ export const siteSettingsRouter = {
 		return toCrawledLimitsOutput(
 			row ?? {
 				crawledAdBannerLimit: null,
+				crawledCommunityLimit: null,
 				crawledRecommendedLimit: null,
 				crawledSpecialLimit: null,
 				crawledUrgentLimit: null,
@@ -434,7 +457,7 @@ export const siteSettingsRouter = {
 		);
 	}),
 
-	// 네 값을 한 번에 저장한다 — 섹션 간 균형을 보고 함께 조정하는 값이라 개별 저장이 의미가 없다.
+	// 다섯 값을 한 번에 저장한다 — 섹션 간 균형을 보고 함께 조정하는 값이라 개별 저장이 의미가 없다.
 	updateCrawledLimits: adminProcedure
 		.input(updateCrawledLimitsInput)
 		.handler(async ({ input }) => {

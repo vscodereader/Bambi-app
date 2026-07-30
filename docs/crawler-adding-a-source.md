@@ -161,7 +161,10 @@ export const IMPLEMENTED_CRAWL_TARGETS: readonly CrawlTarget[] = [
   있어 지우지 않는다. 상세는 **본문이 비어 있는 글만** 받는다(게시글 본문은 사실상 안 바뀌는데
   매 회차 150건을 다시 받으면 상대 서버를 이유 없이 두드린다).
 - **범위**: `COMMUNITY_LIST_PAGES`(현재 5) 페이지까지만 훑는다. 페이지당 30건이고, 보려는 건
-  지금 반응을 얻는 주제라 과거 글을 매 회차 다시 긁을 이유가 없다.
+  지금 반응을 얻는 주제라 과거 글을 매 회차 다시 긁을 이유가 없다. 그 위에 운영자 상한이 있다 —
+  `bambi_site_settings.crawled_community_limit`(미설정이면 `DEFAULT_CRAWLED_LIMITS.community`
+  = 5페이지 × 30건 = 150). `collectCommunityTopics`가 최신순 앞에서 그 개수만큼만 담고, 채우면
+  남은 페이지를 받지 않는다. 상한 밖으로 밀려난 기존 행은 지우지 않는다(만료 처리가 없다).
 - **등록**: 위 ④에 조합 한 줄.
 
 ### 퀸알바 게시판에서 실제로 마주친 것

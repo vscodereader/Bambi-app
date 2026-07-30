@@ -965,6 +965,10 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	crawledSpecialLimit: integer("crawled_special_limit"),
 	crawledUrgentLimit: integer("crawled_urgent_limit"),
 	crawledRecommendedLimit: integer("crawled_recommended_limit"),
+	// 한 회차에 게시판 목록에서 모을 커뮤니티 글 수 상한. 위 네 값이 "노출 자리 개수"라면 이건
+	// "수집 규모"다 — 최신순 앞에서 이 개수만큼만 담고, 채우면 남은 목록 페이지를 받지 않는다.
+	// 같은 이유로 null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS.community)으로 폴백한다.
+	crawledCommunityLimit: integer("crawled_community_limit"),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())
