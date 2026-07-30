@@ -225,10 +225,16 @@ export const jobPostSource = pgEnum("job_post_source", [
 
 // 수집 공고의 생애. needs_review는 원본 업종이 우리 8종 enum에 매핑되지 않아 운영자가
 // 손으로 이어줘야 하는 상태다(매핑 실패를 버리지 않고 남긴다).
+//
+// removed는 운영자가 내린 공고다. 행을 실제로 지우지 않는 이유는 원본 사이트에 글이 살아
+// 있는 한 다음 회차 upsert가 같은 (사이트, 원본ID)로 행을 되살리기 때문이다 — 삭제는
+// 재수집을 견디는 톰스톤이어야 한다. 그래서 이 값은 upsert·만료 스윕이 절대 덮지 않는다
+// (bambi-crawl-ingest.ts).
 export const crawledPostStatus = pgEnum("crawled_post_status", [
 	"active",
 	"needs_review",
 	"expired",
+	"removed",
 ]);
 
 // 수집 회차 결과. aborted_low_yield는 파싱 성공률이 임계치 아래여서 아무것도 커밋하지 않고
@@ -511,6 +517,11 @@ export const crawledCommunityTopic = pgTable(
 		// 0개. 이 구분이 없으면 "댓글 없는 글"과 "아직 안 받은 글"이 뭉개져 매 회차 다시 받는다.
 		comments: jsonb("comments").$type<CrawledCommunityCommentRecord[]>(),
 		sourcePostedAt: timestamp("source_posted_at"),
+		// 운영자가 이 글을 내린 시각. null이면 노출 중이다. 공고와 달리 상태 enum이 없어
+		// 컬럼 하나로 톰스톤을 세운다 — 행을 지우면 원본이 살아 있는 한 다음 회차 upsert가
+		// 같은 (사이트, 원본ID)로 되살린다. 목록 패스의 upsert set 목록에 이 칸이 없으므로
+		// 재수집이 자연히 값을 유지한다(bambi-crawl-ingest.ts runCommunityPass).
+		removedAt: timestamp("removed_at"),
 		firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
 		lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
 	},

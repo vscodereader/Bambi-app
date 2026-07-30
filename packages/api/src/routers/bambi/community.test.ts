@@ -2351,6 +2351,57 @@ describe("bambi community router — 수집 글 union·상세", () => {
 		}
 	});
 
+	// 운영자가 내린 글은 목록에서만 빠져선 안 된다 — 상세가 열리면 링크를 아는 사람에게는
+	// 계속 보여 "삭제"가 아니라 "숨김"이 된다. 총 건수에도 세지 않아야 마지막 페이지가 비지 않는다.
+	it("운영자가 내린 수집 글은 목록·총건수·상세에서 모두 빠진다", async () => {
+		const fixture = await createCommunityFixture();
+		const previousFeed = await readCommunityFeedEnabled();
+		let topicId: string | undefined;
+		try {
+			await setCommunityFeedEnabled(true);
+			topicId = await insertCrawledTopic();
+
+			const listPosts = clientFor(
+				communityRouter.listPosts,
+				fixture.femaleUserId,
+				["listPosts"]
+			);
+			const before = await listPosts({ board: "work_talk", page: 1 });
+			expect(
+				before.items.some((item: { id: string }) => item.id === topicId)
+			).toBe(true);
+
+			await db
+				.update(crawledCommunityTopic)
+				.set({ removedAt: new Date() })
+				.where(eq(crawledCommunityTopic.id, topicId));
+
+			const after = await listPosts({ board: "work_talk", page: 1 });
+			expect(
+				after.items.some((item: { id: string }) => item.id === topicId)
+			).toBe(false);
+			expect(after.totalCount).toBe(before.totalCount - 1);
+
+			const getCrawledTopic = clientFor(
+				communityRouter.getCrawledTopic,
+				fixture.femaleUserId,
+				["getCrawledTopic"]
+			);
+			await expectOrpcCode(
+				getCrawledTopic({ topicId: topicId as string }),
+				"NOT_FOUND"
+			);
+		} finally {
+			if (topicId) {
+				await db
+					.delete(crawledCommunityTopic)
+					.where(eq(crawledCommunityTopic.id, topicId));
+			}
+			await setCommunityFeedEnabled(previousFeed);
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
 	it("광고·업소 필터가 켜지면 수집 글은 섞이지 않는다", async () => {
 		const fixture = await createCommunityFixture();
 		const previousFeed = await readCommunityFeedEnabled();

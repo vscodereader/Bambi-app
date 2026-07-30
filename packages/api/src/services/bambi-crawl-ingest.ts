@@ -3,6 +3,7 @@ import {
 	bambiSiteSettings,
 	crawledCommunityTopic,
 	crawledJobPost,
+	type crawledPostStatus,
 	crawlRun,
 } from "@bambi-app/db/schema/bambi";
 import { env } from "@bambi-app/env/server";
@@ -411,6 +412,8 @@ interface ExistingRow {
 	detailFetchedAt: Date | null;
 	id: string;
 	sourceExternalId: string;
+	// 상세 재수집 대상에서 removed를 빼기 위해서만 읽는다(selectDetailTargets).
+	status: (typeof crawledPostStatus.enumValues)[number];
 }
 
 // 상세 한 건의 처리 결과. 이 구분이 있어야 "바뀐 게 없어서 건너뜀"과 "파싱에 실패함"을
@@ -479,6 +482,11 @@ const markSeen = async (
 };
 
 // 원본 목록에서 오래 안 보인 공고를 만료시킨다. 수율이 신뢰할 만한 회차에서만 호출해야 한다.
+//
+// 대상이 active·needs_review로 한정된 것은 removed(운영자가 내린 공고)를 지키기 위한
+// 장치이기도 하다. removed를 expired로 덮으면 재수집 upsert의 CASE가 "이 행은 removed였다"를
+// 알아볼 수 없어 원본에 글이 다시 뜨는 순간 active로 부활한다 — 삭제가 톰스톤인 이유가
+// 여기서 무너진다. 조건을 넓힐 때 removed를 함께 넣지 말 것.
 const expireStale = (site: CrawlSourceSite, now: Date) =>
 	db
 		.update(crawledJobPost)
@@ -700,7 +708,12 @@ const ingestDetail = async (
 				industryCategory: sql`coalesce(excluded.industry_category, ${crawledJobPost.industryCategory})`,
 				// 업종이 (파서든 운영자든) 있으면 노출, 없으면 검토 대기. expired였던 공고가
 				// 원본에 다시 뜨면 살아나는 것은 의도된 동작이다.
-				status: sql`case when coalesce(excluded.industry_category, ${crawledJobPost.industryCategory}) is null then 'needs_review'::crawled_post_status else 'active'::crawled_post_status end`,
+				//
+				// removed 판정이 맨 앞에 오는 이유: 운영자가 내린 공고는 원본에 글이 살아 있어
+				// 매 회차 이 upsert를 다시 지난다. 업종 분기가 먼저 걸리면 그때마다 active로
+				// 부활해 "삭제 버튼이 하루도 못 버티는" 상태가 된다. 복구는 운영자만 한다
+				// (crawler.restorePost).
+				status: sql`case when ${crawledJobPost.status} = 'removed' then 'removed'::crawled_post_status when coalesce(excluded.industry_category, ${crawledJobPost.industryCategory}) is null then 'needs_review'::crawled_post_status else 'active'::crawled_post_status end`,
 			},
 			target: [crawledJobPost.sourceSite, crawledJobPost.sourceExternalId],
 		});
@@ -772,6 +785,7 @@ const loadExisting = async (
 			detailFetchedAt: crawledJobPost.detailFetchedAt,
 			id: crawledJobPost.id,
 			sourceExternalId: crawledJobPost.sourceExternalId,
+			status: crawledJobPost.status,
 		})
 		.from(crawledJobPost)
 		.where(eq(crawledJobPost.sourceSite, site));
@@ -779,7 +793,10 @@ const loadExisting = async (
 	return new Map(rows.map((row) => [row.sourceExternalId, row]));
 };
 
-// 상세를 다시 받을 대상: 처음 보는 공고와, 상세가 낡은 공고.
+// 상세를 다시 받을 대상: 처음 보는 공고와, 상세가 낡은 공고. removed는 제외한다 —
+// 운영자가 내린 공고는 원본에 살아 있어 매 회차 목록에 계속 실리는데, 상세를 다시 받아도
+// upsert가 removed를 유지하므로 요청 한 번(간격 1.5초)과 회차당 상한 300칸을 아무 소득 없이
+// 쓴다. 복구되면 detailFetchedAt이 이미 낡아 있어 다음 회차가 자연히 다시 받는다.
 //
 // 고른 대상을 미수집(detailFetchedAt null) 먼저, 그다음 오래된 순으로 정렬해 돌려준다.
 // 목록은 681건인데 회차당 상한은 300(MAX_DETAIL_FETCHES_PER_RUN, 상대 서버 부하 정책)이라,
@@ -795,6 +812,10 @@ export const selectDetailTargets = (
 
 	const targets = items.filter((item) => {
 		const row = existingByExternalId.get(item.sourceExternalId);
+
+		if (row?.status === "removed") {
+			return false;
+		}
 
 		return !row?.detailFetchedAt || row.detailFetchedAt < cutoff;
 	});
@@ -927,6 +948,8 @@ const runCommunityPass = async (
 			body: crawledCommunityTopic.body,
 			// 백필 판정(아래 pending)이 null(미수집)과 [](수집 0개)를 구분해야 해서 함께 읽는다.
 			comments: crawledCommunityTopic.comments,
+			// 운영자가 내린 글을 상세 백필 대상에서 빼기 위해 읽는다(아래 pending).
+			removedAt: crawledCommunityTopic.removedAt,
 			sourceExternalId: crawledCommunityTopic.sourceExternalId,
 		})
 		.from(crawledCommunityTopic)
@@ -936,6 +959,10 @@ const runCommunityPass = async (
 	for (const topic of topics) {
 		// 목록이 실제로 아는 값만 갱신한다. viewCount·body는 상세에서만 나오므로 여기 넣으면
 		// 매 회차 null로 되돌린다(insert 시에만 null로 들어가고, 이후 상세 패스가 채운다).
+		//
+		// removedAt이 이 목록에 없는 것도 같은 규약의 결과이자 삭제가 버티는 근거다 — 원본에
+		// 글이 살아 있어 매 회차 이 upsert를 다시 지나지만 set 목록에 없는 칸은 건드리지
+		// 않으므로 운영자가 찍은 시각이 그대로 남는다. 여기에 removedAt을 넣지 말 것.
 		const listValues = {
 			boardName: topic.boardName,
 			commentCount: topic.commentCount,
@@ -966,8 +993,15 @@ const runCommunityPass = async (
 	// 150건을 다시 받으면 상대 서버를 이유 없이 두드린다. comments가 null인 조건이 붙은 건
 	// 이 기능 배포 전에 저장된 행(comments 컬럼 null)을 한 차례 자연 백필하기 위해서다 — 상세를
 	// 한 번 받으면 comments가 [](0개)든 목록이든 null을 벗어나 이후 정상(fetch-once)으로 복귀한다.
+	//
+	// 운영자가 내린 글은 대상에서 아예 뺀다 — 어디에도 노출되지 않는 글의 본문·댓글을 받으려고
+	// 상대 서버를 두드릴 이유가 없다(복구하면 다음 회차가 이어서 받는다).
 	const pending = topics.filter((topic) => {
 		const row = known.get(topic.sourceExternalId);
+
+		if (row?.removedAt) {
+			return false;
+		}
 
 		return !row?.body || row.comments === null;
 	});
