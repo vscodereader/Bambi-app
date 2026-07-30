@@ -81,7 +81,7 @@
   `crawled_ad_banner_limit` / `crawled_special_limit` / `crawled_urgent_limit` / `crawled_recommended_limit`.
 - 코드 폴백 `DEFAULT_CRAWLED_LIMITS = { adBanner: 8, recommended: 12, special: 12, urgent: 12 }` — 새 서비스 파일 `packages/api/src/services/bambi-crawled-limits.ts`의 `readCrawledLimits()`가 null을 폴백으로 치환해 돌려준다.
 - 적용 지점 두 곳:
-  1. **수집 시** (`collectQueenalbaMainListings`): 배너는 리다이렉터 해석 **전에** 상한만큼만 자른다(요청 절약, 가로 먼저·세로 나중 DOM 순서). 섹션 라벨은 타입별 상한 초과분의 라벨을 떼어 일반 카드로 취급.
+  1. **수집 시** (`collectQueenalbaMainListings`): 배너는 리다이렉터 해석 **전에** 상한만큼만 자르되 **방향별로 각각** 적용한다(실물이 가로 6·세로 7이라 총량 상한을 DOM 순서로 자르면 세로가 굶는다 — 구현 중 실측으로 확인해 방향별로 전환). 섹션 라벨은 타입별 상한 초과분의 라벨을 떼어 일반 카드로 취급.
   2. **조회 시** (`jobs.list` 섹션 쿼리·`loadCrawledAdBannerPools`): LIMIT에 같은 값 적용(과거 회차의 초과 라벨 방어).
 - site-settings 라우터에 `getCrawledLimits`(admin, 무입력) / `updateCrawledLimits`(admin, `{ adBannerLimit: int 0–60 | null, specialLimit: …, urgentLimit: …, recommendedLimit: … }`) 추가 — `CRAWLED_EXPOSURE_COLUMNS`와 같은 컬럼 그룹 패턴.
 

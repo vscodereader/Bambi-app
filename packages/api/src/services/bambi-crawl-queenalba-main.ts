@@ -27,15 +27,15 @@ export const queenalbaMainUrl = (): string => `${QUEENALBA_ORIGIN}/`;
 
 export const QUEENALBA_LISTING_TYPES = [
 	"ad_banner",
-	"premium",
 	"special",
 	"urgent",
 	"recommended",
 ] as const;
 
-// 유료 노출 자리. 실물 메인의 섹션 제목 이미지 alt에서 확인한 네 섹션 + 배너다.
-// ad_banner=광고 배너, premium=프리미엄 채용정보, special=스페셜 채용정보,
-// urgent=급구채용, recommended=추천채용.
+// 유료 노출 자리. 값은 원본 사이트의 섹션 이름이 아니라 **우리 서비스의 자리 어휘**다 —
+// 조회부(jobs.list)가 이 값을 그대로 섹션 키로 쓰기 때문에 여기서 이미 번역해 둔다.
+// ad_banner=프리미엄 광고 배너, recommended=추천 채용(원본 스페셜채용 12칸),
+// urgent=급구 채용(원본 프리미엄채용 40칸), special=스페셜 채용(원본 우대등록 72칸).
 // 이 문자열이 crawled_job_post.listing_type에 그대로 들어간다. null은 "유료 자리가 아님"
 // (메인에 실렸지만 일반 채용 카드)이라는 뜻이다.
 export type QueenalbaListingType = (typeof QUEENALBA_LISTING_TYPES)[number];
@@ -65,8 +65,11 @@ export const readQueenalbaBannerTargetId = (html: string): string | null =>
 // 그래서 안 깨지는 부분(ID·이미지 경로·제목 alt)만 앵커로 쓴다.
 // ---------------------------------------------------------------------------
 
-// 메인 상단 가로형 배너 영역.
-const HORIZONTAL_BANNER_SELECTOR = "#main_top_center";
+// 가로형 배너 영역. 기준 컨테이너는 #main_center 하나다(실측 6칸).
+// 예전에 긁던 #main_top_center(3칸)와 #main_left·#main_left2(각 2칸)는 기준 밖이라
+// 수집하지 않는다 — 우리 화면의 프리미엄 배너 자리는 상대가 "제일 비싸게 파는 칸"에서
+// 온 공고만 올려야 값어치가 같다. 컨테이너를 늘리려면 이 상수만 고친다.
+const HORIZONTAL_BANNER_SELECTOR = "#main_center";
 
 // 좌·우 세로형 배너 영역. 둘 다 훑는다(한쪽만 보면 반대편 배너를 통째로 놓친다).
 // 실물에서 좌 3칸·우 4칸이었다 — 칸 수 상한은 두지 않는다. 상한을 두면 칸이 늘어난 날
@@ -81,17 +84,23 @@ const JOB_CARD_SELECTOR = "#content1";
 // 같은 컨테이너에 회원가입·TOP 버튼(img/right_btn_*.png)이 섞여 있어 경로로 걸러야 한다.
 const BANNER_IMAGE_PATH_PATTERN = /^\/mobile_img\/banner\//i;
 
-// 섹션 제목 → 유료 자리. 이 사이트의 섹션 제목은 텍스트가 아니라 이미지이고, 사람이 읽을
+// 섹션 제목 → 우리 자리. 이 사이트의 섹션 제목은 텍스트가 아니라 이미지이고, 사람이 읽을
 // 이름은 alt에만 있다. 파일명(title_premium_use1.gif 등)보다 alt가 뜻을 담고 있어 이쪽을 쓴다.
-// 순서가 우선순위다 — 한 공고가 두 섹션에 걸리면 앞쪽이 이긴다.
+//
+// 순서가 우선순위다 — 한 공고가 두 섹션에 걸리면 앞쪽이 이긴다. 원본에서 칸이 희소할수록
+// (=비쌀수록) 이기게 놓았다: 스페셜 12칸 < 프리미엄 40칸 < 우대등록 72칸.
+//
+// alt에 `채용`을 함께 요구하는 이유: 같은 페이지에 구직자 섹션 "스페셜인재정보"가 있고,
+// 카드 alt에도 "최고우대" 같은 글자가 흔히 섞인다. 제목 이미지만 걸리게 좁힌다.
+// 퀸알바 자체 급구채용·추천채용 섹션은 여기 없다 — 우리 자리에 대응이 없어 라벨을 붙이지
+// 않는다(일반 카드로 수집된다).
 const SECTION_TITLES: readonly {
 	label: RegExp;
 	listingType: QueenalbaListingType;
 }[] = [
-	{ label: /프리미엄/, listingType: "premium" },
-	{ label: /스페셜/, listingType: "special" },
-	{ label: /급구/, listingType: "urgent" },
-	{ label: /추천/, listingType: "recommended" },
+	{ label: /스페셜\s*채용/, listingType: "recommended" },
+	{ label: /프리미엄\s*채용/, listingType: "urgent" },
+	{ label: /우대.*채용/, listingType: "special" },
 ];
 
 export interface QueenalbaMainListing {
@@ -164,22 +173,17 @@ const readTitle = ($link: Cheerio): string | null => {
 		: readImageAlt($link.find("img").first());
 };
 
-// 섹션 제목 이미지가 덮는 카드 범위. 제목 이미지에서 조상을 올라가 **상세 링크를 처음 품는
-// 조상**이 그 섹션이다(실물에서 프리미엄=table 40건, 스페셜=table 36건, 급구=td 9건,
-// 추천=td 16건으로 정확히 갈린다). 앞 형제의 글자를 훑던 예전 방식은 제목이 이미지라
-// 한 건도 못 잡았다.
-const readSectionScope = (titleImage: Cheerio): Cheerio | null => {
-	for (
-		let $node = titleImage.parent();
-		$node.length > 0 && !$node.is("body");
-		$node = $node.parent()
-	) {
-		if ($node.find(QUEENALBA_DETAIL_LINK_SELECTOR).length > 0) {
-			return $node;
-		}
-	}
+// 섹션 하나의 경계. 실물 메인은 섹션마다 #content1의 직계 자식 div를 하나씩 쓴다.
+//
+// "상세 링크를 처음 품는 조상"을 쓰던 예전 방식은 스코프가 섹션 밖으로 넘쳤다 — 그 조상이
+// 여러 섹션을 함께 감싼 table이면 옆 섹션 공고까지 같은 라벨을 받는다(실측 우대 72건인데
+// table 조상은 310행이었다). 직계 자식 div로 못 박으면 광고 칸이 늘고 줄어도 안 깨진다.
+const SECTION_SCOPE_SELECTOR = `${JOB_CARD_SELECTOR} > div`;
 
-	return null;
+const readSectionScope = (titleImage: Cheerio): Cheerio | null => {
+	const $scope = titleImage.closest(SECTION_SCOPE_SELECTOR);
+
+	return $scope.length > 0 ? $scope : null;
 };
 
 // 공고 번호 → 유료 자리. 섹션을 우선순위 순으로 훑어 먼저 담긴 값이 이긴다.

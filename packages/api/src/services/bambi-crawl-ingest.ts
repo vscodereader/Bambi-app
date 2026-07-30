@@ -6,7 +6,16 @@ import {
 	crawlRun,
 } from "@bambi-app/db/schema/bambi";
 import { env } from "@bambi-app/env/server";
-import { and, eq, inArray, lt, or } from "drizzle-orm";
+import {
+	and,
+	eq,
+	inArray,
+	isNotNull,
+	lt,
+	notInArray,
+	or,
+	sql,
+} from "drizzle-orm";
 
 import {
 	type CrawlClient,
@@ -58,10 +67,12 @@ import {
 	attachResolvedBanners,
 	parseQueenalbaMain,
 	type QueenalbaMainBanner,
+	type QueenalbaMainListing,
 	queenalbaBannerLinkUrl,
 	queenalbaMainUrl,
 	readQueenalbaBannerTargetId,
 } from "./bambi-crawl-queenalba-main";
+import { type CrawledLimits, readCrawledLimits } from "./bambi-crawled-limits";
 
 // 목록에서 수집기가 쓰는 최소 규약. 사이트별 목록 파서가 더 많은 필드를 채워도 상관없다 —
 // 상세 패스가 ID 하나만 필요로 하기 때문에 이 경계 덕분에 파서를 추가해도 수집기가 안 바뀐다.
@@ -219,6 +230,49 @@ const resolveQueenalbaBanners = async (
 	return resolved;
 };
 
+// 배너 상한은 **방향별 최대**다 — limits.adBanner가 8이면 "가로 8칸 + 세로 8칸"이다.
+// 방향마다 우리 화면의 링이 따로 돌기 때문에(bambi-ad-exposure의 가로 링 5칸 · 세로 링 3칸)
+// 한쪽이 상한을 다 먹으면 다른 쪽 링이 굶는다. banners는 DOM 순서(가로 먼저·세로 나중)라
+// 전체에 한 번 자르면 실제로 그 일이 벌어졌다: 가로 실물 6칸이 기본값 8의 앞자리를 차지하고
+// 세로에 2칸만 남았다. 방향 안에서는 DOM 순서를 지켜 앞 칸(원본이 더 위에 둔 칸)이 남는다.
+const capBannersByDirection = (
+	banners: readonly QueenalbaMainBanner[],
+	limit: number
+): QueenalbaMainBanner[] => [
+	...banners
+		.filter((banner) => banner.direction === "horizontal")
+		.slice(0, limit),
+	...banners
+		.filter((banner) => banner.direction === "vertical")
+		.slice(0, limit),
+];
+
+// 타입별 상한을 넘는 섹션 라벨을 떼어 일반 카드로 만든다. 등장 순서가 곧 원본의 노출
+// 순서라 앞쪽이 남는다. ad_banner는 위 capBannersByDirection이 이미 상한을 지킨다.
+//
+// 조회부에도 같은 상한이 걸려 있지만(이중 방어) 여기서 떼어야 과거 회차가 남긴 초과 라벨이
+// 다음 회차에 스스로 정리된다.
+const capSectionLabels = (
+	listings: readonly QueenalbaMainListing[],
+	limits: CrawledLimits
+): QueenalbaMainListing[] => {
+	const used = new Map<string, number>();
+
+	return listings.map((listing) => {
+		const type = listing.listingType;
+
+		if (!type || type === "ad_banner") {
+			return listing;
+		}
+
+		const count = (used.get(type) ?? 0) + 1;
+
+		used.set(type, count);
+
+		return count <= limits[type] ? listing : { ...listing, listingType: null };
+	});
+};
+
 const collectQueenalbaMainListings = async (
 	client: CrawlClient
 ): Promise<CrawlListItem[]> => {
@@ -234,6 +288,7 @@ const collectQueenalbaMainListings = async (
 
 	assertNotGated("queenalba", html);
 
+	const limits = await readCrawledLimits();
 	const { banners, listings, skippedBanners } = parseQueenalbaMain(html);
 
 	// 리다이렉터 링크가 아닌 배너(외부·이벤트)는 공고에 매칭할 수 없어 건너뛴다. 정상이지만
@@ -244,9 +299,18 @@ const collectQueenalbaMainListings = async (
 		);
 	}
 
-	return attachResolvedBanners(
-		listings,
-		await resolveQueenalbaBanners(client, banners)
+	// 상한을 리다이렉터 해석 **전에** 자른다 — 배너 한 칸이 요청 한 번이라, 어차피 화면에
+	// 못 오를 초과분을 해석하면 상대 서버를 이유 없이 두드린다. 자르는 단위는 방향별이다
+	// (capBannersByDirection 주석 참고).
+	return capSectionLabels(
+		attachResolvedBanners(
+			listings,
+			await resolveQueenalbaBanners(
+				client,
+				capBannersByDirection(banners, limits.adBanner)
+			)
+		),
+		limits
 	).map((listing) => ({
 		bannerHorizontalUrl: listing.bannerHorizontalUrl,
 		bannerVerticalUrl: listing.bannerVerticalUrl,
@@ -435,6 +499,9 @@ const expireStale = (site: CrawlSourceSite, now: Date) =>
 
 interface ListPass {
 	items: CrawlListItem[];
+	// 메인페이지(유료 노출 자리)에서 본 항목. 낡은 라벨 리셋의 기준이 되므로 일반 목록과
+	// 섞지 않고 따로 돌려준다 — 메인에 없는 공고가 일반 목록에는 그대로 있기 때문이다.
+	mainItems: CrawlListItem[];
 	pagesFetched: number;
 }
 
@@ -457,10 +524,8 @@ const collectListItems = async (
 	);
 	// 유료 노출을 먼저 담는다. 아래 중복 제거가 첫 항목을 남기므로, 같은 공고가 일반
 	// 목록에도 실려 있어도 listing_type·배너 이미지가 붙은 쪽이 살아남는다.
-	const items = [
-		...((await adapter.collectExtraListItems?.(client)) ?? []),
-		...adapter.parseList(firstPage),
-	];
+	const mainItems = (await adapter.collectExtraListItems?.(client)) ?? [];
+	const items = [...mainItems, ...adapter.parseList(firstPage)];
 	let pagesFetched = 1;
 
 	for (let page = 2; page <= pageCount; page += 1) {
@@ -480,7 +545,40 @@ const collectListItems = async (
 		}
 	}
 
-	return { items: [...byExternalId.values()], pagesFetched };
+	return { items: [...byExternalId.values()], mainItems, pagesFetched };
+};
+
+// 메인에서 내려간 광고의 라벨·배너를 떼어 우리 화면에서도 함께 내린다. 상대가 돈 받는 기간이
+// 끝난 자리를 우리가 계속 밀어주면 그건 이미 시장 신호가 아니다.
+//
+// 메인 파싱이 0건이면 건너뛴다 — 게이트 만료·셀렉터 파손으로 0건이 온 회차에 리셋을 돌리면
+// 라벨이 통째로 날아가고, 다음 회차가 배너 이미지를 다시 받기 전까지 광고 자리가 빈다.
+// 메인페이지가 없는 사이트(여우알바)는 mainItems가 항상 비어 자연히 건너뛴다.
+const resetStaleListingLabels = async (
+	site: CrawlSourceSite,
+	mainItems: readonly CrawlListItem[]
+): Promise<void> => {
+	if (mainItems.length === 0) {
+		return;
+	}
+
+	await db
+		.update(crawledJobPost)
+		.set({
+			bannerHorizontalUrl: null,
+			bannerVerticalUrl: null,
+			listingType: null,
+		})
+		.where(
+			and(
+				eq(crawledJobPost.sourceSite, site),
+				isNotNull(crawledJobPost.listingType),
+				notInArray(
+					crawledJobPost.sourceExternalId,
+					mainItems.map((item) => item.sourceExternalId)
+				)
+			)
+		);
 };
 
 const ingestDetail = async (
@@ -589,7 +687,16 @@ const ingestDetail = async (
 		.insert(crawledJobPost)
 		.values(values)
 		.onConflictDoUpdate({
-			set: values,
+			set: {
+				...values,
+				// 파서의 업종 매핑은 대부분 실패한다(원본 업종 표기가 우리 8종과 안 맞는다).
+				// 그 null로 통째로 덮어쓰면 운영자가 손으로 지정해 둔 업종이 다음 회차에
+				// 지워지고 공고가 다시 검토 대기로 떨어졌다 — 이 두 줄이 그 버그 수정이다.
+				industryCategory: sql`coalesce(excluded.industry_category, ${crawledJobPost.industryCategory})`,
+				// 업종이 (파서든 운영자든) 있으면 노출, 없으면 검토 대기. expired였던 공고가
+				// 원본에 다시 뜨면 살아나는 것은 의도된 동작이다.
+				status: sql`case when coalesce(excluded.industry_category, ${crawledJobPost.industryCategory}) is null then 'needs_review'::crawled_post_status else 'active'::crawled_post_status end`,
+			},
 			target: [crawledJobPost.sourceSite, crawledJobPost.sourceExternalId],
 		});
 
@@ -1060,6 +1167,7 @@ export const runCrawlTick = async (
 				now
 			);
 			await expireStale(site, now);
+			await resetStaleListingLabels(site, listPass.mainItems);
 		}
 
 		await db
