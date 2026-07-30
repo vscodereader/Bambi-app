@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Megaphone } from "lucide-react";
@@ -170,15 +171,27 @@ export function AdBanner({ className, item }: AdBannerProps) {
 
 interface AdBannerRailProps {
 	className?: string;
+	// 로딩 중이면 슬롯을 스켈레톤으로 채운다 — 광고 있는 칸도 응답 대기 동안 문의 배너가
+	// 번쩍이는 걸 막는다(로딩 vs "광고 없음" 구분은 useAdBannerJobs.isLoading).
+	isLoading?: boolean;
 	items: (AdBannerItem | null)[];
 }
 
 // 세로 배너 스택(우측). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로, 빈 칸은
-// "광고 등록 문의" 자리표시로 채운다.
-export function AdBannerRail({ className, items }: AdBannerRailProps) {
+// "광고 등록 문의" 자리표시로 채운다. 로딩 중에는 같은 크기 스켈레톤을 그린다.
+export function AdBannerRail({
+	className,
+	isLoading,
+	items,
+}: AdBannerRailProps) {
 	return (
 		<div className={cn("flex flex-col items-start gap-3", className)}>
 			{AD_RAIL_SLOT_KEYS.map((key, index) => {
+				if (isLoading) {
+					return (
+						<Skeleton className="aspect-[4/9] h-52 rounded-lg" key={key} />
+					);
+				}
 				const item = items[index];
 				return item ? (
 					<AdBanner item={item} key={item.id} />
@@ -247,18 +260,26 @@ export function HorizontalAdBanner({
 
 interface HorizontalAdBannerRailProps {
 	className?: string;
+	// 로딩 중이면 슬롯을 스켈레톤으로 채운다(AdBannerRail 주석 참고).
+	isLoading?: boolean;
 	items: (AdBannerItem | null)[];
 }
 
 // 가로형 배너 세로 스택(좌측 사이드). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로,
-// 빈 칸은 "광고 등록 문의" 자리표시로 채운다.
+// 빈 칸은 "광고 등록 문의" 자리표시로 채운다. 로딩 중에는 같은 크기 스켈레톤을 그린다.
 export function HorizontalAdBannerRail({
 	className,
+	isLoading,
 	items,
 }: HorizontalAdBannerRailProps) {
 	return (
 		<div className={cn("flex flex-col gap-3", className)}>
 			{AD_RAIL_SLOT_KEYS.map((key, index) => {
+				if (isLoading) {
+					return (
+						<Skeleton className="aspect-[7/3] w-full rounded-lg" key={key} />
+					);
+				}
 				const item = items[index];
 				return item ? (
 					<HorizontalAdBanner item={item} key={item.id} />

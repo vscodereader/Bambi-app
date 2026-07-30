@@ -139,7 +139,10 @@ export function SeekerJobDetailResponsive({
 			    자리표시로 채우므로 조건 없이 렌더한다. */}
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					<HorizontalAdBannerRail items={adBanners.leftBanner} />
+					<HorizontalAdBannerRail
+						isLoading={adBanners.isLoading}
+						items={adBanners.leftBanner}
+					/>
 				</div>
 			</aside>
 			{/* 중앙 콘텐츠: 본문 + CTA 고정폭 그리드 */}
@@ -361,7 +364,10 @@ export function SeekerJobDetailResponsive({
 			    자리표시로 채우므로 조건 없이 렌더한다. */}
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					<AdBannerRail items={adBanners.rightBanner} />
+					<AdBannerRail
+						isLoading={adBanners.isLoading}
+						items={adBanners.rightBanner}
+					/>
 				</div>
 			</aside>
 			{canStartChat ? (

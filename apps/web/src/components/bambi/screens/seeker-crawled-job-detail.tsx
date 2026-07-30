@@ -76,7 +76,10 @@ export function SeekerCrawledJobDetail({
 			{/* 좌·우 여백 배너는 우리 공고 상세와 같은 배치다(넓은 화면 전용, 스크롤 추종). */}
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					<HorizontalAdBannerRail items={adBanners.leftBanner} />
+					<HorizontalAdBannerRail
+						isLoading={adBanners.isLoading}
+						items={adBanners.leftBanner}
+					/>
 				</div>
 			</aside>
 			<div
@@ -227,7 +230,10 @@ export function SeekerCrawledJobDetail({
 			</div>
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
-					<AdBannerRail items={adBanners.rightBanner} />
+					<AdBannerRail
+						isLoading={adBanners.isLoading}
+						items={adBanners.rightBanner}
+					/>
 				</div>
 			</aside>
 		</div>
