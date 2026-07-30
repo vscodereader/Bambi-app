@@ -81,7 +81,9 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 // 다른 InfoTile과 동일한 룩(secondary 아이콘 타일·muted 라벨·foreground 번호)으로 두고,
 // 번호 바로 옆 상담 안내만 primary 색으로 강조한다. 안내가 길어 wrap되므로 값에는
 // truncate를 걸지 않고 아이콘을 상단 정렬(items-start)한다.
-function EmployerPhoneTile({ phone }: { phone: string }) {
+// 수집 공고 상세(seeker-crawled-job-detail)도 같은 타일을 쓰므로 export한다 — 연락처 안내
+// 문구가 두 화면에서 갈라지면 한쪽만 고쳐지는 사고가 난다.
+export function EmployerPhoneTile({ phone }: { phone: string }) {
 	return (
 		<div className="flex min-w-0 items-start gap-3">
 			<div className="inline-flex size-12 flex-[0_0_48px] items-center justify-center rounded-md bg-secondary text-foreground">

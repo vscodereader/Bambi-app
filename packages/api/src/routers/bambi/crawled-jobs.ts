@@ -6,17 +6,26 @@ import z from "zod";
 
 import { publicProcedure } from "../../index";
 
-// 공개 상세에 내려보내는 컬럼. 연락처·담당자명·카톡아이디·사업자명·주소·원본 URL은
-// **의도적으로 빠져 있다** — 운영자 전용 리드이며(crawler.ts LIST_COLUMNS 주석의 원칙 그대로),
-// 원본 URL도 빼는 이유는 그 링크 한 줄이 위 전부로 가는 우회로이기 때문이다.
+// 공개 상세에 내려보내는 컬럼.
+//
+// contactPhone은 2026-07-30 사용자 결정으로 **순수 공고 상세와 동일하게 자동 노출**한다.
+// 수집 상세를 순수 상세(EmployerPhoneTile)와 같은 구성으로 맞추기로 했고, 이 번호는
+// 원본 사이트에서도 구직자에게 그대로 공개돼 있던 값이다.
+//
+// 나머지 담당자명·카톡아이디·사업자명·주소·원본 URL은 **여전히 의도적으로 빠져 있다** —
+// 운영자 전용 리드이며(crawler.ts LIST_COLUMNS 주석의 원칙 그대로), 원본 URL도 빼는 이유는
+// 그 링크 한 줄이 위 전부로 가는 우회로이기 때문이다.
 const PUBLIC_COLUMNS = {
 	ageRange: crawledJobPost.ageRange,
 	body: crawledJobPost.body,
+	contactPhone: crawledJobPost.contactPhone,
 	detailImageUrls: crawledJobPost.detailImageUrls,
 	district: crawledJobPost.district,
 	gender: crawledJobPost.gender,
 	id: crawledJobPost.id,
 	industryCategory: crawledJobPost.industryCategory,
+	// 화면의 "고용형태" 표기용. 퀸알바의 "업무내용" 원문이 실제로는 고용형태 문구다.
+	industryRaw: crawledJobPost.industryRaw,
 	listingType: crawledJobPost.listingType,
 	payAmount: crawledJobPost.payAmount,
 	payRaw: crawledJobPost.payRaw,

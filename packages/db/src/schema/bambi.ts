@@ -405,6 +405,8 @@ export const crawledJobPost = pgTable(
 		// 담당자는 그 사이트 이용자에게 연락받는 데 동의했을 뿐 다른 서비스에서의 재공개에
 		// 동의한 적이 없고, 업종 특성상 통제 못 하는 확산은 실제 피해로 이어진다.
 		contactName: text("contact_name"),
+		// 예외. 2026-07-30 사용자 결정으로 공개 상세에 자동 노출한다(순수 공고 상세와 같은 구성) —
+		// 원본 사이트에서도 구직자에게 그대로 공개돼 있던 번호다. 나머지 리드 컬럼은 위 원칙 그대로다.
 		contactPhone: text("contact_phone"),
 		contactKakao: text("contact_kakao"),
 		bizName: text("biz_name"),

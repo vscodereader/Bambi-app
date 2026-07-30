@@ -8,16 +8,25 @@ import {
 } from "@bambi-app/ui/components/alert";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { InferRouterOutputs } from "@orpc/server";
+import { useQuery } from "@tanstack/react-query";
 import { InfoIcon } from "lucide-react";
 import Image from "next/image";
 import { formatMarketplacePay } from "@/lib/bambi/api-job-mapper";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
-import { formatDate } from "@/lib/bambi-format";
+import { formatMinimumWageLabel } from "@/lib/bambi/minimum-wage";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
+import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
-import { Button, InfoTile } from "../ds";
-import { CalendarIcon, ClockIcon, DollarCircle } from "../icons";
+import { Badge, Button, InfoTile } from "../ds";
+import {
+	BriefcaseIcon,
+	ClockIcon,
+	DollarCircle,
+	MapPinIcon,
+	StarIcon,
+} from "../icons";
+import { EmployerPhoneTile } from "./seeker-job-detail-responsive";
 
 type CrawledJobDetail =
 	InferRouterOutputs<AppRouter>["bambi"]["crawledJobs"]["getById"];
@@ -37,19 +46,30 @@ const formatCrawledPay = (job: CrawledJobDetail): string => {
 	return job.payRaw ?? NEGOTIABLE_PAY_TEXT;
 };
 
-// 외부 사이트에서 수집한 공고 상세. 우리 공고 상세(SeekerJobDetailResponsive)를 재사용하지
-// 않는다 — 그 화면의 검수·인증 배지 문구가 하드코딩이라, 우리가 확인한 적 없는 공고에
-// 그대로 붙으면 거짓 신호가 된다. 채팅·후기·신고·연락처도 없다(그 공고의 담당자는
-// 우리 서비스 이용자가 아니라 응대할 사람이 없고, 연락처는 애초에 서버가 내려주지 않는다).
+// 외부 사이트에서 수집한 공고 상세. 구성(좌우 광고 레일 · 본문 + 320px sticky 요약 카드 ·
+// InfoTile 목록)은 우리 공고 상세(SeekerJobDetailResponsive)를 그대로 미러링하되, 컴포넌트는
+// 재사용하지 않는다 — 그 화면의 검수·인증 배지와 안전 확인 문구가 하드코딩이라, 우리가 확인한
+// 적 없는 공고에 그대로 붙으면 거짓 신호가 된다. 채팅·후기 본문·신고도 없다(담당자가 우리
+// 서비스 이용자가 아니라 응대할 사람이 없고, 후기·신고는 서버가 job_post 행을 요구한다).
 export function SeekerCrawledJobDetail({
 	job,
 	onBack,
 }: SeekerCrawledJobDetailProps) {
 	const adBanners = useAdBannerJobs();
-	// 시/도 · 세부지역 · 업종을 한 줄로. 업종은 값 자체가 우리 8종 한국어 라벨이다.
-	const meta = [job.region, job.district, job.industryCategory]
+	// 최저시급 부기는 우리 공고 상세와 같은 공개 설정 조회에서 가져온다(광고 슬롯이 이미
+	// 같은 쿼리를 쓰므로 추가 요청이 생기지 않는다).
+	const siteSettings = useQuery(
+		orpc.bambi.siteSettings.getFooter.queryOptions()
+	);
+	const minimumWageLabel = formatMinimumWageLabel(siteSettings.data);
+	// 수집 원본에서 고용형태 자리에 오는 값은 업무내용 원문(industryRaw)이다. 원문이 없으면
+	// 우리 8종 업종 라벨로 떨어지고, 둘 다 없으면 항목 자체를 생략한다.
+	const employmentType = job.industryRaw ?? job.industryCategory;
+	// 시/도 · 세부지역 · 고용형태를 한 줄로(우리 공고 상세의 "지역 · 고용형태" 부제와 같은 자리).
+	const meta = [job.region, job.district, employmentType]
 		.filter(Boolean)
 		.join(" · ");
+	const location = [job.region, job.district].filter(Boolean).join(" ");
 
 	return (
 		<div className="mx-auto flex w-full justify-center gap-5 py-5 pb-5 md:py-7">
@@ -59,7 +79,12 @@ export function SeekerCrawledJobDetail({
 					<HorizontalAdBannerRail items={adBanners.leftBanner} />
 				</div>
 			</aside>
-			<div className={cn("w-full min-w-0 px-5 md:px-6", SEEKER_CONTENT_WIDTH)}>
+			<div
+				className={cn(
+					"w-full min-w-0 px-5 md:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:pb-8",
+					SEEKER_CONTENT_WIDTH
+				)}
+			>
 				<main className="min-w-0">
 					<div className="mb-4 flex items-center gap-2">
 						<Button onClick={onBack} size="sm" variant="secondary">
@@ -71,12 +96,17 @@ export function SeekerCrawledJobDetail({
 						<AlertTitle>외부에서 수집된 공고예요</AlertTitle>
 						<AlertDescription>
 							밤비알바가 검수·인증한 공고가 아니라 다른 채용 사이트에 올라온
-							내용을 그대로 옮긴 것이에요. 채팅·지원·연락처 공개는 제공되지
-							않고, 조건은 반드시 원본 게시자에게 직접 확인해 주세요.
+							내용을 그대로 옮긴 것이에요. 채팅·지원은 제공되지 않으니, 조건은
+							반드시 원본 게시자에게 직접 확인해 주세요.
 						</AlertDescription>
 					</Alert>
 					<section className="rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
 						<div className="flex flex-col gap-4">
+							<div className="flex flex-wrap items-center gap-2">
+								{/* 우리 공고 상세가 검수·연락처보호 배지를 다는 자리. 수집분에는 둘 다
+								    사실이 아니라 출처만 밝히는 중립 배지로 대체한다. */}
+								<Badge tone="neutral">외부 수집 공고</Badge>
+							</div>
 							<div>
 								<h1 className="m-0 font-extrabold text-[28px] leading-tight md:text-[34px]">
 									{job.shopName ? `${job.shopName} ` : ""}
@@ -90,7 +120,16 @@ export function SeekerCrawledJobDetail({
 								<InfoTile
 									icon={<DollarCircle />}
 									label="급여"
-									value={formatCrawledPay(job)}
+									value={
+										// 우리 공고 상세와 같이 금액 오른쪽에 비교 기준(최저시급)을 약한
+										// 위계로 붙인다. 좁은 화면에서는 wrap으로 아래 줄에 떨어진다.
+										<span className="flex flex-wrap items-baseline gap-x-2">
+											{formatCrawledPay(job)}
+											<span className="font-medium text-muted-foreground text-sm">
+												{minimumWageLabel}
+											</span>
+										</span>
+									}
 								/>
 								{job.workSchedule ? (
 									<InfoTile
@@ -99,15 +138,22 @@ export function SeekerCrawledJobDetail({
 										value={job.workSchedule}
 									/>
 								) : null}
-								{/* 마감일자는 원본에 적혀 있을 때만 보여준다 — 없는 마감을 지어내면
-								    이미 끝난 자리에 지원하게 만든다. */}
-								{job.sourceDeadlineAt ? (
+								{/* 수집 원본에 연락처가 적혀 있을 때만 노출한다(상세 재수집 전 데이터는
+								    null이다). 타일 룩·안내 문구는 우리 공고 상세와 공유한다. */}
+								{job.contactPhone ? (
+									<EmployerPhoneTile phone={job.contactPhone} />
+								) : null}
+								{employmentType ? (
 									<InfoTile
-										icon={<CalendarIcon />}
-										label="마감일자"
-										value={formatDate(job.sourceDeadlineAt)}
+										icon={<BriefcaseIcon />}
+										label="고용형태"
+										value={employmentType}
 									/>
 								) : null}
+								{/* 우리 공고의 후기 본문 섹션은 붙일 수 없다 — 서버 조회가 회원
+								    전용이고 review.jobPostId가 우리 job_post를 가리켜, 수집 공고 id로는
+								    항상 빈 결과다. 값만 우리 공고와 같은 형식으로 "신규"로 적는다. */}
+								<InfoTile icon={<StarIcon />} label="후기" value="0개 · 신규" />
 							</div>
 						</div>
 					</section>
@@ -126,7 +172,8 @@ export function SeekerCrawledJobDetail({
 										alt={`${job.title} 상세 이미지 ${index + 1}`}
 										className="h-auto w-full rounded-lg border"
 										height={1600}
-										key={url}
+										// biome-ignore lint/suspicious/noArrayIndexKey: 서로 다른 원본 URL이 같은 이미지로 변환되면 값이 겹쳐 키가 충돌한다(React 중복 키 에러). 재정렬 없는 정적 배열이라 순서가 곧 안정 키다.
+										key={index}
 										src={url}
 										unoptimized
 										width={1200}
@@ -139,6 +186,44 @@ export function SeekerCrawledJobDetail({
 						    화면에서 대체물을 만들지 말고 파서를 고친다. */}
 					</section>
 				</main>
+				{/* 우리 공고 상세와 같은 위치의 요약 카드. 채팅 CTA는 없고(담당자가 우리 이용자가
+				    아니다), 신고 버튼도 없다 — moderation.createReport가 job_post 행을 확인하므로
+				    수집 공고 id로는 접수 자체가 실패한다. */}
+				<aside className="hidden lg:block">
+					<div className="sticky top-20 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border">
+						<Badge tone="neutral">외부 수집</Badge>
+						<div className="mt-3 mb-2 flex flex-wrap items-baseline gap-x-2">
+							<h2 className="m-0 font-extrabold text-xl">
+								{formatCrawledPay(job)}
+							</h2>
+							<span className="font-medium text-muted-foreground text-sm">
+								{minimumWageLabel}
+							</span>
+						</div>
+						<div className="grid gap-3 text-sm">
+							{location ? (
+								<div className="flex items-center gap-2 font-bold">
+									<span className="inline-flex size-4 text-coral-600">
+										<MapPinIcon />
+									</span>
+									{location}
+								</div>
+							) : null}
+							{job.workSchedule ? (
+								<div className="flex items-center gap-2 font-bold">
+									<span className="inline-flex size-4 text-coral-600">
+										<ClockIcon />
+									</span>
+									{job.workSchedule}
+								</div>
+							) : null}
+						</div>
+						<p className="mt-5 mb-0 text-muted-foreground text-xs leading-relaxed">
+							밤비알바가 검수한 공고가 아니어서 신고 접수 대상이 아니에요.
+							조건은 원본 게시자에게 직접 확인해 주세요.
+						</p>
+					</div>
+				</aside>
 			</div>
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20">
