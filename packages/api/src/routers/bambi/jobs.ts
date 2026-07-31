@@ -83,6 +83,7 @@ import {
 	minHourlyPayFilter,
 	ratingAverageSql,
 	ratingCountSql,
+	searchJobFeed,
 } from "../../services/bambi-job-feed";
 import {
 	JOB_AD_BANNER_SPECS,
@@ -1189,6 +1190,29 @@ export const jobsRouter = {
 			},
 		};
 	}),
+
+	search: publicProcedure
+		.input(
+			z.object({
+				limit: z.number().int().min(1).max(20).default(20),
+				query: z.string().trim().min(1).max(100),
+			})
+		)
+		.handler(async ({ input }) => {
+			const rows = await searchJobFeed(input);
+
+			return {
+				// list 항목과 같은 모양으로 내려 클라이언트 매퍼(toMarketplaceJob)를 재사용한다.
+				// 검색 결과 노출은 유료 자리도 성과 집계 대상도 아니다 — impression을 기록하지
+				// 않고 성과 칸은 0으로 채운다(수집 행이 목록에서 받는 값과 같다).
+				items: rows.map((row) => ({
+					...row,
+					isPromoted: false,
+					performance: { detailViews: 0, impressions: 0 },
+					promotionLabel: null,
+				})),
+			};
+		}),
 
 	legacyList: publicProcedure.input(listInput).handler(async ({ input }) => {
 		const filters = [

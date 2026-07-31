@@ -24,7 +24,17 @@ import {
 	type jobPostStatus,
 	review,
 } from "@bambi-app/db/schema/bambi";
-import { and, count, desc, eq, isNotNull, type SQL, sql } from "drizzle-orm";
+import {
+	and,
+	count,
+	desc,
+	eq,
+	ilike,
+	isNotNull,
+	or,
+	type SQL,
+	sql,
+} from "drizzle-orm";
 import { type PgColumn, unionAll } from "drizzle-orm/pg-core";
 
 import type { JobPostMediaUsage } from "./bambi-job-media-policy";
@@ -369,4 +379,78 @@ export const listCrawledSectionRows = async (
 	const type = input.type;
 
 	return type ? rows.map((row) => ({ ...row, exposureType: type })) : rows;
+};
+
+// 사용자가 친 검색어가 LIKE 와일드카드로 동작하지 않게 이스케이프한다("%"·"_"·"\").
+// 이스케이프하지 않으면 "%"만 친 검색이 전량 조회가 되고, "_"는 아무 글자에나 걸린다.
+const LIKE_SPECIALS_RE = /[%_\\]/g;
+
+export const escapeLikePattern = (value: string): string =>
+	value.replace(LIKE_SPECIALS_RE, "\\$&");
+
+export interface JobSearchInput {
+	limit: number;
+	query: string;
+}
+
+// 검색 모달용 전체 코퍼스 검색. 목록과 같은 자격 조건(빌더 재사용) 위에 ilike만 얹는다 —
+// 목록에 없는 공고가 검색에만 뜨거나 그 반대가 되지 않는다. 우선순위 규칙(자체 → 수집)도
+// 목록과 동일하게 이어붙이고 블록 안은 최신순이다.
+export const searchJobFeed = async (
+	input: JobSearchInput
+): Promise<JobFeedRow[]> => {
+	const includeCrawled = await isCrawledJobFeedEnabled();
+	const pattern = `%${escapeLikePattern(input.query)}%`;
+	const [own, crawled] = await Promise.all([
+		db
+			.select(jobPostFeedSelection)
+			.from(jobPost)
+			.innerJoin(
+				employerOrganizationProfile,
+				eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+			)
+			.leftJoin(
+				employerTeamProfile,
+				eq(jobPost.teamId, employerTeamProfile.teamId)
+			)
+			.where(
+				and(
+					...jobPostFeedConditions({ limit: input.limit }),
+					or(
+						ilike(jobPost.title, pattern),
+						ilike(employerOrganizationProfile.displayName, pattern),
+						ilike(jobPost.region, pattern),
+						ilike(jobPost.district, pattern)
+					)
+				)
+			)
+			.orderBy(desc(jobPost.publishedAt), desc(jobPost.id))
+			.limit(input.limit),
+		db
+			.select(crawledJobFeedSelection)
+			.from(crawledJobPost)
+			// 꺼져 있으면 이 조건 배열이 [false]라 결과가 비고, 켜져 있으면 목록과 같은 자격
+			// 조건이 걸린다 — includeCrawled 분기를 여기서 다시 쓰지 않는다.
+			.where(
+				and(
+					...crawledJobFeedConditions({ limit: input.limit }, includeCrawled),
+					or(
+						ilike(crawledJobPost.title, pattern),
+						ilike(crawledJobPost.shopName, pattern),
+						ilike(crawledJobPost.region, pattern),
+						ilike(crawledJobPost.district, pattern),
+						ilike(crawledJobPost.industryRaw, pattern)
+					)
+				)
+			)
+			.orderBy(
+				desc(
+					sql`coalesce(${crawledJobPost.sourcePostedAt}, ${crawledJobPost.firstSeenAt})`
+				),
+				desc(crawledJobPost.id)
+			)
+			.limit(input.limit),
+	]);
+
+	return [...own, ...crawled].slice(0, input.limit);
 };

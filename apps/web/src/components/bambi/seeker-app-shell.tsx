@@ -1,14 +1,15 @@
 "use client";
 
-import { Input } from "@bambi-app/ui/components/input";
-import { usePathname } from "next/navigation";
+import type { Route } from "next";
+import { usePathname, useRouter } from "next/navigation";
 import { createContext, type ReactNode, useContext, useState } from "react";
 import { SEEKER_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import {
 	DEFAULT_MARKETPLACE_FILTERS,
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
-import { Search2 } from "./icons";
+import { useBambiAuth } from "./auth-client-provider";
+import { JobSearchCommand } from "./job-search-command";
 import { ResponsiveAppShell } from "./responsive-shell";
 
 interface SeekerFiltersContextValue {
@@ -29,25 +30,26 @@ export function useSeekerFilters(): SeekerFiltersContextValue {
 }
 
 function SeekerHeaderSearch() {
-	const { filters, setFilters } = useSeekerFilters();
+	const router = useRouter();
+	const { isGuest } = useBambiAuth();
+
 	return (
-		// 헤더 행에서 줄어들 수 있는 건 내비뿐이라(min-w-0 + overflow-x-auto) 폭이 모자라면
-		// 압축이 전부 내비로 몰려 마지막 항목 "고객센터"의 끝 글자가 잘렸다. 검색창이 가장
-		// 큰 고정폭 소비처라 여기를 줄여 내비에 폭을 돌려준다("검색" 2글자 + 아이콘엔 충분).
-		<div className="relative w-48">
-			<span className="pointer-events-none absolute top-1/2 left-3 inline-flex size-4 -translate-y-1/2 text-muted-foreground">
-				<Search2 />
-			</span>
-			<Input
-				aria-label="업종, 지역, 공고 제목 검색"
-				className="h-10 rounded-lg border-none bg-secondary pl-9 font-medium"
-				onChange={(event) =>
-					setFilters({ ...filters, query: event.target.value })
+		<JobSearchCommand
+			onSelectJob={(job) => {
+				// 마켓플레이스 카드 클릭과 같은 규칙: 게스트는 가입 유도, 수집 공고는 수집 상세로.
+				if (isGuest) {
+					router.push("/seeker?auth=signup");
+					return;
 				}
-				placeholder="검색"
-				value={filters.query}
-			/>
-		</div>
+				if (job.crawled) {
+					router.push(`/seeker/jobs/crawled/${job.id}` as Route);
+					return;
+				}
+				router.push(`/seeker/jobs/${job.id}` as Route);
+			}}
+			trigger="header"
+			withHotkey
+		/>
 	);
 }
 

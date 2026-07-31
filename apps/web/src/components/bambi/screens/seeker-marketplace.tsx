@@ -107,6 +107,7 @@ export function SeekerMarketplaceScreen() {
 							filters={filters}
 							onChange={setFilters}
 							onOpenFilters={() => setFiltersOpen(true)}
+							onSelectJob={openJob}
 							searchFieldClassName="md:hidden"
 						/>
 						<MarketplaceDiscoveryAxisChips
