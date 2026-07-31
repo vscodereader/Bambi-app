@@ -249,7 +249,7 @@ export interface AdBannerJobGroups {
 	// 로딩과 "광고 없음"을 구분 못 하면, 광고가 실제 있는 슬롯도 응답 대기 동안 빈 배열이
 	// 되어 문의 배너가 번쩍였다가 광고로 바뀐다. 초기 로딩을 노출해 렌더러가 스켈레톤을 그린다.
 	isLoading: boolean;
-	// 각 그룹은 고정 길이(좌3·중2·우3) 배열이며 빈 칸은 null이다(렌더러가 자리표시로 채운다).
+	// 각 그룹은 고정 길이(좌3·중3·우3) 배열이며 빈 칸은 null이다(렌더러가 자리표시로 채운다).
 	leftBanner: (AdBannerItem | null)[];
 	premiumBanner: (AdBannerItem | null)[];
 	rightBanner: (AdBannerItem | null)[];
