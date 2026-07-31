@@ -300,7 +300,10 @@ export const listJobFeed = async (input: JobFeedInput) => {
 			.from(crawledJobPost)
 			.where(and(...crawledJobFeedConditions(input, includeCrawled)))
 	)
-		.orderBy(sql`published_at desc nulls last`)
+		// id는 동점 깨기다. 한 회차에 수집된 행은 published_at이 초 단위까지 같아서, 정렬키가
+		// 하나뿐이면 limit이 자르는 30건을 플래너가 매번 임의로 고른다(수집이 돌 때마다 전체
+		// 공고 구성이 통째로 바뀐다). 결정적이기만 하면 되므로 순서 자체엔 의미가 없다.
+		.orderBy(sql`published_at desc nulls last, id desc`)
 		.limit(input.limit);
 };
 
@@ -336,10 +339,13 @@ export const listCrawledSectionRows = async (
 		.select(crawledJobFeedSelection)
 		.from(crawledJobPost)
 		.where(and(...conditions))
+		// 합친 목록과 같은 이유로 id까지 정렬키에 넣는다 — 같은 회차 수집분은 시각이 동일해
+		// 동점 깨기가 없으면 limit이 남기는 행이 매번 달라진다.
 		.orderBy(
 			desc(
 				sql`coalesce(${crawledJobPost.sourcePostedAt}, ${crawledJobPost.firstSeenAt})`
-			)
+			),
+			desc(crawledJobPost.id)
 		)
 		.limit(input.limit);
 	const type = input.type;
