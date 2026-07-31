@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 // dotenv를 먼저 실행하고 동적 import한다(정적 import는 env보다 먼저 평가된다).
 dotenv.config({ path: "../../apps/server/.env" });
 
-const { findBannedTerm, normalizeForMatch } = await import(
+const { findBannedTerm, findBannedTerms, normalizeForMatch } = await import(
 	"./bambi-banned-words"
 );
 type BannedWordEntry = import("./bambi-banned-words").BannedWordEntry;
@@ -71,5 +71,36 @@ describe("findBannedTerm", () => {
 		expect(
 			findBannedTerm("주말 근무 가능하신 분 구합니다", entries)
 		).toBeNull();
+	});
+});
+
+describe("findBannedTerms", () => {
+	const entries = [entry("성매매"), entry("미성년"), entry("보도")];
+
+	it("걸린 단어를 모두 모은다", () => {
+		expect(findBannedTerms("미성년 성매매 알선", entries)).toEqual([
+			"성매매",
+			"미성년",
+		]);
+	});
+
+	it("같은 단어가 여러 번 나와도 한 번만 담는다", () => {
+		expect(findBannedTerms("보도 보도 보도", entries)).toEqual(["보도"]);
+	});
+
+	it("공백·구두점으로 끊어 쓴 우회도 잡는다", () => {
+		expect(findBannedTerms("성 매.매 합니다", entries)).toEqual(["성매매"]);
+	});
+
+	it("걸리는 단어가 없으면 빈 배열이다", () => {
+		expect(findBannedTerms("주말 홀서빙 구합니다", entries)).toEqual([]);
+	});
+
+	it("금칙어 목록이 비면 빈 배열이다", () => {
+		expect(findBannedTerms("성매매", [])).toEqual([]);
+	});
+
+	it("빈 텍스트는 빈 배열이다", () => {
+		expect(findBannedTerms("", entries)).toEqual([]);
 	});
 });
