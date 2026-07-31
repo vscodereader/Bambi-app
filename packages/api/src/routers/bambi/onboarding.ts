@@ -22,7 +22,11 @@ import { ORPCError } from "@orpc/server";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import z from "zod";
 
-import { protectedProcedure, publicProcedure } from "../../index";
+import {
+	protectedProcedure,
+	publicProcedure,
+	rateLimitedPublicProcedure,
+} from "../../index";
 import { hasActiveAdExposure } from "../../services/bambi-advertiser";
 import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
@@ -51,6 +55,13 @@ import {
 	isAdultBirth8,
 	UNDERAGE_MESSAGE,
 } from "../../services/portone-identity";
+
+// 포트원 테스트 채널은 통신사 대조를 하지 않아 아무 생년월일·주민번호 뒷자리나 통과시킨다.
+// 개발에서만 허용하고 프로덕션에서는 거부한다(판정은 여기서 하고 서비스에 옵션으로 넘긴다 —
+// bambi-identity는 env에 의존하지 않는 순수 모듈이다).
+const identityChannelOptions = {
+	allowTestChannel: env.NODE_ENV !== "production",
+};
 
 const profileInput = z.object({
 	gender: z.enum(["male", "female"]).optional(),
@@ -248,7 +259,11 @@ const createBambiProfile = async ({
 
 	let identity: VerifiedIdentity | null = null;
 	if (apiSecret && identityVerificationId) {
-		identity = await resolveVerifiedIdentity(apiSecret, identityVerificationId);
+		identity = await resolveVerifiedIdentity(
+			apiSecret,
+			identityVerificationId,
+			identityChannelOptions
+		);
 		// 폼 진입 전에 checkIdentityForSignup이 대부분 걸러내지만, 두 사람이 동시에
 		// 가입하는 경합을 위해 최종 방어선으로 한 번 더 본다.
 		if (await findIdentityCollision(identity, userId)) {
@@ -569,8 +584,8 @@ export const onboardingRouter = {
 	// 본인인증 건 발급 — 클라이언트는 이 ID로만 포트원 인증창을 연다. 가입 전(계정 없는
 	// 방문자)에도 인증을 시작하므로 publicProcedure다. 서버가 발급 시각을 기록해야
 	// "우리가 시작시킨 인증인지 · 유효시간 안인지 · 이미 썼는지"를 나중에 판정할 수 있다.
-	// 무인증 삽입이라 남용되면 표가 부풀 수 있다(레이트리밋은 후속 과제 — 보고 참조).
-	startIdentityVerification: publicProcedure.handler(async () => ({
+	// 무인증 삽입이라 남용되면 표가 부풀 수 있어 IP 레이트리밋을 건다.
+	startIdentityVerification: rateLimitedPublicProcedure.handler(async () => ({
 		identityVerificationId: await issueIdentityVerificationId(),
 	})),
 
@@ -592,7 +607,8 @@ export const onboardingRouter = {
 			await assertIdentityVerificationUsable(input.identityVerificationId);
 			const identity = await resolveVerifiedIdentity(
 				apiSecret,
-				input.identityVerificationId
+				input.identityVerificationId,
+				identityChannelOptions
 			);
 			return {
 				gender: identity.gender,
@@ -626,7 +642,8 @@ export const onboardingRouter = {
 
 			const identity = await resolveVerifiedIdentity(
 				apiSecret,
-				input.identityVerificationId
+				input.identityVerificationId,
+				identityChannelOptions
 			);
 			if (await findIdentityCollision(identity, userId)) {
 				throw new ORPCError("CONFLICT", { message: IDENTITY_CONFLICT_MESSAGE });

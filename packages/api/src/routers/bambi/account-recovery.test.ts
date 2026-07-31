@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
 import { eq, inArray } from "drizzle-orm";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Context } from "../../context";
+import { resetRateLimits } from "../../services/rate-limit";
 
 // 발급 기록 없음·소진·유효시간 초과를 한 문구로 안내한다(bambi-identity-ticket).
 const REUSED = /만료되었거나 이미 사용/;
@@ -45,6 +46,11 @@ beforeAll(() => {
 		json: async () => nextVerification,
 	})) as unknown as typeof fetch;
 });
+
+// 복구 프로시저에는 IP당 시간당 10회 레이트리밋이 걸려 있고, 테스트 컨텍스트는 clientIp가
+// 없어 전 테스트가 한 버킷을 공유한다. 비우지 않으면 테스트를 몇 개 더 붙이는 순간
+// 본래 검증과 무관하게 429로 깨진다.
+beforeEach(resetRateLimits);
 
 const createdUserIds: string[] = [];
 const issuedIds: string[] = [];

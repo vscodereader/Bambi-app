@@ -22,8 +22,8 @@ const nextConfig: NextConfig = {
 	typedRoutes: true,
 	reactCompiler: true,
 	// @bambi-app/api는 소스 TS를 그대로 export 한다. 웹은 지금까지 타입만 가져왔지만,
-	// /api/guest 라우트가 포트원 본인인증 서비스(services/portone-identity)를 런타임
-	// import 하므로 트랜스파일 대상에 넣는다.
+	// /api/guest 라우트가 포트원 본인인증 서비스(services/portone-identity)와
+	// 레이트리밋 카운터(services/rate-limit)를 런타임 import 하므로 트랜스파일 대상에 넣는다.
 	transpilePackages: ["shiki", "@bambi-app/api"],
 	// 옛 진입 경로. 로그인·회원가입 UI가 /seeker 위 오버레이로 옮겨가 두 페이지는
 	// 사라졌지만, 외부 북마크·검색엔진 색인이 남아 있어 영구 리다이렉트로 흡수한다.
