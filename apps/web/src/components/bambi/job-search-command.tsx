@@ -19,16 +19,10 @@ import { JobCoverImage } from "./job-cover-image";
 
 const SEARCH_PLACEHOLDER = "업종, 지역, 공고 제목 검색";
 
-// 트리거는 헤더(좁은 고정폭)와 본문 검색 필드(전체폭) 두 자리에서 같은 모달을 연다.
-const TRIGGER_CLASS = {
-	field: "h-14 w-full gap-3 px-4 text-base",
-	header: "h-10 w-48 gap-2 px-3 text-sm",
-} as const;
-
-const TRIGGER_LABEL = {
-	field: SEARCH_PLACEHOLDER,
-	header: "검색",
-} as const;
+// 트리거는 헤더(돋보기 아이콘 버튼)와 본문 검색 필드(전체폭 검색창 룩) 두 자리에서
+// 같은 모달을 연다. 헤더는 우측 액션 버튼들(h-10 outline)과 같은 룩으로 맞춘다.
+const FIELD_TRIGGER_CLASS =
+	"h-14 w-full justify-start gap-3 px-4 font-medium text-base text-muted-foreground";
 
 const MESSAGE_CLASS = "py-6 text-center text-muted-foreground text-sm";
 
@@ -99,10 +93,10 @@ function JobSearchResults({
 				>
 					{job.coverImage ? (
 						<JobCoverImage
-							className="h-12 w-16 shrink-0 rounded-md object-cover"
-							height={48}
+							className="h-14 w-30 shrink-0 rounded-md object-cover"
+							height={56}
 							media={job.coverImage}
-							width={64}
+							width={56}
 						/>
 					) : null}
 					<div className="flex min-w-0 flex-1 flex-col">
@@ -131,6 +125,7 @@ export function JobSearchCommand({
 	triggerClassName,
 	withHotkey = false,
 }: JobSearchCommandProps) {
+	const isHeader = trigger === "header";
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const debouncedQuery = useDebouncedValue(query);
@@ -157,15 +152,15 @@ export function JobSearchCommand({
 			<Button
 				aria-label={SEARCH_PLACEHOLDER}
 				className={cn(
-					"justify-start font-medium text-muted-foreground",
-					TRIGGER_CLASS[trigger],
+					isHeader ? "size-10" : FIELD_TRIGGER_CLASS,
 					triggerClassName
 				)}
 				onClick={() => setOpen(true)}
-				variant="secondary"
+				size={isHeader ? "icon-lg" : "default"}
+				variant={isHeader ? "outline" : "secondary"}
 			>
 				<SearchIcon />
-				{TRIGGER_LABEL[trigger]}
+				{isHeader ? null : SEARCH_PLACEHOLDER}
 			</Button>
 			<CommandDialog
 				className="w-xl"
