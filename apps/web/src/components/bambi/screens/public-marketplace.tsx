@@ -36,6 +36,7 @@ export function PublicMarketplaceScreen() {
 		hasMore,
 		isApiBacked,
 		isError,
+		isLoading,
 		isLoadingMore,
 		jobs,
 		loadMore,
@@ -109,6 +110,7 @@ export function PublicMarketplaceScreen() {
 					</div>
 					<VisualJobExposureSections
 						hasMore={hasMore}
+						isLoading={isLoading}
 						isLoadingMore={isLoadingMore}
 						jobs={jobs}
 						onLoadMore={loadMore}
