@@ -3,6 +3,11 @@
 // 밤비 — 운영자(Moderator) 콘솔: 검수 큐, 신고 인박스, 사용자 제재.
 
 import {
+	Dialog,
+	DialogContent,
+	DialogTitle,
+} from "@bambi-app/ui/components/dialog";
+import {
 	Select,
 	SelectContent,
 	SelectItem,
@@ -16,13 +21,16 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from "@bambi-app/ui/components/sheet";
+import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
 	COMMUNITY_BOARDS,
 	communityAuthorName,
@@ -429,15 +437,21 @@ function QueueRow({
 					<RiskBadge level={q.riskLevel} />
 				</div>
 				<div className={cn("text-[12.5px] leading-[1.45]", subFg)}>
-					<span>감지 문구 </span>
-					<span
-						className={cn(
-							"font-bold",
-							dark ? "text-white" : "text-[color:var(--text-default)]"
-						)}
-					>
-						{q.detected.map((d) => `"${d}"`).join(", ")}
-					</span>
+					{q.detected.length > 0 ? (
+						<>
+							<span>감지 문구 </span>
+							<span
+								className={cn(
+									"font-bold",
+									dark ? "text-white" : "text-[color:var(--text-default)]"
+								)}
+							>
+								{q.detected.map((d) => `"${d}"`).join(", ")}
+							</span>
+						</>
+					) : (
+						<span>감지된 문구 없음 · 정상 등록 건</span>
+					)}
 				</div>
 				<div
 					className={cn(
@@ -524,13 +538,109 @@ export function QueueList({
 	);
 }
 
+export interface QueueDetailMediaItem {
+	altText: string;
+	storageKey: string;
+}
+
+export interface QueueDetailMedia {
+	cover: QueueDetailMediaItem | null;
+	detail: QueueDetailMediaItem[];
+}
+
+// 검수용 이미지 열람. 본문 없이 이미지로만 등록된 공고가 있어 운영자가 실제 이미지를
+// 봐야 승인/반려를 판단할 수 있다. JobCoverImage는 쓰지 않는다 — 로드 실패를 샘플
+// 썸네일로 가려서, 운영자가 남의 사진을 이 공고 이미지로 오인할 수 있다.
+function QueueMediaSection({
+	isLoading,
+	media,
+}: {
+	isLoading: boolean;
+	media?: QueueDetailMedia;
+}) {
+	const [zoomed, setZoomed] = useState<QueueDetailMediaItem | null>(null);
+
+	if (isLoading) {
+		return (
+			<div className="grid grid-cols-2 gap-2.5">
+				<Skeleton className="aspect-video w-full rounded-xl" />
+				<Skeleton className="aspect-video w-full rounded-xl" />
+			</div>
+		);
+	}
+
+	const items = [
+		...(media?.cover ? [media.cover] : []),
+		...(media?.detail ?? []),
+	];
+
+	if (items.length === 0) {
+		return null;
+	}
+
+	return (
+		<div className="flex flex-col gap-2">
+			<div className="font-bold text-[13px] text-foreground">
+				공고 이미지 {items.length}장
+			</div>
+			<div className="grid grid-cols-2 gap-2.5">
+				{items.map((mediaItem) => (
+					<button
+						className="relative aspect-video overflow-hidden rounded-xl border border-border bg-secondary p-0"
+						key={mediaItem.storageKey}
+						onClick={() => setZoomed(mediaItem)}
+						type="button"
+					>
+						<Image
+							alt={mediaItem.altText || "공고 이미지"}
+							className="object-cover"
+							fill
+							sizes="(max-width: 768px) 50vw, 320px"
+							src={jobMediaPublicUrl(mediaItem.storageKey)}
+							unoptimized
+						/>
+					</button>
+				))}
+			</div>
+			<Dialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setZoomed(null);
+					}
+				}}
+				open={zoomed !== null}
+			>
+				<DialogContent className="w-[92vw] max-w-3xl">
+					<DialogTitle>공고 이미지</DialogTitle>
+					{zoomed ? (
+						<div className="relative h-[70vh] w-full">
+							<Image
+								alt={zoomed.altText || "공고 이미지"}
+								className="rounded-xl object-contain"
+								fill
+								sizes="768px"
+								src={jobMediaPublicUrl(zoomed.storageKey)}
+								unoptimized
+							/>
+						</div>
+					) : null}
+				</DialogContent>
+			</Dialog>
+		</div>
+	);
+}
+
 export function QueueDetail({
 	item,
+	isMediaLoading = false,
+	media,
 	tone,
 	onBack,
 	onResolve,
 }: {
 	item: QueueItem;
+	isMediaLoading?: boolean;
+	media?: QueueDetailMedia;
 	tone: VisualTone;
 	onBack: () => void;
 	onResolve: (id: string, action: "approve" | "reject") => void;
@@ -576,18 +686,36 @@ export function QueueDetail({
 						))}
 					</div>
 				</div>
-				<div>
-					<div className="mb-2 font-bold text-[13px] text-foreground">
-						공고 본문 · 감지 표현 강조
-					</div>
-					<div className="rounded-[14px] border border-border bg-secondary p-4">
-						<HiText
-							level={item.riskLevel}
-							terms={item.detected}
-							text={item.desc}
-						/>
-					</div>
-				</div>
+				{item.desc.trim().length > 0 ? (
+					<>
+						<div>
+							<div className="mb-2 font-bold text-[13px] text-foreground">
+								공고 본문 · 감지 표현 강조
+							</div>
+							<div className="rounded-[14px] border border-border bg-secondary p-4">
+								<HiText
+									level={item.riskLevel}
+									terms={item.detected}
+									text={item.desc}
+								/>
+							</div>
+						</div>
+						<QueueMediaSection isLoading={isMediaLoading} media={media} />
+					</>
+				) : (
+					<>
+						{/* 본문이 없으면 이미지가 유일한 판단 재료다 — 위로 올린다. */}
+						<div className="flex items-center gap-2 rounded-[14px] bg-secondary px-4 py-3">
+							<span className="inline-flex size-[18px] text-muted-foreground">
+								<AlertCircle />
+							</span>
+							<span className="font-bold text-[13px] text-foreground">
+								본문 없음 · 이미지로만 등록된 공고
+							</span>
+						</div>
+						<QueueMediaSection isLoading={isMediaLoading} media={media} />
+					</>
+				)}
 				<div className="px-0.5 text-[12px] text-muted-foreground leading-[1.55]">
 					판단 기준: 성적 서비스 암시·강요·외부 연락 유도는 반려, 단순 오해
 					소지는 승인 후 안내해요.

@@ -49,6 +49,31 @@ export const findBannedTerm = (
 	return null;
 };
 
+// 공고 검수용. 첫 히트에서 멈추는 findBannedTerm과 달리 걸린 단어를 전부 모은다 —
+// 운영자가 한 화면에서 모든 히트를 보고 승인/반려를 판단해야 하기 때문이다.
+export const findBannedTerms = (
+	text: string,
+	entries: BannedWordEntry[]
+): string[] => {
+	if (entries.length === 0) {
+		return [];
+	}
+
+	const normalizedText = normalizeForMatch(text);
+
+	if (normalizedText.length === 0) {
+		return [];
+	}
+
+	return entries
+		.filter(
+			(candidate) =>
+				candidate.normalizedTerm.length > 0 &&
+				normalizedText.includes(candidate.normalizedTerm)
+		)
+		.map((candidate) => candidate.term);
+};
+
 // 매 작성 요청마다 DB를 조회하지 않는다. 인스턴스가 여럿이면 다른 인스턴스는 최대 TTL만큼
 // 늦게 반영되는데, 금칙어 추가가 1분 내 전파되면 충분하다.
 const CACHE_TTL_MS = 60_000;
@@ -96,4 +121,21 @@ export const assertNoBannedWords = async (fields: string[]): Promise<void> => {
 			});
 		}
 	}
+};
+
+// 공고 등록·수정 경로. 커뮤니티처럼 차단하지 않고 감지 결과만 돌려준다 —
+// 모든 공고가 운영자 검수를 거치므로 판단은 사람이 한다.
+export const detectBannedTerms = async (
+	fields: string[]
+): Promise<string[]> => {
+	const entries = await getActiveBannedWords();
+	const detected = new Set<string>();
+
+	for (const field of fields) {
+		for (const term of findBannedTerms(field, entries)) {
+			detected.add(term);
+		}
+	}
+
+	return [...detected];
 };

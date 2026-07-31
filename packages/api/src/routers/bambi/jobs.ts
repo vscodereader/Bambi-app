@@ -61,11 +61,11 @@ import {
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
 } from "../../services/bambi-authz";
+import { detectBannedTerms } from "../../services/bambi-banned-words";
 import { loadCrawledAdBannerPools } from "../../services/bambi-crawled-ad-banner-slots";
 import { readCrawledLimits } from "../../services/bambi-crawled-limits";
 import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import {
-	getJobDescriptionBlockRiskTerms,
 	jobDescriptionBlockTypes,
 	normalizeJobDescriptionBlocks,
 	toPlainJobDescription,
@@ -97,8 +97,6 @@ import {
 } from "../../services/bambi-job-media-policy";
 import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
 import {
-	type EmployerVerificationStatus,
-	getInitialJobPostStatus,
 	getUpdatedJobPostStatus,
 	type JobPostStatus,
 } from "../../services/bambi-policy";
@@ -229,7 +227,8 @@ type JobPostMediaSetInput = z.infer<typeof jobPostMediaSetInput>;
 interface PreparedJobPostContent {
 	description: string;
 	descriptionBlocks: NonNullable<JobPostInput["descriptionBlocks"]>;
-	hasRiskFlags: boolean;
+	// 걸린 금칙어 원문. 비어 있으면 감지 없음(그래도 검수는 거친다).
+	detectedTerms: string[];
 }
 
 interface JobPostMediaRowInput extends JobPostMediaPolicyInput {
@@ -328,28 +327,6 @@ const writeAdBannerLayout = async (
 		});
 };
 
-const RISKY_TERMS = ["미성년", "성매매", "강요"] as const;
-
-const hasRiskFlags = ({
-	adBannerText,
-	blockRiskTerms,
-	description,
-	interviewNotes,
-	title,
-}: {
-	adBannerText: string;
-	blockRiskTerms: string[];
-	description: string;
-	interviewNotes?: string;
-	title: string;
-}): boolean => {
-	const text = `${title} ${description} ${interviewNotes ?? ""} ${adBannerText}`;
-
-	return (
-		blockRiskTerms.length > 0 || RISKY_TERMS.some((term) => text.includes(term))
-	);
-};
-
 const getJobPostPolicyErrorMessage = (code: string): string => {
 	switch (code) {
 		case "alt_text_too_long":
@@ -383,11 +360,11 @@ const getJobPostPolicyErrorMessage = (code: string): string => {
 };
 
 // 배너 문구도 구직자에게 노출되는 문구다. 실제로 저장될 레이아웃을 넘겨받아 본문과 같은
-// 금칙어·위험어 검사를 태운다 — 버려질 문구로 공고가 검수에 걸리지는 않게 한다.
-const prepareJobPostContent = (
+// 금칙어 검사를 태운다 — 버려질 문구로 공고가 검수에 걸리지는 않게 한다.
+const prepareJobPostContent = async (
 	input: JobPostInput,
 	adBannerLayout: unknown
-): PreparedJobPostContent => {
+): Promise<PreparedJobPostContent> => {
 	const descriptionBlocks = input.descriptionBlocks ?? [];
 	const validation = validateJobDescriptionBlocks(descriptionBlocks);
 
@@ -402,21 +379,19 @@ const prepareJobPostContent = (
 		normalizedBlocks.length > 0
 			? toPlainJobDescription(normalizedBlocks)
 			: input.description.trim();
-	const blockRiskTerms = getJobDescriptionBlockRiskTerms(normalizedBlocks);
 
 	return {
 		description,
 		descriptionBlocks: normalizedBlocks,
-		hasRiskFlags: hasRiskFlags({
-			// 가로·세로 두 슬롯을 모두 훑고, 블록별 문구와 화면 읽기 순서 조립본을 함께 넘긴다 —
-			// 한쪽 슬롯만 보면 반대 슬롯이 빠져나가고, 블록별로만 보면 "미성"과 "년"을 나란히
-			// 놓아 배너에는 "미성년"으로 보이는 조합이 검사를 통과한다.
-			adBannerText: collectLayoutModerationText(adBannerLayout),
-			blockRiskTerms,
+		// 가로·세로 두 배너 슬롯을 모두 훑고 블록 조립본을 함께 넘긴다 — 한쪽 슬롯만 보면
+		// 반대 슬롯이 빠져나가고, 블록별로만 보면 "미성"과 "년"을 나란히 놓아 배너에는
+		// "미성년"으로 보이는 조합이 검사를 통과한다.
+		detectedTerms: await detectBannedTerms([
+			input.title,
 			description,
-			interviewNotes: input.interviewNotes,
-			title: input.title,
-		}),
+			input.interviewNotes ?? "",
+			collectLayoutModerationText(adBannerLayout),
+		]),
 	};
 };
 
@@ -691,10 +666,14 @@ export const applyJobPostUpdate = async ({
 	actorUserId,
 	data,
 	existing,
+	// 운영자 편집(moderation.adminUpdateJobPost) 전용. 운영자가 승인 직전 오타를 고칠 때마다
+	// 자기 큐로 되돌아오거나, 게시 중인 공고가 노출에서 내려가면 안 된다.
+	keepStatus = false,
 }: {
 	actorUserId: string;
 	data: JobPostInput;
 	existing: typeof jobPost.$inferSelect;
+	keepStatus?: boolean;
 }) => {
 	// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다.
 	const {
@@ -737,7 +716,7 @@ export const applyJobPostUpdate = async ({
 	const layoutWrite = normalizeAdBannerLayout(data, exposure.exposureType);
 	// 최종 저장될 레이아웃. 검수(금칙어)와 배너 이미지 필수 판정이 같은 값을 봐야 한다.
 	const finalLayout = await resolveModeratedLayout(layoutWrite, existing.id);
-	const preparedContent = prepareJobPostContent(data, finalLayout);
+	const preparedContent = await prepareJobPostContent(data, finalLayout);
 	// 노출 상품·기간이 바뀌면 재결제가 필요하다. 유료 전환/변경은 미결제로 되돌리고,
 	// 무료 전환은 결제 게이트 없이 즉시 게시(paid)로 둔다(생성 시 무료 공고와 동일 규칙).
 	const exposureChanged =
@@ -765,14 +744,10 @@ export const applyJobPostUpdate = async ({
 			: await getJobPostMediaUsages(existing.id),
 		finalLayout
 	);
-	const riskDetected = preparedContent.hasRiskFlags;
-	const status: JobPostStatus = riskDetected
-		? "pending_review"
+	const status: JobPostStatus = keepStatus
+		? (existing.status as JobPostStatus)
 		: getUpdatedJobPostStatus({
 				currentStatus: existing.status as JobPostStatus,
-				employerVerificationStatus:
-					organizationProfile.verificationStatus as EmployerVerificationStatus,
-				publicContentChanged: true,
 			});
 
 	// 교체 대상에서 빠진 이미지만 GCS에서 지우기 위해, 갱신 전 키를 확보한다.
@@ -791,7 +766,9 @@ export const applyJobPostUpdate = async ({
 				description: preparedContent.description,
 				descriptionBlocks: preparedContent.descriptionBlocks,
 				status,
-				riskFlags: riskDetected ? ["risky_term"] : [],
+				riskFlags:
+					preparedContent.detectedTerms.length > 0 ? ["banned_word"] : [],
+				detectedTerms: preparedContent.detectedTerms,
 				adProductId: exposure.adProductId,
 				exposureType: exposure.exposureType,
 				exposureDurationDays: exposure.exposureDurationDays,
@@ -801,10 +778,9 @@ export const applyJobPostUpdate = async ({
 				paymentMethod: exposure.paymentMethod,
 				paymentStatus: nextPaymentStatus,
 				exposureEndsAt: nextExposureEndsAt,
-				publishedAt:
-					status === "published" && !existing.publishedAt
-						? new Date()
-						: existing.publishedAt,
+				// 재검수로 내려가도 게시 시각은 지우지 않는다. 노출 정렬 키가
+				// greatest(boosted_at, published_at)이라 지우면 재승인 후 정렬이 깨진다.
+				publishedAt: existing.publishedAt,
 			})
 			.where(eq(jobPost.id, existing.id))
 			.returning();
@@ -1657,7 +1633,7 @@ export const jobsRouter = {
 			const layoutWrite = normalizeAdBannerLayout(input, exposure.exposureType);
 			// 최종 저장될 레이아웃. 검수(금칙어)와 배너 이미지 필수 판정이 같은 값을 봐야 한다.
 			const finalLayout = await resolveModeratedLayout(layoutWrite, null);
-			const preparedContent = prepareJobPostContent(input, finalLayout);
+			const preparedContent = await prepareJobPostContent(input, finalLayout);
 			const mediaRows = requireValidJobPostMediaSet({
 				media,
 				organizationId: input.organizationId,
@@ -1667,13 +1643,8 @@ export const jobsRouter = {
 				mediaRows.map((row) => row.usage),
 				finalLayout
 			);
-			const riskDetected = preparedContent.hasRiskFlags;
-			const status = getInitialJobPostStatus({
-				employerVerificationStatus:
-					organizationProfile.verificationStatus as EmployerVerificationStatus,
-				hasRiskFlags: riskDetected,
-			});
-			const now = new Date();
+			// 공고는 예외 없이 운영자 검수를 거친다. 업소 인증 여부로 건너뛰지 않는다.
+			const status: JobPostStatus = "pending_review";
 
 			return await db.transaction(async (tx) => {
 				const [created] = await tx
@@ -1684,7 +1655,9 @@ export const jobsRouter = {
 						description: preparedContent.description,
 						descriptionBlocks: preparedContent.descriptionBlocks,
 						status,
-						riskFlags: riskDetected ? ["risky_term"] : [],
+						riskFlags:
+							preparedContent.detectedTerms.length > 0 ? ["banned_word"] : [],
+						detectedTerms: preparedContent.detectedTerms,
 						adProductId: exposure.adProductId,
 						exposureType: exposure.exposureType,
 						exposureDurationDays: exposure.exposureDurationDays,
@@ -1695,7 +1668,7 @@ export const jobsRouter = {
 						// 무료 공고(유료 노출상품 미선택)는 결제 게이트 없이 즉시 노출한다.
 						// 유료 노출상품을 선택한 경우에만 운영자 결제완료 처리를 기다린다.
 						paymentStatus: exposure.adProductId ? "unpaid" : "paid",
-						publishedAt: status === "published" ? now : null,
+						publishedAt: null,
 					})
 					.returning();
 

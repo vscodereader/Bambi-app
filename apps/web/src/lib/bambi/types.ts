@@ -131,10 +131,14 @@ export interface QueueFlag {
 export interface QueueItem {
 	company: string;
 	desc: string;
+	// 본문에 실재하는 금칙어 원문만 담는다 — HiText가 이 문자열을 본문에서 찾아 강조한다.
 	detected: string[];
 	flags: QueueFlag[];
 	id: string;
 	location: string;
+	// "대표 이미지 포함", "이미지 3개" 같은 구성 요약. 감지 문구와 섞으면
+	// `감지 문구 "이미지 3개"`가 되고 본문 강조도 걸리지 않는다.
+	mediaSummaries: string[];
 	pay: string;
 	receivedAt: string;
 	refId: string;
