@@ -34,6 +34,7 @@ export function SeekerMarketplaceScreen() {
 		hasMore,
 		isApiBacked,
 		isError,
+		isLoading,
 		isLoadingMore,
 		jobs,
 		loadMore,
@@ -137,6 +138,7 @@ export function SeekerMarketplaceScreen() {
 					<VisualJobExposureSections
 						communitySlot={<HomeCommunitySection />}
 						hasMore={hasMore}
+						isLoading={isLoading}
 						isLoadingMore={isLoadingMore}
 						jobs={jobs}
 						onLoadMore={loadMore}
