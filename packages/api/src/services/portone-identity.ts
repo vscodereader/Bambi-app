@@ -19,6 +19,10 @@ export interface PortOneVerifiedCustomer {
 }
 
 export interface PortOneIdentityVerification {
+	// 인증창을 태운 채널(SelectedChannelType: "LIVE" | "TEST"). 테스트 채널은 통신사
+	// 대조를 하지 않아 아무 생년월일·주민번호 뒷자리나 통과시키므로, 호출부가 프로덕션에서
+	// 걸러낼 수 있게 응답에서 살려 둔다.
+	channel?: { type?: string };
 	status: string;
 	verifiedCustomer?: PortOneVerifiedCustomer;
 }

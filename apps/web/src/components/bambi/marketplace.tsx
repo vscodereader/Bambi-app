@@ -38,6 +38,7 @@ import {
 	StarIcon,
 } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
+import { JobSearchCommand } from "./job-search-command";
 
 type FilterChange = (nextFilters: MarketplaceFilters) => void;
 
@@ -238,6 +239,7 @@ interface MarketplaceSearchProps {
 	filters: MarketplaceFilters;
 	onChange: FilterChange;
 	onOpenFilters?: () => void;
+	onSelectJob: (job: Job) => void;
 	searchFieldClassName?: string;
 }
 
@@ -245,6 +247,7 @@ export function MarketplaceSearch({
 	filters,
 	onChange,
 	onOpenFilters,
+	onSelectJob,
 	searchFieldClassName,
 }: MarketplaceSearchProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
@@ -252,18 +255,11 @@ export function MarketplaceSearch({
 	return (
 		<div className="flex flex-col gap-3">
 			<div className={cn("flex items-center gap-2.5", searchFieldClassName)}>
-				<label className="flex h-14 flex-1 items-center gap-3 rounded-lg bg-secondary px-[18px]">
-					<span className="inline-flex size-5 text-[color:var(--text-subtle)]">
-						<Search2 />
-					</span>
-					<input
-						aria-label="업종, 지역, 공고 제목 검색"
-						className="min-w-0 flex-1 border-none bg-transparent font-medium text-base text-foreground outline-none"
-						onChange={(event) => update({ query: event.target.value })}
-						placeholder="업종, 지역, 공고 제목 검색"
-						value={filters.query}
-					/>
-				</label>
+				<JobSearchCommand
+					onSelectJob={onSelectJob}
+					trigger="field"
+					triggerClassName="flex-1"
+				/>
 				<button
 					aria-label="필터"
 					className="inline-flex h-14 flex-[0_0_auto] items-center justify-center rounded-lg border border-border bg-card px-4 font-bold text-sm lg:hidden"

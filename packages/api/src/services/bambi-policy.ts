@@ -37,15 +37,8 @@ export type JobPostStatus = (typeof jobPostStatuses)[number];
 export type AccountStatus = (typeof accountStatuses)[number];
 export type InterviewStatus = (typeof interviewStatuses)[number];
 
-interface InitialJobPostStatusInput {
-	employerVerificationStatus: EmployerVerificationStatus;
-	hasRiskFlags: boolean;
-}
-
 interface UpdatedJobPostStatusInput {
 	currentStatus: JobPostStatus;
-	employerVerificationStatus: EmployerVerificationStatus;
-	publicContentChanged: boolean;
 }
 
 interface CanStartChatInput {
@@ -81,40 +74,13 @@ const jobPostStatusLabels = {
 	rejected: "반려",
 } as const satisfies Record<JobPostStatus, string>;
 
-export const getInitialJobPostStatus = ({
-	employerVerificationStatus,
-	hasRiskFlags,
-}: InitialJobPostStatusInput): JobPostStatus => {
-	if (hasRiskFlags) {
-		return "pending_review";
-	}
-
-	if (employerVerificationStatus === "verified") {
-		return "published";
-	}
-
-	return "pending_review";
-};
-
+// 공고는 등록도 수정도 예외 없이 운영자 검수를 거친다. 업소 인증 여부나 내용 변경 여부로
+// 검수를 건너뛰면, 승인된 본문을 나중에 갈아끼우는 우회가 열린다.
+// draft만 예외다 — 아직 제출되지 않은 임시 저장이라 검수 대상이 아니다.
 export const getUpdatedJobPostStatus = ({
 	currentStatus,
-	employerVerificationStatus,
-	publicContentChanged,
-}: UpdatedJobPostStatusInput): JobPostStatus => {
-	if (currentStatus !== "published") {
-		return currentStatus;
-	}
-
-	if (!publicContentChanged) {
-		return currentStatus;
-	}
-
-	if (employerVerificationStatus === "verified") {
-		return "published";
-	}
-
-	return "pending_review";
-};
+}: UpdatedJobPostStatusInput): JobPostStatus =>
+	currentStatus === "draft" ? "draft" : "pending_review";
 
 export const canStartChat = ({
 	accountStatus,

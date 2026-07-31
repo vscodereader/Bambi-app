@@ -117,7 +117,7 @@ export function VisualJobCard({
 				<div className="flex items-start gap-3">
 					{job.coverImage ? (
 						<JobCoverImage
-							className="h-14 w-30 shrink-0 rounded-md border border-white object-cover"
+							className="h-14 w-30 shrink-0 rounded-md border border-white object-fill"
 							height={56}
 							media={job.coverImage}
 							width={56}
