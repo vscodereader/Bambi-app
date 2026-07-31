@@ -115,6 +115,25 @@ describe("buildExposureJobSections", () => {
 		]);
 		expect(totalCount).toBe(3);
 	});
+	it("전체 공고 창 크기는 섹션 보강분을 빼고 센다(더보기 커서 기준)", () => {
+		const special = row("s1", "special");
+		const { organicWindowSize, sections } = buildExposureJobSections({
+			limit: 2,
+			now: NOW,
+			organicRows: [
+				row("o1", "standard"),
+				row("o2", "standard"),
+				row("o3", "standard"),
+			],
+			recommendedRows: [],
+			specialRows: [special],
+			urgentRows: [],
+		});
+		// 창 = limit(2) + 섹션 1건 = 3. 뒤에 보강으로 붙은 s1은 정렬 창 밖이라 세지 않는다 —
+		// 여기까지 커서를 전진시키면 다음 페이지가 o3 다음이 아니라 그 뒤부터 시작해 한 건이 샌다.
+		expect(sections.organic.map((r) => r.id)).toEqual(["o1", "o2", "o3", "s1"]);
+		expect(organicWindowSize).toBe(3);
+	});
 });
 
 const makeRow = (id: string, exposureType: string) => ({

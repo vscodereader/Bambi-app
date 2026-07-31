@@ -30,8 +30,17 @@ export function SeekerMarketplaceScreen() {
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	// 필터는 헤더 검색창과 공유하기 위해 SeekerAppShell 컨텍스트에서 가져온다
 	const { filters, setFilters } = useSeekerFilters();
-	const { isApiBacked, isError, jobs, refetch, sections } =
-		useMarketplaceJobs(filters);
+	const {
+		hasMore,
+		isApiBacked,
+		isError,
+		isLoadingMore,
+		jobs,
+		loadMore,
+		refetch,
+		sections,
+		totalCount,
+	} = useMarketplaceJobs(filters);
 	const adBanners = useAdBannerJobs();
 	const { discoveryTabId, selectDiscoveryTab } = useMarketplaceDiscovery(
 		filters,
@@ -121,12 +130,15 @@ export function SeekerMarketplaceScreen() {
 					<div className="mb-3 flex items-center justify-between">
 						<h2 className="m-0 font-extrabold text-lg">추천 공고</h2>
 						<span className="font-semibold text-muted-foreground text-sm">
-							{jobs.length}개{isApiBacked ? " · 실시간" : ""}
+							{totalCount}개{isApiBacked ? " · 실시간" : ""}
 						</span>
 					</div>
 					<VisualJobExposureSections
 						communitySlot={<HomeCommunitySection />}
+						hasMore={hasMore}
+						isLoadingMore={isLoadingMore}
 						jobs={jobs}
+						onLoadMore={loadMore}
 						onOpen={openJob}
 						sections={sections}
 					/>
