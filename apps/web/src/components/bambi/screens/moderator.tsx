@@ -562,9 +562,10 @@ function QueueMediaSection({
 
 	if (isLoading) {
 		return (
-			<div className="grid grid-cols-2 gap-2.5">
+			<div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
 				<Skeleton className="aspect-video w-full rounded-xl" />
 				<Skeleton className="aspect-video w-full rounded-xl" />
+				<Skeleton className="hidden aspect-video w-full rounded-xl lg:block" />
 			</div>
 		);
 	}
@@ -583,7 +584,7 @@ function QueueMediaSection({
 			<div className="font-bold text-[13px] text-foreground">
 				공고 이미지 {items.length}장
 			</div>
-			<div className="grid grid-cols-2 gap-2.5">
+			<div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
 				{items.map((mediaItem) => (
 					<button
 						className="relative aspect-video overflow-hidden rounded-xl border border-border bg-secondary p-0"
@@ -661,67 +662,79 @@ export function QueueDetail({
 						</div>
 					</div>
 				</div>
-				<div className="grid grid-cols-2 gap-2.5">
-					<MetaBox label="급여" value={item.pay} />
-					<MetaBox label="접수" value={item.receivedAt} />
-				</div>
-				<div className="flex flex-col gap-2 rounded-[14px] bg-[color:var(--status-pending-bg)] p-[14px]">
-					<div className="flex items-center gap-2">
-						<span className="inline-flex size-[18px] text-[color:var(--status-pending-fg)]">
-							<AlertCircle />
-						</span>
-						<span className="font-extrabold text-[13.5px] text-[color:var(--status-pending-fg)]">
-							자동 필터가 감지한 신호 {item.flags.length}건
-						</span>
-					</div>
-					<div className="flex flex-wrap gap-1.5">
-						{item.flags.map((f) => (
-							<RiskFlag
-								key={`${f.label}-${f.match}`}
-								label={f.label}
-								match={f.match}
-								sev={f.sev}
-								tone={tone}
-							/>
-						))}
-					</div>
-				</div>
-				{item.desc.trim().length > 0 ? (
-					<>
-						<div>
-							<div className="mb-2 font-bold text-[13px] text-foreground">
-								공고 본문 · 감지 표현 강조
+				{/* 데스크톱은 판단 재료(본문·이미지)를 넓은 왼쪽에, 요약(급여·접수·감지 신호)을
+				    오른쪽 좁은 열에 둔다 — 한 열로 1120px를 채우면 읽는 줄이 지나치게 길어진다.
+				    모바일 순서는 그대로여야 해서 두 묶음을 display:contents로 접어 둔다:
+				    lg 미만에서는 래퍼가 사라져 자식이 지금과 같은 한 줄기로 흐른다. */}
+				<div className="flex flex-col gap-[18px] lg:flex-row-reverse lg:items-start lg:gap-6">
+					<div className="contents lg:flex lg:w-80 lg:shrink-0 lg:flex-col lg:gap-[18px]">
+						<div className="grid grid-cols-2 gap-2.5">
+							<MetaBox label="급여" value={item.pay} />
+							<MetaBox label="접수" value={item.receivedAt} />
+						</div>
+						<div className="flex flex-col gap-2 rounded-[14px] bg-[color:var(--status-pending-bg)] p-[14px]">
+							<div className="flex items-center gap-2">
+								<span className="inline-flex size-[18px] text-[color:var(--status-pending-fg)]">
+									<AlertCircle />
+								</span>
+								<span className="font-extrabold text-[13.5px] text-[color:var(--status-pending-fg)]">
+									자동 필터가 감지한 신호 {item.flags.length}건
+								</span>
 							</div>
-							<div className="rounded-[14px] border border-border bg-secondary p-4">
-								<HiText
-									level={item.riskLevel}
-									terms={item.detected}
-									text={item.desc}
-								/>
+							<div className="flex flex-wrap gap-1.5">
+								{item.flags.map((f) => (
+									<RiskFlag
+										key={`${f.label}-${f.match}`}
+										label={f.label}
+										match={f.match}
+										sev={f.sev}
+										tone={tone}
+									/>
+								))}
 							</div>
 						</div>
-						<QueueMediaSection isLoading={isMediaLoading} media={media} />
-					</>
-				) : (
-					<>
-						{/* 본문이 없으면 이미지가 유일한 판단 재료다 — 위로 올린다. */}
-						<div className="flex items-center gap-2 rounded-[14px] bg-secondary px-4 py-3">
-							<span className="inline-flex size-[18px] text-muted-foreground">
-								<AlertCircle />
-							</span>
-							<span className="font-bold text-[13px] text-foreground">
-								본문 없음 · 이미지로만 등록된 공고
-							</span>
+					</div>
+					<div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-[18px]">
+						{item.desc.trim().length > 0 ? (
+							<>
+								<div>
+									<div className="mb-2 font-bold text-[13px] text-foreground">
+										공고 본문 · 감지 표현 강조
+									</div>
+									<div className="rounded-[14px] border border-border bg-secondary p-4">
+										<HiText
+											level={item.riskLevel}
+											terms={item.detected}
+											text={item.desc}
+										/>
+									</div>
+								</div>
+								<QueueMediaSection isLoading={isMediaLoading} media={media} />
+							</>
+						) : (
+							<>
+								{/* 본문이 없으면 이미지가 유일한 판단 재료다 — 위로 올린다. */}
+								<div className="flex items-center gap-2 rounded-[14px] bg-secondary px-4 py-3">
+									<span className="inline-flex size-[18px] text-muted-foreground">
+										<AlertCircle />
+									</span>
+									<span className="font-bold text-[13px] text-foreground">
+										본문 없음 · 이미지로만 등록된 공고
+									</span>
+								</div>
+								<QueueMediaSection isLoading={isMediaLoading} media={media} />
+							</>
+						)}
+						<div className="px-0.5 text-[12px] text-muted-foreground leading-[1.55]">
+							판단 기준: 성적 서비스 암시·강요·외부 연락 유도는 반려, 단순 오해
+							소지는 승인 후 안내해요.
 						</div>
-						<QueueMediaSection isLoading={isMediaLoading} media={media} />
-					</>
-				)}
-				<div className="px-0.5 text-[12px] text-muted-foreground leading-[1.55]">
-					판단 기준: 성적 서비스 암시·강요·외부 연락 유도는 반려, 단순 오해
-					소지는 승인 후 안내해요.
+					</div>
 				</div>
 			</div>
-			<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5">
+			{/* 데스크톱에서 버튼을 폭 전체로 늘리면 승인 버튼이 550px짜리 과녁이 된다 —
+			    폭을 묶고 오른쪽으로 정렬해 "이 화면의 마무리 동작"으로 읽히게 둔다. */}
+			<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5 lg:grid-cols-[repeat(2,minmax(0,11rem))] lg:justify-end">
 				<Button
 					block
 					onClick={() => setReject(true)}
@@ -766,14 +779,16 @@ function RejectSheet({
 	];
 	const [sel, setSel] = useState(reasons[0]);
 	return (
-		<div className="absolute inset-0 z-20 flex flex-col justify-end">
+		// 모바일은 바닥에서 올라오는 시트, 데스크톱은 가운데 카드다 — 시트를 그대로 두면
+		// 사유 버튼 하나가 1120px이 되어 다섯 줄이 화면을 가로지른다.
+		<div className="absolute inset-0 z-20 flex flex-col justify-end lg:items-center lg:justify-center">
 			<button
 				aria-label="닫기"
 				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
 				onClick={onCancel}
 				type="button"
 			/>
-			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
+			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-[var(--shadow-card)]">
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
 					반려 사유 선택
 				</h2>
