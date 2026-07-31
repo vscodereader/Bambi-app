@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@bambi-app/ui/components/button";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { ReactNode } from "react";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
@@ -113,7 +114,12 @@ function ExposureSection({
 interface VisualJobExposureSectionsProps {
 	// 급구·추천 사이(공고 0개 빈 상태에서도)에 끼워 넣을 임의 콘텐츠 슬롯
 	communitySlot?: ReactNode;
+	// 전체 공고를 더 받을 수 있으면 목록 아래에 "더보기" 버튼이 선다. 세 값이 한 세트다
+	// (넘기지 않으면 버튼 없음 — 페이징을 쓰지 않는 호출부는 그대로 둔다).
+	hasMore?: boolean;
+	isLoadingMore?: boolean;
 	jobs: Job[];
+	onLoadMore?: () => void;
 	onOpen: (job: Job) => void;
 	sections: MarketplaceJobSections;
 	selectedJobId?: string;
@@ -121,7 +127,10 @@ interface VisualJobExposureSectionsProps {
 
 export function VisualJobExposureSections({
 	communitySlot,
+	hasMore = false,
+	isLoadingMore = false,
 	jobs,
+	onLoadMore,
 	onOpen,
 	sections,
 	selectedJobId,
@@ -188,6 +197,18 @@ export function VisualJobExposureSections({
 				title="전체 공고"
 				tone="organic"
 			/>
+			{hasMore && onLoadMore ? (
+				<div className="flex justify-center">
+					<Button
+						className="w-full sm:w-auto"
+						disabled={isLoadingMore}
+						onClick={onLoadMore}
+						variant="outline"
+					>
+						{isLoadingMore ? "불러오는 중" : "공고 더보기"}
+					</Button>
+				</div>
+			) : null}
 		</div>
 	);
 }

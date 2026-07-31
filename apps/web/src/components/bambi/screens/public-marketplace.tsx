@@ -33,8 +33,17 @@ export function PublicMarketplaceScreen() {
 	const [filters, setFilters] = useState<MarketplaceFilters>(
 		DEFAULT_MARKETPLACE_FILTERS
 	);
-	const { isApiBacked, isError, jobs, refetch, sections } =
-		useMarketplaceJobs(filters);
+	const {
+		hasMore,
+		isApiBacked,
+		isError,
+		isLoadingMore,
+		jobs,
+		loadMore,
+		refetch,
+		sections,
+		totalCount,
+	} = useMarketplaceJobs(filters);
 	const { discoveryTabId, selectDiscoveryTab } = useMarketplaceDiscovery(
 		filters,
 		setFilters
@@ -107,11 +116,14 @@ export function PublicMarketplaceScreen() {
 							지금 확인할 수 있는 공고
 						</h2>
 						<span className="font-semibold text-muted-foreground text-sm">
-							{jobs.length}개{isApiBacked ? " · 실시간" : ""}
+							{totalCount}개{isApiBacked ? " · 실시간" : ""}
 						</span>
 					</div>
 					<VisualJobExposureSections
+						hasMore={hasMore}
+						isLoadingMore={isLoadingMore}
 						jobs={jobs}
+						onLoadMore={loadMore}
 						onOpen={openJob}
 						sections={sections}
 					/>

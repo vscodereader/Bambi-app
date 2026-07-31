@@ -24,7 +24,7 @@ import {
 	type jobPostStatus,
 	review,
 } from "@bambi-app/db/schema/bambi";
-import { and, desc, eq, isNotNull, type SQL, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, type SQL, sql } from "drizzle-orm";
 import { type PgColumn, unionAll } from "drizzle-orm/pg-core";
 
 import type { JobPostMediaUsage } from "./bambi-job-media-policy";
@@ -315,11 +315,28 @@ export interface CrawledSectionInput {
 	industryCategory?: JobIndustryCategory;
 	limit: number;
 	minPayAmount?: number;
+	// 전체 공고 "더보기"가 이어 받을 위치. 아래 정렬이 id까지 결정적이라 offset 페이징이
+	// 회차 사이에도 흔들리지 않는다(신규 수집분이 앞에 끼면 그만큼 밀리는 것은 감수한다).
+	offset?: number;
 	region?: string;
 	// 지정하면 그 라벨이 붙은 행만 뽑고 노출 어휘도 그 자리로 승격한다. 생략하면 전체 공고용
 	// (라벨 무관 전량, 승격 없음)이다.
 	type?: CrawledSectionType;
 }
+
+// 필터를 만족하는 수집 공고 전체 수. 목록 창(limit/offset)과 무관하게 세어 "더보기" 종료
+// 판정과 화면 헤더의 전체 건수 표기에 쓴다. 조건은 목록과 같은 빌더라 세는 대상과 보이는
+// 대상이 어긋나지 않는다.
+export const countCrawledJobFeedRows = async (
+	input: Omit<CrawledSectionInput, "limit" | "offset" | "type">
+): Promise<number> => {
+	const [row] = await db
+		.select({ value: count() })
+		.from(crawledJobPost)
+		.where(and(...crawledJobFeedConditions({ ...input, limit: 0 }, true)));
+
+	return row?.value ?? 0;
+};
 
 // 섹션·전체 공고 뒤에 붙일 수집 행을 뽑는다. UNION(listJobFeed)이 아니라 별도 조회인 이유는
 // 우선순위 규칙이다 — 1순위 우리 순수 공고가 항상 최상단, 2순위 크롤링. 한 쿼리로 섞어
@@ -347,7 +364,8 @@ export const listCrawledSectionRows = async (
 			),
 			desc(crawledJobPost.id)
 		)
-		.limit(input.limit);
+		.limit(input.limit)
+		.offset(input.offset ?? 0);
 	const type = input.type;
 
 	return type ? rows.map((row) => ({ ...row, exposureType: type })) : rows;

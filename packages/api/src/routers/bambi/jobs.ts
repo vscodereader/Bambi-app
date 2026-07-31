@@ -15,6 +15,7 @@ import { ORPCError } from "@orpc/server";
 import {
 	and,
 	asc,
+	count,
 	desc,
 	eq,
 	gt,
@@ -73,6 +74,8 @@ import {
 import {
 	adHorizontalImageSql,
 	adVerticalImageSql,
+	type CrawledSectionType,
+	countCrawledJobFeedRows,
 	coverImageSql,
 	isCrawledJobFeedEnabled,
 	type JobFeedRow,
@@ -208,6 +211,15 @@ const listInput = z.object({
 	district: z.string().max(80).optional(),
 	minPayAmount: z.number().int().positive().optional(),
 	limit: z.number().int().min(1).max(50).default(20),
+	// 전체 공고(organic) "더보기" 커서 — 응답의 nextOrganicOffset을 그대로 돌려보낸다.
+	// 생략하면 첫 페이지(유료 섹션 3종 포함)이고, 주면 전체 공고만 이어 받는다.
+	// 자체 공고 블록과 수집 블록이 순서대로 이어붙는 구조라 커서도 블록별 위치 두 개다.
+	organicOffset: z
+		.object({
+			crawled: z.number().int().min(0),
+			jobPost: z.number().int().min(0),
+		})
+		.optional(),
 });
 
 type JobPostInput = z.infer<typeof jobPostInput>;
@@ -848,34 +860,63 @@ export const applyJobPostUpdate = async ({
 	return result;
 };
 
-// 목록에 주입할 수집 행. 섹션 세 개는 라벨별 상한, 전체 공고는 목록 상한을 쓴다.
+interface CrawledJobSections {
+	organic: JobFeedRow[];
+	// 섹션 보강분을 뺀 창 크기 — "더보기" 커서는 이 값만큼만 전진한다.
+	organicWindowSize: number;
+	recommended: JobFeedRow[];
+	special: JobFeedRow[];
+	// 필터를 만족하는 수집 공고 전체 수(창과 무관).
+	total: number;
+	urgent: JobFeedRow[];
+}
+
+// 목록에 주입할 수집 행. 섹션 세 개는 라벨별 상한, 전체 공고는 organicPage 창을 쓴다.
 // 스위치가 꺼져 있으면 조회조차 하지 않는다(공개 경로라 쿼리 한 번도 아깝다).
+//
+// withSections=false는 "더보기" 2페이지 이후다 — 섹션 3종은 첫 로드 고정이라 다시 돌리지
+// 않고, organicPage.limit이 0이면(자체 공고가 그 페이지를 다 채웠으면) 전체 공고 쿼리도 건다.
 const loadCrawledJobSections = async (
-	input: z.infer<typeof listInput>
-): Promise<
-	Record<"organic" | "recommended" | "special" | "urgent", JobFeedRow[]>
-> => {
+	input: z.infer<typeof listInput>,
+	organicPage: { limit: number; offset: number },
+	withSections: boolean
+): Promise<CrawledJobSections> => {
 	if (!(await isCrawledJobFeedEnabled())) {
-		return { organic: [], recommended: [], special: [], urgent: [] };
+		return {
+			organic: [],
+			organicWindowSize: 0,
+			recommended: [],
+			special: [],
+			total: 0,
+			urgent: [],
+		};
 	}
 
 	// 과거 회차가 남긴 초과 라벨 방어 — 수집 시에도 같은 값으로 자르지만 조회에서 한 번 더 막는다.
-	const limits = await readCrawledLimits();
-	const [special, urgent, recommended, organic] = await Promise.all([
-		listCrawledSectionRows({
-			...input,
-			limit: limits.special,
-			type: "special",
-		}),
-		listCrawledSectionRows({ ...input, limit: limits.urgent, type: "urgent" }),
-		listCrawledSectionRows({
-			...input,
-			limit: limits.recommended,
-			type: "recommended",
-		}),
-		// 전체 공고에는 라벨 무관 전량이 들어간다(승격 라벨 없이 'standard' 유지).
-		listCrawledSectionRows({ ...input, limit: input.limit }),
+	const limits = withSections ? await readCrawledLimits() : null;
+	const sectionRows = async (
+		type: CrawledSectionType
+	): Promise<JobFeedRow[]> =>
+		limits
+			? await listCrawledSectionRows({ ...input, limit: limits[type], type })
+			: [];
+	// 전체 공고에는 라벨 무관 전량이 들어간다(승격 라벨 없이 'standard' 유지).
+	const organicRows = async (): Promise<JobFeedRow[]> =>
+		organicPage.limit > 0
+			? await listCrawledSectionRows({
+					...input,
+					limit: organicPage.limit,
+					offset: organicPage.offset,
+				})
+			: [];
+	const [special, urgent, recommended, organic, total] = await Promise.all([
+		sectionRows("special"),
+		sectionRows("urgent"),
+		sectionRows("recommended"),
+		organicRows(),
+		countCrawledJobFeedRows(input),
 	]);
+	const organicWindowSize = organic.length;
 
 	// 섹션에 뜬 공고는 전체 공고에도 반드시 있어야 한다. 네 쿼리가 서로를 모르는 데다
 	// 정렬 키가 대량으로 동률이라, 전체 공고 쿼리가 섹션 행을 집어올 보장이 없다.
@@ -892,12 +933,23 @@ const loadCrawledJobSections = async (
 		organic.push({ ...row, exposureType: "standard" });
 	}
 
-	return { organic, recommended, special, urgent };
+	return {
+		organic,
+		organicWindowSize,
+		recommended,
+		special,
+		total,
+		urgent,
+	};
 };
 
 export const jobsRouter = {
 	list: publicProcedure.input(listInput).handler(async ({ context, input }) => {
 		const now = new Date();
+		// 커서가 없으면 첫 페이지다 — 유료 섹션 3종은 이때만 조회하고, "더보기" 이후
+		// 페이지는 전체 공고(organic)만 이어 받는다(섹션은 첫 로드 고정).
+		const organicCursor = input.organicOffset;
+		const isFirstPage = organicCursor === undefined;
 		const filters = [
 			eq(jobPost.status, "published" as JobPostStatus),
 			eq(jobPost.paymentStatus, "paid"),
@@ -963,9 +1015,9 @@ export const jobsRouter = {
 		// publishedAt이 더 최신이 되면 자동으로 최신 쪽을 따른다. 배너 쿼리에는 적용하지 않는다.
 		const exposureRankSql = sql`greatest(${jobPost.boostedAt}, ${jobPost.publishedAt})`;
 
-		// 슬롯 상한 없이 결제완료·미만료 유료 공고를 전부 노출한다(행 단위 확장).
-		const getExposedJobs = async (type: ListingSectionExposureType) =>
-			await db
+		// 섹션 3종과 전체 공고가 같은 투영·조인을 쓴다.
+		const selectExposureJobs = () =>
+			db
 				.select(exposureSelection)
 				.from(jobPost)
 				.innerJoin(
@@ -975,7 +1027,20 @@ export const jobsRouter = {
 				.leftJoin(
 					employerTeamProfile,
 					eq(jobPost.teamId, employerTeamProfile.teamId)
-				)
+				);
+		type ExposureJobRow = Awaited<
+			ReturnType<typeof selectExposureJobs>
+		>[number];
+
+		// 슬롯 상한 없이 결제완료·미만료 유료 공고를 전부 노출한다(행 단위 확장).
+		const getExposedJobs = async (
+			type: ListingSectionExposureType
+		): Promise<ExposureJobRow[]> => {
+			if (!isFirstPage) {
+				return [];
+			}
+
+			return await selectExposureJobs()
 				.where(
 					and(
 						...filters,
@@ -984,33 +1049,43 @@ export const jobsRouter = {
 					)
 				)
 				.orderBy(desc(exposureRankSql));
+		};
 
-		const [specialRows, urgentRows, recommendedRows, organicRows] =
-			await Promise.all([
-				getExposedJobs("special"),
-				getExposedJobs("urgent"),
-				getExposedJobs("recommended"),
-				db
-					.select(exposureSelection)
-					.from(jobPost)
-					.innerJoin(
-						employerOrganizationProfile,
-						eq(
-							jobPost.organizationId,
-							employerOrganizationProfile.organizationId
-						)
-					)
-					.leftJoin(
-						employerTeamProfile,
-						eq(jobPost.teamId, employerTeamProfile.teamId)
-					)
-					.where(and(...filters))
-					.orderBy(
-						sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
-						desc(exposureRankSql)
-					)
-					.limit(input.limit + 15),
-			]);
+		const [
+			specialRows,
+			urgentRows,
+			recommendedRows,
+			organicRows,
+			[jobPostTotalRow],
+		] = await Promise.all([
+			getExposedJobs("special"),
+			getExposedJobs("urgent"),
+			getExposedJobs("recommended"),
+			selectExposureJobs()
+				.where(and(...filters))
+				.orderBy(
+					sql`case when ${employerOrganizationProfile.verificationStatus} = 'verified' then 0 else 1 end`,
+					desc(exposureRankSql),
+					// offset 페이징은 정렬이 결정적일 때만 성립한다. 위 두 키는 대량으로
+					// 동률이라(같은 시각에 게시된 공고들) id로 동점을 깬다 — 수집 목록이
+					// 같은 이유로 이미 하고 있는 것과 같다.
+					desc(jobPost.id)
+				)
+				// 첫 페이지만 유료 섹션 몫(+15)을 얹어 넉넉히 받는다(기존 동작 유지).
+				.limit(isFirstPage ? input.limit + 15 : input.limit)
+				.offset(organicCursor?.jobPost ?? 0),
+			// 필터를 만족하는 자체 공고 전체 수. 페이지 창과 무관해야 헤더의 전체 건수와
+			// "더보기" 종료 판정이 정확하다.
+			db
+				.select({ value: count() })
+				.from(jobPost)
+				.innerJoin(
+					employerOrganizationProfile,
+					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+				)
+				.where(and(...filters)),
+		]);
+		const jobPostTotal = jobPostTotalRow?.value ?? 0;
 
 		const result = buildExposureJobSections({
 			limit: input.limit,
@@ -1056,8 +1131,18 @@ export const jobsRouter = {
 		});
 
 		// 우선순위 규칙: 1순위 우리 순수 공고가 항상 최상단, 2순위 크롤링. 섞어 정렬하지 않고
-		// 각 섹션·전체 공고의 **뒤에** 붙인다.
-		const crawled = await loadCrawledJobSections(input);
+		// 각 섹션·전체 공고의 **뒤에** 붙인다. 전체 공고도 같은 순서라 "더보기"는 자체 공고를
+		// 다 소진한 뒤에야 수집 블록으로 넘어간다.
+		const crawled = await loadCrawledJobSections(
+			input,
+			{
+				limit: isFirstPage
+					? input.limit
+					: Math.max(0, input.limit - result.organicWindowSize),
+				offset: organicCursor?.crawled ?? 0,
+			},
+			isFirstPage
+		);
 		const crawledIds = new Set(
 			[
 				...crawled.special,
@@ -1066,9 +1151,23 @@ export const jobsRouter = {
 				...crawled.organic,
 			].map((item) => item.id)
 		);
+		const nextOrganicOffset = {
+			crawled: (organicCursor?.crawled ?? 0) + crawled.organicWindowSize,
+			jobPost: (organicCursor?.jobPost ?? 0) + result.organicWindowSize,
+		};
+		const hasMoreOrganic =
+			nextOrganicOffset.jobPost < jobPostTotal ||
+			nextOrganicOffset.crawled < crawled.total;
 
 		return {
+			// 필터를 만족하는 전체 자격 공고 수(섹션은 전체 공고의 부분집합이라 두 원천의
+			// 합이 곧 고유 건수다). 이번 페이지가 아니라 "더보기"로 끝까지 도달할 수 있는
+			// 총량이며, 화면 헤더의 "N개" 표기가 이 값이다.
+			availableCount: jobPostTotal + crawled.total,
+			// 전체 공고를 이어 받을 커서. 더 없으면 null이라 더보기 버튼이 사라진다.
+			nextOrganicOffset: hasMoreOrganic ? nextOrganicOffset : null,
 			// 수집 행은 섹션과 전체 공고에 동시에 담기므로 고유 id로 센다(유료 쪽과 같은 규칙).
+			// 이 응답에 실제로 담긴 공고 수다(전체 자격 건수는 availableCount).
 			totalCount: result.totalCount + crawledIds.size,
 			sections: {
 				organic: [

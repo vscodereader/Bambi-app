@@ -114,7 +114,13 @@ export const buildExposureJobSections = <TRow extends ExposureSectionRow>({
 	recommendedRows: TRow[];
 	specialRows: TRow[];
 	urgentRows: TRow[];
-}): { sections: ExposureJobSections<TRow>; totalCount: number } => {
+}): {
+	// 섹션 보강분을 빼고 정렬 창에서 실제로 소비한 organic 행 수. "더보기" 커서는 이 값만큼만
+	// 전진해야 한다 — 보강분까지 세면 아직 보여주지 않은 행을 건너뛴다.
+	organicWindowSize: number;
+	sections: ExposureJobSections<TRow>;
+	totalCount: number;
+} => {
 	const activeSection = (
 		rows: TRow[],
 		type: ListingSectionExposureType
@@ -143,6 +149,7 @@ export const buildExposureJobSections = <TRow extends ExposureSectionRow>({
 	// 반드시 있어야 하므로 빠진 것만 뒤에 채운다. exposureType은 DB 원값 그대로 둔다:
 	// organic 쿼리가 집어온 같은 공고도 special/urgent/recommended 그대로이고, 전체 공고
 	// 카드의 유료 배지는 exposureType이 아니라 호출부의 inPaidSection 플래그가 결정한다.
+	const organicWindowSize = organic.length;
 	const organicIds = new Set(organic.map((item) => item.id));
 
 	for (const item of [...special, ...urgent, ...recommended]) {
@@ -153,6 +160,7 @@ export const buildExposureJobSections = <TRow extends ExposureSectionRow>({
 	}
 
 	return {
+		organicWindowSize,
 		sections: { organic, recommended, special, urgent },
 		// 유료 공고는 섹션과 전체 공고에 동시에 담기므로 고유 id로 센다.
 		totalCount: new Set(
