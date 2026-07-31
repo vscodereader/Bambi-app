@@ -175,20 +175,22 @@ export interface AdBannerRow {
 	id: string;
 }
 
-// 좌/우 사이드 배너의 위치별 최대 슬롯 수. 프리미엄은 1행 2열 고정이라 2개로 캡한다.
+// 좌/우 사이드 배너의 위치별 최대 슬롯 수. 프리미엄은 1행 3열 고정이라 3개로 캡한다.
 export const SIDE_BANNER_MAX_SLOTS = 3;
-export const PREMIUM_BANNER_MAX_SLOTS = 2;
+export const PREMIUM_BANNER_MAX_SLOTS = 3;
 
 // 광고 배너 로테이션 기본 주기(분). 운영자가 사이트 설정에서 바꿀 수 있고, 미설정이면 이 값을 쓴다.
 // 같은 버킷 안에서는 어떤 요청·인스턴스든 같은 결과를 돌려준다.
 export const DEFAULT_AD_ROTATION_MINUTES = 60;
 const DEFAULT_AD_ROTATION_INTERVAL_MS = DEFAULT_AD_ROTATION_MINUTES * 60 * 1000;
 
-// 링 위치를 좌→중간(상단 프리미엄)→우 순서로 고정 배치한다. 좌측 3칸(base 0)·상단 2칸(base 3)·
-// 우측 3칸(base 5)으로 총 8칸이며, 이 순서가 활성 칸이 전진하는 방향이다.
+// 링 위치를 좌→중간(상단 프리미엄)→우 순서로 고정 배치한다. 좌측 3칸(base 0)·상단 3칸(base 3)·
+// 우측 3칸(base 6)으로 총 9칸이며, 이 순서가 활성 칸이 전진하는 방향이다.
+// base는 슬롯 수에서 파생시킨다 — 상수를 손으로 맞추면 프리미엄 칸을 늘릴 때 우측 base를
+// 같이 올리는 걸 잊어 두 그룹이 같은 링 칸을 가리키게 된다(같은 광고가 두 칸에 동시 노출).
 const LEFT_RING_BASE = 0;
-const PREMIUM_RING_BASE = 3;
-const RIGHT_RING_BASE = 5;
+const PREMIUM_RING_BASE = LEFT_RING_BASE + SIDE_BANNER_MAX_SLOTS;
+const RIGHT_RING_BASE = PREMIUM_RING_BASE + PREMIUM_BANNER_MAX_SLOTS;
 const TOTAL_RING_SLOTS = RIGHT_RING_BASE + SIDE_BANNER_MAX_SLOTS;
 
 const emptySlots = <TRow>(count: number): (TRow | null)[] =>
@@ -224,14 +226,14 @@ const placeOnRing = <TRow>({
 // 하나이고 활성(미만료)인 공고 전체(레거시 left-banner/right-banner 공고 포함).
 //
 // 컨베이어(밀어내기) 순환: 한 광고는 언제나 정확히 한 칸에만 존재한다. 풀을 id 오름차순으로
-// 정렬해 링 기준 순서를 고정하고(DB 정렬 순서 의존 제거), n개 광고를 길이 L=max(n,8)인 링에
-// 얹어 매 버킷 전체가 한 칸씩 전진시킨다. 슬롯 s(0..7 = 좌0-2·중3-4·우5-7)의 광고는 pool[j],
+// 정렬해 링 기준 순서를 고정하고(DB 정렬 순서 의존 제거), n개 광고를 길이 L=max(n,9)인 링에
+// 얹어 매 버킷 전체가 한 칸씩 전진시킨다. 슬롯 s(0..8 = 좌0-2·중3-5·우6-8)의 광고는 pool[j],
 // j=(((s−bucket) mod L)+L) mod L 이 n 미만이면, 아니면 null(대기 중, 호출부가 자리표시로 렌더).
-// 각 광고는 좌1→좌2→좌3→중1→중2→우1→우2→우3까지 걸어간 뒤 화면에서 빠지고 L−8버킷 대기했다가
-// 좌1로 재진입한다. n≥8이면 8칸 전부 서로 다른 광고가 동시 노출되고, n<8이면 등록순 연속 칸을
-// 채운 "열차"가 함께 이동하며, n=1이면 그 광고가 슬롯 (bucket mod 8) 한 칸만 옮겨 다닌다. 같은
-// 버킷이면 어느 인스턴스·요청이든 같은 결과다(다중 인스턴스 정합). 각 그룹은 고정 길이(좌3·중2·
-// 우3) 배열이며 대기 칸은 null이다. 풀이 비면 전부 null이다.
+// 각 광고는 좌1→좌2→좌3→중1→중2→중3→우1→우2→우3까지 걸어간 뒤 화면에서 빠지고 L−9버킷
+// 대기했다가 좌1로 재진입한다. n≥9면 9칸 전부 서로 다른 광고가 동시 노출되고, n<9면 등록순 연속
+// 칸을 채운 "열차"가 함께 이동하며, n=1이면 그 광고가 슬롯 (bucket mod 9) 한 칸만 옮겨 다닌다.
+// 같은 버킷이면 어느 인스턴스·요청이든 같은 결과다(다중 인스턴스 정합). 각 그룹은 고정 길이(좌3·
+// 중3·우3) 배열이며 대기 칸은 null이다. 풀이 비면 전부 null이다.
 export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	rows: TRow[],
 	now: Date,
@@ -265,7 +267,7 @@ export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 		return { leftBanner, premiumBanner, rightBanner };
 	}
 
-	// 컨베이어 링 길이(광고가 8개 미만이어도 8칸 링에 대기 자리를 둔다). 슬롯 s의 광고는
+	// 컨베이어 링 길이(광고가 9개 미만이어도 9칸 링에 대기 자리를 둔다). 슬롯 s의 광고는
 	// pool[j] (j=((s−bucket) mod ring)), j<n이면 노출·아니면 대기. now는 항상 양수라 모듈러는
 	// 안전하지만 음수 안전형으로 감아 둔다.
 	const ring = Math.max(n, TOTAL_RING_SLOTS);
@@ -288,7 +290,7 @@ export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	return { leftBanner, premiumBanner, rightBanner };
 };
 
-// 수집 공고 배너의 순환 칸 수. 가로형(좌 3 + 중간 2)과 세로형(우 3)이 서로 다른 링이다.
+// 수집 공고 배너의 순환 칸 수. 가로형(좌 3 + 중간 3)과 세로형(우 3)이 서로 다른 링이다.
 const CRAWLED_HORIZONTAL_RING_SLOTS =
 	SIDE_BANNER_MAX_SLOTS + PREMIUM_BANNER_MAX_SLOTS;
 const CRAWLED_VERTICAL_RING_SLOTS = SIDE_BANNER_MAX_SLOTS;
@@ -300,7 +302,7 @@ const CRAWLED_VERTICAL_RING_SLOTS = SIDE_BANNER_MAX_SLOTS;
 // 이미지 보유, 둘 다다. 다른 공고 세로형을 빌려오거나 썸네일로 대신 채우는 통로는 없다
 // (loadCrawledAdBannerPools가 방향별 URL을 요구한다).
 //
-// 그래서 가로형은 좌1→좌2→좌3→중1→중2(5칸) 링을, 세로형은 우1→우2→우3(3칸) 링을 돌며
+// 그래서 가로형은 좌1→좌2→좌3→중1→중2→중3(6칸) 링을, 세로형은 우1→우2→우3(3칸) 링을 돌며
 // 세로형은 좌·중간으로 넘어가지 않는다. 링마다 그 방향 이미지가 실제로 있는 공고만 받으므로
 // (호출부가 pools를 방향별로 나눠 넘긴다) 자리표시로 비는 칸이 생기지 않는다. 두 링이
 // 독립이라 같은 공고가 같은 버킷에 좌측과
