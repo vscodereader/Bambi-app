@@ -968,6 +968,9 @@ export const moderationRouter = {
 					mediaCount: jobPostMediaCountSql,
 					status: jobPost.status,
 					riskFlags: jobPost.riskFlags,
+					// 검수 화면이 본문에서 이 문자열을 그대로 찾아 강조하고, 큐 행의
+					// "감지 문구"로도 쓴다(라벨이 아니라 원문이라 하이라이트가 걸린다).
+					detectedTerms: jobPost.detectedTerms,
 					rejectionReason: jobPost.rejectionReason,
 					exposureType: jobPost.exposureType,
 					exposureAmount: jobPost.exposureAmount,
@@ -1038,6 +1041,9 @@ export const moderationRouter = {
 				actorUserId: admin.userId,
 				data: input.data,
 				existing,
+				// 운영자 편집은 검수 상태를 바꾸지 않는다. 게시 중 공고를 손봤다고 노출에서
+				// 내려가거나, 승인 직전 오타 수정이 자기 큐로 되돌아오면 안 된다.
+				keepStatus: true,
 			});
 
 			await db.insert(adminModerationAction).values({
