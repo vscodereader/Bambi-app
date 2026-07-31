@@ -1,6 +1,10 @@
 "use client";
 
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+	keepPreviousData,
+	useInfiniteQuery,
+	useQuery,
+} from "@tanstack/react-query";
 import {
 	DEFAULT_MARKETPLACE_FILTERS,
 	filterMarketplaceJobs,
@@ -75,10 +79,7 @@ const toApiListInput = (filters: MarketplaceFilters) => ({
 // 서버 입력에 대응이 없어 화면에서만 거르는 필터들. 이게 켜져 있으면 응답의 전체 건수와
 // 실제로 보이는 개수가 갈리므로, 헤더 표기를 전체 건수 대신 화면 개수로 떨어뜨린다.
 const hasLocalOnlyFilters = (filters: MarketplaceFilters): boolean =>
-	filters.query.trim() !== "" ||
-	filters.onlyBeginnerFriendly ||
-	filters.onlyToday ||
-	filters.onlyVerified;
+	filters.onlyBeginnerFriendly || filters.onlyToday || filters.onlyVerified;
 
 const EMPTY_SECTIONS: MarketplaceJobSections = {
 	organic: [],
@@ -176,6 +177,33 @@ export function useMarketplaceJobs(
 			hasLocalOnlyFilters(filters) || firstPage === undefined
 				? jobs.length
 				: firstPage.availableCount,
+	};
+}
+
+// 검색 모달 전용. 빈 검색어는 조회하지 않고, 타이핑 사이 이전 결과를 유지해 깜빡임을 줄인다.
+export function useJobSearch(query: string): {
+	isError: boolean;
+	isFetching: boolean;
+	jobs: Job[];
+	refetch: () => void;
+} {
+	const trimmed = query.trim();
+	const searchQuery = useQuery({
+		...orpc.bambi.jobs.search.queryOptions({ input: { query: trimmed } }),
+		enabled: trimmed.length > 0,
+		placeholderData: keepPreviousData,
+	});
+
+	return {
+		isError: searchQuery.isError,
+		isFetching: searchQuery.isFetching,
+		jobs:
+			trimmed.length > 0
+				? (searchQuery.data?.items ?? []).map(toMarketplaceJob)
+				: [],
+		refetch: () => {
+			searchQuery.refetch().catch(() => undefined);
+		},
 	};
 }
 

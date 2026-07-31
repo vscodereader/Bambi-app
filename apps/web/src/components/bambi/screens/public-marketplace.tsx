@@ -2,9 +2,7 @@
 
 import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
 import { Button } from "@bambi-app/ui/components/button";
-import { Input } from "@bambi-app/ui/components/input";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { Search } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -15,6 +13,7 @@ import {
 } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
 import { BOTTOM_NAV_CONTENT_SPACER } from "../bottom-nav-shell";
+import { JobSearchCommand } from "../job-search-command";
 import {
 	MarketplaceDiscoveryAxisChips,
 	MarketplaceDiscoveryTabs,
@@ -56,19 +55,7 @@ export function PublicMarketplaceScreen() {
 				: `/seeker/jobs/${job.id}`) as Route
 		);
 	const headerSearch = (
-		// seeker 헤더와 같은 이유로 축소 — 공개 셸도 같은 5개 내비를 쓰므로 폭 압박이 동일하다.
-		<div className="relative w-48">
-			<Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-			<Input
-				aria-label="업종, 지역, 공고 제목 검색"
-				className="h-10 rounded-lg bg-secondary pl-9 font-medium"
-				onChange={(event) =>
-					setFilters({ ...filters, query: event.target.value })
-				}
-				placeholder="검색"
-				value={filters.query}
-			/>
-		</div>
+		<JobSearchCommand onSelectJob={openJob} trigger="header" withHotkey />
 	);
 	return (
 		<ResponsiveAppShell headerSlot={headerSearch} variant="public">
@@ -89,6 +76,7 @@ export function PublicMarketplaceScreen() {
 							filters={filters}
 							onChange={setFilters}
 							onOpenFilters={() => setFiltersOpen(true)}
+							onSelectJob={openJob}
 							searchFieldClassName="md:hidden"
 						/>
 						<MarketplaceDiscoveryAxisChips

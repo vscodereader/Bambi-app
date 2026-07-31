@@ -178,34 +178,6 @@ describe("filterMarketplaceJobs", () => {
 		expect(result).toHaveLength(sampleJobs.length);
 	});
 
-	it("filters jobs by free text across title, company, location, and tags", () => {
-		const query = "강남";
-		const result = filterMarketplaceJobs(sampleJobs, {
-			...DEFAULT_MARKETPLACE_FILTERS,
-			query,
-		});
-
-		// mock의 지역 표기가 바뀌면 id 목록은 쉽게 낡으므로, 결과가 비지 않고
-		// 모든 결과가 검색어를 어느 필드에든 포함하는지로 검증한다.
-		expect(result.length).toBeGreaterThan(0);
-		expect(
-			result.every((job) =>
-				[
-					job.title,
-					job.company,
-					job.location,
-					job.pay,
-					job.type,
-					job.hours,
-					job.pref,
-					...job.tags,
-				]
-					.join(" ")
-					.includes(query)
-			)
-		).toBe(true);
-	});
-
 	it("filters jobs by region, category, pay, verification, and beginner-friendly chips", () => {
 		const result = filterMarketplaceJobs(sampleJobs, {
 			category: "룸싸롱",
@@ -214,7 +186,6 @@ describe("filterMarketplaceJobs", () => {
 			onlyBeginnerFriendly: true,
 			onlyToday: false,
 			onlyVerified: true,
-			query: "",
 			region: "서울",
 		});
 
@@ -275,7 +246,6 @@ describe("applyDiscoveryAxis", () => {
 		...DEFAULT_MARKETPLACE_FILTERS,
 		category: "룸싸롱",
 		minimumPay: 20_000,
-		query: "청담",
 		region: "강남",
 	};
 
@@ -301,10 +271,9 @@ describe("applyDiscoveryAxis", () => {
 		});
 	});
 
-	it("preserves unrelated filters like query and minimumPay", () => {
+	it("preserves unrelated filters like minimumPay", () => {
 		const result = applyDiscoveryAxis(base, "region");
 
-		expect(result.query).toBe("청담");
 		expect(result.minimumPay).toBe(20_000);
 	});
 });
