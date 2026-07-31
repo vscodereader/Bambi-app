@@ -1,8 +1,8 @@
 import type { TranslationDictionary } from "@better-auth/i18n";
 
 // better-auth 에러 코드 → 한국어 메시지 사전.
-// 코드 목록은 설치된 better-auth 1.6.11의 auth.$ERROR_CODES(core + organization
-// 플러그인) 기준. 여기 없는 코드는 영어 원문이 그대로 노출되므로, better-auth를
+// 코드 목록은 설치된 better-auth 1.6.11의 auth.$ERROR_CODES(core + organization ·
+// username 플러그인) 기준. 여기 없는 코드는 영어 원문이 그대로 노출되므로, better-auth를
 // 올리거나 플러그인을 추가하면 $ERROR_CODES와 대조해 누락분을 채운다.
 // 순수 서버 설정 오류(MISSING_AC_INSTANCE 등 사용자 플로우에서 나올 수 없는
 // 개발자용 코드)는 의도적으로 제외 — 원문이 로그 검색에 더 유리하다.
@@ -17,7 +17,11 @@ export const koTranslations: TranslationDictionary = {
 	FAILED_TO_GET_SESSION: "로그인 정보를 확인하지 못했어요.",
 	INVALID_EMAIL: "이메일 형식이 올바르지 않아요.",
 	INVALID_PASSWORD: "비밀번호가 올바르지 않아요.",
-	INVALID_EMAIL_OR_PASSWORD: "이메일 또는 비밀번호가 올바르지 않아요.",
+	// 로그인 폼은 입력이 이메일 꼴이면 signIn.email, 아니면 signIn.username으로
+	// 갈리는데 사용자는 어느 쪽으로 갔는지 모르므로 두 문구를 하나로 통일한다.
+	// 아래 두 줄만 사용자 지정 문구라 해요체 예외.
+	INVALID_EMAIL_OR_PASSWORD: "아이디(이메일) 또는 비밀번호가 틀렸습니다.",
+	INVALID_USERNAME_OR_PASSWORD: "아이디(이메일) 또는 비밀번호가 틀렸습니다.",
 	PASSWORD_TOO_SHORT: "비밀번호가 너무 짧아요.",
 	PASSWORD_TOO_LONG: "비밀번호가 너무 길어요.",
 	USER_ALREADY_EXISTS: "이미 가입된 이메일이에요.",
@@ -28,6 +32,15 @@ export const koTranslations: TranslationDictionary = {
 	SESSION_NOT_FRESH: "보안을 위해 다시 로그인한 뒤 시도해 주세요.",
 	CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
 		"보안상 차단된 요청이에요. 다시 시도해 주세요.",
+
+	// 로그인 아이디(username 플러그인)
+	INVALID_USERNAME: "아이디 형식이 올바르지 않아요.",
+	INVALID_DISPLAY_USERNAME: "표시 아이디 형식이 올바르지 않아요.",
+	USERNAME_TOO_SHORT: "아이디가 너무 짧아요.",
+	USERNAME_TOO_LONG: "아이디가 너무 길어요.",
+	USERNAME_IS_ALREADY_TAKEN:
+		"이미 사용 중인 아이디예요. 다른 아이디를 입력해 주세요.",
+	UNEXPECTED_ERROR: "문제가 생겼어요. 잠시 후 다시 시도해 주세요.",
 
 	// 계정 연결 · 소셜 로그인
 	ACCOUNT_NOT_FOUND: "계정을 찾을 수 없어요.",
