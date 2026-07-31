@@ -80,6 +80,8 @@ interface ApiQueueItem {
 	createdAt: Date | string;
 	description: string;
 	descriptionBlocks: { text: string }[];
+	// 서버가 저장 시점에 판정한 금칙어 원문. 클라이언트가 규칙을 다시 구현하지 않는다.
+	detectedTerms: string[];
 	hasCoverImage: boolean;
 	id: string;
 	industryCategory: string;
@@ -124,26 +126,6 @@ const getReportSeverity = (reason: string, status: string): ReportSeverity => {
 
 	return HIGH_SEVERITY_REPORT_REASONS.has(reason) ? "high" : "mid";
 };
-const RISKY_BLOCK_TERMS = ["미성년", "성매매", "강요"] as const;
-const getBlockRiskMatches = (
-	blocks: { text: string }[] | null | undefined
-): string[] => {
-	if (!blocks?.length) {
-		return [];
-	}
-
-	const matches = new Set<string>();
-
-	for (const block of blocks) {
-		for (const term of RISKY_BLOCK_TERMS) {
-			if (block.text.includes(term)) {
-				matches.add(term);
-			}
-		}
-	}
-
-	return [...matches];
-};
 const getQueueMediaSummaries = (item: ApiQueueItem): string[] =>
 	[
 		item.hasCoverImage ? "대표 이미지 포함" : "",
@@ -154,55 +136,48 @@ const getQueueMediaSummaries = (item: ApiQueueItem): string[] =>
 	].filter((summary) => summary.length > 0);
 
 const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
-	const blockRiskMatches = getBlockRiskMatches(item.descriptionBlocks);
 	const mediaSummaries = getQueueMediaSummaries(item);
-	const policyFlags = item.riskFlags.map((flag) => ({
-		label: "정책 확인",
-		match: riskFlagLabel(flag),
-		sev: "review" as const,
-	}));
-	const blockFlags = blockRiskMatches.map((match) => ({
-		label: "블록 위험어",
-		match,
-		sev: "review" as const,
-	}));
+	const detected = item.detectedTerms;
+	const hasDetection = detected.length > 0;
+	const detectionFlags = hasDetection
+		? [
+				{
+					label: riskFlagLabel(item.riskFlags[0] ?? "banned_word"),
+					match: detected.join(", "),
+					sev: "review" as const,
+				},
+			]
+		: [
+				{
+					label: jobPostStatusLabel(item.status),
+					match: "감지된 문구 없음",
+					sev: "ok" as const,
+				},
+			];
 	const mediaFlags = mediaSummaries.map((summary) => ({
 		label: "공고 구성",
 		match: summary,
 		sev: "ok" as const,
 	}));
-	const reviewFlags = [...policyFlags, ...blockFlags];
-	const flags =
-		reviewFlags.length || mediaFlags.length
-			? [...reviewFlags, ...mediaFlags]
-			: [
-					{
-						label: "검수 대기",
-						match: jobPostStatusLabel(item.status),
-						sev: "review" as const,
-					},
-				];
-	const detected = [
-		...item.riskFlags.map(riskFlagLabel),
-		...blockRiskMatches,
-		...mediaSummaries,
-	].filter((summary) => summary.length > 0);
 
 	return {
 		company: item.organizationDisplayName,
 		desc: item.description,
-		detected: detected.length ? detected : ["검수 필요"],
-		flags,
+		detected,
+		flags: [...detectionFlags, ...mediaFlags],
 		id: item.id,
 		location: item.region,
+		mediaSummaries,
 		pay:
 			item.payAmount === null
 				? NEGOTIABLE_PAY_TEXT
 				: `${item.payUnit} ${item.payAmount.toLocaleString("ko-KR")}원`,
 		receivedAt: formatDate(item.createdAt),
 		refId: `#${item.id.slice(0, 8)}`,
-		risk: reviewFlags.length ? "review" : "warn",
-		riskLevel: reviewFlags.length ? "mid" : "low",
+		// 무조건 검수 체제에서는 감지 0건이 다수다. 위험도로 갈라 두면 운영자가
+		// 큐 필터·정렬로 감지 건부터 처리할 수 있다.
+		risk: hasDetection ? "review" : "ok",
+		riskLevel: hasDetection ? "mid" : "low",
 		role: item.industryCategory,
 		submitted: formatDate(item.createdAt),
 		title: item.title,
