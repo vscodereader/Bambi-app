@@ -1,13 +1,18 @@
 // AuthPanel의 입력 필드 묶음. 값·검증은 패널이 들고 있고 여기서는 그리기만 한다.
+// 비밀번호 표시 토글만 자기 상태를 갖는다 — 폼 값이 아니라 보기 방식이라 패널이 알 필요가 없다.
 
+"use client";
+
+import { Button } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
+import { EyeIcon, EyeOffIcon } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import type { ChangeEvent } from "react";
+import { type ChangeEvent, useState } from "react";
 import { Input } from "../ds";
 
 export interface AuthFormValues {
@@ -129,6 +134,49 @@ export function AuthSignupFields({
 	);
 }
 
+// 마스킹된 칸은 오타를 눈으로 잡을 수 없다 — 눈 아이콘으로 직접 확인할 길을 준다.
+// 버튼은 입력 위에 겹쳐 두므로 입력에 오른쪽 여백을 줘 긴 비밀번호가 아이콘에 가리지 않게 한다.
+// type="button"이 필수다 — 폼 안의 button은 기본이 submit이라 누르는 순간 로그인이 날아간다.
+function AuthPasswordInput({
+	autoComplete,
+	id,
+	onChange,
+	placeholder,
+	value,
+}: {
+	autoComplete: string;
+	id: string;
+	onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+	placeholder: string;
+	value: string;
+}) {
+	const [isVisible, setIsVisible] = useState(false);
+	return (
+		<div className="relative">
+			<Input
+				autoComplete={autoComplete}
+				id={id}
+				inputClassName="pr-11"
+				onChange={onChange}
+				placeholder={placeholder}
+				type={isVisible ? "text" : "password"}
+				value={value}
+			/>
+			<Button
+				aria-label={isVisible ? "비밀번호 숨기기" : "비밀번호 표시"}
+				aria-pressed={isVisible}
+				className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground"
+				onClick={() => setIsVisible((prev) => !prev)}
+				size="icon-sm"
+				type="button"
+				variant="ghost"
+			>
+				{isVisible ? <EyeOffIcon /> : <EyeIcon />}
+			</Button>
+		</div>
+	);
+}
+
 // 찾기 링크는 라벨 옆에 붙는 보조 경로다 — 본 액션(로그인)과 위계가 겹치지 않게 텍스트로 둔다.
 const RECOVERY_LINK_CLASS =
 	"font-semibold text-muted-foreground text-xs underline-offset-2 hover:text-foreground hover:underline";
@@ -190,12 +238,11 @@ export function AuthSigninFields({
 						</button>
 					) : null}
 				</div>
-				<Input
+				<AuthPasswordInput
 					autoComplete="current-password"
 					id="auth-password"
 					onChange={onFieldChange("password")}
 					placeholder="비밀번호를 입력해주세요."
-					type="password"
 					value={values.password}
 				/>
 			</div>

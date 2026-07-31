@@ -21,22 +21,23 @@ const idsOf = (slots: ({ id: string } | null)[]) =>
 	slots.map((slot) => slot?.id ?? null);
 
 describe("groupCrawledAdBannerJobs", () => {
-	it("가로형은 좌 3칸과 중간 2칸을 한 링으로 돈다", () => {
-		const five = pools(["a", "b", "c", "d", "e"], []);
-		const first = groupCrawledAdBannerJobs(five, atBucket(0), HOUR_MS);
+	it("가로형은 좌 3칸과 중간 3칸을 한 링으로 돈다", () => {
+		const six = pools(["a", "b", "c", "d", "e", "f"], []);
+		const first = groupCrawledAdBannerJobs(six, atBucket(0), HOUR_MS);
 
 		expect(idsOf(first.leftBanner)).toEqual(["a", "b", "c"]);
-		expect(idsOf(first.premiumBanner)).toEqual(["d", "e"]);
+		expect(idsOf(first.premiumBanner)).toEqual(["d", "e", "f"]);
 
-		// 한 버킷 뒤: 전체가 한 칸씩 전진해 좌1에 있던 a가 좌2로 간다(링 길이 5).
-		const next = groupCrawledAdBannerJobs(five, atBucket(1), HOUR_MS);
+		// 한 버킷 뒤: 전체가 한 칸씩 전진해 좌1에 있던 a가 좌2로 간다(링 길이 6).
+		const next = groupCrawledAdBannerJobs(six, atBucket(1), HOUR_MS);
 
 		expect([...idsOf(next.leftBanner), ...idsOf(next.premiumBanner)]).toEqual([
-			"e",
+			"f",
 			"a",
 			"b",
 			"c",
 			"d",
+			"e",
 		]);
 	});
 
@@ -50,7 +51,7 @@ describe("groupCrawledAdBannerJobs", () => {
 
 		for (const groups of buckets) {
 			expect(idsOf(groups.leftBanner)).toEqual([null, null, null]);
-			expect(idsOf(groups.premiumBanner)).toEqual([null, null]);
+			expect(idsOf(groups.premiumBanner)).toEqual([null, null, null]);
 			expect(idsOf(groups.rightBanner).toSorted()).toEqual(["x", "y", "z"]);
 		}
 
@@ -93,7 +94,7 @@ describe("groupCrawledAdBannerJobs", () => {
 			...idsOf(groups.leftBanner),
 			...idsOf(groups.premiumBanner),
 			...idsOf(groups.rightBanner),
-		]).toEqual([null, null, null, null, null, null, null, null]);
+		]).toEqual([null, null, null, null, null, null, null, null, null]);
 	});
 
 	it("같은 버킷이면 항상 같은 결과다(인스턴스 정합)", () => {

@@ -3,6 +3,7 @@ import {
 	isAdultBirth8,
 	UNDERAGE_MESSAGE,
 } from "@bambi-app/api/services/portone-identity";
+import { takeRateLimit } from "@bambi-app/api/services/rate-limit";
 import { env } from "@bambi-app/env/web";
 import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
@@ -15,7 +16,6 @@ import {
 	type MockPhoneVerifyInput,
 } from "@/lib/bambi/guest";
 import { createGuestToken } from "@/lib/bambi/guest-token";
-import { takeRateLimit } from "@/lib/bambi/rate-limit";
 
 // 서명 키가 없으면 게스트 토큰을 만들 수 없다. 개발 편의를 위한 폴백이며, 프로덕션은
 // env(web.ts)의 부팅 가드가 누락을 막는다.

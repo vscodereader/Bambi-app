@@ -616,6 +616,12 @@ export const jobPost = pgTable(
 		instantInterview: boolean("instant_interview").default(false).notNull(),
 		rejectionReason: text("rejection_reason"),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
+		// 검수에 걸린 금칙어 원문. risk_flags가 "왜"(코드)라면 이 칸은 "어떤 단어"다.
+		// 운영자 화면이 본문에서 이 문자열을 그대로 찾아 강조하므로 라벨이 아닌 원문을 담는다.
+		detectedTerms: jsonb("detected_terms")
+			.$type<string[]>()
+			.default([])
+			.notNull(),
 		exposureType: jobExposureType("exposure_type")
 			.default("standard")
 			.notNull(),

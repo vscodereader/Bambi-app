@@ -81,7 +81,7 @@ function AdSlotInquiryContent({
 }
 
 // 빈 광고/카드 슬롯 자리표시 — 실제 배너와 같은 비율/크기로 "광고 등록 문의"를 그리는
-// 클릭 불가 장식(aria-hidden). 8칸이 같은 문구를 반복하므로 스크린리더에는 읽히지 않게 두고,
+// 클릭 불가 장식(aria-hidden). 아홉 칸이 같은 문구를 반복하므로 스크린리더에는 읽히지 않게 두고,
 // 빈 슬롯이 클릭되면 실제 광고와 혼동되므로 링크도 걸지 않는다.
 // 예전엔 번호가 박힌 PNG 2종이었고 번호를 바꾸려면 이미지를 다시 만들어야 했다 — 이제 운영자
 // 설정값(siteSettings.getFooter)을 그대로 렌더한다.
@@ -107,7 +107,7 @@ export function AdSlotPlaceholder({
 			className={cn("relative overflow-hidden rounded-lg", className)}
 		>
 			{/* 폴백 끝단인 BAMBI_COMPANY.tel이 아직 "TODO_고객센터 전화" 플레이스홀더다.
-			    운영자가 광고 문의·고객센터 번호를 둘 다 비워두면 그 문자열이 빈 슬롯 8칸에
+			    운영자가 광고 문의·고객센터 번호를 둘 다 비워두면 그 문자열이 빈 슬롯 아홉 칸에
 			    그대로 노출되므로, TODO_로 시작하면 번호를 비우고 문구만 남긴다. */}
 			<AdSlotInquiryContent
 				tel={tel.startsWith("TODO_") ? "" : tel}
@@ -206,7 +206,10 @@ interface HorizontalAdBannerProps {
 	item: AdBannerItem;
 }
 
-// 가로형 광고 배너(좌측 사이드·상단 프리미엄용) — 규격 7:3, 최소 700×300.
+// 가로형 광고 배너(좌측 사이드·상단 프리미엄용) — 노출 슬롯은 16:9.
+// 업로드 규격(job-ad-banner-spec.ts)은 아직 7:3(최소 700×300)이라 슬롯보다 넓적하다 —
+// object-cover가 좌우를 약 24% 잘라낸다. 규격을 16:9로 맞추는 건 검증·안내·매뉴얼을
+// 함께 바꾸는 별건이라 여기서는 손대지 않았다.
 // 아래 width/height는 next/image의 비율 힌트일 뿐 요구 해상도가 아니다(실제 폭은 sizes로 결정).
 // 폭은 그리드/컬럼(공고 카드와 동일)으로 정해지고 높이는 비율로 따라온다. 슬롯 비율은
 // 업로드 규격(lib/bambi/job-ad-banner-spec.ts)과 같아야 배너가 잘리지 않는다.
@@ -218,11 +221,11 @@ export function HorizontalAdBanner({
 	item,
 }: HorizontalAdBannerProps) {
 	// 단색 배경 처리는 AdBanner(세로형)와 같다 — 그쪽 주석 참고.
-	// 수집 배너도 결제 배너와 똑같은 규격 슬롯에 object-cover로 채운다. 가로 수집 원본은 실측
-	// 240×117(≈2.05)로 7:3(≈2.33)과 달라 상하가 합쳐 12% 정도 잘리지만, 슬롯이 이미지 크기대로
+	// 수집 배너도 결제 배너와 똑같은 슬롯에 object-cover로 채운다. 가로 수집 원본은 실측
+	// 240×117(≈2.05)로 16:9(≈1.78)보다 넓적해 좌우가 잘리지만, 슬롯이 이미지 크기대로
 	// 늘었다 줄었다 하면 옆 결제 슬롯·레일과 높이가 어긋난다(사용자 결정).
 	const surfaceClassName = cn(
-		"aspect-[7/3] w-full rounded-lg border border-border",
+		"aspect-[16/9] w-full rounded-lg border border-border",
 		className
 	);
 
@@ -231,7 +234,7 @@ export function HorizontalAdBanner({
 			{isAdBannerImageRequired(item.layout, "ad_horizontal") ? (
 				<Image
 					alt={`${item.company} ${item.title} 광고 배너`}
-					className={cn(surfaceClassName, "object-cover")}
+					className={cn(surfaceClassName, "object-fill")}
 					height={600}
 					sizes="272px"
 					src={item.imageUrl}
@@ -267,14 +270,14 @@ export function HorizontalAdBannerRail({
 			{AD_RAIL_SLOT_KEYS.map((key, index) => {
 				if (isLoading) {
 					return (
-						<Skeleton className="aspect-[7/3] w-full rounded-lg" key={key} />
+						<Skeleton className="aspect-[16/9] w-full rounded-lg" key={key} />
 					);
 				}
 				const item = items[index];
 				return item ? (
 					<HorizontalAdBanner item={item} key={item.id} />
 				) : (
-					<AdSlotPlaceholder className="flex aspect-[7/3] w-full" key={key} />
+					<AdSlotPlaceholder className="flex aspect-[16/9] w-full" key={key} />
 				);
 			})}
 		</div>

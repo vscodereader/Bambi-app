@@ -1,6 +1,10 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import {
+	keepPreviousData,
+	useInfiniteQuery,
+	useQuery,
+} from "@tanstack/react-query";
 import {
 	DEFAULT_MARKETPLACE_FILTERS,
 	filterMarketplaceJobs,
@@ -18,13 +22,30 @@ import {
 const UUID_RE =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// 첫 로드는 기존과 같은 30건. "더보기"는 서버 상한(50)까지 받아 클릭 수를 줄인다
+// (자격 공고가 수백 건이라 30씩 끊으면 끝까지 보는 데만 열 번을 넘게 눌러야 한다).
+const FIRST_PAGE_SIZE = 30;
+const MORE_PAGE_SIZE = 50;
+
+// 전체 공고(organic) 이어받기 커서. 자체 공고 블록과 수집 블록이 순서대로 이어붙는 구조라
+// 위치가 블록별로 둘이다(서버 nextOrganicOffset을 그대로 되돌려준다).
+interface OrganicOffset {
+	crawled: number;
+	jobPost: number;
+}
+
 interface UseMarketplaceJobsResult {
+	hasMore: boolean;
 	isApiBacked: boolean;
 	isError: boolean;
 	isLoading: boolean;
+	isLoadingMore: boolean;
 	jobs: Job[];
+	loadMore: () => void;
 	refetch: () => void;
 	sections: MarketplaceJobSections;
+	// 필터를 만족하는 전체 공고 수(로드된 수가 아니다). 헤더의 "N개" 표기용.
+	totalCount: number;
 }
 
 interface UseMarketplaceJobResult {
@@ -48,13 +69,17 @@ const toApiListInput = (filters: MarketplaceFilters) => ({
 		filters.district === DEFAULT_MARKETPLACE_FILTERS.district
 			? undefined
 			: filters.district,
-	limit: 30,
 	minPayAmount: filters.minimumPay > 0 ? filters.minimumPay : undefined,
 	region:
 		filters.region === DEFAULT_MARKETPLACE_FILTERS.region
 			? undefined
 			: filters.region,
 });
+
+// 서버 입력에 대응이 없어 화면에서만 거르는 필터들. 이게 켜져 있으면 응답의 전체 건수와
+// 실제로 보이는 개수가 갈리므로, 헤더 표기를 전체 건수 대신 화면 개수로 떨어뜨린다.
+const hasLocalOnlyFilters = (filters: MarketplaceFilters): boolean =>
+	filters.onlyBeginnerFriendly || filters.onlyToday || filters.onlyVerified;
 
 const EMPTY_SECTIONS: MarketplaceJobSections = {
 	organic: [],
@@ -93,20 +118,40 @@ const filterSections = (
 	urgent: filterMarketplaceJobs(sections.urgent, filters),
 });
 
+// 전체 공고는 "더보기"로 이어 받고(offset 누적), 스페셜·급구·추천 섹션은 첫 페이지 응답으로
+// 고정한다 — 2페이지부터는 서버도 섹션을 다시 계산하지 않는다.
 export function useMarketplaceJobs(
 	filters: MarketplaceFilters
 ): UseMarketplaceJobsResult {
-	const jobsQuery = useQuery(
-		orpc.bambi.jobs.list.queryOptions({ input: toApiListInput(filters) })
+	const jobsQuery = useInfiniteQuery(
+		orpc.bambi.jobs.list.infiniteOptions({
+			getNextPageParam: (lastPage) => lastPage.nextOrganicOffset ?? undefined,
+			initialPageParam: null as null | OrganicOffset,
+			input: (organicOffset: null | OrganicOffset) => ({
+				...toApiListInput(filters),
+				limit: organicOffset ? MORE_PAGE_SIZE : FIRST_PAGE_SIZE,
+				organicOffset: organicOffset ?? undefined,
+			}),
+		})
 	);
-	const sections = jobsQuery.data
+	const pages = jobsQuery.data?.pages ?? [];
+	const [firstPage] = pages;
+	// 1페이지 전체 공고 꼬리에는 섹션 보강분이 정렬과 무관한 위치로 섞여 있어 다음 페이지와
+	// 겹칠 수 있다(서버 커서는 정렬 창만큼만 전진하므로 누락은 없다). id 첫 등장만 남긴다.
+	const organicRows = [
+		...new Map(
+			pages
+				.flatMap((page) => page.sections.organic)
+				.map((item) => [item.id, item] as const)
+		).values(),
+	];
+	const sections = firstPage
 		? filterSections(
 				{
-					organic: jobsQuery.data.sections.organic.map(toMarketplaceJob),
-					recommended:
-						jobsQuery.data.sections.recommended.map(toMarketplaceJob),
-					special: jobsQuery.data.sections.special.map(toMarketplaceJob),
-					urgent: jobsQuery.data.sections.urgent.map(toMarketplaceJob),
+					organic: organicRows.map(toMarketplaceJob),
+					recommended: firstPage.sections.recommended.map(toMarketplaceJob),
+					special: firstPage.sections.special.map(toMarketplaceJob),
+					urgent: firstPage.sections.urgent.map(toMarketplaceJob),
 				},
 				filters
 			)
@@ -115,14 +160,50 @@ export function useMarketplaceJobs(
 	const hasApiJobs = jobs.length > 0;
 
 	return {
+		hasMore: jobsQuery.hasNextPage,
 		isApiBacked: jobsQuery.isSuccess && hasApiJobs,
 		isError: jobsQuery.isError,
 		isLoading: jobsQuery.isLoading,
+		isLoadingMore: jobsQuery.isFetchingNextPage,
 		jobs,
+		loadMore: () => {
+			jobsQuery.fetchNextPage().catch(() => undefined);
+		},
 		refetch: () => {
 			jobsQuery.refetch().catch(() => undefined);
 		},
 		sections,
+		totalCount:
+			hasLocalOnlyFilters(filters) || firstPage === undefined
+				? jobs.length
+				: firstPage.availableCount,
+	};
+}
+
+// 검색 모달 전용. 빈 검색어는 조회하지 않고, 타이핑 사이 이전 결과를 유지해 깜빡임을 줄인다.
+export function useJobSearch(query: string): {
+	isError: boolean;
+	isFetching: boolean;
+	jobs: Job[];
+	refetch: () => void;
+} {
+	const trimmed = query.trim();
+	const searchQuery = useQuery({
+		...orpc.bambi.jobs.search.queryOptions({ input: { query: trimmed } }),
+		enabled: trimmed.length > 0,
+		placeholderData: keepPreviousData,
+	});
+
+	return {
+		isError: searchQuery.isError,
+		isFetching: searchQuery.isFetching,
+		jobs:
+			trimmed.length > 0
+				? (searchQuery.data?.items ?? []).map(toMarketplaceJob)
+				: [],
+		refetch: () => {
+			searchQuery.refetch().catch(() => undefined);
+		},
 	};
 }
 
@@ -168,7 +249,7 @@ export interface AdBannerJobGroups {
 	// 로딩과 "광고 없음"을 구분 못 하면, 광고가 실제 있는 슬롯도 응답 대기 동안 빈 배열이
 	// 되어 문의 배너가 번쩍였다가 광고로 바뀐다. 초기 로딩을 노출해 렌더러가 스켈레톤을 그린다.
 	isLoading: boolean;
-	// 각 그룹은 고정 길이(좌3·중2·우3) 배열이며 빈 칸은 null이다(렌더러가 자리표시로 채운다).
+	// 각 그룹은 고정 길이(좌3·중3·우3) 배열이며 빈 칸은 null이다(렌더러가 자리표시로 채운다).
 	leftBanner: (AdBannerItem | null)[];
 	premiumBanner: (AdBannerItem | null)[];
 	rightBanner: (AdBannerItem | null)[];

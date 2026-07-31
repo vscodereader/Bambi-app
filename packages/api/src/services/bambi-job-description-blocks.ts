@@ -16,12 +16,6 @@ export interface JobDescriptionBlock {
 export const MAX_JOB_DESCRIPTION_BLOCKS = 12;
 export const MAX_JOB_DESCRIPTION_BLOCK_TEXT_LENGTH = 800;
 
-export const JOB_DESCRIPTION_RISKY_TERMS = [
-	"미성년",
-	"성매매",
-	"강요",
-] as const;
-
 export type JobDescriptionBlockValidationCode =
 	| "block_text_too_long"
 	| "empty_block_text"
@@ -40,7 +34,6 @@ export interface JobDescriptionBlockValidationResult {
 	issues: JobDescriptionBlockValidationIssue[];
 	ok: boolean;
 	plainText: string;
-	riskTerms: string[];
 }
 
 const isSupportedBlockType = (
@@ -63,24 +56,6 @@ export const toPlainJobDescription = (blocks: JobDescriptionBlock[]): string =>
 	normalizeJobDescriptionBlocks(blocks)
 		.map((block) => block.text)
 		.join("\n\n");
-
-export const getJobDescriptionBlockRiskTerms = (
-	blocks: JobDescriptionBlock[]
-): string[] => {
-	const riskTerms: string[] = [];
-	const seenTerms = new Set<string>();
-
-	for (const block of normalizeJobDescriptionBlocks(blocks)) {
-		for (const term of JOB_DESCRIPTION_RISKY_TERMS) {
-			if (block.text.includes(term) && !seenTerms.has(term)) {
-				riskTerms.push(term);
-				seenTerms.add(term);
-			}
-		}
-	}
-
-	return riskTerms;
-};
 
 export const validateJobDescriptionBlocks = (
 	blocks: JobDescriptionBlock[]
@@ -122,6 +97,5 @@ export const validateJobDescriptionBlocks = (
 		issues,
 		ok: issues.length === 0,
 		plainText: toPlainJobDescription(normalizedBlocks),
-		riskTerms: getJobDescriptionBlockRiskTerms(normalizedBlocks),
 	};
 };

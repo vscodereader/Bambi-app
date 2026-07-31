@@ -68,7 +68,7 @@ describe("visual job marketplace components", () => {
 
 	// 수집 배너는 방향과 무관하게 결제 배너와 같은 규격 슬롯 + object-cover로 그린다.
 	// 세로: 원본 실측 80×180 = 정확히 4:9라 규격(aspect-[4/9] h-52)에 채워도 잘리는 곳이 없다.
-	// 가로: 원본 실측 240×117(≈2.05)이 7:3(≈2.33)과 달라 상하가 12%쯤 잘리지만, 슬롯이 이미지
+	// 가로: 원본 실측 240×117(≈2.05)이 16:9(≈1.78)와 달라 좌우가 잘리지만, 슬롯이 이미지
 	// 크기대로 늘었다 줄었다 하면 옆 결제 슬롯·레일과 높이가 어긋난다(사용자 결정) — 그래서
 	// 원본 비율(h-auto) 분기는 양쪽 다 없다.
 	it("renders crawled banners at our spec slots in both orientations", () => {
@@ -90,7 +90,7 @@ describe("visual job marketplace components", () => {
 		expect(vertical).not.toContain("item.crawled");
 		expect(vertical).not.toContain("h-auto");
 		// 가로형도 수집·결제 구분 없이 규격 슬롯 + cover 하나로 그린다.
-		expect(horizontal).toContain("aspect-[7/3] w-full rounded-lg border");
+		expect(horizontal).toContain("aspect-[16/9] w-full rounded-lg border");
 		expect(horizontal).toContain('"object-cover"');
 		expect(horizontal).not.toContain("item.crawled");
 		expect(horizontal).not.toContain("h-auto");
@@ -166,9 +166,11 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain(
 			"headerSlot={isMarketplace ? <SeekerHeaderSearch />"
 		);
-		// 검색창은 헤더에서 가장 큰 고정폭 소비처다. 다시 넓히면 내비가 그만큼 압축돼
-		// 마지막 항목("고객센터")의 끝 글자가 잘린다.
-		expect(source).toContain('className="relative w-48"');
+		// 헤더 검색은 아이콘 버튼 트리거의 모달(JobSearchCommand)이다. 고정폭 검색창을
+		// 되살리면 내비가 압축돼 마지막 항목("고객센터") 끝 글자가 잘린다.
+		expect(source).toContain("JobSearchCommand");
+		expect(source).toContain('trigger="header"');
+		expect(source).not.toContain('className="relative w-48"');
 		expect(source).not.toContain("w-64");
 		// 모든 seeker 페이지 헤더를 /seeker와 동일한 고정폭으로 통일한다(경로별 분기 없음)
 		expect(source).toContain("contentWidthClassName={SEEKER_CONTENT_MAX_W}");
@@ -184,8 +186,9 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("max-w-[80%]");
 		// 검색창을 헤더(연락처 보호 왼쪽)로 옮기고 본문 검색은 모바일 전용으로 둔다
 		expect(source).toContain("headerSlot={headerSearch}");
-		// seeker 헤더와 같은 내비 압축 이유로 검색창 폭을 묶어둔다.
-		expect(source).toContain('className="relative w-48"');
+		// 헤더 검색은 seeker와 동일한 아이콘 버튼 트리거 모달이다(고정폭 검색창 제거).
+		expect(source).toContain('trigger="header"');
+		expect(source).not.toContain('className="relative w-48"');
 		expect(source).toContain('searchFieldClassName="md:hidden"');
 		// 히어로 카피 블록은 제거됨
 		expect(source).not.toContain("밤비 안에서 먼저 대화해요");

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	getJobDescriptionBlockRiskTerms,
 	type JobDescriptionBlock,
 	MAX_JOB_DESCRIPTION_BLOCK_TEXT_LENGTH,
 	MAX_JOB_DESCRIPTION_BLOCKS,
@@ -38,7 +37,6 @@ describe("bambi job description blocks", () => {
 			issues: [],
 			ok: true,
 			plainText: "주요 업무\n\n고객 응대\n\n예약 관리\n\n야간 근무 없음",
-			riskTerms: [],
 		});
 	});
 
@@ -113,25 +111,5 @@ describe("bambi job description blocks", () => {
 			createBlock({ id: "second", text: "둘째 문단" }),
 		]);
 		expect(toPlainJobDescription(blocks)).toBe("첫 문단\n\n둘째 문단");
-	});
-
-	it("detects risky terms for moderation without failing validation", () => {
-		const blocks = [
-			createBlock({
-				id: "risk-1",
-				text: "미성년 지원자에게 강요하지 않습니다.",
-			}),
-			createBlock({ id: "risk-2", text: "성매매 관련 문의는 금지합니다." }),
-		];
-
-		expect(getJobDescriptionBlockRiskTerms(blocks)).toEqual([
-			"미성년",
-			"강요",
-			"성매매",
-		]);
-		expect(validateJobDescriptionBlocks(blocks)).toMatchObject({
-			ok: true,
-			riskTerms: ["미성년", "강요", "성매매"],
-		});
 	});
 });

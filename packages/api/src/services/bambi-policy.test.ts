@@ -5,74 +5,29 @@ import {
 	canStartChat,
 	canViewCounterpartContact,
 	getEmployerVerificationStatusLabel,
-	getInitialJobPostStatus,
 	getJobPostStatusLabel,
 	getUpdatedJobPostStatus,
 	shouldPrioritizeJobPost,
 } from "./bambi-policy";
 
 describe("bambi policy", () => {
-	it("publishes verified employer posts immediately", () => {
-		expect(
-			getInitialJobPostStatus({
-				employerVerificationStatus: "verified",
-				hasRiskFlags: false,
-			})
-		).toBe("published");
+	it("공개 중 공고를 수정하면 검수 대기로 내린다", () => {
+		expect(getUpdatedJobPostStatus({ currentStatus: "published" })).toBe(
+			"pending_review"
+		);
 	});
 
-	it("keeps unverified employer posts pending review", () => {
-		expect(
-			getInitialJobPostStatus({
-				employerVerificationStatus: "none",
-				hasRiskFlags: false,
-			})
-		).toBe("pending_review");
+	it("숨김·반려 공고를 수정해도 검수 대기로 보낸다", () => {
+		expect(getUpdatedJobPostStatus({ currentStatus: "hidden" })).toBe(
+			"pending_review"
+		);
+		expect(getUpdatedJobPostStatus({ currentStatus: "rejected" })).toBe(
+			"pending_review"
+		);
 	});
 
-	it("keeps risky verified employer posts pending review", () => {
-		expect(
-			getInitialJobPostStatus({
-				employerVerificationStatus: "verified",
-				hasRiskFlags: true,
-			})
-		).toBe("pending_review");
-	});
-
-	it("returns approved unverified edited posts to review when public content changes", () => {
-		expect(
-			getUpdatedJobPostStatus({
-				currentStatus: "published",
-				employerVerificationStatus: "none",
-				publicContentChanged: true,
-			})
-		).toBe("pending_review");
-
-		expect(
-			getUpdatedJobPostStatus({
-				currentStatus: "hidden",
-				employerVerificationStatus: "none",
-				publicContentChanged: true,
-			})
-		).toBe("hidden");
-	});
-
-	it("keeps verified edited posts published when no risk flags exist", () => {
-		expect(
-			getUpdatedJobPostStatus({
-				currentStatus: "published",
-				employerVerificationStatus: "verified",
-				publicContentChanged: true,
-			})
-		).toBe("published");
-
-		expect(
-			getUpdatedJobPostStatus({
-				currentStatus: "published",
-				employerVerificationStatus: "verified",
-				publicContentChanged: false,
-			})
-		).toBe("published");
+	it("임시 저장은 제출 전이라 그대로 둔다", () => {
+		expect(getUpdatedJobPostStatus({ currentStatus: "draft" })).toBe("draft");
 	});
 
 	it("requires phone verification and blocks suspended accounts before chat starts", () => {

@@ -31,7 +31,6 @@ export interface MarketplaceFilters {
 	onlyBeginnerFriendly: boolean;
 	onlyToday: boolean;
 	onlyVerified: boolean;
-	query: string;
 	region: string;
 }
 
@@ -42,7 +41,6 @@ export const DEFAULT_MARKETPLACE_FILTERS: MarketplaceFilters = {
 	onlyBeginnerFriendly: false,
 	onlyToday: false,
 	onlyVerified: false,
-	query: "",
 	region: ALL_OPTION,
 };
 
@@ -76,30 +74,6 @@ function jobMatchesMinimumPay(job: Job, minimumPay: number): boolean {
 	return amount > 0 && amount >= minimumPay * payUnitHours(job.pay);
 }
 
-function normalizeSearchValue(value: string): string {
-	return value.trim().toLocaleLowerCase("ko-KR");
-}
-
-function jobMatchesQuery(job: Job, query: string): boolean {
-	const normalizedQuery = normalizeSearchValue(query);
-	if (!normalizedQuery) {
-		return true;
-	}
-	const haystack = [
-		job.title,
-		job.company,
-		job.location,
-		job.pay,
-		job.type,
-		job.hours,
-		job.pref,
-		...job.tags,
-	]
-		.join(" ")
-		.toLocaleLowerCase("ko-KR");
-	return haystack.includes(normalizedQuery);
-}
-
 function jobMatchesCategory(job: Job, category: string): boolean {
 	return category === ALL_OPTION || job.type === category;
 }
@@ -117,9 +91,6 @@ export function filterMarketplaceJobs(
 	filters: MarketplaceFilters
 ): Job[] {
 	return jobs.filter((job) => {
-		if (!jobMatchesQuery(job, filters.query)) {
-			return false;
-		}
 		if (!jobMatchesRegion(job, filters.region)) {
 			return false;
 		}

@@ -352,10 +352,15 @@ describe("bambi jobs router media and block content", () => {
 				},
 			});
 			// 공개 상세는 published + paid를 함께 요구한다(jobs.ts의 결제 게이트).
-			// create는 결제 전 상태로 공고를 만들므로 조회 전에 결제 완료로 맞춰 준다.
+			// create는 업소 인증 여부와 무관하게 항상 검수 대기로 공고를 만드므로,
+			// 조회 전에 운영자 승인·결제 완료에 해당하는 상태로 맞춰 준다.
 			await db
 				.update(jobPost)
-				.set({ paymentStatus: "paid" })
+				.set({
+					paymentStatus: "paid",
+					publishedAt: new Date(),
+					status: "published",
+				})
 				.where(eq(jobPost.id, created.id));
 
 			const publicDetail = await getJob({ id: created.id });
