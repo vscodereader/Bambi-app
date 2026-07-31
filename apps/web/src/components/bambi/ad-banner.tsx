@@ -234,7 +234,7 @@ export function HorizontalAdBanner({
 			{isAdBannerImageRequired(item.layout, "ad_horizontal") ? (
 				<Image
 					alt={`${item.company} ${item.title} 광고 배너`}
-					className={cn(surfaceClassName, "object-cover")}
+					className={cn(surfaceClassName, "object-fill")}
 					height={600}
 					sizes="272px"
 					src={item.imageUrl}
