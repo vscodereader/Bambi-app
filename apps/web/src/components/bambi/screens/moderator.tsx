@@ -631,6 +631,38 @@ function QueueMediaSection({
 	);
 }
 
+// 판단 기준 안내는 데스크톱(판정 도크)과 모바일(본문 아래) 두 자리에 놓인다.
+// 자리가 다를 뿐 같은 문장이라 원본을 하나만 둔다.
+const VERDICT_GUIDE =
+	"판단 기준: 성적 서비스 암시·강요·외부 연락 유도는 반려, 단순 오해 소지는 승인 후 안내해요.";
+
+// 승인·반려도 마찬가지로 두 자리에 놓인다(데스크톱 도크 / 모바일 하단 바).
+// 버튼 자체를 한 곳에 모아 둬야 한쪽만 고치는 실수가 안 난다.
+function VerdictActions({
+	onApprove,
+	onReject,
+}: {
+	onApprove: () => void;
+	onReject: () => void;
+}) {
+	return (
+		<>
+			<Button block onClick={onReject} size="lg" variant="secondary">
+				반려
+			</Button>
+			<Button
+				block
+				className="shadow-none"
+				onClick={onApprove}
+				size="lg"
+				variant="primary"
+			>
+				승인 후 게시
+			</Button>
+		</>
+	);
+}
+
 export function QueueDetail({
 	item,
 	isMediaLoading = false,
@@ -647,54 +679,61 @@ export function QueueDetail({
 	onResolve: (id: string, action: "approve" | "reject") => void;
 }) {
 	const [reject, setReject] = useState(false);
+	const approve = () => onResolve(item.id, "approve");
+	const openReject = () => setReject(true);
 	return (
-		<div className="relative flex min-h-0 flex-1 flex-col">
+		<div className="relative flex min-h-0 flex-1 flex-col lg:flex-none">
 			<AppBar onBack={onBack} title="공고 검수" />
-			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-1 pb-5">
-				<div className="flex items-center gap-3">
-					<Avatar name={item.company} size="lg" square />
-					<div className="min-w-0 flex-1">
-						<div className="font-extrabold text-[19px] text-foreground">
-							{item.title}
+			{/* 모바일은 화면 한 장이 곧 앱 화면이라 안에서 스크롤하고 하단 바를 바닥에 붙인다.
+			    데스크톱에 그 틀을 그대로 쓰면 내용이 짧을 때 뷰포트 높이만큼 빈 판이 생기고
+			    액션 바가 본문에서 수백 px 아래로 떨어진다. lg부터는 문서처럼 흐르게 두고
+			    카드 한 장으로 감싼다 — 페이지 배경이 bg-secondary라 이 카드가 경계를 만든다. */}
+			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-1 pb-5 lg:mb-6 lg:flex-none lg:gap-6 lg:overflow-visible lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:px-7 lg:pt-6 lg:pb-7 lg:shadow-[var(--shadow-card)]">
+				{/* 제목과 급여·접수는 "무엇을 심사하는가" 한 덩어리다. 데스크톱에서는 한 줄에
+				    붙여 판단 재료가 시작되는 지점을 위로 끌어올린다. 모바일 순서(제목 → 메타)는
+				    DOM 그대로여야 해서 래퍼를 display:contents로 접어 둔다. */}
+				<div className="contents lg:flex lg:items-center lg:justify-between lg:gap-6">
+					<div className="flex items-center gap-3 lg:min-w-0 lg:flex-1">
+						<Avatar name={item.company} size="lg" square />
+						<div className="min-w-0 flex-1">
+							<div className="font-extrabold text-[19px] text-foreground lg:text-2xl">
+								{item.title}
+							</div>
+							<div className="mt-0.5 text-[13px] text-muted-foreground">
+								{item.company} · {item.location} · ID {item.refId}
+							</div>
 						</div>
-						<div className="mt-0.5 text-[13px] text-muted-foreground">
-							{item.company} · {item.location} · ID {item.refId}
-						</div>
+					</div>
+					<div className="grid grid-cols-2 gap-2.5 lg:w-72 lg:shrink-0">
+						<MetaBox label="급여" value={item.pay} />
+						<MetaBox label="접수" value={item.receivedAt} />
 					</div>
 				</div>
-				{/* 데스크톱은 판단 재료(본문·이미지)를 넓은 왼쪽에, 요약(급여·접수·감지 신호)을
-				    오른쪽 좁은 열에 둔다 — 한 열로 1120px를 채우면 읽는 줄이 지나치게 길어진다.
-				    모바일 순서는 그대로여야 해서 두 묶음을 display:contents로 접어 둔다:
-				    lg 미만에서는 래퍼가 사라져 자식이 지금과 같은 한 줄기로 흐른다. */}
-				<div className="flex flex-col gap-[18px] lg:flex-row-reverse lg:items-start lg:gap-6">
-					<div className="contents lg:flex lg:w-80 lg:shrink-0 lg:flex-col lg:gap-[18px]">
-						<div className="grid grid-cols-2 gap-2.5">
-							<MetaBox label="급여" value={item.pay} />
-							<MetaBox label="접수" value={item.receivedAt} />
-						</div>
-						<div className="flex flex-col gap-2 rounded-[14px] bg-[color:var(--status-pending-bg)] p-[14px]">
-							<div className="flex items-center gap-2">
-								<span className="inline-flex size-[18px] text-[color:var(--status-pending-fg)]">
-									<AlertCircle />
-								</span>
-								<span className="font-extrabold text-[13.5px] text-[color:var(--status-pending-fg)]">
-									자동 필터가 감지한 신호 {item.flags.length}건
-								</span>
-							</div>
-							<div className="flex flex-wrap gap-1.5">
-								{item.flags.map((f) => (
-									<RiskFlag
-										key={`${f.label}-${f.match}`}
-										label={f.label}
-										match={f.match}
-										sev={f.sev}
-										tone={tone}
-									/>
-								))}
-							</div>
-						</div>
+				{/* 이 공고가 큐에 온 이유라 데스크톱에서도 전체 폭 밴드로 둔다. 좁은 열에 넣으면
+				    RiskFlag가 whitespace-nowrap이라 긴 감지 문구가 열 밖으로 삐져나간다. */}
+				<div className="flex flex-col gap-2 rounded-[14px] bg-[color:var(--status-pending-bg)] p-[14px] lg:px-5 lg:py-4">
+					<div className="flex items-center gap-2">
+						<span className="inline-flex size-[18px] text-[color:var(--status-pending-fg)]">
+							<AlertCircle />
+						</span>
+						<span className="font-extrabold text-[13.5px] text-[color:var(--status-pending-fg)]">
+							자동 필터가 감지한 신호 {item.flags.length}건
+						</span>
 					</div>
-					<div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-[18px]">
+					<div className="flex flex-wrap gap-1.5">
+						{item.flags.map((f) => (
+							<RiskFlag
+								key={`${f.label}-${f.match}`}
+								label={f.label}
+								match={f.match}
+								sev={f.sev}
+								tone={tone}
+							/>
+						))}
+					</div>
+				</div>
+				<div className="flex flex-col gap-[18px] lg:flex-row lg:items-start lg:gap-7">
+					<div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-5">
 						{item.desc.trim().length > 0 ? (
 							<>
 								<div>
@@ -725,33 +764,31 @@ export function QueueDetail({
 								<QueueMediaSection isLoading={isMediaLoading} media={media} />
 							</>
 						)}
-						<div className="px-0.5 text-[12px] text-muted-foreground leading-[1.55]">
-							판단 기준: 성적 서비스 암시·강요·외부 연락 유도는 반려, 단순 오해
-							소지는 승인 후 안내해요.
+						<div className="px-0.5 text-[12px] text-muted-foreground leading-[1.55] lg:hidden">
+							{VERDICT_GUIDE}
 						</div>
 					</div>
+					{/* 판정 도크. 승인·반려를 근거 옆에 붙여 두고 스크롤을 따라오게 한다 —
+					    화면 바닥에 고정된 바는 데스크톱에서 본문과 멀어지기만 한다.
+					    모바일에서는 도크가 통째로 숨고 하단 바가 같은 역할을 한다. */}
+					<aside className="hidden lg:sticky lg:top-20 lg:flex lg:w-72 lg:shrink-0 lg:flex-col lg:gap-3 lg:rounded-xl lg:bg-secondary lg:p-5">
+						<div className="font-extrabold text-[13px] text-foreground">
+							판정
+						</div>
+						<p className="m-0 text-[12px] text-muted-foreground leading-[1.55]">
+							{VERDICT_GUIDE}
+						</p>
+						{/* 좁은 열에서 두 버튼을 나란히 두면 "승인 후 게시"가 줄바꿈된다.
+						    세로로 쌓아 라벨을 온전히 두고, 마지막 줄에 승인을 놓아
+						    "확인하고 → 내보낸다" 순서가 그대로 읽히게 한다. */}
+						<div className="flex flex-col gap-2.5">
+							<VerdictActions onApprove={approve} onReject={openReject} />
+						</div>
+					</aside>
 				</div>
 			</div>
-			{/* 데스크톱에서 버튼을 폭 전체로 늘리면 승인 버튼이 550px짜리 과녁이 된다 —
-			    폭을 묶고 오른쪽으로 정렬해 "이 화면의 마무리 동작"으로 읽히게 둔다. */}
-			<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5 lg:grid-cols-[repeat(2,minmax(0,11rem))] lg:justify-end">
-				<Button
-					block
-					onClick={() => setReject(true)}
-					size="lg"
-					variant="secondary"
-				>
-					반려
-				</Button>
-				<Button
-					block
-					className="shadow-none"
-					onClick={() => onResolve(item.id, "approve")}
-					size="lg"
-					variant="primary"
-				>
-					승인 후 게시
-				</Button>
+			<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5 lg:hidden">
+				<VerdictActions onApprove={approve} onReject={openReject} />
 			</div>
 			{reject ? (
 				<RejectSheet
@@ -779,16 +816,18 @@ function RejectSheet({
 	];
 	const [sel, setSel] = useState(reasons[0]);
 	return (
-		// 모바일은 바닥에서 올라오는 시트, 데스크톱은 가운데 카드다 — 시트를 그대로 두면
-		// 사유 버튼 하나가 1120px이 되어 다섯 줄이 화면을 가로지른다.
-		<div className="absolute inset-0 z-20 flex flex-col justify-end lg:items-center lg:justify-center">
+		// 모바일은 바닥에서 올라오는 시트, 데스크톱은 화면 가운데 카드다.
+		// absolute는 상세 영역만 덮어서, 데스크톱에서는 헤더·푸터만 멀쩡히 밝은 채로 남아
+		// 모달이 페이지 일부에 낀 것처럼 보인다 — lg부터 fixed로 뷰포트 전체를 덮고
+		// 스티키 헤더(z-30) 위로 올린다. 올라오는 애니메이션은 바닥 시트일 때만 뜻이 있다.
+		<div className="absolute inset-0 z-20 flex flex-col justify-end lg:fixed lg:z-40 lg:items-center lg:justify-center">
 			<button
 				aria-label="닫기"
 				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
 				onClick={onCancel}
 				type="button"
 			/>
-			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-[var(--shadow-card)]">
+			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:animate-none lg:rounded-3xl lg:pt-6 lg:shadow-[var(--shadow-card)]">
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
 					반려 사유 선택
 				</h2>
