@@ -94,6 +94,27 @@ describe("buildExposureJobSections", () => {
 		expect(organicIds).toContain("o0");
 		expect(organicIds).toContain("o1");
 	});
+	it("organic 쿼리가 못 집어온 섹션 공고도 전체 공고에 반드시 담는다", () => {
+		const special = row("s1", "special");
+		const urgent = row("u1", "urgent");
+		const { sections, totalCount } = buildExposureJobSections({
+			limit: 30,
+			now: NOW,
+			// 상한이 걸린 별도 쿼리라 섹션 공고가 아예 안 들어온 상황.
+			organicRows: [row("o1", "standard")],
+			recommendedRows: [],
+			specialRows: [special],
+			urgentRows: [urgent],
+		});
+		expect(sections.organic.map((r) => r.id)).toEqual(["o1", "s1", "u1"]);
+		// 유료 배지는 호출부가 섹션 여부로 붙이므로 원값을 유지한다.
+		expect(sections.organic.map((r) => r.exposureType)).toEqual([
+			"standard",
+			"special",
+			"urgent",
+		]);
+		expect(totalCount).toBe(3);
+	});
 });
 
 const makeRow = (id: string, exposureType: string) => ({

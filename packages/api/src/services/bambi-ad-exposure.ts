@@ -138,6 +138,19 @@ export const buildExposureJobSections = <TRow extends ExposureSectionRow>({
 	const organic = organicRows
 		.filter((item) => item.status === "published")
 		.slice(0, limit + sectionJobIds.size);
+	// 창을 넓히는 것만으로는 부족하다 — organicRows는 상한이 걸린 별도 쿼리라 정렬상
+	// 뒤로 밀린 섹션 공고를 애초에 담고 있지 않을 수 있다. 섹션에 뜬 공고는 전체 공고에도
+	// 반드시 있어야 하므로 빠진 것만 뒤에 채운다. exposureType은 DB 원값 그대로 둔다:
+	// organic 쿼리가 집어온 같은 공고도 special/urgent/recommended 그대로이고, 전체 공고
+	// 카드의 유료 배지는 exposureType이 아니라 호출부의 inPaidSection 플래그가 결정한다.
+	const organicIds = new Set(organic.map((item) => item.id));
+
+	for (const item of [...special, ...urgent, ...recommended]) {
+		if (!organicIds.has(item.id)) {
+			organicIds.add(item.id);
+			organic.push(item);
+		}
+	}
 
 	return {
 		sections: { organic, recommended, special, urgent },

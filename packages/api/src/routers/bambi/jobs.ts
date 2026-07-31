@@ -877,6 +877,21 @@ const loadCrawledJobSections = async (
 		listCrawledSectionRows({ ...input, limit: input.limit }),
 	]);
 
+	// 섹션에 뜬 공고는 전체 공고에도 반드시 있어야 한다. 네 쿼리가 서로를 모르는 데다
+	// 정렬 키가 대량으로 동률이라, 전체 공고 쿼리가 섹션 행을 집어올 보장이 없다.
+	// 빠진 것만 뒤에 채운다 — listCrawledSectionRows가 승격해 둔 라벨은 'standard'로
+	// 되돌려야 전체 공고 카드가 유료 자리 배지를 달지 않는다.
+	const organicIds = new Set(organic.map((row) => row.id));
+
+	for (const row of [...special, ...urgent, ...recommended]) {
+		if (organicIds.has(row.id)) {
+			continue;
+		}
+
+		organicIds.add(row.id);
+		organic.push({ ...row, exposureType: "standard" });
+	}
+
 	return { organic, recommended, special, urgent };
 };
 
