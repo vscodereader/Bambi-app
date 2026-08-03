@@ -109,13 +109,15 @@ const getVerificationStatusTone = (
 };
 
 // biznumCheckedAt이 있으면 제출 때 국세청 대조를 통과한 것이고, null이면 판정하지
-// 못한 채(키 미설정·국세청 장애) 접수된 것이라 운영자 수동 확인이 남아 있다.
+// 못한 채(국세청 장애) 접수된 것이라 운영자 수동 확인이 남아 있다. 진위확인 자체가 아직
+// 준비 전(서비스키 미설정)이면 "미확인"은 오해를 부르므로 준비 중임을 그대로 알린다.
 const getBiznumCheckText = (
 	checkedAt: Date | null,
-	statusCode: null | string
+	statusCode: null | string,
+	checkEnabled: boolean
 ): string => {
 	if (!checkedAt) {
-		return "미확인";
+		return checkEnabled ? "미확인" : "곧 준비될 기능입니다";
 	}
 
 	return `확인 완료(${getBiznumStatusLabel(statusCode)}) · ${formatDateTime(checkedAt)}`;
@@ -147,6 +149,9 @@ export default function EmployerMePage() {
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	const organizationProfiles =
 		mineQuery.data?.employerOrganizationProfiles ?? [];
+	// 값을 못 받은 순간(로딩·에러)에는 기존 표기를 유지한다 — 준비 중 안내는 서버가
+	// 미설정이라고 알려준 경우에만 띄운다.
+	const biznumCheckEnabled = mineQuery.data?.biznumCheckEnabled ?? true;
 
 	const handleSignOut = async () => {
 		await signOutToHome(router);
@@ -296,6 +301,7 @@ export default function EmployerMePage() {
 					</p>
 				</div>
 				<BusinessInfoForm
+					biznumCheckEnabled={biznumCheckEnabled}
 					defaultBusinessRegistrationNumber={
 						organizationProfiles[0]?.businessRegistrationNumber ?? ""
 					}
@@ -367,7 +373,8 @@ export default function EmployerMePage() {
 											<dd className="mt-1 break-words">
 												{getBiznumCheckText(
 													organizationProfile.biznumCheckedAt,
-													organizationProfile.biznumStatusCode
+													organizationProfile.biznumStatusCode,
+													biznumCheckEnabled
 												)}
 											</dd>
 										</div>
@@ -480,12 +487,14 @@ export default function EmployerMePage() {
 const BRN_PATTERN = /^\d{3}-\d{2}-\d{5}$/;
 
 function BusinessInfoForm({
+	biznumCheckEnabled,
 	defaultDisplayName,
 	defaultBusinessRegistrationNumber,
 	defaultRepresentativeName,
 	defaultBusinessStartDate,
 	isRejected,
 }: {
+	biznumCheckEnabled: boolean;
 	defaultDisplayName: string;
 	defaultBusinessRegistrationNumber: string;
 	defaultRepresentativeName: string;
@@ -615,8 +624,9 @@ function BusinessInfoForm({
 						</div>
 					</div>
 					<p className="text-muted-foreground text-xs">
-						대표자 성명과 개업일자는 사업자등록증에 적힌 그대로 입력해야 국세청
-						진위확인을 통과합니다.
+						{biznumCheckEnabled
+							? "대표자 성명과 개업일자는 사업자등록증에 적힌 그대로 입력해야 국세청 진위확인을 통과합니다."
+							: "국세청 사업자등록정보 진위확인은 곧 준비될 기능이에요. 지금은 제출하신 정보를 운영자가 사업자등록증과 직접 대조해 승인하니, 대표자 성명과 개업일자를 사업자등록증에 적힌 그대로 입력해 주세요."}
 					</p>
 					<div className="flex justify-end">
 						<Button
