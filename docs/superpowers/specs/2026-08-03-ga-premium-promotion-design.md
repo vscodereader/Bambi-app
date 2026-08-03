@@ -27,12 +27,23 @@ GA4 「보고서 > 수익 창출 > 프로모션」에서 슬롯별 조회수·�
 `useAdBannerJobs()`가 내려주는 배너 슬롯 중 **`crawled === false`인 실제 결제 공고 칸만**.
 크롤링 채움 칸·빈 칸(자리표시)은 이벤트 자체를 보내지 않는다.
 
+좌우 rail(좌 `HorizontalAdBannerRail` 가로형 3칸 / 우 `AdBannerRail` 세로형 3칸)은 3컬럼
+셸의 `aside`에 들어 있고 **`min-[1720px]` 이상에서만 렌더**된다 — 그 미만 폭에서는 DOM에
+없으므로 노출 이벤트도 발생하지 않는다.
+
 | 지면 | 컴포넌트 | 슬롯 |
 |---|---|---|
 | 채용정보 마켓플레이스(`/seeker`) | `PremiumAdBannerSection` (중앙 가로 3칸) | `seeker_center_1..3` |
-| 〃 | `HorizontalAdBannerRail` (좌 rail 3칸, ≥1720px) | `seeker_left_1..3` |
-| 〃 | `AdBannerRail` (우 rail 세로 3칸, ≥1720px) | `seeker_right_1..3` |
-| 커뮤니티 홈 | `PremiumAdBannerSection` (중앙 가로 3칸) | `community_center_1..3` |
+| 〃 | `HorizontalAdBannerRail` (좌 rail, ≥1720px) | `seeker_left_1..3` |
+| 〃 | `AdBannerRail` (우 rail, ≥1720px) | `seeker_right_1..3` |
+| 수다방 홈(`/seeker/community`) | `PremiumAdBannerSection` (중앙 가로 3칸) | `community_center_1..3` |
+| 수다방 전 페이지 레이아웃 | 좌·우 rail (≥1720px) | `community_left_1..3` / `community_right_1..3` |
+| 고객센터 전 페이지 레이아웃(`/support`) | 좌·우 rail (≥1720px) | `support_left_1..3` / `support_right_1..3` |
+| 채팅 목록(`/seeker/chats`) | 좌·우 rail (≥1720px) | `chats_left_1..3` / `chats_right_1..3` |
+| 공고 상세 | 좌·우 rail (≥1720px) | `job_detail_left_1..3` / `job_detail_right_1..3` |
+| 수집 공고 상세 | 좌·우 rail (≥1720px) | `crawled_detail_left_1..3` / `crawled_detail_right_1..3` |
+
+총 14지면 × 3칸.
 
 ### 하지 않는 것
 
@@ -50,19 +61,28 @@ GA4 「보고서 > 수익 창출 > 프로모션」에서 슬롯별 조회수·�
   GA 스펙상 item 레벨 값이 이벤트 레벨을 덮어쓰므로 슬롯 구분은 item 레벨에 싣는다.
 - `view_promotion`: 카드가 뷰포트에 50% 이상 들어온 시점에 그 카드 1개를 items로 전송.
   마운트당 공고 ID 기준 1회(dedupe), 라우트 이동 후 재방문 시 다시 1회. 페이지당 최대
-  12칸이라 배칭 없이 카드 단위 전송으로 충분하다.
+  9칸이라 배칭 없이 카드 단위 전송으로 충분하다.
 - `select_promotion`: 카드 클릭 시 해당 카드 1개를 items로 전송 후 기존 내비게이션 진행
   (gtag는 내부 큐잉이라 전송 대기 없이 즉시 이동해도 된다).
 
+노출 수치 해석 시 주의:
+
+- layout(수다방·고객센터)에 호스팅된 rail은 하위 라우트를 오가도 언마운트되지 않아 세션 내
+  노출이 사실상 1회로 유지되는 반면, 화면 컴포넌트에 붙은 지면은 진입마다 다시 계측된다 —
+  지면 간 CTR을 나란히 비교할 때 분모 성격이 다르다는 점에 유의한다.
+- 좌우 rail은 초광폭(≥1720px)에서만 렌더되므로 노출 수가 중앙 지면보다 크게 낮은 것이
+  정상이며, 누락이 아니다.
+
 ## 구현 구성 (웹 전용, 서버·DB 무변경)
 
-1. **GA 헬퍼** `apps/web/src/lib/bambi/ga.ts` (신규)
+1. **GA 헬퍼** `apps/web/src/lib/bambi/ga-promotion.ts` (신규)
    - `trackPromotionView(item)` / `trackPromotionSelect(item)` — `window.gtag`가 없으면
      no-op(프로덕션 외 환경·GA 차단 브라우저 자동 무시). 파라미터 조립을 한곳에 모은다.
-2. **노출 훅** — IntersectionObserver `threshold: 0.5`, 관측 즉시 `unobserve` + 공고 ID
+2. **노출 훅** `apps/web/src/lib/bambi/use-promotion-impression.ts` (신규) —
+   IntersectionObserver `threshold: 0.5`, 관측 즉시 `unobserve` + 공고 ID
    Set으로 마운트당 1회 보장. reduced-API 환경(observer 부재)에서는 조용히 건너뛴다.
 3. **배너 컴포넌트 연결** — `ad-banner.tsx`의 가로/세로 배너 카드에 슬롯 라벨을 내려주는
-   prop을 추가하고, 위 4개 컨테이너(마켓플레이스 3곳·커뮤니티 홈 1곳)에서 지면·레일
+   prop을 추가하고, 위 14지면의 컨테이너(화면 4곳 + 레이아웃·상세 rail)에서 지면·레일
    접두어를 전달. `crawled` 카드와 자리표시는 prop을 주지 않아 계측이 꺼진다.
 
 ## 오류 처리

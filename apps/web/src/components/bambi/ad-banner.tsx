@@ -20,6 +20,12 @@ import { usePromotionImpression } from "@/lib/bambi/use-promotion-impression";
 import { orpc } from "@/utils/orpc";
 import { AdBannerLayoutRenderer } from "./ad-banner-layout-renderer";
 
+// GA4 프로모션 슬롯 지정(이슈 #59) — rail이 칸 순번으로 만들어 배너까지 내려보낸다.
+interface PromotionSlot {
+	index: number;
+	slot: string;
+}
+
 const AD_BANNER_SURFACE_CLASS = "relative block overflow-hidden rounded-lg";
 
 const AD_BANNER_LINK_CLASS =
@@ -38,7 +44,7 @@ function AdBannerFrame({
 	children: ReactNode;
 	className?: string;
 	item: AdBannerItem;
-	promotion?: { index: number; slot: string };
+	promotion?: PromotionSlot;
 }) {
 	const tracked = promotion && shouldTrackPromotion(item) ? promotion : null;
 	// onImpress는 primitive에만 의존시킨다. item 객체는 렌더마다 새로 만들어지므로
@@ -153,7 +159,7 @@ interface AdBannerProps {
 	className?: string;
 	item: AdBannerItem;
 	// 넘기면 이 배너를 GA4 프로모션으로 계측한다(이슈 #59). rail이 칸 순번으로 만들어 준다.
-	promotion?: { index: number; slot: string };
+	promotion?: PromotionSlot;
 }
 
 // 세로형 광고 배너(우측 사이드용) — 규격 4:9(권장 400×900), 높이는 상단 프리미엄 배너와 같다(h-52).
@@ -251,7 +257,7 @@ interface HorizontalAdBannerProps {
 	className?: string;
 	item: AdBannerItem;
 	// AdBannerProps.promotion과 같다 — 넘기면 GA4 프로모션으로 계측한다(이슈 #59).
-	promotion?: { index: number; slot: string };
+	promotion?: PromotionSlot;
 }
 
 // 가로형 광고 배너(좌측 사이드·상단 프리미엄용) — 노출 슬롯은 16:9.

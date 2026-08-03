@@ -56,6 +56,10 @@ const sendPromotionEvent = (
 	creativeSlot: string,
 	index: number
 ): void => {
+	// 게이트(shouldTrackPromotion)를 안 거친 미래 콜사이트 방어 — 크롤링 배너는 계측 제외.
+	if (item.crawled) {
+		return;
+	}
 	const gtag = getGtag();
 	if (!gtag) {
 		return;

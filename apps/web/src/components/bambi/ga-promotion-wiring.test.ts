@@ -112,6 +112,11 @@ describe("GA 프로모션 지면 와이어링", () => {
 		expect(source).toContain("trackPromotionView");
 		expect(source).toContain("trackPromotionSelect");
 		expect(source).toContain("usePromotionImpression");
+		// 좌(HorizontalAdBannerRail)·우(AdBannerRail) rail 두 곳이 같은 슬롯 표현식으로
+		// 칸 이름을 만든다 — 한쪽만 규칙이 어긋나면 지면별 CTR 비교가 깨지므로 개수까지 고정한다.
+		expect(source.match(new RegExp(SLOT_EXPRESSION.source, "g"))).toHaveLength(
+			2
+		);
 	});
 
 	it("프리미엄 섹션이 칸 순번으로 슬롯 이름을 만든다", () => {

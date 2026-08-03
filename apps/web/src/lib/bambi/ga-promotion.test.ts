@@ -77,6 +77,13 @@ describe("track 함수", () => {
 		).not.toThrow();
 	});
 
+	it("크롤링 배너는 게이트를 건너뛴 호출에서도 전송하지 않는다", () => {
+		const gtag = vi.fn();
+		vi.stubGlobal("window", { gtag });
+		trackPromotionView({ ...paidBanner, crawled: true }, "seeker_left_1", 0);
+		expect(gtag).not.toHaveBeenCalled();
+	});
+
 	it("gtag가 예외를 던져도 전파하지 않는다", () => {
 		vi.stubGlobal("window", {
 			gtag: () => {
