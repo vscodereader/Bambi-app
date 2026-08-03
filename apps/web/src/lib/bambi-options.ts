@@ -21,21 +21,8 @@ export type IndustryOption = (typeof industryOptions)[number];
 export const isIndustryOption = (value: string): value is IndustryOption =>
 	(industryOptions as readonly string[]).includes(value);
 
-export const regionOptions = ["서울", "경기", "인천", "부산", "기타"] as const;
+// 지역·세부지역은 DB 지역 마스터(regions.list)에서 온다 — lib/bambi/regions.ts 참고.
 
-// 시/도 → 세부지역. 폼·seeker 필터·mock이 공유하는 단일 소스.
-export const REGION_DISTRICTS: Record<string, readonly string[]> = {
-	서울: ["강남", "서초", "송파", "마포", "용산", "강북"],
-	경기: ["부천", "수원", "성남", "안양"],
-	인천: ["남동", "부평", "미추홀"],
-	부산: ["해운대", "서면", "연제"],
-	기타: [],
-};
-
-// 선택한 시/도의 세부지역 목록(정의 없으면 빈 배열).
-export function districtsForRegion(region: string): readonly string[] {
-	return REGION_DISTRICTS[region] ?? [];
-}
 // 금액 없이 "면접 후 급여 협의"로 내는 단위. 이 단위면 payAmount를 저장하지 않는다.
 export const NEGOTIABLE_PAY_UNIT = "협의";
 

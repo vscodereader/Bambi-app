@@ -19,12 +19,11 @@ import {
 	ALL_OPTION,
 	applyDiscoveryAxis,
 	discoveryAxisForTab,
-	districtOptionsForRegion,
 	MARKETPLACE_CATEGORIES,
 	MARKETPLACE_QUICK_FILTERS,
-	MARKETPLACE_REGIONS,
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
+import { findRegion, useRegions } from "@/lib/bambi/regions";
 import { SELECTED_JOB_CARD_CLASS } from "@/lib/bambi/selection-style";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
 import { Badge, Button, Card, Input, Tag } from "./ds";
@@ -61,26 +60,37 @@ export function MarketplaceFilterControls({
 }: MarketplaceFilterSidebarProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
-	const districtOptions = districtOptionsForRegion(filters.region);
+	const { isLoading, regions } = useRegions();
+	const districts = findRegion(regions, filters.regionCode)?.districts ?? [];
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex flex-col gap-2">
 				<span className="font-bold text-muted-foreground text-xs">지역</span>
 				<Select
+					disabled={isLoading}
+					items={[
+						{ label: ALL_OPTION, value: ALL_OPTION },
+						...regions.map((region) => ({
+							label: region.label,
+							value: region.code,
+						})),
+					]}
 					onValueChange={(value) => {
 						if (value) {
-							update({ district: ALL_OPTION, region: value });
+							// 시/도를 바꾸면 세부지역은 남의 시/도 코드라 전체로 되돌린다.
+							update({ districtCode: ALL_OPTION, regionCode: value });
 						}
 					}}
-					value={filters.region}
+					value={filters.regionCode}
 				>
 					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
-						<SelectValue>{(value) => value}</SelectValue>
+						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						{MARKETPLACE_REGIONS.map((region) => (
-							<SelectItem key={region} value={region}>
-								{region}
+						<SelectItem value={ALL_OPTION}>{ALL_OPTION}</SelectItem>
+						{regions.map((region) => (
+							<SelectItem key={region.code} value={region.code}>
+								{region.label}
 							</SelectItem>
 						))}
 					</SelectContent>
@@ -91,21 +101,29 @@ export function MarketplaceFilterControls({
 					세부지역
 				</span>
 				<Select
-					disabled={districtOptions.length <= 1}
+					disabled={districts.length === 0}
+					items={[
+						{ label: ALL_OPTION, value: ALL_OPTION },
+						...districts.map((district) => ({
+							label: district.name,
+							value: district.code,
+						})),
+					]}
 					onValueChange={(value) => {
 						if (value) {
-							update({ district: value });
+							update({ districtCode: value });
 						}
 					}}
-					value={filters.district}
+					value={filters.districtCode}
 				>
 					<SelectTrigger className="h-11 w-full rounded-lg px-3 font-semibold text-sm">
-						<SelectValue>{(value) => value}</SelectValue>
+						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						{districtOptions.map((district) => (
-							<SelectItem key={district} value={district}>
-								{district}
+						<SelectItem value={ALL_OPTION}>{ALL_OPTION}</SelectItem>
+						{districts.map((district) => (
+							<SelectItem key={district.code} value={district.code}>
+								{district.name}
 							</SelectItem>
 						))}
 					</SelectContent>
@@ -313,18 +331,35 @@ interface MarketplaceAxisChipsProps {
 	onChange: FilterChange;
 }
 
-const MARKETPLACE_AXIS_CONFIG = {
-	category: { Icon: BriefcaseIcon, options: MARKETPLACE_CATEGORIES },
-	region: { Icon: MapPinIcon, options: MARKETPLACE_REGIONS },
+const MARKETPLACE_AXIS_ICONS = {
+	category: BriefcaseIcon,
+	region: MapPinIcon,
 } as const;
 
-// 지역/업종 공용 퀵칩 — 축에 따라 옵션·아이콘·대상 필드를 바꾼다.
+// 지역/업종 공용 퀵칩 — 축에 따라 옵션·아이콘·대상 필드를 바꾼다. 지역 옵션은 DB 지역
+// 마스터에서 오므로 값(코드)과 표기(라벨)가 다르다.
 export function MarketplaceAxisChips({
 	axis,
 	filters,
 	onChange,
 }: MarketplaceAxisChipsProps) {
-	const { Icon, options } = MARKETPLACE_AXIS_CONFIG[axis];
+	const { regions } = useRegions();
+	const Icon = MARKETPLACE_AXIS_ICONS[axis];
+	const options =
+		axis === "region"
+			? [
+					{ label: ALL_OPTION, value: ALL_OPTION },
+					...regions.map((region) => ({
+						label: region.label,
+						value: region.code,
+					})),
+				]
+			: MARKETPLACE_CATEGORIES.map((category) => ({
+					label: category,
+					value: category,
+				}));
+	const selectedValue =
+		axis === "region" ? filters.regionCode : filters.category;
 	return (
 		<div className="flex items-center gap-2">
 			<span className="inline-flex size-4 shrink-0 text-coral-600">
@@ -333,17 +368,21 @@ export function MarketplaceAxisChips({
 			<div className="flex min-w-0 gap-2 overflow-x-auto [scrollbar-width:none]">
 				{options.map((option) => (
 					<Tag
-						key={option}
+						key={option.value}
 						onClick={() =>
 							onChange(
 								axis === "region"
-									? { ...filters, district: ALL_OPTION, region: option }
-									: { ...filters, category: option }
+									? {
+											...filters,
+											districtCode: ALL_OPTION,
+											regionCode: option.value,
+										}
+									: { ...filters, category: option.value }
 							)
 						}
-						selected={filters[axis] === option}
+						selected={selectedValue === option.value}
 					>
-						{option}
+						{option.label}
 					</Tag>
 				))}
 			</div>

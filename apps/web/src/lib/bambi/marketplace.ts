@@ -1,22 +1,10 @@
-import {
-	districtsForRegion,
-	industryOptions,
-	PAY_UNIT_HOURS,
-	regionOptions,
-} from "../bambi-options";
+import { industryOptions, PAY_UNIT_HOURS } from "../bambi-options";
 import type { Job } from "./types";
 
 // 축 미적용(전체) 옵션 — 지역/업종 필터에서 "필터 없음"을 뜻한다.
 export const ALL_OPTION = "전체";
 
-export const MARKETPLACE_REGIONS = [ALL_OPTION, ...regionOptions] as const;
-
 export const MARKETPLACE_CATEGORIES = [ALL_OPTION, ...industryOptions] as const;
-
-// 선택한 시/도의 세부지역 필터 목록(맨 앞 전체 + 시/도 하위 세부지역).
-export function districtOptionsForRegion(region: string): readonly string[] {
-	return [ALL_OPTION, ...districtsForRegion(region)];
-}
 
 export const MARKETPLACE_QUICK_FILTERS = [
 	{ id: "verified", label: "검증 완료" },
@@ -26,22 +14,24 @@ export const MARKETPLACE_QUICK_FILTERS = [
 
 export interface MarketplaceFilters {
 	category: string;
-	district: string;
+	// 지역 축은 표시 문자열이 아니라 지역 마스터 코드로 들고 다닌다(서버 필터 입력도 코드다).
+	// ALL_OPTION이면 축 미적용.
+	districtCode: string;
 	minimumPay: number;
 	onlyBeginnerFriendly: boolean;
 	onlyToday: boolean;
 	onlyVerified: boolean;
-	region: string;
+	regionCode: string;
 }
 
 export const DEFAULT_MARKETPLACE_FILTERS: MarketplaceFilters = {
 	category: ALL_OPTION,
-	district: ALL_OPTION,
+	districtCode: ALL_OPTION,
 	minimumPay: 0,
 	onlyBeginnerFriendly: false,
 	onlyToday: false,
 	onlyVerified: false,
-	region: ALL_OPTION,
+	regionCode: ALL_OPTION,
 };
 
 const NUMBER_RE = /\d[\d,]*/;
@@ -78,12 +68,12 @@ function jobMatchesCategory(job: Job, category: string): boolean {
 	return category === ALL_OPTION || job.type === category;
 }
 
-function jobMatchesRegion(job: Job, region: string): boolean {
-	return region === ALL_OPTION || job.region === region;
+function jobMatchesRegion(job: Job, regionCode: string): boolean {
+	return regionCode === ALL_OPTION || job.regionCode === regionCode;
 }
 
-function jobMatchesDistrict(job: Job, district: string): boolean {
-	return district === ALL_OPTION || job.district === district;
+function jobMatchesDistrict(job: Job, districtCode: string): boolean {
+	return districtCode === ALL_OPTION || job.districtCode === districtCode;
 }
 
 export function filterMarketplaceJobs(
@@ -91,10 +81,10 @@ export function filterMarketplaceJobs(
 	filters: MarketplaceFilters
 ): Job[] {
 	return jobs.filter((job) => {
-		if (!jobMatchesRegion(job, filters.region)) {
+		if (!jobMatchesRegion(job, filters.regionCode)) {
 			return false;
 		}
-		if (!jobMatchesDistrict(job, filters.district)) {
+		if (!jobMatchesDistrict(job, filters.districtCode)) {
 			return false;
 		}
 		if (!jobMatchesCategory(job, filters.category)) {
@@ -131,13 +121,13 @@ export function applyDiscoveryAxis(
 		return { ...filters, category: ALL_OPTION };
 	}
 	if (axis === "category") {
-		return { ...filters, district: ALL_OPTION, region: ALL_OPTION };
+		return { ...filters, districtCode: ALL_OPTION, regionCode: ALL_OPTION };
 	}
 	return {
 		...filters,
 		category: ALL_OPTION,
-		district: ALL_OPTION,
-		region: ALL_OPTION,
+		districtCode: ALL_OPTION,
+		regionCode: ALL_OPTION,
 	};
 }
 
