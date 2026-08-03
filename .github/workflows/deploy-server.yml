@@ -128,7 +128,7 @@ jobs:
             --session-affinity \
             --add-cloudsql-instances="${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" \
             --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}##BAMBI_COOKIE_PREFIX=${BAMBI_COOKIE_PREFIX}" \
-            --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest,PORTONE_API_SECRET=${SERVICE}-portone-api-secret:latest,NTS_SERVICE_KEY=${SERVICE}-nts-service-key:latest"
+            --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest,PORTONE_API_SECRET=${SERVICE}-portone-api-secret:latest"
 
       - name: Show service URL
         run: |

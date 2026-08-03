@@ -19,8 +19,10 @@ export const env = createEnv({
 		// 본인인증이 목 핸들러(verifyMyPhoneMock)로 폴백한다.
 		PORTONE_API_SECRET: z.string().min(1).optional(),
 		// 공공데이터포털 "국세청 사업자등록정보 진위확인" 서비스키(디코딩 키를 넣는다 —
-		// 인코딩 키를 넣으면 이중 인코딩으로 인증에 실패한다). 개발에서는 선택 — 비어 있으면
-		// 사업자정보 제출 시 진위확인을 건너뛰고 운영자 수동 심사만 남는다.
+		// 인코딩 키를 넣으면 이중 인코딩으로 인증에 실패한다). 프로덕션 포함 선택 값이다 —
+		// 공공데이터포털 기업회원 심사 대기로 아직 키가 없다. 비어 있으면 사업자정보 제출 시
+		// 진위확인을 건너뛰고(전 건 "미확인" 접수) 운영자 수동 심사만 남으며, 구인자 화면에는
+		// "곧 준비될 기능" 안내가 나간다. 키를 넣으면 코드 수정 없이 진위확인이 켜진다.
 		NTS_SERVICE_KEY: z.string().min(1).optional(),
 		// better-auth 세션 쿠키 prefix. dev/prod가 같은 apex(.bambialba.com)를 공유하므로
 		// 환경별로 다른 값(prod=bambi, dev=bambi-dev)을 줘 쿠키 충돌을 막는다. 미설정(로컬)
@@ -56,13 +58,5 @@ if (env.NODE_ENV === "production" && !env.GCS_PUBLIC_BUCKET) {
 if (env.NODE_ENV === "production" && !env.PORTONE_API_SECRET) {
 	throw new Error(
 		"PORTONE_API_SECRET은 프로덕션에서 필수입니다. 값이 없으면 휴대폰 본인인증이 동작하지 않습니다."
-	);
-}
-
-// 프로덕션에서 서비스키가 빠지면 사업자등록번호 진위확인이 통째로 생략된 채 제출이 통과한다
-// (검사를 건너뛰는 경로는 개발 편의용이다). 아무 번호나 pending으로 쌓이는 대신 부팅을 실패시킨다.
-if (env.NODE_ENV === "production" && !env.NTS_SERVICE_KEY) {
-	throw new Error(
-		"NTS_SERVICE_KEY는 프로덕션에서 필수입니다. 값이 없으면 사업자등록번호 진위확인이 조용히 생략됩니다."
 	);
 }

@@ -533,6 +533,9 @@ export const onboardingRouter = {
 		return {
 			bambiProfile: toClientProfile(profile),
 			accountSanction,
+			// 국세청 진위확인 서비스키가 있어야 제출 때 대조가 돈다. 없으면 전 건이 "미확인"으로
+			// 접수되므로, 화면이 "미확인" 대신 "곧 준비될 기능" 안내를 띄우도록 여부만 내려준다.
+			biznumCheckEnabled: Boolean(env.NTS_SERVICE_KEY),
 			community,
 			employerOrganizationProfiles: organizationProfiles,
 			// teamMember 기준 팀에 더해 owner/admin 조직 전체 팀까지 포함해야
