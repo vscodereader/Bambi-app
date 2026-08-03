@@ -3,6 +3,7 @@
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
+import Link from "next/link";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { formatMinimumWageLabel } from "@/lib/bambi/minimum-wage";
@@ -29,6 +30,8 @@ interface SeekerJobDetailResponsiveProps {
 	// 눌러도 서버 가드(enforceJobSeekerAccess)가 각자 홈으로 되돌리므로,
 	// 버튼을 남겨두면 아무 설명 없이 튕기는 것처럼 보인다.
 	canStartChat: boolean;
+	// 내가 차단한 구인자의 공고. 채팅을 시작해도 서버가 막으므로 CTA 자리를 안내로 바꾼다.
+	isBlockedEmployer?: boolean;
 	job: Job;
 	onBack: () => void;
 	onReport: () => void;
@@ -112,8 +115,30 @@ export function EmployerPhoneTile({ phone }: { phone: string }) {
 	);
 }
 
+// 채팅 CTA 자리에 그대로 들어가는 차단 안내. 사용자가 스스로 건 차단이라 경고(danger)가
+// 아니라 중립 톤(secondary 카드)으로 두고, 해제 경로(차단 관리)만 링크로 건다.
+function BlockedEmployerNotice({ className }: { className?: string }) {
+	return (
+		<Card className={cn("rounded-lg", className)} pad="md" tone="subtle">
+			<div className="font-extrabold text-foreground text-sm">
+				차단한 상대의 공고입니다
+			</div>
+			<p className="mt-1 mb-0 text-muted-foreground text-xs leading-relaxed">
+				차단을 해제하면 다시 채팅할 수 있어요.{" "}
+				<Link
+					className="font-bold text-foreground underline underline-offset-2"
+					href="/seeker/me/blocks"
+				>
+					차단 관리
+				</Link>
+			</p>
+		</Card>
+	);
+}
+
 export function SeekerJobDetailResponsive({
 	canStartChat,
+	isBlockedEmployer = false,
 	job,
 	onBack,
 	onReport,
@@ -126,6 +151,10 @@ export function SeekerJobDetailResponsive({
 		orpc.bambi.siteSettings.getFooter.queryOptions()
 	);
 	const minimumWageLabel = formatMinimumWageLabel(siteSettings.data);
+	// CTA 자리(데스크톱 우측 패널·모바일 하단 바)는 차단 여부에 따라 채팅 버튼 또는 안내 중
+	// 하나만 그린다. 자리 자체는 그대로라 하단 여백(pb-28)은 canStartChat 기준을 유지한다.
+	const showChatCta = canStartChat && !isBlockedEmployer;
+	const showBlockedNotice = canStartChat && isBlockedEmployer;
 	return (
 		// 모바일 하단 고정 CTA 자리를 pb-28로 비워 둔다. CTA를 감추는 역할에서는
 		// 그 여백이 빈 공간으로 남으므로 기본 여백으로 되돌린다.
@@ -324,7 +353,10 @@ export function SeekerJobDetailResponsive({
 								{job.hours}
 							</div>
 						</div>
-						{canStartChat ? (
+						{showBlockedNotice ? (
+							<BlockedEmployerNotice className="mt-5" />
+						) : null}
+						{showChatCta ? (
 							<>
 								<div className="mt-5 rounded-lg bg-coral-50 p-3 text-coral-700">
 									<div className="flex items-center gap-2 font-extrabold text-sm">
@@ -372,14 +404,18 @@ export function SeekerJobDetailResponsive({
 			</aside>
 			{canStartChat ? (
 				<div className="fixed right-0 bottom-0 left-0 z-30 border-border border-t bg-background p-4 lg:hidden">
-					<Button
-						block
-						className="shadow-none"
-						onClick={onStartChat}
-						rightIcon={<Message />}
-					>
-						1:1 채팅 시작
-					</Button>
+					{showBlockedNotice ? (
+						<BlockedEmployerNotice />
+					) : (
+						<Button
+							block
+							className="shadow-none"
+							onClick={onStartChat}
+							rightIcon={<Message />}
+						>
+							1:1 채팅 시작
+						</Button>
+					)}
 				</div>
 			) : null}
 		</div>
