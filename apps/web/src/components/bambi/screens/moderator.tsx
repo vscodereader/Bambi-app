@@ -2,6 +2,8 @@
 
 // 밤비 — 운영자(Moderator) 콘솔: 검수 큐, 신고 인박스, 사용자 제재.
 
+import { Button as UiButton } from "@bambi-app/ui/components/button";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -23,6 +25,7 @@ import {
 } from "@bambi-app/ui/components/sheet";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
+import { ChevronRight } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -30,6 +33,8 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { type DataColumn, DataTable } from "@/components/bambi/data-table";
+import { StatusBadge } from "@/components/bambi/status-badge";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
 	COMMUNITY_BOARDS,
@@ -942,6 +947,137 @@ function ReportRow({
 	);
 }
 
+// 데스크톱 신고 표 — 콘솔 표준 DataTable. 정렬용 심각도 랭크(심각 → 참고).
+const SEV_RANK: Record<ReportSeverity, number> = { high: 0, mid: 1, low: 2 };
+
+// 이름 + 역할 2줄 셀(피신고 대상·신고자 공용).
+function PartyCell({ name, role }: { name: string; role: string }) {
+	return (
+		<div className="flex flex-col">
+			<span className="text-foreground">{name}</span>
+			<span className="text-muted-foreground text-xs">{role}</span>
+		</div>
+	);
+}
+
+function getReportColumns({
+	onOpen,
+	onToggle,
+	selected,
+}: {
+	onOpen: (r: Report) => void;
+	onToggle?: (id: string) => void;
+	selected: string[];
+}): DataColumn<Report>[] {
+	return [
+		// 선택 기능이 없으면(일괄 처리 바 미사용) 컬럼 자체를 뺀다.
+		...(onToggle
+			? [
+					{
+						id: "select",
+						header: <span className="sr-only">선택</span>,
+						headerClassName: "w-10",
+						cell: (r: Report) => (
+							<Checkbox
+								aria-label={`${r.reason} 신고 선택`}
+								checked={selected.includes(r.id)}
+								onCheckedChange={() => onToggle(r.id)}
+								// 행 클릭(상세 이동)과 겹치지 않게 체크박스 클릭은 여기서 멈춘다.
+								onClick={(event) => event.stopPropagation()}
+							/>
+						),
+					},
+				]
+			: []),
+		{
+			id: "sev",
+			header: "심각도",
+			sortValue: (r) => SEV_RANK[r.sev],
+			cell: (r) => <SevPill sev={r.sev} />,
+		},
+		{
+			id: "reason",
+			header: "사유",
+			sortValue: (r) => r.reason,
+			cell: (r) => (
+				<span
+					className={cn(
+						"font-medium",
+						// 처리 완료 행은 카드 목록처럼 한 톤 죽인다.
+						r.status === "open" ? "text-foreground" : "text-muted-foreground"
+					)}
+				>
+					{r.reason}
+				</span>
+			),
+		},
+		{
+			id: "target",
+			header: "피신고 대상",
+			sortValue: (r) => r.target,
+			cell: (r) => <PartyCell name={r.target} role={r.targetRole} />,
+		},
+		{
+			id: "reporter",
+			header: "신고자",
+			sortValue: (r) => r.reporter,
+			cell: (r) => <PartyCell name={r.reporter} role={r.reporterRole} />,
+		},
+		{
+			id: "note",
+			header: "신고 내용",
+			cell: (r) => (
+				<span className="block max-w-xs truncate text-muted-foreground">
+					{r.note}
+				</span>
+			),
+		},
+		{
+			id: "time",
+			header: "접수",
+			sortValue: (r) => r.time,
+			cell: (r) => (
+				<span className="whitespace-nowrap text-muted-foreground">
+					{r.time}
+				</span>
+			),
+		},
+		{
+			id: "status",
+			header: "상태",
+			sortValue: (r) => (r.status === "open" ? 0 : 1),
+			cell: (r) =>
+				r.status === "open" ? (
+					<StatusBadge tone="warning">대기</StatusBadge>
+				) : (
+					<StatusBadge>완료</StatusBadge>
+				),
+		},
+		{
+			id: "open",
+			header: <span className="sr-only">상세</span>,
+			headerClassName: "w-10",
+			cellClassName: "text-right",
+			// 행 클릭의 키보드 대체 경로.
+			cell: (r) => (
+				<UiButton
+					aria-label="신고 상세 열기"
+					// 행 클릭과 중복 호출되지 않게 여기서 멈춘다.
+					onClick={(event) => {
+						event.stopPropagation();
+						onOpen(r);
+					}}
+					size="icon-sm"
+					type="button"
+					variant="ghost"
+				>
+					<ChevronRight />
+				</UiButton>
+			),
+		},
+	];
+}
+
 export function ReportList({
 	items,
 	onOpen,
@@ -957,7 +1093,19 @@ export function ReportList({
 	const closed = items.filter((r) => r.status !== "open");
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pt-1 pb-5">
+			{/* 데스크톱: 콘솔 표준 표(미처리 → 처리 완료 순). */}
+			<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pt-1 pb-5 max-md:hidden">
+				<DataTable
+					columns={getReportColumns({ onOpen, onToggle, selected })}
+					data={[...open, ...closed]}
+					emptyMessage="신고 내역이 없어요"
+					getRowKey={(r) => r.id}
+					onRowClick={onOpen}
+					pageSize={10}
+				/>
+			</div>
+			{/* 모바일: 기존 카드 목록. */}
+			<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pt-1 pb-5 md:hidden">
 				{open.map((r) => (
 					<ReportRow
 						key={r.id}
@@ -1474,6 +1622,123 @@ function CommunityTargetPanel({
 	);
 }
 
+// 당사자 카드 2개. 모바일은 가로 나란히, 데스크톱 사이드 패널에서는 세로로 쌓는다.
+function ReportParties({ item }: { item: Report }) {
+	return (
+		<div className="flex gap-2.5 md:flex-col">
+			<PartyBox
+				flagged
+				name={item.target}
+				role={`피신고 · ${item.targetRole}`}
+			/>
+			<PartyBox name={item.reporter} role={`신고자 · ${item.reporterRole}`} />
+		</div>
+	);
+}
+
+// 처리 완료 안내. 모바일은 본문 끝, 데스크톱은 오른쪽 패널에 둔다(위치만 다르고 내용 동일).
+function ReportResolvedNotice({ className }: { className?: string }) {
+	return (
+		<div
+			className={cn(
+				"flex items-center gap-2 rounded-[14px] bg-[color:var(--status-success-bg)] p-[14px] text-[color:var(--status-success-fg)]",
+				className
+			)}
+		>
+			<span className="inline-flex size-[18px]">
+				<CheckIcon />
+			</span>
+			<span className="font-bold text-[13px]">이미 처리된 신고예요</span>
+		</div>
+	);
+}
+
+// 구조화된 대상 맥락이 없는 신고(채팅 메시지·프리뷰 목업)의 스레드 폴백.
+function ReportThread({ item }: { item: Report }) {
+	return (
+		<div>
+			<div className="mb-2 font-bold text-[13px] text-foreground">
+				신고된 대화
+			</div>
+			<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
+				{item.thread.map((m) => (
+					<div
+						className={cn("max-w-[85%]", m.mine ? "self-end" : "self-start")}
+						key={`${m.mine ? "me" : "them"}-${m.text}`}
+					>
+						<div
+							className={cn(
+								"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
+								m.mine ? "text-right" : "text-left"
+							)}
+						>
+							{m.mine ? item.reporter : item.target}
+						</div>
+						<div
+							className={cn(
+								"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
+								m.mine
+									? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
+									: "rounded-bl-[4px] bg-ink-800 text-white"
+							)}
+						>
+							{m.text}
+						</div>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
+// 기각·제재 액션. 모바일 하단 고정 바와 데스크톱 오른쪽 패널이 같은 컴포넌트를 쓴다.
+function ReportActions({
+	item,
+	onResolve,
+	onSanctionRequest,
+	sanctionUserId,
+}: {
+	item: Report;
+	onResolve: (id: string, action: "dismiss" | "act") => void;
+	onSanctionRequest: () => void;
+	sanctionUserId: string | null;
+}) {
+	return (
+		<div>
+			{sanctionUserId ? null : (
+				<p className="m-0 mb-2.5 text-[12px] text-muted-foreground leading-[1.5]">
+					이 신고는 사용자 계정이 대상이 아니에요. 사용자 제재가 필요하면 사용자
+					관리에서 진행해 주세요.
+				</p>
+			)}
+			<div className="grid grid-cols-2 gap-2.5">
+				<Button
+					block
+					onClick={() => onResolve(item.id, "dismiss")}
+					size="lg"
+					variant="secondary"
+				>
+					기각
+				</Button>
+				{sanctionUserId ? (
+					<Button block onClick={onSanctionRequest} size="lg" variant="danger">
+						제재 적용
+					</Button>
+				) : (
+					<Button
+						block
+						onClick={() => onResolve(item.id, "act")}
+						size="lg"
+						variant="primary"
+					>
+						조치 완료
+					</Button>
+				)}
+			</div>
+		</div>
+	);
+}
+
 export function ReportDetail({
 	item,
 	onBack,
@@ -1519,117 +1784,51 @@ export function ReportDetail({
 	} else if (item.targetType === "user" && item.targetId) {
 		sanctionUserId = item.targetId;
 	}
+	const isOpen = item.status === "open";
+	const actions = (
+		<ReportActions
+			item={item}
+			onResolve={onResolve}
+			onSanctionRequest={() => setAct(true)}
+			sanctionUserId={sanctionUserId}
+		/>
+	);
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="신고 검토" />
-			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pt-1 pb-5">
-				<div className="flex items-center gap-2">
-					<SevPill sev={item.sev} />
-					<h2 className="m-0 min-w-0 flex-1 font-extrabold text-[19px] text-foreground">
-						{item.reason}
-					</h2>
-				</div>
-				<div className="flex gap-2.5">
-					<PartyBox
-						flagged
-						name={item.target}
-						role={`피신고 · ${item.targetRole}`}
-					/>
-					<PartyBox
-						name={item.reporter}
-						role={`신고자 · ${item.reporterRole}`}
-					/>
-				</div>
-				{item.communityKind || hasStructuredContext ? (
-					<ReportTargetContextView
-						isBlockingChatRoom={isBlockingChatRoom}
-						item={item}
-						onBlockChatRoom={onBlockChatRoom}
-						onModerateCommunity={onModerateCommunity}
-					/>
-				) : (
-					<div>
-						<div className="mb-2 font-bold text-[13px] text-foreground">
-							신고된 대화
-						</div>
-						<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
-							{item.thread.map((m) => (
-								<div
-									className={cn(
-										"max-w-[85%]",
-										m.mine ? "self-end" : "self-start"
-									)}
-									key={`${m.mine ? "me" : "them"}-${m.text}`}
-								>
-									<div
-										className={cn(
-											"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
-											m.mine ? "text-right" : "text-left"
-										)}
-									>
-										{m.mine ? item.reporter : item.target}
-									</div>
-									<div
-										className={cn(
-											"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
-											m.mine
-												? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
-												: "rounded-bl-[4px] bg-ink-800 text-white"
-										)}
-									>
-										{m.text}
-									</div>
-								</div>
-							))}
-						</div>
+			{/* 모바일: 세로 한 줄. 데스크톱: 왼쪽 대상 맥락 + 오른쪽 고정폭 요약·조치 패널. */}
+			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pt-1 pb-5 md:grid md:grid-cols-[minmax(0,1fr)_20rem] md:items-start md:gap-6">
+				<aside className="flex flex-col gap-4 md:sticky md:top-2 md:order-2">
+					<div className="flex items-center gap-2">
+						<SevPill sev={item.sev} />
+						<h2 className="m-0 min-w-0 flex-1 font-extrabold text-[19px] text-foreground">
+							{item.reason}
+						</h2>
 					</div>
-				)}
-				{item.status === "open" ? null : (
-					<div className="flex items-center gap-2 rounded-[14px] bg-[color:var(--status-success-bg)] p-[14px] text-[color:var(--status-success-fg)]">
-						<span className="inline-flex size-[18px]">
-							<CheckIcon />
-						</span>
-						<span className="font-bold text-[13px]">이미 처리된 신고예요</span>
+					<ReportParties item={item} />
+					{/* 데스크톱 전용: 처리 상태·조치는 오른쪽 패널에서 끝낸다. */}
+					<div className="flex flex-col gap-4 max-md:hidden">
+						{isOpen ? actions : <ReportResolvedNotice />}
 					</div>
-				)}
-			</div>
-			{item.status === "open" ? (
-				<div className="border-border border-t px-6 pt-3 pb-1.5">
-					{sanctionUserId ? null : (
-						<p className="m-0 mb-2.5 text-[12px] text-muted-foreground leading-[1.5]">
-							이 신고는 사용자 계정이 대상이 아니에요. 사용자 제재가 필요하면
-							사용자 관리에서 진행해 주세요.
-						</p>
+				</aside>
+				<div className="min-w-0 md:order-1">
+					{item.communityKind || hasStructuredContext ? (
+						<ReportTargetContextView
+							isBlockingChatRoom={isBlockingChatRoom}
+							item={item}
+							onBlockChatRoom={onBlockChatRoom}
+							onModerateCommunity={onModerateCommunity}
+						/>
+					) : (
+						<ReportThread item={item} />
 					)}
-					<div className="grid grid-cols-2 gap-2.5">
-						<Button
-							block
-							onClick={() => onResolve(item.id, "dismiss")}
-							size="lg"
-							variant="secondary"
-						>
-							기각
-						</Button>
-						{sanctionUserId ? (
-							<Button
-								block
-								onClick={() => setAct(true)}
-								size="lg"
-								variant="danger"
-							>
-								제재 적용
-							</Button>
-						) : (
-							<Button
-								block
-								onClick={() => onResolve(item.id, "act")}
-								size="lg"
-								variant="primary"
-							>
-								조치 완료
-							</Button>
-						)}
-					</div>
+				</div>
+				{isOpen ? null : <ReportResolvedNotice className="md:hidden" />}
+			</div>
+			{/* 모바일 전용: 기존 하단 고정 액션 바. */}
+			{isOpen ? (
+				<div className="border-border border-t px-6 pt-3 pb-1.5 md:hidden">
+					{actions}
 				</div>
 			) : null}
 			{act && sanctionUserId ? (

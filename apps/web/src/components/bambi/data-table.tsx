@@ -52,12 +52,16 @@ export function DataTable<T>({
 	data,
 	getRowKey,
 	emptyMessage = "결과 없음",
+	onRowClick,
 	pageSize,
 }: {
 	columns: DataColumn<T>[];
 	data: T[];
 	getRowKey: (row: T) => string;
 	emptyMessage?: string;
+	// 지정하면 데이터 행 전체가 클릭 가능해진다. 키보드 경로는 행 안의 액션 버튼이 담당하므로
+	// 행 자체에 role/tabIndex는 붙이지 않는다.
+	onRowClick?: (row: T) => void;
 	// 지정하면 해당 행 수 단위로 페이징한다(미지정 시 전체 표시).
 	pageSize?: number;
 }): React.JSX.Element {
@@ -143,7 +147,11 @@ export function DataTable<T>({
 				<TableBody>
 					{sortedData.length ? (
 						pageRows.map((row) => (
-							<TableRow key={getRowKey(row)}>
+							<TableRow
+								className={onRowClick ? "cursor-pointer" : undefined}
+								key={getRowKey(row)}
+								onClick={onRowClick ? () => onRowClick(row) : undefined}
+							>
 								{columns.map((column) => (
 									<TableCell className={column.cellClassName} key={column.id}>
 										{column.cell(row)}
