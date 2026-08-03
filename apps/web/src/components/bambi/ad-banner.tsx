@@ -258,6 +258,14 @@ interface HorizontalAdBannerRailProps {
 	items: (AdBannerItem | null)[];
 }
 
+// 레일 슬롯 비율 — 공고 카드(VisualJobCard) 높이 118px(p-2 16 + 썸네일 h-14 56 + gap-2 8 +
+// 급여 행 h-9 36 + border 2)을 aside 폭 259px에서 만드는 비율이다. 컴포넌트 기본값 16:9는
+// 상단 프리미엄 3칸이 계속 쓰므로 여기서만 className으로 덮는다.
+// 카드 구조(패딩·썸네일·급여 행 높이)나 aside 폭이 바뀌면 이 비율도 같이 갱신해야 한다.
+// 이미지가 object-fill이라 16:9보다 세로로 조금 더 눌리지만, 슬롯 크기를 고정하고 이미지를
+// 맞추는 기존 결정을 유지한다(슬롯이 이미지대로 늘면 옆 카드와 높이가 어긋난다).
+const RAIL_SLOT_ASPECT_CLASS = "aspect-[259/118]";
+
 // 가로형 배너 세로 스택(좌측 사이드). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로,
 // 빈 칸은 "광고 등록 문의" 자리표시로 채운다. 로딩 중에는 같은 크기 스켈레톤을 그린다.
 export function HorizontalAdBannerRail({
@@ -270,14 +278,24 @@ export function HorizontalAdBannerRail({
 			{AD_RAIL_SLOT_KEYS.map((key, index) => {
 				if (isLoading) {
 					return (
-						<Skeleton className="aspect-[16/9] w-full rounded-lg" key={key} />
+						<Skeleton
+							className={cn(RAIL_SLOT_ASPECT_CLASS, "w-full rounded-lg")}
+							key={key}
+						/>
 					);
 				}
 				const item = items[index];
 				return item ? (
-					<HorizontalAdBanner item={item} key={item.id} />
+					<HorizontalAdBanner
+						className={RAIL_SLOT_ASPECT_CLASS}
+						item={item}
+						key={item.id}
+					/>
 				) : (
-					<AdSlotPlaceholder className="flex aspect-[16/9] w-full" key={key} />
+					<AdSlotPlaceholder
+						className={cn("flex w-full", RAIL_SLOT_ASPECT_CLASS)}
+						key={key}
+					/>
 				);
 			})}
 		</div>
