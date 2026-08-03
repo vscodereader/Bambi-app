@@ -333,52 +333,62 @@ export const crawlerRouter = {
 	// 붙잡고 기다리지 않고 시작만 시킨 뒤 돌려준다 — 화면은 최근 회차 목록을 다시 불러
 	// 진행 상황을 본다. 주기 판정과 스케줄러 스위치만 건너뛰고 중복 방지·수율 판정·만료 규칙은
 	// 예약 실행과 완전히 같은 경로를 지난다.
-	runNow: adminProcedure.handler(async () => {
-		const [settings] = await db
-			.select({
-				contentType: bambiSiteSettings.crawlContentType,
-				sourceSite: bambiSiteSettings.crawlSourceSite,
-			})
-			.from(bambiSiteSettings)
-			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
-			.limit(1);
+	//
+	// contentType은 화면에서 고른 수집 데이터다. 저장을 거치지 않고 이 회차에만 적용한다 —
+	// 고르고 저장까지 해야 원하는 종류가 돌던 흐름이 실제로 헷갈렸다. 여기서 설정 row를
+	// 갱신하지는 않는다(저장은 updateSettings의 몫). 생략하면 저장된 설정으로 돈다.
+	runNow: adminProcedure
+		.input(z.object({ contentType: contentTypeInput.optional() }))
+		.handler(async ({ input }) => {
+			const [settings] = await db
+				.select({
+					contentType: bambiSiteSettings.crawlContentType,
+					sourceSite: bambiSiteSettings.crawlSourceSite,
+				})
+				.from(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+				.limit(1);
 
-		// crawlEnabled는 보지 않는다. 그 스위치는 스케줄러(주기 실행)만 통제하므로, 꺼둔
-		// 상태에서도 운영자가 파서를 확인할 수 있어야 한다.
-		//
-		// 파서가 없는 (사이트 × 데이터 종류) 조합을 골랐으면 회차를 띄우지 않고 화면에 바로 알린다.
-		// runCrawlTick도 not_implemented로 빠지지만, 여기서 먼저 걸러야 "시작됨" 토스트가 잘못 뜨지 않는다.
-		// 행이 없을 때의 폴백은 runCrawlTick(readSettings)과 같아야 한다 — 다르면 여기서 막은
-		// 조합이 실제로는 돌거나, 그 반대가 된다.
-		if (
-			!isCrawlTargetImplemented(
-				settings?.sourceSite ?? "queenalba",
-				settings?.contentType ?? "job_post"
-			)
-		) {
-			return { reason: "not_implemented" as const, started: false };
-		}
+			// crawlEnabled는 보지 않는다. 그 스위치는 스케줄러(주기 실행)만 통제하므로, 꺼둔
+			// 상태에서도 운영자가 파서를 확인할 수 있어야 한다.
+			//
+			// 파서가 없는 (사이트 × 데이터 종류) 조합을 골랐으면 회차를 띄우지 않고 화면에 바로 알린다.
+			// runCrawlTick도 not_implemented로 빠지지만, 여기서 먼저 걸러야 "시작됨" 토스트가 잘못 뜨지 않는다.
+			// 사이트는 저장값을 쓰고 데이터 종류만 화면 선택을 앞세운다. 둘 다 없을 때의 폴백은
+			// runCrawlTick(readSettings)과 같아야 한다 — 다르면 여기서 막은 조합이 실제로는
+			// 돌거나, 그 반대가 된다.
+			if (
+				!isCrawlTargetImplemented(
+					settings?.sourceSite ?? "queenalba",
+					input.contentType ?? settings?.contentType ?? "job_post"
+				)
+			) {
+				return { reason: "not_implemented" as const, started: false };
+			}
 
-		const [active] = await db
-			.select({ startedAt: crawlRun.startedAt })
-			.from(crawlRun)
-			.where(eq(crawlRun.status, "running"))
-			.limit(1);
+			const [active] = await db
+				.select({ startedAt: crawlRun.startedAt })
+				.from(crawlRun)
+				.where(eq(crawlRun.status, "running"))
+				.limit(1);
 
-		// 여기서 걸러내는 건 화면에 바로 알려주기 위해서다. 진짜 직렬화는 crawl_run의
-		// 부분 유니크 인덱스가 하므로, 이 검사를 두 요청이 동시에 통과해도 한쪽만 실행된다.
-		if (active && !isRunStale(active.startedAt, new Date())) {
-			return { reason: "already_running" as const, started: false };
-		}
+			// 여기서 걸러내는 건 화면에 바로 알려주기 위해서다. 진짜 직렬화는 crawl_run의
+			// 부분 유니크 인덱스가 하므로, 이 검사를 두 요청이 동시에 통과해도 한쪽만 실행된다.
+			if (active && !isRunStale(active.startedAt, new Date())) {
+				return { reason: "already_running" as const, started: false };
+			}
 
-		// 응답을 기다리지 않고 띄운다. 스케줄러 틱과 같은 프로세스라 수명도 같고, 실패는
-		// crawl_run에 기록되므로 여기서는 미처리 거부만 막는다.
-		runCrawlTick(new Date(), undefined, { force: true }).catch(() => {
-			// 실패 사유는 crawl_run.error에 남는다. 화면은 최근 회차 목록에서 확인한다.
-		});
+			// 응답을 기다리지 않고 띄운다. 스케줄러 틱과 같은 프로세스라 수명도 같고, 실패는
+			// crawl_run에 기록되므로 여기서는 미처리 거부만 막는다.
+			runCrawlTick(new Date(), undefined, {
+				contentType: input.contentType,
+				force: true,
+			}).catch(() => {
+				// 실패 사유는 crawl_run.error에 남는다. 화면은 최근 회차 목록에서 확인한다.
+			});
 
-		return { reason: "started" as const, started: true };
-	}),
+			return { reason: "started" as const, started: true };
+		}),
 
 	// 최근 수집 회차. aborted_low_yield가 보이면 상대 마크업이 바뀐 것이므로 파서 점검이 필요하다 —
 	// 이 화면이 셀렉터 파손을 알아채는 유일한 창구다.
