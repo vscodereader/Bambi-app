@@ -29,16 +29,27 @@ export function reviewStatusLabel(status: string): string {
 	return REVIEW_STATUS_LABELS[status] ?? "상태 확인 필요";
 }
 
-// 계정 상태(account_status): active·warned·suspended. blocked는 web UI 전용 상태로 포함한다.
+// 계정 상태(account_status): active·warned·suspended.
 const ACCOUNT_STATUS_LABELS: Record<string, string> = {
 	active: "정상",
 	warned: "경고",
 	suspended: "정지",
-	blocked: "차단",
 };
 
 export function accountStatusLabel(status: string): string {
 	return ACCOUNT_STATUS_LABELS[status] ?? "상태 확인 필요";
+}
+
+// 감사 로그 액션 코드(admin_moderation_action.action). 사용자 대상 제재는 `set_status:*`
+// 형태라 원값이 화면에 새지 않게 조치 이름으로 치환한다.
+const MODERATION_ACTION_LABELS: Record<string, string> = {
+	"set_status:active": "정상 복구",
+	"set_status:warned": "경고",
+	"set_status:suspended": "이용 정지",
+};
+
+export function moderationActionLabel(action: string): string {
+	return MODERATION_ACTION_LABELS[action] ?? "기타 조치";
 }
 
 // 사용자 역할(bambi_user_role): job_seeker·employer·admin.

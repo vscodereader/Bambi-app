@@ -58,6 +58,8 @@ interface ModContextValue {
 	isBlockingChatRoom: boolean;
 	isBulkApplying: boolean;
 	isLoading: boolean;
+	// 사용자 목록 조회 실패(목록 화면의 에러 상태 전용).
+	isUsersError: boolean;
 	moderateCommunityTarget: (
 		report: Report,
 		status: CommunityTargetStatus,
@@ -68,7 +70,8 @@ interface ModContextValue {
 	reports: Report[];
 	resolveQueue: (id: string, action: "approve" | "reject") => void;
 	resolveReport: (id: string, action: "dismiss" | "act") => void;
-	sanction: (id: string, status: UserStatus, label: string) => void;
+	// 적용 성공 여부를 돌려준다 — 호출자가 성공했을 때만 목록으로 되돌아갈 수 있게.
+	sanction: (id: string, status: UserStatus, label: string) => Promise<boolean>;
 	selected: string[];
 	toast: string | null;
 	toggleSelect: (id: string) => void;
@@ -183,18 +186,6 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 		title: item.title,
 	};
 };
-const getRoleLabel = (role: string) => {
-	if (role === "admin") {
-		return "운영자";
-	}
-
-	if (role === "employer") {
-		return "구인자";
-	}
-
-	return "구직자";
-};
-
 // 피신고 대상의 표시 이름·역할을 targetContext 타입별로 계산한다. 사용자는 실명 +
 // userRoleLabel(role), 공고는 제목 + "공고", 대화방은 연결 공고 제목 + "채팅방". 이름을 알 수
 // 없는 대상(후기·채팅 메시지·맥락 없음)은 대상 id 축약(#앞8자)을 이름으로, 유형 라벨을 역할로
@@ -459,17 +450,22 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			};
 		});
 		const apiUsers = moderationUsersQuery.data?.map<ManagedUser>((item) => ({
+			blockedByCount: item.blockedByCount,
+			deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
+			email: item.email,
 			id: item.userId,
+			isPhoneVerified: item.isPhoneVerified,
 			joined: formatDate(item.createdAt),
+			// 정렬용 원값. 포맷 문자열(joined)로 정렬하면 "24. 1. 5." 같은 표기가 사전순으로 섞인다.
+			joinedAt: new Date(item.createdAt),
+			loginId: item.loginId,
 			name: item.name,
-			// 서버 displayName은 프로필 표시명 폐지 후 user.name과 항상 같아 제거됐다.
-			// ManagedUser 쪽 필드 정리는 화면 작업에서 이어서 한다.
-			displayName: item.name,
 			note: item.isPhoneVerified
 				? "휴대폰 인증 완료"
 				: "휴대폰 인증이 필요합니다.",
+			organizationNames: item.organizationNames,
 			reports: item.reportsCount,
-			role: getRoleLabel(item.role),
+			role: userRoleLabel(item.role),
 			status: item.status,
 			warnings: item.warningsCount,
 		}));
@@ -573,23 +569,23 @@ export function ModProvider({ children }: { children: ReactNode }) {
 
 			flash(action === "dismiss" ? "신고를 기각했어요" : "조치를 적용했어요");
 		};
-		const sanction = (id: string, status: UserStatus, label: string) => {
-			setUserStatusMutation.mutate(
-				{
+		// 적용이 끝날 때까지 기다렸다가 결과를 알려준다 — 실패한 제재로 화면이 먼저
+		// 넘어가면 운영자가 반영되지 않은 걸 모른 채 목록으로 돌아간다.
+		const sanction = async (id: string, status: UserStatus, label: string) => {
+			try {
+				await setUserStatusMutation.mutateAsync({
 					reason: label,
-					status: status === "blocked" ? "suspended" : status,
+					status,
 					targetUserId: id,
-				},
-				{
-					onSuccess: async () => {
-						await invalidateUsers();
-					},
-					onError: () =>
-						flash("사용자 상태를 API에 반영하지 못했어요. 다시 시도해 주세요."),
-				}
-			);
+				});
+			} catch {
+				flash("사용자 상태를 API에 반영하지 못했어요. 다시 시도해 주세요.");
+				return false;
+			}
 
+			await invalidateUsers();
 			flash(label);
+			return true;
 		};
 		// 커뮤니티 대상(글·댓글) 콘텐츠 조치. 신고 상태 변경(resolveReport)과는 별개로,
 		// kind에 맞는 프로시저를 호출하고 성공 시 신고 목록을 무효화해 상태 배지를 갱신한다.
@@ -775,6 +771,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			users: visibleUsers,
 			isLoading,
 			isBulkApplying,
+			isUsersError: moderationUsersQuery.isError,
 			selected,
 			toast,
 			openReports: visibleReports.filter((r) => r.status === "open").length,
@@ -796,6 +793,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		moderationReportsQuery.data,
 		moderationReportsQuery.isPending,
 		moderationUsersQuery.data,
+		moderationUsersQuery.isError,
 		moderationUsersQuery.isPending,
 		queryClient,
 		selected,

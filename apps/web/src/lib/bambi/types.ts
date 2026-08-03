@@ -198,14 +198,26 @@ export interface Report {
 	time: string;
 }
 
-export type UserStatus = "active" | "warned" | "suspended" | "blocked";
+// DB account_status enum과 1:1이다(탈퇴는 상태가 아니라 user.deletedAt으로 표현).
+export type UserStatus = "active" | "warned" | "suspended";
 
 export interface ManagedUser {
-	displayName: string;
+	// 다른 사용자에게 차단당한 횟수(신고와 별개의 위험 신호).
+	blockedByCount: number;
+	// 소프트 탈퇴 시각. null이 아니면 탈퇴한 계정이다.
+	deletedAt: Date | null;
+	email: string;
 	id: string;
+	isPhoneVerified: boolean;
+	// 표시용 가입일(포맷 완료 문자열). 정렬은 joinedAt으로 한다.
 	joined: string;
+	joinedAt: Date;
+	// better-auth username 플러그인 로그인 아이디. 미설정 계정은 null.
+	loginId: null | string;
 	name: string;
 	note: string;
+	// 소속 업소 표시명(구인자만 채워진다).
+	organizationNames: string[];
 	reports: number;
 	role: string;
 	status: UserStatus;
