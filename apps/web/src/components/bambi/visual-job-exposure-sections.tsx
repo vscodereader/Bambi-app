@@ -30,14 +30,12 @@ const cardPlaceholderCount = (jobsLength: number): number => {
 
 // 빈 섹션에서 한 행만 남기려고 여분 자리표시를 breakpoint별로 숨긴다. base엔 flex/hidden이
 // 없으므로 display 클래스를 여기서 온전히 지정한다.
-// 공고가 있는 행은 min-h를 주지 않는다 — 행 높이는 항상 실제 카드(자연 높이 약 118px)가
-// 결정하고 자리표시는 stretch로 따라온다(자리표시가 더 높으면 카드가 늘어나 하단 여백이 생긴다).
-// 빈 섹션만 카드 자연 높이에 맞춘 min-h-29(116px)로 스켈레톤 형태를 유지한다.
+// 자리표시는 항상 카드 자연 높이(약 118px = 테두리 2 + p-2 16 + 썸네일 56 + gap-2 8 + 급여 행 36)
+// 바로 아래인 min-h-29(116px)를 깐다. 모바일 1열은 자리표시가 자기 행에 혼자 있어 min-h가
+// 없으면 카드보다 납작해지고, lg/xl은 같은 행 실제 카드가 더 높아 stretch가 그대로 이긴다
+// (min-h가 카드 자연 높이를 넘으면 카드가 늘어나 하단 여백이 생기므로 116px에서 멈춘다).
 const cardPlaceholderClass = (jobsLength: number, index: number): string => {
-	if (jobsLength > 0) {
-		return "flex w-full";
-	}
-	if (index === 0) {
+	if (jobsLength > 0 || index === 0) {
 		return "flex min-h-29 w-full";
 	}
 	if (index < 3) {

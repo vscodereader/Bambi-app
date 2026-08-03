@@ -33,6 +33,7 @@ import {
 	paymentStatusColumn,
 } from "@/components/bambi/job-table-columns";
 import { RowActions } from "@/components/bambi/row-actions";
+import { formatDateTime } from "@/lib/bambi-format";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
@@ -73,9 +74,45 @@ interface PendingAction {
 	title: string;
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// 광고 기간 조정 대상. 연장/단축은 부호만 다르므로 다이얼로그 하나를 공유한다.
+// exposureEndsAt이 null(미결제·무기한)이면 기준일은 지금이다(서버와 동일 규칙).
+interface PendingExposure {
+	direction: "extend" | "shorten";
+	exposureEndsAt: JobRow["exposureEndsAt"];
+	jobPostId: string;
+	title: string;
+}
+
+// 입력한 일수 문자열(1~365 정수)을 검증해 서버로 보낼 부호 있는 일수와 적용 후
+// 종료일로 환산한다. 유효하지 않으면 null(= 확정 버튼 비활성·미리보기 미표시).
+function resolveExposureAdjustment(
+	pendingExposure: PendingExposure | null,
+	daysInput: string
+): { days: number; nextEndsAt: Date } | null {
+	const days = Number.parseInt(daysInput, 10);
+
+	if (!(pendingExposure && Number.isInteger(days)) || days < 1 || days > 365) {
+		return null;
+	}
+
+	const signedDays = pendingExposure.direction === "shorten" ? -days : days;
+	// 종료일이 없으면 지금이 기준일. 렌더 시각과 서버 적용 시각의 초 단위 오차는 허용한다.
+	const baseEndsAt = pendingExposure.exposureEndsAt
+		? new Date(pendingExposure.exposureEndsAt)
+		: new Date();
+
+	return {
+		days: signedDays,
+		nextEndsAt: new Date(baseEndsAt.getTime() + signedDays * MS_PER_DAY),
+	};
+}
+
 function getJobColumns(
 	onRequestStatus: (job: JobRow) => void,
-	onRequestDelete: (job: JobRow) => void
+	onRequestDelete: (job: JobRow) => void,
+	onRequestExposure: (job: JobRow, direction: "extend" | "shorten") => void
 ): DataColumn<JobRow>[] {
 	return [
 		jobTitleColumn<JobRow>(),
@@ -141,6 +178,17 @@ function getJobColumns(
 									},
 								]
 							: []),
+						// 종료일이 없는 공고(미결제·무기한)도 지금 기준으로 새 종료일을 잡을 수 있다.
+						{
+							key: "extend",
+							label: "광고 연장",
+							onSelect: () => onRequestExposure(job, "extend"),
+						},
+						{
+							key: "shorten",
+							label: "광고 단축",
+							onSelect: () => onRequestExposure(job, "shorten"),
+						},
 						{
 							key: "edit",
 							label: "수정",
@@ -171,6 +219,10 @@ export default function ModeratorJobsPage() {
 		title: string;
 	} | null>(null);
 	const [deleteReason, setDeleteReason] = useState("");
+	const [pendingExposure, setPendingExposure] =
+		useState<PendingExposure | null>(null);
+	const [exposureDays, setExposureDays] = useState("7");
+	const [exposureReason, setExposureReason] = useState("");
 
 	const jobsQuery = useQuery(
 		orpc.bambi.moderation.listJobPosts.queryOptions({
@@ -217,6 +269,26 @@ export default function ModeratorJobsPage() {
 				toast.error("공고를 삭제하지 못했어요. 다시 시도해 주세요."),
 		})
 	);
+	const adjustExposureMutation = useMutation(
+		orpc.bambi.moderation.adjustJobPostExposure.mutationOptions({
+			onSuccess: async () => {
+				toast.success(
+					pendingExposure?.direction === "extend"
+						? "광고 기간을 연장했어요."
+						: "광고 기간을 단축했어요."
+				);
+				setPendingExposure(null);
+				setExposureReason("");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.moderation.listJobPosts.queryKey({
+						input: { limit: LIST_LIMIT },
+					}),
+				});
+			},
+			onError: () =>
+				toast.error("광고 기간을 변경하지 못했어요. 다시 시도해 주세요."),
+		})
+	);
 
 	const jobs = jobsQuery.data ?? [];
 
@@ -253,14 +325,39 @@ export default function ModeratorJobsPage() {
 		setDeleteReason("");
 	}, []);
 
+	const requestExposure = useCallback(
+		(job: JobRow, direction: "extend" | "shorten") => {
+			setPendingExposure({
+				direction,
+				exposureEndsAt: job.exposureEndsAt,
+				jobPostId: job.id,
+				title: job.title,
+			});
+			setExposureDays("7");
+			setExposureReason("");
+		},
+		[]
+	);
+
 	const columns = useMemo(
-		() => getJobColumns(requestStatusChange, requestDelete),
-		[requestStatusChange, requestDelete]
+		() => getJobColumns(requestStatusChange, requestDelete, requestExposure),
+		[requestStatusChange, requestDelete, requestExposure]
 	);
 
 	const canConfirm = reason.trim().length >= 2 && !setStatusMutation.isPending;
 	const canConfirmDelete =
 		deleteReason.trim().length >= 2 && !deleteMutation.isPending;
+
+	const exposureLabel =
+		pendingExposure?.direction === "shorten" ? "단축" : "연장";
+	const exposureAdjustment = resolveExposureAdjustment(
+		pendingExposure,
+		exposureDays
+	);
+	const canConfirmExposure =
+		exposureAdjustment !== null &&
+		exposureReason.trim().length >= 2 &&
+		!adjustExposureMutation.isPending;
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
@@ -427,6 +524,82 @@ export default function ModeratorJobsPage() {
 							variant="destructive"
 						>
 							삭제 확정
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setPendingExposure(null);
+						setExposureReason("");
+					}
+				}}
+				open={pendingExposure !== null}
+			>
+				<DialogContent>
+					<DialogTitle>광고 {exposureLabel}</DialogTitle>
+					<DialogDescription>
+						"{pendingExposure?.title}" 공고의 광고 종료일을 {exposureLabel}
+						합니다. 현재 종료일{" "}
+						{pendingExposure?.exposureEndsAt
+							? formatDateTime(pendingExposure.exposureEndsAt)
+							: "종료일 없음(무기한·미결제)"}
+						{" → "}
+						{exposureAdjustment
+							? formatDateTime(exposureAdjustment.nextEndsAt)
+							: "-"}
+						.{" "}
+						{pendingExposure && !pendingExposure.exposureEndsAt
+							? "적용하면 지금부터 계산한 종료일이 새로 설정돼요(무기한 → 기한부). "
+							: null}
+						사유는 감사 로그에 남아요(2자 이상).
+					</DialogDescription>
+					<Input
+						max={365}
+						min={1}
+						onChange={(event) => setExposureDays(event.target.value)}
+						placeholder="일수(1~365)"
+						step={1}
+						type="number"
+						value={exposureDays}
+					/>
+					<Textarea
+						onChange={(event) => setExposureReason(event.target.value)}
+						placeholder="조정 사유를 입력해 주세요."
+						value={exposureReason}
+					/>
+					<div className="flex justify-end gap-2">
+						<DialogClose
+							render={
+								<Button size="sm" type="button" variant="ghost">
+									취소
+								</Button>
+							}
+						/>
+						<Button
+							disabled={!canConfirmExposure}
+							onClick={() => {
+								if (!(pendingExposure && exposureAdjustment)) {
+									return;
+								}
+
+								adjustExposureMutation.mutate({
+									days: exposureAdjustment.days,
+									jobPostId: pendingExposure.jobPostId,
+									reason: exposureReason.trim(),
+								});
+							}}
+							size="sm"
+							type="button"
+							variant={
+								pendingExposure?.direction === "shorten"
+									? "destructive"
+									: "default"
+							}
+						>
+							{exposureLabel} 확정
 						</Button>
 					</div>
 				</DialogContent>

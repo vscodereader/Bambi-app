@@ -18,6 +18,12 @@ export const env = createEnv({
 		// 포트원 V2 API Secret(본인인증 단건조회). 개발에서는 선택 — 비어 있으면 회원
 		// 본인인증이 목 핸들러(verifyMyPhoneMock)로 폴백한다.
 		PORTONE_API_SECRET: z.string().min(1).optional(),
+		// 공공데이터포털 "국세청 사업자등록정보 진위확인" 서비스키(디코딩 키를 넣는다 —
+		// 인코딩 키를 넣으면 이중 인코딩으로 인증에 실패한다). 프로덕션 포함 선택 값이다 —
+		// 공공데이터포털 기업회원 심사 대기로 아직 키가 없다. 비어 있으면 사업자정보 제출 시
+		// 진위확인을 건너뛰고(전 건 "미확인" 접수) 운영자 수동 심사만 남으며, 구인자 화면에는
+		// "곧 준비될 기능" 안내가 나간다. 키를 넣으면 코드 수정 없이 진위확인이 켜진다.
+		NTS_SERVICE_KEY: z.string().min(1).optional(),
 		// better-auth 세션 쿠키 prefix. dev/prod가 같은 apex(.bambialba.com)를 공유하므로
 		// 환경별로 다른 값(prod=bambi, dev=bambi-dev)을 줘 쿠키 충돌을 막는다. 미설정(로컬)
 		// 이면 better-auth 기본 prefix를 그대로 써 개발 동작이 변하지 않는다.

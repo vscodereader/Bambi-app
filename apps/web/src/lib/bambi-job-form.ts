@@ -9,12 +9,10 @@ import {
 	type JobAdBannerUsage,
 } from "./bambi/job-ad-banner-spec";
 import {
-	districtsForRegion,
 	type IndustryOption,
 	industryOptions,
 	NEGOTIABLE_PAY_UNIT,
 	payUnitOptions,
-	regionOptions,
 } from "./bambi-options";
 
 const TITLE_MIN_LENGTH = 2;
@@ -150,7 +148,9 @@ export interface JobForm {
 	adProductId: string | null;
 	beginnerFriendly: boolean;
 	description: string;
-	district: string;
+	// 지역은 표시 문자열이 아니라 지역 마스터 코드로 들고 다닌다(서버 입력도 코드다).
+	// 세부지역은 선택이며, 빈 값은 "지역 전체"를 뜻한다.
+	districtCode: string;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
@@ -161,7 +161,7 @@ export interface JobForm {
 	payAmount: string;
 	paymentMethod: JobPaymentMethod | null;
 	payUnit: string;
-	region: string;
+	regionCode: string;
 	teamId: string;
 	title: string;
 	workSchedule: string;
@@ -175,7 +175,8 @@ export interface JobPostInput {
 	beginnerFriendly: boolean;
 	description: string;
 	descriptionBlocks: JobDescriptionBlockFormValue[];
-	district: string;
+	// 미선택이면 보내지 않는다 — 서버는 세부지역 없는 공고를 시/도 전체로 받는다.
+	districtCode?: string;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
@@ -194,7 +195,7 @@ export interface JobPostInput {
 	payAmount: null | number;
 	paymentMethod: JobPaymentMethod | null;
 	payUnit: string;
-	region: string;
+	regionCode: string;
 	teamId?: string;
 	title: string;
 	workSchedule: string;
@@ -220,16 +221,12 @@ type JobFormValidationResult =
 			ok: true;
 	  };
 
-// 선택한 시/도의 기본 세부지역. 목록이 없는 시/도(기타)는 빈 값.
-export const defaultDistrictForRegion = (region: string): string =>
-	districtsForRegion(region)[0] ?? "";
-
 export const emptyJobForm: JobForm = {
 	adBannerLayout: null,
 	adProductId: null,
 	beginnerFriendly: false,
 	description: "",
-	district: defaultDistrictForRegion(regionOptions[0] ?? ""),
+	districtCode: "",
 	exposureAmount: null,
 	exposureDurationDays: null,
 	exposureType: "standard",
@@ -240,7 +237,7 @@ export const emptyJobForm: JobForm = {
 	payAmount: "",
 	paymentMethod: null,
 	payUnit: payUnitOptions[0] ?? "",
-	region: regionOptions[0] ?? "",
+	regionCode: "",
 	teamId: "",
 	title: "",
 	workSchedule: "",
@@ -733,19 +730,17 @@ const getPostingScopeErrors = ({
 };
 
 const getConditionErrors = ({
-	district,
 	industryCategory,
 	payAmount,
 	payUnit,
-	region,
+	regionCode,
 	title,
 	workSchedule,
 }: {
-	district: string;
 	industryCategory: string;
 	payAmount: number;
 	payUnit: string;
-	region: string;
+	regionCode: string;
 	title: string;
 	workSchedule: string;
 }): JobFormErrors => {
@@ -761,14 +756,10 @@ const getConditionErrors = ({
 		errors.industryCategory = "업종을 선택해 주세요.";
 	}
 
-	if (!(regionOptions as readonly string[]).includes(region)) {
-		errors.region = "지역을 선택해 주세요.";
-	}
-
-	// 세부지역이 정의된 시/도만 필수. "기타"처럼 목록이 빈 시/도는 건너뛴다.
-	const districts = districtsForRegion(region);
-	if (districts.length > 0 && !districts.includes(district)) {
-		errors.district = "세부지역을 선택해 주세요.";
+	// 코드가 실제 지역인지(존재·활성·시도 레벨)는 서버가 지역 마스터와 대조한다.
+	// 여기서는 선택 여부만 본다. 세부지역은 선택이라 검사하지 않는다(미선택 = 지역 전체).
+	if (!regionCode) {
+		errors.regionCode = "지역을 선택해 주세요.";
 	}
 
 	// "협의"는 금액 없이 내는 단위라 금액 검사를 건너뛴다.
@@ -873,8 +864,8 @@ export const validateJobForm = (
 	const teamId = trim(form.teamId);
 	const title = trim(form.title);
 	const industryCategory = trim(form.industryCategory);
-	const region = trim(form.region);
-	const district = trim(form.district);
+	const regionCode = trim(form.regionCode);
+	const districtCode = trim(form.districtCode);
 	const payAmountText = trim(form.payAmount);
 	const payAmount = Number(payAmountText);
 	const payUnit = trim(form.payUnit);
@@ -920,11 +911,10 @@ export const validateJobForm = (
 			teamScopes: options.teamScopes,
 		}),
 		getConditionErrors({
-			district,
 			industryCategory,
 			payAmount,
 			payUnit,
-			region,
+			regionCode,
 			title,
 			workSchedule,
 		}),
@@ -959,7 +949,8 @@ export const validateJobForm = (
 			beginnerFriendly: form.beginnerFriendly,
 			description,
 			descriptionBlocks: normalizedBlocks,
-			district,
+			// 미선택은 키를 빼서 보낸다 — 서버 스키마가 optional이고 빈 문자열은 거부한다.
+			districtCode: districtCode || undefined,
 			exposureAmount,
 			exposureDurationDays,
 			exposureType,
@@ -980,7 +971,7 @@ export const validateJobForm = (
 			payAmount: payUnit === NEGOTIABLE_PAY_UNIT ? null : payAmount,
 			paymentMethod,
 			payUnit,
-			region,
+			regionCode,
 			teamId: teamId || undefined,
 			title,
 			workSchedule,

@@ -7,12 +7,24 @@ import { Megaphone } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { isAdBannerImageRequired } from "@/lib/bambi/ad-banner-layout";
 import { resolveAdInquiryTel } from "@/lib/bambi/ad-inquiry-tel";
 import type { AdBannerItem } from "@/lib/bambi/api-job-mapper";
+import {
+	shouldTrackPromotion,
+	trackPromotionSelect,
+	trackPromotionView,
+} from "@/lib/bambi/ga-promotion";
+import { usePromotionImpression } from "@/lib/bambi/use-promotion-impression";
 import { orpc } from "@/utils/orpc";
 import { AdBannerLayoutRenderer } from "./ad-banner-layout-renderer";
+
+// GA4 프로모션 슬롯 지정(이슈 #59) — rail이 칸 순번으로 만들어 배너까지 내려보낸다.
+interface PromotionSlot {
+	index: number;
+	slot: string;
+}
 
 const AD_BANNER_SURFACE_CLASS = "relative block overflow-hidden rounded-lg";
 
@@ -21,20 +33,46 @@ const AD_BANNER_LINK_CLASS =
 
 // 배너 상자. 결제 광고는 우리 공고 상세로, 수집 배너는 수집 전용 상세로 간다(매퍼가 주소를
 // 만든다) — 갈 곳 없는 배너는 이제 없으므로 항상 Link다.
+// promotion이 넘어온 결제 배너(순수 프리미엄)만 GA4 프로모션으로 계측한다(이슈 #59) —
+// 크롤링 채움 배너는 shouldTrackPromotion이 거르고, 노출은 뷰포트 50% 진입 시 1회다.
 function AdBannerFrame({
 	children,
 	className,
 	item,
+	promotion,
 }: {
 	children: ReactNode;
 	className?: string;
 	item: AdBannerItem;
+	promotion?: PromotionSlot;
 }) {
+	const tracked = promotion && shouldTrackPromotion(item) ? promotion : null;
+	// onImpress는 primitive에만 의존시킨다. item 객체는 렌더마다 새로 만들어지므로
+	// (useAdBannerJobs의 map) 객체째 의존하면 매 렌더 ref가 detach/재attach되고,
+	// 그때마다 IntersectionObserver 초기 콜백이 취소돼 노출이 통째로 유실될 수 있다.
+	const { crawled, id, title } = item;
+	const slot = tracked?.slot ?? null;
+	const index = tracked?.index ?? 0;
+	const onImpress = useMemo(
+		() =>
+			slot === null
+				? null
+				: () => trackPromotionView({ crawled, id, title }, slot, index),
+		[crawled, id, index, slot, title]
+	);
+	const impressionRef = usePromotionImpression(onImpress);
+
 	return (
 		<Link
 			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기`}
 			className={cn(AD_BANNER_SURFACE_CLASS, AD_BANNER_LINK_CLASS, className)}
 			href={item.href as Route}
+			onClick={
+				tracked
+					? () => trackPromotionSelect(item, tracked.slot, tracked.index)
+					: undefined
+			}
+			ref={impressionRef}
 		>
 			{children}
 		</Link>
@@ -120,6 +158,8 @@ export function AdSlotPlaceholder({
 interface AdBannerProps {
 	className?: string;
 	item: AdBannerItem;
+	// 넘기면 이 배너를 GA4 프로모션으로 계측한다(이슈 #59). rail이 칸 순번으로 만들어 준다.
+	promotion?: PromotionSlot;
 }
 
 // 세로형 광고 배너(우측 사이드용) — 규격 4:9(권장 400×900), 높이는 상단 프리미엄 배너와 같다(h-52).
@@ -132,14 +172,14 @@ interface AdBannerProps {
 // 보이지도 않는데다, item.imageUrl은 배너가 없으면 커버·샘플 사진으로 폴백하므로 엉뚱한 사진을
 // 받아 놓고 가리는 낭비가 된다. 대신 같은 크기 클래스를 가진 빈 상자가 슬롯 크기를 만든다
 // (Image가 유일한 크기 소스였다 — 그냥 빼면 슬롯이 무너진다).
-export function AdBanner({ className, item }: AdBannerProps) {
+export function AdBanner({ className, item, promotion }: AdBannerProps) {
 	// 수집 배너도 결제 배너와 같은 규격 슬롯으로 그린다. 세로 수집 배너 원본은 실측 80×180 —
 	// 정확히 4:9라 규격 슬롯을 object-cover로 채워도 잘리는 부분이 없다. 반대로 원본 비율로
 	// 그리면 슬롯이 이미지 크기로 줄어들어 옆의 결제 슬롯과 크기가 어긋난다(사용자 확인 사항).
 	const surfaceClassName = cn("aspect-[4/9] h-52 w-auto rounded-lg", className);
 
 	return (
-		<AdBannerFrame className="w-fit" item={item}>
+		<AdBannerFrame className="w-fit" item={item} promotion={promotion}>
 			{/* 이미지가 없는 단색 배너의 접근성 이름은 Link의 aria-label이 이미 담당한다 —
 			    빈 상자에는 alt에 해당하는 이름을 줄 것이 없고, 실제 내용인 문구는 레이아웃
 			    렌더러가 텍스트로 그린다. */}
@@ -169,6 +209,9 @@ interface AdBannerRailProps {
 	// 번쩍이는 걸 막는다(로딩 vs "광고 없음" 구분은 useAdBannerJobs.isLoading).
 	isLoading?: boolean;
 	items: (AdBannerItem | null)[];
+	// GA4 프로모션 지면 접두어(이슈 #59). 넘기면 각 칸이 `${promotionSurface}_${순번}` 슬롯으로
+	// 계측되고, 안 넘기면 이 rail은 계측하지 않는다.
+	promotionSurface?: string;
 }
 
 // 세로 배너 스택(우측). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로, 빈 칸은
@@ -177,6 +220,7 @@ export function AdBannerRail({
 	className,
 	isLoading,
 	items,
+	promotionSurface,
 }: AdBannerRailProps) {
 	return (
 		<div className={cn("flex flex-col items-start gap-3", className)}>
@@ -188,7 +232,15 @@ export function AdBannerRail({
 				}
 				const item = items[index];
 				return item ? (
-					<AdBanner item={item} key={item.id} />
+					<AdBanner
+						item={item}
+						key={item.id}
+						promotion={
+							promotionSurface
+								? { index, slot: `${promotionSurface}_${index + 1}` }
+								: undefined
+						}
+					/>
 				) : (
 					<AdSlotPlaceholder
 						className="flex aspect-[4/9] h-52"
@@ -204,6 +256,8 @@ export function AdBannerRail({
 interface HorizontalAdBannerProps {
 	className?: string;
 	item: AdBannerItem;
+	// AdBannerProps.promotion과 같다 — 넘기면 GA4 프로모션으로 계측한다(이슈 #59).
+	promotion?: PromotionSlot;
 }
 
 // 가로형 광고 배너(좌측 사이드·상단 프리미엄용) — 노출 슬롯은 16:9.
@@ -219,6 +273,7 @@ interface HorizontalAdBannerProps {
 export function HorizontalAdBanner({
 	className,
 	item,
+	promotion,
 }: HorizontalAdBannerProps) {
 	// 단색 배경 처리는 AdBanner(세로형)와 같다 — 그쪽 주석 참고.
 	// 수집 배너도 결제 배너와 똑같은 슬롯에 object-cover로 채운다. 가로 수집 원본은 실측
@@ -230,7 +285,7 @@ export function HorizontalAdBanner({
 	);
 
 	return (
-		<AdBannerFrame item={item}>
+		<AdBannerFrame item={item} promotion={promotion}>
 			{isAdBannerImageRequired(item.layout, "ad_horizontal") ? (
 				<Image
 					alt={`${item.company} ${item.title} 광고 배너`}
@@ -256,7 +311,18 @@ interface HorizontalAdBannerRailProps {
 	// 로딩 중이면 슬롯을 스켈레톤으로 채운다(AdBannerRail 주석 참고).
 	isLoading?: boolean;
 	items: (AdBannerItem | null)[];
+	// GA4 프로모션 지면 접두어(이슈 #59). 넘기면 각 칸이 `${promotionSurface}_${순번}` 슬롯으로
+	// 계측되고, 안 넘기면 이 rail은 계측하지 않는다.
+	promotionSurface?: string;
 }
+
+// 레일 슬롯 비율 — 공고 카드(VisualJobCard) 높이 118px(p-2 16 + 썸네일 h-14 56 + gap-2 8 +
+// 급여 행 h-9 36 + border 2)을 aside 폭 259px에서 만드는 비율이다. 컴포넌트 기본값 16:9는
+// 상단 프리미엄 3칸이 계속 쓰므로 여기서만 className으로 덮는다.
+// 카드 구조(패딩·썸네일·급여 행 높이)나 aside 폭이 바뀌면 이 비율도 같이 갱신해야 한다.
+// 이미지가 object-fill이라 16:9보다 세로로 조금 더 눌리지만, 슬롯 크기를 고정하고 이미지를
+// 맞추는 기존 결정을 유지한다(슬롯이 이미지대로 늘면 옆 카드와 높이가 어긋난다).
+const RAIL_SLOT_ASPECT_CLASS = "aspect-[259/118]";
 
 // 가로형 배너 세로 스택(좌측 사이드). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로,
 // 빈 칸은 "광고 등록 문의" 자리표시로 채운다. 로딩 중에는 같은 크기 스켈레톤을 그린다.
@@ -264,20 +330,36 @@ export function HorizontalAdBannerRail({
 	className,
 	isLoading,
 	items,
+	promotionSurface,
 }: HorizontalAdBannerRailProps) {
 	return (
 		<div className={cn("flex flex-col gap-3", className)}>
 			{AD_RAIL_SLOT_KEYS.map((key, index) => {
 				if (isLoading) {
 					return (
-						<Skeleton className="aspect-[16/9] w-full rounded-lg" key={key} />
+						<Skeleton
+							className={cn(RAIL_SLOT_ASPECT_CLASS, "w-full rounded-lg")}
+							key={key}
+						/>
 					);
 				}
 				const item = items[index];
 				return item ? (
-					<HorizontalAdBanner item={item} key={item.id} />
+					<HorizontalAdBanner
+						className={RAIL_SLOT_ASPECT_CLASS}
+						item={item}
+						key={item.id}
+						promotion={
+							promotionSurface
+								? { index, slot: `${promotionSurface}_${index + 1}` }
+								: undefined
+						}
+					/>
 				) : (
-					<AdSlotPlaceholder className="flex aspect-[16/9] w-full" key={key} />
+					<AdSlotPlaceholder
+						className={cn("flex w-full", RAIL_SLOT_ASPECT_CLASS)}
+						key={key}
+					/>
 				);
 			})}
 		</div>

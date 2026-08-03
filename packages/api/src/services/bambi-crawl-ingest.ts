@@ -74,6 +74,7 @@ import {
 	readQueenalbaBannerTargetId,
 } from "./bambi-crawl-queenalba-main";
 import { type CrawledLimits, readCrawledLimits } from "./bambi-crawled-limits";
+import { loadRegionIndex, matchRegionCodes } from "./bambi-region";
 
 // 목록에서 수집기가 쓰는 최소 규약. 사이트별 목록 파서가 더 많은 필드를 채워도 상관없다 —
 // 상세 패스가 ID 하나만 필요로 하기 때문에 이 경계 덕분에 파서를 추가해도 수집기가 안 바뀐다.
@@ -394,6 +395,10 @@ type CrawlTickSettings = CrawlSettings & {
 };
 
 export interface CrawlTickOptions {
+	// 운영자가 화면에서 고른 수집 데이터. 「즉시 수집」은 저장 버튼과 분리돼 있어, 고르기만 하고
+	// 저장하지 않은 종류로도 이 회차를 돌린다. 이 회차에만 적용하고 설정 row는 건드리지 않는다 —
+	// 여기서 저장까지 해버리면 한 번 눌러본 종류로 스케줄러가 계속 돌게 된다.
+	contentType?: CrawlContentType;
 	// 운영자가 "즉시 수집"을 누른 경우. 주기 판정만 건너뛰고 나머지(중복 방지·수율 판정·
 	// 만료 규칙)는 예약 실행과 완전히 동일하게 지난다.
 	force?: boolean;
@@ -661,6 +666,10 @@ const ingestDetail = async (
 		return "unchanged";
 	}
 
+	// 원본의 지역 문자열("서울" / "강남구")을 지역 마스터 코드로 해석한다. 대조에 실패하면
+	// 코드만 null로 남고 원문은 그대로 보존된다 — 표기가 우리 표준과 어긋난다고 공고를
+	// 버리지 않는다. 백필 스크립트와 같은 헬퍼라 같은 원문이 항상 같은 코드로 굳는다.
+	const regionCodes = matchRegionCodes(await loadRegionIndex(), record);
 	const values = {
 		address: record.address,
 		ageRange: record.ageRange,
@@ -673,6 +682,7 @@ const ingestDetail = async (
 		detailFetchedAt: now,
 		detailImageUrls: media.detailImageUrls,
 		district: record.district,
+		districtCode: regionCodes.districtCode,
 		gender: record.gender,
 		industryCategory: record.industryCategory,
 		industryRaw: record.industryRaw,
@@ -681,6 +691,7 @@ const ingestDetail = async (
 		payRaw: record.payRaw,
 		payUnit: record.payUnit,
 		region: record.region,
+		regionCode: regionCodes.regionCode,
 		shopName: record.shopName,
 		sourceDeadlineAt: record.sourceDeadlineAt,
 		sourceExternalId: record.sourceExternalId,
@@ -1156,6 +1167,10 @@ export const runCrawlTick = async (
 	options: CrawlTickOptions = {}
 ): Promise<CrawlTickResult> => {
 	const settings = await readSettings();
+	// 화면에서 고른 종류가 오면 그것으로 돈다(없으면 저장된 설정). 아래 가드·회차 기록·
+	// 커뮤니티 분기가 모두 이 값을 봐야 한다 — 하나라도 settings를 직접 읽으면 공고를
+	// 고르고 커뮤니티 회차가 열리는 식으로 어긋난다.
+	const contentType = options.contentType ?? settings.crawlContentType;
 
 	// crawlEnabled는 스케줄러 스위치다. 주기 실행만 통제하고 운영자의 「즉시 수집」은
 	// 막지 않는다 — 수동 실행까지 잠그면 스케줄러를 켜지 않고는 파서를 확인할 방법이 없다.
@@ -1166,12 +1181,7 @@ export const runCrawlTick = async (
 	// 파서가 없는 (사이트 × 데이터 종류) 조합을 골랐으면 회차를 만들지 않고 빠져나온다. 여기서
 	// 회차를 열면 빈 결과가 "공고 없음"으로 읽혀 만료 처리가 돌 수 있다. 파서가 생기면
 	// IMPLEMENTED_CRAWL_TARGETS에 조합을 추가하는 것만으로 이 가드가 풀린다.
-	if (
-		!isCrawlTargetImplemented(
-			settings.crawlSourceSite,
-			settings.crawlContentType
-		)
-	) {
+	if (!isCrawlTargetImplemented(settings.crawlSourceSite, contentType)) {
 		return emptyResult("not_implemented");
 	}
 
@@ -1186,7 +1196,7 @@ export const runCrawlTick = async (
 
 	await reapStaleRuns(now);
 
-	const run = await startRun(site, settings.crawlContentType, now);
+	const run = await startRun(site, contentType, now);
 
 	// 진행 중 회차가 이미 있다. 부분 유니크 인덱스가 두 번째 INSERT를 막은 것이라,
 	// 애플리케이션 검사만 있을 때 남는 경쟁 창이 여기서는 없다.
@@ -1194,7 +1204,7 @@ export const runCrawlTick = async (
 		return emptyResult("already_running");
 	}
 
-	if (settings.crawlContentType === "community") {
+	if (contentType === "community") {
 		return await finishCommunityRun(client, site, now, run.id);
 	}
 

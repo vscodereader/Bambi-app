@@ -11,11 +11,18 @@ dotenv.config({
 	path: "../../apps/server/.env",
 });
 
-const [{ db }, authSchema, bambiSchema, { jobsRouter }] = await Promise.all([
+const [
+	{ db },
+	authSchema,
+	bambiSchema,
+	{ jobsRouter },
+	{ createTestRegion, deleteTestRegion },
+] = await Promise.all([
 	import("@bambi-app/db"),
 	import("@bambi-app/db/schema/auth"),
 	import("@bambi-app/db/schema/bambi"),
 	import("./jobs"),
+	import("../../services/__fixtures__/test-region"),
 ]);
 
 const { organization, user } = authSchema;
@@ -31,7 +38,7 @@ interface BoostOrderFixture {
 	organicNewId: string;
 	organicOldId: string;
 	organizationId: string;
-	region: string;
+	regionCode: string;
 	seekerUserId: string;
 	specialNewId: string;
 	specialOldId: string;
@@ -59,8 +66,8 @@ const createBoostOrderFixture = async (): Promise<BoostOrderFixture> => {
 	const oneHourAgo = new Date(now.getTime() - HOUR_MS);
 	const twoHoursAgo = new Date(now.getTime() - 2 * HOUR_MS);
 	// 공개 jobs.list는 전역 조회라 병렬 테스트 픽스처가 서로의 결과·impression에 섞인다.
-	// 픽스처마다 고유 region을 부여하고 그 region으로만 조회해 완전히 격리한다.
-	const region = `list-boost-${randomUUID()}`;
+	// 픽스처마다 일회용 지역을 만들고 그 지역으로만 조회해 완전히 격리한다.
+	const testRegion = await createTestRegion();
 	const organizationId = `org_test_${randomUUID()}`;
 	const employerUserId = `user_test_employer_${randomUUID()}`;
 	const seekerUserId = `user_test_seeker_${randomUUID()}`;
@@ -124,7 +131,8 @@ const createBoostOrderFixture = async (): Promise<BoostOrderFixture> => {
 		payAmount: 180_000,
 		payUnit: "일급",
 		paymentStatus: "paid" as const,
-		region,
+		region: testRegion.label,
+		regionCode: testRegion.code,
 		status: "published" as const,
 		workSchedule: "20:00-02:00",
 		...overrides,
@@ -170,7 +178,7 @@ const createBoostOrderFixture = async (): Promise<BoostOrderFixture> => {
 		organicNewId,
 		organicOldId,
 		organizationId,
-		region,
+		regionCode: testRegion.code,
 		seekerUserId,
 		specialNewId,
 		specialOldId,
@@ -197,6 +205,7 @@ const cleanupBoostOrderFixture = async (
 	await db
 		.delete(organization)
 		.where(eq(organization.id, fixture.organizationId));
+	await deleteTestRegion(fixture.regionCode);
 };
 
 let fixture: BoostOrderFixture;
@@ -205,7 +214,7 @@ const listForFixtureRegion = () =>
 	createProcedureClient(jobsRouter.list, {
 		context: createContextForUser(fixture.seekerUserId),
 		path: ["bambi", "jobs", "list"],
-	})({ limit: 30, region: fixture.region });
+	})({ limit: 30, regionCode: fixture.regionCode });
 
 const organicIds = (
 	result: Awaited<ReturnType<typeof listForFixtureRegion>>

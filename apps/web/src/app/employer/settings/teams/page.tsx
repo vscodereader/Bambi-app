@@ -30,6 +30,7 @@ import { TeamForm } from "@/components/bambi/team-form";
 import { TeamMemberList } from "@/components/bambi/team-member-list";
 import Loader from "@/components/loader";
 import { authClient } from "@/lib/auth-client";
+import { findDistrictName, useRegions } from "@/lib/bambi/regions";
 import { formatDateTime, formatNullable } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
@@ -48,6 +49,8 @@ export default function EmployerTeamSettingsPage() {
 	const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
 	const [editingTeamId, setEditingTeamId] = useState<null | string>(null);
 	const [deletingTeamId, setDeletingTeamId] = useState<null | string>(null);
+	// 팀 행에는 시/도 표시 문자열만 저장돼 있어 세부지역명은 지역 마스터에서 되짚는다.
+	const { regions } = useRegions();
 	const organizationsQuery = useQuery({
 		...orpc.bambi.organizations.getMine.queryOptions(),
 		enabled: isSignedIn,
@@ -173,8 +176,9 @@ export default function EmployerTeamSettingsPage() {
 										organizations={organizations}
 										team={{
 											displayName: team.displayName,
+											districtCode: team.districtCode,
 											organizationId: team.organizationId,
-											region: team.region,
+											regionCode: team.regionCode,
 											teamId: team.teamId,
 										}}
 									/>
@@ -185,7 +189,19 @@ export default function EmployerTeamSettingsPage() {
 												{team.displayName}
 											</h3>
 											<p className="mt-1 text-muted-foreground text-xs">
-												{formatNullable(team.region)} · 수정{" "}
+												{formatNullable(
+													[
+														team.region,
+														findDistrictName(
+															regions,
+															team.regionCode,
+															team.districtCode
+														),
+													]
+														.filter(Boolean)
+														.join(" ")
+												)}{" "}
+												· 수정{" "}
 												{team.updatedAt
 													? formatDateTime(team.updatedAt)
 													: "미입력"}

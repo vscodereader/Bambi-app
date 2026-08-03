@@ -49,6 +49,7 @@ export function CommunityHomeScreen() {
 			<PremiumAdBannerSection
 				isLoading={adBanners.isLoading}
 				items={adBanners.premiumBanner}
+				promotionSurface="community_center"
 			/>
 			<h1 className="m-0 font-extrabold text-xl">수다방</h1>
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">

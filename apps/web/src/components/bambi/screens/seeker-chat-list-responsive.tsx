@@ -24,6 +24,10 @@ interface SeekerChatListResponsiveProps {
 	onOpen: (roomId: string) => void;
 }
 
+// 운영자 조치는 즉시 이뤄지지 않는다. 접수 사실만이라도 방 카드에 남겨두지 않으면
+// 신고한 사람 눈에는 아무 일도 일어나지 않은 것처럼 보인다.
+const PENDING_REPORT_LABEL = "신고 완료 · 조치 대기 중";
+
 const formatDateTime = (value: Date | string): string =>
 	new Intl.DateTimeFormat("ko-KR", {
 		dateStyle: "medium",
@@ -47,8 +51,12 @@ const getRoomItemClassName = (
 
 // 방 항목의 삭제·신고·차단 케밥 메뉴. 목록 항목은 방 열기 클릭 영역이 카드 전체를
 // 덮으므로, 이 메뉴 트리거는 그 열기 버튼과 형제(자식 아님)로 두어 button-in-button을
-// 피하고 상위에 겹쳐(z-10) 자기 클릭만 받는다. 이 목록은 구직자 화면이라 상대(차단
-// 대상)는 항상 구인자(employerUserId)다.
+// 피하고 상위에 겹쳐(z-10) 자기 클릭만 받는다. 이 라우트에는 역할 게이트가 없어
+// 구인자도 들어오므로 차단 대상은 서버가 뷰어 기준으로 계산해 준 counterpartUserId를
+// 쓴다(employerUserId 고정이면 구인자가 자기 자신을 차단한다).
+//
+// 신고는 구직자 전용이라 뷰어가 그 방의 구직자일 때만 노출한다(서버 createReport도
+// 같은 기준으로 막는다). 뷰어 판별은 "상대가 구인자면 내가 구직자"로 한다.
 //
 // 이미 차단된 방에서는 삭제만 남긴다 — 다시 차단하는 항목은 무의미하고, 대화가 막힌
 // 방에서 남은 실질 선택지는 목록에서 치우는 것뿐이다.
@@ -57,8 +65,9 @@ function ChatRoomActions({
 	room,
 }: {
 	isBlocked: boolean;
-	room: { employerUserId: string; id: string };
+	room: { counterpartUserId: string; employerUserId: string; id: string };
 }) {
+	const isJobSeekerViewer = room.counterpartUserId === room.employerUserId;
 	const queryClient = useQueryClient();
 	const [isReportOpen, setIsReportOpen] = useState(false);
 
@@ -106,17 +115,21 @@ function ChatRoomActions({
 					isBlocked
 						? [deleteAction]
 						: [
-								{
-									key: "report",
-									label: "신고",
-									onSelect: () => setIsReportOpen(true),
-								},
+								...(isJobSeekerViewer
+									? [
+											{
+												key: "report",
+												label: "신고",
+												onSelect: () => setIsReportOpen(true),
+											} satisfies RowAction,
+										]
+									: []),
 								{
 									key: "block",
 									label: "차단",
 									onSelect: () =>
 										blockMutation.mutate({
-											blockedUserId: room.employerUserId,
+											blockedUserId: room.counterpartUserId,
 											chatRoomId: room.id,
 										}),
 								},
@@ -125,12 +138,14 @@ function ChatRoomActions({
 				}
 				ariaLabel="채팅방 관리"
 			/>
-			<ReportDialog
-				onOpenChange={setIsReportOpen}
-				open={isReportOpen}
-				targetId={room.id}
-				targetType="chat_room"
-			/>
+			{isJobSeekerViewer ? (
+				<ReportDialog
+					onOpenChange={setIsReportOpen}
+					open={isReportOpen}
+					targetId={room.id}
+					targetType="chat_room"
+				/>
+			) : null}
 		</>
 	);
 }
@@ -179,6 +194,10 @@ function ChatRoomItem({
 						<Badge tone={isBlocked ? "danger" : "success"}>
 							{isBlocked ? "차단됨" : "대화 가능"}
 						</Badge>
+						{/* 차단된 방에서는 이 줄이 블러 뒤로 숨으므로 아래 오버레이가 대신 알린다. */}
+						{room.hasPendingMyReport && !isBlocked ? (
+							<Badge tone="pending">{PENDING_REPORT_LABEL}</Badge>
+						) : null}
 						{room.unreadCount > 0 ? (
 							<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
 						) : null}
@@ -202,8 +221,13 @@ function ChatRoomItem({
 			{/* 블러 위에 선명하게 얹는 안내. 블러된 내용 뒤에 두어 별도 z-index 없이 위에
 			그려지고, pointer-events-none이라 케밥 메뉴 클릭을 가로채지 않는다. */}
 			{isBlocked ? (
-				<p className="pointer-events-none absolute inset-0 m-0 flex items-center justify-center px-4 text-center font-extrabold text-foreground text-sm">
+				<p className="pointer-events-none absolute inset-0 m-0 flex flex-col items-center justify-center gap-1 px-4 text-center font-extrabold text-foreground text-sm">
 					차단된 채팅입니다.
+					{room.hasPendingMyReport ? (
+						<span className="font-bold text-muted-foreground text-xs">
+							{PENDING_REPORT_LABEL}
+						</span>
+					) : null}
 				</p>
 			) : null}
 			<div className="relative z-10 shrink-0">
@@ -239,6 +263,7 @@ function SeekerChatListRails({
 					<HorizontalAdBannerRail
 						isLoading={adBanners.isLoading}
 						items={adBanners.leftBanner}
+						promotionSurface="chats_left"
 					/>
 				</div>
 			</aside>
@@ -256,6 +281,7 @@ function SeekerChatListRails({
 					<AdBannerRail
 						isLoading={adBanners.isLoading}
 						items={adBanners.rightBanner}
+						promotionSurface="chats_right"
 					/>
 				</div>
 			</aside>

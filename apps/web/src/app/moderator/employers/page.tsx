@@ -14,6 +14,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
+import {
+	formatBusinessStartDate,
+	formatDateTime,
+	formatNullable,
+} from "@/lib/bambi-format";
+import { getBiznumStatusLabel } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
 // 업소 인증 상태 필터. "all"은 서버에 status 미전달(전체 조회)로 매핑한다.
@@ -112,6 +118,28 @@ export default function ModeratorEmployersPage() {
 									? ` · 사업자 ${employer.businessRegistrationNumber}`
 									: ""}
 							</p>
+							<p className="m-0 text-muted-foreground text-sm">
+								대표자 {formatNullable(employer.representativeName)} · 개업일자{" "}
+								{formatNullable(
+									formatBusinessStartDate(employer.businessStartDate)
+								)}
+							</p>
+							{/* 제출 시점 국세청 대조 결과. 미확인은 국세청 키 미설정·장애로 판정을
+							    못 한 제출이라 운영자가 사업자등록증을 직접 봐야 한다. */}
+							<div className="flex flex-wrap items-center gap-2">
+								<Badge
+									variant={employer.biznumCheckedAt ? "success" : "warning"}
+								>
+									{employer.biznumCheckedAt
+										? "국세청 확인 완료"
+										: "국세청 미확인"}
+								</Badge>
+								<span className="text-muted-foreground text-sm">
+									{employer.biznumCheckedAt
+										? `${getBiznumStatusLabel(employer.biznumStatusCode)} · ${formatDateTime(employer.biznumCheckedAt)}`
+										: "국세청 대조를 하지 못했어요. 사업자등록증을 수동으로 확인해 주세요."}
+								</span>
+							</div>
 							{employer.verificationNote ? (
 								<p className="m-0 text-muted-foreground text-sm">
 									반려 사유: {employer.verificationNote}

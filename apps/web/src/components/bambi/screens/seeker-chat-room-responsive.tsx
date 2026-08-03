@@ -143,6 +143,33 @@ const getMutationErrorMessage = (error: Error): string => {
 	return "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
 };
 
+/**
+ * 서버(chats.throwIfChatBlocked)가 FORBIDDEN에 실어 보내는 차단 사유를 안내 문구로.
+ * 사유를 읽어낸 경우에만 문자열을 돌려주고, 그 밖의 오류(비로그인·네트워크 등)는
+ * null — 사유를 모르는 채 목록으로 튕기면 원인 파악이 더 어려워지므로 오류 카드에 맡긴다.
+ */
+const getChatBlockMessage = (error: unknown): null | string => {
+	const data = (error as { data?: unknown } | null | undefined)?.data as
+		| { chatBlockReason?: unknown; counterpartName?: unknown }
+		| null
+		| undefined;
+	const name =
+		typeof data?.counterpartName === "string" ? data.counterpartName : null;
+
+	switch (data?.chatBlockReason) {
+		case "blocked_by_counterpart":
+			return name ? `${name}님이 차단했어요.` : "차단된 채팅방이에요.";
+		case "blocked_by_me":
+			return name
+				? `${name}님을 차단했어요. 차단 관리에서 해제할 수 있어요.`
+				: "차단된 채팅방이에요.";
+		case "moderation":
+			return "신고에 대한 운영자 조치로 종료된 채팅방이에요.";
+		default:
+			return null;
+	}
+};
+
 const getReviewMutationErrorMessage = (error: Error): string => {
 	if ("code" in error && error.code === "BAD_REQUEST") {
 		return "별점과 후기 내용을 다시 확인해 주세요.";
@@ -737,6 +764,75 @@ function ChatBlockConfirm({
 	);
 }
 
+// 헤더 아래 "연락처 보호 중" 안내 바 — 신고·차단 진입점을 함께 담는다.
+// 채팅 신고는 구직자 전용이라(서버 createReport도 같은 기준으로 막는다) 구인자에게는
+// 차단하기만 남기고 안내 문구도 차단 기준으로 바꾼다. 차단은 양쪽 모두 쓸 수 있다.
+// 확인 단계·신고 창 열림 상태는 이 바 밖에서 쓰이지 않아 여기서 갖고 있는다.
+function ChatSafetyNotice({
+	chatRoomId,
+	isBlocked,
+	isBlockPending,
+	isJobSeeker,
+	onBlock,
+}: {
+	chatRoomId: string;
+	isBlocked: boolean;
+	isBlockPending: boolean;
+	isJobSeeker: boolean;
+	onBlock: () => void;
+}) {
+	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
+	const [isReportOpen, setIsReportOpen] = useState(false);
+
+	return (
+		<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
+			<div className="flex items-center justify-between gap-3">
+				<div className="flex items-center gap-2 font-extrabold text-sm">
+					<span className="inline-flex size-4">
+						<ShieldIcon />
+					</span>
+					면접 확정 전 연락처 보호 중
+				</div>
+				<div className="flex items-center gap-2">
+					{isJobSeeker ? (
+						<Button
+							onClick={() => setIsReportOpen(true)}
+							size="sm"
+							variant="secondary"
+						>
+							신고
+						</Button>
+					) : null}
+					<ChatBlockTrigger
+						isBlocked={isBlocked}
+						isConfirmOpen={isBlockConfirmOpen}
+						onOpen={() => setIsBlockConfirmOpen(true)}
+					/>
+				</div>
+			</div>
+			<p className="mt-1 mb-0 text-xs leading-relaxed">
+				{isJobSeeker
+					? "외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요."
+					: "문제가 되는 상대는 차단할 수 있어요."}
+			</p>
+			<ChatBlockConfirm
+				isConfirmOpen={isBlockConfirmOpen}
+				isPending={isBlockPending}
+				onCancel={() => setIsBlockConfirmOpen(false)}
+				onConfirm={onBlock}
+			/>
+			{isJobSeeker ? (
+				<ReportDialog
+					onOpenChange={setIsReportOpen}
+					open={isReportOpen}
+					targetId={chatRoomId}
+					targetType="chat_room"
+				/>
+			) : null}
+		</div>
+	);
+}
+
 // 면접 일정 제안 폼은 구인자에게만 노출된다. 구직자는 제안을 받기만 한다.
 function InterviewProposalForm({
 	interviewAt,
@@ -821,16 +917,16 @@ function ContactRevealAction({
 			<span className="font-medium text-muted-foreground text-xs">
 				구인자 인증 연락처
 			</span>
-			{/* 모바일은 번호 아래로 안내를 스택(flex-col), md↑는 번호 옆 한 줄(flex-row). */}
-			<span className="flex flex-col gap-0.5 md:flex-row md:items-baseline md:gap-1.5">
+			{/* 좁은 사이드 카드에서도 번호가 꺾이지 않도록 항상 세로 스택 + 번호는 한 줄 고정. */}
+			<span className="flex flex-col gap-0.5">
 				<a
-					className="font-bold text-base text-foreground underline-offset-2 hover:underline"
+					className="whitespace-nowrap font-bold text-base text-foreground underline-offset-2 hover:underline"
 					href={`tel:${employerVerifiedPhone}`}
 				>
 					{employerVerifiedPhone}
 				</a>
-				<span className="font-medium text-primary text-sm">
-					('밤비알바 보고 연락드렸다고 하시면 정확한 상담 받으실 수 있어요.')
+				<span className="text-muted-foreground text-xs">
+					밤비알바 보고 연락드렸다고 하시면 정확한 상담을 받으실 수 있어요.
 				</span>
 			</span>
 		</div>
@@ -844,8 +940,6 @@ export function SeekerChatRoomResponsive({
 	const queryClient = useQueryClient();
 	const router = useRouter();
 	const [message, setMessage] = useState("");
-	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
-	const [isReportOpen, setIsReportOpen] = useState(false);
 	const [attachmentDraft, setAttachmentDraft] =
 		useState<AttachmentDraft | null>(null);
 	const [interviewAt, setInterviewAt] = useState("");
@@ -1151,6 +1245,32 @@ export function SeekerChatRoomResponsive({
 		return () => window.clearTimeout(timeoutId);
 	}, [message, roomId, roomQuery.data]);
 
+	// 차단·운영자 조치로 막힌 방은 오류 카드로 세워두지 않고 목록으로 돌려보내며
+	// 이유만 토스트로 알린다. id를 고정해 StrictMode 이중 실행에도 토스트가 겹치지 않는다.
+	const chatBlockMessage = getChatBlockMessage(roomQuery.error);
+
+	useEffect(() => {
+		if (!chatBlockMessage) {
+			return;
+		}
+
+		toast.error(chatBlockMessage, { id: "chat-room-blocked" });
+		router.replace("/seeker/chats");
+	}, [chatBlockMessage, router]);
+
+	if (chatBlockMessage) {
+		return (
+			<div
+				className={cn(
+					"mx-auto w-full px-5 py-10 text-center font-bold text-muted-foreground md:px-6",
+					SEEKER_CONTENT_WIDTH
+				)}
+			>
+				채팅 목록으로 이동하고 있어요.
+			</div>
+		);
+	}
+
 	if (roomQuery.isLoading) {
 		return (
 			<div
@@ -1179,9 +1299,17 @@ export function SeekerChatRoomResponsive({
 					<p className="mt-2 mb-4 text-muted-foreground text-sm">
 						로그인 상태나 채팅방 접근 권한을 확인해 주세요.
 					</p>
-					<Button onClick={() => roomQuery.refetch()} variant="secondary">
-						다시 시도
-					</Button>
+					<div className="flex flex-wrap justify-center gap-2">
+						<Button
+							onClick={() => router.push("/seeker/chats")}
+							variant="primary"
+						>
+							채팅 목록으로
+						</Button>
+						<Button onClick={() => roomQuery.refetch()} variant="secondary">
+							다시 시도
+						</Button>
+					</div>
 				</Card>
 			</div>
 		);
@@ -1417,47 +1545,15 @@ export function SeekerChatRoomResponsive({
 						{getRealtimeStatusLabel(realtimeStatus)}
 					</Badge>
 				</header>
-				<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
-					<div className="flex items-center justify-between gap-3">
-						<div className="flex items-center gap-2 font-extrabold text-sm">
-							<span className="inline-flex size-4">
-								<ShieldIcon />
-							</span>
-							면접 확정 전 연락처 보호 중
-						</div>
-						<div className="flex items-center gap-2">
-							<Button
-								onClick={() => setIsReportOpen(true)}
-								size="sm"
-								variant="secondary"
-							>
-								신고
-							</Button>
-							<ChatBlockTrigger
-								isBlocked={room.isBlocked}
-								isConfirmOpen={isBlockConfirmOpen}
-								onOpen={() => setIsBlockConfirmOpen(true)}
-							/>
-						</div>
-					</div>
-					<p className="mt-1 mb-0 text-xs leading-relaxed">
-						외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요.
-					</p>
-					<ChatBlockConfirm
-						isConfirmOpen={isBlockConfirmOpen}
-						isPending={blockMutation.isPending}
-						onCancel={() => setIsBlockConfirmOpen(false)}
-						onConfirm={() =>
-							blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
-						}
-					/>
-					<ReportDialog
-						onOpenChange={setIsReportOpen}
-						open={isReportOpen}
-						targetId={room.id}
-						targetType="chat_room"
-					/>
-				</div>
+				<ChatSafetyNotice
+					chatRoomId={room.id}
+					isBlocked={room.isBlocked}
+					isBlockPending={blockMutation.isPending}
+					isJobSeeker={isJobSeeker}
+					onBlock={() =>
+						blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
+					}
+				/>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
 					<ChatMessageList
 						counterpartName={counterpartName}

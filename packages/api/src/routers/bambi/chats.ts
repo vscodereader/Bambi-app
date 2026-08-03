@@ -10,6 +10,7 @@ import {
 	employerTeamProfile,
 	interviewSchedule,
 	jobPost,
+	report,
 	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -169,53 +170,12 @@ type RequestedInterviewStatus = z.infer<
 	typeof setInterviewStatusInput
 >["status"];
 
-interface ChatBlockInput {
-	actorUserId: string;
-	employerUserId: string;
-	isBlocked: boolean;
-	jobSeekerUserId: string;
-}
-
 interface InterviewStatusTransitionInput {
 	actorUserId: string;
 	currentStatus: string;
 	proposedByUserId: string;
 	requestedStatus: RequestedInterviewStatus;
 }
-
-const throwIfChatBlocked = async ({
-	actorUserId,
-	employerUserId,
-	isBlocked,
-	jobSeekerUserId,
-}: ChatBlockInput): Promise<void> => {
-	if (isBlocked) {
-		throw new ORPCError("FORBIDDEN");
-	}
-
-	const otherUserId =
-		employerUserId === actorUserId ? jobSeekerUserId : employerUserId;
-	const [block] = await db
-		.select({ id: userBlock.id })
-		.from(userBlock)
-		.where(
-			or(
-				and(
-					eq(userBlock.blockerUserId, actorUserId),
-					eq(userBlock.blockedUserId, otherUserId)
-				),
-				and(
-					eq(userBlock.blockerUserId, otherUserId),
-					eq(userBlock.blockedUserId, actorUserId)
-				)
-			)
-		)
-		.limit(1);
-
-	if (block) {
-		throw new ORPCError("FORBIDDEN");
-	}
-};
 
 const canSetInterviewStatus = ({
 	actorUserId,
@@ -471,6 +431,82 @@ const resolveBlockedCounterpartIds = async (
 	);
 };
 
+type ChatBlockReason =
+	| "blocked_by_counterpart"
+	| "blocked_by_me"
+	| "moderation";
+
+const CHAT_BLOCK_MESSAGES: Record<ChatBlockReason, string> = {
+	blocked_by_counterpart: "상대가 회원님을 차단한 채팅방이에요.",
+	blocked_by_me: "회원님이 상대를 차단한 채팅방이에요.",
+	moderation: "신고에 대한 운영자 조치로 종료된 채팅방이에요.",
+};
+
+/**
+ * 방 진입을 막고, **왜** 막혔는지를 오류에 실어 보낸다.
+ *
+ * 예전에는 세 경우 모두 맨 FORBIDDEN이라 화면이 "채팅방을 불러올 수 없어요"라는
+ * 막다른 카드밖에 못 그렸다. 사유(chatBlockReason)와 상대 이름을 error data로 함께
+ * 내려야 웹이 목록으로 돌려보내며 토스트로 이유를 말해줄 수 있다. 이름은 방 row가
+ * 있어야 풀리는데(구인자 쪽은 팀·조직 프로필 경유) 이 가드가 이미 방을 받으므로
+ * 여기서 푼다 — 오류 경로에서만 도는 조회다.
+ */
+const throwChatBlocked = async (
+	reason: ChatBlockReason,
+	room: CounterpartRoom,
+	actorUserId: string
+): Promise<never> => {
+	const counterpartNames = await resolveCounterpartNames([room], actorUserId);
+
+	throw new ORPCError("FORBIDDEN", {
+		data: {
+			chatBlockReason: reason,
+			counterpartName: counterpartNames.get(room.id) ?? null,
+		},
+		message: CHAT_BLOCK_MESSAGES[reason],
+	});
+};
+
+const throwIfChatBlocked = async ({
+	actorUserId,
+	room,
+}: {
+	actorUserId: string;
+	room: CounterpartRoom & { isBlocked: boolean };
+}): Promise<void> => {
+	if (room.isBlocked) {
+		await throwChatBlocked("moderation", room, actorUserId);
+	}
+
+	const otherUserId = counterpartUserId(room, actorUserId);
+	const [block] = await db
+		.select({ blockerUserId: userBlock.blockerUserId })
+		.from(userBlock)
+		.where(
+			or(
+				and(
+					eq(userBlock.blockerUserId, actorUserId),
+					eq(userBlock.blockedUserId, otherUserId)
+				),
+				and(
+					eq(userBlock.blockerUserId, otherUserId),
+					eq(userBlock.blockedUserId, actorUserId)
+				)
+			)
+		)
+		.limit(1);
+
+	if (block) {
+		await throwChatBlocked(
+			block.blockerUserId === actorUserId
+				? "blocked_by_me"
+				: "blocked_by_counterpart",
+			room,
+			actorUserId
+		);
+	}
+};
+
 export const chatsRouter = {
 	startFromJobPost: protectedProcedure
 		.input(startFromJobPostInput)
@@ -622,6 +658,26 @@ export const chatsRouter = {
 			profile.userId
 		);
 
+		// 내가 넣은 신고 중 아직 처리 전인 방들. 운영자 조치는 즉시 이뤄지지 않으므로
+		// 목록이 "접수됐고 대기 중"을 보여줄 수 있어야 신고가 삼켜진 것처럼 보이지 않는다.
+		const pendingReports = await db
+			.select({ targetId: report.targetId })
+			.from(report)
+			.where(
+				and(
+					eq(report.reporterUserId, profile.userId),
+					eq(report.targetType, "chat_room"),
+					inArray(
+						report.targetId,
+						visibleRooms.map(({ room }) => room.id)
+					),
+					inArray(report.status, ["open", "reviewing"])
+				)
+			);
+		const pendingReportRoomIds = new Set(
+			pendingReports.map((row) => row.targetId)
+		);
+
 		return await Promise.all(
 			visibleRooms.map(async ({ lastMessage, room }) => ({
 				...room,
@@ -633,6 +689,10 @@ export const chatsRouter = {
 					room.isBlocked ||
 					blockedCounterpartIds.has(counterpartUserId(room, profile.userId)),
 				counterpartName: counterpartNames.get(room.id) ?? null,
+				// 목록 화면이 뷰어 쪽(구직자/구인자)을 판별하고 차단 대상을 고르는 근거.
+				// 방 row에는 양쪽 id만 있어 뷰어가 누구인지 화면에서 알 수 없다.
+				counterpartUserId: counterpartUserId(room, profile.userId),
+				hasPendingMyReport: pendingReportRoomIds.has(room.id),
 				jobTitle: jobTitleById.get(room.jobPostId) ?? null,
 				lastMessageBody: lastMessage?.body ?? null,
 				unreadCount: await getUnreadMessageCount({
@@ -725,9 +785,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const [post] = await db
@@ -850,9 +908,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const category = requireAllowedChatMedia(input);
@@ -877,9 +933,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const [message] = await db
@@ -927,9 +981,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const category = requireAllowedChatMedia(input);
@@ -1004,9 +1056,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const readReceipts = await markChatMessagesRead({
@@ -1061,9 +1111,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const [schedule] = await db
@@ -1105,9 +1153,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			if (
@@ -1154,9 +1200,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const viewerIsEmployer = profile.userId === room.employerUserId;
@@ -1257,9 +1301,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			if (

@@ -26,8 +26,15 @@ import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
-import { formatDateTime, formatNullable } from "@/lib/bambi-format";
-import { verificationStatusLabels } from "@/lib/bambi-options";
+import {
+	formatBusinessStartDate,
+	formatDateTime,
+	formatNullable,
+} from "@/lib/bambi-format";
+import {
+	getBiznumStatusLabel,
+	verificationStatusLabels,
+} from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
 const roleLabels: Record<string, string> = {
@@ -101,6 +108,21 @@ const getVerificationStatusTone = (
 	return "default";
 };
 
+// biznumCheckedAt이 있으면 제출 때 국세청 대조를 통과한 것이고, null이면 판정하지
+// 못한 채(국세청 장애) 접수된 것이라 운영자 수동 확인이 남아 있다. 진위확인 자체가 아직
+// 준비 전(서비스키 미설정)이면 "미확인"은 오해를 부르므로 준비 중임을 그대로 알린다.
+const getBiznumCheckText = (
+	checkedAt: Date | null,
+	statusCode: null | string,
+	checkEnabled: boolean
+): string => {
+	if (!checkedAt) {
+		return checkEnabled ? "미확인" : "곧 준비될 기능입니다";
+	}
+
+	return `확인 완료(${getBiznumStatusLabel(statusCode)}) · ${formatDateTime(checkedAt)}`;
+};
+
 const getErrorCode = (error: Error | null): string | undefined =>
 	error && "code" in error && typeof error.code === "string"
 		? error.code
@@ -127,6 +149,9 @@ export default function EmployerMePage() {
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	const organizationProfiles =
 		mineQuery.data?.employerOrganizationProfiles ?? [];
+	// 값을 못 받은 순간(로딩·에러)에는 기존 표기를 유지한다 — 준비 중 안내는 서버가
+	// 미설정이라고 알려준 경우에만 띄운다.
+	const biznumCheckEnabled = mineQuery.data?.biznumCheckEnabled ?? true;
 
 	const handleSignOut = async () => {
 		await signOutToHome(router);
@@ -276,10 +301,17 @@ export default function EmployerMePage() {
 					</p>
 				</div>
 				<BusinessInfoForm
+					biznumCheckEnabled={biznumCheckEnabled}
 					defaultBusinessRegistrationNumber={
 						organizationProfiles[0]?.businessRegistrationNumber ?? ""
 					}
+					defaultBusinessStartDate={formatBusinessStartDate(
+						organizationProfiles[0]?.businessStartDate
+					)}
 					defaultDisplayName={organizationProfiles[0]?.displayName ?? ""}
+					defaultRepresentativeName={
+						organizationProfiles[0]?.representativeName ?? ""
+					}
 					isRejected={
 						organizationProfiles[0]?.verificationStatus === "rejected"
 					}
@@ -313,6 +345,36 @@ export default function EmployerMePage() {
 											<dd className="mt-1 break-words">
 												{formatNullable(
 													organizationProfile.businessRegistrationNumber
+												)}
+											</dd>
+										</div>
+										<div>
+											<dt className="text-muted-foreground text-xs">대표자</dt>
+											<dd className="mt-1 break-words">
+												{formatNullable(organizationProfile.representativeName)}
+											</dd>
+										</div>
+										<div>
+											<dt className="text-muted-foreground text-xs">
+												개업일자
+											</dt>
+											<dd className="mt-1 break-words">
+												{formatNullable(
+													formatBusinessStartDate(
+														organizationProfile.businessStartDate
+													)
+												)}
+											</dd>
+										</div>
+										<div>
+											<dt className="text-muted-foreground text-xs">
+												국세청 확인
+											</dt>
+											<dd className="mt-1 break-words">
+												{getBiznumCheckText(
+													organizationProfile.biznumCheckedAt,
+													organizationProfile.biznumStatusCode,
+													biznumCheckEnabled
 												)}
 											</dd>
 										</div>
@@ -425,17 +487,28 @@ export default function EmployerMePage() {
 const BRN_PATTERN = /^\d{3}-\d{2}-\d{5}$/;
 
 function BusinessInfoForm({
+	biznumCheckEnabled,
 	defaultDisplayName,
 	defaultBusinessRegistrationNumber,
+	defaultRepresentativeName,
+	defaultBusinessStartDate,
 	isRejected,
 }: {
+	biznumCheckEnabled: boolean;
 	defaultDisplayName: string;
 	defaultBusinessRegistrationNumber: string;
+	defaultRepresentativeName: string;
+	// date input 값과 같은 YYYY-MM-DD 문자열(빈 문자열이면 미입력).
+	defaultBusinessStartDate: string;
 	isRejected: boolean;
 }) {
 	const queryClient = useQueryClient();
 	const [displayName, setDisplayName] = useState(defaultDisplayName);
 	const [brn, setBrn] = useState(defaultBusinessRegistrationNumber);
+	const [representativeName, setRepresentativeName] = useState(
+		defaultRepresentativeName
+	);
+	const [startDate, setStartDate] = useState(defaultBusinessStartDate);
 	const [showValidation, setShowValidation] = useState(false);
 
 	const submitMutation = useMutation(
@@ -457,23 +530,32 @@ function BusinessInfoForm({
 	const brnError = BRN_PATTERN.test(brn.trim())
 		? ""
 		: "사업자등록번호는 000-00-00000 형식으로 입력해 주세요.";
+	const representativeNameError =
+		representativeName.trim().length === 0
+			? "대표자 성명을 입력해 주세요."
+			: "";
+	const startDateError = startDate ? "" : "개업일자를 입력해 주세요.";
 
 	// 기존 값에서 바뀐 게 없으면 제출을 막는다(불필요한 재심사 요청 방지).
 	// 단, 반려된 경우엔 동일 정보라도 재제출(재심사 신청)을 허용한다.
 	const isUnchanged =
 		displayName.trim() === defaultDisplayName.trim() &&
-		brn.trim() === defaultBusinessRegistrationNumber.trim();
+		brn.trim() === defaultBusinessRegistrationNumber.trim() &&
+		representativeName.trim() === defaultRepresentativeName.trim() &&
+		startDate === defaultBusinessStartDate;
 	const blockUnchanged = isUnchanged && !isRejected;
 
 	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (nameError || brnError) {
+		if (nameError || brnError || representativeNameError || startDateError) {
 			setShowValidation(true);
 			return;
 		}
 		submitMutation.mutate({
 			displayName: displayName.trim(),
 			businessRegistrationNumber: brn.trim(),
+			representativeName: representativeName.trim(),
+			businessStartDate: startDate,
 		});
 	};
 
@@ -510,7 +592,42 @@ function BusinessInfoForm({
 								message={showValidation ? brnError : ""}
 							/>
 						</div>
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="business-representative">대표자 성명</Label>
+							<Input
+								aria-invalid={
+									showValidation && Boolean(representativeNameError)
+								}
+								id="business-representative"
+								onChange={(event) => setRepresentativeName(event.target.value)}
+								placeholder="예: 홍길동"
+								value={representativeName}
+							/>
+							<FieldError
+								id="business-representative-error"
+								message={showValidation ? representativeNameError : ""}
+							/>
+						</div>
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="business-start-date">개업일자</Label>
+							<Input
+								aria-invalid={showValidation && Boolean(startDateError)}
+								id="business-start-date"
+								onChange={(event) => setStartDate(event.target.value)}
+								type="date"
+								value={startDate}
+							/>
+							<FieldError
+								id="business-start-date-error"
+								message={showValidation ? startDateError : ""}
+							/>
+						</div>
 					</div>
+					<p className="text-muted-foreground text-xs">
+						{biznumCheckEnabled
+							? "대표자 성명과 개업일자는 사업자등록증에 적힌 그대로 입력해야 국세청 진위확인을 통과합니다."
+							: "국세청 사업자등록정보 진위확인은 곧 준비될 기능이에요. 지금은 제출하신 정보를 운영자가 사업자등록증과 직접 대조해 승인하니, 대표자 성명과 개업일자를 사업자등록증에 적힌 그대로 입력해 주세요."}
+					</p>
 					<div className="flex justify-end">
 						<Button
 							className="w-full sm:w-auto"

@@ -59,6 +59,12 @@ export interface Job {
 	descriptionBlocks?: JobDescriptionBlock[];
 	detailImages?: JobMedia[];
 	district: string;
+	// 지역 마스터 코드. 필터는 표시 문자열이 아니라 이 값으로 비교한다(코드가 없는
+	// 수집 공고는 빈 문자열이라 코드 필터에 걸리지 않는다 — 서버 필터와 결과가 같다).
+	districtCode: string;
+	// 공고를 올린 구인자의 user id. 공고 상세(getById) 응답에만 있어 목록/카드에는 없다.
+	// 내 차단 목록과 대조하는 데 쓴다.
+	employerUserId?: string;
 	// 공고 상세에서만 채워진다(작성자 인증번호). 목록/카드 매핑에는 없음.
 	employerVerifiedPhone?: string | null;
 	exposureType?: null | string;
@@ -76,6 +82,7 @@ export interface Job {
 	promotionTier?: "premium" | "recommended" | "standard" | null;
 	rating: number;
 	region: string;
+	regionCode: string;
 	reviews: number;
 	status: string;
 	tags: string[];
@@ -194,14 +201,26 @@ export interface Report {
 	time: string;
 }
 
-export type UserStatus = "active" | "warned" | "suspended" | "blocked";
+// DB account_status enum과 1:1이다(탈퇴는 상태가 아니라 user.deletedAt으로 표현).
+export type UserStatus = "active" | "warned" | "suspended";
 
 export interface ManagedUser {
-	displayName: string;
+	// 다른 사용자에게 차단당한 횟수(신고와 별개의 위험 신호).
+	blockedByCount: number;
+	// 소프트 탈퇴 시각. null이 아니면 탈퇴한 계정이다.
+	deletedAt: Date | null;
+	email: string;
 	id: string;
+	isPhoneVerified: boolean;
+	// 표시용 가입일(포맷 완료 문자열). 정렬은 joinedAt으로 한다.
 	joined: string;
+	joinedAt: Date;
+	// better-auth username 플러그인 로그인 아이디. 미설정 계정은 null.
+	loginId: null | string;
 	name: string;
 	note: string;
+	// 소속 업소 표시명(구인자만 채워진다).
+	organizationNames: string[];
 	reports: number;
 	role: string;
 	status: UserStatus;

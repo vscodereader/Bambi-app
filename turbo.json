@@ -40,6 +40,12 @@
     "seed:bambi": {
       "cache": false
     },
+    "seed:regions": {
+      "cache": false
+    },
+    "backfill:regions": {
+      "cache": false
+    },
     "test": {
       "dependsOn": ["^test"]
     }

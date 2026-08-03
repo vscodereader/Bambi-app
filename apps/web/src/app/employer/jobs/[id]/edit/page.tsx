@@ -44,6 +44,7 @@ import { useRequiredBannerGate } from "@/hooks/use-required-banner-gate";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
+import { regionLabel, useRegions } from "@/lib/bambi/regions";
 import {
 	emptyJobForm,
 	emptyJobFormMedia,
@@ -250,6 +251,9 @@ export default function EditEmployerJobPage({
 	const selectedPostingScope = findPostingScope(postingScopes, form);
 	const previewCompanyName = getPostingScopeDisplayName(selectedPostingScope);
 	const previewPay = formatPreviewPay(form);
+	// 폼은 지역 코드를 들고 있어 미리보기에 그대로 쓸 수 없다. 마스터에서 표시 라벨을 되짚는다.
+	const { regions } = useRegions();
+	const previewRegionLabel = regionLabel(regions, form.regionCode);
 
 	useEffect(() => {
 		if (!job) {
@@ -263,7 +267,7 @@ export default function EditEmployerJobPage({
 			adProductId: job.adProductId ?? null,
 			beginnerFriendly: job.beginnerFriendly ?? false,
 			description: job.description,
-			district: job.district ?? "",
+			districtCode: job.districtCode ?? "",
 			exposureAmount: job.exposureAmount ?? null,
 			exposureDurationDays: job.exposureDurationDays ?? null,
 			exposureType: job.exposureType,
@@ -274,7 +278,7 @@ export default function EditEmployerJobPage({
 			payAmount: String(job.payAmount),
 			paymentMethod: job.paymentMethod ?? null,
 			payUnit: job.payUnit,
-			region: job.region,
+			regionCode: job.regionCode ?? "",
 			teamId: job.teamId ?? "",
 			title: job.title,
 			workSchedule: job.workSchedule,
@@ -530,7 +534,7 @@ export default function EditEmployerJobPage({
 		<EmployerListingPreview
 			companyName={previewCompanyName}
 			coverImageUrl={media.cover?.previewUrl}
-			location={form.region}
+			location={previewRegionLabel}
 			pay={previewPay}
 			title={form.title}
 		/>
@@ -652,10 +656,10 @@ export default function EditEmployerJobPage({
 									/>
 								</div>
 								<JobRegionFields
-									district={form.district}
+									districtCode={form.districtCode}
 									errors={fieldErrors}
 									onChange={updateFormValue}
-									region={form.region}
+									regionCode={form.regionCode}
 								/>
 								<JobPayFields
 									errors={fieldErrors}

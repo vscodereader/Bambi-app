@@ -52,6 +52,7 @@ import Loader from "@/components/loader";
 import { useRequiredBannerGate } from "@/hooks/use-required-banner-gate";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
+import { regionLabel, useRegions } from "@/lib/bambi/regions";
 import { JOB_REVIEW_SLA_TEXT } from "@/lib/bambi-job-copy";
 import {
 	emptyJobForm,
@@ -376,6 +377,9 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		selectedPostingScope?.scope
 	);
 	const previewPay = formatPreviewPay(form);
+	// 폼은 지역 코드를 들고 있어 미리보기에 그대로 쓸 수 없다. 마스터에서 표시 라벨을 되짚는다.
+	const { regions } = useRegions();
+	const previewRegionLabel = regionLabel(regions, form.regionCode);
 
 	const updatePostingScope = (value: string) => {
 		const nextScope = postingScopeOptions.find(
@@ -557,7 +561,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		<EmployerListingPreview
 			companyName={previewCompanyName}
 			coverImageUrl={media.cover?.previewUrl}
-			location={form.region}
+			location={previewRegionLabel}
 			pay={previewPay}
 			title={form.title}
 		/>
@@ -701,10 +705,10 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 									/>
 								</div>
 								<JobRegionFields
-									district={form.district}
+									districtCode={form.districtCode}
 									errors={fieldErrors}
 									onChange={updateFormValue}
-									region={form.region}
+									regionCode={form.regionCode}
 								/>
 								<JobPayFields
 									errors={fieldErrors}

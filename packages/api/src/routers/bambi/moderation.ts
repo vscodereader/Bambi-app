@@ -27,6 +27,7 @@ import {
 	review,
 	supportInquiry,
 	supportInquiryMessage,
+	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
@@ -124,6 +125,10 @@ const listUsersInput = z.object({
 	limit: z.number().int().min(1).max(1000).default(1000),
 });
 
+const listUserModerationActionsInput = z.object({
+	targetUserId: z.string().min(1),
+});
+
 const setReportStatusInput = z.object({
 	reportId: z.string().uuid(),
 	status: reportStatusSchema,
@@ -146,7 +151,23 @@ const listJobsForPaymentInput = z.object({
 	limit: z.number().int().min(1).max(100).default(50),
 });
 
+// 광고 기간 연장(양수)/단축(음수). 0은 아무 일도 하지 않으므로 막는다.
+const adjustJobPostExposureInput = z.object({
+	jobPostId: z.string().uuid(),
+	days: z
+		.number()
+		.int()
+		.min(-365)
+		.max(365)
+		.refine((value) => value !== 0, { message: "조정할 일수를 입력하세요." }),
+	reason: z.string().min(2).max(500),
+});
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// 계정 제재는 bambi_profile 행을 갱신하므로 온보딩 전 계정에는 걸 수 없다.
+const PROFILELESS_SANCTION_MESSAGE =
+	"아직 온보딩을 마치지 않은 계정이라 제재할 수 없어요.";
 
 const setUserStatusInput = z.object({
 	targetUserId: z.string().min(1),
@@ -873,6 +894,18 @@ export const moderationRouter = {
 				});
 			}
 
+			// 채팅 신고는 구직자 전용이다. 구인자에게는 차단만 열어 두고, 화면에서도
+			// 신고 버튼을 숨기지만 근본 차단은 여기서 한다(공고·커뮤니티 신고는 그대로).
+			if (
+				(input.targetType === "chat_room" ||
+					input.targetType === "chat_message") &&
+				profile.role !== "job_seeker"
+			) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "채팅 신고는 구직자만 할 수 있어요.",
+				});
+			}
+
 			await assertReportTargetExists(input.targetType, input.targetId);
 
 			// 동일 신고자·대상의 중복 신고는 멱등 처리한다(스키마 변경 없이 기존 row 반환).
@@ -958,6 +991,10 @@ export const moderationRouter = {
 					title: jobPost.title,
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
+					// 운영자 편집 폼이 지역 Select를 되살리려면 표시 문자열이 아니라 코드가 필요하다
+					// (adminUpdateJobPost 입력이 코드를 요구한다).
+					regionCode: jobPost.regionCode,
+					districtCode: jobPost.districtCode,
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					workSchedule: jobPost.workSchedule,
@@ -1104,12 +1141,16 @@ export const moderationRouter = {
 			await requireAdminProfile(context.session);
 
 			// 계정 목록의 기준 테이블은 user다. bambi_profile은 좌측 조인해 부가 정보로만
-			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다. name은 계정
-			// 이름(user.name), displayName은 프로필 표시 이름(없으면 null)으로 각각 반환한다.
-			// 누적 신고/경고 횟수는 서브쿼리로 실제 집계한다.
+			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다.
+			// 집계는 전부 상관 서브쿼리로 뽑는다 — 조인으로 붙이면 소속 업소·차단 수만큼
+			// user row가 뻥튀기된다.
+			// 기각된 신고는 운영자 판단으로 무효 처리된 건이라 누적 신고 수에서 뺀다.
+			// ponytail: 공고·커뮤니티 등 콘텐츠 신고를 작성자에게 귀속시키는 합산은 이번 범위 밖.
 			const reportsCountSql = sql<number>`(
 				select count(*)::int from ${report}
-				where ${report.targetType} = 'user' and ${report.targetId} = ${user.id}
+				where ${report.targetType} = 'user'
+					and ${report.targetId} = ${user.id}
+					and ${report.status} <> 'dismissed'
 			)`;
 			const warningsCountSql = sql<number>`(
 				select count(*)::int from ${adminModerationAction}
@@ -1117,11 +1158,28 @@ export const moderationRouter = {
 					and ${adminModerationAction.targetId} = ${user.id}
 					and ${adminModerationAction.action} = 'set_status:warned'
 			)`;
+			// 구인자 계정의 소속 업소 표시명. 한 계정이 여러 업소에 속할 수 있어 배열로 모은다.
+			const organizationNamesSql = sql<string[]>`(
+				select coalesce(
+					array_agg(distinct ${employerOrganizationProfile.displayName}),
+					'{}'::text[]
+				)
+				from ${member}
+				join ${employerOrganizationProfile}
+					on ${employerOrganizationProfile.organizationId} = ${member.organizationId}
+				where ${member.userId} = ${user.id}
+			)`;
+			// 다른 사용자에게 차단당한 횟수(신고와 별개의 위험 신호).
+			const blockedByCountSql = sql<number>`(
+				select count(*)::int from ${userBlock}
+				where ${userBlock.blockedUserId} = ${user.id}
+			)`;
 			const query = db
 				.select({
 					userId: user.id,
 					name: user.name,
-					displayName: user.name,
+					// 로그인 아이디(better-auth username 플러그인). 미설정 계정은 null.
+					loginId: user.login_id,
 					email: user.email,
 					role: sql<string>`coalesce(${bambiProfile.role}, 'job_seeker')`,
 					status: sql<
@@ -1131,6 +1189,10 @@ export const moderationRouter = {
 					phoneNumber: bambiProfile.phoneNumber,
 					reportsCount: reportsCountSql,
 					warningsCount: warningsCountSql,
+					organizationNames: organizationNamesSql,
+					blockedByCount: blockedByCountSql,
+					// 소프트 탈퇴 시각. null이 아니면 탈퇴 처리된 계정이다.
+					deletedAt: user.deletedAt,
 					createdAt: user.createdAt,
 					updatedAt: user.updatedAt,
 				})
@@ -1140,11 +1202,43 @@ export const moderationRouter = {
 				.limit(input.limit);
 
 			if (input.status) {
-				return await query.where(eq(bambiProfile.status, input.status));
+				// 프로필이 없는(온보딩 전) 계정도 목록 표시와 동일하게 active로 취급한다 —
+				// 컬럼을 그대로 비교하면 NULL이라 'active' 필터에서 통째로 사라진다.
+				return await query.where(
+					sql`coalesce(${bambiProfile.status}, 'active')::text = ${input.status}`
+				);
 			}
 
 			return await query;
 		}),
+
+	// 계정 상세의 제재 이력. 감사 로그(admin_moderation_action)에서 해당 사용자를 대상으로
+	// 한 기록만 최신순으로 보여준다(target_type·target_id 인덱스를 그대로 탄다).
+	listUserModerationActions: adminProcedure
+		.input(listUserModerationActionsInput)
+		.handler(
+			async ({ input }) =>
+				await db
+					.select({
+						id: adminModerationAction.id,
+						action: adminModerationAction.action,
+						reason: adminModerationAction.reason,
+						metadata: adminModerationAction.metadata,
+						adminUserId: adminModerationAction.adminUserId,
+						adminName: user.name,
+						createdAt: adminModerationAction.createdAt,
+					})
+					.from(adminModerationAction)
+					.innerJoin(user, eq(user.id, adminModerationAction.adminUserId))
+					.where(
+						and(
+							eq(adminModerationAction.targetType, "user"),
+							eq(adminModerationAction.targetId, input.targetUserId)
+						)
+					)
+					.orderBy(desc(adminModerationAction.createdAt))
+					.limit(50)
+		),
 
 	listReviews: protectedProcedure
 		.input(listReviewsInput)
@@ -1417,6 +1511,71 @@ export const moderationRouter = {
 			return updated;
 		}),
 
+	// 공고의 광고 종료일만 앞뒤로 민다. 결제 상태·노출 종류는 그대로라 프리미엄 정원(자리 수)에
+	// 영향이 없어 승인 게이트를 타지 않는다. 음수(단축)로 과거까지 내리는 것도 허용한다(즉시 만료 조치).
+	// 기준일은 `exposureEndsAt ?? now` 단일 규칙이라, 종료일이 없던 공고(미결제·무기한)는 지금
+	// 기준으로 종료일이 새로 설정된다 — 즉 무기한 공고에 적용하면 무기한 → 기한부로 바뀐다.
+	adjustJobPostExposure: adminProcedure
+		.input(adjustJobPostExposureInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const { organizationId, updated } = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({
+						exposureEndsAt: jobPost.exposureEndsAt,
+						organizationId: jobPost.organizationId,
+					})
+					.from(jobPost)
+					.where(eq(jobPost.id, input.jobPostId))
+					.limit(1);
+
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				const exposureEndsAt = new Date(
+					(existing.exposureEndsAt ?? new Date()).getTime() +
+						input.days * MS_PER_DAY
+				);
+
+				const [row] = await tx
+					.update(jobPost)
+					.set({ exposureEndsAt })
+					.where(eq(jobPost.id, input.jobPostId))
+					.returning();
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx.insert(adminModerationAction).values({
+					adminUserId: admin.userId,
+					targetType: "job_post",
+					targetId: input.jobPostId,
+					action: `adjust_job_post_exposure:${input.days > 0 ? "+" : ""}${input.days}`,
+					reason: input.reason,
+					metadata: {
+						days: input.days,
+						exposureEndsAt: exposureEndsAt.toISOString(),
+						previousExposureEndsAt:
+							existing.exposureEndsAt?.toISOString() ?? null,
+					},
+				});
+
+				return { organizationId: existing.organizationId, updated: row };
+			});
+
+			// 종료일이 과거/미래를 넘나들면 광고 유효 여부가 뒤집히므로 수다방 광고 자격
+			// 캐시(is_advertiser)를 재동기화한다(setJobPostPayment와 동일 이유).
+			await syncAdvertiserFlagForOrganization({
+				now: new Date(),
+				organizationId,
+			});
+
+			return updated;
+		}),
+
 	// 결제 처리가 의미있는 공고 목록(초안 제외: pending_review·published).
 	// 인증 업체 공고는 검수 큐 없이 자동 published라 여기서 결제를 처리한다.
 	listJobsForPayment: protectedProcedure
@@ -1591,7 +1750,11 @@ export const moderationRouter = {
 					.returning();
 
 				if (!updated) {
-					throw new ORPCError("NOT_FOUND");
+					// 계정 상태는 bambi_profile에만 있어 온보딩 전 계정은 갱신할 행이 없다.
+					// NOT_FOUND면 운영자가 "왜 실패했는지" 알 수 없어 원인을 그대로 알려준다.
+					throw new ORPCError("BAD_REQUEST", {
+						message: PROFILELESS_SANCTION_MESSAGE,
+					});
 				}
 
 				await tx.insert(adminModerationAction).values({
@@ -1622,8 +1785,10 @@ export const moderationRouter = {
 								.returning();
 
 							if (!updated) {
-								throw new ORPCError("NOT_FOUND", {
-									message: "User was not found.",
+								// 일괄 처리는 실패 대상만 failures로 모으고 나머지는 그대로 적용된다
+								// (executeBulkModeration의 기존 동작). 코드·메시지만 원인을 드러내게 바꾼다.
+								throw new ORPCError("BAD_REQUEST", {
+									message: PROFILELESS_SANCTION_MESSAGE,
 								});
 							}
 
@@ -1650,6 +1815,11 @@ export const moderationRouter = {
 				displayName: employerOrganizationProfile.displayName,
 				businessRegistrationNumber:
 					employerOrganizationProfile.businessRegistrationNumber,
+				representativeName: employerOrganizationProfile.representativeName,
+				businessStartDate: employerOrganizationProfile.businessStartDate,
+				// 국세청 대조 결과 — null이면 운영자가 미확인으로 보고 더 꼼꼼히 심사한다.
+				biznumCheckedAt: employerOrganizationProfile.biznumCheckedAt,
+				biznumStatusCode: employerOrganizationProfile.biznumStatusCode,
 				verificationStatus: employerOrganizationProfile.verificationStatus,
 				verificationNote: employerOrganizationProfile.verificationNote,
 				ownerUserId: member.userId,
@@ -1680,6 +1850,11 @@ export const moderationRouter = {
 					displayName: employerOrganizationProfile.displayName,
 					businessRegistrationNumber:
 						employerOrganizationProfile.businessRegistrationNumber,
+					representativeName: employerOrganizationProfile.representativeName,
+					businessStartDate: employerOrganizationProfile.businessStartDate,
+					// 국세청 대조 결과 — null이면 운영자가 미확인으로 보고 더 꼼꼼히 심사한다.
+					biznumCheckedAt: employerOrganizationProfile.biznumCheckedAt,
+					biznumStatusCode: employerOrganizationProfile.biznumStatusCode,
 					verificationStatus: employerOrganizationProfile.verificationStatus,
 					verificationNote: employerOrganizationProfile.verificationNote,
 					ownerUserId: member.userId,

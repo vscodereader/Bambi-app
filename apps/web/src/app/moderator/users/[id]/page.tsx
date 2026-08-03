@@ -35,9 +35,11 @@ export default function ModeratorUserDetailPage() {
 		<UserDetail
 			item={item}
 			onBack={() => router.push("/moderator/users")}
-			onSanction={(uid, status, label) => {
-				sanction(uid, status, label);
-				router.push("/moderator/users");
+			// 적용이 성공했을 때만 목록으로 돌아간다(실패하면 상세에 남아 에러를 확인할 수 있게).
+			onSanction={async (uid, status, label) => {
+				if (await sanction(uid, status, label)) {
+					router.push("/moderator/users");
+				}
 			}}
 		/>
 	);

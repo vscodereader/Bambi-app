@@ -66,11 +66,12 @@ describe("visual job marketplace components", () => {
 		expect(banner).not.toContain("item.coverUrl");
 	});
 
-	// 수집 배너는 방향과 무관하게 결제 배너와 같은 규격 슬롯 + object-cover로 그린다.
-	// 세로: 원본 실측 80×180 = 정확히 4:9라 규격(aspect-[4/9] h-52)에 채워도 잘리는 곳이 없다.
-	// 가로: 원본 실측 240×117(≈2.05)이 16:9(≈1.78)와 달라 좌우가 잘리지만, 슬롯이 이미지
-	// 크기대로 늘었다 줄었다 하면 옆 결제 슬롯·레일과 높이가 어긋난다(사용자 결정) — 그래서
-	// 원본 비율(h-auto) 분기는 양쪽 다 없다.
+	// 수집 배너는 방향과 무관하게 결제 배너와 같은 규격 슬롯에 채워 그린다.
+	// 세로: 원본 실측 80×180 = 정확히 4:9라 규격(aspect-[4/9] h-52)을 object-cover로 채워도
+	// 잘리는 곳이 없다.
+	// 가로: 슬롯을 object-fill로 채운다 — 원본 실측 240×117(≈2.05)이 슬롯 비율과 달라 눌리지만,
+	// 슬롯이 이미지 크기대로 늘었다 줄었다 하면 옆 결제 슬롯·레일과 높이가 어긋난다(사용자 결정)
+	// — 그래서 원본 비율(h-auto) 분기는 양쪽 다 없다.
 	it("renders crawled banners at our spec slots in both orientations", () => {
 		const banner = readComponent("ad-banner.tsx");
 		const vertical = blockBetween(
@@ -89,13 +90,35 @@ describe("visual job marketplace components", () => {
 		expect(vertical).toContain('"object-cover"');
 		expect(vertical).not.toContain("item.crawled");
 		expect(vertical).not.toContain("h-auto");
-		// 가로형도 수집·결제 구분 없이 규격 슬롯 + cover 하나로 그린다.
+		// 가로형도 수집·결제 구분 없이 규격 슬롯 하나로 그린다. 기본값 16:9는 상단 프리미엄
+		// 3칸이 쓰는 값이라 좌측 레일 높이를 맞추더라도 여기서 바뀌면 안 된다.
 		expect(horizontal).toContain("aspect-[16/9] w-full rounded-lg border");
-		expect(horizontal).toContain('"object-cover"');
+		expect(horizontal).not.toContain("aspect-[259/118]");
+		expect(horizontal).toContain('"object-fill"');
 		expect(horizontal).not.toContain("item.crawled");
 		expect(horizontal).not.toContain("h-auto");
 		// 갈 곳 없는 배너는 이제 없다(매퍼가 수집 전용 상세 주소를 만든다).
 		expect(banner).not.toContain("if (!item.href)");
+	});
+
+	// 좌측 사이드(w-[259px]) 레일 슬롯은 공고 카드 높이 118px에 맞춘다 —
+	// 16:9면 ≈146px라 옆 카드보다 커진다. 고정 px가 아니라 비율로 처리한다.
+	it("sizes the left rail slots to the job card height", () => {
+		const banner = readComponent("ad-banner.tsx");
+		const rail = blockBetween(
+			banner,
+			"export function HorizontalAdBannerRail({",
+			"</div>"
+		);
+
+		expect(banner).toContain(
+			'const RAIL_SLOT_ASPECT_CLASS = "aspect-[259/118]"'
+		);
+		// 세 렌더 경로(배너·자리표시·스켈레톤)가 모두 같은 비율 상수를 쓴다.
+		expect(rail.match(/RAIL_SLOT_ASPECT_CLASS/g)).toHaveLength(3);
+		expect(rail).not.toContain("aspect-[16/9]");
+		// 폭이 변해도 안 깨지도록 고정 높이는 두지 않는다.
+		expect(rail).not.toContain("h-[");
 	});
 
 	// 수집 공고는 job_post에 없어 /seeker/jobs/[id]로 보내면 404다 — 카드도 배너와 같은
@@ -214,12 +237,14 @@ describe("visual job marketplace components", () => {
 		const chatList = readComponent("screens/seeker-chat-list-responsive.tsx");
 		const chatRoom = readComponent("screens/seeker-chat-room-responsive.tsx");
 		const contactReveal = readComponent("screens/contact-reveal.tsx");
-		const seeker = readComponent("screens/seeker.tsx");
+		const myPageShell = readComponent("my-page-shell.tsx");
 
-		// 채팅 목록·상세·연락처 공개·내 정보 본문을 헤더와 동일한 고정폭으로 맞춘다
-		for (const source of [chatList, chatRoom, contactReveal, seeker]) {
+		// 채팅 목록·상세·연락처 공개 본문을 헤더와 동일한 고정폭으로 맞춘다
+		for (const source of [chatList, chatRoom, contactReveal]) {
 			expect(source).toContain("SEEKER_CONTENT_WIDTH");
 		}
+		// 내 정보(마이페이지) 계열은 공용 셸이 같은 상수의 원본(APP_CONTENT_WIDTH)으로 폭을 잡는다
+		expect(myPageShell).toContain("APP_CONTENT_WIDTH");
 		// 개별 하드코딩 폭은 제거됐다(공유 상수로 대체)
 		expect(chatList).not.toContain("max-w-[860px]");
 		expect(chatList).not.toContain("max-w-[760px]");
