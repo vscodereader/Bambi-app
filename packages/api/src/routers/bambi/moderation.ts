@@ -958,6 +958,10 @@ export const moderationRouter = {
 					title: jobPost.title,
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
+					// 운영자 편집 폼이 지역 Select를 되살리려면 표시 문자열이 아니라 코드가 필요하다
+					// (adminUpdateJobPost 입력이 코드를 요구한다).
+					regionCode: jobPost.regionCode,
+					districtCode: jobPost.districtCode,
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					workSchedule: jobPost.workSchedule,

@@ -111,6 +111,7 @@ export const jobPostFeedSelection = {
 	coverImageUrl: sql<null | string>`null::text`.as("cover_image_url"),
 	description: jobPost.description,
 	district: jobPost.district,
+	districtCode: jobPost.districtCode,
 	employerDisplayName: employerOrganizationProfile.displayName,
 	employerVerificationStatus: employerOrganizationProfile.verificationStatus,
 	exposureEndsAt: jobPost.exposureEndsAt,
@@ -134,6 +135,7 @@ export const jobPostFeedSelection = {
 	ratingAverage: ratingAverageSql.as("rating_average"),
 	ratingCount: ratingCountSql.as("rating_count"),
 	region: jobPost.region,
+	regionCode: jobPost.regionCode,
 	source: sql<JobFeedSource>`${jobPost.source}::text`.as("source"),
 	status: jobPost.status,
 	teamDisplayName: employerTeamProfile.displayName,
@@ -151,6 +153,7 @@ export const crawledJobFeedSelection = {
 	coverImageUrl: crawledJobPost.thumbnailUrl,
 	description: crawledJobPost.body,
 	district: crawledJobPost.district,
+	districtCode: crawledJobPost.districtCode,
 	employerDisplayName: sql<string>`${crawledJobPost.shopName}`,
 	// 수집 공고는 우리가 사업자를 확인한 적이 없다. 'none'이어야 화면의 "검증 완료" 배지가
 	// 붙지 않는다 — 여기서 verified를 흘리면 확인하지 않은 업소에 우리 보증이 찍힌다.
@@ -170,6 +173,7 @@ export const crawledJobFeedSelection = {
 	ratingAverage: sql<number>`0::double precision`,
 	ratingCount: sql<number>`0::integer`,
 	region: sql<string>`${crawledJobPost.region}`,
+	regionCode: crawledJobPost.regionCode,
 	source: sql<JobFeedSource>`'crawled'::text`,
 	// 목록에 실렸다는 것 자체가 게시 상태다. crawled_post_status(active/needs_review/expired)를
 	// 그대로 흘리면 클라이언트가 두 가지 상태 어휘를 알아야 한다.
@@ -180,14 +184,14 @@ export const crawledJobFeedSelection = {
 };
 
 export interface JobFeedInput {
-	district?: string;
+	districtCode?: string;
 	// 수집 공고를 목록에 섞을지. 생략하면 운영자 설정(crawled_job_feed_enabled)을 읽는다 —
 	// 호출부가 플래그를 잊으면 남의 공고가 그대로 공개되므로 기본을 "설정을 본다"로 둔다.
 	includeCrawled?: boolean;
 	industryCategory?: JobIndustryCategory;
 	limit: number;
 	minPayAmount?: number;
-	region?: string;
+	regionCode?: string;
 }
 
 // 운영자 노출 스위치. jobs.list도 이 값으로 섹션 주입 여부를 가르므로 export한다 —
@@ -212,12 +216,12 @@ const jobPostFeedConditions = (input: JobFeedInput): SQL[] => {
 		conditions.push(eq(jobPost.industryCategory, input.industryCategory));
 	}
 
-	if (input.region) {
-		conditions.push(eq(jobPost.region, input.region));
+	if (input.regionCode) {
+		conditions.push(eq(jobPost.regionCode, input.regionCode));
 	}
 
-	if (input.district) {
-		conditions.push(eq(jobPost.district, input.district));
+	if (input.districtCode) {
+		conditions.push(eq(jobPost.districtCode, input.districtCode));
 	}
 
 	if (input.minPayAmount) {
@@ -261,12 +265,12 @@ const crawledJobFeedConditions = (
 		);
 	}
 
-	if (input.region) {
-		conditions.push(eq(crawledJobPost.region, input.region));
+	if (input.regionCode) {
+		conditions.push(eq(crawledJobPost.regionCode, input.regionCode));
 	}
 
-	if (input.district) {
-		conditions.push(eq(crawledJobPost.district, input.district));
+	if (input.districtCode) {
+		conditions.push(eq(crawledJobPost.districtCode, input.districtCode));
 	}
 
 	if (input.minPayAmount) {
@@ -321,14 +325,14 @@ export const listJobFeed = async (input: JobFeedInput) => {
 export type CrawledSectionType = "recommended" | "special" | "urgent";
 
 export interface CrawledSectionInput {
-	district?: string;
+	districtCode?: string;
 	industryCategory?: JobIndustryCategory;
 	limit: number;
 	minPayAmount?: number;
 	// 전체 공고 "더보기"가 이어 받을 위치. 아래 정렬이 id까지 결정적이라 offset 페이징이
 	// 회차 사이에도 흔들리지 않는다(신규 수집분이 앞에 끼면 그만큼 밀리는 것은 감수한다).
 	offset?: number;
-	region?: string;
+	regionCode?: string;
 	// 지정하면 그 라벨이 붙은 행만 뽑고 노출 어휘도 그 자리로 승격한다. 생략하면 전체 공고용
 	// (라벨 무관 전량, 승격 없음)이다.
 	type?: CrawledSectionType;

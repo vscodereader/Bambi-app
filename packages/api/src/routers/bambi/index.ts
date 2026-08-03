@@ -12,6 +12,7 @@ import { moderationRouter } from "./moderation";
 import { onboardingRouter } from "./onboarding";
 import { organizationsRouter } from "./organizations";
 import { promotionsRouter } from "./promotions";
+import { regionsRouter } from "./regions";
 import { reviewsRouter } from "./reviews";
 import { siteSettingsRouter } from "./site-settings";
 import { supportRouter } from "./support";
@@ -32,6 +33,7 @@ export const bambiRouter = {
 	onboarding: onboardingRouter,
 	organizations: organizationsRouter,
 	promotions: promotionsRouter,
+	regions: regionsRouter,
 	reviews: reviewsRouter,
 	siteSettings: siteSettingsRouter,
 	support: supportRouter,

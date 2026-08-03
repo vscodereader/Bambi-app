@@ -11,11 +11,18 @@ dotenv.config({
 	path: "../../apps/server/.env",
 });
 
-const [{ db }, authSchema, bambiSchema, { jobsRouter }] = await Promise.all([
+const [
+	{ db },
+	authSchema,
+	bambiSchema,
+	{ jobsRouter },
+	{ createTestRegion, deleteTestRegion },
+] = await Promise.all([
 	import("@bambi-app/db"),
 	import("@bambi-app/db/schema/auth"),
 	import("@bambi-app/db/schema/bambi"),
 	import("./jobs"),
+	import("../../services/__fixtures__/test-region"),
 ]);
 
 const { member, organization, user } = authSchema;
@@ -27,6 +34,8 @@ interface JobPostMediaFixture {
 	otherOrganizationId: string;
 	otherOwnerUserId: string;
 	ownerUserId: string;
+	// 공고 입력이 지역 코드를 요구하므로 픽스처가 일회용 지역 행을 만들어 둔다.
+	regionCode: string;
 	staffUserId: string;
 	userIds: string[];
 }
@@ -51,6 +60,7 @@ const makeEmail = (prefix: string): string =>
 	`${prefix}-${randomUUID()}@bambi.test`;
 
 const createJobPostMediaFixture = async (): Promise<JobPostMediaFixture> => {
+	const testRegion = await createTestRegion();
 	const now = new Date();
 	const organizationId = `org_test_${randomUUID()}`;
 	const otherOrganizationId = `org_test_${randomUUID()}`;
@@ -131,6 +141,7 @@ const createJobPostMediaFixture = async (): Promise<JobPostMediaFixture> => {
 		otherOrganizationId,
 		otherOwnerUserId,
 		ownerUserId,
+		regionCode: testRegion.code,
 		staffUserId,
 		userIds: [ownerUserId, staffUserId, otherOwnerUserId],
 	};
@@ -183,6 +194,7 @@ const cleanupJobPostMediaFixture = async (
 				fixture.otherOrganizationId,
 			])
 		);
+	await deleteTestRegion(fixture.regionCode);
 };
 
 const expectOrpcCode = async (
@@ -192,7 +204,7 @@ const expectOrpcCode = async (
 	await expect(promise).rejects.toMatchObject({ code });
 };
 
-const createJobInput = (organizationId: string) => ({
+const createJobInput = (fixture: JobPostMediaFixture) => ({
 	description: "블록 상세 설명으로 대체될 기본 설명입니다.",
 	descriptionBlocks: [
 		{ id: "heading", text: "주요 업무", type: "heading" as const },
@@ -204,10 +216,10 @@ const createJobInput = (organizationId: string) => ({
 	],
 	industryCategory: "룸싸롱" as const,
 	interviewNotes: "신분증 확인 후 면접합니다.",
-	organizationId,
+	organizationId: fixture.organizationId,
 	payAmount: 180_000,
 	payUnit: "일급",
-	region: "서울 강남구",
+	regionCode: fixture.regionCode,
 	title: "이미지 포함 테스트 공고",
 	workSchedule: "20:00-02:00",
 });
@@ -253,7 +265,7 @@ describe("bambi jobs router media and block content", () => {
 			);
 
 			const created = await createJob({
-				...createJobInput(fixture.organizationId),
+				...createJobInput(fixture),
 				media: {
 					cover: { ...cover, altText: "대표 업무 공간" },
 					detail: detail.map((item, index) => ({
@@ -271,7 +283,7 @@ describe("bambi jobs router media and block content", () => {
 				"주요 업무\n\n고객 응대와 예약 관리를 담당합니다."
 			);
 			expect(created.descriptionBlocks).toEqual(
-				createJobInput(fixture.organizationId).descriptionBlocks
+				createJobInput(fixture).descriptionBlocks
 			);
 			expect(savedMedia).toHaveLength(6);
 			expect(savedMedia).toEqual(
@@ -340,7 +352,7 @@ describe("bambi jobs router media and block content", () => {
 				path: ["bambi", "jobs", "getById"],
 			});
 			const created = await createJob({
-				...createJobInput(fixture.organizationId),
+				...createJobInput(fixture),
 				media: {
 					cover: {
 						altText: "대표 업무 공간",
@@ -366,7 +378,7 @@ describe("bambi jobs router media and block content", () => {
 			const publicDetail = await getJob({ id: created.id });
 
 			expect(publicDetail.descriptionBlocks).toEqual(
-				createJobInput(fixture.organizationId).descriptionBlocks
+				createJobInput(fixture).descriptionBlocks
 			);
 			expect(publicDetail.media.cover).toEqual(
 				expect.objectContaining({
@@ -391,7 +403,7 @@ describe("bambi jobs router media and block content", () => {
 
 			await expectOrpcCode(
 				createJob({
-					...createJobInput(fixture.organizationId),
+					...createJobInput(fixture),
 					media: {
 						detail: Array.from({ length: 6 }, (_, index) => ({
 							altText: `상세 이미지 ${index + 1}`,
@@ -455,7 +467,7 @@ describe("bambi jobs router media and block content", () => {
 			// 자기 공고에 붙이면 공고 삭제·교체 시 남의 객체가 GCS에서 지워진다.
 			await expectOrpcCode(
 				createJob({
-					...createJobInput(fixture.organizationId),
+					...createJobInput(fixture),
 					media: {
 						cover: {
 							altText: "탈취한 대표 이미지",
@@ -501,7 +513,7 @@ describe("bambi jobs router media and block content", () => {
 			await expectOrpcCode(
 				updateJob({
 					data: {
-						...createJobInput(fixture.organizationId),
+						...createJobInput(fixture),
 						media: {
 							cover: {
 								altText: "남의 채팅 첨부",
@@ -547,7 +559,7 @@ describe("bambi jobs router media and block content", () => {
 			});
 			const updated = await updateJob({
 				data: {
-					...createJobInput(fixture.organizationId),
+					...createJobInput(fixture),
 					media: {
 						cover: {
 							altText: "변경된 대표 이미지",
@@ -567,7 +579,7 @@ describe("bambi jobs router media and block content", () => {
 
 			expect(updated.status).toBe("pending_review");
 			expect(updated.descriptionBlocks).toEqual(
-				createJobInput(fixture.organizationId).descriptionBlocks
+				createJobInput(fixture).descriptionBlocks
 			);
 			expect(savedMedia).toEqual([
 				expect.objectContaining({

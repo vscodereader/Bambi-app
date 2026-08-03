@@ -8,6 +8,8 @@
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "tsx watch src/index.ts",
     "seed:bambi": "tsx src/seeds/bambi-dev.ts",
+    "seed:regions": "tsx src/seeds/bambi-regions.ts",
+    "backfill:regions": "tsx src/seeds/bambi-region-backfill.ts",
     "start": "node dist/index.mjs"
   },
   "dependencies": {

@@ -34,6 +34,7 @@ import {
 	type OrganizationManagementRole,
 	type OrganizationMembership,
 } from "../../services/bambi-organization-authz";
+import { resolveOptionalRegion } from "../../services/bambi-region";
 
 const organizationRoleSchema = z.enum(["owner", "manager", "staff"]);
 
@@ -44,7 +45,10 @@ const organizationIdInput = z.object({
 const createTeamInput = organizationIdInput.extend({
 	displayName: z.string().min(1).max(120),
 	name: z.string().min(1).max(120).optional(),
-	region: z.string().min(1).max(80).optional(),
+	// 지역은 마스터 코드로 받는다(공고 입력과 같은 축). 표시용 region 문자열은 저장 시
+	// 서버가 마스터 라벨에서 복사한다.
+	regionCode: z.string().length(10).optional(),
+	districtCode: z.string().length(10).optional(),
 });
 
 const updateTeamInput = createTeamInput.extend({
@@ -210,6 +214,8 @@ export const teamsRouter = {
 					id: team.id,
 					organizationId: team.organizationId,
 					region: employerTeamProfile.region,
+					regionCode: employerTeamProfile.regionCode,
+					districtCode: employerTeamProfile.districtCode,
 					teamId: team.id,
 					updatedAt: team.updatedAt,
 				})
@@ -255,6 +261,7 @@ export const teamsRouter = {
 				profile,
 			});
 
+			const regionSelection = await resolveOptionalRegion(input);
 			const now = new Date();
 			const teamId = `team_${randomUUID()}`;
 			const teamName = input.name ?? input.displayName;
@@ -275,7 +282,7 @@ export const teamsRouter = {
 					.values({
 						displayName: input.displayName,
 						organizationId: input.organizationId,
-						region: input.region,
+						...regionSelection,
 						teamId,
 					})
 					.returning();
@@ -300,6 +307,8 @@ export const teamsRouter = {
 				teamId: input.teamId,
 			});
 
+			const regionSelection = await resolveOptionalRegion(input);
+
 			return await db.transaction(async (tx) => {
 				const [updatedTeam] = await tx
 					.update(team)
@@ -313,7 +322,7 @@ export const teamsRouter = {
 					.update(employerTeamProfile)
 					.set({
 						displayName: input.displayName,
-						region: input.region,
+						...regionSelection,
 					})
 					.where(eq(employerTeamProfile.teamId, input.teamId))
 					.returning();
