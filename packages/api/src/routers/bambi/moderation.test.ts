@@ -963,3 +963,151 @@ describe("adjustJobPostExposure", () => {
 		}
 	});
 });
+
+describe("사용자 관리", () => {
+	it("기각된 신고는 누적 신고 수에서 빠진다", async () => {
+		const fixture = await createReportFixture();
+		const openReportId = randomUUID();
+		const dismissedReportId = randomUUID();
+
+		try {
+			await db.insert(report).values([
+				{
+					id: openReportId,
+					reason: "harassment",
+					reporterUserId: fixture.employerUserId,
+					status: "open",
+					targetId: fixture.jobSeekerUserId,
+					targetType: "user",
+				},
+				{
+					id: dismissedReportId,
+					reason: "harassment",
+					reporterUserId: fixture.employerUserId,
+					status: "dismissed",
+					targetId: fixture.jobSeekerUserId,
+					targetType: "user",
+				},
+			]);
+
+			const listUsers = createProcedureClient(moderationRouter.listUsers, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "moderation", "listUsers"],
+			});
+
+			const users = await listUsers({ limit: 1000 });
+			const seeker = users.find(
+				(row) => row.userId === fixture.jobSeekerUserId
+			);
+
+			expect(seeker?.reportsCount).toBe(1);
+			expect(seeker?.deletedAt).toBeNull();
+			expect(seeker?.blockedByCount).toBe(0);
+			expect(seeker?.organizationNames).toEqual([]);
+		} finally {
+			await db
+				.delete(report)
+				.where(inArray(report.id, [openReportId, dismissedReportId]));
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("제재 이력에 사유와 처리한 운영자 이름이 담긴다", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const context = createContextForUser(fixture.adminUserId);
+			const setUserStatus = createProcedureClient(
+				moderationRouter.setUserStatus,
+				{ context, path: ["bambi", "moderation", "setUserStatus"] }
+			);
+			const listUserModerationActions = createProcedureClient(
+				moderationRouter.listUserModerationActions,
+				{ context, path: ["bambi", "moderation", "listUserModerationActions"] }
+			);
+
+			await setUserStatus({
+				reason: "반복 신고로 경고 처리합니다.",
+				status: "warned",
+				targetUserId: fixture.jobSeekerUserId,
+			});
+
+			const actions = await listUserModerationActions({
+				targetUserId: fixture.jobSeekerUserId,
+			});
+
+			expect(actions).toHaveLength(1);
+			expect(actions[0]).toMatchObject({
+				action: "set_status:warned",
+				adminName: "운영자",
+				adminUserId: fixture.adminUserId,
+				reason: "반복 신고로 경고 처리합니다.",
+			});
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("온보딩 전 계정 제재는 BAD_REQUEST로 원인을 알려주고 일괄 처리는 나머지를 계속한다", async () => {
+		const fixture = await createReportFixture();
+		const profilelessUserId = `user_test_onboarding_${randomUUID()}`;
+
+		try {
+			await db.insert(user).values({
+				email: makeEmail("onboarding"),
+				id: profilelessUserId,
+				name: "온보딩 전 계정",
+			});
+
+			const context = createContextForUser(fixture.adminUserId);
+			const setUserStatus = createProcedureClient(
+				moderationRouter.setUserStatus,
+				{ context, path: ["bambi", "moderation", "setUserStatus"] }
+			);
+			const bulkSetUserStatus = createProcedureClient(
+				moderationRouter.bulkSetUserStatus,
+				{ context, path: ["bambi", "moderation", "bulkSetUserStatus"] }
+			);
+
+			await expect(
+				setUserStatus({
+					reason: "온보딩 전 계정 제재 시도",
+					status: "suspended",
+					targetUserId: profilelessUserId,
+				})
+			).rejects.toMatchObject({
+				code: "BAD_REQUEST",
+				message: "아직 온보딩을 마치지 않은 계정이라 제재할 수 없어요.",
+			});
+
+			const result = await bulkSetUserStatus({
+				reason: "일괄 경고 처리합니다.",
+				status: "warned",
+				targetUserIds: [fixture.jobSeekerUserId, profilelessUserId],
+			});
+
+			expect(result).toMatchObject({
+				failed: 1,
+				failures: [
+					{
+						code: "BAD_REQUEST",
+						message: "아직 온보딩을 마치지 않은 계정이라 제재할 수 없어요.",
+						targetId: profilelessUserId,
+					},
+				],
+				succeeded: 1,
+				total: 2,
+			});
+
+			const [seekerProfile] = await db
+				.select({ status: bambiProfile.status })
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, fixture.jobSeekerUserId))
+				.limit(1);
+			expect(seekerProfile?.status).toBe("warned");
+		} finally {
+			await db.delete(user).where(eq(user.id, profilelessUserId));
+			await cleanupReportFixture(fixture);
+		}
+	});
+});

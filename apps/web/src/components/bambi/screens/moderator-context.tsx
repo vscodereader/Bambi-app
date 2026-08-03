@@ -462,7 +462,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			id: item.userId,
 			joined: formatDate(item.createdAt),
 			name: item.name,
-			displayName: item.displayName ?? "",
+			// 서버 displayName은 프로필 표시명 폐지 후 user.name과 항상 같아 제거됐다.
+			// ManagedUser 쪽 필드 정리는 화면 작업에서 이어서 한다.
+			displayName: item.name,
 			note: item.isPhoneVerified
 				? "휴대폰 인증 완료"
 				: "휴대폰 인증이 필요합니다.",
