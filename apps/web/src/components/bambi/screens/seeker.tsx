@@ -2,18 +2,18 @@
 
 // 밤비 — 구직자(Seeker) 화면: 탐색 → 상세 → 채팅 → 신고.
 
-import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import {
+	Card,
+	CardAction,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@bambi-app/ui/components/card";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { authClient } from "@/lib/auth-client";
-import { signOutToHome } from "@/lib/bambi/auth-actions";
-import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job, ReportMode, VisualTone } from "@/lib/bambi/types";
-import { orpc } from "@/utils/orpc";
 import {
 	AppBar,
 	Avatar,
@@ -51,6 +51,7 @@ import {
 	ShieldIcon,
 	UserIcon,
 } from "../icons";
+import { MyPageShell } from "../my-page-shell";
 import { PhoneFrame } from "../phone-frame";
 import { ReportDone, ReportForm, SafetyNotice } from "../safety-kit";
 import { ContactReveal } from "./contact-reveal";
@@ -547,127 +548,71 @@ export function SeekerChat({
 	);
 }
 
-const seekerRoleLabels: Record<string, string> = {
-	admin: "관리자",
-	employer: "구인자",
-	job_seeker: "구직자",
-};
+// 데스크톱 허브 본문 — 사이드바가 이미 프로필·내비를 들고 있어 링크 리스트를 반복하지
+// 않고, 하위 구역이 무엇인지 알려주는 안내 카드만 둔다(모바일에서는 셸이 그리는 허브
+// 리스트가 이 역할을 하므로 md 미만에서는 감춘다).
+const seekerMeSections: {
+	description: string;
+	href: Route;
+	icon: ReactNode;
+	label: string;
+}[] = [
+	{
+		href: "/seeker/me/reports" as Route,
+		icon: <ClipboardListIcon />,
+		label: "내 신고 내역",
+		description: "접수한 신고의 처리 상태를 확인해요.",
+	},
+	{
+		href: "/seeker/me/interviews" as Route,
+		icon: <ClockIcon />,
+		label: "예정된 면접",
+		description: "확정·제안된 면접 일정을 한눈에 봐요.",
+	},
+	{
+		href: "/seeker/me/blocks" as Route,
+		icon: <LockIcon />,
+		label: "차단한 상대",
+		description: "차단한 상대를 확인하고 해제해요.",
+	},
+	{
+		href: "/seeker/me/settings" as Route,
+		icon: <SettingsIcon />,
+		label: "계정 설정",
+		description: "표시 이름·본인인증을 관리해요.",
+	},
+];
 
 export function SeekerMe() {
-	const router = useRouter();
-	const session = authClient.useSession();
-	const isSignedIn = Boolean(session.data?.user);
-	const mineQuery = useQuery({
-		...orpc.bambi.onboarding.getMine.queryOptions(),
-		enabled: isSignedIn,
-	});
-	const profile = mineQuery.data?.bambiProfile ?? null;
-	const sessionUser = session.data?.user;
-	// 표시명(닉네임)의 정본은 user.name(세션). bambi_profile.display_name은 제거됐다.
-	const displayName = sessionUser?.name?.trim() || "구직자 회원";
-	const roleLabel = profile
-		? (seekerRoleLabels[profile.role] ?? profile.role)
-		: "구직자";
-	const isPhoneVerified = Boolean(profile?.isPhoneVerified);
-	const rows: { href: Route; icon: ReactNode; label: string }[] = [
-		{
-			href: "/seeker/me/reports" as Route,
-			icon: <ClipboardListIcon />,
-			label: "내 신고 내역",
-		},
-		{
-			href: "/seeker/me/interviews" as Route,
-			icon: <ClockIcon />,
-			label: "예정된 면접",
-		},
-		{
-			href: "/seeker/me/blocks" as Route,
-			icon: <LockIcon />,
-			label: "차단한 상대",
-		},
-		{
-			href: "/seeker/me/settings" as Route,
-			icon: <SettingsIcon />,
-			label: "계정 설정",
-		},
-		{
-			href: "/support" as Route,
-			icon: <Message />,
-			label: "고객센터",
-		},
-	];
-	const handleSignOut = async () => {
-		await signOutToHome(router);
-	};
 	return (
-		<div className="flex min-h-0 flex-1 flex-col py-5">
-			<div
-				className={cn(
-					"mx-auto w-full px-5 pt-2 pb-1 md:px-6",
-					SEEKER_CONTENT_WIDTH
-				)}
-			>
-				<h1 className="m-0 font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
-					내 정보
-				</h1>
+		<MyPageShell title="내 정보">
+			<div className="hidden gap-4 md:grid md:grid-cols-2">
+				{seekerMeSections.map((section) => (
+					<Link
+						className="block rounded-lg"
+						href={section.href}
+						key={section.label}
+					>
+						<Card className="h-full transition-shadow hover:ring-primary">
+							<CardHeader>
+								<CardTitle className="flex items-center gap-2 text-base">
+									<span className="inline-flex size-5 text-muted-foreground">
+										{section.icon}
+									</span>
+									{section.label}
+								</CardTitle>
+								<CardDescription>{section.description}</CardDescription>
+								<CardAction>
+									<span className="inline-flex size-4 text-muted-foreground">
+										<ChevronRightIcon />
+									</span>
+								</CardAction>
+							</CardHeader>
+						</Card>
+					</Link>
+				))}
 			</div>
-			<div
-				className={cn(
-					"mx-auto flex min-h-0 w-full flex-1 flex-col gap-[18px] overflow-y-auto px-5 py-4 md:px-6",
-					SEEKER_CONTENT_WIDTH
-				)}
-			>
-				{mineQuery.isLoading ? (
-					<div className="flex items-center gap-[14px] rounded-[18px] border border-border p-[18px]">
-						<Skeleton className="size-14 rounded-full" />
-						<div className="flex-1">
-							<Skeleton className="h-5 w-28 rounded-md" />
-							<Skeleton className="mt-2 h-4 w-40 rounded-md" />
-						</div>
-					</div>
-				) : (
-					<div className="flex items-center gap-[14px] rounded-[18px] border border-primary p-[18px]">
-						<Avatar name={displayName} ring size="lg" />
-						<div className="min-w-0 flex-1">
-							<div className="break-words font-extrabold text-[18px] text-foreground">
-								{displayName}
-							</div>
-							<div className="mt-0.5 text-[13px] text-muted-foreground">
-								{roleLabel}
-							</div>
-						</div>
-						<Badge tone={isPhoneVerified ? "primary" : "neutral"}>
-							{isPhoneVerified ? "인증완료" : "인증 필요"}
-						</Badge>
-					</div>
-				)}
-				<div className="flex flex-col overflow-hidden rounded-2xl border border-border">
-					{rows.map((r, i) => (
-						<Link
-							className={cn(
-								"flex items-center gap-3 p-4 transition-colors hover:bg-secondary",
-								i ? "border-border border-t" : "border-none"
-							)}
-							href={r.href}
-							key={r.label}
-						>
-							<span className="inline-flex size-[22px] text-muted-foreground">
-								{r.icon}
-							</span>
-							<span className="flex-1 font-semibold text-[15px] text-foreground">
-								{r.label}
-							</span>
-							<span className="inline-flex size-[18px] text-[color:var(--text-subtle)]">
-								<ChevronRightIcon />
-							</span>
-						</Link>
-					))}
-				</div>
-				<Button className="w-full" onClick={handleSignOut} variant="secondary">
-					로그아웃
-				</Button>
-			</div>
-		</div>
+		</MyPageShell>
 	);
 }
 
