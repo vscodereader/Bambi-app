@@ -1445,9 +1445,10 @@ export const moderationRouter = {
 			return updated;
 		}),
 
-	// 이미 노출 중인 공고의 광고 종료일만 앞뒤로 민다. 결제 상태·노출 종류는 그대로라
-	// 프리미엄 정원(자리 수)에 영향이 없어 승인 게이트를 타지 않는다. 음수(단축)로 과거까지
-	// 내리는 것도 허용한다(즉시 만료 조치).
+	// 공고의 광고 종료일만 앞뒤로 민다. 결제 상태·노출 종류는 그대로라 프리미엄 정원(자리 수)에
+	// 영향이 없어 승인 게이트를 타지 않는다. 음수(단축)로 과거까지 내리는 것도 허용한다(즉시 만료 조치).
+	// 기준일은 `exposureEndsAt ?? now` 단일 규칙이라, 종료일이 없던 공고(미결제·무기한)는 지금
+	// 기준으로 종료일이 새로 설정된다 — 즉 무기한 공고에 적용하면 무기한 → 기한부로 바뀐다.
 	adjustJobPostExposure: adminProcedure
 		.input(adjustJobPostExposureInput)
 		.handler(async ({ context, input }) => {
@@ -1467,15 +1468,9 @@ export const moderationRouter = {
 					throw new ORPCError("NOT_FOUND");
 				}
 
-				// 미결제이거나 기간 개념이 없는(무기한) 공고는 기준점이 없어 조정할 수 없다.
-				if (existing.exposureEndsAt === null) {
-					throw new ORPCError("BAD_REQUEST", {
-						message: "노출 종료일이 없는 공고는 광고 기간을 조정할 수 없어요.",
-					});
-				}
-
 				const exposureEndsAt = new Date(
-					existing.exposureEndsAt.getTime() + input.days * MS_PER_DAY
+					(existing.exposureEndsAt ?? new Date()).getTime() +
+						input.days * MS_PER_DAY
 				);
 
 				const [row] = await tx
@@ -1497,7 +1492,8 @@ export const moderationRouter = {
 					metadata: {
 						days: input.days,
 						exposureEndsAt: exposureEndsAt.toISOString(),
-						previousExposureEndsAt: existing.exposureEndsAt.toISOString(),
+						previousExposureEndsAt:
+							existing.exposureEndsAt?.toISOString() ?? null,
 					},
 				});
 

@@ -77,9 +77,10 @@ interface PendingAction {
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // 광고 기간 조정 대상. 연장/단축은 부호만 다르므로 다이얼로그 하나를 공유한다.
+// exposureEndsAt이 null(미결제·무기한)이면 기준일은 지금이다(서버와 동일 규칙).
 interface PendingExposure {
 	direction: "extend" | "shorten";
-	exposureEndsAt: NonNullable<JobRow["exposureEndsAt"]>;
+	exposureEndsAt: JobRow["exposureEndsAt"];
 	jobPostId: string;
 	title: string;
 }
@@ -97,13 +98,14 @@ function resolveExposureAdjustment(
 	}
 
 	const signedDays = pendingExposure.direction === "shorten" ? -days : days;
+	// 종료일이 없으면 지금이 기준일. 렌더 시각과 서버 적용 시각의 초 단위 오차는 허용한다.
+	const baseEndsAt = pendingExposure.exposureEndsAt
+		? new Date(pendingExposure.exposureEndsAt)
+		: new Date();
 
 	return {
 		days: signedDays,
-		nextEndsAt: new Date(
-			new Date(pendingExposure.exposureEndsAt).getTime() +
-				signedDays * MS_PER_DAY
-		),
+		nextEndsAt: new Date(baseEndsAt.getTime() + signedDays * MS_PER_DAY),
 	};
 }
 
@@ -176,21 +178,17 @@ function getJobColumns(
 									},
 								]
 							: []),
-						// 노출 종료일이 없는 공고(미결제·무기한)는 기준점이 없어 조정 불가.
-						...(job.exposureEndsAt === null
-							? []
-							: [
-									{
-										key: "extend",
-										label: "광고 연장",
-										onSelect: () => onRequestExposure(job, "extend"),
-									},
-									{
-										key: "shorten",
-										label: "광고 단축",
-										onSelect: () => onRequestExposure(job, "shorten"),
-									},
-								]),
+						// 종료일이 없는 공고(미결제·무기한)도 지금 기준으로 새 종료일을 잡을 수 있다.
+						{
+							key: "extend",
+							label: "광고 연장",
+							onSelect: () => onRequestExposure(job, "extend"),
+						},
+						{
+							key: "shorten",
+							label: "광고 단축",
+							onSelect: () => onRequestExposure(job, "shorten"),
+						},
 						{
 							key: "edit",
 							label: "수정",
@@ -329,10 +327,6 @@ export default function ModeratorJobsPage() {
 
 	const requestExposure = useCallback(
 		(job: JobRow, direction: "extend" | "shorten") => {
-			if (job.exposureEndsAt === null) {
-				return;
-			}
-
 			setPendingExposure({
 				direction,
 				exposureEndsAt: job.exposureEndsAt,
@@ -549,14 +543,18 @@ export default function ModeratorJobsPage() {
 					<DialogDescription>
 						"{pendingExposure?.title}" 공고의 광고 종료일을 {exposureLabel}
 						합니다. 현재 종료일{" "}
-						{pendingExposure
+						{pendingExposure?.exposureEndsAt
 							? formatDateTime(pendingExposure.exposureEndsAt)
-							: "-"}
+							: "종료일 없음(무기한·미결제)"}
 						{" → "}
 						{exposureAdjustment
 							? formatDateTime(exposureAdjustment.nextEndsAt)
 							: "-"}
-						. 사유는 감사 로그에 남아요(2자 이상).
+						.{" "}
+						{pendingExposure && !pendingExposure.exposureEndsAt
+							? "적용하면 지금부터 계산한 종료일이 새로 설정돼요(무기한 → 기한부). "
+							: null}
+						사유는 감사 로그에 남아요(2자 이상).
 					</DialogDescription>
 					<Input
 						max={365}
