@@ -146,6 +146,18 @@ const listJobsForPaymentInput = z.object({
 	limit: z.number().int().min(1).max(100).default(50),
 });
 
+// 광고 기간 연장(양수)/단축(음수). 0은 아무 일도 하지 않으므로 막는다.
+const adjustJobPostExposureInput = z.object({
+	jobPostId: z.string().uuid(),
+	days: z
+		.number()
+		.int()
+		.min(-365)
+		.max(365)
+		.refine((value) => value !== 0, { message: "조정할 일수를 입력하세요." }),
+	reason: z.string().min(2).max(500),
+});
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const setUserStatusInput = z.object({
@@ -1425,6 +1437,75 @@ export const moderationRouter = {
 
 			// 결제 상태 전환은 공개 게이트(published AND paid)를 넘나들 수 있으므로
 			// 해당 조직 owner/admin의 수다방 광고 자격 캐시를 재동기화한다.
+			await syncAdvertiserFlagForOrganization({
+				now: new Date(),
+				organizationId,
+			});
+
+			return updated;
+		}),
+
+	// 이미 노출 중인 공고의 광고 종료일만 앞뒤로 민다. 결제 상태·노출 종류는 그대로라
+	// 프리미엄 정원(자리 수)에 영향이 없어 승인 게이트를 타지 않는다. 음수(단축)로 과거까지
+	// 내리는 것도 허용한다(즉시 만료 조치).
+	adjustJobPostExposure: adminProcedure
+		.input(adjustJobPostExposureInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const { organizationId, updated } = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({
+						exposureEndsAt: jobPost.exposureEndsAt,
+						organizationId: jobPost.organizationId,
+					})
+					.from(jobPost)
+					.where(eq(jobPost.id, input.jobPostId))
+					.limit(1);
+
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				// 미결제이거나 기간 개념이 없는(무기한) 공고는 기준점이 없어 조정할 수 없다.
+				if (existing.exposureEndsAt === null) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "노출 종료일이 없는 공고는 광고 기간을 조정할 수 없어요.",
+					});
+				}
+
+				const exposureEndsAt = new Date(
+					existing.exposureEndsAt.getTime() + input.days * MS_PER_DAY
+				);
+
+				const [row] = await tx
+					.update(jobPost)
+					.set({ exposureEndsAt })
+					.where(eq(jobPost.id, input.jobPostId))
+					.returning();
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx.insert(adminModerationAction).values({
+					adminUserId: admin.userId,
+					targetType: "job_post",
+					targetId: input.jobPostId,
+					action: `adjust_job_post_exposure:${input.days > 0 ? "+" : ""}${input.days}`,
+					reason: input.reason,
+					metadata: {
+						days: input.days,
+						exposureEndsAt: exposureEndsAt.toISOString(),
+						previousExposureEndsAt: existing.exposureEndsAt.toISOString(),
+					},
+				});
+
+				return { organizationId: existing.organizationId, updated: row };
+			});
+
+			// 종료일이 과거/미래를 넘나들면 광고 유효 여부가 뒤집히므로 수다방 광고 자격
+			// 캐시(is_advertiser)를 재동기화한다(setJobPostPayment와 동일 이유).
 			await syncAdvertiserFlagForOrganization({
 				now: new Date(),
 				organizationId,

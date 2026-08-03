@@ -878,3 +878,75 @@ describe("bambi moderation router chat reports", () => {
 		}
 	});
 });
+
+describe("adjustJobPostExposure", () => {
+	const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+	it("광고 종료일을 일수만큼 밀고 감사 로그를 남긴다", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const endsAt = new Date("2026-09-01T00:00:00.000Z");
+			await db
+				.update(jobPost)
+				.set({ exposureEndsAt: endsAt })
+				.where(eq(jobPost.id, fixture.jobPostId));
+
+			const adjustJobPostExposure = createProcedureClient(
+				moderationRouter.adjustJobPostExposure,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "adjustJobPostExposure"],
+				}
+			);
+
+			const updated = await adjustJobPostExposure({
+				days: 7,
+				jobPostId: fixture.jobPostId,
+				reason: "입금 지연 보상으로 7일 연장합니다.",
+			});
+
+			expect(updated.exposureEndsAt?.getTime()).toBe(
+				endsAt.getTime() + 7 * MS_PER_DAY
+			);
+
+			const logs = await db
+				.select()
+				.from(adminModerationAction)
+				.where(eq(adminModerationAction.targetId, fixture.jobPostId));
+			expect(logs).toHaveLength(1);
+			expect(logs[0]).toMatchObject({
+				action: "adjust_job_post_exposure:+7",
+				adminUserId: fixture.adminUserId,
+				targetType: "job_post",
+			});
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("노출 종료일이 없는 공고는 BAD_REQUEST", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const adjustJobPostExposure = createProcedureClient(
+				moderationRouter.adjustJobPostExposure,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "adjustJobPostExposure"],
+				}
+			);
+
+			await expectOrpcCode(
+				adjustJobPostExposure({
+					days: -3,
+					jobPostId: fixture.jobPostId,
+					reason: "무기한 공고 단축 시도",
+				}),
+				"BAD_REQUEST"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
