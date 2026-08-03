@@ -7,6 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { CalendarIcon, ChevronRightIcon } from "@/components/bambi/icons";
+import { MyPageShell } from "@/components/bambi/my-page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { orpc } from "@/utils/orpc";
 
@@ -58,20 +60,15 @@ export function UpcomingInterviewsScreen() {
 	const interviews = query.data ?? [];
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col py-5">
-			<div className="mx-auto w-full max-w-[860px] px-4 pt-2 pb-1 md:px-6">
-				<h1 className="m-0 font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
-					예정된 면접
-				</h1>
-			</div>
-			<div className="mx-auto flex min-h-0 w-full max-w-[860px] flex-1 flex-col gap-[14px] overflow-y-auto px-4 py-4 md:px-6">
+		<MyPageShell title="예정된 면접">
+			<div className="flex flex-col gap-3">
 				{query.isLoading ? (
 					<InterviewSkeletonList />
 				) : (
 					<InterviewList interviews={interviews} />
 				)}
 			</div>
-		</div>
+		</MyPageShell>
 	);
 }
 
@@ -81,15 +78,15 @@ function InterviewSkeletonList() {
 		<>
 			{placeholders.map((key) => (
 				<div
-					className="flex flex-col gap-3 rounded-2xl border border-border p-[18px]"
+					className="flex items-center gap-3 rounded-xl border border-border bg-card p-4"
 					key={key}
 				>
-					<div className="flex items-start justify-between gap-3">
-						<Skeleton className="h-5 w-40 rounded-md" />
-						<Skeleton className="h-6 w-16 rounded-full" />
+					<Skeleton className="size-10 rounded-lg" />
+					<div className="flex flex-1 flex-col gap-2">
+						<Skeleton className="h-6 w-48 rounded-md" />
+						<Skeleton className="h-4 w-32 rounded-md" />
 					</div>
-					<Skeleton className="h-4 w-32 rounded-md" />
-					<Skeleton className="h-4 w-24 rounded-md" />
+					<Skeleton className="h-6 w-16 rounded-full" />
 				</div>
 			))}
 		</>
@@ -126,30 +123,37 @@ function InterviewList({
 				const statusLabel = resolveStatusLabel(interview.status);
 				const statusTone = resolveStatusTone(interview.status);
 				return (
+					// 카드의 주 정보는 일시다 — 상대·공고는 보조로 내리고, 셰브런으로
+					// "누르면 해당 채팅방으로 간다"는 것을 드러낸다.
 					<Link
-						className="flex flex-col gap-3 rounded-2xl border border-border p-[18px] transition-colors hover:border-primary"
+						className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary"
 						href={`/seeker/chats/${interview.chatRoomId}` as Route}
 						key={interview.id}
 					>
-						<div className="flex items-start justify-between gap-3">
-							<div className="min-w-0 flex-1">
-								<div className="break-words font-extrabold text-[16px] text-foreground">
-									{counterpart}
-								</div>
-								<div className="mt-0.5 break-words text-[13px] text-muted-foreground">
-									{job}
-								</div>
+						<span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+							<span className="inline-flex size-5">
+								<CalendarIcon />
+							</span>
+						</span>
+						<div className="flex min-w-0 flex-1 flex-col gap-1">
+							<div className="flex flex-wrap items-center gap-2">
+								<span className="break-words font-extrabold text-foreground text-lg [font-family:var(--font-display)]">
+									{formatSchedule(interview.scheduledAt)}
+								</span>
+								<StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
 							</div>
-							<StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
-						</div>
-						<div className="font-semibold text-[15px] text-foreground">
-							{formatSchedule(interview.scheduledAt)}
-						</div>
-						{interview.locationNote ? (
-							<div className="break-words text-[13px] text-muted-foreground">
-								{interview.locationNote}
+							<div className="break-words text-muted-foreground text-sm">
+								{counterpart} · {job}
 							</div>
-						) : null}
+							{interview.locationNote ? (
+								<div className="break-words text-muted-foreground text-xs">
+									{interview.locationNote}
+								</div>
+							) : null}
+						</div>
+						<span className="inline-flex size-4 shrink-0 self-center text-muted-foreground">
+							<ChevronRightIcon />
+						</span>
 					</Link>
 				);
 			})}

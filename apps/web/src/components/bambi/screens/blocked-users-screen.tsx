@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Avatar } from "@/components/bambi/ds";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { MyPageShell } from "@/components/bambi/my-page-shell";
 import { orpc } from "@/utils/orpc";
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -46,23 +47,12 @@ export function BlockedUsersScreen() {
 
 	const blocks = query.data ?? [];
 
-	return (
-		<div className="flex min-h-0 flex-1 flex-col py-5">
-			<div className="mx-auto w-full max-w-[860px] px-4 pt-2 pb-1 md:px-6">
-				<h1 className="m-0 font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
-					차단한 상대
-				</h1>
-			</div>
-			<div className="mx-auto flex min-h-0 w-full max-w-[860px] flex-1 flex-col gap-[18px] overflow-y-auto px-4 py-4 md:px-6">
-				{renderBody()}
-			</div>
-		</div>
-	);
+	return <MyPageShell title="차단한 상대">{renderBody()}</MyPageShell>;
 
 	function renderBody() {
 		if (query.isLoading) {
 			return (
-				<div className="flex flex-col overflow-hidden rounded-2xl border border-border">
+				<div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
 					{[0, 1, 2].map((index) => (
 						<div
 							className={
@@ -94,7 +84,7 @@ export function BlockedUsersScreen() {
 		}
 
 		return (
-			<div className="flex flex-col overflow-hidden rounded-2xl border border-border">
+			<div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
 				{blocks.map((block, index) => {
 					const isConfirming = confirmingId === block.blockedUserId;
 					const isPending =
@@ -113,10 +103,10 @@ export function BlockedUsersScreen() {
 							<div className="flex items-center gap-3">
 								<Avatar name={block.name} size="md" />
 								<div className="min-w-0 flex-1">
-									<div className="break-words font-semibold text-[15px] text-foreground">
+									<div className="break-words font-semibold text-foreground text-sm">
 										{block.name}
 									</div>
-									<div className="mt-0.5 text-[13px] text-muted-foreground">
+									<div className="mt-0.5 text-muted-foreground text-xs">
 										{formatBlockedDate(block.createdAt)} 차단
 									</div>
 								</div>

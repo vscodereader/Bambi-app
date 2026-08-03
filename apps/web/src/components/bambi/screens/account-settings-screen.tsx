@@ -5,6 +5,17 @@
 // verifyMyPhone이 포트원 조회 결과(번호·성별·생년월일·CI 해시)를 프로필에 저장한다.
 // 포트원 미구성 개발 환경에서는 목 폼으로 폴백해 verifyMyPhoneMock을 호출한다.
 
+import { Button } from "@bambi-app/ui/components/button";
+import {
+	Card,
+	CardAction,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@bambi-app/ui/components/card";
+import { Input } from "@bambi-app/ui/components/input";
+import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -14,7 +25,8 @@ import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
-import { Badge, Button, Input } from "../ds";
+import { Badge } from "../ds";
+import { MyPageShell } from "../my-page-shell";
 import { PhoneVerifyDialog } from "../phone-verify-dialog";
 import { WithdrawAccountSection } from "../withdraw-account-section";
 
@@ -113,21 +125,18 @@ export function AccountSettingsScreen() {
 	};
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col py-5">
-			<div className="mx-auto w-full max-w-[860px] px-4 pt-2 pb-1 md:px-6">
-				<h1 className="m-0 font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
-					계정 설정
-				</h1>
-			</div>
-			<div className="mx-auto flex min-h-0 w-full max-w-[860px] flex-1 flex-col gap-[18px] overflow-y-auto px-4 py-4 md:px-6">
-				{mineQuery.isLoading || session.isPending ? (
-					<Skeleton className="h-40 w-full rounded-2xl" />
-				) : (
-					<section className="flex flex-col gap-4 rounded-2xl border border-border p-5">
+		<MyPageShell title="계정 설정">
+			{mineQuery.isLoading || session.isPending ? (
+				<Skeleton className="h-40 w-full rounded-xl" />
+			) : (
+				<Card>
+					<CardHeader>
+						<CardTitle>프로필</CardTitle>
+						<CardDescription>공고·채팅에 표시되는 이름이에요.</CardDescription>
+					</CardHeader>
+					<CardContent className="flex flex-col gap-3">
 						<div className="flex flex-col gap-2">
-							<span className="font-bold text-foreground text-sm">
-								표시 이름
-							</span>
+							<Label htmlFor="settings-display-name">표시 이름</Label>
 							<Input
 								id="settings-display-name"
 								onChange={(event) => setDisplayName(event.target.value)}
@@ -139,54 +148,62 @@ export function AccountSettingsScreen() {
 							</p>
 						</div>
 						<Button
+							className="self-start"
 							disabled={!canSave}
 							onClick={() =>
 								updateMutation.mutate({ displayName: trimmedName })
 							}
+							type="button"
 						>
 							{updateMutation.isPending ? "저장 중" : "저장"}
 						</Button>
-					</section>
-				)}
+					</CardContent>
+				</Card>
+			)}
 
-				<section className="flex flex-col gap-3 rounded-2xl border border-border p-5">
-					<span className="font-bold text-foreground text-sm">기본 정보</span>
+			<Card>
+				<CardHeader>
+					<CardTitle>기본 정보</CardTitle>
+					<CardDescription>
+						성별·생년월일은 휴대폰 본인인증으로 확인돼요.
+					</CardDescription>
+				</CardHeader>
+				<CardContent>
 					<dl className="m-0 flex flex-col gap-2">
 						<div className="flex items-center justify-between gap-3">
-							<dt className="text-muted-foreground text-xs">성별</dt>
+							<dt className="text-muted-foreground text-sm">성별</dt>
 							<dd className="m-0 font-semibold text-foreground text-sm">
 								{formatGender(profile?.gender)}
 							</dd>
 						</div>
 						<div className="flex items-center justify-between gap-3">
-							<dt className="text-muted-foreground text-xs">생년월일</dt>
+							<dt className="text-muted-foreground text-sm">생년월일</dt>
 							<dd className="m-0 font-semibold text-foreground text-sm">
 								{formatBirthDate(profile?.birthDate)}
 							</dd>
 						</div>
 					</dl>
-					<p className="m-0 text-muted-foreground text-xs">
-						성별·생년월일은 휴대폰 본인인증으로 확인돼요.
-					</p>
-				</section>
+				</CardContent>
+			</Card>
 
-				<section className="flex flex-col gap-4 rounded-2xl border border-border p-5">
-					<div className="flex items-center gap-3">
-						<div className="min-w-0 flex-1">
-							<div className="font-bold text-foreground text-sm">본인인증</div>
-							<p className="m-0 mt-1 text-muted-foreground text-xs">
-								{isPhoneVerified
-									? "휴대폰 본인인증이 완료됐어요."
-									: "휴대폰 본인인증을 완료하면 안심 서비스를 이용할 수 있어요."}
-							</p>
-						</div>
+			<Card>
+				<CardHeader>
+					<CardTitle>본인인증</CardTitle>
+					<CardDescription>
+						{isPhoneVerified
+							? "휴대폰 본인인증이 완료됐어요."
+							: "휴대폰 본인인증을 완료하면 안심 서비스를 이용할 수 있어요."}
+					</CardDescription>
+					<CardAction>
 						<Badge tone={isPhoneVerified ? "primary" : "neutral"}>
 							{isPhoneVerified ? "인증완료" : "인증 필요"}
 						</Badge>
-					</div>
+					</CardAction>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-3">
 					{isPhoneVerified && profile?.phoneNumber ? (
-						<div className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-4 py-3">
-							<span className="text-muted-foreground text-xs">인증된 번호</span>
+						<div className="flex items-center justify-between gap-3 rounded-lg bg-secondary px-4 py-3">
+							<span className="text-muted-foreground text-sm">인증된 번호</span>
 							<span className="font-semibold text-foreground text-sm">
 								{profile.phoneNumber}
 							</span>
@@ -200,13 +217,19 @@ export function AccountSettingsScreen() {
 						title={isPhoneVerified ? "휴대폰 재인증" : "휴대폰 본인인증"}
 						triggerLabel={isPhoneVerified ? "휴대폰 재인증" : "휴대폰 인증하기"}
 					/>
-				</section>
+				</CardContent>
+			</Card>
 
-				<Button className="w-full" onClick={handleSignOut} variant="secondary">
-					로그아웃
-				</Button>
-				<WithdrawAccountSection />
-			</div>
-		</div>
+			{/* 데스크톱은 마이페이지 사이드바에 로그아웃이 있어 본문에서는 감춘다. */}
+			<Button
+				className="w-full md:hidden"
+				onClick={handleSignOut}
+				type="button"
+				variant="outline"
+			>
+				로그아웃
+			</Button>
+			<WithdrawAccountSection />
+		</MyPageShell>
 	);
 }
