@@ -83,6 +83,7 @@ export function SeekerCrawledJobDetail({
 					<HorizontalAdBannerRail
 						isLoading={adBanners.isLoading}
 						items={adBanners.leftBanner}
+						promotionSurface="crawled_detail_left"
 					/>
 				</div>
 			</aside>
@@ -294,6 +295,7 @@ export function SeekerCrawledJobDetail({
 					<AdBannerRail
 						isLoading={adBanners.isLoading}
 						items={adBanners.rightBanner}
+						promotionSurface="crawled_detail_right"
 					/>
 				</div>
 			</aside>

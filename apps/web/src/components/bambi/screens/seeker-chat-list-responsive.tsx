@@ -263,6 +263,7 @@ function SeekerChatListRails({
 					<HorizontalAdBannerRail
 						isLoading={adBanners.isLoading}
 						items={adBanners.leftBanner}
+						promotionSurface="chats_left"
 					/>
 				</div>
 			</aside>
@@ -280,6 +281,7 @@ function SeekerChatListRails({
 					<AdBannerRail
 						isLoading={adBanners.isLoading}
 						items={adBanners.rightBanner}
+						promotionSurface="chats_right"
 					/>
 				</div>
 			</aside>

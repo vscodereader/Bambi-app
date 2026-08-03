@@ -76,6 +76,7 @@ export function SeekerMarketplaceScreen() {
 						<HorizontalAdBannerRail
 							isLoading={adBanners.isLoading}
 							items={adBanners.leftBanner}
+							promotionSurface="seeker_left"
 						/>
 						<Card className="rounded-lg" pad="lg" tone="outline">
 							<div className="mb-4 flex items-center gap-2">
@@ -98,6 +99,7 @@ export function SeekerMarketplaceScreen() {
 						className="mb-6"
 						isLoading={adBanners.isLoading}
 						items={adBanners.premiumBanner}
+						promotionSurface="seeker_center"
 					/>
 					<div className="mb-5 flex flex-col gap-4">
 						<MarketplaceDiscoveryTabs
@@ -152,6 +154,7 @@ export function SeekerMarketplaceScreen() {
 						<AdBannerRail
 							isLoading={adBanners.isLoading}
 							items={adBanners.rightBanner}
+							promotionSurface="seeker_right"
 						/>
 					</div>
 				</aside>
