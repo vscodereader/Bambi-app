@@ -27,6 +27,7 @@ import {
 	review,
 	supportInquiry,
 	supportInquiryMessage,
+	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
@@ -124,6 +125,10 @@ const listUsersInput = z.object({
 	limit: z.number().int().min(1).max(1000).default(1000),
 });
 
+const listUserModerationActionsInput = z.object({
+	targetUserId: z.string().min(1),
+});
+
 const setReportStatusInput = z.object({
 	reportId: z.string().uuid(),
 	status: reportStatusSchema,
@@ -159,6 +164,10 @@ const adjustJobPostExposureInput = z.object({
 });
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// 계정 제재는 bambi_profile 행을 갱신하므로 온보딩 전 계정에는 걸 수 없다.
+const PROFILELESS_SANCTION_MESSAGE =
+	"아직 온보딩을 마치지 않은 계정이라 제재할 수 없어요.";
 
 const setUserStatusInput = z.object({
 	targetUserId: z.string().min(1),
@@ -1132,12 +1141,16 @@ export const moderationRouter = {
 			await requireAdminProfile(context.session);
 
 			// 계정 목록의 기준 테이블은 user다. bambi_profile은 좌측 조인해 부가 정보로만
-			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다. name은 계정
-			// 이름(user.name), displayName은 프로필 표시 이름(없으면 null)으로 각각 반환한다.
-			// 누적 신고/경고 횟수는 서브쿼리로 실제 집계한다.
+			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다.
+			// 집계는 전부 상관 서브쿼리로 뽑는다 — 조인으로 붙이면 소속 업소·차단 수만큼
+			// user row가 뻥튀기된다.
+			// 기각된 신고는 운영자 판단으로 무효 처리된 건이라 누적 신고 수에서 뺀다.
+			// ponytail: 공고·커뮤니티 등 콘텐츠 신고를 작성자에게 귀속시키는 합산은 이번 범위 밖.
 			const reportsCountSql = sql<number>`(
 				select count(*)::int from ${report}
-				where ${report.targetType} = 'user' and ${report.targetId} = ${user.id}
+				where ${report.targetType} = 'user'
+					and ${report.targetId} = ${user.id}
+					and ${report.status} <> 'dismissed'
 			)`;
 			const warningsCountSql = sql<number>`(
 				select count(*)::int from ${adminModerationAction}
@@ -1145,11 +1158,28 @@ export const moderationRouter = {
 					and ${adminModerationAction.targetId} = ${user.id}
 					and ${adminModerationAction.action} = 'set_status:warned'
 			)`;
+			// 구인자 계정의 소속 업소 표시명. 한 계정이 여러 업소에 속할 수 있어 배열로 모은다.
+			const organizationNamesSql = sql<string[]>`(
+				select coalesce(
+					array_agg(distinct ${employerOrganizationProfile.displayName}),
+					'{}'::text[]
+				)
+				from ${member}
+				join ${employerOrganizationProfile}
+					on ${employerOrganizationProfile.organizationId} = ${member.organizationId}
+				where ${member.userId} = ${user.id}
+			)`;
+			// 다른 사용자에게 차단당한 횟수(신고와 별개의 위험 신호).
+			const blockedByCountSql = sql<number>`(
+				select count(*)::int from ${userBlock}
+				where ${userBlock.blockedUserId} = ${user.id}
+			)`;
 			const query = db
 				.select({
 					userId: user.id,
 					name: user.name,
-					displayName: user.name,
+					// 로그인 아이디(better-auth username 플러그인). 미설정 계정은 null.
+					loginId: user.login_id,
 					email: user.email,
 					role: sql<string>`coalesce(${bambiProfile.role}, 'job_seeker')`,
 					status: sql<
@@ -1159,6 +1189,10 @@ export const moderationRouter = {
 					phoneNumber: bambiProfile.phoneNumber,
 					reportsCount: reportsCountSql,
 					warningsCount: warningsCountSql,
+					organizationNames: organizationNamesSql,
+					blockedByCount: blockedByCountSql,
+					// 소프트 탈퇴 시각. null이 아니면 탈퇴 처리된 계정이다.
+					deletedAt: user.deletedAt,
 					createdAt: user.createdAt,
 					updatedAt: user.updatedAt,
 				})
@@ -1168,11 +1202,43 @@ export const moderationRouter = {
 				.limit(input.limit);
 
 			if (input.status) {
-				return await query.where(eq(bambiProfile.status, input.status));
+				// 프로필이 없는(온보딩 전) 계정도 목록 표시와 동일하게 active로 취급한다 —
+				// 컬럼을 그대로 비교하면 NULL이라 'active' 필터에서 통째로 사라진다.
+				return await query.where(
+					sql`coalesce(${bambiProfile.status}, 'active')::text = ${input.status}`
+				);
 			}
 
 			return await query;
 		}),
+
+	// 계정 상세의 제재 이력. 감사 로그(admin_moderation_action)에서 해당 사용자를 대상으로
+	// 한 기록만 최신순으로 보여준다(target_type·target_id 인덱스를 그대로 탄다).
+	listUserModerationActions: adminProcedure
+		.input(listUserModerationActionsInput)
+		.handler(
+			async ({ input }) =>
+				await db
+					.select({
+						id: adminModerationAction.id,
+						action: adminModerationAction.action,
+						reason: adminModerationAction.reason,
+						metadata: adminModerationAction.metadata,
+						adminUserId: adminModerationAction.adminUserId,
+						adminName: user.name,
+						createdAt: adminModerationAction.createdAt,
+					})
+					.from(adminModerationAction)
+					.innerJoin(user, eq(user.id, adminModerationAction.adminUserId))
+					.where(
+						and(
+							eq(adminModerationAction.targetType, "user"),
+							eq(adminModerationAction.targetId, input.targetUserId)
+						)
+					)
+					.orderBy(desc(adminModerationAction.createdAt))
+					.limit(50)
+		),
 
 	listReviews: protectedProcedure
 		.input(listReviewsInput)
@@ -1684,7 +1750,11 @@ export const moderationRouter = {
 					.returning();
 
 				if (!updated) {
-					throw new ORPCError("NOT_FOUND");
+					// 계정 상태는 bambi_profile에만 있어 온보딩 전 계정은 갱신할 행이 없다.
+					// NOT_FOUND면 운영자가 "왜 실패했는지" 알 수 없어 원인을 그대로 알려준다.
+					throw new ORPCError("BAD_REQUEST", {
+						message: PROFILELESS_SANCTION_MESSAGE,
+					});
 				}
 
 				await tx.insert(adminModerationAction).values({
@@ -1715,8 +1785,10 @@ export const moderationRouter = {
 								.returning();
 
 							if (!updated) {
-								throw new ORPCError("NOT_FOUND", {
-									message: "User was not found.",
+								// 일괄 처리는 실패 대상만 failures로 모으고 나머지는 그대로 적용된다
+								// (executeBulkModeration의 기존 동작). 코드·메시지만 원인을 드러내게 바꾼다.
+								throw new ORPCError("BAD_REQUEST", {
+									message: PROFILELESS_SANCTION_MESSAGE,
 								});
 							}
 

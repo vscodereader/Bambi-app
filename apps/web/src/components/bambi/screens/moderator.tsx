@@ -25,6 +25,7 @@ import {
 } from "@bambi-app/ui/components/sheet";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
@@ -44,6 +45,7 @@ import {
 import {
 	accountStatusLabel,
 	jobPostStatusLabel,
+	moderationActionLabel,
 	reviewStatusLabel,
 	userRoleLabel,
 } from "@/lib/bambi/moderation-labels";
@@ -58,6 +60,8 @@ import type {
 	UserStatus,
 	VisualTone,
 } from "@/lib/bambi/types";
+import { formatDateTime } from "@/lib/bambi-format";
+import { orpc } from "@/utils/orpc";
 import { BOTTOM_NAV_STACK_OFFSET } from "../bottom-nav-shell";
 import { AppBar, Avatar, Badge, Button, StatGroup } from "../ds";
 import {
@@ -1623,14 +1627,27 @@ function CommunityTargetPanel({
 }
 
 // 당사자 카드 2개. 모바일은 가로 나란히, 데스크톱 사이드 패널에서는 세로로 쌓는다.
+// 피신고 대상이 사용자 계정이면 카드를 그대로 계정 상세 링크로 감싼다(제재 이력·누적
+// 신고를 바로 확인할 수 있게).
 function ReportParties({ item }: { item: Report }) {
+	const targetBox = (
+		<PartyBox flagged name={item.target} role={`피신고 · ${item.targetRole}`} />
+	);
+	const targetUserId =
+		item.targetType === "user" && item.targetId ? item.targetId : null;
+
 	return (
 		<div className="flex gap-2.5 md:flex-col">
-			<PartyBox
-				flagged
-				name={item.target}
-				role={`피신고 · ${item.targetRole}`}
-			/>
+			{targetUserId ? (
+				<Link
+					className="flex min-w-0 flex-1"
+					href={`/moderator/users/${targetUserId}` as Route}
+				>
+					{targetBox}
+				</Link>
+			) : (
+				targetBox
+			)}
 			<PartyBox name={item.reporter} role={`신고자 · ${item.reporterRole}`} />
 		</div>
 	);
@@ -1853,7 +1870,6 @@ const STATUS_CONF: Record<
 	active: { tone: "success", label: "정상" },
 	warned: { tone: "pending", label: "경고" },
 	suspended: { tone: "danger", label: "정지" },
-	blocked: { tone: "danger", label: "차단" },
 };
 
 function UserRow({
@@ -2016,9 +2032,10 @@ const SANCTION_CHOICES: SanctionChoice[] = [
 		confirmLabel: "이용 정지",
 		danger: true,
 		defaultReason: "정책 위반이 확인되어 이용을 정지했어요",
-		desc: "기간 동안 공고·채팅을 막아요",
+		// 자동 해제 기간이 없다 — 운영자가 "정상으로 복구"를 누를 때까지 유지된다.
+		desc: "정상으로 복구할 때까지 공고·채팅을 막아요",
 		status: "suspended",
-		title: "이용 정지 (7일)",
+		title: "이용 정지",
 		tone: "danger",
 	},
 ];
@@ -2187,6 +2204,65 @@ function SanctionSheet({
 	);
 }
 
+// 계정 상세의 제재 이력(감사 로그 최신 50건). 액션 코드는 라벨 맵으로만 노출한다.
+function UserModerationHistory({ userId }: { userId: string }) {
+	const historyQuery = useQuery(
+		orpc.bambi.moderation.listUserModerationActions.queryOptions({
+			input: { targetUserId: userId },
+		})
+	);
+	const actions = historyQuery.data ?? [];
+
+	return (
+		<div>
+			<div className="mb-2.5 font-bold text-[13px] text-foreground">
+				제재 이력
+			</div>
+			{historyQuery.isPending ? (
+				<div className="flex flex-col gap-2">
+					<Skeleton className="h-16 w-full" />
+					<Skeleton className="h-16 w-full" />
+				</div>
+			) : null}
+			{historyQuery.isError ? (
+				<p className="m-0 text-[12.5px] text-muted-foreground">
+					제재 이력을 불러오지 못했어요.
+				</p>
+			) : null}
+			{historyQuery.isSuccess && actions.length === 0 ? (
+				<p className="m-0 text-[12.5px] text-muted-foreground">
+					제재 이력이 없어요
+				</p>
+			) : null}
+			{actions.length > 0 ? (
+				<ul className="m-0 flex list-none flex-col gap-2 p-0">
+					{actions.map((action) => (
+						<li
+							className="rounded-[14px] border border-border bg-card p-3"
+							key={action.id}
+						>
+							<div className="flex items-center justify-between gap-2">
+								<span className="font-bold text-[13px] text-foreground">
+									{moderationActionLabel(action.action)}
+								</span>
+								<span className="whitespace-nowrap text-[11px] text-muted-foreground">
+									{formatDateTime(action.createdAt)}
+								</span>
+							</div>
+							<p className="mt-1 mb-0 text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
+								{action.reason}
+							</p>
+							<div className="mt-1 text-[11px] text-muted-foreground">
+								처리자 {action.adminName}
+							</div>
+						</li>
+					))}
+				</ul>
+			) : null}
+		</div>
+	);
+}
+
 export function UserDetail({
 	item,
 	onBack,
@@ -2214,14 +2290,45 @@ export function UserDetail({
 							{item.role} · 가입 {item.joined}
 						</div>
 					</div>
-					<Badge dot tone={c.tone}>
-						{c.label}
-					</Badge>
+					<div className="flex items-center gap-2">
+						<Badge dot tone={c.tone}>
+							{c.label}
+						</Badge>
+						{item.deletedAt ? <Badge tone="neutral">탈퇴</Badge> : null}
+					</div>
 				</div>
-				<div className="grid grid-cols-2 gap-2.5">
-					<MetaBox label="누적 신고" value={`${item.reports}건`} />
-					<MetaBox label="경고 횟수" value={`${item.warnings}회`} />
+				<div className="flex flex-col gap-2">
+					<div className="grid grid-cols-2 gap-2.5">
+						<MetaBox label="누적 신고" value={`${item.reports}건`} />
+						<MetaBox label="경고 횟수" value={`${item.warnings}회`} />
+						<MetaBox label="차단당한 횟수" value={`${item.blockedByCount}회`} />
+					</div>
+					<Link
+						className="self-start text-[12.5px] text-primary underline-offset-4 hover:underline"
+						href={`/moderator/reports?user=${item.id}` as Route}
+					>
+						신고 내역 보기
+					</Link>
 				</div>
+				<ContextSection title="계정 정보">
+					<ContextField label="이메일" value={item.email} />
+					<ContextField
+						label="로그인 아이디"
+						value={item.loginId ?? "미설정"}
+					/>
+					{item.organizationNames.length > 0 ? (
+						<ContextField
+							label="소속 업소"
+							value={item.organizationNames.join(", ")}
+						/>
+					) : null}
+					{item.deletedAt ? (
+						<ContextField
+							label="탈퇴 시각"
+							value={formatDateTime(item.deletedAt)}
+						/>
+					) : null}
+				</ContextSection>
 				<div className="flex gap-2 rounded-[14px] bg-secondary p-[14px]">
 					<span className="mt-px inline-flex size-4 flex-[0_0_16px] text-muted-foreground">
 						<AlertCircle />
@@ -2230,13 +2337,13 @@ export function UserDetail({
 						{item.note}
 					</span>
 				</div>
-				{item.status === "suspended" ? (
+				{item.status === "active" ? null : (
 					<div>
 						<div className="mb-2.5 font-bold text-[13px] text-foreground">
 							계정 상태 복구
 						</div>
 						<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
-							현재 이용 정지 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
+							현재 {c.label} 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
 							상태로 되돌릴 수 있어요.
 						</p>
 						<Button
@@ -2251,7 +2358,8 @@ export function UserDetail({
 							정상으로 복구
 						</Button>
 					</div>
-				) : null}
+				)}
+				<UserModerationHistory userId={item.id} />
 				<div>
 					<div className="mb-2.5 font-bold text-[13px] text-foreground">
 						제재 적용

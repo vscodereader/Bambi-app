@@ -13,8 +13,14 @@ const STATUS_CONF: Record<UserStatus, { label: string; tone: Tone }> = {
 	active: { label: "정상", tone: "good" },
 	warned: { label: "경고", tone: "warning" },
 	suspended: { label: "정지", tone: "danger" },
-	blocked: { label: "차단", tone: "danger" },
 };
+
+// 탈퇴는 계정 상태 enum이 아니라 deletedAt으로 표현된다. 탈퇴한 계정에는 제재 상태 대신
+// 탈퇴를 먼저 보여준다(정지된 채 탈퇴한 계정도 "탈퇴"가 운영 판단에 더 중요하다).
+const statusConf = (user: ManagedUser): { label: string; tone: Tone } =>
+	user.deletedAt
+		? { label: "탈퇴", tone: "default" }
+		: STATUS_CONF[user.status];
 
 interface ModeratorUsersTableProps {
 	onToggle: (id: string) => void;
@@ -54,26 +60,40 @@ function getColumns({
 			header: "이름",
 			sortValue: (user) => user.name,
 			cell: (user) => (
-				<Link
-					className="font-medium text-foreground underline-offset-4 hover:underline"
-					href={`/moderator/users/${user.id}` as Route}
-				>
-					{user.name}
-				</Link>
+				<div className="flex flex-col gap-0.5">
+					<Link
+						className="font-medium text-foreground underline-offset-4 hover:underline"
+						href={`/moderator/users/${user.id}` as Route}
+					>
+						{user.name}
+					</Link>
+					{user.organizationNames.length > 0 ? (
+						<span className="max-w-56 truncate text-muted-foreground text-xs">
+							{user.organizationNames.join(", ")}
+						</span>
+					) : null}
+				</div>
 			),
 		},
 		{
-			id: "displayName",
-			header: "표시 이름",
-			sortValue: (user) => user.displayName,
-			cell: (user) =>
-				user.displayName ? (
-					<span className="break-keep text-muted-foreground">
-						{user.displayName}
-					</span>
-				) : (
-					<span className="text-muted-foreground">-</span>
-				),
+			id: "email",
+			header: "이메일",
+			sortValue: (user) => user.email,
+			cell: (user) => (
+				<span className="block max-w-56 truncate text-muted-foreground">
+					{user.email}
+				</span>
+			),
+		},
+		{
+			id: "loginId",
+			header: "아이디",
+			sortValue: (user) => user.loginId ?? "",
+			cell: (user) => (
+				<span className="block max-w-40 truncate text-muted-foreground">
+					{user.loginId ?? "-"}
+				</span>
+			),
 		},
 		{
 			id: "role",
@@ -86,12 +106,12 @@ function getColumns({
 		{
 			id: "status",
 			header: "상태",
-			sortValue: (user) => STATUS_CONF[user.status].label,
-			cell: (user) => (
-				<StatusBadge tone={STATUS_CONF[user.status].tone}>
-					{STATUS_CONF[user.status].label}
-				</StatusBadge>
-			),
+			sortValue: (user) => statusConf(user).label,
+			cell: (user) => {
+				const conf = statusConf(user);
+
+				return <StatusBadge tone={conf.tone}>{conf.label}</StatusBadge>;
+			},
 		},
 		{
 			id: "reports",
@@ -112,7 +132,7 @@ function getColumns({
 		{
 			id: "joined",
 			header: "가입일",
-			sortValue: (user) => user.joined,
+			sortValue: (user) => user.joinedAt.getTime(),
 			cell: (user) => (
 				<span className="whitespace-nowrap text-muted-foreground">
 					{user.joined}
@@ -138,7 +158,7 @@ export function ModeratorUsersTable({
 	});
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pt-1 pb-5">
+		<div className="overflow-x-auto rounded-xl border border-border">
 			<DataTable
 				columns={columns}
 				data={users}
