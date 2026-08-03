@@ -21,3 +21,12 @@ export const formatDateTime = (value: string | Date): string =>
 
 export const formatNullable = (value: null | string | undefined): string =>
 	value?.trim() ? value : "미입력";
+
+// 개업일자는 DB에 YYYYMMDD 8자리 텍스트로 저장된다. 화면 표시와 date input 값은
+// 둘 다 YYYY-MM-DD라 변환 지점을 여기 하나로 둔다(값이 없으면 빈 문자열).
+export const formatBusinessStartDate = (
+	value: null | string | undefined
+): string =>
+	value?.length === 8
+		? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6)}`
+		: "";

@@ -55,6 +55,18 @@ export const jobStatusLabels = {
 	rejected: "반려",
 } as const;
 
+// 국세청 사업자등록 상태(b_stt_cd) 원값 → 화면 라벨. 서버가 계속사업자("01")만
+// 제출을 통과시키므로 저장된 값은 사실상 "01"이지만, 원값 노출을 막으려 맵을 둔다.
+export const biznumStatusLabels = {
+	"01": "계속사업자",
+	"02": "휴업자",
+	"03": "폐업자",
+} as const;
+
+// 대조에 성공한 행에서만 쓰는 라벨이라 값이 없거나 모르는 코드는 하나로 묶는다.
+export const getBiznumStatusLabel = (code: null | string): string =>
+	biznumStatusLabels[code as keyof typeof biznumStatusLabels] ?? "상태 미상";
+
 export const verificationStatusLabels = {
 	none: "미인증",
 	pending: "인증 대기",
