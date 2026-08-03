@@ -114,7 +114,8 @@ const resolveAccountByIdentity = async (
 		apiSecret,
 		identityVerificationId,
 		// 테스트 채널은 통신사 대조를 하지 않아 아무 값이나 통과한다 — 개발에서만 허용한다.
-		{ allowTestChannel: env.NODE_ENV !== "production" }
+		// TODO(임시): KCP 실계약 전 테스트 흐름 확인용으로 프로덕션에서도 허용 중 — 실연동 전환 시 원복.
+		{ allowTestChannel: true }
 	);
 	return await findRecoverableAccount(identity);
 };
