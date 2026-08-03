@@ -47,8 +47,12 @@ const getRoomItemClassName = (
 
 // 방 항목의 삭제·신고·차단 케밥 메뉴. 목록 항목은 방 열기 클릭 영역이 카드 전체를
 // 덮으므로, 이 메뉴 트리거는 그 열기 버튼과 형제(자식 아님)로 두어 button-in-button을
-// 피하고 상위에 겹쳐(z-10) 자기 클릭만 받는다. 이 목록은 구직자 화면이라 상대(차단
-// 대상)는 항상 구인자(employerUserId)다.
+// 피하고 상위에 겹쳐(z-10) 자기 클릭만 받는다. 이 라우트에는 역할 게이트가 없어
+// 구인자도 들어오므로 차단 대상은 서버가 뷰어 기준으로 계산해 준 counterpartUserId를
+// 쓴다(employerUserId 고정이면 구인자가 자기 자신을 차단한다).
+//
+// 신고는 구직자 전용이라 뷰어가 그 방의 구직자일 때만 노출한다(서버 createReport도
+// 같은 기준으로 막는다). 뷰어 판별은 "상대가 구인자면 내가 구직자"로 한다.
 //
 // 이미 차단된 방에서는 삭제만 남긴다 — 다시 차단하는 항목은 무의미하고, 대화가 막힌
 // 방에서 남은 실질 선택지는 목록에서 치우는 것뿐이다.
@@ -57,8 +61,9 @@ function ChatRoomActions({
 	room,
 }: {
 	isBlocked: boolean;
-	room: { employerUserId: string; id: string };
+	room: { counterpartUserId: string; employerUserId: string; id: string };
 }) {
+	const isJobSeekerViewer = room.counterpartUserId === room.employerUserId;
 	const queryClient = useQueryClient();
 	const [isReportOpen, setIsReportOpen] = useState(false);
 
@@ -106,17 +111,21 @@ function ChatRoomActions({
 					isBlocked
 						? [deleteAction]
 						: [
-								{
-									key: "report",
-									label: "신고",
-									onSelect: () => setIsReportOpen(true),
-								},
+								...(isJobSeekerViewer
+									? [
+											{
+												key: "report",
+												label: "신고",
+												onSelect: () => setIsReportOpen(true),
+											} satisfies RowAction,
+										]
+									: []),
 								{
 									key: "block",
 									label: "차단",
 									onSelect: () =>
 										blockMutation.mutate({
-											blockedUserId: room.employerUserId,
+											blockedUserId: room.counterpartUserId,
 											chatRoomId: room.id,
 										}),
 								},
@@ -125,12 +134,14 @@ function ChatRoomActions({
 				}
 				ariaLabel="채팅방 관리"
 			/>
-			<ReportDialog
-				onOpenChange={setIsReportOpen}
-				open={isReportOpen}
-				targetId={room.id}
-				targetType="chat_room"
-			/>
+			{isJobSeekerViewer ? (
+				<ReportDialog
+					onOpenChange={setIsReportOpen}
+					open={isReportOpen}
+					targetId={room.id}
+					targetType="chat_room"
+				/>
+			) : null}
 		</>
 	);
 }

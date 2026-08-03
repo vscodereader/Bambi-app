@@ -829,3 +829,52 @@ describe("bambi moderation router bulk actions", () => {
 		}
 	});
 });
+
+describe("bambi moderation router chat reports", () => {
+	it("채팅 신고는 구직자만 접수할 수 있고 구인자는 FORBIDDEN", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const reportAsEmployer = createProcedureClient(
+				moderationRouter.createReport,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "createReport"],
+				}
+			);
+
+			await expectOrpcCode(
+				reportAsEmployer({
+					reason: "other",
+					targetId: fixture.chatRoomId,
+					targetType: "chat_room",
+				}),
+				"FORBIDDEN"
+			);
+
+			const reportAsJobSeeker = createProcedureClient(
+				moderationRouter.createReport,
+				{
+					context: createContextForUser(fixture.jobSeekerUserId),
+					path: ["bambi", "moderation", "createReport"],
+				}
+			);
+
+			const created = await reportAsJobSeeker({
+				reason: "other",
+				targetId: fixture.chatRoomId,
+				targetType: "chat_room",
+			});
+			if (!created) {
+				throw new Error("신고 생성 결과가 비어 있습니다.");
+			}
+			expect(created.targetType).toBe("chat_room");
+			expect(created.reporterUserId).toBe(fixture.jobSeekerUserId);
+
+			// fixture.reportId가 아닌 새 row라 직접 정리한다.
+			await db.delete(report).where(eq(report.id, created.id));
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});

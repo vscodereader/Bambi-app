@@ -873,6 +873,18 @@ export const moderationRouter = {
 				});
 			}
 
+			// 채팅 신고는 구직자 전용이다. 구인자에게는 차단만 열어 두고, 화면에서도
+			// 신고 버튼을 숨기지만 근본 차단은 여기서 한다(공고·커뮤니티 신고는 그대로).
+			if (
+				(input.targetType === "chat_room" ||
+					input.targetType === "chat_message") &&
+				profile.role !== "job_seeker"
+			) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "채팅 신고는 구직자만 할 수 있어요.",
+				});
+			}
+
 			await assertReportTargetExists(input.targetType, input.targetId);
 
 			// 동일 신고자·대상의 중복 신고는 멱등 처리한다(스키마 변경 없이 기존 row 반환).
