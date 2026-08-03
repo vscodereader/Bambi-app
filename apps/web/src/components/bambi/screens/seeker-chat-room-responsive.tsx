@@ -143,6 +143,33 @@ const getMutationErrorMessage = (error: Error): string => {
 	return "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
 };
 
+/**
+ * 서버(chats.throwIfChatBlocked)가 FORBIDDEN에 실어 보내는 차단 사유를 안내 문구로.
+ * 사유를 읽어낸 경우에만 문자열을 돌려주고, 그 밖의 오류(비로그인·네트워크 등)는
+ * null — 사유를 모르는 채 목록으로 튕기면 원인 파악이 더 어려워지므로 오류 카드에 맡긴다.
+ */
+const getChatBlockMessage = (error: unknown): null | string => {
+	const data = (error as { data?: unknown } | null | undefined)?.data as
+		| { chatBlockReason?: unknown; counterpartName?: unknown }
+		| null
+		| undefined;
+	const name =
+		typeof data?.counterpartName === "string" ? data.counterpartName : null;
+
+	switch (data?.chatBlockReason) {
+		case "blocked_by_counterpart":
+			return name ? `${name}님이 차단했어요.` : "차단된 채팅방이에요.";
+		case "blocked_by_me":
+			return name
+				? `${name}님을 차단했어요. 차단 관리에서 해제할 수 있어요.`
+				: "차단된 채팅방이에요.";
+		case "moderation":
+			return "신고에 대한 운영자 조치로 종료된 채팅방이에요.";
+		default:
+			return null;
+	}
+};
+
 const getReviewMutationErrorMessage = (error: Error): string => {
 	if ("code" in error && error.code === "BAD_REQUEST") {
 		return "별점과 후기 내용을 다시 확인해 주세요.";
@@ -1217,6 +1244,32 @@ export function SeekerChatRoomResponsive({
 
 		return () => window.clearTimeout(timeoutId);
 	}, [message, roomId, roomQuery.data]);
+
+	// 차단·운영자 조치로 막힌 방은 오류 카드로 세워두지 않고 목록으로 돌려보내며
+	// 이유만 토스트로 알린다. id를 고정해 StrictMode 이중 실행에도 토스트가 겹치지 않는다.
+	const chatBlockMessage = getChatBlockMessage(roomQuery.error);
+
+	useEffect(() => {
+		if (!chatBlockMessage) {
+			return;
+		}
+
+		toast.error(chatBlockMessage, { id: "chat-room-blocked" });
+		router.replace("/seeker/chats");
+	}, [chatBlockMessage, router]);
+
+	if (chatBlockMessage) {
+		return (
+			<div
+				className={cn(
+					"mx-auto w-full px-5 py-10 text-center font-bold text-muted-foreground md:px-6",
+					SEEKER_CONTENT_WIDTH
+				)}
+			>
+				채팅 목록으로 이동하고 있어요.
+			</div>
+		);
+	}
 
 	if (roomQuery.isLoading) {
 		return (
