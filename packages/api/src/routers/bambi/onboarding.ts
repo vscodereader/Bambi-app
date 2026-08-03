@@ -53,9 +53,14 @@ import {
 } from "../../services/bambi-onboarding";
 import { resolveOptionalRegion } from "../../services/bambi-region";
 import {
+	type BiznumValidation,
+	validateBiznum,
+} from "../../services/nts-biznum";
+import {
 	isAdultBirth8,
 	UNDERAGE_MESSAGE,
 } from "../../services/portone-identity";
+import { takeRateLimit } from "../../services/rate-limit";
 
 // 포트원 테스트 채널은 통신사 대조를 하지 않아 아무 생년월일·주민번호 뒷자리나 통과시킨다.
 // 개발에서만 허용하고 프로덕션에서는 거부한다(판정은 여기서 하고 서비스에 옵션으로 넘긴다 —
@@ -135,7 +140,60 @@ const submitEmployerBusinessInfoInput = z.object({
 			/^\d{3}-\d{2}-\d{5}$/,
 			"사업자등록번호는 000-00-00000 형식이어야 합니다."
 		),
+	// 국세청 진위확인은 사업자번호만으로는 안 되고 대표자명·개업일자가 함께 있어야 한다.
+	// 상호(displayName)는 대조 항목이 아니다 — 지점명 등으로 등록증과 어긋나는 일이 잦다.
+	representativeName: z.string().trim().min(1).max(60),
+	// 웹 date input 값 그대로 받고(YYYY-MM-DD) 저장·전송 시에만 8자리로 줄인다.
+	businessStartDate: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, "개업일자는 YYYY-MM-DD 형식이어야 합니다."),
 });
+
+const BIZNUM_MISMATCH_MESSAGE =
+	"국세청에 등록된 사업자등록정보와 일치하지 않습니다. 사업자등록번호·대표자 성명·개업일자를 사업자등록증에 적힌 그대로 입력했는지 확인해 주세요. 최근 개업했다면 국세청 반영까지 1~2일 걸릴 수 있습니다.";
+
+// 제출 1회당 국세청 API를 1회 부르므로 반복 제출을 그대로 태우지 않는다. 사용자당 시간당
+// 10회 — 오타를 고쳐 다시 넣는 정상 사용자는 몇 회면 끝난다.
+const BIZNUM_RATE_LIMIT = 10;
+const BIZNUM_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+// 국세청 대조 결과를 프로필에 기록할 형태로. 키 미설정(개발)이나 국세청 장애·타임아웃은
+// "미확인"(둘 다 null)으로 통과시킨다 — 국세청이 죽었다고 정상 사업자를 막으면 안 되고,
+// 뒤에 운영자 수동 심사가 그대로 남아 있다. 불일치·휴폐업만 제출을 거부한다.
+const checkBiznum = async (input: {
+	businessRegistrationNumber: string;
+	businessStartDate: string;
+	representativeName: string;
+}): Promise<{
+	biznumCheckedAt: Date | null;
+	biznumStatusCode: string | null;
+}> => {
+	const unchecked = { biznumCheckedAt: null, biznumStatusCode: null };
+	if (!env.NTS_SERVICE_KEY) {
+		return unchecked;
+	}
+
+	let result: BiznumValidation;
+	try {
+		result = await validateBiznum(env.NTS_SERVICE_KEY, {
+			bNo: input.businessRegistrationNumber.replaceAll("-", ""),
+			pNm: input.representativeName,
+			startDt: input.businessStartDate,
+		});
+	} catch {
+		return unchecked;
+	}
+
+	if (!result.matched) {
+		throw new ORPCError("BAD_REQUEST", { message: BIZNUM_MISMATCH_MESSAGE });
+	}
+	if (result.statusCode !== "01") {
+		throw new ORPCError("BAD_REQUEST", {
+			message: `국세청에 ${result.statusCode === "02" ? "휴업" : "폐업"} 상태로 등록된 사업자등록번호입니다. 정상 영업 중인 사업자등록번호로 제출해 주세요.`,
+		});
+	}
+	return { biznumCheckedAt: new Date(), biznumStatusCode: result.statusCode };
+};
 
 const toOrganizationSlug = (name: string): string => {
 	const base = name
@@ -383,6 +441,10 @@ export const onboardingRouter = {
 				displayName: employerOrganizationProfile.displayName,
 				businessRegistrationNumber:
 					employerOrganizationProfile.businessRegistrationNumber,
+				representativeName: employerOrganizationProfile.representativeName,
+				businessStartDate: employerOrganizationProfile.businessStartDate,
+				biznumCheckedAt: employerOrganizationProfile.biznumCheckedAt,
+				biznumStatusCode: employerOrganizationProfile.biznumStatusCode,
 				verificationStatus: employerOrganizationProfile.verificationStatus,
 				verificationNote: employerOrganizationProfile.verificationNote,
 				createdAt: employerOrganizationProfile.createdAt,
@@ -958,8 +1020,24 @@ export const onboardingRouter = {
 			const userId = context.session.user.id;
 			await requireEmployerBambiProfile(userId);
 
+			if (
+				!takeRateLimit({
+					key: `submitEmployerBusinessInfo:${userId}`,
+					limit: BIZNUM_RATE_LIMIT,
+					now: Date.now(),
+					windowMs: BIZNUM_RATE_LIMIT_WINDOW_MS,
+				})
+			) {
+				throw new ORPCError("TOO_MANY_REQUESTS", {
+					message: "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
+				});
+			}
+
+			// 개업일자는 8자리로 저장한다(국세청 전송 형식과 같게 둬 변환 지점을 하나로).
+			const businessStartDate = input.businessStartDate.replaceAll("-", "");
+
 			// 본인이 owner인 조직이 이미 있으면 그 조직 프로필을 갱신한다.
-			// 단, 이미 인증(verified)된 조직이 업체명·사업자번호를 그대로 재제출한 경우
+			// 단, 이미 인증(verified)된 조직이 사업자정보를 그대로 재제출한 경우
 			// 재심사로 강등하지 않고 verified를 유지한다(변경이 있을 때만 pending 재심사).
 			const [ownedOrg] = await db
 				.select({
@@ -967,6 +1045,8 @@ export const onboardingRouter = {
 					displayName: employerOrganizationProfile.displayName,
 					businessRegistrationNumber:
 						employerOrganizationProfile.businessRegistrationNumber,
+					representativeName: employerOrganizationProfile.representativeName,
+					businessStartDate: employerOrganizationProfile.businessStartDate,
 					verificationStatus: employerOrganizationProfile.verificationStatus,
 				})
 				.from(employerOrganizationProfile)
@@ -987,7 +1067,9 @@ export const onboardingRouter = {
 				const isUnchanged =
 					ownedOrg.displayName === input.displayName &&
 					ownedOrg.businessRegistrationNumber ===
-						input.businessRegistrationNumber;
+						input.businessRegistrationNumber &&
+					ownedOrg.representativeName === input.representativeName &&
+					ownedOrg.businessStartDate === businessStartDate;
 
 				// 인증 완료 상태에서 변경 없이 재제출한 경우: 상태를 건드리지 않고 유지한다.
 				if (ownedOrg.verificationStatus === "verified" && isUnchanged) {
@@ -997,11 +1079,16 @@ export const onboardingRouter = {
 					};
 				}
 
+				const biznumCheck = await checkBiznum({ ...input, businessStartDate });
+
 				await db
 					.update(employerOrganizationProfile)
 					.set({
 						displayName: input.displayName,
 						businessRegistrationNumber: input.businessRegistrationNumber,
+						representativeName: input.representativeName,
+						businessStartDate,
+						...biznumCheck,
 						verificationStatus: "pending",
 						updatedAt: new Date(),
 					})
@@ -1018,6 +1105,7 @@ export const onboardingRouter = {
 				};
 			}
 
+			const biznumCheck = await checkBiznum({ ...input, businessStartDate });
 			const organizationId = `org_${randomUUID()}`;
 			const now = new Date();
 
@@ -1039,6 +1127,9 @@ export const onboardingRouter = {
 					organizationId,
 					displayName: input.displayName,
 					businessRegistrationNumber: input.businessRegistrationNumber,
+					representativeName: input.representativeName,
+					businessStartDate,
+					...biznumCheck,
 					verificationStatus: "pending",
 				});
 			});

@@ -414,6 +414,13 @@
       "when": 1785718512349,
       "tag": "0058_deep_impossible_man",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1785724011074,
+      "tag": "0059_lean_wild_child",
+      "breakpoints": true
     }
   ]
 }
