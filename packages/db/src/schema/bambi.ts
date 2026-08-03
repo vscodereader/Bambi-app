@@ -337,6 +337,15 @@ export const employerOrganizationProfile = pgTable(
 			.default("none")
 			.notNull(),
 		verificationNote: text("verification_note"),
+		// 국세청 진위확인 입력값 — 사업자번호만으로는 대조가 안 되고 대표자명·개업일자가 함께
+		// 필요하다. 기능 도입 전 행에는 값이 없어 null 허용이다.
+		representativeName: text("representative_name"),
+		// 개업일자 YYYYMMDD 8자리(본인인증 birth8과 같은 컨벤션 — 시각이 없는 날짜라 text).
+		businessStartDate: text("business_start_date"),
+		// 국세청 대조 성공 시각·납세자 상태 코드(b_stt_cd 원값). 둘 다 null이면 운영자에게는
+		// "미확인"이다(키 미설정·국세청 장애로 판정하지 못한 제출).
+		biznumCheckedAt: timestamp("biznum_checked_at"),
+		biznumStatusCode: text("biznum_status_code"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()

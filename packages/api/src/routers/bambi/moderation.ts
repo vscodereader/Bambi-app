@@ -1654,6 +1654,11 @@ export const moderationRouter = {
 				displayName: employerOrganizationProfile.displayName,
 				businessRegistrationNumber:
 					employerOrganizationProfile.businessRegistrationNumber,
+				representativeName: employerOrganizationProfile.representativeName,
+				businessStartDate: employerOrganizationProfile.businessStartDate,
+				// 국세청 대조 결과 — null이면 운영자가 미확인으로 보고 더 꼼꼼히 심사한다.
+				biznumCheckedAt: employerOrganizationProfile.biznumCheckedAt,
+				biznumStatusCode: employerOrganizationProfile.biznumStatusCode,
 				verificationStatus: employerOrganizationProfile.verificationStatus,
 				verificationNote: employerOrganizationProfile.verificationNote,
 				ownerUserId: member.userId,
@@ -1684,6 +1689,11 @@ export const moderationRouter = {
 					displayName: employerOrganizationProfile.displayName,
 					businessRegistrationNumber:
 						employerOrganizationProfile.businessRegistrationNumber,
+					representativeName: employerOrganizationProfile.representativeName,
+					businessStartDate: employerOrganizationProfile.businessStartDate,
+					// 국세청 대조 결과 — null이면 운영자가 미확인으로 보고 더 꼼꼼히 심사한다.
+					biznumCheckedAt: employerOrganizationProfile.biznumCheckedAt,
+					biznumStatusCode: employerOrganizationProfile.biznumStatusCode,
 					verificationStatus: employerOrganizationProfile.verificationStatus,
 					verificationNote: employerOrganizationProfile.verificationNote,
 					ownerUserId: member.userId,
