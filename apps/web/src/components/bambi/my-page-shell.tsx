@@ -97,18 +97,21 @@ function ProfileCard() {
 
 	return (
 		// 코럴 보더 링은 이 구역의 시그니처 — 사이드바에서도 그대로 유지한다.
-		// flex-wrap이라 좁은 사이드바에서는 인증 배지가 아래 줄로 자연스럽게 접힌다.
-		<div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary bg-card p-4">
+		// 인증 배지는 최상위가 아니라 역할 라벨 줄에 둔다 — 긴 이름이 두 줄로 꺾여도 배지가
+		// 어정쩡한 높이에 끼지 않고, 그 줄이 flex-wrap이라 좁은 사이드바에선 아래로 접힌다.
+		<div className="flex items-center gap-3 rounded-xl border border-primary bg-card p-4">
 			<Avatar name={displayName} ring size="lg" />
 			<div className="min-w-0 flex-1">
-				<div className="break-words font-extrabold text-foreground text-lg">
+				<div className="break-words font-extrabold text-foreground text-lg leading-tight">
 					{displayName}
 				</div>
-				<div className="mt-0.5 text-muted-foreground text-sm">{roleLabel}</div>
+				<div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+					<span className="text-muted-foreground text-sm">{roleLabel}</span>
+					<Badge tone={isPhoneVerified ? "primary" : "neutral"}>
+						{isPhoneVerified ? "인증완료" : "인증 필요"}
+					</Badge>
+				</div>
 			</div>
-			<Badge tone={isPhoneVerified ? "primary" : "neutral"}>
-				{isPhoneVerified ? "인증완료" : "인증 필요"}
-			</Badge>
 		</div>
 	);
 }
