@@ -14,7 +14,11 @@ import {
 	SeekerChatPreflight,
 } from "@/components/bambi/screens/seeker-chat-preflight";
 import { authClient } from "@/lib/auth-client";
-import { isApiJobId, useMarketplaceJob } from "@/lib/bambi/api-jobs";
+import {
+	isApiJobId,
+	useIsBlockedEmployer,
+	useMarketplaceJob,
+} from "@/lib/bambi/api-jobs";
 import { orpc } from "@/utils/orpc";
 
 const getErrorCode = (error: Error): string | undefined =>
@@ -42,6 +46,8 @@ export default function SeekerJobChatPreflightPage() {
 	const searchParams = useSearchParams();
 	const { id } = useParams<{ id: string }>();
 	const { isLoading: isJobLoading, job } = useMarketplaceJob(id);
+	// 공고 상세를 거치지 않고 URL로 바로 들어온 경우에도 차단한 상대면 계속을 막는다.
+	const isBlockedEmployer = useIsBlockedEmployer(job?.employerUserId);
 	const session = authClient.useSession();
 	const [feedback, setFeedback] = useState<null | string>(null);
 	const isLoggedIn = Boolean(session.data?.user);
@@ -139,8 +145,14 @@ export default function SeekerJobChatPreflightPage() {
 
 	return (
 		<SeekerChatPreflight
+			continueDisabled={isBlockedEmployer}
+			continueLabel={isBlockedEmployer ? "차단한 상대의 공고입니다" : undefined}
 			entry={entry}
-			feedback={feedback}
+			feedback={
+				isBlockedEmployer
+					? "차단을 해제하면 다시 채팅할 수 있어요. 마이페이지 > 차단한 상대에서 해제할 수 있어요."
+					: feedback
+			}
 			isContinuing={startChatMutation.isPending || profileQuery.isLoading}
 			job={job}
 			onBack={() => router.push(`/seeker/jobs/${job.id}` as Route)}

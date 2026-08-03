@@ -62,6 +62,9 @@ export interface Job {
 	// 지역 마스터 코드. 필터는 표시 문자열이 아니라 이 값으로 비교한다(코드가 없는
 	// 수집 공고는 빈 문자열이라 코드 필터에 걸리지 않는다 — 서버 필터와 결과가 같다).
 	districtCode: string;
+	// 공고를 올린 구인자의 user id. 공고 상세(getById) 응답에만 있어 목록/카드에는 없다.
+	// 내 차단 목록과 대조하는 데 쓴다.
+	employerUserId?: string;
 	// 공고 상세에서만 채워진다(작성자 인증번호). 목록/카드 매핑에는 없음.
 	employerVerifiedPhone?: string | null;
 	exposureType?: null | string;
