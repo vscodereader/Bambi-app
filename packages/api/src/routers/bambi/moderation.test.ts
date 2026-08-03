@@ -925,7 +925,7 @@ describe("adjustJobPostExposure", () => {
 		}
 	});
 
-	it("노출 종료일이 없는 공고는 BAD_REQUEST", async () => {
+	it("종료일이 없는 공고는 지금 기준으로 종료일을 새로 잡는다", async () => {
 		const fixture = await createReportFixture();
 
 		try {
@@ -937,14 +937,27 @@ describe("adjustJobPostExposure", () => {
 				}
 			);
 
-			await expectOrpcCode(
-				adjustJobPostExposure({
-					days: -3,
-					jobPostId: fixture.jobPostId,
-					reason: "무기한 공고 단축 시도",
-				}),
-				"BAD_REQUEST"
-			);
+			const before = Date.now();
+			const updated = await adjustJobPostExposure({
+				days: 7,
+				jobPostId: fixture.jobPostId,
+				reason: "무기한 공고에 7일 기한을 부여합니다.",
+			});
+			const after = Date.now();
+
+			// 기준일이 서버의 "지금"이라 초 단위 오차가 생긴다. 호출 전후 범위로 검증한다.
+			const endsAt = updated.exposureEndsAt?.getTime() ?? 0;
+			expect(endsAt).toBeGreaterThanOrEqual(before + 7 * MS_PER_DAY);
+			expect(endsAt).toBeLessThanOrEqual(after + 7 * MS_PER_DAY);
+
+			const logs = await db
+				.select()
+				.from(adminModerationAction)
+				.where(eq(adminModerationAction.targetId, fixture.jobPostId));
+			expect(logs).toHaveLength(1);
+			expect(logs[0]?.metadata).toMatchObject({
+				previousExposureEndsAt: null,
+			});
 		} finally {
 			await cleanupReportFixture(fixture);
 		}
