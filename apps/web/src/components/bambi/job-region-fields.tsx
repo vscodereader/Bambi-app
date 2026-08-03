@@ -9,87 +9,113 @@ import {
 } from "@bambi-app/ui/components/select";
 
 import { FieldError, FieldLabel } from "@/components/bambi/form-message";
+import { findRegion, useRegions } from "@/lib/bambi/regions";
 import type { JobFormErrors } from "@/lib/bambi-job-form";
-import { defaultDistrictForRegion } from "@/lib/bambi-job-form";
-import { districtsForRegion, regionOptions } from "@/lib/bambi-options";
 
 const selectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
 
+// 세부지역 미선택 = 시/도 전체. 빈 문자열은 Select 항목 값이 될 수 없어 null 항목으로 낸다.
+const ALL_DISTRICTS_LABEL = "지역 전체";
+
 interface JobRegionFieldsProps {
-	district: string;
-	errors?: Pick<JobFormErrors, "district" | "region">;
+	districtCode: string;
+	errors?: Pick<JobFormErrors, "districtCode" | "regionCode">;
 	// 등록·수정 폼의 updateFormValue를 그대로 받는다.
-	onChange: (field: "district" | "region", value: string) => void;
-	region: string;
+	onChange: (field: "districtCode" | "regionCode", value: string) => void;
+	regionCode: string;
 }
 
 // 시/도와 세부지역은 연동돼야 해서(시/도가 바뀌면 세부지역 리셋) 등록·수정 폼이 같은
-// 컴포넌트를 공유한다.
+// 컴포넌트를 공유한다. 목록은 DB 지역 마스터(regions.list)에서 온다.
 export function JobRegionFields({
-	district,
+	districtCode,
 	errors,
 	onChange,
-	region,
+	regionCode,
 }: JobRegionFieldsProps) {
-	const districts = districtsForRegion(region);
+	const { isLoading, regions } = useRegions();
+	const selectedRegion = findRegion(regions, regionCode);
+	const districts = selectedRegion?.districts ?? [];
+	// 목록이 도착하기 전에는 value를 비운다 — 안 그러면 라벨을 못 찾아 트리거에 법정동코드가
+	// 그대로 보인다(프리필된 수정 폼).
+	const selectedDistrict = districts.find(
+		(district) => district.code === districtCode
+	);
 
 	return (
 		<>
 			<div className="flex flex-col gap-2">
 				<FieldLabel htmlFor="region">지역</FieldLabel>
 				<Select
-					name="region"
+					disabled={isLoading}
+					items={regions.map((region) => ({
+						label: region.label,
+						value: region.code,
+					}))}
+					name="regionCode"
 					onValueChange={(value) => {
-						const next = value ?? "";
-						onChange("region", next);
-						onChange("district", defaultDistrictForRegion(next));
+						// 이전 세부지역은 다른 시/도의 코드라 반드시 비운다(서버가 소속 불일치를 거부한다).
+						onChange("regionCode", value ?? "");
+						onChange("districtCode", "");
 					}}
 					required
-					value={region}
+					value={selectedRegion?.code ?? null}
 				>
 					<SelectTrigger
-						aria-describedby={errors?.region ? "region-error" : undefined}
-						aria-invalid={Boolean(errors?.region)}
+						aria-describedby={errors?.regionCode ? "region-error" : undefined}
+						aria-invalid={Boolean(errors?.regionCode)}
 						className={selectTriggerClassName}
 						id="region"
 					>
-						<SelectValue />
+						<SelectValue
+							placeholder={isLoading ? "지역 불러오는 중" : "시/도 선택"}
+						/>
 					</SelectTrigger>
 					<SelectContent>
-						{regionOptions.map((option) => (
-							<SelectItem key={option} value={option}>
-								{option}
+						{regions.map((region) => (
+							<SelectItem key={region.code} value={region.code}>
+								{region.label}
 							</SelectItem>
 						))}
 					</SelectContent>
 				</Select>
-				<FieldError id="region-error" message={errors?.region} />
+				<FieldError id="region-error" message={errors?.regionCode} />
 			</div>
 			<div className="flex flex-col gap-2">
 				<FieldLabel htmlFor="district">세부지역</FieldLabel>
 				<Select
 					disabled={districts.length === 0}
-					name="district"
-					onValueChange={(value) => onChange("district", value ?? "")}
-					value={district}
+					items={[
+						{ label: ALL_DISTRICTS_LABEL, value: null },
+						...districts.map((district) => ({
+							label: district.name,
+							value: district.code,
+						})),
+					]}
+					name="districtCode"
+					onValueChange={(value) => onChange("districtCode", value ?? "")}
+					value={selectedDistrict?.code ?? null}
 				>
 					<SelectTrigger
-						aria-describedby={errors?.district ? "district-error" : undefined}
-						aria-invalid={Boolean(errors?.district)}
+						aria-describedby={
+							errors?.districtCode ? "district-error" : undefined
+						}
+						aria-invalid={Boolean(errors?.districtCode)}
 						className={selectTriggerClassName}
 						id="district"
 					>
-						<SelectValue />
+						<SelectValue placeholder={ALL_DISTRICTS_LABEL} />
 					</SelectTrigger>
 					<SelectContent>
-						{districts.map((option) => (
-							<SelectItem key={option} value={option}>
-								{option}
+						<SelectItem value={null}>{ALL_DISTRICTS_LABEL}</SelectItem>
+						{districts.map((district) => (
+							<SelectItem key={district.code} value={district.code}>
+								{district.name}
 							</SelectItem>
 						))}
 					</SelectContent>
 				</Select>
-				<FieldError id="district-error" message={errors?.district} />
+				<FieldError id="district-error" message={errors?.districtCode} />
 			</div>
 		</>
 	);

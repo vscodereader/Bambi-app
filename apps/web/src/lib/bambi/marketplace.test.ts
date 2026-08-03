@@ -8,11 +8,18 @@ import {
 } from "./marketplace";
 import type { Job } from "./types";
 
+// 지역 마스터 코드(법정동코드 10자리) 픽스처 — 필터는 표시 문자열이 아니라 이 값으로 비교한다.
+const SEOUL = "1100000000";
+const GANGNAM = "1168000000";
+const SEOCHO = "1165000000";
+const YONGSAN = "1117000000";
+
 const baseJob: Job = {
 	beginnerFriendly: false,
 	company: "테스트",
 	desc: "",
-	district: "강남",
+	district: "강남구",
+	districtCode: GANGNAM,
 	featured: false,
 	hours: "",
 	id: "t1",
@@ -22,6 +29,7 @@ const baseJob: Job = {
 	pref: "",
 	rating: 0,
 	region: "서울",
+	regionCode: SEOUL,
 	reviews: 0,
 	status: "published",
 	tags: [],
@@ -38,10 +46,7 @@ const sampleJobs: Job[] = [
 		id: "j1",
 		beginnerFriendly: true,
 		company: "달밤 라운지",
-		district: "강남",
-		location: "서울 · 강남",
 		pay: "시급 18,000원",
-		region: "서울",
 		type: "룸싸롱",
 		verified: true,
 	},
@@ -49,10 +54,7 @@ const sampleJobs: Job[] = [
 		...baseJob,
 		id: "j2",
 		company: "문스톤 라운지",
-		district: "강남",
-		location: "서울 · 강남",
 		pay: "시급 17,000원",
-		region: "서울",
 		type: "룸싸롱",
 		verified: true,
 	},
@@ -60,44 +62,54 @@ const sampleJobs: Job[] = [
 		...baseJob,
 		id: "j3",
 		company: "시그니처 바",
-		district: "용산",
+		district: "용산구",
+		districtCode: YONGSAN,
 		instantInterview: true,
-		location: "서울 · 용산",
-		region: "서울",
+		location: "서울 · 용산구",
 		type: "BAR",
 	},
 	{
 		...baseJob,
 		id: "j4",
 		company: "라운지 엘",
-		district: "서초",
+		district: "서초구",
+		districtCode: SEOCHO,
 		instantInterview: true,
-		location: "서울 · 서초",
-		region: "서울",
+		location: "서울 · 서초구",
 		type: "단란주점",
 	},
 ];
 
 describe("filterMarketplaceJobs 지역·업종", () => {
-	it("시/도 필터는 job.region 필드로 정확 비교", () => {
+	it("시/도 필터는 job.regionCode로 정확 비교", () => {
 		const jobs = [
 			baseJob,
-			{ ...baseJob, district: "해운대", id: "t2", region: "부산" },
+			{
+				...baseJob,
+				district: "해운대구",
+				districtCode: "2635000000",
+				id: "t2",
+				region: "부산",
+				regionCode: "2600000000",
+			},
 		];
 		const result = filterMarketplaceJobs(jobs, {
 			...DEFAULT_MARKETPLACE_FILTERS,
-			region: "서울",
+			regionCode: SEOUL,
 		});
 
 		expect(result.map((job) => job.id)).toEqual(["t1"]);
 	});
 
-	it("세부지역 필터는 job.district 필드로 정확 비교", () => {
-		const jobs = [baseJob, { ...baseJob, district: "서초", id: "t2" }];
+	it("세부지역 필터는 job.districtCode로 정확 비교", () => {
+		const jobs = [
+			baseJob,
+			{ ...baseJob, district: "서초구", districtCode: SEOCHO, id: "t2" },
+		];
 		const result = filterMarketplaceJobs(jobs, {
 			...DEFAULT_MARKETPLACE_FILTERS,
-			district: "강남",
-			region: "서울",
+			districtCode: GANGNAM,
+			regionCode: SEOUL,
 		});
 
 		expect(result.map((job) => job.id)).toEqual(["t1"]);
@@ -181,12 +193,12 @@ describe("filterMarketplaceJobs", () => {
 	it("filters jobs by region, category, pay, verification, and beginner-friendly chips", () => {
 		const result = filterMarketplaceJobs(sampleJobs, {
 			category: "룸싸롱",
-			district: "강남",
+			districtCode: GANGNAM,
 			minimumPay: 17_000,
 			onlyBeginnerFriendly: true,
 			onlyToday: false,
 			onlyVerified: true,
-			region: "서울",
+			regionCode: SEOUL,
 		});
 
 		expect(result.map((job) => job.id)).toEqual(["j1"]);
@@ -246,14 +258,14 @@ describe("applyDiscoveryAxis", () => {
 		...DEFAULT_MARKETPLACE_FILTERS,
 		category: "룸싸롱",
 		minimumPay: 20_000,
-		region: "강남",
+		regionCode: SEOUL,
 	};
 
 	it("resets both region and category for the all axis", () => {
 		expect(applyDiscoveryAxis(base, "all")).toEqual({
 			...base,
 			category: "전체",
-			region: "전체",
+			regionCode: "전체",
 		});
 	});
 
@@ -267,7 +279,7 @@ describe("applyDiscoveryAxis", () => {
 	it("keeps category but clears region for the category axis", () => {
 		expect(applyDiscoveryAxis(base, "category")).toEqual({
 			...base,
-			region: "전체",
+			regionCode: "전체",
 		});
 	});
 

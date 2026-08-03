@@ -11,11 +11,18 @@ dotenv.config({
 	path: "../../apps/server/.env",
 });
 
-const [{ db }, authSchema, bambiSchema, { jobsRouter }] = await Promise.all([
+const [
+	{ db },
+	authSchema,
+	bambiSchema,
+	{ jobsRouter },
+	{ createTestRegion, deleteTestRegion },
+] = await Promise.all([
 	import("@bambi-app/db"),
 	import("@bambi-app/db/schema/auth"),
 	import("@bambi-app/db/schema/bambi"),
 	import("./jobs"),
+	import("../../services/__fixtures__/test-region"),
 ]);
 
 const { organization, user } = authSchema;
@@ -33,7 +40,7 @@ interface JobsAnalyticsFixture {
 	jobSeekerUserId: string;
 	organizationId: string;
 	promotionCampaignId: string;
-	region: string;
+	regionCode: string;
 	userIds: string[];
 }
 
@@ -52,8 +59,8 @@ const makeEmail = (prefix: string): string =>
 
 const createJobsAnalyticsFixture = async (): Promise<JobsAnalyticsFixture> => {
 	const now = new Date();
-	// 공개 jobs.list는 전역 조회라, 병렬 테스트 픽스처가 섞이지 않도록 고유 region으로 격리한다.
-	const region = `jobs-analytics-${randomUUID()}`;
+	// 공개 jobs.list는 전역 조회라, 병렬 테스트 픽스처가 섞이지 않도록 일회용 지역으로 격리한다.
+	const testRegion = await createTestRegion();
 	const organizationId = `org_test_${randomUUID()}`;
 	const employerUserId = `user_test_employer_${randomUUID()}`;
 	const jobSeekerUserId = `user_test_seeker_${randomUUID()}`;
@@ -110,7 +117,8 @@ const createJobsAnalyticsFixture = async (): Promise<JobsAnalyticsFixture> => {
 		payUnit: "일급",
 		paymentStatus: "paid",
 		publishedAt: now,
-		region,
+		region: testRegion.label,
+		regionCode: testRegion.code,
 		status: "published",
 		title: "상세 조회 테스트 공고",
 		workSchedule: "20:00-02:00",
@@ -133,7 +141,7 @@ const createJobsAnalyticsFixture = async (): Promise<JobsAnalyticsFixture> => {
 		jobSeekerUserId,
 		organizationId,
 		promotionCampaignId,
-		region,
+		regionCode: testRegion.code,
 		userIds: [employerUserId, jobSeekerUserId],
 	};
 };
@@ -160,6 +168,7 @@ const cleanupJobsAnalyticsFixture = async (
 	await db
 		.delete(organization)
 		.where(eq(organization.id, fixture.organizationId));
+	await deleteTestRegion(fixture.regionCode);
 };
 
 describe("bambi jobs analytics", () => {
@@ -200,7 +209,7 @@ describe("bambi jobs analytics", () => {
 				path: ["bambi", "jobs", "list"],
 			});
 
-			await listJobs({ limit: 10, region: fixture.region });
+			await listJobs({ limit: 10, regionCode: fixture.regionCode });
 
 			const [event] = await db
 				.select()
@@ -258,7 +267,10 @@ describe("bambi jobs analytics", () => {
 				path: ["bambi", "jobs", "list"],
 			});
 
-			const result = await listJobs({ limit: 10, region: fixture.region });
+			const result = await listJobs({
+				limit: 10,
+				regionCode: fixture.regionCode,
+			});
 			const allIds = [
 				...result.sections.special,
 				...result.sections.urgent,

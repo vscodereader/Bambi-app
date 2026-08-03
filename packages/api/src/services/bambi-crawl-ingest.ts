@@ -74,6 +74,7 @@ import {
 	readQueenalbaBannerTargetId,
 } from "./bambi-crawl-queenalba-main";
 import { type CrawledLimits, readCrawledLimits } from "./bambi-crawled-limits";
+import { loadRegionIndex, matchRegionCodes } from "./bambi-region";
 
 // 목록에서 수집기가 쓰는 최소 규약. 사이트별 목록 파서가 더 많은 필드를 채워도 상관없다 —
 // 상세 패스가 ID 하나만 필요로 하기 때문에 이 경계 덕분에 파서를 추가해도 수집기가 안 바뀐다.
@@ -661,6 +662,10 @@ const ingestDetail = async (
 		return "unchanged";
 	}
 
+	// 원본의 지역 문자열("서울" / "강남구")을 지역 마스터 코드로 해석한다. 대조에 실패하면
+	// 코드만 null로 남고 원문은 그대로 보존된다 — 표기가 우리 표준과 어긋난다고 공고를
+	// 버리지 않는다. 백필 스크립트와 같은 헬퍼라 같은 원문이 항상 같은 코드로 굳는다.
+	const regionCodes = matchRegionCodes(await loadRegionIndex(), record);
 	const values = {
 		address: record.address,
 		ageRange: record.ageRange,
@@ -673,6 +678,7 @@ const ingestDetail = async (
 		detailFetchedAt: now,
 		detailImageUrls: media.detailImageUrls,
 		district: record.district,
+		districtCode: regionCodes.districtCode,
 		gender: record.gender,
 		industryCategory: record.industryCategory,
 		industryRaw: record.industryRaw,
@@ -681,6 +687,7 @@ const ingestDetail = async (
 		payRaw: record.payRaw,
 		payUnit: record.payUnit,
 		region: record.region,
+		regionCode: regionCodes.regionCode,
 		shopName: record.shopName,
 		sourceDeadlineAt: record.sourceDeadlineAt,
 		sourceExternalId: record.sourceExternalId,

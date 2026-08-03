@@ -51,6 +51,7 @@ import {
 	deriveEmployerApprovalStatus,
 	type OrganizationRole,
 } from "../../services/bambi-onboarding";
+import { resolveOptionalRegion } from "../../services/bambi-region";
 import {
 	isAdultBirth8,
 	UNDERAGE_MESSAGE,
@@ -117,7 +118,9 @@ const teamProfileInput = z.object({
 	organizationId: z.string().min(1),
 	teamId: z.string().min(1),
 	displayName: z.string().min(1).max(120),
-	region: z.string().min(1).max(80).optional(),
+	// 공고·팀 입력과 같은 축이다 — 지역은 마스터 코드로 받고 표시용 문자열은 서버가 채운다.
+	regionCode: z.string().length(10).optional(),
+	districtCode: z.string().length(10).optional(),
 });
 
 const requestEmployerVerificationInput = z.object({
@@ -400,6 +403,8 @@ export const onboardingRouter = {
 			teamId: employerTeamProfile.teamId,
 			displayName: employerTeamProfile.displayName,
 			region: employerTeamProfile.region,
+			regionCode: employerTeamProfile.regionCode,
+			districtCode: employerTeamProfile.districtCode,
 			createdAt: employerTeamProfile.createdAt,
 			updatedAt: employerTeamProfile.updatedAt,
 		};
@@ -886,15 +891,21 @@ export const onboardingRouter = {
 				});
 			}
 
+			const regionSelection = await resolveOptionalRegion(input);
 			const [profile] = await db
 				.insert(employerTeamProfile)
-				.values(input)
+				.values({
+					displayName: input.displayName,
+					organizationId: input.organizationId,
+					teamId: input.teamId,
+					...regionSelection,
+				})
 				.onConflictDoUpdate({
 					target: employerTeamProfile.teamId,
 					set: {
 						organizationId: input.organizationId,
 						displayName: input.displayName,
-						region: input.region,
+						...regionSelection,
 						updatedAt: new Date(),
 					},
 				})

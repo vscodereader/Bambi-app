@@ -11,6 +11,7 @@ import {
 	timestamp,
 	uniqueIndex,
 	uuid,
+	varchar,
 } from "drizzle-orm/pg-core";
 
 import { organization, team, user } from "./auth";
@@ -352,6 +353,29 @@ export const employerOrganizationProfile = pgTable(
 	]
 );
 
+// 지역 마스터. 시/도 행(sigungu = null)과 그 아래 시/군/구 행이 한 테이블에 같이 산다 —
+// 두 테이블로 쪼개면 공고의 region_code·district_code가 서로 다른 테이블을 가리켜 FK가
+// 두 벌이 되고, "이 코드가 어느 레벨인가"를 컬럼 이름으로만 알게 된다.
+//
+// PK는 법정동코드 10자리(시도 2 + 시군구 3 + 00000)다. 우리가 만든 일련번호가 아니라
+// 정부 표준 코드라 외부 데이터(주소 API·통계)와 나중에 그대로 이어붙는다.
+//
+// label은 **표출용 약칭**이라 법정동 원문과 다르다("서울특별시"가 아니라 "서울"). 화면에
+// 그대로 나가는 값이고, 같은 label을 공유하는 시군구 행들이 그 시/도의 자식이 된다.
+export const region = pgTable("region", {
+	code: varchar("code", { length: 10 }).primaryKey(),
+	label: text("label").notNull(),
+	// null이면 시/도 행이다. 값이 있으면 같은 label 아래의 시/군/구 행.
+	sigungu: text("sigungu"),
+	// 시/도 행은 지역 노출 순서(1~16), 시/군/구 행은 같은 label 안에서의 순서다.
+	sortOrder: integer("sort_order").notNull(),
+	// 운영이 특정 지역을 목록에서 내릴 때 쓴다. 행을 지우면 그 코드를 참조하는 공고가
+	// 통째로 막히므로 삭제 대신 이 플래그로만 내린다(그래서 FK에 onDelete를 두지 않았다).
+	isActive: boolean("is_active").default(true).notNull(),
+});
+// 인덱스를 따로 두지 않는다 — 전체가 245행이고 유일한 조회가 "활성 행 전량"이라 PK 외에
+// 어떤 인덱스도 플래너가 쓰지 않는다. 참조 무결성 검사는 PK로 끝난다.
+
 export const employerTeamProfile = pgTable(
 	"employer_team_profile",
 	{
@@ -363,7 +387,15 @@ export const employerTeamProfile = pgTable(
 			.notNull()
 			.references(() => team.id, { onDelete: "cascade" }),
 		displayName: text("display_name").notNull(),
+		// 표시용 지역 문자열. region_code가 붙은 뒤로는 파생값(라벨 복사본)이며, 코드가 없는
+		// 구 데이터의 폴백으로 남겨둔다.
 		region: text("region"),
+		regionCode: varchar("region_code", { length: 10 }).references(
+			() => region.code
+		),
+		districtCode: varchar("district_code", { length: 10 }).references(
+			() => region.code
+		),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -397,8 +429,17 @@ export const crawledJobPost = pgTable(
 		// 대문짝만하게 박아두기 때문에, 필드만 가리고 본문을 그대로 두면 아무것도 가린 게 아니다.
 		// 원문 HTML은 보관하지 않는다(Cheditor 산출물이라 스크립트·인라인 스타일이 섞여 있다).
 		body: text("body").notNull(),
+		// 원본이 준 지역 문자열("서울" / "강남구"). 아래 코드 두 칸은 이 문자열을 지역
+		// 마스터에 대조해 해석한 결과이고, 대조에 실패하면 코드만 null로 남고 원문은 그대로
+		// 보존된다 — 원본 표기가 우리 표준과 어긋난다고 공고를 버리지는 않는다.
 		region: text("region"),
 		district: text("district"),
+		regionCode: varchar("region_code", { length: 10 }).references(
+			() => region.code
+		),
+		districtCode: varchar("district_code", { length: 10 }).references(
+			() => region.code
+		),
 		// 원본 업종 문자열. 우리 8종 enum에 매핑되지 않아도 버리지 않고 남겨서
 		// 운영자가 손으로 잇게 한다(status = needs_review).
 		industryRaw: text("industry_raw"),
@@ -479,7 +520,7 @@ export const crawledJobPost = pgTable(
 		index("crawled_job_post_discovery_idx").on(
 			table.status,
 			table.industryCategory,
-			table.region
+			table.regionCode
 		),
 	]
 );
@@ -597,8 +638,16 @@ export const jobPost = pgTable(
 		}),
 		status: jobPostStatus("status").default("pending_review").notNull(),
 		industryCategory: jobIndustryCategory("industry_category").notNull(),
+		// 표시용 지역 문자열. 입력은 region_code·district_code로 받고 저장 시 마스터의
+		// 라벨·시군구명을 여기에 복사해 둔다 — 목록·검색(ilike)이 조인 없이 읽는 자리다.
 		region: text("region").notNull(),
 		district: text("district"),
+		regionCode: varchar("region_code", { length: 10 }).references(
+			() => region.code
+		),
+		districtCode: varchar("district_code", { length: 10 }).references(
+			() => region.code
+		),
 		// payUnit이 "협의"(면접 후 급여 협의)면 금액이 없다 — 그래서 nullable.
 		payAmount: integer("pay_amount"),
 		payUnit: text("pay_unit").notNull(),
@@ -660,7 +709,7 @@ export const jobPost = pgTable(
 		index("job_post_discovery_idx").on(
 			table.status,
 			table.industryCategory,
-			table.region,
+			table.regionCode,
 			table.payAmount
 		),
 		uniqueIndex("job_post_crawled_from_id_uidx").on(table.crawledFromId),

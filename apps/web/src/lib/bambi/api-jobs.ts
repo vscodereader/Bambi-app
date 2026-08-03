@@ -65,15 +65,15 @@ const toApiListInput = (filters: MarketplaceFilters) => ({
 		isIndustryOption(filters.category)
 			? filters.category
 			: undefined,
-	district:
-		filters.district === DEFAULT_MARKETPLACE_FILTERS.district
+	districtCode:
+		filters.districtCode === DEFAULT_MARKETPLACE_FILTERS.districtCode
 			? undefined
-			: filters.district,
+			: filters.districtCode,
 	minPayAmount: filters.minimumPay > 0 ? filters.minimumPay : undefined,
-	region:
-		filters.region === DEFAULT_MARKETPLACE_FILTERS.region
+	regionCode:
+		filters.regionCode === DEFAULT_MARKETPLACE_FILTERS.regionCode
 			? undefined
-			: filters.region,
+			: filters.regionCode,
 });
 
 // 서버 입력에 대응이 없어 화면에서만 거르는 필터들. 이게 켜져 있으면 응답의 전체 건수와
