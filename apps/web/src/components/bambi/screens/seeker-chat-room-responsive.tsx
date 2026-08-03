@@ -1246,9 +1246,17 @@ export function SeekerChatRoomResponsive({
 					<p className="mt-2 mb-4 text-muted-foreground text-sm">
 						로그인 상태나 채팅방 접근 권한을 확인해 주세요.
 					</p>
-					<Button onClick={() => roomQuery.refetch()} variant="secondary">
-						다시 시도
-					</Button>
+					<div className="flex flex-wrap justify-center gap-2">
+						<Button
+							onClick={() => router.push("/seeker/chats")}
+							variant="primary"
+						>
+							채팅 목록으로
+						</Button>
+						<Button onClick={() => roomQuery.refetch()} variant="secondary">
+							다시 시도
+						</Button>
+					</div>
 				</Card>
 			</div>
 		);
