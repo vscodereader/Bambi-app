@@ -18,6 +18,19 @@ describe("채팅 목록 액션", () => {
 		// 신고·차단 항목은 차단되지 않은 분기에서만 만들어져야 한다.
 		expect(source).toContain("? [deleteAction]");
 	});
+
+	// 이 라우트에는 역할 게이트가 없어 구인자도 목록에 들어온다. 신고는 구직자
+	// 전용이고(서버 createReport도 같은 기준), 차단 대상은 뷰어의 반대편이어야
+	// 한다 — employerUserId 고정이면 구인자가 자기 자신을 차단한다.
+	it("신고 항목은 뷰어가 그 방의 구직자일 때만 노출한다", () => {
+		expect(source).toContain("room.counterpartUserId === room.employerUserId");
+		expect(source).toContain("...(isJobSeekerViewer");
+	});
+
+	it("차단 대상은 서버가 뷰어 기준으로 계산한 상대다", () => {
+		expect(source).toContain("blockedUserId: room.counterpartUserId");
+		expect(source).not.toContain("blockedUserId: room.employerUserId");
+	});
 });
 
 describe("차단된 채팅 표시", () => {

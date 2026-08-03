@@ -633,6 +633,9 @@ export const chatsRouter = {
 					room.isBlocked ||
 					blockedCounterpartIds.has(counterpartUserId(room, profile.userId)),
 				counterpartName: counterpartNames.get(room.id) ?? null,
+				// 목록 화면이 뷰어 쪽(구직자/구인자)을 판별하고 차단 대상을 고르는 근거.
+				// 방 row에는 양쪽 id만 있어 뷰어가 누구인지 화면에서 알 수 없다.
+				counterpartUserId: counterpartUserId(room, profile.userId),
 				jobTitle: jobTitleById.get(room.jobPostId) ?? null,
 				lastMessageBody: lastMessage?.body ?? null,
 				unreadCount: await getUnreadMessageCount({

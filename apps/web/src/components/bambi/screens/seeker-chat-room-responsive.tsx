@@ -737,6 +737,75 @@ function ChatBlockConfirm({
 	);
 }
 
+// 헤더 아래 "연락처 보호 중" 안내 바 — 신고·차단 진입점을 함께 담는다.
+// 채팅 신고는 구직자 전용이라(서버 createReport도 같은 기준으로 막는다) 구인자에게는
+// 차단하기만 남기고 안내 문구도 차단 기준으로 바꾼다. 차단은 양쪽 모두 쓸 수 있다.
+// 확인 단계·신고 창 열림 상태는 이 바 밖에서 쓰이지 않아 여기서 갖고 있는다.
+function ChatSafetyNotice({
+	chatRoomId,
+	isBlocked,
+	isBlockPending,
+	isJobSeeker,
+	onBlock,
+}: {
+	chatRoomId: string;
+	isBlocked: boolean;
+	isBlockPending: boolean;
+	isJobSeeker: boolean;
+	onBlock: () => void;
+}) {
+	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
+	const [isReportOpen, setIsReportOpen] = useState(false);
+
+	return (
+		<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
+			<div className="flex items-center justify-between gap-3">
+				<div className="flex items-center gap-2 font-extrabold text-sm">
+					<span className="inline-flex size-4">
+						<ShieldIcon />
+					</span>
+					면접 확정 전 연락처 보호 중
+				</div>
+				<div className="flex items-center gap-2">
+					{isJobSeeker ? (
+						<Button
+							onClick={() => setIsReportOpen(true)}
+							size="sm"
+							variant="secondary"
+						>
+							신고
+						</Button>
+					) : null}
+					<ChatBlockTrigger
+						isBlocked={isBlocked}
+						isConfirmOpen={isBlockConfirmOpen}
+						onOpen={() => setIsBlockConfirmOpen(true)}
+					/>
+				</div>
+			</div>
+			<p className="mt-1 mb-0 text-xs leading-relaxed">
+				{isJobSeeker
+					? "외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요."
+					: "문제가 되는 상대는 차단할 수 있어요."}
+			</p>
+			<ChatBlockConfirm
+				isConfirmOpen={isBlockConfirmOpen}
+				isPending={isBlockPending}
+				onCancel={() => setIsBlockConfirmOpen(false)}
+				onConfirm={onBlock}
+			/>
+			{isJobSeeker ? (
+				<ReportDialog
+					onOpenChange={setIsReportOpen}
+					open={isReportOpen}
+					targetId={chatRoomId}
+					targetType="chat_room"
+				/>
+			) : null}
+		</div>
+	);
+}
+
 // 면접 일정 제안 폼은 구인자에게만 노출된다. 구직자는 제안을 받기만 한다.
 function InterviewProposalForm({
 	interviewAt,
@@ -844,8 +913,6 @@ export function SeekerChatRoomResponsive({
 	const queryClient = useQueryClient();
 	const router = useRouter();
 	const [message, setMessage] = useState("");
-	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
-	const [isReportOpen, setIsReportOpen] = useState(false);
 	const [attachmentDraft, setAttachmentDraft] =
 		useState<AttachmentDraft | null>(null);
 	const [interviewAt, setInterviewAt] = useState("");
@@ -1417,47 +1484,15 @@ export function SeekerChatRoomResponsive({
 						{getRealtimeStatusLabel(realtimeStatus)}
 					</Badge>
 				</header>
-				<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
-					<div className="flex items-center justify-between gap-3">
-						<div className="flex items-center gap-2 font-extrabold text-sm">
-							<span className="inline-flex size-4">
-								<ShieldIcon />
-							</span>
-							면접 확정 전 연락처 보호 중
-						</div>
-						<div className="flex items-center gap-2">
-							<Button
-								onClick={() => setIsReportOpen(true)}
-								size="sm"
-								variant="secondary"
-							>
-								신고
-							</Button>
-							<ChatBlockTrigger
-								isBlocked={room.isBlocked}
-								isConfirmOpen={isBlockConfirmOpen}
-								onOpen={() => setIsBlockConfirmOpen(true)}
-							/>
-						</div>
-					</div>
-					<p className="mt-1 mb-0 text-xs leading-relaxed">
-						외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요.
-					</p>
-					<ChatBlockConfirm
-						isConfirmOpen={isBlockConfirmOpen}
-						isPending={blockMutation.isPending}
-						onCancel={() => setIsBlockConfirmOpen(false)}
-						onConfirm={() =>
-							blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
-						}
-					/>
-					<ReportDialog
-						onOpenChange={setIsReportOpen}
-						open={isReportOpen}
-						targetId={room.id}
-						targetType="chat_room"
-					/>
-				</div>
+				<ChatSafetyNotice
+					chatRoomId={room.id}
+					isBlocked={room.isBlocked}
+					isBlockPending={blockMutation.isPending}
+					isJobSeeker={isJobSeeker}
+					onBlock={() =>
+						blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
+					}
+				/>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
 					<ChatMessageList
 						counterpartName={counterpartName}
