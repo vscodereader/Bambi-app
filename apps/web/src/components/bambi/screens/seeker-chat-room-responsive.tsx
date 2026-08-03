@@ -890,16 +890,16 @@ function ContactRevealAction({
 			<span className="font-medium text-muted-foreground text-xs">
 				구인자 인증 연락처
 			</span>
-			{/* 모바일은 번호 아래로 안내를 스택(flex-col), md↑는 번호 옆 한 줄(flex-row). */}
-			<span className="flex flex-col gap-0.5 md:flex-row md:items-baseline md:gap-1.5">
+			{/* 좁은 사이드 카드에서도 번호가 꺾이지 않도록 항상 세로 스택 + 번호는 한 줄 고정. */}
+			<span className="flex flex-col gap-0.5">
 				<a
-					className="font-bold text-base text-foreground underline-offset-2 hover:underline"
+					className="whitespace-nowrap font-bold text-base text-foreground underline-offset-2 hover:underline"
 					href={`tel:${employerVerifiedPhone}`}
 				>
 					{employerVerifiedPhone}
 				</a>
-				<span className="font-medium text-primary text-sm">
-					('밤비알바 보고 연락드렸다고 하시면 정확한 상담 받으실 수 있어요.')
+				<span className="text-muted-foreground text-xs">
+					밤비알바 보고 연락드렸다고 하시면 정확한 상담을 받으실 수 있어요.
 				</span>
 			</span>
 		</div>
