@@ -36,6 +36,7 @@ export default function SeekerCommunityLayout({
 						<HorizontalAdBannerRail
 							isLoading={adBanners.isLoading}
 							items={adBanners.leftBanner}
+							promotionSurface="community_left"
 						/>
 					</div>
 				</aside>
@@ -52,6 +53,7 @@ export default function SeekerCommunityLayout({
 						<AdBannerRail
 							isLoading={adBanners.isLoading}
 							items={adBanners.rightBanner}
+							promotionSurface="community_right"
 						/>
 					</div>
 				</aside>

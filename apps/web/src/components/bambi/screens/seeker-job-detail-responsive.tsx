@@ -171,6 +171,7 @@ export function SeekerJobDetailResponsive({
 					<HorizontalAdBannerRail
 						isLoading={adBanners.isLoading}
 						items={adBanners.leftBanner}
+						promotionSurface="job_detail_left"
 					/>
 				</div>
 			</aside>
@@ -399,6 +400,7 @@ export function SeekerJobDetailResponsive({
 					<AdBannerRail
 						isLoading={adBanners.isLoading}
 						items={adBanners.rightBanner}
+						promotionSurface="job_detail_right"
 					/>
 				</div>
 			</aside>
