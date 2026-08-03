@@ -19,10 +19,11 @@ import { JobCoverImage } from "./job-cover-image";
 
 const SEARCH_PLACEHOLDER = "업종, 지역, 공고 제목 검색";
 
-// 트리거는 헤더(돋보기 아이콘 버튼)와 본문 검색 필드(전체폭 검색창 룩) 두 자리에서
-// 같은 모달을 연다. 헤더는 우측 액션 버튼들(h-10 outline)과 같은 룩으로 맞춘다.
+// 트리거는 헤더(돋보기 아이콘 버튼)와 본문 검색 필드 두 자리에서 같은 모달을 연다.
+// 헤더는 우측 액션 버튼들(h-10 outline)과 같은 룩으로 맞춘다. 본문 트리거는 눌러도
+// 타이핑이 아니라 모달이 뜨므로 입력창(secondary 채움)을 흉내 내지 않고 카드 톤 버튼으로 둔다.
 const FIELD_TRIGGER_CLASS =
-	"h-14 w-full justify-start gap-3 px-4 font-medium text-base text-muted-foreground";
+	"h-12 w-full justify-start gap-2 rounded-lg bg-card px-4 font-semibold text-muted-foreground text-sm shadow-[var(--shadow-card)]";
 
 const MESSAGE_CLASS = "py-6 text-center text-muted-foreground text-sm";
 
@@ -157,9 +158,9 @@ export function JobSearchCommand({
 				)}
 				onClick={() => setOpen(true)}
 				size={isHeader ? "icon-lg" : "default"}
-				variant={isHeader ? "outline" : "secondary"}
+				variant="outline"
 			>
-				<SearchIcon />
+				<SearchIcon className={isHeader ? undefined : "text-coral-600"} />
 				{isHeader ? null : SEARCH_PLACEHOLDER}
 			</Button>
 			<CommandDialog

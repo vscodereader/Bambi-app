@@ -1,5 +1,6 @@
 "use client";
 
+import { Button as UiButton } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	Select,
@@ -18,6 +19,7 @@ import { type ReactNode, useState } from "react";
 import {
 	ALL_OPTION,
 	applyDiscoveryAxis,
+	DEFAULT_MARKETPLACE_FILTERS,
 	discoveryAxisForTab,
 	MARKETPLACE_CATEGORIES,
 	MARKETPLACE_QUICK_FILTERS,
@@ -31,6 +33,7 @@ import {
 	BriefcaseIcon,
 	CheckIcon,
 	ClockIcon,
+	Filter,
 	MapPinIcon,
 	Message,
 	Search2,
@@ -253,6 +256,13 @@ export function MarketplaceFilterSheet({
 	);
 }
 
+// 기본값과 다른 필터 항목 수. 시트를 열지 않아도 몇 개가 걸려 있는지 배지로 보여준다.
+// 키를 순회하므로 MarketplaceFilters에 필드가 늘어도 따로 손댈 필요가 없다.
+const countActiveFilters = (filters: MarketplaceFilters): number =>
+	(
+		Object.keys(DEFAULT_MARKETPLACE_FILTERS) as (keyof MarketplaceFilters)[]
+	).filter((key) => filters[key] !== DEFAULT_MARKETPLACE_FILTERS[key]).length;
+
 interface MarketplaceSearchProps {
 	filters: MarketplaceFilters;
 	onChange: FilterChange;
@@ -270,6 +280,7 @@ export function MarketplaceSearch({
 }: MarketplaceSearchProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
+	const activeFilterCount = countActiveFilters(filters);
 	return (
 		<div className="flex flex-col gap-3">
 			<div className={cn("flex items-center gap-2.5", searchFieldClassName)}>
@@ -278,14 +289,17 @@ export function MarketplaceSearch({
 					trigger="field"
 					triggerClassName="flex-1"
 				/>
-				<button
-					aria-label="필터"
-					className="inline-flex h-14 flex-[0_0_auto] items-center justify-center rounded-lg border border-border bg-card px-4 font-bold text-sm lg:hidden"
+				<UiButton
+					className="h-12 gap-2 rounded-lg bg-card px-4 font-bold text-sm lg:hidden"
 					onClick={onOpenFilters}
-					type="button"
+					variant="outline"
 				>
+					<Filter />
 					필터
-				</button>
+					{activeFilterCount > 0 ? (
+						<Badge tone="primary">{activeFilterCount}</Badge>
+					) : null}
+				</UiButton>
 			</div>
 			<div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
 				{MARKETPLACE_QUICK_FILTERS.map((filter) => {
