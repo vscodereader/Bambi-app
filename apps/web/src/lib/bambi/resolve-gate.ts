@@ -8,7 +8,9 @@ export type GateDecision = { type: "next" } | { type: "redirect"; to: string };
 
 // 약관(/terms)·개인정보 처리방침(/privacy)은 로그인·게스트 여부와 무관하게
 // 누구나 열람할 수 있어야 한다(회원가입 동의 화면에서도 링크로 연다).
-const PUBLIC_PREFIXES = ["/api", "/bambi", "/terms", "/privacy"];
+// /board는 공개 게시판(읽기 전용) 영역이다 — 크롤러가 로그인 없이 본문까지 읽어야
+// 색인되므로 게이트를 태우지 않는다. 쓰기·댓글·추천은 여전히 /seeker/community 뒤에 있다.
+const PUBLIC_PREFIXES = ["/api", "/bambi", "/board", "/terms", "/privacy"];
 
 const isPublic = (pathname: string): boolean =>
 	PUBLIC_PREFIXES.some(

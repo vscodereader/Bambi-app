@@ -61,6 +61,12 @@ describe("resolveGate", () => {
 		expect(resolveGate({ pathname: "/terms", ...guest }).type).toBe("next");
 		expect(resolveGate({ pathname: "/privacy", ...guest }).type).toBe("next");
 	});
+	it("lets the public board area pass for logged-out visitors", () => {
+		for (const pathname of ["/board", "/board/free", "/board/free/abc"]) {
+			expect(resolveGate({ pathname, ...fresh }).type).toBe("next");
+			expect(resolveGate({ pathname, ...guest }).type).toBe("next");
+		}
+	});
 	it("lets api and media pass", () => {
 		expect(resolveGate({ pathname: "/api/guest", ...fresh }).type).toBe("next");
 		expect(
