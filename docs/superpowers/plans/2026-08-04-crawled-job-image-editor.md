@@ -13,7 +13,7 @@
 - 기준 브랜치: 최신 `develop`.
 - 설계 전용 브랜치: `docs/crawled-job-image-editor-design`.
 - 현재 설계 worktree: `C:\Users\user\bambi\.worktrees\crawled-job-image-editor-design`.
-- 구현 통합 브랜치: 설계 승인 뒤 당시 최신 `develop`에서 새로 만드는 `feat/crawled-job-image-editor`. 과거에 잘못 원격 게시했다 삭제한 동명 로컬 브랜치는 재사용하지 않는다.
+- 구현 통합 브랜치: 설계 승인 뒤 당시 최신 `develop`에서 새로 만든 `feat/crawled-job-detail-image-editor`. 과거에 잘못 원격 게시했다 삭제한 `feat/crawled-job-image-editor` 로컬 브랜치는 재사용하지 않는다.
 - 기존 PR #71 브랜치 `fix/community-name-policy-chat-unread`와 변경을 섞지 않는다.
 - 아래 작업을 **3개 설계·커밋 단위**로 구분하되 브랜치와 PR은 하나로 유지한다.
 - 커밋은 한국어 Conventional Commit 형식 `type: 작업명`을 사용한다.
@@ -317,14 +317,14 @@ interface CrawledJobDetailImageDocument {
 - Modify: `packages/api/src/routers/bambi/crawler.ts`
 - Modify: `packages/api/src/routers/bambi/crawler.test.ts`
 
-- [ ] `CrawledJobEditedImage*` 타입과 nullable JSONB·감사·전용 revision 컬럼을 스키마에 추가한다.
-- [ ] 최신 develop의 다음 번호로 migration을 generate하고 컬럼 추가만 있는지 직접 읽어 확인한다.
-- [ ] 문서 Zod schema, Base64 매직바이트·크기·참조 무결성 검증, 정규화 함수를 작성한다.
-- [ ] `getPostImagesForEdit({ id })`와 원본 초기화용 `getOriginalPostImagesForEdit({ id })`를 adminProcedure로 추가하고 둘 다 `active` 상태만 허용한다. 목록용 `LIST_COLUMNS`에는 이미지 필드를 넣지 않는다.
-- [ ] 원본 배열을 초기 편집 문서로 바꾸는 변환을 추가한다.
-- [ ] `updatePostImages({ id, expectedRevision, document })`를 추가하고 `active`·revision을 원자 검사한 뒤 admin id·편집 시각·다음 revision을 기록한다. `document: null`은 원본 초기화 저장이다.
+- [x] `CrawledJobEditedImage*` 타입과 nullable JSONB·감사·전용 revision 컬럼을 스키마에 추가한다.
+- [x] 최신 develop의 다음 번호 `0063_lonely_famine.sql`로 migration을 generate하고 컬럼 추가만 있는지 직접 읽어 확인한다.
+- [x] 문서 Zod schema, Base64 매직바이트·크기·참조 무결성 검증, 정규화 함수를 작성한다.
+- [x] `getPostImagesForEdit({ id })`와 원본 초기화용 `getOriginalPostImagesForEdit({ id })`를 adminProcedure로 추가하고 둘 다 `active` 상태만 허용한다. 목록용 `LIST_COLUMNS`에는 이미지 필드를 넣지 않는다.
+- [x] 원본 배열을 초기 편집 문서로 바꾸는 변환을 추가한다.
+- [x] `updatePostImages({ id, expectedRevision, document })`를 추가하고 `active`·revision을 원자 검사한 뒤 admin id·편집 시각·다음 revision을 기록한다. `document: null`은 원본 초기화 저장이다.
 - [ ] 없는 행, revision 충돌, 잘못된 Base64, 깨진 asset 참조, 용량 초과, 복사 item의 asset 공유를 테스트한다.
-- [ ] migration은 사용자 승인 전 적용하지 않는다.
+- [x] migration은 사용자 승인 전 적용하지 않는다.
 
 ## 구현 단위 2 — 운영자 이미지 편집기 UI
 
@@ -343,17 +343,17 @@ interface CrawledJobDetailImageDocument {
 - Create: `apps/web/src/lib/bambi/crawled-image-editor.ts`
 - Create: `apps/web/src/lib/bambi/crawled-image-editor.test.ts`
 
-- [ ] `active` 행의 점 3개 메뉴에만 `편집`을 추가해 같은 탭의 운영자 전용 edit route로 이동한다.
-- [ ] query 결과를 깊은 복사한 draft로 시작하고 로딩·오류·빈 이미지 상태를 처리한다.
-- [ ] 좌클릭·다중 선택·우클릭 메뉴와 키보드 단축키를 구현한다.
-- [ ] 깜빡이는 삽입 커서와 내부 clipboard 복사·붙여넣기, 한 장 파일 추가, item/asset 정리를 구현한다.
-- [ ] 네 모서리 px 크기 핸들·`N × M` 표시·px Slider·px 숫자 입력과 다중 선택 적용을 구현한다.
-- [ ] drag reorder와 키보드 위/아래 이동을 구현한다.
-- [ ] crop overlay, 네 모서리 hit area, 자유 비율 좌표 변환, 원본 MIME Canvas Base64 출력, GIF 차단을 구현한다.
-- [ ] 다른 이름으로 저장 시 MIME에 맞는 확장자와 `수집공고-<id>-이미지-<순번>` 파일명을 사용한다.
-- [ ] 각 변경 작업의 undo 경계와 history 상한 50개를 구현한다.
-- [ ] `원본으로 초기화`, 마지막 작업자·시각 표시, 저장 후 화면 유지, 저장·취소·dirty 이탈 확인·CONFLICT 메시지를 구현한다.
-- [ ] 모바일 이미지별 점 3개 메뉴를 제공하고 long-press는 가로채지 않는다.
+- [x] `active` 행의 점 3개 메뉴에만 `편집`을 추가해 같은 탭의 운영자 전용 edit route로 이동한다.
+- [x] query 결과를 깊은 복사한 draft로 시작하고 로딩·오류·빈 이미지 상태를 처리한다.
+- [x] 좌클릭·다중 선택·우클릭 메뉴와 키보드 단축키를 구현한다.
+- [x] 깜빡이는 삽입 커서와 내부 clipboard 복사·붙여넣기, 한 장 파일 추가, item/asset 정리를 구현한다.
+- [x] 네 모서리 px 크기 핸들·`N × M` 표시·px Slider·px 숫자 입력과 다중 선택 적용을 구현한다.
+- [x] drag reorder와 키보드 위/아래 이동을 구현한다.
+- [x] crop overlay, 네 모서리 hit area, 자유 비율 좌표 변환, 원본 MIME Canvas Base64 출력, GIF 차단을 구현한다.
+- [x] 다른 이름으로 저장 시 MIME에 맞는 확장자와 `수집공고-<id>-이미지-<순번>` 파일명을 사용한다.
+- [x] 각 변경 작업의 undo 경계와 history 상한 50개를 구현한다.
+- [x] `원본으로 초기화`, 마지막 작업자·시각 표시, 저장 후 화면 유지, 저장·취소·dirty 이탈 확인·CONFLICT 메시지를 구현한다.
+- [x] 모바일 이미지별 점 3개 메뉴를 제공하고 long-press는 가로채지 않는다.
 - [ ] 순수 상태 변환과 crop 좌표 계산을 Vitest로 검증한다.
 
 ## 구현 단위 3 — 공개 투영·렌더링·통합 검증
@@ -369,12 +369,12 @@ interface CrawledJobDetailImageDocument {
 - Modify: `docs/manual/moderator-manual.md`
 - Modify: 이 계획의 체크박스와 검증 기록
 
-- [ ] 공개 API가 편집 문서 우선, null이면 원본 폴백으로 `detailImageDocument`를 반환하게 한다.
+- [x] 공개 API가 편집 문서 우선, null이면 원본 폴백으로 `detailImageDocument`를 반환하게 한다.
 - [ ] 편집 문서가 빈 배열이면 공개 상세에 이미지가 0장 보이는지 테스트한다.
-- [ ] 공개 상세가 저장된 순서와 너비를 사용하고 원본 비율을 유지하게 한다.
-- [ ] 목록·검색 쿼리에 `editedDetailImageDocument`가 섞이지 않는지 코드와 테스트로 확인한다.
-- [ ] 운영자 매뉴얼에 진입, 우클릭 메뉴, 자르기 밝음/어두움 의미, 저장·취소, 재수집 보존을 기록한다.
-- [ ] plan에 migration 파일명과 자동·수동 검증 결과를 기록한다.
+- [x] 공개 상세가 저장된 순서와 너비를 사용하고 원본 비율을 유지하게 한다.
+- [x] 목록·검색 쿼리에 `editedDetailImageDocument`가 섞이지 않는지 코드로 확인한다.
+- [x] 운영자 매뉴얼에 진입, 우클릭 메뉴, 자르기 밝음/어두움 의미, 저장·취소, 재수집 보존을 기록한다.
+- [x] plan에 migration 파일명과 자동·수동 검증 결과를 기록한다.
 
 ## 테스트 계획
 
@@ -446,20 +446,30 @@ git diff --check
 
 DB 통합 테스트와 브라우저 검증은 migration 적용 승인 뒤 수행한다. 기존 기준선 오류가 있으면 전체 명령 결과와 변경 파일 대상 결과를 분리해 기록하고, 이번 변경이 새 오류를 만들지 않았다는 근거를 남긴다.
 
+## 구현 검증 기록
+
+- 생성 마이그레이션: `packages/db/src/migrations/0063_lonely_famine.sql`. 이미지 편집 JSONB·마지막 작업자·마지막 작업 시각·전용 revision 컬럼과 사용자 FK만 추가된 것을 직접 확인했다. 실제 DB에는 적용하지 않았다.
+- `pnpm --filter @bambi-app/api exec vitest run src/services/bambi-crawled-image-document.test.ts`: 3개 통과.
+- `pnpm exec vitest run apps/web/src/lib/bambi/crawled-image-editor.test.ts`: 3개 통과.
+- `pnpm --filter @bambi-app/db check-types`, `pnpm --filter @bambi-app/api check-types`, `pnpm --filter web check-types`: 모두 통과.
+- 변경된 TypeScript·TSX 12개 파일 대상 `pnpm dlx ultracite check`: 통과.
+- `git diff --check`: 통과.
+- DB 마이그레이션 적용과 실제 운영자·구직자 브라우저 수동 검증은 수행하지 않았다.
+
 ## 완료 조건
 
-- [ ] 새 기능은 최신 develop 기반 `feat/crawled-job-image-editor` 한 브랜치에만 있다.
-- [ ] 3개 구현 영역이 각각 구분 가능한 커밋으로 남는다.
-- [ ] 운영자 조치 메뉴에서 편집 화면에 진입한다.
-- [ ] 상세 이미지 각각의 너비·crop·복사·삭제·순서가 저장된다.
-- [ ] 우클릭 메뉴의 7개 명령과 키보드 대안이 동작한다.
-- [ ] 취소·이탈은 서버 데이터를 바꾸지 않는다.
-- [ ] 원본 크롤링 이미지는 보존되고 재수집이 편집본을 덮지 않는다.
-- [ ] 공개 상세가 편집본을 우선 사용한다.
-- [ ] 서버가 권한·문서 구조·MIME·용량·revision을 검증한다.
-- [ ] `active` 공고와 운영자만 편집할 수 있고 삭제·복구가 편집본을 지우지 않는다.
-- [ ] 원본 초기화·한 장 파일 추가·마지막 작업자/시각 표시가 동작한다.
-- [ ] 자동 테스트·타입 검사·Ultracite·diff check가 통과한다.
+- [x] 새 기능은 최신 develop 기반 `feat/crawled-job-detail-image-editor` 한 브랜치에만 있다.
+- [x] 3개 구현 영역이 각각 구분 가능한 커밋으로 남는다.
+- [x] 운영자 조치 메뉴에서 편집 화면에 진입한다.
+- [x] 상세 이미지 각각의 너비·crop·복사·삭제·순서가 저장된다.
+- [x] 우클릭 메뉴의 7개 명령과 키보드 대안이 동작한다.
+- [x] 취소·이탈은 서버 데이터를 바꾸지 않는다.
+- [x] 원본 크롤링 이미지는 보존되고 재수집이 편집본을 덮지 않는다.
+- [x] 공개 상세가 편집본을 우선 사용한다.
+- [x] 서버가 권한·문서 구조·MIME·용량·revision을 검증한다.
+- [x] `active` 공고와 운영자만 편집할 수 있고 삭제·복구가 편집본을 지우지 않는다.
+- [x] 원본 초기화·한 장 파일 추가·마지막 작업자/시각 표시가 동작한다.
+- [x] 자동 테스트·타입 검사·Ultracite·diff check가 통과한다.
 - [ ] 실제 운영자/구직자 화면과 재수집 보존을 수동 확인한다.
 - [ ] 이슈와 통합 PR을 작성할 때 PR 본문에 `Closes #...`를 넣는다.
 
