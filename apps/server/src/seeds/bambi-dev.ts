@@ -1238,7 +1238,7 @@ interface CommunityPostDef {
 	viewCount?: number;
 }
 
-// 수다방(자유수다/일 이야기) 시드 글. 구직자(여성·남성 혼합)와 구인자가 모두 작성한다.
+// 수다방(자유수다/밤문화 이야기) 시드 글. 구직자(여성·남성 혼합)와 구인자가 모두 작성한다.
 // author_display_name은 글별 익명 표시명(계정 표시명 user.name과 별개), authorRole은
 // 작성 시점 계정 유형 스냅샷이다.
 const communityPosts: CommunityPostDef[] = [
@@ -1414,9 +1414,11 @@ const ensureAuthUser = async (devUser: DevUser): Promise<string> => {
 		.limit(1);
 
 	if (!existingUser) {
+		const signupName =
+			devUser.role === "admin" ? "밤비 운영 계정 준비중" : devUser.name;
 		await auth.api.signUpEmail({
 			body: {
-				name: devUser.name,
+				name: signupName,
 				email: devUser.email,
 				password: DEV_PASSWORD,
 				username: loginId,
@@ -1500,6 +1502,12 @@ const seedUsers = async (): Promise<Record<DevUserKey, string>> => {
 	for (const devUser of devUsers) {
 		const userId = await ensureAuthUser(devUser);
 		await ensureBambiProfile(devUser, userId);
+		if (devUser.role === "admin") {
+			await db
+				.update(user)
+				.set({ name: devUser.name })
+				.where(eq(user.id, userId));
+		}
 		userIds[devUser.key] = userId;
 	}
 

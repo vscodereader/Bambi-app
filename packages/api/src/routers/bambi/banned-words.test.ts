@@ -81,6 +81,38 @@ const expectOrpcCode = async (
 };
 
 describe("bambi banned words createMany", () => {
+	it("같은 정규화형을 본문과 닉네임 범위에 각각 등록한다", async () => {
+		const admin = await createUserFixture("admin");
+		const term = makeUniqueBase();
+
+		try {
+			const createMany = createProcedureClient(bannedWordsRouter.createMany, {
+				context: createContextForUser(admin.userId),
+				path: ["bambi", "bannedWords", "createMany"],
+			});
+
+			await expect(
+				createMany({ scope: "content", terms: [term] })
+			).resolves.toMatchObject({ added: 1 });
+			await expect(
+				createMany({ scope: "display_name", terms: [term] })
+			).resolves.toMatchObject({ added: 1 });
+
+			const rows = await db
+				.select({ scope: bannedWord.scope })
+				.from(bannedWord)
+				.where(eq(bannedWord.term, term));
+
+			expect(rows.map((row) => row.scope).sort()).toEqual([
+				"content",
+				"display_name",
+			]);
+		} finally {
+			await cleanupTerms([term]);
+			await cleanupUserFixture(admin);
+		}
+	});
+
 	it("inserts new terms and reports the added count", async () => {
 		const admin = await createUserFixture("admin");
 		const base = makeUniqueBase();

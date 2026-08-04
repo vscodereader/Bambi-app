@@ -441,21 +441,60 @@ describe("bambi chats router analytics", () => {
 });
 
 describe("bambi chats router unread state", () => {
-	it("counts a room as unread when the counterpart sent a message, and clears it after markRead", async () => {
+	it("상대가 보낸 안 읽은 메시지를 개별 합산하고 markRead만큼 차감한다", async () => {
 		const fixture = await createChatFixture();
+		const secondJobPostId = randomUUID();
+		const secondChatRoomId = randomUUID();
 
 		try {
-			const [message] = await db
+			await db.insert(jobPost).values({
+				createdByUserId: fixture.employerUserId,
+				description: "두 번째 채팅방 집계 테스트입니다.",
+				id: secondJobPostId,
+				industryCategory: "BAR",
+				organizationId: fixture.organizationId,
+				payAmount: 190_000,
+				payUnit: "일급",
+				region: "서울 강남구",
+				status: "published",
+				title: "두 번째 테스트 공고",
+				workSchedule: "21:00-03:00",
+			});
+			await db.insert(chatRoom).values({
+				employerUserId: fixture.employerUserId,
+				id: secondChatRoomId,
+				jobPostId: secondJobPostId,
+				jobSeekerUserId: fixture.jobSeekerUserId,
+				organizationId: fixture.organizationId,
+			});
+
+			const messages = await db
 				.insert(chatMessage)
-				.values({
-					body: "안녕하세요, 지원 관련해서 연락드려요.",
-					chatRoomId: fixture.chatRoomId,
-					senderUserId: fixture.employerUserId,
-				})
+				.values(
+					["첫 메시지", "두 번째 메시지", "세 번째 메시지"].map((body) => ({
+						body,
+						chatRoomId: fixture.chatRoomId,
+						senderUserId: fixture.employerUserId,
+					}))
+				)
 				.returning();
 
-			if (!message) {
+			const [firstMessage, ...remainingMessages] = messages;
+			if (!(firstMessage && remainingMessages.length === 2)) {
 				throw new Error("채팅 메시지 픽스처를 만들지 못했습니다.");
+			}
+			const secondRoomMessages = await db
+				.insert(chatMessage)
+				.values(
+					["다른 방 첫 메시지", "다른 방 두 번째 메시지"].map((body) => ({
+						body,
+						chatRoomId: secondChatRoomId,
+						senderUserId: fixture.employerUserId,
+					}))
+				)
+				.returning();
+			if (secondRoomMessages.length !== 2) {
+				throw new Error("두 번째 채팅방 메시지 픽스처를 만들지 못했습니다.");
 			}
 
 			const unreadStateForSeeker = createProcedureClient(
@@ -473,10 +512,13 @@ describe("bambi chats router unread state", () => {
 				}
 			);
 
-			// 상대(구인자)가 보낸 미읽음 메시지가 있으므로 구직자 쪽은 방 1개가 잡힌다.
-			expect(await unreadStateForSeeker({})).toEqual({ unreadRoomCount: 1 });
-			// 보낸 본인(구인자)에게는 안 읽은 방으로 잡히지 않는다.
-			expect(await unreadStateForEmployer({})).toEqual({ unreadRoomCount: 0 });
+			expect(await unreadStateForSeeker({})).toEqual({
+				unreadMessageCount: 5,
+			});
+			// 보낸 본인의 메시지는 안 읽음으로 잡히지 않는다.
+			expect(await unreadStateForEmployer({})).toEqual({
+				unreadMessageCount: 0,
+			});
 
 			const markRead = createProcedureClient(chatsRouter.markRead, {
 				context: createContextForUser(fixture.jobSeekerUserId),
@@ -484,12 +526,35 @@ describe("bambi chats router unread state", () => {
 			});
 			await markRead({
 				chatRoomId: fixture.chatRoomId,
-				messageIds: [message.id],
+				messageIds: [firstMessage.id],
 			});
 
-			// 읽음 처리 후에는 안 읽은 방 수가 0으로 떨어진다.
-			expect(await unreadStateForSeeker({})).toEqual({ unreadRoomCount: 0 });
+			expect(await unreadStateForSeeker({})).toEqual({
+				unreadMessageCount: 4,
+			});
+			await markRead({
+				chatRoomId: fixture.chatRoomId,
+				messageIds: remainingMessages.map(({ id }) => id),
+			});
+			expect(await unreadStateForSeeker({})).toEqual({
+				unreadMessageCount: 2,
+			});
+			await markRead({
+				chatRoomId: secondChatRoomId,
+				messageIds: secondRoomMessages.map(({ id }) => id),
+			});
+			expect(await unreadStateForSeeker({})).toEqual({
+				unreadMessageCount: 0,
+			});
 		} finally {
+			await db
+				.delete(chatMessageReadReceipt)
+				.where(eq(chatMessageReadReceipt.chatRoomId, secondChatRoomId));
+			await db
+				.delete(chatMessage)
+				.where(eq(chatMessage.chatRoomId, secondChatRoomId));
+			await db.delete(chatRoom).where(eq(chatRoom.id, secondChatRoomId));
+			await db.delete(jobPost).where(eq(jobPost.id, secondJobPostId));
 			await cleanupChatFixture(fixture);
 		}
 	});

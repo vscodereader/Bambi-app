@@ -421,6 +421,20 @@
       "when": 1785724011074,
       "tag": "0059_lean_wild_child",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1785818672727,
+      "tag": "0060_community-name-policy-cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785827750168,
+      "tag": "0061_nickname-banned-word-scope",
+      "breakpoints": true
     }
   ]
 }

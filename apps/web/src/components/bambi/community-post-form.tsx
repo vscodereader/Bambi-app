@@ -32,6 +32,17 @@ type WritableBoardKey = Exclude<CommunityBoardKey, "best">;
 const isWritableBoardKey = (key: CommunityBoardKey): key is WritableBoardKey =>
 	key !== "best";
 
+const getInitialLockedState = (
+	boardKey: CommunityBoardKey,
+	initiallyLocked: boolean | undefined
+): boolean => boardKey !== "free" && Boolean(initiallyLocked);
+
+const isLockPasswordRequired = (
+	isEdit: boolean,
+	isFreeBoard: boolean,
+	isLocked: boolean
+): boolean => !(isEdit || isFreeBoard) && isLocked;
+
 interface CommunityPostInitial {
 	authorName: string;
 	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
@@ -51,22 +62,24 @@ interface CommunityPostFormProps {
 	initialPost?: CommunityPostInitial;
 }
 
-// 비밀글 잠금 스위치 + (잠금 시) 비밀번호 필드. 작성 모드는 잠금을 켤 때만 비번 필드를 노출하고
-// 잠금을 끄면 잔여 비번을 비운다. 수정 모드는 인증용 비번 필드(글 비밀번호)를 항상 노출한다.
+// 비밀글 잠금 스위치 + (잠금 시) 비밀번호 필드. 자유수다는 스위치를 숨기되 수정 권한 확인용
+// 비밀번호 필드는 유지한다. 작성 모드는 잠금을 끄면 잔여 비번을 비운다.
 function PostLockField({
+	allowLocking,
 	isEdit,
 	isLocked,
 	password,
 	setIsLocked,
 	setPassword,
 }: {
+	allowLocking: boolean;
 	isEdit: boolean;
 	isLocked: boolean;
 	password: string;
 	setIsLocked: (value: boolean) => void;
 	setPassword: (value: string) => void;
 }) {
-	const showPasswordField = isEdit || isLocked;
+	const showPasswordField = isEdit || (allowLocking && isLocked);
 	const handleLockChange = (checked: boolean) => {
 		setIsLocked(checked);
 		if (!(checked || isEdit)) {
@@ -75,14 +88,16 @@ function PostLockField({
 	};
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="flex items-center gap-2">
-				<Switch
-					checked={isLocked}
-					id="community-post-lock"
-					onCheckedChange={handleLockChange}
-				/>
-				<Label htmlFor="community-post-lock">비밀글로 잠그기</Label>
-			</div>
+			{allowLocking ? (
+				<div className="flex items-center gap-2">
+					<Switch
+						checked={isLocked}
+						id="community-post-lock"
+						onCheckedChange={handleLockChange}
+					/>
+					<Label htmlFor="community-post-lock">비밀글로 잠그기</Label>
+				</div>
+			) : null}
 			{showPasswordField ? (
 				<div className="flex flex-col gap-2">
 					<Label htmlFor="community-post-password">
@@ -111,10 +126,13 @@ export function CommunityPostForm({
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const isEdit = Boolean(initialPost);
+	const isFreeBoard = board.key === "free";
 
 	const [authorName, setAuthorName] = useState(initialPost?.authorName ?? "");
 	const [password, setPassword] = useState(editPassword ?? "");
-	const [isLocked, setIsLocked] = useState(initialPost?.isLocked ?? false);
+	const [isLocked, setIsLocked] = useState(
+		getInitialLockedState(board.key, initialPost?.isLocked)
+	);
 	const [isPromotion, setIsPromotion] = useState(
 		initialPost?.isPromotion ?? false
 	);
@@ -124,13 +142,10 @@ export function CommunityPostForm({
 	// 이미지만 있고 텍스트가 없는 글도 허용(서버 검증과 일치) — 에디터가 이미지 포함 여부를 보고한다.
 	const [bodyHasImage, setBodyHasImage] = useState(false);
 
-	// 작성 모드 작성인 기본값·권한 판정에만 세션 프로필이 필요하므로 수정 모드에서는
-	// getMine을 비활성화한다(작성인 기본값·공지 가드는 create 전용, 광고 게이트는
-	// 수정 모드에서 글 작성자 role 스냅샷을 쓴다).
+	// 현재 편집자가 admin인지 알아야 예약 작성인 예외를 적용할 수 있으므로 작성·수정
+	// 모두 프로필을 조회한다. 광고 게이트는 수정 모드에서 글 작성자 role 스냅샷을 쓴다.
 	const session = authClient.useSession();
-	const mineQuery = useQuery(
-		orpc.bambi.onboarding.getMine.queryOptions({ enabled: !isEdit })
-	);
+	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
 	const role = mineQuery.data?.bambiProfile?.role;
 	// 작성인 기본값은 표시명(user.name, 세션)에서 가져온다 — bambi_profile.display_name은 제거됐다.
 	const displayName = session.data?.user?.name ?? "";
@@ -187,7 +202,12 @@ export function CommunityPostForm({
 	);
 
 	// 비밀번호는 비밀글(잠금)에만 필요하다 — 작성 모드에서 잠그지 않으면 비번 없이 등록할 수 있다.
-	const requiresPassword = !isEdit && isLocked;
+	const requiresPassword = isLockPasswordRequired(
+		isEdit,
+		isFreeBoard,
+		isLocked
+	);
+	const submittedIsLocked = !isFreeBoard && isLocked;
 
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
 	const canSubmit =
@@ -202,7 +222,7 @@ export function CommunityPostForm({
 		updateMutation.mutate({
 			authorName: authorName.trim(),
 			body: bodyJson,
-			isLocked,
+			isLocked: submittedIsLocked,
 			isPromotion,
 			postId,
 			title: title.trim(),
@@ -220,7 +240,7 @@ export function CommunityPostForm({
 			authorName: authorName.trim(),
 			board: boardKey,
 			body: bodyJson,
-			isLocked,
+			isLocked: submittedIsLocked,
 			isPromotion,
 			title: title.trim(),
 			...(trimmedPassword ? { password: trimmedPassword } : {}),
@@ -260,6 +280,7 @@ export function CommunityPostForm({
 			</div>
 
 			<PostLockField
+				allowLocking={!isFreeBoard}
 				isEdit={isEdit}
 				isLocked={isLocked}
 				password={password}

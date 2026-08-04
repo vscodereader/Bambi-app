@@ -15,6 +15,7 @@
   "dependencies": {
     "@ai-sdk/react": "catalog:",
     "@bambi-app/api": "workspace:*",
+    "@bambi-app/auth": "workspace:*",
     "@bambi-app/env": "workspace:*",
     "@better-auth/expo": "catalog:",
     "@expo/metro-runtime": "~56.0.11",
