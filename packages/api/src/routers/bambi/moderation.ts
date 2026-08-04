@@ -248,6 +248,17 @@ const employerVerificationStatusSchema = z.enum([
 const listEmployersInput = z.object({
 	status: employerVerificationStatusSchema.optional(),
 	limit: z.number().int().min(1).max(100).default(50),
+	// 페이지네이션용 오프셋. 화면은 limit+1건을 요청하지 않고, 받은 건수가 limit보다
+	// 적으면 마지막 페이지로 본다(전체 건수 집계 쿼리를 하나 더 돌리지 않기 위해).
+	offset: z.number().int().min(0).default(0),
+});
+
+// 팀 합류 초대 조회 입력. 이름은 listPendingTeamInvitations로 유지하되(호출부 하나),
+// 운영자가 승인·반려한 이력도 되짚을 수 있도록 상태 필터와 페이지네이션을 받는다.
+const listTeamInvitationsInput = z.object({
+	status: z.enum(["pending", "accepted", "rejected"]).default("pending"),
+	limit: z.number().int().min(1).max(100).default(20),
+	offset: z.number().int().min(0).default(0),
 });
 
 const setChatRoomBlockedInput = z.object({
@@ -1874,7 +1885,8 @@ export const moderationRouter = {
 				)
 				.innerJoin(user, eq(user.id, member.userId))
 				.orderBy(desc(employerOrganizationProfile.createdAt))
-				.limit(input.limit);
+				.limit(input.limit)
+				.offset(input.offset);
 
 			if (input.status) {
 				return await query.where(
@@ -1885,8 +1897,9 @@ export const moderationRouter = {
 			return await query;
 		}),
 
-	listPendingTeamInvitations: protectedProcedure.handler(
-		async ({ context }) => {
+	listPendingTeamInvitations: protectedProcedure
+		.input(listTeamInvitationsInput)
+		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 
 			const inviterUser = alias(user, "inviter_user");
@@ -1901,6 +1914,9 @@ export const moderationRouter = {
 					inviteeName: inviteeUser.name,
 					inviterName: inviterUser.name,
 					inviterEmail: inviterUser.email,
+					// 구인자가 초대할 때 적은 사유. 운영자가 승인 판단에 쓴다.
+					inviteReason: invitation.inviteReason,
+					rejectionReason: invitation.rejectionReason,
 					role: invitation.role,
 					teamId: invitation.teamId,
 					teamNameRaw: team.name,
@@ -1924,8 +1940,10 @@ export const moderationRouter = {
 					employerTeamProfile,
 					eq(employerTeamProfile.teamId, invitation.teamId)
 				)
-				.where(eq(invitation.status, "pending"))
-				.orderBy(desc(invitation.createdAt));
+				.where(eq(invitation.status, input.status))
+				.orderBy(desc(invitation.createdAt))
+				.limit(input.limit)
+				.offset(input.offset);
 
 			const now = Date.now();
 			return rows.map((row) => ({
@@ -1936,6 +1954,8 @@ export const moderationRouter = {
 				inviteeName: row.inviteeName,
 				inviterName: row.inviterName,
 				inviterEmail: row.inviterEmail,
+				inviteReason: row.inviteReason,
+				rejectionReason: row.rejectionReason,
 				role: normalizeOrganizationManagementRole(row.role) ?? "staff",
 				teamId: row.teamId,
 				teamName: row.teamProfileName ?? row.teamNameRaw ?? null,
@@ -1944,8 +1964,7 @@ export const moderationRouter = {
 				expiresAt: row.expiresAt,
 				isExpired: row.expiresAt.getTime() < now,
 			}));
-		}
-	),
+		}),
 
 	setChatRoomBlocked: protectedProcedure
 		.input(setChatRoomBlockedInput)

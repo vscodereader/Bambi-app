@@ -33,6 +33,15 @@ import type {
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
+// 검수 상세의 판정. 보류는 일괄 처리의 보류와 같은 조치(공고를 hidden으로 내림)다.
+export type QueueVerdict = "approve" | "hold" | "reject";
+// 판정 성공 토스트(프리뷰 콘솔·실서비스 콘솔 공용).
+export const QUEUE_VERDICT_TOAST: Record<QueueVerdict, string> = {
+	approve: "공고를 승인했어요",
+	hold: "공고를 보류했어요",
+	reject: "공고를 반려했어요",
+};
+
 export type ModerationBulkScope = "queue" | "reports" | "users";
 export type ModerationBulkAction =
 	| "approve"
@@ -68,7 +77,7 @@ interface ModContextValue {
 	openReports: number;
 	queue: QueueItem[];
 	reports: Report[];
-	resolveQueue: (id: string, action: "approve" | "reject") => void;
+	resolveQueue: (id: string, action: QueueVerdict, reason?: string) => void;
 	resolveReport: (id: string, action: "dismiss" | "act") => void;
 	// 적용 성공 여부를 돌려준다 — 호출자가 성공했을 때만 목록으로 되돌아갈 수 있게.
 	sanction: (id: string, status: UserStatus, label: string) => Promise<boolean>;
@@ -97,6 +106,26 @@ interface ApiQueueItem {
 	status: string;
 	title: string;
 }
+
+// 검수 상세 판정 → 공고 상태·기본 사유. 보류는 일괄 처리(applyQueueBulkAction)와 동일하게
+// hidden으로 내린다 — 두 경로가 다른 상태로 갈리면 보류 공고가 큐에서 서로 다르게 보인다.
+const QUEUE_VERDICT_STATUS: Record<
+	QueueVerdict,
+	{ defaultReason: string; status: "hidden" | "published" | "rejected" }
+> = {
+	approve: {
+		defaultReason: "운영자가 공고를 승인했습니다.",
+		status: "published",
+	},
+	hold: {
+		defaultReason: "운영자가 추가 확인을 위해 공고를 보류했습니다.",
+		status: "hidden",
+	},
+	reject: {
+		defaultReason: "운영자가 정책 위반으로 공고를 반려했습니다.",
+		status: "rejected",
+	},
+};
 
 const ModContext = createContext<ModContextValue | null>(null);
 const UUID_PATTERN =
@@ -526,15 +555,19 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				}),
 			});
 		};
-		const resolveQueue = (id: string, action: "approve" | "reject") => {
+		const resolveQueue = (
+			id: string,
+			action: QueueVerdict,
+			reason?: string
+		) => {
+			const verdict = QUEUE_VERDICT_STATUS[action];
+
 			setJobPostStatusMutation.mutate(
 				{
 					jobPostId: id,
-					reason:
-						action === "approve"
-							? "운영자가 공고를 승인했습니다."
-							: "운영자가 정책 위반으로 공고를 반려했습니다.",
-					status: action === "approve" ? "published" : "rejected",
+					// 상세에서 고른 사유를 그대로 감사 로그에 남긴다(미선택 시 기본 문구).
+					reason: reason?.trim() || verdict.defaultReason,
+					status: verdict.status,
 				},
 				{
 					onSuccess: async () => {
@@ -546,7 +579,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			);
 
 			setSelected((s) => s.filter((x) => x !== id));
-			flash(action === "approve" ? "공고를 승인했어요" : "공고를 반려했어요");
+			flash(QUEUE_VERDICT_TOAST[action]);
 		};
 		const resolveReport = (id: string, action: "dismiss" | "act") => {
 			setReportStatusMutation.mutate(

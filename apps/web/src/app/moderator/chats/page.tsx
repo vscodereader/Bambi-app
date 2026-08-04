@@ -75,11 +75,39 @@ function ChatStatusBadges({ row }: { row: ChatRow }) {
 	);
 }
 
-// 하드삭제 확인 대상(어떤 방을 지우는지).
-interface PendingDelete {
+// 사유 입력이 필요한 조치 대상(어떤 방에 무엇을 하는지). 차단/차단 해제는 신고 상세와
+// 같은 setChatRoomBlocked 흐름(사유 2자 이상)을 그대로 쓴다.
+type ChatActionKind = "block" | "delete" | "unblock";
+
+interface PendingAction {
 	chatRoomId: string;
+	kind: ChatActionKind;
 	title: string;
 }
+
+const CHAT_ACTION_COPY: Record<
+	ChatActionKind,
+	{ confirmLabel: string; description: string; title: string }
+> = {
+	block: {
+		confirmLabel: "차단 확정",
+		description:
+			"채팅방을 차단하면 양쪽 모두 새 메시지를 보낼 수 없어요. 사유는 감사 로그에 남아요(2자 이상).",
+		title: "채팅방 차단",
+	},
+	delete: {
+		confirmLabel: "삭제 확정",
+		description:
+			"채팅방을 완전히 삭제합니다. 메시지·첨부가 모두 지워지며 되돌릴 수 없어요. 사유는 감사 로그에 남아요(2자 이상).",
+		title: "채팅방 삭제",
+	},
+	unblock: {
+		confirmLabel: "차단 해제",
+		description:
+			"차단을 풀면 양쪽이 다시 대화할 수 있어요. 사유는 감사 로그에 남아요(2자 이상).",
+		title: "채팅방 차단 해제",
+	},
+};
 
 // 채팅 내역 열람 대상(방 id + 표시용 제목).
 interface ViewingChat {
@@ -153,7 +181,7 @@ function ChatHistoryContent({ chatRoomId }: { chatRoomId: string }) {
 }
 
 function getChatColumns(
-	onRequestDelete: (row: ChatRow) => void,
+	onRequestAction: (row: ChatRow, kind: ChatActionKind) => void,
 	onViewHistory: (row: ChatRow) => void
 ): DataColumn<ChatRow>[] {
 	return [
@@ -218,9 +246,15 @@ function getChatColumns(
 							onSelect: () => onViewHistory(row),
 						},
 						{
+							key: "block",
+							label: row.isBlocked ? "차단 해제" : "차단",
+							onSelect: () =>
+								onRequestAction(row, row.isBlocked ? "unblock" : "block"),
+						},
+						{
 							key: "delete",
 							label: "삭제",
-							onSelect: () => onRequestDelete(row),
+							onSelect: () => onRequestAction(row, "delete"),
 							variant: "destructive",
 						},
 						{
@@ -243,24 +277,41 @@ function getChatColumns(
 
 export default function ModeratorChatsPage() {
 	const queryClient = useQueryClient();
-	const [pending, setPending] = useState<PendingDelete | null>(null);
+	const [pending, setPending] = useState<PendingAction | null>(null);
 	const [reason, setReason] = useState("");
 	const [viewing, setViewing] = useState<ViewingChat | null>(null);
 
 	const chatsQuery = useQuery(
 		orpc.bambi.moderation.listChatsForModeration.queryOptions()
 	);
+	const invalidateChats = async () => {
+		setPending(null);
+		setReason("");
+		await queryClient.invalidateQueries({
+			queryKey: orpc.bambi.moderation.listChatsForModeration.queryKey(),
+		});
+	};
 	const deleteMutation = useMutation(
 		orpc.bambi.moderation.hardDeleteChatRoom.mutationOptions({
 			onError: () =>
 				toast.error("채팅방을 삭제하지 못했어요. 다시 시도해 주세요."),
 			onSuccess: async () => {
 				toast.success("채팅방을 삭제했어요.");
-				setPending(null);
-				setReason("");
-				await queryClient.invalidateQueries({
-					queryKey: orpc.bambi.moderation.listChatsForModeration.queryKey(),
-				});
+				await invalidateChats();
+			},
+		})
+	);
+	const blockMutation = useMutation(
+		orpc.bambi.moderation.setChatRoomBlocked.mutationOptions({
+			onError: () =>
+				toast.error("차단 상태를 반영하지 못했어요. 다시 시도해 주세요."),
+			onSuccess: async (_result, variables) => {
+				toast.success(
+					variables.isBlocked
+						? "채팅방을 차단했어요."
+						: "채팅방 차단을 해제했어요."
+				);
+				await invalidateChats();
 			},
 		})
 	);
@@ -268,8 +319,12 @@ export default function ModeratorChatsPage() {
 	const columns = useMemo(
 		() =>
 			getChatColumns(
-				(row) => {
-					setPending({ chatRoomId: row.chatRoomId, title: row.jobPostTitle });
+				(row, kind) => {
+					setPending({
+						chatRoomId: row.chatRoomId,
+						kind,
+						title: row.jobPostTitle,
+					});
 					setReason("");
 				},
 				(row) => {
@@ -280,15 +335,37 @@ export default function ModeratorChatsPage() {
 	);
 
 	const chats = chatsQuery.data ?? [];
-	const canConfirm = reason.trim().length >= 2 && !deleteMutation.isPending;
+	const isApplying = deleteMutation.isPending || blockMutation.isPending;
+	const canConfirm = reason.trim().length >= 2 && !isApplying;
+	const pendingCopy = pending ? CHAT_ACTION_COPY[pending.kind] : null;
+	const confirmPendingAction = () => {
+		if (!pending) {
+			return;
+		}
+
+		if (pending.kind === "delete") {
+			deleteMutation.mutate({
+				chatRoomId: pending.chatRoomId,
+				reason: reason.trim(),
+			});
+			return;
+		}
+
+		blockMutation.mutate({
+			chatRoomId: pending.chatRoomId,
+			isBlocked: pending.kind === "block",
+			reason: reason.trim(),
+		});
+	};
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<div className="flex flex-col gap-1">
 				<h1 className="m-0 font-extrabold text-2xl">채팅 관리</h1>
 				<p className="m-0 text-muted-foreground text-sm">
-					삭제·차단·신고된 채팅방을 확인하고, 필요 시 방을 완전히 삭제하거나
-					참여한 회원 상세로 이동합니다. 삭제는 되돌릴 수 없어요.
+					삭제·차단·신고된 채팅방을 확인하고, 필요 시 대화방을 차단하거나 차단을
+					해제하고, 방을 완전히 삭제하거나 참여한 회원 상세로 이동합니다. 삭제는
+					되돌릴 수 없어요. 사용자끼리 건 개인 차단은 운영자가 풀지 않습니다.
 				</p>
 			</div>
 
@@ -335,14 +412,13 @@ export default function ModeratorChatsPage() {
 				open={pending !== null}
 			>
 				<DialogContent>
-					<DialogTitle>채팅방 삭제</DialogTitle>
+					<DialogTitle>{pendingCopy?.title}</DialogTitle>
 					<DialogDescription>
-						"{pending?.title}" 채팅방을 완전히 삭제합니다. 메시지·첨부가 모두
-						지워지며 되돌릴 수 없어요. 사유는 감사 로그에 남아요(2자 이상).
+						"{pending?.title}" — {pendingCopy?.description}
 					</DialogDescription>
 					<Textarea
 						onChange={(event) => setReason(event.target.value)}
-						placeholder="삭제 사유를 입력해 주세요."
+						placeholder="사유를 입력해 주세요."
 						value={reason}
 					/>
 					<div className="flex justify-end gap-2">
@@ -355,21 +431,12 @@ export default function ModeratorChatsPage() {
 						/>
 						<Button
 							disabled={!canConfirm}
-							onClick={() => {
-								if (!pending) {
-									return;
-								}
-
-								deleteMutation.mutate({
-									chatRoomId: pending.chatRoomId,
-									reason: reason.trim(),
-								});
-							}}
+							onClick={confirmPendingAction}
 							size="sm"
 							type="button"
-							variant="destructive"
+							variant={pending?.kind === "delete" ? "destructive" : "default"}
 						>
-							삭제 확정
+							{pendingCopy?.confirmLabel}
 						</Button>
 					</div>
 				</DialogContent>

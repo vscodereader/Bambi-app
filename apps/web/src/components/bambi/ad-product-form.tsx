@@ -15,9 +15,11 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
+	AD_PREVIEW_TEMPLATE_HINTS,
 	AD_PREVIEW_TEMPLATE_LABELS,
 	AD_PREVIEW_TEMPLATE_OPTIONS,
 	type AdPreviewTemplateValue,
+	isBannerPreviewTemplate,
 } from "@/lib/bambi/ad-preview-templates";
 
 export interface PriceOption {
@@ -47,14 +49,6 @@ interface PriceOptionField extends PriceOption {
 }
 
 const MAX_PREVIEW_IMAGE_BYTES = 1_500_000;
-
-// 배너형 노출 영역(프리미엄 상단·좌측·우측 사이드 배너)은 끌어올리기 대상이 아니다.
-// 끌어올리기(수동·자동)는 리스팅형(스페셜·급구·추천)에만 제공된다.
-const BANNER_PREVIEW_TEMPLATES: ReadonlySet<AdPreviewTemplateValue> = new Set([
-	"premium-top",
-	"side-horizontal",
-	"side-vertical",
-]);
 
 export function AdProductForm({
 	initialValue,
@@ -96,7 +90,9 @@ export function AdProductForm({
 	const [autoBoostsPerDay, setAutoBoostsPerDay] = useState(
 		initialValue?.autoBoostsPerDay ?? 0
 	);
-	const isBannerTemplate = BANNER_PREVIEW_TEMPLATES.has(previewTemplate);
+	// 배너형(프리미엄·레거시 사이드) 판정은 광고 배너 슬롯 표에서 파생시킨 공용 헬퍼를 쓴다.
+	// 끌어올리기(수동·자동)는 리스팅형(스페셜·급구·추천)에만 제공된다.
+	const isBannerTemplate = isBannerPreviewTemplate(previewTemplate);
 	// 편집 중 상품이 이미 레거시 side 값(좌/우 사이드 배너)이면 표준 옵션 목록에서 빠져
 	// Select 표시가 깨진다. 현재 값이 옵션에 없으면 레거시 항목으로 함께 렌더한다.
 	// AD_PREVIEW_TEMPLATE_LABELS는 레거시 포함 전체 라벨을 계약상 계속 제공한다.
@@ -185,7 +181,7 @@ export function AdProductForm({
 						const next = value as AdPreviewTemplateValue;
 						setPreviewTemplate(next);
 						// 배너형으로 바꾸면 끌어올리기 횟수를 0으로 리셋(배너엔 미제공)
-						if (BANNER_PREVIEW_TEMPLATES.has(next)) {
+						if (isBannerPreviewTemplate(next)) {
 							setManualBoostsPerDay(0);
 							setAutoBoostsPerDay(0);
 						}
@@ -208,9 +204,10 @@ export function AdProductForm({
 						) : null}
 					</SelectContent>
 				</Select>
+				{/* 안내는 선택한 노출 영역 값에 1:1로 매핑한다 — 고정 문구를 쓰면
+				    리스팅형(스페셜·급구·추천)에도 광고 배너 영역 설명이 붙는다. */}
 				<p className="m-0 text-muted-foreground text-xs">
-					이 상품을 구매한 공고가 노출되는 seeker 페이지 위치입니다. "없음"이면
-					일반 구인과 동일하게 취급됩니다.
+					{AD_PREVIEW_TEMPLATE_HINTS[previewTemplate]}
 				</p>
 			</div>
 
@@ -380,6 +377,15 @@ export function AdProductForm({
 						미리보기 없음
 					</div>
 				)}
+				<p className="m-0 text-muted-foreground text-xs">
+					구인자 광고 안내 화면에서 이 상품이 어디에 뜨는지 보여 주는 예시
+					이미지입니다.{" "}
+					{isBannerTemplate
+						? "배너 영역 상품이라 상단·사이드 배너 자리가 보이는 예시가 좋아요."
+						: "리스팅 영역 상품이라 채용 목록 섹션 카드가 보이는 예시가 좋아요."}{" "}
+					실제 광고 배너 이미지는 여기가 아니라 구인자가 공고를 등록할 때
+					올립니다.
+				</p>
 				<Input
 					accept="image/*"
 					id="p-preview-image"

@@ -60,3 +60,28 @@ export const getAdBannerUsagesForPreviewTemplate = (
 	previewTemplate: AdPreviewTemplateValue | null | undefined
 ): JobAdBannerUsage[] =>
 	previewTemplate ? AD_BANNER_USAGES_BY_PREVIEW_TEMPLATE[previewTemplate] : [];
+
+// 배너형(광고 배너 슬롯을 쓰는) 노출 영역인가. 배너 슬롯 표(위)에서 파생시켜 판정을 한 곳에
+// 모은다 — 별도 Set을 손으로 유지하면 리스팅 상품에 배너 안내가 붙는 식으로 어긋난다.
+export const isBannerPreviewTemplate = (
+	previewTemplate: AdPreviewTemplateValue
+): boolean => getAdBannerUsagesForPreviewTemplate(previewTemplate).length > 0;
+
+// 운영자가 노출 영역을 고를 때 보이는 안내. "이 상품을 사면 공고가 어디에 뜨는가"를
+// 영역별로 적는다(리스팅형에 배너 안내가 붙던 문제를 값별 매핑으로 고정).
+export const AD_PREVIEW_TEMPLATE_HINTS: Record<AdPreviewTemplateValue, string> =
+	{
+		none: "노출 영역 없이 일반 구인 목록에만 뜹니다. 광고 배너 이미지도 필요 없어요.",
+		"premium-top":
+			"광고 배너 영역입니다. 메인 상단·좌측 레일(가로형)과 우측 레일(세로형)을 함께 쓰므로 구인자가 가로·세로 배너 이미지를 모두 등록해야 하고, 프리미엄 정원(10자리)을 차지합니다.",
+		"recommended-list":
+			"리스팅 노출 영역입니다. 채용 목록의 '추천 채용' 섹션 카드로 뜨며, 광고 배너 이미지는 쓰지 않습니다.",
+		"side-horizontal":
+			"(구) 좌측 사이드 배너 상품입니다. 현재는 프리미엄 광고 배너 풀로 흡수돼 프리미엄과 동일하게 동작합니다.",
+		"side-vertical":
+			"(구) 우측 사이드 배너 상품입니다. 현재는 프리미엄 광고 배너 풀로 흡수돼 프리미엄과 동일하게 동작합니다.",
+		"special-list":
+			"리스팅 노출 영역입니다. 채용 목록의 '스페셜 채용' 섹션 카드로 뜨며, 광고 배너 이미지는 쓰지 않습니다.",
+		"urgent-list":
+			"리스팅 노출 영역입니다. 채용 목록의 '급구 채용' 섹션 카드로 뜨며, 광고 배너 이미지는 쓰지 않습니다.",
+	};

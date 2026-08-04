@@ -52,8 +52,8 @@ export default function ModeratorQueueDetailPage() {
 					detail: mediaQuery.data?.media.detail ?? [],
 				}}
 				onBack={() => router.push("/moderator")}
-				onResolve={(qid, action) => {
-					resolveQueue(qid, action);
+				onResolve={(qid, action, reason) => {
+					resolveQueue(qid, action, reason);
 					router.push("/moderator");
 				}}
 				tone="calm"
