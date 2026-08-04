@@ -42,6 +42,11 @@ const getJobStatusNote = (job: EmployerJob): null | string => {
 		return "검수 통과와 입금 확인을 모두 마쳐야 노출됩니다.";
 	}
 
+	// 검수 보류는 운영자가 판단을 미룬 상태다 — "숨김"과 달리 구인자가 할 일이 없다.
+	if (job.status === "on_hold") {
+		return "운영자가 추가 확인 중입니다. 검수가 끝나면 상태가 바뀝니다.";
+	}
+
 	if (job.status === "rejected") {
 		return job.rejectionReason
 			? `반려 사유: ${job.rejectionReason}`

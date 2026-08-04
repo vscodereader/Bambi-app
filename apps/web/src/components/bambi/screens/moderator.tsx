@@ -681,9 +681,10 @@ export function QueueDetail({
 	onBack: () => void;
 	onResolve: (id: string, action: QueueVerdict, reason?: string) => void;
 }) {
-	// 사유가 필요한 판정(반려·보류)만 시트를 띄운다. 승인은 그대로 즉시 처리.
-	const [verdict, setVerdict] = useState<null | "hold" | "reject">(null);
-	const approve = () => onResolve(item.id, "approve");
+	// 세 판정 모두 사유 시트를 거친다 — 목록 일괄 처리는 승인에도 사유를 받는데
+	// 상세만 즉시 처리하면 같은 조치의 기록이 경로마다 달라진다.
+	const [verdict, setVerdict] = useState<QueueVerdict | null>(null);
+	const approve = () => setVerdict("approve");
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col lg:flex-none">
 			<AppBar onBack={onBack} title="공고 검수" />
@@ -812,10 +813,11 @@ export function QueueDetail({
 	);
 }
 
-// 사유가 필요한 판정별 시트 문구·선택지. 보류는 일괄 처리(hidden 전환)와 같은 조치라
-// 사유 목록도 "지금 결론을 못 내는 이유"로 맞춘다.
+// 판정별 시트 문구·선택지. 보류는 일괄 처리(on_hold 전환)와 같은 조치라 사유 목록도
+// "지금 결론을 못 내는 이유"로 맞춘다. 선택지는 프리셋일 뿐이고, 운영자는 목록 일괄
+// 처리(ReasonConfirmSheet)와 동일하게 사유를 직접 고쳐 쓸 수 있다.
 const VERDICT_SHEETS: Record<
-	"hold" | "reject",
+	QueueVerdict,
 	{
 		confirmLabel: string;
 		danger: boolean;
@@ -824,10 +826,24 @@ const VERDICT_SHEETS: Record<
 		title: string;
 	}
 > = {
+	approve: {
+		confirmLabel: "승인하기",
+		danger: false,
+		description: "승인하면 공고가 게시되고, 사유가 처리 기록에 남아요.",
+		reasons: [
+			"운영 검수 기준 충족",
+			"감지 표현이 오해 소지 수준",
+			"업소 정보 확인 완료",
+			"보완 요청 반영 확인",
+			"기타 승인 사유",
+		],
+		title: "승인 사유 작성",
+	},
 	hold: {
 		confirmLabel: "보류하기",
 		danger: false,
-		description: "보류하면 공고가 비공개로 내려가고, 사유가 기록돼요.",
+		description:
+			"보류하면 공고가 검수 보류 상태로 내려가고, 사유가 기록돼요. 공고 관리의 '검수 보류' 탭에서 다시 처리할 수 있어요.",
 		reasons: [
 			"업소 정보 추가 확인 필요",
 			"사업자 인증 확인 필요",
@@ -835,12 +851,12 @@ const VERDICT_SHEETS: Record<
 			"내부 논의 필요",
 			"기타 확인 필요",
 		],
-		title: "보류 사유 선택",
+		title: "보류 사유 작성",
 	},
 	reject: {
 		confirmLabel: "반려하기",
 		danger: true,
-		description: "선택한 사유는 구인자에게 그대로 전달돼요.",
+		description: "작성한 사유는 처리 기록에 그대로 남아요.",
 		reasons: [
 			"성적 서비스 암시 표현",
 			"강요·착취 의심 조건",
@@ -848,9 +864,12 @@ const VERDICT_SHEETS: Record<
 			"허위·과장 정보",
 			"기타 정책 위반",
 		],
-		title: "반려 사유 선택",
+		title: "반려 사유 작성",
 	},
 };
+
+// 사유 최소 길이. 목록 일괄 처리(ReasonConfirmSheet)·서버 입력 스키마와 같은 2자.
+const VERDICT_REASON_MIN_LENGTH = 2;
 
 function VerdictReasonSheet({
 	onCancel,
@@ -859,11 +878,14 @@ function VerdictReasonSheet({
 }: {
 	onCancel: () => void;
 	onConfirm: (reason: string) => void;
-	verdict: "hold" | "reject";
+	verdict: QueueVerdict;
 }) {
 	const config = VERDICT_SHEETS[verdict];
 	const reasons = config.reasons;
-	const [sel, setSel] = useState(reasons[0]);
+	// 선택지는 입력칸을 채우는 프리셋이다 — 고른 뒤 그대로 보내도 되고, 고쳐 써도 된다.
+	const [reason, setReason] = useState(reasons[0] ?? "");
+	const reasonFieldId = `queue-verdict-reason-${verdict}`;
+	const canConfirm = reason.trim().length >= VERDICT_REASON_MIN_LENGTH;
 	return (
 		// 모바일은 바닥에서 올라오는 시트, 데스크톱은 화면 가운데 카드다.
 		// absolute는 상세 영역만 덮어서, 데스크톱에서는 헤더·푸터만 멀쩡히 밝은 채로 남아
@@ -876,16 +898,18 @@ function VerdictReasonSheet({
 				onClick={onCancel}
 				type="button"
 			/>
-			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:animate-none lg:rounded-3xl lg:pt-6 lg:shadow-[var(--shadow-card)]">
+			{/* 선택지 5개 + 사유 입력칸이라 작은 화면에서는 시트가 뷰포트를 넘는다.
+			    안에서 스크롤시켜 확정 버튼이 화면 밖으로 밀리지 않게 한다. */}
+			<div className="relative max-h-[90vh] animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] overflow-y-auto rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:animate-none lg:rounded-3xl lg:pt-6 lg:shadow-[var(--shadow-card)]">
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
 					{config.title}
 				</h2>
 				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
 					{config.description}
 				</p>
-				<div className="mb-4 flex flex-col gap-2">
+				<div className="mb-3 flex flex-col gap-2">
 					{reasons.map((r) => {
-						const on = sel === r;
+						const on = reason === r;
 						return (
 							<button
 								className={cn(
@@ -895,7 +919,7 @@ function VerdictReasonSheet({
 										: "border border-[color:var(--border-default)] bg-card"
 								)}
 								key={r}
-								onClick={() => setSel(r)}
+								onClick={() => setReason(r)}
 								type="button"
 							>
 								<span className="flex-1 font-semibold text-[14px] text-foreground">
@@ -910,13 +934,27 @@ function VerdictReasonSheet({
 						);
 					})}
 				</div>
-				<div className="grid grid-cols-2 gap-2.5">
+				<label
+					className="mb-2 block font-bold text-[13px] text-foreground"
+					htmlFor={reasonFieldId}
+				>
+					처리 사유
+				</label>
+				<textarea
+					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+					id={reasonFieldId}
+					onChange={(event) => setReason(event.target.value)}
+					placeholder="위 선택지를 고르거나 직접 작성해 주세요(2자 이상)."
+					value={reason}
+				/>
+				<div className="mt-4 grid grid-cols-2 gap-2.5">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
 					</Button>
 					<Button
 						block
-						onClick={() => onConfirm(sel ?? reasons[0] ?? "")}
+						disabled={!canConfirm}
+						onClick={() => onConfirm(reason.trim())}
 						size="lg"
 						variant={config.danger ? "danger" : "primary"}
 					>

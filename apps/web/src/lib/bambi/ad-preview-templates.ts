@@ -67,6 +67,32 @@ export const isBannerPreviewTemplate = (
 	previewTemplate: AdPreviewTemplateValue
 ): boolean => getAdBannerUsagesForPreviewTemplate(previewTemplate).length > 0;
 
+export type AdPlacementKind = "banner" | "listing";
+
+// 게재 위치 유형(배너/리스팅)에 맞는 노출 영역만 남긴다 — 리스팅 위치 상품 폼에
+// "프리미엄 광고 배너"가 뜨면 위치와 상품이 어긋난 채 팔린다. "노출 영역 없음(일반)"은
+// 광고 없는 기본 상품이라 어느 위치에서도 고를 수 있다. 유형을 아직 모르면(카탈로그
+// 로딩·조회 실패) 좁히지 않고 전체를 준다.
+export const getPreviewTemplateOptionsForPlacementKind = (
+	placementKind: AdPlacementKind | undefined
+): (typeof AD_PREVIEW_TEMPLATE_OPTIONS)[number][] =>
+	AD_PREVIEW_TEMPLATE_OPTIONS.filter(
+		(option) =>
+			placementKind === undefined ||
+			option.value === "none" ||
+			isBannerPreviewTemplate(option.value) === (placementKind === "banner")
+	);
+
+// 이미 저장된 값이 위치 유형과 어긋나는가(기존 상품 편집 경고용). 레거시 side 값은
+// 프리미엄 배너 풀로 흡수되므로 배너 위치에서는 어긋난 게 아니다.
+export const isPreviewTemplateKindMismatch = (
+	previewTemplate: AdPreviewTemplateValue,
+	placementKind: AdPlacementKind | undefined
+): boolean =>
+	placementKind !== undefined &&
+	previewTemplate !== "none" &&
+	isBannerPreviewTemplate(previewTemplate) !== (placementKind === "banner");
+
 // 운영자가 노출 영역을 고를 때 보이는 안내. "이 상품을 사면 공고가 어디에 뜨는가"를
 // 영역별로 적는다(리스팅형에 배너 안내가 붙던 문제를 값별 매핑으로 고정).
 export const AD_PREVIEW_TEMPLATE_HINTS: Record<AdPreviewTemplateValue, string> =

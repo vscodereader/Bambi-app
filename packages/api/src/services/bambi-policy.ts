@@ -10,6 +10,7 @@ export const jobPostStatuses = [
 	"published",
 	"hidden",
 	"rejected",
+	"on_hold",
 ] as const;
 export const accountStatuses = ["active", "warned", "suspended"] as const;
 
@@ -72,6 +73,7 @@ const jobPostStatusLabels = {
 	published: "공개",
 	hidden: "숨김",
 	rejected: "반려",
+	on_hold: "검수 보류",
 } as const satisfies Record<JobPostStatus, string>;
 
 // 공고는 등록도 수정도 예외 없이 운영자 검수를 거친다. 업소 인증 여부나 내용 변경 여부로

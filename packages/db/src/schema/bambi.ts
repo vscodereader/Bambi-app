@@ -38,12 +38,16 @@ export const employerVerificationStatus = pgEnum(
 	["none", "pending", "verified", "rejected"]
 );
 
+// on_hold(검수 보류)는 hidden(운영자 강제 숨김)과 구분되는 검수 축 상태다 — 둘을 같은
+// hidden으로 저장하면 구인자 목록에 "숨김"으로 보여 보류 사유를 알 수 없다.
+// 마이그레이션 호환을 위해 새 값은 항상 목록 끝에 덧붙인다(ALTER TYPE ... ADD VALUE).
 export const jobPostStatus = pgEnum("job_post_status", [
 	"draft",
 	"pending_review",
 	"published",
 	"hidden",
 	"rejected",
+	"on_hold",
 ]);
 
 // 업종 카테고리. 운영이 확정한 9종으로 고정하며, 값 자체가 화면 표기(한국어·BAR)다 —

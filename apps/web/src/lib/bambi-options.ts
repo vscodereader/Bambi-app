@@ -47,12 +47,15 @@ export const PAY_UNIT_HOURS: Record<string, number> = {
 	월급: 209,
 };
 
+// on_hold(검수 보류)는 운영자가 검수 큐에서 판단을 미룬 상태다. 운영자가 직접 내린
+// hidden(숨김)과 라벨이 갈려야 구인자가 "왜 안 보이는지"를 구분할 수 있다.
 export const jobStatusLabels = {
 	draft: "임시 저장",
 	pending_review: "검수 대기",
 	published: "공개",
 	hidden: "숨김",
 	rejected: "반려",
+	on_hold: "검수 보류",
 } as const;
 
 // 국세청 사업자등록 상태(b_stt_cd) 원값 → 화면 라벨. 서버가 계속사업자("01")만

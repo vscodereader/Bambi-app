@@ -93,11 +93,14 @@ const reportStatusSchema = z.enum([
 	"dismissed",
 ]);
 
+// on_hold(검수 보류)는 운영자 강제 숨김(hidden)과 다른 조치라 별도 값으로 받는다 —
+// 목록 필터(listJobPosts)와 단건·일괄 상태 변경이 모두 이 스키마를 공유한다.
 const jobPostModerationStatusSchema = z.enum([
 	"pending_review",
 	"published",
 	"hidden",
 	"rejected",
+	"on_hold",
 ]);
 
 const accountStatusSchema = z.enum(["active", "warned", "suspended"]);

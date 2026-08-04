@@ -52,7 +52,8 @@
 - `bambi_user_role`: `job_seeker` / `employer` / `admin`
 - `account_status`: `active` / `warned` / `suspended`
 - `employer_verification_status`: `none` / `pending` / `verified` / `rejected`
-- `job_post_status`: `draft` / `pending_review` / `published` / `hidden` / `rejected`
+- `job_post_status`: `draft` / `pending_review` / `published` / `hidden` / `rejected` / `on_hold`
+  (`on_hold` = 검수 보류. 운영자 강제 숨김 `hidden`과 구분되며 구인자 목록에 "검수 보류"로 표시)
 - `job_payment_status`: `unpaid` / `paid`
 - `job_exposure_type`: `premium-banner` / `left-banner` / `right-banner` / `special` / `urgent` / `recommended` / `standard`
 - `interview_status`: `proposed` / `confirmed` / `declined` / `canceled` / `completed`
@@ -496,6 +497,8 @@
 [생성]        → pending_review (paymentStatus: 무료=paid / 유료=unpaid)
 pending_review→ published   (운영자 승인)
 pending_review→ rejected    (운영자 반려, rejectionReason 기록)
+pending_review→ on_hold     (운영자 보류, 검수 결론 보류 — 구인자 화면 "검수 보류")
+on_hold       → published / rejected (운영자가 공고 관리 "검수 보류" 탭에서 마무리)
 published     → hidden      (운영자 숨김)
 any(≠draft)   → pending_review (구인자 수정 시 자동 재검수)
 unpaid        → paid        (운영자 결제 확인, exposureEndsAt 설정)

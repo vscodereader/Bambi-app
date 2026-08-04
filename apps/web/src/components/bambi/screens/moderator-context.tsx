@@ -108,10 +108,13 @@ interface ApiQueueItem {
 }
 
 // 검수 상세 판정 → 공고 상태·기본 사유. 보류는 일괄 처리(applyQueueBulkAction)와 동일하게
-// hidden으로 내린다 — 두 경로가 다른 상태로 갈리면 보류 공고가 큐에서 서로 다르게 보인다.
+// on_hold로 내린다 — 두 경로가 다른 상태로 갈리면 보류 공고가 큐에서 서로 다르게 보인다.
+// hidden(운영자 강제 숨김)과 섞으면 구인자 목록에 "숨김"으로 떠 보류인지 알 수 없다.
+type QueueVerdictStatus = "on_hold" | "published" | "rejected";
+
 const QUEUE_VERDICT_STATUS: Record<
 	QueueVerdict,
-	{ defaultReason: string; status: "hidden" | "published" | "rejected" }
+	{ defaultReason: string; status: QueueVerdictStatus }
 > = {
 	approve: {
 		defaultReason: "운영자가 공고를 승인했습니다.",
@@ -119,7 +122,7 @@ const QUEUE_VERDICT_STATUS: Record<
 	},
 	hold: {
 		defaultReason: "운영자가 추가 확인을 위해 공고를 보류했습니다.",
-		status: "hidden",
+		status: "on_hold",
 	},
 	reject: {
 		defaultReason: "운영자가 정책 위반으로 공고를 반려했습니다.",
@@ -666,7 +669,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			action: ModerationBulkAction,
 			reason: string
 		) => {
-			let status: "hidden" | "published" | "rejected" = "hidden";
+			let status: QueueVerdictStatus = "on_hold";
 			let actionLabel = "공고 보류";
 
 			if (action === "approve") {
