@@ -6,6 +6,9 @@ import { eq, inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import type { Context } from "../../context";
+// 글 작성은 사용자당 1분 1회로 묶여 있다(도배 방지). 한 테스트가 같은 사용자로 글을
+// 여러 개 만들 때는 그 카운터를 비워야 한다 — 검증 대상은 정책이 아니라 목록·댓글이다.
+import { resetRateLimits } from "../../services/rate-limit";
 
 dotenv.config({
 	path: "../../apps/server/.env",
@@ -285,6 +288,7 @@ describe("bambi community router — 조회", () => {
 				board: "free",
 				title: openTitle,
 			});
+			resetRateLimits();
 			const locked = await createPost({
 				...basePostInput,
 				board: "free",
@@ -401,6 +405,7 @@ describe("bambi community router — 조회", () => {
 				["createPost"]
 			);
 			for (let index = 0; index < 25; index += 1) {
+				resetRateLimits();
 				await createPost({
 					...basePostInput,
 					board: "market",
@@ -1196,6 +1201,7 @@ describe("bambi community router — 대댓글", () => {
 				board: "free",
 				title: `대댓글 제한 A ${randomUUID()}`,
 			});
+			resetRateLimits();
 			const postB = await createPost({
 				...basePostInput,
 				board: "free",
