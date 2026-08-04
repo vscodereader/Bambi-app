@@ -1218,11 +1218,20 @@
     (직접 호출 시 서버 400).
 - **관련 API**: `bambi.support.createInquiryMessage` (`support.ts`, `protectedProcedure` + `loadAccessibleInquiry`)
 
-### 14.4 문의 종료(closed) — **운영자 화면에 버튼 없음**
+### 14.4 문의 종료(closed) — **운영자 전용**
 
-- `bambi.support.closeInquiry`는 존재하지만 사용처가 **회원 측**
-  (`apps/web/src/components/bambi/support/inquiry-thread.tsx`)뿐이다.
-- QA 절차: 회원 계정으로 문의를 종료 → 운영자 화면 재조회 → 배지 "종료" + 답변 폼 대신 안내 문구.
+- **절차**: 답변을 보내 상태가 **답변완료(`answered`)**가 된 뒤 스레드 하단 **문의 종료**를 누른다.
+- **기대 결과**: 토스트 "문의를 종료했어요." → 배지 "종료" + 답변 폼 대신
+  "종료된 문의라 답변을 남길 수 없어요." 회원 화면도 같은 문의가 종료 상태로 보인다.
+- **엣지 케이스 / 실패 케이스**:
+  - **`open`(접수됨) 상태에서는 버튼이 뜨지 않는다.** 직접 호출하면 서버 400
+    "답변을 보낸 뒤에 문의를 종료할 수 있습니다."
+  - **회원 화면에는 종료 버튼이 없다.** 회원이 직접 호출하면 `FORBIDDEN`
+    (`closeInquiry`가 `adminProcedure`). 회원이 닫아버리면 운영자 답변까지 막히던
+    문제 때문에 종료 권한을 운영자로 옮겼다.
+  - **확인 다이얼로그가 없고 재개(reopen) 프로시저도 없다.** 종료한 문의는 되돌릴 수 없으므로
+    회원이 다시 문의를 등록해야 한다.
+- **관련 API**: `bambi.support.closeInquiry` (`support.ts`, `adminProcedure`)
 
 ### 14.5 FAQ 등록
 

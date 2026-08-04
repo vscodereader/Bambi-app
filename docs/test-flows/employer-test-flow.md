@@ -810,19 +810,19 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 - **엣지 케이스**: **첨부파일 업로드 UI가 없다.** 금칙어 포함 시 `assertNoBannedWords`가 차단하고 해당 메시지가 그대로 토스트로 노출
 - **관련 API**: `bambi.support.createInquiry`
 
-### 15.3 문의 목록 · 상세 · 추가 메시지 · 종료
+### 15.3 문의 목록 · 상세 · 추가 메시지
 
 - **경로**: `/support/inquiries`, `/support/inquiries/[id]` (파일: `apps/web/src/components/bambi/support/inquiry-list.tsx`, `inquiry-thread.tsx`)
 - **기대 결과**:
   - 목록: 카테고리 배지 + 상태 배지(접수됨/답변완료/종료) + 제목 + 최근 메시지 시각
-  - 상세: 원문 + 메시지 스레드(운영자/나 배지) + 답장 Textarea + "보내기" / "문의 종료"
+  - 상세: 원문 + 메시지 스레드(운영자/나 배지) + 답장 Textarea + "보내기"
   - 상태 전이: 사용자가 메시지를 보내면 `open`, 운영자가 답하면 `answered`
 - **엣지 케이스**:
   - **목록이 `page: 1` 고정이고 페이지 이동 UI가 없다** — 서버 페이지 크기 20이므로 21건째부터 볼 수 없다
   - 메시지는 최대 100건까지만 반환
-  - **"문의 종료"에 확인 다이얼로그가 없고 즉시 실행된다.** 종료 후 재개(reopen) 프로시저 없음 → 서버 `BAD_REQUEST "종료된 문의에는 답변을 남길 수 없습니다."`
+  - **문의자 화면에 "문의 종료" 버튼이 없다.** 종료는 운영자 전용(`closeInquiry` = `adminProcedure`)이고 재개(reopen) 프로시저는 없다 → 종료 뒤 답장 시도는 서버 `BAD_REQUEST "종료된 문의에는 답변을 남길 수 없습니다."`
   - 운영자가 숨긴 문의·메시지는 작성자에게 `NOT_FOUND` 또는 "운영자가 숨긴 메시지입니다."로 대체된다
-- **관련 API**: `bambi.support.listMyInquiries`, `bambi.support.getInquiry`, `bambi.support.createInquiryMessage`, `bambi.support.closeInquiry`
+- **관련 API**: `bambi.support.listMyInquiries`, `bambi.support.getInquiry`, `bambi.support.createInquiryMessage`
 
 ### 15.4 법적 문서
 

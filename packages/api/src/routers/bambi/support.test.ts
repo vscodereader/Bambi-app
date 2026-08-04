@@ -128,8 +128,15 @@ describe("고객센터 문의", () => {
 	it("종료된 문의에는 메시지를 남길 수 없다", async () => {
 		const created = await createInquiryAs(seekerId);
 
+		// 종료는 answered 이후에만 열리므로 운영자 답변을 먼저 넣는다.
+		const answerCaller = createProcedureClient(
+			supportRouter.createInquiryMessage,
+			{ context: createContextForUser(adminId) }
+		);
+		await answerCaller({ inquiryId: created.id, body: "확인했습니다." });
+
 		const closeCaller = createProcedureClient(supportRouter.closeInquiry, {
-			context: createContextForUser(seekerId),
+			context: createContextForUser(adminId),
 		});
 		await closeCaller({ inquiryId: created.id });
 
@@ -141,6 +148,30 @@ describe("고객센터 문의", () => {
 		await expect(
 			messageCaller({ inquiryId: created.id, body: "추가 문의" })
 		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+	});
+
+	it("문의자는 문의를 종료할 수 없다", async () => {
+		const created = await createInquiryAs(seekerId);
+
+		const caller = createProcedureClient(supportRouter.closeInquiry, {
+			context: createContextForUser(seekerId),
+		});
+
+		await expect(caller({ inquiryId: created.id })).rejects.toMatchObject({
+			code: "FORBIDDEN",
+		});
+	});
+
+	it("답변 전 문의는 운영자도 종료할 수 없다", async () => {
+		const created = await createInquiryAs(seekerId);
+
+		const caller = createProcedureClient(supportRouter.closeInquiry, {
+			context: createContextForUser(adminId),
+		});
+
+		await expect(caller({ inquiryId: created.id })).rejects.toMatchObject({
+			code: "BAD_REQUEST",
+		});
 	});
 });
 

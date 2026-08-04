@@ -43,18 +43,6 @@ export function InquiryThread({ inquiryId }: { inquiryId: string }) {
 		})
 	);
 
-	const closeMutation = useMutation(
-		orpc.bambi.support.closeInquiry.mutationOptions({
-			onError: (error) => {
-				toast(error.message || "문의를 종료하지 못했어요.");
-			},
-			onSuccess: async () => {
-				toast("문의를 종료했어요.");
-				await invalidate();
-			},
-		})
-	);
-
 	if (inquiryQuery.isPending) {
 		return (
 			<div className="flex flex-col gap-3 py-6">
@@ -75,6 +63,7 @@ export function InquiryThread({ inquiryId }: { inquiryId: string }) {
 	}
 
 	const { inquiry, messages } = inquiryQuery.data;
+	// 종료는 운영자만 한다(문의자가 닫으면 운영자 답변까지 막혀서 종료 버튼을 걷어냈다).
 	// 종료된 문의는 서버가 BAD_REQUEST를 주므로 입력창 자체를 내린다.
 	const isClosed = inquiry.inquiryStatus === "closed";
 
@@ -138,21 +127,13 @@ export function InquiryThread({ inquiryId }: { inquiryId: string }) {
 						placeholder="추가로 남길 내용을 적어 주세요"
 						value={reply}
 					/>
-					<div className="flex flex-wrap gap-2">
-						<Button
-							disabled={reply.trim().length === 0 || replyMutation.isPending}
-							onClick={() => replyMutation.mutate({ body: reply, inquiryId })}
-						>
-							보내기
-						</Button>
-						<Button
-							disabled={closeMutation.isPending}
-							onClick={() => closeMutation.mutate({ inquiryId })}
-							variant="outline"
-						>
-							문의 종료
-						</Button>
-					</div>
+					<Button
+						className="self-start"
+						disabled={reply.trim().length === 0 || replyMutation.isPending}
+						onClick={() => replyMutation.mutate({ body: reply, inquiryId })}
+					>
+						보내기
+					</Button>
 				</div>
 			)}
 		</div>
