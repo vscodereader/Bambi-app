@@ -187,6 +187,8 @@ export const invitation = pgTable(
 		role: text("role"),
 		teamId: text("team_id"),
 		status: text("status").default("pending").notNull(),
+		// 구인자가 초대할 때 적는 사유(선택). 운영자 팀 합류 승인 화면에서 판단 근거로 쓴다.
+		inviteReason: text("invite_reason"),
 		rejectionReason: text("rejection_reason"),
 		expiresAt: timestamp("expires_at").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),

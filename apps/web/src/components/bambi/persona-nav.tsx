@@ -236,6 +236,7 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 							count={selected.length}
 							isApplying={isBulkApplying}
 							onAction={bulkAction}
+							onClearSelection={clearSelection}
 							scope={bulkScope}
 						/>
 					</div>

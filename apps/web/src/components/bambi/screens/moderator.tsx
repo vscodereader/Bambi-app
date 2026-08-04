@@ -78,9 +78,11 @@ import {
 	XIcon,
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
-import type {
-	ModerationBulkAction,
-	ModerationBulkScope,
+import {
+	type ModerationBulkAction,
+	type ModerationBulkScope,
+	QUEUE_VERDICT_TOAST,
+	type QueueVerdict,
 } from "./moderator-context";
 
 const HI_CLASS: Record<string, string> = {
@@ -357,27 +359,29 @@ function QueueFilterRow({
 	);
 }
 
+// 카드 목록(검수 큐·신고·사용자)의 선택 체크박스. shadcn Checkbox를 쓰지 않는 이유는
+// base-ui Checkbox가 숨은 <input>을 루트의 형제로 렌더하고 클릭을 그 input에 재발행해서,
+// 행 클릭(상세 이동)과 분리하려면 래퍼를 한 겹 더 둬야 하기 때문이다. 여기서는 토글
+// 버튼(aria-pressed) 하나로 끝내고 클릭을 그 자리에서 멈춘다. 모양은 콘솔 체크박스 토큰
+// (rounded-sm · border-input · 선택 시 primary)에 맞춘다.
 function QueueCheckbox({
 	checked,
-	dark,
+	label = "항목 선택",
 	onToggle,
 }: {
 	checked: boolean;
-	dark: boolean;
+	label?: string;
 	onToggle: () => void;
 }) {
 	return (
 		<button
-			aria-label="항목 선택"
+			aria-label={label}
 			aria-pressed={checked}
 			className={cn(
-				"mt-px inline-flex size-[22px] flex-[0_0_22px] cursor-pointer items-center justify-center rounded-[7px] text-white",
+				"mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border transition-colors",
 				checked
-					? "border border-transparent bg-primary"
-					: cn(
-							"border-[1.5px]",
-							dark ? "border-white/40" : "border-[color:var(--border-strong)]"
-						)
+					? "border-primary bg-primary text-primary-foreground"
+					: "border-input bg-card text-transparent hover:border-primary/60"
 			)}
 			onClick={(e) => {
 				e.stopPropagation();
@@ -385,11 +389,9 @@ function QueueCheckbox({
 			}}
 			type="button"
 		>
-			{checked ? (
-				<span className="inline-flex size-[13px]">
-					<CheckIcon />
-				</span>
-			) : null}
+			<span className="inline-flex size-3">
+				<CheckIcon />
+			</span>
 		</button>
 	);
 }
@@ -405,18 +407,18 @@ function QueueRow({
 	onToggle: () => void;
 	onOpen: () => void;
 }) {
-	const dark = selected;
-	const subFg = dark
-		? "text-[color:var(--text-on-dark-muted)]"
-		: "text-muted-foreground";
+	// 선택 표시는 신고·사용자 목록과 같은 언어(코럴 테두리 + 연한 코럴 배경)로 통일한다.
+	// 예전처럼 행 전체를 잉크색으로 반전시키면 선택이 "조치 완료"처럼 읽히고, 여러 건을
+	// 고를수록 목록이 통째로 어두워져 남은 항목을 훑기 어렵다.
+	const subFg = "text-muted-foreground";
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: 행 내부에 체크박스 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
 		<div
 			className={cn(
-				"flex cursor-pointer items-start gap-3 rounded-2xl p-[14px]",
-				dark
-					? "border border-transparent bg-ink-800 text-white shadow-md"
-					: "border border-border bg-card text-[color:var(--text-default)] shadow-card"
+				"flex cursor-pointer items-start gap-3 rounded-2xl p-[14px] text-[color:var(--text-default)] shadow-card",
+				selected
+					? "border border-primary bg-coral-50"
+					: "border border-border bg-card"
 			)}
 			onClick={onOpen}
 			onKeyDown={(e) => {
@@ -428,16 +430,15 @@ function QueueRow({
 			role="button"
 			tabIndex={0}
 		>
-			<QueueCheckbox checked={selected} dark={dark} onToggle={onToggle} />
+			<QueueCheckbox
+				checked={selected}
+				label={`${q.company} 공고 선택`}
+				onToggle={onToggle}
+			/>
 			<Avatar name={q.company} size="sm" square />
 			<div className="flex min-w-0 flex-1 flex-col gap-[5px]">
 				<div className="flex items-center gap-2">
-					<span
-						className={cn(
-							"whitespace-nowrap font-bold text-[14.5px]",
-							dark ? "text-white" : "text-foreground"
-						)}
-					>
+					<span className="whitespace-nowrap font-bold text-[14.5px] text-foreground">
 						{q.company}
 					</span>
 					<span className={cn("min-w-0 flex-1 truncate text-[13px]", subFg)}>
@@ -449,12 +450,7 @@ function QueueRow({
 					{q.detected.length > 0 ? (
 						<>
 							<span>감지 문구 </span>
-							<span
-								className={cn(
-									"font-bold",
-									dark ? "text-white" : "text-[color:var(--text-default)]"
-								)}
-							>
+							<span className="font-bold text-[color:var(--text-default)]">
 								{q.detected.map((d) => `"${d}"`).join(", ")}
 							</span>
 						</>
@@ -462,21 +458,13 @@ function QueueRow({
 						<span>감지된 문구 없음 · 정상 등록 건</span>
 					)}
 				</div>
-				<div
-					className={cn(
-						"text-[11.5px]",
-						dark ? "text-white/55" : "text-[color:var(--text-subtle)]"
-					)}
-				>
+				<div className="text-[11.5px] text-[color:var(--text-subtle)]">
 					접수 {q.receivedAt} · ID {q.refId}
 				</div>
 			</div>
 			<span
 				aria-hidden="true"
-				className={cn(
-					"mt-px inline-flex size-[18px]",
-					dark ? "text-white/50" : "text-[color:var(--text-subtle)]"
-				)}
+				className="mt-px inline-flex size-[18px] text-[color:var(--text-subtle)]"
 			>
 				<ChevronRightIcon />
 			</span>
@@ -645,23 +633,29 @@ function QueueMediaSection({
 const VERDICT_GUIDE =
 	"판단 기준: 성적 서비스 암시·강요·외부 연락 유도는 반려, 단순 오해 소지는 승인 후 안내해요.";
 
-// 승인·반려도 마찬가지로 두 자리에 놓인다(데스크톱 도크 / 모바일 하단 바).
-// 버튼 자체를 한 곳에 모아 둬야 한쪽만 고치는 실수가 안 난다.
+// 승인·보류·반려도 마찬가지로 두 자리에 놓인다(데스크톱 도크 / 모바일 하단 바).
+// 버튼 자체를 한 곳에 모아 둬야 한쪽만 고치는 실수가 안 난다. 모바일 하단 바는 2열
+// 그리드라 보류·반려를 한 줄에 두고 승인만 아래 줄 전체를 쓴다(주요 액션 한 곳).
 function VerdictActions({
 	onApprove,
+	onHold,
 	onReject,
 }: {
 	onApprove: () => void;
+	onHold: () => void;
 	onReject: () => void;
 }) {
 	return (
 		<>
+			<Button block onClick={onHold} size="lg" variant="secondary">
+				보류
+			</Button>
 			<Button block onClick={onReject} size="lg" variant="secondary">
 				반려
 			</Button>
 			<Button
 				block
-				className="shadow-none"
+				className="col-span-2 shadow-none"
 				onClick={onApprove}
 				size="lg"
 				variant="primary"
@@ -685,11 +679,11 @@ export function QueueDetail({
 	media?: QueueDetailMedia;
 	tone: VisualTone;
 	onBack: () => void;
-	onResolve: (id: string, action: "approve" | "reject") => void;
+	onResolve: (id: string, action: QueueVerdict, reason?: string) => void;
 }) {
-	const [reject, setReject] = useState(false);
+	// 사유가 필요한 판정(반려·보류)만 시트를 띄운다. 승인은 그대로 즉시 처리.
+	const [verdict, setVerdict] = useState<null | "hold" | "reject">(null);
 	const approve = () => onResolve(item.id, "approve");
-	const openReject = () => setReject(true);
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col lg:flex-none">
 			<AppBar onBack={onBack} title="공고 검수" />
@@ -791,38 +785,84 @@ export function QueueDetail({
 						    세로로 쌓아 라벨을 온전히 두고, 마지막 줄에 승인을 놓아
 						    "확인하고 → 내보낸다" 순서가 그대로 읽히게 한다. */}
 						<div className="flex flex-col gap-2.5">
-							<VerdictActions onApprove={approve} onReject={openReject} />
+							<VerdictActions
+								onApprove={approve}
+								onHold={() => setVerdict("hold")}
+								onReject={() => setVerdict("reject")}
+							/>
 						</div>
 					</aside>
 				</div>
 			</div>
 			<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5 lg:hidden">
-				<VerdictActions onApprove={approve} onReject={openReject} />
+				<VerdictActions
+					onApprove={approve}
+					onHold={() => setVerdict("hold")}
+					onReject={() => setVerdict("reject")}
+				/>
 			</div>
-			{reject ? (
-				<RejectSheet
-					onCancel={() => setReject(false)}
-					onConfirm={() => onResolve(item.id, "reject")}
+			{verdict ? (
+				<VerdictReasonSheet
+					onCancel={() => setVerdict(null)}
+					onConfirm={(reason) => onResolve(item.id, verdict, reason)}
+					verdict={verdict}
 				/>
 			) : null}
 		</div>
 	);
 }
 
-function RejectSheet({
+// 사유가 필요한 판정별 시트 문구·선택지. 보류는 일괄 처리(hidden 전환)와 같은 조치라
+// 사유 목록도 "지금 결론을 못 내는 이유"로 맞춘다.
+const VERDICT_SHEETS: Record<
+	"hold" | "reject",
+	{
+		confirmLabel: string;
+		danger: boolean;
+		description: string;
+		reasons: string[];
+		title: string;
+	}
+> = {
+	hold: {
+		confirmLabel: "보류하기",
+		danger: false,
+		description: "보류하면 공고가 비공개로 내려가고, 사유가 기록돼요.",
+		reasons: [
+			"업소 정보 추가 확인 필요",
+			"사업자 인증 확인 필요",
+			"공고 내용 보완 요청 예정",
+			"내부 논의 필요",
+			"기타 확인 필요",
+		],
+		title: "보류 사유 선택",
+	},
+	reject: {
+		confirmLabel: "반려하기",
+		danger: true,
+		description: "선택한 사유는 구인자에게 그대로 전달돼요.",
+		reasons: [
+			"성적 서비스 암시 표현",
+			"강요·착취 의심 조건",
+			"외부 연락 유도",
+			"허위·과장 정보",
+			"기타 정책 위반",
+		],
+		title: "반려 사유 선택",
+	},
+};
+
+function VerdictReasonSheet({
 	onCancel,
 	onConfirm,
+	verdict,
 }: {
 	onCancel: () => void;
-	onConfirm: () => void;
+	onConfirm: (reason: string) => void;
+	verdict: "hold" | "reject";
 }) {
-	const reasons = [
-		"성적 서비스 암시 표현",
-		"강요·착취 의심 조건",
-		"외부 연락 유도",
-		"허위·과장 정보",
-		"기타 정책 위반",
-	];
+	const config = VERDICT_SHEETS[verdict];
+	const reasons = config.reasons;
 	const [sel, setSel] = useState(reasons[0]);
 	return (
 		// 모바일은 바닥에서 올라오는 시트, 데스크톱은 화면 가운데 카드다.
@@ -838,10 +878,10 @@ function RejectSheet({
 			/>
 			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:animate-none lg:rounded-3xl lg:pt-6 lg:shadow-[var(--shadow-card)]">
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
-					반려 사유 선택
+					{config.title}
 				</h2>
 				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
-					선택한 사유는 구인자에게 그대로 전달돼요.
+					{config.description}
 				</p>
 				<div className="mb-4 flex flex-col gap-2">
 					{reasons.map((r) => {
@@ -874,8 +914,13 @@ function RejectSheet({
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
 					</Button>
-					<Button block onClick={onConfirm} size="lg" variant="danger">
-						반려하기
+					<Button
+						block
+						onClick={() => onConfirm(sel ?? reasons[0] ?? "")}
+						size="lg"
+						variant={config.danger ? "danger" : "primary"}
+					>
+						{config.confirmLabel}
 					</Button>
 				</div>
 			</div>
@@ -923,7 +968,11 @@ function ReportRow({
 			tabIndex={0}
 		>
 			{onToggle ? (
-				<QueueCheckbox checked={selected} dark={false} onToggle={onToggle} />
+				<QueueCheckbox
+					checked={selected}
+					label={`${r.reason} 신고 선택`}
+					onToggle={onToggle}
+				/>
 			) : null}
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-2">
@@ -1902,7 +1951,11 @@ function UserRow({
 			tabIndex={0}
 		>
 			{onToggle ? (
-				<QueueCheckbox checked={selected} dark={false} onToggle={onToggle} />
+				<QueueCheckbox
+					checked={selected}
+					label={`${u.name} 선택`}
+					onToggle={onToggle}
+				/>
 			) : null}
 			<Avatar name={u.name} square={u.role === "구인자"} />
 			<div className="min-w-0 flex-1">
@@ -2081,9 +2134,11 @@ function ReasonConfirmSheet({
 	const fixed = positioning === "fixed";
 
 	return (
+		// 모바일은 바닥에서 올라오는 시트, 데스크톱(lg~)은 화면 가운데 카드다 —
+		// 넓은 화면에서 폭 좁은 바텀시트를 그대로 쓰면 사유 입력칸이 모바일 폭에 갇힌다.
 		<div
 			className={cn(
-				"inset-0 flex flex-col justify-end",
+				"inset-0 flex flex-col justify-end lg:items-center lg:justify-center",
 				fixed ? "fixed z-50" : "absolute z-20"
 			)}
 		>
@@ -2095,8 +2150,9 @@ function ReasonConfirmSheet({
 			/>
 			<div
 				className={cn(
-					"relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]",
-					fixed && "mx-auto w-full max-w-[520px]"
+					"relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-3xl bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]",
+					"lg:w-full lg:max-w-lg lg:animate-none lg:rounded-3xl lg:px-7 lg:pt-6 lg:shadow-[var(--shadow-card)]",
+					fixed && "mx-auto w-full max-w-lg"
 				)}
 			>
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
@@ -2615,43 +2671,25 @@ const BULK_ACTIONS: Record<ModerationBulkScope, BulkActionConfig[]> = {
 	],
 };
 
-function ActionBtn({
-	disabled = false,
-	label,
-	tone,
-	onClick,
-}: {
-	disabled?: boolean;
-	label: string;
-	tone?: "danger" | "success";
-	onClick: () => void;
-}) {
-	let toneClass = "bg-secondary text-foreground";
-	if (tone === "danger") {
-		toneClass = "bg-coral-500 text-white";
-	} else if (tone === "success") {
-		toneClass = "bg-primary text-primary-foreground";
-	}
-	return (
-		<button
-			className={cn(
-				"h-[34px] cursor-pointer whitespace-nowrap rounded-[10px] px-[11px] font-bold text-[12.5px]",
-				toneClass,
-				disabled && "cursor-not-allowed opacity-50"
-			)}
-			disabled={disabled}
-			onClick={onClick}
-			type="button"
-		>
-			{label}
-		</button>
-	);
-}
+// 일괄 처리 버튼의 시각 위계. 되돌리기 어려운 조치(반려·정지)는 destructive,
+// 마무리 조치(승인·해결)만 기본(코럴) 버튼, 나머지는 한 톤 낮춘 secondary다.
+const BULK_TONE_VARIANT = {
+	danger: "destructive",
+	success: "default",
+} as const;
+
+// 액션 바 헤드라인에 쓰는 선택 대상 이름 — "3개"만 있으면 무엇을 고른 건지 모른다.
+const BULK_SCOPE_LABEL: Record<ModerationBulkScope, string> = {
+	queue: "검수 공고",
+	reports: "신고",
+	users: "사용자",
+};
 
 export function QueueActionBar({
 	count,
 	isApplying = false,
 	onAction,
+	onClearSelection,
 	scope = "queue",
 }: {
 	count: number;
@@ -2661,6 +2699,7 @@ export function QueueActionBar({
 		action: ModerationBulkAction,
 		reason: string
 	) => void;
+	onClearSelection?: () => void;
 	scope?: ModerationBulkScope;
 }) {
 	const [pendingAction, setPendingAction] = useState<BulkActionConfig | null>(
@@ -2678,19 +2717,42 @@ export function QueueActionBar({
 
 	return (
 		<div className="px-4 pt-2 pb-1">
-			<div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-3 py-2.5 shadow-[var(--shadow-card)]">
-				<span className="whitespace-nowrap font-bold text-[12.5px] text-foreground">
-					{count}개 선택됨
-				</span>
-				<div className="ml-auto flex min-w-0 gap-1.5 overflow-x-auto">
+			{/* 모바일은 좁아서 개수 줄과 버튼 줄을 나누고, 데스크톱부터 한 줄로 붙인다. */}
+			<div className="flex flex-col gap-2 rounded-2xl border border-border bg-background px-3 py-2.5 shadow-[var(--shadow-card)] sm:flex-row sm:items-center">
+				<div className="flex min-w-0 items-center gap-2">
+					<span className="inline-flex shrink-0 items-center rounded-full bg-primary px-2.5 py-1 font-extrabold text-[12px] text-primary-foreground tabular-nums">
+						{count}
+					</span>
+					<span className="truncate font-bold text-[13px] text-foreground">
+						{BULK_SCOPE_LABEL[scope]} {count}건 선택됨
+					</span>
+					{onClearSelection ? (
+						<UiButton
+							className="ml-auto shrink-0 sm:ml-0"
+							onClick={onClearSelection}
+							size="sm"
+							type="button"
+							variant="ghost"
+						>
+							선택 해제
+						</UiButton>
+					) : null}
+				</div>
+				<div className="flex min-w-0 gap-1.5 overflow-x-auto sm:ml-auto">
 					{actions.map((action) => (
-						<ActionBtn
+						<UiButton
+							className="shrink-0"
 							disabled={isApplying}
 							key={`${action.scope}-${action.action}`}
-							label={action.label}
 							onClick={() => setPendingAction(action)}
-							tone={action.tone}
-						/>
+							size="sm"
+							type="button"
+							variant={
+								action.tone ? BULK_TONE_VARIANT[action.tone] : "secondary"
+							}
+						>
+							{action.label}
+						</UiButton>
 					))}
 				</div>
 			</div>
@@ -2700,7 +2762,7 @@ export function QueueActionBar({
 							confirmLabel={`${pendingAction.label} 적용`}
 							danger={pendingAction.tone === "danger"}
 							defaultReason={pendingAction.defaultReason}
-							description={`${count}건 선택됨`}
+							description={`${BULK_SCOPE_LABEL[scope]} ${count}건에 적용해요.`}
 							isApplying={isApplying}
 							onCancel={() => setPendingAction(null)}
 							onConfirm={confirm}
@@ -2769,11 +2831,11 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 			s.includes(id) ? s.filter((x) => x !== id) : [...s, id]
 		);
 
-	const resolveQueue = (id: string, action: "approve" | "reject") => {
+	const resolveQueue = (id: string, action: QueueVerdict) => {
 		setQueue((q) => q.filter((x) => x.id !== id));
 		setSelected((s) => s.filter((x) => x !== id));
 		setDetail(null);
-		flash(action === "approve" ? "공고를 승인했어요" : "공고를 반려했어요");
+		flash(QUEUE_VERDICT_TOAST[action]);
 	};
 	const resolveReport = (id: string, action: "dismiss" | "act") => {
 		setReports((r) =>
@@ -2895,7 +2957,11 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 				</>
 			)}
 			{showActionBar ? (
-				<QueueActionBar count={selected.length} onAction={bulkAction} />
+				<QueueActionBar
+					count={selected.length}
+					onAction={bulkAction}
+					onClearSelection={() => setSelected([])}
+				/>
 			) : null}
 			{detail ? null : (
 				<div className="border-border border-t bg-background">
