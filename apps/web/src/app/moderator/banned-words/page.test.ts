@@ -16,4 +16,10 @@ describe("금칙어 관리 페이지", () => {
 		expect(source).toContain("createMany");
 		expect(source).toContain('accept=".csv');
 	});
+	it("기존 UI를 본문·닉네임 범위에 각각 재사용한다", () => {
+		expect(source).toContain('title="금칙어 관리"');
+		expect(source).toContain('scope="content"');
+		expect(source).toContain('title="닉네임 금칙어"');
+		expect(source).toContain('scope="display_name"');
+	});
 });

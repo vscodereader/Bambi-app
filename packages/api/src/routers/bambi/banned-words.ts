@@ -1,7 +1,7 @@
 import { db } from "@bambi-app/db";
 import { bannedWord } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure } from "../../index";
@@ -12,16 +12,20 @@ import {
 } from "../../services/bambi-banned-words";
 
 const TERM_MAX = 100;
+const bannedWordScope = z.enum(["content", "display_name"]);
 
 const listBannedWordsInput = z.object({
 	includeInactive: z.boolean().default(false),
+	scope: bannedWordScope.default("content"),
 });
 
 const createBannedWordInput = z.object({
+	scope: bannedWordScope.default("content"),
 	term: z.string().trim().min(1).max(TERM_MAX),
 });
 
 const createManyBannedWordsInput = z.object({
+	scope: bannedWordScope.default("content"),
 	terms: z
 		.array(z.string().trim().min(1).max(TERM_MAX))
 		.min(1, "추가할 단어가 없습니다.")
@@ -54,6 +58,7 @@ export const bannedWordsRouter = {
 			const rows = await db
 				.select()
 				.from(bannedWord)
+				.where(eq(bannedWord.scope, input.scope))
 				.orderBy(asc(bannedWord.term));
 
 			const items = input.includeInactive
@@ -78,7 +83,12 @@ export const bannedWordsRouter = {
 			const [existing] = await db
 				.select({ id: bannedWord.id })
 				.from(bannedWord)
-				.where(eq(bannedWord.normalizedTerm, normalizedTerm))
+				.where(
+					and(
+						eq(bannedWord.scope, input.scope),
+						eq(bannedWord.normalizedTerm, normalizedTerm)
+					)
+				)
 				.limit(1);
 
 			if (existing) {
@@ -90,6 +100,7 @@ export const bannedWordsRouter = {
 			const [created] = await db
 				.insert(bannedWord)
 				.values({
+					scope: input.scope,
 					term: input.term,
 					normalizedTerm,
 					createdByUserId: profile.userId,
@@ -115,12 +126,14 @@ export const bannedWordsRouter = {
 			const toInsert: Array<{
 				createdByUserId: string;
 				normalizedTerm: string;
+				scope: "content" | "display_name";
 				term: string;
 			}> = [];
 
 			const existing = await db
 				.select({ normalizedTerm: bannedWord.normalizedTerm })
-				.from(bannedWord);
+				.from(bannedWord)
+				.where(eq(bannedWord.scope, input.scope));
 			const existingSet = new Set(existing.map((row) => row.normalizedTerm));
 
 			for (const term of input.terms) {
@@ -140,6 +153,7 @@ export const bannedWordsRouter = {
 				toInsert.push({
 					createdByUserId: context.session.user.id,
 					normalizedTerm,
+					scope: input.scope,
 					term,
 				});
 			}
@@ -180,13 +194,16 @@ export const bannedWordsRouter = {
 
 	// 목록을 통째로 비운다. 잘못 올린 CSV를 되돌리는 유일한 수단이라 별도 프로시저로 둔다 —
 	// remove에 "ids가 비면 전체"를 허용하면 빈 배열 한 번에 목록이 날아간다.
-	removeAll: adminProcedure.handler(async () => {
-		const removed = await db
-			.delete(bannedWord)
-			.returning({ id: bannedWord.id });
+	removeAll: adminProcedure
+		.input(z.object({ scope: bannedWordScope.default("content") }))
+		.handler(async ({ input }) => {
+			const removed = await db
+				.delete(bannedWord)
+				.where(eq(bannedWord.scope, input.scope))
+				.returning({ id: bannedWord.id });
 
-		invalidateBannedWordCache();
+			invalidateBannedWordCache();
 
-		return { removed: removed.length };
-	}),
+			return { removed: removed.length };
+		}),
 };

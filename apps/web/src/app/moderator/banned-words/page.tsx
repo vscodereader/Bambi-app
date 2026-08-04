@@ -28,10 +28,22 @@ type BannedWordRow = Awaited<
 	ReturnType<AppRouterClient["bambi"]["bannedWords"]["list"]>
 >["items"][number];
 
+type BannedWordScope = "content" | "display_name";
+
+interface BannedWordsManagerProps {
+	clearEffect: string;
+	description: string;
+	headingLevel: "h1" | "h2";
+	itemLabel: string;
+	scope: BannedWordScope;
+	title: string;
+}
+
 // 선택 상태는 DataTable이 아니라 페이지가 들고 있다. 선택 기능을 쓰는 표가 여기뿐이라
 // 공용 DataTable(사용처 9곳)을 건드리는 대신 컬럼 하나로 얹는다.
 function getBannedWordColumns({
 	allChecked,
+	itemLabel,
 	onRemove,
 	onToggleActive,
 	onToggleSelectAll,
@@ -40,6 +52,7 @@ function getBannedWordColumns({
 	someChecked,
 }: {
 	allChecked: boolean;
+	itemLabel: string;
 	onRemove: (id: string) => void;
 	onToggleActive: (id: string, isActive: boolean) => void;
 	onToggleSelectAll: () => void;
@@ -52,7 +65,7 @@ function getBannedWordColumns({
 			id: "select",
 			header: (
 				<Checkbox
-					aria-label="검색된 금칙어 전체 선택"
+					aria-label={`검색된 ${itemLabel} 전체 선택`}
 					checked={allChecked}
 					indeterminate={someChecked && !allChecked}
 					onCheckedChange={onToggleSelectAll}
@@ -69,7 +82,7 @@ function getBannedWordColumns({
 		},
 		{
 			id: "term",
-			header: "금칙어",
+			header: itemLabel,
 			sortValue: (row) => row.term,
 			cell: (row) => <span className="font-bold">{row.term}</span>,
 		},
@@ -106,7 +119,14 @@ function getBannedWordColumns({
 	];
 }
 
-export default function ModeratorBannedWordsPage() {
+function BannedWordsManager({
+	clearEffect,
+	description,
+	headingLevel,
+	itemLabel,
+	scope,
+	title,
+}: BannedWordsManagerProps) {
 	const queryClient = useQueryClient();
 	const [term, setTerm] = useState("");
 	const [keyword, setKeyword] = useState("");
@@ -116,7 +136,7 @@ export default function ModeratorBannedWordsPage() {
 
 	const listQuery = useQuery(
 		orpc.bambi.bannedWords.list.queryOptions({
-			input: { includeInactive: true },
+			input: { includeInactive: true, scope },
 		})
 	);
 
@@ -128,9 +148,10 @@ export default function ModeratorBannedWordsPage() {
 
 	const createMutation = useMutation(
 		orpc.bambi.bannedWords.create.mutationOptions({
-			onError: (error) => toast(error.message || "금칙어를 등록하지 못했어요."),
+			onError: (error) =>
+				toast(error.message || `${itemLabel}를 등록하지 못했어요.`),
 			onSuccess: async () => {
-				toast("금칙어를 등록했어요.");
+				toast(`${itemLabel}를 등록했어요.`);
 				setTerm("");
 				await invalidate();
 			},
@@ -139,7 +160,8 @@ export default function ModeratorBannedWordsPage() {
 
 	const createManyMutation = useMutation(
 		orpc.bambi.bannedWords.createMany.mutationOptions({
-			onError: (error) => toast(error.message || "일괄 추가하지 못했어요."),
+			onError: (error) =>
+				toast(error.message || `${itemLabel}를 일괄 추가하지 못했어요.`),
 			onSuccess: async (result) => {
 				toast(`추가 ${result.added}건 · 제외 ${result.skipped.length}건`);
 				await invalidate();
@@ -156,9 +178,10 @@ export default function ModeratorBannedWordsPage() {
 
 	const removeMutation = useMutation(
 		orpc.bambi.bannedWords.remove.mutationOptions({
-			onError: (error) => toast(error.message || "삭제하지 못했어요."),
+			onError: (error) =>
+				toast(error.message || `${itemLabel}를 삭제하지 못했어요.`),
 			onSuccess: async (result) => {
-				toast(`금칙어 ${result.removed}건을 삭제했어요.`);
+				toast(`${itemLabel} ${result.removed}건을 삭제했어요.`);
 				setSelectedIds(new Set());
 				await invalidate();
 			},
@@ -167,9 +190,10 @@ export default function ModeratorBannedWordsPage() {
 
 	const removeAllMutation = useMutation(
 		orpc.bambi.bannedWords.removeAll.mutationOptions({
-			onError: (error) => toast(error.message || "전체 삭제하지 못했어요."),
+			onError: (error) =>
+				toast(error.message || `${itemLabel}를 전체 삭제하지 못했어요.`),
 			onSuccess: async (result) => {
-				toast(`금칙어 ${result.removed}건을 모두 삭제했어요.`);
+				toast(`${itemLabel} ${result.removed}건을 모두 삭제했어요.`);
 				setSelectedIds(new Set());
 				setIsClearAllOpen(false);
 				await invalidate();
@@ -205,11 +229,11 @@ export default function ModeratorBannedWordsPage() {
 		const parsed = parseBannedWordsCsv(await file.text());
 
 		if (parsed.length === 0) {
-			toast("CSV에서 추가할 단어를 찾지 못했어요.");
+			toast(`CSV에서 추가할 ${itemLabel}를 찾지 못했어요.`);
 			return;
 		}
 
-		createManyMutation.mutate({ terms: parsed });
+		createManyMutation.mutate({ scope, terms: parsed });
 	};
 
 	const allChecked =
@@ -250,6 +274,7 @@ export default function ModeratorBannedWordsPage() {
 
 	const columns = getBannedWordColumns({
 		allChecked,
+		itemLabel,
 		onRemove: (id) => removeMutation.mutate({ ids: [id] }),
 		onToggleActive: (id, isActive) =>
 			setActiveMutation.mutate({ id, isActive }),
@@ -259,15 +284,13 @@ export default function ModeratorBannedWordsPage() {
 		someChecked: selectedIds.size > 0,
 	});
 
+	const Heading = headingLevel;
+
 	return (
-		<div className="flex flex-col gap-5 px-5 py-6 md:px-6">
+		<section className="flex flex-col gap-5">
 			<header className="flex flex-col gap-2">
-				<h1 className="m-0 font-extrabold text-xl">금칙어 관리</h1>
-				<p className="m-0 text-muted-foreground text-sm">
-					등록된 단어가 제목·본문에 있으면 커뮤니티·고객센터 글이 게시되지
-					않습니다. 공백과 특수문자는 무시하고 비교하므로 "성 매매"처럼 띄어
-					써도 걸립니다.
-				</p>
+				<Heading className="m-0 font-extrabold text-xl">{title}</Heading>
+				<p className="m-0 text-muted-foreground text-sm">{description}</p>
 			</header>
 
 			<div className="flex flex-wrap items-center gap-2">
@@ -275,12 +298,12 @@ export default function ModeratorBannedWordsPage() {
 					className="max-w-80"
 					maxLength={100}
 					onChange={(event) => setTerm(event.target.value)}
-					placeholder="추가할 금칙어"
+					placeholder={`추가할 ${itemLabel}`}
 					value={term}
 				/>
 				<Button
 					disabled={term.trim().length === 0 || createMutation.isPending}
-					onClick={() => createMutation.mutate({ term })}
+					onClick={() => createMutation.mutate({ scope, term })}
 				>
 					추가
 				</Button>
@@ -305,7 +328,7 @@ export default function ModeratorBannedWordsPage() {
 				<Input
 					className="max-w-80"
 					onChange={(event) => setKeyword(event.target.value)}
-					placeholder="금칙어·정규화형 검색"
+					placeholder={`${itemLabel}·정규화형 검색`}
 					value={keyword}
 				/>
 				<Button
@@ -329,17 +352,17 @@ export default function ModeratorBannedWordsPage() {
 			<AlertDialog onOpenChange={setIsClearAllOpen} open={isClearAllOpen}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>금칙어를 전부 삭제할까요?</AlertDialogTitle>
+						<AlertDialogTitle>{itemLabel}를 전부 삭제할까요?</AlertDialogTitle>
 						<AlertDialogDescription>
 							등록된 {items.length}건이 모두 사라집니다. 되돌릴 수 없고,
-							삭제하면 커뮤니티·고객센터 글에서 금칙어 검사가 사실상 꺼집니다.
+							삭제하면 {clearEffect}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>취소</AlertDialogCancel>
 						<AlertDialogAction
 							disabled={removeAllMutation.isPending}
-							onClick={() => removeAllMutation.mutate({})}
+							onClick={() => removeAllMutation.mutate({ scope })}
 							variant="destructive"
 						>
 							전부 삭제
@@ -354,13 +377,36 @@ export default function ModeratorBannedWordsPage() {
 					data={visibleItems}
 					emptyMessage={
 						keyword.trim()
-							? "검색 조건에 맞는 금칙어가 없어요."
-							: "등록된 금칙어가 없어요."
+							? `검색 조건에 맞는 ${itemLabel}가 없어요.`
+							: `등록된 ${itemLabel}가 없어요.`
 					}
 					getRowKey={(row) => row.id}
 					pageSize={20}
 				/>
 			</div>
+		</section>
+	);
+}
+
+export default function ModeratorBannedWordsPage() {
+	return (
+		<div className="flex flex-col gap-10 px-5 py-6 md:px-6">
+			<BannedWordsManager
+				clearEffect="커뮤니티·고객센터 글에서 금칙어 검사가 사실상 꺼집니다."
+				description='등록된 단어가 제목·본문에 있으면 커뮤니티·고객센터 글이 게시되지 않습니다. 공백과 특수문자는 무시하고 비교하므로 "성 매매"처럼 띄어 써도 걸립니다.'
+				headingLevel="h1"
+				itemLabel="금칙어"
+				scope="content"
+				title="금칙어 관리"
+			/>
+			<BannedWordsManager
+				clearEffect="일반 회원의 닉네임·게시글 작성인 금칙어 검사가 사실상 꺼집니다."
+				description="등록된 단어는 일반 회원의 가입·프로필 변경과 게시글 작성·수정의 작성인에 사용할 수 없습니다. 대소문자·공백·특수문자를 무시하고 비교합니다."
+				headingLevel="h2"
+				itemLabel="닉네임 금칙어"
+				scope="display_name"
+				title="닉네임 금칙어"
+			/>
 		</div>
 	);
 }

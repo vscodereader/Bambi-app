@@ -1,7 +1,9 @@
 import { db } from "@bambi-app/db";
 import { bannedWord } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+
+export type BannedWordScope = "content" | "display_name";
 
 // 금칙어 매칭 규칙의 단일 진실원. 순수 함수만 두어 DB 없이 테스트한다.
 //
@@ -78,19 +80,23 @@ export const findBannedTerms = (
 // 늦게 반영되는데, 금칙어 추가가 1분 내 전파되면 충분하다.
 const CACHE_TTL_MS = 60_000;
 
-let cachedEntries: BannedWordEntry[] | null = null;
-let cachedAt = 0;
+const cachedEntries = new Map<
+	BannedWordScope,
+	{ entries: BannedWordEntry[]; loadedAt: number }
+>();
 
 export const invalidateBannedWordCache = (): void => {
-	cachedEntries = null;
-	cachedAt = 0;
+	cachedEntries.clear();
 };
 
-export const getActiveBannedWords = async (): Promise<BannedWordEntry[]> => {
+export const getActiveBannedWords = async (
+	scope: BannedWordScope = "content"
+): Promise<BannedWordEntry[]> => {
 	const now = Date.now();
+	const cached = cachedEntries.get(scope);
 
-	if (cachedEntries && now - cachedAt < CACHE_TTL_MS) {
-		return cachedEntries;
+	if (cached && now - cached.loadedAt < CACHE_TTL_MS) {
+		return cached.entries;
 	}
 
 	const rows = await db
@@ -99,10 +105,9 @@ export const getActiveBannedWords = async (): Promise<BannedWordEntry[]> => {
 			normalizedTerm: bannedWord.normalizedTerm,
 		})
 		.from(bannedWord)
-		.where(eq(bannedWord.isActive, true));
+		.where(and(eq(bannedWord.scope, scope), eq(bannedWord.isActive, true)));
 
-	cachedEntries = rows;
-	cachedAt = now;
+	cachedEntries.set(scope, { entries: rows, loadedAt: now });
 
 	return rows;
 };
@@ -110,7 +115,7 @@ export const getActiveBannedWords = async (): Promise<BannedWordEntry[]> => {
 // 걸린 단어 하나만 알려준다. 목록 전체를 내려보내면 우회 표현을 학습시키지만,
 // 무엇에 걸렸는지 숨기면 사용자가 글을 고칠 방법이 없다.
 export const assertNoBannedWords = async (fields: string[]): Promise<void> => {
-	const entries = await getActiveBannedWords();
+	const entries = await getActiveBannedWords("content");
 
 	for (const field of fields) {
 		const hit = findBannedTerm(field, entries);
@@ -128,7 +133,7 @@ export const assertNoBannedWords = async (fields: string[]): Promise<void> => {
 export const detectBannedTerms = async (
 	fields: string[]
 ): Promise<string[]> => {
-	const entries = await getActiveBannedWords();
+	const entries = await getActiveBannedWords("content");
 	const detected = new Set<string>();
 
 	for (const field of fields) {
