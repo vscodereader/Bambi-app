@@ -16,6 +16,7 @@ import {
 	desc,
 	eq,
 	gte,
+	ilike,
 	isNull,
 	ne,
 	or,
@@ -39,6 +40,7 @@ import {
 	hashCommunityPassword,
 	verifyCommunityPassword,
 } from "../../services/bambi-community-password";
+import { escapeLikePattern } from "../../services/bambi-job-feed";
 import {
 	JOB_POST_IMAGE_MAX_BYTES,
 	type JobPostImageUploadPolicyCode,
@@ -49,6 +51,7 @@ import {
 	assertTiptapDoc,
 	extractTiptapText,
 } from "../../services/bambi-tiptap-text";
+import { takeRateLimit } from "../../services/rate-limit";
 
 const PAGE_SIZE = 20;
 const OVERVIEW_LIMIT = 4;
@@ -91,9 +94,14 @@ type CommunityPostColumns = typeof communityPost.$inferSelect;
 
 // 목록 필터 — 독립 On/Off 토글 2개(광고 글보기·업소 회원 글보기). 기본은 둘 다 false=전체.
 // 켜진 토글이 있으면 그 조건들의 합집합(OR)으로 좁힌다(광고=is_promotion, 업소=author_role).
+// mine·q는 위 두 토글과 달리 AND로 좁힌다(서로 배타가 아니다).
 const listPostsInput = z.object({
 	board: communityBoardSchema,
+	// 내가 쓴 글만 보기. 대상 userId는 입력으로 받지 않고 세션에서 꺼낸다.
+	mine: z.boolean().default(false),
 	page: z.number().int().min(1).default(1),
+	// 제목·본문 검색어.
+	q: z.string().trim().max(50).optional(),
 	showEmployer: z.boolean().default(false),
 	showPromotion: z.boolean().default(false),
 });
@@ -134,6 +142,12 @@ const MEDIA_UPLOAD_ERROR_MESSAGES: Record<
 };
 
 const LOCKED_PASSWORD_ERROR = "비밀글은 4자 이상의 비밀번호가 필요합니다.";
+
+// 도배 방지 — 사용자당 1분 1회. 판정 축이 IP가 아니라 계정이라 미들웨어
+// (rateLimitedPublicProcedure)가 아니라 핸들러에서 세션 userId로 버킷을 잡는다.
+const CREATE_POST_WINDOW_MS = 60 * 1000;
+const CREATE_POST_RATE_LIMIT_ERROR =
+	"글은 1분에 한 번만 등록할 수 있어요. 잠시 후 다시 시도해 주세요.";
 
 const updatePostInput = postIdInput.extend({
 	authorName: z.string().trim().min(1).max(30),
@@ -239,6 +253,13 @@ const postSummarySelection = {
 	isPromotion: communityPost.isPromotion,
 	likeCount: communityPost.likeCount,
 	title: communityPost.title,
+	// 목록 썸네일 — 본문(Tiptap doc JSON)에서 첫 이미지 src만 뽑는다. 본문 전체를 목록
+	// 응답에 실으면 한 페이지에 30KB짜리 글 20건이 그대로 따라 나온다.
+	thumbnailUrl: sql<
+		string | null
+	>`substring(${communityPost.body} from '"src":"([^"]*)"')`.as(
+		"thumbnail_url"
+	),
 	viewCount: communityPost.viewCount,
 	source: sql<CommunityFeedSource>`'native'`.as("source"),
 	isCrawled: sql<number>`0`.as("is_crawled"),
@@ -271,6 +292,8 @@ const crawledCommunityFeedSelection = {
 	isPromotion: sql<boolean>`false`,
 	likeCount: sql<number>`0`,
 	title: crawledCommunityTopic.title,
+	// 수집 글은 본문 이미지를 우리가 호스팅하지 않아 썸네일이 없다(UNION 위치만 맞춘다).
+	thumbnailUrl: sql<string | null>`null`,
 	viewCount: sql<number>`coalesce(${crawledCommunityTopic.viewCount}, 0)`,
 	source: sql<CommunityFeedSource>`'crawled'`,
 	isCrawled: sql<number>`1`,
@@ -329,10 +352,46 @@ const buildListFilters = (
 	return combined ? [combined] : [];
 };
 
+// 검색어·내 글 토글은 AND로 좁힌다. body는 Tiptap doc JSON 문자열이라 본문 텍스트가
+// 그대로 들어 있어 ilike로 걸린다(태그명까지 매칭되지만 별도 색인 없이 쓰는 대가다).
+// ponytail: ilike 순차 스캔 — 글 수가 커지면 pg_trgm 인덱스나 tsvector로.
+const buildNarrowFilters = ({
+	mine,
+	q,
+	userId,
+}: {
+	mine: boolean;
+	q?: string;
+	userId: string;
+}): SQL[] => {
+	const filters: SQL[] = [];
+	if (mine) {
+		filters.push(eq(communityPost.authorUserId, userId));
+	}
+	if (q) {
+		const pattern = `%${escapeLikePattern(q)}%`;
+		const combined = or(
+			ilike(communityPost.title, pattern),
+			ilike(communityPost.body, pattern)
+		);
+		if (combined) {
+			filters.push(combined);
+		}
+	}
+	return filters;
+};
+
+// 마지막 정렬 키는 항상 id다. created_at만으로 정렬하면 같은 시각 글의 순서를 Postgres가
+// 매번 다시 정해, 페이지를 오갈 때마다 목록이 한 칸씩 밀리거나 같은 글이 두 페이지에 뜬다
+// (bambi-job-feed의 desc(publishedAt), desc(id)와 같은 처방).
 const buildBoardOrder = (board: CommunityBoardInput) =>
 	board === "best"
-		? [desc(communityPost.likeCount), desc(communityPost.createdAt)]
-		: [desc(communityPost.createdAt)];
+		? [
+				desc(communityPost.likeCount),
+				desc(communityPost.createdAt),
+				desc(communityPost.id),
+			]
+		: [desc(communityPost.createdAt), desc(communityPost.id)];
 
 const selectBoardPosts = (
 	board: CommunityBoardInput,
@@ -372,6 +431,8 @@ const toPublicSummary = (summary: PostSummaryRow) => ({
 	likeCount: summary.likeCount,
 	// 화면이 "외부 수집" 배지·상세 라우팅을 가르는 판별 필드.
 	source: summary.source,
+	// 목록 카드 썸네일(본문 첫 이미지). 목록에서는 블러로 가리고 상세에서 원본을 본다.
+	thumbnailUrl: summary.thumbnailUrl,
 	title: summary.title,
 	viewCount: summary.viewCount,
 });
@@ -402,7 +463,7 @@ const selectWorkTalkFeedUnion = ({
 			// 게시판에서 긁어 온 글은 신선한 것만 섞는다). null 게시일은 이 조건이 자연히 걸러낸다.
 			.where(and(...crawledTopicFeedFilters(windowStart)))
 	)
-		.orderBy(sql`is_crawled asc, created_at desc`)
+		.orderBy(sql`is_crawled asc, created_at desc, id desc`)
 		.limit(limit)
 		.offset(offset);
 
@@ -465,16 +526,21 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const profile = await requireCommunityMember(context.session);
 
-			const listFilters = buildListFilters(
-				input.showPromotion,
-				input.showEmployer
-			);
+			const listFilters = [
+				...buildListFilters(input.showPromotion, input.showEmployer),
+				...buildNarrowFilters({
+					mine: input.mine,
+					q: input.q,
+					userId: profile.userId,
+				}),
+			];
 			// 목록·count 쿼리가 같은 30일 컷오프를 쓰도록 한 번만 계산한다.
 			const windowStart = bestWindowStart();
 			const offset = (input.page - 1) * PAGE_SIZE;
 
-			// 수집 글은 광고·업소 필터를 만족할 수 없다 — 그 토글이 켜지면(listFilters가 있으면)
-			// 순수 글만 남기고 수집 union을 끈다. work_talk·스위치 ON·필터 없음일 때만 섞는다.
+			// 수집 글은 광고·업소·내 글 필터를 만족할 수 없고 검색 대상도 아니다 — 어떤 필터든
+			// 켜지면(listFilters가 있으면) 순수 글만 남기고 수집 union을 끈다.
+			// work_talk·스위치 ON·필터 없음일 때만 섞는다.
 			const includeCrawled =
 				input.board === CRAWLED_COMMUNITY_BOARD &&
 				listFilters.length === 0 &&
@@ -725,6 +791,20 @@ export const communityRouter = {
 			// 비밀글(잠금)은 잠금 게이트에 쓸 4자 이상 비밀번호가 필요하다.
 			if (input.isLocked && (input.password?.length ?? 0) < 4) {
 				throw new ORPCError("BAD_REQUEST", { message: LOCKED_PASSWORD_ERROR });
+			}
+			// 검증을 모두 통과한 뒤에 센다 — 금칙어·비번 오류로 튕긴 시도가 1분 락을
+			// 먹으면 고쳐서 다시 낼 수도 없다.
+			if (
+				!takeRateLimit({
+					key: `community.createPost:${profile.userId}`,
+					limit: 1,
+					now: Date.now(),
+					windowMs: CREATE_POST_WINDOW_MS,
+				})
+			) {
+				throw new ORPCError("TOO_MANY_REQUESTS", {
+					message: CREATE_POST_RATE_LIMIT_ERROR,
+				});
 			}
 
 			const [created] = await db

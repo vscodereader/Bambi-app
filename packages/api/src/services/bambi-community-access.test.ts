@@ -44,6 +44,12 @@ describe("resolveCommunityAccess", () => {
 		).toEqual({ canAccess: false, notice: "male_employer" });
 	});
 
+	it("blocks female employers without an active ad", () => {
+		expect(
+			resolveCommunityAccess({ ...base, gender: "female", role: "employer" })
+		).toEqual({ canAccess: false, notice: "male_employer" });
+	});
+
 	it("blocks male job seekers", () => {
 		expect(resolveCommunityAccess({ ...base, gender: "male" })).toEqual({
 			canAccess: false,

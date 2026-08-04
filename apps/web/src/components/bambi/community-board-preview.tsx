@@ -168,6 +168,53 @@ export function BoardPreviewCard({
 	);
 }
 
+// 수다방 홈과 seeker 홈 커뮤니티 섹션이 공유하는 미리보기 배치. 공지사항은 글 유무와
+// 무관하게 항상 최상단 전폭, 나머지 게시판은 그 아래 2열 그리드. 두 화면이 각자 배치를
+//들고 있어 홈과 수다방의 같은 섹션이 서로 다르게 보이던 걸 한 컴포넌트로 모은다.
+export function CommunityOverviewGrid({
+	blockedNotice,
+	isPending,
+	postsByBoard,
+}: {
+	// 지정 시 글 클릭을 막고 이 문구를 토스트로 안내한다(미자격자 홈 미리보기).
+	blockedNotice?: string;
+	isPending: boolean;
+	postsByBoard: Record<CommunityBoardKey, OverviewPost[]>;
+}) {
+	const gridBoards = COMMUNITY_BOARDS.filter((board) => board.key !== "notice");
+
+	return (
+		<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+			{isPending ? (
+				<>
+					<BoardPreviewSkeleton className="md:col-span-2" />
+					{gridBoards.map((board) => (
+						<BoardPreviewSkeleton key={board.key} />
+					))}
+				</>
+			) : (
+				<>
+					<BoardPreviewCard
+						blockedNotice={blockedNotice}
+						boardKey="notice"
+						className="md:col-span-2"
+						emptyText="등록된 공지사항이 없어요."
+						posts={postsByBoard.notice}
+					/>
+					{gridBoards.map((board) => (
+						<BoardPreviewCard
+							blockedNotice={blockedNotice}
+							boardKey={board.key}
+							key={board.key}
+							posts={postsByBoard[board.key]}
+						/>
+					))}
+				</>
+			)}
+		</div>
+	);
+}
+
 export function BoardPreviewSkeleton({ className }: { className?: string }) {
 	return (
 		<Card className={className}>
