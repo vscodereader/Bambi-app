@@ -1,4 +1,5 @@
 import { db } from "@bambi-app/db";
+import { user } from "@bambi-app/db/schema/auth";
 import {
 	bambiSiteSettings,
 	crawledCommunityTopic,
@@ -20,8 +21,20 @@ import {
 	isCrawlTargetImplemented,
 	isRunStale,
 } from "../../services/bambi-crawl-policy";
+import {
+	crawledJobEditedImageDocumentSchema,
+	createOriginalImageDocument,
+} from "../../services/bambi-crawled-image-document";
 
 const SETTINGS_ROW_ID = "default";
+const imageEditIdInput = z.object({ id: z.uuid() }).strict();
+const updatePostImagesInput = z
+	.object({
+		document: crawledJobEditedImageDocumentSchema.nullable(),
+		expectedRevision: z.number().int().nonnegative(),
+		id: z.uuid(),
+	})
+	.strict();
 
 // 목록에 내려보내는 컬럼. 연락처·담당자명·카톡아이디·사업자명·주소는 **의도적으로 빠져 있다** —
 // 원본에 연락처를 올린 담당자는 그 사이트 이용자에게 연락받는 데 동의했을 뿐 다른 서비스에서의
@@ -166,6 +179,101 @@ export const crawlerRouter = {
 				.limit(1);
 
 			return row ?? null;
+		}),
+
+	getPostImagesForEdit: adminProcedure
+		.input(imageEditIdInput)
+		.handler(async ({ input }) => {
+			const [post] = await db
+				.select({
+					detailImageEditRevision: crawledJobPost.detailImageEditRevision,
+					detailImagesEditedAt: crawledJobPost.detailImagesEditedAt,
+					detailImagesEditedByName: user.name,
+					detailImageUrls: crawledJobPost.detailImageUrls,
+					document: crawledJobPost.editedDetailImageDocument,
+					id: crawledJobPost.id,
+					title: crawledJobPost.title,
+				})
+				.from(crawledJobPost)
+				.leftJoin(user, eq(crawledJobPost.detailImagesEditedByUserId, user.id))
+				.where(
+					and(
+						eq(crawledJobPost.id, input.id),
+						eq(crawledJobPost.status, "active")
+					)
+				)
+				.limit(1);
+
+			if (!post) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			return {
+				detailImageEditRevision: post.detailImageEditRevision,
+				detailImagesEditedAt: post.detailImagesEditedAt,
+				detailImagesEditedByName: post.detailImagesEditedByName,
+				document:
+					post.document ?? createOriginalImageDocument(post.detailImageUrls),
+				hasEditedDocument: post.document !== null,
+				id: post.id,
+				title: post.title,
+			};
+		}),
+
+	getOriginalPostImagesForEdit: adminProcedure
+		.input(imageEditIdInput)
+		.handler(async ({ input }) => {
+			const [post] = await db
+				.select({ detailImageUrls: crawledJobPost.detailImageUrls })
+				.from(crawledJobPost)
+				.where(
+					and(
+						eq(crawledJobPost.id, input.id),
+						eq(crawledJobPost.status, "active")
+					)
+				)
+				.limit(1);
+			if (!post) {
+				throw new ORPCError("NOT_FOUND");
+			}
+			return createOriginalImageDocument(post.detailImageUrls);
+		}),
+
+	updatePostImages: adminProcedure
+		.input(updatePostImagesInput)
+		.handler(async ({ context, input }) => {
+			const [updated] = await db
+				.update(crawledJobPost)
+				.set({
+					detailImageEditRevision: sql`${crawledJobPost.detailImageEditRevision} + 1`,
+					detailImagesEditedAt: new Date(),
+					detailImagesEditedByUserId: context.session.user.id,
+					editedDetailImageDocument: input.document,
+				})
+				.where(
+					and(
+						eq(crawledJobPost.id, input.id),
+						eq(crawledJobPost.status, "active"),
+						eq(crawledJobPost.detailImageEditRevision, input.expectedRevision)
+					)
+				)
+				.returning({
+					detailImageEditRevision: crawledJobPost.detailImageEditRevision,
+					detailImagesEditedAt: crawledJobPost.detailImagesEditedAt,
+				});
+
+			if (!updated) {
+				throw new ORPCError("CONFLICT", {
+					message:
+						"공고가 편집 중 변경되었습니다. 새로 불러온 뒤 다시 편집해 주세요.",
+				});
+			}
+
+			return {
+				...updated,
+				detailImagesEditedByName: context.session.user.name,
+				document: input.document,
+			};
 		}),
 
 	// 업종 수동 매핑. 원본 직종이 우리 업종 enum에 안 맞아 needs_review로 남은 공고를 운영자가 잇는다.
