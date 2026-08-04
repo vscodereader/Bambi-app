@@ -61,6 +61,17 @@ describe("resolveGate", () => {
 		expect(resolveGate({ pathname: "/terms", ...guest }).type).toBe("next");
 		expect(resolveGate({ pathname: "/privacy", ...guest }).type).toBe("next");
 	});
+	it("lets the public job landings pass for anon and guest", () => {
+		for (const pathname of ["/jobs", "/jobs/seoul", "/jobs/seoul/room-salon"]) {
+			expect(resolveGate({ pathname, ...fresh }).type).toBe("next");
+			expect(resolveGate({ pathname, ...guest }).type).toBe("next");
+		}
+	});
+	it("keeps job detail behind the gate even with the /jobs landing open", () => {
+		expect(resolveGate({ pathname: "/seeker/jobs/abc", ...fresh }).type).toBe(
+			"redirect"
+		);
+	});
 	it("lets api and media pass", () => {
 		expect(resolveGate({ pathname: "/api/guest", ...fresh }).type).toBe("next");
 		expect(

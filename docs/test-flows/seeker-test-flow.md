@@ -77,10 +77,11 @@
   1. 브라우저에서 `/` 진입
   2. `/seeker/chats`, `/support`, `/seeker/me` 등 다른 경로도 각각 시도
   3. `/terms`, `/privacy`, `/icon.svg` 도 시도
+  4. `/jobs`, `/jobs/seoul`, `/jobs/seoul/room-salon` 도 시도
 - **기대 결과**:
   - `/`·`/seeker/chats`·`/support`·`/seeker/me` → **307 리다이렉트 `/seeker?auth=login`**
-  - `/seeker` → 리다이렉트 없이 통과(세션 없는 방문자에게 열린 **유일한** 경로)
-  - `/terms`, `/privacy`, `/api/*`, `/bambi/*`, 확장자 붙은 정적 파일 → 통과
+  - `/seeker` → 리다이렉트 없이 통과(세션 없는 방문자에게 열린 **유일한** 앱 화면)
+  - `/terms`, `/privacy`, `/jobs/**`, `/api/*`, `/bambi/*`, 확장자 붙은 정적 파일 → 통과
   - `/seeker`에는 블러 처리된 공고 배경 위에 인증 카드가 뜬다(`apps/web/src/components/bambi/auth/seeker-auth-gate-screen.tsx`). 배경 공고 문자열은 서버에서 마스킹되어 RSC 페이로드에 원문이 실리지 않는다(`apps/web/src/lib/bambi/auth-backdrop.ts`)
   - 배경은 **md 미만에서 숨김**(`hidden md:block`), 푸터는 블러 밖에서 선명·클릭 가능
 - **엣지 케이스**:
@@ -1050,7 +1051,26 @@
 - **진입점**: 푸터 링크, 회원가입 동의 체크박스의 링크(새 탭)
 - **관련 API**: `bambi.siteSettings.getPrivacyContacts` (publicProcedure, 처리방침의 위탁사·연락처·보존기간 값)
 
-### 14.5 알림 — 사용자 화면 없음
+### 14.5 공개 공고 랜딩(SEO)
+
+- **경로**: `/jobs`, `/jobs/{region}`, `/jobs/{region}/{industry}` (파일: `apps/web/src/app/jobs/**`, `apps/web/src/components/bambi/public-job-landing.tsx`, `apps/web/src/lib/bambi/job-landing.ts`)
+- **접근 조건**: **완전 공개** — anon·guest·member 모두. 게이트의 `PUBLIC_PREFIXES`에 `/jobs` 포함
+- **슬러그**: 시/도 16종(`seoul`·`gyeonggi`·… — 지역 마스터 코드와 1:1), 업종 9종(`room-salon`·`ten-pro`·`karaoke-bar`·`danran`·`dabang`·`bar`·`massage`·`yojeong`·`etc`). 표에 없는 슬러그는 **404**(`notFound()`)
+- **절차**:
+  1. 세션·게스트 쿠키 없이 `/jobs` 진입 → 리다이렉트 없이 랜딩이 뜨는지 확인
+  2. JS를 끈 상태(또는 `view-source:`)에서 공고 제목·업체명·지역·급여가 HTML에 그대로 있는지 확인 — **서버 컴포넌트 렌더가 핵심**
+  3. `/jobs/seoul` → 업종 칩 링크, `/jobs/seoul/room-salon` → 다른 지역·업종 링크가 실제 `<a href>`인지 확인
+  4. `/jobs/xxxx`, `/jobs/seoul/xxxx` → 404
+  5. 공고 카드 클릭 → `/seeker/jobs/{id}`(수집 공고는 `/seeker/jobs/crawled/{id}`)로 이동, **anon이면 여기서 기존 인증 게이트에 걸린다**(의도된 전환 지점)
+- **기대 결과**:
+  - `<title>`/`description`이 랜딩마다 다르다(예: `서울 룸싸롱 알바 채용 정보 | 밤비알바`), `<link rel="canonical">`이 자기 경로를 가리킨다
+  - 소개 문단도 축 조합별로 다르다(`jobLandingIntro`)
+  - 목록 썸네일은 **블러**(수다방 목록과 같은 기준), 공고 카드는 데스크톱 3열 그리드
+  - 상단 CTA(outline)·하단 CTA(primary) 모두 `/seeker?auth=signup`
+- **엣지 케이스**: `bambi.jobs.list` 호출이 실패해도 소개 문단·지역 링크는 그대로 떠야 한다(빈 목록 폴백)
+- **관련 API**: `bambi.jobs.list` (publicProcedure, `regionCode`·`industryCategory` 필터, published+paid 게이트 그대로)
+
+### 14.6 알림 — 사용자 화면 없음
 
 - `bambi_notification` 테이블은 존재하고 `chats.ts`가 채팅 메시지 발생 시 행을 쓴다(`packages/api/src/services/bambi-notifications.ts`).
 - 그러나 **읽기·목록·읽음처리 프로시저가 없고**, `apps/web/src`에 알림 UI가 없다. 모바일 헤더의 벨 아이콘은 `aria-label="알림"`만 있고 핸들러가 없다.
@@ -1070,6 +1090,8 @@
 | `/seeker/jobs/{uuid}` | → `/seeker?auth=login` | resolve-gate |
 | `/seeker/chats`, `/seeker/community`, `/seeker/me`, `/support` | → `/seeker?auth=login` | resolve-gate |
 | `/terms`, `/privacy` | 통과 | `PUBLIC_PREFIXES` |
+| `/jobs`, `/jobs/seoul`, `/jobs/seoul/room-salon` | 통과 → 공개 공고 랜딩(읽기 전용) | `PUBLIC_PREFIXES` + `apps/web/src/app/jobs/**` |
+| `/jobs/{없는 슬러그}` | 404 | `apps/web/src/lib/bambi/job-landing.ts` |
 | `/icon.svg`, `/robots.txt`, `/sitemap.xml` | 통과(정적 파일 패턴) | resolve-gate |
 | API `bambi.jobs.list` / `search` / `getById` / `crawledJobs.getById` / `regions.list` / `siteSettings.getFooter` 직접 호출 | **성공**(publicProcedure) | `packages/api/src/routers/bambi/*` |
 | API `bambi.reviews.listByJobPost`, `bambi.chats.*`, `bambi.community.listPosts` 직접 호출 | `UNAUTHORIZED` | `packages/api/src/index.ts` `requireAuth` |
@@ -1081,6 +1103,7 @@
 |---|---|
 | `/seeker` | 목록 열람 가능 |
 | 공고 카드 클릭 | `/seeker?auth=signup` (상세 진입 불가) |
+| `/jobs/**` | 통과 → 공개 공고 랜딩(anon과 동일) |
 | `/seeker/**` 그 외 경로, `/support` | `/seeker?auth=signup&guestBlocked=1` + 토스트 "회원가입 후에 볼 수 있어요" |
 | `/` | `/seeker` |
 | 쿠키 위조 | 서명 검증 실패 → anon 취급 |
