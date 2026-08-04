@@ -16,9 +16,11 @@ import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import {
 	communityBodyText,
 	getPublicBoardBySlug,
+	PUBLIC_BOARD_INDEX_PATH,
 	publicBoardPath,
 	publicPostPath,
 } from "@/lib/bambi/public-community";
+import { breadcrumbJsonLd } from "@/lib/bambi/seo";
 import { client } from "@/utils/orpc";
 
 interface PageProps {
@@ -125,6 +127,17 @@ export default async function PublicPostPage({ params }: PageProps) {
 					inLanguage: "ko-KR",
 					url: `${BAMBI_COMPANY.url}${publicPostPath(boardSlug, postId)}`,
 				}}
+			/>
+			{/* 게시판 허브 → 게시판 → 글 계층. 아래 "목록으로" 링크가 같은 계층을 화면에도 낸다. */}
+			<JsonLd
+				data={breadcrumbJsonLd([
+					{ name: "커뮤니티 게시판", path: PUBLIC_BOARD_INDEX_PATH },
+					{
+						name: board?.label ?? "게시판",
+						path: publicBoardPath(boardSlug),
+					},
+					{ name: post.title, path: publicPostPath(boardSlug, postId) },
+				])}
 			/>
 			<div>
 				<Link

@@ -864,6 +864,7 @@
   - 로그아웃(또는 JS 비활성) 상태에서 목록·상세가 **서버 렌더된 HTML**로 보인다(본문 텍스트 포함)
   - 페이지 이동은 `?page=` 실제 `<a href>`이고, 1페이지는 쿼리 없이 `/board/free`
   - 상세 `<title>`·`description`·`canonical`이 글마다 다르고, `DiscussionForumPosting` JSON-LD가 실린다
+  - 목록·상세 모두 **현재 위치 내비**(커뮤니티 게시판 › 게시판 › 글)와 같은 계층의 `BreadcrumbList` JSON-LD가 함께 나온다(`apps/web/src/lib/bambi/seo.ts` `breadcrumbJsonLd`)
   - 본문 이미지는 렌더되지 않고 "이미지는 회원 화면에서 볼 수 있어요" 자리표시자로 대체
   - 댓글은 읽기만 가능(작성자 계정명 미노출 — 회원/업소 회원 표기만), 작성 UI 없음
   - "로그인하고 댓글 쓰기"는 `/seeker/community/[slug]/[postId]`로 보내고, 비로그인은 게이트가 로그인 화면으로 돌린다
@@ -1083,12 +1084,29 @@
 - **기대 결과**:
   - `<title>`/`description`이 랜딩마다 다르다(예: `서울 룸싸롱 알바 채용 정보 | 밤비알바`), `<link rel="canonical">`이 자기 경로를 가리킨다
   - 소개 문단도 축 조합별로 다르다(`jobLandingIntro`)
+  - 지역·업종 랜딩에는 화면 브레드크럼과 같은 계층의 `BreadcrumbList` JSON-LD가 실린다(인덱스 `/jobs`에는 없다 — 항목이 하나뿐이라 무의미)
   - 목록 썸네일은 **블러**(수다방 목록과 같은 기준), 공고 카드는 데스크톱 3열 그리드
   - 상단 CTA(outline)·하단 CTA(primary) 모두 `/seeker?auth=signup`
 - **엣지 케이스**: `bambi.jobs.list` 호출이 실패해도 소개 문단·지역 링크는 그대로 떠야 한다(빈 목록 폴백)
 - **관련 API**: `bambi.jobs.list` (publicProcedure, `regionCode`·`industryCategory` 필터, published+paid 게이트 그대로)
 
-### 14.6 알림 — 사용자 화면 없음
+### 14.6 사이트맵 · robots · 공개 영역 상호 링크(SEO 공통)
+
+- **경로**: `/sitemap.xml`, `/robots.txt` (파일: `apps/web/src/app/sitemap.ts`, `apps/web/src/app/robots.ts`)
+- **사이트맵 구성**:
+  - 정적: `/seeker`·`/terms`·`/privacy`
+  - 공고 랜딩 **161개**: `/jobs` + 지역 16 + 지역×업종 144 (`JOB_LANDING_REGIONS`·`JOB_LANDING_INDUSTRIES`에서 생성 — 표에 슬러그를 추가하면 사이트맵도 자동으로 따라온다)
+  - 게시판 **4개**: `/board` + 공개 게시판 3(`notice`·`free`·`work_talk`)
+  - 공개 글 상세: 게시판당 **최근 200건 상한**(`bambi.community.listPublicPosts`를 페이지 단위로 재사용). `<lastmod>`는 글의 `updatedAt`
+- **확인 사항**:
+  - `sitemap.xml`에 `/jobs/seoul/room-salon` 같은 조합과 `/board/notice/{postId}`가 실제로 들어 있다
+  - 서버(RPC) 조회가 실패해도 **정적 경로 + 랜딩 + 게시판 목록**은 그대로 나온다(글 URL만 빠진다)
+  - 라우트는 `dynamic = "force-dynamic"` — 빌드 시점에 서버가 없어 폴백만 담긴 사이트맵이 굳지 않아야 한다
+  - `robots.txt`는 프로덕션(`VERCEL_ENV=production`)에서만 전체 allow + `sitemap:` 줄, 그 외 배포는 전체 disallow (**이번 변경 없음**)
+- **공개 영역 상호 링크**: 공용 푸터(`apps/web/src/components/bambi/site-footer.tsx`)에 `지역별 채용 정보`(/jobs)·`커뮤니티 게시판`(/board)·`공지사항`(/board/notice) 링크가 있다. 이 푸터는 공개 랜딩·공개 게시판·약관 셸뿐 아니라 **인증 게이트 화면**(`seeker-auth-gate-screen`)과 로그인 셸(`responsive-shell`)에도 붙으므로, 비로그인 `/seeker`에서도 공개 영역으로 한 홉에 이동할 수 있어야 한다
+- **미구현(의도)**: `WebSite` JSON-LD의 `SearchAction`은 넣지 않는다 — 공개 검색 진입점 자체가 없다(공고 검색은 게이트 뒤). `JobPosting` 구조화 데이터도 넣지 않는다 — 구글 채용 검색은 **공개 상세 페이지**를 요구하는데 공고 상세(`/seeker/jobs/[id]`)가 로그인 게이트 뒤라 요건을 못 맞춘다
+
+### 14.7 알림 — 사용자 화면 없음
 
 - `bambi_notification` 테이블은 존재하고 `chats.ts`가 채팅 메시지 발생 시 행을 쓴다(`packages/api/src/services/bambi-notifications.ts`).
 - 그러나 **읽기·목록·읽음처리 프로시저가 없고**, `apps/web/src`에 알림 UI가 없다. 모바일 헤더의 벨 아이콘은 `aria-label="알림"`만 있고 핸들러가 없다.

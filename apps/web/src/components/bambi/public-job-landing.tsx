@@ -26,9 +26,11 @@ import {
 	jobLandingIntro,
 	jobLandingPath,
 } from "@/lib/bambi/job-landing";
+import { breadcrumbJsonLd } from "@/lib/bambi/seo";
 import type { Job } from "@/lib/bambi/types";
 import { client } from "@/utils/orpc";
 import { JobCoverImage } from "./job-cover-image";
+import { JsonLd } from "./json-ld";
 
 // 첫 화면에 실을 공고 수. 더보기·페이징은 두지 않는다 — 랜딩의 역할은 색인용 진입점이지
 // 전체 목록 열람이 아니고, 더 보려면 /seeker 목록으로 넘어가는 게 정상 동선이다.
@@ -141,30 +143,42 @@ function LandingBreadcrumb({ industry, region }: JobLandingTarget) {
 		return null;
 	}
 
+	// 구조화 데이터는 아래 화면 브레드크럼과 같은 계층·순서를 그대로 낸다.
+	const breadcrumbItems = [
+		{ name: "채용 정보", path: "/jobs" },
+		{ name: region.label, path: jobLandingPath({ region }) },
+		...(industry
+			? [{ name: industry.label, path: jobLandingPath({ industry, region }) }]
+			: []),
+	];
+
 	return (
-		<nav
-			aria-label="현재 위치"
-			className="flex flex-wrap items-center gap-1 text-muted-foreground text-sm"
-		>
-			<Link className="hover:underline" href="/jobs">
-				채용 정보
-			</Link>
-			<span aria-hidden="true">›</span>
-			{industry ? (
-				<>
-					<Link
-						className="hover:underline"
-						href={jobLandingPath({ region }) as Route}
-					>
-						{region.label}
-					</Link>
-					<span aria-hidden="true">›</span>
-					<span className="font-bold text-foreground">{industry.label}</span>
-				</>
-			) : (
-				<span className="font-bold text-foreground">{region.label}</span>
-			)}
-		</nav>
+		<>
+			<JsonLd data={breadcrumbJsonLd(breadcrumbItems)} />
+			<nav
+				aria-label="현재 위치"
+				className="flex flex-wrap items-center gap-1 text-muted-foreground text-sm"
+			>
+				<Link className="hover:underline" href="/jobs">
+					채용 정보
+				</Link>
+				<span aria-hidden="true">›</span>
+				{industry ? (
+					<>
+						<Link
+							className="hover:underline"
+							href={jobLandingPath({ region }) as Route}
+						>
+							{region.label}
+						</Link>
+						<span aria-hidden="true">›</span>
+						<span className="font-bold text-foreground">{industry.label}</span>
+					</>
+				) : (
+					<span className="font-bold text-foreground">{region.label}</span>
+				)}
+			</nav>
+		</>
 	);
 }
 

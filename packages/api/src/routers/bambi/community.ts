@@ -263,6 +263,8 @@ const postSummarySelection = {
 	isPromotion: communityPost.isPromotion,
 	likeCount: communityPost.likeCount,
 	title: communityPost.title,
+	// 공개 사이트맵의 lastmod가 쓴다(수정된 글이 다시 크롤링되게).
+	updatedAt: communityPost.updatedAt,
 	// 목록 썸네일 — 본문(Tiptap doc JSON)에서 첫 이미지 src만 뽑는다. 본문 전체를 목록
 	// 응답에 실으면 한 페이지에 30KB짜리 글 20건이 그대로 따라 나온다.
 	thumbnailUrl: sql<
@@ -302,6 +304,8 @@ const crawledCommunityFeedSelection = {
 	isPromotion: sql<boolean>`false`,
 	likeCount: sql<number>`0`,
 	title: crawledCommunityTopic.title,
+	// 수집 글엔 갱신 시각이 없어 원 게시일을 그대로 쓴다(UNION 위치 맞춤).
+	updatedAt: sql<Date>`${crawledCommunityTopic.sourcePostedAt}`,
 	// 수집 글은 본문 이미지를 우리가 호스팅하지 않아 썸네일이 없다(UNION 위치만 맞춘다).
 	thumbnailUrl: sql<string | null>`null`,
 	viewCount: sql<number>`coalesce(${crawledCommunityTopic.viewCount}, 0)`,
@@ -444,6 +448,7 @@ const toPublicSummary = (summary: PostSummaryRow) => ({
 	// 목록 카드 썸네일(본문 첫 이미지). 목록에서는 블러로 가리고 상세에서 원본을 본다.
 	thumbnailUrl: summary.thumbnailUrl,
 	title: summary.title,
+	updatedAt: summary.updatedAt,
 	viewCount: summary.viewCount,
 });
 
