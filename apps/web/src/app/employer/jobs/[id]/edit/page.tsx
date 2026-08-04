@@ -129,6 +129,48 @@ const formatPreviewPay = ({
 		: "";
 };
 
+// 검수 축 안내. 반려 사유는 이 화면이 유일한 표시 자리이고(목록은 요약만 보여준다), 게시 중인
+// 공고는 저장하면 서버가 무조건 pending_review로 되돌리므로(getUpdatedJobPostStatus) 제출 전에
+// 노출이 끊긴다는 사실을 알려야 한다.
+function ReviewStatusNotice({
+	job,
+}: {
+	// 로딩 중에는 undefined다. 호출부에서 풀면 페이지 함수의 분기만 늘어난다.
+	job?: { rejectionReason: null | string; status: string };
+}) {
+	const rejectionReason = job?.rejectionReason;
+
+	if (job?.status === "rejected") {
+		return (
+			<Alert variant="destructive">
+				<TriangleAlert />
+				<AlertTitle>검수에서 반려된 공고입니다</AlertTitle>
+				<AlertDescription className="text-pretty">
+					{rejectionReason
+						? `반려 사유: ${rejectionReason}`
+						: "운영자가 사유를 남기지 않았습니다."}{" "}
+					수정 후 제출하면 재검수를 거쳐 다시 게시됩니다.
+				</AlertDescription>
+			</Alert>
+		);
+	}
+
+	if (job?.status === "published") {
+		return (
+			<Alert variant="warning">
+				<TriangleAlert />
+				<AlertTitle>수정하면 재검수 동안 노출이 중단됩니다</AlertTitle>
+				<AlertDescription className="text-pretty">
+					게시 중인 공고를 수정하면 검수 대기 상태로 돌아가, 운영자가 다시
+					승인할 때까지 공고와 광고가 노출되지 않습니다.
+				</AlertDescription>
+			</Alert>
+		);
+	}
+
+	return null;
+}
+
 const focusFirstInvalidField = (form: HTMLFormElement | null) => {
 	if (!form) {
 		return;
@@ -552,6 +594,7 @@ export default function EditEmployerJobPage({
 					ref={formRef}
 				>
 					<FormError message={formError} />
+					<ReviewStatusNotice job={job} />
 					<section
 						aria-labelledby="edit-affiliation"
 						className="flex flex-col gap-3"

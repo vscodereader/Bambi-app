@@ -30,6 +30,27 @@ const TITLE_MAX_LENGTH = 17;
 const isPubliclyViewable = (job: EmployerJob): boolean =>
 	job.status === "published" && job.paymentStatus === "paid";
 
+// 배지 한 줄로는 "왜 안 보이는지"를 알 수 없다. 스페셜·급구·추천 상품을 붙였는데 목록 섹션에
+// 안 뜨는 흔한 원인이 결제 대기(무통장입금 미확인)이고, 반려는 사유를 봐야 다시 낼 수 있다.
+// 공개 게이트는 published AND paid라 두 축을 함께 본다.
+const getJobStatusNote = (job: EmployerJob): null | string => {
+	if (job.paymentStatus !== "paid" && job.status === "published") {
+		return "입금 확인 후 노출됩니다.";
+	}
+
+	if (job.paymentStatus !== "paid" && job.status === "pending_review") {
+		return "검수 통과와 입금 확인을 모두 마쳐야 노출됩니다.";
+	}
+
+	if (job.status === "rejected") {
+		return job.rejectionReason
+			? `반려 사유: ${job.rejectionReason}`
+			: "수정 후 제출하면 재검수를 거칩니다.";
+	}
+
+	return null;
+};
+
 const getTruncatedTitle = (title: string): string =>
 	title.length > TITLE_MAX_LENGTH
 		? `${title.slice(0, TITLE_MAX_LENGTH)}…`
@@ -91,8 +112,20 @@ export function getEmployerJobsColumns({
 			sortValue: (job) => getJobDisplayStatus(job).label,
 			cell: (job) => {
 				const display = getJobDisplayStatus(job);
+				const note = getJobStatusNote(job);
 
-				return <StatusBadge tone={display.tone}>{display.label}</StatusBadge>;
+				return (
+					<div className="flex flex-col items-start gap-1">
+						<StatusBadge tone={display.tone}>{display.label}</StatusBadge>
+						{note ? (
+							// 반려 사유는 길 수 있다. 셀 폭을 붙들어 두고 줄바꿈시킨다 —
+							// 안 그러면 표가 가로로 늘어나 다른 열이 밀린다.
+							<span className="max-w-56 text-pretty break-words text-muted-foreground text-xs">
+								{note}
+							</span>
+						) : null}
+					</div>
+				);
 			},
 		},
 		{
