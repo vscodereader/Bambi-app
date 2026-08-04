@@ -78,7 +78,8 @@
 - **기대 결과**:
   - `authClient.signUp.email` → `bambi.onboarding.createEmployerProfile` → `bambi.onboarding.recordLegalConsent` 순 호출
   - `bambi_profile.role = employer`, 인증 결과(번호·성별·생년월일·CI/DI 해시)가 서버 값으로 덮어써짐, `isPhoneVerified = true`
-  - **역할과 무관하게 `/seeker`로 이동**한다. `/employer`로 자동 진입하지 않음
+  - **역할과 무관하게 `/seeker`로 이동**한다(`window.location.assign` 하드 내비게이션). `/employer`로 자동 진입하지 않음.
+    소프트 내비게이션(`router.push`)이면 세션이 없던 시점에 anon으로 렌더된 Router Cache 엔트리를 재생해 **가입 직후 404**가 뜨고 새로고침해야 정상이 됐다 — 로그인 성공 경로와 같은 이유로 하드 내비게이션이다
   - 업소회원 선택 시 안내 문구 노출: "가입 후 업체 정보를 입력하고 운영자 승인을 받으면 구인 기능을 이용할 수 있어요."
 - **엣지 케이스 / 실패 케이스**:
   - 이미 같은 CI/DI로 가입된 계정 존재 → `checkIdentityForSignup`이 `hasAccount: true` → **로그인 모드로 강제 전환** + "이미 가입된 계정이 있어요. 로그인해 주세요."
@@ -765,15 +766,17 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 - **경로**: `/employer/settings` 하단 (파일: `apps/web/src/components/bambi/withdraw-account-section.tsx`)
 - **선행 조건**: 본인이 owner인 조직에 **다른 멤버가 남아 있지 않을 것**
 - **절차**: "회원 탈퇴" → 다이얼로그 "정말 탈퇴하시겠어요?" → "탈퇴하기"
-- **기대 결과**:
-  - `user.deletedAt` 세팅 + 이메일 tombstone(`withdrawn-{userId}@invalid.bambi`) + `login_id` null + 이름 "탈퇴한 회원"
-  - `account`(비밀번호) 즉시 삭제, `bambi_profile`의 연락처·생년월일·성별 파기, `team_member`·`member`·전 기기 세션 삭제
-  - `ciHash`/`diHash`만 보존기간(기본 30일, 사이트 설정 우선) 동안 남아 재가입 차단
+- **기대 결과**: **소프트 탈퇴만 한다.**
+  - `user.deletedAt` 세팅 + 이름 "탈퇴한 회원" + `image` null. **이메일·`login_id`·`account`(비밀번호)·`bambi_profile`의 연락처·성별·생년월일은 그대로 남는다**
+  - `team_member`·`member`·전 기기 세션 삭제
+  - 탈퇴자가 **유일한 멤버였던 조직**의 `published` 공고는 `hidden`으로 내려간다. 다른 멤버가 남은 조직의 공고는 유지 (`findOrganizationsLeftEmptyBy`)
+  - 식별값 파기는 보존기간(기본 30일, 사이트 설정 우선) 경과 후 `bambi.moderation.purgeWithdrawnAccounts` 배치가 전담한다 (§운영자 4.6)
   - 로그아웃 → 게스트 쿠키 삭제 → 토스트 "탈퇴가 완료됐어요…" → `/`
 - **엣지 케이스**:
   - 다른 멤버가 남아 있으면 버튼이 사전 비활성 + destructive Alert. 서버도 `CONFLICT "팀에 다른 멤버가 남아 있어 탈퇴할 수 없어요…"`
-  - 탈퇴 후 같은 이메일 재가입은 열리지만, 같은 명의 본인인증은 보존기간 동안 막힌다
-  - 재로그인 시도 → better-auth 훅 `FORBIDDEN "탈퇴한 계정이에요. 로그인할 수 없어요."`
+  - 재로그인 시도(아이디·비밀번호 정상 입력) → better-auth 세션 생성 훅 `FORBIDDEN "탈퇴한 계정이에요. 로그인할 수 없어요."`. 이메일·`login_id`·비밀번호가 남아 있어야 이 경로에 도달한다 — 예전처럼 탈퇴 즉시 파기하면 계정을 못 찾아 "아이디(이메일) 또는 비밀번호가 틀렸습니다."로 뭉개졌다
+  - 보존기간 동안은 같은 이메일·`login_id`로 재가입할 수 없다(unique 충돌). 같은 명의 본인인증도 CI/DI 해시로 막힌다. 파기 배치가 돌면 둘 다 열린다
+  - 상대 구직자의 채팅방에는 담당자 이름이 팀·조직 표시명 대신 "탈퇴한 회원"으로 보인다 (`chats.ts` `resolveCounterpartNames`)
   - `user` 행 자체는 삭제하지 않는다(상대방 채팅·리뷰·신고가 FK로 물려 있음)
 - **관련 API**: `bambi.onboarding.getWithdrawEligibility`, `bambi.onboarding.withdrawMyAccount`, `bambi.siteSettings.getMemberPolicy`
 

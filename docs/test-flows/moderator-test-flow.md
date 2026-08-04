@@ -352,8 +352,12 @@
 
 - **경로**: `/moderator/site-settings` 내 실행 버튼 (§13)
 - > ⚠ **되돌릴 수 없다.** 보존기간(운영자 설정, 기본 30일)이 지난 탈퇴 계정의 세션·자격증명(비밀번호)·
-  > 연락처·CI/DI 해시를 지우고, 이메일을 `withdrawn-<id>@invalid.bambi`, 이름을 "탈퇴한 회원"으로 치환한다.
+  > 연락처·CI/DI 해시를 지우고, 이메일을 `withdrawn-<id>@invalid.bambi`, `login_id`를 null,
+  > 이름을 "탈퇴한 회원"으로 치환한다.
   > `user` 행 자체는 삭제하지 않는다(상대방 데이터가 RESTRICT FK로 물려 있음).
+- > **탈퇴 시점에는 아무것도 파기되지 않는다.** 탈퇴(`onboarding.withdrawMyAccount`)는 `deletedAt`·표시명
+  > 익명화·세션 삭제까지만 하는 소프트 삭제다. 이 배치가 유일한 파기 지점이므로 **주기적으로 눌러야**
+  > 이메일·아이디·연락처가 실제로 지워진다.
 - **기대 결과**: `{ purgedCount: N }` 반환. 대상 0건이면 즉시 `{ purgedCount: 0 }`.
 - **관련 API**: `bambi.moderation.purgeWithdrawnAccounts` (`moderation.ts` L2539, `adminProcedure`)
 

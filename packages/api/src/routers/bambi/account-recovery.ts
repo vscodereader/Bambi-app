@@ -45,8 +45,9 @@ interface RecoverableAccount {
 
 // 본인인증 결과로 계정을 특정한다. 판정 축은 DI(1인 1계정)지만, 과거 CI만 저장된 계정도
 // 같은 사람이므로 함께 본다(onboarding.ts의 findIdentityCollision과 같은 where절).
-// 탈퇴 계정은 제외한다 — 로그인 자체가 auth 훅에서 막히고, 탈퇴 시 login_id를 비우므로
-// 알려 줄 아이디도 남아 있지 않다.
+// 탈퇴 계정은 제외한다 — 로그인 자체가 auth 훅에서 막히므로 아이디를 알려 줘도 쓸 수
+// 없다. 아이디·이메일은 보존기간 동안 남지만(파기는 purgeWithdrawnAccounts 배치),
+// 여기서 흘리면 탈퇴한 계정의 식별값을 되돌려주는 셈이라 deletedAt으로 걸러낸다.
 const findRecoverableAccount = async (
 	identity: VerifiedIdentity
 ): Promise<RecoverableAccount | null> => {
