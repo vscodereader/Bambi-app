@@ -47,7 +47,15 @@ import { orpc } from "@/utils/orpc";
 export const communityEditorExtensions = [
 	StarterKit.configure({
 		link: {
-			HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
+			// 스킴 없이 친 주소(example.com)도 https로 붙는다 — 본문에 그냥 적은 주소가
+			// autolink로 걸릴 때와 링크 팝오버로 걸 때 모두 같은 규칙을 탄다.
+			defaultProtocol: "https",
+			// nofollow까지 붙인다 — 회원이 아무 주소나 걸 수 있는 본문이라 우리 도메인의
+			// 신뢰를 광고·스팸 링크에 넘겨주지 않는다.
+			HTMLAttributes: {
+				rel: "noopener noreferrer nofollow",
+				target: "_blank",
+			},
 			openOnClick: false,
 		},
 	}),
@@ -125,6 +133,13 @@ const TOGGLES: ToggleSpec[] = [
 	},
 ];
 
+// 스킴 없이 적은 주소에 https를 붙인다. mailto:·tel: 같은 다른 스킴은 그대로 둔다
+// (Link 확장의 defaultProtocol은 autolink 경로에만 걸려 setLink에는 적용되지 않는다).
+const SCHEME_RE = /^[a-z][\w+.-]*:/i;
+
+const withHttps = (value: string): string =>
+	SCHEME_RE.test(value) ? value : `https://${value}`;
+
 // 링크 입력 팝오버 — window.prompt 대체. 열릴 때 기존 링크 href를 초기값으로 채우고,
 // 빈 값 적용은 링크 해제(unsetLink), URL 적용은 setLink({ href }).
 function LinkPopover({ editor }: { editor: Editor }) {
@@ -141,11 +156,12 @@ function LinkPopover({ editor }: { editor: Editor }) {
 	}
 
 	function applyLink() {
+		const trimmed = url.trim();
 		const chain = editor.chain().focus().extendMarkRange("link");
-		if (url === "") {
+		if (trimmed === "") {
 			chain.unsetLink().run();
 		} else {
-			chain.setLink({ href: url }).run();
+			chain.setLink({ href: withHttps(trimmed) }).run();
 		}
 		setOpen(false);
 	}
@@ -179,11 +195,14 @@ function LinkPopover({ editor }: { editor: Editor }) {
 						applyLink();
 					}}
 				>
+					{/* type="url"이면 브라우저 검증이 스킴 없는 입력(example.com)의 제출 자체를
+					    막아 https 자동 보정이 돌 기회가 없다. 검증은 withHttps가 맡는다. */}
 					<Input
 						aria-label="링크 URL"
+						inputMode="url"
 						onChange={(event) => setUrl(event.target.value)}
-						placeholder="https://example.com"
-						type="url"
+						placeholder="example.com"
+						type="text"
 						value={url}
 					/>
 					<div className="flex justify-end gap-1.5">

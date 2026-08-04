@@ -76,6 +76,7 @@ export default function EditAdProductPage() {
 						})
 					}
 					pending={updateProduct.isPending}
+					placementKind={placement?.kind}
 					submitLabel="수정 저장"
 				/>
 			) : null}

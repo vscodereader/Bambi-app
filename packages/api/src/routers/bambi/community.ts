@@ -16,6 +16,7 @@ import {
 	desc,
 	eq,
 	gte,
+	ilike,
 	isNull,
 	ne,
 	or,
@@ -39,7 +40,10 @@ import {
 	hashCommunityPassword,
 	verifyCommunityPassword,
 } from "../../services/bambi-community-password";
+
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
+import { escapeLikePattern } from "../../services/bambi-job-feed";
+
 import {
 	JOB_POST_IMAGE_MAX_BYTES,
 	type JobPostImageUploadPolicyCode,
@@ -50,6 +54,7 @@ import {
 	assertTiptapDoc,
 	extractTiptapText,
 } from "../../services/bambi-tiptap-text";
+import { takeRateLimit } from "../../services/rate-limit";
 
 const PAGE_SIZE = 20;
 const OVERVIEW_LIMIT = 4;
@@ -76,6 +81,16 @@ const communityBoardSchema = z.enum([
 
 type CommunityBoardInput = z.infer<typeof communityBoardSchema>;
 
+// 비로그인(크롤러 포함)에게 읽기만 여는 게시판. 서버가 이 목록으로 강제하고, 화면은
+// 이 값을 따라간다 — 목록·상세 어느 쪽으로 들어와도 같은 집합만 열린다.
+// 중고거래(market)는 회원 간 거래 맥락이라 제외하고, 베스트(best)는 게시판이 아니라
+// 전 게시판 큐레이션이라 비공개 보드 글이 섞이므로 제외한다.
+const PUBLIC_COMMUNITY_BOARDS = ["notice", "free", "work_talk"] as const;
+const publicBoardSchema = z.enum(PUBLIC_COMMUNITY_BOARDS);
+
+const isPublicBoard = (board: string): boolean =>
+	publicBoardSchema.safeParse(board).success;
+
 // 요약 행의 출처. 화면이 이 값으로 "외부 수집" 배지·상세 라우팅을 가른다(공고 목록의
 // JobFeedSource와 같은 판별). 순수 글은 "native", 수집 글은 "crawled".
 type CommunityFeedSource = "crawled" | "native";
@@ -92,9 +107,14 @@ type CommunityPostColumns = typeof communityPost.$inferSelect;
 
 // 목록 필터 — 독립 On/Off 토글 2개(광고 글보기·업소 회원 글보기). 기본은 둘 다 false=전체.
 // 켜진 토글이 있으면 그 조건들의 합집합(OR)으로 좁힌다(광고=is_promotion, 업소=author_role).
+// mine·q는 위 두 토글과 달리 AND로 좁힌다(서로 배타가 아니다).
 const listPostsInput = z.object({
 	board: communityBoardSchema,
+	// 내가 쓴 글만 보기. 대상 userId는 입력으로 받지 않고 세션에서 꺼낸다.
+	mine: z.boolean().default(false),
 	page: z.number().int().min(1).default(1),
+	// 제목·본문 검색어.
+	q: z.string().trim().max(50).optional(),
 	showEmployer: z.boolean().default(false),
 	showPromotion: z.boolean().default(false),
 });
@@ -135,6 +155,12 @@ const MEDIA_UPLOAD_ERROR_MESSAGES: Record<
 };
 
 const LOCKED_PASSWORD_ERROR = "비밀글은 4자 이상의 비밀번호가 필요합니다.";
+
+// 도배 방지 — 사용자당 1분 1회. 판정 축이 IP가 아니라 계정이라 미들웨어
+// (rateLimitedPublicProcedure)가 아니라 핸들러에서 세션 userId로 버킷을 잡는다.
+const CREATE_POST_WINDOW_MS = 60 * 1000;
+const CREATE_POST_RATE_LIMIT_ERROR =
+	"글은 1분에 한 번만 등록할 수 있어요. 잠시 후 다시 시도해 주세요.";
 
 const updatePostInput = postIdInput.extend({
 	authorName: z.string().trim().min(1).max(30),
@@ -240,6 +266,15 @@ const postSummarySelection = {
 	isPromotion: communityPost.isPromotion,
 	likeCount: communityPost.likeCount,
 	title: communityPost.title,
+	// 공개 사이트맵의 lastmod가 쓴다(수정된 글이 다시 크롤링되게).
+	updatedAt: communityPost.updatedAt,
+	// 목록 썸네일 — 본문(Tiptap doc JSON)에서 첫 이미지 src만 뽑는다. 본문 전체를 목록
+	// 응답에 실으면 한 페이지에 30KB짜리 글 20건이 그대로 따라 나온다.
+	thumbnailUrl: sql<
+		string | null
+	>`substring(${communityPost.body} from '"src":"([^"]*)"')`.as(
+		"thumbnail_url"
+	),
 	viewCount: communityPost.viewCount,
 	source: sql<CommunityFeedSource>`'native'`.as("source"),
 	isCrawled: sql<number>`0`.as("is_crawled"),
@@ -272,6 +307,10 @@ const crawledCommunityFeedSelection = {
 	isPromotion: sql<boolean>`false`,
 	likeCount: sql<number>`0`,
 	title: crawledCommunityTopic.title,
+	// 수집 글엔 갱신 시각이 없어 원 게시일을 그대로 쓴다(UNION 위치 맞춤).
+	updatedAt: sql<Date>`${crawledCommunityTopic.sourcePostedAt}`,
+	// 수집 글은 본문 이미지를 우리가 호스팅하지 않아 썸네일이 없다(UNION 위치만 맞춘다).
+	thumbnailUrl: sql<string | null>`null`,
 	viewCount: sql<number>`coalesce(${crawledCommunityTopic.viewCount}, 0)`,
 	source: sql<CommunityFeedSource>`'crawled'`,
 	isCrawled: sql<number>`1`,
@@ -330,10 +369,46 @@ const buildListFilters = (
 	return combined ? [combined] : [];
 };
 
+// 검색어·내 글 토글은 AND로 좁힌다. body는 Tiptap doc JSON 문자열이라 본문 텍스트가
+// 그대로 들어 있어 ilike로 걸린다(태그명까지 매칭되지만 별도 색인 없이 쓰는 대가다).
+// ponytail: ilike 순차 스캔 — 글 수가 커지면 pg_trgm 인덱스나 tsvector로.
+const buildNarrowFilters = ({
+	mine,
+	q,
+	userId,
+}: {
+	mine: boolean;
+	q?: string;
+	userId: string;
+}): SQL[] => {
+	const filters: SQL[] = [];
+	if (mine) {
+		filters.push(eq(communityPost.authorUserId, userId));
+	}
+	if (q) {
+		const pattern = `%${escapeLikePattern(q)}%`;
+		const combined = or(
+			ilike(communityPost.title, pattern),
+			ilike(communityPost.body, pattern)
+		);
+		if (combined) {
+			filters.push(combined);
+		}
+	}
+	return filters;
+};
+
+// 마지막 정렬 키는 항상 id다. created_at만으로 정렬하면 같은 시각 글의 순서를 Postgres가
+// 매번 다시 정해, 페이지를 오갈 때마다 목록이 한 칸씩 밀리거나 같은 글이 두 페이지에 뜬다
+// (bambi-job-feed의 desc(publishedAt), desc(id)와 같은 처방).
 const buildBoardOrder = (board: CommunityBoardInput) =>
 	board === "best"
-		? [desc(communityPost.likeCount), desc(communityPost.createdAt)]
-		: [desc(communityPost.createdAt)];
+		? [
+				desc(communityPost.likeCount),
+				desc(communityPost.createdAt),
+				desc(communityPost.id),
+			]
+		: [desc(communityPost.createdAt), desc(communityPost.id)];
 
 const selectBoardPosts = (
 	board: CommunityBoardInput,
@@ -373,7 +448,10 @@ const toPublicSummary = (summary: PostSummaryRow) => ({
 	likeCount: summary.likeCount,
 	// 화면이 "외부 수집" 배지·상세 라우팅을 가르는 판별 필드.
 	source: summary.source,
+	// 목록 카드 썸네일(본문 첫 이미지). 목록에서는 블러로 가리고 상세에서 원본을 본다.
+	thumbnailUrl: summary.thumbnailUrl,
 	title: summary.title,
+	updatedAt: summary.updatedAt,
 	viewCount: summary.viewCount,
 });
 
@@ -403,7 +481,7 @@ const selectWorkTalkFeedUnion = ({
 			// 게시판에서 긁어 온 글은 신선한 것만 섞는다). null 게시일은 이 조건이 자연히 걸러낸다.
 			.where(and(...crawledTopicFeedFilters(windowStart)))
 	)
-		.orderBy(sql`is_crawled asc, created_at desc`)
+		.orderBy(sql`is_crawled asc, created_at desc, id desc`)
 		.limit(limit)
 		.offset(offset);
 
@@ -444,6 +522,38 @@ const readLikeCount = async (
 	return row?.likeCount ?? 0;
 };
 
+// 노출 대상 댓글 행. published 댓글 + published 대댓글을 가진 삭제 부모(스레드 유지용
+// 플레이스홀더)만 남긴다. 회원 목록(listComments)과 공개 상세(getPublicPost)가 같은
+// 기준을 공유해야 한쪽에서만 보이는 댓글이 생기지 않는다.
+const selectVisibleCommentRows = async (postId: string) => {
+	const rows = await db
+		.select({
+			authorName: user.name,
+			authorRole: communityComment.authorRole,
+			authorUserId: communityComment.authorUserId,
+			body: communityComment.body,
+			createdAt: communityComment.createdAt,
+			id: communityComment.id,
+			parentCommentId: communityComment.parentCommentId,
+			status: communityComment.status,
+		})
+		.from(communityComment)
+		.leftJoin(user, eq(user.id, communityComment.authorUserId))
+		.where(eq(communityComment.postId, postId))
+		.orderBy(asc(communityComment.createdAt))
+		.limit(COMMENTS_CAP);
+
+	const liveParentIds = new Set(
+		rows
+			.filter((row) => row.status === "published" && row.parentCommentId)
+			.map((row) => row.parentCommentId)
+	);
+
+	return rows.filter(
+		(row) => row.status === "published" || liveParentIds.has(row.id)
+	);
+};
+
 const findPublishedPost = async (postId: string) => {
 	const [post] = await db
 		.select()
@@ -466,16 +576,21 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const profile = await requireCommunityMember(context.session);
 
-			const listFilters = buildListFilters(
-				input.showPromotion,
-				input.showEmployer
-			);
+			const listFilters = [
+				...buildListFilters(input.showPromotion, input.showEmployer),
+				...buildNarrowFilters({
+					mine: input.mine,
+					q: input.q,
+					userId: profile.userId,
+				}),
+			];
 			// 목록·count 쿼리가 같은 30일 컷오프를 쓰도록 한 번만 계산한다.
 			const windowStart = bestWindowStart();
 			const offset = (input.page - 1) * PAGE_SIZE;
 
-			// 수집 글은 광고·업소 필터를 만족할 수 없다 — 그 토글이 켜지면(listFilters가 있으면)
-			// 순수 글만 남기고 수집 union을 끈다. work_talk·스위치 ON·필터 없음일 때만 섞는다.
+			// 수집 글은 광고·업소·내 글 필터를 만족할 수 없고 검색 대상도 아니다 — 어떤 필터든
+			// 켜지면(listFilters가 있으면) 순수 글만 남기고 수집 union을 끈다.
+			// work_talk·스위치 ON·필터 없음일 때만 섞는다.
 			const includeCrawled =
 				input.board === CRAWLED_COMMUNITY_BOARD &&
 				listFilters.length === 0 &&
@@ -558,6 +673,86 @@ export const communityRouter = {
 			workTalk: maskLockedSummaries(workTalk, profile).map(toPublicSummary),
 		};
 	}),
+
+	// 비로그인 공개 목록(SEO). 공개 보드(PUBLIC_COMMUNITY_BOARDS)의 published 글만,
+	// 필터·검색·내 글 없이 최신순으로 내려준다. 비밀글은 마스킹이 아니라 아예 뺀다 —
+	// 열 수 없는 글의 링크를 크롤러에게 심어 봐야 404 뿐이다. 수집(crawled) 글도 섞지
+	// 않는다: 남의 사이트에서 긁어 온 본문을 우리 도메인에 색인시키면 중복 콘텐츠다.
+	listPublicPosts: publicProcedure
+		.input(
+			z.object({
+				board: publicBoardSchema,
+				page: z.number().int().min(1).default(1),
+			})
+		)
+		.handler(async ({ input }) => {
+			const windowStart = bestWindowStart();
+			const offset = (input.page - 1) * PAGE_SIZE;
+			const filters = [eq(communityPost.isLocked, false)];
+
+			const [items, [total]] = await Promise.all([
+				selectBoardPosts(input.board, {
+					filters,
+					limit: PAGE_SIZE,
+					offset,
+					windowStart,
+				}),
+				db
+					.select({ value: count() })
+					.from(communityPost)
+					.where(
+						and(...buildBoardFilters(input.board, windowStart), ...filters)
+					),
+			]);
+
+			return {
+				items: items.map(toPublicSummary),
+				page: input.page,
+				pageSize: PAGE_SIZE,
+				totalCount: total?.value ?? 0,
+			};
+		}),
+
+	// 비로그인 공개 상세(SEO). 공개 보드의 published·비잠금 글만 열리고, 그 외에는
+	// 존재를 숨긴다(NOT_FOUND). 댓글은 읽기만 나가며 작성자 계정명은 싣지 않는다 —
+	// 회원 화면과 달리 색인되는 페이지라 표시명 이상은 내보내지 않는다. 조회수도
+	// 올리지 않는다(크롤러 방문이 인기 지표를 부풀리면 안 된다).
+	getPublicPost: publicProcedure
+		.input(postIdInput)
+		.handler(async ({ input }) => {
+			const post = await findPublishedPost(input.postId);
+
+			if (!isPublicBoard(post.board) || post.isLocked) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "게시글을 찾을 수 없습니다.",
+				});
+			}
+
+			const rows = await selectVisibleCommentRows(input.postId);
+
+			return {
+				authorName: post.authorDisplayName,
+				authorRole: post.authorRole,
+				board: post.board,
+				body: post.body,
+				commentCount: post.commentCount,
+				comments: rows.map((row) => ({
+					authorRole: row.status === "published" ? row.authorRole : null,
+					body: row.status === "published" ? row.body : "",
+					createdAt: row.createdAt,
+					id: row.id,
+					isDeleted: row.status !== "published",
+					parentCommentId: row.parentCommentId,
+				})),
+				createdAt: post.createdAt,
+				id: post.id,
+				isPromotion: post.isPromotion,
+				likeCount: post.likeCount,
+				title: post.title,
+				updatedAt: post.updatedAt,
+				viewCount: post.viewCount,
+			};
+		}),
 
 	getPost: protectedProcedure
 		.input(
@@ -735,6 +930,20 @@ export const communityRouter = {
 			if (input.isLocked && (input.password?.length ?? 0) < 4) {
 				throw new ORPCError("BAD_REQUEST", { message: LOCKED_PASSWORD_ERROR });
 			}
+			// 검증을 모두 통과한 뒤에 센다 — 금칙어·비번 오류로 튕긴 시도가 1분 락을
+			// 먹으면 고쳐서 다시 낼 수도 없다.
+			if (
+				!takeRateLimit({
+					key: `community.createPost:${profile.userId}`,
+					limit: 1,
+					now: Date.now(),
+					windowMs: CREATE_POST_WINDOW_MS,
+				})
+			) {
+				throw new ORPCError("TOO_MANY_REQUESTS", {
+					message: CREATE_POST_RATE_LIMIT_ERROR,
+				});
+			}
 
 			const [created] = await db
 				.insert(communityPost)
@@ -910,63 +1119,36 @@ export const communityRouter = {
 			const post = await findPublishedPost(input.postId);
 			requirePostReadAccess(post, profile, input.password);
 
-			const rows = await db
-				.select({
-					authorName: user.name,
-					authorRole: communityComment.authorRole,
-					authorUserId: communityComment.authorUserId,
-					body: communityComment.body,
-					createdAt: communityComment.createdAt,
-					id: communityComment.id,
-					parentCommentId: communityComment.parentCommentId,
-					status: communityComment.status,
-				})
-				.from(communityComment)
-				.leftJoin(user, eq(user.id, communityComment.authorUserId))
-				.where(eq(communityComment.postId, input.postId))
-				.orderBy(asc(communityComment.createdAt))
-				.limit(COMMENTS_CAP);
-
-			// published 대댓글을 가진 삭제 부모는 스레드 유지를 위해 플레이스홀더로 남긴다.
-			const liveParentIds = new Set(
-				rows
-					.filter((row) => row.status === "published" && row.parentCommentId)
-					.map((row) => row.parentCommentId)
-			);
+			const rows = await selectVisibleCommentRows(input.postId);
 
 			// authorUserId는 canDelete 계산에만 쓰고 응답에서는 제외한다(익명성 보호).
-			return rows
-				.filter(
-					(row) => row.status === "published" || liveParentIds.has(row.id)
-				)
-				.map((row) =>
-					row.status === "published"
-						? {
-								authorName: row.authorName,
-								authorRole: row.authorRole,
-								body: row.body,
-								// 삭제와 달리 수정은 작성자 본인만 가능하다(admin 제외 — getPost.canEdit와 동일 철학).
-								canDelete:
-									row.authorUserId === profile.userId ||
-									profile.role === "admin",
-								canEdit: row.authorUserId === profile.userId,
-								createdAt: row.createdAt,
-								id: row.id,
-								isDeleted: false,
-								parentCommentId: row.parentCommentId,
-							}
-						: {
-								authorName: null,
-								authorRole: null,
-								body: "",
-								canDelete: false,
-								canEdit: false,
-								createdAt: row.createdAt,
-								id: row.id,
-								isDeleted: true,
-								parentCommentId: row.parentCommentId,
-							}
-				);
+			return rows.map((row) =>
+				row.status === "published"
+					? {
+							authorName: row.authorName,
+							authorRole: row.authorRole,
+							body: row.body,
+							// 삭제와 달리 수정은 작성자 본인만 가능하다(admin 제외 — getPost.canEdit와 동일 철학).
+							canDelete:
+								row.authorUserId === profile.userId || profile.role === "admin",
+							canEdit: row.authorUserId === profile.userId,
+							createdAt: row.createdAt,
+							id: row.id,
+							isDeleted: false,
+							parentCommentId: row.parentCommentId,
+						}
+					: {
+							authorName: null,
+							authorRole: null,
+							body: "",
+							canDelete: false,
+							canEdit: false,
+							createdAt: row.createdAt,
+							id: row.id,
+							isDeleted: true,
+							parentCommentId: row.parentCommentId,
+						}
+			);
 		}),
 
 	createComment: protectedProcedure

@@ -1,8 +1,7 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
-import type { Route } from "next";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -158,7 +157,6 @@ function AuthCardHeader({
 }
 
 export function AuthPanel() {
-	const router = useRouter();
 	const searchParams = useSearchParams();
 	const initialMode = useMemo(
 		() => getInitialMode(searchParams.get("auth") ?? searchParams.get("mode")),
@@ -271,7 +269,12 @@ export function AuthPanel() {
 		queryClient.invalidateQueries();
 		// 역할과 무관하게 구직자 홈으로 진입한다. 구인자는 헤더/탭바의 "구인 관리"
 		// 버튼으로 /employer에 들어가고, 대시보드가 업체정보 입력을 유도한다.
-		router.push("/seeker" as Route);
+		// 로그인과 같은 이유로 하드 내비게이션이다: 지금 이 화면(/seeker?auth=signup)은
+		// 세션이 없던 시점에 anon으로 렌더된 트리라, router.push는 Router Cache에 남은
+		// 그 엔트리를 재생해 갓 만들어진 세션이 반영되지 않은 화면(가입 직후 404)을 낸다.
+		// 브라우저가 세션 쿠키를 달고 /seeker를 새로 요청하게 하면 "새로고침하면 정상"과
+		// 같은 상태가 되고, 첫 내비게이션만 깨지는 문제가 사라진다.
+		window.location.assign("/seeker");
 	};
 
 	const handleAuthSuccess = async () => {

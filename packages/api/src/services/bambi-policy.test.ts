@@ -17,13 +17,27 @@ describe("bambi policy", () => {
 		);
 	});
 
-	it("숨김·반려 공고를 수정해도 검수 대기로 보낸다", () => {
+	it("숨김·반려·검수 보류 공고를 수정해도 검수 대기로 보낸다", () => {
 		expect(getUpdatedJobPostStatus({ currentStatus: "hidden" })).toBe(
 			"pending_review"
 		);
 		expect(getUpdatedJobPostStatus({ currentStatus: "rejected" })).toBe(
 			"pending_review"
 		);
+		expect(getUpdatedJobPostStatus({ currentStatus: "on_hold" })).toBe(
+			"pending_review"
+		);
+	});
+
+	it("검수 보류는 공개 게이트를 통과하지 못한다", () => {
+		expect(getJobPostStatusLabel("on_hold")).toBe("검수 보류");
+		expect(
+			canStartChat({
+				accountStatus: "active",
+				isPhoneVerified: true,
+				jobPostStatus: "on_hold",
+			})
+		).toBe(false);
 	});
 
 	it("임시 저장은 제출 전이라 그대로 둔다", () => {

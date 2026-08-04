@@ -1,0 +1,48 @@
+import { buttonVariants } from "@bambi-app/ui/components/button";
+import { cn } from "@bambi-app/ui/lib/utils";
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { Logo } from "@/components/bambi/ds";
+import { SiteFooter } from "@/components/bambi/site-footer";
+import { APP_CONTENT_MAX_W, APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
+
+// 비로그인 공개 읽기(/board) 셸. 로그인 상태를 전제로 하는 앱 셸(탭바·내 메뉴) 대신
+// 브랜드 헤더와 공용 푸터만 둔다 — 이 영역은 세션 없이도 열려야 하고(resolve-gate의
+// 공개 prefix), 크롤러가 JS 없이 본문까지 읽을 수 있어야 한다.
+export default function PublicBoardLayout({
+	children,
+}: {
+	children: ReactNode;
+}) {
+	return (
+		<div className="flex min-h-dvh flex-col">
+			<header className="border-border border-b bg-background">
+				<div
+					className={cn(
+						"mx-auto flex w-full items-center justify-between gap-3 px-5 py-3",
+						APP_CONTENT_MAX_W
+					)}
+				>
+					<Link aria-label="밤비알바 홈" href="/seeker">
+						<Logo lang="ko" size="sm" />
+					</Link>
+					<Link
+						className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+						href="/seeker"
+					>
+						채용 공고 보기
+					</Link>
+				</div>
+			</header>
+			<main
+				className={cn(
+					"mx-auto flex w-full max-w-full flex-1 flex-col gap-4 px-5 py-6 md:px-6",
+					APP_CONTENT_WIDTH
+				)}
+			>
+				{children}
+			</main>
+			<SiteFooter />
+		</div>
+	);
+}

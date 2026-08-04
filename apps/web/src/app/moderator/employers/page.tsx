@@ -47,39 +47,53 @@ const VERIFICATION_BADGE: Record<
 	rejected: { label: "반려", variant: "destructive" },
 };
 
+// 한 화면에 담는 업소 수. 받은 건수가 이 값보다 적으면 마지막 페이지로 본다
+// (전체 건수 집계 쿼리를 따로 돌리지 않기 위한 선택).
+const PAGE_SIZE = 20;
+
 export default function ModeratorEmployersPage() {
 	const queryClient = useQueryClient();
 	const [filter, setFilter] = useState<EmployerFilter>("pending");
+	const [page, setPage] = useState(0);
 	const [notes, setNotes] = useState<Record<string, string>>({});
 	const employersQuery = useQuery(
 		orpc.bambi.moderation.listEmployers.queryOptions({
 			input: {
-				limit: 50,
+				limit: PAGE_SIZE,
+				offset: page * PAGE_SIZE,
 				status: filter === "all" ? undefined : filter,
 			},
 		})
 	);
 	const decide = useMutation(
 		orpc.bambi.moderation.setEmployerVerificationStatus.mutationOptions({
-			onSuccess: async () => {
+			onSuccess: async (_result, variables) => {
 				toast.success("처리했어요.");
-				// 부분 키(status 생략)로 모든 상태 필터 캐시를 함께 무효화한다.
+				// 처리한 업소의 반려 사유 입력값은 지운다 — 남겨두면 다음에 같은 업소를
+				// 다시 열었을 때 이미 처리한 사유가 그대로 남아 있다.
+				setNotes((prev) => {
+					const { [variables.organizationId]: _removed, ...rest } = prev;
+					return rest;
+				});
+				// 입력 키 전체(상태 필터·페이지 무관)를 함께 무효화한다.
 				await queryClient.invalidateQueries({
-					queryKey: orpc.bambi.moderation.listEmployers.queryKey({
-						input: { limit: 50 },
-					}),
+					queryKey: orpc.bambi.moderation.listEmployers.key(),
 				});
 			},
 			onError: (error) => toast.error(error.message),
 		})
 	);
 	const employers = employersQuery.data ?? [];
+	const hasNextPage = employers.length === PAGE_SIZE;
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<h1 className="m-0 font-extrabold text-2xl">업소 관리</h1>
 			<Tabs
-				onValueChange={(value) => setFilter(value as EmployerFilter)}
+				onValueChange={(value) => {
+					setFilter(value as EmployerFilter);
+					setPage(0);
+				}}
 				value={filter}
 			>
 				<TabsList className="max-w-full flex-wrap">
@@ -186,6 +200,23 @@ export default function ModeratorEmployersPage() {
 					</Card>
 				);
 			})}
+			<div className="flex items-center justify-between gap-2">
+				<Button
+					disabled={page === 0}
+					onClick={() => setPage((prev) => Math.max(0, prev - 1))}
+					variant="outline"
+				>
+					이전
+				</Button>
+				<span className="text-muted-foreground text-sm">{page + 1} 페이지</span>
+				<Button
+					disabled={!hasNextPage}
+					onClick={() => setPage((prev) => prev + 1)}
+					variant="outline"
+				>
+					다음
+				</Button>
+			</div>
 		</div>
 	);
 }

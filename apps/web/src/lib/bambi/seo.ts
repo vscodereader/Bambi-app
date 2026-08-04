@@ -55,6 +55,25 @@ export const bambiSiteJsonLd = {
 	],
 };
 
+export interface BreadcrumbItem {
+	name: string;
+	// 사이트 루트 기준 경로("/board/notice") — 절대 URL은 여기서 붙인다.
+	path: string;
+}
+
+// 공개 계층(공고 랜딩·게시판)의 BreadcrumbList. 화면에 그린 브레드크럼과 같은 순서를
+// 넘겨야 한다 — 구조화 데이터가 화면에 없는 경로를 주장하면 리치 결과에서 빠진다.
+export const breadcrumbJsonLd = (items: readonly BreadcrumbItem[]) => ({
+	"@context": "https://schema.org",
+	"@type": "BreadcrumbList",
+	itemListElement: items.map((item, index) => ({
+		"@type": "ListItem",
+		position: index + 1,
+		name: item.name,
+		item: `${BAMBI_COMPANY.url}${item.path}`,
+	})),
+});
+
 // script 본문에 "</script>"가 섞이면 태그가 조기에 닫혀 뒤 내용이 마크업으로 실행된다.
 // `<`를 유니코드 이스케이프하면 JSON 의미는 그대로 두고 파서 탈출만 막는다.
 export const toJsonLdScriptContent = (data: object): string =>

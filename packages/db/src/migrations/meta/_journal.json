@@ -435,6 +435,13 @@
       "when": 1785827750168,
       "tag": "0061_nickname-banned-word-scope",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1785832380491,
+      "tag": "0062_young_paper_doll",
+      "breakpoints": true
     }
   ]
 }

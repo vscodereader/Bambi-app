@@ -283,10 +283,33 @@ interface CounterpartRoom {
 	teamId: string | null;
 }
 
+// 구직자가 보는 구인자 이름. 담당자가 탈퇴했으면 팀·조직 표시명보다 탈퇴 표기가
+// 앞선다 — 업소 이름만 보이면 응대할 사람이 없는 방에서 답을 기다리게 된다.
+// 탈퇴 계정은 user.name이 이미 "탈퇴한 회원"이라 별도 문구를 만들지 않는다.
+const resolveEmployerName = (
+	room: CounterpartRoom,
+	names: {
+		byOrganizationId: Map<string, string>;
+		byTeamId: Map<string, string>;
+		byUserId: Map<string, string>;
+		withdrawnUserIds: Set<string>;
+	}
+): string | null => {
+	if (names.withdrawnUserIds.has(room.employerUserId)) {
+		return names.byUserId.get(room.employerUserId) ?? null;
+	}
+	return (
+		(room.teamId ? names.byTeamId.get(room.teamId) : undefined) ??
+		names.byOrganizationId.get(room.organizationId) ??
+		names.byUserId.get(room.employerUserId) ??
+		null
+	);
+};
+
 /**
  * 현재 보는 사람(viewer) 기준으로 대화 상대방의 표시 이름을 방마다 해석한다.
  * - 구인자가 볼 때 → 상대는 구직자(user.name, 표시명 정본)
- * - 구직자가 볼 때 → 상대는 구인자(팀 프로필 → 조직 프로필 → 구인자 개인 프로필 순)
+ * - 구직자가 볼 때 → 상대는 구인자(탈퇴 표기 → 팀 프로필 → 조직 프로필 → 개인 프로필 순)
  */
 const resolveCounterpartNames = async (
 	rooms: CounterpartRoom[],
@@ -314,6 +337,7 @@ const resolveCounterpartNames = async (
 					.select({
 						userId: user.id,
 						displayName: user.name,
+						deletedAt: user.deletedAt,
 					})
 					.from(user)
 					.where(inArray(user.id, [...profileUserIds]))
@@ -345,6 +369,9 @@ const resolveCounterpartNames = async (
 	const nameByUserId = new Map(
 		profiles.map((entry) => [entry.userId, entry.displayName])
 	);
+	const withdrawnUserIds = new Set(
+		profiles.flatMap((entry) => (entry.deletedAt ? [entry.userId] : []))
+	);
 	const nameByTeamId = new Map(
 		teamProfiles.map((entry) => [entry.teamId, entry.displayName])
 	);
@@ -363,12 +390,15 @@ const resolveCounterpartNames = async (
 				nameByUserId.get(room.jobSeekerUserId) ?? null
 			);
 		} else {
-			const employerName =
-				(room.teamId ? nameByTeamId.get(room.teamId) : undefined) ??
-				nameByOrganizationId.get(room.organizationId) ??
-				nameByUserId.get(room.employerUserId) ??
-				null;
-			namesByRoomId.set(room.id, employerName);
+			namesByRoomId.set(
+				room.id,
+				resolveEmployerName(room, {
+					byOrganizationId: nameByOrganizationId,
+					byTeamId: nameByTeamId,
+					byUserId: nameByUserId,
+					withdrawnUserIds,
+				})
+			);
 		}
 	}
 
@@ -799,6 +829,9 @@ export const chatsRouter = {
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					status: jobPost.status,
+					// 채팅방에서 공고 상세로 보낼지 판단하는 데 쓴다. 상세(jobs.getById)가
+					// published + paid만 열어 주므로 같은 기준을 화면에도 내려야 한다.
+					paymentStatus: jobPost.paymentStatus,
 				})
 				.from(jobPost)
 				.where(eq(jobPost.id, room.jobPostId))
@@ -915,7 +948,7 @@ export const chatsRouter = {
 
 			const category = requireAllowedChatMedia(input);
 
-			return createChatAttachmentUploadIntent({
+			return await createChatAttachmentUploadIntent({
 				byteSize: input.byteSize,
 				category,
 				chatRoomId: room.id,

@@ -68,6 +68,8 @@ const inviteMemberInput = organizationIdInput.extend({
 	email: z.string().email().max(320),
 	role: organizationRoleSchema,
 	teamId: z.string().min(1).optional(),
+	// 초대 사유(선택). 운영자 팀 합류 승인 화면에 그대로 노출된다.
+	reason: z.string().trim().max(500).optional(),
 });
 
 const setMemberRoleInput = organizationIdInput.extend({
@@ -373,6 +375,7 @@ export const teamsRouter = {
 					email: normalizedEmail,
 					expiresAt: getExpiresAt(),
 					id: `invitation_${randomUUID()}`,
+					inviteReason: input.reason || null,
 					inviterId: profile.userId,
 					organizationId: input.organizationId,
 					role: toStoredRole(input.role),

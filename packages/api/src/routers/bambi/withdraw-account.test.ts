@@ -16,11 +16,15 @@ const [{ db }, authSchema, bambiSchema, { onboardingRouter }] =
 	]);
 
 const { account, member, organization, session, user } = authSchema;
-const { bambiProfile } = bambiSchema;
+const { bambiProfile, jobPost } = bambiSchema;
 
 const createdUserIds: string[] = [];
 const createdOrganizationIds: string[] = [];
 afterEach(async () => {
+	// 공고가 작성자(user)를 RESTRICT FK로 잡고 있어 사용자보다 먼저 지운다.
+	for (const id of createdOrganizationIds) {
+		await db.delete(jobPost).where(eq(jobPost.organizationId, id));
+	}
 	for (const id of createdUserIds.splice(0)) {
 		await db.delete(user).where(eq(user.id, id));
 	}
@@ -107,6 +111,29 @@ const seedMembership = async (userId: string, role: "member" | "owner") => {
 	return organizationId;
 };
 
+// 조직 삭제(afterEach)가 cascade로 공고까지 지우므로 별도 정리가 필요 없다.
+const seedJobPost = async (
+	organizationId: string,
+	createdByUserId: string,
+	status: "draft" | "published"
+) => {
+	const [row] = await db
+		.insert(jobPost)
+		.values({
+			organizationId,
+			createdByUserId,
+			status,
+			industryCategory: "기타",
+			region: "서울",
+			payUnit: "일급",
+			workSchedule: "협의",
+			title: "탈퇴 테스트 공고",
+			description: "탈퇴 테스트 공고 본문",
+		})
+		.returning({ id: jobPost.id });
+	return row?.id as string;
+};
+
 // 같은 조직에 다른 멤버를 추가한다(팀에 멤버가 남은 상황 재현).
 const seedOrganizationMember = async (
 	organizationId: string,
@@ -122,7 +149,7 @@ const seedOrganizationMember = async (
 };
 
 describe("withdrawMyAccount 회원 탈퇴", () => {
-	it("탈퇴하면 개인정보를 즉시 파기하고 CI·DI 해시만 남긴다", async () => {
+	it("탈퇴하면 소프트 삭제만 하고 식별값은 보존기간까지 남긴다", async () => {
 		const userId = await seedUser();
 		await seedSession(userId);
 		await seedMembership(userId, "member");
@@ -136,31 +163,27 @@ describe("withdrawMyAccount 회원 탈퇴", () => {
 			.where(eq(user.id, userId));
 		expect(updatedUser?.deletedAt).not.toBeNull();
 		expect(updatedUser?.name).toBe("탈퇴한 회원");
-		// 이메일은 notNull·unique라 tombstone으로 치환한다(원 이메일 재가입 재개방).
-		expect(updatedUser?.email).toBe(`withdrawn-${userId}@invalid.bambi`);
-		// 로그인 아이디는 nullable이라 비워서 파기한다(같은 아이디 재사용 개방).
-		expect(updatedUser?.login_id).toBeNull();
-		expect(updatedUser?.login_id_display).toBeNull();
+		// 이메일·로그인 아이디는 남는다 — 재로그인 시도가 계정을 찾아 auth 훅의
+		// "탈퇴한 계정이에요" 안내에 닿아야 한다. 파기는 purgeWithdrawnAccounts 배치가 한다.
+		expect(updatedUser?.email).toBe(`${userId}@bambi.test`);
+		expect(updatedUser?.login_id).toBe(userId);
+		expect(updatedUser?.login_id_display).toBe(userId);
 
 		const [profile] = await db
 			.select()
 			.from(bambiProfile)
 			.where(eq(bambiProfile.userId, userId));
-		// 표시명(닉네임)은 user.name 정본에서 익명화된다(위에서 검증).
-		// 연락처·본인인증 정보는 즉시 파기하고, 부정 재가입 차단용 해시만 남긴다.
-		expect(profile?.phoneNumber).toBeNull();
-		expect(profile?.gender).toBeNull();
-		expect(profile?.birthDate).toBeNull();
-		expect(profile?.isPhoneVerified).toBe(false);
+		// 연락처·본인인증 정보도 보존기간까지 남기고 배치가 파기한다.
+		expect(profile?.phoneNumber).toBe("010-1111-2222");
 		expect(profile?.ciHash).toBe(`ci_${userId}`);
 		expect(profile?.diHash).toBe(`di_${userId}`);
 
-		// 비밀번호 등 자격증명도 즉시 파기된다.
+		// 비밀번호(자격증명)도 남아야 훅까지 도달한다.
 		const accounts = await db
 			.select()
 			.from(account)
 			.where(eq(account.userId, userId));
-		expect(accounts).toHaveLength(0);
+		expect(accounts).toHaveLength(1);
 
 		const sessions = await db
 			.select()
@@ -173,6 +196,43 @@ describe("withdrawMyAccount 회원 탈퇴", () => {
 			.from(member)
 			.where(eq(member.userId, userId));
 		expect(memberships).toHaveLength(0);
+	});
+
+	it("탈퇴자가 유일한 멤버였던 조직의 공개 공고는 내려간다", async () => {
+		const userId = await seedUser();
+		const organizationId = await seedMembership(userId, "owner");
+		const publishedId = await seedJobPost(organizationId, userId, "published");
+		const draftId = await seedJobPost(organizationId, userId, "draft");
+
+		await withdrawClient(userId)();
+
+		const [published] = await db
+			.select({ status: jobPost.status })
+			.from(jobPost)
+			.where(eq(jobPost.id, publishedId));
+		expect(published?.status).toBe("hidden");
+		// 공개 상태가 아니었던 공고는 건드리지 않는다.
+		const [draft] = await db
+			.select({ status: jobPost.status })
+			.from(jobPost)
+			.where(eq(jobPost.id, draftId));
+		expect(draft?.status).toBe("draft");
+	});
+
+	it("다른 멤버가 남은 조직의 공고는 그대로 둔다", async () => {
+		const staffId = await seedUser();
+		const organizationId = await seedMembership(staffId, "member");
+		const ownerId = await seedUser();
+		await seedOrganizationMember(organizationId, ownerId);
+		const publishedId = await seedJobPost(organizationId, ownerId, "published");
+
+		await withdrawClient(staffId)();
+
+		const [published] = await db
+			.select({ status: jobPost.status })
+			.from(jobPost)
+			.where(eq(jobPost.id, publishedId));
+		expect(published?.status).toBe("published");
 	});
 
 	it("소유 조직에 다른 멤버가 남아 있으면 탈퇴가 차단되고, 멤버 정리 후 탈퇴할 수 있다", async () => {

@@ -2,8 +2,11 @@
 
 // 밤비 — 운영자 전용 전체 공고 통합 관리 목록.
 // 검수 큐(pending_review 전용)와 달리 모든 상태의 공고를 상태·업소명·제목으로 필터/검색하고,
-// 공개(published) 공고를 강제로 내리거나(hidden) 숨긴 공고를 재공개한다. 본문/이미지 수정은
-// 행의 "수정"에서 운영자 편집 페이지(/moderator/jobs/[id]/edit)로 이동한다.
+// 공개(published) 공고를 강제로 내리거나(hidden) 숨긴 공고를 재공개하고, 검수에서 보류한
+// (on_hold) 공고를 승인·반려로 마무리한다. 본문/이미지 수정은 행의 "수정"에서 운영자 편집
+// 페이지(/moderator/jobs/[id]/edit)로 이동한다(상태 무관).
+// 제목 링크는 공개 상세(/seeker/jobs/[id])로 가는데, 이 상세는 published+paid만 열어 주므로
+// 그 게이트를 통과한 행만 링크로 만든다.
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { Button } from "@bambi-app/ui/components/button";
@@ -20,6 +23,7 @@ import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
+import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
@@ -29,10 +33,10 @@ import {
 	exposureTypeColumn,
 	jobOrganizationColumn,
 	jobStatusColumn,
-	jobTitleColumn,
 	paymentStatusColumn,
 } from "@/components/bambi/job-table-columns";
 import { RowActions } from "@/components/bambi/row-actions";
+import { getJobDisplayStatus } from "@/lib/bambi/exposure";
 import { formatDateTime } from "@/lib/bambi-format";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
@@ -46,13 +50,17 @@ type JobRow = Awaited<
 type StatusFilter =
 	| "all"
 	| "pending_review"
+	| "on_hold"
 	| "published"
 	| "hidden"
 	| "rejected";
 
+// 검수 큐는 pending_review만 조회하므로, 보류(on_hold)한 공고를 운영자가 다시 찾는
+// 유일한 경로가 이 탭이다.
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 	{ value: "all", label: "전체" },
 	{ value: "pending_review", label: "검수 대기" },
+	{ value: "on_hold", label: "검수 보류" },
 	{ value: "published", label: "공개" },
 	{ value: "hidden", label: "숨김" },
 	{ value: "rejected", label: "반려" },
@@ -66,13 +74,35 @@ const formatPay = (job: JobRow): string =>
 		? NEGOTIABLE_PAY_TEXT
 		: `${job.payUnit} ${job.payAmount.toLocaleString("ko-KR")}원`;
 
-// 강제 내림/재공개 확인 대상(어떤 공고를 어떤 상태로 바꾸는지).
+// 강제 내림/재공개/보류 해소 확인 대상(어떤 공고를 어떤 상태로 바꾸는지).
+type ActionStatus = "hidden" | "published" | "rejected";
+
 interface PendingAction {
 	jobPostId: string;
 	label: string;
-	status: "hidden" | "published";
+	status: ActionStatus;
 	title: string;
 }
+
+// 상태 변경별 기본 사유(감사 로그 프리필)와 성공 토스트. 보류(on_hold) 공고는 재공개가
+// 아니라 검수 결론(승인·반려)을 내는 자리라 문구도 검수 어투로 둔다.
+const ACTION_COPY: Record<
+	ActionStatus,
+	{ defaultReason: string; success: string }
+> = {
+	hidden: {
+		defaultReason: "운영자가 공고를 숨김 처리했습니다.",
+		success: "공고를 숨김 처리했어요.",
+	},
+	published: {
+		defaultReason: "운영자가 공고를 다시 공개했습니다.",
+		success: "공고를 공개했어요.",
+	},
+	rejected: {
+		defaultReason: "운영자가 정책 위반으로 공고를 반려했습니다.",
+		success: "공고를 반려했어요.",
+	},
+};
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -109,13 +139,62 @@ function resolveExposureAdjustment(
 	};
 }
 
+// 상태별 처리 메뉴. 공개 공고는 내리고, 숨긴 공고는 되올리고, 검수 보류 공고는
+// 결론(승인·반려)을 낸다 — 보류에 "재공개"만 주면 검수를 건너뛴 채 게시된다.
+const STATUS_ACTIONS: Record<
+	string,
+	{ key: string; label: string; status: ActionStatus; destructive?: boolean }[]
+> = {
+	published: [
+		{ key: "hide", label: "숨김", status: "hidden", destructive: true },
+	],
+	hidden: [{ key: "show", label: "재공개", status: "published" }],
+	on_hold: [
+		{ key: "approve", label: "승인 후 공개", status: "published" },
+		{ key: "reject", label: "반려", status: "rejected", destructive: true },
+	],
+};
+
+// 공개 상세(/seeker/jobs/[id])는 published AND paid 게이트를 통과한 공고만 연다.
+// 그 외(검수 대기·보류·숨김·반려·미결제) 제목을 링크로 걸면 눌렀을 때 404가 난다.
+// 구인자 목록(employer-jobs-columns)의 isPubliclyViewable과 같은 판정이다.
+const isPubliclyViewable = (job: JobRow): boolean =>
+	job.status === "published" && job.paymentStatus === "paid";
+
+// 공개 상세로 이동할 수 있는 행만 제목을 링크로 만든다. 나머지는 왜 못 가는지
+// 한 줄로 알린다 — 상태 원값이 아니라 공용 라벨 헬퍼가 만든 표시 문구를 쓴다.
+const publicDetailTitleColumn: DataColumn<JobRow> = {
+	id: "title",
+	header: "공고 제목",
+	sortValue: (job) => job.title,
+	cell: (job) =>
+		isPubliclyViewable(job) ? (
+			<Link
+				className="break-keep font-medium text-foreground underline-offset-4 hover:underline"
+				href={`/seeker/jobs/${job.id}` as Route}
+			>
+				{job.title}
+			</Link>
+		) : (
+			<div className="flex flex-col gap-0.5">
+				<span className="break-keep font-medium text-foreground">
+					{job.title}
+				</span>
+				<span className="text-muted-foreground text-xs">
+					비공개 공고 · 상세 보기 불가(
+					{getJobDisplayStatus(job).label})
+				</span>
+			</div>
+		),
+};
+
 function getJobColumns(
-	onRequestStatus: (job: JobRow) => void,
+	onRequestStatus: (job: JobRow, status: ActionStatus, label: string) => void,
 	onRequestDelete: (job: JobRow) => void,
 	onRequestExposure: (job: JobRow, direction: "extend" | "shorten") => void
 ): DataColumn<JobRow>[] {
 	return [
-		jobTitleColumn<JobRow>(),
+		publicDetailTitleColumn,
 		jobOrganizationColumn<JobRow>(),
 		{
 			id: "industryCategory",
@@ -159,25 +238,14 @@ function getJobColumns(
 			cell: (job) => (
 				<RowActions
 					actions={[
-						...(job.status === "published"
-							? [
-									{
-										key: "hide",
-										label: "숨김",
-										onSelect: () => onRequestStatus(job),
-										variant: "destructive" as const,
-									},
-								]
-							: []),
-						...(job.status === "hidden"
-							? [
-									{
-										key: "show",
-										label: "재공개",
-										onSelect: () => onRequestStatus(job),
-									},
-								]
-							: []),
+						...(STATUS_ACTIONS[job.status] ?? []).map((action) => ({
+							key: action.key,
+							label: action.label,
+							onSelect: () => onRequestStatus(job, action.status, action.label),
+							...(action.destructive
+								? { variant: "destructive" as const }
+								: {}),
+						})),
 						// 종료일이 없는 공고(미결제·무기한)도 지금 기준으로 새 종료일을 잡을 수 있다.
 						{
 							key: "extend",
@@ -236,9 +304,7 @@ export default function ModeratorJobsPage() {
 		orpc.bambi.moderation.setJobPostStatus.mutationOptions({
 			onSuccess: async () => {
 				toast.success(
-					pending?.status === "hidden"
-						? "공고를 숨김 처리했어요."
-						: "공고를 다시 공개했어요."
+					pending ? ACTION_COPY[pending.status].success : "공고를 처리했어요."
 				);
 				setPending(null);
 				setReason("");
@@ -306,19 +372,13 @@ export default function ModeratorJobsPage() {
 		);
 	}, [jobs, search]);
 
-	const requestStatusChange = useCallback((job: JobRow) => {
-		const toHidden = job.status === "published";
-		const defaultReason = toHidden
-			? "운영자가 공고를 숨김 처리했습니다."
-			: "운영자가 공고를 다시 공개했습니다.";
-		setPending({
-			jobPostId: job.id,
-			label: toHidden ? "숨김" : "재공개",
-			status: toHidden ? "hidden" : "published",
-			title: job.title,
-		});
-		setReason(defaultReason);
-	}, []);
+	const requestStatusChange = useCallback(
+		(job: JobRow, status: ActionStatus, label: string) => {
+			setPending({ jobPostId: job.id, label, status, title: job.title });
+			setReason(ACTION_COPY[status].defaultReason);
+		},
+		[]
+	);
 
 	const requestDelete = useCallback((job: JobRow) => {
 		setPendingDelete({ jobPostId: job.id, title: job.title });
@@ -365,7 +425,9 @@ export default function ModeratorJobsPage() {
 				<h1 className="m-0 font-extrabold text-2xl">공고 관리</h1>
 				<p className="m-0 text-muted-foreground text-sm">
 					모든 상태의 공고를 검색·확인하고, 공개된 공고를 강제로 내리거나 숨긴
-					공고를 재공개합니다. 본문·이미지 수정은 각 행의 "수정"에서 진행합니다.
+					공고를 재공개합니다. 검수에서 <strong>보류</strong>한 공고도 "검수
+					보류" 탭에서 찾아 승인·반려로 마무리합니다. 본문·이미지 수정은 각 행의
+					"수정"에서 진행합니다.
 				</p>
 			</div>
 
@@ -470,7 +532,9 @@ export default function ModeratorJobsPage() {
 							}}
 							size="sm"
 							type="button"
-							variant={pending?.status === "hidden" ? "destructive" : "default"}
+							variant={
+								pending?.status === "published" ? "default" : "destructive"
+							}
 						>
 							{pending?.label} 확정
 						</Button>

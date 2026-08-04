@@ -28,4 +28,28 @@ describe("채팅방 연락처 재설계", () => {
 	it("채팅 이미지 첨부에 시그니처 검증을 배선한다", () => {
 		expect(source).toContain("detectImageSignature");
 	});
+
+	// 이미지·PDF만 받는다. 파일 선택 input의 accept와 선택 시점 검증이 같은 목록을 봐야 한다.
+	it("첨부를 이미지와 PDF로만 제한한다", () => {
+		expect(source).toContain('ACCEPTED_ATTACHMENT_MIME_TYPES.join(",")');
+		expect(source).toContain("isPdfSignature");
+		expect(source).not.toContain("image/gif");
+	});
+
+	// 인텐트만 받고 파일을 올리지 않던 게 "내 이미지 대신 목 이미지" 증상의 원인이었다.
+	it("첨부 파일을 서명 URL로 실제 업로드한다", () => {
+		expect(source).toContain("uploadFileToSignedUrl");
+		// 업로드가 끝난 뒤에 메시지를 남겨야 한다(import가 아니라 호출부 위치로 본다).
+		expect(source.indexOf("uploadFileToSignedUrl({")).toBeLessThan(
+			source.indexOf("sendMediaMessageMutation.mutateAsync")
+		);
+	});
+
+	it("채팅방 헤더에서 공고 상세로 이동시킨다", () => {
+		expect(source).toContain("/seeker/jobs/");
+		expect(source).toContain("ChatJobPostLink");
+		// 상세가 published + paid만 열어 주므로 그 밖의 공고는 이동 대신 사유를 남긴다.
+		expect(source).toContain("공고 삭제됨");
+		expect(source).toContain("공고 비공개");
+	});
 });

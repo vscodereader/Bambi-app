@@ -10,14 +10,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import {
-	BoardPreviewCard,
-	BoardPreviewSkeleton,
+	CommunityOverviewGrid,
 	type OverviewPost,
 } from "@/components/bambi/community-board-preview";
+import type { CommunityBoardKey } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
-
-// 홈 섹션에 노출할 게시판 순서. 중고거래(market)는 응답에 있어도 홈에서는 제외한다.
-const HOME_BOARD_KEYS = ["best", "free", "work_talk", "notice"] as const;
 
 const COMMUNITY_BLOCKED_MESSAGE = "여성 회원과 광고 중인 업소회원만 가능합니다";
 
@@ -40,7 +37,8 @@ function SectionHeader() {
 	);
 }
 
-// 게시판 4개를 2×2로 렌더한다. blocked면 글 클릭을 막고 자격 안내를 토스트로 띄운다
+// 배치는 수다방 페이지(CommunityHomeScreen)와 같은 컴포넌트를 쓴다 — 같은 섹션이 홈과
+// 수다방에서 다르게 보이지 않게. blocked면 글 클릭을 막고 자격 안내를 토스트로 띄운다
 // (수다방 페이지로 가는 "더보기"는 그대로 두고, 그쪽 자격 게이트가 이어받는다).
 function CommunityContent({ blocked }: { blocked: boolean }) {
 	const overviewQuery = useQuery(
@@ -54,43 +52,39 @@ function CommunityContent({ blocked }: { blocked: boolean }) {
 
 	const data = overviewQuery.data;
 	// 응답 키(workTalk)를 게시판 키(work_talk)로 매핑해 게시판별 글 목록을 뽑는다.
-	const postsByBoard: Record<(typeof HOME_BOARD_KEYS)[number], OverviewPost[]> =
-		{
-			best: data?.best ?? [],
-			free: data?.free ?? [],
-			notice: data?.notice ?? [],
-			work_talk: data?.workTalk ?? [],
-		};
+	const postsByBoard: Record<CommunityBoardKey, OverviewPost[]> = {
+		best: data?.best ?? [],
+		free: data?.free ?? [],
+		market: data?.market ?? [],
+		notice: data?.notice ?? [],
+		work_talk: data?.workTalk ?? [],
+	};
 
 	return (
 		<section className="grid gap-2">
 			<SectionHeader />
-			<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-				{overviewQuery.isPending
-					? HOME_BOARD_KEYS.map((key) => <BoardPreviewSkeleton key={key} />)
-					: HOME_BOARD_KEYS.map((key) => (
-							<BoardPreviewCard
-								blockedNotice={blocked ? COMMUNITY_BLOCKED_MESSAGE : undefined}
-								boardKey={key}
-								key={key}
-								posts={postsByBoard[key]}
-							/>
-						))}
-			</div>
+			<CommunityOverviewGrid
+				blockedNotice={blocked ? COMMUNITY_BLOCKED_MESSAGE : undefined}
+				isPending={overviewQuery.isPending}
+				postsByBoard={postsByBoard}
+			/>
 		</section>
 	);
 }
 
 // 세션 판정 대기 중 스켈레톤 — 차단/허용 판정 전 잘못된 토스트 동작을 막는다.
 function CommunitySkeleton() {
+	const empty: Record<CommunityBoardKey, OverviewPost[]> = {
+		best: [],
+		free: [],
+		market: [],
+		notice: [],
+		work_talk: [],
+	};
 	return (
 		<section className="grid gap-2">
 			<SectionHeader />
-			<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-				{HOME_BOARD_KEYS.map((key) => (
-					<BoardPreviewSkeleton key={key} />
-				))}
-			</div>
+			<CommunityOverviewGrid isPending postsByBoard={empty} />
 		</section>
 	);
 }
