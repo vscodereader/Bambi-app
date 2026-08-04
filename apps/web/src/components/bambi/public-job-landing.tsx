@@ -182,10 +182,10 @@ function LandingJobCard({ job }: { job: Job }) {
 			{job.coverImage ? (
 				// 목록 썸네일은 블러로 가린다 — 수다방 목록과 같은 기준이다. 원본은 상세에서 본다.
 				<JobCoverImage
-					className="size-12 shrink-0 rounded-md border border-border object-cover blur-sm"
-					height={96}
+					className="size-10 shrink-0 rounded-lg border border-border object-cover blur-sm"
+					height={40}
 					media={job.coverImage}
-					width={96}
+					width={40}
 				/>
 			) : null}
 			<div className="flex min-w-0 flex-1 flex-col gap-1">
