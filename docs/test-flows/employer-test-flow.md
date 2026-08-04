@@ -417,6 +417,8 @@
   4. "저장"
 - **기대 결과**:
   - 저장 시 **서버 호출 없음**. `postMessage`(팝업) 또는 콜백(Dialog)으로 `{layout, media}`가 공고 폼 상태에 반영되고 `isDirty = true`
+  - 폼으로 돌아오면 **광고 배너** 영역의 슬롯 미리보기가 노출 화면과 **같은 렌더러**(`AdBannerLayoutRenderer`)로 다시 그려진다 — 배경(이미지/단색)·스크림·문구 블록·연출까지 실제 노출과 같은 배치로 보인다(`apps/web/src/components/bambi/job-post-media-uploader.tsx`의 `AdBannerStatus`)
+  - 배경이 **단색**인 슬롯은 미리보기에서 이미지를 그리지 않고(렌더러가 색으로 덮으므로) 배지가 **"단색 배경"**, 비율 반려 경고도 뜨지 않는다 — 판정은 `isAdBannerImageRequired` 하나만 본다(에디터 저장 가드와 동일)
   - 실제 저장은 공고 폼 제출 시 `bambi.jobs.createMediaUpload` → GCS PUT → `bambi.jobs.create`/`update`의 `adBannerLayout` + `media` 필드로 이뤄진다
   - 규격: 가로형 7:3(최소 700×300, 권장 1400×600), 세로형 4:9(최소 400×900), 허용오차 ±15% (`apps/web/src/lib/bambi/job-ad-banner-spec.ts`)
   - 문구: 슬롯당 최대 5개, 문구 40자, 글자 크기 2~20%, 폭 10~100% (`apps/web/src/lib/bambi/ad-banner-layout.ts`)
@@ -455,6 +457,11 @@
 
 - **경로**: `/employer` (파일: `apps/web/src/app/employer/page.tsx`, `apps/web/src/components/bambi/employer-jobs-columns.tsx`)
 - **기대 결과**: 상단 요약 카드에 게시/검수 대기/반려 개수, 목록에 "검수 대기" 배지. 공고 상태 표기는 `getJobDisplayStatus` — **`published` + `unpaid`이면 "미공개"(warning)**
+- 배지 아래 보조 문구(`getJobStatusNote`, `employer-jobs-columns.tsx`):
+  - `published` + `unpaid` → "입금 확인 후 노출됩니다."
+  - `pending_review` + `unpaid` → "검수 통과와 입금 확인을 모두 마쳐야 노출됩니다."
+  - `rejected` → "반려 사유: {rejectionReason}" (사유가 없으면 "수정 후 제출하면 재검수를 거칩니다.")
+  - 스페셜·급구·추천 섹션 미노출 신고의 대부분은 이 결제 게이트다 — 서버 섹션 쿼리는 `status=published AND paymentStatus=paid AND exposureType=… AND (exposureEndsAt IS NULL OR > now)`로 정상 동작한다(`jobs.list`의 `getExposedJobs`)
 - **관련 API**: `bambi.jobs.listMine`
 
 ### 6.2 운영자 승인 → 게시
@@ -475,10 +482,12 @@
 - **경로**: `/employer` → 행 `⋯` → "수정" → `/employer/jobs/[id]/edit`
 - **절차**: 반려된 공고를 수정하고 "공고 수정" 제출
 - **기대 결과**: `getUpdatedJobPostStatus`가 `draft`가 아닌 모든 상태를 `pending_review`로 되돌린다 → 재검수. `publishedAt`은 지우지 않음(노출 정렬 키 유지)
+  - 반려 공고를 열면 폼 상단에 destructive Alert "검수에서 반려된 공고입니다" + "반려 사유: {reason}"(없으면 "운영자가 사유를 남기지 않았습니다.") + "수정 후 제출하면 재검수를 거쳐 다시 게시됩니다." (`ReviewStatusNotice`)
+  - `published` 공고를 열면 warning Alert "수정하면 재검수 동안 노출이 중단됩니다"
+  - 목록(`listMine`)도 `rejectionReason`을 함께 내려주고, 상태 배지 아래에 사유가 표시된다(6.1 참고)
 - **엣지 케이스**:
-  - **공고의 반려 사유(`job_post.rejection_reason`)는 구인자 화면 어디에도 표시되지 않는다.** 목록(`listMine`)이 해당 컬럼을 내려주지 않고, 수정 화면도 렌더하지 않는다
-  - 금칙어 감지 결과(`riskFlags`/`detectedTerms`)도 구인자에게 노출되지 않는다 — 공고는 금칙어가 있어도 **차단되지 않고** 플래그만 남긴 채 검수 큐로 간다
-  - **게시 중인 공고를 수정해도 무조건 `pending_review`로 내려가 노출이 중단된다.** 화면에 이를 알리는 안내가 없다
+  - 금칙어 감지 결과(`riskFlags`/`detectedTerms`)는 여전히 구인자에게 노출되지 않는다 — 공고는 금칙어가 있어도 **차단되지 않고** 플래그만 남긴 채 검수 큐로 간다
+  - `applyJobPostUpdate`는 `rejection_reason`을 지우지 않는다 — 재제출로 `pending_review`가 된 뒤에도 DB에는 직전 사유가 남고, 운영자 검수 화면(`moderator.tsx`)이 그 값을 "반려 사유"로 보여준다(구인자 화면은 `status === "rejected"`일 때만 렌더하므로 영향 없음)
 - **관련 API**: `bambi.jobs.update` → `applyJobPostUpdate`, 상태 정책 `packages/api/src/services/bambi-policy.ts`
 
 ### 6.5 상태 전이 요약 (구인자가 관측 가능한 축)
@@ -556,6 +565,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 - **기대 결과**:
   - 상단 "광고 등록 안내" 카드: 무통장입금 전용, 업무 시간 30분 이내 / 시간 외 다음 영업일 승인, 끌어올리기는 리스팅 광고 전용, 금칙어·불량 업소 시 광고 삭제 경고
   - 진열대(placement)별 카드 + 상품 행: 노출 위치 미리보기 이미지 / 서비스 내용(끌어올리기 횟수·benefits) / 기간별 요금(할인 시 원가 취소선 + 할인가 + `N% 할인`) / "신청하기" → `/employer/new`
+  - 노출 위치 미리보기 이미지는 **클릭하면 Dialog 라이트박스**로 확대된다(`AdPlacementPreview`). 트리거는 `aria-label="{상품명} 게시 위치 미리보기 크게 보기"`, 닫기는 Esc·백드롭
   - **배너 진열대에만** 정원 표기: `남은 자리 R/10`, 0이면 "현재 정원이 가득 찼어요 — 지금 신청하면 대기열에 등록돼요."
   - 정원은 30초마다 자동 갱신
 - **엣지 케이스**:
@@ -927,7 +937,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 | 11 | 프리미엄 배너 "자리는 상단 2칸, 좌측·우측 각 3칸으로 **총 8칸**" / "최대 8칸까지 동시에" / "8개를 넘으면" | 실제 링은 **좌 3 + 상단(중간) 3 + 우 3 = 9칸**(`SIDE_BANNER_MAX_SLOTS = 3`, `PREMIUM_BANNER_MAX_SLOTS = 3`, `TOTAL_RING_SLOTS = 9`) | `packages/api/src/services/bambi-ad-exposure.ts` |
 | 12 | 광고 관리 "광고 상품을 적용한 공고의 노출 상태와 … 표로 확인합니다" | 맞지만, **광고 상품이 적용된 공고만 목록에 나온다**(무료 일반 공고는 이 화면에 아예 없다)는 점이 명시되어 있지 않아 "내 공고가 안 보인다"는 오인을 부를 수 있다 | `packages/api/src/routers/bambi/promotions.ts` `listMyAds` (`innerJoin(adProduct)`) |
 | 13 | "4. 공고 상태와 검수 안내 — **임시 저장**: 아직 검수 신청 전인 초안 상태" | **임시저장 기능이 존재하지 않는다.** 라벨만 있고 `draft` 상태를 만드는 코드 경로가 리포 전체에 없다(서버 `create`는 항상 `pending_review`) | `packages/api/src/routers/bambi/jobs.ts`, `packages/api/src/services/bambi-policy.ts` |
-| 14 | "공고가 반려되었을 때 … 1. 공고의 **수정** 버튼을 눌러 내용을 확인합니다" | **공고 반려 사유(`rejection_reason`)가 구인자 화면 어디에도 표시되지 않는다.** 목록도 수정 화면도 렌더하지 않음. 사유를 알 방법이 현재 없음 | `apps/web/src/app/employer/*` 전체에 `rejectionReason` 미사용 |
+| 14 | ~~공고 반려 사유가 구인자 화면에 표시되지 않는다~~ (해소) | `listMine`이 `rejectionReason`을 내려주고, 목록 상태 배지 아래(`getJobStatusNote`)와 수정 화면 상단 Alert(`ReviewStatusNotice`)에 표시된다 | `packages/api/src/routers/bambi/jobs.ts`, `apps/web/src/components/bambi/employer-jobs-columns.tsx`, `apps/web/src/app/employer/jobs/[id]/edit/page.tsx` |
 | 15 | "연락처 보호 … 면접 일정이 확정되면 채팅방의 **연락처 공개하기** 화면에서 사장님이 연락 방식(전화번호·카카오톡·이메일)을 골라 … **내 연락처 공개**를 누르면" | 웹 UI는 이 흐름을 쓰지 않는다. 실제로는 **"연락처 공개 요청" 버튼 한 개**로 구직자에게 요청을 보내고 구직자가 공개/거절한다. 면접 확정도 요구하지 않는다(본인인증만 요구) | `apps/web/src/components/bambi/screens/seeker-chat-room-responsive.tsx`, `bambi.chats.requestContactReveal` |
 | 16 | "업체 정보 … 5. 화면 맨 아래 **로그아웃** 버튼" + "회원 탈퇴는 **팀 관리** 아래 **회원 탈퇴** 영역에서" | 로그아웃은 `/employer/me` 맨 아래가 맞다. 다만 **회원 탈퇴는 `/employer/settings`(조직 설정) 하단**에 있다 — "팀 관리 아래"라는 표현이 `/employer/settings/teams`로 오해될 수 있음 | `apps/web/src/app/employer/settings/page.tsx` |
 | 17 | "성과 분석 … 지표" | **기간 필터가 없고 전체 누적이라는 점**이 매뉴얼에 없다. 또한 **조직 owner/manager만** 지표를 볼 수 있고 staff는 항상 빈 화면이라는 점도 없다 | `packages/api/src/services/bambi-analytics.ts` |
@@ -943,12 +953,12 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 |---|---|---|
 | B1 | 끌어올리기 비활성 사유가 **클라이언트 4종 / 서버 6종**으로 문구·판정 순서가 다르다. 미결제 배너 공고에서 화면과 서버가 서로 다른 사유를 낸다 | `apps/web/src/app/employer/promotions/page.tsx` `getBoostState` vs `packages/api/src/services/bambi-job-boost.ts` |
 | B2 | 공고 수정 시 **노출 상품/기간을 바꾸면 `paymentStatus`가 `unpaid`로 되돌아가고 노출이 끊기는데** 화면에 안내가 없다 | `apps/web/src/app/employer/jobs/[id]/edit/page.tsx`, `packages/api/src/routers/bambi/jobs.ts` `applyJobPostUpdate` |
-| B3 | 게시 중인 공고를 수정하면 무조건 `pending_review`로 내려가 노출이 중단되는데 수정 화면에 경고가 없다 | 동일 |
+| B3 | ~~게시 중인 공고를 수정하면 노출이 중단되는데 경고가 없다~~ (해소) — 수정 화면 상단에 warning Alert "수정하면 재검수 동안 노출이 중단됩니다" | `apps/web/src/app/employer/jobs/[id]/edit/page.tsx` `ReviewStatusNotice` |
 | B4 | **미승인 구인자도 공고 수정·삭제가 가능**하다(create만 승인 검사). 의도인지 확인 필요 | `packages/api/src/routers/bambi/jobs.ts` |
 | B5 | `bambi.teams.deleteInvitation`만 `assertOrganizationVerified`를 호출하지 않는다 | `packages/api/src/routers/bambi/teams.ts` |
 | B6 | `/employer/me`의 사업자 정보 폼이 **`organizationProfiles[0]`만** 프리필·판정한다. 조직이 2개 이상이면 두 번째 조직은 이 폼으로 갱신할 수 없다 | `apps/web/src/app/employer/me/page.tsx` |
 | B7 | `deriveEmployerApprovalStatus`는 **verified 하나만 있으면 verified**를 반환한다. 조직 A verified + 조직 B pending인 계정은 배너가 사라져 "다 됐다"고 오인하지만 조직 B 공고 등록은 서버가 막는다 | `packages/api/src/services/bambi-onboarding.ts` vs `bambi-authz.ts` |
-| B8 | 공고 **반려 사유·금칙어 감지 결과**가 구인자에게 전혀 노출되지 않는다 | 웹 employer 전 화면 |
+| B8 | 반려 사유는 노출된다(#14). **금칙어 감지 결과(`riskFlags`/`detectedTerms`)는 여전히** 구인자에게 노출되지 않는다 | 웹 employer 전 화면 |
 | B9 | `/employer` 퀵링크 "광고 안내" 설명이 "노출 상품과 **배너 규격**을 확인해요"인데, `/employer/ad-guide`에는 배너 규격 정보가 없다 | `apps/web/src/app/employer/page.tsx`, `apps/web/src/components/bambi/screens/employer-ad-guide.tsx` |
 | B10 | `/support/inquiries`가 `page: 1` 고정이라 21건째 이후 문의를 볼 수 없다 | `apps/web/src/components/bambi/support/inquiry-list.tsx` |
 | B11 | "문의 종료"에 확인 절차가 없고 재개(reopen) 경로도 없다 | `apps/web/src/components/bambi/support/inquiry-thread.tsx`, `packages/api/src/routers/bambi/support.ts` |
@@ -962,7 +972,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 | # | 내용 |
 |---|---|
 | C1 | 초대받은 구인자에게 **초대 사실을 알리는 채널이 코드에 없다**(이메일 발송·인앱 알림 모두 미구현). 운영 상 어떻게 통지하는지 확인 필요 |
-| C2 | 공고 반려 사유를 구인자에게 노출할 계획이 있는지(B8). 현재 매뉴얼은 "수정 버튼으로 내용을 확인"하라고만 안내한다 |
+| C2 | 반려 사유는 노출로 확정됐다(#14). 남은 판단은 **금칙어 감지 결과**를 구인자에게 보여줄지, 그리고 재제출 시 `rejection_reason`을 지울지(운영자 재검수 화면에 직전 사유가 남는다) |
 | C3 | `NTS_SERVICE_KEY`(국세청 디코딩 키) 미배포 상태에서의 QA는 전 건 "미확인"으로만 검증 가능하다. 진위확인 성공/불일치/휴폐업 경로는 키가 있어야 실측 가능 |
 | C4 | 프리미엄 정원 게이트가 대기열 rank를 강제하지 않는 것(입금 도착 순서 우선)이 운영 정책과 맞는지 |
 | C5 | `warned` 상태에서 서버가 아무 기능도 막지 않는 것이 의도인지(배너 안내만) |

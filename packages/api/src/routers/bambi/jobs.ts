@@ -1526,6 +1526,9 @@ export const jobsRouter = {
 				payAmount: jobPost.payAmount,
 				payUnit: jobPost.payUnit,
 				status: jobPost.status,
+				// 반려 사유는 목록에서 바로 보여준다. 안 내려주면 구인자는 무엇을 고쳐야 하는지
+				// 알 방법이 화면 어디에도 없다.
+				rejectionReason: jobPost.rejectionReason,
 				organizationId: jobPost.organizationId,
 				teamId: jobPost.teamId,
 				createdByUserId: jobPost.createdByUserId,

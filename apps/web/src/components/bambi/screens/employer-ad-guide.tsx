@@ -3,6 +3,12 @@
 import { Badge } from "@bambi-app/ui/components/badge";
 import { buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
+import {
+	Dialog,
+	DialogContent,
+	DialogTitle,
+	DialogTrigger,
+} from "@bambi-app/ui/components/dialog";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
@@ -56,6 +62,41 @@ function PremiumCapacityNote({ capacity }: { capacity: PremiumCapacity }) {
 			남은 자리 <span className="text-primary">{capacity.remaining}</span>/
 			{capacity.capacity}
 		</span>
+	);
+}
+
+// 노출 위치 미리보기. 표 안에서는 max-h-40이라 어디에 뜨는 배너인지 알아보기 어렵다 —
+// 눌러서 원본 크기로 확대해 볼 수 있게 한다(모달·백드롭·포커스 트랩은 Dialog가 관리).
+function AdPlacementPreview({ alt, src }: { alt: string; src: string }) {
+	return (
+		<Dialog>
+			<DialogTrigger
+				aria-label={`${alt} 크게 보기`}
+				className="flex cursor-zoom-in items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/30 p-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			>
+				<Image
+					alt={alt}
+					className="max-h-40 w-auto object-contain"
+					height={160}
+					src={src}
+					unoptimized
+					width={280}
+				/>
+			</DialogTrigger>
+			{/* base의 고정폭(w-[420px])을 풀어야 확대가 의미를 갖는다. 모바일에서는 화면 폭,
+			    데스크톱에서는 3xl까지 넓힌다. */}
+			<DialogContent className="w-auto max-w-[92vw] md:max-w-3xl">
+				<DialogTitle className="text-base">{alt}</DialogTitle>
+				<Image
+					alt={alt}
+					className="h-auto max-h-[70vh] w-full object-contain"
+					height={1200}
+					src={src}
+					unoptimized
+					width={1600}
+				/>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -115,16 +156,10 @@ function PlacementSection({
 									광고 위치
 								</span>
 								{product.previewImageUrl ? (
-									<div className="flex items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/30 p-2">
-										<Image
-											alt={`${product.name} 게시 위치 미리보기`}
-											className="max-h-40 w-auto object-contain"
-											height={160}
-											src={product.previewImageUrl}
-											unoptimized
-											width={280}
-										/>
-									</div>
+									<AdPlacementPreview
+										alt={`${product.name} 게시 위치 미리보기`}
+										src={product.previewImageUrl}
+									/>
 								) : (
 									<div className="flex min-h-16 items-center justify-center rounded-lg border border-border border-dashed bg-muted/30 p-3 text-muted-foreground text-xs">
 										미리보기 없음

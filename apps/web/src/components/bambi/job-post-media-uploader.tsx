@@ -10,9 +10,10 @@ import { useQuery } from "@tanstack/react-query";
 import { ImageIcon, Trash2, TriangleAlert } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
-import type {
-	AdBannerLayout,
-	AdBannerSlot,
+import {
+	type AdBannerLayout,
+	type AdBannerSlot,
+	isAdBannerImageRequired,
 } from "@/lib/bambi/ad-banner-layout";
 import { getAdBannerUsagesForPreviewTemplate } from "@/lib/bambi/ad-preview-templates";
 import {
@@ -33,6 +34,7 @@ import {
 } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
 import { AdBannerEditorLauncher } from "./ad-banner-editor/editor-launcher";
+import { AdBannerLayoutRenderer } from "./ad-banner-layout-renderer";
 
 interface JobPostMediaUploaderProps {
 	// 배너 에디터가 만든 레이아웃. 필수 prop이라 세 호출부(등록·구인자 수정·운영자 수정)가
@@ -207,21 +209,75 @@ function MediaSlot({
 	);
 }
 
+// 단색 배경 슬롯은 이미지를 아예 그리지 않는다 — 렌더러가 색으로 덮어 보이지 않는데
+// "이미지 없음" 자리표시만 남으면 배너를 등록하지 않은 것처럼 읽힌다(노출 슬롯도 같은 이유로
+// 이미지를 건너뛴다).
+const renderAdBannerBackground = (
+	item: JobFormMediaItem | null,
+	usesImage: boolean
+) => {
+	if (!usesImage) {
+		return null;
+	}
+
+	if (item?.previewUrl) {
+		return (
+			<Image
+				alt={item.altText || item.fileName}
+				className="size-full object-cover"
+				height={112}
+				src={item.previewUrl}
+				unoptimized
+				width={112}
+			/>
+		);
+	}
+
+	return (
+		<div className="flex flex-col items-center gap-1 text-muted-foreground text-xs">
+			<ImageIcon aria-hidden="true" className="size-4" />
+			<span>이미지 없음</span>
+		</div>
+	);
+};
+
+const getAdBannerImageStateLabel = (
+	usesImage: boolean,
+	hasItem: boolean
+): string => {
+	if (!usesImage) {
+		return "단색 배경";
+	}
+
+	return hasItem ? "이미지 등록됨" : "이미지 없음";
+};
+
+const getAdBannerImageHint = (usesImage: boolean): string =>
+	usesImage
+		? "편집기에서 이미지를 등록해 주십시오."
+		: "단색 배경이라 이미지 없이 노출됩니다.";
+
 interface AdBannerStatusProps {
 	item: JobFormMediaItem | null;
+	// 에디터가 돌려준 레이아웃 전체. 미리보기가 노출 렌더러와 같은 값을 받아야 폼에서 본 배너와
+	// 실제 광고가 같아진다.
+	layout: AdBannerLayout | null;
 	// 운영자 편집(allowUpload=false)은 에디터를 열 수 없으므로 여기서만 배너를 내릴 수 있다.
 	onRemove: null | (() => void);
-	textCount: number;
+	slot: AdBannerSlot;
 	usage: JobAdBannerUsage;
 }
 
 // 배너 이미지는 이제 에디터에서만 고른다. 폼에는 그 결과를 요약해 보여준다 — 썸네일·이미지
 // 유무·문구 개수가 없으면 에디터를 열기 전엔 배너가 어떤 상태인지 폼에서 전혀 안 보인다.
-// 미리보기는 실제 노출 슬롯과 같은 비율로 그린다. 여기서 이상해 보이면 실제 광고도 그렇다.
+// 미리보기는 실제 노출 슬롯과 같은 비율로, 노출 화면과 **같은 렌더러**(AdBannerLayoutRenderer)로
+// 그린다. 이미지만 그리면 단색 배경 배너는 폼에서 통째로 사라지고, 문구·연출도 저장했는데
+// 안 보인다 — 여기서 이상해 보이면 실제 광고도 그렇다.
 function AdBannerStatus({
 	item,
+	layout,
 	onRemove,
-	textCount,
+	slot,
 	usage,
 }: AdBannerStatusProps) {
 	const {
@@ -232,10 +288,15 @@ function AdBannerStatus({
 		minHeight,
 		minWidth,
 	} = JOB_AD_BANNER_SPECS[usage];
+	// 이 슬롯이 업로드 이미지를 실제로 쓰는가. 배경이 단색이면 렌더러가 색으로 덮어 이미지가
+	// 화면에 나오지 않으므로, "이미지 없음" 표시도 비율 반려 경고도 거짓말이 된다(에디터의
+	// 저장 가드와 같은 판정 — isAdBannerImageRequired 하나만 본다).
+	const usesImage = isAdBannerImageRequired(layout, usage);
+	const textCount = layout?.[slot].texts.length ?? 0;
 	// 비율이 허용 오차를 크게 벗어나면 슬롯에서 로고·문구가 잘려 나가므로 반려한다. 폼
 	// 검증(bambi-job-form)이 같은 규칙으로 제출을 막고, 여기선 그 이유를 바로 알려 준다.
 	const aspectRejected =
-		item?.height && item.width
+		usesImage && item?.height && item.width
 			? !isAllowedJobAdBannerAspect({
 					height: item.height,
 					usage,
@@ -266,37 +327,26 @@ function AdBannerStatus({
 				) : null}
 			</div>
 			<div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
+				{/* 레이아웃 오버레이가 absolute inset-0이라 relative가 필요하다(없으면 엉뚱한
+				    조상 기준으로 배치된다) — 노출 슬롯(ad-banner.tsx)과 같은 구성이다. */}
 				<div
 					className={cn(
-						"flex items-center justify-center overflow-hidden rounded-md border border-border bg-muted/30",
+						"relative flex items-center justify-center overflow-hidden rounded-md border border-border bg-muted/30",
 						aspectClassName
 					)}
 				>
-					{item?.previewUrl ? (
-						<Image
-							alt={item.altText || item.fileName}
-							className="size-full object-cover"
-							height={112}
-							src={item.previewUrl}
-							unoptimized
-							width={112}
-						/>
-					) : (
-						<div className="flex flex-col items-center gap-1 text-muted-foreground text-xs">
-							<ImageIcon aria-hidden="true" className="size-4" />
-							<span>이미지 없음</span>
-						</div>
-					)}
+					{renderAdBannerBackground(item, usesImage)}
+					<AdBannerLayoutRenderer layout={layout} slot={slot} />
 				</div>
 				<div className="flex min-w-0 flex-col gap-2">
 					<div className="flex flex-wrap gap-2">
-						<Badge variant={item ? "success" : "outline"}>
-							{item ? "이미지 등록됨" : "이미지 없음"}
+						<Badge variant={usesImage && !item ? "outline" : "success"}>
+							{getAdBannerImageStateLabel(usesImage, Boolean(item))}
 						</Badge>
 						<Badge variant="outline">문구 {textCount}개</Badge>
 					</div>
 					<p className="break-words text-muted-foreground text-xs">
-						{item?.fileName ?? "편집기에서 이미지를 등록해 주십시오."}
+						{item?.fileName ?? getAdBannerImageHint(usesImage)}
 					</p>
 				</div>
 			</div>
@@ -502,6 +552,7 @@ function AdBannerSection({
 					<AdBannerStatus
 						item={media[key]}
 						key={key}
+						layout={adBannerLayout}
 						onRemove={
 							allowUpload
 								? null
@@ -510,7 +561,7 @@ function AdBannerSection({
 										onChange({ ...media, [key]: null });
 									}
 						}
-						textCount={adBannerLayout?.[slot].texts.length ?? 0}
+						slot={slot}
 						usage={usage}
 					/>
 				))}
