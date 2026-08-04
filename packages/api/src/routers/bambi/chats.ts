@@ -797,6 +797,9 @@ export const chatsRouter = {
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					status: jobPost.status,
+					// 채팅방에서 공고 상세로 보낼지 판단하는 데 쓴다. 상세(jobs.getById)가
+					// published + paid만 열어 주므로 같은 기준을 화면에도 내려야 한다.
+					paymentStatus: jobPost.paymentStatus,
 				})
 				.from(jobPost)
 				.where(eq(jobPost.id, room.jobPostId))
@@ -913,7 +916,7 @@ export const chatsRouter = {
 
 			const category = requireAllowedChatMedia(input);
 
-			return createChatAttachmentUploadIntent({
+			return await createChatAttachmentUploadIntent({
 				byteSize: input.byteSize,
 				category,
 				chatRoomId: room.id,
