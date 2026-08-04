@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 
 import type { ChatMediaCategory } from "./bambi-media-policy";
-import { createSignedUploadUrl, isPublicBucketConfigured } from "./gcs";
+import {
+	createSignedUploadUrl,
+	getPublicObjectUrl,
+	isPublicBucketConfigured,
+} from "./gcs";
 
 export interface ChatAttachmentStorageInput {
 	byteSize: number;
@@ -118,14 +122,17 @@ const buildLocalObjectUrl = ({
 	return `/bambi/local-chat-attachments?${params.toString()}`;
 };
 
-export const createChatAttachmentUploadIntent = ({
+// 공고·본문 미디어와 같은 흐름: 버킷이 있으면 서명 URL을 내려 브라우저가 GCS로 직접 PUT 한다.
+// 이 분기가 없던 동안 채팅 첨부만 항상 local:// 플레이스홀더를 받아 파일이 어디에도 올라가지
+// 않았고, 상대는 원본 대신 아래 buildLocalObjectUrl의 안내 이미지를 봤다.
+export const createChatAttachmentUploadIntent = async ({
 	byteSize,
 	category,
 	chatRoomId,
 	createdByUserId,
 	fileName,
 	mimeType,
-}: ChatAttachmentStorageInput): ChatAttachmentUploadIntent => {
+}: ChatAttachmentStorageInput): Promise<ChatAttachmentUploadIntent> => {
 	const storageFileName = normalizeFileNameForStorage(fileName);
 	const storageKey = [
 		"bambi-chat",
@@ -140,13 +147,18 @@ export const createChatAttachmentUploadIntent = ({
 		fileName: fileName.trim(),
 		mimeType,
 		storageKey,
-		uploadUrl: `local://upload/${storageKey}`,
+		uploadUrl: isPublicBucketConfigured()
+			? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
+			: `local://upload/${storageKey}`,
 	};
 };
 
 export const getChatAttachmentObjectUrl = (
 	input: ChatAttachmentObjectInput
-): string => buildLocalObjectUrl(input);
+): string =>
+	isPublicBucketConfigured()
+		? getPublicObjectUrl(input.storageKey)
+		: buildLocalObjectUrl(input);
 
 // ponytail: 본문에서 지워진 이미지·삭제된 글(status "deleted")의 GCS 객체는 그대로 남는다.
 // 공고 미디어도 같은 구멍을 안고 가고 있고 레포 어디에도 스위퍼가 없어 지금은 감수한다.

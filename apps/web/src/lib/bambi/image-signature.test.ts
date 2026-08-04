@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { detectImageSignature, isSignatureMismatch } from "./image-signature";
+import {
+	detectImageSignature,
+	isPdfSignature,
+	isSignatureMismatch,
+} from "./image-signature";
 
 const blobFromBytes = (bytes: number[]): Blob =>
 	new Blob([new Uint8Array(bytes)]);
@@ -30,6 +34,23 @@ describe("detectImageSignature", () => {
 		expect(await detectImageSignature(blobFromBytes([0xff, 0xd8, 0xff]))).toBe(
 			"image/jpeg"
 		);
+	});
+});
+
+describe("isPdfSignature", () => {
+	it("%PDF- 로 시작하면 true", async () => {
+		// "%PDF-1.7"
+		expect(
+			await isPdfSignature(
+				blobFromBytes([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37])
+			)
+		).toBe(true);
+	});
+	it("확장자만 pdf인 다른 파일(JPEG 바이트)은 false", async () => {
+		expect(await isPdfSignature(blobFromBytes(JPEG))).toBe(false);
+	});
+	it("5바이트 미만이어도 안전하게 false", async () => {
+		expect(await isPdfSignature(blobFromBytes([0x25, 0x50]))).toBe(false);
 	});
 });
 
