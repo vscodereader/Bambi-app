@@ -74,6 +74,9 @@ export function SeekerCrawledJobDetail({
 		.filter(Boolean)
 		.join(" · ");
 	const location = [job.region, job.district].filter(Boolean).join(" ");
+	const detailImageAssets = new Map(
+		job.detailImageDocument.assets.map((asset) => [asset.id, asset])
+	);
 
 	return (
 		<div className="mx-auto flex w-full justify-center gap-5 py-5 pb-5 md:py-7">
@@ -172,20 +175,30 @@ export function SeekerCrawledJobDetail({
 						{/* 유흥 공고는 조건 대부분을 이미지로만 적어두는 경우가 많다(본문이 거의
 						    비어 있고 이미지 한 장이 공고 전부인 경우도 있다). 크롭 없이 본문 폭에
 						    맞춰 원본 비율로 세로로 이어 붙인다. */}
-						{job.detailImageUrls.length > 0 ? (
+						{job.detailImageDocument.items.length > 0 ? (
 							<div className="mt-5 flex flex-col gap-3">
-								{job.detailImageUrls.map((url, index) => (
-									<Image
-										alt={`${job.title} 상세 이미지 ${index + 1}`}
-										className="h-auto w-full rounded-lg border"
-										height={1600}
-										// biome-ignore lint/suspicious/noArrayIndexKey: 서로 다른 원본 URL이 같은 이미지로 변환되면 값이 겹쳐 키가 충돌한다(React 중복 키 에러). 재정렬 없는 정적 배열이라 순서가 곧 안정 키다.
-										key={index}
-										src={url}
-										unoptimized
-										width={1200}
-									/>
-								))}
+								{job.detailImageDocument.items.map((item, index) => {
+									const asset = detailImageAssets.get(item.assetId);
+									if (!asset) {
+										return null;
+									}
+									return (
+										<div
+											className="mx-auto max-w-full"
+											key={item.id}
+											style={{ width: item.widthPx ?? "100%" }}
+										>
+											<Image
+												alt={`${job.title} 상세 이미지 ${index + 1}`}
+												className="h-auto w-full rounded-lg border"
+												height={asset.height}
+												src={asset.src}
+												unoptimized
+												width={asset.width}
+											/>
+										</div>
+									);
+								})}
 							</div>
 						) : null}
 						{/* 목록 썸네일(thumbnailUrl)은 상세에 폴백으로 넣지 않는다 — 상세 내용이
