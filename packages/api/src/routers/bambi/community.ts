@@ -78,6 +78,16 @@ const communityBoardSchema = z.enum([
 
 type CommunityBoardInput = z.infer<typeof communityBoardSchema>;
 
+// 비로그인(크롤러 포함)에게 읽기만 여는 게시판. 서버가 이 목록으로 강제하고, 화면은
+// 이 값을 따라간다 — 목록·상세 어느 쪽으로 들어와도 같은 집합만 열린다.
+// 중고거래(market)는 회원 간 거래 맥락이라 제외하고, 베스트(best)는 게시판이 아니라
+// 전 게시판 큐레이션이라 비공개 보드 글이 섞이므로 제외한다.
+const PUBLIC_COMMUNITY_BOARDS = ["notice", "free", "work_talk"] as const;
+const publicBoardSchema = z.enum(PUBLIC_COMMUNITY_BOARDS);
+
+const isPublicBoard = (board: string): boolean =>
+	publicBoardSchema.safeParse(board).success;
+
 // 요약 행의 출처. 화면이 이 값으로 "외부 수집" 배지·상세 라우팅을 가른다(공고 목록의
 // JobFeedSource와 같은 판별). 순수 글은 "native", 수집 글은 "crawled".
 type CommunityFeedSource = "crawled" | "native";
@@ -504,6 +514,38 @@ const readLikeCount = async (
 	return row?.likeCount ?? 0;
 };
 
+// 노출 대상 댓글 행. published 댓글 + published 대댓글을 가진 삭제 부모(스레드 유지용
+// 플레이스홀더)만 남긴다. 회원 목록(listComments)과 공개 상세(getPublicPost)가 같은
+// 기준을 공유해야 한쪽에서만 보이는 댓글이 생기지 않는다.
+const selectVisibleCommentRows = async (postId: string) => {
+	const rows = await db
+		.select({
+			authorName: user.name,
+			authorRole: communityComment.authorRole,
+			authorUserId: communityComment.authorUserId,
+			body: communityComment.body,
+			createdAt: communityComment.createdAt,
+			id: communityComment.id,
+			parentCommentId: communityComment.parentCommentId,
+			status: communityComment.status,
+		})
+		.from(communityComment)
+		.leftJoin(user, eq(user.id, communityComment.authorUserId))
+		.where(eq(communityComment.postId, postId))
+		.orderBy(asc(communityComment.createdAt))
+		.limit(COMMENTS_CAP);
+
+	const liveParentIds = new Set(
+		rows
+			.filter((row) => row.status === "published" && row.parentCommentId)
+			.map((row) => row.parentCommentId)
+	);
+
+	return rows.filter(
+		(row) => row.status === "published" || liveParentIds.has(row.id)
+	);
+};
+
 const findPublishedPost = async (postId: string) => {
 	const [post] = await db
 		.select()
@@ -623,6 +665,86 @@ export const communityRouter = {
 			workTalk: maskLockedSummaries(workTalk, profile).map(toPublicSummary),
 		};
 	}),
+
+	// 비로그인 공개 목록(SEO). 공개 보드(PUBLIC_COMMUNITY_BOARDS)의 published 글만,
+	// 필터·검색·내 글 없이 최신순으로 내려준다. 비밀글은 마스킹이 아니라 아예 뺀다 —
+	// 열 수 없는 글의 링크를 크롤러에게 심어 봐야 404 뿐이다. 수집(crawled) 글도 섞지
+	// 않는다: 남의 사이트에서 긁어 온 본문을 우리 도메인에 색인시키면 중복 콘텐츠다.
+	listPublicPosts: publicProcedure
+		.input(
+			z.object({
+				board: publicBoardSchema,
+				page: z.number().int().min(1).default(1),
+			})
+		)
+		.handler(async ({ input }) => {
+			const windowStart = bestWindowStart();
+			const offset = (input.page - 1) * PAGE_SIZE;
+			const filters = [eq(communityPost.isLocked, false)];
+
+			const [items, [total]] = await Promise.all([
+				selectBoardPosts(input.board, {
+					filters,
+					limit: PAGE_SIZE,
+					offset,
+					windowStart,
+				}),
+				db
+					.select({ value: count() })
+					.from(communityPost)
+					.where(
+						and(...buildBoardFilters(input.board, windowStart), ...filters)
+					),
+			]);
+
+			return {
+				items: items.map(toPublicSummary),
+				page: input.page,
+				pageSize: PAGE_SIZE,
+				totalCount: total?.value ?? 0,
+			};
+		}),
+
+	// 비로그인 공개 상세(SEO). 공개 보드의 published·비잠금 글만 열리고, 그 외에는
+	// 존재를 숨긴다(NOT_FOUND). 댓글은 읽기만 나가며 작성자 계정명은 싣지 않는다 —
+	// 회원 화면과 달리 색인되는 페이지라 표시명 이상은 내보내지 않는다. 조회수도
+	// 올리지 않는다(크롤러 방문이 인기 지표를 부풀리면 안 된다).
+	getPublicPost: publicProcedure
+		.input(postIdInput)
+		.handler(async ({ input }) => {
+			const post = await findPublishedPost(input.postId);
+
+			if (!isPublicBoard(post.board) || post.isLocked) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "게시글을 찾을 수 없습니다.",
+				});
+			}
+
+			const rows = await selectVisibleCommentRows(input.postId);
+
+			return {
+				authorName: post.authorDisplayName,
+				authorRole: post.authorRole,
+				board: post.board,
+				body: post.body,
+				commentCount: post.commentCount,
+				comments: rows.map((row) => ({
+					authorRole: row.status === "published" ? row.authorRole : null,
+					body: row.status === "published" ? row.body : "",
+					createdAt: row.createdAt,
+					id: row.id,
+					isDeleted: row.status !== "published",
+					parentCommentId: row.parentCommentId,
+				})),
+				createdAt: post.createdAt,
+				id: post.id,
+				isPromotion: post.isPromotion,
+				likeCount: post.likeCount,
+				title: post.title,
+				updatedAt: post.updatedAt,
+				viewCount: post.viewCount,
+			};
+		}),
 
 	getPost: protectedProcedure
 		.input(
@@ -973,63 +1095,36 @@ export const communityRouter = {
 			const post = await findPublishedPost(input.postId);
 			requirePostReadAccess(post, profile, input.password);
 
-			const rows = await db
-				.select({
-					authorName: user.name,
-					authorRole: communityComment.authorRole,
-					authorUserId: communityComment.authorUserId,
-					body: communityComment.body,
-					createdAt: communityComment.createdAt,
-					id: communityComment.id,
-					parentCommentId: communityComment.parentCommentId,
-					status: communityComment.status,
-				})
-				.from(communityComment)
-				.leftJoin(user, eq(user.id, communityComment.authorUserId))
-				.where(eq(communityComment.postId, input.postId))
-				.orderBy(asc(communityComment.createdAt))
-				.limit(COMMENTS_CAP);
-
-			// published 대댓글을 가진 삭제 부모는 스레드 유지를 위해 플레이스홀더로 남긴다.
-			const liveParentIds = new Set(
-				rows
-					.filter((row) => row.status === "published" && row.parentCommentId)
-					.map((row) => row.parentCommentId)
-			);
+			const rows = await selectVisibleCommentRows(input.postId);
 
 			// authorUserId는 canDelete 계산에만 쓰고 응답에서는 제외한다(익명성 보호).
-			return rows
-				.filter(
-					(row) => row.status === "published" || liveParentIds.has(row.id)
-				)
-				.map((row) =>
-					row.status === "published"
-						? {
-								authorName: row.authorName,
-								authorRole: row.authorRole,
-								body: row.body,
-								// 삭제와 달리 수정은 작성자 본인만 가능하다(admin 제외 — getPost.canEdit와 동일 철학).
-								canDelete:
-									row.authorUserId === profile.userId ||
-									profile.role === "admin",
-								canEdit: row.authorUserId === profile.userId,
-								createdAt: row.createdAt,
-								id: row.id,
-								isDeleted: false,
-								parentCommentId: row.parentCommentId,
-							}
-						: {
-								authorName: null,
-								authorRole: null,
-								body: "",
-								canDelete: false,
-								canEdit: false,
-								createdAt: row.createdAt,
-								id: row.id,
-								isDeleted: true,
-								parentCommentId: row.parentCommentId,
-							}
-				);
+			return rows.map((row) =>
+				row.status === "published"
+					? {
+							authorName: row.authorName,
+							authorRole: row.authorRole,
+							body: row.body,
+							// 삭제와 달리 수정은 작성자 본인만 가능하다(admin 제외 — getPost.canEdit와 동일 철학).
+							canDelete:
+								row.authorUserId === profile.userId || profile.role === "admin",
+							canEdit: row.authorUserId === profile.userId,
+							createdAt: row.createdAt,
+							id: row.id,
+							isDeleted: false,
+							parentCommentId: row.parentCommentId,
+						}
+					: {
+							authorName: null,
+							authorRole: null,
+							body: "",
+							canDelete: false,
+							canEdit: false,
+							createdAt: row.createdAt,
+							id: row.id,
+							isDeleted: true,
+							parentCommentId: row.parentCommentId,
+						}
+			);
 		}),
 
 	createComment: protectedProcedure

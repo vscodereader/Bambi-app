@@ -853,6 +853,24 @@
 - **실패 케이스**: 스위치 OFF → `NOT_FOUND`(존재 자체를 숨김)
 - **관련 API**: `bambi.community.getCrawledTopic` (protected + `requireCommunityMember`)
 
+### 11.9 공개 게시판(비로그인 읽기 전용, SEO)
+
+- **경로**: `/board`(허브) · `/board/[boardSlug]`(목록) · `/board/[boardSlug]/[postId]`(상세)
+  (파일: `apps/web/src/app/board/**`, `apps/web/src/components/bambi/public-post-body.tsx`)
+- **게이트**: `resolve-gate`의 공개 prefix에 `/board` 추가 — 비로그인·게스트 모두 통과. `/seeker/community` 쪽 자격 게이트는 **그대로**다.
+- **공개 대상**: 서버 상수 `PUBLIC_COMMUNITY_BOARDS = notice · free · work_talk`(`packages/api/src/routers/bambi/community.ts`).
+  `market`·`best`는 비공개 → 슬러그로 직접 들어가도 404. 잠금(비밀)글·`published` 아닌 글·수집 글은 목록·상세 모두 제외.
+- **확인 사항**:
+  - 로그아웃(또는 JS 비활성) 상태에서 목록·상세가 **서버 렌더된 HTML**로 보인다(본문 텍스트 포함)
+  - 페이지 이동은 `?page=` 실제 `<a href>`이고, 1페이지는 쿼리 없이 `/board/free`
+  - 상세 `<title>`·`description`·`canonical`이 글마다 다르고, `DiscussionForumPosting` JSON-LD가 실린다
+  - 본문 이미지는 렌더되지 않고 "이미지는 회원 화면에서 볼 수 있어요" 자리표시자로 대체
+  - 댓글은 읽기만 가능(작성자 계정명 미노출 — 회원/업소 회원 표기만), 작성 UI 없음
+  - "로그인하고 댓글 쓰기"는 `/seeker/community/[slug]/[postId]`로 보내고, 비로그인은 게이트가 로그인 화면으로 돌린다
+  - 상세 조회로 **조회수가 오르지 않는다**(크롤러 방문 방지)
+  - slug와 글의 실제 게시판이 다르면 404(중복 URL 색인 방지)
+- **관련 API**: `bambi.community.listPublicPosts` · `bambi.community.getPublicPost` (둘 다 `publicProcedure`)
+
 ---
 
 ## 12. 신고 · 차단

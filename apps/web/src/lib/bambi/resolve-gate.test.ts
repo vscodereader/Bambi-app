@@ -67,6 +67,12 @@ describe("resolveGate", () => {
 			expect(resolveGate({ pathname, ...guest }).type).toBe("next");
 		}
 	});
+	it("lets the public board area pass for logged-out visitors", () => {
+		for (const pathname of ["/board", "/board/free", "/board/free/abc"]) {
+			expect(resolveGate({ pathname, ...fresh }).type).toBe("next");
+			expect(resolveGate({ pathname, ...guest }).type).toBe("next");
+		}
+	});
 	it("keeps job detail behind the gate even with the /jobs landing open", () => {
 		expect(resolveGate({ pathname: "/seeker/jobs/abc", ...fresh }).type).toBe(
 			"redirect"

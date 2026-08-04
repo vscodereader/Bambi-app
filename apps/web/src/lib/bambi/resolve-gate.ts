@@ -9,10 +9,18 @@ export type GateDecision = { type: "next" } | { type: "redirect"; to: string };
 // 약관(/terms)·개인정보 처리방침(/privacy)은 로그인·게스트 여부와 무관하게
 // 누구나 열람할 수 있어야 한다(회원가입 동의 화면에서도 링크로 연다).
 //
-// /jobs는 지역·업종별 공개 공고 랜딩이다. 검색 크롤러와 비로그인 방문자가 게이트에
-// 걸리지 않고 목록을 읽어야 색인이 된다. 공개 범위는 읽기 전용 목록까지이고, 공고 상세
-// (/seeker/jobs/[id])·채팅·연락처는 그대로 게이트 뒤에 남는다.
-const PUBLIC_PREFIXES = ["/api", "/bambi", "/terms", "/privacy", "/jobs"];
+// /jobs는 지역·업종별 공개 공고 랜딩, /board는 공개 게시판(읽기 전용) 영역이다.
+// 검색 크롤러와 비로그인 방문자가 게이트에 걸리지 않고 목록·본문을 읽어야 색인이 된다.
+// 공개 범위는 읽기 전용까지이고, 공고 상세(/seeker/jobs/[id])·채팅·연락처와
+// 커뮤니티 쓰기·댓글·추천은 그대로 게이트 뒤에 남는다.
+const PUBLIC_PREFIXES = [
+	"/api",
+	"/bambi",
+	"/board",
+	"/jobs",
+	"/terms",
+	"/privacy",
+];
 
 const isPublic = (pathname: string): boolean =>
 	PUBLIC_PREFIXES.some(
