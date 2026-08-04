@@ -7,6 +7,7 @@ import {
 	JOB_LANDING_REGIONS,
 	jobLandingDescription,
 	jobLandingPath,
+	jobLandingPaths,
 	jobLandingTitle,
 } from "./job-landing";
 
@@ -47,6 +48,18 @@ describe("job landing paths and copy", () => {
 		expect(jobLandingPath({ industry, region })).toBe("/jobs/seoul/room-salon");
 		// 지역 없는 업종 랜딩은 없다 — 업종 세그먼트를 버린다.
 		expect(jobLandingPath({ industry })).toBe("/jobs");
+	});
+	// 사이트맵이 그대로 싣는 목록이라, 빠지거나 중복되면 색인이 어긋난다.
+	it("lists every landing address once for the sitemap", () => {
+		const paths = jobLandingPaths();
+		const expected =
+			1 + JOB_LANDING_REGIONS.length * (1 + JOB_LANDING_INDUSTRIES.length);
+
+		expect(paths).toHaveLength(expected);
+		expect(new Set(paths).size).toBe(expected);
+		expect(paths).toContain("/jobs");
+		expect(paths).toContain("/jobs/seoul");
+		expect(paths).toContain("/jobs/seoul/room-salon");
 	});
 	it("gives each landing its own title and description", () => {
 		expect(jobLandingTitle({ industry, region })).toBe(

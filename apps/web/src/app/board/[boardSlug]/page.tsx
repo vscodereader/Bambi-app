@@ -12,6 +12,7 @@ import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Fragment } from "react";
+import { JsonLd } from "@/components/bambi/json-ld";
 import {
 	communityAuthorName,
 	formatCommunityDate,
@@ -21,10 +22,12 @@ import {
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import {
 	getPublicBoardBySlug,
+	PUBLIC_BOARD_INDEX_PATH,
 	parsePageParam,
 	publicBoardPath,
 	publicPostPath,
 } from "@/lib/bambi/public-community";
+import { breadcrumbJsonLd } from "@/lib/bambi/seo";
 import { client } from "@/utils/orpc";
 
 interface PageProps {
@@ -144,6 +147,22 @@ export default async function PublicBoardPage({
 
 	return (
 		<div className="flex flex-col gap-4">
+			<JsonLd
+				data={breadcrumbJsonLd([
+					{ name: "커뮤니티 게시판", path: PUBLIC_BOARD_INDEX_PATH },
+					{ name: board.label, path: publicBoardPath(board.slug) },
+				])}
+			/>
+			<nav
+				aria-label="현재 위치"
+				className="flex flex-wrap items-center gap-1 text-muted-foreground text-sm"
+			>
+				<Link className="hover:underline" href={PUBLIC_BOARD_INDEX_PATH}>
+					커뮤니티 게시판
+				</Link>
+				<span aria-hidden="true">›</span>
+				<span className="font-bold text-foreground">{board.label}</span>
+			</nav>
 			<div className="flex flex-col gap-1">
 				<h1 className="m-0 font-extrabold text-xl">{board.label}</h1>
 				<p className="m-0 text-muted-foreground text-sm">{board.description}</p>

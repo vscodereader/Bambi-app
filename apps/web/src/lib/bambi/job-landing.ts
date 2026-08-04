@@ -88,6 +88,18 @@ export const jobLandingPath = ({
 		.filter(Boolean)
 		.join("/");
 
+// 존재하는 랜딩 주소 전부 — 1(인덱스) + 16(지역) + 16×9(지역×업종) = 161개.
+// 사이트맵이 라우트와 같은 표에서 주소를 만들어, 슬러그가 늘어도 색인이 따라온다.
+export const jobLandingPaths = (): string[] => [
+	"/jobs",
+	...JOB_LANDING_REGIONS.flatMap((region) => [
+		jobLandingPath({ region }),
+		...JOB_LANDING_INDUSTRIES.map((industry) =>
+			jobLandingPath({ industry, region })
+		),
+	]),
+];
+
 // "서울 룸싸롱" / "서울" / "" — 제목·문구가 공유하는 범위 라벨.
 const scopeLabel = ({ industry, region }: JobLandingTarget): string =>
 	[region?.label, region ? industry?.label : undefined]
