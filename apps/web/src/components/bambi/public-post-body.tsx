@@ -52,6 +52,20 @@ const headingTag = (level?: number) =>
 		Math.min(Math.max((level ?? 1) - 1, 0), HEADING_TAGS.length - 1)
 	];
 
+// 회원 에디터는 withHttps로 스킴을 보정해 넣지만, 본문 doc JSON은 API로 임의 값이
+// 들어올 수 있다. javascript: 등 실행 가능한 스킴이 <a href>로 그려지면 클릭 XSS가
+// 되므로 렌더 시점에 프로토콜을 화이트리스트로 거르고, 걸러진 링크는 텍스트만 남긴다.
+const SAFE_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
+
+export const isSafeLinkHref = (href: string): boolean => {
+	try {
+		return SAFE_LINK_PROTOCOLS.has(new URL(href).protocol);
+	} catch {
+		// 상대 경로·형식 오류는 링크로 그리지 않는다(본문 링크는 외부 주소 전제).
+		return false;
+	}
+};
+
 const withMarks = (text: string, marks: DocMark[]): ReactNode => {
 	let node: ReactNode = text;
 	for (const mark of marks) {
@@ -62,7 +76,11 @@ const withMarks = (text: string, marks: DocMark[]): ReactNode => {
 		}
 		// 회원이 아무 주소나 걸 수 있는 본문이라 도메인 신뢰를 넘기지 않는다
 		// (community-editor의 링크 확장 설정과 같은 rel).
-		if (mark.type === "link" && mark.attrs?.href) {
+		if (
+			mark.type === "link" &&
+			mark.attrs?.href &&
+			isSafeLinkHref(mark.attrs.href)
+		) {
 			node = (
 				<a
 					href={mark.attrs.href}
