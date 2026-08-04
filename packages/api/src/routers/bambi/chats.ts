@@ -26,7 +26,7 @@ import {
 import {
 	getChatRecipientUserId,
 	getUnreadMessageCount,
-	getUnreadRoomCount,
+	getUnreadMessageCountForUser,
 	markChatMessagesRead,
 } from "../../services/bambi-chat-read-state";
 import {
@@ -705,12 +705,14 @@ export const chatsRouter = {
 
 	// 헤더 채팅 버튼 핀·모바일 탭 뱃지용 경량 집계. listMine은 방마다 상대 이름·
 	// 마지막 메시지·안 읽음 수를 모두 조립해 무거우므로 재사용하지 않고, 안 읽은
-	// 방 수만 한 번의 쿼리로 센다.
+	// 메시지 총합만 한 번의 쿼리로 센다.
 	unreadState: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
 		return {
-			unreadRoomCount: await getUnreadRoomCount({ userId: profile.userId }),
+			unreadMessageCount: await getUnreadMessageCountForUser({
+				userId: profile.userId,
+			}),
 		};
 	}),
 
