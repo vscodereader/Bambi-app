@@ -40,7 +40,10 @@ import {
 	hashCommunityPassword,
 	verifyCommunityPassword,
 } from "../../services/bambi-community-password";
+
+import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
+
 import {
 	JOB_POST_IMAGE_MAX_BYTES,
 	type JobPostImageUploadPolicyCode,
@@ -905,6 +908,9 @@ export const communityRouter = {
 			const profile = await requireCommunityMember(context.session);
 			assertTiptapDoc(input.body);
 			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
+			await assertDisplayNameAllowed(input.authorName, {
+				isAdmin: profile.role === "admin",
+			});
 
 			// 공지사항은 운영자만, 광고글 표시는 업소회원만 허용한다.
 			if (input.board === "notice" && profile.role !== "admin") {
@@ -914,6 +920,11 @@ export const communityRouter = {
 			}
 			if (input.isPromotion && profile.role !== "employer") {
 				throw new ORPCError("BAD_REQUEST", { message: PROMOTION_ROLE_ERROR });
+			}
+			if (input.board === "free" && input.isLocked) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "자유수다에서는 비밀글을 작성할 수 없습니다.",
+				});
 			}
 			// 비밀글(잠금)은 잠금 게이트에 쓸 4자 이상 비밀번호가 필요하다.
 			if (input.isLocked && (input.password?.length ?? 0) < 4) {
@@ -963,10 +974,18 @@ export const communityRouter = {
 			const post = await findPublishedPost(input.postId);
 			assertTiptapDoc(input.body);
 			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
+			await assertDisplayNameAllowed(input.authorName, {
+				isAdmin: profile.role === "admin",
+			});
 
 			// authorRole 스냅샷은 불변 — 업소로 기록된 글만 광고 표시를 유지·전환할 수 있다.
 			if (post.authorRole !== "employer" && input.isPromotion) {
 				throw new ORPCError("BAD_REQUEST", { message: PROMOTION_ROLE_ERROR });
+			}
+			if (post.board === "free" && input.isLocked) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "자유수다에서는 비밀글을 사용할 수 없습니다.",
+				});
 			}
 
 			// 수정은 작성자 본인 또는 비밀번호 일치만 허용한다(admin이라도 비번 없이는 불가).

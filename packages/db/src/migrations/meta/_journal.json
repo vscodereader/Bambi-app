@@ -425,15 +425,22 @@
     {
       "idx": 60,
       "version": "7",
-      "when": 1785818379337,
-      "tag": "0060_numerous_butterfly",
+      "when": 1785818672727,
+      "tag": "0060_community-name-policy-cleanup",
       "breakpoints": true
     },
     {
       "idx": 61,
       "version": "7",
-      "when": 1785825447201,
-      "tag": "0061_ancient_magneto",
+      "when": 1785827750168,
+      "tag": "0061_nickname-banned-word-scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1785832380491,
+      "tag": "0062_young_paper_doll",
       "breakpoints": true
     }
   ]

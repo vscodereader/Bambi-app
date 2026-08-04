@@ -447,8 +447,8 @@ export function CrawledCommunityTopicsCard() {
 			<CardContent className="flex flex-col gap-3">
 				<p className="m-0 text-muted-foreground text-xs">
 					공고와 같은 방식으로, 삭제해도 기록은 남고 다음 회차가 되살리지
-					않습니다. 「일 이야기」 게시판과 수다방 미리보기에서 즉시 빠져요. 잘못
-					눌렀다면 상태를 「{CRAWLED_POST_STATUS_LABELS.removed}」로 걸러
+					않습니다. 「밤문화 이야기」 게시판과 수다방 미리보기에서 즉시 빠져요.
+					잘못 눌렀다면 상태를 「{CRAWLED_POST_STATUS_LABELS.removed}」로 걸러
 					복구하면 됩니다. 한 페이지에 {PAGE_SIZE}건씩 보여줍니다
 					{listQuery.data ? ` (조건에 맞는 ${total}건)` : ""}.
 				</p>
@@ -650,8 +650,8 @@ export function CrawledCommunityTopicsCard() {
 						<AlertDialogHeader>
 							<AlertDialogTitle>이 커뮤니티 글을 삭제할까요?</AlertDialogTitle>
 							<AlertDialogDescription>
-								「{pendingRemove?.title}」이(가) 「일 이야기」 게시판과 수다방
-								미리보기에서 바로 빠집니다. 기록은 「
+								「{pendingRemove?.title}」이(가) 「밤문화 이야기」 게시판과
+								수다방 미리보기에서 바로 빠집니다. 기록은 「
 								{CRAWLED_POST_STATUS_LABELS.removed}」으로 남으니 잘못 눌렀다면
 								상태를 「{CRAWLED_POST_STATUS_LABELS.removed}」로 걸러 복구하면
 								됩니다.

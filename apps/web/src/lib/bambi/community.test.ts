@@ -29,6 +29,16 @@ describe("community boards meta", () => {
 		]);
 	});
 
+	it("일 이야기 게시판은 표시명만 밤문화 이야기로 바뀐다", () => {
+		const board = COMMUNITY_BOARDS.find((item) => item.key === "work_talk");
+
+		expect(board).toMatchObject({
+			key: "work_talk",
+			label: "밤문화 이야기",
+			slug: "work-talk",
+		});
+	});
+
 	it("공지사항만 운영자 전용(adminOnly) 게시판이다", () => {
 		expect(getBoardBySlug("notice")?.adminOnly).toBe(true);
 		expect(getBoardBySlug("free")?.adminOnly).toBeUndefined();

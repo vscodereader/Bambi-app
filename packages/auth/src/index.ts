@@ -26,6 +26,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import { organization, username } from "better-auth/plugins";
 import { koTranslations } from "./locales/ko";
+import { getReservedDisplayNameErrorMessage } from "./reserved-display-name";
 
 const schema = {
 	account,
@@ -92,6 +93,28 @@ export function createAuth() {
 		// 탈퇴 시 기존 세션은 전부 삭제되지만, 보존기간 동안 이메일·비밀번호가 남아
 		// 있어 재로그인을 막는 최종 관문이 필요하다.
 		databaseHooks: {
+			user: {
+				create: {
+					before: async (userData) => {
+						const entries = await db.query.bannedWord.findMany({
+							columns: { normalizedTerm: true, term: true },
+							where: (fields, operators) =>
+								operators.and(
+									operators.eq(fields.scope, "display_name"),
+									operators.eq(fields.isActive, true)
+								),
+						});
+						const message = getReservedDisplayNameErrorMessage(
+							userData.name,
+							entries
+						);
+						if (message) {
+							throw new APIError("BAD_REQUEST", { message });
+						}
+						return { data: userData };
+					},
+				},
+			},
 			session: {
 				create: {
 					before: async (sessionData) => {

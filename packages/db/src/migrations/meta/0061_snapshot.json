@@ -1,6 +1,6 @@
 {
-  "id": "c4bf9193-8aae-4a97-9622-00e0290bb858",
-  "prevId": "7be4b2c5-eb05-4173-8b3e-08f83f799b54",
+  "id": "4140cb01-8668-49b0-a599-d68affa28916",
+  "prevId": "eaff34c2-8550-4657-ab12-907b8de40d1e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -162,12 +162,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'pending'"
-        },
-        "invite_reason": {
-          "name": "invite_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "rejection_reason": {
           "name": "rejection_reason",
@@ -1968,6 +1962,14 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "scope": {
+          "name": "scope",
+          "type": "banned_word_scope",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'content'"
+        },
         "term": {
           "name": "term",
           "type": "text",
@@ -2009,9 +2011,15 @@
         }
       },
       "indexes": {
-        "banned_word_normalized_term_uidx": {
-          "name": "banned_word_normalized_term_uidx",
+        "banned_word_scope_normalized_term_uidx": {
+          "name": "banned_word_scope_normalized_term_uidx",
           "columns": [
+            {
+              "expression": "scope",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
             {
               "expression": "normalized_term",
               "isExpression": false,
@@ -2024,9 +2032,15 @@
           "method": "btree",
           "with": {}
         },
-        "banned_word_is_active_idx": {
-          "name": "banned_word_is_active_idx",
+        "banned_word_scope_is_active_idx": {
+          "name": "banned_word_scope_is_active_idx",
           "columns": [
+            {
+              "expression": "scope",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
             {
               "expression": "is_active",
               "isExpression": false,
@@ -6390,6 +6404,11 @@
       "schema": "public",
       "values": ["job_seeker", "employer", "admin"]
     },
+    "public.banned_word_scope": {
+      "name": "banned_word_scope",
+      "schema": "public",
+      "values": ["content", "display_name"]
+    },
     "public.chat_attachment_category": {
       "name": "chat_attachment_category",
       "schema": "public",
@@ -6491,14 +6510,7 @@
     "public.job_post_status": {
       "name": "job_post_status",
       "schema": "public",
-      "values": [
-        "draft",
-        "pending_review",
-        "published",
-        "hidden",
-        "rejected",
-        "on_hold"
-      ]
+      "values": ["draft", "pending_review", "published", "hidden", "rejected"]
     },
     "public.moderation_target_type": {
       "name": "moderation_target_type",

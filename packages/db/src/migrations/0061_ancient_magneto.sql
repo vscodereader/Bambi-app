@@ -1,1 +1,0 @@
-ALTER TYPE "public"."job_post_status" ADD VALUE 'on_hold';

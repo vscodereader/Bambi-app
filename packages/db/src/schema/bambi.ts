@@ -1586,10 +1586,16 @@ export const faqEntry = pgTable(
 	]
 );
 
+export const bannedWordScope = pgEnum("banned_word_scope", [
+	"content",
+	"display_name",
+]);
+
 export const bannedWord = pgTable(
 	"banned_word",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
+		scope: bannedWordScope("scope").default("content").notNull(),
 		// 운영자가 입력한 원문(표시용).
 		term: text("term").notNull(),
 		// 정규화형(매칭용). 저장 시 계산해 두고 매 요청 재계산을 피한다.
@@ -1602,9 +1608,13 @@ export const bannedWord = pgTable(
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
 	(table) => [
-		// 정규화형에 걸어야 "성 매매"와 "성매매"가 중복 등록되지 않는다.
-		uniqueIndex("banned_word_normalized_term_uidx").on(table.normalizedTerm),
-		index("banned_word_is_active_idx").on(table.isActive),
+		// 같은 범위에서는 "성 매매"와 "성매매"가 중복되지 않지만, 본문·닉네임에는 같은
+		// 단어를 각각 등록할 수 있어야 한다.
+		uniqueIndex("banned_word_scope_normalized_term_uidx").on(
+			table.scope,
+			table.normalizedTerm
+		),
+		index("banned_word_scope_is_active_idx").on(table.scope, table.isActive),
 	]
 );
 

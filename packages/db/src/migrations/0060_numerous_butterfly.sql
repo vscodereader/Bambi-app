@@ -1,1 +1,0 @@
-ALTER TABLE "invitation" ADD COLUMN "invite_reason" text;

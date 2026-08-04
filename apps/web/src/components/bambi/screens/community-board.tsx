@@ -43,13 +43,7 @@ import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-	Fragment,
-	type MouseEvent,
-	useCallback,
-	useEffect,
-	useState,
-} from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
 	CommunityNewBadge,
 	CommunityRoleBadges,
@@ -185,12 +179,10 @@ function BoardPostRow({
 }
 
 function BoardPagination({
-	onNavigate,
 	page,
 	pageHref,
 	totalPages,
 }: {
-	onNavigate: (event: MouseEvent<HTMLAnchorElement>, nextPage: number) => void;
 	page: number;
 	pageHref: (nextPage: number) => Route;
 	totalPages: number;
@@ -208,14 +200,12 @@ function BoardPagination({
 					<PaginationPrevious
 						aria-disabled={prevDisabled}
 						className={cn(prevDisabled && "pointer-events-none opacity-50")}
-						href={pageHref(prevPage)}
 						onClick={(event) => {
 							if (prevDisabled) {
 								event.preventDefault();
-								return;
 							}
-							onNavigate(event, prevPage);
 						}}
+						render={<Link href={pageHref(prevPage)} />}
 						tabIndex={prevDisabled ? -1 : undefined}
 					/>
 				</PaginationItem>
@@ -223,9 +213,8 @@ function BoardPagination({
 					typeof item === "number" ? (
 						<PaginationItem key={item}>
 							<PaginationLink
-								href={pageHref(item)}
 								isActive={item === page}
-								onClick={(event) => onNavigate(event, item)}
+								render={<Link href={pageHref(item)} />}
 							>
 								{item}
 							</PaginationLink>
@@ -240,14 +229,12 @@ function BoardPagination({
 					<PaginationNext
 						aria-disabled={nextDisabled}
 						className={cn(nextDisabled && "pointer-events-none opacity-50")}
-						href={pageHref(nextPage)}
 						onClick={(event) => {
 							if (nextDisabled) {
 								event.preventDefault();
-								return;
 							}
-							onNavigate(event, nextPage);
 						}}
+						render={<Link href={pageHref(nextPage)} />}
 						tabIndex={nextDisabled ? -1 : undefined}
 					/>
 				</PaginationItem>
@@ -525,14 +512,11 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 		router.replace(buildHref(filters, 1, next));
 	};
 
-	// 페이지 이동은 실제 앵커(href)로 접근성을 유지하고, 클릭 시에도 push로 히스토리에
-	// 한 칸 쌓는다. replace로 갈아끼우면 2페이지에서 뒤로가기가 목록 1페이지가 아니라
-	// 그 앞(직전에 보던 글)으로 튄다 — QA가 보고한 뒤로가기 오동작의 원인이다.
+	// 페이지 이동은 실제 앵커의 기본 push 이동을 사용해 각 페이지를 브라우저 history에
+	// 남긴다. replace로 갈아끼우면 2페이지에서 뒤로가기가 목록 1페이지가 아니라 그 앞
+	// (직전에 보던 글)으로 튄다 — QA가 보고한 뒤로가기 오동작의 원인이다. 필터 변경·
+	// 검색·범위 초과 클램프만 위에서 replace를 사용한다.
 	const pageHref = (nextPage: number) => buildHref(filters, nextPage, query);
-	const goToPage = (event: MouseEvent<HTMLAnchorElement>, nextPage: number) => {
-		event.preventDefault();
-		router.push(pageHref(nextPage));
-	};
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -583,7 +567,6 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 			    목록 하단이 있다 없다 하면 어디까지 봤는지 가늠이 안 된다. */}
 			{listQuery.isSuccess && items.length > 0 ? (
 				<BoardPagination
-					onNavigate={goToPage}
 					page={page}
 					pageHref={pageHref}
 					totalPages={totalPages}

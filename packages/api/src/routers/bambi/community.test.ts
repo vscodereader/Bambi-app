@@ -238,7 +238,6 @@ const cleanupCommunityFixture = async (
 };
 
 const clientFor = <T>(procedure: T, userId: string, path: string[]) =>
-	// biome-ignore lint/suspicious/noExplicitAny: 테스트 헬퍼 — 프로시저별 제네릭 전개 생략
 	createProcedureClient(procedure as any, {
 		context: createContextForUser(userId),
 		path: ["bambi", "community", ...path],
@@ -246,7 +245,6 @@ const clientFor = <T>(procedure: T, userId: string, path: string[]) =>
 
 // 비로그인 열람(public overview) 검증용 — 세션 없는 컨텍스트.
 const clientForAnonymous = <T>(procedure: T, path: string[]) =>
-	// biome-ignore lint/suspicious/noExplicitAny: 테스트 헬퍼 — 프로시저별 제네릭 전개 생략
 	createProcedureClient(procedure as any, {
 		context: { auth: null, session: null } as Context,
 		path: ["bambi", "community", ...path],
@@ -291,7 +289,7 @@ describe("bambi community router — 조회", () => {
 			resetRateLimits();
 			const locked = await createPost({
 				...basePostInput,
-				board: "free",
+				board: "work_talk",
 				isLocked: true,
 				title: `비밀글 ${randomUUID()}`,
 			});
@@ -310,7 +308,7 @@ describe("bambi community router — 조회", () => {
 				)
 			).toBe(true);
 			expect(
-				maleHome.free.find((item: { id: string }) => item.id === locked.id)
+				maleHome.workTalk.find((item: { id: string }) => item.id === locked.id)
 					?.title
 			).toBe("비밀글입니다");
 
@@ -323,8 +321,9 @@ describe("bambi community router — 조회", () => {
 				anonymousHome.free.some((item: { id: string }) => item.id === open.id)
 			).toBe(true);
 			expect(
-				anonymousHome.free.find((item: { id: string }) => item.id === locked.id)
-					?.title
+				anonymousHome.workTalk.find(
+					(item: { id: string }) => item.id === locked.id
+				)?.title
 			).toBe("비밀글입니다");
 
 			// 자격자(작성자 본인)의 잠금 우회 마스킹은 그대로 유지된다.
@@ -335,8 +334,9 @@ describe("bambi community router — 조회", () => {
 			);
 			const authorHome = await overviewAsAuthor({});
 			expect(
-				authorHome.free.find((item: { id: string }) => item.id === locked.id)
-					?.title
+				authorHome.workTalk.find(
+					(item: { id: string }) => item.id === locked.id
+				)?.title
 			).not.toBe("비밀글입니다");
 		} finally {
 			await cleanupCommunityFixture(fixture);
@@ -454,7 +454,7 @@ describe("bambi community router — 조회", () => {
 			);
 			const created = await createPost({
 				...basePostInput,
-				board: "free",
+				board: "work_talk",
 				isLocked: true,
 				title: `비밀 제목 ${randomUUID()}`,
 			});
@@ -465,7 +465,7 @@ describe("bambi community router — 조회", () => {
 				fixture.adminUserId,
 				["listPosts"]
 			);
-			const adminList = await listAsAdmin({ board: "free", page: 1 });
+			const adminList = await listAsAdmin({ board: "work_talk", page: 1 });
 			expect(
 				adminList.items.find((item: { id: string }) => item.id === created.id)
 					?.title
@@ -499,7 +499,7 @@ describe("bambi community router — 조회", () => {
 				fixture.otherFemaleUserId,
 				["listPosts"]
 			);
-			const otherList = await listAsOther({ board: "free", page: 1 });
+			const otherList = await listAsOther({ board: "work_talk", page: 1 });
 			expect(
 				otherList.items.find((item: { id: string }) => item.id === created.id)
 					?.title
@@ -551,7 +551,7 @@ describe("bambi community router — 조회", () => {
 			await expectOrpcCode(
 				createPost({
 					...basePostInput,
-					board: "free",
+					board: "work_talk",
 					isLocked: true,
 					password: undefined,
 					title: `비밀무비번 ${randomUUID()}`,
@@ -573,7 +573,7 @@ describe("bambi community router — 조회", () => {
 			);
 			const created = await createPost({
 				...basePostInput,
-				board: "free",
+				board: "work_talk",
 				isLocked: false,
 				password: undefined,
 				title: `무비번 수정 ${randomUUID()}`,
@@ -595,6 +595,109 @@ describe("bambi community router — 조회", () => {
 				}),
 				"BAD_REQUEST"
 			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("자유수다는 작성과 수정 모두 비밀글 잠금을 거부한다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createPost = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			await expectOrpcCode(
+				createPost({
+					...basePostInput,
+					board: "free",
+					isLocked: true,
+					title: `자유수다 잠금 차단 ${randomUUID()}`,
+				}),
+				"BAD_REQUEST"
+			);
+
+			const created = await createPost({
+				...basePostInput,
+				board: "free",
+				isLocked: false,
+				title: `자유수다 공개글 ${randomUUID()}`,
+			});
+			const updatePost = clientFor(
+				communityRouter.updatePost,
+				fixture.femaleUserId,
+				["updatePost"]
+			);
+			await expectOrpcCode(
+				updatePost({
+					authorName: basePostInput.authorName,
+					body: basePostInput.body,
+					isLocked: true,
+					isPromotion: false,
+					postId: created.id,
+					title: `자유수다 수정 잠금 차단 ${randomUUID()}`,
+				}),
+				"BAD_REQUEST"
+			);
+		} finally {
+			await cleanupCommunityFixture(fixture);
+		}
+	});
+
+	it("일반 회원의 예약 작성인은 작성·수정에서 차단하고 admin은 허용한다", async () => {
+		const fixture = await createCommunityFixture();
+		try {
+			const createAsMember = clientFor(
+				communityRouter.createPost,
+				fixture.femaleUserId,
+				["createPost"]
+			);
+			await expectOrpcCode(
+				createAsMember({
+					...basePostInput,
+					authorName: "A d-m_i.n",
+					board: "free",
+					title: `예약 작성인 차단 ${randomUUID()}`,
+				}),
+				"BAD_REQUEST"
+			);
+
+			const created = await createAsMember({
+				...basePostInput,
+				board: "free",
+				title: `예약 작성인 수정 차단 ${randomUUID()}`,
+			});
+			const updateAsMember = clientFor(
+				communityRouter.updatePost,
+				fixture.femaleUserId,
+				["updatePost"]
+			);
+			await expectOrpcCode(
+				updateAsMember({
+					authorName: "관 리-자",
+					body: basePostInput.body,
+					isLocked: false,
+					isPromotion: false,
+					postId: created.id,
+					title: `예약 작성인 수정 ${randomUUID()}`,
+				}),
+				"BAD_REQUEST"
+			);
+
+			const createAsAdmin = clientFor(
+				communityRouter.createPost,
+				fixture.adminUserId,
+				["createPost"]
+			);
+			await expect(
+				createAsAdmin({
+					...basePostInput,
+					authorName: "밤비 관리자",
+					board: "free",
+					title: `운영자 작성인 허용 ${randomUUID()}`,
+				})
+			).resolves.toMatchObject({ board: "free" });
 		} finally {
 			await cleanupCommunityFixture(fixture);
 		}
@@ -732,7 +835,7 @@ describe("bambi community router — 조회", () => {
 
 			const created = await createPost({
 				...basePostInput,
-				board: "free",
+				board: "work_talk",
 				isLocked: true,
 				title: `잠금 마스킹 ${randomUUID()}`,
 			});
@@ -1101,7 +1204,7 @@ describe("bambi community router — 추천·댓글", () => {
 			);
 			const created = await createPost({
 				...basePostInput,
-				board: "free",
+				board: "work_talk",
 				isLocked: true,
 				title: `잠긴 댓글 ${randomUUID()}`,
 			});

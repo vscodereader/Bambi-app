@@ -28,7 +28,7 @@ import {
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
-// 수집 글은 일 이야기(work_talk) 게시판에 합류하므로 목록으로 돌아가는 버튼도 그 게시판을 가리킨다.
+// 수집 글은 밤문화 이야기(work_talk) 게시판에 합류하므로 목록으로 돌아가는 버튼도 그 게시판을 가리킨다.
 const CRAWLED_BOARD = getBoardByKey("work_talk");
 
 // 닉네임이 비어 오는 댓글의 폴백. 커뮤니티 기본값("회원")과 달리 수집 원본은 익명 작성이 흔해

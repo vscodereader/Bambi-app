@@ -30,6 +30,7 @@ import {
 import { hasActiveAdExposure } from "../../services/bambi-advertiser";
 import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
+import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import {
 	resolveVerifiedIdentity,
 	type VerifiedIdentity,
@@ -653,6 +654,9 @@ export const onboardingRouter = {
 
 			// 표시명(닉네임)은 user.name 정본을 갱신한다(프로필 아님).
 			if (input.displayName !== undefined) {
+				await assertDisplayNameAllowed(input.displayName, {
+					isAdmin: existingProfile?.role === "admin",
+				});
 				await db
 					.update(user)
 					.set({ name: input.displayName })
