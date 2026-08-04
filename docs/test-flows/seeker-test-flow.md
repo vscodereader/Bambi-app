@@ -1033,13 +1033,13 @@
 - **목록**: `lastMessageAt DESC`, 서버 `PAGE_SIZE=20`, `status='published'`만. 빈 상태 "아직 남긴 문의가 없어요". **페이지네이션 UI가 없어 항상 1페이지 고정**
 - **상세**: 카테고리 배지 + 상태 배지 + 제목 + 원문 + 메시지 카드 시간순(최대 **100건**). 작성자 배지 **"운영자"/"나"**(작성 시점 스냅샷). 숨김·삭제 메시지는 작성자에게 "운영자가 숨긴 메시지입니다."로 치환
 - **답장**: Textarea(최대 5000자) + [보내기] → 상태 자동 전이(**운영자 답 → `answered`, 사용자 답 → `open`**), `lastMessageAt` 갱신
-- **종료**: [문의 종료] → `closed` → 토스트 "문의를 종료했어요." 이후 입력창 미노출 + "종료된 문의예요. 추가로 문의할 내용이 있으면 새로 등록해 주세요." (서버도 `BAD_REQUEST` "종료된 문의에는 답변을 남길 수 없습니다.")
+- **종료**: **문의자 화면에는 종료 버튼이 없다.** 종료는 운영자만 하며(`closeInquiry`가 `adminProcedure`), 종료되면 입력창 대신 "종료된 문의예요. 추가로 문의할 내용이 있으면 새로 등록해 주세요."가 뜬다 (서버도 `BAD_REQUEST` "종료된 문의에는 답변을 남길 수 없습니다.")
 - **엣지 케이스**:
   - 타인 문의 id로 접근 → `FORBIDDEN`이 아니라 **`NOT_FOUND`**("문의를 불러오지 못했어요. 접근 권한이 없거나 삭제된 문의일 수 있어요.") — 문의 존재 여부가 새지 않게
   - 운영자가 `hidden` 처리한 문의는 작성자에게도 `NOT_FOUND`
   - **답변 알림이 없다** — 사용자가 직접 목록/상세를 열어야만 확인 가능
   - `/support`에는 **모바일 하단 탭바가 없다** → 마이페이지에서 들어가면 뒤로가기 외 복귀 경로가 없음
-- **관련 API**: `bambi.support.listMyInquiries`, `bambi.support.getInquiry`, `bambi.support.createInquiryMessage`, `bambi.support.closeInquiry` (모두 protected)
+- **관련 API**: `bambi.support.listMyInquiries`, `bambi.support.getInquiry`, `bambi.support.createInquiryMessage` (모두 protected). `closeInquiry`는 `adminProcedure`라 문의자가 직접 부르면 `FORBIDDEN`
 
 ### 14.4 약관 · 개인정보 처리방침
 

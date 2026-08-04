@@ -270,13 +270,22 @@ export const supportRouter = {
 			return { id: created.id };
 		}),
 
-	closeInquiry: protectedProcedure
+	// 종료는 운영자 전용이다. 문의자가 종료할 수 있으면 운영자가 답변을 남길 수 없게 된다
+	// (createInquiryMessage가 closed를 400으로 막는다). 답변을 한 번도 안 한 문의를 닫으면
+	// 문의자가 답을 못 받고 끝나므로 answered 이후에만 연다.
+	closeInquiry: adminProcedure
 		.input(inquiryIdInput)
 		.handler(async ({ context, input }) => {
 			const { inquiry } = await loadAccessibleInquiry(
 				input.inquiryId,
 				context.session
 			);
+
+			if (inquiry.inquiryStatus !== "answered") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "답변을 보낸 뒤에 문의를 종료할 수 있습니다.",
+				});
+			}
 
 			await db
 				.update(supportInquiry)
