@@ -428,6 +428,13 @@
       "when": 1785818379337,
       "tag": "0060_numerous_butterfly",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785825447201,
+      "tag": "0061_ancient_magneto",
+      "breakpoints": true
     }
   ]
 }
