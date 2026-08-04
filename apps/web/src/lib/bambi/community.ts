@@ -55,7 +55,7 @@ export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
 	{
 		description: "일·알바 경험과 정보를 나눠요",
 		key: "work_talk",
-		label: "일 이야기",
+		label: "밤문화 이야기",
 		slug: "work-talk",
 		writable: true,
 	},

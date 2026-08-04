@@ -40,7 +40,7 @@ import {
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Fragment, type MouseEvent, useCallback, useEffect } from "react";
+import { Fragment, useCallback, useEffect } from "react";
 import {
 	CommunityNewBadge,
 	CommunityRoleBadges,
@@ -131,12 +131,10 @@ function BoardPostRow({
 }
 
 function BoardPagination({
-	onNavigate,
 	page,
 	pageHref,
 	totalPages,
 }: {
-	onNavigate: (event: MouseEvent<HTMLAnchorElement>, nextPage: number) => void;
 	page: number;
 	pageHref: (nextPage: number) => Route;
 	totalPages: number;
@@ -154,14 +152,12 @@ function BoardPagination({
 					<PaginationPrevious
 						aria-disabled={prevDisabled}
 						className={cn(prevDisabled && "pointer-events-none opacity-50")}
-						href={pageHref(prevPage)}
 						onClick={(event) => {
 							if (prevDisabled) {
 								event.preventDefault();
-								return;
 							}
-							onNavigate(event, prevPage);
 						}}
+						render={<Link href={pageHref(prevPage)} />}
 						tabIndex={prevDisabled ? -1 : undefined}
 					/>
 				</PaginationItem>
@@ -169,9 +165,8 @@ function BoardPagination({
 					typeof item === "number" ? (
 						<PaginationItem key={item}>
 							<PaginationLink
-								href={pageHref(item)}
 								isActive={item === page}
-								onClick={(event) => onNavigate(event, item)}
+								render={<Link href={pageHref(item)} />}
 							>
 								{item}
 							</PaginationLink>
@@ -186,14 +181,12 @@ function BoardPagination({
 					<PaginationNext
 						aria-disabled={nextDisabled}
 						className={cn(nextDisabled && "pointer-events-none opacity-50")}
-						href={pageHref(nextPage)}
 						onClick={(event) => {
 							if (nextDisabled) {
 								event.preventDefault();
-								return;
 							}
-							onNavigate(event, nextPage);
 						}}
+						render={<Link href={pageHref(nextPage)} />}
 						tabIndex={nextDisabled ? -1 : undefined}
 					/>
 				</PaginationItem>
@@ -345,14 +338,10 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 		router.replace(buildHref(next, 1));
 	};
 
-	// 페이지 이동은 실제 앵커(href)로 접근성을 유지하되, 클릭 시 router.replace로
-	// 쿼리만 교체해 히스토리를 늘리지 않는다.
+	// 페이지 이동은 실제 앵커의 기본 push 이동을 사용해 각 페이지를 브라우저
+	// history에 남긴다. 필터 변경·범위 초과 클램프만 위에서 replace를 사용한다.
 	const pageHref = (nextPage: number) =>
 		buildHref({ showEmployer, showPromotion }, nextPage);
-	const goToPage = (event: MouseEvent<HTMLAnchorElement>, nextPage: number) => {
-		event.preventDefault();
-		router.replace(pageHref(nextPage));
-	};
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -431,7 +420,6 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 
 			{listQuery.isSuccess && totalPages > 1 ? (
 				<BoardPagination
-					onNavigate={goToPage}
 					page={page}
 					pageHref={pageHref}
 					totalPages={totalPages}
