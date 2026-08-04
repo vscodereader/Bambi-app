@@ -138,8 +138,12 @@
   2. "자동 필터가 감지한 신호 N건" 영역과 본문의 하이라이트(감지 표현)를 확인.
   3. 이미지 영역(`QueueMediaSection`) — `getJobPostForAdmin`으로 별도 조회한 cover/detail 미디어.
   4. 데스크톱 판정 도크(또는 모바일 하단 바)의 **승인 후 게시** 클릭.
+  5. **승인 사유 작성** 시트에서 선택지를 고르거나(입력칸에 프리필) 직접 작성 → **승인하기** 클릭.
+     (선택지: 운영 검수 기준 충족 / 감지 표현이 오해 소지 수준 / 업소 정보 확인 완료 /
+     보완 요청 반영 확인 / 기타 승인 사유. 2자 미만이면 확정 버튼 비활성.)
 - **기대 결과**:
-  - `setJobPostStatus({status:"published", reason:"운영자가 공고를 승인했습니다."})` 호출.
+  - `setJobPostStatus({status:"published", reason: 작성한 사유})` 호출
+    (미입력 불가 — 빈 값이면 `resolveQueue`가 기본 문구 "운영자가 공고를 승인했습니다."로 대체).
   - 서버가 `publishedAt`을 최초 승인 시각으로 채우고 `rejectionReason`을 `null`로 지운다
     (`getJobPostModerationStatusPatch`, `moderation.ts` L654~682).
   - `admin_moderation_action`에 `set_status:published` 감사 로그가 남는다.
@@ -152,23 +156,29 @@
 - **관련 API**: `bambi.moderation.setJobPostStatus` (`moderation.ts` L1407),
   `bambi.moderation.getJobPostForAdmin` (L1038, `adminProcedure`)
 
-### 2.3 단건 반려
+### 2.3 단건 반려 / 보류 (사유 직접 작성)
 
-- **경로**: `/moderator/queue/[id]` (반려 시트: `moderator.tsx` `RejectSheet` L812~)
+- **경로**: `/moderator/queue/[id]` (판정 시트: `moderator.tsx` `VerdictReasonSheet`,
+  문구·선택지는 `VERDICT_SHEETS`)
 - **절차**:
-  1. 상세에서 **반려** 클릭.
-  2. "반려 사유 선택" 시트에서 5개 중 하나 선택 —
-     성적 서비스 암시 표현 / 강요·착취 의심 조건 / 외부 연락 유도 / 허위·과장 정보 / 기타 정책 위반.
-  3. **반려하기** 클릭.
+  1. 상세에서 **반려**(또는 **보류**) 클릭.
+  2. "반려/보류 사유 작성" 시트에서 선택지를 누르면 **아래 입력칸에 그 문구가 프리필**된다.
+     반려 선택지: 성적 서비스 암시 표현 / 강요·착취 의심 조건 / 외부 연락 유도 / 허위·과장 정보 / 기타 정책 위반.
+     보류 선택지: 업소 정보 추가 확인 필요 / 사업자 인증 확인 필요 / 공고 내용 보완 요청 예정 /
+     내부 논의 필요 / 기타 확인 필요.
+  3. 입력칸에서 문구를 **직접 고쳐 쓰거나 새로 작성**한다(목록 일괄 처리 `ReasonConfirmSheet`와 동일 흐름).
+  4. **반려하기 / 보류하기** 클릭.
 - **기대 결과**:
-  - `setJobPostStatus({status:"rejected", reason: ...})` → 서버가 `jobPost.rejectionReason = reason`으로 저장.
-  - 감사 로그 `set_status:rejected`.
+  - 반려: `setJobPostStatus({status:"rejected", reason: 작성한 사유})` →
+    서버가 `jobPost.rejectionReason = reason`으로 저장. 감사 로그 `set_status:rejected`.
+  - 보류: `setJobPostStatus({status:"on_hold", reason: 작성한 사유})` → 감사 로그 `set_status:on_hold`.
+    `rejectionReason`·`publishedAt`은 그대로 유지된다(`getJobPostModerationStatusPatch`).
+  - 세 판정(승인·보류·반려) 모두 시트를 거치므로 상세와 목록 일괄 처리의 기록 방식이 같다.
 - **엣지 케이스 / 실패 케이스**:
-  - **⚠ 코드 결함**: `RejectSheet`가 고른 사유(`sel`)는 **API로 전달되지 않는다**.
-    `onConfirm={() => onResolve(item.id, "reject")}`이고, `resolveQueue`가
-    `"운영자가 정책 위반으로 공고를 반려했습니다."` 고정 문자열을 보낸다
-    (`moderator-context.tsx` L529~550). 즉 어떤 사유를 골라도 구인자에게 저장되는 반려 사유는 동일하다.
-    → **QA 시 반드시 확인·리포트할 항목**(부록).
+  - 사유 2자 미만(공백 제외)이면 확정 버튼이 비활성이다(`VERDICT_REASON_MIN_LENGTH = 2`,
+    서버 입력 스키마 `z.string().min(2)`와 동일).
+  - **보류한 공고는 검수 큐에 다시 나타나지 않는다**(큐는 `pending_review`만 조회).
+    `/moderator/jobs`의 **검수 보류** 탭에서 찾아 마무리한다(§3.2).
 - **관련 API**: `bambi.moderation.setJobPostStatus`
 
 ### 2.4 큐 일괄 처리(승인/반려/보류)
@@ -178,7 +188,8 @@
   1. 목록 행의 체크박스로 2건 이상 선택 → 하단(모바일 고정 / 데스크톱 sticky) 액션 바 노출.
   2. **반려 / 보류 / 승인** 중 하나 클릭 → 사유 시트(기본 문구 프리필) → 2자 이상 입력 → 적용.
 - **기대 결과**:
-  - 승인 → `published`, 반려 → `rejected`, **보류 → `hidden`** (`applyQueueBulkAction`).
+  - 승인 → `published`, 반려 → `rejected`, **보류 → `on_hold`** (`applyQueueBulkAction`).
+    보류는 운영자 강제 숨김(`hidden`)과 다른 상태이며, 구인자 목록에는 "검수 보류"로 표시된다.
   - 결과 토스트: `"<액션> · 성공 N건 · 실패 M건 · 실패 ID xxxxxxxx, ..."` (최대 3개 ID).
   - 각 건마다 감사 로그(`metadata: { bulk: true }`).
 - **엣지 케이스 / 실패 케이스**:
@@ -213,20 +224,37 @@
 
 - **경로**: `/moderator/jobs` (파일: `apps/web/src/app/moderator/jobs/page.tsx`)
 - **절차**:
-  1. 상태 탭: 전체 / 검수 대기 / 공개 / 숨김 / 반려 (`draft`는 필터 선택지에 없음 — 전체 조회에는 포함될 수 있음).
+  1. 상태 탭: 전체 / 검수 대기 / 검수 보류 / 공개 / 숨김 / 반려
+     (`draft`는 필터 선택지에 없음 — 전체 조회에는 포함될 수 있음).
   2. 검색 입력: 공고 제목·업소명(클라이언트 필터).
 - **기대 결과**: DataTable 컬럼 = 제목 / 업소 / 업종 / 지역 / 급여 / 상태 / 노출 종류 / 결제 상태 /
   만료(남은 기간) / 관리. 페이지 크기 10.
+- **제목 링크(공개 상세 이동)**: 제목이 `/seeker/jobs/[id]` 링크가 되는 건 **`status === "published"`
+  이고 `paymentStatus === "paid"`인 행뿐이다**(`isPubliclyViewable`). 공개 상세가 그 게이트를
+  통과한 공고만 열어 주므로, 그 외 상태에서 링크를 걸면 404가 난다. 링크가 아닌 행은 제목이
+  일반 텍스트로 뜨고 아래에 `비공개 공고 · 상세 보기 불가(<표시 상태>)`가 붙는다
+  (표시 상태는 `getJobDisplayStatus` 라벨 — enum 원값 노출 없음, published+미결제는 "미공개").
+  운영자 편집(`수정` 액션 → `/moderator/jobs/[id]/edit`)은 상태와 무관하게 항상 열린다.
 - **엣지 케이스**: 서버 조회 상한 `LIST_LIMIT = 100`(서버 max도 100). 검색·정렬은 이 100건 안에서만 동작.
 - **관련 API**: `bambi.moderation.listJobPosts`
 
-### 3.2 공개 공고 강제 숨김 / 숨긴 공고 재공개
+### 3.2 강제 숨김 / 재공개 / 검수 보류 공고 마무리
 
-- **경로**: `/moderator/jobs` 행 액션 → "숨김"(published일 때만) / "재공개"(hidden일 때만)
-- **절차**: 행 메뉴 → 숨김/재공개 → 다이얼로그에서 사유(2자 이상, 기본 문구 프리필) → 확정.
-- **기대 결과**: `setJobPostStatus`로 `hidden`/`published` 전환. 재공개 시 `rejectionReason`이 `null`이 되고
-  `publishedAt`은 기존 값 유지(최초 게시 시각 보존). 토스트 후 모든 상태 필터 캐시 무효화.
-- **엣지 케이스**: 사유 2자 미만이면 확정 버튼 비활성.
+- **경로**: `/moderator/jobs` 행 액션 (`STATUS_ACTIONS`가 현재 상태에 맞는 항목만 낸다)
+  - `published` → "숨김"
+  - `hidden` → "재공개"
+  - `on_hold` → "승인 후 공개" / "반려"
+  - 그 밖(`pending_review`·`rejected`) → 상태 변경 항목 없음(광고 연장·단축·수정·삭제만)
+- **절차**: 행 메뉴 → 항목 선택 → 다이얼로그에서 사유(2자 이상, 기본 문구 프리필) → 확정.
+- **기대 결과**: `setJobPostStatus`로 `hidden`/`published`/`rejected` 전환. 재공개·승인 시
+  `rejectionReason`이 `null`이 되고 `publishedAt`은 기존 값 유지(최초 게시 시각 보존).
+  토스트 후 모든 상태 필터 캐시 무효화.
+- **엣지 케이스**:
+  - 사유 2자 미만이면 확정 버튼 비활성.
+  - **보류 공고에는 "재공개"가 없다** — 검수 결론을 건너뛴 게시를 막기 위해 승인/반려만 제공한다.
+  - 검수 큐는 `pending_review`만 조회하므로, 보류 공고를 다시 찾는 경로는 이 화면의 **검수 보류** 탭뿐이다.
+  - 구인자가 보류 공고를 수정해 다시 제출하면 `getUpdatedJobPostStatus`가 `pending_review`로 되돌려
+    큐에 다시 올라온다.
 - **관련 API**: `bambi.moderation.setJobPostStatus`
 
 ### 3.3 광고 기간 연장 / 단축
@@ -1409,13 +1437,11 @@
 
 ### B. 매뉴얼과 코드가 **어긋나는** 지점
 
-1. **[중요] 반려 사유가 전달되지 않는다.**
-   매뉴얼 3.1은 "선택한 사유는 구인자에게 그대로 전달됩니다"라고 하지만,
-   `RejectSheet`가 고른 값(`sel`)은 API 호출에 쓰이지 않고
-   `resolveQueue`가 `"운영자가 정책 위반으로 공고를 반려했습니다."` 고정 문자열을 보낸다
-   (`apps/web/src/components/bambi/screens/moderator.tsx` L802~807,
-   `apps/web/src/components/bambi/screens/moderator-context.tsx` L529~550).
-   → **코드 결함으로 보인다. 매뉴얼 수정이 아니라 코드 수정이 필요한 항목.**
+1. ~~**[중요] 반려 사유가 전달되지 않는다.**~~ **해소됨.**
+   상세 판정 시트(`VerdictReasonSheet`)가 작성한 사유를 `onResolve(item.id, verdict, reason)`로
+   그대로 넘기고, `resolveQueue`가 그 값을 `setJobPostStatus`에 싣는다. 승인·보류·반려 세 판정 모두
+   선택지 프리필 + 직접 작성이 가능하다(§2.2·§2.3). 다만 구인자 화면에는 여전히
+   **공통 반려 안내 문구**가 보인다 — 저장된 사유 원문 노출 여부는 별도 정책 사안이다.
 2. **"이용 정지 (7일)"** — 매뉴얼 3.5의 표기. 코드의 `SANCTION_CHOICES`는
    제목 "이용 정지", 설명 "정상으로 복구할 때까지 공고·채팅을 막아요"이고
    **자동 해제 기간이 없다**(주석에 명시). 매뉴얼의 "(7일)"은 사실과 다르다.

@@ -5,13 +5,14 @@
 // 않는다. 여기서 만드는 건 **표시 텍스트**뿐이며, 필터 쿼리 값·비교 로직·API 입력의 원값은
 // 절대 이 라벨로 대체하지 않는다.
 
-// 공고 검수 상태(job_post_status): draft·pending_review·published·hidden·rejected.
+// 공고 검수 상태(job_post_status): draft·pending_review·published·hidden·rejected·on_hold.
 const JOB_POST_STATUS_LABELS: Record<string, string> = {
 	draft: "작성 중",
 	pending_review: "검수 대기",
 	published: "게시됨",
 	hidden: "숨김",
 	rejected: "반려",
+	on_hold: "검수 보류",
 };
 
 export function jobPostStatusLabel(status: string): string {

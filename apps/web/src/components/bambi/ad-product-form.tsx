@@ -17,9 +17,11 @@ import { toast } from "sonner";
 import {
 	AD_PREVIEW_TEMPLATE_HINTS,
 	AD_PREVIEW_TEMPLATE_LABELS,
-	AD_PREVIEW_TEMPLATE_OPTIONS,
+	type AdPlacementKind,
 	type AdPreviewTemplateValue,
+	getPreviewTemplateOptionsForPlacementKind,
 	isBannerPreviewTemplate,
+	isPreviewTemplateKindMismatch,
 } from "@/lib/bambi/ad-preview-templates";
 
 export interface PriceOption {
@@ -54,11 +56,16 @@ export function AdProductForm({
 	initialValue,
 	onSubmit,
 	pending,
+	placementKind,
 	submitLabel = "저장",
 }: {
 	initialValue?: AdProductDraft;
 	onSubmit: (draft: AdProductDraft) => void;
 	pending: boolean;
+	// 이 상품이 속한 게재 위치의 유형. 노출 영역 선택지를 유형에 맞게 좁힌다 —
+	// 리스팅 위치에 "프리미엄 광고 배너"가 보이면 위치와 상품이 어긋난 채 팔린다.
+	// 위치를 아직 못 읽었으면(로딩·조회 실패) undefined로 전체 선택지를 유지한다.
+	placementKind?: AdPlacementKind;
 	submitLabel?: string;
 }) {
 	const nextFieldId = useRef(0);
@@ -93,11 +100,18 @@ export function AdProductForm({
 	// 배너형(프리미엄·레거시 사이드) 판정은 광고 배너 슬롯 표에서 파생시킨 공용 헬퍼를 쓴다.
 	// 끌어올리기(수동·자동)는 리스팅형(스페셜·급구·추천)에만 제공된다.
 	const isBannerTemplate = isBannerPreviewTemplate(previewTemplate);
-	// 편집 중 상품이 이미 레거시 side 값(좌/우 사이드 배너)이면 표준 옵션 목록에서 빠져
-	// Select 표시가 깨진다. 현재 값이 옵션에 없으면 레거시 항목으로 함께 렌더한다.
-	// AD_PREVIEW_TEMPLATE_LABELS는 레거시 포함 전체 라벨을 계약상 계속 제공한다.
-	const isLegacyTemplate = !AD_PREVIEW_TEMPLATE_OPTIONS.some(
+	// 게재 위치 유형에 맞는 선택지만 남긴다(판정은 ad-preview-templates의 공용 헬퍼).
+	const templateOptions =
+		getPreviewTemplateOptionsForPlacementKind(placementKind);
+	// 현재 값이 선택지에 없는 경우가 둘 있다: 레거시 side 값(좌/우 사이드 배너)이거나,
+	// 위치 유형과 어긋난 채 저장된 기존 상품이다. 둘 다 항목으로 함께 렌더해 편집 중
+	// 값이 유실되지 않게 한다. AD_PREVIEW_TEMPLATE_LABELS는 레거시 포함 전체 라벨을 제공한다.
+	const isOffListTemplate = !templateOptions.some(
 		(option) => option.value === previewTemplate
+	);
+	const isKindMismatch = isPreviewTemplateKindMismatch(
+		previewTemplate,
+		placementKind
 	);
 
 	const setPrice = (id: number, patch: Partial<PriceOption>) =>
@@ -192,12 +206,12 @@ export function AdProductForm({
 						<SelectValue placeholder="노출 영역 선택" />
 					</SelectTrigger>
 					<SelectContent>
-						{AD_PREVIEW_TEMPLATE_OPTIONS.map((option) => (
+						{templateOptions.map((option) => (
 							<SelectItem key={option.value} value={option.value}>
 								{option.label}
 							</SelectItem>
 						))}
-						{isLegacyTemplate ? (
+						{isOffListTemplate ? (
 							<SelectItem value={previewTemplate}>
 								{AD_PREVIEW_TEMPLATE_LABELS[previewTemplate]}
 							</SelectItem>
@@ -209,6 +223,14 @@ export function AdProductForm({
 				<p className="m-0 text-muted-foreground text-xs">
 					{AD_PREVIEW_TEMPLATE_HINTS[previewTemplate]}
 				</p>
+				{isKindMismatch ? (
+					<p className="m-0 text-destructive text-xs">
+						이 상품이 속한 게재 위치는{" "}
+						{placementKind === "banner" ? "배너 광고" : "리스팅 노출"} 유형인데,
+						선택된 노출 영역은 {placementKind === "banner" ? "리스팅" : "배너"}{" "}
+						영역이에요. 저장 전에 위치 유형에 맞는 노출 영역으로 바꿔 주세요.
+					</p>
+				) : null}
 			</div>
 
 			<div className="flex flex-col gap-2">

@@ -36,7 +36,8 @@ const getBaseJobStatusTone = (status: string): StatusTone => {
 		return "good";
 	}
 
-	if (status === "pending_review") {
+	// 검수 보류(on_hold)는 검수 대기와 같은 "아직 결론이 안 난" 축이라 같은 tone을 쓴다.
+	if (status === "pending_review" || status === "on_hold") {
 		return "warning";
 	}
 
