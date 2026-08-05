@@ -470,6 +470,13 @@
       "when": 1785901174146,
       "tag": "0066_goofy_rockslide",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1785904456626,
+      "tag": "0067_blue_triton",
+      "breakpoints": true
     }
   ]
 }

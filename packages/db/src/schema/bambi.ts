@@ -1023,6 +1023,13 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 회원 탈퇴 후 개인정보 보존기간(일). 운영자 사이트 설정에서 편집한다.
 	// null이면 코드 기본값(DEFAULT_WITHDRAWAL_RETENTION_DAYS=30)으로 폴백한다.
 	withdrawalRetentionDays: integer("withdrawal_retention_days"),
+	// 파기 배치 자동 실행 시각(KST 0~23시). null이면 코드 기본값
+	// (DEFAULT_WITHDRAWAL_PURGE_HOUR=4)으로 폴백한다.
+	withdrawalPurgeHour: integer("withdrawal_purge_hour"),
+	// 파기 배치 마지막 실행 시각(자동·수동 공통). 스케줄러가 "오늘 설정 시각 이후 이미 돌았는지"를
+	// 이 값으로 판정한다 — 프로세스 메모리가 아니라 DB라 서버를 재시작하거나 인스턴스가 늘어도
+	// 하루 한 번이 유지되고, 운영자 화면의 "마지막 실행" 표시도 같은 값을 본다.
+	withdrawalPurgeLastRunAt: timestamp("withdrawal_purge_last_run_at"),
 	// 광고 배너 로테이션 주기(분). 운영자 사이트 설정에서 편집한다. 활성 광고 칸이 이 주기마다
 	// 한 칸씩 전진한다. null이면 코드 기본값(DEFAULT_AD_ROTATION_MINUTES=60)으로 폴백한다.
 	adBannerRotationMinutes: integer("ad_banner_rotation_minutes"),
