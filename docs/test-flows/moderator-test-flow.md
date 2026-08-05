@@ -410,10 +410,16 @@
 
 ### 4.7 탈퇴 계정 잔여 식별값 파기 (배치)
 
-- **경로**: 서버 스케줄러가 **자동 실행(매일 1회)** + `/moderator/site-settings` 실행 버튼(즉시 실행용, §13)
-- **자동 실행**: `apps/server/src/plugins/withdrawal-purge.ts` — 서버 기동 5분 뒤 1회, 이후 24시간 간격.
+- **경로**: 서버 스케줄러가 **자동 실행(매일 1회, 운영자 설정 시각)** + `/moderator/site-settings` 실행 버튼(즉시 실행용, §13)
+- **자동 실행**: `apps/server/src/plugins/withdrawal-purge.ts` — 10분 간격 틱(crawl 플러그인과 동일)마다
+  `runScheduledWithdrawalPurge()`가 DB에서 실행 시각(`bambi_site_settings.withdrawal_purge_hour`,
+  기본 `DEFAULT_WITHDRAWAL_PURGE_HOUR = 4`, **KST**)과 마지막 실행 시각(`withdrawal_purge_last_run_at`)을 읽어
+  **"오늘 설정 시각이 지났는데 그 이후로 아직 안 돌았다"** 면 실행한다(순수 판정 `isWithdrawalPurgeDue`).
+  판정 근거가 전부 DB라 재시작 후 캐치업·다중 인스턴스 중복 방지가 메모리 상태 없이 이뤄진다.
   실행 시점마다 `resolveWithdrawalRetentionDays()`로 보존기간을 다시 읽으므로 설정 변경은 다음 실행부터 반영된다.
-  결과는 `withdrawal purge completed` 로그(파기 0건이면 로그 없음), 실패는 `withdrawal purge failed` 후 다음 회차 재시도.
+  결과는 `withdrawal purge completed` 로그(파기 0건이면 로그 없음), 실패는 `withdrawal purge failed`.
+  마지막 실행 시각은 대상 0건·실패와 무관하게 배치 진입 시 찍히므로(장애 중 매 틱 재시도 방지) 실패한 날은
+  다음 날 예약 실행이 이어받는다.
 - > ⚠ **되돌릴 수 없다.** 보존기간(운영자 설정, 기본 30일)이 지난 탈퇴 계정의 세션·자격증명(비밀번호)·
   > 연락처·CI/DI 해시를 지우고, 이메일을 `withdrawn-<id>@invalid.bambi`, `login_id`를 null,
   > 이름을 "탈퇴한 회원"으로 치환한다.
@@ -1187,20 +1193,25 @@
   - 중복 계좌 방지 없음.
 - **관련 API**: `bambi.siteSettings.getPaymentAccounts`(public) / `updatePaymentAccounts`(L303)
 
-### 13.4 회원 정책 — 탈퇴 개인정보 보존기간
+### 13.4 회원 정책 — 탈퇴 개인정보 보존기간 · 파기 배치 실행 시각
 
-- **절차**: 「탈퇴 개인정보 보존기간(일)」 입력 → **저장**.
-- **기대 결과**: "회원 정책을 저장했어요." 값은 ① 탈퇴 안내 문구 ② 개인정보 처리방침
+- **절차**: 「탈퇴 개인정보 보존기간(일)」·「파기 배치 실행 시각(0~23시)」 입력 → **저장**(한 폼·한 번의 저장).
+- **기대 결과**: "회원 정책을 저장했어요." 보존기간은 ① 탈퇴 안내 문구 ② 개인정보 처리방침
   ③ **파기 배치의 cutoff 계산**(`resolveWithdrawalRetentionDays`)에 동시 반영된다.
   기본값 `DEFAULT_WITHDRAWAL_RETENTION_DAYS = 30`.
-- **입력 검증**: 정수 1~365, `null` 허용(=기본값 복귀).
-- **엣지 케이스**: `12.5`/`abc` → 클라이언트 차단 / `0`·`366` → 서버 400.
-- **관련 API**: `bambi.siteSettings.getMemberPolicy`(public) / `updateMemberPolicy`(L333)
+  실행 시각은 **다음 틱(≤10분)부터** 파기 배치의 도래 판정에 반영된다(§4.7).
+  기본값 `DEFAULT_WITHDRAWAL_PURGE_HOUR = 4`(KST 새벽 4시).
+- **입력 검증**: 보존기간 정수 1~365 / 실행 시각 정수 0~23, 둘 다 `null` 허용(=기본값 복귀).
+- **엣지 케이스**: `12.5`/`abc` → 클라이언트 차단 / 보존기간 `0`·`366`, 실행 시각 `-1`·`24` → 서버 400.
+  실행 시각을 그날 자동 실행이 끝난 뒤 더 늦은 시각으로 바꾸면 같은 날 한 번 더 돈다(멱등이라 결과 동일).
+- **관련 API**: `bambi.siteSettings.getMemberPolicy`(public — `purgeLastRunAt`은 조회 전용) /
+  `updateMemberPolicy`(admin)
 
 ### 13.5 "지금 파기 실행" (탈퇴 계정 잔여 정보 파기)
 
-- **절차**: 「회원 정책」 카드 하단 **지금 파기 실행** 클릭. 같은 배치를 서버가 매일 1회
+- **절차**: 「회원 정책」 카드 하단 **지금 파기 실행** 클릭. 같은 배치를 서버가 매일 설정 시각에
   자동 실행하므로(§4.7) 이 버튼은 다음 자동 실행 전에 즉시 정리할 때만 쓴다.
+  버튼 위에 **마지막 실행** 시각이 표시된다(미실행이면 "아직 없음", 실행 후 자동 갱신).
 - > ⚠ **확인 다이얼로그 없이 즉시 실행되며 되돌릴 수 없다.**
   > 대상: `deletedAt IS NOT NULL AND deletedAt <= (now - 보존기간) AND purgedAt IS NULL`.
   > 세션·자격증명(비밀번호) 삭제, 연락처·성별·생년월일·CI/DI 해시 파기,
@@ -1210,6 +1221,8 @@
   N건 → "탈퇴 계정 N건의 잔여 정보를 파기했어요."
 - **엣지 케이스**: 멱등하다(`purgedAt IS NULL` 조건) → 연속 2회 클릭 시 두 번째는 0건.
   자동 실행과 겹쳐도 같은 이유로 두 번 처리되지 않는다.
+  수동 실행도 `withdrawal_purge_last_run_at`을 갱신하므로(자동·수동 공용 함수) **그날 설정 시각 이후에**
+  수동 실행하면 그날의 자동 실행은 건너뛴다 — crawl의 「즉시 수집」이 주기를 미는 것과 같은 동작이다.
 - **관련 API**: `bambi.moderation.purgeWithdrawnAccounts` (`adminProcedure`) →
   `purgeWithdrawnAccountsBatch`(`packages/api/src/services/bambi-withdrawal-purge.ts`)
 
