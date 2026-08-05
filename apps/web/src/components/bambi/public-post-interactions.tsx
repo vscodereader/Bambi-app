@@ -24,7 +24,7 @@ import { Label } from "@bambi-app/ui/components/label";
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ThumbsUpIcon } from "lucide-react";
+import { CornerDownRightIcon, ThumbsUpIcon } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -196,6 +196,7 @@ function CommentEditForm({
 	);
 }
 
+// 단일 댓글 행. onReply가 있으면(최상위·미삭제 한정) 본문 아래 답글 버튼을 렌더한다.
 function CommentRow({
 	comment,
 	deletePending,
@@ -205,6 +206,7 @@ function CommentRow({
 	onEditClose,
 	onEditOpen,
 	onEditSubmit,
+	onReply,
 }: {
 	comment: PublicCommentItem;
 	deletePending: boolean;
@@ -214,13 +216,12 @@ function CommentRow({
 	onEditClose: () => void;
 	onEditOpen: (commentId: string) => void;
 	onEditSubmit: (commentId: string, body: string, password: string) => void;
+	onReply?: () => void;
 }) {
 	const isEditing = editingId === comment.id;
 
 	return (
-		<li
-			className={cn("flex flex-col gap-1", comment.parentCommentId && "pl-6")}
-		>
+		<div className="flex flex-col gap-1">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				{/* enum 원값 대신 라벨 맵을 거친다. 공개 경로는 회원 계정명을 싣지 않는다. */}
 				<span className="text-muted-foreground text-xs">
@@ -264,16 +265,33 @@ function CommentRow({
 					{comment.isDeleted ? "삭제된 댓글이에요." : comment.body}
 				</p>
 			)}
-		</li>
+			{onReply && !(isEditing || comment.isDeleted) ? (
+				<div>
+					<Button onClick={onReply} size="sm" variant="ghost">
+						<CornerDownRightIcon data-icon="inline-start" />
+						답글
+					</Button>
+				</div>
+			) : null}
+		</div>
 	);
 }
 
+// 댓글·답글 공용 작성 폼. onCancel이 있으면 답글 모드(취소 가능)로 쓴다.
 function CommentComposer({
+	onCancel,
 	onSubmit,
+	passwordId,
 	pending,
+	placeholder,
+	submitLabel,
 }: {
+	onCancel?: () => void;
 	onSubmit: (body: string, password: string) => void;
+	passwordId: string;
 	pending: boolean;
+	placeholder: string;
+	submitLabel: string;
 }) {
 	const [body, setBody] = useState("");
 	const [password, setPassword] = useState("");
@@ -286,15 +304,16 @@ function CommentComposer({
 			<Textarea
 				maxLength={COMMENT_MAX}
 				onChange={(event) => setBody(event.target.value)}
-				placeholder="댓글을 입력해 주세요"
+				placeholder={placeholder}
 				value={body}
 			/>
-			<PasswordField
-				id="public-comment-password"
-				onChange={setPassword}
-				value={password}
-			/>
-			<div className="flex justify-end">
+			<PasswordField id={passwordId} onChange={setPassword} value={password} />
+			<div className="flex justify-end gap-2">
+				{onCancel ? (
+					<Button onClick={onCancel} size="sm" type="button" variant="outline">
+						취소
+					</Button>
+				) : null}
 				<Button
 					disabled={!canSubmit}
 					onClick={() => {
@@ -303,10 +322,94 @@ function CommentComposer({
 					}}
 					size="sm"
 				>
-					댓글 등록
+					{submitLabel}
 				</Button>
 			</div>
 		</div>
+	);
+}
+
+// 최상위 댓글 + 그 답글 묶음. 목록이 createdAt 평면 정렬이라 부모 아래로 답글을 모아
+// 한 들여쓰기 레일에 넣는다(회원 화면 CommentThread와 같은 방식).
+function CommentThread({
+	deletePending,
+	editingId,
+	editPending,
+	onDelete,
+	onEditClose,
+	onEditOpen,
+	onEditSubmit,
+	onReplyClose,
+	onReplyOpen,
+	onReplySubmit,
+	parent,
+	replies,
+	replyPending,
+	replyTo,
+}: {
+	deletePending: boolean;
+	editingId: string | null;
+	editPending: boolean;
+	onDelete: (commentId: string, password: string) => Promise<unknown>;
+	onEditClose: () => void;
+	onEditOpen: (commentId: string) => void;
+	onEditSubmit: (commentId: string, body: string, password: string) => void;
+	onReplyClose: () => void;
+	// 참여 자격이 없으면(비인증 방문자) 아예 넘어오지 않아 답글 버튼도 숨는다.
+	onReplyOpen?: (parentId: string) => void;
+	onReplySubmit: (parentId: string, body: string, password: string) => void;
+	parent: PublicCommentItem;
+	replies: PublicCommentItem[];
+	replyPending: boolean;
+	replyTo: string | null;
+}) {
+	const isReplying = replyTo === parent.id;
+	const rowProps = {
+		deletePending,
+		editingId,
+		editPending,
+		onDelete,
+		onEditClose,
+		onEditOpen,
+		onEditSubmit,
+	};
+
+	return (
+		<li className="flex flex-col gap-3">
+			<CommentRow
+				comment={parent}
+				{...rowProps}
+				onReply={
+					onReplyOpen && !isReplying ? () => onReplyOpen(parent.id) : undefined
+				}
+			/>
+			{isReplying || replies.length > 0 ? (
+				<ul className="m-0 flex list-none flex-col gap-3 border-border border-l p-0 pl-4">
+					{isReplying ? (
+						<li className="flex flex-col gap-1">
+							<span className="text-muted-foreground text-xs">
+								{communityAuthorRoleLabel(parent.authorRole)}님의 댓글에 답글
+							</span>
+							<CommentComposer
+								onCancel={onReplyClose}
+								onSubmit={(body, password) =>
+									onReplySubmit(parent.id, body, password)
+								}
+								passwordId="public-reply-password"
+								pending={replyPending}
+								placeholder="답글을 입력해 주세요"
+								submitLabel="답글 등록"
+							/>
+						</li>
+					) : null}
+					{replies.map((reply) => (
+						<li key={reply.id}>
+							<CommentRow comment={reply} {...rowProps} />
+						</li>
+					))}
+				</ul>
+			) : null}
+		</li>
 	);
 }
 
@@ -337,6 +440,7 @@ export function PublicPostInteractions({
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const [editingId, setEditingId] = useState<string | null>(null);
+	const [replyTo, setReplyTo] = useState<string | null>(null);
 	// 공개 상세는 추천 여부를 내려주지 않는다 — 이미 추천한 방문자의 첫 클릭은 추천 취소로
 	// 동작하고, 서버 응답으로 상태가 맞춰진다.
 	const [like, setLike] = useState({ isLiked: false, likeCount });
@@ -357,6 +461,16 @@ export function PublicPostInteractions({
 			...comment,
 			canDelete: false,
 			canEdit: false,
+		}));
+
+	// 서버는 createdAt 오름차순 평면 목록을 준다 — 화면에서 부모별로 답글을 모은다.
+	const threads = comments
+		.filter((comment) => comment.parentCommentId === null)
+		.map((parent) => ({
+			parent,
+			replies: comments.filter(
+				(comment) => comment.parentCommentId === parent.id
+			),
 		}));
 
 	const refreshComments = async () => {
@@ -380,7 +494,10 @@ export function PublicPostInteractions({
 	const createCommentMutation = useMutation(
 		orpc.bambi.community.createComment.mutationOptions({
 			onError: (error) => toast(error.message || "댓글을 등록하지 못했어요."),
-			onSuccess: refreshComments,
+			onSuccess: async () => {
+				setReplyTo(null);
+				await refreshComments();
+			},
 		})
 	);
 	const updateCommentMutation = useMutation(
@@ -460,14 +577,13 @@ export function PublicPostInteractions({
 						아직 댓글이 없어요.
 					</p>
 				) : (
-					<ul className="m-0 flex list-none flex-col gap-3 p-0">
-						{comments.map((comment) => (
-							<CommentRow
-								comment={comment}
+					<ul className="m-0 flex list-none flex-col gap-4 p-0">
+						{threads.map(({ parent, replies }) => (
+							<CommentThread
 								deletePending={deleteCommentMutation.isPending}
 								editingId={editingId}
 								editPending={updateCommentMutation.isPending}
-								key={comment.id}
+								key={parent.id}
 								onDelete={(commentId, password) =>
 									deleteCommentMutation.mutateAsync({ commentId, password })
 								}
@@ -476,6 +592,20 @@ export function PublicPostInteractions({
 								onEditSubmit={(commentId, body, password) =>
 									updateCommentMutation.mutate({ body, commentId, password })
 								}
+								onReplyClose={() => setReplyTo(null)}
+								onReplyOpen={canParticipate ? setReplyTo : undefined}
+								onReplySubmit={(parentCommentId, body, password) =>
+									createCommentMutation.mutate({
+										body,
+										parentCommentId,
+										password,
+										postId,
+									})
+								}
+								parent={parent}
+								replies={replies}
+								replyPending={createCommentMutation.isPending}
+								replyTo={replyTo}
 							/>
 						))}
 					</ul>
@@ -485,7 +615,10 @@ export function PublicPostInteractions({
 						onSubmit={(body, password) =>
 							createCommentMutation.mutate({ body, password, postId })
 						}
+						passwordId="public-comment-password"
 						pending={createCommentMutation.isPending}
+						placeholder="댓글을 입력해 주세요"
+						submitLabel="댓글 등록"
 					/>
 				) : null}
 			</section>
