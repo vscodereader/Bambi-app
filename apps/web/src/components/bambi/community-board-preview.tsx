@@ -43,20 +43,32 @@ export type OverviewPost =
 export const accentClassName: Record<CommunityBoardKey, string> = {
 	best: "bg-coral-500",
 	free: "bg-sky-400",
+	legal: "bg-violet-500",
 	market: "bg-green-500",
 	notice: "bg-coral-500",
 	work_talk: "bg-amber-500",
 };
 
+// 글 행 오른쪽 메타. 반폭 카드(compact)는 작성인을 접고 날짜만 남긴다 — 좁은 칸에서
+// 제목이 두어 글자로 잘리는 걸 막는다.
+const postMetaText = (post: OverviewPost, compact: boolean): string =>
+	compact
+		? formatCommunityDate(post.createdAt)
+		: `${post.authorName ?? COMMUNITY_AUTHOR_FALLBACK} · ${formatCommunityDate(post.createdAt)}`;
+
 export function BoardPreviewCard({
 	boardKey,
 	className,
+	compact = false,
 	emptyText,
 	onBlockedNavigate,
 	posts,
 }: {
 	boardKey: CommunityBoardKey;
 	className?: string;
+	// 반폭 칸(중고거래·법률 자문)에 들어가는 카드. 제목이 설 자리를 남기려고 작성인을
+	// 접고 날짜만 남긴다 — 좁은 칸에서 제목이 두어 글자로 잘리는 걸 막는다.
+	compact?: boolean;
 	// 지정 시 수다방으로 가는 링크(글·더보기) 클릭을 가로채 목적지를 넘긴다 — 미자격자
 	// 홈 미리보기용. 안내 방식(토스트·본인인증 다이얼로그)은 호출한 화면이 정한다.
 	onBlockedNavigate?: (href: string) => void;
@@ -158,8 +170,7 @@ export function BoardPreviewCard({
 									) : null}
 								</span>
 								<span className="shrink-0 text-muted-foreground text-xs">
-									{post.authorName ?? COMMUNITY_AUTHOR_FALLBACK} ·{" "}
-									{formatCommunityDate(post.createdAt)}
+									{postMetaText(post, compact)}
 								</span>
 							</Link>
 						);
@@ -169,6 +180,10 @@ export function BoardPreviewCard({
 		</Card>
 	);
 }
+
+// 중고거래·무료 법률 자문은 2열 그리드의 한 칸을 좌우로 나눠 쓴다(모바일은 세로 스택).
+// 글이 적은 두 게시판이라 각각 한 칸씩 차지하면 홈에서 빈 카드가 두 줄로 늘어진다.
+const PAIRED_BOARD_KEYS: CommunityBoardKey[] = ["market", "legal"];
 
 // 수다방 홈과 seeker 홈 커뮤니티 섹션이 공유하는 미리보기 배치. 공지사항은 글 유무와
 // 무관하게 항상 최상단 전폭, 나머지 게시판은 그 아래 2열 그리드. 두 화면이 각자 배치를
@@ -183,16 +198,23 @@ export function CommunityOverviewGrid({
 	onBlockedNavigate?: (href: string) => void;
 	postsByBoard: Record<CommunityBoardKey, OverviewPost[]>;
 }) {
-	const gridBoards = COMMUNITY_BOARDS.filter((board) => board.key !== "notice");
+	const soloBoards = COMMUNITY_BOARDS.filter(
+		(board) => board.key !== "notice" && !PAIRED_BOARD_KEYS.includes(board.key)
+	);
 
 	return (
 		<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 			{isPending ? (
 				<>
 					<BoardPreviewSkeleton className="md:col-span-2" />
-					{gridBoards.map((board) => (
+					{soloBoards.map((board) => (
 						<BoardPreviewSkeleton key={board.key} />
 					))}
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						{PAIRED_BOARD_KEYS.map((key) => (
+							<BoardPreviewSkeleton key={key} />
+						))}
+					</div>
 				</>
 			) : (
 				<>
@@ -203,7 +225,7 @@ export function CommunityOverviewGrid({
 						onBlockedNavigate={onBlockedNavigate}
 						posts={postsByBoard.notice}
 					/>
-					{gridBoards.map((board) => (
+					{soloBoards.map((board) => (
 						<BoardPreviewCard
 							boardKey={board.key}
 							key={board.key}
@@ -211,6 +233,17 @@ export function CommunityOverviewGrid({
 							posts={postsByBoard[board.key]}
 						/>
 					))}
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						{PAIRED_BOARD_KEYS.map((key) => (
+							<BoardPreviewCard
+								boardKey={key}
+								compact
+								key={key}
+								onBlockedNavigate={onBlockedNavigate}
+								posts={postsByBoard[key]}
+							/>
+						))}
+					</div>
 				</>
 			)}
 		</div>

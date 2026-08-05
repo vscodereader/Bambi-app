@@ -31,6 +31,7 @@ export function CommunityHomeScreen() {
 	const postsByBoard: Record<CommunityBoardKey, OverviewPost[]> = {
 		best: data?.best ?? [],
 		free: data?.free ?? [],
+		legal: data?.legal ?? [],
 		market: data?.market ?? [],
 		notice: data?.notice ?? [],
 		work_talk: data?.workTalk ?? [],

@@ -10,6 +10,7 @@ import {
 	getCommunityPageItems,
 	getCommunityTotalPages,
 	isGuestWritableBoardKey,
+	isLegalBoardKey,
 	isNewCommunityPost,
 } from "./community";
 
@@ -20,22 +21,34 @@ describe("community boards meta", () => {
 		expect(getBoardBySlug("nope")).toBeUndefined();
 	});
 
-	it("게시판은 공지·베스트·자유·일·중고 5개이고 공지가 맨 앞이다", () => {
+	it("게시판은 공지·베스트·자유·일·중고·법률 6개이고 공지가 맨 앞이다", () => {
 		expect(COMMUNITY_BOARDS.map((board) => board.key)).toEqual([
 			"notice",
 			"best",
 			"free",
 			"work_talk",
 			"market",
+			"legal",
 		]);
 	});
 
-	it("비회원 글쓰기는 자유수다·밤문화 이야기만 열린다", () => {
+	it("비회원 글쓰기는 자유수다·밤문화 이야기·무료 법률 자문만 열린다", () => {
 		expect(isGuestWritableBoardKey("free")).toBe(true);
 		expect(isGuestWritableBoardKey("work_talk")).toBe(true);
+		expect(isGuestWritableBoardKey("legal")).toBe(true);
 		expect(isGuestWritableBoardKey("notice")).toBe(false);
 		expect(isGuestWritableBoardKey("market")).toBe(false);
 		expect(isGuestWritableBoardKey("best")).toBe(false);
+	});
+
+	it("무료 법률 자문 게시판만 잠금·연락처 규칙을 탄다", () => {
+		expect(getBoardBySlug("legal")).toMatchObject({
+			key: "legal",
+			label: "무료 법률 자문",
+			writable: true,
+		});
+		expect(isLegalBoardKey("legal")).toBe(true);
+		expect(isLegalBoardKey("free")).toBe(false);
 	});
 
 	it("일 이야기 게시판은 표시명만 밤문화 이야기로 바뀐다", () => {

@@ -52,6 +52,7 @@ import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
+import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { resolveWithdrawalRetentionDays } from "../../services/bambi-member-policy";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
@@ -171,11 +172,21 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // 계정 제재는 bambi_profile 행을 갱신하므로 온보딩 전 계정에는 걸 수 없다.
 const PROFILELESS_SANCTION_MESSAGE =
 	"아직 온보딩을 마치지 않은 계정이라 제재할 수 없어요.";
+const PROFILELESS_ROLE_MESSAGE =
+	"아직 온보딩을 마치지 않은 계정이라 역할을 지정할 수 없어요.";
 
 const setUserStatusInput = z.object({
 	targetUserId: z.string().min(1),
 	status: accountStatusSchema,
 	reason: z.string().min(2).max(500),
+});
+
+// 법률 자문 계정 지정·해제. 전환 축이 구직자 ↔ 법률자문 둘뿐이라 입력도 그 둘만 받고,
+// 나머지 조합(업소·운영자 계정)은 서버 가드(assertLegalAdvisorRoleSwitch)가 막는다.
+const setUserRoleInput = z.object({
+	reason: z.string().min(2).max(500),
+	role: z.enum(["job_seeker", "legal_advisor"]),
+	targetUserId: z.string().min(1),
 });
 
 const employerVerificationDecisionSchema = z.enum(["verified", "rejected"]);
@@ -1777,6 +1788,46 @@ export const moderationRouter = {
 					targetId: input.targetUserId,
 					action: `set_status:${input.status}`,
 					reason: input.reason,
+				});
+
+				return updated;
+			});
+		}),
+
+	// 법률 자문 계정 지정·해제. 제재(setUserStatus)와 같은 트랜잭션 문법이지만 바꾸는 축이
+	// status가 아니라 role이고, 감사 로그 action은 set_role:<역할>로 남긴다.
+	setUserRole: adminProcedure
+		.input(setUserRoleInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(async (tx) => {
+				const [current] = await tx
+					.select({ role: bambiProfile.role })
+					.from(bambiProfile)
+					.where(eq(bambiProfile.userId, input.targetUserId))
+					.limit(1);
+
+				if (!current) {
+					// 역할은 bambi_profile에만 있어 온보딩 전 계정에는 지정할 행이 없다.
+					throw new ORPCError("BAD_REQUEST", {
+						message: PROFILELESS_ROLE_MESSAGE,
+					});
+				}
+				assertLegalAdvisorRoleSwitch(current.role, input.role);
+
+				const [updated] = await tx
+					.update(bambiProfile)
+					.set({ role: input.role })
+					.where(eq(bambiProfile.userId, input.targetUserId))
+					.returning();
+
+				await tx.insert(adminModerationAction).values({
+					action: `set_role:${input.role}`,
+					adminUserId: admin.userId,
+					reason: input.reason,
+					targetId: input.targetUserId,
+					targetType: "user",
 				});
 
 				return updated;

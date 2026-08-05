@@ -36,6 +36,7 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 const ROLE_FILTER_ITEMS: Record<string, string> = {
 	all: "전체",
 	job_seeker: userRoleLabel("job_seeker"),
+	legal_advisor: userRoleLabel("legal_advisor"),
 	employer: userRoleLabel("employer"),
 	admin: userRoleLabel("admin"),
 };

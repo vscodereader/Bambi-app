@@ -6,7 +6,8 @@ export type CommunityBoardKey =
 	| "best"
 	| "free"
 	| "work_talk"
-	| "market";
+	| "market"
+	| "legal";
 
 export interface CommunityBoardMeta {
 	// 운영자만 글을 쓸 수 있는 게시판(공지사항). 목록/폼에서 글쓰기 권한 게이트에 쓴다.
@@ -34,6 +35,7 @@ export const communityAuthorName = (
 const COMMUNITY_AUTHOR_ROLE_LABELS: Record<string, string> = {
 	employer: "업소 회원",
 	guest: "비회원",
+	legal_advisor: "법률자문",
 };
 
 export const communityAuthorRoleLabel = (
@@ -78,7 +80,19 @@ export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
 		slug: "market",
 		writable: true,
 	},
+	{
+		description: "법률자문에게 비밀글로 물어보는 무료 상담",
+		key: "legal",
+		label: "무료 법률 자문",
+		slug: "legal",
+		writable: true,
+	},
 ];
+
+// 법률 자문 게시판은 글이 전부 비밀글(서버 강제)이고 연락처 입력이 열린다 — 폼·상세가
+// 같은 판정을 쓰도록 한 곳에 둔다.
+export const isLegalBoardKey = (key: CommunityBoardKey): boolean =>
+	key === "legal";
 
 // 게시판 key(DB enum) → 표시 라벨. enum 원값이 화면에 새지 않도록 표시는 이 맵을 거친다.
 // 모르는 key는 원값으로 폴백한다(REPORT_REASON_LABELS와 동일 관례) — 화면이 비는 것보다는 낫다.
@@ -90,11 +104,11 @@ export const COMMUNITY_BOARD_LABELS = Object.fromEntries(
 // 전체 보드지만 쓰기는 여기로 좁힌다 — 정본은 서버(bambi-community-authz의
 // GUEST_WRITABLE_BOARDS)이고 이 사본은 버튼·안내 노출용이다.
 export const isGuestWritableBoardKey = (key: CommunityBoardKey): boolean =>
-	key === "free" || key === "work_talk";
+	key === "free" || key === "work_talk" || key === "legal";
 
 // 위 제한을 화면에서 설명할 때 쓰는 문구(서버 GUEST_BOARD_ERROR와 같은 말).
 export const GUEST_BOARD_LIMIT_NOTICE =
-	"비회원은 자유수다·밤문화 이야기에만 참여할 수 있어요.";
+	"비회원은 자유수다·밤문화 이야기·무료 법률 자문에만 참여할 수 있어요.";
 
 export const getBoardBySlug = (slug: string): CommunityBoardMeta | undefined =>
 	COMMUNITY_BOARDS.find((board) => board.slug === slug);

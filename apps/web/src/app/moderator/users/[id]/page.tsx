@@ -7,7 +7,7 @@ import { useMod } from "@/components/bambi/screens/moderator-context";
 export default function ModeratorUserDetailPage() {
 	const router = useRouter();
 	const { id } = useParams<{ id: string }>();
-	const { isLoading, sanction, users } = useMod();
+	const { isLoading, sanction, setLegalAdvisor, users } = useMod();
 	const item = users.find((u) => u.id === id);
 
 	if (isLoading) {
@@ -41,6 +41,9 @@ export default function ModeratorUserDetailPage() {
 					router.push("/moderator/users");
 				}
 			}}
+			// 역할 전환은 제재와 달리 계속 이 계정을 보며 확인하는 조작이라 상세에 머무른다
+			// (갱신된 역할은 목록 무효화로 이 화면에도 그대로 반영된다).
+			onSetRole={setLegalAdvisor}
 		/>
 	);
 }

@@ -2,11 +2,17 @@
 
 // 글 작성/수정 공용 폼. 컨트롤드 필드 + Tiptap 본문 에디터, 서버 검증에 위임한다.
 
+import {
+	Alert,
+	AlertDescription,
+	AlertTitle,
+} from "@bambi-app/ui/components/alert";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { LockIcon } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -17,12 +23,14 @@ import {
 	type CommunityBoardKey,
 	type CommunityBoardMeta,
 	communityBoardPath,
+	isLegalBoardKey,
 } from "@/lib/bambi/community";
 import { useCommunityAreaPaths } from "@/lib/bambi/community-paths";
 import { orpc } from "@/utils/orpc";
 
 const TITLE_MAX = 100;
 const AUTHOR_MAX = 30;
+const CONTACT_PHONE_MAX = 20;
 const PASSWORD_MIN = 4;
 const PASSWORD_MAX = 30;
 const MIN_TEXT = 2;
@@ -36,10 +44,13 @@ type WritableBoardKey = Exclude<CommunityBoardKey, "best">;
 const isWritableBoardKey = (key: CommunityBoardKey): key is WritableBoardKey =>
 	key !== "best";
 
+// 법률 자문 글은 서버가 잠금을 강제하므로(resolveLockedForBoard) 화면도 항상 잠금 상태로 연다.
 const getInitialLockedState = (
 	boardKey: CommunityBoardKey,
 	initiallyLocked: boolean | undefined
-): boolean => boardKey !== "free" && Boolean(initiallyLocked);
+): boolean =>
+	isLegalBoardKey(boardKey) ||
+	(boardKey !== "free" && Boolean(initiallyLocked));
 
 const initialAuthorName = (guest: boolean, initial?: string): string =>
 	initial ?? (guest ? GUEST_AUTHOR_DEFAULT : "");
@@ -50,11 +61,29 @@ const isLockPasswordRequired = (
 	isLocked: boolean
 ): boolean => !(isEdit || isFreeBoard) && isLocked;
 
+// 실제로 서버에 보낼 잠금 값. 법률 자문은 회원·비회원 가릴 것 없이 잠긴 채 등록되고
+// (서버 resolveLockedForBoard가 같은 판정을 다시 강제한다), 자유수다·비회원 글은 잠기지 않는다.
+const resolveSubmittedLock = (
+	boardKey: CommunityBoardKey,
+	guest: boolean,
+	isLocked: boolean
+): boolean =>
+	isLegalBoardKey(boardKey) || (!(boardKey === "free" || guest) && isLocked);
+
+// 연락처는 법률 자문 글에만 실어 보낸다 — 다른 게시판에 실리면 서버가 400으로 막는다.
+const contactPhoneInput = (
+	boardKey: CommunityBoardKey,
+	contactPhone: string
+): { contactPhone?: string } =>
+	isLegalBoardKey(boardKey) ? { contactPhone: contactPhone.trim() } : {};
+
 interface CommunityPostInitial {
 	authorName: string;
 	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
-	authorRole: "admin" | "employer" | "guest" | "job_seeker";
+	authorRole: "admin" | "employer" | "guest" | "job_seeker" | "legal_advisor";
 	body: string;
+	// 법률 자문 글의 연락처. 수정 폼이 다시 실어 보내지 않으면 서버가 null로 덮어쓴다.
+	contactPhone?: string | null;
 	id: string;
 	isLocked: boolean;
 	// 수정 모드 광고글 초기값. 편집 페이지가 getPost.isPromotion을 넘겨주면 사용한다.
@@ -90,8 +119,10 @@ const passwordPlaceholder = (guest: boolean, isEdit: boolean): string => {
 // 비밀번호 필드는 유지한다. 작성 모드는 잠금을 끄면 잔여 비번을 비운다.
 // 비회원은 잠금 자체를 쓸 수 없고(공개 경로에서 자기 글도 못 읽게 된다) 비밀번호가
 // 소유권 증명 전용이라 항상 필드를 노출한다.
+// 법률 자문(forcedLock)은 스위치 대신 안내만 두고 비밀번호를 반드시 받는다.
 function PostLockField({
 	allowLocking,
+	forcedLock,
 	guest,
 	isEdit,
 	isLocked,
@@ -100,6 +131,7 @@ function PostLockField({
 	setPassword,
 }: {
 	allowLocking: boolean;
+	forcedLock: boolean;
 	guest: boolean;
 	isEdit: boolean;
 	isLocked: boolean;
@@ -107,7 +139,7 @@ function PostLockField({
 	setIsLocked: (value: boolean) => void;
 	setPassword: (value: string) => void;
 }) {
-	const showPasswordField = guest || isEdit || (allowLocking && isLocked);
+	const showPasswordField = guest || isEdit || isLocked;
 	const handleLockChange = (checked: boolean) => {
 		setIsLocked(checked);
 		if (!(checked || isEdit)) {
@@ -116,6 +148,16 @@ function PostLockField({
 	};
 	return (
 		<div className="flex flex-col gap-2">
+			{forcedLock ? (
+				<Alert>
+					<LockIcon />
+					<AlertTitle>법률 자문 글은 비밀글로 등록됩니다</AlertTitle>
+					<AlertDescription>
+						글 비밀번호를 정해 주세요. 본인과 운영자·법률자문만 내용을 볼 수
+						있어요.
+					</AlertDescription>
+				</Alert>
+			) : null}
 			{allowLocking ? (
 				<div className="flex items-center gap-2">
 					<Switch
@@ -146,6 +188,36 @@ function PostLockField({
 	);
 }
 
+// 연락처(선택) — 법률 자문 게시판에서만 세운다. 서버는 다른 게시판에서 이 값을 받으면
+// 400으로 막으므로 폼도 여기서만 보낸다.
+function ContactPhoneField({
+	setValue,
+	value,
+}: {
+	setValue: (next: string) => void;
+	value: string;
+}) {
+	return (
+		<div className="flex flex-col gap-2">
+			<Label htmlFor="community-post-contact-phone">연락처 (선택)</Label>
+			<Input
+				autoComplete="tel"
+				id="community-post-contact-phone"
+				inputMode="tel"
+				maxLength={CONTACT_PHONE_MAX}
+				onChange={(event) => setValue(event.target.value)}
+				placeholder="010-0000-0000"
+				type="tel"
+				value={value}
+			/>
+			<p className="m-0 text-muted-foreground text-xs">
+				답변 안내를 받을 휴대폰 번호예요. 글을 열람할 수 있는
+				본인·운영자·법률자문에게만 보입니다.
+			</p>
+		</div>
+	);
+}
+
 export function CommunityPostForm({
 	board,
 	editPassword,
@@ -157,6 +229,7 @@ export function CommunityPostForm({
 	const paths = useCommunityAreaPaths();
 	const isEdit = Boolean(initialPost);
 	const isFreeBoard = board.key === "free";
+	const isLegalBoard = isLegalBoardKey(board.key);
 	const listPath = paths.boardPath(board.slug);
 
 	const [authorName, setAuthorName] = useState(
@@ -168,6 +241,9 @@ export function CommunityPostForm({
 	);
 	const [isPromotion, setIsPromotion] = useState(
 		initialPost?.isPromotion ?? false
+	);
+	const [contactPhone, setContactPhone] = useState(
+		initialPost?.contactPhone ?? ""
 	);
 	const [title, setTitle] = useState(initialPost?.title ?? "");
 	const [bodyJson, setBodyJson] = useState(initialPost?.body ?? "");
@@ -241,7 +317,7 @@ export function CommunityPostForm({
 	// 비회원은 세션이 없어 비밀번호가 유일한 소유권 증명이라 작성·수정 모두 필수다.
 	const requiresPassword =
 		guest || isLockPasswordRequired(isEdit, isFreeBoard, isLocked);
-	const submittedIsLocked = !(isFreeBoard || guest) && isLocked;
+	const submittedIsLocked = resolveSubmittedLock(board.key, guest, isLocked);
 
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
 	const canSubmit =
@@ -254,6 +330,7 @@ export function CommunityPostForm({
 	const submitEdit = (postId: string) => {
 		const trimmedPassword = password.trim();
 		updateMutation.mutate({
+			...contactPhoneInput(board.key, contactPhone),
 			authorName: authorName.trim(),
 			body: bodyJson,
 			isLocked: submittedIsLocked,
@@ -271,6 +348,7 @@ export function CommunityPostForm({
 		}
 		const trimmedPassword = password.trim();
 		createMutation.mutate({
+			...contactPhoneInput(boardKey, contactPhone),
 			authorName: authorName.trim(),
 			board: boardKey,
 			body: bodyJson,
@@ -314,7 +392,8 @@ export function CommunityPostForm({
 			</div>
 
 			<PostLockField
-				allowLocking={!(isFreeBoard || guest)}
+				allowLocking={!(isFreeBoard || guest || isLegalBoard)}
+				forcedLock={isLegalBoard}
 				guest={guest}
 				isEdit={isEdit}
 				isLocked={isLocked}
@@ -322,6 +401,10 @@ export function CommunityPostForm({
 				setIsLocked={setIsLocked}
 				setPassword={setPassword}
 			/>
+
+			{isLegalBoard ? (
+				<ContactPhoneField setValue={setContactPhone} value={contactPhone} />
+			) : null}
 
 			{canPromote ? (
 				<div className="flex items-center gap-2">

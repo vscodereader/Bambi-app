@@ -28,7 +28,10 @@ import {
 	rateLimitedPublicProcedure,
 } from "../../index";
 import { hasActiveAdExposure } from "../../services/bambi-advertiser";
-import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
+import {
+	isEmployerLikeRole,
+	isEmployerOrganizationVerified,
+} from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import {
@@ -245,7 +248,7 @@ const requireEmployerBambiProfile = async (userId: string) => {
 		.where(eq(bambiProfile.userId, userId))
 		.limit(1);
 
-	if (!profile || profile.role === "job_seeker") {
+	if (!(profile && isEmployerLikeRole(profile.role))) {
 		throw new ORPCError("FORBIDDEN", {
 			message: "Employer Bambi profile is required.",
 		});

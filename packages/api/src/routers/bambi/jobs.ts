@@ -57,6 +57,7 @@ import {
 	recordJobPerformanceEvent,
 } from "../../services/bambi-analytics";
 import {
+	isEmployerLikeRole,
 	isEmployerOrganizationVerified,
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
@@ -1462,7 +1463,7 @@ export const jobsRouter = {
 	listMine: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
-		if (profile.role === "job_seeker") {
+		if (!isEmployerLikeRole(profile.role)) {
 			throw new ORPCError("FORBIDDEN");
 		}
 

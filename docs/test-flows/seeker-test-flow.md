@@ -60,7 +60,7 @@
 |---|---|---|
 | 채팅 시작 가능 | `status!=='suspended' && isPhoneVerified && jobPostStatus==='published'` | `packages/api/src/services/bambi-policy.ts` (`canStartChat`) |
 | 연락처 공개 대상 면접 상태 | `confirmed` 또는 `completed` | 동일 (`isContactRevealEligibleInterviewStatus`) |
-| 수다방 입장 | `status!=='suspended' && (role==='admin' \|\| gender==='female' \|\| (role==='employer' && isAdvertiser))` | `packages/api/src/services/bambi-community-access.ts` |
+| 수다방 입장 | `status!=='suspended' && (role==='admin' \|\| role==='legal_advisor' \|\| gender==='female' \|\| (role==='employer' && isAdvertiser))` | `packages/api/src/services/bambi-community-access.ts` |
 | 본인인증 건 유효시간 | **30분**, 1회 소진 | `packages/api/src/services/bambi-identity-ticket.ts` |
 | 성인 기준 | 만 **19세** 이상, KST 기준 | `packages/api/src/services/portone-identity.ts` |
 | 공개 레이트리밋 | IP당 **시간당 10회**(프로시저별 개별 버킷) | `packages/api/src/index.ts`, `apps/web/src/app/api/guest/route.ts` |
@@ -740,6 +740,7 @@
   | 광고 중 업소회원(owner/manager) | 가능 |
   | 광고 없음/만료 업소회원 | 불가 |
   | 운영자 | 가능(성별 무관) |
+  | 법률자문(`role='legal_advisor'`) | 가능(성별·광고 무관) |
   | 정지 계정 | 불가 |
   | 게스트·비로그인 | 게이트가 먼저 차단 |
 - **기대 결과(미자격)**: 토스트 **"여성회원과 광고 중인 업소회원만 이용가능합니다"** → `/seeker`로 replace. 전용 안내 화면은 **없음**(빈 화면 후 홈으로 튕김)
@@ -760,6 +761,7 @@
 | `free` | `free` | 자유수다 | 가능 | |
 | `work_talk` | **`work-talk`** | 일 이야기 | 가능 | slug에 하이픈, DB enum은 언더스코어. **수집 글이 합류하는 유일한 게시판** |
 | `market` | `market` | 중고거래 | 가능 | |
+| `legal` | `legal` | 무료 법률 자문 | 가능 | **전 글 강제 잠금 + 비번 필수**, 연락처 입력, best·공개 `/board` 제외 (11.9) |
 
 - **경로**: `/seeker/community/[board]` — `getBoardBySlug` 실패 시 `notFound()`(404). `/seeker/community/best/write`는 `writable=false`라 404
 
@@ -775,7 +777,7 @@
   - 메타: 작성자명(폴백 "회원") · `YYYY.MM.DD` · 조회수 · 추천수
   - **비밀글 마스킹**: 작성자 본인·운영자가 아니면 제목이 서버에서 `"비밀글입니다"`로 치환되어 내려온다
   - 빈 상태: 쓰기 가능이면 "아직 글이 없어요. 첫 글을 남겨보세요.", best면 "최근 30일 추천 글이 아직 없어요.", 그 외 "아직 등록된 글이 없어요."
-- **홈**: 게시판별 최신 **4건** 미리보기. 공지사항은 최상단 전폭, 나머지는 2열 그리드. `/seeker` 홈의 커뮤니티 섹션은 `best/free/work_talk/notice` 4개만 노출하고, 미자격자가 글을 누르면 `preventDefault` + 토스트 "여성 회원과 광고 중인 업소회원만 가능합니다"
+- **홈**: 게시판별 최신 **4건** 미리보기. 공지사항은 최상단 전폭, 나머지는 2열 그리드이고 **중고거래·무료 법률 자문은 한 칸을 좌우로 나눠 나란히**(모바일 1열에서는 세로 스택, 반폭 카드는 작성인을 접고 날짜만 표시). 수다방 홈과 `/seeker` 홈이 같은 컴포넌트(`CommunityOverviewGrid`)를 쓰므로 두 화면이 항상 같은 배치다. 미자격자가 글을 누르면 `preventDefault` + 토스트 "여성 회원과 광고 중인 업소회원만 가능합니다"
 - **관련 API**: `bambi.community.listPosts` (protected + `requireCommunityMember`), `bambi.community.overview` (**publicProcedure**, 미자격·비로그인도 요약 열람 가능)
 
 ### 11.4 글 작성
@@ -788,6 +790,7 @@
   | 비밀글로 잠그기 | Switch | — | boolean |
   | 비밀번호 | password Input (잠금 ON일 때만) | `maxLength=30`, 4자+ | 잠금 시 4자 미만이면 `BAD_REQUEST` "비밀글은 4자 이상의 비밀번호가 필요합니다." |
   | 광고글로 표시 | Switch (**employer일 때만 노출**) | — | employer 아니면 `BAD_REQUEST` "광고글은 업소회원만 표시할 수 있습니다." |
+  | 연락처 | tel Input (**`legal` 게시판일 때만 노출**, 선택) | `maxLength=20` | `trim().max(20).optional()`. legal 외 게시판에 실려 오면 `BAD_REQUEST` "연락처는 무료 법률 자문 게시판에만 남길 수 있습니다." |
   | 제목 | Input | `maxLength=100`, 2자+ | `trim().min(2).max(100)` |
   | 본문 | **Tiptap 에디터** | 텍스트 2자+ **또는** 이미지 1개+ | `min(2).max(30000)` + `assertTiptapDoc` |
 - **에디터 툴바**: 굵게 / 기울임 / 취소선 / 글머리목록 / 번호목록 / 링크(Popover) / 이미지(Popover)
@@ -854,7 +857,32 @@
 - **실패 케이스**: 스위치 OFF → `NOT_FOUND`(존재 자체를 숨김)
 - **관련 API**: `bambi.community.getCrawledTopic` (protected + `requireCommunityMember`)
 
-### 11.9 공개 게시판(비로그인 읽기 + 비회원 쓰기, SEO)
+### 11.9 무료 법률 자문 게시판(`legal`)
+
+- **경로**: `/seeker/community/legal` · `/seeker/community/legal/write` · `/seeker/community/legal/[postId]`
+  (파일: `apps/web/src/lib/bambi/community.ts` `isLegalBoardKey`, `.../community-post-form.tsx`,
+  `packages/api/src/services/bambi-community-authz.ts` `resolveLockedForBoard`·`canBypassLock`)
+- **쓸 수 있는 사람**: 수다방 자격자 전부 + 여성 인증 게스트(게스트 쓰기 허용 보드 = `free`·`work_talk`·`legal`)
+- **작성 규칙**:
+  - 잠금 스위치가 **없고**, 대신 "법률 자문 글은 비밀글로 등록됩니다" 안내 Alert이 뜬다. 서버(`resolveLockedForBoard`)가 `isLocked`를 무조건 true로 덮어쓴다
+  - **비밀번호(4자 이상) 필수** — 없으면 `BAD_REQUEST` "비밀글은 4자 이상의 비밀번호가 필요합니다."
+  - 연락처(선택) 입력. 다른 게시판에 연락처를 실어 보내면 `BAD_REQUEST`(11.4 표 참고)
+  - 게스트도 동일하다(다른 게시판에서는 막히는 잠금글 작성이 `legal`에서만 열린다). 단 잠긴 legal 글에 댓글·추천을 남기는 건 **그 글을 쓴 게스트 본인(gid 일치)** 뿐이다
+- **열람 권한**(`canBypassLock`):
+  | 대상 | 잠긴 legal 글 |
+  |---|---|
+  | 작성자 본인 | 비번 없이 열람 |
+  | 운영자(`admin`) | 비번 없이 열람 |
+  | 법률자문(`legal_advisor`) | 비번 없이 열람 (**`legal` 보드에서만** — 다른 보드 비밀글은 기존대로 비번 필요) |
+  | 그 외 회원·게스트 | 목록 제목이 "비밀글입니다"로 마스킹, 상세는 비번 게이트 |
+- **연락처 노출**: `getPost`의 **잠금 해제 응답에만** `contactPhone`이 실린다(마스킹 응답·`getPublicPost`·`listPosts`·`listComments`에는 없음). 화면에서는 본문 위 Alert "연락처 {번호} / 작성자 본인과 운영자·법률자문에게만 보이는 번호예요"
+- **답변 표시**: `legal_advisor` 계정의 댓글에 **법률자문** 배지(회원 상세) / 공개·게스트 화면에서는 작성자 유형 라벨이 "법률자문"으로 나온다
+- **수정**: 저장된 board 기준으로 잠금을 다시 강제하므로 `isLocked:false`를 보내도 **잠금이 풀리지 않는다**. 연락처는 수정 폼이 현재 값을 다시 실어 보내므로 비우면 삭제된다
+- **제외 규칙**: 베스트 큐레이션에서 제외(`notInArray(board, ['notice','legal'])`), 공개 `/board`에도 노출되지 않음(`PUBLIC_COMMUNITY_BOARDS` 무변경)
+- **게스트 잠금 예외의 범위**: 게스트의 잠금 금지 가드가 legal에서 열리는 건 **자기 글**에 한정된다(`assertGuestPostAccess`가 `authorGuestId === gid`를 확인). 남의 legal 잠금글에 댓글·추천을 시도하면 `FORBIDDEN` "비밀글에는 글쓴이 본인만 댓글·추천을 남길 수 있어요." — 회원이 비밀번호 게이트를 통과해야 하는 것과 같은 축이다(게스트의 `password`는 잠금 열쇠가 아니라 자기 댓글 소유권 비밀번호라 게이트로 쓸 수 없다)
+- **관련 API**: `bambi.community.createPost`(`board:'legal'`), `updatePost`, `getPost`, `overview`(응답 키 `legal`)
+
+### 11.10 공개 게시판(비로그인 읽기 + 비회원 쓰기, SEO)
 
 - **경로**: `/board`(허브) · `/board/[boardSlug]`(목록) · `/board/[boardSlug]/[postId]`(상세) ·
   `/board/[boardSlug]/write`(비회원 글쓰기) · `/board/[boardSlug]/[postId]/edit`(비회원 글 수정)
@@ -875,7 +903,7 @@
   - slug와 글의 실제 게시판이 다르면 404(중복 URL 색인 방지)
 - **관련 API**: `bambi.community.listPublicPosts` · `bambi.community.getPublicPost` (둘 다 `publicProcedure`)
 
-#### 11.9.1 비회원(게스트) 쓰기
+#### 11.10.1 비회원(게스트) 쓰기
 
 - **자격**: 게스트 쿠키(`bambi_guest`) 서명·만료 유효 + **`gid` 포함(v2)** + `gender === "female"`.
   gid 없는 옛 토큰 보유자는 읽기만 되고 쓰기는 401 → 화면이 재인증 카드를 세운다
@@ -884,7 +912,9 @@
   헤더로 옮겨 붙이고(`apps/web/src/utils/orpc.ts`), SSR 경유 호출은 `Cookie` 헤더 폴백.
   CORS `allowedHeaders`에 `x-bambi-guest`가 없으면 preflight에서 잘린다(`apps/server/src/plugins/cors.ts`).
   **web·server의 `BAMBI_GUEST_TOKEN_SECRET`이 다르면 전부 401.**
-- **허용 범위**: 게시판 `free`·`work_talk`만(공지는 읽기 전용), 글·댓글·추천. 비밀글 작성·전환 불가.
+- **허용 범위**: 서버 게스트 쓰기 보드는 `free`·`work_talk`·`legal`(공지는 읽기 전용), 글·댓글·추천.
+  비밀글 작성·전환 불가 — **단 `legal`은 강제 잠금이라 예외**(11.9). 공개 `/board` 영역에는 `legal`이
+  없으므로 여기서 실제로 쓸 수 있는 건 `free`·`work_talk` 둘뿐이고, `legal`은 회원 수다방 화면에서 쓴다.
 - **비밀번호**: 비회원 글·댓글은 **4자 이상 필수**(scrypt 해시). 수정·삭제는 gid가 아니라 **비밀번호로만**
   판정 → 쿠키가 만료돼도 본인 글을 지울 수 있다. 회원 글(`author_guest_id = null`)은 비번이 맞아도
   비회원 경로로 수정·삭제되지 않는다.
@@ -893,7 +923,7 @@
   |---|---|
   | 미인증 방문자가 게시판 헤더 [본인인증하고 글쓰기] | 본인인증 다이얼로그 → 성공 시 `/board/[slug]/write`로 복귀(`redirectTo`) |
   | 인증된 비회원이 `자유수다`/`밤문화 이야기` 글쓰기 | 작성인 기본 "비회원", 비밀번호 필드 필수, 잠금·광고 스위치 없음 |
-  | 인증된 비회원이 `공지사항`에 글·댓글·추천 | 버튼 미노출 / API 직접 호출 시 `BAD_REQUEST` "비회원은 자유수다·밤문화 이야기에만 참여할 수 있어요." |
+  | 인증된 비회원이 `공지사항`에 글·댓글·추천 | 버튼 미노출 / API 직접 호출 시 `BAD_REQUEST` "비회원은 자유수다·밤문화 이야기·무료 법률 자문에만 참여할 수 있어요." |
   | 남성·성별 미상 게스트 | `FORBIDDEN` "여성회원과 광고 중인 업소회원만 이용가능합니다" |
   | 토큰 없음·위조·만료·gid 없는 옛 토큰 | `UNAUTHORIZED` "본인인증 후 이용할 수 있습니다." |
   | 비밀번호 4자 미만 | `BAD_REQUEST` "비회원 글·댓글은 4자 이상의 비밀번호가 필요합니다." |
