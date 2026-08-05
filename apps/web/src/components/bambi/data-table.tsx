@@ -39,6 +39,11 @@ function SortIndicator({ direction }: { direction: false | "asc" | "desc" }) {
 	return <ArrowUpDownIcon className="size-3.5 text-muted-foreground/50" />;
 }
 
+// 행 클릭(상세 이동)으로 치지 않을 셀 내부 요소. base-ui Checkbox는 숨은 <input>을 루트의
+// **형제**로 렌더하고 클릭을 그 input에 재발행하므로, 체크박스 쪽 stopPropagation만으로는
+// 재발행된 클릭이 행까지 올라오는 걸 막지 못한다(신고 목록에서 체크만 하려다 상세로 이동).
+const ROW_CLICK_IGNORE_SELECTOR = "a, button, input, label, [role='checkbox']";
+
 function compareValues(a: number | string, b: number | string): number {
 	if (typeof a === "number" && typeof b === "number") {
 		return a - b;
@@ -52,12 +57,16 @@ export function DataTable<T>({
 	data,
 	getRowKey,
 	emptyMessage = "결과 없음",
+	onRowClick,
 	pageSize,
 }: {
 	columns: DataColumn<T>[];
 	data: T[];
 	getRowKey: (row: T) => string;
 	emptyMessage?: string;
+	// 지정하면 데이터 행 전체가 클릭 가능해진다. 키보드 경로는 행 안의 액션 버튼이 담당하므로
+	// 행 자체에 role/tabIndex는 붙이지 않는다.
+	onRowClick?: (row: T) => void;
 	// 지정하면 해당 행 수 단위로 페이징한다(미지정 시 전체 표시).
 	pageSize?: number;
 }): React.JSX.Element {
@@ -143,7 +152,25 @@ export function DataTable<T>({
 				<TableBody>
 					{sortedData.length ? (
 						pageRows.map((row) => (
-							<TableRow key={getRowKey(row)}>
+							<TableRow
+								className={onRowClick ? "cursor-pointer" : undefined}
+								key={getRowKey(row)}
+								onClick={
+									onRowClick
+										? (event) => {
+												if (
+													(event.target as HTMLElement).closest?.(
+														ROW_CLICK_IGNORE_SELECTOR
+													)
+												) {
+													return;
+												}
+
+												onRowClick(row);
+											}
+										: undefined
+								}
+							>
 								{columns.map((column) => (
 									<TableCell className={column.cellClassName} key={column.id}>
 										{column.cell(row)}

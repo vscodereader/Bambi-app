@@ -3,10 +3,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { createContext, type ReactNode, useContext } from "react";
 import { authClient } from "@/lib/auth-client";
-import { readGuestFromCookieString } from "@/lib/bambi/guest";
+import {
+	readGuestFromCookieString,
+	readGuestGenderFromCookieString,
+} from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
 
-type BambiRole = "job_seeker" | "employer" | "admin" | null;
+type BambiRole = "job_seeker" | "employer" | "admin" | "legal_advisor" | null;
 type BambiAccountStatus = "active" | "warned" | "suspended" | null;
 
 interface BambiAuthValue {
@@ -36,6 +39,12 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 		typeof document !== "undefined" &&
 		readGuestFromCookieString(document.cookie);
 
+	// 여성 인증 게스트는 회원 수다방(/seeker/community)에 들어올 수 있다. 여기 판정은
+	// 버튼·안내를 고르기 위한 UI 편의일 뿐이다 — 서명·만료·gid까지 보는 최종 강제는
+	// 미들웨어(resolve-gate)와 서버(resolveCommunityActor)가 한다.
+	const isCommunityGuest =
+		isGuest && readGuestGenderFromCookieString(document.cookie) === "female";
+
 	const community = mineQuery.data?.community;
 	const value: BambiAuthValue = {
 		user: session.data?.user
@@ -55,7 +64,9 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 		accountSanctionCreatedAt: mineQuery.data?.accountSanction?.createdAt
 			? new Date(mineQuery.data.accountSanction.createdAt).toISOString()
 			: null,
-		canAccessCommunity: community?.canAccess ?? false,
+		canAccessCommunity: isAuthenticated
+			? (community?.canAccess ?? false)
+			: isCommunityGuest,
 		isAuthenticated,
 		isGuest,
 		isPending: session.isPending || (isAuthenticated && mineQuery.isLoading),

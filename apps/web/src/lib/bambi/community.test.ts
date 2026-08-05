@@ -9,6 +9,9 @@ import {
 	getBoardBySlug,
 	getCommunityPageItems,
 	getCommunityTotalPages,
+	isGuestWritableBoardKey,
+	isLegalAdvisorAllowedPath,
+	isLegalBoardKey,
 	isNewCommunityPost,
 } from "./community";
 
@@ -19,14 +22,57 @@ describe("community boards meta", () => {
 		expect(getBoardBySlug("nope")).toBeUndefined();
 	});
 
-	it("게시판은 공지·베스트·자유·일·중고 5개이고 공지가 맨 앞이다", () => {
+	it("게시판은 공지·베스트·자유·일·중고·법률 6개이고 공지가 맨 앞이다", () => {
 		expect(COMMUNITY_BOARDS.map((board) => board.key)).toEqual([
 			"notice",
 			"best",
 			"free",
 			"work_talk",
 			"market",
+			"legal",
 		]);
+	});
+
+	it("비회원 글쓰기는 자유수다·밤문화 이야기·무료 법률 자문만 열린다", () => {
+		expect(isGuestWritableBoardKey("free")).toBe(true);
+		expect(isGuestWritableBoardKey("work_talk")).toBe(true);
+		expect(isGuestWritableBoardKey("legal")).toBe(true);
+		expect(isGuestWritableBoardKey("notice")).toBe(false);
+		expect(isGuestWritableBoardKey("market")).toBe(false);
+		expect(isGuestWritableBoardKey("best")).toBe(false);
+	});
+
+	it("무료 법률 자문 게시판만 잠금·연락처 규칙을 탄다", () => {
+		expect(getBoardBySlug("legal")).toMatchObject({
+			key: "legal",
+			label: "무료 법률 자문",
+			writable: true,
+		});
+		expect(isLegalBoardKey("legal")).toBe(true);
+		expect(isLegalBoardKey("free")).toBe(false);
+	});
+
+	it("법률자문은 수다방 홈·legal 경로만 통과하고 다른 게시판 링크는 막힌다", () => {
+		expect(isLegalAdvisorAllowedPath("/seeker/community")).toBe(true);
+		expect(isLegalAdvisorAllowedPath("/seeker/community/legal")).toBe(true);
+		expect(isLegalAdvisorAllowedPath("/seeker/community/legal/abc")).toBe(true);
+		expect(isLegalAdvisorAllowedPath("/seeker/community/free")).toBe(false);
+		expect(isLegalAdvisorAllowedPath("/seeker/community/notice/abc")).toBe(
+			false
+		);
+		expect(isLegalAdvisorAllowedPath("/seeker/community/crawled/abc")).toBe(
+			false
+		);
+	});
+
+	it("일 이야기 게시판은 표시명만 밤문화 이야기로 바뀐다", () => {
+		const board = COMMUNITY_BOARDS.find((item) => item.key === "work_talk");
+
+		expect(board).toMatchObject({
+			key: "work_talk",
+			label: "밤문화 이야기",
+			slug: "work-talk",
+		});
 	});
 
 	it("공지사항만 운영자 전용(adminOnly) 게시판이다", () => {

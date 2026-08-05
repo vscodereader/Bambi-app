@@ -16,7 +16,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useUnreadRoomCount } from "@/lib/bambi/use-unread-room-count";
+import { useUnreadMessageCount } from "@/lib/bambi/use-unread-message-count";
 import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
 import { BellIcon, ShieldIcon } from "./icons";
@@ -154,15 +154,17 @@ function RoleSwitchLink() {
 	return null;
 }
 
-// "내 정보"와 동일한 형태의 헤더 채팅 버튼. 안 읽은 방이 있으면 우상단에
-// primary(coral) 점을 띄운다. 핀은 로그인 셸(withPin)에서만 — 비로그인 public
-// 마켓에서는 버튼만 노출하고(누르면 로그인 벽으로) 핀은 그리지 않는다.
+// "내 정보"와 동일한 형태의 헤더 채팅 버튼. 로그인 셸에서는 안 읽은 메시지
+// 총합을 숫자 배지로 표시하고, 비로그인 public 셸은 버튼만 노출한다.
 function ChatNavButton({ withPin }: { withPin: boolean }) {
-	const unreadRoomCount = useUnreadRoomCount();
-	const showPin = withPin && unreadRoomCount > 0;
+	const unreadMessageCount = useUnreadMessageCount();
+	const showBadge = withPin && unreadMessageCount > 0;
 	return (
 		<span className="relative inline-flex">
 			<Link
+				aria-label={
+					showBadge ? `채팅, 읽지 않은 메시지 ${unreadMessageCount}개` : "채팅"
+				}
 				className={cn(
 					buttonVariants({ variant: "outline" }),
 					"h-10 px-4 font-bold text-sm no-underline"
@@ -171,8 +173,10 @@ function ChatNavButton({ withPin }: { withPin: boolean }) {
 			>
 				채팅
 			</Link>
-			{showPin ? (
-				<span className="absolute top-1 right-1 size-2 rounded-full bg-coral-500 ring-2 ring-background" />
+			{showBadge ? (
+				<Badge className="absolute -top-2 -right-2 min-w-5 justify-center px-1 text-xs">
+					{unreadMessageCount}
+				</Badge>
 			) : null}
 		</span>
 	);

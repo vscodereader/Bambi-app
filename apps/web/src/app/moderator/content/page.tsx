@@ -9,6 +9,7 @@
 
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -52,7 +53,7 @@ import {
 	type SupportCategory,
 } from "@/lib/bambi/support";
 import { formatDateTime } from "@/lib/bambi-format";
-import { orpc } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 
 const TARGET_TABS = [
 	{ value: "community_post", label: "커뮤니티 글" },
@@ -87,11 +88,14 @@ const STATUS_ACTIONS: { status: ContentStatus; label: string }[] = [
 	{ status: "deleted", label: "삭제" },
 ];
 
+// 선택 열은 커뮤니티 글 탭에서만 붙는다(다중 선택 + 일괄 삭제 대상).
 const TABLE_COLUMN_COUNT = 6;
+const SELECTABLE_TARGET_TYPE: TargetType = "community_post";
 
 // 사유 Dialog가 조치를 확정할 때까지 들고 있는 대상. null이면 Dialog가 닫힌 상태다.
+// ids가 2건 이상이면 일괄 조치다(커뮤니티 글 전용).
 interface PendingAction {
-	id: string;
+	ids: string[];
 	label: string;
 	status: ContentStatus;
 	title: string;
@@ -104,6 +108,7 @@ export default function ModeratorContentPage() {
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 	const [pending, setPending] = useState<PendingAction | null>(null);
 	const [reason, setReason] = useState("");
+	const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
 	const listQuery = useQuery(
 		orpc.bambi.moderation.listModeratableContent.queryOptions({
@@ -152,11 +157,52 @@ export default function ModeratorContentPage() {
 			onError,
 		})
 	);
+	// 커뮤니티 글 일괄 조치. 서버에 묶음 프로시저가 없어 글 단위 조치를 모아 보내고,
+	// 토스트·무효화는 한 번만 낸다(글마다 토스트가 뜨면 화면이 잠긴 것처럼 보인다).
+	const bulkSetPostStatus = useMutation({
+		mutationFn: async (input: {
+			ids: string[];
+			reason: string;
+			status: ContentStatus;
+		}) => {
+			const results = await Promise.allSettled(
+				input.ids.map((postId) =>
+					client.bambi.community.setPostStatusByAdmin({
+						postId,
+						reason: input.reason,
+						status: input.status,
+					})
+				)
+			);
+
+			return {
+				failed: results.filter((result) => result.status === "rejected").length,
+				total: input.ids.length,
+			};
+		},
+		onError,
+		onSuccess: async (result) => {
+			if (result.failed > 0) {
+				toast.error(
+					`${result.total - result.failed}건 처리, ${result.failed}건 실패했어요.`
+				);
+			} else {
+				toast.success(`${result.total}건 조치했어요.`);
+			}
+
+			setSelectedIds([]);
+			closeDialog();
+			await queryClient.invalidateQueries({
+				queryKey: orpc.bambi.moderation.listModeratableContent.key(),
+			});
+		},
+	});
 
 	const isPending =
 		setPostStatus.isPending ||
 		setCommentStatus.isPending ||
-		setInquiryStatus.isPending;
+		setInquiryStatus.isPending ||
+		bulkSetPostStatus.isPending;
 
 	const trimmedReason = reason.trim();
 	const canSubmit = trimmedReason.length >= REASON_MIN_LENGTH && !isPending;
@@ -166,12 +212,20 @@ export default function ModeratorContentPage() {
 			return;
 		}
 		const input = { reason: trimmedReason, status: pending.status };
+		if (pending.ids.length > 1) {
+			bulkSetPostStatus.mutate({ ids: pending.ids, ...input });
+			return;
+		}
+		const targetId = pending.ids[0];
+		if (!targetId) {
+			return;
+		}
 		if (targetType === "community_post") {
-			setPostStatus.mutate({ postId: pending.id, ...input });
+			setPostStatus.mutate({ postId: targetId, ...input });
 		} else if (targetType === "community_comment") {
-			setCommentStatus.mutate({ commentId: pending.id, ...input });
+			setCommentStatus.mutate({ commentId: targetId, ...input });
 		} else {
-			setInquiryStatus.mutate({ inquiryId: pending.id, ...input });
+			setInquiryStatus.mutate({ inquiryId: targetId, ...input });
 		}
 	};
 
@@ -180,9 +234,20 @@ export default function ModeratorContentPage() {
 		setPage(1);
 		// 유형이 바뀌면 펼친 행의 id가 다른 테이블 것이 되므로 접는다.
 		setExpandedId(null);
+		setSelectedIds([]);
 	};
 
 	const items = listQuery.data?.items ?? [];
+	const isSelectable = targetType === SELECTABLE_TARGET_TYPE;
+	const toggleSelected = (id: string) =>
+		setSelectedIds((prev) =>
+			prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
+		);
+	// 헤더 체크박스: 현재 페이지가 전부 선택돼 있으면 해제, 아니면 전부 선택한다.
+	const pageIds = items.map((item) => item.id);
+	const allSelected =
+		pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+	const toggleAllOnPage = () => setSelectedIds(allSelected ? [] : pageIds);
 	const totalCount = listQuery.data?.totalCount ?? 0;
 	const pageSize = listQuery.data?.pageSize ?? 20;
 	const hasNextPage = page * pageSize < totalCount;
@@ -201,6 +266,40 @@ export default function ModeratorContentPage() {
 				</TabsList>
 			</Tabs>
 
+			{isSelectable && selectedIds.length > 0 ? (
+				<div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3">
+					<span className="font-medium text-foreground text-sm">
+						{selectedIds.length}개 선택됨
+					</span>
+					<div className="flex flex-wrap items-center gap-2">
+						<Button
+							disabled={isPending}
+							onClick={() =>
+								setPending({
+									ids: selectedIds,
+									label: "삭제",
+									status: "deleted",
+									title: `선택한 커뮤니티 글 ${selectedIds.length}건`,
+								})
+							}
+							size="sm"
+							type="button"
+							variant="destructive"
+						>
+							선택 삭제
+						</Button>
+						<Button
+							onClick={() => setSelectedIds([])}
+							size="sm"
+							type="button"
+							variant="ghost"
+						>
+							선택 해제
+						</Button>
+					</div>
+				</div>
+			) : null}
+
 			{items.length === 0 ? (
 				<EmptyState
 					description="선택한 유형에 조치할 게시물이 없어요."
@@ -210,6 +309,15 @@ export default function ModeratorContentPage() {
 				<Table>
 					<TableHeader>
 						<TableRow>
+							{isSelectable ? (
+								<TableHead className="w-10">
+									<Checkbox
+										aria-label="이 페이지 전체 선택"
+										checked={allSelected}
+										onCheckedChange={toggleAllOnPage}
+									/>
+								</TableHead>
+							) : null}
 							<TableHead className="w-10">
 								<span className="sr-only">상세보기</span>
 							</TableHead>
@@ -228,6 +336,15 @@ export default function ModeratorContentPage() {
 							return (
 								<Fragment key={item.id}>
 									<TableRow>
+										{isSelectable ? (
+											<TableCell>
+												<Checkbox
+													aria-label={`${item.title} 선택`}
+													checked={selectedIds.includes(item.id)}
+													onCheckedChange={() => toggleSelected(item.id)}
+												/>
+											</TableCell>
+										) : null}
 										<TableCell>
 											<Button
 												aria-expanded={isExpanded}
@@ -280,7 +397,7 @@ export default function ModeratorContentPage() {
 															key={action.status}
 															onClick={() =>
 																setPending({
-																	id: item.id,
+																	ids: [item.id],
 																	label: action.label,
 																	status: action.status,
 																	title: item.title,
@@ -303,7 +420,11 @@ export default function ModeratorContentPage() {
 										<TableRow>
 											<TableCell
 												className="whitespace-normal bg-muted/30"
-												colSpan={TABLE_COLUMN_COUNT}
+												colSpan={
+													isSelectable
+														? TABLE_COLUMN_COUNT + 1
+														: TABLE_COLUMN_COUNT
+												}
 											>
 												<DetailPanel
 													board={detailQuery.data?.board}
@@ -324,7 +445,10 @@ export default function ModeratorContentPage() {
 			<div className="flex items-center justify-between gap-2">
 				<Button
 					disabled={page <= 1}
-					onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+					onClick={() => {
+						setPage((prev) => Math.max(1, prev - 1));
+						setSelectedIds([]);
+					}}
 					variant="outline"
 				>
 					이전
@@ -334,7 +458,10 @@ export default function ModeratorContentPage() {
 				</span>
 				<Button
 					disabled={!hasNextPage}
-					onClick={() => setPage((prev) => prev + 1)}
+					onClick={() => {
+						setPage((prev) => prev + 1);
+						setSelectedIds([]);
+					}}
 					variant="outline"
 				>
 					다음

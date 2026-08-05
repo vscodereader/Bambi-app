@@ -47,7 +47,15 @@ import { orpc } from "@/utils/orpc";
 export const communityEditorExtensions = [
 	StarterKit.configure({
 		link: {
-			HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
+			// 스킴 없이 친 주소(example.com)도 https로 붙는다 — 본문에 그냥 적은 주소가
+			// autolink로 걸릴 때와 링크 팝오버로 걸 때 모두 같은 규칙을 탄다.
+			defaultProtocol: "https",
+			// nofollow까지 붙인다 — 회원이 아무 주소나 걸 수 있는 본문이라 우리 도메인의
+			// 신뢰를 광고·스팸 링크에 넘겨주지 않는다.
+			HTMLAttributes: {
+				rel: "noopener noreferrer nofollow",
+				target: "_blank",
+			},
 			openOnClick: false,
 		},
 	}),
@@ -125,6 +133,13 @@ const TOGGLES: ToggleSpec[] = [
 	},
 ];
 
+// 스킴 없이 적은 주소에 https를 붙인다. mailto:·tel: 같은 다른 스킴은 그대로 둔다
+// (Link 확장의 defaultProtocol은 autolink 경로에만 걸려 setLink에는 적용되지 않는다).
+const SCHEME_RE = /^[a-z][\w+.-]*:/i;
+
+const withHttps = (value: string): string =>
+	SCHEME_RE.test(value) ? value : `https://${value}`;
+
 // 링크 입력 팝오버 — window.prompt 대체. 열릴 때 기존 링크 href를 초기값으로 채우고,
 // 빈 값 적용은 링크 해제(unsetLink), URL 적용은 setLink({ href }).
 function LinkPopover({ editor }: { editor: Editor }) {
@@ -141,11 +156,12 @@ function LinkPopover({ editor }: { editor: Editor }) {
 	}
 
 	function applyLink() {
+		const trimmed = url.trim();
 		const chain = editor.chain().focus().extendMarkRange("link");
-		if (url === "") {
+		if (trimmed === "") {
 			chain.unsetLink().run();
 		} else {
-			chain.setLink({ href: url }).run();
+			chain.setLink({ href: withHttps(trimmed) }).run();
 		}
 		setOpen(false);
 	}
@@ -179,11 +195,14 @@ function LinkPopover({ editor }: { editor: Editor }) {
 						applyLink();
 					}}
 				>
+					{/* type="url"이면 브라우저 검증이 스킴 없는 입력(example.com)의 제출 자체를
+					    막아 https 자동 보정이 돌 기회가 없다. 검증은 withHttps가 맡는다. */}
 					<Input
 						aria-label="링크 URL"
+						inputMode="url"
 						onChange={(event) => setUrl(event.target.value)}
-						placeholder="https://example.com"
-						type="url"
+						placeholder="example.com"
+						type="text"
 						value={url}
 					/>
 					<div className="flex justify-end gap-1.5">
@@ -218,7 +237,15 @@ const ALT_TEXT_MAX_LENGTH = 120;
 // 같은 표현이 필요하고, 남의 이미지를 링크로만 참조하려는 쓰임도 정당하기 때문이다.
 // 업로드는 인텐트 발급 → 서명 URL PUT → 공개 URL 삽입 순서이며, 어느 단계든 실패하면
 // 이미지 노드를 넣지 않고 팝오버 안에 사유를 남긴다(깨진 이미지가 본문에 조용히 박히는 걸 막는다).
-function ImagePopover({ editor }: { editor: Editor }) {
+// allowUpload=false면 파일 업로드 자리를 안내 문구로 바꾼다 — 비회원은 업로드 인텐트
+// 발급(createMediaUpload)이 회원 전용이라 파일을 고를수록 401만 받는다.
+function ImagePopover({
+	allowUpload,
+	editor,
+}: {
+	allowUpload: boolean;
+	editor: Editor;
+}) {
 	const [open, setOpen] = useState(false);
 	const [url, setUrl] = useState("");
 	const [alt, setAlt] = useState("");
@@ -325,23 +352,32 @@ function ImagePopover({ editor }: { editor: Editor }) {
 					value={alt}
 				/>
 				<div className="flex flex-col gap-1.5">
-					<Input
-						accept={UPLOAD_ACCEPT}
-						aria-label="이미지 파일"
-						disabled={isUploading}
-						onChange={handleFileChange}
-						type="file"
-					/>
-					{isUploading ? (
-						<p className="flex items-center gap-1.5 text-muted-foreground text-xs">
-							<Loader2Icon className="size-3.5 animate-spin" />
-							업로드 중…
-						</p>
+					{allowUpload ? (
+						<Input
+							accept={UPLOAD_ACCEPT}
+							aria-label="이미지 파일"
+							disabled={isUploading}
+							onChange={handleFileChange}
+							type="file"
+						/>
 					) : (
 						<p className="text-muted-foreground text-xs">
-							JPG·PNG·WebP · 최대 {UPLOAD_MAX_MB}MB
+							이미지 업로드는 회원만 이용할 수 있어요. 이미지 주소로 넣어
+							주세요.
 						</p>
 					)}
+					{allowUpload ? (
+						<p className="flex items-center gap-1.5 text-muted-foreground text-xs">
+							{isUploading ? (
+								<>
+									<Loader2Icon className="size-3.5 animate-spin" />
+									업로드 중…
+								</>
+							) : (
+								`JPG·PNG·WebP · 최대 ${UPLOAD_MAX_MB}MB`
+							)}
+						</p>
+					) : null}
 					{error ? (
 						<p className="text-destructive text-xs" role="alert">
 							{error}
@@ -378,7 +414,13 @@ function ImagePopover({ editor }: { editor: Editor }) {
 	);
 }
 
-function CommunityEditorToolbar({ editor }: { editor: Editor }) {
+function CommunityEditorToolbar({
+	allowUpload,
+	editor,
+}: {
+	allowUpload: boolean;
+	editor: Editor;
+}) {
 	return (
 		<div className="flex flex-wrap items-center gap-1 border-border border-b px-2 py-1.5">
 			{TOGGLES.map((toggle) => {
@@ -400,12 +442,14 @@ function CommunityEditorToolbar({ editor }: { editor: Editor }) {
 				);
 			})}
 			<LinkPopover editor={editor} />
-			<ImagePopover editor={editor} />
+			<ImagePopover allowUpload={allowUpload} editor={editor} />
 		</div>
 	);
 }
 
 interface CommunityPostEditorProps {
+	// 파일 업로드 허용 여부(기본 허용). 비회원 폼은 false로 내려 URL 삽입만 남긴다.
+	allowUpload?: boolean;
 	onChange: (payload: {
 		hasImage: boolean;
 		json: string;
@@ -436,6 +480,7 @@ const buildEditorPayload = (editor: Editor) => ({
 // 컨트롤드 규약: value는 초기 마운트 시 1회만 파싱해 주입(마운트 후 비제어), onChange는 매
 // 업데이트마다 { json, text, hasImage }를 돌려준다 — 폼은 json으로 제출, text·hasImage로 비어있음 판정.
 export function CommunityPostEditor({
+	allowUpload = true,
 	onChange,
 	value,
 }: CommunityPostEditorProps) {
@@ -457,7 +502,9 @@ export function CommunityPostEditor({
 
 	return (
 		<div className="flex flex-col rounded-lg border border-input bg-transparent focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50 dark:bg-input/30">
-			{editor ? <CommunityEditorToolbar editor={editor} /> : null}
+			{editor ? (
+				<CommunityEditorToolbar allowUpload={allowUpload} editor={editor} />
+			) : null}
 			<EditorContent editor={editor} />
 		</div>
 	);

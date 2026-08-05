@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@bambi-app/db";
 import {
-	account,
 	invitation,
 	member,
-	session,
 	team,
 	teamMember,
 	user,
@@ -27,6 +25,7 @@ import {
 	review,
 	supportInquiry,
 	supportInquiryMessage,
+	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
@@ -37,8 +36,6 @@ import {
 	eq,
 	inArray,
 	isNotNull,
-	isNull,
-	lte,
 	or,
 	sql,
 } from "drizzle-orm";
@@ -51,11 +48,12 @@ import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
-import { resolveWithdrawalRetentionDays } from "../../services/bambi-member-policy";
+import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
+import { purgeWithdrawnAccountsBatch } from "../../services/bambi-withdrawal-purge";
 import { deletePublicObjects } from "../../services/gcs";
 import {
 	applyJobPostUpdate,
@@ -92,11 +90,14 @@ const reportStatusSchema = z.enum([
 	"dismissed",
 ]);
 
+// on_hold(검수 보류)는 운영자 강제 숨김(hidden)과 다른 조치라 별도 값으로 받는다 —
+// 목록 필터(listJobPosts)와 단건·일괄 상태 변경이 모두 이 스키마를 공유한다.
 const jobPostModerationStatusSchema = z.enum([
 	"pending_review",
 	"published",
 	"hidden",
 	"rejected",
+	"on_hold",
 ]);
 
 const accountStatusSchema = z.enum(["active", "warned", "suspended"]);
@@ -124,6 +125,10 @@ const listUsersInput = z.object({
 	limit: z.number().int().min(1).max(1000).default(1000),
 });
 
+const listUserModerationActionsInput = z.object({
+	targetUserId: z.string().min(1),
+});
+
 const setReportStatusInput = z.object({
 	reportId: z.string().uuid(),
 	status: reportStatusSchema,
@@ -146,12 +151,38 @@ const listJobsForPaymentInput = z.object({
 	limit: z.number().int().min(1).max(100).default(50),
 });
 
+// 광고 기간 연장(양수)/단축(음수). 0은 아무 일도 하지 않으므로 막는다.
+const adjustJobPostExposureInput = z.object({
+	jobPostId: z.string().uuid(),
+	days: z
+		.number()
+		.int()
+		.min(-365)
+		.max(365)
+		.refine((value) => value !== 0, { message: "조정할 일수를 입력하세요." }),
+	reason: z.string().min(2).max(500),
+});
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// 계정 제재는 bambi_profile 행을 갱신하므로 온보딩 전 계정에는 걸 수 없다.
+const PROFILELESS_SANCTION_MESSAGE =
+	"아직 온보딩을 마치지 않은 계정이라 제재할 수 없어요.";
+const PROFILELESS_ROLE_MESSAGE =
+	"아직 온보딩을 마치지 않은 계정이라 역할을 지정할 수 없어요.";
 
 const setUserStatusInput = z.object({
 	targetUserId: z.string().min(1),
 	status: accountStatusSchema,
 	reason: z.string().min(2).max(500),
+});
+
+// 법률 자문 계정 지정·해제. 전환 축이 구직자 ↔ 법률자문 둘뿐이라 입력도 그 둘만 받고,
+// 나머지 조합(업소·운영자 계정)은 서버 가드(assertLegalAdvisorRoleSwitch)가 막는다.
+const setUserRoleInput = z.object({
+	reason: z.string().min(2).max(500),
+	role: z.enum(["job_seeker", "legal_advisor"]),
+	targetUserId: z.string().min(1),
 });
 
 const employerVerificationDecisionSchema = z.enum(["verified", "rejected"]);
@@ -227,6 +258,17 @@ const employerVerificationStatusSchema = z.enum([
 const listEmployersInput = z.object({
 	status: employerVerificationStatusSchema.optional(),
 	limit: z.number().int().min(1).max(100).default(50),
+	// 페이지네이션용 오프셋. 화면은 limit+1건을 요청하지 않고, 받은 건수가 limit보다
+	// 적으면 마지막 페이지로 본다(전체 건수 집계 쿼리를 하나 더 돌리지 않기 위해).
+	offset: z.number().int().min(0).default(0),
+});
+
+// 팀 합류 초대 조회 입력. 이름은 listPendingTeamInvitations로 유지하되(호출부 하나),
+// 운영자가 승인·반려한 이력도 되짚을 수 있도록 상태 필터와 페이지네이션을 받는다.
+const listTeamInvitationsInput = z.object({
+	status: z.enum(["pending", "accepted", "rejected"]).default("pending"),
+	limit: z.number().int().min(1).max(100).default(20),
+	offset: z.number().int().min(0).default(0),
 });
 
 const setChatRoomBlockedInput = z.object({
@@ -873,6 +915,18 @@ export const moderationRouter = {
 				});
 			}
 
+			// 채팅 신고는 구직자 전용이다. 구인자에게는 차단만 열어 두고, 화면에서도
+			// 신고 버튼을 숨기지만 근본 차단은 여기서 한다(공고·커뮤니티 신고는 그대로).
+			if (
+				(input.targetType === "chat_room" ||
+					input.targetType === "chat_message") &&
+				profile.role !== "job_seeker"
+			) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "채팅 신고는 구직자만 할 수 있어요.",
+				});
+			}
+
 			await assertReportTargetExists(input.targetType, input.targetId);
 
 			// 동일 신고자·대상의 중복 신고는 멱등 처리한다(스키마 변경 없이 기존 row 반환).
@@ -958,6 +1012,10 @@ export const moderationRouter = {
 					title: jobPost.title,
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
+					// 운영자 편집 폼이 지역 Select를 되살리려면 표시 문자열이 아니라 코드가 필요하다
+					// (adminUpdateJobPost 입력이 코드를 요구한다).
+					regionCode: jobPost.regionCode,
+					districtCode: jobPost.districtCode,
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					workSchedule: jobPost.workSchedule,
@@ -1104,12 +1162,16 @@ export const moderationRouter = {
 			await requireAdminProfile(context.session);
 
 			// 계정 목록의 기준 테이블은 user다. bambi_profile은 좌측 조인해 부가 정보로만
-			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다. name은 계정
-			// 이름(user.name), displayName은 프로필 표시 이름(없으면 null)으로 각각 반환한다.
-			// 누적 신고/경고 횟수는 서브쿼리로 실제 집계한다.
+			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다.
+			// 집계는 전부 상관 서브쿼리로 뽑는다 — 조인으로 붙이면 소속 업소·차단 수만큼
+			// user row가 뻥튀기된다.
+			// 기각된 신고는 운영자 판단으로 무효 처리된 건이라 누적 신고 수에서 뺀다.
+			// ponytail: 공고·커뮤니티 등 콘텐츠 신고를 작성자에게 귀속시키는 합산은 이번 범위 밖.
 			const reportsCountSql = sql<number>`(
 				select count(*)::int from ${report}
-				where ${report.targetType} = 'user' and ${report.targetId} = ${user.id}
+				where ${report.targetType} = 'user'
+					and ${report.targetId} = ${user.id}
+					and ${report.status} <> 'dismissed'
 			)`;
 			const warningsCountSql = sql<number>`(
 				select count(*)::int from ${adminModerationAction}
@@ -1117,11 +1179,28 @@ export const moderationRouter = {
 					and ${adminModerationAction.targetId} = ${user.id}
 					and ${adminModerationAction.action} = 'set_status:warned'
 			)`;
+			// 구인자 계정의 소속 업소 표시명. 한 계정이 여러 업소에 속할 수 있어 배열로 모은다.
+			const organizationNamesSql = sql<string[]>`(
+				select coalesce(
+					array_agg(distinct ${employerOrganizationProfile.displayName}),
+					'{}'::text[]
+				)
+				from ${member}
+				join ${employerOrganizationProfile}
+					on ${employerOrganizationProfile.organizationId} = ${member.organizationId}
+				where ${member.userId} = ${user.id}
+			)`;
+			// 다른 사용자에게 차단당한 횟수(신고와 별개의 위험 신호).
+			const blockedByCountSql = sql<number>`(
+				select count(*)::int from ${userBlock}
+				where ${userBlock.blockedUserId} = ${user.id}
+			)`;
 			const query = db
 				.select({
 					userId: user.id,
 					name: user.name,
-					displayName: user.name,
+					// 로그인 아이디(better-auth username 플러그인). 미설정 계정은 null.
+					loginId: user.login_id,
 					email: user.email,
 					role: sql<string>`coalesce(${bambiProfile.role}, 'job_seeker')`,
 					status: sql<
@@ -1131,6 +1210,10 @@ export const moderationRouter = {
 					phoneNumber: bambiProfile.phoneNumber,
 					reportsCount: reportsCountSql,
 					warningsCount: warningsCountSql,
+					organizationNames: organizationNamesSql,
+					blockedByCount: blockedByCountSql,
+					// 소프트 탈퇴 시각. null이 아니면 탈퇴 처리된 계정이다.
+					deletedAt: user.deletedAt,
 					createdAt: user.createdAt,
 					updatedAt: user.updatedAt,
 				})
@@ -1140,11 +1223,43 @@ export const moderationRouter = {
 				.limit(input.limit);
 
 			if (input.status) {
-				return await query.where(eq(bambiProfile.status, input.status));
+				// 프로필이 없는(온보딩 전) 계정도 목록 표시와 동일하게 active로 취급한다 —
+				// 컬럼을 그대로 비교하면 NULL이라 'active' 필터에서 통째로 사라진다.
+				return await query.where(
+					sql`coalesce(${bambiProfile.status}, 'active')::text = ${input.status}`
+				);
 			}
 
 			return await query;
 		}),
+
+	// 계정 상세의 제재 이력. 감사 로그(admin_moderation_action)에서 해당 사용자를 대상으로
+	// 한 기록만 최신순으로 보여준다(target_type·target_id 인덱스를 그대로 탄다).
+	listUserModerationActions: adminProcedure
+		.input(listUserModerationActionsInput)
+		.handler(
+			async ({ input }) =>
+				await db
+					.select({
+						id: adminModerationAction.id,
+						action: adminModerationAction.action,
+						reason: adminModerationAction.reason,
+						metadata: adminModerationAction.metadata,
+						adminUserId: adminModerationAction.adminUserId,
+						adminName: user.name,
+						createdAt: adminModerationAction.createdAt,
+					})
+					.from(adminModerationAction)
+					.innerJoin(user, eq(user.id, adminModerationAction.adminUserId))
+					.where(
+						and(
+							eq(adminModerationAction.targetType, "user"),
+							eq(adminModerationAction.targetId, input.targetUserId)
+						)
+					)
+					.orderBy(desc(adminModerationAction.createdAt))
+					.limit(50)
+		),
 
 	listReviews: protectedProcedure
 		.input(listReviewsInput)
@@ -1417,6 +1532,71 @@ export const moderationRouter = {
 			return updated;
 		}),
 
+	// 공고의 광고 종료일만 앞뒤로 민다. 결제 상태·노출 종류는 그대로라 프리미엄 정원(자리 수)에
+	// 영향이 없어 승인 게이트를 타지 않는다. 음수(단축)로 과거까지 내리는 것도 허용한다(즉시 만료 조치).
+	// 기준일은 `exposureEndsAt ?? now` 단일 규칙이라, 종료일이 없던 공고(미결제·무기한)는 지금
+	// 기준으로 종료일이 새로 설정된다 — 즉 무기한 공고에 적용하면 무기한 → 기한부로 바뀐다.
+	adjustJobPostExposure: adminProcedure
+		.input(adjustJobPostExposureInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const { organizationId, updated } = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({
+						exposureEndsAt: jobPost.exposureEndsAt,
+						organizationId: jobPost.organizationId,
+					})
+					.from(jobPost)
+					.where(eq(jobPost.id, input.jobPostId))
+					.limit(1);
+
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				const exposureEndsAt = new Date(
+					(existing.exposureEndsAt ?? new Date()).getTime() +
+						input.days * MS_PER_DAY
+				);
+
+				const [row] = await tx
+					.update(jobPost)
+					.set({ exposureEndsAt })
+					.where(eq(jobPost.id, input.jobPostId))
+					.returning();
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx.insert(adminModerationAction).values({
+					adminUserId: admin.userId,
+					targetType: "job_post",
+					targetId: input.jobPostId,
+					action: `adjust_job_post_exposure:${input.days > 0 ? "+" : ""}${input.days}`,
+					reason: input.reason,
+					metadata: {
+						days: input.days,
+						exposureEndsAt: exposureEndsAt.toISOString(),
+						previousExposureEndsAt:
+							existing.exposureEndsAt?.toISOString() ?? null,
+					},
+				});
+
+				return { organizationId: existing.organizationId, updated: row };
+			});
+
+			// 종료일이 과거/미래를 넘나들면 광고 유효 여부가 뒤집히므로 수다방 광고 자격
+			// 캐시(is_advertiser)를 재동기화한다(setJobPostPayment와 동일 이유).
+			await syncAdvertiserFlagForOrganization({
+				now: new Date(),
+				organizationId,
+			});
+
+			return updated;
+		}),
+
 	// 결제 처리가 의미있는 공고 목록(초안 제외: pending_review·published).
 	// 인증 업체 공고는 검수 큐 없이 자동 published라 여기서 결제를 처리한다.
 	listJobsForPayment: protectedProcedure
@@ -1591,7 +1771,11 @@ export const moderationRouter = {
 					.returning();
 
 				if (!updated) {
-					throw new ORPCError("NOT_FOUND");
+					// 계정 상태는 bambi_profile에만 있어 온보딩 전 계정은 갱신할 행이 없다.
+					// NOT_FOUND면 운영자가 "왜 실패했는지" 알 수 없어 원인을 그대로 알려준다.
+					throw new ORPCError("BAD_REQUEST", {
+						message: PROFILELESS_SANCTION_MESSAGE,
+					});
 				}
 
 				await tx.insert(adminModerationAction).values({
@@ -1600,6 +1784,46 @@ export const moderationRouter = {
 					targetId: input.targetUserId,
 					action: `set_status:${input.status}`,
 					reason: input.reason,
+				});
+
+				return updated;
+			});
+		}),
+
+	// 법률 자문 계정 지정·해제. 제재(setUserStatus)와 같은 트랜잭션 문법이지만 바꾸는 축이
+	// status가 아니라 role이고, 감사 로그 action은 set_role:<역할>로 남긴다.
+	setUserRole: adminProcedure
+		.input(setUserRoleInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(async (tx) => {
+				const [current] = await tx
+					.select({ role: bambiProfile.role })
+					.from(bambiProfile)
+					.where(eq(bambiProfile.userId, input.targetUserId))
+					.limit(1);
+
+				if (!current) {
+					// 역할은 bambi_profile에만 있어 온보딩 전 계정에는 지정할 행이 없다.
+					throw new ORPCError("BAD_REQUEST", {
+						message: PROFILELESS_ROLE_MESSAGE,
+					});
+				}
+				assertLegalAdvisorRoleSwitch(current.role, input.role);
+
+				const [updated] = await tx
+					.update(bambiProfile)
+					.set({ role: input.role })
+					.where(eq(bambiProfile.userId, input.targetUserId))
+					.returning();
+
+				await tx.insert(adminModerationAction).values({
+					action: `set_role:${input.role}`,
+					adminUserId: admin.userId,
+					reason: input.reason,
+					targetId: input.targetUserId,
+					targetType: "user",
 				});
 
 				return updated;
@@ -1622,8 +1846,10 @@ export const moderationRouter = {
 								.returning();
 
 							if (!updated) {
-								throw new ORPCError("NOT_FOUND", {
-									message: "User was not found.",
+								// 일괄 처리는 실패 대상만 failures로 모으고 나머지는 그대로 적용된다
+								// (executeBulkModeration의 기존 동작). 코드·메시지만 원인을 드러내게 바꾼다.
+								throw new ORPCError("BAD_REQUEST", {
+									message: PROFILELESS_SANCTION_MESSAGE,
 								});
 							}
 
@@ -1650,6 +1876,11 @@ export const moderationRouter = {
 				displayName: employerOrganizationProfile.displayName,
 				businessRegistrationNumber:
 					employerOrganizationProfile.businessRegistrationNumber,
+				representativeName: employerOrganizationProfile.representativeName,
+				businessStartDate: employerOrganizationProfile.businessStartDate,
+				// 국세청 대조 결과 — null이면 운영자가 미확인으로 보고 더 꼼꼼히 심사한다.
+				biznumCheckedAt: employerOrganizationProfile.biznumCheckedAt,
+				biznumStatusCode: employerOrganizationProfile.biznumStatusCode,
 				verificationStatus: employerOrganizationProfile.verificationStatus,
 				verificationNote: employerOrganizationProfile.verificationNote,
 				ownerUserId: member.userId,
@@ -1680,6 +1911,11 @@ export const moderationRouter = {
 					displayName: employerOrganizationProfile.displayName,
 					businessRegistrationNumber:
 						employerOrganizationProfile.businessRegistrationNumber,
+					representativeName: employerOrganizationProfile.representativeName,
+					businessStartDate: employerOrganizationProfile.businessStartDate,
+					// 국세청 대조 결과 — null이면 운영자가 미확인으로 보고 더 꼼꼼히 심사한다.
+					biznumCheckedAt: employerOrganizationProfile.biznumCheckedAt,
+					biznumStatusCode: employerOrganizationProfile.biznumStatusCode,
 					verificationStatus: employerOrganizationProfile.verificationStatus,
 					verificationNote: employerOrganizationProfile.verificationNote,
 					ownerUserId: member.userId,
@@ -1699,7 +1935,8 @@ export const moderationRouter = {
 				)
 				.innerJoin(user, eq(user.id, member.userId))
 				.orderBy(desc(employerOrganizationProfile.createdAt))
-				.limit(input.limit);
+				.limit(input.limit)
+				.offset(input.offset);
 
 			if (input.status) {
 				return await query.where(
@@ -1710,8 +1947,9 @@ export const moderationRouter = {
 			return await query;
 		}),
 
-	listPendingTeamInvitations: protectedProcedure.handler(
-		async ({ context }) => {
+	listPendingTeamInvitations: protectedProcedure
+		.input(listTeamInvitationsInput)
+		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
 
 			const inviterUser = alias(user, "inviter_user");
@@ -1726,6 +1964,9 @@ export const moderationRouter = {
 					inviteeName: inviteeUser.name,
 					inviterName: inviterUser.name,
 					inviterEmail: inviterUser.email,
+					// 구인자가 초대할 때 적은 사유. 운영자가 승인 판단에 쓴다.
+					inviteReason: invitation.inviteReason,
+					rejectionReason: invitation.rejectionReason,
 					role: invitation.role,
 					teamId: invitation.teamId,
 					teamNameRaw: team.name,
@@ -1749,8 +1990,10 @@ export const moderationRouter = {
 					employerTeamProfile,
 					eq(employerTeamProfile.teamId, invitation.teamId)
 				)
-				.where(eq(invitation.status, "pending"))
-				.orderBy(desc(invitation.createdAt));
+				.where(eq(invitation.status, input.status))
+				.orderBy(desc(invitation.createdAt))
+				.limit(input.limit)
+				.offset(input.offset);
 
 			const now = Date.now();
 			return rows.map((row) => ({
@@ -1761,6 +2004,8 @@ export const moderationRouter = {
 				inviteeName: row.inviteeName,
 				inviterName: row.inviterName,
 				inviterEmail: row.inviterEmail,
+				inviteReason: row.inviteReason,
+				rejectionReason: row.rejectionReason,
 				role: normalizeOrganizationManagementRole(row.role) ?? "staff",
 				teamId: row.teamId,
 				teamName: row.teamProfileName ?? row.teamNameRaw ?? null,
@@ -1769,8 +2014,7 @@ export const moderationRouter = {
 				expiresAt: row.expiresAt,
 				isExpired: row.expiresAt.getTime() < now,
 			}));
-		}
-	),
+		}),
 
 	setChatRoomBlocked: protectedProcedure
 		.input(setChatRoomBlockedInput)
@@ -2353,67 +2597,11 @@ export const moderationRouter = {
 			};
 		}),
 
-	// 탈퇴 계정의 잔여 식별값 파기 배치. 연락처·자격증명은 이미 탈퇴 시점에
-	// (onboarding.withdrawMyAccount) 파기되고, 부정 재가입 차단용 CI·DI 해시만 남는다 —
-	// 이 배치가 보존기간(운영자 설정, 기본 30일) 경과분의 해시를 마저 지우고 purgedAt을
-	// 찍는다. 스크럽 항목을 전부 유지하는 것은 이 변경 이전에 탈퇴해 PII가 남아 있는
-	// 계정까지 한 번에 정리하기 위해서다(이미 null인 값은 no-op).
-	// user 행 자체는 지우지 않는다 — 채팅·리뷰·신고 등 상대방 데이터가 onDelete 미지정
-	// (RESTRICT) FK로 물려 있어 행 삭제는 실패하거나 상대방 기록까지 깨진다.
-	// cron 인프라가 없어 운영자 사이트 설정의 실행 버튼으로 트리거한다.
-	purgeWithdrawnAccounts: adminProcedure.handler(async () => {
-		const retentionDays = await resolveWithdrawalRetentionDays();
-		const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-		const targets = await db
-			.select({ id: user.id })
-			.from(user)
-			.where(
-				and(
-					isNotNull(user.deletedAt),
-					lte(user.deletedAt, cutoff),
-					isNull(user.purgedAt)
-				)
-			);
-		if (targets.length === 0) {
-			return { purgedCount: 0 };
-		}
-		const ids = targets.map((row) => row.id);
-
-		await db.transaction(async (tx) => {
-			await tx.delete(session).where(inArray(session.userId, ids));
-			// 비밀번호 등 자격증명 파기.
-			await tx.delete(account).where(inArray(account.userId, ids));
-			// 표시명(닉네임)은 user.name을 "탈퇴한 회원"으로 치환(아래 user 갱신)하므로
-			// 프로필에서는 연락처·본인인증 식별값만 파기한다.
-			await tx
-				.update(bambiProfile)
-				.set({
-					phoneNumber: null,
-					gender: null,
-					birthDate: null,
-					ciHash: null,
-					diHash: null,
-					isPhoneVerified: false,
-				})
-				.where(inArray(bambiProfile.userId, ids));
-			// 이메일은 unique 제약이라 사용자별 tombstone으로 치환하고, 로그인 아이디는
-			// nullable이라 비워서 파기한다(탈퇴 시점에 이미 처리되지만 이 변경 이전에
-			// 탈퇴한 계정을 위해 여기서도 수행한다).
-			for (const id of ids) {
-				await tx
-					.update(user)
-					.set({
-						email: `withdrawn-${id}@invalid.bambi`,
-						name: "탈퇴한 회원",
-						image: null,
-						login_id: null,
-						login_id_display: null,
-						purgedAt: new Date(),
-					})
-					.where(eq(user.id, id));
-			}
-		});
-
-		return { purgedCount: ids.length };
-	}),
+	// 탈퇴 계정의 잔여 식별값 파기 배치의 수동 트리거(즉시 실행용). 실제 로직은 서버
+	// 스케줄러(apps/server/src/plugins/withdrawal-purge.ts)가 매일 호출하는 것과 같은
+	// 서비스 함수다 — 운영자가 보존기간을 줄인 직후 등 다음 자동 실행을 기다리지 않고
+	// 즉시 정리하고 싶을 때 쓴다. 멱등하므로 자동 실행과 겹쳐도 안전하다.
+	purgeWithdrawnAccounts: adminProcedure.handler(() =>
+		purgeWithdrawnAccountsBatch()
+	),
 };

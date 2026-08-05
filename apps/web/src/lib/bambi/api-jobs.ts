@@ -5,6 +5,7 @@ import {
 	useInfiniteQuery,
 	useQuery,
 } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth-client";
 import {
 	DEFAULT_MARKETPLACE_FILTERS,
 	filterMarketplaceJobs,
@@ -65,15 +66,15 @@ const toApiListInput = (filters: MarketplaceFilters) => ({
 		isIndustryOption(filters.category)
 			? filters.category
 			: undefined,
-	district:
-		filters.district === DEFAULT_MARKETPLACE_FILTERS.district
+	districtCode:
+		filters.districtCode === DEFAULT_MARKETPLACE_FILTERS.districtCode
 			? undefined
-			: filters.district,
+			: filters.districtCode,
 	minPayAmount: filters.minimumPay > 0 ? filters.minimumPay : undefined,
-	region:
-		filters.region === DEFAULT_MARKETPLACE_FILTERS.region
+	regionCode:
+		filters.regionCode === DEFAULT_MARKETPLACE_FILTERS.regionCode
 			? undefined
-			: filters.region,
+			: filters.regionCode,
 });
 
 // 서버 입력에 대응이 없어 화면에서만 거르는 필터들. 이게 켜져 있으면 응답의 전체 건수와
@@ -224,6 +225,25 @@ export function useMarketplaceJob(id: string): UseMarketplaceJobResult {
 			jobQuery.refetch().catch(() => undefined);
 		},
 	};
+}
+
+// 내가 차단한 상대가 올린 공고인지. 차단한 상대와는 채팅방이 서버에서 막히므로,
+// 화면이 미리 채팅 CTA 대신 안내를 보여주는 데 쓴다.
+// 비로그인·로딩 중·프로필 없음(listMine이 requireActiveBambiProfile이라 실패할 수 있다)·
+// 조회 실패는 전부 "차단 아님"으로 본다 — 오탐으로 채팅을 막는 쪽이 더 나쁘고,
+// 최종 판정은 어차피 서버가 한다.
+export function useIsBlockedEmployer(employerUserId?: string): boolean {
+	const session = authClient.useSession();
+	const blocksQuery = useQuery({
+		...orpc.bambi.blocks.listMine.queryOptions(),
+		enabled: Boolean(employerUserId) && Boolean(session.data?.user),
+		retry: false,
+	});
+
+	return Boolean(
+		employerUserId &&
+			blocksQuery.data?.some((block) => block.blockedUserId === employerUserId)
+	);
 }
 
 // 수집 공고 상세. 우리 공고와 테이블·필드가 달라 목록 매퍼(toMarketplaceJob)를 거치지 않고

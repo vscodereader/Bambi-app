@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 
 import { db } from "@bambi-app/db";
 import {
-	account,
 	member,
 	organization,
 	session as sessionTable,
@@ -16,6 +15,7 @@ import {
 	bambiProfile,
 	employerOrganizationProfile,
 	employerTeamProfile,
+	jobPost,
 } from "@bambi-app/db/schema/bambi";
 import { env } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
@@ -28,12 +28,17 @@ import {
 	rateLimitedPublicProcedure,
 } from "../../index";
 import { hasActiveAdExposure } from "../../services/bambi-advertiser";
-import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
+import {
+	isEmployerLikeRole,
+	isEmployerOrganizationVerified,
+} from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
+import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import {
 	resolveVerifiedIdentity,
 	type VerifiedIdentity,
 } from "../../services/bambi-identity";
+import { recordIdentityVerification } from "../../services/bambi-identity-log";
 import {
 	assertIdentityVerificationUsable,
 	consumeIdentityVerification,
@@ -51,16 +56,24 @@ import {
 	deriveEmployerApprovalStatus,
 	type OrganizationRole,
 } from "../../services/bambi-onboarding";
+import { resolveOptionalRegion } from "../../services/bambi-region";
+import {
+	type BiznumValidation,
+	validateBiznum,
+} from "../../services/nts-biznum";
 import {
 	isAdultBirth8,
 	UNDERAGE_MESSAGE,
 } from "../../services/portone-identity";
+import { takeRateLimit } from "../../services/rate-limit";
 
 // 포트원 테스트 채널은 통신사 대조를 하지 않아 아무 생년월일·주민번호 뒷자리나 통과시킨다.
 // 개발에서만 허용하고 프로덕션에서는 거부한다(판정은 여기서 하고 서비스에 옵션으로 넘긴다 —
 // bambi-identity는 env에 의존하지 않는 순수 모듈이다).
+// TODO(임시): KCP 실계약 전 테스트 흐름 확인을 위해 프로덕션에서도 테스트 채널을 허용 중.
+// 실연동 채널 전환 시 `env.NODE_ENV !== "production"` 판정으로 반드시 되돌릴 것.
 const identityChannelOptions = {
-	allowTestChannel: env.NODE_ENV !== "production",
+	allowTestChannel: true,
 };
 
 const profileInput = z.object({
@@ -117,7 +130,9 @@ const teamProfileInput = z.object({
 	organizationId: z.string().min(1),
 	teamId: z.string().min(1),
 	displayName: z.string().min(1).max(120),
-	region: z.string().min(1).max(80).optional(),
+	// 공고·팀 입력과 같은 축이다 — 지역은 마스터 코드로 받고 표시용 문자열은 서버가 채운다.
+	regionCode: z.string().length(10).optional(),
+	districtCode: z.string().length(10).optional(),
 });
 
 const requestEmployerVerificationInput = z.object({
@@ -132,7 +147,60 @@ const submitEmployerBusinessInfoInput = z.object({
 			/^\d{3}-\d{2}-\d{5}$/,
 			"사업자등록번호는 000-00-00000 형식이어야 합니다."
 		),
+	// 국세청 진위확인은 사업자번호만으로는 안 되고 대표자명·개업일자가 함께 있어야 한다.
+	// 상호(displayName)는 대조 항목이 아니다 — 지점명 등으로 등록증과 어긋나는 일이 잦다.
+	representativeName: z.string().trim().min(1).max(60),
+	// 웹 date input 값 그대로 받고(YYYY-MM-DD) 저장·전송 시에만 8자리로 줄인다.
+	businessStartDate: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, "개업일자는 YYYY-MM-DD 형식이어야 합니다."),
 });
+
+const BIZNUM_MISMATCH_MESSAGE =
+	"국세청에 등록된 사업자등록정보와 일치하지 않습니다. 사업자등록번호·대표자 성명·개업일자를 사업자등록증에 적힌 그대로 입력했는지 확인해 주세요. 최근 개업했다면 국세청 반영까지 1~2일 걸릴 수 있습니다.";
+
+// 제출 1회당 국세청 API를 1회 부르므로 반복 제출을 그대로 태우지 않는다. 사용자당 시간당
+// 10회 — 오타를 고쳐 다시 넣는 정상 사용자는 몇 회면 끝난다.
+const BIZNUM_RATE_LIMIT = 10;
+const BIZNUM_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+// 국세청 대조 결과를 프로필에 기록할 형태로. 키 미설정(개발)이나 국세청 장애·타임아웃은
+// "미확인"(둘 다 null)으로 통과시킨다 — 국세청이 죽었다고 정상 사업자를 막으면 안 되고,
+// 뒤에 운영자 수동 심사가 그대로 남아 있다. 불일치·휴폐업만 제출을 거부한다.
+const checkBiznum = async (input: {
+	businessRegistrationNumber: string;
+	businessStartDate: string;
+	representativeName: string;
+}): Promise<{
+	biznumCheckedAt: Date | null;
+	biznumStatusCode: string | null;
+}> => {
+	const unchecked = { biznumCheckedAt: null, biznumStatusCode: null };
+	if (!env.NTS_SERVICE_KEY) {
+		return unchecked;
+	}
+
+	let result: BiznumValidation;
+	try {
+		result = await validateBiznum(env.NTS_SERVICE_KEY, {
+			bNo: input.businessRegistrationNumber.replaceAll("-", ""),
+			pNm: input.representativeName,
+			startDt: input.businessStartDate,
+		});
+	} catch {
+		return unchecked;
+	}
+
+	if (!result.matched) {
+		throw new ORPCError("BAD_REQUEST", { message: BIZNUM_MISMATCH_MESSAGE });
+	}
+	if (result.statusCode !== "01") {
+		throw new ORPCError("BAD_REQUEST", {
+			message: `국세청에 ${result.statusCode === "02" ? "휴업" : "폐업"} 상태로 등록된 사업자등록번호입니다. 정상 영업 중인 사업자등록번호로 제출해 주세요.`,
+		});
+	}
+	return { biznumCheckedAt: new Date(), biznumStatusCode: result.statusCode };
+};
 
 const toOrganizationSlug = (name: string): string => {
 	const base = name
@@ -180,7 +248,7 @@ const requireEmployerBambiProfile = async (userId: string) => {
 		.where(eq(bambiProfile.userId, userId))
 		.limit(1);
 
-	if (!profile || profile.role === "job_seeker") {
+	if (!(profile && isEmployerLikeRole(profile.role))) {
 		throw new ORPCError("FORBIDDEN", {
 			message: "Employer Bambi profile is required.",
 		});
@@ -272,6 +340,12 @@ const createBambiProfile = async ({
 		// 인증 건의 최종 소비 지점. 여기를 지나면 같은 ID로는 다시 가입할 수 없다
 		// (앞선 checkIdentityForSignup·/api/guest는 검증만 하고 소진시키지 않는다).
 		await consumeIdentityVerification(identityVerificationId);
+		// 비회원으로 먼저 인증했다면 그 행의 구분을 가입 역할로 덮어쓴다.
+		await recordIdentityVerification({
+			identity,
+			identityVerificationId,
+			kind: role,
+		});
 	}
 
 	const [createdProfile] = await db
@@ -317,6 +391,37 @@ const hasRemainingMembersInOwnedOrganizations = async (
 		)
 		.limit(1);
 	return Boolean(remainingMember);
+};
+
+// 이 사용자가 빠지면 멤버가 한 명도 남지 않는 조직 ID들. 탈퇴 시 그 조직의 공개 공고를
+// 내리는 판정에 쓴다. 탈퇴는 member 행을 지우므로 남아 있는 member 행은 모두 활성
+// 계정이다 — 별도의 deletedAt 대조 없이 "다른 member 행이 있는가"로 충분하다.
+const findOrganizationsLeftEmptyBy = async (
+	userId: string
+): Promise<string[]> => {
+	const organizationIds = (
+		await db
+			.select({ organizationId: member.organizationId })
+			.from(member)
+			.where(eq(member.userId, userId))
+	).map((row) => row.organizationId);
+	if (organizationIds.length === 0) {
+		return [];
+	}
+	const sharedOrganizationIds = new Set(
+		(
+			await db
+				.select({ organizationId: member.organizationId })
+				.from(member)
+				.where(
+					and(
+						inArray(member.organizationId, organizationIds),
+						ne(member.userId, userId)
+					)
+				)
+		).map((row) => row.organizationId)
+	);
+	return organizationIds.filter((id) => !sharedOrganizationIds.has(id));
 };
 
 export const onboardingRouter = {
@@ -380,6 +485,10 @@ export const onboardingRouter = {
 				displayName: employerOrganizationProfile.displayName,
 				businessRegistrationNumber:
 					employerOrganizationProfile.businessRegistrationNumber,
+				representativeName: employerOrganizationProfile.representativeName,
+				businessStartDate: employerOrganizationProfile.businessStartDate,
+				biznumCheckedAt: employerOrganizationProfile.biznumCheckedAt,
+				biznumStatusCode: employerOrganizationProfile.biznumStatusCode,
 				verificationStatus: employerOrganizationProfile.verificationStatus,
 				verificationNote: employerOrganizationProfile.verificationNote,
 				createdAt: employerOrganizationProfile.createdAt,
@@ -400,6 +509,8 @@ export const onboardingRouter = {
 			teamId: employerTeamProfile.teamId,
 			displayName: employerTeamProfile.displayName,
 			region: employerTeamProfile.region,
+			regionCode: employerTeamProfile.regionCode,
+			districtCode: employerTeamProfile.districtCode,
 			createdAt: employerTeamProfile.createdAt,
 			updatedAt: employerTeamProfile.updatedAt,
 		};
@@ -466,6 +577,9 @@ export const onboardingRouter = {
 		return {
 			bambiProfile: toClientProfile(profile),
 			accountSanction,
+			// 국세청 진위확인 서비스키가 있어야 제출 때 대조가 돈다. 없으면 전 건이 "미확인"으로
+			// 접수되므로, 화면이 "미확인" 대신 "곧 준비될 기능" 안내를 띄우도록 여부만 내려준다.
+			biznumCheckEnabled: Boolean(env.NTS_SERVICE_KEY),
 			community,
 			employerOrganizationProfiles: organizationProfiles,
 			// teamMember 기준 팀에 더해 owner/admin 조직 전체 팀까지 포함해야
@@ -550,6 +664,9 @@ export const onboardingRouter = {
 
 			// 표시명(닉네임)은 user.name 정본을 갱신한다(프로필 아님).
 			if (input.displayName !== undefined) {
+				await assertDisplayNameAllowed(input.displayName, {
+					isAdmin: existingProfile?.role === "admin",
+				});
 				await db
 					.update(user)
 					.set({ name: input.displayName })
@@ -594,7 +711,13 @@ export const onboardingRouter = {
 	// 끝난 뒤이고 포트원 단건조회는 무료라, 임의 ID로 두드려도 얻을 게 없다
 	// (identityVerificationId는 UUID라 추측이 불가능하다).
 	checkIdentityForSignup: publicProcedure
-		.input(phoneVerificationInput)
+		.input(
+			// 비회원(수다방 게스트) 흐름에서 온 호출만 구분을 guest로 남긴다. 가입 폼의
+			// 사전확인 호출은 구분을 아직 모르므로 플래그 없이 부른다.
+			phoneVerificationInput.extend({
+				source: z.literal("guest").optional(),
+			})
+		)
 		.handler(async ({ input }) => {
 			const apiSecret = env.PORTONE_API_SECRET;
 			if (!apiSecret) {
@@ -610,6 +733,11 @@ export const onboardingRouter = {
 				input.identityVerificationId,
 				identityChannelOptions
 			);
+			await recordIdentityVerification({
+				identity,
+				identityVerificationId: input.identityVerificationId,
+				kind: input.source,
+			});
 			return {
 				gender: identity.gender,
 				hasAccount: await findIdentityCollision(identity),
@@ -630,7 +758,7 @@ export const onboardingRouter = {
 			}
 			const userId = context.session.user.id;
 			const [existingProfile] = await db
-				.select({ gender: bambiProfile.gender })
+				.select({ gender: bambiProfile.gender, role: bambiProfile.role })
 				.from(bambiProfile)
 				.where(eq(bambiProfile.userId, userId))
 				.limit(1);
@@ -650,6 +778,11 @@ export const onboardingRouter = {
 			}
 			// 재인증의 최종 소비 지점 — 같은 인증 건으로 두 번 번호를 갈아끼울 수 없다.
 			await consumeIdentityVerification(input.identityVerificationId);
+			await recordIdentityVerification({
+				identity,
+				identityVerificationId: input.identityVerificationId,
+				kind: existingProfile.role,
+			});
 
 			const [updatedProfile] = await db
 				.update(bambiProfile)
@@ -757,11 +890,13 @@ export const onboardingRouter = {
 	// 회원 탈퇴. 본인이 소유한 조직에 다른 멤버가 남아 있으면 차단한다 —
 	// 팀 관리에서 멤버를 모두 정리한 뒤 탈퇴할 수 있다(혼자 남은 소유자는 그대로 탈퇴 가능).
 	//
-	// 개인정보 보호법 제21조제1항은 목적 달성 시 "지체 없이" 파기하도록 하고, 그 단서의
-	// 예외는 "다른 법령에 따라 보존하여야 하는 경우"뿐이다. 부정 재가입 차단은 법령상
-	// 보존 사유가 아니므로 탈퇴 시점에 PII를 즉시 파기하고, 그 목적에 꼭 필요한 최소
-	// 식별값인 CI·DI 해시만 보존기간 동안 남긴다. 남은 해시는 보존기간 경과 후 운영자
-	// 배치(moderation.purgeWithdrawnAccounts)가 파기한다.
+	// 여기서는 소프트 탈퇴만 한다: deletedAt을 찍고, 상대방에게 보이는 표시값을
+	// 익명화하고, 전 기기 세션을 끊는다. 식별값(이메일·로그인 아이디·비밀번호·연락처·
+	// CI/DI 해시) 파기는 보존기간(운영자 설정, 기본 30일) 경과 후 운영자 배치
+	// (moderation.purgeWithdrawnAccounts)가 전담한다. 탈퇴 시점에 이메일을 치환하고
+	// login_id·자격증명을 지우면 재로그인 시 계정 자체가 조회되지 않아 better-auth가
+	// "아이디(이메일) 또는 비밀번호가 틀렸습니다"로 뭉개고, 세션 생성 훅의 안내
+	// ("탈퇴한 계정이에요. 로그인할 수 없어요." — packages/auth/src/index.ts)에 닿지 못했다.
 	// user 행 자체는 지우지 않는다 — 채팅·리뷰·신고 등 상대방 데이터가 onDelete 미지정
 	// (RESTRICT) FK로 물려 있어 행 삭제는 실패하거나 상대방 기록까지 깨진다.
 	withdrawMyAccount: protectedProcedure.handler(async ({ context }) => {
@@ -775,35 +910,32 @@ export const onboardingRouter = {
 			});
 		}
 
+		const orphanedOrganizationIds = await findOrganizationsLeftEmptyBy(userId);
+
 		await db.transaction(async (tx) => {
-			// 이메일은 notNull·unique라 지울 수 없어 tombstone으로 치환한다(원 이메일
-			// 재가입이 바로 열린다). 로그인 아이디는 nullable이라 그대로 비워 파기하며,
-			// 같은 아이디를 다른 사람이 다시 쓸 수 있게 된다(Postgres unique는 NULL 다중
-			// 허용). isNull 가드로 중복 호출을 no-op으로 만든다(멱등).
+			// 응대할 사람이 남지 않은 조직의 공개 공고를 내린다. 다른 멤버가 남은 조직은
+			// 그대로 둔다 — 조직이 계속 운영되므로 공고도 살아 있는 게 맞다.
+			if (orphanedOrganizationIds.length > 0) {
+				await tx
+					.update(jobPost)
+					.set({ status: "hidden" })
+					.where(
+						and(
+							inArray(jobPost.organizationId, orphanedOrganizationIds),
+							eq(jobPost.status, "published")
+						)
+					);
+			}
+			// 표시명·프로필 이미지는 상대방 화면(채팅·후기)에 그대로 보이는 값이라 즉시
+			// 익명화한다. isNull 가드로 중복 호출을 no-op으로 만든다(멱등).
 			await tx
 				.update(user)
 				.set({
 					deletedAt: new Date(),
-					email: `withdrawn-${userId}@invalid.bambi`,
 					image: null,
-					login_id: null,
-					login_id_display: null,
 					name: "탈퇴한 회원",
 				})
 				.where(and(eq(user.id, userId), isNull(user.deletedAt)));
-			// 비밀번호 등 자격증명 즉시 파기.
-			await tx.delete(account).where(eq(account.userId, userId));
-			// 연락처·본인인증 정보 즉시 파기. ciHash·diHash는 부정 재가입 차단에 필요해
-			// 보존기간 동안만 남기고, 파기 배치가 보존기간 경과 후 지운다.
-			await tx
-				.update(bambiProfile)
-				.set({
-					birthDate: null,
-					gender: null,
-					isPhoneVerified: false,
-					phoneNumber: null,
-				})
-				.where(eq(bambiProfile.userId, userId));
 			await tx.delete(teamMember).where(eq(teamMember.userId, userId));
 			await tx.delete(member).where(eq(member.userId, userId));
 			// 전 기기 세션을 지워 즉시 접근을 끊는다. 재로그인은 auth 훅이 차단.
@@ -886,15 +1018,21 @@ export const onboardingRouter = {
 				});
 			}
 
+			const regionSelection = await resolveOptionalRegion(input);
 			const [profile] = await db
 				.insert(employerTeamProfile)
-				.values(input)
+				.values({
+					displayName: input.displayName,
+					organizationId: input.organizationId,
+					teamId: input.teamId,
+					...regionSelection,
+				})
 				.onConflictDoUpdate({
 					target: employerTeamProfile.teamId,
 					set: {
 						organizationId: input.organizationId,
 						displayName: input.displayName,
-						region: input.region,
+						...regionSelection,
 						updatedAt: new Date(),
 					},
 				})
@@ -947,8 +1085,24 @@ export const onboardingRouter = {
 			const userId = context.session.user.id;
 			await requireEmployerBambiProfile(userId);
 
+			if (
+				!takeRateLimit({
+					key: `submitEmployerBusinessInfo:${userId}`,
+					limit: BIZNUM_RATE_LIMIT,
+					now: Date.now(),
+					windowMs: BIZNUM_RATE_LIMIT_WINDOW_MS,
+				})
+			) {
+				throw new ORPCError("TOO_MANY_REQUESTS", {
+					message: "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
+				});
+			}
+
+			// 개업일자는 8자리로 저장한다(국세청 전송 형식과 같게 둬 변환 지점을 하나로).
+			const businessStartDate = input.businessStartDate.replaceAll("-", "");
+
 			// 본인이 owner인 조직이 이미 있으면 그 조직 프로필을 갱신한다.
-			// 단, 이미 인증(verified)된 조직이 업체명·사업자번호를 그대로 재제출한 경우
+			// 단, 이미 인증(verified)된 조직이 사업자정보를 그대로 재제출한 경우
 			// 재심사로 강등하지 않고 verified를 유지한다(변경이 있을 때만 pending 재심사).
 			const [ownedOrg] = await db
 				.select({
@@ -956,6 +1110,8 @@ export const onboardingRouter = {
 					displayName: employerOrganizationProfile.displayName,
 					businessRegistrationNumber:
 						employerOrganizationProfile.businessRegistrationNumber,
+					representativeName: employerOrganizationProfile.representativeName,
+					businessStartDate: employerOrganizationProfile.businessStartDate,
 					verificationStatus: employerOrganizationProfile.verificationStatus,
 				})
 				.from(employerOrganizationProfile)
@@ -976,7 +1132,9 @@ export const onboardingRouter = {
 				const isUnchanged =
 					ownedOrg.displayName === input.displayName &&
 					ownedOrg.businessRegistrationNumber ===
-						input.businessRegistrationNumber;
+						input.businessRegistrationNumber &&
+					ownedOrg.representativeName === input.representativeName &&
+					ownedOrg.businessStartDate === businessStartDate;
 
 				// 인증 완료 상태에서 변경 없이 재제출한 경우: 상태를 건드리지 않고 유지한다.
 				if (ownedOrg.verificationStatus === "verified" && isUnchanged) {
@@ -986,11 +1144,16 @@ export const onboardingRouter = {
 					};
 				}
 
+				const biznumCheck = await checkBiznum({ ...input, businessStartDate });
+
 				await db
 					.update(employerOrganizationProfile)
 					.set({
 						displayName: input.displayName,
 						businessRegistrationNumber: input.businessRegistrationNumber,
+						representativeName: input.representativeName,
+						businessStartDate,
+						...biznumCheck,
 						verificationStatus: "pending",
 						updatedAt: new Date(),
 					})
@@ -1007,6 +1170,7 @@ export const onboardingRouter = {
 				};
 			}
 
+			const biznumCheck = await checkBiznum({ ...input, businessStartDate });
 			const organizationId = `org_${randomUUID()}`;
 			const now = new Date();
 
@@ -1028,6 +1192,9 @@ export const onboardingRouter = {
 					organizationId,
 					displayName: input.displayName,
 					businessRegistrationNumber: input.businessRegistrationNumber,
+					representativeName: input.representativeName,
+					businessStartDate,
+					...biznumCheck,
 					verificationStatus: "pending",
 				});
 			});

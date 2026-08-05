@@ -9,6 +9,8 @@ import {
 } from "@bambi-app/ui/components/message";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Route } from "next";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
 	type ReactNode,
@@ -21,6 +23,7 @@ import {
 import { toast } from "sonner";
 import {
 	detectImageSignature,
+	isPdfSignature,
 	isSignatureMismatch,
 } from "@/lib/bambi/image-signature";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
@@ -31,6 +34,7 @@ import {
 	joinBambiChatRoom,
 	leaveBambiChatRoom,
 } from "@/lib/bambi-chat-realtime";
+import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import {
 	interviewStatusLabels,
 	jobStatusLabels,
@@ -82,8 +86,9 @@ const ACCEPTED_ATTACHMENT_MIME_TYPES = [
 	"image/webp",
 	"application/pdf",
 ] as const;
-const IMAGE_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
-const PDF_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+// 서버 정책(bambi-media-policy.ts)과 같은 값이어야 한다. 8MB로 두던 이미지 상한이 서버보다
+// 좁아 서버가 받아 줄 파일을 화면이 먼저 막았다.
+const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 type AttachmentDraftStatus = "error" | "selected" | "uploading";
 
@@ -106,15 +111,10 @@ const getAttachmentValidationError = (file: File): null | string => {
 		return "JPG, PNG, WebP 이미지 또는 PDF만 첨부할 수 있어요.";
 	}
 
-	const maxBytes =
-		file.type === "application/pdf"
-			? PDF_ATTACHMENT_MAX_BYTES
-			: IMAGE_ATTACHMENT_MAX_BYTES;
-
-	if (file.size > maxBytes) {
+	if (file.size > ATTACHMENT_MAX_BYTES) {
 		return file.type === "application/pdf"
 			? "PDF는 10 MB 이하만 첨부할 수 있어요."
-			: "이미지는 8 MB 이하만 첨부할 수 있어요.";
+			: "이미지는 10 MB 이하만 첨부할 수 있어요.";
 	}
 
 	return null;
@@ -141,6 +141,33 @@ const getMutationErrorMessage = (error: Error): string => {
 	}
 
 	return "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
+};
+
+/**
+ * 서버(chats.throwIfChatBlocked)가 FORBIDDEN에 실어 보내는 차단 사유를 안내 문구로.
+ * 사유를 읽어낸 경우에만 문자열을 돌려주고, 그 밖의 오류(비로그인·네트워크 등)는
+ * null — 사유를 모르는 채 목록으로 튕기면 원인 파악이 더 어려워지므로 오류 카드에 맡긴다.
+ */
+const getChatBlockMessage = (error: unknown): null | string => {
+	const data = (error as { data?: unknown } | null | undefined)?.data as
+		| { chatBlockReason?: unknown; counterpartName?: unknown }
+		| null
+		| undefined;
+	const name =
+		typeof data?.counterpartName === "string" ? data.counterpartName : null;
+
+	switch (data?.chatBlockReason) {
+		case "blocked_by_counterpart":
+			return name ? `${name}님이 차단했어요.` : "차단된 채팅방이에요.";
+		case "blocked_by_me":
+			return name
+				? `${name}님을 차단했어요. 차단 관리에서 해제할 수 있어요.`
+				: "차단된 채팅방이에요.";
+		case "moderation":
+			return "신고에 대한 운영자 조치로 종료된 채팅방이에요.";
+		default:
+			return null;
+	}
 };
 
 const getReviewMutationErrorMessage = (error: Error): string => {
@@ -648,6 +675,42 @@ function ReviewSidebarCard({
 	);
 }
 
+// 채팅방 헤더에서 공고 상세로 가는 버튼. 상세(jobs.getById)는 published + paid만 열어 주므로
+// 그 밖의 공고(삭제·검수 중·숨김·미결제)는 이동시키지 않고 이유만 남긴다 — 눌러서 404를 보는
+// 것보다 낫다. 경로는 구직자·구인자 공용이다(seeker 레이아웃은 비로그인·게스트만 막는다).
+function ChatJobPostLink({
+	jobPost,
+}: {
+	jobPost: null | {
+		id: string;
+		paymentStatus: string;
+		status: string;
+	};
+}) {
+	const isViewable =
+		jobPost?.status === "published" && jobPost.paymentStatus === "paid";
+
+	if (!(jobPost && isViewable)) {
+		return (
+			<UiButton className="flex-none" disabled size="sm" variant="outline">
+				{jobPost ? "공고 비공개" : "공고 삭제됨"}
+			</UiButton>
+		);
+	}
+
+	return (
+		<UiButton
+			className="flex-none"
+			nativeButton={false}
+			render={<Link href={`/seeker/jobs/${jobPost.id}` as Route} />}
+			size="sm"
+			variant="outline"
+		>
+			공고 보기
+		</UiButton>
+	);
+}
+
 function ChatCounterpartName({ name }: { name: string | null }) {
 	if (!name) {
 		return null;
@@ -737,6 +800,75 @@ function ChatBlockConfirm({
 	);
 }
 
+// 헤더 아래 "연락처 보호 중" 안내 바 — 신고·차단 진입점을 함께 담는다.
+// 채팅 신고는 구직자 전용이라(서버 createReport도 같은 기준으로 막는다) 구인자에게는
+// 차단하기만 남기고 안내 문구도 차단 기준으로 바꾼다. 차단은 양쪽 모두 쓸 수 있다.
+// 확인 단계·신고 창 열림 상태는 이 바 밖에서 쓰이지 않아 여기서 갖고 있는다.
+function ChatSafetyNotice({
+	chatRoomId,
+	isBlocked,
+	isBlockPending,
+	isJobSeeker,
+	onBlock,
+}: {
+	chatRoomId: string;
+	isBlocked: boolean;
+	isBlockPending: boolean;
+	isJobSeeker: boolean;
+	onBlock: () => void;
+}) {
+	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
+	const [isReportOpen, setIsReportOpen] = useState(false);
+
+	return (
+		<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
+			<div className="flex items-center justify-between gap-3">
+				<div className="flex items-center gap-2 font-extrabold text-sm">
+					<span className="inline-flex size-4">
+						<ShieldIcon />
+					</span>
+					면접 확정 전 연락처 보호 중
+				</div>
+				<div className="flex items-center gap-2">
+					{isJobSeeker ? (
+						<Button
+							onClick={() => setIsReportOpen(true)}
+							size="sm"
+							variant="secondary"
+						>
+							신고
+						</Button>
+					) : null}
+					<ChatBlockTrigger
+						isBlocked={isBlocked}
+						isConfirmOpen={isBlockConfirmOpen}
+						onOpen={() => setIsBlockConfirmOpen(true)}
+					/>
+				</div>
+			</div>
+			<p className="mt-1 mb-0 text-xs leading-relaxed">
+				{isJobSeeker
+					? "외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요."
+					: "문제가 되는 상대는 차단할 수 있어요."}
+			</p>
+			<ChatBlockConfirm
+				isConfirmOpen={isBlockConfirmOpen}
+				isPending={isBlockPending}
+				onCancel={() => setIsBlockConfirmOpen(false)}
+				onConfirm={onBlock}
+			/>
+			{isJobSeeker ? (
+				<ReportDialog
+					onOpenChange={setIsReportOpen}
+					open={isReportOpen}
+					targetId={chatRoomId}
+					targetType="chat_room"
+				/>
+			) : null}
+		</div>
+	);
+}
+
 // 면접 일정 제안 폼은 구인자에게만 노출된다. 구직자는 제안을 받기만 한다.
 function InterviewProposalForm({
 	interviewAt,
@@ -821,16 +953,16 @@ function ContactRevealAction({
 			<span className="font-medium text-muted-foreground text-xs">
 				구인자 인증 연락처
 			</span>
-			{/* 모바일은 번호 아래로 안내를 스택(flex-col), md↑는 번호 옆 한 줄(flex-row). */}
-			<span className="flex flex-col gap-0.5 md:flex-row md:items-baseline md:gap-1.5">
+			{/* 좁은 사이드 카드에서도 번호가 꺾이지 않도록 항상 세로 스택 + 번호는 한 줄 고정. */}
+			<span className="flex flex-col gap-0.5">
 				<a
-					className="font-bold text-base text-foreground underline-offset-2 hover:underline"
+					className="whitespace-nowrap font-bold text-base text-foreground underline-offset-2 hover:underline"
 					href={`tel:${employerVerifiedPhone}`}
 				>
 					{employerVerifiedPhone}
 				</a>
-				<span className="font-medium text-primary text-sm">
-					('밤비알바 보고 연락드렸다고 하시면 정확한 상담 받으실 수 있어요.')
+				<span className="text-muted-foreground text-xs">
+					밤비알바 보고 연락드렸다고 하시면 정확한 상담을 받으실 수 있어요.
 				</span>
 			</span>
 		</div>
@@ -844,8 +976,6 @@ export function SeekerChatRoomResponsive({
 	const queryClient = useQueryClient();
 	const router = useRouter();
 	const [message, setMessage] = useState("");
-	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
-	const [isReportOpen, setIsReportOpen] = useState(false);
 	const [attachmentDraft, setAttachmentDraft] =
 		useState<AttachmentDraft | null>(null);
 	const [interviewAt, setInterviewAt] = useState("");
@@ -1151,6 +1281,32 @@ export function SeekerChatRoomResponsive({
 		return () => window.clearTimeout(timeoutId);
 	}, [message, roomId, roomQuery.data]);
 
+	// 차단·운영자 조치로 막힌 방은 오류 카드로 세워두지 않고 목록으로 돌려보내며
+	// 이유만 토스트로 알린다. id를 고정해 StrictMode 이중 실행에도 토스트가 겹치지 않는다.
+	const chatBlockMessage = getChatBlockMessage(roomQuery.error);
+
+	useEffect(() => {
+		if (!chatBlockMessage) {
+			return;
+		}
+
+		toast.error(chatBlockMessage, { id: "chat-room-blocked" });
+		router.replace("/seeker/chats");
+	}, [chatBlockMessage, router]);
+
+	if (chatBlockMessage) {
+		return (
+			<div
+				className={cn(
+					"mx-auto w-full px-5 py-10 text-center font-bold text-muted-foreground md:px-6",
+					SEEKER_CONTENT_WIDTH
+				)}
+			>
+				채팅 목록으로 이동하고 있어요.
+			</div>
+		);
+	}
+
 	if (roomQuery.isLoading) {
 		return (
 			<div
@@ -1179,9 +1335,17 @@ export function SeekerChatRoomResponsive({
 					<p className="mt-2 mb-4 text-muted-foreground text-sm">
 						로그인 상태나 채팅방 접근 권한을 확인해 주세요.
 					</p>
-					<Button onClick={() => roomQuery.refetch()} variant="secondary">
-						다시 시도
-					</Button>
+					<div className="flex flex-wrap justify-center gap-2">
+						<Button
+							onClick={() => router.push("/seeker/chats")}
+							variant="primary"
+						>
+							채팅 목록으로
+						</Button>
+						<Button onClick={() => roomQuery.refetch()} variant="secondary">
+							다시 시도
+						</Button>
+					</div>
 				</Card>
 			</div>
 		);
@@ -1234,15 +1398,23 @@ export function SeekerChatRoomResponsive({
 			return;
 		}
 
-		// 이미지는 매직넘버로 실제 형식을 검증해 확장자/MIME 위조를 차단한다(PDF 제외).
+		// 이미지·PDF 모두 앞바이트(매직넘버)로 실제 형식을 확인해 확장자·MIME 위조를 거른다.
+		// GIF는 채팅 허용 목록에 없어(bambi-media-policy.ts) 안내 문구에서도 뺀다.
 		if (file.type.startsWith("image/")) {
 			const detected = await detectImageSignature(file);
 			if (isSignatureMismatch(file.type, detected)) {
 				toast.error(
-					"이미지 형식이 올바르지 않습니다. PNG·JPG·WebP·GIF만 첨부할 수 있어요."
+					"이미지 형식이 올바르지 않습니다. JPG·PNG·WebP 이미지 또는 PDF 파일만 첨부할 수 있어요."
 				);
 				return;
 			}
+		}
+
+		if (file.type === "application/pdf" && !(await isPdfSignature(file))) {
+			toast.error(
+				"PDF 형식이 올바르지 않습니다. 이미지 또는 PDF 파일만 첨부할 수 있어요."
+			);
+			return;
 		}
 
 		const error = getAttachmentValidationError(file);
@@ -1295,6 +1467,13 @@ export function SeekerChatRoomResponsive({
 					chatRoomId: room.id,
 					fileName: attachmentDraft.file.name,
 					mimeType: attachmentDraft.file.type,
+				});
+
+				// 인텐트만 받고 파일을 올리지 않으면 첨부 레코드만 남아 상대에게는 원본 대신
+				// 안내 이미지가 뜬다. 공고 미디어와 같은 헬퍼로 서명 URL에 직접 PUT 한다.
+				await uploadFileToSignedUrl({
+					file: attachmentDraft.file,
+					uploadIntent,
 				});
 
 				await sendMediaMessageMutation.mutateAsync({
@@ -1392,7 +1571,8 @@ export function SeekerChatRoomResponsive({
 			)}
 		>
 			<main className="min-w-0 rounded-lg bg-card shadow-sm ring-1 ring-border lg:self-start">
-				<header className="flex items-center gap-3 border-border border-b p-4">
+				{/* 좁은 화면에서는 공고 버튼·배지가 제목 아래로 접히도록 wrap 한다. */}
+				<header className="flex flex-wrap items-center gap-3 border-border border-b p-4">
 					<button
 						className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 font-bold text-sm"
 						onClick={onBack}
@@ -1410,6 +1590,7 @@ export function SeekerChatRoomResponsive({
 							{jobPost?.region ?? "지역 확인"}
 						</p>
 					</div>
+					<ChatJobPostLink jobPost={jobPost} />
 					<Badge tone={room.isBlocked ? "danger" : "success"}>
 						{room.isBlocked ? "차단됨" : "대화 가능"}
 					</Badge>
@@ -1417,47 +1598,15 @@ export function SeekerChatRoomResponsive({
 						{getRealtimeStatusLabel(realtimeStatus)}
 					</Badge>
 				</header>
-				<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
-					<div className="flex items-center justify-between gap-3">
-						<div className="flex items-center gap-2 font-extrabold text-sm">
-							<span className="inline-flex size-4">
-								<ShieldIcon />
-							</span>
-							면접 확정 전 연락처 보호 중
-						</div>
-						<div className="flex items-center gap-2">
-							<Button
-								onClick={() => setIsReportOpen(true)}
-								size="sm"
-								variant="secondary"
-							>
-								신고
-							</Button>
-							<ChatBlockTrigger
-								isBlocked={room.isBlocked}
-								isConfirmOpen={isBlockConfirmOpen}
-								onOpen={() => setIsBlockConfirmOpen(true)}
-							/>
-						</div>
-					</div>
-					<p className="mt-1 mb-0 text-xs leading-relaxed">
-						외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요.
-					</p>
-					<ChatBlockConfirm
-						isConfirmOpen={isBlockConfirmOpen}
-						isPending={blockMutation.isPending}
-						onCancel={() => setIsBlockConfirmOpen(false)}
-						onConfirm={() =>
-							blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
-						}
-					/>
-					<ReportDialog
-						onOpenChange={setIsReportOpen}
-						open={isReportOpen}
-						targetId={room.id}
-						targetType="chat_room"
-					/>
-				</div>
+				<ChatSafetyNotice
+					chatRoomId={room.id}
+					isBlocked={room.isBlocked}
+					isBlockPending={blockMutation.isPending}
+					isJobSeeker={isJobSeeker}
+					onBlock={() =>
+						blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
+					}
+				/>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
 					<ChatMessageList
 						counterpartName={counterpartName}

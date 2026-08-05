@@ -21,12 +21,16 @@ export function PremiumAdBannerSection({
 	className,
 	isLoading,
 	items,
+	promotionSurface,
 }: {
 	className?: string;
 	// 로딩 중이면 슬롯을 스켈레톤으로 채운다 — 광고 있는 칸도 응답 대기 동안 문의 배너가
 	// 번쩍이는 걸 막는다(로딩 vs "광고 없음" 구분은 useAdBannerJobs.isLoading).
 	isLoading?: boolean;
 	items: (AdBannerItem | null)[];
+	// GA4 프로모션 지면 접두어(이슈 #59). 넘기면 각 칸이 `${promotionSurface}_${순번}` 슬롯으로
+	// 계측되고, 안 넘기면 이 섹션은 계측하지 않는다.
+	promotionSurface?: string;
 }) {
 	return (
 		<section className={cn("flex flex-col gap-3", className)}>
@@ -43,7 +47,15 @@ export function PremiumAdBannerSection({
 					}
 					const item = items[index];
 					return item ? (
-						<HorizontalAdBanner item={item} key={item.id} />
+						<HorizontalAdBanner
+							item={item}
+							key={item.id}
+							promotion={
+								promotionSurface
+									? { index, slot: `${promotionSurface}_${index + 1}` }
+									: undefined
+							}
+						/>
 					) : (
 						<AdSlotPlaceholder
 							className="flex aspect-[16/9] w-full"

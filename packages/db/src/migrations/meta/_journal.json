@@ -407,6 +407,76 @@
       "when": 1785468662265,
       "tag": "0057_majestic_roulette",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1785718512349,
+      "tag": "0058_deep_impossible_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1785724011074,
+      "tag": "0059_lean_wild_child",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1785818672727,
+      "tag": "0060_community-name-policy-cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785827750168,
+      "tag": "0061_nickname-banned-word-scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1785832380491,
+      "tag": "0062_young_paper_doll",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1785834322350,
+      "tag": "0063_guest-community-authorship",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1785896024382,
+      "tag": "0064_absurd_spyke",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1785896804095,
+      "tag": "0065_handy_proteus",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1785901174146,
+      "tag": "0066_goofy_rockslide",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1785904456626,
+      "tag": "0067_blue_triton",
+      "breakpoints": true
     }
   ]
 }

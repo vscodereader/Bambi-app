@@ -1,61 +1,20 @@
-"use client";
-
-import { cn } from "@bambi-app/ui/lib/utils";
 import type { ReactNode } from "react";
-import {
-	AdBannerRail,
-	HorizontalAdBannerRail,
-} from "@/components/bambi/ad-banner";
-import { RequireCommunityAccess } from "@/components/bambi/require-community-access";
-import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
-import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { SeekerShell } from "@/components/bambi/seeker-shell";
+import { readVisitorState } from "@/lib/bambi/visitor";
+import { CommunityRails } from "./community-rails";
 
-// 수다방 전 페이지 공통 레이아웃 — 입장 게이트로 감싸고, 초광폭(≥1720px)에서만 좌(가로형)·
-// 우(세로형) 사이드 광고 배너 rail을 노출한다. 중앙 콘텐츠는 앱 공통 고정폭으로 헤더와 정렬한다.
-// 게이트를 rail 바깥(상위)에 둬 미자격·마운트 전에는 배너도 함께 감춘다.
-//
-// 좌우 aside는 판매된 배너가 없어도 폭을 그대로 차지한다. 한쪽만 렌더하면 justify-center가
-// 남은 두 칸을 기준으로 정렬해 콘텐츠가 (rail+gap)/2 = 약 139px 밀리고, 고정폭이 같은
-// 헤더·푸터와 눈에 띄게 어긋난다(우측 배너만 팔린 수다방에서 실제로 발생했다).
-// 그래서 바깥 자리는 항상 대칭으로 남기고, rail은 빈 슬롯을 "광고 모집중" 자리표시로
-// 채워 조건 없이 렌더한다 — seeker 마켓플레이스·공고 상세도 같은 이유로 이 형태다.
-// 훅을 쓰려면 클라이언트 모듈이어야 하는데, 이미 게이트(RequireCommunityAccess)가
-// 클라이언트라 경계가 실질적으로 달라지지 않는다.
-export default function SeekerCommunityLayout({
+// 수다방 영역 레이아웃. 본문(게이트·사이드 배너)은 CommunityRails가 그리고, 여기서는
+// 게스트에게 앱 셸을 씌우는 일만 한다: /seeker/layout.tsx는 게스트에게 셸을 생략하고
+// (게스트가 셸 없는 인증 게이트 화면으로 갈 수도 있어 layout에서 일괄 처리할 수 없다)
+// page에 넘기는데, 수다방은 여성 인증 게스트도 들어오는 유일한 하위 영역이라 회원과
+// 같은 헤더·하단 탭이 필요하다. 회원은 상위 layout이 이미 씌웠으므로 그대로 둔다.
+export default async function SeekerCommunityLayout({
 	children,
 }: {
 	children: ReactNode;
 }) {
-	const adBanners = useAdBannerJobs();
+	const visitor = await readVisitorState();
+	const body = <CommunityRails>{children}</CommunityRails>;
 
-	return (
-		<RequireCommunityAccess>
-			<div className="mx-auto flex w-full justify-center gap-5 py-6">
-				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
-					<div className="sticky top-20">
-						<HorizontalAdBannerRail
-							isLoading={adBanners.isLoading}
-							items={adBanners.leftBanner}
-						/>
-					</div>
-				</aside>
-				<div
-					className={cn(
-						"flex w-full min-w-0 flex-col px-5 md:px-6",
-						SEEKER_CONTENT_WIDTH
-					)}
-				>
-					{children}
-				</div>
-				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
-					<div className="sticky top-20">
-						<AdBannerRail
-							isLoading={adBanners.isLoading}
-							items={adBanners.rightBanner}
-						/>
-					</div>
-				</aside>
-			</div>
-		</RequireCommunityAccess>
-	);
+	return visitor === "guest" ? <SeekerShell>{body}</SeekerShell> : body;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AdProductForm } from "@/components/bambi/ad-product-form";
@@ -9,6 +9,12 @@ import { orpc } from "@/utils/orpc";
 export default function NewAdProductPage() {
 	const router = useRouter();
 	const params = useParams<{ placementId: string }>();
+	// 위치 유형(배너/리스팅)에 맞는 노출 영역만 고르게 하려면 위치를 알아야 한다.
+	// 목록과 같은 카탈로그 쿼리를 재사용해 캐시를 공유한다.
+	const catalogQuery = useQuery(
+		orpc.bambi.adProducts.listCatalogAdmin.queryOptions()
+	);
+	const placement = catalogQuery.data?.find((p) => p.id === params.placementId);
 	const create = useMutation(
 		orpc.bambi.adProducts.createProduct.mutationOptions({
 			onSuccess: () => {
@@ -37,6 +43,7 @@ export default function NewAdProductPage() {
 					})
 				}
 				pending={create.isPending}
+				placementKind={placement?.kind}
 			/>
 		</div>
 	);

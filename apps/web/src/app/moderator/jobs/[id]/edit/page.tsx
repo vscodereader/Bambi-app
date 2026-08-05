@@ -186,7 +186,7 @@ export default function ModeratorEditJobPage({
 			adProductId: job.adProductId ?? null,
 			beginnerFriendly: job.beginnerFriendly ?? false,
 			description: job.description,
-			district: job.district ?? "",
+			districtCode: job.districtCode ?? "",
 			exposureAmount: job.exposureAmount ?? null,
 			exposureDurationDays: job.exposureDurationDays ?? null,
 			exposureType: job.exposureType,
@@ -197,7 +197,7 @@ export default function ModeratorEditJobPage({
 			payAmount: String(job.payAmount),
 			paymentMethod: job.paymentMethod ?? null,
 			payUnit: job.payUnit,
-			region: job.region,
+			regionCode: job.regionCode ?? "",
 			teamId: job.teamId ?? "",
 			title: job.title,
 			workSchedule: job.workSchedule,
@@ -486,10 +486,10 @@ export default function ModeratorEditJobPage({
 								/>
 							</div>
 							<JobRegionFields
-								district={form.district}
+								districtCode={form.districtCode}
 								errors={fieldErrors}
 								onChange={updateFormValue}
-								region={form.region}
+								regionCode={form.regionCode}
 							/>
 							<JobPayFields
 								errors={fieldErrors}

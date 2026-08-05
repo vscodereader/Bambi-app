@@ -10,6 +10,7 @@ export const jobPostStatuses = [
 	"published",
 	"hidden",
 	"rejected",
+	"on_hold",
 ] as const;
 export const accountStatuses = ["active", "warned", "suspended"] as const;
 
@@ -17,6 +18,50 @@ export const accountStatuses = ["active", "warned", "suspended"] as const;
 // (bambi_site_settings.withdrawal_retention_days)이 우선하고, 미설정이면 이 값을 쓴다.
 // 해석은 bambi-member-policy의 resolveWithdrawalRetentionDays가 담당한다.
 export const DEFAULT_WITHDRAWAL_RETENTION_DAYS = 30;
+
+// 파기 대상 경계 시각 — 이 시각 이전에 탈퇴한 계정이 보존기간 경과분이다.
+export const resolveWithdrawalPurgeCutoff = (
+	now: Date,
+	retentionDays: number
+): Date => new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+
+// 파기 배치 자동 실행 시각 기본값(KST 0~23시). 실제 적용값은 운영자 사이트 설정
+// (bambi_site_settings.withdrawal_purge_hour)이 우선하고, 미설정이면 이 값을 쓴다.
+// 새벽 4시인 것은 트래픽이 가장 적은 시간대라서다.
+export const DEFAULT_WITHDRAWAL_PURGE_HOUR = 4;
+
+// 한국은 DST가 없어 고정 오프셋 계산으로 충분하다(bambi-job-boost·portone-identity와 같은 방식).
+// 이 모듈은 DB·env 의존이 없어야 해서 상수를 가져오지 않고 여기서 다시 둔다.
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+
+export interface WithdrawalPurgeSchedule {
+	// 운영자가 설정한 실행 시각(KST 시). null이면 기본값을 쓴다.
+	hour: null | number;
+	// 배치가 마지막으로 돈 시각. null이면 한 번도 돌지 않았다.
+	lastRunAt: Date | null;
+}
+
+// 이번 틱에 파기 배치를 돌릴 차례인지. "오늘(KST) 설정 시각이 지났는데 그 시각 이후로 아직
+// 안 돌았다"면 실행한다. 틱 간격이 아니라 마지막 실행 시각으로 판정하므로 서버를 재시작해도
+// 그날 몫이 밀리지 않고(캐치업), 마지막 실행 시각이 DB에 있어 인스턴스가 늘어도 하루 한 번이다.
+export const isWithdrawalPurgeDue = (
+	{ hour, lastRunAt }: WithdrawalPurgeSchedule,
+	now: Date
+): boolean => {
+	const kstDayStart = new Date(now.getTime() + KST_OFFSET_MS);
+	kstDayStart.setUTCHours(0, 0, 0, 0);
+	const dueAt =
+		kstDayStart.getTime() -
+		KST_OFFSET_MS +
+		(hour ?? DEFAULT_WITHDRAWAL_PURGE_HOUR) * HOUR_MS;
+
+	if (now.getTime() < dueAt) {
+		return false;
+	}
+
+	return !lastRunAt || lastRunAt.getTime() < dueAt;
+};
 
 // 공고 상세의 급여 옆 보조 표기에 쓰는 최저시급 기본값. 실제 적용값은 운영자 사이트 설정
 // (bambi_site_settings.minimum_wage_year / minimum_wage_hourly)이 우선하고, 미설정이면 이 값을 쓴다.
@@ -72,6 +117,7 @@ const jobPostStatusLabels = {
 	published: "공개",
 	hidden: "숨김",
 	rejected: "반려",
+	on_hold: "검수 보류",
 } as const satisfies Record<JobPostStatus, string>;
 
 // 공고는 등록도 수정도 예외 없이 운영자 검수를 거친다. 업소 인증 여부나 내용 변경 여부로

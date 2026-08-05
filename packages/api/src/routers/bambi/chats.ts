@@ -10,6 +10,7 @@ import {
 	employerTeamProfile,
 	interviewSchedule,
 	jobPost,
+	report,
 	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -25,7 +26,7 @@ import {
 import {
 	getChatRecipientUserId,
 	getUnreadMessageCount,
-	getUnreadRoomCount,
+	getUnreadMessageCountForUser,
 	markChatMessagesRead,
 } from "../../services/bambi-chat-read-state";
 import {
@@ -169,53 +170,12 @@ type RequestedInterviewStatus = z.infer<
 	typeof setInterviewStatusInput
 >["status"];
 
-interface ChatBlockInput {
-	actorUserId: string;
-	employerUserId: string;
-	isBlocked: boolean;
-	jobSeekerUserId: string;
-}
-
 interface InterviewStatusTransitionInput {
 	actorUserId: string;
 	currentStatus: string;
 	proposedByUserId: string;
 	requestedStatus: RequestedInterviewStatus;
 }
-
-const throwIfChatBlocked = async ({
-	actorUserId,
-	employerUserId,
-	isBlocked,
-	jobSeekerUserId,
-}: ChatBlockInput): Promise<void> => {
-	if (isBlocked) {
-		throw new ORPCError("FORBIDDEN");
-	}
-
-	const otherUserId =
-		employerUserId === actorUserId ? jobSeekerUserId : employerUserId;
-	const [block] = await db
-		.select({ id: userBlock.id })
-		.from(userBlock)
-		.where(
-			or(
-				and(
-					eq(userBlock.blockerUserId, actorUserId),
-					eq(userBlock.blockedUserId, otherUserId)
-				),
-				and(
-					eq(userBlock.blockerUserId, otherUserId),
-					eq(userBlock.blockedUserId, actorUserId)
-				)
-			)
-		)
-		.limit(1);
-
-	if (block) {
-		throw new ORPCError("FORBIDDEN");
-	}
-};
 
 const canSetInterviewStatus = ({
 	actorUserId,
@@ -323,10 +283,33 @@ interface CounterpartRoom {
 	teamId: string | null;
 }
 
+// 구직자가 보는 구인자 이름. 담당자가 탈퇴했으면 팀·조직 표시명보다 탈퇴 표기가
+// 앞선다 — 업소 이름만 보이면 응대할 사람이 없는 방에서 답을 기다리게 된다.
+// 탈퇴 계정은 user.name이 이미 "탈퇴한 회원"이라 별도 문구를 만들지 않는다.
+const resolveEmployerName = (
+	room: CounterpartRoom,
+	names: {
+		byOrganizationId: Map<string, string>;
+		byTeamId: Map<string, string>;
+		byUserId: Map<string, string>;
+		withdrawnUserIds: Set<string>;
+	}
+): string | null => {
+	if (names.withdrawnUserIds.has(room.employerUserId)) {
+		return names.byUserId.get(room.employerUserId) ?? null;
+	}
+	return (
+		(room.teamId ? names.byTeamId.get(room.teamId) : undefined) ??
+		names.byOrganizationId.get(room.organizationId) ??
+		names.byUserId.get(room.employerUserId) ??
+		null
+	);
+};
+
 /**
  * 현재 보는 사람(viewer) 기준으로 대화 상대방의 표시 이름을 방마다 해석한다.
  * - 구인자가 볼 때 → 상대는 구직자(user.name, 표시명 정본)
- * - 구직자가 볼 때 → 상대는 구인자(팀 프로필 → 조직 프로필 → 구인자 개인 프로필 순)
+ * - 구직자가 볼 때 → 상대는 구인자(탈퇴 표기 → 팀 프로필 → 조직 프로필 → 개인 프로필 순)
  */
 const resolveCounterpartNames = async (
 	rooms: CounterpartRoom[],
@@ -354,6 +337,7 @@ const resolveCounterpartNames = async (
 					.select({
 						userId: user.id,
 						displayName: user.name,
+						deletedAt: user.deletedAt,
 					})
 					.from(user)
 					.where(inArray(user.id, [...profileUserIds]))
@@ -385,6 +369,9 @@ const resolveCounterpartNames = async (
 	const nameByUserId = new Map(
 		profiles.map((entry) => [entry.userId, entry.displayName])
 	);
+	const withdrawnUserIds = new Set(
+		profiles.flatMap((entry) => (entry.deletedAt ? [entry.userId] : []))
+	);
 	const nameByTeamId = new Map(
 		teamProfiles.map((entry) => [entry.teamId, entry.displayName])
 	);
@@ -403,12 +390,15 @@ const resolveCounterpartNames = async (
 				nameByUserId.get(room.jobSeekerUserId) ?? null
 			);
 		} else {
-			const employerName =
-				(room.teamId ? nameByTeamId.get(room.teamId) : undefined) ??
-				nameByOrganizationId.get(room.organizationId) ??
-				nameByUserId.get(room.employerUserId) ??
-				null;
-			namesByRoomId.set(room.id, employerName);
+			namesByRoomId.set(
+				room.id,
+				resolveEmployerName(room, {
+					byOrganizationId: nameByOrganizationId,
+					byTeamId: nameByTeamId,
+					byUserId: nameByUserId,
+					withdrawnUserIds,
+				})
+			);
 		}
 	}
 
@@ -469,6 +459,82 @@ const resolveBlockedCounterpartIds = async (
 				: block.blockerUserId
 		)
 	);
+};
+
+type ChatBlockReason =
+	| "blocked_by_counterpart"
+	| "blocked_by_me"
+	| "moderation";
+
+const CHAT_BLOCK_MESSAGES: Record<ChatBlockReason, string> = {
+	blocked_by_counterpart: "상대가 회원님을 차단한 채팅방이에요.",
+	blocked_by_me: "회원님이 상대를 차단한 채팅방이에요.",
+	moderation: "신고에 대한 운영자 조치로 종료된 채팅방이에요.",
+};
+
+/**
+ * 방 진입을 막고, **왜** 막혔는지를 오류에 실어 보낸다.
+ *
+ * 예전에는 세 경우 모두 맨 FORBIDDEN이라 화면이 "채팅방을 불러올 수 없어요"라는
+ * 막다른 카드밖에 못 그렸다. 사유(chatBlockReason)와 상대 이름을 error data로 함께
+ * 내려야 웹이 목록으로 돌려보내며 토스트로 이유를 말해줄 수 있다. 이름은 방 row가
+ * 있어야 풀리는데(구인자 쪽은 팀·조직 프로필 경유) 이 가드가 이미 방을 받으므로
+ * 여기서 푼다 — 오류 경로에서만 도는 조회다.
+ */
+const throwChatBlocked = async (
+	reason: ChatBlockReason,
+	room: CounterpartRoom,
+	actorUserId: string
+): Promise<never> => {
+	const counterpartNames = await resolveCounterpartNames([room], actorUserId);
+
+	throw new ORPCError("FORBIDDEN", {
+		data: {
+			chatBlockReason: reason,
+			counterpartName: counterpartNames.get(room.id) ?? null,
+		},
+		message: CHAT_BLOCK_MESSAGES[reason],
+	});
+};
+
+const throwIfChatBlocked = async ({
+	actorUserId,
+	room,
+}: {
+	actorUserId: string;
+	room: CounterpartRoom & { isBlocked: boolean };
+}): Promise<void> => {
+	if (room.isBlocked) {
+		await throwChatBlocked("moderation", room, actorUserId);
+	}
+
+	const otherUserId = counterpartUserId(room, actorUserId);
+	const [block] = await db
+		.select({ blockerUserId: userBlock.blockerUserId })
+		.from(userBlock)
+		.where(
+			or(
+				and(
+					eq(userBlock.blockerUserId, actorUserId),
+					eq(userBlock.blockedUserId, otherUserId)
+				),
+				and(
+					eq(userBlock.blockerUserId, otherUserId),
+					eq(userBlock.blockedUserId, actorUserId)
+				)
+			)
+		)
+		.limit(1);
+
+	if (block) {
+		await throwChatBlocked(
+			block.blockerUserId === actorUserId
+				? "blocked_by_me"
+				: "blocked_by_counterpart",
+			room,
+			actorUserId
+		);
+	}
 };
 
 export const chatsRouter = {
@@ -622,6 +688,26 @@ export const chatsRouter = {
 			profile.userId
 		);
 
+		// 내가 넣은 신고 중 아직 처리 전인 방들. 운영자 조치는 즉시 이뤄지지 않으므로
+		// 목록이 "접수됐고 대기 중"을 보여줄 수 있어야 신고가 삼켜진 것처럼 보이지 않는다.
+		const pendingReports = await db
+			.select({ targetId: report.targetId })
+			.from(report)
+			.where(
+				and(
+					eq(report.reporterUserId, profile.userId),
+					eq(report.targetType, "chat_room"),
+					inArray(
+						report.targetId,
+						visibleRooms.map(({ room }) => room.id)
+					),
+					inArray(report.status, ["open", "reviewing"])
+				)
+			);
+		const pendingReportRoomIds = new Set(
+			pendingReports.map((row) => row.targetId)
+		);
+
 		return await Promise.all(
 			visibleRooms.map(async ({ lastMessage, room }) => ({
 				...room,
@@ -633,6 +719,10 @@ export const chatsRouter = {
 					room.isBlocked ||
 					blockedCounterpartIds.has(counterpartUserId(room, profile.userId)),
 				counterpartName: counterpartNames.get(room.id) ?? null,
+				// 목록 화면이 뷰어 쪽(구직자/구인자)을 판별하고 차단 대상을 고르는 근거.
+				// 방 row에는 양쪽 id만 있어 뷰어가 누구인지 화면에서 알 수 없다.
+				counterpartUserId: counterpartUserId(room, profile.userId),
+				hasPendingMyReport: pendingReportRoomIds.has(room.id),
 				jobTitle: jobTitleById.get(room.jobPostId) ?? null,
 				lastMessageBody: lastMessage?.body ?? null,
 				unreadCount: await getUnreadMessageCount({
@@ -645,12 +735,14 @@ export const chatsRouter = {
 
 	// 헤더 채팅 버튼 핀·모바일 탭 뱃지용 경량 집계. listMine은 방마다 상대 이름·
 	// 마지막 메시지·안 읽음 수를 모두 조립해 무거우므로 재사용하지 않고, 안 읽은
-	// 방 수만 한 번의 쿼리로 센다.
+	// 메시지 총합만 한 번의 쿼리로 센다.
 	unreadState: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
 		return {
-			unreadRoomCount: await getUnreadRoomCount({ userId: profile.userId }),
+			unreadMessageCount: await getUnreadMessageCountForUser({
+				userId: profile.userId,
+			}),
 		};
 	}),
 
@@ -725,9 +817,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const [post] = await db
@@ -739,6 +829,9 @@ export const chatsRouter = {
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					status: jobPost.status,
+					// 채팅방에서 공고 상세로 보낼지 판단하는 데 쓴다. 상세(jobs.getById)가
+					// published + paid만 열어 주므로 같은 기준을 화면에도 내려야 한다.
+					paymentStatus: jobPost.paymentStatus,
 				})
 				.from(jobPost)
 				.where(eq(jobPost.id, room.jobPostId))
@@ -850,14 +943,12 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const category = requireAllowedChatMedia(input);
 
-			return createChatAttachmentUploadIntent({
+			return await createChatAttachmentUploadIntent({
 				byteSize: input.byteSize,
 				category,
 				chatRoomId: room.id,
@@ -877,9 +968,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const [message] = await db
@@ -927,9 +1016,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const category = requireAllowedChatMedia(input);
@@ -1004,9 +1091,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const readReceipts = await markChatMessagesRead({
@@ -1061,9 +1146,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const [schedule] = await db
@@ -1105,9 +1188,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			if (
@@ -1154,9 +1235,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			const viewerIsEmployer = profile.userId === room.employerUserId;
@@ -1257,9 +1336,7 @@ export const chatsRouter = {
 
 			await throwIfChatBlocked({
 				actorUserId: profile.userId,
-				employerUserId: room.employerUserId,
-				isBlocked: room.isBlocked,
-				jobSeekerUserId: room.jobSeekerUserId,
+				room,
 			});
 
 			if (

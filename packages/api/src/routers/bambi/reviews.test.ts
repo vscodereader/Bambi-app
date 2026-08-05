@@ -11,14 +11,21 @@ dotenv.config({
 	path: "../../apps/server/.env",
 });
 
-const [{ db }, authSchema, bambiSchema, { jobsRouter }, { reviewsRouter }] =
-	await Promise.all([
-		import("@bambi-app/db"),
-		import("@bambi-app/db/schema/auth"),
-		import("@bambi-app/db/schema/bambi"),
-		import("./jobs"),
-		import("./reviews"),
-	]);
+const [
+	{ db },
+	authSchema,
+	bambiSchema,
+	{ jobsRouter },
+	{ reviewsRouter },
+	{ createTestRegion, deleteTestRegion },
+] = await Promise.all([
+	import("@bambi-app/db"),
+	import("@bambi-app/db/schema/auth"),
+	import("@bambi-app/db/schema/bambi"),
+	import("./jobs"),
+	import("./reviews"),
+	import("../../services/__fixtures__/test-region"),
+]);
 
 const { organization, user } = authSchema;
 const {
@@ -38,7 +45,7 @@ interface ReviewFixture {
 	jobPostId: string;
 	jobSeekerUserId: string;
 	organizationId: string;
-	region: string;
+	regionCode: string;
 	scheduleId: string;
 	userIds: string[];
 }
@@ -61,8 +68,8 @@ const makeEmail = (prefix: string): string =>
 
 const createReviewFixture = async (): Promise<ReviewFixture> => {
 	const now = new Date();
-	// 공개 jobs.list는 전역 조회라, 병렬 테스트 픽스처가 섞이지 않도록 고유 region으로 격리한다.
-	const region = `reviews-${randomUUID()}`;
+	// 공개 jobs.list는 전역 조회라, 병렬 테스트 픽스처가 섞이지 않도록 일회용 지역으로 격리한다.
+	const testRegion = await createTestRegion();
 	const organizationId = `org_test_${randomUUID()}`;
 	const employerUserId = `user_test_employer_${randomUUID()}`;
 	const jobSeekerUserId = `user_test_seeker_${randomUUID()}`;
@@ -132,7 +139,8 @@ const createReviewFixture = async (): Promise<ReviewFixture> => {
 		// 공개 목록·상세 조회는 published + paid를 함께 요구한다(jobs.ts의 결제 게이트).
 		paymentStatus: "paid",
 		publishedAt: now,
-		region,
+		region: testRegion.label,
+		regionCode: testRegion.code,
 		status: "published",
 		title: "후기 테스트 공고",
 		workSchedule: "20:00-02:00",
@@ -169,7 +177,7 @@ const createReviewFixture = async (): Promise<ReviewFixture> => {
 		jobPostId,
 		jobSeekerUserId,
 		organizationId,
-		region,
+		regionCode: testRegion.code,
 		scheduleId,
 		userIds: [employerUserId, jobSeekerUserId, alternateSeekerUserId],
 	};
@@ -198,6 +206,7 @@ const cleanupReviewFixture = async (fixture: ReviewFixture): Promise<void> => {
 	await db
 		.delete(organization)
 		.where(eq(organization.id, fixture.organizationId));
+	await deleteTestRegion(fixture.regionCode);
 };
 
 const expectOrpcCode = async (
@@ -423,7 +432,10 @@ describe("bambi jobs review aggregates", () => {
 				path: ["bambi", "jobs", "getById"],
 			});
 
-			const listResult = await listJobs({ limit: 20, region: fixture.region });
+			const listResult = await listJobs({
+				limit: 20,
+				regionCode: fixture.regionCode,
+			});
 			const listedJob = [
 				...listResult.sections.special,
 				...listResult.sections.urgent,

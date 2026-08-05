@@ -38,6 +38,7 @@ export default function SupportLayout({ children }: { children: ReactNode }) {
 						<HorizontalAdBannerRail
 							isLoading={adBanners.isLoading}
 							items={adBanners.leftBanner}
+							promotionSurface="support_left"
 						/>
 					</div>
 				</aside>
@@ -54,6 +55,7 @@ export default function SupportLayout({ children }: { children: ReactNode }) {
 						<AdBannerRail
 							isLoading={adBanners.isLoading}
 							items={adBanners.rightBanner}
+							promotionSurface="support_right"
 						/>
 					</div>
 				</aside>

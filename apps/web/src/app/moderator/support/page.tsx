@@ -41,6 +41,7 @@ import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	INQUIRY_STATUS_LABELS,
+	type InquiryStatus,
 	SUPPORT_CATEGORIES,
 	SUPPORT_CATEGORY_LABELS,
 	type SupportCategory,
@@ -140,8 +141,8 @@ function InquiryQueue() {
 						{openId === item.id ? (
 							<InquiryThread
 								inquiryId={item.id}
-								isClosed={item.inquiryStatus === "closed"}
-								onAnswered={invalidate}
+								inquiryStatus={item.inquiryStatus}
+								onChanged={invalidate}
 							/>
 						) : null}
 					</CardContent>
@@ -153,12 +154,12 @@ function InquiryQueue() {
 
 function InquiryThread({
 	inquiryId,
-	isClosed,
-	onAnswered,
+	inquiryStatus,
+	onChanged,
 }: {
 	inquiryId: string;
-	isClosed: boolean;
-	onAnswered: () => Promise<void>;
+	inquiryStatus: InquiryStatus;
+	onChanged: () => Promise<void>;
 }) {
 	const [reply, setReply] = useState("");
 
@@ -172,7 +173,18 @@ function InquiryThread({
 			onSuccess: async () => {
 				toast.success("답변을 보냈어요.");
 				setReply("");
-				await onAnswered();
+				await onChanged();
+			},
+		})
+	);
+
+	// 종료는 운영자만 한다. 서버가 answered 이후에만 받으므로 버튼도 그때만 띄운다.
+	const closeMutation = useMutation(
+		orpc.bambi.support.closeInquiry.mutationOptions({
+			onError: (error) => toast.error(error.message),
+			onSuccess: async () => {
+				toast.success("문의를 종료했어요.");
+				await onChanged();
 			},
 		})
 	);
@@ -198,7 +210,7 @@ function InquiryThread({
 				</div>
 			))}
 
-			{isClosed ? (
+			{inquiryStatus === "closed" ? (
 				<p className="m-0 text-muted-foreground text-sm">
 					종료된 문의라 답변을 남길 수 없어요.
 				</p>
@@ -210,16 +222,27 @@ function InquiryThread({
 						placeholder="답변을 입력하세요"
 						value={reply}
 					/>
-					<Button
-						className="self-start"
-						disabled={reply.trim().length === 0 || replyMutation.isPending}
-						onClick={() =>
-							replyMutation.mutate({ body: reply.trim(), inquiryId })
-						}
-						size="sm"
-					>
-						답변 보내기
-					</Button>
+					<div className="flex flex-wrap gap-2">
+						<Button
+							disabled={reply.trim().length === 0 || replyMutation.isPending}
+							onClick={() =>
+								replyMutation.mutate({ body: reply.trim(), inquiryId })
+							}
+							size="sm"
+						>
+							답변 보내기
+						</Button>
+						{inquiryStatus === "answered" ? (
+							<Button
+								disabled={closeMutation.isPending}
+								onClick={() => closeMutation.mutate({ inquiryId })}
+								size="sm"
+								variant="outline"
+							>
+								문의 종료
+							</Button>
+						) : null}
+					</div>
 				</>
 			)}
 		</div>

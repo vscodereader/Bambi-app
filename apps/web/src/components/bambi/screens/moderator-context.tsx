@@ -33,6 +33,15 @@ import type {
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
+// 검수 상세의 판정. 보류는 일괄 처리의 보류와 같은 조치(공고를 hidden으로 내림)다.
+export type QueueVerdict = "approve" | "hold" | "reject";
+// 판정 성공 토스트(프리뷰 콘솔·실서비스 콘솔 공용).
+export const QUEUE_VERDICT_TOAST: Record<QueueVerdict, string> = {
+	approve: "공고를 승인했어요",
+	hold: "공고를 보류했어요",
+	reject: "공고를 반려했어요",
+};
+
 export type ModerationBulkScope = "queue" | "reports" | "users";
 export type ModerationBulkAction =
 	| "approve"
@@ -58,6 +67,8 @@ interface ModContextValue {
 	isBlockingChatRoom: boolean;
 	isBulkApplying: boolean;
 	isLoading: boolean;
+	// 사용자 목록 조회 실패(목록 화면의 에러 상태 전용).
+	isUsersError: boolean;
 	moderateCommunityTarget: (
 		report: Report,
 		status: CommunityTargetStatus,
@@ -66,10 +77,18 @@ interface ModContextValue {
 	openReports: number;
 	queue: QueueItem[];
 	reports: Report[];
-	resolveQueue: (id: string, action: "approve" | "reject") => void;
+	resolveQueue: (id: string, action: QueueVerdict, reason?: string) => void;
 	resolveReport: (id: string, action: "dismiss" | "act") => void;
-	sanction: (id: string, status: UserStatus, label: string) => void;
+	// 적용 성공 여부를 돌려준다 — 호출자가 성공했을 때만 목록으로 되돌아갈 수 있게.
+	sanction: (id: string, status: UserStatus, label: string) => Promise<boolean>;
 	selected: string[];
+	// 무료 법률 자문 답변 계정 지정·해제(구직자 ↔ 법률자문). 서버가 거절한 사유를 그대로
+	// 띄워야 해서 성공 여부만 돌려주고 화면 이동은 호출자가 정한다.
+	setLegalAdvisor: (
+		id: string,
+		role: "job_seeker" | "legal_advisor",
+		reason: string
+	) => Promise<boolean>;
 	toast: string | null;
 	toggleSelect: (id: string) => void;
 	users: ManagedUser[];
@@ -94,6 +113,29 @@ interface ApiQueueItem {
 	status: string;
 	title: string;
 }
+
+// 검수 상세 판정 → 공고 상태·기본 사유. 보류는 일괄 처리(applyQueueBulkAction)와 동일하게
+// on_hold로 내린다 — 두 경로가 다른 상태로 갈리면 보류 공고가 큐에서 서로 다르게 보인다.
+// hidden(운영자 강제 숨김)과 섞으면 구인자 목록에 "숨김"으로 떠 보류인지 알 수 없다.
+type QueueVerdictStatus = "on_hold" | "published" | "rejected";
+
+const QUEUE_VERDICT_STATUS: Record<
+	QueueVerdict,
+	{ defaultReason: string; status: QueueVerdictStatus }
+> = {
+	approve: {
+		defaultReason: "운영자가 공고를 승인했습니다.",
+		status: "published",
+	},
+	hold: {
+		defaultReason: "운영자가 추가 확인을 위해 공고를 보류했습니다.",
+		status: "on_hold",
+	},
+	reject: {
+		defaultReason: "운영자가 정책 위반으로 공고를 반려했습니다.",
+		status: "rejected",
+	},
+};
 
 const ModContext = createContext<ModContextValue | null>(null);
 const UUID_PATTERN =
@@ -183,18 +225,6 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 		title: item.title,
 	};
 };
-const getRoleLabel = (role: string) => {
-	if (role === "admin") {
-		return "운영자";
-	}
-
-	if (role === "employer") {
-		return "구인자";
-	}
-
-	return "구직자";
-};
-
 // 피신고 대상의 표시 이름·역할을 targetContext 타입별로 계산한다. 사용자는 실명 +
 // userRoleLabel(role), 공고는 제목 + "공고", 대화방은 연결 공고 제목 + "채팅방". 이름을 알 수
 // 없는 대상(후기·채팅 메시지·맥락 없음)은 대상 id 축약(#앞8자)을 이름으로, 유형 라벨을 역할로
@@ -367,6 +397,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	const setUserStatusMutation = useMutation(
 		orpc.bambi.moderation.setUserStatus.mutationOptions()
 	);
+	const setUserRoleMutation = useMutation(
+		orpc.bambi.moderation.setUserRole.mutationOptions()
+	);
 	// 커뮤니티 대상(글·댓글) 운영자 상태 변경 프로시저.
 	const setPostStatusByAdminMutation = useMutation(
 		orpc.bambi.community.setPostStatusByAdmin.mutationOptions()
@@ -459,15 +492,23 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			};
 		});
 		const apiUsers = moderationUsersQuery.data?.map<ManagedUser>((item) => ({
+			blockedByCount: item.blockedByCount,
+			deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
+			email: item.email,
 			id: item.userId,
+			isPhoneVerified: item.isPhoneVerified,
 			joined: formatDate(item.createdAt),
+			// 정렬용 원값. 포맷 문자열(joined)로 정렬하면 "24. 1. 5." 같은 표기가 사전순으로 섞인다.
+			joinedAt: new Date(item.createdAt),
+			loginId: item.loginId,
 			name: item.name,
-			displayName: item.displayName ?? "",
 			note: item.isPhoneVerified
 				? "휴대폰 인증 완료"
 				: "휴대폰 인증이 필요합니다.",
+			organizationNames: item.organizationNames,
 			reports: item.reportsCount,
-			role: getRoleLabel(item.role),
+			role: userRoleLabel(item.role),
+			roleKey: item.role,
 			status: item.status,
 			warnings: item.warningsCount,
 		}));
@@ -528,15 +569,19 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				}),
 			});
 		};
-		const resolveQueue = (id: string, action: "approve" | "reject") => {
+		const resolveQueue = (
+			id: string,
+			action: QueueVerdict,
+			reason?: string
+		) => {
+			const verdict = QUEUE_VERDICT_STATUS[action];
+
 			setJobPostStatusMutation.mutate(
 				{
 					jobPostId: id,
-					reason:
-						action === "approve"
-							? "운영자가 공고를 승인했습니다."
-							: "운영자가 정책 위반으로 공고를 반려했습니다.",
-					status: action === "approve" ? "published" : "rejected",
+					// 상세에서 고른 사유를 그대로 감사 로그에 남긴다(미선택 시 기본 문구).
+					reason: reason?.trim() || verdict.defaultReason,
+					status: verdict.status,
 				},
 				{
 					onSuccess: async () => {
@@ -548,7 +593,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			);
 
 			setSelected((s) => s.filter((x) => x !== id));
-			flash(action === "approve" ? "공고를 승인했어요" : "공고를 반려했어요");
+			flash(QUEUE_VERDICT_TOAST[action]);
 		};
 		const resolveReport = (id: string, action: "dismiss" | "act") => {
 			setReportStatusMutation.mutate(
@@ -571,23 +616,53 @@ export function ModProvider({ children }: { children: ReactNode }) {
 
 			flash(action === "dismiss" ? "신고를 기각했어요" : "조치를 적용했어요");
 		};
-		const sanction = (id: string, status: UserStatus, label: string) => {
-			setUserStatusMutation.mutate(
-				{
+		// 적용이 끝날 때까지 기다렸다가 결과를 알려준다 — 실패한 제재로 화면이 먼저
+		// 넘어가면 운영자가 반영되지 않은 걸 모른 채 목록으로 돌아간다.
+		const sanction = async (id: string, status: UserStatus, label: string) => {
+			try {
+				await setUserStatusMutation.mutateAsync({
 					reason: label,
-					status: status === "blocked" ? "suspended" : status,
+					status,
 					targetUserId: id,
-				},
-				{
-					onSuccess: async () => {
-						await invalidateUsers();
-					},
-					onError: () =>
-						flash("사용자 상태를 API에 반영하지 못했어요. 다시 시도해 주세요."),
-				}
-			);
+				});
+			} catch {
+				flash("사용자 상태를 API에 반영하지 못했어요. 다시 시도해 주세요.");
+				return false;
+			}
 
+			await invalidateUsers();
 			flash(label);
+			return true;
+		};
+		// 역할 전환은 구직자 ↔ 법률자문만 열려 있다(서버 assertLegalAdvisorRoleSwitch).
+		// 거절 사유가 계정 종류마다 달라 서버 메시지를 그대로 띄운다.
+		const setLegalAdvisor = async (
+			id: string,
+			role: "job_seeker" | "legal_advisor",
+			reason: string
+		) => {
+			try {
+				await setUserRoleMutation.mutateAsync({
+					reason,
+					role,
+					targetUserId: id,
+				});
+			} catch (error) {
+				flash(
+					error instanceof Error && error.message
+						? error.message
+						: "역할을 변경하지 못했어요. 다시 시도해 주세요."
+				);
+				return false;
+			}
+
+			await invalidateUsers();
+			flash(
+				role === "legal_advisor"
+					? "법률자문으로 지정했어요"
+					: "법률자문 지정을 해제했어요"
+			);
+			return true;
 		};
 		// 커뮤니티 대상(글·댓글) 콘텐츠 조치. 신고 상태 변경(resolveReport)과는 별개로,
 		// kind에 맞는 프로시저를 호출하고 성공 시 신고 목록을 무효화해 상태 배지를 갱신한다.
@@ -635,7 +710,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			action: ModerationBulkAction,
 			reason: string
 		) => {
-			let status: "hidden" | "published" | "rejected" = "hidden";
+			let status: QueueVerdictStatus = "on_hold";
 			let actionLabel = "공고 보류";
 
 			if (action === "approve") {
@@ -773,6 +848,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			users: visibleUsers,
 			isLoading,
 			isBulkApplying,
+			isUsersError: moderationUsersQuery.isError,
 			selected,
 			toast,
 			openReports: visibleReports.filter((r) => r.status === "open").length,
@@ -782,6 +858,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			resolveQueue,
 			resolveReport,
 			sanction,
+			setLegalAdvisor,
 			moderateCommunityTarget,
 			bulkAction,
 		};
@@ -794,6 +871,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		moderationReportsQuery.data,
 		moderationReportsQuery.isPending,
 		moderationUsersQuery.data,
+		moderationUsersQuery.isError,
 		moderationUsersQuery.isPending,
 		queryClient,
 		selected,
@@ -802,6 +880,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		setJobPostStatusMutation,
 		setPostStatusByAdminMutation,
 		setReportStatusMutation,
+		setUserRoleMutation,
 		setUserStatusMutation,
 		toast,
 	]);

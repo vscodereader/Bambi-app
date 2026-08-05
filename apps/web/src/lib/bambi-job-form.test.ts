@@ -9,7 +9,9 @@ const baseForm = {
 	organizationId: "o1",
 	payAmount: "20000",
 	payUnit: "시급",
-	region: "서울",
+	// 지역 마스터 코드(서울 / 강남구). 실제 존재 여부는 서버가 대조하므로 폼 검증은
+	// 선택 여부만 본다.
+	regionCode: "1100000000",
 	teamId: "",
 	title: "공고",
 	workSchedule: "협의",
@@ -18,32 +20,27 @@ const baseForm = {
 const options = { teamScopes: [{ organizationId: "o1", teamId: "" }] };
 
 describe("validateJobForm 세부지역", () => {
-	it("세부지역 있는 시/도에서 district 비면 검증 실패", () => {
-		const result = validateJobForm({ ...baseForm, district: "" }, options);
+	it("세부지역 미선택은 통과하고 districtCode를 싣지 않는다(= 지역 전체)", () => {
+		const result = validateJobForm({ ...baseForm, districtCode: "" }, options);
 
-		expect(result.ok).toBe(false);
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.input.districtCode).toBeUndefined();
 	});
 
-	it("세부지역 없는 시/도는 district 비어도 통과", () => {
+	it("districtCode를 고르면 input에 실린다", () => {
 		const result = validateJobForm(
-			{ ...baseForm, district: "", region: "기타" },
+			{ ...baseForm, districtCode: "1168000000" },
 			options
 		);
 
-		expect(result.ok).toBe(true);
-	});
-
-	it("district를 입력하면 통과하고 input에 실린다", () => {
-		const result = validateJobForm({ ...baseForm, district: "강남" }, options);
-
-		expect(result.ok && result.input.district).toBe("강남");
+		expect(result.ok && result.input.districtCode).toBe("1168000000");
 	});
 });
 
 describe("validateJobForm 급여 협의", () => {
 	it("협의 단위는 금액이 비어도 통과하고 payAmount를 null로 싣는다", () => {
 		const result = validateJobForm(
-			{ ...baseForm, district: "강남", payAmount: "", payUnit: "협의" },
+			{ ...baseForm, payAmount: "", payUnit: "협의" },
 			options
 		);
 
@@ -52,7 +49,7 @@ describe("validateJobForm 급여 협의", () => {
 
 	it("협의 단위에 금액이 남아 있어도 저장하지 않는다", () => {
 		const result = validateJobForm(
-			{ ...baseForm, district: "강남", payAmount: "20000", payUnit: "협의" },
+			{ ...baseForm, payAmount: "20000", payUnit: "협의" },
 			options
 		);
 
@@ -61,7 +58,7 @@ describe("validateJobForm 급여 협의", () => {
 
 	it("금액 단위는 금액이 비면 여전히 실패한다", () => {
 		const result = validateJobForm(
-			{ ...baseForm, district: "강남", payAmount: "", payUnit: "시급" },
+			{ ...baseForm, payAmount: "", payUnit: "시급" },
 			options
 		);
 
@@ -69,39 +66,24 @@ describe("validateJobForm 급여 협의", () => {
 	});
 
 	it("목록에 없는 급여 단위는 걸러진다", () => {
-		const result = validateJobForm(
-			{ ...baseForm, district: "강남", payUnit: "연봉" },
-			options
-		);
+		const result = validateJobForm({ ...baseForm, payUnit: "연봉" }, options);
 
 		expect(result.ok).toBe(false);
 	});
 });
 
 describe("validateJobForm taxonomy 화이트리스트", () => {
-	// 구 표기 공고를 수정 폼에서 열면 Select가 빈칸이 되는데, 길이만 검사하면
-	// 그대로 재저장돼 지역 필터에 영영 걸리지 않는다.
-	it("구 taxonomy 지역 값은 걸러진다", () => {
-		const result = validateJobForm(
-			{ ...baseForm, district: "", region: "서울 강남구" },
-			options
-		);
+	// 지역 코드가 실제 지역인지(존재·활성·소속)는 서버가 마스터와 대조한다. 폼은
+	// 미선택만 막는다 — 여기서 빠지면 시/도 없는 공고가 그대로 제출된다.
+	it("지역 미선택은 걸러진다", () => {
+		const result = validateJobForm({ ...baseForm, regionCode: "" }, options);
 
 		expect(result.ok).toBe(false);
 	});
 
 	it("목록에 없는 업종은 걸러진다", () => {
 		const result = validateJobForm(
-			{ ...baseForm, district: "강남", industryCategory: "노래방바" },
-			options
-		);
-
-		expect(result.ok).toBe(false);
-	});
-
-	it("선택한 시/도에 속하지 않는 세부지역은 걸러진다", () => {
-		const result = validateJobForm(
-			{ ...baseForm, district: "해운대", region: "서울" },
+			{ ...baseForm, industryCategory: "노래방바" },
 			options
 		);
 
@@ -129,7 +111,6 @@ describe("validateJobForm 프리미엄 광고 필수 배너", () => {
 	};
 	const paidForm = {
 		...baseForm,
-		district: "강남",
 		adProductId: "premium-1",
 		exposureDurationDays: 7,
 		exposureType: "premium-banner" as const,
@@ -184,7 +165,7 @@ describe("validateJobForm 프리미엄 광고 필수 배너", () => {
 
 	it("무료(adProductId null)면 필수 배너가 있어도 통과한다", () => {
 		const result = validateJobForm(
-			{ ...baseForm, district: "강남", adProductId: null },
+			{ ...baseForm, adProductId: null },
 			{
 				...options,
 				requiredBannerUsages: [...requiredBannerUsages],

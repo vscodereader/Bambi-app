@@ -102,20 +102,25 @@ describe("toMarketplaceJob", () => {
 
 	it("maps region/district onto fields, location and tags", () => {
 		const job = toMarketplaceJob({
-			district: "강남",
+			district: "강남구",
+			districtCode: "1168000000",
 			id: "44444444-4444-4444-8444-444444444401",
 			industryCategory: "룸싸롱",
 			payAmount: 150_000,
 			payUnit: "일급",
 			region: "서울",
+			regionCode: "1100000000",
 			status: "published",
 			title: "세부지역 공고",
 		});
 
 		expect(job.region).toBe("서울");
-		expect(job.district).toBe("강남");
-		expect(job.location).toBe("서울 · 강남");
-		expect(job.tags).toContain("강남");
+		expect(job.district).toBe("강남구");
+		// 표시 문자열과 별개로 코드가 실려야 필터가 코드 비교를 할 수 있다.
+		expect(job.regionCode).toBe("1100000000");
+		expect(job.districtCode).toBe("1168000000");
+		expect(job.location).toBe("서울 · 강남구");
+		expect(job.tags).toContain("강남구");
 	});
 
 	it("falls back to region alone when the job has no district", () => {
@@ -130,6 +135,9 @@ describe("toMarketplaceJob", () => {
 		});
 
 		expect(job.district).toBe("");
+		// 코드를 못 받은 공고(수집 원문 매칭 실패)는 빈 문자열이라 코드 필터에 걸리지 않는다.
+		expect(job.districtCode).toBe("");
+		expect(job.regionCode).toBe("");
 		expect(job.location).toBe("기타");
 		// 빈 세부지역이 태그로 새면 칩이 빈 칸으로 렌더된다.
 		expect(job.tags).not.toContain("");

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { bambiSiteJsonLd, toJsonLdScriptContent } from "./seo";
+import {
+	bambiSiteJsonLd,
+	breadcrumbJsonLd,
+	toJsonLdScriptContent,
+} from "./seo";
 
 const ABSOLUTE_HTTPS = /^https:\/\//;
 
@@ -35,6 +39,22 @@ describe("bambiSiteJsonLd", () => {
 	// 구조화 데이터로 색인되면 되돌리기 어려우니 유출을 막는다.
 	it("TODO_ 자리표시자를 포함하지 않는다", () => {
 		expect(JSON.stringify(bambiSiteJsonLd)).not.toContain("TODO_");
+	});
+});
+
+describe("breadcrumbJsonLd", () => {
+	it("1부터 시작하는 position과 절대 URL을 낸다", () => {
+		const data = breadcrumbJsonLd([
+			{ name: "채용 정보", path: "/jobs" },
+			{ name: "서울", path: "/jobs/seoul" },
+		]);
+
+		expect(data["@type"]).toBe("BreadcrumbList");
+		expect(data.itemListElement.map((item) => item.position)).toEqual([1, 2]);
+		for (const item of data.itemListElement) {
+			expect(item.item).toMatch(ABSOLUTE_HTTPS);
+		}
+		expect(data.itemListElement.at(-1)?.item).toContain("/jobs/seoul");
 	});
 });
 

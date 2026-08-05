@@ -38,9 +38,13 @@ export interface ApiMarketplaceJob {
 	// 수집 공고의 대표 이미지. job_post_media 행이 아니라 미러링된 URL 한 줄로 오므로
 	// storageKey 기반 조립을 거치지 않는다(버킷이 없는 환경에서는 원본 URL이 그대로 온다).
 	coverImageUrl?: null | string;
+	// 공고 상세(getById) 응답에만 존재 — 공고를 올린 구인자의 user id.
+	createdByUserId?: null | string;
 	description?: string | null;
 	descriptionBlocks?: JobDescriptionBlock[] | null;
 	district?: string | null;
+	// 지역 마스터 코드. 표시 문자열(region·district)과 달리 필터·폼이 쓰는 값이다.
+	districtCode?: null | string;
 	employerDisplayName?: string | null;
 	employerVerificationStatus?: string | null;
 	// 공고 상세(getById) 응답에만 존재 — 작성자 인증번호(미인증이면 null).
@@ -62,6 +66,7 @@ export interface ApiMarketplaceJob {
 	ratingAverage?: null | number | string;
 	ratingCount?: null | number | string;
 	region: string;
+	regionCode?: null | string;
 	// "crawled"면 수집 공고다 — 상세가 job_post 경로에 없어 카드 클릭이 갈 곳이 다르다.
 	source?: null | string;
 	status: string;
@@ -165,6 +170,20 @@ const toRating = ({
 	return Math.round(toFiniteNumber(ratingAverage) * 10) / 10;
 };
 
+// 코드가 없는 공고(크롤 원문 매칭 실패)는 빈 문자열로 내린다 — 코드 필터는 표시 문자열을
+// 보지 않으므로 그런 공고는 지역 필터에 걸리지 않는다(서버 필터와 같은 결과).
+const toRegionCodes = (
+	job: ApiMarketplaceJob
+): Pick<Job, "districtCode" | "regionCode"> => ({
+	districtCode: job.districtCode ?? "",
+	regionCode: job.regionCode ?? "",
+});
+
+// 공고를 올린 구인자의 user id. 상세(getById) 응답에만 있어 목록에서는 undefined다.
+// (매퍼 본문이 이미 복잡도 상한이라 분기를 밖으로 뺀다)
+const toEmployerUserId = (job: ApiMarketplaceJob): string | undefined =>
+	job.createdByUserId ?? undefined;
+
 export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 	const company = getMarketplaceJobCompany(job);
 	const coverImage =
@@ -196,6 +215,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		descriptionBlocks: job.descriptionBlocks ?? [],
 		detailImages,
 		district: job.district ?? "",
+		employerUserId: toEmployerUserId(job),
 		employerVerifiedPhone: job.employerVerifiedPhone ?? null,
 		exposureType: job.exposureType ?? null,
 		featured: job.employerVerificationStatus === "verified",
@@ -212,6 +232,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		promotionTier: job.promotionTier ?? null,
 		rating: toRating(job),
 		region: job.region,
+		...toRegionCodes(job),
 		reviews: toReviewCount(job.ratingCount),
 		status: job.status,
 		tags,

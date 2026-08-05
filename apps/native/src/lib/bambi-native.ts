@@ -93,6 +93,7 @@ export const payUnitOptions = ["시급", "일급", "주급", "월급"] as const;
 export const jobStatusLabels = {
 	draft: "임시 저장",
 	hidden: "숨김",
+	on_hold: "검수 보류",
 	pending_review: "검수 대기",
 	published: "공개",
 	rejected: "반려",

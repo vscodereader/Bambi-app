@@ -650,7 +650,8 @@ export default function ModeratorCrawlerPage() {
 									settingsQuery.isLoading ||
 									!selectedTargetReady
 								}
-								onClick={() => runNowMutation.mutate({})}
+								// 저장을 거치지 않고 지금 화면에서 고른 수집 데이터로 한 회차를 돌린다.
+								onClick={() => runNowMutation.mutate({ contentType })}
 								type="button"
 								variant="outline"
 							>
@@ -664,8 +665,11 @@ export default function ModeratorCrawlerPage() {
 							</Button>
 						</div>
 						<p className="m-0 text-muted-foreground text-xs">
-							즉시 수집은 주기를 기다리지 않고 한 회차를 지금 시작합니다. 저장한
-							설정을 기준으로 돌기 때문에, 방금 바꾼 값이 있다면 먼저 저장해
+							즉시 수집은 주기를 기다리지 않고 한 회차를 지금 시작합니다. 위에서
+							고른 수집 데이터(
+							{CRAWL_CONTENT_TYPE_LABELS[contentType]})로 바로 돌기 때문에
+							저장을 먼저 하지 않아도 돼요. 다만 이 선택은 이 회차에만 적용되고
+							저장되지 않으니, 스케줄러도 같은 종류로 돌리려면 「저장」을 눌러
 							주세요.
 						</p>
 					</form>
@@ -729,10 +733,10 @@ export default function ModeratorCrawlerPage() {
 								수집 커뮤니티 글 노출
 							</Label>
 							<p className="m-0 text-muted-foreground text-xs">
-								수집한 커뮤니티 글이 「일 이야기」 게시판과 수다방 홈 미리보기에
-								섞입니다. 우리 회원 글이 항상 먼저 나오고 남은 자리에 붙으며,
-								「외부 수집」 배지가 달립니다. 좋아요·댓글·신고는 제공되지
-								않아요.
+								수집한 커뮤니티 글이 「밤문화 이야기」 게시판과 수다방 홈
+								미리보기에 섞입니다. 우리 회원 글이 항상 먼저 나오고 남은 자리에
+								붙으며, 「외부 수집」 배지가 달립니다. 좋아요·댓글·신고는
+								제공되지 않아요.
 							</p>
 						</div>
 						<Switch

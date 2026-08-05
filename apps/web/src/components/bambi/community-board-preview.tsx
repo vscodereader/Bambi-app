@@ -21,7 +21,9 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import {
 	CommunityNewBadge,
 	CommunityRoleBadges,
@@ -34,6 +36,8 @@ import {
 	communityCrawledPath,
 	communityPostPath,
 	formatCommunityDate,
+	isLegalAdvisorAllowedPath,
+	LEGAL_ADVISOR_BOARD_NOTICE,
 } from "@/lib/bambi/community";
 
 // 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 미리보기 글 타입을 파생한다.
@@ -44,22 +48,35 @@ export type OverviewPost =
 export const accentClassName: Record<CommunityBoardKey, string> = {
 	best: "bg-coral-500",
 	free: "bg-sky-400",
+	legal: "bg-violet-500",
 	market: "bg-green-500",
 	notice: "bg-coral-500",
 	work_talk: "bg-amber-500",
 };
 
+// 글 행 오른쪽 메타. 반폭 카드(compact)는 작성인을 접고 날짜만 남긴다 — 좁은 칸에서
+// 제목이 두어 글자로 잘리는 걸 막는다.
+const postMetaText = (post: OverviewPost, compact: boolean): string =>
+	compact
+		? formatCommunityDate(post.createdAt)
+		: `${post.authorName ?? COMMUNITY_AUTHOR_FALLBACK} · ${formatCommunityDate(post.createdAt)}`;
+
 export function BoardPreviewCard({
-	blockedNotice,
 	boardKey,
 	className,
+	compact = false,
 	emptyText,
+	onBlockedNavigate,
 	posts,
 }: {
-	// 지정 시 글 클릭을 막고 이 문구를 토스트로 안내한다(미자격자 홈 미리보기).
-	blockedNotice?: string;
 	boardKey: CommunityBoardKey;
 	className?: string;
+	// 반폭 칸(중고거래·법률 자문)에 들어가는 카드. 제목이 설 자리를 남기려고 작성인을
+	// 접고 날짜만 남긴다 — 좁은 칸에서 제목이 두어 글자로 잘리는 걸 막는다.
+	compact?: boolean;
+	// 지정 시 수다방으로 가는 링크(글·더보기) 클릭을 가로채 목적지를 넘긴다 — 미자격자
+	// 홈 미리보기용. 안내 방식(토스트·본인인증 다이얼로그)은 호출한 화면이 정한다.
+	onBlockedNavigate?: (href: string) => void;
 	// 빈 상태 문구 — 미지정 시 기존 "첫 글" 안내를 그대로 쓴다(운영자 전용 게시판은 별도 문구 주입).
 	emptyText?: string;
 	posts: OverviewPost[];
@@ -97,6 +114,12 @@ export function BoardPreviewCard({
 				<Link
 					className="flex items-center gap-1 font-semibold text-muted-foreground text-xs hover:text-foreground"
 					href={communityBoardPath(board.slug) as Route}
+					onClick={(event) => {
+						if (onBlockedNavigate) {
+							event.preventDefault();
+							onBlockedNavigate(communityBoardPath(board.slug));
+						}
+					}}
 				>
 					더보기
 					<ChevronRightIcon className="size-3" />
@@ -114,25 +137,21 @@ export function BoardPreviewCard({
 						);
 						// 수집 글은 전용 상세로 분기한다(순수 글은 기존 게시판 상세 경로 그대로).
 						const isCrawled = post.source === "crawled";
+						const href = isCrawled
+							? communityCrawledPath(post.id)
+							: communityPostPath(boardOfPost?.slug ?? board.slug, post.id);
 						return (
 							<Link
 								className={cn(
 									"flex items-center justify-between gap-3 rounded-lg px-2 py-1.5",
 									isNotice ? "hover:bg-coral-100/60" : "hover:bg-muted"
 								)}
-								href={
-									(isCrawled
-										? communityCrawledPath(post.id)
-										: communityPostPath(
-												boardOfPost?.slug ?? board.slug,
-												post.id
-											)) as Route
-								}
+								href={href as Route}
 								key={post.id}
 								onClick={(event) => {
-									if (blockedNotice) {
+									if (onBlockedNavigate) {
 										event.preventDefault();
-										toast(blockedNotice);
+										onBlockedNavigate(href);
 									}
 								}}
 							>
@@ -156,8 +175,7 @@ export function BoardPreviewCard({
 									) : null}
 								</span>
 								<span className="shrink-0 text-muted-foreground text-xs">
-									{post.authorName ?? COMMUNITY_AUTHOR_FALLBACK} ·{" "}
-									{formatCommunityDate(post.createdAt)}
+									{postMetaText(post, compact)}
 								</span>
 							</Link>
 						);
@@ -165,6 +183,98 @@ export function BoardPreviewCard({
 				)}
 			</CardContent>
 		</Card>
+	);
+}
+
+// 법률자문 계정용 링크 가드. 다른 게시판 카드는 그대로 보여주되(숨기지 않는다) 눌렀을 때
+// legal 게시판·수다방 홈만 통과시키고 나머지는 서버 가드와 같은 문구로 안내한다.
+// 반환값은 onBlockedNavigate와 같은 시그니처라 화면이 그대로 넘기면 되고, 법률자문이
+// 아니면 undefined라 링크가 평소대로 동작한다.
+export function useLegalAdvisorNavGuard():
+	| ((href: string) => void)
+	| undefined {
+	const { role } = useBambiAuth();
+	const router = useRouter();
+
+	if (role !== "legal_advisor") {
+		return;
+	}
+
+	return (href: string) => {
+		if (isLegalAdvisorAllowedPath(href)) {
+			router.push(href as Route);
+			return;
+		}
+		toast(LEGAL_ADVISOR_BOARD_NOTICE);
+	};
+}
+
+// 중고거래·무료 법률 자문은 2열 그리드의 한 칸을 좌우로 나눠 쓴다(모바일은 세로 스택).
+// 글이 적은 두 게시판이라 각각 한 칸씩 차지하면 홈에서 빈 카드가 두 줄로 늘어진다.
+const PAIRED_BOARD_KEYS: CommunityBoardKey[] = ["market", "legal"];
+
+// 수다방 홈과 seeker 홈 커뮤니티 섹션이 공유하는 미리보기 배치. 공지사항은 글 유무와
+// 무관하게 항상 최상단 전폭, 나머지 게시판은 그 아래 2열 그리드. 두 화면이 각자 배치를
+//들고 있어 홈과 수다방의 같은 섹션이 서로 다르게 보이던 걸 한 컴포넌트로 모은다.
+export function CommunityOverviewGrid({
+	isPending,
+	onBlockedNavigate,
+	postsByBoard,
+}: {
+	isPending: boolean;
+	// BoardPreviewCard와 같은 의미 — 지정 시 수다방 링크를 가로채 호출한 화면이 안내한다.
+	onBlockedNavigate?: (href: string) => void;
+	postsByBoard: Record<CommunityBoardKey, OverviewPost[]>;
+}) {
+	const soloBoards = COMMUNITY_BOARDS.filter(
+		(board) => board.key !== "notice" && !PAIRED_BOARD_KEYS.includes(board.key)
+	);
+
+	return (
+		<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+			{isPending ? (
+				<>
+					<BoardPreviewSkeleton className="md:col-span-2" />
+					{soloBoards.map((board) => (
+						<BoardPreviewSkeleton key={board.key} />
+					))}
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						{PAIRED_BOARD_KEYS.map((key) => (
+							<BoardPreviewSkeleton key={key} />
+						))}
+					</div>
+				</>
+			) : (
+				<>
+					<BoardPreviewCard
+						boardKey="notice"
+						className="md:col-span-2"
+						emptyText="등록된 공지사항이 없어요."
+						onBlockedNavigate={onBlockedNavigate}
+						posts={postsByBoard.notice}
+					/>
+					{soloBoards.map((board) => (
+						<BoardPreviewCard
+							boardKey={board.key}
+							key={board.key}
+							onBlockedNavigate={onBlockedNavigate}
+							posts={postsByBoard[board.key]}
+						/>
+					))}
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						{PAIRED_BOARD_KEYS.map((key) => (
+							<BoardPreviewCard
+								boardKey={key}
+								compact
+								key={key}
+								onBlockedNavigate={onBlockedNavigate}
+								posts={postsByBoard[key]}
+							/>
+						))}
+					</div>
+				</>
+			)}
+		</div>
 	);
 }
 

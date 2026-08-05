@@ -41,6 +41,20 @@ const FOOTER_LINKS: FooterLink[] = [
 	{ href: "/privacy" as Route, label: "개인정보 처리방침", distinct: true },
 ];
 
+// 로그인 없이 열리는 영역(/jobs·/board)으로 가는 링크. 이 푸터는 공개 랜딩·공개
+// 게시판·약관 셸은 물론 인증 게이트 화면(seeker-auth-gate-screen)과 로그인 셸
+// (responsive-shell)에도 붙는다 — 어느 화면에서 시작하든 크롤러가 한 홉 안에
+// 공개 영역 전체에 닿게 하는 유일한 공통 지점이다. 앵커 텍스트는 목적지가 무엇인지
+// 그대로 말한다("여기" 같은 문구 금지).
+const PUBLIC_NAV_LINKS: FooterLink[] = [
+	{ href: "/jobs" as Route, label: "지역별 채용 정보" },
+	{ href: "/board" as Route, label: "커뮤니티 게시판" },
+	{ href: "/board/notice" as Route, label: "공지사항" },
+];
+
+const FOOTER_LINK_CLASS =
+	"text-muted-foreground text-sm no-underline transition-colors hover:text-foreground";
+
 interface SiteFooterProps {
 	// 콘텐츠 폭 — 헤더와 정렬. 기본은 앱 공통 고정폭.
 	contentWidthClassName?: string;
@@ -84,54 +98,67 @@ export function SiteFooter({
 							{intro}
 						</p>
 					</div>
-					<nav
-						aria-label="약관 및 정책"
-						className="flex flex-wrap items-center gap-x-6 gap-y-2"
-					>
-						{FOOTER_LINKS.map((link) => (
-							<Link
-								className={cn(
-									"text-muted-foreground text-sm no-underline transition-colors hover:text-foreground",
-									link.distinct && "text-foreground"
-								)}
-								href={link.href}
-								key={link.href}
-							>
-								{link.label}
-							</Link>
-						))}
-						{/* 환불 정책은 페이지 이동 대신 안내 다이얼로그로 노출한다. 링크 톤 유지. */}
-						<Dialog>
-							<DialogTrigger className="cursor-pointer border-0 bg-transparent p-0 text-muted-foreground text-sm no-underline transition-colors hover:text-foreground">
-								환불 정책
-							</DialogTrigger>
-							<DialogContent>
-								<div className="flex flex-col gap-2">
-									<DialogTitle>환불 정책</DialogTitle>
-									<DialogDescription>
-										무통장: 수수료 5% + 광고 게재 기간을 제외한 금액
-									</DialogDescription>
-								</div>
-							</DialogContent>
-						</Dialog>
-						{/* 직업정보제공사업자 준수사항: 명단이 공개 중인 체불사업주인지 구직자가
+					<div className="flex flex-col gap-4 md:items-end">
+						<nav
+							aria-label="공개 정보"
+							className="flex flex-wrap items-center gap-x-6 gap-y-2"
+						>
+							{PUBLIC_NAV_LINKS.map((link) => (
+								<Link
+									className={FOOTER_LINK_CLASS}
+									href={link.href}
+									key={link.href}
+								>
+									{link.label}
+								</Link>
+							))}
+						</nav>
+						<nav
+							aria-label="약관 및 정책"
+							className="flex flex-wrap items-center gap-x-6 gap-y-2"
+						>
+							{FOOTER_LINKS.map((link) => (
+								<Link
+									className={cn(
+										FOOTER_LINK_CLASS,
+										link.distinct && "text-foreground"
+									)}
+									href={link.href}
+									key={link.href}
+								>
+									{link.label}
+								</Link>
+							))}
+							{/* 환불 정책은 페이지 이동 대신 안내 다이얼로그로 노출한다. 링크 톤 유지. */}
+							<Dialog>
+								<DialogTrigger className="cursor-pointer border-0 bg-transparent p-0 text-muted-foreground text-sm no-underline transition-colors hover:text-foreground">
+									환불 정책
+								</DialogTrigger>
+								<DialogContent>
+									<div className="flex flex-col gap-2">
+										<DialogTitle>환불 정책</DialogTitle>
+										<DialogDescription>
+											무통장: 수수료 5% + 광고 게재 기간을 제외한 금액
+										</DialogDescription>
+									</div>
+								</DialogContent>
+							</Dialog>
+							{/* 직업정보제공사업자 준수사항: 명단이 공개 중인 체불사업주인지 구직자가
 						    확인할 수 있어야 한다. 명단은 고용노동부가 직접 관리·갱신하므로
 						    사본을 두지 않고 원본을 새 탭으로 연다(밤비를 떠나게 하지 않는다). */}
-						<a
-							className="text-muted-foreground text-sm no-underline transition-colors hover:text-foreground"
-							href="https://www.moel.go.kr/info/defaulter/defaulterList.do"
-							rel="noreferrer"
-							target="_blank"
-						>
-							체불사업주 명단
-						</a>
-						<a
-							className="text-muted-foreground text-sm no-underline transition-colors hover:text-foreground"
-							href={`mailto:${email}`}
-						>
-							고객센터
-						</a>
-					</nav>
+							<a
+								className={FOOTER_LINK_CLASS}
+								href="https://www.moel.go.kr/info/defaulter/defaulterList.do"
+								rel="noreferrer"
+								target="_blank"
+							>
+								체불사업주 명단
+							</a>
+							<a className={FOOTER_LINK_CLASS} href={`mailto:${email}`}>
+								고객센터
+							</a>
+						</nav>
+					</div>
 				</div>
 
 				<Separator />

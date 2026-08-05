@@ -57,6 +57,7 @@ import {
 	recordJobPerformanceEvent,
 } from "../../services/bambi-analytics";
 import {
+	isEmployerLikeRole,
 	isEmployerOrganizationVerified,
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
@@ -100,6 +101,7 @@ import {
 	getUpdatedJobPostStatus,
 	type JobPostStatus,
 } from "../../services/bambi-policy";
+import { resolveRegionSelection } from "../../services/bambi-region";
 import {
 	createJobPostMediaUploadIntent,
 	isOwnedJobPostMediaKey,
@@ -143,8 +145,11 @@ const jobPostInputShape = z.object({
 	teamId: z.string().min(1).optional(),
 	title: z.string().min(2).max(80),
 	industryCategory: industryCategorySchema,
-	region: z.string().min(1).max(80),
-	district: z.string().max(80).optional(),
+	// 지역은 자유 문자열이 아니라 지역 마스터의 법정동코드(10자리)로 받는다. 존재·활성·
+	// 레벨 정합은 저장 직전 resolveRegionSelection이 DB 대조로 확인하고, 화면에 나갈
+	// 문자열(region·district)은 서버가 마스터에서 복사한다 — 표기가 한 벌로 굳는다.
+	regionCode: z.string().length(10),
+	districtCode: z.string().length(10).optional(),
 	// "협의" 단위는 금액이 없다(면접 후 급여 협의). 아래 refine에서 짝을 강제한다.
 	payAmount: z.number().int().positive().nullish(),
 	payUnit: z.string().min(1).max(30),
@@ -206,8 +211,8 @@ const createMediaUploadInput = z.object({
 
 const listInput = z.object({
 	industryCategory: industryCategorySchema.optional(),
-	region: z.string().min(1).max(80).optional(),
-	district: z.string().max(80).optional(),
+	regionCode: z.string().length(10).optional(),
+	districtCode: z.string().length(10).optional(),
 	minPayAmount: z.number().int().positive().optional(),
 	limit: z.number().int().min(1).max(50).default(20),
 	// 전체 공고(organic) "더보기" 커서 — 응답의 nextOrganicOffset을 그대로 돌려보낸다.
@@ -706,6 +711,9 @@ export const applyJobPostUpdate = async ({
 		});
 	}
 
+	// 지역 코드는 클라이언트가 보낸 값이라 저장 전에 마스터 대조가 필요하다. 표시용
+	// region·district 문자열도 여기서 나온다.
+	const regionSelection = await resolveRegionSelection(data);
 	// 노출 확정이 먼저다 — 배너 문구를 남길지 버릴지가 확정된 노출 타입에 달려 있고,
 	// 검수 검사도 실제로 저장될 문구만 봐야 한다.
 	const exposure = await resolveJobPostExposure({
@@ -760,6 +768,7 @@ export const applyJobPostUpdate = async ({
 			.update(jobPost)
 			.set({
 				...jobInput,
+				...regionSelection,
 				// 금액 단위 → "협의"로 바꿀 때 undefined면 drizzle이 컬럼을 건너뛰어
 				// 예전 금액이 남는다. null로 명시해 지운다.
 				payAmount: jobInput.payAmount ?? null,
@@ -936,12 +945,12 @@ export const jobsRouter = {
 			filters.push(eq(jobPost.industryCategory, input.industryCategory));
 		}
 
-		if (input.region) {
-			filters.push(eq(jobPost.region, input.region));
+		if (input.regionCode) {
+			filters.push(eq(jobPost.regionCode, input.regionCode));
 		}
 
-		if (input.district) {
-			filters.push(eq(jobPost.district, input.district));
+		if (input.districtCode) {
+			filters.push(eq(jobPost.districtCode, input.districtCode));
 		}
 
 		if (input.minPayAmount) {
@@ -981,6 +990,8 @@ export const jobsRouter = {
 			ratingCount: ratingCountSql,
 			region: jobPost.region,
 			district: jobPost.district,
+			regionCode: jobPost.regionCode,
+			districtCode: jobPost.districtCode,
 			status: jobPost.status,
 			teamDisplayName: employerTeamProfile.displayName,
 			title: jobPost.title,
@@ -1200,12 +1211,12 @@ export const jobsRouter = {
 			filters.push(eq(jobPost.industryCategory, input.industryCategory));
 		}
 
-		if (input.region) {
-			filters.push(eq(jobPost.region, input.region));
+		if (input.regionCode) {
+			filters.push(eq(jobPost.regionCode, input.regionCode));
 		}
 
-		if (input.district) {
-			filters.push(eq(jobPost.district, input.district));
+		if (input.districtCode) {
+			filters.push(eq(jobPost.districtCode, input.districtCode));
 		}
 
 		if (input.minPayAmount) {
@@ -1225,6 +1236,8 @@ export const jobsRouter = {
 				industryCategory: jobPost.industryCategory,
 				region: jobPost.region,
 				district: jobPost.district,
+				regionCode: jobPost.regionCode,
+				districtCode: jobPost.districtCode,
 				payAmount: jobPost.payAmount,
 				payUnit: jobPost.payUnit,
 				workSchedule: jobPost.workSchedule,
@@ -1382,6 +1395,8 @@ export const jobsRouter = {
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
 					district: jobPost.district,
+					regionCode: jobPost.regionCode,
+					districtCode: jobPost.districtCode,
 					payAmount: jobPost.payAmount,
 					payUnit: jobPost.payUnit,
 					workSchedule: jobPost.workSchedule,
@@ -1448,7 +1463,7 @@ export const jobsRouter = {
 	listMine: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
-		if (profile.role === "job_seeker") {
+		if (!isEmployerLikeRole(profile.role)) {
 			throw new ORPCError("FORBIDDEN");
 		}
 
@@ -1507,9 +1522,14 @@ export const jobsRouter = {
 				industryCategory: jobPost.industryCategory,
 				region: jobPost.region,
 				district: jobPost.district,
+				regionCode: jobPost.regionCode,
+				districtCode: jobPost.districtCode,
 				payAmount: jobPost.payAmount,
 				payUnit: jobPost.payUnit,
 				status: jobPost.status,
+				// 반려 사유는 목록에서 바로 보여준다. 안 내려주면 구인자는 무엇을 고쳐야 하는지
+				// 알 방법이 화면 어디에도 없다.
+				rejectionReason: jobPost.rejectionReason,
 				organizationId: jobPost.organizationId,
 				teamId: jobPost.teamId,
 				createdByUserId: jobPost.createdByUserId,
@@ -1623,6 +1643,9 @@ export const jobsRouter = {
 				});
 			}
 
+			// 지역 코드는 클라이언트가 보낸 값이라 저장 전에 마스터 대조가 필요하다. 표시용
+			// region·district 문자열도 여기서 나온다.
+			const regionSelection = await resolveRegionSelection(input);
 			// 노출 확정이 먼저다 — 배너형이 아니면 문구를 저장 전에 버려야 하고, 검수
 			// 검사도 실제로 저장될 문구만 봐야 한다.
 			const exposure = await resolveJobPostExposure({
@@ -1651,6 +1674,7 @@ export const jobsRouter = {
 					.insert(jobPost)
 					.values({
 						...jobInput,
+						...regionSelection,
 						createdByUserId: actor.userId,
 						description: preparedContent.description,
 						descriptionBlocks: preparedContent.descriptionBlocks,

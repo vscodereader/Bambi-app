@@ -41,3 +41,12 @@ export function isSignatureMismatch(
 ): boolean {
 	return detected === null || detected !== declaredMime;
 }
+
+// PDF는 이미지가 아니라 DetectedImageType에 넣지 않고 따로 판정한다. 채팅 첨부가 유일한
+// PDF 경로이며, 이미지와 같은 이유로 확장자·File.type 위조를 앞바이트로 한 번 걸러낸다.
+export async function isPdfSignature(file: Blob): Promise<boolean> {
+	const bytes = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+
+	// "%PDF-"
+	return startsWith(bytes, [0x25, 0x50, 0x44, 0x46, 0x2d]);
+}

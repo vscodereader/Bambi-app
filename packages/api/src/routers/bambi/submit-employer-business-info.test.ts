@@ -29,6 +29,13 @@ const callSubmit = (userId: string) =>
 		path: ["bambi", "onboarding", "submitEmployerBusinessInfo"],
 	});
 
+// 대표자명·개업일자는 국세청 대조용 필수 입력이지만 이 스위트의 관심사가 아니다
+// (NTS_SERVICE_KEY 미설정 개발 환경에서는 대조를 건너뛴다).
+const IDENTITY = {
+	representativeName: "홍길동",
+	businessStartDate: "2020-01-01",
+};
+
 describe("submitEmployerBusinessInfo", () => {
 	it("creates org(owner) and pending org profile when the employer has none", async () => {
 		const userId = `user_sub_${randomUUID()}`;
@@ -41,6 +48,7 @@ describe("submitEmployerBusinessInfo", () => {
 
 		const submit = callSubmit(userId);
 		const { organizationId, verificationStatus } = await submit({
+			...IDENTITY,
 			displayName: "밤비 업소",
 			businessRegistrationNumber: "123-45-67890",
 		});
@@ -63,12 +71,17 @@ describe("submitEmployerBusinessInfo", () => {
 				status: employerOrganizationProfile.verificationStatus,
 				brn: employerOrganizationProfile.businessRegistrationNumber,
 				displayName: employerOrganizationProfile.displayName,
+				representativeName: employerOrganizationProfile.representativeName,
+				businessStartDate: employerOrganizationProfile.businessStartDate,
 			})
 			.from(employerOrganizationProfile)
 			.where(eq(employerOrganizationProfile.organizationId, organizationId));
 		expect(orgProfile?.status).toBe("pending");
 		expect(orgProfile?.brn).toBe("123-45-67890");
 		expect(orgProfile?.displayName).toBe("밤비 업소");
+		expect(orgProfile?.representativeName).toBe("홍길동");
+		// 개업일자는 하이픈을 뗀 8자리로 저장한다.
+		expect(orgProfile?.businessStartDate).toBe("20200101");
 
 		await db.delete(user).where(eq(user.id, userId));
 		await db.delete(organization).where(eq(organization.id, organizationId));
@@ -85,6 +98,7 @@ describe("submitEmployerBusinessInfo", () => {
 
 		const submit = callSubmit(userId);
 		const first = await submit({
+			...IDENTITY,
 			displayName: "구업체명",
 			businessRegistrationNumber: "111-11-11111",
 		});
@@ -97,6 +111,7 @@ describe("submitEmployerBusinessInfo", () => {
 			);
 
 		const second = await submit({
+			...IDENTITY,
 			displayName: "새업체명",
 			businessRegistrationNumber: "222-22-22222",
 		});
@@ -135,6 +150,7 @@ describe("submitEmployerBusinessInfo", () => {
 
 		const submit = callSubmit(userId);
 		const first = await submit({
+			...IDENTITY,
 			displayName: "인증업체",
 			businessRegistrationNumber: "333-33-33333",
 		});
@@ -148,6 +164,7 @@ describe("submitEmployerBusinessInfo", () => {
 
 		// 아무것도 바꾸지 않고 그대로 재제출한다.
 		const second = await submit({
+			...IDENTITY,
 			displayName: "인증업체",
 			businessRegistrationNumber: "333-33-33333",
 		});
@@ -182,6 +199,7 @@ describe("submitEmployerBusinessInfo", () => {
 
 		const submit = callSubmit(userId);
 		const first = await submit({
+			...IDENTITY,
 			displayName: "인증업체",
 			businessRegistrationNumber: "444-44-44444",
 		});
@@ -194,6 +212,7 @@ describe("submitEmployerBusinessInfo", () => {
 
 		// 사업자등록번호를 바꿔서 재제출하면 재심사(pending)로 돌아가야 한다.
 		const second = await submit({
+			...IDENTITY,
 			displayName: "인증업체",
 			businessRegistrationNumber: "555-55-55555",
 		});
@@ -230,7 +249,11 @@ describe("submitEmployerBusinessInfo", () => {
 
 		const submit = callSubmit(userId);
 		await expect(
-			submit({ displayName: "x", businessRegistrationNumber: "1234567890" })
+			submit({
+				...IDENTITY,
+				displayName: "x",
+				businessRegistrationNumber: "1234567890",
+			})
 		).rejects.toThrow();
 
 		await db.delete(user).where(eq(user.id, userId));
@@ -246,7 +269,11 @@ describe("submitEmployerBusinessInfo", () => {
 
 		const submit = callSubmit(userId);
 		await expect(
-			submit({ displayName: "x", businessRegistrationNumber: "123-45-67890" })
+			submit({
+				...IDENTITY,
+				displayName: "x",
+				businessRegistrationNumber: "123-45-67890",
+			})
 		).rejects.toThrow();
 
 		await db.delete(user).where(eq(user.id, userId));

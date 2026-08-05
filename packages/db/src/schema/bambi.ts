@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
 	type AnyPgColumn,
 	boolean,
+	check,
 	index,
 	integer,
 	jsonb,
@@ -11,14 +12,22 @@ import {
 	timestamp,
 	uniqueIndex,
 	uuid,
+	varchar,
 } from "drizzle-orm/pg-core";
 
 import { organization, team, user } from "./auth";
 
+// guest는 계정이 없는 비회원 작성자(성인인증 통과 게스트 토큰)를 가리키는 스냅샷 값이며
+// user.role로는 저장되지 않는다 — 수다방 글·댓글의 author_role에만 쓰인다.
+// 마이그레이션 호환을 위해 새 값은 항상 목록 끝에 덧붙인다(ALTER TYPE ... ADD VALUE).
 export const bambiUserRole = pgEnum("bambi_user_role", [
 	"job_seeker",
 	"employer",
 	"admin",
+	"guest",
+	// 무료 법률 자문 게시판(legal) 전용 계정. 운영자가 구직자 계정을 지정·해제하며
+	// 해당 게시판의 잠금글만 열람·답변할 수 있다(다른 보드 잠금글은 일반 회원과 동일).
+	"legal_advisor",
 ]);
 
 export const accountStatus = pgEnum("account_status", [
@@ -37,12 +46,16 @@ export const employerVerificationStatus = pgEnum(
 	["none", "pending", "verified", "rejected"]
 );
 
+// on_hold(검수 보류)는 hidden(운영자 강제 숨김)과 구분되는 검수 축 상태다 — 둘을 같은
+// hidden으로 저장하면 구인자 목록에 "숨김"으로 보여 보류 사유를 알 수 없다.
+// 마이그레이션 호환을 위해 새 값은 항상 목록 끝에 덧붙인다(ALTER TYPE ... ADD VALUE).
 export const jobPostStatus = pgEnum("job_post_status", [
 	"draft",
 	"pending_review",
 	"published",
 	"hidden",
 	"rejected",
+	"on_hold",
 ]);
 
 // 업종 카테고리. 운영이 확정한 9종으로 고정하며, 값 자체가 화면 표기(한국어·BAR)다 —
@@ -123,6 +136,9 @@ export const communityBoard = pgEnum("community_board", [
 	"work_talk",
 	"market",
 	"notice",
+	// 무료 법률 자문. 글이 전부 잠금(비밀번호 필수)이라 목록에는 마스킹 제목만 보인다.
+	// 마이그레이션 호환을 위해 새 값은 항상 끝에 덧붙인다.
+	"legal",
 ]);
 
 // 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
@@ -286,6 +302,43 @@ export const bambiIdentityVerification = pgTable(
 	]
 );
 
+// 본인인증 수집 로그. 실인증이 확인될 때마다 생년월일·번호·성별과 구분(비회원/구직자/
+// 구인자)을 사람당 1행으로 남긴다 — (birth_date, phone_number)가 사람 식별 upsert 키.
+// 같은 사람이 재인증하면(포트원 인증 건 ID는 매번 새로 발급) 기존 행을 갱신한다.
+// 이름은 담지 않는다(PII 최소화).
+// 개발자 SQL 전용 표다 — 조회 프로시저·관리자 화면을 만들지 않는다(쓰기 코드만 존재).
+// bambi_identity_verification(발급 기록)에 FK를 걸지 않는다: 그쪽은 만료 행을 정리하는
+// 대상이라 cascade로 수집 로그까지 사라지면 안 된다.
+export const bambiIdentityVerificationLog = pgTable(
+	"bambi_identity_verification_log",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		// 이 행을 마지막으로 갱신한 포트원 인증 건 ID(최근 인증 건 추적용).
+		identityVerificationId: text("identity_verification_id").notNull(),
+		phoneNumber: text("phone_number"),
+		// YYYYMMDD 8자리(bambi_profile.birth_date와 같은 컨벤션).
+		birthDate: varchar("birth_date", { length: 8 }).notNull(),
+		gender: bambiGender("gender"),
+		// 구분 — guest/job_seeker/employer. 가입 전 인증은 아직 모르므로 null이고,
+		// 가입이 끝나면 그 역할로 덮어쓴다.
+		kind: bambiUserRole("kind"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("bambi_identity_verification_log_iv_id_idx").on(
+			table.identityVerificationId
+		),
+		// 사람 식별 upsert 키. phone_number가 null인 행은 사람을 특정할 수 없어 제외.
+		uniqueIndex("bambi_identity_verification_log_person_uidx")
+			.on(table.birthDate, table.phoneNumber)
+			.where(sql`${table.phoneNumber} IS NOT NULL`),
+	]
+);
+
 export const bambiProfile = pgTable(
 	"bambi_profile",
 	{
@@ -336,6 +389,15 @@ export const employerOrganizationProfile = pgTable(
 			.default("none")
 			.notNull(),
 		verificationNote: text("verification_note"),
+		// 국세청 진위확인 입력값 — 사업자번호만으로는 대조가 안 되고 대표자명·개업일자가 함께
+		// 필요하다. 기능 도입 전 행에는 값이 없어 null 허용이다.
+		representativeName: text("representative_name"),
+		// 개업일자 YYYYMMDD 8자리(본인인증 birth8과 같은 컨벤션 — 시각이 없는 날짜라 text).
+		businessStartDate: text("business_start_date"),
+		// 국세청 대조 성공 시각·납세자 상태 코드(b_stt_cd 원값). 둘 다 null이면 운영자에게는
+		// "미확인"이다(키 미설정·국세청 장애로 판정하지 못한 제출).
+		biznumCheckedAt: timestamp("biznum_checked_at"),
+		biznumStatusCode: text("biznum_status_code"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -352,6 +414,29 @@ export const employerOrganizationProfile = pgTable(
 	]
 );
 
+// 지역 마스터. 시/도 행(sigungu = null)과 그 아래 시/군/구 행이 한 테이블에 같이 산다 —
+// 두 테이블로 쪼개면 공고의 region_code·district_code가 서로 다른 테이블을 가리켜 FK가
+// 두 벌이 되고, "이 코드가 어느 레벨인가"를 컬럼 이름으로만 알게 된다.
+//
+// PK는 법정동코드 10자리(시도 2 + 시군구 3 + 00000)다. 우리가 만든 일련번호가 아니라
+// 정부 표준 코드라 외부 데이터(주소 API·통계)와 나중에 그대로 이어붙는다.
+//
+// label은 **표출용 약칭**이라 법정동 원문과 다르다("서울특별시"가 아니라 "서울"). 화면에
+// 그대로 나가는 값이고, 같은 label을 공유하는 시군구 행들이 그 시/도의 자식이 된다.
+export const region = pgTable("region", {
+	code: varchar("code", { length: 10 }).primaryKey(),
+	label: text("label").notNull(),
+	// null이면 시/도 행이다. 값이 있으면 같은 label 아래의 시/군/구 행.
+	sigungu: text("sigungu"),
+	// 시/도 행은 지역 노출 순서(1~16), 시/군/구 행은 같은 label 안에서의 순서다.
+	sortOrder: integer("sort_order").notNull(),
+	// 운영이 특정 지역을 목록에서 내릴 때 쓴다. 행을 지우면 그 코드를 참조하는 공고가
+	// 통째로 막히므로 삭제 대신 이 플래그로만 내린다(그래서 FK에 onDelete를 두지 않았다).
+	isActive: boolean("is_active").default(true).notNull(),
+});
+// 인덱스를 따로 두지 않는다 — 전체가 245행이고 유일한 조회가 "활성 행 전량"이라 PK 외에
+// 어떤 인덱스도 플래너가 쓰지 않는다. 참조 무결성 검사는 PK로 끝난다.
+
 export const employerTeamProfile = pgTable(
 	"employer_team_profile",
 	{
@@ -363,7 +448,15 @@ export const employerTeamProfile = pgTable(
 			.notNull()
 			.references(() => team.id, { onDelete: "cascade" }),
 		displayName: text("display_name").notNull(),
+		// 표시용 지역 문자열. region_code가 붙은 뒤로는 파생값(라벨 복사본)이며, 코드가 없는
+		// 구 데이터의 폴백으로 남겨둔다.
 		region: text("region"),
+		regionCode: varchar("region_code", { length: 10 }).references(
+			() => region.code
+		),
+		districtCode: varchar("district_code", { length: 10 }).references(
+			() => region.code
+		),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -397,8 +490,17 @@ export const crawledJobPost = pgTable(
 		// 대문짝만하게 박아두기 때문에, 필드만 가리고 본문을 그대로 두면 아무것도 가린 게 아니다.
 		// 원문 HTML은 보관하지 않는다(Cheditor 산출물이라 스크립트·인라인 스타일이 섞여 있다).
 		body: text("body").notNull(),
+		// 원본이 준 지역 문자열("서울" / "강남구"). 아래 코드 두 칸은 이 문자열을 지역
+		// 마스터에 대조해 해석한 결과이고, 대조에 실패하면 코드만 null로 남고 원문은 그대로
+		// 보존된다 — 원본 표기가 우리 표준과 어긋난다고 공고를 버리지는 않는다.
 		region: text("region"),
 		district: text("district"),
+		regionCode: varchar("region_code", { length: 10 }).references(
+			() => region.code
+		),
+		districtCode: varchar("district_code", { length: 10 }).references(
+			() => region.code
+		),
 		// 원본 업종 문자열. 우리 8종 enum에 매핑되지 않아도 버리지 않고 남겨서
 		// 운영자가 손으로 잇게 한다(status = needs_review).
 		industryRaw: text("industry_raw"),
@@ -479,7 +581,7 @@ export const crawledJobPost = pgTable(
 		index("crawled_job_post_discovery_idx").on(
 			table.status,
 			table.industryCategory,
-			table.region
+			table.regionCode
 		),
 	]
 );
@@ -597,8 +699,16 @@ export const jobPost = pgTable(
 		}),
 		status: jobPostStatus("status").default("pending_review").notNull(),
 		industryCategory: jobIndustryCategory("industry_category").notNull(),
+		// 표시용 지역 문자열. 입력은 region_code·district_code로 받고 저장 시 마스터의
+		// 라벨·시군구명을 여기에 복사해 둔다 — 목록·검색(ilike)이 조인 없이 읽는 자리다.
 		region: text("region").notNull(),
 		district: text("district"),
+		regionCode: varchar("region_code", { length: 10 }).references(
+			() => region.code
+		),
+		districtCode: varchar("district_code", { length: 10 }).references(
+			() => region.code
+		),
 		// payUnit이 "협의"(면접 후 급여 협의)면 금액이 없다 — 그래서 nullable.
 		payAmount: integer("pay_amount"),
 		payUnit: text("pay_unit").notNull(),
@@ -660,7 +770,7 @@ export const jobPost = pgTable(
 		index("job_post_discovery_idx").on(
 			table.status,
 			table.industryCategory,
-			table.region,
+			table.regionCode,
 			table.payAmount
 		),
 		uniqueIndex("job_post_crawled_from_id_uidx").on(table.crawledFromId),
@@ -913,6 +1023,13 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 회원 탈퇴 후 개인정보 보존기간(일). 운영자 사이트 설정에서 편집한다.
 	// null이면 코드 기본값(DEFAULT_WITHDRAWAL_RETENTION_DAYS=30)으로 폴백한다.
 	withdrawalRetentionDays: integer("withdrawal_retention_days"),
+	// 파기 배치 자동 실행 시각(KST 0~23시). null이면 코드 기본값
+	// (DEFAULT_WITHDRAWAL_PURGE_HOUR=4)으로 폴백한다.
+	withdrawalPurgeHour: integer("withdrawal_purge_hour"),
+	// 파기 배치 마지막 실행 시각(자동·수동 공통). 스케줄러가 "오늘 설정 시각 이후 이미 돌았는지"를
+	// 이 값으로 판정한다 — 프로세스 메모리가 아니라 DB라 서버를 재시작하거나 인스턴스가 늘어도
+	// 하루 한 번이 유지되고, 운영자 화면의 "마지막 실행" 표시도 같은 값을 본다.
+	withdrawalPurgeLastRunAt: timestamp("withdrawal_purge_last_run_at"),
 	// 광고 배너 로테이션 주기(분). 운영자 사이트 설정에서 편집한다. 활성 광고 칸이 이 주기마다
 	// 한 칸씩 전진한다. null이면 코드 기본값(DEFAULT_AD_ROTATION_MINUTES=60)으로 폴백한다.
 	adBannerRotationMinutes: integer("ad_banner_rotation_minutes"),
@@ -1349,13 +1466,20 @@ export const communityPost = pgTable(
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
 		board: communityBoard("board").notNull(),
-		authorUserId: text("author_user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 회원 글이면 author_user_id, 비회원(게스트 토큰) 글이면 author_guest_id만 채워진다
+		// — 정확히 한쪽만 채워지도록 아래 CHECK로 강제한다. 게스트는 계정이 없어 FK가 없고,
+		// 소유권은 password_hash 검증으로만 증명한다.
+		authorUserId: text("author_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		authorGuestId: text("author_guest_id"),
 		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
 		authorDisplayName: text("author_display_name").notNull(),
 		passwordHash: text("password_hash").notNull(),
 		isLocked: boolean("is_locked").default(false).notNull(),
+		// 법률 자문 글의 선택 입력 연락처(휴대폰). 잠금을 연 열람자(작성자·운영자·법률자문)에게만
+		// 응답에 실린다. legal 외 게시판에서는 저장하지 않는다(API 강제).
+		contactPhone: text("contact_phone"),
 		// 작성 시점 계정 유형 스냅샷(서버 기록, 위조 불가). 업소 배지·필터용 — 이후 role 변경과 무관.
 		authorRole: bambiUserRole("author_role").notNull(),
 		// 업소회원 자율 광고 표시. employer만 true 가능(API 강제), 미표시 광고는 신고로 보완.
@@ -1384,6 +1508,10 @@ export const communityPost = pgTable(
 			table.createdAt
 		),
 		index("community_post_author_user_id_idx").on(table.authorUserId),
+		check(
+			"community_post_author_one_of_ck",
+			sql`num_nonnulls(${table.authorUserId}, ${table.authorGuestId}) = 1`
+		),
 	]
 );
 
@@ -1394,9 +1522,14 @@ export const communityComment = pgTable(
 		postId: uuid("post_id")
 			.notNull()
 			.references(() => communityPost.id, { onDelete: "cascade" }),
-		authorUserId: text("author_user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 글과 같은 규칙: 회원이면 author_user_id, 비회원이면 author_guest_id만 채워진다.
+		authorUserId: text("author_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		authorGuestId: text("author_guest_id"),
+		// 비회원 댓글의 수정·삭제 소유권 증명용(scrypt salt:hash). 회원 댓글은 세션으로
+		// 소유권이 증명되므로 글의 관례대로 빈 문자열을 넣는다.
+		passwordHash: text("password_hash").default("").notNull(),
 		// 작성 시점 계정 유형 스냅샷(서버 기록). 업소 댓글 배지·숨김 토글용.
 		authorRole: bambiUserRole("author_role").notNull(),
 		// 대댓글(1단계). null이면 최상위 댓글. 1단계 제한은 API에서 강제한다.
@@ -1417,6 +1550,10 @@ export const communityComment = pgTable(
 		),
 		index("community_comment_author_user_id_idx").on(table.authorUserId),
 		index("community_comment_parent_comment_id_idx").on(table.parentCommentId),
+		check(
+			"community_comment_author_one_of_ck",
+			sql`num_nonnulls(${table.authorUserId}, ${table.authorGuestId}) = 1`
+		),
 	]
 );
 
@@ -1427,9 +1564,10 @@ export const communityPostLike = pgTable(
 		postId: uuid("post_id")
 			.notNull()
 			.references(() => communityPost.id, { onDelete: "cascade" }),
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 회원 추천은 user_id, 비회원 추천은 guest_id(게스트 토큰의 gid). 정확히 한쪽만
+		// 채워지며, unique 인덱스가 각각 중복 추천을 막는다(NULL은 서로 distinct라 섞이지 않는다).
+		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+		guestId: text("guest_id"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
@@ -1437,7 +1575,15 @@ export const communityPostLike = pgTable(
 			table.postId,
 			table.userId
 		),
+		uniqueIndex("community_post_like_post_id_guest_id_uidx").on(
+			table.postId,
+			table.guestId
+		),
 		index("community_post_like_user_id_idx").on(table.userId),
+		check(
+			"community_post_like_actor_one_of_ck",
+			sql`num_nonnulls(${table.userId}, ${table.guestId}) = 1`
+		),
 	]
 );
 
@@ -1524,10 +1670,16 @@ export const faqEntry = pgTable(
 	]
 );
 
+export const bannedWordScope = pgEnum("banned_word_scope", [
+	"content",
+	"display_name",
+]);
+
 export const bannedWord = pgTable(
 	"banned_word",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
+		scope: bannedWordScope("scope").default("content").notNull(),
 		// 운영자가 입력한 원문(표시용).
 		term: text("term").notNull(),
 		// 정규화형(매칭용). 저장 시 계산해 두고 매 요청 재계산을 피한다.
@@ -1540,9 +1692,13 @@ export const bannedWord = pgTable(
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
 	(table) => [
-		// 정규화형에 걸어야 "성 매매"와 "성매매"가 중복 등록되지 않는다.
-		uniqueIndex("banned_word_normalized_term_uidx").on(table.normalizedTerm),
-		index("banned_word_is_active_idx").on(table.isActive),
+		// 같은 범위에서는 "성 매매"와 "성매매"가 중복되지 않지만, 본문·닉네임에는 같은
+		// 단어를 각각 등록할 수 있어야 한다.
+		uniqueIndex("banned_word_scope_normalized_term_uidx").on(
+			table.scope,
+			table.normalizedTerm
+		),
+		index("banned_word_scope_is_active_idx").on(table.scope, table.isActive),
 	]
 );
 

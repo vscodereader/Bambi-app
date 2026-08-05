@@ -2,6 +2,8 @@
 
 // 밤비 — 운영자(Moderator) 콘솔: 검수 큐, 신고 인박스, 사용자 제재.
 
+import { Button as UiButton } from "@bambi-app/ui/components/button";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -23,6 +25,8 @@ import {
 } from "@bambi-app/ui/components/sheet";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -30,6 +34,8 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { type DataColumn, DataTable } from "@/components/bambi/data-table";
+import { StatusBadge } from "@/components/bambi/status-badge";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
 	COMMUNITY_BOARDS,
@@ -39,6 +45,7 @@ import {
 import {
 	accountStatusLabel,
 	jobPostStatusLabel,
+	moderationActionLabel,
 	reviewStatusLabel,
 	userRoleLabel,
 } from "@/lib/bambi/moderation-labels";
@@ -53,6 +60,8 @@ import type {
 	UserStatus,
 	VisualTone,
 } from "@/lib/bambi/types";
+import { formatDateTime } from "@/lib/bambi-format";
+import { orpc } from "@/utils/orpc";
 import { BOTTOM_NAV_STACK_OFFSET } from "../bottom-nav-shell";
 import { AppBar, Avatar, Badge, Button, StatGroup } from "../ds";
 import {
@@ -69,9 +78,11 @@ import {
 	XIcon,
 } from "../icons";
 import { RiskFlag } from "../safety-kit";
-import type {
-	ModerationBulkAction,
-	ModerationBulkScope,
+import {
+	type ModerationBulkAction,
+	type ModerationBulkScope,
+	QUEUE_VERDICT_TOAST,
+	type QueueVerdict,
 } from "./moderator-context";
 
 const HI_CLASS: Record<string, string> = {
@@ -348,27 +359,29 @@ function QueueFilterRow({
 	);
 }
 
+// 카드 목록(검수 큐·신고·사용자)의 선택 체크박스. shadcn Checkbox를 쓰지 않는 이유는
+// base-ui Checkbox가 숨은 <input>을 루트의 형제로 렌더하고 클릭을 그 input에 재발행해서,
+// 행 클릭(상세 이동)과 분리하려면 래퍼를 한 겹 더 둬야 하기 때문이다. 여기서는 토글
+// 버튼(aria-pressed) 하나로 끝내고 클릭을 그 자리에서 멈춘다. 모양은 콘솔 체크박스 토큰
+// (rounded-sm · border-input · 선택 시 primary)에 맞춘다.
 function QueueCheckbox({
 	checked,
-	dark,
+	label = "항목 선택",
 	onToggle,
 }: {
 	checked: boolean;
-	dark: boolean;
+	label?: string;
 	onToggle: () => void;
 }) {
 	return (
 		<button
-			aria-label="항목 선택"
+			aria-label={label}
 			aria-pressed={checked}
 			className={cn(
-				"mt-px inline-flex size-[22px] flex-[0_0_22px] cursor-pointer items-center justify-center rounded-[7px] text-white",
+				"mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border transition-colors",
 				checked
-					? "border border-transparent bg-primary"
-					: cn(
-							"border-[1.5px]",
-							dark ? "border-white/40" : "border-[color:var(--border-strong)]"
-						)
+					? "border-primary bg-primary text-primary-foreground"
+					: "border-input bg-card text-transparent hover:border-primary/60"
 			)}
 			onClick={(e) => {
 				e.stopPropagation();
@@ -376,11 +389,9 @@ function QueueCheckbox({
 			}}
 			type="button"
 		>
-			{checked ? (
-				<span className="inline-flex size-[13px]">
-					<CheckIcon />
-				</span>
-			) : null}
+			<span className="inline-flex size-3">
+				<CheckIcon />
+			</span>
 		</button>
 	);
 }
@@ -396,18 +407,18 @@ function QueueRow({
 	onToggle: () => void;
 	onOpen: () => void;
 }) {
-	const dark = selected;
-	const subFg = dark
-		? "text-[color:var(--text-on-dark-muted)]"
-		: "text-muted-foreground";
+	// 선택 표시는 신고·사용자 목록과 같은 언어(코럴 테두리 + 연한 코럴 배경)로 통일한다.
+	// 예전처럼 행 전체를 잉크색으로 반전시키면 선택이 "조치 완료"처럼 읽히고, 여러 건을
+	// 고를수록 목록이 통째로 어두워져 남은 항목을 훑기 어렵다.
+	const subFg = "text-muted-foreground";
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: 행 내부에 체크박스 버튼이 중첩되어 네이티브 button 사용 불가. tabIndex/onKeyDown으로 키보드 접근성 보장.
 		<div
 			className={cn(
-				"flex cursor-pointer items-start gap-3 rounded-2xl p-[14px]",
-				dark
-					? "border border-transparent bg-ink-800 text-white shadow-md"
-					: "border border-border bg-card text-[color:var(--text-default)] shadow-card"
+				"flex cursor-pointer items-start gap-3 rounded-2xl p-[14px] text-[color:var(--text-default)] shadow-card",
+				selected
+					? "border border-primary bg-coral-50"
+					: "border border-border bg-card"
 			)}
 			onClick={onOpen}
 			onKeyDown={(e) => {
@@ -419,16 +430,15 @@ function QueueRow({
 			role="button"
 			tabIndex={0}
 		>
-			<QueueCheckbox checked={selected} dark={dark} onToggle={onToggle} />
+			<QueueCheckbox
+				checked={selected}
+				label={`${q.company} 공고 선택`}
+				onToggle={onToggle}
+			/>
 			<Avatar name={q.company} size="sm" square />
 			<div className="flex min-w-0 flex-1 flex-col gap-[5px]">
 				<div className="flex items-center gap-2">
-					<span
-						className={cn(
-							"whitespace-nowrap font-bold text-[14.5px]",
-							dark ? "text-white" : "text-foreground"
-						)}
-					>
+					<span className="whitespace-nowrap font-bold text-[14.5px] text-foreground">
 						{q.company}
 					</span>
 					<span className={cn("min-w-0 flex-1 truncate text-[13px]", subFg)}>
@@ -440,12 +450,7 @@ function QueueRow({
 					{q.detected.length > 0 ? (
 						<>
 							<span>감지 문구 </span>
-							<span
-								className={cn(
-									"font-bold",
-									dark ? "text-white" : "text-[color:var(--text-default)]"
-								)}
-							>
+							<span className="font-bold text-[color:var(--text-default)]">
 								{q.detected.map((d) => `"${d}"`).join(", ")}
 							</span>
 						</>
@@ -453,21 +458,13 @@ function QueueRow({
 						<span>감지된 문구 없음 · 정상 등록 건</span>
 					)}
 				</div>
-				<div
-					className={cn(
-						"text-[11.5px]",
-						dark ? "text-white/55" : "text-[color:var(--text-subtle)]"
-					)}
-				>
+				<div className="text-[11.5px] text-[color:var(--text-subtle)]">
 					접수 {q.receivedAt} · ID {q.refId}
 				</div>
 			</div>
 			<span
 				aria-hidden="true"
-				className={cn(
-					"mt-px inline-flex size-[18px]",
-					dark ? "text-white/50" : "text-[color:var(--text-subtle)]"
-				)}
+				className="mt-px inline-flex size-[18px] text-[color:var(--text-subtle)]"
 			>
 				<ChevronRightIcon />
 			</span>
@@ -636,23 +633,29 @@ function QueueMediaSection({
 const VERDICT_GUIDE =
 	"판단 기준: 성적 서비스 암시·강요·외부 연락 유도는 반려, 단순 오해 소지는 승인 후 안내해요.";
 
-// 승인·반려도 마찬가지로 두 자리에 놓인다(데스크톱 도크 / 모바일 하단 바).
-// 버튼 자체를 한 곳에 모아 둬야 한쪽만 고치는 실수가 안 난다.
+// 승인·보류·반려도 마찬가지로 두 자리에 놓인다(데스크톱 도크 / 모바일 하단 바).
+// 버튼 자체를 한 곳에 모아 둬야 한쪽만 고치는 실수가 안 난다. 모바일 하단 바는 2열
+// 그리드라 보류·반려를 한 줄에 두고 승인만 아래 줄 전체를 쓴다(주요 액션 한 곳).
 function VerdictActions({
 	onApprove,
+	onHold,
 	onReject,
 }: {
 	onApprove: () => void;
+	onHold: () => void;
 	onReject: () => void;
 }) {
 	return (
 		<>
+			<Button block onClick={onHold} size="lg" variant="secondary">
+				보류
+			</Button>
 			<Button block onClick={onReject} size="lg" variant="secondary">
 				반려
 			</Button>
 			<Button
 				block
-				className="shadow-none"
+				className="col-span-2 shadow-none"
 				onClick={onApprove}
 				size="lg"
 				variant="primary"
@@ -676,11 +679,12 @@ export function QueueDetail({
 	media?: QueueDetailMedia;
 	tone: VisualTone;
 	onBack: () => void;
-	onResolve: (id: string, action: "approve" | "reject") => void;
+	onResolve: (id: string, action: QueueVerdict, reason?: string) => void;
 }) {
-	const [reject, setReject] = useState(false);
-	const approve = () => onResolve(item.id, "approve");
-	const openReject = () => setReject(true);
+	// 세 판정 모두 사유 시트를 거친다 — 목록 일괄 처리는 승인에도 사유를 받는데
+	// 상세만 즉시 처리하면 같은 조치의 기록이 경로마다 달라진다.
+	const [verdict, setVerdict] = useState<QueueVerdict | null>(null);
+	const approve = () => setVerdict("approve");
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col lg:flex-none">
 			<AppBar onBack={onBack} title="공고 검수" />
@@ -782,39 +786,106 @@ export function QueueDetail({
 						    세로로 쌓아 라벨을 온전히 두고, 마지막 줄에 승인을 놓아
 						    "확인하고 → 내보낸다" 순서가 그대로 읽히게 한다. */}
 						<div className="flex flex-col gap-2.5">
-							<VerdictActions onApprove={approve} onReject={openReject} />
+							<VerdictActions
+								onApprove={approve}
+								onHold={() => setVerdict("hold")}
+								onReject={() => setVerdict("reject")}
+							/>
 						</div>
 					</aside>
 				</div>
 			</div>
 			<div className="grid grid-cols-2 gap-2.5 border-border border-t px-6 pt-3 pb-1.5 lg:hidden">
-				<VerdictActions onApprove={approve} onReject={openReject} />
+				<VerdictActions
+					onApprove={approve}
+					onHold={() => setVerdict("hold")}
+					onReject={() => setVerdict("reject")}
+				/>
 			</div>
-			{reject ? (
-				<RejectSheet
-					onCancel={() => setReject(false)}
-					onConfirm={() => onResolve(item.id, "reject")}
+			{verdict ? (
+				<VerdictReasonSheet
+					onCancel={() => setVerdict(null)}
+					onConfirm={(reason) => onResolve(item.id, verdict, reason)}
+					verdict={verdict}
 				/>
 			) : null}
 		</div>
 	);
 }
 
-function RejectSheet({
+// 판정별 시트 문구·선택지. 보류는 일괄 처리(on_hold 전환)와 같은 조치라 사유 목록도
+// "지금 결론을 못 내는 이유"로 맞춘다. 선택지는 프리셋일 뿐이고, 운영자는 목록 일괄
+// 처리(ReasonConfirmSheet)와 동일하게 사유를 직접 고쳐 쓸 수 있다.
+const VERDICT_SHEETS: Record<
+	QueueVerdict,
+	{
+		confirmLabel: string;
+		danger: boolean;
+		description: string;
+		reasons: string[];
+		title: string;
+	}
+> = {
+	approve: {
+		confirmLabel: "승인하기",
+		danger: false,
+		description: "승인하면 공고가 게시되고, 사유가 처리 기록에 남아요.",
+		reasons: [
+			"운영 검수 기준 충족",
+			"감지 표현이 오해 소지 수준",
+			"업소 정보 확인 완료",
+			"보완 요청 반영 확인",
+			"기타 승인 사유",
+		],
+		title: "승인 사유 작성",
+	},
+	hold: {
+		confirmLabel: "보류하기",
+		danger: false,
+		description:
+			"보류하면 공고가 검수 보류 상태로 내려가고, 사유가 기록돼요. 공고 관리의 '검수 보류' 탭에서 다시 처리할 수 있어요.",
+		reasons: [
+			"업소 정보 추가 확인 필요",
+			"사업자 인증 확인 필요",
+			"공고 내용 보완 요청 예정",
+			"내부 논의 필요",
+			"기타 확인 필요",
+		],
+		title: "보류 사유 작성",
+	},
+	reject: {
+		confirmLabel: "반려하기",
+		danger: true,
+		description: "작성한 사유는 처리 기록에 그대로 남아요.",
+		reasons: [
+			"성적 서비스 암시 표현",
+			"강요·착취 의심 조건",
+			"외부 연락 유도",
+			"허위·과장 정보",
+			"기타 정책 위반",
+		],
+		title: "반려 사유 작성",
+	},
+};
+
+// 사유 최소 길이. 목록 일괄 처리(ReasonConfirmSheet)·서버 입력 스키마와 같은 2자.
+const VERDICT_REASON_MIN_LENGTH = 2;
+
+function VerdictReasonSheet({
 	onCancel,
 	onConfirm,
+	verdict,
 }: {
 	onCancel: () => void;
-	onConfirm: () => void;
+	onConfirm: (reason: string) => void;
+	verdict: QueueVerdict;
 }) {
-	const reasons = [
-		"성적 서비스 암시 표현",
-		"강요·착취 의심 조건",
-		"외부 연락 유도",
-		"허위·과장 정보",
-		"기타 정책 위반",
-	];
-	const [sel, setSel] = useState(reasons[0]);
+	const config = VERDICT_SHEETS[verdict];
+	const reasons = config.reasons;
+	// 선택지는 입력칸을 채우는 프리셋이다 — 고른 뒤 그대로 보내도 되고, 고쳐 써도 된다.
+	const [reason, setReason] = useState(reasons[0] ?? "");
+	const reasonFieldId = `queue-verdict-reason-${verdict}`;
+	const canConfirm = reason.trim().length >= VERDICT_REASON_MIN_LENGTH;
 	return (
 		// 모바일은 바닥에서 올라오는 시트, 데스크톱은 화면 가운데 카드다.
 		// absolute는 상세 영역만 덮어서, 데스크톱에서는 헤더·푸터만 멀쩡히 밝은 채로 남아
@@ -827,16 +898,18 @@ function RejectSheet({
 				onClick={onCancel}
 				type="button"
 			/>
-			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:animate-none lg:rounded-3xl lg:pt-6 lg:shadow-[var(--shadow-card)]">
+			{/* 선택지 5개 + 사유 입력칸이라 작은 화면에서는 시트가 뷰포트를 넘는다.
+			    안에서 스크롤시켜 확정 버튼이 화면 밖으로 밀리지 않게 한다. */}
+			<div className="relative max-h-[90vh] animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] overflow-y-auto rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)] lg:w-full lg:max-w-md lg:animate-none lg:rounded-3xl lg:pt-6 lg:shadow-[var(--shadow-card)]">
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
-					반려 사유 선택
+					{config.title}
 				</h2>
 				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
-					선택한 사유는 구인자에게 그대로 전달돼요.
+					{config.description}
 				</p>
-				<div className="mb-4 flex flex-col gap-2">
+				<div className="mb-3 flex flex-col gap-2">
 					{reasons.map((r) => {
-						const on = sel === r;
+						const on = reason === r;
 						return (
 							<button
 								className={cn(
@@ -846,7 +919,7 @@ function RejectSheet({
 										: "border border-[color:var(--border-default)] bg-card"
 								)}
 								key={r}
-								onClick={() => setSel(r)}
+								onClick={() => setReason(r)}
 								type="button"
 							>
 								<span className="flex-1 font-semibold text-[14px] text-foreground">
@@ -861,12 +934,31 @@ function RejectSheet({
 						);
 					})}
 				</div>
-				<div className="grid grid-cols-2 gap-2.5">
+				<label
+					className="mb-2 block font-bold text-[13px] text-foreground"
+					htmlFor={reasonFieldId}
+				>
+					처리 사유
+				</label>
+				<textarea
+					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+					id={reasonFieldId}
+					onChange={(event) => setReason(event.target.value)}
+					placeholder="위 선택지를 고르거나 직접 작성해 주세요(2자 이상)."
+					value={reason}
+				/>
+				<div className="mt-4 grid grid-cols-2 gap-2.5">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
 					</Button>
-					<Button block onClick={onConfirm} size="lg" variant="danger">
-						반려하기
+					<Button
+						block
+						disabled={!canConfirm}
+						onClick={() => onConfirm(reason.trim())}
+						size="lg"
+						variant={config.danger ? "danger" : "primary"}
+					>
+						{config.confirmLabel}
 					</Button>
 				</div>
 			</div>
@@ -914,7 +1006,11 @@ function ReportRow({
 			tabIndex={0}
 		>
 			{onToggle ? (
-				<QueueCheckbox checked={selected} dark={false} onToggle={onToggle} />
+				<QueueCheckbox
+					checked={selected}
+					label={`${r.reason} 신고 선택`}
+					onToggle={onToggle}
+				/>
 			) : null}
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-2">
@@ -942,6 +1038,137 @@ function ReportRow({
 	);
 }
 
+// 데스크톱 신고 표 — 콘솔 표준 DataTable. 정렬용 심각도 랭크(심각 → 참고).
+const SEV_RANK: Record<ReportSeverity, number> = { high: 0, mid: 1, low: 2 };
+
+// 이름 + 역할 2줄 셀(피신고 대상·신고자 공용).
+function PartyCell({ name, role }: { name: string; role: string }) {
+	return (
+		<div className="flex flex-col">
+			<span className="text-foreground">{name}</span>
+			<span className="text-muted-foreground text-xs">{role}</span>
+		</div>
+	);
+}
+
+function getReportColumns({
+	onOpen,
+	onToggle,
+	selected,
+}: {
+	onOpen: (r: Report) => void;
+	onToggle?: (id: string) => void;
+	selected: string[];
+}): DataColumn<Report>[] {
+	return [
+		// 선택 기능이 없으면(일괄 처리 바 미사용) 컬럼 자체를 뺀다.
+		...(onToggle
+			? [
+					{
+						id: "select",
+						header: <span className="sr-only">선택</span>,
+						headerClassName: "w-10",
+						cell: (r: Report) => (
+							<Checkbox
+								aria-label={`${r.reason} 신고 선택`}
+								checked={selected.includes(r.id)}
+								onCheckedChange={() => onToggle(r.id)}
+								// 행 클릭(상세 이동)과 겹치지 않게 체크박스 클릭은 여기서 멈춘다.
+								onClick={(event) => event.stopPropagation()}
+							/>
+						),
+					},
+				]
+			: []),
+		{
+			id: "sev",
+			header: "심각도",
+			sortValue: (r) => SEV_RANK[r.sev],
+			cell: (r) => <SevPill sev={r.sev} />,
+		},
+		{
+			id: "reason",
+			header: "사유",
+			sortValue: (r) => r.reason,
+			cell: (r) => (
+				<span
+					className={cn(
+						"font-medium",
+						// 처리 완료 행은 카드 목록처럼 한 톤 죽인다.
+						r.status === "open" ? "text-foreground" : "text-muted-foreground"
+					)}
+				>
+					{r.reason}
+				</span>
+			),
+		},
+		{
+			id: "target",
+			header: "피신고 대상",
+			sortValue: (r) => r.target,
+			cell: (r) => <PartyCell name={r.target} role={r.targetRole} />,
+		},
+		{
+			id: "reporter",
+			header: "신고자",
+			sortValue: (r) => r.reporter,
+			cell: (r) => <PartyCell name={r.reporter} role={r.reporterRole} />,
+		},
+		{
+			id: "note",
+			header: "신고 내용",
+			cell: (r) => (
+				<span className="block max-w-xs truncate text-muted-foreground">
+					{r.note}
+				</span>
+			),
+		},
+		{
+			id: "time",
+			header: "접수",
+			sortValue: (r) => r.time,
+			cell: (r) => (
+				<span className="whitespace-nowrap text-muted-foreground">
+					{r.time}
+				</span>
+			),
+		},
+		{
+			id: "status",
+			header: "상태",
+			sortValue: (r) => (r.status === "open" ? 0 : 1),
+			cell: (r) =>
+				r.status === "open" ? (
+					<StatusBadge tone="warning">대기</StatusBadge>
+				) : (
+					<StatusBadge>완료</StatusBadge>
+				),
+		},
+		{
+			id: "open",
+			header: <span className="sr-only">상세</span>,
+			headerClassName: "w-10",
+			cellClassName: "text-right",
+			// 행 클릭의 키보드 대체 경로.
+			cell: (r) => (
+				<UiButton
+					aria-label="신고 상세 열기"
+					// 행 클릭과 중복 호출되지 않게 여기서 멈춘다.
+					onClick={(event) => {
+						event.stopPropagation();
+						onOpen(r);
+					}}
+					size="icon-sm"
+					type="button"
+					variant="ghost"
+				>
+					<ChevronRight />
+				</UiButton>
+			),
+		},
+	];
+}
+
 export function ReportList({
 	items,
 	onOpen,
@@ -957,7 +1184,19 @@ export function ReportList({
 	const closed = items.filter((r) => r.status !== "open");
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pt-1 pb-5">
+			{/* 데스크톱: 콘솔 표준 표(미처리 → 처리 완료 순). */}
+			<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pt-1 pb-5 max-md:hidden">
+				<DataTable
+					columns={getReportColumns({ onOpen, onToggle, selected })}
+					data={[...open, ...closed]}
+					emptyMessage="신고 내역이 없어요"
+					getRowKey={(r) => r.id}
+					onRowClick={onOpen}
+					pageSize={10}
+				/>
+			</div>
+			{/* 모바일: 기존 카드 목록. */}
+			<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pt-1 pb-5 md:hidden">
 				{open.map((r) => (
 					<ReportRow
 						key={r.id}
@@ -1474,6 +1713,136 @@ function CommunityTargetPanel({
 	);
 }
 
+// 당사자 카드 2개. 모바일은 가로 나란히, 데스크톱 사이드 패널에서는 세로로 쌓는다.
+// 피신고 대상이 사용자 계정이면 카드를 그대로 계정 상세 링크로 감싼다(제재 이력·누적
+// 신고를 바로 확인할 수 있게).
+function ReportParties({ item }: { item: Report }) {
+	const targetBox = (
+		<PartyBox flagged name={item.target} role={`피신고 · ${item.targetRole}`} />
+	);
+	const targetUserId =
+		item.targetType === "user" && item.targetId ? item.targetId : null;
+
+	return (
+		<div className="flex gap-2.5 md:flex-col">
+			{targetUserId ? (
+				<Link
+					className="flex min-w-0 flex-1"
+					href={`/moderator/users/${targetUserId}` as Route}
+				>
+					{targetBox}
+				</Link>
+			) : (
+				targetBox
+			)}
+			<PartyBox name={item.reporter} role={`신고자 · ${item.reporterRole}`} />
+		</div>
+	);
+}
+
+// 처리 완료 안내. 모바일은 본문 끝, 데스크톱은 오른쪽 패널에 둔다(위치만 다르고 내용 동일).
+function ReportResolvedNotice({ className }: { className?: string }) {
+	return (
+		<div
+			className={cn(
+				"flex items-center gap-2 rounded-[14px] bg-[color:var(--status-success-bg)] p-[14px] text-[color:var(--status-success-fg)]",
+				className
+			)}
+		>
+			<span className="inline-flex size-[18px]">
+				<CheckIcon />
+			</span>
+			<span className="font-bold text-[13px]">이미 처리된 신고예요</span>
+		</div>
+	);
+}
+
+// 구조화된 대상 맥락이 없는 신고(채팅 메시지·프리뷰 목업)의 스레드 폴백.
+function ReportThread({ item }: { item: Report }) {
+	return (
+		<div>
+			<div className="mb-2 font-bold text-[13px] text-foreground">
+				신고된 대화
+			</div>
+			<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
+				{item.thread.map((m) => (
+					<div
+						className={cn("max-w-[85%]", m.mine ? "self-end" : "self-start")}
+						key={`${m.mine ? "me" : "them"}-${m.text}`}
+					>
+						<div
+							className={cn(
+								"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
+								m.mine ? "text-right" : "text-left"
+							)}
+						>
+							{m.mine ? item.reporter : item.target}
+						</div>
+						<div
+							className={cn(
+								"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
+								m.mine
+									? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
+									: "rounded-bl-[4px] bg-ink-800 text-white"
+							)}
+						>
+							{m.text}
+						</div>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
+// 기각·제재 액션. 모바일 하단 고정 바와 데스크톱 오른쪽 패널이 같은 컴포넌트를 쓴다.
+function ReportActions({
+	item,
+	onResolve,
+	onSanctionRequest,
+	sanctionUserId,
+}: {
+	item: Report;
+	onResolve: (id: string, action: "dismiss" | "act") => void;
+	onSanctionRequest: () => void;
+	sanctionUserId: string | null;
+}) {
+	return (
+		<div>
+			{sanctionUserId ? null : (
+				<p className="m-0 mb-2.5 text-[12px] text-muted-foreground leading-[1.5]">
+					이 신고는 사용자 계정이 대상이 아니에요. 사용자 제재가 필요하면 사용자
+					관리에서 진행해 주세요.
+				</p>
+			)}
+			<div className="grid grid-cols-2 gap-2.5">
+				<Button
+					block
+					onClick={() => onResolve(item.id, "dismiss")}
+					size="lg"
+					variant="secondary"
+				>
+					기각
+				</Button>
+				{sanctionUserId ? (
+					<Button block onClick={onSanctionRequest} size="lg" variant="danger">
+						제재 적용
+					</Button>
+				) : (
+					<Button
+						block
+						onClick={() => onResolve(item.id, "act")}
+						size="lg"
+						variant="primary"
+					>
+						조치 완료
+					</Button>
+				)}
+			</div>
+		</div>
+	);
+}
+
 export function ReportDetail({
 	item,
 	onBack,
@@ -1519,117 +1888,51 @@ export function ReportDetail({
 	} else if (item.targetType === "user" && item.targetId) {
 		sanctionUserId = item.targetId;
 	}
+	const isOpen = item.status === "open";
+	const actions = (
+		<ReportActions
+			item={item}
+			onResolve={onResolve}
+			onSanctionRequest={() => setAct(true)}
+			sanctionUserId={sanctionUserId}
+		/>
+	);
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="신고 검토" />
-			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pt-1 pb-5">
-				<div className="flex items-center gap-2">
-					<SevPill sev={item.sev} />
-					<h2 className="m-0 min-w-0 flex-1 font-extrabold text-[19px] text-foreground">
-						{item.reason}
-					</h2>
-				</div>
-				<div className="flex gap-2.5">
-					<PartyBox
-						flagged
-						name={item.target}
-						role={`피신고 · ${item.targetRole}`}
-					/>
-					<PartyBox
-						name={item.reporter}
-						role={`신고자 · ${item.reporterRole}`}
-					/>
-				</div>
-				{item.communityKind || hasStructuredContext ? (
-					<ReportTargetContextView
-						isBlockingChatRoom={isBlockingChatRoom}
-						item={item}
-						onBlockChatRoom={onBlockChatRoom}
-						onModerateCommunity={onModerateCommunity}
-					/>
-				) : (
-					<div>
-						<div className="mb-2 font-bold text-[13px] text-foreground">
-							신고된 대화
-						</div>
-						<div className="flex flex-col gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
-							{item.thread.map((m) => (
-								<div
-									className={cn(
-										"max-w-[85%]",
-										m.mine ? "self-end" : "self-start"
-									)}
-									key={`${m.mine ? "me" : "them"}-${m.text}`}
-								>
-									<div
-										className={cn(
-											"mb-[3px] text-[10.5px] text-[color:var(--text-subtle)]",
-											m.mine ? "text-right" : "text-left"
-										)}
-									>
-										{m.mine ? item.reporter : item.target}
-									</div>
-									<div
-										className={cn(
-											"rounded-[14px] px-[13px] py-[9px] text-[13.5px] leading-[1.45]",
-											m.mine
-												? "rounded-br-[4px] border border-[color:var(--border-default)] bg-card text-foreground"
-												: "rounded-bl-[4px] bg-ink-800 text-white"
-										)}
-									>
-										{m.text}
-									</div>
-								</div>
-							))}
-						</div>
+			{/* 모바일: 세로 한 줄. 데스크톱: 왼쪽 대상 맥락 + 오른쪽 고정폭 요약·조치 패널. */}
+			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pt-1 pb-5 md:grid md:grid-cols-[minmax(0,1fr)_20rem] md:items-start md:gap-6">
+				<aside className="flex flex-col gap-4 md:sticky md:top-2 md:order-2">
+					<div className="flex items-center gap-2">
+						<SevPill sev={item.sev} />
+						<h2 className="m-0 min-w-0 flex-1 font-extrabold text-[19px] text-foreground">
+							{item.reason}
+						</h2>
 					</div>
-				)}
-				{item.status === "open" ? null : (
-					<div className="flex items-center gap-2 rounded-[14px] bg-[color:var(--status-success-bg)] p-[14px] text-[color:var(--status-success-fg)]">
-						<span className="inline-flex size-[18px]">
-							<CheckIcon />
-						</span>
-						<span className="font-bold text-[13px]">이미 처리된 신고예요</span>
+					<ReportParties item={item} />
+					{/* 데스크톱 전용: 처리 상태·조치는 오른쪽 패널에서 끝낸다. */}
+					<div className="flex flex-col gap-4 max-md:hidden">
+						{isOpen ? actions : <ReportResolvedNotice />}
 					</div>
-				)}
-			</div>
-			{item.status === "open" ? (
-				<div className="border-border border-t px-6 pt-3 pb-1.5">
-					{sanctionUserId ? null : (
-						<p className="m-0 mb-2.5 text-[12px] text-muted-foreground leading-[1.5]">
-							이 신고는 사용자 계정이 대상이 아니에요. 사용자 제재가 필요하면
-							사용자 관리에서 진행해 주세요.
-						</p>
+				</aside>
+				<div className="min-w-0 md:order-1">
+					{item.communityKind || hasStructuredContext ? (
+						<ReportTargetContextView
+							isBlockingChatRoom={isBlockingChatRoom}
+							item={item}
+							onBlockChatRoom={onBlockChatRoom}
+							onModerateCommunity={onModerateCommunity}
+						/>
+					) : (
+						<ReportThread item={item} />
 					)}
-					<div className="grid grid-cols-2 gap-2.5">
-						<Button
-							block
-							onClick={() => onResolve(item.id, "dismiss")}
-							size="lg"
-							variant="secondary"
-						>
-							기각
-						</Button>
-						{sanctionUserId ? (
-							<Button
-								block
-								onClick={() => setAct(true)}
-								size="lg"
-								variant="danger"
-							>
-								제재 적용
-							</Button>
-						) : (
-							<Button
-								block
-								onClick={() => onResolve(item.id, "act")}
-								size="lg"
-								variant="primary"
-							>
-								조치 완료
-							</Button>
-						)}
-					</div>
+				</div>
+				{isOpen ? null : <ReportResolvedNotice className="md:hidden" />}
+			</div>
+			{/* 모바일 전용: 기존 하단 고정 액션 바. */}
+			{isOpen ? (
+				<div className="border-border border-t px-6 pt-3 pb-1.5 md:hidden">
+					{actions}
 				</div>
 			) : null}
 			{act && sanctionUserId ? (
@@ -1654,7 +1957,6 @@ const STATUS_CONF: Record<
 	active: { tone: "success", label: "정상" },
 	warned: { tone: "pending", label: "경고" },
 	suspended: { tone: "danger", label: "정지" },
-	blocked: { tone: "danger", label: "차단" },
 };
 
 function UserRow({
@@ -1687,7 +1989,11 @@ function UserRow({
 			tabIndex={0}
 		>
 			{onToggle ? (
-				<QueueCheckbox checked={selected} dark={false} onToggle={onToggle} />
+				<QueueCheckbox
+					checked={selected}
+					label={`${u.name} 선택`}
+					onToggle={onToggle}
+				/>
 			) : null}
 			<Avatar name={u.name} square={u.role === "구인자"} />
 			<div className="min-w-0 flex-1">
@@ -1817,9 +2123,10 @@ const SANCTION_CHOICES: SanctionChoice[] = [
 		confirmLabel: "이용 정지",
 		danger: true,
 		defaultReason: "정책 위반이 확인되어 이용을 정지했어요",
-		desc: "기간 동안 공고·채팅을 막아요",
+		// 자동 해제 기간이 없다 — 운영자가 "정상으로 복구"를 누를 때까지 유지된다.
+		desc: "정상으로 복구할 때까지 공고·채팅을 막아요",
 		status: "suspended",
-		title: "이용 정지 (7일)",
+		title: "이용 정지",
 		tone: "danger",
 	},
 ];
@@ -1829,7 +2136,7 @@ const SANCTION_CHOICES: SanctionChoice[] = [
 // defaultReason으로 프리필한 뒤 최소 길이(minLength, 기본 2자)를 만족해야 확정된다.
 // positioning="fixed"는 document.body로 포털된 일괄 시트(전체 화면 중앙 정렬)용,
 // "absolute"는 콘솔 컨테이너 내부(사용자 상세·신고 상세)에서 부모 relative 박스를 덮는 시트용.
-function ReasonConfirmSheet({
+export function ReasonConfirmSheet({
 	confirmLabel,
 	danger = false,
 	defaultReason,
@@ -1865,9 +2172,11 @@ function ReasonConfirmSheet({
 	const fixed = positioning === "fixed";
 
 	return (
+		// 모바일은 바닥에서 올라오는 시트, 데스크톱(lg~)은 화면 가운데 카드다 —
+		// 넓은 화면에서 폭 좁은 바텀시트를 그대로 쓰면 사유 입력칸이 모바일 폭에 갇힌다.
 		<div
 			className={cn(
-				"inset-0 flex flex-col justify-end",
+				"inset-0 flex flex-col justify-end lg:items-center lg:justify-center",
 				fixed ? "fixed z-50" : "absolute z-20"
 			)}
 		>
@@ -1879,8 +2188,9 @@ function ReasonConfirmSheet({
 			/>
 			<div
 				className={cn(
-					"relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]",
-					fixed && "mx-auto w-full max-w-[520px]"
+					"relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-3xl bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]",
+					"lg:w-full lg:max-w-lg lg:animate-none lg:rounded-3xl lg:px-7 lg:pt-6 lg:shadow-[var(--shadow-card)]",
+					fixed && "mx-auto w-full max-w-lg"
 				)}
 			>
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
@@ -1988,6 +2298,101 @@ function SanctionSheet({
 	);
 }
 
+// 계정 상세의 제재 이력(감사 로그 최신 50건). 액션 코드는 라벨 맵으로만 노출한다.
+function UserModerationHistory({ userId }: { userId: string }) {
+	const historyQuery = useQuery(
+		orpc.bambi.moderation.listUserModerationActions.queryOptions({
+			input: { targetUserId: userId },
+		})
+	);
+	const actions = historyQuery.data ?? [];
+
+	return (
+		<div>
+			<div className="mb-2.5 font-bold text-[13px] text-foreground">
+				제재 이력
+			</div>
+			{historyQuery.isPending ? (
+				<div className="flex flex-col gap-2">
+					<Skeleton className="h-16 w-full" />
+					<Skeleton className="h-16 w-full" />
+				</div>
+			) : null}
+			{historyQuery.isError ? (
+				<p className="m-0 text-[12.5px] text-muted-foreground">
+					제재 이력을 불러오지 못했어요.
+				</p>
+			) : null}
+			{historyQuery.isSuccess && actions.length === 0 ? (
+				<p className="m-0 text-[12.5px] text-muted-foreground">
+					제재 이력이 없어요
+				</p>
+			) : null}
+			{actions.length > 0 ? (
+				<ul className="m-0 flex list-none flex-col gap-2 p-0">
+					{actions.map((action) => (
+						<li
+							className="rounded-[14px] border border-border bg-card p-3"
+							key={action.id}
+						>
+							<div className="flex items-center justify-between gap-2">
+								<span className="font-bold text-[13px] text-foreground">
+									{moderationActionLabel(action.action)}
+								</span>
+								<span className="whitespace-nowrap text-[11px] text-muted-foreground">
+									{formatDateTime(action.createdAt)}
+								</span>
+							</div>
+							<p className="mt-1 mb-0 text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
+								{action.reason}
+							</p>
+							<div className="mt-1 text-[11px] text-muted-foreground">
+								처리자 {action.adminName}
+							</div>
+						</li>
+					))}
+				</ul>
+			) : null}
+		</div>
+	);
+}
+
+// 무료 법률 자문 답변 계정 지정·해제. 구직자 ↔ 법률자문만 오갈 수 있고(서버 규칙),
+// 액션 UI는 사용자 목록(/moderator/users)이 이 헬퍼로 대상 여부를 판정해 띄운다.
+const LEGAL_ADVISOR_ROLE = "legal_advisor";
+
+export interface LegalAdvisorChoice {
+	confirmLabel: string;
+	defaultReason: string;
+	desc: string;
+	role: "job_seeker" | "legal_advisor";
+	title: string;
+}
+
+export const legalAdvisorChoice = (
+	roleKey: string
+): LegalAdvisorChoice | null => {
+	if (roleKey === LEGAL_ADVISOR_ROLE) {
+		return {
+			confirmLabel: "법률자문 해제",
+			defaultReason: "법률 자문 활동이 끝나 지정을 해제했어요",
+			desc: "무료 법률 자문 글 열람·답변 권한을 거둬요",
+			role: "job_seeker",
+			title: "법률자문 해제",
+		};
+	}
+	if (roleKey === "job_seeker") {
+		return {
+			confirmLabel: "법률자문 지정",
+			defaultReason: "무료 법률 자문 답변을 맡기려고 지정했어요",
+			desc: "무료 법률 자문의 비밀글을 열람하고 답변할 수 있게 해요",
+			role: LEGAL_ADVISOR_ROLE,
+			title: "법률자문 지정",
+		};
+	}
+	return null;
+};
+
 export function UserDetail({
 	item,
 	onBack,
@@ -2015,14 +2420,45 @@ export function UserDetail({
 							{item.role} · 가입 {item.joined}
 						</div>
 					</div>
-					<Badge dot tone={c.tone}>
-						{c.label}
-					</Badge>
+					<div className="flex items-center gap-2">
+						<Badge dot tone={c.tone}>
+							{c.label}
+						</Badge>
+						{item.deletedAt ? <Badge tone="neutral">탈퇴</Badge> : null}
+					</div>
 				</div>
-				<div className="grid grid-cols-2 gap-2.5">
-					<MetaBox label="누적 신고" value={`${item.reports}건`} />
-					<MetaBox label="경고 횟수" value={`${item.warnings}회`} />
+				<div className="flex flex-col gap-2">
+					<div className="grid grid-cols-2 gap-2.5">
+						<MetaBox label="누적 신고" value={`${item.reports}건`} />
+						<MetaBox label="경고 횟수" value={`${item.warnings}회`} />
+						<MetaBox label="차단당한 횟수" value={`${item.blockedByCount}회`} />
+					</div>
+					<Link
+						className="self-start text-[12.5px] text-primary underline-offset-4 hover:underline"
+						href={`/moderator/reports?user=${item.id}` as Route}
+					>
+						신고 내역 보기
+					</Link>
 				</div>
+				<ContextSection title="계정 정보">
+					<ContextField label="이메일" value={item.email} />
+					<ContextField
+						label="로그인 아이디"
+						value={item.loginId ?? "미설정"}
+					/>
+					{item.organizationNames.length > 0 ? (
+						<ContextField
+							label="소속 업소"
+							value={item.organizationNames.join(", ")}
+						/>
+					) : null}
+					{item.deletedAt ? (
+						<ContextField
+							label="탈퇴 시각"
+							value={formatDateTime(item.deletedAt)}
+						/>
+					) : null}
+				</ContextSection>
 				<div className="flex gap-2 rounded-[14px] bg-secondary p-[14px]">
 					<span className="mt-px inline-flex size-4 flex-[0_0_16px] text-muted-foreground">
 						<AlertCircle />
@@ -2031,13 +2467,13 @@ export function UserDetail({
 						{item.note}
 					</span>
 				</div>
-				{item.status === "suspended" ? (
+				{item.status === "active" ? null : (
 					<div>
 						<div className="mb-2.5 font-bold text-[13px] text-foreground">
 							계정 상태 복구
 						</div>
 						<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
-							현재 이용 정지 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
+							현재 {c.label} 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
 							상태로 되돌릴 수 있어요.
 						</p>
 						<Button
@@ -2052,7 +2488,8 @@ export function UserDetail({
 							정상으로 복구
 						</Button>
 					</div>
-				) : null}
+				)}
+				<UserModerationHistory userId={item.id} />
 				<div>
 					<div className="mb-2.5 font-bold text-[13px] text-foreground">
 						제재 적용
@@ -2308,43 +2745,25 @@ const BULK_ACTIONS: Record<ModerationBulkScope, BulkActionConfig[]> = {
 	],
 };
 
-function ActionBtn({
-	disabled = false,
-	label,
-	tone,
-	onClick,
-}: {
-	disabled?: boolean;
-	label: string;
-	tone?: "danger" | "success";
-	onClick: () => void;
-}) {
-	let toneClass = "bg-secondary text-foreground";
-	if (tone === "danger") {
-		toneClass = "bg-coral-500 text-white";
-	} else if (tone === "success") {
-		toneClass = "bg-primary text-primary-foreground";
-	}
-	return (
-		<button
-			className={cn(
-				"h-[34px] cursor-pointer whitespace-nowrap rounded-[10px] px-[11px] font-bold text-[12.5px]",
-				toneClass,
-				disabled && "cursor-not-allowed opacity-50"
-			)}
-			disabled={disabled}
-			onClick={onClick}
-			type="button"
-		>
-			{label}
-		</button>
-	);
-}
+// 일괄 처리 버튼의 시각 위계. 되돌리기 어려운 조치(반려·정지)는 destructive,
+// 마무리 조치(승인·해결)만 기본(코럴) 버튼, 나머지는 한 톤 낮춘 secondary다.
+const BULK_TONE_VARIANT = {
+	danger: "destructive",
+	success: "default",
+} as const;
+
+// 액션 바 헤드라인에 쓰는 선택 대상 이름 — "3개"만 있으면 무엇을 고른 건지 모른다.
+const BULK_SCOPE_LABEL: Record<ModerationBulkScope, string> = {
+	queue: "검수 공고",
+	reports: "신고",
+	users: "사용자",
+};
 
 export function QueueActionBar({
 	count,
 	isApplying = false,
 	onAction,
+	onClearSelection,
 	scope = "queue",
 }: {
 	count: number;
@@ -2354,6 +2773,7 @@ export function QueueActionBar({
 		action: ModerationBulkAction,
 		reason: string
 	) => void;
+	onClearSelection?: () => void;
 	scope?: ModerationBulkScope;
 }) {
 	const [pendingAction, setPendingAction] = useState<BulkActionConfig | null>(
@@ -2371,19 +2791,42 @@ export function QueueActionBar({
 
 	return (
 		<div className="px-4 pt-2 pb-1">
-			<div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-3 py-2.5 shadow-[var(--shadow-card)]">
-				<span className="whitespace-nowrap font-bold text-[12.5px] text-foreground">
-					{count}개 선택됨
-				</span>
-				<div className="ml-auto flex min-w-0 gap-1.5 overflow-x-auto">
+			{/* 모바일은 좁아서 개수 줄과 버튼 줄을 나누고, 데스크톱부터 한 줄로 붙인다. */}
+			<div className="flex flex-col gap-2 rounded-2xl border border-border bg-background px-3 py-2.5 shadow-[var(--shadow-card)] sm:flex-row sm:items-center">
+				<div className="flex min-w-0 items-center gap-2">
+					<span className="inline-flex shrink-0 items-center rounded-full bg-primary px-2.5 py-1 font-extrabold text-[12px] text-primary-foreground tabular-nums">
+						{count}
+					</span>
+					<span className="truncate font-bold text-[13px] text-foreground">
+						{BULK_SCOPE_LABEL[scope]} {count}건 선택됨
+					</span>
+					{onClearSelection ? (
+						<UiButton
+							className="ml-auto shrink-0 sm:ml-0"
+							onClick={onClearSelection}
+							size="sm"
+							type="button"
+							variant="ghost"
+						>
+							선택 해제
+						</UiButton>
+					) : null}
+				</div>
+				<div className="flex min-w-0 gap-1.5 overflow-x-auto sm:ml-auto">
 					{actions.map((action) => (
-						<ActionBtn
+						<UiButton
+							className="shrink-0"
 							disabled={isApplying}
 							key={`${action.scope}-${action.action}`}
-							label={action.label}
 							onClick={() => setPendingAction(action)}
-							tone={action.tone}
-						/>
+							size="sm"
+							type="button"
+							variant={
+								action.tone ? BULK_TONE_VARIANT[action.tone] : "secondary"
+							}
+						>
+							{action.label}
+						</UiButton>
 					))}
 				</div>
 			</div>
@@ -2393,7 +2836,7 @@ export function QueueActionBar({
 							confirmLabel={`${pendingAction.label} 적용`}
 							danger={pendingAction.tone === "danger"}
 							defaultReason={pendingAction.defaultReason}
-							description={`${count}건 선택됨`}
+							description={`${BULK_SCOPE_LABEL[scope]} ${count}건에 적용해요.`}
 							isApplying={isApplying}
 							onCancel={() => setPendingAction(null)}
 							onConfirm={confirm}
@@ -2462,11 +2905,11 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 			s.includes(id) ? s.filter((x) => x !== id) : [...s, id]
 		);
 
-	const resolveQueue = (id: string, action: "approve" | "reject") => {
+	const resolveQueue = (id: string, action: QueueVerdict) => {
 		setQueue((q) => q.filter((x) => x.id !== id));
 		setSelected((s) => s.filter((x) => x !== id));
 		setDetail(null);
-		flash(action === "approve" ? "공고를 승인했어요" : "공고를 반려했어요");
+		flash(QUEUE_VERDICT_TOAST[action]);
 	};
 	const resolveReport = (id: string, action: "dismiss" | "act") => {
 		setReports((r) =>
@@ -2588,7 +3031,11 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 				</>
 			)}
 			{showActionBar ? (
-				<QueueActionBar count={selected.length} onAction={bulkAction} />
+				<QueueActionBar
+					count={selected.length}
+					onAction={bulkAction}
+					onClearSelection={() => setSelected([])}
+				/>
 			) : null}
 			{detail ? null : (
 				<div className="border-border border-t bg-background">

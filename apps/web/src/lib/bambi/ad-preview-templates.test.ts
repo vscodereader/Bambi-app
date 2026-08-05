@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
 	AD_PREVIEW_TEMPLATE_OPTIONS,
 	getAdBannerUsagesForPreviewTemplate,
+	getPreviewTemplateOptionsForPlacementKind,
+	isPreviewTemplateKindMismatch,
 } from "./ad-preview-templates";
 
 describe("getAdBannerUsagesForPreviewTemplate", () => {
@@ -56,5 +58,52 @@ describe("getAdBannerUsagesForPreviewTemplate", () => {
 
 		expect(values).not.toContain("side-horizontal");
 		expect(values).not.toContain("side-vertical");
+	});
+});
+
+describe("getPreviewTemplateOptionsForPlacementKind", () => {
+	it("리스팅 위치에는 배너 노출 영역을 감춘다", () => {
+		// QA: 리스팅 노출 위치인데 "프리미엄 광고 배너"가 선택지에 떠 있었다.
+		const values = getPreviewTemplateOptionsForPlacementKind("listing").map(
+			(option) => option.value
+		);
+
+		expect(values).toEqual([
+			"special-list",
+			"urgent-list",
+			"recommended-list",
+			"none",
+		]);
+	});
+
+	it("배너 위치에는 리스팅 노출 영역을 감춘다", () => {
+		const values = getPreviewTemplateOptionsForPlacementKind("banner").map(
+			(option) => option.value
+		);
+
+		expect(values).toEqual(["premium-top", "none"]);
+	});
+
+	it("위치 유형을 모르면 좁히지 않는다", () => {
+		expect(getPreviewTemplateOptionsForPlacementKind(undefined)).toEqual([
+			...AD_PREVIEW_TEMPLATE_OPTIONS,
+		]);
+	});
+});
+
+describe("isPreviewTemplateKindMismatch", () => {
+	it("유형과 어긋난 기존 값만 경고한다", () => {
+		expect(isPreviewTemplateKindMismatch("premium-top", "listing")).toBe(true);
+		expect(isPreviewTemplateKindMismatch("special-list", "banner")).toBe(true);
+		expect(isPreviewTemplateKindMismatch("special-list", "listing")).toBe(
+			false
+		);
+		// 레거시 side 값은 프리미엄 배너 풀로 흡수돼 배너 위치에서는 정상이다.
+		expect(isPreviewTemplateKindMismatch("side-vertical", "banner")).toBe(
+			false
+		);
+		// "노출 영역 없음"은 어느 위치에서도 유효하고, 유형을 모르면 판정하지 않는다.
+		expect(isPreviewTemplateKindMismatch("none", "banner")).toBe(false);
+		expect(isPreviewTemplateKindMismatch("premium-top", undefined)).toBe(false);
 	});
 });

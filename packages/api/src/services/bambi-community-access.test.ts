@@ -38,9 +38,22 @@ describe("resolveCommunityAccess", () => {
 		});
 	});
 
+	it("allows legal advisors regardless of gender", () => {
+		expect(resolveCommunityAccess({ ...base, role: "legal_advisor" })).toEqual({
+			canAccess: true,
+			notice: null,
+		});
+	});
+
 	it("blocks non-advertiser employers", () => {
 		expect(
 			resolveCommunityAccess({ ...base, gender: "male", role: "employer" })
+		).toEqual({ canAccess: false, notice: "male_employer" });
+	});
+
+	it("blocks female employers without an active ad", () => {
+		expect(
+			resolveCommunityAccess({ ...base, gender: "female", role: "employer" })
 		).toEqual({ canAccess: false, notice: "male_employer" });
 	});
 

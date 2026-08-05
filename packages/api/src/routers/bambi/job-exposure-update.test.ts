@@ -9,11 +9,18 @@ import type { Context } from "../../context";
 
 dotenv.config({ path: "../../apps/server/.env" });
 
-const [{ db }, authSchema, bambiSchema, { jobsRouter }] = await Promise.all([
+const [
+	{ db },
+	authSchema,
+	bambiSchema,
+	{ jobsRouter },
+	{ createTestRegion, deleteTestRegion },
+] = await Promise.all([
 	import("@bambi-app/db"),
 	import("@bambi-app/db/schema/auth"),
 	import("@bambi-app/db/schema/bambi"),
 	import("./jobs"),
+	import("../../services/__fixtures__/test-region"),
 ]);
 
 const { user, organization, member } = authSchema;
@@ -39,7 +46,7 @@ interface JobUpdateData {
 	payAmount: number;
 	paymentMethod?: "bank_transfer" | "card" | null;
 	payUnit: string;
-	region: string;
+	regionCode: string;
 	title: string;
 	workSchedule: string;
 }
@@ -50,16 +57,18 @@ interface ExposureFixture {
 	organizationId: string;
 	placementId: string;
 	productId: string;
+	// 공고 입력이 지역 코드를 요구하므로 픽스처가 일회용 지역 행을 만들어 둔다.
+	regionCode: string;
 }
 
 const now = new Date();
 
 // jobPostInput의 필수 필드를 채운 유효 입력. 각 케이스는 여기에 노출 필드만 덧씌운다.
-const buildBaseInput = (organizationId: string) => ({
+const buildBaseInput = (organizationId: string, regionCode: string) => ({
 	organizationId,
 	title: "테스트 알바 공고",
 	industryCategory: "다방" as const,
-	region: "서울 강남구",
+	regionCode,
 	payAmount: 12_000,
 	payUnit: "시급",
 	workSchedule: "평일 09:00-18:00",
@@ -67,6 +76,7 @@ const buildBaseInput = (organizationId: string) => ({
 });
 
 const createExposureFixture = async (): Promise<ExposureFixture> => {
+	const testRegion = await createTestRegion();
 	const employerUserId = `user_test_employer_${randomUUID()}`;
 	const organizationId = `org_test_${randomUUID()}`;
 	const placementId = randomUUID();
@@ -130,6 +140,7 @@ const createExposureFixture = async (): Promise<ExposureFixture> => {
 		organizationId,
 		placementId,
 		productId: product.id,
+		regionCode: testRegion.code,
 		jobPostIds: [],
 	};
 };
@@ -193,6 +204,7 @@ const cleanupExposureFixture = async (fixture: ExposureFixture) => {
 		.delete(bambiProfile)
 		.where(eq(bambiProfile.userId, fixture.employerUserId));
 	await db.delete(user).where(eq(user.id, fixture.employerUserId));
+	await deleteTestRegion(fixture.regionCode);
 };
 
 describe("jobs.update 노출 결제 상태 정합성", () => {
@@ -214,7 +226,10 @@ describe("jobs.update 노출 결제 상태 정합성", () => {
 	});
 
 	it("무료 공고에 유료 상품을 붙이면 미결제로 전환되고 노출 만료일이 초기화된다", async () => {
-		const baseInput = buildBaseInput(fixture.organizationId);
+		const baseInput = buildBaseInput(
+			fixture.organizationId,
+			fixture.regionCode
+		);
 		// 사전: 무료 공고(상품 없음, paid + 만료일 없음)
 		const id = await seedJobPost(fixture, {
 			adProductId: null,
@@ -236,7 +251,10 @@ describe("jobs.update 노출 결제 상태 정합성", () => {
 	});
 
 	it("유료 결제완료 공고를 무료로 바꾸면 즉시 게시 가능(paid)하고 만료일이 초기화된다", async () => {
-		const baseInput = buildBaseInput(fixture.organizationId);
+		const baseInput = buildBaseInput(
+			fixture.organizationId,
+			fixture.regionCode
+		);
 		// 사전: paid + 미래 만료일을 가진 유료 공고
 		const id = await seedJobPost(fixture, {
 			adProductId: fixture.productId,
@@ -258,7 +276,10 @@ describe("jobs.update 노출 결제 상태 정합성", () => {
 	});
 
 	it("가격 옵션에 할인율이 설정돼 있으면 노출 결제 금액이 할인가로 확정된다", async () => {
-		const baseInput = buildBaseInput(fixture.organizationId);
+		const baseInput = buildBaseInput(
+			fixture.organizationId,
+			fixture.regionCode
+		);
 		// 사전: 무료 공고에 유료 상품(옵션 할인 10%)을 붙여 할인가가 스냅샷되는지 본다.
 		const id = await seedJobPost(fixture, {
 			adProductId: null,
@@ -293,7 +314,10 @@ describe("jobs.update 노출 결제 상태 정합성", () => {
 	});
 
 	it("노출 상품·기간이 그대로면 결제 상태와 만료일을 유지한다", async () => {
-		const baseInput = buildBaseInput(fixture.organizationId);
+		const baseInput = buildBaseInput(
+			fixture.organizationId,
+			fixture.regionCode
+		);
 		const futureEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 		// 사전: paid + 미래 만료일을 가진 유료 공고
 		const id = await seedJobPost(fixture, {

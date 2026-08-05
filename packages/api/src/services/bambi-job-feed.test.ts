@@ -12,14 +12,21 @@ dotenv.config({
 // jobs.list의 수집 주입 테스트가 이 파일에 함께 있는 이유: 두 테스트 모두 사이트 설정 한 행
 // (crawled_job_feed_enabled)을 켜고 끄는데, vitest는 **파일 단위로 병렬** 실행한다. 다른
 // 파일에 두면 서로의 스위치를 덮어써 둘 다 간헐적으로 깨진다(같은 파일 안에서는 순차 실행).
-const [{ db }, authSchema, bambiSchema, feed, { jobsRouter }] =
-	await Promise.all([
-		import("@bambi-app/db"),
-		import("@bambi-app/db/schema/auth"),
-		import("@bambi-app/db/schema/bambi"),
-		import("./bambi-job-feed"),
-		import("../routers/bambi/jobs"),
-	]);
+const [
+	{ db },
+	authSchema,
+	bambiSchema,
+	feed,
+	{ jobsRouter },
+	{ createTestRegion, deleteTestRegion },
+] = await Promise.all([
+	import("@bambi-app/db"),
+	import("@bambi-app/db/schema/auth"),
+	import("@bambi-app/db/schema/bambi"),
+	import("./bambi-job-feed"),
+	import("../routers/bambi/jobs"),
+	import("./__fixtures__/test-region"),
+]);
 
 const { organization, user } = authSchema;
 const {
@@ -44,11 +51,11 @@ interface Fixture {
 	crawledId: string;
 	jobPostIds: string[];
 	organizationId: string;
-	region: string;
+	regionCode: string;
 	sourceExternalIds: string[];
 	specialCrawledIds: string[];
 	specialJobPostId: string;
-	specialRegion: string;
+	specialRegionCode: string;
 	thinCrawledId: string;
 	userId: string;
 }
@@ -59,10 +66,10 @@ const HOUR_MS = 60 * 60 * 1000;
 
 const createFixture = async (): Promise<Fixture> => {
 	const now = new Date();
-	// job_post·crawled_job_post 모두 전역 조회라, 고유 region으로만 걸러 병렬 테스트와 격리한다.
-	const region = `feed-${randomUUID()}`;
+	// job_post·crawled_job_post 모두 전역 조회라, 일회용 지역으로만 걸러 병렬 테스트와 격리한다.
+	const testRegion = await createTestRegion();
 	// 섹션 조회 전용 지역 — 기존 합친 목록 단언(행 수·출처 집합)에 새 행이 끼지 않게 나눈다.
-	const specialRegion = `feed-special-${randomUUID()}`;
+	const specialTestRegion = await createTestRegion();
 	const organizationId = `org_test_${randomUUID()}`;
 	const userId = `user_test_employer_${randomUUID()}`;
 	const jobPostId = randomUUID();
@@ -110,7 +117,8 @@ const createFixture = async (): Promise<Fixture> => {
 		payUnit: "일급",
 		paymentStatus: "paid" as const,
 		publishedAt: new Date(now.getTime() - HOUR_MS),
-		region,
+		region: testRegion.label,
+		regionCode: testRegion.code,
 		status: "published" as const,
 		title: "우리 공고",
 		workSchedule: "20:00-02:00",
@@ -128,7 +136,8 @@ const createFixture = async (): Promise<Fixture> => {
 		industryCategory: "BAR" as const,
 		payAmount: 150_000,
 		payUnit: "일급",
-		region,
+		region: testRegion.label,
+		regionCode: testRegion.code,
 		shopName: "수집 업소",
 		sourceExternalId,
 		sourceSite: "queenalba" as const,
@@ -152,13 +161,15 @@ const createFixture = async (): Promise<Fixture> => {
 		// 흔들지 않도록 별도 지역으로 격리하고, 게시일을 벌려 정렬을 고정한다.
 		collected(specialCrawledIds[0] as string, sourceExternalIds[3] as string, {
 			listingType: "special",
-			region: specialRegion,
+			region: specialTestRegion.label,
+			regionCode: specialTestRegion.code,
 			sourcePostedAt: new Date(now.getTime() - HOUR_MS),
 			title: "스페셜 수집 공고 최신",
 		}),
 		collected(specialCrawledIds[1] as string, sourceExternalIds[4] as string, {
 			listingType: "special",
-			region: specialRegion,
+			region: specialTestRegion.label,
+			regionCode: specialTestRegion.code,
 			sourcePostedAt: new Date(now.getTime() - 3 * HOUR_MS),
 			title: "스페셜 수집 공고 이전",
 		}),
@@ -175,7 +186,8 @@ const createFixture = async (): Promise<Fixture> => {
 		ourPost(specialJobPostId, {
 			exposureType: "special" as const,
 			publishedAt: now,
-			region: specialRegion,
+			region: specialTestRegion.label,
+			regionCode: specialTestRegion.code,
 			title: "우리 스페셜 공고",
 		}),
 	]);
@@ -185,11 +197,11 @@ const createFixture = async (): Promise<Fixture> => {
 		crawledId,
 		jobPostIds: [jobPostId, convertedJobPostId, specialJobPostId],
 		organizationId,
-		region,
+		regionCode: testRegion.code,
 		sourceExternalIds,
 		specialCrawledIds,
 		specialJobPostId,
-		specialRegion,
+		specialRegionCode: specialTestRegion.code,
 		thinCrawledId,
 		userId,
 	};
@@ -214,6 +226,8 @@ const cleanupFixture = async (target: Fixture): Promise<void> => {
 	await db
 		.delete(organization)
 		.where(eq(organization.id, target.organizationId));
+	await deleteTestRegion(target.regionCode);
+	await deleteTestRegion(target.specialRegionCode);
 };
 
 describe("공고 목록 투영", () => {
@@ -250,7 +264,7 @@ describe("listJobFeed", () => {
 		const rows = await listJobFeed({
 			includeCrawled: true,
 			limit: 20,
-			region: fixture.region,
+			regionCode: fixture.regionCode,
 		});
 		const bySource = new Map(rows.map((row) => [row.source, row]));
 
@@ -268,7 +282,7 @@ describe("listJobFeed", () => {
 		const rows = await listJobFeed({
 			includeCrawled: true,
 			limit: 20,
-			region: fixture.region,
+			regionCode: fixture.regionCode,
 		});
 		const collected = rows.find((row) => row.source === "crawled");
 
@@ -295,7 +309,7 @@ describe("listJobFeed", () => {
 		const rows = await listJobFeed({
 			includeCrawled: true,
 			limit: 20,
-			region: fixture.region,
+			regionCode: fixture.regionCode,
 		});
 		const ids = rows.map((row) => row.id);
 
@@ -308,7 +322,7 @@ describe("listJobFeed", () => {
 			includeCrawled: true,
 			industryCategory: "BAR",
 			limit: 20,
-			region: fixture.region,
+			regionCode: fixture.regionCode,
 		});
 
 		expect(barOnly.map((row) => row.source)).toEqual(["crawled"]);
@@ -318,7 +332,7 @@ describe("listJobFeed", () => {
 			includeCrawled: true,
 			limit: 20,
 			minPayAmount: 20_000,
-			region: fixture.region,
+			regionCode: fixture.regionCode,
 		});
 
 		expect(wellPaid.every((row) => row.source !== "crawled")).toBe(true);
@@ -330,7 +344,7 @@ describe("listJobFeed", () => {
 		const rows = await listJobFeed({
 			includeCrawled: false,
 			limit: 20,
-			region: fixture.region,
+			regionCode: fixture.regionCode,
 		});
 
 		expect(rows.every((row) => row.source !== "crawled")).toBe(true);
@@ -354,7 +368,10 @@ describe("listJobFeed", () => {
 			});
 
 		try {
-			const rows = await listJobFeed({ limit: 20, region: fixture.region });
+			const rows = await listJobFeed({
+				limit: 20,
+				regionCode: fixture.regionCode,
+			});
 
 			expect(rows.every((row) => row.source !== "crawled")).toBe(true);
 		} finally {
@@ -380,7 +397,7 @@ describe("listCrawledSectionRows", () => {
 	it("타입을 주면 그 라벨의 행만 뽑고 노출 어휘를 그 자리로 승격한다", async () => {
 		const rows = await listCrawledSectionRows({
 			limit: 20,
-			region: fixture.specialRegion,
+			regionCode: fixture.specialRegionCode,
 			type: "special",
 		});
 
@@ -393,7 +410,7 @@ describe("listCrawledSectionRows", () => {
 		const rows = await listCrawledSectionRows({
 			limit: 20,
 			// 이 지역의 수집 행 라벨은 'premium'(우리 자리 어휘가 아닌 레거시)뿐이다.
-			region: fixture.region,
+			regionCode: fixture.regionCode,
 			type: "special",
 		});
 
@@ -403,7 +420,7 @@ describe("listCrawledSectionRows", () => {
 	it("상한을 넘겨 뽑지 않는다", async () => {
 		const rows = await listCrawledSectionRows({
 			limit: 1,
-			region: fixture.specialRegion,
+			regionCode: fixture.specialRegionCode,
 			type: "special",
 		});
 
@@ -414,7 +431,7 @@ describe("listCrawledSectionRows", () => {
 	it("타입을 생략하면 라벨과 무관하게 뽑고 'standard'를 유지한다", async () => {
 		const rows = await listCrawledSectionRows({
 			limit: 20,
-			region: fixture.region,
+			regionCode: fixture.regionCode,
 		});
 		const ids = rows.map((row) => row.id);
 
@@ -426,7 +443,7 @@ describe("listCrawledSectionRows", () => {
 	});
 });
 
-const listJobs = (input: { limit: number; region: string }) =>
+const listJobs = (input: { limit: number; regionCode: string }) =>
 	createProcedureClient(jobsRouter.list, {
 		context: {} as never,
 		path: ["bambi", "jobs", "list"],
@@ -464,7 +481,10 @@ describe("jobs.list 수집 공고 주입", () => {
 	it("스위치가 꺼져 있으면 수집 공고를 한 건도 주입하지 않는다", async () => {
 		await setCrawledJobFeedEnabled(false);
 
-		const result = await listJobs({ limit: 20, region: fixture.specialRegion });
+		const result = await listJobs({
+			limit: 20,
+			regionCode: fixture.specialRegionCode,
+		});
 		const ids = [
 			...result.sections.special,
 			...result.sections.organic,
@@ -479,7 +499,10 @@ describe("jobs.list 수집 공고 주입", () => {
 	it("스위치가 켜지면 섹션·전체 공고의 유료 공고 뒤에 붙인다", async () => {
 		await setCrawledJobFeedEnabled(true);
 
-		const result = await listJobs({ limit: 20, region: fixture.specialRegion });
+		const result = await listJobs({
+			limit: 20,
+			regionCode: fixture.specialRegionCode,
+		});
 
 		// 1순위 우리 순수 공고가 최상단, 2순위 크롤링(원본 게시일 최신순).
 		expect(result.sections.special.map((item) => item.id)).toEqual([
@@ -501,7 +524,7 @@ describe("jobs.list 수집 공고 주입", () => {
 	// 유료 공고의 노출 기록까지 통째로 사라진다(FK 위반은 삼켜지므로 조용히 비어 버린다).
 	it("수집 행은 impression에 기록하지 않고 유료 행 기록은 남는다", async () => {
 		await setCrawledJobFeedEnabled(true);
-		await listJobs({ limit: 20, region: fixture.specialRegion });
+		await listJobs({ limit: 20, regionCode: fixture.specialRegionCode });
 
 		const events = await db
 			.select({ jobPostId: jobPerformanceEvent.jobPostId })

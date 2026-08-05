@@ -19,6 +19,8 @@
     "db:generate": "turbo -F @bambi-app/db db:generate",
     "db:migrate": "turbo -F @bambi-app/db db:migrate",
     "db:seed:bambi": "turbo -F server seed:bambi",
+    "db:seed:regions": "turbo -F server seed:regions",
+    "db:backfill:regions": "turbo -F server backfill:regions",
     "check": "ultracite check",
     "fix": "ultracite fix",
     "test": "turbo test"

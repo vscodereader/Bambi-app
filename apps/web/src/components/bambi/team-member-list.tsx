@@ -390,6 +390,9 @@ export function TeamMemberList({
 	const [search, setSearch] = useState("");
 	const [popoverOpen, setPopoverOpen] = useState(false);
 	const [role, setRole] = useState<OrganizationRole>("staff");
+	// 초대 사유는 선택 입력이다 — 운영자 승인 판단을 돕는 참고 정보라서, 필수로 막으면
+	// 기존 초대 흐름이 통째로 멈춘다.
+	const [inviteReason, setInviteReason] = useState("");
 	const [teamId, setTeamId] = useState(teams[0]?.teamId ?? "");
 	const [formError, setFormError] = useState<null | string>(null);
 	const [showValidation, setShowValidation] = useState(false);
@@ -432,6 +435,7 @@ export function TeamMemberList({
 				setEmail("");
 				setSearch("");
 				setRole("staff");
+				setInviteReason("");
 				setFormError(null);
 				setShowValidation(false);
 				toast.success("멤버 초대를 만들었습니다.");
@@ -533,6 +537,7 @@ export function TeamMemberList({
 		inviteMutation.mutate({
 			email: email.trim(),
 			organizationId,
+			reason: inviteReason.trim() || undefined,
 			role,
 			teamId: teamId || undefined,
 		});
@@ -709,6 +714,20 @@ export function TeamMemberList({
 							초대
 						</Button>
 					</div>
+				</div>
+				<div className="mt-3 flex flex-col gap-1.5">
+					<Label htmlFor="invite-reason">초대 사유(선택)</Label>
+					<Input
+						disabled={disabled}
+						id="invite-reason"
+						maxLength={500}
+						onChange={(event) => setInviteReason(event.target.value)}
+						placeholder="예: 2호점 매니저로 합류 예정"
+						value={inviteReason}
+					/>
+					<p className="m-0 text-muted-foreground text-xs">
+						운영자가 팀 합류를 승인할 때 이 사유를 함께 봅니다.
+					</p>
 				</div>
 				<div className="mt-3">
 					<FormError message={formError} />

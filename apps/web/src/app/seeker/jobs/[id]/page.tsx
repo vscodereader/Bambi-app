@@ -6,7 +6,11 @@ import { useEffect, useState } from "react";
 import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { ReportDialog } from "@/components/bambi/report-dialog";
 import { SeekerJobDetailResponsive } from "@/components/bambi/screens/seeker-job-detail-responsive";
-import { isApiJobId, useMarketplaceJob } from "@/lib/bambi/api-jobs";
+import {
+	isApiJobId,
+	useIsBlockedEmployer,
+	useMarketplaceJob,
+} from "@/lib/bambi/api-jobs";
 
 export default function SeekerJobPage() {
 	const router = useRouter();
@@ -17,6 +21,8 @@ export default function SeekerJobPage() {
 	// 역할을 아직 못 읽은 동안(role null)에는 감춰 두는 쪽이 안전하다 — 눌렀다가
 	// 가드에 튕기는 것보다 잠깐 안 보이는 편이 낫다.
 	const canStartChat = role === "job_seeker";
+	// 내가 차단한 구인자의 공고면 채팅 대신 안내를 보여준다(누르면 서버가 막는다).
+	const isBlockedEmployer = useIsBlockedEmployer(job?.employerUserId);
 	const [isReportOpen, setIsReportOpen] = useState(false);
 	// 상세로 들어왔는데 목록에서 내려둔 스크롤 위치가 그대로 남는 문제를 막는다.
 	// App Router의 스크롤 초기화는 세그먼트가 처음 커밋될 때 잡은 DOM 노드 하나에만
@@ -58,6 +64,7 @@ export default function SeekerJobPage() {
 			) : null}
 			<SeekerJobDetailResponsive
 				canStartChat={canStartChat}
+				isBlockedEmployer={isBlockedEmployer}
 				job={job}
 				onBack={() => router.push("/seeker")}
 				onReport={() => {
