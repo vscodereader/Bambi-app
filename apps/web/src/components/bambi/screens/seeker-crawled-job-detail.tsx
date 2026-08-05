@@ -191,6 +191,8 @@ export function SeekerCrawledJobDetail({
 													item.heightPx === null
 														? undefined
 														: `${item.widthPx ?? asset.width} / ${item.heightPx}`,
+												marginBottom: item.offsetY,
+												transform: `translate(${item.offsetX}px, ${item.offsetY}px)`,
 												width: item.widthPx ?? "100%",
 											}}
 										>

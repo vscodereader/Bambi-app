@@ -87,6 +87,8 @@ export const crawledJobsRouter = {
 						assetId: item.assetId,
 						heightPx: item.displayHeightPx ?? null,
 						id: item.id,
+						offsetX: item.offsetX ?? 0,
+						offsetY: item.offsetY ?? 0,
 						widthPx: item.displayWidthPx,
 					})),
 				},

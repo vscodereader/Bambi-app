@@ -218,6 +218,8 @@ export const crawlerRouter = {
 							items: post.document.items.map((item) => ({
 								...item,
 								displayHeightPx: item.displayHeightPx ?? null,
+								offsetX: item.offsetX ?? 0,
+								offsetY: item.offsetY ?? 0,
 							})),
 						}
 					: createOriginalImageDocument(post.detailImageUrls),

@@ -32,6 +32,8 @@ const imageItemSchema = z
 			.default(null),
 		displayWidthPx: z.number().int().positive().nullable(),
 		id: z.uuid(),
+		offsetX: z.number().int().optional().default(0),
+		offsetY: z.number().int().optional().default(0),
 	})
 	.strict();
 
@@ -228,6 +230,15 @@ export const crawledJobEditedImageDocumentSchema = z
 					message: "표시 높이가 허용 범위를 벗어났습니다.",
 				});
 			}
+			if (
+				Math.abs(item.offsetX) > asset.width ||
+				Math.abs(item.offsetY) > asset.height
+			) {
+				context.addIssue({
+					code: "custom",
+					message: "이미지 표시 위치가 허용 범위를 벗어났습니다.",
+				});
+			}
 		}
 
 		const referencedIds = new Set(document.items.map((item) => item.assetId));
@@ -273,5 +284,7 @@ export const attachOriginalItems = (
 		displayHeightPx: null,
 		displayWidthPx: null,
 		id: crypto.randomUUID(),
+		offsetX: 0,
+		offsetY: 0,
 	})),
 });

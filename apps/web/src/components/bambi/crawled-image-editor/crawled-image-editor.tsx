@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import {
+	anchoredResizeOffsets,
 	type CrawledImageAsset,
 	type CrawledImageDocument,
 	type CrawledImageItem,
@@ -138,8 +139,11 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const resizeRef = useRef<{
 		handle: ResizeHandle;
+		itemId: string;
 		pointerId: number;
 		startHeight: number;
+		startOffsetX: number;
+		startOffsetY: number;
 		startWidth: number;
 		startX: number;
 		startY: number;
@@ -576,6 +580,8 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 									displayHeightPx: null,
 									displayWidthPx: null,
 									id: crypto.randomUUID(),
+									offsetX: 0,
+									offsetY: 0,
 								};
 								const items = [...documentState.items];
 								items.splice(targetIndex, 0, item);
@@ -723,6 +729,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 													setDirty(true);
 												}}
 												role="option"
+												style={{ marginBottom: item.offsetY }}
 												tabIndex={-1}
 											>
 												<div
@@ -732,6 +739,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 															item.displayHeightPx === null
 																? undefined
 																: `${width} / ${height}`,
+														transform: `translate(${item.offsetX}px, ${item.offsetY}px)`,
 														width,
 													}}
 												>
@@ -789,11 +797,16 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 																		);
 																		const bounds =
 																			event.currentTarget.parentElement?.getBoundingClientRect();
+																		setSelectedIds(new Set([item.id]));
+																		anchorIdRef.current = item.id;
 																		pushHistory();
 																		resizeRef.current = {
 																			handle,
+																			itemId: item.id,
 																			pointerId: event.pointerId,
 																			startHeight: bounds?.height ?? height,
+																			startOffsetX: item.offsetX,
+																			startOffsetY: item.offsetY,
 																			startWidth: bounds?.width ?? width,
 																			startX: event.clientX,
 																			startY: event.clientY,
@@ -809,10 +822,10 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 																			resizeRef.current = null;
 																			return;
 																		}
-																		setDocumentState(
+																		const resizedDocument =
 																			resizeItemDimensions(
 																				documentState,
-																				selectedIds,
+																				new Set([resize.itemId]),
 																				resizeDimensionsFromHandleDrag({
 																					deltaX: event.clientX - resize.startX,
 																					deltaY: event.clientY - resize.startY,
@@ -821,8 +834,37 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 																					startWidth: resize.startWidth,
 																				}),
 																				resize.handle.length === 2
-																			)
-																		);
+																			);
+																		const resizedItem =
+																			resizedDocument.items.find(
+																				(candidate) =>
+																					candidate.id === resize.itemId
+																			);
+																		if (!resizedItem) {
+																			return;
+																		}
+																		const nextWidth =
+																			resizedItem.displayWidthPx ?? width;
+																		const nextHeight =
+																			resizedItem.displayHeightPx ?? height;
+																		const offsets = anchoredResizeOffsets({
+																			handle: resize.handle,
+																			nextHeight,
+																			nextWidth,
+																			startHeight: resize.startHeight,
+																			startOffsetX: resize.startOffsetX,
+																			startOffsetY: resize.startOffsetY,
+																			startWidth: resize.startWidth,
+																		});
+																		setDocumentState({
+																			...resizedDocument,
+																			items: resizedDocument.items.map(
+																				(candidate) =>
+																					candidate.id === resize.itemId
+																						? { ...candidate, ...offsets }
+																						: candidate
+																			),
+																		});
 																		setUseOriginalFallback(false);
 																		setDirty(true);
 																	}}
@@ -1032,6 +1074,14 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 												candidate.displayWidthPx === null
 													? null
 													: Math.min(candidate.displayWidthPx, newAsset.width),
+											offsetX: Math.max(
+												-newAsset.width,
+												Math.min(newAsset.width, candidate.offsetX)
+											),
+											offsetY: Math.max(
+												-newAsset.height,
+												Math.min(newAsset.height, candidate.offsetY)
+											),
 										}
 									: candidate
 							),
