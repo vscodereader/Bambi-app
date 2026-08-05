@@ -527,3 +527,13 @@ DB 통합 테스트와 브라우저 검증은 migration 적용 승인 뒤 수행
 - [x] `pnpm --filter server check-types` — 통과.
 - [x] 변경 TypeScript 3개 파일 `pnpm exec ultracite check` — 통과.
 - [ ] 실제 운영자 화면에서 높이 9,999px 원본을 자르고 저장하는 수동 검증은 서버 재시작 후 수행한다.
+
+### PR 검수 후 추가 보완
+
+- 저장 전에 브라우저가 단일 이미지 32MB와 전체 이미지 64MB 한도를 Base64 디코딩 바이트 기준으로 검사해, 서버 요청 전에 초과를 안내한다.
+- 서버·프록시가 `413 Request Body Too Large`, `Content Too Large` 또는 `Failed to fetch`를 반환해도 원문 오류를 노출하지 않고 “이미지 용량이 저장 가능한 크기를 초과하여 저장할 수 없습니다. 이미지 크기를 줄이거나 일부 이미지를 삭제해 주세요.”라고 안내한다.
+- 일반 저장 오류와 revision 충돌 메시지는 기존 서버 메시지를 그대로 유지한다.
+- [x] `pnpm --filter web exec vitest run src/lib/bambi/crawled-image-editor.test.ts` — Base64 바이트 계산·합계 초과 사전 차단·413/네트워크 오류 안내를 포함해 9개 통과.
+- [x] `pnpm --filter web check-types` — 통과.
+- [x] `pnpm --filter @bambi-app/api exec vitest run src/services/bambi-crawled-image-document.test.ts` — 6개 통과.
+- [x] `pnpm --filter server check-types` — 통과.

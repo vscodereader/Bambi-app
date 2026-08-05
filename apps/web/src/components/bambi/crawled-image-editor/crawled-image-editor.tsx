@@ -46,6 +46,8 @@ import {
 	type CrawledImageItem,
 	cleanUnusedAssets,
 	cloneImageDocument,
+	crawledImageDocumentSizeError,
+	crawledImageSaveErrorMessage,
 	duplicateItems,
 	imageExtension,
 	imageMime,
@@ -263,7 +265,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 	const saveMutation = useMutation(
 		orpc.bambi.crawler.updatePostImages.mutationOptions({
 			onError: (error) =>
-				toast.error(error.message || "이미지 편집 결과를 저장하지 못했습니다."),
+				toast.error(crawledImageSaveErrorMessage(error.message)),
 			onSuccess: async (result) => {
 				if (!documentState) {
 					return;
@@ -941,15 +943,23 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 					</Button>
 					<Button
 						disabled={!dirty || saveMutation.isPending}
-						onClick={() =>
+						onClick={() => {
+							const document = useOriginalFallback
+								? null
+								: cleanUnusedAssets(documentState);
+							const sizeError = document
+								? crawledImageDocumentSizeError(document)
+								: null;
+							if (sizeError) {
+								toast.error(sizeError);
+								return;
+							}
 							saveMutation.mutate({
-								document: useOriginalFallback
-									? null
-									: cleanUnusedAssets(documentState),
+								document,
 								expectedRevision: revision,
 								id: postId,
-							})
-						}
+							});
+						}}
 					>
 						<Save />
 						{saveMutation.isPending ? "저장 중…" : "저장"}
