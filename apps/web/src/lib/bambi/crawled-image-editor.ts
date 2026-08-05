@@ -7,6 +7,7 @@ export interface CrawledImageAsset {
 
 export interface CrawledImageItem {
 	assetId: string;
+	displayHeightPx: number | null;
 	displayWidthPx: number | null;
 	id: string;
 }
@@ -18,6 +19,11 @@ export interface CrawledImageDocument {
 }
 
 export type ResizeHandle = "e" | "n" | "ne" | "nw" | "s" | "se" | "sw" | "w";
+
+export interface ResizeDimensions {
+	height: number;
+	width: number;
+}
 
 const DATA_URL_MIME_PATTERN = /^data:([^;]+);base64,/;
 
@@ -52,8 +58,13 @@ export const resizeItems = (
 			return item;
 		}
 		const minimumWidth = Math.min(50, asset.width);
+		const currentWidth = item.displayWidthPx ?? asset.width;
+		const currentHeight =
+			item.displayHeightPx ??
+			Math.round((currentWidth * asset.height) / asset.width);
 		return {
 			...item,
+			displayHeightPx: currentHeight,
 			displayWidthPx: Math.max(
 				minimumWidth,
 				Math.min(asset.width, Math.round(targetWidth))
@@ -62,19 +73,71 @@ export const resizeItems = (
 	}),
 });
 
-export const resizeWidthFromHandleDrag = ({
-	aspectRatio,
+export const resizeItemDimensions = (
+	document: CrawledImageDocument,
+	itemIds: ReadonlySet<string>,
+	target: ResizeDimensions,
+	preserveAspectRatio = false
+): CrawledImageDocument => ({
+	...document,
+	items: document.items.map((item) => {
+		if (!itemIds.has(item.id)) {
+			return item;
+		}
+		const asset = document.assets.find(
+			(candidate) => candidate.id === item.assetId
+		);
+		if (!asset) {
+			return item;
+		}
+		const minimumWidth = Math.min(50, asset.width);
+		const minimumHeight = Math.min(50, asset.height);
+		if (preserveAspectRatio) {
+			const targetAspectRatio = target.width / target.height;
+			const aspectRatio =
+				Number.isFinite(targetAspectRatio) && targetAspectRatio > 0
+					? targetAspectRatio
+					: asset.width / asset.height;
+			const width = Math.max(
+				Math.max(minimumWidth, minimumHeight * aspectRatio),
+				Math.min(
+					Math.min(asset.width, asset.height * aspectRatio),
+					target.width
+				)
+			);
+			return {
+				...item,
+				displayHeightPx: Math.round(width / aspectRatio),
+				displayWidthPx: Math.round(width),
+			};
+		}
+		return {
+			...item,
+			displayHeightPx: Math.max(
+				minimumHeight,
+				Math.min(asset.height, Math.round(target.height))
+			),
+			displayWidthPx: Math.max(
+				minimumWidth,
+				Math.min(asset.width, Math.round(target.width))
+			),
+		};
+	}),
+});
+
+export const resizeDimensionsFromHandleDrag = ({
 	handle,
 	deltaX,
 	deltaY,
+	startHeight,
 	startWidth,
 }: {
-	aspectRatio: number;
 	handle: ResizeHandle;
 	deltaX: number;
 	deltaY: number;
+	startHeight: number;
 	startWidth: number;
-}): number => {
+}): ResizeDimensions => {
 	let horizontalDelta: number | null = null;
 	if (handle.includes("w")) {
 		horizontalDelta = -deltaX;
@@ -83,21 +146,24 @@ export const resizeWidthFromHandleDrag = ({
 	}
 	let verticalDelta: number | null = null;
 	if (handle.includes("n")) {
-		verticalDelta = -deltaY * aspectRatio;
+		verticalDelta = -deltaY;
 	} else if (handle.includes("s")) {
-		verticalDelta = deltaY * aspectRatio;
+		verticalDelta = deltaY;
 	}
 	if (horizontalDelta === null) {
-		return startWidth + (verticalDelta ?? 0);
+		return { height: startHeight + (verticalDelta ?? 0), width: startWidth };
 	}
 	if (verticalDelta === null) {
-		return startWidth + horizontalDelta;
+		return { height: startHeight, width: startWidth + horizontalDelta };
 	}
+	const aspectRatio = startWidth / startHeight;
+	const verticalWidthDelta = verticalDelta * aspectRatio;
 	const widthDelta =
-		Math.abs(horizontalDelta) >= Math.abs(verticalDelta)
+		Math.abs(horizontalDelta) >= Math.abs(verticalWidthDelta)
 			? horizontalDelta
-			: verticalDelta;
-	return startWidth + widthDelta;
+			: verticalWidthDelta;
+	const width = startWidth + widthDelta;
+	return { height: width / aspectRatio, width };
 };
 
 export const moveItems = (

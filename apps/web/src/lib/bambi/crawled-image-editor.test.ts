@@ -3,8 +3,8 @@ import {
 	cleanUnusedAssets,
 	duplicateItems,
 	moveItems,
+	resizeDimensionsFromHandleDrag,
 	resizeItems,
-	resizeWidthFromHandleDrag,
 } from "./crawled-image-editor";
 
 const document = {
@@ -23,8 +23,18 @@ const document = {
 		},
 	],
 	items: [
-		{ assetId: "asset-1", displayWidthPx: null, id: "item-1" },
-		{ assetId: "asset-2", displayWidthPx: null, id: "item-2" },
+		{
+			assetId: "asset-1",
+			displayHeightPx: null,
+			displayWidthPx: null,
+			id: "item-1",
+		},
+		{
+			assetId: "asset-2",
+			displayHeightPx: null,
+			displayWidthPx: null,
+			id: "item-2",
+		},
 	],
 	version: 1 as const,
 };
@@ -42,34 +52,46 @@ describe("crawled image editor state", () => {
 		expect(resized.items.map((item) => item.displayWidthPx)).toEqual([150, 80]);
 	});
 
-	it("uses both pointer axes when resizing from a corner", () => {
+	it("keeps the drag-start ratio only for corner handles", () => {
 		expect(
-			resizeWidthFromHandleDrag({
-				aspectRatio: 0.25,
+			resizeDimensionsFromHandleDrag({
 				deltaX: 20,
-				deltaY: 40,
-				handle: "nw",
+				deltaY: 5,
+				handle: "se",
+				startHeight: 100,
 				startWidth: 200,
 			})
-		).toBe(180);
+		).toEqual({ height: 110, width: 220 });
 		expect(
-			resizeWidthFromHandleDrag({
-				aspectRatio: 0.25,
-				deltaX: 0,
-				deltaY: 80,
-				handle: "nw",
+			resizeDimensionsFromHandleDrag({
+				deltaX: 2,
+				deltaY: 20,
+				handle: "se",
+				startHeight: 100,
 				startWidth: 200,
 			})
-		).toBe(180);
+		).toEqual({ height: 120, width: 240 });
+	});
+
+	it("changes only one axis for side handles", () => {
 		expect(
-			resizeWidthFromHandleDrag({
-				aspectRatio: 0.25,
-				deltaX: 0,
-				deltaY: 80,
-				handle: "n",
+			resizeDimensionsFromHandleDrag({
+				deltaX: -20,
+				deltaY: 50,
+				handle: "e",
+				startHeight: 100,
 				startWidth: 200,
 			})
-		).toBe(180);
+		).toEqual({ height: 100, width: 180 });
+		expect(
+			resizeDimensionsFromHandleDrag({
+				deltaX: 50,
+				deltaY: -20,
+				handle: "s",
+				startHeight: 100,
+				startWidth: 200,
+			})
+		).toEqual({ height: 80, width: 200 });
 	});
 
 	it("moves a selected group and removes only unused assets", () => {

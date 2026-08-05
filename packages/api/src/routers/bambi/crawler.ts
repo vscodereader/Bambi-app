@@ -212,8 +212,15 @@ export const crawlerRouter = {
 				detailImageEditRevision: post.detailImageEditRevision,
 				detailImagesEditedAt: post.detailImagesEditedAt,
 				detailImagesEditedByName: post.detailImagesEditedByName,
-				document:
-					post.document ?? createOriginalImageDocument(post.detailImageUrls),
+				document: post.document
+					? {
+							...post.document,
+							items: post.document.items.map((item) => ({
+								...item,
+								displayHeightPx: item.displayHeightPx ?? null,
+							})),
+						}
+					: createOriginalImageDocument(post.detailImageUrls),
 				hasEditedDocument: post.document !== null,
 				id: post.id,
 				title: post.title,

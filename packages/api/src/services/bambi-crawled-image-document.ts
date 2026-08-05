@@ -23,6 +23,13 @@ const imageAssetSchema = z
 const imageItemSchema = z
 	.object({
 		assetId: z.uuid(),
+		displayHeightPx: z
+			.number()
+			.int()
+			.positive()
+			.nullable()
+			.optional()
+			.default(null),
 		displayWidthPx: z.number().int().positive().nullable(),
 		id: z.uuid(),
 	})
@@ -200,6 +207,7 @@ export const crawledJobEditedImageDocumentSchema = z
 				continue;
 			}
 			const minimumWidth = Math.min(50, asset.width);
+			const minimumHeight = Math.min(50, asset.height);
 			if (
 				item.displayWidthPx !== null &&
 				(item.displayWidthPx < minimumWidth ||
@@ -208,6 +216,16 @@ export const crawledJobEditedImageDocumentSchema = z
 				context.addIssue({
 					code: "custom",
 					message: "표시 너비가 허용 범위를 벗어났습니다.",
+				});
+			}
+			if (
+				item.displayHeightPx !== null &&
+				(item.displayHeightPx < minimumHeight ||
+					item.displayHeightPx > asset.height)
+			) {
+				context.addIssue({
+					code: "custom",
+					message: "표시 높이가 허용 범위를 벗어났습니다.",
 				});
 			}
 		}
@@ -252,6 +270,7 @@ export const attachOriginalItems = (
 	...document,
 	items: document.assets.map((asset) => ({
 		assetId: asset.id,
+		displayHeightPx: null,
 		displayWidthPx: null,
 		id: crypto.randomUUID(),
 	})),

@@ -434,6 +434,7 @@ export interface CrawledJobEditedImageAsset {
 
 export interface CrawledJobEditedImageItem {
 	assetId: string;
+	displayHeightPx: number | null;
 	displayWidthPx: number | null;
 	id: string;
 }
