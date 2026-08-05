@@ -9,6 +9,7 @@ import { healthPlugin } from "./plugins/health";
 import { observabilityPlugin } from "./plugins/observability";
 import { orpcPlugin } from "./plugins/orpc";
 import { realtimePlugin } from "./plugins/realtime";
+import { withdrawalPurgePlugin } from "./plugins/withdrawal-purge";
 
 const fastify = Fastify({
 	logger: true,
@@ -23,6 +24,7 @@ fastify.register(aiPlugin);
 fastify.register(healthPlugin);
 fastify.register(autoBoostPlugin);
 fastify.register(crawlPlugin);
+fastify.register(withdrawalPurgePlugin);
 
 fastify.listen({ port: 23_000, host: "0.0.0.0" }, (err) => {
 	if (err) {

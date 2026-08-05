@@ -1080,7 +1080,7 @@
   | 같은 계정 재로그인 | 불가 — "탈퇴한 계정이에요. 로그인할 수 없어요." |
   | 같은 이메일로 신규 가입 | **즉시 가능**(이메일이 tombstone으로 치환됨) |
   | 같은 명의(본인인증)로 신규 가입 | **보존기간 동안 불가** — `CONFLICT` "이미 다른 계정에서 본인인증에 사용된 정보예요." |
-  - 해시 파기는 **운영자가 `bambi.moderation.purgeWithdrawnAccounts`(adminProcedure)를 수동 실행**해야 이뤄진다. cron 없음 → "30일 경과 후 자동 가능"으로 테스트하면 안 된다
+  - 해시 파기는 **서버 스케줄러가 매일 1회 자동 실행**한다(`apps/server/src/plugins/withdrawal-purge.ts`). 즉시 확인하려면 운영자가 사이트 정보의 「지금 파기 실행」(`bambi.moderation.purgeWithdrawnAccounts`)을 눌러 앞당긴다 → 보존기간 경과 직후가 아니라 **다음 자동 실행 뒤** 열린다는 점만 유의
 - **확인 절차 없는 것**: 비밀번호 재확인, 확인 문구 입력 → **없음**(다이얼로그 1단계뿐)
 - **관련 API**: `bambi.onboarding.getWithdrawEligibility`, `bambi.onboarding.withdrawMyAccount` (protected), `bambi.siteSettings.getMemberPolicy` (publicProcedure)
 
@@ -1331,7 +1331,7 @@
 26. **모바일 인증 리디렉션 복귀 시 회원가입 단계 유실 가능** — `?auth=login`에서 모드만 토글해 가입에 들어간 경우 복귀 URL에 `auth=login`이 남아 로그인 모드로 돌아온다. **실기기 QA 필수**.
 27. **`checkIdentityForSignup`에 레이트리밋 없음** — 같은 흐름의 `startIdentityVerification`은 rateLimited인데 이쪽은 publicProcedure다.
 28. **`recordLegalConsent` 실패를 삼킴** — 약관 동의 이력이 누락돼도 가입은 성공한다.
-29. **`purgeWithdrawnAccounts`가 cron 없이 운영자 수동 실행** — 같은 명의 재가입 가능 시점이 운영자 실행 시점에 좌우된다. "30일 경과 후 자동 가능"으로 테스트하면 안 된다.
+29. ~~**`purgeWithdrawnAccounts`가 cron 없이 운영자 수동 실행**~~ — 해소됨. 서버 스케줄러가 매일 1회 자동 실행한다(운영자 버튼은 즉시 실행용). 같은 명의 재가입은 보존기간 경과 시점이 아니라 **그 뒤 첫 자동 실행 시점**에 열린다.
 30. **모바일 헤더 벨 아이콘이 무동작** — `aria-label="알림"`만 있고 핸들러가 없다. QA 결함으로 볼지 확인 필요.
 31. **`/support`에 모바일 하단 탭바 없음** — 마이페이지에서 들어가면 뒤로가기 외 복귀 경로가 없다.
 32. **`bambi.jobs.legacyList`** — 웹 화면에서 호출처를 찾지 못했다(네이티브/외부 사용 여부 확인 필요).

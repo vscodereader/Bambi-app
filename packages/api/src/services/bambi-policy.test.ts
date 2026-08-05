@@ -7,8 +7,25 @@ import {
 	getEmployerVerificationStatusLabel,
 	getJobPostStatusLabel,
 	getUpdatedJobPostStatus,
+	resolveWithdrawalPurgeCutoff,
 	shouldPrioritizeJobPost,
 } from "./bambi-policy";
+
+describe("탈퇴 파기 보존기간 경계", () => {
+	const now = new Date("2026-08-05T09:00:00.000Z");
+
+	it("보존기간(일)만큼 과거를 경계로 잡는다", () => {
+		expect(resolveWithdrawalPurgeCutoff(now, 30).toISOString()).toBe(
+			"2026-07-06T09:00:00.000Z"
+		);
+	});
+
+	it("보존기간을 줄이면 경계가 현재에 가까워진다", () => {
+		expect(resolveWithdrawalPurgeCutoff(now, 1).getTime()).toBeGreaterThan(
+			resolveWithdrawalPurgeCutoff(now, 30).getTime()
+		);
+	});
+});
 
 describe("bambi policy", () => {
 	it("공개 중 공고를 수정하면 검수 대기로 내린다", () => {
