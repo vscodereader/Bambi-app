@@ -1,5 +1,8 @@
-import { createContext } from "@bambi-app/api/context";
-import { requireChatParticipant } from "@bambi-app/api/services/bambi-authz";
+import { clientIpFromHeaders, createContext } from "@bambi-app/api/context";
+import {
+	findUserBlockBetween,
+	requireChatParticipant,
+} from "@bambi-app/api/services/bambi-authz";
 import {
 	getUnreadMessageCount,
 	markChatMessagesRead,
@@ -12,6 +15,7 @@ import {
 	emitChatListUpdated,
 	emitMessageRead,
 	emitUnreadUpdated,
+	getChatRoomIdFromSocketRoom,
 	getChatRoomSocketRoom,
 	getUserSocketRoom,
 	isParticipantActiveInRoom,
@@ -19,6 +23,10 @@ import {
 	markParticipantInactive,
 	markSocketInactiveEverywhere,
 } from "@bambi-app/api/services/bambi-chat-realtime";
+import {
+	resolveRealtimeConnectRateLimit,
+	takeRateLimit,
+} from "@bambi-app/api/services/rate-limit";
 import { env } from "@bambi-app/env/server";
 import type { FastifyInstance } from "fastify";
 import { Server, type Socket } from "socket.io";
@@ -132,6 +140,37 @@ const getSocketUserId = (socket: BambiChatSocket): string => {
 	return userId;
 };
 
+/**
+ * 소켓 경로의 차단 가드. 예전에는 chatRoom.isBlocked(운영자 조치)만 봐서 사용자 간 차단
+ * (user_block)을 통째로 놓쳤다 — HTTP는 막히는데 소켓으로는 방에 들어가 이벤트를 받고
+ * 읽음 처리까지 밀어 넣을 수 있었다. HTTP 가드(chats.ts)와 같은 조회를 쓴다.
+ */
+const assertChatRoomNotBlocked = async (
+	room: {
+		employerUserId: string;
+		id: string;
+		isBlocked: boolean;
+		jobSeekerUserId: string;
+	},
+	actorUserId: string
+): Promise<void> => {
+	if (room.isBlocked) {
+		throw new ChatRealtimeError("FORBIDDEN", "차단된 채팅방입니다.");
+	}
+
+	const otherUserId =
+		room.employerUserId === actorUserId
+			? room.jobSeekerUserId
+			: room.employerUserId;
+
+	if (await findUserBlockBetween(actorUserId, otherUserId)) {
+		throw new ChatRealtimeError(
+			"FORBIDDEN",
+			"차단된 상대와는 채팅할 수 없습니다."
+		);
+	}
+};
+
 const assertJoinedParticipant = (
 	socket: BambiChatSocket,
 	roomId: string
@@ -151,7 +190,12 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 		ChatRealtimeServerToClientEvents
 	>(fastify.server, {
 		connectionStateRecovery: {
-			maxDisconnectionDuration: 120_000,
+			// 복구 창은 실제 재연결 지연(수 초) 수준이면 충분하다. 길게 잡으면 끊긴 소켓의
+			// 세션(사용자 정보 포함)과 그 사이의 모든 브로드캐스트 패킷을 그만큼 들고 있는다.
+			maxDisconnectionDuration: 30_000,
+			// 복구 소켓도 인증 미들웨어를 다시 태운다(기본값은 건너뛴다). 안 그러면 로그아웃·
+			// 정지된 세션이 복구만으로 되살아난다.
+			skipMiddlewares: false,
 		},
 		cors: {
 			allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
@@ -184,6 +228,20 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 
 	io.use(async (socket, next) => {
 		try {
+			// 핸드셰이크마다 세션 조회가 붙고 연결 하나가 인스턴스 동시 슬롯을 잡으므로,
+			// 세션을 보기 전에 IP 기준으로 "새로 여는 속도"부터 끊는다.
+			const { key, limit, windowMs } = resolveRealtimeConnectRateLimit({
+				clientIp: clientIpFromHeaders(socket.request.headers),
+				scope: "socket",
+			});
+
+			if (!takeRateLimit({ key, limit, now: Date.now(), windowMs })) {
+				throw new ChatRealtimeError(
+					"BAD_REQUEST",
+					"연결 요청이 너무 잦아요. 잠시 후 다시 시도해 주세요."
+				);
+			}
+
 			const context = await createContext(socket.request.headers);
 			const userId = context.session?.user.id;
 
@@ -208,6 +266,24 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 		// 실시간으로 받도록, 연결 시 유저 채널에 자동 입장한다.
 		socket.join(getUserSocketRoom(socket.data.userId));
 
+		// connectionStateRecovery는 socket.io 룸만 되돌리고 앱 레벨 프레즌스는 되살리지
+		// 않는다(끊길 때 disconnect가 이미 지웠다). 그대로 두면 복구된 소켓이 방 이벤트는
+		// 받으면서 타이핑마다 "채팅방에 먼저 입장해 주세요" FORBIDDEN을 맞고, 알림 판정도
+		// "방을 안 보고 있다"로 뒤집힌다.
+		if (socket.recovered) {
+			for (const socketRoom of socket.rooms) {
+				const roomId = getChatRoomIdFromSocketRoom(socketRoom);
+
+				if (roomId) {
+					markParticipantActive({
+						roomId,
+						socketId: socket.id,
+						userId: socket.data.userId,
+					});
+				}
+			}
+		}
+
 		socket.on("chat:join", async (rawPayload, ack) => {
 			try {
 				const { roomId } = roomPayloadSchema.parse(rawPayload);
@@ -216,9 +292,7 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 					socket.data.session
 				);
 
-				if (room.isBlocked) {
-					throw new ChatRealtimeError("FORBIDDEN", "차단된 채팅방입니다.");
-				}
+				await assertChatRoomNotBlocked(room, profile.userId);
 
 				await socket.join(getChatRoomSocketRoom(room.id));
 				markParticipantActive({
@@ -285,9 +359,7 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 					socket.data.session
 				);
 
-				if (room.isBlocked) {
-					throw new ChatRealtimeError("FORBIDDEN", "차단된 채팅방입니다.");
-				}
+				await assertChatRoomNotBlocked(room, profile.userId);
 
 				const readReceipts = await markChatMessagesRead({
 					chatRoomId: room.id,

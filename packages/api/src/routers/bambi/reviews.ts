@@ -14,6 +14,10 @@ import {
 	maskReviewerDisplayName,
 	validateReviewInput,
 } from "../../services/bambi-review-policy";
+import {
+	isWithdrawnAccount,
+	WITHDRAWN_DISPLAY_NAME,
+} from "../../services/bambi-withdrawn-display";
 
 const createReviewInput = z.object({
 	body: z.string().min(1).max(1200),
@@ -37,6 +41,22 @@ const getPolicyErrorMessage = (code: string): string => {
 		default:
 			return "Review body must be at least 20 characters.";
 	}
+};
+
+// 후기 목록에 실을 작성자 표기. 익명 후기가 가장 먼저고, 그다음이 탈퇴다 —
+// 익명으로 남긴 후기는 작성자가 탈퇴했더라도 계속 "익명"이어야 한다.
+const resolveReviewerDisplayName = (row: {
+	deletedAt: Date | null;
+	displayName: null | string;
+	isAnonymous: boolean;
+}): string => {
+	if (row.isAnonymous) {
+		return "익명";
+	}
+	if (isWithdrawnAccount(row)) {
+		return WITHDRAWN_DISPLAY_NAME;
+	}
+	return maskReviewerDisplayName(row.displayName);
 };
 
 export const reviewsRouter = {
@@ -119,7 +139,7 @@ export const reviewsRouter = {
 
 	// 공고 상세용 후기 목록. 회원(활성 bambi 프로필) 전용이며, 게시된(published) 후기만
 	// 서버에서 강제 필터한다. 작성자 식별 정보(reviewerUserId·원본 표시명)는 응답에 넣지 않고,
-	// 익명이면 "익명", 아니면 마스킹된 표시명만 내려준다.
+	// 익명이면 "익명", 탈퇴자면 "탈퇴한 회원", 그 외에는 마스킹된 표시명만 내려준다.
 	listByJobPost: protectedProcedure
 		.input(listByJobPostInput)
 		.handler(async ({ context, input }) => {
@@ -129,6 +149,9 @@ export const reviewsRouter = {
 				.select({
 					body: review.body,
 					createdAt: review.createdAt,
+					// 탈퇴자는 마스킹 대신 탈퇴 문구를 쓴다 — 탈퇴는 마커만 남기므로
+					// 마스킹된 원본("김*")도 실제 닉네임의 일부가 그대로 남는다.
+					deletedAt: user.deletedAt,
 					displayName: user.name,
 					id: review.id,
 					isAnonymous: review.isAnonymous,
@@ -153,9 +176,7 @@ export const reviewsRouter = {
 					createdAt: row.createdAt,
 					id: row.id,
 					rating: row.rating,
-					reviewerDisplayName: row.isAnonymous
-						? "익명"
-						: maskReviewerDisplayName(row.displayName),
+					reviewerDisplayName: resolveReviewerDisplayName(row),
 				})
 			);
 

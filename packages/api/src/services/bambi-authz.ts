@@ -7,6 +7,7 @@ import {
 	type bambiUserRole,
 	chatRoom,
 	employerOrganizationProfile,
+	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, eq, or } from "drizzle-orm";
@@ -199,6 +200,35 @@ export const isEmployerOrganizationVerified = async (
 		.limit(1);
 
 	return row?.status === "verified";
+};
+
+/**
+ * 두 사용자 사이의 차단 행을 방향 구분 없이 찾는다(누가 걸었는지는 blockerUserId로 구분).
+ * 차단은 방 컬럼이 아니라 user_block 행으로만 표현되므로, chatRoom.isBlocked만 보는 경로는
+ * 사용자 간 차단을 통째로 놓친다 — HTTP 가드와 소켓 핸들러가 같은 판정을 쓰게 여기에 둔다.
+ */
+export const findUserBlockBetween = async (
+	userId: string,
+	otherUserId: string
+): Promise<null | { blockerUserId: string }> => {
+	const [block] = await db
+		.select({ blockerUserId: userBlock.blockerUserId })
+		.from(userBlock)
+		.where(
+			or(
+				and(
+					eq(userBlock.blockerUserId, userId),
+					eq(userBlock.blockedUserId, otherUserId)
+				),
+				and(
+					eq(userBlock.blockerUserId, otherUserId),
+					eq(userBlock.blockedUserId, userId)
+				)
+			)
+		)
+		.limit(1);
+
+	return block ?? null;
 };
 
 export const requireChatParticipant = async (

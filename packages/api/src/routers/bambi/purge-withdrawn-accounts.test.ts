@@ -51,9 +51,11 @@ const seedAdmin = async () => {
 const seedWithdrawnUser = async (daysAgo: number) => {
 	const userId = `user_purge_${randomUUID()}`;
 	createdUserIds.push(userId);
+	// 탈퇴 시점에는 표시명 원본이 그대로 남는다(익명화는 표시 계층 담당) — 파기 배치가
+	// 지운다는 것을 확인하려면 시드도 원본 이름이어야 한다.
 	await db.insert(user).values({
 		id: userId,
-		name: "탈퇴한 회원",
+		name: "탈퇴대상",
 		email: `${userId}@bambi.test`,
 		deletedAt: new Date(Date.now() - daysAgo * DAY_MS),
 	});
@@ -89,6 +91,9 @@ describe("purgeWithdrawnAccounts 개인정보 파기 배치", () => {
 
 		const [purged] = await db.select().from(user).where(eq(user.id, oldUserId));
 		expect(purged?.email).toBe(`withdrawn-${oldUserId}@invalid.bambi`);
+		// 표시명·프로필 이미지 파기는 이 배치가 유일한 지점이다.
+		expect(purged?.name).toBe("탈퇴한 회원");
+		expect(purged?.image).toBeNull();
 		expect(purged?.purgedAt).not.toBeNull();
 
 		const [purgedProfile] = await db
@@ -112,6 +117,7 @@ describe("purgeWithdrawnAccounts 개인정보 파기 배치", () => {
 			.from(user)
 			.where(eq(user.id, recentUserId));
 		expect(recent?.email).toBe(`${recentUserId}@bambi.test`);
+		expect(recent?.name).toBe("탈퇴대상");
 		expect(recent?.purgedAt).toBeNull();
 	});
 

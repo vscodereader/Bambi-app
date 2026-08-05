@@ -34,10 +34,14 @@ export const koTranslations: TranslationDictionary = {
 		"보안상 차단된 요청이에요. 다시 시도해 주세요.",
 
 	// 로그인 아이디(username 플러그인)
-	INVALID_USERNAME: "아이디 형식이 올바르지 않아요.",
+	// 이 사전은 after 훅에서 적용되므로 엔드포인트 본문이 던지는 에러(/sign-in/username,
+	// /is-username-available)에만 닿는다. 회원가입·정보수정은 플러그인이 before 훅에서
+	// 던져 여기까지 오지 못하므로, 그쪽 문구는 index.ts의 loginIdGuard가 한국어로 낸다.
+	INVALID_USERNAME:
+		"아이디는 영문·숫자와 밑줄(_)·마침표(.)·하이픈(-)만 쓸 수 있어요.",
 	INVALID_DISPLAY_USERNAME: "표시 아이디 형식이 올바르지 않아요.",
-	USERNAME_TOO_SHORT: "아이디가 너무 짧아요.",
-	USERNAME_TOO_LONG: "아이디가 너무 길어요.",
+	USERNAME_TOO_SHORT: "아이디는 3자 이상 입력해 주세요.",
+	USERNAME_TOO_LONG: "아이디는 30자까지 쓸 수 있어요.",
 	USERNAME_IS_ALREADY_TAKEN:
 		"이미 사용 중인 아이디예요. 다른 아이디를 입력해 주세요.",
 	UNEXPECTED_ERROR: "문제가 생겼어요. 잠시 후 다시 시도해 주세요.",

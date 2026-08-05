@@ -52,6 +52,7 @@ import {
 	hashCommunityPassword,
 	verifyCommunityPassword,
 } from "../../services/bambi-community-password";
+import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
@@ -66,6 +67,7 @@ import {
 	assertTiptapDoc,
 	extractTiptapText,
 } from "../../services/bambi-tiptap-text";
+import { resolveVisibleDisplayName } from "../../services/bambi-withdrawn-display";
 import { takeRateLimit } from "../../services/rate-limit";
 
 const PAGE_SIZE = 20;
@@ -577,6 +579,9 @@ const selectVisibleCommentRows = async (postId: string) => {
 	const rows = await db
 		.select({
 			authorGuestId: communityComment.authorGuestId,
+			// 표시명은 작성 시점 스냅샷이 아니라 계정의 정본이라 탈퇴 여부를 함께 읽는다 —
+			// 탈퇴자는 표시 계층에서 "탈퇴한 회원"으로 바꿔 내보낸다(listComments).
+			authorDeletedAt: user.deletedAt,
 			authorName: user.name,
 			authorRole: communityComment.authorRole,
 			authorUserId: communityComment.authorUserId,
@@ -1342,7 +1347,11 @@ export const communityRouter = {
 				// authorUserId는 canDelete 계산에만 쓰고 응답에서는 제외한다(익명성 보호).
 				return toCommentItems(rows, (row) => ({
 					// 비회원 댓글엔 계정이 없어 leftJoin 이름이 null이다 — 고정 표시명을 세운다.
-					authorName: row.authorName ?? GUEST_DISPLAY_NAME,
+					// 탈퇴한 회원 댓글은 원본 닉네임 대신 탈퇴 문구로 바뀐다.
+					authorName: resolveVisibleDisplayName(
+						{ deletedAt: row.authorDeletedAt, name: row.authorName },
+						GUEST_DISPLAY_NAME
+					),
 					canDelete:
 						row.authorUserId === profile.userId || profile.role === "admin",
 					// 삭제와 달리 수정은 작성자 본인만 가능하다(admin 제외 — getPost.canEdit와 동일 철학).
@@ -1530,6 +1539,26 @@ export const communityRouter = {
 			const admin = await requireAdminProfile(context.session);
 
 			return await db.transaction(async (tx) => {
+				// 이미 삭제된 글에 삭제 요청이 또 오는 경우를 먼저 거른다 — 화면이 버튼을
+				// 감춰도 낡은 목록 캐시나 다른 탭에서 요청이 들어올 수 있다.
+				const [existing] = await tx
+					.select({ status: communityPost.status })
+					.from(communityPost)
+					.where(eq(communityPost.id, input.postId))
+					.limit(1);
+
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "글을 찾을 수 없습니다.",
+					});
+				}
+
+				assertNotAlreadyDeleted({
+					current: existing.status,
+					kind: "post",
+					next: input.status,
+				});
+
 				const [updated] = await tx
 					.update(communityPost)
 					.set({ status: input.status, updatedAt: new Date() })
@@ -1580,6 +1609,12 @@ export const communityRouter = {
 						message: "댓글을 찾을 수 없습니다.",
 					});
 				}
+
+				assertNotAlreadyDeleted({
+					current: existing.status,
+					kind: "comment",
+					next: input.status,
+				});
 
 				const [updated] = await tx
 					.update(communityComment)

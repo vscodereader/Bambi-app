@@ -3,9 +3,10 @@ import { randomUUID } from "node:crypto";
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
 import { eq, inArray } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Context } from "../../context";
+import { resetRateLimits } from "../../services/rate-limit";
 
 dotenv.config({
 	path: "../../apps/server/.env",
@@ -42,6 +43,10 @@ interface ChatFixture {
 	outsiderUserId: string;
 	userIds: string[];
 }
+
+// 발신 계열에 계정 단위 한도가 걸려 있고 카운터가 모듈 전역이라, 한 테스트의 호출이
+// 다음 테스트로 샌다(같은 픽스처 사용자를 여러 번 쓰면 엉뚱하게 429로 깨진다).
+beforeEach(resetRateLimits);
 
 const createContextForUser = (userId: string): Context =>
 	({
@@ -468,14 +473,20 @@ describe("bambi chats router unread state", () => {
 				organizationId: fixture.organizationId,
 			});
 
+			// markRead가 "이 메시지까지"라는 기준선으로 동작하므로 시각이 겹치면 안 된다
+			// (한 INSERT의 defaultNow는 트랜잭션 시각이라 모두 같아진다).
+			const baseTime = Date.now();
 			const messages = await db
 				.insert(chatMessage)
 				.values(
-					["첫 메시지", "두 번째 메시지", "세 번째 메시지"].map((body) => ({
-						body,
-						chatRoomId: fixture.chatRoomId,
-						senderUserId: fixture.employerUserId,
-					}))
+					["첫 메시지", "두 번째 메시지", "세 번째 메시지"].map(
+						(body, index) => ({
+							body,
+							chatRoomId: fixture.chatRoomId,
+							createdAt: new Date(baseTime + index * 1000),
+							senderUserId: fixture.employerUserId,
+						})
+					)
 				)
 				.returning();
 
@@ -486,11 +497,14 @@ describe("bambi chats router unread state", () => {
 			const secondRoomMessages = await db
 				.insert(chatMessage)
 				.values(
-					["다른 방 첫 메시지", "다른 방 두 번째 메시지"].map((body) => ({
-						body,
-						chatRoomId: secondChatRoomId,
-						senderUserId: fixture.employerUserId,
-					}))
+					["다른 방 첫 메시지", "다른 방 두 번째 메시지"].map(
+						(body, index) => ({
+							body,
+							chatRoomId: secondChatRoomId,
+							createdAt: new Date(baseTime + index * 1000),
+							senderUserId: fixture.employerUserId,
+						})
+					)
 				)
 				.returning();
 			if (secondRoomMessages.length !== 2) {
@@ -524,24 +538,32 @@ describe("bambi chats router unread state", () => {
 				context: createContextForUser(fixture.jobSeekerUserId),
 				path: ["bambi", "chats", "markRead"],
 			});
+			// 기준선까지만 읽음 처리한다 — 그 뒤에 온 메시지는 그대로 안 읽음으로 남는다.
 			await markRead({
 				chatRoomId: fixture.chatRoomId,
-				messageIds: [firstMessage.id],
+				upToMessageId: firstMessage.id,
 			});
 
 			expect(await unreadStateForSeeker({})).toEqual({
 				unreadMessageCount: 4,
 			});
+
+			const lastMessage = remainingMessages.at(-1);
+			const lastSecondRoomMessage = secondRoomMessages.at(-1);
+			if (!(lastMessage && lastSecondRoomMessage)) {
+				throw new Error("채팅 메시지 픽스처를 만들지 못했습니다.");
+			}
+
 			await markRead({
 				chatRoomId: fixture.chatRoomId,
-				messageIds: remainingMessages.map(({ id }) => id),
+				upToMessageId: lastMessage.id,
 			});
 			expect(await unreadStateForSeeker({})).toEqual({
 				unreadMessageCount: 2,
 			});
 			await markRead({
 				chatRoomId: secondChatRoomId,
-				messageIds: secondRoomMessages.map(({ id }) => id),
+				upToMessageId: lastSecondRoomMessage.id,
 			});
 			expect(await unreadStateForSeeker({})).toEqual({
 				unreadMessageCount: 0,
@@ -1077,7 +1099,9 @@ describe("bambi chats router soft delete", () => {
 		}
 	});
 
-	it("re-surfaces the room for the seeker after the employer sends a message", async () => {
+	// 나간 쪽 의사를 발신자가 되돌릴 수 없어야 한다. 예전에는 전송이 양쪽 소프트삭제를
+	// 모두 NULL로 만들어, 상대가 나간 방을 계속 되살릴 수 있었다.
+	it("rejects the employer's message once the seeker left the room", async () => {
 		const fixture = await createChatFixture();
 
 		try {
@@ -1093,8 +1117,41 @@ describe("bambi chats router soft delete", () => {
 				context: createContextForUser(fixture.employerUserId),
 				path: ["bambi", "chats", "sendMessage"],
 			});
+
+			await expectOrpcCode(
+				sendMessage({
+					body: "새 메시지입니다.",
+					chatRoomId: fixture.chatRoomId,
+				}),
+				"FORBIDDEN"
+			);
+
+			const seekerRooms = await listMineFor(fixture.jobSeekerUserId)({});
+
+			expect(hasRoom(seekerRooms, fixture.chatRoomId)).toBe(false);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("re-surfaces the room only for the sender who deleted it", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.employerUserId);
+
+			const deleteChatRoom = createProcedureClient(chatsRouter.deleteChatRoom, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "chats", "deleteChatRoom"],
+			});
+			await deleteChatRoom({ chatRoomId: fixture.chatRoomId });
+
+			const sendMessage = createProcedureClient(chatsRouter.sendMessage, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "chats", "sendMessage"],
+			});
 			await sendMessage({
-				body: "새 메시지입니다.",
+				body: "다시 문의드려요.",
 				chatRoomId: fixture.chatRoomId,
 			});
 

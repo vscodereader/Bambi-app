@@ -34,6 +34,7 @@ import {
 	count,
 	desc,
 	eq,
+	ilike,
 	inArray,
 	isNotNull,
 	or,
@@ -47,8 +48,11 @@ import { syncAdvertiserFlagForOrganization } from "../../services/bambi-advertis
 import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
+	requireChatParticipant,
 } from "../../services/bambi-authz";
 import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
+import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
+import { escapeLikePattern } from "../../services/bambi-job-feed";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
@@ -282,6 +286,16 @@ const hardDeleteChatRoomInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
+const CHAT_MODERATION_PAGE_SIZE = 20;
+const CHAT_SEARCH_MAX = 100;
+
+const listAllChatsForModerationInput = z.object({
+	// 조치 대상(삭제·차단·신고)만 좁혀 보는 스위치. 기본은 전체 방이다.
+	onlyFlagged: z.boolean().default(false),
+	page: z.number().int().min(1).default(1),
+	search: z.string().trim().max(CHAT_SEARCH_MAX).default(""),
+});
+
 const contentStatusSchema = z.enum(["published", "hidden", "deleted"]);
 
 const setInquiryStatusByAdminInput = z.object({
@@ -499,6 +513,121 @@ const getReportedChatRoomIds = async (): Promise<Set<string>> => {
 		...directRows.map((row) => row.chatRoomId),
 		...viaMessageRows.map((row) => row.chatRoomId),
 	]);
+};
+
+// ---- 운영자 채팅 목록 공통 조립 ------------------------------------------
+// 플래그 목록(listChatsForModeration)과 전체 목록(listAllChatsForModeration)이 같은
+// 조인·select·매핑을 공유한다. 두 곳에 각각 쿼리를 두면 행 형태가 갈려 화면이 분기해야 한다.
+const chatModerationEmployerUser = alias(user, "chat_moderation_employer_user");
+const chatModerationSeekerUser = alias(user, "chat_moderation_seeker_user");
+
+// 상관 서브쿼리는 타입 파서가 없어 timestamp가 문자열로 온다 → 매핑에서 Date로 되돌린다.
+const chatModerationLastMessageAtSql = sql<string | null>`(
+	select max(${chatMessage.createdAt})
+	from ${chatMessage}
+	where ${chatMessage.chatRoomId} = ${chatRoom.id}
+)`;
+
+const chatModerationSelection = {
+	chatRoomId: chatRoom.id,
+	employerDeletedAt: chatRoom.employerDeletedAt,
+	employerName: chatModerationEmployerUser.name,
+	employerUserId: chatRoom.employerUserId,
+	isBlocked: chatRoom.isBlocked,
+	jobPostTitle: jobPost.title,
+	jobSeekerName: chatModerationSeekerUser.name,
+	jobSeekerUserId: chatRoom.jobSeekerUserId,
+	lastMessageAt: chatModerationLastMessageAtSql,
+	seekerDeletedAt: chatRoom.seekerDeletedAt,
+};
+
+interface ChatModerationRawRow {
+	chatRoomId: string;
+	employerDeletedAt: Date | null;
+	employerName: string;
+	employerUserId: string;
+	isBlocked: boolean;
+	jobPostTitle: string;
+	jobSeekerName: string;
+	jobSeekerUserId: string;
+	lastMessageAt: string | null;
+	seekerDeletedAt: Date | null;
+}
+
+const chatModerationBaseQuery = () =>
+	db
+		.select(chatModerationSelection)
+		.from(chatRoom)
+		.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+		.innerJoin(
+			chatModerationEmployerUser,
+			eq(chatModerationEmployerUser.id, chatRoom.employerUserId)
+		)
+		.innerJoin(
+			chatModerationSeekerUser,
+			eq(chatModerationSeekerUser.id, chatRoom.jobSeekerUserId)
+		);
+
+const chatModerationCountQuery = () =>
+	db
+		.select({ value: count() })
+		.from(chatRoom)
+		.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+		.innerJoin(
+			chatModerationEmployerUser,
+			eq(chatModerationEmployerUser.id, chatRoom.employerUserId)
+		)
+		.innerJoin(
+			chatModerationSeekerUser,
+			eq(chatModerationSeekerUser.id, chatRoom.jobSeekerUserId)
+		);
+
+const toChatModerationRow = (
+	row: ChatModerationRawRow,
+	reportedRoomIds: Set<string>
+) => ({
+	chatRoomId: row.chatRoomId,
+	employerName: row.employerName,
+	employerUserId: row.employerUserId,
+	isBlocked: row.isBlocked,
+	isDeleted: row.seekerDeletedAt !== null || row.employerDeletedAt !== null,
+	isReported: reportedRoomIds.has(row.chatRoomId),
+	jobPostTitle: row.jobPostTitle,
+	jobSeekerName: row.jobSeekerName,
+	jobSeekerUserId: row.jobSeekerUserId,
+	lastMessageAt:
+		row.lastMessageAt === null ? null : new Date(row.lastMessageAt),
+});
+
+// 조치 대상(삭제됨·차단됨·신고됨) 필터. 신고 방이 하나도 없으면 inArray를 붙이지 않는다
+// (빈 배열 inArray는 항상 거짓이라 조건이 통째로 무너진다).
+const buildFlaggedChatCondition = (reportedRoomIds: Set<string>) => {
+	const conditions = [
+		eq(chatRoom.isBlocked, true),
+		isNotNull(chatRoom.seekerDeletedAt),
+		isNotNull(chatRoom.employerDeletedAt),
+	];
+	if (reportedRoomIds.size > 0) {
+		conditions.push(inArray(chatRoom.id, [...reportedRoomIds]));
+	}
+
+	return or(...conditions);
+};
+
+// 참여자 이름·공고 제목 부분 일치. 운영자가 아는 단서가 "누구"와 "어느 공고"뿐이라
+// 이 셋만 훑는다(메시지 본문 검색은 열람 로그 없이 대화 내용을 훑게 되므로 두지 않는다).
+const buildChatSearchCondition = (search: string) => {
+	const keyword = search.trim();
+	if (!keyword) {
+		return;
+	}
+
+	const pattern = `%${escapeLikePattern(keyword)}%`;
+	return or(
+		ilike(chatModerationEmployerUser.name, pattern),
+		ilike(chatModerationSeekerUser.name, pattern),
+		ilike(jobPost.title, pattern)
+	);
 };
 
 const COMMUNITY_BODY_PREVIEW_MAX = 300;
@@ -927,7 +1056,30 @@ export const moderationRouter = {
 				});
 			}
 
+			// 채팅 신고는 그 방의 참여자만 낼 수 있다. 예전에는 "대상이 존재하는가"만 봤는데,
+			// 내 신고 목록(listMyReports)이 신고 대상의 최근 메시지 본문을 함께 돌려주므로
+			// 방 uuid만 알면 남의 대화를 읽는 우회로가 됐다. 비참여자에겐 requireChatParticipant가
+			// NOT_FOUND를 내 존재 여부도 새지 않는다.
 			await assertReportTargetExists(input.targetType, input.targetId);
+
+			if (input.targetType === "chat_room") {
+				await requireChatParticipant(input.targetId, context.session);
+			} else if (input.targetType === "chat_message") {
+				const [reportedMessage] = await db
+					.select({ chatRoomId: chatMessage.chatRoomId })
+					.from(chatMessage)
+					.where(eq(chatMessage.id, input.targetId))
+					.limit(1);
+
+				if (!reportedMessage) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await requireChatParticipant(
+					reportedMessage.chatRoomId,
+					context.session
+				);
+			}
 
 			// 동일 신고자·대상의 중복 신고는 멱등 처리한다(스키마 변경 없이 기존 row 반환).
 			const [existing] = await db
@@ -1212,8 +1364,12 @@ export const moderationRouter = {
 					warningsCount: warningsCountSql,
 					organizationNames: organizationNamesSql,
 					blockedByCount: blockedByCountSql,
-					// 소프트 탈퇴 시각. null이 아니면 탈퇴 처리된 계정이다.
+					// 소프트 탈퇴 시각. null이 아니면 탈퇴 처리된 계정이다. 표시명(name)은
+					// 탈퇴해도 원본 그대로다 — 운영자 화면만 원본을 보고, 일반 사용자 화면은
+					// 표시 계층(bambi-withdrawn-display)이 "탈퇴한 회원"으로 바꾼다.
 					deletedAt: user.deletedAt,
+					// 개인정보 파기 완료 시각. 값이 있으면 탈퇴 복구가 불가능한 계정이다.
+					purgedAt: user.purgedAt,
 					createdAt: user.createdAt,
 					updatedAt: user.updatedAt,
 				})
@@ -2032,12 +2188,42 @@ export const moderationRouter = {
 					throw new ORPCError("NOT_FOUND");
 				}
 
+				// 차단이든 해제든 이 방에 대한 판단은 끝났으므로, 아직 처리 전인 신고를
+				// 조치 완료로 닫는다. 이걸 남겨두면 신고자에게는 방이 계속 숨겨진 채
+				// "조치 대기 중"으로 굳어, 차단을 풀어도 대화가 돌아오지 않는다.
+				const resolvedReports = await tx
+					.update(report)
+					.set({ status: "resolved" })
+					.where(
+						and(
+							inArray(report.status, ["open", "reviewing"]),
+							or(
+								and(
+									eq(report.targetType, "chat_room"),
+									eq(report.targetId, input.chatRoomId)
+								),
+								and(
+									eq(report.targetType, "chat_message"),
+									sql`exists (
+										select 1 from ${chatMessage}
+										where ${chatMessage.id}::text = ${report.targetId}
+											and ${chatMessage.chatRoomId} = ${input.chatRoomId}
+									)`
+								)
+							)
+						)
+					)
+					.returning({ id: report.id });
+
 				await tx.insert(adminModerationAction).values({
 					adminUserId: admin.userId,
 					targetType: "chat_room",
 					targetId: input.chatRoomId,
 					action: `set_blocked:${input.isBlocked}`,
 					reason: input.reason,
+					metadata: {
+						resolvedReportIds: resolvedReports.map(({ id }) => id),
+					},
 				});
 
 				return updated;
@@ -2046,67 +2232,61 @@ export const moderationRouter = {
 
 	// 운영자 채팅 관리 목록: 삭제됨(seeker/employer deletedAt)·차단됨(isBlocked)·신고됨
 	// (chat_room/chat_message 신고가 참조) 방만 노출한다. 플래그 없는 정상 방은 제외.
+	// 페이지네이션·검색이 필요한 전체 목록은 listAllChatsForModeration을 쓴다.
 	listChatsForModeration: adminProcedure.handler(async () => {
 		const reportedRoomIds = await getReportedChatRoomIds();
-		const employerUser = alias(user, "chat_moderation_employer_user");
-		const seekerUser = alias(user, "chat_moderation_seeker_user");
-		// 상관 서브쿼리는 타입 파서가 없어 timestamp가 문자열로 온다 → 매핑에서 Date로 되돌린다.
-		const lastMessageAtSql = sql<string | null>`(
-			select max(${chatMessage.createdAt})
-			from ${chatMessage}
-			where ${chatMessage.chatRoomId} = ${chatRoom.id}
-		)`;
 
-		const conditions = [
-			eq(chatRoom.isBlocked, true),
-			isNotNull(chatRoom.seekerDeletedAt),
-			isNotNull(chatRoom.employerDeletedAt),
-		];
-		if (reportedRoomIds.size > 0) {
-			conditions.push(inArray(chatRoom.id, [...reportedRoomIds]));
-		}
-
-		const rows = await db
-			.select({
-				chatRoomId: chatRoom.id,
-				employerDeletedAt: chatRoom.employerDeletedAt,
-				employerName: employerUser.name,
-				employerUserId: chatRoom.employerUserId,
-				isBlocked: chatRoom.isBlocked,
-				jobPostTitle: jobPost.title,
-				jobSeekerName: seekerUser.name,
-				jobSeekerUserId: chatRoom.jobSeekerUserId,
-				lastMessageAt: lastMessageAtSql,
-				seekerDeletedAt: chatRoom.seekerDeletedAt,
-			})
-			.from(chatRoom)
-			.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
-			.innerJoin(employerUser, eq(employerUser.id, chatRoom.employerUserId))
-			.innerJoin(seekerUser, eq(seekerUser.id, chatRoom.jobSeekerUserId))
-			.where(or(...conditions))
+		const rows = await chatModerationBaseQuery()
+			.where(buildFlaggedChatCondition(reportedRoomIds))
 			.orderBy(desc(chatRoom.updatedAt));
 
-		return rows.map((row) => ({
-			chatRoomId: row.chatRoomId,
-			employerName: row.employerName,
-			employerUserId: row.employerUserId,
-			isBlocked: row.isBlocked,
-			isDeleted: row.seekerDeletedAt !== null || row.employerDeletedAt !== null,
-			isReported: reportedRoomIds.has(row.chatRoomId),
-			jobPostTitle: row.jobPostTitle,
-			jobSeekerName: row.jobSeekerName,
-			jobSeekerUserId: row.jobSeekerUserId,
-			lastMessageAt:
-				row.lastMessageAt === null ? null : new Date(row.lastMessageAt),
-		}));
+		return rows.map((row) => toChatModerationRow(row, reportedRoomIds));
 	}),
+
+	// 운영자 전체 채팅방 목록: 플래그 유무와 무관하게 모든 방을 페이지 단위로 내려준다.
+	// 행 형태는 플래그 목록과 동일(같은 조립 헬퍼)이라 화면이 두 목록을 한 표로 렌더한다.
+	// onlyFlagged로 조치 대상만 좁힐 수 있어, 화면은 이 프로시저 하나만 쓴다.
+	listAllChatsForModeration: adminProcedure
+		.input(listAllChatsForModerationInput)
+		.handler(async ({ input }) => {
+			const reportedRoomIds = await getReportedChatRoomIds();
+			const searchCondition = buildChatSearchCondition(input.search);
+			const flaggedCondition = input.onlyFlagged
+				? buildFlaggedChatCondition(reportedRoomIds)
+				: undefined;
+			const where = and(
+				...[flaggedCondition, searchCondition].filter((condition) => condition)
+			);
+
+			const [totalRow] = await chatModerationCountQuery().where(where);
+
+			const rows = await chatModerationBaseQuery()
+				.where(where)
+				// 방 갱신 시각이 같은 방이 여러 개면 순서가 매번 흔들려 같은 방이 두 페이지에
+				// 걸친다 — id를 마지막 정렬 키로 붙여 고정한다(커뮤니티 목록과 같은 이유).
+				.orderBy(desc(chatRoom.updatedAt), desc(chatRoom.id))
+				.limit(CHAT_MODERATION_PAGE_SIZE)
+				.offset((input.page - 1) * CHAT_MODERATION_PAGE_SIZE);
+
+			return {
+				items: rows.map((row) => toChatModerationRow(row, reportedRoomIds)),
+				page: input.page,
+				pageSize: CHAT_MODERATION_PAGE_SIZE,
+				totalCount: totalRow?.value ?? 0,
+			};
+		}),
 
 	// 운영자 채팅 내역 열람: 특정 방의 전체 메시지를 시간순으로 내려준다. contact_request는
 	// body가 이미 사람이 읽는 문구("연락처 공개를 요청했습니다.")라 별도 렌더 없이 그대로 쓴다.
 	// 첨부는 storageKey를 제외하고 파일명만 노출한다(getChatMessageTargetContext와 동일 원칙).
+	//
+	// 읽기 전용이다 — 읽음 영수증(chat_message_read_receipt)도, 알림도 남기지 않는다.
+	// 운영자가 열어 본 것을 당사자의 "읽음"으로 만들면 대화 상대에게 거짓 신호가 간다.
+	// 대신 열람 사실 자체를 감사 로그에 남긴다(다른 운영 조치와 같은 admin_moderation_action).
 	getChatMessagesForModeration: adminProcedure
 		.input(z.object({ chatRoomId: z.string().uuid() }))
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
 			const employerUser = alias(user, "chat_history_employer_user");
 			const seekerUser = alias(user, "chat_history_seeker_user");
 
@@ -2165,6 +2345,17 @@ export const moderationRouter = {
 				attachmentsByMessage.set(attachment.messageId, list);
 			}
 
+			// 사유 입력이 없는 조치라 reason은 고정 문구다(컬럼이 NOT NULL). 조치와 섞이지
+			// 않도록 action은 view_messages로 구분한다.
+			await db.insert(adminModerationAction).values({
+				action: "view_messages",
+				adminUserId: admin.userId,
+				metadata: { messageCount: messages.length },
+				reason: "운영자 채팅 내역 열람",
+				targetId: input.chatRoomId,
+				targetType: "chat_room",
+			});
+
 			return {
 				...room,
 				messages: messages.map((message) => ({
@@ -2181,7 +2372,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			await db.transaction(async (tx) => {
+			const storageKeys = await db.transaction(async (tx) => {
 				const [room] = await tx
 					.select({ id: chatRoom.id })
 					.from(chatRoom)
@@ -2191,6 +2382,13 @@ export const moderationRouter = {
 				if (!room) {
 					throw new ORPCError("NOT_FOUND");
 				}
+
+				// 행을 지우고 나면 키가 어디에도 남지 않아 사후 회수 배치를 만들 수 없다.
+				// 공고 하드삭제와 같은 순서로, 지우기 전에 먼저 모아 둔다.
+				const attachments = await tx
+					.select({ storageKey: chatAttachment.storageKey })
+					.from(chatAttachment)
+					.where(eq(chatAttachment.chatRoomId, input.chatRoomId));
 
 				await tx
 					.delete(chatMessageReadReceipt)
@@ -2213,7 +2411,13 @@ export const moderationRouter = {
 					targetId: input.chatRoomId,
 					targetType: "chat_room",
 				});
+
+				return attachments.map(({ storageKey }) => storageKey);
 			});
+
+			// 트랜잭션 밖에서 지운다(원격 호출이라 실패해도 삭제 자체를 되돌릴 이유가 없다).
+			// 공고 삭제 경로와 같은 함수를 쓰며, 없는 객체는 무시한다.
+			await deletePublicObjects(storageKeys);
 
 			return { ok: true };
 		}),
@@ -2299,7 +2503,7 @@ export const moderationRouter = {
 
 			await db.transaction(async (tx) => {
 				const [inquiry] = await tx
-					.select({ id: supportInquiry.id })
+					.select({ id: supportInquiry.id, status: supportInquiry.status })
 					.from(supportInquiry)
 					.where(eq(supportInquiry.id, input.inquiryId))
 					.limit(1);
@@ -2309,6 +2513,12 @@ export const moderationRouter = {
 						message: "문의를 찾을 수 없습니다.",
 					});
 				}
+
+				assertNotAlreadyDeleted({
+					current: inquiry.status,
+					kind: "inquiry",
+					next: input.status,
+				});
 
 				await tx
 					.update(supportInquiry)

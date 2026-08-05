@@ -7,6 +7,7 @@ import z from "zod";
 
 import { protectedProcedure } from "../../index";
 import { requireActiveBambiProfile } from "../../services/bambi-authz";
+import { resolveVisibleDisplayName } from "../../services/bambi-withdrawn-display";
 
 // 차단 라이프사이클. 차단은 특정 방이 아니라 상대(사용자)에 대해 적용된다 —
 // throwIfChatBlocked(chats.ts)가 userBlock row를 양방향으로 확인하므로, row 하나가
@@ -59,7 +60,8 @@ export const blocksRouter = {
 			return { ok: true };
 		}),
 
-	// 내가 차단한 사용자 목록. 상대 표시 이름은 user.name(표시명 정본).
+	// 내가 차단한 사용자 목록. 상대 표시 이름은 user.name(표시명 정본)이되, 탈퇴한 상대는
+	// 표시 계층에서 "탈퇴한 회원"으로 바꾼다 — 탈퇴는 마커만 남기므로 원본 닉네임이 그대로 있다.
 	listMine: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
@@ -67,6 +69,7 @@ export const blocksRouter = {
 			.select({
 				blockedUserId: userBlock.blockedUserId,
 				userName: user.name,
+				deletedAt: user.deletedAt,
 				createdAt: userBlock.createdAt,
 			})
 			.from(userBlock)
@@ -76,7 +79,10 @@ export const blocksRouter = {
 
 		return rows.map((row) => ({
 			blockedUserId: row.blockedUserId,
-			name: row.userName ?? "알 수 없는 사용자",
+			name: resolveVisibleDisplayName(
+				{ deletedAt: row.deletedAt, name: row.userName },
+				"알 수 없는 사용자"
+			),
 			createdAt: row.createdAt,
 		}));
 	}),

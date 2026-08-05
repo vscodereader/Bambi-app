@@ -1,5 +1,6 @@
 "use client";
 
+import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
@@ -68,8 +69,11 @@ const getValidationError = (
 	if (values.nickname.trim().length < 2) {
 		return { text: "닉네임을 2자 이상 입력해 주세요.", tone: "error" };
 	}
-	if (values.username.trim().length < 3) {
-		return { text: "아이디를 3자 이상 입력해 주세요.", tone: "error" };
+	// 아이디 규칙은 서버(better-auth username 플러그인)와 같은 공용 함수로 본다 —
+	// 여기서 통과한 값은 서버도 통과한다(규칙이 갈리면 폼은 보내는데 서버가 막는다).
+	const loginIdError = getLoginIdErrorMessage(values.username.trim());
+	if (loginIdError) {
+		return { text: loginIdError, tone: "error" };
 	}
 	if (!values.email.includes("@") || values.password.length < 8) {
 		return {

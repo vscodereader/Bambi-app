@@ -22,6 +22,11 @@ import {
 } from "react";
 import { toast } from "sonner";
 import {
+	COUNTERPART_LEFT_NOTICE,
+	getChatBlockMessage,
+	getChatEntryBlockMessage,
+} from "@/lib/bambi/chat-block";
+import {
 	detectImageSignature,
 	isPdfSignature,
 	isSignatureMismatch,
@@ -80,6 +85,27 @@ const formatPay = (amount?: null | number, unit?: string): string => {
 	return `${unit} ${amount.toLocaleString("ko-KR")}원`;
 };
 
+const getRealtimeErrorMessage = (error: unknown): string =>
+	error instanceof Error ? error.message : "실시간 채팅 연결을 확인해 주세요.";
+
+// 서버 기본 페이지 크기와 같은 값. "이전 메시지 더 보기"를 누를 때마다 이만큼 늘린다.
+const CHAT_MESSAGE_PAGE_SIZE = 50;
+// 서버 입력 상한(MAX_CHAT_MESSAGE_PAGE_SIZE)과 같은 값.
+const CHAT_MESSAGE_MAX_PAGE_SIZE = 500;
+
+// 이전 메시지를 더 부를 수 있는지, 상한에 걸려 더는 못 부르는지.
+const resolveOlderMessageState = ({
+	hasMoreMessages,
+	messageLimit,
+}: {
+	hasMoreMessages: boolean;
+	messageLimit: number;
+}): { canLoadOlder: boolean; hasOlderBeyondLimit: boolean } => ({
+	canLoadOlder: hasMoreMessages && messageLimit < CHAT_MESSAGE_MAX_PAGE_SIZE,
+	hasOlderBeyondLimit:
+		hasMoreMessages && messageLimit >= CHAT_MESSAGE_MAX_PAGE_SIZE,
+});
+
 const ACCEPTED_ATTACHMENT_MIME_TYPES = [
 	"image/jpeg",
 	"image/png",
@@ -136,6 +162,15 @@ const getMutationErrorMessage = (error: Error): string => {
 		return "로그인 후 다시 시도해 주세요.";
 	}
 
+	// 상대가 나간 방·차단·신고 검토 중처럼 서버가 사유를 실어 보낸 FORBIDDEN은
+	// 그 사유를 그대로 보여준다("권한이 없거나 차단된 채팅방입니다."로 뭉뚱그리면
+	// 왜 안 보내지는지 알 길이 없다).
+	const blockMessage = getChatBlockMessage(error);
+
+	if (blockMessage) {
+		return blockMessage;
+	}
+
 	if ("code" in error && error.code === "FORBIDDEN") {
 		return "권한이 없거나 차단된 채팅방입니다.";
 	}
@@ -144,30 +179,23 @@ const getMutationErrorMessage = (error: Error): string => {
 };
 
 /**
- * 서버(chats.throwIfChatBlocked)가 FORBIDDEN에 실어 보내는 차단 사유를 안내 문구로.
- * 사유를 읽어낸 경우에만 문자열을 돌려주고, 그 밖의 오류(비로그인·네트워크 등)는
- * null — 사유를 모르는 채 목록으로 튕기면 원인 파악이 더 어려워지므로 오류 카드에 맡긴다.
+ * 상대가 방을 나가 발신이 막혔을 때 입력창 위에 붙일 안내.
+ * 상대 이름을 알면 누구인지까지 밝혀, 방을 잘못 찾아온 게 아님을 분명히 한다.
  */
-const getChatBlockMessage = (error: unknown): null | string => {
-	const data = (error as { data?: unknown } | null | undefined)?.data as
-		| { chatBlockReason?: unknown; counterpartName?: unknown }
-		| null
-		| undefined;
-	const name =
-		typeof data?.counterpartName === "string" ? data.counterpartName : null;
-
-	switch (data?.chatBlockReason) {
-		case "blocked_by_counterpart":
-			return name ? `${name}님이 차단했어요.` : "차단된 채팅방이에요.";
-		case "blocked_by_me":
-			return name
-				? `${name}님을 차단했어요. 차단 관리에서 해제할 수 있어요.`
-				: "차단된 채팅방이에요.";
-		case "moderation":
-			return "신고에 대한 운영자 조치로 종료된 채팅방이에요.";
-		default:
-			return null;
+const getComposerDisabledNotice = ({
+	counterpartLeft,
+	counterpartName,
+}: {
+	counterpartLeft: boolean;
+	counterpartName: null | string;
+}): null | string => {
+	if (!counterpartLeft) {
+		return null;
 	}
+
+	return counterpartName
+		? `${counterpartName}님이 채팅방을 나가서 더 이상 메시지를 보낼 수 없어요.`
+		: COUNTERPART_LEFT_NOTICE;
 };
 
 const getReviewMutationErrorMessage = (error: Error): string => {
@@ -331,6 +359,7 @@ function ContactRequestMessage({
 	counterpartName,
 	currentUserId,
 	isResponding,
+	isSendBlocked,
 	message,
 	onRespond,
 	viewerIsEmployer,
@@ -338,6 +367,7 @@ function ContactRequestMessage({
 	counterpartName: null | string;
 	currentUserId: string;
 	isResponding: boolean;
+	isSendBlocked: boolean;
 	message: ChatMessageItem;
 	onRespond: (messageId: string, decision: ContactRevealDecision) => void;
 	viewerIsEmployer: boolean;
@@ -354,8 +384,11 @@ function ContactRequestMessage({
 		status: metadata.status,
 		viewerIsEmployer,
 	});
+	// 상대가 방을 나갔으면 응답을 보낼 곳이 없다(서버도 같은 이유로 거절한다).
 	const canRespond =
-		metadata.status === "pending" && metadata.targetUserId === currentUserId;
+		!isSendBlocked &&
+		metadata.status === "pending" &&
+		metadata.targetUserId === currentUserId;
 
 	return (
 		<div className="mx-auto flex w-full max-w-[80%] flex-col gap-3 rounded-lg border border-coral-100 bg-coral-50 px-4 py-3 text-center">
@@ -390,20 +423,28 @@ function ContactRequestMessage({
 }
 
 interface ChatMessageListProps {
+	canLoadOlder: boolean;
 	counterpartName: null | string;
 	currentUserId: string;
+	hasOlderBeyondLimit: boolean;
 	isResponding: boolean;
+	isSendBlocked: boolean;
 	messages: ChatMessageItem[];
+	onLoadOlder: () => void;
 	onRespond: (messageId: string, decision: ContactRevealDecision) => void;
 	typingUserIds: string[];
 	viewerIsEmployer: boolean;
 }
 
 function ChatMessageList({
+	canLoadOlder,
 	counterpartName,
 	currentUserId,
+	hasOlderBeyondLimit,
 	isResponding,
+	isSendBlocked,
 	messages,
+	onLoadOlder,
 	onRespond,
 	typingUserIds,
 	viewerIsEmployer,
@@ -418,12 +459,25 @@ function ChatMessageList({
 
 	return (
 		<MessageGroup>
+			{canLoadOlder ? (
+				<div className="flex justify-center">
+					<UiButton onClick={onLoadOlder} size="sm" variant="outline">
+						이전 메시지 더 보기
+					</UiButton>
+				</div>
+			) : null}
+			{hasOlderBeyondLimit ? (
+				<p className="m-0 text-center text-muted-foreground text-xs">
+					이전 메시지는 최근 {CHAT_MESSAGE_MAX_PAGE_SIZE}건까지 볼 수 있어요.
+				</p>
+			) : null}
 			{messages.map((chatMessage) =>
 				chatMessage.kind === "contact_request" ? (
 					<ContactRequestMessage
 						counterpartName={counterpartName}
 						currentUserId={currentUserId}
 						isResponding={isResponding}
+						isSendBlocked={isSendBlocked}
 						key={chatMessage.id}
 						message={chatMessage}
 						onRespond={onRespond}
@@ -504,6 +558,7 @@ function AttachmentDraftPanel({
 interface ChatComposerProps {
 	attachmentDraft: AttachmentDraft | null;
 	attachmentInputRef: React.RefObject<HTMLInputElement | null>;
+	disabledNotice: null | string;
 	isAttachmentSubmitting: boolean;
 	isComposerSubmitting: boolean;
 	message: string;
@@ -513,9 +568,12 @@ interface ChatComposerProps {
 	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
 
+// disabledNotice가 있으면 발신이 막힌 방(상대가 나감 등)이다. 입력창을 지우지 않고
+// 잠근 채 이유를 위에 붙여, 지난 대화를 계속 읽으면서도 왜 못 보내는지 알게 한다.
 function ChatComposer({
 	attachmentDraft,
 	attachmentInputRef,
+	disabledNotice,
 	isAttachmentSubmitting,
 	isComposerSubmitting,
 	message,
@@ -524,8 +582,15 @@ function ChatComposer({
 	onMessageChange,
 	onSubmit,
 }: ChatComposerProps) {
+	const isDisabled = Boolean(disabledNotice);
+
 	return (
 		<div className="border-border border-t">
+			{disabledNotice ? (
+				<p className="m-0 border-border border-b bg-muted px-4 py-3 text-center font-bold text-muted-foreground text-sm">
+					{disabledNotice}
+				</p>
+			) : null}
 			{attachmentDraft ? (
 				<AttachmentDraftPanel
 					attachmentDraft={attachmentDraft}
@@ -536,12 +601,18 @@ function ChatComposer({
 			<form className="flex items-center gap-2 p-4" onSubmit={onSubmit}>
 				<label
 					aria-label="파일 첨부"
-					className="inline-flex size-11 flex-none cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-muted-foreground focus-within:ring-2 focus-within:ring-coral-100 hover:text-foreground"
+					className={cn(
+						"inline-flex size-11 flex-none items-center justify-center rounded-lg border border-border bg-background text-muted-foreground focus-within:ring-2 focus-within:ring-coral-100",
+						isDisabled
+							? "pointer-events-none opacity-50"
+							: "cursor-pointer hover:text-foreground"
+					)}
 					title="파일 첨부"
 				>
 					<input
 						accept={ACCEPTED_ATTACHMENT_MIME_TYPES.join(",")}
 						className="sr-only"
+						disabled={isDisabled}
 						onChange={onAttachmentChange}
 						ref={attachmentInputRef}
 						type="file"
@@ -554,14 +625,18 @@ function ChatComposer({
 					메시지
 				</label>
 				<input
-					className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
+					className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100 disabled:cursor-not-allowed disabled:opacity-60"
+					disabled={isDisabled}
 					id="chat-message"
 					onChange={(event) => onMessageChange(event.target.value)}
-					placeholder="메시지를 입력하세요"
+					placeholder={
+						isDisabled ? "메시지를 보낼 수 없어요" : "메시지를 입력하세요"
+					}
 					value={message}
 				/>
 				<Button
 					disabled={
+						isDisabled ||
 						isComposerSubmitting ||
 						attachmentDraft?.status === "error" ||
 						!(message.trim() || attachmentDraft)
@@ -711,6 +786,25 @@ function ChatJobPostLink({
 	);
 }
 
+// 헤더 상태 배지. 운영자 차단이 가장 강한 상태고, 그다음이 "상대가 나감"(읽기만 가능)이다.
+function ChatRoomStateBadge({
+	counterpartLeft,
+	isBlocked,
+}: {
+	counterpartLeft: boolean;
+	isBlocked: boolean;
+}) {
+	if (isBlocked) {
+		return <Badge tone="danger">차단됨</Badge>;
+	}
+
+	if (counterpartLeft) {
+		return <Badge tone="neutral">상대방 나감</Badge>;
+	}
+
+	return <Badge tone="success">대화 가능</Badge>;
+}
+
 function ChatCounterpartName({ name }: { name: string | null }) {
 	if (!name) {
 		return null;
@@ -817,8 +911,25 @@ function ChatSafetyNotice({
 	isJobSeeker: boolean;
 	onBlock: () => void;
 }) {
+	const queryClient = useQueryClient();
 	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
 	const [isReportOpen, setIsReportOpen] = useState(false);
+	// 신고한 방은 검토가 끝날 때까지 서버가 감춘다. 창을 닫을 때 방 조회를 다시 돌려
+	// "신고를 검토하고 있는 채팅이에요" 안내와 함께 목록으로 나가게 한다.
+	const handleReportOpenChange = (next: boolean) => {
+		setIsReportOpen(next);
+
+		if (!next) {
+			queryClient
+				.invalidateQueries({
+					// 페이지 크기가 입력에 들어가므로 부분 일치 키를 쓴다.
+					queryKey: orpc.bambi.chats.getById.key({
+						input: { id: chatRoomId },
+					}),
+				})
+				.catch(() => undefined);
+		}
+	};
 
 	return (
 		<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
@@ -859,7 +970,7 @@ function ChatSafetyNotice({
 			/>
 			{isJobSeeker ? (
 				<ReportDialog
-					onOpenChange={setIsReportOpen}
+					onOpenChange={handleReportOpenChange}
 					open={isReportOpen}
 					targetId={chatRoomId}
 					targetType="chat_room"
@@ -922,14 +1033,21 @@ function ContactRevealAction({
 	employerVerifiedPhone,
 	isJobSeeker,
 	isRequesting,
+	isSendBlocked,
 	onRequest,
 }: {
 	employerVerifiedPhone: null | string;
 	isJobSeeker: boolean;
 	isRequesting: boolean;
+	isSendBlocked: boolean;
 	onRequest: () => void;
 }) {
 	if (!isJobSeeker) {
+		// 구직자가 나간 방에서는 요청을 받아 줄 사람이 없다 — 버튼을 아예 감춘다.
+		if (isSendBlocked) {
+			return null;
+		}
+
 		return (
 			<Button
 				block
@@ -996,8 +1114,13 @@ export function SeekerChatRoomResponsive({
 	const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 	const lastReadMessageSignatureRef = useRef("");
 	const typingActiveRef = useRef(false);
+	// 방을 열면 최근 메시지 한 페이지만 받는다. 예전에는 이력 전체가 매 조회마다 다시
+	// 내려왔고, 소켓 이벤트가 뜰 때마다 그 전량 전송이 반복됐다.
+	const [messageLimit, setMessageLimit] = useState(CHAT_MESSAGE_PAGE_SIZE);
 	const roomQuery = useQuery(
-		orpc.bambi.chats.getById.queryOptions({ input: { id: roomId } })
+		orpc.bambi.chats.getById.queryOptions({
+			input: { id: roomId, limit: messageLimit },
+		})
 	);
 	const currentSessionUserId = roomQuery.data?.currentUserId;
 	const reviewListQuery = useQuery({
@@ -1005,8 +1128,10 @@ export function SeekerChatRoomResponsive({
 		enabled: Boolean(currentSessionUserId),
 	});
 	const invalidateRoom = useCallback(async () => {
+		// 페이지 크기가 입력에 들어가므로 부분 일치 키로 무효화한다(더 보기로 늘린
+		// 페이지도 함께 갱신되게).
 		await queryClient.invalidateQueries({
-			queryKey: orpc.bambi.chats.getById.queryKey({ input: { id: roomId } }),
+			queryKey: orpc.bambi.chats.getById.key({ input: { id: roomId } }),
 		});
 		await queryClient.invalidateQueries({
 			queryKey: orpc.bambi.chats.listMine.queryKey(),
@@ -1137,18 +1262,14 @@ export function SeekerChatRoomResponsive({
 			},
 		})
 	);
-	const readCandidateMessageIds = useMemo(() => {
-		if (!roomQuery.data) {
-			return [];
-		}
-
-		return roomQuery.data.messages
-			.filter(
-				(chatMessage) => chatMessage.senderUserId !== currentSessionUserId
-			)
-			.map((chatMessage) => chatMessage.id);
-	}, [currentSessionUserId, roomQuery.data]);
-	const readCandidateMessageIdsSignature = readCandidateMessageIds.join("|");
+	// 읽음 처리는 "여기까지 봤다" 기준선 하나만 보낸다. 예전에는 상대가 보낸 메시지 id를
+	// 전부 실어 보냈는데 서버 상한이 50이라, 51건째부터 요청 전체가 거절돼 읽음영수증이
+	// 한 건도 안 써졌다(안 읽음 뱃지가 영영 안 꺼짐). 기준선은 화면에 올라온 마지막
+	// 메시지다 — 내가 보낸 것이어도 그 앞의 상대 메시지는 본 것이므로 함께 읽음이 된다.
+	const lastVisibleMessageId = useMemo(
+		() => roomQuery.data?.messages.at(-1)?.id ?? null,
+		[roomQuery.data]
+	);
 
 	useEffect(() => {
 		if (!currentSessionUserId) {
@@ -1161,7 +1282,25 @@ export function SeekerChatRoomResponsive({
 				invalidateRoom().catch(() => undefined);
 			}
 		};
-		const handleConnect = () => setRealtimeStatus("connected");
+		// 재연결하면 서버 쪽 방 입장 기록이 사라져 있다(끊길 때 지운다). 다시 들어가지
+		// 않으면 소켓은 붙어 있는데 방 이벤트가 한 건도 안 오고, 타이핑마다 "채팅방에 먼저
+		// 입장해 주세요" 오류만 뜬다 — 상태 배지는 '연결'이라 사용자는 정상으로 오인한다.
+		const joinRoom = () => {
+			joinBambiChatRoom(roomId)
+				.then(() => {
+					setRealtimeStatus("connected");
+				})
+				.catch((error: unknown) => {
+					setRealtimeStatus("offline");
+					setErrorMessage(getRealtimeErrorMessage(error));
+				});
+		};
+		const handleConnect = () => {
+			setRealtimeStatus("connected");
+			joinRoom();
+			// 끊겨 있던 사이의 메시지는 방 소켓룸으로 오지 않았으므로 정본을 다시 읽는다.
+			invalidateRoom().catch(() => undefined);
+		};
 		const handleDisconnect = () => setRealtimeStatus("offline");
 		const handleRealtimeError = (payload: { message: string }) => {
 			setErrorMessage(payload.message);
@@ -1201,17 +1340,13 @@ export function SeekerChatRoomResponsive({
 		socket.on("chat:message:read", refreshIfCurrentRoom);
 		socket.on("chat:room:updated", refreshIfCurrentRoom);
 		socket.on("chat:unread:updated", refreshIfCurrentRoom);
+		// 유저 채널로 오는 신호라 방 소켓룸을 잃은 상태에서도 도착한다 — 방 화면의
+		// 마지막 안전망.
+		socket.on("chat:list:updated", refreshIfCurrentRoom);
 		socket.on("chat:typing:started", handleTypingStarted);
 		socket.on("chat:typing:stopped", handleTypingStopped);
 		setRealtimeStatus(socket.connected ? "connected" : "connecting");
-		joinBambiChatRoom(roomId).catch((error) => {
-			setRealtimeStatus("offline");
-			setErrorMessage(
-				error instanceof Error
-					? error.message
-					: "실시간 채팅 연결을 확인해 주세요."
-			);
-		});
+		joinRoom();
 
 		return () => {
 			socket.off("connect", handleConnect);
@@ -1221,6 +1356,7 @@ export function SeekerChatRoomResponsive({
 			socket.off("chat:message:read", refreshIfCurrentRoom);
 			socket.off("chat:room:updated", refreshIfCurrentRoom);
 			socket.off("chat:unread:updated", refreshIfCurrentRoom);
+			socket.off("chat:list:updated", refreshIfCurrentRoom);
 			socket.off("chat:typing:started", handleTypingStarted);
 			socket.off("chat:typing:stopped", handleTypingStopped);
 			leaveBambiChatRoom(roomId);
@@ -1230,28 +1366,20 @@ export function SeekerChatRoomResponsive({
 	}, [currentSessionUserId, invalidateRoom, roomId]);
 
 	useEffect(() => {
-		if (!(roomQuery.data && readCandidateMessageIdsSignature)) {
+		if (!(roomQuery.data && lastVisibleMessageId)) {
 			return;
 		}
 
-		if (
-			lastReadMessageSignatureRef.current === readCandidateMessageIdsSignature
-		) {
+		if (lastReadMessageSignatureRef.current === lastVisibleMessageId) {
 			return;
 		}
 
-		lastReadMessageSignatureRef.current = readCandidateMessageIdsSignature;
+		lastReadMessageSignatureRef.current = lastVisibleMessageId;
 		markReadMutation.mutate({
 			chatRoomId: roomId,
-			messageIds: readCandidateMessageIds,
+			upToMessageId: lastVisibleMessageId,
 		});
-	}, [
-		markReadMutation,
-		readCandidateMessageIds,
-		readCandidateMessageIdsSignature,
-		roomId,
-		roomQuery.data,
-	]);
+	}, [lastVisibleMessageId, markReadMutation, roomId, roomQuery.data]);
 
 	useEffect(() => {
 		if (!roomQuery.data) {
@@ -1281,9 +1409,10 @@ export function SeekerChatRoomResponsive({
 		return () => window.clearTimeout(timeoutId);
 	}, [message, roomId, roomQuery.data]);
 
-	// 차단·운영자 조치로 막힌 방은 오류 카드로 세워두지 않고 목록으로 돌려보내며
-	// 이유만 토스트로 알린다. id를 고정해 StrictMode 이중 실행에도 토스트가 겹치지 않는다.
-	const chatBlockMessage = getChatBlockMessage(roomQuery.error);
+	// 차단·운영자 조치·내 신고 검토로 막힌 방은 오류 카드로 세워두지 않고 목록으로
+	// 돌려보내며 이유만 토스트로 알린다. id를 고정해 StrictMode 이중 실행에도 토스트가
+	// 겹치지 않는다. 상대가 나간 방은 여기서 걸리지 않는다(읽기는 그대로 열어 둔다).
+	const chatBlockMessage = getChatEntryBlockMessage(roomQuery.error);
 
 	useEffect(() => {
 		if (!chatBlockMessage) {
@@ -1352,15 +1481,25 @@ export function SeekerChatRoomResponsive({
 	}
 
 	const {
+		counterpartLeft,
 		counterpartName,
 		currentUserId,
 		employerVerifiedPhone,
+		hasMoreMessages,
 		jobPost,
 		messages,
 		room,
 		schedules,
 	} = roomQuery.data;
 	const isJobSeeker = currentUserId === room.jobSeekerUserId;
+	const olderMessageState = resolveOlderMessageState({
+		hasMoreMessages,
+		messageLimit,
+	});
+	const composerDisabledNotice = getComposerDisabledNotice({
+		counterpartLeft,
+		counterpartName,
+	});
 	const blockedUserId = resolveBlockedUserId(isJobSeeker, room);
 	const isAttachmentSubmitting =
 		createAttachmentUploadMutation.isPending ||
@@ -1591,9 +1730,10 @@ export function SeekerChatRoomResponsive({
 						</p>
 					</div>
 					<ChatJobPostLink jobPost={jobPost} />
-					<Badge tone={room.isBlocked ? "danger" : "success"}>
-						{room.isBlocked ? "차단됨" : "대화 가능"}
-					</Badge>
+					<ChatRoomStateBadge
+						counterpartLeft={counterpartLeft}
+						isBlocked={room.isBlocked}
+					/>
 					<Badge tone={realtimeStatus === "connected" ? "success" : "neutral"}>
 						{getRealtimeStatusLabel(realtimeStatus)}
 					</Badge>
@@ -1609,10 +1749,21 @@ export function SeekerChatRoomResponsive({
 				/>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
 					<ChatMessageList
+						canLoadOlder={olderMessageState.canLoadOlder}
 						counterpartName={counterpartName}
 						currentUserId={currentUserId}
+						hasOlderBeyondLimit={olderMessageState.hasOlderBeyondLimit}
 						isResponding={respondContactRevealMutation.isPending}
+						isSendBlocked={counterpartLeft}
 						messages={messages}
+						onLoadOlder={() =>
+							setMessageLimit((current) =>
+								Math.min(
+									current + CHAT_MESSAGE_PAGE_SIZE,
+									CHAT_MESSAGE_MAX_PAGE_SIZE
+								)
+							)
+						}
 						onRespond={handleRespondContact}
 						typingUserIds={typingUserIds}
 						viewerIsEmployer={!isJobSeeker}
@@ -1621,6 +1772,7 @@ export function SeekerChatRoomResponsive({
 				<ChatComposer
 					attachmentDraft={attachmentDraft}
 					attachmentInputRef={attachmentInputRef}
+					disabledNotice={composerDisabledNotice}
 					isAttachmentSubmitting={isAttachmentSubmitting}
 					isComposerSubmitting={isComposerSubmitting}
 					message={message}
@@ -1660,7 +1812,8 @@ export function SeekerChatRoomResponsive({
 					</Card>
 					<Card className="rounded-lg" pad="lg" tone="outline">
 						<h2 className="m-0 font-extrabold text-lg">면접 일정</h2>
-						{isJobSeeker ? null : (
+						{/* 구직자에게는 제안 폼이 없고, 구직자가 나간 방에서는 구인자에게도 감춘다. */}
+						{isJobSeeker || counterpartLeft ? null : (
 							<InterviewProposalForm
 								interviewAt={interviewAt}
 								isPending={proposeInterviewMutation.isPending}
@@ -1766,6 +1919,7 @@ export function SeekerChatRoomResponsive({
 							employerVerifiedPhone={employerVerifiedPhone}
 							isJobSeeker={isJobSeeker}
 							isRequesting={requestContactRevealMutation.isPending}
+							isSendBlocked={counterpartLeft}
 							onRequest={() =>
 								requestContactRevealMutation.mutate({ chatRoomId: room.id })
 							}

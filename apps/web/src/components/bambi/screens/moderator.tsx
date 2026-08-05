@@ -2,6 +2,9 @@
 
 // 밤비 — 운영자(Moderator) 콘솔: 검수 큐, 신고 인박스, 사용자 제재.
 
+// 복구 가능 여부 판정은 서버(accountRecovery.restoreWithdrawnAccount)와 같은 순수 함수를
+// 공유한다 — 화면이 규칙을 따로 구현하면 버튼은 열려 있는데 서버가 거절하는 상태가 생긴다.
+import { resolveAccountRestoreDecision } from "@bambi-app/api/services/bambi-account-restore";
 import { Button as UiButton } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
@@ -2393,13 +2396,68 @@ export const legalAdvisorChoice = (
 	return null;
 };
 
+// 탈퇴 계정 안내·복구 블록. 표시명은 탈퇴해도 원본이 그대로라(익명화는 사용자 화면의
+// 표시 계층이 담당) 운영자는 여기서 원래 이름과 탈퇴 상태를 함께 본다.
+// 파기 배치가 지나간 계정은 되살릴 수단이 없어 버튼 대신 사유만 남긴다.
+function UserWithdrawalPanel({
+	item,
+	onRestore,
+}: {
+	item: ManagedUser;
+	onRestore: (id: string, reason: string) => void;
+}) {
+	const [isConfirming, setIsConfirming] = useState(false);
+	const decision = resolveAccountRestoreDecision(item);
+
+	return (
+		<div>
+			<div className="mb-2.5 font-bold text-[13px] text-foreground">
+				탈퇴 계정
+			</div>
+			<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
+				{decision.canRestore
+					? "실수로 탈퇴했거나 운영자 판단으로 되살려야 하는 계정이면 복구할 수 있어요. 복구하면 본인이 기존 아이디로 다시 로그인할 수 있어요. 팀 소속과 내려간 공고는 함께 돌아오지 않아요."
+					: decision.message}
+			</p>
+			<Button
+				block
+				disabled={!decision.canRestore}
+				leftIcon={<CheckIcon />}
+				onClick={() => setIsConfirming(true)}
+				size="lg"
+				variant="secondary"
+			>
+				탈퇴 복구
+			</Button>
+			{isConfirming ? (
+				<ReasonConfirmSheet
+					confirmLabel="탈퇴 복구"
+					defaultReason="본인 요청으로 탈퇴를 되돌렸어요"
+					description={`${item.name} 님의 계정을 다시 이용 가능한 상태로 되돌려요`}
+					onCancel={() => setIsConfirming(false)}
+					onConfirm={(reason) => {
+						onRestore(item.id, reason);
+						setIsConfirming(false);
+					}}
+					positioning="absolute"
+					reasonFieldId={`user-restore-reason-${item.id}`}
+					reasonLabel="복구 사유"
+					title="탈퇴 복구"
+				/>
+			) : null}
+		</div>
+	);
+}
+
 export function UserDetail({
 	item,
 	onBack,
+	onRestore,
 	onSanction,
 }: {
 	item: ManagedUser;
 	onBack: () => void;
+	onRestore: (id: string, reason: string) => void;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
 }) {
 	const c = STATUS_CONF[item.status];
@@ -2467,6 +2525,9 @@ export function UserDetail({
 						{item.note}
 					</span>
 				</div>
+				{item.deletedAt ? (
+					<UserWithdrawalPanel item={item} onRestore={onRestore} />
+				) : null}
 				{item.status === "active" ? null : (
 					<div>
 						<div className="mb-2.5 font-bold text-[13px] text-foreground">
@@ -2933,6 +2994,14 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 		setDetail(null);
 		flash(label);
 	};
+	// 프리뷰(목업) 콘솔은 API를 부르지 않고 로컬 상태에서 탈퇴 마커만 지운다.
+	const restoreAccount = (id: string) => {
+		setUsers((u) =>
+			u.map((x) => (x.id === id ? { ...x, deletedAt: null } : x))
+		);
+		setDetail(null);
+		flash("탈퇴를 복구했어요");
+	};
 
 	const bulkAction = (
 		_scope: ModerationBulkScope,
@@ -2981,6 +3050,7 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 			<UserDetail
 				item={detail.item}
 				onBack={() => setDetail(null)}
+				onRestore={restoreAccount}
 				onSanction={sanction}
 			/>
 		);

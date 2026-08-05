@@ -79,6 +79,9 @@ interface ModContextValue {
 	reports: Report[];
 	resolveQueue: (id: string, action: QueueVerdict, reason?: string) => void;
 	resolveReport: (id: string, action: "dismiss" | "act") => void;
+	// 탈퇴 복구(deletedAt 해제). 파기 완료 계정 등 서버 거절 사유를 그대로 띄워야 해서
+	// 성공 여부만 돌려준다.
+	restoreAccount: (id: string, reason: string) => Promise<boolean>;
 	// 적용 성공 여부를 돌려준다 — 호출자가 성공했을 때만 목록으로 되돌아갈 수 있게.
 	sanction: (id: string, status: UserStatus, label: string) => Promise<boolean>;
 	selected: string[];
@@ -400,6 +403,10 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	const setUserRoleMutation = useMutation(
 		orpc.bambi.moderation.setUserRole.mutationOptions()
 	);
+	// 탈퇴 복구는 계정 복구 라우터에 있다(제재가 아니라 계정 생명주기 조치라서).
+	const restoreWithdrawnAccountMutation = useMutation(
+		orpc.bambi.accountRecovery.restoreWithdrawnAccount.mutationOptions()
+	);
 	// 커뮤니티 대상(글·댓글) 운영자 상태 변경 프로시저.
 	const setPostStatusByAdminMutation = useMutation(
 		orpc.bambi.community.setPostStatusByAdmin.mutationOptions()
@@ -506,6 +513,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				? "휴대폰 인증 완료"
 				: "휴대폰 인증이 필요합니다.",
 			organizationNames: item.organizationNames,
+			purgedAt: item.purgedAt ? new Date(item.purgedAt) : null,
 			reports: item.reportsCount,
 			role: userRoleLabel(item.role),
 			roleKey: item.role,
@@ -662,6 +670,27 @@ export function ModProvider({ children }: { children: ReactNode }) {
 					? "법률자문으로 지정했어요"
 					: "법률자문 지정을 해제했어요"
 			);
+			return true;
+		};
+		// 탈퇴 복구. 파기가 끝난 계정 등 서버가 거절하는 사유가 여러 갈래라 메시지를
+		// 그대로 띄우고, 성공 여부만 돌려준다(화면 이동은 호출자가 정한다).
+		const restoreAccount = async (id: string, reason: string) => {
+			try {
+				await restoreWithdrawnAccountMutation.mutateAsync({
+					reason,
+					targetUserId: id,
+				});
+			} catch (error) {
+				flash(
+					error instanceof Error && error.message
+						? error.message
+						: "탈퇴를 복구하지 못했어요. 다시 시도해 주세요."
+				);
+				return false;
+			}
+
+			await invalidateUsers();
+			flash("탈퇴를 복구했어요. 본인이 기존 아이디로 다시 로그인할 수 있어요");
 			return true;
 		};
 		// 커뮤니티 대상(글·댓글) 콘텐츠 조치. 신고 상태 변경(resolveReport)과는 별개로,
@@ -857,6 +886,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			clearSelection,
 			resolveQueue,
 			resolveReport,
+			restoreAccount,
 			sanction,
 			setLegalAdvisor,
 			moderateCommunityTarget,
@@ -874,6 +904,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		moderationUsersQuery.isError,
 		moderationUsersQuery.isPending,
 		queryClient,
+		restoreWithdrawnAccountMutation,
 		selected,
 		setChatRoomBlockedMutation,
 		setCommentStatusByAdminMutation,

@@ -122,6 +122,32 @@ const buildLocalObjectUrl = ({
 	return `/bambi/local-chat-attachments?${params.toString()}`;
 };
 
+const CHAT_ATTACHMENT_KEY_ROOT = "bambi-chat";
+
+const buildChatAttachmentKeyPrefix = ({
+	chatRoomId,
+	userId,
+}: {
+	chatRoomId: string;
+	userId: string;
+}): string => `${CHAT_ATTACHMENT_KEY_ROOT}/${chatRoomId}/${userId}/`;
+
+// 공고·본문 미디어와 같은 이유의 소유권 가드. 첨부 메시지는 클라이언트가 보낸 storageKey를
+// 그대로 행에 심으므로, 발급 시점 prefix 규칙을 다시 확인하지 않으면 업로드 없이 남의 방
+// 첨부 키나 버킷의 임의 객체를 자기 방 화면에 띄울 수 있다.
+export const isOwnedChatAttachmentKey = ({
+	chatRoomId,
+	storageKey,
+	userId,
+}: {
+	chatRoomId: string;
+	storageKey: string;
+	userId: string;
+}): boolean =>
+	storageKey.startsWith(buildChatAttachmentKeyPrefix({ chatRoomId, userId })) &&
+	// 상위 경로 탈출(`..`)이 섞이면 prefix를 통과해도 다른 객체를 가리킬 수 있다.
+	!storageKey.includes("..");
+
 // 공고·본문 미디어와 같은 흐름: 버킷이 있으면 서명 URL을 내려 브라우저가 GCS로 직접 PUT 한다.
 // 이 분기가 없던 동안 채팅 첨부만 항상 local:// 플레이스홀더를 받아 파일이 어디에도 올라가지
 // 않았고, 상대는 원본 대신 아래 buildLocalObjectUrl의 안내 이미지를 봤다.
@@ -134,12 +160,10 @@ export const createChatAttachmentUploadIntent = async ({
 	mimeType,
 }: ChatAttachmentStorageInput): Promise<ChatAttachmentUploadIntent> => {
 	const storageFileName = normalizeFileNameForStorage(fileName);
-	const storageKey = [
-		"bambi-chat",
+	const storageKey = `${buildChatAttachmentKeyPrefix({
 		chatRoomId,
-		createdByUserId,
-		`${randomUUID()}-${storageFileName}`,
-	].join("/");
+		userId: createdByUserId,
+	})}${randomUUID()}-${storageFileName}`;
 
 	return {
 		byteSize,
