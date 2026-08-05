@@ -28,13 +28,17 @@ import {
 	rateLimitedPublicProcedure,
 } from "../../index";
 import { hasActiveAdExposure } from "../../services/bambi-advertiser";
-import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
+import {
+	isEmployerLikeRole,
+	isEmployerOrganizationVerified,
+} from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import {
 	resolveVerifiedIdentity,
 	type VerifiedIdentity,
 } from "../../services/bambi-identity";
+import { recordIdentityVerification } from "../../services/bambi-identity-log";
 import {
 	assertIdentityVerificationUsable,
 	consumeIdentityVerification,
@@ -244,7 +248,7 @@ const requireEmployerBambiProfile = async (userId: string) => {
 		.where(eq(bambiProfile.userId, userId))
 		.limit(1);
 
-	if (!profile || profile.role === "job_seeker") {
+	if (!(profile && isEmployerLikeRole(profile.role))) {
 		throw new ORPCError("FORBIDDEN", {
 			message: "Employer Bambi profile is required.",
 		});
@@ -336,6 +340,12 @@ const createBambiProfile = async ({
 		// 인증 건의 최종 소비 지점. 여기를 지나면 같은 ID로는 다시 가입할 수 없다
 		// (앞선 checkIdentityForSignup·/api/guest는 검증만 하고 소진시키지 않는다).
 		await consumeIdentityVerification(identityVerificationId);
+		// 비회원으로 먼저 인증했다면 그 행의 구분을 가입 역할로 덮어쓴다.
+		await recordIdentityVerification({
+			identity,
+			identityVerificationId,
+			kind: role,
+		});
 	}
 
 	const [createdProfile] = await db
@@ -701,7 +711,13 @@ export const onboardingRouter = {
 	// 끝난 뒤이고 포트원 단건조회는 무료라, 임의 ID로 두드려도 얻을 게 없다
 	// (identityVerificationId는 UUID라 추측이 불가능하다).
 	checkIdentityForSignup: publicProcedure
-		.input(phoneVerificationInput)
+		.input(
+			// 비회원(수다방 게스트) 흐름에서 온 호출만 구분을 guest로 남긴다. 가입 폼의
+			// 사전확인 호출은 구분을 아직 모르므로 플래그 없이 부른다.
+			phoneVerificationInput.extend({
+				source: z.literal("guest").optional(),
+			})
+		)
 		.handler(async ({ input }) => {
 			const apiSecret = env.PORTONE_API_SECRET;
 			if (!apiSecret) {
@@ -717,6 +733,11 @@ export const onboardingRouter = {
 				input.identityVerificationId,
 				identityChannelOptions
 			);
+			await recordIdentityVerification({
+				identity,
+				identityVerificationId: input.identityVerificationId,
+				kind: input.source,
+			});
 			return {
 				gender: identity.gender,
 				hasAccount: await findIdentityCollision(identity),
@@ -737,7 +758,7 @@ export const onboardingRouter = {
 			}
 			const userId = context.session.user.id;
 			const [existingProfile] = await db
-				.select({ gender: bambiProfile.gender })
+				.select({ gender: bambiProfile.gender, role: bambiProfile.role })
 				.from(bambiProfile)
 				.where(eq(bambiProfile.userId, userId))
 				.limit(1);
@@ -757,6 +778,11 @@ export const onboardingRouter = {
 			}
 			// 재인증의 최종 소비 지점 — 같은 인증 건으로 두 번 번호를 갈아끼울 수 없다.
 			await consumeIdentityVerification(input.identityVerificationId);
+			await recordIdentityVerification({
+				identity,
+				identityVerificationId: input.identityVerificationId,
+				kind: existingProfile.role,
+			});
 
 			const [updatedProfile] = await db
 				.update(bambiProfile)

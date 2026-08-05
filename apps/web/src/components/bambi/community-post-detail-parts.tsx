@@ -3,6 +3,11 @@
 // 글 상세 화면의 리프 서브컴포넌트 모음. 본문 뷰어·헤더·추천/신고/수정/삭제 액션·
 // 잠긴 글 게이트·댓글 목록/작성 폼을 각자 낮은 복잡도로 분리한다.
 
+import {
+	Alert,
+	AlertDescription,
+	AlertTitle,
+} from "@bambi-app/ui/components/alert";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -33,6 +38,7 @@ import {
 	LockIcon,
 	MegaphoneIcon,
 	PencilIcon,
+	PhoneIcon,
 	ThumbsUpIcon,
 	Trash2Icon,
 } from "lucide-react";
@@ -59,7 +65,14 @@ import { orpc } from "@/utils/orpc";
 const PASSWORD_MIN = 4;
 const DETAILS_MAX = 1000;
 
-export type CommunityAuthorRole = "admin" | "employer" | "job_seeker";
+// 비회원(guest)도 글·댓글을 남길 수 있어 작성자 role 스냅샷에 포함된다. 화면 표시는
+// 항상 라벨 맵(communityAuthorRoleLabel)을 거치고, 여기서는 배지 분기에만 쓴다.
+export type CommunityAuthorRole =
+	| "admin"
+	| "employer"
+	| "guest"
+	| "job_seeker"
+	| "legal_advisor";
 
 // 상세 화면이 소비하는 글 필드(잠금 해제 상태).
 export interface CommunityPostDetail {
@@ -70,6 +83,8 @@ export interface CommunityPostDetail {
 	canDelete: boolean;
 	canEdit: boolean;
 	commentCount: number;
+	// 법률 자문 글에만 실린다. 잠금을 연 열람자(작성자·운영자·법률자문)에게만 서버가 내려준다.
+	contactPhone: string | null;
 	createdAt: Date | string;
 	id: string;
 	isLiked: boolean;
@@ -170,6 +185,17 @@ export function PostHeader({ post }: { post: CommunityPostDetail }) {
 					{post.likeCount}
 				</span>
 			</div>
+			{/* 연락처는 서버가 잠금을 연 열람자에게만 실어 보낸다 — 여기 도달했다는 건 볼 권한이
+			    있다는 뜻이라 화면에서 다시 판정하지 않는다. */}
+			{post.contactPhone ? (
+				<Alert>
+					<PhoneIcon />
+					<AlertTitle>연락처 {post.contactPhone}</AlertTitle>
+					<AlertDescription>
+						작성자 본인과 운영자·법률자문에게만 보이는 번호예요.
+					</AlertDescription>
+				</Alert>
+			) : null}
 		</div>
 	);
 }
@@ -501,6 +527,11 @@ function CommentRow({
 					{comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
 					{comment.authorRole === "employer" ? (
 						<Badge variant="secondary">업소</Badge>
+					) : null}
+					{/* 법률 자문 게시판의 답변인지 한눈에 보이게 — 질문자와 자문 답변이 섞이면
+					    어느 쪽이 전문가 답변인지 알 수 없다. */}
+					{comment.authorRole === "legal_advisor" ? (
+						<Badge variant="dark">법률자문</Badge>
 					) : null}
 				</span>
 				{isEditing ? null : (

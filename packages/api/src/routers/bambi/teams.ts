@@ -24,6 +24,7 @@ import z from "zod";
 
 import { protectedProcedure } from "../../index";
 import {
+	isEmployerLikeRole,
 	isEmployerOrganizationVerified,
 	requireActiveBambiProfile,
 } from "../../services/bambi-authz";
@@ -116,7 +117,7 @@ const requireEmployerLikeProfile = async (
 ) => {
 	const profile = await requireActiveBambiProfile(session);
 
-	if (profile.role === "job_seeker") {
+	if (!isEmployerLikeRole(profile.role)) {
 		throw forbidden("Employer Bambi profile is required.");
 	}
 

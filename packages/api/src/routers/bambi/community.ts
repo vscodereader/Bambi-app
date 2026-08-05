@@ -18,7 +18,7 @@ import {
 	gte,
 	ilike,
 	isNull,
-	ne,
+	notInArray,
 	or,
 	type SQL,
 	sql,
@@ -33,8 +33,20 @@ import {
 } from "../../services/bambi-authz";
 import { assertNoBannedWords } from "../../services/bambi-banned-words";
 import {
+	assertGuestOwnership,
+	assertGuestPostAccess,
+	assertGuestWritableBoard,
+	assertLegalAdvisorBoardScope,
+	type CommunityActor,
+	canBypassLock,
+	findCommunityActor,
 	findCommunityMember,
+	GUEST_LOCKED_ERROR,
+	LEGAL_BOARD,
 	requireCommunityMember,
+	requireGuestPassword,
+	resolveCommunityActor,
+	resolveLockedForBoard,
 } from "../../services/bambi-community-authz";
 import {
 	hashCommunityPassword,
@@ -70,6 +82,7 @@ const communityWritableBoardSchema = z.enum([
 	"work_talk",
 	"market",
 	"notice",
+	"legal",
 ]);
 const communityBoardSchema = z.enum([
 	"best",
@@ -77,6 +90,7 @@ const communityBoardSchema = z.enum([
 	"work_talk",
 	"market",
 	"notice",
+	"legal",
 ]);
 
 type CommunityBoardInput = z.infer<typeof communityBoardSchema>;
@@ -127,6 +141,8 @@ const createPostInput = z.object({
 	authorName: z.string().trim().min(1).max(30),
 	board: communityWritableBoardSchema,
 	body: z.string().min(2).max(BODY_MAX),
+	// 법률 자문 글의 선택 입력 연락처. 다른 게시판에서는 받지 않는다(아래 assertContactPhoneBoard).
+	contactPhone: z.string().trim().max(20).optional(),
 	isLocked: z.boolean().default(false),
 	isPromotion: z.boolean().default(false),
 	// 비밀번호는 비밀글(잠금)에만 필요하다 — 잠그지 않으면 생략하고 등록할 수 있다.
@@ -155,16 +171,37 @@ const MEDIA_UPLOAD_ERROR_MESSAGES: Record<
 };
 
 const LOCKED_PASSWORD_ERROR = "비밀글은 4자 이상의 비밀번호가 필요합니다.";
+const CONTACT_PHONE_BOARD_ERROR =
+	"연락처는 무료 법률 자문 게시판에만 남길 수 있습니다.";
 
-// 도배 방지 — 사용자당 1분 1회. 판정 축이 IP가 아니라 계정이라 미들웨어
-// (rateLimitedPublicProcedure)가 아니라 핸들러에서 세션 userId로 버킷을 잡는다.
-const CREATE_POST_WINDOW_MS = 60 * 1000;
+// 연락처는 법률 자문 글 전용 필드다. 다른 게시판에 실려 오면 조용히 버리지 않고 거부한다 —
+// 사용자가 남긴 연락처가 저장되지 않은 채 성공 응답이 나가면 안 된다(광고글 role 규칙과 같은 축).
+const assertContactPhoneBoard = (
+	board: string,
+	contactPhone: string | undefined
+): void => {
+	if (contactPhone && board !== LEGAL_BOARD) {
+		throw new ORPCError("BAD_REQUEST", { message: CONTACT_PHONE_BOARD_ERROR });
+	}
+};
+
+// 도배 방지 — 회원은 계정당, 비회원은 gid·IP당 1분 창. 판정 축이 IP만이 아니라 계정·
+// 신원이라 미들웨어(rateLimitedPublicProcedure)가 아니라 핸들러에서 버킷을 잡는다.
+const WRITE_WINDOW_MS = 60 * 1000;
 const CREATE_POST_RATE_LIMIT_ERROR =
 	"글은 1분에 한 번만 등록할 수 있어요. 잠시 후 다시 시도해 주세요.";
+const GUEST_COMMENT_LIMIT = 5;
+const GUEST_COMMENT_RATE_LIMIT_ERROR =
+	"댓글을 너무 빠르게 남기고 있어요. 잠시 후 다시 시도해 주세요.";
+
+// 댓글에는 글과 달리 표시명 컬럼이 없다(회원은 계정 이름을 join한다) — 비회원 댓글은
+// 이 고정 표시명으로 나간다.
+const GUEST_DISPLAY_NAME = "비회원";
 
 const updatePostInput = postIdInput.extend({
 	authorName: z.string().trim().min(1).max(30),
 	body: z.string().min(2).max(BODY_MAX),
+	contactPhone: z.string().trim().max(20).optional(),
 	isLocked: z.boolean(),
 	isPromotion: z.boolean(),
 	password: z.string().trim().max(30).optional(),
@@ -182,6 +219,9 @@ const postReadInput = postIdInput.extend({
 	password: z.string().trim().max(30).optional(),
 });
 
+// password는 액터에 따라 뜻이 갈린다: 회원은 잠긴 글을 여는 열쇠, 비회원은 자기 댓글의
+// 소유권 증명용 비밀번호다. 비회원은 잠긴 글에 댓글을 달 수 없어(공개 보드 한정) 두 뜻이
+// 한 요청에서 겹치지 않는다.
 const createCommentInput = postIdInput.extend({
 	body: z.string().trim().min(1).max(1000),
 	parentCommentId: z.string().uuid().optional(),
@@ -190,11 +230,14 @@ const createCommentInput = postIdInput.extend({
 
 const deleteCommentInput = z.object({
 	commentId: z.string().uuid(),
+	// 비회원 댓글 소유권 증명. 회원은 세션으로 증명하므로 보내지 않는다.
+	password: z.string().trim().max(30).optional(),
 });
 
 const updateCommentInput = z.object({
 	body: z.string().trim().min(1).max(1000),
 	commentId: z.string().uuid(),
+	password: z.string().trim().max(30).optional(),
 });
 
 // 운영자 조치 — 작성자·비밀번호와 무관하게 admin만 글·댓글 상태를 전환한다(published/hidden/deleted).
@@ -214,17 +257,15 @@ const setCommentStatusByAdminInput = z.object({
 	status: communityAdminStatusSchema,
 });
 
-// profile null은 미자격·비로그인 열람(overview public 경로) — 잠금 우회 없음.
-const canBypassLock = (
-	post: { authorUserId: string },
-	profile: BambiAccessProfile | null
-): boolean =>
-	profile !== null &&
-	(post.authorUserId === profile.userId || profile.role === "admin");
-
+// profile null은 잠금 우회가 없는 열람자(비회원 게스트) — 비밀글은 비밀번호로만 열린다.
 export const requirePostReadAccess = (
-	post: { authorUserId: string; isLocked: boolean; passwordHash: string },
-	profile: BambiAccessProfile,
+	post: {
+		authorUserId: string | null;
+		board: string;
+		isLocked: boolean;
+		passwordHash: string;
+	},
+	profile: BambiAccessProfile | null,
 	password?: string
 ): void => {
 	if (!post.isLocked || canBypassLock(post, profile)) {
@@ -239,7 +280,12 @@ export const requirePostReadAccess = (
 };
 
 const maskLockedSummaries = <
-	T extends { authorUserId: string; isLocked: boolean; title: string },
+	T extends {
+		authorUserId: string | null;
+		board: string;
+		isLocked: boolean;
+		title: string;
+	},
 >(
 	items: T[],
 	profile: BambiAccessProfile | null
@@ -328,7 +374,8 @@ const crawledTopicFeedFilters = (windowStart: Date): SQL[] => [
 const bestWindowStart = () => new Date(Date.now() - BEST_WINDOW_DAYS * DAY_MS);
 
 // 베스트글은 저장 게시판이 아니라 최근 30일 추천 상위 큐레이션 가상 게시판이다.
-// 공지사항(notice)은 베스트 큐레이션에서 제외한다. windowStart(30일 컷오프)는
+// 공지사항(notice)과 법률 자문(legal)은 베스트 큐레이션에서 제외한다 — 법률 자문 글은
+// 전부 잠금이라 베스트에 올라와도 마스킹 제목만 자리를 차지한다. windowStart(30일 컷오프)는
 // 목록·count 쿼리 간 밀리초 오차로 1-off가 나지 않도록 핸들러에서 한 번 계산해
 // 동일 값으로 전달한다.
 const buildBoardFilters = (
@@ -340,7 +387,7 @@ const buildBoardFilters = (
 			eq(communityPost.status, "published"),
 			gte(communityPost.likeCount, BEST_MIN_LIKES),
 			gte(communityPost.createdAt, windowStart),
-			ne(communityPost.board, "notice"),
+			notInArray(communityPost.board, ["notice", LEGAL_BOARD]),
 		];
 	}
 	return [
@@ -374,16 +421,17 @@ const buildListFilters = (
 // ponytail: ilike 순차 스캔 — 글 수가 커지면 pg_trgm 인덱스나 tsvector로.
 const buildNarrowFilters = ({
 	mine,
+	owner,
 	q,
-	userId,
 }: {
 	mine: boolean;
+	// "내 글만 보기"의 판정 축. 액터마다 다른 컬럼이라 조건을 통째로 받는다.
+	owner: SQL;
 	q?: string;
-	userId: string;
 }): SQL[] => {
 	const filters: SQL[] = [];
 	if (mine) {
-		filters.push(eq(communityPost.authorUserId, userId));
+		filters.push(owner);
 	}
 	if (q) {
 		const pattern = `%${escapeLikePattern(q)}%`;
@@ -528,6 +576,7 @@ const readLikeCount = async (
 const selectVisibleCommentRows = async (postId: string) => {
 	const rows = await db
 		.select({
+			authorGuestId: communityComment.authorGuestId,
 			authorName: user.name,
 			authorRole: communityComment.authorRole,
 			authorUserId: communityComment.authorUserId,
@@ -570,18 +619,111 @@ const findPublishedPost = async (postId: string) => {
 	return post;
 };
 
+// 작성 시점 계정 유형 스냅샷. 비회원은 계정이 없으므로 "guest"로 기록한다 — 공지·광고글
+// 같은 역할 규칙이 회원·비회원 한 축에서 판정된다.
+const actorRole = (
+	actor: CommunityActor
+): CommunityPostColumns["authorRole"] =>
+	actor.kind === "member" ? actor.profile.role : "guest";
+
+const actorUserId = (actor: CommunityActor): string | null =>
+	actor.kind === "member" ? actor.profile.userId : null;
+
+const actorGuestId = (actor: CommunityActor): string | null =>
+	actor.kind === "guest" ? actor.gid : null;
+
+// 버킷이 여러 개면 전부 통과해야 한다 — 비회원은 gid·IP 이중이다. 쿠키를 지우면 gid가
+// 새로 발급되므로 IP 축이 없으면 사실상 무제한이고, IP만 세면 공용망 사용자가 서로를 막는다.
+const assertWriteRateLimit = ({
+	keys,
+	limit,
+	message,
+}: {
+	keys: string[];
+	limit: number;
+	message: string;
+}): void => {
+	const now = Date.now();
+	for (const key of keys) {
+		if (!takeRateLimit({ key, limit, now, windowMs: WRITE_WINDOW_MS })) {
+			throw new ORPCError("TOO_MANY_REQUESTS", { message });
+		}
+	}
+};
+
+// 비회원 쓰기 버킷 키. 액션마다 따로 세고(글 1분 1회, 댓글 1분 5회) gid·IP 두 축을 모두 건다.
+const guestWriteKeys = (
+	action: string,
+	gid: string,
+	clientIp: string | undefined
+): string[] => [
+	`community.${action}:guest:${gid}`,
+	`community.${action}:ip:${clientIp ?? "unknown"}`,
+];
+
+type CommentRow = Awaited<ReturnType<typeof selectVisibleCommentRows>>[number];
+
+// 댓글 응답 모양은 회원·공개 경로가 공유하고, 작성자 표시·권한만 경로별 정책으로 갈린다
+// (공개 경로는 색인되는 페이지라 회원 계정명을 싣지 않는다).
+const toCommentItems = (
+	rows: CommentRow[],
+	resolve: (row: CommentRow) => {
+		authorName: string | null;
+		canDelete: boolean;
+		canEdit: boolean;
+	}
+) =>
+	rows.map((row) => {
+		if (row.status !== "published") {
+			return {
+				authorName: null,
+				authorRole: null,
+				body: "",
+				canDelete: false,
+				canEdit: false,
+				createdAt: row.createdAt,
+				id: row.id,
+				isDeleted: true,
+				parentCommentId: row.parentCommentId,
+			};
+		}
+		const policy = resolve(row);
+		return {
+			authorName: policy.authorName,
+			authorRole: row.authorRole,
+			body: row.body,
+			canDelete: policy.canDelete,
+			canEdit: policy.canEdit,
+			createdAt: row.createdAt,
+			id: row.id,
+			isDeleted: false,
+			parentCommentId: row.parentCommentId,
+		};
+	});
+
 export const communityRouter = {
-	listPosts: protectedProcedure
+	// 회원과 비회원(여성 성인인증 게스트)이 같은 목록을 본다 — 게시판·필터·정렬이 모두 같고,
+	// 갈리는 건 개인화 축(내 글)과 잠금 우회뿐이다. 게스트는 profile이 null이라 비밀글 제목이
+	// 항상 마스킹된다(회원 비소유자와 동일).
+	listPosts: publicProcedure
 		.input(listPostsInput)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
+			const profile = actor.kind === "member" ? actor.profile : null;
+			// 법률자문 계정은 legal 게시판만 — 가상 큐레이션 best도 비-legal 글이 섞이므로 막는다.
+			assertLegalAdvisorBoardScope(profile, input.board);
 
 			const listFilters = [
 				...buildListFilters(input.showPromotion, input.showEmployer),
 				...buildNarrowFilters({
 					mine: input.mine,
+					// 비회원은 계정이 없어 게스트 신원(gid)으로 좁힌다. 재인증으로 gid가 바뀌면
+					// 목록에서 빠지지만, 소유권 정본은 어차피 비밀번호다(assertGuestOwnership).
+					owner:
+						actor.kind === "member"
+							? eq(communityPost.authorUserId, actor.profile.userId)
+							: eq(communityPost.authorGuestId, actor.gid),
 					q: input.q,
-					userId: profile.userId,
 				}),
 			];
 			// 목록·count 쿼리가 같은 30일 컷오프를 쓰도록 한 번만 계산한다.
@@ -648,7 +790,7 @@ export const communityRouter = {
 		const windowStart = bestWindowStart();
 		// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
 		const communityFeedOn = await isCrawledCommunityFeedEnabled();
-		const [best, free, workTalk, market, notice] = await Promise.all([
+		const [best, free, workTalk, market, notice, legal] = await Promise.all([
 			selectBoardPosts("best", { limit: OVERVIEW_LIMIT, windowStart }),
 			selectBoardPosts("free", { limit: OVERVIEW_LIMIT, windowStart }),
 			communityFeedOn
@@ -663,11 +805,15 @@ export const communityRouter = {
 					}),
 			selectBoardPosts("market", { limit: OVERVIEW_LIMIT, windowStart }),
 			selectBoardPosts("notice", { limit: OVERVIEW_LIMIT, windowStart }),
+			// 법률 자문은 전 글이 잠금이라 미리보기 제목도 기존 마스킹 규칙을 그대로 탄다
+			// (작성자·운영자·법률자문만 실제 제목을 본다).
+			selectBoardPosts(LEGAL_BOARD, { limit: OVERVIEW_LIMIT, windowStart }),
 		]);
 
 		return {
 			best: maskLockedSummaries(best, profile).map(toPublicSummary),
 			free: maskLockedSummaries(free, profile).map(toPublicSummary),
+			legal: maskLockedSummaries(legal, profile).map(toPublicSummary),
 			market: maskLockedSummaries(market, profile).map(toPublicSummary),
 			notice: maskLockedSummaries(notice, profile).map(toPublicSummary),
 			workTalk: maskLockedSummaries(workTalk, profile).map(toPublicSummary),
@@ -754,15 +900,19 @@ export const communityRouter = {
 			};
 		}),
 
-	getPost: protectedProcedure
+	getPost: publicProcedure
 		.input(
 			postIdInput.extend({
 				password: z.string().trim().max(30).optional(),
 			})
 		)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
+			// 게스트는 profile이 null이라 잠금 우회가 없다 — 비밀글은 회원 비소유자와 똑같이
+			// 비밀번호로만 열린다(게스트는 비밀글을 쓸 수 없어 자기 글이 잠긴 경우도 없다).
+			const profile = actor.kind === "member" ? actor.profile : null;
 			const post = await findPublishedPost(input.postId);
+			assertLegalAdvisorBoardScope(profile, post.board);
 
 			if (post.isLocked && !canBypassLock(post, profile)) {
 				if (!input.password) {
@@ -788,27 +938,39 @@ export const communityRouter = {
 				.where(eq(communityPost.id, input.postId))
 				.returning({ viewCount: communityPost.viewCount });
 
+			// 추천 여부도 toggleLike와 같은 축으로 읽는다 — 회원은 user_id, 비회원은 guest_id.
 			const [like] = await db
 				.select({ id: communityPostLike.id })
 				.from(communityPostLike)
 				.where(
 					and(
 						eq(communityPostLike.postId, input.postId),
-						eq(communityPostLike.userId, profile.userId)
+						actor.kind === "member"
+							? eq(communityPostLike.userId, actor.profile.userId)
+							: eq(communityPostLike.guestId, actor.gid)
 					)
 				)
 				.limit(1);
 
-			const isMine = post.authorUserId === profile.userId;
+			// 비회원의 canEdit/canDelete는 gid 일치로 버튼만 열어 주는 힌트다 — 실제 수정·삭제의
+			// 최종 게이트는 서버의 비밀번호 검증이다(updatePost·deletePost의 assertGuestOwnership).
+			const isMine =
+				actor.kind === "member"
+					? post.authorUserId === actor.profile.userId
+					: post.authorGuestId === actor.gid;
 
 			return {
 				authorName: post.authorDisplayName,
 				authorRole: post.authorRole,
 				board: post.board,
 				body: post.body,
-				canDelete: isMine || profile.role === "admin",
+				canDelete: isMine || profile?.role === "admin",
 				canEdit: isMine,
 				commentCount: post.commentCount,
+				// 잠금을 실제로 연 열람자(작성자·운영자·법률자문·비밀번호 통과)만 여기까지 온다 —
+				// 위쪽 잠금 축소 응답에는 연락처가 실리지 않는다. 법률 자문 외 게시판은 애초에
+				// 저장하지 않으므로 항상 null이다.
+				contactPhone: post.contactPhone,
 				createdAt: post.createdAt,
 				id: post.id,
 				isLiked: Boolean(like),
@@ -827,10 +989,11 @@ export const communityRouter = {
 	// 읽어 확인해야 한다). 멤버 게이트 + 스위치 게이트를 통과해야 하고, 좋아요·수정·삭제·댓글
 	// 작성은 없다. sourceUrl은 절대 내려보내지 않는다 — 그 링크 한 줄이 원본 전체로 가는
 	// 우회로다(crawled-jobs.ts PUBLIC_COLUMNS 주석의 원칙 그대로).
-	getCrawledTopic: protectedProcedure
+	getCrawledTopic: publicProcedure
 		.input(z.object({ topicId: z.uuid() }))
 		.handler(async ({ context, input }) => {
-			await requireCommunityMember(context.session);
+			// 목록(listPosts)에서 이미 보이는 글이라 상세 게이트도 같은 액터 축으로 연다.
+			await resolveCommunityActor(context);
 			// 스위치 OFF면 존재를 숨긴다 — 노출을 내린 글은 상세도 열리지 않아야 한다.
 			if (!(await isCrawledCommunityFeedEnabled())) {
 				throw new ORPCError("NOT_FOUND", {
@@ -902,23 +1065,28 @@ export const communityRouter = {
 			});
 		}),
 
-	createPost: protectedProcedure
+	createPost: publicProcedure
 		.input(createPostInput)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
+			const role = actorRole(actor);
+			assertLegalAdvisorBoardScope(
+				actor.kind === "member" ? actor.profile : null,
+				input.board
+			);
 			assertTiptapDoc(input.body);
 			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 			await assertDisplayNameAllowed(input.authorName, {
-				isAdmin: profile.role === "admin",
+				isAdmin: role === "admin",
 			});
 
-			// 공지사항은 운영자만, 광고글 표시는 업소회원만 허용한다.
-			if (input.board === "notice" && profile.role !== "admin") {
+			// 공지사항은 운영자만, 광고글 표시는 업소회원만 허용한다(비회원은 둘 다 아니다).
+			if (input.board === "notice" && role !== "admin") {
 				throw new ORPCError("FORBIDDEN", {
 					message: "공지사항은 운영자만 작성할 수 있습니다.",
 				});
 			}
-			if (input.isPromotion && profile.role !== "employer") {
+			if (input.isPromotion && role !== "employer") {
 				throw new ORPCError("BAD_REQUEST", { message: PROMOTION_ROLE_ERROR });
 			}
 			if (input.board === "free" && input.isLocked) {
@@ -926,37 +1094,46 @@ export const communityRouter = {
 					message: "자유수다에서는 비밀글을 작성할 수 없습니다.",
 				});
 			}
+			assertContactPhoneBoard(input.board, input.contactPhone);
+			const isLocked = resolveLockedForBoard(input.board, input.isLocked);
 			// 비밀글(잠금)은 잠금 게이트에 쓸 4자 이상 비밀번호가 필요하다.
-			if (input.isLocked && (input.password?.length ?? 0) < 4) {
+			if (isLocked && (input.password?.length ?? 0) < 4) {
 				throw new ORPCError("BAD_REQUEST", { message: LOCKED_PASSWORD_ERROR });
+			}
+			// 비회원은 게시판이 좁고 비밀번호가 필수다. 법률 자문을 뺀 보드에서는 is_locked가
+			// false로 남는다 — 비밀글은 공개 경로에서 숨겨져 작성자 본인도 다시 읽지 못한다.
+			if (actor.kind === "guest") {
+				assertGuestWritableBoard(input.board);
+				if (isLocked && input.board !== LEGAL_BOARD) {
+					throw new ORPCError("BAD_REQUEST", { message: GUEST_LOCKED_ERROR });
+				}
+				requireGuestPassword(input.password);
 			}
 			// 검증을 모두 통과한 뒤에 센다 — 금칙어·비번 오류로 튕긴 시도가 1분 락을
 			// 먹으면 고쳐서 다시 낼 수도 없다.
-			if (
-				!takeRateLimit({
-					key: `community.createPost:${profile.userId}`,
-					limit: 1,
-					now: Date.now(),
-					windowMs: CREATE_POST_WINDOW_MS,
-				})
-			) {
-				throw new ORPCError("TOO_MANY_REQUESTS", {
-					message: CREATE_POST_RATE_LIMIT_ERROR,
-				});
-			}
+			assertWriteRateLimit({
+				keys:
+					actor.kind === "member"
+						? [`community.createPost:${actor.profile.userId}`]
+						: guestWriteKeys("createPost", actor.gid, context.clientIp),
+				limit: 1,
+				message: CREATE_POST_RATE_LIMIT_ERROR,
+			});
 
 			const [created] = await db
 				.insert(communityPost)
 				.values({
 					authorDisplayName: input.authorName,
-					authorRole: profile.role,
-					authorUserId: profile.userId,
+					authorGuestId: actorGuestId(actor),
+					authorRole: role,
+					authorUserId: actorUserId(actor),
 					board: input.board,
 					body: input.body,
-					isLocked: input.isLocked,
+					contactPhone: input.contactPhone || null,
+					isLocked,
 					isPromotion: input.isPromotion,
-					// 비번 미입력(잠그지 않은 글)은 빈 문자열로 저장한다 — verify가 항상 실패해
-					// 잠금 게이트·비작성자 수정이 자연히 차단된다.
+					// 비번 미입력(잠그지 않은 회원 글)은 빈 문자열로 저장한다 — verify가 항상
+					// 실패해 잠금 게이트·비작성자 수정이 자연히 차단된다.
 					passwordHash: input.password
 						? hashCommunityPassword(input.password)
 						: "",
@@ -967,15 +1144,19 @@ export const communityRouter = {
 			return created;
 		}),
 
-	updatePost: protectedProcedure
+	updatePost: publicProcedure
 		.input(updatePostInput)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
+			assertLegalAdvisorBoardScope(
+				actor.kind === "member" ? actor.profile : null,
+				post.board
+			);
 			assertTiptapDoc(input.body);
 			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 			await assertDisplayNameAllowed(input.authorName, {
-				isAdmin: profile.role === "admin",
+				isAdmin: actorRole(actor) === "admin",
 			});
 
 			// authorRole 스냅샷은 불변 — 업소로 기록된 글만 광고 표시를 유지·전환할 수 있다.
@@ -987,22 +1168,35 @@ export const communityRouter = {
 					message: "자유수다에서는 비밀글을 사용할 수 없습니다.",
 				});
 			}
+			assertContactPhoneBoard(post.board, input.contactPhone);
+			// 게시판은 수정으로 바뀌지 않으므로 잠금 강제도 저장된 board로 판정한다 — 법률 자문
+			// 글은 작성자가 잠금을 풀어 달라고 보내도 계속 잠긴 채 남는다.
+			const isLocked = resolveLockedForBoard(post.board, input.isLocked);
 
-			// 수정은 작성자 본인 또는 비밀번호 일치만 허용한다(admin이라도 비번 없이는 불가).
-			const isAuthor = post.authorUserId === profile.userId;
-			const hasValidPassword =
-				input.password != null &&
-				verifyCommunityPassword(input.password, post.passwordHash);
-			if (!(isAuthor || hasValidPassword)) {
-				throw new ORPCError("FORBIDDEN", {
-					message:
-						"본인이 작성한 글만 수정할 수 있습니다. 비밀번호를 확인해 주세요.",
-				});
+			// 비회원은 자기 신분(gid)이 찍힌 글만, 그것도 비밀번호로만 수정한다.
+			if (actor.kind === "guest") {
+				assertGuestPostAccess(post, actor.gid);
+				if (isLocked && post.board !== LEGAL_BOARD) {
+					throw new ORPCError("BAD_REQUEST", { message: GUEST_LOCKED_ERROR });
+				}
+				assertGuestOwnership(post, input.password);
+			} else {
+				// 수정은 작성자 본인 또는 비밀번호 일치만 허용한다(admin이라도 비번 없이는 불가).
+				const isAuthor = post.authorUserId === actor.profile.userId;
+				const hasValidPassword =
+					input.password != null &&
+					verifyCommunityPassword(input.password, post.passwordHash);
+				if (!(isAuthor || hasValidPassword)) {
+					throw new ORPCError("FORBIDDEN", {
+						message:
+							"본인이 작성한 글만 수정할 수 있습니다. 비밀번호를 확인해 주세요.",
+					});
+				}
 			}
 
 			// 비밀번호 없이 작성한 글(passwordHash 빈 값)은 잠금 게이트에 쓸 비번이 없어
 			// 비밀글로 전환할 수 없다 — 무결성을 위해 차단한다.
-			if (input.isLocked && post.passwordHash === "") {
+			if (isLocked && post.passwordHash === "") {
 				throw new ORPCError("BAD_REQUEST", {
 					message: "비밀번호 없이 작성한 글은 비밀글로 잠글 수 없어요.",
 				});
@@ -1013,7 +1207,8 @@ export const communityRouter = {
 				.set({
 					authorDisplayName: input.authorName,
 					body: input.body,
-					isLocked: input.isLocked,
+					contactPhone: input.contactPhone || null,
+					isLocked,
 					isPromotion: input.isPromotion,
 					title: input.title,
 					updatedAt: new Date(),
@@ -1024,22 +1219,26 @@ export const communityRouter = {
 			return updated;
 		}),
 
-	deletePost: protectedProcedure
+	deletePost: publicProcedure
 		.input(deletePostInput)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
 
-			// 삭제는 작성자·관리자·비밀번호 일치 중 하나면 허용한다.
-			const isAuthor = post.authorUserId === profile.userId;
-			const hasValidPassword =
-				input.password != null &&
-				verifyCommunityPassword(input.password, post.passwordHash);
-			if (!(isAuthor || profile.role === "admin" || hasValidPassword)) {
-				throw new ORPCError("FORBIDDEN", {
-					message:
-						"본인이 작성한 글만 삭제할 수 있습니다. 비밀번호를 확인해 주세요.",
-				});
+			if (actor.kind === "guest") {
+				assertGuestOwnership(post, input.password);
+			} else {
+				// 삭제는 작성자·관리자·비밀번호 일치 중 하나면 허용한다.
+				const isAuthor = post.authorUserId === actor.profile.userId;
+				const hasValidPassword =
+					input.password != null &&
+					verifyCommunityPassword(input.password, post.passwordHash);
+				if (!(isAuthor || actor.profile.role === "admin" || hasValidPassword)) {
+					throw new ORPCError("FORBIDDEN", {
+						message:
+							"본인이 작성한 글만 삭제할 수 있습니다. 비밀번호를 확인해 주세요.",
+					});
+				}
 			}
 
 			await db
@@ -1050,12 +1249,28 @@ export const communityRouter = {
 			return { id: post.id };
 		}),
 
-	toggleLike: protectedProcedure
+	toggleLike: publicProcedure
 		.input(postReadInput)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
-			requirePostReadAccess(post, profile, input.password);
+			if (actor.kind === "guest") {
+				assertGuestPostAccess(post, actor.gid);
+			} else {
+				assertLegalAdvisorBoardScope(actor.profile, post.board);
+				requirePostReadAccess(post, actor.profile, input.password);
+			}
+
+			// 추천 주체 컬럼만 액터에 따라 갈린다 — 회원은 user_id, 비회원은 guest_id이고
+			// 각각의 (post_id, *) unique 인덱스가 중복 추천을 막는다.
+			const actorMatches =
+				actor.kind === "member"
+					? eq(communityPostLike.userId, actor.profile.userId)
+					: eq(communityPostLike.guestId, actor.gid);
+			const actorColumns =
+				actor.kind === "member"
+					? { userId: actor.profile.userId }
+					: { guestId: actor.gid };
 
 			// (post_id,user_id) unique 인덱스에 기대어 동시 호출에서도 캐시 증감이
 			// 실제 행 변화와 1:1이 되게 한다. 삭제는 rowCount(returning 개수)로,
@@ -1064,12 +1279,7 @@ export const communityRouter = {
 				const [existing] = await tx
 					.select({ id: communityPostLike.id })
 					.from(communityPostLike)
-					.where(
-						and(
-							eq(communityPostLike.postId, input.postId),
-							eq(communityPostLike.userId, profile.userId)
-						)
-					)
+					.where(and(eq(communityPostLike.postId, input.postId), actorMatches))
 					.limit(1);
 
 				if (existing) {
@@ -1094,8 +1304,8 @@ export const communityRouter = {
 				const inserted = await tx
 					.insert(communityPostLike)
 					.values({
+						...actorColumns,
 						postId: input.postId,
-						userId: profile.userId,
 					})
 					.onConflictDoNothing()
 					.returning({ id: communityPostLike.id });
@@ -1112,51 +1322,71 @@ export const communityRouter = {
 			});
 		}),
 
-	listComments: protectedProcedure
+	// 회원 경로는 기존 그대로(잠금 게이트 통과 후 전체 댓글). 인증 게스트는 읽기 범위가
+	// 회원과 같아(전체 보드 + 비밀번호로 여는 비밀글) 같은 게이트를 profile 없이 통과한다.
+	// 토큰이 없는 방문자(공개 /board·크롤러)만 공개 상세(getPublicPost)와 같은 기준 —
+	// 공개 보드의 잠기지 않은 published 글만 열린다.
+	listComments: publicProcedure
 		.input(postReadInput)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await findCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
-			requirePostReadAccess(post, profile, input.password);
+
+			if (actor?.kind === "member") {
+				const { profile } = actor;
+				// 글 로드 후 post.board로 판정한다 — 목록에서 못 보는 글은 댓글도 못 본다.
+				assertLegalAdvisorBoardScope(profile, post.board);
+				requirePostReadAccess(post, profile, input.password);
+				const rows = await selectVisibleCommentRows(input.postId);
+
+				// authorUserId는 canDelete 계산에만 쓰고 응답에서는 제외한다(익명성 보호).
+				return toCommentItems(rows, (row) => ({
+					// 비회원 댓글엔 계정이 없어 leftJoin 이름이 null이다 — 고정 표시명을 세운다.
+					authorName: row.authorName ?? GUEST_DISPLAY_NAME,
+					canDelete:
+						row.authorUserId === profile.userId || profile.role === "admin",
+					// 삭제와 달리 수정은 작성자 본인만 가능하다(admin 제외 — getPost.canEdit와 동일 철학).
+					canEdit: row.authorUserId === profile.userId,
+				}));
+			}
+
+			const guestId = actor?.kind === "guest" ? actor.gid : null;
+
+			if (guestId) {
+				requirePostReadAccess(post, null, input.password);
+			} else if (!isPublicBoard(post.board) || post.isLocked) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "게시글을 찾을 수 없습니다.",
+				});
+			}
 
 			const rows = await selectVisibleCommentRows(input.postId);
 
-			// authorUserId는 canDelete 계산에만 쓰고 응답에서는 제외한다(익명성 보호).
-			return rows.map((row) =>
-				row.status === "published"
-					? {
-							authorName: row.authorName,
-							authorRole: row.authorRole,
-							body: row.body,
-							// 삭제와 달리 수정은 작성자 본인만 가능하다(admin 제외 — getPost.canEdit와 동일 철학).
-							canDelete:
-								row.authorUserId === profile.userId || profile.role === "admin",
-							canEdit: row.authorUserId === profile.userId,
-							createdAt: row.createdAt,
-							id: row.id,
-							isDeleted: false,
-							parentCommentId: row.parentCommentId,
-						}
-					: {
-							authorName: null,
-							authorRole: null,
-							body: "",
-							canDelete: false,
-							canEdit: false,
-							createdAt: row.createdAt,
-							id: row.id,
-							isDeleted: true,
-							parentCommentId: row.parentCommentId,
-						}
-			);
+			// 색인되는 공개 페이지라 회원 계정명은 싣지 않는다(getPublicPost와 같은 원칙).
+			// 화면은 authorRole 라벨로 작성인 유형만 표시한다.
+			return toCommentItems(rows, (row) => ({
+				authorName: row.authorGuestId ? GUEST_DISPLAY_NAME : null,
+				canDelete: Boolean(guestId) && row.authorGuestId === guestId,
+				canEdit: Boolean(guestId) && row.authorGuestId === guestId,
+			}));
 		}),
 
-	createComment: protectedProcedure
+	createComment: publicProcedure
 		.input(createCommentInput)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
-			requirePostReadAccess(post, profile, input.password);
+			// 비회원이 닿을 수 있는 잠긴 글은 자기가 쓴 법률 자문 글뿐이고(assertGuestPostAccess가
+			// gid로 확인한다) 그 경우에도 잠금은 이미 통과한 상태라, password는 잠금 열쇠가
+			// 아니라 그대로 자기 댓글의 소유권 비밀번호가 된다.
+			let guestPassword: string | null = null;
+			if (actor.kind === "guest") {
+				assertGuestPostAccess(post, actor.gid);
+				guestPassword = requireGuestPassword(input.password);
+			} else {
+				assertLegalAdvisorBoardScope(actor.profile, post.board);
+				requirePostReadAccess(post, actor.profile, input.password);
+			}
 			await assertNoBannedWords([input.body]);
 
 			if (input.parentCommentId) {
@@ -1183,17 +1413,32 @@ export const communityRouter = {
 				}
 			}
 
+			// 검증을 모두 통과한 뒤에 센다(createPost와 같은 이유). 회원 댓글은 기존대로
+			// 한도가 없고, 계정 없이 부를 수 있는 비회원 경로에만 도배 방지를 건다.
+			if (actor.kind === "guest") {
+				assertWriteRateLimit({
+					keys: guestWriteKeys("createComment", actor.gid, context.clientIp),
+					limit: GUEST_COMMENT_LIMIT,
+					message: GUEST_COMMENT_RATE_LIMIT_ERROR,
+				});
+			}
+
 			return await db.transaction(async (tx) => {
 				const [created] = await tx
 					.insert(communityComment)
 					.values({
-						authorRole: profile.role,
-						authorUserId: profile.userId,
+						authorGuestId: actorGuestId(actor),
+						authorRole: actorRole(actor),
+						authorUserId: actorUserId(actor),
 						body: input.body,
 						parentCommentId: input.parentCommentId ?? null,
+						// 회원 댓글은 세션으로 소유권이 증명되므로 글과 같은 관례로 빈 문자열.
+						passwordHash: guestPassword
+							? hashCommunityPassword(guestPassword)
+							: "",
 						postId: input.postId,
 					})
-					.returning();
+					.returning({ id: communityComment.id });
 				await tx
 					.update(communityPost)
 					.set({ commentCount: sql`${communityPost.commentCount} + 1` })
@@ -1202,10 +1447,10 @@ export const communityRouter = {
 			});
 		}),
 
-	deleteComment: protectedProcedure
+	deleteComment: publicProcedure
 		.input(deleteCommentInput)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
 			const [comment] = await db
 				.select()
 				.from(communityComment)
@@ -1217,7 +1462,12 @@ export const communityRouter = {
 					message: "댓글을 찾을 수 없습니다.",
 				});
 			}
-			if (comment.authorUserId !== profile.userId && profile.role !== "admin") {
+			if (actor.kind === "guest") {
+				assertGuestOwnership(comment, input.password);
+			} else if (
+				comment.authorUserId !== actor.profile.userId &&
+				actor.profile.role !== "admin"
+			) {
 				throw new ORPCError("FORBIDDEN", {
 					message: "본인이 작성한 댓글만 삭제할 수 있습니다.",
 				});
@@ -1239,10 +1489,10 @@ export const communityRouter = {
 			return { id: comment.id };
 		}),
 
-	updateComment: protectedProcedure
+	updateComment: publicProcedure
 		.input(updateCommentInput)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
 			const [comment] = await db
 				.select()
 				.from(communityComment)
@@ -1254,8 +1504,10 @@ export const communityRouter = {
 					message: "댓글을 찾을 수 없습니다.",
 				});
 			}
-			// 삭제와 달리 수정은 작성자 본인만 가능하다(admin도 타인 댓글은 수정 불가).
-			if (comment.authorUserId !== profile.userId) {
+			if (actor.kind === "guest") {
+				assertGuestOwnership(comment, input.password);
+			} else if (comment.authorUserId !== actor.profile.userId) {
+				// 삭제와 달리 수정은 작성자 본인만 가능하다(admin도 타인 댓글은 수정 불가).
 				throw new ORPCError("FORBIDDEN", {
 					message: "본인이 작성한 댓글만 수정할 수 있습니다.",
 				});

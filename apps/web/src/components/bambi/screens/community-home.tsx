@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
 	CommunityOverviewGrid,
 	type OverviewPost,
+	useLegalAdvisorNavGuard,
 } from "@/components/bambi/community-board-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PremiumAdBannerSection } from "@/components/bambi/premium-ad-banner-section";
@@ -16,6 +17,9 @@ import { orpc } from "@/utils/orpc";
 export function CommunityHomeScreen() {
 	const overviewQuery = useQuery(orpc.bambi.community.overview.queryOptions());
 	const adBanners = useAdBannerJobs();
+	// 법률자문 계정은 legal 게시판만 이용한다(서버 격리 가드와 동일) — 카드는 다 보여주되
+	// 다른 게시판 링크를 누르면 토스트로 안내한다.
+	const legalAdvisorGuard = useLegalAdvisorNavGuard();
 
 	if (overviewQuery.isError) {
 		return (
@@ -31,6 +35,7 @@ export function CommunityHomeScreen() {
 	const postsByBoard: Record<CommunityBoardKey, OverviewPost[]> = {
 		best: data?.best ?? [],
 		free: data?.free ?? [],
+		legal: data?.legal ?? [],
 		market: data?.market ?? [],
 		notice: data?.notice ?? [],
 		work_talk: data?.workTalk ?? [],
@@ -47,6 +52,7 @@ export function CommunityHomeScreen() {
 			<h1 className="m-0 font-extrabold text-xl">수다방</h1>
 			<CommunityOverviewGrid
 				isPending={overviewQuery.isPending}
+				onBlockedNavigate={legalAdvisorGuard}
 				postsByBoard={postsByBoard}
 			/>
 		</div>

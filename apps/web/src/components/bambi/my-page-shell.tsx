@@ -37,10 +37,14 @@ import {
 
 export const MY_PAGE_HUB_HREF = "/seeker/me" as Route;
 
+// 표시 라벨은 여기서만 만든다 — enum 원값(job_seeker·legal_advisor …)이 화면에 새지 않도록
+// 미등록 역할도 "구직자"로 떨어뜨린다. 법률자문은 구직자 계정에 얹는 역할이라 폴백도 자연스럽다.
+// 운영자 콘솔 라벨("법률자문")과 달리 당사자에게 보이는 내 정보에서는 "법률자문가"로 부른다.
 const ROLE_LABELS: Record<string, string> = {
 	admin: "관리자",
 	employer: "구인자",
 	job_seeker: "구직자",
+	legal_advisor: "법률자문가",
 };
 
 const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
@@ -78,9 +82,7 @@ function ProfileCard() {
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	// 표시명(닉네임)의 정본은 user.name(세션). bambi_profile.display_name은 제거됐다.
 	const displayName = session.data?.user?.name?.trim() || "구직자 회원";
-	const roleLabel = profile
-		? (ROLE_LABELS[profile.role] ?? profile.role)
-		: "구직자";
+	const roleLabel = ROLE_LABELS[profile?.role ?? ""] ?? "구직자";
 	const isPhoneVerified = Boolean(profile?.isPhoneVerified);
 
 	if (mineQuery.isLoading) {

@@ -1,7 +1,10 @@
+import {
+	DEV_GUEST_TOKEN_SECRET,
+	GUEST_COOKIE_NAME,
+	verifyGuestToken,
+} from "@bambi-app/api/services/bambi-guest-token";
 import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
-import { GUEST_COOKIE_NAME } from "@/lib/bambi/guest";
-import { verifyGuestToken } from "@/lib/bambi/guest-token";
 import { resolveGate } from "@/lib/bambi/resolve-gate";
 
 export const config = {
@@ -11,11 +14,10 @@ export const config = {
 	matcher: ["/((?!_next/static|_next/image|.*\\.[^/]+$).*)"],
 };
 
-// /api/guest 라우트의 서명 키와 같은 값이어야 한다. edge 미들웨어라 @bambi-app/env를
-// 거치지 않고 process.env를 직접 읽는다(개발 폴백도 라우트와 동일).
+// /api/guest 라우트·api 서버의 서명 키와 같은 값이어야 한다. edge 미들웨어라
+// @bambi-app/env를 거치지 않고 process.env를 직접 읽는다(개발 폴백은 공용 상수).
 const guestTokenSecret = (): string =>
-	process.env.BAMBI_GUEST_TOKEN_SECRET ??
-	"bambi-dev-guest-token-secret-not-for-prod";
+	process.env.BAMBI_GUEST_TOKEN_SECRET ?? DEV_GUEST_TOKEN_SECRET;
 
 export async function proxy(request: NextRequest) {
 	const { pathname } = request.nextUrl;
@@ -42,12 +44,19 @@ export async function proxy(request: NextRequest) {
 	// 게스트 여부는 쿠키 존재가 아니라 HMAC 서명 검증으로 판정한다. 평문 값 비교였을 때는
 	// devtools에서 document.cookie 한 줄로 성인 게이트가 뚫렸다.
 	const guestToken = request.cookies.get(GUEST_COOKIE_NAME)?.value;
-	const isGuest = guestToken
-		? (await verifyGuestToken(guestToken, guestTokenSecret(), new Date())) !==
-			null
-		: false;
+	const guest = guestToken
+		? await verifyGuestToken(guestToken, guestTokenSecret(), new Date())
+		: null;
+	// 수다방 입장은 gid까지 있는 여성 토큰만 — api의 게스트 액터 판정
+	// (bambi-community-authz의 resolveCommunityActor)과 같은 축이다.
+	const isCommunityGuest = guest?.gender === "female" && Boolean(guest.gid);
 
-	const decision = resolveGate({ pathname, hasSession, isGuest });
+	const decision = resolveGate({
+		hasSession,
+		isCommunityGuest,
+		isGuest: guest !== null,
+		pathname,
+	});
 
 	if (decision.type === "redirect") {
 		return NextResponse.redirect(new URL(decision.to, request.url));

@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
 	communityBodyText,
 	getPublicBoardBySlug,
+	isGuestWritableBoard,
+	isPublicBoardPath,
 	PUBLIC_BOARDS,
 	parsePageParam,
 	publicBoardPath,
+	publicEditPath,
 	publicPostPath,
+	publicWritePath,
 } from "./public-community";
 
 describe("public community boards", () => {
@@ -29,6 +33,23 @@ describe("public community paths", () => {
 		expect(publicBoardPath("free", 1)).toBe("/board/free");
 		expect(publicBoardPath("free", 3)).toBe("/board/free?page=3");
 		expect(publicPostPath("free", "abc")).toBe("/board/free/abc");
+	});
+	it("builds the guest write/edit paths under the same board", () => {
+		expect(publicWritePath("free")).toBe("/board/free/write");
+		expect(publicEditPath("work-talk", "abc")).toBe(
+			"/board/work-talk/abc/edit"
+		);
+	});
+	it("opens participation on free/work_talk but not notice", () => {
+		expect(isGuestWritableBoard("free")).toBe(true);
+		expect(isGuestWritableBoard("work_talk")).toBe(true);
+		expect(isGuestWritableBoard("notice")).toBe(false);
+	});
+	it("tells the public area apart from lookalike paths", () => {
+		expect(isPublicBoardPath("/board")).toBe(true);
+		expect(isPublicBoardPath("/board/free/abc")).toBe(true);
+		expect(isPublicBoardPath("/boardgame")).toBe(false);
+		expect(isPublicBoardPath("/seeker/community/free")).toBe(false);
 	});
 	it("folds bad ?page values into page 1", () => {
 		expect(parsePageParam("2")).toBe(2);

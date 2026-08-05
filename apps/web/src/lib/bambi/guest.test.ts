@@ -1,10 +1,12 @@
+import {
+	createGuestToken,
+	GUEST_COOKIE_NAME,
+} from "@bambi-app/api/services/bambi-guest-token";
 import { describe, expect, it } from "vitest";
 import {
-	GUEST_COOKIE_NAME,
 	readGuestFromCookieString,
 	readGuestGenderFromCookieString,
 } from "./guest";
-import { createGuestToken } from "./guest-token";
 
 const SECRET = "test-secret-key-with-enough-length-123456";
 

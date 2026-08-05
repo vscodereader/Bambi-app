@@ -41,6 +41,9 @@ interface MockPhoneVerifyDialogProps {
 	// 인증 성공 시 호출. 제공하면 게스트 쿠키 흐름 대신 이 콜백으로 결과를 넘겨
 	// 호출부(예: 계정설정)가 저장을 담당한다. 실인증 API 도입 시 이 콜백 경계는 유지된다.
 	onVerified?: (input: MockPhoneVerifyInput) => Promise<void> | void;
+	// 게스트 쿠키 흐름(onVerified 미제공) 성공 후 이동할 경로. 인증을 시작한 화면으로
+	// 돌아와 이어서 글·댓글을 쓰게 하려면 그 경로를 넘긴다.
+	redirectTo?: string;
 	// 트리거 버튼 크기(실인증 경로와 동일).
 	size?: ComponentProps<typeof Button>["size"];
 	title?: string;
@@ -52,6 +55,7 @@ interface MockPhoneVerifyDialogProps {
 export function MockPhoneVerifyDialog({
 	className,
 	onVerified,
+	redirectTo = "/seeker",
 	size,
 	triggerLabel = "휴대폰 인증",
 	title = "휴대폰 본인인증",
@@ -84,7 +88,7 @@ export function MockPhoneVerifyDialog({
 		return null;
 	};
 
-	// onVerified 미제공 시의 기본 동작: 게스트 인증 쿠키 세팅 후 공고 화면으로 이동.
+	// onVerified 미제공 시의 기본 동작: 게스트 인증 쿠키 세팅 후 redirectTo로 이동.
 	const runGuestFlow = async (verified: MockPhoneVerifyInput) => {
 		const response = await fetch("/api/guest", {
 			method: "POST",
@@ -102,7 +106,7 @@ export function MockPhoneVerifyDialog({
 			return;
 		}
 		setOpen(false);
-		router.push("/seeker" as Route);
+		router.push(redirectTo as Route);
 		router.refresh();
 	};
 

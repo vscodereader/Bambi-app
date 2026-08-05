@@ -442,6 +442,41 @@
       "when": 1785832380491,
       "tag": "0062_young_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1785834322350,
+      "tag": "0063_guest-community-authorship",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1785896024382,
+      "tag": "0064_absurd_spyke",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1785896804095,
+      "tag": "0065_handy_proteus",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1785901174146,
+      "tag": "0066_goofy_rockslide",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1785904456626,
+      "tag": "0067_blue_triton",
+      "breakpoints": true
     }
   ]
 }

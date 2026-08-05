@@ -2136,7 +2136,7 @@ const SANCTION_CHOICES: SanctionChoice[] = [
 // defaultReason으로 프리필한 뒤 최소 길이(minLength, 기본 2자)를 만족해야 확정된다.
 // positioning="fixed"는 document.body로 포털된 일괄 시트(전체 화면 중앙 정렬)용,
 // "absolute"는 콘솔 컨테이너 내부(사용자 상세·신고 상세)에서 부모 relative 박스를 덮는 시트용.
-function ReasonConfirmSheet({
+export function ReasonConfirmSheet({
 	confirmLabel,
 	danger = false,
 	defaultReason,
@@ -2356,6 +2356,42 @@ function UserModerationHistory({ userId }: { userId: string }) {
 		</div>
 	);
 }
+
+// 무료 법률 자문 답변 계정 지정·해제. 구직자 ↔ 법률자문만 오갈 수 있고(서버 규칙),
+// 액션 UI는 사용자 목록(/moderator/users)이 이 헬퍼로 대상 여부를 판정해 띄운다.
+const LEGAL_ADVISOR_ROLE = "legal_advisor";
+
+export interface LegalAdvisorChoice {
+	confirmLabel: string;
+	defaultReason: string;
+	desc: string;
+	role: "job_seeker" | "legal_advisor";
+	title: string;
+}
+
+export const legalAdvisorChoice = (
+	roleKey: string
+): LegalAdvisorChoice | null => {
+	if (roleKey === LEGAL_ADVISOR_ROLE) {
+		return {
+			confirmLabel: "법률자문 해제",
+			defaultReason: "법률 자문 활동이 끝나 지정을 해제했어요",
+			desc: "무료 법률 자문 글 열람·답변 권한을 거둬요",
+			role: "job_seeker",
+			title: "법률자문 해제",
+		};
+	}
+	if (roleKey === "job_seeker") {
+		return {
+			confirmLabel: "법률자문 지정",
+			defaultReason: "무료 법률 자문 답변을 맡기려고 지정했어요",
+			desc: "무료 법률 자문의 비밀글을 열람하고 답변할 수 있게 해요",
+			role: LEGAL_ADVISOR_ROLE,
+			title: "법률자문 지정",
+		};
+	}
+	return null;
+};
 
 export function UserDetail({
 	item,

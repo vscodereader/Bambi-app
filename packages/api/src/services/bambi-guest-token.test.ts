@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
 	createGuestToken,
 	decodeGuestTokenGender,
+	readGuestTokenFromCookieString,
 	verifyGuestToken,
-} from "./guest-token";
+} from "./bambi-guest-token";
 
 const SECRET = "test-secret-key-with-enough-length-123456";
 const NOW = new Date("2026-07-21T03:00:00Z");
@@ -87,6 +88,16 @@ describe("guest token", () => {
 		expect(decodeGuestTokenGender(token)).toBe("female");
 		expect(decodeGuestTokenGender("1")).toBeNull();
 	});
+
+	it("Cookie 헤더 문자열에서 토큰만 뽑는다", async () => {
+		const token = await makeToken();
+
+		expect(
+			readGuestTokenFromCookieString(`other=1; bambi_guest=${token}; a=b`)
+		).toBe(token);
+		expect(readGuestTokenFromCookieString("bambi_guest=")).toBeNull();
+		expect(readGuestTokenFromCookieString("other=1")).toBeNull();
+	});
 });
 
 // 구 버전이 발급한 토큰을 재현한다(현재 createGuestToken으로는 만들 수 없는 페이로드).
@@ -108,38 +119,38 @@ const signLegacyPayload = async (payload: unknown) => {
 	return `${payloadPart}.${toBase64Url(new Uint8Array(signature))}`;
 };
 
-describe("게스트 토큰 — 인증 건 ID 미탑재", () => {
-	it("발급 토큰에는 인증 건 ID가 실리지 않는다", async () => {
-		const token = await createGuestToken({
-			gender: "female",
-			maxAgeSeconds: 3600,
-			now: NOW,
-			secret: SECRET,
-		});
+describe("게스트 토큰 — 게스트 식별자(gid)", () => {
+	it("발급 토큰에는 gid가 실리고 인증 건 ID는 실리지 않는다", async () => {
+		const token = await makeToken();
 		// 쿠키는 httpOnly:false라 document.cookie로 그대로 읽힌다 — 원문 키 목록이
-		// 성별·만료·버전뿐이어야 인증 건 ID가 새지 않는다.
+		// 성별·만료·버전·gid뿐이어야 인증 건 ID가 새지 않는다.
 		expect(Object.keys(rawPayload(token)).sort()).toEqual([
 			"exp",
 			"gender",
+			"gid",
 			"v",
 		]);
-		expect(await verifyGuestToken(token, SECRET, NOW)).toMatchObject({
-			gender: "female",
-			v: 2,
-		});
+		const payload = await verifyGuestToken(token, SECRET, NOW);
+		expect(payload).toMatchObject({ gender: "female", v: 2 });
+		expect(payload?.gid).toEqual(expect.any(String));
 	});
 
-	it("기존 v1 토큰도 계속 유효하다", async () => {
+	it("발급마다 다른 gid를 준다", async () => {
+		const [first, second] = await Promise.all([makeToken(), makeToken()]);
+
+		expect(rawPayload(first).gid).not.toBe(rawPayload(second).gid);
+	});
+
+	it("기존 v1 토큰도 계속 유효하되 gid가 없다", async () => {
 		const token = await signLegacyPayload({
 			exp: Math.floor(NOW.getTime() / 1000) + 3600,
 			gender: "male",
 			v: 1,
 		});
+		const payload = await verifyGuestToken(token, SECRET, NOW);
 
-		expect(await verifyGuestToken(token, SECRET, NOW)).toMatchObject({
-			gender: "male",
-			v: 1,
-		});
+		expect(payload).toMatchObject({ gender: "male", v: 1 });
+		expect(payload?.gid).toBeUndefined();
 	});
 
 	it("ivId가 남아 있는 구 v2 토큰도 유효하되 ivId는 버려진다", async () => {

@@ -32,6 +32,9 @@ interface PhoneVerifyDialogProps {
 	onMockVerified?: (input: MockPhoneVerifyInput) => Promise<void> | void;
 	// 실인증 성공 시 저장을 담당할 콜백(회원 흐름). 미제공 시 게스트 쿠키 흐름(/api/guest).
 	onVerified?: (identityVerificationId: string) => Promise<void> | void;
+	// 게스트 쿠키 흐름 성공 후 이동할 경로. 인증을 시작한 화면(예: 수다방 글쓰기)으로
+	// 돌아와 이어서 작성하게 하려면 그 경로를 넘긴다. 기본은 공고 목록.
+	redirectTo?: string;
 	// 트리거 버튼 크기. 한 화면에 인증 버튼이 둘일 때 위계를 크기로도 구분한다.
 	size?: ButtonSize;
 	title?: string;
@@ -46,6 +49,7 @@ export function PhoneVerifyDialog({
 	intent = "",
 	onMockVerified,
 	onVerified,
+	redirectTo = "/seeker",
 	size,
 	title,
 	triggerLabel = "휴대폰 인증",
@@ -61,6 +65,7 @@ export function PhoneVerifyDialog({
 				defaultGender={defaultGender}
 				description={description}
 				onVerified={onMockVerified}
+				redirectTo={redirectTo}
 				size={size}
 				title={title}
 				triggerLabel={triggerLabel}
@@ -74,6 +79,7 @@ export function PhoneVerifyDialog({
 			className={className}
 			intent={intent}
 			onVerified={onVerified}
+			redirectTo={redirectTo}
 			size={size}
 			triggerLabel={triggerLabel}
 			variant={variant}
@@ -85,6 +91,7 @@ function PortOneVerifyButton({
 	className,
 	intent,
 	onVerified,
+	redirectTo,
 	size,
 	triggerLabel,
 	variant,
@@ -92,13 +99,14 @@ function PortOneVerifyButton({
 	className?: string;
 	intent: string;
 	onVerified?: (identityVerificationId: string) => Promise<void> | void;
+	redirectTo: string;
 	size?: ButtonSize;
 	triggerLabel: string;
 	variant: ButtonVariant;
 }) {
 	const router = useRouter();
 
-	// onVerified 미제공 시의 기본 동작: 게스트 인증(/api/guest) 후 공고 화면으로 이동.
+	// onVerified 미제공 시의 기본 동작: 게스트 인증(/api/guest) 후 redirectTo로 이동.
 	const completeVerification = useCallback(
 		async (identityVerificationId: string) => {
 			if (onVerified) {
@@ -118,10 +126,10 @@ function PortOneVerifyButton({
 					data?.message ?? "인증 처리에 실패했어요. 다시 시도해 주세요."
 				);
 			}
-			router.push("/seeker" as Route);
+			router.push(redirectTo as Route);
 			router.refresh();
 		},
-		[onVerified, router]
+		[onVerified, redirectTo, router]
 	);
 
 	const { isVerifying, startVerification } = usePortOneVerification({

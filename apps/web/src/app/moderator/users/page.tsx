@@ -4,6 +4,7 @@
 // 이 화면은 상태·역할·인증·누적 신고/경고 필터와 이름·이메일·아이디 검색을 클라이언트에서
 // 적용한다. 레이아웃·필터·빈 상태 패턴은 공고 관리(/moderator/jobs)와 동일하다.
 
+import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import {
@@ -18,6 +19,11 @@ import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { useMemo, useState } from "react";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { ModeratorUsersTable } from "@/components/bambi/moderator-users-table";
+import {
+	type LegalAdvisorChoice,
+	legalAdvisorChoice,
+	ReasonConfirmSheet,
+} from "@/components/bambi/screens/moderator";
 import { useMod } from "@/components/bambi/screens/moderator-context";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import type { ManagedUser } from "@/lib/bambi/types";
@@ -36,6 +42,7 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 const ROLE_FILTER_ITEMS: Record<string, string> = {
 	all: "전체",
 	job_seeker: userRoleLabel("job_seeker"),
+	legal_advisor: userRoleLabel("legal_advisor"),
 	employer: userRoleLabel("employer"),
 	admin: userRoleLabel("admin"),
 };
@@ -88,6 +95,7 @@ export default function ModeratorUsersPage() {
 		isLoading,
 		isUsersError,
 		selected,
+		setLegalAdvisor,
 		toggleSelect,
 		users,
 	} = useMod();
@@ -97,6 +105,12 @@ export default function ModeratorUsersPage() {
 	const [minReports, setMinReports] = useState(0);
 	const [minWarnings, setMinWarnings] = useState(0);
 	const [search, setSearch] = useState("");
+	// 법률자문 지정·해제(사유 시트). 목록에서 대상 한 명을 체크하면 버튼이 나타난다.
+	const [pendingRole, setPendingRole] = useState<{
+		choice: LegalAdvisorChoice;
+		user: ManagedUser;
+	} | null>(null);
+	const [isApplyingRole, setIsApplyingRole] = useState(false);
 
 	const filteredUsers = useMemo(() => {
 		const keyword = search.trim().toLowerCase();
@@ -119,6 +133,22 @@ export default function ModeratorUsersPage() {
 		minWarnings,
 		search,
 	]);
+
+	// 역할 수정은 한 명씩만 — 정확히 1명 선택됐고 그 계정이 구직자·법률자문(탈퇴 아님)일
+	// 때만 버튼을 노출한다. 업소·운영자·탈퇴 계정은 서버가 어차피 거절하므로 아예 숨긴다.
+	const roleTarget = useMemo(() => {
+		if (selected.length !== 1) {
+			return null;
+		}
+
+		const user = users.find((candidate) => candidate.id === selected[0]);
+		if (!user || user.deletedAt) {
+			return null;
+		}
+
+		const choice = legalAdvisorChoice(user.roleKey);
+		return choice ? { choice, user } : null;
+	}, [selected, users]);
 
 	// 전체 선택 토글: 현재 필터된 목록 기준으로 전부 선택돼 있으면 해제, 아니면 선택한다.
 	const toggleAll = () => {
@@ -248,6 +278,24 @@ export default function ModeratorUsersPage() {
 				</div>
 			</div>
 
+			{roleTarget ? (
+				<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+					<span className="text-muted-foreground text-sm">
+						<span className="font-medium text-foreground">
+							{roleTarget.user.name}
+						</span>
+						{` 님(${roleTarget.user.role}) · ${roleTarget.choice.desc}`}
+					</span>
+					<Button
+						onClick={() => setPendingRole(roleTarget)}
+						size="sm"
+						variant="outline"
+					>
+						{roleTarget.choice.title}
+					</Button>
+				</div>
+			) : null}
+
 			{isLoading ? (
 				<div className="flex flex-col gap-2">
 					<Skeleton className="h-10 w-full" />
@@ -280,6 +328,33 @@ export default function ModeratorUsersPage() {
 					onToggleAll={toggleAll}
 					selected={selected}
 					users={filteredUsers}
+				/>
+			) : null}
+
+			{pendingRole ? (
+				<ReasonConfirmSheet
+					confirmLabel={pendingRole.choice.confirmLabel}
+					defaultReason={pendingRole.choice.defaultReason}
+					description={`${pendingRole.user.name} 님에게 적용돼요 — ${pendingRole.choice.desc}`}
+					isApplying={isApplyingRole}
+					onCancel={() => setPendingRole(null)}
+					onConfirm={async (reason) => {
+						setIsApplyingRole(true);
+						const ok = await setLegalAdvisor(
+							pendingRole.user.id,
+							pendingRole.choice.role,
+							reason
+						);
+						setIsApplyingRole(false);
+						// 성공했을 때만 닫고 선택을 푼다 — 실패하면 시트에 남아 사유를 고쳐 재시도.
+						if (ok) {
+							setPendingRole(null);
+							clearSelection();
+						}
+					}}
+					reasonFieldId="moderator-users-role-reason"
+					reasonLabel="지정 사유"
+					title={pendingRole.choice.title}
 				/>
 			) : null}
 		</div>

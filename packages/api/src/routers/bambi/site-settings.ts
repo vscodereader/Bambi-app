@@ -6,7 +6,10 @@ import z from "zod";
 import { adminProcedure, publicProcedure } from "../../index";
 import { DEFAULT_AD_ROTATION_MINUTES } from "../../services/bambi-ad-exposure";
 import { DEFAULT_CRAWLED_LIMITS } from "../../services/bambi-crawled-limits";
-import { DEFAULT_WITHDRAWAL_RETENTION_DAYS } from "../../services/bambi-policy";
+import {
+	DEFAULT_WITHDRAWAL_PURGE_HOUR,
+	DEFAULT_WITHDRAWAL_RETENTION_DAYS,
+} from "../../services/bambi-policy";
 
 // 단일 행(설정) 고정 키. 조회·수정 모두 이 행 하나만 다룬다.
 const SETTINGS_ROW_ID = "default";
@@ -108,8 +111,16 @@ const updateFooterInput = z.object({
 	adInquiryTel: optionalText(60),
 });
 
-// 회원 정책 — 탈퇴 개인정보 보존기간(일). null이면 기본값으로 복귀한다.
+// 회원 정책 — 탈퇴 개인정보 보존기간(일)과 파기 배치 자동 실행 시각. 둘 다 null이면 기본값으로
+// 복귀한다. 실행 시각은 생략(undefined)하면 기존 값을 유지한다 — 보존기간만 저장하는 호출을
+// 깨지 않기 위해서다.
 const updateMemberPolicyInput = z.object({
+	withdrawalPurgeHour: z
+		.number()
+		.int("실행 시각은 0~23 사이 정수로 입력해 주세요.")
+		.min(0, "실행 시각은 0~23 사이로 설정해 주세요.")
+		.max(23, "실행 시각은 0~23 사이로 설정해 주세요.")
+		.nullish(),
 	withdrawalRetentionDays: z
 		.number()
 		.int("보존기간은 일 단위 정수로 입력해 주세요.")
@@ -316,16 +327,24 @@ export const siteSettingsRouter = {
 
 	// 회원 정책 공개 조회 — 탈퇴 안내 카피가 보존기간을 표시하는 데 쓴다.
 	// days가 null이면 미설정(기본값 사용). defaultDays는 코드 기본값으로, 운영자
-	// 폼의 placeholder와 안내 카피 폴백이 같은 값을 보게 한다.
+	// 폼의 placeholder와 안내 카피 폴백이 같은 값을 보게 한다. 파기 배치 실행 시각도
+	// 같은 규약이며(purgeHour null = 기본값), 마지막 실행 시각은 표시 전용이라 저장 입력에는 없다.
 	getMemberPolicy: publicProcedure.handler(async () => {
 		const [row] = await db
-			.select({ days: bambiSiteSettings.withdrawalRetentionDays })
+			.select({
+				days: bambiSiteSettings.withdrawalRetentionDays,
+				purgeHour: bambiSiteSettings.withdrawalPurgeHour,
+				purgeLastRunAt: bambiSiteSettings.withdrawalPurgeLastRunAt,
+			})
 			.from(bambiSiteSettings)
 			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
 			.limit(1);
 		return {
 			days: row?.days ?? null,
 			defaultDays: DEFAULT_WITHDRAWAL_RETENTION_DAYS,
+			defaultPurgeHour: DEFAULT_WITHDRAWAL_PURGE_HOUR,
+			purgeHour: row?.purgeHour ?? null,
+			purgeLastRunAt: row?.purgeLastRunAt ?? null,
 		};
 	}),
 
@@ -337,14 +356,21 @@ export const siteSettingsRouter = {
 				.insert(bambiSiteSettings)
 				.values({
 					id: SETTINGS_ROW_ID,
+					withdrawalPurgeHour: input.withdrawalPurgeHour,
 					withdrawalRetentionDays: input.withdrawalRetentionDays,
 				})
 				.onConflictDoUpdate({
 					target: bambiSiteSettings.id,
-					set: { withdrawalRetentionDays: input.withdrawalRetentionDays },
+					set: {
+						withdrawalPurgeHour: input.withdrawalPurgeHour,
+						withdrawalRetentionDays: input.withdrawalRetentionDays,
+					},
 				})
-				.returning({ days: bambiSiteSettings.withdrawalRetentionDays });
-			return { days: saved?.days ?? null };
+				.returning({
+					days: bambiSiteSettings.withdrawalRetentionDays,
+					purgeHour: bambiSiteSettings.withdrawalPurgeHour,
+				});
+			return { days: saved?.days ?? null, purgeHour: saved?.purgeHour ?? null };
 		}),
 
 	// 광고 배너 로테이션 주기 조회. minutes가 null이면 미설정(기본값 사용). defaultMinutes는

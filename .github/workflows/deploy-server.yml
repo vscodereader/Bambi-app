@@ -100,6 +100,8 @@ jobs:
       # socket.io가 인메모리(어댑터 없음)라 당분간 --max-instances=1 로 고정.
       # 웹소켓 유지를 위해 --timeout=3600(최대), --session-affinity 설정.
       # 민감 값은 GCP Secret Manager에서 주입(--set-secrets) — GitHub에는 시크릿 없음.
+      # BAMBI_GUEST_TOKEN_SECRET은 web(Vercel)에 넣은 값과 반드시 같아야 한다 — web이 서명한
+      # 게스트 토큰을 이 서버가 검증한다. 시크릿 이름: ${SERVICE}-bambi-guest-token-secret.
       # GCS 자격 증명은 주입하지 않는다(JSON 키 없음). 런타임 SA로 ADC가 해결하고,
       # 서명 URL은 IAM signBlob으로 만든다 — 권한 부여는 scripts/setup-gcp-cloud-run.sh 참고.
       - name: Deploy to Cloud Run
@@ -128,7 +130,7 @@ jobs:
             --session-affinity \
             --add-cloudsql-instances="${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" \
             --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}##BAMBI_COOKIE_PREFIX=${BAMBI_COOKIE_PREFIX}" \
-            --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest,PORTONE_API_SECRET=${SERVICE}-portone-api-secret:latest"
+            --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest,PORTONE_API_SECRET=${SERVICE}-portone-api-secret:latest,BAMBI_GUEST_TOKEN_SECRET=${SERVICE}-bambi-guest-token-secret:latest"
 
       - name: Show service URL
         run: |

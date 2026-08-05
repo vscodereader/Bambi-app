@@ -1,5 +1,8 @@
 export interface GateInput {
 	hasSession: boolean;
+	// 수다방에 들어올 수 있는 게스트(서명·만료 유효 + gid + 여성). 읽기 게이트(isGuest)보다
+	// 좁다 — 남성·gid 없는 옛 토큰은 API가 게스트로 인정하지 않으므로 화면도 열지 않는다.
+	isCommunityGuest: boolean;
 	isGuest: boolean;
 	pathname: string;
 }
@@ -9,10 +12,11 @@ export type GateDecision = { type: "next" } | { type: "redirect"; to: string };
 // 약관(/terms)·개인정보 처리방침(/privacy)은 로그인·게스트 여부와 무관하게
 // 누구나 열람할 수 있어야 한다(회원가입 동의 화면에서도 링크로 연다).
 //
-// /jobs는 지역·업종별 공개 공고 랜딩, /board는 공개 게시판(읽기 전용) 영역이다.
+// /jobs는 지역·업종별 공개 공고 랜딩, /board는 공개 게시판 영역이다.
 // 검색 크롤러와 비로그인 방문자가 게이트에 걸리지 않고 목록·본문을 읽어야 색인이 된다.
-// 공개 범위는 읽기 전용까지이고, 공고 상세(/seeker/jobs/[id])·채팅·연락처와
-// 커뮤니티 쓰기·댓글·추천은 그대로 게이트 뒤에 남는다.
+// /board의 글쓰기·댓글·추천 화면도 이 게이트를 통과하지만, 실제 쓰기 자격은 API가
+// 게스트 토큰(성인 본인인증 + gid)으로 판정한다 — 미인증 방문자에게는 화면이 본인인증
+// 카드를 세운다. 공고 상세(/seeker/jobs/[id])·채팅·연락처는 그대로 게이트 뒤에 남는다.
 const PUBLIC_PREFIXES = [
 	"/api",
 	"/bambi",
@@ -43,6 +47,11 @@ const redirect = (to: string): GateDecision => ({ type: "redirect", to });
 // 통과시키되, ?auth= 쿼리가 붙으면 목록 대신 블러 배경 위 인증 카드를 렌더한다
 // (배경 데이터는 서버에서 마스킹된다). 실제 목록 위에 겹치는 다이얼로그는 없다.
 const SEEKER_ROOT = "/seeker";
+// 수다방은 여성 인증 게스트에게도 열린 유일한 /seeker 하위 영역이다. 읽기는 회원과 같고
+// (전체 보드), 쓰기 제한(자유수다·밤문화 이야기·비밀번호 필수)은 API 가드가 강제한다.
+const COMMUNITY_ROOT = "/seeker/community";
+const isCommunity = (pathname: string): boolean =>
+	pathname === COMMUNITY_ROOT || pathname.startsWith(`${COMMUNITY_ROOT}/`);
 // 그냥 들어온 비로그인 방문자에게는 로그인 폼을 먼저 보인다. 재방문자가 다수라
 // 로그인이 기본이고, 가입은 카드 안의 전환 링크로 한 번에 갈 수 있다.
 const LOGIN_REDIRECT = "/seeker?auth=login";
@@ -53,6 +62,7 @@ const GUEST_BLOCKED_REDIRECT = "/seeker?auth=signup&guestBlocked=1";
 export const resolveGate = ({
 	pathname,
 	hasSession,
+	isCommunityGuest,
 	isGuest,
 }: GateInput): GateDecision => {
 	if (isStaticFile(pathname)) {
@@ -69,6 +79,9 @@ export const resolveGate = ({
 		return next;
 	}
 	if (isGuest) {
+		if (isCommunityGuest && isCommunity(pathname)) {
+			return next;
+		}
 		if (pathname === "/") {
 			return redirect(SEEKER_ROOT);
 		}
