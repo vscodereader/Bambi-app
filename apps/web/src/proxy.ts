@@ -44,12 +44,19 @@ export async function proxy(request: NextRequest) {
 	// 게스트 여부는 쿠키 존재가 아니라 HMAC 서명 검증으로 판정한다. 평문 값 비교였을 때는
 	// devtools에서 document.cookie 한 줄로 성인 게이트가 뚫렸다.
 	const guestToken = request.cookies.get(GUEST_COOKIE_NAME)?.value;
-	const isGuest = guestToken
-		? (await verifyGuestToken(guestToken, guestTokenSecret(), new Date())) !==
-			null
-		: false;
+	const guest = guestToken
+		? await verifyGuestToken(guestToken, guestTokenSecret(), new Date())
+		: null;
+	// 수다방 입장은 gid까지 있는 여성 토큰만 — api의 게스트 액터 판정
+	// (bambi-community-authz의 resolveCommunityActor)과 같은 축이다.
+	const isCommunityGuest = guest?.gender === "female" && Boolean(guest.gid);
 
-	const decision = resolveGate({ pathname, hasSession, isGuest });
+	const decision = resolveGate({
+		hasSession,
+		isCommunityGuest,
+		isGuest: guest !== null,
+		pathname,
+	});
 
 	if (decision.type === "redirect") {
 		return NextResponse.redirect(new URL(decision.to, request.url));

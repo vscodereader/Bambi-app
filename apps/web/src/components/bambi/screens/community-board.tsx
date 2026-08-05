@@ -44,6 +44,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import {
 	CommunityNewBadge,
 	CommunityRoleBadges,
@@ -58,6 +59,7 @@ import {
 	getBoardBySlug,
 	getCommunityPageItems,
 	getCommunityTotalPages,
+	isGuestWritableBoardKey,
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
@@ -444,7 +446,11 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 		[pathname]
 	);
 
-	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	// 비회원(여성 인증 게스트)도 목록을 읽는다 — 프로필 조회는 회원 전용이라 걸지 않는다.
+	const { isGuest } = useBambiAuth();
+	const mineQuery = useQuery(
+		orpc.bambi.onboarding.getMine.queryOptions({ enabled: !isGuest })
+	);
 	const isAdmin = mineQuery.data?.bambiProfile?.role === "admin";
 
 	const listQuery = useQuery(
@@ -494,7 +500,11 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 	const showFilter =
 		board.key === "free" || board.key === "work_talk" || board.key === "market";
 	// 공지 게시판은 글쓰기가 운영자 전용이라 admin에게만 버튼을 노출한다.
-	const canWrite = board.writable && (!board.adminOnly || isAdmin);
+	// 비회원은 읽기만 전체 보드고 쓰기는 자유수다·밤문화 이야기로 좁다(서버 가드와 동일).
+	const canWrite =
+		board.writable &&
+		(!board.adminOnly || isAdmin) &&
+		(!isGuest || isGuestWritableBoardKey(board.key));
 	// 공지 게시판은 배지(광고·업소)를 생략한다.
 	const showBadges = board.key !== "notice";
 

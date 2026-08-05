@@ -33,6 +33,13 @@ export const getPublicBoardBySlug = (
 
 export const PUBLIC_BOARD_INDEX_PATH = "/board";
 
+// 지금 보고 있는 화면이 공개 영역(/board)인지. 글 폼·참여 UI가 공개 영역과 회원
+// 수다방 양쪽에서 쓰이므로, 이동 경로는 신분이 아니라 "어느 영역에 있는가"로 정한다
+// (여성 인증 게스트는 회원 수다방에서도 글·댓글을 쓴다).
+export const isPublicBoardPath = (pathname: string): boolean =>
+	pathname === PUBLIC_BOARD_INDEX_PATH ||
+	pathname.startsWith(`${PUBLIC_BOARD_INDEX_PATH}/`);
+
 // 1페이지는 쿼리를 붙이지 않는다 — 같은 목록이 /board/free 와 ?page=1 두 주소로
 // 색인되면 중복 콘텐츠가 된다(canonical도 이 함수 결과를 쓴다).
 export const publicBoardPath = (slug: string, page = 1): string =>

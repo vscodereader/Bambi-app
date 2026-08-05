@@ -244,13 +244,14 @@ const canBypassLock = (
 	profile !== null &&
 	(post.authorUserId === profile.userId || profile.role === "admin");
 
+// profile null은 잠금 우회가 없는 열람자(비회원 게스트) — 비밀글은 비밀번호로만 열린다.
 export const requirePostReadAccess = (
 	post: {
 		authorUserId: string | null;
 		isLocked: boolean;
 		passwordHash: string;
 	},
-	profile: BambiAccessProfile,
+	profile: BambiAccessProfile | null,
 	password?: string
 ): void => {
 	if (!post.isLocked || canBypassLock(post, profile)) {
@@ -400,16 +401,17 @@ const buildListFilters = (
 // ponytail: ilike 순차 스캔 — 글 수가 커지면 pg_trgm 인덱스나 tsvector로.
 const buildNarrowFilters = ({
 	mine,
+	owner,
 	q,
-	userId,
 }: {
 	mine: boolean;
+	// "내 글만 보기"의 판정 축. 액터마다 다른 컬럼이라 조건을 통째로 받는다.
+	owner: SQL;
 	q?: string;
-	userId: string;
 }): SQL[] => {
 	const filters: SQL[] = [];
 	if (mine) {
-		filters.push(eq(communityPost.authorUserId, userId));
+		filters.push(owner);
 	}
 	if (q) {
 		const pattern = `%${escapeLikePattern(q)}%`;
@@ -680,17 +682,26 @@ const toCommentItems = (
 	});
 
 export const communityRouter = {
-	listPosts: protectedProcedure
+	// 회원과 비회원(여성 성인인증 게스트)이 같은 목록을 본다 — 게시판·필터·정렬이 모두 같고,
+	// 갈리는 건 개인화 축(내 글)과 잠금 우회뿐이다. 게스트는 profile이 null이라 비밀글 제목이
+	// 항상 마스킹된다(회원 비소유자와 동일).
+	listPosts: publicProcedure
 		.input(listPostsInput)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
+			const profile = actor.kind === "member" ? actor.profile : null;
 
 			const listFilters = [
 				...buildListFilters(input.showPromotion, input.showEmployer),
 				...buildNarrowFilters({
 					mine: input.mine,
+					// 비회원은 계정이 없어 게스트 신원(gid)으로 좁힌다. 재인증으로 gid가 바뀌면
+					// 목록에서 빠지지만, 소유권 정본은 어차피 비밀번호다(assertGuestOwnership).
+					owner:
+						actor.kind === "member"
+							? eq(communityPost.authorUserId, actor.profile.userId)
+							: eq(communityPost.authorGuestId, actor.gid),
 					q: input.q,
-					userId: profile.userId,
 				}),
 			];
 			// 목록·count 쿼리가 같은 30일 컷오프를 쓰도록 한 번만 계산한다.
@@ -863,14 +874,17 @@ export const communityRouter = {
 			};
 		}),
 
-	getPost: protectedProcedure
+	getPost: publicProcedure
 		.input(
 			postIdInput.extend({
 				password: z.string().trim().max(30).optional(),
 			})
 		)
 		.handler(async ({ context, input }) => {
-			const profile = await requireCommunityMember(context.session);
+			const actor = await resolveCommunityActor(context);
+			// 게스트는 profile이 null이라 잠금 우회가 없다 — 비밀글은 회원 비소유자와 똑같이
+			// 비밀번호로만 열린다(게스트는 비밀글을 쓸 수 없어 자기 글이 잠긴 경우도 없다).
+			const profile = actor.kind === "member" ? actor.profile : null;
 			const post = await findPublishedPost(input.postId);
 
 			if (post.isLocked && !canBypassLock(post, profile)) {
@@ -897,25 +911,33 @@ export const communityRouter = {
 				.where(eq(communityPost.id, input.postId))
 				.returning({ viewCount: communityPost.viewCount });
 
+			// 추천 여부도 toggleLike와 같은 축으로 읽는다 — 회원은 user_id, 비회원은 guest_id.
 			const [like] = await db
 				.select({ id: communityPostLike.id })
 				.from(communityPostLike)
 				.where(
 					and(
 						eq(communityPostLike.postId, input.postId),
-						eq(communityPostLike.userId, profile.userId)
+						actor.kind === "member"
+							? eq(communityPostLike.userId, actor.profile.userId)
+							: eq(communityPostLike.guestId, actor.gid)
 					)
 				)
 				.limit(1);
 
-			const isMine = post.authorUserId === profile.userId;
+			// 비회원의 canEdit/canDelete는 gid 일치로 버튼만 열어 주는 힌트다 — 실제 수정·삭제의
+			// 최종 게이트는 서버의 비밀번호 검증이다(updatePost·deletePost의 assertGuestOwnership).
+			const isMine =
+				actor.kind === "member"
+					? post.authorUserId === actor.profile.userId
+					: post.authorGuestId === actor.gid;
 
 			return {
 				authorName: post.authorDisplayName,
 				authorRole: post.authorRole,
 				board: post.board,
 				body: post.body,
-				canDelete: isMine || profile.role === "admin",
+				canDelete: isMine || profile?.role === "admin",
 				canEdit: isMine,
 				commentCount: post.commentCount,
 				createdAt: post.createdAt,
@@ -936,10 +958,11 @@ export const communityRouter = {
 	// 읽어 확인해야 한다). 멤버 게이트 + 스위치 게이트를 통과해야 하고, 좋아요·수정·삭제·댓글
 	// 작성은 없다. sourceUrl은 절대 내려보내지 않는다 — 그 링크 한 줄이 원본 전체로 가는
 	// 우회로다(crawled-jobs.ts PUBLIC_COLUMNS 주석의 원칙 그대로).
-	getCrawledTopic: protectedProcedure
+	getCrawledTopic: publicProcedure
 		.input(z.object({ topicId: z.uuid() }))
 		.handler(async ({ context, input }) => {
-			await requireCommunityMember(context.session);
+			// 목록(listPosts)에서 이미 보이는 글이라 상세 게이트도 같은 액터 축으로 연다.
+			await resolveCommunityActor(context);
 			// 스위치 OFF면 존재를 숨긴다 — 노출을 내린 글은 상세도 열리지 않아야 한다.
 			if (!(await isCrawledCommunityFeedEnabled())) {
 				throw new ORPCError("NOT_FOUND", {
@@ -1251,8 +1274,10 @@ export const communityRouter = {
 			});
 		}),
 
-	// 회원 경로는 기존 그대로(잠금 게이트 통과 후 전체 댓글). 비회원·비로그인은 공개 상세
-	// (getPublicPost)와 같은 기준 — 공개 보드의 잠기지 않은 published 글만 열린다.
+	// 회원 경로는 기존 그대로(잠금 게이트 통과 후 전체 댓글). 인증 게스트는 읽기 범위가
+	// 회원과 같아(전체 보드 + 비밀번호로 여는 비밀글) 같은 게이트를 profile 없이 통과한다.
+	// 토큰이 없는 방문자(공개 /board·크롤러)만 공개 상세(getPublicPost)와 같은 기준 —
+	// 공개 보드의 잠기지 않은 published 글만 열린다.
 	listComments: publicProcedure
 		.input(postReadInput)
 		.handler(async ({ context, input }) => {
@@ -1275,14 +1300,17 @@ export const communityRouter = {
 				}));
 			}
 
-			if (!isPublicBoard(post.board) || post.isLocked) {
+			const guestId = actor?.kind === "guest" ? actor.gid : null;
+
+			if (guestId) {
+				requirePostReadAccess(post, null, input.password);
+			} else if (!isPublicBoard(post.board) || post.isLocked) {
 				throw new ORPCError("NOT_FOUND", {
 					message: "게시글을 찾을 수 없습니다.",
 				});
 			}
 
 			const rows = await selectVisibleCommentRows(input.postId);
-			const guestId = actor?.kind === "guest" ? actor.gid : null;
 
 			// 색인되는 공개 페이지라 회원 계정명은 싣지 않는다(getPublicPost와 같은 원칙).
 			// 화면은 authorRole 라벨로 작성인 유형만 표시한다.
