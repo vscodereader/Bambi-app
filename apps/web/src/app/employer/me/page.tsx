@@ -37,10 +37,12 @@ import {
 } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
+// 미등록 역할도 enum 원값 대신 중립 라벨로 떨어뜨린다(원값 노출 금지).
 const roleLabels: Record<string, string> = {
 	admin: "관리자",
 	employer: "구인자",
 	job_seeker: "구직자",
+	legal_advisor: "법률자문가",
 };
 
 const accountStatusLabels: Record<string, string> = {
@@ -55,7 +57,7 @@ const membershipRoleLabels: Record<string, string> = {
 	owner: "대표",
 };
 
-const getRoleLabel = (role: string): string => roleLabels[role] ?? role;
+const getRoleLabel = (role: string): string => roleLabels[role] ?? "회원";
 
 const getMembershipRoleLabel = (role: null | string): string => {
 	if (!role) {

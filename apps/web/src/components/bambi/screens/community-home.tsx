@@ -3,6 +3,7 @@
 // 수다방 홈 — 게시판별 최신 글 미리보기 인덱스(레퍼런스: 커뮤니티 인덱스형 홈).
 
 import { useQuery } from "@tanstack/react-query";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import {
 	CommunityOverviewGrid,
 	type OverviewPost,
@@ -16,6 +17,8 @@ import { orpc } from "@/utils/orpc";
 export function CommunityHomeScreen() {
 	const overviewQuery = useQuery(orpc.bambi.community.overview.queryOptions());
 	const adBanners = useAdBannerJobs();
+	// 법률자문 계정은 legal 게시판만 이용한다(서버 격리 가드와 동일) — 홈에도 legal 카드만 노출.
+	const { role } = useBambiAuth();
 
 	if (overviewQuery.isError) {
 		return (
@@ -48,6 +51,7 @@ export function CommunityHomeScreen() {
 			<h1 className="m-0 font-extrabold text-xl">수다방</h1>
 			<CommunityOverviewGrid
 				isPending={overviewQuery.isPending}
+				legalOnly={role === "legal_advisor"}
 				postsByBoard={postsByBoard}
 			/>
 		</div>

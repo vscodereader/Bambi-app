@@ -190,10 +190,14 @@ const PAIRED_BOARD_KEYS: CommunityBoardKey[] = ["market", "legal"];
 //들고 있어 홈과 수다방의 같은 섹션이 서로 다르게 보이던 걸 한 컴포넌트로 모은다.
 export function CommunityOverviewGrid({
 	isPending,
+	legalOnly = false,
 	onBlockedNavigate,
 	postsByBoard,
 }: {
 	isPending: boolean;
+	// 법률자문 계정용 — legal 게시판 카드 하나만 전폭으로 렌더한다(다른 보드는 서버가
+	// FORBIDDEN을 내므로 동선 자체를 숨긴다).
+	legalOnly?: boolean;
 	// BoardPreviewCard와 같은 의미 — 지정 시 수다방 링크를 가로채 호출한 화면이 안내한다.
 	onBlockedNavigate?: (href: string) => void;
 	postsByBoard: Record<CommunityBoardKey, OverviewPost[]>;
@@ -201,6 +205,18 @@ export function CommunityOverviewGrid({
 	const soloBoards = COMMUNITY_BOARDS.filter(
 		(board) => board.key !== "notice" && !PAIRED_BOARD_KEYS.includes(board.key)
 	);
+
+	if (legalOnly) {
+		return isPending ? (
+			<BoardPreviewSkeleton />
+		) : (
+			<BoardPreviewCard
+				boardKey="legal"
+				onBlockedNavigate={onBlockedNavigate}
+				posts={postsByBoard.legal}
+			/>
+		);
+	}
 
 	return (
 		<div className="grid grid-cols-1 gap-4 md:grid-cols-2">

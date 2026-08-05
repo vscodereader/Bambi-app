@@ -15,6 +15,7 @@ const {
 	assertGuestOwnership,
 	assertGuestPostAccess,
 	assertGuestWritableBoard,
+	assertLegalAdvisorBoardScope,
 	assertLegalAdvisorRoleSwitch,
 	canBypassLock,
 	findCommunityActor,
@@ -210,6 +211,60 @@ describe("무료 법률 자문 게시판", () => {
 		expect(canBypassLock({ authorUserId: null, board: "legal" }, null)).toBe(
 			false
 		);
+	});
+});
+
+describe("법률자문 게시판 격리", () => {
+	const profile = (role: string, gender = "female") =>
+		({
+			gender,
+			isPhoneVerified: true,
+			role,
+			status: "active",
+			userId: "u-1",
+		}) as Parameters<typeof assertLegalAdvisorBoardScope>[0];
+
+	it("legal_advisor는 legal 게시판만 통과한다", () => {
+		expect(
+			codeOf(() =>
+				assertLegalAdvisorBoardScope(profile("legal_advisor"), "legal")
+			)
+		).toBeUndefined();
+		for (const board of ["free", "work_talk", "market", "notice", "best"]) {
+			expect(
+				codeOf(() =>
+					assertLegalAdvisorBoardScope(profile("legal_advisor"), board)
+				)
+			).toBe("FORBIDDEN");
+		}
+	});
+
+	it("여성 legal_advisor도 예외 없다 — 역할이 성별 자격보다 우선", () => {
+		expect(
+			codeOf(() =>
+				assertLegalAdvisorBoardScope(profile("legal_advisor", "female"), "free")
+			)
+		).toBe("FORBIDDEN");
+	});
+
+	it("다른 역할·게스트(null)에는 발동하지 않는다", () => {
+		for (const role of ["job_seeker", "employer", "admin"]) {
+			for (const board of [
+				"free",
+				"work_talk",
+				"market",
+				"notice",
+				"best",
+				"legal",
+			]) {
+				expect(
+					codeOf(() => assertLegalAdvisorBoardScope(profile(role), board))
+				).toBeUndefined();
+			}
+		}
+		expect(
+			codeOf(() => assertLegalAdvisorBoardScope(null, "free"))
+		).toBeUndefined();
 	});
 });
 

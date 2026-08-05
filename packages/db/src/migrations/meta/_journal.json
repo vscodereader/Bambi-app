@@ -463,6 +463,13 @@
       "when": 1785896804095,
       "tag": "0065_handy_proteus",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1785901174146,
+      "tag": "0066_goofy_rockslide",
+      "breakpoints": true
     }
   ]
 }
