@@ -89,6 +89,8 @@ const handleRealVerification = async (identityVerificationId: string) => {
 	try {
 		const { gender } = await rpc.bambi.onboarding.checkIdentityForSignup({
 			identityVerificationId,
+			// 비회원 인증 흐름 — 수집 로그의 구분을 guest로 남긴다(가입하면 역할로 덮인다).
+			source: "guest",
 		});
 		return await verifiedResponse(gender);
 	} catch (error) {
