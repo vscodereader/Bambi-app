@@ -1,0 +1,143 @@
+import { ORPCError } from "@orpc/server";
+import dotenv from "dotenv";
+import { describe, expect, it } from "vitest";
+
+// 게스트 분기는 DB를 타지 않지만(세션 없음 → 프로필 조회도 없음) 모듈 그래프가
+// @bambi-app/db를 끌어오므로 env 검증만 통과시킨다. .env가 있으면 그 값이 이기고,
+// 없는 환경(워크트리)에서는 연결하지 않는 플레이스홀더로 채운다.
+dotenv.config({ path: "../../apps/server/.env" });
+process.env.DATABASE_URL ||= "postgres://placeholder/community-authz";
+process.env.BETTER_AUTH_SECRET ||= "community-authz-test-secret-32-chars-min";
+process.env.BETTER_AUTH_URL ||= "http://localhost:3000";
+process.env.CORS_ORIGIN ||= "http://localhost:3001";
+
+const {
+	assertGuestOwnership,
+	assertGuestPostAccess,
+	assertGuestWritableBoard,
+	findCommunityActor,
+	requireGuestPassword,
+	resolveCommunityActor,
+} = await import("./bambi-community-authz");
+const { hashCommunityPassword } = await import("./bambi-community-password");
+
+// 던진 ORPCError의 코드만 뽑는다(통과하면 undefined) — 가드마다 try/catch를 쓰지 않으려고.
+const codeOf = (run: () => void): string | undefined => {
+	try {
+		run();
+	} catch (error) {
+		return error instanceof ORPCError ? error.code : "not-orpc-error";
+	}
+	return;
+};
+
+describe("resolveCommunityActor — 비회원 분기", () => {
+	it("세션도 게스트 토큰도 없으면 UNAUTHORIZED", async () => {
+		await expect(resolveCommunityActor({})).rejects.toMatchObject({
+			code: "UNAUTHORIZED",
+		});
+	});
+
+	it("남성 게스트는 FORBIDDEN, 성별 미상도 FORBIDDEN", async () => {
+		await expect(
+			resolveCommunityActor({ guest: { gender: "male", gid: "g-1" } })
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+		await expect(
+			resolveCommunityActor({ guest: { gender: null, gid: "g-2" } })
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+	});
+
+	it("여성 게스트는 gid를 가진 guest 액터가 된다", async () => {
+		await expect(
+			resolveCommunityActor({ guest: { gender: "female", gid: "g-3" } })
+		).resolves.toEqual({ gender: "female", gid: "g-3", kind: "guest" });
+	});
+
+	it("findCommunityActor는 자격 실패를 null로 접는다", async () => {
+		await expect(findCommunityActor({})).resolves.toBeNull();
+		await expect(
+			findCommunityActor({ guest: { gender: "male", gid: "g-4" } })
+		).resolves.toBeNull();
+	});
+});
+
+describe("비회원 쓰기 게이트", () => {
+	it("자유수다·밤문화 이야기에만 참여할 수 있다", () => {
+		expect(codeOf(() => assertGuestWritableBoard("free"))).toBeUndefined();
+		expect(codeOf(() => assertGuestWritableBoard("work_talk"))).toBeUndefined();
+		// 공지는 읽기만 열려 있고(운영자 게시판), 중고거래·베스트는 비로그인에게 닫혀 있다.
+		for (const board of ["notice", "market", "best"]) {
+			expect(codeOf(() => assertGuestWritableBoard(board))).toBe("BAD_REQUEST");
+		}
+	});
+
+	it("잠금글에는 비회원이 댓글·추천을 남길 수 없다", () => {
+		expect(
+			codeOf(() => assertGuestPostAccess({ board: "free", isLocked: false }))
+		).toBeUndefined();
+		expect(
+			codeOf(() => assertGuestPostAccess({ board: "free", isLocked: true }))
+		).toBe("BAD_REQUEST");
+		expect(
+			codeOf(() => assertGuestPostAccess({ board: "notice", isLocked: false }))
+		).toBe("BAD_REQUEST");
+	});
+
+	it("비회원 글·댓글 비밀번호는 4자 이상 필수다", () => {
+		expect(requireGuestPassword("1234")).toBe("1234");
+		for (const password of [undefined, "", "123"]) {
+			expect(codeOf(() => requireGuestPassword(password))).toBe("BAD_REQUEST");
+		}
+	});
+});
+
+describe("비회원 소유권 증명", () => {
+	const guestRow = {
+		authorGuestId: "g-1",
+		passwordHash: hashCommunityPassword("secret-1"),
+	};
+
+	it("비밀번호가 맞으면 gid가 달라도 통과한다", () => {
+		// 쿠키가 만료돼 gid가 새로 발급돼도 본인 글을 고치고 지울 수 있어야 한다.
+		expect(
+			codeOf(() => assertGuestOwnership(guestRow, "secret-1"))
+		).toBeUndefined();
+	});
+
+	it("비밀번호가 틀리거나 없으면 FORBIDDEN", () => {
+		for (const password of [undefined, "", "secret-2"]) {
+			expect(codeOf(() => assertGuestOwnership(guestRow, password))).toBe(
+				"FORBIDDEN"
+			);
+		}
+	});
+
+	it("회원 글은 비밀번호가 맞아도 비회원 소유권으로 열리지 않는다", () => {
+		// 잠금글 회원 글은 passwordHash가 채워져 있다 — author_guest_id가 없으면
+		// 그 비밀번호를 아는 사람도 비회원 경로로 수정·삭제할 수 없어야 한다.
+		expect(
+			codeOf(() =>
+				assertGuestOwnership(
+					{
+						authorGuestId: null,
+						passwordHash: hashCommunityPassword("locked-pw"),
+					},
+					"locked-pw"
+				)
+			)
+		).toBe("FORBIDDEN");
+	});
+
+	it("비번 없는 행(빈 해시)은 어떤 비밀번호로도 열리지 않는다", () => {
+		expect(
+			codeOf(() =>
+				assertGuestOwnership({ authorGuestId: "g-2", passwordHash: "" }, "")
+			)
+		).toBe("FORBIDDEN");
+		expect(
+			codeOf(() =>
+				assertGuestOwnership({ authorGuestId: "g-2", passwordHash: "" }, "1234")
+			)
+		).toBe("FORBIDDEN");
+	});
+});

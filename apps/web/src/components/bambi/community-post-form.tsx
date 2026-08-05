@@ -19,6 +19,7 @@ import {
 	communityBoardPath,
 	communityPostPath,
 } from "@/lib/bambi/community";
+import { publicBoardPath, publicPostPath } from "@/lib/bambi/public-community";
 import { orpc } from "@/utils/orpc";
 
 const TITLE_MAX = 100;
@@ -26,6 +27,10 @@ const AUTHOR_MAX = 30;
 const PASSWORD_MIN = 4;
 const PASSWORD_MAX = 30;
 const MIN_TEXT = 2;
+
+// 비회원 글의 작성인 기본값. 서버 zod가 빈 문자열을 거부하므로 화면이 값을 채워 보낸다
+// (자유 수정 가능 — 금칙어 검사는 회원과 동일하게 서버가 한다).
+const GUEST_AUTHOR_DEFAULT = "비회원";
 
 type WritableBoardKey = Exclude<CommunityBoardKey, "best">;
 
@@ -37,6 +42,16 @@ const getInitialLockedState = (
 	initiallyLocked: boolean | undefined
 ): boolean => boardKey !== "free" && Boolean(initiallyLocked);
 
+// 비회원은 공개 영역(/board)에서 오고 그리로 돌아간다 — 회원 화면은 게이트가 막는다.
+const listPathFor = (guest: boolean, slug: string): string =>
+	guest ? publicBoardPath(slug) : communityBoardPath(slug);
+
+const detailPathFor = (guest: boolean, slug: string, postId: string): string =>
+	guest ? publicPostPath(slug, postId) : communityPostPath(slug, postId);
+
+const initialAuthorName = (guest: boolean, initial?: string): string =>
+	initial ?? (guest ? GUEST_AUTHOR_DEFAULT : "");
+
 const isLockPasswordRequired = (
 	isEdit: boolean,
 	isFreeBoard: boolean,
@@ -46,7 +61,7 @@ const isLockPasswordRequired = (
 interface CommunityPostInitial {
 	authorName: string;
 	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
-	authorRole: "admin" | "employer" | "job_seeker";
+	authorRole: "admin" | "employer" | "guest" | "job_seeker";
 	body: string;
 	id: string;
 	isLocked: boolean;
@@ -59,13 +74,33 @@ interface CommunityPostFormProps {
 	board: CommunityBoardMeta;
 	// 수정 모드 초기값. 비작성자(비밀번호 수정)는 editPassword로 게이트 통과 비번을 넘긴다.
 	editPassword?: string;
+	// 비회원(게스트 인증) 모드. 작성인 기본값·비밀번호 필수·잠금/광고 숨김이 함께 바뀌고
+	// 완료 후 이동도 공개 영역(/board)으로 간다.
+	guest?: boolean;
 	initialPost?: CommunityPostInitial;
 }
 
+const passwordLabel = (guest: boolean, isEdit: boolean): string => {
+	if (guest) {
+		return "비밀번호";
+	}
+	return isEdit ? "글 비밀번호" : "비밀글 비밀번호";
+};
+
+const passwordPlaceholder = (guest: boolean, isEdit: boolean): string => {
+	if (guest) {
+		return "4자 이상 (수정·삭제할 때 필요해요)";
+	}
+	return isEdit ? "본인은 비워둘 수 있어요" : "4자 이상";
+};
+
 // 비밀글 잠금 스위치 + (잠금 시) 비밀번호 필드. 자유수다는 스위치를 숨기되 수정 권한 확인용
 // 비밀번호 필드는 유지한다. 작성 모드는 잠금을 끄면 잔여 비번을 비운다.
+// 비회원은 잠금 자체를 쓸 수 없고(공개 경로에서 자기 글도 못 읽게 된다) 비밀번호가
+// 소유권 증명 전용이라 항상 필드를 노출한다.
 function PostLockField({
 	allowLocking,
+	guest,
 	isEdit,
 	isLocked,
 	password,
@@ -73,13 +108,14 @@ function PostLockField({
 	setPassword,
 }: {
 	allowLocking: boolean;
+	guest: boolean;
 	isEdit: boolean;
 	isLocked: boolean;
 	password: string;
 	setIsLocked: (value: boolean) => void;
 	setPassword: (value: string) => void;
 }) {
-	const showPasswordField = isEdit || (allowLocking && isLocked);
+	const showPasswordField = guest || isEdit || (allowLocking && isLocked);
 	const handleLockChange = (checked: boolean) => {
 		setIsLocked(checked);
 		if (!(checked || isEdit)) {
@@ -101,14 +137,14 @@ function PostLockField({
 			{showPasswordField ? (
 				<div className="flex flex-col gap-2">
 					<Label htmlFor="community-post-password">
-						{isEdit ? "글 비밀번호" : "비밀글 비밀번호"}
+						{passwordLabel(guest, isEdit)}
 					</Label>
 					<Input
 						autoComplete="new-password"
 						id="community-post-password"
 						maxLength={PASSWORD_MAX}
 						onChange={(event) => setPassword(event.target.value)}
-						placeholder={isEdit ? "본인은 비워둘 수 있어요" : "4자 이상"}
+						placeholder={passwordPlaceholder(guest, isEdit)}
 						type="password"
 						value={password}
 					/>
@@ -121,14 +157,18 @@ function PostLockField({
 export function CommunityPostForm({
 	board,
 	editPassword,
+	guest = false,
 	initialPost,
 }: CommunityPostFormProps) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const isEdit = Boolean(initialPost);
 	const isFreeBoard = board.key === "free";
+	const listPath = listPathFor(guest, board.slug);
 
-	const [authorName, setAuthorName] = useState(initialPost?.authorName ?? "");
+	const [authorName, setAuthorName] = useState(
+		initialAuthorName(guest, initialPost?.authorName)
+	);
 	const [password, setPassword] = useState(editPassword ?? "");
 	const [isLocked, setIsLocked] = useState(
 		getInitialLockedState(board.key, initialPost?.isLocked)
@@ -144,8 +184,11 @@ export function CommunityPostForm({
 
 	// 현재 편집자가 admin인지 알아야 예약 작성인 예외를 적용할 수 있으므로 작성·수정
 	// 모두 프로필을 조회한다. 광고 게이트는 수정 모드에서 글 작성자 role 스냅샷을 쓴다.
+	// 비회원 모드에서는 세션·프로필 조회가 401로 끝나므로 아예 걸지 않는다.
 	const session = authClient.useSession();
-	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
+	const mineQuery = useQuery(
+		orpc.bambi.onboarding.getMine.queryOptions({ enabled: !guest })
+	);
 	const role = mineQuery.data?.bambiProfile?.role;
 	// 작성인 기본값은 표시명(user.name, 세션)에서 가져온다 — bambi_profile.display_name은 제거됐다.
 	const displayName = session.data?.user?.name ?? "";
@@ -175,7 +218,7 @@ export function CommunityPostForm({
 		await queryClient.invalidateQueries({
 			queryKey: orpc.bambi.community.key(),
 		});
-		router.replace(communityPostPath(board.slug, postId) as Route);
+		router.replace(detailPathFor(guest, board.slug, postId) as Route);
 	};
 
 	const createMutation = useMutation(
@@ -202,12 +245,10 @@ export function CommunityPostForm({
 	);
 
 	// 비밀번호는 비밀글(잠금)에만 필요하다 — 작성 모드에서 잠그지 않으면 비번 없이 등록할 수 있다.
-	const requiresPassword = isLockPasswordRequired(
-		isEdit,
-		isFreeBoard,
-		isLocked
-	);
-	const submittedIsLocked = !isFreeBoard && isLocked;
+	// 비회원은 세션이 없어 비밀번호가 유일한 소유권 증명이라 작성·수정 모두 필수다.
+	const requiresPassword =
+		guest || isLockPasswordRequired(isEdit, isFreeBoard, isLocked);
+	const submittedIsLocked = !(isFreeBoard || guest) && isLocked;
 
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
 	const canSubmit =
@@ -280,7 +321,8 @@ export function CommunityPostForm({
 			</div>
 
 			<PostLockField
-				allowLocking={!isFreeBoard}
+				allowLocking={!(isFreeBoard || guest)}
+				guest={guest}
 				isEdit={isEdit}
 				isLocked={isLocked}
 				password={password}
@@ -324,7 +366,7 @@ export function CommunityPostForm({
 
 			<div className="flex justify-end gap-2">
 				<Button
-					onClick={() => router.push(communityBoardPath(board.slug) as Route)}
+					onClick={() => router.push(listPath as Route)}
 					type="button"
 					variant="outline"
 				>

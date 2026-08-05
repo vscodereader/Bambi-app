@@ -1,7 +1,10 @@
+import {
+	DEV_GUEST_TOKEN_SECRET,
+	GUEST_COOKIE_NAME,
+	verifyGuestToken,
+} from "@bambi-app/api/services/bambi-guest-token";
 import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
-import { GUEST_COOKIE_NAME } from "@/lib/bambi/guest";
-import { verifyGuestToken } from "@/lib/bambi/guest-token";
 import { resolveGate } from "@/lib/bambi/resolve-gate";
 
 export const config = {
@@ -11,11 +14,10 @@ export const config = {
 	matcher: ["/((?!_next/static|_next/image|.*\\.[^/]+$).*)"],
 };
 
-// /api/guest 라우트의 서명 키와 같은 값이어야 한다. edge 미들웨어라 @bambi-app/env를
-// 거치지 않고 process.env를 직접 읽는다(개발 폴백도 라우트와 동일).
+// /api/guest 라우트·api 서버의 서명 키와 같은 값이어야 한다. edge 미들웨어라
+// @bambi-app/env를 거치지 않고 process.env를 직접 읽는다(개발 폴백은 공용 상수).
 const guestTokenSecret = (): string =>
-	process.env.BAMBI_GUEST_TOKEN_SECRET ??
-	"bambi-dev-guest-token-secret-not-for-prod";
+	process.env.BAMBI_GUEST_TOKEN_SECRET ?? DEV_GUEST_TOKEN_SECRET;
 
 export async function proxy(request: NextRequest) {
 	const { pathname } = request.nextUrl;

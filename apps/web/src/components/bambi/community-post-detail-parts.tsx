@@ -59,7 +59,9 @@ import { orpc } from "@/utils/orpc";
 const PASSWORD_MIN = 4;
 const DETAILS_MAX = 1000;
 
-export type CommunityAuthorRole = "admin" | "employer" | "job_seeker";
+// 비회원(guest)도 글·댓글을 남길 수 있어 작성자 role 스냅샷에 포함된다. 화면 표시는
+// 항상 라벨 맵(communityAuthorRoleLabel)을 거치고, 여기서는 배지 분기에만 쓴다.
+export type CommunityAuthorRole = "admin" | "employer" | "guest" | "job_seeker";
 
 // 상세 화면이 소비하는 글 필드(잠금 해제 상태).
 export interface CommunityPostDetail {

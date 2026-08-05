@@ -19,6 +19,7 @@
 | web(클라) | `NEXT_PUBLIC_PORTONE_STORE_ID`, `NEXT_PUBLIC_PORTONE_CHANNEL_KEY` | **둘 중 하나라도 비면 본인인증이 목(mock) 폼으로 폴백**. 로그인 화면의 "아이디 찾기 / 비밀번호를 잊으셨나요?" 링크도 **렌더되지 않음** | `packages/env/src/web.ts` |
 | web(서버) | `PORTONE_API_SECRET` | 게스트 실인증(`POST /api/guest`)이 **503** | 동일 |
 | web(서버) | `BAMBI_GUEST_TOKEN_SECRET` (min 32자) | 개발 폴백 키(`bambi-dev-guest-token-secret-not-for-prod`) 사용 | 동일 |
+| server | `BAMBI_GUEST_TOKEN_SECRET` (min 32자) | 개발 폴백 키 사용. web과 값이 어긋나면 게스트 신원(`context.guest`)이 항상 null | `packages/env/src/server.ts` |
 | web(서버) | `BAMBI_COOKIE_PREFIX` | better-auth 기본 prefix. 서버(`packages/auth`)와 값이 어긋나면 **세션 판정이 통째로 틀어짐** | 동일 |
 | web(클라) | `NEXT_PUBLIC_GCS_PUBLIC_BASE_URL` | 공고 이미지가 샘플 썸네일로 폴백 | 동일 |
 | server | `PORTONE_API_SECRET` | 회원 본인인증이 목 핸들러(`verifyMyPhoneMock`)로 폴백 | `packages/env/src/server.ts` |
@@ -853,10 +854,12 @@
 - **실패 케이스**: 스위치 OFF → `NOT_FOUND`(존재 자체를 숨김)
 - **관련 API**: `bambi.community.getCrawledTopic` (protected + `requireCommunityMember`)
 
-### 11.9 공개 게시판(비로그인 읽기 전용, SEO)
+### 11.9 공개 게시판(비로그인 읽기 + 비회원 쓰기, SEO)
 
-- **경로**: `/board`(허브) · `/board/[boardSlug]`(목록) · `/board/[boardSlug]/[postId]`(상세)
-  (파일: `apps/web/src/app/board/**`, `apps/web/src/components/bambi/public-post-body.tsx`)
+- **경로**: `/board`(허브) · `/board/[boardSlug]`(목록) · `/board/[boardSlug]/[postId]`(상세) ·
+  `/board/[boardSlug]/write`(비회원 글쓰기) · `/board/[boardSlug]/[postId]/edit`(비회원 글 수정)
+  (파일: `apps/web/src/app/board/**`, `apps/web/src/components/bambi/public-post-body.tsx`,
+  `public-post-interactions.tsx`, `guest-verify-card.tsx`)
 - **게이트**: `resolve-gate`의 공개 prefix에 `/board` 추가 — 비로그인·게스트 모두 통과. `/seeker/community` 쪽 자격 게이트는 **그대로**다.
 - **공개 대상**: 서버 상수 `PUBLIC_COMMUNITY_BOARDS = notice · free · work_talk`(`packages/api/src/routers/bambi/community.ts`).
   `market`·`best`는 비공개 → 슬러그로 직접 들어가도 404. 잠금(비밀)글·`published` 아닌 글·수집 글은 목록·상세 모두 제외.
@@ -866,11 +869,42 @@
   - 상세 `<title>`·`description`·`canonical`이 글마다 다르고, `DiscussionForumPosting` JSON-LD가 실린다
   - 목록·상세 모두 **현재 위치 내비**(커뮤니티 게시판 › 게시판 › 글)와 같은 계층의 `BreadcrumbList` JSON-LD가 함께 나온다(`apps/web/src/lib/bambi/seo.ts` `breadcrumbJsonLd`)
   - 본문 이미지는 렌더되지 않고 "이미지는 회원 화면에서 볼 수 있어요" 자리표시자로 대체
-  - 댓글은 읽기만 가능(작성자 계정명 미노출 — 회원/업소 회원 표기만), 작성 UI 없음
-  - "로그인하고 댓글 쓰기"는 `/seeker/community/[slug]/[postId]`로 보내고, 비로그인은 게이트가 로그인 화면으로 돌린다
+  - 댓글 목록은 항상 SSR HTML에 포함(작성자 계정명 미노출 — `communityAuthorRoleLabel`로 "회원/업소 회원/비회원"만)
+  - 로그인 회원에게는 참여 UI 대신 "회원 화면에서 보기"(`/seeker/community/[slug]/[postId]`) 안내가 나온다
   - 상세 조회로 **조회수가 오르지 않는다**(크롤러 방문 방지)
   - slug와 글의 실제 게시판이 다르면 404(중복 URL 색인 방지)
 - **관련 API**: `bambi.community.listPublicPosts` · `bambi.community.getPublicPost` (둘 다 `publicProcedure`)
+
+#### 11.9.1 비회원(게스트) 쓰기
+
+- **자격**: 게스트 쿠키(`bambi_guest`) 서명·만료 유효 + **`gid` 포함(v2)** + `gender === "female"`.
+  gid 없는 옛 토큰 보유자는 읽기만 되고 쓰기는 401 → 화면이 재인증 카드를 세운다
+  (`readGuestCanWrite`, `packages/api/src/context.ts` `resolveGuest`).
+- **전달 경로**: 게스트 쿠키는 host-only라 API 서버에 안 실린다 → 클라 oRPC 링크가 `x-bambi-guest`
+  헤더로 옮겨 붙이고(`apps/web/src/utils/orpc.ts`), SSR 경유 호출은 `Cookie` 헤더 폴백.
+  CORS `allowedHeaders`에 `x-bambi-guest`가 없으면 preflight에서 잘린다(`apps/server/src/plugins/cors.ts`).
+  **web·server의 `BAMBI_GUEST_TOKEN_SECRET`이 다르면 전부 401.**
+- **허용 범위**: 게시판 `free`·`work_talk`만(공지는 읽기 전용), 글·댓글·추천. 비밀글 작성·전환 불가.
+- **비밀번호**: 비회원 글·댓글은 **4자 이상 필수**(scrypt 해시). 수정·삭제는 gid가 아니라 **비밀번호로만**
+  판정 → 쿠키가 만료돼도 본인 글을 지울 수 있다. 회원 글(`author_guest_id = null`)은 비번이 맞아도
+  비회원 경로로 수정·삭제되지 않는다.
+- **확인 사항 / 실패 케이스**:
+  | 상황 | 결과 |
+  |---|---|
+  | 미인증 방문자가 게시판 헤더 [본인인증하고 글쓰기] | 본인인증 다이얼로그 → 성공 시 `/board/[slug]/write`로 복귀(`redirectTo`) |
+  | 인증된 비회원이 `자유수다`/`밤문화 이야기` 글쓰기 | 작성인 기본 "비회원", 비밀번호 필드 필수, 잠금·광고 스위치 없음 |
+  | 인증된 비회원이 `공지사항`에 글·댓글·추천 | 버튼 미노출 / API 직접 호출 시 `BAD_REQUEST` "비회원은 자유수다·밤문화 이야기에만 참여할 수 있어요." |
+  | 남성·성별 미상 게스트 | `FORBIDDEN` "여성회원과 광고 중인 업소회원만 이용가능합니다" |
+  | 토큰 없음·위조·만료·gid 없는 옛 토큰 | `UNAUTHORIZED` "본인인증 후 이용할 수 있습니다." |
+  | 비밀번호 4자 미만 | `BAD_REQUEST` "비회원 글·댓글은 4자 이상의 비밀번호가 필요합니다." |
+  | 수정·삭제 비밀번호 불일치 | `FORBIDDEN` "비밀번호가 일치하지 않습니다." |
+  | 같은 글 추천 두 번 | 토글(추천 → 취소). `(post_id, guest_id)` unique로 중복 행 불가 |
+  | 글 1분 2회 / 댓글 1분 6회 | `TOO_MANY_REQUESTS`. gid·IP **두 버킷 모두** 통과해야 한다 |
+  | 로그인 상태에서 게스트 쿠키 보유 | 세션이 정본 → 회원 자격 판정(정지·성별·광고)을 게스트 신분으로 우회 불가 |
+  | 비회원 답글(대댓글)·신고·이미지 첨부 | **미구현** — 회원 화면 전용 |
+- **관련 API**: `createPost`·`updatePost`·`deletePost`·`toggleLike`·`createComment`·`updateComment`·
+  `deleteComment`·`listComments` 전부 `publicProcedure` + `resolveCommunityActor`
+  (`packages/api/src/services/bambi-community-authz.ts`). 회원 경로 동작은 회귀 없음.
 
 ---
 

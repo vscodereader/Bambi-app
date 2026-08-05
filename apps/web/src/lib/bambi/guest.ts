@@ -1,6 +1,10 @@
-import { decodeGuestTokenGender } from "./guest-token";
+import {
+	decodeGuestTokenGender,
+	readGuestTokenFromCookieString,
+} from "@bambi-app/api/services/bambi-guest-token";
 
-export const GUEST_COOKIE_NAME = "bambi_guest";
+// 쿠키 이름(GUEST_COOKIE_NAME)은 토큰 모듈이 소유한다 — api 서버도 Cookie 헤더에서
+// 같은 이름을 찾으므로, 필요한 쪽에서 직접 import 한다.
 export const GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 
 // 실인증(포트원) 이전의 목 인증 쿠키들. 더는 발급하지 않지만 기존 방문자 브라우저에
@@ -22,15 +26,6 @@ export interface MockPhoneVerifyInput {
 	name: string;
 	phone: string;
 }
-
-const readGuestTokenFromCookieString = (cookie: string): string | null => {
-	const entry = cookie
-		.split(";")
-		.map((part) => part.trim())
-		.find((part) => part.startsWith(`${GUEST_COOKIE_NAME}=`));
-	const value = entry?.slice(GUEST_COOKIE_NAME.length + 1);
-	return value ? value : null;
-};
 
 // 클라이언트에서 게스트 쿠키의 존재만 본다(내비게이션 UI 분기용). 진위 판정은 서버
 // 미들웨어가 서명 검증으로 한다 — 여기 값은 위조 가능하므로 권한 판단에 쓰지 않는다.
