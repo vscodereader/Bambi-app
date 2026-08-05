@@ -3,12 +3,18 @@
 
 "use client";
 
+import {
+	getLoginIdErrorMessage,
+	LOGIN_ID_HELP_TEXT,
+	LOGIN_ID_MIN_LENGTH,
+} from "@bambi-app/auth/login-id";
 import { Button } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -41,6 +47,16 @@ export function AuthSignupFields({
 	signupRole: SignupRole;
 	values: AuthFormValues;
 }) {
+	// 서버(@bambi-app/auth의 공용 규칙)와 같은 검증을 입력 즉시 돌려, 회원가입 버튼을
+	// 누르고 서버까지 다녀와서야 형식 오류를 아는 일이 없게 한다.
+	// 다만 "3자 이상" 잔소리는 여기서 하지 않는다 — 짧은 값은 아직 입력 중일 뿐이라
+	// 오류가 아니다(길이는 제출 시 auth-panel이 한 번 더 본다).
+	const loginId = values.username.trim();
+	const loginIdError =
+		loginId.length >= LOGIN_ID_MIN_LENGTH
+			? getLoginIdErrorMessage(loginId)
+			: null;
+
 	return (
 		<>
 			<label className="grid gap-2" htmlFor="auth-nickname">
@@ -57,11 +73,23 @@ export function AuthSignupFields({
 				<span className="font-bold text-sm">아이디</span>
 				<Input
 					autoComplete="username"
+					error={loginIdError !== null}
 					id="auth-username"
 					onChange={onFieldChange("username")}
-					placeholder="영문·숫자 3자 이상"
+					placeholder="예: bambi-alba"
 					value={values.username}
 				/>
+				{/* 규칙 안내는 상시 노출하고, 어긋난 순간에만 그 자리를 오류 문구로 바꾼다 —
+				    두 줄이 동시에 뜨면 무엇을 고쳐야 하는지 흐려진다. */}
+				<span
+					className={cn(
+						"text-xs leading-relaxed",
+						loginIdError ? "text-destructive" : "text-muted-foreground"
+					)}
+					role={loginIdError ? "alert" : undefined}
+				>
+					{loginIdError ?? LOGIN_ID_HELP_TEXT}
+				</span>
 			</label>
 			<label className="grid gap-2" htmlFor="auth-password">
 				<span className="font-bold text-sm">비밀번호</span>
