@@ -410,16 +410,19 @@
 
 ### 4.7 탈퇴 계정 잔여 식별값 파기 (배치)
 
-- **경로**: `/moderator/site-settings` 내 실행 버튼 (§13)
+- **경로**: 서버 스케줄러가 **자동 실행(매일 1회)** + `/moderator/site-settings` 실행 버튼(즉시 실행용, §13)
+- **자동 실행**: `apps/server/src/plugins/withdrawal-purge.ts` — 서버 기동 5분 뒤 1회, 이후 24시간 간격.
+  실행 시점마다 `resolveWithdrawalRetentionDays()`로 보존기간을 다시 읽으므로 설정 변경은 다음 실행부터 반영된다.
+  결과는 `withdrawal purge completed` 로그(파기 0건이면 로그 없음), 실패는 `withdrawal purge failed` 후 다음 회차 재시도.
 - > ⚠ **되돌릴 수 없다.** 보존기간(운영자 설정, 기본 30일)이 지난 탈퇴 계정의 세션·자격증명(비밀번호)·
   > 연락처·CI/DI 해시를 지우고, 이메일을 `withdrawn-<id>@invalid.bambi`, `login_id`를 null,
   > 이름을 "탈퇴한 회원"으로 치환한다.
   > `user` 행 자체는 삭제하지 않는다(상대방 데이터가 RESTRICT FK로 물려 있음).
 - > **탈퇴 시점에는 아무것도 파기되지 않는다.** 탈퇴(`onboarding.withdrawMyAccount`)는 `deletedAt`·표시명
-  > 익명화·세션 삭제까지만 하는 소프트 삭제다. 이 배치가 유일한 파기 지점이므로 **주기적으로 눌러야**
-  > 이메일·아이디·연락처가 실제로 지워진다.
+  > 익명화·세션 삭제까지만 하는 소프트 삭제다. 이메일·아이디·연락처는 이 배치가 보존기간 경과 후 지운다.
 - **기대 결과**: `{ purgedCount: N }` 반환. 대상 0건이면 즉시 `{ purgedCount: 0 }`.
-- **관련 API**: `bambi.moderation.purgeWithdrawnAccounts` (`moderation.ts` L2539, `adminProcedure`)
+- **관련 API**: `bambi.moderation.purgeWithdrawnAccounts`(`adminProcedure`) — 자동 실행과 동일한
+  서비스 `purgeWithdrawnAccountsBatch`(`packages/api/src/services/bambi-withdrawal-purge.ts`)를 호출한다.
 
 ---
 
@@ -1196,7 +1199,8 @@
 
 ### 13.5 "지금 파기 실행" (탈퇴 계정 잔여 정보 파기)
 
-- **절차**: 「회원 정책」 카드 하단 **지금 파기 실행** 클릭.
+- **절차**: 「회원 정책」 카드 하단 **지금 파기 실행** 클릭. 같은 배치를 서버가 매일 1회
+  자동 실행하므로(§4.7) 이 버튼은 다음 자동 실행 전에 즉시 정리할 때만 쓴다.
 - > ⚠ **확인 다이얼로그 없이 즉시 실행되며 되돌릴 수 없다.**
   > 대상: `deletedAt IS NOT NULL AND deletedAt <= (now - 보존기간) AND purgedAt IS NULL`.
   > 세션·자격증명(비밀번호) 삭제, 연락처·성별·생년월일·CI/DI 해시 파기,
@@ -1205,8 +1209,9 @@
 - **기대 결과**: 대상 0건 → "보존기간이 지난 탈퇴 계정이 없어요." /
   N건 → "탈퇴 계정 N건의 잔여 정보를 파기했어요."
 - **엣지 케이스**: 멱등하다(`purgedAt IS NULL` 조건) → 연속 2회 클릭 시 두 번째는 0건.
-  cron 인프라가 없어 이 버튼이 유일한 트리거다.
-- **관련 API**: `bambi.moderation.purgeWithdrawnAccounts` (`moderation.ts` L2539, `adminProcedure`)
+  자동 실행과 겹쳐도 같은 이유로 두 번 처리되지 않는다.
+- **관련 API**: `bambi.moderation.purgeWithdrawnAccounts` (`adminProcedure`) →
+  `purgeWithdrawnAccountsBatch`(`packages/api/src/services/bambi-withdrawal-purge.ts`)
 
 ### 13.6 최저시급 표기
 

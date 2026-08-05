@@ -19,6 +19,12 @@ export const accountStatuses = ["active", "warned", "suspended"] as const;
 // 해석은 bambi-member-policy의 resolveWithdrawalRetentionDays가 담당한다.
 export const DEFAULT_WITHDRAWAL_RETENTION_DAYS = 30;
 
+// 파기 대상 경계 시각 — 이 시각 이전에 탈퇴한 계정이 보존기간 경과분이다.
+export const resolveWithdrawalPurgeCutoff = (
+	now: Date,
+	retentionDays: number
+): Date => new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+
 // 공고 상세의 급여 옆 보조 표기에 쓰는 최저시급 기본값. 실제 적용값은 운영자 사이트 설정
 // (bambi_site_settings.minimum_wage_year / minimum_wage_hourly)이 우선하고, 미설정이면 이 값을 쓴다.
 // 연도를 함께 두는 이유: 최저시급은 매년 바뀌고 다음 해 값이 8월에 미리 고시되므로

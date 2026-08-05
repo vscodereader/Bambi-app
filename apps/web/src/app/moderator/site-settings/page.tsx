@@ -256,7 +256,8 @@ export default function ModeratorSiteSettingsPage() {
 		saveMemberPolicyMutation.mutate({ withdrawalRetentionDays: parsed });
 	};
 
-	// 파기 배치 수동 실행. cron 인프라가 없어 이 버튼이 유일한 트리거다.
+	// 파기 배치 수동 실행. 서버 스케줄러가 매일 1회 같은 배치를 돌리며, 이 버튼은
+	// 다음 자동 실행을 기다리지 않고 즉시 정리할 때 쓰는 트리거다(멱등이라 겹쳐도 안전).
 	const purgeMutation = useMutation(
 		orpc.bambi.moderation.purgeWithdrawnAccounts.mutationOptions({
 			onError: (error) => toast.error(error.message || "실행하지 못했어요."),
@@ -649,8 +650,9 @@ export default function ModeratorSiteSettingsPage() {
 					<Separator className="my-5" />
 					<div className="flex flex-col gap-3">
 						<p className="m-0 text-muted-foreground text-xs">
-							보존기간이 지난 탈퇴 계정의 잔여 식별값을 파기해요. 자동 실행이
-							없어 주기적으로 눌러 주셔야 해요.
+							보존기간이 지난 탈퇴 계정의 잔여 식별값을 파기해요. 매일 1회
+							자동으로 실행되며, 이 버튼은 지금 바로 실행하고 싶을 때 눌러
+							주세요.
 						</p>
 						<div className="flex justify-end">
 							<Button
