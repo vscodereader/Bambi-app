@@ -50,8 +50,9 @@ import {
 	imageMime,
 	moveItems,
 	type ResizeHandle,
+	resizeDimensionsFromHandleDrag,
+	resizeItemDimensions,
 	resizeItems,
-	resizeWidthFromHandleDrag,
 } from "@/lib/bambi/crawled-image-editor";
 import { orpc } from "@/utils/orpc";
 import { CropDialog } from "./crop-dialog";
@@ -136,9 +137,9 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 	const queryClient = useQueryClient();
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const resizeRef = useRef<{
-		aspectRatio: number;
 		handle: ResizeHandle;
 		pointerId: number;
+		startHeight: number;
 		startWidth: number;
 		startX: number;
 		startY: number;
@@ -303,6 +304,12 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 		? (documentState?.assets.find((asset) => asset.id === resizeItem.assetId) ??
 			null)
 		: null;
+	const resizeWidth = resizeItem?.displayWidthPx ?? resizeAsset?.width ?? 0;
+	const resizeHeight =
+		resizeItem?.displayHeightPx ??
+		(resizeAsset
+			? Math.round((resizeWidth * resizeAsset.height) / resizeAsset.width)
+			: 0);
 	const cropAsset =
 		cropItemId && documentState
 			? (documentState.assets.find(
@@ -566,6 +573,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 								const asset = { dataUrl, ...size, id: crypto.randomUUID() };
 								const item = {
 									assetId: asset.id,
+									displayHeightPx: null,
 									displayWidthPx: null,
 									id: crypto.randomUUID(),
 								};
@@ -592,13 +600,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 								{selectedItems.length > 1
 									? `${selectedItems.length}장 일괄 크기`
 									: "표시 크기"}{" "}
-								{resizeItem.displayWidthPx ?? resizeAsset.width} ×{" "}
-								{Math.round(
-									((resizeItem.displayWidthPx ?? resizeAsset.width) *
-										resizeAsset.height) /
-										resizeAsset.width
-								)}{" "}
-								px
+								{resizeWidth} × {resizeHeight} px
 							</span>
 							<Slider
 								aria-label="이미지 표시 너비"
@@ -611,7 +613,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 									}
 								}}
 								onValueCommitted={commitWidth}
-								value={resizeItem.displayWidthPx ?? resizeAsset.width}
+								value={resizeWidth}
 							/>
 							<Input
 								aria-label="표시 너비 px"
@@ -620,7 +622,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 								onBlur={commitWidth}
 								onChange={(event) => previewWidth(Number(event.target.value))}
 								type="number"
-								value={resizeItem.displayWidthPx ?? resizeAsset.width}
+								value={resizeWidth}
 							/>
 							<div className="flex gap-1">
 								<Button
@@ -669,6 +671,9 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 									}
 									const selected = selectedIds.has(item.id);
 									const width = item.displayWidthPx ?? asset.width;
+									const height =
+										item.displayHeightPx ??
+										Math.round((width * asset.height) / asset.width);
 									return (
 										<div key={item.id}>
 											<button
@@ -722,11 +727,17 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 											>
 												<div
 													className={`relative max-w-full ${selected ? "ring-2 ring-primary" : ""}`}
-													style={{ width }}
+													style={{
+														aspectRatio:
+															item.displayHeightPx === null
+																? undefined
+																: `${width} / ${height}`,
+														width,
+													}}
 												>
 													<Image
 														alt={`${editQuery.data?.title} 상세 이미지 ${index + 1}`}
-														className="h-auto max-w-full select-none rounded"
+														className={`${item.displayHeightPx === null ? "h-auto" : "h-full"} w-full max-w-full select-none rounded`}
 														height={asset.height}
 														src={asset.dataUrl}
 														unoptimized
@@ -776,12 +787,14 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 																		event.currentTarget.setPointerCapture(
 																			event.pointerId
 																		);
+																		const bounds =
+																			event.currentTarget.parentElement?.getBoundingClientRect();
 																		pushHistory();
 																		resizeRef.current = {
-																			aspectRatio: asset.width / asset.height,
 																			handle,
 																			pointerId: event.pointerId,
-																			startWidth: width,
+																			startHeight: bounds?.height ?? height,
+																			startWidth: bounds?.width ?? width,
 																			startX: event.clientX,
 																			startY: event.clientY,
 																		};
@@ -797,16 +810,17 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 																			return;
 																		}
 																		setDocumentState(
-																			resizeItems(
+																			resizeItemDimensions(
 																				documentState,
 																				selectedIds,
-																				resizeWidthFromHandleDrag({
-																					aspectRatio: resize.aspectRatio,
+																				resizeDimensionsFromHandleDrag({
 																					deltaX: event.clientX - resize.startX,
 																					deltaY: event.clientY - resize.startY,
 																					handle: resize.handle,
+																					startHeight: resize.startHeight,
 																					startWidth: resize.startWidth,
-																				})
+																				}),
+																				resize.handle.length === 2
 																			)
 																		);
 																		setUseOriginalFallback(false);
@@ -1007,6 +1021,13 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 									? {
 											...candidate,
 											assetId: newAsset.id,
+											displayHeightPx:
+												candidate.displayHeightPx === null
+													? null
+													: Math.min(
+															candidate.displayHeightPx,
+															newAsset.height
+														),
 											displayWidthPx:
 												candidate.displayWidthPx === null
 													? null

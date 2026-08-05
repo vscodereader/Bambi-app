@@ -186,11 +186,17 @@ export function SeekerCrawledJobDetail({
 										<div
 											className="mx-auto max-w-full"
 											key={item.id}
-											style={{ width: item.widthPx ?? "100%" }}
+											style={{
+												aspectRatio:
+													item.heightPx === null
+														? undefined
+														: `${item.widthPx ?? asset.width} / ${item.heightPx}`,
+												width: item.widthPx ?? "100%",
+											}}
 										>
 											<Image
 												alt={`${job.title} 상세 이미지 ${index + 1}`}
-												className="h-auto w-full rounded-lg border"
+												className={`${item.heightPx === null ? "h-auto" : "h-full"} w-full rounded-lg border`}
 												height={asset.height}
 												src={asset.src}
 												unoptimized

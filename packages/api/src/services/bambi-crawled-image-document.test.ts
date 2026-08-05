@@ -11,7 +11,14 @@ const ITEM_ID = "22222222-2222-4222-8222-222222222222";
 
 const document = {
 	assets: [{ dataUrl: PNG_1X1, height: 1, id: ASSET_ID, width: 1 }],
-	items: [{ assetId: ASSET_ID, displayWidthPx: null, id: ITEM_ID }],
+	items: [
+		{
+			assetId: ASSET_ID,
+			displayHeightPx: null,
+			displayWidthPx: null,
+			id: ITEM_ID,
+		},
+	],
 	version: 1 as const,
 };
 
@@ -36,6 +43,21 @@ describe("crawledJobEditedImageDocumentSchema", () => {
 		expect(crawledJobEditedImageDocumentSchema.safeParse(copied).success).toBe(
 			true
 		);
+	});
+
+	it("accepts legacy items without a stored display height", () => {
+		const legacyDocument = {
+			...document,
+			items: document.items.map(
+				({ displayHeightPx: _displayHeightPx, ...item }) => item
+			),
+		};
+		const result =
+			crawledJobEditedImageDocumentSchema.safeParse(legacyDocument);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.items[0]?.displayHeightPx).toBeNull();
+		}
 	});
 
 	it("rejects unused assets, broken references and false dimensions", () => {

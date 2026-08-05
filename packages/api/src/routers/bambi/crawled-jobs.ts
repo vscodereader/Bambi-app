@@ -85,6 +85,7 @@ export const crawledJobsRouter = {
 					})),
 					items: sourceDocument.items.map((item) => ({
 						assetId: item.assetId,
+						heightPx: item.displayHeightPx ?? null,
 						id: item.id,
 						widthPx: item.displayWidthPx,
 					})),
