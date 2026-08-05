@@ -110,6 +110,10 @@ export const isGuestWritableBoardKey = (key: CommunityBoardKey): boolean =>
 export const GUEST_BOARD_LIMIT_NOTICE =
 	"비회원은 자유수다·밤문화 이야기·무료 법률 자문에만 참여할 수 있어요.";
 
+// 법률자문 계정이 다른 게시판을 눌렀을 때의 안내(서버 LEGAL_ADVISOR_BOARD_ERROR와 같은 말).
+export const LEGAL_ADVISOR_BOARD_NOTICE =
+	"법률자문 계정은 무료 법률 자문 게시판만 이용할 수 있어요.";
+
 export const getBoardBySlug = (slug: string): CommunityBoardMeta | undefined =>
 	COMMUNITY_BOARDS.find((board) => board.slug === slug);
 
@@ -121,8 +125,15 @@ export const getBoardByKey = (key: CommunityBoardKey): CommunityBoardMeta => {
 	return board;
 };
 
+export const COMMUNITY_ROOT_PATH = "/seeker/community";
+
 export const communityBoardPath = (slug: string): string =>
-	`/seeker/community/${slug}`;
+	`${COMMUNITY_ROOT_PATH}/${slug}`;
+
+// 법률자문 계정이 눌러도 되는 수다방 경로 — 수다방 홈과 legal 게시판(목록·글·글쓰기).
+// 그 외 게시판은 서버가 FORBIDDEN을 내므로 카드는 그대로 보여주되 클릭만 가로챈다.
+export const isLegalAdvisorAllowedPath = (href: string): boolean =>
+	href === COMMUNITY_ROOT_PATH || href.startsWith(communityBoardPath("legal"));
 
 export const communityPostPath = (slug: string, postId: string): string =>
 	`/seeker/community/${slug}/${postId}`;

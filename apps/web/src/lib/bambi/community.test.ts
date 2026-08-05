@@ -10,6 +10,7 @@ import {
 	getCommunityPageItems,
 	getCommunityTotalPages,
 	isGuestWritableBoardKey,
+	isLegalAdvisorAllowedPath,
 	isLegalBoardKey,
 	isNewCommunityPost,
 } from "./community";
@@ -49,6 +50,19 @@ describe("community boards meta", () => {
 		});
 		expect(isLegalBoardKey("legal")).toBe(true);
 		expect(isLegalBoardKey("free")).toBe(false);
+	});
+
+	it("법률자문은 수다방 홈·legal 경로만 통과하고 다른 게시판 링크는 막힌다", () => {
+		expect(isLegalAdvisorAllowedPath("/seeker/community")).toBe(true);
+		expect(isLegalAdvisorAllowedPath("/seeker/community/legal")).toBe(true);
+		expect(isLegalAdvisorAllowedPath("/seeker/community/legal/abc")).toBe(true);
+		expect(isLegalAdvisorAllowedPath("/seeker/community/free")).toBe(false);
+		expect(isLegalAdvisorAllowedPath("/seeker/community/notice/abc")).toBe(
+			false
+		);
+		expect(isLegalAdvisorAllowedPath("/seeker/community/crawled/abc")).toBe(
+			false
+		);
 	});
 
 	it("일 이야기 게시판은 표시명만 밤문화 이야기로 바뀐다", () => {

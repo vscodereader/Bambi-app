@@ -740,7 +740,7 @@
   | 광고 중 업소회원(owner/manager) | 가능 |
   | 광고 없음/만료 업소회원 | 불가 |
   | 운영자 | 가능(성별 무관) |
-  | 법률자문(`role='legal_advisor'`) | 가능(성별·광고 무관) — 단 **`legal` 게시판만** 이용 가능. 다른 게시판(가상 `best` 포함)은 목록·상세·댓글·추천·쓰기 전부 `FORBIDDEN` "법률자문 계정은 무료 법률 자문 게시판만 이용할 수 있어요."(`assertLegalAdvisorBoardScope`), 화면은 수다방 홈에 legal 카드만 노출하고 비-legal 게시판 URL 진입 시 `/seeker/community/legal`로 replace |
+  | 법률자문(`role='legal_advisor'`) | 가능(성별·광고 무관) — 단 **`legal` 게시판만** 이용 가능. 다른 게시판(가상 `best` 포함)은 목록·상세·댓글·추천·쓰기 전부 `FORBIDDEN` "법률자문 계정은 무료 법률 자문 게시판만 이용할 수 있어요."(`assertLegalAdvisorBoardScope`), 화면은 수다방 홈·seeker 홈 미리보기에 **모든 게시판 카드를 그대로 노출**하되 legal 외 링크 클릭을 가로채 같은 문구를 토스트(`useLegalAdvisorNavGuard`, 통과 판정 `isLegalAdvisorAllowedPath` = 수다방 홈·`/seeker/community/legal*`)하고, 비-legal 게시판 URL 직접 진입 시 `/seeker/community/legal`로 replace |
   | 정지 계정 | 불가 |
   | 게스트·비로그인 | 게이트가 먼저 차단 |
 - **기대 결과(미자격)**: 토스트 **"일반 여성회원과 광고 중인 업소회원만 이용가능합니다"** → `/seeker`로 replace. 전용 안내 화면은 **없음**(빈 화면 후 홈으로 튕김)
