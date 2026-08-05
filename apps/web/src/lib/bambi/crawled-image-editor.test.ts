@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
 	anchoredResizeOffsets,
+	base64DataUrlByteLength,
+	CRAWLED_IMAGE_SIZE_ERROR_MESSAGE,
 	cleanUnusedAssets,
+	crawledImageDocumentSizeError,
+	crawledImageSaveErrorMessage,
 	duplicateItems,
 	moveItems,
 	resizeDimensionsFromHandleDrag,
@@ -129,5 +133,39 @@ describe("crawled image editor state", () => {
 		expect(moved.items.map((item) => item.id)).toEqual(["item-2", "item-1"]);
 		const cleaned = cleanUnusedAssets({ ...moved, items: [moved.items[0]] });
 		expect(cleaned.assets.map((asset) => asset.id)).toEqual(["asset-2"]);
+	});
+
+	it("calculates decoded Base64 byte lengths including padding", () => {
+		expect(base64DataUrlByteLength("data:image/png;base64,AA==")).toBe(1);
+		expect(base64DataUrlByteLength("data:image/png;base64,AAA=")).toBe(2);
+		expect(base64DataUrlByteLength("data:image/png;base64,AAAA")).toBe(3);
+	});
+
+	it("blocks a document whose combined images exceed the save limit", () => {
+		const payload = "A".repeat(4 * 1024 * 1024);
+		const oversized = {
+			...document,
+			assets: Array.from({ length: 22 }, (_, index) => ({
+				dataUrl: `data:image/png;base64,${payload}`,
+				height: 100,
+				id: `asset-${index}`,
+				width: 200,
+			})),
+		};
+		expect(crawledImageDocumentSizeError(oversized)).toBe(
+			CRAWLED_IMAGE_SIZE_ERROR_MESSAGE
+		);
+	});
+
+	it("replaces payload and network size errors with an actionable message", () => {
+		expect(crawledImageSaveErrorMessage("Failed to fetch")).toBe(
+			CRAWLED_IMAGE_SIZE_ERROR_MESSAGE
+		);
+		expect(crawledImageSaveErrorMessage("413 Request Body Too Large")).toBe(
+			CRAWLED_IMAGE_SIZE_ERROR_MESSAGE
+		);
+		expect(crawledImageSaveErrorMessage("revision conflict")).toBe(
+			"revision conflict"
+		);
 	});
 });

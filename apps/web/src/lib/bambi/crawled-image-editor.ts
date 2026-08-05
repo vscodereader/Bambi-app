@@ -33,6 +33,56 @@ export interface ResizeOffsets {
 }
 
 const DATA_URL_MIME_PATTERN = /^data:([^;]+);base64,/;
+const BASE64_DATA_URL_PATTERN = /^data:[^;]+;base64,([A-Za-z0-9+/]+={0,2})$/;
+
+export const CRAWLED_IMAGE_MAX_ASSET_BYTES = 32 * 1024 * 1024;
+export const CRAWLED_IMAGE_MAX_DOCUMENT_BYTES = 64 * 1024 * 1024;
+
+export const CRAWLED_IMAGE_SIZE_ERROR_MESSAGE =
+	"이미지 용량이 저장 가능한 크기를 초과하여 저장할 수 없습니다. 이미지 크기를 줄이거나 일부 이미지를 삭제해 주세요.";
+
+export const base64DataUrlByteLength = (dataUrl: string): number | null => {
+	const payload = BASE64_DATA_URL_PATTERN.exec(dataUrl)?.[1];
+	if (!payload) {
+		return null;
+	}
+	let padding = 0;
+	if (payload.endsWith("==")) {
+		padding = 2;
+	} else if (payload.endsWith("=")) {
+		padding = 1;
+	}
+	return Math.floor((payload.length * 3) / 4) - padding;
+};
+
+export const crawledImageDocumentSizeError = (
+	document: CrawledImageDocument
+): string | null => {
+	let totalBytes = 0;
+	for (const asset of document.assets) {
+		const byteLength = base64DataUrlByteLength(asset.dataUrl);
+		if (byteLength === null) {
+			continue;
+		}
+		if (byteLength > CRAWLED_IMAGE_MAX_ASSET_BYTES) {
+			return CRAWLED_IMAGE_SIZE_ERROR_MESSAGE;
+		}
+		totalBytes += byteLength;
+	}
+	return totalBytes > CRAWLED_IMAGE_MAX_DOCUMENT_BYTES
+		? CRAWLED_IMAGE_SIZE_ERROR_MESSAGE
+		: null;
+};
+
+export const crawledImageSaveErrorMessage = (message: string): string => {
+	const normalized = message.toLowerCase();
+	return normalized.includes("failed to fetch") ||
+		normalized.includes("request body too large") ||
+		normalized.includes("content too large") ||
+		normalized.includes("413")
+		? CRAWLED_IMAGE_SIZE_ERROR_MESSAGE
+		: message || "이미지 편집 결과를 저장하지 못했습니다.";
+};
 
 export const cloneImageDocument = (
 	document: CrawledImageDocument
