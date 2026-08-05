@@ -4,6 +4,7 @@ import {
 	duplicateItems,
 	moveItems,
 	resizeItems,
+	resizeWidthFromCornerDrag,
 } from "./crawled-image-editor";
 
 const document = {
@@ -39,6 +40,27 @@ describe("crawled image editor state", () => {
 	it("clamps a shared pixel resize to each natural width", () => {
 		const resized = resizeItems(document, new Set(["item-1", "item-2"]), 150);
 		expect(resized.items.map((item) => item.displayWidthPx)).toEqual([150, 80]);
+	});
+
+	it("uses both pointer axes when resizing from a corner", () => {
+		expect(
+			resizeWidthFromCornerDrag({
+				aspectRatio: 0.25,
+				corner: "nw",
+				deltaX: 20,
+				deltaY: 40,
+				startWidth: 200,
+			})
+		).toBe(180);
+		expect(
+			resizeWidthFromCornerDrag({
+				aspectRatio: 0.25,
+				corner: "nw",
+				deltaX: 0,
+				deltaY: 80,
+				startWidth: 200,
+			})
+		).toBe(180);
 	});
 
 	it("moves a selected group and removes only unused assets", () => {

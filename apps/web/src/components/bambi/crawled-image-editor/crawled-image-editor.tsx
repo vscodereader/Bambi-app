@@ -50,6 +50,7 @@ import {
 	imageMime,
 	moveItems,
 	resizeItems,
+	resizeWidthFromCornerDrag,
 } from "@/lib/bambi/crawled-image-editor";
 import { orpc } from "@/utils/orpc";
 import { CropDialog } from "./crop-dialog";
@@ -104,9 +105,12 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 	const queryClient = useQueryClient();
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const resizeRef = useRef<{
+		aspectRatio: number;
+		corner: "ne" | "nw" | "se" | "sw";
 		pointerId: number;
 		startWidth: number;
 		startX: number;
+		startY: number;
 	} | null>(null);
 	const widthEditSnapshotRef = useRef<Snapshot | null>(null);
 	const dragItemIdRef = useRef<string | null>(null);
@@ -613,16 +617,20 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 										<div key={item.id}>
 											<button
 												aria-label={`이미지 ${index + 1} 앞에 삽입 위치 지정`}
-												className={`h-3 w-full border-0 bg-transparent ${insertionIndex === index ? "border-primary border-t-2" : ""}`}
+												className="flex h-5 w-full items-center justify-center border-0 bg-transparent"
 												onClick={(event) => {
 													event.stopPropagation();
 													setInsertionIndex(index);
 												}}
 												type="button"
-											/>
+											>
+												{insertionIndex === index ? (
+													<span className="h-4 w-0.5 animate-pulse bg-primary" />
+												) : null}
+											</button>
 											<div
 												aria-selected={selected}
-												className={`group relative mx-auto flex justify-center rounded-lg p-2 ${selected ? "ring-2 ring-primary" : "ring-1 ring-border"}`}
+												className="group relative mx-auto flex justify-center p-2"
 												draggable
 												onDragOver={(event) => event.preventDefault()}
 												onDragStart={() => {
@@ -651,7 +659,10 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 												role="option"
 												tabIndex={-1}
 											>
-												<div className="relative max-w-full" style={{ width }}>
+												<div
+													className={`relative max-w-full ${selected ? "ring-2 ring-primary" : ""}`}
+													style={{ width }}
+												>
 													<Image
 														alt={`${editQuery.data?.title} 상세 이미지 ${index + 1}`}
 														className="h-auto max-w-full select-none rounded"
@@ -693,9 +704,12 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 																			);
 																			pushHistory();
 																			resizeRef.current = {
+																				aspectRatio: asset.width / asset.height,
+																				corner,
 																				pointerId: event.pointerId,
 																				startWidth: width,
 																				startX: event.clientX,
+																				startY: event.clientY,
 																			};
 																		}}
 																		onPointerMove={(event) => {
@@ -706,16 +720,19 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 																			) {
 																				return;
 																			}
-																			const direction = corner.includes("w")
-																				? -1
-																				: 1;
 																			setDocumentState(
 																				resizeItems(
 																					documentState,
 																					selectedIds,
-																					resize.startWidth +
-																						(event.clientX - resize.startX) *
-																							direction
+																					resizeWidthFromCornerDrag({
+																						aspectRatio: resize.aspectRatio,
+																						corner: resize.corner,
+																						deltaX:
+																							event.clientX - resize.startX,
+																						deltaY:
+																							event.clientY - resize.startY,
+																						startWidth: resize.startWidth,
+																					})
 																				)
 																			);
 																			setUseOriginalFallback(false);
@@ -753,13 +770,17 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 								})}
 								<button
 									aria-label="마지막 삽입 위치 지정"
-									className={`h-3 w-full border-0 bg-transparent ${insertionIndex === documentState.items.length ? "border-primary border-t-2" : ""}`}
+									className="flex h-5 w-full items-center justify-center border-0 bg-transparent"
 									onClick={(event) => {
 										event.stopPropagation();
 										setInsertionIndex(documentState.items.length);
 									}}
 									type="button"
-								/>
+								>
+									{insertionIndex === documentState.items.length ? (
+										<span className="h-4 w-0.5 animate-pulse bg-primary" />
+									) : null}
+								</button>
 							</div>
 						)}
 					</CardContent>

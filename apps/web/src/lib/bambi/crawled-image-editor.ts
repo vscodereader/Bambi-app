@@ -17,6 +17,8 @@ export interface CrawledImageDocument {
 	version: 1;
 }
 
+export type ResizeCorner = "ne" | "nw" | "se" | "sw";
+
 const DATA_URL_MIME_PATTERN = /^data:([^;]+);base64,/;
 
 export const cloneImageDocument = (
@@ -59,6 +61,28 @@ export const resizeItems = (
 		};
 	}),
 });
+
+export const resizeWidthFromCornerDrag = ({
+	aspectRatio,
+	corner,
+	deltaX,
+	deltaY,
+	startWidth,
+}: {
+	aspectRatio: number;
+	corner: ResizeCorner;
+	deltaX: number;
+	deltaY: number;
+	startWidth: number;
+}): number => {
+	const horizontalDelta = deltaX * (corner.includes("w") ? -1 : 1);
+	const verticalDelta = deltaY * (corner.includes("n") ? -1 : 1) * aspectRatio;
+	const widthDelta =
+		Math.abs(horizontalDelta) >= Math.abs(verticalDelta)
+			? horizontalDelta
+			: verticalDelta;
+	return startWidth + widthDelta;
+};
 
 export const moveItems = (
 	document: CrawledImageDocument,
