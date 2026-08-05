@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { takeRateLimit } from "./rate-limit";
+import { UNKNOWN_CLIENT_IP } from "./client-ip";
+import {
+	DEFAULT_PUBLIC_RATE_LIMIT,
+	GUEST_VERIFY_RATE_LIMIT_SCOPE,
+	IDENTITY_RATE_LIMIT,
+	PUBLIC_RATE_LIMIT_WINDOW_MS,
+	resolvePublicRateLimit,
+	takeRateLimit,
+	UNKNOWN_IP_LIMIT_MULTIPLIER,
+} from "./rate-limit";
 
 const WINDOW = 60_000;
 
@@ -28,5 +37,68 @@ describe("takeRateLimit", () => {
 		expect(
 			takeRateLimit({ key: "ip-d", limit: 1, now: 0, windowMs: WINDOW })
 		).toBe(true);
+	});
+});
+
+const IDENTITY_SCOPE = "bambi.onboarding.startIdentityVerification";
+const RECOVERY_SCOPE = "bambi.accountRecovery.lookupAccountByIdentity";
+
+describe("resolvePublicRateLimit", () => {
+	it("버킷 키는 경로와 IP를 함께 쓴다", () => {
+		expect(
+			resolvePublicRateLimit({ clientIp: "203.0.113.9", scope: IDENTITY_SCOPE })
+				.key
+		).toBe(`${IDENTITY_SCOPE}:203.0.113.9`);
+	});
+
+	it("프로시저가 다르면 버킷이 나뉜다", () => {
+		expect(
+			resolvePublicRateLimit({ clientIp: "203.0.113.9", scope: IDENTITY_SCOPE })
+				.key
+		).not.toBe(
+			resolvePublicRateLimit({ clientIp: "203.0.113.9", scope: RECOVERY_SCOPE })
+				.key
+		);
+	});
+
+	it("본인인증 경로는 한도를 올려 잡는다", () => {
+		expect(
+			resolvePublicRateLimit({ clientIp: "203.0.113.9", scope: IDENTITY_SCOPE })
+				.limit
+		).toBe(IDENTITY_RATE_LIMIT);
+		expect(
+			resolvePublicRateLimit({
+				clientIp: "203.0.113.9",
+				scope: GUEST_VERIFY_RATE_LIMIT_SCOPE,
+			}).limit
+		).toBe(IDENTITY_RATE_LIMIT);
+		expect(IDENTITY_RATE_LIMIT).toBeGreaterThan(DEFAULT_PUBLIC_RATE_LIMIT);
+	});
+
+	it("그 밖의 공개 프로시저는 기본 한도를 유지한다", () => {
+		expect(
+			resolvePublicRateLimit({ clientIp: "203.0.113.9", scope: RECOVERY_SCOPE })
+				.limit
+		).toBe(DEFAULT_PUBLIC_RATE_LIMIT);
+	});
+
+	// IP를 못 구하면 모두가 한 버킷을 쓴다 — 1인 기준 한도를 그대로 걸면 몇 명이 전체를 잠근다.
+	it("IP 미상 버킷은 한도를 완화하되 무제한은 아니다", () => {
+		const unknown = resolvePublicRateLimit({
+			clientIp: UNKNOWN_CLIENT_IP,
+			scope: RECOVERY_SCOPE,
+		});
+
+		expect(unknown.limit).toBe(
+			DEFAULT_PUBLIC_RATE_LIMIT * UNKNOWN_IP_LIMIT_MULTIPLIER
+		);
+		expect(Number.isFinite(unknown.limit)).toBe(true);
+	});
+
+	it("윈도는 1시간 고정", () => {
+		expect(
+			resolvePublicRateLimit({ clientIp: "203.0.113.9", scope: IDENTITY_SCOPE })
+				.windowMs
+		).toBe(PUBLIC_RATE_LIMIT_WINDOW_MS);
 	});
 });
