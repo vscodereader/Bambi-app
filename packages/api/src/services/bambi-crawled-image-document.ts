@@ -4,8 +4,12 @@ import type {
 } from "@bambi-app/db/schema/bambi";
 import { z } from "zod";
 
-const MAX_ASSET_BYTES = 8 * 1024 * 1024;
-const MAX_DOCUMENT_BYTES = 16 * 1024 * 1024;
+// Canvas가 긴 JPEG를 다시 인코딩하면 크롤링 원본보다 커질 수 있다. 퀸알바
+// 상세 이미지의 최대 지원 높이(9,999px)를 편집한 결과까지 저장할 수 있도록
+// 운영자 편집 문서에만 넉넉한 별도 한도를 둔다. 일반 이미지 업로드 정책과
+// 크롤러 원본 수집 한도는 변경하지 않는다.
+export const CRAWLED_EDITED_IMAGE_MAX_ASSET_BYTES = 32 * 1024 * 1024;
+export const CRAWLED_EDITED_IMAGE_MAX_DOCUMENT_BYTES = 64 * 1024 * 1024;
 const MAX_ASSETS = 30;
 const MAX_ITEMS = 60;
 const DATA_URL_PATTERN =
@@ -181,10 +185,10 @@ export const crawledJobEditedImageDocumentSchema = z
 					message: "이미지 크기 정보가 실제 파일과 다릅니다.",
 				});
 			}
-			if (decoded.bytes.byteLength > MAX_ASSET_BYTES) {
+			if (decoded.bytes.byteLength > CRAWLED_EDITED_IMAGE_MAX_ASSET_BYTES) {
 				context.addIssue({
 					code: "custom",
-					message: "이미지 한 장은 8MB 이하여야 합니다.",
+					message: "이미지 한 장은 32MB 이하여야 합니다.",
 				});
 			}
 			totalBytes += decoded.bytes.byteLength;
@@ -248,10 +252,10 @@ export const crawledJobEditedImageDocumentSchema = z
 				message: "사용하지 않는 이미지가 포함되었습니다.",
 			});
 		}
-		if (totalBytes > MAX_DOCUMENT_BYTES) {
+		if (totalBytes > CRAWLED_EDITED_IMAGE_MAX_DOCUMENT_BYTES) {
 			context.addIssue({
 				code: "custom",
-				message: "전체 이미지는 16MB 이하여야 합니다.",
+				message: "전체 이미지는 64MB 이하여야 합니다.",
 			});
 		}
 	});

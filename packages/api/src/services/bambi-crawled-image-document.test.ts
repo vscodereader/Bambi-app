@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	CRAWLED_EDITED_IMAGE_MAX_ASSET_BYTES,
 	crawledJobEditedImageDocumentSchema,
 	createOriginalImageDocument,
 } from "./bambi-crawled-image-document";
@@ -8,6 +9,18 @@ const PNG_1X1 =
 	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 const ASSET_ID = "11111111-1111-4111-8111-111111111111";
 const ITEM_ID = "22222222-2222-4222-8222-222222222222";
+
+const createJpegDataUrl = (
+	byteLength: number,
+	width: number,
+	height: number
+) => {
+	const bytes = Buffer.alloc(byteLength);
+	bytes.set([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x0b, 0x08]);
+	bytes.writeUInt16BE(height, 7);
+	bytes.writeUInt16BE(width, 9);
+	return `data:image/jpeg;base64,${bytes.toString("base64")}`;
+};
 
 const document = {
 	assets: [{ dataUrl: PNG_1X1, height: 1, id: ASSET_ID, width: 1 }],
@@ -87,6 +100,46 @@ describe("crawledJobEditedImageDocumentSchema", () => {
 				...document,
 				assets: [{ ...document.assets[0], width: 2 }],
 			}).success
+		).toBe(false);
+	});
+
+	it("accepts a 730 by 9999 cropped JPEG over the legacy 8MB limit", () => {
+		const largeDocument = {
+			...document,
+			assets: [
+				{
+					dataUrl: createJpegDataUrl(9 * 1024 * 1024, 730, 9999),
+					height: 9999,
+					id: ASSET_ID,
+					width: 730,
+				},
+			],
+		};
+
+		expect(
+			crawledJobEditedImageDocumentSchema.safeParse(largeDocument).success
+		).toBe(true);
+	});
+
+	it("still rejects one edited image over 32MB", () => {
+		const oversizedDocument = {
+			...document,
+			assets: [
+				{
+					dataUrl: createJpegDataUrl(
+						CRAWLED_EDITED_IMAGE_MAX_ASSET_BYTES + 1,
+						730,
+						9999
+					),
+					height: 9999,
+					id: ASSET_ID,
+					width: 730,
+				},
+			],
+		};
+
+		expect(
+			crawledJobEditedImageDocumentSchema.safeParse(oversizedDocument).success
 		).toBe(false);
 	});
 });
