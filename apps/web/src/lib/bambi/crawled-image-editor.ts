@@ -17,7 +17,7 @@ export interface CrawledImageDocument {
 	version: 1;
 }
 
-export type ResizeCorner = "ne" | "nw" | "se" | "sw";
+export type ResizeHandle = "e" | "n" | "ne" | "nw" | "s" | "se" | "sw" | "w";
 
 const DATA_URL_MIME_PATTERN = /^data:([^;]+);base64,/;
 
@@ -62,21 +62,37 @@ export const resizeItems = (
 	}),
 });
 
-export const resizeWidthFromCornerDrag = ({
+export const resizeWidthFromHandleDrag = ({
 	aspectRatio,
-	corner,
+	handle,
 	deltaX,
 	deltaY,
 	startWidth,
 }: {
 	aspectRatio: number;
-	corner: ResizeCorner;
+	handle: ResizeHandle;
 	deltaX: number;
 	deltaY: number;
 	startWidth: number;
 }): number => {
-	const horizontalDelta = deltaX * (corner.includes("w") ? -1 : 1);
-	const verticalDelta = deltaY * (corner.includes("n") ? -1 : 1) * aspectRatio;
+	let horizontalDelta: number | null = null;
+	if (handle.includes("w")) {
+		horizontalDelta = -deltaX;
+	} else if (handle.includes("e")) {
+		horizontalDelta = deltaX;
+	}
+	let verticalDelta: number | null = null;
+	if (handle.includes("n")) {
+		verticalDelta = -deltaY * aspectRatio;
+	} else if (handle.includes("s")) {
+		verticalDelta = deltaY * aspectRatio;
+	}
+	if (horizontalDelta === null) {
+		return startWidth + (verticalDelta ?? 0);
+	}
+	if (verticalDelta === null) {
+		return startWidth + horizontalDelta;
+	}
 	const widthDelta =
 		Math.abs(horizontalDelta) >= Math.abs(verticalDelta)
 			? horizontalDelta

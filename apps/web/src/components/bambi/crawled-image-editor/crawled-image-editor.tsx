@@ -49,8 +49,9 @@ import {
 	imageExtension,
 	imageMime,
 	moveItems,
+	type ResizeHandle,
 	resizeItems,
-	resizeWidthFromCornerDrag,
+	resizeWidthFromHandleDrag,
 } from "@/lib/bambi/crawled-image-editor";
 import { orpc } from "@/utils/orpc";
 import { CropDialog } from "./crop-dialog";
@@ -59,6 +60,7 @@ interface CrawledImageEditorProps {
 	postId: string;
 }
 interface Snapshot {
+	dirty: boolean;
 	document: CrawledImageDocument;
 	useOriginalFallback: boolean;
 }
@@ -70,6 +72,35 @@ interface MenuPosition {
 const HISTORY_LIMIT = 50;
 const MAX_ASSET_BYTES = 8 * 1024 * 1024;
 const MAX_ITEMS = 60;
+const RESIZE_HANDLES: ResizeHandle[] = [
+	"nw",
+	"n",
+	"ne",
+	"e",
+	"se",
+	"s",
+	"sw",
+	"w",
+];
+
+const resizeHandleClass = (handle: ResizeHandle): string => {
+	const edgeClasses: Partial<Record<ResizeHandle, string>> = {
+		e: "top-5 -right-2 bottom-5 w-5 cursor-ew-resize bg-transparent",
+		n: "-top-2 right-5 left-5 h-5 cursor-ns-resize bg-transparent",
+		s: "right-5 -bottom-2 left-5 h-5 cursor-ns-resize bg-transparent",
+		w: "top-5 bottom-5 -left-2 w-5 cursor-ew-resize bg-transparent",
+	};
+	const edgeClass = edgeClasses[handle];
+	if (edgeClass) {
+		return `absolute z-20 touch-none border-0 ${edgeClass}`;
+	}
+	return `absolute z-20 size-5 touch-none rounded-full border-2 border-white bg-primary ${handle === "nw" || handle === "se" ? "cursor-nwse-resize" : "cursor-nesw-resize"} ${handle.includes("n") ? "-top-2" : "-bottom-2"} ${handle.includes("w") ? "-left-2" : "-right-2"}`;
+};
+
+const resizeEdgeMarkerClass = (handle: ResizeHandle): string =>
+	handle === "n" || handle === "s"
+		? "pointer-events-none absolute top-1/2 left-1/2 h-3 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary"
+		: "pointer-events-none absolute top-1/2 left-1/2 h-5 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary";
 
 const readFileAsDataUrl = (file: File): Promise<string> =>
 	new Promise((resolve, reject) => {
@@ -106,7 +137,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const resizeRef = useRef<{
 		aspectRatio: number;
-		corner: "ne" | "nw" | "se" | "sw";
+		handle: ResizeHandle;
 		pointerId: number;
 		startWidth: number;
 		startX: number;
@@ -114,11 +145,11 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 	} | null>(null);
 	const widthEditSnapshotRef = useRef<Snapshot | null>(null);
 	const dragItemIdRef = useRef<string | null>(null);
-	const baselineRef = useRef("");
 	const anchorIdRef = useRef<string | null>(null);
 	const [documentState, setDocumentState] =
 		useState<CrawledImageDocument | null>(null);
 	const [useOriginalFallback, setUseOriginalFallback] = useState(false);
+	const [dirty, setDirty] = useState(false);
 	const [revision, setRevision] = useState(0);
 	const [history, setHistory] = useState<Snapshot[]>([]);
 	const [clipboard, setClipboard] = useState<CrawledImageItem[]>([]);
@@ -152,16 +183,8 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 			at: editQuery.data.detailImagesEditedAt,
 			name: editQuery.data.detailImagesEditedByName,
 		});
-		baselineRef.current = JSON.stringify({
-			document: initial,
-			useOriginalFallback: originalFallback,
-		});
+		setDirty(false);
 	}, [documentState, editQuery.data]);
-
-	const dirty = documentState
-		? baselineRef.current !==
-			JSON.stringify({ document: documentState, useOriginalFallback })
-		: false;
 	useEffect(() => {
 		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 			if (!dirty) {
@@ -217,15 +240,16 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 		}
 		setHistory((current) => [
 			...current.slice(-(HISTORY_LIMIT - 1)),
-			{ document: cloneImageDocument(documentState), useOriginalFallback },
+			{ dirty, document: documentState, useOriginalFallback },
 		]);
-	}, [documentState, useOriginalFallback]);
+	}, [dirty, documentState, useOriginalFallback]);
 
 	const applyChange = useCallback(
 		(next: CrawledImageDocument, originalFallback = false) => {
 			pushHistory();
 			setDocumentState(next);
 			setUseOriginalFallback(originalFallback);
+			setDirty(true);
 			setMenuPosition(null);
 		},
 		[pushHistory]
@@ -246,10 +270,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 				});
 				setHistory([]);
 				setClipboard([]);
-				baselineRef.current = JSON.stringify({
-					document: documentState,
-					useOriginalFallback,
-				});
+				setDirty(false);
 				toast.success("이미지 편집 결과를 저장했습니다.");
 				await Promise.all([
 					queryClient.invalidateQueries({
@@ -373,8 +394,9 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 		if (!previous) {
 			return;
 		}
-		setDocumentState(cloneImageDocument(previous.document));
+		setDocumentState(previous.document);
 		setUseOriginalFallback(previous.useOriginalFallback);
+		setDirty(previous.dirty);
 		setHistory((current) => current.slice(0, -1));
 		setMenuPosition(null);
 	}, [history]);
@@ -424,12 +446,14 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 	const previewWidth = (width: number) => {
 		if (!widthEditSnapshotRef.current) {
 			widthEditSnapshotRef.current = {
-				document: cloneImageDocument(documentState),
+				dirty,
+				document: documentState,
 				useOriginalFallback,
 			};
 		}
 		setDocumentState(resizeItems(documentState, selectedIds, width));
 		setUseOriginalFallback(false);
+		setDirty(true);
 	};
 	const commitWidth = () => {
 		const snapshot = widthEditSnapshotRef.current;
@@ -691,6 +715,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 													}
 													setDocumentState({ ...documentState, items });
 													setUseOriginalFallback(false);
+													setDirty(true);
 												}}
 												role="option"
 												tabIndex={-1}
@@ -728,74 +753,77 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 														type="button"
 													/>
 													{selected
-														? (["nw", "ne", "sw", "se"] as const).map(
-																(corner) => (
-																	<button
-																		aria-label={`${index + 1}번 이미지 ${corner} 크기 조절`}
-																		className={`absolute z-20 size-5 touch-none rounded-full border-2 border-white bg-primary ${corner === "nw" || corner === "se" ? "cursor-nwse-resize" : "cursor-nesw-resize"} ${corner.includes("n") ? "-top-2" : "-bottom-2"} ${corner.includes("w") ? "-left-2" : "-right-2"}`}
-																		key={corner}
-																		onClick={(event) => {
-																			event.stopPropagation();
-																		}}
-																		onLostPointerCapture={() => {
+														? RESIZE_HANDLES.map((handle) => (
+																<button
+																	aria-label={`${index + 1}번 이미지 ${handle} 크기 조절`}
+																	className={resizeHandleClass(handle)}
+																	key={handle}
+																	onClick={(event) => {
+																		event.stopPropagation();
+																	}}
+																	onLostPointerCapture={() => {
+																		resizeRef.current = null;
+																	}}
+																	onPointerCancel={() => {
+																		resizeRef.current = null;
+																	}}
+																	onPointerDown={(event) => {
+																		if (event.button !== 0) {
+																			return;
+																		}
+																		event.preventDefault();
+																		event.stopPropagation();
+																		event.currentTarget.setPointerCapture(
+																			event.pointerId
+																		);
+																		pushHistory();
+																		resizeRef.current = {
+																			aspectRatio: asset.width / asset.height,
+																			handle,
+																			pointerId: event.pointerId,
+																			startWidth: width,
+																			startX: event.clientX,
+																			startY: event.clientY,
+																		};
+																	}}
+																	onPointerMove={(event) => {
+																		const resize = resizeRef.current;
+																		if (
+																			!resize ||
+																			resize.pointerId !== event.pointerId ||
+																			event.buttons !== 1
+																		) {
 																			resizeRef.current = null;
-																		}}
-																		onPointerCancel={() => {
-																			resizeRef.current = null;
-																		}}
-																		onPointerDown={(event) => {
-																			if (event.button !== 0) {
-																				return;
-																			}
-																			event.preventDefault();
-																			event.stopPropagation();
-																			event.currentTarget.setPointerCapture(
-																				event.pointerId
-																			);
-																			pushHistory();
-																			resizeRef.current = {
-																				aspectRatio: asset.width / asset.height,
-																				corner,
-																				pointerId: event.pointerId,
-																				startWidth: width,
-																				startX: event.clientX,
-																				startY: event.clientY,
-																			};
-																		}}
-																		onPointerMove={(event) => {
-																			const resize = resizeRef.current;
-																			if (
-																				!resize ||
-																				resize.pointerId !== event.pointerId ||
-																				event.buttons !== 1
-																			) {
-																				resizeRef.current = null;
-																				return;
-																			}
-																			setDocumentState(
-																				resizeItems(
-																					documentState,
-																					selectedIds,
-																					resizeWidthFromCornerDrag({
-																						aspectRatio: resize.aspectRatio,
-																						corner: resize.corner,
-																						deltaX:
-																							event.clientX - resize.startX,
-																						deltaY:
-																							event.clientY - resize.startY,
-																						startWidth: resize.startWidth,
-																					})
-																				)
-																			);
-																			setUseOriginalFallback(false);
-																		}}
-																		onPointerUp={() => {
-																			resizeRef.current = null;
-																		}}
-																		type="button"
-																	/>
-																)
-															)
+																			return;
+																		}
+																		setDocumentState(
+																			resizeItems(
+																				documentState,
+																				selectedIds,
+																				resizeWidthFromHandleDrag({
+																					aspectRatio: resize.aspectRatio,
+																					deltaX: event.clientX - resize.startX,
+																					deltaY: event.clientY - resize.startY,
+																					handle: resize.handle,
+																					startWidth: resize.startWidth,
+																				})
+																			)
+																		);
+																		setUseOriginalFallback(false);
+																		setDirty(true);
+																	}}
+																	onPointerUp={() => {
+																		resizeRef.current = null;
+																	}}
+																	type="button"
+																>
+																	{handle.length === 1 ? (
+																		<span
+																			className={resizeEdgeMarkerClass(handle)}
+																		/>
+																	) : null}
+																</button>
+															))
 														: null}
 												</div>
 												<Button
