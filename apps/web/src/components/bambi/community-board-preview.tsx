@@ -21,6 +21,9 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import {
 	CommunityNewBadge,
 	CommunityRoleBadges,
@@ -33,6 +36,8 @@ import {
 	communityCrawledPath,
 	communityPostPath,
 	formatCommunityDate,
+	isLegalAdvisorAllowedPath,
+	LEGAL_ADVISOR_BOARD_NOTICE,
 } from "@/lib/bambi/community";
 
 // 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 미리보기 글 타입을 파생한다.
@@ -181,6 +186,29 @@ export function BoardPreviewCard({
 	);
 }
 
+// 법률자문 계정용 링크 가드. 다른 게시판 카드는 그대로 보여주되(숨기지 않는다) 눌렀을 때
+// legal 게시판·수다방 홈만 통과시키고 나머지는 서버 가드와 같은 문구로 안내한다.
+// 반환값은 onBlockedNavigate와 같은 시그니처라 화면이 그대로 넘기면 되고, 법률자문이
+// 아니면 undefined라 링크가 평소대로 동작한다.
+export function useLegalAdvisorNavGuard():
+	| ((href: string) => void)
+	| undefined {
+	const { role } = useBambiAuth();
+	const router = useRouter();
+
+	if (role !== "legal_advisor") {
+		return;
+	}
+
+	return (href: string) => {
+		if (isLegalAdvisorAllowedPath(href)) {
+			router.push(href as Route);
+			return;
+		}
+		toast(LEGAL_ADVISOR_BOARD_NOTICE);
+	};
+}
+
 // 중고거래·무료 법률 자문은 2열 그리드의 한 칸을 좌우로 나눠 쓴다(모바일은 세로 스택).
 // 글이 적은 두 게시판이라 각각 한 칸씩 차지하면 홈에서 빈 카드가 두 줄로 늘어진다.
 const PAIRED_BOARD_KEYS: CommunityBoardKey[] = ["market", "legal"];
@@ -190,14 +218,10 @@ const PAIRED_BOARD_KEYS: CommunityBoardKey[] = ["market", "legal"];
 //들고 있어 홈과 수다방의 같은 섹션이 서로 다르게 보이던 걸 한 컴포넌트로 모은다.
 export function CommunityOverviewGrid({
 	isPending,
-	legalOnly = false,
 	onBlockedNavigate,
 	postsByBoard,
 }: {
 	isPending: boolean;
-	// 법률자문 계정용 — legal 게시판 카드 하나만 전폭으로 렌더한다(다른 보드는 서버가
-	// FORBIDDEN을 내므로 동선 자체를 숨긴다).
-	legalOnly?: boolean;
 	// BoardPreviewCard와 같은 의미 — 지정 시 수다방 링크를 가로채 호출한 화면이 안내한다.
 	onBlockedNavigate?: (href: string) => void;
 	postsByBoard: Record<CommunityBoardKey, OverviewPost[]>;
@@ -205,18 +229,6 @@ export function CommunityOverviewGrid({
 	const soloBoards = COMMUNITY_BOARDS.filter(
 		(board) => board.key !== "notice" && !PAIRED_BOARD_KEYS.includes(board.key)
 	);
-
-	if (legalOnly) {
-		return isPending ? (
-			<BoardPreviewSkeleton />
-		) : (
-			<BoardPreviewCard
-				boardKey="legal"
-				onBlockedNavigate={onBlockedNavigate}
-				posts={postsByBoard.legal}
-			/>
-		);
-	}
 
 	return (
 		<div className="grid grid-cols-1 gap-4 md:grid-cols-2">

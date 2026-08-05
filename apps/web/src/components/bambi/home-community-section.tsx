@@ -4,6 +4,7 @@
 // 무관하게 모두에게 노출한다(overview가 public). 그 다음 동선만 방문자별로 갈린다:
 // 자격자(여성·광고 업소 회원, 여성 인증 게스트)는 그대로 수다방으로, 미인증 방문자는
 // 본인인증 다이얼로그로, 로그인했지만 자격이 없는 회원은 토스트 안내로 막는다.
+// 법률자문 계정은 legal 게시판·수다방 홈 링크만 통과하고 나머지는 토스트로 막는다.
 // 홈을 방해하지 않도록 에러 시 조용히 숨긴다.
 
 import {
@@ -21,14 +22,17 @@ import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import {
 	CommunityOverviewGrid,
 	type OverviewPost,
+	useLegalAdvisorNavGuard,
 } from "@/components/bambi/community-board-preview";
 import { PhoneVerifyDialog } from "@/components/bambi/phone-verify-dialog";
-import type { CommunityBoardKey } from "@/lib/bambi/community";
+import {
+	COMMUNITY_ROOT_PATH,
+	type CommunityBoardKey,
+} from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
 const COMMUNITY_BLOCKED_MESSAGE =
 	"일반 여성 회원과 광고 중인 업소회원만 가능합니다";
-const COMMUNITY_ROOT = "/seeker/community";
 
 // 섹션 헤더 — visual-job-exposure-sections의 ExposureSection 헤더 문법을 따른다.
 function SectionHeader({
@@ -44,11 +48,11 @@ function SectionHeader({
 			</h2>
 			<Link
 				className="flex items-center gap-1 font-semibold text-muted-foreground text-xs hover:text-foreground"
-				href={COMMUNITY_ROOT}
+				href={COMMUNITY_ROOT_PATH}
 				onClick={(event) => {
 					if (onBlockedNavigate) {
 						event.preventDefault();
-						onBlockedNavigate(COMMUNITY_ROOT);
+						onBlockedNavigate(COMMUNITY_ROOT_PATH);
 					}
 				}}
 			>
@@ -86,7 +90,7 @@ function CommunityVerifyDialog({
 					</DialogDescription>
 				</div>
 				<PhoneVerifyDialog
-					redirectTo={target ?? COMMUNITY_ROOT}
+					redirectTo={target ?? COMMUNITY_ROOT_PATH}
 					size="md"
 					triggerLabel="본인인증하고 이용하기"
 					variant="primary"
@@ -99,11 +103,8 @@ function CommunityVerifyDialog({
 // 배치는 수다방 페이지(CommunityHomeScreen)와 같은 컴포넌트를 쓴다 — 같은 섹션이 홈과
 // 수다방에서 다르게 보이지 않게.
 function CommunityContent({
-	legalOnly,
 	onBlockedNavigate,
 }: {
-	// 법률자문 계정용 — legal 게시판 카드만 노출한다(CommunityOverviewGrid와 같은 의미).
-	legalOnly?: boolean;
 	onBlockedNavigate?: (href: string) => void;
 }) {
 	const overviewQuery = useQuery(
@@ -131,7 +132,6 @@ function CommunityContent({
 			<SectionHeader onBlockedNavigate={onBlockedNavigate} />
 			<CommunityOverviewGrid
 				isPending={overviewQuery.isPending}
-				legalOnly={legalOnly}
 				onBlockedNavigate={onBlockedNavigate}
 				postsByBoard={postsByBoard}
 			/>
@@ -166,8 +166,11 @@ export function HomeCommunitySection() {
 		setMounted(true);
 	}, []);
 
-	const { canAccessCommunity, isAuthenticated, isGuest, isPending, role } =
+	const { canAccessCommunity, isAuthenticated, isGuest, isPending } =
 		useBambiAuth();
+	// 법률자문 계정은 입장은 되지만 legal 게시판만 이용한다 — 다른 게시판 카드는 그대로
+	// 보이고 누르면 안내한다.
+	const legalAdvisorGuard = useLegalAdvisorNavGuard();
 
 	if (!mounted) {
 		return null;
@@ -192,8 +195,9 @@ export function HomeCommunitySection() {
 	return (
 		<>
 			<CommunityContent
-				legalOnly={role === "legal_advisor"}
-				onBlockedNavigate={canAccessCommunity ? undefined : handleBlocked}
+				onBlockedNavigate={
+					canAccessCommunity ? legalAdvisorGuard : handleBlocked
+				}
 			/>
 			<CommunityVerifyDialog
 				onClose={() => setVerifyTarget(null)}
