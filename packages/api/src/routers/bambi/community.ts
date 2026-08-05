@@ -18,7 +18,7 @@ import {
 	gte,
 	ilike,
 	isNull,
-	ne,
+	notInArray,
 	or,
 	type SQL,
 	sql,
@@ -37,12 +37,15 @@ import {
 	assertGuestPostAccess,
 	assertGuestWritableBoard,
 	type CommunityActor,
+	canBypassLock,
 	findCommunityActor,
 	findCommunityMember,
 	GUEST_LOCKED_ERROR,
+	LEGAL_BOARD,
 	requireCommunityMember,
 	requireGuestPassword,
 	resolveCommunityActor,
+	resolveLockedForBoard,
 } from "../../services/bambi-community-authz";
 import {
 	hashCommunityPassword,
@@ -78,6 +81,7 @@ const communityWritableBoardSchema = z.enum([
 	"work_talk",
 	"market",
 	"notice",
+	"legal",
 ]);
 const communityBoardSchema = z.enum([
 	"best",
@@ -85,6 +89,7 @@ const communityBoardSchema = z.enum([
 	"work_talk",
 	"market",
 	"notice",
+	"legal",
 ]);
 
 type CommunityBoardInput = z.infer<typeof communityBoardSchema>;
@@ -135,6 +140,8 @@ const createPostInput = z.object({
 	authorName: z.string().trim().min(1).max(30),
 	board: communityWritableBoardSchema,
 	body: z.string().min(2).max(BODY_MAX),
+	// 법률 자문 글의 선택 입력 연락처. 다른 게시판에서는 받지 않는다(아래 assertContactPhoneBoard).
+	contactPhone: z.string().trim().max(20).optional(),
 	isLocked: z.boolean().default(false),
 	isPromotion: z.boolean().default(false),
 	// 비밀번호는 비밀글(잠금)에만 필요하다 — 잠그지 않으면 생략하고 등록할 수 있다.
@@ -163,6 +170,19 @@ const MEDIA_UPLOAD_ERROR_MESSAGES: Record<
 };
 
 const LOCKED_PASSWORD_ERROR = "비밀글은 4자 이상의 비밀번호가 필요합니다.";
+const CONTACT_PHONE_BOARD_ERROR =
+	"연락처는 무료 법률 자문 게시판에만 남길 수 있습니다.";
+
+// 연락처는 법률 자문 글 전용 필드다. 다른 게시판에 실려 오면 조용히 버리지 않고 거부한다 —
+// 사용자가 남긴 연락처가 저장되지 않은 채 성공 응답이 나가면 안 된다(광고글 role 규칙과 같은 축).
+const assertContactPhoneBoard = (
+	board: string,
+	contactPhone: string | undefined
+): void => {
+	if (contactPhone && board !== LEGAL_BOARD) {
+		throw new ORPCError("BAD_REQUEST", { message: CONTACT_PHONE_BOARD_ERROR });
+	}
+};
 
 // 도배 방지 — 회원은 계정당, 비회원은 gid·IP당 1분 창. 판정 축이 IP만이 아니라 계정·
 // 신원이라 미들웨어(rateLimitedPublicProcedure)가 아니라 핸들러에서 버킷을 잡는다.
@@ -180,6 +200,7 @@ const GUEST_DISPLAY_NAME = "비회원";
 const updatePostInput = postIdInput.extend({
 	authorName: z.string().trim().min(1).max(30),
 	body: z.string().min(2).max(BODY_MAX),
+	contactPhone: z.string().trim().max(20).optional(),
 	isLocked: z.boolean(),
 	isPromotion: z.boolean(),
 	password: z.string().trim().max(30).optional(),
@@ -235,19 +256,11 @@ const setCommentStatusByAdminInput = z.object({
 	status: communityAdminStatusSchema,
 });
 
-// profile null은 미자격·비로그인 열람(overview public 경로) — 잠금 우회 없음.
-// authorUserId null은 비회원 글이라 어떤 회원도 작성자로 잡히지 않는다.
-const canBypassLock = (
-	post: { authorUserId: string | null },
-	profile: BambiAccessProfile | null
-): boolean =>
-	profile !== null &&
-	(post.authorUserId === profile.userId || profile.role === "admin");
-
 // profile null은 잠금 우회가 없는 열람자(비회원 게스트) — 비밀글은 비밀번호로만 열린다.
 export const requirePostReadAccess = (
 	post: {
 		authorUserId: string | null;
+		board: string;
 		isLocked: boolean;
 		passwordHash: string;
 	},
@@ -266,7 +279,12 @@ export const requirePostReadAccess = (
 };
 
 const maskLockedSummaries = <
-	T extends { authorUserId: string | null; isLocked: boolean; title: string },
+	T extends {
+		authorUserId: string | null;
+		board: string;
+		isLocked: boolean;
+		title: string;
+	},
 >(
 	items: T[],
 	profile: BambiAccessProfile | null
@@ -355,7 +373,8 @@ const crawledTopicFeedFilters = (windowStart: Date): SQL[] => [
 const bestWindowStart = () => new Date(Date.now() - BEST_WINDOW_DAYS * DAY_MS);
 
 // 베스트글은 저장 게시판이 아니라 최근 30일 추천 상위 큐레이션 가상 게시판이다.
-// 공지사항(notice)은 베스트 큐레이션에서 제외한다. windowStart(30일 컷오프)는
+// 공지사항(notice)과 법률 자문(legal)은 베스트 큐레이션에서 제외한다 — 법률 자문 글은
+// 전부 잠금이라 베스트에 올라와도 마스킹 제목만 자리를 차지한다. windowStart(30일 컷오프)는
 // 목록·count 쿼리 간 밀리초 오차로 1-off가 나지 않도록 핸들러에서 한 번 계산해
 // 동일 값으로 전달한다.
 const buildBoardFilters = (
@@ -367,7 +386,7 @@ const buildBoardFilters = (
 			eq(communityPost.status, "published"),
 			gte(communityPost.likeCount, BEST_MIN_LIKES),
 			gte(communityPost.createdAt, windowStart),
-			ne(communityPost.board, "notice"),
+			notInArray(communityPost.board, ["notice", LEGAL_BOARD]),
 		];
 	}
 	return [
@@ -768,7 +787,7 @@ export const communityRouter = {
 		const windowStart = bestWindowStart();
 		// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
 		const communityFeedOn = await isCrawledCommunityFeedEnabled();
-		const [best, free, workTalk, market, notice] = await Promise.all([
+		const [best, free, workTalk, market, notice, legal] = await Promise.all([
 			selectBoardPosts("best", { limit: OVERVIEW_LIMIT, windowStart }),
 			selectBoardPosts("free", { limit: OVERVIEW_LIMIT, windowStart }),
 			communityFeedOn
@@ -783,11 +802,15 @@ export const communityRouter = {
 					}),
 			selectBoardPosts("market", { limit: OVERVIEW_LIMIT, windowStart }),
 			selectBoardPosts("notice", { limit: OVERVIEW_LIMIT, windowStart }),
+			// 법률 자문은 전 글이 잠금이라 미리보기 제목도 기존 마스킹 규칙을 그대로 탄다
+			// (작성자·운영자·법률자문만 실제 제목을 본다).
+			selectBoardPosts(LEGAL_BOARD, { limit: OVERVIEW_LIMIT, windowStart }),
 		]);
 
 		return {
 			best: maskLockedSummaries(best, profile).map(toPublicSummary),
 			free: maskLockedSummaries(free, profile).map(toPublicSummary),
+			legal: maskLockedSummaries(legal, profile).map(toPublicSummary),
 			market: maskLockedSummaries(market, profile).map(toPublicSummary),
 			notice: maskLockedSummaries(notice, profile).map(toPublicSummary),
 			workTalk: maskLockedSummaries(workTalk, profile).map(toPublicSummary),
@@ -940,6 +963,10 @@ export const communityRouter = {
 				canDelete: isMine || profile?.role === "admin",
 				canEdit: isMine,
 				commentCount: post.commentCount,
+				// 잠금을 실제로 연 열람자(작성자·운영자·법률자문·비밀번호 통과)만 여기까지 온다 —
+				// 위쪽 잠금 축소 응답에는 연락처가 실리지 않는다. 법률 자문 외 게시판은 애초에
+				// 저장하지 않으므로 항상 null이다.
+				contactPhone: post.contactPhone,
 				createdAt: post.createdAt,
 				id: post.id,
 				isLiked: Boolean(like),
@@ -1059,15 +1086,17 @@ export const communityRouter = {
 					message: "자유수다에서는 비밀글을 작성할 수 없습니다.",
 				});
 			}
+			assertContactPhoneBoard(input.board, input.contactPhone);
+			const isLocked = resolveLockedForBoard(input.board, input.isLocked);
 			// 비밀글(잠금)은 잠금 게이트에 쓸 4자 이상 비밀번호가 필요하다.
-			if (input.isLocked && (input.password?.length ?? 0) < 4) {
+			if (isLocked && (input.password?.length ?? 0) < 4) {
 				throw new ORPCError("BAD_REQUEST", { message: LOCKED_PASSWORD_ERROR });
 			}
-			// 비회원은 게시판이 좁고 비밀번호가 필수다. is_locked는 false로 남는다 —
-			// 비밀글은 공개 경로에서 숨겨져 작성자 본인도 다시 읽지 못한다.
+			// 비회원은 게시판이 좁고 비밀번호가 필수다. 법률 자문을 뺀 보드에서는 is_locked가
+			// false로 남는다 — 비밀글은 공개 경로에서 숨겨져 작성자 본인도 다시 읽지 못한다.
 			if (actor.kind === "guest") {
 				assertGuestWritableBoard(input.board);
-				if (input.isLocked) {
+				if (isLocked && input.board !== LEGAL_BOARD) {
 					throw new ORPCError("BAD_REQUEST", { message: GUEST_LOCKED_ERROR });
 				}
 				requireGuestPassword(input.password);
@@ -1092,7 +1121,8 @@ export const communityRouter = {
 					authorUserId: actorUserId(actor),
 					board: input.board,
 					body: input.body,
-					isLocked: input.isLocked,
+					contactPhone: input.contactPhone || null,
+					isLocked,
 					isPromotion: input.isPromotion,
 					// 비번 미입력(잠그지 않은 회원 글)은 빈 문자열로 저장한다 — verify가 항상
 					// 실패해 잠금 게이트·비작성자 수정이 자연히 차단된다.
@@ -1126,11 +1156,15 @@ export const communityRouter = {
 					message: "자유수다에서는 비밀글을 사용할 수 없습니다.",
 				});
 			}
+			assertContactPhoneBoard(post.board, input.contactPhone);
+			// 게시판은 수정으로 바뀌지 않으므로 잠금 강제도 저장된 board로 판정한다 — 법률 자문
+			// 글은 작성자가 잠금을 풀어 달라고 보내도 계속 잠긴 채 남는다.
+			const isLocked = resolveLockedForBoard(post.board, input.isLocked);
 
 			// 비회원은 자기 신분(gid)이 찍힌 글만, 그것도 비밀번호로만 수정한다.
 			if (actor.kind === "guest") {
-				assertGuestPostAccess(post);
-				if (input.isLocked) {
+				assertGuestPostAccess(post, actor.gid);
+				if (isLocked && post.board !== LEGAL_BOARD) {
 					throw new ORPCError("BAD_REQUEST", { message: GUEST_LOCKED_ERROR });
 				}
 				assertGuestOwnership(post, input.password);
@@ -1150,7 +1184,7 @@ export const communityRouter = {
 
 			// 비밀번호 없이 작성한 글(passwordHash 빈 값)은 잠금 게이트에 쓸 비번이 없어
 			// 비밀글로 전환할 수 없다 — 무결성을 위해 차단한다.
-			if (input.isLocked && post.passwordHash === "") {
+			if (isLocked && post.passwordHash === "") {
 				throw new ORPCError("BAD_REQUEST", {
 					message: "비밀번호 없이 작성한 글은 비밀글로 잠글 수 없어요.",
 				});
@@ -1161,7 +1195,8 @@ export const communityRouter = {
 				.set({
 					authorDisplayName: input.authorName,
 					body: input.body,
-					isLocked: input.isLocked,
+					contactPhone: input.contactPhone || null,
+					isLocked,
 					isPromotion: input.isPromotion,
 					title: input.title,
 					updatedAt: new Date(),
@@ -1208,7 +1243,7 @@ export const communityRouter = {
 			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
 			if (actor.kind === "guest") {
-				assertGuestPostAccess(post);
+				assertGuestPostAccess(post, actor.gid);
 			} else {
 				requirePostReadAccess(post, actor.profile, input.password);
 			}
@@ -1326,11 +1361,12 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
-			// 비회원은 잠긴 글에 닿을 수 없으므로 password가 잠금 열쇠로 쓰일 일이 없다 —
-			// 그대로 자기 댓글의 소유권 비밀번호가 된다.
+			// 비회원이 닿을 수 있는 잠긴 글은 자기가 쓴 법률 자문 글뿐이고(assertGuestPostAccess가
+			// gid로 확인한다) 그 경우에도 잠금은 이미 통과한 상태라, password는 잠금 열쇠가
+			// 아니라 그대로 자기 댓글의 소유권 비밀번호가 된다.
 			let guestPassword: string | null = null;
 			if (actor.kind === "guest") {
-				assertGuestPostAccess(post);
+				assertGuestPostAccess(post, actor.gid);
 				guestPassword = requireGuestPassword(input.password);
 			} else {
 				requirePostReadAccess(post, actor.profile, input.password);

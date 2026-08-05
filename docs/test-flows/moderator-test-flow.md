@@ -11,10 +11,13 @@
 
 ### 0.1 역할 모델 (코드 확인)
 
-- 역할 enum은 **3종뿐**이다 — `job_seeker` / `employer` / `admin`
-  (`packages/db/src/schema/bambi.ts` `bambiUserRole`).
+- 계정 역할 enum은 `job_seeker` / `employer` / `admin` / `legal_advisor`이다
+  (`packages/db/src/schema/bambi.ts` `bambiUserRole`. `guest`도 같은 enum에 있지만 계정 없는 비회원
+  작성자 스냅샷 전용이라 회원 목록에는 나오지 않는다).
   **`moderator`라는 별도 역할·등급은 코드에 존재하지 않는다.** 화면 이름만 "운영자 콘솔"(`/moderator`)이고
   실제 권한 값은 `admin` 하나다. 따라서 **운영자 등급별 차등 권한 테스트는 대상이 없다**(부록 참조).
+- `legal_advisor`는 **운영자만 지정**하는 역할이며(§4.6), 콘솔 권한은 전혀 없다 — 수다방
+  `무료 법률 자문` 게시판의 잠긴 글을 열람·답변할 수 있을 뿐이다.
 - 계정 상태 enum: `active` / `warned` / `suspended` (`accountStatus`).
 
 ### 0.2 권한 게이트 2중 구조
@@ -316,7 +319,7 @@
   테이블 `apps/web/src/components/bambi/moderator-users-table.tsx`)
 - **절차**:
   1. 상태 탭: 전체 / 정상 / 경고 / 정지 / **탈퇴**(= `deletedAt !== null`, enum이 아니라 별도 축).
-  2. 역할 Select(전체/구직자/구인자/운영자), 휴대폰 인증 Select(전체/인증/미인증).
+  2. 역할 Select(전체/구직자/**법률자문**/구인자/운영자), 휴대폰 인증 Select(전체/인증/미인증).
   3. 누적 신고 Select(0/1/3/5/10건 이상), 경고 횟수 Select(0/1/3/5회 이상).
   4. 검색: 이름·이메일·로그인 아이디.
 - **기대 결과**:
@@ -354,7 +357,8 @@
 - **경로**: `/moderator/users/[id]` "제재 이력" 섹션 (`moderator.tsx` `UserModerationHistory` L2208~)
 - **기대 결과**: 해당 사용자를 대상으로 한 감사 로그 **최신 50건**(액션 라벨 / 사유 / 처리자 이름 / 시각).
   액션 코드는 라벨 맵으로만 노출되며, 매핑에 없는 코드는 "기타 조치"로 표시된다
-  (`apps/web/src/lib/bambi/moderation-labels.ts` — 현재 `set_status:active|warned|suspended`만 매핑).
+  (`apps/web/src/lib/bambi/moderation-labels.ts` — 현재 `set_status:active|warned|suspended`,
+  `set_role:legal_advisor`(법률자문 지정)·`set_role:job_seeker`(법률자문 해제)만 매핑).
 - **관련 API**: `bambi.moderation.listUserModerationActions` (`moderation.ts` L1217, `adminProcedure`)
 
 ### 4.4 정상 복구(제재 해제)
@@ -376,7 +380,32 @@
   0건 또는 51건 이상이면 `BAD_REQUEST`.
 - **관련 API**: `bambi.moderation.bulkSetUserStatus` (`moderation.ts` L1772)
 
-### 4.6 탈퇴 계정 잔여 식별값 파기 (배치)
+### 4.6 법률자문 지정·해제
+
+- **경로**: `/moderator/users/[id]` "무료 법률 자문" 영역 (UI `moderator.tsx` `UserDetail`,
+  컨텍스트 `moderator-context.tsx` `setLegalAdvisor`)
+- **선행 조건**: 대상이 **밤비 프로필이 있는** `job_seeker` 또는 `legal_advisor` 계정.
+- **절차**:
+  1. 목록에서 역할 Select로 `구직자`/`법률자문`을 걸러 대상을 찾고 행 클릭 → 상세.
+  2. "무료 법률 자문" 영역 버튼(구직자면 **법률자문 지정**, 법률자문이면 **법률자문 해제**) 클릭.
+  3. 사유 시트(기본 문구 프리필, 2자 이상) → 확정.
+- **기대 결과**:
+  - `setUserRole({role, reason, targetUserId})` → `bambi_profile.role` 갱신 +
+    감사 로그 `set_role:legal_advisor` / `set_role:job_seeker`(대상 유형 `user`).
+  - 적용 후 목록 캐시가 무효화되어 상세·목록의 역할 표기가 함께 바뀐다. **제재와 달리 목록으로 튕기지 않는다.**
+  - 지정된 계정은 수다방에 성별·광고와 무관하게 입장하고, `legal` 게시판의 잠긴 글을 비번 없이 열람·답변한다
+    (구직자 테스트 흐름 §11.9). 해제하면 곧바로 권한이 사라진다.
+  - **그 외 권한은 구직자 그대로다.** 구인 기능(공고 `listMine`·조직·팀·광고·분석·업소 인증 제출)은
+    `isEmployerLikeRole`(`employer`·`admin` 허용 목록)이 막아 `FORBIDDEN`이고, 홈도 `/seeker`다.
+    채팅은 `job_seeker` 전용이라 지정 중에는 이용할 수 없다(해제하면 복구).
+- **엣지 케이스 / 실패 케이스**:
+  - `employer`·`admin` 계정 → 버튼 대신 안내 문구만 노출. API 직접 호출 시 `BAD_REQUEST`
+    "법률자문 지정·해제는 구직자 계정에만 할 수 있어요(업소·운영자 계정은 전환할 수 없습니다)."
+  - 온보딩 전 계정 → `BAD_REQUEST` "아직 온보딩을 마치지 않은 계정이라 역할을 지정할 수 없어요."
+  - 탈퇴 계정에는 이 영역이 뜨지 않는다. 사유 2자 미만이면 확정 비활성.
+- **관련 API**: `bambi.moderation.setUserRole` (`adminProcedure`)
+
+### 4.7 탈퇴 계정 잔여 식별값 파기 (배치)
 
 - **경로**: `/moderator/site-settings` 내 실행 버튼 (§13)
 - > ⚠ **되돌릴 수 없다.** 보존기간(운영자 설정, 기본 30일)이 지난 탈퇴 계정의 세션·자격증명(비밀번호)·

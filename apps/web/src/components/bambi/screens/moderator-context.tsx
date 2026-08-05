@@ -82,6 +82,13 @@ interface ModContextValue {
 	// 적용 성공 여부를 돌려준다 — 호출자가 성공했을 때만 목록으로 되돌아갈 수 있게.
 	sanction: (id: string, status: UserStatus, label: string) => Promise<boolean>;
 	selected: string[];
+	// 무료 법률 자문 답변 계정 지정·해제(구직자 ↔ 법률자문). 서버가 거절한 사유를 그대로
+	// 띄워야 해서 성공 여부만 돌려주고 화면 이동은 호출자가 정한다.
+	setLegalAdvisor: (
+		id: string,
+		role: "job_seeker" | "legal_advisor",
+		reason: string
+	) => Promise<boolean>;
 	toast: string | null;
 	toggleSelect: (id: string) => void;
 	users: ManagedUser[];
@@ -390,6 +397,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	const setUserStatusMutation = useMutation(
 		orpc.bambi.moderation.setUserStatus.mutationOptions()
 	);
+	const setUserRoleMutation = useMutation(
+		orpc.bambi.moderation.setUserRole.mutationOptions()
+	);
 	// 커뮤니티 대상(글·댓글) 운영자 상태 변경 프로시저.
 	const setPostStatusByAdminMutation = useMutation(
 		orpc.bambi.community.setPostStatusByAdmin.mutationOptions()
@@ -498,6 +508,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			organizationNames: item.organizationNames,
 			reports: item.reportsCount,
 			role: userRoleLabel(item.role),
+			roleKey: item.role,
 			status: item.status,
 			warnings: item.warningsCount,
 		}));
@@ -621,6 +632,36 @@ export function ModProvider({ children }: { children: ReactNode }) {
 
 			await invalidateUsers();
 			flash(label);
+			return true;
+		};
+		// 역할 전환은 구직자 ↔ 법률자문만 열려 있다(서버 assertLegalAdvisorRoleSwitch).
+		// 거절 사유가 계정 종류마다 달라 서버 메시지를 그대로 띄운다.
+		const setLegalAdvisor = async (
+			id: string,
+			role: "job_seeker" | "legal_advisor",
+			reason: string
+		) => {
+			try {
+				await setUserRoleMutation.mutateAsync({
+					reason,
+					role,
+					targetUserId: id,
+				});
+			} catch (error) {
+				flash(
+					error instanceof Error && error.message
+						? error.message
+						: "역할을 변경하지 못했어요. 다시 시도해 주세요."
+				);
+				return false;
+			}
+
+			await invalidateUsers();
+			flash(
+				role === "legal_advisor"
+					? "법률자문으로 지정했어요"
+					: "법률자문 지정을 해제했어요"
+			);
 			return true;
 		};
 		// 커뮤니티 대상(글·댓글) 콘텐츠 조치. 신고 상태 변경(resolveReport)과는 별개로,
@@ -817,6 +858,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			resolveQueue,
 			resolveReport,
 			sanction,
+			setLegalAdvisor,
 			moderateCommunityTarget,
 			bulkAction,
 		};
@@ -838,6 +880,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		setJobPostStatusMutation,
 		setPostStatusByAdminMutation,
 		setReportStatusMutation,
+		setUserRoleMutation,
 		setUserStatusMutation,
 		toast,
 	]);

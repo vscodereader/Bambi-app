@@ -15,10 +15,14 @@ const {
 	assertGuestOwnership,
 	assertGuestPostAccess,
 	assertGuestWritableBoard,
+	assertLegalAdvisorRoleSwitch,
+	canBypassLock,
 	findCommunityActor,
 	requireGuestPassword,
 	resolveCommunityActor,
+	resolveLockedForBoard,
 } = await import("./bambi-community-authz");
+type AccessProfile = Parameters<typeof canBypassLock>[1];
 const { hashCommunityPassword } = await import("./bambi-community-password");
 
 // 던진 ORPCError의 코드만 뽑는다(통과하면 undefined) — 가드마다 try/catch를 쓰지 않으려고.
@@ -62,9 +66,10 @@ describe("resolveCommunityActor — 비회원 분기", () => {
 });
 
 describe("비회원 쓰기 게이트", () => {
-	it("자유수다·밤문화 이야기에만 참여할 수 있다", () => {
+	it("자유수다·밤문화 이야기·무료 법률 자문에만 참여할 수 있다", () => {
 		expect(codeOf(() => assertGuestWritableBoard("free"))).toBeUndefined();
 		expect(codeOf(() => assertGuestWritableBoard("work_talk"))).toBeUndefined();
+		expect(codeOf(() => assertGuestWritableBoard("legal"))).toBeUndefined();
 		// 공지는 읽기만 열려 있고(운영자 게시판), 중고거래·베스트는 비로그인에게 닫혀 있다.
 		for (const board of ["notice", "market", "best"]) {
 			expect(codeOf(() => assertGuestWritableBoard(board))).toBe("BAD_REQUEST");
@@ -72,15 +77,36 @@ describe("비회원 쓰기 게이트", () => {
 	});
 
 	it("잠금글에는 비회원이 댓글·추천을 남길 수 없다", () => {
+		const post = (board: string, isLocked: boolean) => ({
+			authorGuestId: "gid-1",
+			board,
+			isLocked,
+		});
 		expect(
-			codeOf(() => assertGuestPostAccess({ board: "free", isLocked: false }))
+			codeOf(() => assertGuestPostAccess(post("free", false), "gid-1"))
 		).toBeUndefined();
+		// 자기 글이어도 법률 자문 밖 보드의 잠금글은 그대로 막힌다.
 		expect(
-			codeOf(() => assertGuestPostAccess({ board: "free", isLocked: true }))
+			codeOf(() => assertGuestPostAccess(post("free", true), "gid-1"))
 		).toBe("BAD_REQUEST");
 		expect(
-			codeOf(() => assertGuestPostAccess({ board: "notice", isLocked: false }))
+			codeOf(() => assertGuestPostAccess(post("notice", false), "gid-1"))
 		).toBe("BAD_REQUEST");
+	});
+
+	it("법률 자문 게시판은 강제 잠금이라 글쓴이 본인에게만 잠금 금지 가드가 풀린다", () => {
+		const legalPost = {
+			authorGuestId: "gid-1",
+			board: "legal",
+			isLocked: true,
+		};
+		expect(
+			codeOf(() => assertGuestPostAccess(legalPost, "gid-1"))
+		).toBeUndefined();
+		// 남의 법률 상담글은 읽지도 못하므로 댓글·추천도 붙일 수 없다.
+		expect(codeOf(() => assertGuestPostAccess(legalPost, "gid-2"))).toBe(
+			"FORBIDDEN"
+		);
 	});
 
 	it("비회원 글·댓글 비밀번호는 4자 이상 필수다", () => {
@@ -139,5 +165,72 @@ describe("비회원 소유권 증명", () => {
 				assertGuestOwnership({ authorGuestId: "g-2", passwordHash: "" }, "1234")
 			)
 		).toBe("FORBIDDEN");
+	});
+});
+
+describe("무료 법률 자문 게시판", () => {
+	it("legal 보드는 입력 토글과 무관하게 잠금이 강제된다", () => {
+		expect(resolveLockedForBoard("legal", false)).toBe(true);
+		expect(resolveLockedForBoard("legal", true)).toBe(true);
+		// 다른 게시판은 입력한 토글 그대로다.
+		expect(resolveLockedForBoard("work_talk", false)).toBe(false);
+		expect(resolveLockedForBoard("work_talk", true)).toBe(true);
+	});
+
+	const profile = (
+		role: string,
+		userId = "u-advisor"
+	): NonNullable<AccessProfile> =>
+		({
+			gender: "female",
+			isPhoneVerified: true,
+			role,
+			status: "active",
+			userId,
+		}) as NonNullable<AccessProfile>;
+
+	it("법률자문은 legal 잠금글만 비밀번호 없이 연다", () => {
+		const legalPost = { authorUserId: "u-author", board: "legal" };
+		const otherPost = { authorUserId: "u-author", board: "work_talk" };
+		expect(canBypassLock(legalPost, profile("legal_advisor"))).toBe(true);
+		// 다른 보드 잠금글은 일반 회원과 똑같이 비밀번호가 필요하다.
+		expect(canBypassLock(otherPost, profile("legal_advisor"))).toBe(false);
+	});
+
+	it("작성자·운영자 우회와 비열람자 차단은 그대로다", () => {
+		const legalPost = { authorUserId: "u-author", board: "legal" };
+		expect(canBypassLock(legalPost, profile("job_seeker", "u-author"))).toBe(
+			true
+		);
+		expect(canBypassLock(legalPost, profile("admin"))).toBe(true);
+		expect(canBypassLock(legalPost, profile("job_seeker"))).toBe(false);
+		// 비회원·비로그인(profile null)은 어떤 잠금글도 우회하지 못한다.
+		expect(canBypassLock(legalPost, null)).toBe(false);
+		// 비회원 글(author_user_id null)이 회원 null userId와 엮이지 않는지도 함께 본다.
+		expect(canBypassLock({ authorUserId: null, board: "legal" }, null)).toBe(
+			false
+		);
+	});
+});
+
+describe("법률자문 역할 전환 축", () => {
+	it("구직자 ↔ 법률자문만 오갈 수 있다", () => {
+		expect(
+			codeOf(() => assertLegalAdvisorRoleSwitch("job_seeker", "legal_advisor"))
+		).toBeUndefined();
+		expect(
+			codeOf(() => assertLegalAdvisorRoleSwitch("legal_advisor", "job_seeker"))
+		).toBeUndefined();
+	});
+
+	it("업소·운영자·비회원 계정은 전환할 수 없다", () => {
+		for (const role of ["employer", "admin", "guest"]) {
+			expect(
+				codeOf(() => assertLegalAdvisorRoleSwitch(role, "legal_advisor"))
+			).toBe("BAD_REQUEST");
+			expect(
+				codeOf(() => assertLegalAdvisorRoleSwitch("legal_advisor", role))
+			).toBe("BAD_REQUEST");
+		}
 	});
 });

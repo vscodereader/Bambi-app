@@ -47,20 +47,24 @@ const MODERATION_ACTION_LABELS: Record<string, string> = {
 	"set_status:active": "정상 복구",
 	"set_status:warned": "경고",
 	"set_status:suspended": "이용 정지",
+	"set_role:legal_advisor": "법률자문 지정",
+	"set_role:job_seeker": "법률자문 해제",
 };
 
 export function moderationActionLabel(action: string): string {
 	return MODERATION_ACTION_LABELS[action] ?? "기타 조치";
 }
 
-// 사용자 역할(bambi_user_role): job_seeker·employer·admin·guest.
+// 사용자 역할(bambi_user_role): job_seeker·employer·admin·guest·legal_advisor.
 // guest는 계정 없는 비회원 작성자 스냅샷이라 회원 목록에는 나타나지 않고, 수다방
-// 글·댓글의 author_role로만 등장한다.
+// 글·댓글의 author_role로만 등장한다. legal_advisor는 운영자가 구직자 계정에 지정하는
+// 무료 법률 자문 답변 계정이다.
 const USER_ROLE_LABELS: Record<string, string> = {
 	admin: "운영자",
 	employer: "구인자",
 	guest: "비회원",
 	job_seeker: "구직자",
+	legal_advisor: "법률자문",
 };
 
 export function userRoleLabel(role: string): string {

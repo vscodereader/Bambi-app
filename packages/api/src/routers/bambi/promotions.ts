@@ -23,6 +23,7 @@ import z from "zod";
 
 import { protectedProcedure } from "../../index";
 import {
+	isEmployerLikeRole,
 	requireActiveBambiProfile,
 	requireEmployerPostingAccess,
 } from "../../services/bambi-authz";
@@ -41,7 +42,7 @@ export const promotionsRouter = {
 	listMyAds: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
-		if (profile.role === "job_seeker") {
+		if (!isEmployerLikeRole(profile.role)) {
 			throw new ORPCError("FORBIDDEN");
 		}
 

@@ -81,7 +81,7 @@ function CommunityVerifyDialog({
 					<DialogTitle>본인인증이 필요해요</DialogTitle>
 					<DialogDescription>
 						성인 본인인증을 마치면 비회원도 수다방을 보고 자유수다·밤문화
-						이야기에 참여할 수 있어요.
+						이야기·무료 법률 자문에 참여할 수 있어요.
 					</DialogDescription>
 				</div>
 				<PhoneVerifyDialog
@@ -116,6 +116,7 @@ function CommunityContent({
 	const postsByBoard: Record<CommunityBoardKey, OverviewPost[]> = {
 		best: data?.best ?? [],
 		free: data?.free ?? [],
+		legal: data?.legal ?? [],
 		market: data?.market ?? [],
 		notice: data?.notice ?? [],
 		work_talk: data?.workTalk ?? [],
@@ -138,6 +139,7 @@ function CommunitySkeleton() {
 	const empty: Record<CommunityBoardKey, OverviewPost[]> = {
 		best: [],
 		free: [],
+		legal: [],
 		market: [],
 		notice: [],
 		work_talk: [],

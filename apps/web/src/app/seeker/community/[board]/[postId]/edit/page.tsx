@@ -106,6 +106,7 @@ function CommunityEditContent({
 					authorName: data.authorName,
 					authorRole: data.authorRole,
 					body: data.body,
+					contactPhone: data.contactPhone,
 					id: data.id,
 					isLocked: data.isLocked,
 					isPromotion: data.isPromotion,

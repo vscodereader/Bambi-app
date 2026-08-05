@@ -35,6 +35,7 @@ import {
 	communityBoardPath,
 	getBoardBySlug,
 	isGuestWritableBoardKey,
+	isLegalBoardKey,
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
@@ -90,7 +91,12 @@ function GuestPostDetailView({
 	// 읽기는 회원과 같은 전 게시판이고, 쓰기(추천·댓글)만 자유수다·밤문화 이야기의
 	// 잠기지 않은 글로 좁다 — 서버 가드(assertGuestPostAccess)와 같은 기준이다.
 	// 비밀글 댓글은 회원 비소유자와 똑같이 게이트를 통과한 비밀번호로 읽는다.
-	const participable = isGuestWritableBoardKey(board.key) && !post.isLocked;
+	// 법률 자문은 전 글이 잠겨 있어(서버 강제) 잠금만으로 막으면 질문한 비회원이 자기
+	// 글의 답변에 되묻지 못한다 — 서버도 legal 잠금글은 **작성한 비회원 본인**(gid 일치,
+	// 여기서는 canEdit)에게만 예외를 준다.
+	const participable =
+		isGuestWritableBoardKey(board.key) &&
+		(!post.isLocked || (isLegalBoardKey(board.key) && post.canEdit));
 
 	return (
 		<div className="flex flex-col gap-4">

@@ -29,6 +29,15 @@ export interface BambiAccessProfile {
 	userId: string;
 }
 
+// 구인 기능(조직·팀·공고·광고·분석)을 쓸 수 있는 역할. 예전에는 호출부마다
+// `role === "job_seeker"`면 거부하는 식으로 뒤집어 판정했는데, 그러면 bambi_user_role에
+// 값이 하나 늘 때마다(legal_advisor 등) 구직자 축 계정이 조용히 구인자 API로 새어 들어간다.
+// 허용 목록으로 고정해 기본값이 "거부"가 되게 한다(기존 두 역할의 판정 결과는 그대로다).
+const EMPLOYER_LIKE_ROLES = new Set<string>(["employer", "admin"]);
+
+export const isEmployerLikeRole = (role: string): boolean =>
+	EMPLOYER_LIKE_ROLES.has(role);
+
 interface EmployerPostingAccessInput {
 	organizationId: string;
 	session: SessionLike | null | undefined;

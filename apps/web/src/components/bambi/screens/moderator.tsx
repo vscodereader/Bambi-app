@@ -2357,19 +2357,67 @@ function UserModerationHistory({ userId }: { userId: string }) {
 	);
 }
 
+// 무료 법률 자문 답변 계정 지정·해제. 구직자 ↔ 법률자문만 오갈 수 있어(서버 규칙)
+// 그 밖의 계정에는 왜 안 되는지 이유만 남긴다.
+const LEGAL_ADVISOR_ROLE = "legal_advisor";
+const LEGAL_ADVISOR_BLOCKED_NOTICE =
+	"법률자문 지정·해제는 구직자 계정에만 할 수 있어요. 업소·운영자 계정은 전환할 수 없습니다.";
+
+interface LegalAdvisorChoice {
+	confirmLabel: string;
+	defaultReason: string;
+	desc: string;
+	role: "job_seeker" | "legal_advisor";
+	title: string;
+}
+
+const legalAdvisorChoice = (roleKey: string): LegalAdvisorChoice | null => {
+	if (roleKey === LEGAL_ADVISOR_ROLE) {
+		return {
+			confirmLabel: "법률자문 해제",
+			defaultReason: "법률 자문 활동이 끝나 지정을 해제했어요",
+			desc: "무료 법률 자문 글 열람·답변 권한을 거둬요",
+			role: "job_seeker",
+			title: "법률자문 해제",
+		};
+	}
+	if (roleKey === "job_seeker") {
+		return {
+			confirmLabel: "법률자문 지정",
+			defaultReason: "무료 법률 자문 답변을 맡기려고 지정했어요",
+			desc: "무료 법률 자문의 비밀글을 열람하고 답변할 수 있게 해요",
+			role: LEGAL_ADVISOR_ROLE,
+			title: "법률자문 지정",
+		};
+	}
+	return null;
+};
+
 export function UserDetail({
 	item,
 	onBack,
 	onSanction,
+	onSetRole,
 }: {
 	item: ManagedUser;
 	onBack: () => void;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
+	// 실서비스 콘솔에서만 넘어온다(프리뷰 목업 콘솔에는 역할 전환 API가 없다).
+	onSetRole?: (
+		id: string,
+		role: "job_seeker" | "legal_advisor",
+		reason: string
+	) => void;
 }) {
 	const c = STATUS_CONF[item.status];
 	// 경고/정지 버튼을 누르면 곧바로 적용하지 않고, 공용 사유 작성 시트를 띄워
 	// 기본 문구가 프리필된 사유를 운영자가 확인·수정한 뒤 확정하게 한다.
 	const [pending, setPending] = useState<SanctionChoice | null>(null);
+	// 역할 전환도 같은 사유 시트를 쓴다 — 제재와 감사 로그 성격이 같다.
+	const [pendingRole, setPendingRole] = useState<LegalAdvisorChoice | null>(
+		null
+	);
+	const roleChoice = legalAdvisorChoice(item.roleKey);
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="사용자 상세" />
@@ -2453,6 +2501,32 @@ export function UserDetail({
 						</Button>
 					</div>
 				)}
+				{onSetRole && !item.deletedAt ? (
+					<div>
+						<div className="mb-2.5 font-bold text-[13px] text-foreground">
+							무료 법률 자문
+						</div>
+						{roleChoice ? (
+							<>
+								<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
+									{roleChoice.desc}
+								</p>
+								<Button
+									block
+									onClick={() => setPendingRole(roleChoice)}
+									size="lg"
+									variant="secondary"
+								>
+									{roleChoice.title}
+								</Button>
+							</>
+						) : (
+							<p className="m-0 text-[12.5px] text-muted-foreground leading-[1.5]">
+								{LEGAL_ADVISOR_BLOCKED_NOTICE}
+							</p>
+						)}
+					</div>
+				) : null}
 				<UserModerationHistory userId={item.id} />
 				<div>
 					<div className="mb-2.5 font-bold text-[13px] text-foreground">
@@ -2486,6 +2560,22 @@ export function UserDetail({
 					reasonFieldId={`user-sanction-reason-${item.id}`}
 					reasonLabel="제재 사유"
 					title={pending.title}
+				/>
+			) : null}
+			{pendingRole && onSetRole ? (
+				<ReasonConfirmSheet
+					confirmLabel={pendingRole.confirmLabel}
+					defaultReason={pendingRole.defaultReason}
+					description={`${item.name} 님에게 적용돼요`}
+					onCancel={() => setPendingRole(null)}
+					onConfirm={(reason) => {
+						onSetRole(item.id, pendingRole.role, reason);
+						setPendingRole(null);
+					}}
+					positioning="absolute"
+					reasonFieldId={`user-role-reason-${item.id}`}
+					reasonLabel="지정 사유"
+					title={pendingRole.title}
 				/>
 			) : null}
 		</div>

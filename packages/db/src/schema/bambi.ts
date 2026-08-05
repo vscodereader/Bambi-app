@@ -25,6 +25,9 @@ export const bambiUserRole = pgEnum("bambi_user_role", [
 	"employer",
 	"admin",
 	"guest",
+	// 무료 법률 자문 게시판(legal) 전용 계정. 운영자가 구직자 계정을 지정·해제하며
+	// 해당 게시판의 잠금글만 열람·답변할 수 있다(다른 보드 잠금글은 일반 회원과 동일).
+	"legal_advisor",
 ]);
 
 export const accountStatus = pgEnum("account_status", [
@@ -133,6 +136,9 @@ export const communityBoard = pgEnum("community_board", [
 	"work_talk",
 	"market",
 	"notice",
+	// 무료 법률 자문. 글이 전부 잠금(비밀번호 필수)이라 목록에는 마스킹 제목만 보인다.
+	// 마이그레이션 호환을 위해 새 값은 항상 끝에 덧붙인다.
+	"legal",
 ]);
 
 // 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
@@ -1459,6 +1465,9 @@ export const communityPost = pgTable(
 		authorDisplayName: text("author_display_name").notNull(),
 		passwordHash: text("password_hash").notNull(),
 		isLocked: boolean("is_locked").default(false).notNull(),
+		// 법률 자문 글의 선택 입력 연락처(휴대폰). 잠금을 연 열람자(작성자·운영자·법률자문)에게만
+		// 응답에 실린다. legal 외 게시판에서는 저장하지 않는다(API 강제).
+		contactPhone: text("contact_phone"),
 		// 작성 시점 계정 유형 스냅샷(서버 기록, 위조 불가). 업소 배지·필터용 — 이후 role 변경과 무관.
 		authorRole: bambiUserRole("author_role").notNull(),
 		// 업소회원 자율 광고 표시. employer만 true 가능(API 강제), 미표시 광고는 신고로 보완.
