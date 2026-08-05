@@ -4,7 +4,7 @@ import {
 	duplicateItems,
 	moveItems,
 	resizeItems,
-	resizeWidthFromCornerDrag,
+	resizeWidthFromHandleDrag,
 } from "./crawled-image-editor";
 
 const document = {
@@ -44,20 +44,29 @@ describe("crawled image editor state", () => {
 
 	it("uses both pointer axes when resizing from a corner", () => {
 		expect(
-			resizeWidthFromCornerDrag({
+			resizeWidthFromHandleDrag({
 				aspectRatio: 0.25,
-				corner: "nw",
 				deltaX: 20,
 				deltaY: 40,
+				handle: "nw",
 				startWidth: 200,
 			})
 		).toBe(180);
 		expect(
-			resizeWidthFromCornerDrag({
+			resizeWidthFromHandleDrag({
 				aspectRatio: 0.25,
-				corner: "nw",
 				deltaX: 0,
 				deltaY: 80,
+				handle: "nw",
+				startWidth: 200,
+			})
+		).toBe(180);
+		expect(
+			resizeWidthFromHandleDrag({
+				aspectRatio: 0.25,
+				deltaX: 0,
+				deltaY: 80,
+				handle: "n",
 				startWidth: 200,
 			})
 		).toBe(180);
