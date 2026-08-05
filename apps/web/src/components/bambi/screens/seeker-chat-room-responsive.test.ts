@@ -52,4 +52,12 @@ describe("채팅방 연락처 재설계", () => {
 		expect(source).toContain("공고 삭제됨");
 		expect(source).toContain("공고 비공개");
 	});
+
+	it("면접 상태 변경 후 예정된 면접 목록을 갱신한다", () => {
+		expect(source).toContain("listMyUpcomingInterviews.queryKey()");
+	});
+
+	it("완료 전환 버튼의 의미를 면접 완료로 명확히 한다", () => {
+		expect(source).toContain("면접 완료");
+	});
 });

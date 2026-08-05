@@ -1082,6 +1082,9 @@ export function SeekerChatRoomResponsive({
 			onSuccess: async () => {
 				setScheduleErrorMessage(null);
 				await invalidateRoom();
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.chats.listMyUpcomingInterviews.queryKey(),
+				});
 			},
 		})
 	);
@@ -1744,7 +1747,7 @@ export function SeekerChatRoomResponsive({
 													size="md"
 													variant="secondary"
 												>
-													완료
+													면접 완료
 												</Button>
 												<Button
 													disabled={setInterviewStatusMutation.isPending}
