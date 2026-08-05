@@ -734,6 +734,9 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 																		aria-label={`${index + 1}번 이미지 ${corner} 크기 조절`}
 																		className={`absolute z-20 size-5 touch-none rounded-full border-2 border-white bg-primary ${corner === "nw" || corner === "se" ? "cursor-nwse-resize" : "cursor-nesw-resize"} ${corner.includes("n") ? "-top-2" : "-bottom-2"} ${corner.includes("w") ? "-left-2" : "-right-2"}`}
 																		key={corner}
+																		onClick={(event) => {
+																			event.stopPropagation();
+																		}}
 																		onLostPointerCapture={() => {
 																			resizeRef.current = null;
 																		}}
