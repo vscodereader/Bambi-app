@@ -17,9 +17,8 @@ import {
 	type CommunityBoardKey,
 	type CommunityBoardMeta,
 	communityBoardPath,
-	communityPostPath,
 } from "@/lib/bambi/community";
-import { publicBoardPath, publicPostPath } from "@/lib/bambi/public-community";
+import { useCommunityAreaPaths } from "@/lib/bambi/community-paths";
 import { orpc } from "@/utils/orpc";
 
 const TITLE_MAX = 100;
@@ -41,13 +40,6 @@ const getInitialLockedState = (
 	boardKey: CommunityBoardKey,
 	initiallyLocked: boolean | undefined
 ): boolean => boardKey !== "free" && Boolean(initiallyLocked);
-
-// 비회원은 공개 영역(/board)에서 오고 그리로 돌아간다 — 회원 화면은 게이트가 막는다.
-const listPathFor = (guest: boolean, slug: string): string =>
-	guest ? publicBoardPath(slug) : communityBoardPath(slug);
-
-const detailPathFor = (guest: boolean, slug: string, postId: string): string =>
-	guest ? publicPostPath(slug, postId) : communityPostPath(slug, postId);
 
 const initialAuthorName = (guest: boolean, initial?: string): string =>
 	initial ?? (guest ? GUEST_AUTHOR_DEFAULT : "");
@@ -74,8 +66,8 @@ interface CommunityPostFormProps {
 	board: CommunityBoardMeta;
 	// 수정 모드 초기값. 비작성자(비밀번호 수정)는 editPassword로 게이트 통과 비번을 넘긴다.
 	editPassword?: string;
-	// 비회원(게스트 인증) 모드. 작성인 기본값·비밀번호 필수·잠금/광고 숨김이 함께 바뀌고
-	// 완료 후 이동도 공개 영역(/board)으로 간다.
+	// 비회원(게스트 인증) 모드. 작성인 기본값·비밀번호 필수·잠금/광고·이미지 업로드 숨김이
+	// 함께 바뀐다. 완료 후 이동은 신분이 아니라 지금 있는 영역(useCommunityAreaPaths)을 따른다.
 	guest?: boolean;
 	initialPost?: CommunityPostInitial;
 }
@@ -162,9 +154,10 @@ export function CommunityPostForm({
 }: CommunityPostFormProps) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
+	const paths = useCommunityAreaPaths();
 	const isEdit = Boolean(initialPost);
 	const isFreeBoard = board.key === "free";
-	const listPath = listPathFor(guest, board.slug);
+	const listPath = paths.boardPath(board.slug);
 
 	const [authorName, setAuthorName] = useState(
 		initialAuthorName(guest, initialPost?.authorName)
@@ -218,7 +211,7 @@ export function CommunityPostForm({
 		await queryClient.invalidateQueries({
 			queryKey: orpc.bambi.community.key(),
 		});
-		router.replace(detailPathFor(guest, board.slug, postId) as Route);
+		router.replace(paths.postPath(board.slug, postId) as Route);
 	};
 
 	const createMutation = useMutation(
@@ -354,7 +347,9 @@ export function CommunityPostForm({
 
 			<div className="flex flex-col gap-2">
 				<Label>본문</Label>
+				{/* 이미지 업로드(createMediaUpload)는 회원 전용이라 비회원에게는 URL 삽입만 연다. */}
 				<CommunityPostEditor
+					allowUpload={!guest}
 					onChange={(payload) => {
 						setBodyJson(payload.json);
 						setBodyText(payload.text);

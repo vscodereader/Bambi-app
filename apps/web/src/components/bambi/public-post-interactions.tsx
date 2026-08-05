@@ -1,7 +1,9 @@
 "use client";
 
-// 공개 상세(/board/[boardSlug]/[postId])의 참여 UI — 추천·댓글 목록/작성·본인 글·댓글
-// 수정/삭제. 회원에게는 마운트하지 않는다(회원 화면 /seeker/community가 담당).
+// 비회원 참여 UI — 추천·댓글 목록/작성·본인 글·댓글 수정/삭제. 공개 상세
+// (/board/[boardSlug]/[postId])와 회원 수다방 상세(/seeker/community, 여성 인증 게스트로
+// 들어온 경우)가 함께 쓴다. 회원에게는 마운트하지 않는다(회원 전용 UI가 따로 있다).
+// 이동 경로는 신분이 아니라 지금 있는 영역을 따른다(useCommunityAreaPaths).
 //
 // 비회원의 소유권 증명은 오직 비밀번호다. 쿠키(gid)가 만료돼도 비밀번호만 맞으면 자기
 // 글·댓글을 지울 수 있도록 서버가 gid가 아니라 비밀번호로 판정하므로, 화면도 매 요청에
@@ -35,11 +37,7 @@ import {
 	communityAuthorRoleLabel,
 	formatCommunityDate,
 } from "@/lib/bambi/community";
-import {
-	publicBoardPath,
-	publicEditPath,
-	publicPostPath,
-} from "@/lib/bambi/public-community";
+import { useCommunityAreaPaths } from "@/lib/bambi/community-paths";
 import { orpc } from "@/utils/orpc";
 
 const COMMENT_MAX = 1000;
@@ -415,35 +413,50 @@ function CommentThread({
 
 interface PublicPostInteractionsProps {
 	boardSlug: string;
+	// 댓글 목록을 서버에서 다시 읽을지. 기본은 참여 가능할 때만(공개 상세는 서버가 이미
+	// 렌더한 목록을 그대로 쓰고, 미인증 방문자·크롤러에게는 추가 요청을 만들지 않는다).
+	// 회원 화면에 얹을 때처럼 씨앗 목록이 없으면 참여 자격과 무관하게 켠다.
+	canReadComments?: boolean;
 	// 비회원 쓰기 자격(gid 있는 게스트 토큰). 없으면 읽기 + 본인인증 안내만.
 	canWrite: boolean;
 	commentCount: number;
 	initialComments: PublicCommentSeed[];
+	// 이미 추천했는지. 공개 상세(getPublicPost)는 내려주지 않아 기본 false지만, 회원 화면
+	// 상세(getPost)는 gid 기준으로 알려주므로 첫 클릭이 추천 취소가 되지 않게 넘겨받는다.
+	initialIsLiked?: boolean;
 	// 비회원이 쓴 글이면 비밀번호로 수정·삭제할 수 있다(회원 글은 회원 화면 몫).
 	isGuestAuthored: boolean;
 	likeCount: number;
 	// 비회원 참여가 열린 게시판(자유수다·밤문화 이야기)인지. 공지는 읽기 전용이다.
 	participable: boolean;
+	// 비밀글 게이트를 통과한 비밀번호. 댓글 목록도 상세와 같은 열쇠를 요구한다
+	// (공개 상세에는 잠긴 글이 없어 undefined).
+	password?: string;
 	postId: string;
 }
 
 export function PublicPostInteractions({
 	boardSlug,
+	canReadComments,
 	canWrite,
 	commentCount,
 	initialComments,
+	initialIsLiked = false,
 	isGuestAuthored,
 	likeCount,
 	participable,
+	password,
 	postId,
 }: PublicPostInteractionsProps) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
+	// 목록·수정·상세 경로는 지금 있는 영역을 따른다(공개 /board ↔ 회원 수다방).
+	const paths = useCommunityAreaPaths();
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [replyTo, setReplyTo] = useState<string | null>(null);
-	// 공개 상세는 추천 여부를 내려주지 않는다 — 이미 추천한 방문자의 첫 클릭은 추천 취소로
-	// 동작하고, 서버 응답으로 상태가 맞춰진다.
-	const [like, setLike] = useState({ isLiked: false, likeCount });
+	// 공개 상세는 추천 여부를 내려주지 않는다(initialIsLiked 기본 false) — 이미 추천한
+	// 방문자의 첫 클릭은 추천 취소로 동작하고, 서버 응답으로 상태가 맞춰진다.
+	const [like, setLike] = useState({ isLiked: initialIsLiked, likeCount });
 
 	const canParticipate = canWrite && participable;
 
@@ -451,8 +464,8 @@ export function PublicPostInteractions({
 	// 그 외에는 서버가 내려준 목록을 그대로 쓴다.
 	const commentsQuery = useQuery(
 		orpc.bambi.community.listComments.queryOptions({
-			enabled: canParticipate,
-			input: { postId },
+			enabled: canReadComments ?? canParticipate,
+			input: { password, postId },
 		})
 	);
 	const comments: PublicCommentItem[] =
@@ -521,7 +534,7 @@ export function PublicPostInteractions({
 			onError: (error) => toast(error.message || "글을 삭제하지 못했어요."),
 			onSuccess: () => {
 				toast("글이 삭제됐어요.");
-				router.replace(publicBoardPath(boardSlug) as Route);
+				router.replace(paths.boardPath(boardSlug) as Route);
 			},
 		})
 	);
@@ -545,7 +558,7 @@ export function PublicPostInteractions({
 							<Button
 								nativeButton={false}
 								render={
-									<Link href={publicEditPath(boardSlug, postId) as Route}>
+									<Link href={paths.editPath(boardSlug, postId) as Route}>
 										수정
 									</Link>
 								}
@@ -626,7 +639,7 @@ export function PublicPostInteractions({
 			{canParticipate || !participable ? null : (
 				<GuestVerifyCard
 					description="성인 본인인증을 마치면 비회원도 댓글·추천을 남길 수 있어요."
-					redirectTo={publicPostPath(boardSlug, postId)}
+					redirectTo={paths.postPath(boardSlug, postId)}
 					title="댓글·추천 남기기"
 					triggerLabel="본인인증하고 참여하기"
 				/>

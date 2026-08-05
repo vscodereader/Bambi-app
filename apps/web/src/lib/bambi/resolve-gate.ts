@@ -1,5 +1,8 @@
 export interface GateInput {
 	hasSession: boolean;
+	// 수다방에 들어올 수 있는 게스트(서명·만료 유효 + gid + 여성). 읽기 게이트(isGuest)보다
+	// 좁다 — 남성·gid 없는 옛 토큰은 API가 게스트로 인정하지 않으므로 화면도 열지 않는다.
+	isCommunityGuest: boolean;
 	isGuest: boolean;
 	pathname: string;
 }
@@ -44,6 +47,11 @@ const redirect = (to: string): GateDecision => ({ type: "redirect", to });
 // 통과시키되, ?auth= 쿼리가 붙으면 목록 대신 블러 배경 위 인증 카드를 렌더한다
 // (배경 데이터는 서버에서 마스킹된다). 실제 목록 위에 겹치는 다이얼로그는 없다.
 const SEEKER_ROOT = "/seeker";
+// 수다방은 여성 인증 게스트에게도 열린 유일한 /seeker 하위 영역이다. 읽기는 회원과 같고
+// (전체 보드), 쓰기 제한(자유수다·밤문화 이야기·비밀번호 필수)은 API 가드가 강제한다.
+const COMMUNITY_ROOT = "/seeker/community";
+const isCommunity = (pathname: string): boolean =>
+	pathname === COMMUNITY_ROOT || pathname.startsWith(`${COMMUNITY_ROOT}/`);
 // 그냥 들어온 비로그인 방문자에게는 로그인 폼을 먼저 보인다. 재방문자가 다수라
 // 로그인이 기본이고, 가입은 카드 안의 전환 링크로 한 번에 갈 수 있다.
 const LOGIN_REDIRECT = "/seeker?auth=login";
@@ -54,6 +62,7 @@ const GUEST_BLOCKED_REDIRECT = "/seeker?auth=signup&guestBlocked=1";
 export const resolveGate = ({
 	pathname,
 	hasSession,
+	isCommunityGuest,
 	isGuest,
 }: GateInput): GateDecision => {
 	if (isStaticFile(pathname)) {
@@ -70,6 +79,9 @@ export const resolveGate = ({
 		return next;
 	}
 	if (isGuest) {
+		if (isCommunityGuest && isCommunity(pathname)) {
+			return next;
+		}
 		if (pathname === "/") {
 			return redirect(SEEKER_ROOT);
 		}

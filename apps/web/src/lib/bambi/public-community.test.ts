@@ -3,6 +3,7 @@ import {
 	communityBodyText,
 	getPublicBoardBySlug,
 	isGuestWritableBoard,
+	isPublicBoardPath,
 	PUBLIC_BOARDS,
 	parsePageParam,
 	publicBoardPath,
@@ -43,6 +44,12 @@ describe("public community paths", () => {
 		expect(isGuestWritableBoard("free")).toBe(true);
 		expect(isGuestWritableBoard("work_talk")).toBe(true);
 		expect(isGuestWritableBoard("notice")).toBe(false);
+	});
+	it("tells the public area apart from lookalike paths", () => {
+		expect(isPublicBoardPath("/board")).toBe(true);
+		expect(isPublicBoardPath("/board/free/abc")).toBe(true);
+		expect(isPublicBoardPath("/boardgame")).toBe(false);
+		expect(isPublicBoardPath("/seeker/community/free")).toBe(false);
 	});
 	it("folds bad ?page values into page 1", () => {
 		expect(parsePageParam("2")).toBe(2);

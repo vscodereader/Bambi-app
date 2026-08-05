@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import {
 	CommentForm,
 	CommentList,
@@ -28,10 +29,12 @@ import {
 	ReportDialog,
 } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { PublicPostInteractions } from "@/components/bambi/public-post-interactions";
 import {
 	type CommunityBoardMeta,
 	communityBoardPath,
 	getBoardBySlug,
+	isGuestWritableBoardKey,
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
@@ -65,6 +68,49 @@ function BackButton({ board }: { board: CommunityBoardMeta }) {
 				}
 				size="sm"
 				variant="ghost"
+			/>
+		</div>
+	);
+}
+
+// 비회원(여성 인증 게스트)이 보는 상세. 본문까지는 회원과 같고, 참여(추천·댓글·본인 글
+// 수정/삭제)만 비밀번호 기반 공용 UI로 바꾼다 — 계정이 없어 소유권 증명이 비밀번호뿐이다.
+// 신고·업소 댓글 숨기기 같은 회원 전용 액션은 넣지 않는다.
+function GuestPostDetailView({
+	appliedPassword,
+	board,
+	post,
+	postId,
+}: {
+	appliedPassword?: string;
+	board: CommunityBoardMeta;
+	post: CommunityPostDetail;
+	postId: string;
+}) {
+	// 읽기는 회원과 같은 전 게시판이고, 쓰기(추천·댓글)만 자유수다·밤문화 이야기의
+	// 잠기지 않은 글로 좁다 — 서버 가드(assertGuestPostAccess)와 같은 기준이다.
+	// 비밀글 댓글은 회원 비소유자와 똑같이 게이트를 통과한 비밀번호로 읽는다.
+	const participable = isGuestWritableBoardKey(board.key) && !post.isLocked;
+
+	return (
+		<div className="flex flex-col gap-4">
+			<BackButton board={board} />
+			<PostHeader post={post} />
+			<Separator />
+			<PostBodyViewer body={post.body} />
+			<Separator />
+			<PublicPostInteractions
+				boardSlug={board.slug}
+				canReadComments
+				canWrite
+				commentCount={post.commentCount}
+				initialComments={[]}
+				initialIsLiked={post.isLiked}
+				isGuestAuthored={post.canEdit}
+				likeCount={post.likeCount}
+				participable={participable}
+				password={appliedPassword}
+				postId={postId}
 			/>
 		</div>
 	);
@@ -291,6 +337,7 @@ export function CommunityPostDetailScreen({
 	postId,
 }: CommunityPostDetailScreenProps) {
 	const board = getBoardBySlug(boardSlug);
+	const { isGuest } = useBambiAuth();
 	const [appliedPassword, setAppliedPassword] = useState<string | undefined>();
 
 	const postQuery = useQuery(
@@ -323,6 +370,16 @@ export function CommunityPostDetailScreen({
 	const data = postQuery.data;
 
 	if (data?.locked === false) {
+		if (isGuest) {
+			return (
+				<GuestPostDetailView
+					appliedPassword={appliedPassword}
+					board={board}
+					post={data}
+					postId={postId}
+				/>
+			);
+		}
 		return (
 			<PostDetailView
 				appliedPassword={appliedPassword}

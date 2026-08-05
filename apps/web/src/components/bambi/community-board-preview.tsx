@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { toast } from "sonner";
 import {
 	CommunityNewBadge,
 	CommunityRoleBadges,
@@ -50,16 +49,17 @@ export const accentClassName: Record<CommunityBoardKey, string> = {
 };
 
 export function BoardPreviewCard({
-	blockedNotice,
 	boardKey,
 	className,
 	emptyText,
+	onBlockedNavigate,
 	posts,
 }: {
-	// 지정 시 글 클릭을 막고 이 문구를 토스트로 안내한다(미자격자 홈 미리보기).
-	blockedNotice?: string;
 	boardKey: CommunityBoardKey;
 	className?: string;
+	// 지정 시 수다방으로 가는 링크(글·더보기) 클릭을 가로채 목적지를 넘긴다 — 미자격자
+	// 홈 미리보기용. 안내 방식(토스트·본인인증 다이얼로그)은 호출한 화면이 정한다.
+	onBlockedNavigate?: (href: string) => void;
 	// 빈 상태 문구 — 미지정 시 기존 "첫 글" 안내를 그대로 쓴다(운영자 전용 게시판은 별도 문구 주입).
 	emptyText?: string;
 	posts: OverviewPost[];
@@ -97,6 +97,12 @@ export function BoardPreviewCard({
 				<Link
 					className="flex items-center gap-1 font-semibold text-muted-foreground text-xs hover:text-foreground"
 					href={communityBoardPath(board.slug) as Route}
+					onClick={(event) => {
+						if (onBlockedNavigate) {
+							event.preventDefault();
+							onBlockedNavigate(communityBoardPath(board.slug));
+						}
+					}}
 				>
 					더보기
 					<ChevronRightIcon className="size-3" />
@@ -114,25 +120,21 @@ export function BoardPreviewCard({
 						);
 						// 수집 글은 전용 상세로 분기한다(순수 글은 기존 게시판 상세 경로 그대로).
 						const isCrawled = post.source === "crawled";
+						const href = isCrawled
+							? communityCrawledPath(post.id)
+							: communityPostPath(boardOfPost?.slug ?? board.slug, post.id);
 						return (
 							<Link
 								className={cn(
 									"flex items-center justify-between gap-3 rounded-lg px-2 py-1.5",
 									isNotice ? "hover:bg-coral-100/60" : "hover:bg-muted"
 								)}
-								href={
-									(isCrawled
-										? communityCrawledPath(post.id)
-										: communityPostPath(
-												boardOfPost?.slug ?? board.slug,
-												post.id
-											)) as Route
-								}
+								href={href as Route}
 								key={post.id}
 								onClick={(event) => {
-									if (blockedNotice) {
+									if (onBlockedNavigate) {
 										event.preventDefault();
-										toast(blockedNotice);
+										onBlockedNavigate(href);
 									}
 								}}
 							>
@@ -172,13 +174,13 @@ export function BoardPreviewCard({
 // 무관하게 항상 최상단 전폭, 나머지 게시판은 그 아래 2열 그리드. 두 화면이 각자 배치를
 //들고 있어 홈과 수다방의 같은 섹션이 서로 다르게 보이던 걸 한 컴포넌트로 모은다.
 export function CommunityOverviewGrid({
-	blockedNotice,
 	isPending,
+	onBlockedNavigate,
 	postsByBoard,
 }: {
-	// 지정 시 글 클릭을 막고 이 문구를 토스트로 안내한다(미자격자 홈 미리보기).
-	blockedNotice?: string;
 	isPending: boolean;
+	// BoardPreviewCard와 같은 의미 — 지정 시 수다방 링크를 가로채 호출한 화면이 안내한다.
+	onBlockedNavigate?: (href: string) => void;
 	postsByBoard: Record<CommunityBoardKey, OverviewPost[]>;
 }) {
 	const gridBoards = COMMUNITY_BOARDS.filter((board) => board.key !== "notice");
@@ -195,17 +197,17 @@ export function CommunityOverviewGrid({
 			) : (
 				<>
 					<BoardPreviewCard
-						blockedNotice={blockedNotice}
 						boardKey="notice"
 						className="md:col-span-2"
 						emptyText="등록된 공지사항이 없어요."
+						onBlockedNavigate={onBlockedNavigate}
 						posts={postsByBoard.notice}
 					/>
 					{gridBoards.map((board) => (
 						<BoardPreviewCard
-							blockedNotice={blockedNotice}
 							boardKey={board.key}
 							key={board.key}
+							onBlockedNavigate={onBlockedNavigate}
 							posts={postsByBoard[board.key]}
 						/>
 					))}

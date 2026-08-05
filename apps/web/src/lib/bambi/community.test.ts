@@ -9,6 +9,7 @@ import {
 	getBoardBySlug,
 	getCommunityPageItems,
 	getCommunityTotalPages,
+	isGuestWritableBoardKey,
 	isNewCommunityPost,
 } from "./community";
 
@@ -27,6 +28,14 @@ describe("community boards meta", () => {
 			"work_talk",
 			"market",
 		]);
+	});
+
+	it("비회원 글쓰기는 자유수다·밤문화 이야기만 열린다", () => {
+		expect(isGuestWritableBoardKey("free")).toBe(true);
+		expect(isGuestWritableBoardKey("work_talk")).toBe(true);
+		expect(isGuestWritableBoardKey("notice")).toBe(false);
+		expect(isGuestWritableBoardKey("market")).toBe(false);
+		expect(isGuestWritableBoardKey("best")).toBe(false);
 	});
 
 	it("일 이야기 게시판은 표시명만 밤문화 이야기로 바뀐다", () => {
