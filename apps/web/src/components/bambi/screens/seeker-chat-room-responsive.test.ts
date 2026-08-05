@@ -79,6 +79,29 @@ describe("신고한 채팅 숨김", () => {
 	// 창을 닫을 때 방 조회를 다시 돌려 그 안내와 함께 목록으로 나가야 한다.
 	it("신고 창을 닫으면 방 조회를 다시 받는다", () => {
 		expect(source).toContain("handleReportOpenChange");
-		expect(source).toContain("orpc.bambi.chats.getById.queryKey");
+		// 방 조회 입력에 페이지 크기가 들어가므로 부분 일치 키(key)로 무효화해야 한다
+		// — 정확 일치(queryKey)는 "더 보기"로 늘린 페이지를 놓친다.
+		expect(source).toContain("orpc.bambi.chats.getById.key");
+	});
+});
+
+describe("채팅방 메시지 페이지네이션·재연결", () => {
+	// 이력 전체를 매 조회마다 다시 받던 구조라, 소켓 이벤트 한 건이 전량 재전송을 불렀다.
+	it("최근 한 페이지만 받고 더 보기로 늘린다", () => {
+		expect(source).toContain("CHAT_MESSAGE_PAGE_SIZE");
+		expect(source).toContain("이전 메시지 더 보기");
+		expect(source).toContain("hasMoreMessages");
+	});
+
+	// 끊겼다 붙으면 서버 쪽 입장 기록이 사라져 있어 방 이벤트가 한 건도 오지 않는다.
+	it("재연결하면 방에 다시 입장한다", () => {
+		expect(source).toContain("const handleConnect = () => {");
+		expect(source).toContain("joinRoom();");
+	});
+
+	// 상한(50)을 넘는 id 목록을 보내 읽음 처리가 통째로 거절되던 문제.
+	it("읽음 처리는 기준선 하나만 보낸다", () => {
+		expect(source).toContain("upToMessageId");
+		expect(source).not.toContain("readCandidateMessageIds");
 	});
 });

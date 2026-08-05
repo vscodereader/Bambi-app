@@ -48,6 +48,7 @@ import { syncAdvertiserFlagForOrganization } from "../../services/bambi-advertis
 import {
 	requireActiveBambiProfile,
 	requireAdminProfile,
+	requireChatParticipant,
 } from "../../services/bambi-authz";
 import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
@@ -1055,7 +1056,30 @@ export const moderationRouter = {
 				});
 			}
 
+			// 채팅 신고는 그 방의 참여자만 낼 수 있다. 예전에는 "대상이 존재하는가"만 봤는데,
+			// 내 신고 목록(listMyReports)이 신고 대상의 최근 메시지 본문을 함께 돌려주므로
+			// 방 uuid만 알면 남의 대화를 읽는 우회로가 됐다. 비참여자에겐 requireChatParticipant가
+			// NOT_FOUND를 내 존재 여부도 새지 않는다.
 			await assertReportTargetExists(input.targetType, input.targetId);
+
+			if (input.targetType === "chat_room") {
+				await requireChatParticipant(input.targetId, context.session);
+			} else if (input.targetType === "chat_message") {
+				const [reportedMessage] = await db
+					.select({ chatRoomId: chatMessage.chatRoomId })
+					.from(chatMessage)
+					.where(eq(chatMessage.id, input.targetId))
+					.limit(1);
+
+				if (!reportedMessage) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await requireChatParticipant(
+					reportedMessage.chatRoomId,
+					context.session
+				);
+			}
 
 			// 동일 신고자·대상의 중복 신고는 멱등 처리한다(스키마 변경 없이 기존 row 반환).
 			const [existing] = await db
@@ -2348,7 +2372,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			await db.transaction(async (tx) => {
+			const storageKeys = await db.transaction(async (tx) => {
 				const [room] = await tx
 					.select({ id: chatRoom.id })
 					.from(chatRoom)
@@ -2358,6 +2382,13 @@ export const moderationRouter = {
 				if (!room) {
 					throw new ORPCError("NOT_FOUND");
 				}
+
+				// 행을 지우고 나면 키가 어디에도 남지 않아 사후 회수 배치를 만들 수 없다.
+				// 공고 하드삭제와 같은 순서로, 지우기 전에 먼저 모아 둔다.
+				const attachments = await tx
+					.select({ storageKey: chatAttachment.storageKey })
+					.from(chatAttachment)
+					.where(eq(chatAttachment.chatRoomId, input.chatRoomId));
 
 				await tx
 					.delete(chatMessageReadReceipt)
@@ -2380,7 +2411,13 @@ export const moderationRouter = {
 					targetId: input.chatRoomId,
 					targetType: "chat_room",
 				});
+
+				return attachments.map(({ storageKey }) => storageKey);
 			});
+
+			// 트랜잭션 밖에서 지운다(원격 호출이라 실패해도 삭제 자체를 되돌릴 이유가 없다).
+			// 공고 삭제 경로와 같은 함수를 쓰며, 없는 객체는 무시한다.
+			await deletePublicObjects(storageKeys);
 
 			return { ok: true };
 		}),

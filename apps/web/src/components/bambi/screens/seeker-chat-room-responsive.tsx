@@ -85,6 +85,27 @@ const formatPay = (amount?: null | number, unit?: string): string => {
 	return `${unit} ${amount.toLocaleString("ko-KR")}원`;
 };
 
+const getRealtimeErrorMessage = (error: unknown): string =>
+	error instanceof Error ? error.message : "실시간 채팅 연결을 확인해 주세요.";
+
+// 서버 기본 페이지 크기와 같은 값. "이전 메시지 더 보기"를 누를 때마다 이만큼 늘린다.
+const CHAT_MESSAGE_PAGE_SIZE = 50;
+// 서버 입력 상한(MAX_CHAT_MESSAGE_PAGE_SIZE)과 같은 값.
+const CHAT_MESSAGE_MAX_PAGE_SIZE = 500;
+
+// 이전 메시지를 더 부를 수 있는지, 상한에 걸려 더는 못 부르는지.
+const resolveOlderMessageState = ({
+	hasMoreMessages,
+	messageLimit,
+}: {
+	hasMoreMessages: boolean;
+	messageLimit: number;
+}): { canLoadOlder: boolean; hasOlderBeyondLimit: boolean } => ({
+	canLoadOlder: hasMoreMessages && messageLimit < CHAT_MESSAGE_MAX_PAGE_SIZE,
+	hasOlderBeyondLimit:
+		hasMoreMessages && messageLimit >= CHAT_MESSAGE_MAX_PAGE_SIZE,
+});
+
 const ACCEPTED_ATTACHMENT_MIME_TYPES = [
 	"image/jpeg",
 	"image/png",
@@ -402,22 +423,28 @@ function ContactRequestMessage({
 }
 
 interface ChatMessageListProps {
+	canLoadOlder: boolean;
 	counterpartName: null | string;
 	currentUserId: string;
+	hasOlderBeyondLimit: boolean;
 	isResponding: boolean;
 	isSendBlocked: boolean;
 	messages: ChatMessageItem[];
+	onLoadOlder: () => void;
 	onRespond: (messageId: string, decision: ContactRevealDecision) => void;
 	typingUserIds: string[];
 	viewerIsEmployer: boolean;
 }
 
 function ChatMessageList({
+	canLoadOlder,
 	counterpartName,
 	currentUserId,
+	hasOlderBeyondLimit,
 	isResponding,
 	isSendBlocked,
 	messages,
+	onLoadOlder,
 	onRespond,
 	typingUserIds,
 	viewerIsEmployer,
@@ -432,6 +459,18 @@ function ChatMessageList({
 
 	return (
 		<MessageGroup>
+			{canLoadOlder ? (
+				<div className="flex justify-center">
+					<UiButton onClick={onLoadOlder} size="sm" variant="outline">
+						이전 메시지 더 보기
+					</UiButton>
+				</div>
+			) : null}
+			{hasOlderBeyondLimit ? (
+				<p className="m-0 text-center text-muted-foreground text-xs">
+					이전 메시지는 최근 {CHAT_MESSAGE_MAX_PAGE_SIZE}건까지 볼 수 있어요.
+				</p>
+			) : null}
 			{messages.map((chatMessage) =>
 				chatMessage.kind === "contact_request" ? (
 					<ContactRequestMessage
@@ -883,7 +922,8 @@ function ChatSafetyNotice({
 		if (!next) {
 			queryClient
 				.invalidateQueries({
-					queryKey: orpc.bambi.chats.getById.queryKey({
+					// 페이지 크기가 입력에 들어가므로 부분 일치 키를 쓴다.
+					queryKey: orpc.bambi.chats.getById.key({
 						input: { id: chatRoomId },
 					}),
 				})
@@ -1074,8 +1114,13 @@ export function SeekerChatRoomResponsive({
 	const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 	const lastReadMessageSignatureRef = useRef("");
 	const typingActiveRef = useRef(false);
+	// 방을 열면 최근 메시지 한 페이지만 받는다. 예전에는 이력 전체가 매 조회마다 다시
+	// 내려왔고, 소켓 이벤트가 뜰 때마다 그 전량 전송이 반복됐다.
+	const [messageLimit, setMessageLimit] = useState(CHAT_MESSAGE_PAGE_SIZE);
 	const roomQuery = useQuery(
-		orpc.bambi.chats.getById.queryOptions({ input: { id: roomId } })
+		orpc.bambi.chats.getById.queryOptions({
+			input: { id: roomId, limit: messageLimit },
+		})
 	);
 	const currentSessionUserId = roomQuery.data?.currentUserId;
 	const reviewListQuery = useQuery({
@@ -1083,8 +1128,10 @@ export function SeekerChatRoomResponsive({
 		enabled: Boolean(currentSessionUserId),
 	});
 	const invalidateRoom = useCallback(async () => {
+		// 페이지 크기가 입력에 들어가므로 부분 일치 키로 무효화한다(더 보기로 늘린
+		// 페이지도 함께 갱신되게).
 		await queryClient.invalidateQueries({
-			queryKey: orpc.bambi.chats.getById.queryKey({ input: { id: roomId } }),
+			queryKey: orpc.bambi.chats.getById.key({ input: { id: roomId } }),
 		});
 		await queryClient.invalidateQueries({
 			queryKey: orpc.bambi.chats.listMine.queryKey(),
@@ -1215,18 +1262,14 @@ export function SeekerChatRoomResponsive({
 			},
 		})
 	);
-	const readCandidateMessageIds = useMemo(() => {
-		if (!roomQuery.data) {
-			return [];
-		}
-
-		return roomQuery.data.messages
-			.filter(
-				(chatMessage) => chatMessage.senderUserId !== currentSessionUserId
-			)
-			.map((chatMessage) => chatMessage.id);
-	}, [currentSessionUserId, roomQuery.data]);
-	const readCandidateMessageIdsSignature = readCandidateMessageIds.join("|");
+	// 읽음 처리는 "여기까지 봤다" 기준선 하나만 보낸다. 예전에는 상대가 보낸 메시지 id를
+	// 전부 실어 보냈는데 서버 상한이 50이라, 51건째부터 요청 전체가 거절돼 읽음영수증이
+	// 한 건도 안 써졌다(안 읽음 뱃지가 영영 안 꺼짐). 기준선은 화면에 올라온 마지막
+	// 메시지다 — 내가 보낸 것이어도 그 앞의 상대 메시지는 본 것이므로 함께 읽음이 된다.
+	const lastVisibleMessageId = useMemo(
+		() => roomQuery.data?.messages.at(-1)?.id ?? null,
+		[roomQuery.data]
+	);
 
 	useEffect(() => {
 		if (!currentSessionUserId) {
@@ -1239,7 +1282,25 @@ export function SeekerChatRoomResponsive({
 				invalidateRoom().catch(() => undefined);
 			}
 		};
-		const handleConnect = () => setRealtimeStatus("connected");
+		// 재연결하면 서버 쪽 방 입장 기록이 사라져 있다(끊길 때 지운다). 다시 들어가지
+		// 않으면 소켓은 붙어 있는데 방 이벤트가 한 건도 안 오고, 타이핑마다 "채팅방에 먼저
+		// 입장해 주세요" 오류만 뜬다 — 상태 배지는 '연결'이라 사용자는 정상으로 오인한다.
+		const joinRoom = () => {
+			joinBambiChatRoom(roomId)
+				.then(() => {
+					setRealtimeStatus("connected");
+				})
+				.catch((error: unknown) => {
+					setRealtimeStatus("offline");
+					setErrorMessage(getRealtimeErrorMessage(error));
+				});
+		};
+		const handleConnect = () => {
+			setRealtimeStatus("connected");
+			joinRoom();
+			// 끊겨 있던 사이의 메시지는 방 소켓룸으로 오지 않았으므로 정본을 다시 읽는다.
+			invalidateRoom().catch(() => undefined);
+		};
 		const handleDisconnect = () => setRealtimeStatus("offline");
 		const handleRealtimeError = (payload: { message: string }) => {
 			setErrorMessage(payload.message);
@@ -1279,17 +1340,13 @@ export function SeekerChatRoomResponsive({
 		socket.on("chat:message:read", refreshIfCurrentRoom);
 		socket.on("chat:room:updated", refreshIfCurrentRoom);
 		socket.on("chat:unread:updated", refreshIfCurrentRoom);
+		// 유저 채널로 오는 신호라 방 소켓룸을 잃은 상태에서도 도착한다 — 방 화면의
+		// 마지막 안전망.
+		socket.on("chat:list:updated", refreshIfCurrentRoom);
 		socket.on("chat:typing:started", handleTypingStarted);
 		socket.on("chat:typing:stopped", handleTypingStopped);
 		setRealtimeStatus(socket.connected ? "connected" : "connecting");
-		joinBambiChatRoom(roomId).catch((error) => {
-			setRealtimeStatus("offline");
-			setErrorMessage(
-				error instanceof Error
-					? error.message
-					: "실시간 채팅 연결을 확인해 주세요."
-			);
-		});
+		joinRoom();
 
 		return () => {
 			socket.off("connect", handleConnect);
@@ -1299,6 +1356,7 @@ export function SeekerChatRoomResponsive({
 			socket.off("chat:message:read", refreshIfCurrentRoom);
 			socket.off("chat:room:updated", refreshIfCurrentRoom);
 			socket.off("chat:unread:updated", refreshIfCurrentRoom);
+			socket.off("chat:list:updated", refreshIfCurrentRoom);
 			socket.off("chat:typing:started", handleTypingStarted);
 			socket.off("chat:typing:stopped", handleTypingStopped);
 			leaveBambiChatRoom(roomId);
@@ -1308,28 +1366,20 @@ export function SeekerChatRoomResponsive({
 	}, [currentSessionUserId, invalidateRoom, roomId]);
 
 	useEffect(() => {
-		if (!(roomQuery.data && readCandidateMessageIdsSignature)) {
+		if (!(roomQuery.data && lastVisibleMessageId)) {
 			return;
 		}
 
-		if (
-			lastReadMessageSignatureRef.current === readCandidateMessageIdsSignature
-		) {
+		if (lastReadMessageSignatureRef.current === lastVisibleMessageId) {
 			return;
 		}
 
-		lastReadMessageSignatureRef.current = readCandidateMessageIdsSignature;
+		lastReadMessageSignatureRef.current = lastVisibleMessageId;
 		markReadMutation.mutate({
 			chatRoomId: roomId,
-			messageIds: readCandidateMessageIds,
+			upToMessageId: lastVisibleMessageId,
 		});
-	}, [
-		markReadMutation,
-		readCandidateMessageIds,
-		readCandidateMessageIdsSignature,
-		roomId,
-		roomQuery.data,
-	]);
+	}, [lastVisibleMessageId, markReadMutation, roomId, roomQuery.data]);
 
 	useEffect(() => {
 		if (!roomQuery.data) {
@@ -1435,12 +1485,17 @@ export function SeekerChatRoomResponsive({
 		counterpartName,
 		currentUserId,
 		employerVerifiedPhone,
+		hasMoreMessages,
 		jobPost,
 		messages,
 		room,
 		schedules,
 	} = roomQuery.data;
 	const isJobSeeker = currentUserId === room.jobSeekerUserId;
+	const olderMessageState = resolveOlderMessageState({
+		hasMoreMessages,
+		messageLimit,
+	});
 	const composerDisabledNotice = getComposerDisabledNotice({
 		counterpartLeft,
 		counterpartName,
@@ -1694,11 +1749,21 @@ export function SeekerChatRoomResponsive({
 				/>
 				<div className="flex min-h-[420px] flex-col gap-3 p-4">
 					<ChatMessageList
+						canLoadOlder={olderMessageState.canLoadOlder}
 						counterpartName={counterpartName}
 						currentUserId={currentUserId}
+						hasOlderBeyondLimit={olderMessageState.hasOlderBeyondLimit}
 						isResponding={respondContactRevealMutation.isPending}
 						isSendBlocked={counterpartLeft}
 						messages={messages}
+						onLoadOlder={() =>
+							setMessageLimit((current) =>
+								Math.min(
+									current + CHAT_MESSAGE_PAGE_SIZE,
+									CHAT_MESSAGE_MAX_PAGE_SIZE
+								)
+							)
+						}
 						onRespond={handleRespondContact}
 						typingUserIds={typingUserIds}
 						viewerIsEmployer={!isJobSeeker}

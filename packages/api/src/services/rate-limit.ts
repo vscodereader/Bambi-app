@@ -86,6 +86,78 @@ const RATE_LIMIT_OVERRIDES: Record<string, number> = {
 // 프로덕션에서 이 버킷에 들어오는 건 내부 트래픽뿐이다).
 export const UNKNOWN_IP_LIMIT_MULTIPLIER = 20;
 
+// ── 로그인 채팅 발신 경로의 계정 기반 한도 ────────────────────────────────────────
+// 채팅 발신은 계정이 있어야 닿는 경로라 버킷 축은 IP가 아니라 userId다(수다방 회원 글쓰기와
+// 같은 규칙). 한도가 없으면 인증을 통과한 계정 하나가 방 하나에 초당 수십 건을 밀어 넣어
+// 메시지·알림 행과 소켓/SSE 팬아웃을 무제한으로 만들 수 있다.
+
+export const CHAT_SEND_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+export type ChatSendAction =
+	| "createAttachmentUpload"
+	| "proposeInterview"
+	| "requestContactReveal"
+	| "respondContactReveal"
+	| "revealContact"
+	| "sendMediaMessage"
+	| "sendMessage"
+	| "startFromJobPost";
+
+// 1분 한도. 대화의 자연스러운 속도는 막지 않고(사람이 1분에 20건 이상 보내지 않는다),
+// 비용이 큰 동작(외부 서명·방 개설·연락처 흐름)일수록 낮춘다.
+const CHAT_SEND_RATE_LIMITS: Record<ChatSendAction, number> = {
+	createAttachmentUpload: 20,
+	proposeInterview: 5,
+	requestContactReveal: 5,
+	respondContactReveal: 5,
+	revealContact: 5,
+	sendMediaMessage: 20,
+	sendMessage: 20,
+	startFromJobPost: 10,
+};
+
+export function resolveChatSendRateLimit({
+	action,
+	userId,
+}: {
+	action: ChatSendAction;
+	userId: string;
+}): { key: string; limit: number; windowMs: number } {
+	return {
+		// 동작별로 따로 센다 — 메시지를 활발히 주고받는 중에 면접 제안이 막히면 안 된다.
+		key: `chats.${action}:${userId}`,
+		limit: CHAT_SEND_RATE_LIMITS[action],
+		windowMs: CHAT_SEND_RATE_LIMIT_WINDOW_MS,
+	};
+}
+
+// ── 장수명 연결(SSE·socket.io) 개시 한도 ─────────────────────────────────────────
+// 연결 자체가 인스턴스 동시 슬롯을 하나씩 점유하고, 개시마다 세션 조회가 붙는다. 인증만
+// 통과하면 개수 제한이 없어 스크립트로 수천 개를 열 수 있었다 — IP 기준으로 "새로 여는
+// 속도"를 제한한다(이미 열린 스트림 수 상한은 구독 레지스트리가 따로 건다).
+export const REALTIME_CONNECT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+// 탭 여러 개·새로고침·모바일 네트워크 전환으로 정상 사용자도 분당 몇 번은 다시 연다.
+// 재연결 폭주(배포 직후)까지 감안해 넉넉히 잡되, 무한 루프는 끊는다.
+export const REALTIME_CONNECT_RATE_LIMIT = 30;
+
+export function resolveRealtimeConnectRateLimit({
+	clientIp,
+	scope,
+}: {
+	clientIp: string;
+	scope: string;
+}): { key: string; limit: number; windowMs: number } {
+	return {
+		key: `realtime.${scope}:${clientIp}`,
+		limit:
+			clientIp === UNKNOWN_CLIENT_IP
+				? REALTIME_CONNECT_RATE_LIMIT * UNKNOWN_IP_LIMIT_MULTIPLIER
+				: REALTIME_CONNECT_RATE_LIMIT,
+		windowMs: REALTIME_CONNECT_RATE_LIMIT_WINDOW_MS,
+	};
+}
+
 export function resolvePublicRateLimit({
 	clientIp,
 	scope,

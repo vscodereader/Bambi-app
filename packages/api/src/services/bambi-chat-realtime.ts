@@ -66,9 +66,28 @@ interface ParticipantSocketInput {
 
 let realtimeServer: ChatRealtimeTransport | null = null;
 const activeParticipants = new Map<string, Map<string, Set<string>>>();
+// socketId → (roomId → userId) 역인덱스. 끊긴 소켓 하나를 지우려고 전체 방×사용자를
+// 훑지 않기 위한 것으로, 아래 mark* 함수들이 activeParticipants와 함께 갱신한다.
+// 소켓 하나는 사용자 한 명에 묶이므로 방마다 값이 하나면 충분하다.
+const socketParticipations = new Map<string, Map<string, string>>();
+
+const CHAT_SOCKET_ROOM_PREFIX = "chat:";
 
 export const getChatRoomSocketRoom = (roomId: string): string =>
-	`chat:${roomId}`;
+	`${CHAT_SOCKET_ROOM_PREFIX}${roomId}`;
+
+/** 소켓룸 이름에서 방 id를 되돌린다(유저 채널 등 다른 룸이면 null). */
+export const getChatRoomIdFromSocketRoom = (
+	socketRoom: string
+): null | string => {
+	if (!socketRoom.startsWith(CHAT_SOCKET_ROOM_PREFIX)) {
+		return null;
+	}
+
+	const roomId = socketRoom.slice(CHAT_SOCKET_ROOM_PREFIX.length);
+
+	return roomId === "" ? null : roomId;
+};
 
 export const getUserSocketRoom = (userId: string): string => `user:${userId}`;
 
@@ -81,6 +100,7 @@ export const configureBambiChatRealtime = (
 export const resetBambiChatRealtimeForTests = (): void => {
 	realtimeServer = null;
 	activeParticipants.clear();
+	socketParticipations.clear();
 };
 
 export const markParticipantActive = ({
@@ -94,6 +114,11 @@ export const markParticipantActive = ({
 	sockets.add(socketId);
 	users.set(userId, sockets);
 	activeParticipants.set(roomId, users);
+
+	const participations =
+		socketParticipations.get(socketId) ?? new Map<string, string>();
+	participations.set(roomId, userId);
+	socketParticipations.set(socketId, participations);
 };
 
 export const markParticipantInactive = ({
@@ -101,6 +126,13 @@ export const markParticipantInactive = ({
 	socketId,
 	userId,
 }: ParticipantSocketInput): void => {
+	const participations = socketParticipations.get(socketId);
+	participations?.delete(roomId);
+
+	if (participations?.size === 0) {
+		socketParticipations.delete(socketId);
+	}
+
 	const users = activeParticipants.get(roomId);
 
 	if (!users) {
@@ -124,14 +156,23 @@ export const markParticipantInactive = ({
 	}
 };
 
+/**
+ * 끊긴 소켓 하나를 모든 방에서 지운다. 예전에는 disconnect마다 활성 방×사용자를 전부
+ * 훑었지만, 이제 socketId 역인덱스에 담긴 항목만 본다(끊김이 몰려도 비용이 그 소켓의
+ * 입장 방 수에 비례한다).
+ */
 export const markSocketInactiveEverywhere = (socketId: string): void => {
-	for (const [roomId, users] of activeParticipants.entries()) {
-		for (const [userId, sockets] of users.entries()) {
-			if (sockets.has(socketId)) {
-				markParticipantInactive({ roomId, socketId, userId });
-			}
-		}
+	const participations = socketParticipations.get(socketId);
+
+	if (!participations) {
+		return;
 	}
+
+	for (const [roomId, userId] of Array.from(participations.entries())) {
+		markParticipantInactive({ roomId, socketId, userId });
+	}
+
+	socketParticipations.delete(socketId);
 };
 
 export const isParticipantActiveInRoom = (

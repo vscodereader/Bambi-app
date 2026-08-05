@@ -37,7 +37,8 @@ const headerValue = (
 
 // 레이트리밋 버킷 키로 쓸 클라이언트 IP. 헤더에서 파생하므로 createContext의 시그니처는
 // 그대로 두고 호출부 3곳(orpc·openapi·realtime)이 영향받지 않는다.
-const clientIpFromHeaders = (req: IncomingHttpHeaders): string =>
+// 세션 조회 전에 연결 개시를 막아야 하는 경로(SSE·socket.io 핸드셰이크)는 이 함수만 부른다.
+export const clientIpFromHeaders = (req: IncomingHttpHeaders): string =>
 	resolveClientIp({
 		forwardedFor: headerValue(req, "x-forwarded-for"),
 		trustedProxyHops,
