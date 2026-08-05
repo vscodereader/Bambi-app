@@ -1,4 +1,5 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { readGuestTokenFromCookieString } from "@bambi-app/api/services/bambi-guest-token";
 import { env } from "@bambi-app/env/web";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
@@ -23,9 +24,15 @@ export const link = new RPCLink({
 	},
 	headers: async () => {
 		if (typeof window !== "undefined") {
-			return {};
+			// 게스트 쿠키는 host-only라 다른 호스트인 API 서버에는 실리지 않는다.
+			// httpOnly:false라 JS로 읽을 수 있으므로 헤더로 옮겨 붙여 게스트 신원을
+			// 서버까지 전달한다(진위 판정은 서버가 서명 검증으로 한다).
+			const token = readGuestTokenFromCookieString(document.cookie);
+			return token ? { "x-bambi-guest": token } : {};
 		}
 
+		// SSR 경유 호출은 들어온 요청 헤더를 통째로 전달하므로 Cookie 헤더에 게스트
+		// 쿠키가 그대로 실린다 — 서버 context가 그쪽도 폴백으로 읽는다.
 		const { headers } = await import("next/headers");
 		return Object.fromEntries(await headers());
 	},

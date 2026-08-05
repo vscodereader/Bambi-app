@@ -1,5 +1,10 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import {
+	createGuestToken,
+	DEV_GUEST_TOKEN_SECRET,
+	GUEST_COOKIE_NAME,
+} from "@bambi-app/api/services/bambi-guest-token";
+import {
 	isAdultBirth8,
 	UNDERAGE_MESSAGE,
 } from "@bambi-app/api/services/portone-identity";
@@ -11,15 +16,9 @@ import { NextResponse } from "next/server";
 import {
 	type BambiGenderValue,
 	GUEST_COOKIE_MAX_AGE,
-	GUEST_COOKIE_NAME,
 	LEGACY_ADULT_COOKIE_NAMES,
 	type MockPhoneVerifyInput,
 } from "@/lib/bambi/guest";
-import { createGuestToken } from "@/lib/bambi/guest-token";
-
-// 서명 키가 없으면 게스트 토큰을 만들 수 없다. 개발 편의를 위한 폴백이며, 프로덕션은
-// env(web.ts)의 부팅 가드가 누락을 막는다.
-const DEV_GUEST_TOKEN_SECRET = "bambi-dev-guest-token-secret-not-for-prod";
 
 const guestTokenSecret = (): string =>
 	env.BAMBI_GUEST_TOKEN_SECRET ?? DEV_GUEST_TOKEN_SECRET;
@@ -59,6 +58,8 @@ const underageResponse = () =>
 // packages/auth advanced.defaultCookieAttributes). localhost는 secure 컨텍스트라 개발 무영향.
 // 인증 건 ID는 싣지 않는다: 유효시간이 30분인 값을 30일짜리 쿠키에 JS로 읽히게 두면
 // 공용 PC·XSS에서 그대로 새어 나가고, 만료 뒤엔 어차피 쓸 수도 없다(자체점검 항목 4).
+// 대신 게스트 식별자(gid)가 실린다 — 수다방 게스트 글·댓글·추천의 소유·중복방지 키이며,
+// 발급 시점에 만들어지므로 이 라우트를 다시 타면(재인증) 새 게스트로 취급된다.
 const verifiedResponse = async (gender: BambiGenderValue | null) => {
 	const token = await createGuestToken({
 		gender,

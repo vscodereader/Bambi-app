@@ -53,10 +53,13 @@ export function moderationActionLabel(action: string): string {
 	return MODERATION_ACTION_LABELS[action] ?? "기타 조치";
 }
 
-// 사용자 역할(bambi_user_role): job_seeker·employer·admin.
+// 사용자 역할(bambi_user_role): job_seeker·employer·admin·guest.
+// guest는 계정 없는 비회원 작성자 스냅샷이라 회원 목록에는 나타나지 않고, 수다방
+// 글·댓글의 author_role로만 등장한다.
 const USER_ROLE_LABELS: Record<string, string> = {
 	admin: "운영자",
 	employer: "구인자",
+	guest: "비회원",
 	job_seeker: "구직자",
 };
 

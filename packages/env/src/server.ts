@@ -24,6 +24,10 @@ export const env = createEnv({
 		// 진위확인을 건너뛰고(전 건 "미확인" 접수) 운영자 수동 심사만 남으며, 구인자 화면에는
 		// "곧 준비될 기능" 안내가 나간다. 키를 넣으면 코드 수정 없이 진위확인이 켜진다.
 		NTS_SERVICE_KEY: z.string().min(1).optional(),
+		// 게스트 인증 쿠키(HMAC 서명 토큰)의 서명 키. web(web.ts)이 발급한 토큰을 api 서버가
+		// 다시 검증하므로 web과 반드시 같은 값이어야 한다 — 어긋나면 비회원 글·댓글·추천이
+		// 전부 401이 된다. 개발에서는 선택(양쪽 공용 폴백 키로 떨어진다).
+		BAMBI_GUEST_TOKEN_SECRET: z.string().min(32).optional(),
 		// better-auth 세션 쿠키 prefix. dev/prod가 같은 apex(.bambialba.com)를 공유하므로
 		// 환경별로 다른 값(prod=bambi, dev=bambi-dev)을 줘 쿠키 충돌을 막는다. 미설정(로컬)
 		// 이면 better-auth 기본 prefix를 그대로 써 개발 동작이 변하지 않는다.
@@ -58,5 +62,14 @@ if (env.NODE_ENV === "production" && !env.GCS_PUBLIC_BUCKET) {
 if (env.NODE_ENV === "production" && !env.PORTONE_API_SECRET) {
 	throw new Error(
 		"PORTONE_API_SECRET은 프로덕션에서 필수입니다. 값이 없으면 휴대폰 본인인증이 동작하지 않습니다."
+	);
+}
+
+// 서명 키가 없으면 개발 폴백 키로 게스트 토큰을 검증하게 된다 — web이 진짜 키로 서명한
+// 토큰이 전부 무효가 되고(비회원 쓰기 401), 반대로 폴백 키를 아는 사람이 신원을 위조할 수
+// 있다. web.ts와 같은 가드로 부팅을 실패시킨다.
+if (env.NODE_ENV === "production" && !env.BAMBI_GUEST_TOKEN_SECRET) {
+	throw new Error(
+		"BAMBI_GUEST_TOKEN_SECRET은 프로덕션에서 필수입니다. web과 같은 값을 넣어야 게스트 토큰 서명 검증이 통과합니다."
 	);
 }

@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
 	type AnyPgColumn,
 	boolean,
+	check,
 	index,
 	integer,
 	jsonb,
@@ -16,10 +17,14 @@ import {
 
 import { organization, team, user } from "./auth";
 
+// guest는 계정이 없는 비회원 작성자(성인인증 통과 게스트 토큰)를 가리키는 스냅샷 값이며
+// user.role로는 저장되지 않는다 — 수다방 글·댓글의 author_role에만 쓰인다.
+// 마이그레이션 호환을 위해 새 값은 항상 목록 끝에 덧붙인다(ALTER TYPE ... ADD VALUE).
 export const bambiUserRole = pgEnum("bambi_user_role", [
 	"job_seeker",
 	"employer",
 	"admin",
+	"guest",
 ]);
 
 export const accountStatus = pgEnum("account_status", [
@@ -1411,9 +1416,13 @@ export const communityPost = pgTable(
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
 		board: communityBoard("board").notNull(),
-		authorUserId: text("author_user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 회원 글이면 author_user_id, 비회원(게스트 토큰) 글이면 author_guest_id만 채워진다
+		// — 정확히 한쪽만 채워지도록 아래 CHECK로 강제한다. 게스트는 계정이 없어 FK가 없고,
+		// 소유권은 password_hash 검증으로만 증명한다.
+		authorUserId: text("author_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		authorGuestId: text("author_guest_id"),
 		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
 		authorDisplayName: text("author_display_name").notNull(),
 		passwordHash: text("password_hash").notNull(),
@@ -1446,6 +1455,10 @@ export const communityPost = pgTable(
 			table.createdAt
 		),
 		index("community_post_author_user_id_idx").on(table.authorUserId),
+		check(
+			"community_post_author_one_of_ck",
+			sql`num_nonnulls(${table.authorUserId}, ${table.authorGuestId}) = 1`
+		),
 	]
 );
 
@@ -1456,9 +1469,14 @@ export const communityComment = pgTable(
 		postId: uuid("post_id")
 			.notNull()
 			.references(() => communityPost.id, { onDelete: "cascade" }),
-		authorUserId: text("author_user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 글과 같은 규칙: 회원이면 author_user_id, 비회원이면 author_guest_id만 채워진다.
+		authorUserId: text("author_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		authorGuestId: text("author_guest_id"),
+		// 비회원 댓글의 수정·삭제 소유권 증명용(scrypt salt:hash). 회원 댓글은 세션으로
+		// 소유권이 증명되므로 글의 관례대로 빈 문자열을 넣는다.
+		passwordHash: text("password_hash").default("").notNull(),
 		// 작성 시점 계정 유형 스냅샷(서버 기록). 업소 댓글 배지·숨김 토글용.
 		authorRole: bambiUserRole("author_role").notNull(),
 		// 대댓글(1단계). null이면 최상위 댓글. 1단계 제한은 API에서 강제한다.
@@ -1479,6 +1497,10 @@ export const communityComment = pgTable(
 		),
 		index("community_comment_author_user_id_idx").on(table.authorUserId),
 		index("community_comment_parent_comment_id_idx").on(table.parentCommentId),
+		check(
+			"community_comment_author_one_of_ck",
+			sql`num_nonnulls(${table.authorUserId}, ${table.authorGuestId}) = 1`
+		),
 	]
 );
 
@@ -1489,9 +1511,10 @@ export const communityPostLike = pgTable(
 		postId: uuid("post_id")
 			.notNull()
 			.references(() => communityPost.id, { onDelete: "cascade" }),
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 회원 추천은 user_id, 비회원 추천은 guest_id(게스트 토큰의 gid). 정확히 한쪽만
+		// 채워지며, unique 인덱스가 각각 중복 추천을 막는다(NULL은 서로 distinct라 섞이지 않는다).
+		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+		guestId: text("guest_id"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
@@ -1499,7 +1522,15 @@ export const communityPostLike = pgTable(
 			table.postId,
 			table.userId
 		),
+		uniqueIndex("community_post_like_post_id_guest_id_uidx").on(
+			table.postId,
+			table.guestId
+		),
 		index("community_post_like_user_id_idx").on(table.userId),
+		check(
+			"community_post_like_actor_one_of_ck",
+			sql`num_nonnulls(${table.userId}, ${table.guestId}) = 1`
+		),
 	]
 );
 
