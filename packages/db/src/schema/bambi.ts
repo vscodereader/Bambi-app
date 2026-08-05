@@ -437,6 +437,8 @@ export interface CrawledJobEditedImageItem {
 	displayHeightPx: number | null;
 	displayWidthPx: number | null;
 	id: string;
+	offsetX: number;
+	offsetY: number;
 }
 
 export interface CrawledJobEditedImageDocument {

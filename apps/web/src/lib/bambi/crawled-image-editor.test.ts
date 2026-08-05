@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	anchoredResizeOffsets,
 	cleanUnusedAssets,
 	duplicateItems,
 	moveItems,
@@ -28,12 +29,16 @@ const document = {
 			displayHeightPx: null,
 			displayWidthPx: null,
 			id: "item-1",
+			offsetX: 0,
+			offsetY: 0,
 		},
 		{
 			assetId: "asset-2",
 			displayHeightPx: null,
 			displayWidthPx: null,
 			id: "item-2",
+			offsetX: 0,
+			offsetY: 0,
 		},
 	],
 	version: 1 as const,
@@ -92,6 +97,31 @@ describe("crawled image editor state", () => {
 				startWidth: 200,
 			})
 		).toEqual({ height: 80, width: 200 });
+	});
+
+	it("keeps the opposite edge fixed with persistent offsets", () => {
+		expect(
+			anchoredResizeOffsets({
+				handle: "w",
+				nextHeight: 100,
+				nextWidth: 160,
+				startHeight: 100,
+				startOffsetX: 0,
+				startOffsetY: 0,
+				startWidth: 200,
+			})
+		).toEqual({ offsetX: 20, offsetY: 0 });
+		expect(
+			anchoredResizeOffsets({
+				handle: "n",
+				nextHeight: 70,
+				nextWidth: 200,
+				startHeight: 100,
+				startOffsetX: 0,
+				startOffsetY: 0,
+				startWidth: 200,
+			})
+		).toEqual({ offsetX: 0, offsetY: 30 });
 	});
 
 	it("moves a selected group and removes only unused assets", () => {

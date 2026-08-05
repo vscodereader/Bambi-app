@@ -17,6 +17,8 @@ const document = {
 			displayHeightPx: null,
 			displayWidthPx: null,
 			id: ITEM_ID,
+			offsetX: 0,
+			offsetY: 0,
 		},
 	],
 	version: 1 as const,
@@ -45,18 +47,22 @@ describe("crawledJobEditedImageDocumentSchema", () => {
 		);
 	});
 
-	it("accepts legacy items without a stored display height", () => {
+	it("accepts legacy items without height or position fields", () => {
 		const legacyDocument = {
 			...document,
-			items: document.items.map(
-				({ displayHeightPx: _displayHeightPx, ...item }) => item
-			),
+			items: document.items.map(({ assetId, displayWidthPx, id }) => ({
+				assetId,
+				displayWidthPx,
+				id,
+			})),
 		};
 		const result =
 			crawledJobEditedImageDocumentSchema.safeParse(legacyDocument);
 		expect(result.success).toBe(true);
 		if (result.success) {
 			expect(result.data.items[0]?.displayHeightPx).toBeNull();
+			expect(result.data.items[0]?.offsetX).toBe(0);
+			expect(result.data.items[0]?.offsetY).toBe(0);
 		}
 	});
 

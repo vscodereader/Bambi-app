@@ -10,6 +10,8 @@ export interface CrawledImageItem {
 	displayHeightPx: number | null;
 	displayWidthPx: number | null;
 	id: string;
+	offsetX: number;
+	offsetY: number;
 }
 
 export interface CrawledImageDocument {
@@ -23,6 +25,11 @@ export type ResizeHandle = "e" | "n" | "ne" | "nw" | "s" | "se" | "sw" | "w";
 export interface ResizeDimensions {
 	height: number;
 	width: number;
+}
+
+export interface ResizeOffsets {
+	offsetX: number;
+	offsetY: number;
 }
 
 const DATA_URL_MIME_PATTERN = /^data:([^;]+);base64,/;
@@ -164,6 +171,35 @@ export const resizeDimensionsFromHandleDrag = ({
 			: verticalWidthDelta;
 	const width = startWidth + widthDelta;
 	return { height: width / aspectRatio, width };
+};
+
+export const anchoredResizeOffsets = ({
+	handle,
+	nextHeight,
+	nextWidth,
+	startHeight,
+	startOffsetX,
+	startOffsetY,
+	startWidth,
+}: {
+	handle: ResizeHandle;
+	nextHeight: number;
+	nextWidth: number;
+	startHeight: number;
+	startOffsetX: number;
+	startOffsetY: number;
+	startWidth: number;
+}): ResizeOffsets => {
+	let offsetX = startOffsetX;
+	if (handle.includes("w")) {
+		offsetX += (startWidth - nextWidth) / 2;
+	} else if (handle.includes("e")) {
+		offsetX += (nextWidth - startWidth) / 2;
+	}
+	const offsetY = handle.includes("n")
+		? startOffsetY + startHeight - nextHeight
+		: startOffsetY;
+	return { offsetX: Math.round(offsetX), offsetY: Math.round(offsetY) };
 };
 
 export const moveItems = (
