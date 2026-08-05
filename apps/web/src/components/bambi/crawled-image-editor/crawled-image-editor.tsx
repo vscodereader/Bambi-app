@@ -123,7 +123,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 	const [history, setHistory] = useState<Snapshot[]>([]);
 	const [clipboard, setClipboard] = useState<CrawledImageItem[]>([]);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-	const [insertionIndex, setInsertionIndex] = useState(0);
+	const [insertionIndex, setInsertionIndex] = useState<number | null>(null);
 	const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
 	const [cropItemId, setCropItemId] = useState<string | null>(null);
 	const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -147,7 +147,6 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 		const originalFallback = !editQuery.data.hasEditedDocument;
 		setDocumentState(initial);
 		setUseOriginalFallback(originalFallback);
-		setInsertionIndex(initial.items.length);
 		setRevision(editQuery.data.detailImageEditRevision);
 		setLastEditor({
 			at: editQuery.data.detailImagesEditedAt,
@@ -200,6 +199,17 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 			window.removeEventListener("keydown", closeOnEscape);
 		};
 	}, [menuPosition]);
+	useEffect(() => {
+		const stopResize = () => {
+			resizeRef.current = null;
+		};
+		window.addEventListener("pointerup", stopResize);
+		window.addEventListener("pointercancel", stopResize);
+		return () => {
+			window.removeEventListener("pointerup", stopResize);
+			window.removeEventListener("pointercancel", stopResize);
+		};
+	}, []);
 
 	const pushHistory = useCallback(() => {
 		if (!documentState) {
@@ -329,17 +339,20 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 	}, [selectedItems]);
 
 	const pasteClipboard = useCallback(() => {
+		const targetIndex =
+			insertionIndex ?? (documentState?.items.length === 0 ? 0 : null);
 		if (
 			!documentState ||
+			targetIndex === null ||
 			clipboard.length === 0 ||
 			documentState.items.length + clipboard.length > MAX_ITEMS
 		) {
 			return;
 		}
-		const result = duplicateItems(documentState, clipboard, insertionIndex);
+		const result = duplicateItems(documentState, clipboard, targetIndex);
 		applyChange(result.document);
 		setSelectedIds(new Set(result.insertedIds));
-		setInsertionIndex(insertionIndex + result.insertedIds.length);
+		setInsertionIndex(targetIndex + result.insertedIds.length);
 	}, [applyChange, clipboard, documentState, insertionIndex]);
 
 	const deleteSelection = useCallback(() => {
@@ -458,7 +471,16 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 						</span>
 						<div className="flex flex-wrap gap-2">
 							<Button
-								onClick={() => fileInputRef.current?.click()}
+								onClick={() => {
+									if (
+										insertionIndex === null &&
+										documentState.items.length > 0
+									) {
+										toast.error("이미지를 추가할 위치를 먼저 클릭하세요.");
+										return;
+									}
+									fileInputRef.current?.click();
+								}}
 								variant="outline"
 							>
 								<ImagePlus />
@@ -473,7 +495,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 									);
 									applyChange(original as CrawledImageDocument, true);
 									setSelectedIds(new Set());
-									setInsertionIndex(original.items.length);
+									setInsertionIndex(null);
 								}}
 								variant="outline"
 							>
@@ -495,7 +517,10 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 							onChange={async (event) => {
 								const file = event.target.files?.[0];
 								event.target.value = "";
-								if (!file) {
+								const targetIndex =
+									insertionIndex ??
+									(documentState.items.length === 0 ? 0 : null);
+								if (!file || targetIndex === null) {
 									return;
 								}
 								if (
@@ -521,14 +546,14 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 									id: crypto.randomUUID(),
 								};
 								const items = [...documentState.items];
-								items.splice(insertionIndex, 0, item);
+								items.splice(targetIndex, 0, item);
 								applyChange({
 									assets: [...documentState.assets, asset],
 									items,
 									version: 1,
 								});
 								setSelectedIds(new Set([item.id]));
-								setInsertionIndex(insertionIndex + 1);
+								setInsertionIndex(targetIndex + 1);
 							}}
 							ref={fileInputRef}
 							type="file"
@@ -596,7 +621,14 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 				) : null}
 
 				<Card>
-					<CardContent className="pt-6">
+					<CardContent
+						className="pt-6"
+						onClick={() => {
+							setSelectedIds(new Set());
+							setInsertionIndex(null);
+							anchorIdRef.current = null;
+						}}
+					>
 						{documentState.items.length === 0 ? (
 							<EmptyState
 								description="이미지를 추가하거나 원본으로 초기화할 수 있습니다. 이 상태로 저장하면 공개 상세에는 이미지가 보이지 않습니다."
@@ -617,10 +649,14 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 										<div key={item.id}>
 											<button
 												aria-label={`이미지 ${index + 1} 앞에 삽입 위치 지정`}
-												className="flex h-5 w-full items-center justify-center border-0 bg-transparent"
+												aria-pressed={insertionIndex === index}
+												className="flex h-5 w-full items-center justify-center border-0 bg-transparent outline-none focus:outline-none focus-visible:outline-none"
 												onClick={(event) => {
 													event.stopPropagation();
+													setSelectedIds(new Set());
 													setInsertionIndex(index);
+													anchorIdRef.current = null;
+													event.currentTarget.blur();
 												}}
 												type="button"
 											>
@@ -676,6 +712,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 														className="absolute inset-0 z-10 cursor-default bg-transparent"
 														onClick={(event) => {
 															event.stopPropagation();
+															setInsertionIndex(null);
 															selectItem(item.id, event);
 														}}
 														onContextMenu={(event) => {
@@ -695,9 +732,19 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 																(corner) => (
 																	<button
 																		aria-label={`${index + 1}번 이미지 ${corner} 크기 조절`}
-																		className={`absolute z-20 size-5 rounded-full border-2 border-white bg-primary ${corner.includes("n") ? "-top-2" : "-bottom-2"} ${corner.includes("w") ? "-left-2" : "-right-2"}`}
+																		className={`absolute z-20 size-5 touch-none rounded-full border-2 border-white bg-primary ${corner === "nw" || corner === "se" ? "cursor-nwse-resize" : "cursor-nesw-resize"} ${corner.includes("n") ? "-top-2" : "-bottom-2"} ${corner.includes("w") ? "-left-2" : "-right-2"}`}
 																		key={corner}
+																		onLostPointerCapture={() => {
+																			resizeRef.current = null;
+																		}}
+																		onPointerCancel={() => {
+																			resizeRef.current = null;
+																		}}
 																		onPointerDown={(event) => {
+																			if (event.button !== 0) {
+																				return;
+																			}
+																			event.preventDefault();
 																			event.stopPropagation();
 																			event.currentTarget.setPointerCapture(
 																				event.pointerId
@@ -716,8 +763,10 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 																			const resize = resizeRef.current;
 																			if (
 																				!resize ||
-																				resize.pointerId !== event.pointerId
+																				resize.pointerId !== event.pointerId ||
+																				event.buttons !== 1
 																			) {
+																				resizeRef.current = null;
 																				return;
 																			}
 																			setDocumentState(
@@ -770,10 +819,14 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 								})}
 								<button
 									aria-label="마지막 삽입 위치 지정"
-									className="flex h-5 w-full items-center justify-center border-0 bg-transparent"
+									aria-pressed={insertionIndex === documentState.items.length}
+									className="flex h-5 w-full items-center justify-center border-0 bg-transparent outline-none focus:outline-none focus-visible:outline-none"
 									onClick={(event) => {
 										event.stopPropagation();
+										setSelectedIds(new Set());
 										setInsertionIndex(documentState.items.length);
+										anchorIdRef.current = null;
+										event.currentTarget.blur();
 									}}
 									type="button"
 								>
@@ -844,6 +897,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 					</Button>
 					<Button
 						disabled={
+							(insertionIndex === null && documentState.items.length > 0) ||
 							clipboard.length === 0 ||
 							documentState.items.length + clipboard.length > MAX_ITEMS
 						}
