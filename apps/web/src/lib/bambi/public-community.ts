@@ -41,6 +41,16 @@ export const publicBoardPath = (slug: string, page = 1): string =>
 export const publicPostPath = (slug: string, postId: string): string =>
 	`/board/${slug}/${postId}`;
 
+export const publicWritePath = (slug: string): string => `/board/${slug}/write`;
+
+export const publicEditPath = (slug: string, postId: string): string =>
+	`/board/${slug}/${postId}/edit`;
+
+// 비회원이 글·댓글·추천을 남길 수 있는 게시판 — 공지는 운영자 전용이라 읽기만 열린다.
+// 정본은 서버(community.ts의 GUEST_WRITABLE_BOARDS)이고 여기 사본은 버튼 노출용이다.
+export const isGuestWritableBoard = (key: PublicBoardKey): boolean =>
+	key !== "notice";
+
 // ?page= 파싱 — 정수·1 이상만 통과시키고 나머지는 1페이지로 접는다.
 export const parsePageParam = (
 	value: string | string[] | undefined

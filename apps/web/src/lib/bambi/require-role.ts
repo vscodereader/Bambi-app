@@ -16,7 +16,9 @@ async function getRouting(): Promise<{
 	} catch {
 		redirect("/seeker?auth=login");
 	}
-	if (routing.role === null) {
+	// guest는 비회원 글·댓글의 작성자 표시용 role이라 회원 영역의 홈이 없다 — 프로필
+	// 부재와 같이 취급해 인증 화면으로 돌려보낸다(BambiRole은 회원 역할로 유지).
+	if (routing.role === null || routing.role === "guest") {
 		redirect("/seeker?auth=login");
 	}
 	return {
