@@ -52,6 +52,7 @@ import {
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
+	communityBoardPath,
 	communityCrawledPath,
 	communityPostPath,
 	communityWritePath,
@@ -447,15 +448,26 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 	);
 
 	// 비회원(여성 인증 게스트)도 목록을 읽는다 — 프로필 조회는 회원 전용이라 걸지 않는다.
-	const { isGuest } = useBambiAuth();
+	const { isGuest, role } = useBambiAuth();
 	const mineQuery = useQuery(
 		orpc.bambi.onboarding.getMine.queryOptions({ enabled: !isGuest })
 	);
 	const isAdmin = mineQuery.data?.bambiProfile?.role === "admin";
 
+	// 법률자문 계정은 legal 게시판만 이용한다(서버가 다른 보드를 FORBIDDEN으로 막는다).
+	// 비-legal 보드 URL로 직접 들어오면 에러 화면 대신 legal 게시판으로 안내한다.
+	// 입장 게이트(RequireCommunityAccess)가 isPending 동안 렌더를 막아 role은 확정 상태다.
+	const legalAdvisorBlocked =
+		role === "legal_advisor" && board !== undefined && board.key !== "legal";
+	useEffect(() => {
+		if (legalAdvisorBlocked) {
+			router.replace(communityBoardPath("legal") as Route);
+		}
+	}, [legalAdvisorBlocked, router]);
+
 	const listQuery = useQuery(
 		orpc.bambi.community.listPosts.queryOptions({
-			enabled: Boolean(board),
+			enabled: Boolean(board) && !legalAdvisorBlocked,
 			input: {
 				board: board?.key ?? "free",
 				mine,
@@ -492,7 +504,7 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 		buildHref,
 	]);
 
-	if (!board) {
+	if (!board || legalAdvisorBlocked) {
 		return null;
 	}
 

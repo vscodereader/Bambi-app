@@ -7,7 +7,7 @@ import { useBambiAuth } from "./auth-client-provider";
 import { RequireAuth } from "./require-auth";
 
 const COMMUNITY_BLOCKED_MESSAGE =
-	"여성회원과 광고 중인 업소회원만 이용가능합니다";
+	"일반 여성회원과 광고 중인 업소회원만 이용가능합니다";
 
 // 로그인 확인(RequireAuth) 후 수다방 입장 자격을 검사한다. 미자격자에게는 탭·nav를
 // 그대로 노출하되, 진입 시 토스트로 안내하고 구직 홈으로 되돌린다.

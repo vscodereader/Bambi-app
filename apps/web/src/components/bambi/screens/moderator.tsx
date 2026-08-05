@@ -2136,7 +2136,7 @@ const SANCTION_CHOICES: SanctionChoice[] = [
 // defaultReason으로 프리필한 뒤 최소 길이(minLength, 기본 2자)를 만족해야 확정된다.
 // positioning="fixed"는 document.body로 포털된 일괄 시트(전체 화면 중앙 정렬)용,
 // "absolute"는 콘솔 컨테이너 내부(사용자 상세·신고 상세)에서 부모 relative 박스를 덮는 시트용.
-function ReasonConfirmSheet({
+export function ReasonConfirmSheet({
 	confirmLabel,
 	danger = false,
 	defaultReason,
@@ -2357,13 +2357,11 @@ function UserModerationHistory({ userId }: { userId: string }) {
 	);
 }
 
-// 무료 법률 자문 답변 계정 지정·해제. 구직자 ↔ 법률자문만 오갈 수 있어(서버 규칙)
-// 그 밖의 계정에는 왜 안 되는지 이유만 남긴다.
+// 무료 법률 자문 답변 계정 지정·해제. 구직자 ↔ 법률자문만 오갈 수 있고(서버 규칙),
+// 액션 UI는 사용자 목록(/moderator/users)이 이 헬퍼로 대상 여부를 판정해 띄운다.
 const LEGAL_ADVISOR_ROLE = "legal_advisor";
-const LEGAL_ADVISOR_BLOCKED_NOTICE =
-	"법률자문 지정·해제는 구직자 계정에만 할 수 있어요. 업소·운영자 계정은 전환할 수 없습니다.";
 
-interface LegalAdvisorChoice {
+export interface LegalAdvisorChoice {
 	confirmLabel: string;
 	defaultReason: string;
 	desc: string;
@@ -2371,7 +2369,9 @@ interface LegalAdvisorChoice {
 	title: string;
 }
 
-const legalAdvisorChoice = (roleKey: string): LegalAdvisorChoice | null => {
+export const legalAdvisorChoice = (
+	roleKey: string
+): LegalAdvisorChoice | null => {
 	if (roleKey === LEGAL_ADVISOR_ROLE) {
 		return {
 			confirmLabel: "법률자문 해제",
@@ -2397,27 +2397,15 @@ export function UserDetail({
 	item,
 	onBack,
 	onSanction,
-	onSetRole,
 }: {
 	item: ManagedUser;
 	onBack: () => void;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
-	// 실서비스 콘솔에서만 넘어온다(프리뷰 목업 콘솔에는 역할 전환 API가 없다).
-	onSetRole?: (
-		id: string,
-		role: "job_seeker" | "legal_advisor",
-		reason: string
-	) => void;
 }) {
 	const c = STATUS_CONF[item.status];
 	// 경고/정지 버튼을 누르면 곧바로 적용하지 않고, 공용 사유 작성 시트를 띄워
 	// 기본 문구가 프리필된 사유를 운영자가 확인·수정한 뒤 확정하게 한다.
 	const [pending, setPending] = useState<SanctionChoice | null>(null);
-	// 역할 전환도 같은 사유 시트를 쓴다 — 제재와 감사 로그 성격이 같다.
-	const [pendingRole, setPendingRole] = useState<LegalAdvisorChoice | null>(
-		null
-	);
-	const roleChoice = legalAdvisorChoice(item.roleKey);
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="사용자 상세" />
@@ -2501,32 +2489,6 @@ export function UserDetail({
 						</Button>
 					</div>
 				)}
-				{onSetRole && !item.deletedAt ? (
-					<div>
-						<div className="mb-2.5 font-bold text-[13px] text-foreground">
-							무료 법률 자문
-						</div>
-						{roleChoice ? (
-							<>
-								<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
-									{roleChoice.desc}
-								</p>
-								<Button
-									block
-									onClick={() => setPendingRole(roleChoice)}
-									size="lg"
-									variant="secondary"
-								>
-									{roleChoice.title}
-								</Button>
-							</>
-						) : (
-							<p className="m-0 text-[12.5px] text-muted-foreground leading-[1.5]">
-								{LEGAL_ADVISOR_BLOCKED_NOTICE}
-							</p>
-						)}
-					</div>
-				) : null}
 				<UserModerationHistory userId={item.id} />
 				<div>
 					<div className="mb-2.5 font-bold text-[13px] text-foreground">
@@ -2560,22 +2522,6 @@ export function UserDetail({
 					reasonFieldId={`user-sanction-reason-${item.id}`}
 					reasonLabel="제재 사유"
 					title={pending.title}
-				/>
-			) : null}
-			{pendingRole && onSetRole ? (
-				<ReasonConfirmSheet
-					confirmLabel={pendingRole.confirmLabel}
-					defaultReason={pendingRole.defaultReason}
-					description={`${item.name} 님에게 적용돼요`}
-					onCancel={() => setPendingRole(null)}
-					onConfirm={(reason) => {
-						onSetRole(item.id, pendingRole.role, reason);
-						setPendingRole(null);
-					}}
-					positioning="absolute"
-					reasonFieldId={`user-role-reason-${item.id}`}
-					reasonLabel="지정 사유"
-					title={pendingRole.title}
 				/>
 			) : null}
 		</div>

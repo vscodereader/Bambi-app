@@ -36,6 +36,7 @@ import {
 	assertGuestOwnership,
 	assertGuestPostAccess,
 	assertGuestWritableBoard,
+	assertLegalAdvisorBoardScope,
 	type CommunityActor,
 	canBypassLock,
 	findCommunityActor,
@@ -709,6 +710,8 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const actor = await resolveCommunityActor(context);
 			const profile = actor.kind === "member" ? actor.profile : null;
+			// 법률자문 계정은 legal 게시판만 — 가상 큐레이션 best도 비-legal 글이 섞이므로 막는다.
+			assertLegalAdvisorBoardScope(profile, input.board);
 
 			const listFilters = [
 				...buildListFilters(input.showPromotion, input.showEmployer),
@@ -909,6 +912,7 @@ export const communityRouter = {
 			// 비밀번호로만 열린다(게스트는 비밀글을 쓸 수 없어 자기 글이 잠긴 경우도 없다).
 			const profile = actor.kind === "member" ? actor.profile : null;
 			const post = await findPublishedPost(input.postId);
+			assertLegalAdvisorBoardScope(profile, post.board);
 
 			if (post.isLocked && !canBypassLock(post, profile)) {
 				if (!input.password) {
@@ -1066,6 +1070,10 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const actor = await resolveCommunityActor(context);
 			const role = actorRole(actor);
+			assertLegalAdvisorBoardScope(
+				actor.kind === "member" ? actor.profile : null,
+				input.board
+			);
 			assertTiptapDoc(input.body);
 			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 			await assertDisplayNameAllowed(input.authorName, {
@@ -1141,6 +1149,10 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
+			assertLegalAdvisorBoardScope(
+				actor.kind === "member" ? actor.profile : null,
+				post.board
+			);
 			assertTiptapDoc(input.body);
 			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 			await assertDisplayNameAllowed(input.authorName, {
@@ -1245,6 +1257,7 @@ export const communityRouter = {
 			if (actor.kind === "guest") {
 				assertGuestPostAccess(post, actor.gid);
 			} else {
+				assertLegalAdvisorBoardScope(actor.profile, post.board);
 				requirePostReadAccess(post, actor.profile, input.password);
 			}
 
@@ -1321,6 +1334,8 @@ export const communityRouter = {
 
 			if (actor?.kind === "member") {
 				const { profile } = actor;
+				// 글 로드 후 post.board로 판정한다 — 목록에서 못 보는 글은 댓글도 못 본다.
+				assertLegalAdvisorBoardScope(profile, post.board);
 				requirePostReadAccess(post, profile, input.password);
 				const rows = await selectVisibleCommentRows(input.postId);
 
@@ -1369,6 +1384,7 @@ export const communityRouter = {
 				assertGuestPostAccess(post, actor.gid);
 				guestPassword = requireGuestPassword(input.password);
 			} else {
+				assertLegalAdvisorBoardScope(actor.profile, post.board);
 				requirePostReadAccess(post, actor.profile, input.password);
 			}
 			await assertNoBannedWords([input.body]);

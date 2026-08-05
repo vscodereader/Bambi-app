@@ -10,7 +10,8 @@
 
 - 수집 항목은 4개뿐: 생년월일(YYYYMMDD)·휴대폰 번호·성별·구분. 이름(name)은 저장하지 않는다(PII 최소화).
 - 구분은 인증 시점에 모를 수 있다(가입 전 인증) — nullable로 두고, 비회원 흐름은 즉시 `guest`, 회원은 가입 완료 시점에 역할로 채운다.
-- 비회원으로 인증한 사람이 같은 인증 건으로 이어서 가입하면 구분을 가입 역할로 **덮어쓴다**(인증 건당 1행, 최종 상태 보존).
+- **사람당 1행**: (생년월일, 휴대폰 번호)가 사람 식별 upsert 키다. 같은 사람이 재인증하면(포트원 인증 건 ID는 실패·재시도마다 새로 발급) 기존 행이 최신 상태로 갱신된다. 번호가 null인 행은 사람을 특정할 수 없어 그냥 insert(부분 unique 인덱스 제외 대상).
+- 비회원으로 인증한 사람이 이어서 가입하면 구분을 가입 역할로 **덮어쓴다**(최종 상태 보존).
 - 기존 회원의 재인증(`verifyMyPhone`)도 기록한다(구분 = 해당 회원 역할).
 - 평문 저장 — 기존 `bambi_profile`의 번호·생년월일 저장 축과 동일. 보존 기간은 별도 정책 없음(무기한, 파기 정책 필요 시 후속).
 - 개발 목(mock) 인증(포트원 미구성)은 기록하지 않는다.
@@ -22,19 +23,21 @@
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
 | `id` | uuid pk | |
-| `identity_verification_id` | text unique | 포트원 인증 건 ID — 인증 건당 1행(upsert 키) |
+| `identity_verification_id` | text (일반 index) | 이 행을 마지막으로 갱신한 포트원 인증 건 ID(최근 인증 건 추적용) |
 | `phone_number` | text | |
 | `birth_date` | varchar(8) | YYYYMMDD |
 | `gender` | `bambi_gender` nullable | 포트원 미제공 시 null |
 | `kind` | `bambi_user_role` nullable | 구분 — guest/job_seeker/employer 사용(admin 미사용) |
 | `created_at` / `updated_at` | timestamp | |
 
+사람 식별 unique 인덱스: `(birth_date, phone_number)` 부분 unique — `WHERE phone_number IS NOT NULL`.
+
 enum은 기존 `bambi_user_role`·`bambi_gender` 재사용 — 새 enum 불필요.
 
 ## 기록 지점 (모든 실인증이 지나는 `resolveVerifiedIdentity` 호출부)
 
 1. **`checkIdentityForSignup`** (onboarding 라우터, public): 인증 성공 시 번호·성별·생년월일 upsert. 입력에 `source: "guest"` 선택 필드를 추가하고, web `/api/guest` 라우트가 이 플래그로 호출하면 `kind = 'guest'`까지 기록한다(플래그 없으면 kind 미변경 — 가입 전 사전확인 호출).
-2. **`createBambiProfile`** (가입 완료, 인증 건 최종 소진): 같은 `identity_verification_id` 행의 `kind`를 가입 역할(job_seeker/employer)로 upsert.
+2. **`createBambiProfile`** (가입 완료, 인증 건 최종 소진): 같은 사람 행의 `kind`를 가입 역할(job_seeker/employer)로 upsert.
 3. **`verifyMyPhone`** (기존 회원 재인증): upsert, `kind` = 프로필 역할.
 
 기록은 인증 흐름과 같은 경로에서 straight insert/upsert 한다(별도 try/catch로 삼키지 않음 — 수집 누락 방지가 목적이므로 실패는 실패로 드러낸다).

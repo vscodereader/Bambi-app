@@ -382,27 +382,30 @@
 
 ### 4.6 법률자문 지정·해제
 
-- **경로**: `/moderator/users/[id]` "무료 법률 자문" 영역 (UI `moderator.tsx` `UserDetail`,
+- **경로**: `/moderator/users` 목록에서 대상 **1명** 체크 → 목록 위 역할 수정 줄
+  (UI `users/page.tsx` `roleTarget`, 시트 `moderator.tsx` `ReasonConfirmSheet`·`legalAdvisorChoice`,
   컨텍스트 `moderator-context.tsx` `setLegalAdvisor`)
 - **선행 조건**: 대상이 **밤비 프로필이 있는** `job_seeker` 또는 `legal_advisor` 계정.
 - **절차**:
-  1. 목록에서 역할 Select로 `구직자`/`법률자문`을 걸러 대상을 찾고 행 클릭 → 상세.
-  2. "무료 법률 자문" 영역 버튼(구직자면 **법률자문 지정**, 법률자문이면 **법률자문 해제**) 클릭.
+  1. 목록에서 역할 Select로 `구직자`/`법률자문`을 걸러 대상을 찾고 행 왼쪽 선택 칸 체크(정확히 1명).
+  2. 목록 위에 뜬 역할 수정 줄의 버튼(구직자면 **법률자문 지정**, 법률자문이면 **법률자문 해제**) 클릭.
   3. 사유 시트(기본 문구 프리필, 2자 이상) → 확정.
 - **기대 결과**:
   - `setUserRole({role, reason, targetUserId})` → `bambi_profile.role` 갱신 +
     감사 로그 `set_role:legal_advisor` / `set_role:job_seeker`(대상 유형 `user`).
-  - 적용 후 목록 캐시가 무효화되어 상세·목록의 역할 표기가 함께 바뀐다. **제재와 달리 목록으로 튕기지 않는다.**
+  - 적용 후 목록 캐시가 무효화되어 목록(·상세)의 역할 표기가 바뀌고, 시트가 닫히며 선택이 해제된다.
+    실패하면 시트에 남아 사유를 고쳐 재시도할 수 있다(서버 거절 사유 토스트).
   - 지정된 계정은 수다방에 성별·광고와 무관하게 입장하고, `legal` 게시판의 잠긴 글을 비번 없이 열람·답변한다
     (구직자 테스트 흐름 §11.9). 해제하면 곧바로 권한이 사라진다.
   - **그 외 권한은 구직자 그대로다.** 구인 기능(공고 `listMine`·조직·팀·광고·분석·업소 인증 제출)은
     `isEmployerLikeRole`(`employer`·`admin` 허용 목록)이 막아 `FORBIDDEN`이고, 홈도 `/seeker`다.
     채팅은 `job_seeker` 전용이라 지정 중에는 이용할 수 없다(해제하면 복구).
 - **엣지 케이스 / 실패 케이스**:
-  - `employer`·`admin` 계정 → 버튼 대신 안내 문구만 노출. API 직접 호출 시 `BAD_REQUEST`
+  - `employer`·`admin`·탈퇴 계정을 선택하거나 **2명 이상** 선택 → 역할 수정 줄 미노출
+    (일괄 제재 바만 뜬다). API 직접 호출 시 `BAD_REQUEST`
     "법률자문 지정·해제는 구직자 계정에만 할 수 있어요(업소·운영자 계정은 전환할 수 없습니다)."
   - 온보딩 전 계정 → `BAD_REQUEST` "아직 온보딩을 마치지 않은 계정이라 역할을 지정할 수 없어요."
-  - 탈퇴 계정에는 이 영역이 뜨지 않는다. 사유 2자 미만이면 확정 비활성.
+  - 사유 2자 미만이면 확정 비활성.
 - **관련 API**: `bambi.moderation.setUserRole` (`adminProcedure`)
 
 ### 4.7 탈퇴 계정 잔여 식별값 파기 (배치)

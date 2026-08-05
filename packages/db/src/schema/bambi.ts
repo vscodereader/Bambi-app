@@ -303,8 +303,9 @@ export const bambiIdentityVerification = pgTable(
 );
 
 // 본인인증 수집 로그. 실인증이 확인될 때마다 생년월일·번호·성별과 구분(비회원/구직자/
-// 구인자)을 인증 건당 1행으로 남긴다(같은 인증 건이 사전확인 → 게스트 → 가입으로 이어지면
-// 같은 행을 갱신한다). 이름은 담지 않는다(PII 최소화).
+// 구인자)을 사람당 1행으로 남긴다 — (birth_date, phone_number)가 사람 식별 upsert 키.
+// 같은 사람이 재인증하면(포트원 인증 건 ID는 매번 새로 발급) 기존 행을 갱신한다.
+// 이름은 담지 않는다(PII 최소화).
 // 개발자 SQL 전용 표다 — 조회 프로시저·관리자 화면을 만들지 않는다(쓰기 코드만 존재).
 // bambi_identity_verification(발급 기록)에 FK를 걸지 않는다: 그쪽은 만료 행을 정리하는
 // 대상이라 cascade로 수집 로그까지 사라지면 안 된다.
@@ -312,7 +313,7 @@ export const bambiIdentityVerificationLog = pgTable(
 	"bambi_identity_verification_log",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		// 포트원 인증 건 ID. 인증 건당 1행을 유지하는 upsert 키다.
+		// 이 행을 마지막으로 갱신한 포트원 인증 건 ID(최근 인증 건 추적용).
 		identityVerificationId: text("identity_verification_id").notNull(),
 		phoneNumber: text("phone_number"),
 		// YYYYMMDD 8자리(bambi_profile.birth_date와 같은 컨벤션).
@@ -328,9 +329,13 @@ export const bambiIdentityVerificationLog = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		uniqueIndex("bambi_identity_verification_log_iv_id_uidx").on(
+		index("bambi_identity_verification_log_iv_id_idx").on(
 			table.identityVerificationId
 		),
+		// 사람 식별 upsert 키. phone_number가 null인 행은 사람을 특정할 수 없어 제외.
+		uniqueIndex("bambi_identity_verification_log_person_uidx")
+			.on(table.birthDate, table.phoneNumber)
+			.where(sql`${table.phoneNumber} IS NOT NULL`),
 	]
 );
 

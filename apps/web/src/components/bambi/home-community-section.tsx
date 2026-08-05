@@ -26,7 +26,8 @@ import { PhoneVerifyDialog } from "@/components/bambi/phone-verify-dialog";
 import type { CommunityBoardKey } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
-const COMMUNITY_BLOCKED_MESSAGE = "여성 회원과 광고 중인 업소회원만 가능합니다";
+const COMMUNITY_BLOCKED_MESSAGE =
+	"일반 여성 회원과 광고 중인 업소회원만 가능합니다";
 const COMMUNITY_ROOT = "/seeker/community";
 
 // 섹션 헤더 — visual-job-exposure-sections의 ExposureSection 헤더 문법을 따른다.
@@ -98,8 +99,11 @@ function CommunityVerifyDialog({
 // 배치는 수다방 페이지(CommunityHomeScreen)와 같은 컴포넌트를 쓴다 — 같은 섹션이 홈과
 // 수다방에서 다르게 보이지 않게.
 function CommunityContent({
+	legalOnly,
 	onBlockedNavigate,
 }: {
+	// 법률자문 계정용 — legal 게시판 카드만 노출한다(CommunityOverviewGrid와 같은 의미).
+	legalOnly?: boolean;
 	onBlockedNavigate?: (href: string) => void;
 }) {
 	const overviewQuery = useQuery(
@@ -127,6 +131,7 @@ function CommunityContent({
 			<SectionHeader onBlockedNavigate={onBlockedNavigate} />
 			<CommunityOverviewGrid
 				isPending={overviewQuery.isPending}
+				legalOnly={legalOnly}
 				onBlockedNavigate={onBlockedNavigate}
 				postsByBoard={postsByBoard}
 			/>
@@ -161,7 +166,7 @@ export function HomeCommunitySection() {
 		setMounted(true);
 	}, []);
 
-	const { canAccessCommunity, isAuthenticated, isGuest, isPending } =
+	const { canAccessCommunity, isAuthenticated, isGuest, isPending, role } =
 		useBambiAuth();
 
 	if (!mounted) {
@@ -187,6 +192,7 @@ export function HomeCommunitySection() {
 	return (
 		<>
 			<CommunityContent
+				legalOnly={role === "legal_advisor"}
 				onBlockedNavigate={canAccessCommunity ? undefined : handleBlocked}
 			/>
 			<CommunityVerifyDialog

@@ -34,7 +34,7 @@ export const requireCommunityMember = async (
 
 	if (!access.canAccess) {
 		throw new ORPCError("FORBIDDEN", {
-			message: "여성회원과 광고 중인 업소회원만 이용가능합니다",
+			message: "일반 여성회원과 광고 중인 업소회원만 이용가능합니다",
 		});
 	}
 
@@ -89,7 +89,7 @@ export const resolveCommunityActor = async (
 	}
 	if (context.guest.gender !== "female") {
 		throw new ORPCError("FORBIDDEN", {
-			message: "여성회원과 광고 중인 업소회원만 이용가능합니다",
+			message: "일반 여성회원과 광고 중인 업소회원만 이용가능합니다",
 		});
 	}
 
@@ -115,6 +115,22 @@ export const findCommunityActor = async (
 export const LEGAL_BOARD = "legal";
 // 그 게시판의 잠금글을 열람·답변하는 계정 역할(운영자가 지정·해제).
 export const LEGAL_ADVISOR_ROLE = "legal_advisor";
+
+const LEGAL_ADVISOR_BOARD_ERROR =
+	"법률자문 계정은 무료 법률 자문 게시판만 이용할 수 있어요.";
+
+// 법률자문 계정은 legal 게시판에 격리한다 — 역할이 성별 자격보다 우선이라 여성
+// 법률자문이라도 예외 없이 다른 게시판(가상 best 포함)은 읽기·쓰기 모두 FORBIDDEN이다.
+// 다른 역할·게스트(profile null)에는 발동하지 않는다. 라우터의 읽기·쓰기 경로가
+// 이 함수 하나를 지나므로 격리 범위가 바뀌면 여기만 고친다.
+export const assertLegalAdvisorBoardScope = (
+	profile: Pick<BambiAccessProfile, "role"> | null,
+	board: string
+): void => {
+	if (profile?.role === LEGAL_ADVISOR_ROLE && board !== LEGAL_BOARD) {
+		throw new ORPCError("FORBIDDEN", { message: LEGAL_ADVISOR_BOARD_ERROR });
+	}
+};
 
 // 비회원이 글·댓글·추천을 남길 수 있는 게시판. 공개 읽기 보드(PUBLIC_COMMUNITY_BOARDS)보다
 // 좁다 — 공지(notice)는 운영자 게시판이라 읽기만 열어 두고, 중고거래·베스트는 애초에

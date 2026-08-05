@@ -9,7 +9,7 @@ import {
 } from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
 
-type BambiRole = "job_seeker" | "employer" | "admin" | null;
+type BambiRole = "job_seeker" | "employer" | "admin" | "legal_advisor" | null;
 type BambiAccountStatus = "active" | "warned" | "suspended" | null;
 
 interface BambiAuthValue {
