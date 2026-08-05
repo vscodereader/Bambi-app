@@ -23,7 +23,23 @@ interface CropDialogProps {
 	onClose: () => void;
 	onComplete: (asset: CrawledImageAsset) => void;
 }
-type Corner = "ne" | "nw" | "se" | "sw";
+type CropHandle = "e" | "n" | "ne" | "nw" | "s" | "se" | "sw" | "w";
+
+const CROP_HANDLES: CropHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+
+const cropHandleClass = (handle: CropHandle): string => {
+	const edgeClasses: Partial<Record<CropHandle, string>> = {
+		e: "top-8 right-0 bottom-8 z-10 w-5 cursor-ew-resize",
+		n: "top-0 right-8 left-8 z-10 h-5 cursor-ns-resize",
+		s: "right-8 bottom-0 left-8 z-10 h-5 cursor-ns-resize",
+		w: "top-8 bottom-8 left-0 z-10 w-5 cursor-ew-resize",
+	};
+	const edgeClass = edgeClasses[handle];
+	if (edgeClass) {
+		return `absolute touch-none border-0 bg-transparent ${edgeClass}`;
+	}
+	return `absolute z-20 size-8 touch-none bg-black/10 drop-shadow-md ${handle === "nw" || handle === "se" ? "cursor-nwse-resize" : "cursor-nesw-resize"} ${handle.includes("n") ? "top-1 border-t-4" : "bottom-1 border-b-4"} ${handle.includes("w") ? "left-1 border-l-4" : "right-1 border-r-4"} border-white`;
+};
 
 const cropImage = async (
 	asset: CrawledImageAsset,
@@ -78,7 +94,7 @@ const cropImage = async (
 export function CropDialog({ asset, onClose, onComplete }: CropDialogProps) {
 	const imageRef = useRef<HTMLImageElement>(null);
 	const dragRef = useRef<{
-		corner: Corner;
+		handle: CropHandle;
 		pointerId: number;
 		start: CropRect;
 		x: number;
@@ -126,18 +142,18 @@ export function CropDialog({ asset, onClose, onComplete }: CropDialogProps) {
 		const dx = ((event.clientX - drag.x) * asset.width) / bounds.width;
 		const dy = ((event.clientY - drag.y) * asset.height) / bounds.height;
 		let { height, width, x, y } = drag.start;
-		if (drag.corner.includes("w")) {
+		if (drag.handle.includes("w")) {
 			const right = x + width;
 			x = Math.max(0, Math.min(right - minimumWidth, x + dx));
 			width = right - x;
-		} else {
+		} else if (drag.handle.includes("e")) {
 			width = Math.max(minimumWidth, Math.min(asset.width - x, width + dx));
 		}
-		if (drag.corner.includes("n")) {
+		if (drag.handle.includes("n")) {
 			const bottom = y + height;
 			y = Math.max(0, Math.min(bottom - minimumHeight, y + dy));
 			height = bottom - y;
-		} else {
+		} else if (drag.handle.includes("s")) {
 			height = Math.max(minimumHeight, Math.min(asset.height - y, height + dy));
 		}
 		setRect({ height, width, x, y });
@@ -148,7 +164,8 @@ export function CropDialog({ asset, onClose, onComplete }: CropDialogProps) {
 			<DialogContent className="w-[min(94vw,900px)] max-w-none">
 				<DialogTitle>이미지 자르기</DialogTitle>
 				<DialogDescription>
-					밝은 영역만 남습니다. 네 모서리를 끌어 자유 비율로 조절하세요.
+					밝은 영역만 남습니다. 모서리 또는 상·하·좌·우 테두리를 끌어
+					조절하세요.
 				</DialogDescription>
 				<div className="flex max-h-[70vh] justify-center overflow-auto rounded-lg bg-muted p-4">
 					<div className="relative h-fit max-w-full overflow-hidden">
@@ -165,11 +182,11 @@ export function CropDialog({ asset, onClose, onComplete }: CropDialogProps) {
 							className="absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.58)]"
 							style={selectionStyle}
 						>
-							{(["nw", "ne", "sw", "se"] as Corner[]).map((corner) => (
+							{CROP_HANDLES.map((handle) => (
 								<button
-									aria-label={`${corner} 모서리 조절`}
-									className={`absolute z-10 size-8 touch-none bg-black/10 drop-shadow-md ${corner === "nw" || corner === "se" ? "cursor-nwse-resize" : "cursor-nesw-resize"} ${corner.includes("n") ? "top-1 border-t-4" : "bottom-1 border-b-4"} ${corner.includes("w") ? "left-1 border-l-4" : "right-1 border-r-4"} border-white`}
-									key={corner}
+									aria-label={`${handle} 자르기 범위 조절`}
+									className={cropHandleClass(handle)}
+									key={handle}
 									onPointerCancel={(event) => {
 										event.stopPropagation();
 										dragRef.current = null;
@@ -179,7 +196,7 @@ export function CropDialog({ asset, onClose, onComplete }: CropDialogProps) {
 										event.stopPropagation();
 										event.currentTarget.setPointerCapture(event.pointerId);
 										dragRef.current = {
-											corner,
+											handle,
 											pointerId: event.pointerId,
 											start: rect,
 											x: event.clientX,
