@@ -8,6 +8,7 @@ import { communityRouter } from "./community";
 import { crawledJobsRouter } from "./crawled-jobs";
 import { crawlerRouter } from "./crawler";
 import { jobsRouter } from "./jobs";
+import { mainPopupsRouter } from "./main-popups";
 import { moderationRouter } from "./moderation";
 import { onboardingRouter } from "./onboarding";
 import { organizationsRouter } from "./organizations";
@@ -29,6 +30,7 @@ export const bambiRouter = {
 	crawledJobs: crawledJobsRouter,
 	crawler: crawlerRouter,
 	jobs: jobsRouter,
+	mainPopups: mainPopupsRouter,
 	moderation: moderationRouter,
 	onboarding: onboardingRouter,
 	organizations: organizationsRouter,
