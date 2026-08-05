@@ -53,3 +53,32 @@ describe("채팅방 연락처 재설계", () => {
 		expect(source).toContain("공고 비공개");
 	});
 });
+
+describe("상대가 나간 채팅방", () => {
+	// 서버가 발신을 FORBIDDEN(counterpart_left)으로 막으므로, 화면은 눌러서 실패하기
+	// 전에 입력창을 잠그고 이유를 보여줘야 한다.
+	it("서버가 내려준 counterpartLeft로 입력창을 잠근다", () => {
+		expect(source).toContain("counterpartLeft");
+		expect(source).toContain("disabledNotice={composerDisabledNotice}");
+		expect(source).toContain("disabled={isDisabled}");
+	});
+
+	it("상대가 나가도 지난 대화는 읽게 둔다(목록으로 튕기지 않는다)", () => {
+		expect(source).toContain("getChatEntryBlockMessage(roomQuery.error)");
+	});
+
+	it("보낼 곳이 없는 액션(면접 제안·연락처 요청·요청 응답)은 감춘다", () => {
+		expect(source).toContain("isJobSeeker || counterpartLeft ? null");
+		expect(source).toContain("isSendBlocked={counterpartLeft}");
+		expect(source).toContain("!isSendBlocked &&");
+	});
+});
+
+describe("신고한 채팅 숨김", () => {
+	// 신고 완료 안내가 "해당 채팅은 잠시 숨겨둘게요"라고 약속한다. 서버가 방을 감추므로
+	// 창을 닫을 때 방 조회를 다시 돌려 그 안내와 함께 목록으로 나가야 한다.
+	it("신고 창을 닫으면 방 조회를 다시 받는다", () => {
+		expect(source).toContain("handleReportOpenChange");
+		expect(source).toContain("orpc.bambi.chats.getById.queryKey");
+	});
+});

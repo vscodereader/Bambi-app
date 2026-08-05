@@ -24,6 +24,10 @@ import {
 	requireChatParticipant,
 } from "../../services/bambi-authz";
 import {
+	getSenderRoomRestoreFields,
+	hasCounterpartLeftChatRoom,
+} from "../../services/bambi-chat-participation";
+import {
 	getChatRecipientUserId,
 	getUnreadMessageCount,
 	getUnreadMessageCountForUser,
@@ -52,6 +56,10 @@ import {
 	createChatAttachmentUploadIntent,
 	getChatAttachmentObjectUrl,
 } from "../../services/bambi-storage";
+import {
+	resolveVisibleDisplayName,
+	WITHDRAWN_DISPLAY_NAME,
+} from "../../services/bambi-withdrawn-display";
 
 const startFromJobPostInput = z.object({
 	jobPostId: z.string().uuid(),
@@ -285,7 +293,8 @@ interface CounterpartRoom {
 
 // 구직자가 보는 구인자 이름. 담당자가 탈퇴했으면 팀·조직 표시명보다 탈퇴 표기가
 // 앞선다 — 업소 이름만 보이면 응대할 사람이 없는 방에서 답을 기다리게 된다.
-// 탈퇴 계정은 user.name이 이미 "탈퇴한 회원"이라 별도 문구를 만들지 않는다.
+// 탈퇴 계정의 user.name은 원본 닉네임이라 그대로 내보내면 안 된다. 표시 문구는
+// WITHDRAWN_DISPLAY_NAME(표시 계층)으로 고정한다.
 const resolveEmployerName = (
 	room: CounterpartRoom,
 	names: {
@@ -296,7 +305,7 @@ const resolveEmployerName = (
 	}
 ): string | null => {
 	if (names.withdrawnUserIds.has(room.employerUserId)) {
-		return names.byUserId.get(room.employerUserId) ?? null;
+		return WITHDRAWN_DISPLAY_NAME;
 	}
 	return (
 		(room.teamId ? names.byTeamId.get(room.teamId) : undefined) ??
@@ -310,6 +319,9 @@ const resolveEmployerName = (
  * 현재 보는 사람(viewer) 기준으로 대화 상대방의 표시 이름을 방마다 해석한다.
  * - 구인자가 볼 때 → 상대는 구직자(user.name, 표시명 정본)
  * - 구직자가 볼 때 → 상대는 구인자(탈퇴 표기 → 팀 프로필 → 조직 프로필 → 개인 프로필 순)
+ *
+ * 어느 쪽이든 탈퇴한 상대는 원본 닉네임 대신 "탈퇴한 회원"으로 나간다 — 탈퇴는 이제
+ * user.deletedAt 마커만 남기므로 이름을 그대로 실으면 실명이 상대 화면에 남는다.
  */
 const resolveCounterpartNames = async (
 	rooms: CounterpartRoom[],
@@ -366,8 +378,16 @@ const resolveCounterpartNames = async (
 			: Promise.resolve([]),
 	]);
 
+	// 탈퇴한 상대의 원본 닉네임이 목록에 남지 않도록 지도를 만들 때부터 표시 문구로 바꾼다
+	// (구인자가 보는 구직자 이름도 이 지도를 그대로 쓴다).
 	const nameByUserId = new Map(
-		profiles.map((entry) => [entry.userId, entry.displayName])
+		profiles.map((entry) => [
+			entry.userId,
+			resolveVisibleDisplayName(
+				{ deletedAt: entry.deletedAt, name: entry.displayName },
+				entry.displayName
+			),
+		])
 	);
 	const withdrawnUserIds = new Set(
 		profiles.flatMap((entry) => (entry.deletedAt ? [entry.userId] : []))
@@ -464,12 +484,70 @@ const resolveBlockedCounterpartIds = async (
 type ChatBlockReason =
 	| "blocked_by_counterpart"
 	| "blocked_by_me"
-	| "moderation";
+	| "counterpart_left"
+	| "moderation"
+	| "pending_report";
 
 const CHAT_BLOCK_MESSAGES: Record<ChatBlockReason, string> = {
 	blocked_by_counterpart: "상대가 회원님을 차단한 채팅방이에요.",
 	blocked_by_me: "회원님이 상대를 차단한 채팅방이에요.",
+	counterpart_left: "상대방이 채팅방을 나가서 더 이상 메시지를 보낼 수 없어요.",
 	moderation: "신고에 대한 운영자 조치로 종료된 채팅방이에요.",
+	pending_report: "신고를 검토하고 있는 채팅이에요. 처리 후 다시 볼 수 있어요.",
+};
+
+// 신고 처리 전(open·reviewing) 상태. 이 구간에는 신고자에게서 방을 감춘다.
+const PENDING_REPORT_STATUSES = ["open", "reviewing"] as const;
+
+/**
+ * "내가 신고했고 아직 처리 전"인 방 id들.
+ *
+ * 신고 완료 안내가 "해당 채팅은 잠시 숨겨둘게요"라고 약속하므로, 신고자에게는 목록에서도
+ * 방 안에서도 보이지 않아야 한다. 방을 직접 겨눈 신고(chat_room)뿐 아니라 그 방의 특정
+ * 메시지를 겨눈 신고(chat_message)도 같은 방을 가리키므로 함께 모은다. 상대에게는 아무
+ * 영향이 없고, 운영자가 처리(resolved·dismissed)하면 자연히 다시 보인다.
+ */
+const getRoomIdsHiddenByMyReport = async ({
+	reporterUserId,
+	roomIds,
+}: {
+	reporterUserId: string;
+	roomIds: string[];
+}): Promise<Set<string>> => {
+	if (roomIds.length === 0) {
+		return new Set();
+	}
+
+	const [directRows, viaMessageRows] = await Promise.all([
+		db
+			.select({ roomId: report.targetId })
+			.from(report)
+			.where(
+				and(
+					eq(report.reporterUserId, reporterUserId),
+					eq(report.targetType, "chat_room"),
+					inArray(report.targetId, roomIds),
+					inArray(report.status, [...PENDING_REPORT_STATUSES])
+				)
+			),
+		db
+			.select({ roomId: chatMessage.chatRoomId })
+			.from(report)
+			.innerJoin(chatMessage, eq(sql`${chatMessage.id}::text`, report.targetId))
+			.where(
+				and(
+					eq(report.reporterUserId, reporterUserId),
+					eq(report.targetType, "chat_message"),
+					inArray(chatMessage.chatRoomId, roomIds),
+					inArray(report.status, [...PENDING_REPORT_STATUSES])
+				)
+			),
+	]);
+
+	return new Set([
+		...directRows.map((row) => row.roomId),
+		...viaMessageRows.map((row) => row.roomId),
+	]);
 };
 
 /**
@@ -534,6 +612,64 @@ const throwIfChatBlocked = async ({
 			room,
 			actorUserId
 		);
+	}
+};
+
+/** 내가 신고해 숨겨진 방이면 진입 자체를 막는다(상대는 영향 없음). */
+const throwIfHiddenByMyReport = async ({
+	actorUserId,
+	room,
+}: {
+	actorUserId: string;
+	room: CounterpartRoom;
+}): Promise<void> => {
+	const hiddenRoomIds = await getRoomIdsHiddenByMyReport({
+		reporterUserId: actorUserId,
+		roomIds: [room.id],
+	});
+
+	if (hiddenRoomIds.has(room.id)) {
+		await throwChatBlocked("pending_report", room, actorUserId);
+	}
+};
+
+/**
+ * 방을 열어 보는 것까지 허용되는 가드(운영자 조치·사용자 차단·내 신고 대기).
+ * 상대가 나간 방은 읽기는 그대로 두고 발신만 막으므로 여기서 보지 않는다.
+ */
+const throwIfChatUnavailable = async ({
+	actorUserId,
+	room,
+}: {
+	actorUserId: string;
+	room: CounterpartRoom & { isBlocked: boolean };
+}): Promise<void> => {
+	await throwIfChatBlocked({ actorUserId, room });
+	await throwIfHiddenByMyReport({ actorUserId, room });
+};
+
+/**
+ * 발신 계열(메시지·첨부·면접 제안·연락처 요청 등) 전용 가드.
+ *
+ * 상대가 "나가기"로 지운 방에 새 내용을 밀어 넣지 못하게 한다. 예전에는 전송이 양쪽
+ * 소프트삭제를 되돌려 나간 사람 방을 강제로 되살렸는데, 그건 나간 쪽 의사를 무시하는
+ * 동작이라 차단 사유(counterpart_left)로 거절한다.
+ */
+const throwIfChatSendBlocked = async ({
+	actorUserId,
+	room,
+}: {
+	actorUserId: string;
+	room: CounterpartRoom & {
+		employerDeletedAt: Date | null;
+		isBlocked: boolean;
+		seekerDeletedAt: Date | null;
+	};
+}): Promise<void> => {
+	await throwIfChatUnavailable({ actorUserId, room });
+
+	if (hasCounterpartLeftChatRoom(room, actorUserId)) {
+		await throwChatBlocked("counterpart_left", room, actorUserId);
 	}
 };
 
@@ -620,6 +756,27 @@ export const chatsRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
+			// 구인자가 나간 방은 다시 열어 주지 않는다. 이 경로가 방을 되살리면
+			// 상대는 "나가기"를 눌러도 계속 새 대화를 받게 된다.
+			if (hasCounterpartLeftChatRoom(existingRoom, profile.userId)) {
+				await throwChatBlocked(
+					"counterpart_left",
+					existingRoom,
+					profile.userId
+				);
+			}
+
+			// 내가 지웠던 방으로 다시 들어오는 경우엔 내 목록에만 되돌린다.
+			if (existingRoom.seekerDeletedAt) {
+				const [restoredRoom] = await db
+					.update(chatRoom)
+					.set({ seekerDeletedAt: null })
+					.where(eq(chatRoom.id, existingRoom.id))
+					.returning();
+
+				return restoredRoom ?? existingRoom;
+			}
+
 			return existingRoom;
 		}),
 
@@ -661,8 +818,18 @@ export const chatsRouter = {
 				return { lastMessage, room };
 			})
 		);
-		const visibleRooms = roomsWithLastMessage.filter(
+		const roomsWithMessages = roomsWithLastMessage.filter(
 			({ lastMessage }) => lastMessage
+		);
+
+		// 내가 신고하고 아직 처리 전인 방은 목록에서 뺀다. 신고 완료 안내가 "해당 채팅은
+		// 잠시 숨겨둘게요"라고 약속하는데, 예전에는 라벨만 붙인 채 그대로 남아 있었다.
+		const hiddenRoomIds = await getRoomIdsHiddenByMyReport({
+			reporterUserId: profile.userId,
+			roomIds: roomsWithMessages.map(({ room }) => room.id),
+		});
+		const visibleRooms = roomsWithMessages.filter(
+			({ room }) => !hiddenRoomIds.has(room.id)
 		);
 
 		if (visibleRooms.length === 0) {
@@ -688,26 +855,6 @@ export const chatsRouter = {
 			profile.userId
 		);
 
-		// 내가 넣은 신고 중 아직 처리 전인 방들. 운영자 조치는 즉시 이뤄지지 않으므로
-		// 목록이 "접수됐고 대기 중"을 보여줄 수 있어야 신고가 삼켜진 것처럼 보이지 않는다.
-		const pendingReports = await db
-			.select({ targetId: report.targetId })
-			.from(report)
-			.where(
-				and(
-					eq(report.reporterUserId, profile.userId),
-					eq(report.targetType, "chat_room"),
-					inArray(
-						report.targetId,
-						visibleRooms.map(({ room }) => room.id)
-					),
-					inArray(report.status, ["open", "reviewing"])
-				)
-			);
-		const pendingReportRoomIds = new Set(
-			pendingReports.map((row) => row.targetId)
-		);
-
 		return await Promise.all(
 			visibleRooms.map(async ({ lastMessage, room }) => ({
 				...room,
@@ -722,7 +869,9 @@ export const chatsRouter = {
 				// 목록 화면이 뷰어 쪽(구직자/구인자)을 판별하고 차단 대상을 고르는 근거.
 				// 방 row에는 양쪽 id만 있어 뷰어가 누구인지 화면에서 알 수 없다.
 				counterpartUserId: counterpartUserId(room, profile.userId),
-				hasPendingMyReport: pendingReportRoomIds.has(room.id),
+				// 상대가 나간 방은 목록에서도 발신 불가를 미리 알린다(방에 들어가서야
+				// 입력창이 잠긴 걸 발견하지 않도록).
+				hasCounterpartLeft: hasCounterpartLeftChatRoom(room, profile.userId),
 				jobTitle: jobTitleById.get(room.jobPostId) ?? null,
 				lastMessageBody: lastMessage?.body ?? null,
 				unreadCount: await getUnreadMessageCount({
@@ -815,7 +964,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -911,6 +1060,8 @@ export const chatsRouter = {
 
 			return {
 				counterpartName: counterpartNames.get(room.id) ?? null,
+				// 상대가 나간 방은 읽기만 허용한다. 화면이 입력창을 미리 잠그도록 내려 준다.
+				counterpartLeft: hasCounterpartLeftChatRoom(room, profile.userId),
 				currentUserId: profile.userId,
 				employerVerifiedPhone: verifiedPhoneFor(room.employerUserId),
 				jobPost: post ?? null,
@@ -941,7 +1092,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatSendBlocked({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -966,7 +1117,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatSendBlocked({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -986,12 +1137,12 @@ export const chatsRouter = {
 				});
 			}
 
-			// 새 메시지는 소프트삭제한 방을 양쪽 모두 다시 노출한다(메시지 유실 방지).
+			// 새 메시지는 **보낸 사람 본인이** 지웠던 방만 다시 노출한다. 상대의
+			// 소프트삭제(나가기)는 그대로 둔다 — 되돌리면 나간 의사를 지우는 셈이다.
 			await db
 				.update(chatRoom)
 				.set({
-					employerDeletedAt: null,
-					seekerDeletedAt: null,
+					...getSenderRoomRestoreFields(room, profile.userId),
 					updatedAt: new Date(),
 				})
 				.where(eq(chatRoom.id, room.id));
@@ -1014,7 +1165,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatSendBlocked({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1056,11 +1207,11 @@ export const chatsRouter = {
 					});
 				}
 
+				// 텍스트 전송과 같은 규칙 — 보낸 사람 본인 소프트삭제만 되돌린다.
 				await tx
 					.update(chatRoom)
 					.set({
-						employerDeletedAt: null,
-						seekerDeletedAt: null,
+						...getSenderRoomRestoreFields(room, profile.userId),
 						updatedAt: new Date(),
 					})
 					.where(eq(chatRoom.id, room.id));
@@ -1144,7 +1295,7 @@ export const chatsRouter = {
 				throw new ORPCError("FORBIDDEN");
 			}
 
-			await throwIfChatBlocked({
+			await throwIfChatSendBlocked({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1334,7 +1485,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatSendBlocked({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1398,6 +1549,11 @@ export const chatsRouter = {
 			if (profile.userId !== room.employerUserId) {
 				throw new ORPCError("FORBIDDEN");
 			}
+
+			await throwIfChatSendBlocked({
+				actorUserId: profile.userId,
+				room,
+			});
 
 			if (!profile.isPhoneVerified) {
 				throw new ORPCError("BAD_REQUEST", {
@@ -1494,6 +1650,11 @@ export const chatsRouter = {
 			if (profile.userId !== metadata.targetUserId) {
 				throw new ORPCError("FORBIDDEN");
 			}
+
+			await throwIfChatSendBlocked({
+				actorUserId: profile.userId,
+				room,
+			});
 
 			if (input.decision === "reveal" && !profile.isPhoneVerified) {
 				throw new ORPCError("BAD_REQUEST", {

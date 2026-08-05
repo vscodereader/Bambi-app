@@ -1077,7 +1077,9 @@ describe("bambi chats router soft delete", () => {
 		}
 	});
 
-	it("re-surfaces the room for the seeker after the employer sends a message", async () => {
+	// 나간 쪽 의사를 발신자가 되돌릴 수 없어야 한다. 예전에는 전송이 양쪽 소프트삭제를
+	// 모두 NULL로 만들어, 상대가 나간 방을 계속 되살릴 수 있었다.
+	it("rejects the employer's message once the seeker left the room", async () => {
 		const fixture = await createChatFixture();
 
 		try {
@@ -1093,8 +1095,41 @@ describe("bambi chats router soft delete", () => {
 				context: createContextForUser(fixture.employerUserId),
 				path: ["bambi", "chats", "sendMessage"],
 			});
+
+			await expectOrpcCode(
+				sendMessage({
+					body: "새 메시지입니다.",
+					chatRoomId: fixture.chatRoomId,
+				}),
+				"FORBIDDEN"
+			);
+
+			const seekerRooms = await listMineFor(fixture.jobSeekerUserId)({});
+
+			expect(hasRoom(seekerRooms, fixture.chatRoomId)).toBe(false);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("re-surfaces the room only for the sender who deleted it", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.employerUserId);
+
+			const deleteChatRoom = createProcedureClient(chatsRouter.deleteChatRoom, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "chats", "deleteChatRoom"],
+			});
+			await deleteChatRoom({ chatRoomId: fixture.chatRoomId });
+
+			const sendMessage = createProcedureClient(chatsRouter.sendMessage, {
+				context: createContextForUser(fixture.jobSeekerUserId),
+				path: ["bambi", "chats", "sendMessage"],
+			});
 			await sendMessage({
-				body: "새 메시지입니다.",
+				body: "다시 문의드려요.",
 				chatRoomId: fixture.chatRoomId,
 			});
 
