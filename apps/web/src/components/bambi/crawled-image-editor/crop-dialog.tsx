@@ -116,6 +116,7 @@ export function CropDialog({ asset, onClose, onComplete }: CropDialogProps) {
 		width: `${(rect.width / asset.width) * 100}%`,
 	};
 	const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+		event.stopPropagation();
 		const drag = dragRef.current;
 		const image = imageRef.current;
 		if (!drag || drag.pointerId !== event.pointerId || !image) {
@@ -153,7 +154,7 @@ export function CropDialog({ asset, onClose, onComplete }: CropDialogProps) {
 					<div className="relative h-fit max-w-full overflow-hidden">
 						<Image
 							alt="자를 이미지"
-							className="block h-auto max-h-[62vh] max-w-full select-none object-contain"
+							className="block h-auto max-w-full select-none object-contain"
 							height={asset.height}
 							ref={imageRef}
 							src={asset.dataUrl}
@@ -167,9 +168,15 @@ export function CropDialog({ asset, onClose, onComplete }: CropDialogProps) {
 							{(["nw", "ne", "sw", "se"] as Corner[]).map((corner) => (
 								<button
 									aria-label={`${corner} 모서리 조절`}
-									className={`absolute size-7 touch-none border-white bg-transparent ${corner.includes("n") ? "-top-1 border-t-4" : "-bottom-1 border-b-4"} ${corner.includes("w") ? "-left-1 border-l-4" : "-right-1 border-r-4"}`}
+									className={`absolute z-10 size-8 touch-none bg-black/10 drop-shadow-md ${corner === "nw" || corner === "se" ? "cursor-nwse-resize" : "cursor-nesw-resize"} ${corner.includes("n") ? "top-1 border-t-4" : "bottom-1 border-b-4"} ${corner.includes("w") ? "left-1 border-l-4" : "right-1 border-r-4"} border-white`}
 									key={corner}
+									onPointerCancel={(event) => {
+										event.stopPropagation();
+										dragRef.current = null;
+									}}
 									onPointerDown={(event) => {
+										event.preventDefault();
+										event.stopPropagation();
 										event.currentTarget.setPointerCapture(event.pointerId);
 										dragRef.current = {
 											corner,
@@ -180,7 +187,8 @@ export function CropDialog({ asset, onClose, onComplete }: CropDialogProps) {
 										};
 									}}
 									onPointerMove={handlePointerMove}
-									onPointerUp={() => {
+									onPointerUp={(event) => {
+										event.stopPropagation();
 										dragRef.current = null;
 									}}
 									type="button"

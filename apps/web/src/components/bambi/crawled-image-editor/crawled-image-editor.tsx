@@ -925,7 +925,10 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 					<AlertDialogFooter>
 						<AlertDialogCancel>계속 편집</AlertDialogCancel>
 						<AlertDialogAction
-							onClick={() => router.push("/moderator/crawler")}
+							onClick={() => {
+								setShowCancelConfirm(false);
+								router.replace("/moderator/crawler");
+							}}
 							variant="destructive"
 						>
 							변경 버리기
