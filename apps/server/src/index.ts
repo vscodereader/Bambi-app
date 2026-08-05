@@ -9,6 +9,7 @@ import { healthPlugin } from "./plugins/health";
 import { observabilityPlugin } from "./plugins/observability";
 import { orpcPlugin } from "./plugins/orpc";
 import { realtimePlugin } from "./plugins/realtime";
+import { ssePlugin } from "./plugins/sse";
 import { withdrawalPurgePlugin } from "./plugins/withdrawal-purge";
 
 const fastify = Fastify({
@@ -18,6 +19,7 @@ const fastify = Fastify({
 fastify.register(observabilityPlugin);
 fastify.register(corsPlugin);
 fastify.register(realtimePlugin);
+fastify.register(ssePlugin);
 fastify.register(orpcPlugin);
 fastify.register(authBridgePlugin);
 fastify.register(aiPlugin);
