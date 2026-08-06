@@ -1,6 +1,6 @@
 import { bambiNotification, bambiProfile } from "@bambi-app/db/schema/bambi";
 import { eq } from "drizzle-orm";
-
+import { resolveNotificationRecipients } from "./bambi-notification-recipients";
 import {
 	type BambiNotificationTargetType,
 	emitBambiNotification,
@@ -112,5 +112,120 @@ export const notifyBambiNotification = async (
 		await createBambiNotification(input);
 	} catch (error) {
 		logBambiNotificationError(error, "bambi notification create failed");
+	}
+};
+
+/**
+ * 운영자 조치 알림의 대상 타입. 조치 지점마다 "이 대상의 주인이 누구인가"를 다시 쓰지
+ * 않도록, 여기 한 곳에서만 해석한다. 수신자 id가 이미 핸들러에 있는 이벤트
+ * (사업자 인증 owner·팀 초대 대상·구성원 변경)는 이 훅이 아니라
+ * notifyBambiNotification으로 직접 부른다 — 훅이 같은 조회를 두 번 하지 않게.
+ */
+export type ModerationNotificationTargetType =
+	| "community_comment"
+	| "community_post"
+	| "job_post"
+	| "report"
+	| "review";
+
+interface NotifyModerationActionInput {
+	/** 감사 로그(admin_moderation_action.action)와 같은 문자열을 그대로 넘긴다. */
+	action: string;
+	actorUserId: string;
+	metadata?: Record<string, unknown>;
+	reason?: null | string;
+	targetId: string;
+	targetType: ModerationNotificationTargetType;
+}
+
+/** 대상 주인 조회. 못 찾으면 null이고, 알림은 조용히 생략된다. */
+const loadModerationOwnerUserId = async (
+	targetType: ModerationNotificationTargetType,
+	targetId: string
+): Promise<null | string> => {
+	const { db } = await import("@bambi-app/db");
+	const { communityComment, communityPost, jobPost, report, review } =
+		await import("@bambi-app/db/schema/bambi");
+
+	switch (targetType) {
+		case "job_post": {
+			const [row] = await db
+				.select({ userId: jobPost.createdByUserId })
+				.from(jobPost)
+				.where(eq(jobPost.id, targetId))
+				.limit(1);
+			return row?.userId ?? null;
+		}
+		case "review": {
+			const [row] = await db
+				.select({ userId: review.reviewerUserId })
+				.from(review)
+				.where(eq(review.id, targetId))
+				.limit(1);
+			return row?.userId ?? null;
+		}
+		case "community_post": {
+			// 게스트 글은 author_user_id가 null이다 — 계정이 없어 알림을 보낼 곳도 없다.
+			const [row] = await db
+				.select({ userId: communityPost.authorUserId })
+				.from(communityPost)
+				.where(eq(communityPost.id, targetId))
+				.limit(1);
+			return row?.userId ?? null;
+		}
+		case "community_comment": {
+			const [row] = await db
+				.select({ userId: communityComment.authorUserId })
+				.from(communityComment)
+				.where(eq(communityComment.id, targetId))
+				.limit(1);
+			return row?.userId ?? null;
+		}
+		case "report": {
+			// 신고 대상의 주인이 아니라 신고자에게 처리 결과를 알린다(스펙 §3).
+			const [row] = await db
+				.select({ userId: report.reporterUserId })
+				.from(report)
+				.where(eq(report.id, targetId))
+				.limit(1);
+			return row?.userId ?? null;
+		}
+		default:
+			return null;
+	}
+};
+
+/**
+ * 운영자 조치 → 당사자 알림. admin_moderation_action을 남기는 지점에서 부른다.
+ * best-effort라 조회·전송이 실패해도 조치 자체는 그대로 성립한다.
+ */
+export const notifyModerationAction = async ({
+	action,
+	actorUserId,
+	metadata,
+	reason,
+	targetId,
+	targetType,
+}: NotifyModerationActionInput): Promise<void> => {
+	try {
+		const ownerUserId = await loadModerationOwnerUserId(targetType, targetId);
+		const [recipientUserId] = resolveNotificationRecipients(
+			[ownerUserId],
+			actorUserId
+		);
+
+		if (!recipientUserId) {
+			return;
+		}
+
+		await notifyBambiNotification({
+			actorUserId,
+			metadata: { ...metadata, action, reason: reason ?? null },
+			recipientUserId,
+			targetId,
+			targetType,
+		});
+	} catch (error) {
+		logBambiNotificationError(error, "bambi moderation notification failed");
 	}
 };
