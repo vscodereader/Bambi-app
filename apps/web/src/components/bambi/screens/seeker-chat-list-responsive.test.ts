@@ -68,7 +68,8 @@ describe("신고한 채팅 숨김", () => {
 });
 
 describe("상대가 나간 채팅", () => {
-	// 나가도 발신은 그대로 되고(전송 = 방 부활), 나간 사실이 상대에게 드러나서도 안 된다.
+	// 한쪽이 나가면 방은 양쪽 목록에서 아예 사라진다(서버 listMine이 걸러낸다) —
+	// 화면에 "나감" 상태를 표시할 방 자체가 없다.
 	it("목록에 나감 배지를 남기지 않는다", () => {
 		expect(source).not.toContain("hasCounterpartLeft");
 		expect(source).not.toContain("상대방 나감");

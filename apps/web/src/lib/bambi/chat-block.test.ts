@@ -28,7 +28,7 @@ describe("채팅 차단 사유 안내", () => {
 		);
 	});
 
-	// 상대가 나가도 발신을 막지 않는다(전송이 곧 방 부활). 서버가 이 사유를 더 이상
+	// 나간 방은 차단이 아니라 "없는 방"이다 — 서버가 NOT_FOUND로 끊고 이 사유를
 	// 내려보내지 않으므로 화면 문구도 남기지 않는다.
 	it("상대 나감은 더 이상 차단 사유가 아니다", () => {
 		expect(getChatBlockMessage(blockError("counterpart_left"))).toBeNull();

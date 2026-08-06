@@ -37,10 +37,6 @@ import {
 } from "../../services/bambi-authz";
 import { generateChatMessageId } from "../../services/bambi-chat-message-id";
 import {
-	getChatRoomReviveFields,
-	isChatRoomLeftByAnyone,
-} from "../../services/bambi-chat-participation";
-import {
 	getUnreadMessageCount,
 	getUnreadMessageCountForUser,
 	getUnreadMessageCountsByRoom,
@@ -698,9 +694,8 @@ const throwIfHiddenByMyReport = async ({
 /**
  * 채팅 가드(운영자 조치·사용자 차단·내 신고 대기). 열람·발신이 같은 기준을 쓴다.
  *
- * 상대가 "나가기"로 지운 방도 막지 않는다 — 전송이 곧 방 부활이라(양쪽 소프트삭제
- * 리셋) 상대 목록에 방이 다시 뜨고 대화가 이어진다. 나간 사실 자체를 상대에게
- * 드러내지 않는 것이 정책이라, 발신 차단도 안내도 두지 않는다.
+ * 한쪽이 나간 방은 여기까지 오지 않는다 — 방 로드 가드(requireChatParticipant)가
+ * 이미 NOT_FOUND로 끊는다.
  */
 const throwIfChatUnavailable = async ({
 	actorUserId,
@@ -755,6 +750,9 @@ export const chatsRouter = {
 
 			assertChatSendRateLimit("startFromJobPost", profile.userId);
 
+			// 살아 있는 방이 있으면 INSERT가 부분 유니크에 걸려 아무것도 만들지 않는다.
+			// 나갔던 방은 그 인덱스 밖이라 새 방이 생긴다 — 재문의는 언제나 새 대화다.
+			// 충돌 판정을 DB에 맡기므로 동시 더블클릭에도 방은 하나만 생긴다.
 			const [createdRoom] = await db
 				.insert(chatRoom)
 				.values({
@@ -766,6 +764,7 @@ export const chatsRouter = {
 				})
 				.onConflictDoNothing({
 					target: [chatRoom.jobPostId, chatRoom.jobSeekerUserId],
+					where: sql`${chatRoom.seekerDeletedAt} IS NULL AND ${chatRoom.employerDeletedAt} IS NULL`,
 				})
 				.returning();
 
@@ -783,13 +782,16 @@ export const chatsRouter = {
 				return createdRoom;
 			}
 
+			// 충돌했다 = 살아 있는 방이 이미 있다. 그 방으로 들여보낸다.
 			const [existingRoom] = await db
 				.select()
 				.from(chatRoom)
 				.where(
 					and(
 						eq(chatRoom.jobPostId, input.jobPostId),
-						eq(chatRoom.jobSeekerUserId, profile.userId)
+						eq(chatRoom.jobSeekerUserId, profile.userId),
+						isNull(chatRoom.seekerDeletedAt),
+						isNull(chatRoom.employerDeletedAt)
 					)
 				)
 				.limit(1);
@@ -798,43 +800,24 @@ export const chatsRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
-			// 내가 나갔던 방으로 공고에서 다시 문의를 거는 경로. 방 안 발신과 같은
-			// 규칙으로 양쪽 소프트삭제를 되돌린다(공고×구직자 유니크라 새 방은 못 판다).
-			if (!isChatRoomLeftByAnyone(existingRoom)) {
-				return existingRoom;
-			}
-
-			const [revivedRoom] = await db
-				.update(chatRoom)
-				.set(getChatRoomReviveFields())
-				.where(eq(chatRoom.id, existingRoom.id))
-				.returning();
-
-			// 양쪽 목록에 방이 다시 나타나야 하므로 두 사람 모두에게 갱신 신호를 보낸다.
-			emitChatListUpdated(
-				[existingRoom.employerUserId, existingRoom.jobSeekerUserId],
-				{ roomId: existingRoom.id }
-			);
-
-			return revivedRoom ?? existingRoom;
+			return existingRoom;
 		}),
 
 	listMine: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
+		// 어느 한쪽이라도 나간 방은 양쪽 목록에서 함께 사라진다(내가 나간 방만이 아니다).
 		const rooms = await db
 			.select()
 			.from(chatRoom)
 			.where(
-				or(
-					and(
+				and(
+					or(
 						eq(chatRoom.employerUserId, profile.userId),
-						isNull(chatRoom.employerDeletedAt)
+						eq(chatRoom.jobSeekerUserId, profile.userId)
 					),
-					and(
-						eq(chatRoom.jobSeekerUserId, profile.userId),
-						isNull(chatRoom.seekerDeletedAt)
-					)
+					isNull(chatRoom.employerDeletedAt),
+					isNull(chatRoom.seekerDeletedAt)
 				)
 			)
 			.orderBy(desc(chatRoom.updatedAt));
@@ -949,13 +932,19 @@ export const chatsRouter = {
 	listMyUpcomingInterviews: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
+		// 사라진 방의 면접은 걸어 들어갈 곳이 없다(방 열람이 NOT_FOUND) — 목록과 같은
+		// 기준으로 제외한다.
 		const rooms = await db
 			.select()
 			.from(chatRoom)
 			.where(
-				or(
-					eq(chatRoom.employerUserId, profile.userId),
-					eq(chatRoom.jobSeekerUserId, profile.userId)
+				and(
+					or(
+						eq(chatRoom.employerUserId, profile.userId),
+						eq(chatRoom.jobSeekerUserId, profile.userId)
+					),
+					isNull(chatRoom.employerDeletedAt),
+					isNull(chatRoom.seekerDeletedAt)
 				)
 			);
 		if (rooms.length === 0) {
@@ -1229,14 +1218,9 @@ export const chatsRouter = {
 					return null;
 				}
 
-				// 전송이 곧 방 부활이다 — 한쪽이 나갔어도 양쪽 소프트삭제를 되돌려
-				// 상대 목록에 방을 다시 띄운다(공고×구직자 유니크라 새 방을 팔 수 없다).
 				await tx
 					.update(chatRoom)
-					.set({
-						...getChatRoomReviveFields(),
-						updatedAt: new Date(),
-					})
+					.set({ updatedAt: new Date() })
 					.where(eq(chatRoom.id, room.id));
 				await enqueueChatMessageSync(tx, {
 					chatRoomId: room.id,
@@ -1332,13 +1316,9 @@ export const chatsRouter = {
 					});
 				}
 
-				// 텍스트 전송과 같은 규칙 — 보낸 사람 본인 소프트삭제만 되돌린다.
 				await tx
 					.update(chatRoom)
-					.set({
-						...getChatRoomReviveFields(),
-						updatedAt: new Date(),
-					})
+					.set({ updatedAt: new Date() })
 					.where(eq(chatRoom.id, room.id));
 				await enqueueChatMessageSync(tx, {
 					chatRoomId: room.id,
@@ -1768,10 +1748,7 @@ export const chatsRouter = {
 
 				await tx
 					.update(chatRoom)
-					.set({
-						...getChatRoomReviveFields(),
-						updatedAt: new Date(),
-					})
+					.set({ updatedAt: new Date() })
 					.where(eq(chatRoom.id, room.id));
 				await enqueueChatMessageSync(tx, {
 					chatRoomId: room.id,
@@ -1866,7 +1843,8 @@ export const chatsRouter = {
 			return updated;
 		}),
 
-	// 회원별 소프트삭제(목록 숨김). 상대는 그대로 보며, 새 메시지가 오면 재노출된다.
+	// 나가기 = 방이 양쪽 모두에게서 사라진다. 컬럼은 "누가 언제 나갔나" 기록으로만
+	// 남고, 되살아나지 않는다(재문의는 새 방).
 	deleteChatRoom: protectedProcedure
 		.input(deleteChatRoomInput)
 		.handler(async ({ context, input }) => {
@@ -1884,6 +1862,11 @@ export const chatsRouter = {
 						: { seekerDeletedAt: deletedAt }
 				)
 				.where(eq(chatRoom.id, room.id));
+
+			// 상대 목록에서도 즉시 사라져야 하므로 양쪽 유저 채널로 갱신 신호를 보낸다.
+			emitChatListUpdated([room.employerUserId, room.jobSeekerUserId], {
+				roomId: room.id,
+			});
 
 			return { ok: true as const };
 		}),

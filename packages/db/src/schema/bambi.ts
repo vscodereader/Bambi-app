@@ -1145,8 +1145,9 @@ export const chatRoom = pgTable(
 			.notNull()
 			.references(() => user.id),
 		isBlocked: boolean("is_blocked").default(false).notNull(),
-		// 회원별 소프트삭제(목록 숨김). 상대는 그대로 유지되며, 새 메시지 도착 시
-		// sendMessage가 양쪽 값을 NULL로 되돌려 방을 다시 노출한다.
+		// "누가 언제 나갔나" 기록. 한쪽이라도 값이 차면 방은 **양쪽 모두에게서** 사라진다
+		// (목록·열람·발신·읽음 전부 차단). 되돌리는 경로는 없고, 재문의는 새 방을 판다.
+		// 운영자 화면은 이 두 값을 그대로 읽어 삭제된 방 이력을 계속 본다.
 		seekerDeletedAt: timestamp("seeker_deleted_at"),
 		employerDeletedAt: timestamp("employer_deleted_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1156,10 +1157,13 @@ export const chatRoom = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		uniqueIndex("chat_room_job_post_id_job_seeker_user_id_uidx").on(
-			table.jobPostId,
-			table.jobSeekerUserId
-		),
+		// 살아 있는 방만 공고×구직자 1개다. 나간 방은 이력으로 남아 누적되므로 부분
+		// 유니크로 제외한다 — 그래야 재문의 때 새 방을 팔 수 있다.
+		uniqueIndex("chat_room_job_post_id_job_seeker_user_id_uidx")
+			.on(table.jobPostId, table.jobSeekerUserId)
+			.where(
+				sql`${table.seekerDeletedAt} IS NULL AND ${table.employerDeletedAt} IS NULL`
+			),
 		index("chat_room_organization_id_idx").on(table.organizationId),
 		index("chat_room_team_id_idx").on(table.teamId),
 		index("chat_room_employer_user_id_idx").on(table.employerUserId),
