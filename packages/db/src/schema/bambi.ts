@@ -131,6 +131,27 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"team_invitation",
 ]);
 
+// 알림 전용 대상 타입. 감사 로그(moderation_target_type)와 분리한다 — 알림에만 필요한 값
+// (interview_schedule·contact_reveal·job_post 검수 대기 등)이 감사 enum을 오염시키면
+// 두 축이 서로의 마이그레이션에 묶인다. 이 시점부터 두 enum은 독립 진화한다.
+// 마이그레이션 호환을 위해 새 값은 항상 목록 끝에 덧붙인다(ALTER TYPE ... ADD VALUE).
+export const notificationTargetType = pgEnum("notification_target_type", [
+	// 채팅 2종은 기존 저장값 호환용(알림함 목록·카운트에서는 제외된다 — 채팅 핀이 담당).
+	"chat_message",
+	"chat_room",
+	"interview_schedule",
+	"contact_reveal",
+	"support_inquiry",
+	"report",
+	"community_post",
+	"community_comment",
+	"review",
+	"job_post",
+	"employer_verification",
+	"team_invitation",
+	"organization_member",
+]);
+
 // 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.
 // notice(공지사항)는 admin만 작성 가능(API 강제).
 export const communityBoard = pgEnum("community_board", [
@@ -1477,27 +1498,47 @@ export const bambiNotification = pgTable(
 	"bambi_notification",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		recipientUserId: text("recipient_user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 개인 수신자. 역할 공유 알림(운영자 큐·법률자문)에서는 비고 recipient_role만 채운다 —
+		// 아래 CHECK가 "정확히 한쪽"을 강제한다(community_post_author_one_of_ck와 같은 패턴).
+		recipientUserId: text("recipient_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		// 역할 공유 수신. 운영자 5명이면 행 5개가 아니라 1개다 — 한 명이 확인하면 전원의
+		// 배지에서 사라진다(큐 성격상 의도된 동작). SSE만 그 역할 계정 수만큼 팬아웃한다.
+		recipientRole: bambiUserRole("recipient_role"),
+		// 공유 행을 누가 확인했는지. 알림함에 "확인: ○○"로 표시한다. 확인자가 탈퇴해도
+		// 알림 자체는 남아야 하므로 계정 삭제 시 null로만 떨어뜨린다.
+		readByUserId: text("read_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		actorUserId: text("actor_user_id")
 			.notNull()
 			.references(() => user.id),
-		targetType: moderationTargetType("target_type").notNull(),
+		targetType: notificationTargetType("target_type").notNull(),
 		targetId: text("target_id").notNull(),
 		chatRoomId: uuid("chat_room_id").references(() => chatRoom.id, {
 			onDelete: "cascade",
 		}),
 		readAt: timestamp("read_at"),
+		// 이벤트 세부(action·reason·board·postId·jobPostId …). 라벨·딥링크가 이 값을 읽는다.
 		metadata: jsonb("metadata").$type<Record<string, unknown>>(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
 		index("bambi_notification_recipient_user_id_idx").on(table.recipientUserId),
+		// 공유 행은 전체의 극소수라 부분 인덱스로 둔다 — 운영자 목록·카운트가 개인 행
+		// 수백만 건을 건너뛰고 바로 자기 몫만 읽는다.
+		index("bambi_notification_recipient_role_idx")
+			.on(table.recipientRole)
+			.where(sql`${table.recipientRole} IS NOT NULL`),
 		index("bambi_notification_chat_room_id_idx").on(table.chatRoomId),
 		index("bambi_notification_target_type_target_id_idx").on(
 			table.targetType,
 			table.targetId
+		),
+		check(
+			"bambi_notification_recipient_one_of_ck",
+			sql`num_nonnulls(${table.recipientUserId}, ${table.recipientRole}) = 1`
 		),
 	]
 );
