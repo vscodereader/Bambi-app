@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { SeekerAuthGateScreen } from "@/components/bambi/auth/seeker-auth-gate-screen";
 import { GuestBlockedToast } from "@/components/bambi/guest-blocked-toast";
+import { MainPopupLayer } from "@/components/bambi/main-popup/main-popup-layer";
 import { SeekerMarketplaceScreen } from "@/components/bambi/screens/seeker-marketplace";
 import { SeekerShell } from "@/components/bambi/seeker-shell";
 import { readVisitorState } from "@/lib/bambi/visitor";
@@ -28,6 +29,7 @@ export default async function SeekerHomePage({
 
 	return (
 		<>
+			{showGate ? null : <MainPopupLayer />}
 			{/* useSearchParams를 쓰므로 Suspense 경계가 필요하다. 게이트 화면으로 갈아탈 때도
 			    "회원가입 후에 볼 수 있어요" 안내는 그대로 떠야 해서 분기 밖에 둔다. */}
 			<Suspense>

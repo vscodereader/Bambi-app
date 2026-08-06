@@ -36,6 +36,18 @@ export const accountStatus = pgEnum("account_status", [
 	"suspended",
 ]);
 
+export const mainPopupContentType = pgEnum("main_popup_content_type", [
+	"image",
+	"text",
+]);
+
+export interface MainPopupImageAsset {
+	dataUrl: string;
+	height: number;
+	mimeType: "image/jpeg" | "image/png" | "image/webp";
+	width: number;
+}
+
 // 성별. 휴대폰 본인인증 결과로 채워진다(1남/2여 → male/female). 게스트는 프로필이
 // 없어 쿠키에만 남고, 정식 회원은 이 컬럼에 저장된다. 여성/광고 업소 회원만 입장하는
 // 수다방 접근 판정에 쓰인다.
@@ -1877,4 +1889,34 @@ export const supportInquiryMessageRelations = relations(
 			references: [supportInquiry.id],
 		}),
 	})
+);
+
+export const mainPopup = pgTable(
+	"main_popup",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		slotIndex: integer("slot_index").notNull(),
+		enabled: boolean("enabled").default(false).notNull(),
+		contentType: mainPopupContentType("content_type")
+			.default("image")
+			.notNull(),
+		originalImage: jsonb("original_image").$type<MainPopupImageAsset>(),
+		editedImage: jsonb("edited_image").$type<MainPopupImageAsset>(),
+		contentWidth: integer("content_width").default(420).notNull(),
+		contentHeight: integer("content_height").default(320).notNull(),
+		textDocument: jsonb("text_document").$type<Record<string, unknown>>(),
+		linkPath: text("link_path"),
+		startsAt: timestamp("starts_at", { withTimezone: true }),
+		endsAt: timestamp("ends_at", { withTimezone: true }),
+		revision: integer("revision").default(0).notNull(),
+		updatedByUserId: text("updated_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [uniqueIndex("main_popup_slot_index_uidx").on(table.slotIndex)]
 );
