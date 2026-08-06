@@ -14,6 +14,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { Job, ReportMode, VisualTone } from "@/lib/bambi/types";
+import { useBambiAuth } from "../auth-client-provider";
 import {
 	AppBar,
 	Avatar,
@@ -51,7 +52,11 @@ import {
 	ShieldIcon,
 	UserIcon,
 } from "../icons";
-import { MyPageShell } from "../my-page-shell";
+import {
+	ATTENDANCE_HREF,
+	canUseAttendance,
+	MyPageShell,
+} from "../my-page-shell";
 import { PhoneFrame } from "../phone-frame";
 import { ReportDone, ReportForm, SafetyNotice } from "../safety-kit";
 import { ContactReveal } from "./contact-reveal";
@@ -576,7 +581,7 @@ const seekerMeSections: {
 		description: "차단한 상대를 확인하고 해제해요.",
 	},
 	{
-		href: "/seeker/attendance" as Route,
+		href: ATTENDANCE_HREF,
 		icon: <ClockIcon />,
 		label: "출석체크",
 		description: "하루 한 번 출석하고 연속 기록을 확인해요.",
@@ -590,10 +595,15 @@ const seekerMeSections: {
 ];
 
 export function SeekerMe() {
+	const { role } = useBambiAuth();
+	// 출석은 구직자·업주만 진입할 수 있어(서버 게이트) 안내 카드도 같이 감춘다.
+	const sections = canUseAttendance(role)
+		? seekerMeSections
+		: seekerMeSections.filter((section) => section.href !== ATTENDANCE_HREF);
 	return (
 		<MyPageShell title="내 정보">
 			<div className="hidden gap-4 md:grid md:grid-cols-2">
-				{seekerMeSections.map((section) => (
+				{sections.map((section) => (
 					<Link
 						className="block rounded-lg"
 						href={section.href}

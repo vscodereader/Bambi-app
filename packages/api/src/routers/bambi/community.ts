@@ -715,13 +715,19 @@ const toCommentItems = (
  * 새 댓글·대댓글 알림. 글 작성자와 부모 댓글 작성자에게 한 통씩(같은 사람이면 한 통),
  * 본인 행위는 resolveNotificationRecipients가 걸러낸다. 비회원 댓글은 행위자 계정이
  * 없어(actor_user_id NOT NULL) 알림을 만들 수 없다.
+ *
+ * 법률 자문 글의 추가 질문(자문가가 아닌 사람의 댓글)은 개인 알림과 별개로
+ * legal_advisor 공유 1행을 더 보낸다 — 새 잠금글과 같은 "큐 도착" 성격이라 수신자가
+ * 개인이 아니다. 자문가 본인의 댓글은 답변이므로 큐에 넣지 않는다(글 작성자 개인 알림 담당).
  */
 const notifyNewComment = async ({
+	actorRole: commentActorRole,
 	actorUserId: commentActorUserId,
 	parentAuthorUserId,
 	parentCommentId,
 	post,
 }: {
+	actorRole: CommunityPostColumns["authorRole"];
 	actorUserId: null | string;
 	parentAuthorUserId: null | string;
 	parentCommentId: null | string;
@@ -729,6 +735,20 @@ const notifyNewComment = async ({
 }): Promise<void> => {
 	if (!commentActorUserId) {
 		return;
+	}
+
+	if (post.board === LEGAL_BOARD && commentActorRole !== "legal_advisor") {
+		await notifyBambiNotification({
+			actorUserId: commentActorUserId,
+			metadata: {
+				action: "replied",
+				board: post.board,
+				postId: post.id,
+			},
+			recipientRole: "legal_advisor",
+			targetId: post.id,
+			targetType: "community_post",
+		});
 	}
 
 	const recipients = resolveNotificationRecipients(
@@ -1530,6 +1550,7 @@ export const communityRouter = {
 
 			// 알림은 커밋 뒤에 보낸다 — 알림 실패로 댓글이 롤백되면 안 된다.
 			await notifyNewComment({
+				actorRole: actorRole(actor),
 				actorUserId: actorUserId(actor),
 				parentAuthorUserId,
 				parentCommentId: input.parentCommentId ?? null,

@@ -23,6 +23,7 @@ import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { orpc } from "@/utils/orpc";
+import { useBambiAuth } from "./auth-client-provider";
 import { Avatar, Badge } from "./ds";
 import {
 	ChevronLeftIcon,
@@ -36,6 +37,12 @@ import {
 } from "./icons";
 
 export const MY_PAGE_HUB_HREF = "/seeker/me" as Route;
+export const ATTENDANCE_HREF = "/seeker/attendance" as Route;
+
+// 출석 라우터는 구직자·업주만 허용한다(서버 게이트) — 법률자문·운영자에게는 진입점 자체를
+// 감춘다. 그대로 두면 눌러서 에러 화면을 보게 된다. 역할 로딩 중(null)에도 감춘 뒤 나타난다.
+export const canUseAttendance = (role: null | string): boolean =>
+	role === "job_seeker" || role === "employer";
 
 // 표시 라벨은 여기서만 만든다 — enum 원값(job_seeker·legal_advisor …)이 화면에 새지 않도록
 // 미등록 역할도 "구직자"로 떨어뜨린다. 법률자문은 구직자 계정에 얹는 역할이라 폴백도 자연스럽다.
@@ -65,7 +72,7 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 		label: "차단한 상대",
 	},
 	{
-		href: "/seeker/attendance" as Route,
+		href: ATTENDANCE_HREF,
 		icon: <ClockIcon />,
 		label: "출석체크",
 	},
@@ -125,11 +132,15 @@ function ProfileCard() {
 
 function MyPageNav() {
 	const pathname = usePathname();
+	const { role } = useBambiAuth();
+	const items = canUseAttendance(role)
+		? NAV_ITEMS
+		: NAV_ITEMS.filter((item) => item.href !== ATTENDANCE_HREF);
 	return (
 		// 사이드바(md↑)와 모바일 허브가 같은 행 렌더를 공유한다. 셰브런은 카드 리스트로
 		// 보이는 모바일에서만 노출(md:hidden) — 사이드바는 활성 하이라이트로 위치를 알린다.
 		<nav aria-label="내 정보 메뉴" className="flex flex-col gap-1">
-			{NAV_ITEMS.map((item) => {
+			{items.map((item) => {
 				const isActive = pathname === item.href;
 				return (
 					<Link
