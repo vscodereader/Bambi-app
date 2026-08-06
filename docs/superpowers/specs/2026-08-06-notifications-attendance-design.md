@@ -27,7 +27,7 @@
 | 알림 형태 | 벨 아이콘 + 안읽음 배지 + 알림함 화면(읽음 처리) |
 | OS 알림 | **Notification API만** (탭 열림·비포커스 시). 진짜 Web Push(서비스워커+VAPID)는 후속 — 의존성 추가 없음 |
 | 생성 아키텍처 | **통일 행 + 공통 훅**: 모든 알림을 `bambi_notification` 행으로 통일. 운영자→사용자 축은 `adminModerationAction` 삽입 지점의 공통 훅 하나로 일괄 커버, 사용자간 이벤트만 개별 호출 |
-| 이벤트 범위 | **필수 + 유용 전부** (아래 §3 매트릭스) |
+| 이벤트 범위 | **필수 + 유용 전부** (아래 §3 매트릭스). 운영자도 포함 — 새 심사거리(공고 검수·1:1 문의·신고 등) 도착 알림(사용자 지시로 범위 추가) |
 | 출석 방식 | 하루 1회 버튼 클릭, 보상 없음(기록·연속일·월 달력). 보상 시스템은 테이블 확장 여지만 남김 |
 | 운영자 출석 화면 | 사용자 목록표(검색·역할 필터·정렬) + 상단 요약 카운트. 개인 상세·차트는 후속 |
 | 병합 | 구현 완료 후에도 **로컬 머지 금지** — 브랜치·커밋 위치만 보고 |
@@ -78,6 +78,17 @@
 - `teams.removeMember` / `setMemberRole` / `transferOwnership` → 대상 `member.userId`
 - `community.createPost`(board=`legal`, 잠금글) → `bambiProfile.role='legal_advisor'` 전원 팬아웃(`bambi_profile_role_idx` 인덱스 존재, 계정 수 소수)
 
+**운영자 팬아웃** (새 심사거리 도착 — `bambiProfile.role='admin'` 전원에게 행 생성, legal 팬아웃과 동일 패턴):
+
+- `jobs.create` 등 공고가 검수 대기 상태로 들어가는 지점(생성·반려 후 재제출) → 새 공고 검수 대기
+- `support.createInquiry` → 새 1:1 문의 접수 / `support.createInquiryMessage`(`isStaff=false`) → 사용자 재질문
+- `moderation.createReport` → 새 신고 접수
+- `onboarding.submitEmployerBusinessInfo` → 사업자 인증 제출(재제출 포함)
+- `teams.inviteMember` / `resubmitInvitation` → 팀 초대 심사 요청
+- `reviews.create`(정책 결과가 심사 대기일 때) → 리뷰 심사 대기
+
+운영자 알림의 알려진 한계(수용): 읽음은 행 단위 개인 상태라 **한 운영자가 큐를 처리해도 다른 운영자의 알림은 미읽음으로 남는다**. 처리 연동(대상 처리 시 관련 알림 일괄 읽음)은 후속. 볼륨이 큰 축(공고·신고)은 알림함이 길어질 수 있으나 "모두 읽음"으로 관리한다.
+
 **에러 처리**: 알림 생성은 전부 best-effort. 실패해도 본 작업(면접 제안·검수 등)을 실패시키지 않고 로그만 남긴다(기존 `createBambiNotification` 호출부 패턴과 동일).
 
 ### 2.4 SSE
@@ -123,9 +134,22 @@ judgment 근거: "사용자 A의 행위가 B에게 영향을 주는데 B가 새�
 | legal 게시판 새 잠금글 | `community.createPost`(legal) | `community_post` | `/board/legal/{postId}` |
 | 담당 글 추가 질문(댓글) | `community.createComment` | `community_post` | `/board/legal/{postId}` |
 
+### 운영자(admin) 수신
+
+| 이벤트 | 발생 지점 | targetType | metadata.action | 딥링크 |
+|---|---|---|---|---|
+| 새 공고 검수 대기 | `jobs.create`(+반려 후 재제출 지점) | `job_post` | `submitted` | `/moderator/jobs` |
+| 새 1:1 문의 접수 | `support.createInquiry` | `support_inquiry` | `submitted` | `/moderator/support` |
+| 문의 재질문(사용자 메시지) | `support.createInquiryMessage`(`isStaff=false`) | `support_inquiry` | `replied` | `/moderator/support` |
+| 새 신고 접수 | `moderation.createReport` | `report` | `submitted` | `/moderator/reports` |
+| 사업자 인증 제출/재제출 | `onboarding.submitEmployerBusinessInfo` | `employer_verification` | `submitted` | `/moderator/employers` |
+| 팀 초대 심사 요청 | `teams.inviteMember`/`resubmitInvitation` | `team_invitation` | `submitted` | `/moderator/team-invites` |
+| 리뷰 심사 대기 | `reviews.create`(pending 판정 시) | `review` | `submitted` | `/moderator/reviews` |
+
+수신자는 `bambiProfile.role='admin'` 전원 팬아웃. enum 추가 값은 필요 없다(전부 기존 값 + `metadata.action`으로 구분).
+
 ### 제외 (판정 근거 포함)
 
-- **운영자(admin) 개인 알림**: 큐 화면 10종이 이미 존재하고, 알림의 행 단위 개인 읽음 모델이 N명 공유 큐와 맞지 않음. 신고·문의 실시간 큐 배지는 후속.
 - **게스트**: `recipientUserId`가 user FK NOT NULL — 구조적 불가. legal 보드 게스트 작성분 답변 알림은 포기(정책 확정).
 - **연락처 요청/응답, 채팅 새 메시지**: 채팅 메시지 알림으로 이미 커버 — 중복 생성 안 함.
 - **계정 경고/정지**: `getMine`의 `accountSanction` 배너가 이미 전달.
@@ -134,8 +158,8 @@ judgment 근거: "사용자 A의 행위가 B에게 영향을 주는데 B가 새�
 
 ## 4. 알림 — 웹 UI
 
-- **벨 배선**: `responsive-shell.tsx`의 벨 2곳(데스크톱 헤더·모바일)에 `unreadCount` 배지(9+ 캡) + 클릭 시 알림함 이동. 채팅 핀과 별개 카운트.
-- **알림함 라우트**: `/seeker/notifications` 단일 경로를 전 역할 공유(채팅 라우트 `/seeker/chats/{roomId}` 공유 선례와 동일).
+- **벨 배선**: `responsive-shell.tsx`의 벨 2곳(데스크톱 헤더·모바일)에 `unreadCount` 배지(9+ 캡) + 클릭 시 알림함 이동. 채팅 핀과 별개 카운트. **운영자는 `ModeratorShell`(persona-nav.tsx)에 벨 진입점을 추가**(동일 배지·동일 알림함 이동).
+- **알림함 라우트**: `/seeker/notifications` 단일 경로를 전 역할(운영자 포함) 공유(채팅 라우트 `/seeker/chats/{roomId}` 공유 선례와 동일).
 - **렌더링**: `(targetType, metadata.action)` → 한국어 라벨 맵 + 딥링크 맵을 `apps/web/src/lib/bambi/notification-labels.ts`(순수 로직, vitest 동거)에 정의. enum 원값 화면 노출 금지 규칙 준수. 반려·숨김류는 `metadata.reason`을 본문에 표시.
 - **동작**: 항목 클릭 → `markRead` + 딥링크 이동. 상단 "모두 읽음" 버튼. 미읽음 항목은 시각 구분. 빈 상태는 `Empty` 컴포넌트.
 - **SSE 훅 확장**(`use-bambi-notification-stream.ts`): targetType이 채팅류면 기존 무효화(채팅 핀·목록·방) 유지, 그 외면 `notifications.list`·`notifications.unreadCount` 무효화. `onOpen`(재연결) 시 양쪽 모두 무효화.
@@ -176,7 +200,7 @@ judgment 근거: "사용자 A의 행위가 B에게 영향을 주는데 B가 새�
 
 - 진짜 Web Push(서비스워커 + VAPID + `web-push` 의존성 — 라이브러리 추가 허가 필요)
 - 광고 만료 임박 알림(스케줄러 플러그인 + `actorUserId` nullable화)
-- 운영자 큐 실시간 배지(신고·문의)
+- 운영자 알림의 처리 연동(대상 처리 시 관련 알림 일괄 읽음) 및 큐별 미처리 카운트 배지
 - 조직 단위 이벤트의 구성원 팬아웃(현재는 작성자/owner 1명)
 - 출석 보상 시스템, 운영자 개인별 출석 상세·통계 차트
 - 오래된 알림 정리(retention)
