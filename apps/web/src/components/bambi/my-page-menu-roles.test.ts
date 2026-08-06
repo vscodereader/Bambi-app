@@ -10,8 +10,9 @@ const seeker = read("./screens/seeker.tsx");
 const employerMe = read("../../app/employer/me/page.tsx");
 
 describe("내 정보 메뉴 역할별 숨김", () => {
-	it("구인자는 예정된 면접만 감춘다", () => {
-		expect(shell).toContain('employer: ["/seeker/me/interviews"]');
+	// 숨김 표의 키는 역할명 뒤에 배열이 온다(ROLE_LABELS의 employer 라벨과 구분).
+	it("구인자는 감추는 항목이 없다", () => {
+		expect(shell).not.toContain("employer: [");
 	});
 
 	it("운영자는 신고·면접·차단·고객센터를 감춘다", () => {
@@ -32,11 +33,10 @@ describe("내 정보 메뉴 역할별 숨김", () => {
 		expect(seeker).toContain("isMyPageItemVisible(section.href, role)");
 	});
 
-	it("구인자 전용 업체 정보 화면에서는 예정된 면접 링크를 아예 뺀다", () => {
-		expect(employerMe).not.toContain("/seeker/me/interviews");
-		expect(employerMe).not.toContain("예정된 면접");
-		// 신고·차단은 구인자에게도 남는다
+	it("구인자 전용 업체 정보 화면에도 신고·면접·차단 링크가 모두 있다", () => {
 		expect(employerMe).toContain("/seeker/me/reports");
+		expect(employerMe).toContain("/seeker/me/interviews");
+		expect(employerMe).toContain("예정된 면접");
 		expect(employerMe).toContain("/seeker/me/blocks");
 	});
 });

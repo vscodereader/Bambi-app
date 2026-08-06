@@ -1,6 +1,8 @@
 "use client";
 
-// 밤비 — 구직자(Seeker) "예정된 면접" 화면.
+// 밤비 — "예정된 면접" 화면. 구직자·구인자 공용이다(운영자만 메뉴에서 숨긴다).
+// 카드의 상대 이름은 호출자 기준으로 서버가 정하므로(chats.listMyUpcomingInterviews →
+// resolveCounterpartNames) 구직자에겐 업소명, 구인자에겐 구직자 닉네임이 나온다.
 
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
