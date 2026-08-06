@@ -4,7 +4,23 @@
 // 사용자의 열린 SSE 스트림으로 이벤트를 흘려보낸다.
 // bambi-chat-realtime.ts와 같은 결(모듈 전역 상태 + configure/emit/reset)을 따른다.
 
-export type BambiNotificationTargetType = "chat_message" | "chat_room";
+// 알림 대상 타입. DB enum(notification_target_type)과 값이 같아야 하지만, 이 모듈은
+// 웹 클라이언트(use-bambi-notification-stream.ts)도 import하므로 @bambi-app/db를
+// 끌어올 수 없다 — 그래서 리터럴로 복제해 둔다. 스키마에 값을 추가하면 여기도 함께 늘린다.
+export type BambiNotificationTargetType =
+	| "chat_message"
+	| "chat_room"
+	| "community_comment"
+	| "community_post"
+	| "contact_reveal"
+	| "employer_verification"
+	| "interview_schedule"
+	| "job_post"
+	| "organization_member"
+	| "report"
+	| "review"
+	| "support_inquiry"
+	| "team_invitation";
 
 export interface BambiNotificationEvent {
 	chatRoomId: null | string;
@@ -133,6 +149,17 @@ export const unregisterBambiNotificationSubscriber = ({
 
 export const getBambiNotificationSubscriberCount = (userId: string): number =>
 	subscribers.get(userId)?.size ?? 0;
+
+/**
+ * 알림 생성 실패를 서버 로거로 흘린다. best-effort 알림의 호출부가 각자 console을
+ * 쓰지 않도록, 이미 플러그인이 꽂아 둔 로거(streamLogger)를 그대로 재사용한다.
+ */
+export const logBambiNotificationError = (
+	error: unknown,
+	message: string
+): void => {
+	streamLogger?.error(error, message);
+};
 
 /**
  * 알림을 수신자의 열린 스트림 전부(여러 탭·기기)로 밀어 넣고 전달 건수를 돌려준다.
