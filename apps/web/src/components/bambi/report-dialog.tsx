@@ -92,7 +92,7 @@ export function ReportDialog({
 
 	return (
 		<Dialog onOpenChange={handleOpenChange} open={open}>
-			<DialogContent>
+			<DialogContent className="max-h-[calc(100dvh-2rem)]">
 				{isDone ? (
 					<ReportDone onClose={() => handleOpenChange(false)} />
 				) : (

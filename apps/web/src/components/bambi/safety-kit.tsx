@@ -452,10 +452,13 @@ export function ReportForm({
 			</div>
 			<textarea
 				className={cn(
-					"box-border w-full resize-none rounded-[14px] border border-[color:var(--border-default)] bg-card p-3.5 text-base text-foreground leading-normal outline-none",
+					"box-border w-full resize-none scroll-mb-24 rounded-[14px] border border-[color:var(--border-default)] bg-card p-3.5 text-base text-foreground leading-normal outline-none",
 					compact ? "min-h-14" : "min-h-20"
 				)}
 				onChange={(e) => setDetail(e.target.value)}
+				onFocus={(event) => {
+					event.currentTarget.scrollIntoView({ block: "nearest" });
+				}}
 				placeholder="구체적인 상황을 적어주시면 처리가 빨라져요 (선택)"
 				value={detail}
 			/>

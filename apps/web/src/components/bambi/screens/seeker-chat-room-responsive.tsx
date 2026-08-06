@@ -1082,6 +1082,9 @@ export function SeekerChatRoomResponsive({
 			onSuccess: async () => {
 				setScheduleErrorMessage(null);
 				await invalidateRoom();
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.chats.listMyUpcomingInterviews.queryKey(),
+				});
 			},
 		})
 	);
@@ -1571,32 +1574,37 @@ export function SeekerChatRoomResponsive({
 			)}
 		>
 			<main className="min-w-0 rounded-lg bg-card shadow-sm ring-1 ring-border lg:self-start">
-				{/* 좁은 화면에서는 공고 버튼·배지가 제목 아래로 접히도록 wrap 한다. */}
-				<header className="flex flex-wrap items-center gap-3 border-border border-b p-4">
-					<button
-						className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 font-bold text-sm"
-						onClick={onBack}
-						type="button"
-					>
-						목록
-					</button>
-					<div className="min-w-0 flex-1">
-						<h1 className="m-0 truncate font-extrabold text-lg">
-							{jobPost?.title ?? "공고 채팅"}
-						</h1>
-						<ChatCounterpartName name={counterpartName} />
-						<p className="mt-1 mb-0 truncate text-muted-foreground text-xs">
-							{jobPost?.industryCategory ?? "공고"} ·{" "}
-							{jobPost?.region ?? "지역 확인"}
-						</p>
+				<header className="flex flex-col gap-3 border-border border-b p-4 sm:flex-row sm:flex-wrap sm:items-center">
+					<div className="flex min-w-0 items-start gap-3 sm:flex-1 sm:items-center">
+						<button
+							className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 font-bold text-sm"
+							onClick={onBack}
+							type="button"
+						>
+							목록
+						</button>
+						<div className="min-w-0 flex-1">
+							<h1 className="m-0 line-clamp-2 break-words font-extrabold text-lg sm:line-clamp-1">
+								{jobPost?.title ?? "공고 채팅"}
+							</h1>
+							<ChatCounterpartName name={counterpartName} />
+							<p className="mt-1 mb-0 truncate text-muted-foreground text-xs">
+								{jobPost?.industryCategory ?? "공고"} ·{" "}
+								{jobPost?.region ?? "지역 확인"}
+							</p>
+						</div>
 					</div>
-					<ChatJobPostLink jobPost={jobPost} />
-					<Badge tone={room.isBlocked ? "danger" : "success"}>
-						{room.isBlocked ? "차단됨" : "대화 가능"}
-					</Badge>
-					<Badge tone={realtimeStatus === "connected" ? "success" : "neutral"}>
-						{getRealtimeStatusLabel(realtimeStatus)}
-					</Badge>
+					<div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+						<ChatJobPostLink jobPost={jobPost} />
+						<Badge tone={room.isBlocked ? "danger" : "success"}>
+							{room.isBlocked ? "차단됨" : "대화 가능"}
+						</Badge>
+						<Badge
+							tone={realtimeStatus === "connected" ? "success" : "neutral"}
+						>
+							{getRealtimeStatusLabel(realtimeStatus)}
+						</Badge>
+					</div>
 				</header>
 				<ChatSafetyNotice
 					chatRoomId={room.id}
@@ -1744,7 +1752,7 @@ export function SeekerChatRoomResponsive({
 													size="md"
 													variant="secondary"
 												>
-													완료
+													면접 완료
 												</Button>
 												<Button
 													disabled={setInterviewStatusMutation.isPending}
