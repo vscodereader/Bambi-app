@@ -68,6 +68,18 @@ export function AttendancePanel() {
 		return (
 			<div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-5 py-6 md:px-6">
 				<EmptyState
+					action={
+						// 이전 달 요청이 실패하면 그 달에 갇힌다 — 이번 달로 되돌리고 다시 부른다.
+						<Button
+							onClick={() => {
+								setMonth(null);
+								mineQuery.refetch();
+							}}
+							type="button"
+						>
+							다시 시도
+						</Button>
+					}
 					description="출석 기록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
 					title="불러오기 실패"
 				/>
@@ -156,10 +168,19 @@ export function AttendancePanel() {
 								{label}
 							</div>
 						))}
-						{buildMonthGrid(viewMonth).map((cell) =>
-							cell.date === null ? (
-								<div key={cell.key} />
-							) : (
+						{buildMonthGrid(viewMonth).map((cell) => {
+							if (cell.date === null) {
+								return <div key={cell.key} />;
+							}
+
+							// 출석·오늘이 배경색과 테두리로만 구분되면 스크린리더·색각이상 사용자에게
+							// 전달되지 않는다(WCAG 1.4.1). 칸 안에 sr-only 텍스트를 같이 읽힌다 —
+							// div는 generic role이라 aria-label이 무시되므로 텍스트로 넣는다.
+							const marks = `${cell.date === today ? " 오늘" : ""}${
+								attended.has(cell.date) ? " 출석" : ""
+							}`;
+
+							return (
 								<div
 									className={cn(
 										"flex aspect-square items-center justify-center rounded-md border border-transparent text-sm",
@@ -171,9 +192,10 @@ export function AttendancePanel() {
 									key={cell.key}
 								>
 									{Number(cell.date.slice(8, 10))}
+									{marks ? <span className="sr-only">{marks}</span> : null}
 								</div>
-							)
-						)}
+							);
+						})}
 					</div>
 					<p className="mt-3 mb-0 text-muted-foreground text-xs">
 						색이 채워진 날이 출석한 날이에요. 테두리는 오늘이에요.
