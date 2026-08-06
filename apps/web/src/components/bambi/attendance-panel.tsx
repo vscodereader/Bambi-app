@@ -4,6 +4,7 @@
 // 재사용한다(역할별 문구 차이가 없어 컴포넌트를 나누지 않는다). 화면 요소는 오늘 버튼 +
 // 월 달력 + 연속/총/포인트 스탯뿐이다(출석 1회당 10포인트 적립, 잔액은 서버 원장 합산).
 // 달력은 라이브러리 없이 Tailwind 7열 grid로 직접 그린다(의존성 추가 금지).
+// embedded=true면 MyPageShell 안에 들어간 상태 — 셸이 여백·제목을 주므로 자체 여백과 h1을 뺀다.
 
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -27,7 +28,11 @@ const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 const monthLabel = (month: string): string =>
 	`${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월`;
 
-export function AttendancePanel() {
+export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
+	const containerClass = cn(
+		"flex w-full max-w-2xl flex-col gap-4",
+		!embedded && "mx-auto px-5 py-6 md:px-6"
+	);
 	const queryClient = useQueryClient();
 	// null이면 서버가 정한 이번 달(KST)을 본다 — 클라이언트가 "이번 달"을 따로 계산하면
 	// 자정 전후 시계 차이로 서버와 다른 달을 요청하게 된다.
@@ -57,7 +62,7 @@ export function AttendancePanel() {
 
 	if (mineQuery.isPending) {
 		return (
-			<div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-5 py-6 md:px-6">
+			<div className={containerClass}>
 				<Skeleton className="h-32 w-full rounded-xl" />
 				<Skeleton className="h-80 w-full rounded-xl" />
 			</div>
@@ -66,7 +71,7 @@ export function AttendancePanel() {
 
 	if (mineQuery.isError || !mineQuery.data) {
 		return (
-			<div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-5 py-6 md:px-6">
+			<div className={containerClass}>
 				<EmptyState
 					action={
 						// 이전 달 요청이 실패하면 그 달에 갇힌다 — 이번 달로 되돌리고 다시 부른다.
@@ -99,9 +104,11 @@ export function AttendancePanel() {
 	const attended = new Set(attendedDates);
 
 	return (
-		<div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-5 py-6 md:px-6">
+		<div className={containerClass}>
 			<div className="flex flex-col gap-1">
-				<h1 className="m-0 font-extrabold text-2xl">출석체크</h1>
+				{embedded ? null : (
+					<h1 className="m-0 font-extrabold text-2xl">출석체크</h1>
+				)}
 				<p className="m-0 text-muted-foreground text-sm">
 					하루에 한 번 출석 도장을 찍고 10포인트를 받아요.
 				</p>
