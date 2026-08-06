@@ -1187,7 +1187,10 @@ export const chatMessage = pgTable(
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
-		index("chat_message_chat_room_id_idx").on(table.chatRoomId),
+		index("chat_message_chat_room_id_created_at_idx").on(
+			table.chatRoomId,
+			table.createdAt
+		),
 		index("chat_message_sender_user_id_idx").on(table.senderUserId),
 	]
 );
@@ -1403,6 +1406,10 @@ export const report = pgTable(
 	},
 	(table) => [
 		index("report_status_idx").on(table.status),
+		index("report_reporter_user_id_status_idx").on(
+			table.reporterUserId,
+			table.status
+		),
 		index("report_target_type_target_id_idx").on(
 			table.targetType,
 			table.targetId
