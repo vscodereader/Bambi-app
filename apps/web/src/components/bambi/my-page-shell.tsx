@@ -23,6 +23,7 @@ import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { orpc } from "@/utils/orpc";
+import { useBambiAuth } from "./auth-client-provider";
 import { Avatar, Badge } from "./ds";
 import {
 	ChevronLeftIcon,
@@ -72,6 +73,23 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 	{ href: "/support" as Route, icon: <Message />, label: "고객센터" },
 ];
 
+// 역할별로 감추는 항목. 구인자는 면접 일정을 채팅방에서만 다루고, 운영자는 신고·차단·
+// 고객센터를 콘솔에서 처리하므로 개인용 메뉴가 의미 없다. 노출만 감추는 것이라 직접 URL로는
+// 그대로 들어갈 수 있다. 데스크톱 허브 카드(screens/seeker.tsx)도 같은 표를 쓴다.
+const HIDDEN_MY_PAGE_HREFS: Record<string, string[]> = {
+	admin: [
+		"/seeker/me/reports",
+		"/seeker/me/interviews",
+		"/seeker/me/blocks",
+		"/support",
+	],
+	employer: ["/seeker/me/interviews"],
+};
+
+export function isMyPageItemVisible(href: string, role: string | null) {
+	return !HIDDEN_MY_PAGE_HREFS[role ?? ""]?.includes(href);
+}
+
 function ProfileCard() {
 	const session = authClient.useSession();
 	const isSignedIn = Boolean(session.data?.user);
@@ -120,11 +138,15 @@ function ProfileCard() {
 
 function MyPageNav() {
 	const pathname = usePathname();
+	const { role } = useBambiAuth();
+	const items = NAV_ITEMS.filter((item) =>
+		isMyPageItemVisible(item.href, role)
+	);
 	return (
 		// 사이드바(md↑)와 모바일 허브가 같은 행 렌더를 공유한다. 셰브런은 카드 리스트로
 		// 보이는 모바일에서만 노출(md:hidden) — 사이드바는 활성 하이라이트로 위치를 알린다.
 		<nav aria-label="내 정보 메뉴" className="flex flex-col gap-1">
-			{NAV_ITEMS.map((item) => {
+			{items.map((item) => {
 				const isActive = pathname === item.href;
 				return (
 					<Link

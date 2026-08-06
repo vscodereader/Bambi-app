@@ -282,6 +282,22 @@ describe("방 화면 이탈 시 조용한 연결 정리", () => {
 	});
 });
 
+describe("방 오류 카드", () => {
+	// 3차 정책상 한쪽이 나가면 방이 사라진다 — 열 수 없는 이유는 대개 종료지 로그인이
+	// 아니라서, 엉뚱한 로그인 확인 안내를 지웠다.
+	it("로그인 상태 확인 문구를 빼고 종료 안내만 남긴다", () => {
+		expect(source).toContain("종료됐거나 접근할 수 없는 채팅방이에요.");
+		expect(source).not.toContain("로그인 상태를 확인해 주세요");
+	});
+
+	// primary 버튼 기본 코럴 글로우(--shadow-primary)를 이 자리에서만 끈다.
+	it("채팅 목록으로 버튼의 그림자를 끈다", () => {
+		expect(source).toContain(
+			'className="shadow-none"\n\t\t\t\t\t\t\tonClick={() => router.push("/seeker/chats")}'
+		);
+	});
+});
+
 describe("메시지 id 승격", () => {
 	// 클라이언트가 전송 전에 id를 만들어 보내면 서버가 PK 충돌로 재시도·더블클릭을 흡수한다.
 	it("전송 입력에 클라이언트 생성 messageId를 싣는다", () => {
