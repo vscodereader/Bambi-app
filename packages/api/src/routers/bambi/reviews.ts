@@ -136,12 +136,23 @@ export const reviewsRouter = {
 				.returning();
 
 			// 후기는 구직자만 남기고, 그 대상은 그 방의 구인자다. 정책 판정이 심사 대기면
-			// 아직 게시되지 않으므로 구인자에게는 알리지 않는다(운영자 큐 알림은 Task 9).
+			// 아직 게시되지 않으므로 구인자에게는 알리지 않는다(그 경우는 아래 운영자 큐로).
 			if (created && created.status === "published") {
 				await notifyBambiNotification({
 					actorUserId: profile.userId,
 					metadata: { action: "created", jobPostId: room.jobPostId },
 					recipientUserId: room.employerUserId,
+					targetId: created.id,
+					targetType: "review",
+				});
+			}
+
+			// 정책 판정이 심사 대기면 구인자 알림 대신 운영자 큐로 보낸다(둘은 배타적이다).
+			if (created && created.status === "pending_review") {
+				await notifyBambiNotification({
+					actorUserId: profile.userId,
+					metadata: { action: "submitted", jobPostId: room.jobPostId },
+					recipientRole: "admin",
 					targetId: created.id,
 					targetType: "review",
 				});

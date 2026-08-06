@@ -1123,6 +1123,22 @@ export const moderationRouter = {
 				})
 				.returning();
 
+			// 새 신고는 운영자 처리 큐에 쌓인다. 멱등 반환 경로(위 existing)에는 넣지
+			// 않는다 — 같은 신고로 큐를 두 번 울리지 않는다.
+			if (created) {
+				await notifyBambiNotification({
+					actorUserId: profile.userId,
+					metadata: {
+						action: "submitted",
+						reason: input.reason,
+						reportTargetType: input.targetType,
+					},
+					recipientRole: "admin",
+					targetId: created.id,
+					targetType: "report",
+				});
+			}
+
 			return created;
 		}),
 

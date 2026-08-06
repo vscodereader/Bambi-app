@@ -388,6 +388,20 @@ export const teamsRouter = {
 				})
 				.returning();
 
+			// 팀 초대는 운영자 승인을 거친다 — 새 심사거리다(개인 수신자 없이 role 공유 1행).
+			if (created) {
+				await notifyBambiNotification({
+					actorUserId: profile.userId,
+					metadata: {
+						action: "submitted",
+						organizationId: input.organizationId,
+					},
+					recipientRole: "admin",
+					targetId: created.id,
+					targetType: "team_invitation",
+				});
+			}
+
 			return created;
 		}),
 
@@ -434,6 +448,15 @@ export const teamsRouter = {
 				})
 				.where(eq(invitation.id, input.invitationId))
 				.returning();
+
+			// 반려 초대를 고쳐 다시 낸 것도 새 심사거리다(위 rejected 게이트가 전이를 보장한다).
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				metadata: { action: "submitted", organizationId: input.organizationId },
+				recipientRole: "admin",
+				targetId: input.invitationId,
+				targetType: "team_invitation",
+			});
 
 			return updated;
 		}),

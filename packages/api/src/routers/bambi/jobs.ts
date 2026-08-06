@@ -96,6 +96,7 @@ import {
 	validateJobPostImageUpload,
 	validateJobPostMediaSet,
 } from "../../services/bambi-job-media-policy";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
 import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
 import {
 	getUpdatedJobPostStatus,
@@ -1669,7 +1670,7 @@ export const jobsRouter = {
 			// 공고는 예외 없이 운영자 검수를 거친다. 업소 인증 여부로 건너뛰지 않는다.
 			const status: JobPostStatus = "pending_review";
 
-			return await db.transaction(async (tx) => {
+			const result = await db.transaction(async (tx) => {
 				const [created] = await tx
 					.insert(jobPost)
 					.values({
@@ -1724,6 +1725,18 @@ export const jobsRouter = {
 					media: toJobPostMediaSet(insertedMedia),
 				};
 			});
+
+			// 모든 공고는 예외 없이 pending_review로 들어온다 — 운영자 검수 큐에 새 건이
+			// 쌓였다는 신호다. 개인 수신자가 없으니 role 공유 1행. 커밋 뒤 best-effort.
+			await notifyBambiNotification({
+				actorUserId: actor.userId,
+				metadata: { action: "submitted", organizationId: input.organizationId },
+				recipientRole: "admin",
+				targetId: result.id,
+				targetType: "job_post",
+			});
+
+			return result;
 		}),
 
 	update: protectedProcedure
@@ -1750,11 +1763,31 @@ export const jobsRouter = {
 				session: context.session,
 			});
 
-			return await applyJobPostUpdate({
+			const result = await applyJobPostUpdate({
 				actorUserId: actor.userId,
 				data: input.data,
 				existing,
 			});
+
+			// 반려 공고를 고쳐 다시 낸 경우도 새 검수거리다. 게시 중 공고의 단순 수정
+			// (상태 불변)까지 알리면 큐가 소음으로 찬다 — 전이가 일어난 경우만 보낸다.
+			if (
+				existing.status !== "pending_review" &&
+				result.status === "pending_review"
+			) {
+				await notifyBambiNotification({
+					actorUserId: actor.userId,
+					metadata: {
+						action: "submitted",
+						organizationId: existing.organizationId,
+					},
+					recipientRole: "admin",
+					targetId: existing.id,
+					targetType: "job_post",
+				});
+			}
+
+			return result;
 		}),
 	delete: protectedProcedure
 		.input(z.object({ id: z.string().uuid() }))

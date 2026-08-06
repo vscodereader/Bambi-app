@@ -164,6 +164,15 @@ export const supportRouter = {
 				});
 			}
 
+			// 새 문의는 운영자 답변 큐에 쌓인다. 개인 수신자가 없으니 role 공유 1행.
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				metadata: { action: "submitted", category: input.category },
+				recipientRole: "admin",
+				targetId: created.id,
+				targetType: "support_inquiry",
+			});
+
 			return { id: created.id };
 		}),
 
