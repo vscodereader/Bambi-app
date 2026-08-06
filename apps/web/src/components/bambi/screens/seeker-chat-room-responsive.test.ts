@@ -20,9 +20,9 @@ const realtimeSource = readFileSync(
 	"utf8"
 );
 
-// 완료 버튼이 구직자 가드 안에 남아 있는지 본다(들여쓰기 변화에 견디게 느슨히).
-const COMPLETE_BUTTON_EMPLOYER_ONLY_PATTERN =
-	/\{isJobSeeker \? null : \(\s*<Button[\s\S]{0,200}onSetStatus\("completed"\)[\s\S]{0,200}완료/;
+// 확정 카드에 취소 버튼만 남았는지 본다(들여쓰기 변화에 견디게 느슨히).
+const CONFIRMED_CANCEL_ONLY_PATTERN =
+	/schedule\.status === "confirmed" \? \(\s*<Button[\s\S]{0,300}setScheduleStatus\(schedule\.id, "canceled"\)/;
 
 describe("채팅방 연락처 재설계", () => {
 	it("구인자 버튼을 연락처 공개 요청으로 바꾼다", () => {
@@ -302,17 +302,20 @@ describe("방 오류 카드", () => {
 	});
 });
 
-describe("면접 완료 버튼", () => {
-	// 완료(status → completed)는 구인자 전용. 구직자는 확정까지만 한다.
-	it("구직자에게는 완료 버튼을 렌더하지 않는다", () => {
-		expect(source).toMatch(COMPLETE_BUTTON_EMPLOYER_ONLY_PATTERN);
+describe("면접 완료 버튼 이관", () => {
+	// 완료 처리는 "내 정보 → 예정된 면접"으로 옮겼다 — 방을 나가면 완료를 못 누르던
+	// 엣지케이스 때문이다. 방 화면에는 완료 전환 경로가 남아 있으면 안 된다.
+	it("방 화면에서 완료 전환을 제거한다", () => {
+		expect(source).not.toContain('setScheduleStatus(schedule.id, "completed")');
+		// 완료 상태 자체는 계속 읽는다(후기·연락처 자격 판정) — 전환만 사라진다.
+		expect(source).toContain('schedule.status === "completed"');
 	});
 
-	// 확정·거절·취소는 양측 그대로다. 완료가 빠진 구직자 화면만 1열로 둔다.
-	it("구직자 쪽 확정 카드 액션을 1열로 둔다", () => {
+	// 확정 카드에는 취소만, 제안 카드의 확정·거절은 그대로다.
+	it("확정 카드에 취소만 남긴다", () => {
+		expect(source).toMatch(CONFIRMED_CANCEL_ONLY_PATTERN);
 		expect(source).toContain('setScheduleStatus(schedule.id, "confirmed")');
 		expect(source).toContain('setScheduleStatus(schedule.id, "declined")');
-		expect(source).toContain('isJobSeeker ? "grid-cols-1" : "grid-cols-2"');
 	});
 });
 
