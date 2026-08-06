@@ -57,6 +57,7 @@ export function SeekerNav({ children }: { children: ReactNode }) {
 	// 유지한다 → /seeker/me 및 그 하위 경로 전체에서 노출.
 	const showNav =
 		path === "/seeker" ||
+		path === "/seeker/attendance" ||
 		path === "/seeker/chats" ||
 		path === "/seeker/community" ||
 		path === "/seeker/me" ||
@@ -82,6 +83,7 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 		path === "/employer/new" ||
 		path === "/employer/me" ||
 		path.startsWith("/employer/ad-guide") ||
+		path.startsWith("/employer/attendance") ||
 		path.startsWith("/employer/promotions") ||
 		path.startsWith("/employer/analytics") ||
 		path.startsWith("/employer/settings");

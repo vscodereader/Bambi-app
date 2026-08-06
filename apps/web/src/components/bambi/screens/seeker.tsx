@@ -576,6 +576,12 @@ const seekerMeSections: {
 		description: "차단한 상대를 확인하고 해제해요.",
 	},
 	{
+		href: "/seeker/attendance" as Route,
+		icon: <ClockIcon />,
+		label: "출석체크",
+		description: "하루 한 번 출석하고 연속 기록을 확인해요.",
+	},
+	{
 		href: "/seeker/me/settings" as Route,
 		icon: <SettingsIcon />,
 		label: "계정 설정",

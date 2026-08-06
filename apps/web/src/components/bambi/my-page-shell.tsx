@@ -65,6 +65,11 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 		label: "차단한 상대",
 	},
 	{
+		href: "/seeker/attendance" as Route,
+		icon: <ClockIcon />,
+		label: "출석체크",
+	},
+	{
 		href: "/seeker/me/settings" as Route,
 		icon: <SettingsIcon />,
 		label: "계정 설정",
