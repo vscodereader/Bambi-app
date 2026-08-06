@@ -54,6 +54,7 @@ import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-aut
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
@@ -2427,7 +2428,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const updated = await db.transaction(async (tx) => {
 				const [invite] = await tx
 					.select()
 					.from(invitation)
@@ -2448,6 +2449,27 @@ export const moderationRouter = {
 					? await rejectTeamInvitation(tx, admin.userId, invite, input.reason)
 					: await acceptTeamInvitation(tx, admin.userId, invite, input.reason);
 			});
+
+			const isRejected = input.status === "rejected";
+
+			// 커밋 뒤에 알린다(롤백된 처리의 유령 알림 방지). 반려는 초대를 낸 사람이,
+			// 승인은 합류한 본인이 알아야 한다 — 초대자는 조직 설정 화면에서 바로 본다.
+			await notifyBambiNotification({
+				actorUserId: admin.userId,
+				metadata: isRejected
+					? {
+							action: "rejected",
+							organizationId: updated?.organizationId,
+							reason: input.reason ?? null,
+						}
+					: { action: "accepted", organizationId: updated?.organizationId },
+				recipientUserId:
+					(isRejected ? updated?.inviterId : updated?.acceptedUserId) ?? null,
+				targetId: input.invitationId,
+				targetType: "team_invitation",
+			});
+
+			return updated;
 		}),
 
 	setEmployerVerificationStatus: protectedProcedure
@@ -2455,7 +2477,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const { owner, updated } = await db.transaction(async (tx) => {
 				const [owner] = await tx
 					.select({ userId: member.userId })
 					.from(member)
@@ -2492,8 +2514,23 @@ export const moderationRouter = {
 					metadata: { organizationId: input.organizationId },
 				});
 
-				return updated;
+				return { owner, updated };
 			});
+
+			// 커밋 뒤에 알린다. owner가 없는 조직(멤버 정리 중)이면 수신자가 없어 조용히 생략된다.
+			await notifyBambiNotification({
+				actorUserId: admin.userId,
+				metadata: {
+					action: input.status,
+					organizationId: input.organizationId,
+					reason: input.reason ?? null,
+				},
+				recipientUserId: owner?.userId ?? null,
+				targetId: input.organizationId,
+				targetType: "employer_verification",
+			});
+
+			return updated;
 		}),
 
 	setInquiryStatusByAdmin: adminProcedure

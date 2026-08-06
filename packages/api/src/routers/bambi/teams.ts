@@ -29,6 +29,7 @@ import {
 	isEmployerOrganizationVerified,
 	requireActiveBambiProfile,
 } from "../../services/bambi-authz";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
 	canInviteMembers,
 	canManageOrganization,
@@ -562,7 +563,12 @@ export const teamsRouter = {
 			});
 
 			const [targetMember] = await db
-				.select({ id: member.id, role: member.role })
+				.select({
+					id: member.id,
+					role: member.role,
+					// 권한 변경은 당사자가 알아야 한다(화면에는 owner만 보이는 정보다).
+					userId: member.userId,
+				})
 				.from(member)
 				.where(
 					and(
@@ -604,6 +610,18 @@ export const teamsRouter = {
 				.where(eq(member.id, input.memberId))
 				.returning();
 
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				metadata: {
+					action: "role_changed",
+					organizationId: input.organizationId,
+					role: normalizedRole,
+				},
+				recipientUserId: targetMember.userId,
+				targetId: input.memberId,
+				targetType: "organization_member",
+			});
+
 			return updated;
 		}),
 
@@ -640,7 +658,7 @@ export const teamsRouter = {
 
 			// 소유권을 넘길 대상 멤버.
 			const [targetMember] = await db
-				.select({ id: member.id, status: member.status })
+				.select({ id: member.id, status: member.status, userId: member.userId })
 				.from(member)
 				.where(
 					and(
@@ -673,6 +691,17 @@ export const teamsRouter = {
 					.update(member)
 					.set({ role: toStoredRole("owner"), updatedAt: now })
 					.where(eq(member.id, targetMember.id));
+			});
+
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				metadata: {
+					action: "ownership_transferred",
+					organizationId: input.organizationId,
+				},
+				recipientUserId: targetMember.userId,
+				targetId: input.memberId,
+				targetType: "organization_member",
 			});
 
 			return { success: true };
@@ -731,6 +760,18 @@ export const teamsRouter = {
 				}
 
 				await tx.delete(member).where(eq(member.id, input.memberId));
+			});
+
+			// 내보내진 사람은 화면에서 사라지므로 알림 말고는 알 방법이 없다.
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				metadata: {
+					action: "removed",
+					organizationId: input.organizationId,
+				},
+				recipientUserId: targetMember.userId,
+				targetId: input.memberId,
+				targetType: "organization_member",
 			});
 
 			return { success: true };
