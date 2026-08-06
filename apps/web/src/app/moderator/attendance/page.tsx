@@ -31,15 +31,26 @@ import {
 	TableHeader,
 	TableRow,
 } from "@bambi-app/ui/components/table";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowDownIcon, ArrowUpDownIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { formatDate } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
 const PAGE_SIZE = 20;
+
+// 검색어를 칠 때마다 서버를 때리면 집계 서브쿼리 5개짜리 목록 쿼리가 키 입력마다 나간다.
+// 채팅 관리(moderator/chats)·공고 검색 모달과 같은 250ms 디바운스를 쓴다.
+function useDebouncedValue(value: string, delayMs = 250): string {
+	const [debounced, setDebounced] = useState(value);
+	useEffect(() => {
+		const timer = setTimeout(() => setDebounced(value), delayMs);
+		return () => clearTimeout(timer);
+	}, [value, delayMs]);
+	return debounced;
+}
 
 type SortKey = "recent" | "idle" | "total" | "month";
 
@@ -61,9 +72,10 @@ export default function ModeratorAttendancePage() {
 	const [search, setSearch] = useState("");
 	const [roleFilter, setRoleFilter] = useState("all");
 	const [sort, setSort] = useState<SortKey>("recent");
+	const debouncedSearch = useDebouncedValue(search);
 
-	const listQuery = useInfiniteQuery(
-		orpc.bambi.attendance.adminList.infiniteOptions({
+	const listQuery = useInfiniteQuery({
+		...orpc.bambi.attendance.adminList.infiniteOptions({
 			getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
 			initialPageParam: 0,
 			input: (cursor: number) => ({
@@ -73,11 +85,14 @@ export default function ModeratorAttendancePage() {
 					roleFilter === "all"
 						? undefined
 						: (roleFilter as "employer" | "job_seeker"),
-				search: search.trim() || undefined,
+				search: debouncedSearch.trim() || undefined,
 				sort,
 			}),
-		})
-	);
+		}),
+		// 검색·필터·정렬을 바꾸면 쿼리 키가 바뀐다 — 직전 결과를 남겨 두지 않으면 표가
+		// 통째로 사라졌다가 다시 그려진다.
+		placeholderData: keepPreviousData,
+	});
 
 	const pages = listQuery.data?.pages ?? [];
 	// 페이지 사이에 출석이 끼어들면 오프셋이 밀려 같은 계정이 겹칠 수 있어 userId로 걸러낸다.
@@ -171,7 +186,7 @@ export default function ModeratorAttendancePage() {
 			{!(listQuery.isPending || listQuery.isError) && items.length === 0 ? (
 				<EmptyState
 					description={
-						search.trim()
+						debouncedSearch.trim()
 							? "검색 조건에 맞는 회원이 없어요."
 							: "출석 대상 회원이 없어요."
 					}
@@ -187,7 +202,11 @@ export default function ModeratorAttendancePage() {
 								<TableHead>회원</TableHead>
 								<TableHead>역할</TableHead>
 								{SORTABLE_COLUMNS.map((column) => (
-									<TableHead key={column.key}>
+									// 서버 정렬은 축마다 방향이 고정(내림차순)이라 활성 열은 항상 descending이다.
+									<TableHead
+										aria-sort={sort === column.key ? "descending" : undefined}
+										key={column.key}
+									>
 										<button
 											className="-mx-2 flex items-center gap-1 rounded-md px-2 py-1 font-medium hover:bg-muted/50"
 											onClick={() => setSort(column.key)}
