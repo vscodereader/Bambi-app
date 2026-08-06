@@ -6,6 +6,7 @@ import {
 	emitMessageCreated,
 	emitRoomUpdated,
 	getActiveParticipantIds,
+	getChatRoomIdFromSocketRoom,
 	getChatRoomSocketRoom,
 	getUserSocketRoom,
 	isParticipantActiveInRoom,
@@ -95,6 +96,48 @@ describe("bambi chat realtime", () => {
 
 		expect(isParticipantActiveInRoom("room-1", "user-1")).toBe(false);
 		expect(isParticipantActiveInRoom("room-2", "user-1")).toBe(true);
+	});
+
+	// 소켓 정리는 역인덱스만 보므로, 명시적으로 나간 방이 나중에 되살아나면 안 된다.
+	it("does not resurrect rooms the socket already left", () => {
+		resetBambiChatRealtimeForTests();
+
+		markParticipantActive({
+			roomId: "room-1",
+			socketId: "socket-a",
+			userId: "user-1",
+		});
+		markParticipantActive({
+			roomId: "room-2",
+			socketId: "socket-a",
+			userId: "user-1",
+		});
+		markParticipantInactive({
+			roomId: "room-1",
+			socketId: "socket-a",
+			userId: "user-1",
+		});
+
+		markSocketInactiveEverywhere("socket-a");
+
+		expect(isParticipantActiveInRoom("room-1", "user-1")).toBe(false);
+		expect(isParticipantActiveInRoom("room-2", "user-1")).toBe(false);
+		expect(getActiveParticipantIds("room-2")).toEqual([]);
+	});
+
+	it("ignores disconnects of sockets that never joined a room", () => {
+		resetBambiChatRealtimeForTests();
+
+		expect(() => markSocketInactiveEverywhere("socket-unknown")).not.toThrow();
+	});
+
+	// 재연결 복구 소켓은 socket.io 룸만 복원되므로, 룸 이름에서 방 id를 되짚어 프레즌스를 되살린다.
+	it("reads the chat room id back from a socket room name", () => {
+		expect(getChatRoomIdFromSocketRoom(getChatRoomSocketRoom("room-1"))).toBe(
+			"room-1"
+		);
+		expect(getChatRoomIdFromSocketRoom(getUserSocketRoom("user-1"))).toBeNull();
+		expect(getChatRoomIdFromSocketRoom("chat:")).toBeNull();
 	});
 
 	it("emits message-created without message body or sensitive fields", () => {

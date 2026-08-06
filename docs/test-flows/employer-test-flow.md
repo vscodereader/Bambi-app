@@ -30,7 +30,7 @@
 | `PORTONE_API_SECRET` / `NEXT_PUBLIC_PORTONE_STORE_ID` / `NEXT_PUBLIC_PORTONE_CHANNEL_KEY` | 본인인증이 **목(mock) 폼**으로 폴백. 가입 시 본인인증 없이 프로필 생성 허용. **아이디/비밀번호 찾기 링크가 아예 사라짐** | `packages/env/src/server.ts`, `packages/env/src/web.ts` |
 | `NTS_SERVICE_KEY` | 사업자 진위확인 미실행 → 전 건 "미확인" 접수, 화면에 "곧 준비될 기능입니다" 표기 (`getMine.biznumCheckEnabled = false`) | `packages/env/src/server.ts` |
 | `GCS_PUBLIC_BUCKET` / `NEXT_PUBLIC_GCS_PUBLIC_BASE_URL` | 업로드 인텐트가 `local://` 플레이스홀더로 폴백, 이미지가 샘플 썸네일로 표시 | 동일 |
-| `BAMBI_GUEST_TOKEN_SECRET` | 개발 폴백 키 사용(게스트 쿠키 서명) | `packages/env/src/web.ts` |
+| `BAMBI_GUEST_TOKEN_SECRET` | 개발 폴백 키 사용(게스트 쿠키 서명·검증). web과 server가 같은 값이어야 게스트 신원이 API 서버까지 전달됨 | `packages/env/src/web.ts`, `packages/env/src/server.ts` |
 | `BAMBI_COOKIE_PREFIX` | 미설정 시 better-auth 기본 prefix. 미들웨어(`apps/web/src/proxy.ts`)와 auth 서버가 같은 값이어야 세션 판정 일치 | — |
 
 프로덕션 빌드는 `GCS_PUBLIC_BUCKET`, `PORTONE_*` 누락 시 부팅/빌드가 실패한다.
@@ -656,7 +656,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 
 - **경로**: `/seeker/chats/[id]`
 - **절차**: 텍스트 입력 후 전송 / 이미지·PDF 첨부
-- **기대 결과**: `sendMessage`/`sendMediaMessage` 성공, 소프트 삭제된 방은 새 메시지로 양쪽 모두 재노출
+- **기대 결과**: `sendMessage`/`sendMediaMessage` 성공. 한쪽이 나간 방은 양쪽 모두에게서 사라져 열람·전송이 `NOT_FOUND`(부활 없음)
 - **엣지 케이스**: 차단된 방은 `FORBIDDEN` + 안내("…님이 차단했어요." / "…님을 차단했어요. 차단 관리에서 해제할 수 있어요."). 운영자가 방을 차단하면(`setChatRoomBlocked`) 목록으로 되돌려 보낸다
 - **관련 API**: `bambi.chats.sendMessage`, `bambi.chats.createAttachmentUpload`, `bambi.chats.sendMediaMessage`, `bambi.chats.markRead`, `bambi.chats.deleteChatRoom`
 
@@ -846,7 +846,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 | 비로그인으로 `/ad-banner-editor` | `/seeker?auth=login` | 미들웨어 + `resolveEmployerAccess()` |
 | 비로그인으로 oRPC 직접 호출 | `UNAUTHORIZED` (모든 `protectedProcedure`) | `packages/api/src/index.ts` `requireAuth` |
 | 비로그인으로 `/terms`·`/privacy` | 통과 | `PUBLIC_PREFIXES` |
-| 게스트 쿠키 위조(서명 불일치) | anon 취급 → `/seeker?auth=login` | `apps/web/src/lib/bambi/guest-token.ts` HMAC 검증 |
+| 게스트 쿠키 위조(서명 불일치) | anon 취급 → `/seeker?auth=login` | `packages/api/src/services/bambi-guest-token.ts` HMAC 검증 |
 
 ### 16.2 역할 경계
 

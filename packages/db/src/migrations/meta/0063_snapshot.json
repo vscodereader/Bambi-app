@@ -1,5 +1,5 @@
 {
-  "id": "3a661298-8b69-46e9-b7aa-0794e3e6592d",
+  "id": "5b915bba-a65d-4887-b7c3-e8ddaa032b9d",
   "prevId": "e58f1c3c-3586-4c63-a97c-19e738143692",
   "version": "7",
   "dialect": "postgresql",
@@ -2721,7 +2721,20 @@
           "name": "author_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "author_guest_id": {
+          "name": "author_guest_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
         },
         "author_role": {
           "name": "author_role",
@@ -2856,7 +2869,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "community_comment_author_one_of_ck": {
+          "name": "community_comment_author_one_of_ck",
+          "value": "num_nonnulls(\"community_comment\".\"author_user_id\", \"community_comment\".\"author_guest_id\") = 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.community_post": {
@@ -2881,7 +2899,13 @@
           "name": "author_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "author_guest_id": {
+          "name": "author_guest_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "author_display_name": {
           "name": "author_display_name",
@@ -3051,7 +3075,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "community_post_author_one_of_ck": {
+          "name": "community_post_author_one_of_ck",
+          "value": "num_nonnulls(\"community_post\".\"author_user_id\", \"community_post\".\"author_guest_id\") = 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.community_post_like": {
@@ -3075,7 +3104,13 @@
           "name": "user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "guest_id": {
+          "name": "guest_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -3097,6 +3132,27 @@
             },
             {
               "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "community_post_like_post_id_guest_id_uidx": {
+          "name": "community_post_like_post_id_guest_id_uidx",
+          "columns": [
+            {
+              "expression": "post_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "guest_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3146,7 +3202,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "community_post_like_actor_one_of_ck": {
+          "name": "community_post_like_actor_one_of_ck",
+          "value": "num_nonnulls(\"community_post_like\".\"user_id\", \"community_post_like\".\"guest_id\") = 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.contact_reveal_consent": {
@@ -5613,150 +5674,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.main_popup": {
-      "name": "main_popup",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "slot_index": {
-          "name": "slot_index",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "enabled": {
-          "name": "enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "content_type": {
-          "name": "content_type",
-          "type": "main_popup_content_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'image'"
-        },
-        "original_image": {
-          "name": "original_image",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "edited_image": {
-          "name": "edited_image",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "content_width": {
-          "name": "content_width",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 420
-        },
-        "content_height": {
-          "name": "content_height",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 320
-        },
-        "text_document": {
-          "name": "text_document",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "link_path": {
-          "name": "link_path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "starts_at": {
-          "name": "starts_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ends_at": {
-          "name": "ends_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revision": {
-          "name": "revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "updated_by_user_id": {
-          "name": "updated_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "main_popup_slot_index_uidx": {
-          "name": "main_popup_slot_index_uidx",
-          "columns": [
-            {
-              "expression": "slot_index",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "main_popup_updated_by_user_id_user_id_fk": {
-          "name": "main_popup_updated_by_user_id_user_id_fk",
-          "tableFrom": "main_popup",
-          "tableTo": "user",
-          "columnsFrom": ["updated_by_user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.region": {
       "name": "region",
       "schema": "",
@@ -6552,7 +6469,7 @@
     "public.bambi_user_role": {
       "name": "bambi_user_role",
       "schema": "public",
-      "values": ["job_seeker", "employer", "admin"]
+      "values": ["job_seeker", "employer", "admin", "guest"]
     },
     "public.banned_word_scope": {
       "name": "banned_word_scope",
@@ -6668,11 +6585,6 @@
         "rejected",
         "on_hold"
       ]
-    },
-    "public.main_popup_content_type": {
-      "name": "main_popup_content_type",
-      "schema": "public",
-      "values": ["image", "text"]
     },
     "public.moderation_target_type": {
       "name": "moderation_target_type",

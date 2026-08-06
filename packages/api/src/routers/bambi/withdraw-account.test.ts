@@ -162,7 +162,10 @@ describe("withdrawMyAccount 회원 탈퇴", () => {
 			.from(user)
 			.where(eq(user.id, userId));
 		expect(updatedUser?.deletedAt).not.toBeNull();
-		expect(updatedUser?.name).toBe("탈퇴한 회원");
+		// 표시명 원본은 그대로 둔다 — 사용자 화면의 "탈퇴한 회원" 표기는 표시 계층
+		// (services/bambi-withdrawn-display)이 맡고, 원본 파기는 파기 배치가 한다.
+		// 여기서 덮으면 운영자가 누가 탈퇴했는지 알 수 없고 복구해도 이름이 돌아오지 않는다.
+		expect(updatedUser?.name).toBe("탈퇴대상");
 		// 이메일·로그인 아이디는 남는다 — 재로그인 시도가 계정을 찾아 auth 훅의
 		// "탈퇴한 계정이에요" 안내에 닿아야 한다. 파기는 purgeWithdrawnAccounts 배치가 한다.
 		expect(updatedUser?.email).toBe(`${userId}@bambi.test`);

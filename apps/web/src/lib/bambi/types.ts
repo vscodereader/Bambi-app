@@ -221,8 +221,14 @@ export interface ManagedUser {
 	note: string;
 	// 소속 업소 표시명(구인자만 채워진다).
 	organizationNames: string[];
+	// 개인정보 파기 완료 시각. 값이 있으면 탈퇴 복구가 불가능하다(로그인 수단이 이미 파기됨).
+	purgedAt: Date | null;
 	reports: number;
+	// 표시용 역할 라벨("구직자"·"법률자문" …). 비교·API 입력에는 roleKey를 쓴다.
 	role: string;
+	// 역할 enum 원값(job_seeker·employer·admin·legal_advisor). 라벨로는 역할 전환 가능
+	// 여부를 판정할 수 없어 원값을 함께 들고 다닌다.
+	roleKey: string;
 	status: UserStatus;
 	warnings: number;
 }

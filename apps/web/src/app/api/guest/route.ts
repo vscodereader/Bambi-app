@@ -1,9 +1,19 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import {
+	createGuestToken,
+	DEV_GUEST_TOKEN_SECRET,
+	GUEST_COOKIE_NAME,
+} from "@bambi-app/api/services/bambi-guest-token";
+import { resolveClientIp } from "@bambi-app/api/services/client-ip";
+import {
 	isAdultBirth8,
 	UNDERAGE_MESSAGE,
 } from "@bambi-app/api/services/portone-identity";
-import { takeRateLimit } from "@bambi-app/api/services/rate-limit";
+import {
+	GUEST_VERIFY_RATE_LIMIT_SCOPE,
+	resolvePublicRateLimit,
+	takeRateLimit,
+} from "@bambi-app/api/services/rate-limit";
 import { env } from "@bambi-app/env/web";
 import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
@@ -11,25 +21,26 @@ import { NextResponse } from "next/server";
 import {
 	type BambiGenderValue,
 	GUEST_COOKIE_MAX_AGE,
-	GUEST_COOKIE_NAME,
 	LEGACY_ADULT_COOKIE_NAMES,
 	type MockPhoneVerifyInput,
 } from "@/lib/bambi/guest";
-import { createGuestToken } from "@/lib/bambi/guest-token";
-
-// 서명 키가 없으면 게스트 토큰을 만들 수 없다. 개발 편의를 위한 폴백이며, 프로덕션은
-// env(web.ts)의 부팅 가드가 누락을 막는다.
-const DEV_GUEST_TOKEN_SECRET = "bambi-dev-guest-token-secret-not-for-prod";
 
 const guestTokenSecret = (): string =>
 	env.BAMBI_GUEST_TOKEN_SECRET ?? DEV_GUEST_TOKEN_SECRET;
 
-// 본인인증은 건당 과금이라 봇이 라우트를 두드리면 비용이 샌다. IP당 시간당 10회.
-const RATE_LIMIT = 10;
-const RATE_WINDOW_MS = 60 * 60 * 1000;
-
+// 본인인증 경로의 봇 방어. 한도·윈도는 api 서버와 같은 표에서 온다
+// (@bambi-app/api services/rate-limit의 resolvePublicRateLimit).
+//
+// 이 라우트는 Vercel 함수라 Vercel이 마지막 프록시다 — x-forwarded-for의 오른쪽 끝이
+// 실제 클라이언트라 홉은 0이다. x-vercel-forwarded-for는 Vercel이 직접 채워 넣어
+// 호출자가 위조할 수 없으므로 있으면 그 값을 먼저 쓴다(맨 앞 칸을 그대로 읽던 종전
+// 방식은 사내 프록시가 넣은 사설 IP로 여러 사용자를 한 버킷에 합쳐 버렸다).
 const clientIp = (request: Request): string =>
-	request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+	resolveClientIp({
+		directIp: request.headers.get("x-vercel-forwarded-for"),
+		forwardedFor: request.headers.get("x-forwarded-for"),
+		trustedProxyHops: 0,
+	});
 
 const badRequest = (message?: string) =>
 	NextResponse.json(message ? { message, ok: false } : { ok: false }, {
@@ -59,6 +70,8 @@ const underageResponse = () =>
 // packages/auth advanced.defaultCookieAttributes). localhost는 secure 컨텍스트라 개발 무영향.
 // 인증 건 ID는 싣지 않는다: 유효시간이 30분인 값을 30일짜리 쿠키에 JS로 읽히게 두면
 // 공용 PC·XSS에서 그대로 새어 나가고, 만료 뒤엔 어차피 쓸 수도 없다(자체점검 항목 4).
+// 대신 게스트 식별자(gid)가 실린다 — 수다방 게스트 글·댓글·추천의 소유·중복방지 키이며,
+// 발급 시점에 만들어지므로 이 라우트를 다시 타면(재인증) 새 게스트로 취급된다.
 const verifiedResponse = async (gender: BambiGenderValue | null) => {
 	const token = await createGuestToken({
 		gender,
@@ -88,6 +101,8 @@ const handleRealVerification = async (identityVerificationId: string) => {
 	try {
 		const { gender } = await rpc.bambi.onboarding.checkIdentityForSignup({
 			identityVerificationId,
+			// 비회원 인증 흐름 — 수집 로그의 구분을 guest로 남긴다(가입하면 역할로 덮인다).
+			source: "guest",
 		});
 		return await verifiedResponse(gender);
 	} catch (error) {
@@ -148,15 +163,19 @@ const handleMockVerification = async (body: Record<string, unknown>) => {
 };
 
 export async function POST(request: Request) {
-	if (
-		!takeRateLimit({
-			key: clientIp(request),
-			limit: RATE_LIMIT,
-			now: Date.now(),
-			windowMs: RATE_WINDOW_MS,
-		})
-	) {
-		return NextResponse.json({ ok: false }, { status: 429 });
+	const { key, limit, windowMs } = resolvePublicRateLimit({
+		clientIp: clientIp(request),
+		scope: GUEST_VERIFY_RATE_LIMIT_SCOPE,
+	});
+	if (!takeRateLimit({ key, limit, now: Date.now(), windowMs })) {
+		return NextResponse.json(
+			{
+				message:
+					"본인인증 요청이 너무 많아요. 잠시 기다렸다가 다시 시도해 주세요. 계속 막히면 1시간 뒤에 다시 이용할 수 있어요.",
+				ok: false,
+			},
+			{ status: 429 }
+		);
 	}
 
 	let body: unknown;

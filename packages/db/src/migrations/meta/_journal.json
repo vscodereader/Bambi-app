@@ -446,8 +446,71 @@
     {
       "idx": 63,
       "version": "7",
-      "when": 1785905253921,
-      "tag": "0063_ambitious_layla_miller",
+      "when": 1785834322350,
+      "tag": "0063_guest-community-authorship",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1785896024382,
+      "tag": "0064_absurd_spyke",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1785896804095,
+      "tag": "0065_handy_proteus",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1785901174146,
+      "tag": "0066_goofy_rockslide",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1785904456626,
+      "tag": "0067_blue_triton",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1785976270703,
+      "tag": "0068_broad_krista_starr",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1785976270704,
+      "tag": "0069_open_santa_claus",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1785982532576,
+      "tag": "0070_optimal_scream",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1785991916193,
+      "tag": "0071_harsh_black_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1786006038279,
+      "tag": "0072_messy_wallop",
       "breakpoints": true
     }
   ]

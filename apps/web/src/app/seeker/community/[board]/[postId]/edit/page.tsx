@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { notFound, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { CommunityPostForm } from "@/components/bambi/community-post-form";
 import { type CommunityBoardMeta, getBoardBySlug } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
@@ -64,9 +65,11 @@ function CommunityEditPasswordGate({
 
 function CommunityEditContent({
 	board,
+	guest,
 	postId,
 }: {
 	board: CommunityBoardMeta;
+	guest: boolean;
 	postId: string;
 }) {
 	const [password, setPassword] = useState("");
@@ -91,15 +94,19 @@ function CommunityEditContent({
 	const data = postQuery.data;
 
 	// 작성자(canEdit)는 즉시, 비작성자는 게이트 비번을 통과했을 때만 폼 로드.
+	// 비회원은 gid가 맞아 canEdit이 서더라도 저장할 때 비밀번호가 필요하다 — guest 모드
+	// 폼이 비밀번호 필드를 항상 세우므로 여기서 따로 채워 주지 않는다.
 	if (data && data.locked === false && (data.canEdit || appliedPassword)) {
 		return (
 			<CommunityPostForm
 				board={board}
 				editPassword={data.canEdit ? undefined : appliedPassword}
+				guest={guest}
 				initialPost={{
 					authorName: data.authorName,
 					authorRole: data.authorRole,
 					body: data.body,
+					contactPhone: data.contactPhone,
 					id: data.id,
 					isLocked: data.isLocked,
 					isPromotion: data.isPromotion,
@@ -121,11 +128,18 @@ function CommunityEditContent({
 
 export default function SeekerCommunityEditPage() {
 	const params = useParams<{ board: string; postId: string }>();
+	const { isGuest } = useBambiAuth();
 	const board = getBoardBySlug(params.board);
 
 	if (!board?.writable) {
 		notFound();
 	}
 
-	return <CommunityEditContent board={board} postId={params.postId} />;
+	return (
+		<CommunityEditContent
+			board={board}
+			guest={isGuest}
+			postId={params.postId}
+		/>
+	);
 }

@@ -7,7 +7,7 @@ import { useMod } from "@/components/bambi/screens/moderator-context";
 export default function ModeratorUserDetailPage() {
 	const router = useRouter();
 	const { id } = useParams<{ id: string }>();
-	const { isLoading, sanction, users } = useMod();
+	const { isLoading, restoreAccount, sanction, users } = useMod();
 	const item = users.find((u) => u.id === id);
 
 	if (isLoading) {
@@ -35,6 +35,11 @@ export default function ModeratorUserDetailPage() {
 		<UserDetail
 			item={item}
 			onBack={() => router.push("/moderator/users")}
+			// 복구는 목록으로 돌아가지 않고 상세에 머문다 — 되살린 계정의 상태·제재 이력을
+			// 이어서 확인하는 흐름이 자연스럽다(실패 사유도 토스트로 그대로 보인다).
+			onRestore={async (uid, reason) => {
+				await restoreAccount(uid, reason);
+			}}
 			// 적용이 성공했을 때만 목록으로 돌아간다(실패하면 상세에 남아 에러를 확인할 수 있게).
 			onSanction={async (uid, status, label) => {
 				if (await sanction(uid, status, label)) {

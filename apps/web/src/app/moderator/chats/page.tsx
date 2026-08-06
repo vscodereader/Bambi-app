@@ -1,8 +1,10 @@
 "use client";
 
 // 밤비 — 운영자 전용 채팅 관리 목록.
-// 서버(listChatsForModeration)는 삭제됨·차단됨·신고됨 플래그가 붙은 방만 내려준다.
-// 각 행에서 방을 하드삭제(사유 필수)하거나 구직자·구인자 회원 상세로 이동한다.
+// 서버(listAllChatsForModeration)는 모든 채팅방을 페이지 단위로 내려주고, "조치 대상"
+// 탭을 고르면 삭제됨·차단됨·신고됨 방만 좁혀 준다. 검색은 참여자 이름·공고 제목을 훑는다.
+// 각 행에서 대화를 열람(읽기 전용)하거나 차단/차단 해제·하드삭제(사유 필수)하고,
+// 구직자·구인자 회원 상세로 이동한다.
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { Badge } from "@bambi-app/ui/components/badge";
@@ -14,21 +16,45 @@ import {
 	DialogDescription,
 	DialogTitle,
 } from "@bambi-app/ui/components/dialog";
+import { Input } from "@bambi-app/ui/components/input";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { RowActions } from "@/components/bambi/row-actions";
 import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
+import { ChatHistoryDialog, type ViewingChat } from "./chat-history-dialog";
 
 type ChatRow = Awaited<
-	ReturnType<AppRouterClient["bambi"]["moderation"]["listChatsForModeration"]>
->[number];
+	ReturnType<
+		AppRouterClient["bambi"]["moderation"]["listAllChatsForModeration"]
+	>
+>["items"][number];
+
+// 목록 탭. 기본은 전체 방이고, 조치가 필요한 방만 보고 싶을 때 좁힌다.
+const SCOPE_TABS = [
+	{ label: "전체", value: "all" },
+	{ label: "조치 대상", value: "flagged" },
+] as const;
+
+type ScopeValue = (typeof SCOPE_TABS)[number]["value"];
+
+// 검색어를 칠 때마다 서버를 때리면 조인 3개짜리 목록 쿼리가 키 입력마다 나간다.
+// 공고 검색 모달(job-search-command)과 같은 250ms 디바운스를 쓴다.
+function useDebouncedValue(value: string, delayMs = 250): string {
+	const [debounced, setDebounced] = useState(value);
+	useEffect(() => {
+		const timer = setTimeout(() => setDebounced(value), delayMs);
+		return () => clearTimeout(timer);
+	}, [value, delayMs]);
+	return debounced;
+}
 
 // 상태 배지(라벨 맵 경유) — 한 방에 여러 플래그가 동시에 붙을 수 있어 배열로 렌더한다.
 const CHAT_STATUS_BADGES: {
@@ -108,77 +134,6 @@ const CHAT_ACTION_COPY: Record<
 		title: "채팅방 차단 해제",
 	},
 };
-
-// 채팅 내역 열람 대상(방 id + 표시용 제목).
-interface ViewingChat {
-	chatRoomId: string;
-	title: string;
-}
-
-// 다이얼로그가 열릴 때만 마운트돼 메시지를 조회·렌더한다(support InquiryThread와 동일 패턴).
-function ChatHistoryContent({ chatRoomId }: { chatRoomId: string }) {
-	const historyQuery = useQuery(
-		orpc.bambi.moderation.getChatMessagesForModeration.queryOptions({
-			input: { chatRoomId },
-		})
-	);
-
-	if (historyQuery.isPending) {
-		return <Skeleton className="h-40 w-full" />;
-	}
-
-	if (historyQuery.isError || !historyQuery.data) {
-		return (
-			<p className="m-0 text-muted-foreground text-sm">
-				채팅 내역을 불러오지 못했어요.
-			</p>
-		);
-	}
-
-	const { employerName, employerUserId, jobSeekerName, messages } =
-		historyQuery.data;
-
-	if (messages.length === 0) {
-		return (
-			<p className="m-0 text-muted-foreground text-sm">아직 메시지가 없어요.</p>
-		);
-	}
-
-	return (
-		<div className="flex max-h-[60vh] min-w-0 flex-col gap-3 overflow-y-auto">
-			{messages.map((message) => {
-				const isEmployer = message.senderUserId === employerUserId;
-				return (
-					<div className="flex min-w-0 flex-col gap-1" key={message.id}>
-						<div className="flex flex-wrap items-center gap-2">
-							<Badge variant={isEmployer ? "default" : "secondary"}>
-								{isEmployer ? employerName : jobSeekerName}
-							</Badge>
-							{message.kind === "contact_request" ? (
-								<Badge variant="outline">연락처 요청</Badge>
-							) : null}
-							<span className="text-muted-foreground text-xs">
-								{formatDateTime(message.createdAt)}
-							</span>
-						</div>
-						<p className="m-0 whitespace-pre-wrap text-foreground text-sm">
-							{message.body}
-						</p>
-						{message.attachments.length > 0 ? (
-							<div className="flex flex-wrap gap-1">
-								{message.attachments.map((attachment) => (
-									<Badge key={attachment.id} variant="outline">
-										첨부 · {attachment.fileName}
-									</Badge>
-								))}
-							</div>
-						) : null}
-					</div>
-				);
-			})}
-		</div>
-	);
-}
 
 function getChatColumns(
 	onRequestAction: (row: ChatRow, kind: ChatActionKind) => void,
@@ -280,15 +235,26 @@ export default function ModeratorChatsPage() {
 	const [pending, setPending] = useState<PendingAction | null>(null);
 	const [reason, setReason] = useState("");
 	const [viewing, setViewing] = useState<ViewingChat | null>(null);
+	const [scope, setScope] = useState<ScopeValue>("all");
+	const [search, setSearch] = useState("");
+	const [page, setPage] = useState(1);
+	const debouncedSearch = useDebouncedValue(search);
 
 	const chatsQuery = useQuery(
-		orpc.bambi.moderation.listChatsForModeration.queryOptions()
+		orpc.bambi.moderation.listAllChatsForModeration.queryOptions({
+			input: {
+				onlyFlagged: scope === "flagged",
+				page,
+				search: debouncedSearch.trim(),
+			},
+		})
 	);
 	const invalidateChats = async () => {
 		setPending(null);
 		setReason("");
 		await queryClient.invalidateQueries({
-			queryKey: orpc.bambi.moderation.listChatsForModeration.queryKey(),
+			// input 없이 호출해 탭·검색어·페이지 조합 전체를 한 번에 무효화한다.
+			queryKey: orpc.bambi.moderation.listAllChatsForModeration.key(),
 		});
 	};
 	const deleteMutation = useMutation(
@@ -334,10 +300,22 @@ export default function ModeratorChatsPage() {
 		[]
 	);
 
-	const chats = chatsQuery.data ?? [];
+	const chats = chatsQuery.data?.items ?? [];
+	const totalCount = chatsQuery.data?.totalCount ?? 0;
+	const pageSize = chatsQuery.data?.pageSize ?? 20;
+	const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+	const hasNextPage = page * pageSize < totalCount;
 	const isApplying = deleteMutation.isPending || blockMutation.isPending;
 	const canConfirm = reason.trim().length >= 2 && !isApplying;
 	const pendingCopy = pending ? CHAT_ACTION_COPY[pending.kind] : null;
+	// 빈 목록 안내는 "아직 방이 없다"와 "검색·탭 때문에 안 보인다"를 구분해야 한다.
+	let emptyDescription = "아직 만들어진 채팅방이 없어요.";
+	if (search.trim()) {
+		emptyDescription =
+			"검색어와 맞는 채팅방이 없어요. 다른 이름으로 찾아보세요.";
+	} else if (scope === "flagged") {
+		emptyDescription = "삭제·차단·신고된 채팅방이 아직 없어요.";
+	}
 	const confirmPendingAction = () => {
 		if (!pending) {
 			return;
@@ -363,10 +341,39 @@ export default function ModeratorChatsPage() {
 			<div className="flex flex-col gap-1">
 				<h1 className="m-0 font-extrabold text-2xl">채팅 관리</h1>
 				<p className="m-0 text-muted-foreground text-sm">
-					삭제·차단·신고된 채팅방을 확인하고, 필요 시 대화방을 차단하거나 차단을
-					해제하고, 방을 완전히 삭제하거나 참여한 회원 상세로 이동합니다. 삭제는
-					되돌릴 수 없어요. 사용자끼리 건 개인 차단은 운영자가 풀지 않습니다.
+					모든 채팅방을 훑어보고 대화를 열람합니다. 열람은 읽기 전용이라
+					상대에게 읽음으로 보이지 않고, 누가 언제 열었는지는 감사 로그에
+					남아요. 필요하면 대화방을 차단하거나 차단을 해제하고, 방을 완전히
+					삭제하거나 참여한 회원 상세로 이동합니다. 삭제는 되돌릴 수 없어요.
+					사용자끼리 건 개인 차단은 운영자가 풀지 않습니다.
 				</p>
+			</div>
+
+			<div className="flex flex-wrap items-center gap-3">
+				<Tabs
+					onValueChange={(value) => {
+						setScope(value as ScopeValue);
+						setPage(1);
+					}}
+					value={scope}
+				>
+					<TabsList className="max-w-full flex-wrap">
+						{SCOPE_TABS.map((tab) => (
+							<TabsTrigger key={tab.value} value={tab.value}>
+								{tab.label}
+							</TabsTrigger>
+						))}
+					</TabsList>
+				</Tabs>
+				<Input
+					className="max-w-xs"
+					onChange={(event) => {
+						setSearch(event.target.value);
+						setPage(1);
+					}}
+					placeholder="구직자·구인자 이름, 공고 제목 검색"
+					value={search}
+				/>
 			</div>
 
 			{chatsQuery.isPending ? (
@@ -385,21 +392,39 @@ export default function ModeratorChatsPage() {
 			) : null}
 
 			{chatsQuery.isSuccess && chats.length === 0 ? (
-				<EmptyState
-					description="삭제·차단·신고된 채팅방이 아직 없어요."
-					title="관리할 채팅방이 없어요"
-				/>
+				<EmptyState description={emptyDescription} title="채팅방이 없어요" />
 			) : null}
 
 			{chatsQuery.isSuccess && chats.length > 0 ? (
-				<div className="overflow-x-auto rounded-xl border border-border">
-					<DataTable
-						columns={columns}
-						data={chats}
-						getRowKey={(row) => row.chatRoomId}
-						pageSize={10}
-					/>
-				</div>
+				<>
+					{/* 페이지네이션은 서버가 하므로 표에는 pageSize를 주지 않는다(내려온 페이지 전부 표시). */}
+					<div className="overflow-x-auto rounded-xl border border-border">
+						<DataTable
+							columns={columns}
+							data={chats}
+							getRowKey={(row) => row.chatRoomId}
+						/>
+					</div>
+					<div className="flex items-center justify-between gap-2">
+						<Button
+							disabled={page <= 1}
+							onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+							variant="outline"
+						>
+							이전
+						</Button>
+						<span className="text-muted-foreground text-sm">
+							{page} / {totalPages} · 전체 {totalCount}개
+						</span>
+						<Button
+							disabled={!hasNextPage}
+							onClick={() => setPage((prev) => prev + 1)}
+							variant="outline"
+						>
+							다음
+						</Button>
+					</div>
+				</>
 			) : null}
 
 			<Dialog
@@ -442,33 +467,7 @@ export default function ModeratorChatsPage() {
 				</DialogContent>
 			</Dialog>
 
-			<Dialog
-				onOpenChange={(open) => {
-					if (!open) {
-						setViewing(null);
-					}
-				}}
-				open={viewing !== null}
-			>
-				<DialogContent className="max-w-2xl">
-					<DialogTitle>채팅 내역</DialogTitle>
-					<DialogDescription>
-						"{viewing?.title}" 채팅방의 전체 대화를 시간순으로 봅니다.
-					</DialogDescription>
-					{viewing ? (
-						<ChatHistoryContent chatRoomId={viewing.chatRoomId} />
-					) : null}
-					<div className="flex justify-end">
-						<DialogClose
-							render={
-								<Button size="sm" type="button" variant="ghost">
-									닫기
-								</Button>
-							}
-						/>
-					</div>
-				</DialogContent>
-			</Dialog>
+			<ChatHistoryDialog onClose={() => setViewing(null)} viewing={viewing} />
 		</div>
 	);
 }

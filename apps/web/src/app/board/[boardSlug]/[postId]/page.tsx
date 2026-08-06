@@ -7,8 +7,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/bambi/json-ld";
 import { PublicPostBody } from "@/components/bambi/public-post-body";
+import { PublicPostInteractions } from "@/components/bambi/public-post-interactions";
 import {
 	communityAuthorName,
+	communityAuthorRoleLabel,
 	communityPostPath,
 	formatCommunityDate,
 } from "@/lib/bambi/community";
@@ -16,11 +18,13 @@ import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import {
 	communityBodyText,
 	getPublicBoardBySlug,
+	isGuestWritableBoard,
 	PUBLIC_BOARD_INDEX_PATH,
 	publicBoardPath,
 	publicPostPath,
 } from "@/lib/bambi/public-community";
 import { breadcrumbJsonLd } from "@/lib/bambi/seo";
+import { readGuestCanWrite, readVisitorState } from "@/lib/bambi/visitor";
 import { client } from "@/utils/orpc";
 
 interface PageProps {
@@ -94,7 +98,7 @@ function PublicComments({ comments }: { comments: PublicPost["comments"] }) {
 					key={comment.id}
 				>
 					<span className="text-muted-foreground text-xs">
-						{comment.authorRole === "employer" ? "업소 회원" : "회원"} ·{" "}
+						{communityAuthorRoleLabel(comment.authorRole)} ·{" "}
 						{formatCommunityDate(comment.createdAt)}
 					</span>
 					<p className="m-0 whitespace-pre-wrap text-foreground text-sm">
@@ -106,9 +110,47 @@ function PublicComments({ comments }: { comments: PublicPost["comments"] }) {
 	);
 }
 
+// 로그인 회원용 안내. 잠금·신고·답글 등 회원 전용 기능이 회원 화면에만 있어 그쪽으로 보낸다.
+function MemberCommentsSection({
+	boardSlug,
+	post,
+	postId,
+}: {
+	boardSlug: string;
+	post: PublicPost;
+	postId: string;
+}) {
+	return (
+		<>
+			<section className="flex flex-col gap-3">
+				<h2 className="m-0 font-bold text-base">댓글 {post.commentCount}</h2>
+				<PublicComments comments={post.comments} />
+			</section>
+			<div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-4">
+				<p className="m-0 text-muted-foreground text-sm">
+					댓글·추천은 회원 화면에서 남길 수 있어요.
+				</p>
+				<Link
+					className={cn(
+						buttonVariants({ size: "sm", variant: "outline" }),
+						"no-underline"
+					)}
+					href={communityPostPath(boardSlug, postId) as Route}
+				>
+					회원 화면에서 보기
+				</Link>
+			</div>
+		</>
+	);
+}
+
 export default async function PublicPostPage({ params }: PageProps) {
 	const { boardSlug, postId } = await params;
-	const post = await loadPost(boardSlug, postId);
+	const [post, visitor, canWrite] = await Promise.all([
+		loadPost(boardSlug, postId),
+		readVisitorState(),
+		readGuestCanWrite(),
+	]);
 	if (!post) {
 		notFound();
 	}
@@ -175,24 +217,24 @@ export default async function PublicPostPage({ params }: PageProps) {
 			<PublicPostBody body={post.body} />
 
 			<Separator />
-			<section className="flex flex-col gap-3">
-				<h2 className="m-0 font-bold text-base">댓글 {post.commentCount}</h2>
-				<PublicComments comments={post.comments} />
-			</section>
-
-			{/* 참여(추천·댓글·신고)는 회원 화면으로 보낸다. 비로그인은 게이트가 로그인
-			    화면으로 돌리므로 여기서 따로 막지 않는다. */}
-			<div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-4">
-				<p className="m-0 text-muted-foreground text-sm">
-					댓글·추천은 밤비알바 회원만 남길 수 있어요.
-				</p>
-				<Link
-					className={cn(buttonVariants({ size: "sm" }), "no-underline")}
-					href={communityPostPath(boardSlug, postId) as Route}
-				>
-					로그인하고 댓글 쓰기
-				</Link>
-			</div>
+			{visitor === "member" ? (
+				<MemberCommentsSection
+					boardSlug={boardSlug}
+					post={post}
+					postId={postId}
+				/>
+			) : (
+				<PublicPostInteractions
+					boardSlug={boardSlug}
+					canWrite={canWrite}
+					commentCount={post.commentCount}
+					initialComments={post.comments}
+					isGuestAuthored={post.authorRole === "guest"}
+					likeCount={post.likeCount}
+					participable={board ? isGuestWritableBoard(board.key) : false}
+					postId={postId}
+				/>
+			)}
 		</article>
 	);
 }

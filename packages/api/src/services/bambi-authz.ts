@@ -7,9 +7,12 @@ import {
 	type bambiUserRole,
 	chatRoom,
 	employerOrganizationProfile,
+	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, eq, or } from "drizzle-orm";
+
+import { isChatRoomLeftByAnyone } from "./bambi-chat-participation";
 
 export interface SessionLike {
 	user?: {
@@ -28,6 +31,15 @@ export interface BambiAccessProfile {
 	status: AccountStatus;
 	userId: string;
 }
+
+// 구인 기능(조직·팀·공고·광고·분석)을 쓸 수 있는 역할. 예전에는 호출부마다
+// `role === "job_seeker"`면 거부하는 식으로 뒤집어 판정했는데, 그러면 bambi_user_role에
+// 값이 하나 늘 때마다(legal_advisor 등) 구직자 축 계정이 조용히 구인자 API로 새어 들어간다.
+// 허용 목록으로 고정해 기본값이 "거부"가 되게 한다(기존 두 역할의 판정 결과는 그대로다).
+const EMPLOYER_LIKE_ROLES = new Set<string>(["employer", "admin"]);
+
+export const isEmployerLikeRole = (role: string): boolean =>
+	EMPLOYER_LIKE_ROLES.has(role);
 
 interface EmployerPostingAccessInput {
 	organizationId: string;
@@ -192,9 +204,48 @@ export const isEmployerOrganizationVerified = async (
 	return row?.status === "verified";
 };
 
+/**
+ * 두 사용자 사이의 차단 행을 방향 구분 없이 찾는다(누가 걸었는지는 blockerUserId로 구분).
+ * 차단은 방 컬럼이 아니라 user_block 행으로만 표현되므로, chatRoom.isBlocked만 보는 경로는
+ * 사용자 간 차단을 통째로 놓친다 — HTTP 가드와 소켓 핸들러가 같은 판정을 쓰게 여기에 둔다.
+ */
+export const findUserBlockBetween = async (
+	userId: string,
+	otherUserId: string
+): Promise<null | { blockerUserId: string }> => {
+	const [block] = await db
+		.select({ blockerUserId: userBlock.blockerUserId })
+		.from(userBlock)
+		.where(
+			or(
+				and(
+					eq(userBlock.blockerUserId, userId),
+					eq(userBlock.blockedUserId, otherUserId)
+				),
+				and(
+					eq(userBlock.blockerUserId, otherUserId),
+					eq(userBlock.blockedUserId, userId)
+				)
+			)
+		)
+		.limit(1);
+
+	return block ?? null;
+};
+
+/**
+ * 참여자용 방 로드 가드. 열람·발신·읽음·소켓 입장이 모두 여기를 지난다.
+ *
+ * 한쪽이라도 "나가기"를 누른 방은 양쪽 모두에게 없는 방이다 — 여기서 한 번 막으면
+ * 호출부(getById·sendMessage·markRead·면접·연락처·후기·신고·소켓 join)가 전부 덮인다.
+ *
+ * allowLeftRoom은 면접 경로 전용 예외다(사용자 확정): 면접이 걸린 방은 한쪽이 나갔어도
+ * 완료 처리와 내역 열람만은 열어 둔다 — 방을 나가면 면접을 영영 못 끝내기 때문이다.
+ */
 export const requireChatParticipant = async (
 	chatRoomId: string,
-	session: SessionLike | null | undefined
+	session: SessionLike | null | undefined,
+	options?: { allowLeftRoom?: boolean }
 ) => {
 	const profile = await requireActiveBambiProfile(session);
 	const [room] = await db
@@ -211,7 +262,7 @@ export const requireChatParticipant = async (
 		)
 		.limit(1);
 
-	if (!room) {
+	if (!room || (isChatRoomLeftByAnyone(room) && !options?.allowLeftRoom)) {
 		throw new ORPCError("NOT_FOUND", {
 			message: "Chat room was not found for this user.",
 		});

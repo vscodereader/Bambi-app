@@ -14,6 +14,7 @@ const PAGES = [
 	// 후기 관리는 이 규약이 생기기 전에 만들어져 max-w-3xl(768px)을 스스로 얹고 있었다.
 	// 헤더는 1120px이라 눈에 띄게 좁았고 여백도 px-6 단독이라 모바일에서 형제들과 달랐다.
 	{ name: "후기 관리", source: readPageSource("reviews/page.tsx") },
+	{ name: "면접 일정", source: readPageSource("interviews/page.tsx") },
 ];
 
 describe("moderator page content width", () => {

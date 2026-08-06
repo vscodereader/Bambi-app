@@ -92,6 +92,8 @@ const listInquiriesByAdminInput = z.object({
 });
 
 const INQUIRY_NOT_FOUND = "문의를 찾을 수 없습니다.";
+const ADMIN_CANNOT_CREATE_INQUIRY =
+	"운영자 계정은 문의 접수 대상이 아니에요. 회원 문의는 운영자 콘솔의 고객센터 관리에서 답변해 주세요.";
 
 // 본인 또는 운영자만 문의에 접근한다. 타인에게는 NOT_FOUND를 던진다 —
 // FORBIDDEN은 "그 id의 문의가 존재한다"를 알려주므로 비공개 문의의 존재가 새어 나간다.
@@ -133,6 +135,14 @@ export const supportRouter = {
 		.input(createInquiryInput)
 		.handler(async ({ context, input }) => {
 			const profile = await requireActiveBambiProfile(context.session);
+
+			// 운영자는 문의를 받는 쪽이다. 운영자 계정으로 접수된 문의는 답변 큐
+			// (listInquiriesByAdmin)에 자기 글로 섞여 처리 대상을 흐린다.
+			if (profile.role === "admin") {
+				throw new ORPCError("FORBIDDEN", {
+					message: ADMIN_CANNOT_CREATE_INQUIRY,
+				});
+			}
 
 			await assertNoBannedWords([input.title, input.body]);
 

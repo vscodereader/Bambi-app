@@ -28,13 +28,17 @@ import {
 	rateLimitedPublicProcedure,
 } from "../../index";
 import { hasActiveAdExposure } from "../../services/bambi-advertiser";
-import { isEmployerOrganizationVerified } from "../../services/bambi-authz";
+import {
+	isEmployerLikeRole,
+	isEmployerOrganizationVerified,
+} from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import {
 	resolveVerifiedIdentity,
 	type VerifiedIdentity,
 } from "../../services/bambi-identity";
+import { recordIdentityVerification } from "../../services/bambi-identity-log";
 import {
 	assertIdentityVerificationUsable,
 	consumeIdentityVerification,
@@ -244,7 +248,7 @@ const requireEmployerBambiProfile = async (userId: string) => {
 		.where(eq(bambiProfile.userId, userId))
 		.limit(1);
 
-	if (!profile || profile.role === "job_seeker") {
+	if (!(profile && isEmployerLikeRole(profile.role))) {
 		throw new ORPCError("FORBIDDEN", {
 			message: "Employer Bambi profile is required.",
 		});
@@ -336,6 +340,12 @@ const createBambiProfile = async ({
 		// 인증 건의 최종 소비 지점. 여기를 지나면 같은 ID로는 다시 가입할 수 없다
 		// (앞선 checkIdentityForSignup·/api/guest는 검증만 하고 소진시키지 않는다).
 		await consumeIdentityVerification(identityVerificationId);
+		// 비회원으로 먼저 인증했다면 그 행의 구분을 가입 역할로 덮어쓴다.
+		await recordIdentityVerification({
+			identity,
+			identityVerificationId,
+			kind: role,
+		});
 	}
 
 	const [createdProfile] = await db
@@ -701,7 +711,13 @@ export const onboardingRouter = {
 	// 끝난 뒤이고 포트원 단건조회는 무료라, 임의 ID로 두드려도 얻을 게 없다
 	// (identityVerificationId는 UUID라 추측이 불가능하다).
 	checkIdentityForSignup: publicProcedure
-		.input(phoneVerificationInput)
+		.input(
+			// 비회원(수다방 게스트) 흐름에서 온 호출만 구분을 guest로 남긴다. 가입 폼의
+			// 사전확인 호출은 구분을 아직 모르므로 플래그 없이 부른다.
+			phoneVerificationInput.extend({
+				source: z.literal("guest").optional(),
+			})
+		)
 		.handler(async ({ input }) => {
 			const apiSecret = env.PORTONE_API_SECRET;
 			if (!apiSecret) {
@@ -717,6 +733,11 @@ export const onboardingRouter = {
 				input.identityVerificationId,
 				identityChannelOptions
 			);
+			await recordIdentityVerification({
+				identity,
+				identityVerificationId: input.identityVerificationId,
+				kind: input.source,
+			});
 			return {
 				gender: identity.gender,
 				hasAccount: await findIdentityCollision(identity),
@@ -737,7 +758,7 @@ export const onboardingRouter = {
 			}
 			const userId = context.session.user.id;
 			const [existingProfile] = await db
-				.select({ gender: bambiProfile.gender })
+				.select({ gender: bambiProfile.gender, role: bambiProfile.role })
 				.from(bambiProfile)
 				.where(eq(bambiProfile.userId, userId))
 				.limit(1);
@@ -757,6 +778,11 @@ export const onboardingRouter = {
 			}
 			// 재인증의 최종 소비 지점 — 같은 인증 건으로 두 번 번호를 갈아끼울 수 없다.
 			await consumeIdentityVerification(input.identityVerificationId);
+			await recordIdentityVerification({
+				identity,
+				identityVerificationId: input.identityVerificationId,
+				kind: existingProfile.role,
+			});
 
 			const [updatedProfile] = await db
 				.update(bambiProfile)
@@ -864,9 +890,13 @@ export const onboardingRouter = {
 	// 회원 탈퇴. 본인이 소유한 조직에 다른 멤버가 남아 있으면 차단한다 —
 	// 팀 관리에서 멤버를 모두 정리한 뒤 탈퇴할 수 있다(혼자 남은 소유자는 그대로 탈퇴 가능).
 	//
-	// 여기서는 소프트 탈퇴만 한다: deletedAt을 찍고, 상대방에게 보이는 표시값을
-	// 익명화하고, 전 기기 세션을 끊는다. 식별값(이메일·로그인 아이디·비밀번호·연락처·
-	// CI/DI 해시) 파기는 보존기간(운영자 설정, 기본 30일) 경과 후 운영자 배치
+	// 여기서는 소프트 탈퇴만 한다: deletedAt 마커를 찍고 전 기기 세션을 끊는다.
+	// 프로필 원본(이름·이미지)은 건드리지 않는다 — 상대방 화면에 실명이 남지 않게 하는 건
+	// 표시 계층(services/bambi-withdrawn-display)이 맡고, 실제 파기는 보존기간 경과 후
+	// 파기 배치가 한다. 원본을 여기서 덮으면 운영자가 누가 탈퇴했는지 알 수 없고, 실수로
+	// 탈퇴한 계정을 되살려도(accountRecovery.restoreWithdrawnAccount) 이름이 돌아오지 않는다.
+	// 식별값(이메일·로그인 아이디·비밀번호·연락처·CI/DI 해시)과 이름·이미지 파기는
+	// 보존기간(운영자 설정, 기본 30일) 경과 후 운영자 배치
 	// (moderation.purgeWithdrawnAccounts)가 전담한다. 탈퇴 시점에 이메일을 치환하고
 	// login_id·자격증명을 지우면 재로그인 시 계정 자체가 조회되지 않아 better-auth가
 	// "아이디(이메일) 또는 비밀번호가 틀렸습니다"로 뭉개고, 세션 생성 훅의 안내
@@ -900,15 +930,13 @@ export const onboardingRouter = {
 						)
 					);
 			}
-			// 표시명·프로필 이미지는 상대방 화면(채팅·후기)에 그대로 보이는 값이라 즉시
-			// 익명화한다. isNull 가드로 중복 호출을 no-op으로 만든다(멱등).
+			// 소프트 삭제 마커만 찍는다. 상대방 화면(채팅·후기·커뮤니티)의 표시명은
+			// resolveVisibleDisplayName이 이 마커를 보고 "탈퇴한 회원"으로 바꿔 내보낸다.
+			// isNull 가드로 중복 호출을 no-op으로 만든다(멱등) — 이미 탈퇴한 계정의
+			// deletedAt을 다시 찍어 보존기간이 뒤로 밀리는 것도 함께 막는다.
 			await tx
 				.update(user)
-				.set({
-					deletedAt: new Date(),
-					image: null,
-					name: "탈퇴한 회원",
-				})
+				.set({ deletedAt: new Date() })
 				.where(and(eq(user.id, userId), isNull(user.deletedAt)));
 			await tx.delete(teamMember).where(eq(teamMember.userId, userId));
 			await tx.delete(member).where(eq(member.userId, userId));

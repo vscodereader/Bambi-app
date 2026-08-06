@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { BAMBI_COMPANY, BAMBI_PROCESSORS } from "@/lib/bambi/company";
+import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
 interface FooterForm {
@@ -223,6 +224,7 @@ export default function ModeratorSiteSettingsPage() {
 		orpc.bambi.siteSettings.getMemberPolicy.queryOptions()
 	);
 	const [retentionDays, setRetentionDays] = useState("");
+	const [purgeHour, setPurgeHour] = useState("");
 
 	// 저장된 값이 오면 폼에 채운다(미설정이면 빈 값 → 기본값 placeholder 노출).
 	useEffect(() => {
@@ -231,6 +233,7 @@ export default function ModeratorSiteSettingsPage() {
 			return;
 		}
 		setRetentionDays(data.days === null ? "" : String(data.days));
+		setPurgeHour(data.purgeHour === null ? "" : String(data.purgeHour));
 	}, [memberPolicyQuery.data]);
 
 	const saveMemberPolicyMutation = useMutation(
@@ -253,14 +256,31 @@ export default function ModeratorSiteSettingsPage() {
 			toast.error("보존기간은 일 단위 정수로 입력해 주세요.");
 			return;
 		}
-		saveMemberPolicyMutation.mutate({ withdrawalRetentionDays: parsed });
+		const trimmedHour = purgeHour.trim();
+		const parsedHour = trimmedHour === "" ? null : Number(trimmedHour);
+		if (
+			parsedHour !== null &&
+			!(Number.isInteger(parsedHour) && parsedHour >= 0 && parsedHour <= 23)
+		) {
+			toast.error("파기 실행 시각은 0~23 사이 정수로 입력해 주세요.");
+			return;
+		}
+		saveMemberPolicyMutation.mutate({
+			withdrawalPurgeHour: parsedHour,
+			withdrawalRetentionDays: parsed,
+		});
 	};
 
-	// 파기 배치 수동 실행. cron 인프라가 없어 이 버튼이 유일한 트리거다.
+	// 파기 배치 수동 실행. 서버 스케줄러가 매일 설정 시각에 같은 배치를 돌리며, 이 버튼은
+	// 다음 자동 실행을 기다리지 않고 즉시 정리할 때 쓰는 트리거다(멱등이라 겹쳐도 안전).
+	// 수동 실행도 "마지막 실행" 시각을 갱신하므로 성공 후 회원 정책 조회를 다시 받는다.
 	const purgeMutation = useMutation(
 		orpc.bambi.moderation.purgeWithdrawnAccounts.mutationOptions({
 			onError: (error) => toast.error(error.message || "실행하지 못했어요."),
-			onSuccess: (result) => {
+			onSuccess: async (result) => {
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getMemberPolicy.queryKey(),
+				});
 				if (result.purgedCount === 0) {
 					toast.success("보존기간이 지난 탈퇴 계정이 없어요.");
 					return;
@@ -616,23 +636,45 @@ export default function ModeratorSiteSettingsPage() {
 				</CardHeader>
 				<CardContent>
 					<form className="flex flex-col gap-5" onSubmit={onSubmitMemberPolicy}>
-						<div className="flex flex-col gap-2 md:max-w-xs">
-							<Label htmlFor="withdrawalRetentionDays">
-								탈퇴 개인정보 보존기간(일)
-							</Label>
-							<Input
-								id="withdrawalRetentionDays"
-								inputMode="numeric"
-								onChange={(event) => setRetentionDays(event.target.value)}
-								placeholder={String(memberPolicyQuery.data?.defaultDays ?? 30)}
-								value={retentionDays}
-							/>
-							<p className="m-0 text-muted-foreground text-xs">
-								연락처·비밀번호 등은 탈퇴 즉시 파기하고, 부정 재가입 차단에
-								필요한 본인인증 식별값(CI·DI 해시)만 이 기간 동안 남겨요.
-								비워두면 기본값을 사용하고, 탈퇴 안내 문구와 개인정보
-								처리방침에도 그대로 표시돼요.
-							</p>
+						<div className="grid grid-cols-1 gap-5 md:max-w-md md:grid-cols-2">
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="withdrawalRetentionDays">
+									탈퇴 개인정보 보존기간(일)
+								</Label>
+								<Input
+									id="withdrawalRetentionDays"
+									inputMode="numeric"
+									onChange={(event) => setRetentionDays(event.target.value)}
+									placeholder={String(
+										memberPolicyQuery.data?.defaultDays ?? 30
+									)}
+									value={retentionDays}
+								/>
+								<p className="m-0 text-muted-foreground text-xs">
+									연락처·비밀번호 등은 탈퇴 즉시 파기하고, 부정 재가입 차단에
+									필요한 본인인증 식별값(CI·DI 해시)만 이 기간 동안 남겨요.
+									비워두면 기본값을 사용하고, 탈퇴 안내 문구와 개인정보
+									처리방침에도 그대로 표시돼요.
+								</p>
+							</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="withdrawalPurgeHour">
+									파기 배치 실행 시각(0~23시)
+								</Label>
+								<Input
+									id="withdrawalPurgeHour"
+									inputMode="numeric"
+									onChange={(event) => setPurgeHour(event.target.value)}
+									placeholder={String(
+										memberPolicyQuery.data?.defaultPurgeHour ?? 4
+									)}
+									value={purgeHour}
+								/>
+								<p className="m-0 text-muted-foreground text-xs">
+									보존기간이 지난 탈퇴 계정을 파기하는 배치가 매일 이 시각(한국
+									시간)에 자동으로 돌아요. 비워두면 기본값(새벽 4시)을 사용해요.
+								</p>
+							</div>
 						</div>
 						<div className="flex justify-end">
 							<Button
@@ -649,8 +691,15 @@ export default function ModeratorSiteSettingsPage() {
 					<Separator className="my-5" />
 					<div className="flex flex-col gap-3">
 						<p className="m-0 text-muted-foreground text-xs">
-							보존기간이 지난 탈퇴 계정의 잔여 식별값을 파기해요. 자동 실행이
-							없어 주기적으로 눌러 주셔야 해요.
+							보존기간이 지난 탈퇴 계정의 잔여 식별값을 파기해요. 매일 위에서
+							설정한 시각(기본 새벽 4시)에 자동으로 실행되며, 이 버튼은 지금
+							바로 실행하고 싶을 때 눌러 주세요.
+						</p>
+						<p className="m-0 text-muted-foreground text-xs">
+							마지막 실행:{" "}
+							{memberPolicyQuery.data?.purgeLastRunAt
+								? formatDateTime(memberPolicyQuery.data.purgeLastRunAt)
+								: "아직 없음"}
 						</p>
 						<div className="flex justify-end">
 							<Button

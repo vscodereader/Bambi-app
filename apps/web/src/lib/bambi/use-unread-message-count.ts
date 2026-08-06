@@ -3,14 +3,19 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useBambiAuth } from "@/components/bambi/auth-client-provider";
+import { useBambiNotificationStream } from "@/lib/bambi/use-bambi-notification-stream";
 import { connectBambiChatSocket } from "@/lib/bambi-chat-realtime";
 import { orpc } from "@/utils/orpc";
 
 // 헤더 채팅 버튼과 모바일 하단 탭이 공유하는 안 읽은 메시지 총합 훅.
 // 새 메시지·읽음 처리 신호를 받으면 서버 정본을 다시 조회해 중복 증감을 피한다.
+// 소켓이 연결되지 않은 상황(방 밖·다른 탭)에서도 알림 SSE가 같은 갱신을 밀어 준다.
 export function useUnreadMessageCount(): number {
 	const { isAuthenticated } = useBambiAuth();
 	const queryClient = useQueryClient();
+
+	useBambiNotificationStream(isAuthenticated);
+
 	const query = useQuery({
 		...orpc.bambi.chats.unreadState.queryOptions(),
 		enabled: isAuthenticated,

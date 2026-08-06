@@ -15,6 +15,10 @@ describe("moderator nav 재편", () => {
 		expect(source).toContain('label: "채팅"');
 		expect(source).toContain("/moderator/chats");
 	});
+	it("회원 관리 그룹에 면접 일정 nav를 추가한다", () => {
+		expect(source).toContain('label: "면접 일정"');
+		expect(source).toContain("/moderator/interviews");
+	});
 	it("콘텐츠·고객센터 그룹명을 콘텐츠로 정리한다", () => {
 		expect(source).toContain('label: "콘텐츠"');
 		expect(source).not.toContain("콘텐츠·고객센터");

@@ -11,10 +11,13 @@
 
 ### 0.1 역할 모델 (코드 확인)
 
-- 역할 enum은 **3종뿐**이다 — `job_seeker` / `employer` / `admin`
-  (`packages/db/src/schema/bambi.ts` `bambiUserRole`).
+- 계정 역할 enum은 `job_seeker` / `employer` / `admin` / `legal_advisor`이다
+  (`packages/db/src/schema/bambi.ts` `bambiUserRole`. `guest`도 같은 enum에 있지만 계정 없는 비회원
+  작성자 스냅샷 전용이라 회원 목록에는 나오지 않는다).
   **`moderator`라는 별도 역할·등급은 코드에 존재하지 않는다.** 화면 이름만 "운영자 콘솔"(`/moderator`)이고
   실제 권한 값은 `admin` 하나다. 따라서 **운영자 등급별 차등 권한 테스트는 대상이 없다**(부록 참조).
+- `legal_advisor`는 **운영자만 지정**하는 역할이며(§4.6), 콘솔 권한은 전혀 없다 — 수다방
+  `무료 법률 자문` 게시판의 잠긴 글을 열람·답변할 수 있을 뿐이다.
 - 계정 상태 enum: `active` / `warned` / `suspended` (`accountStatus`).
 
 ### 0.2 권한 게이트 2중 구조
@@ -316,7 +319,7 @@
   테이블 `apps/web/src/components/bambi/moderator-users-table.tsx`)
 - **절차**:
   1. 상태 탭: 전체 / 정상 / 경고 / 정지 / **탈퇴**(= `deletedAt !== null`, enum이 아니라 별도 축).
-  2. 역할 Select(전체/구직자/구인자/운영자), 휴대폰 인증 Select(전체/인증/미인증).
+  2. 역할 Select(전체/구직자/**법률자문**/구인자/운영자), 휴대폰 인증 Select(전체/인증/미인증).
   3. 누적 신고 Select(0/1/3/5/10건 이상), 경고 횟수 Select(0/1/3/5회 이상).
   4. 검색: 이름·이메일·로그인 아이디.
 - **기대 결과**:
@@ -354,7 +357,8 @@
 - **경로**: `/moderator/users/[id]` "제재 이력" 섹션 (`moderator.tsx` `UserModerationHistory` L2208~)
 - **기대 결과**: 해당 사용자를 대상으로 한 감사 로그 **최신 50건**(액션 라벨 / 사유 / 처리자 이름 / 시각).
   액션 코드는 라벨 맵으로만 노출되며, 매핑에 없는 코드는 "기타 조치"로 표시된다
-  (`apps/web/src/lib/bambi/moderation-labels.ts` — 현재 `set_status:active|warned|suspended`만 매핑).
+  (`apps/web/src/lib/bambi/moderation-labels.ts` — 현재 `set_status:active|warned|suspended`,
+  `set_role:legal_advisor`(법률자문 지정)·`set_role:job_seeker`(법률자문 해제)만 매핑).
 - **관련 API**: `bambi.moderation.listUserModerationActions` (`moderation.ts` L1217, `adminProcedure`)
 
 ### 4.4 정상 복구(제재 해제)
@@ -376,18 +380,55 @@
   0건 또는 51건 이상이면 `BAD_REQUEST`.
 - **관련 API**: `bambi.moderation.bulkSetUserStatus` (`moderation.ts` L1772)
 
-### 4.6 탈퇴 계정 잔여 식별값 파기 (배치)
+### 4.6 법률자문 지정·해제
 
-- **경로**: `/moderator/site-settings` 내 실행 버튼 (§13)
+- **경로**: `/moderator/users` 목록에서 대상 **1명** 체크 → 목록 위 역할 수정 줄
+  (UI `users/page.tsx` `roleTarget`, 시트 `moderator.tsx` `ReasonConfirmSheet`·`legalAdvisorChoice`,
+  컨텍스트 `moderator-context.tsx` `setLegalAdvisor`)
+- **선행 조건**: 대상이 **밤비 프로필이 있는** `job_seeker` 또는 `legal_advisor` 계정.
+- **절차**:
+  1. 목록에서 역할 Select로 `구직자`/`법률자문`을 걸러 대상을 찾고 행 왼쪽 선택 칸 체크(정확히 1명).
+  2. 목록 위에 뜬 역할 수정 줄의 버튼(구직자면 **법률자문 지정**, 법률자문이면 **법률자문 해제**) 클릭.
+  3. 사유 시트(기본 문구 프리필, 2자 이상) → 확정.
+- **기대 결과**:
+  - `setUserRole({role, reason, targetUserId})` → `bambi_profile.role` 갱신 +
+    감사 로그 `set_role:legal_advisor` / `set_role:job_seeker`(대상 유형 `user`).
+  - 적용 후 목록 캐시가 무효화되어 목록(·상세)의 역할 표기가 바뀌고, 시트가 닫히며 선택이 해제된다.
+    실패하면 시트에 남아 사유를 고쳐 재시도할 수 있다(서버 거절 사유 토스트).
+  - 지정된 계정은 수다방에 성별·광고와 무관하게 입장하고, `legal` 게시판의 잠긴 글을 비번 없이 열람·답변한다
+    (구직자 테스트 흐름 §11.9). 해제하면 곧바로 권한이 사라진다.
+  - **그 외 권한은 구직자 그대로다.** 구인 기능(공고 `listMine`·조직·팀·광고·분석·업소 인증 제출)은
+    `isEmployerLikeRole`(`employer`·`admin` 허용 목록)이 막아 `FORBIDDEN`이고, 홈도 `/seeker`다.
+    채팅은 `job_seeker` 전용이라 지정 중에는 이용할 수 없다(해제하면 복구).
+- **엣지 케이스 / 실패 케이스**:
+  - `employer`·`admin`·탈퇴 계정을 선택하거나 **2명 이상** 선택 → 역할 수정 줄 미노출
+    (일괄 제재 바만 뜬다). API 직접 호출 시 `BAD_REQUEST`
+    "법률자문 지정·해제는 구직자 계정에만 할 수 있어요(업소·운영자 계정은 전환할 수 없습니다)."
+  - 온보딩 전 계정 → `BAD_REQUEST` "아직 온보딩을 마치지 않은 계정이라 역할을 지정할 수 없어요."
+  - 사유 2자 미만이면 확정 비활성.
+- **관련 API**: `bambi.moderation.setUserRole` (`adminProcedure`)
+
+### 4.7 탈퇴 계정 잔여 식별값 파기 (배치)
+
+- **경로**: 서버 스케줄러가 **자동 실행(매일 1회, 운영자 설정 시각)** + `/moderator/site-settings` 실행 버튼(즉시 실행용, §13)
+- **자동 실행**: `apps/server/src/plugins/withdrawal-purge.ts` — 10분 간격 틱(crawl 플러그인과 동일)마다
+  `runScheduledWithdrawalPurge()`가 DB에서 실행 시각(`bambi_site_settings.withdrawal_purge_hour`,
+  기본 `DEFAULT_WITHDRAWAL_PURGE_HOUR = 4`, **KST**)과 마지막 실행 시각(`withdrawal_purge_last_run_at`)을 읽어
+  **"오늘 설정 시각이 지났는데 그 이후로 아직 안 돌았다"** 면 실행한다(순수 판정 `isWithdrawalPurgeDue`).
+  판정 근거가 전부 DB라 재시작 후 캐치업·다중 인스턴스 중복 방지가 메모리 상태 없이 이뤄진다.
+  실행 시점마다 `resolveWithdrawalRetentionDays()`로 보존기간을 다시 읽으므로 설정 변경은 다음 실행부터 반영된다.
+  결과는 `withdrawal purge completed` 로그(파기 0건이면 로그 없음), 실패는 `withdrawal purge failed`.
+  마지막 실행 시각은 대상 0건·실패와 무관하게 배치 진입 시 찍히므로(장애 중 매 틱 재시도 방지) 실패한 날은
+  다음 날 예약 실행이 이어받는다.
 - > ⚠ **되돌릴 수 없다.** 보존기간(운영자 설정, 기본 30일)이 지난 탈퇴 계정의 세션·자격증명(비밀번호)·
   > 연락처·CI/DI 해시를 지우고, 이메일을 `withdrawn-<id>@invalid.bambi`, `login_id`를 null,
   > 이름을 "탈퇴한 회원"으로 치환한다.
   > `user` 행 자체는 삭제하지 않는다(상대방 데이터가 RESTRICT FK로 물려 있음).
 - > **탈퇴 시점에는 아무것도 파기되지 않는다.** 탈퇴(`onboarding.withdrawMyAccount`)는 `deletedAt`·표시명
-  > 익명화·세션 삭제까지만 하는 소프트 삭제다. 이 배치가 유일한 파기 지점이므로 **주기적으로 눌러야**
-  > 이메일·아이디·연락처가 실제로 지워진다.
+  > 익명화·세션 삭제까지만 하는 소프트 삭제다. 이메일·아이디·연락처는 이 배치가 보존기간 경과 후 지운다.
 - **기대 결과**: `{ purgedCount: N }` 반환. 대상 0건이면 즉시 `{ purgedCount: 0 }`.
-- **관련 API**: `bambi.moderation.purgeWithdrawnAccounts` (`moderation.ts` L2539, `adminProcedure`)
+- **관련 API**: `bambi.moderation.purgeWithdrawnAccounts`(`adminProcedure`) — 자동 실행과 동일한
+  서비스 `purgeWithdrawnAccountsBatch`(`packages/api/src/services/bambi-withdrawal-purge.ts`)를 호출한다.
 
 ---
 
@@ -1152,19 +1193,25 @@
   - 중복 계좌 방지 없음.
 - **관련 API**: `bambi.siteSettings.getPaymentAccounts`(public) / `updatePaymentAccounts`(L303)
 
-### 13.4 회원 정책 — 탈퇴 개인정보 보존기간
+### 13.4 회원 정책 — 탈퇴 개인정보 보존기간 · 파기 배치 실행 시각
 
-- **절차**: 「탈퇴 개인정보 보존기간(일)」 입력 → **저장**.
-- **기대 결과**: "회원 정책을 저장했어요." 값은 ① 탈퇴 안내 문구 ② 개인정보 처리방침
+- **절차**: 「탈퇴 개인정보 보존기간(일)」·「파기 배치 실행 시각(0~23시)」 입력 → **저장**(한 폼·한 번의 저장).
+- **기대 결과**: "회원 정책을 저장했어요." 보존기간은 ① 탈퇴 안내 문구 ② 개인정보 처리방침
   ③ **파기 배치의 cutoff 계산**(`resolveWithdrawalRetentionDays`)에 동시 반영된다.
   기본값 `DEFAULT_WITHDRAWAL_RETENTION_DAYS = 30`.
-- **입력 검증**: 정수 1~365, `null` 허용(=기본값 복귀).
-- **엣지 케이스**: `12.5`/`abc` → 클라이언트 차단 / `0`·`366` → 서버 400.
-- **관련 API**: `bambi.siteSettings.getMemberPolicy`(public) / `updateMemberPolicy`(L333)
+  실행 시각은 **다음 틱(≤10분)부터** 파기 배치의 도래 판정에 반영된다(§4.7).
+  기본값 `DEFAULT_WITHDRAWAL_PURGE_HOUR = 4`(KST 새벽 4시).
+- **입력 검증**: 보존기간 정수 1~365 / 실행 시각 정수 0~23, 둘 다 `null` 허용(=기본값 복귀).
+- **엣지 케이스**: `12.5`/`abc` → 클라이언트 차단 / 보존기간 `0`·`366`, 실행 시각 `-1`·`24` → 서버 400.
+  실행 시각을 그날 자동 실행이 끝난 뒤 더 늦은 시각으로 바꾸면 같은 날 한 번 더 돈다(멱등이라 결과 동일).
+- **관련 API**: `bambi.siteSettings.getMemberPolicy`(public — `purgeLastRunAt`은 조회 전용) /
+  `updateMemberPolicy`(admin)
 
 ### 13.5 "지금 파기 실행" (탈퇴 계정 잔여 정보 파기)
 
-- **절차**: 「회원 정책」 카드 하단 **지금 파기 실행** 클릭.
+- **절차**: 「회원 정책」 카드 하단 **지금 파기 실행** 클릭. 같은 배치를 서버가 매일 설정 시각에
+  자동 실행하므로(§4.7) 이 버튼은 다음 자동 실행 전에 즉시 정리할 때만 쓴다.
+  버튼 위에 **마지막 실행** 시각이 표시된다(미실행이면 "아직 없음", 실행 후 자동 갱신).
 - > ⚠ **확인 다이얼로그 없이 즉시 실행되며 되돌릴 수 없다.**
   > 대상: `deletedAt IS NOT NULL AND deletedAt <= (now - 보존기간) AND purgedAt IS NULL`.
   > 세션·자격증명(비밀번호) 삭제, 연락처·성별·생년월일·CI/DI 해시 파기,
@@ -1173,8 +1220,11 @@
 - **기대 결과**: 대상 0건 → "보존기간이 지난 탈퇴 계정이 없어요." /
   N건 → "탈퇴 계정 N건의 잔여 정보를 파기했어요."
 - **엣지 케이스**: 멱등하다(`purgedAt IS NULL` 조건) → 연속 2회 클릭 시 두 번째는 0건.
-  cron 인프라가 없어 이 버튼이 유일한 트리거다.
-- **관련 API**: `bambi.moderation.purgeWithdrawnAccounts` (`moderation.ts` L2539, `adminProcedure`)
+  자동 실행과 겹쳐도 같은 이유로 두 번 처리되지 않는다.
+  수동 실행도 `withdrawal_purge_last_run_at`을 갱신하므로(자동·수동 공용 함수) **그날 설정 시각 이후에**
+  수동 실행하면 그날의 자동 실행은 건너뛴다 — crawl의 「즉시 수집」이 주기를 미는 것과 같은 동작이다.
+- **관련 API**: `bambi.moderation.purgeWithdrawnAccounts` (`adminProcedure`) →
+  `purgeWithdrawnAccountsBatch`(`packages/api/src/services/bambi-withdrawal-purge.ts`)
 
 ### 13.6 최저시급 표기
 

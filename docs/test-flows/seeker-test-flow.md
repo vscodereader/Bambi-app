@@ -19,6 +19,7 @@
 | web(클라) | `NEXT_PUBLIC_PORTONE_STORE_ID`, `NEXT_PUBLIC_PORTONE_CHANNEL_KEY` | **둘 중 하나라도 비면 본인인증이 목(mock) 폼으로 폴백**. 로그인 화면의 "아이디 찾기 / 비밀번호를 잊으셨나요?" 링크도 **렌더되지 않음** | `packages/env/src/web.ts` |
 | web(서버) | `PORTONE_API_SECRET` | 게스트 실인증(`POST /api/guest`)이 **503** | 동일 |
 | web(서버) | `BAMBI_GUEST_TOKEN_SECRET` (min 32자) | 개발 폴백 키(`bambi-dev-guest-token-secret-not-for-prod`) 사용 | 동일 |
+| server | `BAMBI_GUEST_TOKEN_SECRET` (min 32자) | 개발 폴백 키 사용. web과 값이 어긋나면 게스트 신원(`context.guest`)이 항상 null | `packages/env/src/server.ts` |
 | web(서버) | `BAMBI_COOKIE_PREFIX` | better-auth 기본 prefix. 서버(`packages/auth`)와 값이 어긋나면 **세션 판정이 통째로 틀어짐** | 동일 |
 | web(클라) | `NEXT_PUBLIC_GCS_PUBLIC_BASE_URL` | 공고 이미지가 샘플 썸네일로 폴백 | 동일 |
 | server | `PORTONE_API_SECRET` | 회원 본인인증이 목 핸들러(`verifyMyPhoneMock`)로 폴백 | `packages/env/src/server.ts` |
@@ -59,7 +60,7 @@
 |---|---|---|
 | 채팅 시작 가능 | `status!=='suspended' && isPhoneVerified && jobPostStatus==='published'` | `packages/api/src/services/bambi-policy.ts` (`canStartChat`) |
 | 연락처 공개 대상 면접 상태 | `confirmed` 또는 `completed` | 동일 (`isContactRevealEligibleInterviewStatus`) |
-| 수다방 입장 | `status!=='suspended' && (role==='admin' \|\| gender==='female' \|\| (role==='employer' && isAdvertiser))` | `packages/api/src/services/bambi-community-access.ts` |
+| 수다방 입장 | `status!=='suspended' && (role==='admin' \|\| role==='legal_advisor' \|\| gender==='female' \|\| (role==='employer' && isAdvertiser))` | `packages/api/src/services/bambi-community-access.ts` |
 | 본인인증 건 유효시간 | **30분**, 1회 소진 | `packages/api/src/services/bambi-identity-ticket.ts` |
 | 성인 기준 | 만 **19세** 이상, KST 기준 | `packages/api/src/services/portone-identity.ts` |
 | 공개 레이트리밋 | IP당 **시간당 10회**(프로시저별 개별 버킷) | `packages/api/src/index.ts`, `apps/web/src/app/api/guest/route.ts` |
@@ -508,7 +509,7 @@
 - **경로**: `/seeker/chats` (파일: `apps/web/src/app/seeker/chats/page.tsx`, `apps/web/src/components/bambi/screens/seeker-chat-list-responsive.tsx`)
 - **선행 조건**: 로그인. **역할 게이트 없음** — 구인자·운영자도 진입 가능
 - **기대 결과 — 항목당 표시**: 공고 제목 / 상대 이름(구직자 뷰: 팀 프로필 → 조직 프로필 → 구인자 `user.name` 폴백) / 마지막 메시지 / 최근 업데이트(md 이상) / `대화 가능`·`차단됨` 배지 / `N개 미확인` 배지 / `신고 완료 · 조치 대기 중` 배지
-- **정렬·필터**: `chat_room.updatedAt DESC`. 본인 측 소프트삭제(`seekerDeletedAt`) 방 제외. **메시지 0건 방 제외**
+- **정렬·필터**: `chat_room.updatedAt DESC`. **어느 한쪽이라도 나간 방 제외**(`seekerDeletedAt`·`employerDeletedAt` 중 하나라도 non-null이면 양쪽 목록에서 사라짐). **메시지 0건 방 제외**
 - **케밥 메뉴**:
   - `신고` — **뷰어가 그 방의 구직자일 때만 노출**(`room.counterpartUserId === room.employerUserId`)
   - `차단` — **확인 단계 없이 즉시 실행**
@@ -524,7 +525,7 @@
 - **절차**: 방 진입 → 텍스트 입력 → [전송]
 - **기대 결과**:
   - 입력 1~2000자. 내 말풍선 코럴, 상대 말풍선 secondary
-  - 전송 시 `chat_room`의 `employerDeletedAt`·`seekerDeletedAt`이 **양쪽 모두 NULL로 리셋** → 상대가 삭제한 방도 재노출
+  - 한쪽이 나간 방은 **양쪽 모두에게 사라진다** — 열람·전송·읽음 모두 `NOT_FOUND`(방 부활 없음, 공고에서 재문의하면 **새 방**)
   - 헤더: 공고 제목, 상대 이름, `대화 가능`/`차단됨`, **실시간 배지**(`실시간 연결` / `연결 중` / `오프라인`)
   - 상대 입력 중 → "상대가 입력 중이에요"
 - **실시간(socket.io)**: `apps/web/src/lib/bambi-chat-realtime.ts` — 이벤트 `connect`/`disconnect`/`chat:error`/`chat:message:created`/`chat:message:read`/`chat:room:updated`/`chat:unread:updated`/`chat:typing:started`/`chat:typing:stopped`. 재연결 delay 500~5000ms, ack timeout 5000ms. 타이핑은 1200ms 무입력 시 stop 전송
@@ -661,7 +662,7 @@
   - 카드 전체가 `/seeker/chats/{chatRoomId}` 링크
   - **읽기 전용** — 조작 버튼 없음
   - 빈 상태: "예정된 면접이 없어요 / 확정되었거나 제안된 다가오는 면접이 여기에 표시됩니다."
-- **엣지 케이스**: **소프트삭제한 방·차단한 방을 제외하지 않는다**(`listMine`과 달리 필터 없음) → 차단·삭제한 방의 면접이 계속 노출되는지 확인
+- **엣지 케이스**: 한쪽이라도 나간 방은 제외된다(`listMine`과 같은 기준). **차단한 방은 여전히 제외하지 않는다** → 차단한 방의 면접이 계속 노출되는지 확인
 - **관련 API**: `bambi.chats.listMyUpcomingInterviews` (protected + `requireActiveBambiProfile`)
 
 ---
@@ -739,13 +740,14 @@
   | 광고 중 업소회원(owner/manager) | 가능 |
   | 광고 없음/만료 업소회원 | 불가 |
   | 운영자 | 가능(성별 무관) |
+  | 법률자문(`role='legal_advisor'`) | 가능(성별·광고 무관) — 단 **`legal` 게시판만** 이용 가능. 다른 게시판(가상 `best` 포함)은 목록·상세·댓글·추천·쓰기 전부 `FORBIDDEN` "법률자문 계정은 무료 법률 자문 게시판만 이용할 수 있어요."(`assertLegalAdvisorBoardScope`), 화면은 수다방 홈·seeker 홈 미리보기에 **모든 게시판 카드를 그대로 노출**하되 legal 외 링크 클릭을 가로채 같은 문구를 토스트(`useLegalAdvisorNavGuard`, 통과 판정 `isLegalAdvisorAllowedPath` = 수다방 홈·`/seeker/community/legal*`)하고, 비-legal 게시판 URL 직접 진입 시 `/seeker/community/legal`로 replace |
   | 정지 계정 | 불가 |
   | 게스트·비로그인 | 게이트가 먼저 차단 |
-- **기대 결과(미자격)**: 토스트 **"여성회원과 광고 중인 업소회원만 이용가능합니다"** → `/seeker`로 replace. 전용 안내 화면은 **없음**(빈 화면 후 홈으로 튕김)
+- **기대 결과(미자격)**: 토스트 **"일반 여성회원과 광고 중인 업소회원만 이용가능합니다"** → `/seeker`로 replace. 전용 안내 화면은 **없음**(빈 화면 후 홈으로 튕김)
 - **엣지 케이스**:
   - 헤더 nav·하단 탭바의 "수다방" 항목은 **미자격자에게도 그대로 보인다** — 눌러야 토스트+리다이렉트
   - `isAdvertiser`는 저장 컬럼이 아니라 조회 시 라이브 계산(`hasActiveAdExposure`: 결제완료·공개·미만료 광고 공고 1건 이상)
-  - 서버 게이트(`requireCommunityMember`)가 별도로 있어 API 직접 호출도 막힌다: `FORBIDDEN` "여성회원과 광고 중인 업소회원만 이용가능합니다"
+  - 서버 게이트(`requireCommunityMember`)가 별도로 있어 API 직접 호출도 막힌다: `FORBIDDEN` "일반 여성회원과 광고 중인 업소회원만 이용가능합니다"
 - **관련 API**: `bambi.onboarding.getMine` (protected, `community.canAccess`)
 
 ### 11.2 게시판 목록
@@ -759,6 +761,7 @@
 | `free` | `free` | 자유수다 | 가능 | |
 | `work_talk` | **`work-talk`** | 일 이야기 | 가능 | slug에 하이픈, DB enum은 언더스코어. **수집 글이 합류하는 유일한 게시판** |
 | `market` | `market` | 중고거래 | 가능 | |
+| `legal` | `legal` | 무료 법률 자문 | 가능 | **전 글 강제 잠금 + 비번 필수**, 연락처 입력, best·공개 `/board` 제외 (11.9) |
 
 - **경로**: `/seeker/community/[board]` — `getBoardBySlug` 실패 시 `notFound()`(404). `/seeker/community/best/write`는 `writable=false`라 404
 
@@ -774,7 +777,7 @@
   - 메타: 작성자명(폴백 "회원") · `YYYY.MM.DD` · 조회수 · 추천수
   - **비밀글 마스킹**: 작성자 본인·운영자가 아니면 제목이 서버에서 `"비밀글입니다"`로 치환되어 내려온다
   - 빈 상태: 쓰기 가능이면 "아직 글이 없어요. 첫 글을 남겨보세요.", best면 "최근 30일 추천 글이 아직 없어요.", 그 외 "아직 등록된 글이 없어요."
-- **홈**: 게시판별 최신 **4건** 미리보기. 공지사항은 최상단 전폭, 나머지는 2열 그리드. `/seeker` 홈의 커뮤니티 섹션은 `best/free/work_talk/notice` 4개만 노출하고, 미자격자가 글을 누르면 `preventDefault` + 토스트 "여성 회원과 광고 중인 업소회원만 가능합니다"
+- **홈**: 게시판별 최신 **4건** 미리보기. 공지사항은 최상단 전폭, 나머지는 2열 그리드이고 **중고거래·무료 법률 자문은 한 칸을 좌우로 나눠 나란히**(모바일 1열에서는 세로 스택, 반폭 카드는 작성인을 접고 날짜만 표시). 수다방 홈과 `/seeker` 홈이 같은 컴포넌트(`CommunityOverviewGrid`)를 쓰므로 두 화면이 항상 같은 배치다. 미자격자가 글을 누르면 `preventDefault` + 토스트 "일반 여성 회원과 광고 중인 업소회원만 가능합니다"
 - **관련 API**: `bambi.community.listPosts` (protected + `requireCommunityMember`), `bambi.community.overview` (**publicProcedure**, 미자격·비로그인도 요약 열람 가능)
 
 ### 11.4 글 작성
@@ -787,6 +790,7 @@
   | 비밀글로 잠그기 | Switch | — | boolean |
   | 비밀번호 | password Input (잠금 ON일 때만) | `maxLength=30`, 4자+ | 잠금 시 4자 미만이면 `BAD_REQUEST` "비밀글은 4자 이상의 비밀번호가 필요합니다." |
   | 광고글로 표시 | Switch (**employer일 때만 노출**) | — | employer 아니면 `BAD_REQUEST` "광고글은 업소회원만 표시할 수 있습니다." |
+  | 연락처 | tel Input (**`legal` 게시판일 때만 노출**, 선택) | `maxLength=20` | `trim().max(20).optional()`. legal 외 게시판에 실려 오면 `BAD_REQUEST` "연락처는 무료 법률 자문 게시판에만 남길 수 있습니다." |
   | 제목 | Input | `maxLength=100`, 2자+ | `trim().min(2).max(100)` |
   | 본문 | **Tiptap 에디터** | 텍스트 2자+ **또는** 이미지 1개+ | `min(2).max(30000)` + `assertTiptapDoc` |
 - **에디터 툴바**: 굵게 / 기울임 / 취소선 / 글머리목록 / 번호목록 / 링크(Popover) / 이미지(Popover)
@@ -853,10 +857,37 @@
 - **실패 케이스**: 스위치 OFF → `NOT_FOUND`(존재 자체를 숨김)
 - **관련 API**: `bambi.community.getCrawledTopic` (protected + `requireCommunityMember`)
 
-### 11.9 공개 게시판(비로그인 읽기 전용, SEO)
+### 11.9 무료 법률 자문 게시판(`legal`)
 
-- **경로**: `/board`(허브) · `/board/[boardSlug]`(목록) · `/board/[boardSlug]/[postId]`(상세)
-  (파일: `apps/web/src/app/board/**`, `apps/web/src/components/bambi/public-post-body.tsx`)
+- **경로**: `/seeker/community/legal` · `/seeker/community/legal/write` · `/seeker/community/legal/[postId]`
+  (파일: `apps/web/src/lib/bambi/community.ts` `isLegalBoardKey`, `.../community-post-form.tsx`,
+  `packages/api/src/services/bambi-community-authz.ts` `resolveLockedForBoard`·`canBypassLock`)
+- **쓸 수 있는 사람**: 수다방 자격자 전부 + 여성 인증 게스트(게스트 쓰기 허용 보드 = `free`·`work_talk`·`legal`)
+- **작성 규칙**:
+  - 잠금 스위치가 **없고**, 대신 "법률 자문 글은 비밀글로 등록됩니다" 안내 Alert이 뜬다. 서버(`resolveLockedForBoard`)가 `isLocked`를 무조건 true로 덮어쓴다
+  - **비밀번호(4자 이상) 필수** — 없으면 `BAD_REQUEST` "비밀글은 4자 이상의 비밀번호가 필요합니다."
+  - 연락처(선택) 입력. 다른 게시판에 연락처를 실어 보내면 `BAD_REQUEST`(11.4 표 참고)
+  - 게스트도 동일하다(다른 게시판에서는 막히는 잠금글 작성이 `legal`에서만 열린다). 단 잠긴 legal 글에 댓글·추천을 남기는 건 **그 글을 쓴 게스트 본인(gid 일치)** 뿐이다
+- **열람 권한**(`canBypassLock`):
+  | 대상 | 잠긴 legal 글 |
+  |---|---|
+  | 작성자 본인 | 비번 없이 열람 |
+  | 운영자(`admin`) | 비번 없이 열람 |
+  | 법률자문(`legal_advisor`) | 비번 없이 열람 (**`legal` 보드에서만** — 다른 보드 비밀글은 기존대로 비번 필요) |
+  | 그 외 회원·게스트 | 목록 제목이 "비밀글입니다"로 마스킹, 상세는 비번 게이트 |
+- **연락처 노출**: `getPost`의 **잠금 해제 응답에만** `contactPhone`이 실린다(마스킹 응답·`getPublicPost`·`listPosts`·`listComments`에는 없음). 화면에서는 본문 위 Alert "연락처 {번호} / 작성자 본인과 운영자·법률자문에게만 보이는 번호예요"
+- **답변 표시**: `legal_advisor` 계정의 댓글에 **법률자문** 배지(회원 상세) / 공개·게스트 화면에서는 작성자 유형 라벨이 "법률자문"으로 나온다
+- **수정**: 저장된 board 기준으로 잠금을 다시 강제하므로 `isLocked:false`를 보내도 **잠금이 풀리지 않는다**. 연락처는 수정 폼이 현재 값을 다시 실어 보내므로 비우면 삭제된다
+- **제외 규칙**: 베스트 큐레이션에서 제외(`notInArray(board, ['notice','legal'])`), 공개 `/board`에도 노출되지 않음(`PUBLIC_COMMUNITY_BOARDS` 무변경)
+- **게스트 잠금 예외의 범위**: 게스트의 잠금 금지 가드가 legal에서 열리는 건 **자기 글**에 한정된다(`assertGuestPostAccess`가 `authorGuestId === gid`를 확인). 남의 legal 잠금글에 댓글·추천을 시도하면 `FORBIDDEN` "비밀글에는 글쓴이 본인만 댓글·추천을 남길 수 있어요." — 회원이 비밀번호 게이트를 통과해야 하는 것과 같은 축이다(게스트의 `password`는 잠금 열쇠가 아니라 자기 댓글 소유권 비밀번호라 게이트로 쓸 수 없다)
+- **관련 API**: `bambi.community.createPost`(`board:'legal'`), `updatePost`, `getPost`, `overview`(응답 키 `legal`)
+
+### 11.10 공개 게시판(비로그인 읽기 + 비회원 쓰기, SEO)
+
+- **경로**: `/board`(허브) · `/board/[boardSlug]`(목록) · `/board/[boardSlug]/[postId]`(상세) ·
+  `/board/[boardSlug]/write`(비회원 글쓰기) · `/board/[boardSlug]/[postId]/edit`(비회원 글 수정)
+  (파일: `apps/web/src/app/board/**`, `apps/web/src/components/bambi/public-post-body.tsx`,
+  `public-post-interactions.tsx`, `guest-verify-card.tsx`)
 - **게이트**: `resolve-gate`의 공개 prefix에 `/board` 추가 — 비로그인·게스트 모두 통과. `/seeker/community` 쪽 자격 게이트는 **그대로**다.
 - **공개 대상**: 서버 상수 `PUBLIC_COMMUNITY_BOARDS = notice · free · work_talk`(`packages/api/src/routers/bambi/community.ts`).
   `market`·`best`는 비공개 → 슬러그로 직접 들어가도 404. 잠금(비밀)글·`published` 아닌 글·수집 글은 목록·상세 모두 제외.
@@ -866,11 +897,44 @@
   - 상세 `<title>`·`description`·`canonical`이 글마다 다르고, `DiscussionForumPosting` JSON-LD가 실린다
   - 목록·상세 모두 **현재 위치 내비**(커뮤니티 게시판 › 게시판 › 글)와 같은 계층의 `BreadcrumbList` JSON-LD가 함께 나온다(`apps/web/src/lib/bambi/seo.ts` `breadcrumbJsonLd`)
   - 본문 이미지는 렌더되지 않고 "이미지는 회원 화면에서 볼 수 있어요" 자리표시자로 대체
-  - 댓글은 읽기만 가능(작성자 계정명 미노출 — 회원/업소 회원 표기만), 작성 UI 없음
-  - "로그인하고 댓글 쓰기"는 `/seeker/community/[slug]/[postId]`로 보내고, 비로그인은 게이트가 로그인 화면으로 돌린다
+  - 댓글 목록은 항상 SSR HTML에 포함(작성자 계정명 미노출 — `communityAuthorRoleLabel`로 "회원/업소 회원/비회원"만)
+  - 로그인 회원에게는 참여 UI 대신 "회원 화면에서 보기"(`/seeker/community/[slug]/[postId]`) 안내가 나온다
   - 상세 조회로 **조회수가 오르지 않는다**(크롤러 방문 방지)
   - slug와 글의 실제 게시판이 다르면 404(중복 URL 색인 방지)
 - **관련 API**: `bambi.community.listPublicPosts` · `bambi.community.getPublicPost` (둘 다 `publicProcedure`)
+
+#### 11.10.1 비회원(게스트) 쓰기
+
+- **자격**: 게스트 쿠키(`bambi_guest`) 서명·만료 유효 + **`gid` 포함(v2)** + `gender === "female"`.
+  gid 없는 옛 토큰 보유자는 읽기만 되고 쓰기는 401 → 화면이 재인증 카드를 세운다
+  (`readGuestCanWrite`, `packages/api/src/context.ts` `resolveGuest`).
+- **전달 경로**: 게스트 쿠키는 host-only라 API 서버에 안 실린다 → 클라 oRPC 링크가 `x-bambi-guest`
+  헤더로 옮겨 붙이고(`apps/web/src/utils/orpc.ts`), SSR 경유 호출은 `Cookie` 헤더 폴백.
+  CORS `allowedHeaders`에 `x-bambi-guest`가 없으면 preflight에서 잘린다(`apps/server/src/plugins/cors.ts`).
+  **web·server의 `BAMBI_GUEST_TOKEN_SECRET`이 다르면 전부 401.**
+- **허용 범위**: 서버 게스트 쓰기 보드는 `free`·`work_talk`·`legal`(공지는 읽기 전용), 글·댓글·추천.
+  비밀글 작성·전환 불가 — **단 `legal`은 강제 잠금이라 예외**(11.9). 공개 `/board` 영역에는 `legal`이
+  없으므로 여기서 실제로 쓸 수 있는 건 `free`·`work_talk` 둘뿐이고, `legal`은 회원 수다방 화면에서 쓴다.
+- **비밀번호**: 비회원 글·댓글은 **4자 이상 필수**(scrypt 해시). 수정·삭제는 gid가 아니라 **비밀번호로만**
+  판정 → 쿠키가 만료돼도 본인 글을 지울 수 있다. 회원 글(`author_guest_id = null`)은 비번이 맞아도
+  비회원 경로로 수정·삭제되지 않는다.
+- **확인 사항 / 실패 케이스**:
+  | 상황 | 결과 |
+  |---|---|
+  | 미인증 방문자가 게시판 헤더 [본인인증하고 글쓰기] | 본인인증 다이얼로그 → 성공 시 `/board/[slug]/write`로 복귀(`redirectTo`) |
+  | 인증된 비회원이 `자유수다`/`밤문화 이야기` 글쓰기 | 작성인 기본 "비회원", 비밀번호 필드 필수, 잠금·광고 스위치 없음 |
+  | 인증된 비회원이 `공지사항`에 글·댓글·추천 | 버튼 미노출 / API 직접 호출 시 `BAD_REQUEST` "비회원은 자유수다·밤문화 이야기·무료 법률 자문에만 참여할 수 있어요." |
+  | 남성·성별 미상 게스트 | `FORBIDDEN` "일반 여성회원과 광고 중인 업소회원만 이용가능합니다" |
+  | 토큰 없음·위조·만료·gid 없는 옛 토큰 | `UNAUTHORIZED` "본인인증 후 이용할 수 있습니다." |
+  | 비밀번호 4자 미만 | `BAD_REQUEST` "비회원 글·댓글은 4자 이상의 비밀번호가 필요합니다." |
+  | 수정·삭제 비밀번호 불일치 | `FORBIDDEN` "비밀번호가 일치하지 않습니다." |
+  | 같은 글 추천 두 번 | 토글(추천 → 취소). `(post_id, guest_id)` unique로 중복 행 불가 |
+  | 글 1분 2회 / 댓글 1분 6회 | `TOO_MANY_REQUESTS`. gid·IP **두 버킷 모두** 통과해야 한다 |
+  | 로그인 상태에서 게스트 쿠키 보유 | 세션이 정본 → 회원 자격 판정(정지·성별·광고)을 게스트 신분으로 우회 불가 |
+  | 비회원 답글(대댓글)·신고·이미지 첨부 | **미구현** — 회원 화면 전용 |
+- **관련 API**: `createPost`·`updatePost`·`deletePost`·`toggleLike`·`createComment`·`updateComment`·
+  `deleteComment`·`listComments` 전부 `publicProcedure` + `resolveCommunityActor`
+  (`packages/api/src/services/bambi-community-authz.ts`). 회원 경로 동작은 회귀 없음.
 
 ---
 
@@ -1016,7 +1080,7 @@
   | 같은 계정 재로그인 | 불가 — "탈퇴한 계정이에요. 로그인할 수 없어요." |
   | 같은 이메일로 신규 가입 | **즉시 가능**(이메일이 tombstone으로 치환됨) |
   | 같은 명의(본인인증)로 신규 가입 | **보존기간 동안 불가** — `CONFLICT` "이미 다른 계정에서 본인인증에 사용된 정보예요." |
-  - 해시 파기는 **운영자가 `bambi.moderation.purgeWithdrawnAccounts`(adminProcedure)를 수동 실행**해야 이뤄진다. cron 없음 → "30일 경과 후 자동 가능"으로 테스트하면 안 된다
+  - 해시 파기는 **서버 스케줄러가 매일 1회 자동 실행**한다(`apps/server/src/plugins/withdrawal-purge.ts`). 즉시 확인하려면 운영자가 사이트 정보의 「지금 파기 실행」(`bambi.moderation.purgeWithdrawnAccounts`)을 눌러 앞당긴다 → 보존기간 경과 직후가 아니라 **다음 자동 실행 뒤** 열린다는 점만 유의
 - **확인 절차 없는 것**: 비밀번호 재확인, 확인 문구 입력 → **없음**(다이얼로그 1단계뿐)
 - **관련 API**: `bambi.onboarding.getWithdrawEligibility`, `bambi.onboarding.withdrawMyAccount` (protected), `bambi.siteSettings.getMemberPolicy` (publicProcedure)
 
@@ -1241,7 +1305,7 @@
 
 1. **구인자 전화번호 무조건 노출** — `bambi.jobs.getById`가 **publicProcedure**인데 공고 작성자의 인증 전화번호를 응답에 싣는다. 화면 문구("면접 확정 전 연락처 보호 중")와 상충. 의도된 정책인지 확인 필요.
 2. **`requestContactReveal` / `respondContactReveal` / `deleteChatRoom`에 차단 가드 없음** — 차단 상태에서 연락처 요청·응답이 통과할 수 있는지 실동작 확인 필요.
-3. **`listMyUpcomingInterviews`에 차단·소프트삭제 필터 없음** — 차단하거나 삭제한 방의 면접이 "예정된 면접"에 계속 노출되는지 확인 필요.
+3. **`listMyUpcomingInterviews`에 차단 필터 없음** — 차단한 방의 면접이 "예정된 면접"에 계속 노출되는지 확인 필요(나간 방은 제외된다).
 4. **`startFromJobPost`에 차단 검사 없음** — 차단한 상대 공고로 방 생성 자체는 되고 이후 진입만 막힌다(UI CTA 비활성화로만 커버).
 5. **`markRead`의 `messageIds` 상한 50** — 상대 메시지 50건을 넘는 방에서 읽음 처리가 zod 검증에 걸려 실패한다("읽음 상태를 반영하지 못했어요.").
 6. **채팅 첨부의 실제 바이트 업로드 경로** — 클라이언트가 `uploadUrl`로 PUT 하는 코드가 web에 없고, 조회 URL(`/bambi/local-chat-attachments`)은 자리표시 SVG를 반환한다. 실제 GCS 경로 존재 여부 확인 필요.
@@ -1267,7 +1331,7 @@
 26. **모바일 인증 리디렉션 복귀 시 회원가입 단계 유실 가능** — `?auth=login`에서 모드만 토글해 가입에 들어간 경우 복귀 URL에 `auth=login`이 남아 로그인 모드로 돌아온다. **실기기 QA 필수**.
 27. **`checkIdentityForSignup`에 레이트리밋 없음** — 같은 흐름의 `startIdentityVerification`은 rateLimited인데 이쪽은 publicProcedure다.
 28. **`recordLegalConsent` 실패를 삼킴** — 약관 동의 이력이 누락돼도 가입은 성공한다.
-29. **`purgeWithdrawnAccounts`가 cron 없이 운영자 수동 실행** — 같은 명의 재가입 가능 시점이 운영자 실행 시점에 좌우된다. "30일 경과 후 자동 가능"으로 테스트하면 안 된다.
+29. ~~**`purgeWithdrawnAccounts`가 cron 없이 운영자 수동 실행**~~ — 해소됨. 서버 스케줄러가 매일 1회 자동 실행한다(운영자 버튼은 즉시 실행용). 같은 명의 재가입은 보존기간 경과 시점이 아니라 **그 뒤 첫 자동 실행 시점**에 열린다.
 30. **모바일 헤더 벨 아이콘이 무동작** — `aria-label="알림"`만 있고 핸들러가 없다. QA 결함으로 볼지 확인 필요.
 31. **`/support`에 모바일 하단 탭바 없음** — 마이페이지에서 들어가면 뒤로가기 외 복귀 경로가 없다.
 32. **`bambi.jobs.legacyList`** — 웹 화면에서 호출처를 찾지 못했다(네이티브/외부 사용 여부 확인 필요).

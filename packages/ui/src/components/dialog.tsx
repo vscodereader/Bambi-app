@@ -28,7 +28,7 @@ function DialogBackdrop({
 			className={cn(
 				// prefers-reduced-motion에서는 페이드를 끈다. 트랜지션이 없으면 base-ui는
 				// getAnimations()가 비어 즉시 언마운트하므로 닫기가 막히지 않는다.
-				"fixed inset-0 bg-ink-900/25 transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none",
+				"fixed inset-0 z-50 bg-ink-900/25 transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none",
 				className
 			)}
 			data-slot="dialog-backdrop"
@@ -73,7 +73,7 @@ function DialogContent({
 				className={cn(
 					// overscroll-contain: 모바일에서 시트 끝까지 스크롤해도 뒤 페이지가 함께 밀리지
 					// 않는다. motion-reduce: 확대·페이드 등장을 끈다(백드롭과 같은 처리).
-					"fixed top-1/2 left-1/2 flex w-[420px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto overscroll-contain rounded-xl bg-card p-6 shadow-[var(--shadow-lg)] transition-[transform,opacity] duration-200 data-[ending-style]:scale-95 data-[starting-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none motion-reduce:data-[ending-style]:scale-100 motion-reduce:data-[starting-style]:scale-100",
+					"fixed top-1/2 left-1/2 z-50 flex w-[420px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto overscroll-contain rounded-xl bg-card p-6 shadow-[var(--shadow-lg)] transition-[transform,opacity] duration-200 data-[ending-style]:scale-95 data-[starting-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none motion-reduce:data-[ending-style]:scale-100 motion-reduce:data-[starting-style]:scale-100",
 					className
 				)}
 				data-slot="dialog-content"

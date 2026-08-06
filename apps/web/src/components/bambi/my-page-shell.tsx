@@ -23,6 +23,7 @@ import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { orpc } from "@/utils/orpc";
+import { useBambiAuth } from "./auth-client-provider";
 import { Avatar, Badge } from "./ds";
 import {
 	ChevronLeftIcon,
@@ -37,10 +38,14 @@ import {
 
 export const MY_PAGE_HUB_HREF = "/seeker/me" as Route;
 
+// 표시 라벨은 여기서만 만든다 — enum 원값(job_seeker·legal_advisor …)이 화면에 새지 않도록
+// 미등록 역할도 "구직자"로 떨어뜨린다. 법률자문은 구직자 계정에 얹는 역할이라 폴백도 자연스럽다.
+// 운영자 콘솔 라벨("법률자문")과 달리 당사자에게 보이는 내 정보에서는 "법률자문가"로 부른다.
 const ROLE_LABELS: Record<string, string> = {
 	admin: "관리자",
 	employer: "구인자",
 	job_seeker: "구직자",
+	legal_advisor: "법률자문가",
 };
 
 const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
@@ -68,6 +73,23 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 	{ href: "/support" as Route, icon: <Message />, label: "고객센터" },
 ];
 
+// 역할별로 감추는 항목. 운영자는 신고·면접·차단·고객센터를 콘솔에서 처리하므로 개인용
+// 메뉴가 의미 없다. 구인자는 예정된 면접을 그대로 본다 — 카드가 호출자 기준(구직자 닉네임·
+// 공고명·일시)으로 그려지므로 구인자 시점에서도 읽힌다. 노출만 감추는 것이라 직접 URL로는
+// 그대로 들어갈 수 있다. 데스크톱 허브 카드(screens/seeker.tsx)도 같은 표를 쓴다.
+const HIDDEN_MY_PAGE_HREFS: Record<string, string[]> = {
+	admin: [
+		"/seeker/me/reports",
+		"/seeker/me/interviews",
+		"/seeker/me/blocks",
+		"/support",
+	],
+};
+
+export function isMyPageItemVisible(href: string, role: string | null) {
+	return !HIDDEN_MY_PAGE_HREFS[role ?? ""]?.includes(href);
+}
+
 function ProfileCard() {
 	const session = authClient.useSession();
 	const isSignedIn = Boolean(session.data?.user);
@@ -78,9 +100,7 @@ function ProfileCard() {
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	// 표시명(닉네임)의 정본은 user.name(세션). bambi_profile.display_name은 제거됐다.
 	const displayName = session.data?.user?.name?.trim() || "구직자 회원";
-	const roleLabel = profile
-		? (ROLE_LABELS[profile.role] ?? profile.role)
-		: "구직자";
+	const roleLabel = ROLE_LABELS[profile?.role ?? ""] ?? "구직자";
 	const isPhoneVerified = Boolean(profile?.isPhoneVerified);
 
 	if (mineQuery.isLoading) {
@@ -118,11 +138,15 @@ function ProfileCard() {
 
 function MyPageNav() {
 	const pathname = usePathname();
+	const { role } = useBambiAuth();
+	const items = NAV_ITEMS.filter((item) =>
+		isMyPageItemVisible(item.href, role)
+	);
 	return (
 		// 사이드바(md↑)와 모바일 허브가 같은 행 렌더를 공유한다. 셰브런은 카드 리스트로
 		// 보이는 모바일에서만 노출(md:hidden) — 사이드바는 활성 하이라이트로 위치를 알린다.
 		<nav aria-label="내 정보 메뉴" className="flex flex-col gap-1">
-			{NAV_ITEMS.map((item) => {
+			{items.map((item) => {
 				const isActive = pathname === item.href;
 				return (
 					<Link

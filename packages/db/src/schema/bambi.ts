@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
 	type AnyPgColumn,
 	boolean,
+	check,
 	index,
 	integer,
 	jsonb,
@@ -16,10 +17,17 @@ import {
 
 import { organization, team, user } from "./auth";
 
+// guest는 계정이 없는 비회원 작성자(성인인증 통과 게스트 토큰)를 가리키는 스냅샷 값이며
+// user.role로는 저장되지 않는다 — 수다방 글·댓글의 author_role에만 쓰인다.
+// 마이그레이션 호환을 위해 새 값은 항상 목록 끝에 덧붙인다(ALTER TYPE ... ADD VALUE).
 export const bambiUserRole = pgEnum("bambi_user_role", [
 	"job_seeker",
 	"employer",
 	"admin",
+	"guest",
+	// 무료 법률 자문 게시판(legal) 전용 계정. 운영자가 구직자 계정을 지정·해제하며
+	// 해당 게시판의 잠금글만 열람·답변할 수 있다(다른 보드 잠금글은 일반 회원과 동일).
+	"legal_advisor",
 ]);
 
 export const accountStatus = pgEnum("account_status", [
@@ -140,6 +148,9 @@ export const communityBoard = pgEnum("community_board", [
 	"work_talk",
 	"market",
 	"notice",
+	// 무료 법률 자문. 글이 전부 잠금(비밀번호 필수)이라 목록에는 마스킹 제목만 보인다.
+	// 마이그레이션 호환을 위해 새 값은 항상 끝에 덧붙인다.
+	"legal",
 ]);
 
 // 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
@@ -303,6 +314,43 @@ export const bambiIdentityVerification = pgTable(
 	]
 );
 
+// 본인인증 수집 로그. 실인증이 확인될 때마다 생년월일·번호·성별과 구분(비회원/구직자/
+// 구인자)을 사람당 1행으로 남긴다 — (birth_date, phone_number)가 사람 식별 upsert 키.
+// 같은 사람이 재인증하면(포트원 인증 건 ID는 매번 새로 발급) 기존 행을 갱신한다.
+// 이름은 담지 않는다(PII 최소화).
+// 개발자 SQL 전용 표다 — 조회 프로시저·관리자 화면을 만들지 않는다(쓰기 코드만 존재).
+// bambi_identity_verification(발급 기록)에 FK를 걸지 않는다: 그쪽은 만료 행을 정리하는
+// 대상이라 cascade로 수집 로그까지 사라지면 안 된다.
+export const bambiIdentityVerificationLog = pgTable(
+	"bambi_identity_verification_log",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		// 이 행을 마지막으로 갱신한 포트원 인증 건 ID(최근 인증 건 추적용).
+		identityVerificationId: text("identity_verification_id").notNull(),
+		phoneNumber: text("phone_number"),
+		// YYYYMMDD 8자리(bambi_profile.birth_date와 같은 컨벤션).
+		birthDate: varchar("birth_date", { length: 8 }).notNull(),
+		gender: bambiGender("gender"),
+		// 구분 — guest/job_seeker/employer. 가입 전 인증은 아직 모르므로 null이고,
+		// 가입이 끝나면 그 역할로 덮어쓴다.
+		kind: bambiUserRole("kind"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("bambi_identity_verification_log_iv_id_idx").on(
+			table.identityVerificationId
+		),
+		// 사람 식별 upsert 키. phone_number가 null인 행은 사람을 특정할 수 없어 제외.
+		uniqueIndex("bambi_identity_verification_log_person_uidx")
+			.on(table.birthDate, table.phoneNumber)
+			.where(sql`${table.phoneNumber} IS NOT NULL`),
+	]
+);
+
 export const bambiProfile = pgTable(
 	"bambi_profile",
 	{
@@ -437,6 +485,28 @@ export const employerTeamProfile = pgTable(
 // 때문이다 — job_post는 organization_id와 created_by_user_id가 NOT NULL이라 크롤링 행에
 // 붙일 주인이 없고, 억지로 합성 계정을 붙이면 그 조직이 업소 목록·검색·채팅·통계 전반에
 // 유령으로 섞인다. 업체가 실제로 가입해 전환될 때만 job_post 행이 생긴다.
+export interface CrawledJobEditedImageAsset {
+	dataUrl: string;
+	height: number;
+	id: string;
+	width: number;
+}
+
+export interface CrawledJobEditedImageItem {
+	assetId: string;
+	displayHeightPx: number | null;
+	displayWidthPx: number | null;
+	id: string;
+	offsetX: number;
+	offsetY: number;
+}
+
+export interface CrawledJobEditedImageDocument {
+	assets: CrawledJobEditedImageAsset[];
+	items: CrawledJobEditedImageItem[];
+	version: 1;
+}
+
 export const crawledJobPost = pgTable(
 	"crawled_job_post",
 	{
@@ -526,6 +596,18 @@ export const crawledJobPost = pgTable(
 		detailImageUrls: jsonb("detail_image_urls")
 			.$type<string[]>()
 			.default([])
+			.notNull(),
+		// 크롤링 원본은 위 배열에 보존하고 운영자가 확정한 배치·크롭 결과만 별도 저장한다.
+		// null은 원본 폴백, items: []는 의도적으로 상세 이미지를 모두 숨긴 상태다.
+		editedDetailImageDocument: jsonb("edited_detail_image_document")
+			.$type<CrawledJobEditedImageDocument | null>()
+			.default(null),
+		detailImagesEditedAt: timestamp("detail_images_edited_at"),
+		detailImagesEditedByUserId: text(
+			"detail_images_edited_by_user_id"
+		).references(() => user.id, { onDelete: "set null" }),
+		detailImageEditRevision: integer("detail_image_edit_revision")
+			.default(0)
 			.notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -987,6 +1069,13 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 회원 탈퇴 후 개인정보 보존기간(일). 운영자 사이트 설정에서 편집한다.
 	// null이면 코드 기본값(DEFAULT_WITHDRAWAL_RETENTION_DAYS=30)으로 폴백한다.
 	withdrawalRetentionDays: integer("withdrawal_retention_days"),
+	// 파기 배치 자동 실행 시각(KST 0~23시). null이면 코드 기본값
+	// (DEFAULT_WITHDRAWAL_PURGE_HOUR=4)으로 폴백한다.
+	withdrawalPurgeHour: integer("withdrawal_purge_hour"),
+	// 파기 배치 마지막 실행 시각(자동·수동 공통). 스케줄러가 "오늘 설정 시각 이후 이미 돌았는지"를
+	// 이 값으로 판정한다 — 프로세스 메모리가 아니라 DB라 서버를 재시작하거나 인스턴스가 늘어도
+	// 하루 한 번이 유지되고, 운영자 화면의 "마지막 실행" 표시도 같은 값을 본다.
+	withdrawalPurgeLastRunAt: timestamp("withdrawal_purge_last_run_at"),
 	// 광고 배너 로테이션 주기(분). 운영자 사이트 설정에서 편집한다. 활성 광고 칸이 이 주기마다
 	// 한 칸씩 전진한다. null이면 코드 기본값(DEFAULT_AD_ROTATION_MINUTES=60)으로 폴백한다.
 	adBannerRotationMinutes: integer("ad_banner_rotation_minutes"),
@@ -1102,8 +1191,9 @@ export const chatRoom = pgTable(
 			.notNull()
 			.references(() => user.id),
 		isBlocked: boolean("is_blocked").default(false).notNull(),
-		// 회원별 소프트삭제(목록 숨김). 상대는 그대로 유지되며, 새 메시지 도착 시
-		// sendMessage가 양쪽 값을 NULL로 되돌려 방을 다시 노출한다.
+		// "누가 언제 나갔나" 기록. 한쪽이라도 값이 차면 방은 **양쪽 모두에게서** 사라진다
+		// (목록·열람·발신·읽음 전부 차단). 되돌리는 경로는 없고, 재문의는 새 방을 판다.
+		// 운영자 화면은 이 두 값을 그대로 읽어 삭제된 방 이력을 계속 본다.
 		seekerDeletedAt: timestamp("seeker_deleted_at"),
 		employerDeletedAt: timestamp("employer_deleted_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1113,10 +1203,13 @@ export const chatRoom = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		uniqueIndex("chat_room_job_post_id_job_seeker_user_id_uidx").on(
-			table.jobPostId,
-			table.jobSeekerUserId
-		),
+		// 살아 있는 방만 공고×구직자 1개다. 나간 방은 이력으로 남아 누적되므로 부분
+		// 유니크로 제외한다 — 그래야 재문의 때 새 방을 팔 수 있다.
+		uniqueIndex("chat_room_job_post_id_job_seeker_user_id_uidx")
+			.on(table.jobPostId, table.jobSeekerUserId)
+			.where(
+				sql`${table.seekerDeletedAt} IS NULL AND ${table.employerDeletedAt} IS NULL`
+			),
 		index("chat_room_organization_id_idx").on(table.organizationId),
 		index("chat_room_team_id_idx").on(table.teamId),
 		index("chat_room_employer_user_id_idx").on(table.employerUserId),
@@ -1144,8 +1237,43 @@ export const chatMessage = pgTable(
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
-		index("chat_message_chat_room_id_idx").on(table.chatRoomId),
+		index("chat_message_chat_room_id_created_at_idx").on(
+			table.chatRoomId,
+			table.createdAt
+		),
 		index("chat_message_sender_user_id_idx").on(table.senderUserId),
+	]
+);
+
+/**
+ * 채팅 메시지 전파(소켓·알림)의 transactional outbox. **채팅 메시지 전용**이며 범용
+ * 이벤트 버스가 아니다.
+ *
+ * 메시지 INSERT와 같은 트랜잭션으로 행을 쌓고, 커밋 직후 인프로세스 컨슈머가 즉시
+ * 비워 간다(체감 지연 0). 전파에 실패해도 메시지는 이미 커밋돼 있으므로 행이 남아
+ * 부팅·주기 스윕이 다시 시도한다. 성공한 행은 즉시 삭제하므로 평소엔 거의 비어 있다.
+ * 안 읽음 숫자의 정본은 여전히 DB 집계(anti-join)다 — 이 큐는 재계산 신호일 뿐이다.
+ */
+export const chatMessageSyncQueue = pgTable(
+	"chat_message_sync_queue",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
+		messageId: uuid("message_id")
+			.notNull()
+			.references(() => chatMessage.id, { onDelete: "cascade" }),
+		senderUserId: text("sender_user_id")
+			.notNull()
+			.references(() => user.id),
+		// 소켓 페이로드에 실어 보내는 메시지 생성 시각(정렬 정본인 chat_message.created_at 사본).
+		messageCreatedAt: timestamp("message_created_at").notNull(),
+		attempts: integer("attempts").default(0).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("chat_message_sync_queue_created_at_idx").on(table.createdAt),
 	]
 );
 
@@ -1360,6 +1488,10 @@ export const report = pgTable(
 	},
 	(table) => [
 		index("report_status_idx").on(table.status),
+		index("report_reporter_user_id_status_idx").on(
+			table.reporterUserId,
+			table.status
+		),
 		index("report_target_type_target_id_idx").on(
 			table.targetType,
 			table.targetId
@@ -1423,13 +1555,20 @@ export const communityPost = pgTable(
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
 		board: communityBoard("board").notNull(),
-		authorUserId: text("author_user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 회원 글이면 author_user_id, 비회원(게스트 토큰) 글이면 author_guest_id만 채워진다
+		// — 정확히 한쪽만 채워지도록 아래 CHECK로 강제한다. 게스트는 계정이 없어 FK가 없고,
+		// 소유권은 password_hash 검증으로만 증명한다.
+		authorUserId: text("author_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		authorGuestId: text("author_guest_id"),
 		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
 		authorDisplayName: text("author_display_name").notNull(),
 		passwordHash: text("password_hash").notNull(),
 		isLocked: boolean("is_locked").default(false).notNull(),
+		// 법률 자문 글의 선택 입력 연락처(휴대폰). 잠금을 연 열람자(작성자·운영자·법률자문)에게만
+		// 응답에 실린다. legal 외 게시판에서는 저장하지 않는다(API 강제).
+		contactPhone: text("contact_phone"),
 		// 작성 시점 계정 유형 스냅샷(서버 기록, 위조 불가). 업소 배지·필터용 — 이후 role 변경과 무관.
 		authorRole: bambiUserRole("author_role").notNull(),
 		// 업소회원 자율 광고 표시. employer만 true 가능(API 강제), 미표시 광고는 신고로 보완.
@@ -1458,6 +1597,10 @@ export const communityPost = pgTable(
 			table.createdAt
 		),
 		index("community_post_author_user_id_idx").on(table.authorUserId),
+		check(
+			"community_post_author_one_of_ck",
+			sql`num_nonnulls(${table.authorUserId}, ${table.authorGuestId}) = 1`
+		),
 	]
 );
 
@@ -1468,9 +1611,14 @@ export const communityComment = pgTable(
 		postId: uuid("post_id")
 			.notNull()
 			.references(() => communityPost.id, { onDelete: "cascade" }),
-		authorUserId: text("author_user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 글과 같은 규칙: 회원이면 author_user_id, 비회원이면 author_guest_id만 채워진다.
+		authorUserId: text("author_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		authorGuestId: text("author_guest_id"),
+		// 비회원 댓글의 수정·삭제 소유권 증명용(scrypt salt:hash). 회원 댓글은 세션으로
+		// 소유권이 증명되므로 글의 관례대로 빈 문자열을 넣는다.
+		passwordHash: text("password_hash").default("").notNull(),
 		// 작성 시점 계정 유형 스냅샷(서버 기록). 업소 댓글 배지·숨김 토글용.
 		authorRole: bambiUserRole("author_role").notNull(),
 		// 대댓글(1단계). null이면 최상위 댓글. 1단계 제한은 API에서 강제한다.
@@ -1491,6 +1639,10 @@ export const communityComment = pgTable(
 		),
 		index("community_comment_author_user_id_idx").on(table.authorUserId),
 		index("community_comment_parent_comment_id_idx").on(table.parentCommentId),
+		check(
+			"community_comment_author_one_of_ck",
+			sql`num_nonnulls(${table.authorUserId}, ${table.authorGuestId}) = 1`
+		),
 	]
 );
 
@@ -1501,9 +1653,10 @@ export const communityPostLike = pgTable(
 		postId: uuid("post_id")
 			.notNull()
 			.references(() => communityPost.id, { onDelete: "cascade" }),
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 회원 추천은 user_id, 비회원 추천은 guest_id(게스트 토큰의 gid). 정확히 한쪽만
+		// 채워지며, unique 인덱스가 각각 중복 추천을 막는다(NULL은 서로 distinct라 섞이지 않는다).
+		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+		guestId: text("guest_id"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
@@ -1511,7 +1664,15 @@ export const communityPostLike = pgTable(
 			table.postId,
 			table.userId
 		),
+		uniqueIndex("community_post_like_post_id_guest_id_uidx").on(
+			table.postId,
+			table.guestId
+		),
 		index("community_post_like_user_id_idx").on(table.userId),
+		check(
+			"community_post_like_actor_one_of_ck",
+			sql`num_nonnulls(${table.userId}, ${table.guestId}) = 1`
+		),
 	]
 );
 
