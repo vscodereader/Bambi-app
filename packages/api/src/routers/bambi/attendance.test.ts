@@ -133,4 +133,51 @@ describe("bambi attendance router", () => {
 			await cleanup([userId]);
 		}
 	});
+
+	it("adminList가 집계·검색·요약을 함께 돌려준다", async () => {
+		const seekerUserId = await createUser("job_seeker");
+		const adminUserId = await createUser("admin");
+		const today = attendanceService.getKstDateString();
+
+		try {
+			await db.insert(bambiAttendance).values([
+				{ attendedOn: today, userId: seekerUserId },
+				{
+					attendedOn: attendanceService.shiftKstDate(today, -1),
+					userId: seekerUserId,
+				},
+			]);
+
+			const result = await createProcedureClient(attendanceRouter.adminList, {
+				context: createContextForUser(adminUserId),
+			})({ search: "출석 테스트 계정" });
+
+			const row = result.items.find((item) => item.userId === seekerUserId);
+			expect(row?.totalDays).toBe(2);
+			expect(row?.attendedToday).toBe(true);
+			expect(row?.lastAttendedOn).toBe(today);
+			expect(row?.idleDays).toBe(0);
+			// 운영자 계정은 출석 대상이 아니라 목록에 없다.
+			expect(result.items.some((item) => item.userId === adminUserId)).toBe(
+				false
+			);
+			expect(result.summary.attendedToday).toBeGreaterThanOrEqual(1);
+		} finally {
+			await cleanup([seekerUserId, adminUserId]);
+		}
+	});
+
+	it("adminList는 운영자만 부를 수 있다", async () => {
+		const seekerUserId = await createUser("job_seeker");
+
+		try {
+			await expect(
+				createProcedureClient(attendanceRouter.adminList, {
+					context: createContextForUser(seekerUserId),
+				})({})
+			).rejects.toThrow();
+		} finally {
+			await cleanup([seekerUserId]);
+		}
+	});
 });
