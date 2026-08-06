@@ -1518,9 +1518,12 @@ export const moderationRouter = {
 				return updated;
 			});
 
+			// 후기 알림 딥링크는 metadata.jobPostId로 공고 상세를 연다 — 없으면 알림함으로
+			// 떨어진다(web notification-labels: case "review").
 			await notifyModerationAction({
 				action: `set_status:${input.status}`,
 				actorUserId: admin.userId,
+				metadata: { jobPostId: updated.jobPostId },
 				reason: input.reason,
 				targetId: input.reviewId,
 				targetType: "review",
@@ -1533,6 +1536,9 @@ export const moderationRouter = {
 		.input(bulkSetReviewStatusInput)
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
+
+			// 알림 딥링크(metadata.jobPostId)용 — 갱신된 행에서만 얻을 수 있어 여기 모은다.
+			const jobPostIdByReviewId = new Map<string, string>();
 
 			const result = await db.transaction(
 				async (tx) =>
@@ -1549,6 +1555,8 @@ export const moderationRouter = {
 									message: "Review was not found.",
 								});
 							}
+
+							jobPostIdByReviewId.set(reviewId, updated.jobPostId);
 
 							await tx.insert(adminModerationAction).values({
 								adminUserId: admin.userId,
@@ -1568,7 +1576,10 @@ export const moderationRouter = {
 				await notifyModerationAction({
 					action: `set_status:${input.status}`,
 					actorUserId: admin.userId,
-					metadata: { bulk: true },
+					metadata: {
+						bulk: true,
+						jobPostId: jobPostIdByReviewId.get(reviewId),
+					},
 					reason: input.reason,
 					targetId: reviewId,
 					targetType: "review",
