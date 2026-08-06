@@ -2609,6 +2609,10 @@ const MOD_MORE_GROUPS: {
 		],
 	},
 	{
+		label: "회원",
+		items: [{ href: "/moderator/attendance" as Route, label: "출석 관리" }],
+	},
+	{
 		label: "광고·결제",
 		items: [
 			{ href: "/moderator/ad-products", label: "광고 상품" },

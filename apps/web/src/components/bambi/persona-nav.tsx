@@ -195,6 +195,7 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 	} else if (path.startsWith("/moderator/ad-products")) {
 		tab = "adProducts";
 	} else if (
+		path.startsWith("/moderator/attendance") ||
 		path.startsWith("/moderator/employers") ||
 		path.startsWith("/moderator/team-invites") ||
 		path.startsWith("/moderator/payments") ||
