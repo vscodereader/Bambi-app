@@ -20,6 +20,10 @@ const realtimeSource = readFileSync(
 	"utf8"
 );
 
+// 완료 버튼이 구직자 가드 안에 남아 있는지 본다(들여쓰기 변화에 견디게 느슨히).
+const COMPLETE_BUTTON_EMPLOYER_ONLY_PATTERN =
+	/\{isJobSeeker \? null : \(\s*<Button[\s\S]{0,200}onSetStatus\("completed"\)[\s\S]{0,200}완료/;
+
 describe("채팅방 연락처 재설계", () => {
 	it("구인자 버튼을 연락처 공개 요청으로 바꾼다", () => {
 		expect(source).toContain("연락처 공개 요청");
@@ -295,6 +299,20 @@ describe("방 오류 카드", () => {
 		expect(source).toContain(
 			'className="shadow-none"\n\t\t\t\t\t\t\tonClick={() => router.push("/seeker/chats")}'
 		);
+	});
+});
+
+describe("면접 완료 버튼", () => {
+	// 완료(status → completed)는 구인자 전용. 구직자는 확정까지만 한다.
+	it("구직자에게는 완료 버튼을 렌더하지 않는다", () => {
+		expect(source).toMatch(COMPLETE_BUTTON_EMPLOYER_ONLY_PATTERN);
+	});
+
+	// 확정·거절·취소는 양측 그대로다. 완료가 빠진 구직자 화면만 1열로 둔다.
+	it("구직자 쪽 확정 카드 액션을 1열로 둔다", () => {
+		expect(source).toContain('setScheduleStatus(schedule.id, "confirmed")');
+		expect(source).toContain('setScheduleStatus(schedule.id, "declined")');
+		expect(source).toContain('isJobSeeker ? "grid-cols-1" : "grid-cols-2"');
 	});
 });
 

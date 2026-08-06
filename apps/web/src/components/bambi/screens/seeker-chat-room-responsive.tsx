@@ -972,6 +972,45 @@ function InterviewProposalForm({
 	);
 }
 
+// 확정된 면접 카드의 액션. 완료 처리는 구인자만 한다 — 구직자는 확정까지다.
+function ConfirmedInterviewActions({
+	isJobSeeker,
+	isPending,
+	onSetStatus,
+}: {
+	isJobSeeker: boolean;
+	isPending: boolean;
+	onSetStatus: (status: "canceled" | "completed") => void;
+}) {
+	return (
+		<div
+			className={cn(
+				"mt-3 grid gap-2",
+				isJobSeeker ? "grid-cols-1" : "grid-cols-2"
+			)}
+		>
+			{isJobSeeker ? null : (
+				<Button
+					disabled={isPending}
+					onClick={() => onSetStatus("completed")}
+					size="md"
+					variant="secondary"
+				>
+					완료
+				</Button>
+			)}
+			<Button
+				disabled={isPending}
+				onClick={() => onSetStatus("canceled")}
+				size="md"
+				variant="secondary"
+			>
+				취소
+			</Button>
+		</div>
+	);
+}
+
 // 면접 일정 카드 하단. 구인자는 "연락처 공개 요청" 버튼, 구직자는 구인자 인증번호를 본다.
 function ContactRevealAction({
 	employerVerifiedPhone,
@@ -1910,28 +1949,13 @@ export function SeekerChatRoomResponsive({
 											</div>
 										) : null}
 										{schedule.status === "confirmed" ? (
-											<div className="mt-3 grid grid-cols-2 gap-2">
-												<Button
-													disabled={setInterviewStatusMutation.isPending}
-													onClick={() =>
-														setScheduleStatus(schedule.id, "completed")
-													}
-													size="md"
-													variant="secondary"
-												>
-													완료
-												</Button>
-												<Button
-													disabled={setInterviewStatusMutation.isPending}
-													onClick={() =>
-														setScheduleStatus(schedule.id, "canceled")
-													}
-													size="md"
-													variant="secondary"
-												>
-													취소
-												</Button>
-											</div>
+											<ConfirmedInterviewActions
+												isJobSeeker={isJobSeeker}
+												isPending={setInterviewStatusMutation.isPending}
+												onSetStatus={(status) =>
+													setScheduleStatus(schedule.id, status)
+												}
+											/>
 										) : null}
 									</div>
 								))}

@@ -233,6 +233,7 @@ type RequestedInterviewStatus = z.infer<
 interface InterviewStatusTransitionInput {
 	actorUserId: string;
 	currentStatus: string;
+	employerUserId: string;
 	proposedByUserId: string;
 	requestedStatus: RequestedInterviewStatus;
 }
@@ -240,6 +241,7 @@ interface InterviewStatusTransitionInput {
 const canSetInterviewStatus = ({
 	actorUserId,
 	currentStatus,
+	employerUserId,
 	proposedByUserId,
 	requestedStatus,
 }: InterviewStatusTransitionInput): boolean => {
@@ -249,8 +251,9 @@ const canSetInterviewStatus = ({
 			return currentStatus === "proposed" && actorUserId !== proposedByUserId;
 		case "canceled":
 			return currentStatus === "proposed" || currentStatus === "confirmed";
+		// 면접 완료 처리는 구인자만 한다(구직자는 확정까지). UI 숨김만으로는 직접 호출을 못 막는다.
 		case "completed":
-			return currentStatus === "confirmed";
+			return currentStatus === "confirmed" && actorUserId === employerUserId;
 		default:
 			return false;
 	}
@@ -1481,6 +1484,7 @@ export const chatsRouter = {
 				!canSetInterviewStatus({
 					actorUserId: profile.userId,
 					currentStatus: schedule.status,
+					employerUserId: room.employerUserId,
 					proposedByUserId: schedule.proposedByUserId,
 					requestedStatus: input.status,
 				})
