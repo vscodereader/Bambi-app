@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@bambi-app/ui/components/badge";
-import { buttonVariants } from "@bambi-app/ui/components/button";
+import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	NavigationMenu,
 	NavigationMenuContent,
@@ -19,7 +19,7 @@ import type { ReactNode } from "react";
 import { useUnreadMessageCount } from "@/lib/bambi/use-unread-message-count";
 import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
-import { ShieldIcon } from "./icons";
+import { Message, ShieldIcon } from "./icons";
 import { NotificationBell } from "./notification-bell";
 import { SiteFooter } from "./site-footer";
 
@@ -155,25 +155,26 @@ function RoleSwitchLink() {
 	return null;
 }
 
-// "내 정보"와 동일한 형태의 헤더 채팅 버튼. 로그인 셸에서는 안 읽은 메시지
-// 총합을 숫자 배지로 표시하고, 비로그인 public 셸은 버튼만 노출한다.
+// 알림 벨과 동일한 형태의 헤더 채팅 아이콘 버튼(아이콘은 모바일 탭바 채팅 탭과 같다).
+// 로그인 셸에서는 안 읽은 메시지 총합을 숫자 배지로 표시하고, 비로그인 public 셸은
+// 버튼만 노출한다.
 function ChatNavButton({ withPin }: { withPin: boolean }) {
 	const unreadMessageCount = useUnreadMessageCount();
 	const showBadge = withPin && unreadMessageCount > 0;
 	return (
 		<span className="relative inline-flex">
-			<Link
+			<Button
 				aria-label={
 					showBadge ? `채팅, 읽지 않은 메시지 ${unreadMessageCount}개` : "채팅"
 				}
-				className={cn(
-					buttonVariants({ variant: "outline" }),
-					"h-10 px-4 font-bold text-sm no-underline"
-				)}
-				href={"/seeker/chats" as Route}
+				className="bg-card"
+				nativeButton={false}
+				render={<Link href={"/seeker/chats" as Route} />}
+				size="icon-lg"
+				variant="outline"
 			>
-				채팅
-			</Link>
+				<Message />
+			</Button>
 			{showBadge ? (
 				<Badge className="absolute -top-2 -right-2 min-w-5 justify-center px-1 text-xs">
 					{unreadMessageCount}
@@ -186,18 +187,18 @@ function ChatNavButton({ withPin }: { withPin: boolean }) {
 function ModeratorHeaderActions() {
 	return (
 		<>
+			<NotificationBell />
 			<Badge className="h-9 gap-1.5 px-3 font-bold" variant="secondary">
 				<span className="inline-flex size-3.5">
 					<ShieldIcon />
 				</span>
 				운영자 모드
 			</Badge>
-			<NotificationBell />
 		</>
 	);
 }
 
-// 헤더 우측 액션 묶음. 운영자는 전용 액션, 그 외에는 역할 전환·채팅·내 정보/시작하기.
+// 헤더 우측 액션 묶음. 운영자는 전용 액션, 그 외에는 채팅·알림·역할 전환·내 정보/시작하기.
 function HeaderRightActions({
 	isModerator,
 	isPublic,
@@ -212,11 +213,11 @@ function HeaderRightActions({
 	}
 	return (
 		<>
-			{isPublic ? null : <RoleSwitchLink />}
+			{showChatButton ? <ChatNavButton withPin={!isPublic} /> : null}
 			{/* 벨은 스스로 로그인 여부로 게이트한다 — public 라우트를 보는 로그인 사용자에게도
 			    모바일 헤더와 똑같이 노출한다(폭에 따라 벨이 사라지지 않게). */}
 			<NotificationBell />
-			{showChatButton ? <ChatNavButton withPin={!isPublic} /> : null}
+			{isPublic ? null : <RoleSwitchLink />}
 			<Link
 				className={cn(
 					buttonVariants({ variant: isPublic ? "dark" : "outline" }),
