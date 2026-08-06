@@ -1,6 +1,7 @@
 import { accountRecoveryRouter } from "./account-recovery";
 import { adProductsRouter } from "./ad-products";
 import { analyticsRouter } from "./analytics";
+import { attendanceRouter } from "./attendance";
 import { bannedWordsRouter } from "./banned-words";
 import { blocksRouter } from "./blocks";
 import { chatsRouter } from "./chats";
@@ -22,6 +23,7 @@ export const bambiRouter = {
 	accountRecovery: accountRecoveryRouter,
 	adProducts: adProductsRouter,
 	analytics: analyticsRouter,
+	attendance: attendanceRouter,
 	bannedWords: bannedWordsRouter,
 	blocks: blocksRouter,
 	chats: chatsRouter,
