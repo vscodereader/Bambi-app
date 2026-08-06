@@ -29,7 +29,7 @@
 | 생성 아키텍처 | **통일 행 + 공통 훅**: 모든 알림을 `bambi_notification` 행으로 통일. 운영자→사용자 축은 `adminModerationAction` 삽입 지점의 공통 훅 하나로 일괄 커버, 사용자간 이벤트만 개별 호출 |
 | 이벤트 범위 | **필수 + 유용 전부** (아래 §3 매트릭스). 운영자도 포함 — 새 심사거리(공고 검수·1:1 문의·신고 등) 도착 알림(사용자 지시로 범위 추가) |
 | 역할 공유 수신 | 운영자·법률자문 알림은 개인 복제 대신 **role 공유 1행 + 확인자 기록**(`recipient_role`·`read_by_user_id`) — 한 명이 확인하면 전원 배지에서 소거(사용자 제안 채택) |
-| 출석 방식 | 하루 1회 버튼 클릭, 보상 없음(기록·연속일·월 달력). 보상 시스템은 테이블 확장 여지만 남김 |
+| 출석 방식 | 하루 1회 버튼 클릭(기록·연속일·월 달력) + **출석 1회당 +10 포인트 적립**(2026-08-06 사용자 지시로 "보상 없음"에서 개정 — 포인트 사용처는 후속) |
 | 운영자 출석 화면 | 사용자 목록표(검색·역할 필터·정렬) + 상단 요약 카운트. 개인 상세·차트는 후속 |
 | 병합 | 구현 완료 후에도 **로컬 머지 금지** — 브랜치·커밋 위치만 보고 |
 
@@ -176,18 +176,19 @@ judgment 근거: "사용자 A의 행위가 B에게 영향을 주는데 B가 새�
 
 ### 5.1 스키마
 
-- `bambi_attendance`: `user_id`(text, user FK, cascade) + `attended_on`(date) 복합 PK, `created_at`. 보상 없음이므로 이 두 축이면 충분 — 보상 도입 시 컬럼 추가로 확장.
+- `bambi_attendance`: `user_id`(text, user FK, cascade) + `attended_on`(date) 복합 PK, `created_at`.
+- `bambi_point_transaction`(포인트 원장, 사용자 지시로 추가): `id`(uuid PK), `user_id`(user FK, cascade), `amount`(int, 적립 +/차감 −), `reason`(text — 현재 `attendance`만), `created_at`. 잔액은 원장 합산(별도 잔액 컬럼 없음 — 사용처가 생기면 재검토). 중복 적립 가드는 별도 유니크가 아니라 **출석 복합 PK가 담당** — checkIn 트랜잭션에서 출석 insert가 실제로 일어났을 때만 +10을 적립한다.
 - 날짜는 **서버에서 KST 기준으로 계산**(클라이언트 시계 불신). `Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" })` 기반 순수 함수로 두고 vitest 동거.
 
 ### 5.2 API — `routers/bambi/attendance.ts` (신설)
 
-- `checkIn()`: job_seeker·employer만(role 게이트). 오늘(KST) 행 insert, PK 충돌은 `onConflictDoNothing`으로 멱등 — 이미 출석이어도 성공 응답에 오늘 출석 여부 반영.
+- `checkIn()`: job_seeker·employer만(role 게이트). 오늘(KST) 행 insert, PK 충돌은 `onConflictDoNothing`으로 멱등 — 이미 출석이어도 성공 응답에 오늘 출석 여부 반영. **출석 insert가 실제로 일어난 경우에만 같은 트랜잭션에서 +10 포인트 원장 기록**(상수 `ATTENDANCE_POINT_AMOUNT = 10`), 응답에 `pointsAwarded`·`pointBalance` 포함.
 - `getMine({ month? })`: 해당 월 출석일 배열 + 연속 출석일 + 총 출석일. 연속일은 본인 출석일 목록을 내림차순으로 읽어 조회 시 계산(순수 함수, vitest).
 - `adminList({ search?, role?, sort, cursor? })`: admin 전용. 사용자별 총 출석일·이번 달 출석일·마지막 출석일·미출석 경과일을 SQL 집계로 산출, 정렬·검색(닉네임/아이디)·역할 필터·페이지네이션 + 요약 카운트(오늘 출석자 수, 대상 사용자 수).
 
 ### 5.3 화면
 
-- **공통 출석 컴포넌트 1개**: 오늘 출석 버튼(출석 완료 시 비활성+완료 표시) + 월 달력 그리드(단순 Tailwind grid 직접 구현 — 달력 라이브러리 추가 없음) + 연속/총 출석 스탯. `/seeker/attendance`·`/employer/attendance` 두 라우트에서 재사용, 각 역할 셸 메뉴에 진입점 추가.
+- **공통 출석 컴포넌트 1개**: 오늘 출석 버튼(출석 완료 시 비활성+완료 표시) + 월 달력 그리드(단순 Tailwind grid 직접 구현 — 달력 라이브러리 추가 없음) + 연속/총 출석 스탯 + **포인트 잔액 표시**(출석 성공 시 "+10 적립" 피드백). `/seeker/attendance`·`/employer/attendance` 두 라우트에서 재사용, 각 역할 셸 메뉴에 진입점 추가.
 - **운영자**: `/moderator/attendance` — raw shadcn Table 목록표(검색 입력·역할 필터·정렬 헤더·페이지네이션) + 상단 요약 카운트. 기존 모더레이터 화면 패턴 그대로.
 - **출석 알림은 만들지 않는다**(보상이 없어 리마인드는 스팸).
 
