@@ -3,6 +3,7 @@ import {
 	hasPopupContent,
 	isInternalPopupPath,
 	isPopupScheduledNow,
+	normalizePopupLink,
 } from "./bambi-main-popups";
 
 describe("main popup policy", () => {
@@ -11,6 +12,22 @@ describe("main popup policy", () => {
 		expect(isInternalPopupPath("https://example.com")).toBe(false);
 		expect(isInternalPopupPath("//example.com/path")).toBe(false);
 		expect(isInternalPopupPath("/\\example.com")).toBe(false);
+	});
+
+	it("normalizes deployed and localhost URLs to the same internal path", () => {
+		expect(
+			normalizePopupLink(
+				"http://localhost:23001/seeker/community/notice/post-1?from=popup#top"
+			)
+		).toBe("/seeker/community/notice/post-1?from=popup#top");
+		expect(
+			normalizePopupLink(
+				"https://www.bambialba.com/seeker/community/notice/post-2"
+			)
+		).toBe("/seeker/community/notice/post-2");
+		expect(() => normalizePopupLink("https://example.com/seeker")).toThrow(
+			"localhost 또는 bambialba.com 내부 주소"
+		);
 	});
 
 	it("uses an inclusive start and exclusive end", () => {

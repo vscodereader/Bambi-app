@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { AdPriceChangeDialog } from "@/components/bambi/ad-price-change-dialog";
 import { EmployerListingPreview } from "@/components/bambi/employer-listing-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
@@ -245,6 +246,9 @@ export default function EditEmployerJobPage({
 	const formRef = useRef<HTMLFormElement>(null);
 	const [isDirty, setIsDirty] = useState(false);
 	const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+	const [priceConflictMessage, setPriceConflictMessage] = useState<
+		null | string
+	>(null);
 	useUnsavedChangesWarning(isDirty);
 	const jobQuery = useQuery({
 		...orpc.bambi.jobs.getEditableById.queryOptions({ input: { id } }),
@@ -256,7 +260,18 @@ export default function EditEmployerJobPage({
 	});
 	const updateMutation = useMutation(
 		orpc.bambi.jobs.update.mutationOptions({
-			onError: (error) => {
+			onError: async (error) => {
+				if (getErrorCode(error) === "CONFLICT") {
+					await utils.invalidateQueries({
+						queryKey: orpc.bambi.adProducts.getCatalog.queryKey(),
+					});
+					await utils.refetchQueries({
+						queryKey: orpc.bambi.adProducts.getCatalog.queryKey(),
+					});
+					setPriceConflictMessage(error.message);
+					return;
+				}
+
 				const message =
 					"공고를 수정하지 못했습니다. 입력값과 공고 수정 권한을 확인해 주세요.";
 				setFormError(message);
@@ -971,6 +986,14 @@ export default function EditEmployerJobPage({
 					</div>
 				</aside>
 			</div>
+			<AdPriceChangeDialog
+				message={priceConflictMessage}
+				onCancel={() => setPriceConflictMessage(null)}
+				onConfirm={() => {
+					setPriceConflictMessage(null);
+					formRef.current?.requestSubmit();
+				}}
+			/>
 		</PageShell>
 	);
 }

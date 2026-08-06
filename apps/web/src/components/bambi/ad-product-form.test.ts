@@ -66,4 +66,12 @@ describe("ad product form", () => {
 		expect(source).toContain("{ amount, days, discountPercent: percent }");
 		expect(source).toContain("{ amount, days }");
 	});
+
+	it("restores an active campaign before ended history", () => {
+		const source = readComponent("ad-product-form.tsx");
+		expect(source).toContain("selectEditableAdCampaign(");
+		expect(source).not.toContain(
+			"b.startsAt.getTime() - a.startsAt.getTime())[0]"
+		);
+	});
 });

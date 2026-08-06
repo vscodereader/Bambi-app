@@ -41,6 +41,12 @@ export const mainPopupContentType = pgEnum("main_popup_content_type", [
 	"text",
 ]);
 
+export const mainPopupAudience = pgEnum("main_popup_audience", [
+	"common",
+	"job_seeker",
+	"employer",
+]);
+
 export interface MainPopupImageAsset {
 	dataUrl: string;
 	height: number;
@@ -1031,6 +1037,53 @@ export const adProduct = pgTable(
 	]
 );
 
+export const adProductDiscountCampaign = pgTable(
+	"ad_product_discount_campaign",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		adProductId: uuid("ad_product_id")
+			.notNull()
+			.references(() => adProduct.id, { onDelete: "cascade" }),
+		priceOptionDays: integer("price_option_days").notNull(),
+		discountPercent: integer("discount_percent").notNull(),
+		startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+		// 운영자가 선택한 종료 분까지 포함되도록 API에서 다음 분 시각으로 변환해 저장한다.
+		endsAtExclusive: timestamp("ends_at_exclusive", { withTimezone: true }),
+		cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+		supersededById: uuid("superseded_by_id").references(
+			(): AnyPgColumn => adProductDiscountCampaign.id,
+			{ onDelete: "set null" }
+		),
+		createdByUserId: text("created_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("ad_product_discount_campaign_product_days_idx").on(
+			table.adProductId,
+			table.priceOptionDays,
+			table.startsAt
+		),
+		check(
+			"ad_product_discount_campaign_discount_check",
+			sql`${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100`
+		),
+		check(
+			"ad_product_discount_campaign_days_check",
+			sql`${table.priceOptionDays} > 0`
+		),
+		check(
+			"ad_product_discount_campaign_window_check",
+			sql`${table.endsAtExclusive} IS NULL OR ${table.endsAtExclusive} > ${table.startsAt}`
+		),
+	]
+);
+
 // 사이트 전역 설정(단일 행). 지금은 푸터에 노출하는 사업자 정보를 담고, 이후 다른
 // 사이트 설정(무통장입금 계좌 안내 등)이 생기면 컬럼을 추가한다. 도메인을 푸터로 좁히지
 // 않으려고 이름을 site_settings로 둔다. 값이 없으면(null) 코드의 폴백 상수를 쓴다.
@@ -1573,6 +1626,8 @@ export const communityPost = pgTable(
 		authorRole: bambiUserRole("author_role").notNull(),
 		// 업소회원 자율 광고 표시. employer만 true 가능(API 강제), 미표시 광고는 신고로 보완.
 		isPromotion: boolean("is_promotion").default(false).notNull(),
+		// 공지사항 운영자 전용 이벤트 표시. 이벤트 글은 비밀글과 동시에 사용할 수 없다.
+		isEvent: boolean("is_event").default(false).notNull(),
 		title: text("title").notNull(),
 		body: text("body").notNull(),
 		viewCount: integer("view_count").default(0).notNull(),
@@ -1940,6 +1995,7 @@ export const mainPopup = pgTable(
 		id: uuid("id").defaultRandom().primaryKey(),
 		slotIndex: integer("slot_index").notNull(),
 		enabled: boolean("enabled").default(false).notNull(),
+		audience: mainPopupAudience("audience").default("common").notNull(),
 		contentType: mainPopupContentType("content_type")
 			.default("image")
 			.notNull(),

@@ -27,15 +27,37 @@ export const isInternalPopupPath = (value: string): boolean =>
 	!value.includes("\\") &&
 	Array.from(value).every((character) => character.charCodeAt(0) >= 32);
 
+const ALLOWED_POPUP_HOSTS = new Set([
+	"bambialba.com",
+	"www.bambialba.com",
+	"localhost",
+]);
+
 export const normalizePopupLink = (value: string | null | undefined) => {
 	const trimmed = value?.trim() ?? "";
 	if (trimmed.length === 0) {
 		return null;
 	}
-	if (!isInternalPopupPath(trimmed)) {
+	if (isInternalPopupPath(trimmed)) {
+		return trimmed;
+	}
+	let parsed: URL;
+	try {
+		parsed = new URL(trimmed);
+	} catch {
 		throw new Error("밤비 내부 주소만 입력할 수 있습니다.");
 	}
-	return trimmed;
+	if (
+		!(
+			ALLOWED_POPUP_HOSTS.has(parsed.hostname.toLowerCase()) &&
+			["http:", "https:"].includes(parsed.protocol)
+		)
+	) {
+		throw new Error(
+			"localhost 또는 bambialba.com 내부 주소만 입력할 수 있습니다."
+		);
+	}
+	return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 };
 
 export const isPopupScheduledNow = (

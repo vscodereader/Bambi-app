@@ -13,9 +13,10 @@ import {
 	ChevronRight,
 	ChevronUp,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const TIME_INPUT_PATTERN = /^\d{0,2}$/;
 const toKstDate = (date: Date) => new Date(date.getTime() + KST_OFFSET_MS);
 const fromKstParts = (
 	year: number,
@@ -44,10 +45,12 @@ const label = (date: Date | null) =>
 		: "설정 안 함";
 
 export function PopupDateTimePicker({
+	allowUnset = true,
 	kind,
 	onChange,
 	value,
 }: {
+	allowUnset?: boolean;
 	kind: "end" | "start";
 	onChange: (value: Date | null) => void;
 	value: Date | null;
@@ -163,16 +166,20 @@ export function PopupDateTimePicker({
 						/>
 					</div>
 				</div>
-				<div className="mt-4 flex justify-between">
-					<Button
-						onClick={() => {
-							onChange(null);
-							setOpen(false);
-						}}
-						variant="ghost"
-					>
-						설정 안 함
-					</Button>
+				<div
+					className={`mt-4 flex ${allowUnset ? "justify-between" : "justify-end"}`}
+				>
+					{allowUnset ? (
+						<Button
+							onClick={() => {
+								onChange(null);
+								setOpen(false);
+							}}
+							variant="ghost"
+						>
+							설정 안 함
+						</Button>
+					) : null}
 					<Button onClick={commit}>확인</Button>
 				</div>
 				{kind === "start" &&
@@ -199,6 +206,10 @@ function TimeStepper({
 	onChange: (value: number) => void;
 	value: number;
 }) {
+	const [inputValue, setInputValue] = useState(String(value));
+	useEffect(() => {
+		setInputValue(String(value));
+	}, [value]);
 	const set = (next: number) => onChange((next + max + 1) % (max + 1));
 	return (
 		<div className="grid justify-items-center gap-1">
@@ -213,13 +224,26 @@ function TimeStepper({
 			<Input
 				aria-label={label}
 				className="w-14 text-center"
-				max={max}
-				min={0}
-				onChange={(event) =>
-					set(Math.max(0, Math.min(max, Number(event.target.value))))
-				}
-				type="number"
-				value={value}
+				inputMode="numeric"
+				maxLength={2}
+				onBlur={() => {
+					if (inputValue === "") {
+						setInputValue(String(value));
+					}
+				}}
+				onChange={(event) => {
+					const next = event.target.value;
+					if (!TIME_INPUT_PATTERN.test(next)) {
+						return;
+					}
+					setInputValue(next);
+					if (next !== "") {
+						onChange(Math.max(0, Math.min(max, Number(next))));
+					}
+				}}
+				onFocus={(event) => event.currentTarget.select()}
+				type="text"
+				value={inputValue}
 			/>
 			<Button
 				aria-label={`${label} 감소`}

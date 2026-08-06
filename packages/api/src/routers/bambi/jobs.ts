@@ -36,6 +36,10 @@ import {
 	parseStoredAdBannerLayout,
 } from "../../services/bambi-ad-banner-layout";
 import {
+	loadDiscountCampaigns,
+	resolveEffectiveAdPrice,
+} from "../../services/bambi-ad-discount-campaigns";
+import {
 	AD_BANNER_EXPOSURE_TYPES,
 	buildExposureJobSections,
 	DEFAULT_AD_ROTATION_MINUTES,
@@ -49,7 +53,6 @@ import {
 	requireDirectionImage,
 	requiredAdBannerUsagesForExposureType,
 } from "../../services/bambi-ad-exposure";
-import { discountedAdAmount } from "../../services/bambi-ad-pricing";
 import {
 	getRecentJobPerformanceMetrics,
 	recordAdBannerImpressions,
@@ -589,6 +592,7 @@ interface ResolvedJobExposure {
 export const resolveJobPostExposure = async (input: {
 	adProductId?: string | null;
 	exposureDurationDays?: number | null;
+	expectedExposureAmount?: number | null;
 	paymentMethod?: "bank_transfer" | "card" | null;
 }): Promise<ResolvedJobExposure> => {
 	if (!input.adProductId) {
@@ -648,14 +652,32 @@ export const resolveJobPostExposure = async (input: {
 		exposureType
 	);
 
+	const [campaigns, now] = [
+		await loadDiscountCampaigns([product.id]),
+		new Date(),
+	];
+	const resolvedPrice = resolveEffectiveAdPrice({
+		amount: priceOption.amount,
+		baseDiscountPercent: priceOption.discountPercent ?? 0,
+		campaigns: campaigns.filter(
+			(campaign) => campaign.priceOptionDays === priceOption.days
+		),
+		now,
+	});
+	if (
+		input.expectedExposureAmount != null &&
+		input.expectedExposureAmount !== resolvedPrice.amount
+	) {
+		throw new ORPCError("CONFLICT", {
+			message: `광고 가격이 ${input.expectedExposureAmount.toLocaleString("ko-KR")}원에서 ${resolvedPrice.amount.toLocaleString("ko-KR")}원으로 변경되었습니다. 변경된 가격을 확인한 뒤 다시 결제해 주세요.`,
+		});
+	}
+
 	return {
 		adProductId: product.id,
 		// 구매 시점 할인가 스냅샷: 선택한 가격 옵션의 discountPercent(없으면 0)를 적용해 결제
 		// 금액을 확정한다. 이후 상품 할인율이 바뀌어도 이미 확정된 이 금액에는 영향을 주지 않는다.
-		exposureAmount: discountedAdAmount(
-			priceOption.amount,
-			priceOption.discountPercent ?? 0
-		),
+		exposureAmount: resolvedPrice.amount,
 		exposureDurationDays: priceOption.days,
 		exposureType,
 		manualBoostsPerDay: isBanner ? 0 : product.manualBoostsPerDay,
@@ -719,6 +741,7 @@ export const applyJobPostUpdate = async ({
 	const exposure = await resolveJobPostExposure({
 		adProductId: data.adProductId,
 		exposureDurationDays: data.exposureDurationDays,
+		expectedExposureAmount: data.exposureAmount,
 		paymentMethod: data.paymentMethod,
 	});
 	const layoutWrite = normalizeAdBannerLayout(data, exposure.exposureType);
@@ -1651,6 +1674,7 @@ export const jobsRouter = {
 			const exposure = await resolveJobPostExposure({
 				adProductId: input.adProductId,
 				exposureDurationDays: input.exposureDurationDays,
+				expectedExposureAmount: input.exposureAmount,
 				paymentMethod: input.paymentMethod,
 			});
 			const layoutWrite = normalizeAdBannerLayout(input, exposure.exposureType);

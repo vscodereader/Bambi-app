@@ -1,8 +1,12 @@
 import { db } from "@bambi-app/db";
-import { user } from "@bambi-app/db/schema/auth";
-import { mainPopup } from "@bambi-app/db/schema/bambi";
+import { member, user } from "@bambi-app/db/schema/auth";
+import {
+	bambiProfile,
+	employerOrganizationProfile,
+	mainPopup,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, publicProcedure } from "../../index";
@@ -15,6 +19,7 @@ import {
 } from "../../services/bambi-main-popups";
 
 const countInput = z.object({ count: z.number().int().min(0) });
+const deleteInput = z.object({ id: z.string().uuid() });
 
 const saveInput = z
 	.object({
@@ -27,6 +32,7 @@ const saveInput = z
 		expectedRevision: z.number().int().min(0),
 		id: z.string().uuid(),
 		linkPath: z.string().max(2000).nullable(),
+		audience: z.enum(["common", "job_seeker", "employer"]),
 		originalImage: popupImageAssetSchema.nullable(),
 		startsAt: z.coerce.date().nullable(),
 		textDocument: popupTextDocumentSchema.nullable(),
@@ -60,6 +66,7 @@ const saveInput = z
 
 const adminColumns = {
 	contentHeight: mainPopup.contentHeight,
+	audience: mainPopup.audience,
 	contentType: mainPopup.contentType,
 	contentWidth: mainPopup.contentWidth,
 	createdAt: mainPopup.createdAt,
@@ -78,6 +85,7 @@ const adminColumns = {
 
 const publicColumns = {
 	contentHeight: mainPopup.contentHeight,
+	audience: mainPopup.audience,
 	contentType: mainPopup.contentType,
 	contentWidth: mainPopup.contentWidth,
 	editedImage: mainPopup.editedImage,
@@ -98,8 +106,46 @@ export const mainPopupsRouter = {
 		return { count: rows.length, items: rows };
 	}),
 
-	listPublic: publicProcedure.handler(async () => {
+	listPublic: publicProcedure.handler(async ({ context }) => {
 		const now = new Date();
+		const userId = context.session?.user?.id;
+		let allowedAudiences: Array<"common" | "job_seeker" | "employer"> = [
+			"common",
+		];
+		if (userId) {
+			const [profile] = await db
+				.select({ role: bambiProfile.role })
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, userId))
+				.limit(1);
+			if (profile?.role === "admin") {
+				return { items: [] };
+			}
+			if (profile?.role === "job_seeker") {
+				allowedAudiences = ["common", "job_seeker"];
+			}
+			if (profile?.role === "employer") {
+				const [verified] = await db
+					.select({ organizationId: member.organizationId })
+					.from(member)
+					.innerJoin(
+						employerOrganizationProfile,
+						eq(
+							member.organizationId,
+							employerOrganizationProfile.organizationId
+						)
+					)
+					.where(
+						and(
+							eq(member.userId, userId),
+							eq(member.status, "active"),
+							eq(employerOrganizationProfile.verificationStatus, "verified")
+						)
+					)
+					.limit(1);
+				allowedAudiences = verified ? ["common", "employer"] : ["common"];
+			}
+		}
 		const rows = await db
 			.select({
 				...publicColumns,
@@ -107,7 +153,12 @@ export const mainPopupsRouter = {
 				startsAt: mainPopup.startsAt,
 			})
 			.from(mainPopup)
-			.where(eq(mainPopup.enabled, true))
+			.where(
+				and(
+					eq(mainPopup.enabled, true),
+					inArray(mainPopup.audience, allowedAudiences)
+				)
+			)
 			.orderBy(asc(mainPopup.slotIndex));
 		return {
 			items: rows.filter(
@@ -142,6 +193,35 @@ export const mainPopupsRouter = {
 		return { count: input.count };
 	}),
 
+	delete: adminProcedure.input(deleteInput).handler(async ({ input }) =>
+		db.transaction(async (transaction) => {
+			const [removed] = await transaction
+				.delete(mainPopup)
+				.where(eq(mainPopup.id, input.id))
+				.returning({ slotIndex: mainPopup.slotIndex });
+			if (!removed) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "삭제할 팝업을 찾을 수 없습니다.",
+				});
+			}
+			const subsequent = await transaction
+				.select({ id: mainPopup.id, slotIndex: mainPopup.slotIndex })
+				.from(mainPopup)
+				.where(gt(mainPopup.slotIndex, removed.slotIndex))
+				.orderBy(asc(mainPopup.slotIndex));
+			for (const popup of subsequent) {
+				await transaction
+					.update(mainPopup)
+					.set({ slotIndex: popup.slotIndex - 1 })
+					.where(eq(mainPopup.id, popup.id));
+			}
+			const remaining = await transaction
+				.select({ id: mainPopup.id })
+				.from(mainPopup);
+			return { count: remaining.length };
+		})
+	),
+
 	save: adminProcedure.input(saveInput).handler(async ({ context, input }) => {
 		const [existing] = await db
 			.select({ startsAt: mainPopup.startsAt })
@@ -169,6 +249,7 @@ export const mainPopupsRouter = {
 		const [saved] = await db
 			.update(mainPopup)
 			.set({
+				audience: input.audience,
 				contentHeight: input.contentHeight,
 				contentType: input.contentType,
 				contentWidth: input.contentWidth,
