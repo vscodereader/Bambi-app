@@ -8,6 +8,11 @@ import {
 import { env } from "@bambi-app/env/web";
 import { type QueryKey, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import {
+	NOTIFICATIONS_HREF,
+	notificationTitle,
+} from "@/lib/bambi/notification-labels";
+import { showOsNotification } from "@/lib/bambi/os-notification";
 import { orpc } from "@/utils/orpc";
 
 interface NotificationStreamListener {
@@ -196,11 +201,13 @@ const subscribeNotificationStream = (listener: NotificationStreamListener) => {
 	};
 };
 
+// 채팅 축 알림. 이 두 타입만 채팅 핀·목록·방 캐시를 건드린다.
+const CHAT_TARGET_TYPES = new Set(["chat_message", "chat_room"]);
+
 /**
- * 알림 SSE 구독 훅. 서버가 알림 행을 만드는 즉시 이벤트를 받아
- * 안 읽음 배지·채팅 목록 캐시를 무효화한다. 알림 채널은 뱃지(핀)만 남기고
- * 토스트는 띄우지 않는다. 기존 폴링·소켓 경로는 그대로 두고 이 스트림은
- * 즉시성만 더한다.
+ * 알림 SSE 구독 훅. 서버가 알림 행을 만드는 즉시 이벤트를 받아 관련 캐시를 무효화한다.
+ * 채팅류는 기존대로 채팅 핀·목록·방을, 그 외는 알림함 목록·벨 배지를 갱신한다.
+ * 탭을 보고 있지 않고 권한이 허용된 경우에만 OS 알림을 덧붙인다 — 토스트는 띄우지 않는다.
  */
 export function useBambiNotificationStream(enabled: boolean): void {
 	const queryClient = useQueryClient();
@@ -213,26 +220,51 @@ export function useBambiNotificationStream(enabled: boolean): void {
 		const invalidate = (queryKey: QueryKey) => {
 			queryClient.invalidateQueries({ queryKey }).catch(() => undefined);
 		};
-		const refreshUnreadAndList = () => {
+		const refreshChat = () => {
 			invalidate(orpc.bambi.chats.unreadState.queryKey());
 			invalidate(orpc.bambi.chats.listMine.queryKey());
+		};
+		const refreshNotifications = () => {
+			invalidate(orpc.bambi.notifications.unreadCount.queryKey());
+			invalidate(orpc.bambi.notifications.list.key());
 		};
 
 		return subscribeNotificationStream({
 			onEvent: (event) => {
-				refreshUnreadAndList();
+				if (CHAT_TARGET_TYPES.has(event.targetType)) {
+					refreshChat();
 
-				// 배지·목록만 갱신하면 "안 읽음 1인데 방에는 그 메시지가 없는" 상태가 된다
-				// (방 소켓룸을 잃었거나 소켓과 SSE가 서로 다른 인스턴스에 붙은 경우).
-				if (event.chatRoomId) {
-					invalidate(
-						orpc.bambi.chats.getById.key({
-							input: { id: event.chatRoomId },
-						})
-					);
+					// 배지·목록만 갱신하면 "안 읽음 1인데 방에는 그 메시지가 없는" 상태가 된다
+					// (방 소켓룸을 잃었거나 소켓과 SSE가 서로 다른 인스턴스에 붙은 경우).
+					if (event.chatRoomId) {
+						invalidate(
+							orpc.bambi.chats.getById.key({
+								input: { id: event.chatRoomId },
+							})
+						);
+					}
+					return;
 				}
+
+				refreshNotifications();
+				// SSE 페이로드에는 metadata·recipientRole이 없어 targetType 기본 문구만 나온다.
+				// 정확한 문구·딥링크는 알림함이 정본이라, 클릭은 알림함으로만 보낸다.
+				showOsNotification({
+					href: NOTIFICATIONS_HREF,
+					title: notificationTitle({
+						chatRoomId: event.chatRoomId,
+						metadata: null,
+						recipientRole: null,
+						targetId: event.targetId,
+						targetType: event.targetType,
+					}),
+				});
 			},
-			onOpen: refreshUnreadAndList,
+			// 끊겨 있던 동안 놓친 알림은 재전송되지 않는다 — 재연결마다 양쪽 정본을 다시 읽는다.
+			onOpen: () => {
+				refreshChat();
+				refreshNotifications();
+			},
 		});
 	}, [enabled, queryClient]);
 }
