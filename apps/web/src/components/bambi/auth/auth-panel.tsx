@@ -400,29 +400,22 @@ export function AuthPanel() {
 							onVerifiedForSignup={handleVerifiedForSignup}
 						/>
 					) : (
-						// @container: 2열 전환 기준은 뷰포트가 아니라 카드 폭이다 — 카드가
-						// max-w로 뷰포트보다 좁게 고정돼 있어 뷰포트 breakpoint로는 폼이
-						// 실제로 2열을 감당하는 시점을 맞출 수 없다.
+						// 폼은 데스크톱·모바일 모두 1열이다. 2열은 칸마다 도움말·오류 문구
+						// 높이가 달라 옆 칸과 라인이 어긋나고, 읽는 순서도 갈린다.
 						<form
-							className="@container grid gap-4"
+							className="grid gap-4"
 							onSubmit={(event) => {
 								event.preventDefault();
 								handleSubmit().catch(() => undefined);
 							}}
 						>
 							{isSignUp ? (
-								// items-start: 아이디 칸 아래 규칙 안내가 그 행을 높이면, 기본
-								// stretch가 옆 닉네임 칸(label+입력 2행 그리드)까지 늘려 남는
-								// 높이를 행마다 나눠 준다 — 입력창이 아래로 밀려 두 칸의 라인이
-								// 어긋난다. 각 칸을 제 높이로 두면 상단·입력 라인이 맞는다.
-								<div className="grid @md:grid-cols-2 items-start gap-4">
-									<AuthSignupFields
-										onFieldChange={setField}
-										onSignupRoleChange={setSignupRole}
-										signupRole={signupRole}
-										values={form}
-									/>
-								</div>
+								<AuthSignupFields
+									onFieldChange={setField}
+									onSignupRoleChange={setSignupRole}
+									signupRole={signupRole}
+									values={form}
+								/>
 							) : (
 								<AuthSigninFields
 									onFieldChange={setField}
