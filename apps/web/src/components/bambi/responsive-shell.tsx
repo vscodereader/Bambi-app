@@ -213,7 +213,9 @@ function HeaderRightActions({
 	return (
 		<>
 			{isPublic ? null : <RoleSwitchLink />}
-			{isPublic ? null : <NotificationBell />}
+			{/* 벨은 스스로 로그인 여부로 게이트한다 — public 라우트를 보는 로그인 사용자에게도
+			    모바일 헤더와 똑같이 노출한다(폭에 따라 벨이 사라지지 않게). */}
+			<NotificationBell />
 			{showChatButton ? <ChatNavButton withPin={!isPublic} /> : null}
 			<Link
 				className={cn(
