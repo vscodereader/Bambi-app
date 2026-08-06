@@ -48,6 +48,7 @@ import {
 	getJobPostingScopes,
 	ORGANIZATION_WIDE_POSTING_ROLES,
 } from "../../services/bambi-job-access";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
 	assertCanCreateBambiProfile,
 	assertCanManageEmployerProfile,
@@ -1166,6 +1167,19 @@ export const onboardingRouter = {
 						)
 					);
 
+				// pending으로 전이됐을 때만 알린다 — verified 유지 경로(위)는 심사거리가
+				// 아니다. 제출·재제출 모두 운영자 인증 큐의 새 건이다.
+				await notifyBambiNotification({
+					actorUserId: userId,
+					metadata: {
+						action: "submitted",
+						organizationId: ownedOrg.organizationId,
+					},
+					recipientRole: "admin",
+					targetId: ownedOrg.organizationId,
+					targetType: "employer_verification",
+				});
+
 				return {
 					organizationId: ownedOrg.organizationId,
 					verificationStatus: "pending" as const,
@@ -1199,6 +1213,14 @@ export const onboardingRouter = {
 					...biznumCheck,
 					verificationStatus: "pending",
 				});
+			});
+
+			await notifyBambiNotification({
+				actorUserId: userId,
+				metadata: { action: "submitted", organizationId },
+				recipientRole: "admin",
+				targetId: organizationId,
+				targetType: "employer_verification",
 			});
 
 			return { organizationId, verificationStatus: "pending" as const };

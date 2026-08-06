@@ -23,6 +23,7 @@ const MODERATOR_NAV_ITEMS: NavEntry[] = [
 			{ href: "/moderator/reports", label: "신고" },
 			{ href: "/moderator/employers", label: "업소 승인" },
 			{ href: "/moderator/team-invites", label: "팀 합류 승인" },
+			{ href: "/moderator/attendance" as Route, label: "출석 관리" },
 		],
 	},
 	{

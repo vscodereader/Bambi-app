@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@bambi-app/ui/components/badge";
-import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import { buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	NavigationMenu,
 	NavigationMenuContent,
@@ -19,7 +19,8 @@ import type { ReactNode } from "react";
 import { useUnreadMessageCount } from "@/lib/bambi/use-unread-message-count";
 import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
-import { BellIcon, ShieldIcon } from "./icons";
+import { ShieldIcon } from "./icons";
+import { NotificationBell } from "./notification-bell";
 import { SiteFooter } from "./site-footer";
 
 export interface NavItem {
@@ -191,14 +192,7 @@ function ModeratorHeaderActions() {
 				</span>
 				운영자 모드
 			</Badge>
-			<Button
-				aria-label="알림"
-				className="bg-card"
-				size="icon-lg"
-				variant="outline"
-			>
-				<BellIcon />
-			</Button>
+			<NotificationBell />
 		</>
 	);
 }
@@ -219,6 +213,9 @@ function HeaderRightActions({
 	return (
 		<>
 			{isPublic ? null : <RoleSwitchLink />}
+			{/* 벨은 스스로 로그인 여부로 게이트한다 — public 라우트를 보는 로그인 사용자에게도
+			    모바일 헤더와 똑같이 노출한다(폭에 따라 벨이 사라지지 않게). */}
+			<NotificationBell />
 			{showChatButton ? <ChatNavButton withPin={!isPublic} /> : null}
 			<Link
 				className={cn(
@@ -337,21 +334,7 @@ export function ResponsiveAppShell({
 						<Logo lang="ko" size="sm" />
 					</Link>
 					<div className="flex items-center gap-2">
-						{(() => {
-							if (isModerator) {
-								return <ModeratorHeaderActions />;
-							}
-							return (
-								<Button
-									aria-label="알림"
-									className="bg-card"
-									size="icon-lg"
-									variant="outline"
-								>
-									<BellIcon />
-								</Button>
-							);
-						})()}
+						{isModerator ? <ModeratorHeaderActions /> : <NotificationBell />}
 					</div>
 				</div>
 			</header>

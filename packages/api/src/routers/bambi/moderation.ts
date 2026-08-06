@@ -55,6 +55,11 @@ import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-aut
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
+import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
+import {
+	notifyBambiNotification,
+	notifyModerationAction,
+} from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
@@ -909,6 +914,15 @@ const assertReportTargetExists = async (
 type ModerationTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type InvitationRow = typeof invitation.$inferSelect;
 
+/** 일괄 처리에서 실제로 성공한 대상만 남긴다 — 실패 건에 "처리됨" 알림이 나가면 안 된다. */
+const succeededBulkTargetIds = (
+	targetIds: readonly string[],
+	result: { failures: { targetId: string }[] }
+): string[] => {
+	const failed = new Set(result.failures.map((failure) => failure.targetId));
+	return targetIds.filter((targetId) => !failed.has(targetId));
+};
+
 const rejectTeamInvitation = async (
 	tx: ModerationTx,
 	adminUserId: string,
@@ -1117,6 +1131,22 @@ export const moderationRouter = {
 				})
 				.returning();
 
+			// 새 신고는 운영자 처리 큐에 쌓인다. 멱등 반환 경로(위 existing)에는 넣지
+			// 않는다 — 같은 신고로 큐를 두 번 울리지 않는다.
+			if (created) {
+				await notifyBambiNotification({
+					actorUserId: profile.userId,
+					metadata: {
+						action: "submitted",
+						reason: input.reason,
+						reportTargetType: input.targetType,
+					},
+					recipientRole: "admin",
+					targetId: created.id,
+					targetType: "report",
+				});
+			}
+
 			return created;
 		}),
 
@@ -1272,6 +1302,14 @@ export const moderationRouter = {
 				reason: "운영자 공고 수정",
 			});
 
+			await notifyModerationAction({
+				action: "edit_job_post",
+				actorUserId: admin.userId,
+				reason: "운영자 공고 수정",
+				targetId: input.jobPostId,
+				targetType: "job_post",
+			});
+
 			return result;
 		}),
 
@@ -1288,8 +1326,10 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
+			// 삭제되면 소유자를 되찾을 수 없다 — 공통 훅(조회형) 대신 여기서 미리 확보해
+			// 커밋 뒤 명시 수신자로 보낸다(롤백된 삭제의 유령 알림 방지).
 			const [existing] = await db
-				.select({ id: jobPost.id })
+				.select({ id: jobPost.id, ownerUserId: jobPost.createdByUserId })
 				.from(jobPost)
 				.where(eq(jobPost.id, input.jobPostId))
 				.limit(1);
@@ -1309,6 +1349,19 @@ export const moderationRouter = {
 					targetId: input.jobPostId,
 					targetType: "job_post",
 				});
+			});
+
+			const [recipientUserId] = resolveNotificationRecipients(
+				[existing.ownerUserId],
+				admin.userId
+			);
+
+			await notifyBambiNotification({
+				actorUserId: admin.userId,
+				metadata: { action: "hard_delete", reason: input.reason },
+				recipientUserId: recipientUserId ?? null,
+				targetId: input.jobPostId,
+				targetType: "job_post",
 			});
 
 			await deletePublicObjects(storageKeys);
@@ -1467,7 +1520,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const updated = await db.transaction(async (tx) => {
 				const [updated] = await tx
 					.update(review)
 					.set({ status: input.status })
@@ -1488,6 +1541,19 @@ export const moderationRouter = {
 
 				return updated;
 			});
+
+			// 후기 알림 딥링크는 metadata.jobPostId로 공고 상세를 연다 — 없으면 알림함으로
+			// 떨어진다(web notification-labels: case "review").
+			await notifyModerationAction({
+				action: `set_status:${input.status}`,
+				actorUserId: admin.userId,
+				metadata: { jobPostId: updated.jobPostId },
+				reason: input.reason,
+				targetId: input.reviewId,
+				targetType: "review",
+			});
+
+			return updated;
 		}),
 
 	bulkSetReviewStatus: protectedProcedure
@@ -1495,7 +1561,10 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(
+			// 알림 딥링크(metadata.jobPostId)용 — 갱신된 행에서만 얻을 수 있어 여기 모은다.
+			const jobPostIdByReviewId = new Map<string, string>();
+
+			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (reviewId) => {
@@ -1511,6 +1580,8 @@ export const moderationRouter = {
 								});
 							}
 
+							jobPostIdByReviewId.set(reviewId, updated.jobPostId);
+
 							await tx.insert(adminModerationAction).values({
 								adminUserId: admin.userId,
 								targetType: "review",
@@ -1523,6 +1594,23 @@ export const moderationRouter = {
 						targetIds: input.reviewIds,
 					})
 			);
+
+			// 알림은 트랜잭션 밖에서 성공분에만 보낸다(항목별 실패가 섞인다).
+			for (const reviewId of succeededBulkTargetIds(input.reviewIds, result)) {
+				await notifyModerationAction({
+					action: `set_status:${input.status}`,
+					actorUserId: admin.userId,
+					metadata: {
+						bulk: true,
+						jobPostId: jobPostIdByReviewId.get(reviewId),
+					},
+					reason: input.reason,
+					targetId: reviewId,
+					targetType: "review",
+				});
+			}
+
+			return result;
 		}),
 
 	setReportStatus: protectedProcedure
@@ -1530,7 +1618,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const updated = await db.transaction(async (tx) => {
 				const [updated] = await tx
 					.update(report)
 					.set({ status: input.status })
@@ -1552,6 +1640,17 @@ export const moderationRouter = {
 
 				return updated;
 			});
+
+			// 알림 수신자는 신고당한 콘텐츠 주인이 아니라 신고자다 — targetType은 "report".
+			await notifyModerationAction({
+				action: `set_report_status:${input.status}`,
+				actorUserId: admin.userId,
+				reason: input.reason,
+				targetId: input.reportId,
+				targetType: "report",
+			});
+
+			return updated;
 		}),
 
 	bulkSetReportStatus: protectedProcedure
@@ -1559,7 +1658,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(
+			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (reportId) => {
@@ -1587,6 +1686,19 @@ export const moderationRouter = {
 						targetIds: input.reportIds,
 					})
 			);
+
+			for (const reportId of succeededBulkTargetIds(input.reportIds, result)) {
+				await notifyModerationAction({
+					action: `set_report_status:${input.status}`,
+					actorUserId: admin.userId,
+					metadata: { bulk: true },
+					reason: input.reason,
+					targetId: reportId,
+					targetType: "report",
+				});
+			}
+
+			return result;
 		}),
 
 	setJobPostStatus: protectedProcedure
@@ -1594,7 +1706,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const updated = await db.transaction(async (tx) => {
 				const [existing] = await tx
 					.select()
 					.from(jobPost)
@@ -1631,12 +1743,22 @@ export const moderationRouter = {
 
 				return updated;
 			});
+
+			await notifyModerationAction({
+				action: `set_status:${input.status}`,
+				actorUserId: admin.userId,
+				reason: input.reason,
+				targetId: input.jobPostId,
+				targetType: "job_post",
+			});
+
+			return updated;
 		}),
 
 	setJobPostPayment: protectedProcedure
 		.input(setJobPostPaymentInput)
 		.handler(async ({ context, input }) => {
-			await requireAdminProfile(context.session);
+			const admin = await requireAdminProfile(context.session);
 
 			// 배너형 승인(unpaid→paid)은 프리미엄 정원 게이트가 필요하므로 트랜잭션 안에서
 			// advisory lock으로 직렬화한다(assertPremiumApprovalWithinCapacity).
@@ -1691,6 +1813,15 @@ export const moderationRouter = {
 			await syncAdvertiserFlagForOrganization({
 				now: new Date(),
 				organizationId,
+			});
+
+			// unpaid→paid가 노출 개시라, 구인자에게는 "광고가 시작됐다"는 유일한 신호다.
+			await notifyModerationAction({
+				action: `set_payment:${input.paymentStatus}`,
+				actorUserId: admin.userId,
+				metadata: { paymentStatus: input.paymentStatus },
+				targetId: input.jobPostId,
+				targetType: "job_post",
 			});
 
 			return updated;
@@ -1758,6 +1889,15 @@ export const moderationRouter = {
 				organizationId,
 			});
 
+			await notifyModerationAction({
+				action: `adjust_job_post_exposure:${input.days > 0 ? "+" : ""}${input.days}`,
+				actorUserId: admin.userId,
+				metadata: { days: input.days },
+				reason: input.reason,
+				targetId: input.jobPostId,
+				targetType: "job_post",
+			});
+
 			return updated;
 		}),
 
@@ -1807,7 +1947,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(
+			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (jobPostId) => {
@@ -1847,6 +1987,22 @@ export const moderationRouter = {
 						targetIds: input.jobPostIds,
 					})
 			);
+
+			for (const jobPostId of succeededBulkTargetIds(
+				input.jobPostIds,
+				result
+			)) {
+				await notifyModerationAction({
+					action: `set_status:${input.status}`,
+					actorUserId: admin.userId,
+					metadata: { bulk: true },
+					reason: input.reason,
+					targetId: jobPostId,
+					targetType: "job_post",
+				});
+			}
+
+			return result;
 		}),
 
 	// 결제관리 목록에서 선택한 공고들의 결제 상태를 일괄 전환한다.
@@ -1854,7 +2010,7 @@ export const moderationRouter = {
 	bulkSetJobPostPayment: protectedProcedure
 		.input(bulkSetJobPostPaymentInput)
 		.handler(async ({ context, input }) => {
-			await requireAdminProfile(context.session);
+			const admin = await requireAdminProfile(context.session);
 
 			// 갱신에 성공한 공고들의 조직 유니크 집합 — 트랜잭션 커밋 후 광고 자격 캐시 동기화용.
 			const affectedOrganizationIds = new Set<string>();
@@ -1917,6 +2073,20 @@ export const moderationRouter = {
 			const now = new Date();
 			for (const organizationId of affectedOrganizationIds) {
 				await syncAdvertiserFlagForOrganization({ now, organizationId });
+			}
+
+			// 정원 초과로 CONFLICT 난 공고는 승인되지 않았다 — 성공분에만 "노출 개시"를 알린다.
+			for (const jobPostId of succeededBulkTargetIds(
+				input.jobPostIds,
+				result
+			)) {
+				await notifyModerationAction({
+					action: `set_payment:${input.paymentStatus}`,
+					actorUserId: admin.userId,
+					metadata: { bulk: true, paymentStatus: input.paymentStatus },
+					targetId: jobPostId,
+					targetType: "job_post",
+				});
 			}
 
 			return result;
@@ -2477,7 +2647,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const updated = await db.transaction(async (tx) => {
 				const [invite] = await tx
 					.select()
 					.from(invitation)
@@ -2498,6 +2668,27 @@ export const moderationRouter = {
 					? await rejectTeamInvitation(tx, admin.userId, invite, input.reason)
 					: await acceptTeamInvitation(tx, admin.userId, invite, input.reason);
 			});
+
+			const isRejected = input.status === "rejected";
+
+			// 커밋 뒤에 알린다(롤백된 처리의 유령 알림 방지). 반려는 초대를 낸 사람이,
+			// 승인은 합류한 본인이 알아야 한다 — 초대자는 조직 설정 화면에서 바로 본다.
+			await notifyBambiNotification({
+				actorUserId: admin.userId,
+				metadata: isRejected
+					? {
+							action: "rejected",
+							organizationId: updated?.organizationId,
+							reason: input.reason ?? null,
+						}
+					: { action: "accepted", organizationId: updated?.organizationId },
+				recipientUserId:
+					(isRejected ? updated?.inviterId : updated?.acceptedUserId) ?? null,
+				targetId: input.invitationId,
+				targetType: "team_invitation",
+			});
+
+			return updated;
 		}),
 
 	setEmployerVerificationStatus: protectedProcedure
@@ -2505,7 +2696,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const { owner, updated } = await db.transaction(async (tx) => {
 				const [owner] = await tx
 					.select({ userId: member.userId })
 					.from(member)
@@ -2542,8 +2733,23 @@ export const moderationRouter = {
 					metadata: { organizationId: input.organizationId },
 				});
 
-				return updated;
+				return { owner, updated };
 			});
+
+			// 커밋 뒤에 알린다. owner가 없는 조직(멤버 정리 중)이면 수신자가 없어 조용히 생략된다.
+			await notifyBambiNotification({
+				actorUserId: admin.userId,
+				metadata: {
+					action: input.status,
+					organizationId: input.organizationId,
+					reason: input.reason ?? null,
+				},
+				recipientUserId: owner?.userId ?? null,
+				targetId: input.organizationId,
+				targetType: "employer_verification",
+			});
+
+			return updated;
 		}),
 
 	setInquiryStatusByAdmin: adminProcedure
