@@ -10,6 +10,7 @@ import {
 	requireActiveBambiProfile,
 	requireChatParticipant,
 } from "../../services/bambi-authz";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
 	maskReviewerDisplayName,
 	validateReviewInput,
@@ -133,6 +134,18 @@ export const reviewsRouter = {
 					status: policyResult.status,
 				})
 				.returning();
+
+			// 후기는 구직자만 남기고, 그 대상은 그 방의 구인자다. 정책 판정이 심사 대기면
+			// 아직 게시되지 않으므로 구인자에게는 알리지 않는다(운영자 큐 알림은 Task 9).
+			if (created && created.status === "published") {
+				await notifyBambiNotification({
+					actorUserId: profile.userId,
+					metadata: { action: "created", jobPostId: room.jobPostId },
+					recipientUserId: room.employerUserId,
+					targetId: created.id,
+					targetType: "review",
+				});
+			}
 
 			return created;
 		}),

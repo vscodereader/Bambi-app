@@ -62,6 +62,8 @@ import {
 	type JobPostImageUploadPolicyCode,
 	validateJobPostImageUpload,
 } from "../../services/bambi-job-media-policy";
+import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
 import { createEditorMediaUploadIntent } from "../../services/bambi-storage";
 import {
 	assertTiptapDoc,
@@ -706,6 +708,48 @@ const toCommentItems = (
 		};
 	});
 
+/**
+ * 새 댓글·대댓글 알림. 글 작성자와 부모 댓글 작성자에게 한 통씩(같은 사람이면 한 통),
+ * 본인 행위는 resolveNotificationRecipients가 걸러낸다. 비회원 댓글은 행위자 계정이
+ * 없어(actor_user_id NOT NULL) 알림을 만들 수 없다.
+ */
+const notifyNewComment = async ({
+	actorUserId: commentActorUserId,
+	parentAuthorUserId,
+	parentCommentId,
+	post,
+}: {
+	actorUserId: null | string;
+	parentAuthorUserId: null | string;
+	parentCommentId: null | string;
+	post: { authorUserId: null | string; board: string; id: string };
+}): Promise<void> => {
+	if (!commentActorUserId) {
+		return;
+	}
+
+	const recipients = resolveNotificationRecipients(
+		[post.authorUserId, parentAuthorUserId],
+		commentActorUserId
+	);
+
+	for (const recipientUserId of recipients) {
+		const isParentAuthor = recipientUserId === parentAuthorUserId;
+
+		await notifyBambiNotification({
+			actorUserId: commentActorUserId,
+			metadata: {
+				action: isParentAuthor ? "reply" : "comment",
+				board: post.board,
+				postId: post.id,
+			},
+			recipientUserId,
+			targetId: isParentAuthor ? (parentCommentId ?? post.id) : post.id,
+			targetType: isParentAuthor ? "community_comment" : "community_post",
+		});
+	}
+};
+
 export const communityRouter = {
 	// 회원과 비회원(여성 성인인증 게스트)이 같은 목록을 본다 — 게시판·필터·정렬이 모두 같고,
 	// 갈리는 건 개인화 축(내 글)과 잠금 우회뿐이다. 게스트는 profile이 null이라 비밀글 제목이
@@ -1146,6 +1190,25 @@ export const communityRouter = {
 				})
 				.returning({ board: communityPost.board, id: communityPost.id });
 
+			// 법률 자문 글은 전부 잠금글이고 답변 주체가 법률자문 계정이라, 개인 수신자가
+			// 아니라 role 공유 1행으로 보낸다(누가 맡아도 되는 큐). 비회원 글은 행위자
+			// 계정이 없어 알림을 만들 수 없다 — 정책상 포기(스펙 §3 제외 목록).
+			const postActorUserId = actorUserId(actor);
+
+			if (created && input.board === LEGAL_BOARD && postActorUserId) {
+				await notifyBambiNotification({
+					actorUserId: postActorUserId,
+					metadata: {
+						action: "submitted",
+						board: created.board,
+						postId: created.id,
+					},
+					recipientRole: "legal_advisor",
+					targetId: created.id,
+					targetType: "community_post",
+				});
+			}
+
 			return created;
 		}),
 
@@ -1398,9 +1461,14 @@ export const communityRouter = {
 			}
 			await assertNoBannedWords([input.body]);
 
+			// 대댓글 알림에서 부모 댓글 작성자에게도 알려야 해 블록 밖으로 끌어올린다.
+			let parentAuthorUserId: null | string = null;
+
 			if (input.parentCommentId) {
 				const [parent] = await db
 					.select({
+						// 대댓글 알림 수신자. 게스트 댓글은 null이라 알림이 생략된다.
+						authorUserId: communityComment.authorUserId,
 						id: communityComment.id,
 						parentCommentId: communityComment.parentCommentId,
 						postId: communityComment.postId,
@@ -1420,6 +1488,8 @@ export const communityRouter = {
 						message: "답글에는 다시 답글을 달 수 없습니다.",
 					});
 				}
+
+				parentAuthorUserId = parent.authorUserId;
 			}
 
 			// 검증을 모두 통과한 뒤에 센다(createPost와 같은 이유). 회원 댓글은 기존대로
@@ -1432,8 +1502,8 @@ export const communityRouter = {
 				});
 			}
 
-			return await db.transaction(async (tx) => {
-				const [created] = await tx
+			const created = await db.transaction(async (tx) => {
+				const [row] = await tx
 					.insert(communityComment)
 					.values({
 						authorGuestId: actorGuestId(actor),
@@ -1452,8 +1522,18 @@ export const communityRouter = {
 					.update(communityPost)
 					.set({ commentCount: sql`${communityPost.commentCount} + 1` })
 					.where(eq(communityPost.id, input.postId));
-				return created;
+				return row;
 			});
+
+			// 알림은 커밋 뒤에 보낸다 — 알림 실패로 댓글이 롤백되면 안 된다.
+			await notifyNewComment({
+				actorUserId: actorUserId(actor),
+				parentAuthorUserId,
+				parentCommentId: input.parentCommentId ?? null,
+				post,
+			});
+
+			return created;
 		}),
 
 	deleteComment: publicProcedure
