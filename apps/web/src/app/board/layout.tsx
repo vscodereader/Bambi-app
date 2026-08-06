@@ -3,12 +3,11 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/bambi/ds";
-import { SiteFooter } from "@/components/bambi/site-footer";
 import { APP_CONTENT_MAX_W, APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 
 // 비로그인 공개 읽기(/board) 셸. 로그인 상태를 전제로 하는 앱 셸(탭바·내 메뉴) 대신
-// 브랜드 헤더와 공용 푸터만 둔다 — 이 영역은 세션 없이도 열려야 하고(resolve-gate의
-// 공개 prefix), 크롤러가 JS 없이 본문까지 읽을 수 있어야 한다.
+// 브랜드 헤더만 둔다(푸터는 두지 않는다) — 이 영역은 세션 없이도 열려야 하고
+// (resolve-gate의 공개 prefix), 크롤러가 JS 없이 본문까지 읽을 수 있어야 한다.
 export default function PublicBoardLayout({
 	children,
 }: {
@@ -42,7 +41,6 @@ export default function PublicBoardLayout({
 			>
 				{children}
 			</main>
-			<SiteFooter />
 		</div>
 	);
 }
