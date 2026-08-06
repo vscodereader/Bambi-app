@@ -1,5 +1,6 @@
 "use client";
 
+import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-message-id";
 import { Button as UiButton } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import {
@@ -16,6 +17,7 @@ import {
 	type ReactNode,
 	useCallback,
 	useEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -26,12 +28,16 @@ import {
 	getChatBlockMessage,
 	getChatEntryBlockMessage,
 } from "@/lib/bambi/chat-block";
+import { mergeChatMessagesById } from "@/lib/bambi/chat-room-messages";
 import {
 	detectImageSignature,
 	isPdfSignature,
 	isSignatureMismatch,
 } from "@/lib/bambi/image-signature";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { useChatMessageScroll } from "@/lib/bambi/use-chat-message-scroll";
+import { useChatRoomAutoRead } from "@/lib/bambi/use-chat-room-auto-read";
+import { useOlderChatMessages } from "@/lib/bambi/use-older-chat-messages";
 import {
 	connectBambiChatSocket,
 	emitBambiChatTypingStarted,
@@ -88,23 +94,9 @@ const formatPay = (amount?: null | number, unit?: string): string => {
 const getRealtimeErrorMessage = (error: unknown): string =>
 	error instanceof Error ? error.message : "실시간 채팅 연결을 확인해 주세요.";
 
-// 서버 기본 페이지 크기와 같은 값. "이전 메시지 더 보기"를 누를 때마다 이만큼 늘린다.
+// 서버 기본 페이지 크기와 같은 값. "이전 메시지 더 보기"는 이 크기의 커서 페이지를 하나씩
+// 앞으로 붙인다(예전처럼 limit을 키우지 않는다 — 상한도, 전량 재전송도 없다).
 const CHAT_MESSAGE_PAGE_SIZE = 50;
-// 서버 입력 상한(MAX_CHAT_MESSAGE_PAGE_SIZE)과 같은 값.
-const CHAT_MESSAGE_MAX_PAGE_SIZE = 500;
-
-// 이전 메시지를 더 부를 수 있는지, 상한에 걸려 더는 못 부르는지.
-const resolveOlderMessageState = ({
-	hasMoreMessages,
-	messageLimit,
-}: {
-	hasMoreMessages: boolean;
-	messageLimit: number;
-}): { canLoadOlder: boolean; hasOlderBeyondLimit: boolean } => ({
-	canLoadOlder: hasMoreMessages && messageLimit < CHAT_MESSAGE_MAX_PAGE_SIZE,
-	hasOlderBeyondLimit:
-		hasMoreMessages && messageLimit >= CHAT_MESSAGE_MAX_PAGE_SIZE,
-});
 
 const ACCEPTED_ATTACHMENT_MIME_TYPES = [
 	"image/jpeg",
@@ -156,6 +148,19 @@ const getAttachmentStatusLabel = (status: AttachmentDraftStatus): string => {
 			return "첨부 준비";
 	}
 };
+
+/**
+ * 채팅 목록 캐시에서 이 방의 안 읽음만 0으로 눌러 둔다. 읽음 요청이 왕복하는 사이에
+ * 목록이 다시 그려지면 방금 읽은 방에 핀이 깜빡이기 때문이다. 핀 숫자의 정본은 서버
+ * 집계라, 요청이 성공하면 다시 무효화해 정본으로 맞춘다.
+ */
+const zeroUnreadCountForRoom = <RoomType extends { id: string }>(
+	rooms: RoomType[] | undefined,
+	roomId: string
+): RoomType[] | undefined =>
+	rooms?.map((room) =>
+		room.id === roomId ? { ...room, unreadCount: 0 } : room
+	);
 
 const getMutationErrorMessage = (error: Error): string => {
 	if ("code" in error && error.code === "UNAUTHORIZED") {
@@ -426,7 +431,7 @@ interface ChatMessageListProps {
 	canLoadOlder: boolean;
 	counterpartName: null | string;
 	currentUserId: string;
-	hasOlderBeyondLimit: boolean;
+	isLoadingOlder: boolean;
 	isResponding: boolean;
 	isSendBlocked: boolean;
 	messages: ChatMessageItem[];
@@ -440,7 +445,7 @@ function ChatMessageList({
 	canLoadOlder,
 	counterpartName,
 	currentUserId,
-	hasOlderBeyondLimit,
+	isLoadingOlder,
 	isResponding,
 	isSendBlocked,
 	messages,
@@ -461,15 +466,15 @@ function ChatMessageList({
 		<MessageGroup>
 			{canLoadOlder ? (
 				<div className="flex justify-center">
-					<UiButton onClick={onLoadOlder} size="sm" variant="outline">
-						이전 메시지 더 보기
+					<UiButton
+						disabled={isLoadingOlder}
+						onClick={onLoadOlder}
+						size="sm"
+						variant="outline"
+					>
+						{isLoadingOlder ? "불러오는 중" : "이전 메시지 더 보기"}
 					</UiButton>
 				</div>
-			) : null}
-			{hasOlderBeyondLimit ? (
-				<p className="m-0 text-center text-muted-foreground text-xs">
-					이전 메시지는 최근 {CHAT_MESSAGE_MAX_PAGE_SIZE}건까지 볼 수 있어요.
-				</p>
 			) : null}
 			{messages.map((chatMessage) =>
 				chatMessage.kind === "contact_request" ? (
@@ -585,7 +590,7 @@ function ChatComposer({
 	const isDisabled = Boolean(disabledNotice);
 
 	return (
-		<div className="border-border border-t">
+		<div className="flex-none border-border border-t">
 			{disabledNotice ? (
 				<p className="m-0 border-border border-b bg-muted px-4 py-3 text-center font-bold text-muted-foreground text-sm">
 					{disabledNotice}
@@ -932,7 +937,7 @@ function ChatSafetyNotice({
 	};
 
 	return (
-		<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
+		<div className="flex-none border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
 			<div className="flex items-center justify-between gap-3">
 				<div className="flex items-center gap-2 font-extrabold text-sm">
 					<span className="inline-flex size-4">
@@ -1112,16 +1117,31 @@ export function SeekerChatRoomResponsive({
 		null | string
 	>(null);
 	const attachmentInputRef = useRef<HTMLInputElement | null>(null);
-	const lastReadMessageSignatureRef = useRef("");
 	const typingActiveRef = useRef(false);
 	// 방을 열면 최근 메시지 한 페이지만 받는다. 예전에는 이력 전체가 매 조회마다 다시
 	// 내려왔고, 소켓 이벤트가 뜰 때마다 그 전량 전송이 반복됐다.
-	const [messageLimit, setMessageLimit] = useState(CHAT_MESSAGE_PAGE_SIZE);
 	const roomQuery = useQuery(
 		orpc.bambi.chats.getById.queryOptions({
-			input: { id: roomId, limit: messageLimit },
+			input: { id: roomId, limit: CHAT_MESSAGE_PAGE_SIZE },
 		})
 	);
+	// 문서가 아니라 메시지 영역만 스크롤한다.
+	const {
+		captureOlderAnchor,
+		handleScroll,
+		scrollRef,
+		stickToBottom,
+		syncScroll,
+	} = useChatMessageScroll(roomId);
+	// "이전 메시지 더 보기"로 쌓은 커서 페이지들(오래된 → 최신).
+	const { canLoadOlder, isLoadingOlder, loadOlder, olderMessages } =
+		useOlderChatMessages({
+			latestPageCursor: roomQuery.data?.nextCursor,
+			onBeforePrepend: captureOlderAnchor,
+			onError: setErrorMessage,
+			pageSize: CHAT_MESSAGE_PAGE_SIZE,
+			roomId,
+		});
 	const currentSessionUserId = roomQuery.data?.currentUserId;
 	const reviewListQuery = useQuery({
 		...orpc.bambi.reviews.listMine.queryOptions(),
@@ -1181,8 +1201,29 @@ export function SeekerChatRoomResponsive({
 	);
 	const markReadMutation = useMutation(
 		orpc.bambi.chats.markRead.mutationOptions({
+			// 읽음 요청이 왕복하는 사이에 목록이 다시 그려지면 방금 읽은 방에 핀이 잠깐
+			// 떴다 사라진다. 보고 있는 방의 안 읽음은 먼저 0으로 눌러 두고, 성공 뒤 정본으로
+			// 맞춘다(핀 숫자의 정본은 서버 집계다).
+			onMutate: () => {
+				queryClient.setQueryData(
+					orpc.bambi.chats.listMine.queryKey(),
+					(rooms) => zeroUnreadCountForRoom(rooms, roomId)
+				);
+			},
 			onError: () => {
 				setErrorMessage("읽음 상태를 반영하지 못했어요.");
+			},
+			onSuccess: () => {
+				queryClient
+					.invalidateQueries({
+						queryKey: orpc.bambi.chats.unreadState.queryKey(),
+					})
+					.catch(() => undefined);
+				queryClient
+					.invalidateQueries({
+						queryKey: orpc.bambi.chats.listMine.queryKey(),
+					})
+					.catch(() => undefined);
 			},
 		})
 	);
@@ -1262,14 +1303,27 @@ export function SeekerChatRoomResponsive({
 			},
 		})
 	);
+	// 화면에 올라온 메시지 = 커서로 쌓은 이전 페이지 + 최신 페이지. 합칠 때 id가 유일
+	// 키라, 큐 재처리·소켓 재전달로 같은 메시지가 두 경로로 들어와도 말풍선이 겹치지 않는다.
+	const messages = useMemo(
+		() =>
+			mergeChatMessagesById<ChatMessageItem>(
+				olderMessages,
+				roomQuery.data?.messages ?? []
+			),
+		[olderMessages, roomQuery.data]
+	);
 	// 읽음 처리는 "여기까지 봤다" 기준선 하나만 보낸다. 예전에는 상대가 보낸 메시지 id를
 	// 전부 실어 보냈는데 서버 상한이 50이라, 51건째부터 요청 전체가 거절돼 읽음영수증이
 	// 한 건도 안 써졌다(안 읽음 뱃지가 영영 안 꺼짐). 기준선은 화면에 올라온 마지막
 	// 메시지다 — 내가 보낸 것이어도 그 앞의 상대 메시지는 본 것이므로 함께 읽음이 된다.
-	const lastVisibleMessageId = useMemo(
-		() => roomQuery.data?.messages.at(-1)?.id ?? null,
-		[roomQuery.data]
-	);
+	const lastVisibleMessageId = messages.at(-1)?.id ?? null;
+	const queueMarkRead = useChatRoomAutoRead({
+		chatRoomId: roomId,
+		markRead: markReadMutation.mutate,
+	});
+	// 목록이 바뀐 뒤 레이아웃 커밋에서 스크롤 위치를 맞춘다(하단 고정·앵커 복원).
+	useLayoutEffect(() => syncScroll(messages), [messages, syncScroll]);
 
 	useEffect(() => {
 		if (!currentSessionUserId) {
@@ -1281,6 +1335,21 @@ export function SeekerChatRoomResponsive({
 			if (payload.roomId === roomId) {
 				invalidateRoom().catch(() => undefined);
 			}
+		};
+		// 실시간 수신분은 정본 재조회를 기다리지 않고 바로 읽음 기준선으로 올린다. 방 데이터
+		// 로드 기준으로만 markRead를 걸면 소켓으로 먼저 도착한 상대 메시지가 빠져 목록에
+		// 핀이 잠깐 뜬다. 발신자는 가리지 않는다 — 기준선은 "여기까지 봤다" 한 점이라
+		// 내가 보낸 메시지여도 그 앞의 상대 메시지가 함께 읽음이 되고, 중복 요청은 합쳐진다.
+		const handleMessageCreated = (payload: {
+			messageId: string;
+			roomId: string;
+		}) => {
+			if (payload.roomId !== roomId) {
+				return;
+			}
+
+			queueMarkRead(payload.messageId);
+			invalidateRoom().catch(() => undefined);
 		};
 		// 재연결하면 서버 쪽 방 입장 기록이 사라져 있다(끊길 때 지운다). 다시 들어가지
 		// 않으면 소켓은 붙어 있는데 방 이벤트가 한 건도 안 오고, 타이핑마다 "채팅방에 먼저
@@ -1336,7 +1405,7 @@ export function SeekerChatRoomResponsive({
 		socket.on("connect", handleConnect);
 		socket.on("disconnect", handleDisconnect);
 		socket.on("chat:error", handleRealtimeError);
-		socket.on("chat:message:created", refreshIfCurrentRoom);
+		socket.on("chat:message:created", handleMessageCreated);
 		socket.on("chat:message:read", refreshIfCurrentRoom);
 		socket.on("chat:room:updated", refreshIfCurrentRoom);
 		socket.on("chat:unread:updated", refreshIfCurrentRoom);
@@ -1352,7 +1421,7 @@ export function SeekerChatRoomResponsive({
 			socket.off("connect", handleConnect);
 			socket.off("disconnect", handleDisconnect);
 			socket.off("chat:error", handleRealtimeError);
-			socket.off("chat:message:created", refreshIfCurrentRoom);
+			socket.off("chat:message:created", handleMessageCreated);
 			socket.off("chat:message:read", refreshIfCurrentRoom);
 			socket.off("chat:room:updated", refreshIfCurrentRoom);
 			socket.off("chat:unread:updated", refreshIfCurrentRoom);
@@ -1363,23 +1432,11 @@ export function SeekerChatRoomResponsive({
 			typingActiveRef.current = false;
 			setTypingUserIds([]);
 		};
-	}, [currentSessionUserId, invalidateRoom, roomId]);
+	}, [currentSessionUserId, invalidateRoom, queueMarkRead, roomId]);
 
 	useEffect(() => {
-		if (!(roomQuery.data && lastVisibleMessageId)) {
-			return;
-		}
-
-		if (lastReadMessageSignatureRef.current === lastVisibleMessageId) {
-			return;
-		}
-
-		lastReadMessageSignatureRef.current = lastVisibleMessageId;
-		markReadMutation.mutate({
-			chatRoomId: roomId,
-			upToMessageId: lastVisibleMessageId,
-		});
-	}, [lastVisibleMessageId, markReadMutation, roomId, roomQuery.data]);
+		queueMarkRead(lastVisibleMessageId);
+	}, [lastVisibleMessageId, queueMarkRead]);
 
 	useEffect(() => {
 		if (!roomQuery.data) {
@@ -1485,17 +1542,11 @@ export function SeekerChatRoomResponsive({
 		counterpartName,
 		currentUserId,
 		employerVerifiedPhone,
-		hasMoreMessages,
 		jobPost,
-		messages,
 		room,
 		schedules,
 	} = roomQuery.data;
 	const isJobSeeker = currentUserId === room.jobSeekerUserId;
-	const olderMessageState = resolveOlderMessageState({
-		hasMoreMessages,
-		messageLimit,
-	});
 	const composerDisabledNotice = getComposerDisabledNotice({
 		counterpartLeft,
 		counterpartName,
@@ -1579,6 +1630,8 @@ export function SeekerChatRoomResponsive({
 	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		const body = message.trim();
+		// 내가 보낸 것은 위로 올려 읽던 중이었더라도 하단으로 따라 내린다.
+		stickToBottom();
 
 		if (attachmentDraft) {
 			const validationError =
@@ -1619,6 +1672,9 @@ export function SeekerChatRoomResponsive({
 					byteSize: uploadIntent.byteSize,
 					chatRoomId: room.id,
 					fileName: uploadIntent.fileName,
+					// 메시지 id는 클라이언트가 만들어 보낸다. 서버가 PK 충돌로 재시도·더블클릭을
+					// 흡수하므로 같은 전송이 두 번 들어가도 방에는 한 건만 남는다.
+					messageId: generateChatMessageId(),
 					mimeType: uploadIntent.mimeType,
 					storageKey: uploadIntent.storageKey,
 				});
@@ -1652,6 +1708,7 @@ export function SeekerChatRoomResponsive({
 		sendMessageMutation.mutate({
 			body,
 			chatRoomId: room.id,
+			messageId: generateChatMessageId(),
 		});
 		stopTyping();
 	};
@@ -1705,13 +1762,16 @@ export function SeekerChatRoomResponsive({
 	return (
 		<div
 			className={cn(
-				"mx-auto grid w-full gap-5 px-5 py-5 pb-28 md:px-6 md:py-7 lg:grid-cols-[minmax(0,1fr)_320px] lg:pb-8",
+				"mx-auto grid w-full gap-5 px-5 py-5 md:px-6 md:py-7 lg:grid-cols-[minmax(0,1fr)_320px]",
 				SEEKER_CONTENT_WIDTH
 			)}
 		>
-			<main className="min-w-0 rounded-lg bg-card shadow-sm ring-1 ring-border lg:self-start">
+			{/* 대화가 길어져도 문서가 자라지 않도록 방 패널을 뷰포트에 고정하고, 스크롤은
+			    메시지 영역 하나만 갖는다. 빼는 높이는 셸 헤더(3.5rem·md 4rem)와 이 컨테이너의
+			    위아래 여백(py-5·md:py-7) 합이다. */}
+			<main className="flex h-[calc(100dvh-6rem)] min-w-0 flex-col overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border md:h-[calc(100dvh-7.5rem)] lg:self-start">
 				{/* 좁은 화면에서는 공고 버튼·배지가 제목 아래로 접히도록 wrap 한다. */}
-				<header className="flex flex-wrap items-center gap-3 border-border border-b p-4">
+				<header className="flex flex-none flex-wrap items-center gap-3 border-border border-b p-4">
 					<button
 						className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 font-bold text-sm"
 						onClick={onBack}
@@ -1747,23 +1807,22 @@ export function SeekerChatRoomResponsive({
 						blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
 					}
 				/>
-				<div className="flex min-h-[420px] flex-col gap-3 p-4">
+				{/* 이 안쪽만 스크롤한다 — min-h-0이 없으면 flex 자식이 내용만큼 늘어나 다시
+				    문서가 자란다. */}
+				<div
+					className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"
+					onScroll={handleScroll}
+					ref={scrollRef}
+				>
 					<ChatMessageList
-						canLoadOlder={olderMessageState.canLoadOlder}
+						canLoadOlder={canLoadOlder}
 						counterpartName={counterpartName}
 						currentUserId={currentUserId}
-						hasOlderBeyondLimit={olderMessageState.hasOlderBeyondLimit}
+						isLoadingOlder={isLoadingOlder}
 						isResponding={respondContactRevealMutation.isPending}
 						isSendBlocked={counterpartLeft}
 						messages={messages}
-						onLoadOlder={() =>
-							setMessageLimit((current) =>
-								Math.min(
-									current + CHAT_MESSAGE_PAGE_SIZE,
-									CHAT_MESSAGE_MAX_PAGE_SIZE
-								)
-							)
-						}
+						onLoadOlder={() => loadOlder(messages)}
 						onRespond={handleRespondContact}
 						typingUserIds={typingUserIds}
 						viewerIsEmployer={!isJobSeeker}
@@ -1782,7 +1841,7 @@ export function SeekerChatRoomResponsive({
 					onSubmit={handleSubmit}
 				/>
 				{errorMessage ? (
-					<div className="border-border border-t px-4 py-3 font-semibold text-red-600 text-sm">
+					<div className="flex-none border-border border-t px-4 py-3 font-semibold text-red-600 text-sm">
 						{errorMessage}
 					</div>
 				) : null}
