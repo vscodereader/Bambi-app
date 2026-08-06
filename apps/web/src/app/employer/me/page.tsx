@@ -431,6 +431,12 @@ export default function EmployerMePage() {
 					</Link>
 					<Link
 						className={buttonVariants({ variant: "outline" })}
+						href={"/seeker/me/interviews" as Route}
+					>
+						예정된 면접
+					</Link>
+					<Link
+						className={buttonVariants({ variant: "outline" })}
 						href={"/seeker/me/blocks" as Route}
 					>
 						차단한 상대
