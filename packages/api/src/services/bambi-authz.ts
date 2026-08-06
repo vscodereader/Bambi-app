@@ -238,10 +238,14 @@ export const findUserBlockBetween = async (
  *
  * 한쪽이라도 "나가기"를 누른 방은 양쪽 모두에게 없는 방이다 — 여기서 한 번 막으면
  * 호출부(getById·sendMessage·markRead·면접·연락처·후기·신고·소켓 join)가 전부 덮인다.
+ *
+ * allowLeftRoom은 면접 경로 전용 예외다(사용자 확정): 면접이 걸린 방은 한쪽이 나갔어도
+ * 완료 처리와 내역 열람만은 열어 둔다 — 방을 나가면 면접을 영영 못 끝내기 때문이다.
  */
 export const requireChatParticipant = async (
 	chatRoomId: string,
-	session: SessionLike | null | undefined
+	session: SessionLike | null | undefined,
+	options?: { allowLeftRoom?: boolean }
 ) => {
 	const profile = await requireActiveBambiProfile(session);
 	const [room] = await db
@@ -258,7 +262,7 @@ export const requireChatParticipant = async (
 		)
 		.limit(1);
 
-	if (!room || isChatRoomLeftByAnyone(room)) {
+	if (!room || (isChatRoomLeftByAnyone(room) && !options?.allowLeftRoom)) {
 		throw new ORPCError("NOT_FOUND", {
 			message: "Chat room was not found for this user.",
 		});

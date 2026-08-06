@@ -14,18 +14,7 @@ import {
 	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import {
-	and,
-	asc,
-	desc,
-	eq,
-	gte,
-	inArray,
-	isNull,
-	lt,
-	or,
-	sql,
-} from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -159,6 +148,33 @@ const setInterviewStatusInput = z.object({
 	interviewScheduleId: z.string().uuid(),
 	status: z.enum(["confirmed", "declined", "canceled", "completed"]),
 });
+
+const getInterviewChatContextInput = z.object({
+	cursor: chatMessageCursorInput.optional(),
+	interviewScheduleId: z.string().uuid(),
+});
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+// 면접 목록에 남겨 두는 기간. 지난 확정 면접은 완료를 누를 수 있어야 하고, 완료한 면접도
+// 한동안 기록으로 보여야 한다.
+const INTERVIEW_RETENTION_DAYS = 30;
+
+/** 진행 중(제안·확정)이 가까운 일시 순으로 먼저, 완료는 뒤에 최근 처리 순. */
+const compareInterviewSchedules = (
+	left: { scheduledAt: Date; status: string; updatedAt: Date },
+	right: { scheduledAt: Date; status: string; updatedAt: Date }
+): number => {
+	const leftDone = left.status === "completed";
+	const rightDone = right.status === "completed";
+
+	if (leftDone !== rightDone) {
+		return leftDone ? 1 : -1;
+	}
+
+	return leftDone
+		? right.updatedAt.getTime() - left.updatedAt.getTime()
+		: left.scheduledAt.getTime() - right.scheduledAt.getTime();
+};
 
 const revealContactInput = z.object({
 	interviewScheduleId: z.string().uuid(),
@@ -340,6 +356,59 @@ const requireExistingChatMessage = async (
 	return existing;
 };
 
+/**
+ * 방 메시지 한 페이지를 keyset 커서로 읽어 화면 순서(오래된 → 최신)로 돌려준다.
+ *
+ * 최신 limit건만 받되 한 건을 더 읽어 "이전 메시지가 더 있는지"를 별도 count 없이 본다.
+ * 커서를 받으면 그보다 오래된 구간을 읽는다 — 정렬 총순서가 (created_at, id)라
+ * (chat_room_id, created_at) 인덱스를 그대로 타고, 동시각 메시지도 id로 갈라 페이지
+ * 경계에서 빠지거나 겹치지 않는다. 방 화면(getById)과 면접 내역(getInterviewChatContext)이
+ * 같은 커서 규칙을 쓰도록 여기 한 곳에 둔다.
+ */
+const loadChatMessagePage = async ({
+	chatRoomId,
+	cursor,
+	limit,
+}: {
+	chatRoomId: string;
+	cursor?: z.infer<typeof chatMessageCursorInput>;
+	limit: number;
+}) => {
+	const cursorCreatedAt = cursor ? new Date(cursor.createdAt) : null;
+	const olderThanCursor =
+		cursorCreatedAt && cursor
+			? or(
+					lt(chatMessage.createdAt, cursorCreatedAt),
+					and(
+						eq(chatMessage.createdAt, cursorCreatedAt),
+						lt(chatMessage.id, cursor.id)
+					)
+				)
+			: undefined;
+	const recentMessages = await db
+		.select()
+		.from(chatMessage)
+		.where(and(eq(chatMessage.chatRoomId, chatRoomId), olderThanCursor))
+		.orderBy(desc(chatMessage.createdAt), desc(chatMessage.id))
+		.limit(limit + 1);
+	const hasMoreMessages = recentMessages.length > limit;
+	const messages = recentMessages.slice(0, limit).reverse();
+	const oldestMessage = messages[0];
+
+	return {
+		hasMoreMessages,
+		messages,
+		// 다음 페이지의 기준점 = 이번 페이지에서 가장 오래된 메시지. 더 없으면 null.
+		nextCursor:
+			hasMoreMessages && oldestMessage
+				? {
+						createdAt: toIsoDateTime(oldestMessage.createdAt),
+						id: oldestMessage.id,
+					}
+				: null,
+	};
+};
+
 interface CounterpartRoom {
 	employerUserId: string;
 	id: string;
@@ -379,11 +448,16 @@ const resolveEmployerName = (
  *
  * 어느 쪽이든 탈퇴한 상대는 원본 닉네임 대신 "탈퇴한 회원"으로 나간다 — 탈퇴는 이제
  * user.deletedAt 마커만 남기므로 이름을 그대로 실으면 실명이 상대 화면에 남는다.
+ *
+ * maskWithdrawn: false는 면접 경로 전용이다(사용자 확정) — 이미 약속을 잡은 상대가
+ * "탈퇴한 회원"으로 바뀌면 누구와의 면접인지 알 수 없어진다. 다른 호출부는 기본값(마스킹).
  */
 const resolveCounterpartNames = async (
 	rooms: CounterpartRoom[],
-	viewerUserId: string
+	viewerUserId: string,
+	options?: { maskWithdrawn?: boolean }
 ): Promise<Map<string, string | null>> => {
+	const maskWithdrawn = options?.maskWithdrawn !== false;
 	const profileUserIds = new Set<string>();
 	const teamIds = new Set<string>();
 	const organizationIds = new Set<string>();
@@ -440,14 +514,18 @@ const resolveCounterpartNames = async (
 	const nameByUserId = new Map(
 		profiles.map((entry) => [
 			entry.userId,
-			resolveVisibleDisplayName(
-				{ deletedAt: entry.deletedAt, name: entry.displayName },
-				entry.displayName
-			),
+			maskWithdrawn
+				? resolveVisibleDisplayName(
+						{ deletedAt: entry.deletedAt, name: entry.displayName },
+						entry.displayName
+					)
+				: entry.displayName,
 		])
 	);
 	const withdrawnUserIds = new Set(
-		profiles.flatMap((entry) => (entry.deletedAt ? [entry.userId] : []))
+		maskWithdrawn
+			? profiles.flatMap((entry) => (entry.deletedAt ? [entry.userId] : []))
+			: []
 	);
 	const nameByTeamId = new Map(
 		teamProfiles.map((entry) => [entry.teamId, entry.displayName])
@@ -930,14 +1008,16 @@ export const chatsRouter = {
 		};
 	}),
 
-	// 내가 참여한 방들의 "다가오는" 면접 목록. status가 proposed·confirmed이고
-	// scheduledAt이 현재 이후인 일정만 시간순으로 모아 방을 넘나들며 보여준다.
+	// 내가 참여한 방들의 면접 목록("예정된 면접" 화면). 면접 완료 처리가 방이 아니라 이
+	// 목록에 있으므로, 노출 규칙이 곧 "완료를 누를 수 있는 기간"이다.
+	// - proposed: 면접일이 남은 것만(답 없이 지난 제안은 접는다)
+	// - confirmed: 면접일이 지나도 30일간 남긴다 — 여기서 사라지면 완료를 영영 못 누른다
+	// - completed: 완료 시각(updatedAt) 기준 30일간 완료 뱃지로 남는다
 	listMyUpcomingInterviews: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
 		// 방 삭제 여부는 보지 않는다 — 면접은 현실의 약속이라 방이 사라져도 일정 카드는
-		// 남아야 한다. 카드로 들어간 방이 이미 없으면 방 화면이 "종료됐거나 접근할 수
-		// 없는 채팅방" 카드를 띄우는 게 의도된 동작이다.
+		// 남아야 한다. 아코디언의 내역 열람·완료 처리도 나간 방에서 그대로 열린다.
 		const rooms = await db
 			.select()
 			.from(chatRoom)
@@ -952,28 +1032,47 @@ export const chatsRouter = {
 		}
 
 		const roomById = new Map(rooms.map((room) => [room.id, room]));
+		const now = new Date();
+		const retentionSince = new Date(
+			now.getTime() - INTERVIEW_RETENTION_DAYS * DAY_IN_MS
+		);
 		const schedules = await db
 			.select()
 			.from(interviewSchedule)
 			.where(
 				and(
 					inArray(interviewSchedule.chatRoomId, [...roomById.keys()]),
-					inArray(interviewSchedule.status, ["proposed", "confirmed"]),
-					gte(interviewSchedule.scheduledAt, new Date())
+					or(
+						and(
+							eq(interviewSchedule.status, "proposed"),
+							gte(interviewSchedule.scheduledAt, now)
+						),
+						and(
+							eq(interviewSchedule.status, "confirmed"),
+							gte(interviewSchedule.scheduledAt, retentionSince)
+						),
+						and(
+							eq(interviewSchedule.status, "completed"),
+							gte(interviewSchedule.updatedAt, retentionSince)
+						)
+					)
 				)
-			)
-			.orderBy(asc(interviewSchedule.scheduledAt));
+			);
 		if (schedules.length === 0) {
 			return [];
 		}
+
+		schedules.sort(compareInterviewSchedules);
 
 		const involvedRooms = schedules
 			.map((schedule) => roomById.get(schedule.chatRoomId))
 			.filter((room): room is (typeof rooms)[number] => room !== undefined);
 
+		// 면접 목록은 탈퇴한 상대도 원래 이름으로 보여준다(사용자 확정).
 		const counterpartNames = await resolveCounterpartNames(
 			involvedRooms,
-			profile.userId
+			profile.userId,
+			{ maskWithdrawn: false }
 		);
 		const jobPostIds = [
 			...new Set(involvedRooms.map((room) => room.jobPostId)),
@@ -990,6 +1089,9 @@ export const chatsRouter = {
 				...schedule,
 				counterpartName: room ? (counterpartNames.get(room.id) ?? null) : null,
 				jobTitle: room ? (jobTitleById.get(room.jobPostId) ?? null) : null,
+				// 완료 버튼은 구인자에게만 뜬다. 화면이 전역 역할 상태를 다시 들지 않도록
+				// 방 기준 판정을 응답에 실어 준다(서버 가드도 같은 기준이다).
+				viewerIsEmployer: room?.employerUserId === profile.userId,
 			};
 		});
 	}),
@@ -1024,43 +1126,12 @@ export const chatsRouter = {
 				.where(eq(jobPost.id, room.jobPostId))
 				.limit(1);
 
-			// 최신 limit건만 받아 화면 순서(오래된 → 최신)로 되돌린다. 한 건을 더 읽어
-			// "이전 메시지가 더 있는지"를 별도 count 없이 판단한다.
-			//
-			// 커서를 받으면 그보다 오래된 구간을 읽는다. keyset이라 앞쪽을 건너뛰지 않고
-			// (chat_room_id, created_at) 인덱스를 그대로 타므로 이력이 아무리 길어도
-			// 비용이 페이지 크기에만 비례한다 — 예전의 "limit을 500까지 키우기"와 달리
-			// 상한이 없다. 동시각 메시지는 id로 갈라 페이지 경계에서 빠지거나 겹치지 않는다.
-			const cursorCreatedAt = input.cursor
-				? new Date(input.cursor.createdAt)
-				: null;
-			const olderThanCursor =
-				cursorCreatedAt && input.cursor
-					? or(
-							lt(chatMessage.createdAt, cursorCreatedAt),
-							and(
-								eq(chatMessage.createdAt, cursorCreatedAt),
-								lt(chatMessage.id, input.cursor.id)
-							)
-						)
-					: undefined;
-			const recentMessages = await db
-				.select()
-				.from(chatMessage)
-				.where(and(eq(chatMessage.chatRoomId, room.id), olderThanCursor))
-				.orderBy(desc(chatMessage.createdAt), desc(chatMessage.id))
-				.limit(input.limit + 1);
-			const hasMoreMessages = recentMessages.length > input.limit;
-			const messages = recentMessages.slice(0, input.limit).reverse();
-			const oldestMessage = messages[0];
-			// 다음 페이지의 기준점 = 이번 페이지에서 가장 오래된 메시지. 더 없으면 null.
-			const nextCursor =
-				hasMoreMessages && oldestMessage
-					? {
-							createdAt: toIsoDateTime(oldestMessage.createdAt),
-							id: oldestMessage.id,
-						}
-					: null;
+			const { hasMoreMessages, messages, nextCursor } =
+				await loadChatMessagePage({
+					chatRoomId: room.id,
+					cursor: input.cursor,
+					limit: input.limit,
+				});
 			const attachments =
 				messages.length > 0
 					? await db
@@ -1470,9 +1541,13 @@ export const chatsRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
+			// 완료 처리만은 나간 방에서도 열어 둔다(사용자 확정) — 완료 버튼이 방이 아니라
+			// "예정된 면접" 목록에 있고, 방을 나갔다고 지난 약속을 못 끝내면 안 된다.
+			// 그 밖의 전환(확정·거절·취소)은 기존대로 나간 방에서 NOT_FOUND다.
 			const { profile, room } = await requireChatParticipant(
 				schedule.chatRoomId,
-				context.session
+				context.session,
+				{ allowLeftRoom: input.status === "completed" }
 			);
 
 			await throwIfChatBlocked({
@@ -1512,6 +1587,74 @@ export const chatsRouter = {
 			emitRoomUpdated({ roomId: room.id });
 
 			return updatedSchedule;
+		}),
+
+	/**
+	 * "예정된 면접" 아코디언이 펼칠 때 읽는 면접 컨텍스트 — 일정 + 그 방의 채팅 내역.
+	 *
+	 * 읽기 전용이다: 읽음영수증도, markRead도, 소켓 신호도 남기지 않는다. 지난 약속을
+	 * 다시 읽는 화면이라 상대에게 "읽음"이 가면 거짓 신호가 된다.
+	 * 나간 방도 연다(면접 예외). 차단·신고 대기 방은 기존 정책 그대로 막는다.
+	 */
+	getInterviewChatContext: protectedProcedure
+		.input(getInterviewChatContextInput)
+		.handler(async ({ context, input }) => {
+			const [schedule] = await db
+				.select()
+				.from(interviewSchedule)
+				.where(eq(interviewSchedule.id, input.interviewScheduleId))
+				.limit(1);
+
+			if (!schedule) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const { profile, room } = await requireChatParticipant(
+				schedule.chatRoomId,
+				context.session,
+				{ allowLeftRoom: true }
+			);
+
+			await throwIfChatUnavailable({
+				actorUserId: profile.userId,
+				room,
+			});
+
+			const { messages, nextCursor } = await loadChatMessagePage({
+				chatRoomId: room.id,
+				cursor: input.cursor,
+				limit: DEFAULT_CHAT_MESSAGE_PAGE_SIZE,
+			});
+			const counterpartNames = await resolveCounterpartNames(
+				[room],
+				profile.userId,
+				{ maskWithdrawn: false }
+			);
+			const [post] = await db
+				.select({ title: jobPost.title })
+				.from(jobPost)
+				.where(eq(jobPost.id, room.jobPostId))
+				.limit(1);
+
+			return {
+				counterpartName: counterpartNames.get(room.id) ?? null,
+				currentUserId: profile.userId,
+				jobTitle: post?.title ?? null,
+				// 읽기 전용 말풍선에 필요한 것만 싣는다. 첨부·연락처 요청도 body가 이미
+				// 사람이 읽는 문구라("첨부 파일을 보냈습니다.") 별도 매핑이 필요 없다.
+				messages: messages.map(
+					({ body, createdAt, id, kind, senderUserId }) => ({
+						body,
+						createdAt,
+						id,
+						kind,
+						senderUserId,
+					})
+				),
+				// 이 값을 그대로 다음 요청의 cursor로 보내면 그 이전 구간이 온다.
+				nextCursor,
+				schedule,
+			};
 		}),
 
 	// 조회 전용. 상대 연락처는 canViewCounterpart가 true일 때만 응답에 싣는다.

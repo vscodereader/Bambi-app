@@ -50,6 +50,7 @@ import {
 	requireAdminProfile,
 	requireChatParticipant,
 } from "../../services/bambi-authz";
+import { isChatRoomLeftByAnyone } from "../../services/bambi-chat-participation";
 import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
@@ -295,6 +296,13 @@ const listAllChatsForModerationInput = z.object({
 	page: z.number().int().min(1).default(1),
 	search: z.string().trim().max(CHAT_SEARCH_MAX).default(""),
 });
+
+// 운영자 면접 일정 열람. 입력 없이도 부르도록 전부 optional로 둔다.
+const DEFAULT_INTERVIEW_SCHEDULE_LIMIT = 100;
+
+const listInterviewSchedulesInput = z
+	.object({ limit: z.number().int().min(1).max(200).optional() })
+	.optional();
 
 const contentStatusSchema = z.enum(["published", "hidden", "deleted"]);
 
@@ -2228,6 +2236,48 @@ export const moderationRouter = {
 
 				return updated;
 			});
+		}),
+
+	// 운영자 면접 일정 열람: 상태·방 상태와 무관하게 최신 면접일부터 내려준다. 이름은
+	// 운영자 열람이라 탈퇴 마스킹 없이 원본(user.name)을 그대로 쓴다.
+	listInterviewSchedules: adminProcedure
+		.input(listInterviewSchedulesInput)
+		.handler(async ({ input }) => {
+			const employerUser = alias(user, "interview_employer_user");
+			const seekerUser = alias(user, "interview_seeker_user");
+
+			const rows = await db
+				.select({
+					chatRoomId: interviewSchedule.chatRoomId,
+					createdAt: interviewSchedule.createdAt,
+					employerDeletedAt: chatRoom.employerDeletedAt,
+					employerName: employerUser.name,
+					id: interviewSchedule.id,
+					jobPostTitle: jobPost.title,
+					locationNote: interviewSchedule.locationNote,
+					roomIsBlocked: chatRoom.isBlocked,
+					scheduledAt: interviewSchedule.scheduledAt,
+					seekerDeletedAt: chatRoom.seekerDeletedAt,
+					seekerName: seekerUser.name,
+					status: interviewSchedule.status,
+					updatedAt: interviewSchedule.updatedAt,
+				})
+				.from(interviewSchedule)
+				.innerJoin(chatRoom, eq(interviewSchedule.chatRoomId, chatRoom.id))
+				.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+				.innerJoin(employerUser, eq(employerUser.id, chatRoom.employerUserId))
+				.innerJoin(seekerUser, eq(seekerUser.id, chatRoom.jobSeekerUserId))
+				.orderBy(desc(interviewSchedule.scheduledAt))
+				.limit(input?.limit ?? DEFAULT_INTERVIEW_SCHEDULE_LIMIT);
+
+			// 방의 "나감" 두 컬럼은 화면 계약(roomIsDeleted) 하나로 접어 내려준다.
+			return rows.map(({ employerDeletedAt, seekerDeletedAt, ...row }) => ({
+				...row,
+				roomIsDeleted: isChatRoomLeftByAnyone({
+					employerDeletedAt,
+					seekerDeletedAt,
+				}),
+			}));
 		}),
 
 	// 운영자 채팅 관리 목록: 삭제됨(seeker/employer deletedAt)·차단됨(isBlocked)·신고됨

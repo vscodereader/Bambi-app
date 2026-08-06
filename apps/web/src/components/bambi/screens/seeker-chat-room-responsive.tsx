@@ -972,45 +972,6 @@ function InterviewProposalForm({
 	);
 }
 
-// 확정된 면접 카드의 액션. 완료 처리는 구인자만 한다 — 구직자는 확정까지다.
-function ConfirmedInterviewActions({
-	isJobSeeker,
-	isPending,
-	onSetStatus,
-}: {
-	isJobSeeker: boolean;
-	isPending: boolean;
-	onSetStatus: (status: "canceled" | "completed") => void;
-}) {
-	return (
-		<div
-			className={cn(
-				"mt-3 grid gap-2",
-				isJobSeeker ? "grid-cols-1" : "grid-cols-2"
-			)}
-		>
-			{isJobSeeker ? null : (
-				<Button
-					disabled={isPending}
-					onClick={() => onSetStatus("completed")}
-					size="md"
-					variant="secondary"
-				>
-					완료
-				</Button>
-			)}
-			<Button
-				disabled={isPending}
-				onClick={() => onSetStatus("canceled")}
-				size="md"
-				variant="secondary"
-			>
-				취소
-			</Button>
-		</div>
-	);
-}
-
 // 면접 일정 카드 하단. 구인자는 "연락처 공개 요청" 버튼, 구직자는 구인자 인증번호를 본다.
 function ContactRevealAction({
 	employerVerifiedPhone,
@@ -1742,7 +1703,7 @@ export function SeekerChatRoomResponsive({
 	};
 	const setScheduleStatus = (
 		interviewScheduleId: string,
-		status: "canceled" | "completed" | "confirmed" | "declined"
+		status: "canceled" | "confirmed" | "declined"
 	) => {
 		setInterviewStatusMutation.mutate({
 			interviewScheduleId,
@@ -1948,14 +1909,21 @@ export function SeekerChatRoomResponsive({
 												</Button>
 											</div>
 										) : null}
+										{/* 확정 카드에는 취소만 남는다 — 완료 처리는 방을 나가도 누를 수
+										    있도록 "내 정보 → 예정된 면접"으로 옮겼다. */}
 										{schedule.status === "confirmed" ? (
-											<ConfirmedInterviewActions
-												isJobSeeker={isJobSeeker}
-												isPending={setInterviewStatusMutation.isPending}
-												onSetStatus={(status) =>
-													setScheduleStatus(schedule.id, status)
+											<Button
+												block
+												className="mt-3 shadow-none"
+												disabled={setInterviewStatusMutation.isPending}
+												onClick={() =>
+													setScheduleStatus(schedule.id, "canceled")
 												}
-											/>
+												size="md"
+												variant="secondary"
+											>
+												취소
+											</Button>
 										) : null}
 									</div>
 								))}
