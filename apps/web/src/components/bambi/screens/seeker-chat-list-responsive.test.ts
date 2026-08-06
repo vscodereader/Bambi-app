@@ -53,3 +53,25 @@ describe("차단된 채팅 표시", () => {
 		expect(source).toContain("onOpen(room.id)");
 	});
 });
+
+describe("신고한 채팅 숨김", () => {
+	// 신고 대기 방은 서버(listMine)가 아예 빼 준다. 화면에 "조치 대기 중" 라벨이 남으면
+	// 운영자가 차단을 해제한 뒤에도 조치가 안 끝난 것처럼 보인다.
+	it("신고 대기 라벨과 그 배선을 남기지 않는다", () => {
+		expect(source).not.toContain("hasPendingMyReport");
+		expect(source).not.toContain("조치 대기 중");
+	});
+
+	it("신고 창을 닫으면 목록을 다시 받아 숨김을 반영한다", () => {
+		expect(source).toContain("invalidateList().catch");
+	});
+});
+
+describe("상대가 나간 채팅", () => {
+	// 한쪽이 나가면 방은 양쪽 목록에서 아예 사라진다(서버 listMine이 걸러낸다) —
+	// 화면에 "나감" 상태를 표시할 방 자체가 없다.
+	it("목록에 나감 배지를 남기지 않는다", () => {
+		expect(source).not.toContain("hasCounterpartLeft");
+		expect(source).not.toContain("상대방 나감");
+	});
+});

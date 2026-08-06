@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	buildReadReceiptValues,
-	countUnreadMessageIds,
+	chunkMessageIds,
 	getChatRecipientUserId,
 } from "./bambi-chat-read-state";
 
@@ -43,12 +43,24 @@ describe("bambi chat read state", () => {
 		]);
 	});
 
-	it("counts only messages without read receipts as unread", () => {
-		expect(
-			countUnreadMessageIds({
-				messageIds: ["message-1", "message-2", "message-3"],
-				readMessageIds: ["message-1", "message-3"],
-			})
-		).toBe(1);
+	it("splits a long read-receipt batch into bounded insert chunks", () => {
+		const messageIds = Array.from(
+			{ length: 5 },
+			(_value, index) => `message-${index}`
+		);
+
+		expect(chunkMessageIds(messageIds, 2)).toEqual([
+			["message-0", "message-1"],
+			["message-2", "message-3"],
+			["message-4"],
+		]);
+		expect(chunkMessageIds([], 2)).toEqual([]);
+	});
+
+	it("keeps every id in a single chunk when the size is not usable", () => {
+		expect(chunkMessageIds(["message-1", "message-2"], 0)).toEqual([
+			["message-1", "message-2"],
+		]);
+		expect(chunkMessageIds([], 0)).toEqual([]);
 	});
 });

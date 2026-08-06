@@ -24,10 +24,6 @@ interface SeekerChatListResponsiveProps {
 	onOpen: (roomId: string) => void;
 }
 
-// 운영자 조치는 즉시 이뤄지지 않는다. 접수 사실만이라도 방 카드에 남겨두지 않으면
-// 신고한 사람 눈에는 아무 일도 일어나지 않은 것처럼 보인다.
-const PENDING_REPORT_LABEL = "신고 완료 · 조치 대기 중";
-
 const formatDateTime = (value: Date | string): string =>
 	new Intl.DateTimeFormat("ko-KR", {
 		dateStyle: "medium",
@@ -48,6 +44,16 @@ const getRoomItemClassName = (
 					unreadCount > 0 && "border-coral-300 ring-1 ring-coral-200"
 				)
 	);
+
+// 방 상태 배지. 남는 상태는 운영자 차단뿐이다 — 상대가 나갔는지는 알리지 않는다
+// (나가도 발신은 그대로 되고, 그 사실이 상대에게 드러나서도 안 된다).
+function ChatRoomStateBadge({ isBlocked }: { isBlocked: boolean }) {
+	if (isBlocked) {
+		return <Badge tone="danger">차단됨</Badge>;
+	}
+
+	return <Badge tone="success">대화 가능</Badge>;
+}
 
 // 방 항목의 삭제·신고·차단 케밥 메뉴. 목록 항목은 방 열기 클릭 영역이 카드 전체를
 // 덮으므로, 이 메뉴 트리거는 그 열기 버튼과 형제(자식 아님)로 두어 button-in-button을
@@ -140,7 +146,15 @@ function ChatRoomActions({
 			/>
 			{isJobSeekerViewer ? (
 				<ReportDialog
-					onOpenChange={setIsReportOpen}
+					// 신고가 접수된 방은 검토가 끝날 때까지 서버가 목록에서 빼 준다
+					// ("해당 채팅은 잠시 숨겨둘게요" 약속). 창을 닫을 때 목록을 다시
+					// 받아 그 자리에서 사라지게 한다.
+					onOpenChange={(next) => {
+						setIsReportOpen(next);
+						if (!next) {
+							invalidateList().catch(() => undefined);
+						}
+					}}
 					open={isReportOpen}
 					targetId={room.id}
 					targetType="chat_room"
@@ -191,13 +205,7 @@ function ChatRoomItem({
 						<h2 className="m-0 truncate font-extrabold text-base">
 							{jobTitle}
 						</h2>
-						<Badge tone={isBlocked ? "danger" : "success"}>
-							{isBlocked ? "차단됨" : "대화 가능"}
-						</Badge>
-						{/* 차단된 방에서는 이 줄이 블러 뒤로 숨으므로 아래 오버레이가 대신 알린다. */}
-						{room.hasPendingMyReport && !isBlocked ? (
-							<Badge tone="pending">{PENDING_REPORT_LABEL}</Badge>
-						) : null}
+						<ChatRoomStateBadge isBlocked={isBlocked} />
 						{room.unreadCount > 0 ? (
 							<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
 						) : null}
@@ -223,11 +231,6 @@ function ChatRoomItem({
 			{isBlocked ? (
 				<p className="pointer-events-none absolute inset-0 m-0 flex flex-col items-center justify-center gap-1 px-4 text-center font-extrabold text-foreground text-sm">
 					차단된 채팅입니다.
-					{room.hasPendingMyReport ? (
-						<span className="font-bold text-muted-foreground text-xs">
-							{PENDING_REPORT_LABEL}
-						</span>
-					) : null}
 				</p>
 			) : null}
 			<div className="relative z-10 shrink-0">

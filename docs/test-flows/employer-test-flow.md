@@ -656,7 +656,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 
 - **경로**: `/seeker/chats/[id]`
 - **절차**: 텍스트 입력 후 전송 / 이미지·PDF 첨부
-- **기대 결과**: `sendMessage`/`sendMediaMessage` 성공, 소프트 삭제된 방은 새 메시지로 양쪽 모두 재노출
+- **기대 결과**: `sendMessage`/`sendMediaMessage` 성공. 한쪽이 나간 방은 양쪽 모두에게서 사라져 열람·전송이 `NOT_FOUND`(부활 없음)
 - **엣지 케이스**: 차단된 방은 `FORBIDDEN` + 안내("…님이 차단했어요." / "…님을 차단했어요. 차단 관리에서 해제할 수 있어요."). 운영자가 방을 차단하면(`setChatRoomBlocked`) 목록으로 되돌려 보낸다
 - **관련 API**: `bambi.chats.sendMessage`, `bambi.chats.createAttachmentUpload`, `bambi.chats.sendMediaMessage`, `bambi.chats.markRead`, `bambi.chats.deleteChatRoom`
 

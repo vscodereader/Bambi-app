@@ -3,11 +3,10 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/bambi/ds";
-import { SiteFooter } from "@/components/bambi/site-footer";
 import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
 
 // 공개 공고 랜딩 셸. 로그인 여부와 무관하게 열리는 화면이라(resolve-gate의 공개 prefix)
-// 역할별 내비게이션 없이 로고 헤더와 공용 푸터만 둔다 — 약관·처리방침 셸과 같은 구성이다.
+// 역할별 내비게이션 없이 로고 헤더만 둔다(푸터는 두지 않는다).
 export default function JobsLandingLayout({
 	children,
 }: {
@@ -38,7 +37,6 @@ export default function JobsLandingLayout({
 					{children}
 				</div>
 			</main>
-			<SiteFooter />
 		</div>
 	);
 }

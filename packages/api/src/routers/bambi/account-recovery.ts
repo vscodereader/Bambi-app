@@ -1,21 +1,30 @@
-// 아이디 찾기 · 비밀번호 찾기. 로그인하지 못하는 사람이 부르는 흐름이므로 전부
-// 공개 프로시저이고, 대신 IP 레이트리밋을 건다(rateLimitedPublicProcedure). 대상 계정은
-// 클라이언트가 지정할 수 없고, 오직 서버가 포트원 본인인증 결과의 CI/DI 해시 + 프로필에
-// 저장된 생년월일·성별로 특정한다 — userId·이메일 같은 식별자를 입력으로 받으면
-// 남의 계정 비밀번호를 바꾸는 통로가 된다.
+// 계정 복구. 두 갈래가 들어 있다.
+//
+// 1) 아이디 찾기 · 비밀번호 찾기 — 로그인하지 못하는 사람이 부르는 흐름이므로 전부
+//    공개 프로시저이고, 대신 IP 레이트리밋을 건다(rateLimitedPublicProcedure). 대상 계정은
+//    클라이언트가 지정할 수 없고, 오직 서버가 포트원 본인인증 결과의 CI/DI 해시 + 프로필에
+//    저장된 생년월일·성별로 특정한다 — userId·이메일 같은 식별자를 입력으로 받으면
+//    남의 계정 비밀번호를 바꾸는 통로가 된다.
+// 2) 탈퇴 복구(운영자) — 실수로 탈퇴한 계정의 deletedAt 마커를 지워 로그인을 되살린다.
+//    운영자 전용(adminProcedure)이고 대상 userId를 그대로 받는다.
 //
 // onboarding.ts에 붙이지 않고 파일을 나눈 이유는 그쪽이 이미 1000줄이 넘어서다.
 
 import { auth } from "@bambi-app/auth";
 import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
-import { bambiProfile } from "@bambi-app/db/schema/bambi";
+import {
+	adminModerationAction,
+	bambiProfile,
+} from "@bambi-app/db/schema/bambi";
 import { env } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
 import { and, eq, isNull, or } from "drizzle-orm";
 import z from "zod";
 
-import { rateLimitedPublicProcedure } from "../../index";
+import { adminProcedure, rateLimitedPublicProcedure } from "../../index";
+import { resolveAccountRestoreDecision } from "../../services/bambi-account-restore";
+import { requireAdminProfile } from "../../services/bambi-authz";
 import {
 	resolveVerifiedIdentity,
 	type VerifiedIdentity,
@@ -36,6 +45,12 @@ const resetPasswordInput = identityInput.extend({
 		.string()
 		.min(8, "비밀번호는 8자 이상이어야 해요.")
 		.max(128, "비밀번호는 128자 이하여야 해요."),
+});
+
+// 운영자 탈퇴 복구 입력. 사유는 다른 운영자 조치(setUserStatus·setUserRole)와 같은 길이 규약.
+const restoreWithdrawnAccountInput = z.object({
+	reason: z.string().min(2).max(500),
+	targetUserId: z.string().min(1),
 });
 
 interface RecoverableAccount {
@@ -185,5 +200,68 @@ export const accountRecoveryRouter = {
 			await authContext.internalAdapter.deleteSessions(account.userId);
 
 			return { success: true };
+		}),
+
+	// 탈퇴 복구(운영자). deletedAt 마커만 지우면 끝이다 — better-auth 세션 생성 훅이
+	// 이 마커 하나로 로그인을 막고 있어서(packages/auth/src/index.ts), 지우는 즉시
+	// 본인이 기존 아이디·비밀번호로 다시 로그인할 수 있다.
+	//
+	// 파기 배치가 이미 지나간 계정(purgedAt)은 되살리지 않는다. 비밀번호·연락처·본인인증
+	// 해시가 모두 지워져 로그인할 수단이 없고, 되살려 봐야 표시명이 "탈퇴한 회원"인 빈
+	// 껍데기만 남는다. 판정은 서버·화면이 공유하는 순수 함수(bambi-account-restore)에 둔다.
+	//
+	// 탈퇴 때 지운 팀·조직 멤버십(member·team_member)과 내려간 공고는 복구되지 않는다 —
+	// 조직 구성은 소유자 판단이 필요한 영역이라 운영자가 임의로 되돌리지 않는다.
+	restoreWithdrawnAccount: adminProcedure
+		.input(restoreWithdrawnAccountInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			return await db.transaction(async (tx) => {
+				const [target] = await tx
+					.select({
+						deletedAt: user.deletedAt,
+						purgedAt: user.purgedAt,
+					})
+					.from(user)
+					.where(eq(user.id, input.targetUserId))
+					.limit(1);
+
+				if (!target) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "계정을 찾을 수 없어요.",
+					});
+				}
+
+				const decision = resolveAccountRestoreDecision(target);
+				if (!decision.canRestore) {
+					throw new ORPCError("BAD_REQUEST", { message: decision.message });
+				}
+
+				// purgedAt 가드를 WHERE에도 둔다 — 판정과 갱신 사이에 파기 배치가 끼어들어도
+				// 파기된 계정이 되살아나지 않는다.
+				const [restored] = await tx
+					.update(user)
+					.set({ deletedAt: null })
+					.where(and(eq(user.id, input.targetUserId), isNull(user.purgedAt)))
+					.returning({ name: user.name, userId: user.id });
+
+				if (!restored) {
+					throw new ORPCError("CONFLICT", {
+						message:
+							"복구하는 사이에 계정 상태가 바뀌었어요. 목록을 새로고침한 뒤 다시 시도해 주세요.",
+					});
+				}
+
+				await tx.insert(adminModerationAction).values({
+					action: "restore_account",
+					adminUserId: admin.userId,
+					reason: input.reason,
+					targetId: input.targetUserId,
+					targetType: "user",
+				});
+
+				return restored;
+			});
 		}),
 };

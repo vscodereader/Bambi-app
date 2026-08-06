@@ -1,0 +1,2 @@
+DROP INDEX "chat_room_job_post_id_job_seeker_user_id_uidx";--> statement-breakpoint
+CREATE UNIQUE INDEX "chat_room_job_post_id_job_seeker_user_id_uidx" ON "chat_room" USING btree ("job_post_id","job_seeker_user_id") WHERE "chat_room"."seeker_deleted_at" IS NULL AND "chat_room"."employer_deleted_at" IS NULL;

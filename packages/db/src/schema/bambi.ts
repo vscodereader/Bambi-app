@@ -473,6 +473,28 @@ export const employerTeamProfile = pgTable(
 // 때문이다 — job_post는 organization_id와 created_by_user_id가 NOT NULL이라 크롤링 행에
 // 붙일 주인이 없고, 억지로 합성 계정을 붙이면 그 조직이 업소 목록·검색·채팅·통계 전반에
 // 유령으로 섞인다. 업체가 실제로 가입해 전환될 때만 job_post 행이 생긴다.
+export interface CrawledJobEditedImageAsset {
+	dataUrl: string;
+	height: number;
+	id: string;
+	width: number;
+}
+
+export interface CrawledJobEditedImageItem {
+	assetId: string;
+	displayHeightPx: number | null;
+	displayWidthPx: number | null;
+	id: string;
+	offsetX: number;
+	offsetY: number;
+}
+
+export interface CrawledJobEditedImageDocument {
+	assets: CrawledJobEditedImageAsset[];
+	items: CrawledJobEditedImageItem[];
+	version: 1;
+}
+
 export const crawledJobPost = pgTable(
 	"crawled_job_post",
 	{
@@ -562,6 +584,18 @@ export const crawledJobPost = pgTable(
 		detailImageUrls: jsonb("detail_image_urls")
 			.$type<string[]>()
 			.default([])
+			.notNull(),
+		// 크롤링 원본은 위 배열에 보존하고 운영자가 확정한 배치·크롭 결과만 별도 저장한다.
+		// null은 원본 폴백, items: []는 의도적으로 상세 이미지를 모두 숨긴 상태다.
+		editedDetailImageDocument: jsonb("edited_detail_image_document")
+			.$type<CrawledJobEditedImageDocument | null>()
+			.default(null),
+		detailImagesEditedAt: timestamp("detail_images_edited_at"),
+		detailImagesEditedByUserId: text(
+			"detail_images_edited_by_user_id"
+		).references(() => user.id, { onDelete: "set null" }),
+		detailImageEditRevision: integer("detail_image_edit_revision")
+			.default(0)
 			.notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -1145,8 +1179,9 @@ export const chatRoom = pgTable(
 			.notNull()
 			.references(() => user.id),
 		isBlocked: boolean("is_blocked").default(false).notNull(),
-		// 회원별 소프트삭제(목록 숨김). 상대는 그대로 유지되며, 새 메시지 도착 시
-		// sendMessage가 양쪽 값을 NULL로 되돌려 방을 다시 노출한다.
+		// "누가 언제 나갔나" 기록. 한쪽이라도 값이 차면 방은 **양쪽 모두에게서** 사라진다
+		// (목록·열람·발신·읽음 전부 차단). 되돌리는 경로는 없고, 재문의는 새 방을 판다.
+		// 운영자 화면은 이 두 값을 그대로 읽어 삭제된 방 이력을 계속 본다.
 		seekerDeletedAt: timestamp("seeker_deleted_at"),
 		employerDeletedAt: timestamp("employer_deleted_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1156,10 +1191,13 @@ export const chatRoom = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		uniqueIndex("chat_room_job_post_id_job_seeker_user_id_uidx").on(
-			table.jobPostId,
-			table.jobSeekerUserId
-		),
+		// 살아 있는 방만 공고×구직자 1개다. 나간 방은 이력으로 남아 누적되므로 부분
+		// 유니크로 제외한다 — 그래야 재문의 때 새 방을 팔 수 있다.
+		uniqueIndex("chat_room_job_post_id_job_seeker_user_id_uidx")
+			.on(table.jobPostId, table.jobSeekerUserId)
+			.where(
+				sql`${table.seekerDeletedAt} IS NULL AND ${table.employerDeletedAt} IS NULL`
+			),
 		index("chat_room_organization_id_idx").on(table.organizationId),
 		index("chat_room_team_id_idx").on(table.teamId),
 		index("chat_room_employer_user_id_idx").on(table.employerUserId),
@@ -1187,8 +1225,43 @@ export const chatMessage = pgTable(
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
-		index("chat_message_chat_room_id_idx").on(table.chatRoomId),
+		index("chat_message_chat_room_id_created_at_idx").on(
+			table.chatRoomId,
+			table.createdAt
+		),
 		index("chat_message_sender_user_id_idx").on(table.senderUserId),
+	]
+);
+
+/**
+ * 채팅 메시지 전파(소켓·알림)의 transactional outbox. **채팅 메시지 전용**이며 범용
+ * 이벤트 버스가 아니다.
+ *
+ * 메시지 INSERT와 같은 트랜잭션으로 행을 쌓고, 커밋 직후 인프로세스 컨슈머가 즉시
+ * 비워 간다(체감 지연 0). 전파에 실패해도 메시지는 이미 커밋돼 있으므로 행이 남아
+ * 부팅·주기 스윕이 다시 시도한다. 성공한 행은 즉시 삭제하므로 평소엔 거의 비어 있다.
+ * 안 읽음 숫자의 정본은 여전히 DB 집계(anti-join)다 — 이 큐는 재계산 신호일 뿐이다.
+ */
+export const chatMessageSyncQueue = pgTable(
+	"chat_message_sync_queue",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
+		messageId: uuid("message_id")
+			.notNull()
+			.references(() => chatMessage.id, { onDelete: "cascade" }),
+		senderUserId: text("sender_user_id")
+			.notNull()
+			.references(() => user.id),
+		// 소켓 페이로드에 실어 보내는 메시지 생성 시각(정렬 정본인 chat_message.created_at 사본).
+		messageCreatedAt: timestamp("message_created_at").notNull(),
+		attempts: integer("attempts").default(0).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("chat_message_sync_queue_created_at_idx").on(table.createdAt),
 	]
 );
 
@@ -1403,6 +1476,10 @@ export const report = pgTable(
 	},
 	(table) => [
 		index("report_status_idx").on(table.status),
+		index("report_reporter_user_id_status_idx").on(
+			table.reporterUserId,
+			table.status
+		),
 		index("report_target_type_target_id_idx").on(
 			table.targetType,
 			table.targetId

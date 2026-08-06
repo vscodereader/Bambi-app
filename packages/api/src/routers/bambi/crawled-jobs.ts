@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import z from "zod";
 
 import { publicProcedure } from "../../index";
+import { createOriginalImageDocument } from "../../services/bambi-crawled-image-document";
 
 // 공개 상세에 내려보내는 컬럼.
 //
@@ -20,6 +21,7 @@ const PUBLIC_COLUMNS = {
 	body: crawledJobPost.body,
 	contactPhone: crawledJobPost.contactPhone,
 	detailImageUrls: crawledJobPost.detailImageUrls,
+	editedDetailImageDocument: crawledJobPost.editedDetailImageDocument,
 	district: crawledJobPost.district,
 	gender: crawledJobPost.gender,
 	id: crawledJobPost.id,
@@ -64,6 +66,32 @@ export const crawledJobsRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
-			return post;
+			const sourceDocument =
+				post.editedDetailImageDocument ??
+				createOriginalImageDocument(post.detailImageUrls);
+			const {
+				detailImageUrls: _detailImageUrls,
+				editedDetailImageDocument: _edited,
+				...publicPost
+			} = post;
+			return {
+				...publicPost,
+				detailImageDocument: {
+					assets: sourceDocument.assets.map((asset) => ({
+						height: asset.height,
+						id: asset.id,
+						src: asset.dataUrl,
+						width: asset.width,
+					})),
+					items: sourceDocument.items.map((item) => ({
+						assetId: item.assetId,
+						heightPx: item.displayHeightPx ?? null,
+						id: item.id,
+						offsetX: item.offsetX ?? 0,
+						offsetY: item.offsetY ?? 0,
+						widthPx: item.displayWidthPx,
+					})),
+				},
+			};
 		}),
 };

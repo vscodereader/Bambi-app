@@ -88,6 +88,16 @@ const STATUS_ACTIONS: { status: ContentStatus; label: string }[] = [
 	{ status: "deleted", label: "삭제" },
 ];
 
+// 현재 상태 배지 톤. 삭제된 행은 목록에서 바로 구분돼야 다시 지우려는 시도를 줄인다.
+const STATUS_BADGE_VARIANT: Record<
+	ContentStatus,
+	"destructive" | "outline" | "secondary"
+> = {
+	deleted: "destructive",
+	hidden: "outline",
+	published: "secondary",
+};
+
 // 선택 열은 커뮤니티 글 탭에서만 붙는다(다중 선택 + 일괄 삭제 대상).
 const TABLE_COLUMN_COUNT = 6;
 const SELECTABLE_TARGET_TYPE: TargetType = "community_post";
@@ -244,7 +254,10 @@ export default function ModeratorContentPage() {
 			prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
 		);
 	// 헤더 체크박스: 현재 페이지가 전부 선택돼 있으면 해제, 아니면 전부 선택한다.
-	const pageIds = items.map((item) => item.id);
+	// 이미 삭제된 글은 선택 대상에서 빼 일괄 삭제로 다시 지워지지 않게 한다(서버도 거절한다).
+	const pageIds = items
+		.filter((item) => item.status !== "deleted")
+		.map((item) => item.id);
 	const allSelected =
 		pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
 	const toggleAllOnPage = () => setSelectedIds(allSelected ? [] : pageIds);
@@ -338,9 +351,11 @@ export default function ModeratorContentPage() {
 									<TableRow>
 										{isSelectable ? (
 											<TableCell>
+												{/* 삭제된 글은 더 지울 게 없어 선택 자체를 막는다. */}
 												<Checkbox
 													aria-label={`${item.title} 선택`}
 													checked={selectedIds.includes(item.id)}
+													disabled={item.status === "deleted"}
 													onCheckedChange={() => toggleSelected(item.id)}
 												/>
 											</TableCell>
@@ -371,7 +386,7 @@ export default function ModeratorContentPage() {
 										</TableCell>
 										<TableCell>{item.authorName}</TableCell>
 										<TableCell>
-											<Badge variant="secondary">
+											<Badge variant={STATUS_BADGE_VARIANT[item.status]}>
 												{CONTENT_STATUS_LABELS[item.status]}
 											</Badge>
 										</TableCell>

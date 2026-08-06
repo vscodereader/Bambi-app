@@ -3,9 +3,10 @@ import { randomUUID } from "node:crypto";
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
 import { eq, inArray } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Context } from "../../context";
+import { resetRateLimits } from "../../services/rate-limit";
 
 dotenv.config({
 	path: "../../apps/server/.env",
@@ -42,6 +43,10 @@ interface ChatFixture {
 	outsiderUserId: string;
 	userIds: string[];
 }
+
+// 발신 계열에 계정 단위 한도가 걸려 있고 카운터가 모듈 전역이라, 한 테스트의 호출이
+// 다음 테스트로 샌다(같은 픽스처 사용자를 여러 번 쓰면 엉뚱하게 429로 깨진다).
+beforeEach(resetRateLimits);
 
 const createContextForUser = (userId: string): Context =>
 	({
@@ -185,6 +190,10 @@ const expectOrpcCode = async (
 ): Promise<void> => {
 	await expect(promise).rejects.toMatchObject({ code });
 };
+
+// 서버가 id를 만들 때 쓰는 형식(UUIDv7 — 버전 자리가 7).
+const UUID_V7_PATTERN =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe("bambi chats router media", () => {
 	it("rejects attachment upload intents when the user is not a room participant", async () => {
@@ -468,14 +477,20 @@ describe("bambi chats router unread state", () => {
 				organizationId: fixture.organizationId,
 			});
 
+			// markRead가 "이 메시지까지"라는 기준선으로 동작하므로 시각이 겹치면 안 된다
+			// (한 INSERT의 defaultNow는 트랜잭션 시각이라 모두 같아진다).
+			const baseTime = Date.now();
 			const messages = await db
 				.insert(chatMessage)
 				.values(
-					["첫 메시지", "두 번째 메시지", "세 번째 메시지"].map((body) => ({
-						body,
-						chatRoomId: fixture.chatRoomId,
-						senderUserId: fixture.employerUserId,
-					}))
+					["첫 메시지", "두 번째 메시지", "세 번째 메시지"].map(
+						(body, index) => ({
+							body,
+							chatRoomId: fixture.chatRoomId,
+							createdAt: new Date(baseTime + index * 1000),
+							senderUserId: fixture.employerUserId,
+						})
+					)
 				)
 				.returning();
 
@@ -486,11 +501,14 @@ describe("bambi chats router unread state", () => {
 			const secondRoomMessages = await db
 				.insert(chatMessage)
 				.values(
-					["다른 방 첫 메시지", "다른 방 두 번째 메시지"].map((body) => ({
-						body,
-						chatRoomId: secondChatRoomId,
-						senderUserId: fixture.employerUserId,
-					}))
+					["다른 방 첫 메시지", "다른 방 두 번째 메시지"].map(
+						(body, index) => ({
+							body,
+							chatRoomId: secondChatRoomId,
+							createdAt: new Date(baseTime + index * 1000),
+							senderUserId: fixture.employerUserId,
+						})
+					)
 				)
 				.returning();
 			if (secondRoomMessages.length !== 2) {
@@ -524,24 +542,35 @@ describe("bambi chats router unread state", () => {
 				context: createContextForUser(fixture.jobSeekerUserId),
 				path: ["bambi", "chats", "markRead"],
 			});
-			await markRead({
+			// 기준선까지만 읽음 처리한다 — 그 뒤에 온 메시지는 그대로 안 읽음으로 남는다.
+			const firstMarkRead = await markRead({
 				chatRoomId: fixture.chatRoomId,
-				messageIds: [firstMessage.id],
+				upToMessageId: firstMessage.id,
 			});
 
 			expect(await unreadStateForSeeker({})).toEqual({
 				unreadMessageCount: 4,
 			});
+			// 화면 핀은 방별 수가 아니라 이 총합을 그린다 — 응답값과 unreadState가
+			// 갈라지면 읽음 직후 핀이 틀린 숫자로 굳는다.
+			expect(firstMarkRead.totalUnreadMessageCount).toBe(4);
+
+			const lastMessage = remainingMessages.at(-1);
+			const lastSecondRoomMessage = secondRoomMessages.at(-1);
+			if (!(lastMessage && lastSecondRoomMessage)) {
+				throw new Error("채팅 메시지 픽스처를 만들지 못했습니다.");
+			}
+
 			await markRead({
 				chatRoomId: fixture.chatRoomId,
-				messageIds: remainingMessages.map(({ id }) => id),
+				upToMessageId: lastMessage.id,
 			});
 			expect(await unreadStateForSeeker({})).toEqual({
 				unreadMessageCount: 2,
 			});
 			await markRead({
 				chatRoomId: secondChatRoomId,
-				messageIds: secondRoomMessages.map(({ id }) => id),
+				upToMessageId: lastSecondRoomMessage.id,
 			});
 			expect(await unreadStateForSeeker({})).toEqual({
 				unreadMessageCount: 0,
@@ -813,12 +842,21 @@ const setProfilePhone = async (
 const seedMessage = async (
 	fixture: ChatFixture,
 	senderUserId: string
-): Promise<void> => {
-	await db.insert(chatMessage).values({
-		body: "안녕하세요.",
-		chatRoomId: fixture.chatRoomId,
-		senderUserId,
-	});
+): Promise<{ id: string }> => {
+	const [created] = await db
+		.insert(chatMessage)
+		.values({
+			body: "안녕하세요.",
+			chatRoomId: fixture.chatRoomId,
+			senderUserId,
+		})
+		.returning({ id: chatMessage.id });
+
+	if (!created) {
+		throw new Error("채팅 메시지 픽스처를 만들지 못했습니다.");
+	}
+
+	return created;
 };
 
 const requestReveal = (userId: string) =>
@@ -843,6 +881,18 @@ const getByIdFor = (userId: string) =>
 	createProcedureClient(chatsRouter.getById, {
 		context: createContextForUser(userId),
 		path: ["bambi", "chats", "getById"],
+	});
+
+const markReadFor = (userId: string) =>
+	createProcedureClient(chatsRouter.markRead, {
+		context: createContextForUser(userId),
+		path: ["bambi", "chats", "markRead"],
+	});
+
+const unreadStateFor = (userId: string) =>
+	createProcedureClient(chatsRouter.unreadState, {
+		context: createContextForUser(userId),
+		path: ["bambi", "chats", "unreadState"],
 	});
 
 describe("bambi chats router contact reveal request", () => {
@@ -1048,59 +1098,95 @@ describe("bambi chats listMine 차단 판정", () => {
 	});
 });
 
-describe("bambi chats router soft delete", () => {
+// 나가기 = 방이 양쪽 모두에게서 사라진다(되살아나지 않는다).
+describe("bambi chats router 나가기", () => {
 	const hasRoom = (rooms: Array<{ id: string }>, chatRoomId: string): boolean =>
 		rooms.some((room) => room.id === chatRoomId);
 
-	it("hides the room from the seeker after delete while the employer still sees it", async () => {
+	const deleteRoomFor = (userId: string) =>
+		createProcedureClient(chatsRouter.deleteChatRoom, {
+			context: createContextForUser(userId),
+			path: ["bambi", "chats", "deleteChatRoom"],
+		});
+
+	const sendMessageFor = (userId: string) =>
+		createProcedureClient(chatsRouter.sendMessage, {
+			context: createContextForUser(userId),
+			path: ["bambi", "chats", "sendMessage"],
+		});
+
+	it("한쪽이 나가면 양쪽 목록에서 함께 사라진다", async () => {
 		const fixture = await createChatFixture();
 
 		try {
 			await seedMessage(fixture, fixture.employerUserId);
 
-			const deleteChatRoom = createProcedureClient(chatsRouter.deleteChatRoom, {
-				context: createContextForUser(fixture.jobSeekerUserId),
-				path: ["bambi", "chats", "deleteChatRoom"],
-			});
-
-			expect(await deleteChatRoom({ chatRoomId: fixture.chatRoomId })).toEqual({
-				ok: true,
-			});
+			expect(
+				await deleteRoomFor(fixture.jobSeekerUserId)({
+					chatRoomId: fixture.chatRoomId,
+				})
+			).toEqual({ ok: true });
 
 			const seekerRooms = await listMineFor(fixture.jobSeekerUserId)({});
 			const employerRooms = await listMineFor(fixture.employerUserId)({});
 
 			expect(hasRoom(seekerRooms, fixture.chatRoomId)).toBe(false);
-			expect(hasRoom(employerRooms, fixture.chatRoomId)).toBe(true);
+			expect(hasRoom(employerRooms, fixture.chatRoomId)).toBe(false);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}
 	});
 
-	it("re-surfaces the room for the seeker after the employer sends a message", async () => {
+	// 남은 쪽에게도 없는 방이다 — 열람·발신·읽음이 모두 NOT_FOUND여야 한다.
+	it("상대가 나간 방은 열람·발신 모두 NOT_FOUND다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const seeded = await seedMessage(fixture, fixture.employerUserId);
+
+			await deleteRoomFor(fixture.jobSeekerUserId)({
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			await expectOrpcCode(
+				getByIdFor(fixture.employerUserId)({ id: fixture.chatRoomId }),
+				"NOT_FOUND"
+			);
+			await expectOrpcCode(
+				sendMessageFor(fixture.employerUserId)({
+					body: "새 메시지입니다.",
+					chatRoomId: fixture.chatRoomId,
+				}),
+				"NOT_FOUND"
+			);
+			await expectOrpcCode(
+				markReadFor(fixture.employerUserId)({
+					chatRoomId: fixture.chatRoomId,
+					upToMessageId: seeded.id,
+				}),
+				"NOT_FOUND"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	// 유령 핀 방지 — 목록에 없는 방의 안 읽음이 총합에 남으면 끌 방법이 없다.
+	it("나간 방의 안 읽음은 총합에서 빠진다", async () => {
 		const fixture = await createChatFixture();
 
 		try {
 			await seedMessage(fixture, fixture.employerUserId);
 
-			const deleteChatRoom = createProcedureClient(chatsRouter.deleteChatRoom, {
-				context: createContextForUser(fixture.jobSeekerUserId),
-				path: ["bambi", "chats", "deleteChatRoom"],
-			});
-			await deleteChatRoom({ chatRoomId: fixture.chatRoomId });
-
-			const sendMessage = createProcedureClient(chatsRouter.sendMessage, {
-				context: createContextForUser(fixture.employerUserId),
-				path: ["bambi", "chats", "sendMessage"],
-			});
-			await sendMessage({
-				body: "새 메시지입니다.",
+			await deleteRoomFor(fixture.employerUserId)({
 				chatRoomId: fixture.chatRoomId,
 			});
 
-			const seekerRooms = await listMineFor(fixture.jobSeekerUserId)({});
+			const { unreadMessageCount } = await unreadStateFor(
+				fixture.jobSeekerUserId
+			)({});
 
-			expect(hasRoom(seekerRooms, fixture.chatRoomId)).toBe(true);
+			expect(unreadMessageCount).toBe(0);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}
@@ -1176,6 +1262,257 @@ describe("bambi chats router employer verified phone", () => {
 
 			expect(employerMessage?.revealedPhone).toBe("010-9999-0000");
 			expect(seekerMessage?.revealedPhone).toBeNull();
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+// 나간 방은 되살아나지 않는다 — 공고에서 다시 문의하면 새 방을 판다(이전 대화는
+// 이어지지 않고, 옛 방은 운영자 이력으로만 남는다).
+describe("bambi chats router 재문의 = 새 방", () => {
+	const startFor = (userId: string) =>
+		createProcedureClient(chatsRouter.startFromJobPost, {
+			context: createContextForUser(userId),
+			path: ["bambi", "chats", "startFromJobPost"],
+		});
+
+	const deleteRoomFor = (userId: string) =>
+		createProcedureClient(chatsRouter.deleteChatRoom, {
+			context: createContextForUser(userId),
+			path: ["bambi", "chats", "deleteChatRoom"],
+		});
+
+	it("업주가 나간 방으로 재문의하면 새 방이 생긴다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.jobSeekerUserId);
+			await deleteRoomFor(fixture.employerUserId)({
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			const created = await startFor(fixture.jobSeekerUserId)({
+				jobPostId: fixture.jobPostId,
+			});
+
+			expect(created.id).not.toBe(fixture.chatRoomId);
+			expect(created.employerDeletedAt).toBeNull();
+			expect(created.seekerDeletedAt).toBeNull();
+
+			// 옛 방은 나간 채로 남고(운영자 이력), 새 방은 아직 메시지가 없어 목록에
+			// 뜨지 않는다.
+			const [oldRoom] = await db
+				.select()
+				.from(chatRoom)
+				.where(eq(chatRoom.id, fixture.chatRoomId))
+				.limit(1);
+
+			expect(oldRoom?.employerDeletedAt).not.toBeNull();
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("구직자가 나간 방으로 재문의해도 새 방이 생긴다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.employerUserId);
+			await deleteRoomFor(fixture.jobSeekerUserId)({
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			const created = await startFor(fixture.jobSeekerUserId)({
+				jobPostId: fixture.jobPostId,
+			});
+
+			expect(created.id).not.toBe(fixture.chatRoomId);
+			expect(created.seekerDeletedAt).toBeNull();
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("아무도 나가지 않은 방은 그대로 재사용한다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const reused = await startFor(fixture.jobSeekerUserId)({
+				jobPostId: fixture.jobPostId,
+			});
+
+			expect(reused.id).toBe(fixture.chatRoomId);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+describe("bambi chats router 메시지 멱등성", () => {
+	const sendFor = (userId: string) =>
+		createProcedureClient(chatsRouter.sendMessage, {
+			context: createContextForUser(userId),
+			path: ["bambi", "chats", "sendMessage"],
+		});
+
+	// 네트워크 재시도·더블클릭이 같은 id로 다시 와도 방에 메시지가 두 번 남으면 안 된다.
+	it("같은 messageId 재전송은 원래 행을 돌려주고 부수효과를 다시 돌리지 않는다", async () => {
+		const fixture = await createChatFixture();
+		const messageId = randomUUID();
+
+		try {
+			const first = await sendFor(fixture.jobSeekerUserId)({
+				body: "안녕하세요.",
+				chatRoomId: fixture.chatRoomId,
+				messageId,
+			});
+			const retried = await sendFor(fixture.jobSeekerUserId)({
+				body: "재시도라 무시돼야 하는 본문",
+				chatRoomId: fixture.chatRoomId,
+				messageId,
+			});
+
+			expect(retried.id).toBe(first.id);
+			expect(retried.body).toBe("안녕하세요.");
+
+			const rows = await db
+				.select()
+				.from(chatMessage)
+				.where(eq(chatMessage.chatRoomId, fixture.chatRoomId));
+			const notifications = await db
+				.select()
+				.from(bambiNotification)
+				.where(eq(bambiNotification.chatRoomId, fixture.chatRoomId));
+
+			expect(rows).toHaveLength(1);
+			// 알림도 한 번만 — 재전송마다 뱃지가 늘면 핀이 실제 메시지 수와 어긋난다.
+			expect(notifications).toHaveLength(1);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("남이 쓴 메시지 id를 재사용하면 CONFLICT로 막는다", async () => {
+		const fixture = await createChatFixture();
+		const messageId = randomUUID();
+
+		try {
+			await sendFor(fixture.jobSeekerUserId)({
+				body: "구직자 메시지",
+				chatRoomId: fixture.chatRoomId,
+				messageId,
+			});
+
+			await expectOrpcCode(
+				sendFor(fixture.employerUserId)({
+					body: "같은 id를 노린 업주 메시지",
+					chatRoomId: fixture.chatRoomId,
+					messageId,
+				}),
+				"CONFLICT"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("messageId를 안 보내는 옛 클라이언트도 그대로 보낸다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const message = await sendFor(fixture.jobSeekerUserId)({
+				body: "id 없는 전송",
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			expect(message.id).toMatch(UUID_V7_PATTERN);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+describe("bambi chats router 메시지 커서 페이지네이션", () => {
+	// createdAt을 명시해 총순서를 고정한다(defaultNow는 같은 ms로 겹칠 수 있다).
+	const seedOrderedMessages = async (
+		fixture: ChatFixture,
+		count: number
+	): Promise<string[]> => {
+		const ids = Array.from({ length: count }, () => randomUUID());
+
+		await db.insert(chatMessage).values(
+			ids.map((id, index) => ({
+				body: `메시지 ${index}`,
+				chatRoomId: fixture.chatRoomId,
+				createdAt: new Date(Date.UTC(2026, 7, 6, 0, 0, index)),
+				id,
+				senderUserId: fixture.employerUserId,
+			}))
+		);
+
+		return ids;
+	};
+
+	it("커서로 이전 구간을 이어 읽고, 끝에서 nextCursor가 null이 된다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const ids = await seedOrderedMessages(fixture, 3);
+			const firstPage = await getByIdFor(fixture.jobSeekerUserId)({
+				id: fixture.chatRoomId,
+				limit: 2,
+			});
+
+			// 최신 2건이 오래된 → 최신 순으로 온다.
+			expect(firstPage.messages.map((message) => message.id)).toEqual([
+				ids[1],
+				ids[2],
+			]);
+			expect(firstPage.hasMoreMessages).toBe(true);
+			expect(firstPage.nextCursor).toMatchObject({ id: ids[1] });
+
+			const secondPage = await getByIdFor(fixture.jobSeekerUserId)({
+				cursor: firstPage.nextCursor ?? undefined,
+				id: fixture.chatRoomId,
+				limit: 2,
+			});
+
+			// 커서 이전 구간만. 경계 메시지가 겹쳐 오지 않아야 한다.
+			expect(secondPage.messages.map((message) => message.id)).toEqual([
+				ids[0],
+			]);
+			expect(secondPage.hasMoreMessages).toBe(false);
+			expect(secondPage.nextCursor).toBeNull();
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("예전 상한(500건)을 넘는 이력도 커서로 계속 거슬러 올라간다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const ids = await seedOrderedMessages(fixture, 6);
+			const seenIds: string[] = [];
+			let cursor: { createdAt: string; id: string } | null = null;
+
+			for (let page = 0; page < 6; page += 1) {
+				const result = await getByIdFor(fixture.jobSeekerUserId)({
+					cursor: cursor ?? undefined,
+					id: fixture.chatRoomId,
+					limit: 2,
+				});
+
+				seenIds.unshift(...result.messages.map((message) => message.id));
+				cursor = result.nextCursor;
+
+				if (!cursor) {
+					break;
+				}
+			}
+
+			expect(seenIds).toEqual(ids);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}

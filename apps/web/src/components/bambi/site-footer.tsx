@@ -21,6 +21,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
+import { SUPPORT_PATH } from "@/lib/bambi/support";
 import { orpc } from "@/utils/orpc";
 import { BOTTOM_NAV_CONTENT_SPACER } from "./bottom-nav-shell";
 import { Logo } from "./ds";
@@ -54,6 +55,26 @@ const PUBLIC_NAV_LINKS: FooterLink[] = [
 
 const FOOTER_LINK_CLASS =
 	"text-muted-foreground text-sm no-underline transition-colors hover:text-foreground";
+
+// 사업자 정보 줄 안에 섞여 있는 연락처 링크. 크기·색은 감싼 문단에서 물려받고
+// 밑줄은 호버에서만 켠다(위 링크 묶음과 같은 규칙).
+const FOOTER_INLINE_LINK_CLASS =
+	"underline-offset-2 transition-colors hover:text-foreground hover:underline";
+
+const HAS_DIGIT = /\d/;
+
+// 전화번호는 숫자가 있을 때만 tel: 링크로 만든다 — 운영자 콘솔에 값이 들어오기 전에는
+// 자리표시자 문자열(BAMBI_COMPANY.tel의 "TODO_…")이라 걸 수 있는 번호가 아니다.
+function FooterTel({ tel }: { tel: string }) {
+	if (!HAS_DIGIT.test(tel)) {
+		return <>{tel}</>;
+	}
+	return (
+		<a className={FOOTER_INLINE_LINK_CLASS} href={`tel:${tel}`}>
+			{tel}
+		</a>
+	);
+}
 
 interface SiteFooterProps {
 	// 콘텐츠 폭 — 헤더와 정렬. 기본은 앱 공통 고정폭.
@@ -154,9 +175,13 @@ export function SiteFooter({
 							>
 								체불사업주 명단
 							</a>
-							<a className={FOOTER_LINK_CLASS} href={`mailto:${email}`}>
+							{/* 고객센터는 메일 클라이언트를 띄우는 대신 1:1 문의 창구로 보낸다 —
+							    문의 이력이 남고 답변을 서비스 안에서 받을 수 있는 경로다.
+							    /support는 로그인 뒤에 있지만, 비로그인 방문자도 아래 사업자 정보
+							    줄의 메일 주소(mailto)로 연락할 수 있어 창구가 막히지는 않는다. */}
+							<Link className={FOOTER_LINK_CLASS} href={SUPPORT_PATH}>
 								고객센터
-							</a>
+							</Link>
 						</nav>
 					</div>
 				</div>
@@ -168,8 +193,13 @@ export function SiteFooter({
 						{operator} · 대표 {ceo} · 사업자등록번호 {bizRegNo} ·
 						직업정보제공사업 신고번호 {BAMBI_COMPANY.jobInfoProviderNo}
 					</p>
+					{/* 연락처는 읽는 값이 아니라 거는 값이다 — 모바일에서 번호를 받아 적지 않고
+					    바로 통화·메일로 이어지도록 각각 tel:·mailto:로 건다. */}
 					<p>
-						{address} · TEL {tel} · 고객문의 {email}
+						{address} · TEL <FooterTel tel={tel} /> · 고객문의{" "}
+						<a className={FOOTER_INLINE_LINK_CLASS} href={`mailto:${email}`}>
+							{email}
+						</a>
 					</p>
 					<p className="pt-2 text-muted-foreground/80">
 						© {new Date().getFullYear()} {operator}. All rights reserved.

@@ -509,7 +509,7 @@
 - **경로**: `/seeker/chats` (파일: `apps/web/src/app/seeker/chats/page.tsx`, `apps/web/src/components/bambi/screens/seeker-chat-list-responsive.tsx`)
 - **선행 조건**: 로그인. **역할 게이트 없음** — 구인자·운영자도 진입 가능
 - **기대 결과 — 항목당 표시**: 공고 제목 / 상대 이름(구직자 뷰: 팀 프로필 → 조직 프로필 → 구인자 `user.name` 폴백) / 마지막 메시지 / 최근 업데이트(md 이상) / `대화 가능`·`차단됨` 배지 / `N개 미확인` 배지 / `신고 완료 · 조치 대기 중` 배지
-- **정렬·필터**: `chat_room.updatedAt DESC`. 본인 측 소프트삭제(`seekerDeletedAt`) 방 제외. **메시지 0건 방 제외**
+- **정렬·필터**: `chat_room.updatedAt DESC`. **어느 한쪽이라도 나간 방 제외**(`seekerDeletedAt`·`employerDeletedAt` 중 하나라도 non-null이면 양쪽 목록에서 사라짐). **메시지 0건 방 제외**
 - **케밥 메뉴**:
   - `신고` — **뷰어가 그 방의 구직자일 때만 노출**(`room.counterpartUserId === room.employerUserId`)
   - `차단` — **확인 단계 없이 즉시 실행**
@@ -525,7 +525,7 @@
 - **절차**: 방 진입 → 텍스트 입력 → [전송]
 - **기대 결과**:
   - 입력 1~2000자. 내 말풍선 코럴, 상대 말풍선 secondary
-  - 전송 시 `chat_room`의 `employerDeletedAt`·`seekerDeletedAt`이 **양쪽 모두 NULL로 리셋** → 상대가 삭제한 방도 재노출
+  - 한쪽이 나간 방은 **양쪽 모두에게 사라진다** — 열람·전송·읽음 모두 `NOT_FOUND`(방 부활 없음, 공고에서 재문의하면 **새 방**)
   - 헤더: 공고 제목, 상대 이름, `대화 가능`/`차단됨`, **실시간 배지**(`실시간 연결` / `연결 중` / `오프라인`)
   - 상대 입력 중 → "상대가 입력 중이에요"
 - **실시간(socket.io)**: `apps/web/src/lib/bambi-chat-realtime.ts` — 이벤트 `connect`/`disconnect`/`chat:error`/`chat:message:created`/`chat:message:read`/`chat:room:updated`/`chat:unread:updated`/`chat:typing:started`/`chat:typing:stopped`. 재연결 delay 500~5000ms, ack timeout 5000ms. 타이핑은 1200ms 무입력 시 stop 전송
@@ -662,7 +662,7 @@
   - 카드 전체가 `/seeker/chats/{chatRoomId}` 링크
   - **읽기 전용** — 조작 버튼 없음
   - 빈 상태: "예정된 면접이 없어요 / 확정되었거나 제안된 다가오는 면접이 여기에 표시됩니다."
-- **엣지 케이스**: **소프트삭제한 방·차단한 방을 제외하지 않는다**(`listMine`과 달리 필터 없음) → 차단·삭제한 방의 면접이 계속 노출되는지 확인
+- **엣지 케이스**: 한쪽이라도 나간 방은 제외된다(`listMine`과 같은 기준). **차단한 방은 여전히 제외하지 않는다** → 차단한 방의 면접이 계속 노출되는지 확인
 - **관련 API**: `bambi.chats.listMyUpcomingInterviews` (protected + `requireActiveBambiProfile`)
 
 ---
@@ -1305,7 +1305,7 @@
 
 1. **구인자 전화번호 무조건 노출** — `bambi.jobs.getById`가 **publicProcedure**인데 공고 작성자의 인증 전화번호를 응답에 싣는다. 화면 문구("면접 확정 전 연락처 보호 중")와 상충. 의도된 정책인지 확인 필요.
 2. **`requestContactReveal` / `respondContactReveal` / `deleteChatRoom`에 차단 가드 없음** — 차단 상태에서 연락처 요청·응답이 통과할 수 있는지 실동작 확인 필요.
-3. **`listMyUpcomingInterviews`에 차단·소프트삭제 필터 없음** — 차단하거나 삭제한 방의 면접이 "예정된 면접"에 계속 노출되는지 확인 필요.
+3. **`listMyUpcomingInterviews`에 차단 필터 없음** — 차단한 방의 면접이 "예정된 면접"에 계속 노출되는지 확인 필요(나간 방은 제외된다).
 4. **`startFromJobPost`에 차단 검사 없음** — 차단한 상대 공고로 방 생성 자체는 되고 이후 진입만 막힌다(UI CTA 비활성화로만 커버).
 5. **`markRead`의 `messageIds` 상한 50** — 상대 메시지 50건을 넘는 방에서 읽음 처리가 zod 검증에 걸려 실패한다("읽음 상태를 반영하지 못했어요.").
 6. **채팅 첨부의 실제 바이트 업로드 경로** — 클라이언트가 `uploadUrl`로 PUT 하는 코드가 web에 없고, 조회 URL(`/bambi/local-chat-attachments`)은 자리표시 SVG를 반환한다. 실제 GCS 경로 존재 여부 확인 필요.

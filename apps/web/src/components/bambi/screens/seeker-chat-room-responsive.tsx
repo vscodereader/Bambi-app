@@ -1,5 +1,6 @@
 "use client";
 
+import { generateChatMessageId } from "@bambi-app/api/services/bambi-chat-message-id";
 import { Button as UiButton } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import {
@@ -16,23 +17,29 @@ import {
 	type ReactNode,
 	useCallback,
 	useEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
 } from "react";
 import { toast } from "sonner";
+import { getChatBlockMessage } from "@/lib/bambi/chat-block";
+import { mergeChatMessagesById } from "@/lib/bambi/chat-room-messages";
 import {
 	detectImageSignature,
 	isPdfSignature,
 	isSignatureMismatch,
 } from "@/lib/bambi/image-signature";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { useChatMessageScroll } from "@/lib/bambi/use-chat-message-scroll";
+import { useChatRoomAutoRead } from "@/lib/bambi/use-chat-room-auto-read";
+import { useOlderChatMessages } from "@/lib/bambi/use-older-chat-messages";
 import {
 	connectBambiChatSocket,
 	emitBambiChatTypingStarted,
 	emitBambiChatTypingStopped,
 	joinBambiChatRoom,
-	leaveBambiChatRoom,
+	scheduleBambiChatRoomLeave,
 } from "@/lib/bambi-chat-realtime";
 import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import {
@@ -79,6 +86,13 @@ const formatPay = (amount?: null | number, unit?: string): string => {
 	}
 	return `${unit} ${amount.toLocaleString("ko-KR")}원`;
 };
+
+const getRealtimeErrorMessage = (error: unknown): string =>
+	error instanceof Error ? error.message : "실시간 채팅 연결을 확인해 주세요.";
+
+// 서버 기본 페이지 크기와 같은 값. "이전 메시지 더 보기"는 이 크기의 커서 페이지를 하나씩
+// 앞으로 붙인다(예전처럼 limit을 키우지 않는다 — 상한도, 전량 재전송도 없다).
+const CHAT_MESSAGE_PAGE_SIZE = 50;
 
 const ACCEPTED_ATTACHMENT_MIME_TYPES = [
 	"image/jpeg",
@@ -131,9 +145,31 @@ const getAttachmentStatusLabel = (status: AttachmentDraftStatus): string => {
 	}
 };
 
+/**
+ * 채팅 목록 캐시에서 이 방의 안 읽음만 0으로 눌러 둔다. 읽음 요청이 왕복하는 사이에
+ * 목록이 다시 그려지면 방금 읽은 방에 핀이 깜빡이기 때문이다. 핀 숫자의 정본은 서버
+ * 집계라, 요청이 성공하면 다시 무효화해 정본으로 맞춘다.
+ */
+const zeroUnreadCountForRoom = <RoomType extends { id: string }>(
+	rooms: RoomType[] | undefined,
+	roomId: string
+): RoomType[] | undefined =>
+	rooms?.map((room) =>
+		room.id === roomId ? { ...room, unreadCount: 0 } : room
+	);
+
 const getMutationErrorMessage = (error: Error): string => {
 	if ("code" in error && error.code === "UNAUTHORIZED") {
 		return "로그인 후 다시 시도해 주세요.";
+	}
+
+	// 상대가 나간 방·차단·신고 검토 중처럼 서버가 사유를 실어 보낸 FORBIDDEN은
+	// 그 사유를 그대로 보여준다("권한이 없거나 차단된 채팅방입니다."로 뭉뚱그리면
+	// 왜 안 보내지는지 알 길이 없다).
+	const blockMessage = getChatBlockMessage(error);
+
+	if (blockMessage) {
+		return blockMessage;
 	}
 
 	if ("code" in error && error.code === "FORBIDDEN") {
@@ -141,33 +177,6 @@ const getMutationErrorMessage = (error: Error): string => {
 	}
 
 	return "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
-};
-
-/**
- * 서버(chats.throwIfChatBlocked)가 FORBIDDEN에 실어 보내는 차단 사유를 안내 문구로.
- * 사유를 읽어낸 경우에만 문자열을 돌려주고, 그 밖의 오류(비로그인·네트워크 등)는
- * null — 사유를 모르는 채 목록으로 튕기면 원인 파악이 더 어려워지므로 오류 카드에 맡긴다.
- */
-const getChatBlockMessage = (error: unknown): null | string => {
-	const data = (error as { data?: unknown } | null | undefined)?.data as
-		| { chatBlockReason?: unknown; counterpartName?: unknown }
-		| null
-		| undefined;
-	const name =
-		typeof data?.counterpartName === "string" ? data.counterpartName : null;
-
-	switch (data?.chatBlockReason) {
-		case "blocked_by_counterpart":
-			return name ? `${name}님이 차단했어요.` : "차단된 채팅방이에요.";
-		case "blocked_by_me":
-			return name
-				? `${name}님을 차단했어요. 차단 관리에서 해제할 수 있어요.`
-				: "차단된 채팅방이에요.";
-		case "moderation":
-			return "신고에 대한 운영자 조치로 종료된 채팅방이에요.";
-		default:
-			return null;
-	}
 };
 
 const getReviewMutationErrorMessage = (error: Error): string => {
@@ -390,20 +399,26 @@ function ContactRequestMessage({
 }
 
 interface ChatMessageListProps {
+	canLoadOlder: boolean;
 	counterpartName: null | string;
 	currentUserId: string;
+	isLoadingOlder: boolean;
 	isResponding: boolean;
 	messages: ChatMessageItem[];
+	onLoadOlder: () => void;
 	onRespond: (messageId: string, decision: ContactRevealDecision) => void;
 	typingUserIds: string[];
 	viewerIsEmployer: boolean;
 }
 
 function ChatMessageList({
+	canLoadOlder,
 	counterpartName,
 	currentUserId,
+	isLoadingOlder,
 	isResponding,
 	messages,
+	onLoadOlder,
 	onRespond,
 	typingUserIds,
 	viewerIsEmployer,
@@ -418,6 +433,18 @@ function ChatMessageList({
 
 	return (
 		<MessageGroup>
+			{canLoadOlder ? (
+				<div className="flex justify-center">
+					<UiButton
+						disabled={isLoadingOlder}
+						onClick={onLoadOlder}
+						size="sm"
+						variant="outline"
+					>
+						{isLoadingOlder ? "불러오는 중" : "이전 메시지 더 보기"}
+					</UiButton>
+				</div>
+			) : null}
 			{messages.map((chatMessage) =>
 				chatMessage.kind === "contact_request" ? (
 					<ContactRequestMessage
@@ -513,6 +540,8 @@ interface ChatComposerProps {
 	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
 
+// 입력창에는 나감 상태 배선이 없다 — 한쪽이라도 나간 방은 서버가 NOT_FOUND로 끊어
+// 화면 자체가 열리지 않으므로, 살아 있는 방에서는 잠글 이유가 없다.
 function ChatComposer({
 	attachmentDraft,
 	attachmentInputRef,
@@ -525,7 +554,7 @@ function ChatComposer({
 	onSubmit,
 }: ChatComposerProps) {
 	return (
-		<div className="border-border border-t">
+		<div className="flex-none border-border border-t">
 			{attachmentDraft ? (
 				<AttachmentDraftPanel
 					attachmentDraft={attachmentDraft}
@@ -711,6 +740,15 @@ function ChatJobPostLink({
 	);
 }
 
+// 헤더 상태 배지. 남는 상태는 운영자 차단뿐이다 — 상대가 나갔는지는 드러내지 않는다.
+function ChatRoomStateBadge({ isBlocked }: { isBlocked: boolean }) {
+	if (isBlocked) {
+		return <Badge tone="danger">차단됨</Badge>;
+	}
+
+	return <Badge tone="success">대화 가능</Badge>;
+}
+
 function ChatCounterpartName({ name }: { name: string | null }) {
 	if (!name) {
 		return null;
@@ -817,11 +855,28 @@ function ChatSafetyNotice({
 	isJobSeeker: boolean;
 	onBlock: () => void;
 }) {
+	const queryClient = useQueryClient();
 	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
 	const [isReportOpen, setIsReportOpen] = useState(false);
+	// 신고한 방은 검토가 끝날 때까지 서버가 감춘다. 창을 닫을 때 방 조회를 다시 돌려
+	// "신고를 검토하고 있는 채팅이에요" 안내와 함께 목록으로 나가게 한다.
+	const handleReportOpenChange = (next: boolean) => {
+		setIsReportOpen(next);
+
+		if (!next) {
+			queryClient
+				.invalidateQueries({
+					// 페이지 크기가 입력에 들어가므로 부분 일치 키를 쓴다.
+					queryKey: orpc.bambi.chats.getById.key({
+						input: { id: chatRoomId },
+					}),
+				})
+				.catch(() => undefined);
+		}
+	};
 
 	return (
-		<div className="border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
+		<div className="flex-none border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
 			<div className="flex items-center justify-between gap-3">
 				<div className="flex items-center gap-2 font-extrabold text-sm">
 					<span className="inline-flex size-4">
@@ -859,7 +914,7 @@ function ChatSafetyNotice({
 			/>
 			{isJobSeeker ? (
 				<ReportDialog
-					onOpenChange={setIsReportOpen}
+					onOpenChange={handleReportOpenChange}
 					open={isReportOpen}
 					targetId={chatRoomId}
 					targetType="chat_room"
@@ -994,19 +1049,41 @@ export function SeekerChatRoomResponsive({
 		null | string
 	>(null);
 	const attachmentInputRef = useRef<HTMLInputElement | null>(null);
-	const lastReadMessageSignatureRef = useRef("");
 	const typingActiveRef = useRef(false);
+	// 방을 열면 최근 메시지 한 페이지만 받는다. 예전에는 이력 전체가 매 조회마다 다시
+	// 내려왔고, 소켓 이벤트가 뜰 때마다 그 전량 전송이 반복됐다.
 	const roomQuery = useQuery(
-		orpc.bambi.chats.getById.queryOptions({ input: { id: roomId } })
+		orpc.bambi.chats.getById.queryOptions({
+			input: { id: roomId, limit: CHAT_MESSAGE_PAGE_SIZE },
+		})
 	);
+	// 문서가 아니라 메시지 영역만 스크롤한다.
+	const {
+		captureOlderAnchor,
+		handleScroll,
+		scrollRef,
+		stickToBottom,
+		syncScroll,
+	} = useChatMessageScroll(roomId);
+	// "이전 메시지 더 보기"로 쌓은 커서 페이지들(오래된 → 최신).
+	const { canLoadOlder, isLoadingOlder, loadOlder, olderMessages } =
+		useOlderChatMessages({
+			latestPageCursor: roomQuery.data?.nextCursor,
+			onBeforePrepend: captureOlderAnchor,
+			onError: setErrorMessage,
+			pageSize: CHAT_MESSAGE_PAGE_SIZE,
+			roomId,
+		});
 	const currentSessionUserId = roomQuery.data?.currentUserId;
 	const reviewListQuery = useQuery({
 		...orpc.bambi.reviews.listMine.queryOptions(),
 		enabled: Boolean(currentSessionUserId),
 	});
 	const invalidateRoom = useCallback(async () => {
+		// 페이지 크기가 입력에 들어가므로 부분 일치 키로 무효화한다(더 보기로 늘린
+		// 페이지도 함께 갱신되게).
 		await queryClient.invalidateQueries({
-			queryKey: orpc.bambi.chats.getById.queryKey({ input: { id: roomId } }),
+			queryKey: orpc.bambi.chats.getById.key({ input: { id: roomId } }),
 		});
 		await queryClient.invalidateQueries({
 			queryKey: orpc.bambi.chats.listMine.queryKey(),
@@ -1056,8 +1133,36 @@ export function SeekerChatRoomResponsive({
 	);
 	const markReadMutation = useMutation(
 		orpc.bambi.chats.markRead.mutationOptions({
+			// 읽음 요청이 왕복하는 사이에 목록이 다시 그려지면 방금 읽은 방에 핀이 잠깐
+			// 떴다 사라진다. 보고 있는 방의 안 읽음은 먼저 0으로 눌러 두고, 성공 뒤 정본으로
+			// 맞춘다(핀 숫자의 정본은 서버 집계다).
+			onMutate: () => {
+				queryClient.setQueryData(
+					orpc.bambi.chats.listMine.queryKey(),
+					(rooms) => zeroUnreadCountForRoom(rooms, roomId)
+				);
+			},
 			onError: () => {
 				setErrorMessage("읽음 상태를 반영하지 못했어요.");
+			},
+			onSuccess: (data) => {
+				// 핀은 여기서 서버가 방금 센 총합으로 바로 덮는다. 무효화만 걸어 두면
+				// 핀이 0이 되는 시점이 "재조회가 언제 도느냐"에 달리는데, 새 메시지
+				// 신호로 이미 떠 있던 조회가 읽음 커밋 전 값(1)을 들고 늦게 돌아오면
+				// 핀이 1에 머문다. 아래 무효화는 그 뒤 정본 대조용으로 남긴다.
+				queryClient.setQueryData(orpc.bambi.chats.unreadState.queryKey(), {
+					unreadMessageCount: data.totalUnreadMessageCount,
+				});
+				queryClient
+					.invalidateQueries({
+						queryKey: orpc.bambi.chats.unreadState.queryKey(),
+					})
+					.catch(() => undefined);
+				queryClient
+					.invalidateQueries({
+						queryKey: orpc.bambi.chats.listMine.queryKey(),
+					})
+					.catch(() => undefined);
 			},
 		})
 	);
@@ -1137,31 +1242,79 @@ export function SeekerChatRoomResponsive({
 			},
 		})
 	);
-	const readCandidateMessageIds = useMemo(() => {
-		if (!roomQuery.data) {
-			return [];
-		}
-
-		return roomQuery.data.messages
-			.filter(
-				(chatMessage) => chatMessage.senderUserId !== currentSessionUserId
-			)
-			.map((chatMessage) => chatMessage.id);
-	}, [currentSessionUserId, roomQuery.data]);
-	const readCandidateMessageIdsSignature = readCandidateMessageIds.join("|");
+	// 화면에 올라온 메시지 = 커서로 쌓은 이전 페이지 + 최신 페이지. 합칠 때 id가 유일
+	// 키라, 큐 재처리·소켓 재전달로 같은 메시지가 두 경로로 들어와도 말풍선이 겹치지 않는다.
+	const messages = useMemo(
+		() =>
+			mergeChatMessagesById<ChatMessageItem>(
+				olderMessages,
+				roomQuery.data?.messages ?? []
+			),
+		[olderMessages, roomQuery.data]
+	);
+	// 읽음 처리는 "여기까지 봤다" 기준선 하나만 보낸다. 예전에는 상대가 보낸 메시지 id를
+	// 전부 실어 보냈는데 서버 상한이 50이라, 51건째부터 요청 전체가 거절돼 읽음영수증이
+	// 한 건도 안 써졌다(안 읽음 뱃지가 영영 안 꺼짐). 기준선은 화면에 올라온 마지막
+	// 메시지다 — 내가 보낸 것이어도 그 앞의 상대 메시지는 본 것이므로 함께 읽음이 된다.
+	const lastVisibleMessageId = messages.at(-1)?.id ?? null;
+	const { queueMarkRead, reassertMarkRead } = useChatRoomAutoRead({
+		chatRoomId: roomId,
+		// 성공 여부를 훅이 알아야 실패한 기준선을 다시 시도할 수 있다.
+		markRead: markReadMutation.mutateAsync,
+	});
+	// 목록이 바뀐 뒤 레이아웃 커밋에서 스크롤 위치를 맞춘다(하단 고정·앵커 복원).
+	useLayoutEffect(() => syncScroll(messages), [messages, syncScroll]);
+	// 세션 id는 방 HTTP 조회가 끝나야 온다. 소켓 접속·입장이 그걸 기다리면 그 사이에 온
+	// 상대 메시지가 방 소켓룸으로 오지 않아 핀이 남는다. 값은 ref로만 흘려 넣어 도착이
+	// effect를 다시 돌리지 않게 한다(leave/join 왕복 방지).
+	const currentSessionUserIdRef = useRef<string | undefined>(undefined);
 
 	useEffect(() => {
-		if (!currentSessionUserId) {
-			return;
-		}
+		currentSessionUserIdRef.current = currentSessionUserId;
+	}, [currentSessionUserId]);
 
+	useEffect(() => {
+		// 참여자 검증은 서버 join 가드가 한다 — 클라이언트는 URL의 방 id만으로 바로 붙는다.
 		const socket = connectBambiChatSocket();
 		const refreshIfCurrentRoom = (payload: { roomId: string }) => {
 			if (payload.roomId === roomId) {
 				invalidateRoom().catch(() => undefined);
 			}
 		};
-		const handleConnect = () => setRealtimeStatus("connected");
+		// 실시간 수신분은 정본 재조회를 기다리지 않고 바로 읽음 기준선으로 올린다. 방 데이터
+		// 로드 기준으로만 markRead를 걸면 소켓으로 먼저 도착한 상대 메시지가 빠져 목록에
+		// 핀이 잠깐 뜬다. 발신자는 가리지 않는다 — 기준선은 "여기까지 봤다" 한 점이라
+		// 내가 보낸 메시지여도 그 앞의 상대 메시지가 함께 읽음이 되고, 중복 요청은 합쳐진다.
+		const handleMessageCreated = (payload: {
+			messageId: string;
+			roomId: string;
+		}) => {
+			if (payload.roomId !== roomId) {
+				return;
+			}
+
+			queueMarkRead(payload.messageId);
+			invalidateRoom().catch(() => undefined);
+		};
+		// 재연결하면 서버 쪽 방 입장 기록이 사라져 있다(끊길 때 지운다). 다시 들어가지
+		// 않으면 소켓은 붙어 있는데 방 이벤트가 한 건도 안 오고, 타이핑마다 "채팅방에 먼저
+		// 입장해 주세요" 오류만 뜬다 — 상태 배지는 '연결'이라 사용자는 정상으로 오인한다.
+		const joinRoom = () => {
+			joinBambiChatRoom(roomId)
+				.then(() => {
+					setRealtimeStatus("connected");
+				})
+				.catch((error: unknown) => {
+					setRealtimeStatus("offline");
+					setErrorMessage(getRealtimeErrorMessage(error));
+				});
+		};
+		const handleConnect = () => {
+			setRealtimeStatus("connected");
+			joinRoom();
+			// 끊겨 있던 사이의 메시지는 방 소켓룸으로 오지 않았으므로 정본을 다시 읽는다.
+			invalidateRoom().catch(() => undefined);
+		};
 		const handleDisconnect = () => setRealtimeStatus("offline");
 		const handleRealtimeError = (payload: { message: string }) => {
 			setErrorMessage(payload.message);
@@ -1172,7 +1325,7 @@ export function SeekerChatRoomResponsive({
 		}) => {
 			if (
 				payload.roomId !== roomId ||
-				payload.userId === currentSessionUserId
+				payload.userId === currentSessionUserIdRef.current
 			) {
 				return;
 			}
@@ -1180,6 +1333,24 @@ export function SeekerChatRoomResponsive({
 			setTypingUserIds((prev) =>
 				prev.includes(payload.userId) ? prev : [...prev, payload.userId]
 			);
+		};
+		// 이 방의 안 읽음이 아직 0이 아니라는 신호. 방을 보고 있는 동안 그 상태는 성립할 수
+		// 없으므로, 이미 보낸 기준선이어도 읽음을 다시 주장한다(어떤 레이스로 뜬 핀이든
+		// 자가 소멸). markRead 성공이 안 읽음 0 신호를 만들어 루프는 돌지 않는다.
+		const handleUnreadUpdated = (payload: {
+			roomId: string;
+			unreadCount: number;
+			userId: string;
+		}) => {
+			refreshIfCurrentRoom(payload);
+
+			if (
+				payload.roomId === roomId &&
+				payload.unreadCount > 0 &&
+				payload.userId === currentSessionUserIdRef.current
+			) {
+				reassertMarkRead();
+			}
 		};
 		const handleTypingStopped = (payload: {
 			roomId: string;
@@ -1197,61 +1368,47 @@ export function SeekerChatRoomResponsive({
 		socket.on("connect", handleConnect);
 		socket.on("disconnect", handleDisconnect);
 		socket.on("chat:error", handleRealtimeError);
-		socket.on("chat:message:created", refreshIfCurrentRoom);
+		socket.on("chat:message:created", handleMessageCreated);
 		socket.on("chat:message:read", refreshIfCurrentRoom);
 		socket.on("chat:room:updated", refreshIfCurrentRoom);
-		socket.on("chat:unread:updated", refreshIfCurrentRoom);
+		socket.on("chat:unread:updated", handleUnreadUpdated);
+		// 유저 채널로 오는 신호라 방 소켓룸을 잃은 상태에서도 도착한다 — 방 화면의
+		// 마지막 안전망.
+		socket.on("chat:list:updated", refreshIfCurrentRoom);
 		socket.on("chat:typing:started", handleTypingStarted);
 		socket.on("chat:typing:stopped", handleTypingStopped);
 		setRealtimeStatus(socket.connected ? "connected" : "connecting");
-		joinBambiChatRoom(roomId).catch((error) => {
-			setRealtimeStatus("offline");
-			setErrorMessage(
-				error instanceof Error
-					? error.message
-					: "실시간 채팅 연결을 확인해 주세요."
-			);
-		});
+		joinRoom();
 
 		return () => {
 			socket.off("connect", handleConnect);
 			socket.off("disconnect", handleDisconnect);
 			socket.off("chat:error", handleRealtimeError);
-			socket.off("chat:message:created", refreshIfCurrentRoom);
+			socket.off("chat:message:created", handleMessageCreated);
 			socket.off("chat:message:read", refreshIfCurrentRoom);
 			socket.off("chat:room:updated", refreshIfCurrentRoom);
-			socket.off("chat:unread:updated", refreshIfCurrentRoom);
+			socket.off("chat:unread:updated", handleUnreadUpdated);
+			socket.off("chat:list:updated", refreshIfCurrentRoom);
 			socket.off("chat:typing:started", handleTypingStarted);
 			socket.off("chat:typing:stopped", handleTypingStopped);
-			leaveBambiChatRoom(roomId);
+
+			// 입력 중에 나가면 상대 화면에 "입력 중"이 유령처럼 남는다. 이건 나감 알림이
+			// 아니라 내가 켠 표시를 끄는 것이라 즉시 보낸다(아직 방에 들어가 있어 통과된다).
+			if (typingActiveRef.current) {
+				emitBambiChatTypingStopped(roomId);
+			}
+
+			// 방 입장 정리는 30초 유예 뒤에 조용히 한다 — 상대에게 가는 표시·알림은 없다.
+			// 그 안에 같은 방으로 돌아오면 join이 타이머를 취소하고 기존 입장을 그대로 쓴다.
+			scheduleBambiChatRoomLeave(roomId);
 			typingActiveRef.current = false;
 			setTypingUserIds([]);
 		};
-	}, [currentSessionUserId, invalidateRoom, roomId]);
+	}, [invalidateRoom, queueMarkRead, reassertMarkRead, roomId]);
 
 	useEffect(() => {
-		if (!(roomQuery.data && readCandidateMessageIdsSignature)) {
-			return;
-		}
-
-		if (
-			lastReadMessageSignatureRef.current === readCandidateMessageIdsSignature
-		) {
-			return;
-		}
-
-		lastReadMessageSignatureRef.current = readCandidateMessageIdsSignature;
-		markReadMutation.mutate({
-			chatRoomId: roomId,
-			messageIds: readCandidateMessageIds,
-		});
-	}, [
-		markReadMutation,
-		readCandidateMessageIds,
-		readCandidateMessageIdsSignature,
-		roomId,
-		roomQuery.data,
-	]);
+		queueMarkRead(lastVisibleMessageId);
+	}, [lastVisibleMessageId, queueMarkRead]);
 
 	useEffect(() => {
 		if (!roomQuery.data) {
@@ -1281,8 +1438,9 @@ export function SeekerChatRoomResponsive({
 		return () => window.clearTimeout(timeoutId);
 	}, [message, roomId, roomQuery.data]);
 
-	// 차단·운영자 조치로 막힌 방은 오류 카드로 세워두지 않고 목록으로 돌려보내며
-	// 이유만 토스트로 알린다. id를 고정해 StrictMode 이중 실행에도 토스트가 겹치지 않는다.
+	// 차단·운영자 조치·내 신고 검토로 막힌 방은 오류 카드로 세워두지 않고 목록으로
+	// 돌려보내며 이유만 토스트로 알린다. id를 고정해 StrictMode 이중 실행에도 토스트가
+	// 겹치지 않는다. 상대가 나간 방은 여기서 걸리지 않는다(읽기는 그대로 열어 둔다).
 	const chatBlockMessage = getChatBlockMessage(roomQuery.error);
 
 	useEffect(() => {
@@ -1333,10 +1491,11 @@ export function SeekerChatRoomResponsive({
 						채팅방을 불러올 수 없어요
 					</h1>
 					<p className="mt-2 mb-4 text-muted-foreground text-sm">
-						로그인 상태나 채팅방 접근 권한을 확인해 주세요.
+						종료됐거나 접근할 수 없는 채팅방이에요.
 					</p>
 					<div className="flex flex-wrap justify-center gap-2">
 						<Button
+							className="shadow-none"
 							onClick={() => router.push("/seeker/chats")}
 							variant="primary"
 						>
@@ -1356,7 +1515,6 @@ export function SeekerChatRoomResponsive({
 		currentUserId,
 		employerVerifiedPhone,
 		jobPost,
-		messages,
 		room,
 		schedules,
 	} = roomQuery.data;
@@ -1440,6 +1598,8 @@ export function SeekerChatRoomResponsive({
 	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		const body = message.trim();
+		// 내가 보낸 것은 위로 올려 읽던 중이었더라도 하단으로 따라 내린다.
+		stickToBottom();
 
 		if (attachmentDraft) {
 			const validationError =
@@ -1480,6 +1640,9 @@ export function SeekerChatRoomResponsive({
 					byteSize: uploadIntent.byteSize,
 					chatRoomId: room.id,
 					fileName: uploadIntent.fileName,
+					// 메시지 id는 클라이언트가 만들어 보낸다. 서버가 PK 충돌로 재시도·더블클릭을
+					// 흡수하므로 같은 전송이 두 번 들어가도 방에는 한 건만 남는다.
+					messageId: generateChatMessageId(),
 					mimeType: uploadIntent.mimeType,
 					storageKey: uploadIntent.storageKey,
 				});
@@ -1513,6 +1676,7 @@ export function SeekerChatRoomResponsive({
 		sendMessageMutation.mutate({
 			body,
 			chatRoomId: room.id,
+			messageId: generateChatMessageId(),
 		});
 		stopTyping();
 	};
@@ -1539,7 +1703,7 @@ export function SeekerChatRoomResponsive({
 	};
 	const setScheduleStatus = (
 		interviewScheduleId: string,
-		status: "canceled" | "completed" | "confirmed" | "declined"
+		status: "canceled" | "confirmed" | "declined"
 	) => {
 		setInterviewStatusMutation.mutate({
 			interviewScheduleId,
@@ -1566,13 +1730,16 @@ export function SeekerChatRoomResponsive({
 	return (
 		<div
 			className={cn(
-				"mx-auto grid w-full gap-5 px-5 py-5 pb-28 md:px-6 md:py-7 lg:grid-cols-[minmax(0,1fr)_320px] lg:pb-8",
+				"mx-auto grid w-full gap-5 px-5 py-5 md:px-6 md:py-7 lg:grid-cols-[minmax(0,1fr)_320px]",
 				SEEKER_CONTENT_WIDTH
 			)}
 		>
-			<main className="min-w-0 rounded-lg bg-card shadow-sm ring-1 ring-border lg:self-start">
+			{/* 대화가 길어져도 문서가 자라지 않도록 방 패널을 뷰포트에 고정하고, 스크롤은
+			    메시지 영역 하나만 갖는다. 빼는 높이는 셸 헤더(3.5rem·md 4rem)와 이 컨테이너의
+			    위아래 여백(py-5·md:py-7) 합이다. */}
+			<main className="flex h-[calc(100dvh-6rem)] min-w-0 flex-col overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border md:h-[calc(100dvh-7.5rem)] lg:self-start">
 				{/* 좁은 화면에서는 공고 버튼·배지가 제목 아래로 접히도록 wrap 한다. */}
-				<header className="flex flex-wrap items-center gap-3 border-border border-b p-4">
+				<header className="flex flex-none flex-wrap items-center gap-3 border-border border-b p-4">
 					<button
 						className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 font-bold text-sm"
 						onClick={onBack}
@@ -1591,9 +1758,7 @@ export function SeekerChatRoomResponsive({
 						</p>
 					</div>
 					<ChatJobPostLink jobPost={jobPost} />
-					<Badge tone={room.isBlocked ? "danger" : "success"}>
-						{room.isBlocked ? "차단됨" : "대화 가능"}
-					</Badge>
+					<ChatRoomStateBadge isBlocked={room.isBlocked} />
 					<Badge tone={realtimeStatus === "connected" ? "success" : "neutral"}>
 						{getRealtimeStatusLabel(realtimeStatus)}
 					</Badge>
@@ -1607,12 +1772,21 @@ export function SeekerChatRoomResponsive({
 						blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
 					}
 				/>
-				<div className="flex min-h-[420px] flex-col gap-3 p-4">
+				{/* 이 안쪽만 스크롤한다 — min-h-0이 없으면 flex 자식이 내용만큼 늘어나 다시
+				    문서가 자란다. */}
+				<div
+					className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"
+					onScroll={handleScroll}
+					ref={scrollRef}
+				>
 					<ChatMessageList
+						canLoadOlder={canLoadOlder}
 						counterpartName={counterpartName}
 						currentUserId={currentUserId}
+						isLoadingOlder={isLoadingOlder}
 						isResponding={respondContactRevealMutation.isPending}
 						messages={messages}
+						onLoadOlder={() => loadOlder(messages)}
 						onRespond={handleRespondContact}
 						typingUserIds={typingUserIds}
 						viewerIsEmployer={!isJobSeeker}
@@ -1630,7 +1804,7 @@ export function SeekerChatRoomResponsive({
 					onSubmit={handleSubmit}
 				/>
 				{errorMessage ? (
-					<div className="border-border border-t px-4 py-3 font-semibold text-red-600 text-sm">
+					<div className="flex-none border-border border-t px-4 py-3 font-semibold text-red-600 text-sm">
 						{errorMessage}
 					</div>
 				) : null}
@@ -1660,6 +1834,7 @@ export function SeekerChatRoomResponsive({
 					</Card>
 					<Card className="rounded-lg" pad="lg" tone="outline">
 						<h2 className="m-0 font-extrabold text-lg">면접 일정</h2>
+						{/* 구직자에게는 제안 폼이 없다. */}
 						{isJobSeeker ? null : (
 							<InterviewProposalForm
 								interviewAt={interviewAt}
@@ -1734,29 +1909,21 @@ export function SeekerChatRoomResponsive({
 												</Button>
 											</div>
 										) : null}
+										{/* 확정 카드에는 취소만 남는다 — 완료 처리는 방을 나가도 누를 수
+										    있도록 "내 정보 → 예정된 면접"으로 옮겼다. */}
 										{schedule.status === "confirmed" ? (
-											<div className="mt-3 grid grid-cols-2 gap-2">
-												<Button
-													disabled={setInterviewStatusMutation.isPending}
-													onClick={() =>
-														setScheduleStatus(schedule.id, "completed")
-													}
-													size="md"
-													variant="secondary"
-												>
-													완료
-												</Button>
-												<Button
-													disabled={setInterviewStatusMutation.isPending}
-													onClick={() =>
-														setScheduleStatus(schedule.id, "canceled")
-													}
-													size="md"
-													variant="secondary"
-												>
-													취소
-												</Button>
-											</div>
+											<Button
+												block
+												className="mt-3 shadow-none"
+												disabled={setInterviewStatusMutation.isPending}
+												onClick={() =>
+													setScheduleStatus(schedule.id, "canceled")
+												}
+												size="md"
+												variant="secondary"
+											>
+												취소
+											</Button>
 										) : null}
 									</div>
 								))}

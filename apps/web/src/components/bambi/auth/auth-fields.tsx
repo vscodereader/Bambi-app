@@ -3,12 +3,18 @@
 
 "use client";
 
+import {
+	getLoginIdErrorMessage,
+	LOGIN_ID_HELP_TEXT,
+	LOGIN_ID_MIN_LENGTH,
+} from "@bambi-app/auth/login-id";
 import { Button } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -41,9 +47,22 @@ export function AuthSignupFields({
 	signupRole: SignupRole;
 	values: AuthFormValues;
 }) {
+	// 서버(@bambi-app/auth의 공용 규칙)와 같은 검증을 입력 즉시 돌려, 회원가입 버튼을
+	// 누르고 서버까지 다녀와서야 형식 오류를 아는 일이 없게 한다.
+	// 다만 "3자 이상" 잔소리는 여기서 하지 않는다 — 짧은 값은 아직 입력 중일 뿐이라
+	// 오류가 아니다(길이는 제출 시 auth-panel이 한 번 더 본다).
+	const loginId = values.username.trim();
+	const loginIdError =
+		loginId.length >= LOGIN_ID_MIN_LENGTH
+			? getLoginIdErrorMessage(loginId)
+			: null;
+
+	// 칸 안의 라벨–입력 간격은 행 수만큼 높이에 곱해진다 — 가입 폼만 gap-1.5로 좁힌다
+	// (로그인은 2칸뿐이라 gap-2를 그대로 둔다). 배치(2열/전체 폭)는 패널의 그리드와
+	// 각 칸의 @md:col-span-2가 정한다.
 	return (
 		<>
-			<label className="grid gap-2" htmlFor="auth-nickname">
+			<label className="grid gap-1.5" htmlFor="auth-nickname">
 				<span className="font-bold text-sm">닉네임</span>
 				<Input
 					autoComplete="nickname"
@@ -53,41 +72,32 @@ export function AuthSignupFields({
 					value={values.nickname}
 				/>
 			</label>
-			<label className="grid gap-2" htmlFor="auth-username">
+			<label className="grid gap-1.5" htmlFor="auth-username">
 				<span className="font-bold text-sm">아이디</span>
 				<Input
 					autoComplete="username"
+					error={loginIdError !== null}
 					id="auth-username"
 					onChange={onFieldChange("username")}
-					placeholder="영문·숫자 3자 이상"
+					placeholder="예: bambi-alba"
 					value={values.username}
 				/>
+				{/* 규칙 안내는 상시 노출하고, 어긋난 순간에만 그 자리를 오류 문구로 바꾼다 —
+				    두 줄이 동시에 뜨면 무엇을 고쳐야 하는지 흐려진다. */}
+				<span
+					className={cn(
+						// leading-snug: 한 줄짜리 규칙 안내라 넉넉한 행간이 필요 없다.
+						"text-xs leading-snug",
+						loginIdError ? "text-destructive" : "text-muted-foreground"
+					)}
+					role={loginIdError ? "alert" : undefined}
+				>
+					{loginIdError ?? LOGIN_ID_HELP_TEXT}
+				</span>
 			</label>
-			<label className="grid gap-2" htmlFor="auth-password">
-				<span className="font-bold text-sm">비밀번호</span>
-				<Input
-					autoComplete="new-password"
-					id="auth-password"
-					onChange={onFieldChange("password")}
-					placeholder="비밀번호를 입력해주세요."
-					type="password"
-					value={values.password}
-				/>
-			</label>
-			<label className="grid gap-2" htmlFor="auth-password-confirm">
-				<span className="font-bold text-sm">비밀번호 확인</span>
-				<Input
-					autoComplete="new-password"
-					id="auth-password-confirm"
-					onChange={onFieldChange("passwordConfirm")}
-					placeholder="비밀번호를 다시 입력해주세요."
-					type="password"
-					value={values.passwordConfirm}
-				/>
-			</label>
-			{/* 아래 셋은 2열 그리드(넓은 게이트 카드)에서 한 행을 통째로 쓴다.
-			    전환 기준은 뷰포트가 아니라 폼을 감싼 카드 폭(@container)이다. */}
-			<label className="@md:col-span-2 grid gap-2" htmlFor="auth-email">
+			{/* 이메일·가입 유형(과 그 안내)은 반으로 갈리면 안 되는 칸이라 행을 통째로
+			    쓴다. 전환 기준은 뷰포트가 아니라 폼을 감싼 카드 폭(@container)이다. */}
+			<label className="@md:col-span-2 grid gap-1.5" htmlFor="auth-email">
 				<span className="font-bold text-sm">이메일</span>
 				<Input
 					autoComplete="email"
@@ -98,7 +108,29 @@ export function AuthSignupFields({
 					value={values.email}
 				/>
 			</label>
-			<div className="@md:col-span-2 grid gap-2">
+			<label className="grid gap-1.5" htmlFor="auth-password">
+				<span className="font-bold text-sm">비밀번호</span>
+				<Input
+					autoComplete="new-password"
+					id="auth-password"
+					onChange={onFieldChange("password")}
+					placeholder="비밀번호를 입력해주세요."
+					type="password"
+					value={values.password}
+				/>
+			</label>
+			<label className="grid gap-1.5" htmlFor="auth-password-confirm">
+				<span className="font-bold text-sm">비밀번호 확인</span>
+				<Input
+					autoComplete="new-password"
+					id="auth-password-confirm"
+					onChange={onFieldChange("passwordConfirm")}
+					placeholder="비밀번호를 다시 입력해주세요."
+					type="password"
+					value={values.passwordConfirm}
+				/>
+			</label>
+			<div className="@md:col-span-2 grid gap-1.5">
 				<span className="font-bold text-sm" id="auth-role-label">
 					가입 유형
 				</span>
@@ -123,7 +155,7 @@ export function AuthSignupFields({
 			</div>
 			{signupRole === "employer" ? (
 				<p
-					className="@md:col-span-2 m-0 rounded-lg border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm"
+					className="@md:col-span-2 m-0 rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground text-sm leading-snug"
 					role="note"
 				>
 					가입 후 업체 정보를 입력하고 운영자 승인을 받으면 구인 기능을 이용할
@@ -258,7 +290,7 @@ export function AuthTermsAgreement({
 	onCheckedChange: (checked: boolean) => void;
 }) {
 	return (
-		<div className="flex items-start gap-2.5">
+		<div className="flex items-start gap-2">
 			<Checkbox
 				checked={checked}
 				className="mt-0.5"
@@ -266,7 +298,7 @@ export function AuthTermsAgreement({
 				onCheckedChange={(next) => onCheckedChange(next === true)}
 			/>
 			<label
-				className="text-muted-foreground text-sm leading-relaxed"
+				className="text-muted-foreground text-sm leading-snug"
 				htmlFor="auth-agree-terms"
 			>
 				<Link
