@@ -14,6 +14,11 @@ const readLib = (fileName: string) =>
 const scrollSource = readLib("use-chat-message-scroll.ts");
 const autoReadSource = readLib("use-chat-room-auto-read.ts");
 const olderMessagesSource = readLib("use-older-chat-messages.ts");
+// 소켓 클라이언트(방 입장·이탈 유예)는 lib/bambi가 아니라 lib 바로 아래에 있다.
+const realtimeSource = readFileSync(
+	new URL("../../../lib/bambi-chat-realtime.ts", import.meta.url),
+	"utf8"
+);
 
 describe("채팅방 연락처 재설계", () => {
 	it("구인자 버튼을 연락처 공개 요청으로 바꾼다", () => {
@@ -64,22 +69,22 @@ describe("채팅방 연락처 재설계", () => {
 });
 
 describe("상대가 나간 채팅방", () => {
-	// 서버가 발신을 FORBIDDEN(counterpart_left)으로 막으므로, 화면은 눌러서 실패하기
-	// 전에 입력창을 잠그고 이유를 보여줘야 한다.
-	it("서버가 내려준 counterpartLeft로 입력창을 잠근다", () => {
-		expect(source).toContain("counterpartLeft");
-		expect(source).toContain("disabledNotice={composerDisabledNotice}");
-		expect(source).toContain("disabled={isDisabled}");
+	// 전송이 곧 방 부활이다 — 입력창을 잠그지 않고, 나갔다는 사실도 드러내지 않는다.
+	it("나감 상태로 잠그거나 안내하는 배선을 남기지 않는다", () => {
+		expect(source).not.toContain("counterpartLeft");
+		expect(source).not.toContain("disabledNotice");
+		expect(source).not.toContain("isSendBlocked");
+		expect(source).not.toContain("상대방 나감");
 	});
 
-	it("상대가 나가도 지난 대화는 읽게 둔다(목록으로 튕기지 않는다)", () => {
-		expect(source).toContain("getChatEntryBlockMessage(roomQuery.error)");
+	it("면접 제안·연락처 요청·요청 응답도 나감으로 감추지 않는다", () => {
+		expect(source).toContain("{isJobSeeker ? null : (");
 	});
 
-	it("보낼 곳이 없는 액션(면접 제안·연락처 요청·요청 응답)은 감춘다", () => {
-		expect(source).toContain("isJobSeeker || counterpartLeft ? null");
-		expect(source).toContain("isSendBlocked={counterpartLeft}");
-		expect(source).toContain("!isSendBlocked &&");
+	// 운영자 차단·내 신고 대기는 그대로 진입을 막고 목록으로 돌려보낸다.
+	it("차단·신고 사유는 그대로 목록으로 돌려보낸다", () => {
+		expect(source).toContain("getChatBlockMessage(roomQuery.error)");
+		expect(source).toContain('router.replace("/seeker/chats")');
 	});
 });
 
@@ -179,6 +184,46 @@ describe("보고 있는 방 자동 읽음", () => {
 	it("읽는 즉시 목록 캐시의 안 읽음을 0으로 눌러 둔다", () => {
 		expect(source).toContain("zeroUnreadCountForRoom");
 		expect(source).toContain("orpc.bambi.chats.unreadState.queryKey()");
+	});
+
+	// 무효화만 걸어 두면 핀이 0이 되는 시점이 재조회 타이밍에 달린다 — 새 메시지 신호로
+	// 먼저 뜬 조회가 읽음 커밋 전 값을 들고 늦게 돌아오면 핀이 1에 머문다.
+	it("읽음 응답의 서버 총합으로 핀 캐시를 직접 덮는다", () => {
+		expect(source).toContain("data.totalUnreadMessageCount");
+		expect(source).toContain(
+			"queryClient.setQueryData(orpc.bambi.chats.unreadState.queryKey()"
+		);
+	});
+
+	// 실패한 기준선을 "보냈다"로 남기면 같은 기준선으로는 다시 시도하지 않아,
+	// 다음 새 메시지가 올 때까지 핀이 안 꺼진다.
+	it("읽음 요청이 실패하면 기준선을 되돌려 다시 시도할 수 있게 한다", () => {
+		expect(source).toContain("markRead: markReadMutation.mutateAsync");
+		expect(autoReadSource).toContain("sentMessageIdRef.current = null");
+	});
+});
+
+describe("방 화면 이탈 시 조용한 연결 정리", () => {
+	// 나감 알림이 아니라 내부 정리다 — 상대 화면에는 어떤 표시도 가지 않는다.
+	it("이탈 시 즉시 leave 하지 않고 유예 뒤에 정리한다", () => {
+		expect(source).toContain("scheduleBambiChatRoomLeave(roomId)");
+		expect(source).not.toContain("leaveBambiChatRoom(roomId)");
+		expect(realtimeSource).toContain("LEAVE_GRACE_MS = 30_000");
+	});
+
+	// 유예 안에 같은 방으로 돌아오면 기존 입장을 그대로 쓴다.
+	it("재진입하면 예약된 정리를 취소한다", () => {
+		expect(realtimeSource).toContain("cancelPendingLeave(roomId)");
+		expect(
+			realtimeSource.indexOf("cancelPendingLeave(roomId);\n\t\tconst socket")
+		).toBeGreaterThan(-1);
+	});
+
+	// 입력 중에 나가면 상대 화면에 "입력 중"이 유령으로 남는다.
+	it("이탈 시 타이핑 표시는 즉시 끈다", () => {
+		expect(source).toContain(
+			"if (typingActiveRef.current) {\n\t\t\t\temitBambiChatTypingStopped(roomId);"
+		);
 	});
 });
 

@@ -45,22 +45,11 @@ const getRoomItemClassName = (
 				)
 	);
 
-// 방 상태 배지 하나로 정리한다. 차단이 가장 강한 상태고, 그다음이 "상대방 나감"
-// (지난 대화는 읽히지만 발신이 막힌 방)이다. 들어가 봐야 입력창이 잠긴 걸 알게 되면
-// 목록이 거짓말을 한 셈이라 여기서 먼저 알린다.
-function ChatRoomStateBadge({
-	hasCounterpartLeft,
-	isBlocked,
-}: {
-	hasCounterpartLeft: boolean;
-	isBlocked: boolean;
-}) {
+// 방 상태 배지. 남는 상태는 운영자 차단뿐이다 — 상대가 나갔는지는 알리지 않는다
+// (나가도 발신은 그대로 되고, 그 사실이 상대에게 드러나서도 안 된다).
+function ChatRoomStateBadge({ isBlocked }: { isBlocked: boolean }) {
 	if (isBlocked) {
 		return <Badge tone="danger">차단됨</Badge>;
-	}
-
-	if (hasCounterpartLeft) {
-		return <Badge tone="neutral">상대방 나감</Badge>;
 	}
 
 	return <Badge tone="success">대화 가능</Badge>;
@@ -216,10 +205,7 @@ function ChatRoomItem({
 						<h2 className="m-0 truncate font-extrabold text-base">
 							{jobTitle}
 						</h2>
-						<ChatRoomStateBadge
-							hasCounterpartLeft={room.hasCounterpartLeft}
-							isBlocked={isBlocked}
-						/>
+						<ChatRoomStateBadge isBlocked={isBlocked} />
 						{room.unreadCount > 0 ? (
 							<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
 						) : null}

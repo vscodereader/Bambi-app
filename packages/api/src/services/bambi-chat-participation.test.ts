@@ -4,8 +4,6 @@ import {
 	type ChatRoomParticipation,
 	getChatRoomReviveFields,
 	getChatRoomSide,
-	getSenderRoomRestoreFields,
-	hasCounterpartLeftChatRoom,
 	isChatRoomLeftByAnyone,
 } from "./bambi-chat-participation";
 
@@ -28,53 +26,9 @@ describe("채팅방 참여 판정", () => {
 		expect(getChatRoomSide(room, "employer-1")).toBe("employer");
 		expect(getChatRoomSide(room, "seeker-1")).toBe("seeker");
 	});
-
-	it("양쪽 다 남아 있으면 상대가 나간 것으로 보지 않는다", () => {
-		const room = createRoom();
-
-		expect(hasCounterpartLeftChatRoom(room, "employer-1")).toBe(false);
-		expect(hasCounterpartLeftChatRoom(room, "seeker-1")).toBe(false);
-	});
-
-	it("구직자가 나간 방은 구인자에게만 '상대가 나감'이다", () => {
-		const room = createRoom({ seekerDeletedAt: leftAt });
-
-		expect(hasCounterpartLeftChatRoom(room, "employer-1")).toBe(true);
-		// 내가 지운 방은 내가 다시 보낼 수 있어야 한다(내 목록만 복원).
-		expect(hasCounterpartLeftChatRoom(room, "seeker-1")).toBe(false);
-	});
-
-	it("구인자가 나간 방은 구직자에게만 '상대가 나감'이다", () => {
-		const room = createRoom({ employerDeletedAt: leftAt });
-
-		expect(hasCounterpartLeftChatRoom(room, "seeker-1")).toBe(true);
-		expect(hasCounterpartLeftChatRoom(room, "employer-1")).toBe(false);
-	});
 });
 
-describe("발신 시 소프트삭제 복원 범위", () => {
-	it("구인자가 보내면 구인자 컬럼만 되돌린다", () => {
-		expect(getSenderRoomRestoreFields(createRoom(), "employer-1")).toEqual({
-			employerDeletedAt: null,
-		});
-	});
-
-	it("구직자가 보내면 구직자 컬럼만 되돌린다", () => {
-		expect(getSenderRoomRestoreFields(createRoom(), "seeker-1")).toEqual({
-			seekerDeletedAt: null,
-		});
-	});
-
-	it("상대가 나간 흔적(deletedAt)은 복원 대상에 들어가지 않는다", () => {
-		const room = createRoom({ seekerDeletedAt: leftAt });
-
-		expect(getSenderRoomRestoreFields(room, "employer-1")).not.toHaveProperty(
-			"seekerDeletedAt"
-		);
-	});
-});
-
-describe("재문의 시 방 부활", () => {
+describe("발신·재문의 시 방 부활", () => {
 	it("한쪽이라도 나갔으면 부활 대상으로 본다", () => {
 		expect(isChatRoomLeftByAnyone(createRoom())).toBe(false);
 		expect(
@@ -85,7 +39,7 @@ describe("재문의 시 방 부활", () => {
 		).toBe(true);
 	});
 
-	// 방 안 발신과 갈라지는 지점. 발신은 본인 컬럼만, 재문의는 양쪽을 되돌린다.
+	// 발신도 재문의도 같은 규칙이다 — 보낸 사람 컬럼만 되돌리던 옛 정책은 철회됐다.
 	it("양쪽 소프트삭제를 모두 되돌린다", () => {
 		expect(getChatRoomReviveFields()).toEqual({
 			employerDeletedAt: null,

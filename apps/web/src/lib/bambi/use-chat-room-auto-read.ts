@@ -7,7 +7,11 @@ const MARK_READ_COALESCE_MS = 300;
 
 interface ChatRoomAutoReadInput {
 	chatRoomId: string;
-	markRead: (input: { chatRoomId: string; upToMessageId: string }) => void;
+	// 실패를 알 수 있어야 같은 기준선을 다시 시도할 수 있다(mutateAsync).
+	markRead: (input: {
+		chatRoomId: string;
+		upToMessageId: string;
+	}) => Promise<unknown>;
 }
 
 /**
@@ -46,6 +50,13 @@ export function useChatRoomAutoRead({
 			markRead({
 				chatRoomId: latest.chatRoomId,
 				upToMessageId: latest.messageId,
+			}).catch(() => {
+				// 실패한 기준선을 "보냈다"로 남겨 두면 같은 기준선으로는 두 번 다시
+				// 시도하지 않는다 — 핀이 1에 걸린 채 다음 새 메시지가 올 때까지 안 꺼진다.
+				// 되돌려 두면 탭 복귀·방 재조회 같은 다음 신호가 그대로 재시도한다.
+				if (sentMessageIdRef.current === latest.messageId) {
+					sentMessageIdRef.current = null;
+				}
 			});
 		}, MARK_READ_COALESCE_MS);
 	}, [markRead]);
