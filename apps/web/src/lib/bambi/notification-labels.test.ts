@@ -48,6 +48,33 @@ describe("notificationTitle", () => {
 		).toBe("공고가 반려됐어요");
 	});
 
+	it("업주가 받는 새 후기 등록은 후기 조치 문구와 갈린다", () => {
+		expect(
+			notificationTitle(
+				view({ metadata: { action: "created" }, targetType: "review" })
+			)
+		).toBe("내 업소에 새 후기가 등록됐어요");
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "set_status:hidden" },
+					targetType: "review",
+				})
+			)
+		).toBe("내 후기가 숨김 처리됐어요");
+	});
+
+	it("아는 targetType이면 모르는 action이어도 그 축의 폴백 문구를 쓴다", () => {
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "brand_new_action" },
+					targetType: "contact_reveal",
+				})
+			)
+		).toBe("연락처가 공개됐어요");
+	});
+
 	it("모르는 targetType·action도 enum 원값을 노출하지 않는다", () => {
 		expect(notificationTitle(view({ targetType: "brand_new_thing" }))).toBe(
 			"새 알림이 도착했어요"
@@ -118,6 +145,44 @@ describe("notificationHref", () => {
 		expect(
 			notificationHref(view({ metadata: { action: "set_status:rejected" } }))
 		).toBe("/employer/jobs/target-1/edit");
+	});
+
+	it("사업자 인증은 공유 행이면 운영자 큐로, 개인 행이면 내 설정으로 갈린다", () => {
+		expect(
+			notificationHref(
+				view({
+					metadata: { action: "submitted" },
+					recipientRole: "admin",
+					targetType: "employer_verification",
+				})
+			)
+		).toBe("/moderator/employers");
+		expect(
+			notificationHref(
+				view({
+					metadata: { action: "verified" },
+					targetType: "employer_verification",
+				})
+			)
+		).toBe("/employer/settings");
+	});
+
+	it("법률자문 공유 행은 운영자 콘솔이 아니라 그 글로 보낸다", () => {
+		expect(
+			notificationHref(
+				view({
+					metadata: { board: "legal", postId: "post-9" },
+					recipientRole: "legal_advisor",
+					targetType: "community_post",
+				})
+			)
+		).toBe("/seeker/community/legal/post-9");
+	});
+
+	it("삭제된 공고는 404가 될 수정 화면 대신 목록으로 보낸다", () => {
+		expect(
+			notificationHref(view({ metadata: { action: "hard_delete" } }))
+		).toBe("/employer");
 	});
 
 	it("문의 알림은 개인이면 문의 상세로, 운영자 공유면 문의 큐로 보낸다", () => {

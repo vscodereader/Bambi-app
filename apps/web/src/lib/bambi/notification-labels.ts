@@ -57,6 +57,9 @@ const TITLE_BY_TARGET_AND_ACTION: Record<string, string> = {
 	"organization_member:ownership_transferred": "조직 소유권을 넘겨받았어요",
 	"organization_member:removed": "조직에서 제외됐어요",
 	"organization_member:role_changed": "조직 내 권한이 변경됐어요",
+	// 업주가 받는 "새 후기 등록"(reviews.ts action: "created"). 폴백 문구로 떨어지면
+	// "후기 상태가 변경됐어요"가 되어 내 후기가 조치된 것처럼 정반대로 읽힌다.
+	"review:created": "내 업소에 새 후기가 등록됐어요",
 	"review:set_status:hidden": "내 후기가 숨김 처리됐어요",
 	"review:set_status:published": "내 후기가 게시됐어요",
 	"support_inquiry:answered": "문의에 답변이 도착했어요",
