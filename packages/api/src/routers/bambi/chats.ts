@@ -14,7 +14,18 @@ import {
 	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	desc,
+	eq,
+	gte,
+	inArray,
+	isNull,
+	lt,
+	or,
+	sql,
+} from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -24,12 +35,14 @@ import {
 	requireActiveBambiProfile,
 	requireChatParticipant,
 } from "../../services/bambi-authz";
+import { generateChatMessageId } from "../../services/bambi-chat-message-id";
 import {
+	getChatRoomReviveFields,
 	getSenderRoomRestoreFields,
 	hasCounterpartLeftChatRoom,
+	isChatRoomLeftByAnyone,
 } from "../../services/bambi-chat-participation";
 import {
-	getChatRecipientUserId,
 	getUnreadMessageCount,
 	getUnreadMessageCountForUser,
 	getUnreadMessageCountsByRoom,
@@ -37,18 +50,20 @@ import {
 } from "../../services/bambi-chat-read-state";
 import {
 	emitChatListUpdated,
-	emitMessageCreated,
 	emitMessageRead,
 	emitRoomUpdated,
 	emitUnreadUpdated,
-	isParticipantActiveInRoom,
 } from "../../services/bambi-chat-realtime";
+import {
+	drainPendingChatMessageSyncs,
+	enqueueChatMessageSync,
+	notifyChatMessageCreated,
+} from "../../services/bambi-chat-sync-queue";
 import {
 	type ChatMediaCategory,
 	type ChatMediaUploadInput,
 	validateChatMediaUpload,
 } from "../../services/bambi-media-policy";
-import { createBambiNotification } from "../../services/bambi-notifications";
 import {
 	canRevealContact,
 	canStartChat,
@@ -73,9 +88,15 @@ const startFromJobPostInput = z.object({
 	jobPostId: z.string().uuid(),
 });
 
+// 메시지 id는 클라이언트가 전송 전에 만들어 실어 보낸다(UUIDv7). 네트워크 재시도나
+// 더블클릭이 같은 id로 다시 오면 서버가 PK 충돌로 흡수해 같은 행을 돌려준다.
+// 옛 클라이언트는 id를 안 보내므로 optional — 그때는 서버가 같은 유틸로 만든다.
+const clientMessageIdInput = z.string().uuid().optional();
+
 const sendMessageInput = z.object({
 	chatRoomId: z.string().uuid(),
 	body: z.string().min(1).max(2000),
+	messageId: clientMessageIdInput,
 });
 
 const attachmentMetadataInput = z.object({
@@ -86,6 +107,7 @@ const attachmentMetadataInput = z.object({
 });
 
 const sendMediaMessageInput = attachmentMetadataInput.extend({
+	messageId: clientMessageIdInput,
 	storageKey: z.string().min(1).max(512),
 });
 
@@ -98,13 +120,21 @@ const markReadInput = z.object({
 });
 
 // 방 열람 기본 페이지 크기. 예전에는 LIMIT이 없어 소켓 이벤트가 뜰 때마다 방 이력 전체가
-// 다시 나갔다. 화면은 필요하면 limit을 키워 이전 메시지를 더 불러온다.
+// 다시 나갔다.
 const DEFAULT_CHAT_MESSAGE_PAGE_SIZE = 50;
-// 화면이 "이전 메시지 더 보기"로 늘릴 수 있는 상한. 커서 페이지네이션 대신 페이지 크기를
-// 키우는 방식이라 상한이 곧 열람 가능한 이력의 끝이다 — 그보다 긴 방이 흔해지면 커서로 바꾼다.
+// 한 번에 실어 보낼 수 있는 최대 페이지 크기. 예전에는 이 값이 곧 "열람 가능한 이력의 끝"
+// 이었지만(더 보기 = limit 확장), 이제 커서로 계속 거슬러 올라갈 수 있어 한 응답의
+// 크기 상한일 뿐이다. limit 입력은 옛 화면 호환을 위해 그대로 받는다.
 const MAX_CHAT_MESSAGE_PAGE_SIZE = 500;
 
+// "이 메시지보다 오래된 것"의 기준점. 정렬 총순서가 (created_at, id)라 커서도 두 값을 함께 든다.
+const chatMessageCursorInput = z.object({
+	createdAt: z.string().datetime(),
+	id: z.string().uuid(),
+});
+
 const getChatRoomByIdInput = z.object({
+	cursor: chatMessageCursorInput.optional(),
 	id: z.string().uuid(),
 	limit: z
 		.number()
@@ -282,55 +312,35 @@ const requireAllowedChatMedia = (
 	return result.category;
 };
 
-interface NotifyChatMessageInput {
-	createdAt: Date | string;
-	messageId: string;
-	profileUserId: string;
-	room: {
-		employerUserId: string;
-		id: string;
-		jobSeekerUserId: string;
-	};
-}
+/**
+ * 같은 메시지 id로 INSERT가 한 행도 남기지 않았을 때(PK 충돌 = 재시도·더블클릭) 이미
+ * 들어와 있는 행을 돌려준다.
+ *
+ * 남의 방이나 남의 이름으로 이미 쓰인 id를 재사용하려는 요청은 CONFLICT로 막는다 —
+ * 그대로 돌려주면 다른 방의 메시지 본문이 응답으로 새어 나간다.
+ */
+const requireExistingChatMessage = async (
+	messageId: string,
+	roomId: string,
+	senderUserId: string
+) => {
+	const [existing] = await db
+		.select()
+		.from(chatMessage)
+		.where(eq(chatMessage.id, messageId))
+		.limit(1);
 
-const notifyChatMessageCreated = async ({
-	createdAt,
-	messageId,
-	profileUserId,
-	room,
-}: NotifyChatMessageInput): Promise<void> => {
-	const recipientUserId = getChatRecipientUserId(room, profileUserId);
-	const recipientUnreadCount = await getUnreadMessageCount({
-		chatRoomId: room.id,
-		userId: recipientUserId,
-	});
-
-	emitMessageCreated({
-		createdAt: toIsoDateTime(createdAt),
-		messageId,
-		roomId: room.id,
-		senderUserId: profileUserId,
-	});
-	emitUnreadUpdated({
-		roomId: room.id,
-		unreadCount: recipientUnreadCount,
-		userId: recipientUserId,
-	});
-	// 방 소켓룸에 입장하지 않은 목록 화면도 새 방/새 메시지를 반영하도록
-	// 양쪽 참여자의 유저 채널로 목록 갱신 신호를 보낸다.
-	emitChatListUpdated([room.employerUserId, room.jobSeekerUserId], {
-		roomId: room.id,
-	});
-
-	if (!isParticipantActiveInRoom(room.id, recipientUserId)) {
-		await createBambiNotification({
-			actorUserId: profileUserId,
-			chatRoomId: room.id,
-			recipientUserId,
-			targetId: messageId,
-			targetType: "chat_message",
+	if (
+		!existing ||
+		existing.chatRoomId !== roomId ||
+		existing.senderUserId !== senderUserId
+	) {
+		throw new ORPCError("CONFLICT", {
+			message: "이미 사용된 메시지 식별자예요. 다시 시도해 주세요.",
 		});
 	}
+
+	return existing;
 };
 
 interface CounterpartRoom {
@@ -814,28 +824,27 @@ export const chatsRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
-			// 구인자가 나간 방은 다시 열어 주지 않는다. 이 경로가 방을 되살리면
-			// 상대는 "나가기"를 눌러도 계속 새 대화를 받게 된다.
-			if (hasCounterpartLeftChatRoom(existingRoom, profile.userId)) {
-				await throwChatBlocked(
-					"counterpart_left",
-					existingRoom,
-					profile.userId
-				);
+			// 공고에서 다시 문의를 거는 것은 명시적인 "새 대화" 의도라, 나간 쪽이 누구든
+			// 방을 부활시킨다(공고×구직자 유니크 제약 때문에 새 방을 팔 수 없다).
+			// 방 **안**에서의 일반 발신은 여전히 counterpart_left로 막힌다 — 나간 상대의
+			// 목록을 발신자가 마음대로 되살리는 건 이 경로에서만 허용한다.
+			if (!isChatRoomLeftByAnyone(existingRoom)) {
+				return existingRoom;
 			}
 
-			// 내가 지웠던 방으로 다시 들어오는 경우엔 내 목록에만 되돌린다.
-			if (existingRoom.seekerDeletedAt) {
-				const [restoredRoom] = await db
-					.update(chatRoom)
-					.set({ seekerDeletedAt: null })
-					.where(eq(chatRoom.id, existingRoom.id))
-					.returning();
+			const [revivedRoom] = await db
+				.update(chatRoom)
+				.set(getChatRoomReviveFields())
+				.where(eq(chatRoom.id, existingRoom.id))
+				.returning();
 
-				return restoredRoom ?? existingRoom;
-			}
+			// 양쪽 목록에 방이 다시 나타나야 하므로 두 사람 모두에게 갱신 신호를 보낸다.
+			emitChatListUpdated(
+				[existingRoom.employerUserId, existingRoom.jobSeekerUserId],
+				{ roomId: existingRoom.id }
+			);
 
-			return existingRoom;
+			return revivedRoom ?? existingRoom;
 		}),
 
 	listMine: protectedProcedure.handler(async ({ context }) => {
@@ -875,7 +884,13 @@ export const chatsRouter = {
 			})
 			.from(chatMessage)
 			.where(inArray(chatMessage.chatRoomId, roomIds))
-			.orderBy(chatMessage.chatRoomId, desc(chatMessage.createdAt));
+			// 방 화면과 같은 총순서(created_at, id) — 같은 ms에 두 건이 들어오면 id가
+			// 갈라 주지 않는 한 목록의 "마지막 메시지"가 매번 달라진다.
+			.orderBy(
+				chatMessage.chatRoomId,
+				desc(chatMessage.createdAt),
+				desc(chatMessage.id)
+			);
 		const lastMessageByRoomId = new Map(
 			lastMessageRows.map((row) => [row.chatRoomId, row])
 		);
@@ -1053,14 +1068,41 @@ export const chatsRouter = {
 
 			// 최신 limit건만 받아 화면 순서(오래된 → 최신)로 되돌린다. 한 건을 더 읽어
 			// "이전 메시지가 더 있는지"를 별도 count 없이 판단한다.
+			//
+			// 커서를 받으면 그보다 오래된 구간을 읽는다. keyset이라 앞쪽을 건너뛰지 않고
+			// (chat_room_id, created_at) 인덱스를 그대로 타므로 이력이 아무리 길어도
+			// 비용이 페이지 크기에만 비례한다 — 예전의 "limit을 500까지 키우기"와 달리
+			// 상한이 없다. 동시각 메시지는 id로 갈라 페이지 경계에서 빠지거나 겹치지 않는다.
+			const cursorCreatedAt = input.cursor
+				? new Date(input.cursor.createdAt)
+				: null;
+			const olderThanCursor =
+				cursorCreatedAt && input.cursor
+					? or(
+							lt(chatMessage.createdAt, cursorCreatedAt),
+							and(
+								eq(chatMessage.createdAt, cursorCreatedAt),
+								lt(chatMessage.id, input.cursor.id)
+							)
+						)
+					: undefined;
 			const recentMessages = await db
 				.select()
 				.from(chatMessage)
-				.where(eq(chatMessage.chatRoomId, room.id))
+				.where(and(eq(chatMessage.chatRoomId, room.id), olderThanCursor))
 				.orderBy(desc(chatMessage.createdAt), desc(chatMessage.id))
 				.limit(input.limit + 1);
 			const hasMoreMessages = recentMessages.length > input.limit;
 			const messages = recentMessages.slice(0, input.limit).reverse();
+			const oldestMessage = messages[0];
+			// 다음 페이지의 기준점 = 이번 페이지에서 가장 오래된 메시지. 더 없으면 null.
+			const nextCursor =
+				hasMoreMessages && oldestMessage
+					? {
+							createdAt: toIsoDateTime(oldestMessage.createdAt),
+							id: oldestMessage.id,
+						}
+					: null;
 			const attachments =
 				messages.length > 0
 					? await db
@@ -1151,6 +1193,8 @@ export const chatsRouter = {
 						revealedPhone,
 					};
 				}),
+				// 이 값을 그대로 다음 요청의 cursor로 보내면 그 이전 구간이 온다.
+				nextCursor,
 				room,
 				schedules,
 			};
@@ -1198,37 +1242,56 @@ export const chatsRouter = {
 			});
 			assertChatSendRateLimit("sendMessage", profile.userId);
 
-			const [message] = await db
-				.insert(chatMessage)
-				.values({
-					chatRoomId: room.id,
-					senderUserId: profile.userId,
-					body: input.body,
-				})
-				.returning();
+			const messageId = input.messageId ?? generateChatMessageId();
+			// 메시지·방 갱신·전파 이벤트가 한 트랜잭션으로 함께 커밋된다. 예전에는 INSERT
+			// 뒤에 전파를 이어 했기 때문에, 그 사이에 죽으면 상대에게 아무 신호도 가지
+			// 않는 메시지가 남았다.
+			const message = await db.transaction(async (tx) => {
+				const [created] = await tx
+					.insert(chatMessage)
+					.values({
+						body: input.body,
+						chatRoomId: room.id,
+						id: messageId,
+						senderUserId: profile.userId,
+					})
+					.onConflictDoNothing()
+					.returning();
 
-			if (!message) {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Chat message could not be created.",
+				if (!created) {
+					return null;
+				}
+
+				// 새 메시지는 **보낸 사람 본인이** 지웠던 방만 다시 노출한다. 상대의
+				// 소프트삭제(나가기)는 그대로 둔다 — 되돌리면 나간 의사를 지우는 셈이다.
+				await tx
+					.update(chatRoom)
+					.set({
+						...getSenderRoomRestoreFields(room, profile.userId),
+						updatedAt: new Date(),
+					})
+					.where(eq(chatRoom.id, room.id));
+				await enqueueChatMessageSync(tx, {
+					chatRoomId: room.id,
+					createdAt: created.createdAt,
+					messageId: created.id,
+					senderUserId: profile.userId,
 				});
+
+				return created;
+			});
+
+			// 같은 id가 이미 들어와 있다 = 재시도·더블클릭. 방 갱신도 전파도 다시 하지
+			// 않고 원래 행만 돌려준다.
+			if (!message) {
+				return await requireExistingChatMessage(
+					messageId,
+					room.id,
+					profile.userId
+				);
 			}
 
-			// 새 메시지는 **보낸 사람 본인이** 지웠던 방만 다시 노출한다. 상대의
-			// 소프트삭제(나가기)는 그대로 둔다 — 되돌리면 나간 의사를 지우는 셈이다.
-			await db
-				.update(chatRoom)
-				.set({
-					...getSenderRoomRestoreFields(room, profile.userId),
-					updatedAt: new Date(),
-				})
-				.where(eq(chatRoom.id, room.id));
-
-			await notifyChatMessageCreated({
-				createdAt: toIsoDateTime(message.createdAt),
-				messageId: message.id,
-				profileUserId: profile.userId,
-				room,
-			});
+			await drainPendingChatMessageSyncs();
 
 			return message;
 		}),
@@ -1265,20 +1328,21 @@ export const chatsRouter = {
 
 			assertChatSendRateLimit("sendMediaMessage", profile.userId);
 
-			const { attachment, message } = await db.transaction(async (tx) => {
+			const messageId = input.messageId ?? generateChatMessageId();
+			const inserted = await db.transaction(async (tx) => {
 				const [createdMessage] = await tx
 					.insert(chatMessage)
 					.values({
 						body: "첨부 파일을 보냈습니다.",
 						chatRoomId: room.id,
+						id: messageId,
 						senderUserId: profile.userId,
 					})
+					.onConflictDoNothing()
 					.returning();
 
 				if (!createdMessage) {
-					throw new ORPCError("INTERNAL_SERVER_ERROR", {
-						message: "Chat message could not be created.",
-					});
+					return null;
 				}
 
 				const [createdAttachment] = await tx
@@ -1309,6 +1373,12 @@ export const chatsRouter = {
 						updatedAt: new Date(),
 					})
 					.where(eq(chatRoom.id, room.id));
+				await enqueueChatMessageSync(tx, {
+					chatRoomId: room.id,
+					createdAt: createdMessage.createdAt,
+					messageId: createdMessage.id,
+					senderUserId: profile.userId,
+				});
 
 				return {
 					attachment: createdAttachment,
@@ -1316,14 +1386,32 @@ export const chatsRouter = {
 				};
 			});
 
-			await notifyChatMessageCreated({
-				createdAt: message.createdAt,
-				messageId: message.id,
-				profileUserId: profile.userId,
-				room,
-			});
+			// 같은 id의 재전송이면 첨부도 이미 붙어 있다. 다시 쓰지 않고 그대로 돌려준다
+			// (storage_key 유니크 제약에 걸리기 전에 여기서 흡수된다).
+			if (!inserted) {
+				const message = await requireExistingChatMessage(
+					messageId,
+					room.id,
+					profile.userId
+				);
+				const [existingAttachment] = await db
+					.select()
+					.from(chatAttachment)
+					.where(eq(chatAttachment.messageId, message.id))
+					.limit(1);
 
-			return { attachment, message };
+				if (!existingAttachment) {
+					throw new ORPCError("CONFLICT", {
+						message: "이미 사용된 메시지 식별자예요. 다시 시도해 주세요.",
+					});
+				}
+
+				return { attachment: existingAttachment, message };
+			}
+
+			await drainPendingChatMessageSyncs();
+
+			return inserted;
 		}),
 
 	markRead: protectedProcedure
@@ -1678,38 +1766,49 @@ export const chatsRouter = {
 				});
 			}
 
-			const [message] = await db
-				.insert(chatMessage)
-				.values({
-					body: "연락처 공개를 요청했습니다.",
+			// 서버가 만드는 메시지도 클라이언트 전송과 같은 유틸로 id를 만든다 —
+			// 정렬·커서의 기준(UUIDv7)이 메시지 종류에 따라 갈리지 않게.
+			const message = await db.transaction(async (tx) => {
+				const [created] = await tx
+					.insert(chatMessage)
+					.values({
+						body: "연락처 공개를 요청했습니다.",
+						chatRoomId: room.id,
+						id: generateChatMessageId(),
+						kind: "contact_request",
+						metadata: {
+							requesterUserId: room.employerUserId,
+							status: "pending",
+							targetUserId: room.jobSeekerUserId,
+						},
+						senderUserId: profile.userId,
+					})
+					.returning();
+
+				if (!created) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR", {
+						message: "Contact request could not be created.",
+					});
+				}
+
+				await tx
+					.update(chatRoom)
+					.set({
+						...getSenderRoomRestoreFields(room, profile.userId),
+						updatedAt: new Date(),
+					})
+					.where(eq(chatRoom.id, room.id));
+				await enqueueChatMessageSync(tx, {
 					chatRoomId: room.id,
-					kind: "contact_request",
-					metadata: {
-						requesterUserId: room.employerUserId,
-						status: "pending",
-						targetUserId: room.jobSeekerUserId,
-					},
+					createdAt: created.createdAt,
+					messageId: created.id,
 					senderUserId: profile.userId,
-				})
-				.returning();
-
-			if (!message) {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Contact request could not be created.",
 				});
-			}
 
-			await db
-				.update(chatRoom)
-				.set({ updatedAt: new Date() })
-				.where(eq(chatRoom.id, room.id));
-
-			await notifyChatMessageCreated({
-				createdAt: message.createdAt,
-				messageId: message.id,
-				profileUserId: profile.userId,
-				room,
+				return created;
 			});
+
+			await drainPendingChatMessageSyncs();
 
 			return message;
 		}),

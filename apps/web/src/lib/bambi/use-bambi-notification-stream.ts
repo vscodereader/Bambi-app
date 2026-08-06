@@ -7,10 +7,7 @@ import {
 } from "@bambi-app/api/services/bambi-notification-stream";
 import { env } from "@bambi-app/env/web";
 import { type QueryKey, useQueryClient } from "@tanstack/react-query";
-import type { Route } from "next";
-import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { toast } from "sonner";
 import { orpc } from "@/utils/orpc";
 
 interface NotificationStreamListener {
@@ -39,35 +36,6 @@ let reopenTimer: null | ReturnType<typeof setTimeout> = null;
 let watchdogTimer: null | ReturnType<typeof setInterval> = null;
 let reopenAttempt = 0;
 let lastFrameAt = 0;
-let activePathname = "";
-let navigate: ((href: string) => void) | null = null;
-
-const chatRoomPath = (chatRoomId: string) => `/seeker/chats/${chatRoomId}`;
-
-const isViewingChatRoom = (event: BambiNotificationEvent) =>
-	event.chatRoomId !== null &&
-	activePathname === chatRoomPath(event.chatRoomId);
-
-// 토스트는 구독자 수와 무관하게 이벤트당 한 번만 떠야 해서 모듈 레벨에서 처리한다.
-const showNotificationToast = (event: BambiNotificationEvent) => {
-	if (event.targetType !== "chat_message" || isViewingChatRoom(event)) {
-		return;
-	}
-
-	const roomId = event.chatRoomId;
-
-	toast("새 메시지가 도착했어요.", {
-		action: roomId
-			? {
-					label: "보러 가기",
-					onClick: () => navigate?.(chatRoomPath(roomId)),
-				}
-			: undefined,
-		description: "채팅방에서 내용을 확인해 보세요.",
-		// 같은 방의 연속 메시지는 토스트를 쌓지 않고 하나로 접는다.
-		id: roomId ? `chat-message-${roomId}` : undefined,
-	});
-};
 
 const parseNotificationEvent = (
 	data: string
@@ -172,8 +140,6 @@ function openStream() {
 			return;
 		}
 
-		showNotificationToast(event);
-
 		for (const listener of listeners) {
 			listener.onEvent(event);
 		}
@@ -232,25 +198,12 @@ const subscribeNotificationStream = (listener: NotificationStreamListener) => {
 
 /**
  * 알림 SSE 구독 훅. 서버가 알림 행을 만드는 즉시 이벤트를 받아
- * 안 읽음 배지·채팅 목록 캐시를 무효화하고, 새 메시지면 토스트를 띄운다.
- * 기존 폴링·소켓 경로는 그대로 두고 이 스트림은 즉시성만 더한다.
+ * 안 읽음 배지·채팅 목록 캐시를 무효화한다. 알림 채널은 뱃지(핀)만 남기고
+ * 토스트는 띄우지 않는다. 기존 폴링·소켓 경로는 그대로 두고 이 스트림은
+ * 즉시성만 더한다.
  */
 export function useBambiNotificationStream(enabled: boolean): void {
 	const queryClient = useQueryClient();
-	const pathname = usePathname();
-	const router = useRouter();
-
-	useEffect(() => {
-		activePathname = pathname ?? "";
-	}, [pathname]);
-
-	// 토스트 액션이 쓰는 이동 함수. 훅이 여러 곳에서 마운트되므로 해제하지 않고
-	// 마지막 라우터로 덮어쓰기만 한다(끊기면 액션이 먹통이 된다).
-	useEffect(() => {
-		navigate = (href: string) => {
-			router.push(href as Route);
-		};
-	}, [router]);
 
 	useEffect(() => {
 		if (!enabled) {

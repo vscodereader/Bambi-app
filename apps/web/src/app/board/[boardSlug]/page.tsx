@@ -13,7 +13,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Fragment } from "react";
 import { JsonLd } from "@/components/bambi/json-ld";
-import { PhoneVerifyDialog } from "@/components/bambi/phone-verify-dialog";
 import {
 	communityAuthorName,
 	communityWritePath,
@@ -133,9 +132,9 @@ function BoardPagination({
 	);
 }
 
-// 글쓰기 진입. 회원은 회원 화면으로, 인증된 비회원은 공개 글쓰기로 바로 가고,
-// 그 외(미인증·구 토큰)는 본인인증을 거쳐 같은 자리로 돌아온다. 공지는 운영자
-// 게시판이라 어느 쪽에도 버튼을 두지 않는다.
+// 글쓰기 진입. 회원은 회원 화면으로, 이미 인증을 마친 비회원은 공개 글쓰기로 간다.
+// 그 외(미인증·구 토큰)에게는 아무 버튼도 노출하지 않는다 — 이 목록에서 본인인증을
+// 권유하지 않는다. 공지는 운영자 게시판이라 어느 쪽에도 버튼을 두지 않는다.
 function BoardWriteAction({
 	board,
 	canWrite,
@@ -168,15 +167,7 @@ function BoardWriteAction({
 			</Link>
 		);
 	}
-	return (
-		<PhoneVerifyDialog
-			className="w-auto"
-			redirectTo={publicWritePath(board.slug)}
-			size="sm"
-			triggerLabel="본인인증하고 글쓰기"
-			variant="primary"
-		/>
-	);
+	return null;
 }
 
 export default async function PublicBoardPage({

@@ -484,6 +484,13 @@
       "when": 1785974853266,
       "tag": "0068_open_santa_claus",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1785982532576,
+      "tag": "0069_optimal_scream",
+      "breakpoints": true
     }
   ]
 }

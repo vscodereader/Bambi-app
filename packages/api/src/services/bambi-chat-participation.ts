@@ -45,3 +45,20 @@ export const getSenderRoomRestoreFields = (
 	getChatRoomSide(room, actorUserId) === "employer"
 		? { employerDeletedAt: null }
 		: { seekerDeletedAt: null };
+
+/** 어느 한쪽이라도 나간 방인가. 부활이 필요한지 판단하는 데만 쓴다. */
+export const isChatRoomLeftByAnyone = (
+	room: Pick<ChatRoomParticipation, "employerDeletedAt" | "seekerDeletedAt">
+): boolean => Boolean(room.employerDeletedAt || room.seekerDeletedAt);
+
+/**
+ * 재문의(공고에서 채팅 다시 걸기)로 기존 방을 재사용할 때 되돌릴 컬럼 — **양쪽 모두**다.
+ *
+ * 방 안에서의 일반 발신(getSenderRoomRestoreFields)과 다른 유일한 경로다. 방 안 발신은
+ * "상대가 나갔다"를 존중해 막지만, 공고에서 다시 문의를 거는 행위는 명시적인 새 대화
+ * 의도라 양쪽 목록에 방을 되돌린다(유니크 제약 때문에 새 방을 팔 수 없기도 하다).
+ */
+export const getChatRoomReviveFields = (): {
+	employerDeletedAt: null;
+	seekerDeletedAt: null;
+} => ({ employerDeletedAt: null, seekerDeletedAt: null });

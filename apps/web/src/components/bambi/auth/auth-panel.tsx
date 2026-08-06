@@ -411,7 +411,11 @@ export function AuthPanel() {
 							}}
 						>
 							{isSignUp ? (
-								<div className="grid @md:grid-cols-2 gap-4">
+								// items-start: 아이디 칸 아래 규칙 안내가 그 행을 높이면, 기본
+								// stretch가 옆 닉네임 칸(label+입력 2행 그리드)까지 늘려 남는
+								// 높이를 행마다 나눠 준다 — 입력창이 아래로 밀려 두 칸의 라인이
+								// 어긋난다. 각 칸을 제 높이로 두면 상단·입력 라인이 맞는다.
+								<div className="grid @md:grid-cols-2 items-start gap-4">
 									<AuthSignupFields
 										onFieldChange={setField}
 										onSignupRoleChange={setSignupRole}

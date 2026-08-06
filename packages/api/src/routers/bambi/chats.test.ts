@@ -191,6 +191,10 @@ const expectOrpcCode = async (
 	await expect(promise).rejects.toMatchObject({ code });
 };
 
+// 서버가 id를 만들 때 쓰는 형식(UUIDv7 — 버전 자리가 7).
+const UUID_V7_PATTERN =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 describe("bambi chats router media", () => {
 	it("rejects attachment upload intents when the user is not a room participant", async () => {
 		const fixture = await createChatFixture();
@@ -1233,6 +1237,258 @@ describe("bambi chats router employer verified phone", () => {
 
 			expect(employerMessage?.revealedPhone).toBe("010-9999-0000");
 			expect(seekerMessage?.revealedPhone).toBeNull();
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+// 지난 정책("업주가 나간 방엔 재문의 영구 불가")을 뒤집은 확정. 방 안 발신은 여전히
+// counterpart_left로 막히고, 공고에서 다시 거는 이 경로만 부활시킨다.
+describe("bambi chats router 재문의 방 부활", () => {
+	const startFor = (userId: string) =>
+		createProcedureClient(chatsRouter.startFromJobPost, {
+			context: createContextForUser(userId),
+			path: ["bambi", "chats", "startFromJobPost"],
+		});
+
+	const deleteRoomFor = (userId: string) =>
+		createProcedureClient(chatsRouter.deleteChatRoom, {
+			context: createContextForUser(userId),
+			path: ["bambi", "chats", "deleteChatRoom"],
+		});
+
+	it("업주가 나간 방도 재문의로 되살아나 양쪽 목록에 다시 보인다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.jobSeekerUserId);
+			await deleteRoomFor(fixture.employerUserId)({
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			const revived = await startFor(fixture.jobSeekerUserId)({
+				jobPostId: fixture.jobPostId,
+			});
+
+			expect(revived.id).toBe(fixture.chatRoomId);
+			expect(revived.employerDeletedAt).toBeNull();
+			expect(revived.seekerDeletedAt).toBeNull();
+
+			const employerRooms = await listMineFor(fixture.employerUserId)({});
+
+			expect(employerRooms.some((room) => room.id === fixture.chatRoomId)).toBe(
+				true
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("구직자가 지웠던 방도 재문의로 자기 목록에 되돌아온다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.employerUserId);
+			await deleteRoomFor(fixture.jobSeekerUserId)({
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			const revived = await startFor(fixture.jobSeekerUserId)({
+				jobPostId: fixture.jobPostId,
+			});
+
+			expect(revived.seekerDeletedAt).toBeNull();
+
+			const seekerRooms = await listMineFor(fixture.jobSeekerUserId)({});
+
+			expect(seekerRooms.some((room) => room.id === fixture.chatRoomId)).toBe(
+				true
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("아무도 나가지 않은 방은 그대로 재사용한다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const reused = await startFor(fixture.jobSeekerUserId)({
+				jobPostId: fixture.jobPostId,
+			});
+
+			expect(reused.id).toBe(fixture.chatRoomId);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+describe("bambi chats router 메시지 멱등성", () => {
+	const sendFor = (userId: string) =>
+		createProcedureClient(chatsRouter.sendMessage, {
+			context: createContextForUser(userId),
+			path: ["bambi", "chats", "sendMessage"],
+		});
+
+	// 네트워크 재시도·더블클릭이 같은 id로 다시 와도 방에 메시지가 두 번 남으면 안 된다.
+	it("같은 messageId 재전송은 원래 행을 돌려주고 부수효과를 다시 돌리지 않는다", async () => {
+		const fixture = await createChatFixture();
+		const messageId = randomUUID();
+
+		try {
+			const first = await sendFor(fixture.jobSeekerUserId)({
+				body: "안녕하세요.",
+				chatRoomId: fixture.chatRoomId,
+				messageId,
+			});
+			const retried = await sendFor(fixture.jobSeekerUserId)({
+				body: "재시도라 무시돼야 하는 본문",
+				chatRoomId: fixture.chatRoomId,
+				messageId,
+			});
+
+			expect(retried.id).toBe(first.id);
+			expect(retried.body).toBe("안녕하세요.");
+
+			const rows = await db
+				.select()
+				.from(chatMessage)
+				.where(eq(chatMessage.chatRoomId, fixture.chatRoomId));
+			const notifications = await db
+				.select()
+				.from(bambiNotification)
+				.where(eq(bambiNotification.chatRoomId, fixture.chatRoomId));
+
+			expect(rows).toHaveLength(1);
+			// 알림도 한 번만 — 재전송마다 뱃지가 늘면 핀이 실제 메시지 수와 어긋난다.
+			expect(notifications).toHaveLength(1);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("남이 쓴 메시지 id를 재사용하면 CONFLICT로 막는다", async () => {
+		const fixture = await createChatFixture();
+		const messageId = randomUUID();
+
+		try {
+			await sendFor(fixture.jobSeekerUserId)({
+				body: "구직자 메시지",
+				chatRoomId: fixture.chatRoomId,
+				messageId,
+			});
+
+			await expectOrpcCode(
+				sendFor(fixture.employerUserId)({
+					body: "같은 id를 노린 업주 메시지",
+					chatRoomId: fixture.chatRoomId,
+					messageId,
+				}),
+				"CONFLICT"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("messageId를 안 보내는 옛 클라이언트도 그대로 보낸다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const message = await sendFor(fixture.jobSeekerUserId)({
+				body: "id 없는 전송",
+				chatRoomId: fixture.chatRoomId,
+			});
+
+			expect(message.id).toMatch(UUID_V7_PATTERN);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
+
+describe("bambi chats router 메시지 커서 페이지네이션", () => {
+	// createdAt을 명시해 총순서를 고정한다(defaultNow는 같은 ms로 겹칠 수 있다).
+	const seedOrderedMessages = async (
+		fixture: ChatFixture,
+		count: number
+	): Promise<string[]> => {
+		const ids = Array.from({ length: count }, () => randomUUID());
+
+		await db.insert(chatMessage).values(
+			ids.map((id, index) => ({
+				body: `메시지 ${index}`,
+				chatRoomId: fixture.chatRoomId,
+				createdAt: new Date(Date.UTC(2026, 7, 6, 0, 0, index)),
+				id,
+				senderUserId: fixture.employerUserId,
+			}))
+		);
+
+		return ids;
+	};
+
+	it("커서로 이전 구간을 이어 읽고, 끝에서 nextCursor가 null이 된다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const ids = await seedOrderedMessages(fixture, 3);
+			const firstPage = await getByIdFor(fixture.jobSeekerUserId)({
+				id: fixture.chatRoomId,
+				limit: 2,
+			});
+
+			// 최신 2건이 오래된 → 최신 순으로 온다.
+			expect(firstPage.messages.map((message) => message.id)).toEqual([
+				ids[1],
+				ids[2],
+			]);
+			expect(firstPage.hasMoreMessages).toBe(true);
+			expect(firstPage.nextCursor).toMatchObject({ id: ids[1] });
+
+			const secondPage = await getByIdFor(fixture.jobSeekerUserId)({
+				cursor: firstPage.nextCursor ?? undefined,
+				id: fixture.chatRoomId,
+				limit: 2,
+			});
+
+			// 커서 이전 구간만. 경계 메시지가 겹쳐 오지 않아야 한다.
+			expect(secondPage.messages.map((message) => message.id)).toEqual([
+				ids[0],
+			]);
+			expect(secondPage.hasMoreMessages).toBe(false);
+			expect(secondPage.nextCursor).toBeNull();
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("예전 상한(500건)을 넘는 이력도 커서로 계속 거슬러 올라간다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const ids = await seedOrderedMessages(fixture, 6);
+			const seenIds: string[] = [];
+			let cursor: { createdAt: string; id: string } | null = null;
+
+			for (let page = 0; page < 6; page += 1) {
+				const result = await getByIdFor(fixture.jobSeekerUserId)({
+					cursor: cursor ?? undefined,
+					id: fixture.chatRoomId,
+					limit: 2,
+				});
+
+				seenIds.unshift(...result.messages.map((message) => message.id));
+				cursor = result.nextCursor;
+
+				if (!cursor) {
+					break;
+				}
+			}
+
+			expect(seenIds).toEqual(ids);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}
