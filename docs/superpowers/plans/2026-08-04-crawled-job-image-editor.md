@@ -551,10 +551,15 @@ DB 통합 테스트와 브라우저 검증은 migration 적용 승인 뒤 수행
 
 ### 검증 기준
 
-- [ ] rebase 완료 후 작업 트리에 충돌 표시와 미해결 파일이 없다.
-- [ ] 기존 `0063_lonely_famine.sql`과 중복 `0063_snapshot.json`이 제거되고 이미지 편집 마이그레이션이 `0068`로 생성된다.
-- [ ] 새 마이그레이션에는 이미지 편집 문서·편집 시각·편집자·revision 컬럼과 편집자 FK만 포함된다.
-- [ ] API·서버·웹·DB 타입 검사와 이미지 편집 관련 단위 테스트가 통과한다.
-- [ ] Ultracite 검사와 `git diff --check`가 통과한다.
-- [ ] PR #82의 base가 `develop`, head가 `feat/crawled-job-detail-image-editor`로 유지되고 GitHub에서 충돌 상태가 해소된다.
-- [ ] GitHub PR 머지는 수행하지 않는다.
+- [x] rebase 완료 후 작업 트리에 충돌 표시와 미해결 파일이 없다.
+- [x] 기존 `0063_lonely_famine.sql`과 중복 `0063_snapshot.json`이 제거되고 이미지 편집 마이그레이션이 `0068`로 생성된다.
+- [x] 새 마이그레이션에는 이미지 편집 문서·편집 시각·편집자·revision 컬럼과 편집자 FK만 포함된다.
+- [x] API·서버·웹·DB 타입 검사와 이미지 편집 관련 단위 테스트가 통과한다.
+- [x] 변경 TypeScript·TSX 15개 파일의 Ultracite 검사와 `git diff --check`가 통과한다. 저장소 전체 검사에서 확인된 `seed-ad-catalog.ts`의 미사용 suppression 경고 2건은 최신 `develop`에 이미 존재하는 이번 PR 범위 밖 항목이다.
+- [x] PR #82의 base가 `develop`, head가 `feat/crawled-job-detail-image-editor`로 유지되고 GitHub에서 `MERGEABLE`로 확인됐다.
+- [x] GitHub PR 머지는 수행하지 않는다.
+
+### 최종 확인 기록
+
+- `pnpm --filter web build`와 `pnpm --filter server build`가 통과했다.
+- GitHub의 Vercel 상태는 빌드 로그를 실행한 실패가 아니라 `Deployment was blocked`로 기록된 외부 배포 차단이다. Vercel 상세는 별도 로그인 권한이 필요하며 코드 충돌·타입 검사·단위 테스트·프로덕션 빌드는 모두 통과했다.
