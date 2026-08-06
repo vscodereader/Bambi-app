@@ -1,5 +1,5 @@
 {
-  "id": "9fb3c4b6-6150-46d0-a9d1-c5d34d99fd34",
+  "id": "9b64bd13-4093-4b2b-9994-23bb5067bd73",
   "prevId": "af2ce15d-6d69-4e51-94a6-c85438915fa3",
   "version": "7",
   "dialect": "postgresql",
@@ -2416,17 +2416,11 @@
         }
       },
       "indexes": {
-        "chat_message_chat_room_id_created_at_idx": {
-          "name": "chat_message_chat_room_id_created_at_idx",
+        "chat_message_chat_room_id_idx": {
+          "name": "chat_message_chat_room_id_idx",
           "columns": [
             {
               "expression": "chat_room_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3943,6 +3937,32 @@
           "notNull": true,
           "default": "'[]'::jsonb"
         },
+        "edited_detail_image_document": {
+          "name": "edited_detail_image_document",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'null'::jsonb"
+        },
+        "detail_images_edited_at": {
+          "name": "detail_images_edited_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "detail_images_edited_by_user_id": {
+          "name": "detail_images_edited_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "detail_image_edit_revision": {
+          "name": "detail_image_edit_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -4046,6 +4066,15 @@
           "columnsFrom": ["district_code"],
           "columnsTo": ["code"],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "crawled_job_post_detail_images_edited_by_user_id_user_id_fk": {
+          "name": "crawled_job_post_detail_images_edited_by_user_id_user_id_fk",
+          "tableFrom": "crawled_job_post",
+          "tableTo": "user",
+          "columnsFrom": ["detail_images_edited_by_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -5915,27 +5944,6 @@
         "report_status_idx": {
           "name": "report_status_idx",
           "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "report_reporter_user_id_status_idx": {
-          "name": "report_reporter_user_id_status_idx",
-          "columns": [
-            {
-              "expression": "reporter_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
             {
               "expression": "status",
               "isExpression": false,

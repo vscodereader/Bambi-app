@@ -1,6 +1,6 @@
 {
-  "id": "38077bb7-7c2b-4c01-a179-021cdf292e6e",
-  "prevId": "9fb3c4b6-6150-46d0-a9d1-c5d34d99fd34",
+  "id": "24f13b52-0394-4497-b487-5b7ca9c4c675",
+  "prevId": "38077bb7-7c2b-4c01-a179-021cdf292e6e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2806,6 +2806,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"chat_room\".\"seeker_deleted_at\" IS NULL AND \"chat_room\".\"employer_deleted_at\" IS NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}

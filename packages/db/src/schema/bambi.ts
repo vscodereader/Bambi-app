@@ -473,6 +473,28 @@ export const employerTeamProfile = pgTable(
 // 때문이다 — job_post는 organization_id와 created_by_user_id가 NOT NULL이라 크롤링 행에
 // 붙일 주인이 없고, 억지로 합성 계정을 붙이면 그 조직이 업소 목록·검색·채팅·통계 전반에
 // 유령으로 섞인다. 업체가 실제로 가입해 전환될 때만 job_post 행이 생긴다.
+export interface CrawledJobEditedImageAsset {
+	dataUrl: string;
+	height: number;
+	id: string;
+	width: number;
+}
+
+export interface CrawledJobEditedImageItem {
+	assetId: string;
+	displayHeightPx: number | null;
+	displayWidthPx: number | null;
+	id: string;
+	offsetX: number;
+	offsetY: number;
+}
+
+export interface CrawledJobEditedImageDocument {
+	assets: CrawledJobEditedImageAsset[];
+	items: CrawledJobEditedImageItem[];
+	version: 1;
+}
+
 export const crawledJobPost = pgTable(
 	"crawled_job_post",
 	{
@@ -562,6 +584,18 @@ export const crawledJobPost = pgTable(
 		detailImageUrls: jsonb("detail_image_urls")
 			.$type<string[]>()
 			.default([])
+			.notNull(),
+		// 크롤링 원본은 위 배열에 보존하고 운영자가 확정한 배치·크롭 결과만 별도 저장한다.
+		// null은 원본 폴백, items: []는 의도적으로 상세 이미지를 모두 숨긴 상태다.
+		editedDetailImageDocument: jsonb("edited_detail_image_document")
+			.$type<CrawledJobEditedImageDocument | null>()
+			.default(null),
+		detailImagesEditedAt: timestamp("detail_images_edited_at"),
+		detailImagesEditedByUserId: text(
+			"detail_images_edited_by_user_id"
+		).references(() => user.id, { onDelete: "set null" }),
+		detailImageEditRevision: integer("detail_image_edit_revision")
+			.default(0)
 			.notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")

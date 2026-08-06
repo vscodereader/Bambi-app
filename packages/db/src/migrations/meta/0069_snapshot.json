@@ -1,6 +1,6 @@
 {
-  "id": "38077bb7-7c2b-4c01-a179-021cdf292e6e",
-  "prevId": "9fb3c4b6-6150-46d0-a9d1-c5d34d99fd34",
+  "id": "9fb3c4b6-6150-46d0-a9d1-c5d34d99fd34",
+  "prevId": "9b64bd13-4093-4b2b-9994-23bb5067bd73",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2600,108 +2600,6 @@
           "tableFrom": "chat_message_read_receipt",
           "tableTo": "user",
           "columnsFrom": ["reader_user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.chat_message_sync_queue": {
-      "name": "chat_message_sync_queue",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "chat_room_id": {
-          "name": "chat_room_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "message_id": {
-          "name": "message_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sender_user_id": {
-          "name": "sender_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "message_created_at": {
-          "name": "message_created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "chat_message_sync_queue_created_at_idx": {
-          "name": "chat_message_sync_queue_created_at_idx",
-          "columns": [
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "chat_message_sync_queue_chat_room_id_chat_room_id_fk": {
-          "name": "chat_message_sync_queue_chat_room_id_chat_room_id_fk",
-          "tableFrom": "chat_message_sync_queue",
-          "tableTo": "chat_room",
-          "columnsFrom": ["chat_room_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "chat_message_sync_queue_message_id_chat_message_id_fk": {
-          "name": "chat_message_sync_queue_message_id_chat_message_id_fk",
-          "tableFrom": "chat_message_sync_queue",
-          "tableTo": "chat_message",
-          "columnsFrom": ["message_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "chat_message_sync_queue_sender_user_id_user_id_fk": {
-          "name": "chat_message_sync_queue_sender_user_id_user_id_fk",
-          "tableFrom": "chat_message_sync_queue",
-          "tableTo": "user",
-          "columnsFrom": ["sender_user_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
