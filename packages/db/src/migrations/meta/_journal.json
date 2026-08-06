@@ -505,6 +505,13 @@
       "when": 1785996132526,
       "tag": "0071_neat_skrulls",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1785997349489,
+      "tag": "0072_rich_hydra",
+      "breakpoints": true
     }
   ]
 }

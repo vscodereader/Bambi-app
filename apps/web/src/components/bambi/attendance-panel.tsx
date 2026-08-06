@@ -1,8 +1,8 @@
 "use client";
 
 // 밤비 — 출석체크 패널. /seeker/attendance·/employer/attendance 두 라우트가 그대로
-// 재사용한다(역할별 문구 차이가 없어 컴포넌트를 나누지 않는다). 보상 없는 기록형 기능이라
-// 화면 요소는 오늘 버튼 + 월 달력 + 연속/총 스탯 셋뿐이다.
+// 재사용한다(역할별 문구 차이가 없어 컴포넌트를 나누지 않는다). 화면 요소는 오늘 버튼 +
+// 월 달력 + 연속/총/포인트 스탯뿐이다(출석 1회당 10포인트 적립, 잔액은 서버 원장 합산).
 // 달력은 라이브러리 없이 Tailwind 7열 grid로 직접 그린다(의존성 추가 금지).
 
 import { Button } from "@bambi-app/ui/components/button";
@@ -45,7 +45,7 @@ export function AttendancePanel() {
 				toast.success(
 					result.alreadyAttended
 						? "오늘은 이미 출석했어요."
-						: "출석했어요. 내일도 만나요."
+						: `출석했어요. +${result.pointsAwarded} 포인트 적립!`
 				);
 				// 달을 이동한 상태여도 모든 월 캐시를 함께 갱신한다.
 				await queryClient.invalidateQueries({
@@ -75,8 +75,14 @@ export function AttendancePanel() {
 		);
 	}
 
-	const { attendedDates, checkedInToday, streakDays, today, totalDays } =
-		mineQuery.data;
+	const {
+		attendedDates,
+		checkedInToday,
+		pointBalance,
+		streakDays,
+		today,
+		totalDays,
+	} = mineQuery.data;
 	const viewMonth = mineQuery.data.month;
 	const attended = new Set(attendedDates);
 
@@ -85,7 +91,7 @@ export function AttendancePanel() {
 			<div className="flex flex-col gap-1">
 				<h1 className="m-0 font-extrabold text-2xl">출석체크</h1>
 				<p className="m-0 text-muted-foreground text-sm">
-					하루에 한 번 출석 도장을 찍어요. 별도 보상은 없고 기록만 남아요.
+					하루에 한 번 출석 도장을 찍고 10포인트를 받아요.
 				</p>
 			</div>
 
@@ -94,7 +100,7 @@ export function AttendancePanel() {
 					<CardTitle className="text-base">오늘 출석</CardTitle>
 				</CardHeader>
 				<CardContent className="flex flex-wrap items-center justify-between gap-4">
-					<dl className="m-0 flex gap-8">
+					<dl className="m-0 flex flex-wrap gap-x-8 gap-y-3">
 						<div className="flex flex-col gap-0.5">
 							<dt className="m-0 text-muted-foreground text-xs">연속 출석</dt>
 							<dd className="m-0 font-extrabold text-xl">{`${streakDays}일`}</dd>
@@ -102,6 +108,10 @@ export function AttendancePanel() {
 						<div className="flex flex-col gap-0.5">
 							<dt className="m-0 text-muted-foreground text-xs">총 출석</dt>
 							<dd className="m-0 font-extrabold text-xl">{`${totalDays}일`}</dd>
+						</div>
+						<div className="flex flex-col gap-0.5">
+							<dt className="m-0 text-muted-foreground text-xs">포인트</dt>
+							<dd className="m-0 font-extrabold text-xl">{`${pointBalance.toLocaleString("ko-KR")}P`}</dd>
 						</div>
 					</dl>
 					<Button

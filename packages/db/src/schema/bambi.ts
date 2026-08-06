@@ -1543,10 +1543,11 @@ export const bambiNotification = pgTable(
 	]
 );
 
-// 출석체크. 보상이 없어 (누가, 며칠) 두 축이면 충분하다 — 복합 PK가 "하루 1회"를 DB에서
-// 보장하므로 애플리케이션은 조건 분기 없이 onConflictDoNothing으로 멱등만 지키면 된다.
+// 출석체크. (누가, 며칠) 두 축이면 충분하다 — 복합 PK가 "하루 1회"를 DB에서 보장하므로
+// 애플리케이션은 조건 분기 없이 onConflictDoNothing으로 멱등만 지키면 된다.
 // attended_on은 KST 달력일이다(서버가 services/bambi-attendance의 getKstDateString으로
-// 계산해 넣는다 — 클라이언트 시계 불신). 보상 도입 시 컬럼 추가로 확장한다.
+// 계산해 넣는다 — 클라이언트 시계 불신). 출석 포인트는 이 테이블에 컬럼을 붙이지 않고
+// 아래 bambi_point_transaction 원장에 별도 행으로 쌓는다(적립 이력이 남아야 해서).
 export const bambiAttendance = pgTable(
 	"bambi_attendance",
 	{
@@ -1560,6 +1561,29 @@ export const bambiAttendance = pgTable(
 		primaryKey({ columns: [table.userId, table.attendedOn] }),
 		// 운영자 목록의 "오늘 출석자 수" 요약이 날짜 한 값으로 전 계정을 훑는다.
 		index("bambi_attendance_attended_on_idx").on(table.attendedOn),
+	]
+);
+
+// 포인트 원장. 잔액 컬럼을 따로 두지 않고 행 합산으로 읽는다 — 잔액 컬럼은 적립·차감마다
+// 두 곳을 맞춰야 해서 어긋나면 복구할 근거가 없다(원장은 언제나 재계산 가능).
+// 중복 적립 가드는 여기 유니크가 아니라 bambi_attendance 복합 PK가 담당한다:
+// checkIn 트랜잭션에서 출석 insert가 실제로 일어났을 때만 +10 행을 쌓는다.
+// reason은 현재 "attendance"뿐이라 enum 대신 text로 둔다(사용처가 늘면 enum 승격 검토).
+export const bambiPointTransaction = pgTable(
+	"bambi_point_transaction",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 적립은 양수, 차감은 음수. 잔액 = 계정 행 합산.
+		amount: integer("amount").notNull(),
+		reason: text("reason").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		// 잔액 합산이 계정 하나의 행만 훑게 한다(출석 화면이 진입마다 부른다).
+		index("bambi_point_transaction_user_id_idx").on(table.userId),
 	]
 );
 

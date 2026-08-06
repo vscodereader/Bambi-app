@@ -1,6 +1,10 @@
 import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
-import { bambiAttendance, bambiProfile } from "@bambi-app/db/schema/bambi";
+import {
+	bambiAttendance,
+	bambiPointTransaction,
+	bambiProfile,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
 	and,
@@ -29,6 +33,12 @@ import {
 // 출석 대상 역할. 운영자·법률자문·게스트는 출석 대상이 아니다. 허용 목록으로 고정해
 // bambi_user_role에 값이 하나 늘어도 기본 판정이 "거부"가 되게 한다(bambi-authz 관례).
 const ATTENDANCE_ROLES = new Set<string>(["job_seeker", "employer"]);
+
+// 출석 1회당 적립 포인트. 원장(bambi_point_transaction)에 +10 행으로 쌓인다.
+const ATTENDANCE_POINT_AMOUNT = 10;
+
+// 잔액은 원장 합산이다(잔액 컬럼 없음). 행이 없으면 0.
+const pointBalanceSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}), 0)::int`;
 
 const getMineInput = z.object({
 	// YYYY-MM. 생략하면 서버 KST 기준 이번 달.
@@ -166,18 +176,39 @@ export const attendanceRouter = {
 		const profile = await requireAttendanceProfile(context.session);
 		const attendedOn = getKstDateString();
 
-		// 복합 PK가 하루 1회를 보장하므로 중복 클릭·동시 클릭은 충돌을 무시하고 성공으로 끝낸다.
-		// 삽입된 행이 없으면 이미 출석한 날이다(조회 후 삽입하면 그 사이 경합에서 500이 난다).
-		const inserted = await db
-			.insert(bambiAttendance)
-			.values({ attendedOn, userId: profile.userId })
-			.onConflictDoNothing()
-			.returning({ attendedOn: bambiAttendance.attendedOn });
+		// 출석 기록과 포인트 적립은 한 트랜잭션이다 — 따로 쓰면 적립만 실패했을 때 복합 PK 탓에
+		// 그날은 영영 재적립할 수 없다(재시도해도 출석 insert가 충돌로 스킵되기 때문).
+		return await db.transaction(async (tx) => {
+			// 복합 PK가 하루 1회를 보장하므로 중복 클릭·동시 클릭은 충돌을 무시하고 성공으로 끝낸다.
+			// 삽입된 행이 없으면 이미 출석한 날이다(조회 후 삽입하면 그 사이 경합에서 500이 난다).
+			const inserted = await tx
+				.insert(bambiAttendance)
+				.values({ attendedOn, userId: profile.userId })
+				.onConflictDoNothing()
+				.returning({ attendedOn: bambiAttendance.attendedOn });
 
-		return {
-			alreadyAttended: inserted.length === 0,
-			attendedOn,
-		};
+			// 중복 적립 가드는 이 조건 하나다 — 출석 행이 실제로 생긴 경우에만 원장에 쌓는다.
+			const pointsAwarded = inserted.length === 0 ? 0 : ATTENDANCE_POINT_AMOUNT;
+			if (pointsAwarded > 0) {
+				await tx.insert(bambiPointTransaction).values({
+					amount: pointsAwarded,
+					reason: "attendance",
+					userId: profile.userId,
+				});
+			}
+
+			const [balance] = await tx
+				.select({ pointBalance: pointBalanceSql })
+				.from(bambiPointTransaction)
+				.where(eq(bambiPointTransaction.userId, profile.userId));
+
+			return {
+				alreadyAttended: inserted.length === 0,
+				attendedOn,
+				pointBalance: balance?.pointBalance ?? 0,
+				pointsAwarded,
+			};
+		});
 	}),
 
 	getMine: protectedProcedure
@@ -196,12 +227,19 @@ export const attendanceRouter = {
 				.orderBy(desc(bambiAttendance.attendedOn));
 			const attendedDatesDesc = rows.map((row) => row.attendedOn);
 
+			// 패널 초기 렌더에 잔액이 함께 필요하다(출석 전에도 보여야 해서 checkIn 응답만으론 부족).
+			const [balance] = await db
+				.select({ pointBalance: pointBalanceSql })
+				.from(bambiPointTransaction)
+				.where(eq(bambiPointTransaction.userId, profile.userId));
+
 			return {
 				attendedDates: attendedDatesDesc.filter((attendedOn) =>
 					attendedOn.startsWith(month)
 				),
 				checkedInToday: attendedDatesDesc[0] === today,
 				month,
+				pointBalance: balance?.pointBalance ?? 0,
 				streakDays: countAttendanceStreak(attendedDatesDesc, today),
 				today,
 				totalDays: attendedDatesDesc.length,

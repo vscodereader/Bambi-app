@@ -26,7 +26,7 @@ const [
 ]);
 
 const { user } = authSchema;
-const { bambiAttendance, bambiProfile } = bambiSchema;
+const { bambiAttendance, bambiPointTransaction, bambiProfile } = bambiSchema;
 
 const createContextForUser = (userId: string): Context =>
 	({
@@ -51,6 +51,9 @@ const cleanup = async (userIds: string[]) => {
 	await db
 		.delete(bambiAttendance)
 		.where(inArray(bambiAttendance.userId, userIds));
+	await db
+		.delete(bambiPointTransaction)
+		.where(inArray(bambiPointTransaction.userId, userIds));
 	await db.delete(bambiProfile).where(inArray(bambiProfile.userId, userIds));
 	await db.delete(user).where(inArray(user.id, userIds));
 };
@@ -75,6 +78,37 @@ describe("bambi attendance router", () => {
 				.from(bambiAttendance)
 				.where(eq(bambiAttendance.userId, userId));
 			expect(rows).toHaveLength(1);
+		} finally {
+			await cleanup([userId]);
+		}
+	});
+
+	it("첫 출석에만 10포인트가 적립되고 두 번째 호출은 잔액이 그대로다", async () => {
+		const userId = await createUser("job_seeker");
+		const checkIn = createProcedureClient(attendanceRouter.checkIn, {
+			context: createContextForUser(userId),
+		});
+
+		try {
+			const first = await checkIn({});
+			expect(first.pointsAwarded).toBe(10);
+			expect(first.pointBalance).toBe(10);
+
+			const second = await checkIn({});
+			expect(second.pointsAwarded).toBe(0);
+			expect(second.pointBalance).toBe(10);
+
+			// 원장에도 행이 하나만 쌓여야 한다(잔액은 합산이라 행이 늘면 그대로 새어 나간다).
+			const ledger = await db
+				.select({ amount: bambiPointTransaction.amount })
+				.from(bambiPointTransaction)
+				.where(eq(bambiPointTransaction.userId, userId));
+			expect(ledger).toEqual([{ amount: 10 }]);
+
+			const mine = await createProcedureClient(attendanceRouter.getMine, {
+				context: createContextForUser(userId),
+			})({});
+			expect(mine.pointBalance).toBe(10);
 		} finally {
 			await cleanup([userId]);
 		}
