@@ -57,9 +57,11 @@ export function AuthSignupFields({
 			? getLoginIdErrorMessage(loginId)
 			: null;
 
+	// 1열 6칸이라 칸 안의 라벨–입력 간격도 높이에 6배로 곱해진다 — 가입 폼만 gap-1.5로
+	// 좁힌다(로그인은 2칸뿐이라 gap-2를 그대로 둔다).
 	return (
 		<>
-			<label className="grid gap-2" htmlFor="auth-nickname">
+			<label className="grid gap-1.5" htmlFor="auth-nickname">
 				<span className="font-bold text-sm">닉네임</span>
 				<Input
 					autoComplete="nickname"
@@ -69,7 +71,7 @@ export function AuthSignupFields({
 					value={values.nickname}
 				/>
 			</label>
-			<label className="grid gap-2" htmlFor="auth-username">
+			<label className="grid gap-1.5" htmlFor="auth-username">
 				<span className="font-bold text-sm">아이디</span>
 				<Input
 					autoComplete="username"
@@ -83,7 +85,8 @@ export function AuthSignupFields({
 				    두 줄이 동시에 뜨면 무엇을 고쳐야 하는지 흐려진다. */}
 				<span
 					className={cn(
-						"text-xs leading-relaxed",
+						// leading-snug: 한 줄짜리 규칙 안내라 넉넉한 행간이 필요 없다.
+						"text-xs leading-snug",
 						loginIdError ? "text-destructive" : "text-muted-foreground"
 					)}
 					role={loginIdError ? "alert" : undefined}
@@ -91,7 +94,7 @@ export function AuthSignupFields({
 					{loginIdError ?? LOGIN_ID_HELP_TEXT}
 				</span>
 			</label>
-			<label className="grid gap-2" htmlFor="auth-email">
+			<label className="grid gap-1.5" htmlFor="auth-email">
 				<span className="font-bold text-sm">이메일</span>
 				<Input
 					autoComplete="email"
@@ -102,7 +105,7 @@ export function AuthSignupFields({
 					value={values.email}
 				/>
 			</label>
-			<label className="grid gap-2" htmlFor="auth-password">
+			<label className="grid gap-1.5" htmlFor="auth-password">
 				<span className="font-bold text-sm">비밀번호</span>
 				<Input
 					autoComplete="new-password"
@@ -113,7 +116,7 @@ export function AuthSignupFields({
 					value={values.password}
 				/>
 			</label>
-			<label className="grid gap-2" htmlFor="auth-password-confirm">
+			<label className="grid gap-1.5" htmlFor="auth-password-confirm">
 				<span className="font-bold text-sm">비밀번호 확인</span>
 				<Input
 					autoComplete="new-password"
@@ -124,7 +127,7 @@ export function AuthSignupFields({
 					value={values.passwordConfirm}
 				/>
 			</label>
-			<div className="grid gap-2">
+			<div className="grid gap-1.5">
 				<span className="font-bold text-sm" id="auth-role-label">
 					가입 유형
 				</span>
@@ -149,7 +152,7 @@ export function AuthSignupFields({
 			</div>
 			{signupRole === "employer" ? (
 				<p
-					className="m-0 rounded-lg border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm"
+					className="m-0 rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground text-sm leading-snug"
 					role="note"
 				>
 					가입 후 업체 정보를 입력하고 운영자 승인을 받으면 구인 기능을 이용할
@@ -284,7 +287,7 @@ export function AuthTermsAgreement({
 	onCheckedChange: (checked: boolean) => void;
 }) {
 	return (
-		<div className="flex items-start gap-2.5">
+		<div className="flex items-start gap-2">
 			<Checkbox
 				checked={checked}
 				className="mt-0.5"
@@ -292,7 +295,7 @@ export function AuthTermsAgreement({
 				onCheckedChange={(next) => onCheckedChange(next === true)}
 			/>
 			<label
-				className="text-muted-foreground text-sm leading-relaxed"
+				className="text-muted-foreground text-sm leading-snug"
 				htmlFor="auth-agree-terms"
 			>
 				<Link

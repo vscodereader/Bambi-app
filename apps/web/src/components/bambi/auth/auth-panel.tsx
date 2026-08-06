@@ -149,11 +149,11 @@ function AuthCardHeader({
 }) {
 	return (
 		<>
-			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-				<Logo lang="ko" size="lg" />
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<Logo lang="ko" size="md" />
 				{isSignUp ? <AuthSteps current={step === "verify" ? 1 : 2} /> : null}
 			</div>
-			<h2 className="mt-6 mb-5 font-extrabold text-2xl tracking-tight sm:text-3xl">
+			<h2 className="mt-5 mb-4 font-extrabold text-xl tracking-tight sm:text-2xl">
 				{title}
 			</h2>
 		</>
@@ -378,14 +378,17 @@ export function AuthPanel() {
 		setMode(isSignUp ? "sign-in" : "sign-up");
 	};
 
+	// my-auto: 이 래퍼는 데스크톱에서 스크롤 가능한 오버레이(seeker-auth-gate-screen)의
+	// flex 아이템이다. items-center로만 가운데를 잡으면 카드가 영역보다 클 때 위쪽이
+	// 스크롤로 닿지 않는 자리에 잘리므로, 남는 높이를 auto 마진으로 나눠 갖게 한다.
 	return (
-		<div className="w-full text-foreground">
+		<div className="my-auto w-full text-foreground">
 			{/* 게이트 카드는 폭·높이를 고정 수치로 잡는다 — 로그인·회원가입·인증 단계를
 			    오가도 카드 덩치가 흔들리지 않아야 한다. min-h라 폼이 더 길어지면 늘어난다.
 			    머리는 위, 본문은 남는 높이를 위아래로 나눈 광학 중앙, 19금 고지는 바닥.
 			    인증 단계처럼 내용이 짧아도 남는 높이가 "덩어리 아래의 빈 꼬리"로 몰리지 않는다. */}
 			<Card
-				className="mx-auto min-h-[620px] max-w-[580px] rounded-xl sm:p-7"
+				className="mx-auto min-h-[620px] max-w-[580px] rounded-xl sm:p-6"
 				pad="lg"
 			>
 				<AuthCardHeader isSignUp={isSignUp} step={step} title={title} />
@@ -402,8 +405,10 @@ export function AuthPanel() {
 					) : (
 						// 폼은 데스크톱·모바일 모두 1열이다. 2열은 칸마다 도움말·오류 문구
 						// 높이가 달라 옆 칸과 라인이 어긋나고, 읽는 순서도 갈린다.
+						// 1열이라 칸 수가 그대로 높이가 되므로 칸 사이 간격은 gap-3까지 좁힌다
+						// (가입 6칸 기준 가장 큰 절감 — 로그인 2칸에는 사실상 차이가 없다).
 						<form
-							className="grid gap-4"
+							className="grid gap-3"
 							onSubmit={(event) => {
 								event.preventDefault();
 								handleSubmit().catch(() => undefined);
@@ -474,8 +479,8 @@ export function AuthPanel() {
 				    자체가 아니라 래퍼가 갖는다 — 패널에 pt를 주면 p-4로 잡아 둔 패널 안쪽 여백이
 				    깨진다. 바닥 고정은 위 본문의 my-auto가 이미 해 준다(뒤따르는 형제를 끝으로
 				    민다). 여기에 mt-auto를 또 주면 auto 마진이 셋이 되어 남는 높이를 1/3씩
-				    나눠 가져 위아래가 어긋난다. pt-10은 내용이 길 때의 최소 간격이다. */}
-				<div className="pt-10">
+				    나눠 가져 위아래가 어긋난다. pt-6은 내용이 길 때의 최소 간격이다. */}
+				<div className="pt-6">
 					<AdultNotice />
 				</div>
 			</Card>
