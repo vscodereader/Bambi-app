@@ -18,8 +18,10 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { ModeratorSupportNotice } from "@/components/bambi/support/moderator-support-notice";
 import {
 	SUPPORT_CATEGORIES,
 	SUPPORT_CATEGORY_LABELS,
@@ -36,6 +38,8 @@ type FilterValue = SupportCategory | typeof ALL_VALUE;
 
 export function FaqList() {
 	const [filter, setFilter] = useState<FilterValue>(ALL_VALUE);
+	const { role } = useBambiAuth();
+	const isModerator = role === "admin";
 
 	const faqQuery = useQuery(
 		orpc.bambi.support.listFaq.queryOptions({
@@ -103,22 +107,27 @@ export function FaqList() {
 				</Accordion>
 			) : null}
 
-			{/* base-ui Button은 nativeButton이 기본 true라 render로 <a>를 넣으면 경고한다.
-			    링크는 이 레포 관례대로 Link에 buttonVariants를 입힌다. */}
-			<div className="flex flex-wrap gap-2">
-				<Link
-					className={buttonVariants({ size: "lg" })}
-					href={SUPPORT_INQUIRY_NEW_PATH}
-				>
-					1:1 문의하기
-				</Link>
-				<Link
-					className={buttonVariants({ size: "lg", variant: "outline" })}
-					href={SUPPORT_INQUIRIES_PATH}
-				>
-					내 문의 내역
-				</Link>
-			</div>
+			{/* 운영자는 문의를 받는 쪽이라 작성·내 문의 내역 대신 문의 관리 안내를 보여준다. */}
+			{isModerator ? (
+				<ModeratorSupportNotice />
+			) : (
+				/* base-ui Button은 nativeButton이 기본 true라 render로 <a>를 넣으면 경고한다.
+				   링크는 이 레포 관례대로 Link에 buttonVariants를 입힌다. */
+				<div className="flex flex-wrap gap-2">
+					<Link
+						className={buttonVariants({ size: "lg" })}
+						href={SUPPORT_INQUIRY_NEW_PATH}
+					>
+						1:1 문의하기
+					</Link>
+					<Link
+						className={buttonVariants({ size: "lg", variant: "outline" })}
+						href={SUPPORT_INQUIRIES_PATH}
+					>
+						내 문의 내역
+					</Link>
+				</div>
+			)}
 		</div>
 	);
 }

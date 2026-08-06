@@ -8,6 +8,7 @@ import {
 	isWithdrawalPurgeDue,
 	resolveWithdrawalPurgeCutoff,
 } from "./bambi-policy";
+import { WITHDRAWN_DISPLAY_NAME } from "./bambi-withdrawn-display";
 
 // 사이트 설정은 고정 키 "default" 단일 행이다(site-settings 라우터와 동일 규약).
 const SETTINGS_ROW_ID = "default";
@@ -24,11 +25,12 @@ const touchLastRunAt = (now: Date) =>
 			set: { withdrawalPurgeLastRunAt: now },
 		});
 
-// 탈퇴 계정의 잔여 식별값 파기 배치. 연락처·자격증명은 이미 탈퇴 시점에
-// (onboarding.withdrawMyAccount) 파기되고, 부정 재가입 차단용 CI·DI 해시만 남는다 —
-// 이 배치가 보존기간(운영자 설정, 기본 30일) 경과분의 해시를 마저 지우고 purgedAt을
-// 찍는다. 스크럽 항목을 전부 유지하는 것은 이 변경 이전에 탈퇴해 PII가 남아 있는
-// 계정까지 한 번에 정리하기 위해서다(이미 null인 값은 no-op).
+// 탈퇴 계정의 개인정보 파기 배치. 탈퇴 시점(onboarding.withdrawMyAccount)에는
+// deletedAt 마커만 찍고 표시명·이미지·연락처·자격증명을 전부 남겨 두므로, 실제 파기는
+// 여기 한 곳에서만 일어난다 — 보존기간(운영자 설정, 기본 30일)이 지난 계정의 표시명·
+// 프로필 이미지·이메일·로그인 아이디·자격증명·연락처·CI/DI 해시를 지우고 purgedAt을 찍는다.
+// 여기를 지난 계정은 로그인 수단이 남지 않아 운영자 복구 대상에서도 빠진다
+// (services/bambi-account-restore).
 // user 행 자체는 지우지 않는다 — 채팅·리뷰·신고 등 상대방 데이터가 onDelete 미지정
 // (RESTRICT) FK로 물려 있어 행 삭제는 실패하거나 상대방 기록까지 깨진다.
 //
@@ -64,7 +66,7 @@ export const purgeWithdrawnAccountsBatch = async (
 		await tx.delete(session).where(inArray(session.userId, ids));
 		// 비밀번호 등 자격증명 파기.
 		await tx.delete(account).where(inArray(account.userId, ids));
-		// 표시명(닉네임)은 user.name을 "탈퇴한 회원"으로 치환(아래 user 갱신)하므로
+		// 표시명(닉네임)은 user 테이블에 있어 아래 user 갱신에서 치환한다 —
 		// 프로필에서는 연락처·본인인증 식별값만 파기한다.
 		await tx
 			.update(bambiProfile)
@@ -78,14 +80,16 @@ export const purgeWithdrawnAccountsBatch = async (
 			})
 			.where(inArray(bambiProfile.userId, ids));
 		// 이메일은 unique 제약이라 사용자별 tombstone으로 치환하고, 로그인 아이디는
-		// nullable이라 비워서 파기한다(탈퇴 시점에 이미 처리되지만 이 변경 이전에
-		// 탈퇴한 계정을 위해 여기서도 수행한다).
+		// nullable이라 비워서 파기한다. 표시명(닉네임)·프로필 이미지도 여기서 지운다 —
+		// 탈퇴 시점에는 원본을 남겨 두므로(운영자 확인·복구용) 이 배치가 유일한 파기 지점이다.
+		// 표시명은 not null 컬럼이라 빈 문자열 대신 익명 문구로 덮는다(표시 계층의
+		// WITHDRAWN_DISPLAY_NAME과 같은 값 — 파기 후에도 화면 문구가 달라지지 않는다).
 		for (const id of ids) {
 			await tx
 				.update(user)
 				.set({
 					email: `withdrawn-${id}@invalid.bambi`,
-					name: "탈퇴한 회원",
+					name: WITHDRAWN_DISPLAY_NAME,
 					image: null,
 					login_id: null,
 					login_id_display: null,

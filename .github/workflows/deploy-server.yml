@@ -98,7 +98,12 @@ jobs:
 
       # 서버는 23000에 listen → --port=23000 으로 Cloud Run 프로브를 맞춘다.
       # socket.io가 인메모리(어댑터 없음)라 당분간 --max-instances=1 로 고정.
-      # 웹소켓 유지를 위해 --timeout=3600(최대), --session-affinity 설정.
+      # 웹소켓 유지를 위해 --timeout, --session-affinity 설정.
+      # --timeout은 "요청 하나가 살아 있을 수 있는 시간"이라 WebSocket·SSE 수명 상한이기도 하다.
+      # 최대치(3600)로 두면 새 리비전을 배포해도 옛 리비전에 붙은 소켓이 최대 1시간 남아
+      # "옛 인스턴스의 소켓 + 새 인스턴스에서 처리되는 메시지"라는 조합이 그동안 계속된다
+      # (팬아웃이 프로세스 로컬이라 그 사용자는 실시간을 한 건도 못 받는다). 900초로 낮춰
+      # 잔류 창을 15분으로 줄인다 — 클라이언트는 끊기면 재연결·방 재입장을 스스로 한다.
       # 민감 값은 GCP Secret Manager에서 주입(--set-secrets) — GitHub에는 시크릿 없음.
       # BAMBI_GUEST_TOKEN_SECRET은 web(Vercel)에 넣은 값과 반드시 같아야 한다 — web이 서명한
       # 게스트 토큰을 이 서버가 검증한다. 시크릿 이름: ${SERVICE}-bambi-guest-token-secret.
@@ -126,7 +131,7 @@ jobs:
             --max-instances=1 \
             --memory=512Mi \
             --cpu=1 \
-            --timeout=3600 \
+            --timeout=900 \
             --session-affinity \
             --add-cloudsql-instances="${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" \
             --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}##BAMBI_COOKIE_PREFIX=${BAMBI_COOKIE_PREFIX}" \

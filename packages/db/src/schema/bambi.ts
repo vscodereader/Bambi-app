@@ -1179,8 +1179,9 @@ export const chatRoom = pgTable(
 			.notNull()
 			.references(() => user.id),
 		isBlocked: boolean("is_blocked").default(false).notNull(),
-		// 회원별 소프트삭제(목록 숨김). 상대는 그대로 유지되며, 새 메시지 도착 시
-		// sendMessage가 양쪽 값을 NULL로 되돌려 방을 다시 노출한다.
+		// "누가 언제 나갔나" 기록. 한쪽이라도 값이 차면 방은 **양쪽 모두에게서** 사라진다
+		// (목록·열람·발신·읽음 전부 차단). 되돌리는 경로는 없고, 재문의는 새 방을 판다.
+		// 운영자 화면은 이 두 값을 그대로 읽어 삭제된 방 이력을 계속 본다.
 		seekerDeletedAt: timestamp("seeker_deleted_at"),
 		employerDeletedAt: timestamp("employer_deleted_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1190,10 +1191,13 @@ export const chatRoom = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		uniqueIndex("chat_room_job_post_id_job_seeker_user_id_uidx").on(
-			table.jobPostId,
-			table.jobSeekerUserId
-		),
+		// 살아 있는 방만 공고×구직자 1개다. 나간 방은 이력으로 남아 누적되므로 부분
+		// 유니크로 제외한다 — 그래야 재문의 때 새 방을 팔 수 있다.
+		uniqueIndex("chat_room_job_post_id_job_seeker_user_id_uidx")
+			.on(table.jobPostId, table.jobSeekerUserId)
+			.where(
+				sql`${table.seekerDeletedAt} IS NULL AND ${table.employerDeletedAt} IS NULL`
+			),
 		index("chat_room_organization_id_idx").on(table.organizationId),
 		index("chat_room_team_id_idx").on(table.teamId),
 		index("chat_room_employer_user_id_idx").on(table.employerUserId),
@@ -1221,8 +1225,43 @@ export const chatMessage = pgTable(
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
-		index("chat_message_chat_room_id_idx").on(table.chatRoomId),
+		index("chat_message_chat_room_id_created_at_idx").on(
+			table.chatRoomId,
+			table.createdAt
+		),
 		index("chat_message_sender_user_id_idx").on(table.senderUserId),
+	]
+);
+
+/**
+ * 채팅 메시지 전파(소켓·알림)의 transactional outbox. **채팅 메시지 전용**이며 범용
+ * 이벤트 버스가 아니다.
+ *
+ * 메시지 INSERT와 같은 트랜잭션으로 행을 쌓고, 커밋 직후 인프로세스 컨슈머가 즉시
+ * 비워 간다(체감 지연 0). 전파에 실패해도 메시지는 이미 커밋돼 있으므로 행이 남아
+ * 부팅·주기 스윕이 다시 시도한다. 성공한 행은 즉시 삭제하므로 평소엔 거의 비어 있다.
+ * 안 읽음 숫자의 정본은 여전히 DB 집계(anti-join)다 — 이 큐는 재계산 신호일 뿐이다.
+ */
+export const chatMessageSyncQueue = pgTable(
+	"chat_message_sync_queue",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
+		messageId: uuid("message_id")
+			.notNull()
+			.references(() => chatMessage.id, { onDelete: "cascade" }),
+		senderUserId: text("sender_user_id")
+			.notNull()
+			.references(() => user.id),
+		// 소켓 페이로드에 실어 보내는 메시지 생성 시각(정렬 정본인 chat_message.created_at 사본).
+		messageCreatedAt: timestamp("message_created_at").notNull(),
+		attempts: integer("attempts").default(0).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("chat_message_sync_queue_created_at_idx").on(table.createdAt),
 	]
 );
 
@@ -1437,6 +1476,10 @@ export const report = pgTable(
 	},
 	(table) => [
 		index("report_status_idx").on(table.status),
+		index("report_reporter_user_id_status_idx").on(
+			table.reporterUserId,
+			table.status
+		),
 		index("report_target_type_target_id_idx").on(
 			table.targetType,
 			table.targetId

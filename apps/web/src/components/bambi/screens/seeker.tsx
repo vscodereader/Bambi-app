@@ -14,6 +14,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { Job, ReportMode, VisualTone } from "@/lib/bambi/types";
+import { useBambiAuth } from "../auth-client-provider";
 import {
 	AppBar,
 	Avatar,
@@ -51,7 +52,7 @@ import {
 	ShieldIcon,
 	UserIcon,
 } from "../icons";
-import { MyPageShell } from "../my-page-shell";
+import { isMyPageItemVisible, MyPageShell } from "../my-page-shell";
 import { PhoneFrame } from "../phone-frame";
 import { ReportDone, ReportForm, SafetyNotice } from "../safety-kit";
 import { ContactReveal } from "./contact-reveal";
@@ -584,10 +585,16 @@ const seekerMeSections: {
 ];
 
 export function SeekerMe() {
+	// 사이드바 내비와 같은 표로 역할별 항목을 감춘다(구인자·운영자에게 안 보이는 메뉴가
+	// 허브 카드로 되살아나지 않도록).
+	const { role } = useBambiAuth();
+	const sections = seekerMeSections.filter((section) =>
+		isMyPageItemVisible(section.href, role)
+	);
 	return (
 		<MyPageShell title="내 정보">
 			<div className="hidden gap-4 md:grid md:grid-cols-2">
-				{seekerMeSections.map((section) => (
+				{sections.map((section) => (
 					<Link
 						className="block rounded-lg"
 						href={section.href}

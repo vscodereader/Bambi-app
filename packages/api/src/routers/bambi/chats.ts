@@ -14,35 +14,39 @@ import {
 	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
 import { recordJobPerformanceEvent } from "../../services/bambi-analytics";
 import {
+	findUserBlockBetween,
 	requireActiveBambiProfile,
 	requireChatParticipant,
 } from "../../services/bambi-authz";
+import { generateChatMessageId } from "../../services/bambi-chat-message-id";
 import {
-	getChatRecipientUserId,
 	getUnreadMessageCount,
 	getUnreadMessageCountForUser,
-	markChatMessagesRead,
+	getUnreadMessageCountsByRoom,
+	markChatMessagesReadUpTo,
 } from "../../services/bambi-chat-read-state";
 import {
 	emitChatListUpdated,
-	emitMessageCreated,
 	emitMessageRead,
 	emitRoomUpdated,
 	emitUnreadUpdated,
-	isParticipantActiveInRoom,
 } from "../../services/bambi-chat-realtime";
+import {
+	drainPendingChatMessageSyncs,
+	enqueueChatMessageSync,
+	notifyChatMessageCreated,
+} from "../../services/bambi-chat-sync-queue";
 import {
 	type ChatMediaCategory,
 	type ChatMediaUploadInput,
 	validateChatMediaUpload,
 } from "../../services/bambi-media-policy";
-import { createBambiNotification } from "../../services/bambi-notifications";
 import {
 	canRevealContact,
 	canStartChat,
@@ -51,15 +55,31 @@ import {
 import {
 	createChatAttachmentUploadIntent,
 	getChatAttachmentObjectUrl,
+	isOwnedChatAttachmentKey,
 } from "../../services/bambi-storage";
+import {
+	resolveVisibleDisplayName,
+	WITHDRAWN_DISPLAY_NAME,
+} from "../../services/bambi-withdrawn-display";
+import {
+	type ChatSendAction,
+	resolveChatSendRateLimit,
+	takeRateLimit,
+} from "../../services/rate-limit";
 
 const startFromJobPostInput = z.object({
 	jobPostId: z.string().uuid(),
 });
 
+// 메시지 id는 클라이언트가 전송 전에 만들어 실어 보낸다(UUIDv7). 네트워크 재시도나
+// 더블클릭이 같은 id로 다시 오면 서버가 PK 충돌로 흡수해 같은 행을 돌려준다.
+// 옛 클라이언트는 id를 안 보내므로 optional — 그때는 서버가 같은 유틸로 만든다.
+const clientMessageIdInput = z.string().uuid().optional();
+
 const sendMessageInput = z.object({
 	chatRoomId: z.string().uuid(),
 	body: z.string().min(1).max(2000),
+	messageId: clientMessageIdInput,
 });
 
 const attachmentMetadataInput = z.object({
@@ -70,12 +90,41 @@ const attachmentMetadataInput = z.object({
 });
 
 const sendMediaMessageInput = attachmentMetadataInput.extend({
+	messageId: clientMessageIdInput,
 	storageKey: z.string().min(1).max(512),
 });
 
+// 읽음 처리는 id 목록이 아니라 기준선("이 메시지까지 봤다") 하나만 받는다. 예전에는
+// 클라이언트가 방의 상대 메시지 id를 전부 실어 보냈는데 상한이 50이라, 51건째부터 요청
+// 전체가 거절돼 읽음영수증이 한 건도 안 써졌다(안 읽음 뱃지가 영영 안 꺼짐).
 const markReadInput = z.object({
 	chatRoomId: z.string().uuid(),
-	messageIds: z.array(z.string().uuid()).min(1).max(50),
+	upToMessageId: z.string().uuid(),
+});
+
+// 방 열람 기본 페이지 크기. 예전에는 LIMIT이 없어 소켓 이벤트가 뜰 때마다 방 이력 전체가
+// 다시 나갔다.
+const DEFAULT_CHAT_MESSAGE_PAGE_SIZE = 50;
+// 한 번에 실어 보낼 수 있는 최대 페이지 크기. 예전에는 이 값이 곧 "열람 가능한 이력의 끝"
+// 이었지만(더 보기 = limit 확장), 이제 커서로 계속 거슬러 올라갈 수 있어 한 응답의
+// 크기 상한일 뿐이다. limit 입력은 옛 화면 호환을 위해 그대로 받는다.
+const MAX_CHAT_MESSAGE_PAGE_SIZE = 500;
+
+// "이 메시지보다 오래된 것"의 기준점. 정렬 총순서가 (created_at, id)라 커서도 두 값을 함께 든다.
+const chatMessageCursorInput = z.object({
+	createdAt: z.string().datetime(),
+	id: z.string().uuid(),
+});
+
+const getChatRoomByIdInput = z.object({
+	cursor: chatMessageCursorInput.optional(),
+	id: z.string().uuid(),
+	limit: z
+		.number()
+		.int()
+		.min(1)
+		.max(MAX_CHAT_MESSAGE_PAGE_SIZE)
+		.default(DEFAULT_CHAT_MESSAGE_PAGE_SIZE),
 });
 
 const isFutureIsoDateTime = (value: string): boolean => {
@@ -99,6 +148,33 @@ const setInterviewStatusInput = z.object({
 	interviewScheduleId: z.string().uuid(),
 	status: z.enum(["confirmed", "declined", "canceled", "completed"]),
 });
+
+const getInterviewChatContextInput = z.object({
+	cursor: chatMessageCursorInput.optional(),
+	interviewScheduleId: z.string().uuid(),
+});
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+// 면접 목록에 남겨 두는 기간. 지난 확정 면접은 완료를 누를 수 있어야 하고, 완료한 면접도
+// 한동안 기록으로 보여야 한다.
+const INTERVIEW_RETENTION_DAYS = 30;
+
+/** 진행 중(제안·확정)이 가까운 일시 순으로 먼저, 완료는 뒤에 최근 처리 순. */
+const compareInterviewSchedules = (
+	left: { scheduledAt: Date; status: string; updatedAt: Date },
+	right: { scheduledAt: Date; status: string; updatedAt: Date }
+): number => {
+	const leftDone = left.status === "completed";
+	const rightDone = right.status === "completed";
+
+	if (leftDone !== rightDone) {
+		return leftDone ? 1 : -1;
+	}
+
+	return leftDone
+		? right.updatedAt.getTime() - left.updatedAt.getTime()
+		: left.scheduledAt.getTime() - right.scheduledAt.getTime();
+};
 
 const revealContactInput = z.object({
 	interviewScheduleId: z.string().uuid(),
@@ -173,6 +249,7 @@ type RequestedInterviewStatus = z.infer<
 interface InterviewStatusTransitionInput {
 	actorUserId: string;
 	currentStatus: string;
+	employerUserId: string;
 	proposedByUserId: string;
 	requestedStatus: RequestedInterviewStatus;
 }
@@ -180,6 +257,7 @@ interface InterviewStatusTransitionInput {
 const canSetInterviewStatus = ({
 	actorUserId,
 	currentStatus,
+	employerUserId,
 	proposedByUserId,
 	requestedStatus,
 }: InterviewStatusTransitionInput): boolean => {
@@ -189,8 +267,9 @@ const canSetInterviewStatus = ({
 			return currentStatus === "proposed" && actorUserId !== proposedByUserId;
 		case "canceled":
 			return currentStatus === "proposed" || currentStatus === "confirmed";
+		// 면접 완료 처리는 구인자만 한다(구직자는 확정까지). UI 숨김만으로는 직접 호출을 못 막는다.
 		case "completed":
-			return currentStatus === "confirmed";
+			return currentStatus === "confirmed" && actorUserId === employerUserId;
 		default:
 			return false;
 	}
@@ -210,6 +289,28 @@ const getPolicyErrorMessage = (code: string): string => {
 	}
 };
 
+const CHAT_SEND_RATE_LIMIT_MESSAGE =
+	"채팅 요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.";
+
+/**
+ * 발신 계열의 계정 단위 한도. 수다방 회원 글쓰기(community.ts)와 같은 규칙·같은 카운터를 쓴다.
+ *
+ * 호출 위치는 항상 차단·참여 검증을 **통과한 뒤**다 — 검증에서 튕긴 시도가 창을 먹으면
+ * 사용자가 고쳐서 다시 낼 수 없다.
+ */
+const assertChatSendRateLimit = (
+	action: ChatSendAction,
+	userId: string
+): void => {
+	const { key, limit, windowMs } = resolveChatSendRateLimit({ action, userId });
+
+	if (!takeRateLimit({ key, limit, now: Date.now(), windowMs })) {
+		throw new ORPCError("TOO_MANY_REQUESTS", {
+			message: CHAT_SEND_RATE_LIMIT_MESSAGE,
+		});
+	}
+};
+
 const requireAllowedChatMedia = (
 	input: ChatMediaUploadInput
 ): ChatMediaCategory => {
@@ -224,55 +325,88 @@ const requireAllowedChatMedia = (
 	return result.category;
 };
 
-interface NotifyChatMessageInput {
-	createdAt: Date | string;
-	messageId: string;
-	profileUserId: string;
-	room: {
-		employerUserId: string;
-		id: string;
-		jobSeekerUserId: string;
-	};
-}
+/**
+ * 같은 메시지 id로 INSERT가 한 행도 남기지 않았을 때(PK 충돌 = 재시도·더블클릭) 이미
+ * 들어와 있는 행을 돌려준다.
+ *
+ * 남의 방이나 남의 이름으로 이미 쓰인 id를 재사용하려는 요청은 CONFLICT로 막는다 —
+ * 그대로 돌려주면 다른 방의 메시지 본문이 응답으로 새어 나간다.
+ */
+const requireExistingChatMessage = async (
+	messageId: string,
+	roomId: string,
+	senderUserId: string
+) => {
+	const [existing] = await db
+		.select()
+		.from(chatMessage)
+		.where(eq(chatMessage.id, messageId))
+		.limit(1);
 
-const notifyChatMessageCreated = async ({
-	createdAt,
-	messageId,
-	profileUserId,
-	room,
-}: NotifyChatMessageInput): Promise<void> => {
-	const recipientUserId = getChatRecipientUserId(room, profileUserId);
-	const recipientUnreadCount = await getUnreadMessageCount({
-		chatRoomId: room.id,
-		userId: recipientUserId,
-	});
-
-	emitMessageCreated({
-		createdAt: toIsoDateTime(createdAt),
-		messageId,
-		roomId: room.id,
-		senderUserId: profileUserId,
-	});
-	emitUnreadUpdated({
-		roomId: room.id,
-		unreadCount: recipientUnreadCount,
-		userId: recipientUserId,
-	});
-	// 방 소켓룸에 입장하지 않은 목록 화면도 새 방/새 메시지를 반영하도록
-	// 양쪽 참여자의 유저 채널로 목록 갱신 신호를 보낸다.
-	emitChatListUpdated([room.employerUserId, room.jobSeekerUserId], {
-		roomId: room.id,
-	});
-
-	if (!isParticipantActiveInRoom(room.id, recipientUserId)) {
-		await createBambiNotification({
-			actorUserId: profileUserId,
-			chatRoomId: room.id,
-			recipientUserId,
-			targetId: messageId,
-			targetType: "chat_message",
+	if (
+		!existing ||
+		existing.chatRoomId !== roomId ||
+		existing.senderUserId !== senderUserId
+	) {
+		throw new ORPCError("CONFLICT", {
+			message: "이미 사용된 메시지 식별자예요. 다시 시도해 주세요.",
 		});
 	}
+
+	return existing;
+};
+
+/**
+ * 방 메시지 한 페이지를 keyset 커서로 읽어 화면 순서(오래된 → 최신)로 돌려준다.
+ *
+ * 최신 limit건만 받되 한 건을 더 읽어 "이전 메시지가 더 있는지"를 별도 count 없이 본다.
+ * 커서를 받으면 그보다 오래된 구간을 읽는다 — 정렬 총순서가 (created_at, id)라
+ * (chat_room_id, created_at) 인덱스를 그대로 타고, 동시각 메시지도 id로 갈라 페이지
+ * 경계에서 빠지거나 겹치지 않는다. 방 화면(getById)과 면접 내역(getInterviewChatContext)이
+ * 같은 커서 규칙을 쓰도록 여기 한 곳에 둔다.
+ */
+const loadChatMessagePage = async ({
+	chatRoomId,
+	cursor,
+	limit,
+}: {
+	chatRoomId: string;
+	cursor?: z.infer<typeof chatMessageCursorInput>;
+	limit: number;
+}) => {
+	const cursorCreatedAt = cursor ? new Date(cursor.createdAt) : null;
+	const olderThanCursor =
+		cursorCreatedAt && cursor
+			? or(
+					lt(chatMessage.createdAt, cursorCreatedAt),
+					and(
+						eq(chatMessage.createdAt, cursorCreatedAt),
+						lt(chatMessage.id, cursor.id)
+					)
+				)
+			: undefined;
+	const recentMessages = await db
+		.select()
+		.from(chatMessage)
+		.where(and(eq(chatMessage.chatRoomId, chatRoomId), olderThanCursor))
+		.orderBy(desc(chatMessage.createdAt), desc(chatMessage.id))
+		.limit(limit + 1);
+	const hasMoreMessages = recentMessages.length > limit;
+	const messages = recentMessages.slice(0, limit).reverse();
+	const oldestMessage = messages[0];
+
+	return {
+		hasMoreMessages,
+		messages,
+		// 다음 페이지의 기준점 = 이번 페이지에서 가장 오래된 메시지. 더 없으면 null.
+		nextCursor:
+			hasMoreMessages && oldestMessage
+				? {
+						createdAt: toIsoDateTime(oldestMessage.createdAt),
+						id: oldestMessage.id,
+					}
+				: null,
+	};
 };
 
 interface CounterpartRoom {
@@ -285,7 +419,8 @@ interface CounterpartRoom {
 
 // 구직자가 보는 구인자 이름. 담당자가 탈퇴했으면 팀·조직 표시명보다 탈퇴 표기가
 // 앞선다 — 업소 이름만 보이면 응대할 사람이 없는 방에서 답을 기다리게 된다.
-// 탈퇴 계정은 user.name이 이미 "탈퇴한 회원"이라 별도 문구를 만들지 않는다.
+// 탈퇴 계정의 user.name은 원본 닉네임이라 그대로 내보내면 안 된다. 표시 문구는
+// WITHDRAWN_DISPLAY_NAME(표시 계층)으로 고정한다.
 const resolveEmployerName = (
 	room: CounterpartRoom,
 	names: {
@@ -296,7 +431,7 @@ const resolveEmployerName = (
 	}
 ): string | null => {
 	if (names.withdrawnUserIds.has(room.employerUserId)) {
-		return names.byUserId.get(room.employerUserId) ?? null;
+		return WITHDRAWN_DISPLAY_NAME;
 	}
 	return (
 		(room.teamId ? names.byTeamId.get(room.teamId) : undefined) ??
@@ -310,11 +445,19 @@ const resolveEmployerName = (
  * 현재 보는 사람(viewer) 기준으로 대화 상대방의 표시 이름을 방마다 해석한다.
  * - 구인자가 볼 때 → 상대는 구직자(user.name, 표시명 정본)
  * - 구직자가 볼 때 → 상대는 구인자(탈퇴 표기 → 팀 프로필 → 조직 프로필 → 개인 프로필 순)
+ *
+ * 어느 쪽이든 탈퇴한 상대는 원본 닉네임 대신 "탈퇴한 회원"으로 나간다 — 탈퇴는 이제
+ * user.deletedAt 마커만 남기므로 이름을 그대로 실으면 실명이 상대 화면에 남는다.
+ *
+ * maskWithdrawn: false는 면접 경로 전용이다(사용자 확정) — 이미 약속을 잡은 상대가
+ * "탈퇴한 회원"으로 바뀌면 누구와의 면접인지 알 수 없어진다. 다른 호출부는 기본값(마스킹).
  */
 const resolveCounterpartNames = async (
 	rooms: CounterpartRoom[],
-	viewerUserId: string
+	viewerUserId: string,
+	options?: { maskWithdrawn?: boolean }
 ): Promise<Map<string, string | null>> => {
+	const maskWithdrawn = options?.maskWithdrawn !== false;
 	const profileUserIds = new Set<string>();
 	const teamIds = new Set<string>();
 	const organizationIds = new Set<string>();
@@ -366,11 +509,23 @@ const resolveCounterpartNames = async (
 			: Promise.resolve([]),
 	]);
 
+	// 탈퇴한 상대의 원본 닉네임이 목록에 남지 않도록 지도를 만들 때부터 표시 문구로 바꾼다
+	// (구인자가 보는 구직자 이름도 이 지도를 그대로 쓴다).
 	const nameByUserId = new Map(
-		profiles.map((entry) => [entry.userId, entry.displayName])
+		profiles.map((entry) => [
+			entry.userId,
+			maskWithdrawn
+				? resolveVisibleDisplayName(
+						{ deletedAt: entry.deletedAt, name: entry.displayName },
+						entry.displayName
+					)
+				: entry.displayName,
+		])
 	);
 	const withdrawnUserIds = new Set(
-		profiles.flatMap((entry) => (entry.deletedAt ? [entry.userId] : []))
+		maskWithdrawn
+			? profiles.flatMap((entry) => (entry.deletedAt ? [entry.userId] : []))
+			: []
 	);
 	const nameByTeamId = new Map(
 		teamProfiles.map((entry) => [entry.teamId, entry.displayName])
@@ -464,12 +619,89 @@ const resolveBlockedCounterpartIds = async (
 type ChatBlockReason =
 	| "blocked_by_counterpart"
 	| "blocked_by_me"
-	| "moderation";
+	| "moderation"
+	| "pending_report";
 
 const CHAT_BLOCK_MESSAGES: Record<ChatBlockReason, string> = {
 	blocked_by_counterpart: "상대가 회원님을 차단한 채팅방이에요.",
 	blocked_by_me: "회원님이 상대를 차단한 채팅방이에요.",
 	moderation: "신고에 대한 운영자 조치로 종료된 채팅방이에요.",
+	pending_report: "신고를 검토하고 있는 채팅이에요. 처리 후 다시 볼 수 있어요.",
+};
+
+// 신고 처리 전(open·reviewing) 상태. 이 구간에는 신고자에게서 방을 감춘다.
+const PENDING_REPORT_STATUSES = ["open", "reviewing"] as const;
+
+// report.target_id는 여러 도메인을 겸하는 text라 uuid가 아닌 값도 들어올 수 있다.
+const uuidSchema = z.string().uuid();
+
+/**
+ * "내가 신고했고 아직 처리 전"인 방 id들.
+ *
+ * 신고 완료 안내가 "해당 채팅은 잠시 숨겨둘게요"라고 약속하므로, 신고자에게는 목록에서도
+ * 방 안에서도 보이지 않아야 한다. 방을 직접 겨눈 신고(chat_room)뿐 아니라 그 방의 특정
+ * 메시지를 겨눈 신고(chat_message)도 같은 방을 가리키므로 함께 모은다. 상대에게는 아무
+ * 영향이 없고, 운영자가 처리(resolved·dismissed)하면 자연히 다시 보인다.
+ */
+const getRoomIdsHiddenByMyReport = async ({
+	reporterUserId,
+	roomIds,
+}: {
+	reporterUserId: string;
+	roomIds: string[];
+}): Promise<Set<string>> => {
+	if (roomIds.length === 0) {
+		return new Set();
+	}
+
+	// 메시지 신고는 report.target_id가 text라 조인하려면 형변환이 필요한데, 인덱스가 있는
+	// chat_message.id 쪽에 캐스팅을 걸면 PK 조회가 통째로 막힌다. 그래서 작은 집합(내가 낸
+	// 미처리 신고)을 먼저 뽑고, 그 값으로 uuid 컬럼을 조회한다 — 캐스팅이 값 쪽으로 간다.
+	const [directRows, reportedMessageRows] = await Promise.all([
+		db
+			.select({ roomId: report.targetId })
+			.from(report)
+			.where(
+				and(
+					eq(report.reporterUserId, reporterUserId),
+					eq(report.targetType, "chat_room"),
+					inArray(report.targetId, roomIds),
+					inArray(report.status, [...PENDING_REPORT_STATUSES])
+				)
+			),
+		db
+			.select({ messageId: report.targetId })
+			.from(report)
+			.where(
+				and(
+					eq(report.reporterUserId, reporterUserId),
+					eq(report.targetType, "chat_message"),
+					inArray(report.status, [...PENDING_REPORT_STATUSES])
+				)
+			),
+	]);
+
+	// 신고 대상 id가 uuid가 아닌 값으로 저장돼 있으면 바인딩에서 터지므로 먼저 거른다.
+	const reportedMessageIds = reportedMessageRows
+		.map(({ messageId }) => messageId)
+		.filter((messageId) => uuidSchema.safeParse(messageId).success);
+	const viaMessageRows =
+		reportedMessageIds.length > 0
+			? await db
+					.select({ roomId: chatMessage.chatRoomId })
+					.from(chatMessage)
+					.where(
+						and(
+							inArray(chatMessage.id, reportedMessageIds),
+							inArray(chatMessage.chatRoomId, roomIds)
+						)
+					)
+			: [];
+
+	return new Set([
+		...directRows.map((row) => row.roomId),
+		...viaMessageRows.map((row) => row.roomId),
+	]);
 };
 
 /**
@@ -509,22 +741,7 @@ const throwIfChatBlocked = async ({
 	}
 
 	const otherUserId = counterpartUserId(room, actorUserId);
-	const [block] = await db
-		.select({ blockerUserId: userBlock.blockerUserId })
-		.from(userBlock)
-		.where(
-			or(
-				and(
-					eq(userBlock.blockerUserId, actorUserId),
-					eq(userBlock.blockedUserId, otherUserId)
-				),
-				and(
-					eq(userBlock.blockerUserId, otherUserId),
-					eq(userBlock.blockedUserId, actorUserId)
-				)
-			)
-		)
-		.limit(1);
+	const block = await findUserBlockBetween(actorUserId, otherUserId);
 
 	if (block) {
 		await throwChatBlocked(
@@ -535,6 +752,41 @@ const throwIfChatBlocked = async ({
 			actorUserId
 		);
 	}
+};
+
+/** 내가 신고해 숨겨진 방이면 진입 자체를 막는다(상대는 영향 없음). */
+const throwIfHiddenByMyReport = async ({
+	actorUserId,
+	room,
+}: {
+	actorUserId: string;
+	room: CounterpartRoom;
+}): Promise<void> => {
+	const hiddenRoomIds = await getRoomIdsHiddenByMyReport({
+		reporterUserId: actorUserId,
+		roomIds: [room.id],
+	});
+
+	if (hiddenRoomIds.has(room.id)) {
+		await throwChatBlocked("pending_report", room, actorUserId);
+	}
+};
+
+/**
+ * 채팅 가드(운영자 조치·사용자 차단·내 신고 대기). 열람·발신이 같은 기준을 쓴다.
+ *
+ * 한쪽이 나간 방은 여기까지 오지 않는다 — 방 로드 가드(requireChatParticipant)가
+ * 이미 NOT_FOUND로 끊는다.
+ */
+const throwIfChatUnavailable = async ({
+	actorUserId,
+	room,
+}: {
+	actorUserId: string;
+	room: CounterpartRoom & { isBlocked: boolean };
+}): Promise<void> => {
+	await throwIfChatBlocked({ actorUserId, room });
+	await throwIfHiddenByMyReport({ actorUserId, room });
 };
 
 export const chatsRouter = {
@@ -577,6 +829,11 @@ export const chatsRouter = {
 				throw new ORPCError("FORBIDDEN");
 			}
 
+			assertChatSendRateLimit("startFromJobPost", profile.userId);
+
+			// 살아 있는 방이 있으면 INSERT가 부분 유니크에 걸려 아무것도 만들지 않는다.
+			// 나갔던 방은 그 인덱스 밖이라 새 방이 생긴다 — 재문의는 언제나 새 대화다.
+			// 충돌 판정을 DB에 맡기므로 동시 더블클릭에도 방은 하나만 생긴다.
 			const [createdRoom] = await db
 				.insert(chatRoom)
 				.values({
@@ -588,6 +845,7 @@ export const chatsRouter = {
 				})
 				.onConflictDoNothing({
 					target: [chatRoom.jobPostId, chatRoom.jobSeekerUserId],
+					where: sql`${chatRoom.seekerDeletedAt} IS NULL AND ${chatRoom.employerDeletedAt} IS NULL`,
 				})
 				.returning();
 
@@ -605,13 +863,16 @@ export const chatsRouter = {
 				return createdRoom;
 			}
 
+			// 충돌했다 = 살아 있는 방이 이미 있다. 그 방으로 들여보낸다.
 			const [existingRoom] = await db
 				.select()
 				.from(chatRoom)
 				.where(
 					and(
 						eq(chatRoom.jobPostId, input.jobPostId),
-						eq(chatRoom.jobSeekerUserId, profile.userId)
+						eq(chatRoom.jobSeekerUserId, profile.userId),
+						isNull(chatRoom.seekerDeletedAt),
+						isNull(chatRoom.employerDeletedAt)
 					)
 				)
 				.limit(1);
@@ -626,19 +887,18 @@ export const chatsRouter = {
 	listMine: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
+		// 어느 한쪽이라도 나간 방은 양쪽 목록에서 함께 사라진다(내가 나간 방만이 아니다).
 		const rooms = await db
 			.select()
 			.from(chatRoom)
 			.where(
-				or(
-					and(
+				and(
+					or(
 						eq(chatRoom.employerUserId, profile.userId),
-						isNull(chatRoom.employerDeletedAt)
+						eq(chatRoom.jobSeekerUserId, profile.userId)
 					),
-					and(
-						eq(chatRoom.jobSeekerUserId, profile.userId),
-						isNull(chatRoom.seekerDeletedAt)
-					)
+					isNull(chatRoom.employerDeletedAt),
+					isNull(chatRoom.seekerDeletedAt)
 				)
 			)
 			.orderBy(desc(chatRoom.updatedAt));
@@ -649,20 +909,42 @@ export const chatsRouter = {
 
 		// 아직 메시지가 하나도 오가지 않은 방(구직자가 채팅 시작만 하고 첫
 		// 메시지를 보내지 않은 빈 방)은 목록에서 숨긴다.
-		const roomsWithLastMessage = await Promise.all(
-			rooms.map(async (room) => {
-				const [lastMessage] = await db
-					.select({ id: chatMessage.id, body: chatMessage.body })
-					.from(chatMessage)
-					.where(eq(chatMessage.chatRoomId, room.id))
-					.orderBy(desc(chatMessage.createdAt))
-					.limit(1);
-
-				return { lastMessage, room };
+		// 방마다 따로 물으면 방 수만큼 왕복이 늘어나므로(목록 한 번에 수십 쿼리) 방별
+		// 마지막 메시지를 DISTINCT ON 한 번으로 모은다.
+		const roomIds = rooms.map((room) => room.id);
+		const lastMessageRows = await db
+			.selectDistinctOn([chatMessage.chatRoomId], {
+				body: chatMessage.body,
+				chatRoomId: chatMessage.chatRoomId,
+				id: chatMessage.id,
 			})
+			.from(chatMessage)
+			.where(inArray(chatMessage.chatRoomId, roomIds))
+			// 방 화면과 같은 총순서(created_at, id) — 같은 ms에 두 건이 들어오면 id가
+			// 갈라 주지 않는 한 목록의 "마지막 메시지"가 매번 달라진다.
+			.orderBy(
+				chatMessage.chatRoomId,
+				desc(chatMessage.createdAt),
+				desc(chatMessage.id)
+			);
+		const lastMessageByRoomId = new Map(
+			lastMessageRows.map((row) => [row.chatRoomId, row])
 		);
-		const visibleRooms = roomsWithLastMessage.filter(
-			({ lastMessage }) => lastMessage
+		const roomsWithMessages = rooms
+			.map((room) => ({
+				lastMessage: lastMessageByRoomId.get(room.id),
+				room,
+			}))
+			.filter(({ lastMessage }) => lastMessage);
+
+		// 내가 신고하고 아직 처리 전인 방은 목록에서 뺀다. 신고 완료 안내가 "해당 채팅은
+		// 잠시 숨겨둘게요"라고 약속하는데, 예전에는 라벨만 붙인 채 그대로 남아 있었다.
+		const hiddenRoomIds = await getRoomIdsHiddenByMyReport({
+			reporterUserId: profile.userId,
+			roomIds: roomsWithMessages.map(({ room }) => room.id),
+		});
+		const visibleRooms = roomsWithMessages.filter(
+			({ room }) => !hiddenRoomIds.has(room.id)
 		);
 
 		if (visibleRooms.length === 0) {
@@ -688,49 +970,29 @@ export const chatsRouter = {
 			profile.userId
 		);
 
-		// 내가 넣은 신고 중 아직 처리 전인 방들. 운영자 조치는 즉시 이뤄지지 않으므로
-		// 목록이 "접수됐고 대기 중"을 보여줄 수 있어야 신고가 삼켜진 것처럼 보이지 않는다.
-		const pendingReports = await db
-			.select({ targetId: report.targetId })
-			.from(report)
-			.where(
-				and(
-					eq(report.reporterUserId, profile.userId),
-					eq(report.targetType, "chat_room"),
-					inArray(
-						report.targetId,
-						visibleRooms.map(({ room }) => room.id)
-					),
-					inArray(report.status, ["open", "reviewing"])
-				)
-			);
-		const pendingReportRoomIds = new Set(
-			pendingReports.map((row) => row.targetId)
-		);
+		// 안 읽음 수도 방마다 묻지 않고 한 번의 집계로 모은다.
+		const unreadCountByRoomId = await getUnreadMessageCountsByRoom({
+			roomIds: visibleRooms.map(({ room }) => room.id),
+			userId: profile.userId,
+		});
 
-		return await Promise.all(
-			visibleRooms.map(async ({ lastMessage, room }) => ({
-				...room,
-				// 목록이 쓰는 isBlocked는 방 컬럼이 아니라 "이 방에 들어갈 수 있는가"다.
-				// chatRoom.isBlocked는 운영자 차단만 담고, 사용자 간 차단은 user_block에
-				// 따로 있다 — 방 진입 가드(throwIfChatBlocked)는 둘 다 보므로 목록이 방
-				// 컬럼만 보면 "열리는 것처럼 보이는데 누르면 에러"가 그대로 남는다.
-				isBlocked:
-					room.isBlocked ||
-					blockedCounterpartIds.has(counterpartUserId(room, profile.userId)),
-				counterpartName: counterpartNames.get(room.id) ?? null,
-				// 목록 화면이 뷰어 쪽(구직자/구인자)을 판별하고 차단 대상을 고르는 근거.
-				// 방 row에는 양쪽 id만 있어 뷰어가 누구인지 화면에서 알 수 없다.
-				counterpartUserId: counterpartUserId(room, profile.userId),
-				hasPendingMyReport: pendingReportRoomIds.has(room.id),
-				jobTitle: jobTitleById.get(room.jobPostId) ?? null,
-				lastMessageBody: lastMessage?.body ?? null,
-				unreadCount: await getUnreadMessageCount({
-					chatRoomId: room.id,
-					userId: profile.userId,
-				}),
-			}))
-		);
+		return visibleRooms.map(({ lastMessage, room }) => ({
+			...room,
+			// 목록이 쓰는 isBlocked는 방 컬럼이 아니라 "이 방에 들어갈 수 있는가"다.
+			// chatRoom.isBlocked는 운영자 차단만 담고, 사용자 간 차단은 user_block에
+			// 따로 있다 — 방 진입 가드(throwIfChatBlocked)는 둘 다 보므로 목록이 방
+			// 컬럼만 보면 "열리는 것처럼 보이는데 누르면 에러"가 그대로 남는다.
+			isBlocked:
+				room.isBlocked ||
+				blockedCounterpartIds.has(counterpartUserId(room, profile.userId)),
+			counterpartName: counterpartNames.get(room.id) ?? null,
+			// 목록 화면이 뷰어 쪽(구직자/구인자)을 판별하고 차단 대상을 고르는 근거.
+			// 방 row에는 양쪽 id만 있어 뷰어가 누구인지 화면에서 알 수 없다.
+			counterpartUserId: counterpartUserId(room, profile.userId),
+			jobTitle: jobTitleById.get(room.jobPostId) ?? null,
+			lastMessageBody: lastMessage?.body ?? null,
+			unreadCount: unreadCountByRoomId.get(room.id) ?? 0,
+		}));
 	}),
 
 	// 헤더 채팅 버튼 핀·모바일 탭 뱃지용 경량 집계. listMine은 방마다 상대 이름·
@@ -746,11 +1008,16 @@ export const chatsRouter = {
 		};
 	}),
 
-	// 내가 참여한 방들의 "다가오는" 면접 목록. status가 proposed·confirmed이고
-	// scheduledAt이 현재 이후인 일정만 시간순으로 모아 방을 넘나들며 보여준다.
+	// 내가 참여한 방들의 면접 목록("예정된 면접" 화면). 면접 완료 처리가 방이 아니라 이
+	// 목록에 있으므로, 노출 규칙이 곧 "완료를 누를 수 있는 기간"이다.
+	// - proposed: 면접일이 남은 것만(답 없이 지난 제안은 접는다)
+	// - confirmed: 면접일이 지나도 30일간 남긴다 — 여기서 사라지면 완료를 영영 못 누른다
+	// - completed: 완료 시각(updatedAt) 기준 30일간 완료 뱃지로 남는다
 	listMyUpcomingInterviews: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
+		// 방 삭제 여부는 보지 않는다 — 면접은 현실의 약속이라 방이 사라져도 일정 카드는
+		// 남아야 한다. 아코디언의 내역 열람·완료 처리도 나간 방에서 그대로 열린다.
 		const rooms = await db
 			.select()
 			.from(chatRoom)
@@ -765,28 +1032,47 @@ export const chatsRouter = {
 		}
 
 		const roomById = new Map(rooms.map((room) => [room.id, room]));
+		const now = new Date();
+		const retentionSince = new Date(
+			now.getTime() - INTERVIEW_RETENTION_DAYS * DAY_IN_MS
+		);
 		const schedules = await db
 			.select()
 			.from(interviewSchedule)
 			.where(
 				and(
 					inArray(interviewSchedule.chatRoomId, [...roomById.keys()]),
-					inArray(interviewSchedule.status, ["proposed", "confirmed"]),
-					gte(interviewSchedule.scheduledAt, new Date())
+					or(
+						and(
+							eq(interviewSchedule.status, "proposed"),
+							gte(interviewSchedule.scheduledAt, now)
+						),
+						and(
+							eq(interviewSchedule.status, "confirmed"),
+							gte(interviewSchedule.scheduledAt, retentionSince)
+						),
+						and(
+							eq(interviewSchedule.status, "completed"),
+							gte(interviewSchedule.updatedAt, retentionSince)
+						)
+					)
 				)
-			)
-			.orderBy(asc(interviewSchedule.scheduledAt));
+			);
 		if (schedules.length === 0) {
 			return [];
 		}
+
+		schedules.sort(compareInterviewSchedules);
 
 		const involvedRooms = schedules
 			.map((schedule) => roomById.get(schedule.chatRoomId))
 			.filter((room): room is (typeof rooms)[number] => room !== undefined);
 
+		// 면접 목록은 탈퇴한 상대도 원래 이름으로 보여준다(사용자 확정).
 		const counterpartNames = await resolveCounterpartNames(
 			involvedRooms,
-			profile.userId
+			profile.userId,
+			{ maskWithdrawn: false }
 		);
 		const jobPostIds = [
 			...new Set(involvedRooms.map((room) => room.jobPostId)),
@@ -803,19 +1089,22 @@ export const chatsRouter = {
 				...schedule,
 				counterpartName: room ? (counterpartNames.get(room.id) ?? null) : null,
 				jobTitle: room ? (jobTitleById.get(room.jobPostId) ?? null) : null,
+				// 완료 버튼은 구인자에게만 뜬다. 화면이 전역 역할 상태를 다시 들지 않도록
+				// 방 기준 판정을 응답에 실어 준다(서버 가드도 같은 기준이다).
+				viewerIsEmployer: room?.employerUserId === profile.userId,
 			};
 		});
 	}),
 
 	getById: protectedProcedure
-		.input(z.object({ id: z.string().uuid() }))
+		.input(getChatRoomByIdInput)
 		.handler(async ({ context, input }) => {
 			const { profile, room } = await requireChatParticipant(
 				input.id,
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -837,11 +1126,12 @@ export const chatsRouter = {
 				.where(eq(jobPost.id, room.jobPostId))
 				.limit(1);
 
-			const messages = await db
-				.select()
-				.from(chatMessage)
-				.where(eq(chatMessage.chatRoomId, room.id))
-				.orderBy(asc(chatMessage.createdAt));
+			const { hasMoreMessages, messages, nextCursor } =
+				await loadChatMessagePage({
+					chatRoomId: room.id,
+					cursor: input.cursor,
+					limit: input.limit,
+				});
 			const attachments =
 				messages.length > 0
 					? await db
@@ -913,6 +1203,8 @@ export const chatsRouter = {
 				counterpartName: counterpartNames.get(room.id) ?? null,
 				currentUserId: profile.userId,
 				employerVerifiedPhone: verifiedPhoneFor(room.employerUserId),
+				// 화면이 "이전 메시지 더 보기"를 띄울지 판단하는 근거.
+				hasMoreMessages,
 				jobPost: post ?? null,
 				messages: messages.map((message) => {
 					const revealedPhone =
@@ -928,6 +1220,8 @@ export const chatsRouter = {
 						revealedPhone,
 					};
 				}),
+				// 이 값을 그대로 다음 요청의 cursor로 보내면 그 이전 구간이 온다.
+				nextCursor,
 				room,
 				schedules,
 			};
@@ -941,12 +1235,15 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
 
 			const category = requireAllowedChatMedia(input);
+
+			// 서명 URL 발급은 매번 외부(IAM signBlob) 호출이라 횟수 자체를 묶어 둔다.
+			assertChatSendRateLimit("createAttachmentUpload", profile.userId);
 
 			return await createChatAttachmentUploadIntent({
 				byteSize: input.byteSize,
@@ -966,42 +1263,57 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
+			assertChatSendRateLimit("sendMessage", profile.userId);
 
-			const [message] = await db
-				.insert(chatMessage)
-				.values({
+			const messageId = input.messageId ?? generateChatMessageId();
+			// 메시지·방 갱신·전파 이벤트가 한 트랜잭션으로 함께 커밋된다. 예전에는 INSERT
+			// 뒤에 전파를 이어 했기 때문에, 그 사이에 죽으면 상대에게 아무 신호도 가지
+			// 않는 메시지가 남았다.
+			const message = await db.transaction(async (tx) => {
+				const [created] = await tx
+					.insert(chatMessage)
+					.values({
+						body: input.body,
+						chatRoomId: room.id,
+						id: messageId,
+						senderUserId: profile.userId,
+					})
+					.onConflictDoNothing()
+					.returning();
+
+				if (!created) {
+					return null;
+				}
+
+				await tx
+					.update(chatRoom)
+					.set({ updatedAt: new Date() })
+					.where(eq(chatRoom.id, room.id));
+				await enqueueChatMessageSync(tx, {
 					chatRoomId: room.id,
+					createdAt: created.createdAt,
+					messageId: created.id,
 					senderUserId: profile.userId,
-					body: input.body,
-				})
-				.returning();
-
-			if (!message) {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Chat message could not be created.",
 				});
+
+				return created;
+			});
+
+			// 같은 id가 이미 들어와 있다 = 재시도·더블클릭. 방 갱신도 전파도 다시 하지
+			// 않고 원래 행만 돌려준다.
+			if (!message) {
+				return await requireExistingChatMessage(
+					messageId,
+					room.id,
+					profile.userId
+				);
 			}
 
-			// 새 메시지는 소프트삭제한 방을 양쪽 모두 다시 노출한다(메시지 유실 방지).
-			await db
-				.update(chatRoom)
-				.set({
-					employerDeletedAt: null,
-					seekerDeletedAt: null,
-					updatedAt: new Date(),
-				})
-				.where(eq(chatRoom.id, room.id));
-
-			await notifyChatMessageCreated({
-				createdAt: toIsoDateTime(message.createdAt),
-				messageId: message.id,
-				profileUserId: profile.userId,
-				room,
-			});
+			await drainPendingChatMessageSyncs();
 
 			return message;
 		}),
@@ -1014,26 +1326,45 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
 
 			const category = requireAllowedChatMedia(input);
-			const { attachment, message } = await db.transaction(async (tx) => {
+
+			// storageKey는 응답에 실려 나가는 값이라 비밀이 아니다. 그대로 믿으면 업로드 없이
+			// 남의 방 첨부 키를 자기 방에 붙이거나 버킷의 임의 객체를 가리킬 수 있으므로,
+			// 공고·본문 미디어와 같은 방식으로 발급 시점 prefix 규칙을 다시 확인한다.
+			if (
+				!isOwnedChatAttachmentKey({
+					chatRoomId: room.id,
+					storageKey: input.storageKey,
+					userId: profile.userId,
+				})
+			) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "첨부 파일 정보가 올바르지 않아요. 다시 업로드해 주세요.",
+				});
+			}
+
+			assertChatSendRateLimit("sendMediaMessage", profile.userId);
+
+			const messageId = input.messageId ?? generateChatMessageId();
+			const inserted = await db.transaction(async (tx) => {
 				const [createdMessage] = await tx
 					.insert(chatMessage)
 					.values({
 						body: "첨부 파일을 보냈습니다.",
 						chatRoomId: room.id,
+						id: messageId,
 						senderUserId: profile.userId,
 					})
+					.onConflictDoNothing()
 					.returning();
 
 				if (!createdMessage) {
-					throw new ORPCError("INTERNAL_SERVER_ERROR", {
-						message: "Chat message could not be created.",
-					});
+					return null;
 				}
 
 				const [createdAttachment] = await tx
@@ -1058,12 +1389,14 @@ export const chatsRouter = {
 
 				await tx
 					.update(chatRoom)
-					.set({
-						employerDeletedAt: null,
-						seekerDeletedAt: null,
-						updatedAt: new Date(),
-					})
+					.set({ updatedAt: new Date() })
 					.where(eq(chatRoom.id, room.id));
+				await enqueueChatMessageSync(tx, {
+					chatRoomId: room.id,
+					createdAt: createdMessage.createdAt,
+					messageId: createdMessage.id,
+					senderUserId: profile.userId,
+				});
 
 				return {
 					attachment: createdAttachment,
@@ -1071,14 +1404,32 @@ export const chatsRouter = {
 				};
 			});
 
-			await notifyChatMessageCreated({
-				createdAt: message.createdAt,
-				messageId: message.id,
-				profileUserId: profile.userId,
-				room,
-			});
+			// 같은 id의 재전송이면 첨부도 이미 붙어 있다. 다시 쓰지 않고 그대로 돌려준다
+			// (storage_key 유니크 제약에 걸리기 전에 여기서 흡수된다).
+			if (!inserted) {
+				const message = await requireExistingChatMessage(
+					messageId,
+					room.id,
+					profile.userId
+				);
+				const [existingAttachment] = await db
+					.select()
+					.from(chatAttachment)
+					.where(eq(chatAttachment.messageId, message.id))
+					.limit(1);
 
-			return { attachment, message };
+				if (!existingAttachment) {
+					throw new ORPCError("CONFLICT", {
+						message: "이미 사용된 메시지 식별자예요. 다시 시도해 주세요.",
+					});
+				}
+
+				return { attachment: existingAttachment, message };
+			}
+
+			await drainPendingChatMessageSyncs();
+
+			return inserted;
 		}),
 
 	markRead: protectedProcedure
@@ -1094,13 +1445,20 @@ export const chatsRouter = {
 				room,
 			});
 
-			const readReceipts = await markChatMessagesRead({
+			const readReceipts = await markChatMessagesReadUpTo({
 				chatRoomId: room.id,
-				messageIds: input.messageIds,
 				readerUserId: profile.userId,
+				upToMessageId: input.upToMessageId,
 			});
 			const unreadCount = await getUnreadMessageCount({
 				chatRoomId: room.id,
+				userId: profile.userId,
+			});
+			// 핀(헤더 채팅 버튼·모바일 탭)이 그리는 값은 방별 수가 아니라 계정 전체 합계다.
+			// 읽음 응답에 그 합계를 함께 실어 주면, 화면이 "무효화 → 재조회"가 언제 도는지에
+			// 기대지 않고 곧바로 정본으로 맞출 수 있다. 증감 누적이 아니라 여기서 다시 센
+			// 값이므로 핀 숫자의 정본이 DB 집계라는 규칙은 그대로다.
+			const totalUnreadMessageCount = await getUnreadMessageCountForUser({
 				userId: profile.userId,
 			});
 
@@ -1127,6 +1485,7 @@ export const chatsRouter = {
 
 			return {
 				readMessageIds: readReceipts.map(({ messageId }) => messageId),
+				totalUnreadMessageCount,
 				unreadCount,
 			};
 		}),
@@ -1144,10 +1503,11 @@ export const chatsRouter = {
 				throw new ORPCError("FORBIDDEN");
 			}
 
-			await throwIfChatBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
+			assertChatSendRateLimit("proposeInterview", profile.userId);
 
 			const [schedule] = await db
 				.insert(interviewSchedule)
@@ -1181,9 +1541,13 @@ export const chatsRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
+			// 완료 처리만은 나간 방에서도 열어 둔다(사용자 확정) — 완료 버튼이 방이 아니라
+			// "예정된 면접" 목록에 있고, 방을 나갔다고 지난 약속을 못 끝내면 안 된다.
+			// 그 밖의 전환(확정·거절·취소)은 기존대로 나간 방에서 NOT_FOUND다.
 			const { profile, room } = await requireChatParticipant(
 				schedule.chatRoomId,
-				context.session
+				context.session,
+				{ allowLeftRoom: input.status === "completed" }
 			);
 
 			await throwIfChatBlocked({
@@ -1195,6 +1559,7 @@ export const chatsRouter = {
 				!canSetInterviewStatus({
 					actorUserId: profile.userId,
 					currentStatus: schedule.status,
+					employerUserId: room.employerUserId,
 					proposedByUserId: schedule.proposedByUserId,
 					requestedStatus: input.status,
 				})
@@ -1222,6 +1587,74 @@ export const chatsRouter = {
 			emitRoomUpdated({ roomId: room.id });
 
 			return updatedSchedule;
+		}),
+
+	/**
+	 * "예정된 면접" 아코디언이 펼칠 때 읽는 면접 컨텍스트 — 일정 + 그 방의 채팅 내역.
+	 *
+	 * 읽기 전용이다: 읽음영수증도, markRead도, 소켓 신호도 남기지 않는다. 지난 약속을
+	 * 다시 읽는 화면이라 상대에게 "읽음"이 가면 거짓 신호가 된다.
+	 * 나간 방도 연다(면접 예외). 차단·신고 대기 방은 기존 정책 그대로 막는다.
+	 */
+	getInterviewChatContext: protectedProcedure
+		.input(getInterviewChatContextInput)
+		.handler(async ({ context, input }) => {
+			const [schedule] = await db
+				.select()
+				.from(interviewSchedule)
+				.where(eq(interviewSchedule.id, input.interviewScheduleId))
+				.limit(1);
+
+			if (!schedule) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const { profile, room } = await requireChatParticipant(
+				schedule.chatRoomId,
+				context.session,
+				{ allowLeftRoom: true }
+			);
+
+			await throwIfChatUnavailable({
+				actorUserId: profile.userId,
+				room,
+			});
+
+			const { messages, nextCursor } = await loadChatMessagePage({
+				chatRoomId: room.id,
+				cursor: input.cursor,
+				limit: DEFAULT_CHAT_MESSAGE_PAGE_SIZE,
+			});
+			const counterpartNames = await resolveCounterpartNames(
+				[room],
+				profile.userId,
+				{ maskWithdrawn: false }
+			);
+			const [post] = await db
+				.select({ title: jobPost.title })
+				.from(jobPost)
+				.where(eq(jobPost.id, room.jobPostId))
+				.limit(1);
+
+			return {
+				counterpartName: counterpartNames.get(room.id) ?? null,
+				currentUserId: profile.userId,
+				jobTitle: post?.title ?? null,
+				// 읽기 전용 말풍선에 필요한 것만 싣는다. 첨부·연락처 요청도 body가 이미
+				// 사람이 읽는 문구라("첨부 파일을 보냈습니다.") 별도 매핑이 필요 없다.
+				messages: messages.map(
+					({ body, createdAt, id, kind, senderUserId }) => ({
+						body,
+						createdAt,
+						id,
+						kind,
+						senderUserId,
+					})
+				),
+				// 이 값을 그대로 다음 요청의 cursor로 보내면 그 이전 구간이 온다.
+				nextCursor,
+				schedule,
+			};
 		}),
 
 	// 조회 전용. 상대 연락처는 canViewCounterpart가 true일 때만 응답에 싣는다.
@@ -1334,7 +1767,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1349,6 +1782,8 @@ export const chatsRouter = {
 			) {
 				throw new ORPCError("FORBIDDEN");
 			}
+
+			assertChatSendRateLimit("revealContact", profile.userId);
 
 			const [consent] = await db
 				.insert(contactRevealConsent)
@@ -1399,11 +1834,18 @@ export const chatsRouter = {
 				throw new ORPCError("FORBIDDEN");
 			}
 
+			await throwIfChatUnavailable({
+				actorUserId: profile.userId,
+				room,
+			});
+
 			if (!profile.isPhoneVerified) {
 				throw new ORPCError("BAD_REQUEST", {
 					message: "본인인증 후 이용할 수 있습니다.",
 				});
 			}
+
+			assertChatSendRateLimit("requestContactReveal", profile.userId);
 
 			const [pending] = await db
 				.select({ id: chatMessage.id })
@@ -1423,38 +1865,46 @@ export const chatsRouter = {
 				});
 			}
 
-			const [message] = await db
-				.insert(chatMessage)
-				.values({
-					body: "연락처 공개를 요청했습니다.",
+			// 서버가 만드는 메시지도 클라이언트 전송과 같은 유틸로 id를 만든다 —
+			// 정렬·커서의 기준(UUIDv7)이 메시지 종류에 따라 갈리지 않게.
+			const message = await db.transaction(async (tx) => {
+				const [created] = await tx
+					.insert(chatMessage)
+					.values({
+						body: "연락처 공개를 요청했습니다.",
+						chatRoomId: room.id,
+						id: generateChatMessageId(),
+						kind: "contact_request",
+						metadata: {
+							requesterUserId: room.employerUserId,
+							status: "pending",
+							targetUserId: room.jobSeekerUserId,
+						},
+						senderUserId: profile.userId,
+					})
+					.returning();
+
+				if (!created) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR", {
+						message: "Contact request could not be created.",
+					});
+				}
+
+				await tx
+					.update(chatRoom)
+					.set({ updatedAt: new Date() })
+					.where(eq(chatRoom.id, room.id));
+				await enqueueChatMessageSync(tx, {
 					chatRoomId: room.id,
-					kind: "contact_request",
-					metadata: {
-						requesterUserId: room.employerUserId,
-						status: "pending",
-						targetUserId: room.jobSeekerUserId,
-					},
+					createdAt: created.createdAt,
+					messageId: created.id,
 					senderUserId: profile.userId,
-				})
-				.returning();
-
-			if (!message) {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Contact request could not be created.",
 				});
-			}
 
-			await db
-				.update(chatRoom)
-				.set({ updatedAt: new Date() })
-				.where(eq(chatRoom.id, room.id));
-
-			await notifyChatMessageCreated({
-				createdAt: message.createdAt,
-				messageId: message.id,
-				profileUserId: profile.userId,
-				room,
+				return created;
 			});
+
+			await drainPendingChatMessageSyncs();
 
 			return message;
 		}),
@@ -1495,11 +1945,18 @@ export const chatsRouter = {
 				throw new ORPCError("FORBIDDEN");
 			}
 
+			await throwIfChatUnavailable({
+				actorUserId: profile.userId,
+				room,
+			});
+
 			if (input.decision === "reveal" && !profile.isPhoneVerified) {
 				throw new ORPCError("BAD_REQUEST", {
 					message: "본인인증 후 연락처를 공개할 수 있습니다.",
 				});
 			}
+
+			assertChatSendRateLimit("respondContactReveal", profile.userId);
 
 			const nextStatus: ContactRequestStatus =
 				input.decision === "reveal" ? "revealed" : "declined";
@@ -1530,7 +1987,8 @@ export const chatsRouter = {
 			return updated;
 		}),
 
-	// 회원별 소프트삭제(목록 숨김). 상대는 그대로 보며, 새 메시지가 오면 재노출된다.
+	// 나가기 = 방이 양쪽 모두에게서 사라진다. 컬럼은 "누가 언제 나갔나" 기록으로만
+	// 남고, 되살아나지 않는다(재문의는 새 방).
 	deleteChatRoom: protectedProcedure
 		.input(deleteChatRoomInput)
 		.handler(async ({ context, input }) => {
@@ -1548,6 +2006,11 @@ export const chatsRouter = {
 						: { seekerDeletedAt: deletedAt }
 				)
 				.where(eq(chatRoom.id, room.id));
+
+			// 상대 목록에서도 즉시 사라져야 하므로 양쪽 유저 채널로 갱신 신호를 보낸다.
+			emitChatListUpdated([room.employerUserId, room.jobSeekerUserId], {
+				roomId: room.id,
+			});
 
 			return { ok: true as const };
 		}),

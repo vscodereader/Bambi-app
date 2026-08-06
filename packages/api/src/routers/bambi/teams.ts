@@ -17,6 +17,7 @@ import {
 	eq,
 	ilike,
 	inArray,
+	isNull,
 	notInArray,
 	or,
 } from "drizzle-orm";
@@ -357,13 +358,14 @@ export const teamsRouter = {
 				});
 			}
 
-			// 초대 대상은 현재 employer로 가입된 계정만 허용한다.
+			// 초대 대상은 현재 employer로 가입된 계정만 허용한다. 탈퇴 계정은 보존기간 동안
+			// 이메일이 그대로 남아 조회에 걸리지만 로그인이 막혀 초대를 수락할 수 없다.
 			const normalizedEmail = input.email.toLowerCase();
 			const [invitee] = await db
 				.select({ role: bambiProfile.role })
 				.from(user)
 				.innerJoin(bambiProfile, eq(bambiProfile.userId, user.id))
-				.where(eq(user.email, normalizedEmail))
+				.where(and(eq(user.email, normalizedEmail), isNull(user.deletedAt)))
 				.limit(1);
 
 			if (invitee?.role !== "employer") {
@@ -535,6 +537,10 @@ export const teamsRouter = {
 					and(
 						eq(bambiProfile.role, "employer"),
 						notInArray(user.id, excludedUserIds),
+						// 탈퇴 계정은 후보에서 뺀다. 로그인 자체가 막혀 초대해도 수락할 수 없고,
+						// 탈퇴 시 이름을 덮지 않게 되면서 이 목록이 탈퇴자의 실명·이메일을
+						// 그대로 노출하는 통로가 됐다.
+						isNull(user.deletedAt),
 						searchFilter,
 						pendingEmailFilter
 					)

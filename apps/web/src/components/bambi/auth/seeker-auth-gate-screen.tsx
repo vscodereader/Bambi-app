@@ -42,8 +42,11 @@ export async function SeekerAuthGateScreen() {
 				<AuthBackdrop jobs={backdropJobs} />
 				{/* md 미만에서는 문서 흐름에 두어 페이지가 정상 스크롤되고, md 이상에서만
 				    블러 배경 위에 겹쳐 띄운다. 스크림은 배경을 한 겹 눌러 카드 대비를
-				    확보하되, 뒤의 화면이 무엇인지는 알아볼 수 있는 정도로만 덮는다. */}
-				<div className="flex min-h-full items-center justify-center p-4 md:absolute md:inset-0 md:bg-background/60 md:p-8">
+				    확보하되, 뒤의 화면이 무엇인지는 알아볼 수 있는 정도로만 덮는다.
+				    겹쳐 띄운 층은 화면에서 잘라낸 고정 높이라, 카드가 그보다 길면(가입 폼
+				    1열) 넘친 부분이 아래 푸터를 덮는다 — overflow-y-auto로 그 층 안에서
+				    스크롤되게 해 푸터를 침범하지 않게 한다(카드의 my-auto가 짝이다). */}
+				<div className="flex min-h-full items-center justify-center p-4 md:absolute md:inset-0 md:overflow-y-auto md:bg-background/60 md:p-6">
 					{/* AuthPanel이 useSearchParams를 쓰므로 Suspense가 필요하다. */}
 					<Suspense>
 						<AuthPanel />

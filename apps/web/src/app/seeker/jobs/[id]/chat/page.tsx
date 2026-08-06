@@ -19,6 +19,7 @@ import {
 	useIsBlockedEmployer,
 	useMarketplaceJob,
 } from "@/lib/bambi/api-jobs";
+import { getChatBlockMessage } from "@/lib/bambi/chat-block";
 import { orpc } from "@/utils/orpc";
 
 const getErrorCode = (error: Error): string | undefined =>
@@ -29,6 +30,13 @@ const getChatStartErrorMessage = (error: Error): string => {
 
 	if (errorCode === "UNAUTHORIZED") {
 		return "로그인 후 채팅을 시작할 수 있어요.";
+	}
+
+	// 상대가 나간 방을 다시 열려는 경우처럼 서버가 사유를 실어 보냈으면 그대로 전한다.
+	const blockMessage = getChatBlockMessage(error);
+
+	if (blockMessage) {
+		return blockMessage;
 	}
 
 	if (errorCode === "FORBIDDEN") {

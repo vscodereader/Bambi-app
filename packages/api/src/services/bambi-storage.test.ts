@@ -6,9 +6,12 @@ dotenv.config({
 	path: "../../apps/server/.env",
 });
 
-const { isOwnedEditorMediaKey } = await import("./bambi-storage");
+const { isOwnedChatAttachmentKey, isOwnedEditorMediaKey } = await import(
+	"./bambi-storage"
+);
 
 const OWNER_ID = "user_owner";
+const ROOM_ID = "11111111-1111-4111-8111-111111111111";
 
 describe("bambi editor media key ownership", () => {
 	it("본인 네임스페이스의 키만 소유로 인정한다", () => {
@@ -43,6 +46,54 @@ describe("bambi editor media key ownership", () => {
 			isOwnedEditorMediaKey({
 				storageKey: "bambi-editor-media/abc/8f0c-photo.jpg",
 				userId: "ab",
+			})
+		).toBe(false);
+	});
+});
+
+describe("bambi chat attachment key ownership", () => {
+	it("발급 규칙(방·업로더)에 맞는 키만 소유로 인정한다", () => {
+		expect(
+			isOwnedChatAttachmentKey({
+				chatRoomId: ROOM_ID,
+				storageKey: `bambi-chat/${ROOM_ID}/${OWNER_ID}/8f0c-photo.jpg`,
+				userId: OWNER_ID,
+			})
+		).toBe(true);
+	});
+
+	it("다른 방·다른 사용자의 첨부 키는 거절한다", () => {
+		expect(
+			isOwnedChatAttachmentKey({
+				chatRoomId: ROOM_ID,
+				storageKey: `bambi-chat/22222222-2222-4222-8222-222222222222/${OWNER_ID}/8f0c-photo.jpg`,
+				userId: OWNER_ID,
+			})
+		).toBe(false);
+
+		expect(
+			isOwnedChatAttachmentKey({
+				chatRoomId: ROOM_ID,
+				storageKey: `bambi-chat/${ROOM_ID}/user_other/8f0c-photo.jpg`,
+				userId: OWNER_ID,
+			})
+		).toBe(false);
+	});
+
+	it("다른 네임스페이스나 상위 경로 탈출을 섞은 키는 거절한다", () => {
+		expect(
+			isOwnedChatAttachmentKey({
+				chatRoomId: ROOM_ID,
+				storageKey: `bambi-job-post-media/org_1/${OWNER_ID}/8f0c-photo.jpg`,
+				userId: OWNER_ID,
+			})
+		).toBe(false);
+
+		expect(
+			isOwnedChatAttachmentKey({
+				chatRoomId: ROOM_ID,
+				storageKey: `bambi-chat/${ROOM_ID}/${OWNER_ID}/../../../other/photo.jpg`,
+				userId: OWNER_ID,
 			})
 		).toBe(false);
 	});

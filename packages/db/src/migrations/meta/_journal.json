@@ -484,6 +484,27 @@
       "when": 1785976270703,
       "tag": "0068_broad_krista_starr",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1785976270704,
+      "tag": "0069_open_santa_claus",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1785982532576,
+      "tag": "0070_optimal_scream",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1785991916193,
+      "tag": "0071_harsh_black_knight",
+      "breakpoints": true
     }
   ]
 }

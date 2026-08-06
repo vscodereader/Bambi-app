@@ -1,5 +1,6 @@
 "use client";
 
+import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
@@ -68,8 +69,11 @@ const getValidationError = (
 	if (values.nickname.trim().length < 2) {
 		return { text: "닉네임을 2자 이상 입력해 주세요.", tone: "error" };
 	}
-	if (values.username.trim().length < 3) {
-		return { text: "아이디를 3자 이상 입력해 주세요.", tone: "error" };
+	// 아이디 규칙은 서버(better-auth username 플러그인)와 같은 공용 함수로 본다 —
+	// 여기서 통과한 값은 서버도 통과한다(규칙이 갈리면 폼은 보내는데 서버가 막는다).
+	const loginIdError = getLoginIdErrorMessage(values.username.trim());
+	if (loginIdError) {
+		return { text: loginIdError, tone: "error" };
 	}
 	if (!values.email.includes("@") || values.password.length < 8) {
 		return {
@@ -145,11 +149,11 @@ function AuthCardHeader({
 }) {
 	return (
 		<>
-			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-				<Logo lang="ko" size="lg" />
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<Logo lang="ko" size="md" />
 				{isSignUp ? <AuthSteps current={step === "verify" ? 1 : 2} /> : null}
 			</div>
-			<h2 className="mt-6 mb-5 font-extrabold text-2xl tracking-tight sm:text-3xl">
+			<h2 className="mt-5 mb-4 font-extrabold text-xl tracking-tight sm:text-2xl">
 				{title}
 			</h2>
 		</>
@@ -374,14 +378,17 @@ export function AuthPanel() {
 		setMode(isSignUp ? "sign-in" : "sign-up");
 	};
 
+	// my-auto: 이 래퍼는 데스크톱에서 스크롤 가능한 오버레이(seeker-auth-gate-screen)의
+	// flex 아이템이다. items-center로만 가운데를 잡으면 카드가 영역보다 클 때 위쪽이
+	// 스크롤로 닿지 않는 자리에 잘리므로, 남는 높이를 auto 마진으로 나눠 갖게 한다.
 	return (
-		<div className="w-full text-foreground">
+		<div className="my-auto w-full text-foreground">
 			{/* 게이트 카드는 폭·높이를 고정 수치로 잡는다 — 로그인·회원가입·인증 단계를
 			    오가도 카드 덩치가 흔들리지 않아야 한다. min-h라 폼이 더 길어지면 늘어난다.
 			    머리는 위, 본문은 남는 높이를 위아래로 나눈 광학 중앙, 19금 고지는 바닥.
 			    인증 단계처럼 내용이 짧아도 남는 높이가 "덩어리 아래의 빈 꼬리"로 몰리지 않는다. */}
 			<Card
-				className="mx-auto min-h-[620px] max-w-[580px] rounded-xl sm:p-7"
+				className="mx-auto min-h-[620px] max-w-[580px] rounded-xl sm:p-6"
 				pad="lg"
 			>
 				<AuthCardHeader isSignUp={isSignUp} step={step} title={title} />
@@ -399,15 +406,27 @@ export function AuthPanel() {
 						// @container: 2열 전환 기준은 뷰포트가 아니라 카드 폭이다 — 카드가
 						// max-w로 뷰포트보다 좁게 고정돼 있어 뷰포트 breakpoint로는 폼이
 						// 실제로 2열을 감당하는 시점을 맞출 수 없다.
+						// 칸 사이 간격은 gap-3으로 좁혀 둔다(로그인 2칸에는 사실상 차이가 없다).
 						<form
-							className="@container grid gap-4"
+							className="@container grid gap-3"
 							onSubmit={(event) => {
 								event.preventDefault();
 								handleSubmit().catch(() => undefined);
 							}}
 						>
 							{isSignUp ? (
-								<div className="grid @md:grid-cols-2 gap-4">
+								// 가입 폼만 혼합 배치다 — 1열은 6칸이 그대로 높이가 돼 카드가
+								// 푸터를 침범했고, 전면 2열은 이메일·가입 유형까지 반쪽으로
+								// 갈랐다. 짝지어도 읽는 순서가 흐려지지 않는 칸만 2열로 묶는다:
+								// 닉네임|아이디 · 이메일(전체) · 비밀번호|비밀번호 확인 ·
+								// 가입 유형(전체). 전체 폭 칸은 스스로 @md:col-span-2를 들고
+								// 있고 나머지는 자동 배치로 짝을 짓는다. 카드가 좁으면(모바일)
+								// 한 열이 되어 위 순서 그대로 세로로 흐른다.
+								// items-start: 아이디 칸 아래 규칙 안내가 그 행을 높이면, 기본
+								// stretch가 옆 닉네임 칸(label+입력 2행 그리드)까지 늘려 남는
+								// 높이를 행마다 나눠 준다 — 입력창이 아래로 밀려 두 칸의 라인이
+								// 어긋난다. 각 칸을 제 높이로 두면 상단·입력 라인이 맞는다.
+								<div className="grid @md:grid-cols-2 items-start gap-3">
 									<AuthSignupFields
 										onFieldChange={setField}
 										onSignupRoleChange={setSignupRole}
@@ -473,8 +492,8 @@ export function AuthPanel() {
 				    자체가 아니라 래퍼가 갖는다 — 패널에 pt를 주면 p-4로 잡아 둔 패널 안쪽 여백이
 				    깨진다. 바닥 고정은 위 본문의 my-auto가 이미 해 준다(뒤따르는 형제를 끝으로
 				    민다). 여기에 mt-auto를 또 주면 auto 마진이 셋이 되어 남는 높이를 1/3씩
-				    나눠 가져 위아래가 어긋난다. pt-10은 내용이 길 때의 최소 간격이다. */}
-				<div className="pt-10">
+				    나눠 가져 위아래가 어긋난다. pt-6은 내용이 길 때의 최소 간격이다. */}
+				<div className="pt-6">
 					<AdultNotice />
 				</div>
 			</Card>

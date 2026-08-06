@@ -1,12 +1,13 @@
+import { buttonVariants } from "@bambi-app/ui/components/button";
 import type { Metadata, Route } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CommunityPostForm } from "@/components/bambi/community-post-form";
-import { GuestVerifyCard } from "@/components/bambi/guest-verify-card";
+import { EmptyState } from "@/components/bambi/empty-state";
 import { communityWritePath } from "@/lib/bambi/community";
 import {
 	getPublicBoardBySlug,
 	isGuestWritableBoard,
-	publicWritePath,
 } from "@/lib/bambi/public-community";
 import { readGuestCanWrite, readVisitorState } from "@/lib/bambi/visitor";
 
@@ -36,13 +37,18 @@ export default async function PublicBoardWritePage({ params }: PageProps) {
 		redirect(communityWritePath(board.slug) as Route);
 	}
 
+	// 이 화면으로 오는 동선은 목록에서 없앴다(본인인증 CTA 제거) — 주소로 직접 들어온
+	// 미인증 방문자에게는 인증을 권하지 않고 로그인으로 안내한다.
 	if (!canWrite) {
 		return (
-			<GuestVerifyCard
-				description="성인 본인인증을 마치면 비회원도 자유수다·밤문화 이야기에 글을 남길 수 있어요."
-				redirectTo={publicWritePath(board.slug)}
-				title={`${board.label} 글쓰기`}
-				triggerLabel="본인인증하고 글쓰기"
+			<EmptyState
+				action={
+					<Link className={buttonVariants()} href="/seeker?auth=login">
+						로그인
+					</Link>
+				}
+				description="로그인하면 게시판에 글을 남길 수 있어요."
+				title="로그인이 필요해요"
 			/>
 		);
 	}

@@ -85,8 +85,8 @@ export function WithdrawAccountSection() {
 				<DialogContent>
 					<DialogTitle>정말 탈퇴하시겠어요?</DialogTitle>
 					<DialogDescription>
-						탈퇴 즉시 모든 기기에서 로그아웃되고 계정은 복구할 수 없어요. 남긴
-						채팅·리뷰는 '탈퇴한 회원'으로 표시돼요.
+						탈퇴 즉시 모든 기기에서 로그아웃되고 계정은 스스로 되돌릴 수 없어요.
+						남긴 채팅·리뷰는 '탈퇴한 회원'으로 표시돼요.
 					</DialogDescription>
 					<div className="flex justify-end gap-2">
 						<Button onClick={() => setOpen(false)} variant="outline">
