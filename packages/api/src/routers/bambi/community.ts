@@ -63,7 +63,10 @@ import {
 	validateJobPostImageUpload,
 } from "../../services/bambi-job-media-policy";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
-import { notifyBambiNotification } from "../../services/bambi-notifications";
+import {
+	notifyBambiNotification,
+	notifyModerationAction,
+} from "../../services/bambi-notifications";
 import { createEditorMediaUploadIntent } from "../../services/bambi-storage";
 import {
 	assertTiptapDoc,
@@ -1618,11 +1621,15 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const result = await db.transaction(async (tx) => {
 				// 이미 삭제된 글에 삭제 요청이 또 오는 경우를 먼저 거른다 — 화면이 버튼을
 				// 감춰도 낡은 목록 캐시나 다른 탭에서 요청이 들어올 수 있다.
 				const [existing] = await tx
-					.select({ status: communityPost.status })
+					.select({
+						// 알림 딥링크(/seeker/community/{slug}/{postId})에 필요하다.
+						board: communityPost.board,
+						status: communityPost.status,
+					})
 					.from(communityPost)
 					.where(eq(communityPost.id, input.postId))
 					.limit(1);
@@ -1663,8 +1670,23 @@ export const communityRouter = {
 					targetType: "community_post",
 				});
 
-				return { id: updated.id, status: updated.status };
+				return {
+					board: existing.board,
+					id: updated.id,
+					status: updated.status,
+				};
 			});
+
+			await notifyModerationAction({
+				action: `set_community_post_status:${input.status}`,
+				actorUserId: admin.userId,
+				metadata: { board: result.board, postId: input.postId },
+				reason: input.reason,
+				targetId: input.postId,
+				targetType: "community_post",
+			});
+
+			return { id: result.id, status: result.status };
 		}),
 
 	// 운영자 댓글 숨김/삭제/복구. commentCount 캐시는 노출(published)만 세므로
@@ -1674,13 +1696,19 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const result = await db.transaction(async (tx) => {
 				const [existing] = await tx
 					.select({
+						// 딥링크는 글 단위다 — 댓글이 속한 글의 게시판·id가 필요하다.
+						board: communityPost.board,
 						postId: communityComment.postId,
 						status: communityComment.status,
 					})
 					.from(communityComment)
+					.innerJoin(
+						communityPost,
+						eq(communityPost.id, communityComment.postId)
+					)
 					.where(eq(communityComment.id, input.commentId))
 					.limit(1);
 
@@ -1737,7 +1765,23 @@ export const communityRouter = {
 					targetType: "community_comment",
 				});
 
-				return { id: updated.id, status: updated.status };
+				return {
+					board: existing.board,
+					id: updated.id,
+					postId: existing.postId,
+					status: updated.status,
+				};
 			});
+
+			await notifyModerationAction({
+				action: `set_community_comment_status:${input.status}`,
+				actorUserId: admin.userId,
+				metadata: { board: result.board, postId: result.postId },
+				reason: input.reason,
+				targetId: input.commentId,
+				targetType: "community_comment",
+			});
+
+			return { id: result.id, status: result.status };
 		}),
 };
