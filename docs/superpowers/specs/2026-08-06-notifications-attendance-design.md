@@ -126,7 +126,8 @@ judgment 근거: "사용자 A의 행위가 B에게 영향을 주는데 B가 새�
 |---|---|---|---|
 | 공고 검수 승인/반려/보류 | `moderation.setJobPostStatus`(+bulk) | `job_post` | `/employer/jobs/{id}/edit` |
 | 공고 결제 승인(노출 개시) | `moderation.setJobPostPayment`(+bulk) | `job_post` | `/employer/promotions` |
-| 운영자의 내 공고 수정/삭제/노출 조정 | `moderation.adminUpdateJobPost`/`adminDeleteJobPost`/`adjustJobPostExposure` | `job_post` | `/employer` |
+| 운영자의 내 공고 수정/노출 조정 | `moderation.adminUpdateJobPost`/`adjustJobPostExposure` | `job_post` | `/employer/jobs/{id}/edit` (구현 시 개정 — 조치 대상 공고의 편집 화면이 정확한 착지점) |
+| 운영자의 내 공고 삭제 | `moderation.adminDeleteJobPost` | `job_post` | `/employer` (삭제된 공고의 edit는 404) |
 | 사업자 인증 승인/반려 | `moderation.setEmployerVerificationStatus` | `employer_verification` | `/employer/settings` |
 | 팀 초대 승인(합류됨) | `moderation.acceptTeamInvitation` | `team_invitation` | `/employer/settings/teams` |
 | 팀 초대 반려(초대자에게) | `moderation.rejectTeamInvitation` | `team_invitation` | `/employer/settings/teams` |
