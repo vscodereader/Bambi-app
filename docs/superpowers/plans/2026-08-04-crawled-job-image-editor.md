@@ -537,3 +537,24 @@ DB 통합 테스트와 브라우저 검증은 migration 적용 승인 뒤 수행
 - [x] `pnpm --filter web check-types` — 통과.
 - [x] `pnpm --filter @bambi-app/api exec vitest run src/services/bambi-crawled-image-document.test.ts` — 6개 통과.
 - [x] `pnpm --filter server check-types` — 통과.
+
+## 2026-08-06 최신 develop 동기화 및 PR 충돌 해소
+
+### 작업 원칙
+
+- GitHub PR #82를 직접 머지하거나 `develop`에 merge commit을 만들지 않는다. 동료가 검수 후 머지할 수 있도록 PR 브랜치만 정리한다.
+- 작업 전 현재 커밋 `2f6878d`를 로컬 백업 브랜치로 보존한다.
+- `feat/crawled-job-detail-image-editor`를 최신 `origin/develop` 위로 rebase해 PR에 기능 커밋만 남긴다.
+- 최신 `develop`의 DB 마이그레이션 `0063`~`0067`을 그대로 보존하고, 이미지 편집 스키마 변경은 다음 순번인 `0068`로 다시 생성한다.
+- 운영자 매뉴얼 충돌은 어느 한쪽을 버리지 않고 최신 매뉴얼 내용과 수집 공고 이미지 편집 안내를 함께 보존한다.
+- 검증이 모두 끝난 뒤에만 `--force-with-lease`로 PR 브랜치를 갱신한다. 일반 강제 push는 사용하지 않는다.
+
+### 검증 기준
+
+- [ ] rebase 완료 후 작업 트리에 충돌 표시와 미해결 파일이 없다.
+- [ ] 기존 `0063_lonely_famine.sql`과 중복 `0063_snapshot.json`이 제거되고 이미지 편집 마이그레이션이 `0068`로 생성된다.
+- [ ] 새 마이그레이션에는 이미지 편집 문서·편집 시각·편집자·revision 컬럼과 편집자 FK만 포함된다.
+- [ ] API·서버·웹·DB 타입 검사와 이미지 편집 관련 단위 테스트가 통과한다.
+- [ ] Ultracite 검사와 `git diff --check`가 통과한다.
+- [ ] PR #82의 base가 `develop`, head가 `feat/crawled-job-detail-image-editor`로 유지되고 GitHub에서 충돌 상태가 해소된다.
+- [ ] GitHub PR 머지는 수행하지 않는다.
