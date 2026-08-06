@@ -3,11 +3,13 @@ import {
 	type AnyPgColumn,
 	boolean,
 	check,
+	date,
 	index,
 	integer,
 	jsonb,
 	pgEnum,
 	pgTable,
+	primaryKey,
 	text,
 	timestamp,
 	uniqueIndex,
@@ -1497,6 +1499,26 @@ export const bambiNotification = pgTable(
 			table.targetType,
 			table.targetId
 		),
+	]
+);
+
+// 출석체크. 보상이 없어 (누가, 며칠) 두 축이면 충분하다 — 복합 PK가 "하루 1회"를 DB에서
+// 보장하므로 애플리케이션은 조건 분기 없이 onConflictDoNothing으로 멱등만 지키면 된다.
+// attended_on은 KST 달력일이다(서버가 services/bambi-attendance의 getKstDateString으로
+// 계산해 넣는다 — 클라이언트 시계 불신). 보상 도입 시 컬럼 추가로 확장한다.
+export const bambiAttendance = pgTable(
+	"bambi_attendance",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		attendedOn: date("attended_on").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.userId, table.attendedOn] }),
+		// 운영자 목록의 "오늘 출석자 수" 요약이 날짜 한 값으로 전 계정을 훑는다.
+		index("bambi_attendance_attended_on_idx").on(table.attendedOn),
 	]
 );
 
