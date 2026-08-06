@@ -41,6 +41,7 @@ import {
 	isChatRoomLeftByAnyone,
 } from "../../services/bambi-chat-participation";
 import {
+	getChatRecipientUserId,
 	getUnreadMessageCount,
 	getUnreadMessageCountForUser,
 	getUnreadMessageCountsByRoom,
@@ -62,6 +63,7 @@ import {
 	type ChatMediaUploadInput,
 	validateChatMediaUpload,
 } from "../../services/bambi-media-policy";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
 	canRevealContact,
 	canStartChat,
@@ -1468,7 +1470,24 @@ export const chatsRouter = {
 				})
 				.returning();
 
+			if (!schedule) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Interview schedule could not be created.",
+				});
+			}
+
 			emitRoomUpdated({ roomId: room.id });
+
+			// emitRoomUpdated는 그 방 소켓룸에 들어와 있는 클라이언트에게만 닿는다 —
+			// 방 밖(목록·다른 화면)에 있는 구직자는 새로고침 전까지 제안을 모른다.
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				chatRoomId: room.id,
+				metadata: { action: "proposed" },
+				recipientUserId: getChatRecipientUserId(room, profile.userId),
+				targetId: schedule.id,
+				targetType: "interview_schedule",
+			});
 
 			return schedule;
 		}),
@@ -1529,6 +1548,17 @@ export const chatsRouter = {
 			}
 
 			emitRoomUpdated({ roomId: room.id });
+
+			// 확정·거절·취소·완료 전부 상대가 알아야 하는 전이다. 상태값은 metadata.action에
+			// 실어 화면이 "면접이 확정됐어요"처럼 문구를 가른다.
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				chatRoomId: room.id,
+				metadata: { action: input.status },
+				recipientUserId: getChatRecipientUserId(room, profile.userId),
+				targetId: updatedSchedule.id,
+				targetType: "interview_schedule",
+			});
 
 			return updatedSchedule;
 		}),
@@ -1691,6 +1721,16 @@ export const chatsRouter = {
 					interviewScheduleId: schedule.id,
 				},
 				organizationId: room.organizationId,
+			});
+
+			// 연락처를 공개하는 쪽은 항상 구인자이고, 알아야 하는 쪽은 구직자다.
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				chatRoomId: room.id,
+				metadata: { contactMethod: input.contactMethod },
+				recipientUserId: room.jobSeekerUserId,
+				targetId: schedule.id,
+				targetType: "contact_reveal",
 			});
 
 			return consent;
