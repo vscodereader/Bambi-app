@@ -540,8 +540,8 @@ interface ChatComposerProps {
 	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
 
-// 상대가 나간 방에서도 입력창은 평소대로 열어 둔다 — 전송이 곧 방 부활이라 막을 이유가
-// 없고, 상대가 나갔다는 사실이 이 화면에 드러나서도 안 된다.
+// 입력창에는 나감 상태 배선이 없다 — 한쪽이라도 나간 방은 서버가 NOT_FOUND로 끊어
+// 화면 자체가 열리지 않으므로, 살아 있는 방에서는 잠글 이유가 없다.
 function ChatComposer({
 	attachmentDraft,
 	attachmentInputRef,
@@ -1257,19 +1257,24 @@ export function SeekerChatRoomResponsive({
 	// 한 건도 안 써졌다(안 읽음 뱃지가 영영 안 꺼짐). 기준선은 화면에 올라온 마지막
 	// 메시지다 — 내가 보낸 것이어도 그 앞의 상대 메시지는 본 것이므로 함께 읽음이 된다.
 	const lastVisibleMessageId = messages.at(-1)?.id ?? null;
-	const queueMarkRead = useChatRoomAutoRead({
+	const { queueMarkRead, reassertMarkRead } = useChatRoomAutoRead({
 		chatRoomId: roomId,
 		// 성공 여부를 훅이 알아야 실패한 기준선을 다시 시도할 수 있다.
 		markRead: markReadMutation.mutateAsync,
 	});
 	// 목록이 바뀐 뒤 레이아웃 커밋에서 스크롤 위치를 맞춘다(하단 고정·앵커 복원).
 	useLayoutEffect(() => syncScroll(messages), [messages, syncScroll]);
+	// 세션 id는 방 HTTP 조회가 끝나야 온다. 소켓 접속·입장이 그걸 기다리면 그 사이에 온
+	// 상대 메시지가 방 소켓룸으로 오지 않아 핀이 남는다. 값은 ref로만 흘려 넣어 도착이
+	// effect를 다시 돌리지 않게 한다(leave/join 왕복 방지).
+	const currentSessionUserIdRef = useRef<string | undefined>(undefined);
 
 	useEffect(() => {
-		if (!currentSessionUserId) {
-			return;
-		}
+		currentSessionUserIdRef.current = currentSessionUserId;
+	}, [currentSessionUserId]);
 
+	useEffect(() => {
+		// 참여자 검증은 서버 join 가드가 한다 — 클라이언트는 URL의 방 id만으로 바로 붙는다.
 		const socket = connectBambiChatSocket();
 		const refreshIfCurrentRoom = (payload: { roomId: string }) => {
 			if (payload.roomId === roomId) {
@@ -1320,7 +1325,7 @@ export function SeekerChatRoomResponsive({
 		}) => {
 			if (
 				payload.roomId !== roomId ||
-				payload.userId === currentSessionUserId
+				payload.userId === currentSessionUserIdRef.current
 			) {
 				return;
 			}
@@ -1328,6 +1333,24 @@ export function SeekerChatRoomResponsive({
 			setTypingUserIds((prev) =>
 				prev.includes(payload.userId) ? prev : [...prev, payload.userId]
 			);
+		};
+		// 이 방의 안 읽음이 아직 0이 아니라는 신호. 방을 보고 있는 동안 그 상태는 성립할 수
+		// 없으므로, 이미 보낸 기준선이어도 읽음을 다시 주장한다(어떤 레이스로 뜬 핀이든
+		// 자가 소멸). markRead 성공이 안 읽음 0 신호를 만들어 루프는 돌지 않는다.
+		const handleUnreadUpdated = (payload: {
+			roomId: string;
+			unreadCount: number;
+			userId: string;
+		}) => {
+			refreshIfCurrentRoom(payload);
+
+			if (
+				payload.roomId === roomId &&
+				payload.unreadCount > 0 &&
+				payload.userId === currentSessionUserIdRef.current
+			) {
+				reassertMarkRead();
+			}
 		};
 		const handleTypingStopped = (payload: {
 			roomId: string;
@@ -1348,7 +1371,7 @@ export function SeekerChatRoomResponsive({
 		socket.on("chat:message:created", handleMessageCreated);
 		socket.on("chat:message:read", refreshIfCurrentRoom);
 		socket.on("chat:room:updated", refreshIfCurrentRoom);
-		socket.on("chat:unread:updated", refreshIfCurrentRoom);
+		socket.on("chat:unread:updated", handleUnreadUpdated);
 		// 유저 채널로 오는 신호라 방 소켓룸을 잃은 상태에서도 도착한다 — 방 화면의
 		// 마지막 안전망.
 		socket.on("chat:list:updated", refreshIfCurrentRoom);
@@ -1364,7 +1387,7 @@ export function SeekerChatRoomResponsive({
 			socket.off("chat:message:created", handleMessageCreated);
 			socket.off("chat:message:read", refreshIfCurrentRoom);
 			socket.off("chat:room:updated", refreshIfCurrentRoom);
-			socket.off("chat:unread:updated", refreshIfCurrentRoom);
+			socket.off("chat:unread:updated", handleUnreadUpdated);
 			socket.off("chat:list:updated", refreshIfCurrentRoom);
 			socket.off("chat:typing:started", handleTypingStarted);
 			socket.off("chat:typing:stopped", handleTypingStopped);
@@ -1381,7 +1404,7 @@ export function SeekerChatRoomResponsive({
 			typingActiveRef.current = false;
 			setTypingUserIds([]);
 		};
-	}, [currentSessionUserId, invalidateRoom, queueMarkRead, roomId]);
+	}, [invalidateRoom, queueMarkRead, reassertMarkRead, roomId]);
 
 	useEffect(() => {
 		queueMarkRead(lastVisibleMessageId);
@@ -1468,7 +1491,7 @@ export function SeekerChatRoomResponsive({
 						채팅방을 불러올 수 없어요
 					</h1>
 					<p className="mt-2 mb-4 text-muted-foreground text-sm">
-						로그인 상태나 채팅방 접근 권한을 확인해 주세요.
+						종료됐거나 접근할 수 없는 채팅방이에요. 로그인 상태를 확인해 주세요.
 					</p>
 					<div className="flex flex-wrap justify-center gap-2">
 						<Button
