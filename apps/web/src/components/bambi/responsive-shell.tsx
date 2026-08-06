@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@bambi-app/ui/components/badge";
-import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import { buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	NavigationMenu,
 	NavigationMenuContent,
@@ -19,7 +19,8 @@ import type { ReactNode } from "react";
 import { useUnreadMessageCount } from "@/lib/bambi/use-unread-message-count";
 import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
-import { BellIcon, ShieldIcon } from "./icons";
+import { ShieldIcon } from "./icons";
+import { NotificationBell } from "./notification-bell";
 import { SiteFooter } from "./site-footer";
 
 export interface NavItem {
@@ -191,14 +192,7 @@ function ModeratorHeaderActions() {
 				</span>
 				운영자 모드
 			</Badge>
-			<Button
-				aria-label="알림"
-				className="bg-card"
-				size="icon-lg"
-				variant="outline"
-			>
-				<BellIcon />
-			</Button>
+			<NotificationBell />
 		</>
 	);
 }
@@ -219,6 +213,7 @@ function HeaderRightActions({
 	return (
 		<>
 			{isPublic ? null : <RoleSwitchLink />}
+			{isPublic ? null : <NotificationBell />}
 			{showChatButton ? <ChatNavButton withPin={!isPublic} /> : null}
 			<Link
 				className={cn(
@@ -337,21 +332,7 @@ export function ResponsiveAppShell({
 						<Logo lang="ko" size="sm" />
 					</Link>
 					<div className="flex items-center gap-2">
-						{(() => {
-							if (isModerator) {
-								return <ModeratorHeaderActions />;
-							}
-							return (
-								<Button
-									aria-label="알림"
-									className="bg-card"
-									size="icon-lg"
-									variant="outline"
-								>
-									<BellIcon />
-								</Button>
-							);
-						})()}
+						{isModerator ? <ModeratorHeaderActions /> : <NotificationBell />}
 					</div>
 				</div>
 			</header>
