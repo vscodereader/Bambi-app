@@ -1195,6 +1195,38 @@ export const chatMessage = pgTable(
 	]
 );
 
+/**
+ * 채팅 메시지 전파(소켓·알림)의 transactional outbox. **채팅 메시지 전용**이며 범용
+ * 이벤트 버스가 아니다.
+ *
+ * 메시지 INSERT와 같은 트랜잭션으로 행을 쌓고, 커밋 직후 인프로세스 컨슈머가 즉시
+ * 비워 간다(체감 지연 0). 전파에 실패해도 메시지는 이미 커밋돼 있으므로 행이 남아
+ * 부팅·주기 스윕이 다시 시도한다. 성공한 행은 즉시 삭제하므로 평소엔 거의 비어 있다.
+ * 안 읽음 숫자의 정본은 여전히 DB 집계(anti-join)다 — 이 큐는 재계산 신호일 뿐이다.
+ */
+export const chatMessageSyncQueue = pgTable(
+	"chat_message_sync_queue",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		chatRoomId: uuid("chat_room_id")
+			.notNull()
+			.references(() => chatRoom.id, { onDelete: "cascade" }),
+		messageId: uuid("message_id")
+			.notNull()
+			.references(() => chatMessage.id, { onDelete: "cascade" }),
+		senderUserId: text("sender_user_id")
+			.notNull()
+			.references(() => user.id),
+		// 소켓 페이로드에 실어 보내는 메시지 생성 시각(정렬 정본인 chat_message.created_at 사본).
+		messageCreatedAt: timestamp("message_created_at").notNull(),
+		attempts: integer("attempts").default(0).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("chat_message_sync_queue_created_at_idx").on(table.createdAt),
+	]
+);
+
 export const chatAttachment = pgTable(
 	"chat_attachment",
 	{
