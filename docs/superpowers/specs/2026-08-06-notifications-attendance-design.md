@@ -28,6 +28,7 @@
 | OS 알림 | **Notification API만** (탭 열림·비포커스 시). 진짜 Web Push(서비스워커+VAPID)는 후속 — 의존성 추가 없음 |
 | 생성 아키텍처 | **통일 행 + 공통 훅**: 모든 알림을 `bambi_notification` 행으로 통일. 운영자→사용자 축은 `adminModerationAction` 삽입 지점의 공통 훅 하나로 일괄 커버, 사용자간 이벤트만 개별 호출 |
 | 이벤트 범위 | **필수 + 유용 전부** (아래 §3 매트릭스). 운영자도 포함 — 새 심사거리(공고 검수·1:1 문의·신고 등) 도착 알림(사용자 지시로 범위 추가) |
+| 역할 공유 수신 | 운영자·법률자문 알림은 개인 복제 대신 **role 공유 1행 + 확인자 기록**(`recipient_role`·`read_by_user_id`) — 한 명이 확인하면 전원 배지에서 소거(사용자 제안 채택) |
 | 출석 방식 | 하루 1회 버튼 클릭, 보상 없음(기록·연속일·월 달력). 보상 시스템은 테이블 확장 여지만 남김 |
 | 운영자 출석 화면 | 사용자 목록표(검색·역할 필터·정렬) + 상단 요약 카운트. 개인 상세·차트는 후속 |
 | 병합 | 구현 완료 후에도 **로컬 머지 금지** — 브랜치·커밋 위치만 보고 |
@@ -39,6 +40,11 @@
 - **enum 신설**: `notification_target_type`. 감사 로그의 `moderation_target_type`과 분리한다(알림 전용 값으로 감사 enum 오염 방지 — 두 enum은 이 시점부터 독립 진화).
   - 값: `chat_message`, `chat_room`(기존 호환), `interview_schedule`, `contact_reveal`, `support_inquiry`, `report`, `community_post`, `community_comment`, `review`, `job_post`, `employer_verification`, `team_invitation`, `organization_member`
 - `bambi_notification.target_type` 컬럼을 새 enum으로 전환. 기존 저장값은 `chat_message`/`chat_room` 2종뿐이고 양쪽 enum에 존재하므로 `USING ... ::text::notification_target_type` 캐스트로 무손실 이전.
+- **역할 공유 수신 모델**(운영자·법률자문용, 사용자 지시로 개인 복제 대신 채택):
+  - `recipient_user_id`를 **nullable**로 완화하고 `recipient_role`(bambi_user_role enum, nullable) 컬럼 추가. **정확히 한쪽만 채워지는 CHECK**(커뮤니티 글의 회원/게스트 CHECK 선례와 동일 패턴).
+  - 개인 알림(구직자·업주 등)은 기존대로 `recipient_user_id` 1명. 운영자 새 심사거리·법률자문 새 잠금글은 `recipient_role='admin'`/`'legal_advisor'` **공유 1행** — 복제 팬아웃 없음.
+  - `read_by_user_id`(user FK, nullable) 추가: 공유 행을 누가 확인했는지 기록. **한 명이 확인하면 해당 역할 전원의 배지에서 사라지고**, 알림함에 "확인: ○○"가 표시된다(개인 행에서는 미사용 — 항상 본인).
+  - `recipient_role` 부분 인덱스 추가(공유 행 목록·카운트 조회용).
 - 그 외 컬럼 변경 없음 — `readAt`(읽음), `metadata`(이벤트 세부)가 이미 있다. 이벤트 세부(승인/반려 구분·사유·게시판 등)는 `metadata`에 담는다: `{ action?: string, reason?: string, board?: string, postId?: string, ... }`.
 - `actorUserId`는 NOT NULL 유지 — 이번 범위의 모든 이벤트는 행위자가 있다(시스템 발신 알림은 만료 임박 등 후속 범위).
 - **마이그레이션**: drizzle generate로 파일 생성까지만. 적용(migrate)은 사용자 명시 지시 후 실행(적용 검증 포함). `db:push` 금지.
@@ -47,10 +53,10 @@
 
 로그인 사용자 전원(protectedProcedure). 채팅 알림은 채팅 핀이 담당하므로 **알림함 축에서는 채팅류(`chat_message`·`chat_room`)를 제외**해 이중 카운트를 막는다.
 
-- `list({ cursor?, limit=20 })`: 본인 수신 알림 최신순 커서 페이지네이션. 채팅류 제외.
-- `unreadCount()`: 본인 미읽음 수(채팅류 제외). 벨 배지용.
-- `markRead({ ids })`: 본인 소유 행만 `readAt` 채움(멱등).
-- `markAllRead()`: 본인 미읽음 전체.
+- `list({ cursor?, limit=20 })`: 최신순 커서 페이지네이션. 채팅류 제외. 대상: `recipient_user_id = 본인` OR (`recipient_role = 본인 role` — admin·legal_advisor만 해당).
+- `unreadCount()`: 위 대상 중 미읽음 수(채팅류 제외). 벨 배지용 — 공유 행은 누군가 확인하는 순간 전원 카운트에서 빠진다.
+- `markRead({ ids })`: 본인 수신(개인 행) 또는 본인 role 수신(공유 행)만 `readAt` 채움(멱등). 공유 행은 `read_by_user_id = 본인`도 기록.
+- `markAllRead()`: 위 대상의 미읽음 전체. 공유 행도 포함(확인자로 본인 기록) — UI 문구는 "처리"가 아니라 **"확인"**으로 표기해 과대 표현을 피한다.
 
 ### 2.3 생성 — 공통 훅 + 개별 호출
 
@@ -76,9 +82,9 @@
 - `reviews.create` → `room.employerUserId`
 - `moderation.acceptTeamInvitation` → 합류된 employer / `rejectTeamInvitation` → `invitation.inviterId`
 - `teams.removeMember` / `setMemberRole` / `transferOwnership` → 대상 `member.userId`
-- `community.createPost`(board=`legal`, 잠금글) → `bambiProfile.role='legal_advisor'` 전원 팬아웃(`bambi_profile_role_idx` 인덱스 존재, 계정 수 소수)
+- `community.createPost`(board=`legal`, 잠금글) → `recipient_role='legal_advisor'` **공유 1행**
 
-**운영자 팬아웃** (새 심사거리 도착 — `bambiProfile.role='admin'` 전원에게 행 생성, legal 팬아웃과 동일 패턴):
+**운영자 공유 알림** (새 심사거리 도착 — `recipient_role='admin'` 공유 1행, 복제 없음):
 
 - `jobs.create` 등 공고가 검수 대기 상태로 들어가는 지점(생성·반려 후 재제출) → 새 공고 검수 대기
 - `support.createInquiry` → 새 1:1 문의 접수 / `support.createInquiryMessage`(`isStaff=false`) → 사용자 재질문
@@ -87,13 +93,14 @@
 - `teams.inviteMember` / `resubmitInvitation` → 팀 초대 심사 요청
 - `reviews.create`(정책 결과가 심사 대기일 때) → 리뷰 심사 대기
 
-운영자 알림의 알려진 한계(수용): 읽음은 행 단위 개인 상태라 **한 운영자가 큐를 처리해도 다른 운영자의 알림은 미읽음으로 남는다**. 처리 연동(대상 처리 시 관련 알림 일괄 읽음)은 후속. 볼륨이 큰 축(공고·신고)은 알림함이 길어질 수 있으나 "모두 읽음"으로 관리한다.
+공유 행의 읽음 의미론: **한 명이 확인하면 역할 전원의 배지에서 사라진다**(확인자는 `read_by_user_id`로 기록, 알림함에 "확인: ○○" 표시). "확인"은 담당 인수 표시일 뿐 실제 큐 처리와는 별개이며, 대상 처리 시 자동 확인 연동은 후속. 반대로 다른 운영자가 먼저 확인한 알림은 내 알림함에서 읽음 상태로 보인다 — 큐 성격상 의도된 동작.
 
 **에러 처리**: 알림 생성은 전부 best-effort. 실패해도 본 작업(면접 제안·검수 등)을 실패시키지 않고 로그만 남긴다(기존 `createBambiNotification` 호출부 패턴과 동일).
 
 ### 2.4 SSE
 
 - 이벤트 페이로드의 `targetType` 타입을 새 enum 값 전체로 확장(`bambi-notification-stream.ts:7`의 리터럴 유니언). 와이어 포맷·플러그인·하트비트·상한 로직 변경 없음.
+- 공유 행(role 수신)은 생성 시점에 해당 role 사용자 id 목록을 조회해(`bambi_profile_role_idx` 인덱스 존재, 계정 수 소수) 각자의 열린 스트림으로 `emitBambiNotification` — DB 행은 1개, SSE 전송만 N명.
 
 ## 3. 알림 이벤트 확정 매트릭스
 
@@ -146,7 +153,7 @@ judgment 근거: "사용자 A의 행위가 B에게 영향을 주는데 B가 새�
 | 팀 초대 심사 요청 | `teams.inviteMember`/`resubmitInvitation` | `team_invitation` | `submitted` | `/moderator/team-invites` |
 | 리뷰 심사 대기 | `reviews.create`(pending 판정 시) | `review` | `submitted` | `/moderator/reviews` |
 
-수신자는 `bambiProfile.role='admin'` 전원 팬아웃. enum 추가 값은 필요 없다(전부 기존 값 + `metadata.action`으로 구분).
+수신은 `recipient_role='admin'` 공유 1행(§2.1). enum 추가 값은 필요 없다(전부 기존 값 + `metadata.action`으로 구분).
 
 ### 제외 (판정 근거 포함)
 
@@ -161,7 +168,7 @@ judgment 근거: "사용자 A의 행위가 B에게 영향을 주는데 B가 새�
 - **벨 배선**: `responsive-shell.tsx`의 벨 2곳(데스크톱 헤더·모바일)에 `unreadCount` 배지(9+ 캡) + 클릭 시 알림함 이동. 채팅 핀과 별개 카운트. **운영자는 `ModeratorShell`(persona-nav.tsx)에 벨 진입점을 추가**(동일 배지·동일 알림함 이동).
 - **알림함 라우트**: `/seeker/notifications` 단일 경로를 전 역할(운영자 포함) 공유(채팅 라우트 `/seeker/chats/{roomId}` 공유 선례와 동일).
 - **렌더링**: `(targetType, metadata.action)` → 한국어 라벨 맵 + 딥링크 맵을 `apps/web/src/lib/bambi/notification-labels.ts`(순수 로직, vitest 동거)에 정의. enum 원값 화면 노출 금지 규칙 준수. 반려·숨김류는 `metadata.reason`을 본문에 표시.
-- **동작**: 항목 클릭 → `markRead` + 딥링크 이동. 상단 "모두 읽음" 버튼. 미읽음 항목은 시각 구분. 빈 상태는 `Empty` 컴포넌트.
+- **동작**: 항목 클릭 → `markRead` + 딥링크 이동. 상단 "모두 읽음" 버튼. 미읽음 항목은 시각 구분. 빈 상태는 `Empty` 컴포넌트. 공유 행(운영자·법률자문)은 읽음 상태에 **"확인: ○○"**(확인자 표시명)를 함께 표시.
 - **SSE 훅 확장**(`use-bambi-notification-stream.ts`): targetType이 채팅류면 기존 무효화(채팅 핀·목록·방) 유지, 그 외면 `notifications.list`·`notifications.unreadCount` 무효화. `onOpen`(재연결) 시 양쪽 모두 무효화.
 - **Notification API**: 권한 허용 상태 + `document.hidden`일 때만 targetType 라벨로 OS 알림 표시, 클릭 시 딥링크로 포커스 이동. 권한 요청은 알림함 화면의 안내 배너(허용 버튼)에서만 — 진입 시 강제 팝업 금지. 서비스워커·서버 변경·의존성 추가 없음.
 
@@ -200,7 +207,7 @@ judgment 근거: "사용자 A의 행위가 B에게 영향을 주는데 B가 새�
 
 - 진짜 Web Push(서비스워커 + VAPID + `web-push` 의존성 — 라이브러리 추가 허가 필요)
 - 광고 만료 임박 알림(스케줄러 플러그인 + `actorUserId` nullable화)
-- 운영자 알림의 처리 연동(대상 처리 시 관련 알림 일괄 읽음) 및 큐별 미처리 카운트 배지
+- 운영자 알림의 처리 연동(대상 큐 처리 시 공유 알림 자동 확인) 및 큐별 미처리 카운트 배지
 - 조직 단위 이벤트의 구성원 팬아웃(현재는 작성자/owner 1명)
 - 출석 보상 시스템, 운영자 개인별 출석 상세·통계 차트
 - 오래된 알림 정리(retention)
