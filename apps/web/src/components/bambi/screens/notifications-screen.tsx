@@ -17,6 +17,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import {
 	useInfiniteQuery,
 	useMutation,
+	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
 import type { Route } from "next";
@@ -139,8 +140,16 @@ export function NotificationsScreen() {
 		})
 	);
 
+	// 벨 배지와 같은 쿼리(캐시 공유). 미읽음이 2페이지 이후에만 있으면 로드된 목록만으로는
+	// 판정이 어긋나 "배지엔 N개인데 모두 확인이 비활성"이 된다 — 정본 카운트로 활성 판정한다.
+	const unreadCountQuery = useQuery(
+		orpc.bambi.notifications.unreadCount.queryOptions()
+	);
+
 	const items = query.data?.pages.flatMap((page) => page.items) ?? [];
-	const hasUnread = items.some((item) => item.readAt === null);
+	const hasUnread =
+		(unreadCountQuery.data?.unreadCount ?? 0) > 0 ||
+		items.some((item) => item.readAt === null);
 
 	const openNotification = (item: (typeof items)[number]) => {
 		if (item.readAt === null) {
@@ -181,7 +190,25 @@ export function NotificationsScreen() {
 				</div>
 			) : null}
 
-			{query.isLoading || items.length > 0 ? null : (
+			{/* 실패를 "빈 알림함"으로 위장하면 사용자가 재시도할 방법이 없다 — 따로 세운다. */}
+			{query.isError ? (
+				<EmptyState
+					action={
+						<Button
+							onClick={() => {
+								query.refetch().catch(() => undefined);
+							}}
+							type="button"
+						>
+							다시 시도
+						</Button>
+					}
+					description="알림을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
+					title="불러오기 실패"
+				/>
+			) : null}
+
+			{query.isLoading || query.isError || items.length > 0 ? null : (
 				<EmptyState
 					description="면접 제안·검수 결과처럼 바로 알아야 하는 소식이 여기에 쌓여요."
 					title="아직 받은 알림이 없어요"
