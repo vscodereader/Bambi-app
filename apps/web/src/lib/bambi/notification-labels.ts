@@ -119,9 +119,31 @@ export function notificationTitle(item: BambiNotificationView): string {
 	);
 }
 
-/** 반려·숨김류의 사유. 사유가 없는 이벤트는 본문 없이 제목만 보여준다. */
+// 사유를 본문으로 낼 수 있는 부정 전이 결과. metadata.reason은 부정 전이에서만 당사자에게
+// 남기는 설명이고, 그 밖(승인·게시·접수)에서는 운영자 내부 메모이거나 신고 사유 enum
+// 원값이라 그대로 렌더하면 안 새야 할 값이 샌다(스펙 §4).
+const REASON_VISIBLE_OUTCOMES = new Set([
+	"deleted",
+	"hard_delete",
+	"hidden",
+	"on_hold",
+	"rejected",
+]);
+
+/**
+ * 반려·숨김류의 사유. 사유가 없거나 부정 전이가 아니면 본문 없이 제목만 보여준다.
+ * action은 `set_status:rejected`·`set_community_post_status:hidden`처럼 접미가 붙거나
+ * `hard_delete`·`rejected`처럼 단독으로 오므로 마지막 세그먼트로 판정한다.
+ */
 export function notificationBody(item: BambiNotificationView): null | string {
-	return readString(item.metadata, "reason");
+	const rawAction = action(item);
+	// 신고 처리 결과의 reason만 예외로 전이 방향과 무관하게 남긴다 — 운영자가 신고자에게
+	// 남기는 처리 메모라(setReportStatus의 자유 입력) 결과가 resolved여도 본문이 정보다.
+	const visible =
+		rawAction.startsWith("set_report_status:") ||
+		REASON_VISIBLE_OUTCOMES.has(rawAction.split(":").at(-1) ?? "");
+
+	return visible ? readString(item.metadata, "reason") : null;
 }
 
 const boardSlug = (item: BambiNotificationView): null | string => {

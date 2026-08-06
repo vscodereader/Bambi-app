@@ -93,6 +93,57 @@ describe("notificationBody", () => {
 		).toBe("사진 미비");
 	});
 
+	it("접미가 붙은 부정 전이 사유도 본문으로 보여준다", () => {
+		expect(
+			notificationBody(
+				view({
+					metadata: {
+						action: "set_community_post_status:hidden",
+						reason: "정책 위반",
+					},
+					targetType: "community_post",
+				})
+			)
+		).toBe("정책 위반");
+	});
+
+	it("승인·게시·접수 알림은 사유가 있어도 본문을 내지 않는다", () => {
+		expect(
+			notificationBody(
+				view({
+					metadata: { action: "set_status:published", reason: "운영자 메모" },
+				})
+			)
+		).toBeNull();
+		// 신고 접수 공유 알림의 reason은 enum 원값이라 특히 새면 안 된다.
+		expect(
+			notificationBody(
+				view({
+					metadata: {
+						action: "submitted",
+						reason: "illegal_or_prohibited_content",
+					},
+					recipientRole: "admin",
+					targetType: "report",
+				})
+			)
+		).toBeNull();
+	});
+
+	it("신고 처리 결과는 부정 전이가 아니어도 처리 메모를 보여준다", () => {
+		expect(
+			notificationBody(
+				view({
+					metadata: {
+						action: "set_report_status:resolved",
+						reason: "조치 완료했습니다.",
+					},
+					targetType: "report",
+				})
+			)
+		).toBe("조치 완료했습니다.");
+	});
+
 	it("사유가 없으면 본문도 없다", () => {
 		expect(
 			notificationBody(view({ metadata: { action: "submitted" } }))
