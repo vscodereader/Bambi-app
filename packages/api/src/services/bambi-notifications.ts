@@ -87,11 +87,17 @@ export const createBambiNotification = async (
 			).map((row) => row.userId);
 
 	// 본문·연락처는 담지 않고 "무엇이 생겼는지"만 보내 클라이언트가 정본을 다시 조회하게 한다.
+	// action·recipientRole만 예외로 싣는다 — 둘이 없으면 OS 배너 문구가 targetType 폴백으로
+	// 떨어져 "게시됐어요/반려됐어요"가 뭉개지고 운영자 큐 알림이 "내 것이 처리됐다"로 뒤집힌다.
+	const action = input.metadata?.action;
+
 	for (const userId of recipientUserIds) {
 		emitBambiNotification(userId, {
+			action: typeof action === "string" ? action : null,
 			chatRoomId: input.chatRoomId ?? null,
 			createdAt: notification.createdAt.toISOString(),
 			notificationId: notification.id,
+			recipientRole: input.recipientRole ?? null,
 			targetId: input.targetId,
 			targetType: input.targetType,
 		});

@@ -53,9 +53,12 @@ const parseNotificationEvent = (
 		}
 
 		return {
+			// 배포 중에는 옛 서버 프레임(두 필드 없음)이 섞여 올 수 있다 — 그때는 폴백 문구로 돈다.
+			action: parsed.action ?? null,
 			chatRoomId: parsed.chatRoomId ?? null,
 			createdAt: parsed.createdAt ?? new Date().toISOString(),
 			notificationId: parsed.notificationId,
+			recipientRole: parsed.recipientRole ?? null,
 			targetId: parsed.targetId ?? "",
 			targetType: parsed.targetType,
 		};
@@ -231,30 +234,32 @@ export function useBambiNotificationStream(enabled: boolean): void {
 
 		return subscribeNotificationStream({
 			onEvent: (event) => {
+				// 배지·목록만 갱신하면 "안 읽음 1인데 방에는 그 메시지가 없는" 상태가 된다
+				// (방 소켓룸을 잃었거나 소켓과 SSE가 서로 다른 인스턴스에 붙은 경우).
+				// targetType과 무관하게 돈다 — 면접 제안·연락처 공개는 chat_message 행을
+				// 만들지 않아 방 캐시를 대신 복구해 줄 이벤트가 뒤따르지 않는다.
+				if (event.chatRoomId) {
+					invalidate(
+						orpc.bambi.chats.getById.key({
+							input: { id: event.chatRoomId },
+						})
+					);
+				}
+
 				if (CHAT_TARGET_TYPES.has(event.targetType)) {
 					refreshChat();
-
-					// 배지·목록만 갱신하면 "안 읽음 1인데 방에는 그 메시지가 없는" 상태가 된다
-					// (방 소켓룸을 잃었거나 소켓과 SSE가 서로 다른 인스턴스에 붙은 경우).
-					if (event.chatRoomId) {
-						invalidate(
-							orpc.bambi.chats.getById.key({
-								input: { id: event.chatRoomId },
-							})
-						);
-					}
 					return;
 				}
 
 				refreshNotifications();
-				// SSE 페이로드에는 metadata·recipientRole이 없어 targetType 기본 문구만 나온다.
-				// 정확한 문구·딥링크는 알림함이 정본이라, 클릭은 알림함으로만 보낸다.
+				// 페이로드에는 action·recipientRole만 있어 제목까지는 정확하지만, 사유·딥링크에
+				// 필요한 나머지 metadata는 없다 — 정본은 알림함이라 클릭은 알림함으로만 보낸다.
 				showOsNotification({
 					href: NOTIFICATIONS_HREF,
 					title: notificationTitle({
 						chatRoomId: event.chatRoomId,
-						metadata: null,
-						recipientRole: null,
+						metadata: event.action ? { action: event.action } : null,
+						recipientRole: event.recipientRole,
 						targetId: event.targetId,
 						targetType: event.targetType,
 					}),

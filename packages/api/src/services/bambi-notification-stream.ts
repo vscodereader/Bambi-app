@@ -23,9 +23,16 @@ export type BambiNotificationTargetType =
 	| "team_invitation";
 
 export interface BambiNotificationEvent {
+	/**
+	 * metadata.action만 뽑아 실은 값(사유·본문은 싣지 않는다). 이게 없으면 클라이언트가
+	 * targetType 기본 문구로만 떨어져 "게시됨"과 "반려됨"이 같은 제목으로 나온다.
+	 */
+	action: null | string;
 	chatRoomId: null | string;
 	createdAt: string;
 	notificationId: string;
+	/** 채워져 있으면 역할 공유 큐 알림이다 — 문구가 "내 것 처리됨"이 아니라 "처리거리 도착"이 된다. */
+	recipientRole: null | string;
 	targetId: string;
 	targetType: BambiNotificationTargetType;
 }
