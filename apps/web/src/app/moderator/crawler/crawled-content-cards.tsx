@@ -40,6 +40,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	ExternalLinkIcon,
+	ImageIcon,
 	MoreHorizontalIcon,
 	RotateCcwIcon,
 	Trash2Icon,
@@ -74,6 +75,8 @@ const truncateTitle = (title: string): string =>
 // (crawled-jobs.ts). needs_review·expired·removed를 링크로 걸면 눌러서 NOT_FOUND를
 // 만나게 되므로, active인 행만 링크·「상세 보기」를 내주고 나머지는 일반 텍스트로 둔다.
 const crawledDetailHref = (id: string) => `/seeker/jobs/crawled/${id}` as Route;
+const crawledImageEditHref = (id: string) =>
+	`/moderator/crawler/jobs/${id}/edit` as Route;
 
 type CrawledPostStatus = keyof typeof CRAWLED_POST_STATUS_LABELS;
 type StatusFilter = "all" | CrawledPostStatus;
@@ -283,6 +286,16 @@ export function CrawledJobPostsCard() {
 																>
 																	<ExternalLinkIcon />
 																	상세 보기
+																</DropdownMenuItem>
+																<DropdownMenuItem
+																	render={
+																		<Link
+																			href={crawledImageEditHref(item.id)}
+																		/>
+																	}
+																>
+																	<ImageIcon />
+																	이미지 편집
 																</DropdownMenuItem>
 																<DropdownMenuSeparator />
 															</>
