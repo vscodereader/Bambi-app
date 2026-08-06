@@ -91,6 +91,17 @@ export function AuthSignupFields({
 					{loginIdError ?? LOGIN_ID_HELP_TEXT}
 				</span>
 			</label>
+			<label className="grid gap-2" htmlFor="auth-email">
+				<span className="font-bold text-sm">이메일</span>
+				<Input
+					autoComplete="email"
+					id="auth-email"
+					onChange={onFieldChange("email")}
+					placeholder="이메일을 입력해주세요."
+					type="email"
+					value={values.email}
+				/>
+			</label>
 			<label className="grid gap-2" htmlFor="auth-password">
 				<span className="font-bold text-sm">비밀번호</span>
 				<Input
@@ -113,20 +124,7 @@ export function AuthSignupFields({
 					value={values.passwordConfirm}
 				/>
 			</label>
-			{/* 아래 셋은 2열 그리드(넓은 게이트 카드)에서 한 행을 통째로 쓴다.
-			    전환 기준은 뷰포트가 아니라 폼을 감싼 카드 폭(@container)이다. */}
-			<label className="@md:col-span-2 grid gap-2" htmlFor="auth-email">
-				<span className="font-bold text-sm">이메일</span>
-				<Input
-					autoComplete="email"
-					id="auth-email"
-					onChange={onFieldChange("email")}
-					placeholder="이메일을 입력해주세요."
-					type="email"
-					value={values.email}
-				/>
-			</label>
-			<div className="@md:col-span-2 grid gap-2">
+			<div className="grid gap-2">
 				<span className="font-bold text-sm" id="auth-role-label">
 					가입 유형
 				</span>
@@ -151,7 +149,7 @@ export function AuthSignupFields({
 			</div>
 			{signupRole === "employer" ? (
 				<p
-					className="@md:col-span-2 m-0 rounded-lg border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm"
+					className="m-0 rounded-lg border border-border bg-secondary px-4 py-3 text-muted-foreground text-sm"
 					role="note"
 				>
 					가입 후 업체 정보를 입력하고 운영자 승인을 받으면 구인 기능을 이용할

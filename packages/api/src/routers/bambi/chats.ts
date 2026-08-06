@@ -38,8 +38,6 @@ import {
 import { generateChatMessageId } from "../../services/bambi-chat-message-id";
 import {
 	getChatRoomReviveFields,
-	getSenderRoomRestoreFields,
-	hasCounterpartLeftChatRoom,
 	isChatRoomLeftByAnyone,
 } from "../../services/bambi-chat-participation";
 import {
@@ -544,14 +542,12 @@ const resolveBlockedCounterpartIds = async (
 type ChatBlockReason =
 	| "blocked_by_counterpart"
 	| "blocked_by_me"
-	| "counterpart_left"
 	| "moderation"
 	| "pending_report";
 
 const CHAT_BLOCK_MESSAGES: Record<ChatBlockReason, string> = {
 	blocked_by_counterpart: "상대가 회원님을 차단한 채팅방이에요.",
 	blocked_by_me: "회원님이 상대를 차단한 채팅방이에요.",
-	counterpart_left: "상대방이 채팅방을 나가서 더 이상 메시지를 보낼 수 없어요.",
 	moderation: "신고에 대한 운영자 조치로 종료된 채팅방이에요.",
 	pending_report: "신고를 검토하고 있는 채팅이에요. 처리 후 다시 볼 수 있어요.",
 };
@@ -700,8 +696,11 @@ const throwIfHiddenByMyReport = async ({
 };
 
 /**
- * 방을 열어 보는 것까지 허용되는 가드(운영자 조치·사용자 차단·내 신고 대기).
- * 상대가 나간 방은 읽기는 그대로 두고 발신만 막으므로 여기서 보지 않는다.
+ * 채팅 가드(운영자 조치·사용자 차단·내 신고 대기). 열람·발신이 같은 기준을 쓴다.
+ *
+ * 상대가 "나가기"로 지운 방도 막지 않는다 — 전송이 곧 방 부활이라(양쪽 소프트삭제
+ * 리셋) 상대 목록에 방이 다시 뜨고 대화가 이어진다. 나간 사실 자체를 상대에게
+ * 드러내지 않는 것이 정책이라, 발신 차단도 안내도 두지 않는다.
  */
 const throwIfChatUnavailable = async ({
 	actorUserId,
@@ -712,31 +711,6 @@ const throwIfChatUnavailable = async ({
 }): Promise<void> => {
 	await throwIfChatBlocked({ actorUserId, room });
 	await throwIfHiddenByMyReport({ actorUserId, room });
-};
-
-/**
- * 발신 계열(메시지·첨부·면접 제안·연락처 요청 등) 전용 가드.
- *
- * 상대가 "나가기"로 지운 방에 새 내용을 밀어 넣지 못하게 한다. 예전에는 전송이 양쪽
- * 소프트삭제를 되돌려 나간 사람 방을 강제로 되살렸는데, 그건 나간 쪽 의사를 무시하는
- * 동작이라 차단 사유(counterpart_left)로 거절한다.
- */
-const throwIfChatSendBlocked = async ({
-	actorUserId,
-	room,
-}: {
-	actorUserId: string;
-	room: CounterpartRoom & {
-		employerDeletedAt: Date | null;
-		isBlocked: boolean;
-		seekerDeletedAt: Date | null;
-	};
-}): Promise<void> => {
-	await throwIfChatUnavailable({ actorUserId, room });
-
-	if (hasCounterpartLeftChatRoom(room, actorUserId)) {
-		await throwChatBlocked("counterpart_left", room, actorUserId);
-	}
 };
 
 export const chatsRouter = {
@@ -824,10 +798,8 @@ export const chatsRouter = {
 				throw new ORPCError("NOT_FOUND");
 			}
 
-			// 공고에서 다시 문의를 거는 것은 명시적인 "새 대화" 의도라, 나간 쪽이 누구든
-			// 방을 부활시킨다(공고×구직자 유니크 제약 때문에 새 방을 팔 수 없다).
-			// 방 **안**에서의 일반 발신은 여전히 counterpart_left로 막힌다 — 나간 상대의
-			// 목록을 발신자가 마음대로 되살리는 건 이 경로에서만 허용한다.
+			// 내가 나갔던 방으로 공고에서 다시 문의를 거는 경로. 방 안 발신과 같은
+			// 규칙으로 양쪽 소프트삭제를 되돌린다(공고×구직자 유니크라 새 방은 못 판다).
 			if (!isChatRoomLeftByAnyone(existingRoom)) {
 				return existingRoom;
 			}
@@ -953,9 +925,6 @@ export const chatsRouter = {
 			// 목록 화면이 뷰어 쪽(구직자/구인자)을 판별하고 차단 대상을 고르는 근거.
 			// 방 row에는 양쪽 id만 있어 뷰어가 누구인지 화면에서 알 수 없다.
 			counterpartUserId: counterpartUserId(room, profile.userId),
-			// 상대가 나간 방은 목록에서도 발신 불가를 미리 알린다(방에 들어가서야
-			// 입력창이 잠긴 걸 발견하지 않도록).
-			hasCounterpartLeft: hasCounterpartLeftChatRoom(room, profile.userId),
 			jobTitle: jobTitleById.get(room.jobPostId) ?? null,
 			lastMessageBody: lastMessage?.body ?? null,
 			unreadCount: unreadCountByRoomId.get(room.id) ?? 0,
@@ -1172,8 +1141,6 @@ export const chatsRouter = {
 
 			return {
 				counterpartName: counterpartNames.get(room.id) ?? null,
-				// 상대가 나간 방은 읽기만 허용한다. 화면이 입력창을 미리 잠그도록 내려 준다.
-				counterpartLeft: hasCounterpartLeftChatRoom(room, profile.userId),
 				currentUserId: profile.userId,
 				employerVerifiedPhone: verifiedPhoneFor(room.employerUserId),
 				// 화면이 "이전 메시지 더 보기"를 띄울지 판단하는 근거.
@@ -1208,7 +1175,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatSendBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1236,7 +1203,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatSendBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1262,12 +1229,12 @@ export const chatsRouter = {
 					return null;
 				}
 
-				// 새 메시지는 **보낸 사람 본인이** 지웠던 방만 다시 노출한다. 상대의
-				// 소프트삭제(나가기)는 그대로 둔다 — 되돌리면 나간 의사를 지우는 셈이다.
+				// 전송이 곧 방 부활이다 — 한쪽이 나갔어도 양쪽 소프트삭제를 되돌려
+				// 상대 목록에 방을 다시 띄운다(공고×구직자 유니크라 새 방을 팔 수 없다).
 				await tx
 					.update(chatRoom)
 					.set({
-						...getSenderRoomRestoreFields(room, profile.userId),
+						...getChatRoomReviveFields(),
 						updatedAt: new Date(),
 					})
 					.where(eq(chatRoom.id, room.id));
@@ -1304,7 +1271,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatSendBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1369,7 +1336,7 @@ export const chatsRouter = {
 				await tx
 					.update(chatRoom)
 					.set({
-						...getSenderRoomRestoreFields(room, profile.userId),
+						...getChatRoomReviveFields(),
 						updatedAt: new Date(),
 					})
 					.where(eq(chatRoom.id, room.id));
@@ -1436,6 +1403,13 @@ export const chatsRouter = {
 				chatRoomId: room.id,
 				userId: profile.userId,
 			});
+			// 핀(헤더 채팅 버튼·모바일 탭)이 그리는 값은 방별 수가 아니라 계정 전체 합계다.
+			// 읽음 응답에 그 합계를 함께 실어 주면, 화면이 "무효화 → 재조회"가 언제 도는지에
+			// 기대지 않고 곧바로 정본으로 맞출 수 있다. 증감 누적이 아니라 여기서 다시 센
+			// 값이므로 핀 숫자의 정본이 DB 집계라는 규칙은 그대로다.
+			const totalUnreadMessageCount = await getUnreadMessageCountForUser({
+				userId: profile.userId,
+			});
 
 			for (const receipt of readReceipts) {
 				emitMessageRead({
@@ -1460,6 +1434,7 @@ export const chatsRouter = {
 
 			return {
 				readMessageIds: readReceipts.map(({ messageId }) => messageId),
+				totalUnreadMessageCount,
 				unreadCount,
 			};
 		}),
@@ -1477,7 +1452,7 @@ export const chatsRouter = {
 				throw new ORPCError("FORBIDDEN");
 			}
 
-			await throwIfChatSendBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1668,7 +1643,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatSendBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1735,7 +1710,7 @@ export const chatsRouter = {
 				throw new ORPCError("FORBIDDEN");
 			}
 
-			await throwIfChatSendBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1794,7 +1769,7 @@ export const chatsRouter = {
 				await tx
 					.update(chatRoom)
 					.set({
-						...getSenderRoomRestoreFields(room, profile.userId),
+						...getChatRoomReviveFields(),
 						updatedAt: new Date(),
 					})
 					.where(eq(chatRoom.id, room.id));
@@ -1849,7 +1824,7 @@ export const chatsRouter = {
 				throw new ORPCError("FORBIDDEN");
 			}
 
-			await throwIfChatSendBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});

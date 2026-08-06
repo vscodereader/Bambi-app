@@ -543,7 +543,7 @@ describe("bambi chats router unread state", () => {
 				path: ["bambi", "chats", "markRead"],
 			});
 			// 기준선까지만 읽음 처리한다 — 그 뒤에 온 메시지는 그대로 안 읽음으로 남는다.
-			await markRead({
+			const firstMarkRead = await markRead({
 				chatRoomId: fixture.chatRoomId,
 				upToMessageId: firstMessage.id,
 			});
@@ -551,6 +551,9 @@ describe("bambi chats router unread state", () => {
 			expect(await unreadStateForSeeker({})).toEqual({
 				unreadMessageCount: 4,
 			});
+			// 화면 핀은 방별 수가 아니라 이 총합을 그린다 — 응답값과 unreadState가
+			// 갈라지면 읽음 직후 핀이 틀린 숫자로 굳는다.
+			expect(firstMarkRead.totalUnreadMessageCount).toBe(4);
 
 			const lastMessage = remainingMessages.at(-1);
 			const lastSecondRoomMessage = secondRoomMessages.at(-1);
@@ -1103,9 +1106,9 @@ describe("bambi chats router soft delete", () => {
 		}
 	});
 
-	// 나간 쪽 의사를 발신자가 되돌릴 수 없어야 한다. 예전에는 전송이 양쪽 소프트삭제를
-	// 모두 NULL로 만들어, 상대가 나간 방을 계속 되살릴 수 있었다.
-	it("rejects the employer's message once the seeker left the room", async () => {
+	// 전송이 곧 방 부활이다. 상대가 나갔어도 발신은 막지 않고, 양쪽 목록에 방이 돌아온다
+	// (나간 사실을 상대에게 드러내지 않는 정책이라 발신 차단·안내를 두지 않는다).
+	it("revives the room for both sides when the employer writes after the seeker left", async () => {
 		const fixture = await createChatFixture();
 
 		try {
@@ -1121,24 +1124,22 @@ describe("bambi chats router soft delete", () => {
 				context: createContextForUser(fixture.employerUserId),
 				path: ["bambi", "chats", "sendMessage"],
 			});
-
-			await expectOrpcCode(
-				sendMessage({
-					body: "새 메시지입니다.",
-					chatRoomId: fixture.chatRoomId,
-				}),
-				"FORBIDDEN"
-			);
+			await sendMessage({
+				body: "새 메시지입니다.",
+				chatRoomId: fixture.chatRoomId,
+			});
 
 			const seekerRooms = await listMineFor(fixture.jobSeekerUserId)({});
+			const employerRooms = await listMineFor(fixture.employerUserId)({});
 
-			expect(hasRoom(seekerRooms, fixture.chatRoomId)).toBe(false);
+			expect(hasRoom(seekerRooms, fixture.chatRoomId)).toBe(true);
+			expect(hasRoom(employerRooms, fixture.chatRoomId)).toBe(true);
 		} finally {
 			await cleanupChatFixture(fixture);
 		}
 	});
 
-	it("re-surfaces the room only for the sender who deleted it", async () => {
+	it("re-surfaces the room for the sender who deleted it", async () => {
 		const fixture = await createChatFixture();
 
 		try {
@@ -1243,8 +1244,8 @@ describe("bambi chats router employer verified phone", () => {
 	});
 });
 
-// 지난 정책("업주가 나간 방엔 재문의 영구 불가")을 뒤집은 확정. 방 안 발신은 여전히
-// counterpart_left로 막히고, 공고에서 다시 거는 이 경로만 부활시킨다.
+// 지난 정책("업주가 나간 방엔 재문의 영구 불가")을 뒤집은 확정. 방 안 발신도 같은
+// 규칙으로 부활시키므로, 이 경로는 내가 지운 방을 공고에서 다시 여는 입구다.
 describe("bambi chats router 재문의 방 부활", () => {
 	const startFor = (userId: string) =>
 		createProcedureClient(chatsRouter.startFromJobPost, {

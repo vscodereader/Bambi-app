@@ -68,8 +68,9 @@ describe("신고한 채팅 숨김", () => {
 });
 
 describe("상대가 나간 채팅", () => {
-	it("목록에서 미리 상대방 나감을 알린다", () => {
-		expect(source).toContain("room.hasCounterpartLeft");
-		expect(source).toContain("상대방 나감");
+	// 나가도 발신은 그대로 되고(전송 = 방 부활), 나간 사실이 상대에게 드러나서도 안 된다.
+	it("목록에 나감 배지를 남기지 않는다", () => {
+		expect(source).not.toContain("hasCounterpartLeft");
+		expect(source).not.toContain("상대방 나감");
 	});
 });
