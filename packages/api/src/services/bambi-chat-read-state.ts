@@ -134,6 +134,9 @@ const insertReadReceipts = async ({
  * 예전에는 방의 상대 메시지 id를 전부 앱으로 끌어와(LIMIT 없음) 두 번째 쿼리의 IN 절에
  * 그대로 넣고 JS에서 차집합을 셌다 — 방 이력이 길수록 전송 1건의 비용이 선형으로 커졌고,
  * 목록(listMine)은 그걸 방 수만큼 반복했다. 아래 anti-join은 행을 하나도 옮기지 않는다.
+ *
+ * 어느 한쪽이라도 나간 방은 아예 세지 않는다 — 총합과 같은 기준이라야 핀이 유령으로
+ * 켜지지 않는다.
  */
 export const getUnreadMessageCountsByRoom = async ({
 	roomIds,
@@ -150,6 +153,7 @@ export const getUnreadMessageCountsByRoom = async ({
 			value: count(chatMessage.id),
 		})
 		.from(chatMessage)
+		.innerJoin(chatRoom, eq(chatRoom.id, chatMessage.chatRoomId))
 		.leftJoin(
 			chatMessageReadReceipt,
 			and(
@@ -160,6 +164,8 @@ export const getUnreadMessageCountsByRoom = async ({
 		.where(
 			and(
 				inArray(chatMessage.chatRoomId, roomIds),
+				isNull(chatRoom.employerDeletedAt),
+				isNull(chatRoom.seekerDeletedAt),
 				ne(chatMessage.senderUserId, userId),
 				isNull(chatMessageReadReceipt.messageId)
 			)
@@ -183,8 +189,8 @@ export const getUnreadMessageCount = async ({
 
 // 헤더 채팅 버튼·모바일 탭 뱃지용 전체 집계. 내가 참여한 모든 방에서 상대가 보낸
 // 메시지 중 내 읽음 영수증이 없는 메시지 행의 총수를 한 번의 쿼리로 센다.
-// 집합은 목록(listMine)과 같아야 한다 — 내가 "나가기"로 지운 방까지 세면 목록에 없는
-// 방 때문에 뱃지가 켜진 채 끌 방법이 없다. 그래서 소프트삭제 술어를 똑같이 건다.
+// 집합은 목록(listMine)과 같아야 한다 — 어느 한쪽이라도 나간 방까지 세면 목록에 없는
+// 방 때문에 뱃지가 켜진 채 끌 방법이 없다. 그래서 같은 술어를 건다.
 export const getUnreadMessageCountForUser = async ({
 	userId,
 }: {
@@ -205,15 +211,11 @@ export const getUnreadMessageCountForUser = async ({
 		.where(
 			and(
 				or(
-					and(
-						eq(chatRoom.employerUserId, userId),
-						isNull(chatRoom.employerDeletedAt)
-					),
-					and(
-						eq(chatRoom.jobSeekerUserId, userId),
-						isNull(chatRoom.seekerDeletedAt)
-					)
+					eq(chatRoom.employerUserId, userId),
+					eq(chatRoom.jobSeekerUserId, userId)
 				),
+				isNull(chatRoom.employerDeletedAt),
+				isNull(chatRoom.seekerDeletedAt),
 				ne(chatMessage.senderUserId, userId),
 				isNull(chatMessageReadReceipt.messageId)
 			)

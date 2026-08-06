@@ -1,9 +1,9 @@
 /**
  * 채팅방 참여 상태(회원별 소프트삭제) 판정. DB에 붙지 않고 방 row만 보고 답한다.
  *
- * 발신은 한쪽이 "나가기"로 지운 방도 막지 않는다 — 전송이 곧 방 부활이라
- * (getChatRoomReviveFields) 양쪽 목록에 방이 다시 뜬다. 나갔다는 사실을 상대에게
- * 드러내지 않는 것이 정책이므로, "상대가 나갔는지"를 판정하는 함수는 두지 않는다.
+ * 어느 한쪽이라도 "나가기"를 누르면 방은 양쪽 모두에게서 사라진다 — 되살리는 경로는
+ * 없고(부활 장치 폐기), 공고에서 다시 문의하면 새 방을 판다. 그래서 "누가 나갔는지"가
+ * 아니라 "이 방이 살아 있는지"만 판정하면 된다.
  */
 
 export interface ChatRoomParticipation {
@@ -25,18 +25,7 @@ export const getChatRoomSide = (
 ): ChatRoomSide =>
 	room.employerUserId === actorUserId ? "employer" : "seeker";
 
-/** 어느 한쪽이라도 나간 방인가. 부활이 필요한지 판단하는 데만 쓴다. */
+/** 어느 한쪽이라도 나간 방인가. 나간 방은 양쪽 모두에게 "없는 방"이다. */
 export const isChatRoomLeftByAnyone = (
 	room: Pick<ChatRoomParticipation, "employerDeletedAt" | "seekerDeletedAt">
 ): boolean => Boolean(room.employerDeletedAt || room.seekerDeletedAt);
-
-/**
- * 방을 부활시킬 때 되돌릴 컬럼 — **양쪽 모두**다.
- *
- * 방 안 발신(sendMessage 등)과 공고에서의 재문의(startFromJobPost)가 같은 규칙을 쓴다.
- * 공고×구직자 유니크 제약 때문에 새 방을 팔 수 없기도 하다.
- */
-export const getChatRoomReviveFields = (): {
-	employerDeletedAt: null;
-	seekerDeletedAt: null;
-} => ({ employerDeletedAt: null, seekerDeletedAt: null });

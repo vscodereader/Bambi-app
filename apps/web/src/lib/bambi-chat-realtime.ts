@@ -55,10 +55,44 @@ const ACK_TIMEOUT_MS = 5000;
  * 매번 leave/join을 왕복시키지 않으려고 창을 둔다.
  */
 const LEAVE_GRACE_MS = 30_000;
+/**
+ * 서버 인증 미들웨어 거절(레이트리밋·세션 순단)은 네임스페이스 오류라 socket.io가
+ * 스스로 다시 붙지 않는다(그때 socket.active === false). 아무도 듣지 않으면 소켓이
+ * 조용히 영영 죽어 핀·목록·실시간이 전부 멈추고 HTTP 경로만 남는다.
+ */
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30_000;
 
 let chatSocket: BambiChatSocket | null = null;
 // roomId → 유예 타이머. 같은 방으로 다시 들어오면 취소하고 기존 입장을 그대로 쓴다.
 const pendingLeaveTimers = new Map<string, number>();
+let reconnectTimer: null | number = null;
+let reconnectAttempt = 0;
+
+const clearReconnectTimer = (): void => {
+	if (reconnectTimer !== null) {
+		window.clearTimeout(reconnectTimer);
+		reconnectTimer = null;
+	}
+};
+
+const scheduleReconnect = (): void => {
+	if (reconnectTimer !== null) {
+		return;
+	}
+
+	const backoff = Math.min(
+		RECONNECT_BASE_MS * 2 ** reconnectAttempt,
+		RECONNECT_MAX_MS
+	);
+	// 지터가 없으면 배포·레이트리밋으로 동시에 끊긴 클라이언트가 같은 시점에 몰려 온다.
+	const delay = backoff + Math.floor(Math.random() * RECONNECT_BASE_MS);
+	reconnectAttempt += 1;
+	reconnectTimer = window.setTimeout(() => {
+		reconnectTimer = null;
+		chatSocket?.connect();
+	}, delay);
+};
 
 const cancelPendingLeave = (roomId: string): void => {
 	const timerId = pendingLeaveTimers.get(roomId);
@@ -87,6 +121,18 @@ export const getBambiChatSocket = (): BambiChatSocket => {
 			timeout: ACK_TIMEOUT_MS,
 			withCredentials: true,
 		}) as BambiChatSocket;
+
+		chatSocket.on("connect", () => {
+			reconnectAttempt = 0;
+			clearReconnectTimer();
+		});
+		// active === false면 socket.io가 재시도를 포기한 상태(미들웨어 거절)다. 전송 계층
+		// 오류는 내장 재연결이 이미 돌고 있으므로 우리가 끼어들지 않는다.
+		chatSocket.on("connect_error", () => {
+			if (!chatSocket?.active) {
+				scheduleReconnect();
+			}
+		});
 	}
 
 	return chatSocket;

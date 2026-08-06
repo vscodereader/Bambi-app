@@ -69,7 +69,8 @@ describe("채팅방 연락처 재설계", () => {
 });
 
 describe("상대가 나간 채팅방", () => {
-	// 전송이 곧 방 부활이다 — 입력창을 잠그지 않고, 나갔다는 사실도 드러내지 않는다.
+	// 한쪽이라도 나간 방은 서버가 NOT_FOUND로 끊어 화면이 열리지 않는다 — 화면에는
+	// 나감 상태를 다루는 배선 자체가 없어야 한다.
 	it("나감 상태로 잠그거나 안내하는 배선을 남기지 않는다", () => {
 		expect(source).not.toContain("counterpartLeft");
 		expect(source).not.toContain("disabledNotice");
@@ -200,6 +201,60 @@ describe("보고 있는 방 자동 읽음", () => {
 	it("읽음 요청이 실패하면 기준선을 되돌려 다시 시도할 수 있게 한다", () => {
 		expect(source).toContain("markRead: markReadMutation.mutateAsync");
 		expect(autoReadSource).toContain("sentMessageIdRef.current = null");
+	});
+});
+
+describe("방 화면 실시간 연결 강건화", () => {
+	// 소켓 접속·입장을 방 HTTP 조회(currentUserId)에 묶어 두면, 조회가 도는 동안 온 상대
+	// 메시지가 방 소켓룸으로 오지 않아 핀이 남는다. 참여자 검증은 서버 join 가드가 한다.
+	it("세션 id를 기다리지 않고 방 id만으로 즉시 접속·입장한다", () => {
+		expect(source).not.toContain("if (!currentSessionUserId) {");
+		expect(source).toContain(
+			"const socket = connectBambiChatSocket();\n\t\tconst refreshIfCurrentRoom"
+		);
+	});
+
+	// 세션 id가 늦게 도착해도 effect가 다시 돌면 leave/join을 왕복한다 — ref로만 흘린다.
+	it("세션 id 도착이 실시간 effect를 다시 돌리지 않는다", () => {
+		expect(source).toContain("currentSessionUserIdRef.current");
+		expect(source).toContain(
+			"}, [invalidateRoom, queueMarkRead, reassertMarkRead, roomId]);"
+		);
+	});
+
+	// 서버 인증 미들웨어 거절은 socket.io가 스스로 다시 붙지 않는 네임스페이스 오류라,
+	// 아무도 듣지 않으면 소켓이 조용히 영영 죽는다(HTTP 경로만 남는 관찰 증상).
+	it("connect_error를 듣고 백오프로 다시 붙는다", () => {
+		expect(realtimeSource).toContain('chatSocket.on("connect_error"');
+		expect(realtimeSource).toContain("if (!chatSocket?.active)");
+		expect(realtimeSource).toContain("RECONNECT_MAX_MS = 30_000");
+		expect(realtimeSource).toContain("Math.random()");
+		// 붙는 순간 백오프는 처음으로 되돌린다.
+		expect(realtimeSource).toContain("reconnectAttempt = 0;");
+	});
+
+	// "보고 있는 방인데 안 읽음 > 0"은 성립할 수 없는 상태다 — 어떤 레이스로 뜬 핀이든
+	// 읽음을 다시 주장해 자가 소멸시킨다. markRead 성공이 0 신호를 만들어 루프는 없다.
+	it("이 방의 안 읽음 신호를 읽음 재주장으로 되받는다", () => {
+		expect(source).toContain("const handleUnreadUpdated = (payload: {");
+		expect(source).toContain("payload.unreadCount > 0");
+		expect(source).toContain("reassertMarkRead();");
+		expect(source).toContain(
+			'socket.on("chat:unread:updated", handleUnreadUpdated)'
+		);
+	});
+
+	// 재주장은 봉인만 풀고 평소 경로로 흘린다(탭 활성 게이트·300ms 합치기 그대로).
+	it("재주장은 보낸 기준선의 봉인을 풀고 같은 경로로 흘린다", () => {
+		expect(autoReadSource).toContain(
+			"const reassertMarkRead = useCallback(() => {"
+		);
+		expect(autoReadSource).toContain(
+			"if (latestRef.current?.chatRoomId !== chatRoomId) {"
+		);
+		expect(autoReadSource).toContain(
+			"return { queueMarkRead, reassertMarkRead };"
+		);
 	});
 });
 

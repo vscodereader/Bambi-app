@@ -12,6 +12,8 @@ import {
 import { ORPCError } from "@orpc/server";
 import { and, eq, or } from "drizzle-orm";
 
+import { isChatRoomLeftByAnyone } from "./bambi-chat-participation";
+
 export interface SessionLike {
 	user?: {
 		id?: string | null;
@@ -231,6 +233,12 @@ export const findUserBlockBetween = async (
 	return block ?? null;
 };
 
+/**
+ * 참여자용 방 로드 가드. 열람·발신·읽음·소켓 입장이 모두 여기를 지난다.
+ *
+ * 한쪽이라도 "나가기"를 누른 방은 양쪽 모두에게 없는 방이다 — 여기서 한 번 막으면
+ * 호출부(getById·sendMessage·markRead·면접·연락처·후기·신고·소켓 join)가 전부 덮인다.
+ */
 export const requireChatParticipant = async (
 	chatRoomId: string,
 	session: SessionLike | null | undefined
@@ -250,7 +258,7 @@ export const requireChatParticipant = async (
 		)
 		.limit(1);
 
-	if (!room) {
+	if (!room || isChatRoomLeftByAnyone(room)) {
 		throw new ORPCError("NOT_FOUND", {
 			message: "Chat room was not found for this user.",
 		});

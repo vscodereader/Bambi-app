@@ -14,6 +14,15 @@ interface ChatRoomAutoReadInput {
 	}) => Promise<unknown>;
 }
 
+interface ChatRoomAutoRead {
+	queueMarkRead: (messageId: null | string) => void;
+	/**
+	 * "보고 있는 방인데 안 읽음이 남아 있다"는 신호(chat:unread:updated)를 받았을 때의
+	 * 재주장. 이미 보낸 기준선이어도 봉인을 풀어 같은 기준선으로 다시 쏜다.
+	 */
+	reassertMarkRead: () => void;
+}
+
 /**
  * 보고 있는 방의 자동 읽음. 기준은 "탭 활성(visibilityState === visible) + 이 방 화면
  * 표시 중"이다. 백그라운드 탭에서는 목록 핀을 그대로 두고, 탭으로 돌아온 순간 밀린
@@ -26,7 +35,7 @@ interface ChatRoomAutoReadInput {
 export function useChatRoomAutoRead({
 	chatRoomId,
 	markRead,
-}: ChatRoomAutoReadInput): (messageId: null | string) => void {
+}: ChatRoomAutoReadInput): ChatRoomAutoRead {
 	const latestRef = useRef<null | { chatRoomId: string; messageId: string }>(
 		null
 	);
@@ -76,6 +85,24 @@ export function useChatRoomAutoRead({
 		[chatRoomId, flushSoon]
 	);
 
+	/**
+	 * 이 방의 안 읽음이 아직 0이 아니라는 신호를 받았을 때 쓴다. 기준선이 같아도 다시
+	 * 보내야 하므로 봉인(sentMessageIdRef)만 풀고 평소 경로로 흘린다 — markRead 성공이
+	 * 안 읽음 0 신호를 만들므로 루프는 돌지 않는다. 기준선이 다른 방 것이면(방 전환 직후)
+	 * 남의 방으로 새지 않도록 그냥 넘긴다.
+	 */
+	const reassertMarkRead = useCallback(() => {
+		if (latestRef.current?.chatRoomId !== chatRoomId) {
+			return;
+		}
+
+		sentMessageIdRef.current = null;
+
+		if (document.visibilityState === "visible") {
+			flushSoon();
+		}
+	}, [chatRoomId, flushSoon]);
+
 	useEffect(() => {
 		const handleVisibilityChange = () => {
 			if (document.visibilityState === "visible") {
@@ -100,5 +127,5 @@ export function useChatRoomAutoRead({
 		[]
 	);
 
-	return queueMarkRead;
+	return { queueMarkRead, reassertMarkRead };
 }
