@@ -403,24 +403,37 @@ export function AuthPanel() {
 							onVerifiedForSignup={handleVerifiedForSignup}
 						/>
 					) : (
-						// 폼은 데스크톱·모바일 모두 1열이다. 2열은 칸마다 도움말·오류 문구
-						// 높이가 달라 옆 칸과 라인이 어긋나고, 읽는 순서도 갈린다.
-						// 1열이라 칸 수가 그대로 높이가 되므로 칸 사이 간격은 gap-3까지 좁힌다
-						// (가입 6칸 기준 가장 큰 절감 — 로그인 2칸에는 사실상 차이가 없다).
+						// @container: 2열 전환 기준은 뷰포트가 아니라 카드 폭이다 — 카드가
+						// max-w로 뷰포트보다 좁게 고정돼 있어 뷰포트 breakpoint로는 폼이
+						// 실제로 2열을 감당하는 시점을 맞출 수 없다.
+						// 칸 사이 간격은 gap-3으로 좁혀 둔다(로그인 2칸에는 사실상 차이가 없다).
 						<form
-							className="grid gap-3"
+							className="@container grid gap-3"
 							onSubmit={(event) => {
 								event.preventDefault();
 								handleSubmit().catch(() => undefined);
 							}}
 						>
 							{isSignUp ? (
-								<AuthSignupFields
-									onFieldChange={setField}
-									onSignupRoleChange={setSignupRole}
-									signupRole={signupRole}
-									values={form}
-								/>
+								// 가입 폼만 혼합 배치다 — 1열은 6칸이 그대로 높이가 돼 카드가
+								// 푸터를 침범했고, 전면 2열은 이메일·가입 유형까지 반쪽으로
+								// 갈랐다. 짝지어도 읽는 순서가 흐려지지 않는 칸만 2열로 묶는다:
+								// 닉네임|아이디 · 이메일(전체) · 비밀번호|비밀번호 확인 ·
+								// 가입 유형(전체). 전체 폭 칸은 스스로 @md:col-span-2를 들고
+								// 있고 나머지는 자동 배치로 짝을 짓는다. 카드가 좁으면(모바일)
+								// 한 열이 되어 위 순서 그대로 세로로 흐른다.
+								// items-start: 아이디 칸 아래 규칙 안내가 그 행을 높이면, 기본
+								// stretch가 옆 닉네임 칸(label+입력 2행 그리드)까지 늘려 남는
+								// 높이를 행마다 나눠 준다 — 입력창이 아래로 밀려 두 칸의 라인이
+								// 어긋난다. 각 칸을 제 높이로 두면 상단·입력 라인이 맞는다.
+								<div className="grid @md:grid-cols-2 items-start gap-3">
+									<AuthSignupFields
+										onFieldChange={setField}
+										onSignupRoleChange={setSignupRole}
+										signupRole={signupRole}
+										values={form}
+									/>
+								</div>
 							) : (
 								<AuthSigninFields
 									onFieldChange={setField}

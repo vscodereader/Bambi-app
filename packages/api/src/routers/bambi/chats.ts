@@ -932,19 +932,16 @@ export const chatsRouter = {
 	listMyUpcomingInterviews: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
 
-		// 사라진 방의 면접은 걸어 들어갈 곳이 없다(방 열람이 NOT_FOUND) — 목록과 같은
-		// 기준으로 제외한다.
+		// 방 삭제 여부는 보지 않는다 — 면접은 현실의 약속이라 방이 사라져도 일정 카드는
+		// 남아야 한다. 카드로 들어간 방이 이미 없으면 방 화면이 "종료됐거나 접근할 수
+		// 없는 채팅방" 카드를 띄우는 게 의도된 동작이다.
 		const rooms = await db
 			.select()
 			.from(chatRoom)
 			.where(
-				and(
-					or(
-						eq(chatRoom.employerUserId, profile.userId),
-						eq(chatRoom.jobSeekerUserId, profile.userId)
-					),
-					isNull(chatRoom.employerDeletedAt),
-					isNull(chatRoom.seekerDeletedAt)
+				or(
+					eq(chatRoom.employerUserId, profile.userId),
+					eq(chatRoom.jobSeekerUserId, profile.userId)
 				)
 			);
 		if (rooms.length === 0) {

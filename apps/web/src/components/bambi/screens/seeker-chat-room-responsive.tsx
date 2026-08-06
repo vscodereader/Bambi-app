@@ -1491,10 +1491,11 @@ export function SeekerChatRoomResponsive({
 						채팅방을 불러올 수 없어요
 					</h1>
 					<p className="mt-2 mb-4 text-muted-foreground text-sm">
-						종료됐거나 접근할 수 없는 채팅방이에요. 로그인 상태를 확인해 주세요.
+						종료됐거나 접근할 수 없는 채팅방이에요.
 					</p>
 					<div className="flex flex-wrap justify-center gap-2">
 						<Button
+							className="shadow-none"
 							onClick={() => router.push("/seeker/chats")}
 							variant="primary"
 						>

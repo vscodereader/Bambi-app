@@ -57,8 +57,9 @@ export function AuthSignupFields({
 			? getLoginIdErrorMessage(loginId)
 			: null;
 
-	// 1열 6칸이라 칸 안의 라벨–입력 간격도 높이에 6배로 곱해진다 — 가입 폼만 gap-1.5로
-	// 좁힌다(로그인은 2칸뿐이라 gap-2를 그대로 둔다).
+	// 칸 안의 라벨–입력 간격은 행 수만큼 높이에 곱해진다 — 가입 폼만 gap-1.5로 좁힌다
+	// (로그인은 2칸뿐이라 gap-2를 그대로 둔다). 배치(2열/전체 폭)는 패널의 그리드와
+	// 각 칸의 @md:col-span-2가 정한다.
 	return (
 		<>
 			<label className="grid gap-1.5" htmlFor="auth-nickname">
@@ -94,7 +95,9 @@ export function AuthSignupFields({
 					{loginIdError ?? LOGIN_ID_HELP_TEXT}
 				</span>
 			</label>
-			<label className="grid gap-1.5" htmlFor="auth-email">
+			{/* 이메일·가입 유형(과 그 안내)은 반으로 갈리면 안 되는 칸이라 행을 통째로
+			    쓴다. 전환 기준은 뷰포트가 아니라 폼을 감싼 카드 폭(@container)이다. */}
+			<label className="@md:col-span-2 grid gap-1.5" htmlFor="auth-email">
 				<span className="font-bold text-sm">이메일</span>
 				<Input
 					autoComplete="email"
@@ -127,7 +130,7 @@ export function AuthSignupFields({
 					value={values.passwordConfirm}
 				/>
 			</label>
-			<div className="grid gap-1.5">
+			<div className="@md:col-span-2 grid gap-1.5">
 				<span className="font-bold text-sm" id="auth-role-label">
 					가입 유형
 				</span>
@@ -152,7 +155,7 @@ export function AuthSignupFields({
 			</div>
 			{signupRole === "employer" ? (
 				<p
-					className="m-0 rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground text-sm leading-snug"
+					className="@md:col-span-2 m-0 rounded-lg border border-border bg-secondary px-3 py-2 text-muted-foreground text-sm leading-snug"
 					role="note"
 				>
 					가입 후 업체 정보를 입력하고 운영자 승인을 받으면 구인 기능을 이용할
