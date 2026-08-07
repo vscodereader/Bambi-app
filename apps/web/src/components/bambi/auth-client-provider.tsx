@@ -1,7 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { createContext, type ReactNode, useContext } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useContext,
+	useEffect,
+	useState,
+} from "react";
 import { authClient } from "@/lib/auth-client";
 import {
 	readGuestFromCookieString,
@@ -27,17 +33,25 @@ interface BambiAuthValue {
 const BambiAuthContext = createContext<BambiAuthValue | null>(null);
 
 export function AuthClientProvider({ children }: { children: ReactNode }) {
+	const [mounted, setMounted] = useState(false);
 	const session = authClient.useSession();
-	const isAuthenticated = Boolean(session.data?.user);
+
+	useEffect(() => {
+		setMounted(true);
+	}, []);
+
+	// Better Auth는 브라우저 캐시에 세션이 있으면 hydration 첫 렌더부터 사용자가
+	// 보일 수 있다. 서버는 그 캐시를 볼 수 없어 비로그인 HTML을 만들기 때문에,
+	// 인증에 따라 알림 벨·채팅 배지·역할 버튼의 태그와 순서가 달라졌다. 마운트 전에는
+	// 서버와 동일한 비로그인 스냅샷을 유지하고, hydration이 끝난 뒤 실제 세션을 반영한다.
+	const isAuthenticated = mounted && Boolean(session.data?.user);
 	const mineQuery = useQuery({
 		...orpc.bambi.onboarding.getMine.queryOptions(),
 		enabled: isAuthenticated,
 	});
 
 	const isGuest =
-		!isAuthenticated &&
-		typeof document !== "undefined" &&
-		readGuestFromCookieString(document.cookie);
+		mounted && !isAuthenticated && readGuestFromCookieString(document.cookie);
 
 	// 여성 인증 게스트는 회원 수다방(/seeker/community)에 들어올 수 있다. 여기 판정은
 	// 버튼·안내를 고르기 위한 UI 편의일 뿐이다 — 서명·만료·gid까지 보는 최종 강제는

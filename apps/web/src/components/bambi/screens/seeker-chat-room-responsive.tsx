@@ -32,6 +32,7 @@ import {
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { useChatMessageScroll } from "@/lib/bambi/use-chat-message-scroll";
 import { useChatRoomAutoRead } from "@/lib/bambi/use-chat-room-auto-read";
+import { useMobileKeyboardState } from "@/lib/bambi/use-mobile-keyboard-state";
 import { useOlderChatMessages } from "@/lib/bambi/use-older-chat-messages";
 import {
 	connectBambiChatSocket,
@@ -928,7 +929,21 @@ export function SeekerChatRoomResponsive({
 		null | string
 	>(null);
 	const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+	const chatPanelRef = useRef<HTMLElement | null>(null);
 	const typingActiveRef = useRef(false);
+	const { visualViewportHeight } = useMobileKeyboardState();
+
+	useEffect(() => {
+		const panel = chatPanelRef.current;
+		if (!panel || visualViewportHeight === null) {
+			return;
+		}
+
+		panel.style.setProperty(
+			"--chat-visual-viewport-height",
+			`${Math.round(visualViewportHeight)}px`
+		);
+	}, [visualViewportHeight]);
 	// 방을 열면 최근 메시지 한 페이지만 받는다. 예전에는 이력 전체가 매 조회마다 다시
 	// 내려왔고, 소켓 이벤트가 뜰 때마다 그 전량 전송이 반복됐다.
 	const roomQuery = useQuery(
@@ -1117,7 +1132,7 @@ export function SeekerChatRoomResponsive({
 	// 한 건도 안 써졌다(안 읽음 뱃지가 영영 안 꺼짐). 기준선은 화면에 올라온 마지막
 	// 메시지다 — 내가 보낸 것이어도 그 앞의 상대 메시지는 본 것이므로 함께 읽음이 된다.
 	const lastVisibleMessageId = messages.at(-1)?.id ?? null;
-	const { queueMarkRead, reassertMarkRead } = useChatRoomAutoRead({
+	const { markReadNow, queueMarkRead, reassertMarkRead } = useChatRoomAutoRead({
 		chatRoomId: roomId,
 		// 성공 여부를 훅이 알아야 실패한 기준선을 다시 시도할 수 있다.
 		markRead: markReadMutation.mutateAsync,
@@ -1267,8 +1282,14 @@ export function SeekerChatRoomResponsive({
 	}, [invalidateRoom, queueMarkRead, reassertMarkRead, roomId]);
 
 	useEffect(() => {
-		queueMarkRead(lastVisibleMessageId);
-	}, [lastVisibleMessageId, queueMarkRead]);
+		if (!roomQuery.isSuccess) {
+			return;
+		}
+
+		// 방 진입 HTTP 조회가 완료된 바로 그 시점에 읽음을 서버에 저장한다. 실시간
+		// 수신용 합치기 큐에만 기대면 렌더 교체·이탈 타이밍에 요청이 유실될 수 있다.
+		markReadNow(lastVisibleMessageId);
+	}, [lastVisibleMessageId, markReadNow, roomQuery.isSuccess]);
 
 	useEffect(() => {
 		if (!roomQuery.data) {
@@ -1565,31 +1586,39 @@ export function SeekerChatRoomResponsive({
 			{/* 대화가 길어져도 문서가 자라지 않도록 방 패널을 뷰포트에 고정하고, 스크롤은
 			    메시지 영역 하나만 갖는다. 빼는 높이는 셸 헤더(3.5rem·md 4rem)와 이 컨테이너의
 			    위아래 여백(py-5·md:py-7) 합이다. */}
-			<main className="flex h-[calc(100dvh-6rem)] min-w-0 flex-col overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border md:h-[calc(100dvh-7.5rem)] lg:self-start">
-				{/* 좁은 화면에서는 공고 버튼·배지가 제목 아래로 접히도록 wrap 한다. */}
-				<header className="flex flex-none flex-wrap items-center gap-3 border-border border-b p-4">
-					<button
-						className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 font-bold text-sm"
-						onClick={onBack}
-						type="button"
-					>
-						목록
-					</button>
-					<div className="min-w-0 flex-1">
-						<h1 className="m-0 truncate font-extrabold text-lg">
-							{jobPost?.title ?? "공고 채팅"}
-						</h1>
-						<ChatCounterpartName name={counterpartName} />
-						<p className="mt-1 mb-0 truncate text-muted-foreground text-xs">
-							{jobPost?.industryCategory ?? "공고"} ·{" "}
-							{jobPost?.region ?? "지역 확인"}
-						</p>
+			<main
+				className="flex h-[calc(var(--chat-visual-viewport-height,100dvh)-6rem)] min-w-0 flex-col overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border md:h-[calc(100dvh-7.5rem)] lg:self-start"
+				ref={chatPanelRef}
+			>
+				<header className="flex flex-none flex-col gap-2 border-border border-b p-3 sm:p-4">
+					<div className="flex min-w-0 items-center gap-2 sm:gap-3">
+						<button
+							className="shrink-0 cursor-pointer rounded-lg border border-border bg-background px-3 py-2 font-bold text-sm"
+							onClick={onBack}
+							type="button"
+						>
+							목록
+						</button>
+						<div className="min-w-0 flex-1">
+							<h1 className="m-0 truncate font-extrabold text-sm sm:text-lg">
+								{jobPost?.title ?? "공고 채팅"}
+							</h1>
+							<ChatCounterpartName name={counterpartName} />
+							<p className="mt-1 mb-0 truncate text-muted-foreground text-xs">
+								{jobPost?.industryCategory ?? "공고"} ·{" "}
+								{jobPost?.region ?? "지역 확인"}
+							</p>
+						</div>
 					</div>
-					<ChatJobPostLink jobPost={jobPost} />
-					<ChatRoomStateBadge isBlocked={room.isBlocked} />
-					<Badge tone={realtimeStatus === "connected" ? "success" : "neutral"}>
-						{getRealtimeStatusLabel(realtimeStatus)}
-					</Badge>
+					<div className="flex min-w-0 items-center gap-2 overflow-hidden">
+						<ChatJobPostLink jobPost={jobPost} />
+						<ChatRoomStateBadge isBlocked={room.isBlocked} />
+						<Badge
+							tone={realtimeStatus === "connected" ? "success" : "neutral"}
+						>
+							{getRealtimeStatusLabel(realtimeStatus)}
+						</Badge>
+					</div>
 				</header>
 				<ChatSafetyNotice
 					chatRoomId={room.id}

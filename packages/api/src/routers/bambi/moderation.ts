@@ -16,6 +16,7 @@ import {
 	chatRoom,
 	communityComment,
 	communityPost,
+	employerBusinessDocument,
 	employerOrganizationProfile,
 	employerTeamProfile,
 	interviewSchedule,
@@ -51,6 +52,10 @@ import {
 	requireChatParticipant,
 } from "../../services/bambi-authz";
 import { isChatRoomLeftByAnyone } from "../../services/bambi-chat-participation";
+import {
+	emitChatListUpdated,
+	emitRoomUpdated,
+} from "../../services/bambi-chat-realtime";
 import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
@@ -62,6 +67,7 @@ import {
 } from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
+import { getBusinessDocumentObjectUrl } from "../../services/bambi-storage";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 import { purgeWithdrawnAccountsBatch } from "../../services/bambi-withdrawal-purge";
 import { deletePublicObjects } from "../../services/gcs";
@@ -359,6 +365,53 @@ const bulkSetJobPostPaymentInput = z.object({
 
 type ReportTargetType = z.infer<typeof targetTypeSchema>;
 type ReportRow = typeof report.$inferSelect;
+
+const getReportedChatRoomId = async (
+	targetType: ReportRow["targetType"],
+	targetId: string
+): Promise<string | null> => {
+	if (targetType === "chat_room") {
+		return targetId;
+	}
+	if (targetType !== "chat_message") {
+		return null;
+	}
+
+	const [message] = await db
+		.select({ chatRoomId: chatMessage.chatRoomId })
+		.from(chatMessage)
+		.where(eq(chatMessage.id, targetId))
+		.limit(1);
+
+	return message?.chatRoomId ?? null;
+};
+
+const emitChatReportAvailabilityChanged = async (
+	targetType: ReportRow["targetType"],
+	targetId: string
+): Promise<void> => {
+	const roomId = await getReportedChatRoomId(targetType, targetId);
+
+	if (!roomId) {
+		return;
+	}
+
+	const [room] = await db
+		.select({
+			employerUserId: chatRoom.employerUserId,
+			jobSeekerUserId: chatRoom.jobSeekerUserId,
+		})
+		.from(chatRoom)
+		.where(eq(chatRoom.id, roomId))
+		.limit(1);
+
+	if (!room) {
+		return;
+	}
+
+	emitRoomUpdated({ roomId });
+	emitChatListUpdated([room.employerUserId, room.jobSeekerUserId], { roomId });
+};
 type JobPostModerationStatus = z.infer<typeof jobPostModerationStatusSchema>;
 type JobPostRow = typeof jobPost.$inferSelect;
 
@@ -1137,6 +1190,10 @@ export const moderationRouter = {
 				.limit(1);
 
 			if (existing) {
+				await emitChatReportAvailabilityChanged(
+					existing.targetType,
+					existing.targetId
+				);
 				return existing;
 			}
 
@@ -1151,9 +1208,11 @@ export const moderationRouter = {
 				})
 				.returning();
 
-			// 새 신고는 운영자 처리 큐에 쌓인다. 멱등 반환 경로(위 existing)에는 넣지
-			// 않는다 — 같은 신고로 큐를 두 번 울리지 않는다.
 			if (created) {
+				await emitChatReportAvailabilityChanged(
+					created.targetType,
+					created.targetId
+				);
 				await notifyBambiNotification({
 					actorUserId: profile.userId,
 					metadata: {
@@ -1671,6 +1730,10 @@ export const moderationRouter = {
 				return updated;
 			});
 
+			await emitChatReportAvailabilityChanged(
+				updated.targetType,
+				updated.targetId
+			);
 			// 알림 수신자는 신고당한 콘텐츠 주인이 아니라 신고자다 — targetType은 "report".
 			await notifyModerationAction({
 				action: `set_report_status:${input.status}`,
@@ -1679,7 +1742,6 @@ export const moderationRouter = {
 				targetId: input.reportId,
 				targetType: "report",
 			});
-
 			return updated;
 		}),
 
@@ -1687,6 +1749,10 @@ export const moderationRouter = {
 		.input(bulkSetReportStatusInput)
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
+			const updatedChatTargets: Array<{
+				targetId: string;
+				targetType: ReportRow["targetType"];
+			}> = [];
 
 			const result = await db.transaction(
 				async (tx) =>
@@ -1712,11 +1778,26 @@ export const moderationRouter = {
 								reason: input.reason,
 								metadata: { bulk: true, reportId },
 							});
+
+							if (
+								updated.targetType === "chat_room" ||
+								updated.targetType === "chat_message"
+							) {
+								updatedChatTargets.push({
+									targetId: updated.targetId,
+									targetType: updated.targetType,
+								});
+							}
 						},
 						targetIds: input.reportIds,
 					})
 			);
 
+			await Promise.all(
+				updatedChatTargets.map(({ targetId, targetType }) =>
+					emitChatReportAvailabilityChanged(targetType, targetId)
+				)
+			);
 			for (const reportId of succeededBulkTargetIds(input.reportIds, result)) {
 				await notifyModerationAction({
 					action: `set_report_status:${input.status}`,
@@ -2325,13 +2406,68 @@ export const moderationRouter = {
 				.limit(input.limit)
 				.offset(input.offset);
 
-			if (input.status) {
-				return await query.where(
-					eq(employerOrganizationProfile.verificationStatus, input.status)
+			const employers = input.status
+				? await query.where(
+						eq(employerOrganizationProfile.verificationStatus, input.status)
+					)
+				: await query;
+			const organizationIds = employers.map(
+				({ organizationId }) => organizationId
+			);
+			const documents =
+				organizationIds.length > 0
+					? await db
+							.select({
+								byteSize: employerBusinessDocument.byteSize,
+								category: employerBusinessDocument.category,
+								fileName: employerBusinessDocument.fileName,
+								id: employerBusinessDocument.id,
+								mimeType: employerBusinessDocument.mimeType,
+								organizationId: employerBusinessDocument.organizationId,
+								storageKey: employerBusinessDocument.storageKey,
+							})
+							.from(employerBusinessDocument)
+							.where(
+								inArray(
+									employerBusinessDocument.organizationId,
+									organizationIds
+								)
+							)
+							.orderBy(employerBusinessDocument.createdAt)
+					: [];
+			const documentsByOrganizationId = new Map<
+				string,
+				Array<{
+					byteSize: number;
+					category: "image" | "pdf";
+					fileName: string;
+					id: string;
+					mimeType: string;
+					objectUrl: string;
+				}>
+			>();
+			for (const document of documents) {
+				const organizationDocuments =
+					documentsByOrganizationId.get(document.organizationId) ?? [];
+				organizationDocuments.push({
+					byteSize: document.byteSize,
+					category: document.category,
+					fileName: document.fileName,
+					id: document.id,
+					mimeType: document.mimeType,
+					objectUrl: getBusinessDocumentObjectUrl(document),
+				});
+				documentsByOrganizationId.set(
+					document.organizationId,
+					organizationDocuments
 				);
 			}
 
-			return await query;
+			return employers.map((employer) => ({
+				...employer,
+				businessDocuments:
+					documentsByOrganizationId.get(employer.organizationId) ?? [],
+			}));
 		}),
 
 	listPendingTeamInvitations: protectedProcedure

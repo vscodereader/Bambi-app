@@ -1,5 +1,13 @@
 # 구인자(Employer) 테스트 흐름
 
+## 사업자 인증 서류 추가 검수
+
+- 업체 정보는 서류가 없어도 최초 제출할 수 있으며, 조직이 생성된 뒤 JPG·PNG·WEBP·PDF 서류를 최대 5개까지 추가할 수 있다.
+- 각 파일은 10MB 이하여야 하고, 확장자와 실제 파일 형식이 다르면 업로드가 거부된다.
+- 심사 대기 중에는 누락 서류를 추가할 수 있지만 기존 서류 삭제·교체는 할 수 없다.
+- 반려 후에는 기존 서류를 삭제하거나 새 서류를 추가한 다음 다시 제출할 수 있다.
+- 업로드한 이미지와 PDF는 각각 열기·다운로드가 가능하다.
+
 > 작성 기준: `C:\Users\user\projects\bambi-app` 브랜치 `feat/region-biznum-role-ux` (커밋 `bd7e2e4`) 소스코드.
 > 모든 항목은 코드에서 직접 확인한 내용만 담았다. 코드에 없는 기능은 "없음"으로 명시했다.
 > 경로 표기: 웹 라우트는 `apps/web/src/app/...`, tRPC(oRPC) 프로시저는 `bambi.<router>.<procedure>` (구현: `packages/api/src/routers/bambi/<router>.ts`).
@@ -658,6 +666,8 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 - **절차**: 텍스트 입력 후 전송 / 이미지·PDF 첨부
 - **기대 결과**: `sendMessage`/`sendMediaMessage` 성공. 한쪽이 나간 방은 양쪽 모두에게서 사라져 열람·전송이 `NOT_FOUND`(부활 없음)
 - **엣지 케이스**: 차단된 방은 `FORBIDDEN` + 안내("…님이 차단했어요." / "…님을 차단했어요. 차단 관리에서 해제할 수 있어요."). 운영자가 방을 차단하면(`setChatRoomBlocked`) 목록으로 되돌려 보낸다
+- **신고 양쪽 차단 회귀 테스트**: 구직자가 방 또는 메시지를 신고하면 구인자 목록에서도 즉시 사라져야 한다. 구인자는 기존 직접 URL로 열람하거나 텍스트·첨부·면접·연락처·읽음·타이핑을 보낼 수 없고, 시도한 메시지가 구직자의 하단 채팅 핀을 만들면 안 된다. 운영자가 기각하면 양쪽 모두 즉시 복구되고, 조치 완료면 계속 숨겨진다.
+- **모바일 키보드 회귀 테스트**: 채팅방에서 Android 키보드를 열면 하단 내비게이션이 숨겨지고 입력창은 키보드 위에 유지되며 메시지 목록만 줄어들어 스크롤되어야 한다.
 - **관련 API**: `bambi.chats.sendMessage`, `bambi.chats.createAttachmentUpload`, `bambi.chats.sendMediaMessage`, `bambi.chats.markRead`, `bambi.chats.deleteChatRoom`
 
 ### 10.3 면접 일정 제안 · 상태 전이

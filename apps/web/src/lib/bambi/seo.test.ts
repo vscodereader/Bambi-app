@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	bambiSiteJsonLd,
 	breadcrumbJsonLd,
+	SITE_KEYWORDS,
 	toJsonLdScriptContent,
 } from "./seo";
 
@@ -9,6 +10,60 @@ const ABSOLUTE_HTTPS = /^https:\/\//;
 
 const nodes = bambiSiteJsonLd["@graph"];
 const nodeOf = (type: string) => nodes.find((node) => node["@type"] === type);
+
+const ORIGINAL_KEYWORDS = [
+	"유흥알바",
+	"밤비알바",
+	"밤알바",
+	"룸알바",
+	"노래주점알바",
+	"룸싸롱알바",
+	"유흥구인구직",
+	"고소득알바",
+	"여성알바",
+	"접객알바",
+] as const;
+
+const REQUESTED_KEYWORDS = [
+	"여성알바",
+	"퀸알바",
+	"밤알바",
+	"룸알바",
+	"밤일알바",
+	"여우알바",
+	"악녀알바",
+	"노래방도우미",
+	"보도알바",
+	"유흥알바",
+	"텐프로",
+	"안마",
+	"마사지",
+	"주점",
+	"유흥업소알바",
+	"아가씨알바",
+	"구인구직 사이트",
+	"이브알바",
+	"고소득알바",
+] as const;
+
+describe("SITE_KEYWORDS", () => {
+	it("기존 목록과 요청 목록의 합집합을 중복 없이 유지한다", () => {
+		const expectedKeywords = [
+			...new Set([...ORIGINAL_KEYWORDS, ...REQUESTED_KEYWORDS]),
+		];
+
+		expect(new Set(SITE_KEYWORDS).size).toBe(SITE_KEYWORDS.length);
+		expect(SITE_KEYWORDS).toEqual(expectedKeywords);
+	});
+
+	it("구인구직 사이트를 분리하지 않은 하나의 키워드로 유지한다", () => {
+		expect(
+			SITE_KEYWORDS.filter((keyword) => keyword === "구인구직 사이트")
+		).toHaveLength(1);
+		expect(SITE_KEYWORDS).not.toContain("구인구직");
+		expect(SITE_KEYWORDS).not.toContain("사이트");
+	});
+});
 
 describe("bambiSiteJsonLd", () => {
 	it("Organization·WebSite 두 노드를 schema.org 컨텍스트로 낸다", () => {

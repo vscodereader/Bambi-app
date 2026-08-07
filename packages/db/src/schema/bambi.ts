@@ -470,6 +470,36 @@ export const employerOrganizationProfile = pgTable(
 	]
 );
 
+export const employerBusinessDocument = pgTable(
+	"employer_business_document",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		createdByUserId: text("created_by_user_id")
+			.notNull()
+			.references(() => user.id),
+		category: chatAttachmentCategory("category").notNull(),
+		fileName: text("file_name").notNull(),
+		mimeType: text("mime_type").notNull(),
+		byteSize: integer("byte_size").notNull(),
+		storageKey: text("storage_key").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("employer_business_document_organization_id_idx").on(
+			table.organizationId
+		),
+		index("employer_business_document_created_by_user_id_idx").on(
+			table.createdByUserId
+		),
+		uniqueIndex("employer_business_document_storage_key_uidx").on(
+			table.storageKey
+		),
+	]
+);
+
 // 지역 마스터. 시/도 행(sigungu = null)과 그 아래 시/군/구 행이 한 테이블에 같이 산다 —
 // 두 테이블로 쪼개면 공고의 region_code·district_code가 서로 다른 테이블을 가리켜 FK가
 // 두 벌이 되고, "이 코드가 어느 레벨인가"를 컬럼 이름으로만 알게 된다.
@@ -1961,7 +1991,18 @@ export const bambiProfileRelations = relations(bambiProfile, ({ one }) => ({
 export const employerOrganizationProfileRelations = relations(
 	employerOrganizationProfile,
 	({ many }) => ({
+		businessDocuments: many(employerBusinessDocument),
 		teamProfiles: many(employerTeamProfile),
+	})
+);
+
+export const employerBusinessDocumentRelations = relations(
+	employerBusinessDocument,
+	({ one }) => ({
+		organizationProfile: one(employerOrganizationProfile, {
+			fields: [employerBusinessDocument.organizationId],
+			references: [employerOrganizationProfile.organizationId],
+		}),
 	})
 );
 

@@ -540,6 +540,13 @@
       "when": 1786073885503,
       "tag": "0076_community-board-icon",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1786084225762,
+      "tag": "0077_grey_hellfire_club",
+      "breakpoints": true
     }
   ]
 }

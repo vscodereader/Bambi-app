@@ -23,6 +23,7 @@ import {
 	markParticipantInactive,
 	markSocketInactiveEverywhere,
 } from "@bambi-app/api/services/bambi-chat-realtime";
+import { getRoomIdsHiddenByActiveReport } from "@bambi-app/api/services/bambi-chat-report-availability";
 import {
 	resolveRealtimeConnectRateLimit,
 	takeRateLimit,
@@ -83,6 +84,17 @@ class ChatRealtimeError extends Error {
 		this.code = code;
 	}
 }
+
+const assertNoActiveChatReport = async (roomId: string): Promise<void> => {
+	const hiddenRoomIds = await getRoomIdsHiddenByActiveReport([roomId]);
+
+	if (hiddenRoomIds.has(roomId)) {
+		throw new ChatRealtimeError(
+			"FORBIDDEN",
+			"신고 처리 중인 채팅방은 이용할 수 없어요."
+		);
+	}
+};
 
 const getErrorPayload = (error: unknown): ChatErrorEvent => {
 	if (error instanceof ChatRealtimeError) {
@@ -293,6 +305,7 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 				);
 
 				await assertChatRoomNotBlocked(room, profile.userId);
+				await assertNoActiveChatReport(room.id);
 
 				await socket.join(getChatRoomSocketRoom(room.id));
 				markParticipantActive({
@@ -323,10 +336,11 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 			}
 		});
 
-		socket.on("chat:typing:started", (rawPayload) => {
+		socket.on("chat:typing:started", async (rawPayload) => {
 			try {
 				const { roomId } = roomPayloadSchema.parse(rawPayload);
 				const userId = assertJoinedParticipant(socket, roomId);
+				await assertNoActiveChatReport(roomId);
 
 				socket.to(getChatRoomSocketRoom(roomId)).emit("chat:typing:started", {
 					roomId,
@@ -337,10 +351,11 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 			}
 		});
 
-		socket.on("chat:typing:stopped", (rawPayload) => {
+		socket.on("chat:typing:stopped", async (rawPayload) => {
 			try {
 				const { roomId } = roomPayloadSchema.parse(rawPayload);
 				const userId = assertJoinedParticipant(socket, roomId);
+				await assertNoActiveChatReport(roomId);
 
 				socket.to(getChatRoomSocketRoom(roomId)).emit("chat:typing:stopped", {
 					roomId,
@@ -360,6 +375,7 @@ export const attachBambiRealtime = (fastify: FastifyInstance): void => {
 				);
 
 				await assertChatRoomNotBlocked(room, profile.userId);
+				await assertNoActiveChatReport(room.id);
 
 				const readReceipts = await markChatMessagesRead({
 					chatRoomId: room.id,

@@ -41,6 +41,18 @@ describe("mergeChatMessagesById", () => {
 			{ body: "그대로", createdAt: "2", id: "b" },
 		]);
 	});
+
+	it("입력 배열 순서가 섞여도 실제 최신 메시지를 마지막에 둔다", () => {
+		const merged = mergeChatMessagesById(
+			[message("c", "2026-08-03T00:00:00.000Z")],
+			[
+				message("b", "2026-08-02T00:00:00.000Z"),
+				message("a", "2026-08-01T00:00:00.000Z"),
+			]
+		);
+
+		expect(merged.map(({ id }) => id)).toEqual(["a", "b", "c"]);
+	});
 });
 
 describe("resolveOldestChatMessageCursor", () => {
