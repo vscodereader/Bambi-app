@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@bambi-app/ui/components/badge";
-import { Button } from "@bambi-app/ui/components/button";
+import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	Card,
 	CardContent,
@@ -11,8 +11,10 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ChatAttachmentPreview } from "@/components/bambi/chat-attachment-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	formatBusinessStartDate,
@@ -153,6 +155,42 @@ export default function ModeratorEmployersPage() {
 										? `${getBiznumStatusLabel(employer.biznumStatusCode)} · ${formatDateTime(employer.biznumCheckedAt)}`
 										: "국세청 대조를 하지 못했어요. 사업자등록증을 수동으로 확인해 주세요."}
 								</span>
+							</div>
+							<div className="flex flex-col gap-2">
+								<div className="flex items-center justify-between gap-2">
+									<h3 className="font-medium text-sm">사업자 인증 서류</h3>
+									<Badge variant="secondary">
+										{employer.businessDocuments.length}개
+									</Badge>
+								</div>
+								{employer.businessDocuments.length > 0 ? (
+									<ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+										{employer.businessDocuments.map((document) => (
+											<li className="min-w-0" key={document.id}>
+												<ChatAttachmentPreview
+													attachment={document}
+													mine={false}
+												/>
+												<a
+													className={buttonVariants({
+														className: "mt-2 w-full",
+														size: "sm",
+														variant: "outline",
+													})}
+													download={document.fileName}
+													href={document.objectUrl}
+												>
+													<Download aria-hidden />
+													다운로드
+												</a>
+											</li>
+										))}
+									</ul>
+								) : (
+									<p className="rounded-lg border border-dashed p-4 text-center text-muted-foreground text-sm">
+										제출된 사업자 인증 서류가 없습니다.
+									</p>
+								)}
 							</div>
 							{employer.verificationNote ? (
 								<p className="m-0 text-muted-foreground text-sm">

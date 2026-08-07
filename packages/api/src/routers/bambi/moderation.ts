@@ -16,6 +16,7 @@ import {
 	chatRoom,
 	communityComment,
 	communityPost,
+	employerBusinessDocument,
 	employerOrganizationProfile,
 	employerTeamProfile,
 	interviewSchedule,
@@ -66,6 +67,7 @@ import {
 } from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
+import { getBusinessDocumentObjectUrl } from "../../services/bambi-storage";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 import { purgeWithdrawnAccountsBatch } from "../../services/bambi-withdrawal-purge";
 import { deletePublicObjects } from "../../services/gcs";
@@ -2397,13 +2399,68 @@ export const moderationRouter = {
 				.limit(input.limit)
 				.offset(input.offset);
 
-			if (input.status) {
-				return await query.where(
-					eq(employerOrganizationProfile.verificationStatus, input.status)
+			const employers = input.status
+				? await query.where(
+						eq(employerOrganizationProfile.verificationStatus, input.status)
+					)
+				: await query;
+			const organizationIds = employers.map(
+				({ organizationId }) => organizationId
+			);
+			const documents =
+				organizationIds.length > 0
+					? await db
+							.select({
+								byteSize: employerBusinessDocument.byteSize,
+								category: employerBusinessDocument.category,
+								fileName: employerBusinessDocument.fileName,
+								id: employerBusinessDocument.id,
+								mimeType: employerBusinessDocument.mimeType,
+								organizationId: employerBusinessDocument.organizationId,
+								storageKey: employerBusinessDocument.storageKey,
+							})
+							.from(employerBusinessDocument)
+							.where(
+								inArray(
+									employerBusinessDocument.organizationId,
+									organizationIds
+								)
+							)
+							.orderBy(employerBusinessDocument.createdAt)
+					: [];
+			const documentsByOrganizationId = new Map<
+				string,
+				Array<{
+					byteSize: number;
+					category: "image" | "pdf";
+					fileName: string;
+					id: string;
+					mimeType: string;
+					objectUrl: string;
+				}>
+			>();
+			for (const document of documents) {
+				const organizationDocuments =
+					documentsByOrganizationId.get(document.organizationId) ?? [];
+				organizationDocuments.push({
+					byteSize: document.byteSize,
+					category: document.category,
+					fileName: document.fileName,
+					id: document.id,
+					mimeType: document.mimeType,
+					objectUrl: getBusinessDocumentObjectUrl(document),
+				});
+				documentsByOrganizationId.set(
+					document.organizationId,
+					organizationDocuments
 				);
 			}
 
-			return await query;
+			return employers.map((employer) => ({
+				...employer,
+				businessDocuments:
+					documentsByOrganizationId.get(employer.organizationId) ?? [],
+			}));
 		}),
 
 	listPendingTeamInvitations: protectedProcedure

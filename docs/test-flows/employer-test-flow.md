@@ -1,5 +1,13 @@
 # 구인자(Employer) 테스트 흐름
 
+## 사업자 인증 서류 추가 검수
+
+- 업체 정보는 서류가 없어도 최초 제출할 수 있으며, 조직이 생성된 뒤 JPG·PNG·WEBP·PDF 서류를 최대 5개까지 추가할 수 있다.
+- 각 파일은 10MB 이하여야 하고, 확장자와 실제 파일 형식이 다르면 업로드가 거부된다.
+- 심사 대기 중에는 누락 서류를 추가할 수 있지만 기존 서류 삭제·교체는 할 수 없다.
+- 반려 후에는 기존 서류를 삭제하거나 새 서류를 추가한 다음 다시 제출할 수 있다.
+- 업로드한 이미지와 PDF는 각각 열기·다운로드가 가능하다.
+
 > 작성 기준: `C:\Users\user\projects\bambi-app` 브랜치 `feat/region-biznum-role-ux` (커밋 `bd7e2e4`) 소스코드.
 > 모든 항목은 코드에서 직접 확인한 내용만 담았다. 코드에 없는 기능은 "없음"으로 명시했다.
 > 경로 표기: 웹 라우트는 `apps/web/src/app/...`, tRPC(oRPC) 프로시저는 `bambi.<router>.<procedure>` (구현: `packages/api/src/routers/bambi/<router>.ts`).

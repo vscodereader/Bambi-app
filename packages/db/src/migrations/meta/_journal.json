@@ -526,6 +526,13 @@
       "when": 1786006732773,
       "tag": "0074_nebulous_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1786073717289,
+      "tag": "0075_medical_captain_universe",
+      "breakpoints": true
     }
   ]
 }

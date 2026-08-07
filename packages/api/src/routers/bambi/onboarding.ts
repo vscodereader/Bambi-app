@@ -13,13 +13,14 @@ import {
 	adminModerationAction,
 	bambiLegalConsent,
 	bambiProfile,
+	employerBusinessDocument,
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
 import { env } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import z from "zod";
 
 import {
@@ -48,6 +49,7 @@ import {
 	getJobPostingScopes,
 	ORGANIZATION_WIDE_POSTING_ROLES,
 } from "../../services/bambi-job-access";
+import { validateChatMediaUpload } from "../../services/bambi-media-policy";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
 	assertCanCreateBambiProfile,
@@ -58,6 +60,12 @@ import {
 	type OrganizationRole,
 } from "../../services/bambi-onboarding";
 import { resolveOptionalRegion } from "../../services/bambi-region";
+import {
+	createBusinessDocumentUploadIntent,
+	getBusinessDocumentObjectUrl,
+	isOwnedBusinessDocumentKey,
+} from "../../services/bambi-storage";
+import { deletePublicObjects } from "../../services/gcs";
 import {
 	type BiznumValidation,
 	validateBiznum,
@@ -155,6 +163,21 @@ const submitEmployerBusinessInfoInput = z.object({
 	businessStartDate: z
 		.string()
 		.regex(/^\d{4}-\d{2}-\d{2}$/, "개업일자는 YYYY-MM-DD 형식이어야 합니다."),
+});
+
+const businessDocumentUploadInput = z.object({
+	organizationId: z.string().min(1),
+	byteSize: z.number().int().positive(),
+	fileName: z.string().min(1).max(255),
+	mimeType: z.string().min(1).max(120),
+});
+
+const addBusinessDocumentInput = businessDocumentUploadInput.extend({
+	storageKey: z.string().min(1).max(512),
+});
+
+const deleteBusinessDocumentInput = z.object({
+	documentId: z.string().uuid(),
 });
 
 const BIZNUM_MISMATCH_MESSAGE =
@@ -257,6 +280,85 @@ const requireEmployerBambiProfile = async (userId: string) => {
 
 	return profile;
 };
+
+const MAX_BUSINESS_DOCUMENTS = 5;
+
+const requireBusinessDocumentOrganization = async ({
+	allowPending = false,
+	organizationId,
+	userId,
+}: {
+	allowPending?: boolean;
+	organizationId: string;
+	userId: string;
+}) => {
+	await requireEmployerBambiProfile(userId);
+
+	const [organizationProfile] = await db
+		.select({
+			organizationId: employerOrganizationProfile.organizationId,
+			verificationStatus: employerOrganizationProfile.verificationStatus,
+		})
+		.from(employerOrganizationProfile)
+		.innerJoin(
+			member,
+			and(
+				eq(member.organizationId, employerOrganizationProfile.organizationId),
+				eq(member.userId, userId),
+				eq(member.role, "owner")
+			)
+		)
+		.where(eq(employerOrganizationProfile.organizationId, organizationId))
+		.limit(1);
+
+	if (!organizationProfile) {
+		throw new ORPCError("FORBIDDEN", {
+			message: "Only the organization owner can manage business documents.",
+		});
+	}
+
+	if (!allowPending && organizationProfile.verificationStatus === "pending") {
+		throw new ORPCError("CONFLICT", {
+			message: "Business documents cannot be changed while review is pending.",
+		});
+	}
+
+	return organizationProfile;
+};
+
+const requireValidBusinessDocument = (input: {
+	byteSize: number;
+	fileName: string;
+	mimeType: string;
+}) => {
+	const result = validateChatMediaUpload(input);
+	if (!result.ok) {
+		throw new ORPCError("BAD_REQUEST", {
+			message:
+				result.code === "file_too_large"
+					? "Each business document must be 10 MB or smaller."
+					: "Only JPG, PNG, WEBP, and PDF business documents are allowed.",
+		});
+	}
+
+	return result.category;
+};
+
+const toBusinessDocumentResponse = (document: {
+	byteSize: number;
+	category: "image" | "pdf";
+	fileName: string;
+	id: string;
+	mimeType: string;
+	storageKey: string;
+}) => ({
+	byteSize: document.byteSize,
+	category: document.category,
+	fileName: document.fileName,
+	id: document.id,
+	mimeType: document.mimeType,
+	objectUrl: getBusinessDocumentObjectUrl(document),
+});
 
 // 다른 계정이 같은 사람으로 인증했는지 본다. 판정 축은 DI지만, 과거 CI만 저장된
 // 계정과의 충돌도 유니크 인덱스가 유지되므로 함께 걸러 같은 안내로 막는다.
@@ -426,6 +528,180 @@ const findOrganizationsLeftEmptyBy = async (
 };
 
 export const onboardingRouter = {
+	createBusinessDocumentUpload: protectedProcedure
+		.input(businessDocumentUploadInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			await requireBusinessDocumentOrganization({
+				allowPending: true,
+				organizationId: input.organizationId,
+				userId,
+			});
+			const category = requireValidBusinessDocument(input);
+
+			return await createBusinessDocumentUploadIntent({
+				actorUserId: userId,
+				byteSize: input.byteSize,
+				category,
+				fileName: input.fileName,
+				mimeType: input.mimeType,
+				organizationId: input.organizationId,
+			});
+		}),
+
+	addBusinessDocument: protectedProcedure
+		.input(addBusinessDocumentInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			await requireBusinessDocumentOrganization({
+				allowPending: true,
+				organizationId: input.organizationId,
+				userId,
+			});
+			const category = requireValidBusinessDocument(input);
+
+			if (
+				!isOwnedBusinessDocumentKey({
+					organizationId: input.organizationId,
+					storageKey: input.storageKey,
+					userId,
+				})
+			) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "Business document does not belong to this organization.",
+				});
+			}
+
+			const createdDocument = await db.transaction(async (tx) => {
+				const [lockedOrganizationProfile] = await tx
+					.select({
+						verificationStatus: employerOrganizationProfile.verificationStatus,
+					})
+					.from(employerOrganizationProfile)
+					.where(
+						eq(employerOrganizationProfile.organizationId, input.organizationId)
+					)
+					.for("update");
+				if (!lockedOrganizationProfile) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "Employer organization profile was not found.",
+					});
+				}
+
+				const [documentCount] = await tx
+					.select({ count: count() })
+					.from(employerBusinessDocument)
+					.where(
+						eq(employerBusinessDocument.organizationId, input.organizationId)
+					);
+				if ((documentCount?.count ?? 0) >= MAX_BUSINESS_DOCUMENTS) {
+					throw new ORPCError("CONFLICT", {
+						message: "Up to five business documents can be uploaded.",
+					});
+				}
+
+				const [created] = await tx
+					.insert(employerBusinessDocument)
+					.values({
+						byteSize: input.byteSize,
+						category,
+						createdByUserId: userId,
+						fileName: input.fileName.trim(),
+						mimeType: input.mimeType,
+						organizationId: input.organizationId,
+						storageKey: input.storageKey,
+					})
+					.returning();
+
+				if (lockedOrganizationProfile.verificationStatus === "verified") {
+					await tx
+						.update(employerOrganizationProfile)
+						.set({ verificationStatus: "pending", updatedAt: new Date() })
+						.where(
+							eq(
+								employerOrganizationProfile.organizationId,
+								input.organizationId
+							)
+						);
+				}
+
+				return created;
+			});
+
+			if (!createdDocument) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Business document could not be saved.",
+				});
+			}
+
+			return toBusinessDocumentResponse(createdDocument);
+		}),
+
+	deleteBusinessDocument: protectedProcedure
+		.input(deleteBusinessDocumentInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			const [document] = await db
+				.select()
+				.from(employerBusinessDocument)
+				.where(eq(employerBusinessDocument.id, input.documentId))
+				.limit(1);
+
+			if (!document) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Business document was not found.",
+				});
+			}
+
+			await requireBusinessDocumentOrganization({
+				organizationId: document.organizationId,
+				userId,
+			});
+			await db.transaction(async (tx) => {
+				const [lockedOrganizationProfile] = await tx
+					.select({
+						verificationStatus: employerOrganizationProfile.verificationStatus,
+					})
+					.from(employerOrganizationProfile)
+					.where(
+						eq(
+							employerOrganizationProfile.organizationId,
+							document.organizationId
+						)
+					)
+					.for("update");
+				if (!lockedOrganizationProfile) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "Employer organization profile was not found.",
+					});
+				}
+				if (lockedOrganizationProfile.verificationStatus === "pending") {
+					throw new ORPCError("CONFLICT", {
+						message:
+							"Business documents cannot be changed while review is pending.",
+					});
+				}
+
+				await tx
+					.delete(employerBusinessDocument)
+					.where(eq(employerBusinessDocument.id, document.id));
+				if (lockedOrganizationProfile.verificationStatus === "verified") {
+					await tx
+						.update(employerOrganizationProfile)
+						.set({ verificationStatus: "pending", updatedAt: new Date() })
+						.where(
+							eq(
+								employerOrganizationProfile.organizationId,
+								document.organizationId
+							)
+						);
+				}
+			});
+			await deletePublicObjects([document.storageKey]);
+
+			return { id: document.id };
+		}),
+
 	getMine: protectedProcedure.handler(async ({ context }) => {
 		const userId = context.session.user.id;
 		const [profile] = await db
@@ -503,6 +779,46 @@ export const onboardingRouter = {
 					eq(member.userId, userId)
 				)
 			);
+		const organizationIds = organizationProfiles.map(
+			({ organizationId }) => organizationId
+		);
+		const businessDocuments =
+			organizationIds.length > 0
+				? await db
+						.select({
+							byteSize: employerBusinessDocument.byteSize,
+							category: employerBusinessDocument.category,
+							fileName: employerBusinessDocument.fileName,
+							id: employerBusinessDocument.id,
+							mimeType: employerBusinessDocument.mimeType,
+							organizationId: employerBusinessDocument.organizationId,
+							storageKey: employerBusinessDocument.storageKey,
+						})
+						.from(employerBusinessDocument)
+						.where(
+							inArray(employerBusinessDocument.organizationId, organizationIds)
+						)
+						.orderBy(employerBusinessDocument.createdAt)
+				: [];
+		const businessDocumentsByOrganizationId = new Map<
+			string,
+			ReturnType<typeof toBusinessDocumentResponse>[]
+		>();
+		for (const document of businessDocuments) {
+			const documents =
+				businessDocumentsByOrganizationId.get(document.organizationId) ?? [];
+			documents.push(toBusinessDocumentResponse(document));
+			businessDocumentsByOrganizationId.set(document.organizationId, documents);
+		}
+		const organizationProfilesWithDocuments = organizationProfiles.map(
+			(organizationProfile) => ({
+				...organizationProfile,
+				businessDocuments:
+					businessDocumentsByOrganizationId.get(
+						organizationProfile.organizationId
+					) ?? [],
+			})
+		);
 
 		const teamProfileColumns = {
 			id: employerTeamProfile.id,
@@ -582,7 +898,7 @@ export const onboardingRouter = {
 			// 접수되므로, 화면이 "미확인" 대신 "곧 준비될 기능" 안내를 띄우도록 여부만 내려준다.
 			biznumCheckEnabled: Boolean(env.NTS_SERVICE_KEY),
 			community,
-			employerOrganizationProfiles: organizationProfiles,
+			employerOrganizationProfiles: organizationProfilesWithDocuments,
 			// teamMember 기준 팀에 더해 owner/admin 조직 전체 팀까지 포함해야
 			// owner가 본인이 멤버가 아닌 팀으로 낸 공고도 팀명 라벨을 조회할 수 있다.
 			employerTeamProfiles: postingScopeTeamProfiles,
