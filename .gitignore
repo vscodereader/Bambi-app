@@ -60,3 +60,6 @@ temp
 .omx
 
 .claude/worktrees/*
+
+# Graphify generated knowledge graph
+graphify-out/
