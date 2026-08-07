@@ -3,7 +3,17 @@ import {
 	chatMessageReadReceipt,
 	chatRoom,
 } from "@bambi-app/db/schema/bambi";
-import { and, count, eq, inArray, isNull, lte, ne, or } from "drizzle-orm";
+import {
+	and,
+	count,
+	eq,
+	inArray,
+	isNull,
+	lte,
+	ne,
+	notInArray,
+	or,
+} from "drizzle-orm";
 
 interface ChatParticipantRoom {
 	employerUserId: string;
@@ -192,8 +202,10 @@ export const getUnreadMessageCount = async ({
 // 집합은 목록(listMine)과 같아야 한다 — 어느 한쪽이라도 나간 방까지 세면 목록에 없는
 // 방 때문에 뱃지가 켜진 채 끌 방법이 없다. 그래서 같은 술어를 건다.
 export const getUnreadMessageCountForUser = async ({
+	excludedRoomIds = [],
 	userId,
 }: {
+	excludedRoomIds?: string[];
 	userId: string;
 }): Promise<number> => {
 	const { db } = await import("@bambi-app/db");
@@ -210,6 +222,9 @@ export const getUnreadMessageCountForUser = async ({
 		)
 		.where(
 			and(
+				excludedRoomIds.length > 0
+					? notInArray(chatRoom.id, excludedRoomIds)
+					: undefined,
 				or(
 					eq(chatRoom.employerUserId, userId),
 					eq(chatRoom.jobSeekerUserId, userId)

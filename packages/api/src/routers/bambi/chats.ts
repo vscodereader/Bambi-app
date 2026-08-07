@@ -10,7 +10,6 @@ import {
 	employerTeamProfile,
 	interviewSchedule,
 	jobPost,
-	report,
 	userBlock,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -37,6 +36,7 @@ import {
 	emitRoomUpdated,
 	emitUnreadUpdated,
 } from "../../services/bambi-chat-realtime";
+import { getRoomIdsHiddenByActiveReport } from "../../services/bambi-chat-report-availability";
 import {
 	drainPendingChatMessageSyncs,
 	enqueueChatMessageSync,
@@ -616,6 +616,24 @@ const resolveBlockedCounterpartIds = async (
 	);
 };
 
+const getHiddenParticipantRoomIds = async (
+	userId: string
+): Promise<Set<string>> => {
+	const participantRooms = await db
+		.select({ id: chatRoom.id })
+		.from(chatRoom)
+		.where(
+			or(
+				eq(chatRoom.employerUserId, userId),
+				eq(chatRoom.jobSeekerUserId, userId)
+			)
+		);
+
+	return await getRoomIdsHiddenByActiveReport(
+		participantRooms.map(({ id }) => id)
+	);
+};
+
 type ChatBlockReason =
 	| "blocked_by_counterpart"
 	| "blocked_by_me"
@@ -627,81 +645,6 @@ const CHAT_BLOCK_MESSAGES: Record<ChatBlockReason, string> = {
 	blocked_by_me: "회원님이 상대를 차단한 채팅방이에요.",
 	moderation: "신고에 대한 운영자 조치로 종료된 채팅방이에요.",
 	pending_report: "신고를 검토하고 있는 채팅이에요. 처리 후 다시 볼 수 있어요.",
-};
-
-// 신고 처리 전(open·reviewing) 상태. 이 구간에는 신고자에게서 방을 감춘다.
-const PENDING_REPORT_STATUSES = ["open", "reviewing"] as const;
-
-// report.target_id는 여러 도메인을 겸하는 text라 uuid가 아닌 값도 들어올 수 있다.
-const uuidSchema = z.string().uuid();
-
-/**
- * "내가 신고했고 아직 처리 전"인 방 id들.
- *
- * 신고 완료 안내가 "해당 채팅은 잠시 숨겨둘게요"라고 약속하므로, 신고자에게는 목록에서도
- * 방 안에서도 보이지 않아야 한다. 방을 직접 겨눈 신고(chat_room)뿐 아니라 그 방의 특정
- * 메시지를 겨눈 신고(chat_message)도 같은 방을 가리키므로 함께 모은다. 상대에게는 아무
- * 영향이 없고, 운영자가 처리(resolved·dismissed)하면 자연히 다시 보인다.
- */
-const getRoomIdsHiddenByMyReport = async ({
-	reporterUserId,
-	roomIds,
-}: {
-	reporterUserId: string;
-	roomIds: string[];
-}): Promise<Set<string>> => {
-	if (roomIds.length === 0) {
-		return new Set();
-	}
-
-	// 메시지 신고는 report.target_id가 text라 조인하려면 형변환이 필요한데, 인덱스가 있는
-	// chat_message.id 쪽에 캐스팅을 걸면 PK 조회가 통째로 막힌다. 그래서 작은 집합(내가 낸
-	// 미처리 신고)을 먼저 뽑고, 그 값으로 uuid 컬럼을 조회한다 — 캐스팅이 값 쪽으로 간다.
-	const [directRows, reportedMessageRows] = await Promise.all([
-		db
-			.select({ roomId: report.targetId })
-			.from(report)
-			.where(
-				and(
-					eq(report.reporterUserId, reporterUserId),
-					eq(report.targetType, "chat_room"),
-					inArray(report.targetId, roomIds),
-					inArray(report.status, [...PENDING_REPORT_STATUSES])
-				)
-			),
-		db
-			.select({ messageId: report.targetId })
-			.from(report)
-			.where(
-				and(
-					eq(report.reporterUserId, reporterUserId),
-					eq(report.targetType, "chat_message"),
-					inArray(report.status, [...PENDING_REPORT_STATUSES])
-				)
-			),
-	]);
-
-	// 신고 대상 id가 uuid가 아닌 값으로 저장돼 있으면 바인딩에서 터지므로 먼저 거른다.
-	const reportedMessageIds = reportedMessageRows
-		.map(({ messageId }) => messageId)
-		.filter((messageId) => uuidSchema.safeParse(messageId).success);
-	const viaMessageRows =
-		reportedMessageIds.length > 0
-			? await db
-					.select({ roomId: chatMessage.chatRoomId })
-					.from(chatMessage)
-					.where(
-						and(
-							inArray(chatMessage.id, reportedMessageIds),
-							inArray(chatMessage.chatRoomId, roomIds)
-						)
-					)
-			: [];
-
-	return new Set([
-		...directRows.map((row) => row.roomId),
-		...viaMessageRows.map((row) => row.roomId),
-	]);
 };
 
 /**
@@ -754,18 +697,15 @@ const throwIfChatBlocked = async ({
 	}
 };
 
-/** 내가 신고해 숨겨진 방이면 진입 자체를 막는다(상대는 영향 없음). */
-const throwIfHiddenByMyReport = async ({
+/** 어느 참여자가 신고했든 활성 신고가 있으면 양쪽의 진입과 상호작용을 막는다. */
+const throwIfHiddenByActiveReport = async ({
 	actorUserId,
 	room,
 }: {
 	actorUserId: string;
 	room: CounterpartRoom;
 }): Promise<void> => {
-	const hiddenRoomIds = await getRoomIdsHiddenByMyReport({
-		reporterUserId: actorUserId,
-		roomIds: [room.id],
-	});
+	const hiddenRoomIds = await getRoomIdsHiddenByActiveReport([room.id]);
 
 	if (hiddenRoomIds.has(room.id)) {
 		await throwChatBlocked("pending_report", room, actorUserId);
@@ -786,7 +726,7 @@ const throwIfChatUnavailable = async ({
 	room: CounterpartRoom & { isBlocked: boolean };
 }): Promise<void> => {
 	await throwIfChatBlocked({ actorUserId, room });
-	await throwIfHiddenByMyReport({ actorUserId, room });
+	await throwIfHiddenByActiveReport({ actorUserId, room });
 };
 
 export const chatsRouter = {
@@ -939,10 +879,9 @@ export const chatsRouter = {
 
 		// 내가 신고하고 아직 처리 전인 방은 목록에서 뺀다. 신고 완료 안내가 "해당 채팅은
 		// 잠시 숨겨둘게요"라고 약속하는데, 예전에는 라벨만 붙인 채 그대로 남아 있었다.
-		const hiddenRoomIds = await getRoomIdsHiddenByMyReport({
-			reporterUserId: profile.userId,
-			roomIds: roomsWithMessages.map(({ room }) => room.id),
-		});
+		const hiddenRoomIds = await getRoomIdsHiddenByActiveReport(
+			roomsWithMessages.map(({ room }) => room.id)
+		);
 		const visibleRooms = roomsWithMessages.filter(
 			({ room }) => !hiddenRoomIds.has(room.id)
 		);
@@ -1000,9 +939,11 @@ export const chatsRouter = {
 	// 메시지 총합만 한 번의 쿼리로 센다.
 	unreadState: protectedProcedure.handler(async ({ context }) => {
 		const profile = await requireActiveBambiProfile(context.session);
+		const hiddenRoomIds = await getHiddenParticipantRoomIds(profile.userId);
 
 		return {
 			unreadMessageCount: await getUnreadMessageCountForUser({
+				excludedRoomIds: [...hiddenRoomIds],
 				userId: profile.userId,
 			}),
 		};
@@ -1440,7 +1381,7 @@ export const chatsRouter = {
 				context.session
 			);
 
-			await throwIfChatBlocked({
+			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
 				room,
 			});
@@ -1459,6 +1400,9 @@ export const chatsRouter = {
 			// 기대지 않고 곧바로 정본으로 맞출 수 있다. 증감 누적이 아니라 여기서 다시 센
 			// 값이므로 핀 숫자의 정본이 DB 집계라는 규칙은 그대로다.
 			const totalUnreadMessageCount = await getUnreadMessageCountForUser({
+				excludedRoomIds: [
+					...(await getHiddenParticipantRoomIds(profile.userId)),
+				],
 				userId: profile.userId,
 			});
 

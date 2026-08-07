@@ -51,6 +51,10 @@ import {
 	requireChatParticipant,
 } from "../../services/bambi-authz";
 import { isChatRoomLeftByAnyone } from "../../services/bambi-chat-participation";
+import {
+	emitChatListUpdated,
+	emitRoomUpdated,
+} from "../../services/bambi-chat-realtime";
 import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
@@ -347,6 +351,53 @@ const bulkSetJobPostPaymentInput = z.object({
 
 type ReportTargetType = z.infer<typeof targetTypeSchema>;
 type ReportRow = typeof report.$inferSelect;
+
+const getReportedChatRoomId = async (
+	targetType: ReportRow["targetType"],
+	targetId: string
+): Promise<string | null> => {
+	if (targetType === "chat_room") {
+		return targetId;
+	}
+	if (targetType !== "chat_message") {
+		return null;
+	}
+
+	const [message] = await db
+		.select({ chatRoomId: chatMessage.chatRoomId })
+		.from(chatMessage)
+		.where(eq(chatMessage.id, targetId))
+		.limit(1);
+
+	return message?.chatRoomId ?? null;
+};
+
+const emitChatReportAvailabilityChanged = async (
+	targetType: ReportRow["targetType"],
+	targetId: string
+): Promise<void> => {
+	const roomId = await getReportedChatRoomId(targetType, targetId);
+
+	if (!roomId) {
+		return;
+	}
+
+	const [room] = await db
+		.select({
+			employerUserId: chatRoom.employerUserId,
+			jobSeekerUserId: chatRoom.jobSeekerUserId,
+		})
+		.from(chatRoom)
+		.where(eq(chatRoom.id, roomId))
+		.limit(1);
+
+	if (!room) {
+		return;
+	}
+
+	emitRoomUpdated({ roomId });
+	emitChatListUpdated([room.employerUserId, room.jobSeekerUserId], { roomId });
+};
 type JobPostModerationStatus = z.infer<typeof jobPostModerationStatusSchema>;
 type JobPostRow = typeof jobPost.$inferSelect;
 
@@ -1103,6 +1154,10 @@ export const moderationRouter = {
 				.limit(1);
 
 			if (existing) {
+				await emitChatReportAvailabilityChanged(
+					existing.targetType,
+					existing.targetId
+				);
 				return existing;
 			}
 
@@ -1116,6 +1171,13 @@ export const moderationRouter = {
 					details: input.details,
 				})
 				.returning();
+
+			if (created) {
+				await emitChatReportAvailabilityChanged(
+					created.targetType,
+					created.targetId
+				);
+			}
 
 			return created;
 		}),
@@ -1530,7 +1592,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const updated = await db.transaction(async (tx) => {
 				const [updated] = await tx
 					.update(report)
 					.set({ status: input.status })
@@ -1552,14 +1614,24 @@ export const moderationRouter = {
 
 				return updated;
 			});
+
+			await emitChatReportAvailabilityChanged(
+				updated.targetType,
+				updated.targetId
+			);
+			return updated;
 		}),
 
 	bulkSetReportStatus: protectedProcedure
 		.input(bulkSetReportStatusInput)
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
+			const updatedChatTargets: Array<{
+				targetId: string;
+				targetType: ReportRow["targetType"];
+			}> = [];
 
-			return await db.transaction(
+			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (reportId) => {
@@ -1583,10 +1655,28 @@ export const moderationRouter = {
 								reason: input.reason,
 								metadata: { bulk: true, reportId },
 							});
+
+							if (
+								updated.targetType === "chat_room" ||
+								updated.targetType === "chat_message"
+							) {
+								updatedChatTargets.push({
+									targetId: updated.targetId,
+									targetType: updated.targetType,
+								});
+							}
 						},
 						targetIds: input.reportIds,
 					})
 			);
+
+			await Promise.all(
+				updatedChatTargets.map(({ targetId, targetType }) =>
+					emitChatReportAvailabilityChanged(targetType, targetId)
+				)
+			);
+
+			return result;
 		}),
 
 	setJobPostStatus: protectedProcedure
