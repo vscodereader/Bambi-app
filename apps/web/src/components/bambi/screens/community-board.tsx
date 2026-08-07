@@ -62,6 +62,7 @@ import {
 	getCommunityTotalPages,
 	isGuestWritableBoardKey,
 } from "@/lib/bambi/community";
+import { communityBoardIcon } from "@/lib/bambi/community-board-icons";
 import { orpc } from "@/utils/orpc";
 
 // 필터 메뉴를 감추는 게시판. 베스트는 큐레이션이라 좁힐 대상이 아니고, 공지는 운영자 글만,
@@ -523,6 +524,11 @@ export function CommunityBoardScreen({ board }: { board: CommunityBoardMeta }) {
 		(!isGuest || isGuestWritableBoardKey(board.key));
 	// 공지 게시판은 배지(광고·업소)를 생략한다.
 	const showBadges = board.key !== "notice";
+	// 제목 앞 아이콘 — 운영자가 지정한 아이콘이 우선이고, 없으면 공지의 확성기만 남는다
+	// (그 외 게시판은 지금처럼 아이콘 없이 제목만).
+	const BoardIcon =
+		communityBoardIcon(board.icon) ??
+		(board.key === "notice" ? MegaphoneIcon : undefined);
 
 	const emptyDescription = getEmptyDescription(board.key, canWrite, {
 		mine,
@@ -549,8 +555,8 @@ export function CommunityBoardScreen({ board }: { board: CommunityBoardMeta }) {
 			<div className="flex items-start justify-between gap-3">
 				<div className="flex flex-col gap-1">
 					<h1 className="m-0 flex items-center gap-2 font-extrabold text-xl">
-						{board.key === "notice" ? (
-							<MegaphoneIcon className="size-5 shrink-0 text-coral-500" />
+						{BoardIcon ? (
+							<BoardIcon className="size-5 shrink-0 text-coral-500" />
 						) : null}
 						{board.label}
 					</h1>

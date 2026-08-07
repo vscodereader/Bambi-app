@@ -16,6 +16,9 @@ export interface CommunityBoardMeta {
 	// 운영자만 글을 쓸 수 있는 게시판(공지사항). 목록/폼에서 글쓰기 권한 게이트에 쓴다.
 	adminOnly?: boolean;
 	description: string;
+	// 운영자가 지정한 lucide 아이콘 이름(community-board-icons의 맵으로 그린다).
+	// 빌트인 메타에는 없고, DB 행에서만 실려 온다 — 없으면 기존 모양 그대로다.
+	icon?: string | null;
 	// 운영자가 추가한 게시판도 담기므로 리터럴 유니온이 아니라 문자열이다.
 	key: string;
 	label: string;
@@ -100,6 +103,7 @@ export const COMMUNITY_BOARDS: BuiltinBoardMeta[] = [
 // DB 게시판 행(communityBoards.listActive)의 화면용 형태.
 export interface ActiveBoardRow {
 	description: string;
+	icon: string | null;
 	isWritable: boolean;
 	key: string;
 	label: string;
@@ -111,6 +115,7 @@ export interface ActiveBoardRow {
 export const toBoardMeta = (row: ActiveBoardRow): CommunityBoardMeta => ({
 	adminOnly: COMMUNITY_BOARDS.find((board) => board.key === row.key)?.adminOnly,
 	description: row.description,
+	icon: row.icon,
 	key: row.key,
 	label: row.label,
 	slug: row.slug,
@@ -147,6 +152,12 @@ export const GUEST_BOARD_LIMIT_NOTICE =
 // 법률자문 계정이 다른 게시판을 눌렀을 때의 안내(서버 LEGAL_ADVISOR_BOARD_ERROR와 같은 말).
 export const LEGAL_ADVISOR_BOARD_NOTICE =
 	"법률자문 계정은 무료 법률 자문 게시판만 이용할 수 있어요.";
+
+// 코드가 key 리터럴로 특수 동작을 분기하는 저장 게시판 — 운영자가 지울 수 없다(서버
+// community-boards.remove의 BUILTIN_BOARD_KEYS와 같은 말). best는 DB 행이 아니라 가상
+// 게시판이라 애초에 운영자 목록에 나오지 않는다.
+export const isBuiltinBoardKey = (key: string): boolean =>
+	key !== "best" && COMMUNITY_BOARDS.some((board) => board.key === key);
 
 // 빌트인 게시판 전용 조회 — 동적 게시판까지 보려면 useBoardBySlug 훅을 쓴다.
 export const getBoardBySlug = (slug: string): BuiltinBoardMeta | undefined =>

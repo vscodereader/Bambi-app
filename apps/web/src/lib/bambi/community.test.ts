@@ -9,6 +9,7 @@ import {
 	getBoardBySlug,
 	getCommunityPageItems,
 	getCommunityTotalPages,
+	isBuiltinBoardKey,
 	isGuestWritableBoardKey,
 	isLegalAdvisorAllowedPath,
 	isLegalBoardKey,
@@ -85,6 +86,7 @@ describe("community boards meta", () => {
 		const boards = toBoardMetas([
 			{
 				description: "밤비알바 수다방 공지",
+				icon: null,
 				isWritable: true,
 				key: "notice",
 				label: "공지사항",
@@ -92,6 +94,7 @@ describe("community boards meta", () => {
 			},
 			{
 				description: "새 게시판",
+				icon: "Sparkles",
 				isWritable: false,
 				key: "beauty-talk",
 				label: "뷰티 수다",
@@ -110,6 +113,17 @@ describe("community boards meta", () => {
 		// 글쓰기 허용(is_writable)은 DB 값을 그대로 따른다.
 		expect(boards[2]?.writable).toBe(false);
 		expect(boards[2]?.label).toBe("뷰티 수다");
+		// 아이콘도 DB 값 그대로 통과한다(미지정은 null → 화면은 기존 모양).
+		expect(boards[1]?.icon).toBeNull();
+		expect(boards[2]?.icon).toBe("Sparkles");
+	});
+
+	it("빌트인 게시판만 삭제 금지로 판정한다(가상 best 제외)", () => {
+		expect(isBuiltinBoardKey("notice")).toBe(true);
+		expect(isBuiltinBoardKey("work_talk")).toBe(true);
+		expect(isBuiltinBoardKey("legal")).toBe(true);
+		expect(isBuiltinBoardKey("best")).toBe(false);
+		expect(isBuiltinBoardKey("beauty-talk")).toBe(false);
 	});
 
 	it("상세 경로를 만든다", () => {
