@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import type { Job } from "@/lib/bambi/types";
+import { formatPhone } from "@/lib/bambi-format";
 import { interviewStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import { AppBar, Avatar, Badge, Button, Card } from "../ds";
@@ -54,8 +55,9 @@ interface ContactRow {
 	contactValue: string;
 }
 
+// 전화번호만 하이픈을 넣는다 — 카카오 ID·이메일은 사용자가 적은 원문 그대로 보여준다.
 const formatContact = ({ contactMethod, contactValue }: ContactRow): string =>
-	`${contactMethodLabels[contactMethod as ContactMethod] ?? contactMethod} · ${contactValue}`;
+	`${contactMethodLabels[contactMethod as ContactMethod] ?? contactMethod} · ${contactMethod === "phone" ? formatPhone(contactValue) : contactValue}`;
 
 // 완료된 면접이면 "확정"이 아니라 실제 상태(완료) 라벨을 보여준다. enum 원값은
 // 노출하지 않고 라벨 맵을 거친다.
