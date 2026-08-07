@@ -60,6 +60,20 @@ const adminListInput = z.object({
 	sort: z.enum(["recent", "idle", "total", "month"]).default("recent"),
 });
 
+const adminAdjustPointsInput = z.object({
+	// 0은 원장에 의미 없는 행만 남긴다. 한 번에 움직일 수 있는 폭은 오타 방어로 10만까지.
+	amount: z
+		.number()
+		.int()
+		.min(-100_000)
+		.max(100_000)
+		.refine((value) => value !== 0, {
+			message: "0 포인트는 조정할 수 없습니다.",
+		}),
+	reason: z.string().trim().min(1).max(200),
+	userId: z.string().min(1),
+});
+
 const requireAttendanceProfile = async (
 	session: SessionLike | null | undefined
 ): Promise<BambiAccessProfile> => {
@@ -75,6 +89,55 @@ const requireAttendanceProfile = async (
 };
 
 export const attendanceRouter = {
+	adminAdjustPoints: adminProcedure
+		.input(adminAdjustPointsInput)
+		.handler(async ({ input }) => {
+			const [target] = await db
+				.select({ deletedAt: user.deletedAt, role: bambiProfile.role })
+				.from(user)
+				.innerJoin(bambiProfile, eq(bambiProfile.userId, user.id))
+				.where(eq(user.id, input.userId))
+				.limit(1);
+
+			if (!target || target.deletedAt) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "대상 회원을 찾을 수 없습니다.",
+				});
+			}
+			if (!ATTENDANCE_ROLES.has(target.role)) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "구직자·업소 회원에게만 포인트를 조정할 수 있습니다.",
+				});
+			}
+
+			return await db.transaction(async (tx) => {
+				// 잔액 컬럼이 없어 합산으로 읽는다. 집계 select는 FOR UPDATE를 못 걸므로 동시에
+				// 두 운영자가 차감하면 둘 다 통과해 음수가 될 수 있다.
+				// ponytail: 운영자 수동 조작이라 경합을 방치, 자동 차감이 생기면 잔액 스냅샷 행이나
+				// 계정 단위 advisory lock으로 올린다.
+				const [current] = await tx
+					.select({ pointBalance: pointBalanceSql })
+					.from(bambiPointTransaction)
+					.where(eq(bambiPointTransaction.userId, input.userId));
+
+				const pointBalance = (current?.pointBalance ?? 0) + input.amount;
+				if (pointBalance < 0) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "잔액보다 많이 차감할 수 없습니다.",
+					});
+				}
+
+				// 출석 적립(reason="attendance")과 섞이지 않게 프리픽스를 붙여 남긴다.
+				await tx.insert(bambiPointTransaction).values({
+					amount: input.amount,
+					reason: `${input.amount > 0 ? "운영자 지급" : "운영자 차감"}: ${input.reason}`,
+					userId: input.userId,
+				});
+
+				return { pointBalance, userId: input.userId };
+			});
+		}),
+
 	adminList: adminProcedure.input(adminListInput).handler(async ({ input }) => {
 		const today = getKstDateString();
 		const monthStart = `${today.slice(0, 7)}-01`;
@@ -100,6 +163,11 @@ export const attendanceRouter = {
 			select (${today}::date - max(${bambiAttendance.attendedOn}))::int
 			from ${bambiAttendance}
 			where ${bambiAttendance.userId} = ${user.id}
+		)`;
+		// 잔액도 같은 상관 서브쿼리로 붙인다 — 원장 조인은 행을 부풀린다(위와 같은 이유).
+		const pointBalanceRowSql = sql<number>`(
+			select ${pointBalanceSql} from ${bambiPointTransaction}
+			where ${bambiPointTransaction.userId} = ${user.id}
 		)`;
 		const attendedTodaySql = sql<boolean>`exists (
 			select 1 from ${bambiAttendance}
@@ -139,6 +207,7 @@ export const attendanceRouter = {
 				lastAttendedOn: lastAttendedOnSql,
 				loginId: user.login_id,
 				monthDays: monthDaysSql,
+				pointBalance: pointBalanceRowSql,
 				role: bambiProfile.role,
 				totalDays: totalDaysSql,
 				userId: user.id,

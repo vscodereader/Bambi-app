@@ -2625,6 +2625,7 @@ const MOD_MORE_GROUPS: {
 		label: "콘텐츠·고객센터",
 		items: [
 			{ href: "/moderator/content" as Route, label: "게시물" },
+			{ href: "/moderator/community-boards" as Route, label: "게시판 관리" },
 			{ href: "/moderator/support" as Route, label: "고객센터" },
 			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
 			{ href: "/moderator/crawler" as Route, label: "크롤링" },

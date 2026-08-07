@@ -248,7 +248,19 @@ export function MarketplaceFilterSheet({
 }: MarketplaceFilterSheetProps) {
 	return (
 		<Sheet onOpenChange={onOpenChange} open={open}>
-			<SheetContent>
+			<SheetContent
+				onKeyDown={(event) => {
+					// 입력칸에서 Enter = 시트 닫기(필터 값은 onChange로 이미 반영된 상태).
+					// Select·체크박스의 Enter는 조작 키라 닫지 않고, IME 조합 중 Enter도 무시한다.
+					if (
+						event.key === "Enter" &&
+						event.target instanceof HTMLInputElement &&
+						!event.nativeEvent.isComposing
+					) {
+						onOpenChange(false);
+					}
+				}}
+			>
 				<SheetTitle className="mb-4">빠른 탐색</SheetTitle>
 				<MarketplaceFilterControls filters={filters} onChange={onChange} />
 			</SheetContent>

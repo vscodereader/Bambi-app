@@ -20,7 +20,6 @@ import { toast } from "sonner";
 import { CommunityPostEditor } from "@/components/bambi/community-editor";
 import { authClient } from "@/lib/auth-client";
 import {
-	type CommunityBoardKey,
 	type CommunityBoardMeta,
 	communityBoardPath,
 	isLegalBoardKey,
@@ -39,14 +38,9 @@ const MIN_TEXT = 2;
 // (자유 수정 가능 — 금칙어 검사는 회원과 동일하게 서버가 한다).
 const GUEST_AUTHOR_DEFAULT = "비회원";
 
-type WritableBoardKey = Exclude<CommunityBoardKey, "best">;
-
-const isWritableBoardKey = (key: CommunityBoardKey): key is WritableBoardKey =>
-	key !== "best";
-
 // 법률 자문 글은 서버가 잠금을 강제하므로(resolveLockedForBoard) 화면도 항상 잠금 상태로 연다.
 const getInitialLockedState = (
-	boardKey: CommunityBoardKey,
+	boardKey: string,
 	initiallyLocked: boolean | undefined
 ): boolean =>
 	isLegalBoardKey(boardKey) ||
@@ -64,7 +58,7 @@ const isLockPasswordRequired = (
 // 실제로 서버에 보낼 잠금 값. 법률 자문은 회원·비회원 가릴 것 없이 잠긴 채 등록되고
 // (서버 resolveLockedForBoard가 같은 판정을 다시 강제한다), 자유수다·비회원 글은 잠기지 않는다.
 const resolveSubmittedLock = (
-	boardKey: CommunityBoardKey,
+	boardKey: string,
 	guest: boolean,
 	isLocked: boolean
 ): boolean =>
@@ -72,7 +66,7 @@ const resolveSubmittedLock = (
 
 // 연락처는 법률 자문 글에만 실어 보낸다 — 다른 게시판에 실리면 서버가 400으로 막는다.
 const contactPhoneInput = (
-	boardKey: CommunityBoardKey,
+	boardKey: string,
 	contactPhone: string
 ): { contactPhone?: string } =>
 	isLegalBoardKey(boardKey) ? { contactPhone: contactPhone.trim() } : {};
@@ -458,16 +452,14 @@ export function CommunityPostForm({
 		});
 	};
 
+	// 쓸 수 없는 게시판(베스트·비활성)은 글쓰기 페이지가 애초에 열리지 않고, 서버도
+	// assertBoard로 한 번 더 막는다 — 폼은 받은 게시판 key를 그대로 보낸다.
 	const submitCreate = () => {
-		const boardKey = board.key;
-		if (!isWritableBoardKey(boardKey)) {
-			return;
-		}
 		const trimmedPassword = password.trim();
 		createMutation.mutate({
-			...contactPhoneInput(boardKey, contactPhone),
+			...contactPhoneInput(board.key, contactPhone),
 			authorName: authorName.trim(),
-			board: boardKey,
+			board: board.key,
 			body: bodyJson,
 			isLocked: submittedIsLocked,
 			isEvent: submittedIsEvent,

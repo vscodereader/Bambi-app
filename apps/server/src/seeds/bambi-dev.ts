@@ -14,7 +14,6 @@ import {
 	bambiProfile,
 	chatMessage,
 	chatRoom,
-	type communityBoard,
 	communityPost,
 	contactRevealConsent,
 	employerOrganizationProfile,
@@ -1227,7 +1226,8 @@ const hashCommunityPassword = (password: string): string => {
 interface CommunityPostDef {
 	authorDisplayName: string;
 	authorKey: DevUserKey;
-	board: (typeof communityBoard.enumValues)[number];
+	// 게시판 key는 community_board 테이블(FK)이 정본이라 enum 유니온이 아니라 문자열이다.
+	board: string;
 	body: string;
 	isLocked?: boolean;
 	isPromotion?: boolean;

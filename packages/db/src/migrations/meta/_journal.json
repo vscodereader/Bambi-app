@@ -526,6 +526,20 @@
       "when": 1786006732773,
       "tag": "0074_nebulous_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1786070697018,
+      "tag": "0075_dynamic-community-board",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1786073885503,
+      "tag": "0076_community-board-icon",
+      "breakpoints": true
     }
   ]
 }

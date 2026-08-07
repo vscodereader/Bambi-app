@@ -307,8 +307,8 @@ describe("면접 완료 버튼 이관", () => {
 	// 엣지케이스 때문이다. 방 화면에는 완료 전환 경로가 남아 있으면 안 된다.
 	it("방 화면에서 완료 전환을 제거한다", () => {
 		expect(source).not.toContain('setScheduleStatus(schedule.id, "completed")');
-		// 완료 상태 자체는 계속 읽는다(후기·연락처 자격 판정) — 전환만 사라진다.
-		expect(source).toContain('schedule.status === "completed"');
+		// 완료 상태를 읽던 자리는 후기 자격 판정뿐이었고, 그 후기도 예정된 면접으로 옮겼다.
+		expect(source).not.toContain('"completed"');
 	});
 
 	// 확정 카드에는 취소만, 제안 카드의 확정·거절은 그대로다.
@@ -316,6 +316,17 @@ describe("면접 완료 버튼 이관", () => {
 		expect(source).toMatch(CONFIRMED_CANCEL_ONLY_PATTERN);
 		expect(source).toContain('setScheduleStatus(schedule.id, "confirmed")');
 		expect(source).toContain('setScheduleStatus(schedule.id, "declined")');
+	});
+});
+
+// 후기도 같은 이유로 "내 정보 → 예정된 면접" 아코디언으로 옮겼다 — 방을 나가면 후기를
+// 영영 못 남기던 엣지케이스다. 방 사이드바에는 진입점이 남아 있으면 안 된다.
+describe("후기 작성 이관", () => {
+	it("방 화면에서 후기 진입점을 제거한다", () => {
+		expect(source).not.toContain("ReviewForm");
+		expect(source).not.toContain("reviews.listMine");
+		expect(source).not.toContain("reviews.create");
+		expect(source).not.toContain("후기 남기기");
 	});
 });
 

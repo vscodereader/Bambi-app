@@ -8,6 +8,7 @@ import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { formatMinimumWageLabel } from "@/lib/bambi/minimum-wage";
 import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
+import { formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { Badge, Button, Card, InfoTile } from "../ds";
@@ -104,7 +105,7 @@ export function EmployerPhoneTile({ phone }: { phone: string }) {
 						className="font-bold text-base text-foreground underline-offset-2 hover:underline"
 						href={`tel:${phone}`}
 					>
-						{phone}
+						{formatPhone(phone)}
 					</a>
 					<span className="font-medium text-primary text-sm">
 						('밤비알바 보고 연락드렸다고 하시면 정확한 상담 받으실 수 있어요.')

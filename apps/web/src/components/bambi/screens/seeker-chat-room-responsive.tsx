@@ -14,7 +14,6 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-	type ReactNode,
 	useCallback,
 	useEffect,
 	useLayoutEffect,
@@ -41,6 +40,7 @@ import {
 	joinBambiChatRoom,
 	scheduleBambiChatRoomLeave,
 } from "@/lib/bambi-chat-realtime";
+import { formatPhone } from "@/lib/bambi-format";
 import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import {
 	interviewStatusLabels,
@@ -63,7 +63,6 @@ import {
 	XIcon,
 } from "../icons";
 import { ReportDialog } from "../report-dialog";
-import { ReviewForm } from "../review-form";
 
 interface SeekerChatRoomResponsiveProps {
 	onBack: () => void;
@@ -179,22 +178,6 @@ const getMutationErrorMessage = (error: Error): string => {
 	return "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
 };
 
-const getReviewMutationErrorMessage = (error: Error): string => {
-	if ("code" in error && error.code === "BAD_REQUEST") {
-		return "별점과 후기 내용을 다시 확인해 주세요.";
-	}
-
-	if ("code" in error && error.code === "CONFLICT") {
-		return "이미 이 채팅방의 후기를 등록했어요.";
-	}
-
-	if ("code" in error && error.code === "FORBIDDEN") {
-		return "확정된 면접 이후에만 후기를 남길 수 있어요.";
-	}
-
-	return getMutationErrorMessage(error);
-};
-
 type RealtimeStatus = "connected" | "connecting" | "offline";
 
 type ContactRequestStatus = "declined" | "pending" | "revealed";
@@ -262,7 +245,7 @@ const getContactRequestNotice = ({
 
 	if (status === "revealed") {
 		return viewerIsEmployer
-			? `${counterpartName}님께서 연락처를 공개했습니다: ${revealedPhone ?? "확인 필요"}`
+			? `${counterpartName}님께서 연락처를 공개했습니다: ${revealedPhone ? formatPhone(revealedPhone) : "확인 필요"}`
 			: "연락처를 공개했습니다.";
 	}
 
@@ -606,104 +589,6 @@ function ChatComposer({
 	);
 }
 
-interface ReviewSidebarCardReview {
-	body: string;
-	rating: number;
-	status: string;
-}
-
-interface ReviewSidebarCardProps {
-	canCreateReview: boolean;
-	errorMessage: null | string;
-	existingReview?: ReviewSidebarCardReview;
-	isLoading: boolean;
-	isSubmitting: boolean;
-	isVisible: boolean;
-	onSubmit: (input: {
-		body: string;
-		isAnonymous: boolean;
-		rating: number;
-	}) => void;
-	successMessage: null | string;
-}
-
-function ReviewSidebarCard({
-	canCreateReview,
-	errorMessage,
-	existingReview,
-	isLoading,
-	isSubmitting,
-	isVisible,
-	onSubmit,
-	successMessage,
-}: ReviewSidebarCardProps) {
-	if (!isVisible) {
-		return null;
-	}
-
-	let content: ReactNode;
-
-	if (isLoading) {
-		content = (
-			<p className="mt-4 mb-0 text-muted-foreground text-sm">
-				후기 상태를 확인하고 있어요.
-			</p>
-		);
-	} else if (existingReview) {
-		const title =
-			existingReview.status === "pending_review"
-				? "검수 중인 후기"
-				: "등록된 후기";
-
-		content = (
-			<div className="mt-4 rounded-lg border border-border bg-secondary p-3">
-				<strong className="text-sm">{title}</strong>
-				<p className="mt-1 mb-0 text-muted-foreground text-xs leading-relaxed">
-					별점 {existingReview.rating.toFixed(1)} · {existingReview.body}
-				</p>
-			</div>
-		);
-	} else if (canCreateReview) {
-		content = (
-			<div className="mt-4">
-				<ReviewForm
-					errorMessage={errorMessage}
-					isSubmitting={isSubmitting}
-					onSubmit={onSubmit}
-				/>
-				{successMessage ? (
-					<p className="mt-3 mb-0 font-semibold text-green-700 text-xs">
-						{successMessage}
-					</p>
-				) : null}
-			</div>
-		);
-	} else {
-		content = (
-			<p className="mt-4 mb-0 text-muted-foreground text-sm">
-				후기를 등록할 수 없는 채팅방입니다.
-			</p>
-		);
-	}
-
-	return (
-		<Card className="rounded-lg" pad="lg" tone="outline">
-			<div className="flex items-start justify-between gap-3">
-				<div>
-					<h2 className="m-0 font-extrabold text-lg">후기 남기기</h2>
-					<p className="mt-1 mb-0 text-muted-foreground text-sm leading-relaxed">
-						면접 이후 경험을 남기면 다른 구직자가 업체를 더 잘 판단할 수 있어요.
-					</p>
-				</div>
-				<Badge tone={existingReview ? "success" : "pending"}>
-					{existingReview ? "작성 완료" : "작성 가능"}
-				</Badge>
-			</div>
-			{content}
-		</Card>
-	);
-}
-
 // 채팅방 헤더에서 공고 상세로 가는 버튼. 상세(jobs.getById)는 published + paid만 열어 주므로
 // 그 밖의 공고(삭제·검수 중·숨김·미결제)는 이동시키지 않고 이유만 남긴다 — 눌러서 404를 보는
 // 것보다 낫다. 경로는 구직자·구인자 공용이다(seeker 레이아웃은 비로그인·게스트만 막는다).
@@ -1014,7 +899,7 @@ function ContactRevealAction({
 					className="whitespace-nowrap font-bold text-base text-foreground underline-offset-2 hover:underline"
 					href={`tel:${employerVerifiedPhone}`}
 				>
-					{employerVerifiedPhone}
+					{formatPhone(employerVerifiedPhone)}
 				</a>
 				<span className="text-muted-foreground text-xs">
 					밤비알바 보고 연락드렸다고 하시면 정확한 상담을 받으실 수 있어요.
@@ -1040,12 +925,6 @@ export function SeekerChatRoomResponsive({
 	const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
 	const [errorMessage, setErrorMessage] = useState<null | string>(null);
 	const [scheduleErrorMessage, setScheduleErrorMessage] = useState<
-		null | string
-	>(null);
-	const [reviewErrorMessage, setReviewErrorMessage] = useState<null | string>(
-		null
-	);
-	const [reviewSuccessMessage, setReviewSuccessMessage] = useState<
 		null | string
 	>(null);
 	const attachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -1075,10 +954,6 @@ export function SeekerChatRoomResponsive({
 			roomId,
 		});
 	const currentSessionUserId = roomQuery.data?.currentUserId;
-	const reviewListQuery = useQuery({
-		...orpc.bambi.reviews.listMine.queryOptions(),
-		enabled: Boolean(currentSessionUserId),
-	});
 	const invalidateRoom = useCallback(async () => {
 		// 페이지 크기가 입력에 들어가므로 부분 일치 키로 무효화한다(더 보기로 늘린
 		// 페이지도 함께 갱신되게).
@@ -1187,21 +1062,6 @@ export function SeekerChatRoomResponsive({
 			onSuccess: async () => {
 				setScheduleErrorMessage(null);
 				await invalidateRoom();
-			},
-		})
-	);
-	const createReviewMutation = useMutation(
-		orpc.bambi.reviews.create.mutationOptions({
-			onError: (error) => {
-				setReviewSuccessMessage(null);
-				setReviewErrorMessage(getReviewMutationErrorMessage(error));
-			},
-			onSuccess: async () => {
-				setReviewErrorMessage(null);
-				setReviewSuccessMessage("후기가 등록됐어요.");
-				await queryClient.invalidateQueries({
-					queryKey: orpc.bambi.reviews.listMine.queryKey(),
-				});
 			},
 		})
 	);
@@ -1525,21 +1385,6 @@ export function SeekerChatRoomResponsive({
 		sendMediaMessageMutation.isPending;
 	const isComposerSubmitting =
 		sendMessageMutation.isPending || isAttachmentSubmitting;
-	// 완료된 면접도 확정을 거친 것이라 연락처 열람·후기 작성을 계속 허용한다.
-	const eligibleSchedule = schedules.find(
-		(schedule) =>
-			schedule.status === "confirmed" || schedule.status === "completed"
-	);
-	const existingReview = reviewListQuery.data?.find(
-		(item) => item.chatRoomId === room.id
-	);
-	const canCreateReview =
-		isJobSeeker &&
-		Boolean(eligibleSchedule) &&
-		!existingReview &&
-		!room.isBlocked &&
-		!reviewListQuery.isError &&
-		!reviewListQuery.isLoading;
 	const clearAttachmentDraft = () => {
 		setAttachmentDraft(null);
 		if (attachmentInputRef.current) {
@@ -1710,23 +1555,6 @@ export function SeekerChatRoomResponsive({
 			status,
 		});
 	};
-	const handleReviewSubmit = ({
-		body,
-		isAnonymous,
-		rating,
-	}: {
-		body: string;
-		isAnonymous: boolean;
-		rating: number;
-	}) => {
-		createReviewMutation.mutate({
-			body,
-			chatRoomId: room.id,
-			isAnonymous,
-			rating,
-		});
-	};
-
 	return (
 		<div
 			className={cn(
@@ -1938,16 +1766,6 @@ export function SeekerChatRoomResponsive({
 							}
 						/>
 					</Card>
-					<ReviewSidebarCard
-						canCreateReview={canCreateReview}
-						errorMessage={reviewErrorMessage}
-						existingReview={existingReview}
-						isLoading={reviewListQuery.isLoading}
-						isSubmitting={createReviewMutation.isPending}
-						isVisible={isJobSeeker && Boolean(eligibleSchedule)}
-						onSubmit={handleReviewSubmit}
-						successMessage={reviewSuccessMessage}
-					/>
 				</div>
 			</aside>
 		</div>

@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
+import { formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 import { Badge } from "../ds";
 import { MyPageShell } from "../my-page-shell";
@@ -205,7 +206,7 @@ export function AccountSettingsScreen() {
 						<div className="flex items-center justify-between gap-3 rounded-lg bg-secondary px-4 py-3">
 							<span className="text-muted-foreground text-sm">인증된 번호</span>
 							<span className="font-semibold text-foreground text-sm">
-								{profile.phoneNumber}
+								{formatPhone(profile.phoneNumber)}
 							</span>
 						</div>
 					) : null}
