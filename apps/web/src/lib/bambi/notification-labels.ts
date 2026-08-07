@@ -226,7 +226,9 @@ const communityHref = (item: BambiNotificationView): string => {
 const SHARED_HREF_BY_TARGET: Record<string, string> = {
 	community_post: "/seeker/community/legal",
 	employer_verification: "/moderator/employers",
-	job_post: "/moderator/jobs",
+	// 공유 job_post는 "새 공고 검수 요청"뿐이라 검수 대기 큐인 콘솔 루트가 착지점이다
+	// (/moderator/jobs는 전체 상태 공고 관리라 방금 온 검수 건이 묻힌다).
+	job_post: "/moderator",
 	report: "/moderator/reports",
 	review: "/moderator/reviews",
 	support_inquiry: "/moderator/support",

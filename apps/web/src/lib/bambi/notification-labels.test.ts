@@ -356,8 +356,9 @@ describe("notificationHref", () => {
 
 	it("운영자 공유 행은 같은 targetType이라도 운영자 큐로 보낸다", () => {
 		expect(
+			// 공고 검수 요청은 공고 관리(/moderator/jobs)가 아니라 검수 대기 큐인 콘솔 루트로.
 			notificationHref(view({ recipientRole: "admin", targetType: "job_post" }))
-		).toBe("/moderator/jobs");
+		).toBe("/moderator");
 		expect(
 			notificationHref(
 				view({ recipientRole: "admin", targetType: "support_inquiry" })
