@@ -60,11 +60,11 @@
 
 - 검수 큐 `/moderator`
 - 공고 관리 `/moderator/jobs`
-- 회원 관리: 사용자 `/moderator/users` · 채팅 `/moderator/chats` · 신고 `/moderator/reports` ·
-  업소 승인 `/moderator/employers` · 팀 합류 승인 `/moderator/team-invites`
+- 회원 관리: 사용자 `/moderator/users` · 채팅 `/moderator/chats` · 면접 일정 `/moderator/interviews` ·
+  신고 `/moderator/reports` · 업소 승인 `/moderator/employers` · 팀 합류 승인 `/moderator/team-invites`
 - 광고·결제: 광고 상품 `/moderator/ad-products` · 결제 관리 `/moderator/payments`
-- 콘텐츠: 게시물 `/moderator/content` · 고객센터 `/moderator/support` · 금칙어 `/moderator/banned-words` ·
-  후기 관리 `/moderator/reviews` · 크롤링 `/moderator/crawler`
+- 콘텐츠: 게시물 `/moderator/content` · **게시판 관리 `/moderator/community-boards`** · 고객센터 `/moderator/support` ·
+  금칙어 `/moderator/banned-words` · 후기 관리 `/moderator/reviews` · 크롤링 `/moderator/crawler`
 - 사이트 정보 `/moderator/site-settings`
 
 모바일 하단 탭(`ModeratorShell`, `apps/web/src/components/bambi/persona-nav.tsx`)은
@@ -777,6 +777,34 @@
 - > ⚠ **캐시 타이밍 함정**: 활성 금칙어는 모듈 전역 메모리 캐시(TTL 60초)다. 변경 프로시저가
   > `invalidateBannedWordCache()`를 호출해 **같은 인스턴스는 즉시 반영**되지만,
   > **다중 인스턴스면 다른 인스턴스는 최대 60초 지연**된다. "추가했는데 글이 써진다"면 60초 대기 후 재확인.
+
+### 8.8 게시판 관리(수다방 게시판 추가·수정·노출)
+
+- **경로**: `/moderator/community-boards` (파일: `apps/web/src/app/moderator/community-boards/page.tsx`)
+- **사전 조건**: 마이그레이션 `0072_dynamic-community-board`가 적용돼 `community_board` 테이블과
+  시드 5행(`notice`/0 · `free`/20 · `work_talk`(slug `work-talk`)/30 · `market`/40 · `legal`/50)이 있어야 한다.
+  미적용이면 수다방 전 경로가 `NOT_FOUND` "게시판을 찾을 수 없습니다."로 죽는다.
+- **목록**: `communityBoards.list`(adminProcedure, **비활성 포함**, `sort_order ASC`).
+  열 7개 — 게시판(label) · 주소(`/seeker/community/{slug}` 배지) · 설명 · 순서 · 글쓰기(Switch) · 노출(Switch) · 관리([수정]).
+- **추가 절차**: 이름(≤30) · 주소(2~30) · 설명(≤200, 선택) 입력 → **[게시판 추가]**.
+  - 기대: 토스트 "게시판을 만들었어요.", `key = slug`, `sortOrder = max(sort_order) + 10`(목록 맨 끝).
+  - 실패: 패턴 위반 → 400 "주소는 영소문자·숫자·하이픈·밑줄 2~30자로 입력해 주세요." /
+    `best`·`crawled`·`write` → 400 "이미 쓰이고 있는 주소입니다. 다른 주소를 입력해 주세요." /
+    기존 slug 중복 → 409 "이미 등록된 게시판 주소입니다."
+- **수정**: [수정] → 다이얼로그(이름·설명·정렬 순서 0~10000) → **[저장]**, 토스트 "게시판을 수정했어요."
+  **`key`·`slug`는 수정 불가**(입력칸 없음). 선택 필드를 전부 생략하면 zod `refine`이 거부한다.
+- **스위치**: 글쓰기(`update.isWritable`) · 노출(`setActive`) 모두 **확인 모달 없이 즉시** 적용.
+  미존재 key면 `NOT_FOUND` "게시판을 찾을 수 없습니다."
+- **삭제 프로시저 없음** — 글이 `community_post.board` FK로 매달려 있어 숨김(`setActive(false)`)만 제공한다.
+- **소비 경로 확인(엔드투엔드)**:
+  - 웹은 `communityBoards.listActive`(**publicProcedure**, 활성만)를 `useCommunityBoards`로 받고 **staleTime 5분** — 방금 만든 게시판이 안 보이면 5분 또는 새로고침.
+  - `community.overview.boards[]`는 `best`(가상, 선두) → 활성 게시판 `sort_order ASC`. 홈·수다방 홈이 같은 배열을 쓴다.
+  - 노출 OFF → 수다방 목록·홈에서 사라지고 `/seeker/community/{slug}`는 404, 서버 `assertBoard`도 `NOT_FOUND`. **글은 보존**되며 다시 켜면 복귀.
+  - 글쓰기 OFF → 목록의 [글쓰기] 버튼 사라짐, `/seeker/community/{slug}/write` 404, `createPost`는 400 "이 게시판에는 글을 쓸 수 없습니다."
+- **신규 게시판의 표준 동작**: 회원 열람·작성, 비밀글 가능, 목록 필터 노출(`best`·`notice`·`legal`만 필터 숨김),
+  `베스트글` 집계 포함(제외는 `notice`·`legal`), **게스트 쓰기 불가**(`free`·`work_talk`·`legal` 고정),
+  **공개 `/board` 미노출**(`PUBLIC_COMMUNITY_BOARDS` 3종 고정), 연락처 칸·자동 잠금 없음.
+- **관련 API**: `bambi.communityBoards.list` / `create` / `update` / `setActive` (adminProcedure), `listActive` (publicProcedure) — `packages/api/src/routers/bambi/community-boards.ts`
 
 ---
 

@@ -372,8 +372,10 @@
   3. 최소 시급 17000 입력 → 일급/주급/월급 공고가 시급 환산(일급×8, 주급×40, 월급×209)으로 비교되는지 확인
   4. 모바일에서 [필터] 버튼 → 활성 필터 개수 배지 확인 → 시트에서 설정
   5. 시/도 변경 시 세부지역이 자동 "전체"로 리셋되는지 확인
+  6. 모바일 필터 시트의 **최소 시급 칸에서 Enter** → 시트가 닫히는지 확인(적용 버튼은 없다 — onChange 즉시 반영)
 - **엣지 케이스**:
   - **필터는 URL 쿼리에 동기화되지 않는다** → 새로고침·뒤로가기 시 초기화(현행 동작)
+  - 시트 Enter 닫기는 `event.target instanceof HTMLInputElement`일 때만 동작한다 — Select 트리거·Checkbox(base-ui가 `button`으로 렌더)에서 Enter를 눌러도 닫히지 않고, **IME 조합 중(`isComposing`) Enter도 무시**된다. 시트 안의 유일한 `<input>`이 최소 시급이다
   - 로컬 전용 필터(검증/당일/초보)를 켜면 헤더 개수가 전체 건수 대신 **화면에 남은 개수**로 바뀐다
   - "급여 협의"처럼 금액을 못 읽는 공고는 최소 시급 하한을 걸면 탈락, 하한 0이면 남는다
 - **관련 API**: `bambi.jobs.list` (publicProcedure), `bambi.regions.list` (**publicProcedure**, `packages/api/src/routers/bambi/regions.ts`)
@@ -657,13 +659,13 @@
 
 - **경로**: `/seeker/me/interviews` (파일: `apps/web/src/app/seeker/me/interviews/page.tsx`, `apps/web/src/components/bambi/screens/upcoming-interviews-screen.tsx`)
 - **기대 결과**:
-  - 조건: 내가 참여자인 방 + `status ∈ {proposed, confirmed}` + `scheduledAt >= now()` + `ORDER BY scheduledAt ASC`
-  - 표시: `YYYY.MM.DD (요일) HH:MM` + 배지(`제안됨`/`확정됨`) + `상대 · 공고` + 장소 메모
-  - 카드 전체가 `/seeker/chats/{chatRoomId}` 링크
-  - **읽기 전용** — 조작 버튼 없음
-  - 빈 상태: "예정된 면접이 없어요 / 확정되었거나 제안된 다가오는 면접이 여기에 표시됩니다."
-- **엣지 케이스**: 한쪽이라도 나간 방은 제외된다(`listMine`과 같은 기준). **차단한 방은 여전히 제외하지 않는다** → 차단한 방의 면접이 계속 노출되는지 확인
-- **관련 API**: `bambi.chats.listMyUpcomingInterviews` (protected + `requireActiveBambiProfile`)
+  - 조건: 내가 참여자인 방 + (`proposed` & `scheduledAt >= now()`) 또는 (`confirmed` & `scheduledAt >= now-30d`) 또는 (`completed` & `updatedAt >= now-30d`)
+  - 표시(접힘): `YYYY.MM.DD (요일) HH:MM` + 배지(`제안됨`/`확정됨`/`완료`) + `상대 · 공고`
+  - 펼침: 면접 일시·장소 메모("장소 메모가 없어요.") → (구인자·`confirmed`) **[면접 완료 처리]** → (구직자·`confirmed|completed`) **후기 남기기** → 그 방의 채팅 내역(읽기 전용, `getInterviewChatContext` 커서 페이징, **[이전 메시지 더 보기]**)
+  - 카드 링크 없음 — 채팅방으로 이동하지 않는다(`next/link`·`/seeker/chats/` 금지 규칙이 소스 스캔 테스트로 고정)
+  - 빈 상태: "예정된 면접이 없어요 / 제안·확정된 면접과 최근 완료한 면접이 여기에 표시됩니다."
+- **엣지 케이스**: **나간 방도 포함된다**(면접 예외 — 완료 처리·내역 열람·후기 등록이 열림, 10.1 참고). **차단한 방은 여전히 제외하지 않는다** → 차단한 방의 면접이 계속 노출되는지 확인
+- **관련 API**: `bambi.chats.listMyUpcomingInterviews` (protected + `requireActiveBambiProfile`), `bambi.chats.getInterviewChatContext`, `bambi.chats.setInterviewStatus`(완료), `bambi.reviews.listMine`/`create`
 
 ---
 
@@ -671,7 +673,8 @@
 
 ### 10.1 후기 작성
 
-- **경로**: `/seeker/chats/[id]` 우측 "후기 남기기" 카드 (파일: `apps/web/src/components/bambi/review-form.tsx`, `apps/web/src/components/bambi/screens/seeker-chat-room-responsive.tsx` `ReviewSidebarCard`)
+- **경로**: `/seeker/me/interviews` → 면접 아코디언 펼침 → "후기 남기기" 영역 (파일: `apps/web/src/components/bambi/review-form.tsx`, `apps/web/src/components/bambi/screens/upcoming-interviews-screen.tsx` `InterviewReviewSection`)
+- **노출 조건(화면)**: `!interview.viewerIsEmployer && status ∈ {confirmed, completed}` — 구인자에게는 후기 영역 자체가 없고, `proposed`에도 없다. **채팅방(`/seeker/chats/[id]`)에는 후기 진입점이 더 이상 없다**
 - **선행 조건(서버가 순서대로 검사)**:
   1. 그 채팅방의 참여자
   2. **`profile.userId === room.jobSeekerUserId`** (구직자만) — 아니면 `FORBIDDEN` "Only the job seeker can review this chat room."
@@ -680,8 +683,8 @@
 - **절차**: 별점(1~5) 선택 → 후기 본문 작성 → (선택) "익명으로 표시" 체크 → **[후기 등록]**
 - **입력 제한**: 별점 **1~5 정수**, 본문 trim 후 **20자 이상 1000자 이하**(textarea `maxLength=1000`, 실시간 `{길이}/1000`)
 - **기대 결과**:
-  - 성공 토스트 "후기가 등록됐어요."
-  - 카드 배지가 `작성 가능` → `작성 완료`로 바뀌고, 폼 대신 읽기 카드(`등록된 후기` 또는 `검수 중인 후기`)
+  - 성공 안내 "후기가 등록됐어요."(토스트가 아니라 폼 아래 초록 문구) + `reviews.listMine` 무효화
+  - 배지가 `작성 가능` → `작성 완료`로 바뀌고, 폼 대신 읽기 카드(`등록된 후기` 또는 `검수 중인 후기`)
   - **위험 표현 감지 시 `status='pending_review'`(비공개)** — 감지 규칙(`packages/api/src/services/bambi-review-policy.ts`):
     | 플래그 | 패턴 |
     |---|---|
@@ -696,9 +699,14 @@
   | 별점 미선택 | "별점을 선택해 주세요." |
   | 20자 미만 | "후기는 20자 이상 작성해 주세요." (등록 버튼 비활성) |
   | 서버 `BAD_REQUEST` | "별점과 후기 내용을 다시 확인해 주세요." |
-  | 방에 이미 후기 존재 | `CONFLICT` |
-  | 차단된 방 | 카드 자체가 노출되지 않음(`!room.isBlocked` 조건) |
-- **엣지 케이스**: `jobPostId`·`organizationId`는 사용자가 지정할 수 없고 **채팅방에서 파생**된다
+  | 방에 이미 후기 존재 | `CONFLICT` → "이미 이 채팅방의 후기를 등록했어요." |
+  | 확정/완료 면접 없음 | `FORBIDDEN` → "확정된 면접 이후에만 후기를 남길 수 있어요." |
+  | 그 밖(코드 미매핑) | "후기를 등록하지 못했어요. 잠시 후 다시 시도해 주세요." |
+- **엣지 케이스**:
+  - `jobPostId`·`organizationId`는 사용자가 지정할 수 없고 **채팅방에서 파생**된다
+  - 이미 후기가 있으면 폼 대신 읽기 카드(`등록된 후기` 또는 `검수 중인 후기` + `별점 X.X · 본문`), 배지가 `작성 가능` → `작성 완료`
+  - **차단된 방에도 후기 영역이 뜬다** — 옛 `!room.isBlocked` 카드 가드가 사라지고 면접 상태 가드만 남았으며 `reviews.create`에 차단 검사가 없다. 정책 확인 대상
+  - **나간 방에서도 등록된다** — `listMyUpcomingInterviews`가 나간 방을 포함하는 것에 맞춰 `reviews.create`도 `requireChatParticipant`를 `allowLeftRoom: true`로 호출한다(면접 완료 처리와 동일한 예외). 구직자 본인·확정/완료 면접·방당 1건 가드는 그대로 적용
 - **관련 API**: `bambi.reviews.create` (protected + `requireChatParticipant` + 구직자 확인), `bambi.reviews.listMine` (protected)
 
 ### 10.2 후기 열람
@@ -752,18 +760,27 @@
 
 ### 11.2 게시판 목록
 
-- **파일**: `apps/web/src/lib/bambi/community.ts` (`COMMUNITY_BOARDS`)
+- **정본은 DB `community_board` 테이블**이다(마이그레이션 0072에서 pgEnum → 테이블 전환). 화면은
+  `communityBoards.listActive`를 `useCommunityBoards`(staleTime 5분)로 받아 slug를 해석한다
+  (`apps/web/src/lib/bambi/use-community-boards.ts`). `apps/web/src/lib/bambi/community.ts`의 `COMMUNITY_BOARDS`는
+  이제 **빌트인 메타 전용**(가상 게시판 best, 공지의 `adminOnly`, 액센트 색, 공개 `/board` 3종)이고 게시판 목록의 출처가 아니다.
+- **운영자가 게시판을 추가·수정·숨김**할 수 있다(운영자 테스트 플로우 8.8). 아래는 시드된 기본 게시판이며,
+  신규 게시판은 특수 규칙 없이 **표준 동작**(회원 열람·작성, 비밀글 가능, 필터 노출, best 집계 포함, 게스트 쓰기 불가, 공개 `/board` 미노출)만 갖는다.
 
-| key | slug | 라벨 | 글쓰기 | 비고 |
-|---|---|---|---|---|
-| `notice` | `notice` | 공지사항 | **운영자만** | 서버가 `role!=='admin'` 거부 |
-| `best` | `best` | 베스트글 | **불가** | DB enum에 없는 **가상 큐레이션** (최근 30일, 추천 ≥1, 공지 제외) |
-| `free` | `free` | 자유수다 | 가능 | |
-| `work_talk` | **`work-talk`** | 일 이야기 | 가능 | slug에 하이픈, DB enum은 언더스코어. **수집 글이 합류하는 유일한 게시판** |
-| `market` | `market` | 중고거래 | 가능 | |
-| `legal` | `legal` | 무료 법률 자문 | 가능 | **전 글 강제 잠금 + 비번 필수**, 연락처 입력, best·공개 `/board` 제외 (11.9) |
+| key | slug | 라벨 | sort_order | 글쓰기 | 비고 |
+|---|---|---|---|---|---|
+| `notice` | `notice` | 공지사항 | 0 | **운영자만** | 서버가 `role!=='admin'` 거부 |
+| `best` | `best` | 베스트글 | — | **불가** | DB 행이 아닌 **가상 큐레이션**(최근 30일, 추천 ≥1, `notice`·`legal` 제외). 서버 overview·클라이언트 `toBoardMetas`가 선두에 주입 |
+| `free` | `free` | 자유수다 | 20 | 가능 | |
+| `work_talk` | **`work-talk`** | 밤문화 이야기 | 30 | 가능 | slug에 하이픈, 저장 key는 언더스코어(레거시). **수집 글이 합류하는 유일한 게시판** |
+| `market` | `market` | 중고거래 | 40 | 가능 | |
+| `legal` | `legal` | 무료 법률 자문 | 50 | 가능 | **전 글 강제 잠금 + 비번 필수**, 연락처 입력, best·공개 `/board` 제외 (11.9) |
 
-- **경로**: `/seeker/community/[board]` — `getBoardBySlug` 실패 시 `notFound()`(404). `/seeker/community/best/write`는 `writable=false`라 404
+- **경로**: `/seeker/community/[board]` — `useBoardBySlug(params.board)`로 해석한다.
+  **로딩 중(`isPending`)에는 `notFound()`를 부르지 않고 Skeleton**을 세우고, 로드 후 없으면 404
+  (`[board]`·`[board]/write`·`[board]/[postId]`·`.../edit` 4개 페이지 공통 규칙). 서버도 `assertBoard`로 존재·활성(+쓰기면 `is_writable`)을 다시 본다.
+- **회귀 확인**: 목록을 받기 전에 404가 번쩍이지 않을 것, 비활성 게시판·없는 slug는 404,
+  `is_writable=false` 게시판의 `/write`는 404(가상 게시판 `best`도 동일).
 
 ### 11.3 수다방 홈 · 글 목록
 
@@ -772,12 +789,12 @@
   - 정렬: 일반 게시판 `createdAt DESC` / 베스트글 `likeCount DESC, createdAt DESC` / work_talk에 수집 글이 섞이면 **순수 글 먼저, 그다음 수집 글**
   - 페이지네이션: 서버 `PAGE_SIZE=20` 고정, URL `?page=N` 동기화, 번호 페이지네이션(`router.replace`로 히스토리 미증가), `page > totalPages`면 마지막 페이지로 자동 클램프
   - **검색 기능 없음**
-  - 필터: "필터" 드롭다운의 독립 토글 2개 — **광고 글보기**(`?promotion=1`), **업소 회원 글보기**(`?employer=1`). 켜진 조건들의 **OR**. `free`/`work_talk`/`market`에서만 노출
+  - 필터: "필터" 드롭다운의 독립 토글 2개 — **광고 글보기**(`?promotion=1`), **업소 회원 글보기**(`?employer=1`). 켜진 조건들의 **OR**. 노출 규칙이 **화이트리스트에서 블랙리스트로 바뀌었다** — `best`·`notice`·`legal`만 감추고(`NO_FILTER_BOARD_KEYS`), 나머지는 운영자가 새로 만든 게시판까지 필터가 붙는다
   - 배지: 잠금 아이콘 / `공지` / `외부 수집` / `광고`(업소회원 광고글) / `업소` / `N`(새 글, **48시간 기준**) / 댓글 수(코럴)
   - 메타: 작성자명(폴백 "회원") · `YYYY.MM.DD` · 조회수 · 추천수
   - **비밀글 마스킹**: 작성자 본인·운영자가 아니면 제목이 서버에서 `"비밀글입니다"`로 치환되어 내려온다
   - 빈 상태: 쓰기 가능이면 "아직 글이 없어요. 첫 글을 남겨보세요.", best면 "최근 30일 추천 글이 아직 없어요.", 그 외 "아직 등록된 글이 없어요."
-- **홈**: 게시판별 최신 **4건** 미리보기. 공지사항은 최상단 전폭, 나머지는 2열 그리드이고 **중고거래·무료 법률 자문은 한 칸을 좌우로 나눠 나란히**(모바일 1열에서는 세로 스택, 반폭 카드는 작성인을 접고 날짜만 표시). 수다방 홈과 `/seeker` 홈이 같은 컴포넌트(`CommunityOverviewGrid`)를 쓰므로 두 화면이 항상 같은 배치다. 미자격자가 글을 누르면 `preventDefault` + 토스트 "일반 여성 회원과 광고 중인 업소회원만 가능합니다"
+- **홈**: 게시판별 최신 **4건** 미리보기. 데이터는 `overview.boards[]` **배열**(고정 6키 객체 폐기)이고, 공지사항은 최상단 전폭, 나머지는 2열 그리드이고 **중고거래·무료 법률 자문은 한 칸을 좌우로 나눠 나란히**(모바일 1열에서는 세로 스택, 반폭 카드는 작성인을 접고 날짜만 표시). 운영자가 만든 게시판은 solo 카드로 2열 그리드 뒤쪽(= 짝 카드 앞)에 `sort_order` 순서대로 붙고, 액센트 색이 없으면 중립색으로 폴백한다. 수다방 홈과 `/seeker` 홈이 같은 컴포넌트(`CommunityOverviewGrid`)를 쓰므로 두 화면이 항상 같은 배치다. 미자격자가 글을 누르면 `preventDefault` + 토스트 "일반 여성 회원과 광고 중인 업소회원만 가능합니다"
 - **관련 API**: `bambi.community.listPosts` (protected + `requireCommunityMember`), `bambi.community.overview` (**publicProcedure**, 미자격·비로그인도 요약 열람 가능)
 
 ### 11.4 글 작성
@@ -1281,7 +1298,7 @@
 | A-1 | "회원가입: 시작 화면에서 회원가입 → 가입 유형 → **이름/이메일/비밀번호** 입력" | 회원가입은 **2단계**다. ①본인인증을 마쳐야 ②폼이 열린다. 필드는 **닉네임 / 아이디 / 비밀번호 / 비밀번호 확인 / 이메일 / 가입 유형 / 약관 동의 체크박스** 7개 | `apps/web/src/components/bambi/auth/auth-panel.tsx`, `.../auth-fields.tsx` |
 | A-2 | "로그인: **이메일**과 비밀번호를 입력" | 입력 칸 라벨은 **"아이디"**이고 아이디·이메일을 한 칸으로 받는다(`@` 포함 여부로 분기) | `apps/web/src/lib/bambi/login-id.ts` |
 | A-3 | "비회원: 로그인 화면 아래쪽 **휴대폰 인증** 버튼 → 이름/생년월일/휴대폰/성별 입력" | 버튼 라벨은 **"비회원으로 목록만 보기"**이고, 포트원 구성 환경에서는 KCP 인증창이 뜬다. 이름·생년월일 직접 입력 폼은 **포트원 미구성 개발 환경의 목 폼**뿐 | `apps/web/src/components/bambi/auth/auth-panel.tsx`, `.../phone-verify-dialog.tsx` |
-| A-4 | "**수다방** (현재 준비 중)" | 수다방은 **완전히 구현되어 있다** — 5개 게시판, 글/댓글/추천, 비밀글, 광고글, 수집 글, 금칙어 검사 | `apps/web/src/app/seeker/community/**`, `packages/api/src/routers/bambi/community.ts` |
+| A-4 | "**수다방** (현재 준비 중)" | 수다방은 **완전히 구현되어 있다** — 게시판(시드 5개 + 운영자가 추가하는 게시판), 글/댓글/추천, 비밀글, 광고글, 수집 글, 금칙어 검사 | `apps/web/src/app/seeker/community/**`, `packages/api/src/routers/bambi/community.ts` |
 | A-5 | 내비게이션 표에 "탐색 / 채팅 / 수다방 / 내 정보" 4개 | 데스크톱 헤더 nav는 **채용정보 / 수다방 / 고객센터**이고, 우측에 역할 전환·채팅·내 정보가 따로 있다. 모바일 탭바는 탐색/채팅/(구인 관리)/수다방/(운영자 모드)/내 정보 | `apps/web/src/components/bambi/responsive-shell.tsx`, `.../mobile-tab-bar.tsx` |
 | A-6 | "**연락처는 구인자가 공개**하고 구직자가 확인한다 / 구직자의 전화번호는 공개되지 않는다" | 현행 흐름은 **정반대**다. **구인자가 [연락처 공개 요청]을 보내고 구직자가 [공개]/[거절]** 하며, 공개되는 것은 **구직자의 인증 전화번호**다 | `packages/api/src/routers/bambi/chats.ts` (`requestContactReveal`/`respondContactReveal`) |
 | A-7 | "연락처 보기 버튼을 누르면 **연락처 화면으로 이동**" | 전용 연락처 화면(`contact-reveal.tsx`)은 **실서비스에서 도달 불가**하다. 연락처는 채팅방 안 인라인 시스템 메시지로 처리된다 | `apps/web/src/components/bambi/screens/seeker-chat-room-responsive.tsx`, 회귀 테스트 `seeker-chat-room-responsive.test.ts` |
@@ -1299,13 +1316,13 @@
 | A-19 | 매뉴얼에 **찜/스크랩**이 없다 (없는 게 맞음) | 실제로도 없다 — 다만 사용자 문의 대비로 "제공하지 않음"을 명시하는 편이 낫다 | — |
 | A-20 | "공고 목록: 각 공고 카드에 **후기 개수와 별점**이 보이고, 인증 업체에 `인증 완료` 표시" | 실제 카드에는 **후기·별점·인증 배지가 없다**(회사명/지역·업종/급여/커버/HIT 리본만) | `apps/web/src/components/bambi/visual-job-card.tsx` |
 | A-21 | "빠른 필터 칩: 검증 완료 / **오늘 면접 가능** / 초보 가능" | 라벨은 **"당일면접 가능"** | `apps/web/src/lib/bambi/marketplace.ts` |
-| A-22 | 수다방 홈 미리보기 "게시판별 최대 4개" | 맞다(`OVERVIEW_LIMIT=4`). 다만 `/seeker` 홈 섹션은 **중고거래를 제외한 4개 게시판**만 노출한다 | `apps/web/src/components/bambi/home-community-section.tsx` |
+| A-22 | 수다방 홈 미리보기 "게시판별 최대 4개" | 맞다(`OVERVIEW_LIMIT=4`). `/seeker` 홈과 수다방 홈은 이제 같은 `CommunityOverviewGrid`를 쓰므로 **게시판 집합·배치가 동일**하고, 운영자가 추가한 게시판도 두 화면에 함께 나온다 | `apps/web/src/components/bambi/home-community-section.tsx`, `.../community-board-preview.tsx` |
 
 ### B. 확인 필요 (코드만으로 의도를 단정할 수 없음 — 기획/QA 판단 필요)
 
 1. **구인자 전화번호 무조건 노출** — `bambi.jobs.getById`가 **publicProcedure**인데 공고 작성자의 인증 전화번호를 응답에 싣는다. 화면 문구("면접 확정 전 연락처 보호 중")와 상충. 의도된 정책인지 확인 필요.
 2. **`requestContactReveal` / `respondContactReveal` / `deleteChatRoom`에 차단 가드 없음** — 차단 상태에서 연락처 요청·응답이 통과할 수 있는지 실동작 확인 필요.
-3. **`listMyUpcomingInterviews`에 차단 필터 없음** — 차단한 방의 면접이 "예정된 면접"에 계속 노출되는지 확인 필요(나간 방은 제외된다).
+3. **`listMyUpcomingInterviews`에 차단 필터 없음** — 차단한 방의 면접이 "예정된 면접"에 계속 노출되는지 확인 필요(나간 방도 이제 포함된다 — 면접 완료·내역 열람·후기 등록 예외).
 4. **`startFromJobPost`에 차단 검사 없음** — 차단한 상대 공고로 방 생성 자체는 되고 이후 진입만 막힌다(UI CTA 비활성화로만 커버).
 5. **`markRead`의 `messageIds` 상한 50** — 상대 메시지 50건을 넘는 방에서 읽음 처리가 zod 검증에 걸려 실패한다("읽음 상태를 반영하지 못했어요.").
 6. **채팅 첨부의 실제 바이트 업로드 경로** — 클라이언트가 `uploadUrl`로 PUT 하는 코드가 web에 없고, 조회 URL(`/bambi/local-chat-attachments`)은 자리표시 SVG를 반환한다. 실제 GCS 경로 존재 여부 확인 필요.
