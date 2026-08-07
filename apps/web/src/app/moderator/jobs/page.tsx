@@ -150,7 +150,8 @@ const STATUS_ACTIONS: Record<
 	],
 	hidden: [{ key: "show", label: "재공개", status: "published" }],
 	on_hold: [
-		{ key: "approve", label: "승인 후 공개", status: "published" },
+		// 승인해도 유료 상품 공고는 입금 확인 전까지 게시되지 않아 라벨에 "공개"를 쓰지 않는다.
+		{ key: "approve", label: "승인", status: "published" },
 		{ key: "reject", label: "반려", status: "rejected", destructive: true },
 	],
 };

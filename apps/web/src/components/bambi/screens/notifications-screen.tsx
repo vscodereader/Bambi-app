@@ -10,6 +10,16 @@ import {
 	AlertDescription,
 	AlertTitle,
 } from "@bambi-app/ui/components/alert";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
@@ -97,6 +107,7 @@ function OsNotificationBanner() {
 export function NotificationsScreen() {
 	const queryClient = useQueryClient();
 	const router = useRouter();
+	const [isClearOpen, setIsClearOpen] = useState(false);
 
 	const query = useInfiniteQuery(
 		orpc.bambi.notifications.list.infiniteOptions({
@@ -140,6 +151,19 @@ export function NotificationsScreen() {
 		})
 	);
 
+	const clearAll = useMutation(
+		orpc.bambi.notifications.clearAll.mutationOptions({
+			onError: () => {
+				toast.error("알림을 비우지 못했어요");
+			},
+			onSuccess: (result) => {
+				applyUnreadCount(result.unreadCount);
+				setIsClearOpen(false);
+				toast.success("알림을 모두 비웠어요");
+			},
+		})
+	);
+
 	// 벨 배지와 같은 쿼리(캐시 공유). 미읽음이 2페이지 이후에만 있으면 로드된 목록만으로는
 	// 판정이 어긋나 "배지엔 N개인데 모두 확인이 비활성"이 된다 — 정본 카운트로 활성 판정한다.
 	const unreadCountQuery = useQuery(
@@ -151,11 +175,19 @@ export function NotificationsScreen() {
 		(unreadCountQuery.data?.unreadCount ?? 0) > 0 ||
 		items.some((item) => item.readAt === null);
 
+	// 공유 알림을 받는 역할(운영자·법률자문)인지. 비우기 확인 문구에서 "나만 지워지는 게
+	// 아니다"를 알려야 해서, 별도 조회 없이 목록에 온 공유 행 유무로 판정한다.
+	const hasSharedItems = items.some((item) => item.recipientRole !== null);
+
 	const openNotification = (item: (typeof items)[number]) => {
 		if (item.readAt === null) {
 			markRead.mutate({ ids: [item.id] });
 		}
-		router.push(notificationHref(toView(item)) as Route);
+		// 착지할 화면이 없는 알림(권한 변경 등)은 읽음 처리만 하고 그대로 머문다.
+		const href = notificationHref(toView(item));
+		if (href) {
+			router.push(href as Route);
+		}
 	};
 
 	return (
@@ -169,16 +201,53 @@ export function NotificationsScreen() {
 				<h1 className="font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
 					알림
 				</h1>
-				<Button
-					disabled={!hasUnread || markAllRead.isPending}
-					onClick={() => markAllRead.mutate({})}
-					size="sm"
-					type="button"
-					variant="outline"
-				>
-					모두 확인
-				</Button>
+				<div className="flex flex-wrap items-center gap-2">
+					<Button
+						disabled={!hasUnread || markAllRead.isPending}
+						onClick={() => markAllRead.mutate({})}
+						size="sm"
+						type="button"
+						variant="outline"
+					>
+						모두 확인
+					</Button>
+					{/* 지울 게 없으면 버튼 자체를 감춘다 — 빈 알림함에서 누를 수 있는 파괴 동작이 남지 않게. */}
+					{items.length > 0 ? (
+						<Button
+							onClick={() => setIsClearOpen(true)}
+							size="sm"
+							type="button"
+							variant="outline"
+						>
+							알림 비우기
+						</Button>
+					) : null}
+				</div>
 			</div>
+
+			<AlertDialog onOpenChange={setIsClearOpen} open={isClearOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>알림을 모두 비울까요?</AlertDialogTitle>
+						<AlertDialogDescription>
+							읽은 알림과 읽지 않은 알림이 모두 삭제되고 되돌릴 수 없어요.
+							{hasSharedItems
+								? " 함께 받는 처리 요청 알림은 비우면 같은 역할의 다른 담당자에게서도 사라집니다."
+								: ""}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={clearAll.isPending}
+							onClick={() => clearAll.mutate({})}
+							variant="destructive"
+						>
+							비우기
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
 			<OsNotificationBanner />
 

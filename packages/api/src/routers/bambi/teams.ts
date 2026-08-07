@@ -8,7 +8,11 @@ import {
 	teamMember,
 	user,
 } from "@bambi-app/db/schema/auth";
-import { bambiProfile, employerTeamProfile } from "@bambi-app/db/schema/bambi";
+import {
+	bambiProfile,
+	employerOrganizationProfile,
+	employerTeamProfile,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
 	and,
@@ -633,10 +637,20 @@ export const teamsRouter = {
 				.where(eq(member.id, input.memberId))
 				.returning();
 
+			// 업소를 여러 곳 겸하는 구성원은 업소명이 없으면 어디의 권한이 바뀐 건지 모른다.
+			const [organizationProfile] = await db
+				.select({ displayName: employerOrganizationProfile.displayName })
+				.from(employerOrganizationProfile)
+				.where(
+					eq(employerOrganizationProfile.organizationId, input.organizationId)
+				)
+				.limit(1);
+
 			await notifyBambiNotification({
 				actorUserId: profile.userId,
 				metadata: {
 					action: "role_changed",
+					orgName: organizationProfile?.displayName ?? null,
 					organizationId: input.organizationId,
 					role: normalizedRole,
 				},
