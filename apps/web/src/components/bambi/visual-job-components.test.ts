@@ -290,6 +290,20 @@ describe("visual job marketplace components", () => {
 		const layout = readComponent("../../app/moderator/layout.tsx");
 		const nav = readComponent("persona-nav.tsx");
 		expect(page).toContain("listCatalogAdmin");
+		expect(page).toContain("effectiveDiscountPercent");
+		expect(page).toContain("기간 할인");
+		expect(page).toContain("campaign.startsAt");
+		expect(page).toContain("campaign.endsAt");
+		expect(page).toContain('"무기한"');
+		expect(page).not.toContain('dateStyle: "medium"');
+		expect(page).toContain('year: "numeric"');
+		expect(page).toContain('month: "numeric"');
+		expect(page).toContain('day: "numeric"');
+		expect(page).toContain("collapsedPlacementIds");
+		expect(page).toContain("collapsedProductIds");
+		expect(page).toContain(
+			"flex flex-col items-start gap-2 text-muted-foreground text-sm"
+		);
 		expect(layout).toContain("/moderator/ad-products");
 		expect(nav).toContain("adProducts");
 	});

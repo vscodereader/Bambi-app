@@ -1,6 +1,17 @@
 "use client";
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Button } from "@bambi-app/ui/components/button";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import {
@@ -14,6 +25,7 @@ import { X } from "lucide-react";
 import Image from "next/image";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { selectEditableAdCampaign } from "@/lib/bambi/ad-catalog";
 import {
 	AD_PREVIEW_TEMPLATE_HINTS,
 	AD_PREVIEW_TEMPLATE_LABELS,
@@ -23,6 +35,15 @@ import {
 	isBannerPreviewTemplate,
 	isPreviewTemplateKindMismatch,
 } from "@/lib/bambi/ad-preview-templates";
+import { PopupDateTimePicker } from "./main-popup/popup-date-time-picker";
+
+export interface DiscountCampaignDraft {
+	discountPercent: number;
+	endsAt: Date | null;
+	priceOptionDays: number;
+	startsAt: Date;
+	status?: "active" | "cancelled" | "ended" | "planned";
+}
 
 export interface PriceOption {
 	amount: number;
@@ -34,6 +55,7 @@ export interface PriceOption {
 export interface AdProductDraft {
 	autoBoostsPerDay: number;
 	benefits: string[];
+	discountCampaigns: DiscountCampaignDraft[];
 	manualBoostsPerDay: number;
 	name: string;
 	previewImageUrl: string | null;
@@ -47,6 +69,11 @@ interface BenefitField {
 	value: string;
 }
 interface PriceOptionField extends PriceOption {
+	campaignDiscountPercent?: number;
+	campaignEnabled: boolean;
+	campaignEndsAt?: Date | null;
+	campaignStartsAt?: Date | null;
+	campaignStatus?: "active" | "cancelled" | "ended" | "planned";
 	id: number;
 }
 
@@ -82,7 +109,23 @@ export function AdProductForm({
 		(initialValue?.priceOptions.length
 			? initialValue.priceOptions
 			: [{ amount: 0, days: 30 }]
-		).map((o) => ({ id: makeId(), ...o }))
+		).map((o) => {
+			const campaign = selectEditableAdCampaign(
+				initialValue?.discountCampaigns ?? [],
+				o.days
+			);
+			const campaignEnabled =
+				campaign?.status === "active" || campaign?.status === "planned";
+			return {
+				id: makeId(),
+				...o,
+				campaignDiscountPercent: campaign?.discountPercent,
+				campaignEnabled,
+				campaignEndsAt: campaign?.endsAt ?? null,
+				campaignStartsAt: campaign?.startsAt ?? null,
+				campaignStatus: campaign?.status,
+			};
+		})
 	);
 	const clampPercent = (value: number) =>
 		Math.max(0, Math.min(100, Math.floor(value)));
@@ -97,6 +140,10 @@ export function AdProductForm({
 	const [autoBoostsPerDay, setAutoBoostsPerDay] = useState(
 		initialValue?.autoBoostsPerDay ?? 0
 	);
+	const [pendingDaysChange, setPendingDaysChange] = useState<{
+		days: number;
+		id: number;
+	} | null>(null);
 	// 배너형(프리미엄·레거시 사이드) 판정은 광고 배너 슬롯 표에서 파생시킨 공용 헬퍼를 쓴다.
 	// 끌어올리기(수동·자동)는 리스팅형(스페셜·급구·추천)에만 제공된다.
 	const isBannerTemplate = isBannerPreviewTemplate(previewTemplate);
@@ -154,12 +201,36 @@ export function AdProductForm({
 			toast.error("같은 이용 기간이 중복됩니다. 기간별로 하나만 등록해주세요.");
 			return;
 		}
+		const invalidCampaign = priceOptions.find(
+			(option) =>
+				option.campaignEnabled &&
+				(!option.campaignStartsAt || option.campaignDiscountPercent == null)
+		);
+		if (invalidCampaign) {
+			toast.error("기간 할인의 시작 일시와 할인율을 모두 입력해 주세요.");
+			return;
+		}
+		const discountCampaigns = priceOptions.flatMap((option) =>
+			option.campaignEnabled &&
+			option.campaignStartsAt &&
+			option.campaignDiscountPercent != null
+				? [
+						{
+							discountPercent: clampPercent(option.campaignDiscountPercent),
+							endsAt: option.campaignEndsAt ?? null,
+							priceOptionDays: option.days,
+							startsAt: option.campaignStartsAt,
+						},
+					]
+				: []
+		);
 		onSubmit({
 			name: name.trim(),
 			tagline: tagline.trim(),
 			benefits: benefits
 				.map((item) => item.value.trim())
 				.filter((value) => value.length > 0),
+			discountCampaigns,
 			priceOptions: normalizedPriceOptions,
 			previewImageUrl,
 			previewTemplate,
@@ -266,56 +337,156 @@ export function AdProductForm({
 			<div className="flex flex-col gap-2">
 				<Label>가격 옵션(이용기간 · 금액 · 할인율)</Label>
 				{priceOptions.map((option) => (
-					<div className="flex flex-wrap items-center gap-2" key={option.id}>
-						<Input
-							className="w-24"
-							onChange={(e) =>
-								setPrice(option.id, { days: Number(e.target.value) || 0 })
-							}
-							type="number"
-							value={option.days === 0 ? "" : option.days}
-						/>
-						<span className="text-muted-foreground text-sm">일</span>
-						<Input
-							className="w-40"
-							onChange={(e) =>
-								setPrice(option.id, { amount: Number(e.target.value) || 0 })
-							}
-							type="number"
-							value={option.amount === 0 ? "" : option.amount}
-						/>
-						<span className="text-muted-foreground text-sm">원</span>
-						<Input
-							className="w-20"
-							max={100}
-							min={0}
-							onChange={(e) =>
-								setPrice(option.id, {
-									discountPercent: clampPercent(Number(e.target.value) || 0),
-								})
-							}
-							type="number"
-							value={option.discountPercent ? option.discountPercent : ""}
-						/>
-						<span className="text-muted-foreground text-sm">% 할인</span>
-						<Button
-							onClick={() =>
-								setPriceOptions((options) =>
-									options.filter((o) => o.id !== option.id)
-								)
-							}
-							size="sm"
-							variant="ghost"
-						>
-							삭제
-						</Button>
+					<div className="grid gap-3 rounded-lg border p-3" key={option.id}>
+						<div className="flex flex-wrap items-center gap-2">
+							<Input
+								className="w-24"
+								onChange={(e) => {
+									const days = Number(e.target.value) || 0;
+									if (option.campaignEnabled) {
+										setPendingDaysChange({ days, id: option.id });
+										return;
+									}
+									setPrice(option.id, { days });
+								}}
+								type="number"
+								value={option.days === 0 ? "" : option.days}
+							/>
+							<span className="text-muted-foreground text-sm">일</span>
+							<Input
+								className="w-40"
+								onChange={(e) =>
+									setPrice(option.id, { amount: Number(e.target.value) || 0 })
+								}
+								type="number"
+								value={option.amount === 0 ? "" : option.amount}
+							/>
+							<span className="text-muted-foreground text-sm">원</span>
+							<Input
+								className="w-20"
+								disabled={option.campaignEnabled}
+								max={100}
+								min={0}
+								onChange={(e) =>
+									setPrice(option.id, {
+										discountPercent: clampPercent(Number(e.target.value) || 0),
+									})
+								}
+								type="number"
+								value={option.discountPercent ? option.discountPercent : ""}
+							/>
+							<span className="text-muted-foreground text-sm">% 할인</span>
+							<Button
+								onClick={() =>
+									setPriceOptions((options) =>
+										options.filter((o) => o.id !== option.id)
+									)
+								}
+								size="sm"
+								variant="ghost"
+							>
+								삭제
+							</Button>
+						</div>
+						<div className="flex flex-wrap items-center gap-2">
+							<Checkbox
+								checked={option.campaignEnabled}
+								id={`campaign-${option.id}`}
+								onCheckedChange={(checked) =>
+									setPriceOptions((items) =>
+										items.map((item) =>
+											item.id === option.id
+												? {
+														...item,
+														campaignEnabled: checked === true,
+														campaignStartsAt:
+															checked === true
+																? (item.campaignStartsAt ?? new Date())
+																: item.campaignStartsAt,
+													}
+												: item
+										)
+									)
+								}
+							/>
+							<Label htmlFor={`campaign-${option.id}`}>기간 설정</Label>
+							{option.campaignStatus === "ended" && !option.campaignEnabled ? (
+								<span className="text-muted-foreground text-sm">종료됨</span>
+							) : null}
+						</div>
+						{option.campaignEnabled ? (
+							<div className="grid gap-3 md:grid-cols-3">
+								<div className="grid gap-1.5">
+									<Label>시작 일시</Label>
+									<PopupDateTimePicker
+										allowUnset={false}
+										kind="start"
+										onChange={(campaignStartsAt) =>
+											setPriceOptions((items) =>
+												items.map((item) =>
+													item.id === option.id
+														? { ...item, campaignStartsAt }
+														: item
+												)
+											)
+										}
+										value={option.campaignStartsAt ?? null}
+									/>
+								</div>
+								<div className="grid gap-1.5">
+									<Label>종료 일시 (설정 안 함: 무기한)</Label>
+									<PopupDateTimePicker
+										kind="end"
+										onChange={(campaignEndsAt) =>
+											setPriceOptions((items) =>
+												items.map((item) =>
+													item.id === option.id
+														? { ...item, campaignEndsAt }
+														: item
+												)
+											)
+										}
+										value={option.campaignEndsAt ?? null}
+									/>
+								</div>
+								<div className="grid gap-1.5">
+									<Label htmlFor={`campaign-discount-${option.id}`}>
+										기간 할인율
+									</Label>
+									<div className="flex items-center gap-2">
+										<Input
+											id={`campaign-discount-${option.id}`}
+											max={100}
+											min={0}
+											onChange={(event) =>
+												setPriceOptions((items) =>
+													items.map((item) =>
+														item.id === option.id
+															? {
+																	...item,
+																	campaignDiscountPercent: clampPercent(
+																		Number(event.target.value) || 0
+																	),
+																}
+															: item
+													)
+												)
+											}
+											type="number"
+											value={option.campaignDiscountPercent ?? ""}
+										/>
+										<span>%</span>
+									</div>
+								</div>
+							</div>
+						) : null}
 					</div>
 				))}
 				<Button
 					onClick={() =>
 						setPriceOptions((options) => [
 							...options,
-							{ id: makeId(), amount: 0, days: 30 },
+							{ id: makeId(), amount: 0, campaignEnabled: false, days: 30 },
 						])
 					}
 					size="sm"
@@ -425,6 +596,51 @@ export function AdProductForm({
 			<Button disabled={pending || name.trim().length === 0} onClick={submit}>
 				{submitLabel}
 			</Button>
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setPendingDaysChange(null);
+					}
+				}}
+				open={pendingDaysChange !== null}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>이용 기간을 변경할까요?</AlertDialogTitle>
+						<AlertDialogDescription>
+							이 옵션에 연결된 기간 할인 설정과 저장된 이력이 함께 삭제됩니다.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								if (!pendingDaysChange) {
+									return;
+								}
+								setPriceOptions((options) =>
+									options.map((option) =>
+										option.id === pendingDaysChange.id
+											? {
+													...option,
+													campaignDiscountPercent: undefined,
+													campaignEnabled: false,
+													campaignEndsAt: null,
+													campaignStartsAt: null,
+													campaignStatus: undefined,
+													days: pendingDaysChange.days,
+												}
+											: option
+									)
+								);
+								setPendingDaysChange(null);
+							}}
+						>
+							변경
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }

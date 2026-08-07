@@ -505,6 +505,20 @@
       "when": 1785991916193,
       "tag": "0071_harsh_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1786006038279,
+      "tag": "0072_messy_wallop",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1786006732773,
+      "tag": "0073_nebulous_black_queen",
+      "breakpoints": true
     }
   ]
 }

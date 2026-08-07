@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { AdPriceChangeDialog } from "@/components/bambi/ad-price-change-dialog";
 import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
 import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
 import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
@@ -289,6 +290,9 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const formRef = useRef<HTMLFormElement>(null);
 	const [isDirty, setIsDirty] = useState(false);
 	const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+	const [priceConflictMessage, setPriceConflictMessage] = useState<
+		null | string
+	>(null);
 	// 무통장입금 유료 공고 등록 후 계좌·금액을 한 번 더 안내하는 완료 다이얼로그 상태.
 	const [bankNotice, setBankNotice] = useState<{
 		amount: number | null;
@@ -313,7 +317,18 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 
 	const createMutation = useMutation(
 		orpc.bambi.jobs.create.mutationOptions({
-			onError: (error) => {
+			onError: async (error) => {
+				if (getErrorCode(error) === "CONFLICT") {
+					await utils.invalidateQueries({
+						queryKey: orpc.bambi.adProducts.getCatalog.queryKey(),
+					});
+					await utils.refetchQueries({
+						queryKey: orpc.bambi.adProducts.getCatalog.queryKey(),
+					});
+					setPriceConflictMessage(error.message);
+					return;
+				}
+
 				const message =
 					"공고를 등록하지 못했습니다. 입력값과 공고 등록 권한을 확인해 주세요.";
 				setFormError(message);
@@ -1010,6 +1025,14 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					</div>
 				</DialogContent>
 			</Dialog>
+			<AdPriceChangeDialog
+				message={priceConflictMessage}
+				onCancel={() => setPriceConflictMessage(null)}
+				onConfirm={() => {
+					setPriceConflictMessage(null);
+					formRef.current?.requestSubmit();
+				}}
+			/>
 		</PageShell>
 	);
 }
