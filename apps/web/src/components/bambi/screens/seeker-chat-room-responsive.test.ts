@@ -142,11 +142,13 @@ describe("채팅방 메시지 페이지네이션·재연결", () => {
 
 describe("채팅방 내부 스크롤", () => {
 	// 문서가 대화 길이만큼 세로로 자라던 구조(min-h-[420px])를 뷰포트 고정으로 바꿨다.
+	// 모바일은 한 걸음 더 나아가 패널을 뷰포트에 통째로 고정한다(카카오톡식 풀스크린).
 	it("방 패널을 뷰포트에 고정하고 메시지 영역만 스크롤한다", () => {
 		expect(source).not.toContain("min-h-[420px]");
 		expect(source).toContain(
-			"h-[calc(var(--chat-visual-viewport-height,100dvh)-6rem)]"
+			"max-md:h-[var(--chat-visual-viewport-height,100dvh)]"
 		);
+		expect(source).toContain("max-md:fixed");
 		expect(source).toContain("md:h-[calc(100dvh-7.5rem)]");
 		expect(source).toContain("overflow-y-auto");
 		expect(source).toContain("ref={scrollRef}");
