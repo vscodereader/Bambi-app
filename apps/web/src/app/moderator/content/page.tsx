@@ -42,10 +42,7 @@ import {
 import { Fragment, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
-import {
-	COMMUNITY_BOARD_LABELS,
-	type CommunityBoardKey,
-} from "@/lib/bambi/community";
+import { COMMUNITY_BOARD_LABELS } from "@/lib/bambi/community";
 import {
 	CONTENT_STATUS_LABELS,
 	type ContentStatus,
@@ -536,14 +533,16 @@ export default function ModeratorContentPage() {
 }
 
 // 상세 뱃지에 쓸 표시 문구. 서버는 유형에 따라 board(커뮤니티) 또는 category(고객센터) 중
-// 하나만 채워 주는데, 둘 다 DB enum 원값이므로 반드시 라벨 맵을 거쳐 표시한다.
-// 모르는 값은 원값으로 폴백한다 — 빈 뱃지보다는 낫고, 라벨 누락을 눈으로 잡을 수 있다.
+// 하나만 채워 주는데, 둘 다 저장 원값이므로 반드시 라벨을 거쳐 표시한다. 게시판 라벨의
+// 정본은 DB(communityBoards.list)이고 빌트인 맵은 폴백이다 — 운영자가 라벨을 바꾸거나
+// 게시판을 추가해도 따라간다. 둘 다 없으면 원값 폴백(빈 뱃지보다는 낫다).
 const resolveMetaLabel = (
 	board: string | null | undefined,
-	category: string | null | undefined
+	category: string | null | undefined,
+	boardLabels: Record<string, string>
 ): string | null => {
 	if (board) {
-		return COMMUNITY_BOARD_LABELS[board as CommunityBoardKey] ?? board;
+		return boardLabels[board] ?? COMMUNITY_BOARD_LABELS[board] ?? board;
 	}
 
 	if (category) {
@@ -565,13 +564,20 @@ function DetailPanel({
 	category: string | null | undefined;
 	isLoading: boolean;
 }) {
+	// 게시판 라벨 맵. 목록 전체가 아니라 펼친 행에서만 필요하고, 여러 행을 펼쳐도
+	// react-query 캐시가 한 번만 받아 온다.
+	const boardsQuery = useQuery(orpc.bambi.communityBoards.list.queryOptions());
+	const boardLabels = Object.fromEntries(
+		(boardsQuery.data ?? []).map((item) => [item.key, item.label])
+	);
+
 	if (isLoading) {
 		return (
 			<p className="m-0 text-muted-foreground">본문을 불러오는 중이에요.</p>
 		);
 	}
 
-	const metaLabel = resolveMetaLabel(board, category);
+	const metaLabel = resolveMetaLabel(board, category, boardLabels);
 
 	return (
 		<div className="flex flex-col gap-2">

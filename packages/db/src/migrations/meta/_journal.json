@@ -505,6 +505,13 @@
       "when": 1785991916193,
       "tag": "0071_harsh_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1786064638330,
+      "tag": "0072_dynamic-community-board",
+      "breakpoints": true
     }
   ]
 }

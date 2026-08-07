@@ -33,7 +33,6 @@ import { PublicPostInteractions } from "@/components/bambi/public-post-interacti
 import {
 	type CommunityBoardMeta,
 	communityBoardPath,
-	getBoardBySlug,
 	isGuestWritableBoardKey,
 	isLegalBoardKey,
 } from "@/lib/bambi/community";
@@ -42,7 +41,8 @@ import { orpc } from "@/utils/orpc";
 const COMMENT_MAX = 1000;
 
 interface CommunityPostDetailScreenProps {
-	boardSlug: string;
+	// 게시판 메타는 페이지가 훅으로 해석해 넘겨준다(운영자가 추가한 게시판 포함).
+	board: CommunityBoardMeta;
 	postId: string;
 }
 
@@ -339,10 +339,9 @@ function PostDetailView({
 }
 
 export function CommunityPostDetailScreen({
-	boardSlug,
+	board,
 	postId,
 }: CommunityPostDetailScreenProps) {
-	const board = getBoardBySlug(boardSlug);
 	const { isGuest } = useBambiAuth();
 	const [appliedPassword, setAppliedPassword] = useState<string | undefined>();
 
@@ -358,16 +357,6 @@ export function CommunityPostDetailScreen({
 			toast("비밀번호를 확인해 주세요.");
 		}
 	}, [postQuery.isError, appliedPassword]);
-
-	if (!board) {
-		return (
-			<EmptyState
-				className="flex-1"
-				description="존재하지 않는 게시판이에요."
-				title="게시판을 찾을 수 없어요"
-			/>
-		);
-	}
 
 	if (postQuery.isPending) {
 		return <PostDetailSkeleton />;

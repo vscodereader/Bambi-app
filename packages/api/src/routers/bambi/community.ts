@@ -3,6 +3,7 @@ import { user } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
 	bambiSiteSettings,
+	communityBoard,
 	communityComment,
 	communityPost,
 	communityPostLike,
@@ -79,23 +80,15 @@ const LOCKED_TITLE = "비밀글입니다";
 const BODY_MAX = 30_000;
 const COMMENTS_CAP = 200;
 
-const communityWritableBoardSchema = z.enum([
-	"free",
-	"work_talk",
-	"market",
-	"notice",
-	"legal",
-]);
-const communityBoardSchema = z.enum([
-	"best",
-	"free",
-	"work_talk",
-	"market",
-	"notice",
-	"legal",
-]);
+// 게시판 목록은 community_board 테이블이 정본이라 입력에서는 좁히지 않는다 —
+// 존재·활성·쓰기 가능 여부는 핸들러의 assertBoard가 DB를 보고 판정한다(운영자가
+// 게시판을 추가할 때마다 zod enum을 고치고 배포해야 하던 구조를 걷어냈다).
+const boardKeySchema = z.string().trim().min(1).max(40);
 
-type CommunityBoardInput = z.infer<typeof communityBoardSchema>;
+// 저장 게시판이 아닌 가상 큐레이션. 읽기 경로에서만 허용한다(글은 여기에 못 쓴다).
+const BEST_BOARD = "best";
+const BEST_BOARD_LABEL = "베스트글";
+const BEST_BOARD_DESCRIPTION = "최근 30일 동안 추천을 많이 받은 글";
 
 // 비로그인(크롤러 포함)에게 읽기만 여는 게시판. 서버가 이 목록으로 강제하고, 화면은
 // 이 값을 따라간다 — 목록·상세 어느 쪽으로 들어와도 같은 집합만 열린다.
@@ -112,7 +105,7 @@ const isPublicBoard = (board: string): boolean =>
 type CommunityFeedSource = "crawled" | "native";
 
 // 설계 D4 — 수집 커뮤니티 글이 합류하는 게시판. 상수 하나만 바꾸면 다른 게시판으로 옮길 수 있게 둔다.
-const CRAWLED_COMMUNITY_BOARD: CommunityBoardInput = "work_talk";
+const CRAWLED_COMMUNITY_BOARD = "work_talk";
 
 // 원본 게시판명이 비어 있을 때 작성자 자리에 세울 값(수집 대상 게시판 이름).
 const CRAWLED_AUTHOR_NAME = "밤문화이야기";
@@ -125,7 +118,7 @@ type CommunityPostColumns = typeof communityPost.$inferSelect;
 // 켜진 토글이 있으면 그 조건들의 합집합(OR)으로 좁힌다(광고=is_promotion, 업소=author_role).
 // mine·q는 위 두 토글과 달리 AND로 좁힌다(서로 배타가 아니다).
 const listPostsInput = z.object({
-	board: communityBoardSchema,
+	board: boardKeySchema,
 	// 내가 쓴 글만 보기. 대상 userId는 입력으로 받지 않고 세션에서 꺼낸다.
 	mine: z.boolean().default(false),
 	page: z.number().int().min(1).default(1),
@@ -141,7 +134,7 @@ const postIdInput = z.object({
 
 const createPostInput = z.object({
 	authorName: z.string().trim().min(1).max(30),
-	board: communityWritableBoardSchema,
+	board: boardKeySchema,
 	body: z.string().min(2).max(BODY_MAX),
 	// 법률 자문 글의 선택 입력 연락처. 다른 게시판에서는 받지 않는다(아래 assertContactPhoneBoard).
 	contactPhone: z.string().trim().max(20).optional(),
@@ -375,16 +368,46 @@ const crawledTopicFeedFilters = (windowStart: Date): SQL[] => [
 
 const bestWindowStart = () => new Date(Date.now() - BEST_WINDOW_DAYS * DAY_MS);
 
+// 게시판 존재·활성 판정의 단일 지점. 입력 zod가 더 이상 목록을 들고 있지 않으므로
+// (게시판은 운영자가 늘린다) 읽기·쓰기 경로가 모두 이 함수를 지나야 한다.
+// allowBest는 가상 큐레이션 게시판을 여는 읽기 경로 전용이고, forWrite는 읽기 전용
+// 게시판(is_writable=false)까지 함께 본다. 비활성 게시판은 존재를 숨긴다(NOT_FOUND) —
+// 운영자가 내린 게시판이 링크로는 계속 열리면 "숨김"이 아니라 "목록에서만 뺀 것"이 된다.
+const assertBoard = async (
+	board: string,
+	options: { allowBest?: boolean; forWrite?: boolean } = {}
+): Promise<void> => {
+	if (options.allowBest && board === BEST_BOARD) {
+		return;
+	}
+
+	const [row] = await db
+		.select({ isWritable: communityBoard.isWritable })
+		.from(communityBoard)
+		.where(
+			and(eq(communityBoard.key, board), eq(communityBoard.isActive, true))
+		)
+		.limit(1);
+
+	if (!row) {
+		throw new ORPCError("NOT_FOUND", {
+			message: "게시판을 찾을 수 없습니다.",
+		});
+	}
+	if (options.forWrite && !row.isWritable) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "이 게시판에는 글을 쓸 수 없습니다.",
+		});
+	}
+};
+
 // 베스트글은 저장 게시판이 아니라 최근 30일 추천 상위 큐레이션 가상 게시판이다.
 // 공지사항(notice)과 법률 자문(legal)은 베스트 큐레이션에서 제외한다 — 법률 자문 글은
 // 전부 잠금이라 베스트에 올라와도 마스킹 제목만 자리를 차지한다. windowStart(30일 컷오프)는
 // 목록·count 쿼리 간 밀리초 오차로 1-off가 나지 않도록 핸들러에서 한 번 계산해
 // 동일 값으로 전달한다.
-const buildBoardFilters = (
-	board: CommunityBoardInput,
-	windowStart: Date
-): SQL[] => {
-	if (board === "best") {
+const buildBoardFilters = (board: string, windowStart: Date): SQL[] => {
+	if (board === BEST_BOARD) {
 		return [
 			eq(communityPost.status, "published"),
 			gte(communityPost.likeCount, BEST_MIN_LIKES),
@@ -451,8 +474,8 @@ const buildNarrowFilters = ({
 // 마지막 정렬 키는 항상 id다. created_at만으로 정렬하면 같은 시각 글의 순서를 Postgres가
 // 매번 다시 정해, 페이지를 오갈 때마다 목록이 한 칸씩 밀리거나 같은 글이 두 페이지에 뜬다
 // (bambi-job-feed의 desc(publishedAt), desc(id)와 같은 처방).
-const buildBoardOrder = (board: CommunityBoardInput) =>
-	board === "best"
+const buildBoardOrder = (board: string) =>
+	board === BEST_BOARD
 		? [
 				desc(communityPost.likeCount),
 				desc(communityPost.createdAt),
@@ -461,7 +484,7 @@ const buildBoardOrder = (board: CommunityBoardInput) =>
 		: [desc(communityPost.createdAt), desc(communityPost.id)];
 
 const selectBoardPosts = (
-	board: CommunityBoardInput,
+	board: string,
 	{
 		limit,
 		offset = 0,
@@ -717,6 +740,7 @@ export const communityRouter = {
 			const profile = actor.kind === "member" ? actor.profile : null;
 			// 법률자문 계정은 legal 게시판만 — 가상 큐레이션 best도 비-legal 글이 섞이므로 막는다.
 			assertLegalAdvisorBoardScope(profile, input.board);
+			await assertBoard(input.board, { allowBest: true });
 
 			const listFilters = [
 				...buildListFilters(input.showPromotion, input.showEmployer),
@@ -789,39 +813,59 @@ export const communityRouter = {
 	// 홈 미리보기는 미자격자(비회원·남성·비광고 업소)에게도 게시판별 상위 4개까지 공개한다.
 	// 상세·목록·쓰기는 여전히 requireCommunityMember 뒤에 있고, 여기서는 요약(제목·작성자
 	// 표시명·카운트)만 나가며 비밀글 제목은 자격 무관하게 마스킹된다(잠금 우회는 자격자만).
+	// 게시판이 고정 6종이 아니게 되면서 응답도 고정 키 객체가 아니라 배열이다 — 운영자가
+	// 게시판을 늘리면 홈 미리보기에 자동으로 따라 붙는다. 순서는 best(가상, 선두) →
+	// 활성 게시판 sort_order asc.
 	overview: publicProcedure.handler(async ({ context }) => {
 		const profile = await findCommunityMember(context.session);
 
 		const windowStart = bestWindowStart();
 		// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
-		const communityFeedOn = await isCrawledCommunityFeedEnabled();
-		const [best, free, workTalk, market, notice, legal] = await Promise.all([
-			selectBoardPosts("best", { limit: OVERVIEW_LIMIT, windowStart }),
-			selectBoardPosts("free", { limit: OVERVIEW_LIMIT, windowStart }),
-			communityFeedOn
-				? selectWorkTalkFeedUnion({
-						limit: OVERVIEW_LIMIT,
-						offset: 0,
-						windowStart,
-					})
-				: selectBoardPosts(CRAWLED_COMMUNITY_BOARD, {
-						limit: OVERVIEW_LIMIT,
-						windowStart,
-					}),
-			selectBoardPosts("market", { limit: OVERVIEW_LIMIT, windowStart }),
-			selectBoardPosts("notice", { limit: OVERVIEW_LIMIT, windowStart }),
-			// 법률 자문은 전 글이 잠금이라 미리보기 제목도 기존 마스킹 규칙을 그대로 탄다
-			// (작성자·운영자·법률자문만 실제 제목을 본다).
-			selectBoardPosts(LEGAL_BOARD, { limit: OVERVIEW_LIMIT, windowStart }),
+		const [communityFeedOn, boards] = await Promise.all([
+			isCrawledCommunityFeedEnabled(),
+			db
+				.select({
+					description: communityBoard.description,
+					key: communityBoard.key,
+					label: communityBoard.label,
+					slug: communityBoard.slug,
+				})
+				.from(communityBoard)
+				.where(eq(communityBoard.isActive, true))
+				.orderBy(asc(communityBoard.sortOrder)),
 		]);
 
+		// 법률 자문처럼 전 글이 잠긴 게시판도 같은 마스킹 규칙을 그대로 탄다
+		// (작성자·운영자·법률자문만 실제 제목을 본다).
+		const previews = [
+			{
+				description: BEST_BOARD_DESCRIPTION,
+				key: BEST_BOARD,
+				label: BEST_BOARD_LABEL,
+				slug: BEST_BOARD,
+			},
+			...boards,
+		];
+
+		const postsPerBoard = await Promise.all(
+			previews.map((board) =>
+				board.key === CRAWLED_COMMUNITY_BOARD && communityFeedOn
+					? selectWorkTalkFeedUnion({
+							limit: OVERVIEW_LIMIT,
+							offset: 0,
+							windowStart,
+						})
+					: selectBoardPosts(board.key, { limit: OVERVIEW_LIMIT, windowStart })
+			)
+		);
+
 		return {
-			best: maskLockedSummaries(best, profile).map(toPublicSummary),
-			free: maskLockedSummaries(free, profile).map(toPublicSummary),
-			legal: maskLockedSummaries(legal, profile).map(toPublicSummary),
-			market: maskLockedSummaries(market, profile).map(toPublicSummary),
-			notice: maskLockedSummaries(notice, profile).map(toPublicSummary),
-			workTalk: maskLockedSummaries(workTalk, profile).map(toPublicSummary),
+			boards: previews.map((board, index) => ({
+				...board,
+				posts: maskLockedSummaries(postsPerBoard[index] ?? [], profile).map(
+					toPublicSummary
+				),
+			})),
 		};
 	}),
 
@@ -1079,6 +1123,9 @@ export const communityRouter = {
 				actor.kind === "member" ? actor.profile : null,
 				input.board
 			);
+			// 가상 게시판(best)·비활성·읽기 전용 게시판은 여기서 걸린다 — FK 위반이
+			// 500으로 새어 나가기 전에 사용자 문구로 막는다.
+			await assertBoard(input.board, { forWrite: true });
 			assertTiptapDoc(input.body);
 			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 			await assertDisplayNameAllowed(input.authorName, {

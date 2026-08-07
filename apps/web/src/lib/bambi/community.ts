@@ -1,5 +1,8 @@
-// 수다방 게시판 메타·경로·표시 유틸. 게시판 목록의 단일 진실원.
-// key는 API enum(community_board + 가상 best), slug는 URL 세그먼트.
+// 수다방 게시판 메타·경로·표시 유틸.
+// 게시판 목록의 정본은 DB(community_board)이고 화면은 use-community-boards 훅으로 받는다.
+// 여기 COMMUNITY_BOARDS는 DB에 담기지 않는 것들의 출처다 — 가상 게시판(best), 공지의
+// 운영자 전용 규칙, 공개 영역(/board) 고정 3종, 액센트 같은 표시 메타.
+// key는 저장값(신규 게시판은 slug와 같다), slug는 URL 세그먼트다.
 
 export type CommunityBoardKey =
 	| "notice"
@@ -13,11 +16,16 @@ export interface CommunityBoardMeta {
 	// 운영자만 글을 쓸 수 있는 게시판(공지사항). 목록/폼에서 글쓰기 권한 게이트에 쓴다.
 	adminOnly?: boolean;
 	description: string;
-	key: CommunityBoardKey;
+	// 운영자가 추가한 게시판도 담기므로 리터럴 유니온이 아니라 문자열이다.
+	key: string;
 	label: string;
 	slug: string;
 	writable: boolean;
 }
+
+// 코드에 박힌 게시판 메타 — key가 리터럴로 좁혀져 있어 고정 집합만 다루는 화면
+// (공개 /board 3종 등)이 캐스팅 없이 쓴다.
+export type BuiltinBoardMeta = CommunityBoardMeta & { key: CommunityBoardKey };
 
 export const COMMUNITY_AUTHOR_FALLBACK = "회원";
 
@@ -43,7 +51,7 @@ export const communityAuthorRoleLabel = (
 ): string =>
 	COMMUNITY_AUTHOR_ROLE_LABELS[role ?? ""] ?? COMMUNITY_AUTHOR_FALLBACK;
 
-export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
+export const COMMUNITY_BOARDS: BuiltinBoardMeta[] = [
 	{
 		adminOnly: true,
 		description: "밤비알바 수다방 공지",
@@ -89,21 +97,47 @@ export const COMMUNITY_BOARDS: CommunityBoardMeta[] = [
 	},
 ];
 
+// DB 게시판 행(communityBoards.listActive)의 화면용 형태.
+export interface ActiveBoardRow {
+	description: string;
+	isWritable: boolean;
+	key: string;
+	label: string;
+	slug: string;
+}
+
+// DB 행 → 화면 메타. adminOnly(공지 운영자 전용)는 DB에 없는 빌트인 규칙이라 key로 얹는다 —
+// 운영자가 새로 만든 게시판은 adminOnly가 없어 표준 동작(회원 열람·작성)만 갖는다.
+export const toBoardMeta = (row: ActiveBoardRow): CommunityBoardMeta => ({
+	adminOnly: COMMUNITY_BOARDS.find((board) => board.key === row.key)?.adminOnly,
+	description: row.description,
+	key: row.key,
+	label: row.label,
+	slug: row.slug,
+	writable: row.isWritable,
+});
+
+// 화면이 쓰는 게시판 목록. 베스트는 DB 행이 아니라 서버가 만들어 주는 가상 게시판이라
+// 선두에 직접 얹는다(community.overview도 같은 자리에 끼운다).
+export const toBoardMetas = (rows: ActiveBoardRow[]): CommunityBoardMeta[] => [
+	getBoardByKey("best"),
+	...rows.map(toBoardMeta),
+];
+
 // 법률 자문 게시판은 글이 전부 비밀글(서버 강제)이고 연락처 입력이 열린다 — 폼·상세가
 // 같은 판정을 쓰도록 한 곳에 둔다.
-export const isLegalBoardKey = (key: CommunityBoardKey): boolean =>
-	key === "legal";
+export const isLegalBoardKey = (key: string): boolean => key === "legal";
 
-// 게시판 key(DB enum) → 표시 라벨. enum 원값이 화면에 새지 않도록 표시는 이 맵을 거친다.
-// 모르는 key는 원값으로 폴백한다(REPORT_REASON_LABELS와 동일 관례) — 화면이 비는 것보다는 낫다.
-export const COMMUNITY_BOARD_LABELS = Object.fromEntries(
-	COMMUNITY_BOARDS.map((board) => [board.key, board.label])
-) as Record<CommunityBoardKey, string>;
+// 빌트인 게시판 key → 표시 라벨. key 원값이 화면에 새지 않도록 표시는 라벨 맵을 거친다.
+// 운영자가 추가한 게시판은 여기 없으므로 DB 라벨(communityBoards.list)을 먼저 보고
+// 이 맵은 폴백으로 쓴다. 둘 다 없으면 원값 폴백(REPORT_REASON_LABELS와 동일 관례).
+export const COMMUNITY_BOARD_LABELS: Record<string, string> =
+	Object.fromEntries(COMMUNITY_BOARDS.map((board) => [board.key, board.label]));
 
 // 비회원(여성 인증 게스트)이 글·댓글·추천을 남길 수 있는 게시판. 읽기는 회원과 같은
 // 전체 보드지만 쓰기는 여기로 좁힌다 — 정본은 서버(bambi-community-authz의
 // GUEST_WRITABLE_BOARDS)이고 이 사본은 버튼·안내 노출용이다.
-export const isGuestWritableBoardKey = (key: CommunityBoardKey): boolean =>
+export const isGuestWritableBoardKey = (key: string): boolean =>
 	key === "free" || key === "work_talk" || key === "legal";
 
 // 위 제한을 화면에서 설명할 때 쓰는 문구(서버 GUEST_BOARD_ERROR와 같은 말).
@@ -114,10 +148,11 @@ export const GUEST_BOARD_LIMIT_NOTICE =
 export const LEGAL_ADVISOR_BOARD_NOTICE =
 	"법률자문 계정은 무료 법률 자문 게시판만 이용할 수 있어요.";
 
-export const getBoardBySlug = (slug: string): CommunityBoardMeta | undefined =>
+// 빌트인 게시판 전용 조회 — 동적 게시판까지 보려면 useBoardBySlug 훅을 쓴다.
+export const getBoardBySlug = (slug: string): BuiltinBoardMeta | undefined =>
 	COMMUNITY_BOARDS.find((board) => board.slug === slug);
 
-export const getBoardByKey = (key: CommunityBoardKey): CommunityBoardMeta => {
+export const getBoardByKey = (key: CommunityBoardKey): BuiltinBoardMeta => {
 	const board = COMMUNITY_BOARDS.find((item) => item.key === key);
 	if (!board) {
 		throw new Error(`Unknown community board key: ${key}`);
