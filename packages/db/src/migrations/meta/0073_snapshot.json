@@ -1,6 +1,6 @@
 {
-  "id": "3cf1b4e5-2a55-4bdb-b753-bd65d79815ea",
-  "prevId": "b2898f99-a5f7-471c-833a-af8c42a8075a",
+  "id": "b2898f99-a5f7-471c-833a-af8c42a8075a",
+  "prevId": "d7a91706-f6e2-42b3-94eb-c31d5d51bf09",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1178,157 +1178,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.ad_product_discount_campaign": {
-      "name": "ad_product_discount_campaign",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "ad_product_id": {
-          "name": "ad_product_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "price_option_days": {
-          "name": "price_option_days",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "discount_percent": {
-          "name": "discount_percent",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "starts_at": {
-          "name": "starts_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ends_at_exclusive": {
-          "name": "ends_at_exclusive",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cancelled_at": {
-          "name": "cancelled_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "superseded_by_id": {
-          "name": "superseded_by_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "ad_product_discount_campaign_product_days_idx": {
-          "name": "ad_product_discount_campaign_product_days_idx",
-          "columns": [
-            {
-              "expression": "ad_product_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "price_option_days",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "starts_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "ad_product_discount_campaign_ad_product_id_ad_product_id_fk": {
-          "name": "ad_product_discount_campaign_ad_product_id_ad_product_id_fk",
-          "tableFrom": "ad_product_discount_campaign",
-          "tableTo": "ad_product",
-          "columnsFrom": ["ad_product_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "ad_product_discount_campaign_superseded_by_id_ad_product_discount_campaign_id_fk": {
-          "name": "ad_product_discount_campaign_superseded_by_id_ad_product_discount_campaign_id_fk",
-          "tableFrom": "ad_product_discount_campaign",
-          "tableTo": "ad_product_discount_campaign",
-          "columnsFrom": ["superseded_by_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "ad_product_discount_campaign_created_by_user_id_user_id_fk": {
-          "name": "ad_product_discount_campaign_created_by_user_id_user_id_fk",
-          "tableFrom": "ad_product_discount_campaign",
-          "tableTo": "user",
-          "columnsFrom": ["created_by_user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "ad_product_discount_campaign_discount_check": {
-          "name": "ad_product_discount_campaign_discount_check",
-          "value": "\"ad_product_discount_campaign\".\"discount_percent\" >= 0 AND \"ad_product_discount_campaign\".\"discount_percent\" <= 100"
-        },
-        "ad_product_discount_campaign_days_check": {
-          "name": "ad_product_discount_campaign_days_check",
-          "value": "\"ad_product_discount_campaign\".\"price_option_days\" > 0"
-        },
-        "ad_product_discount_campaign_window_check": {
-          "name": "ad_product_discount_campaign_window_check",
-          "value": "\"ad_product_discount_campaign\".\"ends_at_exclusive\" IS NULL OR \"ad_product_discount_campaign\".\"ends_at_exclusive\" > \"ad_product_discount_campaign\".\"starts_at\""
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.admin_moderation_action": {
       "name": "admin_moderation_action",
       "schema": "",
@@ -1691,7 +1540,20 @@
           "name": "recipient_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "recipient_role": {
+          "name": "recipient_role",
+          "type": "bambi_user_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "read_by_user_id": {
+          "name": "read_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "actor_user_id": {
           "name": "actor_user_id",
@@ -1701,7 +1563,7 @@
         },
         "target_type": {
           "name": "target_type",
-          "type": "moderation_target_type",
+          "type": "notification_target_type",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
@@ -1754,6 +1616,22 @@
           "method": "btree",
           "with": {}
         },
+        "bambi_notification_recipient_role_idx": {
+          "name": "bambi_notification_recipient_role_idx",
+          "columns": [
+            {
+              "expression": "recipient_role",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"bambi_notification\".\"recipient_role\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "bambi_notification_chat_room_id_idx": {
           "name": "bambi_notification_chat_room_id_idx",
           "columns": [
@@ -1801,6 +1679,15 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "bambi_notification_read_by_user_id_user_id_fk": {
+          "name": "bambi_notification_read_by_user_id_user_id_fk",
+          "tableFrom": "bambi_notification",
+          "tableTo": "user",
+          "columnsFrom": ["read_by_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "bambi_notification_actor_user_id_user_id_fk": {
           "name": "bambi_notification_actor_user_id_user_id_fk",
           "tableFrom": "bambi_notification",
@@ -1823,7 +1710,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "bambi_notification_recipient_one_of_ck": {
+          "name": "bambi_notification_recipient_one_of_ck",
+          "value": "num_nonnulls(\"bambi_notification\".\"recipient_user_id\", \"bambi_notification\".\"recipient_role\") = 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.bambi_profile": {
@@ -3317,13 +3209,6 @@
         },
         "is_promotion": {
           "name": "is_promotion",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "is_event": {
-          "name": "is_event",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -6122,14 +6007,6 @@
           "notNull": true,
           "default": false
         },
-        "audience": {
-          "name": "audience",
-          "type": "main_popup_audience",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'common'"
-        },
         "content_type": {
           "name": "content_type",
           "type": "main_popup_content_type",
@@ -7027,6 +6904,140 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+    },
+    "public.bambi_attendance": {
+      "name": "bambi_attendance",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attended_on": {
+          "name": "attended_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "bambi_attendance_attended_on_idx": {
+          "name": "bambi_attendance_attended_on_idx",
+          "columns": [
+            {
+              "expression": "attended_on",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "bambi_attendance_user_id_user_id_fk": {
+          "name": "bambi_attendance_user_id_user_id_fk",
+          "tableFrom": "bambi_attendance",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "bambi_attendance_user_id_attended_on_pk": {
+          "name": "bambi_attendance_user_id_attended_on_pk",
+          "columns": ["user_id", "attended_on"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bambi_point_transaction": {
+      "name": "bambi_point_transaction",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "bambi_point_transaction_user_id_idx": {
+          "name": "bambi_point_transaction_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "bambi_point_transaction_user_id_user_id_fk": {
+          "name": "bambi_point_transaction_user_id_user_id_fk",
+          "tableFrom": "bambi_point_transaction",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -7183,11 +7194,6 @@
         "on_hold"
       ]
     },
-    "public.main_popup_audience": {
-      "name": "main_popup_audience",
-      "schema": "public",
-      "values": ["common", "job_seeker", "employer"]
-    },
     "public.main_popup_content_type": {
       "name": "main_popup_content_type",
       "schema": "public",
@@ -7245,6 +7251,25 @@
       "name": "support_inquiry_status",
       "schema": "public",
       "values": ["open", "answered", "closed"]
+    },
+    "public.notification_target_type": {
+      "name": "notification_target_type",
+      "schema": "public",
+      "values": [
+        "chat_message",
+        "chat_room",
+        "interview_schedule",
+        "contact_reveal",
+        "support_inquiry",
+        "report",
+        "community_post",
+        "community_comment",
+        "review",
+        "job_post",
+        "employer_verification",
+        "team_invitation",
+        "organization_member"
+      ]
     }
   },
   "schemas": {},

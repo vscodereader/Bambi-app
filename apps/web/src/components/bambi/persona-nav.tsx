@@ -59,6 +59,7 @@ export function SeekerNav({ children }: { children: ReactNode }) {
 	// 유지한다 → /seeker/me 및 그 하위 경로 전체에서 노출.
 	const showNav =
 		path === "/seeker" ||
+		path === "/seeker/attendance" ||
 		path === "/seeker/chats" ||
 		path.startsWith("/seeker/chats/") ||
 		path === "/seeker/community" ||
@@ -85,6 +86,7 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 		path === "/employer/new" ||
 		path === "/employer/me" ||
 		path.startsWith("/employer/ad-guide") ||
+		path.startsWith("/employer/attendance") ||
 		path.startsWith("/employer/promotions") ||
 		path.startsWith("/employer/analytics") ||
 		path.startsWith("/employer/settings");
@@ -196,6 +198,7 @@ export function ModeratorShell({ children }: { children: ReactNode }) {
 	} else if (path.startsWith("/moderator/ad-products")) {
 		tab = "adProducts";
 	} else if (
+		path.startsWith("/moderator/attendance") ||
 		path.startsWith("/moderator/employers") ||
 		path.startsWith("/moderator/team-invites") ||
 		path.startsWith("/moderator/payments") ||

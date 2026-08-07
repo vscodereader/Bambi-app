@@ -62,6 +62,11 @@ import {
 	type JobPostImageUploadPolicyCode,
 	validateJobPostImageUpload,
 } from "../../services/bambi-job-media-policy";
+import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
+import {
+	notifyBambiNotification,
+	notifyModerationAction,
+} from "../../services/bambi-notifications";
 import { createEditorMediaUploadIntent } from "../../services/bambi-storage";
 import {
 	assertTiptapDoc,
@@ -746,6 +751,68 @@ const toCommentItems = (
 		};
 	});
 
+/**
+ * 새 댓글·대댓글 알림. 글 작성자와 부모 댓글 작성자에게 한 통씩(같은 사람이면 한 통),
+ * 본인 행위는 resolveNotificationRecipients가 걸러낸다. 비회원 댓글은 행위자 계정이
+ * 없어(actor_user_id NOT NULL) 알림을 만들 수 없다.
+ *
+ * 법률 자문 글의 추가 질문(자문가가 아닌 사람의 댓글)은 개인 알림과 별개로
+ * legal_advisor 공유 1행을 더 보낸다 — 새 잠금글과 같은 "큐 도착" 성격이라 수신자가
+ * 개인이 아니다. 자문가 본인의 댓글은 답변이므로 큐에 넣지 않는다(글 작성자 개인 알림 담당).
+ */
+const notifyNewComment = async ({
+	actorRole: commentActorRole,
+	actorUserId: commentActorUserId,
+	parentAuthorUserId,
+	parentCommentId,
+	post,
+}: {
+	actorRole: CommunityPostColumns["authorRole"];
+	actorUserId: null | string;
+	parentAuthorUserId: null | string;
+	parentCommentId: null | string;
+	post: { authorUserId: null | string; board: string; id: string };
+}): Promise<void> => {
+	if (!commentActorUserId) {
+		return;
+	}
+
+	if (post.board === LEGAL_BOARD && commentActorRole !== "legal_advisor") {
+		await notifyBambiNotification({
+			actorUserId: commentActorUserId,
+			metadata: {
+				action: "replied",
+				board: post.board,
+				postId: post.id,
+			},
+			recipientRole: "legal_advisor",
+			targetId: post.id,
+			targetType: "community_post",
+		});
+	}
+
+	const recipients = resolveNotificationRecipients(
+		[post.authorUserId, parentAuthorUserId],
+		commentActorUserId
+	);
+
+	for (const recipientUserId of recipients) {
+		const isParentAuthor = recipientUserId === parentAuthorUserId;
+
+		await notifyBambiNotification({
+			actorUserId: commentActorUserId,
+			metadata: {
+				action: isParentAuthor ? "reply" : "comment",
+				board: post.board,
+				postId: post.id,
+			},
+			recipientUserId,
+			targetId: isParentAuthor ? (parentCommentId ?? post.id) : post.id,
+			targetType: isParentAuthor ? "community_comment" : "community_post",
+		});
+	}
+};
+
 export const communityRouter = {
 	// 회원과 비회원(여성 성인인증 게스트)이 같은 목록을 본다 — 게시판·필터·정렬이 모두 같고,
 	// 갈리는 건 개인화 축(내 글)과 잠금 우회뿐이다. 게스트는 profile이 null이라 비밀글 제목이
@@ -1194,6 +1261,25 @@ export const communityRouter = {
 				})
 				.returning({ board: communityPost.board, id: communityPost.id });
 
+			// 법률 자문 글은 전부 잠금글이고 답변 주체가 법률자문 계정이라, 개인 수신자가
+			// 아니라 role 공유 1행으로 보낸다(누가 맡아도 되는 큐). 비회원 글은 행위자
+			// 계정이 없어 알림을 만들 수 없다 — 정책상 포기(스펙 §3 제외 목록).
+			const postActorUserId = actorUserId(actor);
+
+			if (created && input.board === LEGAL_BOARD && postActorUserId) {
+				await notifyBambiNotification({
+					actorUserId: postActorUserId,
+					metadata: {
+						action: "submitted",
+						board: created.board,
+						postId: created.id,
+					},
+					recipientRole: "legal_advisor",
+					targetId: created.id,
+					targetType: "community_post",
+				});
+			}
+
 			return created;
 		}),
 
@@ -1454,9 +1540,14 @@ export const communityRouter = {
 			}
 			await assertNoBannedWords([input.body]);
 
+			// 대댓글 알림에서 부모 댓글 작성자에게도 알려야 해 블록 밖으로 끌어올린다.
+			let parentAuthorUserId: null | string = null;
+
 			if (input.parentCommentId) {
 				const [parent] = await db
 					.select({
+						// 대댓글 알림 수신자. 게스트 댓글은 null이라 알림이 생략된다.
+						authorUserId: communityComment.authorUserId,
 						id: communityComment.id,
 						parentCommentId: communityComment.parentCommentId,
 						postId: communityComment.postId,
@@ -1476,6 +1567,8 @@ export const communityRouter = {
 						message: "답글에는 다시 답글을 달 수 없습니다.",
 					});
 				}
+
+				parentAuthorUserId = parent.authorUserId;
 			}
 
 			// 검증을 모두 통과한 뒤에 센다(createPost와 같은 이유). 회원 댓글은 기존대로
@@ -1488,8 +1581,8 @@ export const communityRouter = {
 				});
 			}
 
-			return await db.transaction(async (tx) => {
-				const [created] = await tx
+			const created = await db.transaction(async (tx) => {
+				const [row] = await tx
 					.insert(communityComment)
 					.values({
 						authorGuestId: actorGuestId(actor),
@@ -1508,8 +1601,19 @@ export const communityRouter = {
 					.update(communityPost)
 					.set({ commentCount: sql`${communityPost.commentCount} + 1` })
 					.where(eq(communityPost.id, input.postId));
-				return created;
+				return row;
 			});
+
+			// 알림은 커밋 뒤에 보낸다 — 알림 실패로 댓글이 롤백되면 안 된다.
+			await notifyNewComment({
+				actorRole: actorRole(actor),
+				actorUserId: actorUserId(actor),
+				parentAuthorUserId,
+				parentCommentId: input.parentCommentId ?? null,
+				post,
+			});
+
+			return created;
 		}),
 
 	deleteComment: publicProcedure
@@ -1594,11 +1698,15 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const result = await db.transaction(async (tx) => {
 				// 이미 삭제된 글에 삭제 요청이 또 오는 경우를 먼저 거른다 — 화면이 버튼을
 				// 감춰도 낡은 목록 캐시나 다른 탭에서 요청이 들어올 수 있다.
 				const [existing] = await tx
-					.select({ status: communityPost.status })
+					.select({
+						// 알림 딥링크(/seeker/community/{slug}/{postId})에 필요하다.
+						board: communityPost.board,
+						status: communityPost.status,
+					})
 					.from(communityPost)
 					.where(eq(communityPost.id, input.postId))
 					.limit(1);
@@ -1639,8 +1747,23 @@ export const communityRouter = {
 					targetType: "community_post",
 				});
 
-				return { id: updated.id, status: updated.status };
+				return {
+					board: existing.board,
+					id: updated.id,
+					status: updated.status,
+				};
 			});
+
+			await notifyModerationAction({
+				action: `set_community_post_status:${input.status}`,
+				actorUserId: admin.userId,
+				metadata: { board: result.board, postId: input.postId },
+				reason: input.reason,
+				targetId: input.postId,
+				targetType: "community_post",
+			});
+
+			return { id: result.id, status: result.status };
 		}),
 
 	// 운영자 댓글 숨김/삭제/복구. commentCount 캐시는 노출(published)만 세므로
@@ -1650,13 +1773,19 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const result = await db.transaction(async (tx) => {
 				const [existing] = await tx
 					.select({
+						// 딥링크는 글 단위다 — 댓글이 속한 글의 게시판·id가 필요하다.
+						board: communityPost.board,
 						postId: communityComment.postId,
 						status: communityComment.status,
 					})
 					.from(communityComment)
+					.innerJoin(
+						communityPost,
+						eq(communityPost.id, communityComment.postId)
+					)
 					.where(eq(communityComment.id, input.commentId))
 					.limit(1);
 
@@ -1713,7 +1842,23 @@ export const communityRouter = {
 					targetType: "community_comment",
 				});
 
-				return { id: updated.id, status: updated.status };
+				return {
+					board: existing.board,
+					id: updated.id,
+					postId: existing.postId,
+					status: updated.status,
+				};
 			});
+
+			await notifyModerationAction({
+				action: `set_community_comment_status:${input.status}`,
+				actorUserId: admin.userId,
+				metadata: { board: result.board, postId: result.postId },
+				reason: input.reason,
+				targetId: input.commentId,
+				targetType: "community_comment",
+			});
+
+			return { id: result.id, status: result.status };
 		}),
 };

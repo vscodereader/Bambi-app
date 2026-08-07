@@ -8,7 +8,11 @@ import {
 	teamMember,
 	user,
 } from "@bambi-app/db/schema/auth";
-import { bambiProfile, employerTeamProfile } from "@bambi-app/db/schema/bambi";
+import {
+	bambiProfile,
+	employerOrganizationProfile,
+	employerTeamProfile,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
 	and,
@@ -29,6 +33,7 @@ import {
 	isEmployerOrganizationVerified,
 	requireActiveBambiProfile,
 } from "../../services/bambi-authz";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
 	canInviteMembers,
 	canManageOrganization,
@@ -387,6 +392,20 @@ export const teamsRouter = {
 				})
 				.returning();
 
+			// 팀 초대는 운영자 승인을 거친다 — 새 심사거리다(개인 수신자 없이 role 공유 1행).
+			if (created) {
+				await notifyBambiNotification({
+					actorUserId: profile.userId,
+					metadata: {
+						action: "submitted",
+						organizationId: input.organizationId,
+					},
+					recipientRole: "admin",
+					targetId: created.id,
+					targetType: "team_invitation",
+				});
+			}
+
 			return created;
 		}),
 
@@ -433,6 +452,15 @@ export const teamsRouter = {
 				})
 				.where(eq(invitation.id, input.invitationId))
 				.returning();
+
+			// 반려 초대를 고쳐 다시 낸 것도 새 심사거리다(위 rejected 게이트가 전이를 보장한다).
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				metadata: { action: "submitted", organizationId: input.organizationId },
+				recipientRole: "admin",
+				targetId: input.invitationId,
+				targetType: "team_invitation",
+			});
 
 			return updated;
 		}),
@@ -562,7 +590,12 @@ export const teamsRouter = {
 			});
 
 			const [targetMember] = await db
-				.select({ id: member.id, role: member.role })
+				.select({
+					id: member.id,
+					role: member.role,
+					// 권한 변경은 당사자가 알아야 한다(화면에는 owner만 보이는 정보다).
+					userId: member.userId,
+				})
 				.from(member)
 				.where(
 					and(
@@ -604,6 +637,28 @@ export const teamsRouter = {
 				.where(eq(member.id, input.memberId))
 				.returning();
 
+			// 업소를 여러 곳 겸하는 구성원은 업소명이 없으면 어디의 권한이 바뀐 건지 모른다.
+			const [organizationProfile] = await db
+				.select({ displayName: employerOrganizationProfile.displayName })
+				.from(employerOrganizationProfile)
+				.where(
+					eq(employerOrganizationProfile.organizationId, input.organizationId)
+				)
+				.limit(1);
+
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				metadata: {
+					action: "role_changed",
+					orgName: organizationProfile?.displayName ?? null,
+					organizationId: input.organizationId,
+					role: normalizedRole,
+				},
+				recipientUserId: targetMember.userId,
+				targetId: input.memberId,
+				targetType: "organization_member",
+			});
+
 			return updated;
 		}),
 
@@ -640,7 +695,7 @@ export const teamsRouter = {
 
 			// 소유권을 넘길 대상 멤버.
 			const [targetMember] = await db
-				.select({ id: member.id, status: member.status })
+				.select({ id: member.id, status: member.status, userId: member.userId })
 				.from(member)
 				.where(
 					and(
@@ -673,6 +728,17 @@ export const teamsRouter = {
 					.update(member)
 					.set({ role: toStoredRole("owner"), updatedAt: now })
 					.where(eq(member.id, targetMember.id));
+			});
+
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				metadata: {
+					action: "ownership_transferred",
+					organizationId: input.organizationId,
+				},
+				recipientUserId: targetMember.userId,
+				targetId: input.memberId,
+				targetType: "organization_member",
 			});
 
 			return { success: true };
@@ -731,6 +797,18 @@ export const teamsRouter = {
 				}
 
 				await tx.delete(member).where(eq(member.id, input.memberId));
+			});
+
+			// 내보내진 사람은 화면에서 사라지므로 알림 말고는 알 방법이 없다.
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				metadata: {
+					action: "removed",
+					organizationId: input.organizationId,
+				},
+				recipientUserId: targetMember.userId,
+				targetId: input.memberId,
+				targetType: "organization_member",
 			});
 
 			return { success: true };

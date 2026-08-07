@@ -1,6 +1,6 @@
 import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
-import { interviewSchedule, review } from "@bambi-app/db/schema/bambi";
+import { interviewSchedule, jobPost, review } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq, or } from "drizzle-orm";
 import z from "zod";
@@ -10,6 +10,7 @@ import {
 	requireActiveBambiProfile,
 	requireChatParticipant,
 } from "../../services/bambi-authz";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
 	maskReviewerDisplayName,
 	validateReviewInput,
@@ -133,6 +134,40 @@ export const reviewsRouter = {
 					status: policyResult.status,
 				})
 				.returning();
+
+			// 후기는 구직자만 남기고, 그 대상은 그 방의 구인자다. 정책 판정이 심사 대기면
+			// 아직 게시되지 않으므로 구인자에게는 알리지 않는다(그 경우는 아래 운영자 큐로).
+			if (created && created.status === "published") {
+				// 공고를 여러 개 굴리는 업주는 제목이 없으면 어느 공고의 후기인지 모른다.
+				const [reviewedJobPost] = await db
+					.select({ title: jobPost.title })
+					.from(jobPost)
+					.where(eq(jobPost.id, room.jobPostId))
+					.limit(1);
+
+				await notifyBambiNotification({
+					actorUserId: profile.userId,
+					metadata: {
+						action: "created",
+						jobPostId: room.jobPostId,
+						jobPostTitle: reviewedJobPost?.title ?? null,
+					},
+					recipientUserId: room.employerUserId,
+					targetId: created.id,
+					targetType: "review",
+				});
+			}
+
+			// 정책 판정이 심사 대기면 구인자 알림 대신 운영자 큐로 보낸다(둘은 배타적이다).
+			if (created && created.status === "pending_review") {
+				await notifyBambiNotification({
+					actorUserId: profile.userId,
+					metadata: { action: "submitted", jobPostId: room.jobPostId },
+					recipientRole: "admin",
+					targetId: created.id,
+					targetType: "review",
+				});
+			}
 
 			return created;
 		}),

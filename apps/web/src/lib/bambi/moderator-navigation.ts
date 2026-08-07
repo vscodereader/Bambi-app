@@ -20,6 +20,7 @@ export const MODERATOR_NAV_ITEMS: NavEntry[] = [
 			{ href: "/moderator/reports", label: "신고" },
 			{ href: "/moderator/employers", label: "업소 승인" },
 			{ href: "/moderator/team-invites", label: "팀 합류 승인" },
+			{ href: "/moderator/attendance" as Route, label: "출석 관리" },
 		],
 	},
 	{
@@ -37,7 +38,7 @@ export const MODERATOR_NAV_ITEMS: NavEntry[] = [
 			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
 			{ href: "/moderator/reviews", label: "후기 관리" },
 			{ href: "/moderator/crawler" as Route, label: "크롤링" },
-			{ href: "/moderator/popups" as Route, label: "??" },
+			{ href: "/moderator/popups" as Route, label: "팝업" },
 		],
 	},
 	{ href: "/moderator/site-settings" as Route, label: "사이트 정보" },
