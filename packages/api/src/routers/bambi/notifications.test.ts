@@ -313,4 +313,38 @@ describe("알림 읽기 API", () => {
 			expect(row.readByUserId).toBe(advisorId);
 		}
 	});
+
+	it("clearAll은 볼 수 있는 행을 지우고 목록을 비운다", async () => {
+		// 공유 행 삭제까지 확인하려면 운영자 계정이 필요한데, 그러면 dev DB의 admin 공유
+		// 알림이 통째로 지워진다 — 개인 행만 가진 구직자로 계약(삭제·카운트 0)만 확인한다.
+		const clearingSeekerId = await seedUser("job_seeker");
+		await db.insert(bambiNotification).values([
+			{
+				actorUserId: actorId,
+				metadata: { action: "proposed" },
+				recipientUserId: clearingSeekerId,
+				targetId: randomUUID(),
+				targetType: "interview_schedule",
+			},
+			{
+				actorUserId: actorId,
+				metadata: {},
+				readAt: new Date(),
+				recipientUserId: clearingSeekerId,
+				targetId: randomUUID(),
+				targetType: "report",
+			},
+		]);
+
+		const context = createContextForUser(clearingSeekerId);
+		const result = await createProcedureClient(notificationsRouter.clearAll, {
+			context,
+		})({});
+		const list = await createProcedureClient(notificationsRouter.list, {
+			context,
+		})({ limit: 20 });
+
+		expect(result.unreadCount).toBe(0);
+		expect(list.items).toHaveLength(0);
+	});
 });

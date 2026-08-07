@@ -169,4 +169,15 @@ export const notificationsRouter = {
 
 		return { unreadCount: await countUnread(profile) };
 	}),
+
+	// 알림 비우기. 목록에 보이는 행(개인 수신 + 공유 역할 수신)을 실제로 지운다 —
+	// 공유 행은 읽음과 같은 의미론이라 한 명이 비우면 같은 역할 전원에게서 사라진다.
+	// 채팅류는 애초에 이 필터 밖이라 헤더 채팅 핀은 영향받지 않는다.
+	clearAll: protectedProcedure.handler(async ({ context }) => {
+		const profile = await requireActiveBambiProfile(context.session);
+
+		await db.delete(bambiNotification).where(buildVisibleFilter(profile));
+
+		return { unreadCount: await countUnread(profile) };
+	}),
 };

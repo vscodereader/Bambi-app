@@ -914,6 +914,19 @@ const assertReportTargetExists = async (
 type ModerationTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type InvitationRow = typeof invitation.$inferSelect;
 
+/**
+ * 검수 결과 알림 문구가 갈리는 재료. 유료 공고는 승인돼도 입금 확인 전까지 게시되지 않고,
+ * hidden→published는 신규 승인이 아니라 재공개다 — 셋이 전부 "승인돼 게시됐어요"로 읽히면
+ * 안 된다. 무료 공고는 저장 시점에 paid로 두므로 unpaid가 곧 입금 대기다.
+ */
+const buildJobPostStatusNotificationMetadata = ({
+	paymentStatus,
+	previousStatus,
+}: {
+	paymentStatus: string;
+	previousStatus: string;
+}) => ({ paymentPending: paymentStatus !== "paid", previousStatus });
+
 /** 일괄 처리에서 실제로 성공한 대상만 남긴다 — 실패 건에 "처리됨" 알림이 나가면 안 된다. */
 const succeededBulkTargetIds = (
 	targetIds: readonly string[],
@@ -1269,7 +1282,8 @@ export const moderationRouter = {
 		}),
 
 	// 운영자가 임의 공고 본문/급여/노출/미디어를 직접 수정한다. jobs.update와 동일한 갱신·
-	// 노출확정·미디어 교체 로직(applyJobPostUpdate)을 재사용하되 조직 멤버십 검사만 우회한다.
+	// 노출확정·미디어 교체 로직(applyJobPostUpdate)을 재사용하되 조직 멤버십 검사를 우회하고,
+	// 검수·결제를 다시 거치지 않는 "즉시 반영"으로 돈다(moderatorEdit).
 	adminUpdateJobPost: adminProcedure
 		.input(z.object({ jobPostId: z.string().uuid(), data: jobPostInput }))
 		.handler(async ({ context, input }) => {
@@ -1289,9 +1303,9 @@ export const moderationRouter = {
 				actorUserId: admin.userId,
 				data: input.data,
 				existing,
-				// 운영자 편집은 검수 상태를 바꾸지 않는다. 게시 중 공고를 손봤다고 노출에서
-				// 내려가거나, 승인 직전 오타 수정이 자기 큐로 되돌아오면 안 된다.
-				keepStatus: true,
+				// 운영자 편집은 검수 상태도 결제 상태도 바꾸지 않는다. 게시 중 공고를 손봤다고
+				// 노출에서 내려가거나, 승인 직전 오타 수정이 자기 큐로 되돌아오면 안 된다.
+				moderatorEdit: true,
 			});
 
 			await db.insert(adminModerationAction).values({
@@ -1329,7 +1343,12 @@ export const moderationRouter = {
 			// 삭제되면 소유자를 되찾을 수 없다 — 공통 훅(조회형) 대신 여기서 미리 확보해
 			// 커밋 뒤 명시 수신자로 보낸다(롤백된 삭제의 유령 알림 방지).
 			const [existing] = await db
-				.select({ id: jobPost.id, ownerUserId: jobPost.createdByUserId })
+				.select({
+					id: jobPost.id,
+					ownerUserId: jobPost.createdByUserId,
+					// 삭제 알림은 "어느 공고였는지"가 전부다 — 지운 뒤에는 되찾을 수 없다.
+					title: jobPost.title,
+				})
 				.from(jobPost)
 				.where(eq(jobPost.id, input.jobPostId))
 				.limit(1);
@@ -1358,7 +1377,11 @@ export const moderationRouter = {
 
 			await notifyBambiNotification({
 				actorUserId: admin.userId,
-				metadata: { action: "hard_delete", reason: input.reason },
+				metadata: {
+					action: "hard_delete",
+					jobPostTitle: existing.title,
+					reason: input.reason,
+				},
 				recipientUserId: recipientUserId ?? null,
 				targetId: input.jobPostId,
 				targetType: "job_post",
@@ -1706,7 +1729,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			const updated = await db.transaction(async (tx) => {
+			const { previousStatus, updated } = await db.transaction(async (tx) => {
 				const [existing] = await tx
 					.select()
 					.from(jobPost)
@@ -1741,12 +1764,16 @@ export const moderationRouter = {
 					reason: input.reason,
 				});
 
-				return updated;
+				return { previousStatus: existing.status, updated };
 			});
 
 			await notifyModerationAction({
 				action: `set_status:${input.status}`,
 				actorUserId: admin.userId,
+				metadata: buildJobPostStatusNotificationMetadata({
+					paymentStatus: updated.paymentStatus,
+					previousStatus,
+				}),
 				reason: input.reason,
 				targetId: input.jobPostId,
 				targetType: "job_post",
@@ -1892,7 +1919,8 @@ export const moderationRouter = {
 			await notifyModerationAction({
 				action: `adjust_job_post_exposure:${input.days > 0 ? "+" : ""}${input.days}`,
 				actorUserId: admin.userId,
-				metadata: { days: input.days },
+				// 공고를 여러 개 굴리는 업주는 제목이 없으면 어느 공고가 조정됐는지 알 수 없다.
+				metadata: { days: input.days, jobPostTitle: updated.title },
 				reason: input.reason,
 				targetId: input.jobPostId,
 				targetType: "job_post",
@@ -1947,6 +1975,13 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
+			// 단건 경로와 같은 문구 분기를 쓰려면 전이 전 상태·결제 상태가 필요하다 —
+			// 알림 루프는 트랜잭션 밖이라 처리하면서 모아 둔다(affectedOrganizationIds와 같은 패턴).
+			const notificationMetadataByJobPostId = new Map<
+				string,
+				ReturnType<typeof buildJobPostStatusNotificationMetadata>
+			>();
+
 			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
@@ -1962,6 +1997,14 @@ export const moderationRouter = {
 									message: "Job post was not found.",
 								});
 							}
+
+							notificationMetadataByJobPostId.set(
+								jobPostId,
+								buildJobPostStatusNotificationMetadata({
+									paymentStatus: existing.paymentStatus,
+									previousStatus: existing.status,
+								})
+							);
 
 							await tx
 								.update(jobPost)
@@ -1995,7 +2038,10 @@ export const moderationRouter = {
 				await notifyModerationAction({
 					action: `set_status:${input.status}`,
 					actorUserId: admin.userId,
-					metadata: { bulk: true },
+					metadata: {
+						bulk: true,
+						...notificationMetadataByJobPostId.get(jobPostId),
+					},
 					reason: input.reason,
 					targetId: jobPostId,
 					targetType: "job_post",
@@ -2672,7 +2718,7 @@ export const moderationRouter = {
 			const isRejected = input.status === "rejected";
 
 			// 커밋 뒤에 알린다(롤백된 처리의 유령 알림 방지). 반려는 초대를 낸 사람이,
-			// 승인은 합류한 본인이 알아야 한다 — 초대자는 조직 설정 화면에서 바로 본다.
+			// 승인은 합류한 본인이 알아야 한다.
 			await notifyBambiNotification({
 				actorUserId: admin.userId,
 				metadata: isRejected
@@ -2687,6 +2733,32 @@ export const moderationRouter = {
 				targetId: input.invitationId,
 				targetType: "team_invitation",
 			});
+
+			// 승인은 초대를 낸 쪽에도 알린다 — 운영자 승인이 언제 떨어지는지 알 방법이
+			// 팀 관리 화면을 다시 여는 것밖에 없었다. 초대자 본인이 합류자면 생략된다.
+			if (!isRejected && updated?.acceptedUserId) {
+				const [joined] = await db
+					.select({ displayName: user.name })
+					.from(user)
+					.where(eq(user.id, updated.acceptedUserId))
+					.limit(1);
+				const [recipientUserId] = resolveNotificationRecipients(
+					[updated.inviterId],
+					updated.acceptedUserId
+				);
+
+				await notifyBambiNotification({
+					actorUserId: admin.userId,
+					metadata: {
+						action: "joined",
+						joinedDisplayName: joined?.displayName ?? null,
+						organizationId: updated.organizationId,
+					},
+					recipientUserId: recipientUserId ?? null,
+					targetId: input.invitationId,
+					targetType: "team_invitation",
+				});
+			}
 
 			return updated;
 		}),

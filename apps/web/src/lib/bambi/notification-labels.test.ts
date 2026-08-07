@@ -48,12 +48,15 @@ describe("notificationTitle", () => {
 		).toBe("공고가 반려됐어요");
 	});
 
-	it("업주가 받는 새 후기 등록은 후기 조치 문구와 갈린다", () => {
+	it("업주가 받는 새 후기 등록은 공고명을 달고 후기 조치 문구와 갈린다", () => {
 		expect(
 			notificationTitle(
-				view({ metadata: { action: "created" }, targetType: "review" })
+				view({
+					metadata: { action: "created", jobPostTitle: "홀서빙 급구" },
+					targetType: "review",
+				})
 			)
-		).toBe("내 업소에 새 후기가 등록됐어요");
+		).toBe("｢홀서빙 급구｣ 공고에 후기가 달렸어요");
 		expect(
 			notificationTitle(
 				view({
@@ -62,6 +65,144 @@ describe("notificationTitle", () => {
 				})
 			)
 		).toBe("내 후기가 숨김 처리됐어요");
+	});
+
+	it("공고 승인은 결제 대기·재공개·즉시 게시로 갈린다", () => {
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "set_status:published", paymentPending: true },
+				})
+			)
+		).toBe("공고가 승인됐어요. 입금 확인 후 게시됩니다");
+		expect(
+			notificationTitle(
+				view({
+					metadata: {
+						action: "set_status:published",
+						paymentPending: false,
+						previousStatus: "hidden",
+					},
+				})
+			)
+		).toBe("공고가 재공개됐어요");
+		expect(
+			notificationTitle(
+				view({
+					metadata: {
+						action: "set_status:published",
+						paymentPending: false,
+						previousStatus: "pending_review",
+					},
+				})
+			)
+		).toBe("공고가 승인돼 게시됐어요");
+	});
+
+	it("노출 조정은 공고명과 증감 일수를 문구에 담는다", () => {
+		expect(
+			notificationTitle(
+				view({
+					metadata: {
+						action: "adjust_job_post_exposure:+7",
+						days: 7,
+						jobPostTitle: "주말 홀 스태프",
+					},
+				})
+			)
+		).toBe("｢주말 홀 스태프｣ 공고의 노출 기간이 7일 연장되었습니다");
+		expect(
+			notificationTitle(
+				view({
+					metadata: {
+						action: "adjust_job_post_exposure:-3",
+						days: -3,
+						jobPostTitle: "주말 홀 스태프",
+					},
+				})
+			)
+		).toBe("｢주말 홀 스태프｣ 공고의 노출 기간이 3일 단축되었습니다");
+	});
+
+	it("공고 삭제는 어느 공고였는지 제목으로 남긴다", () => {
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "hard_delete", jobPostTitle: "야간 마감 알바" },
+				})
+			)
+		).toBe("｢야간 마감 알바｣ 공고가 삭제됐어요");
+	});
+
+	it("권한 변경은 업소명과 한글 역할 라벨로 조합한다", () => {
+		expect(
+			notificationTitle(
+				view({
+					metadata: {
+						action: "role_changed",
+						orgName: "밤비라운지",
+						role: "manager",
+					},
+					targetType: "organization_member",
+				})
+			)
+		).toBe("밤비라운지에서 권한이 매니저(으)로 변경되었습니다");
+	});
+
+	it("모르는 역할이어도 enum 원값을 노출하지 않는다", () => {
+		expect(
+			notificationTitle(
+				view({
+					metadata: {
+						action: "role_changed",
+						orgName: "밤비라운지",
+						role: "brand_new_role",
+					},
+					targetType: "organization_member",
+				})
+			)
+		).toBe("밤비라운지에서 권한이 구성원(으)로 변경되었습니다");
+	});
+
+	it("초대한 쪽은 합류자 닉네임이 담긴 합류 알림을 받는다", () => {
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "joined", joinedDisplayName: "김밤비" },
+					targetType: "team_invitation",
+				})
+			)
+		).toBe("김밤비님이 팀에 합류했어요");
+	});
+
+	it("metadata가 없는 구버전 행은 정적 문구로 폴백한다", () => {
+		// 서버가 공고명·업소명을 싣기 전에 쌓인 알림도 그대로 남아 있다.
+		expect(
+			notificationTitle(view({ metadata: { action: "set_status:published" } }))
+		).toBe("공고가 승인돼 게시됐어요");
+		expect(
+			notificationTitle(view({ metadata: { action: "hard_delete" } }))
+		).toBe("내 공고가 삭제됐어요");
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "adjust_job_post_exposure:+7" },
+				})
+			)
+		).toBe("공고 노출 기간이 조정됐어요");
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "role_changed" },
+					targetType: "organization_member",
+				})
+			)
+		).toBe("조직 내 권한이 변경됐어요");
+		expect(
+			notificationTitle(
+				view({ metadata: { action: "created" }, targetType: "review" })
+			)
+		).toBe("내 업소에 새 후기가 등록됐어요");
 	});
 
 	it("아는 targetType이면 모르는 action이어도 그 축의 폴백 문구를 쓴다", () => {
@@ -155,10 +296,45 @@ describe("notificationBody", () => {
 describe("notificationHref", () => {
 	it("채팅 축 알림은 그 방으로 보낸다", () => {
 		expect(
+			notificationHref(view({ chatRoomId: "room-1", targetType: "chat_room" }))
+		).toBe("/seeker/chats/room-1");
+	});
+
+	it("면접 알림은 방이 살아 있어도 예정된 면접 화면으로 보낸다", () => {
+		// 채팅방이 삭제되면 착지할 곳이 없어진다 — 구인자·구직자 공용 화면으로 통일한다.
+		expect(
 			notificationHref(
 				view({ chatRoomId: "room-1", targetType: "interview_schedule" })
 			)
-		).toBe("/seeker/chats/room-1");
+		).toBe("/seeker/me/interviews");
+	});
+
+	it("권한 변경 알림은 이동할 화면이 없다", () => {
+		expect(
+			notificationHref(
+				view({
+					metadata: { action: "role_changed" },
+					targetType: "organization_member",
+				})
+			)
+		).toBeNull();
+		// 같은 targetType이라도 제외·소유권 이전은 팀 관리로 그대로 보낸다.
+		expect(
+			notificationHref(
+				view({
+					metadata: { action: "removed" },
+					targetType: "organization_member",
+				})
+			)
+		).toBe("/employer/settings/teams");
+		expect(
+			notificationHref(
+				view({
+					metadata: { action: "ownership_transferred" },
+					targetType: "organization_member",
+				})
+			)
+		).toBe("/employer/settings/teams");
 	});
 
 	it("방 정보가 없으면 채팅 목록으로 폴백한다", () => {

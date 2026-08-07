@@ -672,14 +672,17 @@ export const applyJobPostUpdate = async ({
 	actorUserId,
 	data,
 	existing,
-	// 운영자 편집(moderation.adminUpdateJobPost) 전용. 운영자가 승인 직전 오타를 고칠 때마다
-	// 자기 큐로 되돌아오거나, 게시 중인 공고가 노출에서 내려가면 안 된다.
-	keepStatus = false,
+	// 운영자 편집(moderation.adminUpdateJobPost) 전용 "즉시 반영" 모드. 구인자 수정은 재검수·
+	// (상품·기간을 바꿨으면) 재결제를 거치지만, 운영자 수정은 검수 상태·결제 상태·노출 종료일을
+	// 수정 전 그대로 두고 내용만 갈아끼운다. 되돌아갈 곳이 없기 때문이다 — 운영자 수정 건은
+	// 검수 큐(pending_review만 조회)에도, 결제 관리(유료 공고만 조회)에도 다시 뜨지 않아
+	// 한 번 미결제로 떨어지면 게시 상태로 되돌릴 창구가 사라진다.
+	moderatorEdit = false,
 }: {
 	actorUserId: string;
 	data: JobPostInput;
 	existing: typeof jobPost.$inferSelect;
-	keepStatus?: boolean;
+	moderatorEdit?: boolean;
 }) => {
 	// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다.
 	const {
@@ -728,9 +731,12 @@ export const applyJobPostUpdate = async ({
 	const preparedContent = await prepareJobPostContent(data, finalLayout);
 	// 노출 상품·기간이 바뀌면 재결제가 필요하다. 유료 전환/변경은 미결제로 되돌리고,
 	// 무료 전환은 결제 게이트 없이 즉시 게시(paid)로 둔다(생성 시 무료 공고와 동일 규칙).
+	// 운영자 편집만 예외다 — 결제 상태와 광고 종료일은 결제 관리·광고 기간 조정 화면의
+	// 몫이라, 여기서 되돌리면 게시 중이던 유료 공고가 조용히 노출에서 내려간다.
 	const exposureChanged =
-		exposure.adProductId !== existing.adProductId ||
-		exposure.exposureDurationDays !== existing.exposureDurationDays;
+		!moderatorEdit &&
+		(exposure.adProductId !== existing.adProductId ||
+			exposure.exposureDurationDays !== existing.exposureDurationDays);
 	const changedPaymentStatus = exposure.adProductId
 		? ("unpaid" as const)
 		: ("paid" as const);
@@ -753,7 +759,7 @@ export const applyJobPostUpdate = async ({
 			: await getJobPostMediaUsages(existing.id),
 		finalLayout
 	);
-	const status: JobPostStatus = keepStatus
+	const status: JobPostStatus = moderatorEdit
 		? (existing.status as JobPostStatus)
 		: getUpdatedJobPostStatus({
 				currentStatus: existing.status as JobPostStatus,

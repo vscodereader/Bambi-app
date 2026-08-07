@@ -405,7 +405,7 @@ export default function ModeratorEditJobPage({
 
 	return (
 		<PageShell
-			description="운영자 권한으로 이 공고의 본문·조건·기존 이미지를 직접 수정합니다. 소속 조직·팀은 유지됩니다."
+			description="운영자 권한으로 이 공고의 본문·조건·기존 이미지를 직접 수정합니다. 저장하면 검수를 다시 거치지 않고 바로 반영되며, 소속 조직·팀과 검수 상태·결제 상태·광고 종료일은 그대로 유지됩니다."
 			title="공고 수정 (운영자)"
 		>
 			<form

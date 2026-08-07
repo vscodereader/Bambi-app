@@ -3,6 +3,7 @@
 // 서버가 먼저 새 값을 내려도 원값이 화면에 새지 않는다(report-labels.ts와 같은 관례).
 
 import { COMMUNITY_BOARDS, communityPostPath } from "./community";
+import { organizationRoleLabel } from "./team-labels";
 
 export const NOTIFICATIONS_HREF = "/seeker/notifications";
 
@@ -21,6 +22,14 @@ const readString = (
 ): null | string => {
 	const value = metadata?.[key];
 	return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+const readNumber = (
+	metadata: Record<string, unknown> | null,
+	key: string
+): null | number => {
+	const value = metadata?.[key];
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
 };
 
 const action = (item: BambiNotificationView): string =>
@@ -49,7 +58,7 @@ const TITLE_BY_TARGET_AND_ACTION: Record<string, string> = {
 	"job_post:adjust_job_post_exposure": "공고 노출 기간이 조정됐어요",
 	"job_post:edit_job_post": "운영자가 내 공고를 수정했어요",
 	"job_post:hard_delete": "내 공고가 삭제됐어요",
-	"job_post:set_payment:paid": "공고 결제가 승인돼 노출이 시작됐어요",
+	"job_post:set_payment:paid": "입금이 확인돼 공고가 게시됐어요",
 	"job_post:set_status:hidden": "공고가 숨김 처리됐어요",
 	"job_post:set_status:on_hold": "공고 검수가 보류됐어요",
 	"job_post:set_status:published": "공고가 승인돼 게시됐어요",
@@ -64,6 +73,8 @@ const TITLE_BY_TARGET_AND_ACTION: Record<string, string> = {
 	"review:set_status:published": "내 후기가 게시됐어요",
 	"support_inquiry:answered": "문의에 답변이 도착했어요",
 	"team_invitation:accepted": "팀 합류가 승인됐어요",
+	// 초대를 낸 조직 쪽이 받는 합류 완료 알림(합류자 본인의 accepted와 짝이다).
+	"team_invitation:joined": "초대한 구성원이 팀에 합류했어요",
 	"team_invitation:rejected": "팀 초대가 반려됐어요",
 };
 
@@ -95,6 +106,58 @@ const TITLE_BY_TARGET: Record<string, string> = {
 	team_invitation: "팀 초대에 변동이 있어요",
 };
 
+/**
+ * 공고명·업소명처럼 metadata가 있어야 완성되는 문구. 서버가 그 값을 싣기 전에 쌓인
+ * 구버전 행도 그대로 남아 있으므로, 재료가 하나라도 없으면 null을 돌려 아래 정적 맵
+ * 문구로 폴백한다(「」만 남은 빈 제목이 나오지 않게).
+ */
+const dynamicTitle = (
+	item: BambiNotificationView,
+	key: string
+): null | string => {
+	const jobPostTitle = readString(item.metadata, "jobPostTitle");
+
+	switch (key) {
+		// 승인은 셋으로 갈린다: 숨김 해제(재공개) / 유료 공고의 입금 대기 / 무료 즉시 게시.
+		// 유료 공고는 승인만으로 노출되지 않아 "게시됐어요"가 사실과 다르다.
+		case "job_post:set_status:published": {
+			if (readString(item.metadata, "previousStatus") === "hidden") {
+				return "공고가 재공개됐어요";
+			}
+			return item.metadata?.paymentPending === true
+				? "공고가 승인됐어요. 입금 확인 후 게시됩니다"
+				: null;
+		}
+		case "job_post:adjust_job_post_exposure": {
+			const days = readNumber(item.metadata, "days");
+			if (!(jobPostTitle && days)) {
+				return null;
+			}
+			const direction = days > 0 ? "연장" : "단축";
+			return `｢${jobPostTitle}｣ 공고의 노출 기간이 ${Math.abs(days)}일 ${direction}되었습니다`;
+		}
+		case "job_post:hard_delete":
+			return jobPostTitle ? `｢${jobPostTitle}｣ 공고가 삭제됐어요` : null;
+		case "review:created":
+			return jobPostTitle ? `｢${jobPostTitle}｣ 공고에 후기가 달렸어요` : null;
+		case "organization_member:role_changed": {
+			const orgName = readString(item.metadata, "orgName");
+			const role = readString(item.metadata, "role");
+			return orgName && role
+				? `${orgName}에서 권한이 ${organizationRoleLabel(role)}(으)로 변경되었습니다`
+				: null;
+		}
+		case "team_invitation:joined": {
+			const joinedDisplayName = readString(item.metadata, "joinedDisplayName");
+			return joinedDisplayName
+				? `${joinedDisplayName}님이 팀에 합류했어요`
+				: null;
+		}
+		default:
+			return null;
+	}
+};
+
 export function notificationTitle(item: BambiNotificationView): string {
 	if (isShared(item)) {
 		// 문의 재질문(replied)만 공유 큐에서 문구가 갈린다.
@@ -112,8 +175,11 @@ export function notificationTitle(item: BambiNotificationView): string {
 		? "adjust_job_post_exposure"
 		: rawAction;
 
+	const key = `${item.targetType}:${normalizedAction}`;
+
 	return (
-		TITLE_BY_TARGET_AND_ACTION[`${item.targetType}:${normalizedAction}`] ??
+		dynamicTitle(item, key) ??
+		TITLE_BY_TARGET_AND_ACTION[key] ??
 		TITLE_BY_TARGET[item.targetType] ??
 		"새 알림이 도착했어요"
 	);
@@ -180,7 +246,8 @@ const jobPostHref = (item: BambiNotificationView): string => {
 	return `/employer/jobs/${item.targetId}/edit`;
 };
 
-export function notificationHref(item: BambiNotificationView): string {
+/** null이면 착지할 화면이 없는 알림이다(읽음 처리만 하고 이동하지 않는다). */
+export function notificationHref(item: BambiNotificationView): null | string {
 	if (isShared(item)) {
 		// 법률자문 공유는 운영자 콘솔이 아니라 법률 자문 게시판 글로 보낸다.
 		if (item.recipientRole === "legal_advisor") {
@@ -193,10 +260,13 @@ export function notificationHref(item: BambiNotificationView): string {
 		case "chat_message":
 		case "chat_room":
 		case "contact_reveal":
-		case "interview_schedule":
 			return item.chatRoomId
 				? `/seeker/chats/${item.chatRoomId}`
 				: "/seeker/chats";
+		// 면접은 채팅방이 아니라 예정된 면접 화면으로 보낸다 — 방이 삭제되면 착지할 곳이
+		// 없어지고, 구인자·구직자가 같은 화면에서 일정을 본다.
+		case "interview_schedule":
+			return "/seeker/me/interviews";
 		case "community_comment":
 		case "community_post":
 			return communityHref(item);
@@ -204,7 +274,11 @@ export function notificationHref(item: BambiNotificationView): string {
 			return "/employer/settings";
 		case "job_post":
 			return jobPostHref(item);
+		// 권한 변경은 당사자가 볼 화면이 없다(팀 관리는 소유자 전용) — 이동시키지 않는다.
 		case "organization_member":
+			return action(item) === "role_changed"
+				? null
+				: "/employer/settings/teams";
 		case "team_invitation":
 			return "/employer/settings/teams";
 		case "report":
