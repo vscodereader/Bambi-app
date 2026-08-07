@@ -8,14 +8,22 @@ import {
 	MessageContent,
 	MessageGroup,
 } from "@bambi-app/ui/components/message";
+import {
+	Sheet,
+	SheetContent,
+	SheetTitle,
+} from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+	Fragment,
+	type ReactNode,
 	useCallback,
 	useEffect,
+	useId,
 	useLayoutEffect,
 	useMemo,
 	useRef,
@@ -23,6 +31,10 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { getChatBlockMessage } from "@/lib/bambi/chat-block";
+import {
+	annotateChatMessages,
+	formatChatTimeLabel,
+} from "@/lib/bambi/chat-message-grouping";
 import { mergeChatMessagesById } from "@/lib/bambi/chat-room-messages";
 import {
 	detectImageSignature,
@@ -53,13 +65,16 @@ import {
 	ChatAttachmentPreview,
 	type ChatAttachmentPreviewItem,
 } from "../chat-attachment-preview";
-import { Badge, Button, Card } from "../ds";
+import { Avatar, Badge, Button, Card } from "../ds";
 import { FieldLabel } from "../form-message";
 import {
+	ArrowNarrowLeft,
 	ClockIcon,
 	DollarCircle,
+	MenuIcon,
 	Message as MessageIcon,
 	PaperclipIcon,
+	PlusIcon,
 	ShieldIcon,
 	XIcon,
 } from "../icons";
@@ -278,44 +293,100 @@ interface ChatMessageItem {
 }
 
 // 일반 말풍선. 내(coral-500)/상대(secondary)로 좌우 정렬. shadcn Message 래핑.
+// 모바일(<md)은 카카오톡식이다 — 상대 아바타·이름은 그룹 첫 메시지에만 붙고(이어지는
+// 메시지는 아바타 폭만큼 들여쓴다), 시간은 그룹 마지막 메시지의 말풍선 밖에 붙인다.
+// 데스크톱은 현행 그대로라 모바일 전용 조각은 md:hidden, 말풍선 안 시간은 max-md:hidden이다.
 function ChatMessageBubble({
+	counterpartName,
 	currentUserId,
+	isGroupEnd,
+	isGroupStart,
 	message,
 }: {
+	counterpartName: null | string;
 	currentUserId: string;
+	isGroupEnd: boolean;
+	isGroupStart: boolean;
 	message: ChatMessageItem;
 }) {
 	const mine = message.senderUserId === currentUserId;
 	const attachments = message.attachments ?? [];
+	const senderName = counterpartName ?? "상대방";
 
 	return (
 		<Message align={mine ? "end" : "start"}>
-			<MessageContent
+			{mine ? null : (
+				<span className="flex-none self-start md:hidden">
+					{isGroupStart ? (
+						<Avatar name={senderName} size="xs" />
+					) : (
+						<span className="block size-7" />
+					)}
+				</span>
+			)}
+			<div
 				className={cn(
-					"w-fit max-w-[78%] rounded-lg px-4 py-2",
-					mine ? "bg-coral-500 text-white" : "bg-secondary text-foreground"
+					"flex min-w-0 max-w-[78%] flex-col gap-1",
+					mine && "items-end"
 				)}
 			>
-				{attachments.length === 0 ? (
-					<p className="m-0 whitespace-pre-wrap text-sm leading-relaxed">
-						{message.body}
-					</p>
-				) : (
-					<div className="grid gap-2">
-						{attachments.map((attachment) => (
-							<ChatAttachmentPreview
-								attachment={attachment}
-								key={attachment.id}
-								mine={mine}
-							/>
-						))}
-					</div>
+				{mine || !isGroupStart ? null : (
+					<span className="truncate font-semibold text-muted-foreground text-xs md:hidden">
+						{senderName}
+					</span>
 				)}
-				<p className="mt-1 mb-0 text-[11px] opacity-70">
-					{formatDateTime(message.createdAt)}
-				</p>
-			</MessageContent>
+				<div
+					className={cn(
+						"flex min-w-0 items-end gap-1.5",
+						mine && "flex-row-reverse"
+					)}
+				>
+					<MessageContent
+						className={cn(
+							"w-fit max-w-full rounded-lg px-4 py-2",
+							mine
+								? "bg-coral-500 text-white"
+								: "bg-secondary text-foreground max-md:bg-background"
+						)}
+					>
+						{attachments.length === 0 ? (
+							<p className="m-0 whitespace-pre-wrap text-sm leading-relaxed">
+								{message.body}
+							</p>
+						) : (
+							<div className="grid gap-2">
+								{attachments.map((attachment) => (
+									<ChatAttachmentPreview
+										attachment={attachment}
+										key={attachment.id}
+										mine={mine}
+									/>
+								))}
+							</div>
+						)}
+						<p className="mt-1 mb-0 text-[11px] opacity-70 max-md:hidden">
+							{formatDateTime(message.createdAt)}
+						</p>
+					</MessageContent>
+					{isGroupEnd ? (
+						<span className="flex-none text-[11px] text-muted-foreground md:hidden">
+							{formatChatTimeLabel(message.createdAt)}
+						</span>
+					) : null}
+				</div>
+			</div>
 		</Message>
+	);
+}
+
+// 날짜가 바뀌는 지점의 가운데 pill. 데스크톱 말풍선은 안에 날짜까지 찍으므로 모바일에만 둔다.
+function ChatDateChip({ label }: { label: string }) {
+	return (
+		<div className="flex justify-center py-1 md:hidden">
+			<span className="rounded-full bg-ink-900/10 px-3 py-1 font-semibold text-[11px] text-ink-800">
+				{label}
+			</span>
+		</div>
 	);
 }
 
@@ -429,23 +500,29 @@ function ChatMessageList({
 					</UiButton>
 				</div>
 			) : null}
-			{messages.map((chatMessage) =>
-				chatMessage.kind === "contact_request" ? (
-					<ContactRequestMessage
-						counterpartName={counterpartName}
-						currentUserId={currentUserId}
-						isResponding={isResponding}
-						key={chatMessage.id}
-						message={chatMessage}
-						onRespond={onRespond}
-						viewerIsEmployer={viewerIsEmployer}
-					/>
-				) : (
-					<ChatMessageBubble
-						currentUserId={currentUserId}
-						key={chatMessage.id}
-						message={chatMessage}
-					/>
+			{annotateChatMessages(messages).map(
+				({ dateLabel, isGroupEnd, isGroupStart, message: chatMessage }) => (
+					<Fragment key={chatMessage.id}>
+						{dateLabel ? <ChatDateChip label={dateLabel} /> : null}
+						{chatMessage.kind === "contact_request" ? (
+							<ContactRequestMessage
+								counterpartName={counterpartName}
+								currentUserId={currentUserId}
+								isResponding={isResponding}
+								message={chatMessage}
+								onRespond={onRespond}
+								viewerIsEmployer={viewerIsEmployer}
+							/>
+						) : (
+							<ChatMessageBubble
+								counterpartName={counterpartName}
+								currentUserId={currentUserId}
+								isGroupEnd={isGroupEnd}
+								isGroupStart={isGroupStart}
+								message={chatMessage}
+							/>
+						)}
+					</Fragment>
 				)
 			)}
 			{typingUserIds.length > 0 ? (
@@ -537,8 +614,14 @@ function ChatComposer({
 	onMessageChange,
 	onSubmit,
 }: ChatComposerProps) {
+	// 전송 가능 판정은 한 벌만 둔다 — 모바일 원형 버튼과 데스크톱 텍스트 버튼이 같이 쓴다.
+	const isSendDisabled =
+		isComposerSubmitting ||
+		attachmentDraft?.status === "error" ||
+		!(message.trim() || attachmentDraft);
+
 	return (
-		<div className="flex-none border-border border-t">
+		<div className="flex-none border-border border-t max-md:pb-[env(safe-area-inset-bottom)]">
 			{attachmentDraft ? (
 				<AttachmentDraftPanel
 					attachmentDraft={attachmentDraft}
@@ -546,10 +629,13 @@ function ChatComposer({
 					onClear={onClearAttachment}
 				/>
 			) : null}
-			<form className="flex items-center gap-2 p-4" onSubmit={onSubmit}>
+			<form
+				className="flex items-center gap-2 p-4 max-md:gap-1.5 max-md:p-2"
+				onSubmit={onSubmit}
+			>
 				<label
 					aria-label="파일 첨부"
-					className="inline-flex size-11 flex-none cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-muted-foreground focus-within:ring-2 focus-within:ring-coral-100 hover:text-foreground"
+					className="inline-flex size-11 flex-none cursor-pointer items-center justify-center rounded-lg border border-border bg-background text-muted-foreground focus-within:ring-2 focus-within:ring-coral-100 hover:text-foreground max-md:size-10 max-md:rounded-full max-md:border-transparent max-md:bg-secondary"
 					title="파일 첨부"
 				>
 					<input
@@ -559,32 +645,44 @@ function ChatComposer({
 						ref={attachmentInputRef}
 						type="file"
 					/>
-					<span className="inline-flex size-5">
+					<span className="inline-flex size-5 max-md:hidden">
 						<PaperclipIcon />
+					</span>
+					<span className="inline-flex size-5 md:hidden">
+						<PlusIcon />
 					</span>
 				</label>
 				<label className="sr-only" htmlFor="chat-message">
 					메시지
 				</label>
 				<input
-					className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100"
+					className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-coral-100 max-md:h-10 max-md:rounded-full max-md:border-transparent max-md:bg-secondary"
 					id="chat-message"
 					onChange={(event) => onMessageChange(event.target.value)}
 					placeholder="메시지를 입력하세요"
 					value={message}
 				/>
 				<Button
-					disabled={
-						isComposerSubmitting ||
-						attachmentDraft?.status === "error" ||
-						!(message.trim() || attachmentDraft)
-					}
+					className="max-md:hidden"
+					disabled={isSendDisabled}
 					rightIcon={<MessageIcon />}
 					size="md"
 					type="submit"
 				>
 					{isAttachmentSubmitting ? "업로드 중" : "전송"}
 				</Button>
+				{/* 모바일은 원형 코럴 아이콘 버튼 하나 — 활성 조건은 데스크톱과 같다. */}
+				<UiButton
+					aria-label={isAttachmentSubmitting ? "업로드 중" : "전송"}
+					className="size-10 flex-none rounded-full bg-coral-500 text-white md:hidden"
+					disabled={isSendDisabled}
+					size="icon-lg"
+					type="submit"
+				>
+					<span className="inline-flex size-5">
+						<MessageIcon />
+					</span>
+				</UiButton>
 			</form>
 		</div>
 	);
@@ -724,45 +822,28 @@ function ChatBlockConfirm({
 	);
 }
 
-// 헤더 아래 "연락처 보호 중" 안내 바 — 신고·차단 진입점을 함께 담는다.
+// 헤더 아래 "연락처 보호 중" 안내 바 — 신고·차단 진입점을 함께 담는다(데스크톱 전용).
 // 채팅 신고는 구직자 전용이라(서버 createReport도 같은 기준으로 막는다) 구인자에게는
 // 차단하기만 남기고 안내 문구도 차단 기준으로 바꾼다. 차단은 양쪽 모두 쓸 수 있다.
-// 확인 단계·신고 창 열림 상태는 이 바 밖에서 쓰이지 않아 여기서 갖고 있는다.
+// 확인 단계는 이 바 밖에서 쓰이지 않아 여기서 갖고 있고, 신고 창은 모바일 서랍과 공유하려고
+// 부모가 들고 있다.
 function ChatSafetyNotice({
-	chatRoomId,
 	isBlocked,
 	isBlockPending,
 	isJobSeeker,
 	onBlock,
+	onReport,
 }: {
-	chatRoomId: string;
 	isBlocked: boolean;
 	isBlockPending: boolean;
 	isJobSeeker: boolean;
 	onBlock: () => void;
+	onReport: () => void;
 }) {
-	const queryClient = useQueryClient();
 	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
-	const [isReportOpen, setIsReportOpen] = useState(false);
-	// 신고한 방은 검토가 끝날 때까지 서버가 감춘다. 창을 닫을 때 방 조회를 다시 돌려
-	// "신고를 검토하고 있는 채팅이에요" 안내와 함께 목록으로 나가게 한다.
-	const handleReportOpenChange = (next: boolean) => {
-		setIsReportOpen(next);
-
-		if (!next) {
-			queryClient
-				.invalidateQueries({
-					// 페이지 크기가 입력에 들어가므로 부분 일치 키를 쓴다.
-					queryKey: orpc.bambi.chats.getById.key({
-						input: { id: chatRoomId },
-					}),
-				})
-				.catch(() => undefined);
-		}
-	};
 
 	return (
-		<div className="flex-none border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700">
+		<div className="hidden flex-none border-coral-100 border-b bg-coral-50 px-4 py-3 text-coral-700 md:block">
 			<div className="flex items-center justify-between gap-3">
 				<div className="flex items-center gap-2 font-extrabold text-sm">
 					<span className="inline-flex size-4">
@@ -772,11 +853,7 @@ function ChatSafetyNotice({
 				</div>
 				<div className="flex items-center gap-2">
 					{isJobSeeker ? (
-						<Button
-							onClick={() => setIsReportOpen(true)}
-							size="sm"
-							variant="secondary"
-						>
+						<Button onClick={onReport} size="sm" variant="secondary">
 							신고
 						</Button>
 					) : null}
@@ -798,15 +875,66 @@ function ChatSafetyNotice({
 				onCancel={() => setIsBlockConfirmOpen(false)}
 				onConfirm={onBlock}
 			/>
-			{isJobSeeker ? (
-				<ReportDialog
-					onOpenChange={handleReportOpenChange}
-					open={isReportOpen}
-					targetId={chatRoomId}
-					targetType="chat_room"
-				/>
-			) : null}
 		</div>
+	);
+}
+
+// 모바일 안전 바 — 한 줄만 남기고 신고·차단은 서랍으로 옮겼다.
+function ChatSafetyBannerMobile() {
+	return (
+		<div className="flex flex-none items-center gap-2 border-coral-100 border-b bg-coral-50 px-4 py-1.5 font-bold text-coral-700 text-xs md:hidden">
+			<span className="inline-flex size-3.5">
+				<ShieldIcon />
+			</span>
+			면접 확정 전 연락처 보호 중
+		</div>
+	);
+}
+
+// 서랍 안 안전 섹션 — 데스크톱 안내 바가 갖던 신고·차단을 그대로 옮겨 담는다(같은 트리거·
+// 확인 단계 컴포넌트를 쓴다). 신고 창 자체는 부모가 한 벌만 띄운다.
+function ChatSafetySheetCard({
+	isBlocked,
+	isBlockPending,
+	isJobSeeker,
+	onBlock,
+	onReport,
+}: {
+	isBlocked: boolean;
+	isBlockPending: boolean;
+	isJobSeeker: boolean;
+	onBlock: () => void;
+	onReport: () => void;
+}) {
+	const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
+
+	return (
+		<Card className="rounded-lg" pad="lg" tone="outline">
+			<h2 className="m-0 font-extrabold text-lg">안전</h2>
+			<p className="mt-2 mb-0 text-muted-foreground text-sm leading-relaxed">
+				{isJobSeeker
+					? "외부 연락처 공유 유도나 조건 불일치는 신고할 수 있어요."
+					: "문제가 되는 상대는 차단할 수 있어요."}
+			</p>
+			<div className="mt-3 flex items-center gap-2">
+				{isJobSeeker ? (
+					<Button onClick={onReport} size="sm" variant="secondary">
+						신고
+					</Button>
+				) : null}
+				<ChatBlockTrigger
+					isBlocked={isBlocked}
+					isConfirmOpen={isBlockConfirmOpen}
+					onOpen={() => setIsBlockConfirmOpen(true)}
+				/>
+			</div>
+			<ChatBlockConfirm
+				isConfirmOpen={isBlockConfirmOpen}
+				isPending={isBlockPending}
+				onCancel={() => setIsBlockConfirmOpen(false)}
+				onConfirm={onBlock}
+			/>
+		</Card>
 	);
 }
 
@@ -826,12 +954,16 @@ function InterviewProposalForm({
 	onScheduledAtChange: (value: string) => void;
 	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
+	// 이 폼은 데스크톱 사이드바와 모바일 서랍 양쪽에 동시에 붙는다 — id를 고정하면
+	// 같은 문서에 중복 id가 생겨 라벨이 엉뚱한 입력을 가리킨다.
+	const fieldId = useId();
+
 	return (
 		<form className="mt-4 grid gap-3" onSubmit={onSubmit}>
 			<div className="flex flex-col gap-2">
-				<FieldLabel htmlFor="interview-at">면접 일시</FieldLabel>
+				<FieldLabel htmlFor={`${fieldId}-interview-at`}>면접 일시</FieldLabel>
 				<Input
-					id="interview-at"
+					id={`${fieldId}-interview-at`}
 					min={new Date().toISOString().slice(0, 16)}
 					onChange={(event) => onScheduledAtChange(event.target.value)}
 					required
@@ -840,11 +972,11 @@ function InterviewProposalForm({
 				/>
 			</div>
 			<div className="flex flex-col gap-2">
-				<FieldLabel htmlFor="location-note" optional>
+				<FieldLabel htmlFor={`${fieldId}-location-note`} optional>
 					장소 메모
 				</FieldLabel>
 				<Input
-					id="location-note"
+					id={`${fieldId}-location-note`}
 					maxLength={300}
 					onChange={(event) => onLocationNoteChange(event.target.value)}
 					placeholder="예: 역삼역 3번 출구 근처"
@@ -910,6 +1042,198 @@ function ContactRevealAction({
 	);
 }
 
+interface ChatRoomSidePanelProps {
+	currentUserId: string;
+	employerVerifiedPhone: null | string;
+	interviewAt: string;
+	isBlocked: boolean;
+	isJobSeeker: boolean;
+	isProposePending: boolean;
+	isRequestingContact: boolean;
+	isStatusPending: boolean;
+	jobPost: null | {
+		id: string;
+		payAmount: null | number;
+		payUnit: string;
+		paymentStatus: string;
+		status: string;
+	};
+	locationNote: string;
+	onInterviewSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+	onLocationNoteChange: (value: string) => void;
+	onRequestContact: () => void;
+	onScheduledAtChange: (value: string) => void;
+	safety: ReactNode;
+	scheduleErrorMessage: null | string;
+	schedules: readonly {
+		id: string;
+		locationNote: null | string;
+		proposedByUserId: string;
+		scheduledAt: Date | string;
+		status: string;
+	}[];
+	setScheduleStatus: (
+		interviewScheduleId: string,
+		status: "canceled" | "confirmed" | "declined"
+	) => void;
+}
+
+// 공고 조건·면접 일정·연락처 카드. 데스크톱 사이드바(aside)와 모바일 서랍(Sheet)이
+// 같은 내용을 쓴다 — 서랍에만 있는 조각(공고 보기·상태 배지·안전 섹션)은 md:hidden으로
+// 데스크톱 사이드바에서만 빠진다(모바일 헤더에서 뺀 것들의 새 자리라 데스크톱은 무변경).
+function ChatRoomSidePanel({
+	currentUserId,
+	employerVerifiedPhone,
+	interviewAt,
+	isBlocked,
+	isJobSeeker,
+	isProposePending,
+	isRequestingContact,
+	isStatusPending,
+	jobPost,
+	locationNote,
+	onInterviewSubmit,
+	onLocationNoteChange,
+	onRequestContact,
+	onScheduledAtChange,
+	safety,
+	scheduleErrorMessage,
+	schedules,
+	setScheduleStatus,
+}: ChatRoomSidePanelProps) {
+	return (
+		<div className="grid gap-4">
+			<Card className="rounded-lg" pad="lg" tone="outline">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="m-0 font-extrabold text-lg">공고 조건</h2>
+					<span className="md:hidden">
+						<ChatRoomStateBadge isBlocked={isBlocked} />
+					</span>
+				</div>
+				<div className="mt-4 grid gap-3 text-sm">
+					<div className="flex items-center gap-2 font-bold">
+						<span className="inline-flex size-4 text-coral-600">
+							<DollarCircle />
+						</span>
+						{formatPay(jobPost?.payAmount, jobPost?.payUnit)}
+					</div>
+					<div className="flex items-center gap-2 font-bold">
+						<span className="inline-flex size-4 text-coral-600">
+							<ClockIcon />
+						</span>
+						{jobPost?.status
+							? (jobStatusLabels[
+									jobPost.status as keyof typeof jobStatusLabels
+								] ?? jobPost.status)
+							: "상태 확인"}
+					</div>
+				</div>
+				<div className="mt-4 flex md:hidden">
+					<ChatJobPostLink jobPost={jobPost} />
+				</div>
+			</Card>
+			<Card className="rounded-lg" pad="lg" tone="outline">
+				<h2 className="m-0 font-extrabold text-lg">면접 일정</h2>
+				{/* 구직자에게는 제안 폼이 없다. */}
+				{isJobSeeker ? null : (
+					<InterviewProposalForm
+						interviewAt={interviewAt}
+						isPending={isProposePending}
+						locationNote={locationNote}
+						onLocationNoteChange={onLocationNoteChange}
+						onScheduledAtChange={onScheduledAtChange}
+						onSubmit={onInterviewSubmit}
+					/>
+				)}
+				{scheduleErrorMessage ? (
+					<p className="mt-3 mb-0 font-semibold text-red-600 text-xs">
+						{scheduleErrorMessage}
+					</p>
+				) : null}
+				{schedules.length === 0 ? (
+					<p className="mt-3 mb-0 text-muted-foreground text-sm leading-relaxed">
+						아직 제안된 면접 일정이 없어요. 채팅에서 가능한 시간을 조율해보세요.
+					</p>
+				) : (
+					<div className="mt-3 grid gap-2">
+						{schedules.map((schedule) => (
+							<div
+								className="rounded-lg border border-border bg-secondary p-3"
+								key={schedule.id}
+							>
+								<div className="flex items-center justify-between gap-2">
+									<strong className="text-sm">
+										{formatDateTime(schedule.scheduledAt)}
+									</strong>
+									<Badge
+										tone={
+											schedule.status === "confirmed" ? "success" : "pending"
+										}
+									>
+										{interviewStatusLabels[
+											schedule.status as keyof typeof interviewStatusLabels
+										] ?? schedule.status}
+									</Badge>
+								</div>
+								{schedule.locationNote ? (
+									<p className="mt-2 mb-0 text-muted-foreground text-xs">
+										{schedule.locationNote}
+									</p>
+								) : null}
+								{schedule.status === "proposed" &&
+								schedule.proposedByUserId !== currentUserId ? (
+									<div className="mt-3 grid grid-cols-2 gap-2">
+										<Button
+											className="shadow-none"
+											disabled={isStatusPending}
+											onClick={() =>
+												setScheduleStatus(schedule.id, "confirmed")
+											}
+											size="md"
+											variant="primary"
+										>
+											확정
+										</Button>
+										<Button
+											disabled={isStatusPending}
+											onClick={() => setScheduleStatus(schedule.id, "declined")}
+											size="md"
+											variant="secondary"
+										>
+											거절
+										</Button>
+									</div>
+								) : null}
+								{/* 확정 카드에는 취소만 남는다 — 완료 처리는 방을 나가도 누를 수
+								    있도록 "내 정보 → 예정된 면접"으로 옮겼다. */}
+								{schedule.status === "confirmed" ? (
+									<Button
+										block
+										className="mt-3 shadow-none"
+										disabled={isStatusPending}
+										onClick={() => setScheduleStatus(schedule.id, "canceled")}
+										size="md"
+										variant="secondary"
+									>
+										취소
+									</Button>
+								) : null}
+							</div>
+						))}
+					</div>
+				)}
+				<ContactRevealAction
+					employerVerifiedPhone={employerVerifiedPhone}
+					isJobSeeker={isJobSeeker}
+					isRequesting={isRequestingContact}
+					onRequest={onRequestContact}
+				/>
+			</Card>
+			<div className="md:hidden">{safety}</div>
+		</div>
+	);
+}
+
 export function SeekerChatRoomResponsive({
 	onBack,
 	roomId,
@@ -925,6 +1249,10 @@ export function SeekerChatRoomResponsive({
 		useState<RealtimeStatus>("connecting");
 	const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
 	const [errorMessage, setErrorMessage] = useState<null | string>(null);
+	// 모바일 서랍(공고·면접·연락처·안전)과 신고 창. 신고 창은 데스크톱 안내 바와 모바일
+	// 서랍이 같이 여는 자리라 여기서 한 벌만 들고 있는다.
+	const [isSheetOpen, setIsSheetOpen] = useState(false);
+	const [isReportOpen, setIsReportOpen] = useState(false);
 	const [scheduleErrorMessage, setScheduleErrorMessage] = useState<
 		null | string
 	>(null);
@@ -944,6 +1272,29 @@ export function SeekerChatRoomResponsive({
 			`${Math.round(visualViewportHeight)}px`
 		);
 	}, [visualViewportHeight]);
+	// 모바일 채팅방은 뷰포트에 고정된 풀스크린이라 문서 스크롤이 있을 이유가 없다. iOS는
+	// 키보드가 열리면 문서를 제멋대로 밀어 올리므로, 잠금과 함께 매 뷰포트 변화에서 0으로
+	// 되돌린다. 데스크톱(md+)에는 아무 일도 하지 않는다.
+	useEffect(() => {
+		if (window.matchMedia("(min-width: 768px)").matches) {
+			return;
+		}
+
+		const { body } = document;
+		const previousOverflow = body.style.overflow;
+		const resetScroll = () => window.scrollTo(0, 0);
+
+		body.style.overflow = "hidden";
+		resetScroll();
+		window.visualViewport?.addEventListener("resize", resetScroll);
+		window.visualViewport?.addEventListener("scroll", resetScroll);
+
+		return () => {
+			body.style.overflow = previousOverflow;
+			window.visualViewport?.removeEventListener("resize", resetScroll);
+			window.visualViewport?.removeEventListener("scroll", resetScroll);
+		};
+	}, []);
 	// 방을 열면 최근 메시지 한 페이지만 받는다. 예전에는 이력 전체가 매 조회마다 다시
 	// 내려왔고, 소켓 이벤트가 뜰 때마다 그 전량 전송이 반복됐다.
 	const roomQuery = useQuery(
@@ -1139,6 +1490,16 @@ export function SeekerChatRoomResponsive({
 	});
 	// 목록이 바뀐 뒤 레이아웃 커밋에서 스크롤 위치를 맞춘다(하단 고정·앵커 복원).
 	useLayoutEffect(() => syncScroll(messages), [messages, syncScroll]);
+	// 키보드가 열리면 패널이 줄면서 메시지 영역도 같이 줄어, 보고 있던 마지막 말풍선이
+	// 접힌 만큼 화면 밖으로 밀린다. 높이를 바꾸는 위 effect 다음에 돌아 다시 바닥에
+	// 붙인다 — 위로 올려 과거를 읽는 중이면 syncScroll이 자리를 지킨다.
+	useEffect(() => {
+		if (visualViewportHeight === null) {
+			return;
+		}
+
+		syncScroll(messages);
+	}, [messages, syncScroll, visualViewportHeight]);
 	// 세션 id는 방 HTTP 조회가 끝나야 온다. 소켓 접속·입장이 그걸 기다리면 그 사이에 온
 	// 상대 메시지가 방 소켓룸으로 오지 않아 핀이 남는다. 값은 ref로만 흘려 넣어 도착이
 	// effect를 다시 돌리지 않게 한다(leave/join 왕복 방지).
@@ -1576,21 +1937,116 @@ export function SeekerChatRoomResponsive({
 			status,
 		});
 	};
+	// 신고한 방은 검토가 끝날 때까지 서버가 감춘다. 창을 닫을 때 방 조회를 다시 돌려
+	// "신고를 검토하고 있는 채팅이에요" 안내와 함께 목록으로 나가게 한다.
+	const handleReportOpenChange = (next: boolean) => {
+		setIsReportOpen(next);
+
+		if (!next) {
+			invalidateRoom().catch(() => undefined);
+		}
+	};
+	const sidePanel = (
+		<ChatRoomSidePanel
+			currentUserId={currentUserId}
+			employerVerifiedPhone={employerVerifiedPhone}
+			interviewAt={interviewAt}
+			isBlocked={room.isBlocked}
+			isJobSeeker={isJobSeeker}
+			isProposePending={proposeInterviewMutation.isPending}
+			isRequestingContact={requestContactRevealMutation.isPending}
+			isStatusPending={setInterviewStatusMutation.isPending}
+			jobPost={jobPost}
+			locationNote={locationNote}
+			onInterviewSubmit={handleInterviewSubmit}
+			onLocationNoteChange={setLocationNote}
+			onRequestContact={() =>
+				requestContactRevealMutation.mutate({ chatRoomId: room.id })
+			}
+			onScheduledAtChange={setInterviewAt}
+			safety={
+				<ChatSafetySheetCard
+					isBlocked={room.isBlocked}
+					isBlockPending={blockMutation.isPending}
+					isJobSeeker={isJobSeeker}
+					onBlock={() =>
+						blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
+					}
+					onReport={() => {
+						setIsSheetOpen(false);
+						setIsReportOpen(true);
+					}}
+				/>
+			}
+			scheduleErrorMessage={scheduleErrorMessage}
+			schedules={schedules}
+			setScheduleStatus={setScheduleStatus}
+		/>
+	);
+
 	return (
 		<div
 			className={cn(
-				"mx-auto grid w-full gap-5 px-5 py-5 md:px-6 md:py-7 lg:grid-cols-[minmax(0,1fr)_320px]",
+				"mx-auto grid w-full gap-5 px-5 py-5 max-md:gap-0 max-md:p-0 md:px-6 md:py-7 lg:grid-cols-[minmax(0,1fr)_320px]",
 				SEEKER_CONTENT_WIDTH
 			)}
 		>
 			{/* 대화가 길어져도 문서가 자라지 않도록 방 패널을 뷰포트에 고정하고, 스크롤은
-			    메시지 영역 하나만 갖는다. 빼는 높이는 셸 헤더(3.5rem·md 4rem)와 이 컨테이너의
-			    위아래 여백(py-5·md:py-7) 합이다. */}
+			    메시지 영역 하나만 갖는다. 모바일은 카카오톡처럼 뷰포트를 통째로 덮어(fixed)
+			    키보드가 열리면 visualViewport 높이만큼 줄어 입력창이 키보드 바로 위에 붙는다.
+			    데스크톱에서 빼는 높이는 셸 헤더(4rem)와 이 컨테이너 위아래 여백(md:py-7) 합이다. */}
 			<main
-				className="flex h-[calc(var(--chat-visual-viewport-height,100dvh)-6rem)] min-w-0 flex-col overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border md:h-[calc(100dvh-7.5rem)] lg:self-start"
+				className="flex min-w-0 flex-col overflow-hidden bg-card max-md:fixed max-md:inset-x-0 max-md:top-0 max-md:z-40 max-md:h-[var(--chat-visual-viewport-height,100dvh)] md:h-[calc(100dvh-7.5rem)] md:rounded-lg md:shadow-sm md:ring-1 md:ring-border lg:self-start"
 				ref={chatPanelRef}
 			>
-				<header className="flex flex-none flex-col gap-2 border-border border-b p-3 sm:p-4">
+				{/* 모바일 헤더 — 뒤로가기 · 상대 이름(+연결 점)·공고 제목 · 서랍 메뉴 한 줄. */}
+				<header className="flex flex-none items-center gap-1 border-border border-b px-2 py-1.5 md:hidden">
+					<UiButton
+						aria-label="채팅 목록으로"
+						className="flex-none"
+						onClick={onBack}
+						size="icon-lg"
+						variant="ghost"
+					>
+						<span className="inline-flex size-5">
+							<ArrowNarrowLeft />
+						</span>
+					</UiButton>
+					<div className="min-w-0 flex-1">
+						<div className="flex min-w-0 items-center gap-1.5">
+							<strong className="truncate font-extrabold text-sm">
+								{counterpartName ?? "공고 채팅"}
+							</strong>
+							<span
+								aria-hidden="true"
+								className={cn(
+									"size-2 flex-none rounded-full",
+									realtimeStatus === "connected"
+										? "bg-green-500"
+										: "bg-muted-foreground/40"
+								)}
+							/>
+							<span className="sr-only">
+								{getRealtimeStatusLabel(realtimeStatus)}
+							</span>
+						</div>
+						<p className="m-0 truncate text-muted-foreground text-xs">
+							{jobPost?.title ?? "공고 채팅"}
+						</p>
+					</div>
+					<UiButton
+						aria-label="채팅 정보 열기"
+						className="flex-none"
+						onClick={() => setIsSheetOpen(true)}
+						size="icon-lg"
+						variant="ghost"
+					>
+						<span className="inline-flex size-5">
+							<MenuIcon />
+						</span>
+					</UiButton>
+				</header>
+				<header className="hidden flex-none flex-col gap-2 border-border border-b p-3 sm:p-4 md:flex">
 					<div className="flex min-w-0 items-center gap-2 sm:gap-3">
 						<button
 							className="shrink-0 cursor-pointer rounded-lg border border-border bg-background px-3 py-2 font-bold text-sm"
@@ -1620,19 +2076,20 @@ export function SeekerChatRoomResponsive({
 						</Badge>
 					</div>
 				</header>
+				<ChatSafetyBannerMobile />
 				<ChatSafetyNotice
-					chatRoomId={room.id}
 					isBlocked={room.isBlocked}
 					isBlockPending={blockMutation.isPending}
 					isJobSeeker={isJobSeeker}
 					onBlock={() =>
 						blockMutation.mutate({ blockedUserId, chatRoomId: room.id })
 					}
+					onReport={() => setIsReportOpen(true)}
 				/>
 				{/* 이 안쪽만 스크롤한다 — min-h-0이 없으면 flex 자식이 내용만큼 늘어나 다시
 				    문서가 자란다. */}
 				<div
-					className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"
+					className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 max-md:bg-secondary"
 					onScroll={handleScroll}
 					ref={scrollRef}
 				>
@@ -1666,137 +2123,24 @@ export function SeekerChatRoomResponsive({
 					</div>
 				) : null}
 			</main>
-			<aside className="min-w-0">
-				<div className="sticky top-20 grid gap-4">
-					<Card className="rounded-lg" pad="lg" tone="outline">
-						<h2 className="m-0 font-extrabold text-lg">공고 조건</h2>
-						<div className="mt-4 grid gap-3 text-sm">
-							<div className="flex items-center gap-2 font-bold">
-								<span className="inline-flex size-4 text-coral-600">
-									<DollarCircle />
-								</span>
-								{formatPay(jobPost?.payAmount, jobPost?.payUnit)}
-							</div>
-							<div className="flex items-center gap-2 font-bold">
-								<span className="inline-flex size-4 text-coral-600">
-									<ClockIcon />
-								</span>
-								{jobPost?.status
-									? (jobStatusLabels[
-											jobPost.status as keyof typeof jobStatusLabels
-										] ?? jobPost.status)
-									: "상태 확인"}
-							</div>
-						</div>
-					</Card>
-					<Card className="rounded-lg" pad="lg" tone="outline">
-						<h2 className="m-0 font-extrabold text-lg">면접 일정</h2>
-						{/* 구직자에게는 제안 폼이 없다. */}
-						{isJobSeeker ? null : (
-							<InterviewProposalForm
-								interviewAt={interviewAt}
-								isPending={proposeInterviewMutation.isPending}
-								locationNote={locationNote}
-								onLocationNoteChange={setLocationNote}
-								onScheduledAtChange={setInterviewAt}
-								onSubmit={handleInterviewSubmit}
-							/>
-						)}
-						{scheduleErrorMessage ? (
-							<p className="mt-3 mb-0 font-semibold text-red-600 text-xs">
-								{scheduleErrorMessage}
-							</p>
-						) : null}
-						{schedules.length === 0 ? (
-							<p className="mt-3 mb-0 text-muted-foreground text-sm leading-relaxed">
-								아직 제안된 면접 일정이 없어요. 채팅에서 가능한 시간을
-								조율해보세요.
-							</p>
-						) : (
-							<div className="mt-3 grid gap-2">
-								{schedules.map((schedule) => (
-									<div
-										className="rounded-lg border border-border bg-secondary p-3"
-										key={schedule.id}
-									>
-										<div className="flex items-center justify-between gap-2">
-											<strong className="text-sm">
-												{formatDateTime(schedule.scheduledAt)}
-											</strong>
-											<Badge
-												tone={
-													schedule.status === "confirmed"
-														? "success"
-														: "pending"
-												}
-											>
-												{interviewStatusLabels[
-													schedule.status as keyof typeof interviewStatusLabels
-												] ?? schedule.status}
-											</Badge>
-										</div>
-										{schedule.locationNote ? (
-											<p className="mt-2 mb-0 text-muted-foreground text-xs">
-												{schedule.locationNote}
-											</p>
-										) : null}
-										{schedule.status === "proposed" &&
-										schedule.proposedByUserId !== currentUserId ? (
-											<div className="mt-3 grid grid-cols-2 gap-2">
-												<Button
-													className="shadow-none"
-													disabled={setInterviewStatusMutation.isPending}
-													onClick={() =>
-														setScheduleStatus(schedule.id, "confirmed")
-													}
-													size="md"
-													variant="primary"
-												>
-													확정
-												</Button>
-												<Button
-													disabled={setInterviewStatusMutation.isPending}
-													onClick={() =>
-														setScheduleStatus(schedule.id, "declined")
-													}
-													size="md"
-													variant="secondary"
-												>
-													거절
-												</Button>
-											</div>
-										) : null}
-										{/* 확정 카드에는 취소만 남는다 — 완료 처리는 방을 나가도 누를 수
-										    있도록 "내 정보 → 예정된 면접"으로 옮겼다. */}
-										{schedule.status === "confirmed" ? (
-											<Button
-												block
-												className="mt-3 shadow-none"
-												disabled={setInterviewStatusMutation.isPending}
-												onClick={() =>
-													setScheduleStatus(schedule.id, "canceled")
-												}
-												size="md"
-												variant="secondary"
-											>
-												취소
-											</Button>
-										) : null}
-									</div>
-								))}
-							</div>
-						)}
-						<ContactRevealAction
-							employerVerifiedPhone={employerVerifiedPhone}
-							isJobSeeker={isJobSeeker}
-							isRequesting={requestContactRevealMutation.isPending}
-							onRequest={() =>
-								requestContactRevealMutation.mutate({ chatRoomId: room.id })
-							}
-						/>
-					</Card>
-				</div>
+			<aside className="min-w-0 max-md:hidden">
+				<div className="sticky top-20">{sidePanel}</div>
 			</aside>
+			{/* 모바일 서랍 — 헤더 메뉴로 열리며 데스크톱 사이드바와 같은 내용을 담는다. */}
+			<Sheet onOpenChange={setIsSheetOpen} open={isSheetOpen}>
+				<SheetContent>
+					<SheetTitle className="mb-4">채팅 정보</SheetTitle>
+					{sidePanel}
+				</SheetContent>
+			</Sheet>
+			{isJobSeeker ? (
+				<ReportDialog
+					onOpenChange={handleReportOpenChange}
+					open={isReportOpen}
+					targetId={room.id}
+					targetType="chat_room"
+				/>
+			) : null}
 		</div>
 	);
 }

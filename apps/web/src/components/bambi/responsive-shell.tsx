@@ -23,6 +23,9 @@ import { Message, ShieldIcon } from "./icons";
 import { NotificationBell } from "./notification-bell";
 import { SiteFooter } from "./site-footer";
 
+// 채팅 상세는 <md에서 카카오톡식 풀스크린이라 셸의 모바일 헤더를 숨긴다(md+ 데스크톱 헤더는 유지).
+const CHAT_ROOM_PATH_RE = /^\/seeker\/chats\/[^/]+$/;
+
 export interface NavItem {
 	href: Route;
 	label: string;
@@ -323,7 +326,12 @@ export function ResponsiveAppShell({
 					</div>
 				</header>
 			) : null}
-			<header className="sticky top-0 z-30 border-border border-b bg-background/95 backdrop-blur md:hidden">
+			<header
+				className={cn(
+					"sticky top-0 z-30 border-border border-b bg-background/95 backdrop-blur md:hidden",
+					CHAT_ROOM_PATH_RE.test(pathname) && "hidden"
+				)}
+			>
 				<div className="flex h-14 items-center justify-between px-5">
 					{/* 데스크톱과 같은 이유로 shrink-0 — 좁은 화면에서 우측 액션이 늘어나면
 					    브랜드가 압축 대상이 된다. */}

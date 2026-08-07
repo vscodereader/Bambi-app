@@ -28,6 +28,7 @@ import {
 	type LucideIcon,
 	type LucideProps,
 	MapPin,
+	Menu,
 	MessageCircle,
 	MessagesSquare,
 	MoreHorizontal,
@@ -79,6 +80,7 @@ export const Home2 = fill(House);
 export const ImageIcon = fill(ImageIconBase);
 export const LockIcon = fill(Lock);
 export const MapPinIcon = fill(MapPin);
+export const MenuIcon = fill(Menu);
 export const Message = fill(MessageCircle);
 export const MessagesIcon = fill(MessagesSquare);
 export const MoreIcon = fill(MoreHorizontal);
