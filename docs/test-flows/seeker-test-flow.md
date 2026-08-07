@@ -95,7 +95,7 @@
 - **경로**: `/seeker` (파일: `apps/web/src/app/seeker/page.tsx`, `apps/web/src/app/seeker/layout.tsx`)
 - **선행 조건**: 1.3 절차로 게스트 쿠키 발급
 - **절차**:
-  1. 로그인 카드 하단 **[비회원으로 목록만 보기]** 클릭 → 본인인증(또는 목 폼) 완료
+  1. 로그인 카드 하단 **[비회원으로 인증하기]** 클릭 → 본인인증(또는 목 폼) 완료
   2. `/seeker` 목록이 뜨는지 확인
   3. 공고 카드 클릭
   4. URL로 `/seeker/chats`, `/seeker/community`, `/seeker/me`, `/support` 직접 진입
@@ -114,7 +114,7 @@
 
 ### 1.3 게스트 본인인증(비회원 둘러보기) 발급
 
-- **경로**: `/seeker?auth=login` → [비회원으로 목록만 보기] (파일: `apps/web/src/components/bambi/auth/auth-panel.tsx`, `apps/web/src/components/bambi/phone-verify-dialog.tsx`)
+- **경로**: `/seeker?auth=login` → [비회원으로 인증하기] (파일: `apps/web/src/components/bambi/auth/auth-panel.tsx`, `apps/web/src/components/bambi/phone-verify-dialog.tsx`)
 - **절차(실인증)**:
   1. 버튼 클릭 → `bambi.onboarding.startIdentityVerification`으로 인증 건 ID 발급
   2. 포트원 KCP 인증창(PC=POPUP, 모바일=REDIRECTION)에서 인증 완료
@@ -760,7 +760,7 @@
 
 ### 11.2 게시판 목록
 
-- **정본은 DB `community_board` 테이블**이다(마이그레이션 0072에서 pgEnum → 테이블 전환). 화면은
+- **정본은 DB `community_board` 테이블**이다(마이그레이션 0075에서 pgEnum → 테이블 전환). 화면은
   `communityBoards.listActive`를 `useCommunityBoards`(staleTime 5분)로 받아 slug를 해석한다
   (`apps/web/src/lib/bambi/use-community-boards.ts`). `apps/web/src/lib/bambi/community.ts`의 `COMMUNITY_BOARDS`는
   이제 **빌트인 메타 전용**(가상 게시판 best, 공지의 `adminOnly`, 액센트 색, 공개 `/board` 3종)이고 게시판 목록의 출처가 아니다.
@@ -1297,7 +1297,7 @@
 |---|---|---|---|
 | A-1 | "회원가입: 시작 화면에서 회원가입 → 가입 유형 → **이름/이메일/비밀번호** 입력" | 회원가입은 **2단계**다. ①본인인증을 마쳐야 ②폼이 열린다. 필드는 **닉네임 / 아이디 / 비밀번호 / 비밀번호 확인 / 이메일 / 가입 유형 / 약관 동의 체크박스** 7개 | `apps/web/src/components/bambi/auth/auth-panel.tsx`, `.../auth-fields.tsx` |
 | A-2 | "로그인: **이메일**과 비밀번호를 입력" | 입력 칸 라벨은 **"아이디"**이고 아이디·이메일을 한 칸으로 받는다(`@` 포함 여부로 분기) | `apps/web/src/lib/bambi/login-id.ts` |
-| A-3 | "비회원: 로그인 화면 아래쪽 **휴대폰 인증** 버튼 → 이름/생년월일/휴대폰/성별 입력" | 버튼 라벨은 **"비회원으로 목록만 보기"**이고, 포트원 구성 환경에서는 KCP 인증창이 뜬다. 이름·생년월일 직접 입력 폼은 **포트원 미구성 개발 환경의 목 폼**뿐 | `apps/web/src/components/bambi/auth/auth-panel.tsx`, `.../phone-verify-dialog.tsx` |
+| A-3 | "비회원: 로그인 화면 아래쪽 **휴대폰 인증** 버튼 → 이름/생년월일/휴대폰/성별 입력" | 버튼 라벨은 **"비회원으로 인증하기"**이고, 포트원 구성 환경에서는 KCP 인증창이 뜬다. 이름·생년월일 직접 입력 폼은 **포트원 미구성 개발 환경의 목 폼**뿐 | `apps/web/src/components/bambi/auth/auth-panel.tsx`, `.../phone-verify-dialog.tsx` |
 | A-4 | "**수다방** (현재 준비 중)" | 수다방은 **완전히 구현되어 있다** — 게시판(시드 5개 + 운영자가 추가하는 게시판), 글/댓글/추천, 비밀글, 광고글, 수집 글, 금칙어 검사 | `apps/web/src/app/seeker/community/**`, `packages/api/src/routers/bambi/community.ts` |
 | A-5 | 내비게이션 표에 "탐색 / 채팅 / 수다방 / 내 정보" 4개 | 데스크톱 헤더 nav는 **채용정보 / 수다방 / 고객센터**이고, 우측에 역할 전환·채팅·내 정보가 따로 있다. 모바일 탭바는 탐색/채팅/(구인 관리)/수다방/(운영자 모드)/내 정보 | `apps/web/src/components/bambi/responsive-shell.tsx`, `.../mobile-tab-bar.tsx` |
 | A-6 | "**연락처는 구인자가 공개**하고 구직자가 확인한다 / 구직자의 전화번호는 공개되지 않는다" | 현행 흐름은 **정반대**다. **구인자가 [연락처 공개 요청]을 보내고 구직자가 [공개]/[거절]** 하며, 공개되는 것은 **구직자의 인증 전화번호**다 | `packages/api/src/routers/bambi/chats.ts` (`requestContactReveal`/`respondContactReveal`) |

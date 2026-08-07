@@ -509,8 +509,29 @@
     {
       "idx": 72,
       "version": "7",
-      "when": 1786064638330,
-      "tag": "0072_dynamic-community-board",
+      "when": 1786004147330,
+      "tag": "0072_minor_monster_badoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1786006038279,
+      "tag": "0073_messy_wallop",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1786006732773,
+      "tag": "0074_nebulous_black_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1786070697018,
+      "tag": "0075_dynamic-community-board",
       "breakpoints": true
     }
   ]

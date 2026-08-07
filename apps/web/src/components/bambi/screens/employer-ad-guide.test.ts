@@ -45,6 +45,12 @@ describe("employer ad guide screen", () => {
 		expect(source).not.toContain("product.discountPercent");
 	});
 
+	it("shows the active campaign period below its price", () => {
+		expect(source).toContain("option.campaignStartsAt");
+		expect(source).toContain("formatAdCampaignPeriod(");
+		expect(source).toContain("option.campaignEndsAt ?? null");
+	});
+
 	it("uses only ratio tracks so column widths do not depend on content", () => {
 		// 4개 열 전부 minmax(0,_fr) 비율 트랙 — 내용 의존 auto 트랙은 정렬을 깬다
 		expect(source).toContain(

@@ -61,10 +61,12 @@
 - 검수 큐 `/moderator`
 - 공고 관리 `/moderator/jobs`
 - 회원 관리: 사용자 `/moderator/users` · 채팅 `/moderator/chats` · 면접 일정 `/moderator/interviews` ·
-  신고 `/moderator/reports` · 업소 승인 `/moderator/employers` · 팀 합류 승인 `/moderator/team-invites`
+  신고 `/moderator/reports` · 업소 승인 `/moderator/employers` · 팀 합류 승인 `/moderator/team-invites` ·
+  출석 관리 `/moderator/attendance`
 - 광고·결제: 광고 상품 `/moderator/ad-products` · 결제 관리 `/moderator/payments`
 - 콘텐츠: 게시물 `/moderator/content` · **게시판 관리 `/moderator/community-boards`** · 고객센터 `/moderator/support` ·
-  금칙어 `/moderator/banned-words` · 후기 관리 `/moderator/reviews` · 크롤링 `/moderator/crawler`
+  금칙어 `/moderator/banned-words` · 후기 관리 `/moderator/reviews` · 크롤링 `/moderator/crawler` ·
+  팝업 `/moderator/popups`
 - 사이트 정보 `/moderator/site-settings`
 
 모바일 하단 탭(`ModeratorShell`, `apps/web/src/components/bambi/persona-nav.tsx`)은
@@ -131,7 +133,7 @@
 - **관련 API**: `bambi.moderation.listJobPosts` (`moderation.ts` L983, `protectedProcedure` +
   핸들러 내 `requireAdminProfile`)
 
-### 2.2 단건 승인(승인 후 게시)
+### 2.2 단건 승인
 
 - **경로**: `/moderator/queue/[id]` (파일: `apps/web/src/app/moderator/queue/[id]/page.tsx`,
   상세 UI `moderator.tsx` `QueueDetail` L675~)
@@ -140,7 +142,8 @@
   1. 큐 목록에서 행 클릭 → 상세 진입.
   2. "자동 필터가 감지한 신호 N건" 영역과 본문의 하이라이트(감지 표현)를 확인.
   3. 이미지 영역(`QueueMediaSection`) — `getJobPostForAdmin`으로 별도 조회한 cover/detail 미디어.
-  4. 데스크톱 판정 도크(또는 모바일 하단 바)의 **승인 후 게시** 클릭.
+  4. 데스크톱 판정 도크(또는 모바일 하단 바)의 **승인** 클릭.
+     (무료 공고는 승인 즉시 게시되고, 유료 상품 공고는 입금 확인 후 게시된다.)
   5. **승인 사유 작성** 시트에서 선택지를 고르거나(입력칸에 프리필) 직접 작성 → **승인하기** 클릭.
      (선택지: 운영 검수 기준 충족 / 감지 표현이 오해 소지 수준 / 업소 정보 확인 완료 /
      보완 요청 반영 확인 / 기타 승인 사유. 2자 미만이면 확정 버튼 비활성.)
@@ -246,7 +249,7 @@
 - **경로**: `/moderator/jobs` 행 액션 (`STATUS_ACTIONS`가 현재 상태에 맞는 항목만 낸다)
   - `published` → "숨김"
   - `hidden` → "재공개"
-  - `on_hold` → "승인 후 공개" / "반려"
+  - `on_hold` → "승인" / "반려"
   - 그 밖(`pending_review`·`rejected`) → 상태 변경 항목 없음(광고 연장·단축·수정·삭제만)
 - **절차**: 행 메뉴 → 항목 선택 → 다이얼로그에서 사유(2자 이상, 기본 문구 프리필) → 확정.
 - **기대 결과**: `setJobPostStatus`로 `hidden`/`published`/`rejected` 전환. 재공개·승인 시
@@ -296,8 +299,9 @@
   3. 저장.
 - **기대 결과**:
   - `adminUpdateJobPost` 호출 → 구인자 편집과 동일한 `applyJobPostUpdate` 로직을 재사용하되
-    **`keepStatus: true`** 라 **검수 상태가 바뀌지 않는다**(게시 중 공고를 고쳐도 내려가지 않고,
-    승인 직전 공고가 큐로 되돌아오지 않는다).
+    **`moderatorEdit: true`** 라 **검수 상태·결제 상태·광고 종료일이 전부 유지**된다
+    (게시 중 공고를 고쳐도 내려가지 않고, 승인 직전 공고가 큐로 되돌아오지 않으며,
+    노출 상품·기간을 바꿔도 미결제로 떨어지지 않고 즉시 반영된다).
   - 감사 로그 `edit_job_post`("운영자 공고 수정").
   - 성공 토스트 후 `/moderator/jobs`로 이동.
 - **엣지 케이스 / 실패 케이스**:
@@ -781,7 +785,7 @@
 ### 8.8 게시판 관리(수다방 게시판 추가·수정·노출)
 
 - **경로**: `/moderator/community-boards` (파일: `apps/web/src/app/moderator/community-boards/page.tsx`)
-- **사전 조건**: 마이그레이션 `0072_dynamic-community-board`가 적용돼 `community_board` 테이블과
+- **사전 조건**: 마이그레이션 `0075_dynamic-community-board`가 적용돼 `community_board` 테이블과
   시드 5행(`notice`/0 · `free`/20 · `work_talk`(slug `work-talk`)/30 · `market`/40 · `legal`/50)이 있어야 한다.
   미적용이면 수다방 전 경로가 `NOT_FOUND` "게시판을 찾을 수 없습니다."로 죽는다.
 - **목록**: `communityBoards.list`(adminProcedure, **비활성 포함**, `sort_order ASC`).

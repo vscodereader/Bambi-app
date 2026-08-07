@@ -125,7 +125,7 @@ function BoardPostRow({
 
 	return (
 		<Link
-			className="flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-muted"
+			className={`flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-muted ${post.board === "notice" && post.isEvent ? "bg-primary/5" : ""}`}
 			href={
 				(isCrawled
 					? communityCrawledPath(post.id)
@@ -138,7 +138,9 @@ function BoardPostRow({
 						<LockIcon className="size-3 shrink-0 text-muted-foreground" />
 					) : null}
 					{post.board === "notice" ? (
-						<Badge className="shrink-0">공지</Badge>
+						<Badge className="shrink-0">
+							{post.isEvent ? "이벤트" : "공지"}
+						</Badge>
 					) : null}
 					{isCrawled ? (
 						<Badge className="shrink-0" variant="secondary">

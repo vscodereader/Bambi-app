@@ -71,6 +71,28 @@ const contactPhoneInput = (
 ): { contactPhone?: string } =>
 	isLegalBoardKey(boardKey) ? { contactPhone: contactPhone.trim() } : {};
 
+const eventStateAfterLockChange = (
+	currentIsEvent: boolean,
+	nextIsLocked: boolean
+): boolean => (nextIsLocked ? false : currentIsEvent);
+
+const lockStateAfterEventChange = (
+	currentIsLocked: boolean,
+	nextIsEvent: boolean
+): boolean => (nextIsEvent ? false : currentIsLocked);
+
+const passwordAfterEventChange = (
+	currentPassword: string,
+	nextIsEvent: boolean
+): string => (nextIsEvent ? "" : currentPassword);
+
+const canPromotePost = (
+	isEdit: boolean,
+	initialAuthorRole: CommunityPostInitial["authorRole"] | undefined,
+	currentRole: CommunityPostInitial["authorRole"] | undefined
+): boolean =>
+	isEdit ? initialAuthorRole === "employer" : currentRole === "employer";
+
 interface CommunityPostInitial {
 	authorName: string;
 	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
@@ -79,6 +101,7 @@ interface CommunityPostInitial {
 	// 법률 자문 글의 연락처. 수정 폼이 다시 실어 보내지 않으면 서버가 null로 덮어쓴다.
 	contactPhone?: string | null;
 	id: string;
+	isEvent?: boolean;
 	isLocked: boolean;
 	// 수정 모드 광고글 초기값. 편집 페이지가 getPost.isPromotion을 넘겨주면 사용한다.
 	isPromotion?: boolean;
@@ -212,6 +235,102 @@ function ContactPhoneField({
 	);
 }
 
+function LegalContactPhoneField({
+	setValue,
+	value,
+	visible,
+}: {
+	setValue: (next: string) => void;
+	value: string;
+	visible: boolean;
+}) {
+	if (!visible) {
+		return null;
+	}
+	return <ContactPhoneField setValue={setValue} value={value} />;
+}
+
+function useNoticeWriteRedirect({
+	blocked,
+	boardSlug,
+	router,
+}: {
+	blocked: boolean;
+	boardSlug: string;
+	router: ReturnType<typeof useRouter>;
+}) {
+	useEffect(() => {
+		if (blocked) {
+			toast("공지사항은 운영자만 작성할 수 있어요.");
+			router.replace(communityBoardPath(boardSlug) as Route);
+		}
+	}, [blocked, boardSlug, router]);
+}
+
+function useInitialAuthorName({
+	displayName,
+	isEdit,
+	setAuthorName,
+}: {
+	displayName: string;
+	isEdit: boolean;
+	setAuthorName: (updater: (previous: string) => string) => void;
+}) {
+	useEffect(() => {
+		if (!isEdit && displayName) {
+			setAuthorName((previous) => (previous === "" ? displayName : previous));
+		}
+	}, [displayName, isEdit, setAuthorName]);
+}
+
+function NoticeEventField({
+	isEvent,
+	onChange,
+	visible,
+}: {
+	isEvent: boolean;
+	onChange: (checked: boolean) => void;
+	visible: boolean;
+}) {
+	if (!visible) {
+		return null;
+	}
+	return (
+		<div className="flex items-center gap-2">
+			<Switch
+				checked={isEvent}
+				id="community-post-event"
+				onCheckedChange={onChange}
+			/>
+			<Label htmlFor="community-post-event">이벤트로 표시하기</Label>
+		</div>
+	);
+}
+
+function PromotionField({
+	checked,
+	onChange,
+	visible,
+}: {
+	checked: boolean;
+	onChange: (checked: boolean) => void;
+	visible: boolean;
+}) {
+	if (!visible) {
+		return null;
+	}
+	return (
+		<div className="flex items-center gap-2">
+			<Switch
+				checked={checked}
+				id="community-post-promotion"
+				onCheckedChange={onChange}
+			/>
+			<Label htmlFor="community-post-promotion">광고글로 표시하기</Label>
+		</div>
+	);
+}
+
 export function CommunityPostForm({
 	board,
 	editPassword,
@@ -239,6 +358,7 @@ export function CommunityPostForm({
 	const [contactPhone, setContactPhone] = useState(
 		initialPost?.contactPhone ?? ""
 	);
+	const [isEvent, setIsEvent] = useState(initialPost?.isEvent ?? false);
 	const [title, setTitle] = useState(initialPost?.title ?? "");
 	const [bodyJson, setBodyJson] = useState(initialPost?.body ?? "");
 	const [bodyText, setBodyText] = useState("");
@@ -258,24 +378,18 @@ export function CommunityPostForm({
 	// 광고 Switch 노출: 작성 모드는 편집자 role, 수정 모드는 글 작성자 role 기준.
 	// employer가 비번으로 타인(job_seeker) 글을 수정할 때 서버 검증(작성자 role
 	// 기준)과 어긋나 BAD_REQUEST 나던 문제를 막는다.
-	const canPromote = isEdit
-		? initialPost?.authorRole === "employer"
-		: role === "employer";
-	useEffect(() => {
-		if (!isEdit && displayName) {
-			setAuthorName((previous) => (previous === "" ? displayName : previous));
-		}
-	}, [displayName, isEdit]);
+	const canPromote = canPromotePost(isEdit, initialPost?.authorRole, role);
+	useInitialAuthorName({ displayName, isEdit, setAuthorName });
 
 	// 공지사항은 운영자만 작성 가능 — 작성 모드에서 비운영자는 안내 후 목록으로 보낸다.
-	const blockedFromNotice =
-		!(isEdit || mineQuery.isPending) && board.adminOnly && role !== "admin";
-	useEffect(() => {
-		if (blockedFromNotice) {
-			toast("공지사항은 운영자만 작성할 수 있어요.");
-			router.replace(communityBoardPath(board.slug) as Route);
-		}
-	}, [blockedFromNotice, board.slug, router]);
+	const blockedFromNotice = Boolean(
+		!(isEdit || mineQuery.isPending) && board.adminOnly && role !== "admin"
+	);
+	useNoticeWriteRedirect({
+		blocked: blockedFromNotice,
+		boardSlug: board.slug,
+		router,
+	});
 
 	const invalidateAndGo = async (postId: string) => {
 		await queryClient.invalidateQueries({
@@ -312,6 +426,8 @@ export function CommunityPostForm({
 	const requiresPassword =
 		guest || isLockPasswordRequired(isEdit, isFreeBoard, isLocked);
 	const submittedIsLocked = resolveSubmittedLock(board.key, guest, isLocked);
+	const submittedIsEvent =
+		board.key === "notice" && role === "admin" && isEvent;
 
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
 	const canSubmit =
@@ -328,6 +444,7 @@ export function CommunityPostForm({
 			authorName: authorName.trim(),
 			body: bodyJson,
 			isLocked: submittedIsLocked,
+			isEvent: submittedIsEvent,
 			isPromotion,
 			postId,
 			title: title.trim(),
@@ -345,6 +462,7 @@ export function CommunityPostForm({
 			board: board.key,
 			body: bodyJson,
 			isLocked: submittedIsLocked,
+			isEvent: submittedIsEvent,
 			isPromotion,
 			title: title.trim(),
 			...(trimmedPassword ? { password: trimmedPassword } : {}),
@@ -360,6 +478,15 @@ export function CommunityPostForm({
 			return;
 		}
 		submitCreate();
+	};
+	const handleLockChange = (value: boolean) => {
+		setIsLocked(value);
+		setIsEvent((current) => eventStateAfterLockChange(current, value));
+	};
+	const handleEventChange = (checked: boolean) => {
+		setIsEvent(checked);
+		setIsLocked((current) => lockStateAfterEventChange(current, checked));
+		setPassword((current) => passwordAfterEventChange(current, checked));
 	};
 
 	if (blockedFromNotice) {
@@ -390,24 +517,27 @@ export function CommunityPostForm({
 				isEdit={isEdit}
 				isLocked={isLocked}
 				password={password}
-				setIsLocked={setIsLocked}
+				setIsLocked={handleLockChange}
 				setPassword={setPassword}
 			/>
 
-			{isLegalBoard ? (
-				<ContactPhoneField setValue={setContactPhone} value={contactPhone} />
-			) : null}
+			<LegalContactPhoneField
+				setValue={setContactPhone}
+				value={contactPhone}
+				visible={isLegalBoard}
+			/>
 
-			{canPromote ? (
-				<div className="flex items-center gap-2">
-					<Switch
-						checked={isPromotion}
-						id="community-post-promotion"
-						onCheckedChange={setIsPromotion}
-					/>
-					<Label htmlFor="community-post-promotion">광고글로 표시하기</Label>
-				</div>
-			) : null}
+			<NoticeEventField
+				isEvent={isEvent}
+				onChange={handleEventChange}
+				visible={board.key === "notice" && role === "admin"}
+			/>
+
+			<PromotionField
+				checked={isPromotion}
+				onChange={setIsPromotion}
+				visible={canPromote}
+			/>
 
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="community-post-title">제목</Label>
