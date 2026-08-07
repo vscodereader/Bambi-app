@@ -10,6 +10,11 @@ const source = readFileSync(
 const COMPLETE_ACTION_GUARD_PATTERN =
 	/interview\.viewerIsEmployer && interview\.status === "confirmed"[\s\S]{0,120}<CompleteInterviewAction/;
 
+// 후기 섹션도 같은 요령으로 "구직자 + 확정·완료" 가드 안에 있는지 본다
+// (서버 reviews.create 가드와 같은 조건이어야 한다).
+const REVIEW_SECTION_GUARD_PATTERN =
+	/!interview\.viewerIsEmployer &&[\s\S]{0,200}<InterviewReviewSection/;
+
 describe("예정된 면접 아코디언", () => {
 	it("카드를 아코디언으로 렌더한다", () => {
 		expect(source).toContain("@bambi-app/ui/components/accordion");
@@ -45,5 +50,24 @@ describe("면접 완료 처리 이관", () => {
 	it("상태 라벨을 공용 라벨 맵으로 렌더한다", () => {
 		expect(source).toContain("interviewStatusLabels");
 		expect(source).not.toContain('"완료됨"');
+	});
+});
+
+// 후기는 채팅 사이드바에서 여기로 옮겼다 — 방을 나가도 면접 카드는 남기 때문이다.
+describe("후기 작성 이관", () => {
+	it("후기 섹션을 구직자·확정/완료 면접에만 노출한다", () => {
+		expect(source).toMatch(REVIEW_SECTION_GUARD_PATTERN);
+		expect(source).toContain('interview.status === "completed"');
+	});
+
+	it("기존 후기는 방 단위로 판정하고, 없으면 공용 후기 폼을 재사용한다", () => {
+		expect(source).toContain("orpc.bambi.reviews.listMine");
+		expect(source).toContain("item.chatRoomId === chatRoomId");
+		expect(source).toContain("<ReviewForm");
+	});
+
+	it("등록 성공 시 내 후기 목록을 무효화한다", () => {
+		expect(source).toContain("orpc.bambi.reviews.create");
+		expect(source).toContain("orpc.bambi.reviews.listMine.queryKey()");
 	});
 });

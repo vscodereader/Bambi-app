@@ -63,9 +63,12 @@ export const reviewsRouter = {
 	create: protectedProcedure
 		.input(createReviewInput)
 		.handler(async ({ context, input }) => {
+			// 후기 진입점이 "예정된 면접"(나간 방 포함)으로 이관돼, 완료 처리와 같은
+			// 나간 방 예외를 후기 등록에도 연다 — 아래 가드가 면접 성사 여부를 계속 막는다.
 			const { profile, room } = await requireChatParticipant(
 				input.chatRoomId,
-				context.session
+				context.session,
+				{ allowLeftRoom: true }
 			);
 
 			if (profile.userId !== room.jobSeekerUserId) {

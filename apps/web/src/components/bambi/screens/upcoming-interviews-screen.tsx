@@ -4,6 +4,7 @@
 // 카드는 아코디언이다: 접으면 일시·상대·공고·상태, 펼치면 면접 정보와 그 방의 채팅 내역
 // (읽기 전용)이 열린다. 면접 완료 처리도 여기 있다 — 방 화면에 두면 방을 나간 뒤 완료를
 // 영영 못 누르기 때문이다(구인자에게만 노출, 서버 가드도 같은 기준).
+// 후기 작성도 같은 이유로 채팅 사이드바에서 이리로 옮겼다(구직자 전용, 확정·완료 면접).
 // 카드의 상대 이름은 호출자 기준으로 서버가 정하므로(chats.listMyUpcomingInterviews →
 // resolveCounterpartNames) 구직자에겐 업소명, 구인자에겐 구직자 닉네임이 나온다.
 
@@ -22,9 +23,11 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
+import { type ReactNode, useState } from "react";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { CalendarIcon } from "@/components/bambi/icons";
 import { MyPageShell } from "@/components/bambi/my-page-shell";
+import { ReviewForm } from "@/components/bambi/review-form";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { interviewStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
@@ -38,7 +41,26 @@ const STATUS_TONES = {
 	proposed: "warning",
 } as const;
 
+// 후기는 방 단위로 한 건이라(서버 유니크) 카드에서 방 id를 그대로 들고 간다.
+const REVIEW_ERROR_MESSAGES: Record<string, string> = {
+	BAD_REQUEST: "별점과 후기 내용을 다시 확인해 주세요.",
+	CONFLICT: "이미 이 채팅방의 후기를 등록했어요.",
+	FORBIDDEN: "확정된 면접 이후에만 후기를 남길 수 있어요.",
+	UNAUTHORIZED: "로그인 후 다시 시도해 주세요.",
+};
+
+const REVIEW_ERROR_FALLBACK =
+	"후기를 등록하지 못했어요. 잠시 후 다시 시도해 주세요.";
+
+// 채팅 화면에서 옮겨 온 문구 맵. 방이 아니라 면접 카드에서 남기므로 채팅 전용 차단 사유
+// (getChatBlockMessage)는 딸려 오지 않는다 — reviews.create는 차단 검사를 하지 않는다.
+function getReviewMutationErrorMessage(error: Error): string {
+	const code = "code" in error ? String(error.code) : "";
+	return REVIEW_ERROR_MESSAGES[code] ?? REVIEW_ERROR_FALLBACK;
+}
+
 interface InterviewListItem {
+	chatRoomId: string;
 	counterpartName: null | string;
 	id: string;
 	jobTitle: null | string;
@@ -185,6 +207,12 @@ function InterviewAccordionItem({
 				{interview.viewerIsEmployer && interview.status === "confirmed" ? (
 					<CompleteInterviewAction interviewScheduleId={interview.id} />
 				) : null}
+				{/* 후기는 구직자만, 확정·완료 면접에만 — 서버 reviews.create 가드와 같은 조건. */}
+				{!interview.viewerIsEmployer &&
+				(interview.status === "confirmed" ||
+					interview.status === "completed") ? (
+					<InterviewReviewSection chatRoomId={interview.chatRoomId} />
+				) : null}
 				<InterviewChatHistory interviewScheduleId={interview.id} />
 			</AccordionContent>
 		</AccordionItem>
@@ -227,6 +255,94 @@ function CompleteInterviewAction({
 					완료 처리에 실패했어요. 잠시 후 다시 시도해 주세요.
 				</p>
 			) : null}
+		</div>
+	);
+}
+
+// 후기 남기기. 방을 나가도 면접 카드는 남으므로 여기서는 계속 쓸 수 있다(채팅 사이드바에
+// 있던 카드를 옮긴 이유). 이미 쓴 후기는 읽기 카드로만 보여준다 — 방당 1건이 서버 규칙이다.
+function InterviewReviewSection({ chatRoomId }: { chatRoomId: string }) {
+	const queryClient = useQueryClient();
+	const [errorMessage, setErrorMessage] = useState<null | string>(null);
+	const [successMessage, setSuccessMessage] = useState<null | string>(null);
+	const reviewListQuery = useQuery(orpc.bambi.reviews.listMine.queryOptions());
+	const createReviewMutation = useMutation(
+		orpc.bambi.reviews.create.mutationOptions({
+			onError: (error) => {
+				setSuccessMessage(null);
+				setErrorMessage(getReviewMutationErrorMessage(error));
+			},
+			onSuccess: () => {
+				setErrorMessage(null);
+				setSuccessMessage("후기가 등록됐어요.");
+				queryClient
+					.invalidateQueries({
+						queryKey: orpc.bambi.reviews.listMine.queryKey(),
+					})
+					.catch(() => undefined);
+			},
+		})
+	);
+	const existingReview = reviewListQuery.data?.find(
+		(item) => item.chatRoomId === chatRoomId
+	);
+
+	let content: ReactNode;
+
+	if (reviewListQuery.isLoading) {
+		content = <Skeleton className="h-24 w-full rounded-lg" />;
+	} else if (reviewListQuery.isError) {
+		content = (
+			<p className="m-0 text-muted-foreground text-sm">
+				후기 상태를 확인하지 못했어요.
+			</p>
+		);
+	} else if (existingReview) {
+		content = (
+			<div className="flex flex-col gap-1 rounded-lg bg-secondary p-3">
+				<strong className="text-sm">
+					{existingReview.status === "pending_review"
+						? "검수 중인 후기"
+						: "등록된 후기"}
+				</strong>
+				<p className="m-0 whitespace-pre-wrap break-words text-muted-foreground text-xs leading-relaxed">
+					별점 {existingReview.rating.toFixed(1)} · {existingReview.body}
+				</p>
+			</div>
+		);
+	} else {
+		content = (
+			<div className="flex flex-col gap-3">
+				<ReviewForm
+					errorMessage={errorMessage}
+					isSubmitting={createReviewMutation.isPending}
+					onSubmit={(input) =>
+						createReviewMutation.mutate({ ...input, chatRoomId })
+					}
+				/>
+				{successMessage ? (
+					<p className="m-0 font-semibold text-green-700 text-xs">
+						{successMessage}
+					</p>
+				) : null}
+			</div>
+		);
+	}
+
+	return (
+		<div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+			<div className="flex items-start justify-between gap-3">
+				<div className="flex flex-col gap-1">
+					<h3 className="m-0 font-extrabold text-base">후기 남기기</h3>
+					<p className="m-0 text-muted-foreground text-xs leading-relaxed">
+						면접 이후 경험을 남기면 다른 구직자가 업체를 더 잘 판단할 수 있어요.
+					</p>
+				</div>
+				<StatusBadge tone={existingReview ? "good" : "warning"}>
+					{existingReview ? "작성 완료" : "작성 가능"}
+				</StatusBadge>
+			</div>
+			{content}
 		</div>
 	);
 }
