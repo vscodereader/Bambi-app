@@ -52,7 +52,11 @@ import {
 	ShieldIcon,
 	UserIcon,
 } from "../icons";
-import { isMyPageItemVisible, MyPageShell } from "../my-page-shell";
+import {
+	ATTENDANCE_HREF,
+	isMyPageItemVisible,
+	MyPageShell,
+} from "../my-page-shell";
 import { PhoneFrame } from "../phone-frame";
 import { ReportDone, ReportForm, SafetyNotice } from "../safety-kit";
 import { ContactReveal } from "./contact-reveal";
@@ -577,6 +581,12 @@ const seekerMeSections: {
 		description: "차단한 상대를 확인하고 해제해요.",
 	},
 	{
+		href: ATTENDANCE_HREF,
+		icon: <ClockIcon />,
+		label: "출석체크",
+		description: "하루 한 번 출석하고 연속 기록을 확인해요.",
+	},
+	{
 		href: "/seeker/me/settings" as Route,
 		icon: <SettingsIcon />,
 		label: "계정 설정",
@@ -586,7 +596,7 @@ const seekerMeSections: {
 
 export function SeekerMe() {
 	// 사이드바 내비와 같은 표로 역할별 항목을 감춘다(구인자·운영자에게 안 보이는 메뉴가
-	// 허브 카드로 되살아나지 않도록).
+	// 허브 카드로 되살아나지 않도록). 출석 카드의 역할 제한도 같은 함수가 담당한다.
 	const { role } = useBambiAuth();
 	const sections = seekerMeSections.filter((section) =>
 		isMyPageItemVisible(section.href, role)

@@ -663,7 +663,7 @@ function VerdictActions({
 				size="lg"
 				variant="primary"
 			>
-				승인 후 게시
+				승인
 			</Button>
 		</>
 	);
@@ -785,8 +785,7 @@ export function QueueDetail({
 						<p className="m-0 text-[12px] text-muted-foreground leading-[1.55]">
 							{VERDICT_GUIDE}
 						</p>
-						{/* 좁은 열에서 두 버튼을 나란히 두면 "승인 후 게시"가 줄바꿈된다.
-						    세로로 쌓아 라벨을 온전히 두고, 마지막 줄에 승인을 놓아
+						{/* 좁은 도크라 세로로 쌓고, 마지막 줄에 승인을 놓아
 						    "확인하고 → 내보낸다" 순서가 그대로 읽히게 한다. */}
 						<div className="flex flex-col gap-2.5">
 							<VerdictActions
@@ -832,7 +831,10 @@ const VERDICT_SHEETS: Record<
 	approve: {
 		confirmLabel: "승인하기",
 		danger: false,
-		description: "승인하면 공고가 게시되고, 사유가 처리 기록에 남아요.",
+		// 유료 상품 공고는 승인만으로 게시되지 않는다(입금 확인이 남는다) — 승인 = 게시로
+		// 읽히지 않게 두 경우를 다 적는다.
+		description:
+			"승인하면 무료 공고는 바로 게시되고, 유료 상품 공고는 입금 확인 후 게시돼요. 사유는 처리 기록에 남아요.",
 		reasons: [
 			"운영 검수 기준 충족",
 			"감지 표현이 오해 소지 수준",
@@ -2607,6 +2609,10 @@ const MOD_MORE_GROUPS: {
 			{ href: "/moderator/employers", label: "업소 승인" },
 			{ href: "/moderator/team-invites", label: "팀 합류 승인" },
 		],
+	},
+	{
+		label: "회원",
+		items: [{ href: "/moderator/attendance" as Route, label: "출석 관리" }],
 	},
 	{
 		label: "광고·결제",

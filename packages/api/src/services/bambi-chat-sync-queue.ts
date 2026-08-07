@@ -96,6 +96,7 @@ export const notifyChatMessageCreated = async ({
 		await createBambiNotification({
 			actorUserId: profileUserId,
 			chatRoomId: room.id,
+			metadata: { source: "chat" },
 			recipientUserId,
 			targetId: messageId,
 			targetType: "chat_message",

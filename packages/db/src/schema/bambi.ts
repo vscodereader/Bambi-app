@@ -3,11 +3,13 @@ import {
 	type AnyPgColumn,
 	boolean,
 	check,
+	date,
 	index,
 	integer,
 	jsonb,
 	pgEnum,
 	pgTable,
+	primaryKey,
 	text,
 	timestamp,
 	uniqueIndex,
@@ -145,6 +147,27 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"support_inquiry",
 	"support_inquiry_message",
 	"team_invitation",
+]);
+
+// 알림 전용 대상 타입. 감사 로그(moderation_target_type)와 분리한다 — 알림에만 필요한 값
+// (interview_schedule·contact_reveal·job_post 검수 대기 등)이 감사 enum을 오염시키면
+// 두 축이 서로의 마이그레이션에 묶인다. 이 시점부터 두 enum은 독립 진화한다.
+// 마이그레이션 호환을 위해 새 값은 항상 목록 끝에 덧붙인다(ALTER TYPE ... ADD VALUE).
+export const notificationTargetType = pgEnum("notification_target_type", [
+	// 채팅 2종은 기존 저장값 호환용(알림함 목록·카운트에서는 제외된다 — 채팅 핀이 담당).
+	"chat_message",
+	"chat_room",
+	"interview_schedule",
+	"contact_reveal",
+	"support_inquiry",
+	"report",
+	"community_post",
+	"community_comment",
+	"review",
+	"job_post",
+	"employer_verification",
+	"team_invitation",
+	"organization_member",
 ]);
 
 // 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.
@@ -1578,28 +1601,92 @@ export const bambiNotification = pgTable(
 	"bambi_notification",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		recipientUserId: text("recipient_user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 개인 수신자. 역할 공유 알림(운영자 큐·법률자문)에서는 비고 recipient_role만 채운다 —
+		// 아래 CHECK가 "정확히 한쪽"을 강제한다(community_post_author_one_of_ck와 같은 패턴).
+		recipientUserId: text("recipient_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		// 역할 공유 수신. 운영자 5명이면 행 5개가 아니라 1개다 — 한 명이 확인하면 전원의
+		// 배지에서 사라진다(큐 성격상 의도된 동작). SSE만 그 역할 계정 수만큼 팬아웃한다.
+		recipientRole: bambiUserRole("recipient_role"),
+		// 공유 행을 누가 확인했는지. 알림함에 "확인: ○○"로 표시한다. 확인자가 탈퇴해도
+		// 알림 자체는 남아야 하므로 계정 삭제 시 null로만 떨어뜨린다.
+		readByUserId: text("read_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		actorUserId: text("actor_user_id")
 			.notNull()
 			.references(() => user.id),
-		targetType: moderationTargetType("target_type").notNull(),
+		targetType: notificationTargetType("target_type").notNull(),
 		targetId: text("target_id").notNull(),
 		chatRoomId: uuid("chat_room_id").references(() => chatRoom.id, {
 			onDelete: "cascade",
 		}),
 		readAt: timestamp("read_at"),
+		// 이벤트 세부(action·reason·board·postId·jobPostId …). 라벨·딥링크가 이 값을 읽는다.
 		metadata: jsonb("metadata").$type<Record<string, unknown>>(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
 		index("bambi_notification_recipient_user_id_idx").on(table.recipientUserId),
+		// 공유 행은 전체의 극소수라 부분 인덱스로 둔다 — 운영자 목록·카운트가 개인 행
+		// 수백만 건을 건너뛰고 바로 자기 몫만 읽는다.
+		index("bambi_notification_recipient_role_idx")
+			.on(table.recipientRole)
+			.where(sql`${table.recipientRole} IS NOT NULL`),
 		index("bambi_notification_chat_room_id_idx").on(table.chatRoomId),
 		index("bambi_notification_target_type_target_id_idx").on(
 			table.targetType,
 			table.targetId
 		),
+		check(
+			"bambi_notification_recipient_one_of_ck",
+			sql`num_nonnulls(${table.recipientUserId}, ${table.recipientRole}) = 1`
+		),
+	]
+);
+
+// 출석체크. (누가, 며칠) 두 축이면 충분하다 — 복합 PK가 "하루 1회"를 DB에서 보장하므로
+// 애플리케이션은 조건 분기 없이 onConflictDoNothing으로 멱등만 지키면 된다.
+// attended_on은 KST 달력일이다(서버가 services/bambi-attendance의 getKstDateString으로
+// 계산해 넣는다 — 클라이언트 시계 불신). 출석 포인트는 이 테이블에 컬럼을 붙이지 않고
+// 아래 bambi_point_transaction 원장에 별도 행으로 쌓는다(적립 이력이 남아야 해서).
+export const bambiAttendance = pgTable(
+	"bambi_attendance",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		attendedOn: date("attended_on").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.userId, table.attendedOn] }),
+		// 운영자 목록의 "오늘 출석자 수" 요약이 날짜 한 값으로 전 계정을 훑는다.
+		index("bambi_attendance_attended_on_idx").on(table.attendedOn),
+	]
+);
+
+// 포인트 원장. 잔액 컬럼을 따로 두지 않고 행 합산으로 읽는다 — 잔액 컬럼은 적립·차감마다
+// 두 곳을 맞춰야 해서 어긋나면 복구할 근거가 없다(원장은 언제나 재계산 가능).
+// 중복 적립 가드는 여기 유니크가 아니라 bambi_attendance 복합 PK가 담당한다:
+// checkIn 트랜잭션에서 출석 insert가 실제로 일어났을 때만 +10 행을 쌓는다.
+// reason은 현재 "attendance"뿐이라 enum 대신 text로 둔다(사용처가 늘면 enum 승격 검토).
+export const bambiPointTransaction = pgTable(
+	"bambi_point_transaction",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 적립은 양수, 차감은 음수. 잔액 = 계정 행 합산.
+		amount: integer("amount").notNull(),
+		reason: text("reason").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		// 잔액 합산이 계정 하나의 행만 훑게 한다(출석 화면이 진입마다 부른다).
+		index("bambi_point_transaction_user_id_idx").on(table.userId),
 	]
 );
 

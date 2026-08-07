@@ -14,6 +14,7 @@ const EMPLOYER_NAV_ITEMS: NavEntry[] = [
 	{ href: "/employer", label: "내 공고" },
 	{ href: "/employer/new", label: "공고 등록" },
 	{ href: "/employer/ad-guide" as Route, label: "광고 안내" },
+	{ href: "/employer/attendance" as Route, label: "출석체크" },
 	{
 		label: "업체 관리",
 		items: [

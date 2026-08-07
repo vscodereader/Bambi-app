@@ -475,7 +475,7 @@ export function AuthPanel() {
 									onMockVerified={handleMockVerifiedForGuest}
 									onVerified={handleVerifiedForGuest}
 									size="md"
-									triggerLabel="비회원으로 목록만 보기"
+									triggerLabel="비회원으로 인증하기"
 									variant="secondary"
 								/>
 							)}

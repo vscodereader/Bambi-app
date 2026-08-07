@@ -1,5 +1,5 @@
 {
-  "id": "b2898f99-a5f7-471c-833a-af8c42a8075a",
+  "id": "d7a91706-f6e2-42b3-94eb-c31d5d51bf09",
   "prevId": "24f13b52-0394-4497-b487-5b7ca9c4c675",
   "version": "7",
   "dialect": "postgresql",
@@ -110,12 +110,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -264,12 +260,8 @@
           "name": "invitation_organization_id_organization_id_fk",
           "tableFrom": "invitation",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -277,12 +269,8 @@
           "name": "invitation_accepted_user_id_user_id_fk",
           "tableFrom": "invitation",
           "tableTo": "user",
-          "columnsFrom": [
-            "accepted_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["accepted_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -290,12 +278,8 @@
           "name": "invitation_inviter_id_user_id_fk",
           "tableFrom": "invitation",
           "tableTo": "user",
-          "columnsFrom": [
-            "inviter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inviter_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -435,12 +419,8 @@
           "name": "member_organization_id_organization_id_fk",
           "tableFrom": "member",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -448,12 +428,8 @@
           "name": "member_user_id_user_id_fk",
           "tableFrom": "member",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -461,12 +437,8 @@
           "name": "member_accepted_user_id_user_id_fk",
           "tableFrom": "member",
           "tableTo": "user",
-          "columnsFrom": [
-            "accepted_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["accepted_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -541,9 +513,7 @@
         "organization_slug_unique": {
           "name": "organization_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -638,12 +608,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -653,9 +619,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -719,12 +683,8 @@
           "name": "team_organization_id_organization_id_fk",
           "tableFrom": "team",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -801,12 +761,8 @@
           "name": "team_member_team_id_team_id_fk",
           "tableFrom": "team_member",
           "tableTo": "team",
-          "columnsFrom": [
-            "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["team_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -814,12 +770,8 @@
           "name": "team_member_user_id_user_id_fk",
           "tableFrom": "team_member",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -911,16 +863,12 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         },
         "user_login_id_unique": {
           "name": "user_login_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "login_id"
-          ]
+          "columns": ["login_id"]
         }
       },
       "policies": {},
@@ -1218,12 +1166,8 @@
           "name": "ad_product_placement_id_ad_placement_id_fk",
           "tableFrom": "ad_product",
           "tableTo": "ad_placement",
-          "columnsFrom": [
-            "placement_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["placement_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1318,17 +1262,76 @@
           "name": "admin_moderation_action_admin_user_id_user_id_fk",
           "tableFrom": "admin_moderation_action",
           "tableTo": "user",
-          "columnsFrom": [
-            "admin_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["admin_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bambi_attendance": {
+      "name": "bambi_attendance",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attended_on": {
+          "name": "attended_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "bambi_attendance_attended_on_idx": {
+          "name": "bambi_attendance_attended_on_idx",
+          "columns": [
+            {
+              "expression": "attended_on",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "bambi_attendance_user_id_user_id_fk": {
+          "name": "bambi_attendance_user_id_user_id_fk",
+          "tableFrom": "bambi_attendance",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "bambi_attendance_user_id_attended_on_pk": {
+          "name": "bambi_attendance_user_id_attended_on_pk",
+          "columns": ["user_id", "attended_on"]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1573,12 +1576,8 @@
           "name": "bambi_legal_consent_user_id_user_id_fk",
           "tableFrom": "bambi_legal_consent",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1604,7 +1603,20 @@
           "name": "recipient_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "recipient_role": {
+          "name": "recipient_role",
+          "type": "bambi_user_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "read_by_user_id": {
+          "name": "read_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "actor_user_id": {
           "name": "actor_user_id",
@@ -1614,7 +1626,7 @@
         },
         "target_type": {
           "name": "target_type",
-          "type": "moderation_target_type",
+          "type": "notification_target_type",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
@@ -1667,6 +1679,22 @@
           "method": "btree",
           "with": {}
         },
+        "bambi_notification_recipient_role_idx": {
+          "name": "bambi_notification_recipient_role_idx",
+          "columns": [
+            {
+              "expression": "recipient_role",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"bambi_notification\".\"recipient_role\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "bambi_notification_chat_room_id_idx": {
           "name": "bambi_notification_chat_room_id_idx",
           "columns": [
@@ -1709,25 +1737,26 @@
           "name": "bambi_notification_recipient_user_id_user_id_fk",
           "tableFrom": "bambi_notification",
           "tableTo": "user",
-          "columnsFrom": [
-            "recipient_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["recipient_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "bambi_notification_read_by_user_id_user_id_fk": {
+          "name": "bambi_notification_read_by_user_id_user_id_fk",
+          "tableFrom": "bambi_notification",
+          "tableTo": "user",
+          "columnsFrom": ["read_by_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "bambi_notification_actor_user_id_user_id_fk": {
           "name": "bambi_notification_actor_user_id_user_id_fk",
           "tableFrom": "bambi_notification",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1735,12 +1764,84 @@
           "name": "bambi_notification_chat_room_id_chat_room_id_fk",
           "tableFrom": "bambi_notification",
           "tableTo": "chat_room",
-          "columnsFrom": [
-            "chat_room_id"
+          "columnsFrom": ["chat_room_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "bambi_notification_recipient_one_of_ck": {
+          "name": "bambi_notification_recipient_one_of_ck",
+          "value": "num_nonnulls(\"bambi_notification\".\"recipient_user_id\", \"bambi_notification\".\"recipient_role\") = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.bambi_point_transaction": {
+      "name": "bambi_point_transaction",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "bambi_point_transaction_user_id_idx": {
+          "name": "bambi_point_transaction_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "columnsTo": [
-            "id"
-          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "bambi_point_transaction_user_id_user_id_fk": {
+          "name": "bambi_point_transaction_user_id_user_id_fk",
+          "tableFrom": "bambi_point_transaction",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1903,12 +2004,8 @@
           "name": "bambi_profile_user_id_user_id_fk",
           "tableFrom": "bambi_profile",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2261,12 +2358,8 @@
           "name": "banned_word_created_by_user_id_user_id_fk",
           "tableFrom": "banned_word",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2412,12 +2505,8 @@
           "name": "chat_attachment_chat_room_id_chat_room_id_fk",
           "tableFrom": "chat_attachment",
           "tableTo": "chat_room",
-          "columnsFrom": [
-            "chat_room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chat_room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2425,12 +2514,8 @@
           "name": "chat_attachment_message_id_chat_message_id_fk",
           "tableFrom": "chat_attachment",
           "tableTo": "chat_message",
-          "columnsFrom": [
-            "message_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["message_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2438,12 +2523,8 @@
           "name": "chat_attachment_created_by_user_id_user_id_fk",
           "tableFrom": "chat_attachment",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2554,12 +2635,8 @@
           "name": "chat_message_chat_room_id_chat_room_id_fk",
           "tableFrom": "chat_message",
           "tableTo": "chat_room",
-          "columnsFrom": [
-            "chat_room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chat_room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2567,12 +2644,8 @@
           "name": "chat_message_sender_user_id_user_id_fk",
           "tableFrom": "chat_message",
           "tableTo": "user",
-          "columnsFrom": [
-            "sender_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["sender_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2685,12 +2758,8 @@
           "name": "chat_message_read_receipt_message_id_chat_message_id_fk",
           "tableFrom": "chat_message_read_receipt",
           "tableTo": "chat_message",
-          "columnsFrom": [
-            "message_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["message_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2698,12 +2767,8 @@
           "name": "chat_message_read_receipt_chat_room_id_chat_room_id_fk",
           "tableFrom": "chat_message_read_receipt",
           "tableTo": "chat_room",
-          "columnsFrom": [
-            "chat_room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chat_room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2711,12 +2776,8 @@
           "name": "chat_message_read_receipt_reader_user_id_user_id_fk",
           "tableFrom": "chat_message_read_receipt",
           "tableTo": "user",
-          "columnsFrom": [
-            "reader_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reader_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2799,12 +2860,8 @@
           "name": "chat_message_sync_queue_chat_room_id_chat_room_id_fk",
           "tableFrom": "chat_message_sync_queue",
           "tableTo": "chat_room",
-          "columnsFrom": [
-            "chat_room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chat_room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2812,12 +2869,8 @@
           "name": "chat_message_sync_queue_message_id_chat_message_id_fk",
           "tableFrom": "chat_message_sync_queue",
           "tableTo": "chat_message",
-          "columnsFrom": [
-            "message_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["message_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2825,12 +2878,8 @@
           "name": "chat_message_sync_queue_sender_user_id_user_id_fk",
           "tableFrom": "chat_message_sync_queue",
           "tableTo": "user",
-          "columnsFrom": [
-            "sender_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["sender_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3005,12 +3054,8 @@
           "name": "chat_room_job_post_id_job_post_id_fk",
           "tableFrom": "chat_room",
           "tableTo": "job_post",
-          "columnsFrom": [
-            "job_post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3018,12 +3063,8 @@
           "name": "chat_room_organization_id_organization_id_fk",
           "tableFrom": "chat_room",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3031,12 +3072,8 @@
           "name": "chat_room_team_id_team_id_fk",
           "tableFrom": "chat_room",
           "tableTo": "team",
-          "columnsFrom": [
-            "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["team_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -3044,12 +3081,8 @@
           "name": "chat_room_employer_user_id_user_id_fk",
           "tableFrom": "chat_room",
           "tableTo": "user",
-          "columnsFrom": [
-            "employer_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employer_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3057,12 +3090,8 @@
           "name": "chat_room_job_seeker_user_id_user_id_fk",
           "tableFrom": "chat_room",
           "tableTo": "user",
-          "columnsFrom": [
-            "job_seeker_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_seeker_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3215,12 +3244,8 @@
           "name": "community_comment_post_id_community_post_id_fk",
           "tableFrom": "community_comment",
           "tableTo": "community_post",
-          "columnsFrom": [
-            "post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3228,12 +3253,8 @@
           "name": "community_comment_author_user_id_user_id_fk",
           "tableFrom": "community_comment",
           "tableTo": "user",
-          "columnsFrom": [
-            "author_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3241,12 +3262,8 @@
           "name": "community_comment_parent_comment_id_community_comment_id_fk",
           "tableFrom": "community_comment",
           "tableTo": "community_comment",
-          "columnsFrom": [
-            "parent_comment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_comment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3457,12 +3474,8 @@
           "name": "community_post_author_user_id_user_id_fk",
           "tableFrom": "community_post",
           "tableTo": "user",
-          "columnsFrom": [
-            "author_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3579,12 +3592,8 @@
           "name": "community_post_like_post_id_community_post_id_fk",
           "tableFrom": "community_post_like",
           "tableTo": "community_post",
-          "columnsFrom": [
-            "post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3592,12 +3601,8 @@
           "name": "community_post_like_user_id_user_id_fk",
           "tableFrom": "community_post_like",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3690,12 +3695,8 @@
           "name": "contact_reveal_consent_interview_schedule_id_interview_schedule_id_fk",
           "tableFrom": "contact_reveal_consent",
           "tableTo": "interview_schedule",
-          "columnsFrom": [
-            "interview_schedule_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["interview_schedule_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3703,12 +3704,8 @@
           "name": "contact_reveal_consent_user_id_user_id_fk",
           "tableFrom": "contact_reveal_consent",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4343,12 +4340,8 @@
           "name": "crawled_job_post_region_code_region_code_fk",
           "tableFrom": "crawled_job_post",
           "tableTo": "region",
-          "columnsFrom": [
-            "region_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
+          "columnsFrom": ["region_code"],
+          "columnsTo": ["code"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4356,12 +4349,8 @@
           "name": "crawled_job_post_district_code_region_code_fk",
           "tableFrom": "crawled_job_post",
           "tableTo": "region",
-          "columnsFrom": [
-            "district_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
+          "columnsFrom": ["district_code"],
+          "columnsTo": ["code"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4369,12 +4358,8 @@
           "name": "crawled_job_post_detail_images_edited_by_user_id_user_id_fk",
           "tableFrom": "crawled_job_post",
           "tableTo": "user",
-          "columnsFrom": [
-            "detail_images_edited_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["detail_images_edited_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -4504,12 +4489,8 @@
           "name": "employer_organization_profile_organization_id_organization_id_fk",
           "tableFrom": "employer_organization_profile",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4619,12 +4600,8 @@
           "name": "employer_team_profile_organization_id_organization_id_fk",
           "tableFrom": "employer_team_profile",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4632,12 +4609,8 @@
           "name": "employer_team_profile_team_id_team_id_fk",
           "tableFrom": "employer_team_profile",
           "tableTo": "team",
-          "columnsFrom": [
-            "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["team_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4645,12 +4618,8 @@
           "name": "employer_team_profile_region_code_region_code_fk",
           "tableFrom": "employer_team_profile",
           "tableTo": "region",
-          "columnsFrom": [
-            "region_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
+          "columnsFrom": ["region_code"],
+          "columnsTo": ["code"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4658,12 +4627,8 @@
           "name": "employer_team_profile_district_code_region_code_fk",
           "tableFrom": "employer_team_profile",
           "tableTo": "region",
-          "columnsFrom": [
-            "district_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
+          "columnsFrom": ["district_code"],
+          "columnsTo": ["code"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4858,12 +4823,8 @@
           "name": "interview_schedule_chat_room_id_chat_room_id_fk",
           "tableFrom": "interview_schedule",
           "tableTo": "chat_room",
-          "columnsFrom": [
-            "chat_room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chat_room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4871,12 +4832,8 @@
           "name": "interview_schedule_proposed_by_user_id_user_id_fk",
           "tableFrom": "interview_schedule",
           "tableTo": "user",
-          "columnsFrom": [
-            "proposed_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["proposed_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4924,12 +4881,8 @@
           "name": "job_ad_banner_layout_job_post_id_job_post_id_fk",
           "tableFrom": "job_ad_banner_layout",
           "tableTo": "job_post",
-          "columnsFrom": [
-            "job_post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5027,12 +4980,8 @@
           "name": "job_boost_event_job_post_id_job_post_id_fk",
           "tableFrom": "job_boost_event",
           "tableTo": "job_post",
-          "columnsFrom": [
-            "job_post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5040,12 +4989,8 @@
           "name": "job_boost_event_organization_id_organization_id_fk",
           "tableFrom": "job_boost_event",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5053,12 +4998,8 @@
           "name": "job_boost_event_actor_user_id_user_id_fk",
           "tableFrom": "job_boost_event",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -5177,12 +5118,8 @@
           "name": "job_performance_event_job_post_id_job_post_id_fk",
           "tableFrom": "job_performance_event",
           "tableTo": "job_post",
-          "columnsFrom": [
-            "job_post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5190,12 +5127,8 @@
           "name": "job_performance_event_organization_id_organization_id_fk",
           "tableFrom": "job_performance_event",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5203,12 +5136,8 @@
           "name": "job_performance_event_actor_user_id_user_id_fk",
           "tableFrom": "job_performance_event",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -5581,12 +5510,8 @@
           "name": "job_post_organization_id_organization_id_fk",
           "tableFrom": "job_post",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5594,12 +5519,8 @@
           "name": "job_post_team_id_team_id_fk",
           "tableFrom": "job_post",
           "tableTo": "team",
-          "columnsFrom": [
-            "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["team_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -5607,12 +5528,8 @@
           "name": "job_post_created_by_user_id_user_id_fk",
           "tableFrom": "job_post",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5620,12 +5537,8 @@
           "name": "job_post_crawled_from_id_crawled_job_post_id_fk",
           "tableFrom": "job_post",
           "tableTo": "crawled_job_post",
-          "columnsFrom": [
-            "crawled_from_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["crawled_from_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -5633,12 +5546,8 @@
           "name": "job_post_region_code_region_code_fk",
           "tableFrom": "job_post",
           "tableTo": "region",
-          "columnsFrom": [
-            "region_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
+          "columnsFrom": ["region_code"],
+          "columnsTo": ["code"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5646,12 +5555,8 @@
           "name": "job_post_district_code_region_code_fk",
           "tableFrom": "job_post",
           "tableTo": "region",
-          "columnsFrom": [
-            "district_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
+          "columnsFrom": ["district_code"],
+          "columnsTo": ["code"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5659,12 +5564,8 @@
           "name": "job_post_ad_product_id_ad_product_id_fk",
           "tableFrom": "job_post",
           "tableTo": "ad_product",
-          "columnsFrom": [
-            "ad_product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ad_product_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -5848,12 +5749,8 @@
           "name": "job_post_media_job_post_id_job_post_id_fk",
           "tableFrom": "job_post_media",
           "tableTo": "job_post",
-          "columnsFrom": [
-            "job_post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5861,12 +5758,8 @@
           "name": "job_post_media_organization_id_organization_id_fk",
           "tableFrom": "job_post_media",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5874,12 +5767,8 @@
           "name": "job_post_media_uploaded_by_user_id_user_id_fk",
           "tableFrom": "job_post_media",
           "tableTo": "user",
-          "columnsFrom": [
-            "uploaded_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["uploaded_by_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -5991,12 +5880,8 @@
           "name": "job_promotion_boost_event_campaign_id_job_promotion_campaign_id_fk",
           "tableFrom": "job_promotion_boost_event",
           "tableTo": "job_promotion_campaign",
-          "columnsFrom": [
-            "campaign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6004,12 +5889,8 @@
           "name": "job_promotion_boost_event_job_post_id_job_post_id_fk",
           "tableFrom": "job_promotion_boost_event",
           "tableTo": "job_post",
-          "columnsFrom": [
-            "job_post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6017,12 +5898,8 @@
           "name": "job_promotion_boost_event_organization_id_organization_id_fk",
           "tableFrom": "job_promotion_boost_event",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6030,12 +5907,8 @@
           "name": "job_promotion_boost_event_actor_user_id_user_id_fk",
           "tableFrom": "job_promotion_boost_event",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -6223,12 +6096,8 @@
           "name": "job_promotion_campaign_job_post_id_job_post_id_fk",
           "tableFrom": "job_promotion_campaign",
           "tableTo": "job_post",
-          "columnsFrom": [
-            "job_post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6236,161 +6105,9 @@
           "name": "job_promotion_campaign_organization_id_organization_id_fk",
           "tableFrom": "job_promotion_campaign",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.main_popup": {
-      "name": "main_popup",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "slot_index": {
-          "name": "slot_index",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "enabled": {
-          "name": "enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "content_type": {
-          "name": "content_type",
-          "type": "main_popup_content_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'image'"
-        },
-        "original_image": {
-          "name": "original_image",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "edited_image": {
-          "name": "edited_image",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "content_width": {
-          "name": "content_width",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 420
-        },
-        "content_height": {
-          "name": "content_height",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 320
-        },
-        "text_document": {
-          "name": "text_document",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "link_path": {
-          "name": "link_path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "starts_at": {
-          "name": "starts_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ends_at": {
-          "name": "ends_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revision": {
-          "name": "revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "updated_by_user_id": {
-          "name": "updated_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "main_popup_slot_index_uidx": {
-          "name": "main_popup_slot_index_uidx",
-          "columns": [
-            {
-              "expression": "slot_index",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "main_popup_updated_by_user_id_user_id_fk": {
-          "name": "main_popup_updated_by_user_id_user_id_fk",
-          "tableFrom": "main_popup",
-          "tableTo": "user",
-          "columnsFrom": [
-            "updated_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -6573,12 +6290,8 @@
           "name": "report_reporter_user_id_user_id_fk",
           "tableFrom": "report",
           "tableTo": "user",
-          "columnsFrom": [
-            "reporter_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reporter_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -6752,12 +6465,8 @@
           "name": "review_job_post_id_job_post_id_fk",
           "tableFrom": "review",
           "tableTo": "job_post",
-          "columnsFrom": [
-            "job_post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_post_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6765,12 +6474,8 @@
           "name": "review_organization_id_organization_id_fk",
           "tableFrom": "review",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6778,12 +6483,8 @@
           "name": "review_chat_room_id_chat_room_id_fk",
           "tableFrom": "review",
           "tableTo": "chat_room",
-          "columnsFrom": [
-            "chat_room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chat_room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6791,12 +6492,8 @@
           "name": "review_reviewer_user_id_user_id_fk",
           "tableFrom": "review",
           "tableTo": "user",
-          "columnsFrom": [
-            "reviewer_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reviewer_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -6958,12 +6655,8 @@
           "name": "support_inquiry_author_user_id_user_id_fk",
           "tableFrom": "support_inquiry",
           "tableTo": "user",
-          "columnsFrom": [
-            "author_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7054,12 +6747,8 @@
           "name": "support_inquiry_message_inquiry_id_support_inquiry_id_fk",
           "tableFrom": "support_inquiry_message",
           "tableTo": "support_inquiry",
-          "columnsFrom": [
-            "inquiry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inquiry_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7067,12 +6756,8 @@
           "name": "support_inquiry_message_author_user_id_user_id_fk",
           "tableFrom": "support_inquiry_message",
           "tableTo": "user",
-          "columnsFrom": [
-            "author_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7148,12 +6833,8 @@
           "name": "user_block_blocker_user_id_user_id_fk",
           "tableFrom": "user_block",
           "tableTo": "user",
-          "columnsFrom": [
-            "blocker_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["blocker_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -7161,12 +6842,8 @@
           "name": "user_block_blocked_user_id_user_id_fk",
           "tableFrom": "user_block",
           "tableTo": "user",
-          "columnsFrom": [
-            "blocked_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["blocked_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -7174,12 +6851,8 @@
           "name": "user_block_chat_room_id_chat_room_id_fk",
           "tableFrom": "user_block",
           "tableTo": "chat_room",
-          "columnsFrom": [
-            "chat_room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chat_room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7227,19 +6900,12 @@
     "public.account_status": {
       "name": "account_status",
       "schema": "public",
-      "values": [
-        "active",
-        "warned",
-        "suspended"
-      ]
+      "values": ["active", "warned", "suspended"]
     },
     "public.ad_placement_kind": {
       "name": "ad_placement_kind",
       "schema": "public",
-      "values": [
-        "listing",
-        "banner"
-      ]
+      "values": ["listing", "banner"]
     },
     "public.ad_preview_template": {
       "name": "ad_preview_template",
@@ -7257,122 +6923,67 @@
     "public.bambi_gender": {
       "name": "bambi_gender",
       "schema": "public",
-      "values": [
-        "male",
-        "female"
-      ]
+      "values": ["male", "female"]
     },
     "public.bambi_legal_consent_document": {
       "name": "bambi_legal_consent_document",
       "schema": "public",
-      "values": [
-        "terms_of_service",
-        "privacy_policy"
-      ]
+      "values": ["terms_of_service", "privacy_policy"]
     },
     "public.bambi_user_role": {
       "name": "bambi_user_role",
       "schema": "public",
-      "values": [
-        "job_seeker",
-        "employer",
-        "admin",
-        "guest",
-        "legal_advisor"
-      ]
+      "values": ["job_seeker", "employer", "admin", "guest", "legal_advisor"]
     },
     "public.banned_word_scope": {
       "name": "banned_word_scope",
       "schema": "public",
-      "values": [
-        "content",
-        "display_name"
-      ]
+      "values": ["content", "display_name"]
     },
     "public.chat_attachment_category": {
       "name": "chat_attachment_category",
       "schema": "public",
-      "values": [
-        "image",
-        "pdf"
-      ]
+      "values": ["image", "pdf"]
     },
     "public.community_board": {
       "name": "community_board",
       "schema": "public",
-      "values": [
-        "free",
-        "work_talk",
-        "market",
-        "notice",
-        "legal"
-      ]
+      "values": ["free", "work_talk", "market", "notice", "legal"]
     },
     "public.community_content_status": {
       "name": "community_content_status",
       "schema": "public",
-      "values": [
-        "published",
-        "hidden",
-        "deleted"
-      ]
+      "values": ["published", "hidden", "deleted"]
     },
     "public.crawl_content_type": {
       "name": "crawl_content_type",
       "schema": "public",
-      "values": [
-        "job_post",
-        "community"
-      ]
+      "values": ["job_post", "community"]
     },
     "public.crawl_run_status": {
       "name": "crawl_run_status",
       "schema": "public",
-      "values": [
-        "running",
-        "success",
-        "failed",
-        "aborted_low_yield"
-      ]
+      "values": ["running", "success", "failed", "aborted_low_yield"]
     },
     "public.crawl_source_site": {
       "name": "crawl_source_site",
       "schema": "public",
-      "values": [
-        "foxalba",
-        "queenalba"
-      ]
+      "values": ["foxalba", "queenalba"]
     },
     "public.crawled_post_status": {
       "name": "crawled_post_status",
       "schema": "public",
-      "values": [
-        "active",
-        "needs_review",
-        "expired",
-        "removed"
-      ]
+      "values": ["active", "needs_review", "expired", "removed"]
     },
     "public.employer_verification_status": {
       "name": "employer_verification_status",
       "schema": "public",
-      "values": [
-        "none",
-        "pending",
-        "verified",
-        "rejected"
-      ]
+      "values": ["none", "pending", "verified", "rejected"]
     },
     "public.interview_status": {
       "name": "interview_status",
       "schema": "public",
-      "values": [
-        "proposed",
-        "confirmed",
-        "declined",
-        "canceled",
-        "completed"
-      ]
+      "values": ["proposed", "confirmed", "declined", "canceled", "completed"]
     },
     "public.job_exposure_type": {
       "name": "job_exposure_type",
@@ -7405,46 +7016,27 @@
     "public.job_payment_method": {
       "name": "job_payment_method",
       "schema": "public",
-      "values": [
-        "card",
-        "bank_transfer"
-      ]
+      "values": ["card", "bank_transfer"]
     },
     "public.job_payment_status": {
       "name": "job_payment_status",
       "schema": "public",
-      "values": [
-        "unpaid",
-        "paid"
-      ]
+      "values": ["unpaid", "paid"]
     },
     "public.job_performance_event_type": {
       "name": "job_performance_event_type",
       "schema": "public",
-      "values": [
-        "impression",
-        "detail_view",
-        "chat_start",
-        "contact_reveal"
-      ]
+      "values": ["impression", "detail_view", "chat_start", "contact_reveal"]
     },
     "public.job_post_media_usage": {
       "name": "job_post_media_usage",
       "schema": "public",
-      "values": [
-        "cover",
-        "detail",
-        "ad_horizontal",
-        "ad_vertical"
-      ]
+      "values": ["cover", "detail", "ad_horizontal", "ad_vertical"]
     },
     "public.job_post_source": {
       "name": "job_post_source",
       "schema": "public",
-      "values": [
-        "original",
-        "converted"
-      ]
+      "values": ["original", "converted"]
     },
     "public.job_post_status": {
       "name": "job_post_status",
@@ -7456,14 +7048,6 @@
         "hidden",
         "rejected",
         "on_hold"
-      ]
-    },
-    "public.main_popup_content_type": {
-      "name": "main_popup_content_type",
-      "schema": "public",
-      "values": [
-        "image",
-        "text"
       ]
     },
     "public.moderation_target_type": {
@@ -7482,6 +7066,25 @@
         "team_invitation"
       ]
     },
+    "public.notification_target_type": {
+      "name": "notification_target_type",
+      "schema": "public",
+      "values": [
+        "chat_message",
+        "chat_room",
+        "interview_schedule",
+        "contact_reveal",
+        "support_inquiry",
+        "report",
+        "community_post",
+        "community_comment",
+        "review",
+        "job_post",
+        "employer_verification",
+        "team_invitation",
+        "organization_member"
+      ]
+    },
     "public.promotion_status": {
       "name": "promotion_status",
       "schema": "public",
@@ -7497,50 +7100,27 @@
     "public.promotion_tier": {
       "name": "promotion_tier",
       "schema": "public",
-      "values": [
-        "premium",
-        "recommended",
-        "standard"
-      ]
+      "values": ["premium", "recommended", "standard"]
     },
     "public.report_status": {
       "name": "report_status",
       "schema": "public",
-      "values": [
-        "open",
-        "reviewing",
-        "resolved",
-        "dismissed"
-      ]
+      "values": ["open", "reviewing", "resolved", "dismissed"]
     },
     "public.review_status": {
       "name": "review_status",
       "schema": "public",
-      "values": [
-        "published",
-        "pending_review",
-        "hidden"
-      ]
+      "values": ["published", "pending_review", "hidden"]
     },
     "public.support_inquiry_category": {
       "name": "support_inquiry_category",
       "schema": "public",
-      "values": [
-        "account",
-        "job_post",
-        "payment",
-        "report",
-        "etc"
-      ]
+      "values": ["account", "job_post", "payment", "report", "etc"]
     },
     "public.support_inquiry_status": {
       "name": "support_inquiry_status",
       "schema": "public",
-      "values": [
-        "open",
-        "answered",
-        "closed"
-      ]
+      "values": ["open", "answered", "closed"]
     }
   },
   "schemas": {},
