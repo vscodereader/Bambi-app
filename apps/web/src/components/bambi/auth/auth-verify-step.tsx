@@ -4,8 +4,8 @@
 import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { PhoneVerifyDialog } from "../phone-verify-dialog";
 
-// 모바일 인증은 리디렉션이라, 복귀한 화면이 인증을 시작한 화면과 다를 수 있다(가입 단계에서
-// 시작해도 쿼리에 auth=signup이 없으면 로그인 폼으로 돌아온다). 그 화면에 있는 게스트 버튼이
+// 모바일 인증은 리디렉션이라, 복귀한 화면이 인증을 시작한 화면과 다를 수 있다(모드 전환은
+// auth-panel이 쿼리 auth에 기록하지만, 그 밖의 화면 상태는 복원되지 않는다). 그 화면의 게스트 버튼이
 // 이 인증 결과를 가로채지 않도록 auth-panel의 GUEST_INTENT와 값을 다르게 둔다
 // (처리 주체를 가리는 방식은 phone-verify-dialog 참고).
 const SIGNUP_INTENT = "auth-panel:signup";
