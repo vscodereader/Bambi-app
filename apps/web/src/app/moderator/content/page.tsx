@@ -7,6 +7,16 @@
 // 조치는 행 우측 Row Actions(DropdownMenu) → 사유 입력 Dialog → mutation 순서로 나간다.
 // 사유 Dialog는 목록 밖에 하나만 두고 대상만 갈아끼운다(행마다 Dialog를 두면 20개가 마운트된다).
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
@@ -23,6 +33,13 @@ import {
 	DropdownMenuTrigger,
 } from "@bambi-app/ui/components/dropdown-menu";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import {
 	Table,
 	TableBody,
@@ -95,9 +112,14 @@ const STATUS_BADGE_VARIANT: Record<
 	published: "secondary",
 };
 
-// 선택 열은 커뮤니티 글 탭에서만 붙는다(다중 선택 + 일괄 삭제 대상).
+// 선택 열과 게시판 열은 커뮤니티 글 탭에서만 붙는다(다중 선택 + 일괄 삭제 대상,
+// 게시판은 글에만 있는 축이다). 펼친 행의 colSpan도 그만큼 늘어난다.
 const TABLE_COLUMN_COUNT = 6;
+const COMMUNITY_POST_EXTRA_COLUMNS = 2;
 const SELECTABLE_TARGET_TYPE: TargetType = "community_post";
+
+// 게시판 필터의 "전체" 값. Select는 빈 문자열을 값으로 쓰기 어려워 센티넬을 둔다.
+const ALL_BOARDS = "all";
 
 // 사유 Dialog가 조치를 확정할 때까지 들고 있는 대상. null이면 Dialog가 닫힌 상태다.
 // ids가 2건 이상이면 일괄 조치다(커뮤니티 글 전용).
@@ -108,6 +130,7 @@ interface PendingAction {
 	title: string;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: 한 화면이 유형 탭·게시판 필터·다중 선택·사유 Dialog·영구 삭제 확인을 함께 조율하는 최상위 경계다(행 액션·필터는 이미 컴포넌트로 뗐다).
 export default function ModeratorContentPage() {
 	const queryClient = useQueryClient();
 	const [targetType, setTargetType] = useState<TargetType>("community_post");
@@ -116,11 +139,31 @@ export default function ModeratorContentPage() {
 	const [pending, setPending] = useState<PendingAction | null>(null);
 	const [reason, setReason] = useState("");
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
+	const [board, setBoard] = useState(ALL_BOARDS);
+	// 영구 삭제 확인 대상(제목은 경고 문구에 그대로 쓴다). null이면 확인 창이 닫힌 상태다.
+	const [purging, setPurging] = useState<{ id: string; title: string } | null>(
+		null
+	);
 
 	const listQuery = useQuery(
 		orpc.bambi.moderation.listModeratableContent.queryOptions({
-			input: { page, targetType },
+			input: {
+				// 게시판은 커뮤니티 글에만 있는 축이라 다른 탭에서는 보내지 않는다.
+				board:
+					targetType === SELECTABLE_TARGET_TYPE && board !== ALL_BOARDS
+						? board
+						: undefined,
+				page,
+				targetType,
+			},
 		})
+	);
+
+	// 게시판 라벨의 정본은 DB다(빌트인 맵은 폴백). 목록 열·필터·펼친 행이 함께 쓰므로
+	// 화면 최상단에서 한 번만 받는다.
+	const boardsQuery = useQuery(orpc.bambi.communityBoards.list.queryOptions());
+	const boardLabels = Object.fromEntries(
+		(boardsQuery.data ?? []).map((item) => [item.key, item.label])
 	);
 
 	// 펼친 행에 대해서만 전체 본문을 조회한다(목록 excerpt는 120자라 내용 판단이 어렵다).
@@ -162,6 +205,19 @@ export default function ModeratorContentPage() {
 		orpc.bambi.moderation.setInquiryStatusByAdmin.mutationOptions({
 			onSuccess: invalidate,
 			onError,
+		})
+	);
+	// 영구 삭제는 사유를 받지 않는다(선행 삭제 조치에 이미 사유가 남아 있다) — 확인 창만 거친다.
+	const hardDeletePost = useMutation(
+		orpc.bambi.moderation.hardDeleteCommunityPost.mutationOptions({
+			onError,
+			onSuccess: async () => {
+				toast.success("영구 삭제했어요.");
+				setPurging(null);
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.moderation.listModeratableContent.key(),
+				});
+			},
 		})
 	);
 	// 커뮤니티 글 일괄 조치. 서버에 묶음 프로시저가 없어 글 단위 조치를 모아 보내고,
@@ -242,10 +298,27 @@ export default function ModeratorContentPage() {
 		// 유형이 바뀌면 펼친 행의 id가 다른 테이블 것이 되므로 접는다.
 		setExpandedId(null);
 		setSelectedIds([]);
+		setBoard(ALL_BOARDS);
+	};
+
+	const switchBoard = (value: string) => {
+		setBoard(value);
+		setPage(1);
+		setExpandedId(null);
+		setSelectedIds([]);
 	};
 
 	const items = listQuery.data?.items ?? [];
 	const isSelectable = targetType === SELECTABLE_TARGET_TYPE;
+	// 펼친 행은 헤더 열 수만큼 가로로 뻗는다(선택·게시판 열이 붙는 탭에서는 그만큼 넓다).
+	const expandedColSpan = isSelectable
+		? TABLE_COLUMN_COUNT + COMMUNITY_POST_EXTRA_COLUMNS
+		: TABLE_COLUMN_COUNT;
+	// 값은 게시판 key 원값, 표시는 DB 라벨(운영자가 이름을 바꾸면 따라간다).
+	const boardFilterItems: Record<string, string> = {
+		[ALL_BOARDS]: "전체",
+		...boardLabels,
+	};
 	const toggleSelected = (id: string) =>
 		setSelectedIds((prev) =>
 			prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
@@ -275,6 +348,16 @@ export default function ModeratorContentPage() {
 					))}
 				</TabsList>
 			</Tabs>
+
+			{/* 게시판 필터는 커뮤니티 글 탭에서만 의미가 있다(댓글·문의에는 게시판 축이 없다).
+			    특정 게시판 글을 모아 비우고 그 게시판을 지우는 흐름의 출발점이다. */}
+			{isSelectable ? (
+				<BoardFilter
+					items={boardFilterItems}
+					onChange={switchBoard}
+					value={board}
+				/>
+			) : null}
 
 			{isSelectable && selectedIds.length > 0 ? (
 				<div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3">
@@ -332,6 +415,7 @@ export default function ModeratorContentPage() {
 								<span className="sr-only">상세보기</span>
 							</TableHead>
 							<TableHead>내용</TableHead>
+							{isSelectable ? <TableHead>게시판</TableHead> : null}
 							<TableHead>작성자</TableHead>
 							<TableHead>상태</TableHead>
 							<TableHead>등록일</TableHead>
@@ -381,6 +465,11 @@ export default function ModeratorContentPage() {
 												{clampCellText(item.excerpt)}
 											</span>
 										</TableCell>
+										{isSelectable ? (
+											<TableCell>
+												{resolveMetaLabel(item.board, null, boardLabels) ?? "—"}
+											</TableCell>
+										) : null}
 										<TableCell>{item.authorName}</TableCell>
 										<TableCell>
 											<Badge variant={STATUS_BADGE_VARIANT[item.status]}>
@@ -389,57 +478,34 @@ export default function ModeratorContentPage() {
 										</TableCell>
 										<TableCell>{formatDateTime(item.createdAt)}</TableCell>
 										<TableCell>
-											<DropdownMenu>
-												<DropdownMenuTrigger
-													render={
-														<Button
-															aria-label="조치 메뉴"
-															size="icon-sm"
-															variant="ghost"
-														>
-															<MoreHorizontalIcon />
-														</Button>
-													}
-												/>
-												<DropdownMenuContent align="end" className="w-32">
-													{STATUS_ACTIONS.filter(
-														(action) => action.status !== item.status
-													).map((action) => (
-														<DropdownMenuItem
-															key={action.status}
-															onClick={() =>
-																setPending({
-																	ids: [item.id],
-																	label: action.label,
-																	status: action.status,
-																	title: item.title,
-																})
-															}
-															variant={
-																action.status === "deleted"
-																	? "destructive"
-																	: "default"
-															}
-														>
-															{action.label}
-														</DropdownMenuItem>
-													))}
-												</DropdownMenuContent>
-											</DropdownMenu>
+											<RowActions
+												canHardDelete={
+													isSelectable && item.status === "deleted"
+												}
+												onPurge={() =>
+													setPurging({ id: item.id, title: item.title })
+												}
+												onSelect={(action) =>
+													setPending({
+														ids: [item.id],
+														label: action.label,
+														status: action.status,
+														title: item.title,
+													})
+												}
+												status={item.status}
+											/>
 										</TableCell>
 									</TableRow>
 									{isExpanded ? (
 										<TableRow>
 											<TableCell
 												className="whitespace-normal bg-muted/30"
-												colSpan={
-													isSelectable
-														? TABLE_COLUMN_COUNT + 1
-														: TABLE_COLUMN_COUNT
-												}
+												colSpan={expandedColSpan}
 											>
 												<DetailPanel
 													board={detailQuery.data?.board}
+													boardLabels={boardLabels}
 													body={detailQuery.data?.body}
 													category={detailQuery.data?.category}
 													isLoading={detailQuery.isPending}
@@ -528,7 +594,122 @@ export default function ModeratorContentPage() {
 					</div>
 				</DialogContent>
 			</Dialog>
+
+			{/* 영구 삭제는 복구 경로가 없어 확인 단계를 한 번 둔다(게시판 삭제와 같은 관례).
+			    가부는 서버가 판정하고 실패 문구도 서버 것을 그대로 토스트한다. */}
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setPurging(null);
+					}
+				}}
+				open={purging !== null}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							「{purging?.title}」 글을 영구 삭제할까요?
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							되돌릴 수 없습니다. 글과 달린 댓글·추천이 DB에서 함께 사라지고,
+							복구할 수 없습니다. 게시판을 비워 삭제하려는 경우에만 쓰세요.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={hardDeletePost.isPending}
+							onClick={() => {
+								if (purging) {
+									hardDeletePost.mutate({ postId: purging.id });
+								}
+							}}
+							variant="destructive"
+						>
+							영구 삭제하기
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
+	);
+}
+
+// 게시판 필터(커뮤니티 글 탭 전용). 값은 게시판 key 원값, 표시는 DB 라벨이다.
+function BoardFilter({
+	items,
+	onChange,
+	value,
+}: {
+	items: Record<string, string>;
+	onChange: (value: string) => void;
+	value: string;
+}) {
+	return (
+		<div className="flex flex-col gap-1.5">
+			<Label htmlFor="filter-board">게시판</Label>
+			<Select
+				items={items}
+				onValueChange={(next) => onChange(String(next))}
+				value={value}
+			>
+				<SelectTrigger className="w-48" id="filter-board">
+					<SelectValue />
+				</SelectTrigger>
+				<SelectContent>
+					{Object.entries(items).map(([key, label]) => (
+						<SelectItem key={key} value={key}>
+							{label}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+		</div>
+	);
+}
+
+// 행 우측 조치 메뉴. 현재 상태와 같은 조치는 빼고, 영구 삭제는 이미 삭제된 커뮤니티
+// 글에서만 붙인다(서버도 같은 조건으로 거절한다). 목록 본체에서 떼어 내 행 렌더러의
+// 분기 밀도를 낮춘다.
+function RowActions({
+	canHardDelete,
+	onPurge,
+	onSelect,
+	status,
+}: {
+	canHardDelete: boolean;
+	onPurge: () => void;
+	onSelect: (action: { label: string; status: ContentStatus }) => void;
+	status: ContentStatus;
+}) {
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				render={
+					<Button aria-label="조치 메뉴" size="icon-sm" variant="ghost">
+						<MoreHorizontalIcon />
+					</Button>
+				}
+			/>
+			<DropdownMenuContent align="end" className="w-32">
+				{STATUS_ACTIONS.filter((action) => action.status !== status).map(
+					(action) => (
+						<DropdownMenuItem
+							key={action.status}
+							onClick={() => onSelect(action)}
+							variant={action.status === "deleted" ? "destructive" : "default"}
+						>
+							{action.label}
+						</DropdownMenuItem>
+					)
+				)}
+				{canHardDelete ? (
+					<DropdownMenuItem onClick={onPurge} variant="destructive">
+						영구 삭제하기
+					</DropdownMenuItem>
+				) : null}
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 
@@ -553,24 +734,20 @@ const resolveMetaLabel = (
 };
 
 // 펼친 행의 전체 본문 패널. 목록 excerpt와 달리 줄바꿈을 유지해 원문 형태로 보여준다.
+// 게시판 라벨 맵은 목록 열·필터와 같은 것을 위에서 받아 쓴다(쿼리는 화면에 하나뿐이다).
 function DetailPanel({
 	body,
 	board,
+	boardLabels,
 	category,
 	isLoading,
 }: {
 	body: string | undefined;
 	board: string | null | undefined;
+	boardLabels: Record<string, string>;
 	category: string | null | undefined;
 	isLoading: boolean;
 }) {
-	// 게시판 라벨 맵. 목록 전체가 아니라 펼친 행에서만 필요하고, 여러 행을 펼쳐도
-	// react-query 캐시가 한 번만 받아 온다.
-	const boardsQuery = useQuery(orpc.bambi.communityBoards.list.queryOptions());
-	const boardLabels = Object.fromEntries(
-		(boardsQuery.data ?? []).map((item) => [item.key, item.label])
-	);
-
 	if (isLoading) {
 		return (
 			<p className="m-0 text-muted-foreground">본문을 불러오는 중이에요.</p>
