@@ -332,9 +332,16 @@ const moderatableTargetTypeSchema = z.enum([
 ]);
 
 const listModeratableContentInput = z.object({
+	// 게시판 key 필터(커뮤니티 글 전용, 다른 유형에서는 무시된다). 존재 여부는 검사하지
+	// 않는다 — 없는 key면 빈 목록이 나올 뿐이고, 목록은 이미 게시판을 조인하지 않는다.
+	board: z.string().trim().min(1).max(40).optional(),
 	page: z.number().int().min(1).default(1),
 	status: contentStatusSchema.optional(),
 	targetType: moderatableTargetTypeSchema,
+});
+
+const hardDeleteCommunityPostInput = z.object({
+	postId: z.string().uuid(),
 });
 
 const getModeratableContentDetailInput = z.object({
@@ -2909,9 +2916,10 @@ export const moderationRouter = {
 			const excerpt = (text: string) => text.slice(0, EXCERPT_LENGTH);
 
 			if (input.targetType === "community_post") {
-				const where = input.status
-					? eq(communityPost.status, input.status)
-					: undefined;
+				const where = and(
+					input.status ? eq(communityPost.status, input.status) : undefined,
+					input.board ? eq(communityPost.board, input.board) : undefined
+				);
 
 				const [totalRow] = await db
 					.select({ value: count() })
@@ -2930,6 +2938,9 @@ export const moderationRouter = {
 					items: rows.map((row) => ({
 						id: row.id,
 						targetType: "community_post" as const,
+						// 목록에서 게시판을 바로 보고 걸러야 게시판 비우기(영구 삭제 → 게시판 삭제)를
+						// 한 화면에서 끝낼 수 있다. 라벨 변환은 화면 몫이다(저장 원값을 그대로 준다).
+						board: row.board as string | null,
 						title: row.title,
 						// 본문은 Tiptap JSON이라 평문을 뽑아 발췌한다(기존 신고 컨텍스트와 동일 규칙).
 						excerpt: excerpt(toCommunityBodyPreview(row.body)),
@@ -2979,6 +2990,9 @@ export const moderationRouter = {
 					items: rows.map((row) => ({
 						id: row.id,
 						targetType: "community_comment" as const,
+						// 게시판 열은 커뮤니티 글 탭 전용이라 나머지 유형은 null로 채워
+						// 화면이 유형별 좁히기 없이 한 형태만 렌더하게 둔다(상세와 같은 관례).
+						board: null as string | null,
 						// 댓글은 제목이 없으므로 원글 제목을 맥락으로 보여준다.
 						title: row.postTitle,
 						excerpt: excerpt(row.body),
@@ -3024,6 +3038,7 @@ export const moderationRouter = {
 				items: rows.map((row) => ({
 					id: row.id,
 					targetType: "support_inquiry" as const,
+					board: null as string | null,
 					title: row.title,
 					excerpt: excerpt(row.body),
 					authorName: row.authorName ?? "(표시명 없음)",
@@ -3133,6 +3148,66 @@ export const moderationRouter = {
 				board: null as string | null,
 				category: row.category as string | null,
 			};
+		}),
+
+	// 커뮤니티 글 영구 삭제(하드 삭제). 조치 삭제는 소프트 삭제라 행이 남고, 그 행이
+	// community_post.board FK로 게시판 삭제를 막는다(communityBoards.remove의 409) —
+	// 게시판을 비우는 마지막 한 걸음이다. 되돌릴 수 없으므로 이미 삭제 조치한 글만 받는다.
+	// 댓글·추천은 FK cascade가 함께 지우고, 신고·알림의 targetId는 FK가 아니라 남지만
+	// 대상 컨텍스트 조회가 이미 null을 허용한다(getReportTargetContext). 감사 로그도 같은
+	// 이유로 남길 수 있으나 가리킬 행이 사라지므로 제목·게시판을 metadata에 스냅샷한다.
+	// 사유는 선행 삭제 조치가 이미 받아 두었으므로 여기서 다시 받지 않는다(확인 한 단계).
+	hardDeleteCommunityPost: adminProcedure
+		.input(hardDeleteCommunityPostInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			await db.transaction(async (tx) => {
+				const [post] = await tx
+					.select({
+						authorDisplayName: communityPost.authorDisplayName,
+						board: communityPost.board,
+						createdAt: communityPost.createdAt,
+						status: communityPost.status,
+						title: communityPost.title,
+					})
+					.from(communityPost)
+					.where(eq(communityPost.id, input.postId))
+					.limit(1);
+
+				if (!post) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "글을 찾을 수 없습니다.",
+					});
+				}
+
+				if (post.status !== "deleted") {
+					throw new ORPCError("CONFLICT", {
+						message:
+							"삭제 처리한 글만 영구 삭제할 수 있습니다. 먼저 삭제 조치를 해 주세요.",
+					});
+				}
+
+				await tx
+					.delete(communityPost)
+					.where(eq(communityPost.id, input.postId));
+
+				await tx.insert(adminModerationAction).values({
+					action: "hard_delete",
+					adminUserId: admin.userId,
+					metadata: {
+						authorName: post.authorDisplayName,
+						board: post.board,
+						createdAt: post.createdAt.toISOString(),
+						title: post.title,
+					},
+					reason: "영구 삭제",
+					targetId: input.postId,
+					targetType: "community_post",
+				});
+			});
+
+			return { ok: true };
 		}),
 
 	// 탈퇴 계정의 잔여 식별값 파기 배치의 수동 트리거(즉시 실행용). 실제 로직은 서버
