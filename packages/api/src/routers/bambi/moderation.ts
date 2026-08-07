@@ -16,6 +16,7 @@ import {
 	chatRoom,
 	communityComment,
 	communityPost,
+	employerBusinessDocument,
 	employerOrganizationProfile,
 	employerTeamProfile,
 	interviewSchedule,
@@ -51,12 +52,22 @@ import {
 	requireChatParticipant,
 } from "../../services/bambi-authz";
 import { isChatRoomLeftByAnyone } from "../../services/bambi-chat-participation";
+import {
+	emitChatListUpdated,
+	emitRoomUpdated,
+} from "../../services/bambi-chat-realtime";
 import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
+import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
+import {
+	notifyBambiNotification,
+	notifyModerationAction,
+} from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
+import { getBusinessDocumentObjectUrl } from "../../services/bambi-storage";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 import { purgeWithdrawnAccountsBatch } from "../../services/bambi-withdrawal-purge";
 import { deletePublicObjects } from "../../services/gcs";
@@ -327,9 +338,16 @@ const moderatableTargetTypeSchema = z.enum([
 ]);
 
 const listModeratableContentInput = z.object({
+	// 게시판 key 필터(커뮤니티 글 전용, 다른 유형에서는 무시된다). 존재 여부는 검사하지
+	// 않는다 — 없는 key면 빈 목록이 나올 뿐이고, 목록은 이미 게시판을 조인하지 않는다.
+	board: z.string().trim().min(1).max(40).optional(),
 	page: z.number().int().min(1).default(1),
 	status: contentStatusSchema.optional(),
 	targetType: moderatableTargetTypeSchema,
+});
+
+const hardDeleteCommunityPostInput = z.object({
+	postId: z.string().uuid(),
 });
 
 const getModeratableContentDetailInput = z.object({
@@ -347,6 +365,53 @@ const bulkSetJobPostPaymentInput = z.object({
 
 type ReportTargetType = z.infer<typeof targetTypeSchema>;
 type ReportRow = typeof report.$inferSelect;
+
+const getReportedChatRoomId = async (
+	targetType: ReportRow["targetType"],
+	targetId: string
+): Promise<string | null> => {
+	if (targetType === "chat_room") {
+		return targetId;
+	}
+	if (targetType !== "chat_message") {
+		return null;
+	}
+
+	const [message] = await db
+		.select({ chatRoomId: chatMessage.chatRoomId })
+		.from(chatMessage)
+		.where(eq(chatMessage.id, targetId))
+		.limit(1);
+
+	return message?.chatRoomId ?? null;
+};
+
+const emitChatReportAvailabilityChanged = async (
+	targetType: ReportRow["targetType"],
+	targetId: string
+): Promise<void> => {
+	const roomId = await getReportedChatRoomId(targetType, targetId);
+
+	if (!roomId) {
+		return;
+	}
+
+	const [room] = await db
+		.select({
+			employerUserId: chatRoom.employerUserId,
+			jobSeekerUserId: chatRoom.jobSeekerUserId,
+		})
+		.from(chatRoom)
+		.where(eq(chatRoom.id, roomId))
+		.limit(1);
+
+	if (!room) {
+		return;
+	}
+
+	emitRoomUpdated({ roomId });
+	emitChatListUpdated([room.employerUserId, room.jobSeekerUserId], { roomId });
+};
 type JobPostModerationStatus = z.infer<typeof jobPostModerationStatusSchema>;
 type JobPostRow = typeof jobPost.$inferSelect;
 
@@ -909,6 +974,28 @@ const assertReportTargetExists = async (
 type ModerationTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type InvitationRow = typeof invitation.$inferSelect;
 
+/**
+ * 검수 결과 알림 문구가 갈리는 재료. 유료 공고는 승인돼도 입금 확인 전까지 게시되지 않고,
+ * hidden→published는 신규 승인이 아니라 재공개다 — 셋이 전부 "승인돼 게시됐어요"로 읽히면
+ * 안 된다. 무료 공고는 저장 시점에 paid로 두므로 unpaid가 곧 입금 대기다.
+ */
+const buildJobPostStatusNotificationMetadata = ({
+	paymentStatus,
+	previousStatus,
+}: {
+	paymentStatus: string;
+	previousStatus: string;
+}) => ({ paymentPending: paymentStatus !== "paid", previousStatus });
+
+/** 일괄 처리에서 실제로 성공한 대상만 남긴다 — 실패 건에 "처리됨" 알림이 나가면 안 된다. */
+const succeededBulkTargetIds = (
+	targetIds: readonly string[],
+	result: { failures: { targetId: string }[] }
+): string[] => {
+	const failed = new Set(result.failures.map((failure) => failure.targetId));
+	return targetIds.filter((targetId) => !failed.has(targetId));
+};
+
 const rejectTeamInvitation = async (
 	tx: ModerationTx,
 	adminUserId: string,
@@ -1103,6 +1190,10 @@ export const moderationRouter = {
 				.limit(1);
 
 			if (existing) {
+				await emitChatReportAvailabilityChanged(
+					existing.targetType,
+					existing.targetId
+				);
 				return existing;
 			}
 
@@ -1116,6 +1207,24 @@ export const moderationRouter = {
 					details: input.details,
 				})
 				.returning();
+
+			if (created) {
+				await emitChatReportAvailabilityChanged(
+					created.targetType,
+					created.targetId
+				);
+				await notifyBambiNotification({
+					actorUserId: profile.userId,
+					metadata: {
+						action: "submitted",
+						reason: input.reason,
+						reportTargetType: input.targetType,
+					},
+					recipientRole: "admin",
+					targetId: created.id,
+					targetType: "report",
+				});
+			}
 
 			return created;
 		}),
@@ -1239,7 +1348,8 @@ export const moderationRouter = {
 		}),
 
 	// 운영자가 임의 공고 본문/급여/노출/미디어를 직접 수정한다. jobs.update와 동일한 갱신·
-	// 노출확정·미디어 교체 로직(applyJobPostUpdate)을 재사용하되 조직 멤버십 검사만 우회한다.
+	// 노출확정·미디어 교체 로직(applyJobPostUpdate)을 재사용하되 조직 멤버십 검사를 우회하고,
+	// 검수·결제를 다시 거치지 않는 "즉시 반영"으로 돈다(moderatorEdit).
 	adminUpdateJobPost: adminProcedure
 		.input(z.object({ jobPostId: z.string().uuid(), data: jobPostInput }))
 		.handler(async ({ context, input }) => {
@@ -1259,9 +1369,9 @@ export const moderationRouter = {
 				actorUserId: admin.userId,
 				data: input.data,
 				existing,
-				// 운영자 편집은 검수 상태를 바꾸지 않는다. 게시 중 공고를 손봤다고 노출에서
-				// 내려가거나, 승인 직전 오타 수정이 자기 큐로 되돌아오면 안 된다.
-				keepStatus: true,
+				// 운영자 편집은 검수 상태도 결제 상태도 바꾸지 않는다. 게시 중 공고를 손봤다고
+				// 노출에서 내려가거나, 승인 직전 오타 수정이 자기 큐로 되돌아오면 안 된다.
+				moderatorEdit: true,
 			});
 
 			await db.insert(adminModerationAction).values({
@@ -1270,6 +1380,14 @@ export const moderationRouter = {
 				targetId: input.jobPostId,
 				action: "edit_job_post",
 				reason: "운영자 공고 수정",
+			});
+
+			await notifyModerationAction({
+				action: "edit_job_post",
+				actorUserId: admin.userId,
+				reason: "운영자 공고 수정",
+				targetId: input.jobPostId,
+				targetType: "job_post",
 			});
 
 			return result;
@@ -1288,8 +1406,15 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
+			// 삭제되면 소유자를 되찾을 수 없다 — 공통 훅(조회형) 대신 여기서 미리 확보해
+			// 커밋 뒤 명시 수신자로 보낸다(롤백된 삭제의 유령 알림 방지).
 			const [existing] = await db
-				.select({ id: jobPost.id })
+				.select({
+					id: jobPost.id,
+					ownerUserId: jobPost.createdByUserId,
+					// 삭제 알림은 "어느 공고였는지"가 전부다 — 지운 뒤에는 되찾을 수 없다.
+					title: jobPost.title,
+				})
 				.from(jobPost)
 				.where(eq(jobPost.id, input.jobPostId))
 				.limit(1);
@@ -1309,6 +1434,23 @@ export const moderationRouter = {
 					targetId: input.jobPostId,
 					targetType: "job_post",
 				});
+			});
+
+			const [recipientUserId] = resolveNotificationRecipients(
+				[existing.ownerUserId],
+				admin.userId
+			);
+
+			await notifyBambiNotification({
+				actorUserId: admin.userId,
+				metadata: {
+					action: "hard_delete",
+					jobPostTitle: existing.title,
+					reason: input.reason,
+				},
+				recipientUserId: recipientUserId ?? null,
+				targetId: input.jobPostId,
+				targetType: "job_post",
 			});
 
 			await deletePublicObjects(storageKeys);
@@ -1467,7 +1609,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const updated = await db.transaction(async (tx) => {
 				const [updated] = await tx
 					.update(review)
 					.set({ status: input.status })
@@ -1488,6 +1630,19 @@ export const moderationRouter = {
 
 				return updated;
 			});
+
+			// 후기 알림 딥링크는 metadata.jobPostId로 공고 상세를 연다 — 없으면 알림함으로
+			// 떨어진다(web notification-labels: case "review").
+			await notifyModerationAction({
+				action: `set_status:${input.status}`,
+				actorUserId: admin.userId,
+				metadata: { jobPostId: updated.jobPostId },
+				reason: input.reason,
+				targetId: input.reviewId,
+				targetType: "review",
+			});
+
+			return updated;
 		}),
 
 	bulkSetReviewStatus: protectedProcedure
@@ -1495,7 +1650,10 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(
+			// 알림 딥링크(metadata.jobPostId)용 — 갱신된 행에서만 얻을 수 있어 여기 모은다.
+			const jobPostIdByReviewId = new Map<string, string>();
+
+			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (reviewId) => {
@@ -1511,6 +1669,8 @@ export const moderationRouter = {
 								});
 							}
 
+							jobPostIdByReviewId.set(reviewId, updated.jobPostId);
+
 							await tx.insert(adminModerationAction).values({
 								adminUserId: admin.userId,
 								targetType: "review",
@@ -1523,6 +1683,23 @@ export const moderationRouter = {
 						targetIds: input.reviewIds,
 					})
 			);
+
+			// 알림은 트랜잭션 밖에서 성공분에만 보낸다(항목별 실패가 섞인다).
+			for (const reviewId of succeededBulkTargetIds(input.reviewIds, result)) {
+				await notifyModerationAction({
+					action: `set_status:${input.status}`,
+					actorUserId: admin.userId,
+					metadata: {
+						bulk: true,
+						jobPostId: jobPostIdByReviewId.get(reviewId),
+					},
+					reason: input.reason,
+					targetId: reviewId,
+					targetType: "review",
+				});
+			}
+
+			return result;
 		}),
 
 	setReportStatus: protectedProcedure
@@ -1530,7 +1707,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const updated = await db.transaction(async (tx) => {
 				const [updated] = await tx
 					.update(report)
 					.set({ status: input.status })
@@ -1552,14 +1729,32 @@ export const moderationRouter = {
 
 				return updated;
 			});
+
+			await emitChatReportAvailabilityChanged(
+				updated.targetType,
+				updated.targetId
+			);
+			// 알림 수신자는 신고당한 콘텐츠 주인이 아니라 신고자다 — targetType은 "report".
+			await notifyModerationAction({
+				action: `set_report_status:${input.status}`,
+				actorUserId: admin.userId,
+				reason: input.reason,
+				targetId: input.reportId,
+				targetType: "report",
+			});
+			return updated;
 		}),
 
 	bulkSetReportStatus: protectedProcedure
 		.input(bulkSetReportStatusInput)
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
+			const updatedChatTargets: Array<{
+				targetId: string;
+				targetType: ReportRow["targetType"];
+			}> = [];
 
-			return await db.transaction(
+			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (reportId) => {
@@ -1583,10 +1778,38 @@ export const moderationRouter = {
 								reason: input.reason,
 								metadata: { bulk: true, reportId },
 							});
+
+							if (
+								updated.targetType === "chat_room" ||
+								updated.targetType === "chat_message"
+							) {
+								updatedChatTargets.push({
+									targetId: updated.targetId,
+									targetType: updated.targetType,
+								});
+							}
 						},
 						targetIds: input.reportIds,
 					})
 			);
+
+			await Promise.all(
+				updatedChatTargets.map(({ targetId, targetType }) =>
+					emitChatReportAvailabilityChanged(targetType, targetId)
+				)
+			);
+			for (const reportId of succeededBulkTargetIds(input.reportIds, result)) {
+				await notifyModerationAction({
+					action: `set_report_status:${input.status}`,
+					actorUserId: admin.userId,
+					metadata: { bulk: true },
+					reason: input.reason,
+					targetId: reportId,
+					targetType: "report",
+				});
+			}
+
+			return result;
 		}),
 
 	setJobPostStatus: protectedProcedure
@@ -1594,7 +1817,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const { previousStatus, updated } = await db.transaction(async (tx) => {
 				const [existing] = await tx
 					.select()
 					.from(jobPost)
@@ -1629,14 +1852,28 @@ export const moderationRouter = {
 					reason: input.reason,
 				});
 
-				return updated;
+				return { previousStatus: existing.status, updated };
 			});
+
+			await notifyModerationAction({
+				action: `set_status:${input.status}`,
+				actorUserId: admin.userId,
+				metadata: buildJobPostStatusNotificationMetadata({
+					paymentStatus: updated.paymentStatus,
+					previousStatus,
+				}),
+				reason: input.reason,
+				targetId: input.jobPostId,
+				targetType: "job_post",
+			});
+
+			return updated;
 		}),
 
 	setJobPostPayment: protectedProcedure
 		.input(setJobPostPaymentInput)
 		.handler(async ({ context, input }) => {
-			await requireAdminProfile(context.session);
+			const admin = await requireAdminProfile(context.session);
 
 			// 배너형 승인(unpaid→paid)은 프리미엄 정원 게이트가 필요하므로 트랜잭션 안에서
 			// advisory lock으로 직렬화한다(assertPremiumApprovalWithinCapacity).
@@ -1691,6 +1928,15 @@ export const moderationRouter = {
 			await syncAdvertiserFlagForOrganization({
 				now: new Date(),
 				organizationId,
+			});
+
+			// unpaid→paid가 노출 개시라, 구인자에게는 "광고가 시작됐다"는 유일한 신호다.
+			await notifyModerationAction({
+				action: `set_payment:${input.paymentStatus}`,
+				actorUserId: admin.userId,
+				metadata: { paymentStatus: input.paymentStatus },
+				targetId: input.jobPostId,
+				targetType: "job_post",
 			});
 
 			return updated;
@@ -1758,6 +2004,16 @@ export const moderationRouter = {
 				organizationId,
 			});
 
+			await notifyModerationAction({
+				action: `adjust_job_post_exposure:${input.days > 0 ? "+" : ""}${input.days}`,
+				actorUserId: admin.userId,
+				// 공고를 여러 개 굴리는 업주는 제목이 없으면 어느 공고가 조정됐는지 알 수 없다.
+				metadata: { days: input.days, jobPostTitle: updated.title },
+				reason: input.reason,
+				targetId: input.jobPostId,
+				targetType: "job_post",
+			});
+
 			return updated;
 		}),
 
@@ -1807,7 +2063,14 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(
+			// 단건 경로와 같은 문구 분기를 쓰려면 전이 전 상태·결제 상태가 필요하다 —
+			// 알림 루프는 트랜잭션 밖이라 처리하면서 모아 둔다(affectedOrganizationIds와 같은 패턴).
+			const notificationMetadataByJobPostId = new Map<
+				string,
+				ReturnType<typeof buildJobPostStatusNotificationMetadata>
+			>();
+
+			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (jobPostId) => {
@@ -1822,6 +2085,14 @@ export const moderationRouter = {
 									message: "Job post was not found.",
 								});
 							}
+
+							notificationMetadataByJobPostId.set(
+								jobPostId,
+								buildJobPostStatusNotificationMetadata({
+									paymentStatus: existing.paymentStatus,
+									previousStatus: existing.status,
+								})
+							);
 
 							await tx
 								.update(jobPost)
@@ -1847,6 +2118,25 @@ export const moderationRouter = {
 						targetIds: input.jobPostIds,
 					})
 			);
+
+			for (const jobPostId of succeededBulkTargetIds(
+				input.jobPostIds,
+				result
+			)) {
+				await notifyModerationAction({
+					action: `set_status:${input.status}`,
+					actorUserId: admin.userId,
+					metadata: {
+						bulk: true,
+						...notificationMetadataByJobPostId.get(jobPostId),
+					},
+					reason: input.reason,
+					targetId: jobPostId,
+					targetType: "job_post",
+				});
+			}
+
+			return result;
 		}),
 
 	// 결제관리 목록에서 선택한 공고들의 결제 상태를 일괄 전환한다.
@@ -1854,7 +2144,7 @@ export const moderationRouter = {
 	bulkSetJobPostPayment: protectedProcedure
 		.input(bulkSetJobPostPaymentInput)
 		.handler(async ({ context, input }) => {
-			await requireAdminProfile(context.session);
+			const admin = await requireAdminProfile(context.session);
 
 			// 갱신에 성공한 공고들의 조직 유니크 집합 — 트랜잭션 커밋 후 광고 자격 캐시 동기화용.
 			const affectedOrganizationIds = new Set<string>();
@@ -1917,6 +2207,20 @@ export const moderationRouter = {
 			const now = new Date();
 			for (const organizationId of affectedOrganizationIds) {
 				await syncAdvertiserFlagForOrganization({ now, organizationId });
+			}
+
+			// 정원 초과로 CONFLICT 난 공고는 승인되지 않았다 — 성공분에만 "노출 개시"를 알린다.
+			for (const jobPostId of succeededBulkTargetIds(
+				input.jobPostIds,
+				result
+			)) {
+				await notifyModerationAction({
+					action: `set_payment:${input.paymentStatus}`,
+					actorUserId: admin.userId,
+					metadata: { bulk: true, paymentStatus: input.paymentStatus },
+					targetId: jobPostId,
+					targetType: "job_post",
+				});
 			}
 
 			return result;
@@ -2102,13 +2406,68 @@ export const moderationRouter = {
 				.limit(input.limit)
 				.offset(input.offset);
 
-			if (input.status) {
-				return await query.where(
-					eq(employerOrganizationProfile.verificationStatus, input.status)
+			const employers = input.status
+				? await query.where(
+						eq(employerOrganizationProfile.verificationStatus, input.status)
+					)
+				: await query;
+			const organizationIds = employers.map(
+				({ organizationId }) => organizationId
+			);
+			const documents =
+				organizationIds.length > 0
+					? await db
+							.select({
+								byteSize: employerBusinessDocument.byteSize,
+								category: employerBusinessDocument.category,
+								fileName: employerBusinessDocument.fileName,
+								id: employerBusinessDocument.id,
+								mimeType: employerBusinessDocument.mimeType,
+								organizationId: employerBusinessDocument.organizationId,
+								storageKey: employerBusinessDocument.storageKey,
+							})
+							.from(employerBusinessDocument)
+							.where(
+								inArray(
+									employerBusinessDocument.organizationId,
+									organizationIds
+								)
+							)
+							.orderBy(employerBusinessDocument.createdAt)
+					: [];
+			const documentsByOrganizationId = new Map<
+				string,
+				Array<{
+					byteSize: number;
+					category: "image" | "pdf";
+					fileName: string;
+					id: string;
+					mimeType: string;
+					objectUrl: string;
+				}>
+			>();
+			for (const document of documents) {
+				const organizationDocuments =
+					documentsByOrganizationId.get(document.organizationId) ?? [];
+				organizationDocuments.push({
+					byteSize: document.byteSize,
+					category: document.category,
+					fileName: document.fileName,
+					id: document.id,
+					mimeType: document.mimeType,
+					objectUrl: getBusinessDocumentObjectUrl(document),
+				});
+				documentsByOrganizationId.set(
+					document.organizationId,
+					organizationDocuments
 				);
 			}
 
-			return await query;
+			return employers.map((employer) => ({
+				...employer,
+				businessDocuments:
+					documentsByOrganizationId.get(employer.organizationId) ?? [],
+			}));
 		}),
 
 	listPendingTeamInvitations: protectedProcedure
@@ -2477,7 +2836,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const updated = await db.transaction(async (tx) => {
 				const [invite] = await tx
 					.select()
 					.from(invitation)
@@ -2498,6 +2857,53 @@ export const moderationRouter = {
 					? await rejectTeamInvitation(tx, admin.userId, invite, input.reason)
 					: await acceptTeamInvitation(tx, admin.userId, invite, input.reason);
 			});
+
+			const isRejected = input.status === "rejected";
+
+			// 커밋 뒤에 알린다(롤백된 처리의 유령 알림 방지). 반려는 초대를 낸 사람이,
+			// 승인은 합류한 본인이 알아야 한다.
+			await notifyBambiNotification({
+				actorUserId: admin.userId,
+				metadata: isRejected
+					? {
+							action: "rejected",
+							organizationId: updated?.organizationId,
+							reason: input.reason ?? null,
+						}
+					: { action: "accepted", organizationId: updated?.organizationId },
+				recipientUserId:
+					(isRejected ? updated?.inviterId : updated?.acceptedUserId) ?? null,
+				targetId: input.invitationId,
+				targetType: "team_invitation",
+			});
+
+			// 승인은 초대를 낸 쪽에도 알린다 — 운영자 승인이 언제 떨어지는지 알 방법이
+			// 팀 관리 화면을 다시 여는 것밖에 없었다. 초대자 본인이 합류자면 생략된다.
+			if (!isRejected && updated?.acceptedUserId) {
+				const [joined] = await db
+					.select({ displayName: user.name })
+					.from(user)
+					.where(eq(user.id, updated.acceptedUserId))
+					.limit(1);
+				const [recipientUserId] = resolveNotificationRecipients(
+					[updated.inviterId],
+					updated.acceptedUserId
+				);
+
+				await notifyBambiNotification({
+					actorUserId: admin.userId,
+					metadata: {
+						action: "joined",
+						joinedDisplayName: joined?.displayName ?? null,
+						organizationId: updated.organizationId,
+					},
+					recipientUserId: recipientUserId ?? null,
+					targetId: input.invitationId,
+					targetType: "team_invitation",
+				});
+			}
+
+			return updated;
 		}),
 
 	setEmployerVerificationStatus: protectedProcedure
@@ -2505,7 +2911,7 @@ export const moderationRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			return await db.transaction(async (tx) => {
+			const { owner, updated } = await db.transaction(async (tx) => {
 				const [owner] = await tx
 					.select({ userId: member.userId })
 					.from(member)
@@ -2542,8 +2948,23 @@ export const moderationRouter = {
 					metadata: { organizationId: input.organizationId },
 				});
 
-				return updated;
+				return { owner, updated };
 			});
+
+			// 커밋 뒤에 알린다. owner가 없는 조직(멤버 정리 중)이면 수신자가 없어 조용히 생략된다.
+			await notifyBambiNotification({
+				actorUserId: admin.userId,
+				metadata: {
+					action: input.status,
+					organizationId: input.organizationId,
+					reason: input.reason ?? null,
+				},
+				recipientUserId: owner?.userId ?? null,
+				targetId: input.organizationId,
+				targetType: "employer_verification",
+			});
+
+			return updated;
 		}),
 
 	setInquiryStatusByAdmin: adminProcedure
@@ -2631,9 +3052,10 @@ export const moderationRouter = {
 			const excerpt = (text: string) => text.slice(0, EXCERPT_LENGTH);
 
 			if (input.targetType === "community_post") {
-				const where = input.status
-					? eq(communityPost.status, input.status)
-					: undefined;
+				const where = and(
+					input.status ? eq(communityPost.status, input.status) : undefined,
+					input.board ? eq(communityPost.board, input.board) : undefined
+				);
 
 				const [totalRow] = await db
 					.select({ value: count() })
@@ -2652,6 +3074,9 @@ export const moderationRouter = {
 					items: rows.map((row) => ({
 						id: row.id,
 						targetType: "community_post" as const,
+						// 목록에서 게시판을 바로 보고 걸러야 게시판 비우기(영구 삭제 → 게시판 삭제)를
+						// 한 화면에서 끝낼 수 있다. 라벨 변환은 화면 몫이다(저장 원값을 그대로 준다).
+						board: row.board as string | null,
 						title: row.title,
 						// 본문은 Tiptap JSON이라 평문을 뽑아 발췌한다(기존 신고 컨텍스트와 동일 규칙).
 						excerpt: excerpt(toCommunityBodyPreview(row.body)),
@@ -2701,6 +3126,9 @@ export const moderationRouter = {
 					items: rows.map((row) => ({
 						id: row.id,
 						targetType: "community_comment" as const,
+						// 게시판 열은 커뮤니티 글 탭 전용이라 나머지 유형은 null로 채워
+						// 화면이 유형별 좁히기 없이 한 형태만 렌더하게 둔다(상세와 같은 관례).
+						board: null as string | null,
 						// 댓글은 제목이 없으므로 원글 제목을 맥락으로 보여준다.
 						title: row.postTitle,
 						excerpt: excerpt(row.body),
@@ -2746,6 +3174,7 @@ export const moderationRouter = {
 				items: rows.map((row) => ({
 					id: row.id,
 					targetType: "support_inquiry" as const,
+					board: null as string | null,
 					title: row.title,
 					excerpt: excerpt(row.body),
 					authorName: row.authorName ?? "(표시명 없음)",
@@ -2855,6 +3284,66 @@ export const moderationRouter = {
 				board: null as string | null,
 				category: row.category as string | null,
 			};
+		}),
+
+	// 커뮤니티 글 영구 삭제(하드 삭제). 조치 삭제는 소프트 삭제라 행이 남고, 그 행이
+	// community_post.board FK로 게시판 삭제를 막는다(communityBoards.remove의 409) —
+	// 게시판을 비우는 마지막 한 걸음이다. 되돌릴 수 없으므로 이미 삭제 조치한 글만 받는다.
+	// 댓글·추천은 FK cascade가 함께 지우고, 신고·알림의 targetId는 FK가 아니라 남지만
+	// 대상 컨텍스트 조회가 이미 null을 허용한다(getReportTargetContext). 감사 로그도 같은
+	// 이유로 남길 수 있으나 가리킬 행이 사라지므로 제목·게시판을 metadata에 스냅샷한다.
+	// 사유는 선행 삭제 조치가 이미 받아 두었으므로 여기서 다시 받지 않는다(확인 한 단계).
+	hardDeleteCommunityPost: adminProcedure
+		.input(hardDeleteCommunityPostInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			await db.transaction(async (tx) => {
+				const [post] = await tx
+					.select({
+						authorDisplayName: communityPost.authorDisplayName,
+						board: communityPost.board,
+						createdAt: communityPost.createdAt,
+						status: communityPost.status,
+						title: communityPost.title,
+					})
+					.from(communityPost)
+					.where(eq(communityPost.id, input.postId))
+					.limit(1);
+
+				if (!post) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "글을 찾을 수 없습니다.",
+					});
+				}
+
+				if (post.status !== "deleted") {
+					throw new ORPCError("CONFLICT", {
+						message:
+							"삭제 처리한 글만 영구 삭제할 수 있습니다. 먼저 삭제 조치를 해 주세요.",
+					});
+				}
+
+				await tx
+					.delete(communityPost)
+					.where(eq(communityPost.id, input.postId));
+
+				await tx.insert(adminModerationAction).values({
+					action: "hard_delete",
+					adminUserId: admin.userId,
+					metadata: {
+						authorName: post.authorDisplayName,
+						board: post.board,
+						createdAt: post.createdAt.toISOString(),
+						title: post.title,
+					},
+					reason: "영구 삭제",
+					targetId: input.postId,
+					targetType: "community_post",
+				});
+			});
+
+			return { ok: true };
 		}),
 
 	// 탈퇴 계정의 잔여 식별값 파기 배치의 수동 트리거(즉시 실행용). 실제 로직은 서버

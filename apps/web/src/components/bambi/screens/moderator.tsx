@@ -52,6 +52,7 @@ import {
 	reviewStatusLabel,
 	userRoleLabel,
 } from "@/lib/bambi/moderation-labels";
+import { MODERATOR_MORE_GROUPS } from "@/lib/bambi/moderator-navigation";
 import { scan } from "@/lib/bambi/scanner";
 import type {
 	CommunityTargetStatus,
@@ -663,7 +664,7 @@ function VerdictActions({
 				size="lg"
 				variant="primary"
 			>
-				승인 후 게시
+				승인
 			</Button>
 		</>
 	);
@@ -785,8 +786,7 @@ export function QueueDetail({
 						<p className="m-0 text-[12px] text-muted-foreground leading-[1.55]">
 							{VERDICT_GUIDE}
 						</p>
-						{/* 좁은 열에서 두 버튼을 나란히 두면 "승인 후 게시"가 줄바꿈된다.
-						    세로로 쌓아 라벨을 온전히 두고, 마지막 줄에 승인을 놓아
+						{/* 좁은 도크라 세로로 쌓고, 마지막 줄에 승인을 놓아
 						    "확인하고 → 내보낸다" 순서가 그대로 읽히게 한다. */}
 						<div className="flex flex-col gap-2.5">
 							<VerdictActions
@@ -832,7 +832,10 @@ const VERDICT_SHEETS: Record<
 	approve: {
 		confirmLabel: "승인하기",
 		danger: false,
-		description: "승인하면 공고가 게시되고, 사유가 처리 기록에 남아요.",
+		// 유료 상품 공고는 승인만으로 게시되지 않는다(입금 확인이 남는다) — 승인 = 게시로
+		// 읽히지 않게 두 경우를 다 적는다.
+		description:
+			"승인하면 무료 공고는 바로 게시되고, 유료 상품 공고는 입금 확인 후 게시돼요. 사유는 처리 기록에 남아요.",
 		reasons: [
 			"운영 검수 기준 충족",
 			"감지 표현이 오해 소지 수준",
@@ -2593,45 +2596,6 @@ export function UserDetail({
 // "더보기" 시트가 노출하는 목적지 — 데스크톱 헤더 nav(승인 관리·광고·결제 그룹,
 // moderator/layout.tsx)를 모바일에서 미러링한다. 하단 평면 탭(검수·신고·사용자·
 // 광고 상품)에 자리가 없어 여기로 접는다. 라우트가 바뀌면 layout.tsx와 함께 갱신.
-const MOD_MORE_GROUPS: {
-	items: { href: Route; label: string }[];
-	label: string;
-}[] = [
-	{
-		label: "공고",
-		items: [{ href: "/moderator/jobs" as Route, label: "공고 관리" }],
-	},
-	{
-		label: "승인 관리",
-		items: [
-			{ href: "/moderator/employers", label: "업소 승인" },
-			{ href: "/moderator/team-invites", label: "팀 합류 승인" },
-		],
-	},
-	{
-		label: "광고·결제",
-		items: [
-			{ href: "/moderator/ad-products", label: "광고 상품" },
-			{ href: "/moderator/payments", label: "결제 관리" },
-		],
-	},
-	{
-		label: "콘텐츠·고객센터",
-		items: [
-			{ href: "/moderator/content" as Route, label: "게시물" },
-			{ href: "/moderator/support" as Route, label: "고객센터" },
-			{ href: "/moderator/banned-words" as Route, label: "금칙어" },
-			{ href: "/moderator/crawler" as Route, label: "크롤링" },
-		],
-	},
-	{
-		label: "사이트",
-		items: [
-			{ href: "/moderator/site-settings" as Route, label: "사이트 정보" },
-		],
-	},
-];
-
 // 하단 탭 버튼 공통 톤(평면 탭·더보기 탭 공유).
 function modTabButtonClassName(on: boolean): string {
 	return cn(
@@ -2660,10 +2624,10 @@ function ModMoreTab({ active }: { active: boolean }) {
 					{open ? "닫기" : "더보기"}
 				</span>
 			</SheetTrigger>
-			<SheetContent>
+			<SheetContent className="pb-28">
 				<SheetTitle>더보기</SheetTitle>
 				<div className="mt-5 flex flex-col gap-6">
-					{MOD_MORE_GROUPS.map((group) => (
+					{MODERATOR_MORE_GROUPS.map((group) => (
 						<div className="flex flex-col gap-1" key={group.label}>
 							<p className="px-3 font-bold text-muted-foreground text-xs">
 								{group.label}

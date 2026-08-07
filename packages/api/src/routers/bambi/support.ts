@@ -14,6 +14,7 @@ import {
 	type SessionLike,
 } from "../../services/bambi-authz";
 import { assertNoBannedWords } from "../../services/bambi-banned-words";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
 import { assertTiptapDoc } from "../../services/bambi-tiptap-text";
 
 const PAGE_SIZE = 20;
@@ -163,6 +164,15 @@ export const supportRouter = {
 				});
 			}
 
+			// 새 문의는 운영자 답변 큐에 쌓인다. 개인 수신자가 없으니 role 공유 1행.
+			await notifyBambiNotification({
+				actorUserId: profile.userId,
+				metadata: { action: "submitted", category: input.category },
+				recipientRole: "admin",
+				targetId: created.id,
+				targetType: "support_inquiry",
+			});
+
 			return { id: created.id };
 		}),
 
@@ -276,6 +286,24 @@ export const supportRouter = {
 
 				return message;
 			});
+
+			// 운영자 답변은 문의자에게, 사용자 재질문은 운영자 큐(공유 1행)에 알린다.
+			// 문의자 본인이 자기 문의에 글을 더 남긴 경우는 recipient가 본인이라 생략된다.
+			await (isAdmin
+				? notifyBambiNotification({
+						actorUserId: profile.userId,
+						metadata: { action: "answered" },
+						recipientUserId: inquiry.authorUserId,
+						targetId: inquiry.id,
+						targetType: "support_inquiry",
+					})
+				: notifyBambiNotification({
+						actorUserId: profile.userId,
+						metadata: { action: "replied" },
+						recipientRole: "admin",
+						targetId: inquiry.id,
+						targetType: "support_inquiry",
+					}));
 
 			return { id: created.id };
 		}),

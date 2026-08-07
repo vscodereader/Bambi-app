@@ -10,7 +10,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { CommunityPostForm } from "@/components/bambi/community-post-form";
-import { type CommunityBoardMeta, getBoardBySlug } from "@/lib/bambi/community";
+import type { CommunityBoardMeta } from "@/lib/bambi/community";
+import { useBoardBySlug } from "@/lib/bambi/use-community-boards";
 import { orpc } from "@/utils/orpc";
 
 const PASSWORD_MIN = 4;
@@ -109,6 +110,7 @@ function CommunityEditContent({
 					contactPhone: data.contactPhone,
 					id: data.id,
 					isLocked: data.isLocked,
+					isEvent: data.isEvent,
 					isPromotion: data.isPromotion,
 					title: data.title,
 				}}
@@ -129,7 +131,12 @@ function CommunityEditContent({
 export default function SeekerCommunityEditPage() {
 	const params = useParams<{ board: string; postId: string }>();
 	const { isGuest } = useBambiAuth();
-	const board = getBoardBySlug(params.board);
+	// 게시판 목록을 다 받기 전에는 404를 내지 않는다(목록 페이지와 같은 규칙).
+	const { board, isPending } = useBoardBySlug(params.board);
+
+	if (isPending) {
+		return <Skeleton className="h-64 w-full" />;
+	}
 
 	if (!board?.writable) {
 		notFound();

@@ -144,7 +144,9 @@ describe("채팅방 내부 스크롤", () => {
 	// 문서가 대화 길이만큼 세로로 자라던 구조(min-h-[420px])를 뷰포트 고정으로 바꿨다.
 	it("방 패널을 뷰포트에 고정하고 메시지 영역만 스크롤한다", () => {
 		expect(source).not.toContain("min-h-[420px]");
-		expect(source).toContain("h-[calc(100dvh-6rem)]");
+		expect(source).toContain(
+			"h-[calc(var(--chat-visual-viewport-height,100dvh)-6rem)]"
+		);
 		expect(source).toContain("md:h-[calc(100dvh-7.5rem)]");
 		expect(source).toContain("overflow-y-auto");
 		expect(source).toContain("ref={scrollRef}");
@@ -183,6 +185,12 @@ describe("보고 있는 방 자동 읽음", () => {
 	it("읽음 요청을 최신 기준선 하나로 합친다", () => {
 		expect(autoReadSource).toContain("MARK_READ_COALESCE_MS");
 		expect(autoReadSource).toContain("if (timerRef.current !== null)");
+	});
+
+	it("방 조회가 성공하면 메시지를 보내지 않아도 즉시 읽음 처리한다", () => {
+		expect(source).toContain("roomQuery.isSuccess");
+		expect(source).toContain("markReadNow(lastVisibleMessageId)");
+		expect(autoReadSource).toContain("const markReadNow = useCallback");
 	});
 
 	// 읽음 왕복 사이에 목록이 다시 그려져도 방금 읽은 방에 핀이 깜빡이면 안 된다.
@@ -257,7 +265,23 @@ describe("방 화면 실시간 연결 강건화", () => {
 			"if (latestRef.current?.chatRoomId !== chatRoomId) {"
 		);
 		expect(autoReadSource).toContain(
-			"return { queueMarkRead, reassertMarkRead };"
+			"return { markReadNow, queueMarkRead, reassertMarkRead };"
+		);
+	});
+});
+
+describe("모바일 채팅방 레이아웃", () => {
+	it("키보드의 visual viewport 높이를 채팅 패널에 반영한다", () => {
+		expect(source).toContain("useMobileKeyboardState");
+		expect(source).toContain("--chat-visual-viewport-height");
+	});
+
+	it("긴 제목은 한 줄 말줄임하고 상태 배지는 별도 행에 둔다", () => {
+		expect(source).toContain(
+			'className="m-0 truncate font-extrabold text-sm sm:text-lg"'
+		);
+		expect(source).toContain(
+			'className="flex min-w-0 items-center gap-2 overflow-hidden"'
 		);
 	});
 });
@@ -307,8 +331,8 @@ describe("면접 완료 버튼 이관", () => {
 	// 엣지케이스 때문이다. 방 화면에는 완료 전환 경로가 남아 있으면 안 된다.
 	it("방 화면에서 완료 전환을 제거한다", () => {
 		expect(source).not.toContain('setScheduleStatus(schedule.id, "completed")');
-		// 완료 상태 자체는 계속 읽는다(후기·연락처 자격 판정) — 전환만 사라진다.
-		expect(source).toContain('schedule.status === "completed"');
+		// 완료 상태를 읽던 자리는 후기 자격 판정뿐이었고, 그 후기도 예정된 면접으로 옮겼다.
+		expect(source).not.toContain('"completed"');
 	});
 
 	// 확정 카드에는 취소만, 제안 카드의 확정·거절은 그대로다.
@@ -316,6 +340,17 @@ describe("면접 완료 버튼 이관", () => {
 		expect(source).toMatch(CONFIRMED_CANCEL_ONLY_PATTERN);
 		expect(source).toContain('setScheduleStatus(schedule.id, "confirmed")');
 		expect(source).toContain('setScheduleStatus(schedule.id, "declined")');
+	});
+});
+
+// 후기도 같은 이유로 "내 정보 → 예정된 면접" 아코디언으로 옮겼다 — 방을 나가면 후기를
+// 영영 못 남기던 엣지케이스다. 방 사이드바에는 진입점이 남아 있으면 안 된다.
+describe("후기 작성 이관", () => {
+	it("방 화면에서 후기 진입점을 제거한다", () => {
+		expect(source).not.toContain("ReviewForm");
+		expect(source).not.toContain("reviews.listMine");
+		expect(source).not.toContain("reviews.create");
+		expect(source).not.toContain("후기 남기기");
 	});
 });
 

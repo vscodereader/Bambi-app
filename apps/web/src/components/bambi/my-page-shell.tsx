@@ -37,6 +37,12 @@ import {
 } from "./icons";
 
 export const MY_PAGE_HUB_HREF = "/seeker/me" as Route;
+export const ATTENDANCE_HREF = "/seeker/attendance" as Route;
+
+// 출석 라우터는 구직자·업주만 허용한다(서버 게이트) — 법률자문·운영자에게는 진입점 자체를
+// 감춘다. 그대로 두면 눌러서 에러 화면을 보게 된다. 역할 로딩 중(null)에도 감춘 뒤 나타난다.
+export const canUseAttendance = (role: null | string): boolean =>
+	role === "job_seeker" || role === "employer";
 
 // 표시 라벨은 여기서만 만든다 — enum 원값(job_seeker·legal_advisor …)이 화면에 새지 않도록
 // 미등록 역할도 "구직자"로 떨어뜨린다. 법률자문은 구직자 계정에 얹는 역할이라 폴백도 자연스럽다.
@@ -66,6 +72,11 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 		label: "차단한 상대",
 	},
 	{
+		href: ATTENDANCE_HREF,
+		icon: <ClockIcon />,
+		label: "출석체크",
+	},
+	{
 		href: "/seeker/me/settings" as Route,
 		icon: <SettingsIcon />,
 		label: "계정 설정",
@@ -87,6 +98,11 @@ const HIDDEN_MY_PAGE_HREFS: Record<string, string[]> = {
 };
 
 export function isMyPageItemVisible(href: string, role: string | null) {
+	// 출석은 서버 게이트(job_seeker·employer)와 같은 조건으로 감춘다 — 다른 역할이 눌러
+	// 에러 화면을 보지 않게. 직접 URL 진입은 서버 FORBIDDEN이 막는다.
+	if (href === ATTENDANCE_HREF && !canUseAttendance(role)) {
+		return false;
+	}
 	return !HIDDEN_MY_PAGE_HREFS[role ?? ""]?.includes(href);
 }
 

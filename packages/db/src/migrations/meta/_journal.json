@@ -505,6 +505,48 @@
       "when": 1785991916193,
       "tag": "0071_harsh_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1786004147330,
+      "tag": "0072_minor_monster_badoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1786006038279,
+      "tag": "0073_messy_wallop",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1786006732773,
+      "tag": "0074_nebulous_black_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1786070697018,
+      "tag": "0075_dynamic-community-board",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1786073885503,
+      "tag": "0076_community-board-icon",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1786084225762,
+      "tag": "0077_grey_hellfire_club",
+      "breakpoints": true
     }
   ]
 }

@@ -3,7 +3,18 @@ import {
 	chatMessageReadReceipt,
 	chatRoom,
 } from "@bambi-app/db/schema/bambi";
-import { and, count, eq, inArray, isNull, lte, ne, or } from "drizzle-orm";
+import {
+	and,
+	count,
+	desc,
+	eq,
+	inArray,
+	isNull,
+	lte,
+	ne,
+	notInArray,
+	or,
+} from "drizzle-orm";
 
 interface ChatParticipantRoom {
 	employerUserId: string;
@@ -39,6 +50,12 @@ interface MarkChatMessagesReadUpToInput {
 	readAt?: Date;
 	readerUserId: string;
 	upToMessageId: string;
+}
+
+interface MarkAllCurrentChatMessagesReadInput {
+	chatRoomId: string;
+	readAt?: Date;
+	readerUserId: string;
 }
 
 export interface ReadReceiptResult {
@@ -187,13 +204,47 @@ export const getUnreadMessageCount = async ({
 	return counts.get(chatRoomId) ?? 0;
 };
 
+/**
+ * 메시지 조회와 실시간 수신 경계에서 클라이언트가 한 단계 오래된 기준선을 보내도
+ * 마지막 한 건까지 읽음 처리할 수 있도록, 서버에 남은 최신 안 읽음 id를 돌려준다.
+ */
+export const getLatestUnreadMessageId = async ({
+	chatRoomId,
+	userId,
+}: GetUnreadMessageCountInput): Promise<null | string> => {
+	const { db } = await import("@bambi-app/db");
+	const [latestUnreadMessage] = await db
+		.select({ id: chatMessage.id })
+		.from(chatMessage)
+		.leftJoin(
+			chatMessageReadReceipt,
+			and(
+				eq(chatMessageReadReceipt.messageId, chatMessage.id),
+				eq(chatMessageReadReceipt.readerUserId, userId)
+			)
+		)
+		.where(
+			and(
+				eq(chatMessage.chatRoomId, chatRoomId),
+				ne(chatMessage.senderUserId, userId),
+				isNull(chatMessageReadReceipt.messageId)
+			)
+		)
+		.orderBy(desc(chatMessage.createdAt), desc(chatMessage.id))
+		.limit(1);
+
+	return latestUnreadMessage?.id ?? null;
+};
+
 // 헤더 채팅 버튼·모바일 탭 뱃지용 전체 집계. 내가 참여한 모든 방에서 상대가 보낸
 // 메시지 중 내 읽음 영수증이 없는 메시지 행의 총수를 한 번의 쿼리로 센다.
 // 집합은 목록(listMine)과 같아야 한다 — 어느 한쪽이라도 나간 방까지 세면 목록에 없는
 // 방 때문에 뱃지가 켜진 채 끌 방법이 없다. 그래서 같은 술어를 건다.
 export const getUnreadMessageCountForUser = async ({
+	excludedRoomIds = [],
 	userId,
 }: {
+	excludedRoomIds?: string[];
 	userId: string;
 }): Promise<number> => {
 	const { db } = await import("@bambi-app/db");
@@ -210,6 +261,9 @@ export const getUnreadMessageCountForUser = async ({
 		)
 		.where(
 			and(
+				excludedRoomIds.length > 0
+					? notInArray(chatRoom.id, excludedRoomIds)
+					: undefined,
 				or(
 					eq(chatRoom.employerUserId, userId),
 					eq(chatRoom.jobSeekerUserId, userId)
@@ -259,6 +313,56 @@ export const markChatMessagesRead = async ({
 		readAt,
 		readerUserId,
 	});
+};
+
+/**
+ * Marks every incoming message that is already persisted when a participant opens a room.
+ *
+ * The room view itself is the read boundary. Using a client-provided last-message id can leave
+ * one receipt missing when the client's message snapshot and the server snapshot differ, so the
+ * server selects the complete unread set atomically from its current data instead.
+ */
+export const markAllCurrentChatMessagesRead = async ({
+	chatRoomId,
+	readAt = new Date(),
+	readerUserId,
+}: MarkAllCurrentChatMessagesReadInput): Promise<ReadReceiptResult[]> => {
+	const { db } = await import("@bambi-app/db");
+	const unreadMessages = await db
+		.select({ id: chatMessage.id })
+		.from(chatMessage)
+		.leftJoin(
+			chatMessageReadReceipt,
+			and(
+				eq(chatMessageReadReceipt.messageId, chatMessage.id),
+				eq(chatMessageReadReceipt.readerUserId, readerUserId)
+			)
+		)
+		.where(
+			and(
+				eq(chatMessage.chatRoomId, chatRoomId),
+				ne(chatMessage.senderUserId, readerUserId),
+				isNull(chatMessageReadReceipt.messageId)
+			)
+		);
+
+	const receipts: ReadReceiptResult[] = [];
+
+	for (const chunk of chunkMessageIds(
+		unreadMessages.map(({ id }) => id),
+		READ_RECEIPT_INSERT_CHUNK_SIZE
+	)) {
+		receipts.push(
+			...(await insertReadReceipts({
+				chatRoomId,
+				messageIds: chunk,
+				readAt,
+				readerUserId,
+			}))
+		);
+	}
+
+	return receipts;
 };
 
 /**

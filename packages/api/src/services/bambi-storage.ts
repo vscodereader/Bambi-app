@@ -5,6 +5,7 @@ import {
 	createSignedUploadUrl,
 	getPublicObjectUrl,
 	isPublicBucketConfigured,
+	shouldUsePublicBucket,
 } from "./gcs";
 
 export interface ChatAttachmentStorageInput {
@@ -14,6 +15,24 @@ export interface ChatAttachmentStorageInput {
 	createdByUserId: string;
 	fileName: string;
 	mimeType: string;
+}
+
+export interface BusinessDocumentStorageInput {
+	actorUserId: string;
+	byteSize: number;
+	category: ChatMediaCategory;
+	fileName: string;
+	mimeType: string;
+	organizationId: string;
+}
+
+export interface BusinessDocumentUploadIntent {
+	byteSize: number;
+	category: ChatMediaCategory;
+	fileName: string;
+	mimeType: string;
+	storageKey: string;
+	uploadUrl: string;
 }
 
 export interface ChatAttachmentUploadIntent {
@@ -70,6 +89,29 @@ const normalizeFileNameForStorage = (fileName: string): string => {
 };
 
 const JOB_POST_MEDIA_KEY_ROOT = "bambi-job-post-media";
+
+const BUSINESS_DOCUMENT_KEY_ROOT = "bambi-business-documents";
+
+const buildBusinessDocumentKeyPrefix = ({
+	organizationId,
+	userId,
+}: {
+	organizationId: string;
+	userId: string;
+}): string => `${BUSINESS_DOCUMENT_KEY_ROOT}/${organizationId}/${userId}/`;
+
+export const isOwnedBusinessDocumentKey = ({
+	organizationId,
+	storageKey,
+	userId,
+}: {
+	organizationId: string;
+	storageKey: string;
+	userId: string;
+}): boolean =>
+	storageKey.startsWith(
+		buildBusinessDocumentKeyPrefix({ organizationId, userId })
+	) && !storageKey.includes("..");
 
 const buildJobPostMediaKeyPrefix = (organizationId: string): string =>
 	`${JOB_POST_MEDIA_KEY_ROOT}/${organizationId}/`;
@@ -183,6 +225,43 @@ export const getChatAttachmentObjectUrl = (
 	isPublicBucketConfigured()
 		? getPublicObjectUrl(input.storageKey)
 		: buildLocalObjectUrl(input);
+
+export const getBusinessDocumentObjectUrl = (
+	input: ChatAttachmentObjectInput
+): string =>
+	shouldUsePublicBucket()
+		? getPublicObjectUrl(input.storageKey)
+		: buildLocalObjectUrl(input);
+
+export const createBusinessDocumentUploadIntent = async ({
+	actorUserId,
+	byteSize,
+	category,
+	fileName,
+	mimeType,
+	organizationId,
+}: BusinessDocumentStorageInput): Promise<BusinessDocumentUploadIntent> => {
+	const storageFileName = normalizeFileNameForStorage(fileName);
+	const storageKey = `${buildBusinessDocumentKeyPrefix({
+		organizationId,
+		userId: actorUserId,
+	})}${randomUUID()}-${storageFileName}`;
+
+	return {
+		byteSize,
+		category,
+		fileName: fileName.trim(),
+		mimeType,
+		storageKey,
+		uploadUrl: shouldUsePublicBucket()
+			? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
+			: buildLocalObjectUrl({
+					category,
+					fileName: fileName.trim(),
+					storageKey,
+				}),
+	};
+};
 
 // ponytail: 본문에서 지워진 이미지·삭제된 글(status "deleted")의 GCS 객체는 그대로 남는다.
 // 공고 미디어도 같은 구멍을 안고 가고 있고 레포 어디에도 스위퍼가 없어 지금은 감수한다.

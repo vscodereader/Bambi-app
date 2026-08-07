@@ -21,6 +21,7 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import {
 	type AdCatalogPlacement,
+	formatAdCampaignPeriod,
 	formatAdDuration,
 } from "@/lib/bambi/ad-catalog";
 import { orpc } from "@/utils/orpc";
@@ -215,11 +216,21 @@ function PlacementSection({
 										<span className="whitespace-nowrap text-muted-foreground text-xs">
 											{formatAdDuration(option.days)}
 										</span>
-										<AdPriceTag
-											amount={option.amount}
-											discountPercent={option.discountPercent ?? 0}
-											priceClassName="font-bold text-base text-coral-600"
-										/>
+										<div className="flex min-w-0 flex-col gap-0.5">
+											<AdPriceTag
+												amount={option.amount}
+												discountPercent={option.discountPercent ?? 0}
+												priceClassName="font-bold text-base text-coral-600"
+											/>
+											{option.campaignStartsAt ? (
+												<span className="text-muted-foreground text-xs">
+													{formatAdCampaignPeriod(
+														option.campaignStartsAt,
+														option.campaignEndsAt ?? null
+													)}
+												</span>
+											) : null}
+										</div>
 									</div>
 								))}
 							</div>

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Context } from "../../context";
@@ -31,6 +31,7 @@ const {
 	interviewSchedule,
 	jobPerformanceEvent,
 	jobPost,
+	report,
 	userBlock,
 } = bambiSchema;
 
@@ -147,6 +148,14 @@ const createChatFixture = async (): Promise<ChatFixture> => {
 };
 
 const cleanupChatFixture = async (fixture: ChatFixture): Promise<void> => {
+	await db
+		.delete(report)
+		.where(
+			or(
+				eq(report.targetId, fixture.chatRoomId),
+				inArray(report.reporterUserId, fixture.userIds)
+			)
+		);
 	await db
 		.delete(chatAttachment)
 		.where(eq(chatAttachment.chatRoomId, fixture.chatRoomId));
@@ -542,29 +551,34 @@ describe("bambi chats router unread state", () => {
 				context: createContextForUser(fixture.jobSeekerUserId),
 				path: ["bambi", "chats", "markRead"],
 			});
-			// 기준선까지만 읽음 처리한다 — 그 뒤에 온 메시지는 그대로 안 읽음으로 남는다.
+			// 방에 들어온 순간 서버가 현재 저장된 이 방의 수신 메시지를 모두 읽음 처리한다.
 			const firstMarkRead = await markRead({
 				chatRoomId: fixture.chatRoomId,
 				upToMessageId: firstMessage.id,
 			});
 
 			expect(await unreadStateForSeeker({})).toEqual({
-				unreadMessageCount: 4,
+				unreadMessageCount: 2,
 			});
 			// 화면 핀은 방별 수가 아니라 이 총합을 그린다 — 응답값과 unreadState가
 			// 갈라지면 읽음 직후 핀이 틀린 숫자로 굳는다.
-			expect(firstMarkRead.totalUnreadMessageCount).toBe(4);
+			expect(firstMarkRead.totalUnreadMessageCount).toBe(2);
 
 			const lastMessage = remainingMessages.at(-1);
 			const lastSecondRoomMessage = secondRoomMessages.at(-1);
 			if (!(lastMessage && lastSecondRoomMessage)) {
 				throw new Error("채팅 메시지 픽스처를 만들지 못했습니다.");
 			}
+			expect(firstMarkRead.latestUnreadMessageId).toBeNull();
+			expect(firstMarkRead.unreadCount).toBe(0);
 
-			await markRead({
+			// 같은 방을 다시 읽어도 멱등이며 다른 방의 안 읽음 수에는 영향을 주지 않는다.
+			const lastRoomMarkRead = await markRead({
 				chatRoomId: fixture.chatRoomId,
 				upToMessageId: lastMessage.id,
 			});
+			expect(lastRoomMarkRead.latestUnreadMessageId).toBeNull();
+			expect(lastRoomMarkRead.unreadCount).toBe(0);
 			expect(await unreadStateForSeeker({})).toEqual({
 				unreadMessageCount: 2,
 			});
@@ -894,6 +908,113 @@ const unreadStateFor = (userId: string) =>
 		context: createContextForUser(userId),
 		path: ["bambi", "chats", "unreadState"],
 	});
+
+const sendMessageFor = (userId: string) =>
+	createProcedureClient(chatsRouter.sendMessage, {
+		context: createContextForUser(userId),
+		path: ["bambi", "chats", "sendMessage"],
+	});
+
+describe("bambi chats router 신고된 방 양방향 제한", () => {
+	it("신고가 활성 상태면 양쪽 목록·열람·발신·안 읽음에서 숨기고 기각 시 복구한다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			await seedMessage(fixture, fixture.employerUserId);
+			const [createdReport] = await db
+				.insert(report)
+				.values({
+					reason: "외부 연락처 유도",
+					reporterUserId: fixture.jobSeekerUserId,
+					status: "open",
+					targetId: fixture.chatRoomId,
+					targetType: "chat_room",
+				})
+				.returning({ id: report.id });
+
+			if (!createdReport) {
+				throw new Error("신고 픽스처를 만들지 못했습니다.");
+			}
+
+			for (const userId of [fixture.jobSeekerUserId, fixture.employerUserId]) {
+				expect(
+					(await listMineFor(userId)({})).some(
+						(room) => room.id === fixture.chatRoomId
+					)
+				).toBe(false);
+				await expectOrpcCode(
+					getByIdFor(userId)({ id: fixture.chatRoomId }),
+					"FORBIDDEN"
+				);
+			}
+
+			await expectOrpcCode(
+				sendMessageFor(fixture.employerUserId)({
+					body: "신고 뒤에도 보내면 안 됩니다.",
+					chatRoomId: fixture.chatRoomId,
+				}),
+				"FORBIDDEN"
+			);
+			expect(await unreadStateFor(fixture.jobSeekerUserId)({})).toEqual({
+				unreadMessageCount: 0,
+			});
+
+			await db
+				.update(report)
+				.set({ status: "resolved" })
+				.where(eq(report.id, createdReport.id));
+			expect(
+				(await listMineFor(fixture.employerUserId)({})).some(
+					(room) => room.id === fixture.chatRoomId
+				)
+			).toBe(false);
+
+			await db
+				.update(report)
+				.set({ status: "dismissed" })
+				.where(eq(report.id, createdReport.id));
+			expect(
+				(await listMineFor(fixture.employerUserId)({})).some(
+					(room) => room.id === fixture.chatRoomId
+				)
+			).toBe(true);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+
+	it("메시지 신고도 부모 채팅방을 양쪽에서 숨긴다", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const message = await seedMessage(fixture, fixture.employerUserId);
+			await db.insert(report).values({
+				reason: "외부 연락처 유도",
+				reporterUserId: fixture.jobSeekerUserId,
+				status: "open",
+				targetId: message.id,
+				targetType: "chat_message",
+			});
+
+			for (const userId of [fixture.jobSeekerUserId, fixture.employerUserId]) {
+				expect(
+					(await listMineFor(userId)({})).some(
+						(room) => room.id === fixture.chatRoomId
+					)
+				).toBe(false);
+			}
+			await expectOrpcCode(
+				sendMessageFor(fixture.employerUserId)({
+					body: "메시지 신고 뒤에도 보내면 안 됩니다.",
+					chatRoomId: fixture.chatRoomId,
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
+});
 
 describe("bambi chats router contact reveal request", () => {
 	it("rejects a contact reveal request from the job seeker", async () => {

@@ -19,7 +19,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-
+import {
+	type BusinessDocument,
+	BusinessDocumentUploader,
+} from "@/components/bambi/business-document-uploader";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { FieldError } from "@/components/bambi/form-message";
 import { PageShell } from "@/components/bambi/page-shell";
@@ -30,6 +33,7 @@ import {
 	formatBusinessStartDate,
 	formatDateTime,
 	formatNullable,
+	formatPhone,
 } from "@/lib/bambi-format";
 import {
 	getBiznumStatusLabel,
@@ -140,6 +144,7 @@ const getInitials = (name: null | string): string => {
 	return trimmed.slice(0, 2);
 };
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This page coordinates independent profile, verification, document, and team workflows.
 export default function EmployerMePage() {
 	const router = useRouter();
 	const session = authClient.useSession();
@@ -281,7 +286,10 @@ export default function EmployerMePage() {
 							</div>
 							<p className="text-muted-foreground text-sm">
 								{profile.isPhoneVerified ? "전화 인증 완료" : "전화 미인증"} ·
-								연락처 {formatNullable(profile.phoneNumber)}
+								연락처{" "}
+								{formatNullable(
+									profile.phoneNumber ? formatPhone(profile.phoneNumber) : null
+								)}
 							</p>
 							<p className="text-muted-foreground text-xs">
 								가입 {formatDateTime(profile.createdAt)}
@@ -304,6 +312,7 @@ export default function EmployerMePage() {
 				</div>
 				<BusinessInfoForm
 					biznumCheckEnabled={biznumCheckEnabled}
+					businessDocuments={organizationProfiles[0]?.businessDocuments ?? []}
 					defaultBusinessRegistrationNumber={
 						organizationProfiles[0]?.businessRegistrationNumber ?? ""
 					}
@@ -316,6 +325,10 @@ export default function EmployerMePage() {
 					}
 					isRejected={
 						organizationProfiles[0]?.verificationStatus === "rejected"
+					}
+					organizationId={organizationProfiles[0]?.organizationId ?? null}
+					verificationStatus={
+						organizationProfiles[0]?.verificationStatus ?? "none"
 					}
 				/>
 				{organizationProfiles.length > 0 ? (
@@ -490,19 +503,25 @@ const BRN_PATTERN = /^\d{3}-\d{2}-\d{5}$/;
 
 function BusinessInfoForm({
 	biznumCheckEnabled,
+	businessDocuments,
 	defaultDisplayName,
 	defaultBusinessRegistrationNumber,
 	defaultRepresentativeName,
 	defaultBusinessStartDate,
 	isRejected,
+	organizationId,
+	verificationStatus,
 }: {
 	biznumCheckEnabled: boolean;
+	businessDocuments: BusinessDocument[];
 	defaultDisplayName: string;
 	defaultBusinessRegistrationNumber: string;
 	defaultRepresentativeName: string;
 	// date input 값과 같은 YYYY-MM-DD 문자열(빈 문자열이면 미입력).
 	defaultBusinessStartDate: string;
 	isRejected: boolean;
+	organizationId: null | string;
+	verificationStatus: string;
 }) {
 	const queryClient = useQueryClient();
 	const [displayName, setDisplayName] = useState(defaultDisplayName);
@@ -630,6 +649,11 @@ function BusinessInfoForm({
 							? "대표자 성명과 개업일자는 사업자등록증에 적힌 그대로 입력해야 국세청 진위확인을 통과합니다."
 							: "국세청 사업자등록정보 진위확인은 곧 준비될 기능이에요. 지금은 제출하신 정보를 운영자가 사업자등록증과 직접 대조해 승인하니, 대표자 성명과 개업일자를 사업자등록증에 적힌 그대로 입력해 주세요."}
 					</p>
+					<BusinessDocumentUploader
+						documents={businessDocuments}
+						organizationId={organizationId}
+						verificationStatus={verificationStatus}
+					/>
 					<div className="flex justify-end">
 						<Button
 							className="w-full sm:w-auto"

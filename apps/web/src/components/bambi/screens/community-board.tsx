@@ -52,17 +52,22 @@ import {
 import { EmptyState } from "@/components/bambi/empty-state";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
+	type CommunityBoardMeta,
 	communityBoardPath,
 	communityCrawledPath,
 	communityPostPath,
 	communityWritePath,
 	formatCommunityDate,
-	getBoardBySlug,
 	getCommunityPageItems,
 	getCommunityTotalPages,
 	isGuestWritableBoardKey,
 } from "@/lib/bambi/community";
+import { communityBoardIcon } from "@/lib/bambi/community-board-icons";
 import { orpc } from "@/utils/orpc";
+
+// 필터 메뉴를 감추는 게시판. 베스트는 큐레이션이라 좁힐 대상이 아니고, 공지는 운영자 글만,
+// 법률 자문은 전 글이 비밀글이라 광고·업소 필터가 의미 없다.
+const NO_FILTER_BOARD_KEYS = ["best", "notice", "legal"];
 
 // 목록 필터는 독립 On/Off 토글 3개(광고 글보기·업소 회원 글보기·내가 쓴 글). 기본은 모두 off=전체.
 interface CommunityListFilters {
@@ -121,7 +126,7 @@ function BoardPostRow({
 
 	return (
 		<Link
-			className="flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-muted"
+			className={`flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-muted ${post.board === "notice" && post.isEvent ? "bg-primary/5" : ""}`}
 			href={
 				(isCrawled
 					? communityCrawledPath(post.id)
@@ -134,7 +139,9 @@ function BoardPostRow({
 						<LockIcon className="size-3 shrink-0 text-muted-foreground" />
 					) : null}
 					{post.board === "notice" ? (
-						<Badge className="shrink-0">공지</Badge>
+						<Badge className="shrink-0">
+							{post.isEvent ? "이벤트" : "공지"}
+						</Badge>
 					) : null}
 					{isCrawled ? (
 						<Badge className="shrink-0" variant="secondary">
@@ -426,11 +433,10 @@ function BoardFilterMenu({
 	);
 }
 
-export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
+export function CommunityBoardScreen({ board }: { board: CommunityBoardMeta }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
-	const board = getBoardBySlug(boardSlug);
 	// 필터 토글·검색어·페이지 모두 URL 쿼리를 단일 진실원으로 파생한다(뒤로가기 복원 부수 이득).
 	const showPromotion = isFlagOn(searchParams.get("promotion"));
 	const showEmployer = isFlagOn(searchParams.get("employer"));
@@ -457,8 +463,7 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 	// 법률자문 계정은 legal 게시판만 이용한다(서버가 다른 보드를 FORBIDDEN으로 막는다).
 	// 비-legal 보드 URL로 직접 들어오면 에러 화면 대신 legal 게시판으로 안내한다.
 	// 입장 게이트(RequireCommunityAccess)가 isPending 동안 렌더를 막아 role은 확정 상태다.
-	const legalAdvisorBlocked =
-		role === "legal_advisor" && board !== undefined && board.key !== "legal";
+	const legalAdvisorBlocked = role === "legal_advisor" && board.key !== "legal";
 	useEffect(() => {
 		if (legalAdvisorBlocked) {
 			router.replace(communityBoardPath("legal") as Route);
@@ -467,9 +472,9 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 
 	const listQuery = useQuery(
 		orpc.bambi.community.listPosts.queryOptions({
-			enabled: Boolean(board) && !legalAdvisorBlocked,
+			enabled: !legalAdvisorBlocked,
 			input: {
-				board: board?.key ?? "free",
+				board: board.key,
 				mine,
 				page,
 				q: query,
@@ -504,13 +509,13 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 		buildHref,
 	]);
 
-	if (!board || legalAdvisorBlocked) {
+	if (legalAdvisorBlocked) {
 		return null;
 	}
 
-	// 일반 게시판(자유·일·중고)만 필터를 노출한다. 베스트·공지는 필터 없음.
-	const showFilter =
-		board.key === "free" || board.key === "work_talk" || board.key === "market";
+	// 특수 게시판(베스트·공지·법률 자문)만 필터를 감춘다 — 나머지는 운영자가 새로 만든
+	// 게시판까지 표준 필터를 그대로 쓴다.
+	const showFilter = !NO_FILTER_BOARD_KEYS.includes(board.key);
 	// 공지 게시판은 글쓰기가 운영자 전용이라 admin에게만 버튼을 노출한다.
 	// 비회원은 읽기만 전체 보드고 쓰기는 자유수다·밤문화 이야기로 좁다(서버 가드와 동일).
 	const canWrite =
@@ -519,6 +524,11 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 		(!isGuest || isGuestWritableBoardKey(board.key));
 	// 공지 게시판은 배지(광고·업소)를 생략한다.
 	const showBadges = board.key !== "notice";
+	// 제목 앞 아이콘 — 운영자가 지정한 아이콘이 우선이고, 없으면 공지의 확성기만 남는다
+	// (그 외 게시판은 지금처럼 아이콘 없이 제목만).
+	const BoardIcon =
+		communityBoardIcon(board.icon) ??
+		(board.key === "notice" ? MegaphoneIcon : undefined);
 
 	const emptyDescription = getEmptyDescription(board.key, canWrite, {
 		mine,
@@ -545,8 +555,8 @@ export function CommunityBoardScreen({ boardSlug }: { boardSlug: string }) {
 			<div className="flex items-start justify-between gap-3">
 				<div className="flex flex-col gap-1">
 					<h1 className="m-0 flex items-center gap-2 font-extrabold text-xl">
-						{board.key === "notice" ? (
-							<MegaphoneIcon className="size-5 shrink-0 text-coral-500" />
+						{BoardIcon ? (
+							<BoardIcon className="size-5 shrink-0 text-coral-500" />
 						) : null}
 						{board.label}
 					</h1>

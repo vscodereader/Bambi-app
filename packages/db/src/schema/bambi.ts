@@ -3,11 +3,13 @@ import {
 	type AnyPgColumn,
 	boolean,
 	check,
+	date,
 	index,
 	integer,
 	jsonb,
 	pgEnum,
 	pgTable,
+	primaryKey,
 	text,
 	timestamp,
 	uniqueIndex,
@@ -35,6 +37,24 @@ export const accountStatus = pgEnum("account_status", [
 	"warned",
 	"suspended",
 ]);
+
+export const mainPopupContentType = pgEnum("main_popup_content_type", [
+	"image",
+	"text",
+]);
+
+export const mainPopupAudience = pgEnum("main_popup_audience", [
+	"common",
+	"job_seeker",
+	"employer",
+]);
+
+export interface MainPopupImageAsset {
+	dataUrl: string;
+	height: number;
+	mimeType: "image/jpeg" | "image/png" | "image/webp";
+	width: number;
+}
 
 // 성별. 휴대폰 본인인증 결과로 채워진다(1남/2여 → male/female). 게스트는 프로필이
 // 없어 쿠키에만 남고, 정식 회원은 이 컬럼에 저장된다. 여성/광고 업소 회원만 입장하는
@@ -129,17 +149,53 @@ export const moderationTargetType = pgEnum("moderation_target_type", [
 	"team_invitation",
 ]);
 
-// 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.
-// notice(공지사항)는 admin만 작성 가능(API 강제).
-export const communityBoard = pgEnum("community_board", [
-	"free",
-	"work_talk",
-	"market",
-	"notice",
-	// 무료 법률 자문. 글이 전부 잠금(비밀번호 필수)이라 목록에는 마스킹 제목만 보인다.
-	// 마이그레이션 호환을 위해 새 값은 항상 끝에 덧붙인다.
-	"legal",
+// 알림 전용 대상 타입. 감사 로그(moderation_target_type)와 분리한다 — 알림에만 필요한 값
+// (interview_schedule·contact_reveal·job_post 검수 대기 등)이 감사 enum을 오염시키면
+// 두 축이 서로의 마이그레이션에 묶인다. 이 시점부터 두 enum은 독립 진화한다.
+// 마이그레이션 호환을 위해 새 값은 항상 목록 끝에 덧붙인다(ALTER TYPE ... ADD VALUE).
+export const notificationTargetType = pgEnum("notification_target_type", [
+	// 채팅 2종은 기존 저장값 호환용(알림함 목록·카운트에서는 제외된다 — 채팅 핀이 담당).
+	"chat_message",
+	"chat_room",
+	"interview_schedule",
+	"contact_reveal",
+	"support_inquiry",
+	"report",
+	"community_post",
+	"community_comment",
+	"review",
+	"job_post",
+	"employer_verification",
+	"team_invitation",
+	"organization_member",
 ]);
+
+// 수다방 게시판 정의. 운영자가 코드 배포 없이 추가·수정할 수 있도록 enum이 아니라
+// 테이블로 둔다(pgEnum이던 시절엔 게시판 하나를 늘리는 데 마이그레이션이 필요했다).
+// 베스트글(best)은 여기에 없다 — 저장 게시판이 아니라 추천수 큐레이션 가상 게시판이다.
+// key는 저장값(community_post.board가 참조), slug는 URL 세그먼트다. 신규 게시판은
+// key === slug이고, 레거시 work_talk만 slug가 "work-talk"으로 갈린다.
+// 특수 동작(notice 운영자 전용·free 잠금 금지·legal 연락처·work_talk 수집 합류)은
+// 여전히 API의 키 리터럴 분기이며, 새 게시판은 표준 동작(회원 열람·작성)만 갖는다.
+// 삭제는 없다 — 글이 FK로 매달려 있어 비활성(is_active=false)이 곧 숨김이다.
+export const communityBoard = pgTable("community_board", {
+	key: text("key").primaryKey(),
+	slug: text("slug").notNull().unique(),
+	label: text("label").notNull(),
+	description: text("description").default("").notNull(),
+	// 게시판 카드·헤더에 붙는 lucide 아이콘 이름(예: "Coffee"). 자유 입력이 아니라 API의
+	// 큐레이션 목록으로 좁히고, 웹이 모르는 이름은 무시한다. null이면 아이콘 없음(기존 모양).
+	icon: text("icon"),
+	isActive: boolean("is_active").default(true).notNull(),
+	// false면 읽기만 열린다(글쓰기 버튼·서버 가드 양쪽에서 막는다).
+	isWritable: boolean("is_writable").default(true).notNull(),
+	sortOrder: integer("sort_order").notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
 
 // 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
 export const communityContentStatus = pgEnum("community_content_status", [
@@ -410,6 +466,36 @@ export const employerOrganizationProfile = pgTable(
 		),
 		index("employer_organization_profile_verification_status_idx").on(
 			table.verificationStatus
+		),
+	]
+);
+
+export const employerBusinessDocument = pgTable(
+	"employer_business_document",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		createdByUserId: text("created_by_user_id")
+			.notNull()
+			.references(() => user.id),
+		category: chatAttachmentCategory("category").notNull(),
+		fileName: text("file_name").notNull(),
+		mimeType: text("mime_type").notNull(),
+		byteSize: integer("byte_size").notNull(),
+		storageKey: text("storage_key").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("employer_business_document_organization_id_idx").on(
+			table.organizationId
+		),
+		index("employer_business_document_created_by_user_id_idx").on(
+			table.createdByUserId
+		),
+		uniqueIndex("employer_business_document_storage_key_uidx").on(
+			table.storageKey
 		),
 	]
 );
@@ -1019,6 +1105,53 @@ export const adProduct = pgTable(
 	]
 );
 
+export const adProductDiscountCampaign = pgTable(
+	"ad_product_discount_campaign",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		adProductId: uuid("ad_product_id")
+			.notNull()
+			.references(() => adProduct.id, { onDelete: "cascade" }),
+		priceOptionDays: integer("price_option_days").notNull(),
+		discountPercent: integer("discount_percent").notNull(),
+		startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+		// 운영자가 선택한 종료 분까지 포함되도록 API에서 다음 분 시각으로 변환해 저장한다.
+		endsAtExclusive: timestamp("ends_at_exclusive", { withTimezone: true }),
+		cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+		supersededById: uuid("superseded_by_id").references(
+			(): AnyPgColumn => adProductDiscountCampaign.id,
+			{ onDelete: "set null" }
+		),
+		createdByUserId: text("created_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		index("ad_product_discount_campaign_product_days_idx").on(
+			table.adProductId,
+			table.priceOptionDays,
+			table.startsAt
+		),
+		check(
+			"ad_product_discount_campaign_discount_check",
+			sql`${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100`
+		),
+		check(
+			"ad_product_discount_campaign_days_check",
+			sql`${table.priceOptionDays} > 0`
+		),
+		check(
+			"ad_product_discount_campaign_window_check",
+			sql`${table.endsAtExclusive} IS NULL OR ${table.endsAtExclusive} > ${table.startsAt}`
+		),
+	]
+);
+
 // 사이트 전역 설정(단일 행). 지금은 푸터에 노출하는 사업자 정보를 담고, 이후 다른
 // 사이트 설정(무통장입금 계좌 안내 등)이 생기면 컬럼을 추가한다. 도메인을 푸터로 좁히지
 // 않으려고 이름을 site_settings로 둔다. 값이 없으면(null) 코드의 폴백 상수를 쓴다.
@@ -1513,28 +1646,92 @@ export const bambiNotification = pgTable(
 	"bambi_notification",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		recipientUserId: text("recipient_user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// 개인 수신자. 역할 공유 알림(운영자 큐·법률자문)에서는 비고 recipient_role만 채운다 —
+		// 아래 CHECK가 "정확히 한쪽"을 강제한다(community_post_author_one_of_ck와 같은 패턴).
+		recipientUserId: text("recipient_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		// 역할 공유 수신. 운영자 5명이면 행 5개가 아니라 1개다 — 한 명이 확인하면 전원의
+		// 배지에서 사라진다(큐 성격상 의도된 동작). SSE만 그 역할 계정 수만큼 팬아웃한다.
+		recipientRole: bambiUserRole("recipient_role"),
+		// 공유 행을 누가 확인했는지. 알림함에 "확인: ○○"로 표시한다. 확인자가 탈퇴해도
+		// 알림 자체는 남아야 하므로 계정 삭제 시 null로만 떨어뜨린다.
+		readByUserId: text("read_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		actorUserId: text("actor_user_id")
 			.notNull()
 			.references(() => user.id),
-		targetType: moderationTargetType("target_type").notNull(),
+		targetType: notificationTargetType("target_type").notNull(),
 		targetId: text("target_id").notNull(),
 		chatRoomId: uuid("chat_room_id").references(() => chatRoom.id, {
 			onDelete: "cascade",
 		}),
 		readAt: timestamp("read_at"),
+		// 이벤트 세부(action·reason·board·postId·jobPostId …). 라벨·딥링크가 이 값을 읽는다.
 		metadata: jsonb("metadata").$type<Record<string, unknown>>(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
 		index("bambi_notification_recipient_user_id_idx").on(table.recipientUserId),
+		// 공유 행은 전체의 극소수라 부분 인덱스로 둔다 — 운영자 목록·카운트가 개인 행
+		// 수백만 건을 건너뛰고 바로 자기 몫만 읽는다.
+		index("bambi_notification_recipient_role_idx")
+			.on(table.recipientRole)
+			.where(sql`${table.recipientRole} IS NOT NULL`),
 		index("bambi_notification_chat_room_id_idx").on(table.chatRoomId),
 		index("bambi_notification_target_type_target_id_idx").on(
 			table.targetType,
 			table.targetId
 		),
+		check(
+			"bambi_notification_recipient_one_of_ck",
+			sql`num_nonnulls(${table.recipientUserId}, ${table.recipientRole}) = 1`
+		),
+	]
+);
+
+// 출석체크. (누가, 며칠) 두 축이면 충분하다 — 복합 PK가 "하루 1회"를 DB에서 보장하므로
+// 애플리케이션은 조건 분기 없이 onConflictDoNothing으로 멱등만 지키면 된다.
+// attended_on은 KST 달력일이다(서버가 services/bambi-attendance의 getKstDateString으로
+// 계산해 넣는다 — 클라이언트 시계 불신). 출석 포인트는 이 테이블에 컬럼을 붙이지 않고
+// 아래 bambi_point_transaction 원장에 별도 행으로 쌓는다(적립 이력이 남아야 해서).
+export const bambiAttendance = pgTable(
+	"bambi_attendance",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		attendedOn: date("attended_on").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.userId, table.attendedOn] }),
+		// 운영자 목록의 "오늘 출석자 수" 요약이 날짜 한 값으로 전 계정을 훑는다.
+		index("bambi_attendance_attended_on_idx").on(table.attendedOn),
+	]
+);
+
+// 포인트 원장. 잔액 컬럼을 따로 두지 않고 행 합산으로 읽는다 — 잔액 컬럼은 적립·차감마다
+// 두 곳을 맞춰야 해서 어긋나면 복구할 근거가 없다(원장은 언제나 재계산 가능).
+// 중복 적립 가드는 여기 유니크가 아니라 bambi_attendance 복합 PK가 담당한다:
+// checkIn 트랜잭션에서 출석 insert가 실제로 일어났을 때만 +10 행을 쌓는다.
+// reason은 현재 "attendance"뿐이라 enum 대신 text로 둔다(사용처가 늘면 enum 승격 검토).
+export const bambiPointTransaction = pgTable(
+	"bambi_point_transaction",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// 적립은 양수, 차감은 음수. 잔액 = 계정 행 합산.
+		amount: integer("amount").notNull(),
+		reason: text("reason").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		// 잔액 합산이 계정 하나의 행만 훑게 한다(출석 화면이 진입마다 부른다).
+		index("bambi_point_transaction_user_id_idx").on(table.userId),
 	]
 );
 
@@ -1542,7 +1739,10 @@ export const communityPost = pgTable(
 	"community_post",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		board: communityBoard("board").notNull(),
+		// 게시판 정의는 community_board가 정본이다(FK) — 운영자가 추가한 게시판도 같은 칸에 담긴다.
+		board: text("board")
+			.notNull()
+			.references(() => communityBoard.key),
 		// 회원 글이면 author_user_id, 비회원(게스트 토큰) 글이면 author_guest_id만 채워진다
 		// — 정확히 한쪽만 채워지도록 아래 CHECK로 강제한다. 게스트는 계정이 없어 FK가 없고,
 		// 소유권은 password_hash 검증으로만 증명한다.
@@ -1561,6 +1761,8 @@ export const communityPost = pgTable(
 		authorRole: bambiUserRole("author_role").notNull(),
 		// 업소회원 자율 광고 표시. employer만 true 가능(API 강제), 미표시 광고는 신고로 보완.
 		isPromotion: boolean("is_promotion").default(false).notNull(),
+		// 공지사항 운영자 전용 이벤트 표시. 이벤트 글은 비밀글과 동시에 사용할 수 없다.
+		isEvent: boolean("is_event").default(false).notNull(),
 		title: text("title").notNull(),
 		body: text("body").notNull(),
 		viewCount: integer("view_count").default(0).notNull(),
@@ -1789,7 +1991,18 @@ export const bambiProfileRelations = relations(bambiProfile, ({ one }) => ({
 export const employerOrganizationProfileRelations = relations(
 	employerOrganizationProfile,
 	({ many }) => ({
+		businessDocuments: many(employerBusinessDocument),
 		teamProfiles: many(employerTeamProfile),
+	})
+);
+
+export const employerBusinessDocumentRelations = relations(
+	employerBusinessDocument,
+	({ one }) => ({
+		organizationProfile: one(employerOrganizationProfile, {
+			fields: [employerBusinessDocument.organizationId],
+			references: [employerOrganizationProfile.organizationId],
+		}),
 	})
 );
 
@@ -1920,4 +2133,35 @@ export const supportInquiryMessageRelations = relations(
 			references: [supportInquiry.id],
 		}),
 	})
+);
+
+export const mainPopup = pgTable(
+	"main_popup",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		slotIndex: integer("slot_index").notNull(),
+		enabled: boolean("enabled").default(false).notNull(),
+		audience: mainPopupAudience("audience").default("common").notNull(),
+		contentType: mainPopupContentType("content_type")
+			.default("image")
+			.notNull(),
+		originalImage: jsonb("original_image").$type<MainPopupImageAsset>(),
+		editedImage: jsonb("edited_image").$type<MainPopupImageAsset>(),
+		contentWidth: integer("content_width").default(420).notNull(),
+		contentHeight: integer("content_height").default(320).notNull(),
+		textDocument: jsonb("text_document").$type<Record<string, unknown>>(),
+		linkPath: text("link_path"),
+		startsAt: timestamp("starts_at", { withTimezone: true }),
+		endsAt: timestamp("ends_at", { withTimezone: true }),
+		revision: integer("revision").default(0).notNull(),
+		updatedByUserId: text("updated_by_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [uniqueIndex("main_popup_slot_index_uidx").on(table.slotIndex)]
 );

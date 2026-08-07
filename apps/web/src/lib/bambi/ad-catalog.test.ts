@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	formatAdCampaignPeriod,
 	formatAdDuration,
 	formatAdPrice,
 	formatAdPriceLabel,
 	resolveAdPrice,
+	selectEditableAdCampaign,
 } from "./ad-catalog";
 
 describe("ad-catalog format helpers", () => {
@@ -13,6 +15,30 @@ describe("ad-catalog format helpers", () => {
 	});
 	it("formats duration days", () => {
 		expect(formatAdDuration(30)).toBe("30일");
+	});
+	it("formats campaign periods in KST and supports an indefinite end", () => {
+		expect(
+			formatAdCampaignPeriod(
+				new Date("2026-08-06T07:41:00.000Z"),
+				new Date("2026-08-27T07:41:00.000Z")
+			)
+		).toContain("2026");
+		expect(
+			formatAdCampaignPeriod(new Date("2026-08-06T07:41:00.000Z"), null)
+		).toContain("무기한");
+	});
+	it("prefers an active campaign over later-started ended history", () => {
+		const active = {
+			priceOptionDays: 30,
+			startsAt: new Date("2026-08-06T07:41:00.000Z"),
+			status: "active" as const,
+		};
+		const ended = {
+			priceOptionDays: 30,
+			startsAt: new Date("2026-08-06T07:42:00.000Z"),
+			status: "ended" as const,
+		};
+		expect(selectEditableAdCampaign([ended, active], 30)).toBe(active);
 	});
 });
 

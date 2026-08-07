@@ -11,12 +11,65 @@ export type AdCatalogProduct = AdCatalogPlacement["products"][number];
 
 const wonFormatter = new Intl.NumberFormat("ko-KR");
 
+const campaignDateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
+	day: "numeric",
+	hour: "numeric",
+	minute: "2-digit",
+	month: "numeric",
+	timeZone: "Asia/Seoul",
+	year: "numeric",
+});
+
+type CampaignStatus = "active" | "cancelled" | "ended" | "planned";
+
+interface EditableCampaign {
+	priceOptionDays: number;
+	startsAt: Date;
+	status?: CampaignStatus;
+}
+
+const campaignStatusPriority: Record<CampaignStatus, number> = {
+	active: 0,
+	planned: 1,
+	ended: 2,
+	cancelled: 3,
+};
+
 export function formatAdPrice(amount: number): string {
 	return `${wonFormatter.format(amount)}원`;
 }
 
 export function formatAdDuration(days: number): string {
 	return `${days}일`;
+}
+
+export function formatAdCampaignPeriod(
+	startsAt: Date | string,
+	endsAt: Date | string | null
+): string {
+	const start = campaignDateTimeFormatter.format(new Date(startsAt));
+	const end = endsAt
+		? campaignDateTimeFormatter.format(new Date(endsAt))
+		: "무기한";
+	return `${start} ~ ${end}`;
+}
+
+export function selectEditableAdCampaign<T extends EditableCampaign>(
+	campaigns: T[],
+	priceOptionDays: number
+): T | undefined {
+	return campaigns
+		.filter(
+			(campaign) =>
+				campaign.priceOptionDays === priceOptionDays &&
+				campaign.status !== "cancelled"
+		)
+		.sort((a, b) => {
+			const statusDifference =
+				campaignStatusPriority[a.status ?? "ended"] -
+				campaignStatusPriority[b.status ?? "ended"];
+			return statusDifference || b.startsAt.getTime() - a.startsAt.getTime();
+		})[0];
 }
 
 // 할인 표시용 파생값. discountPercent가 0이거나 계산 결과가 원가와 같으면 hasDiscount=false.

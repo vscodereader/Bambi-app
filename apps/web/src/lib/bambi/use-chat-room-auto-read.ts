@@ -11,10 +11,53 @@ interface ChatRoomAutoReadInput {
 	markRead: (input: {
 		chatRoomId: string;
 		upToMessageId: string;
-	}) => Promise<unknown>;
+	}) => Promise<ChatRoomMarkReadResult>;
 }
 
+interface ChatRoomMarkReadResult {
+	latestUnreadMessageId: null | string;
+	unreadCount: number;
+}
+
+export const resolveNextChatReadWatermark = ({
+	attemptedMessageId,
+	latestUnreadMessageId,
+}: {
+	attemptedMessageId: string;
+	latestUnreadMessageId: null | string;
+}): null | string =>
+	latestUnreadMessageId && latestUnreadMessageId !== attemptedMessageId
+		? latestUnreadMessageId
+		: null;
+
+interface ChatReadWatermark {
+	chatRoomId: string;
+	messageId: string;
+}
+
+const canFlushChatRead = (
+	latest: ChatReadWatermark | null,
+	sentMessageId: null | string,
+	attemptedMessageIds: ReadonlySet<string>
+): latest is ChatReadWatermark =>
+	Boolean(
+		latest &&
+			sentMessageId !== latest.messageId &&
+			!attemptedMessageIds.has(latest.messageId)
+	);
+
+const resolveSentMessageAfterFailure = ({
+	attemptedMessageId,
+	sentMessageId,
+}: {
+	attemptedMessageId: string;
+	sentMessageId: null | string;
+}): null | string =>
+	sentMessageId === attemptedMessageId ? null : sentMessageId;
+
 interface ChatRoomAutoRead {
+	/** HTTP 메시지 조회가 끝난 방 진입 시 지연 없이 서버에 읽음을 저장한다. */
+	markReadNow: (messageId: null | string) => void;
 	queueMarkRead: (messageId: null | string) => void;
 	/**
 	 * "보고 있는 방인데 안 읽음이 남아 있다"는 신호(chat:unread:updated)를 받았을 때의
@@ -41,6 +84,63 @@ export function useChatRoomAutoRead({
 	);
 	const sentMessageIdRef = useRef<null | string>(null);
 	const timerRef = useRef<null | number>(null);
+	const markReadRef = useRef(markRead);
+
+	useEffect(() => {
+		markReadRef.current = markRead;
+	}, [markRead]);
+
+	const flush = useCallback(() => {
+		const run = async () => {
+			const attemptedMessageIds = new Set<string>();
+
+			while (document.visibilityState === "visible") {
+				const latest = latestRef.current;
+
+				if (
+					!canFlushChatRead(
+						latest,
+						sentMessageIdRef.current,
+						attemptedMessageIds
+					)
+				) {
+					return;
+				}
+
+				attemptedMessageIds.add(latest.messageId);
+				sentMessageIdRef.current = latest.messageId;
+
+				try {
+					const result = await markReadRef.current({
+						chatRoomId: latest.chatRoomId,
+						upToMessageId: latest.messageId,
+					});
+					const nextMessageId = resolveNextChatReadWatermark({
+						attemptedMessageId: latest.messageId,
+						latestUnreadMessageId: result.latestUnreadMessageId,
+					});
+
+					if (!nextMessageId || result.unreadCount === 0) {
+						return;
+					}
+
+					latestRef.current = {
+						chatRoomId: latest.chatRoomId,
+						messageId: nextMessageId,
+					};
+					sentMessageIdRef.current = null;
+				} catch {
+					sentMessageIdRef.current = resolveSentMessageAfterFailure({
+						attemptedMessageId: latest.messageId,
+						sentMessageId: sentMessageIdRef.current,
+					});
+					return;
+				}
+			}
+		};
+
+		run().catch(() => undefined);
+	}, []);
 
 	const flushSoon = useCallback(() => {
 		if (timerRef.current !== null) {
@@ -49,26 +149,25 @@ export function useChatRoomAutoRead({
 
 		timerRef.current = window.setTimeout(() => {
 			timerRef.current = null;
-			const latest = latestRef.current;
+			flush();
+		}, MARK_READ_COALESCE_MS);
+	}, [flush]);
 
-			if (!latest || sentMessageIdRef.current === latest.messageId) {
+	const markReadNow = useCallback(
+		(messageId: null | string) => {
+			if (!messageId) {
 				return;
 			}
 
-			sentMessageIdRef.current = latest.messageId;
-			markRead({
-				chatRoomId: latest.chatRoomId,
-				upToMessageId: latest.messageId,
-			}).catch(() => {
-				// 실패한 기준선을 "보냈다"로 남겨 두면 같은 기준선으로는 두 번 다시
-				// 시도하지 않는다 — 핀이 1에 걸린 채 다음 새 메시지가 올 때까지 안 꺼진다.
-				// 되돌려 두면 탭 복귀·방 재조회 같은 다음 신호가 그대로 재시도한다.
-				if (sentMessageIdRef.current === latest.messageId) {
-					sentMessageIdRef.current = null;
-				}
-			});
-		}, MARK_READ_COALESCE_MS);
-	}, [markRead]);
+			latestRef.current = { chatRoomId, messageId };
+			if (timerRef.current !== null) {
+				window.clearTimeout(timerRef.current);
+				timerRef.current = null;
+			}
+			flush();
+		},
+		[chatRoomId, flush]
+	);
 
 	const queueMarkRead = useCallback(
 		(messageId: null | string) => {
@@ -127,5 +226,5 @@ export function useChatRoomAutoRead({
 		[]
 	);
 
-	return { queueMarkRead, reassertMarkRead };
+	return { markReadNow, queueMarkRead, reassertMarkRead };
 }

@@ -60,6 +60,7 @@ import {
 	REPORT_REASON_LABELS,
 	type ReportReason,
 } from "@/lib/bambi/report-labels";
+import { formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
 const PASSWORD_MIN = 4;
@@ -190,7 +191,7 @@ export function PostHeader({ post }: { post: CommunityPostDetail }) {
 			{post.contactPhone ? (
 				<Alert>
 					<PhoneIcon />
-					<AlertTitle>연락처 {post.contactPhone}</AlertTitle>
+					<AlertTitle>연락처 {formatPhone(post.contactPhone)}</AlertTitle>
 					<AlertDescription>
 						작성자 본인과 운영자·법률자문에게만 보이는 번호예요.
 					</AlertDescription>

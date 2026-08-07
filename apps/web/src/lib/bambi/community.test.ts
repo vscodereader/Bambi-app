@@ -9,10 +9,12 @@ import {
 	getBoardBySlug,
 	getCommunityPageItems,
 	getCommunityTotalPages,
+	isBuiltinBoardKey,
 	isGuestWritableBoardKey,
 	isLegalAdvisorAllowedPath,
 	isLegalBoardKey,
 	isNewCommunityPost,
+	toBoardMetas,
 } from "./community";
 
 describe("community boards meta", () => {
@@ -22,7 +24,7 @@ describe("community boards meta", () => {
 		expect(getBoardBySlug("nope")).toBeUndefined();
 	});
 
-	it("게시판은 공지·베스트·자유·일·중고·법률 6개이고 공지가 맨 앞이다", () => {
+	it("빌트인 목록은 공지·베스트·자유·일·중고·법률 6개이고 공지가 맨 앞이다", () => {
 		expect(COMMUNITY_BOARDS.map((board) => board.key)).toEqual([
 			"notice",
 			"best",
@@ -78,6 +80,50 @@ describe("community boards meta", () => {
 	it("공지사항만 운영자 전용(adminOnly) 게시판이다", () => {
 		expect(getBoardBySlug("notice")?.adminOnly).toBe(true);
 		expect(getBoardBySlug("free")?.adminOnly).toBeUndefined();
+	});
+
+	it("DB 게시판 행을 화면 메타로 옮기고 베스트를 선두에 얹는다", () => {
+		const boards = toBoardMetas([
+			{
+				description: "밤비알바 수다방 공지",
+				icon: null,
+				isWritable: true,
+				key: "notice",
+				label: "공지사항",
+				slug: "notice",
+			},
+			{
+				description: "새 게시판",
+				icon: "Sparkles",
+				isWritable: false,
+				key: "beauty-talk",
+				label: "뷰티 수다",
+				slug: "beauty-talk",
+			},
+		]);
+
+		expect(boards.map((board) => board.key)).toEqual([
+			"best",
+			"notice",
+			"beauty-talk",
+		]);
+		// 운영자 전용은 DB에 없는 빌트인 규칙이라 key로 얹힌다 — 새 게시판은 표준 동작이다.
+		expect(boards[1]?.adminOnly).toBe(true);
+		expect(boards[2]?.adminOnly).toBeUndefined();
+		// 글쓰기 허용(is_writable)은 DB 값을 그대로 따른다.
+		expect(boards[2]?.writable).toBe(false);
+		expect(boards[2]?.label).toBe("뷰티 수다");
+		// 아이콘도 DB 값 그대로 통과한다(미지정은 null → 화면은 기존 모양).
+		expect(boards[1]?.icon).toBeNull();
+		expect(boards[2]?.icon).toBe("Sparkles");
+	});
+
+	it("빌트인 게시판만 삭제 금지로 판정한다(가상 best 제외)", () => {
+		expect(isBuiltinBoardKey("notice")).toBe(true);
+		expect(isBuiltinBoardKey("work_talk")).toBe(true);
+		expect(isBuiltinBoardKey("legal")).toBe(true);
+		expect(isBuiltinBoardKey("best")).toBe(false);
+		expect(isBuiltinBoardKey("beauty-talk")).toBe(false);
 	});
 
 	it("상세 경로를 만든다", () => {

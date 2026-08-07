@@ -21,14 +21,10 @@ import { toast } from "sonner";
 import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import {
 	CommunityOverviewGrid,
-	type OverviewPost,
 	useLegalAdvisorNavGuard,
 } from "@/components/bambi/community-board-preview";
 import { PhoneVerifyDialog } from "@/components/bambi/phone-verify-dialog";
-import {
-	COMMUNITY_ROOT_PATH,
-	type CommunityBoardKey,
-} from "@/lib/bambi/community";
+import { COMMUNITY_ROOT_PATH } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
 const COMMUNITY_BLOCKED_MESSAGE =
@@ -116,24 +112,13 @@ function CommunityContent({
 		return null;
 	}
 
-	const data = overviewQuery.data;
-	// 응답 키(workTalk)를 게시판 키(work_talk)로 매핑해 게시판별 글 목록을 뽑는다.
-	const postsByBoard: Record<CommunityBoardKey, OverviewPost[]> = {
-		best: data?.best ?? [],
-		free: data?.free ?? [],
-		legal: data?.legal ?? [],
-		market: data?.market ?? [],
-		notice: data?.notice ?? [],
-		work_talk: data?.workTalk ?? [],
-	};
-
 	return (
 		<section className="grid gap-2">
 			<SectionHeader onBlockedNavigate={onBlockedNavigate} />
 			<CommunityOverviewGrid
+				boards={overviewQuery.data?.boards ?? []}
 				isPending={overviewQuery.isPending}
 				onBlockedNavigate={onBlockedNavigate}
-				postsByBoard={postsByBoard}
 			/>
 		</section>
 	);
@@ -141,18 +126,10 @@ function CommunityContent({
 
 // 세션 판정 대기 중 스켈레톤 — 차단/허용 판정 전 잘못된 안내를 막는다.
 function CommunitySkeleton() {
-	const empty: Record<CommunityBoardKey, OverviewPost[]> = {
-		best: [],
-		free: [],
-		legal: [],
-		market: [],
-		notice: [],
-		work_talk: [],
-	};
 	return (
 		<section className="grid gap-2">
 			<SectionHeader />
-			<CommunityOverviewGrid isPending postsByBoard={empty} />
+			<CommunityOverviewGrid boards={[]} isPending />
 		</section>
 	);
 }

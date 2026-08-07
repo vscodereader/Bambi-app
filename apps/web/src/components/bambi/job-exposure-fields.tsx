@@ -16,7 +16,7 @@ import {
 } from "@bambi-app/ui/components/toggle-group";
 import { useQuery } from "@tanstack/react-query";
 import { Ban, Info } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { AdPriceTag } from "@/components/bambi/ad-price-tag";
 import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
@@ -165,9 +165,10 @@ export function JobExposureFields({
 	onProductChange,
 	paymentMethod,
 }: JobExposureFieldsProps) {
-	const catalogQuery = useQuery(
-		orpc.bambi.adProducts.getCatalog.queryOptions()
-	);
+	const catalogQuery = useQuery({
+		...orpc.bambi.adProducts.getCatalog.queryOptions(),
+		refetchOnWindowFocus: true,
+	});
 	const products = useMemo<AdCatalogProduct[]>(
 		() => (catalogQuery.data ?? []).flatMap((placement) => placement.products),
 		[catalogQuery.data]
@@ -191,6 +192,50 @@ export function JobExposureFields({
 		showPaidOptions &&
 		typeof exposureDurationDays === "number" &&
 		typeof exposureAmount === "number";
+	const nextPricingChangeAt = useMemo(() => {
+		const futureBoundaries = products
+			.flatMap((product) => product.priceOptions)
+			.map((option) => option.nextPricingChangeAt)
+			.filter((value): value is Date => value instanceof Date)
+			.map((value) => value.getTime())
+			.filter((value) => value > Date.now());
+
+		return futureBoundaries.length > 0 ? Math.min(...futureBoundaries) : null;
+	}, [products]);
+
+	useEffect(() => {
+		if (nextPricingChangeAt === null) {
+			return;
+		}
+
+		const timeout = window.setTimeout(
+			() => {
+				catalogQuery.refetch().catch(() => undefined);
+			},
+			Math.max(0, nextPricingChangeAt - Date.now()) + 250
+		);
+
+		return () => window.clearTimeout(timeout);
+	}, [catalogQuery.refetch, nextPricingChangeAt]);
+
+	useEffect(() => {
+		if (!selectedDurationOption || exposureDurationDays === null) {
+			return;
+		}
+
+		const currentAmount = resolveAdPrice(
+			selectedDurationOption.amount,
+			selectedDurationOption.discountPercent ?? 0
+		).discountedAmount;
+		if (currentAmount !== exposureAmount) {
+			onDurationChange(exposureDurationDays, currentAmount);
+		}
+	}, [
+		exposureAmount,
+		exposureDurationDays,
+		onDurationChange,
+		selectedDurationOption,
+	]);
 
 	const handleExposureValueChange = (value: string[]) => {
 		const next = value.at(-1);

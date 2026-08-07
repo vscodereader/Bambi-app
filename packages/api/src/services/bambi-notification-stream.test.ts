@@ -19,9 +19,11 @@ import {
 const buildEvent = (
 	overrides: Partial<BambiNotificationEvent> = {}
 ): BambiNotificationEvent => ({
+	action: null,
 	chatRoomId: "room-1",
 	createdAt: "2026-08-05T00:00:00.000Z",
 	notificationId: "notification-1",
+	recipientRole: null,
 	targetId: "message-1",
 	targetType: "chat_message",
 	...overrides,
@@ -187,6 +189,20 @@ describe("bambi sse serialization", () => {
 			)}\n\n`
 		);
 		expect(frame.endsWith("\n\n")).toBe(true);
+	});
+
+	// 문구를 고르는 데 필요한 두 값만 예외로 싣는다 — 없으면 클라이언트가 targetType 폴백만 탄다.
+	it("carries the action and shared recipient role", () => {
+		const frame = serializeBambiNotificationEvent(
+			buildEvent({
+				action: "set_status:rejected",
+				recipientRole: "admin",
+				targetType: "job_post",
+			})
+		);
+
+		expect(frame).toContain('"action":"set_status:rejected"');
+		expect(frame).toContain('"recipientRole":"admin"');
 	});
 
 	it("carries no message body or contact data", () => {

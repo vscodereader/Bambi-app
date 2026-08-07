@@ -12,6 +12,8 @@ import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+
+import { getPortOneReturnUrl } from "@/lib/bambi/portone-verification-return";
 import { client } from "@/utils/orpc";
 
 // 한 화면에 인증 버튼이 여럿이면(예: "본인인증하고 계속하기" / "비회원으로 둘러보기")
@@ -107,7 +109,9 @@ export function usePortOneVerification({
 		handledRedirect.current = true;
 		const code = searchParams.get("code");
 		const message = searchParams.get("message");
-		router.replace(pathname as Route);
+		// 모바일 인증 결과 파라미터만 지운다. `router.replace(pathname)`로 전체 쿼리를
+		// 버리면 `auth=signup`까지 사라져 AuthPanel이 로그인 폼으로 재생성된다.
+		router.replace(getPortOneReturnUrl(pathname, searchParams) as Route);
 		if (code !== null) {
 			toast.error(message || "인증이 완료되지 않았어요.");
 			return;

@@ -344,10 +344,12 @@ export const toPlainJobDescription = (
 		.map((block) => block.text)
 		.join("\n\n");
 
-// 서버가 GCS 없이 도는 개발 환경에서는 인텐트가 local:// 플레이스홀더를 돌려준다.
-// 이때는 실제 전송할 대상이 없으므로 업로드를 건너뛴다.
-const isSignedUploadUrl = (uploadUrl: string): boolean =>
-	uploadUrl.startsWith("https://");
+// 운영 환경은 GCS 서명 URL만 허용한다. 개발 환경의 사업자 인증 서류는 같은 출처의
+// 로컬 객체 엔드포인트로 PUT해 실제 원본을 보존한다.
+const isAllowedUploadUrl = (uploadUrl: string): boolean =>
+	uploadUrl.startsWith("https://") ||
+	(process.env.NODE_ENV !== "production" &&
+		uploadUrl.startsWith("/bambi/local-chat-attachments?"));
 
 // 서명 URL로 브라우저가 GCS에 직접 PUT 한다. Content-Type은 서명에 묶여 있어
 // 인텐트에서 선언한 값과 정확히 일치해야 GCS가 받아준다.
@@ -360,7 +362,7 @@ export const uploadFileToSignedUrl = async ({
 	file: File;
 	uploadIntent: JobPostMediaUploadIntent;
 }): Promise<void> => {
-	if (!isSignedUploadUrl(uploadIntent.uploadUrl)) {
+	if (!isAllowedUploadUrl(uploadIntent.uploadUrl)) {
 		// 개발 환경의 플레이스홀더는 건너뛰지만, 프로덕션에서 서명되지 않은 URL이 왔다면
 		// 서버 구성이 잘못된 것이다. 조용히 넘기면 업로드 없이 공고만 저장된다.
 		if (process.env.NODE_ENV === "production") {
