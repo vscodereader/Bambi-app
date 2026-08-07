@@ -8,6 +8,7 @@ import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { useMobileKeyboardState } from "@/lib/bambi/use-mobile-keyboard-state";
 import { BOTTOM_NAV_CONTENT_SPACER, BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
 import {
@@ -53,18 +54,20 @@ function NavBar({ children }: { children: ReactNode }) {
 // ---- 구직자 ----------------------------------------------------------------
 export function SeekerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
+	const { isKeyboardOpen } = useMobileKeyboardState();
 	// 내 정보 하위 페이지(신고 내역·예정된 면접·차단 목록·계정 설정)도 하단 탭을
 	// 유지한다 → /seeker/me 및 그 하위 경로 전체에서 노출.
 	const showNav =
 		path === "/seeker" ||
 		path === "/seeker/chats" ||
+		path.startsWith("/seeker/chats/") ||
 		path === "/seeker/community" ||
 		path === "/seeker/me" ||
 		path.startsWith("/seeker/me/");
 	return (
 		<>
-			<Content withBottomNav={showNav}>{children}</Content>
-			{showNav ? <MobileTabBar homeHref="/seeker" /> : null}
+			<Content withBottomNav={showNav && !isKeyboardOpen}>{children}</Content>
+			{showNav && !isKeyboardOpen ? <MobileTabBar homeHref="/seeker" /> : null}
 		</>
 	);
 }

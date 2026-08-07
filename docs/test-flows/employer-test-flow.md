@@ -658,6 +658,8 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 - **절차**: 텍스트 입력 후 전송 / 이미지·PDF 첨부
 - **기대 결과**: `sendMessage`/`sendMediaMessage` 성공. 한쪽이 나간 방은 양쪽 모두에게서 사라져 열람·전송이 `NOT_FOUND`(부활 없음)
 - **엣지 케이스**: 차단된 방은 `FORBIDDEN` + 안내("…님이 차단했어요." / "…님을 차단했어요. 차단 관리에서 해제할 수 있어요."). 운영자가 방을 차단하면(`setChatRoomBlocked`) 목록으로 되돌려 보낸다
+- **신고 양쪽 차단 회귀 테스트**: 구직자가 방 또는 메시지를 신고하면 구인자 목록에서도 즉시 사라져야 한다. 구인자는 기존 직접 URL로 열람하거나 텍스트·첨부·면접·연락처·읽음·타이핑을 보낼 수 없고, 시도한 메시지가 구직자의 하단 채팅 핀을 만들면 안 된다. 운영자가 기각하면 양쪽 모두 즉시 복구되고, 조치 완료면 계속 숨겨진다.
+- **모바일 키보드 회귀 테스트**: 채팅방에서 Android 키보드를 열면 하단 내비게이션이 숨겨지고 입력창은 키보드 위에 유지되며 메시지 목록만 줄어들어 스크롤되어야 한다.
 - **관련 API**: `bambi.chats.sendMessage`, `bambi.chats.createAttachmentUpload`, `bambi.chats.sendMediaMessage`, `bambi.chats.markRead`, `bambi.chats.deleteChatRoom`
 
 ### 10.3 면접 일정 제안 · 상태 전이

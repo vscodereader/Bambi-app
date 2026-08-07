@@ -56,7 +56,7 @@
 
 ### 0.5 콘솔 네비게이션 (코드 확인)
 
-`apps/web/src/app/moderator/layout.tsx`의 `MODERATOR_NAV_ITEMS`:
+`apps/web/src/lib/bambi/moderator-navigation.ts`의 `MODERATOR_NAV_ITEMS`:
 
 - 검수 큐 `/moderator`
 - 공고 관리 `/moderator/jobs`
@@ -68,8 +68,13 @@
 - 사이트 정보 `/moderator/site-settings`
 
 모바일 하단 탭(`ModeratorShell`, `apps/web/src/components/bambi/persona-nav.tsx`)은
-검수/신고/사용자/후기/광고 상품 5개만 노출하고 나머지는 **더보기** 시트(`MOD_MORE_GROUPS`,
-`apps/web/src/components/bambi/screens/moderator.tsx` L2405~)로 접힌다.
+검수/신고/사용자/후기/광고 상품 5개만 노출하고 나머지는 **더보기** 시트(`MODERATOR_MORE_GROUPS`)로 접힌다. 데스크톱과 모바일은 같은 공통 메뉴 정의를 사용한다.
+
+### 0.6 모바일 더보기 회귀 테스트
+
+- 모바일 운영자 화면에서 **더보기**를 열고 공고 관리, 업소 승인, 팀 합류 승인, 광고 상품, 결제 관리, 게시물, 고객센터, 금칙어, 크롤링뿐 아니라 **채팅, 후기 관리, 사이트 정보**까지 모두 표시되는지 확인한다.
+- 시트를 아래에서 위로 스와이프해 마지막 사이트 정보 항목까지 스크롤할 수 있어야 한다.
+- 각 항목을 누르면 해당 경로로 이동하며 현재 경로가 활성 스타일로 표시되어야 한다.
 
 ---
 
@@ -561,6 +566,7 @@
   - 사유가 **고정 문자열**이라 운영자가 입력할 수 없다(일괄 처리는 입력 가능 — §6.6).
   - 대상이 사용자 계정이 아니면 "이 신고는 사용자 계정이 대상이 아니에요…" 안내가 뜬다.
   - 목록에 없는 신고 id → "신고 내역을 찾을 수 없어요."
+  - 채팅방·메시지 신고는 `open`·`reviewing`·`resolved` 동안 양쪽 참여자의 목록·열람·전송·읽음·실시간 동작과 안 읽음 집계에서 제외된다. **기각(`dismissed`)** 시에만 양쪽에 즉시 복구되며 `chat:list:updated`로 화면과 전역 핀이 함께 갱신되어야 한다.
 - **관련 API**: `bambi.moderation.setReportStatus` (`moderation.ts` L1343)
 
 ### 6.3 신고 상세 — 사용자 제재(대상이 계정일 때)
@@ -1550,4 +1556,3 @@
 12. **확인 모달이 없는 위험 조작** — 업소 승인(1클릭), 사이트 설정의 "지금 파기 실행",
     FAQ 삭제, 금칙어 단건/선택 삭제, 크롤러 노출 스위치, 업종 지정, 수집 공고·글 복구.
     확인 단계를 추가할지 확인 필요.
-
