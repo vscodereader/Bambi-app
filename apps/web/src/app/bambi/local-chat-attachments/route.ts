@@ -1,4 +1,53 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { NextRequest } from "next/server";
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const BUSINESS_DOCUMENT_KEY_PREFIX = "bambi-business-documents/";
+const ALLOWED_MIME_TYPES = new Set([
+	"application/pdf",
+	"image/jpeg",
+	"image/png",
+	"image/webp",
+]);
+
+const LOCAL_STORAGE_ROOT = path.resolve(
+	process.cwd(),
+	".local-storage",
+	"business-documents"
+);
+
+const getLocalFilePath = (storageKey: string): string | null => {
+	if (
+		!storageKey.startsWith(BUSINESS_DOCUMENT_KEY_PREFIX) ||
+		storageKey.includes("..") ||
+		storageKey.includes("\\")
+	) {
+		return null;
+	}
+
+	const relativeKey = storageKey.slice(BUSINESS_DOCUMENT_KEY_PREFIX.length);
+	const filePath = path.resolve(LOCAL_STORAGE_ROOT, relativeKey);
+	return filePath.startsWith(`${LOCAL_STORAGE_ROOT}${path.sep}`)
+		? filePath
+		: null;
+};
+
+const getMimeType = (fileName: string): string => {
+	switch (path.extname(fileName).toLowerCase()) {
+		case ".jpg":
+		case ".jpeg":
+			return "image/jpeg";
+		case ".png":
+			return "image/png";
+		case ".webp":
+			return "image/webp";
+		case ".pdf":
+			return "application/pdf";
+		default:
+			return "application/octet-stream";
+	}
+};
 
 const escapeSvgText = (value: string): string =>
 	value
@@ -7,10 +56,55 @@ const escapeSvgText = (value: string): string =>
 		.replaceAll(">", "&gt;")
 		.replaceAll('"', "&quot;");
 
-export function GET(request: NextRequest) {
+export async function PUT(request: NextRequest) {
+	if (process.env.NODE_ENV === "production") {
+		return new Response("Not found", { status: 404 });
+	}
+
+	const storageKey = request.nextUrl.searchParams.get("key")?.trim() ?? "";
+	const filePath = getLocalFilePath(storageKey);
+	const mimeType = request.headers.get("content-type")?.split(";", 1)[0] ?? "";
+	const contentLength = Number(request.headers.get("content-length") ?? "0");
+	if (!filePath) {
+		return new Response("Invalid business document", { status: 400 });
+	}
+	if (!ALLOWED_MIME_TYPES.has(mimeType)) {
+		return new Response("Invalid business document", { status: 400 });
+	}
+	if (!Number.isFinite(contentLength) || contentLength > MAX_FILE_BYTES) {
+		return new Response("Invalid business document", { status: 400 });
+	}
+
+	const bytes = Buffer.from(await request.arrayBuffer());
+	if (bytes.byteLength === 0 || bytes.byteLength > MAX_FILE_BYTES) {
+		return new Response("Invalid business document size", { status: 400 });
+	}
+
+	await mkdir(path.dirname(filePath), { recursive: true });
+	await writeFile(filePath, bytes);
+	return new Response(null, { status: 204 });
+}
+
+export async function GET(request: NextRequest) {
 	const fileName =
 		request.nextUrl.searchParams.get("fileName")?.trim() || "attachment";
 	const category = request.nextUrl.searchParams.get("category");
+	const storageKey = request.nextUrl.searchParams.get("key")?.trim() ?? "";
+	const filePath = getLocalFilePath(storageKey);
+	if (process.env.NODE_ENV !== "production" && filePath) {
+		try {
+			const bytes = await readFile(filePath);
+			return new Response(bytes, {
+				headers: {
+					"Cache-Control": "no-store",
+					"Content-Length": String(bytes.byteLength),
+					"Content-Type": getMimeType(fileName),
+				},
+			});
+		} catch {
+			// 과거 local:// 흐름에서 원본이 버려진 레코드는 아래 명시적 대체 이미지를 유지한다.
+		}
+	}
 	const label = category === "pdf" ? "PDF" : "IMAGE";
 	const safeFileName = escapeSvgText(fileName.slice(0, 48));
 	// GCS가 없는 개발 환경에서만 나오는 자리표시자. 원본처럼 보이면 "내가 올린 이미지가

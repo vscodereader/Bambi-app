@@ -32,7 +32,10 @@ describe("business document local storage fallback", () => {
 			organizationId: "organization-1",
 		});
 
-		expect(intent.uploadUrl).toBe(`local://upload/${intent.storageKey}`);
+		expect(intent.uploadUrl).toContain("/bambi/local-chat-attachments?");
+		expect(intent.uploadUrl).toContain(
+			`key=${encodeURIComponent(intent.storageKey)}`
+		);
 		expect(
 			getBusinessDocumentObjectUrl({
 				category: intent.category,

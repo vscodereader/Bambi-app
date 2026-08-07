@@ -255,7 +255,11 @@ export const createBusinessDocumentUploadIntent = async ({
 		storageKey,
 		uploadUrl: shouldUsePublicBucket()
 			? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
-			: `local://upload/${storageKey}`,
+			: buildLocalObjectUrl({
+					category,
+					fileName: fileName.trim(),
+					storageKey,
+				}),
 	};
 };
 

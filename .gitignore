@@ -63,3 +63,6 @@ temp
 
 # Graphify generated knowledge graph
 graphify-out/
+
+# Local development object storage (real business-document bytes)
+apps/web/.local-storage/
