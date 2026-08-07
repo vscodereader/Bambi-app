@@ -1,10 +1,19 @@
 import { db } from "@bambi-app/db";
-import { adPlacement, adProduct } from "@bambi-app/db/schema/bambi";
+import {
+	adPlacement,
+	adProduct,
+	adProductDiscountCampaign,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, notInArray } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
+import {
+	discountCampaignStatus,
+	loadDiscountCampaigns,
+	resolveEffectiveAdPrice,
+} from "../../services/bambi-ad-discount-campaigns";
 import {
 	AD_BANNER_EXPOSURE_TYPES,
 	type AdPreviewTemplate,
@@ -73,6 +82,39 @@ const priceOptionSchema = z.object({
 	discountPercent: z.number().int().min(0).max(100).optional(),
 });
 
+const discountCampaignInputSchema = z
+	.object({
+		discountPercent: z.number().int().min(0).max(100),
+		endsAt: z.coerce.date().nullable(),
+		priceOptionDays: z.number().int().min(1),
+		startsAt: z.coerce.date(),
+	})
+	.refine(
+		(campaign) =>
+			!campaign.endsAt ||
+			campaign.endsAt.getTime() >= campaign.startsAt.getTime(),
+		{
+			message: "종료 일시는 시작 일시보다 빠를 수 없습니다.",
+			path: ["endsAt"],
+		}
+	);
+
+const discountCampaignsSchema = z
+	.array(discountCampaignInputSchema)
+	.superRefine((campaigns, context) => {
+		const seenDays = new Set<number>();
+		for (const [index, campaign] of campaigns.entries()) {
+			if (seenDays.has(campaign.priceOptionDays)) {
+				context.addIssue({
+					code: "custom",
+					message: "같은 이용 기간에는 기간 할인을 하나만 설정할 수 있습니다.",
+					path: [index, "priceOptionDays"],
+				});
+			}
+			seenDays.add(campaign.priceOptionDays);
+		}
+	});
+
 const previewImageUrlSchema = z
 	.string()
 	.max(3_000_000)
@@ -91,6 +133,7 @@ const createProductInput = z.object({
 	tagline: z.string().max(200).optional(),
 	benefits: z.array(z.string().min(1)).default([]),
 	priceOptions: z.array(priceOptionSchema).min(1),
+	discountCampaigns: discountCampaignsSchema.default([]),
 	previewTemplate: previewTemplateSchema.optional(),
 	previewImageUrl: previewImageUrlSchema,
 	manualBoostsPerDay: z.number().int().min(0).default(0),
@@ -104,6 +147,7 @@ const updateProductInput = z.object({
 	tagline: z.string().max(200).nullish(),
 	benefits: z.array(z.string().min(1)).optional(),
 	priceOptions: z.array(priceOptionSchema).min(1).optional(),
+	discountCampaigns: discountCampaignsSchema.optional(),
 	previewTemplate: previewTemplateSchema.optional(),
 	previewImageUrl: previewImageUrlSchema,
 	manualBoostsPerDay: z.number().int().min(0).optional(),
@@ -112,29 +156,169 @@ const updateProductInput = z.object({
 	isActive: z.boolean().optional(),
 });
 
-export const adProductsRouter = {
-	getCatalog: protectedProcedure.handler(
-		async () =>
-			await db.query.adPlacement.findMany({
-				where: eq(adPlacement.isActive, true),
-				orderBy: [asc(adPlacement.sortOrder), asc(adPlacement.createdAt)],
-				with: {
-					products: {
-						// 좌/우 사이드 배너(side-horizontal·side-vertical)는 프리미엄 광고로 통합돼
-						// 신규 구매를 차단한다. 레거시 데이터(이미 팔린 공고)는 계속 노출하되
-						// 구인자 구매 카탈로그에서만 제외한다. 운영자 관리(listCatalogAdmin)에는 계속 노출.
-						where: and(
-							eq(adProduct.isActive, true),
-							notInArray(adProduct.previewTemplate, [
-								"side-horizontal",
-								"side-vertical",
-							])
-						),
-						orderBy: [asc(adProduct.sortOrder), asc(adProduct.createdAt)],
-					},
-				},
+type AdProductDiscountCampaignInput = z.infer<
+	typeof discountCampaignInputSchema
+>;
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+const assertCampaignOptionsExist = (
+	campaigns: AdProductDiscountCampaignInput[],
+	priceOptions: { days: number }[]
+) => {
+	const optionDays = new Set(priceOptions.map((option) => option.days));
+	if (campaigns.some((campaign) => !optionDays.has(campaign.priceOptionDays))) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "존재하지 않는 가격 옵션에는 기간 할인을 설정할 수 없습니다.",
+		});
+	}
+};
+
+const toExclusiveEnd = (endsAt: Date | null | undefined) =>
+	endsAt ? new Date(endsAt.getTime() + 60_000) : null;
+
+const sameCampaign = (
+	existing: typeof adProductDiscountCampaign.$inferSelect | undefined,
+	desired: AdProductDiscountCampaignInput,
+	endsAtExclusive: Date | null
+) =>
+	Boolean(
+		existing &&
+			existing.discountPercent === desired.discountPercent &&
+			existing.startsAt.getTime() === desired.startsAt.getTime() &&
+			existing.endsAtExclusive?.getTime() === endsAtExclusive?.getTime()
+	);
+
+const syncDiscountCampaigns = async ({
+	campaigns,
+	productId,
+	tx,
+	userId,
+}: {
+	campaigns: AdProductDiscountCampaignInput[];
+	productId: string;
+	tx: DbTransaction;
+	userId: string;
+}) => {
+	const now = new Date();
+	const existingCampaigns = await tx
+		.select()
+		.from(adProductDiscountCampaign)
+		.where(eq(adProductDiscountCampaign.adProductId, productId));
+	const open = existingCampaigns.filter(
+		(campaign) =>
+			!campaign.cancelledAt &&
+			(!campaign.endsAtExclusive || campaign.endsAtExclusive > now)
+	);
+	const desiredDays = new Set(
+		campaigns.map((campaign) => campaign.priceOptionDays)
+	);
+	const toCancel = open.filter(
+		(campaign) => !desiredDays.has(campaign.priceOptionDays)
+	);
+	if (toCancel.length > 0) {
+		await tx
+			.update(adProductDiscountCampaign)
+			.set({ cancelledAt: now, updatedAt: now })
+			.where(
+				inArray(
+					adProductDiscountCampaign.id,
+					toCancel.map((campaign) => campaign.id)
+				)
+			);
+	}
+	for (const campaign of campaigns) {
+		const old = open.find(
+			(item) => item.priceOptionDays === campaign.priceOptionDays
+		);
+		const endsAtExclusive = toExclusiveEnd(campaign.endsAt);
+		if (sameCampaign(old, campaign, endsAtExclusive)) {
+			continue;
+		}
+		const [created] = await tx
+			.insert(adProductDiscountCampaign)
+			.values({
+				adProductId: productId,
+				createdByUserId: userId,
+				discountPercent: campaign.discountPercent,
+				endsAtExclusive,
+				priceOptionDays: campaign.priceOptionDays,
+				startsAt: campaign.startsAt,
 			})
-	),
+			.returning({ id: adProductDiscountCampaign.id });
+		if (old && created) {
+			await tx
+				.update(adProductDiscountCampaign)
+				.set({
+					cancelledAt: now,
+					supersededById: created.id,
+					updatedAt: now,
+				})
+				.where(eq(adProductDiscountCampaign.id, old.id));
+		}
+	}
+};
+
+export const adProductsRouter = {
+	getCatalog: protectedProcedure.handler(async () => {
+		const placements = await db.query.adPlacement.findMany({
+			where: eq(adPlacement.isActive, true),
+			orderBy: [asc(adPlacement.sortOrder), asc(adPlacement.createdAt)],
+			with: {
+				products: {
+					// 좌/우 사이드 배너(side-horizontal·side-vertical)는 프리미엄 광고로 통합돼
+					// 신규 구매를 차단한다. 레거시 데이터(이미 팔린 공고)는 계속 노출하되
+					// 구인자 구매 카탈로그에서만 제외한다. 운영자 관리(listCatalogAdmin)에는 계속 노출.
+					where: and(
+						eq(adProduct.isActive, true),
+						notInArray(adProduct.previewTemplate, [
+							"side-horizontal",
+							"side-vertical",
+						])
+					),
+					orderBy: [asc(adProduct.sortOrder), asc(adProduct.createdAt)],
+				},
+			},
+		});
+		const products = placements.flatMap((placement) => placement.products);
+		const campaigns = await loadDiscountCampaigns(
+			products.map((product) => product.id)
+		);
+		const now = new Date();
+		return placements.map((placement) => ({
+			...placement,
+			products: placement.products.map((product) => {
+				const productCampaigns = campaigns.filter(
+					(campaign) => campaign.adProductId === product.id
+				);
+				const priceOptions = product.priceOptions.map((option) => {
+					const resolved = resolveEffectiveAdPrice({
+						amount: option.amount,
+						baseDiscountPercent: option.discountPercent ?? 0,
+						campaigns: productCampaigns.filter(
+							(campaign) => campaign.priceOptionDays === option.days
+						),
+						now,
+					});
+					return {
+						...option,
+						...(resolved.campaignStartsAt
+							? {
+									campaignEndsAt: resolved.campaignEndsAt,
+									campaignStartsAt: resolved.campaignStartsAt,
+								}
+							: {}),
+						...(resolved.discountPercent > 0
+							? { discountPercent: resolved.discountPercent }
+							: {}),
+						...(resolved.nextPricingChangeAt
+							? { nextPricingChangeAt: resolved.nextPricingChangeAt }
+							: {}),
+					};
+				});
+				return { ...product, priceOptions };
+			}),
+		}));
+	}),
 
 	// 프리미엄 광고(배너 3종 통합 풀)의 남은 자리·정원. 광고 안내 페이지가 "N/10" 표시와
 	// 정원 만석 안내에 쓴다. getCatalog와 같은 protected 조회다.
@@ -146,7 +330,7 @@ export const adProductsRouter = {
 
 	listCatalogAdmin: protectedProcedure.handler(async ({ context }) => {
 		await requireAdminProfile(context.session);
-		return await db.query.adPlacement.findMany({
+		const placements = await db.query.adPlacement.findMany({
 			orderBy: [asc(adPlacement.sortOrder), asc(adPlacement.createdAt)],
 			with: {
 				products: {
@@ -154,6 +338,45 @@ export const adProductsRouter = {
 				},
 			},
 		});
+		const products = placements.flatMap((placement) => placement.products);
+		const campaigns = await loadDiscountCampaigns(
+			products.map((product) => product.id)
+		);
+		const now = new Date();
+		return placements.map((placement) => ({
+			...placement,
+			products: placement.products.map((product) => {
+				const productCampaigns = campaigns.filter(
+					(campaign) => campaign.adProductId === product.id
+				);
+				return {
+					...product,
+					priceOptions: product.priceOptions.map((option) => {
+						const resolved = resolveEffectiveAdPrice({
+							amount: option.amount,
+							baseDiscountPercent: option.discountPercent ?? 0,
+							campaigns: productCampaigns.filter(
+								(campaign) => campaign.priceOptionDays === option.days
+							),
+							now,
+						});
+						return {
+							...option,
+							effectiveAmount: resolved.amount,
+							effectiveDiscountPercent: resolved.discountPercent,
+							nextPricingChangeAt: resolved.nextPricingChangeAt,
+						};
+					}),
+					discountCampaigns: productCampaigns.map((campaign) => ({
+						...campaign,
+						endsAt: campaign.endsAtExclusive
+							? new Date(campaign.endsAtExclusive.getTime() - 60_000)
+							: null,
+						status: discountCampaignStatus(campaign, now),
+					})),
+				};
+			}),
+		}));
 	}),
 
 	createPlacement: protectedProcedure
@@ -216,13 +439,38 @@ export const adProductsRouter = {
 		.input(createProductInput)
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
+			assertCampaignOptionsExist(input.discountCampaigns, input.priceOptions);
 			// previewTemplate 미지정 시 컬럼 기본값 "none"(비배너)로 검증한다.
 			assertBannerHasNoBoost({
 				autoBoostsPerDay: input.autoBoostsPerDay,
 				manualBoostsPerDay: input.manualBoostsPerDay,
 				previewTemplate: input.previewTemplate ?? "none",
 			});
-			const [created] = await db.insert(adProduct).values(input).returning();
+			const { discountCampaigns, ...productInput } = input;
+			const created = await db.transaction(async (tx) => {
+				const [product] = await tx
+					.insert(adProduct)
+					.values(productInput)
+					.returning();
+				if (!product) {
+					return null;
+				}
+				if (discountCampaigns.length > 0) {
+					await tx.insert(adProductDiscountCampaign).values(
+						discountCampaigns.map((campaign) => ({
+							adProductId: product.id,
+							createdByUserId: context.session.user.id,
+							discountPercent: campaign.discountPercent,
+							endsAtExclusive: campaign.endsAt
+								? new Date(campaign.endsAt.getTime() + 60_000)
+								: null,
+							priceOptionDays: campaign.priceOptionDays,
+							startsAt: campaign.startsAt,
+						}))
+					);
+				}
+				return product;
+			});
 			if (!created) {
 				throw new ORPCError("INTERNAL_SERVER_ERROR");
 			}
@@ -233,7 +481,7 @@ export const adProductsRouter = {
 		.input(updateProductInput)
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
-			const { id, ...patch } = input;
+			const { discountCampaigns, id, ...patch } = input;
 			// 부분 수정이라 미지정 필드는 기존 값을 유지한다. 템플릿만 배너형으로 바꾸면서
 			// 기존 끌어올리기 값이 남는 경우도 잡으려면 최종 상태를 기존 행과 합쳐 검증해야 한다.
 			const existing = await db.query.adProduct.findFirst({
@@ -242,17 +490,48 @@ export const adProductsRouter = {
 			if (!existing) {
 				throw new ORPCError("NOT_FOUND");
 			}
+			if (discountCampaigns) {
+				assertCampaignOptionsExist(
+					discountCampaigns,
+					patch.priceOptions ?? existing.priceOptions
+				);
+			}
 			assertBannerHasNoBoost({
 				autoBoostsPerDay: patch.autoBoostsPerDay ?? existing.autoBoostsPerDay,
 				manualBoostsPerDay:
 					patch.manualBoostsPerDay ?? existing.manualBoostsPerDay,
 				previewTemplate: patch.previewTemplate ?? existing.previewTemplate,
 			});
-			const [updated] = await db
-				.update(adProduct)
-				.set(patch)
-				.where(eq(adProduct.id, id))
-				.returning();
+			const updated = await db.transaction(async (tx) => {
+				const [product] = await tx
+					.update(adProduct)
+					.set(patch)
+					.where(eq(adProduct.id, id))
+					.returning();
+				if (!product) {
+					return null;
+				}
+				if (patch.priceOptions) {
+					const days = patch.priceOptions.map((option) => option.days);
+					await tx
+						.delete(adProductDiscountCampaign)
+						.where(
+							and(
+								eq(adProductDiscountCampaign.adProductId, id),
+								notInArray(adProductDiscountCampaign.priceOptionDays, days)
+							)
+						);
+				}
+				if (discountCampaigns) {
+					await syncDiscountCampaigns({
+						campaigns: discountCampaigns,
+						productId: id,
+						tx,
+						userId: context.session.user.id,
+					});
+				}
+				return product;
+			});
 			if (!updated) {
 				throw new ORPCError("NOT_FOUND");
 			}

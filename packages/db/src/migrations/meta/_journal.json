@@ -512,6 +512,20 @@
       "when": 1786004147330,
       "tag": "0072_minor_monster_badoon",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1786006038279,
+      "tag": "0073_messy_wallop",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1786006732773,
+      "tag": "0074_nebulous_black_queen",
+      "breakpoints": true
     }
   ]
 }

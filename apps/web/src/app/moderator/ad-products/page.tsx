@@ -39,6 +39,26 @@ const swapAt = (ids: string[], from: number, to: number): null | string[] => {
 	return next;
 };
 
+const formatCampaignDateTime = (value: Date): string =>
+	new Intl.DateTimeFormat("ko-KR", {
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+		month: "numeric",
+		timeZone: "Asia/Seoul",
+		year: "numeric",
+	}).format(value);
+
+const toggleSetValue = (values: Set<string>, value: string): Set<string> => {
+	const next = new Set(values);
+	if (next.has(value)) {
+		next.delete(value);
+	} else {
+		next.add(value);
+	}
+	return next;
+};
+
 // 위/아래 이동 버튼 한 쌍. 목록 양 끝에서는 해당 방향 버튼을 비활성화한다.
 function ReorderButtons({
 	disabled,
@@ -79,11 +99,77 @@ function ReorderButtons({
 	);
 }
 
+interface AdminDiscountCampaign {
+	endsAt: Date | null;
+	priceOptionDays: number;
+	startsAt: Date;
+	status: "active" | "cancelled" | "ended" | "planned";
+}
+
+interface AdminPriceOption {
+	amount: number;
+	days: number;
+	effectiveDiscountPercent: number;
+}
+
+function AdminPriceOptionRow({
+	campaigns,
+	option,
+	productId,
+}: {
+	campaigns: AdminDiscountCampaign[];
+	option: AdminPriceOption;
+	productId: string;
+}) {
+	const campaign = campaigns.find(
+		(item) =>
+			item.priceOptionDays === option.days &&
+			(item.status === "active" || item.status === "planned")
+	);
+
+	return (
+		<span
+			className="flex flex-col gap-1"
+			key={`${productId}-${option.days}-${option.amount}`}
+		>
+			<span className="flex items-baseline gap-1">
+				{formatAdDuration(option.days)} ·{" "}
+				<AdPriceTag
+					amount={option.amount}
+					discountPercent={option.effectiveDiscountPercent}
+					priceClassName="font-medium text-foreground"
+				/>
+			</span>
+			{campaign ? (
+				<span className="flex flex-wrap items-center gap-1 text-xs">
+					<Badge
+						variant={campaign.status === "active" ? "default" : "secondary"}
+					>
+						기간 할인 {campaign.status === "active" ? "진행 중" : "예정"}
+					</Badge>
+					<span>
+						{formatCampaignDateTime(campaign.startsAt)} ~{" "}
+						{campaign.endsAt
+							? formatCampaignDateTime(campaign.endsAt)
+							: "무기한"}
+					</span>
+				</span>
+			) : null}
+		</span>
+	);
+}
+
 export default function ModeratorAdProductsPage() {
 	const queryClient = useQueryClient();
 	const [confirmingId, setConfirmingId] = useState<null | string>(null);
 	const [confirmingProductId, setConfirmingProductId] = useState<null | string>(
 		null
+	);
+	const [collapsedPlacementIds, setCollapsedPlacementIds] = useState<
+		Set<string>
+	>(() => new Set());
+	const [collapsedProductIds, setCollapsedProductIds] = useState<Set<string>>(
+		() => new Set()
 	);
 	const catalogQuery = useQuery(
 		orpc.bambi.adProducts.listCatalogAdmin.queryOptions()
@@ -190,6 +276,25 @@ export default function ModeratorAdProductsPage() {
 								onMove={(to) => movePlacement(placementIndex, to)}
 								total={placements.length}
 							/>
+							<Button
+								aria-label={`${placement.name} ${
+									collapsedPlacementIds.has(placement.id) ? "펼치기" : "접기"
+								}`}
+								onClick={() =>
+									setCollapsedPlacementIds((values) =>
+										toggleSetValue(values, placement.id)
+									)
+								}
+								size="icon-sm"
+								type="button"
+								variant="ghost"
+							>
+								{collapsedPlacementIds.has(placement.id) ? (
+									<ChevronDownIcon />
+								) : (
+									<ChevronUpIcon />
+								)}
+							</Button>
 							<Switch
 								checked={placement.isActive}
 								onCheckedChange={(next) =>
@@ -231,121 +336,141 @@ export default function ModeratorAdProductsPage() {
 							)}
 						</div>
 					</CardHeader>
-					<CardContent className="flex flex-col gap-3">
-						{placement.description ? (
-							<p className="m-0 text-muted-foreground text-sm">
-								{placement.description}
-							</p>
-						) : null}
-						{placement.products.length === 0 ? (
-							<p className="m-0 text-muted-foreground text-sm">
-								등록된 상품이 없어요.
-							</p>
-						) : null}
-						{placement.products.map((product, productIndex) => (
-							<div
-								className="flex flex-col gap-1 rounded-lg border border-border p-3"
-								key={product.id}
-							>
-								<div className="flex flex-wrap items-center justify-between gap-2">
-									<span className="font-bold">{product.name}</span>
-									<div className="flex flex-wrap items-center gap-2">
-										<ReorderButtons
-											disabled={isReordering}
-											index={productIndex}
-											label={product.name}
-											onMove={(to) => {
-												const ids = swapAt(
-													placement.products.map((item) => item.id),
-													productIndex,
-													to
-												);
+					{collapsedPlacementIds.has(placement.id) ? null : (
+						<CardContent className="flex flex-col gap-3">
+							{placement.description ? (
+								<p className="m-0 text-muted-foreground text-sm">
+									{placement.description}
+								</p>
+							) : null}
+							{placement.products.length === 0 ? (
+								<p className="m-0 text-muted-foreground text-sm">
+									등록된 상품이 없어요.
+								</p>
+							) : null}
+							{placement.products.map((product, productIndex) => (
+								<div
+									className="flex flex-col gap-1 rounded-lg border border-border p-3"
+									key={product.id}
+								>
+									<div className="flex flex-wrap items-center justify-between gap-2">
+										<span className="font-bold">{product.name}</span>
+										<div className="flex flex-wrap items-center gap-2">
+											<ReorderButtons
+												disabled={isReordering}
+												index={productIndex}
+												label={product.name}
+												onMove={(to) => {
+													const ids = swapAt(
+														placement.products.map((item) => item.id),
+														productIndex,
+														to
+													);
 
-												if (ids) {
-													reorderProducts.mutate({
-														ids,
-														placementId: placement.id,
-													});
-												}
-											}}
-											total={placement.products.length}
-										/>
-										<Switch
-											checked={product.isActive}
-											onCheckedChange={(next) =>
-												toggleProduct.mutate({
-													id: product.id,
-													isActive: next,
-												})
-											}
-										/>
-										<Link
-											className={cn(
-												buttonVariants({ size: "sm", variant: "ghost" })
-											)}
-											href={
-												`/moderator/ad-products/${placement.id}/${product.id}/edit` as Route
-											}
-										>
-											수정
-										</Link>
-										{confirmingProductId === product.id ? (
-											<div className="flex gap-1">
-												<Button
-													disabled={deleteProduct.isPending}
-													onClick={() =>
-														deleteProduct.mutate({ id: product.id })
+													if (ids) {
+														reorderProducts.mutate({
+															ids,
+															placementId: placement.id,
+														});
 													}
-													size="sm"
-													variant="destructive"
-												>
-													삭제 확인
-												</Button>
+												}}
+												total={placement.products.length}
+											/>
+											<Button
+												aria-label={`${product.name} ${
+													collapsedProductIds.has(product.id)
+														? "펼치기"
+														: "접기"
+												}`}
+												onClick={() =>
+													setCollapsedProductIds((values) =>
+														toggleSetValue(values, product.id)
+													)
+												}
+												size="icon-sm"
+												type="button"
+												variant="ghost"
+											>
+												{collapsedProductIds.has(product.id) ? (
+													<ChevronDownIcon />
+												) : (
+													<ChevronUpIcon />
+												)}
+											</Button>
+											<Switch
+												checked={product.isActive}
+												onCheckedChange={(next) =>
+													toggleProduct.mutate({
+														id: product.id,
+														isActive: next,
+													})
+												}
+											/>
+											<Link
+												className={cn(
+													buttonVariants({ size: "sm", variant: "ghost" })
+												)}
+												href={
+													`/moderator/ad-products/${placement.id}/${product.id}/edit` as Route
+												}
+											>
+												수정
+											</Link>
+											{confirmingProductId === product.id ? (
+												<div className="flex gap-1">
+													<Button
+														disabled={deleteProduct.isPending}
+														onClick={() =>
+															deleteProduct.mutate({ id: product.id })
+														}
+														size="sm"
+														variant="destructive"
+													>
+														삭제 확인
+													</Button>
+													<Button
+														onClick={() => setConfirmingProductId(null)}
+														size="sm"
+														variant="ghost"
+													>
+														취소
+													</Button>
+												</div>
+											) : (
 												<Button
-													onClick={() => setConfirmingProductId(null)}
+													onClick={() => setConfirmingProductId(product.id)}
 													size="sm"
 													variant="ghost"
 												>
-													취소
+													삭제
 												</Button>
-											</div>
-										) : (
-											<Button
-												onClick={() => setConfirmingProductId(product.id)}
-												size="sm"
-												variant="ghost"
-											>
-												삭제
-											</Button>
-										)}
+											)}
+										</div>
 									</div>
+									{collapsedProductIds.has(product.id) ? null : (
+										<div className="flex flex-col items-start gap-2 text-muted-foreground text-sm">
+											{product.priceOptions.map((option) => (
+												<AdminPriceOptionRow
+													campaigns={product.discountCampaigns}
+													key={`${product.id}-${option.days}-${option.amount}`}
+													option={option}
+													productId={product.id}
+												/>
+											))}
+										</div>
+									)}
 								</div>
-								<div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-sm">
-									{product.priceOptions.map((option) => (
-										<span
-											className="flex items-baseline gap-1"
-											key={`${product.id}-${option.days}-${option.amount}`}
-										>
-											{formatAdDuration(option.days)} ·{" "}
-											<AdPriceTag
-												amount={option.amount}
-												discountPercent={option.discountPercent ?? 0}
-												priceClassName="font-medium text-foreground"
-											/>
-										</span>
-									))}
-								</div>
-							</div>
-						))}
-						<Link
-							className={cn(
-								buttonVariants({ size: "sm", variant: "secondary" })
-							)}
-							href={`/moderator/ad-products/${placement.id}/new` as Route}
-						>
-							이 위치에 상품 추가
-						</Link>
-					</CardContent>
+							))}
+							<Link
+								className={cn(
+									buttonVariants({ size: "sm", variant: "secondary" })
+								)}
+								href={`/moderator/ad-products/${placement.id}/new` as Route}
+							>
+								이 위치에 상품 추가
+							</Link>
+						</CardContent>
+					)}
 				</Card>
 			))}
 		</div>

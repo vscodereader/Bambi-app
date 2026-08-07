@@ -14,6 +14,7 @@ import {
 	readGuestGenderFromCookieString,
 } from "@/lib/bambi/guest";
 import { isEmailLoginId } from "@/lib/bambi/login-id";
+import { popupLoginTargetStorageKey } from "@/lib/bambi/main-popup";
 import { client, queryClient } from "@/utils/orpc";
 import { Button, Card, Logo } from "../ds";
 import { PhoneVerifyDialog } from "../phone-verify-dialog";
@@ -310,6 +311,12 @@ export function AuthPanel() {
 		// 간헐적으로 인증 화면에 머문다(재로그인이 "간혹" 되고 "간혹" 안 되는 원인).
 		// 하드 내비게이션으로 Router Cache를 통째로 우회한다: 브라우저가 갓 설정된
 		// 세션 쿠키로 "/"를 새로 요청 → 미들웨어 통과 → 서버가 role 홈을 계산한다.
+		const popupTarget = sessionStorage.getItem(popupLoginTargetStorageKey);
+		if (popupTarget) {
+			sessionStorage.removeItem(popupLoginTargetStorageKey);
+			window.location.assign(popupTarget);
+			return;
+		}
 		window.location.assign("/");
 	};
 

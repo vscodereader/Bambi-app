@@ -109,6 +109,7 @@ function CommunityEditContent({
 					contactPhone: data.contactPhone,
 					id: data.id,
 					isLocked: data.isLocked,
+					isEvent: data.isEvent,
 					isPromotion: data.isPromotion,
 					title: data.title,
 				}}

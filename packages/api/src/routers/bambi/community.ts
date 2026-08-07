@@ -151,6 +151,7 @@ const createPostInput = z.object({
 	// 법률 자문 글의 선택 입력 연락처. 다른 게시판에서는 받지 않는다(아래 assertContactPhoneBoard).
 	contactPhone: z.string().trim().max(20).optional(),
 	isLocked: z.boolean().default(false),
+	isEvent: z.boolean().default(false),
 	isPromotion: z.boolean().default(false),
 	// 비밀번호는 비밀글(잠금)에만 필요하다 — 잠그지 않으면 생략하고 등록할 수 있다.
 	password: z.string().trim().max(30).optional(),
@@ -192,6 +193,32 @@ const assertContactPhoneBoard = (
 	}
 };
 
+const assertEventNoticePolicy = ({
+	board,
+	isEvent,
+	isLocked,
+	role,
+}: {
+	board: string;
+	isEvent: boolean;
+	isLocked: boolean;
+	role: string;
+}): void => {
+	if (!isEvent) {
+		return;
+	}
+	if (board !== "notice" || role !== "admin") {
+		throw new ORPCError("FORBIDDEN", {
+			message: "이벤트 공지는 운영자만 작성·수정할 수 있습니다.",
+		});
+	}
+	if (isLocked) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "이벤트 공지는 비밀글과 함께 사용할 수 없습니다.",
+		});
+	}
+};
+
 // 도배 방지 — 회원은 계정당, 비회원은 gid·IP당 1분 창. 판정 축이 IP만이 아니라 계정·
 // 신원이라 미들웨어(rateLimitedPublicProcedure)가 아니라 핸들러에서 버킷을 잡는다.
 const WRITE_WINDOW_MS = 60 * 1000;
@@ -210,6 +237,7 @@ const updatePostInput = postIdInput.extend({
 	body: z.string().min(2).max(BODY_MAX),
 	contactPhone: z.string().trim().max(20).optional(),
 	isLocked: z.boolean(),
+	isEvent: z.boolean().optional(),
 	isPromotion: z.boolean(),
 	password: z.string().trim().max(30).optional(),
 	title: z.string().trim().min(2).max(100),
@@ -316,6 +344,7 @@ const postSummarySelection = {
 	createdAt: communityPost.createdAt,
 	id: communityPost.id,
 	isLocked: communityPost.isLocked,
+	isEvent: communityPost.isEvent,
 	isPromotion: communityPost.isPromotion,
 	likeCount: communityPost.likeCount,
 	title: communityPost.title,
@@ -357,6 +386,7 @@ const crawledCommunityFeedSelection = {
 	createdAt: sql<Date>`${crawledCommunityTopic.sourcePostedAt}`,
 	id: crawledCommunityTopic.id,
 	isLocked: sql<boolean>`false`,
+	isEvent: sql<boolean>`false`,
 	isPromotion: sql<boolean>`false`,
 	likeCount: sql<number>`0`,
 	title: crawledCommunityTopic.title,
@@ -456,14 +486,23 @@ const buildNarrowFilters = ({
 // 마지막 정렬 키는 항상 id다. created_at만으로 정렬하면 같은 시각 글의 순서를 Postgres가
 // 매번 다시 정해, 페이지를 오갈 때마다 목록이 한 칸씩 밀리거나 같은 글이 두 페이지에 뜬다
 // (bambi-job-feed의 desc(publishedAt), desc(id)와 같은 처방).
-const buildBoardOrder = (board: CommunityBoardInput) =>
-	board === "best"
-		? [
-				desc(communityPost.likeCount),
-				desc(communityPost.createdAt),
-				desc(communityPost.id),
-			]
-		: [desc(communityPost.createdAt), desc(communityPost.id)];
+const buildBoardOrder = (board: CommunityBoardInput) => {
+	if (board === "best") {
+		return [
+			desc(communityPost.likeCount),
+			desc(communityPost.createdAt),
+			desc(communityPost.id),
+		];
+	}
+	if (board === "notice") {
+		return [
+			desc(communityPost.isEvent),
+			desc(communityPost.createdAt),
+			desc(communityPost.id),
+		];
+	}
+	return [desc(communityPost.createdAt), desc(communityPost.id)];
+};
 
 const selectBoardPosts = (
 	board: CommunityBoardInput,
@@ -499,6 +538,7 @@ const toPublicSummary = (summary: PostSummaryRow) => ({
 	createdAt: summary.createdAt,
 	id: summary.id,
 	isLocked: summary.isLocked,
+	isEvent: summary.isEvent,
 	isPromotion: summary.isPromotion,
 	likeCount: summary.likeCount,
 	// 화면이 "외부 수집" 배지·상세 라우팅을 가르는 판별 필드.
@@ -1047,6 +1087,7 @@ export const communityRouter = {
 				id: post.id,
 				isLiked: Boolean(like),
 				isLocked: post.isLocked,
+				isEvent: post.isEvent,
 				isPromotion: post.isPromotion,
 				likeCount: post.likeCount,
 				locked: false as const,
@@ -1168,6 +1209,12 @@ export const communityRouter = {
 			}
 			assertContactPhoneBoard(input.board, input.contactPhone);
 			const isLocked = resolveLockedForBoard(input.board, input.isLocked);
+			assertEventNoticePolicy({
+				board: input.board,
+				isEvent: input.isEvent,
+				isLocked,
+				role,
+			});
 			// 비밀글(잠금)은 잠금 게이트에 쓸 4자 이상 비밀번호가 필요하다.
 			if (isLocked && (input.password?.length ?? 0) < 4) {
 				throw new ORPCError("BAD_REQUEST", { message: LOCKED_PASSWORD_ERROR });
@@ -1203,6 +1250,7 @@ export const communityRouter = {
 					body: input.body,
 					contactPhone: input.contactPhone || null,
 					isLocked,
+					isEvent: input.isEvent,
 					isPromotion: input.isPromotion,
 					// 비번 미입력(잠그지 않은 회원 글)은 빈 문자열로 저장한다 — verify가 항상
 					// 실패해 잠금 게이트·비작성자 수정이 자연히 차단된다.
@@ -1244,6 +1292,7 @@ export const communityRouter = {
 				actor.kind === "member" ? actor.profile : null,
 				post.board
 			);
+			const nextIsEvent = input.isEvent ?? post.isEvent;
 			assertTiptapDoc(input.body);
 			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 			await assertDisplayNameAllowed(input.authorName, {
@@ -1263,6 +1312,12 @@ export const communityRouter = {
 			// 게시판은 수정으로 바뀌지 않으므로 잠금 강제도 저장된 board로 판정한다 — 법률 자문
 			// 글은 작성자가 잠금을 풀어 달라고 보내도 계속 잠긴 채 남는다.
 			const isLocked = resolveLockedForBoard(post.board, input.isLocked);
+			assertEventNoticePolicy({
+				board: post.board,
+				isEvent: nextIsEvent,
+				isLocked,
+				role: actorRole(actor),
+			});
 
 			// 비회원은 자기 신분(gid)이 찍힌 글만, 그것도 비밀번호로만 수정한다.
 			if (actor.kind === "guest") {
@@ -1300,6 +1355,7 @@ export const communityRouter = {
 					body: input.body,
 					contactPhone: input.contactPhone || null,
 					isLocked,
+					isEvent: nextIsEvent,
 					isPromotion: input.isPromotion,
 					title: input.title,
 					updatedAt: new Date(),
