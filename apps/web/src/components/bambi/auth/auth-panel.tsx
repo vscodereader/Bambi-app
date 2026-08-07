@@ -2,11 +2,13 @@
 
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { useSearchParams } from "next/navigation";
+import type { Route } from "next";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { getAuthModeUrl } from "@/lib/bambi/auth-mode-url";
 import {
 	type BambiGenderValue,
 	clearGuestCookie,
@@ -162,6 +164,8 @@ function AuthCardHeader({
 }
 
 export function AuthPanel() {
+	const router = useRouter();
+	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const initialMode = useMemo(
 		() => getInitialMode(searchParams.get("auth") ?? searchParams.get("mode")),
@@ -177,13 +181,23 @@ export function AuthPanel() {
 	const [verifiedId, setVerifiedId] = useState<string | null>(null);
 	const isSignUp = mode === "sign-up";
 	const isVerifyStep = isSignUp && step === "verify";
+	// 모드는 state와 URL 두 곳에 남긴다. 모바일 본인인증은 리디렉션이라 복귀하면 페이지가
+	// 새로 뜨고 이 패널은 쿼리(auth)만 보고 모드를 복원한다 — state만 바꾸면 회원가입으로
+	// 전환한 뒤 인증을 마쳐도 로그인 폼으로 돌아온다. 히스토리에 남길 이동이 아니므로
+	// replace, 카드 위치가 튀지 않게 scroll: false.
+	const changeMode = (next: AuthMode) => {
+		setMode(next);
+		router.replace(getAuthModeUrl(pathname, searchParams, next) as Route, {
+			scroll: false,
+		});
+	};
 	// 아이디·비밀번호 찾기. 모바일은 인증 리디렉션에서 돌아오며 페이지가 새로 뜨는데,
 	// 그때 쿼리에 auth=signup이 남아 있으면 회원가입 모드로 복귀할 수 있다 — 결과를
 	// 적용할 때 로그인 모드로 되돌려 채운 아이디가 보이는 화면에 남게 한다.
 	const recovery = useAccountRecovery({
-		onSignUp: () => setMode("sign-up"),
+		onSignUp: () => changeMode("sign-up"),
 		onUseLoginId: (loginId) => {
-			setMode("sign-in");
+			changeMode("sign-in");
 			setForm((prev) => ({ ...prev, username: loginId }));
 		},
 	});
@@ -224,7 +238,7 @@ export function AuthPanel() {
 			identityVerificationId,
 		});
 		if (check.hasAccount) {
-			setMode("sign-in");
+			changeMode("sign-in");
 			setNotice({
 				text: "이미 가입된 계정이 있어요. 로그인해 주세요.",
 				tone: "error",
@@ -382,7 +396,7 @@ export function AuthPanel() {
 
 	const toggleMode = () => {
 		setNotice(null);
-		setMode(isSignUp ? "sign-in" : "sign-up");
+		changeMode(isSignUp ? "sign-in" : "sign-up");
 	};
 
 	// my-auto: 이 래퍼는 데스크톱에서 스크롤 가능한 오버레이(seeker-auth-gate-screen)의
