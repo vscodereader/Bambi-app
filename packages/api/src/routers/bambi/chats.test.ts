@@ -551,29 +551,34 @@ describe("bambi chats router unread state", () => {
 				context: createContextForUser(fixture.jobSeekerUserId),
 				path: ["bambi", "chats", "markRead"],
 			});
-			// 기준선까지만 읽음 처리한다 — 그 뒤에 온 메시지는 그대로 안 읽음으로 남는다.
+			// 방에 들어온 순간 서버가 현재 저장된 이 방의 수신 메시지를 모두 읽음 처리한다.
 			const firstMarkRead = await markRead({
 				chatRoomId: fixture.chatRoomId,
 				upToMessageId: firstMessage.id,
 			});
 
 			expect(await unreadStateForSeeker({})).toEqual({
-				unreadMessageCount: 4,
+				unreadMessageCount: 2,
 			});
 			// 화면 핀은 방별 수가 아니라 이 총합을 그린다 — 응답값과 unreadState가
 			// 갈라지면 읽음 직후 핀이 틀린 숫자로 굳는다.
-			expect(firstMarkRead.totalUnreadMessageCount).toBe(4);
+			expect(firstMarkRead.totalUnreadMessageCount).toBe(2);
 
 			const lastMessage = remainingMessages.at(-1);
 			const lastSecondRoomMessage = secondRoomMessages.at(-1);
 			if (!(lastMessage && lastSecondRoomMessage)) {
 				throw new Error("채팅 메시지 픽스처를 만들지 못했습니다.");
 			}
+			expect(firstMarkRead.latestUnreadMessageId).toBeNull();
+			expect(firstMarkRead.unreadCount).toBe(0);
 
-			await markRead({
+			// 같은 방을 다시 읽어도 멱등이며 다른 방의 안 읽음 수에는 영향을 주지 않는다.
+			const lastRoomMarkRead = await markRead({
 				chatRoomId: fixture.chatRoomId,
 				upToMessageId: lastMessage.id,
 			});
+			expect(lastRoomMarkRead.latestUnreadMessageId).toBeNull();
+			expect(lastRoomMarkRead.unreadCount).toBe(0);
 			expect(await unreadStateForSeeker({})).toEqual({
 				unreadMessageCount: 2,
 			});

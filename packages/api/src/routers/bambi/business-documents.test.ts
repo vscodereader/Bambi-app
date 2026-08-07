@@ -20,6 +20,7 @@ vi.mock("../../services/gcs", () => ({
 	getPublicObjectUrl: (storageKey: string) =>
 		`https://files.bambi.test/${storageKey}`,
 	isPublicBucketConfigured: () => true,
+	shouldUsePublicBucket: () => true,
 }));
 
 const [

@@ -30,7 +30,14 @@ export const mergeChatMessagesById = <MessageType extends ChatMessageLike>(
 		byId.set(message.id, message);
 	}
 
-	return [...byId.values()];
+	return [...byId.values()].sort((left, right) => {
+		const createdAtDifference =
+			new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+
+		return Number.isFinite(createdAtDifference) && createdAtDifference !== 0
+			? createdAtDifference
+			: left.id.localeCompare(right.id);
+	});
 };
 
 /** 가장 오래된 로드분의 (createdAt, id) — 다음 "더 보기" 요청의 커서. */

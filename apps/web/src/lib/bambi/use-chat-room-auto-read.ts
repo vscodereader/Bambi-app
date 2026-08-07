@@ -11,8 +11,49 @@ interface ChatRoomAutoReadInput {
 	markRead: (input: {
 		chatRoomId: string;
 		upToMessageId: string;
-	}) => Promise<unknown>;
+	}) => Promise<ChatRoomMarkReadResult>;
 }
+
+interface ChatRoomMarkReadResult {
+	latestUnreadMessageId: null | string;
+	unreadCount: number;
+}
+
+export const resolveNextChatReadWatermark = ({
+	attemptedMessageId,
+	latestUnreadMessageId,
+}: {
+	attemptedMessageId: string;
+	latestUnreadMessageId: null | string;
+}): null | string =>
+	latestUnreadMessageId && latestUnreadMessageId !== attemptedMessageId
+		? latestUnreadMessageId
+		: null;
+
+interface ChatReadWatermark {
+	chatRoomId: string;
+	messageId: string;
+}
+
+const canFlushChatRead = (
+	latest: ChatReadWatermark | null,
+	sentMessageId: null | string,
+	attemptedMessageIds: ReadonlySet<string>
+): latest is ChatReadWatermark =>
+	Boolean(
+		latest &&
+			sentMessageId !== latest.messageId &&
+			!attemptedMessageIds.has(latest.messageId)
+	);
+
+const resolveSentMessageAfterFailure = ({
+	attemptedMessageId,
+	sentMessageId,
+}: {
+	attemptedMessageId: string;
+	sentMessageId: null | string;
+}): null | string =>
+	sentMessageId === attemptedMessageId ? null : sentMessageId;
 
 interface ChatRoomAutoRead {
 	/** HTTP 메시지 조회가 끝난 방 진입 시 지연 없이 서버에 읽음을 저장한다. */
@@ -50,27 +91,55 @@ export function useChatRoomAutoRead({
 	}, [markRead]);
 
 	const flush = useCallback(() => {
-		const latest = latestRef.current;
+		const run = async () => {
+			const attemptedMessageIds = new Set<string>();
 
-		if (
-			!latest ||
-			document.visibilityState !== "visible" ||
-			sentMessageIdRef.current === latest.messageId
-		) {
-			return;
-		}
+			while (document.visibilityState === "visible") {
+				const latest = latestRef.current;
 
-		sentMessageIdRef.current = latest.messageId;
-		markReadRef
-			.current({
-				chatRoomId: latest.chatRoomId,
-				upToMessageId: latest.messageId,
-			})
-			.catch(() => {
-				if (sentMessageIdRef.current === latest.messageId) {
-					sentMessageIdRef.current = null;
+				if (
+					!canFlushChatRead(
+						latest,
+						sentMessageIdRef.current,
+						attemptedMessageIds
+					)
+				) {
+					return;
 				}
-			});
+
+				attemptedMessageIds.add(latest.messageId);
+				sentMessageIdRef.current = latest.messageId;
+
+				try {
+					const result = await markReadRef.current({
+						chatRoomId: latest.chatRoomId,
+						upToMessageId: latest.messageId,
+					});
+					const nextMessageId = resolveNextChatReadWatermark({
+						attemptedMessageId: latest.messageId,
+						latestUnreadMessageId: result.latestUnreadMessageId,
+					});
+
+					if (!nextMessageId || result.unreadCount === 0) {
+						return;
+					}
+
+					latestRef.current = {
+						chatRoomId: latest.chatRoomId,
+						messageId: nextMessageId,
+					};
+					sentMessageIdRef.current = null;
+				} catch {
+					sentMessageIdRef.current = resolveSentMessageAfterFailure({
+						attemptedMessageId: latest.messageId,
+						sentMessageId: sentMessageIdRef.current,
+					});
+					return;
+				}
+			}
+		};
+
+		run().catch(() => undefined);
 	}, []);
 
 	const flushSoon = useCallback(() => {

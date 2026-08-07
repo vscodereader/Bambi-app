@@ -29,6 +29,11 @@ export const getPublicBucketName = (): string | undefined =>
 export const isPublicBucketConfigured = (): boolean =>
 	Boolean(env.GCS_PUBLIC_BUCKET);
 
+// 개발 환경은 운영용 버킷 이름이 복사되어 있어도 ADC가 없을 수 있다.
+// 로컬 플레이스홀더 업로드를 유지하고 실제 GCS 업로드는 운영에서만 사용한다.
+export const shouldUsePublicBucket = (): boolean =>
+	env.NODE_ENV === "production" && isPublicBucketConfigured();
+
 const requirePublicBucket = (): string => {
 	const bucketName = env.GCS_PUBLIC_BUCKET;
 

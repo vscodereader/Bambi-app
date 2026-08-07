@@ -5,6 +5,7 @@ import {
 	createSignedUploadUrl,
 	getPublicObjectUrl,
 	isPublicBucketConfigured,
+	shouldUsePublicBucket,
 } from "./gcs";
 
 export interface ChatAttachmentStorageInput {
@@ -228,7 +229,7 @@ export const getChatAttachmentObjectUrl = (
 export const getBusinessDocumentObjectUrl = (
 	input: ChatAttachmentObjectInput
 ): string =>
-	isPublicBucketConfigured()
+	shouldUsePublicBucket()
 		? getPublicObjectUrl(input.storageKey)
 		: buildLocalObjectUrl(input);
 
@@ -252,7 +253,7 @@ export const createBusinessDocumentUploadIntent = async ({
 		fileName: fileName.trim(),
 		mimeType,
 		storageKey,
-		uploadUrl: isPublicBucketConfigured()
+		uploadUrl: shouldUsePublicBucket()
 			? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
 			: `local://upload/${storageKey}`,
 	};

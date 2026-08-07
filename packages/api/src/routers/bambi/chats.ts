@@ -26,10 +26,11 @@ import {
 import { generateChatMessageId } from "../../services/bambi-chat-message-id";
 import {
 	getChatRecipientUserId,
+	getLatestUnreadMessageId,
 	getUnreadMessageCount,
 	getUnreadMessageCountForUser,
 	getUnreadMessageCountsByRoom,
-	markChatMessagesReadUpTo,
+	markAllCurrentChatMessagesRead,
 } from "../../services/bambi-chat-read-state";
 import {
 	emitChatListUpdated,
@@ -1388,15 +1389,20 @@ export const chatsRouter = {
 				room,
 			});
 
-			const readReceipts = await markChatMessagesReadUpTo({
+			const readReceipts = await markAllCurrentChatMessagesRead({
 				chatRoomId: room.id,
 				readerUserId: profile.userId,
-				upToMessageId: input.upToMessageId,
 			});
-			const unreadCount = await getUnreadMessageCount({
-				chatRoomId: room.id,
-				userId: profile.userId,
-			});
+			const [latestUnreadMessageId, unreadCount] = await Promise.all([
+				getLatestUnreadMessageId({
+					chatRoomId: room.id,
+					userId: profile.userId,
+				}),
+				getUnreadMessageCount({
+					chatRoomId: room.id,
+					userId: profile.userId,
+				}),
+			]);
 			// 핀(헤더 채팅 버튼·모바일 탭)이 그리는 값은 방별 수가 아니라 계정 전체 합계다.
 			// 읽음 응답에 그 합계를 함께 실어 주면, 화면이 "무효화 → 재조회"가 언제 도는지에
 			// 기대지 않고 곧바로 정본으로 맞출 수 있다. 증감 누적이 아니라 여기서 다시 센
@@ -1430,6 +1436,7 @@ export const chatsRouter = {
 			}
 
 			return {
+				latestUnreadMessageId,
 				readMessageIds: readReceipts.map(({ messageId }) => messageId),
 				totalUnreadMessageCount,
 				unreadCount,
