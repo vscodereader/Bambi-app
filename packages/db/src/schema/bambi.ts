@@ -170,17 +170,32 @@ export const notificationTargetType = pgEnum("notification_target_type", [
 	"organization_member",
 ]);
 
-// 수다방 게시판. 베스트글은 저장 컬럼이 아니라 추천수 큐레이션 가상 게시판이다.
-// notice(공지사항)는 admin만 작성 가능(API 강제).
-export const communityBoard = pgEnum("community_board", [
-	"free",
-	"work_talk",
-	"market",
-	"notice",
-	// 무료 법률 자문. 글이 전부 잠금(비밀번호 필수)이라 목록에는 마스킹 제목만 보인다.
-	// 마이그레이션 호환을 위해 새 값은 항상 끝에 덧붙인다.
-	"legal",
-]);
+// 수다방 게시판 정의. 운영자가 코드 배포 없이 추가·수정할 수 있도록 enum이 아니라
+// 테이블로 둔다(pgEnum이던 시절엔 게시판 하나를 늘리는 데 마이그레이션이 필요했다).
+// 베스트글(best)은 여기에 없다 — 저장 게시판이 아니라 추천수 큐레이션 가상 게시판이다.
+// key는 저장값(community_post.board가 참조), slug는 URL 세그먼트다. 신규 게시판은
+// key === slug이고, 레거시 work_talk만 slug가 "work-talk"으로 갈린다.
+// 특수 동작(notice 운영자 전용·free 잠금 금지·legal 연락처·work_talk 수집 합류)은
+// 여전히 API의 키 리터럴 분기이며, 새 게시판은 표준 동작(회원 열람·작성)만 갖는다.
+// 삭제는 없다 — 글이 FK로 매달려 있어 비활성(is_active=false)이 곧 숨김이다.
+export const communityBoard = pgTable("community_board", {
+	key: text("key").primaryKey(),
+	slug: text("slug").notNull().unique(),
+	label: text("label").notNull(),
+	description: text("description").default("").notNull(),
+	// 게시판 카드·헤더에 붙는 lucide 아이콘 이름(예: "Coffee"). 자유 입력이 아니라 API의
+	// 큐레이션 목록으로 좁히고, 웹이 모르는 이름은 무시한다. null이면 아이콘 없음(기존 모양).
+	icon: text("icon"),
+	isActive: boolean("is_active").default(true).notNull(),
+	// false면 읽기만 열린다(글쓰기 버튼·서버 가드 양쪽에서 막는다).
+	isWritable: boolean("is_writable").default(true).notNull(),
+	sortOrder: integer("sort_order").notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
 
 // 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
 export const communityContentStatus = pgEnum("community_content_status", [
@@ -1724,7 +1739,10 @@ export const communityPost = pgTable(
 	"community_post",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		board: communityBoard("board").notNull(),
+		// 게시판 정의는 community_board가 정본이다(FK) — 운영자가 추가한 게시판도 같은 칸에 담긴다.
+		board: text("board")
+			.notNull()
+			.references(() => communityBoard.key),
 		// 회원 글이면 author_user_id, 비회원(게스트 토큰) 글이면 author_guest_id만 채워진다
 		// — 정확히 한쪽만 채워지도록 아래 CHECK로 강제한다. 게스트는 계정이 없어 FK가 없고,
 		// 소유권은 password_hash 검증으로만 증명한다.

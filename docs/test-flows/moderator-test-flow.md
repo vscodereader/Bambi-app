@@ -67,11 +67,13 @@
 
 - 검수 큐 `/moderator`
 - 공고 관리 `/moderator/jobs`
-- 회원 관리: 사용자 `/moderator/users` · 채팅 `/moderator/chats` · 신고 `/moderator/reports` ·
-  업소 승인 `/moderator/employers` · 팀 합류 승인 `/moderator/team-invites`
+- 회원 관리: 사용자 `/moderator/users` · 채팅 `/moderator/chats` · 면접 일정 `/moderator/interviews` ·
+  신고 `/moderator/reports` · 업소 승인 `/moderator/employers` · 팀 합류 승인 `/moderator/team-invites` ·
+  출석 관리 `/moderator/attendance`
 - 광고·결제: 광고 상품 `/moderator/ad-products` · 결제 관리 `/moderator/payments`
-- 콘텐츠: 게시물 `/moderator/content` · 고객센터 `/moderator/support` · 금칙어 `/moderator/banned-words` ·
-  후기 관리 `/moderator/reviews` · 크롤링 `/moderator/crawler`
+- 콘텐츠: 게시물 `/moderator/content` · **게시판 관리 `/moderator/community-boards`** · 고객센터 `/moderator/support` ·
+  금칙어 `/moderator/banned-words` · 후기 관리 `/moderator/reviews` · 크롤링 `/moderator/crawler` ·
+  팝업 `/moderator/popups`
 - 사이트 정보 `/moderator/site-settings`
 
 모바일 하단 탭(`ModeratorShell`, `apps/web/src/components/bambi/persona-nav.tsx`)은
@@ -444,6 +446,46 @@
 - **관련 API**: `bambi.moderation.purgeWithdrawnAccounts`(`adminProcedure`) — 자동 실행과 동일한
   서비스 `purgeWithdrawnAccountsBatch`(`packages/api/src/services/bambi-withdrawal-purge.ts`)를 호출한다.
 
+### 4.8 출석 관리 · 포인트 지급·차감
+
+- **경로**: `/moderator/attendance` (파일: `apps/web/src/app/moderator/attendance/page.tsx`)
+- **목록**: `bambi.attendance.adminList`(`adminProcedure`) — `useInfiniteQuery`, `limit=20`, offset 커서(`nextCursor = cursor + limit`).
+  검색(닉네임·아이디 `ilike`, **250ms 디바운스**)·역할(`전체`/`구직자`/`구인자`)·정렬이 **전부 서버 입력**이고,
+  요약 카드(오늘 출석자 / 출석 대상 회원)도 **같은 where**를 쓴다 — 필터를 걸면 요약 숫자도 좁아진다(의도).
+  대상은 `bambi_profile.role ∈ {job_seeker, employer}` + `user.deleted_at IS NULL`(프로필 없는 온보딩 전 계정 제외).
+- **열 9개**: 회원(닉네임+아이디, 오늘 출석이면 `오늘 출석` 뱃지) · 역할 · 총 출석 · 이번 달 · 마지막 출석 · 미출석 · **포인트** · 관리([지급·차감]).
+  정렬 가능한 헤더는 총 출석·이번 달·마지막 출석·미출석 4개뿐이고 **방향은 축마다 고정**(`aria-sort="descending"`),
+  **포인트 열은 정렬 불가**(서버 `sort` enum이 `recent|idle|total|month` 4개 고정 — 확장하지 않았다).
+- **포인트 잔액**: `items[].pointBalance` = 그 유저 `bambi_point_transaction.amount` **합계**(상관 서브쿼리, coalesce 0).
+  잔액 컬럼이 따로 없으므로 출석 적립(`reason='attendance'`, 1회 10P)과 운영자 조정이 모두 섞인 값이다. 표기는 `1,200P`(ko-KR 천단위).
+- **지급·차감 절차**: 행 [지급·차감] → Dialog(`PointAdjustForm`) → ToggleGroup `지급|차감` + 포인트(양수) + 사유 → **[적용]**.
+  - 입력은 **항상 양수**로 받고 부호는 토글이 정한다(차감에 음수를 넣어 되레 지급되는 부호 뒤집힘 방지) — 회귀 포인트.
+  - 사유 칸 아래에 **조정 후 예상 잔액**이 실시간으로 보인다. 유효하지 않으면 "1 이상 100,000 이하의 정수를 입력해 주세요."
+  - 성공: 토스트 "포인트를 조정했어요. 현재 잔액 1,270P"(서버가 돌려준 조정 후 잔액) + `adminList` 쿼리 무효화로 표의 포인트 열 갱신, 다이얼로그 닫힘.
+- **`bambi.attendance.adminAdjustPoints`(`adminProcedure`) 계약**:
+  - 입력 `{ userId: string(≥1), amount: int, reason: string }`. `amount`는 **−100,000 ~ 100,000, 0 금지**, `reason`은 trim 후 **1~200자**.
+  - 출력 `{ userId, pointBalance }` — **조정 후 새 잔액**.
+  - 원장 기록은 `amount` 그대로(±) + `reason`에 **`운영자 지급: {사유}` / `운영자 차감: {사유}`** 프리픽스. 출석 적립(`reason='attendance'`)과 문자열로 구분된다.
+  - 합산→검증→insert가 **한 트랜잭션** 안에서 돈다.
+- **실패 케이스**:
+  | 상황 | 기대 |
+  |---|---|
+  | 차감 후 잔액이 음수 | `BAD_REQUEST` "잔액보다 많이 차감할 수 없습니다." — 원장 행이 **남지 않아야** 한다 |
+  | 대상 계정 없음 / 탈퇴(`deleted_at`) | `NOT_FOUND` "대상 회원을 찾을 수 없습니다." |
+  | 대상이 운영자·법률자문 | `BAD_REQUEST` "구직자·업소 회원에게만 포인트를 조정할 수 있습니다." |
+  | `amount = 0` | `BAD_REQUEST` "0 포인트는 조정할 수 없습니다." |
+  | `amount` 절댓값 > 100,000 / 사유 공백 또는 200자 초과 | zod 400 |
+- **권장 QA 시나리오**: 잔액 0인 구직자에게 **+100 지급** → 잔액 100P → **−30 차감** → 잔액 70P →
+  **−200 차감 시도** → 400 "잔액보다 많이 차감할 수 없습니다."(잔액 70P 유지, 원장 행은 2건 그대로) →
+  운영자 계정 대상 호출 → 400. 마지막으로 그 회원의 출석체크 화면에서 잔액이 **70P로 같게** 보이는지 확인
+  (구직자·업주 출석 패널은 `attendance.getMine.pointBalance`로 같은 원장을 합산한다).
+- **엣지 케이스**:
+  - 확인 모달이 **없다** — [적용]이 곧 실행이고 되돌리기 버튼도 없다. 되돌리려면 반대 방향으로 재조정해야 하며 그 행도 원장에 남는다.
+  - 잔액 집계 select에 `FOR UPDATE`를 걸 수 없어 **두 운영자가 동시에 차감하면 둘 다 통과해 음수가 될 수 있다**(코드에 `ponytail:` 주석으로 명시된 알려진 한계, 승급 경로는 advisory lock). 동시 조작 QA는 범위 밖.
+  - 페이지 사이에 출석이 끼어들어 오프셋이 밀릴 수 있어 화면이 `userId`로 중복을 걸러낸다.
+- **관련 API**: `bambi.attendance.adminList` / `bambi.attendance.adminAdjustPoints` (`adminProcedure`) — `packages/api/src/routers/bambi/attendance.ts`
+- > ⚠ **회원용 출석 기록 자체는 운영자가 손댈 수 없다.** 출석일 추가·삭제 프로시저가 없고, 이 화면이 바꿀 수 있는 것은 포인트 잔액뿐이다.
+
 ---
 
 ## 5. 구인자(업소)·사업자 검증
@@ -680,11 +722,23 @@
      고객센터 문의(`support_inquiry`). 탭 전환 시 page=1 리셋 + 펼친 행 접힘.
   2. 이전/다음 페이지네이션(서버 고정 20건, `MODERATABLE_PAGE_SIZE`).
   3. 행 좌측 chevron으로 펼쳐 전체 본문 확인(펼친 행만 상세 조회).
+  4. **커뮤니티 글 탭 한정** — 탭 아래 **게시판** Select(기본 `전체`)로 목록을 좁힌다.
+     선택 시 page=1 리셋 + 펼친 행 접힘 + 선택 해제. 탭을 바꾸면 필터도 `전체`로 돌아간다.
 - **기대 결과**: 제목·발췌(목록 셀은 15자 절단, 서버 발췌 120자)·작성자·상태·작성일.
   커뮤니티 본문은 Tiptap JSON을 서버에서 평문화해 내려준다.
+  - **선택 열**은 세 탭 모두에 붙고(일괄 조치 대상), **게시판 열**만 커뮤니티 글 탭 전용이다
+    (펼친 행 colSpan은 기본 `7`, 글 탭에서 `8`).
+    표시는 `communityBoards.list`(화면에 쿼리 하나, 목록 열·필터·펼친 행이 공유) 라벨 →
+    빌트인 `COMMUNITY_BOARD_LABELS` → 저장 원값 순 폴백이고, 값이 없으면 `—`.
+    운영자가 게시판 라벨을 바꾸면 열·필터·상세 배지가 함께 따라간다.
+  - 서버 응답은 유형과 무관하게 `board` 키를 갖는다(글은 `community_post.board` 원값,
+    댓글·문의는 `null`) — 화면이 유형별 좁히기 없이 한 형태만 렌더한다.
+  - 게시판 필터는 커뮤니티 글 탭에서만 전송된다(`board` 입력, 다른 탭은 `undefined`).
+    없는 key를 API로 직접 보내면 오류가 아니라 **빈 목록**이다(존재 검사 없음, 의도).
 - **엣지 케이스**:
   - **상태 필터 UI가 없다.** 서버 `listModeratableContent`는 `status` 입력을 받지만 화면이 보내지 않아
     항상 전체 조회다 → `hidden`/`deleted`만 골라 보는 방법이 화면에 없다.
+    (게시판 필터는 화면에 있으므로 "특정 게시판 글 전수 점검"은 가능하다.)
   - 작성자 표기 주의: 커뮤니티 글은 **글별 익명 표시명**, **댓글은 원글 작성자 표시명**(댓글 작성자가 아님),
     문의는 `user.name`(없으면 "(표시명 없음)").
   - `support_inquiry_message`(문의 스레드 메시지)는 이 목록에 없다.
@@ -711,6 +765,62 @@
     복구하려면 이 화면에서 찾아야 하는데 상태 필터가 없어 페이지를 넘겨 가며 찾아야 한다.
 - **관련 API**: `bambi.community.setPostStatusByAdmin`, `bambi.community.setCommentStatusByAdmin`,
   `bambi.moderation.setInquiryStatusByAdmin` (`moderation.ts` L2226, `adminProcedure`)
+
+### 8.2-1 커뮤니티 글 영구 삭제(하드 삭제)
+
+- **사전 조건**: 대상 글이 **이미 `deleted`(삭제 조치) 상태**여야 한다. 화면도 그때만 메뉴를 붙이고,
+  서버도 같은 조건으로 거절한다(2단계 실수 방지).
+- **절차**: 커뮤니티 글 탭 → (선택) 게시판 필터로 좁힘 → 상태가 **삭제됨**인 행의 `…` →
+  **영구 삭제하기**(destructive, 소프트 삭제 항목 아래) → AlertDialog("「제목」 글을 영구 삭제할까요?" /
+  "되돌릴 수 없습니다…") → **영구 삭제하기**. **사유 입력은 없다**(선행 삭제 조치의 사유가 기록이다).
+- **기대 결과**:
+  - `community_post` 행이 **물리 삭제**되고 토스트 "영구 삭제했어요.", 목록 무효화로 행이 사라진다.
+  - FK cascade로 `community_comment`·`community_post_like`가 함께 사라진다(선삭제 코드 없음 — DB가 한다).
+  - 감사 로그 `admin_moderation_action`: `action = "hard_delete"`, `targetType = "community_post"`,
+    `reason = "영구 삭제"`, `metadata = { title, board, authorName, createdAt }`
+    — `targetId`는 FK가 아니라 남지만 가리킬 행이 없으므로 **스냅샷이 유일한 맥락**이다.
+  - 작성자 알림은 보내지 않는다(선행 삭제 조치에서 이미 통지됐다).
+- **엣지 케이스 / 실패 케이스**:
+  - `published`/`hidden` 상태 글 → 409 "삭제 처리한 글만 영구 삭제할 수 있습니다. 먼저 삭제 조치를 해 주세요."
+    (화면에서는 메뉴가 안 보이므로 API 직접 호출·낡은 캐시로만 재현된다.)
+  - 없는 id → `NOT_FOUND` "글을 찾을 수 없습니다."
+  - 그 글을 가리키던 **신고**(`report.targetId`)·**알림**(`bambi_notification.targetId`)은 FK가 아니라 남는다.
+    신고 목록은 `targetContext: null`로 그려지고(기존 동작), 알림 딥링크는 없는 글로 향한다 — 의도된 잔존이다.
+  - 본문 이미지(Tiptap 안 URL)는 스토리지 회수 대상이 아니다(글 첨부 테이블이 없어 키 원장이 없다).
+  - 댓글·문의에는 영구 삭제가 없다(글을 지우면 댓글은 cascade로 함께 사라진다).
+- **QA 시나리오(게시판 비우기 → 게시판 삭제)**:
+  1. 새 게시판 생성(8.8) → 글 여러 건 작성 → 게시판 삭제 시도 → 409 "글이 있는 게시판은 삭제할 수 없습니다…".
+  2. 게시물 조치에서 게시판 필터로 그 게시판 선택 → 머리글 전체선택 → **선택 삭제 (N)**(사유 2자 이상).
+  3. 게시판 삭제 재시도 → **여전히 409**(소프트 삭제라 행이 남아 있다 — D5 소견의 재현 지점).
+  4. 다시 머리글 전체선택 → **선택 영구 삭제 (N)** → 확인 → 페이지가 통째로 비워진다
+     (한 건만이면 그 행의 `…` → **영구 삭제하기**도 동일 결과).
+  5. 게시판 삭제 재시도 → **성공**("게시판을 삭제했어요.").
+     20건 초과면 2~4를 페이지마다 반복한다(선택은 현재 페이지 한정).
+- **관련 API**: `bambi.moderation.hardDeleteCommunityPost` (`moderation.ts`, `adminProcedure`,
+  입력 `{ postId: uuid }`, 반환 `{ ok: true }`)
+
+### 8.2-2 선택(체크박스) 일괄 조치 — 세 탭 공통
+
+- **절차**: 행 체크(또는 머리글 전체선택 — **상태를 가리지 않고 현재 페이지 전 행**이 대상) →
+  표 위 "N개 선택됨" 막대 → **선택 삭제 (N)** 또는 **선택 영구 삭제 (N)**.
+  선택 삭제는 사유 Dialog(2자 이상) → "확인", 선택 영구 삭제는 사유 없이 AlertDialog
+  ("선택한 N건을 영구 삭제할까요?" / "되돌릴 수 없습니다…") → "영구 삭제하기".
+- **기대 결과**:
+  - 서버에 묶음 프로시저가 **없다.** 화면이 단건 프로시저(8.2·8.2-1과 동일한 것)를
+    `Promise.allSettled`로 모아 보내고, 토스트·목록 무효화는 **한 번만** 낸다.
+  - 버튼 라벨의 괄호 숫자 = **실제 대상 건수**. 선택 삭제는 고른 것 중 `status !== "deleted"`,
+    선택 영구 삭제는 `status === "deleted"`만 센다. 대상 0건이면 그 버튼은 `disabled`.
+  - **선택 영구 삭제는 커뮤니티 글 탭에만** 나온다(댓글·문의에는 하드 삭제 경로가 없다).
+  - 전건 성공 시 "N건 조치했어요." / "N건 영구 삭제했어요."(1건이면 "조치했어요." /
+    "영구 삭제했어요."), 부분 실패 시 "X건 처리, Y건 실패했어요.",
+    **단건 실패면 서버 문구를 그대로** 노출한다(409·404 원문).
+  - 처리 후 선택은 해제되고 Dialog가 닫힌다.
+- **엣지 케이스**:
+  - 탭·페이지·게시판 필터를 바꾸면 선택이 초기화된다(선택은 항상 현재 페이지 한정).
+  - **삭제됨 행도 체크된다**(예전에는 `disabled`였다) — 그래야 선택 영구 삭제 대상이 된다.
+    대신 선택 삭제는 그 행을 세지 않아 서버 중복 삭제 거절이 화면에서 발생하지 않는다.
+  - 게시중·숨김만 골라 선택 영구 삭제를 누를 수는 없다(대상 0건 → `disabled`).
+- **관련 API**: 8.2·8.2-1의 단건 프로시저 반복 호출(신설 프로시저 없음).
 
 ### 8.3 공지사항 작성(운영자 전용 게시판)
 
@@ -792,6 +902,61 @@
 - > ⚠ **캐시 타이밍 함정**: 활성 금칙어는 모듈 전역 메모리 캐시(TTL 60초)다. 변경 프로시저가
   > `invalidateBannedWordCache()`를 호출해 **같은 인스턴스는 즉시 반영**되지만,
   > **다중 인스턴스면 다른 인스턴스는 최대 60초 지연**된다. "추가했는데 글이 써진다"면 60초 대기 후 재확인.
+
+### 8.8 게시판 관리(수다방 게시판 추가·수정·아이콘·노출·삭제)
+
+- **경로**: `/moderator/community-boards` (파일: `apps/web/src/app/moderator/community-boards/page.tsx`)
+- **사전 조건**: 마이그레이션 `0075_dynamic-community-board`가 적용돼 `community_board` 테이블과
+  시드 5행(`notice`/0 · `free`/20 · `work_talk`(slug `work-talk`)/30 · `market`/40 · `legal`/50)이 있어야 한다.
+  미적용이면 수다방 전 경로가 `NOT_FOUND` "게시판을 찾을 수 없습니다."로 죽는다.
+  아이콘 열은 `0076_community-board-icon`(`community_board.icon text NULL`)까지 적용돼야 한다 —
+  **시드 5행의 `icon`은 NULL**이라 마이그레이션 직후 화면 모습은 이전과 동일해야 한다(회귀 기준).
+- **목록**: `communityBoards.list`(adminProcedure, **비활성 포함**, `sort_order ASC`).
+  열 8개 — 아이콘 · 게시판(label) · 주소(`/seeker/community/{slug}` 배지) · 설명 · 순서 · 글쓰기(Switch) · 노출(Switch) · 관리([수정] + 빌트인이 아니면 [삭제]).
+  아이콘 열은 지정 없거나 웹이 모르는 이름이면 `—`.
+- **추가 절차**: 이름(≤30) · 주소(2~30) · 아이콘(선택, 기본 `없음`) · 설명(≤200, 선택) 입력 → **[게시판 추가]**.
+  - 기대: 토스트 "게시판을 만들었어요.", `key = slug`, `sortOrder = max(sort_order) + 10`(목록 맨 끝), 아이콘 미선택이면 `icon = NULL`.
+  - 실패: 패턴 위반 → 400 "주소는 영소문자·숫자·하이픈·밑줄 2~30자로 입력해 주세요." /
+    `best`·`crawled`·`write` → 400 "이미 쓰이고 있는 주소입니다. 다른 주소를 입력해 주세요." /
+    기존 slug 중복 → 409 "이미 등록된 게시판 주소입니다."
+- **수정**: [수정] → 다이얼로그(이름·설명·아이콘·정렬 순서 0~10000) → **[저장]**, 토스트 "게시판을 수정했어요."
+  **`key`·`slug`는 수정 불가**(입력칸 없음). 선택 필드를 전부 생략하면 zod `refine`이 거부한다(`icon`도 그 refine에 편입).
+- **아이콘 케이스**:
+  - 선택지는 **12종 고정**(서버 `COMMUNITY_BOARD_ICONS` zod enum = `MessageCircle`·`Briefcase`·`ShoppingBag`·`Scale`·`Megaphone`·`Sparkles`·`Coffee`·`Music`·`Heart`·`Star`·`Users`·`Newspaper`).
+    화면은 lucide 원값이 아니라 **한글 라벨**(말풍선·서류가방·쇼핑백·저울·확성기·반짝임·커피·음표·하트·별·사람들·신문)로 노출하고, 목록 항목엔 실제 아이콘을 함께 그린다.
+  - 12종 밖의 문자열을 API로 직접 보내면 zod enum이 **400**으로 거부한다.
+  - 수정에서 `없음` 저장 → `icon: null`이 실려 **아이콘 제거**. 아이콘 필드를 아예 빼면(`undefined`) 기존 값 유지 — 이 둘의 구분이 회귀 포인트다.
+  - DB에 웹 맵에 없는 이름이 들어 있으면(수기 UPDATE 등) 화면은 **조용히 무시**하고 아이콘 없음처럼 그리며, 수정 창의 선택값도 `없음`으로 시작한다(그릴 수 없는 값을 고른 것처럼 보이지 않게).
+  - 노출 위치: `communityBoards.listActive`·`community.overview.boards[]`에 `icon`이 실려
+    **수다방 홈/구직자 홈 카드 제목 앞**(`BoardTitleMark`)과 **게시판 목록 화면 상단 제목 앞**에 `text-coral-500` 크기 `size-4`로 붙는다.
+    우선순위는 **지정 아이콘 > `notice`의 확성기 폴백 > 기존 액센트 색 막대**. `overview`의 가상 `best` 항목은 항상 `icon: null`.
+- **스위치**: 글쓰기(`update.isWritable`) · 노출(`setActive`) 모두 **확인 모달 없이 즉시** 적용.
+  미존재 key면 `NOT_FOUND` "게시판을 찾을 수 없습니다."
+- **삭제(`communityBoards.remove`, adminProcedure)**: [삭제] → AlertDialog("○○ 게시판을 삭제할까요?" / "되돌릴 수 없습니다…") → **[삭제]**.
+  - 성공: 토스트 "게시판을 삭제했어요.", 행이 목록에서 사라진다. 되돌리는 경로는 없다(같은 slug로 재생성만 가능).
+  - 빌트인 5종(`notice`·`free`·`work_talk`·`market`·`legal`) → **버튼 자체가 없다**(웹 `isBuiltinBoardKey`).
+    API 직접 호출 시 400 "기본 게시판은 삭제할 수 없습니다."
+  - 글이 **1건이라도** 있는 게시판(`community_post.board = key`, 숨김·삭제 상태 글 포함) → 409
+    "글이 있는 게시판은 삭제할 수 없습니다. 노출을 끄는 방식을 사용해 주세요." — 화면은 이 서버 문구를 그대로 토스트한다.
+    **조치 삭제는 소프트 삭제라 행이 남아 이 409를 풀어 주지 않는다.** 게시판을 실제로 비우려면
+    [8.2-1 영구 삭제](#82-1-커뮤니티-글-영구-삭제하드-삭제)로 글을 하나씩 물리 삭제해야 한다.
+  - 미존재 key → `NOT_FOUND` "게시판을 찾을 수 없습니다."
+  - **QA 시나리오**: 새 게시판 생성 → 글 0건 상태에서 삭제 성공 → 재생성 후 글 1건 작성 → 삭제 시도 409 확인 →
+    노출 OFF로 대체 처리, 또는 게시물 조치에서 **삭제 → 영구 삭제하기**로 글을 비운 뒤 삭제 성공(8.2-1).
+    글 수를 화면이 세지 않으므로 **버튼은 항상 보이고 거절은 서버에서만** 난다(의도).
+- **소비 경로 확인(엔드투엔드)**:
+  - 웹은 `communityBoards.listActive`(**publicProcedure**, 활성만)를 `useCommunityBoards`로 받고 **staleTime 5분** — 방금 만든 게시판·아이콘 변경이 안 보이면 5분 또는 새로고침.
+  - `community.overview.boards[]`는 `best`(가상, 선두) → 활성 게시판 `sort_order ASC`. 홈·수다방 홈이 같은 배열을 쓴다.
+  - 노출 OFF → 수다방 목록·홈에서 사라지고 `/seeker/community/{slug}`는 404, 서버 `assertBoard`도 `NOT_FOUND`. **글은 보존**되며 다시 켜면 복귀.
+  - 글쓰기 OFF → 목록의 [글쓰기] 버튼 사라짐, `/seeker/community/{slug}/write` 404, `createPost`는 400 "이 게시판에는 글을 쓸 수 없습니다."
+- **신규 게시판의 표준 동작**: 회원 열람·작성, 비밀글 가능, 목록 필터 노출(`best`·`notice`·`legal`만 필터 숨김),
+  `베스트글` 집계 포함(제외는 `notice`·`legal`), **게스트 쓰기 불가**(`free`·`work_talk`·`legal` 고정),
+  **공개 `/board` 미노출**(`PUBLIC_COMMUNITY_BOARDS` 3종 고정), 연락처 칸·자동 잠금 없음.
+- **관련 API**: `bambi.communityBoards.list` / `create` / `update` / `setActive` / `remove` (adminProcedure), `listActive` (publicProcedure) — `packages/api/src/routers/bambi/community-boards.ts`
+- > ⚠ **아이콘 목록이 서버·웹 두 벌이다.** 서버는 zod enum(`COMMUNITY_BOARD_ICONS`, 라우터), 웹은 이름→lucide 컴포넌트 Record
+  > (`apps/web/src/lib/bambi/community-board-icons.ts`). 웹이 서버를 import하지 않으므로(번들에 `db`가 딸려 오는 것을 피함)
+  > **드리프트를 타입 검사가 잡지 못한다.** 아이콘을 추가할 때는 두 파일을 함께 고치고, 12종 전부가 운영자 화면 Select에
+  > 보이는지 눈으로 확인할 것. 서버에만 있는 이름은 화면에서 무시되고, 웹에만 있는 이름은 저장 시 400이 난다.
 
 ---
 

@@ -33,6 +33,7 @@ import {
 	formatBusinessStartDate,
 	formatDateTime,
 	formatNullable,
+	formatPhone,
 } from "@/lib/bambi-format";
 import {
 	getBiznumStatusLabel,
@@ -143,6 +144,7 @@ const getInitials = (name: null | string): string => {
 	return trimmed.slice(0, 2);
 };
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This page coordinates independent profile, verification, document, and team workflows.
 export default function EmployerMePage() {
 	const router = useRouter();
 	const session = authClient.useSession();
@@ -284,7 +286,10 @@ export default function EmployerMePage() {
 							</div>
 							<p className="text-muted-foreground text-sm">
 								{profile.isPhoneVerified ? "전화 인증 완료" : "전화 미인증"} ·
-								연락처 {formatNullable(profile.phoneNumber)}
+								연락처{" "}
+								{formatNullable(
+									profile.phoneNumber ? formatPhone(profile.phoneNumber) : null
+								)}
 							</p>
 							<p className="text-muted-foreground text-xs">
 								가입 {formatDateTime(profile.createdAt)}

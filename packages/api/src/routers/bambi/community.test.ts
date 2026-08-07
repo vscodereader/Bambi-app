@@ -250,6 +250,19 @@ const clientForAnonymous = <T>(procedure: T, path: string[]) =>
 		path: ["bambi", "community", ...path],
 	});
 
+interface OverviewPreviewPost {
+	id: string;
+	title: string;
+}
+
+// overview 응답은 고정 키 객체({ best, free, ... })가 아니라 게시판 배열이다 —
+// 게시판이 DB(community_board)에서 오므로 테스트도 key로 집어 온다.
+const boardPreview = (
+	home: { boards: Array<{ key: string; posts: OverviewPreviewPost[] }> },
+	key: string
+): OverviewPreviewPost[] =>
+	home.boards.find((board) => board.key === key)?.posts ?? [];
+
 const expectOrpcCode = async (
 	promise: Promise<unknown>,
 	code: string
@@ -302,14 +315,14 @@ describe("bambi community router — 조회", () => {
 			);
 			const maleHome = await overviewAsMale({});
 			expect(
-				maleHome.free.some(
-					(item: { id: string; title: string }) =>
-						item.id === open.id && item.title === openTitle
+				boardPreview(maleHome, "free").some(
+					(item) => item.id === open.id && item.title === openTitle
 				)
 			).toBe(true);
 			expect(
-				maleHome.workTalk.find((item: { id: string }) => item.id === locked.id)
-					?.title
+				boardPreview(maleHome, "work_talk").find(
+					(item) => item.id === locked.id
+				)?.title
 			).toBe("비밀글입니다");
 
 			// 비로그인(세션 없음)도 동일하게 열람되고 비밀글은 마스킹된다.
@@ -318,11 +331,11 @@ describe("bambi community router — 조회", () => {
 			]);
 			const anonymousHome = await overviewAnonymous({});
 			expect(
-				anonymousHome.free.some((item: { id: string }) => item.id === open.id)
+				boardPreview(anonymousHome, "free").some((item) => item.id === open.id)
 			).toBe(true);
 			expect(
-				anonymousHome.workTalk.find(
-					(item: { id: string }) => item.id === locked.id
+				boardPreview(anonymousHome, "work_talk").find(
+					(item) => item.id === locked.id
 				)?.title
 			).toBe("비밀글입니다");
 
@@ -334,8 +347,8 @@ describe("bambi community router — 조회", () => {
 			);
 			const authorHome = await overviewAsAuthor({});
 			expect(
-				authorHome.workTalk.find(
-					(item: { id: string }) => item.id === locked.id
+				boardPreview(authorHome, "work_talk").find(
+					(item) => item.id === locked.id
 				)?.title
 			).not.toBe("비밀글입니다");
 		} finally {
@@ -383,7 +396,7 @@ describe("bambi community router — 조회", () => {
 
 			const home = await overview({});
 			expect(
-				home.free.some((item: { id: string }) => item.id === created.id)
+				boardPreview(home, "free").some((item) => item.id === created.id)
 			).toBe(true);
 
 			const detail = await getPost({ postId: created.id });
@@ -1760,11 +1773,11 @@ describe("bambi community router — 계정유형·광고글·필터·공지사�
 
 			const home = await overview({});
 			expect(
-				home.notice.some((item: { id: string }) => item.id === notice.id)
+				boardPreview(home, "notice").some((item) => item.id === notice.id)
 			).toBe(true);
 			// 공지는 베스트 큐레이션에서 제외된다(추천 조건과 무관하게).
 			expect(
-				home.best.some((item: { id: string }) => item.id === notice.id)
+				boardPreview(home, "best").some((item) => item.id === notice.id)
 			).toBe(false);
 		} finally {
 			await cleanupCommunityFixture(fixture);
@@ -1811,7 +1824,7 @@ describe("bambi community router — 계정유형·광고글·필터·공지사�
 			).toBe(false);
 			const home = await overview({});
 			expect(
-				home.best.some((item: { id: string }) => item.id === notice.id)
+				boardPreview(home, "best").some((item) => item.id === notice.id)
 			).toBe(false);
 		} finally {
 			await cleanupCommunityFixture(fixture);

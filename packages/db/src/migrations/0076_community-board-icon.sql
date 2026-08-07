@@ -1,0 +1,1 @@
+ALTER TABLE "community_board" ADD COLUMN "icon" text;

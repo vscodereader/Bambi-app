@@ -31,7 +31,6 @@ import {
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
 	COMMUNITY_BOARDS,
-	type CommunityBoardKey,
 	communityBoardPath,
 	communityCrawledPath,
 	communityPostPath,
@@ -39,13 +38,18 @@ import {
 	isLegalAdvisorAllowedPath,
 	LEGAL_ADVISOR_BOARD_NOTICE,
 } from "@/lib/bambi/community";
+import { communityBoardIcon } from "@/lib/bambi/community-board-icons";
 
-// 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 미리보기 글 타입을 파생한다.
-export type OverviewPost =
-	InferRouterOutputs<AppRouter>["bambi"]["community"]["overview"]["free"][number];
+// 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 미리보기 게시판·글 타입을 파생한다.
+// overview는 고정 키 객체가 아니라 배열이다 — 운영자가 게시판을 늘리면 그대로 따라 붙는다.
+export type OverviewBoard =
+	InferRouterOutputs<AppRouter>["bambi"]["community"]["overview"]["boards"][number];
+
+export type OverviewPost = OverviewBoard["posts"][number];
 
 // 게시판별 액센트 바 — visual-job-exposure-sections의 섹션 헤더 문법을 따른다.
-export const accentClassName: Record<CommunityBoardKey, string> = {
+// 운영자가 추가한 게시판은 여기 없으므로 중립 색으로 폴백한다.
+export const accentClassName: Record<string, string> = {
 	best: "bg-coral-500",
 	free: "bg-sky-400",
 	legal: "bg-violet-500",
@@ -54,6 +58,8 @@ export const accentClassName: Record<CommunityBoardKey, string> = {
 	work_talk: "bg-amber-500",
 };
 
+const DEFAULT_ACCENT_CLASS = "bg-muted-foreground";
+
 // 글 행 오른쪽 메타. 반폭 카드(compact)는 작성인을 접고 날짜만 남긴다 — 좁은 칸에서
 // 제목이 두어 글자로 잘리는 걸 막는다.
 const postMetaText = (post: OverviewPost, compact: boolean): string =>
@@ -61,15 +67,41 @@ const postMetaText = (post: OverviewPost, compact: boolean): string =>
 		? formatCommunityDate(post.createdAt)
 		: `${post.authorName ?? COMMUNITY_AUTHOR_FALLBACK} · ${formatCommunityDate(post.createdAt)}`;
 
-export function BoardPreviewCard({
+// 카드 제목 앞 표식 — 운영자가 지정한 아이콘 > 공지 확성기 > 게시판 액센트 바 순으로
+// 하나만 그린다. 아이콘 미지정(빌트인 기본값)이면 기존 모양이 그대로 남는다.
+function BoardTitleMark({
 	boardKey,
+	icon,
+}: {
+	boardKey: string;
+	icon: string | null;
+}) {
+	const BoardIcon = communityBoardIcon(icon);
+
+	if (BoardIcon) {
+		return <BoardIcon className="size-4 shrink-0 text-coral-500" />;
+	}
+	if (boardKey === "notice") {
+		return <MegaphoneIcon className="size-4 shrink-0 text-coral-500" />;
+	}
+	return (
+		<span
+			className={cn(
+				"h-4 w-1 rounded-full",
+				accentClassName[boardKey] ?? DEFAULT_ACCENT_CLASS
+			)}
+		/>
+	);
+}
+
+export function BoardPreviewCard({
+	board,
 	className,
 	compact = false,
 	emptyText,
 	onBlockedNavigate,
-	posts,
 }: {
-	boardKey: CommunityBoardKey;
+	board: OverviewBoard;
 	className?: string;
 	// 반폭 칸(중고거래·법률 자문)에 들어가는 카드. 제목이 설 자리를 남기려고 작성인을
 	// 접고 날짜만 남긴다 — 좁은 칸에서 제목이 두어 글자로 잘리는 걸 막는다.
@@ -79,14 +111,9 @@ export function BoardPreviewCard({
 	onBlockedNavigate?: (href: string) => void;
 	// 빈 상태 문구 — 미지정 시 기존 "첫 글" 안내를 그대로 쓴다(운영자 전용 게시판은 별도 문구 주입).
 	emptyText?: string;
-	posts: OverviewPost[];
 }) {
-	const board = COMMUNITY_BOARDS.find((item) => item.key === boardKey);
-	if (!board) {
-		return null;
-	}
-
-	const isNotice = boardKey === "notice";
+	const posts = board.posts;
+	const isNotice = board.key === "notice";
 
 	return (
 		<Card
@@ -102,13 +129,7 @@ export function BoardPreviewCard({
 						isNotice && "text-coral-600"
 					)}
 				>
-					{isNotice ? (
-						<MegaphoneIcon className="size-4 shrink-0 text-coral-500" />
-					) : (
-						<span
-							className={cn("h-4 w-1 rounded-full", accentClassName[boardKey])}
-						/>
-					)}
+					<BoardTitleMark boardKey={board.key} icon={board.icon} />
 					{board.label}
 				</CardTitle>
 				<Link
@@ -132,14 +153,17 @@ export function BoardPreviewCard({
 					</p>
 				) : (
 					posts.map((post) => {
-						const boardOfPost = COMMUNITY_BOARDS.find(
-							(item) => item.key === post.board
-						);
+						// 베스트 카드에는 다른 게시판 글이 섞이므로 글의 게시판 slug로 링크를 만든다.
+						// 레거시 key(work_talk↔work-talk)만 빌트인 메타로 되짚고, 운영자가 만든
+						// 게시판은 key가 곧 slug라 원값을 그대로 쓴다.
+						const slugOfPost =
+							COMMUNITY_BOARDS.find((item) => item.key === post.board)?.slug ??
+							post.board;
 						// 수집 글은 전용 상세로 분기한다(순수 글은 기존 게시판 상세 경로 그대로).
 						const isCrawled = post.source === "crawled";
 						const href = isCrawled
 							? communityCrawledPath(post.id)
-							: communityPostPath(boardOfPost?.slug ?? board.slug, post.id);
+							: communityPostPath(slugOfPost, post.id);
 						return (
 							<Link
 								className={cn(
@@ -211,69 +235,76 @@ export function useLegalAdvisorNavGuard():
 
 // 중고거래·무료 법률 자문은 2열 그리드의 한 칸을 좌우로 나눠 쓴다(모바일은 세로 스택).
 // 글이 적은 두 게시판이라 각각 한 칸씩 차지하면 홈에서 빈 카드가 두 줄로 늘어진다.
-const PAIRED_BOARD_KEYS: CommunityBoardKey[] = ["market", "legal"];
+const PAIRED_BOARD_KEYS = ["market", "legal"];
 
 // 수다방 홈과 seeker 홈 커뮤니티 섹션이 공유하는 미리보기 배치. 공지사항은 글 유무와
 // 무관하게 항상 최상단 전폭, 나머지 게시판은 그 아래 2열 그리드. 두 화면이 각자 배치를
 //들고 있어 홈과 수다방의 같은 섹션이 서로 다르게 보이던 걸 한 컴포넌트로 모은다.
+// 운영자가 추가한 게시판은 서버 순서(sort_order) 그대로 solo 카드로 뒤에 붙는다.
 export function CommunityOverviewGrid({
+	boards,
 	isPending,
 	onBlockedNavigate,
-	postsByBoard,
 }: {
+	boards: OverviewBoard[];
 	isPending: boolean;
 	// BoardPreviewCard와 같은 의미 — 지정 시 수다방 링크를 가로채 호출한 화면이 안내한다.
 	onBlockedNavigate?: (href: string) => void;
-	postsByBoard: Record<CommunityBoardKey, OverviewPost[]>;
 }) {
-	const soloBoards = COMMUNITY_BOARDS.filter(
+	const notice = boards.find((board) => board.key === "notice");
+	const pairedBoards = PAIRED_BOARD_KEYS.map((key) =>
+		boards.find((board) => board.key === key)
+	).filter((board) => board !== undefined);
+	const soloBoards = boards.filter(
 		(board) => board.key !== "notice" && !PAIRED_BOARD_KEYS.includes(board.key)
 	);
 
+	// 로딩 자리표시자는 실제 게시판 수를 모른다(목록도 같이 오는 중) — 빌트인 배치와
+	// 같은 모양으로 자리만 잡아 둔다.
+	if (isPending) {
+		return (
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<BoardPreviewSkeleton className="md:col-span-2" />
+				<BoardPreviewSkeleton />
+				<BoardPreviewSkeleton />
+				<BoardPreviewSkeleton />
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<BoardPreviewSkeleton />
+					<BoardPreviewSkeleton />
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-			{isPending ? (
-				<>
-					<BoardPreviewSkeleton className="md:col-span-2" />
-					{soloBoards.map((board) => (
-						<BoardPreviewSkeleton key={board.key} />
-					))}
-					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-						{PAIRED_BOARD_KEYS.map((key) => (
-							<BoardPreviewSkeleton key={key} />
-						))}
-					</div>
-				</>
-			) : (
-				<>
-					<BoardPreviewCard
-						boardKey="notice"
-						className="md:col-span-2"
-						emptyText="등록된 공지사항이 없어요."
-						onBlockedNavigate={onBlockedNavigate}
-						posts={postsByBoard.notice}
-					/>
-					{soloBoards.map((board) => (
+			{notice ? (
+				<BoardPreviewCard
+					board={notice}
+					className="md:col-span-2"
+					emptyText="등록된 공지사항이 없어요."
+					onBlockedNavigate={onBlockedNavigate}
+				/>
+			) : null}
+			{soloBoards.map((board) => (
+				<BoardPreviewCard
+					board={board}
+					key={board.key}
+					onBlockedNavigate={onBlockedNavigate}
+				/>
+			))}
+			{pairedBoards.length > 0 ? (
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					{pairedBoards.map((board) => (
 						<BoardPreviewCard
-							boardKey={board.key}
+							board={board}
+							compact
 							key={board.key}
 							onBlockedNavigate={onBlockedNavigate}
-							posts={postsByBoard[board.key]}
 						/>
 					))}
-					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-						{PAIRED_BOARD_KEYS.map((key) => (
-							<BoardPreviewCard
-								boardKey={key}
-								compact
-								key={key}
-								onBlockedNavigate={onBlockedNavigate}
-								posts={postsByBoard[key]}
-							/>
-						))}
-					</div>
-				</>
-			)}
+				</div>
+			) : null}
 		</div>
 	);
 }

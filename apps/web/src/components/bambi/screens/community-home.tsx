@@ -5,13 +5,11 @@
 import { useQuery } from "@tanstack/react-query";
 import {
 	CommunityOverviewGrid,
-	type OverviewPost,
 	useLegalAdvisorNavGuard,
 } from "@/components/bambi/community-board-preview";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PremiumAdBannerSection } from "@/components/bambi/premium-ad-banner-section";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
-import type { CommunityBoardKey } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
 
 export function CommunityHomeScreen() {
@@ -31,15 +29,6 @@ export function CommunityHomeScreen() {
 		);
 	}
 
-	const data = overviewQuery.data;
-	const postsByBoard: Record<CommunityBoardKey, OverviewPost[]> = {
-		best: data?.best ?? [],
-		free: data?.free ?? [],
-		legal: data?.legal ?? [],
-		market: data?.market ?? [],
-		notice: data?.notice ?? [],
-		work_talk: data?.workTalk ?? [],
-	};
 	return (
 		<div className="flex flex-col gap-4">
 			{/* 마켓플레이스 상단과 동일한 프리미엄(중간) 광고 섹션 — 빈 칸은 자체
@@ -51,9 +40,9 @@ export function CommunityHomeScreen() {
 			/>
 			<h1 className="m-0 font-extrabold text-xl">수다방</h1>
 			<CommunityOverviewGrid
+				boards={overviewQuery.data?.boards ?? []}
 				isPending={overviewQuery.isPending}
 				onBlockedNavigate={legalAdvisorGuard}
-				postsByBoard={postsByBoard}
 			/>
 		</div>
 	);
