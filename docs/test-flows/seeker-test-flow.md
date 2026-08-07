@@ -705,7 +705,7 @@
 - **엣지 케이스**:
   - `jobPostId`·`organizationId`는 사용자가 지정할 수 없고 **채팅방에서 파생**된다
   - 이미 후기가 있으면 폼 대신 읽기 카드(`등록된 후기` 또는 `검수 중인 후기` + `별점 X.X · 본문`), 배지가 `작성 가능` → `작성 완료`
-  - **차단된 방에도 후기 영역이 뜬다** — 옛 `!room.isBlocked` 카드 가드가 사라지고 면접 상태 가드만 남았으며 `reviews.create`에 차단 검사가 없다. 정책 확인 대상
+  - **차단한 상대와의 방에서도 후기를 쓸 수 있다(확정 정책)** — 옛 `!room.isBlocked` 카드 가드가 사라지고 면접 상태 가드만 남았으며 `reviews.create`에도 차단 검사가 없다. **의도된 정책**이다: 차단은 그 상대와 더 대화하지 않겠다는 뜻일 뿐이고, 면접까지 간 경험은 **다른 구직자가 그 업소를 판단할 근거**라 후기 작성 자격을 막지 않는다. 차단 후 후기 등록이 400/403으로 막히면 **회귀**로 본다
   - **나간 방에서도 등록된다** — `listMyUpcomingInterviews`가 나간 방을 포함하는 것에 맞춰 `reviews.create`도 `requireChatParticipant`를 `allowLeftRoom: true`로 호출한다(면접 완료 처리와 동일한 예외). 구직자 본인·확정/완료 면접·방당 1건 가드는 그대로 적용
 - **관련 API**: `bambi.reviews.create` (protected + `requireChatParticipant` + 구직자 확인), `bambi.reviews.listMine` (protected)
 
@@ -764,8 +764,11 @@
   `communityBoards.listActive`를 `useCommunityBoards`(staleTime 5분)로 받아 slug를 해석한다
   (`apps/web/src/lib/bambi/use-community-boards.ts`). `apps/web/src/lib/bambi/community.ts`의 `COMMUNITY_BOARDS`는
   이제 **빌트인 메타 전용**(가상 게시판 best, 공지의 `adminOnly`, 액센트 색, 공개 `/board` 3종)이고 게시판 목록의 출처가 아니다.
-- **운영자가 게시판을 추가·수정·숨김**할 수 있다(운영자 테스트 플로우 8.8). 아래는 시드된 기본 게시판이며,
+- **운영자가 게시판을 추가·수정·숨김·삭제**할 수 있다(운영자 테스트 플로우 8.8). 아래는 시드된 기본 게시판이며,
   신규 게시판은 특수 규칙 없이 **표준 동작**(회원 열람·작성, 비밀글 가능, 필터 노출, best 집계 포함, 게스트 쓰기 불가, 공개 `/board` 미노출)만 갖는다.
+- **게시판 아이콘**: 운영자가 지정한 아이콘(`listActive`·`overview.boards[].icon`, 12종 중 하나)이 **수다방 홈/구직자 홈 카드 제목 앞**과
+  **게시판 목록 화면 상단 제목 앞**에 코럴색으로 붙는다. 미지정이면 `notice`만 확성기 폴백, 나머지는 기존 액센트 색 막대(카드)·아이콘 없음(목록 헤더).
+  시드 5행은 `icon` NULL이라 **기본 게시판의 겉모습은 이전과 같아야 한다**(회귀 기준).
 
 | key | slug | 라벨 | sort_order | 글쓰기 | 비고 |
 |---|---|---|---|---|---|

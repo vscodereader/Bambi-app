@@ -434,6 +434,46 @@
 - **관련 API**: `bambi.moderation.purgeWithdrawnAccounts`(`adminProcedure`) — 자동 실행과 동일한
   서비스 `purgeWithdrawnAccountsBatch`(`packages/api/src/services/bambi-withdrawal-purge.ts`)를 호출한다.
 
+### 4.8 출석 관리 · 포인트 지급·차감
+
+- **경로**: `/moderator/attendance` (파일: `apps/web/src/app/moderator/attendance/page.tsx`)
+- **목록**: `bambi.attendance.adminList`(`adminProcedure`) — `useInfiniteQuery`, `limit=20`, offset 커서(`nextCursor = cursor + limit`).
+  검색(닉네임·아이디 `ilike`, **250ms 디바운스**)·역할(`전체`/`구직자`/`구인자`)·정렬이 **전부 서버 입력**이고,
+  요약 카드(오늘 출석자 / 출석 대상 회원)도 **같은 where**를 쓴다 — 필터를 걸면 요약 숫자도 좁아진다(의도).
+  대상은 `bambi_profile.role ∈ {job_seeker, employer}` + `user.deleted_at IS NULL`(프로필 없는 온보딩 전 계정 제외).
+- **열 9개**: 회원(닉네임+아이디, 오늘 출석이면 `오늘 출석` 뱃지) · 역할 · 총 출석 · 이번 달 · 마지막 출석 · 미출석 · **포인트** · 관리([지급·차감]).
+  정렬 가능한 헤더는 총 출석·이번 달·마지막 출석·미출석 4개뿐이고 **방향은 축마다 고정**(`aria-sort="descending"`),
+  **포인트 열은 정렬 불가**(서버 `sort` enum이 `recent|idle|total|month` 4개 고정 — 확장하지 않았다).
+- **포인트 잔액**: `items[].pointBalance` = 그 유저 `bambi_point_transaction.amount` **합계**(상관 서브쿼리, coalesce 0).
+  잔액 컬럼이 따로 없으므로 출석 적립(`reason='attendance'`, 1회 10P)과 운영자 조정이 모두 섞인 값이다. 표기는 `1,200P`(ko-KR 천단위).
+- **지급·차감 절차**: 행 [지급·차감] → Dialog(`PointAdjustForm`) → ToggleGroup `지급|차감` + 포인트(양수) + 사유 → **[적용]**.
+  - 입력은 **항상 양수**로 받고 부호는 토글이 정한다(차감에 음수를 넣어 되레 지급되는 부호 뒤집힘 방지) — 회귀 포인트.
+  - 사유 칸 아래에 **조정 후 예상 잔액**이 실시간으로 보인다. 유효하지 않으면 "1 이상 100,000 이하의 정수를 입력해 주세요."
+  - 성공: 토스트 "포인트를 조정했어요. 현재 잔액 1,270P"(서버가 돌려준 조정 후 잔액) + `adminList` 쿼리 무효화로 표의 포인트 열 갱신, 다이얼로그 닫힘.
+- **`bambi.attendance.adminAdjustPoints`(`adminProcedure`) 계약**:
+  - 입력 `{ userId: string(≥1), amount: int, reason: string }`. `amount`는 **−100,000 ~ 100,000, 0 금지**, `reason`은 trim 후 **1~200자**.
+  - 출력 `{ userId, pointBalance }` — **조정 후 새 잔액**.
+  - 원장 기록은 `amount` 그대로(±) + `reason`에 **`운영자 지급: {사유}` / `운영자 차감: {사유}`** 프리픽스. 출석 적립(`reason='attendance'`)과 문자열로 구분된다.
+  - 합산→검증→insert가 **한 트랜잭션** 안에서 돈다.
+- **실패 케이스**:
+  | 상황 | 기대 |
+  |---|---|
+  | 차감 후 잔액이 음수 | `BAD_REQUEST` "잔액보다 많이 차감할 수 없습니다." — 원장 행이 **남지 않아야** 한다 |
+  | 대상 계정 없음 / 탈퇴(`deleted_at`) | `NOT_FOUND` "대상 회원을 찾을 수 없습니다." |
+  | 대상이 운영자·법률자문 | `BAD_REQUEST` "구직자·업소 회원에게만 포인트를 조정할 수 있습니다." |
+  | `amount = 0` | `BAD_REQUEST` "0 포인트는 조정할 수 없습니다." |
+  | `amount` 절댓값 > 100,000 / 사유 공백 또는 200자 초과 | zod 400 |
+- **권장 QA 시나리오**: 잔액 0인 구직자에게 **+100 지급** → 잔액 100P → **−30 차감** → 잔액 70P →
+  **−200 차감 시도** → 400 "잔액보다 많이 차감할 수 없습니다."(잔액 70P 유지, 원장 행은 2건 그대로) →
+  운영자 계정 대상 호출 → 400. 마지막으로 그 회원의 출석체크 화면에서 잔액이 **70P로 같게** 보이는지 확인
+  (구직자·업주 출석 패널은 `attendance.getMine.pointBalance`로 같은 원장을 합산한다).
+- **엣지 케이스**:
+  - 확인 모달이 **없다** — [적용]이 곧 실행이고 되돌리기 버튼도 없다. 되돌리려면 반대 방향으로 재조정해야 하며 그 행도 원장에 남는다.
+  - 잔액 집계 select에 `FOR UPDATE`를 걸 수 없어 **두 운영자가 동시에 차감하면 둘 다 통과해 음수가 될 수 있다**(코드에 `ponytail:` 주석으로 명시된 알려진 한계, 승급 경로는 advisory lock). 동시 조작 QA는 범위 밖.
+  - 페이지 사이에 출석이 끼어들어 오프셋이 밀릴 수 있어 화면이 `userId`로 중복을 걸러낸다.
+- **관련 API**: `bambi.attendance.adminList` / `bambi.attendance.adminAdjustPoints` (`adminProcedure`) — `packages/api/src/routers/bambi/attendance.ts`
+- > ⚠ **회원용 출석 기록 자체는 운영자가 손댈 수 없다.** 출석일 추가·삭제 프로시저가 없고, 이 화면이 바꿀 수 있는 것은 포인트 잔액뿐이다.
+
 ---
 
 ## 5. 구인자(업소)·사업자 검증
@@ -782,33 +822,57 @@
   > `invalidateBannedWordCache()`를 호출해 **같은 인스턴스는 즉시 반영**되지만,
   > **다중 인스턴스면 다른 인스턴스는 최대 60초 지연**된다. "추가했는데 글이 써진다"면 60초 대기 후 재확인.
 
-### 8.8 게시판 관리(수다방 게시판 추가·수정·노출)
+### 8.8 게시판 관리(수다방 게시판 추가·수정·아이콘·노출·삭제)
 
 - **경로**: `/moderator/community-boards` (파일: `apps/web/src/app/moderator/community-boards/page.tsx`)
 - **사전 조건**: 마이그레이션 `0075_dynamic-community-board`가 적용돼 `community_board` 테이블과
   시드 5행(`notice`/0 · `free`/20 · `work_talk`(slug `work-talk`)/30 · `market`/40 · `legal`/50)이 있어야 한다.
   미적용이면 수다방 전 경로가 `NOT_FOUND` "게시판을 찾을 수 없습니다."로 죽는다.
+  아이콘 열은 `0076_community-board-icon`(`community_board.icon text NULL`)까지 적용돼야 한다 —
+  **시드 5행의 `icon`은 NULL**이라 마이그레이션 직후 화면 모습은 이전과 동일해야 한다(회귀 기준).
 - **목록**: `communityBoards.list`(adminProcedure, **비활성 포함**, `sort_order ASC`).
-  열 7개 — 게시판(label) · 주소(`/seeker/community/{slug}` 배지) · 설명 · 순서 · 글쓰기(Switch) · 노출(Switch) · 관리([수정]).
-- **추가 절차**: 이름(≤30) · 주소(2~30) · 설명(≤200, 선택) 입력 → **[게시판 추가]**.
-  - 기대: 토스트 "게시판을 만들었어요.", `key = slug`, `sortOrder = max(sort_order) + 10`(목록 맨 끝).
+  열 8개 — 아이콘 · 게시판(label) · 주소(`/seeker/community/{slug}` 배지) · 설명 · 순서 · 글쓰기(Switch) · 노출(Switch) · 관리([수정] + 빌트인이 아니면 [삭제]).
+  아이콘 열은 지정 없거나 웹이 모르는 이름이면 `—`.
+- **추가 절차**: 이름(≤30) · 주소(2~30) · 아이콘(선택, 기본 `없음`) · 설명(≤200, 선택) 입력 → **[게시판 추가]**.
+  - 기대: 토스트 "게시판을 만들었어요.", `key = slug`, `sortOrder = max(sort_order) + 10`(목록 맨 끝), 아이콘 미선택이면 `icon = NULL`.
   - 실패: 패턴 위반 → 400 "주소는 영소문자·숫자·하이픈·밑줄 2~30자로 입력해 주세요." /
     `best`·`crawled`·`write` → 400 "이미 쓰이고 있는 주소입니다. 다른 주소를 입력해 주세요." /
     기존 slug 중복 → 409 "이미 등록된 게시판 주소입니다."
-- **수정**: [수정] → 다이얼로그(이름·설명·정렬 순서 0~10000) → **[저장]**, 토스트 "게시판을 수정했어요."
-  **`key`·`slug`는 수정 불가**(입력칸 없음). 선택 필드를 전부 생략하면 zod `refine`이 거부한다.
+- **수정**: [수정] → 다이얼로그(이름·설명·아이콘·정렬 순서 0~10000) → **[저장]**, 토스트 "게시판을 수정했어요."
+  **`key`·`slug`는 수정 불가**(입력칸 없음). 선택 필드를 전부 생략하면 zod `refine`이 거부한다(`icon`도 그 refine에 편입).
+- **아이콘 케이스**:
+  - 선택지는 **12종 고정**(서버 `COMMUNITY_BOARD_ICONS` zod enum = `MessageCircle`·`Briefcase`·`ShoppingBag`·`Scale`·`Megaphone`·`Sparkles`·`Coffee`·`Music`·`Heart`·`Star`·`Users`·`Newspaper`).
+    화면은 lucide 원값이 아니라 **한글 라벨**(말풍선·서류가방·쇼핑백·저울·확성기·반짝임·커피·음표·하트·별·사람들·신문)로 노출하고, 목록 항목엔 실제 아이콘을 함께 그린다.
+  - 12종 밖의 문자열을 API로 직접 보내면 zod enum이 **400**으로 거부한다.
+  - 수정에서 `없음` 저장 → `icon: null`이 실려 **아이콘 제거**. 아이콘 필드를 아예 빼면(`undefined`) 기존 값 유지 — 이 둘의 구분이 회귀 포인트다.
+  - DB에 웹 맵에 없는 이름이 들어 있으면(수기 UPDATE 등) 화면은 **조용히 무시**하고 아이콘 없음처럼 그리며, 수정 창의 선택값도 `없음`으로 시작한다(그릴 수 없는 값을 고른 것처럼 보이지 않게).
+  - 노출 위치: `communityBoards.listActive`·`community.overview.boards[]`에 `icon`이 실려
+    **수다방 홈/구직자 홈 카드 제목 앞**(`BoardTitleMark`)과 **게시판 목록 화면 상단 제목 앞**에 `text-coral-500` 크기 `size-4`로 붙는다.
+    우선순위는 **지정 아이콘 > `notice`의 확성기 폴백 > 기존 액센트 색 막대**. `overview`의 가상 `best` 항목은 항상 `icon: null`.
 - **스위치**: 글쓰기(`update.isWritable`) · 노출(`setActive`) 모두 **확인 모달 없이 즉시** 적용.
   미존재 key면 `NOT_FOUND` "게시판을 찾을 수 없습니다."
-- **삭제 프로시저 없음** — 글이 `community_post.board` FK로 매달려 있어 숨김(`setActive(false)`)만 제공한다.
+- **삭제(`communityBoards.remove`, adminProcedure)**: [삭제] → AlertDialog("○○ 게시판을 삭제할까요?" / "되돌릴 수 없습니다…") → **[삭제]**.
+  - 성공: 토스트 "게시판을 삭제했어요.", 행이 목록에서 사라진다. 되돌리는 경로는 없다(같은 slug로 재생성만 가능).
+  - 빌트인 5종(`notice`·`free`·`work_talk`·`market`·`legal`) → **버튼 자체가 없다**(웹 `isBuiltinBoardKey`).
+    API 직접 호출 시 400 "기본 게시판은 삭제할 수 없습니다."
+  - 글이 **1건이라도** 있는 게시판(`community_post.board = key`, 숨김·삭제 상태 글 포함) → 409
+    "글이 있는 게시판은 삭제할 수 없습니다. 노출을 끄는 방식을 사용해 주세요." — 화면은 이 서버 문구를 그대로 토스트한다.
+  - 미존재 key → `NOT_FOUND` "게시판을 찾을 수 없습니다."
+  - **QA 시나리오**: 새 게시판 생성 → 글 0건 상태에서 삭제 성공 → 재생성 후 글 1건 작성 → 삭제 시도 409 확인 → 노출 OFF로 대체 처리.
+    글 수를 화면이 세지 않으므로 **버튼은 항상 보이고 거절은 서버에서만** 난다(의도).
 - **소비 경로 확인(엔드투엔드)**:
-  - 웹은 `communityBoards.listActive`(**publicProcedure**, 활성만)를 `useCommunityBoards`로 받고 **staleTime 5분** — 방금 만든 게시판이 안 보이면 5분 또는 새로고침.
+  - 웹은 `communityBoards.listActive`(**publicProcedure**, 활성만)를 `useCommunityBoards`로 받고 **staleTime 5분** — 방금 만든 게시판·아이콘 변경이 안 보이면 5분 또는 새로고침.
   - `community.overview.boards[]`는 `best`(가상, 선두) → 활성 게시판 `sort_order ASC`. 홈·수다방 홈이 같은 배열을 쓴다.
   - 노출 OFF → 수다방 목록·홈에서 사라지고 `/seeker/community/{slug}`는 404, 서버 `assertBoard`도 `NOT_FOUND`. **글은 보존**되며 다시 켜면 복귀.
   - 글쓰기 OFF → 목록의 [글쓰기] 버튼 사라짐, `/seeker/community/{slug}/write` 404, `createPost`는 400 "이 게시판에는 글을 쓸 수 없습니다."
 - **신규 게시판의 표준 동작**: 회원 열람·작성, 비밀글 가능, 목록 필터 노출(`best`·`notice`·`legal`만 필터 숨김),
   `베스트글` 집계 포함(제외는 `notice`·`legal`), **게스트 쓰기 불가**(`free`·`work_talk`·`legal` 고정),
   **공개 `/board` 미노출**(`PUBLIC_COMMUNITY_BOARDS` 3종 고정), 연락처 칸·자동 잠금 없음.
-- **관련 API**: `bambi.communityBoards.list` / `create` / `update` / `setActive` (adminProcedure), `listActive` (publicProcedure) — `packages/api/src/routers/bambi/community-boards.ts`
+- **관련 API**: `bambi.communityBoards.list` / `create` / `update` / `setActive` / `remove` (adminProcedure), `listActive` (publicProcedure) — `packages/api/src/routers/bambi/community-boards.ts`
+- > ⚠ **아이콘 목록이 서버·웹 두 벌이다.** 서버는 zod enum(`COMMUNITY_BOARD_ICONS`, 라우터), 웹은 이름→lucide 컴포넌트 Record
+  > (`apps/web/src/lib/bambi/community-board-icons.ts`). 웹이 서버를 import하지 않으므로(번들에 `db`가 딸려 오는 것을 피함)
+  > **드리프트를 타입 검사가 잡지 못한다.** 아이콘을 추가할 때는 두 파일을 함께 고치고, 12종 전부가 운영자 화면 Select에
+  > 보이는지 눈으로 확인할 것. 서버에만 있는 이름은 화면에서 무시되고, 웹에만 있는 이름은 저장 시 400이 난다.
 
 ---
 

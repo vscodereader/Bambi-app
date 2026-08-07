@@ -40,6 +40,7 @@ import {
 	joinBambiChatRoom,
 	scheduleBambiChatRoomLeave,
 } from "@/lib/bambi-chat-realtime";
+import { formatPhone } from "@/lib/bambi-format";
 import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import {
 	interviewStatusLabels,
@@ -244,7 +245,7 @@ const getContactRequestNotice = ({
 
 	if (status === "revealed") {
 		return viewerIsEmployer
-			? `${counterpartName}님께서 연락처를 공개했습니다: ${revealedPhone ?? "확인 필요"}`
+			? `${counterpartName}님께서 연락처를 공개했습니다: ${revealedPhone ? formatPhone(revealedPhone) : "확인 필요"}`
 			: "연락처를 공개했습니다.";
 	}
 
@@ -898,7 +899,7 @@ function ContactRevealAction({
 					className="whitespace-nowrap font-bold text-base text-foreground underline-offset-2 hover:underline"
 					href={`tel:${employerVerifiedPhone}`}
 				>
-					{employerVerifiedPhone}
+					{formatPhone(employerVerifiedPhone)}
 				</a>
 				<span className="text-muted-foreground text-xs">
 					밤비알바 보고 연락드렸다고 하시면 정확한 상담을 받으실 수 있어요.

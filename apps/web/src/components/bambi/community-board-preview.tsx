@@ -38,6 +38,7 @@ import {
 	isLegalAdvisorAllowedPath,
 	LEGAL_ADVISOR_BOARD_NOTICE,
 } from "@/lib/bambi/community";
+import { communityBoardIcon } from "@/lib/bambi/community-board-icons";
 
 // 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 미리보기 게시판·글 타입을 파생한다.
 // overview는 고정 키 객체가 아니라 배열이다 — 운영자가 게시판을 늘리면 그대로 따라 붙는다.
@@ -65,6 +66,33 @@ const postMetaText = (post: OverviewPost, compact: boolean): string =>
 	compact
 		? formatCommunityDate(post.createdAt)
 		: `${post.authorName ?? COMMUNITY_AUTHOR_FALLBACK} · ${formatCommunityDate(post.createdAt)}`;
+
+// 카드 제목 앞 표식 — 운영자가 지정한 아이콘 > 공지 확성기 > 게시판 액센트 바 순으로
+// 하나만 그린다. 아이콘 미지정(빌트인 기본값)이면 기존 모양이 그대로 남는다.
+function BoardTitleMark({
+	boardKey,
+	icon,
+}: {
+	boardKey: string;
+	icon: string | null;
+}) {
+	const BoardIcon = communityBoardIcon(icon);
+
+	if (BoardIcon) {
+		return <BoardIcon className="size-4 shrink-0 text-coral-500" />;
+	}
+	if (boardKey === "notice") {
+		return <MegaphoneIcon className="size-4 shrink-0 text-coral-500" />;
+	}
+	return (
+		<span
+			className={cn(
+				"h-4 w-1 rounded-full",
+				accentClassName[boardKey] ?? DEFAULT_ACCENT_CLASS
+			)}
+		/>
+	);
+}
 
 export function BoardPreviewCard({
 	board,
@@ -101,16 +129,7 @@ export function BoardPreviewCard({
 						isNotice && "text-coral-600"
 					)}
 				>
-					{isNotice ? (
-						<MegaphoneIcon className="size-4 shrink-0 text-coral-500" />
-					) : (
-						<span
-							className={cn(
-								"h-4 w-1 rounded-full",
-								accentClassName[board.key] ?? DEFAULT_ACCENT_CLASS
-							)}
-						/>
-					)}
+					<BoardTitleMark boardKey={board.key} icon={board.icon} />
 					{board.label}
 				</CardTitle>
 				<Link

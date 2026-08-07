@@ -933,6 +933,7 @@ export const communityRouter = {
 			db
 				.select({
 					description: communityBoard.description,
+					icon: communityBoard.icon,
 					key: communityBoard.key,
 					label: communityBoard.label,
 					slug: communityBoard.slug,
@@ -947,6 +948,8 @@ export const communityRouter = {
 		const previews = [
 			{
 				description: BEST_BOARD_DESCRIPTION,
+				// 가상 게시판이라 DB 행이 없다 — 아이콘도 없이 기존 액센트 바 모양을 유지한다.
+				icon: null as string | null,
 				key: BEST_BOARD,
 				label: BEST_BOARD_LABEL,
 				slug: BEST_BOARD,

@@ -183,6 +183,9 @@ export const communityBoard = pgTable("community_board", {
 	slug: text("slug").notNull().unique(),
 	label: text("label").notNull(),
 	description: text("description").default("").notNull(),
+	// 게시판 카드·헤더에 붙는 lucide 아이콘 이름(예: "Coffee"). 자유 입력이 아니라 API의
+	// 큐레이션 목록으로 좁히고, 웹이 모르는 이름은 무시한다. null이면 아이콘 없음(기존 모양).
+	icon: text("icon"),
 	isActive: boolean("is_active").default(true).notNull(),
 	// false면 읽기만 열린다(글쓰기 버튼·서버 가드 양쪽에서 막는다).
 	isWritable: boolean("is_writable").default(true).notNull(),

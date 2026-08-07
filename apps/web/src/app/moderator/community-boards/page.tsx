@@ -1,10 +1,21 @@
 "use client";
 
-// 운영자 게시판 관리 — 수다방 게시판을 코드 배포 없이 추가하고, 이름·설명·순서·글쓰기 허용·
-// 노출을 바꾼다. 삭제 버튼은 없다: 글이 게시판 key를 참조하므로 지우면 과거 글이 함께
-// 사라진다. 감출 때는 노출 스위치를 끈다(글은 그대로 남고 목록·홈에서만 빠진다).
+// 운영자 게시판 관리 — 수다방 게시판을 코드 배포 없이 추가하고, 이름·설명·아이콘·순서·
+// 글쓰기 허용·노출을 바꾼다. 삭제는 운영자가 만든 빈 게시판에만 열려 있다: 글이 게시판
+// key를 참조하므로 글이 붙은 뒤에는 지울 수 없고, 그때는 노출 스위치를 끈다(글은 그대로
+// 남고 목록·홈에서만 빠진다).
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -15,6 +26,13 @@ import {
 } from "@bambi-app/ui/components/dialog";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +40,12 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { isBuiltinBoardKey } from "@/lib/bambi/community";
+import {
+	COMMUNITY_BOARD_ICONS,
+	type CommunityBoardIconName,
+	communityBoardIcon,
+} from "@/lib/bambi/community-board-icons";
 import { orpc } from "@/utils/orpc";
 
 type BoardRow = Awaited<
@@ -38,16 +62,87 @@ const SORT_ORDER_MAX = 10_000;
 const SLUG_HINT =
 	"주소는 영소문자·숫자·하이픈·밑줄 2~30자예요. best·crawled·write와 이미 쓰는 주소는 쓸 수 없고, 만든 뒤에는 바꿀 수 없어요.";
 
+// "아이콘 없음"을 나타내는 Select 전용 센티널. base-ui Select는 빈 문자열을 "미선택"으로
+// 보므로 실제 선택지로 둘 값이 필요하다 — 서버에는 undefined(추가)·null(수정)로 나간다.
+const ICON_NONE = "none";
+const ICON_NONE_LABEL = "없음";
+
+type IconValue = CommunityBoardIconName | typeof ICON_NONE;
+
+// base-ui Select의 items는 값→라벨 맵이라 트리거에 한글 라벨이 뜬다(lucide 이름 원값 비노출).
+const ICON_SELECT_ITEMS: Record<string, string> = {
+	[ICON_NONE]: ICON_NONE_LABEL,
+	...Object.fromEntries(
+		Object.entries(COMMUNITY_BOARD_ICONS).map(([name, meta]) => [
+			name,
+			meta.label,
+		])
+	),
+};
+
+// 추가 폼·수정 다이얼로그가 같이 쓰는 아이콘 선택기. 목록에는 실제 lucide 아이콘을 함께
+// 그려서 이름이 아니라 모양을 보고 고르게 한다.
+function BoardIconSelect({
+	id,
+	onChange,
+	value,
+}: {
+	id: string;
+	onChange: (next: IconValue) => void;
+	value: IconValue;
+}) {
+	return (
+		<Select
+			items={ICON_SELECT_ITEMS}
+			onValueChange={(next) => onChange(String(next) as IconValue)}
+			value={value}
+		>
+			<SelectTrigger className="w-40" id={id}>
+				<SelectValue />
+			</SelectTrigger>
+			<SelectContent>
+				<SelectItem value={ICON_NONE}>{ICON_NONE_LABEL}</SelectItem>
+				{Object.entries(COMMUNITY_BOARD_ICONS).map(
+					([name, { icon: Icon, label }]) => (
+						<SelectItem key={name} value={name}>
+							<Icon />
+							{label}
+						</SelectItem>
+					)
+				)}
+			</SelectContent>
+		</Select>
+	);
+}
+
+// 서버로 나가는 값 — 센티널은 "아이콘 없음"이라 추가에서는 생략, 수정에서는 null(제거)이다.
+const toIconInput = (value: IconValue): CommunityBoardIconName | undefined =>
+	value === ICON_NONE ? undefined : value;
+
 function getBoardColumns({
+	onDelete,
 	onEdit,
 	onToggleActive,
 	onToggleWritable,
 }: {
+	onDelete: (row: BoardRow) => void;
 	onEdit: (row: BoardRow) => void;
 	onToggleActive: (row: BoardRow, isActive: boolean) => void;
 	onToggleWritable: (row: BoardRow, isWritable: boolean) => void;
 }): DataColumn<BoardRow>[] {
 	return [
+		{
+			id: "icon",
+			header: "아이콘",
+			cell: (row) => {
+				const Icon = communityBoardIcon(row.icon);
+				return Icon ? (
+					<Icon aria-label={`${row.label} 아이콘`} className="size-4" />
+				) : (
+					<span className="text-muted-foreground">—</span>
+				);
+			},
+		},
 		{
 			id: "label",
 			header: "게시판",
@@ -105,14 +200,28 @@ function getBoardColumns({
 			headerClassName: "text-right",
 			cellClassName: "text-right",
 			cell: (row) => (
-				<Button
-					onClick={() => onEdit(row)}
-					size="sm"
-					type="button"
-					variant="outline"
-				>
-					수정
-				</Button>
+				<div className="flex justify-end gap-2">
+					<Button
+						onClick={() => onEdit(row)}
+						size="sm"
+						type="button"
+						variant="outline"
+					>
+						수정
+					</Button>
+					{/* 빌트인 5종은 서버가 거절하므로 버튼 자체를 감춘다. 글이 붙은 게시판은
+					    눌러 봐야 서버가 막지만, 글 수를 여기서 세지 않으므로 버튼은 남긴다. */}
+					{isBuiltinBoardKey(row.key) ? null : (
+						<Button
+							onClick={() => onDelete(row)}
+							size="sm"
+							type="button"
+							variant="destructive"
+						>
+							삭제
+						</Button>
+					)}
+				</div>
 			),
 		},
 	];
@@ -131,6 +240,7 @@ function BoardEditForm({
 	onClose: () => void;
 	onSubmit: (values: {
 		description: string;
+		icon: CommunityBoardIconName | null;
 		label: string;
 		sortOrder: number;
 	}) => void;
@@ -138,6 +248,13 @@ function BoardEditForm({
 	const [label, setLabel] = useState(board.label);
 	const [description, setDescription] = useState(board.description);
 	const [sortOrder, setSortOrder] = useState(String(board.sortOrder));
+	// 저장된 이름이 웹 맵에 없으면(서버만 아는 이름) "없음"으로 시작한다 — 그릴 수 없는
+	// 값을 고른 것처럼 보여 주지 않는다.
+	const [icon, setIcon] = useState<IconValue>(
+		board.icon && board.icon in COMMUNITY_BOARD_ICONS
+			? (board.icon as CommunityBoardIconName)
+			: ICON_NONE
+	);
 
 	const parsedSortOrder = Number(sortOrder);
 	const canSubmit =
@@ -153,7 +270,7 @@ function BoardEditForm({
 				<DialogTitle>게시판 수정</DialogTitle>
 				<DialogDescription>
 					주소(/seeker/community/{board.slug})는 바꿀 수 없어요.
-					이름·설명·순서만 바꿉니다.
+					이름·설명·아이콘·순서만 바꿉니다.
 				</DialogDescription>
 			</div>
 			<div className="flex flex-col gap-2">
@@ -174,6 +291,18 @@ function BoardEditForm({
 					placeholder="게시판 목록·상단에 보이는 한 줄 설명"
 					value={description}
 				/>
+			</div>
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="community-board-edit-icon">아이콘</Label>
+				<BoardIconSelect
+					id="community-board-edit-icon"
+					onChange={setIcon}
+					value={icon}
+				/>
+				<p className="m-0 text-muted-foreground text-xs">
+					게시판 목록·수다방 홈 카드 제목 앞에 붙습니다. 없음이면 지금처럼
+					아이콘 없이 보입니다.
+				</p>
 			</div>
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="community-board-edit-sort">정렬 순서</Label>
@@ -199,6 +328,8 @@ function BoardEditForm({
 					onClick={() =>
 						onSubmit({
 							description: description.trim(),
+							// 수정은 "없음"을 null로 보내 저장된 아이콘을 지운다.
+							icon: toIconInput(icon) ?? null,
 							label: label.trim(),
 							sortOrder: parsedSortOrder,
 						})
@@ -217,7 +348,9 @@ export default function ModeratorCommunityBoardsPage() {
 	const [label, setLabel] = useState("");
 	const [slug, setSlug] = useState("");
 	const [description, setDescription] = useState("");
+	const [icon, setIcon] = useState<IconValue>(ICON_NONE);
 	const [editing, setEditing] = useState<BoardRow | null>(null);
+	const [deleting, setDeleting] = useState<BoardRow | null>(null);
 
 	const listQuery = useQuery(orpc.bambi.communityBoards.list.queryOptions());
 
@@ -235,6 +368,7 @@ export default function ModeratorCommunityBoardsPage() {
 				setLabel("");
 				setSlug("");
 				setDescription("");
+				setIcon(ICON_NONE);
 				await invalidate();
 			},
 		})
@@ -258,8 +392,22 @@ export default function ModeratorCommunityBoardsPage() {
 		})
 	);
 
+	// 삭제 거절 사유(기본 게시판·글 있음)는 서버 문구를 그대로 띄운다 — 화면이 같은 판정을
+	// 두 벌로 들고 있다가 어긋나는 걸 막는다.
+	const removeMutation = useMutation(
+		orpc.bambi.communityBoards.remove.mutationOptions({
+			onError: (error) => toast(error.message || "게시판을 삭제하지 못했어요."),
+			onSuccess: async () => {
+				toast("게시판을 삭제했어요.");
+				setDeleting(null);
+				await invalidate();
+			},
+		})
+	);
+
 	const boards = listQuery.data ?? [];
 	const columns = getBoardColumns({
+		onDelete: setDeleting,
 		onEdit: setEditing,
 		onToggleActive: (row, isActive) =>
 			setActiveMutation.mutate({ isActive, key: row.key }),
@@ -272,10 +420,11 @@ export default function ModeratorCommunityBoardsPage() {
 			<div className="flex flex-col gap-1">
 				<h1 className="m-0 font-extrabold text-2xl">게시판 관리</h1>
 				<p className="m-0 text-muted-foreground text-sm">
-					수다방 게시판을 추가하고 이름·설명·순서를 정합니다. 글쓰기를 끄면 읽기
-					전용이 되고, 노출을 끄면 목록·수다방 홈에서 사라집니다(쓴 글은
-					지워지지 않습니다). 새로 만든 게시판은 회원이 읽고 쓰는 일반
-					게시판으로, 비회원(본인인증 게스트)은 참여할 수 없습니다.
+					수다방 게시판을 추가하고 이름·설명·아이콘·순서를 정합니다. 글쓰기를
+					끄면 읽기 전용이 되고, 노출을 끄면 목록·수다방 홈에서 사라집니다(쓴
+					글은 지워지지 않습니다). 새로 만든 게시판은 회원이 읽고 쓰는 일반
+					게시판으로, 비회원(본인인증 게스트)은 참여할 수 없습니다. 삭제는 글이
+					하나도 없는 새 게시판만 가능하고, 기본 게시판은 지울 수 없습니다.
 				</p>
 			</div>
 
@@ -303,6 +452,14 @@ export default function ModeratorCommunityBoardsPage() {
 							value={slug}
 						/>
 					</div>
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="community-board-new-icon">아이콘</Label>
+						<BoardIconSelect
+							id="community-board-new-icon"
+							onChange={setIcon}
+							value={icon}
+						/>
+					</div>
 					<div className="flex flex-1 flex-col gap-2">
 						<Label htmlFor="community-board-new-description">설명</Label>
 						<Input
@@ -322,6 +479,7 @@ export default function ModeratorCommunityBoardsPage() {
 						onClick={() =>
 							createMutation.mutate({
 								description: description.trim(),
+								icon: toIconInput(icon),
 								label: label.trim(),
 								slug: slug.trim(),
 							})
@@ -384,6 +542,43 @@ export default function ModeratorCommunityBoardsPage() {
 					) : null}
 				</DialogContent>
 			</Dialog>
+
+			{/* 삭제는 되돌릴 수 없어 확인 단계를 한 번 둔다(금칙어 전체 삭제와 같은 관례).
+			    실제 가부(기본 게시판·글 있음)는 서버가 판정하고 문구도 서버 것을 띄운다. */}
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setDeleting(null);
+					}
+				}}
+				open={deleting !== null}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							{deleting?.label} 게시판을 삭제할까요?
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							되돌릴 수 없습니다. 글이 하나라도 있는 게시판은 삭제되지 않으니,
+							그럴 때는 노출 스위치를 끄세요.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={removeMutation.isPending}
+							onClick={() => {
+								if (deleting) {
+									removeMutation.mutate({ key: deleting.key });
+								}
+							}}
+							variant="destructive"
+						>
+							삭제
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }

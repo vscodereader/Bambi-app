@@ -191,11 +191,63 @@ describe("bambi attendance router", () => {
 			expect(row?.attendedToday).toBe(true);
 			expect(row?.lastAttendedOn).toBe(today);
 			expect(row?.idleDays).toBe(0);
+			// 원장이 비어도 잔액 칸은 0으로 온다(coalesce).
+			expect(row?.pointBalance).toBe(0);
 			// 운영자 계정은 출석 대상이 아니라 목록에 없다.
 			expect(result.items.some((item) => item.userId === adminUserId)).toBe(
 				false
 			);
 			expect(result.summary.attendedToday).toBeGreaterThanOrEqual(1);
+		} finally {
+			await cleanup([seekerUserId, adminUserId]);
+		}
+	});
+
+	it("adminAdjustPoints가 지급·차감을 원장에 남기고 잔액을 넘게 깎지 않는다", async () => {
+		const seekerUserId = await createUser("job_seeker");
+		const adminUserId = await createUser("admin");
+		const adjust = createProcedureClient(attendanceRouter.adminAdjustPoints, {
+			context: createContextForUser(adminUserId),
+		});
+
+		try {
+			const granted = await adjust({
+				amount: 100,
+				reason: "이벤트 보상",
+				userId: seekerUserId,
+			});
+			expect(granted.pointBalance).toBe(100);
+
+			const deducted = await adjust({
+				amount: -30,
+				reason: "오지급 회수",
+				userId: seekerUserId,
+			});
+			expect(deducted.pointBalance).toBe(70);
+
+			// 잔액을 넘는 차감은 거부되고 원장에도 행이 남지 않는다.
+			await expect(
+				adjust({ amount: -1000, reason: "초과 차감", userId: seekerUserId })
+			).rejects.toThrow();
+
+			const ledger = await db
+				.select({
+					amount: bambiPointTransaction.amount,
+					reason: bambiPointTransaction.reason,
+				})
+				.from(bambiPointTransaction)
+				.where(eq(bambiPointTransaction.userId, seekerUserId));
+			expect(ledger).toHaveLength(2);
+			// 출석 적립(reason="attendance")과 구분되는 프리픽스가 붙는다.
+			expect(ledger.map((row) => row.reason).sort()).toEqual([
+				"운영자 지급: 이벤트 보상",
+				"운영자 차감: 오지급 회수",
+			]);
+
+			// 운영자 계정은 출석 대상 역할이 아니라 조정 대상이 될 수 없다.
+			await expect(
+				adjust({ amount: 10, reason: "테스트", userId: adminUserId })
+			).rejects.toThrow();
 		} finally {
 			await cleanup([seekerUserId, adminUserId]);
 		}

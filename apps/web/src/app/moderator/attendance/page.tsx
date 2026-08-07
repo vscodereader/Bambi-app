@@ -5,6 +5,7 @@
 // 전부 서버 입력이라 다른 운영자 화면(클라이언트 필터)과 달리 useInfiniteQuery로 이어 받는다.
 // 개인 상세·차트는 후속 범위다(스펙 §8).
 
+import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
@@ -13,6 +14,12 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@bambi-app/ui/components/card";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogTitle,
+} from "@bambi-app/ui/components/dialog";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import {
@@ -31,9 +38,19 @@ import {
 	TableHeader,
 	TableRow,
 } from "@bambi-app/ui/components/table";
-import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@bambi-app/ui/components/toggle-group";
+import {
+	keepPreviousData,
+	useInfiniteQuery,
+	useMutation,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { ArrowDownIcon, ArrowUpDownIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { formatDate } from "@/lib/bambi-format";
@@ -68,11 +85,119 @@ const SORTABLE_COLUMNS: { key: SortKey; label: string }[] = [
 	{ key: "idle", label: "미출석" },
 ];
 
+type AttendanceRow = Awaited<
+	ReturnType<AppRouterClient["bambi"]["attendance"]["adminList"]>
+>["items"][number];
+
+// 서버 adminAdjustPointsInput과 같은 상한이다 — 왕복 전에 막아 준다.
+const AMOUNT_MAX = 100_000;
+const REASON_MAX = 200;
+
+const formatPoints = (points: number) => `${points.toLocaleString("ko-KR")}P`;
+
+// 지급·차감 폼. 양은 항상 양수로 받고 방향은 토글이 정한다 — 음수 입력을 허용하면
+// "차감"에 -100을 넣어 되레 지급되는 부호 뒤집힘이 난다. 대상마다 새로 마운트된다(key).
+function PointAdjustForm({
+	isPending,
+	onClose,
+	onSubmit,
+	row,
+}: {
+	isPending: boolean;
+	onClose: () => void;
+	onSubmit: (values: { amount: number; reason: string }) => void;
+	row: AttendanceRow;
+}) {
+	const [direction, setDirection] = useState<"deduct" | "grant">("grant");
+	const [amount, setAmount] = useState("");
+	const [reason, setReason] = useState("");
+
+	const parsedAmount = Number(amount);
+	const isAmountValid =
+		Number.isInteger(parsedAmount) &&
+		parsedAmount > 0 &&
+		parsedAmount <= AMOUNT_MAX;
+	const canSubmit = isAmountValid && reason.trim().length > 0 && !isPending;
+
+	return (
+		<>
+			<div className="flex flex-col gap-2">
+				<DialogTitle>포인트 지급·차감</DialogTitle>
+				<DialogDescription>
+					{`${row.displayName} 회원의 현재 잔액은 ${formatPoints(row.pointBalance)}예요. 조정 내역은 사유와 함께 기록됩니다.`}
+				</DialogDescription>
+			</div>
+			<div className="flex flex-col gap-2">
+				<ToggleGroup
+					aria-label="조정 방향"
+					onValueChange={(value) => {
+						const next = value.at(-1);
+						if (next) {
+							setDirection(next as "deduct" | "grant");
+						}
+					}}
+					value={[direction]}
+				>
+					<ToggleGroupItem value="grant">지급</ToggleGroupItem>
+					<ToggleGroupItem value="deduct">차감</ToggleGroupItem>
+				</ToggleGroup>
+			</div>
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="attendance-points-amount">포인트</Label>
+				<Input
+					id="attendance-points-amount"
+					inputMode="numeric"
+					max={AMOUNT_MAX}
+					min={1}
+					onChange={(event) => setAmount(event.target.value)}
+					placeholder="예: 100"
+					type="number"
+					value={amount}
+				/>
+			</div>
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="attendance-points-reason">사유</Label>
+				<Input
+					id="attendance-points-reason"
+					maxLength={REASON_MAX}
+					onChange={(event) => setReason(event.target.value)}
+					placeholder="예: 이벤트 당첨 보상"
+					value={reason}
+				/>
+				<p className="m-0 text-muted-foreground text-xs">
+					{isAmountValid
+						? `조정 후 예상 잔액 ${formatPoints(row.pointBalance + (direction === "deduct" ? -parsedAmount : parsedAmount))}`
+						: `1 이상 ${AMOUNT_MAX.toLocaleString("ko-KR")} 이하의 정수를 입력해 주세요.`}
+				</p>
+			</div>
+			<div className="grid grid-cols-2 gap-2">
+				<Button onClick={onClose} type="button" variant="outline">
+					취소
+				</Button>
+				<Button
+					disabled={!canSubmit}
+					onClick={() =>
+						onSubmit({
+							amount: direction === "deduct" ? -parsedAmount : parsedAmount,
+							reason: reason.trim(),
+						})
+					}
+					type="button"
+				>
+					{isPending ? "저장 중" : "적용"}
+				</Button>
+			</div>
+		</>
+	);
+}
+
 export default function ModeratorAttendancePage() {
 	const [search, setSearch] = useState("");
 	const [roleFilter, setRoleFilter] = useState("all");
 	const [sort, setSort] = useState<SortKey>("recent");
+	const [adjusting, setAdjusting] = useState<AttendanceRow | null>(null);
 	const debouncedSearch = useDebouncedValue(search);
+	const queryClient = useQueryClient();
 
 	const listQuery = useInfiniteQuery({
 		...orpc.bambi.attendance.adminList.infiniteOptions({
@@ -93,6 +218,21 @@ export default function ModeratorAttendancePage() {
 		// 통째로 사라졌다가 다시 그려진다.
 		placeholderData: keepPreviousData,
 	});
+
+	const adjustMutation = useMutation(
+		orpc.bambi.attendance.adminAdjustPoints.mutationOptions({
+			onError: (error) => toast(error.message || "포인트를 조정하지 못했어요."),
+			onSuccess: async (result) => {
+				toast(
+					`포인트를 조정했어요. 현재 잔액 ${formatPoints(result.pointBalance)}`
+				);
+				setAdjusting(null);
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.attendance.adminList.key(),
+				});
+			},
+		})
+	);
 
 	const pages = listQuery.data?.pages ?? [];
 	// 페이지 사이에 출석이 끼어들면 오프셋이 밀려 같은 계정이 겹칠 수 있어 userId로 걸러낸다.
@@ -221,6 +361,8 @@ export default function ModeratorAttendancePage() {
 										</button>
 									</TableHead>
 								))}
+								<TableHead>포인트</TableHead>
+								<TableHead className="text-right">관리</TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
@@ -252,6 +394,19 @@ export default function ModeratorAttendancePage() {
 									<TableCell className="whitespace-nowrap text-muted-foreground">
 										{item.idleDays === null ? "-" : `${item.idleDays}일`}
 									</TableCell>
+									<TableCell className="whitespace-nowrap font-medium">
+										{formatPoints(item.pointBalance)}
+									</TableCell>
+									<TableCell className="text-right">
+										<Button
+											onClick={() => setAdjusting(item)}
+											size="sm"
+											type="button"
+											variant="outline"
+										>
+											지급·차감
+										</Button>
+									</TableCell>
 								</TableRow>
 							))}
 						</TableBody>
@@ -270,6 +425,31 @@ export default function ModeratorAttendancePage() {
 					</Button>
 				</div>
 			) : null}
+
+			{/* 조정 폼은 목록 밖에 하나만 두고 대상만 갈아끼운다(행마다 Dialog를 두면
+			    회원 수만큼 마운트된다 — 게시판 관리 화면과 같은 관례). */}
+			<Dialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setAdjusting(null);
+					}
+				}}
+				open={adjusting !== null}
+			>
+				<DialogContent>
+					{adjusting ? (
+						<PointAdjustForm
+							isPending={adjustMutation.isPending}
+							key={adjusting.userId}
+							onClose={() => setAdjusting(null)}
+							onSubmit={(values) =>
+								adjustMutation.mutate({ ...values, userId: adjusting.userId })
+							}
+							row={adjusting}
+						/>
+					) : null}
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }
