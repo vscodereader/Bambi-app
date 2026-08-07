@@ -8,13 +8,159 @@ import {
 	DialogTitle,
 } from "@bambi-app/ui/components/dialog";
 import { Input } from "@bambi-app/ui/components/input";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { Copy, Crop, Download, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import type { PopupImageAsset } from "@/lib/bambi/main-popup";
 
-type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+export type PopupImageResizeHandle =
+	| "nw"
+	| "n"
+	| "ne"
+	| "e"
+	| "se"
+	| "s"
+	| "sw"
+	| "w";
+type Handle = PopupImageResizeHandle;
 const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+const MIN_IMAGE_SIZE = 50;
+const VIEWPORT_HEIGHT_RATIO = 0.7;
+const MOBILE_EDITOR_QUERY = "(max-width: 767px)";
+
+interface ImageSize {
+	height: number;
+	width: number;
+}
+
+const clamp = (value: number, minimum: number, maximum: number) =>
+	Math.min(Math.max(value, minimum), maximum);
+
+export const fitPopupImageSize = (
+	size: ImageSize,
+	maximum: ImageSize
+): ImageSize => {
+	const scale = Math.min(
+		1,
+		maximum.width / size.width,
+		maximum.height / size.height
+	);
+	return {
+		height: Math.max(1, Math.round(size.height * scale)),
+		width: Math.max(1, Math.round(size.width * scale)),
+	};
+};
+
+export const resizePopupImage = ({
+	dx,
+	dy,
+	handle,
+	maximum,
+	start,
+}: {
+	dx: number;
+	dy: number;
+	handle: PopupImageResizeHandle;
+	maximum: ImageSize;
+	start: ImageSize;
+}): ImageSize => {
+	if (handle.length === 2) {
+		const ratio = start.width / start.height;
+		const widthDelta = handle.includes("w") ? -dx : dx;
+		const heightDeltaAsWidth = (handle.includes("n") ? -dy : dy) * ratio;
+		const desiredWidth =
+			start.width +
+			(Math.abs(widthDelta) > Math.abs(heightDeltaAsWidth)
+				? widthDelta
+				: heightDeltaAsWidth);
+		const minimumScale = Math.max(
+			MIN_IMAGE_SIZE / start.width,
+			MIN_IMAGE_SIZE / start.height
+		);
+		const maximumScale = Math.min(
+			maximum.width / start.width,
+			maximum.height / start.height
+		);
+		const scale = clamp(
+			desiredWidth / start.width,
+			Math.min(minimumScale, maximumScale),
+			maximumScale
+		);
+		return {
+			height: Math.round(start.height * scale),
+			width: Math.round(start.width * scale),
+		};
+	}
+
+	let heightDelta = 0;
+	if (handle === "n") {
+		heightDelta = -dy;
+	} else if (handle === "s") {
+		heightDelta = dy;
+	}
+	let widthDelta = 0;
+	if (handle === "w") {
+		widthDelta = -dx;
+	} else if (handle === "e") {
+		widthDelta = dx;
+	}
+	return {
+		height: clamp(
+			Math.round(start.height + heightDelta),
+			MIN_IMAGE_SIZE,
+			maximum.height
+		),
+		width: clamp(
+			Math.round(start.width + widthDelta),
+			MIN_IMAGE_SIZE,
+			maximum.width
+		),
+	};
+};
+
+const resizePopupImageOnDesktop = (
+	handle: Handle,
+	startWidth: number,
+	startHeight: number,
+	dx: number,
+	dy: number
+): ImageSize => {
+	if (handle.length === 2) {
+		const ratio = startWidth / startHeight;
+		const widthDelta = handle.includes("w") ? -dx : dx;
+		const heightDeltaAsWidth = (handle.includes("n") ? -dy : dy) * ratio;
+		const width = Math.max(
+			MIN_IMAGE_SIZE,
+			Math.round(
+				startWidth +
+					(Math.abs(widthDelta) > Math.abs(heightDeltaAsWidth)
+						? widthDelta
+						: heightDeltaAsWidth)
+			)
+		);
+		return {
+			height: Math.max(MIN_IMAGE_SIZE, Math.round(width / ratio)),
+			width,
+		};
+	}
+	let heightDelta = 0;
+	if (handle === "n") {
+		heightDelta = -dy;
+	} else if (handle === "s") {
+		heightDelta = dy;
+	}
+	let widthDelta = 0;
+	if (handle === "w") {
+		widthDelta = -dx;
+	} else if (handle === "e") {
+		widthDelta = dx;
+	}
+	return {
+		height: Math.max(MIN_IMAGE_SIZE, Math.round(startHeight + heightDelta)),
+		width: Math.max(MIN_IMAGE_SIZE, Math.round(startWidth + widthDelta)),
+	};
+};
 
 const handleClass = (handle: Handle) => {
 	const base =
@@ -30,46 +176,6 @@ const handleClass = (handle: Handle) => {
 		w: "top-1/2 -left-2 -translate-y-1/2 cursor-ew-resize",
 	}[handle];
 	return `${base} ${position}`;
-};
-
-const resize = (
-	handle: Handle,
-	startWidth: number,
-	startHeight: number,
-	dx: number,
-	dy: number
-) => {
-	if (handle.length === 2) {
-		const ratio = startWidth / startHeight;
-		const widthDelta = handle.includes("w") ? -dx : dx;
-		const heightDeltaAsWidth = (handle.includes("n") ? -dy : dy) * ratio;
-		const width = Math.max(
-			50,
-			Math.round(
-				startWidth +
-					(Math.abs(widthDelta) > Math.abs(heightDeltaAsWidth)
-						? widthDelta
-						: heightDeltaAsWidth)
-			)
-		);
-		return { height: Math.max(50, Math.round(width / ratio)), width };
-	}
-	let heightDelta = 0;
-	if (handle === "n") {
-		heightDelta = -dy;
-	} else if (handle === "s") {
-		heightDelta = dy;
-	}
-	let widthDelta = 0;
-	if (handle === "w") {
-		widthDelta = -dx;
-	} else if (handle === "e") {
-		widthDelta = dx;
-	}
-	return {
-		height: Math.max(50, Math.round(startHeight + heightDelta)),
-		width: Math.max(50, Math.round(startWidth + widthDelta)),
-	};
 };
 
 interface CropRect {
@@ -291,6 +397,61 @@ export function PopupImageEditor({
 	const [selected, setSelected] = useState(false);
 	const [menu, setMenu] = useState(false);
 	const [crop, setCrop] = useState(false);
+	const [canvasElement, setCanvasElement] = useState<HTMLDivElement | null>(
+		null
+	);
+	const [isMobileEditor, setIsMobileEditor] = useState(false);
+	const [maximum, setMaximum] = useState<ImageSize>({
+		height: MIN_IMAGE_SIZE,
+		width: MIN_IMAGE_SIZE,
+	});
+	const [widthInput, setWidthInput] = useState(String(width));
+	const [heightInput, setHeightInput] = useState(String(height));
+	const [sizeGuidance, setSizeGuidance] = useState("");
+
+	useEffect(() => {
+		setWidthInput(String(width));
+	}, [width]);
+	useEffect(() => {
+		setHeightInput(String(height));
+	}, [height]);
+	useEffect(() => {
+		const mediaQuery = window.matchMedia(MOBILE_EDITOR_QUERY);
+		const updateMobileEditor = () => setIsMobileEditor(mediaQuery.matches);
+		updateMobileEditor();
+		mediaQuery.addEventListener("change", updateMobileEditor);
+		return () => mediaQuery.removeEventListener("change", updateMobileEditor);
+	}, []);
+	useEffect(() => {
+		if (!(canvasElement && isMobileEditor)) {
+			return;
+		}
+		const measure = () => {
+			const computed = window.getComputedStyle(canvasElement);
+			const horizontalPadding =
+				Number.parseFloat(computed.paddingLeft) +
+				Number.parseFloat(computed.paddingRight);
+			setMaximum({
+				height: Math.max(
+					MIN_IMAGE_SIZE,
+					Math.floor(window.innerHeight * VIEWPORT_HEIGHT_RATIO)
+				),
+				width: Math.max(
+					MIN_IMAGE_SIZE,
+					Math.floor(canvasElement.clientWidth - horizontalPadding)
+				),
+			});
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(canvasElement);
+		window.addEventListener("resize", measure);
+		return () => {
+			observer.disconnect();
+			window.removeEventListener("resize", measure);
+		};
+	}, [canvasElement, isMobileEditor]);
+
 	if (!asset) {
 		return (
 			<div className="flex min-h-40 items-center justify-center rounded-md border border-dashed text-muted-foreground">
@@ -298,6 +459,37 @@ export function PopupImageEditor({
 			</div>
 		);
 	}
+	const renderedSize = isMobileEditor
+		? fitPopupImageSize({ height, width }, maximum)
+		: { height, width };
+	const commitSizeInput = (axis: "height" | "width") => {
+		if (!isMobileEditor) {
+			return;
+		}
+		const input = axis === "width" ? widthInput : heightInput;
+		const parsed = Number(input);
+		const axisMaximum = maximum[axis];
+		const normalized =
+			Number.isInteger(parsed) && parsed >= MIN_IMAGE_SIZE
+				? Math.min(parsed, axisMaximum)
+				: MIN_IMAGE_SIZE;
+		setSizeGuidance(
+			parsed > axisMaximum
+				? "편집 영역 최대 크기까지만 설정할 수 있습니다."
+				: ""
+		);
+		const next = {
+			height: axis === "height" ? normalized : renderedSize.height,
+			width: axis === "width" ? normalized : renderedSize.width,
+		};
+		setHeightInput(String(next.height));
+		setWidthInput(String(next.width));
+		if (next.width === width && next.height === height) {
+			return;
+		}
+		onResizeStart();
+		onResize(next.width, next.height);
+	};
 	return (
 		<div className="grid gap-3">
 			<div className="flex flex-wrap items-center gap-2 text-sm">
@@ -305,26 +497,57 @@ export function PopupImageEditor({
 				<Input
 					aria-label="이미지 표시 너비"
 					className="w-24"
-					min={50}
-					onChange={(event) =>
-						onResize(Math.max(50, Number(event.target.value)), height)
-					}
+					inputMode="numeric"
+					min={MIN_IMAGE_SIZE}
+					onBlur={() => commitSizeInput("width")}
+					onChange={(event) => {
+						setWidthInput(event.target.value);
+						if (!isMobileEditor) {
+							onResize(
+								Math.max(MIN_IMAGE_SIZE, Number(event.target.value)),
+								height
+							);
+						}
+					}}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") {
+							event.currentTarget.blur();
+						}
+					}}
 					type="number"
-					value={width}
+					value={widthInput}
 				/>
 				<span>×</span>
 				<Input
 					aria-label="이미지 표시 높이"
 					className="w-24"
-					min={50}
-					onChange={(event) =>
-						onResize(width, Math.max(50, Number(event.target.value)))
-					}
+					inputMode="numeric"
+					min={MIN_IMAGE_SIZE}
+					onBlur={() => commitSizeInput("height")}
+					onChange={(event) => {
+						setHeightInput(event.target.value);
+						if (!isMobileEditor) {
+							onResize(
+								width,
+								Math.max(MIN_IMAGE_SIZE, Number(event.target.value))
+							);
+						}
+					}}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") {
+							event.currentTarget.blur();
+						}
+					}}
 					type="number"
-					value={height}
+					value={heightInput}
 				/>
 				<span>px</span>
 			</div>
+			{isMobileEditor && sizeGuidance ? (
+				<p className="text-amber-700 text-sm" role="status">
+					{sizeGuidance}
+				</p>
+			) : null}
 			<div
 				className="relative flex min-h-48 justify-center overflow-auto rounded-md bg-muted p-8"
 				onPointerDown={(event) => {
@@ -333,11 +556,15 @@ export function PopupImageEditor({
 						setMenu(false);
 					}
 				}}
+				ref={setCanvasElement}
 			>
 				{/* biome-ignore lint/a11y/useSemanticElements: the selectable canvas contains resize and menu buttons, which cannot be nested in a semantic button */}
 				<div
 					aria-label="팝업 이미지 선택"
-					className={`relative h-fit w-fit ${selected ? "outline outline-2 outline-primary" : ""}`}
+					className={cn(
+						"relative h-fit w-fit",
+						selected && "outline outline-2 outline-primary"
+					)}
 					onContextMenu={(event) => {
 						event.preventDefault();
 						setSelected(true);
@@ -355,20 +582,46 @@ export function PopupImageEditor({
 					role="button"
 					tabIndex={0}
 				>
-					<Image
-						alt="팝업 이미지 미리보기"
-						draggable={false}
-						height={height}
-						src={asset.dataUrl}
-						unoptimized
-						width={width}
-					/>
+					{isMobileEditor ? (
+						<svg
+							aria-label="팝업 이미지 미리보기"
+							className="block max-w-none"
+							height={renderedSize.height}
+							role="img"
+							viewBox={`0 0 ${renderedSize.width} ${renderedSize.height}`}
+							width={renderedSize.width}
+						>
+							<image
+								height={renderedSize.height}
+								href={asset.dataUrl}
+								preserveAspectRatio="none"
+								width={renderedSize.width}
+							/>
+						</svg>
+					) : (
+						<Image
+							alt="팝업 이미지 미리보기"
+							draggable={false}
+							height={height}
+							src={asset.dataUrl}
+							unoptimized
+							width={width}
+						/>
+					)}
 					{selected
 						? HANDLES.map((handle) => (
 								<button
 									aria-label={`${handle} 크기 조절`}
 									className={handleClass(handle)}
 									key={handle}
+									onPointerCancel={
+										isMobileEditor
+											? () => {
+													dragRef.current = null;
+													setSelected(true);
+												}
+											: undefined
+									}
 									onPointerDown={(event) => {
 										event.preventDefault();
 										event.stopPropagation();
@@ -376,8 +629,8 @@ export function PopupImageEditor({
 										onResizeStart();
 										dragRef.current = {
 											handle,
-											height,
-											width,
+											height: renderedSize.height,
+											width: renderedSize.width,
 											x: event.clientX,
 											y: event.clientY,
 										};
@@ -387,13 +640,24 @@ export function PopupImageEditor({
 										if (!drag) {
 											return;
 										}
-										const next = resize(
-											drag.handle,
-											drag.width,
-											drag.height,
-											event.clientX - drag.x,
-											event.clientY - drag.y
-										);
+										const next = isMobileEditor
+											? resizePopupImage({
+													dx: event.clientX - drag.x,
+													dy: event.clientY - drag.y,
+													handle: drag.handle,
+													maximum,
+													start: {
+														height: drag.height,
+														width: drag.width,
+													},
+												})
+											: resizePopupImageOnDesktop(
+													drag.handle,
+													drag.width,
+													drag.height,
+													event.clientX - drag.x,
+													event.clientY - drag.y
+												);
 										onResize(next.width, next.height);
 									}}
 									onPointerUp={() => {
