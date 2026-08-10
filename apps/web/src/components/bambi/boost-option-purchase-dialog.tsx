@@ -249,7 +249,10 @@ export function BoostOptionPurchaseDialog({
 								<Alert>
 									<Info />
 									<AlertDescription>
-										<BankTransferGuide amount={selectedOption.price} />
+										<BankTransferGuide
+											amount={selectedOption.price}
+											purpose="boost"
+										/>
 									</AlertDescription>
 								</Alert>
 							)}

@@ -369,6 +369,7 @@ function PaymentMethodField({
 	label,
 	onChange,
 	paymentMethod,
+	purpose,
 }: {
 	amount: number | null;
 	errorMessage: string | undefined;
@@ -376,6 +377,8 @@ function PaymentMethodField({
 	label: string;
 	onChange: (value: JobPaymentMethod) => void;
 	paymentMethod: JobPaymentMethod | null;
+	// 입금이 여는 대상(계좌 안내 마지막 줄 문구). 무료 공고의 옵션 결제는 "boost".
+	purpose: "boost" | "posting";
 }) {
 	return (
 		<div className="flex flex-col gap-2">
@@ -417,7 +420,7 @@ function PaymentMethodField({
 				<Alert>
 					<Info />
 					<AlertDescription>
-						<BankTransferGuide amount={amount} />
+						<BankTransferGuide amount={amount} purpose={purpose} />
 					</AlertDescription>
 				</Alert>
 			) : null}
@@ -918,6 +921,7 @@ export function JobExposureFields({
 							label="결제 방법"
 							onChange={onPaymentMethodChange}
 							paymentMethod={paymentMethod}
+							purpose="posting"
 						/>
 					) : null}
 
@@ -933,6 +937,7 @@ export function JobExposureFields({
 							label="끌어올리기 옵션 결제 방법"
 							onChange={onBoostOptionPaymentMethodChange}
 							paymentMethod={boostOptionPaymentMethod}
+							purpose="boost"
 						/>
 					)}
 

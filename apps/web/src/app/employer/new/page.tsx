@@ -1134,7 +1134,10 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 					<DialogDescription>
 						{bankNoticeCopy(bankNotice?.boostOnly === true).description}
 					</DialogDescription>
-					<BankTransferGuide amount={bankNotice?.amount ?? null} />
+					<BankTransferGuide
+						amount={bankNotice?.amount ?? null}
+						purpose={bankNotice?.boostOnly === true ? "boost" : "posting"}
+					/>
 					<div className="flex justify-end">
 						<Button onClick={leaveToEmployer} type="button">
 							확인
