@@ -13,7 +13,10 @@ export const MANUAL_LABELS: Record<ManualKey, string> = {
 	moderator: "운영자 매뉴얼",
 };
 
-export const MANUAL_PATH = "/manual" as Route;
+// app/manual/page.tsx가 생겼으므로 실재하는 경로다. 캐스트 대신 타입 주석으로 둔다
+// (Next 16의 Route는 string & {}라 리터럴을 그대로 받는다). manualPath 쪽은
+// 템플릿 리터럴이라 추론이 넓은 string이 되어 캐스트를 유지한다.
+export const MANUAL_PATH: Route = "/manual";
 
 export const manualPath = (key: ManualKey): Route => `/manual/${key}` as Route;
 
