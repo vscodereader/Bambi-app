@@ -3,6 +3,7 @@ import {
 	expiryLabel,
 	getExpiryTone,
 	getJobDisplayStatus,
+	JOB_DETAIL_DESIGN_STATUS_LABELS,
 	remainingDays,
 } from "@/lib/bambi/exposure";
 
@@ -61,6 +62,20 @@ describe("getExpiryTone", () => {
 	});
 	it("그 외는 default", () => {
 		expect(getExpiryTone("대기")).toBe("default");
+	});
+});
+
+describe("JOB_DETAIL_DESIGN_STATUS_LABELS", () => {
+	it("enum 원값 대신 한국어 라벨을 제공한다", () => {
+		expect(JOB_DETAIL_DESIGN_STATUS_LABELS.requested).toBe("제작 대기");
+		expect(JOB_DETAIL_DESIGN_STATUS_LABELS.completed).toBe("제작 완료");
+	});
+
+	it("DB enum 값 2종만 담는다", () => {
+		expect(Object.keys(JOB_DETAIL_DESIGN_STATUS_LABELS).sort()).toEqual([
+			"completed",
+			"requested",
+		]);
 	});
 });
 

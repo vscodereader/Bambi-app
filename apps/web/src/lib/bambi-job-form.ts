@@ -148,6 +148,9 @@ export interface JobForm {
 	adProductId: string | null;
 	beginnerFriendly: boolean;
 	description: string;
+	// 선택한 상품의 상세이미지 디자인 제작 가격 스냅샷(화면에서 본 값). 서버가 재확인한다.
+	detailDesignAmount: number | null;
+	detailDesignRequested: boolean;
 	// 지역은 표시 문자열이 아니라 지역 마스터 코드로 들고 다닌다(서버 입력도 코드다).
 	// 세부지역은 선택이며, 빈 값은 "지역 전체"를 뜻한다.
 	districtCode: string;
@@ -175,6 +178,8 @@ export interface JobPostInput {
 	beginnerFriendly: boolean;
 	description: string;
 	descriptionBlocks: JobDescriptionBlockFormValue[];
+	detailDesignAmount: number | null;
+	detailDesignRequested: boolean;
 	// 미선택이면 보내지 않는다 — 서버는 세부지역 없는 공고를 시/도 전체로 받는다.
 	districtCode?: string;
 	exposureAmount: number | null;
@@ -226,6 +231,8 @@ export const emptyJobForm: JobForm = {
 	adProductId: null,
 	beginnerFriendly: false,
 	description: "",
+	detailDesignAmount: null,
+	detailDesignRequested: false,
 	districtCode: "",
 	exposureAmount: null,
 	exposureDurationDays: null,
@@ -904,6 +911,14 @@ export const validateJobForm = (
 		? null
 		: form.exposureDurationDays;
 	const exposureAmount = isFreeExposure ? null : form.exposureAmount;
+	// 애드온은 유료 상품 전용이다. 무료 공고면 신청 여부·금액을 모두 비워 서버 BAD_REQUEST를
+	// 폼 단계에서 미리 없앤다.
+	const detailDesignRequested = isFreeExposure
+		? false
+		: form.detailDesignRequested;
+	const detailDesignAmount = detailDesignRequested
+		? form.detailDesignAmount
+		: null;
 	const paymentMethod = isFreeExposure ? null : form.paymentMethod;
 	Object.assign(
 		errors,
@@ -951,6 +966,8 @@ export const validateJobForm = (
 			beginnerFriendly: form.beginnerFriendly,
 			description,
 			descriptionBlocks: normalizedBlocks,
+			detailDesignAmount,
+			detailDesignRequested,
 			// 미선택은 키를 빼서 보낸다 — 서버 스키마가 optional이고 빈 문자열은 거부한다.
 			districtCode: districtCode || undefined,
 			exposureAmount,
