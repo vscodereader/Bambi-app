@@ -12,6 +12,8 @@ const baseForm: JobForm = {
 	adProductId: null,
 	beginnerFriendly: false,
 	description: "기본 상세 설명입니다.",
+	detailDesignAmount: null,
+	detailDesignRequested: false,
 	districtCode: "1168000000",
 	exposureAmount: null,
 	exposureDurationDays: null,

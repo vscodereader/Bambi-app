@@ -6,6 +6,7 @@
 // 유료(미결제) 공고 위주로 남는다. 제목 왼쪽 체크박스로 다중 선택해 일괄 결제 처리한다.
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
@@ -17,6 +18,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { JobDetailDesignDialog } from "@/components/bambi/job-detail-design-dialog";
 import {
 	expiryColumn,
 	exposureTypeColumn,
@@ -25,8 +27,12 @@ import {
 	jobTitleColumn,
 	paymentStatusColumn,
 } from "@/components/bambi/job-table-columns";
+import { StatusBadge } from "@/components/bambi/status-badge";
 import { formatAdPrice } from "@/lib/bambi/ad-catalog";
-import { remainingDays } from "@/lib/bambi/exposure";
+import {
+	JOB_DETAIL_DESIGN_STATUS_LABELS,
+	remainingDays,
+} from "@/lib/bambi/exposure";
 import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
@@ -36,6 +42,7 @@ type PaymentJob = Awaited<
 
 interface PaymentColumnsOptions {
 	allSelected: boolean;
+	onOpenDesign: (jobId: string) => void;
 	onToggleAll: (checked: boolean) => void;
 	onToggleRow: (id: string) => void;
 	selectedIds: Set<string>;
@@ -44,6 +51,7 @@ interface PaymentColumnsOptions {
 
 function getPaymentColumns({
 	allSelected,
+	onOpenDesign,
 	onToggleAll,
 	onToggleRow,
 	selectedIds,
@@ -77,14 +85,56 @@ function getPaymentColumns({
 		{
 			id: "exposureAmount",
 			header: "결제 금액",
-			sortValue: (job) => job.exposureAmount ?? 0,
+			sortValue: (job) =>
+				sumJobPaymentAmount(job.exposureAmount, job.detailDesignAmount) ?? 0,
+			cell: (job) => {
+				// 디자인 제작 애드온은 노출 금액과 함께 한 번에 입금받으므로 총액으로 보여준다.
+				const total = sumJobPaymentAmount(
+					job.exposureAmount,
+					job.detailDesignAmount
+				);
+
+				if (total === null) {
+					return <span className="text-muted-foreground">무료</span>;
+				}
+
+				return (
+					<div className="flex flex-col items-start gap-0.5">
+						<span className="whitespace-nowrap font-medium text-foreground">
+							{formatAdPrice(total)}
+						</span>
+						{job.detailDesignAmount === null ? null : (
+							<span className="whitespace-nowrap text-muted-foreground text-xs">
+								디자인 +{formatAdPrice(job.detailDesignAmount)}
+							</span>
+						)}
+					</div>
+				);
+			},
+		},
+		{
+			id: "detailDesign",
+			header: "디자인 제작",
+			sortValue: (job) => job.detailDesignStatus ?? "",
 			cell: (job) =>
-				job.exposureAmount === null ? (
-					<span className="text-muted-foreground">무료</span>
+				job.detailDesignStatus === null ? (
+					<span className="text-muted-foreground">-</span>
 				) : (
-					<span className="whitespace-nowrap font-medium text-foreground">
-						{formatAdPrice(job.exposureAmount)}
-					</span>
+					<div className="flex flex-col items-start gap-1">
+						<StatusBadge
+							tone={job.detailDesignStatus === "completed" ? "good" : "warning"}
+						>
+							{JOB_DETAIL_DESIGN_STATUS_LABELS[job.detailDesignStatus]}
+						</StatusBadge>
+						<Button
+							onClick={() => onOpenDesign(job.id)}
+							size="sm"
+							type="button"
+							variant="outline"
+						>
+							디자인 제작 관리
+						</Button>
+					</div>
 				),
 		},
 		paymentStatusColumn<PaymentJob>(),
@@ -122,9 +172,11 @@ function getPaymentColumns({
 export default function ModeratorPaymentsPage() {
 	const queryClient = useQueryClient();
 	const [onlyUnpaid, setOnlyUnpaid] = useState(false);
+	const [onlyDetailDesign, setOnlyDetailDesign] = useState(false);
+	const [designJobId, setDesignJobId] = useState<null | string>(null);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-	const queryInput = { onlyUnpaid } as const;
+	const queryInput = { onlyDetailDesign, onlyUnpaid } as const;
 	const jobsQuery = useQuery(
 		orpc.bambi.moderation.listJobsForPayment.queryOptions({
 			input: queryInput,
@@ -187,9 +239,11 @@ export default function ModeratorPaymentsPage() {
 						toast("결제 상태를 변경하지 못했어요. 다시 시도해 주세요."),
 					onSuccess: async (result) => {
 						await Promise.all([
+							// 필터가 둘로 늘어나 키가 갈린다 — 조회와 같은 입력으로 무효화하지
+							// 않으면 처리 후 목록이 옛 상태 그대로 남는다.
 							queryClient.invalidateQueries({
 								queryKey: orpc.bambi.moderation.listJobsForPayment.queryKey({
-									input: { onlyUnpaid },
+									input: queryInput,
 								}),
 							}),
 							// 결제완료 처리가 프리미엄 자리를 소비하므로 정원 배지도 갱신한다.
@@ -212,7 +266,7 @@ export default function ModeratorPaymentsPage() {
 				}
 			);
 		},
-		[selectedIds, bulkSetPayment, queryClient, onlyUnpaid, clearSelection]
+		[selectedIds, bulkSetPayment, queryClient, queryInput, clearSelection]
 	);
 
 	// 선택 상태·전체선택 판정·토글 핸들러 변화에만 컬럼을 재생성한다.
@@ -220,6 +274,7 @@ export default function ModeratorPaymentsPage() {
 		() =>
 			getPaymentColumns({
 				allSelected,
+				onOpenDesign: setDesignJobId,
 				onToggleAll: toggleAll,
 				onToggleRow: toggleRow,
 				selectedIds,
@@ -265,6 +320,17 @@ export default function ModeratorPaymentsPage() {
 							}}
 						/>
 						<Label htmlFor="only-unpaid">미결제만 보기</Label>
+					</div>
+					<div className="flex items-center gap-2">
+						<Switch
+							checked={onlyDetailDesign}
+							id="only-detail-design"
+							onCheckedChange={(checked) => {
+								setOnlyDetailDesign(checked);
+								clearSelection();
+							}}
+						/>
+						<Label htmlFor="only-detail-design">디자인 제작 신청건만</Label>
 					</div>
 				</div>
 			</div>
@@ -339,6 +405,18 @@ export default function ModeratorPaymentsPage() {
 						pageSize={10}
 					/>
 				</div>
+			) : null}
+
+			{designJobId ? (
+				<JobDetailDesignDialog
+					jobPostId={designJobId}
+					onOpenChange={(nextOpen) => {
+						if (!nextOpen) {
+							setDesignJobId(null);
+						}
+					}}
+					open
+				/>
 			) : null}
 		</div>
 	);

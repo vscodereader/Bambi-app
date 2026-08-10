@@ -15,7 +15,10 @@ import type { Route } from "next";
 import Link from "next/link";
 import type { DataColumn } from "@/components/bambi/data-table";
 import { StatusBadge } from "@/components/bambi/status-badge";
-import { getJobDisplayStatus } from "@/lib/bambi/exposure";
+import {
+	getJobDisplayStatus,
+	JOB_DETAIL_DESIGN_STATUS_LABELS,
+} from "@/lib/bambi/exposure";
 import { formatPay } from "@/lib/bambi-format";
 
 export type EmployerJob = Awaited<
@@ -121,7 +124,20 @@ export function getEmployerJobsColumns({
 
 				return (
 					<div className="flex flex-col items-start gap-1">
-						<StatusBadge tone={display.tone}>{display.label}</StatusBadge>
+						{/* 열을 늘리면 모바일 가로 스크롤이 길어진다 — 제작 상태는 같은 셀에 붙인다. */}
+						<div className="flex flex-wrap items-center gap-1">
+							<StatusBadge tone={display.tone}>{display.label}</StatusBadge>
+							{job.detailDesignStatus === null ? null : (
+								<StatusBadge
+									tone={
+										job.detailDesignStatus === "completed" ? "good" : "warning"
+									}
+								>
+									상세이미지{" "}
+									{JOB_DETAIL_DESIGN_STATUS_LABELS[job.detailDesignStatus]}
+								</StatusBadge>
+							)}
+						</div>
 						{note ? (
 							// 반려 사유는 길 수 있다. 셀 폭을 붙들어 두고 줄바꿈시킨다 —
 							// 안 그러면 표가 가로로 늘어나 다른 열이 밀린다.

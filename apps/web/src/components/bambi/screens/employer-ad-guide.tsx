@@ -23,6 +23,7 @@ import {
 	type AdCatalogPlacement,
 	formatAdCampaignPeriod,
 	formatAdDuration,
+	formatAdPrice,
 } from "@/lib/bambi/ad-catalog";
 import { orpc } from "@/utils/orpc";
 
@@ -186,6 +187,14 @@ function PlacementSection({
 										일일 자동 끌어올리기 {product.autoBoostsPerDay}회 포함
 									</span>
 								) : null}
+								{/* 디자인 제작은 상품에 포함된 혜택이 아니라 공고 등록 시 고르는
+								    유료 애드온이다. 가격이 설정된 상품에만 안내한다. */}
+								{product.detailDesignPrice === null ? null : (
+									<span className="font-medium text-coral-500 text-sm">
+										상세이미지 디자인 제작 +
+										{formatAdPrice(product.detailDesignPrice)} (선택)
+									</span>
+								)}
 								{product.benefits.length > 0 ? (
 									<ul className="m-0 flex flex-col gap-1.5 p-0">
 										{product.benefits.map((benefit) => (

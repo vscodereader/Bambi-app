@@ -186,6 +186,10 @@ export default function ModeratorEditJobPage({
 			adProductId: job.adProductId ?? null,
 			beginnerFriendly: job.beginnerFriendly ?? false,
 			description: job.description,
+			// 서버가 운영자 편집 경로에서 애드온을 동결하지만, 프리필은 그대로 둔다 —
+			// 결제 예정 총액이 구인자 화면과 같은 값으로 보이고, 동결이 풀려도 안전하다.
+			detailDesignAmount: job.detailDesignAmount,
+			detailDesignRequested: job.detailDesignStatus !== null,
 			districtCode: job.districtCode ?? "",
 			exposureAmount: job.exposureAmount ?? null,
 			exposureDurationDays: job.exposureDurationDays ?? null,
@@ -669,8 +673,14 @@ export default function ModeratorEditJobPage({
 					}}
 				/>
 
+				{/* onDetailDesignChange를 넘기지 않아 애드온이 읽기 전용이다 — 운영자 편집은
+				    서버가 애드온을 동결하므로, 켜고 끄는 컨트롤을 내주면 저장해도 아무 일이
+				    없는 거짓 UI가 된다. 신청 상태 변경은 결제·디자인 관리 화면의 몫. */}
 				<JobExposureFields
 					adProductId={form.adProductId}
+					detailDesignAmount={form.detailDesignAmount}
+					detailDesignRequested={form.detailDesignRequested}
+					detailDesignStatus={job.detailDesignStatus}
 					errors={{
 						exposureDurationDays: fieldErrors.exposureDurationDays,
 						exposureType: fieldErrors.exposureType,

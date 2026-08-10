@@ -34,6 +34,16 @@ describe("employer jobs DataTable columns", () => {
 		expect(source).toContain("StatusBadge");
 	});
 
+	it("상세이미지 디자인 제작 상태를 라벨 맵 경유로 표시한다", () => {
+		const source = read("employer-jobs-columns.tsx");
+
+		// enum 원값(requested/completed) 대신 라벨 맵을 거친다.
+		expect(source).toContain("JOB_DETAIL_DESIGN_STATUS_LABELS");
+		expect(source).toContain("job.detailDesignStatus");
+		// 열을 늘리지 않고 기존 공고 상태 셀에 두 번째 뱃지로 붙인다.
+		expect(source).not.toContain('header: "제작');
+	});
+
 	it("wires the employer page to render the jobs DataTable", () => {
 		const source = read("../../app/employer/page.tsx");
 

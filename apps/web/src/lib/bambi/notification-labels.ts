@@ -58,6 +58,12 @@ const TITLE_BY_TARGET_AND_ACTION: Record<string, string> = {
 	"job_post:adjust_job_post_exposure": "공고 노출 기간이 조정됐어요",
 	"job_post:edit_job_post": "운영자가 내 공고를 수정했어요",
 	"job_post:hard_delete": "내 공고가 삭제됐어요",
+	// 상세이미지 디자인 제작 애드온 진행 상태(운영자 토글). 완료 알림이 구인자가 받는
+	// 유일한 "상세이미지가 올라갔다" 신호라 폴백("공고 상태가 변경됐어요")으로 두면 안 된다.
+	"job_post:set_detail_design_status:completed":
+		"상세이미지 디자인 제작이 완료됐어요",
+	"job_post:set_detail_design_status:requested":
+		"상세이미지 디자인 제작이 대기 상태로 바뀌었어요",
 	"job_post:set_payment:paid": "입금이 확인돼 공고가 게시됐어요",
 	"job_post:set_status:hidden": "공고가 숨김 처리됐어요",
 	"job_post:set_status:on_hold": "공고 검수가 보류됐어요",

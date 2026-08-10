@@ -101,6 +101,75 @@ describe("job exposure and payment fields", () => {
 		expect(source).not.toContain("product?.discountPercent");
 	});
 
+	it("옵션이 있는 상품에서만 체크박스를 그리고 총액에 합산한다", () => {
+		const source = readComponent("job-exposure-fields.tsx");
+
+		expect(source).toContain("selectedProduct?.detailDesignPrice");
+		expect(source).toContain("sumJobPaymentAmount");
+		expect(source).toContain("detail-design-requested");
+	});
+
+	it("무통장입금 안내 금액도 애드온을 합한 총액이다", () => {
+		const source = readComponent("job-exposure-fields.tsx");
+
+		// 노출 금액만 안내하면 애드온만큼 덜 입금된다.
+		expect(source).toContain("amount={payableTotal}");
+	});
+
+	it("등록·수정 폼이 애드온 상태를 JobExposureFields에 잇는다", () => {
+		for (const file of [
+			"../../app/employer/new/page.tsx",
+			"../../app/employer/jobs/[id]/edit/page.tsx",
+		]) {
+			const source = readComponent(file);
+
+			expect(source).toContain(
+				"detailDesignRequested={form.detailDesignRequested}"
+			);
+			expect(source).toContain(
+				"onDetailDesignChange={handleDetailDesignChange}"
+			);
+		}
+	});
+
+	it("수정 폼 프리필이 애드온 상태를 복원한다", () => {
+		for (const file of [
+			"../../app/employer/jobs/[id]/edit/page.tsx",
+			"../../app/moderator/jobs/[id]/edit/page.tsx",
+		]) {
+			const source = readComponent(file);
+
+			// 프리필을 빠뜨리면 기본값(false)이 저장되어 구인자가 신청한 옵션이 조용히 풀린다.
+			expect(source).toContain("detailDesignAmount: job.detailDesignAmount");
+			expect(source).toContain(
+				"detailDesignRequested: job.detailDesignStatus !== null"
+			);
+		}
+	});
+
+	it("완료 건 애드온을 동결한다(체크박스 비활성·자동 언체크 스킵)", () => {
+		const source = readComponent("job-exposure-fields.tsx");
+
+		// 완료 상태면 체크박스를 체크된 채 비활성으로 보여 주고 안내 한 줄을 단다.
+		expect(source).toContain('status === "completed"');
+		expect(source).toContain("disabled");
+		expect(source).toContain("제작이 완료된 옵션은 변경할 수 없어요");
+		// 완료 건은 자동 언체크·신가 덮어쓰기를 모두 스킵한다(강제 언체크 시 서버가 저장을 막는다).
+		expect(source).toContain("onChange?.(false, null)");
+	});
+
+	it("수정 폼이 애드온 진행 상태를 JobExposureFields에 잇는다", () => {
+		for (const file of [
+			"../../app/employer/jobs/[id]/edit/page.tsx",
+			"../../app/moderator/jobs/[id]/edit/page.tsx",
+		]) {
+			const source = readComponent(file);
+
+			// 완료 건 동결 판정에 필요한 진행 상태를 넘긴다.
+			expect(source).toContain("detailDesignStatus={job.detailDesignStatus}");
+		}
+	});
+
 	it("bank transfer guide lists accounts with copy and deposit instructions", () => {
 		const source = readComponent("bank-transfer-guide.tsx");
 

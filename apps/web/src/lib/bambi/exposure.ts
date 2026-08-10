@@ -15,7 +15,17 @@ export const PAYMENT_STATUS_LABELS = {
 	paid: "결제완료",
 } as const;
 
+// 상세이미지 디자인 제작 애드온 진행 상태. DB enum(job_detail_design_status) 원값을
+// 화면에 그대로 내보내지 않기 위한 라벨 맵이다. null(미신청)은 여기 없다 — 표시하지 않거나
+// 호출부에서 "-"로 처리한다.
+export const JOB_DETAIL_DESIGN_STATUS_LABELS = {
+	requested: "제작 대기",
+	completed: "제작 완료",
+} as const;
+
 export type ExposureType = keyof typeof EXPOSURE_TYPE_LABELS;
+export type JobDetailDesignStatusKey =
+	keyof typeof JOB_DETAIL_DESIGN_STATUS_LABELS;
 export type PaymentStatus = keyof typeof PAYMENT_STATUS_LABELS;
 
 // 배너형 노출(프리미엄·좌측·우측 배너)은 끌어올리기(수동·자동) 대상이 아니다.

@@ -75,3 +75,24 @@ describe("ad product form", () => {
 		);
 	});
 });
+
+describe("광고 상품 폼 — 상세이미지 디자인 제작 가격", () => {
+	it("폼이 가격 입력 필드와 draft 필드를 갖는다", () => {
+		const source = readComponent("ad-product-form.tsx");
+
+		expect(source).toContain("detailDesignPrice");
+		expect(source).toContain("p-detail-design-price");
+		expect(source).toContain("상세이미지 디자인 제작 가격");
+	});
+
+	it("등록·수정 페이지가 가격을 서버로 넘긴다", () => {
+		for (const file of [
+			"app/moderator/ad-products/[placementId]/new/page.tsx",
+			"app/moderator/ad-products/[placementId]/[productId]/edit/page.tsx",
+		]) {
+			expect(fs.readFileSync(srcPath(file), "utf8")).toContain(
+				"detailDesignPrice: draft.detailDesignPrice"
+			);
+		}
+	});
+});

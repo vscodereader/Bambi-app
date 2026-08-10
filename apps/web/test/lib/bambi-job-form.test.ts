@@ -257,3 +257,56 @@ describe("validateJobForm 프리미엄 광고 필수 배너", () => {
 		expect(result.ok).toBe(false);
 	});
 });
+
+describe("validateJobForm 상세이미지 디자인 제작 애드온", () => {
+	const addonForm = {
+		...baseForm,
+		adProductId: "premium-1",
+		exposureAmount: 50_000,
+		exposureDurationDays: 30,
+		paymentMethod: "bank_transfer" as const,
+	};
+
+	it("유료 상품에 옵션을 신청하면 신청 여부와 금액을 그대로 넘긴다", () => {
+		const result = validateJobForm(
+			{ ...addonForm, detailDesignAmount: 30_000, detailDesignRequested: true },
+			options
+		);
+
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.input.detailDesignRequested).toBe(true);
+		expect(result.ok && result.input.detailDesignAmount).toBe(30_000);
+	});
+
+	it("무료 공고(상품 미선택)면 옵션 값을 모두 비운다", () => {
+		const result = validateJobForm(
+			{
+				...addonForm,
+				adProductId: null,
+				detailDesignAmount: 30_000,
+				detailDesignRequested: true,
+				exposureAmount: null,
+				exposureDurationDays: null,
+				paymentMethod: null,
+			},
+			options
+		);
+
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.input.detailDesignRequested).toBe(false);
+		expect(result.ok && result.input.detailDesignAmount).toBeNull();
+	});
+
+	it("신청하지 않으면 금액이 남아 있어도 싣지 않는다", () => {
+		const result = validateJobForm(
+			{
+				...addonForm,
+				detailDesignAmount: 30_000,
+				detailDesignRequested: false,
+			},
+			options
+		);
+
+		expect(result.ok && result.input.detailDesignAmount).toBeNull();
+	});
+});

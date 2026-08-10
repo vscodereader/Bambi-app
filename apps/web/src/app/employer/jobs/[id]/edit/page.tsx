@@ -324,6 +324,10 @@ export default function EditEmployerJobPage({
 			adProductId: job.adProductId ?? null,
 			beginnerFriendly: job.beginnerFriendly ?? false,
 			description: job.description,
+			// 애드온도 프리필해야 한다 — 빠뜨리면 기본값(신청 안 함)이 저장되어 구인자가
+			// 신청해 둔 디자인 제작이 다른 항목만 고쳐도 조용히 해제된다.
+			detailDesignAmount: job.detailDesignAmount,
+			detailDesignRequested: job.detailDesignStatus !== null,
 			districtCode: job.districtCode ?? "",
 			exposureAmount: job.exposureAmount ?? null,
 			exposureDurationDays: job.exposureDurationDays ?? null,
@@ -380,6 +384,8 @@ export default function EditEmployerJobPage({
 			Pick<
 				JobForm,
 				| "adProductId"
+				| "detailDesignAmount"
+				| "detailDesignRequested"
 				| "exposureAmount"
 				| "exposureDurationDays"
 				| "exposureType"
@@ -403,21 +409,37 @@ export default function EditEmployerJobPage({
 	};
 
 	const handleProductChange = (productId: string | null) => {
+		// 옵션 가격은 상품마다 다르므로 상품을 바꾸면 애드온 상태도 같이 내려놓는다
+		// (유지하면 낡은 가격 스냅샷이 남아 서버가 CONFLICT를 던진다).
 		updateExposureFields(
 			productId
 				? {
 						adProductId: productId,
+						detailDesignAmount: null,
+						detailDesignRequested: false,
 						exposureAmount: null,
 						exposureDurationDays: null,
 					}
 				: {
 						adProductId: null,
+						detailDesignAmount: null,
+						detailDesignRequested: false,
 						exposureAmount: null,
 						exposureDurationDays: null,
 						exposureType: "standard",
 						paymentMethod: null,
 					}
 		);
+	};
+
+	const handleDetailDesignChange = (
+		requested: boolean,
+		amount: number | null
+	) => {
+		updateExposureFields({
+			detailDesignAmount: amount,
+			detailDesignRequested: requested,
+		});
 	};
 
 	const handlePaymentMethodChange = (value: JobPaymentMethod) => {
@@ -901,6 +923,9 @@ export default function EditEmployerJobPage({
 
 					<JobExposureFields
 						adProductId={form.adProductId}
+						detailDesignAmount={form.detailDesignAmount}
+						detailDesignRequested={form.detailDesignRequested}
+						detailDesignStatus={job.detailDesignStatus}
 						errors={{
 							exposureDurationDays: fieldErrors.exposureDurationDays,
 							exposureType: fieldErrors.exposureType,
@@ -908,6 +933,7 @@ export default function EditEmployerJobPage({
 						}}
 						exposureAmount={form.exposureAmount}
 						exposureDurationDays={form.exposureDurationDays}
+						onDetailDesignChange={handleDetailDesignChange}
 						onDurationChange={handleDurationChange}
 						onPaymentMethodChange={handlePaymentMethodChange}
 						onProductChange={handleProductChange}

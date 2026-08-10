@@ -55,6 +55,8 @@ export interface PriceOption {
 export interface AdProductDraft {
 	autoBoostsPerDay: number;
 	benefits: string[];
+	// 상세이미지 디자인 제작 애드온 가격. null이면 이 상품에는 옵션을 팔지 않는다.
+	detailDesignPrice: number | null;
 	discountCampaigns: DiscountCampaignDraft[];
 	manualBoostsPerDay: number;
 	name: string;
@@ -78,6 +80,13 @@ interface PriceOptionField extends PriceOption {
 }
 
 const MAX_PREVIEW_IMAGE_BYTES = 1_500_000;
+
+// 디자인 제작 가격은 빈 문자열 = 미제공(null)로 들고 있는다. 숫자로만 들고 있으면
+// "0원 제공"과 "미제공"을 구분할 수 없다.
+const toPriceInput = (value?: number | null) =>
+	value == null ? "" : String(value);
+const fromPriceInput = (value: string) =>
+	value.trim() === "" ? null : Number(value);
 
 export function AdProductForm({
 	initialValue,
@@ -139,6 +148,9 @@ export function AdProductForm({
 	);
 	const [autoBoostsPerDay, setAutoBoostsPerDay] = useState(
 		initialValue?.autoBoostsPerDay ?? 0
+	);
+	const [detailDesignPrice, setDetailDesignPrice] = useState(
+		toPriceInput(initialValue?.detailDesignPrice)
 	);
 	const [pendingDaysChange, setPendingDaysChange] = useState<{
 		days: number;
@@ -230,6 +242,7 @@ export function AdProductForm({
 			benefits: benefits
 				.map((item) => item.value.trim())
 				.filter((value) => value.length > 0),
+			detailDesignPrice: fromPriceInput(detailDesignPrice),
 			discountCampaigns,
 			priceOptions: normalizedPriceOptions,
 			previewImageUrl,
@@ -541,6 +554,27 @@ export function AdProductForm({
 					</div>
 				</>
 			)}
+
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-detail-design-price">
+					상세이미지 디자인 제작 가격
+				</Label>
+				<div className="flex items-center gap-2">
+					<Input
+						className="w-40"
+						id="p-detail-design-price"
+						min={0}
+						onChange={(e) => setDetailDesignPrice(e.target.value)}
+						type="number"
+						value={detailDesignPrice}
+					/>
+					<span className="text-muted-foreground text-sm">원</span>
+				</div>
+				<p className="m-0 text-muted-foreground text-xs">
+					이 상품을 구매하는 구인자가 함께 신청할 수 있는 디자이너 상세이미지
+					제작 옵션의 가격입니다. 비워두면 이 상품에는 옵션이 노출되지 않습니다.
+				</p>
+			</div>
 
 			<div className="flex flex-col gap-1.5">
 				<Label htmlFor="p-preview-image">게시 위치 미리보기</Label>

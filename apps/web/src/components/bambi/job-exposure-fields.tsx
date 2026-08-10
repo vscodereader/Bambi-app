@@ -1,7 +1,10 @@
 "use client";
 
+import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
 import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
+import { Label } from "@bambi-app/ui/components/label";
 import {
 	Select,
 	SelectContent,
@@ -28,6 +31,7 @@ import {
 	formatAdPriceLabel,
 	resolveAdPrice,
 } from "@/lib/bambi/ad-catalog";
+import type { JobDetailDesignStatusKey } from "@/lib/bambi/exposure";
 import type { JobFormErrors, JobPaymentMethod } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
 
@@ -76,12 +80,20 @@ const durationSelectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
 
 interface JobExposureFieldsProps {
 	adProductId: string | null;
+	detailDesignAmount: number | null;
+	detailDesignRequested: boolean;
+	// 애드온 제작 진행 상태. "completed"면 애드온을 동결한다(체크박스 비활성·자동 언체크 스킵).
+	// 없으면(신규 등록·미신청) null.
+	detailDesignStatus?: JobDetailDesignStatusKey | null;
 	errors?: Pick<
 		JobFormErrors,
 		"exposureDurationDays" | "exposureType" | "paymentMethod"
 	>;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
+	// 없으면 애드온을 읽기 전용으로 본다(운영자 편집 — 서버가 애드온을 동결하는 경로라
+	// 켜고 끄는 컨트롤을 내주면 저장해도 아무 일이 없는 거짓 UI가 된다).
+	onDetailDesignChange?: (requested: boolean, amount: number | null) => void;
 	onDurationChange: (days: number | null, amount: number | null) => void;
 	onPaymentMethodChange: (value: JobPaymentMethod) => void;
 	onProductChange: (productId: string | null) => void;
@@ -103,13 +115,17 @@ const findDurationOption = (
 		? product.priceOptions.find((priceOption) => priceOption.days === days)
 		: undefined;
 
-// 결제 예정 금액. 할인 옵션이면 원가 취소선+할인가+뱃지, 아니면 원가만 노출한다.
+// 결제 예정 금액 = 노출 금액 + 디자인 제작 옵션 금액. 애드온이 없을 때는 기존처럼
+// 원가 취소선(AdPriceTag)을 보여 주고, 애드온이 붙으면 총액 + 내역 한 줄로 바꾼다
+// (취소선 뱃지 옆에 다른 금액을 더하면 어느 값이 결제액인지 읽히지 않는다).
 function PayableTotal({
 	amount,
+	detailDesignAmount,
 	option,
 	show,
 }: {
 	amount: number | null;
+	detailDesignAmount: number | null;
 	option: AdPriceOption | undefined;
 	show: boolean;
 }) {
@@ -117,26 +133,179 @@ function PayableTotal({
 		return null;
 	}
 
+	const total = sumJobPaymentAmount(amount, detailDesignAmount);
+
 	return (
-		<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-			<span className="font-medium text-muted-foreground text-sm">
-				결제 예정 금액
-			</span>
-			{option ? (
-				<AdPriceTag
-					amount={option.amount}
-					className="justify-end"
-					discountPercent={option.discountPercent ?? 0}
-					priceClassName="min-w-0 break-words font-semibold text-lg text-primary"
-				/>
-			) : (
-				<span className="min-w-0 break-words font-semibold text-lg text-primary">
-					{amount === null ? "" : formatAdPrice(amount)}
+		<div className="flex flex-col gap-1 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<span className="font-medium text-muted-foreground text-sm">
+					결제 예정 금액
+				</span>
+				{option && detailDesignAmount === null ? (
+					<AdPriceTag
+						amount={option.amount}
+						className="justify-end"
+						discountPercent={option.discountPercent ?? 0}
+						priceClassName="min-w-0 break-words font-semibold text-lg text-primary"
+					/>
+				) : (
+					<span className="min-w-0 break-words font-semibold text-lg text-primary">
+						{total === null ? "" : formatAdPrice(total)}
+					</span>
+				)}
+			</div>
+			{detailDesignAmount === null ? null : (
+				<span className="text-muted-foreground text-xs">
+					광고 {formatAdPrice(amount ?? 0)} + 상세이미지 디자인 제작{" "}
+					{formatAdPrice(detailDesignAmount)}
 				</span>
 			)}
 		</div>
 	);
 }
+
+// 상세이미지 디자인 제작 애드온. 상품에 옵션 가격이 있을 때만(price !== null) 낸다.
+// onChange가 없으면 읽기 전용이라 컨트롤 자체를 그리지 않는다 — 운영자 편집은 서버가
+// 애드온을 동결하므로, 켜고 끌 수 있는 체크박스를 내주면 저장해도 아무 일이 없는 거짓 UI다.
+function DetailDesignOption({
+	amount,
+	onChange,
+	price,
+	requested,
+	show,
+	status,
+}: {
+	amount: number | null;
+	onChange: ((requested: boolean, amount: null | number) => void) | undefined;
+	price: number | null;
+	requested: boolean;
+	show: boolean;
+	status: JobDetailDesignStatusKey | null;
+}) {
+	if (!(show && onChange)) {
+		return null;
+	}
+
+	// 제작 완료 건은 애드온이 동결된다 — 서버가 신청 해제·금액 재산정을 막으므로 체크 상태
+	// 그대로 비활성으로 보여 준다. 운영자가 옵션가를 지워도(price null) 결제·제작이 끝난
+	// 스냅샷 금액(amount)으로 표시한다.
+	if (status === "completed") {
+		const frozenAmount = amount ?? price;
+
+		return (
+			<div className="flex items-start gap-2 rounded-lg border border-border p-3">
+				<Checkbox
+					checked
+					className="mt-0.5"
+					disabled
+					id="detail-design-requested"
+				/>
+				<div className="flex min-w-0 flex-col gap-1">
+					<Label htmlFor="detail-design-requested">
+						상세이미지 디자인 제작
+						{frozenAmount === null ? "" : ` +${formatAdPrice(frozenAmount)}`}
+					</Label>
+					<span className="text-muted-foreground text-xs">
+						제작이 완료된 옵션은 변경할 수 없어요. 관련 문의는 운영자에게
+						채팅으로 전달해 주세요.
+					</span>
+				</div>
+			</div>
+		);
+	}
+
+	if (price === null) {
+		return null;
+	}
+
+	return (
+		<div className="flex items-start gap-2 rounded-lg border border-border p-3">
+			<Checkbox
+				checked={requested}
+				className="mt-0.5"
+				id="detail-design-requested"
+				onCheckedChange={(checked) =>
+					onChange(checked === true, checked === true ? price : null)
+				}
+			/>
+			<div className="flex min-w-0 flex-col gap-1">
+				<Label htmlFor="detail-design-requested">
+					상세이미지 디자인 제작 +{formatAdPrice(price)}
+				</Label>
+				<span className="text-muted-foreground text-xs">
+					디자이너가 공고 상세페이지 이미지를 제작해 드립니다. 제작 요청 내용은
+					결제 확인 후 운영자가 채팅으로 안내합니다.
+				</span>
+			</div>
+		</div>
+	);
+}
+
+// 결제 총액에 실제로 더할 애드온 금액. 상품이 옵션을 제공하지 않으면(price === null)
+// 폼에 남은 금액이 있어도 무시한다 — 서버도 그 조합을 저장하지 않는다.
+const resolveAppliedDetailDesignAmount = ({
+	amount,
+	price,
+	requested,
+	status,
+}: {
+	amount: number | null;
+	price: number | null;
+	requested: boolean;
+	status: JobDetailDesignStatusKey | null;
+}): number | null => {
+	// 완료 건은 옵션가가 사라져도 결제·제작이 끝난 스냅샷 금액을 총액에 그대로 유지한다
+	// (화면 총액이 이미 결제된 금액과 일치한다).
+	if (status === "completed") {
+		return amount;
+	}
+
+	return price !== null && requested ? amount : null;
+};
+
+// 신청해 둔 애드온 상태를 현재 상품 가격에 맞춘다. 운영자가 상품 가격을 바꾸면 폼이 들고
+// 있던 스냅샷이 낡으므로, 노출 금액과 같은 방식으로 최신 가격을 되돌려 서버 CONFLICT
+// (가격 변경 재확인)를 미리 없앤다. 옵션이 없는 상품으로 바꾸면 신청 상태 자체를 내려놓는다
+// (서버가 BAD_REQUEST로 막는 조합).
+// productResolved: 카탈로그가 아직 로딩 중이면 선택 상품을 못 찾아 가격이 null로 보인다.
+// 그 값을 믿고 정리하면 수정 폼이 프리필한 신청 상태가 로딩 한 프레임에 조용히 풀린다.
+const useDetailDesignPriceSync = ({
+	amount,
+	onChange,
+	price,
+	productResolved,
+	requested,
+	status,
+}: {
+	amount: number | null;
+	onChange: ((requested: boolean, amount: null | number) => void) | undefined;
+	price: number | null;
+	productResolved: boolean;
+	requested: boolean;
+	status: JobDetailDesignStatusKey | null;
+}) => {
+	useEffect(() => {
+		// 완료 건은 애드온이 동결된다 — 옵션가가 사라져도 자동 언체크하지 않고, 상품가가
+		// 바뀌어도 신가로 덮어쓰지 않는다. 서버가 완료 건의 해제·재산정을 막으므로 폼이
+		// 프리필한 스냅샷을 그대로 둔다(강제 언체크 시 서버 completed_locked로 저장 봉쇄).
+		if (status === "completed") {
+			return;
+		}
+
+		if (!(requested && productResolved)) {
+			return;
+		}
+
+		if (price === null) {
+			onChange?.(false, null);
+			return;
+		}
+
+		if (price !== amount) {
+			onChange?.(true, price);
+		}
+	}, [amount, onChange, price, productResolved, requested, status]);
+};
 
 // 이용 기간 선택값 → {기간, 결제 금액}. 결제 금액은 할인가로 확정한다(서버 스냅샷과 동일 계산).
 const resolveDurationSelection = (
@@ -157,9 +326,13 @@ const resolveDurationSelection = (
 
 export function JobExposureFields({
 	adProductId,
+	detailDesignAmount,
+	detailDesignRequested,
+	detailDesignStatus = null,
 	errors,
 	exposureAmount,
 	exposureDurationDays,
+	onDetailDesignChange,
 	onDurationChange,
 	onPaymentMethodChange,
 	onProductChange,
@@ -192,6 +365,19 @@ export function JobExposureFields({
 		showPaidOptions &&
 		typeof exposureDurationDays === "number" &&
 		typeof exposureAmount === "number";
+	// 상품에 옵션 가격이 설정된 경우에만 애드온을 연다(null = 미제공).
+	const detailDesignPrice = selectedProduct?.detailDesignPrice ?? null;
+	const appliedDetailDesignAmount = resolveAppliedDetailDesignAmount({
+		amount: detailDesignAmount,
+		price: detailDesignPrice,
+		requested: detailDesignRequested,
+		status: detailDesignStatus,
+	});
+	// 무통장입금 안내에도 같은 총액을 쓴다 — 노출 금액만 안내하면 애드온만큼 덜 입금된다.
+	const payableTotal = sumJobPaymentAmount(
+		exposureAmount,
+		appliedDetailDesignAmount
+	);
 	const nextPricingChangeAt = useMemo(() => {
 		const futureBoundaries = products
 			.flatMap((product) => product.priceOptions)
@@ -236,6 +422,15 @@ export function JobExposureFields({
 		onDurationChange,
 		selectedDurationOption,
 	]);
+
+	useDetailDesignPriceSync({
+		amount: detailDesignAmount,
+		onChange: onDetailDesignChange,
+		price: detailDesignPrice,
+		productResolved: showPaidOptions,
+		requested: detailDesignRequested,
+		status: detailDesignStatus,
+	});
 
 	const handleExposureValueChange = (value: string[]) => {
 		const next = value.at(-1);
@@ -379,8 +574,18 @@ export function JobExposureFields({
 						</div>
 					) : null}
 
+					<DetailDesignOption
+						amount={detailDesignAmount}
+						onChange={onDetailDesignChange}
+						price={detailDesignPrice}
+						requested={detailDesignRequested}
+						show={showPaidOptions}
+						status={detailDesignStatus}
+					/>
+
 					<PayableTotal
 						amount={exposureAmount}
+						detailDesignAmount={appliedDetailDesignAmount}
 						option={selectedDurationOption}
 						show={showTotal}
 					/>
@@ -428,7 +633,7 @@ export function JobExposureFields({
 								<Alert>
 									<Info />
 									<AlertDescription>
-										<BankTransferGuide amount={exposureAmount} />
+										<BankTransferGuide amount={payableTotal} />
 									</AlertDescription>
 								</Alert>
 							) : null}
