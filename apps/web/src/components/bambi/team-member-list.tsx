@@ -285,6 +285,87 @@ function MemberRowActions({
 	);
 }
 
+function MobileMemberCard({
+	canManage,
+	disabled,
+	onDeleteInvite,
+	onRemove,
+	onResubmit,
+	onRoleChange,
+	onSetTeams,
+	onTransfer,
+	row,
+}: {
+	canManage: boolean;
+	disabled: boolean;
+	onDeleteInvite: () => void;
+	onRemove: () => void;
+	onResubmit: () => void;
+	onRoleChange: (role: OrganizationRole) => void;
+	onSetTeams: () => void;
+	onTransfer: () => void;
+	row: OrganizationMember;
+}) {
+	return (
+		<Card>
+			<CardContent className="space-y-3 p-4">
+				<div className="flex items-start justify-between gap-3">
+					<div className="min-w-0">
+						<p className="truncate font-medium text-sm">
+							{getMemberLabel(row)}
+						</p>
+						<p className="mt-0.5 truncate text-muted-foreground text-xs">
+							{row.email}
+						</p>
+					</div>
+					<MemberRowActions
+						canManage={canManage}
+						disabled={disabled}
+						onDeleteInvite={onDeleteInvite}
+						onRemove={onRemove}
+						onResubmit={onResubmit}
+						onRoleChange={onRoleChange}
+						onSetTeams={onSetTeams}
+						onTransfer={onTransfer}
+						row={row}
+					/>
+				</div>
+
+				<div className="grid grid-cols-2 gap-3 border-t pt-3">
+					<div className="space-y-1">
+						<p className="text-muted-foreground text-xs">상태</p>
+						<StatusBadge tone={getStatusTone(row.status)}>
+							{memberStatusLabel(row.status)}
+						</StatusBadge>
+					</div>
+					<div className="space-y-1">
+						<p className="text-muted-foreground text-xs">권한</p>
+						<p className="text-sm">{organizationRoleLabel(row.role)}</p>
+					</div>
+				</div>
+
+				<div className="space-y-1">
+					<p className="text-muted-foreground text-xs">소속 팀</p>
+					<MemberTeams role={row.role} teams={row.teams} />
+				</div>
+
+				<div className="space-y-1 border-t pt-3">
+					<p className="text-muted-foreground text-xs">등록 일시</p>
+					<p className="text-sm">{formatDateTime(row.createdAt)}</p>
+				</div>
+
+				{row.kind === "invitation" &&
+				row.status === "rejected" &&
+				row.rejectionReason ? (
+					<p className="break-words text-destructive text-xs">
+						반려 사유: {row.rejectionReason}
+					</p>
+				) : null}
+			</CardContent>
+		</Card>
+	);
+}
+
 // 멤버 테이블 컬럼 정의. 컴포넌트 밖으로 빼 본문 인지 복잡도를 낮춘다. 각 액션은 row를
 // 받는 콜백으로 전달받아 셀에서 바인딩한다.
 function buildMemberColumns({
@@ -761,16 +842,47 @@ export function TeamMemberList({
 			) : null}
 
 			{members.length > 0 ? (
-				<Card>
-					<CardContent className="overflow-x-auto p-0">
-						<DataTable
-							columns={columns}
-							data={members}
-							emptyMessage="활성 멤버나 대기 중인 초대가 없습니다."
-							getRowKey={(row) => `${row.kind}-${row.id}`}
-						/>
-					</CardContent>
-				</Card>
+				<>
+					<div className="space-y-3 md:hidden">
+						{members.map((member) => (
+							<MobileMemberCard
+								canManage={organization.canManageOrganization}
+								disabled={disabled}
+								key={`${member.kind}-${member.id}`}
+								onDeleteInvite={() =>
+									setConfirm({ kind: "deleteInvite", row: member })
+								}
+								onRemove={() => setConfirm({ kind: "remove", row: member })}
+								onResubmit={() =>
+									resubmitMutation.mutate({
+										invitationId: member.id,
+										organizationId,
+									})
+								}
+								onRoleChange={(value) =>
+									setRoleMutation.mutate({
+										memberId: member.id,
+										organizationId,
+										role: value,
+									})
+								}
+								onSetTeams={() => setTeamsTarget(member)}
+								onTransfer={() => setConfirm({ kind: "transfer", row: member })}
+								row={member}
+							/>
+						))}
+					</div>
+					<Card className="hidden md:block">
+						<CardContent className="overflow-x-auto p-0">
+							<DataTable
+								columns={columns}
+								data={members}
+								emptyMessage="활성 멤버나 대기 중인 초대가 없습니다."
+								getRowKey={(row) => `${row.kind}-${row.id}`}
+							/>
+						</CardContent>
+					</Card>
+				</>
 			) : (
 				<EmptyState
 					description="활성 멤버나 대기 중인 초대가 없습니다."

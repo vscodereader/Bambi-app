@@ -3,6 +3,13 @@
 import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
+	Card,
+	CardAction,
+	CardContent,
+	CardHeader,
+	CardTitle,
+} from "@bambi-app/ui/components/card";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -183,6 +190,106 @@ interface AdColumnsOptions {
 	onPurchaseOption: (ad: AdListItem) => void;
 }
 
+function AdStatusDetails({ ad }: { ad: AdListItem }) {
+	const display = getJobDisplayStatus({
+		paymentStatus: ad.paymentStatus,
+		status: ad.status,
+	});
+
+	return (
+		<div className="flex flex-wrap items-center gap-2">
+			<StatusBadge tone={display.tone}>{display.label}</StatusBadge>
+			{ad.paymentStatus === "unpaid" ? (
+				<Popover>
+					<PopoverTrigger
+						render={
+							<Button size="sm" type="button" variant="outline">
+								입금 안내
+							</Button>
+						}
+					/>
+					<PopoverContent align="start" className="w-80">
+						<PopoverTitle>무통장입금 안내</PopoverTitle>
+						<BankTransferGuide
+							amount={sumJobPaymentAmount(
+								ad.exposureAmount,
+								ad.detailDesignAmount
+							)}
+						/>
+					</PopoverContent>
+				</Popover>
+			) : null}
+			{ad.premiumQueue ? (
+				<StatusBadge tone={ad.premiumQueue.progressable ? "good" : "warning"}>
+					{ad.premiumQueue.progressable
+						? "진행 가능"
+						: `대기열 ${ad.premiumQueue.queuePosition}번째`}
+				</StatusBadge>
+			) : null}
+			{ad.hasUnpaidBoostOption ? (
+				<StatusBadge tone="warning">옵션 입금 대기</StatusBadge>
+			) : null}
+		</div>
+	);
+}
+
+function AdActionsMenu({
+	ad,
+	isBoostPending,
+	onBoost,
+	onPurchaseOption,
+}: {
+	ad: AdListItem;
+	isBoostPending: boolean;
+	onBoost: (jobPostId: string) => void;
+	onPurchaseOption: (ad: AdListItem) => void;
+}) {
+	const { canBoost, disabledReason } = getBoostState(ad);
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				aria-label="광고 관리 메뉴"
+				className={cn(buttonVariants({ size: "icon-sm", variant: "ghost" }))}
+			>
+				<EllipsisIcon />
+				<span className="sr-only">광고 관리 메뉴</span>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="min-w-48">
+				<DropdownMenuItem
+					disabled={!canBoost || isBoostPending}
+					onClick={() => onBoost(ad.jobPostId)}
+				>
+					<ArrowUpToLineIcon />
+					끌어올리기
+				</DropdownMenuItem>
+				{disabledReason ? (
+					// DropdownMenuLabel(base-ui GroupLabel)은 Menu.Group 밖에서 크래시라 일반 텍스트로 렌더한다.
+					<p className="m-0 px-2 pb-2 text-muted-foreground text-xs">
+						{disabledReason}
+					</p>
+				) : null}
+				{/* 배너 광고는 끌어올리기 대상이 아니라 옵션도 팔지 않는다(서버도 거부). */}
+				{isBannerExposureType(ad.exposureType) ? null : (
+					<DropdownMenuItem onClick={() => onPurchaseOption(ad)}>
+						<ShoppingCartIcon />
+						끌어올리기 옵션 구매
+					</DropdownMenuItem>
+				)}
+				<DropdownMenuSeparator />
+				<DropdownMenuItem
+					render={
+						<Link href={`/employer/jobs/${ad.jobPostId}/edit` as Route} />
+					}
+				>
+					<FileTextIcon />
+					공고 보기
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 function getAdColumns({
 	isBoostPending,
 	onBoost,
@@ -214,50 +321,7 @@ function getAdColumns({
 					paymentStatus: ad.paymentStatus,
 					status: ad.status,
 				}).label,
-			cell: (ad) => {
-				const display = getJobDisplayStatus({
-					paymentStatus: ad.paymentStatus,
-					status: ad.status,
-				});
-
-				return (
-					<div className="flex flex-wrap items-center gap-2">
-						<StatusBadge tone={display.tone}>{display.label}</StatusBadge>
-						{ad.paymentStatus === "unpaid" ? (
-							<Popover>
-								<PopoverTrigger
-									render={
-										<Button size="sm" type="button" variant="outline">
-											입금 안내
-										</Button>
-									}
-								/>
-								<PopoverContent align="start" className="w-80">
-									<PopoverTitle>무통장입금 안내</PopoverTitle>
-									<BankTransferGuide
-										amount={sumJobPaymentAmount(
-											ad.exposureAmount,
-											ad.detailDesignAmount
-										)}
-									/>
-								</PopoverContent>
-							</Popover>
-						) : null}
-						{ad.premiumQueue ? (
-							<StatusBadge
-								tone={ad.premiumQueue.progressable ? "good" : "warning"}
-							>
-								{ad.premiumQueue.progressable
-									? "진행 가능"
-									: `대기열 ${ad.premiumQueue.queuePosition}번째`}
-							</StatusBadge>
-						) : null}
-						{ad.hasUnpaidBoostOption ? (
-							<StatusBadge tone="warning">옵션 입금 대기</StatusBadge>
-						) : null}
-					</div>
-				);
-			},
+			cell: (ad) => <AdStatusDetails ad={ad} />,
 		},
 		{
 			id: "exposure",
@@ -370,56 +434,165 @@ function getAdColumns({
 			header: "액션",
 			headerClassName: "text-right",
 			cellClassName: "text-right",
-			cell: (ad) => {
-				const { canBoost, disabledReason } = getBoostState(ad);
-
-				return (
-					<DropdownMenu>
-						<DropdownMenuTrigger
-							aria-label="메뉴 열기"
-							className={cn(
-								buttonVariants({ size: "icon-sm", variant: "ghost" })
-							)}
-						>
-							<EllipsisIcon />
-							<span className="sr-only">메뉴 열기</span>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" className="min-w-48">
-							<DropdownMenuItem
-								disabled={!canBoost || isBoostPending}
-								onClick={() => onBoost(ad.jobPostId)}
-							>
-								<ArrowUpToLineIcon />
-								끌어올리기
-							</DropdownMenuItem>
-							{disabledReason ? (
-								// DropdownMenuLabel(base-ui GroupLabel)은 Menu.Group 밖에서 크래시라 일반 텍스트로 렌더한다.
-								<p className="m-0 px-2 pb-2 text-muted-foreground text-xs">
-									{disabledReason}
-								</p>
-							) : null}
-							{/* 배너 광고는 끌어올리기 대상이 아니라 옵션도 팔지 않는다(서버도 거부). */}
-							{isBannerExposureType(ad.exposureType) ? null : (
-								<DropdownMenuItem onClick={() => onPurchaseOption(ad)}>
-									<ShoppingCartIcon />
-									끌어올리기 옵션 구매
-								</DropdownMenuItem>
-							)}
-							<DropdownMenuSeparator />
-							<DropdownMenuItem
-								render={
-									<Link href={`/employer/jobs/${ad.jobPostId}/edit` as Route} />
-								}
-							>
-								<FileTextIcon />
-								공고 보기
-							</DropdownMenuItem>
-						</DropdownMenuContent>
-					</DropdownMenu>
-				);
-			},
+			cell: (ad) => (
+				<AdActionsMenu
+					ad={ad}
+					isBoostPending={isBoostPending}
+					onBoost={onBoost}
+					onPurchaseOption={onPurchaseOption}
+				/>
+			),
 		},
 	];
+}
+
+const MOBILE_AD_PAGE_SIZE = 10;
+
+// 데스크톱 표(boostsToday 열)와 같은 값을 내야 한다 — 번들만 보는 manualBoostsPerDay가 아니라
+// 옵션을 합산한 dailyBoostLimit을 쓰고, 별도 재고인 횟수권 잔여도 함께 붙인다.
+function getManualBoostLabel(ad: AdListItem) {
+	if (isBannerExposureType(ad.exposureType)) {
+		return "—";
+	}
+
+	const limit = dailyBoostLimit(ad);
+	const parts: string[] = [];
+
+	if (limit > 0) {
+		parts.push(`남은 ${remainingBoosts(ad)}회 / 일일 ${limit}회`);
+	}
+	if (ad.boostCountRemaining > 0) {
+		parts.push(`횟수권 ${ad.boostCountRemaining}회`);
+	}
+
+	return parts.length > 0 ? parts.join(" · ") : "미포함";
+}
+
+function MobileAds({
+	ads,
+	isBoostPending,
+	onBoost,
+	onPurchaseOption,
+}: {
+	ads: AdListItem[];
+	isBoostPending: boolean;
+	onBoost: (jobPostId: string) => void;
+	onPurchaseOption: (ad: AdListItem) => void;
+}) {
+	const [page, setPage] = useState(1);
+	const pageCount = Math.max(1, Math.ceil(ads.length / MOBILE_AD_PAGE_SIZE));
+	const safePage = Math.min(page, pageCount);
+	const pageAds = ads.slice(
+		(safePage - 1) * MOBILE_AD_PAGE_SIZE,
+		safePage * MOBILE_AD_PAGE_SIZE
+	);
+
+	return (
+		<div className="flex flex-col gap-3 md:hidden">
+			{pageAds.map((ad) => (
+				<Card key={ad.jobPostId}>
+					<CardHeader className="gap-3">
+						<div className="min-w-0 flex-1">
+							<CardTitle className="truncate text-base" title={ad.title}>
+								{ad.title}
+							</CardTitle>
+							{ad.teamDisplayName ? (
+								<p className="m-0 mt-1 truncate text-muted-foreground text-xs">
+									{ad.teamDisplayName}
+								</p>
+							) : null}
+						</div>
+						<CardAction>
+							<AdActionsMenu
+								ad={ad}
+								isBoostPending={isBoostPending}
+								onBoost={onBoost}
+								onPurchaseOption={onPurchaseOption}
+							/>
+						</CardAction>
+					</CardHeader>
+					<CardContent className="grid gap-3 text-sm">
+						<div className="flex flex-col items-start gap-1">
+							<span className="text-muted-foreground text-xs">상태</span>
+							<AdStatusDetails ad={ad} />
+						</div>
+						<div className="grid grid-cols-2 gap-3">
+							<div className="flex min-w-0 flex-col gap-1">
+								<span className="text-muted-foreground text-xs">
+									노출 위치/상품
+								</span>
+								<div className="flex flex-wrap items-center gap-2">
+									<StatusBadge>{exposureLabel(ad)}</StatusBadge>
+									{ad.adProductName ? (
+										<span className="text-muted-foreground text-xs">
+											{ad.adProductName}
+										</span>
+									) : null}
+								</div>
+							</div>
+							<div className="flex flex-col gap-1">
+								<span className="text-muted-foreground text-xs">노출 마감</span>
+								<span>
+									{ad.exposureEndsAt ? formatDate(ad.exposureEndsAt) : "-"}
+								</span>
+							</div>
+						</div>
+						<div className="grid grid-cols-2 gap-3">
+							<div className="flex flex-col gap-1">
+								<span className="text-muted-foreground text-xs">
+									오늘 끌어올리기
+								</span>
+								<span>{getManualBoostLabel(ad)}</span>
+							</div>
+							<div className="flex flex-col gap-1">
+								<span className="text-muted-foreground text-xs">
+									자동 끌어올리기
+								</span>
+								<span>
+									{autoBoostLimit(ad) === 0
+										? "—"
+										: `오늘 ${ad.autoBoostsUsedToday}/${autoBoostLimit(ad)}회 실행`}
+								</span>
+							</div>
+						</div>
+						<div className="flex flex-col gap-1">
+							<span className="text-muted-foreground text-xs">
+								최근 끌어올림
+							</span>
+							<span className="text-muted-foreground">
+								{ad.boostedAt ? formatDateTime(ad.boostedAt) : "없음"}
+							</span>
+						</div>
+					</CardContent>
+				</Card>
+			))}
+			{pageCount > 1 ? (
+				<div className="flex items-center justify-between gap-3">
+					<Button
+						disabled={safePage === 1}
+						onClick={() => setPage((current) => Math.max(1, current - 1))}
+						type="button"
+						variant="outline"
+					>
+						이전
+					</Button>
+					<span className="text-muted-foreground text-sm">
+						{safePage} / {pageCount}
+					</span>
+					<Button
+						disabled={safePage === pageCount}
+						onClick={() =>
+							setPage((current) => Math.min(pageCount, current + 1))
+						}
+						type="button"
+						variant="outline"
+					>
+						다음
+					</Button>
+				</div>
+			) : null}
+		</div>
+	);
 }
 
 export default function EmployerAdsPage() {
@@ -526,13 +699,21 @@ export default function EmployerAdsPage() {
 		);
 	} else {
 		content = (
-			<div className="overflow-x-auto rounded-xl border border-border">
-				<DataTable
-					columns={columns}
-					data={visibleAds}
-					getRowKey={(ad) => ad.jobPostId}
-					pageSize={10}
+			<div>
+				<MobileAds
+					ads={visibleAds}
+					isBoostPending={isBoostPending}
+					onBoost={handleBoost}
+					onPurchaseOption={handlePurchaseOption}
 				/>
+				<div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+					<DataTable
+						columns={columns}
+						data={visibleAds}
+						getRowKey={(ad) => ad.jobPostId}
+						pageSize={10}
+					/>
+				</div>
 			</div>
 		);
 	}

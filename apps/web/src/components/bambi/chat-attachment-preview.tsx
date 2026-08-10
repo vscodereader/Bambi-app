@@ -34,12 +34,12 @@ export function ChatAttachmentPreview({
 	if (attachment.category === "image") {
 		return (
 			<a
-				className="group mt-2 block overflow-hidden rounded-lg border border-black/10 bg-white text-foreground shadow-sm"
+				className="group mt-2 block overflow-hidden rounded-lg border border-black/10 bg-white text-foreground shadow-sm max-md:w-full max-md:min-w-0 max-md:max-w-full"
 				href={attachment.objectUrl}
 				rel="noopener"
 				target="_blank"
 			>
-				<div className="relative aspect-[16/9] w-full min-w-52 bg-secondary">
+				<div className="relative aspect-[16/9] w-full min-w-52 bg-secondary max-md:min-w-0">
 					<Image
 						alt={attachment.fileName}
 						className="object-cover"
@@ -50,11 +50,11 @@ export function ChatAttachmentPreview({
 						unoptimized
 					/>
 				</div>
-				<div className="flex items-center gap-2 px-3 py-2">
+				<div className="flex min-w-0 items-center gap-2 px-3 py-2">
 					<span className="inline-flex size-4 flex-none text-coral-600">
 						<ImageIcon />
 					</span>
-					<div className="min-w-0">
+					<div className="min-w-0 flex-1 overflow-hidden">
 						<p className="m-0 truncate font-bold text-xs">
 							{attachment.fileName}
 						</p>
@@ -71,17 +71,17 @@ export function ChatAttachmentPreview({
 		<a
 			className={
 				mine
-					? "mt-2 flex items-center gap-3 rounded-lg border border-white/30 bg-white/15 px-3 py-2 text-white"
-					: "mt-2 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-foreground"
+					? "mt-2 flex items-center gap-3 rounded-lg border border-white/30 bg-white/15 px-3 py-2 text-white max-md:w-full max-md:min-w-0 max-md:max-w-full max-md:gap-2 max-md:overflow-hidden max-md:px-2"
+					: "mt-2 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-foreground max-md:w-full max-md:min-w-0 max-md:max-w-full max-md:gap-2 max-md:overflow-hidden max-md:px-2"
 			}
 			href={attachment.objectUrl}
 			rel="noopener"
 			target="_blank"
 		>
-			<span className="inline-flex size-8 flex-none items-center justify-center rounded-md bg-coral-50 text-coral-700">
-				<FileTextIcon />
+			<span className="inline-flex size-8 flex-none items-center justify-center rounded-md bg-coral-50 text-coral-700 max-md:size-7 max-md:rounded-full">
+				<FileTextIcon className="size-full max-md:size-4" />
 			</span>
-			<span className="min-w-0">
+			<span className="min-w-0 flex-1 overflow-hidden">
 				<span className="block truncate font-bold text-xs">
 					{attachment.fileName}
 				</span>

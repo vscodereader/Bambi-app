@@ -8,10 +8,18 @@ import {
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	Card,
+	CardAction,
 	CardContent,
 	CardHeader,
 	CardTitle,
 } from "@bambi-app/ui/components/card";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
@@ -29,20 +37,24 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DataTable } from "@/components/bambi/data-table";
 import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
 import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
 import {
 	type EmployerJob,
+	EmployerJobActionsMenu,
 	getEmployerJobsColumns,
+	getJobStatusNote,
+	isPubliclyViewable,
 } from "@/components/bambi/employer-jobs-columns";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { authClient } from "@/lib/auth-client";
-import { formatNullable } from "@/lib/bambi-format";
+import { getJobDisplayStatus } from "@/lib/bambi/exposure";
+import { formatNullable, formatPay } from "@/lib/bambi-format";
 import { verificationStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
@@ -231,6 +243,163 @@ function QuickLinkTile({
 	);
 }
 
+const MOBILE_JOB_PAGE_SIZE = 10;
+
+type MobileJobSort = "pay" | "recent" | "status" | "title";
+
+function MobileOwnedJobs({
+	deletingJobId,
+	jobs,
+	onRequestDelete,
+}: {
+	deletingJobId: null | string;
+	jobs: EmployerJob[];
+	onRequestDelete: (jobId: string) => void;
+}) {
+	const [page, setPage] = useState(1);
+	const [sort, setSort] = useState<MobileJobSort>("recent");
+	const sortedJobs = useMemo(() => {
+		const next = [...jobs];
+
+		return next.sort((left, right) => {
+			if (sort === "title") {
+				return left.title.localeCompare(right.title, "ko");
+			}
+			if (sort === "pay") {
+				return (right.payAmount ?? 0) - (left.payAmount ?? 0);
+			}
+			if (sort === "status") {
+				return getJobDisplayStatus(left).label.localeCompare(
+					getJobDisplayStatus(right).label,
+					"ko"
+				);
+			}
+
+			return (
+				new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+			);
+		});
+	}, [jobs, sort]);
+	const pageCount = Math.max(
+		1,
+		Math.ceil(sortedJobs.length / MOBILE_JOB_PAGE_SIZE)
+	);
+	const safePage = Math.min(page, pageCount);
+	const pageJobs = sortedJobs.slice(
+		(safePage - 1) * MOBILE_JOB_PAGE_SIZE,
+		safePage * MOBILE_JOB_PAGE_SIZE
+	);
+
+	return (
+		<div className="flex flex-col gap-3 px-2 md:hidden">
+			<Select
+				items={[
+					{ label: "최근 수정순", value: "recent" },
+					{ label: "제목순", value: "title" },
+					{ label: "급여순", value: "pay" },
+					{ label: "상태순", value: "status" },
+				]}
+				onValueChange={(value) => {
+					setSort((value ?? "recent") as MobileJobSort);
+					setPage(1);
+				}}
+				value={sort}
+			>
+				<SelectTrigger aria-label="내 공고 정렬" className="w-full">
+					<SelectValue />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="recent">최근 수정순</SelectItem>
+					<SelectItem value="title">제목순</SelectItem>
+					<SelectItem value="pay">급여순</SelectItem>
+					<SelectItem value="status">상태순</SelectItem>
+				</SelectContent>
+			</Select>
+			{pageJobs.map((job) => {
+				const display = getJobDisplayStatus(job);
+				const note = getJobStatusNote(job);
+				const title = (
+					<span className="block truncate font-semibold" title={job.title}>
+						{job.title}
+					</span>
+				);
+
+				return (
+					<Card key={job.id}>
+						<CardHeader className="gap-3">
+							<CardTitle className="min-w-0 flex-1 text-base">
+								{isPubliclyViewable(job) ? (
+									<Link
+										className="underline-offset-4 hover:underline"
+										href={`/seeker/jobs/${job.id}` as Route}
+									>
+										{title}
+									</Link>
+								) : (
+									title
+								)}
+							</CardTitle>
+							<CardAction>
+								<EmployerJobActionsMenu
+									deletingJobId={deletingJobId}
+									job={job}
+									onRequestDelete={onRequestDelete}
+								/>
+							</CardAction>
+						</CardHeader>
+						<CardContent className="grid gap-3 text-sm">
+							<div className="grid grid-cols-2 gap-3">
+								<div className="flex flex-col gap-1">
+									<span className="text-muted-foreground text-xs">
+										직종·지역
+									</span>
+									<span>{`${job.industryCategory} · ${job.region}`}</span>
+								</div>
+								<div className="flex flex-col gap-1">
+									<span className="text-muted-foreground text-xs">급여</span>
+									<span>{formatPay(job.payAmount, job.payUnit)}</span>
+								</div>
+							</div>
+							<div className="flex flex-col items-start gap-1">
+								<span className="text-muted-foreground text-xs">공고 상태</span>
+								<StatusBadge tone={display.tone}>{display.label}</StatusBadge>
+								{note ? (
+									<span className="text-muted-foreground text-xs">{note}</span>
+								) : null}
+							</div>
+						</CardContent>
+					</Card>
+				);
+			})}
+			{pageCount > 1 ? (
+				<div className="flex items-center justify-between gap-3">
+					<Button
+						disabled={safePage === 1}
+						onClick={() => setPage((current) => Math.max(1, current - 1))}
+						type="button"
+						variant="outline"
+					>
+						이전
+					</Button>
+					<span className="text-muted-foreground text-sm">
+						{safePage} / {pageCount}
+					</span>
+					<Button
+						disabled={safePage === pageCount}
+						onClick={() =>
+							setPage((current) => Math.min(pageCount, current + 1))
+						}
+						type="button"
+						variant="outline"
+					>
+						다음
+					</Button>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 function OwnedJobsPanel({
 	deletingJobId,
 	isDeleting,
@@ -320,16 +489,23 @@ function OwnedJobsPanel({
 				</Alert>
 			) : null}
 			<Card aria-labelledby="owned-jobs">
-				<CardContent className="overflow-x-auto p-0">
-					<DataTable
-						columns={getEmployerJobsColumns({
-							deletingJobId,
-							onRequestDelete,
-						})}
-						data={jobs}
-						emptyMessage="등록한 공고가 없습니다."
-						getRowKey={(job) => job.id}
+				<CardContent className="p-0">
+					<MobileOwnedJobs
+						deletingJobId={deletingJobId}
+						jobs={jobs}
+						onRequestDelete={onRequestDelete}
 					/>
+					<div className="hidden overflow-x-auto md:block">
+						<DataTable
+							columns={getEmployerJobsColumns({
+								deletingJobId,
+								onRequestDelete,
+							})}
+							data={jobs}
+							emptyMessage="등록한 공고가 없습니다."
+							getRowKey={(job) => job.id}
+						/>
+					</div>
 				</CardContent>
 			</Card>
 		</div>

@@ -326,7 +326,8 @@ function ChatMessageBubble({
 			)}
 			<div
 				className={cn(
-					"flex min-w-0 max-w-[78%] flex-col gap-1",
+					"flex min-w-0 max-w-[60%] flex-col gap-1 md:max-w-[78%]",
+					attachments.length > 0 && "max-md:max-w-[58%]",
 					mine && "items-end"
 				)}
 			>
@@ -337,39 +338,57 @@ function ChatMessageBubble({
 				)}
 				<div
 					className={cn(
-						"flex min-w-0 items-end gap-1.5",
+						"flex min-w-0 max-w-full items-end gap-1.5",
 						mine && "flex-row-reverse"
 					)}
 				>
 					<MessageContent
 						className={cn(
-							"w-fit max-w-full rounded-lg px-4 py-2",
+							"w-fit min-w-0 max-w-full overflow-hidden rounded-lg px-4 py-2",
+							attachments.length > 0 &&
+								"max-md:w-full max-md:min-w-0 max-md:overflow-hidden",
 							mine
 								? "bg-coral-500 text-white"
 								: "bg-secondary text-foreground max-md:bg-background"
 						)}
 					>
 						{attachments.length === 0 ? (
-							<p className="m-0 whitespace-pre-wrap text-sm leading-relaxed">
+							<p className="m-0 min-w-0 max-w-full whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">
 								{message.body}
 							</p>
 						) : (
-							<div className="grid gap-2">
-								{attachments.map((attachment) => (
-									<ChatAttachmentPreview
-										attachment={attachment}
-										key={attachment.id}
-										mine={mine}
-									/>
-								))}
-							</div>
+							<>
+								{message.body.trim() ? (
+									<p className="m-0 min-w-0 max-w-full whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere] md:hidden">
+										{message.body}
+									</p>
+								) : null}
+								<div className="grid min-w-0 max-w-full gap-2 max-md:w-full">
+									{attachments.map((attachment) => (
+										<ChatAttachmentPreview
+											attachment={attachment}
+											key={attachment.id}
+											mine={mine}
+										/>
+									))}
+								</div>
+								<p className="mt-1 mb-0 text-right text-[11px] opacity-70 md:hidden">
+									{formatChatTimeLabel(message.createdAt)}
+								</p>
+							</>
 						)}
 						<p className="mt-1 mb-0 text-[11px] opacity-70 max-md:hidden">
 							{formatDateTime(message.createdAt)}
 						</p>
 					</MessageContent>
-					{isGroupEnd ? (
-						<span className="flex-none text-[11px] text-muted-foreground md:hidden">
+					{attachments.length === 0 ? (
+						<span
+							aria-hidden={!isGroupEnd}
+							className={cn(
+								"flex-none text-[11px] text-muted-foreground md:hidden",
+								!isGroupEnd && "invisible"
+							)}
+						>
 							{formatChatTimeLabel(message.createdAt)}
 						</span>
 					) : null}
@@ -679,7 +698,7 @@ function ChatComposer({
 					size="icon-lg"
 					type="submit"
 				>
-					<span className="inline-flex size-5">
+					<span className="inline-flex size-5 translate-x-px -translate-y-px items-center justify-center">
 						<MessageIcon />
 					</span>
 				</UiButton>
