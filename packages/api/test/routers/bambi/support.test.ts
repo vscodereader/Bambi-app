@@ -57,12 +57,23 @@ afterAll(async () => {
 	await db.delete(user).where(inArray(user.id, seedUserIds));
 });
 
+// 문의 본문은 리치 에디터가 만든 Tiptap doc JSON이라 평문은 더 이상 통과하지 않는다.
+const INQUIRY_BODY = JSON.stringify({
+	content: [
+		{
+			content: [{ text: "문의 본문입니다. 확인 부탁드립니다.", type: "text" }],
+			type: "paragraph",
+		},
+	],
+	type: "doc",
+});
+
 const createInquiryAs = async (userId: string) => {
 	const caller = createProcedureClient(supportRouter.createInquiry, {
 		context: createContextForUser(userId),
 	});
 	return await caller({
-		body: "문의 본문입니다. 확인 부탁드립니다.",
+		body: INQUIRY_BODY,
 		category: "account",
 		title: "계정 문의",
 	});
