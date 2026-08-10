@@ -22,10 +22,13 @@
   추가 — 위치는 **고객센터 바로 위**. (`MANUAL_PATH`는 `@/lib/bambi/manual`.)
 - 마이페이지는 구직자·구인자 공용 셸이라 한 곳 수정으로 두 역할 모두 커버.
   `/manual` 인덱스가 역할별 기본 매뉴얼로 리다이렉트하므로 역할 분기 불필요.
-- 모바일 허브 카드·데스크톱 허브 카드(`screens/seeker.tsx`)가 같은 표를 쓰므로 자동 반영.
+- 사이드바(md↑)와 모바일 허브 리스트는 `NAV_ITEMS`를 그대로 쓰므로 자동 반영.
+  데스크톱 허브 카드(`screens/seeker.tsx`의 `seekerMeSections`)는 별도 목록인데
+  **고객센터도 거기 없으므로 이용 가이드도 추가하지 않는다**(안내 카드 성격 유지, 일관).
 - **운영자 숨김**: `HIDDEN_MY_PAGE_HREFS.admin`에 `"/manual"` 추가 — 운영자는 콘솔
   "콘텐츠 → 운영자 매뉴얼"로 들어간다(고객센터를 숨기는 기존 패턴과 동일).
-- 아이콘은 lucide `BookOpenIcon`(기존 항목들과 같은 방식으로 JSX로 전달).
+- 아이콘은 밤비 아이콘 맵(`components/bambi/icons.tsx`)에 lucide `BookOpen`을
+  `BookOpenIcon = fill(BookOpen)`으로 한 줄 추가해 기존 항목들과 같은 방식으로 사용.
 
 ## 2. 본문 타이포그래피 — ManualBody 오버라이드 확장
 
