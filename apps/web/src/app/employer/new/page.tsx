@@ -446,6 +446,8 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			Pick<
 				JobForm,
 				| "adProductId"
+				| "detailDesignAmount"
+				| "detailDesignRequested"
 				| "exposureAmount"
 				| "exposureDurationDays"
 				| "exposureType"
@@ -469,21 +471,37 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	};
 
 	const handleProductChange = (productId: string | null) => {
+		// 옵션 가격은 상품마다 다르므로 상품을 바꾸면 애드온 상태도 같이 내려놓는다
+		// (유지하면 낡은 가격 스냅샷이 남아 서버가 CONFLICT를 던진다).
 		updateExposureFields(
 			productId
 				? {
 						adProductId: productId,
+						detailDesignAmount: null,
+						detailDesignRequested: false,
 						exposureAmount: null,
 						exposureDurationDays: null,
 					}
 				: {
 						adProductId: null,
+						detailDesignAmount: null,
+						detailDesignRequested: false,
 						exposureAmount: null,
 						exposureDurationDays: null,
 						exposureType: "standard",
 						paymentMethod: null,
 					}
 		);
+	};
+
+	const handleDetailDesignChange = (
+		requested: boolean,
+		amount: number | null
+	) => {
+		updateExposureFields({
+			detailDesignAmount: amount,
+			detailDesignRequested: requested,
+		});
 	};
 
 	const handlePaymentMethodChange = (value: JobPaymentMethod) => {
@@ -907,6 +925,8 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 
 					<JobExposureFields
 						adProductId={form.adProductId}
+						detailDesignAmount={form.detailDesignAmount}
+						detailDesignRequested={form.detailDesignRequested}
 						errors={{
 							exposureDurationDays: fieldErrors.exposureDurationDays,
 							exposureType: fieldErrors.exposureType,
@@ -914,6 +934,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 						}}
 						exposureAmount={form.exposureAmount}
 						exposureDurationDays={form.exposureDurationDays}
+						onDetailDesignChange={handleDetailDesignChange}
 						onDurationChange={handleDurationChange}
 						onPaymentMethodChange={handlePaymentMethodChange}
 						onProductChange={handleProductChange}

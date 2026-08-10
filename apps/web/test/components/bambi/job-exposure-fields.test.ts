@@ -101,6 +101,52 @@ describe("job exposure and payment fields", () => {
 		expect(source).not.toContain("product?.discountPercent");
 	});
 
+	it("옵션이 있는 상품에서만 체크박스를 그리고 총액에 합산한다", () => {
+		const source = readComponent("job-exposure-fields.tsx");
+
+		expect(source).toContain("selectedProduct?.detailDesignPrice");
+		expect(source).toContain("sumJobPaymentAmount");
+		expect(source).toContain("detail-design-requested");
+	});
+
+	it("무통장입금 안내 금액도 애드온을 합한 총액이다", () => {
+		const source = readComponent("job-exposure-fields.tsx");
+
+		// 노출 금액만 안내하면 애드온만큼 덜 입금된다.
+		expect(source).toContain("amount={payableTotal}");
+	});
+
+	it("등록·수정 폼이 애드온 상태를 JobExposureFields에 잇는다", () => {
+		for (const file of [
+			"../../app/employer/new/page.tsx",
+			"../../app/employer/jobs/[id]/edit/page.tsx",
+		]) {
+			const source = readComponent(file);
+
+			expect(source).toContain(
+				"detailDesignRequested={form.detailDesignRequested}"
+			);
+			expect(source).toContain(
+				"onDetailDesignChange={handleDetailDesignChange}"
+			);
+		}
+	});
+
+	it("수정 폼 프리필이 애드온 상태를 복원한다", () => {
+		for (const file of [
+			"../../app/employer/jobs/[id]/edit/page.tsx",
+			"../../app/moderator/jobs/[id]/edit/page.tsx",
+		]) {
+			const source = readComponent(file);
+
+			// 프리필을 빠뜨리면 기본값(false)이 저장되어 구인자가 신청한 옵션이 조용히 풀린다.
+			expect(source).toContain("detailDesignAmount: job.detailDesignAmount");
+			expect(source).toContain(
+				"detailDesignRequested: job.detailDesignStatus !== null"
+			);
+		}
+	});
+
 	it("bank transfer guide lists accounts with copy and deposit instructions", () => {
 		const source = readComponent("bank-transfer-guide.tsx");
 
