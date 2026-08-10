@@ -60,6 +60,11 @@ import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-aut
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
 import { jobDetailDesignStatuses } from "../../services/bambi-job-detail-design";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
+import {
+	JOB_POST_DETAIL_IMAGE_LIMIT,
+	validateJobPostImageUpload,
+	validateJobPostMediaSet,
+} from "../../services/bambi-job-media-policy";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
 import {
@@ -68,7 +73,11 @@ import {
 } from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
-import { getBusinessDocumentObjectUrl } from "../../services/bambi-storage";
+import {
+	createJobPostMediaUploadIntent,
+	getBusinessDocumentObjectUrl,
+	isOwnedJobPostMediaKey,
+} from "../../services/bambi-storage";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 import { purgeWithdrawnAccountsBatch } from "../../services/bambi-withdrawal-purge";
 import { deletePublicObjects } from "../../services/gcs";
@@ -166,6 +175,31 @@ const setJobPostPaymentInput = z.object({
 const setJobPostDesignStatusInput = z.object({
 	jobPostId: z.string().uuid(),
 	status: z.enum(jobDetailDesignStatuses),
+});
+
+const createJobPostDesignMediaUploadInput = z.object({
+	byteSize: z.number().int().min(1),
+	fileName: z.string().max(180),
+	jobPostId: z.string().uuid(),
+	mimeType: z.string().min(1).max(120),
+});
+
+const setJobPostDesignMediaInput = z.object({
+	// 저장될 상세 이미지 전량. 빠진 기존 이미지는 행과 GCS 객체가 함께 지워진다.
+	detail: z
+		.array(
+			z.object({
+				altText: z.string().max(120).default(""),
+				byteSize: z.number().int().min(1),
+				fileName: z.string().max(180),
+				height: z.number().int().min(1).max(20_000).optional(),
+				mimeType: z.string().min(1).max(120),
+				storageKey: z.string().min(1).max(512),
+				width: z.number().int().min(1).max(20_000).optional(),
+			})
+		)
+		.max(JOB_POST_DETAIL_IMAGE_LIMIT),
+	jobPostId: z.string().uuid(),
 });
 
 const listJobsForPaymentInput = z.object({
@@ -2006,6 +2040,145 @@ export const moderationRouter = {
 			});
 
 			return updated;
+		}),
+
+	// 운영자가 완성본을 직접 올린다. 서명 URL의 조직 prefix는 반드시 **대상 공고의 조직**이어야
+	// 한다 — 운영자 자신의 조직으로 발급하면 저장 단계의 isOwnedJobPostMediaKey에 걸린다.
+	createJobPostDesignMediaUpload: adminProcedure
+		.input(createJobPostDesignMediaUploadInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const [target] = await db
+				.select({ organizationId: jobPost.organizationId })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!target) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const policy = validateJobPostImageUpload({
+				byteSize: input.byteSize,
+				fileName: input.fileName,
+				mimeType: input.mimeType,
+				usage: "detail",
+			});
+
+			if (!policy.ok) {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"상세 이미지는 JPG·PNG·WebP 형식의 10MB 이하 파일만 등록할 수 있습니다.",
+				});
+			}
+
+			return await createJobPostMediaUploadIntent({
+				actorUserId: admin.userId,
+				byteSize: input.byteSize,
+				fileName: input.fileName,
+				mimeType: input.mimeType,
+				organizationId: target.organizationId,
+			});
+		}),
+
+	// 상세 이미지(usage=detail) 전량 교체. 5장 제한은 기존 정책을 그대로 태우고, 교체에서
+	// 빠진 키는 트랜잭션 커밋 뒤에만 GCS에서 지운다(롤백된 변경으로 원본을 잃지 않게).
+	setJobPostDesignMedia: adminProcedure
+		.input(setJobPostDesignMediaInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const [target] = await db
+				.select({ organizationId: jobPost.organizationId })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!target) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const rows = input.detail.map((item, index) => ({
+				...item,
+				position: index,
+				usage: "detail" as const,
+			}));
+			const policy = validateJobPostMediaSet(rows);
+
+			if (!policy.ok) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: `상세 이미지는 최대 ${JOB_POST_DETAIL_IMAGE_LIMIT}장까지, JPG·PNG·WebP 10MB 이하만 등록할 수 있습니다.`,
+				});
+			}
+
+			for (const row of rows) {
+				if (
+					!isOwnedJobPostMediaKey({
+						organizationId: target.organizationId,
+						storageKey: row.storageKey,
+					})
+				) {
+					throw new ORPCError("FORBIDDEN", {
+						message: "이 공고의 조직에 속하지 않은 이미지 키입니다.",
+					});
+				}
+			}
+
+			const previousKeys = await db
+				.select({ storageKey: jobPostMedia.storageKey })
+				.from(jobPostMedia)
+				.where(
+					and(
+						eq(jobPostMedia.jobPostId, input.jobPostId),
+						eq(jobPostMedia.usage, "detail")
+					)
+				);
+
+			const detail = await db.transaction(async (tx) => {
+				await tx
+					.delete(jobPostMedia)
+					.where(
+						and(
+							eq(jobPostMedia.jobPostId, input.jobPostId),
+							eq(jobPostMedia.usage, "detail")
+						)
+					);
+
+				if (rows.length === 0) {
+					return [];
+				}
+
+				return await tx
+					.insert(jobPostMedia)
+					.values(
+						rows.map((row) => ({
+							altText: row.altText.trim(),
+							byteSize: row.byteSize,
+							fileName: row.fileName.trim(),
+							height: row.height ?? null,
+							jobPostId: input.jobPostId,
+							mimeType: row.mimeType,
+							organizationId: target.organizationId,
+							position: row.position,
+							storageKey: row.storageKey,
+							uploadedByUserId: admin.userId,
+							usage: row.usage,
+							width: row.width ?? null,
+						}))
+					)
+					.returning();
+			});
+
+			const retained = new Set(rows.map((row) => row.storageKey));
+
+			await deletePublicObjects(
+				previousKeys
+					.map((row) => row.storageKey)
+					.filter((key) => !retained.has(key))
+			);
+
+			return { detail };
 		}),
 
 	// 공고의 광고 종료일만 앞뒤로 민다. 결제 상태·노출 종류는 그대로라 프리미엄 정원(자리 수)에
