@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
 import { client } from "@/utils/orpc";
 import { type BambiRole, homePathForRole } from "./home-path";
+import {
+	defaultManualKeyForRole,
+	type ManualKey,
+	manualKeysForRole,
+	manualPath,
+} from "./manual";
 
 type Routing = Awaited<ReturnType<typeof client.bambi.onboarding.getMyRouting>>;
 
@@ -65,4 +71,23 @@ export async function resolveEmployerAccess(): Promise<{
 		redirect(homePathForRole(routing.role));
 	}
 	return { approvalStatus: routing.employerApprovalStatus };
+}
+
+// /manual 인덱스: 자기 역할의 기본 매뉴얼로 보낸다.
+export async function redirectToDefaultManual(): Promise<void> {
+	const routing = await getRouting();
+	redirect(manualPath(defaultManualKeyForRole(routing.role)));
+}
+
+// 매뉴얼 열람 가드: 위계 밖 매뉴얼(예: 구직자가 /manual/moderator)이면 자기 기본
+// 매뉴얼로 되돌린다. 인증 오버레이로 보내지 않는 이유는 위 enforceJobSeekerAccess
+// 주석과 같다. 통과 시 role을 돌려준다 — 전환 탭 구성에 필요하다.
+export async function enforceManualAccess(
+	key: ManualKey
+): Promise<{ role: BambiRole }> {
+	const routing = await getRouting();
+	if (!manualKeysForRole(routing.role).includes(key)) {
+		redirect(manualPath(defaultManualKeyForRole(routing.role)));
+	}
+	return { role: routing.role };
 }

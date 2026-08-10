@@ -19,6 +19,12 @@ if (publicMediaBaseUrl) {
 
 const nextConfig: NextConfig = {
 	images: { remotePatterns: remoteImagePatterns },
+	// /manual/* 페이지는 세션 검사 때문에 동적 렌더라, manual-content.ts의 fs.readFile이
+	// 런타임에 돈다. 원본 md는 apps/web 밖(리포 루트 docs/manual)에 있고 파일명도 변수라
+	// 파일 트레이싱이 정적으로 잡지 못한다 — 명시하지 않으면 배포 번들에서 빠져 전부
+	// notFound()가 된다. 키는 라우트 글롭, 값은 프로젝트 루트(apps/web) 기준 경로.
+	// 트레이싱 루트는 pnpm 워크스페이스라 리포 루트로 자동 추론된다(별도 설정 불필요).
+	outputFileTracingIncludes: { "/manual/**": ["../../docs/manual/*.md"] },
 	typedRoutes: true,
 	reactCompiler: true,
 	// @bambi-app/api는 소스 TS를 그대로 export 한다. 웹은 지금까지 타입만 가져왔지만,
