@@ -66,6 +66,55 @@ function MetricCard({ label, value }: MetricCardProps) {
 export default function EmployerAnalyticsPage() {
 	const summaryQuery = useQuery(orpc.bambi.analytics.summary.queryOptions());
 	const summaries = summaryQuery.data ?? [];
+	const formatPlacementMetrics = (summary: (typeof summaries)[number]) => {
+		const productSections = productSectionsFor(summary.exposureType);
+
+		return [
+			{
+				key: "special",
+				label: "스페셜",
+				value: summary.sectionMetrics.specialImpressions,
+			},
+			{
+				key: "urgent",
+				label: "급구",
+				value: summary.sectionMetrics.urgentImpressions,
+			},
+			{
+				key: "recommended",
+				label: "추천",
+				value: summary.sectionMetrics.recommendedImpressions,
+			},
+			{
+				key: "organic",
+				label: "일반",
+				value: summary.sectionMetrics.organicImpressions,
+			},
+			{
+				key: "premiumBanner",
+				label: "프리미엄 배너·상단",
+				value: summary.sectionMetrics.premiumBannerImpressions,
+			},
+			{
+				key: "leftBanner",
+				label: "프리미엄 배너·좌측",
+				value: summary.sectionMetrics.leftBannerImpressions,
+			},
+			{
+				key: "rightBanner",
+				label: "프리미엄 배너·우측",
+				value: summary.sectionMetrics.rightBannerImpressions,
+			},
+		]
+			.filter(
+				(item) =>
+					item.key === "organic" ||
+					productSections.has(item.key) ||
+					item.value > 0
+			)
+			.map((item) => `${item.label} ${formatNumber(item.value)}`)
+			.join(" · ");
+	};
 	const totals = summaries.reduce(
 		(accumulator, item) => ({
 			chatStarts: accumulator.chatStarts + item.metrics.chatStarts,
@@ -294,125 +343,123 @@ export default function EmployerAnalyticsPage() {
 					title="분석할 공고가 없습니다"
 				/>
 			) : (
-				<Card>
-					<CardContent className="overflow-x-auto p-0">
-						<table className="w-full min-w-[820px] border-collapse text-left text-sm">
-							<thead className="border-b bg-muted/40">
-								<tr>
-									<th className="px-4 py-3 font-medium" scope="col">
-										공고
-									</th>
-									<th className="px-4 py-3 font-medium" scope="col">
-										노출
-									</th>
-									<th className="px-4 py-3 font-medium" scope="col">
-										상세
-									</th>
-									<th className="px-4 py-3 font-medium" scope="col">
-										채팅
-									</th>
-									<th className="px-4 py-3 font-medium" scope="col">
-										상세 전환
-									</th>
-									<th className="px-4 py-3 font-medium" scope="col">
-										게재 구분
-									</th>
-								</tr>
-							</thead>
-							<tbody className="divide-y">
-								{summaries.map((summary) => (
-									<tr key={summary.jobPostId}>
-										<th className="px-4 py-3 font-medium" scope="row">
-											<div className="max-w-[280px]">
-												<p className="m-0 break-words">{summary.title}</p>
-												<StatusBadge tone={getJobDisplayStatus(summary).tone}>
-													{getJobDisplayStatus(summary).label}
-												</StatusBadge>
-											</div>
-										</th>
-										<td className="px-4 py-3">
-											{formatNumber(summary.metrics.impressions)}
-										</td>
-										<td className="px-4 py-3">
-											{formatNumber(summary.metrics.detailViews)}
-										</td>
-										<td className="px-4 py-3">
-											{formatNumber(summary.metrics.chatStarts)}
-										</td>
-										<td className="px-4 py-3">
-											{formatRate(
-												summary.metrics.detailViews,
-												summary.metrics.impressions
-											)}
-										</td>
-										<td className="px-4 py-3">
-											{(() => {
-												// 표시 집합 = {일반} ∪ {현재 상품 섹션} ∪ {카운트 > 0인 섹션}.
-												// 안전장치: 과거에 다른 상품을 산 공고의 실측 카운트를 숨기면 합계가
-												// 어긋나므로, 상품 매핑에 없어도 값이 있으면 남긴다.
-												const productSections = productSectionsFor(
-													summary.exposureType
-												);
+				<>
+					<div className="flex flex-col gap-3 md:hidden">
+						{summaries.map((summary) => {
+							const displayStatus = getJobDisplayStatus(summary);
 
-												return [
-													{
-														key: "special",
-														label: "스페셜",
-														value: summary.sectionMetrics.specialImpressions,
-													},
-													{
-														key: "urgent",
-														label: "급구",
-														value: summary.sectionMetrics.urgentImpressions,
-													},
-													{
-														key: "recommended",
-														label: "추천",
-														value:
-															summary.sectionMetrics.recommendedImpressions,
-													},
-													{
-														key: "organic",
-														label: "일반",
-														value: summary.sectionMetrics.organicImpressions,
-													},
-													{
-														key: "premiumBanner",
-														label: "프리미엄 배너·상단",
-														value:
-															summary.sectionMetrics.premiumBannerImpressions,
-													},
-													{
-														key: "leftBanner",
-														label: "프리미엄 배너·좌측",
-														value: summary.sectionMetrics.leftBannerImpressions,
-													},
-													{
-														key: "rightBanner",
-														label: "프리미엄 배너·우측",
-														value:
-															summary.sectionMetrics.rightBannerImpressions,
-													},
-												]
-													.filter(
-														(item) =>
-															item.key === "organic" ||
-															productSections.has(item.key) ||
-															item.value > 0
-													)
-													.map(
-														(item) =>
-															`${item.label} ${formatNumber(item.value)}`
-													)
-													.join(" · ");
-											})()}
-										</td>
+							return (
+								<Card key={summary.jobPostId} size="sm">
+									<CardContent className="flex flex-col gap-4">
+										<div className="flex items-start justify-between gap-3">
+											<p className="m-0 min-w-0 flex-1 truncate font-medium">
+												{summary.title}
+											</p>
+											<StatusBadge tone={displayStatus.tone}>
+												{displayStatus.label}
+											</StatusBadge>
+										</div>
+										<dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+											<div>
+												<dt className="text-muted-foreground">노출</dt>
+												<dd className="mt-1 font-medium">
+													{formatNumber(summary.metrics.impressions)}
+												</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">상세</dt>
+												<dd className="mt-1 font-medium">
+													{formatNumber(summary.metrics.detailViews)}
+												</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">채팅</dt>
+												<dd className="mt-1 font-medium">
+													{formatNumber(summary.metrics.chatStarts)}
+												</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">상세 전환</dt>
+												<dd className="mt-1 font-medium">
+													{formatRate(
+														summary.metrics.detailViews,
+														summary.metrics.impressions
+													)}
+												</dd>
+											</div>
+											<div className="col-span-2">
+												<dt className="text-muted-foreground">게재 구분</dt>
+												<dd className="mt-1 break-words font-medium">
+													{formatPlacementMetrics(summary)}
+												</dd>
+											</div>
+										</dl>
+									</CardContent>
+								</Card>
+							);
+						})}
+					</div>
+					<Card className="hidden md:block">
+						<CardContent className="overflow-x-auto p-0">
+							<table className="w-full min-w-[820px] border-collapse text-left text-sm">
+								<thead className="border-b bg-muted/40">
+									<tr>
+										<th className="px-4 py-3 font-medium" scope="col">
+											공고
+										</th>
+										<th className="px-4 py-3 font-medium" scope="col">
+											노출
+										</th>
+										<th className="px-4 py-3 font-medium" scope="col">
+											상세
+										</th>
+										<th className="px-4 py-3 font-medium" scope="col">
+											채팅
+										</th>
+										<th className="px-4 py-3 font-medium" scope="col">
+											상세 전환
+										</th>
+										<th className="px-4 py-3 font-medium" scope="col">
+											게재 구분
+										</th>
 									</tr>
-								))}
-							</tbody>
-						</table>
-					</CardContent>
-				</Card>
+								</thead>
+								<tbody className="divide-y">
+									{summaries.map((summary) => (
+										<tr key={summary.jobPostId}>
+											<th className="px-4 py-3 font-medium" scope="row">
+												<div className="max-w-[280px]">
+													<p className="m-0 break-words">{summary.title}</p>
+													<StatusBadge tone={getJobDisplayStatus(summary).tone}>
+														{getJobDisplayStatus(summary).label}
+													</StatusBadge>
+												</div>
+											</th>
+											<td className="px-4 py-3">
+												{formatNumber(summary.metrics.impressions)}
+											</td>
+											<td className="px-4 py-3">
+												{formatNumber(summary.metrics.detailViews)}
+											</td>
+											<td className="px-4 py-3">
+												{formatNumber(summary.metrics.chatStarts)}
+											</td>
+											<td className="px-4 py-3">
+												{formatRate(
+													summary.metrics.detailViews,
+													summary.metrics.impressions
+												)}
+											</td>
+											<td className="px-4 py-3">
+												{formatPlacementMetrics(summary)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</CardContent>
+					</Card>
+				</>
 			)}
 		</PageShell>
 	);
