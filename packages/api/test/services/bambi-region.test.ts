@@ -1,6 +1,12 @@
+import dotenv from "dotenv";
 import { describe, expect, it } from "vitest";
 
-import { matchRegionCodes, type RegionIndex } from "@/services/bambi-region";
+// dotenv를 먼저 실행하고 동적 import한다(정적 import는 env보다 먼저 평가된다).
+dotenv.config({ path: "../../apps/server/.env" });
+
+import type { RegionIndex } from "@/services/bambi-region";
+
+const { matchRegionCodes } = await import("@/services/bambi-region");
 
 const index: RegionIndex = {
 	byLabel: new Map([
