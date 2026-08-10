@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- **선행 조건(실행 전 반드시 처리)**: 이 워크트리는 develop(a1f03f85) 기반이라 테스트 분리 브랜치(`chore/separate-test-files`, 미머지)가 없다. 착수 전에 그 브랜치를 develop에 머지하고, 이 브랜치에 develop을 머지해 `apps/web/test/`·`packages/api/test/` 미러 구조와 vitest config(include `test/**`, `@/` alias, `root` 고정)를 확보해야 한다. 이 계획의 테스트 경로·실행 명령은 전부 그 구조를 전제로 한다.
+- **선행 조건(충족됨, 2026-08-10)**: 이 계획의 테스트 경로·실행 명령은 테스트 분리 컨벤션(`apps/web/test/`·`packages/api/test/` 미러 구조, vitest config include `test/**`·`@/` alias·`root` 고정)을 전제로 한다. 실행 브랜치 `feat/detail-design-addon`은 `chore/separate-test-files` 위에 만들어져 이 구조를 이미 포함한다(3175536e). 구현은 반드시 이 병합 커밋을 포함한 브랜치/워크트리에서 진행한다.
 - 소스를 텍스트로 읽는 웹 테스트는 각 패키지 `test/src-path.ts`의 `srcPath(...)` 헬퍼를 쓴다(상대 깊이 직접 계산 금지). 이 계획은 `srcPath("components/bambi/foo.tsx")`처럼 **src 루트 기준 상대 경로 1개**를 받는 형태로 작성했다 — 머지 후 `test/src-path.ts`의 실제 export 시그니처가 다르면 그 파일을 단일 기준으로 삼아 호출부를 맞춘다.
 - **마이그레이션**: `db:push` 절대 금지. `pnpm --filter @bambi-app/db db:generate`로 생성만 하고, 적용(`db:migrate`)은 사용자 지시가 있을 때만 한다. 현재 최신 마이그레이션은 `0077_grey_hellfire_club.sql`이므로 생성 결과는 `packages/db/src/migrations/0078_*.sql`이다(접미사는 drizzle이 임의로 붙인다).
 - **`packages/api/test/routers/**`(routers/bambi) 스위트는 어떤 이유로도 실행 금지** — 실 dev DB를 지운다. api 테스트 실행은 반드시 `cwd=packages/api`에서 `pnpm vitest run test/services`만. web은 리포 루트에서 `pnpm vitest run --config apps/web/vitest.config.ts`.
