@@ -394,7 +394,7 @@ export const boostOptionsRouter = {
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
 
-			const { jobPostId, optionType, updated } = await db.transaction(
+			const { changed, jobPostId, optionType, updated } = await db.transaction(
 				async (tx) => {
 					const [locked] = await tx
 						.select()
@@ -407,8 +407,10 @@ export const boostOptionsRouter = {
 					}
 
 					// 같은 상태 재확정은 멱등 처리한다 — paid를 다시 걸어 횟수권 잔여가 초기화되는 사고를 막는다.
+					// changed=false로 반환해 커밋 후 알림·감사 로그도 건너뛴다(중복 알림 방지).
 					if (locked.paymentStatus === input.paymentStatus) {
 						return {
+							changed: false,
 							jobPostId: locked.jobPostId,
 							optionType: locked.optionType,
 							updated: locked,
@@ -476,6 +478,7 @@ export const boostOptionsRouter = {
 					});
 
 					return {
+						changed: true,
 						jobPostId: locked.jobPostId,
 						optionType: locked.optionType,
 						updated: row,
@@ -483,14 +486,17 @@ export const boostOptionsRouter = {
 				}
 			);
 
-			// 커밋 후 알림(best-effort). action·targetType·metadata.optionType 문자열은 웹 라벨과 바인딩돼 있다.
-			await notifyModerationAction({
-				action: `set_boost_purchase_payment:${input.paymentStatus}`,
-				actorUserId: admin.userId,
-				metadata: { optionType },
-				targetId: jobPostId,
-				targetType: "job_post",
-			});
+			// 커밋 후 알림(best-effort). 멱등 no-op(changed=false)이면 중복 알림을 건너뛴다.
+			// action·targetType·metadata.optionType 문자열은 웹 라벨과 바인딩돼 있다.
+			if (changed) {
+				await notifyModerationAction({
+					action: `set_boost_purchase_payment:${input.paymentStatus}`,
+					actorUserId: admin.userId,
+					metadata: { optionType },
+					targetId: jobPostId,
+					targetType: "job_post",
+				});
+			}
 
 			return updated;
 		}),
