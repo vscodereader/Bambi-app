@@ -142,7 +142,9 @@ export function BoostOptionPurchaseDialog({
 
 	return (
 		<Dialog onOpenChange={onOpenChange} open={open}>
-			<DialogContent className="max-h-[85vh] w-auto max-w-[92vw] md:max-w-lg">
+			{/* 폭은 DialogContent 기본값(w-[420px]·max-w-[92vw])을 그대로 쓴다 — w-auto로 덮으면
+			    콘텐츠가 짧을 때 데스크톱에서 창이 쪼그라든다. */}
+			<DialogContent className="max-h-[85vh]">
 				<div className="flex flex-col gap-4">
 					<div className="flex flex-col gap-1">
 						<DialogTitle className="text-base">
@@ -252,6 +254,17 @@ export function BoostOptionPurchaseDialog({
 								</Alert>
 							)}
 						</div>
+					) : null}
+
+					{/* 조회 실패를 조용히 빈 목록으로 두면 "입금 대기 없음"과 구별되지 않는다. */}
+					{jobQuery.isError ? (
+						<Alert variant="warning">
+							<Info />
+							<AlertDescription>
+								입금 대기 내역을 불러오지 못했어요. 공고 수정 화면에서 확인해
+								주세요.
+							</AlertDescription>
+						</Alert>
 					) : null}
 
 					{unpaidPurchases.length > 0 ? (
