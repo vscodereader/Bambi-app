@@ -287,7 +287,8 @@ describe("visual job marketplace components", () => {
 
 	it("wires the moderator ad-products console and nav", () => {
 		const page = readComponent("../../app/moderator/ad-products/page.tsx");
-		const layout = readComponent("../../app/moderator/layout.tsx");
+		// 운영자 메뉴는 layout에서 lib의 공통 목록으로 빠졌다(데스크톱 헤더·모바일 더보기 공용).
+		const navItems = readComponent("../../lib/bambi/moderator-navigation.ts");
 		const nav = readComponent("persona-nav.tsx");
 		expect(page).toContain("listCatalogAdmin");
 		expect(page).toContain("effectiveDiscountPercent");
@@ -304,7 +305,7 @@ describe("visual job marketplace components", () => {
 		expect(page).toContain(
 			"flex flex-col items-start gap-2 text-muted-foreground text-sm"
 		);
-		expect(layout).toContain("/moderator/ad-products");
+		expect(navItems).toContain("/moderator/ad-products");
 		expect(nav).toContain("adProducts");
 	});
 

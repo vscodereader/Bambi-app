@@ -45,8 +45,13 @@ const SURFACES = [
 			'promotionSurface="community_left"',
 			'promotionSurface="community_right"',
 		],
-		label: "수다방 레이아웃 rail",
-		relativePath: path.join("app", "seeker", "community", "layout.tsx"),
+		label: "수다방 rail",
+		relativePath: path.join(
+			"app",
+			"seeker",
+			"community",
+			"community-rails.tsx"
+		),
 	},
 	{
 		expects: [

@@ -8,8 +8,13 @@ const SRC_ROOT = srcPath(".");
 
 const RAIL_SCREENS = [
 	{
-		label: "수다방 레이아웃",
-		relativePath: path.join("app", "seeker", "community", "layout.tsx"),
+		label: "수다방 rail",
+		relativePath: path.join(
+			"app",
+			"seeker",
+			"community",
+			"community-rails.tsx"
+		),
 	},
 	{
 		label: "고객센터 레이아웃",
