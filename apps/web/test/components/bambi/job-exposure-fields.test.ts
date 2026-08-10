@@ -147,6 +147,29 @@ describe("job exposure and payment fields", () => {
 		}
 	});
 
+	it("완료 건 애드온을 동결한다(체크박스 비활성·자동 언체크 스킵)", () => {
+		const source = readComponent("job-exposure-fields.tsx");
+
+		// 완료 상태면 체크박스를 체크된 채 비활성으로 보여 주고 안내 한 줄을 단다.
+		expect(source).toContain('status === "completed"');
+		expect(source).toContain("disabled");
+		expect(source).toContain("제작이 완료된 옵션은 변경할 수 없어요");
+		// 완료 건은 자동 언체크·신가 덮어쓰기를 모두 스킵한다(강제 언체크 시 서버가 저장을 막는다).
+		expect(source).toContain("onChange?.(false, null)");
+	});
+
+	it("수정 폼이 애드온 진행 상태를 JobExposureFields에 잇는다", () => {
+		for (const file of [
+			"../../app/employer/jobs/[id]/edit/page.tsx",
+			"../../app/moderator/jobs/[id]/edit/page.tsx",
+		]) {
+			const source = readComponent(file);
+
+			// 완료 건 동결 판정에 필요한 진행 상태를 넘긴다.
+			expect(source).toContain("detailDesignStatus={job.detailDesignStatus}");
+		}
+	});
+
 	it("bank transfer guide lists accounts with copy and deposit instructions", () => {
 		const source = readComponent("bank-transfer-guide.tsx");
 

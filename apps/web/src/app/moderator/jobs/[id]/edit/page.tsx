@@ -680,6 +680,7 @@ export default function ModeratorEditJobPage({
 					adProductId={form.adProductId}
 					detailDesignAmount={form.detailDesignAmount}
 					detailDesignRequested={form.detailDesignRequested}
+					detailDesignStatus={job.detailDesignStatus}
 					errors={{
 						exposureDurationDays: fieldErrors.exposureDurationDays,
 						exposureType: fieldErrors.exposureType,

@@ -43,17 +43,28 @@ export const resolveJobDetailDesign = ({
 		};
 	}
 
+	// 완료 건은 애드온이 동결이다 — 상품가가 바뀌거나 운영자가 옵션가를 지워도(price null)
+	// 재검증 없이 completed 스냅샷을 그대로 돌려준다. 금액은 이미 구매 시점 스냅샷으로 굳어
+	// 재결제할 것이 없고, 여기서 not_offered/amount_changed로 막으면 완료 공고의 모든 저장
+	// (오타 수정·상품 전환 포함)이 봉쇄되고 구인자가 스스로 복구할 길이 없어진다. 실제 금액
+	// 보존은 toJobDetailDesignWrite가 금액 키를 빼서 하므로 아래 detailDesignAmount 값은
+	// (옵션가가 사라졌으면 null이더라도) completed 경로에서 의도적으로 버려진다. 명시적
+	// requested=false의 completed_locked는 위에서 이미 처리된다(완료 건 해제 불가, 스펙).
+	if (currentStatus === "completed") {
+		return {
+			ok: true,
+			snapshot: {
+				detailDesignAmount: productDetailDesignPrice,
+				detailDesignStatus: "completed",
+			},
+		};
+	}
+
 	if (productDetailDesignPrice === null) {
 		return { code: "not_offered", ok: false };
 	}
 
-	if (
-		// 완료 건은 금액이 이미 구매 시점 스냅샷으로 굳어 있어 재결제할 것이 없다.
-		// 여기서 막으면 상품가가 한 번 바뀐 뒤로 완료 공고는 본문 수정조차 못 한다.
-		currentStatus !== "completed" &&
-		expectedAmount != null &&
-		expectedAmount !== productDetailDesignPrice
-	) {
+	if (expectedAmount != null && expectedAmount !== productDetailDesignPrice) {
 		return {
 			code: "amount_changed",
 			expectedAmount,
@@ -66,9 +77,7 @@ export const resolveJobDetailDesign = ({
 		ok: true,
 		snapshot: {
 			detailDesignAmount: productDetailDesignPrice,
-			// 재신청이 아니라 completed 유지 — 상태를 requested로 되돌리면 완료된 작업이
-			// 운영자 큐에 다시 뜬다.
-			detailDesignStatus: currentStatus ?? "requested",
+			detailDesignStatus: "requested",
 		},
 	};
 };

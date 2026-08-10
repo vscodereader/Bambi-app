@@ -101,6 +101,32 @@ describe("resolveJobDetailDesign", () => {
 		).toEqual({ code: "completed_locked", ok: false });
 	});
 
+	it("completed + 상품 옵션 미제공(가격 null) + requested=true면 막지 않고 보존한다", () => {
+		// 운영자가 옵션가를 제거해도 완료 건의 저장이 봉쇄되면 안 된다. not_offered로
+		// 던지지 않고 completed 상태를 유지한다(금액 키 스킵은 toJobDetailDesignWrite 몫).
+		expect(
+			resolveJobDetailDesign({
+				currentStatus: "completed",
+				productDetailDesignPrice: null,
+				requested: true,
+			})
+		).toEqual({
+			ok: true,
+			snapshot: { detailDesignAmount: null, detailDesignStatus: "completed" },
+		});
+	});
+
+	it("completed + 옵션 미제공이어도 requested=false면 completed_locked이다", () => {
+		// 해제 시도는 옵션 제공 여부와 무관하게 완료 건 동결 규칙(스펙)을 그대로 따른다.
+		expect(
+			resolveJobDetailDesign({
+				currentStatus: "completed",
+				productDetailDesignPrice: null,
+				requested: false,
+			})
+		).toEqual({ code: "completed_locked", ok: false });
+	});
+
 	it("completed 건은 상품가가 바뀌어도 amount_changed로 막지 않는다", () => {
 		// 완료 건까지 막으면 상품가가 한 번 오른 뒤로 본문 수정조차 못 하게 된다.
 		expect(
