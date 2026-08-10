@@ -36,6 +36,7 @@ const {
 	bambiProfile,
 	employerOrganizationProfile,
 	jobBoostEvent,
+	jobBoostPurchase,
 	jobPost,
 } = bambiSchema;
 
@@ -64,6 +65,10 @@ const unpaidJobId = randomUUID();
 const expiredJobId = randomUUID();
 const preSeededJobId = randomUUID();
 const bannerJobId = randomUUID();
+// 번들 자동 없이 활성 auto_period 옵션만으로 후보가 되는 무료(standard) 공고.
+const optionOnlyJobId = randomUUID();
+// 배너형 + 활성 auto_period 옵션: 옵션이 있어도 배너형은 자동 후보에서 제외돼야 한다.
+const bannerOptionJobId = randomUUID();
 const jobPostIds = [
 	fireJobId,
 	comboJobId,
@@ -72,6 +77,8 @@ const jobPostIds = [
 	expiredJobId,
 	preSeededJobId,
 	bannerJobId,
+	optionOnlyJobId,
+	bannerOptionJobId,
 ];
 
 const createContextForUser = (userId: string): Context =>
@@ -97,6 +104,7 @@ const autoEventCount = async (jobPostId: string): Promise<number> => {
 };
 
 const baseJob = (overrides: {
+	adProductId?: string | null;
 	autoBoostsPerDay: number;
 	exposureEndsAt: Date | null;
 	exposureType?: JobExposureType;
@@ -230,6 +238,50 @@ describe("runAutoBoostTick", () => {
 				status: "published",
 				title: "배너형 공고",
 			}),
+			// 무료(standard) 공고: 번들 자동 0·노출 만료 없음. 활성 auto_period 옵션만으로 후보가 된다.
+			baseJob({
+				adProductId: null,
+				autoBoostsPerDay: 0,
+				exposureEndsAt: null,
+				exposureType: "standard",
+				id: optionOnlyJobId,
+				manualBoostsPerDay: 0,
+				paymentStatus: "paid",
+				status: "published",
+				title: "옵션 전용 공고",
+			}),
+			// 배너형 + auto_period 옵션: 옵션이 있어도 배너형은 후보 쿼리·잠금 내 재확인 모두에서 제외.
+			baseJob({
+				autoBoostsPerDay: 0,
+				exposureEndsAt: future,
+				exposureType: "premium-banner",
+				id: bannerOptionJobId,
+				manualBoostsPerDay: 0,
+				paymentStatus: "paid",
+				status: "published",
+				title: "배너형 옵션 공고",
+			}),
+		]);
+		// optionOnly·bannerOption 두 공고에 활성 auto_period 옵션(하루 2회)을 붙인다.
+		await db.insert(jobBoostPurchase).values([
+			{
+				amount: 20_000,
+				boostsPerDay: 2,
+				expiresAt: future,
+				jobPostId: optionOnlyJobId,
+				optionType: "auto_period",
+				organizationId,
+				paymentStatus: "paid",
+			},
+			{
+				amount: 20_000,
+				boostsPerDay: 2,
+				expiresAt: future,
+				jobPostId: bannerOptionJobId,
+				optionType: "auto_period",
+				organizationId,
+				paymentStatus: "paid",
+			},
 		]);
 		// preSeededJob은 오늘 자동 1회(쿼터=1)를 이미 소진한 상태를 만든다(잠금 내 재확인 검증).
 		await db.insert(jobBoostEvent).values({
@@ -244,6 +296,9 @@ describe("runAutoBoostTick", () => {
 		await db
 			.delete(jobBoostEvent)
 			.where(inArray(jobBoostEvent.jobPostId, jobPostIds));
+		await db
+			.delete(jobBoostPurchase)
+			.where(inArray(jobBoostPurchase.jobPostId, jobPostIds));
 		await db.delete(jobPost).where(inArray(jobPost.id, jobPostIds));
 		await db.delete(adProduct).where(eq(adProduct.id, adProductId));
 		await db.delete(adPlacement).where(eq(adPlacement.id, adPlacementId));
@@ -294,6 +349,16 @@ describe("runAutoBoostTick", () => {
 	it("excludes banner-type ad jobs (auto-boost is listing-only)", async () => {
 		// 배너형(premium-banner)은 자동 후보 쿼리·잠금 내 재확인 모두에서 제외된다.
 		expect(await autoEventCount(bannerJobId)).toBe(0);
+	});
+
+	it("fires a free standard job that has an active auto_period option", async () => {
+		// 번들 자동 0이어도 활성 auto_period 옵션(하루 2회)만으로 후보가 되어 발동한다(standard 포함).
+		expect(await autoEventCount(optionOnlyJobId)).toBeGreaterThanOrEqual(1);
+	});
+
+	it("excludes banner jobs even when they hold an active auto_period option", async () => {
+		// 배너형은 옵션이 있어도 배너 제외(notInArray)로 후보에서 빠진다.
+		expect(await autoEventCount(bannerOptionJobId)).toBe(0);
 	});
 
 	it("does not fire a job that already met its daily auto quota (in-lock recheck)", async () => {
