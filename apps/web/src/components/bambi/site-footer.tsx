@@ -21,6 +21,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
+import { MANUAL_PATH } from "@/lib/bambi/manual";
 import { SUPPORT_PATH } from "@/lib/bambi/support";
 import { orpc } from "@/utils/orpc";
 import { BOTTOM_NAV_CONTENT_SPACER } from "./bottom-nav-shell";
@@ -51,6 +52,10 @@ const PUBLIC_NAV_LINKS: FooterLink[] = [
 	{ href: "/jobs" as Route, label: "지역별 채용 정보" },
 	{ href: "/board" as Route, label: "커뮤니티 게시판" },
 	{ href: "/board/notice" as Route, label: "공지사항" },
+	// 이용 가이드(/manual)는 로그인 필요 영역이라 위 "로그인 없이 열리는" 묶음의
+	// 예외다 — 비로그인 클릭은 로그인 화면을 거친다. 회원이 푸터에서 매뉴얼을 찾는
+	// 동선이 우선이라 여기 함께 둔다.
+	{ href: MANUAL_PATH, label: "이용 가이드" },
 ];
 
 const FOOTER_LINK_CLASS =
