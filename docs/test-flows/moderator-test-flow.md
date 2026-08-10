@@ -1238,7 +1238,7 @@
   pending(미결제 대기)은 게이트 카운트에 들어가지 않는다.
 - **엣지 케이스**: 운영자 결제 관리 화면에는 **정원·대기 정보 표시가 없어** `CONFLICT`가 나기 전까지
   만석 여부를 알 수 없다. `bambi.adProducts.premiumCapacity`는 구인자 화면에서만 소비된다.
-- **참조 테스트**: `packages/api/src/routers/bambi/premium-capacity-gate.test.ts` (실행하지 말 것)
+- **참조 테스트**: `packages/api/test/routers/bambi/premium-capacity-gate.test.ts` (실행하지 말 것)
 
 ### 11.4 결제 수단·입금 대사 — **화면에 없음**
 
