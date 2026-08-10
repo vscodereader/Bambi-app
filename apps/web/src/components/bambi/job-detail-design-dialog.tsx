@@ -14,10 +14,11 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { JobDetailImageSlots } from "@/components/bambi/job-post-media-uploader";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
-import type { JobDetailDesignStatusKey } from "@/lib/bambi/exposure";
+import { revokeMediaItemPreview } from "@/lib/bambi/job-media-item";
 import {
 	emptyJobFormMedia,
 	type JobFormMedia,
+	type JobFormMediaItem,
 	uploadFileToSignedUrl,
 } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
@@ -28,18 +29,53 @@ type DesignMediaItem = Parameters<
 	AppRouterClient["bambi"]["moderation"]["setJobPostDesignMedia"]
 >[0]["detail"][number];
 
+// 이미 저장된 상세 이미지 한 장(서버 조회분·방금 저장한 입력분 공통 모양).
+interface SavedDesignMediaItem {
+	altText?: null | string;
+	byteSize: number;
+	fileName: string;
+	height?: null | number;
+	mimeType: string;
+	storageKey: string;
+	width?: null | number;
+}
+
+// 저장된 상세 이미지 한 장을 폼 상태로. 미리보기는 공개 버킷 URL을 그대로 쓴다(운영자 공고
+// 수정 화면과 동일 경로).
+const toDesignFormItem = (item: SavedDesignMediaItem): JobFormMediaItem => ({
+	altText: item.altText ?? "",
+	byteSize: item.byteSize,
+	fileName: item.fileName,
+	height: item.height ?? undefined,
+	mimeType: item.mimeType,
+	previewUrl: jobMediaPublicUrl(item.storageKey),
+	storageKey: item.storageKey,
+	width: item.width ?? undefined,
+});
+
+/**
+ * 서버 프리필을 화면 상태에 얹는다. **아직 저장하지 않은 선택(file)이 하나라도 있으면
+ * 화면 상태를 그대로 둔다** — getJobPostForAdmin 응답에는 Date 컬럼이 있어 react-query의
+ * structural sharing이 걸리지 않아 재조회(무효화·창 포커스 복귀)마다 새 참조가 오는데,
+ * 그때마다 덮으면 운영자가 고른 파일이 경고 없이 사라진다(그 뒤 저장하면 서버 상태
+ * 그대로가 저장되고 성공 토스트까지 뜬다).
+ */
+export const mergeDesignDetailPrefill = (
+	current: JobFormMediaItem[],
+	saved: SavedDesignMediaItem[]
+): JobFormMediaItem[] =>
+	current.some((item) => item.file) ? current : saved.map(toDesignFormItem);
+
 // 운영자가 완성본 상세이미지를 올리고 제작 완료로 넘기는 창. 시안 교환은 스코프 밖이라
 // 여기서는 "최종 결과물 등록 + 상태 토글"만 한다.
 export function JobDetailDesignDialog({
 	jobPostId,
 	onOpenChange,
 	open,
-	status,
 }: {
 	jobPostId: string;
 	onOpenChange: (open: boolean) => void;
 	open: boolean;
-	status: JobDetailDesignStatusKey;
 }) {
 	const queryClient = useQueryClient();
 	const [media, setMedia] = useState<JobFormMedia>(emptyJobFormMedia);
@@ -60,26 +96,23 @@ export function JobDetailDesignDialog({
 		orpc.bambi.moderation.setJobPostDesignStatus.mutationOptions()
 	);
 
-	// 저장된 이미지는 공개 버킷 URL로 미리보기를 만든다(운영자 공고 수정 화면과 동일 경로).
+	// 조회분으로 프리필한다. 재조회마다 새 참조가 오므로 병합 규칙(mergeDesignDetailPrefill)이
+	// 미저장 선택을 지켜 준다 — 이전 상태는 setMedia 콜백으로 읽어 deps를 늘리지 않는다.
+	const savedDetail = jobQuery.data?.media.detail;
+	// 제작 상태의 단일 원천도 조회분이다. 목록 행에서 받아 오면 토글 뒤 목록이 갱신될 때까지
+	// 버튼 문구가 옛 값으로 남는다. null = 미신청이거나 아직 로딩 중 → 토글을 막는다.
+	const designStatus = jobQuery.data?.detailDesignStatus ?? null;
+
 	useEffect(() => {
-		if (!jobQuery.data) {
+		if (!savedDetail) {
 			return;
 		}
 
-		setMedia({
-			...emptyJobFormMedia,
-			detail: jobQuery.data.media.detail.map((item) => ({
-				altText: item.altText,
-				byteSize: item.byteSize,
-				fileName: item.fileName,
-				height: item.height ?? undefined,
-				mimeType: item.mimeType,
-				previewUrl: jobMediaPublicUrl(item.storageKey),
-				storageKey: item.storageKey,
-				width: item.width ?? undefined,
-			})),
-		});
-	}, [jobQuery.data]);
+		setMedia((prev) => ({
+			...prev,
+			detail: mergeDesignDetailPrefill(prev.detail, savedDetail),
+		}));
+	}, [savedDetail]);
 
 	const invalidate = async () => {
 		await Promise.all([
@@ -140,8 +173,19 @@ export function JobDetailDesignDialog({
 			}
 
 			await setDesignMedia.mutateAsync({ detail, jobPostId });
+			// 업로드가 끝난 blob 미리보기를 놓아주고, 방금 저장한 키로 화면 상태를 확정한다.
+			// file이 남아 있으면 프리필 가드가 계속 걸려 서버 상태가 화면에 못 오고, 다음
+			// 저장이 같은 파일을 또 올려 고아 객체가 쌓인다.
+			for (const item of media.detail) {
+				revokeMediaItemPreview(item);
+			}
+			setMedia((prev) => ({ ...prev, detail: detail.map(toDesignFormItem) }));
 			await invalidate();
-			toast.success("상세 이미지를 저장했어요.");
+			toast.success(
+				designStatus === "completed"
+					? "상세 이미지를 저장했어요."
+					: "상세 이미지를 저장했어요. 제작이 끝났으면 '제작 완료 처리'도 눌러 주세요."
+			);
 		} catch (error) {
 			toast.error(
 				error instanceof Error
@@ -154,10 +198,14 @@ export function JobDetailDesignDialog({
 	};
 
 	const handleToggleStatus = () => {
+		if (!designStatus) {
+			return;
+		}
+
 		setDesignStatus.mutate(
 			{
 				jobPostId,
-				status: status === "completed" ? "requested" : "completed",
+				status: designStatus === "completed" ? "requested" : "completed",
 			},
 			{
 				onError: (error) => toast.error(error.message),
@@ -183,19 +231,27 @@ export function JobDetailDesignDialog({
 
 					<JobDetailImageSlots media={media} onChange={setMedia} />
 
+					{/* 프리필 전(로딩·실패)에는 저장·토글을 막는다 — 저장은 detail 전량 교체라
+					    빈 목록으로 누르면 기존 상세이미지가 GCS에서 실제로 지워진다. */}
+					{jobQuery.isSuccess ? null : (
+						<p className="text-muted-foreground text-xs">
+							{jobQuery.isError
+								? "공고 정보를 불러오지 못해 저장할 수 없어요. 창을 닫고 다시 열어 주세요."
+								: "공고 정보를 불러오는 중이에요. 잠시 후 저장할 수 있어요."}
+						</p>
+					)}
+
 					<div className="flex flex-wrap items-center justify-end gap-2">
 						<DialogClose render={<Button variant="ghost" />}>닫기</DialogClose>
 						<Button
-							disabled={setDesignStatus.isPending || isSaving}
+							disabled={!designStatus || setDesignStatus.isPending || isSaving}
 							onClick={handleToggleStatus}
 							variant="outline"
 						>
-							{status === "completed"
+							{designStatus === "completed"
 								? "제작 대기로 되돌리기"
 								: "제작 완료 처리"}
 						</Button>
-						{/* 프리필 전(로딩·실패)에는 저장을 막는다 — 저장은 detail 전량 교체라
-						    빈 목록으로 누르면 기존 상세이미지가 GCS에서 실제로 지워진다. */}
 						<Button
 							disabled={isSaving || !jobQuery.isSuccess}
 							onClick={handleSave}

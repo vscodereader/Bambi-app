@@ -416,10 +416,6 @@ export default function ModeratorPaymentsPage() {
 						}
 					}}
 					open
-					status={
-						jobs.find((job) => job.id === designJobId)?.detailDesignStatus ??
-						"requested"
-					}
 				/>
 			) : null}
 		</div>
