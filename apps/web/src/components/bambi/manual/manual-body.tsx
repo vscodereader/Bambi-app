@@ -21,13 +21,13 @@ const textOf = (node: ReactNode): string => {
 	return "";
 };
 
-// 헤딩을 오버라이드하면 streamdown 기본 컴포넌트가 통째로 대체되므로 기본 타이포
-// (mt-6 mb-2 font-semibold + 단계별 크기)를 그대로 다시 얹는다.
+// 오버라이드하면 streamdown 기본 컴포넌트가 통째로 대체되므로 필요한 타이포를 전부
+// 다시 얹는다. h2는 챕터 경계라 상단 구분선(border-t)과 넉넉한 여백으로 위계를 준다.
 // scroll-mt는 sticky 헤더(top-20) 아래로 앵커가 숨지 않게 하는 오프셋.
 function Heading2({ children }: { children?: ReactNode }) {
 	return (
 		<h2
-			className="mt-6 mb-2 scroll-mt-24 font-semibold text-2xl"
+			className="mt-12 mb-4 scroll-mt-24 border-t pt-8 font-semibold text-2xl first:mt-0 first:border-t-0 first:pt-0"
 			id={githubSlug(textOf(children))}
 		>
 			{children}
@@ -38,7 +38,7 @@ function Heading2({ children }: { children?: ReactNode }) {
 function Heading3({ children }: { children?: ReactNode }) {
 	return (
 		<h3
-			className="mt-6 mb-2 scroll-mt-24 font-semibold text-xl"
+			className="mt-8 mb-3 scroll-mt-24 font-semibold text-xl"
 			id={githubSlug(textOf(children))}
 		>
 			{children}
@@ -76,12 +76,88 @@ function Anchor({ children, href }: { children?: ReactNode; href?: string }) {
 	);
 }
 
+// 본문 단락·리스트는 행간(leading-7)과 상하 여백을 키워 긴 매뉴얼의 가독성을 높인다.
+function Paragraph({ children }: { children?: ReactNode }) {
+	return <p className="my-4 leading-7">{children}</p>;
+}
+
+function UnorderedList({ children }: { children?: ReactNode }) {
+	return <ul className="my-4 list-disc pl-6">{children}</ul>;
+}
+
+function OrderedList({ children }: { children?: ReactNode }) {
+	return <ol className="my-4 list-decimal pl-6">{children}</ol>;
+}
+
+function ListItem({ children }: { children?: ReactNode }) {
+	return <li className="my-2 leading-7">{children}</li>;
+}
+
+// 매뉴얼의 > 블록은 전부 주의·팁 성격이라 콜아웃 박스로 렌더한다.
+// 내부 단락의 상하 여백은 박스 안 gap으로 대체한다.
+function Blockquote({ children }: { children?: ReactNode }) {
+	return (
+		<blockquote className="my-4 flex flex-col gap-2 rounded-md border-primary border-l-4 bg-muted/50 px-4 py-3 [&_p]:my-0">
+			{children}
+		</blockquote>
+	);
+}
+
+// 표는 자체 오버플로 래퍼로 감싼다. table 오버라이드가 streamdown 기본 table(자체
+// overflow 래퍼 포함)을 통째로 대체하므로 래퍼 중복은 생기지 않는다.
+function Table({ children }: { children?: ReactNode }) {
+	return (
+		<div className="my-4 w-full overflow-x-auto rounded-lg border">
+			<table className="w-full border-collapse text-sm">{children}</table>
+		</div>
+	);
+}
+
+function TableHeaderCell({ children }: { children?: ReactNode }) {
+	return (
+		<th className="border-border border-b bg-muted px-3 py-2 text-left font-semibold">
+			{children}
+		</th>
+	);
+}
+
+function TableCell({ children }: { children?: ReactNode }) {
+	return (
+		<td className="border-border border-b px-3 py-2 align-top leading-6">
+			{children}
+		</td>
+	);
+}
+
+// 매뉴얼의 인라인 코드는 /jobs 같은 주소 표기다. 코드펜스는 매뉴얼에 없다.
+function InlineCode({ children }: { children?: ReactNode }) {
+	return (
+		<code className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-sm">
+			{children}
+		</code>
+	);
+}
+
 // controls=false — 표에 붙는 개발자용 Copy/Download 툴바를 끈다.
 // parseIncompleteMarkdown=false — 스트리밍이 아니라 완결된 정적 문서다.
 export function ManualBody({ markdown }: { markdown: string }) {
 	return (
 		<Streamdown
-			components={{ a: Anchor, h2: Heading2, h3: Heading3, h4: Heading4 }}
+			components={{
+				a: Anchor,
+				blockquote: Blockquote,
+				code: InlineCode,
+				h2: Heading2,
+				h3: Heading3,
+				h4: Heading4,
+				li: ListItem,
+				ol: OrderedList,
+				p: Paragraph,
+				table: Table,
+				td: TableCell,
+				th: TableHeaderCell,
+				ul: UnorderedList,
+			}}
 			controls={false}
 			parseIncompleteMarkdown={false}
 		>

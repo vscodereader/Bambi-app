@@ -44,7 +44,7 @@ export async function ManualScreen({ manualKey }: { manualKey: ManualKey }) {
 				<aside className="sticky top-20 hidden max-h-[calc(100vh-6rem)] w-64 shrink-0 overflow-y-auto lg:block">
 					<ManualToc headings={doc.headings} />
 				</aside>
-				<div className="min-w-0 flex-1">
+				<div className="min-w-0 max-w-3xl flex-1">
 					<ManualBody markdown={doc.markdown} />
 				</div>
 			</div>
