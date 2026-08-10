@@ -144,7 +144,10 @@ export const boostOptionsRouter = {
 				durationDays: jobBoostOption.durationDays,
 				boostCount: jobBoostOption.boostCount,
 			})
-			.from(jobBoostOption);
+			.from(jobBoostOption)
+			// enum 정의 순(manual_period→manual_count→auto_period)으로 고정한다 — 정렬이
+			// 없으면 구인자 화면의 옵션 표시 순서가 DB 반환 순서에 따라 흔들린다.
+			.orderBy(jobBoostOption.optionType);
 
 		return rows.filter((row) => row.price !== null);
 	}),
@@ -387,9 +390,16 @@ export const boostOptionsRouter = {
 				throw new ORPCError("BAD_REQUEST", { message: CANCEL_PAID_MESSAGE });
 			}
 
+			// 위 unpaid 판정과 DELETE 사이에 운영자가 입금 확인(paid)할 수 있으므로 상태 술어를
+			// WHERE에 함께 건다. 경합 시 0행 삭제가 되고 결제된 구매는 그대로 남는다.
 			await db
 				.delete(jobBoostPurchase)
-				.where(eq(jobBoostPurchase.id, input.purchaseId));
+				.where(
+					and(
+						eq(jobBoostPurchase.id, input.purchaseId),
+						eq(jobBoostPurchase.paymentStatus, "unpaid")
+					)
+				);
 
 			return { ok: true };
 		}),

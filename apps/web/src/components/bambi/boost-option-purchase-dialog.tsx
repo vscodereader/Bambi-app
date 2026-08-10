@@ -309,8 +309,13 @@ export function BoostOptionPurchaseDialog({
 
 					<div className="flex flex-wrap items-center justify-end gap-2">
 						<DialogClose render={<Button variant="ghost" />}>닫기</DialogClose>
+						{/* 신용카드는 아직 미지원이라 위 경고만 띄우고 구매는 막는다(공고 폼 cardPaymentBlocked와 같은 축). */}
 						<Button
-							disabled={!selectedType || purchaseMutation.isPending}
+							disabled={
+								!selectedType ||
+								paymentMethod === "card" ||
+								purchaseMutation.isPending
+							}
 							onClick={handlePurchase}
 							type="button"
 						>

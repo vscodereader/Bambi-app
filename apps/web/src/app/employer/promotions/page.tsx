@@ -513,15 +513,15 @@ export default function EmployerAdsPage() {
 						광고 상품 보기
 					</Link>
 				}
-				description="공고에 광고 상품을 적용하면 노출 현황과 끌어올리기를 이곳에서 관리할 수 있습니다."
-				title="운영 중인 광고가 없습니다"
+				description="공고를 등록하면 노출 현황과 끌어올리기를 이곳에서 관리할 수 있습니다. 광고 상품이나 끌어올리기 옵션을 적용하면 노출이 더 커져요."
+				title="관리할 공고가 없습니다"
 			/>
 		);
 	} else if (visibleAds.length === 0) {
 		content = (
 			<EmptyState
-				description="선택한 상태에 해당하는 광고가 없습니다."
-				title="표시할 광고가 없습니다"
+				description="선택한 상태에 해당하는 공고가 없습니다."
+				title="표시할 공고가 없습니다"
 			/>
 		);
 	} else {
@@ -537,18 +537,20 @@ export default function EmployerAdsPage() {
 		);
 	}
 
-	const activeCount = ads.filter(
-		(ad) => getAdGroupId(ad, now) === "active"
+	// "진행 중 광고"는 광고 상품이 붙은 공고만 센다(구인자 홈 getAdSummary와 같은 정의).
+	// adProductName은 상품 leftJoin 결과라 무료 공고에서만 null이다.
+	const activeAdCount = ads.filter(
+		(ad) => getAdGroupId(ad, now) === "active" && ad.adProductName !== null
 	).length;
 
 	return (
 		<PageShell
-			description="광고 상품이 적용된 공고의 노출 상태와 오늘의 끌어올리기 횟수를 관리합니다."
+			description="광고 공고와 무료 공고의 노출 상태, 오늘의 끌어올리기 횟수와 옵션을 함께 관리합니다."
 			title="광고 관리"
 		>
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<p className="m-0 text-muted-foreground text-sm">
-					진행 중 {activeCount}개 · 전체 {ads.length}개
+					진행 중 광고 {activeAdCount}개 · 전체 공고 {ads.length}개
 				</p>
 				<Link
 					className={buttonVariants({ variant: "outline" })}

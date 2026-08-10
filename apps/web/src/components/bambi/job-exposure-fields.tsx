@@ -207,6 +207,25 @@ interface JobExposureFieldsProps {
 const isJobPaymentMethod = (value: string): value is JobPaymentMethod =>
 	value === "card" || value === "bank_transfer";
 
+// 카드 하단 안내 문구. 무료 공고는 결제와 무관하게 검수만으로 게시되므로 유료 공고 문구를
+// 그대로 쓰면 거짓 안내가 된다. 새로 결제되는 옵션이 있을 때만 옵션 활성화 조건(입금 확인)을
+// 덧붙인다(BankTransferGuide purpose="boost"와 같은 규칙).
+const resolvePublishNotice = ({
+	hasNewBoostOptions,
+	isPaidPosting,
+}: {
+	hasNewBoostOptions: boolean;
+	isPaidPosting: boolean;
+}): string => {
+	if (isPaidPosting) {
+		return "결제는 운영자 확인 후 완료되며, 검수·결제완료 시 게시됩니다.";
+	}
+
+	return hasNewBoostOptions
+		? "공고는 검수 후 게시되며, 끌어올리기 옵션은 입금 확인 후 적용됩니다."
+		: "공고는 검수 후 게시됩니다.";
+};
+
 type AdPriceOption = AdCatalogProduct["priceOptions"][number];
 
 // 선택된 이용 기간에 해당하는 원가 옵션(없으면 undefined). 결제 예정 금액의 원가 취소선
@@ -499,10 +518,13 @@ function BoostOptionsPicker({
 								{JOB_BOOST_OPTION_TYPE_LABELS[option.optionType]}
 								{spec ? ` · ${spec}` : ""} +{formatAdPrice(option.price ?? 0)}
 							</Label>
+							{/* 횟수권은 기간이 없어 "기간이 끝난 뒤"가 거짓이다. 잔여가 남은 횟수권의
+							추가 구매는 광고 관리의 구매 창에서만 할 수 있으므로 그쪽으로 안내한다. */}
 							{locked ? (
 								<span className="text-muted-foreground text-xs">
-									이미 적용 중인 옵션이에요. 기간이 끝난 뒤 다시 신청할 수
-									있습니다.
+									{option.optionType === "manual_count"
+										? "이미 적용 중인 옵션이에요. 잔여 횟수를 모두 사용한 뒤 다시 신청할 수 있고, 추가 구매는 광고 관리에서 할 수 있습니다."
+										: "이미 적용 중인 옵션이에요. 기간이 끝난 뒤 다시 신청할 수 있습니다."}
 								</span>
 							) : null}
 							{!locked && hasUnpaid && checked ? (
@@ -944,7 +966,10 @@ export function JobExposureFields({
 					<Alert>
 						<Info />
 						<AlertDescription>
-							결제는 운영자 확인 후 완료되며, 검수·결제완료 시 게시됩니다.
+							{resolvePublishNotice({
+								hasNewBoostOptions: newBoostOptionTypes.length > 0,
+								isPaidPosting: showPaidOptions,
+							})}
 						</AlertDescription>
 					</Alert>
 				</CardContent>

@@ -846,9 +846,16 @@ const syncBoostPurchases = async ({
 			purchase.paymentStatus === "unpaid" &&
 			!requestedTypes.includes(purchase.optionType as BoostOptionType)
 		) {
+			// unpaid 술어를 WHERE에 함께 건다 — 읽은 뒤 지우기 전에 운영자가 입금 확인(paid)
+			// 하면 이미 결제된 구매를 지우게 된다. 그 경우 0행 삭제로 조용히 유지된다.
 			await tx
 				.delete(jobBoostPurchase)
-				.where(eq(jobBoostPurchase.id, purchase.id));
+				.where(
+					and(
+						eq(jobBoostPurchase.id, purchase.id),
+						eq(jobBoostPurchase.paymentStatus, "unpaid")
+					)
+				);
 		}
 	}
 
