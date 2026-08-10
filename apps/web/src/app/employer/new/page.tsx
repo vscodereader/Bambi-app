@@ -274,17 +274,40 @@ function isBankTransferBlocked(
 	return paymentMethod === "bank_transfer" && (accountCount ?? 0) === 0;
 }
 
-// 실제 결제가 걸리는 결제수단: 유료 공고면 공고 결제수단, 무료 공고면 끌어올리기 옵션을
-// 골랐을 때의 옵션 결제수단(서버 syncBoostPurchases의 판정과 같은 규칙). 결제할 게 없으면 null.
-function resolveActivePaymentMethod(form: JobForm): JobPaymentMethod | null {
+// 실제 결제가 걸리는 결제수단: 유료 공고면 공고 결제수단, 무료 공고면 새로 결제되는
+// 끌어올리기 옵션이 있을 때의 옵션 결제수단(서버 syncBoostPurchases·validateJobForm과 같은
+// 축). 결제할 게 없으면 null. 신규 등록은 기존 구매가 없어 체크한 유형이 전부 새 결제다.
+function resolveActivePaymentMethod(
+	form: JobForm,
+	newBoostOptionTypes: JobBoostOptionTypeKey[] | undefined
+): JobPaymentMethod | null {
 	if (form.adProductId) {
 		return form.paymentMethod;
 	}
 
-	return (form.boostOptionTypes ?? []).length > 0
+	return (newBoostOptionTypes ?? []).length > 0
 		? (form.boostOptionPaymentMethod ?? null)
 		: null;
 }
+
+// 무통장입금 안내 문구. 유료 공고는 입금이 게시 조건이지만(결제완료 전 미게시), 무료 공고 +
+// 끌어올리기 옵션은 공고 자체가 검수만 통과하면 공개되고 입금은 옵션 적용 조건일 뿐이라
+// "입금해야 게시된다"고 안내하면 사실과 다르다.
+const BANK_NOTICE_COPY = {
+	boostOnly: {
+		description:
+			"아래 계좌로 입금하시면 확인 후 끌어올리기 옵션이 적용됩니다. 공고는 검수 후 공개됩니다.",
+		toast:
+			"공고를 등록했습니다. 검수 후 공개되며, 끌어올리기 옵션은 입금 확인 후 적용됩니다.",
+	},
+	posting: {
+		description: "아래 계좌로 입금하시면 확인 후 공고가 게시됩니다.",
+		toast: "공고를 등록했습니다. 입금 확인 후 게시됩니다.",
+	},
+} as const;
+
+const bankNoticeCopy = (boostOnly: boolean) =>
+	BANK_NOTICE_COPY[boostOnly ? "boostOnly" : "posting"];
 
 // 등록 직후 띄울 무통장입금 안내(무통장이 아니면 null). 유료 공고뿐 아니라 무료 공고 +
 // 끌어올리기 옵션도 입금이 필요하므로 같은 안내를 띄운다. 금액은 노출·디자인 제작·옵션을
@@ -292,7 +315,7 @@ function resolveActivePaymentMethod(form: JobForm): JobPaymentMethod | null {
 function resolveBankNotice(
 	jobInput: JobPostInput,
 	boostOptionsAmount: number
-): { amount: number | null } | null {
+): { amount: number | null; boostOnly: boolean } | null {
 	const isBankTransfer = jobInput.adProductId
 		? jobInput.paymentMethod === "bank_transfer"
 		: jobInput.boostOptionPaymentMethod === "bank_transfer";
@@ -306,6 +329,8 @@ function resolveBankNotice(
 			sumJobPaymentAmount(jobInput.exposureAmount, jobInput.detailDesignAmount),
 			boostOptionsAmount > 0 ? boostOptionsAmount : null
 		),
+		// 무료 공고의 입금 대상은 끌어올리기 옵션뿐이다.
+		boostOnly: !jobInput.adProductId,
 	};
 }
 
@@ -329,12 +354,16 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const [priceConflictMessage, setPriceConflictMessage] = useState<
 		null | string
 	>(null);
-	// 무통장입금 유료 공고 등록 후 계좌·금액을 한 번 더 안내하는 완료 다이얼로그 상태.
+	// 무통장입금 등록 후 계좌·금액을 한 번 더 안내하는 완료 다이얼로그 상태.
 	const [bankNotice, setBankNotice] = useState<{
 		amount: number | null;
+		boostOnly: boolean;
 	} | null>(null);
 	// 제출 시점의 결제 방식을 onSuccess로 넘겨, 등록 성공 후 무통장이면 다이얼로그를 띄운다.
-	const pendingBankNoticeRef = useRef<{ amount: number | null } | null>(null);
+	const pendingBankNoticeRef = useRef<{
+		amount: number | null;
+		boostOnly: boolean;
+	} | null>(null);
 	useUnsavedChangesWarning(isDirty);
 	// 프리미엄 광고는 가로형·세로형 배너 이미지가 모두 있어야 등록할 수 있다.
 	const { bannerImagesMissing, requiredBannerUsages } = useRequiredBannerGate({
@@ -384,10 +413,12 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 				await utils.invalidateQueries({
 					queryKey: orpc.bambi.jobs.listMine.queryKey(),
 				});
-				if (pendingBankNoticeRef.current) {
-					setBankNotice(pendingBankNoticeRef.current);
+				const pendingBankNotice = pendingBankNoticeRef.current;
+
+				if (pendingBankNotice) {
+					setBankNotice(pendingBankNotice);
 					pendingBankNoticeRef.current = null;
-					toast.success("공고를 등록했습니다. 입금 확인 후 게시됩니다.");
+					toast.success(bankNoticeCopy(pendingBankNotice.boostOnly).toast);
 					return;
 				}
 				toast.success("공고를 등록했습니다. 검수 후 공개됩니다.");
@@ -634,7 +665,10 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	};
 
 	// 신용카드(미지원)를 고른 상태면 제출을 막는다. 사유는 결제 섹션의 안내가 알린다.
-	const activePaymentMethod = resolveActivePaymentMethod(form);
+	const activePaymentMethod = resolveActivePaymentMethod(
+		form,
+		form.boostOptionTypes
+	);
 	const cardPaymentBlocked = activePaymentMethod === "card";
 
 	const paymentAccountsQuery = useQuery(
@@ -1098,7 +1132,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 				<DialogContent>
 					<DialogTitle>무통장입금 안내</DialogTitle>
 					<DialogDescription>
-						아래 계좌로 입금하시면 확인 후 공고가 게시됩니다.
+						{bankNoticeCopy(bankNotice?.boostOnly === true).description}
 					</DialogDescription>
 					<BankTransferGuide amount={bankNotice?.amount ?? null} />
 					<div className="flex justify-end">

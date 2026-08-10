@@ -35,7 +35,8 @@ import {
 	FormError,
 } from "@/components/bambi/form-message";
 import {
-	isBoostPurchaseLocked,
+	getBoostPurchaseStates,
+	getNewBoostOptionTypes,
 	type JobBoostPurchaseSummary,
 	JobExposureFields,
 } from "@/components/bambi/job-exposure-fields";
@@ -223,36 +224,30 @@ function isBankTransferBlocked(
 	return paymentMethod === "bank_transfer" && (accountCount ?? 0) === 0;
 }
 
-// 실제 결제가 걸리는 결제수단: 유료 공고면 공고 결제수단, 무료 공고면 끌어올리기 옵션을
-// 골랐을 때의 옵션 결제수단(서버 syncBoostPurchases의 판정과 같은 규칙). 결제할 게 없으면 null.
-function resolveActivePaymentMethod(form: JobForm): JobPaymentMethod | null {
+// 실제 결제가 걸리는 결제수단: 유료 공고면 공고 결제수단, 무료 공고면 새로 결제되는
+// 끌어올리기 옵션이 있을 때의 옵션 결제수단(서버 syncBoostPurchases·validateJobForm과 같은 축).
+// 결제할 게 없으면 null.
+function resolveActivePaymentMethod(
+	form: JobForm,
+	newBoostOptionTypes: JobBoostOptionTypeKey[]
+): JobPaymentMethod | null {
 	if (form.adProductId) {
 		return form.paymentMethod;
 	}
 
-	return (form.boostOptionTypes ?? []).length > 0
+	return newBoostOptionTypes.length > 0
 		? (form.boostOptionPaymentMethod ?? null)
 		: null;
 }
 
-// 수정 폼이 체크 상태로 되돌릴 옵션 유형: 입금 대기(unpaid)거나 이미 적용 중(paid·활성)인
-// 구매만. 만료된 기간제·소진된 횟수권을 체크로 남기면 저장할 때 서버가 재구매로 보고 새
-// 유료 구매를 만든다 — 재구매는 구인자가 직접 다시 체크해야 한다.
+// 수정 폼이 체크 상태로 되돌릴 옵션 유형 = 기존 구매가 있는 유형(입금 대기 또는 적용 중).
+// 만료된 기간제·소진된 횟수권은 상태 맵에 안 들어와 언체크로 시작한다 — 체크로 남기면
+// 저장할 때 서버가 재구매로 보고 새 유료 구매를 만든다.
 const toCheckedBoostOptionTypes = (
 	purchases: JobBoostPurchaseSummary[] | undefined,
 	now: Date
 ): JobBoostOptionTypeKey[] =>
-	Array.from(
-		new Set(
-			(purchases ?? [])
-				.filter(
-					(purchase) =>
-						purchase.paymentStatus === "unpaid" ||
-						isBoostPurchaseLocked(purchase, now)
-				)
-				.map((purchase) => purchase.optionType)
-		)
-	);
+	Array.from(getBoostPurchaseStates(purchases, now).keys());
 
 export default function EditEmployerJobPage({
 	params,
@@ -656,7 +651,14 @@ export default function EditEmployerJobPage({
 	}
 
 	// 신용카드(미지원)를 고른 상태면 수정 저장을 막는다. 사유는 결제 섹션 안내가 알린다.
-	const activePaymentMethod = resolveActivePaymentMethod(form);
+	const activePaymentMethod = resolveActivePaymentMethod(
+		form,
+		getNewBoostOptionTypes(
+			form.boostOptionTypes,
+			job.boostPurchases,
+			new Date()
+		)
+	);
 	const cardPaymentBlocked = activePaymentMethod === "card";
 	const bankTransferBlocked = isBankTransferBlocked(
 		activePaymentMethod,

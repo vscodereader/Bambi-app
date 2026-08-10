@@ -95,7 +95,7 @@ export interface JobBoostPurchaseSummary {
 // 체크 고정(해제 불가) 대상 판정 = 이미 적용 중인 구매. 규칙은 서버와 한 벌로 유지해야
 // 하므로 서비스의 순수 함수를 그대로 쓰고, 판정에 쓰이지 않는 칸만 자리값으로 채운다
 // (편집 조회는 boostsPerDay·createdAt을 내려주지 않는다).
-export const isBoostPurchaseLocked = (
+const isBoostPurchaseLocked = (
 	purchase: JobBoostPurchaseSummary,
 	now: Date
 ): boolean =>
@@ -104,21 +104,46 @@ export const isBoostPurchaseLocked = (
 		now
 	);
 
-// 결제 예정 금액에 넣을 유형만 남긴다. 이미 입금이 확인돼 적용 중인 유형은 다시 받을 돈이
-// 아니라 총액·무통장 안내에서 뺀다. 입금 대기(unpaid)는 아직 안 낸 돈이라 그대로 남긴다.
-const getPayableBoostTypes = (
-	types: JobBoostOptionTypeKey[],
+// 유형별 기존 구매 상태. locked = 입금 확인돼 적용 중(해제 불가·다시 받을 돈 아님),
+// unpaid = 입금 대기(해제 가능·이미 청구된 금액). 맵에 없으면 "새로 결제되는 유형"이다.
+// 화면의 체크 고정·총액·결제수단 노출이 전부 이 한 판정에서 갈린다.
+export type BoostPurchaseState = "locked" | "unpaid";
+
+export const getBoostPurchaseStates = (
 	purchases: JobBoostPurchaseSummary[] | undefined,
 	now: Date
-): JobBoostOptionTypeKey[] =>
-	types.filter(
-		(optionType) =>
-			!(purchases ?? []).some(
-				(purchase) =>
-					purchase.optionType === optionType &&
-					isBoostPurchaseLocked(purchase, now)
-			)
-	);
+): Map<JobBoostOptionTypeKey, BoostPurchaseState> => {
+	const states = new Map<JobBoostOptionTypeKey, BoostPurchaseState>();
+
+	for (const purchase of purchases ?? []) {
+		if (isBoostPurchaseLocked(purchase, now)) {
+			states.set(purchase.optionType, "locked");
+			continue;
+		}
+
+		// 같은 유형에 만료된 구매와 입금 대기 구매가 함께 있어도 locked를 덮어쓰지 않는다.
+		if (
+			purchase.paymentStatus === "unpaid" &&
+			!states.has(purchase.optionType)
+		) {
+			states.set(purchase.optionType, "unpaid");
+		}
+	}
+
+	return states;
+};
+
+// 새로 결제되는 유형(= 기존 구매가 없는 유형). 결제수단 요구·노출·차단 축을
+// validateJobForm의 newTypes와 한 규칙으로 맞추는 단일 소스다.
+export const getNewBoostOptionTypes = (
+	types: JobBoostOptionTypeKey[] | undefined,
+	purchases: JobBoostPurchaseSummary[] | undefined,
+	now: Date
+): JobBoostOptionTypeKey[] => {
+	const states = getBoostPurchaseStates(purchases, now);
+
+	return (types ?? []).filter((optionType) => !states.has(optionType));
+};
 
 // 체크한 옵션들의 판매가 합. 카탈로그에 없는(판매 중지) 유형은 계산에서 빠진다 —
 // 서버도 그런 유형은 구매로 만들지 않는다.
@@ -413,21 +438,19 @@ const boostOptionCheckboxId = (optionType: JobBoostOptionTypeKey) =>
 function BoostOptionsPicker({
 	onTypesChange,
 	options,
-	purchases,
+	purchaseStates,
 	selectedTypes,
 	show,
 }: {
 	onTypesChange: ((types: JobBoostOptionTypeKey[]) => void) | undefined;
 	options: BoostOptionRow[];
-	purchases: JobBoostPurchaseSummary[] | undefined;
+	purchaseStates: Map<JobBoostOptionTypeKey, BoostPurchaseState>;
 	selectedTypes: JobBoostOptionTypeKey[];
 	show: boolean;
 }) {
 	if (!(show && onTypesChange && options.length > 0)) {
 		return null;
 	}
-
-	const now = new Date();
 
 	return (
 		<div className="flex flex-col gap-2">
@@ -444,16 +467,9 @@ function BoostOptionsPicker({
 				신청할 수 있어요.
 			</FieldHint>
 			{options.map((option) => {
-				const locked = (purchases ?? []).some(
-					(purchase) =>
-						purchase.optionType === option.optionType &&
-						isBoostPurchaseLocked(purchase, now)
-				);
-				const hasUnpaid = (purchases ?? []).some(
-					(purchase) =>
-						purchase.optionType === option.optionType &&
-						purchase.paymentStatus === "unpaid"
-				);
+				const purchaseState = purchaseStates.get(option.optionType);
+				const locked = purchaseState === "locked";
+				const hasUnpaid = purchaseState === "unpaid";
 				const checked = locked || selectedTypes.includes(option.optionType);
 				const spec = formatBoostOptionSpec(option);
 
@@ -630,11 +646,21 @@ export function JobExposureFields({
 	// 배너형 상품에는 끌어올리기 옵션을 팔지 않는다(서버도 BAD_REQUEST). 카탈로그가 로딩 중이면
 	// 선택 상품을 못 찾아 isBannerProduct가 false라, 로딩 한 프레임에 체크가 풀리는 일은 없다.
 	const showBoostOptions = !isBannerProduct;
+	const boostPurchaseStates = getBoostPurchaseStates(
+		boostPurchases,
+		new Date()
+	);
+	// 결제 예정 금액에서 이미 입금 확인된(적용 중) 유형은 뺀다 — 다시 받을 돈이 아니다.
+	// 입금 대기(unpaid)는 아직 안 낸 돈이라 총액에 남긴다.
+	const payableBoostTypes = boostOptionTypes.filter(
+		(optionType) => boostPurchaseStates.get(optionType) !== "locked"
+	);
+	// 결제수단을 요구·차단하는 축은 "새로 결제되는 유형"이다(validateJobForm과 같은 규칙).
+	const newBoostOptionTypes = boostOptionTypes.filter(
+		(optionType) => !boostPurchaseStates.has(optionType)
+	);
 	const boostOptionsAmount = showBoostOptions
-		? sumBoostOptionPrices(
-				boostOptionsQuery.data,
-				getPayableBoostTypes(boostOptionTypes, boostPurchases, new Date())
-			)
+		? sumBoostOptionPrices(boostOptionsQuery.data, payableBoostTypes)
 		: 0;
 	const boostAmount = boostOptionsAmount > 0 ? boostOptionsAmount : null;
 	const showTotal =
@@ -871,7 +897,7 @@ export function JobExposureFields({
 					<BoostOptionsPicker
 						onTypesChange={onBoostOptionTypesChange}
 						options={boostOptionsQuery.data ?? []}
-						purchases={boostPurchases}
+						purchaseStates={boostPurchaseStates}
 						selectedTypes={boostOptionTypes}
 						show={showBoostOptions}
 					/>
@@ -895,9 +921,10 @@ export function JobExposureFields({
 						/>
 					) : null}
 
-					{/* 무료 공고는 공고 결제수단이 없어, 옵션을 골랐을 때만 옵션 전용 결제수단을 받는다. */}
+					{/* 무료 공고는 공고 결제수단이 없어, 새로 결제되는 옵션이 있을 때만 옵션 전용
+					결제수단을 받는다(이미 입금 대기·적용 중인 유형만 유지하는 저장은 결제가 없다). */}
 					{showPaidOptions ||
-					boostOptionTypes.length === 0 ||
+					newBoostOptionTypes.length === 0 ||
 					!onBoostOptionPaymentMethodChange ? null : (
 						<PaymentMethodField
 							amount={boostAmount}

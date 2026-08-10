@@ -57,6 +57,9 @@ describe("job exposure and payment fields", () => {
 		expect(source).toContain("BankTransferGuide");
 		expect(source).toContain("무통장입금 안내");
 		expect(source).toContain('jobInput.paymentMethod === "bank_transfer"');
+		// 무료 공고 + 끌어올리기 옵션은 입금이 게시 조건이 아니라 옵션 적용 조건이다.
+		expect(source).toContain("끌어올리기 옵션은 입금 확인 후 적용됩니다");
+		expect(source).toContain("공고는 검수 후 공개됩니다");
 	});
 
 	it("offers card and bank transfer payment methods", () => {
