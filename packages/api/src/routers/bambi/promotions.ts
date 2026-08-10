@@ -100,6 +100,8 @@ export const promotionsRouter = {
 				// 라이브 상품이 아니라 공고 구매 시점 스냅샷을 노출한다(상품 join은 이름 표기용만 유지).
 				autoBoostsPerDay: jobPost.autoBoostsPerDay,
 				boostedAt: jobPost.boostedAt,
+				// 무통장입금 재안내의 결제 예정 총액에 노출 금액과 함께 합산된다.
+				detailDesignAmount: jobPost.detailDesignAmount,
 				employerDisplayName: employerOrganizationProfile.displayName,
 				// 미결제 행의 무통장입금 재안내에서 결제 예정 금액을 보여주는 데 쓴다.
 				exposureAmount: jobPost.exposureAmount,

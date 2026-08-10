@@ -1,5 +1,6 @@
 "use client";
 
+import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	DropdownMenu,
@@ -52,6 +53,7 @@ interface AdListItem {
 	autoBoostsUsedToday: number;
 	boostedAt: Date | null | string;
 	boostsUsedToday: number;
+	detailDesignAmount: null | number;
 	employerDisplayName: string;
 	exposureAmount: null | number;
 	exposureEndsAt: Date | null | string;
@@ -209,7 +211,12 @@ function getAdColumns({
 								/>
 								<PopoverContent align="start" className="w-80">
 									<PopoverTitle>무통장입금 안내</PopoverTitle>
-									<BankTransferGuide amount={ad.exposureAmount} />
+									<BankTransferGuide
+										amount={sumJobPaymentAmount(
+											ad.exposureAmount,
+											ad.detailDesignAmount
+										)}
+									/>
 								</PopoverContent>
 							</Popover>
 						) : null}

@@ -1,5 +1,6 @@
 "use client";
 
+import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
 import {
 	Alert,
 	AlertDescription,
@@ -560,7 +561,12 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			// 무통장입금 유료 공고면 등록 성공 후 계좌 안내 다이얼로그를 띄우도록 표시해 둔다.
 			pendingBankNoticeRef.current =
 				jobInput.adProductId && jobInput.paymentMethod === "bank_transfer"
-					? { amount: jobInput.exposureAmount }
+					? {
+							amount: sumJobPaymentAmount(
+								jobInput.exposureAmount,
+								jobInput.detailDesignAmount
+							),
+						}
 					: null;
 
 			createMutation.mutate({
