@@ -1,0 +1,1113 @@
+import { randomUUID } from "node:crypto";
+
+import { createProcedureClient } from "@orpc/server";
+import dotenv from "dotenv";
+import { eq, inArray } from "drizzle-orm";
+import { describe, expect, it } from "vitest";
+
+import type { Context } from "@/context";
+
+dotenv.config({
+	path: "../../apps/server/.env",
+});
+
+const [{ db }, authSchema, bambiSchema, { moderationRouter }] =
+	await Promise.all([
+		import("@bambi-app/db"),
+		import("@bambi-app/db/schema/auth"),
+		import("@bambi-app/db/schema/bambi"),
+		import("@/routers/bambi/moderation"),
+	]);
+
+const { organization, user } = authSchema;
+const {
+	adminModerationAction,
+	bambiProfile,
+	chatAttachment,
+	chatMessage,
+	chatRoom,
+	communityComment,
+	communityPost,
+	jobPost,
+	report,
+} = bambiSchema;
+
+interface ReportFixture {
+	adminUserId: string;
+	attachmentId: string;
+	chatRoomId: string;
+	employerUserId: string;
+	jobPostId: string;
+	jobSeekerUserId: string;
+	messageId: string;
+	organizationId: string;
+	reportId: string;
+	userIds: string[];
+}
+
+const createContextForUser = (userId: string): Context =>
+	({
+		auth: null,
+		session: {
+			user: {
+				id: userId,
+			},
+		},
+	}) as Context;
+
+const makeEmail = (prefix: string): string =>
+	`${prefix}-${randomUUID()}@bambi.test`;
+
+const createReportFixture = async (): Promise<ReportFixture> => {
+	const now = new Date();
+	const adminUserId = `user_test_admin_${randomUUID()}`;
+	const employerUserId = `user_test_employer_${randomUUID()}`;
+	const jobSeekerUserId = `user_test_seeker_${randomUUID()}`;
+	const organizationId = `org_test_${randomUUID()}`;
+	const jobPostId = randomUUID();
+	const chatRoomId = randomUUID();
+	const messageId = randomUUID();
+	const attachmentId = randomUUID();
+	const reportId = randomUUID();
+	const userRows = [
+		{
+			email: makeEmail("admin"),
+			id: adminUserId,
+			name: "운영자",
+		},
+		{
+			email: makeEmail("employer"),
+			id: employerUserId,
+			name: "채용 담당자",
+		},
+		{
+			email: makeEmail("seeker"),
+			id: jobSeekerUserId,
+			name: "구직자",
+		},
+	];
+
+	await db.insert(user).values(userRows);
+	await db.insert(organization).values({
+		createdAt: now,
+		id: organizationId,
+		name: "테스트 조직",
+		slug: `test-${randomUUID()}`,
+	});
+	await db.insert(bambiProfile).values([
+		{
+			isPhoneVerified: true,
+			role: "admin",
+			status: "active",
+			userId: adminUserId,
+		},
+		{
+			isPhoneVerified: true,
+			role: "employer",
+			status: "active",
+			userId: employerUserId,
+		},
+		{
+			isPhoneVerified: true,
+			role: "job_seeker",
+			status: "active",
+			userId: jobSeekerUserId,
+		},
+	]);
+	await db.insert(jobPost).values({
+		createdByUserId: employerUserId,
+		description: "신고 테스트용 공고입니다.",
+		id: jobPostId,
+		industryCategory: "룸싸롱",
+		organizationId,
+		payAmount: 180_000,
+		payUnit: "일급",
+		region: "서울 강남구",
+		status: "published",
+		title: "신고 테스트 공고",
+		workSchedule: "20:00-02:00",
+	});
+	await db.insert(chatRoom).values({
+		employerUserId,
+		id: chatRoomId,
+		jobPostId,
+		jobSeekerUserId,
+		organizationId,
+	});
+	await db.insert(chatMessage).values({
+		body: "첨부 파일을 보냈습니다.",
+		chatRoomId,
+		id: messageId,
+		senderUserId: jobSeekerUserId,
+	});
+	await db.insert(chatAttachment).values({
+		byteSize: 512_000,
+		category: "image",
+		chatRoomId,
+		createdByUserId: jobSeekerUserId,
+		fileName: "reported-photo.png",
+		id: attachmentId,
+		messageId,
+		mimeType: "image/png",
+		storageKey: `bambi-chat/${chatRoomId}/${randomUUID()}-reported-photo.png`,
+	});
+	await db.insert(report).values({
+		details: "첨부 이미지가 정책상 검토 필요해 보입니다.",
+		id: reportId,
+		reason: "other",
+		reporterUserId: employerUserId,
+		targetId: messageId,
+		targetType: "chat_message",
+	});
+
+	return {
+		adminUserId,
+		attachmentId,
+		chatRoomId,
+		employerUserId,
+		jobPostId,
+		jobSeekerUserId,
+		messageId,
+		organizationId,
+		reportId,
+		userIds: [adminUserId, employerUserId, jobSeekerUserId],
+	};
+};
+
+const cleanupReportFixture = async (fixture: ReportFixture): Promise<void> => {
+	await db
+		.delete(adminModerationAction)
+		.where(inArray(adminModerationAction.adminUserId, fixture.userIds));
+	await db.delete(report).where(eq(report.id, fixture.reportId));
+	await db
+		.delete(chatAttachment)
+		.where(eq(chatAttachment.chatRoomId, fixture.chatRoomId));
+	await db
+		.delete(chatMessage)
+		.where(eq(chatMessage.chatRoomId, fixture.chatRoomId));
+	await db.delete(chatRoom).where(eq(chatRoom.id, fixture.chatRoomId));
+	await db.delete(jobPost).where(eq(jobPost.id, fixture.jobPostId));
+	await db
+		.delete(bambiProfile)
+		.where(inArray(bambiProfile.userId, fixture.userIds));
+	await db.delete(user).where(inArray(user.id, fixture.userIds));
+	await db
+		.delete(organization)
+		.where(eq(organization.id, fixture.organizationId));
+};
+
+const expectOrpcCode = async (
+	promise: Promise<unknown>,
+	code: string
+): Promise<void> => {
+	await expect(promise).rejects.toMatchObject({ code });
+};
+
+describe("adminDeleteJobPost", () => {
+	it("공고를 하드삭제하고 연결 채팅방을 cascade로 지우며 감사 로그를 남긴다", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const adminDeleteJobPost = createProcedureClient(
+				moderationRouter.adminDeleteJobPost,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "adminDeleteJobPost"],
+				}
+			);
+
+			const result = await adminDeleteJobPost({
+				jobPostId: fixture.jobPostId,
+				reason: "정책 위반 공고를 파기합니다.",
+			});
+
+			expect(result).toEqual({ ok: true });
+
+			const remainingJobs = await db
+				.select({ id: jobPost.id })
+				.from(jobPost)
+				.where(eq(jobPost.id, fixture.jobPostId));
+			expect(remainingJobs).toHaveLength(0);
+
+			// job_post FK cascade로 연결 채팅방(+메시지·첨부)도 함께 사라진다.
+			const remainingRooms = await db
+				.select({ id: chatRoom.id })
+				.from(chatRoom)
+				.where(eq(chatRoom.id, fixture.chatRoomId));
+			expect(remainingRooms).toHaveLength(0);
+
+			const logs = await db
+				.select()
+				.from(adminModerationAction)
+				.where(eq(adminModerationAction.targetId, fixture.jobPostId));
+			expect(logs).toHaveLength(1);
+			expect(logs[0]).toMatchObject({
+				action: "hard_delete",
+				adminUserId: fixture.adminUserId,
+				reason: "정책 위반 공고를 파기합니다.",
+				targetType: "job_post",
+			});
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("비운영자는 FORBIDDEN", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const adminDeleteJobPost = createProcedureClient(
+				moderationRouter.adminDeleteJobPost,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "adminDeleteJobPost"],
+				}
+			);
+
+			await expectOrpcCode(
+				adminDeleteJobPost({
+					jobPostId: fixture.jobPostId,
+					reason: "권한 없는 사용자입니다.",
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
+
+describe("bambi moderation router media context", () => {
+	it("exposes bulk moderation procedures", () => {
+		expect(moderationRouter.bulkSetJobPostStatus).toBeDefined();
+		expect(moderationRouter.bulkSetReportStatus).toBeDefined();
+		expect(moderationRouter.bulkSetUserStatus).toBeDefined();
+	});
+
+	it("exposes the job post payment procedure", () => {
+		expect(moderationRouter.setJobPostPayment).toBeDefined();
+	});
+
+	it("includes safe attachment metadata for reported chat messages", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const listReports = createProcedureClient(moderationRouter.listReports, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "moderation", "listReports"],
+			});
+
+			const reports = await listReports({ limit: 20 });
+			const targetReport = reports.find((item) => item.id === fixture.reportId);
+
+			expect(targetReport).toMatchObject({
+				targetContext: {
+					chatMessage: {
+						attachments: [
+							{
+								byteSize: 512_000,
+								category: "image",
+								fileName: "reported-photo.png",
+								id: fixture.attachmentId,
+								mimeType: "image/png",
+							},
+						],
+						body: "첨부 파일을 보냈습니다.",
+						chatRoomId: fixture.chatRoomId,
+						id: fixture.messageId,
+						senderUserId: fixture.jobSeekerUserId,
+					},
+				},
+			});
+			expect(JSON.stringify(targetReport?.targetContext)).not.toContain(
+				"storageKey"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
+
+describe("bambi moderation router community reports", () => {
+	it("존재하는 커뮤니티 글(community_post) 신고가 성공한다(잠재 버그 수정 검증)", async () => {
+		const fixture = await createReportFixture();
+		const postId = randomUUID();
+
+		try {
+			await db.insert(communityPost).values({
+				authorDisplayName: "달빛토끼",
+				authorRole: "job_seeker",
+				authorUserId: fixture.jobSeekerUserId,
+				board: "free",
+				body: "신고 대상 글 본문",
+				id: postId,
+				passwordHash: "",
+				title: "신고 대상 글",
+			});
+
+			const createReport = createProcedureClient(
+				moderationRouter.createReport,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "createReport"],
+				}
+			);
+
+			const created = await createReport({
+				reason: "other",
+				targetId: postId,
+				targetType: "community_post",
+			});
+			// returning() 파생 타입이 undefined를 포함해 좁혀서 사용한다.
+			if (!created) {
+				throw new Error("신고 생성 결과가 비어 있습니다.");
+			}
+			expect(created.targetType).toBe("community_post");
+			expect(created.targetId).toBe(postId);
+
+			// 이 테스트가 새로 만든 report는 fixture.reportId가 아니므로 직접 정리한다.
+			await db.delete(report).where(eq(report.id, created.id));
+		} finally {
+			await db.delete(communityPost).where(eq(communityPost.id, postId));
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("존재하지 않는 커뮤니티 댓글(community_comment) 신고는 NOT_FOUND", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const createReport = createProcedureClient(
+				moderationRouter.createReport,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "createReport"],
+				}
+			);
+
+			// INSERT 전에 존재 검증에서 throw되므로 DB enum에 값이 없어도 안전하다.
+			await expectOrpcCode(
+				createReport({
+					reason: "other",
+					targetId: randomUUID(),
+					targetType: "community_comment",
+				}),
+				"NOT_FOUND"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("커뮤니티 댓글 신고에 uuid가 아닌 targetId를 주면 BAD_REQUEST", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const createReport = createProcedureClient(
+				moderationRouter.createReport,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "createReport"],
+				}
+			);
+
+			// uuidTargetTypes에 포함되므로 uuid 형식 검증에서 INSERT 전에 막힌다.
+			await expectOrpcCode(
+				createReport({
+					reason: "other",
+					targetId: "not-a-uuid",
+					targetType: "community_comment",
+				}),
+				"BAD_REQUEST"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
+
+describe("bambi moderation router community target context", () => {
+	it("커뮤니티 글·댓글 신고의 targetContext가 계약 형태로 채워지고 대상 미존재면 null", async () => {
+		const fixture = await createReportFixture();
+		const postId = randomUUID();
+		const commentId = randomUUID();
+		const postReportId = randomUUID();
+		const commentReportId = randomUUID();
+		const missingReportId = randomUUID();
+
+		try {
+			// 글 본문은 Tiptap doc JSON, 댓글 본문은 평문. 글은 hidden 상태여도 컨텍스트가 나와야 한다.
+			await db.insert(communityPost).values({
+				authorDisplayName: "달빛토끼",
+				authorRole: "job_seeker",
+				authorUserId: fixture.jobSeekerUserId,
+				board: "free",
+				body: JSON.stringify({
+					content: [
+						{
+							content: [{ text: "신고 대상 본문입니다.", type: "text" }],
+							type: "paragraph",
+						},
+					],
+					type: "doc",
+				}),
+				id: postId,
+				passwordHash: "",
+				status: "hidden",
+				title: "신고 대상 글",
+			});
+			await db.insert(communityComment).values({
+				authorRole: "job_seeker",
+				authorUserId: fixture.jobSeekerUserId,
+				body: "신고 대상 댓글 본문",
+				id: commentId,
+				postId,
+				status: "published",
+			});
+			await db.insert(report).values([
+				{
+					id: postReportId,
+					reason: "other",
+					reporterUserId: fixture.employerUserId,
+					targetId: postId,
+					targetType: "community_post",
+				},
+				{
+					id: commentReportId,
+					reason: "other",
+					reporterUserId: fixture.employerUserId,
+					targetId: commentId,
+					targetType: "community_comment",
+				},
+				{
+					id: missingReportId,
+					reason: "other",
+					reporterUserId: fixture.employerUserId,
+					targetId: randomUUID(),
+					targetType: "community_post",
+				},
+			]);
+
+			const listReports = createProcedureClient(moderationRouter.listReports, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "moderation", "listReports"],
+			});
+			const reports = await listReports({ limit: 100 });
+
+			const postReport = reports.find((item) => item.id === postReportId);
+			expect(postReport?.targetContext).toMatchObject({
+				communityPost: {
+					authorName: "달빛토끼",
+					board: "free",
+					bodyPreview: "신고 대상 본문입니다.",
+					id: postId,
+					status: "hidden",
+					title: "신고 대상 글",
+				},
+			});
+
+			const commentReport = reports.find((item) => item.id === commentReportId);
+			expect(commentReport?.targetContext).toMatchObject({
+				communityComment: {
+					authorName: "구직자",
+					bodyPreview: "신고 대상 댓글 본문",
+					id: commentId,
+					postBoard: "free",
+					postId,
+					postTitle: "신고 대상 글",
+					status: "published",
+				},
+			});
+
+			const missingReport = reports.find((item) => item.id === missingReportId);
+			expect(missingReport?.targetContext).toBeNull();
+		} finally {
+			await db
+				.delete(report)
+				.where(
+					inArray(report.id, [postReportId, commentReportId, missingReportId])
+				);
+			await db
+				.delete(communityComment)
+				.where(eq(communityComment.id, commentId));
+			await db.delete(communityPost).where(eq(communityPost.id, postId));
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
+
+describe("bambi moderation router bulk actions", () => {
+	it("requires an admin profile for bulk actions", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const context = createContextForUser(fixture.employerUserId);
+			const bulkSetJobPostStatus = createProcedureClient(
+				moderationRouter.bulkSetJobPostStatus,
+				{
+					context,
+					path: ["bambi", "moderation", "bulkSetJobPostStatus"],
+				}
+			);
+			const bulkSetReportStatus = createProcedureClient(
+				moderationRouter.bulkSetReportStatus,
+				{
+					context,
+					path: ["bambi", "moderation", "bulkSetReportStatus"],
+				}
+			);
+			const bulkSetUserStatus = createProcedureClient(
+				moderationRouter.bulkSetUserStatus,
+				{
+					context,
+					path: ["bambi", "moderation", "bulkSetUserStatus"],
+				}
+			);
+
+			await expectOrpcCode(
+				bulkSetJobPostStatus({
+					jobPostIds: [fixture.jobPostId],
+					reason: "운영자 권한 테스트",
+					status: "hidden",
+				}),
+				"FORBIDDEN"
+			);
+			await expectOrpcCode(
+				bulkSetReportStatus({
+					reason: "운영자 권한 테스트",
+					reportIds: [fixture.reportId],
+					status: "resolved",
+				}),
+				"FORBIDDEN"
+			);
+			await expectOrpcCode(
+				bulkSetUserStatus({
+					reason: "운영자 권한 테스트",
+					status: "warned",
+					targetUserIds: [fixture.jobSeekerUserId],
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("partially applies bulk job post moderation and writes audit logs", async () => {
+		const fixture = await createReportFixture();
+		const missingJobPostId = randomUUID();
+
+		try {
+			const bulkSetJobPostStatus = createProcedureClient(
+				moderationRouter.bulkSetJobPostStatus,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "bulkSetJobPostStatus"],
+				}
+			);
+
+			const result = await bulkSetJobPostStatus({
+				jobPostIds: [fixture.jobPostId, missingJobPostId],
+				reason: "정책 기준을 충족해 게시 승인합니다.",
+				status: "published",
+			});
+
+			const [updatedJobPost] = await db
+				.select({
+					publishedAt: jobPost.publishedAt,
+					status: jobPost.status,
+				})
+				.from(jobPost)
+				.where(eq(jobPost.id, fixture.jobPostId))
+				.limit(1);
+			const actionLogs = await db
+				.select()
+				.from(adminModerationAction)
+				.where(eq(adminModerationAction.adminUserId, fixture.adminUserId));
+
+			expect(result).toEqual({
+				failed: 1,
+				failures: [
+					{
+						code: "NOT_FOUND",
+						message: "Job post was not found.",
+						targetId: missingJobPostId,
+					},
+				],
+				succeeded: 1,
+				total: 2,
+			});
+			expect(updatedJobPost).toMatchObject({
+				status: "published",
+			});
+			expect(updatedJobPost?.publishedAt).toBeInstanceOf(Date);
+			expect(actionLogs).toContainEqual(
+				expect.objectContaining({
+					action: "set_status:published",
+					reason: "정책 기준을 충족해 게시 승인합니다.",
+					targetId: fixture.jobPostId,
+					targetType: "job_post",
+				})
+			);
+			expect(actionLogs).not.toContainEqual(
+				expect.objectContaining({ targetId: missingJobPostId })
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("requires an admin profile for setJobPostPayment", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const setJobPostPayment = createProcedureClient(
+				moderationRouter.setJobPostPayment,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "setJobPostPayment"],
+				}
+			);
+
+			await expectOrpcCode(
+				setJobPostPayment({
+					jobPostId: fixture.jobPostId,
+					paymentStatus: "paid",
+				}),
+				"FORBIDDEN"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("sets exposureEndsAt on paid and clears it on unpaid", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			await db
+				.update(jobPost)
+				.set({ exposureDurationDays: 30 })
+				.where(eq(jobPost.id, fixture.jobPostId));
+
+			const setJobPostPayment = createProcedureClient(
+				moderationRouter.setJobPostPayment,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "setJobPostPayment"],
+				}
+			);
+
+			const beforePaid = Date.now();
+			const paidResult = await setJobPostPayment({
+				jobPostId: fixture.jobPostId,
+				paymentStatus: "paid",
+			});
+
+			expect(paidResult.paymentStatus).toBe("paid");
+			expect(paidResult.exposureEndsAt).toBeInstanceOf(Date);
+			const endsAt = paidResult.exposureEndsAt?.getTime() ?? 0;
+			expect(endsAt).toBeGreaterThanOrEqual(
+				beforePaid + 29 * 24 * 60 * 60 * 1000
+			);
+			expect(endsAt).toBeLessThanOrEqual(Date.now() + 31 * 24 * 60 * 60 * 1000);
+
+			const unpaidResult = await setJobPostPayment({
+				jobPostId: fixture.jobPostId,
+				paymentStatus: "unpaid",
+			});
+
+			expect(unpaidResult.paymentStatus).toBe("unpaid");
+			expect(unpaidResult.exposureEndsAt).toBeNull();
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("returns NOT_FOUND when the job post is missing", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const setJobPostPayment = createProcedureClient(
+				moderationRouter.setJobPostPayment,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "setJobPostPayment"],
+				}
+			);
+
+			await expectOrpcCode(
+				setJobPostPayment({
+					jobPostId: randomUUID(),
+					paymentStatus: "paid",
+				}),
+				"NOT_FOUND"
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("applies bulk report and user status updates with audit logs", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const context = createContextForUser(fixture.adminUserId);
+			const bulkSetReportStatus = createProcedureClient(
+				moderationRouter.bulkSetReportStatus,
+				{
+					context,
+					path: ["bambi", "moderation", "bulkSetReportStatus"],
+				}
+			);
+			const bulkSetUserStatus = createProcedureClient(
+				moderationRouter.bulkSetUserStatus,
+				{
+					context,
+					path: ["bambi", "moderation", "bulkSetUserStatus"],
+				}
+			);
+
+			await expect(
+				bulkSetReportStatus({
+					reason: "신고 조치를 완료했습니다.",
+					reportIds: [fixture.reportId],
+					status: "resolved",
+				})
+			).resolves.toMatchObject({
+				failed: 0,
+				succeeded: 1,
+				total: 1,
+			});
+			await expect(
+				bulkSetUserStatus({
+					reason: "정책 위반 안내와 경고를 발송했습니다.",
+					status: "warned",
+					targetUserIds: [fixture.jobSeekerUserId],
+				})
+			).resolves.toMatchObject({
+				failed: 0,
+				succeeded: 1,
+				total: 1,
+			});
+
+			const [updatedReport] = await db
+				.select({ status: report.status })
+				.from(report)
+				.where(eq(report.id, fixture.reportId))
+				.limit(1);
+			const [updatedProfile] = await db
+				.select({ status: bambiProfile.status })
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, fixture.jobSeekerUserId))
+				.limit(1);
+			const actionLogs = await db
+				.select()
+				.from(adminModerationAction)
+				.where(eq(adminModerationAction.adminUserId, fixture.adminUserId));
+
+			expect(updatedReport?.status).toBe("resolved");
+			expect(updatedProfile?.status).toBe("warned");
+			expect(actionLogs).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						action: "set_report_status:resolved",
+						reason: "신고 조치를 완료했습니다.",
+						targetId: fixture.messageId,
+						targetType: "chat_message",
+					}),
+					expect.objectContaining({
+						action: "set_status:warned",
+						reason: "정책 위반 안내와 경고를 발송했습니다.",
+						targetId: fixture.jobSeekerUserId,
+						targetType: "user",
+					}),
+				])
+			);
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
+
+describe("bambi moderation router chat reports", () => {
+	it("채팅 신고는 구직자만 접수할 수 있고 구인자는 FORBIDDEN", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const reportAsEmployer = createProcedureClient(
+				moderationRouter.createReport,
+				{
+					context: createContextForUser(fixture.employerUserId),
+					path: ["bambi", "moderation", "createReport"],
+				}
+			);
+
+			await expectOrpcCode(
+				reportAsEmployer({
+					reason: "other",
+					targetId: fixture.chatRoomId,
+					targetType: "chat_room",
+				}),
+				"FORBIDDEN"
+			);
+
+			const reportAsJobSeeker = createProcedureClient(
+				moderationRouter.createReport,
+				{
+					context: createContextForUser(fixture.jobSeekerUserId),
+					path: ["bambi", "moderation", "createReport"],
+				}
+			);
+
+			const created = await reportAsJobSeeker({
+				reason: "other",
+				targetId: fixture.chatRoomId,
+				targetType: "chat_room",
+			});
+			if (!created) {
+				throw new Error("신고 생성 결과가 비어 있습니다.");
+			}
+			expect(created.targetType).toBe("chat_room");
+			expect(created.reporterUserId).toBe(fixture.jobSeekerUserId);
+
+			// fixture.reportId가 아닌 새 row라 직접 정리한다.
+			await db.delete(report).where(eq(report.id, created.id));
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
+
+describe("adjustJobPostExposure", () => {
+	const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+	it("광고 종료일을 일수만큼 밀고 감사 로그를 남긴다", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const endsAt = new Date("2026-09-01T00:00:00.000Z");
+			await db
+				.update(jobPost)
+				.set({ exposureEndsAt: endsAt })
+				.where(eq(jobPost.id, fixture.jobPostId));
+
+			const adjustJobPostExposure = createProcedureClient(
+				moderationRouter.adjustJobPostExposure,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "adjustJobPostExposure"],
+				}
+			);
+
+			const updated = await adjustJobPostExposure({
+				days: 7,
+				jobPostId: fixture.jobPostId,
+				reason: "입금 지연 보상으로 7일 연장합니다.",
+			});
+
+			expect(updated.exposureEndsAt?.getTime()).toBe(
+				endsAt.getTime() + 7 * MS_PER_DAY
+			);
+
+			const logs = await db
+				.select()
+				.from(adminModerationAction)
+				.where(eq(adminModerationAction.targetId, fixture.jobPostId));
+			expect(logs).toHaveLength(1);
+			expect(logs[0]).toMatchObject({
+				action: "adjust_job_post_exposure:+7",
+				adminUserId: fixture.adminUserId,
+				targetType: "job_post",
+			});
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("종료일이 없는 공고는 지금 기준으로 종료일을 새로 잡는다", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const adjustJobPostExposure = createProcedureClient(
+				moderationRouter.adjustJobPostExposure,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "adjustJobPostExposure"],
+				}
+			);
+
+			const before = Date.now();
+			const updated = await adjustJobPostExposure({
+				days: 7,
+				jobPostId: fixture.jobPostId,
+				reason: "무기한 공고에 7일 기한을 부여합니다.",
+			});
+			const after = Date.now();
+
+			// 기준일이 서버의 "지금"이라 초 단위 오차가 생긴다. 호출 전후 범위로 검증한다.
+			const endsAt = updated.exposureEndsAt?.getTime() ?? 0;
+			expect(endsAt).toBeGreaterThanOrEqual(before + 7 * MS_PER_DAY);
+			expect(endsAt).toBeLessThanOrEqual(after + 7 * MS_PER_DAY);
+
+			const logs = await db
+				.select()
+				.from(adminModerationAction)
+				.where(eq(adminModerationAction.targetId, fixture.jobPostId));
+			expect(logs).toHaveLength(1);
+			expect(logs[0]?.metadata).toMatchObject({
+				previousExposureEndsAt: null,
+			});
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
+
+describe("사용자 관리", () => {
+	it("기각된 신고는 누적 신고 수에서 빠진다", async () => {
+		const fixture = await createReportFixture();
+		const openReportId = randomUUID();
+		const dismissedReportId = randomUUID();
+
+		try {
+			await db.insert(report).values([
+				{
+					id: openReportId,
+					reason: "harassment",
+					reporterUserId: fixture.employerUserId,
+					status: "open",
+					targetId: fixture.jobSeekerUserId,
+					targetType: "user",
+				},
+				{
+					id: dismissedReportId,
+					reason: "harassment",
+					reporterUserId: fixture.employerUserId,
+					status: "dismissed",
+					targetId: fixture.jobSeekerUserId,
+					targetType: "user",
+				},
+			]);
+
+			const listUsers = createProcedureClient(moderationRouter.listUsers, {
+				context: createContextForUser(fixture.adminUserId),
+				path: ["bambi", "moderation", "listUsers"],
+			});
+
+			const users = await listUsers({ limit: 1000 });
+			const seeker = users.find(
+				(row) => row.userId === fixture.jobSeekerUserId
+			);
+
+			expect(seeker?.reportsCount).toBe(1);
+			expect(seeker?.deletedAt).toBeNull();
+			expect(seeker?.blockedByCount).toBe(0);
+			expect(seeker?.organizationNames).toEqual([]);
+		} finally {
+			await db
+				.delete(report)
+				.where(inArray(report.id, [openReportId, dismissedReportId]));
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("제재 이력에 사유와 처리한 운영자 이름이 담긴다", async () => {
+		const fixture = await createReportFixture();
+
+		try {
+			const context = createContextForUser(fixture.adminUserId);
+			const setUserStatus = createProcedureClient(
+				moderationRouter.setUserStatus,
+				{ context, path: ["bambi", "moderation", "setUserStatus"] }
+			);
+			const listUserModerationActions = createProcedureClient(
+				moderationRouter.listUserModerationActions,
+				{ context, path: ["bambi", "moderation", "listUserModerationActions"] }
+			);
+
+			await setUserStatus({
+				reason: "반복 신고로 경고 처리합니다.",
+				status: "warned",
+				targetUserId: fixture.jobSeekerUserId,
+			});
+
+			const actions = await listUserModerationActions({
+				targetUserId: fixture.jobSeekerUserId,
+			});
+
+			expect(actions).toHaveLength(1);
+			expect(actions[0]).toMatchObject({
+				action: "set_status:warned",
+				adminName: "운영자",
+				adminUserId: fixture.adminUserId,
+				reason: "반복 신고로 경고 처리합니다.",
+			});
+		} finally {
+			await cleanupReportFixture(fixture);
+		}
+	});
+
+	it("온보딩 전 계정 제재는 BAD_REQUEST로 원인을 알려주고 일괄 처리는 나머지를 계속한다", async () => {
+		const fixture = await createReportFixture();
+		const profilelessUserId = `user_test_onboarding_${randomUUID()}`;
+
+		try {
+			await db.insert(user).values({
+				email: makeEmail("onboarding"),
+				id: profilelessUserId,
+				name: "온보딩 전 계정",
+			});
+
+			const context = createContextForUser(fixture.adminUserId);
+			const setUserStatus = createProcedureClient(
+				moderationRouter.setUserStatus,
+				{ context, path: ["bambi", "moderation", "setUserStatus"] }
+			);
+			const bulkSetUserStatus = createProcedureClient(
+				moderationRouter.bulkSetUserStatus,
+				{ context, path: ["bambi", "moderation", "bulkSetUserStatus"] }
+			);
+
+			await expect(
+				setUserStatus({
+					reason: "온보딩 전 계정 제재 시도",
+					status: "suspended",
+					targetUserId: profilelessUserId,
+				})
+			).rejects.toMatchObject({
+				code: "BAD_REQUEST",
+				message: "아직 온보딩을 마치지 않은 계정이라 제재할 수 없어요.",
+			});
+
+			const result = await bulkSetUserStatus({
+				reason: "일괄 경고 처리합니다.",
+				status: "warned",
+				targetUserIds: [fixture.jobSeekerUserId, profilelessUserId],
+			});
+
+			expect(result).toMatchObject({
+				failed: 1,
+				failures: [
+					{
+						code: "BAD_REQUEST",
+						message: "아직 온보딩을 마치지 않은 계정이라 제재할 수 없어요.",
+						targetId: profilelessUserId,
+					},
+				],
+				succeeded: 1,
+				total: 2,
+			});
+
+			const [seekerProfile] = await db
+				.select({ status: bambiProfile.status })
+				.from(bambiProfile)
+				.where(eq(bambiProfile.userId, fixture.jobSeekerUserId))
+				.limit(1);
+			expect(seekerProfile?.status).toBe("warned");
+		} finally {
+			await db.delete(user).where(eq(user.id, profilelessUserId));
+			await cleanupReportFixture(fixture);
+		}
+	});
+});
