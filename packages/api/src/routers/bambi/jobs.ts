@@ -7,6 +7,8 @@ import {
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobAdBannerLayout,
+	jobBoostOption,
+	jobBoostPurchase,
 	jobIndustryCategory,
 	jobPost,
 	jobPostMedia,
@@ -70,6 +72,10 @@ import { loadCrawledAdBannerPools } from "../../services/bambi-crawled-ad-banner
 import { readCrawledLimits } from "../../services/bambi-crawled-limits";
 import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import {
+	type BoostPurchaseLike,
+	isBoostPurchaseActive,
+} from "../../services/bambi-job-boost";
+import {
 	jobDescriptionBlockTypes,
 	normalizeJobDescriptionBlocks,
 	toPlainJobDescription,
@@ -119,6 +125,7 @@ import {
 	isOwnedJobPostMediaKey,
 } from "../../services/bambi-storage";
 import { deletePublicObjects } from "../../services/gcs";
+import { requirePurchasableBoostOption } from "./boost-options";
 
 const jobDescriptionBlockInput = z.object({
 	id: z.string().min(1).max(80),
@@ -151,6 +158,15 @@ const jobPostMediaSetInput = z
 // 업종은 DB enum(확정 8종)만 받는다 — 자유 문자열을 받으면 목록 밖 값이 저장 단계에서야
 // (DB 캐스팅 오류로) 터지므로 입력 검증에서 막는다.
 const industryCategorySchema = z.enum(jobIndustryCategory.enumValues);
+
+// 끌어올리기 추가 옵션 유형. boost-options.optionTypeSchema와 같은 값이며, 폼이 체크한
+// 유형 목록으로 넘어온다.
+const boostOptionTypeSchema = z.enum([
+	"manual_period",
+	"manual_count",
+	"auto_period",
+]);
+type BoostOptionType = z.infer<typeof boostOptionTypeSchema>;
 
 const jobPostInputShape = z.object({
 	organizationId: z.string().min(1),
@@ -197,6 +213,11 @@ const jobPostInputShape = z.object({
 	// 없으므로 adBannerLayoutSchema가 유일한 방어선이다 — 트러스트 바운더리다.
 	// 키를 아예 생략하면 기존 레이아웃을 보존하고, 명시적 null이면 지운다.
 	adBannerLayout: adBannerLayoutSchema.nullish(),
+	// 끌어올리기 추가 옵션 신청 목록(폼에서 체크한 유형, 최대 3·중복 불가). 비컬럼 필드라
+	// job_post 저장 spread에서 반드시 분리한다(아래 create/applyJobPostUpdate destructure).
+	boostOptionTypes: z.array(boostOptionTypeSchema).max(3).default([]),
+	// 무료 공고에서 옵션을 신청할 때의 결제수단. 유료 공고는 공고 결제수단을 그대로 쓴다.
+	boostOptionPaymentMethod: z.enum(["bank_transfer", "card"]).optional(),
 	media: jobPostMediaSetInput,
 });
 
@@ -206,16 +227,26 @@ const NEGOTIABLE_PAY_UNIT = "협의";
 
 // 단위와 금액의 짝을 강제한다 — 협의인데 금액이 붙거나, 금액 단위인데 금액이 빠지면
 // 목록에서 "협의 0원" 같은 잡음이 되고 최소 시급 필터도 어긋난다.
-export const jobPostInput = jobPostInputShape.refine(
-	(input) =>
-		input.payUnit === NEGOTIABLE_PAY_UNIT
-			? input.payAmount == null
-			: typeof input.payAmount === "number",
-	{
-		message: "급여 단위가 '협의'가 아니면 급여 금액이 필요합니다.",
-		path: ["payAmount"],
-	}
-);
+export const jobPostInput = jobPostInputShape
+	.refine(
+		(input) =>
+			input.payUnit === NEGOTIABLE_PAY_UNIT
+				? input.payAmount == null
+				: typeof input.payAmount === "number",
+		{
+			message: "급여 단위가 '협의'가 아니면 급여 금액이 필요합니다.",
+			path: ["payAmount"],
+		}
+	)
+	// 같은 옵션 유형을 두 번 신청하면 스냅샷 중복이 되므로 거부한다.
+	.refine(
+		(input) =>
+			new Set(input.boostOptionTypes).size === input.boostOptionTypes.length,
+		{
+			message: "같은 끌어올리기 옵션을 중복 신청할 수 없습니다.",
+			path: ["boostOptionTypes"],
+		}
+	);
 
 const createMediaUploadInput = z.object({
 	organizationId: z.string().min(1),
@@ -751,6 +782,112 @@ const resolveJobDetailDesignSnapshot = ({
 	});
 };
 
+// 등록·수정 tx 안에서 공고의 끌어올리기 옵션 구매를 반영한다. 등록은 기존 구매가 없어 신청분을
+// 그대로 insert하고, 수정은 체크 해제(요청 목록에 없음)된 unpaid 구매를 delete한 뒤, 아직
+// unpaid·활성으로 잡혀 있지 않은 유형만 새로 산다. paid·활성 구매는 요청과 무관하게 불변이다.
+// 옵션 구매는 결제 전까지 unpaid(스키마 기본값)로 남으며, 이 unpaid는 공고 게시를 막지 않는다 —
+// 공고 paymentStatus는 호출부에서 이미 확정한다(무료 공고 즉시 게시 그대로).
+const syncBoostPurchases = async ({
+	actorUserId,
+	existing,
+	exposureType,
+	isPaidPosting,
+	jobPostId,
+	optionPaymentMethod,
+	organizationId,
+	postingPaymentMethod,
+	requestedTypes,
+	tx,
+}: {
+	actorUserId: string;
+	existing: BoostPurchaseLike[];
+	exposureType: string;
+	// 유료 노출상품 공고 여부. 결제수단 출처(공고 vs 옵션 전용)를 가른다.
+	isPaidPosting: boolean;
+	jobPostId: string;
+	optionPaymentMethod?: "bank_transfer" | "card";
+	organizationId: string;
+	postingPaymentMethod: "bank_transfer" | "card" | null;
+	requestedTypes: BoostOptionType[];
+	tx: Parameters<Parameters<typeof db.transaction>[0]>[0];
+}): Promise<void> => {
+	const now = new Date();
+
+	// 체크 해제된 unpaid 구매만 취소한다(=취소). paid·활성 구매는 폼이 체크 고정하므로 불변.
+	for (const purchase of existing) {
+		if (
+			purchase.paymentStatus === "unpaid" &&
+			!requestedTypes.includes(purchase.optionType as BoostOptionType)
+		) {
+			await tx
+				.delete(jobBoostPurchase)
+				.where(eq(jobBoostPurchase.id, purchase.id));
+		}
+	}
+
+	// 이미 unpaid·활성으로 잡혀 있는 유형은 그대로 두고, 새로 나타난 유형만 산다.
+	const typesToBuy = requestedTypes.filter(
+		(optionType) =>
+			!existing.some(
+				(p) =>
+					p.optionType === optionType &&
+					(p.paymentStatus === "unpaid" || isBoostPurchaseActive(p, now))
+			)
+	);
+
+	if (typesToBuy.length === 0) {
+		return;
+	}
+
+	// 유료 공고는 공고 결제수단을, 무료 공고는 옵션 전용 결제수단을 쓴다(무료인데 없으면 거부).
+	let paymentMethod: "bank_transfer" | "card" | null;
+	if (isPaidPosting) {
+		paymentMethod = postingPaymentMethod;
+	} else {
+		if (!optionPaymentMethod) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: "결제수단을 선택해 주세요.",
+			});
+		}
+		paymentMethod = optionPaymentMethod;
+	}
+
+	const catalog = await tx
+		.select({
+			boostCount: jobBoostOption.boostCount,
+			boostsPerDay: jobBoostOption.boostsPerDay,
+			durationDays: jobBoostOption.durationDays,
+			optionType: jobBoostOption.optionType,
+			price: jobBoostOption.price,
+		})
+		.from(jobBoostOption)
+		.where(inArray(jobBoostOption.optionType, typesToBuy));
+	const catalogByType = new Map(catalog.map((row) => [row.optionType, row]));
+
+	for (const optionType of typesToBuy) {
+		// 판매 중·배너형·중복 검증(purchaseOption과 동일 규칙)을 통과한 확정 옵션만 스냅샷한다.
+		const option = requirePurchasableBoostOption({
+			existingSameType: existing.filter((p) => p.optionType === optionType),
+			exposureType,
+			now,
+			option: catalogByType.get(optionType),
+			optionType,
+		});
+
+		await tx.insert(jobBoostPurchase).values({
+			amount: option.price,
+			boostCount: option.boostCount,
+			boostsPerDay: option.boostsPerDay,
+			buyerUserId: actorUserId,
+			durationDays: option.durationDays,
+			jobPostId,
+			optionType,
+			organizationId,
+			paymentMethod,
+		});
+	}
+};
+
 // jobs.update와 운영자 편집(moderation.adminUpdateJobPost)이 공유하는 갱신·노출확정 로직.
 // 호출자는 대상 공고(existing)를 먼저 조회·권한 확인한 뒤 넘긴다 — 이 함수는 권한 검사를 하지
 // 않으므로(조직 멤버십 우회가 목적) 반드시 호출부에서 게이트를 통과시켜야 한다.
@@ -772,9 +909,12 @@ export const applyJobPostUpdate = async ({
 }) => {
 	// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다. 애드온 두 필드도 뺀다 —
 	// detailDesignRequested는 컬럼이 아니고, detailDesignAmount는 "클라이언트가 본 가격"이라
-	// 그대로 흘려보내면 저장 금액이 클라이언트 입력으로 덮인다.
+	// 그대로 흘려보내면 저장 금액이 클라이언트 입력으로 덮인다. 끌어올리기 옵션 두 필드도
+	// job_post 컬럼이 아니라 별도 테이블(jobBoostPurchase) 몫이라 spread에서 분리한다.
 	const {
 		adBannerLayout: _adBannerLayout,
+		boostOptionPaymentMethod: _boostOptionPaymentMethod,
+		boostOptionTypes: _boostOptionTypes,
 		descriptionBlocks: _descriptionBlocks,
 		detailDesignAmount: _detailDesignAmount,
 		detailDesignRequested: _detailDesignRequested,
@@ -942,6 +1082,35 @@ export const applyJobPostUpdate = async ({
 		}
 
 		await writeAdBannerLayout(tx, updated.id, layoutWrite);
+
+		// 운영자 편집은 애드온과 마찬가지로 끌어올리기 옵션도 완전 동결한다(input 무시).
+		if (!moderatorEdit) {
+			const existingBoostPurchases = await tx
+				.select({
+					boostsPerDay: jobBoostPurchase.boostsPerDay,
+					createdAt: jobBoostPurchase.createdAt,
+					expiresAt: jobBoostPurchase.expiresAt,
+					id: jobBoostPurchase.id,
+					optionType: jobBoostPurchase.optionType,
+					paymentStatus: jobBoostPurchase.paymentStatus,
+					remainingCount: jobBoostPurchase.remainingCount,
+				})
+				.from(jobBoostPurchase)
+				.where(eq(jobBoostPurchase.jobPostId, existing.id));
+
+			await syncBoostPurchases({
+				actorUserId,
+				existing: existingBoostPurchases,
+				exposureType: exposure.exposureType,
+				isPaidPosting: exposure.adProductId !== null,
+				jobPostId: updated.id,
+				optionPaymentMethod: data.boostOptionPaymentMethod,
+				organizationId: existing.organizationId,
+				postingPaymentMethod: exposure.paymentMethod,
+				requestedTypes: data.boostOptionTypes,
+				tx,
+			});
+		}
 
 		if (mediaRows) {
 			await tx
@@ -1717,6 +1886,20 @@ export const jobsRouter = {
 			return {
 				...post,
 				adBannerLayout: await getStoredAdBannerLayout(post.id),
+				// 신청된 끌어올리기 옵션 전체(createdAt 순). 폼이 paid·활성 구매를 체크 고정하고,
+				// unpaid 구매를 토글 가능하게 표시하는 데 쓴다.
+				boostPurchases: await db
+					.select({
+						amount: jobBoostPurchase.amount,
+						expiresAt: jobBoostPurchase.expiresAt,
+						id: jobBoostPurchase.id,
+						optionType: jobBoostPurchase.optionType,
+						paymentStatus: jobBoostPurchase.paymentStatus,
+						remainingCount: jobBoostPurchase.remainingCount,
+					})
+					.from(jobBoostPurchase)
+					.where(eq(jobBoostPurchase.jobPostId, post.id))
+					.orderBy(asc(jobBoostPurchase.createdAt)),
 				media: await getJobPostMediaSet(post.id),
 			};
 		}),
@@ -1751,9 +1934,12 @@ export const jobsRouter = {
 		.handler(async ({ context, input }) => {
 			// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다. 애드온 두 필드도 뺀다 —
 			// detailDesignRequested는 컬럼이 아니고, detailDesignAmount는 "클라이언트가 본 가격"이라
-			// 그대로 흘려보내면 저장 금액이 클라이언트 입력으로 덮인다.
+			// 그대로 흘려보내면 저장 금액이 클라이언트 입력으로 덮인다. 끌어올리기 옵션 두 필드도
+			// job_post 컬럼이 아니라 별도 테이블(jobBoostPurchase) 몫이라 spread에서 분리한다.
 			const {
 				adBannerLayout: _adBannerLayout,
+				boostOptionPaymentMethod: _boostOptionPaymentMethod,
+				boostOptionTypes: _boostOptionTypes,
 				descriptionBlocks: _descriptionBlocks,
 				detailDesignAmount: _detailDesignAmount,
 				detailDesignRequested: _detailDesignRequested,
@@ -1860,6 +2046,21 @@ export const jobsRouter = {
 				}
 
 				await writeAdBannerLayout(tx, created.id, layoutWrite);
+
+				// 공고 insert와 같은 tx에서 신청된 끌어올리기 옵션을 구매(unpaid) 처리한다.
+				// 신규 공고라 기존 구매가 없어 신청분을 그대로 insert한다.
+				await syncBoostPurchases({
+					actorUserId: actor.userId,
+					existing: [],
+					exposureType: exposure.exposureType,
+					isPaidPosting: exposure.adProductId !== null,
+					jobPostId: created.id,
+					optionPaymentMethod: input.boostOptionPaymentMethod,
+					organizationId: input.organizationId,
+					postingPaymentMethod: exposure.paymentMethod,
+					requestedTypes: input.boostOptionTypes,
+					tx,
+				});
 
 				const insertedMedia =
 					mediaRows.length > 0

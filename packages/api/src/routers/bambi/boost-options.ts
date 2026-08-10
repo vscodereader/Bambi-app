@@ -69,6 +69,7 @@ const confirmPurchasePaymentInput = z.object({
 	paymentStatus: z.enum(["paid", "unpaid"]),
 });
 
+const NOT_SELLING_MESSAGE = "판매 중이 아닌 옵션입니다.";
 const PERIOD_SPEC_MESSAGE =
 	"판매 중인 기간제 옵션은 하루 끌어올리기 횟수와 기간(일)을 1 이상으로 입력해야 합니다.";
 const COUNT_SPEC_MESSAGE =
@@ -81,6 +82,56 @@ const ACTIVE_PERIOD_MESSAGE =
 const CANCEL_PAID_MESSAGE = "입금 확인된 구매는 취소할 수 없습니다.";
 const REVERT_USED_COUNT_MESSAGE =
 	"이미 사용된 횟수권 구매는 미결제로 되돌릴 수 없습니다.";
+
+// 구매 검증에 필요한 옵션 카탈로그 행의 최소 형태(jobBoostOption의 부분집합).
+export interface PurchasableBoostOptionRow {
+	boostCount: null | number;
+	boostsPerDay: null | number;
+	durationDays: null | number;
+	optionType: z.infer<typeof optionTypeSchema>;
+	price: null | number;
+}
+
+// 구인자 구매(purchaseOption)와 등록·수정 폼(jobs.ts create/update)이 공유하는 순수 구매
+// 가능 판정. 이미 로드한 옵션 카탈로그 행과 같은 유형의 기존 구매만 받아 DB를 다시 읽지 않는다.
+// 규칙: 미판매(가격 null·미등록)·배너형 공고·입금 대기 중복·활성 기간제 중복이면 ORPCError.
+// 통과 시 가격이 확정된 행을 그대로 돌려줘 스냅샷 insert에 바로 쓴다.
+export const requirePurchasableBoostOption = ({
+	existingSameType,
+	exposureType,
+	now,
+	option,
+	optionType,
+}: {
+	existingSameType: BoostPurchaseLike[];
+	exposureType: string;
+	now: Date;
+	option: PurchasableBoostOptionRow | undefined;
+	optionType: z.infer<typeof optionTypeSchema>;
+}): PurchasableBoostOptionRow & { price: number } => {
+	if (!option || option.price === null) {
+		throw new ORPCError("BAD_REQUEST", { message: NOT_SELLING_MESSAGE });
+	}
+
+	// 배너형 공고는 끌어올리기 대상이 아니라 옵션도 팔지 않는다.
+	if ((AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(exposureType)) {
+		throw new ORPCError("BAD_REQUEST", { message: BANNER_REJECT_MESSAGE });
+	}
+
+	if (existingSameType.some((p) => p.paymentStatus === "unpaid")) {
+		throw new ORPCError("BAD_REQUEST", { message: DUPLICATE_UNPAID_MESSAGE });
+	}
+
+	// 기간제는 활성(paid·미만료) 동일 유형이 있으면 만료 전 중복 구매를 막는다. 횟수권은 합산 소진.
+	if (
+		isPeriodOption(optionType) &&
+		existingSameType.some((p) => isBoostPurchaseActive(p, now))
+	) {
+		throw new ORPCError("BAD_REQUEST", { message: ACTIVE_PERIOD_MESSAGE });
+	}
+
+	return option as PurchasableBoostOptionRow & { price: number };
+};
 
 export const boostOptionsRouter = {
 	// 판매 중(가격 not null)인 옵션만 구인자에게 노출한다.
@@ -193,9 +244,7 @@ export const boostOptionsRouter = {
 
 			// 판매 중이 아닌(가격 null·미등록) 옵션은 구매할 수 없다.
 			if (!option || option.price === null) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "판매 중이 아닌 옵션입니다.",
-				});
+				throw new ORPCError("BAD_REQUEST", { message: NOT_SELLING_MESSAGE });
 			}
 
 			const [post] = await db
