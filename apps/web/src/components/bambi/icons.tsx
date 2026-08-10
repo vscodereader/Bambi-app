@@ -6,6 +6,7 @@ import {
 	ArrowUpDown,
 	Bell,
 	Bookmark,
+	BookOpen,
 	Briefcase,
 	Calendar,
 	Check,
@@ -59,6 +60,7 @@ export const AlertCircle = fill(CircleAlert);
 export const ArrowNarrowLeft = fill(ArrowLeft);
 export const BellIcon = fill(Bell);
 export const BookmarkIcon = fill(Bookmark);
+export const BookOpenIcon = fill(BookOpen);
 export const BriefcaseIcon = fill(Briefcase);
 export const CalendarIcon = fill(Calendar);
 export const CheckIcon = fill(Check);
