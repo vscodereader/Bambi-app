@@ -1675,6 +1675,7 @@ export const jobsRouter = {
 				teamId: jobPost.teamId,
 				createdByUserId: jobPost.createdByUserId,
 				exposureType: jobPost.exposureType,
+				detailDesignStatus: jobPost.detailDesignStatus,
 				paymentStatus: jobPost.paymentStatus,
 				exposureDurationDays: jobPost.exposureDurationDays,
 				exposureEndsAt: jobPost.exposureEndsAt,
