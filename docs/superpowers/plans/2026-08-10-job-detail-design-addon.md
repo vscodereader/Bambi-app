@@ -2525,6 +2525,93 @@ git commit -m "docs: 상세이미지 디자인 제작 애드온 매뉴얼 반영
 
 ---
 
+### Task 14: 고객센터 문의 카테고리 "디자인 제작" 추가
+
+(2026-08-10 사용자 추가 요구) 고객센터 문의 유형에 디자인 제작 문의를 추가한다. 카테고리는 DB pgEnum → api zod → web 상수 3층이며, 화면(문의 폼·목록·FAQ 필터·운영자 지원 화면)은 전부 `SUPPORT_CATEGORIES` 배열과 `SUPPORT_CATEGORY_LABELS`를 순회하므로 상수 갱신만으로 자동 반영된다.
+
+**Files:**
+- Modify: `packages/db/src/schema/bambi.ts:216`(supportInquiryCategory pgEnum)
+- Create: `packages/db/src/migrations/0079_*.sql` (drizzle generate 산출물)
+- Modify: `packages/api/src/routers/bambi/support.ts:34`(inquiryCategorySchema)
+- Modify: `apps/web/src/lib/bambi/support.ts:5-21`(SUPPORT_CATEGORIES·라벨)
+
+**Interfaces:**
+- Consumes: 없음 (독립 태스크)
+- Produces: 카테고리 값 `"design"`, 라벨 "디자인 제작"
+
+- [ ] **Step 1: pgEnum에 값 추가**
+
+`packages/db/src/schema/bambi.ts`의 `supportInquiryCategory` 배열 끝(`"etc"` 뒤)에 `"design"`을 추가한다 (pg `ALTER TYPE … ADD VALUE`는 끝 추가가 기본이라 마이그레이션이 단순해진다 — 화면 순서는 web 배열이 결정하므로 무관).
+
+```ts
+export const supportInquiryCategory = pgEnum("support_inquiry_category", [
+	"account",
+	"job_post",
+	"payment",
+	"report",
+	"etc",
+	"design",
+]);
+```
+
+- [ ] **Step 2: 마이그레이션 생성**
+
+`pnpm --filter @bambi-app/db db:generate` 실행. 산출물 `0079_*.sql`이 `ALTER TYPE "public"."support_inquiry_category" ADD VALUE 'design';` 한 줄인지 확인한다. 다른 DDL이 섞이면 중단하고 보고. **db:push·db:migrate 금지.**
+
+- [ ] **Step 3: api zod 갱신**
+
+`packages/api/src/routers/bambi/support.ts`:
+
+```ts
+const inquiryCategorySchema = z.enum([
+	"account",
+	"job_post",
+	"payment",
+	"report",
+	"etc",
+	"design",
+]);
+```
+
+- [ ] **Step 4: web 상수·라벨 갱신**
+
+`apps/web/src/lib/bambi/support.ts` — 표시 순서상 `"etc"` 앞에 넣는다:
+
+```ts
+export const SUPPORT_CATEGORIES = [
+	"account",
+	"job_post",
+	"payment",
+	"report",
+	"design",
+	"etc",
+] as const;
+```
+
+```ts
+export const SUPPORT_CATEGORY_LABELS: Record<SupportCategory, string> = {
+	account: "계정·로그인",
+	job_post: "공고·지원",
+	payment: "결제·광고",
+	report: "신고·제재",
+	design: "디자인 제작",
+	etc: "기타",
+};
+```
+
+- [ ] **Step 5: 검증**
+
+`pnpm --filter @bambi-app/db check-types` · `pnpm --filter @bambi-app/api check-types` · `pnpm --filter web check-types` 전부 PASS, `pnpm ultracite fix <변경 파일 4개>` 클린. (이 상수를 읽는 웹 테스트는 현재 없음 — 화면 순회 렌더라 별도 테스트 불요.)
+
+- [ ] **Step 6: 커밋**
+
+```bash
+git add packages/db packages/api/src/routers/bambi/support.ts apps/web/src/lib/bambi/support.ts
+git commit -m "feat: 고객센터 문의 카테고리에 디자인 제작 추가"
+```
+
+---
+
 ## 스펙 ↔ 태스크 커버리지
 
 | 스펙 절 | 요구 | 태스크 |
@@ -2558,3 +2645,4 @@ git commit -m "docs: 상세이미지 디자인 제작 애드온 매뉴얼 반영
 | 테스트 | api pure 헬퍼 `test/services` | Task 2 |
 | 테스트 | web `apps/web/test/` 컨벤션 | Task 7~12 |
 | 문서 | employer·moderator 매뉴얼 | Task 13 |
+| 추가 요구(2026-08-10) | 고객센터 문의 카테고리 "디자인 제작" | Task 14 |
