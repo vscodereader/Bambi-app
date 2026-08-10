@@ -16,7 +16,7 @@ import {
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
 	SUPPORT_CATEGORIES,
@@ -45,10 +45,14 @@ export function InquiryForm() {
 	const [category, setCategory] = useState<SupportCategory>("account");
 	const [title, setTitle] = useState("");
 	const [body, setBody] = useState("");
+	// isPending은 리렌더 후에야 반영돼 연타 두 번이 다 통과한다. 동기 ref로 즉시 잠근다.
+	const submittingRef = useRef(false);
 
 	const createMutation = useMutation(
 		orpc.bambi.support.createInquiry.mutationOptions({
 			onError: (error) => {
+				// 실패 시엔 재시도할 수 있게 잠금을 푼다(성공은 router.replace로 이탈하므로 유지).
+				submittingRef.current = false;
 				// 서버 ORPCError의 한국어 message를 그대로 노출한다(금칙어 차단 문구 포함).
 				toast(error.message || "문의를 등록하지 못했어요.");
 			},
@@ -68,9 +72,10 @@ export function InquiryForm() {
 		!createMutation.isPending;
 
 	const handleSubmit = () => {
-		if (!canSubmit) {
+		if (!canSubmit || submittingRef.current) {
 			return;
 		}
+		submittingRef.current = true;
 		createMutation.mutate({
 			body: body.trim(),
 			category,
