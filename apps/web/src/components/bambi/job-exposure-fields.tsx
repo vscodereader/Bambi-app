@@ -502,7 +502,6 @@ function BoostOptionsPicker({
 					>
 						<Checkbox
 							checked={checked}
-							className="mt-0.5"
 							disabled={locked}
 							id={boostOptionCheckboxId(option.optionType)}
 							onCheckedChange={(next) =>
@@ -514,7 +513,12 @@ function BoostOptionsPicker({
 							}
 						/>
 						<div className="flex min-w-0 flex-col gap-1">
-							<Label htmlFor={boostOptionCheckboxId(option.optionType)}>
+							{/* leading-none 라벨(12px)이 체크박스(16px)보다 낮아 그냥 두면 중앙이 어긋난다.
+							라벨 박스를 체크박스와 같은 높이로 맞춰 첫 줄 기준 중앙을 정렬한다. */}
+							<Label
+								className="min-h-4"
+								htmlFor={boostOptionCheckboxId(option.optionType)}
+							>
 								{JOB_BOOST_OPTION_TYPE_LABELS[option.optionType]}
 								{spec ? ` · ${spec}` : ""} +{formatAdPrice(option.price ?? 0)}
 							</Label>
