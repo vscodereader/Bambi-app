@@ -59,9 +59,32 @@ function Heading4({ children }: { children?: ReactNode }) {
 	);
 }
 
+// streamdown 기본 a는 target="_blank"가 하드코딩이라 본문에 남은 수기 앵커 링크(#절-제목)까지
+// 새 탭으로 연다. 내부 앵커만 같은 탭 이동으로 돌리고 외부 링크는 기존 동작을 유지한다.
+// className은 streamdown 기본 링크 스타일 그대로다.
+function Anchor({ children, href }: { children?: ReactNode; href?: string }) {
+	const isInternal = href?.startsWith("#");
+	return (
+		<a
+			className="wrap-anywhere font-medium text-primary underline"
+			href={href}
+			rel={isInternal ? undefined : "noreferrer"}
+			target={isInternal ? undefined : "_blank"}
+		>
+			{children}
+		</a>
+	);
+}
+
+// controls=false — 표에 붙는 개발자용 Copy/Download 툴바를 끈다.
+// parseIncompleteMarkdown=false — 스트리밍이 아니라 완결된 정적 문서다.
 export function ManualBody({ markdown }: { markdown: string }) {
 	return (
-		<Streamdown components={{ h2: Heading2, h3: Heading3, h4: Heading4 }}>
+		<Streamdown
+			components={{ a: Anchor, h2: Heading2, h3: Heading3, h4: Heading4 }}
+			controls={false}
+			parseIncompleteMarkdown={false}
+		>
 			{markdown}
 		</Streamdown>
 	);
