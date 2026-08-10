@@ -13,6 +13,9 @@ export default defineConfig({
 		env: {
 			GCS_PUBLIC_BUCKET: "",
 		},
+		// 여러 파일이 공유 dev DB의 bambi_site_settings 단일 행을 서로 다른 값으로 변형해
+		// 병렬 실행 시 서로의 설정을 덮어써 간헐 실패한다. 파일 단위 직렬로 막는다.
+		fileParallelism: false,
 		include: ["test/**/*.test.ts"],
 	},
 });
