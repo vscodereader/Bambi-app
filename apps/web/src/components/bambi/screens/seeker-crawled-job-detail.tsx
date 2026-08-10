@@ -152,7 +152,10 @@ export function SeekerCrawledJobDetail({
 								{/* 수집 원본에 연락처가 적혀 있을 때만 노출한다(상세 재수집 전 데이터는
 								    null이다). 타일 룩·안내 문구는 우리 공고 상세와 공유한다. */}
 								{job.contactPhone ? (
-									<EmployerPhoneTile phone={job.contactPhone} />
+									<EmployerPhoneTile
+										phone={job.contactPhone}
+										trackAnalytics={false}
+									/>
 								) : null}
 								{employmentType ? (
 									<InfoTile

@@ -413,7 +413,7 @@ export function AdBannerEditor({
 	return (
 		<div className="flex w-full min-w-0 flex-col gap-4">
 			{/* 저장·취소는 화면이 길어져도 늘 닿아야 한다 — 스크롤 맨 끝에 두면 사라진다. */}
-			<div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-border border-b bg-background py-3">
+			<div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-border border-b bg-background py-3 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-background md:before:-top-6 md:before:h-6">
 				<ToggleGroup
 					aria-label="배너 슬롯"
 					className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-fit"
@@ -517,23 +517,29 @@ export function AdBannerEditor({
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="flex flex-col gap-4">
-							<EditorImageSlot
-								error={saveError?.field === "image" ? saveError.message : null}
-								// 단색 배경이면 이 이미지는 배너에 나오지 않는다 — "필수" 배지도,
-								// 비율·크기 반려 경고도 띄우지 않는다(둘 다 거짓말이 된다).
-								// 슬롯 자체는 남긴다: 배경을 이미지로 되돌릴 때 다시 쓴다.
-								imageUsed={isAdBannerImageRequired(layout, meta.usage)}
-								inputRef={imageInputRef}
-								item={slotMedia}
-								onChange={(item) => {
-									setSaveError(null);
-									setMedia((prev) => ({ ...prev, [meta.mediaKey]: item }));
-								}}
-								required={isSlotImageRequired(slot)}
-								usage={meta.usage}
-							/>
+							{slotLayout.background.type === "image" ? (
+								<>
+									<EditorImageSlot
+										error={
+											saveError?.field === "image" ? saveError.message : null
+										}
+										imageUsed
+										inputRef={imageInputRef}
+										item={slotMedia}
+										onChange={(item) => {
+											setSaveError(null);
+											setMedia((prev) => ({
+												...prev,
+												[meta.mediaKey]: item,
+											}));
+										}}
+										required={isSlotImageRequired(slot)}
+										usage={meta.usage}
+									/>
 
-							<Separator />
+									<Separator />
+								</>
+							) : null}
 
 							<div className="flex flex-col gap-2">
 								<span className="font-medium text-sm">배경</span>

@@ -3,9 +3,15 @@
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useAdBannerJobs, useMarketplaceJobs } from "@/lib/bambi/api-jobs";
+import {
+	trackDiscoveryTab,
+	trackLoadMore,
+	trackMarketplaceFilterChanges,
+} from "@/lib/bambi/ga-interaction";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import type { MarketplaceFilters } from "@/lib/bambi/marketplace";
 import type { Job } from "@/lib/bambi/types";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
 import { useBambiAuth } from "../auth-client-provider";
@@ -14,6 +20,7 @@ import { HomeCommunitySection } from "../home-community-section";
 import { Search2 } from "../icons";
 import {
 	MarketplaceDiscoveryAxisChips,
+	type MarketplaceDiscoveryTabId,
 	MarketplaceDiscoveryTabs,
 	MarketplaceFilterControls,
 	MarketplaceFilterSheet,
@@ -43,10 +50,25 @@ export function SeekerMarketplaceScreen() {
 		totalCount,
 	} = useMarketplaceJobs(filters);
 	const adBanners = useAdBannerJobs();
+	const handleFiltersChange = useCallback(
+		(next: MarketplaceFilters) => {
+			trackMarketplaceFilterChanges(filters, next);
+			setFilters(next);
+		},
+		[filters, setFilters]
+	);
 	const { discoveryTabId, selectDiscoveryTab } = useMarketplaceDiscovery(
 		filters,
-		setFilters
+		handleFiltersChange
 	);
+	const handleDiscoveryTabSelect = (tab: MarketplaceDiscoveryTabId) => {
+		trackDiscoveryTab(tab);
+		selectDiscoveryTab(tab);
+	};
+	const handleLoadMore = () => {
+		trackLoadMore(sections.organic.length);
+		loadMore();
+	};
 
 	// 카드를 누르면 우측 드로어 미리보기 없이 상세 페이지로 바로 이동한다.
 	// 게스트는 상세 대신 가입 유도 화면으로 보낸다.
@@ -87,7 +109,7 @@ export function SeekerMarketplaceScreen() {
 							</div>
 							<MarketplaceFilterControls
 								filters={filters}
-								onChange={setFilters}
+								onChange={handleFiltersChange}
 							/>
 						</Card>
 					</div>
@@ -103,12 +125,12 @@ export function SeekerMarketplaceScreen() {
 					/>
 					<div className="mb-5 flex flex-col gap-4">
 						<MarketplaceDiscoveryTabs
-							onSelect={selectDiscoveryTab}
+							onSelect={handleDiscoveryTabSelect}
 							value={discoveryTabId}
 						/>
 						<MarketplaceSearch
 							filters={filters}
-							onChange={setFilters}
+							onChange={handleFiltersChange}
 							onOpenFilters={() => setFiltersOpen(true)}
 							onSelectJob={openJob}
 							searchFieldClassName="md:hidden"
@@ -116,7 +138,7 @@ export function SeekerMarketplaceScreen() {
 						<MarketplaceDiscoveryAxisChips
 							discoveryTabId={discoveryTabId}
 							filters={filters}
-							onChange={setFilters}
+							onChange={handleFiltersChange}
 						/>
 					</div>
 					{isError ? (
@@ -143,9 +165,10 @@ export function SeekerMarketplaceScreen() {
 						isLoading={isLoading}
 						isLoadingMore={isLoadingMore}
 						jobs={jobs}
-						onLoadMore={loadMore}
+						onLoadMore={handleLoadMore}
 						onOpen={openJob}
 						sections={sections}
+						trackAnalytics
 					/>
 				</div>
 				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
@@ -161,7 +184,7 @@ export function SeekerMarketplaceScreen() {
 			</div>
 			<MarketplaceFilterSheet
 				filters={filters}
-				onChange={setFilters}
+				onChange={handleFiltersChange}
 				onOpenChange={setFiltersOpen}
 				open={filtersOpen}
 			/>
