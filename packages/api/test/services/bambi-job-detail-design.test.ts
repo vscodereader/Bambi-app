@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	keepOrClearJobDetailDesign,
 	resolveJobDetailDesign,
 	sumJobPaymentAmount,
 	toJobDetailDesignWrite,
@@ -152,6 +153,46 @@ describe("toJobDetailDesignWrite", () => {
 			toJobDetailDesignWrite({
 				currentStatus: "requested",
 				snapshot: { detailDesignAmount: null, detailDesignStatus: null },
+			})
+		).toStrictEqual({ detailDesignAmount: null, detailDesignStatus: null });
+	});
+});
+
+describe("keepOrClearJobDetailDesign", () => {
+	it("상품 변경으로 옵션이 사라지면 스냅샷을 정리한다", () => {
+		// 유료 상품+신청 상태에서 무료(상품 미선택)나 옵션 없는 상품으로 바꾼 경우.
+		// 금액을 안 지우면 결제 합산이 있지도 않은 옵션을 청구 예정으로 띄운다.
+		expect(
+			keepOrClearJobDetailDesign({
+				currentStatus: "requested",
+				productOffersDetailDesign: false,
+			})
+		).toStrictEqual({ detailDesignAmount: null, detailDesignStatus: null });
+	});
+
+	it("completed 건은 옵션이 사라져도 제작 이력을 지우지 않는다", () => {
+		expect(
+			keepOrClearJobDetailDesign({
+				currentStatus: "completed",
+				productOffersDetailDesign: false,
+			})
+		).toStrictEqual({ detailDesignStatus: "completed" });
+	});
+
+	it("상품이 여전히 옵션을 제공하면 금액을 건드리지 않는다", () => {
+		expect(
+			keepOrClearJobDetailDesign({
+				currentStatus: "requested",
+				productOffersDetailDesign: true,
+			})
+		).toStrictEqual({ detailDesignStatus: "requested" });
+	});
+
+	it("미신청 공고는 정리해도 변화가 없다(결제 리셋 유발 금지)", () => {
+		expect(
+			keepOrClearJobDetailDesign({
+				currentStatus: null,
+				productOffersDetailDesign: false,
 			})
 		).toStrictEqual({ detailDesignAmount: null, detailDesignStatus: null });
 	});

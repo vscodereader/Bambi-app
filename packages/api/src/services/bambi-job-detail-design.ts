@@ -94,6 +94,23 @@ export const toJobDetailDesignWrite = ({
 		? { detailDesignStatus: snapshot.detailDesignStatus }
 		: snapshot;
 
+// 신청 여부를 안 보낸 저장(폼이 이 필드를 안 다루는 경로)에서 쓸 값. 원칙은 "기존 유지"지만,
+// 새로 확정된 상품이 옵션을 제공하지 않으면 스냅샷을 지운다 — 안 지우면 상품만 바꾼 수정에서
+// 유령 금액이 남아, 옵션이 없는(무료 포함) 공고에 결제 예정 금액이 계속 붙는다.
+// completed만 예외다: 이미 제작이 끝난 이력을 상품 변경만으로 지우면, 해제를 막는
+// completed_locked 규칙과 정면으로 어긋난다. 운영자가 손대야 하는 건으로 남겨 둔다.
+export const keepOrClearJobDetailDesign = ({
+	currentStatus,
+	productOffersDetailDesign,
+}: {
+	currentStatus: JobDetailDesignStatus | null;
+	productOffersDetailDesign: boolean;
+}): JobDetailDesignWrite =>
+	productOffersDetailDesign || currentStatus === "completed"
+		? // 금액 키를 빼서 기존 금액을 그대로 둔다(상품가가 올라도 재가격하지 않는다).
+			{ detailDesignStatus: currentStatus }
+		: { detailDesignAmount: null, detailDesignStatus: null };
+
 // 결제 예정 총액 = 노출 금액 + 옵션 금액. 둘 다 없으면 무료 공고라 null이다.
 export const sumJobPaymentAmount = (
 	exposureAmount: null | number,

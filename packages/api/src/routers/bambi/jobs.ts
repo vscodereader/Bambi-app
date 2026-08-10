@@ -79,6 +79,7 @@ import {
 	type JobDetailDesignSnapshot,
 	type JobDetailDesignStatus,
 	type JobDetailDesignWrite,
+	keepOrClearJobDetailDesign,
 	resolveJobDetailDesign,
 	toJobDetailDesignWrite,
 } from "../../services/bambi-job-detail-design";
@@ -592,6 +593,9 @@ interface ResolvedJobExposure {
 	adProductId: string | null;
 	// 구매 시점 스냅샷: 상품의 하루 자동 끌어올리기 횟수를 공고 컬럼으로 복사한다(수동과 동일 패턴).
 	autoBoostsPerDay: number;
+	// 확정된 상품의 상세이미지 디자인 제작 옵션 가격. null = 이 상품엔 옵션이 없다(무료 공고 포함).
+	// 애드온 판정이 상품 행을 다시 읽지 않도록 여기서 함께 돌려준다.
+	detailDesignPrice: number | null;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
@@ -618,6 +622,7 @@ export const resolveJobPostExposure = async (input: {
 			exposureType: "standard",
 			manualBoostsPerDay: 0,
 			autoBoostsPerDay: 0,
+			detailDesignPrice: null,
 			paymentMethod: null,
 		};
 	}
@@ -697,35 +702,29 @@ export const resolveJobPostExposure = async (input: {
 		exposureType,
 		manualBoostsPerDay: isBanner ? 0 : product.manualBoostsPerDay,
 		autoBoostsPerDay: isBanner ? 0 : product.autoBoostsPerDay,
+		detailDesignPrice: product.detailDesignPrice,
 		paymentMethod: input.paymentMethod ?? null,
 	};
 };
 
-// 애드온 스냅샷 확정. 판정 자체는 pure 헬퍼가 하고 여기서는 상품 가격 조회와
-// 실패 코드 → ORPCError 번역만 한다(가격 변동 문구는 노출 금액 재확인과 같은 패턴).
-const resolveJobDetailDesignSnapshot = async ({
-	adProductId,
+// 애드온 스냅샷 확정. 판정 자체는 pure 헬퍼가 하고 여기서는 실패 코드 → ORPCError
+// 번역만 한다(가격 변동 문구는 노출 금액 재확인과 같은 패턴). 가격은 노출 확정이 이미
+// 읽어 둔 상품 행에서 온다 — 저장마다 상품을 두 번 읽지 않는다.
+const resolveJobDetailDesignSnapshot = ({
 	currentStatus,
 	expectedAmount,
+	productDetailDesignPrice,
 	requested,
 }: {
-	adProductId: null | string;
 	currentStatus: JobDetailDesignStatus | null;
 	expectedAmount?: null | number;
+	productDetailDesignPrice: null | number;
 	requested: boolean;
-}): Promise<JobDetailDesignSnapshot> => {
-	// 신청하지 않으면 상품 가격은 판정에 쓰이지 않는다 — 공고 저장마다 도는 경로라
-	// 조회 자체를 건다. 무료 공고(상품 미선택)도 가격이 null이라 not_offered로 떨어진다.
-	const product =
-		requested && adProductId
-			? await db.query.adProduct.findFirst({
-					where: eq(adProduct.id, adProductId),
-				})
-			: null;
+}): JobDetailDesignSnapshot => {
 	const resolution = resolveJobDetailDesign({
 		currentStatus,
 		expectedAmount,
-		productDetailDesignPrice: product?.detailDesignPrice ?? null,
+		productDetailDesignPrice,
 		requested,
 	});
 
@@ -821,25 +820,35 @@ export const applyJobPostUpdate = async ({
 	// 제약이라 스스로 db와 맞는지 확인할 수 없어, 값이 실제로 흐르는 여기서 satisfies로 건다.
 	const currentDetailDesignStatus =
 		existing.detailDesignStatus satisfies JobDetailDesignStatus | null;
-	// 애드온은 결제 총액의 일부다. 운영자 편집은 결제 축(결제 상태·노출 종료일)을 건드리지
-	// 않는 모드라 여기서도 손대지 않는다 — 금액만 바뀌고 결제 상태는 paid로 남는 어긋남을
-	// 막는다. 키를 생략한 요청도 같다(구인자가 신청해 둔 옵션을 조용히 해제하지 않는다).
-	// 금액 키를 뺀 객체라 drizzle이 detail_design_amount 컬럼을 건너뛴다.
-	const detailDesign: JobDetailDesignWrite =
-		moderatorEdit || data.detailDesignRequested === undefined
-			? { detailDesignStatus: currentDetailDesignStatus }
-			: // completed 건이면 헬퍼가 돌려준 (새 상품가 기준) 금액을 의도적으로 버리고
-				// 구매 시점 스냅샷을 남긴다 — toJobDetailDesignWrite가 금액 키를 뺀다.
-				toJobDetailDesignWrite({
-					currentStatus: currentDetailDesignStatus,
-					snapshot: await resolveJobDetailDesignSnapshot({
-						adProductId: exposure.adProductId,
+	// 운영자 편집은 애드온을 완전히 동결한다 — 결제 축(결제 상태·노출 종료일)을 건드리지 않는
+	// 모드라, 여기서 금액을 바꾸면 총액만 오르고 결제 상태는 paid로 남는 어긋남이 생긴다.
+	// 금액 키가 없는 객체라 drizzle이 detail_design_amount 컬럼을 건너뛴다.
+	let detailDesign: JobDetailDesignWrite = {
+		detailDesignStatus: currentDetailDesignStatus,
+	};
+
+	if (!moderatorEdit) {
+		detailDesign =
+			data.detailDesignRequested === undefined
+				? // 신청 여부를 안 보낸 저장이라도 상품은 바뀔 수 있다. 새 상품에 옵션이 없으면
+					// 스냅샷을 정리해야 유령 금액이 남지 않는다(completed는 보존 — 헬퍼 주석 참고).
+					keepOrClearJobDetailDesign({
 						currentStatus: currentDetailDesignStatus,
-						// 노출 금액과 같은 재확인 값. 안 넘기면 가격 변동 가드가 조용히 꺼진다.
-						expectedAmount: data.detailDesignAmount,
-						requested: data.detailDesignRequested,
-					}),
-				});
+						productOffersDetailDesign: exposure.detailDesignPrice !== null,
+					})
+				: // completed 건이면 헬퍼가 돌려준 (새 상품가 기준) 금액을 의도적으로 버리고
+					// 구매 시점 스냅샷을 남긴다 — toJobDetailDesignWrite가 금액 키를 뺀다.
+					toJobDetailDesignWrite({
+						currentStatus: currentDetailDesignStatus,
+						snapshot: resolveJobDetailDesignSnapshot({
+							currentStatus: currentDetailDesignStatus,
+							// 노출 금액과 같은 재확인 값. 안 넘기면 가격 변동 가드가 조용히 꺼진다.
+							expectedAmount: data.detailDesignAmount,
+							productDetailDesignPrice: exposure.detailDesignPrice,
+							requested: data.detailDesignRequested,
+						}),
+					});
+	}
 	const layoutWrite = normalizeAdBannerLayout(data, exposure.exposureType);
 	// 최종 저장될 레이아웃. 검수(금칙어)와 배너 이미지 필수 판정이 같은 값을 봐야 한다.
 	const finalLayout = await resolveModeratedLayout(layoutWrite, existing.id);
@@ -1791,11 +1800,11 @@ export const jobsRouter = {
 				paymentMethod: input.paymentMethod,
 			});
 			// 신규 등록이라 기존 상태가 없다(currentStatus: null) — 보존 분기도 필요 없다.
-			const detailDesign = await resolveJobDetailDesignSnapshot({
-				adProductId: exposure.adProductId,
+			const detailDesign = resolveJobDetailDesignSnapshot({
 				currentStatus: null,
 				// 노출 금액과 같은 재확인 값. 안 넘기면 가격 변동 가드가 조용히 꺼진다.
 				expectedAmount: input.detailDesignAmount,
+				productDetailDesignPrice: exposure.detailDesignPrice,
 				requested: input.detailDesignRequested ?? false,
 			});
 			const layoutWrite = normalizeAdBannerLayout(input, exposure.exposureType);
