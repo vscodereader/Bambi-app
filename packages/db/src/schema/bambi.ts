@@ -219,6 +219,7 @@ export const supportInquiryCategory = pgEnum("support_inquiry_category", [
 	"payment",
 	"report",
 	"etc",
+	"design",
 ]);
 
 // 문의 진행 상태. 운영 조치 상태(community_content_status)와는 별개 축이다 —

@@ -37,6 +37,7 @@ const inquiryCategorySchema = z.enum([
 	"payment",
 	"report",
 	"etc",
+	"design",
 ]);
 
 const createInquiryInput = z.object({
