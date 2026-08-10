@@ -113,6 +113,15 @@ export const jobDetailDesignStatus = pgEnum("job_detail_design_status", [
 	"completed",
 ]);
 
+// 공고 끌어올리기 추가 옵션의 종류. 기간제 수동(manual_period)·횟수권 수동(manual_count)·
+// 기간제 자동(auto_period) 세 가지를 전역으로 판다. 전역 카탈로그(job_boost_option)와
+// 구매 스냅샷(job_boost_purchase)이 이 값으로 옵션을 특정한다.
+export const jobBoostOptionType = pgEnum("job_boost_option_type", [
+	"manual_period",
+	"manual_count",
+	"auto_period",
+]);
+
 export const jobPaymentMethod = pgEnum("job_payment_method", [
 	"card",
 	"bank_transfer",
@@ -1049,6 +1058,11 @@ export const jobBoostEvent = pgTable(
 		// 자동 발동('auto')은 사람 액터가 없어 null. 수동('manual')은 클릭한 사용자를 저장한다.
 		actorUserId: text("actor_user_id").references(() => user.id),
 		boostType: text("boost_type").default("manual").notNull(),
+		// 이 끌어올림을 유발한 추가 옵션 구매(횟수권 차감·기간제 자동 발동의 출처). 추가 옵션
+		// 축이 아닌 기존 상품 끌어올림은 null. 구매 행이 정리돼도 이력은 남겨야 하므로 set null.
+		purchaseId: uuid("purchase_id").references(() => jobBoostPurchase.id, {
+			onDelete: "set null",
+		}),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
@@ -1057,6 +1071,70 @@ export const jobBoostEvent = pgTable(
 			table.createdAt
 		),
 		index("job_boost_event_organization_id_idx").on(table.organizationId),
+	]
+);
+
+// 공고 끌어올리기 추가 옵션의 전역 판매 정의(옵션 종류당 1행). 공고별이 아니라 운영자가
+// 관리하는 상품 카탈로그라, 세 옵션의 가격·수량을 여기서 한 번만 정한다. 기간제와 횟수권이
+// 서로 다른 수량 축을 쓰므로 컬럼을 나눠 두고 해당 없는 축은 null로 남긴다.
+export const jobBoostOption = pgTable("job_boost_option", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	// 옵션 종류당 한 행뿐이라 유니크. 구매 스냅샷·화면이 이 값으로 옵션을 특정한다.
+	optionType: jobBoostOptionType("option_type").notNull().unique(),
+	// null = 미판매(구인자 화면에서 이 옵션 자체가 안 보인다). 값이 있으면 판매가.
+	price: integer("price"),
+	// 기간제(manual_period·auto_period) 전용 — 하루 끌어올리기 횟수. 횟수권은 null.
+	boostsPerDay: integer("boosts_per_day"),
+	// 기간제 전용 — 판매 기간(일). 횟수권은 null.
+	durationDays: integer("duration_days"),
+	// 횟수권(manual_count) 전용 — 총 끌어올리기 횟수. 기간제는 null.
+	boostCount: integer("boost_count"),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
+
+// 공고 끌어올리기 추가 옵션의 구매 1건. 전역 카탈로그(job_boost_option)에서 산 결과를 공고
+// 단위로 기록한다. 아래 스냅샷 컬럼(amount·boostsPerDay·durationDays·boostCount)은 구매
+// 시점의 옵션 값을 복사한 것이라, 운영자가 나중에 옵션 가격·수량을 바꿔도 기존 구매에는
+// 비소급으로 고정된다(노출 상품 exposure_amount 스냅샷과 동일 철학).
+export const jobBoostPurchase = pgTable(
+	"job_boost_purchase",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		// 구매를 실행한 사용자. jobBoostEvent.actorUserId와 같이 사용자 삭제에 매이지 않게
+		// onDelete를 두지 않는다(조직 축이 결제 주체라 사용자는 참고값).
+		buyerUserId: text("buyer_user_id").references(() => user.id),
+		optionType: jobBoostOptionType("option_type").notNull(),
+		// 결제 금액 스냅샷. 옵션 가격이 나중에 바뀌어도 이 구매의 청구액은 이 값으로 고정.
+		amount: integer("amount").notNull(),
+		// 아래 세 칸은 구매 시점 옵션 값 스냅샷 — 운영자가 옵션을 바꿔도 기존 구매 비소급.
+		// 기간제는 boostsPerDay·durationDays, 횟수권은 boostCount만 채우고 나머지는 null.
+		boostsPerDay: integer("boosts_per_day"),
+		durationDays: integer("duration_days"),
+		boostCount: integer("boost_count"),
+		paymentMethod: jobPaymentMethod("payment_method"),
+		paymentStatus: jobPaymentStatus("payment_status")
+			.default("unpaid")
+			.notNull(),
+		// 결제 확정 후 옵션이 켜진 시각. 미결제면 null.
+		activatedAt: timestamp("activated_at"),
+		// 기간제 옵션의 만료 시각. 횟수권·미결제면 null.
+		expiresAt: timestamp("expires_at"),
+		// 횟수권 옵션의 잔여 횟수. 발동할 때마다 차감한다. 기간제·미결제면 null.
+		remainingCount: integer("remaining_count"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_boost_purchase_job_post_id_idx").on(table.jobPostId),
+		index("job_boost_purchase_payment_status_idx").on(table.paymentStatus),
 	]
 );
 
@@ -2072,6 +2150,24 @@ export const jobPromotionBoostEventRelations = relations(
 		}),
 	})
 );
+
+export const jobBoostPurchaseRelations = relations(
+	jobBoostPurchase,
+	({ many, one }) => ({
+		jobPost: one(jobPost, {
+			fields: [jobBoostPurchase.jobPostId],
+			references: [jobPost.id],
+		}),
+		boostEvents: many(jobBoostEvent),
+	})
+);
+
+export const jobBoostEventRelations = relations(jobBoostEvent, ({ one }) => ({
+	purchase: one(jobBoostPurchase, {
+		fields: [jobBoostEvent.purchaseId],
+		references: [jobBoostPurchase.id],
+	}),
+}));
 
 export const adPlacementRelations = relations(adPlacement, ({ many }) => ({
 	products: many(adProduct),

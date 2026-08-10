@@ -1,5 +1,6 @@
 "use client";
 
+import { isBoostPurchaseActive } from "@bambi-app/api/services/bambi-job-boost";
 import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
 import { Alert, AlertDescription } from "@bambi-app/ui/components/alert";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
@@ -23,7 +24,11 @@ import { useEffect, useMemo } from "react";
 
 import { AdPriceTag } from "@/components/bambi/ad-price-tag";
 import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
-import { FieldError, FieldLabel } from "@/components/bambi/form-message";
+import {
+	FieldError,
+	FieldHint,
+	FieldLabel,
+} from "@/components/bambi/form-message";
 import {
 	type AdCatalogProduct,
 	formatAdDuration,
@@ -31,6 +36,11 @@ import {
 	formatAdPriceLabel,
 	resolveAdPrice,
 } from "@/lib/bambi/ad-catalog";
+import {
+	formatBoostOptionSpec,
+	JOB_BOOST_OPTION_TYPE_LABELS,
+	type JobBoostOptionTypeKey,
+} from "@/lib/bambi/boost-options";
 import type { JobDetailDesignStatusKey } from "@/lib/bambi/exposure";
 import type { JobFormErrors, JobPaymentMethod } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
@@ -64,6 +74,87 @@ const paymentOptions: { label: string; value: JobPaymentMethod }[] = [
 	{ label: "무통장입금", value: "bank_transfer" },
 ];
 
+// 판매 중인 끌어올리기 옵션 한 줄(boostOptions.listOptions 응답 행).
+interface BoostOptionRow {
+	boostCount: null | number;
+	boostsPerDay: null | number;
+	durationDays: null | number;
+	optionType: JobBoostOptionTypeKey;
+	price: null | number;
+}
+
+// 수정 폼이 넘기는 기존 구매 요약(jobs.getEditableById.boostPurchases).
+export interface JobBoostPurchaseSummary {
+	expiresAt: Date | null;
+	id: string;
+	optionType: JobBoostOptionTypeKey;
+	paymentStatus: string;
+	remainingCount: null | number;
+}
+
+// 체크 고정(해제 불가) 대상 판정 = 이미 적용 중인 구매. 규칙은 서버와 한 벌로 유지해야
+// 하므로 서비스의 순수 함수를 그대로 쓰고, 판정에 쓰이지 않는 칸만 자리값으로 채운다
+// (편집 조회는 boostsPerDay·createdAt을 내려주지 않는다).
+const isBoostPurchaseLocked = (
+	purchase: JobBoostPurchaseSummary,
+	now: Date
+): boolean =>
+	isBoostPurchaseActive(
+		{ ...purchase, boostsPerDay: null, createdAt: now },
+		now
+	);
+
+// 유형별 기존 구매 상태. locked = 입금 확인돼 적용 중(해제 불가·다시 받을 돈 아님),
+// unpaid = 입금 대기(해제 가능·이미 청구된 금액). 맵에 없으면 "새로 결제되는 유형"이다.
+// 화면의 체크 고정·총액·결제수단 노출이 전부 이 한 판정에서 갈린다.
+export type BoostPurchaseState = "locked" | "unpaid";
+
+export const getBoostPurchaseStates = (
+	purchases: JobBoostPurchaseSummary[] | undefined,
+	now: Date
+): Map<JobBoostOptionTypeKey, BoostPurchaseState> => {
+	const states = new Map<JobBoostOptionTypeKey, BoostPurchaseState>();
+
+	for (const purchase of purchases ?? []) {
+		if (isBoostPurchaseLocked(purchase, now)) {
+			states.set(purchase.optionType, "locked");
+			continue;
+		}
+
+		// 같은 유형에 만료된 구매와 입금 대기 구매가 함께 있어도 locked를 덮어쓰지 않는다.
+		if (
+			purchase.paymentStatus === "unpaid" &&
+			!states.has(purchase.optionType)
+		) {
+			states.set(purchase.optionType, "unpaid");
+		}
+	}
+
+	return states;
+};
+
+// 새로 결제되는 유형(= 기존 구매가 없는 유형). 결제수단 요구·노출·차단 축을
+// validateJobForm의 newTypes와 한 규칙으로 맞추는 단일 소스다.
+export const getNewBoostOptionTypes = (
+	types: JobBoostOptionTypeKey[] | undefined,
+	purchases: JobBoostPurchaseSummary[] | undefined,
+	now: Date
+): JobBoostOptionTypeKey[] => {
+	const states = getBoostPurchaseStates(purchases, now);
+
+	return (types ?? []).filter((optionType) => !states.has(optionType));
+};
+
+// 체크한 옵션들의 판매가 합. 카탈로그에 없는(판매 중지) 유형은 계산에서 빠진다 —
+// 서버도 그런 유형은 구매로 만들지 않는다.
+export const sumBoostOptionPrices = (
+	options: BoostOptionRow[] | undefined,
+	types: JobBoostOptionTypeKey[] | undefined
+): number =>
+	(options ?? [])
+		.filter((option) => (types ?? []).includes(option.optionType))
+		.reduce((sum, option) => sum + (option.price ?? 0), 0);
+
 // 카드 내부 텍스트가 카드 밖으로 넘치지 않도록 min-w-0 + whitespace-normal + break-words로
 // 줄바꿈을 허용한다.
 // h-full: 같은 그리드 행에서 부모(ToggleGroup)가 items-stretch일 때 행 안의 가장 높은 카드에
@@ -80,6 +171,14 @@ const durationSelectTriggerClassName = "w-full text-sm data-[size=default]:h-9";
 
 interface JobExposureFieldsProps {
 	adProductId: string | null;
+	// 무료 공고에서 옵션만 결제할 때의 결제수단(유료 공고는 공고 결제수단을 쓴다).
+	boostOptionPaymentMethod?: JobPaymentMethod | null;
+	// 끌어올리기 옵션 네 값은 애드온(onDetailDesignChange)과 같은 규칙으로 optional이다 —
+	// 콜백이 없으면 읽기 전용(운영자 편집)으로 보고 컨트롤 자체를 그리지 않는다. 서버도 운영자
+	// 편집 경로에서는 옵션을 동결하므로, 켜고 끌 수 있는 UI를 내주면 거짓 화면이 된다.
+	boostOptionTypes?: JobBoostOptionTypeKey[];
+	// 수정 폼만 넘긴다. 이미 적용 중인 구매를 체크 고정하고, 입금 대기 건에 취소 안내를 붙인다.
+	boostPurchases?: JobBoostPurchaseSummary[];
 	detailDesignAmount: number | null;
 	detailDesignRequested: boolean;
 	// 애드온 제작 진행 상태. "completed"면 애드온을 동결한다(체크박스 비활성·자동 언체크 스킵).
@@ -87,12 +186,17 @@ interface JobExposureFieldsProps {
 	detailDesignStatus?: JobDetailDesignStatusKey | null;
 	errors?: Pick<
 		JobFormErrors,
-		"exposureDurationDays" | "exposureType" | "paymentMethod"
+		| "boostOptionPaymentMethod"
+		| "exposureDurationDays"
+		| "exposureType"
+		| "paymentMethod"
 	>;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	// 없으면 애드온을 읽기 전용으로 본다(운영자 편집 — 서버가 애드온을 동결하는 경로라
 	// 켜고 끄는 컨트롤을 내주면 저장해도 아무 일이 없는 거짓 UI가 된다).
+	onBoostOptionPaymentMethodChange?: (value: JobPaymentMethod) => void;
+	onBoostOptionTypesChange?: (types: JobBoostOptionTypeKey[]) => void;
 	onDetailDesignChange?: (requested: boolean, amount: number | null) => void;
 	onDurationChange: (days: number | null, amount: number | null) => void;
 	onPaymentMethodChange: (value: JobPaymentMethod) => void;
@@ -102,6 +206,25 @@ interface JobExposureFieldsProps {
 
 const isJobPaymentMethod = (value: string): value is JobPaymentMethod =>
 	value === "card" || value === "bank_transfer";
+
+// 카드 하단 안내 문구. 무료 공고는 결제와 무관하게 검수만으로 게시되므로 유료 공고 문구를
+// 그대로 쓰면 거짓 안내가 된다. 새로 결제되는 옵션이 있을 때만 옵션 활성화 조건(입금 확인)을
+// 덧붙인다(BankTransferGuide purpose="boost"와 같은 규칙).
+const resolvePublishNotice = ({
+	hasNewBoostOptions,
+	isPaidPosting,
+}: {
+	hasNewBoostOptions: boolean;
+	isPaidPosting: boolean;
+}): string => {
+	if (isPaidPosting) {
+		return "결제는 운영자 확인 후 완료되며, 검수·결제완료 시 게시됩니다.";
+	}
+
+	return hasNewBoostOptions
+		? "공고는 검수 후 게시되며, 끌어올리기 옵션은 입금 확인 후 적용됩니다."
+		: "공고는 검수 후 게시됩니다.";
+};
 
 type AdPriceOption = AdCatalogProduct["priceOptions"][number];
 
@@ -115,16 +238,20 @@ const findDurationOption = (
 		? product.priceOptions.find((priceOption) => priceOption.days === days)
 		: undefined;
 
-// 결제 예정 금액 = 노출 금액 + 디자인 제작 옵션 금액. 애드온이 없을 때는 기존처럼
-// 원가 취소선(AdPriceTag)을 보여 주고, 애드온이 붙으면 총액 + 내역 한 줄로 바꾼다
-// (취소선 뱃지 옆에 다른 금액을 더하면 어느 값이 결제액인지 읽히지 않는다).
+// 결제 예정 금액 = 노출 금액 + 디자인 제작 옵션 금액 + 끌어올리기 옵션 금액. 애드온이
+// 하나도 없을 때는 기존처럼 원가 취소선(AdPriceTag)을 보여 주고, 애드온이 붙으면 총액 +
+// 내역 한 줄로 바꾼다(취소선 뱃지 옆에 다른 금액을 더하면 어느 값이 결제액인지 읽히지 않는다).
+// 무료 공고에서 끌어올리기 옵션만 산 경우에도 이 블록이 총액을 알린다(amount가 null이라
+// "광고" 항목은 빠진다).
 function PayableTotal({
 	amount,
+	boostAmount,
 	detailDesignAmount,
 	option,
 	show,
 }: {
 	amount: number | null;
+	boostAmount: number | null;
 	detailDesignAmount: number | null;
 	option: AdPriceOption | undefined;
 	show: boolean;
@@ -133,7 +260,19 @@ function PayableTotal({
 		return null;
 	}
 
-	const total = sumJobPaymentAmount(amount, detailDesignAmount);
+	const total = sumJobPaymentAmount(
+		sumJobPaymentAmount(amount, detailDesignAmount),
+		boostAmount
+	);
+	const breakdown = [
+		amount === null ? null : `광고 ${formatAdPrice(amount)}`,
+		detailDesignAmount === null
+			? null
+			: `상세이미지 디자인 제작 ${formatAdPrice(detailDesignAmount)}`,
+		boostAmount === null
+			? null
+			: `끌어올리기 옵션 ${formatAdPrice(boostAmount)}`,
+	].filter((part): part is string => part !== null);
 
 	return (
 		<div className="flex flex-col gap-1 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
@@ -141,7 +280,7 @@ function PayableTotal({
 				<span className="font-medium text-muted-foreground text-sm">
 					결제 예정 금액
 				</span>
-				{option && detailDesignAmount === null ? (
+				{option && detailDesignAmount === null && boostAmount === null ? (
 					<AdPriceTag
 						amount={option.amount}
 						className="justify-end"
@@ -154,12 +293,11 @@ function PayableTotal({
 					</span>
 				)}
 			</div>
-			{detailDesignAmount === null ? null : (
+			{breakdown.length > 1 ? (
 				<span className="text-muted-foreground text-xs">
-					광고 {formatAdPrice(amount ?? 0)} + 상세이미지 디자인 제작{" "}
-					{formatAdPrice(detailDesignAmount)}
+					{breakdown.join(" + ")}
 				</span>
-			)}
+			) : null}
 		</div>
 	);
 }
@@ -237,6 +375,167 @@ function DetailDesignOption({
 					결제 확인 후 운영자가 채팅으로 안내합니다.
 				</span>
 			</div>
+		</div>
+	);
+}
+
+// 결제 방법 선택 + 안내(미지원 카드 경고·무통장 계좌). 유료 공고 결제와 무료 공고의
+// 끌어올리기 옵션 결제가 같은 컨트롤을 쓴다 — 두 곳에서 문구·경고가 갈라지지 않게 한 벌로 둔다.
+function PaymentMethodField({
+	amount,
+	errorMessage,
+	id,
+	label,
+	onChange,
+	paymentMethod,
+	purpose,
+}: {
+	amount: number | null;
+	errorMessage: string | undefined;
+	id: string;
+	label: string;
+	onChange: (value: JobPaymentMethod) => void;
+	paymentMethod: JobPaymentMethod | null;
+	// 입금이 여는 대상(계좌 안내 마지막 줄 문구). 무료 공고의 옵션 결제는 "boost".
+	purpose: "boost" | "posting";
+}) {
+	return (
+		<div className="flex flex-col gap-2">
+			<FieldLabel htmlFor={id}>{label}</FieldLabel>
+			<ToggleGroup
+				aria-label={label}
+				className="grid w-full grid-cols-2 gap-2"
+				onValueChange={(next) => {
+					const selected = next.at(-1);
+
+					if (selected && isJobPaymentMethod(selected)) {
+						onChange(selected);
+					}
+				}}
+				value={paymentMethod ? [paymentMethod] : []}
+				variant="outline"
+			>
+				{paymentOptions.map((option) => (
+					<ToggleGroupItem
+						className="w-full"
+						key={option.value}
+						value={option.value}
+					>
+						{option.label}
+					</ToggleGroupItem>
+				))}
+			</ToggleGroup>
+			<FieldError id={`${id}-error`} message={errorMessage} />
+			{paymentMethod === "card" ? (
+				<Alert variant="warning">
+					<Ban />
+					<AlertDescription>
+						신용카드는 아직 지원하지 않는 결제 방법입니다. 곧 지원할 예정이에요.
+						지금은 무통장입금으로 진행해 주세요.
+					</AlertDescription>
+				</Alert>
+			) : null}
+			{paymentMethod === "bank_transfer" ? (
+				<Alert>
+					<Info />
+					<AlertDescription>
+						<BankTransferGuide amount={amount} purpose={purpose} />
+					</AlertDescription>
+				</Alert>
+			) : null}
+		</div>
+	);
+}
+
+// 기본값을 인라인 []로 두면 렌더마다 새 배열이 되어 아래 정리 effect가 매번 다시 돈다.
+const NO_BOOST_OPTION_TYPES: JobBoostOptionTypeKey[] = [];
+
+const boostOptionCheckboxId = (optionType: JobBoostOptionTypeKey) =>
+	`boost-option-${optionType}`;
+
+// 끌어올리기 추가 옵션 피커. 판매 중인 옵션(listOptions)만 유형별 체크박스로 낸다.
+// 배너형 상품은 끌어올리기 대상이 아니라(서버도 거부) show=false로 통째로 숨는다.
+// 수정 폼은 기존 구매를 함께 받아, 이미 적용 중인(paid·활성) 유형은 체크 고정·비활성으로
+// 두고 입금 대기(unpaid) 유형만 해제할 수 있게 한다.
+function BoostOptionsPicker({
+	onTypesChange,
+	options,
+	purchaseStates,
+	selectedTypes,
+	show,
+}: {
+	onTypesChange: ((types: JobBoostOptionTypeKey[]) => void) | undefined;
+	options: BoostOptionRow[];
+	purchaseStates: Map<JobBoostOptionTypeKey, BoostPurchaseState>;
+	selectedTypes: JobBoostOptionTypeKey[];
+	show: boolean;
+}) {
+	if (!(show && onTypesChange && options.length > 0)) {
+		return null;
+	}
+
+	return (
+		<div className="flex flex-col gap-2">
+			<FieldLabel
+				htmlFor={boostOptionCheckboxId(
+					options[0]?.optionType ?? "manual_period"
+				)}
+				optional
+			>
+				끌어올리기 옵션
+			</FieldLabel>
+			<FieldHint>
+				결제가 확인되면 공고를 목록 위로 다시 올려 줍니다. 유형별로 하나씩
+				신청할 수 있어요.
+			</FieldHint>
+			{options.map((option) => {
+				const purchaseState = purchaseStates.get(option.optionType);
+				const locked = purchaseState === "locked";
+				const hasUnpaid = purchaseState === "unpaid";
+				const checked = locked || selectedTypes.includes(option.optionType);
+				const spec = formatBoostOptionSpec(option);
+
+				return (
+					<div
+						className="flex items-start gap-2 rounded-lg border border-border p-3"
+						key={option.optionType}
+					>
+						<Checkbox
+							checked={checked}
+							className="mt-0.5"
+							disabled={locked}
+							id={boostOptionCheckboxId(option.optionType)}
+							onCheckedChange={(next) =>
+								onTypesChange(
+									next === true
+										? [...selectedTypes, option.optionType]
+										: selectedTypes.filter((type) => type !== option.optionType)
+								)
+							}
+						/>
+						<div className="flex min-w-0 flex-col gap-1">
+							<Label htmlFor={boostOptionCheckboxId(option.optionType)}>
+								{JOB_BOOST_OPTION_TYPE_LABELS[option.optionType]}
+								{spec ? ` · ${spec}` : ""} +{formatAdPrice(option.price ?? 0)}
+							</Label>
+							{/* 횟수권은 기간이 없어 "기간이 끝난 뒤"가 거짓이다. 잔여가 남은 횟수권의
+							추가 구매는 광고 관리의 구매 창에서만 할 수 있으므로 그쪽으로 안내한다. */}
+							{locked ? (
+								<span className="text-muted-foreground text-xs">
+									{option.optionType === "manual_count"
+										? "이미 적용 중인 옵션이에요. 잔여 횟수를 모두 사용한 뒤 다시 신청할 수 있고, 추가 구매는 광고 관리에서 할 수 있습니다."
+										: "이미 적용 중인 옵션이에요. 기간이 끝난 뒤 다시 신청할 수 있습니다."}
+								</span>
+							) : null}
+							{!locked && hasUnpaid && checked ? (
+								<span className="text-muted-foreground text-xs">
+									해제하면 입금 대기 건이 취소돼요.
+								</span>
+							) : null}
+						</div>
+					</div>
+				);
+			})}
 		</div>
 	);
 }
@@ -326,12 +625,17 @@ const resolveDurationSelection = (
 
 export function JobExposureFields({
 	adProductId,
+	boostOptionPaymentMethod = null,
+	boostOptionTypes = NO_BOOST_OPTION_TYPES,
+	boostPurchases,
 	detailDesignAmount,
 	detailDesignRequested,
 	detailDesignStatus = null,
 	errors,
 	exposureAmount,
 	exposureDurationDays,
+	onBoostOptionPaymentMethodChange,
+	onBoostOptionTypesChange,
 	onDetailDesignChange,
 	onDurationChange,
 	onPaymentMethodChange,
@@ -361,10 +665,34 @@ export function JobExposureFields({
 		selectedProduct,
 		exposureDurationDays
 	);
+	const boostOptionsQuery = useQuery(
+		orpc.bambi.boostOptions.listOptions.queryOptions()
+	);
+	// 배너형 상품에는 끌어올리기 옵션을 팔지 않는다(서버도 BAD_REQUEST). 카탈로그가 로딩 중이면
+	// 선택 상품을 못 찾아 isBannerProduct가 false라, 로딩 한 프레임에 체크가 풀리는 일은 없다.
+	const showBoostOptions = !isBannerProduct;
+	const boostPurchaseStates = getBoostPurchaseStates(
+		boostPurchases,
+		new Date()
+	);
+	// 결제 예정 금액에서 이미 입금 확인된(적용 중) 유형은 뺀다 — 다시 받을 돈이 아니다.
+	// 입금 대기(unpaid)는 아직 안 낸 돈이라 총액에 남긴다.
+	const payableBoostTypes = boostOptionTypes.filter(
+		(optionType) => boostPurchaseStates.get(optionType) !== "locked"
+	);
+	// 결제수단을 요구·차단하는 축은 "새로 결제되는 유형"이다(validateJobForm과 같은 규칙).
+	const newBoostOptionTypes = boostOptionTypes.filter(
+		(optionType) => !boostPurchaseStates.has(optionType)
+	);
+	const boostOptionsAmount = showBoostOptions
+		? sumBoostOptionPrices(boostOptionsQuery.data, payableBoostTypes)
+		: 0;
+	const boostAmount = boostOptionsAmount > 0 ? boostOptionsAmount : null;
 	const showTotal =
-		showPaidOptions &&
-		typeof exposureDurationDays === "number" &&
-		typeof exposureAmount === "number";
+		(showPaidOptions &&
+			typeof exposureDurationDays === "number" &&
+			typeof exposureAmount === "number") ||
+		boostAmount !== null;
 	// 상품에 옵션 가격이 설정된 경우에만 애드온을 연다(null = 미제공).
 	const detailDesignPrice = selectedProduct?.detailDesignPrice ?? null;
 	const appliedDetailDesignAmount = resolveAppliedDetailDesignAmount({
@@ -375,8 +703,8 @@ export function JobExposureFields({
 	});
 	// 무통장입금 안내에도 같은 총액을 쓴다 — 노출 금액만 안내하면 애드온만큼 덜 입금된다.
 	const payableTotal = sumJobPaymentAmount(
-		exposureAmount,
-		appliedDetailDesignAmount
+		sumJobPaymentAmount(exposureAmount, appliedDetailDesignAmount),
+		boostAmount
 	);
 	const nextPricingChangeAt = useMemo(() => {
 		const futureBoundaries = products
@@ -422,6 +750,14 @@ export function JobExposureFields({
 		onDurationChange,
 		selectedDurationOption,
 	]);
+
+	// 배너형 상품으로 바꾸면 옵션 자체가 사라지므로 체크도 비운다 — 남겨 두면 저장할 때
+	// 서버가 "배너 광고 공고에는 끌어올리기 옵션을 제공하지 않습니다"로 막는다.
+	useEffect(() => {
+		if (isBannerProduct && boostOptionTypes.length > 0) {
+			onBoostOptionTypesChange?.([]);
+		}
+	}, [boostOptionTypes, isBannerProduct, onBoostOptionTypesChange]);
 
 	useDetailDesignPriceSync({
 		amount: detailDesignAmount,
@@ -583,67 +919,57 @@ export function JobExposureFields({
 						status={detailDesignStatus}
 					/>
 
+					<BoostOptionsPicker
+						onTypesChange={onBoostOptionTypesChange}
+						options={boostOptionsQuery.data ?? []}
+						purchaseStates={boostPurchaseStates}
+						selectedTypes={boostOptionTypes}
+						show={showBoostOptions}
+					/>
+
 					<PayableTotal
 						amount={exposureAmount}
+						boostAmount={boostAmount}
 						detailDesignAmount={appliedDetailDesignAmount}
 						option={selectedDurationOption}
 						show={showTotal}
 					/>
 
 					{showPaidOptions ? (
-						<div className="flex flex-col gap-2">
-							<FieldLabel htmlFor="paymentMethod">결제 방법</FieldLabel>
-							<ToggleGroup
-								aria-label="결제 방법"
-								className="grid w-full grid-cols-2 gap-2"
-								onValueChange={(value) => {
-									const next = value.at(-1);
-
-									if (next && isJobPaymentMethod(next)) {
-										onPaymentMethodChange(next);
-									}
-								}}
-								value={paymentMethod ? [paymentMethod] : []}
-								variant="outline"
-							>
-								{paymentOptions.map((option) => (
-									<ToggleGroupItem
-										className="w-full"
-										key={option.value}
-										value={option.value}
-									>
-										{option.label}
-									</ToggleGroupItem>
-								))}
-							</ToggleGroup>
-							<FieldError
-								id="paymentMethod-error"
-								message={errors?.paymentMethod}
-							/>
-							{paymentMethod === "card" ? (
-								<Alert variant="warning">
-									<Ban />
-									<AlertDescription>
-										신용카드는 아직 지원하지 않는 결제 방법입니다. 곧 지원할
-										예정이에요. 지금은 무통장입금으로 진행해 주세요.
-									</AlertDescription>
-								</Alert>
-							) : null}
-							{paymentMethod === "bank_transfer" ? (
-								<Alert>
-									<Info />
-									<AlertDescription>
-										<BankTransferGuide amount={payableTotal} />
-									</AlertDescription>
-								</Alert>
-							) : null}
-						</div>
+						<PaymentMethodField
+							amount={payableTotal}
+							errorMessage={errors?.paymentMethod}
+							id="paymentMethod"
+							label="결제 방법"
+							onChange={onPaymentMethodChange}
+							paymentMethod={paymentMethod}
+							purpose="posting"
+						/>
 					) : null}
+
+					{/* 무료 공고는 공고 결제수단이 없어, 새로 결제되는 옵션이 있을 때만 옵션 전용
+					결제수단을 받는다(이미 입금 대기·적용 중인 유형만 유지하는 저장은 결제가 없다). */}
+					{showPaidOptions ||
+					newBoostOptionTypes.length === 0 ||
+					!onBoostOptionPaymentMethodChange ? null : (
+						<PaymentMethodField
+							amount={boostAmount}
+							errorMessage={errors?.boostOptionPaymentMethod}
+							id="boostOptionPaymentMethod"
+							label="끌어올리기 옵션 결제 방법"
+							onChange={onBoostOptionPaymentMethodChange}
+							paymentMethod={boostOptionPaymentMethod}
+							purpose="boost"
+						/>
+					)}
 
 					<Alert>
 						<Info />
 						<AlertDescription>
-							결제는 운영자 확인 후 완료되며, 검수·결제완료 시 게시됩니다.
+							{resolvePublishNotice({
+								hasNewBoostOptions: newBoostOptionTypes.length > 0,
+								isPaidPosting: showPaidOptions,
+							})}
 						</AlertDescription>
 					</Alert>
 				</CardContent>

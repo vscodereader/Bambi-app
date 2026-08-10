@@ -2,28 +2,48 @@ import { describe, expect, it } from "vitest";
 
 import {
 	BOOST_INELIGIBLE_MESSAGES,
+	type BoostPurchaseLike,
 	countDueAutoBoostSlots,
 	getAutoBoostSlotOffsetMs,
 	getKstDayStart,
+	isBoostPurchaseActive,
+	pickCountPurchaseToConsume,
 	resolveBoostEligibility,
+	sumActivePeriodBoostsPerDay,
+	sumRemainingBoostCount,
 } from "@/services/bambi-job-boost";
 
 const HOUR_MS = 60 * 60 * 1000;
 const WINDOW_DURATION_MS = 12 * HOUR_MS;
 
 const FUTURE = new Date("2026-08-01T00:00:00Z");
+const PAST = new Date("2026-07-01T00:00:00Z");
 const NOW = new Date("2026-07-16T05:00:00Z"); // KST 2026-07-16 14:00
 
 const eligibleInput = {
 	adProductId: "ad-1",
+	countRemaining: 0,
 	exposureEndsAt: FUTURE,
 	exposureType: "special",
 	manualBoostsPerDay: 3,
 	now: NOW,
+	optionManualPerDay: 0,
 	paymentStatus: "paid",
 	status: "published",
 	usedToday: 0,
 };
+
+// BoostPurchaseLike 픽스처 헬퍼 — 기본은 결제 완료 횟수권(잔여 있음)이고 필요한 칸만 덮어쓴다.
+const purchase = (over: Partial<BoostPurchaseLike>): BoostPurchaseLike => ({
+	boostsPerDay: null,
+	createdAt: new Date("2026-07-16T00:00:00Z"),
+	expiresAt: null,
+	id: "p",
+	optionType: "manual_count",
+	paymentStatus: "paid",
+	remainingCount: 5,
+	...over,
+});
 
 describe("getKstDayStart", () => {
 	it("returns KST midnight expressed in UTC (15:00 previous day)", () => {
@@ -44,14 +64,74 @@ describe("getKstDayStart", () => {
 });
 
 describe("resolveBoostEligibility", () => {
-	it("allows a paid published ad job under its daily limit", () => {
-		expect(resolveBoostEligibility(eligibleInput)).toEqual({ eligible: true });
+	it("allows a paid published ad job under its daily limit (daily 소비)", () => {
+		expect(resolveBoostEligibility(eligibleInput)).toEqual({
+			consume: "daily",
+			eligible: true,
+		});
 	});
 
-	it("rejects a job without an ad product", () => {
+	it("① 무료 공고(adProductId null)+활성 기간제 → daily", () => {
+		// 무료 공고는 상품 없음(manualBoostsPerDay 0)이지만 옵션 기간제 합이 있으면 daily.
 		expect(
-			resolveBoostEligibility({ ...eligibleInput, adProductId: null })
-		).toEqual({ eligible: false, reason: "not_ad_job" });
+			resolveBoostEligibility({
+				...eligibleInput,
+				adProductId: null,
+				exposureEndsAt: null,
+				exposureType: "free",
+				manualBoostsPerDay: 0,
+				optionManualPerDay: 2,
+			})
+		).toEqual({ consume: "daily", eligible: true });
+	});
+
+	it("② 무료 공고+옵션 없음 → no_boost_available", () => {
+		expect(
+			resolveBoostEligibility({
+				...eligibleInput,
+				adProductId: null,
+				countRemaining: 0,
+				exposureEndsAt: null,
+				exposureType: "free",
+				manualBoostsPerDay: 0,
+				optionManualPerDay: 0,
+			})
+		).toEqual({ eligible: false, reason: "no_boost_available" });
+	});
+
+	it("③ 번들 3+기간제 2, usedToday 4 → daily", () => {
+		expect(
+			resolveBoostEligibility({
+				...eligibleInput,
+				manualBoostsPerDay: 3,
+				optionManualPerDay: 2,
+				usedToday: 4,
+			})
+		).toEqual({ consume: "daily", eligible: true });
+	});
+
+	it("④ usedToday 5(한도 소진)+잔여 2 → count", () => {
+		expect(
+			resolveBoostEligibility({
+				...eligibleInput,
+				countRemaining: 2,
+				manualBoostsPerDay: 3,
+				optionManualPerDay: 2,
+				usedToday: 5,
+			})
+		).toEqual({ consume: "count", eligible: true });
+	});
+
+	it("⑤ usedToday 5+잔여 0 → daily_limit_reached", () => {
+		expect(
+			resolveBoostEligibility({
+				...eligibleInput,
+				countRemaining: 0,
+				manualBoostsPerDay: 3,
+				optionManualPerDay: 2,
+				usedToday: 5,
+			})
+		).toEqual({ eligible: false, reason: "daily_limit_reached" });
 	});
 
 	it("rejects unpaid or unpublished jobs", () => {
@@ -63,44 +143,163 @@ describe("resolveBoostEligibility", () => {
 		).toEqual({ eligible: false, reason: "not_publicly_visible" });
 	});
 
-	it("rejects expired exposure but allows null exposureEndsAt", () => {
+	it("rejects expired exposure only for ad jobs (adProductId null은 통과)", () => {
+		expect(
+			resolveBoostEligibility({ ...eligibleInput, exposureEndsAt: PAST })
+		).toEqual({ eligible: false, reason: "exposure_expired" });
+		// 광고 공고의 미래 노출은 통과
+		expect(
+			resolveBoostEligibility({ ...eligibleInput, exposureEndsAt: null })
+		).toEqual({ consume: "daily", eligible: true });
+		// 무료 공고(adProductId null)는 과거 exposureEndsAt이라도 만료로 거부하지 않는다.
 		expect(
 			resolveBoostEligibility({
 				...eligibleInput,
-				exposureEndsAt: new Date("2026-07-01T00:00:00Z"),
+				adProductId: null,
+				exposureEndsAt: PAST,
 			})
-		).toEqual({ eligible: false, reason: "exposure_expired" });
-		expect(
-			resolveBoostEligibility({ ...eligibleInput, exposureEndsAt: null })
-		).toEqual({ eligible: true });
+		).toEqual({ consume: "daily", eligible: true });
 	});
 
-	it("rejects banner-type exposure (boost is listing-only)", () => {
-		// 배너형은 스냅샷에 끌올 값이 남아 있어도 배너 전용 사유로 거부한다.
+	it("⑥ 배너형+옵션 있어도 banner_product", () => {
+		// 배너형은 스냅샷·옵션에 끌올 값이 남아 있어도 배너 전용 사유로 거부한다.
 		for (const exposureType of [
 			"premium-banner",
 			"left-banner",
 			"right-banner",
 		]) {
 			expect(
-				resolveBoostEligibility({ ...eligibleInput, exposureType })
+				resolveBoostEligibility({
+					...eligibleInput,
+					countRemaining: 3,
+					exposureType,
+					optionManualPerDay: 5,
+				})
 			).toEqual({ eligible: false, reason: "banner_product" });
 		}
-	});
-
-	it("rejects products without boosts and exhausted daily limits", () => {
-		expect(
-			resolveBoostEligibility({ ...eligibleInput, manualBoostsPerDay: 0 })
-		).toEqual({ eligible: false, reason: "product_without_boost" });
-		expect(resolveBoostEligibility({ ...eligibleInput, usedToday: 3 })).toEqual(
-			{ eligible: false, reason: "daily_limit_reached" }
-		);
 	});
 
 	it("has a Korean message for every reason", () => {
 		for (const message of Object.values(BOOST_INELIGIBLE_MESSAGES)) {
 			expect(message.length).toBeGreaterThan(0);
 		}
+	});
+});
+
+describe("isBoostPurchaseActive", () => {
+	it("⑦ unpaid/만료/잔여0 → false, 정상 → true", () => {
+		// 결제 완료 횟수권(잔여>0) → 활성
+		expect(isBoostPurchaseActive(purchase({}), NOW)).toBe(true);
+		// 미결제 → 비활성
+		expect(
+			isBoostPurchaseActive(purchase({ paymentStatus: "unpaid" }), NOW)
+		).toBe(false);
+		// 횟수권 잔여 0 → 비활성
+		expect(isBoostPurchaseActive(purchase({ remainingCount: 0 }), NOW)).toBe(
+			false
+		);
+		// 기간제 미래 만료 → 활성
+		expect(
+			isBoostPurchaseActive(
+				purchase({
+					boostsPerDay: 2,
+					expiresAt: FUTURE,
+					optionType: "manual_period",
+					remainingCount: null,
+				}),
+				NOW
+			)
+		).toBe(true);
+		// 기간제 과거 만료 → 비활성
+		expect(
+			isBoostPurchaseActive(
+				purchase({
+					boostsPerDay: 2,
+					expiresAt: PAST,
+					optionType: "manual_period",
+					remainingCount: null,
+				}),
+				NOW
+			)
+		).toBe(false);
+	});
+});
+
+describe("sumActivePeriodBoostsPerDay", () => {
+	it("⑨ 만료 건 제외·타입 필터로 하루 횟수 합산", () => {
+		const purchases = [
+			purchase({
+				boostsPerDay: 2,
+				expiresAt: FUTURE,
+				optionType: "manual_period",
+				remainingCount: null,
+			}),
+			purchase({
+				boostsPerDay: 1,
+				expiresAt: FUTURE,
+				optionType: "manual_period",
+				remainingCount: null,
+			}),
+			// 만료 건 — 제외
+			purchase({
+				boostsPerDay: 5,
+				expiresAt: PAST,
+				optionType: "manual_period",
+				remainingCount: null,
+			}),
+			// 다른 타입 — 제외
+			purchase({
+				boostsPerDay: 3,
+				expiresAt: FUTURE,
+				optionType: "auto_period",
+				remainingCount: null,
+			}),
+		];
+		expect(sumActivePeriodBoostsPerDay(purchases, "manual_period", NOW)).toBe(
+			3
+		);
+		expect(sumActivePeriodBoostsPerDay(purchases, "auto_period", NOW)).toBe(3);
+	});
+});
+
+describe("sumRemainingBoostCount", () => {
+	it("활성 횟수권 잔여만 합산(미결제·잔여0 제외)", () => {
+		const purchases = [
+			purchase({ remainingCount: 2 }),
+			purchase({ remainingCount: 3 }),
+			purchase({ remainingCount: 0 }),
+			purchase({ paymentStatus: "unpaid", remainingCount: 10 }),
+		];
+		expect(sumRemainingBoostCount(purchases, NOW)).toBe(5);
+	});
+});
+
+describe("pickCountPurchaseToConsume", () => {
+	it("⑧ 오래된 활성 우선, 잔여0 건너뜀", () => {
+		const oldestEmpty = purchase({
+			createdAt: new Date("2026-07-10T00:00:00Z"),
+			id: "old-empty",
+			remainingCount: 0,
+		});
+		const middle = purchase({
+			createdAt: new Date("2026-07-12T00:00:00Z"),
+			id: "middle",
+			remainingCount: 2,
+		});
+		const newest = purchase({
+			createdAt: new Date("2026-07-14T00:00:00Z"),
+			id: "newest",
+			remainingCount: 5,
+		});
+		expect(
+			pickCountPurchaseToConsume([newest, oldestEmpty, middle], NOW)?.id
+		).toBe("middle");
+	});
+
+	it("활성 횟수권이 없으면 null", () => {
+		expect(
+			pickCountPurchaseToConsume([purchase({ remainingCount: 0 })], NOW)
+		).toBeNull();
 	});
 });
 

@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AdPriceTag } from "@/components/bambi/ad-price-tag";
+import { BoostOptionSettings } from "@/components/bambi/boost-option-settings";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { formatAdDuration } from "@/lib/bambi/ad-catalog";
 import { orpc } from "@/utils/orpc";
@@ -251,6 +252,7 @@ export default function ModeratorAdProductsPage() {
 					위치 추가
 				</Link>
 			</div>
+			<BoostOptionSettings />
 			{placements.length === 0 ? (
 				<EmptyState
 					description="노출 위치를 추가하면 그 아래 광고 상품을 등록할 수 있어요."

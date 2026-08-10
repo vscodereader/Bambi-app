@@ -11,6 +11,7 @@ import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Label } from "@bambi-app/ui/components/label";
+import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,6 +36,7 @@ import {
 } from "@/lib/bambi/exposure";
 import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
+import { BoostPurchasesSection } from "./boost-purchases-section";
 
 type PaymentJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["moderation"]["listJobsForPayment"]>
@@ -406,6 +408,10 @@ export default function ModeratorPaymentsPage() {
 					/>
 				</div>
 			) : null}
+
+			<Separator />
+
+			<BoostPurchasesSection />
 
 			{designJobId ? (
 				<JobDetailDesignDialog

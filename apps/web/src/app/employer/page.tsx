@@ -74,6 +74,10 @@ const getErrorCode = (error: Error | null): string | undefined =>
 		: undefined;
 
 interface AdSummaryItem {
+	// null = 광고 상품 없는 무료 공고(listMyAds는 무료 공고도 내려준다).
+	adProductName: null | string;
+	boostCountRemaining: number;
+	boostOptionManualPerDay: number;
 	boostsUsedToday: number;
 	exposureEndsAt: Date | null | string;
 	manualBoostsPerDay: number;
@@ -82,19 +86,30 @@ interface AdSummaryItem {
 }
 
 const getAdSummary = (ads: AdSummaryItem[], now: number) => {
-	const isActive = (ad: AdSummaryItem) =>
+	const isLive = (ad: AdSummaryItem) =>
 		ad.status === "published" &&
 		ad.paymentStatus === "paid" &&
 		(ad.exposureEndsAt === null || new Date(ad.exposureEndsAt).getTime() > now);
 
 	return {
-		activeCount: ads.filter(isActive).length,
+		// "진행 중인 광고"는 광고 상품이 붙은 공고만 센다 — 무료 공고까지 세면 숫자가 부푼다.
+		activeCount: ads.filter((ad) => isLive(ad) && ad.adProductName !== null)
+			.length,
 		pendingCount: ads.filter((ad) => ad.paymentStatus !== "paid").length,
+		// 남은 끌올 = 하루 한도(상품 번들 + 활성 기간제 옵션) 잔여 + 횟수권 잔여.
+		// 서버 resolveBoostEligibility와 같은 계산이라, 옵션만 산 무료 공고도 포함된다.
 		remainingBoostCount: ads
-			.filter(isActive)
+			.filter(isLive)
 			.reduce(
 				(total, ad) =>
-					total + Math.max(0, ad.manualBoostsPerDay - ad.boostsUsedToday),
+					total +
+					Math.max(
+						0,
+						ad.manualBoostsPerDay +
+							ad.boostOptionManualPerDay -
+							ad.boostsUsedToday
+					) +
+					ad.boostCountRemaining,
 				0
 			),
 	};
