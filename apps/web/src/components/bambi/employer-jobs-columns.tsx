@@ -27,13 +27,13 @@ const TITLE_MAX_LENGTH = 17;
 
 // 공개 상세(/seeker/jobs/[id])는 published+paid 게이트를 통과해야만 열린다. 그렇지 않은
 // 공고 제목을 링크로 걸면 클릭 시 404가 나므로, 공개 가능한 공고만 링크로 노출한다.
-const isPubliclyViewable = (job: EmployerJob): boolean =>
+export const isPubliclyViewable = (job: EmployerJob): boolean =>
 	job.status === "published" && job.paymentStatus === "paid";
 
 // 배지 한 줄로는 "왜 안 보이는지"를 알 수 없다. 스페셜·급구·추천 상품을 붙였는데 목록 섹션에
 // 안 뜨는 흔한 원인이 결제 대기(무통장입금 미확인)이고, 반려는 사유를 봐야 다시 낼 수 있다.
 // 공개 게이트는 published AND paid라 두 축을 함께 본다.
-const getJobStatusNote = (job: EmployerJob): null | string => {
+export const getJobStatusNote = (job: EmployerJob): null | string => {
 	if (job.paymentStatus !== "paid" && job.status === "published") {
 		return "입금 확인 후 노출됩니다.";
 	}
@@ -60,6 +60,44 @@ const getTruncatedTitle = (title: string): string =>
 	title.length > TITLE_MAX_LENGTH
 		? `${title.slice(0, TITLE_MAX_LENGTH)}…`
 		: title;
+
+export function EmployerJobActionsMenu({
+	deletingJobId,
+	job,
+	onRequestDelete,
+}: {
+	deletingJobId: null | string;
+	job: EmployerJob;
+	onRequestDelete: (jobId: string) => void;
+}) {
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				aria-label="공고 관리 메뉴"
+				className={cn(buttonVariants({ size: "icon-sm", variant: "ghost" }))}
+			>
+				<EllipsisIcon />
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuItem
+					render={<Link href={`/employer/jobs/${job.id}/edit` as Route} />}
+				>
+					<PencilIcon />
+					수정
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem
+					disabled={deletingJobId === job.id}
+					onClick={() => onRequestDelete(job.id)}
+					variant="destructive"
+				>
+					<Trash2 />
+					삭제
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
 
 interface EmployerJobsColumnsOptions {
 	deletingJobId: null | string;
@@ -139,33 +177,11 @@ export function getEmployerJobsColumns({
 			headerClassName: "text-right",
 			cellClassName: "text-right",
 			cell: (job) => (
-				<DropdownMenu>
-					<DropdownMenuTrigger
-						aria-label="공고 관리 메뉴"
-						className={cn(
-							buttonVariants({ size: "icon-sm", variant: "ghost" })
-						)}
-					>
-						<EllipsisIcon />
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem
-							render={<Link href={`/employer/jobs/${job.id}/edit` as Route} />}
-						>
-							<PencilIcon />
-							수정
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem
-							disabled={deletingJobId === job.id}
-							onClick={() => onRequestDelete(job.id)}
-							variant="destructive"
-						>
-							<Trash2 />
-							삭제
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
+				<EmployerJobActionsMenu
+					deletingJobId={deletingJobId}
+					job={job}
+					onRequestDelete={onRequestDelete}
+				/>
 			),
 		},
 	];
