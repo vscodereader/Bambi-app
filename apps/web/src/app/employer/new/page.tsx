@@ -44,7 +44,10 @@ import {
 	FieldLabel,
 	FormError,
 } from "@/components/bambi/form-message";
-import { JobExposureFields } from "@/components/bambi/job-exposure-fields";
+import {
+	JobExposureFields,
+	sumBoostOptionPrices,
+} from "@/components/bambi/job-exposure-fields";
 import { JobPayFields } from "@/components/bambi/job-pay-fields";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
@@ -54,6 +57,7 @@ import Loader from "@/components/loader";
 import { useRequiredBannerGate } from "@/hooks/use-required-banner-gate";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
+import type { JobBoostOptionTypeKey } from "@/lib/bambi/boost-options";
 import { regionLabel, useRegions } from "@/lib/bambi/regions";
 import { JOB_REVIEW_SLA_TEXT } from "@/lib/bambi-job-copy";
 import {
@@ -64,6 +68,7 @@ import {
 	type JobFormErrors,
 	type JobFormMedia,
 	type JobPaymentMethod,
+	type JobPostInput,
 	resolveJobPostMediaForSubmit,
 	validateJobForm,
 } from "@/lib/bambi-job-form";
@@ -261,17 +266,47 @@ export default function NewEmployerJobPage() {
 	return <NewEmployerJobForm postingScopes={postingScopes} />;
 }
 
-// 유료 상품에 무통장입금을 골랐는데 운영자 입금 계좌가 0개면 제출을 막는다(card와 대칭).
+// 무통장입금을 골랐는데 운영자 입금 계좌가 0개면 제출을 막는다(card와 대칭).
 function isBankTransferBlocked(
-	adProductId: string | null | undefined,
 	paymentMethod: string | null | undefined,
 	accountCount: number | undefined
 ): boolean {
-	return (
-		Boolean(adProductId) &&
-		paymentMethod === "bank_transfer" &&
-		(accountCount ?? 0) === 0
-	);
+	return paymentMethod === "bank_transfer" && (accountCount ?? 0) === 0;
+}
+
+// 실제 결제가 걸리는 결제수단: 유료 공고면 공고 결제수단, 무료 공고면 끌어올리기 옵션을
+// 골랐을 때의 옵션 결제수단(서버 syncBoostPurchases의 판정과 같은 규칙). 결제할 게 없으면 null.
+function resolveActivePaymentMethod(form: JobForm): JobPaymentMethod | null {
+	if (form.adProductId) {
+		return form.paymentMethod;
+	}
+
+	return (form.boostOptionTypes ?? []).length > 0
+		? (form.boostOptionPaymentMethod ?? null)
+		: null;
+}
+
+// 등록 직후 띄울 무통장입금 안내(무통장이 아니면 null). 유료 공고뿐 아니라 무료 공고 +
+// 끌어올리기 옵션도 입금이 필요하므로 같은 안내를 띄운다. 금액은 노출·디자인 제작·옵션을
+// 모두 더한 값이라 결제 섹션에 보여 준 총액과 같다.
+function resolveBankNotice(
+	jobInput: JobPostInput,
+	boostOptionsAmount: number
+): { amount: number | null } | null {
+	const isBankTransfer = jobInput.adProductId
+		? jobInput.paymentMethod === "bank_transfer"
+		: jobInput.boostOptionPaymentMethod === "bank_transfer";
+
+	if (!isBankTransfer) {
+		return null;
+	}
+
+	return {
+		amount: sumJobPaymentAmount(
+			sumJobPaymentAmount(jobInput.exposureAmount, jobInput.detailDesignAmount),
+			boostOptionsAmount > 0 ? boostOptionsAmount : null
+		),
+	};
 }
 
 function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
@@ -309,6 +344,15 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	});
 	const createMediaUploadMutation = useMutation(
 		orpc.bambi.jobs.createMediaUpload.mutationOptions()
+	);
+	// 등록 완료 다이얼로그의 입금 금액에 옵션 합을 더하려면 페이지도 판매가를 알아야 한다.
+	// 노출 섹션과 같은 쿼리라 react-query 캐시를 공유한다(추가 요청 없음).
+	const boostOptionsQuery = useQuery(
+		orpc.bambi.boostOptions.listOptions.queryOptions()
+	);
+	const boostOptionsAmount = sumBoostOptionPrices(
+		boostOptionsQuery.data,
+		form.boostOptionTypes
 	);
 
 	const leaveToEmployer = () => {
@@ -447,6 +491,8 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			Pick<
 				JobForm,
 				| "adProductId"
+				| "boostOptionPaymentMethod"
+				| "boostOptionTypes"
 				| "detailDesignAmount"
 				| "detailDesignRequested"
 				| "exposureAmount"
@@ -464,6 +510,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		setFieldErrors((currentErrors) => ({
 			...currentErrors,
 			adProductId: undefined,
+			boostOptionPaymentMethod: undefined,
 			exposureDurationDays: undefined,
 			exposureType: undefined,
 			paymentMethod: undefined,
@@ -507,6 +554,14 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 
 	const handlePaymentMethodChange = (value: JobPaymentMethod) => {
 		updateExposureFields({ paymentMethod: value });
+	};
+
+	const handleBoostOptionTypesChange = (types: JobBoostOptionTypeKey[]) => {
+		updateExposureFields({ boostOptionTypes: types });
+	};
+
+	const handleBoostOptionPaymentMethodChange = (value: JobPaymentMethod) => {
+		updateExposureFields({ boostOptionPaymentMethod: value });
 	};
 
 	const handleDurationChange = (days: number | null, amount: number | null) => {
@@ -558,16 +613,11 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 				teamId: jobInput.teamId,
 			});
 
-			// 무통장입금 유료 공고면 등록 성공 후 계좌 안내 다이얼로그를 띄우도록 표시해 둔다.
-			pendingBankNoticeRef.current =
-				jobInput.adProductId && jobInput.paymentMethod === "bank_transfer"
-					? {
-							amount: sumJobPaymentAmount(
-								jobInput.exposureAmount,
-								jobInput.detailDesignAmount
-							),
-						}
-					: null;
+			// 무통장입금 건이면 등록 성공 후 계좌 안내 다이얼로그를 띄우도록 표시해 둔다.
+			pendingBankNoticeRef.current = resolveBankNotice(
+				jobInput,
+				boostOptionsAmount
+			);
 
 			createMutation.mutate({
 				...jobInput,
@@ -583,16 +633,15 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		}
 	};
 
-	// 유료 상품에 신용카드(미지원)를 고른 상태면 제출을 막는다. 사유는 결제 섹션의 안내가 알린다.
-	const cardPaymentBlocked =
-		Boolean(form.adProductId) && form.paymentMethod === "card";
+	// 신용카드(미지원)를 고른 상태면 제출을 막는다. 사유는 결제 섹션의 안내가 알린다.
+	const activePaymentMethod = resolveActivePaymentMethod(form);
+	const cardPaymentBlocked = activePaymentMethod === "card";
 
 	const paymentAccountsQuery = useQuery(
 		orpc.bambi.siteSettings.getPaymentAccounts.queryOptions()
 	);
 	const bankTransferBlocked = isBankTransferBlocked(
-		form.adProductId,
-		form.paymentMethod,
+		activePaymentMethod,
 		paymentAccountsQuery.data?.length
 	);
 
@@ -931,15 +980,22 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 
 					<JobExposureFields
 						adProductId={form.adProductId}
+						boostOptionPaymentMethod={form.boostOptionPaymentMethod}
+						boostOptionTypes={form.boostOptionTypes}
 						detailDesignAmount={form.detailDesignAmount}
 						detailDesignRequested={form.detailDesignRequested}
 						errors={{
+							boostOptionPaymentMethod: fieldErrors.boostOptionPaymentMethod,
 							exposureDurationDays: fieldErrors.exposureDurationDays,
 							exposureType: fieldErrors.exposureType,
 							paymentMethod: fieldErrors.paymentMethod,
 						}}
 						exposureAmount={form.exposureAmount}
 						exposureDurationDays={form.exposureDurationDays}
+						onBoostOptionPaymentMethodChange={
+							handleBoostOptionPaymentMethodChange
+						}
+						onBoostOptionTypesChange={handleBoostOptionTypesChange}
 						onDetailDesignChange={handleDetailDesignChange}
 						onDurationChange={handleDurationChange}
 						onPaymentMethodChange={handlePaymentMethodChange}

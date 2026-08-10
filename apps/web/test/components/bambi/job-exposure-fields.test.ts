@@ -29,11 +29,13 @@ describe("job exposure and payment fields", () => {
 			"../../app/employer/jobs/[id]/edit/page.tsx"
 		);
 
-		// 유료 상품 + 신용카드면 등록/수정 제출을 막는다
+		// 신용카드면 등록/수정 제출을 막는다. 결제 축은 유료 공고면 공고 결제수단,
+		// 무료 공고면 끌어올리기 옵션 결제수단이다(resolveActivePaymentMethod).
 		for (const src of [source, editSource]) {
 			expect(src).toContain("cardPaymentBlocked");
-			expect(src).toContain('form.paymentMethod === "card"');
-			expect(src).toContain("Boolean(form.adProductId)");
+			expect(src).toContain('activePaymentMethod === "card"');
+			expect(src).toContain("resolveActivePaymentMethod");
+			expect(src).toContain("form.adProductId");
 		}
 	});
 

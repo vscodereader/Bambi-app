@@ -34,7 +34,11 @@ import {
 	FieldLabel,
 	FormError,
 } from "@/components/bambi/form-message";
-import { JobExposureFields } from "@/components/bambi/job-exposure-fields";
+import {
+	isBoostPurchaseLocked,
+	type JobBoostPurchaseSummary,
+	JobExposureFields,
+} from "@/components/bambi/job-exposure-fields";
 import { JobPayFields } from "@/components/bambi/job-pay-fields";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
@@ -45,6 +49,7 @@ import { useRequiredBannerGate } from "@/hooks/use-required-banner-gate";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { authClient } from "@/lib/auth-client";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
+import type { JobBoostOptionTypeKey } from "@/lib/bambi/boost-options";
 import { regionLabel, useRegions } from "@/lib/bambi/regions";
 import {
 	emptyJobForm,
@@ -210,18 +215,44 @@ const toJobFormMediaItem = (item: {
 	width: item.width ?? undefined,
 });
 
-// 유료 상품에 무통장입금을 골랐는데 운영자 입금 계좌가 0개면 저장을 막는다(card와 대칭).
+// 무통장입금을 골랐는데 운영자 입금 계좌가 0개면 저장을 막는다(card와 대칭).
 function isBankTransferBlocked(
-	adProductId: string | null | undefined,
 	paymentMethod: string | null | undefined,
 	accountCount: number | undefined
 ): boolean {
-	return (
-		Boolean(adProductId) &&
-		paymentMethod === "bank_transfer" &&
-		(accountCount ?? 0) === 0
-	);
+	return paymentMethod === "bank_transfer" && (accountCount ?? 0) === 0;
 }
+
+// 실제 결제가 걸리는 결제수단: 유료 공고면 공고 결제수단, 무료 공고면 끌어올리기 옵션을
+// 골랐을 때의 옵션 결제수단(서버 syncBoostPurchases의 판정과 같은 규칙). 결제할 게 없으면 null.
+function resolveActivePaymentMethod(form: JobForm): JobPaymentMethod | null {
+	if (form.adProductId) {
+		return form.paymentMethod;
+	}
+
+	return (form.boostOptionTypes ?? []).length > 0
+		? (form.boostOptionPaymentMethod ?? null)
+		: null;
+}
+
+// 수정 폼이 체크 상태로 되돌릴 옵션 유형: 입금 대기(unpaid)거나 이미 적용 중(paid·활성)인
+// 구매만. 만료된 기간제·소진된 횟수권을 체크로 남기면 저장할 때 서버가 재구매로 보고 새
+// 유료 구매를 만든다 — 재구매는 구인자가 직접 다시 체크해야 한다.
+const toCheckedBoostOptionTypes = (
+	purchases: JobBoostPurchaseSummary[] | undefined,
+	now: Date
+): JobBoostOptionTypeKey[] =>
+	Array.from(
+		new Set(
+			(purchases ?? [])
+				.filter(
+					(purchase) =>
+						purchase.paymentStatus === "unpaid" ||
+						isBoostPurchaseLocked(purchase, now)
+				)
+				.map((purchase) => purchase.optionType)
+		)
+	);
 
 export default function EditEmployerJobPage({
 	params,
@@ -323,6 +354,13 @@ export default function EditEmployerJobPage({
 			...toJobAdBannerLayoutForm(job),
 			adProductId: job.adProductId ?? null,
 			beginnerFriendly: job.beginnerFriendly ?? false,
+			// 기존 구매의 결제수단은 조회에 없다. 새 옵션을 추가할 때만 다시 고르면 된다
+			// (유지만 하는 저장은 새 결제가 없어 검증도 요구하지 않는다).
+			boostOptionPaymentMethod: null,
+			boostOptionTypes: toCheckedBoostOptionTypes(
+				job.boostPurchases,
+				new Date()
+			),
 			description: job.description,
 			// 애드온도 프리필해야 한다 — 빠뜨리면 기본값(신청 안 함)이 저장되어 구인자가
 			// 신청해 둔 디자인 제작이 다른 항목만 고쳐도 조용히 해제된다.
@@ -384,6 +422,8 @@ export default function EditEmployerJobPage({
 			Pick<
 				JobForm,
 				| "adProductId"
+				| "boostOptionPaymentMethod"
+				| "boostOptionTypes"
 				| "detailDesignAmount"
 				| "detailDesignRequested"
 				| "exposureAmount"
@@ -401,6 +441,7 @@ export default function EditEmployerJobPage({
 		setFieldErrors((currentErrors) => ({
 			...currentErrors,
 			adProductId: undefined,
+			boostOptionPaymentMethod: undefined,
 			exposureDurationDays: undefined,
 			exposureType: undefined,
 			paymentMethod: undefined,
@@ -446,6 +487,14 @@ export default function EditEmployerJobPage({
 		updateExposureFields({ paymentMethod: value });
 	};
 
+	const handleBoostOptionTypesChange = (types: JobBoostOptionTypeKey[]) => {
+		updateExposureFields({ boostOptionTypes: types });
+	};
+
+	const handleBoostOptionPaymentMethodChange = (value: JobPaymentMethod) => {
+		updateExposureFields({ boostOptionPaymentMethod: value });
+	};
+
 	const handleDurationChange = (days: number | null, amount: number | null) => {
 		updateExposureFields({
 			exposureAmount: amount,
@@ -472,6 +521,12 @@ export default function EditEmployerJobPage({
 
 		const validation = validateJobForm(form, {
 			descriptionBlocks,
+			// 이미 입금 대기·적용 중인 유형은 다시 결제되지 않는다 — 유지만 하는 저장에서
+			// 옵션 결제수단을 다시 고르라고 막지 않게 알려 준다.
+			existingBoostOptionTypes: toCheckedBoostOptionTypes(
+				job?.boostPurchases,
+				new Date()
+			),
 			media,
 			requiredBannerUsages,
 			teamScopes: form.teamId
@@ -600,12 +655,11 @@ export default function EditEmployerJobPage({
 		);
 	}
 
-	// 유료 상품에 신용카드(미지원)를 고른 상태면 수정 저장을 막는다. 사유는 결제 섹션 안내가 알린다.
-	const cardPaymentBlocked =
-		Boolean(form.adProductId) && form.paymentMethod === "card";
+	// 신용카드(미지원)를 고른 상태면 수정 저장을 막는다. 사유는 결제 섹션 안내가 알린다.
+	const activePaymentMethod = resolveActivePaymentMethod(form);
+	const cardPaymentBlocked = activePaymentMethod === "card";
 	const bankTransferBlocked = isBankTransferBlocked(
-		form.adProductId,
-		form.paymentMethod,
+		activePaymentMethod,
 		paymentAccountsQuery.data?.length
 	);
 
@@ -923,16 +977,24 @@ export default function EditEmployerJobPage({
 
 					<JobExposureFields
 						adProductId={form.adProductId}
+						boostOptionPaymentMethod={form.boostOptionPaymentMethod}
+						boostOptionTypes={form.boostOptionTypes}
+						boostPurchases={job.boostPurchases}
 						detailDesignAmount={form.detailDesignAmount}
 						detailDesignRequested={form.detailDesignRequested}
 						detailDesignStatus={job.detailDesignStatus}
 						errors={{
+							boostOptionPaymentMethod: fieldErrors.boostOptionPaymentMethod,
 							exposureDurationDays: fieldErrors.exposureDurationDays,
 							exposureType: fieldErrors.exposureType,
 							paymentMethod: fieldErrors.paymentMethod,
 						}}
 						exposureAmount={form.exposureAmount}
 						exposureDurationDays={form.exposureDurationDays}
+						onBoostOptionPaymentMethodChange={
+							handleBoostOptionPaymentMethodChange
+						}
+						onBoostOptionTypesChange={handleBoostOptionTypesChange}
 						onDetailDesignChange={handleDetailDesignChange}
 						onDurationChange={handleDurationChange}
 						onPaymentMethodChange={handlePaymentMethodChange}
