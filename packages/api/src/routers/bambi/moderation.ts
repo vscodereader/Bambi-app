@@ -58,6 +58,7 @@ import {
 } from "../../services/bambi-chat-realtime";
 import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
+import { jobDetailDesignStatuses } from "../../services/bambi-job-detail-design";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
@@ -162,8 +163,15 @@ const setJobPostPaymentInput = z.object({
 	paymentStatus: z.enum(["unpaid", "paid"]),
 });
 
+const setJobPostDesignStatusInput = z.object({
+	jobPostId: z.string().uuid(),
+	status: z.enum(jobDetailDesignStatuses),
+});
+
 const listJobsForPaymentInput = z.object({
 	onlyUnpaid: z.boolean().default(false),
+	// 상세이미지 디자인 제작을 신청한 건만 추린다(별도 큐 화면 대신 이 필터로 처리한다).
+	onlyDetailDesign: z.boolean().default(false),
 	limit: z.number().int().min(1).max(100).default(50),
 });
 
@@ -1942,6 +1950,64 @@ export const moderationRouter = {
 			return updated;
 		}),
 
+	// 디자인 제작 진행 상태 토글. 신청하지 않은 공고에는 상태를 세울 수 없다 —
+	// 금액 스냅샷 없이 상태만 서면 결제 관리에서 "받은 돈 없는 제작 건"이 생긴다.
+	setJobPostDesignStatus: adminProcedure
+		.input(setJobPostDesignStatusInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const updated = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({ detailDesignStatus: jobPost.detailDesignStatus })
+					.from(jobPost)
+					.where(eq(jobPost.id, input.jobPostId))
+					.limit(1);
+
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				if (existing.detailDesignStatus === null) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "상세이미지 디자인 제작을 신청하지 않은 공고입니다.",
+					});
+				}
+
+				const [row] = await tx
+					.update(jobPost)
+					.set({ detailDesignStatus: input.status })
+					.where(eq(jobPost.id, input.jobPostId))
+					.returning();
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx.insert(adminModerationAction).values({
+					action: `set_detail_design_status:${input.status}`,
+					adminUserId: admin.userId,
+					metadata: { previousStatus: existing.detailDesignStatus },
+					reason: "상세이미지 디자인 제작 상태 변경",
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+
+				return row;
+			});
+
+			// 완료 처리는 구인자에게 "상세이미지가 올라갔다"는 유일한 신호다.
+			await notifyModerationAction({
+				action: `set_detail_design_status:${input.status}`,
+				actorUserId: admin.userId,
+				metadata: { jobPostTitle: updated.title },
+				targetId: input.jobPostId,
+				targetType: "job_post",
+			});
+
+			return updated;
+		}),
+
 	// 공고의 광고 종료일만 앞뒤로 민다. 결제 상태·노출 종류는 그대로라 프리미엄 정원(자리 수)에
 	// 영향이 없어 승인 게이트를 타지 않는다. 음수(단축)로 과거까지 내리는 것도 허용한다(즉시 만료 조치).
 	// 기준일은 `exposureEndsAt ?? now` 단일 규칙이라, 종료일이 없던 공고(미결제·무기한)는 지금
@@ -2035,6 +2101,10 @@ export const moderationRouter = {
 				conditions.push(eq(jobPost.paymentStatus, "unpaid"));
 			}
 
+			if (input.onlyDetailDesign) {
+				conditions.push(isNotNull(jobPost.detailDesignStatus));
+			}
+
 			return await db
 				.select({
 					id: jobPost.id,
@@ -2042,6 +2112,8 @@ export const moderationRouter = {
 					status: jobPost.status,
 					exposureType: jobPost.exposureType,
 					exposureAmount: jobPost.exposureAmount,
+					detailDesignAmount: jobPost.detailDesignAmount,
+					detailDesignStatus: jobPost.detailDesignStatus,
 					paymentStatus: jobPost.paymentStatus,
 					exposureDurationDays: jobPost.exposureDurationDays,
 					exposureEndsAt: jobPost.exposureEndsAt,
