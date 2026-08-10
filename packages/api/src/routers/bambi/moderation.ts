@@ -2125,17 +2125,19 @@ export const moderationRouter = {
 				}
 			}
 
-			const previousKeys = await db
-				.select({ storageKey: jobPostMedia.storageKey })
-				.from(jobPostMedia)
-				.where(
-					and(
-						eq(jobPostMedia.jobPostId, input.jobPostId),
-						eq(jobPostMedia.usage, "detail")
-					)
-				);
+			const { detail, removedKeys } = await db.transaction(async (tx) => {
+				// 스냅샷도 tx 안에서 읽는다. 밖에서 읽으면 그 사이 끼어든 detail 행이 삭제 대상
+				// 목록에 빠져 GCS 객체만 영영 남는다.
+				const previousKeys = await tx
+					.select({ storageKey: jobPostMedia.storageKey })
+					.from(jobPostMedia)
+					.where(
+						and(
+							eq(jobPostMedia.jobPostId, input.jobPostId),
+							eq(jobPostMedia.usage, "detail")
+						)
+					);
 
-			const detail = await db.transaction(async (tx) => {
 				await tx
 					.delete(jobPostMedia)
 					.where(
@@ -2145,38 +2147,51 @@ export const moderationRouter = {
 						)
 					);
 
-				if (rows.length === 0) {
-					return [];
-				}
+				const inserted =
+					rows.length === 0
+						? []
+						: await tx
+								.insert(jobPostMedia)
+								.values(
+									rows.map((row) => ({
+										altText: row.altText.trim(),
+										byteSize: row.byteSize,
+										fileName: row.fileName.trim(),
+										height: row.height ?? null,
+										jobPostId: input.jobPostId,
+										mimeType: row.mimeType,
+										organizationId: target.organizationId,
+										position: row.position,
+										storageKey: row.storageKey,
+										uploadedByUserId: admin.userId,
+										usage: row.usage,
+										width: row.width ?? null,
+									}))
+								)
+								.returning();
 
-				return await tx
-					.insert(jobPostMedia)
-					.values(
-						rows.map((row) => ({
-							altText: row.altText.trim(),
-							byteSize: row.byteSize,
-							fileName: row.fileName.trim(),
-							height: row.height ?? null,
-							jobPostId: input.jobPostId,
-							mimeType: row.mimeType,
-							organizationId: target.organizationId,
-							position: row.position,
-							storageKey: row.storageKey,
-							uploadedByUserId: admin.userId,
-							usage: row.usage,
-							width: row.width ?? null,
-						}))
-					)
-					.returning();
+				const retained = new Set(rows.map((row) => row.storageKey));
+				const removed = previousKeys
+					.map((row) => row.storageKey)
+					.filter((key) => !retained.has(key));
+
+				// 남의 조직 자산을 파괴적으로 교체하는 조치라 흔적을 남긴다.
+				await tx.insert(adminModerationAction).values({
+					action: "set_detail_design_media",
+					adminUserId: admin.userId,
+					metadata: {
+						removedCount: removed.length,
+						savedCount: inserted.length,
+					},
+					reason: "상세이미지 디자인 완성본 등록",
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+
+				return { detail: inserted, removedKeys: removed };
 			});
 
-			const retained = new Set(rows.map((row) => row.storageKey));
-
-			await deletePublicObjects(
-				previousKeys
-					.map((row) => row.storageKey)
-					.filter((key) => !retained.has(key))
-			);
+			await deletePublicObjects(removedKeys);
 
 			return { detail };
 		}),
