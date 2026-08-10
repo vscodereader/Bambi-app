@@ -547,6 +547,13 @@
       "when": 1786084225762,
       "tag": "0077_grey_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1786330313164,
+      "tag": "0078_tough_franklin_richards",
+      "breakpoints": true
     }
   ]
 }

@@ -105,6 +105,14 @@ export const jobExposureType = pgEnum("job_exposure_type", [
 	"standard",
 ]);
 
+// 상세이미지 디자인 제작 애드온의 진행 상태. 컬럼이 nullable이라 null = 미신청이고,
+// 신청 순간 requested로 시작해 운영자가 완성본을 등록하면 completed로 넘어간다.
+// 별도 주문 테이블 없이 공고 스냅샷으로만 표현하므로 1공고 1회 주문이며 재주문 이력은 없다.
+export const jobDetailDesignStatus = pgEnum("job_detail_design_status", [
+	"requested",
+	"completed",
+]);
+
 export const jobPaymentMethod = pgEnum("job_payment_method", [
 	"card",
 	"bank_transfer",
@@ -860,6 +868,13 @@ export const jobPost = pgTable(
 			onDelete: "set null",
 		}),
 		exposureAmount: integer("exposure_amount"),
+		// 디자인 제작 애드온의 구매 시점 가격 스냅샷(exposure_amount와 동일 철학).
+		// 상품 가격이 나중에 바뀌어도 이미 신청한 공고의 결제 금액은 이 값으로 고정된다.
+		// null = 미신청.
+		detailDesignAmount: integer("detail_design_amount"),
+		// 신청 시 requested로 시작하고 운영자가 완성본을 올리면 completed가 된다.
+		// completed인 공고는 옵션 해제가 막힌다(이미 제작된 작업의 흔적 보존).
+		detailDesignStatus: jobDetailDesignStatus("detail_design_status"),
 		paymentMethod: jobPaymentMethod("payment_method"),
 		paymentStatus: jobPaymentStatus("payment_status")
 			.default("unpaid")
@@ -1088,6 +1103,9 @@ export const adProduct = pgTable(
 		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
 		// 이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는 횟수(구매 시 공고로 스냅샷). 0 = 미제공.
 		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
+		// 이 상품을 살 때 함께 신청할 수 있는 "상세이미지 디자인 제작" 애드온 가격.
+		// null = 이 상품엔 옵션 미제공(구인자 화면에서 체크박스 자체가 안 보인다).
+		detailDesignPrice: integer("detail_design_price"),
 		sortOrder: integer("sort_order").default(0).notNull(),
 		isActive: boolean("is_active").default(true).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
