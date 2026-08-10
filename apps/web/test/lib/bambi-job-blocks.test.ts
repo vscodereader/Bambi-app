@@ -284,19 +284,21 @@ describe("bambi job block form helpers", () => {
 		});
 	});
 
-	it("rejects an image larger than 8MB before submission", () => {
+	it("rejects an image larger than 10MB before submission", () => {
 		const result = validateJobForm(baseForm, {
 			media: {
 				adHorizontal: null,
 				adVertical: null,
-				cover: createDetailImage(0, { byteSize: 9 * 1024 * 1024 }),
+				// 상한은 서버 정책(JOB_POST_IMAGE_MAX_BYTES)과 같은 10MB다. 경계 바로 위를
+				// 써서 상한이 다시 움직이면 여기서 먼저 걸리게 한다.
+				cover: createDetailImage(0, { byteSize: 10 * 1024 * 1024 + 1 }),
 				detail: [],
 			},
 		});
 
 		expect(result).toMatchObject({
 			errors: {
-				media: "이미지는 한 장당 8MB 이하만 등록할 수 있습니다.",
+				media: "이미지는 한 장당 10MB 이하만 등록할 수 있습니다.",
 			},
 			ok: false,
 		});

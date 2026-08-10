@@ -22,9 +22,13 @@ describe("employer ads management page", () => {
 	});
 
 	it("gates the boost button on publish, payment, exposure and daily limit", () => {
-		expect(source).toContain('status === "published"');
-		expect(source).toContain('paymentStatus === "paid"');
-		expect(source).toContain("remainingToday > 0");
+		// 네 축의 판정은 getBoostState 하나로 모였고(비활성 사유 문구까지 함께 계산),
+		// 드롭다운의 끌어올리기 항목은 그 결과로만 비활성화된다.
+		expect(source).toContain('ad.status !== "published"');
+		expect(source).toContain('ad.paymentStatus !== "paid"');
+		expect(source).toContain("isExposureActive(ad.exposureEndsAt");
+		expect(source).toContain("remainingBoosts(ad) === 0");
+		expect(source).toContain("disabled={!canBoost || isBoostPending}");
 	});
 
 	it("renders the shared DataTable instead of ad cards", () => {
@@ -32,9 +36,11 @@ describe("employer ads management page", () => {
 		expect(source).toContain("@/components/bambi/data-table");
 	});
 
-	it("drops the 공고 수정 edit link entirely", () => {
-		expect(source).not.toContain("공고 수정");
-		expect(source).not.toContain("/edit");
+	it("drops the edit action, leaving only a read-oriented 공고 보기 link", () => {
+		// 수정은 공고 관리(내 공고) 화면의 책임이라 광고 관리엔 수정 액션을 두지 않는다.
+		// 구인자용 공고 상세 라우트가 /edit 하나뿐이라 "공고 보기"가 그 경로를 재사용한다.
+		expect(source).not.toContain("수정");
+		expect(source).toContain("공고 보기");
 	});
 
 	it("adds an auto-boost column showing today's runs over the daily quota", () => {
