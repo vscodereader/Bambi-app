@@ -364,6 +364,58 @@ function AdBannerStatus({
 	);
 }
 
+// 상세 이미지 5칸 그리드. 공고 폼과 운영자 "디자인 제작 관리" 다이얼로그가 같은 UI·같은
+// 파일 검증(pickMediaItem)을 쓰도록 컴포넌트로 뽑았다.
+export function JobDetailImageSlots({
+	allowUpload = true,
+	media,
+	onChange,
+}: {
+	allowUpload?: boolean;
+	media: JobFormMedia;
+	onChange: (media: JobFormMedia) => void;
+}) {
+	return (
+		<div className="grid gap-3 lg:grid-cols-2">
+			{detailSlots.map(({ index, key }) => {
+				const item = media.detail[index] ?? null;
+
+				// 업로드 불가(운영자 공고 편집) + 빈 슬롯이면 아무것도 못 하는 빈 칸이라 숨긴다.
+				if (!(allowUpload || item)) {
+					return null;
+				}
+
+				return (
+					<MediaSlot
+						accept={staticImageAccept}
+						allowUpload={allowUpload}
+						id={`job-detail-image-${index}`}
+						item={item}
+						key={key}
+						label={`상세 이미지 ${index + 1}`}
+						onAltTextChange={(altText) =>
+							onChange(
+								updateDetailAt(media, index, item ? { ...item, altText } : null)
+							)
+						}
+						onFileChange={async (file) => {
+							const created = await pickMediaItem(file, item);
+
+							if (created) {
+								onChange(updateDetailAt(media, index, created));
+							}
+						}}
+						onRemove={() => {
+							revokeMediaItemPreview(item);
+							onChange(updateDetailAt(media, index, null));
+						}}
+					/>
+				);
+			})}
+		</div>
+	);
+}
+
 export function JobPostMediaUploader({
 	adBannerLayout,
 	adProductId,
@@ -430,47 +482,11 @@ export function JobPostMediaUploader({
 					onChange({ ...media, cover: null });
 				}}
 			/>
-			<div className="grid gap-3 lg:grid-cols-2">
-				{detailSlots.map(({ index, key }) => {
-					const item = media.detail[index] ?? null;
-
-					// 업로드 불가(운영자) + 빈 슬롯이면 아무것도 못 하는 빈 칸이라 숨긴다.
-					if (!(allowUpload || item)) {
-						return null;
-					}
-
-					return (
-						<MediaSlot
-							accept={staticImageAccept}
-							allowUpload={allowUpload}
-							id={`job-detail-image-${index}`}
-							item={item}
-							key={key}
-							label={`상세 이미지 ${index + 1}`}
-							onAltTextChange={(altText) =>
-								onChange(
-									updateDetailAt(
-										media,
-										index,
-										item ? { ...item, altText } : null
-									)
-								)
-							}
-							onFileChange={async (file) => {
-								const created = await pickMediaItem(file, item);
-
-								if (created) {
-									onChange(updateDetailAt(media, index, created));
-								}
-							}}
-							onRemove={() => {
-								revokeMediaItemPreview(item);
-								onChange(updateDetailAt(media, index, null));
-							}}
-						/>
-					);
-				})}
-			</div>
+			<JobDetailImageSlots
+				allowUpload={allowUpload}
+				media={media}
+				onChange={onChange}
+			/>
 			<AdBannerSection
 				adBannerLayout={adBannerLayout}
 				allowedUsages={allowedUsages}
