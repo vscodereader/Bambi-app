@@ -3,7 +3,7 @@ import {
 	defaultManualKeyForRole,
 	manualKeysForRole,
 	manualPath,
-} from "./manual";
+} from "@/lib/bambi/manual";
 
 describe("manualKeysForRole", () => {
 	it("gives job seekers only the seeker manual", () => {

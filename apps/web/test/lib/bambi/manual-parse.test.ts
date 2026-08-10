@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { githubSlug, parseManual } from "./manual-parse";
+import { githubSlug, parseManual } from "@/lib/bambi/manual-parse";
 
 // 매뉴얼 본문에 이미 적혀 있는 GitHub식 앵커와 반드시 일치해야 한다.
 // (docs/manual/*.md의 수기 목차 링크가 실제 사례다)
