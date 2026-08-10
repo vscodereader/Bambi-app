@@ -58,7 +58,7 @@
 
 ## 테스트
 
-- 역할→열람 가능 매뉴얼 목록 매핑과 md 파싱(slug·목차)을 순수 함수로 분리하고 단위 테스트를 둔다. 위치는 web의 실제 관례대로 **소스 옆 colocated `*.test.ts` + 상대 경로 import**(web 전용 vitest config가 없어 `@/` alias가 안 풀림 — `home-path.test.ts` 등 기존 80여 개 테스트와 동일).
+- 역할→열람 가능 매뉴얼 목록 매핑과 md 파싱(slug·목차)을 순수 함수로 분리하고 단위 테스트를 둔다. 위치는 **`apps/web/test/` 미러 구조 + `@/` alias**(2026-08-10 `chore/separate-test-files` 병합으로 확정된 기준 — vitest.config.ts가 root 고정·include test/**).
 - 빌드·dev 서버 기동은 하지 않는다(프로젝트 규칙). 검증은 린트+타입체크, 시각 확인은 사용자.
 
 ## 에러 처리
