@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	resolveJobDetailDesign,
 	sumJobPaymentAmount,
+	toJobDetailDesignWrite,
 } from "@/services/bambi-job-detail-design";
 
 describe("sumJobPaymentAmount", () => {
@@ -97,5 +98,61 @@ describe("resolveJobDetailDesign", () => {
 				requested: false,
 			})
 		).toEqual({ code: "completed_locked", ok: false });
+	});
+
+	it("completed 건은 상품가가 바뀌어도 amount_changed로 막지 않는다", () => {
+		// 완료 건까지 막으면 상품가가 한 번 오른 뒤로 본문 수정조차 못 하게 된다.
+		expect(
+			resolveJobDetailDesign({
+				currentStatus: "completed",
+				expectedAmount: 30_000,
+				productDetailDesignPrice: 50_000,
+				requested: true,
+			})
+		).toEqual({
+			ok: true,
+			snapshot: { detailDesignAmount: 50_000, detailDesignStatus: "completed" },
+		});
+	});
+});
+
+describe("toJobDetailDesignWrite", () => {
+	it("completed 건은 상품가가 올라도 장부 금액을 건드리지 않는다", () => {
+		// 상품가가 30,000 → 50,000으로 오른 상황. 스냅샷은 새 가격을 들고 오지만
+		// 저장 값에서는 금액 키가 빠져야 한다(=컬럼 미변경 → 구매 시점 금액 유지).
+		const write = toJobDetailDesignWrite({
+			currentStatus: "completed",
+			snapshot: {
+				detailDesignAmount: 50_000,
+				detailDesignStatus: "completed",
+			},
+		});
+
+		expect(write).toStrictEqual({ detailDesignStatus: "completed" });
+		expect(Object.hasOwn(write, "detailDesignAmount")).toBe(false);
+	});
+
+	it("완료 전이면 스냅샷 금액을 그대로 저장한다", () => {
+		expect(
+			toJobDetailDesignWrite({
+				currentStatus: "requested",
+				snapshot: {
+					detailDesignAmount: 50_000,
+					detailDesignStatus: "requested",
+				},
+			})
+		).toStrictEqual({
+			detailDesignAmount: 50_000,
+			detailDesignStatus: "requested",
+		});
+	});
+
+	it("미신청 스냅샷(해제)은 금액 키를 남겨 null로 지운다", () => {
+		expect(
+			toJobDetailDesignWrite({
+				currentStatus: "requested",
+				snapshot: { detailDesignAmount: null, detailDesignStatus: null },
+			})
+		).toStrictEqual({ detailDesignAmount: null, detailDesignStatus: null });
 	});
 });
