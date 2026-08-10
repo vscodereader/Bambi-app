@@ -213,9 +213,12 @@ const jobPostInputShape = z.object({
 	// 없으므로 adBannerLayoutSchema가 유일한 방어선이다 — 트러스트 바운더리다.
 	// 키를 아예 생략하면 기존 레이아웃을 보존하고, 명시적 null이면 지운다.
 	adBannerLayout: adBannerLayoutSchema.nullish(),
-	// 끌어올리기 추가 옵션 신청 목록(폼에서 체크한 유형, 최대 3·중복 불가). 비컬럼 필드라
-	// job_post 저장 spread에서 반드시 분리한다(아래 create/applyJobPostUpdate destructure).
-	boostOptionTypes: z.array(boostOptionTypeSchema).max(3).default([]),
+	// 끌어올리기 추가 옵션 신청 목록(폼에서 체크한 유형, 최대 3·중복 불가). 키를 생략하면
+	// (undefined) 기존 구매를 그대로 둔다 — 이 필드를 안 보내는 클라이언트(현 edit 폼·native)가
+	// 저장해도 구인자가 따로 구매해 둔 미결제 옵션이 조용히 취소되지 않게 하기 위해서다
+	// (detailDesignRequested가 optional인 이유와 같다). 빈 배열은 "전부 해제"다.
+	// 비컬럼 필드라 job_post 저장 spread에서 반드시 분리한다(아래 destructure).
+	boostOptionTypes: z.array(boostOptionTypeSchema).max(3).optional(),
 	// 무료 공고에서 옵션을 신청할 때의 결제수단. 유료 공고는 공고 결제수단을 그대로 쓴다.
 	boostOptionPaymentMethod: z.enum(["bank_transfer", "card"]).optional(),
 	media: jobPostMediaSetInput,
@@ -241,7 +244,8 @@ export const jobPostInput = jobPostInputShape
 	// 같은 옵션 유형을 두 번 신청하면 스냅샷 중복이 되므로 거부한다.
 	.refine(
 		(input) =>
-			new Set(input.boostOptionTypes).size === input.boostOptionTypes.length,
+			new Set(input.boostOptionTypes ?? []).size ===
+			(input.boostOptionTypes ?? []).length,
 		{
 			message: "같은 끌어올리기 옵션을 중복 신청할 수 없습니다.",
 			path: ["boostOptionTypes"],
@@ -808,10 +812,33 @@ const syncBoostPurchases = async ({
 	optionPaymentMethod?: "bank_transfer" | "card";
 	organizationId: string;
 	postingPaymentMethod: "bank_transfer" | "card" | null;
-	requestedTypes: BoostOptionType[];
+	requestedTypes: BoostOptionType[] | undefined;
 	tx: Parameters<Parameters<typeof db.transaction>[0]>[0];
 }): Promise<void> => {
 	const now = new Date();
+
+	// 배너형으로 확정된 공고엔 옵션을 팔지 않는다. 상품을 배너로 바꾼 수정에서 요청 목록이
+	// 그대로 넘어오면 "살 게 없다"고 판정돼 검증이 아예 돌지 않으므로, 요청과 무관하게 여기서
+	// 미결제 구매를 전량 지우고 신규 구매를 막는다 — 배너 공고에 영원히 못 쓰는 청구가 남지
+	// 않게 한다. 이미 입금된(paid) 구매는 임의로 지우지 않는다(환불은 운영자 몫).
+	if ((AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(exposureType)) {
+		await tx
+			.delete(jobBoostPurchase)
+			.where(
+				and(
+					eq(jobBoostPurchase.jobPostId, jobPostId),
+					eq(jobBoostPurchase.paymentStatus, "unpaid")
+				)
+			);
+
+		return;
+	}
+
+	// 키를 아예 안 보낸 저장은 옵션을 건드리지 않는다 — 이 필드를 모르는 클라이언트의 수정이
+	// 따로 구매해 둔 미결제 옵션을 조용히 취소하지 않게 한다(빈 배열은 "전부 해제"로 처리).
+	if (requestedTypes === undefined) {
+		return;
+	}
 
 	// 체크 해제된 unpaid 구매만 취소한다(=취소). paid·활성 구매는 폼이 체크 고정하므로 불변.
 	for (const purchase of existing) {
