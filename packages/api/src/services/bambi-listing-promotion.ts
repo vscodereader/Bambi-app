@@ -11,6 +11,7 @@ import { db } from "@bambi-app/db";
 import { jobPost } from "@bambi-app/db/schema/bambi";
 import { and, asc, eq, notInArray } from "drizzle-orm";
 
+import { notifyBambiNotification } from "./bambi-notifications";
 import {
 	CAPACITY_LISTING_EXPOSURE_TYPES,
 	type CapacityListingExposureType,
@@ -143,8 +144,10 @@ const promoteSectionToCapacity = async (
 
 		const [head] = await db
 			.select({
+				createdByUserId: jobPost.createdByUserId,
 				exposureDurationDays: jobPost.exposureDurationDays,
 				id: jobPost.id,
+				title: jobPost.title,
 			})
 			.from(jobPost)
 			.where(
@@ -166,6 +169,19 @@ const promoteSectionToCapacity = async (
 		);
 		if (didActivate) {
 			promoted += 1;
+			// 시스템 틱이라 액터가 없어 소유자를 액터로 기록한다(구인자 본인에게 노출 시작 통지).
+			await notifyBambiNotification({
+				actorUserId: head.createdByUserId,
+				metadata: {
+					action: "listing_activated",
+					exposureDurationDays: head.exposureDurationDays,
+					exposureType: type,
+					jobPostTitle: head.title,
+				},
+				recipientUserId: head.createdByUserId,
+				targetId: head.id,
+				targetType: "job_post",
+			});
 		} else {
 			// 잠금 재확인에서 대기열이 아니었던 행 — 이번 틱에선 다시 뽑지 않는다.
 			skipIds.add(head.id);

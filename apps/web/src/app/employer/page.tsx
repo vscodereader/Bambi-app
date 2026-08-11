@@ -243,7 +243,7 @@ function QuickLinkTile({
 	);
 }
 
-const MOBILE_JOB_PAGE_SIZE = 10;
+const JOB_PAGE_SIZE = 10;
 
 type MobileJobSort = "pay" | "recent" | "status" | "title";
 
@@ -280,14 +280,11 @@ function MobileOwnedJobs({
 			);
 		});
 	}, [jobs, sort]);
-	const pageCount = Math.max(
-		1,
-		Math.ceil(sortedJobs.length / MOBILE_JOB_PAGE_SIZE)
-	);
+	const pageCount = Math.max(1, Math.ceil(sortedJobs.length / JOB_PAGE_SIZE));
 	const safePage = Math.min(page, pageCount);
 	const pageJobs = sortedJobs.slice(
-		(safePage - 1) * MOBILE_JOB_PAGE_SIZE,
-		safePage * MOBILE_JOB_PAGE_SIZE
+		(safePage - 1) * JOB_PAGE_SIZE,
+		safePage * JOB_PAGE_SIZE
 	);
 
 	return (
@@ -504,6 +501,7 @@ function OwnedJobsPanel({
 							data={jobs}
 							emptyMessage="등록한 공고가 없습니다."
 							getRowKey={(job) => job.id}
+							pageSize={JOB_PAGE_SIZE}
 						/>
 					</div>
 				</CardContent>

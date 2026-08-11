@@ -134,6 +134,39 @@ describe("notificationTitle", () => {
 		).toBe("｢야간 마감 알바｣ 공고가 삭제됐어요");
 	});
 
+	it("대기열 접수·노출 시작은 공고명·섹션·순번을 담고 재료가 없으면 정적 폴백한다", () => {
+		expect(
+			notificationTitle(
+				view({
+					metadata: {
+						action: "listing_queued",
+						exposureType: "special",
+						jobPostTitle: "주말 홀 스태프",
+						position: 3,
+					},
+				})
+			)
+		).toBe("｢주말 홀 스태프｣이 스페셜 대기열 #3에 접수됐어요");
+		expect(
+			notificationTitle(
+				view({
+					metadata: {
+						action: "listing_activated",
+						exposureType: "recommended",
+						jobPostTitle: "주말 홀 스태프",
+					},
+				})
+			)
+		).toBe("｢주말 홀 스태프｣ 추천 노출이 시작됐어요");
+		// SSE 이벤트는 metadata 없이 action만 오므로 정적 폴백으로 떨어진다.
+		expect(
+			notificationTitle(view({ metadata: { action: "listing_queued" } }))
+		).toBe("결제가 확인돼 광고 대기열에 접수됐어요");
+		expect(
+			notificationTitle(view({ metadata: { action: "listing_activated" } }))
+		).toBe("광고 노출이 시작됐어요");
+	});
+
 	it("권한 변경은 업소명과 한글 역할 라벨로 조합한다", () => {
 		expect(
 			notificationTitle(
@@ -271,6 +304,19 @@ describe("notificationBody", () => {
 		).toBeNull();
 	});
 
+	it("대기열 제외는 운영자 제외 사유를 본문으로 보여준다", () => {
+		expect(
+			notificationBody(
+				view({
+					metadata: {
+						action: "remove_from_listing_queue",
+						reason: "중복 접수 정리",
+					},
+				})
+			)
+		).toBe("중복 접수 정리");
+	});
+
 	it("신고 처리 결과는 부정 전이가 아니어도 처리 메모를 보여준다", () => {
 		expect(
 			notificationBody(
@@ -373,6 +419,15 @@ describe("notificationHref", () => {
 		expect(
 			notificationHref(view({ metadata: { action: "set_status:rejected" } }))
 		).toBe("/employer/jobs/target-1/edit");
+	});
+
+	it("대기열 접수·자동 노출 시작 알림은 광고 관리로 보낸다", () => {
+		expect(
+			notificationHref(view({ metadata: { action: "listing_queued" } }))
+		).toBe("/employer/promotions");
+		expect(
+			notificationHref(view({ metadata: { action: "listing_activated" } }))
+		).toBe("/employer/promotions");
 	});
 
 	it("사업자 인증은 공유 행이면 운영자 큐로, 개인 행이면 내 설정으로 갈린다", () => {
