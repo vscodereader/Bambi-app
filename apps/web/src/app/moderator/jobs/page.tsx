@@ -35,6 +35,7 @@ import {
 	jobStatusColumn,
 	paymentStatusColumn,
 } from "@/components/bambi/job-table-columns";
+import { ListingCapacityOverview } from "@/components/bambi/listing-capacity-overview";
 import { RowActions } from "@/components/bambi/row-actions";
 import { getJobDisplayStatus } from "@/lib/bambi/exposure";
 import { formatDateTime } from "@/lib/bambi-format";
@@ -431,6 +432,8 @@ export default function ModeratorJobsPage() {
 					"수정"에서 진행합니다.
 				</p>
 			</div>
+
+			<ListingCapacityOverview />
 
 			<div className="flex flex-wrap items-center gap-3">
 				<Tabs
