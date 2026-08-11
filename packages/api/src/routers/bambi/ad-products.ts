@@ -3,6 +3,7 @@ import {
 	adPlacement,
 	adProduct,
 	adProductDiscountCampaign,
+	bambiSiteSettings,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
@@ -20,7 +21,12 @@ import {
 	previewTemplateToExposureType,
 } from "../../services/bambi-ad-exposure";
 import { requireAdminProfile } from "../../services/bambi-authz";
-import { derivePremiumQueue } from "../../services/bambi-premium-capacity";
+import {
+	DEFAULT_RECOMMENDED_CAPACITY,
+	DEFAULT_SPECIAL_CAPACITY,
+	deriveListingQueue,
+	derivePremiumQueue,
+} from "../../services/bambi-premium-capacity";
 
 // 배너형 미리보기 템플릿(premium-top / side-horizontal / side-vertical)은 끌어올리기 비대상이다.
 // 노출 타입으로 환산해 배너 여부를 판정한다(previewTemplate→exposureType 단일 소스 재사용).
@@ -330,6 +336,49 @@ export const adProductsRouter = {
 		const { activeCount, capacity, pendingCount, remaining } =
 			await derivePremiumQueue(db, new Date());
 		return { activeCount, capacity, pendingCount, remaining };
+	}),
+
+	// 스페셜/추천 리스팅 광고(정원=렌더 슬롯 수)의 남은 자리·정원. 광고 안내 페이지가
+	// "N/12"·"N/20" 표시와 정원 만석 안내에 쓴다. 정원은 사이트 설정에서 읽고(null이면 코드
+	// 기본값) premiumCapacity와 같은 파생 큐 모델(deriveListingQueue)을 섹션별로 재사용한다.
+	listingCapacity: protectedProcedure.handler(async () => {
+		const [settingsRow] = await db
+			.select({
+				recommendedCapacity: bambiSiteSettings.recommendedCapacity,
+				specialCapacity: bambiSiteSettings.specialCapacity,
+			})
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"))
+			.limit(1);
+		const now = new Date();
+		const [special, recommended] = await Promise.all([
+			deriveListingQueue(
+				db,
+				"special",
+				settingsRow?.specialCapacity ?? DEFAULT_SPECIAL_CAPACITY,
+				now
+			),
+			deriveListingQueue(
+				db,
+				"recommended",
+				settingsRow?.recommendedCapacity ?? DEFAULT_RECOMMENDED_CAPACITY,
+				now
+			),
+		]);
+		return {
+			recommended: {
+				activeCount: recommended.activeCount,
+				capacity: recommended.capacity,
+				pendingCount: recommended.pendingCount,
+				remaining: recommended.remaining,
+			},
+			special: {
+				activeCount: special.activeCount,
+				capacity: special.capacity,
+				pendingCount: special.pendingCount,
+				remaining: special.remaining,
+			},
+		};
 	}),
 
 	listCatalogAdmin: protectedProcedure.handler(async ({ context }) => {

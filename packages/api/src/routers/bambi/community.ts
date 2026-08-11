@@ -614,6 +614,17 @@ const isCrawledCommunityFeedEnabled = async (): Promise<boolean> => {
 	return row?.enabled ?? false;
 };
 
+// 베스트글은 community_board 행이 없어 아이콘을 site_settings에서 읽는다. 운영자가
+// 지정하지 않았으면 null(웹이 기존 코럴 액센트 바로 폴백).
+const getBestBoardIcon = async (): Promise<string | null> => {
+	const [row] = await db
+		.select({ icon: bambiSiteSettings.bestBoardIcon })
+		.from(bambiSiteSettings)
+		.where(eq(bambiSiteSettings.id, "default"))
+		.limit(1);
+	return row?.icon ?? null;
+};
+
 // 30일 컷오프 안의 수집 글 수. 스위치 ON일 때 totalCount에 합산한다.
 const countCrawledCommunityTopics = async (
 	windowStart: Date
@@ -928,8 +939,9 @@ export const communityRouter = {
 
 		const windowStart = bestWindowStart();
 		// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
-		const [communityFeedOn, boards] = await Promise.all([
+		const [communityFeedOn, bestIcon, boards] = await Promise.all([
 			isCrawledCommunityFeedEnabled(),
+			getBestBoardIcon(),
 			db
 				.select({
 					description: communityBoard.description,
@@ -948,8 +960,9 @@ export const communityRouter = {
 		const previews = [
 			{
 				description: BEST_BOARD_DESCRIPTION,
-				// 가상 게시판이라 DB 행이 없다 — 아이콘도 없이 기존 액센트 바 모양을 유지한다.
-				icon: null as string | null,
+				// 가상 게시판이라 DB 행이 없다 — 운영자 지정 아이콘은 site_settings에서 읽는다.
+				// 미지정(null)이면 기존 코럴 액센트 바 모양을 유지한다.
+				icon: bestIcon,
 				key: BEST_BOARD,
 				label: BEST_BOARD_LABEL,
 				slug: BEST_BOARD,

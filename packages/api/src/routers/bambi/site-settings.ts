@@ -10,6 +10,10 @@ import {
 	DEFAULT_WITHDRAWAL_PURGE_HOUR,
 	DEFAULT_WITHDRAWAL_RETENTION_DAYS,
 } from "../../services/bambi-policy";
+import {
+	DEFAULT_RECOMMENDED_CAPACITY,
+	DEFAULT_SPECIAL_CAPACITY,
+} from "../../services/bambi-premium-capacity";
 
 // 단일 행(설정) 고정 키. 조회·수정 모두 이 행 하나만 다룬다.
 const SETTINGS_ROW_ID = "default";
@@ -245,6 +249,49 @@ const toCrawledLimitsOutput = (row: {
 	recommendedLimit: row.crawledRecommendedLimit,
 	specialLimit: row.crawledSpecialLimit,
 	urgentLimit: row.crawledUrgentLimit,
+});
+
+// 노출 섹션 설정. 급구 숨김 스위치와 스페셜/추천 정원(= 렌더 슬롯 수)을 한 쌍으로 묶는다 —
+// 메인 렌더가 셋을 함께 필요로 한다. urgentSectionHidden은 not null(기본 true)이라 행이 있으면
+// 항상 값이 있고, 정원 두 컬럼만 null이면 코드 기본값으로 폴백한다.
+const EXPOSURE_SECTION_COLUMNS = {
+	urgentSectionHidden: bambiSiteSettings.urgentSectionHidden,
+	specialCapacity: bambiSiteSettings.specialCapacity,
+	recommendedCapacity: bambiSiteSettings.recommendedCapacity,
+} as const;
+
+// 스페셜/추천은 정원 = 렌더 슬롯 수 불변식이라 슬롯 수는 트러스트 바운더리에서 정수·범위(1~60)로
+// 검증한다. 0을 허용하면 "슬롯이 아예 없는 섹션"이 되어 고정 인벤토리 렌더가 깨진다.
+const EXPOSURE_SLOTS_MAX = 60;
+const exposureSlots = z
+	.number()
+	.int("슬롯 수는 정수로 입력해 주세요.")
+	.min(1, "슬롯 수는 1 이상으로 입력해 주세요.")
+	.max(
+		EXPOSURE_SLOTS_MAX,
+		`슬롯 수는 ${EXPOSURE_SLOTS_MAX} 이하로 입력해 주세요.`
+	);
+
+const updateExposureSectionConfigInput = z.object({
+	recommendedSlots: exposureSlots,
+	specialSlots: exposureSlots,
+	urgentHidden: z.boolean(),
+});
+
+// 조회·저장 응답 형태를 한 곳에서 맞춘다 — 클라(운영자 UI·메인 렌더)가 두 프로시저에서
+// 같은 키(urgentHidden/specialSlots/recommendedSlots)를 기대한다.
+const toExposureSectionConfigOutput = (
+	row:
+		| {
+				urgentSectionHidden: boolean;
+				specialCapacity: number | null;
+				recommendedCapacity: number | null;
+		  }
+		| undefined
+) => ({
+	recommendedSlots: row?.recommendedCapacity ?? DEFAULT_RECOMMENDED_CAPACITY,
+	specialSlots: row?.specialCapacity ?? DEFAULT_SPECIAL_CAPACITY,
+	urgentHidden: row?.urgentSectionHidden ?? true,
 });
 
 export const siteSettingsRouter = {
@@ -495,5 +542,34 @@ export const siteSettingsRouter = {
 				.returning(CRAWLED_LIMIT_COLUMNS);
 
 			return toCrawledLimitsOutput(saved ?? values);
+		}),
+
+	// 노출 섹션 설정 공개 조회 — 급구 숨김 여부·스페셜/추천 슬롯 수를 메인 렌더가 구독한다.
+	// 행이 없으면(마이그레이션 전·미저장) 급구는 숨김이 안전한 기본값이고, 슬롯 수는 코드
+	// 기본값(DEFAULT_SPECIAL_CAPACITY/DEFAULT_RECOMMENDED_CAPACITY)으로 폴백한다.
+	getExposureSectionConfig: publicProcedure.handler(async () => {
+		const [row] = await db
+			.select(EXPOSURE_SECTION_COLUMNS)
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+		return toExposureSectionConfigOutput(row);
+	}),
+
+	// 운영자 전용 저장. 같은 단일 행을 upsert 하되 노출 섹션 설정 컬럼만 갱신한다.
+	updateExposureSectionConfig: adminProcedure
+		.input(updateExposureSectionConfigInput)
+		.handler(async ({ input }) => {
+			const values = {
+				recommendedCapacity: input.recommendedSlots,
+				specialCapacity: input.specialSlots,
+				urgentSectionHidden: input.urgentHidden,
+			};
+			const [saved] = await db
+				.insert(bambiSiteSettings)
+				.values({ id: SETTINGS_ROW_ID, ...values })
+				.onConflictDoUpdate({ set: values, target: bambiSiteSettings.id })
+				.returning(EXPOSURE_SECTION_COLUMNS);
+			return toExposureSectionConfigOutput(saved ?? values);
 		}),
 };

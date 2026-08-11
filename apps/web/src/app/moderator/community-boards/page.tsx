@@ -36,7 +36,7 @@ import {
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
@@ -118,6 +118,13 @@ function BoardIconSelect({
 // 서버로 나가는 값 — 센티널은 "아이콘 없음"이라 추가에서는 생략, 수정에서는 null(제거)이다.
 const toIconInput = (value: IconValue): CommunityBoardIconName | undefined =>
 	value === ICON_NONE ? undefined : value;
+
+// 서버에서 받은 값 → 셀렉트 상태. 웹 맵에 없는 이름(서버만 아는 값)은 "없음"으로 그린다 —
+// 그릴 수 없는 아이콘을 고른 것처럼 보여 주지 않는다(수정 폼·베스트글 행 공통).
+const toIconValue = (icon: string | null | undefined): IconValue =>
+	icon && icon in COMMUNITY_BOARD_ICONS
+		? (icon as CommunityBoardIconName)
+		: ICON_NONE;
 
 function getBoardColumns({
 	onDelete,
@@ -250,11 +257,7 @@ function BoardEditForm({
 	const [sortOrder, setSortOrder] = useState(String(board.sortOrder));
 	// 저장된 이름이 웹 맵에 없으면(서버만 아는 이름) "없음"으로 시작한다 — 그릴 수 없는
 	// 값을 고른 것처럼 보여 주지 않는다.
-	const [icon, setIcon] = useState<IconValue>(
-		board.icon && board.icon in COMMUNITY_BOARD_ICONS
-			? (board.icon as CommunityBoardIconName)
-			: ICON_NONE
-	);
+	const [icon, setIcon] = useState<IconValue>(toIconValue(board.icon));
 
 	const parsedSortOrder = Number(sortOrder);
 	const canSubmit =
@@ -360,6 +363,30 @@ export default function ModeratorCommunityBoardsPage() {
 		});
 	};
 
+	// 베스트글은 community_board 행이 없는 가상 게시판이라 목록(list) 쿼리에 안 잡힌다 —
+	// 아이콘은 site_settings에서 별도로 읽고 쓴다.
+	const bestIconQuery = useQuery(
+		orpc.bambi.communityBoards.getBestBoardIcon.queryOptions()
+	);
+	const [bestIcon, setBestIcon] = useState<IconValue>(ICON_NONE);
+
+	useEffect(() => {
+		if (bestIconQuery.data) {
+			setBestIcon(toIconValue(bestIconQuery.data.icon));
+		}
+	}, [bestIconQuery.data]);
+
+	const bestIconMutation = useMutation(
+		orpc.bambi.communityBoards.updateBestBoardIcon.mutationOptions({
+			onError: (error) =>
+				toast(error.message || "베스트글 아이콘을 저장하지 못했어요."),
+			onSuccess: async () => {
+				toast("베스트글 아이콘을 저장했어요.");
+				await invalidate();
+			},
+		})
+	);
+
 	const createMutation = useMutation(
 		orpc.bambi.communityBoards.create.mutationOptions({
 			onError: (error) => toast(error.message || "게시판을 만들지 못했어요."),
@@ -406,6 +433,7 @@ export default function ModeratorCommunityBoardsPage() {
 	);
 
 	const boards = listQuery.data ?? [];
+	const BestIcon = communityBoardIcon(toIconInput(bestIcon));
 	const columns = getBoardColumns({
 		onDelete: setDeleting,
 		onEdit: setEditing,
@@ -490,6 +518,44 @@ export default function ModeratorCommunityBoardsPage() {
 					</Button>
 				</div>
 				<p className="m-0 text-muted-foreground text-xs">{SLUG_HINT}</p>
+			</div>
+
+			{/* 베스트글은 community_board 행이 없는 가상 게시판이라 위 목록에 없다 — 삭제·
+			    글쓰기·노출 스위치는 의미가 없고 아이콘 지정만 있다. */}
+			<div className="flex flex-col gap-3 rounded-xl border border-border p-4">
+				<div className="flex flex-wrap items-center gap-2">
+					{BestIcon ? (
+						<BestIcon aria-label="베스트글 아이콘" className="size-4" />
+					) : (
+						<span className="text-muted-foreground">—</span>
+					)}
+					<span className="font-bold">베스트글</span>
+					<Badge variant="outline">가상 게시판</Badge>
+				</div>
+				<p className="m-0 text-muted-foreground text-sm">
+					최근 30일 동안 추천을 많이 받은 글을 모아 보여주는 가상 게시판이라
+					목록에 없고 삭제할 수 없어요. 아이콘만 지정할 수 있고, 없음이면 기존
+					코럴 액센트 바로 보여요.
+				</p>
+				<div className="flex flex-wrap items-end gap-2">
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="community-board-best-icon">아이콘</Label>
+						<BoardIconSelect
+							id="community-board-best-icon"
+							onChange={setBestIcon}
+							value={bestIcon}
+						/>
+					</div>
+					<Button
+						disabled={bestIconMutation.isPending || bestIconQuery.isPending}
+						onClick={() =>
+							bestIconMutation.mutate({ icon: toIconInput(bestIcon) ?? null })
+						}
+						type="button"
+					>
+						{bestIconMutation.isPending ? "저장 중" : "저장"}
+					</Button>
+				</div>
 			</div>
 
 			{listQuery.isPending ? (
