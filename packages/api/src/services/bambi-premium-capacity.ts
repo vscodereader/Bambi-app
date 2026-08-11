@@ -7,7 +7,7 @@
 //   늘고, pending 1순위가 "진행 가능"으로 파생 전환된다(별도 승격 쓰기·배치 불필요).
 
 import type { db } from "@bambi-app/db";
-import { jobPost } from "@bambi-app/db/schema/bambi";
+import { bambiSiteSettings, jobPost } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
 	and,
@@ -97,23 +97,26 @@ const pendingBannerWhere = () =>
 		isNotNull(jobPost.adProductId)
 	);
 
-// 리스팅 섹션 active(자리 점유·노출 중). 배너와 달리 단일 exposureType로 좁힌 것만 다르고
-// 나머지(published + paid + 미만료) 조건은 동일하다.
+// 리스팅 섹션 active(자리 점유·노출 중). 유료 큐 모델에서 리스팅은 exposureEndsAt이 활성화
+// 시점에 세팅되므로, null exposureEndsAt은 더 이상 "무기한 활성"이 아니라 "결제됨·미활성(대기중)"을
+// 뜻한다. 그래서 배너(or(isNull, gt))와 달리 여기선 exposureEndsAt IS NOT NULL AND > now만 active로 센다.
 const activeListingWhere = (type: CapacityListingExposureType, now: Date) =>
 	and(
 		inArray(jobPost.status, ["published"]),
 		eq(jobPost.paymentStatus, "paid"),
 		eq(jobPost.exposureType, type),
-		or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
+		isNotNull(jobPost.exposureEndsAt),
+		gt(jobPost.exposureEndsAt, now)
 	);
 
-// 리스팅 섹션 pending(자리 점유·입금 대기). pendingBannerWhere를 단일 exposureType로 치환.
-const pendingListingWhere = (type: CapacityListingExposureType) =>
+// 결제완료됐지만 아직 활성화(노출) 전인 대기 공고. exposureEndsAt이 아직 안 찍혀(null) 자리를
+// 기다리는 FIFO 큐의 원소들이다.
+export const queuedListingWhere = (type: CapacityListingExposureType) =>
 	and(
-		inArray(jobPost.status, ["pending_review", "published"]),
-		eq(jobPost.paymentStatus, "unpaid"),
+		inArray(jobPost.status, ["published"]),
+		eq(jobPost.paymentStatus, "paid"),
 		eq(jobPost.exposureType, type),
-		isNotNull(jobPost.adProductId)
+		isNull(jobPost.exposureEndsAt)
 	);
 
 // active 카운트 조회의 공통 실행부. where만 배너/리스팅으로 갈린다.
@@ -132,6 +135,32 @@ export const countActivePremiumBanners = (
 	executor: QueryExecutor,
 	now: Date
 ): Promise<number> => countActiveWhere(executor, activeBannerWhere(now));
+
+// 리스팅 섹션의 active(자리 점유·노출 중) 카운트. activeListingWhere 재사용.
+export const countActiveListings = (
+	executor: QueryExecutor,
+	type: CapacityListingExposureType,
+	now: Date
+): Promise<number> => countActiveWhere(executor, activeListingWhere(type, now));
+
+// 리스팅 섹션 정원. 운영자가 사이트 설정(bambiSiteSettings, 단일 행 id="default")에서
+// 조정한 값을 읽고, 아직 미설정(null)이면 코드 기본값으로 폴백한다.
+export const listingSectionCapacity = async (
+	executor: QueryExecutor,
+	type: CapacityListingExposureType
+): Promise<number> => {
+	const [row] = await executor
+		.select({
+			recommendedCapacity: bambiSiteSettings.recommendedCapacity,
+			specialCapacity: bambiSiteSettings.specialCapacity,
+		})
+		.from(bambiSiteSettings)
+		.where(eq(bambiSiteSettings.id, "default"));
+	if (type === "recommended") {
+		return row?.recommendedCapacity ?? DEFAULT_RECOMMENDED_CAPACITY;
+	}
+	return row?.specialCapacity ?? DEFAULT_SPECIAL_CAPACITY;
+};
 
 export interface PremiumCapacity {
 	activeCount: number;
@@ -213,27 +242,28 @@ export const derivePremiumQueue = async (
 	);
 };
 
-// derivePremiumQueue의 리스팅 섹션판. active·pending을 해당 exposureType으로 좁혀 카운트·정렬한
-// 뒤 정원(운영자 설정) 기준으로 대기열을 파생한다. capacity 조회·listMyAds가 공유한다.
+// derivePremiumQueue의 리스팅 섹션판. 유료 큐 모델에서 대기열은 "결제완료됐지만 아직 미활성
+// (exposureEndsAt=null)"인 리스팅 공고들이며, listing_paid_at 오름차순(동률 id asc) FIFO로 정렬한다.
+// active는 activeListingWhere(미만료) 기준으로 카운트하고 정원(운영자 설정)으로 대기열을 파생한다.
 export const deriveListingQueue = async (
 	executor: QueryExecutor,
 	type: CapacityListingExposureType,
 	capacity: number,
 	now: Date
 ): Promise<PremiumQueue> => {
-	const [activeCount, pendingRows] = await Promise.all([
-		countActiveWhere(executor, activeListingWhere(type, now)),
+	const [activeCount, queuedRows] = await Promise.all([
+		countActiveListings(executor, type, now),
 		executor
 			.select({ id: jobPost.id })
 			.from(jobPost)
-			.where(pendingListingWhere(type))
-			.orderBy(asc(jobPost.createdAt), asc(jobPost.id)),
+			.where(queuedListingWhere(type))
+			.orderBy(asc(jobPost.listingPaidAt), asc(jobPost.id)),
 	]);
 
 	return computeCapacityQueue(
 		capacity,
 		activeCount,
-		pendingRows.map((row) => row.id)
+		queuedRows.map((row) => row.id)
 	);
 };
 
@@ -272,47 +302,5 @@ export const assertPremiumApprovalWithinCapacity = async ({
 	const activeCount = await countActivePremiumBanners(executor, now);
 	if (activeCount >= PREMIUM_AD_CAPACITY) {
 		throw new ORPCError("CONFLICT", { message: PREMIUM_CAPACITY_FULL_MESSAGE });
-	}
-};
-
-// assertPremiumApprovalWithinCapacity의 리스팅 섹션판. 승인(unpaid→paid)일 때만 exposureType별
-// 고유 advisory lock 키로 직렬화한 뒤 active를 재카운트해 정원 초과 승인을 막는다. 정원은
-// 운영자 설정에서 읽어 넘긴다. 락 키가 섹션마다 달라 스페셜/추천/프리미엄 승인이 서로 안 막는다.
-//
-// ponytail: 게이트는 큐 순서를 강제하지 않는다(rank 무시) — 프리미엄과 동일하게 입금 도착
-// 순서라는 현실을 반영한 의도적 단순화. 순서 강제가 필요하면 rank ≤ progressableSlots를 덧붙인다.
-export const assertListingApprovalWithinCapacity = async ({
-	capacity,
-	executor,
-	exposureType,
-	existingPaymentStatus,
-	newPaymentStatus,
-	now,
-}: {
-	capacity: number;
-	executor: QueryExecutor;
-	exposureType: CapacityListingExposureType;
-	existingPaymentStatus: string;
-	newPaymentStatus: string;
-	now: Date;
-}): Promise<void> => {
-	const isApproval =
-		existingPaymentStatus === "unpaid" && newPaymentStatus === "paid";
-	if (!isApproval) {
-		return;
-	}
-
-	// 섹션별 고유 키로 승인을 직렬화한다(카운트→검증→전환이 한 번에 한 요청씩, 커밋 시 자동 해제).
-	await executor.execute(
-		sql`select pg_advisory_xact_lock(${LISTING_CAPACITY_LOCK_KEYS[exposureType]})`
-	);
-	const activeCount = await countActiveWhere(
-		executor,
-		activeListingWhere(exposureType, now)
-	);
-	if (activeCount >= capacity) {
-		throw new ORPCError("CONFLICT", {
-			message: listingCapacityFullMessage(exposureType, capacity),
-		});
 	}
 };
