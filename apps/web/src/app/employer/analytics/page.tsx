@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@bambi-app/ui/components/badge";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { cn } from "@bambi-app/ui/lib/utils";
@@ -23,6 +24,40 @@ interface MetricCardProps {
 }
 
 const formatNumber = (value: number): string => value.toLocaleString("ko-KR");
+
+const placementBadgeClassNames = {
+	special: "border-rose-200 bg-rose-50 text-rose-700",
+	urgent: "border-amber-200 bg-amber-50 text-amber-700",
+	recommended: "border-sky-200 bg-sky-50 text-sky-700",
+	organic: "border-slate-200 bg-slate-100 text-slate-700",
+	premiumBanner: "border-violet-200 bg-violet-50 text-violet-700",
+	leftBanner: "border-indigo-200 bg-indigo-50 text-indigo-700",
+	rightBanner: "border-teal-200 bg-teal-50 text-teal-700",
+} as const;
+
+type PlacementMetricKey = keyof typeof placementBadgeClassNames;
+
+interface PlacementMetric {
+	key: PlacementMetricKey;
+	label: string;
+	value: number;
+}
+
+function PlacementMetricBadges({ metrics }: { metrics: PlacementMetric[] }) {
+	return (
+		<div className="flex flex-wrap gap-1.5">
+			{metrics.map((metric) => (
+				<Badge
+					className={placementBadgeClassNames[metric.key]}
+					key={metric.key}
+					variant="outline"
+				>
+					{metric.label} {formatNumber(metric.value)}
+				</Badge>
+			))}
+		</div>
+	);
+}
 
 // 공고가 구매한 광고 상품에 해당하는 게재 섹션. 배너 3종은 하나의 프리미엄 상품이
 // 상단·좌측·우측 슬롯을 순환하므로 세 슬롯을 함께 켠다. 일반(organic)은 상품과
@@ -66,7 +101,9 @@ function MetricCard({ label, value }: MetricCardProps) {
 export default function EmployerAnalyticsPage() {
 	const summaryQuery = useQuery(orpc.bambi.analytics.summary.queryOptions());
 	const summaries = summaryQuery.data ?? [];
-	const formatPlacementMetrics = (summary: (typeof summaries)[number]) => {
+	const getPlacementMetrics = (
+		summary: (typeof summaries)[number]
+	): PlacementMetric[] => {
 		const productSections = productSectionsFor(summary.exposureType);
 
 		return [
@@ -105,15 +142,12 @@ export default function EmployerAnalyticsPage() {
 				label: "프리미엄 배너·우측",
 				value: summary.sectionMetrics.rightBannerImpressions,
 			},
-		]
-			.filter(
-				(item) =>
-					item.key === "organic" ||
-					productSections.has(item.key) ||
-					item.value > 0
-			)
-			.map((item) => `${item.label} ${formatNumber(item.value)}`)
-			.join(" · ");
+		].filter(
+			(item): item is PlacementMetric =>
+				item.key === "organic" ||
+				productSections.has(item.key) ||
+				item.value > 0
+		);
 	};
 	const totals = summaries.reduce(
 		(accumulator, item) => ({
@@ -403,8 +437,10 @@ export default function EmployerAnalyticsPage() {
 											</div>
 											<div className="col-span-2">
 												<dt className="text-muted-foreground">게재 구분</dt>
-												<dd className="mt-1 break-words font-medium">
-													{formatPlacementMetrics(summary)}
+												<dd className="mt-1">
+													<PlacementMetricBadges
+														metrics={getPlacementMetrics(summary)}
+													/>
 												</dd>
 											</div>
 										</dl>
@@ -471,7 +507,9 @@ export default function EmployerAnalyticsPage() {
 												{formatNumber(summary.metrics.autoBoostFires)}회
 											</td>
 											<td className="px-4 py-3">
-												{formatPlacementMetrics(summary)}
+												<PlacementMetricBadges
+													metrics={getPlacementMetrics(summary)}
+												/>
 											</td>
 										</tr>
 									))}
