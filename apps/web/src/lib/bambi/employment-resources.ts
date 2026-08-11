@@ -6,10 +6,6 @@ export interface EmploymentResource {
 // 구직자 보호 정보는 기관이 직접 갱신하는 공식 원문만 연결한다.
 export const EMPLOYMENT_RESOURCES: readonly EmploymentResource[] = [
 	{
-		href: "https://www.moel.go.kr/info/defaulter/defaulterList.do",
-		label: "체불사업주 명단",
-	},
-	{
 		href: "https://www.moel.go.kr/minwon/rigion/rigion_C2.do",
 		label: "관할 고용노동관서 찾기",
 	},
