@@ -12,6 +12,7 @@ import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import {
 	INQUIRY_STATUS_LABELS,
 	SUPPORT_CATEGORY_LABELS,
@@ -85,9 +86,9 @@ export function InquiryThread({ inquiryId }: { inquiryId: string }) {
 				<h1 className="m-0 font-extrabold text-lg md:text-xl">
 					{inquiry.title}
 				</h1>
-				<p className="m-0 whitespace-pre-wrap break-words text-sm">
-					{inquiry.body}
-				</p>
+				{/* 본문은 Tiptap JSON이라 뷰어로 렌더한다. JSON이 아닌 기존 평문 문의는
+				    뷰어가 whitespace-pre-wrap <p> 폴백으로 그대로 보여준다. */}
+				<PostBodyViewer body={inquiry.body} />
 				<p className="m-0 text-muted-foreground text-xs">
 					{new Date(inquiry.createdAt).toLocaleString("ko-KR")}
 				</p>

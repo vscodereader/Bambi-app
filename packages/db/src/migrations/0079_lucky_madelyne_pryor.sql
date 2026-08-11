@@ -1,0 +1,1 @@
+ALTER TYPE "public"."support_inquiry_category" ADD VALUE 'design';

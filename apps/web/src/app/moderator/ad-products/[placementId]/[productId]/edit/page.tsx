@@ -56,6 +56,7 @@ export default function EditAdProductPage() {
 						name: product.name,
 						tagline: product.tagline ?? "",
 						benefits: product.benefits,
+						detailDesignPrice: product.detailDesignPrice ?? null,
 						discountCampaigns: product.discountCampaigns.map((campaign) => ({
 							discountPercent: campaign.discountPercent,
 							endsAt: campaign.endsAt ? new Date(campaign.endsAt) : null,
@@ -75,6 +76,7 @@ export default function EditAdProductPage() {
 							name: draft.name,
 							tagline: draft.tagline.trim() || null,
 							benefits: draft.benefits,
+							detailDesignPrice: draft.detailDesignPrice,
 							discountCampaigns: draft.discountCampaigns,
 							priceOptions: draft.priceOptions,
 							previewImageUrl: draft.previewImageUrl,

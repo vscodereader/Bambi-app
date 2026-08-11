@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import { CommunityPostEditor } from "@/components/bambi/community-editor";
 import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { communityBodyText } from "@/lib/bambi/public-community";
 import {
 	INQUIRY_STATUS_LABELS,
 	type InquiryStatus,
@@ -127,8 +128,9 @@ function InquiryQueue() {
 						<CardTitle className="truncate">{item.title}</CardTitle>
 					</CardHeader>
 					<CardContent className="flex min-w-0 flex-col gap-3">
+						{/* 본문은 Tiptap JSON이라 발췌 평문만 뽑아 미리보기한다(JSON 블롭 노출 방지). */}
 						<p className="m-0 line-clamp-3 whitespace-pre-wrap text-muted-foreground text-sm">
-							{item.body}
+							{communityBodyText(item.body)}
 						</p>
 						<Button
 							className="self-start"

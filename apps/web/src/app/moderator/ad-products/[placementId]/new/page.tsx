@@ -35,6 +35,7 @@ export default function NewAdProductPage() {
 						name: draft.name,
 						tagline: draft.tagline || undefined,
 						benefits: draft.benefits,
+						detailDesignPrice: draft.detailDesignPrice,
 						discountCampaigns: draft.discountCampaigns,
 						priceOptions: draft.priceOptions,
 						previewImageUrl: draft.previewImageUrl,

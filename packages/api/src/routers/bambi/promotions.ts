@@ -5,6 +5,7 @@ import {
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobBoostEvent,
+	jobBoostPurchase,
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -13,11 +14,13 @@ import {
 	count,
 	desc,
 	eq,
+	gt,
 	gte,
 	inArray,
-	isNotNull,
+	isNull,
 	or,
 	type SQL,
+	sql,
 } from "drizzle-orm";
 import z from "zod";
 
@@ -30,8 +33,12 @@ import {
 import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import {
 	BOOST_INELIGIBLE_MESSAGES,
+	type BoostPurchaseLike,
 	getKstDayStart,
+	pickCountPurchaseToConsume,
 	resolveBoostEligibility,
+	sumActivePeriodBoostsPerDay,
+	sumRemainingBoostCount,
 } from "../../services/bambi-job-boost";
 import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
 import { derivePremiumQueue } from "../../services/bambi-premium-capacity";
@@ -100,6 +107,8 @@ export const promotionsRouter = {
 				// 라이브 상품이 아니라 공고 구매 시점 스냅샷을 노출한다(상품 join은 이름 표기용만 유지).
 				autoBoostsPerDay: jobPost.autoBoostsPerDay,
 				boostedAt: jobPost.boostedAt,
+				// 무통장입금 재안내의 결제 예정 총액에 노출 금액과 함께 합산된다.
+				detailDesignAmount: jobPost.detailDesignAmount,
 				employerDisplayName: employerOrganizationProfile.displayName,
 				// 미결제 행의 무통장입금 재안내에서 결제 예정 금액을 보여주는 데 쓴다.
 				exposureAmount: jobPost.exposureAmount,
@@ -114,7 +123,8 @@ export const promotionsRouter = {
 				title: jobPost.title,
 			})
 			.from(jobPost)
-			.innerJoin(adProduct, eq(jobPost.adProductId, adProduct.id))
+			// 무료 공고도 옵션만으로 끌어올릴 수 있어 광고 상품 없는 공고까지 포함한다(leftJoin).
+			.leftJoin(adProduct, eq(jobPost.adProductId, adProduct.id))
 			.innerJoin(
 				employerOrganizationProfile,
 				eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
@@ -123,16 +133,18 @@ export const promotionsRouter = {
 				employerTeamProfile,
 				eq(jobPost.teamId, employerTeamProfile.teamId)
 			)
-			.where(and(or(...accessFilters), isNotNull(jobPost.adProductId)))
+			.where(or(...accessFilters))
 			.orderBy(desc(jobPost.updatedAt));
 
 		if (rows.length === 0) {
 			return [];
 		}
 
-		const dayStart = getKstDayStart(new Date());
+		const now = new Date();
+		const dayStart = getKstDayStart(now);
 		const jobPostIds = rows.map((row) => row.jobPostId);
-		// 수동 사용량은 boostType='manual'만 센다(자동 이벤트가 수동 쿼터를 잠식하지 않도록).
+		// 수동 사용량은 boostType='manual'이면서 횟수권 소비분이 아닌 것(purchaseId null)만 센다.
+		// 자동 이벤트가 수동 쿼터를 잠식하지 않고, 횟수권 사용분도 하루 한도를 잠식하지 않는다.
 		const usedRows = await db
 			.select({ jobPostId: jobBoostEvent.jobPostId, used: count() })
 			.from(jobBoostEvent)
@@ -140,6 +152,7 @@ export const promotionsRouter = {
 				and(
 					inArray(jobBoostEvent.jobPostId, jobPostIds),
 					eq(jobBoostEvent.boostType, "manual"),
+					isNull(jobBoostEvent.purchaseId),
 					gte(jobBoostEvent.createdAt, dayStart)
 				)
 			)
@@ -163,16 +176,54 @@ export const promotionsRouter = {
 			autoUsedRows.map((row) => [row.jobPostId, row.used])
 		);
 
+		// 공고별 끌어올리기 추가 옵션 구매를 일괄 조회해 JS에서 Task 2 헬퍼로 집계한다.
+		const purchaseRows = await db
+			.select({
+				boostsPerDay: jobBoostPurchase.boostsPerDay,
+				createdAt: jobBoostPurchase.createdAt,
+				expiresAt: jobBoostPurchase.expiresAt,
+				id: jobBoostPurchase.id,
+				jobPostId: jobBoostPurchase.jobPostId,
+				optionType: jobBoostPurchase.optionType,
+				paymentStatus: jobBoostPurchase.paymentStatus,
+				remainingCount: jobBoostPurchase.remainingCount,
+			})
+			.from(jobBoostPurchase)
+			.where(inArray(jobBoostPurchase.jobPostId, jobPostIds));
+		const purchasesByJobId = new Map<string, BoostPurchaseLike[]>();
+		for (const purchaseRow of purchaseRows) {
+			const list = purchasesByJobId.get(purchaseRow.jobPostId) ?? [];
+			list.push(purchaseRow);
+			purchasesByJobId.set(purchaseRow.jobPostId, list);
+		}
+
 		// 배너 미결제 신청의 파생 큐 정보(진행 가능 여부·대기 순번). ranksByJobId는 pending
 		// 배너 공고만 담으므로 결제완료·비배너 행은 자연히 null이 된다.
-		const { ranksByJobId } = await derivePremiumQueue(db, new Date());
+		const { ranksByJobId } = await derivePremiumQueue(db, now);
 
-		return rows.map((row) => ({
-			...row,
-			autoBoostsUsedToday: autoUsedByJobId.get(row.jobPostId) ?? 0,
-			boostsUsedToday: usedByJobId.get(row.jobPostId) ?? 0,
-			premiumQueue: ranksByJobId.get(row.jobPostId) ?? null,
-		}));
+		return rows.map((row) => {
+			const purchases = purchasesByJobId.get(row.jobPostId) ?? [];
+			return {
+				...row,
+				autoBoostsUsedToday: autoUsedByJobId.get(row.jobPostId) ?? 0,
+				boostCountRemaining: sumRemainingBoostCount(purchases, now),
+				boostOptionAutoPerDay: sumActivePeriodBoostsPerDay(
+					purchases,
+					"auto_period",
+					now
+				),
+				boostOptionManualPerDay: sumActivePeriodBoostsPerDay(
+					purchases,
+					"manual_period",
+					now
+				),
+				boostsUsedToday: usedByJobId.get(row.jobPostId) ?? 0,
+				hasUnpaidBoostOption: purchases.some(
+					(p) => p.paymentStatus === "unpaid"
+				),
+				premiumQueue: ranksByJobId.get(row.jobPostId) ?? null,
+			};
+		});
 	}),
 
 	boost: protectedProcedure
@@ -214,24 +265,46 @@ export const promotionsRouter = {
 					.where(eq(jobPost.id, input.jobPostId))
 					.for("update");
 
+				// 같은 tx에서 이 공고의 끌어올리기 추가 옵션 구매 전체를 읽는다(판정·차감 대상).
+				const purchases: BoostPurchaseLike[] = await tx
+					.select({
+						boostsPerDay: jobBoostPurchase.boostsPerDay,
+						createdAt: jobBoostPurchase.createdAt,
+						expiresAt: jobBoostPurchase.expiresAt,
+						id: jobBoostPurchase.id,
+						optionType: jobBoostPurchase.optionType,
+						paymentStatus: jobBoostPurchase.paymentStatus,
+						remainingCount: jobBoostPurchase.remainingCount,
+					})
+					.from(jobBoostPurchase)
+					.where(eq(jobBoostPurchase.jobPostId, input.jobPostId));
+
 				const [usage] = await tx
 					.select({ used: count() })
 					.from(jobBoostEvent)
 					.where(
 						and(
 							eq(jobBoostEvent.jobPostId, input.jobPostId),
-							// 수동 한도 판정은 boostType='manual'만 센다(자동 이벤트는 별도 쿼터).
+							// 수동 한도 판정은 boostType='manual'이면서 횟수권 소비분이 아닌 것만 센다.
+							// 횟수권 사용분(purchaseId 있음)은 하루 한도를 잠식하지 않는다.
 							eq(jobBoostEvent.boostType, "manual"),
+							isNull(jobBoostEvent.purchaseId),
 							gte(jobBoostEvent.createdAt, dayStart)
 						)
 					);
 				const usedToday = usage?.used ?? 0;
 				const verdict = resolveBoostEligibility({
 					adProductId: post.adProductId,
+					countRemaining: sumRemainingBoostCount(purchases, now),
 					exposureEndsAt: post.exposureEndsAt,
 					exposureType: post.exposureType,
 					manualBoostsPerDay: locked?.manualBoostsPerDay ?? 0,
 					now,
+					optionManualPerDay: sumActivePeriodBoostsPerDay(
+						purchases,
+						"manual_period",
+						now
+					),
 					paymentStatus: post.paymentStatus,
 					status: post.status,
 					usedToday,
@@ -243,18 +316,50 @@ export const promotionsRouter = {
 					});
 				}
 
+				// 횟수권 소비면 가장 오래된 활성 구매를 조건부 차감한다. remainingCount > 0 가드로
+				// 동시 클릭 시 0행이 나면 CONFLICT로 막는다. purchaseId를 이벤트에 남겨 하루 한도와
+				// 분리한다. daily 소비면 기존대로 purchaseId 없이 기록한다.
+				let purchaseId: string | null = null;
+				if (verdict.consume === "count") {
+					const pick = pickCountPurchaseToConsume(purchases, now);
+					const consumed = pick
+						? await tx
+								.update(jobBoostPurchase)
+								.set({
+									remainingCount: sql`${jobBoostPurchase.remainingCount} - 1`,
+								})
+								.where(
+									and(
+										eq(jobBoostPurchase.id, pick.id),
+										gt(jobBoostPurchase.remainingCount, 0)
+									)
+								)
+								.returning({ id: jobBoostPurchase.id })
+						: [];
+
+					if (consumed.length === 0) {
+						throw new ORPCError("CONFLICT", {
+							message:
+								"끌어올리기 처리 중 잔여 횟수가 변경되었습니다. 다시 시도해 주세요.",
+						});
+					}
+					purchaseId = pick?.id ?? null;
+				}
+
 				await tx.insert(jobBoostEvent).values({
 					actorUserId: actor.userId,
 					boostType: "manual",
 					jobPostId: input.jobPostId,
 					organizationId: post.organizationId,
+					purchaseId,
 				});
 				await tx
 					.update(jobPost)
 					.set({ boostedAt: now })
 					.where(eq(jobPost.id, input.jobPostId));
 
-				return usedToday + 1;
+				// 횟수권 소비는 하루 한도를 잠식하지 않아 usedToday가 그대로다.
+				return verdict.consume === "daily" ? usedToday + 1 : usedToday;
 			});
 
 			return { boostedAt: now, boostsUsedToday };

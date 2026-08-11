@@ -13,7 +13,7 @@ import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Megaphone } from "lucide-react";
+import { ArrowUpToLine, Check, Megaphone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { AdPriceTag } from "@/components/bambi/ad-price-tag";
@@ -23,7 +23,12 @@ import {
 	type AdCatalogPlacement,
 	formatAdCampaignPeriod,
 	formatAdDuration,
+	formatAdPrice,
 } from "@/lib/bambi/ad-catalog";
+import {
+	formatBoostOptionSpec,
+	JOB_BOOST_OPTION_TYPE_LABELS,
+} from "@/lib/bambi/boost-options";
 import { orpc } from "@/utils/orpc";
 
 // 광고 상품 신청 = 공고 등록 화면으로 이동(밤비엔 별도 광고 결제 흐름이 없음).
@@ -186,6 +191,14 @@ function PlacementSection({
 										일일 자동 끌어올리기 {product.autoBoostsPerDay}회 포함
 									</span>
 								) : null}
+								{/* 디자인 제작은 상품에 포함된 혜택이 아니라 공고 등록 시 고르는
+								    유료 애드온이다. 가격이 설정된 상품에만 안내한다. */}
+								{product.detailDesignPrice === null ? null : (
+									<span className="font-medium text-coral-500 text-sm">
+										상세이미지 디자인 제작 +
+										{formatAdPrice(product.detailDesignPrice)} (선택)
+									</span>
+								)}
 								{product.benefits.length > 0 ? (
 									<ul className="m-0 flex flex-col gap-1.5 p-0">
 										{product.benefits.map((benefit) => (
@@ -259,6 +272,62 @@ function PlacementSection({
 	);
 }
 
+// 끌어올리기 추가 옵션 안내. listOptions는 판매 중(가격 설정)인 옵션만 돌려주므로,
+// 비어 있으면(미판매·로딩) 블록 자체를 내지 않는다.
+function BoostOptionsGuide() {
+	const optionsQuery = useQuery(
+		orpc.bambi.boostOptions.listOptions.queryOptions()
+	);
+	const options = optionsQuery.data ?? [];
+
+	if (options.length === 0) {
+		return null;
+	}
+
+	return (
+		<Card>
+			<CardContent className="flex flex-col gap-3">
+				<div className="flex items-center gap-2">
+					<span className="inline-flex size-5 text-primary">
+						<ArrowUpToLine size={20} />
+					</span>
+					<span className="font-bold">끌어올리기 옵션</span>
+				</div>
+				<p className="m-0 text-muted-foreground text-sm">
+					공고를 목록 위로 다시 올려 주는 추가 옵션입니다. 공고 등록·수정
+					화면이나 광고 관리에서 신청할 수 있고, 입금이 확인되면 적용됩니다.
+				</p>
+				<ul className="m-0 flex flex-col gap-1.5 p-0">
+					{options.map((option) => {
+						const spec = formatBoostOptionSpec(option);
+
+						return (
+							<li
+								className="flex items-center gap-2 text-sm"
+								key={option.optionType}
+							>
+								<span className="inline-flex size-4 text-primary">
+									<Check size={16} />
+								</span>
+								<span className="min-w-0 break-words">
+									{JOB_BOOST_OPTION_TYPE_LABELS[option.optionType]}
+									{spec ? ` · ${spec}` : ""} ·{" "}
+									<span className="font-medium text-coral-600">
+										{formatAdPrice(option.price ?? 0)}
+									</span>
+								</span>
+							</li>
+						);
+					})}
+				</ul>
+				<p className="m-0 text-muted-foreground text-sm">
+					일반 구인(무료) 공고도 구매할 수 있어요. (배너 광고 공고는 제외)
+				</p>
+			</CardContent>
+		</Card>
+	);
+}
+
 export function EmployerAdGuideScreen() {
 	const catalogQuery = useQuery(
 		orpc.bambi.adProducts.getCatalog.queryOptions()
@@ -296,8 +365,9 @@ export function EmployerAdGuideScreen() {
 						</ul>
 					</div>
 					<p className="m-0 text-muted-foreground text-sm">
-						끌어올리기(수동·자동)는 스페셜·급구·추천 리스팅 광고에만 제공되며,
-						프리미엄 배너 광고에는 제공되지 않습니다.
+						광고 상품에 포함된 끌어올리기(수동·자동)는 스페셜·급구·추천 리스팅
+						광고에만 제공됩니다. 별도 판매하는 끌어올리기 옵션은 배너 광고를
+						제외한 모든 공고에서 구매할 수 있어요.
 					</p>
 					<p className="m-0 font-medium text-destructive text-sm">
 						{AD_POLICY_WARNING}
@@ -326,6 +396,8 @@ export function EmployerAdGuideScreen() {
 					placement={placement}
 				/>
 			))}
+
+			<BoostOptionsGuide />
 		</PageShell>
 	);
 }

@@ -2,6 +2,7 @@ import {
 	type AdBannerLayout,
 	isAdBannerImageRequired,
 } from "./bambi/ad-banner-layout";
+import type { JobBoostOptionTypeKey } from "./bambi/boost-options";
 import {
 	isAllowedJobAdBannerAspect,
 	isAllowedJobAdBannerSize,
@@ -147,7 +148,17 @@ export interface JobForm {
 	adBannerLayout: AdBannerLayout | null;
 	adProductId: string | null;
 	beginnerFriendly: boolean;
+	// 무료 공고에서 옵션만 결제할 때 쓰는 결제수단. 유료 공고는 공고 결제수단(paymentMethod)을
+	// 그대로 쓰므로 비운다.
+	boostOptionPaymentMethod?: JobPaymentMethod | null;
+	// 체크한 끌어올리기 옵션 유형(유형당 1개·최대 3). 두 필드가 optional인 이유는 끌어올리기
+	// 옵션을 다루지 않는 폼(운영자 편집)이 있기 때문이다 — 서버도 운영자 편집 경로에서는
+	// 옵션을 동결하고 입력을 무시한다. 구인자 등록·수정 폼은 항상 값을 싣는다.
+	boostOptionTypes?: JobBoostOptionTypeKey[];
 	description: string;
+	// 선택한 상품의 상세이미지 디자인 제작 가격 스냅샷(화면에서 본 값). 서버가 재확인한다.
+	detailDesignAmount: number | null;
+	detailDesignRequested: boolean;
 	// 지역은 표시 문자열이 아니라 지역 마스터 코드로 들고 다닌다(서버 입력도 코드다).
 	// 세부지역은 선택이며, 빈 값은 "지역 전체"를 뜻한다.
 	districtCode: string;
@@ -173,8 +184,16 @@ export interface JobPostInput {
 	adBannerLayout: AdBannerLayout | null;
 	adProductId: string | null;
 	beginnerFriendly: boolean;
+	// 무료 공고에서만 싣는다(유료 공고는 서버가 공고 결제수단을 쓴다). 서버 스키마가
+	// optional이라 미선택은 키를 빼서 보낸다.
+	boostOptionPaymentMethod?: JobPaymentMethod;
+	// 항상 현재 체크 상태 전체를 싣는다(생략 금지). 서버는 배열에 없는 입금 대기 구매를
+	// 취소하고, 이미 적용 중인 유형은 그대로 유지한다.
+	boostOptionTypes: JobBoostOptionTypeKey[];
 	description: string;
 	descriptionBlocks: JobDescriptionBlockFormValue[];
+	detailDesignAmount: number | null;
+	detailDesignRequested: boolean;
 	// 미선택이면 보내지 않는다 — 서버는 세부지역 없는 공고를 시/도 전체로 받는다.
 	districtCode?: string;
 	exposureAmount: number | null;
@@ -225,7 +244,11 @@ export const emptyJobForm: JobForm = {
 	adBannerLayout: null,
 	adProductId: null,
 	beginnerFriendly: false,
+	boostOptionPaymentMethod: null,
+	boostOptionTypes: [],
 	description: "",
+	detailDesignAmount: null,
+	detailDesignRequested: false,
 	districtCode: "",
 	exposureAmount: null,
 	exposureDurationDays: null,
@@ -827,14 +850,30 @@ const getContentErrors = ({
 
 const getExposureErrors = ({
 	adProductId,
+	boostOptionPaymentMethod,
 	exposureDurationDays,
+	newBoostOptionTypes,
 	paymentMethod,
 }: {
 	adProductId: string | null;
+	boostOptionPaymentMethod: JobPaymentMethod | undefined;
+	newBoostOptionTypes: JobBoostOptionTypeKey[];
 	exposureDurationDays: number | null;
 	paymentMethod: JobPaymentMethod | null;
 }): JobFormErrors => {
 	const errors: JobFormErrors = {};
+
+	// 끌어올리기 옵션은 무료 공고에서도 살 수 있다. 이때는 공고 결제수단이 없으므로 옵션
+	// 전용 결제수단을 반드시 골라야 한다(서버도 없으면 BAD_REQUEST). 이미 입금 대기·적용
+	// 중인 유형만 유지하는 저장은 새 결제가 없으므로 요구하지 않는다.
+	if (
+		!adProductId &&
+		newBoostOptionTypes.length > 0 &&
+		!boostOptionPaymentMethod
+	) {
+		errors.boostOptionPaymentMethod =
+			"끌어올리기 옵션 결제수단을 선택해 주세요.";
+	}
 
 	// 광고 상품을 고르지 않으면 무료 일반 구인(standard)으로 통과한다.
 	if (!adProductId) {
@@ -852,10 +891,49 @@ const getExposureErrors = ({
 	return errors;
 };
 
+interface ResolvedBoostOptions {
+	// 새로 결제되는 유형(= 아직 구매가 없는 유형). 결제수단 필수 검사는 이 목록만 본다.
+	newTypes: JobBoostOptionTypeKey[];
+	paymentMethod: JobPaymentMethod | undefined;
+	types: JobBoostOptionTypeKey[];
+}
+
+// 끌어올리기 옵션 값 정리. 이미 입금 대기(unpaid)거나 적용 중인 유형은 서버가 그대로 유지하고
+// 새 구매를 만들지 않으므로(수정 폼이 existingTypes로 알린다) 결제 대상에서 뺀다. 옵션 전용
+// 결제수단은 "무료 공고 + 새 옵션"일 때만 싣는다 — 유료 공고는 공고 결제수단으로 결제되고,
+// 새 옵션이 없으면 결제 자체가 없다.
+const resolveBoostOptions = ({
+	existingTypes = [],
+	formPaymentMethod,
+	formTypes = [],
+	isFreeExposure,
+}: {
+	existingTypes?: JobBoostOptionTypeKey[];
+	formPaymentMethod: JobPaymentMethod | null | undefined;
+	formTypes?: JobBoostOptionTypeKey[];
+	isFreeExposure: boolean;
+}): ResolvedBoostOptions => {
+	const newTypes = formTypes.filter(
+		(optionType) => !existingTypes.includes(optionType)
+	);
+	const needsPaymentMethod = isFreeExposure && newTypes.length > 0;
+
+	return {
+		newTypes,
+		paymentMethod: needsPaymentMethod
+			? (formPaymentMethod ?? undefined)
+			: undefined,
+		types: formTypes,
+	};
+};
+
 export const validateJobForm = (
 	form: JobForm,
 	options: {
 		descriptionBlocks?: JobDescriptionBlockFormValue[];
+		// 수정 폼이 넘기는 "이미 결제 대기·적용 중인" 옵션 유형. 이 유형들은 다시 결제되지
+		// 않으므로 결제수단 필수 검사에서 뺀다.
+		existingBoostOptionTypes?: JobBoostOptionTypeKey[];
 		media?: JobFormMedia;
 		requiredBannerUsages?: JobAdBannerUsage[];
 		teamScopes?: JobTeamScope[];
@@ -904,7 +982,21 @@ export const validateJobForm = (
 		? null
 		: form.exposureDurationDays;
 	const exposureAmount = isFreeExposure ? null : form.exposureAmount;
+	// 애드온은 유료 상품 전용이다. 무료 공고면 신청 여부·금액을 모두 비워 서버 BAD_REQUEST를
+	// 폼 단계에서 미리 없앤다.
+	const detailDesignRequested = isFreeExposure
+		? false
+		: form.detailDesignRequested;
+	const detailDesignAmount = detailDesignRequested
+		? form.detailDesignAmount
+		: null;
 	const paymentMethod = isFreeExposure ? null : form.paymentMethod;
+	const boostOptions = resolveBoostOptions({
+		existingTypes: options.existingBoostOptionTypes,
+		formPaymentMethod: form.boostOptionPaymentMethod,
+		formTypes: form.boostOptionTypes,
+		isFreeExposure,
+	});
 	Object.assign(
 		errors,
 		getPostingScopeErrors({
@@ -928,7 +1020,9 @@ export const validateJobForm = (
 		}),
 		getExposureErrors({
 			adProductId,
+			boostOptionPaymentMethod: boostOptions.paymentMethod,
 			exposureDurationDays,
+			newBoostOptionTypes: boostOptions.newTypes,
 			paymentMethod,
 		})
 	);
@@ -949,8 +1043,12 @@ export const validateJobForm = (
 			adBannerLayout: form.adBannerLayout,
 			adProductId,
 			beginnerFriendly: form.beginnerFriendly,
+			boostOptionPaymentMethod: boostOptions.paymentMethod,
+			boostOptionTypes: boostOptions.types,
 			description,
 			descriptionBlocks: normalizedBlocks,
+			detailDesignAmount,
+			detailDesignRequested,
 			// 미선택은 키를 빼서 보낸다 — 서버 스키마가 optional이고 빈 문자열은 거부한다.
 			districtCode: districtCode || undefined,
 			exposureAmount,

@@ -20,11 +20,18 @@ const copyAccountNumber = async (accountNumber: string) => {
 interface BankTransferGuideProps {
 	// 결제 예정 금액(있으면 상단에 안내). 협의/무료는 null.
 	amount?: number | null;
+	// 입금이 무엇을 여는지. "posting"(기본)은 유료 공고 게시, "boost"는 무료 공고에 붙는
+	// 끌어올리기 옵션이다 — 무료 공고는 입금과 무관하게 검수 후 공개되므로 "입금 확인 후
+	// 공고가 게시됩니다"라고 안내하면 사실과 다르다.
+	purpose?: "boost" | "posting";
 }
 
 // 무통장입금 안내(계좌 목록·복사·입금 규칙)를 공고 등록·완료·광고 관리에서 공유하는 콘텐츠 블록.
 // 래퍼(Alert/Popover/Dialog)는 소비처가 감싼다. 계좌 데이터는 공개 조회를 react-query로 읽는다.
-export function BankTransferGuide({ amount }: BankTransferGuideProps) {
+export function BankTransferGuide({
+	amount,
+	purpose = "posting",
+}: BankTransferGuideProps) {
 	const accountsQuery = useQuery(
 		orpc.bambi.siteSettings.getPaymentAccounts.queryOptions()
 	);
@@ -75,7 +82,11 @@ export function BankTransferGuide({ amount }: BankTransferGuideProps) {
 			{hasAccounts ? (
 				<div className="flex flex-col gap-1 text-muted-foreground text-xs">
 					<p>입금자명은 업체명(상호)과 동일하게 입금해 주세요.</p>
-					<p>입금 확인 후 공고가 게시됩니다.</p>
+					<p>
+						{purpose === "boost"
+							? "입금 확인 후 끌어올리기 옵션이 적용됩니다."
+							: "입금 확인 후 공고가 게시됩니다."}
+					</p>
 				</div>
 			) : null}
 		</div>

@@ -58,7 +58,13 @@ import {
 } from "../../services/bambi-chat-realtime";
 import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
+import { jobDetailDesignStatuses } from "../../services/bambi-job-detail-design";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
+import {
+	JOB_POST_DETAIL_IMAGE_LIMIT,
+	validateJobPostImageUpload,
+	validateJobPostMediaSet,
+} from "../../services/bambi-job-media-policy";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
 import {
@@ -67,7 +73,11 @@ import {
 } from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
 import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
-import { getBusinessDocumentObjectUrl } from "../../services/bambi-storage";
+import {
+	createJobPostMediaUploadIntent,
+	getBusinessDocumentObjectUrl,
+	isOwnedJobPostMediaKey,
+} from "../../services/bambi-storage";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 import { purgeWithdrawnAccountsBatch } from "../../services/bambi-withdrawal-purge";
 import { deletePublicObjects } from "../../services/gcs";
@@ -162,8 +172,40 @@ const setJobPostPaymentInput = z.object({
 	paymentStatus: z.enum(["unpaid", "paid"]),
 });
 
+const setJobPostDesignStatusInput = z.object({
+	jobPostId: z.string().uuid(),
+	status: z.enum(jobDetailDesignStatuses),
+});
+
+const createJobPostDesignMediaUploadInput = z.object({
+	byteSize: z.number().int().min(1),
+	fileName: z.string().max(180),
+	jobPostId: z.string().uuid(),
+	mimeType: z.string().min(1).max(120),
+});
+
+const setJobPostDesignMediaInput = z.object({
+	// 저장될 상세 이미지 전량. 빠진 기존 이미지는 행과 GCS 객체가 함께 지워진다.
+	detail: z
+		.array(
+			z.object({
+				altText: z.string().max(120).default(""),
+				byteSize: z.number().int().min(1),
+				fileName: z.string().max(180),
+				height: z.number().int().min(1).max(20_000).optional(),
+				mimeType: z.string().min(1).max(120),
+				storageKey: z.string().min(1).max(512),
+				width: z.number().int().min(1).max(20_000).optional(),
+			})
+		)
+		.max(JOB_POST_DETAIL_IMAGE_LIMIT),
+	jobPostId: z.string().uuid(),
+});
+
 const listJobsForPaymentInput = z.object({
 	onlyUnpaid: z.boolean().default(false),
+	// 상세이미지 디자인 제작을 신청한 건만 추린다(별도 큐 화면 대신 이 필터로 처리한다).
+	onlyDetailDesign: z.boolean().default(false),
 	limit: z.number().int().min(1).max(100).default(50),
 });
 
@@ -1942,6 +1984,218 @@ export const moderationRouter = {
 			return updated;
 		}),
 
+	// 디자인 제작 진행 상태 토글. 신청하지 않은 공고에는 상태를 세울 수 없다 —
+	// 금액 스냅샷 없이 상태만 서면 결제 관리에서 "받은 돈 없는 제작 건"이 생긴다.
+	setJobPostDesignStatus: adminProcedure
+		.input(setJobPostDesignStatusInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const updated = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({ detailDesignStatus: jobPost.detailDesignStatus })
+					.from(jobPost)
+					.where(eq(jobPost.id, input.jobPostId))
+					.limit(1);
+
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				if (existing.detailDesignStatus === null) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "상세이미지 디자인 제작을 신청하지 않은 공고입니다.",
+					});
+				}
+
+				const [row] = await tx
+					.update(jobPost)
+					.set({ detailDesignStatus: input.status })
+					.where(eq(jobPost.id, input.jobPostId))
+					.returning();
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx.insert(adminModerationAction).values({
+					action: `set_detail_design_status:${input.status}`,
+					adminUserId: admin.userId,
+					metadata: { previousStatus: existing.detailDesignStatus },
+					reason: "상세이미지 디자인 제작 상태 변경",
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+
+				return row;
+			});
+
+			// 완료 처리는 구인자에게 "상세이미지가 올라갔다"는 유일한 신호다.
+			await notifyModerationAction({
+				action: `set_detail_design_status:${input.status}`,
+				actorUserId: admin.userId,
+				metadata: { jobPostTitle: updated.title },
+				targetId: input.jobPostId,
+				targetType: "job_post",
+			});
+
+			return updated;
+		}),
+
+	// 운영자가 완성본을 직접 올린다. 서명 URL의 조직 prefix는 반드시 **대상 공고의 조직**이어야
+	// 한다 — 운영자 자신의 조직으로 발급하면 저장 단계의 isOwnedJobPostMediaKey에 걸린다.
+	createJobPostDesignMediaUpload: adminProcedure
+		.input(createJobPostDesignMediaUploadInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const [target] = await db
+				.select({ organizationId: jobPost.organizationId })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!target) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const policy = validateJobPostImageUpload({
+				byteSize: input.byteSize,
+				fileName: input.fileName,
+				mimeType: input.mimeType,
+				usage: "detail",
+			});
+
+			if (!policy.ok) {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"상세 이미지는 JPG·PNG·WebP 형식의 10MB 이하 파일만 등록할 수 있습니다.",
+				});
+			}
+
+			return await createJobPostMediaUploadIntent({
+				actorUserId: admin.userId,
+				byteSize: input.byteSize,
+				fileName: input.fileName,
+				mimeType: input.mimeType,
+				organizationId: target.organizationId,
+			});
+		}),
+
+	// 상세 이미지(usage=detail) 전량 교체. 5장 제한은 기존 정책을 그대로 태우고, 교체에서
+	// 빠진 키는 트랜잭션 커밋 뒤에만 GCS에서 지운다(롤백된 변경으로 원본을 잃지 않게).
+	setJobPostDesignMedia: adminProcedure
+		.input(setJobPostDesignMediaInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const [target] = await db
+				.select({ organizationId: jobPost.organizationId })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!target) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const rows = input.detail.map((item, index) => ({
+				...item,
+				position: index,
+				usage: "detail" as const,
+			}));
+			const policy = validateJobPostMediaSet(rows);
+
+			if (!policy.ok) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: `상세 이미지는 최대 ${JOB_POST_DETAIL_IMAGE_LIMIT}장까지, JPG·PNG·WebP 10MB 이하만 등록할 수 있습니다.`,
+				});
+			}
+
+			for (const row of rows) {
+				if (
+					!isOwnedJobPostMediaKey({
+						organizationId: target.organizationId,
+						storageKey: row.storageKey,
+					})
+				) {
+					throw new ORPCError("FORBIDDEN", {
+						message: "이 공고의 조직에 속하지 않은 이미지 키입니다.",
+					});
+				}
+			}
+
+			const { detail, removedKeys } = await db.transaction(async (tx) => {
+				// 스냅샷도 tx 안에서 읽는다. 밖에서 읽으면 그 사이 끼어든 detail 행이 삭제 대상
+				// 목록에 빠져 GCS 객체만 영영 남는다.
+				const previousKeys = await tx
+					.select({ storageKey: jobPostMedia.storageKey })
+					.from(jobPostMedia)
+					.where(
+						and(
+							eq(jobPostMedia.jobPostId, input.jobPostId),
+							eq(jobPostMedia.usage, "detail")
+						)
+					);
+
+				await tx
+					.delete(jobPostMedia)
+					.where(
+						and(
+							eq(jobPostMedia.jobPostId, input.jobPostId),
+							eq(jobPostMedia.usage, "detail")
+						)
+					);
+
+				const inserted =
+					rows.length === 0
+						? []
+						: await tx
+								.insert(jobPostMedia)
+								.values(
+									rows.map((row) => ({
+										altText: row.altText.trim(),
+										byteSize: row.byteSize,
+										fileName: row.fileName.trim(),
+										height: row.height ?? null,
+										jobPostId: input.jobPostId,
+										mimeType: row.mimeType,
+										organizationId: target.organizationId,
+										position: row.position,
+										storageKey: row.storageKey,
+										uploadedByUserId: admin.userId,
+										usage: row.usage,
+										width: row.width ?? null,
+									}))
+								)
+								.returning();
+
+				const retained = new Set(rows.map((row) => row.storageKey));
+				const removed = previousKeys
+					.map((row) => row.storageKey)
+					.filter((key) => !retained.has(key));
+
+				// 남의 조직 자산을 파괴적으로 교체하는 조치라 흔적을 남긴다.
+				await tx.insert(adminModerationAction).values({
+					action: "set_detail_design_media",
+					adminUserId: admin.userId,
+					metadata: {
+						removedCount: removed.length,
+						savedCount: inserted.length,
+					},
+					reason: "상세이미지 디자인 완성본 등록",
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+
+				return { detail: inserted, removedKeys: removed };
+			});
+
+			await deletePublicObjects(removedKeys);
+
+			return { detail };
+		}),
+
 	// 공고의 광고 종료일만 앞뒤로 민다. 결제 상태·노출 종류는 그대로라 프리미엄 정원(자리 수)에
 	// 영향이 없어 승인 게이트를 타지 않는다. 음수(단축)로 과거까지 내리는 것도 허용한다(즉시 만료 조치).
 	// 기준일은 `exposureEndsAt ?? now` 단일 규칙이라, 종료일이 없던 공고(미결제·무기한)는 지금
@@ -2035,6 +2289,10 @@ export const moderationRouter = {
 				conditions.push(eq(jobPost.paymentStatus, "unpaid"));
 			}
 
+			if (input.onlyDetailDesign) {
+				conditions.push(isNotNull(jobPost.detailDesignStatus));
+			}
+
 			return await db
 				.select({
 					id: jobPost.id,
@@ -2042,6 +2300,8 @@ export const moderationRouter = {
 					status: jobPost.status,
 					exposureType: jobPost.exposureType,
 					exposureAmount: jobPost.exposureAmount,
+					detailDesignAmount: jobPost.detailDesignAmount,
+					detailDesignStatus: jobPost.detailDesignStatus,
 					paymentStatus: jobPost.paymentStatus,
 					exposureDurationDays: jobPost.exposureDurationDays,
 					exposureEndsAt: jobPost.exposureEndsAt,

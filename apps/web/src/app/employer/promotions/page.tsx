@@ -1,5 +1,6 @@
 "use client";
 
+import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	Card,
@@ -32,6 +33,7 @@ import {
 	EllipsisIcon,
 	FileTextIcon,
 	ListIcon,
+	ShoppingCartIcon,
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -39,6 +41,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
+import { BoostOptionPurchaseDialog } from "@/components/bambi/boost-option-purchase-dialog";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
@@ -57,12 +60,18 @@ interface AdListItem {
 	adProductName: null | string;
 	autoBoostsPerDay: number;
 	autoBoostsUsedToday: number;
+	boostCountRemaining: number;
 	boostedAt: Date | null | string;
+	// 활성 기간제 옵션이 더해 주는 하루 횟수(상품 번들과 별개로 합산된다).
+	boostOptionAutoPerDay: number;
+	boostOptionManualPerDay: number;
 	boostsUsedToday: number;
+	detailDesignAmount: null | number;
 	employerDisplayName: string;
 	exposureAmount: null | number;
 	exposureEndsAt: Date | null | string;
 	exposureType: string;
+	hasUnpaidBoostOption: boolean;
 	jobPostId: string;
 	manualBoostsPerDay: number;
 	paymentStatus: string;
@@ -93,8 +102,16 @@ const isExposureActive = (
 ): boolean =>
 	exposureEndsAt === null || new Date(exposureEndsAt).getTime() > now;
 
+// 하루 한도·자동 횟수는 상품 번들 + 활성 기간제 옵션 합이다(서버 resolveBoostEligibility·
+// 자동 배치와 같은 계산). 옵션만 산 무료 공고도 여기서 한도가 잡힌다.
+const dailyBoostLimit = (ad: AdListItem): number =>
+	ad.manualBoostsPerDay + ad.boostOptionManualPerDay;
+
+const autoBoostLimit = (ad: AdListItem): number =>
+	ad.autoBoostsPerDay + ad.boostOptionAutoPerDay;
+
 const remainingBoosts = (ad: AdListItem): number =>
-	Math.max(0, ad.manualBoostsPerDay - ad.boostsUsedToday);
+	Math.max(0, dailyBoostLimit(ad) - ad.boostsUsedToday);
 
 const exposureLabel = (ad: AdListItem): string =>
 	EXPOSURE_TYPE_LABELS[ad.exposureType as ExposureType] ?? ad.exposureType;
@@ -115,8 +132,13 @@ const getBoostState = (ad: AdListItem): BoostState => {
 		};
 	}
 
-	if (ad.manualBoostsPerDay === 0) {
-		return { canBoost: false, disabledReason: "끌어올리기 미포함 상품입니다." };
+	// 하루 한도(상품+옵션)도 없고 횟수권 잔여도 없으면 애초에 쓸 끌어올리기가 없다.
+	if (dailyBoostLimit(ad) === 0 && ad.boostCountRemaining === 0) {
+		return {
+			canBoost: false,
+			disabledReason:
+				"사용할 수 있는 끌어올리기가 없습니다. 끌어올리기 옵션을 구매해 보세요.",
+		};
 	}
 
 	if (
@@ -130,7 +152,8 @@ const getBoostState = (ad: AdListItem): BoostState => {
 		};
 	}
 
-	if (remainingBoosts(ad) === 0) {
+	// 하루 한도를 다 썼어도 횟수권 잔여가 있으면 서버가 1회 차감으로 처리해 준다.
+	if (remainingBoosts(ad) === 0 && ad.boostCountRemaining === 0) {
 		return {
 			canBoost: false,
 			disabledReason: "오늘 끌어올리기를 모두 사용했습니다.",
@@ -164,6 +187,7 @@ const getAdGroupId = (
 interface AdColumnsOptions {
 	isBoostPending: boolean;
 	onBoost: (jobPostId: string) => void;
+	onPurchaseOption: (ad: AdListItem) => void;
 }
 
 function AdStatusDetails({ ad }: { ad: AdListItem }) {
@@ -186,7 +210,12 @@ function AdStatusDetails({ ad }: { ad: AdListItem }) {
 					/>
 					<PopoverContent align="start" className="w-80">
 						<PopoverTitle>무통장입금 안내</PopoverTitle>
-						<BankTransferGuide amount={ad.exposureAmount} />
+						<BankTransferGuide
+							amount={sumJobPaymentAmount(
+								ad.exposureAmount,
+								ad.detailDesignAmount
+							)}
+						/>
 					</PopoverContent>
 				</Popover>
 			) : null}
@@ -197,6 +226,9 @@ function AdStatusDetails({ ad }: { ad: AdListItem }) {
 						: `대기열 ${ad.premiumQueue.queuePosition}번째`}
 				</StatusBadge>
 			) : null}
+			{ad.hasUnpaidBoostOption ? (
+				<StatusBadge tone="warning">옵션 입금 대기</StatusBadge>
+			) : null}
 		</div>
 	);
 }
@@ -205,10 +237,12 @@ function AdActionsMenu({
 	ad,
 	isBoostPending,
 	onBoost,
+	onPurchaseOption,
 }: {
 	ad: AdListItem;
 	isBoostPending: boolean;
 	onBoost: (jobPostId: string) => void;
+	onPurchaseOption: (ad: AdListItem) => void;
 }) {
 	const { canBoost, disabledReason } = getBoostState(ad);
 
@@ -230,10 +264,18 @@ function AdActionsMenu({
 					끌어올리기
 				</DropdownMenuItem>
 				{disabledReason ? (
+					// DropdownMenuLabel(base-ui GroupLabel)은 Menu.Group 밖에서 크래시라 일반 텍스트로 렌더한다.
 					<p className="m-0 px-2 pb-2 text-muted-foreground text-xs">
 						{disabledReason}
 					</p>
 				) : null}
+				{/* 배너 광고는 끌어올리기 대상이 아니라 옵션도 팔지 않는다(서버도 거부). */}
+				{isBannerExposureType(ad.exposureType) ? null : (
+					<DropdownMenuItem onClick={() => onPurchaseOption(ad)}>
+						<ShoppingCartIcon />
+						끌어올리기 옵션 구매
+					</DropdownMenuItem>
+				)}
 				<DropdownMenuSeparator />
 				<DropdownMenuItem
 					render={
@@ -251,6 +293,7 @@ function AdActionsMenu({
 function getAdColumns({
 	isBoostPending,
 	onBoost,
+	onPurchaseOption,
 }: AdColumnsOptions): DataColumn<AdListItem>[] {
 	return [
 		{
@@ -320,37 +363,55 @@ function getAdColumns({
 					return <span className="text-muted-foreground">—</span>;
 				}
 
-				if (ad.manualBoostsPerDay === 0) {
-					return <span className="text-muted-foreground">미포함</span>;
-				}
-
+				const limit = dailyBoostLimit(ad);
 				const remaining = remainingBoosts(ad);
 
 				return (
-					<span
-						className={cn(
-							"whitespace-nowrap",
-							remaining === 0 && "text-muted-foreground"
+					<div className="flex flex-col items-start gap-1">
+						{limit === 0 ? (
+							<span className="text-muted-foreground">미포함</span>
+						) : (
+							<span
+								className={cn(
+									"whitespace-nowrap",
+									remaining === 0 && "text-muted-foreground"
+								)}
+							>
+								{`남은 ${remaining}회 / 일일 ${limit}회`}
+							</span>
 						)}
-					>
-						{`남은 ${remaining}회 / 일일 ${ad.manualBoostsPerDay}회`}
-					</span>
+						<div className="flex flex-wrap gap-1">
+							{ad.boostOptionManualPerDay > 0 ? (
+								<StatusBadge tone="good">{`수동 +${ad.boostOptionManualPerDay}/일`}</StatusBadge>
+							) : null}
+							{ad.boostCountRemaining > 0 ? (
+								<StatusBadge tone="good">{`횟수권 ${ad.boostCountRemaining}회`}</StatusBadge>
+							) : null}
+						</div>
+					</div>
 				);
 			},
 		},
 		{
 			id: "autoBoostsToday",
 			header: "자동 끌어올리기",
-			sortValue: (ad) => ad.autoBoostsPerDay,
+			sortValue: (ad) => autoBoostLimit(ad),
 			cell: (ad) => {
-				if (ad.autoBoostsPerDay === 0) {
+				const limit = autoBoostLimit(ad);
+
+				if (limit === 0) {
 					return <span className="text-muted-foreground">—</span>;
 				}
 
 				return (
-					<span className="whitespace-nowrap">
-						{`오늘 ${ad.autoBoostsUsedToday}/${ad.autoBoostsPerDay}회 실행`}
-					</span>
+					<div className="flex flex-col items-start gap-1">
+						<span className="whitespace-nowrap">
+							{`오늘 ${ad.autoBoostsUsedToday}/${limit}회 실행`}
+						</span>
+						{ad.boostOptionAutoPerDay > 0 ? (
+							<StatusBadge tone="good">{`자동 +${ad.boostOptionAutoPerDay}/일`}</StatusBadge>
+						) : null}
+					</div>
 				);
 			},
 		},
@@ -378,6 +439,7 @@ function getAdColumns({
 					ad={ad}
 					isBoostPending={isBoostPending}
 					onBoost={onBoost}
+					onPurchaseOption={onPurchaseOption}
 				/>
 			),
 		},
@@ -386,24 +448,36 @@ function getAdColumns({
 
 const MOBILE_AD_PAGE_SIZE = 10;
 
+// 데스크톱 표(boostsToday 열)와 같은 값을 내야 한다 — 번들만 보는 manualBoostsPerDay가 아니라
+// 옵션을 합산한 dailyBoostLimit을 쓰고, 별도 재고인 횟수권 잔여도 함께 붙인다.
 function getManualBoostLabel(ad: AdListItem) {
 	if (isBannerExposureType(ad.exposureType)) {
 		return "—";
 	}
-	if (ad.manualBoostsPerDay === 0) {
-		return "미포함";
+
+	const limit = dailyBoostLimit(ad);
+	const parts: string[] = [];
+
+	if (limit > 0) {
+		parts.push(`남은 ${remainingBoosts(ad)}회 / 일일 ${limit}회`);
 	}
-	return `남은 ${remainingBoosts(ad)}회 / 일일 ${ad.manualBoostsPerDay}회`;
+	if (ad.boostCountRemaining > 0) {
+		parts.push(`횟수권 ${ad.boostCountRemaining}회`);
+	}
+
+	return parts.length > 0 ? parts.join(" · ") : "미포함";
 }
 
 function MobileAds({
 	ads,
 	isBoostPending,
 	onBoost,
+	onPurchaseOption,
 }: {
 	ads: AdListItem[];
 	isBoostPending: boolean;
 	onBoost: (jobPostId: string) => void;
+	onPurchaseOption: (ad: AdListItem) => void;
 }) {
 	const [page, setPage] = useState(1);
 	const pageCount = Math.max(1, Math.ceil(ads.length / MOBILE_AD_PAGE_SIZE));
@@ -433,6 +507,7 @@ function MobileAds({
 								ad={ad}
 								isBoostPending={isBoostPending}
 								onBoost={onBoost}
+								onPurchaseOption={onPurchaseOption}
 							/>
 						</CardAction>
 					</CardHeader>
@@ -474,9 +549,9 @@ function MobileAds({
 									자동 끌어올리기
 								</span>
 								<span>
-									{ad.autoBoostsPerDay === 0
+									{autoBoostLimit(ad) === 0
 										? "—"
-										: `오늘 ${ad.autoBoostsUsedToday}/${ad.autoBoostsPerDay}회 실행`}
+										: `오늘 ${ad.autoBoostsUsedToday}/${autoBoostLimit(ad)}회 실행`}
 								</span>
 							</div>
 						</div>
@@ -524,6 +599,11 @@ export default function EmployerAdsPage() {
 	const queryClient = useQueryClient();
 	const [selectedGroupId, setSelectedGroupId] =
 		useState<AdStatusGroupId>("all");
+	// 옵션 구매 창의 대상 공고. 닫으면 null로 되돌려 창 안의 선택 상태도 함께 초기화한다.
+	const [purchaseTarget, setPurchaseTarget] = useState<{
+		jobPostId: string;
+		title: string;
+	} | null>(null);
 	const adsQuery = useQuery(orpc.bambi.promotions.listMyAds.queryOptions());
 	const ads: AdListItem[] = adsQuery.data ?? [];
 	const now = Date.now();
@@ -557,9 +637,20 @@ export default function EmployerAdsPage() {
 		[boost]
 	);
 
+	const handlePurchaseOption = useCallback(
+		(ad: AdListItem) =>
+			setPurchaseTarget({ jobPostId: ad.jobPostId, title: ad.title }),
+		[]
+	);
+
 	const columns = useMemo(
-		() => getAdColumns({ isBoostPending, onBoost: handleBoost }),
-		[isBoostPending, handleBoost]
+		() =>
+			getAdColumns({
+				isBoostPending,
+				onBoost: handleBoost,
+				onPurchaseOption: handlePurchaseOption,
+			}),
+		[isBoostPending, handleBoost, handlePurchaseOption]
 	);
 
 	if (adsQuery.isLoading) {
@@ -595,15 +686,15 @@ export default function EmployerAdsPage() {
 						광고 상품 보기
 					</Link>
 				}
-				description="공고에 광고 상품을 적용하면 노출 현황과 끌어올리기를 이곳에서 관리할 수 있습니다."
-				title="운영 중인 광고가 없습니다"
+				description="공고를 등록하면 노출 현황과 끌어올리기를 이곳에서 관리할 수 있습니다. 광고 상품이나 끌어올리기 옵션을 적용하면 노출이 더 커져요."
+				title="관리할 공고가 없습니다"
 			/>
 		);
 	} else if (visibleAds.length === 0) {
 		content = (
 			<EmptyState
-				description="선택한 상태에 해당하는 광고가 없습니다."
-				title="표시할 광고가 없습니다"
+				description="선택한 상태에 해당하는 공고가 없습니다."
+				title="표시할 공고가 없습니다"
 			/>
 		);
 	} else {
@@ -613,6 +704,7 @@ export default function EmployerAdsPage() {
 					ads={visibleAds}
 					isBoostPending={isBoostPending}
 					onBoost={handleBoost}
+					onPurchaseOption={handlePurchaseOption}
 				/>
 				<div className="hidden overflow-x-auto rounded-xl border border-border md:block">
 					<DataTable
@@ -626,18 +718,20 @@ export default function EmployerAdsPage() {
 		);
 	}
 
-	const activeCount = ads.filter(
-		(ad) => getAdGroupId(ad, now) === "active"
+	// "진행 중 광고"는 광고 상품이 붙은 공고만 센다(구인자 홈 getAdSummary와 같은 정의).
+	// adProductName은 상품 leftJoin 결과라 무료 공고에서만 null이다.
+	const activeAdCount = ads.filter(
+		(ad) => getAdGroupId(ad, now) === "active" && ad.adProductName !== null
 	).length;
 
 	return (
 		<PageShell
-			description="광고 상품이 적용된 공고의 노출 상태와 오늘의 끌어올리기 횟수를 관리합니다."
+			description="광고 공고와 무료 공고의 노출 상태, 오늘의 끌어올리기 횟수와 옵션을 함께 관리합니다."
 			title="광고 관리"
 		>
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<p className="m-0 text-muted-foreground text-sm">
-					진행 중 {activeCount}개 · 전체 {ads.length}개
+					진행 중 광고 {activeAdCount}개 · 전체 공고 {ads.length}개
 				</p>
 				<Link
 					className={buttonVariants({ variant: "outline" })}
@@ -661,6 +755,19 @@ export default function EmployerAdsPage() {
 			</Tabs>
 
 			{content}
+
+			{purchaseTarget ? (
+				<BoostOptionPurchaseDialog
+					jobPostId={purchaseTarget.jobPostId}
+					jobTitle={purchaseTarget.title}
+					onOpenChange={(next) => {
+						if (!next) {
+							setPurchaseTarget(null);
+						}
+					}}
+					open
+				/>
+			) : null}
 		</PageShell>
 	);
 }

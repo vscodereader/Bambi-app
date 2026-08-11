@@ -257,3 +257,144 @@ describe("validateJobForm 프리미엄 광고 필수 배너", () => {
 		expect(result.ok).toBe(false);
 	});
 });
+
+describe("validateJobForm 상세이미지 디자인 제작 애드온", () => {
+	const addonForm = {
+		...baseForm,
+		adProductId: "premium-1",
+		exposureAmount: 50_000,
+		exposureDurationDays: 30,
+		paymentMethod: "bank_transfer" as const,
+	};
+
+	it("유료 상품에 옵션을 신청하면 신청 여부와 금액을 그대로 넘긴다", () => {
+		const result = validateJobForm(
+			{ ...addonForm, detailDesignAmount: 30_000, detailDesignRequested: true },
+			options
+		);
+
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.input.detailDesignRequested).toBe(true);
+		expect(result.ok && result.input.detailDesignAmount).toBe(30_000);
+	});
+
+	it("무료 공고(상품 미선택)면 옵션 값을 모두 비운다", () => {
+		const result = validateJobForm(
+			{
+				...addonForm,
+				adProductId: null,
+				detailDesignAmount: 30_000,
+				detailDesignRequested: true,
+				exposureAmount: null,
+				exposureDurationDays: null,
+				paymentMethod: null,
+			},
+			options
+		);
+
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.input.detailDesignRequested).toBe(false);
+		expect(result.ok && result.input.detailDesignAmount).toBeNull();
+	});
+
+	it("신청하지 않으면 금액이 남아 있어도 싣지 않는다", () => {
+		const result = validateJobForm(
+			{
+				...addonForm,
+				detailDesignAmount: 30_000,
+				detailDesignRequested: false,
+			},
+			options
+		);
+
+		expect(result.ok && result.input.detailDesignAmount).toBeNull();
+	});
+});
+
+describe("validateJobForm 끌어올리기 옵션", () => {
+	it("무료 공고에서 옵션을 고르면 결제수단을 요구한다", () => {
+		const result = validateJobForm(
+			{
+				...baseForm,
+				boostOptionPaymentMethod: null,
+				boostOptionTypes: ["manual_period"],
+			},
+			options
+		);
+
+		expect(result.ok).toBe(false);
+		expect(!result.ok && result.errors.boostOptionPaymentMethod).toBe(
+			"끌어올리기 옵션 결제수단을 선택해 주세요."
+		);
+	});
+
+	it("무료 공고 + 옵션 + 결제수단이면 둘 다 그대로 넘긴다", () => {
+		const result = validateJobForm(
+			{
+				...baseForm,
+				boostOptionPaymentMethod: "bank_transfer",
+				boostOptionTypes: ["manual_period", "manual_count"],
+			},
+			options
+		);
+
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.input.boostOptionPaymentMethod).toBe(
+			"bank_transfer"
+		);
+		expect(result.ok && result.input.boostOptionTypes).toEqual([
+			"manual_period",
+			"manual_count",
+		]);
+	});
+
+	it("옵션을 고르지 않으면 결제수단이 남아 있어도 싣지 않는다", () => {
+		const result = validateJobForm(
+			{
+				...baseForm,
+				boostOptionPaymentMethod: "bank_transfer",
+				boostOptionTypes: [],
+			},
+			options
+		);
+
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.input.boostOptionPaymentMethod).toBeUndefined();
+		expect(result.ok && result.input.boostOptionTypes).toEqual([]);
+	});
+
+	it("유료 공고는 공고 결제수단으로 결제하므로 옵션 결제수단을 싣지 않는다", () => {
+		const result = validateJobForm(
+			{
+				...baseForm,
+				adProductId: "premium-1",
+				boostOptionPaymentMethod: "card",
+				boostOptionTypes: ["auto_period"],
+				exposureAmount: 50_000,
+				exposureDurationDays: 30,
+				paymentMethod: "bank_transfer",
+			},
+			options
+		);
+
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.input.boostOptionPaymentMethod).toBeUndefined();
+		expect(result.ok && result.input.boostOptionTypes).toEqual(["auto_period"]);
+	});
+
+	it("이미 결제 대기·적용 중인 유형만 유지하면 결제수단을 요구하지 않는다", () => {
+		const result = validateJobForm(
+			{
+				...baseForm,
+				boostOptionPaymentMethod: null,
+				boostOptionTypes: ["manual_period"],
+			},
+			{ ...options, existingBoostOptionTypes: ["manual_period"] }
+		);
+
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.input.boostOptionTypes).toEqual([
+			"manual_period",
+		]);
+	});
+});

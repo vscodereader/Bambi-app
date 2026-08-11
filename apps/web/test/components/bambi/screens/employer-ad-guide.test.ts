@@ -59,4 +59,11 @@ describe("employer ad guide screen", () => {
 		// 헤더·행마다 폭이 달라지던 원인이던 auto_auto 트랙 조합이 없어야 한다
 		expect(source).not.toContain("_auto_auto]");
 	});
+
+	it("shows the detail-design add-on only for products that price it", () => {
+		// 가격이 설정된 상품 카드에만 안내 라인을 그린다(null이면 렌더 자체를 생략)
+		expect(source).toContain("product.detailDesignPrice === null ? null :");
+		expect(source).toContain("상세이미지 디자인 제작 +");
+		expect(source).toContain("formatAdPrice(product.detailDesignPrice)");
+	});
 });

@@ -7,6 +7,8 @@ import {
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobAdBannerLayout,
+	jobBoostOption,
+	jobBoostPurchase,
 	jobIndustryCategory,
 	jobPost,
 	jobPostMedia,
@@ -70,11 +72,23 @@ import { loadCrawledAdBannerPools } from "../../services/bambi-crawled-ad-banner
 import { readCrawledLimits } from "../../services/bambi-crawled-limits";
 import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import {
+	type BoostPurchaseLike,
+	isBoostPurchaseActive,
+} from "../../services/bambi-job-boost";
+import {
 	jobDescriptionBlockTypes,
 	normalizeJobDescriptionBlocks,
 	toPlainJobDescription,
 	validateJobDescriptionBlocks,
 } from "../../services/bambi-job-description-blocks";
+import {
+	type JobDetailDesignSnapshot,
+	type JobDetailDesignStatus,
+	type JobDetailDesignWrite,
+	keepOrClearJobDetailDesign,
+	resolveJobDetailDesign,
+	toJobDetailDesignWrite,
+} from "../../services/bambi-job-detail-design";
 import {
 	adHorizontalImageSql,
 	adVerticalImageSql,
@@ -111,6 +125,7 @@ import {
 	isOwnedJobPostMediaKey,
 } from "../../services/bambi-storage";
 import { deletePublicObjects } from "../../services/gcs";
+import { requirePurchasableBoostOption } from "./boost-options";
 
 const jobDescriptionBlockInput = z.object({
 	id: z.string().min(1).max(80),
@@ -143,6 +158,15 @@ const jobPostMediaSetInput = z
 // 업종은 DB enum(확정 8종)만 받는다 — 자유 문자열을 받으면 목록 밖 값이 저장 단계에서야
 // (DB 캐스팅 오류로) 터지므로 입력 검증에서 막는다.
 const industryCategorySchema = z.enum(jobIndustryCategory.enumValues);
+
+// 끌어올리기 추가 옵션 유형. boost-options.optionTypeSchema와 같은 값이며, 폼이 체크한
+// 유형 목록으로 넘어온다.
+const boostOptionTypeSchema = z.enum([
+	"manual_period",
+	"manual_count",
+	"auto_period",
+]);
+type BoostOptionType = z.infer<typeof boostOptionTypeSchema>;
 
 const jobPostInputShape = z.object({
 	organizationId: z.string().min(1),
@@ -177,11 +201,26 @@ const jobPostInputShape = z.object({
 	exposureDurationDays: z.number().int().min(1).max(365).nullish(),
 	adProductId: z.string().uuid().nullish(),
 	exposureAmount: z.number().int().min(0).nullish(),
+	// 상세이미지 디자인 제작 애드온 신청 여부. 키를 생략하면(undefined) 기존 상태를
+	// 그대로 둔다 — 운영자 편집(moderation.adminUpdateJobPost)이 이 값을 안 보내도
+	// 구인자가 신청해 둔 옵션이 조용히 해제되지 않게 하기 위해서다.
+	detailDesignRequested: z.boolean().optional(),
+	// 클라이언트가 화면에서 본 옵션 가격. exposureAmount와 같은 재확인용 값이고
+	// 저장 값이 아니다 — 저장되는 금액은 항상 서버가 상품에서 다시 읽는다.
+	detailDesignAmount: z.number().int().min(0).nullish(),
 	paymentMethod: z.enum(["card", "bank_transfer"]).nullish(),
 	// 프리미엄 배너 에디터가 만든 레이아웃(job_ad_banner_layout.layout). jsonb라 DB 제약이
 	// 없으므로 adBannerLayoutSchema가 유일한 방어선이다 — 트러스트 바운더리다.
 	// 키를 아예 생략하면 기존 레이아웃을 보존하고, 명시적 null이면 지운다.
 	adBannerLayout: adBannerLayoutSchema.nullish(),
+	// 끌어올리기 추가 옵션 신청 목록(폼에서 체크한 유형, 최대 3·중복 불가). 키를 생략하면
+	// (undefined) 기존 구매를 그대로 둔다 — 이 필드를 안 보내는 클라이언트(현 edit 폼·native)가
+	// 저장해도 구인자가 따로 구매해 둔 미결제 옵션이 조용히 취소되지 않게 하기 위해서다
+	// (detailDesignRequested가 optional인 이유와 같다). 빈 배열은 "전부 해제"다.
+	// 비컬럼 필드라 job_post 저장 spread에서 반드시 분리한다(아래 destructure).
+	boostOptionTypes: z.array(boostOptionTypeSchema).max(3).optional(),
+	// 무료 공고에서 옵션을 신청할 때의 결제수단. 유료 공고는 공고 결제수단을 그대로 쓴다.
+	boostOptionPaymentMethod: z.enum(["bank_transfer", "card"]).optional(),
 	media: jobPostMediaSetInput,
 });
 
@@ -191,16 +230,27 @@ const NEGOTIABLE_PAY_UNIT = "협의";
 
 // 단위와 금액의 짝을 강제한다 — 협의인데 금액이 붙거나, 금액 단위인데 금액이 빠지면
 // 목록에서 "협의 0원" 같은 잡음이 되고 최소 시급 필터도 어긋난다.
-export const jobPostInput = jobPostInputShape.refine(
-	(input) =>
-		input.payUnit === NEGOTIABLE_PAY_UNIT
-			? input.payAmount == null
-			: typeof input.payAmount === "number",
-	{
-		message: "급여 단위가 '협의'가 아니면 급여 금액이 필요합니다.",
-		path: ["payAmount"],
-	}
-);
+export const jobPostInput = jobPostInputShape
+	.refine(
+		(input) =>
+			input.payUnit === NEGOTIABLE_PAY_UNIT
+				? input.payAmount == null
+				: typeof input.payAmount === "number",
+		{
+			message: "급여 단위가 '협의'가 아니면 급여 금액이 필요합니다.",
+			path: ["payAmount"],
+		}
+	)
+	// 같은 옵션 유형을 두 번 신청하면 스냅샷 중복이 되므로 거부한다.
+	.refine(
+		(input) =>
+			new Set(input.boostOptionTypes ?? []).size ===
+			(input.boostOptionTypes ?? []).length,
+		{
+			message: "같은 끌어올리기 옵션을 중복 신청할 수 없습니다.",
+			path: ["boostOptionTypes"],
+		}
+	);
 
 const createMediaUploadInput = z.object({
 	organizationId: z.string().min(1),
@@ -578,6 +628,9 @@ interface ResolvedJobExposure {
 	adProductId: string | null;
 	// 구매 시점 스냅샷: 상품의 하루 자동 끌어올리기 횟수를 공고 컬럼으로 복사한다(수동과 동일 패턴).
 	autoBoostsPerDay: number;
+	// 확정된 상품의 상세이미지 디자인 제작 옵션 가격. null = 이 상품엔 옵션이 없다(무료 공고 포함).
+	// 애드온 판정이 상품 행을 다시 읽지 않도록 여기서 함께 돌려준다.
+	detailDesignPrice: number | null;
 	exposureAmount: number | null;
 	exposureDurationDays: number | null;
 	exposureType: JobExposureType;
@@ -604,6 +657,7 @@ export const resolveJobPostExposure = async (input: {
 			exposureType: "standard",
 			manualBoostsPerDay: 0,
 			autoBoostsPerDay: 0,
+			detailDesignPrice: null,
 			paymentMethod: null,
 		};
 	}
@@ -683,8 +737,189 @@ export const resolveJobPostExposure = async (input: {
 		exposureType,
 		manualBoostsPerDay: isBanner ? 0 : product.manualBoostsPerDay,
 		autoBoostsPerDay: isBanner ? 0 : product.autoBoostsPerDay,
+		detailDesignPrice: product.detailDesignPrice,
 		paymentMethod: input.paymentMethod ?? null,
 	};
+};
+
+// 애드온 스냅샷 확정. 판정 자체는 pure 헬퍼가 하고 여기서는 실패 코드 → ORPCError
+// 번역만 한다(가격 변동 문구는 노출 금액 재확인과 같은 패턴). 가격은 노출 확정이 이미
+// 읽어 둔 상품 행에서 온다 — 저장마다 상품을 두 번 읽지 않는다.
+const resolveJobDetailDesignSnapshot = ({
+	currentStatus,
+	expectedAmount,
+	productDetailDesignPrice,
+	requested,
+}: {
+	currentStatus: JobDetailDesignStatus | null;
+	expectedAmount?: null | number;
+	productDetailDesignPrice: null | number;
+	requested: boolean;
+}): JobDetailDesignSnapshot => {
+	const resolution = resolveJobDetailDesign({
+		currentStatus,
+		expectedAmount,
+		productDetailDesignPrice,
+		requested,
+	});
+
+	if (resolution.ok) {
+		return resolution.snapshot;
+	}
+
+	if (resolution.code === "amount_changed") {
+		throw new ORPCError("CONFLICT", {
+			message: `상세이미지 디자인 제작 가격이 ${resolution.expectedAmount.toLocaleString("ko-KR")}원에서 ${resolution.price.toLocaleString("ko-KR")}원으로 변경되었습니다. 변경된 가격을 확인한 뒤 다시 결제해 주세요.`,
+		});
+	}
+
+	if (resolution.code === "completed_locked") {
+		throw new ORPCError("BAD_REQUEST", {
+			message:
+				"이미 제작이 완료된 상세이미지 디자인은 신청을 해제할 수 없습니다. 운영자에게 문의해 주세요.",
+		});
+	}
+
+	throw new ORPCError("BAD_REQUEST", {
+		message:
+			"선택한 광고 상품에는 상세이미지 디자인 제작 옵션이 없습니다. 옵션이 제공되는 상품을 선택해 주세요.",
+	});
+};
+
+// 등록·수정 tx 안에서 공고의 끌어올리기 옵션 구매를 반영한다. 등록은 기존 구매가 없어 신청분을
+// 그대로 insert하고, 수정은 체크 해제(요청 목록에 없음)된 unpaid 구매를 delete한 뒤, 아직
+// unpaid·활성으로 잡혀 있지 않은 유형만 새로 산다. paid·활성 구매는 요청과 무관하게 불변이다.
+// 옵션 구매는 결제 전까지 unpaid(스키마 기본값)로 남으며, 이 unpaid는 공고 게시를 막지 않는다 —
+// 공고 paymentStatus는 호출부에서 이미 확정한다(무료 공고 즉시 게시 그대로).
+const syncBoostPurchases = async ({
+	actorUserId,
+	existing,
+	exposureType,
+	isPaidPosting,
+	jobPostId,
+	optionPaymentMethod,
+	organizationId,
+	postingPaymentMethod,
+	requestedTypes,
+	tx,
+}: {
+	actorUserId: string;
+	existing: BoostPurchaseLike[];
+	exposureType: string;
+	// 유료 노출상품 공고 여부. 결제수단 출처(공고 vs 옵션 전용)를 가른다.
+	isPaidPosting: boolean;
+	jobPostId: string;
+	optionPaymentMethod?: "bank_transfer" | "card";
+	organizationId: string;
+	postingPaymentMethod: "bank_transfer" | "card" | null;
+	requestedTypes: BoostOptionType[] | undefined;
+	tx: Parameters<Parameters<typeof db.transaction>[0]>[0];
+}): Promise<void> => {
+	const now = new Date();
+
+	// 배너형으로 확정된 공고엔 옵션을 팔지 않는다. 상품을 배너로 바꾼 수정에서 요청 목록이
+	// 그대로 넘어오면 "살 게 없다"고 판정돼 검증이 아예 돌지 않으므로, 요청과 무관하게 여기서
+	// 미결제 구매를 전량 지우고 신규 구매를 막는다 — 배너 공고에 영원히 못 쓰는 청구가 남지
+	// 않게 한다. 이미 입금된(paid) 구매는 임의로 지우지 않는다(환불은 운영자 몫).
+	if ((AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(exposureType)) {
+		await tx
+			.delete(jobBoostPurchase)
+			.where(
+				and(
+					eq(jobBoostPurchase.jobPostId, jobPostId),
+					eq(jobBoostPurchase.paymentStatus, "unpaid")
+				)
+			);
+
+		return;
+	}
+
+	// 키를 아예 안 보낸 저장은 옵션을 건드리지 않는다 — 이 필드를 모르는 클라이언트의 수정이
+	// 따로 구매해 둔 미결제 옵션을 조용히 취소하지 않게 한다(빈 배열은 "전부 해제"로 처리).
+	if (requestedTypes === undefined) {
+		return;
+	}
+
+	// 체크 해제된 unpaid 구매만 취소한다(=취소). paid·활성 구매는 폼이 체크 고정하므로 불변.
+	for (const purchase of existing) {
+		if (
+			purchase.paymentStatus === "unpaid" &&
+			!requestedTypes.includes(purchase.optionType as BoostOptionType)
+		) {
+			// unpaid 술어를 WHERE에 함께 건다 — 읽은 뒤 지우기 전에 운영자가 입금 확인(paid)
+			// 하면 이미 결제된 구매를 지우게 된다. 그 경우 0행 삭제로 조용히 유지된다.
+			await tx
+				.delete(jobBoostPurchase)
+				.where(
+					and(
+						eq(jobBoostPurchase.id, purchase.id),
+						eq(jobBoostPurchase.paymentStatus, "unpaid")
+					)
+				);
+		}
+	}
+
+	// 이미 unpaid·활성으로 잡혀 있는 유형은 그대로 두고, 새로 나타난 유형만 산다.
+	const typesToBuy = requestedTypes.filter(
+		(optionType) =>
+			!existing.some(
+				(p) =>
+					p.optionType === optionType &&
+					(p.paymentStatus === "unpaid" || isBoostPurchaseActive(p, now))
+			)
+	);
+
+	if (typesToBuy.length === 0) {
+		return;
+	}
+
+	// 유료 공고는 공고 결제수단을, 무료 공고는 옵션 전용 결제수단을 쓴다(무료인데 없으면 거부).
+	let paymentMethod: "bank_transfer" | "card" | null;
+	if (isPaidPosting) {
+		paymentMethod = postingPaymentMethod;
+	} else {
+		if (!optionPaymentMethod) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: "결제수단을 선택해 주세요.",
+			});
+		}
+		paymentMethod = optionPaymentMethod;
+	}
+
+	const catalog = await tx
+		.select({
+			boostCount: jobBoostOption.boostCount,
+			boostsPerDay: jobBoostOption.boostsPerDay,
+			durationDays: jobBoostOption.durationDays,
+			optionType: jobBoostOption.optionType,
+			price: jobBoostOption.price,
+		})
+		.from(jobBoostOption)
+		.where(inArray(jobBoostOption.optionType, typesToBuy));
+	const catalogByType = new Map(catalog.map((row) => [row.optionType, row]));
+
+	for (const optionType of typesToBuy) {
+		// 판매 중·배너형·중복 검증(purchaseOption과 동일 규칙)을 통과한 확정 옵션만 스냅샷한다.
+		const option = requirePurchasableBoostOption({
+			existingSameType: existing.filter((p) => p.optionType === optionType),
+			exposureType,
+			now,
+			option: catalogByType.get(optionType),
+			optionType,
+		});
+
+		await tx.insert(jobBoostPurchase).values({
+			amount: option.price,
+			boostCount: option.boostCount,
+			boostsPerDay: option.boostsPerDay,
+			buyerUserId: actorUserId,
+			durationDays: option.durationDays,
+			jobPostId,
+			optionType,
+			organizationId,
+			paymentMethod,
+		});
+	}
 };
 
 // jobs.update와 운영자 편집(moderation.adminUpdateJobPost)이 공유하는 갱신·노출확정 로직.
@@ -706,10 +941,17 @@ export const applyJobPostUpdate = async ({
 	existing: typeof jobPost.$inferSelect;
 	moderatorEdit?: boolean;
 }) => {
-	// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다.
+	// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다. 애드온 두 필드도 뺀다 —
+	// detailDesignRequested는 컬럼이 아니고, detailDesignAmount는 "클라이언트가 본 가격"이라
+	// 그대로 흘려보내면 저장 금액이 클라이언트 입력으로 덮인다. 끌어올리기 옵션 두 필드도
+	// job_post 컬럼이 아니라 별도 테이블(jobBoostPurchase) 몫이라 spread에서 분리한다.
 	const {
 		adBannerLayout: _adBannerLayout,
+		boostOptionPaymentMethod: _boostOptionPaymentMethod,
+		boostOptionTypes: _boostOptionTypes,
 		descriptionBlocks: _descriptionBlocks,
+		detailDesignAmount: _detailDesignAmount,
+		detailDesignRequested: _detailDesignRequested,
 		media,
 		...jobInput
 	} = data;
@@ -748,6 +990,39 @@ export const applyJobPostUpdate = async ({
 		expectedExposureAmount: data.exposureAmount,
 		paymentMethod: data.paymentMethod,
 	});
+	// db enum(job_detail_design_status)과 pure 헬퍼의 상태 상수 대조. pure 모듈은 import 0
+	// 제약이라 스스로 db와 맞는지 확인할 수 없어, 값이 실제로 흐르는 여기서 satisfies로 건다.
+	const currentDetailDesignStatus =
+		existing.detailDesignStatus satisfies JobDetailDesignStatus | null;
+	// 운영자 편집은 애드온을 완전히 동결한다 — 결제 축(결제 상태·노출 종료일)을 건드리지 않는
+	// 모드라, 여기서 금액을 바꾸면 총액만 오르고 결제 상태는 paid로 남는 어긋남이 생긴다.
+	// 금액 키가 없는 객체라 drizzle이 detail_design_amount 컬럼을 건너뛴다.
+	let detailDesign: JobDetailDesignWrite = {
+		detailDesignStatus: currentDetailDesignStatus,
+	};
+
+	if (!moderatorEdit) {
+		detailDesign =
+			data.detailDesignRequested === undefined
+				? // 신청 여부를 안 보낸 저장이라도 상품은 바뀔 수 있다. 새 상품에 옵션이 없으면
+					// 스냅샷을 정리해야 유령 금액이 남지 않는다(completed는 보존 — 헬퍼 주석 참고).
+					keepOrClearJobDetailDesign({
+						currentStatus: currentDetailDesignStatus,
+						productOffersDetailDesign: exposure.detailDesignPrice !== null,
+					})
+				: // completed 건이면 헬퍼가 돌려준 (새 상품가 기준) 금액을 의도적으로 버리고
+					// 구매 시점 스냅샷을 남긴다 — toJobDetailDesignWrite가 금액 키를 뺀다.
+					toJobDetailDesignWrite({
+						currentStatus: currentDetailDesignStatus,
+						snapshot: resolveJobDetailDesignSnapshot({
+							currentStatus: currentDetailDesignStatus,
+							// 노출 금액과 같은 재확인 값. 안 넘기면 가격 변동 가드가 조용히 꺼진다.
+							expectedAmount: data.detailDesignAmount,
+							productDetailDesignPrice: exposure.detailDesignPrice,
+							requested: data.detailDesignRequested,
+						}),
+					});
+	}
 	const layoutWrite = normalizeAdBannerLayout(data, exposure.exposureType);
 	// 최종 저장될 레이아웃. 검수(금칙어)와 배너 이미지 필수 판정이 같은 값을 봐야 한다.
 	const finalLayout = await resolveModeratedLayout(layoutWrite, existing.id);
@@ -760,12 +1035,19 @@ export const applyJobPostUpdate = async ({
 		!moderatorEdit &&
 		(exposure.adProductId !== existing.adProductId ||
 			exposure.exposureDurationDays !== existing.exposureDurationDays);
+	// 옵션을 켜거나 끄면(또는 가격이 달라지면) 결제 총액이 바뀌므로 노출 변경과 동일하게
+	// 미결제로 되돌린다. 금액 키가 없으면 컬럼을 안 건드리는 저장이라 총액도 그대로다.
+	const detailDesignChanged =
+		!moderatorEdit &&
+		detailDesign.detailDesignAmount !== undefined &&
+		detailDesign.detailDesignAmount !== existing.detailDesignAmount;
 	const changedPaymentStatus = exposure.adProductId
 		? ("unpaid" as const)
 		: ("paid" as const);
-	const nextPaymentStatus = exposureChanged
-		? changedPaymentStatus
-		: existing.paymentStatus;
+	const nextPaymentStatus =
+		exposureChanged || detailDesignChanged
+			? changedPaymentStatus
+			: existing.paymentStatus;
 	const nextExposureEndsAt = exposureChanged ? null : existing.exposureEndsAt;
 	const mediaRows = media
 		? requireValidJobPostMediaSet({
@@ -812,6 +1094,9 @@ export const applyJobPostUpdate = async ({
 				exposureType: exposure.exposureType,
 				exposureDurationDays: exposure.exposureDurationDays,
 				exposureAmount: exposure.exposureAmount,
+				// 스프레드로 넣는다: 금액을 보존해야 하는 경우(완료 건·운영자 편집·키 미전달)
+				// detailDesignAmount 키 자체가 없어 drizzle이 그 컬럼을 건너뛴다.
+				...detailDesign,
 				manualBoostsPerDay: exposure.manualBoostsPerDay,
 				autoBoostsPerDay: exposure.autoBoostsPerDay,
 				paymentMethod: exposure.paymentMethod,
@@ -831,6 +1116,35 @@ export const applyJobPostUpdate = async ({
 		}
 
 		await writeAdBannerLayout(tx, updated.id, layoutWrite);
+
+		// 운영자 편집은 애드온과 마찬가지로 끌어올리기 옵션도 완전 동결한다(input 무시).
+		if (!moderatorEdit) {
+			const existingBoostPurchases = await tx
+				.select({
+					boostsPerDay: jobBoostPurchase.boostsPerDay,
+					createdAt: jobBoostPurchase.createdAt,
+					expiresAt: jobBoostPurchase.expiresAt,
+					id: jobBoostPurchase.id,
+					optionType: jobBoostPurchase.optionType,
+					paymentStatus: jobBoostPurchase.paymentStatus,
+					remainingCount: jobBoostPurchase.remainingCount,
+				})
+				.from(jobBoostPurchase)
+				.where(eq(jobBoostPurchase.jobPostId, existing.id));
+
+			await syncBoostPurchases({
+				actorUserId,
+				existing: existingBoostPurchases,
+				exposureType: exposure.exposureType,
+				isPaidPosting: exposure.adProductId !== null,
+				jobPostId: updated.id,
+				optionPaymentMethod: data.boostOptionPaymentMethod,
+				organizationId: existing.organizationId,
+				postingPaymentMethod: exposure.paymentMethod,
+				requestedTypes: data.boostOptionTypes,
+				tx,
+			});
+		}
 
 		if (mediaRows) {
 			await tx
@@ -1564,6 +1878,7 @@ export const jobsRouter = {
 				teamId: jobPost.teamId,
 				createdByUserId: jobPost.createdByUserId,
 				exposureType: jobPost.exposureType,
+				detailDesignStatus: jobPost.detailDesignStatus,
 				paymentStatus: jobPost.paymentStatus,
 				exposureDurationDays: jobPost.exposureDurationDays,
 				exposureEndsAt: jobPost.exposureEndsAt,
@@ -1605,6 +1920,20 @@ export const jobsRouter = {
 			return {
 				...post,
 				adBannerLayout: await getStoredAdBannerLayout(post.id),
+				// 신청된 끌어올리기 옵션 전체(createdAt 순). 폼이 paid·활성 구매를 체크 고정하고,
+				// unpaid 구매를 토글 가능하게 표시하는 데 쓴다.
+				boostPurchases: await db
+					.select({
+						amount: jobBoostPurchase.amount,
+						expiresAt: jobBoostPurchase.expiresAt,
+						id: jobBoostPurchase.id,
+						optionType: jobBoostPurchase.optionType,
+						paymentStatus: jobBoostPurchase.paymentStatus,
+						remainingCount: jobBoostPurchase.remainingCount,
+					})
+					.from(jobBoostPurchase)
+					.where(eq(jobBoostPurchase.jobPostId, post.id))
+					.orderBy(asc(jobBoostPurchase.createdAt)),
 				media: await getJobPostMediaSet(post.id),
 			};
 		}),
@@ -1637,10 +1966,17 @@ export const jobsRouter = {
 	create: protectedProcedure
 		.input(jobPostInput)
 		.handler(async ({ context, input }) => {
-			// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다.
+			// 레이아웃은 별도 테이블이라 job_post 컬럼 spread에서 빼 둔다. 애드온 두 필드도 뺀다 —
+			// detailDesignRequested는 컬럼이 아니고, detailDesignAmount는 "클라이언트가 본 가격"이라
+			// 그대로 흘려보내면 저장 금액이 클라이언트 입력으로 덮인다. 끌어올리기 옵션 두 필드도
+			// job_post 컬럼이 아니라 별도 테이블(jobBoostPurchase) 몫이라 spread에서 분리한다.
 			const {
 				adBannerLayout: _adBannerLayout,
+				boostOptionPaymentMethod: _boostOptionPaymentMethod,
+				boostOptionTypes: _boostOptionTypes,
 				descriptionBlocks: _descriptionBlocks,
+				detailDesignAmount: _detailDesignAmount,
+				detailDesignRequested: _detailDesignRequested,
 				media,
 				...jobInput
 			} = input;
@@ -1684,6 +2020,14 @@ export const jobsRouter = {
 				expectedExposureAmount: input.exposureAmount,
 				paymentMethod: input.paymentMethod,
 			});
+			// 신규 등록이라 기존 상태가 없다(currentStatus: null) — 보존 분기도 필요 없다.
+			const detailDesign = resolveJobDetailDesignSnapshot({
+				currentStatus: null,
+				// 노출 금액과 같은 재확인 값. 안 넘기면 가격 변동 가드가 조용히 꺼진다.
+				expectedAmount: input.detailDesignAmount,
+				productDetailDesignPrice: exposure.detailDesignPrice,
+				requested: input.detailDesignRequested ?? false,
+			});
 			const layoutWrite = normalizeAdBannerLayout(input, exposure.exposureType);
 			// 최종 저장될 레이아웃. 검수(금칙어)와 배너 이미지 필수 판정이 같은 값을 봐야 한다.
 			const finalLayout = await resolveModeratedLayout(layoutWrite, null);
@@ -1717,6 +2061,8 @@ export const jobsRouter = {
 						exposureType: exposure.exposureType,
 						exposureDurationDays: exposure.exposureDurationDays,
 						exposureAmount: exposure.exposureAmount,
+						detailDesignAmount: detailDesign.detailDesignAmount,
+						detailDesignStatus: detailDesign.detailDesignStatus,
 						manualBoostsPerDay: exposure.manualBoostsPerDay,
 						autoBoostsPerDay: exposure.autoBoostsPerDay,
 						paymentMethod: exposure.paymentMethod,
@@ -1734,6 +2080,21 @@ export const jobsRouter = {
 				}
 
 				await writeAdBannerLayout(tx, created.id, layoutWrite);
+
+				// 공고 insert와 같은 tx에서 신청된 끌어올리기 옵션을 구매(unpaid) 처리한다.
+				// 신규 공고라 기존 구매가 없어 신청분을 그대로 insert한다.
+				await syncBoostPurchases({
+					actorUserId: actor.userId,
+					existing: [],
+					exposureType: exposure.exposureType,
+					isPaidPosting: exposure.adProductId !== null,
+					jobPostId: created.id,
+					optionPaymentMethod: input.boostOptionPaymentMethod,
+					organizationId: input.organizationId,
+					postingPaymentMethod: exposure.paymentMethod,
+					requestedTypes: input.boostOptionTypes,
+					tx,
+				});
 
 				const insertedMedia =
 					mediaRows.length > 0
