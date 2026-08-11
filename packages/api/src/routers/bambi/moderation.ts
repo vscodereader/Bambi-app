@@ -65,6 +65,7 @@ import {
 	validateJobPostImageUpload,
 	validateJobPostMediaSet,
 } from "../../services/bambi-job-media-policy";
+import { resolveListingPaymentExposure } from "../../services/bambi-listing-promotion";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
 import {
@@ -72,7 +73,11 @@ import {
 	notifyModerationAction,
 } from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
-import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
+import {
+	assertPremiumApprovalWithinCapacity,
+	getListingQueuePositions,
+	queuedListingWhere,
+} from "../../services/bambi-premium-capacity";
 import {
 	createJobPostMediaUploadIntent,
 	getBusinessDocumentObjectUrl,
@@ -218,6 +223,12 @@ const adjustJobPostExposureInput = z.object({
 		.min(-365)
 		.max(365)
 		.refine((value) => value !== 0, { message: "조정할 일수를 입력하세요." }),
+	reason: z.string().min(2).max(500),
+});
+
+// 대기 중인 스페셜/추천 리스팅을 대기열에서 뺀다(결제 취소). 활성/비리스팅엔 쓰지 않는다.
+const removeFromListingQueueInput = z.object({
+	jobPostId: z.string().uuid(),
 	reason: z.string().min(2).max(500),
 });
 
@@ -1169,6 +1180,28 @@ const acceptTeamInvitation = async (
 	return updated;
 };
 
+// 대기열(결제완료·미활성) 리스팅을 섹션별로 뽑아 FIFO(listing_paid_at asc, 동률 id asc) 순번을
+// 부착한다. position은 배열 순번(1-based) — getListingQueuePositions의 섹션별 순번과 같은 규칙.
+// 대기 판정은 queuedListingWhere 단일 소스만 쓴다(재발명 금지).
+const listListingQueueSection = async (type: "recommended" | "special") => {
+	const rows = await db
+		.select({
+			id: jobPost.id,
+			listingPaidAt: jobPost.listingPaidAt,
+			organizationDisplayName: employerOrganizationProfile.displayName,
+			title: jobPost.title,
+		})
+		.from(jobPost)
+		.innerJoin(
+			employerOrganizationProfile,
+			eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+		)
+		.where(queuedListingWhere(type))
+		.orderBy(asc(jobPost.listingPaidAt), asc(jobPost.id));
+
+	return rows.map((row, index) => ({ ...row, position: index + 1 }));
+};
+
 export const moderationRouter = {
 	createReport: protectedProcedure
 		.input(createReportInput)
@@ -1358,11 +1391,17 @@ export const moderationRouter = {
 				.orderBy(desc(jobPost.updatedAt))
 				.limit(input.limit);
 
-			if (input.status) {
-				return await query.where(eq(jobPost.status, input.status));
-			}
+			const rows = input.status
+				? await query.where(eq(jobPost.status, input.status))
+				: await query;
 
-			return await query;
+			// 대기 공고는 상태 배지 대신 "스페셜/추천 #N"으로 표기하므로 FIFO 순번을 요청당 1회만
+			// 뽑아 부착한다(대기 행이 아니면 null).
+			const positions = await getListingQueuePositions(db);
+			return rows.map((row) => ({
+				...row,
+				listingQueuePosition: positions.get(row.id)?.position ?? null,
+			}));
 		}),
 
 	// 운영자 편집 화면 프리필용. getEditableById(jobs)는 조직 멤버십을 요구해 운영자가
@@ -1943,16 +1982,23 @@ export const moderationRouter = {
 					now: new Date(),
 				});
 
-				const exposureEndsAt =
-					input.paymentStatus === "paid" &&
-					existing.exposureDurationDays !== null
-						? new Date(Date.now() + existing.exposureDurationDays * MS_PER_DAY)
-						: null;
+				// 스페셜/추천 리스팅은 승인 게이트 대신 FIFO 유료 대기열을 탄다 — 정원이 차 있으면
+				// 결제는 성공하되 exposureEndsAt=null로 대기(노출 시계 미시작), 자리가 나면 틱이 승격한다.
+				// 정원 내면 즉시 활성화(now+기간). 그 외(배너·비리스팅)는 기존 규칙 그대로.
+				const { exposureEndsAt, listingPaidAt } =
+					await resolveListingPaymentExposure({
+						executor: tx,
+						exposureType: existing.exposureType,
+						exposureDurationDays: existing.exposureDurationDays,
+						newPaymentStatus: input.paymentStatus,
+						now: new Date(),
+					});
 
 				const [row] = await tx
 					.update(jobPost)
 					.set({
 						exposureEndsAt,
+						listingPaidAt,
 						paymentStatus: input.paymentStatus,
 					})
 					.where(eq(jobPost.id, input.jobPostId))
@@ -2271,6 +2317,100 @@ export const moderationRouter = {
 			return updated;
 		}),
 
+	// 대기 중(paid·미노출)인 스페셜/추천 리스팅을 대기열에서 뺀다 — 결제를 unpaid로 되돌리고
+	// listingPaidAt(FIFO 키)·exposureEndsAt을 비운다. 이미 활성(노출 중)이거나 비리스팅·미결제
+	// 공고는 대상이 아니라 BAD_REQUEST로 막는다. adjustJobPostExposure와 같은 흐름.
+	removeFromListingQueue: adminProcedure
+		.input(removeFromListingQueueInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const { organizationId, updated } = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({
+						exposureEndsAt: jobPost.exposureEndsAt,
+						exposureType: jobPost.exposureType,
+						organizationId: jobPost.organizationId,
+						paymentStatus: jobPost.paymentStatus,
+					})
+					.from(jobPost)
+					.where(eq(jobPost.id, input.jobPostId))
+					.limit(1);
+
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				// 대기열 정의: paid + 리스팅 종류 + exposureEndsAt IS NULL(노출 시계 미시작).
+				const isQueuedListing =
+					existing.paymentStatus === "paid" &&
+					(existing.exposureType === "special" ||
+						existing.exposureType === "recommended") &&
+					existing.exposureEndsAt === null;
+				if (!isQueuedListing) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "대기열에 있는 리스팅 공고만 대기열에서 뺄 수 있어요.",
+					});
+				}
+
+				const [row] = await tx
+					.update(jobPost)
+					.set({
+						exposureEndsAt: null,
+						listingPaidAt: null,
+						paymentStatus: "unpaid",
+					})
+					.where(eq(jobPost.id, input.jobPostId))
+					.returning();
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx.insert(adminModerationAction).values({
+					action: "remove_from_listing_queue",
+					adminUserId: admin.userId,
+					metadata: { previousExposureType: existing.exposureType },
+					reason: input.reason,
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+
+				return { organizationId: existing.organizationId, updated: row };
+			});
+
+			// 대기열에서 빠지면 미결제로 돌아가 공개 게이트(published AND paid)를 벗어나므로
+			// 해당 조직의 수다방 광고 자격 캐시를 재동기화한다(setJobPostPayment와 동일 이유).
+			await syncAdvertiserFlagForOrganization({
+				now: new Date(),
+				organizationId,
+			});
+
+			await notifyModerationAction({
+				action: "remove_from_listing_queue",
+				actorUserId: admin.userId,
+				metadata: { jobPostTitle: updated.title },
+				reason: input.reason,
+				targetId: input.jobPostId,
+				targetType: "job_post",
+			});
+
+			return updated;
+		}),
+
+	// 운영자 정원 카드용 섹션별 대기열 목록(스페셜/추천). 대기 판정은 queuedListingWhere 단일
+	// 소스, 순번은 FIFO(listing_paid_at asc). 가드·프로시저 종류는 removeFromListingQueue와 동일.
+	listListingQueues: adminProcedure.handler(async ({ context }) => {
+		await requireAdminProfile(context.session);
+
+		const [recommended, special] = await Promise.all([
+			listListingQueueSection("recommended"),
+			listListingQueueSection("special"),
+		]);
+
+		return { recommended, special };
+	}),
+
 	// 결제 처리가 의미있는 공고 목록(초안 제외: pending_review·published).
 	// 인증 업체 공고는 검수 큐 없이 자동 published라 여기서 결제를 처리한다.
 	listJobsForPayment: protectedProcedure
@@ -2293,7 +2433,7 @@ export const moderationRouter = {
 				conditions.push(isNotNull(jobPost.detailDesignStatus));
 			}
 
-			return await db
+			const rows = await db
 				.select({
 					id: jobPost.id,
 					title: jobPost.title,
@@ -2316,6 +2456,13 @@ export const moderationRouter = {
 				.where(and(...conditions))
 				.orderBy(desc(jobPost.createdAt))
 				.limit(input.limit);
+
+			// 결제관리 목록도 대기 공고에 FIFO 순번을 보여주므로 요청당 1회 뽑아 부착한다.
+			const positions = await getListingQueuePositions(db);
+			return rows.map((row) => ({
+				...row,
+				listingQueuePosition: positions.get(row.id)?.position ?? null,
+			}));
 		}),
 
 	bulkSetJobPostStatus: protectedProcedure
@@ -2440,18 +2587,23 @@ export const moderationRouter = {
 								now: new Date(),
 							});
 
-							const exposureEndsAt =
-								input.paymentStatus === "paid" &&
-								existing.exposureDurationDays !== null
-									? new Date(
-											Date.now() + existing.exposureDurationDays * MS_PER_DAY
-										)
-									: null;
+							// 스페셜/추천 리스팅은 승인 게이트 없이 FIFO 대기열을 탄다 — 정원 내 항목은
+							// 즉시 활성화되고, 같은 트랜잭션의 앞선 활성화가 뒤 항목의 active 카운트에
+							// 보이므로 처리 순서대로 자리를 채운다. 정원이 차면 대기(exposureEndsAt=null).
+							const { exposureEndsAt, listingPaidAt } =
+								await resolveListingPaymentExposure({
+									executor: tx,
+									exposureType: existing.exposureType,
+									exposureDurationDays: existing.exposureDurationDays,
+									newPaymentStatus: input.paymentStatus,
+									now: new Date(),
+								});
 
 							await tx
 								.update(jobPost)
 								.set({
 									exposureEndsAt,
+									listingPaidAt,
 									paymentStatus: input.paymentStatus,
 								})
 								.where(eq(jobPost.id, jobPostId));

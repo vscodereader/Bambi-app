@@ -3,7 +3,9 @@ import {
 	expiryLabel,
 	getExpiryTone,
 	getJobDisplayStatus,
+	isQueuedListing,
 	JOB_DETAIL_DESIGN_STATUS_LABELS,
+	listingQueueBadgeLabel,
 	remainingDays,
 } from "@/lib/bambi/exposure";
 
@@ -76,6 +78,77 @@ describe("JOB_DETAIL_DESIGN_STATUS_LABELS", () => {
 			"completed",
 			"requested",
 		]);
+	});
+});
+
+describe("isQueuedListing", () => {
+	it("결제된 스페셜 공고가 미노출(exposureEndsAt null)이면 대기로 판정한다", () => {
+		expect(
+			isQueuedListing({
+				exposureEndsAt: null,
+				exposureType: "special",
+				paymentStatus: "paid",
+				status: "published",
+			})
+		).toBe(true);
+	});
+
+	it("급구는 대기열 대상이 아니므로 exposureEndsAt이 null이어도 false", () => {
+		expect(
+			isQueuedListing({
+				exposureEndsAt: null,
+				exposureType: "urgent",
+				paymentStatus: "paid",
+				status: "published",
+			})
+		).toBe(false);
+	});
+
+	it("미결제면 false", () => {
+		expect(
+			isQueuedListing({
+				exposureEndsAt: null,
+				exposureType: "special",
+				paymentStatus: "unpaid",
+				status: "published",
+			})
+		).toBe(false);
+	});
+
+	it("이미 노출중(미래 exposureEndsAt)이면 false", () => {
+		expect(
+			isQueuedListing({
+				exposureEndsAt: daysFromNow(5),
+				exposureType: "recommended",
+				paymentStatus: "paid",
+				status: "published",
+			})
+		).toBe(false);
+	});
+
+	it("검수 대기 상태면 false", () => {
+		expect(
+			isQueuedListing({
+				exposureEndsAt: null,
+				exposureType: "special",
+				paymentStatus: "paid",
+				status: "pending_review",
+			})
+		).toBe(false);
+	});
+});
+
+describe("listingQueueBadgeLabel", () => {
+	it("순번이 있으면 '스페셜 #3' 꼴", () => {
+		expect(listingQueueBadgeLabel("special", 3)).toBe("스페셜 #3");
+	});
+
+	it("순번이 null이면 '추천 대기'", () => {
+		expect(listingQueueBadgeLabel("recommended", null)).toBe("추천 대기");
+	});
+
+	it("대기열 대상이 아닌 타입은 원값 없이 '대기'로 방어한다", () => {
+		expect(listingQueueBadgeLabel("urgent", 2)).toBe("대기");
 	});
 });
 

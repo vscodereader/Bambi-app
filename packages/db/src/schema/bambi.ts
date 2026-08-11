@@ -901,6 +901,10 @@ export const jobPost = pgTable(
 		// 서버 틱 스케줄러가 09~21시 KST 창을 이 횟수로 균등 분배해 자동 발동한다.
 		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
 		publishedAt: timestamp("published_at"),
+		// 리스팅(스페셜/추천) 공고가 결제완료된 시각. 만석이면 결제 후에도 노출되지 않고
+		// 대기열에 들어가는데, 이 값이 FIFO 대기 순번의 키다(먼저 결제된 광고가 먼저 자리를 차지).
+		// 활성 여부는 exposureEndsAt로 구분한다(null=대기중). null=미결제/비리스팅.
+		listingPaidAt: timestamp("listing_paid_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -1182,6 +1186,11 @@ export const adProduct = pgTable(
 		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
 		// 이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는 횟수(구매 시 공고로 스냅샷). 0 = 미제공.
 		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
+		// 이 상품을 구매한 공고의 수동 끌어올리기 최소 간격(분). 하루 한도와 별개로 연타를 막아
+		// 리스트 품질을 지킨다. 정책 노브라 라이브 참조(운영자 변경 즉시 반영), 기본 10분.
+		manualBoostCooldownMinutes: integer("manual_boost_cooldown_minutes")
+			.default(10)
+			.notNull(),
 		// 이 상품을 살 때 함께 신청할 수 있는 "상세이미지 디자인 제작" 애드온 가격.
 		// null = 이 상품엔 옵션 미제공(구인자 화면에서 체크박스 자체가 안 보인다).
 		detailDesignPrice: integer("detail_design_price"),
@@ -1297,6 +1306,19 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 광고 배너 로테이션 주기(분). 운영자 사이트 설정에서 편집한다. 활성 광고 칸이 이 주기마다
 	// 한 칸씩 전진한다. null이면 코드 기본값(DEFAULT_AD_ROTATION_MINUTES=60)으로 폴백한다.
 	adBannerRotationMinutes: integer("ad_banner_rotation_minutes"),
+	// 급구 채용 섹션 숨김. 코드에서 섹션을 지우지 않고 운영자 토글로 뺀 값 — 기본 true라
+	// 마이그레이션 직후 즉시 숨겨지고(기존 단일 행에도 채워짐), 운영자가 끄면(false) 다시 노출된다.
+	urgentSectionHidden: boolean("urgent_section_hidden").default(true).notNull(),
+	// 스페셜 리스팅 광고의 정원 = 렌더 슬롯 수(고정 인벤토리, 로테이션 없음). 자리가 차면 신규
+	// 승인은 대기열로 밀린다. null이면 코드 기본값(DEFAULT_SPECIAL_CAPACITY=12)으로 폴백한다.
+	specialCapacity: integer("special_capacity"),
+	// 추천 리스팅 광고의 정원 = 렌더 슬롯 수. 위 스페셜과 동일 규칙이며 null이면 코드 기본값
+	// (DEFAULT_RECOMMENDED_CAPACITY=20)으로 폴백한다.
+	recommendedCapacity: integer("recommended_capacity"),
+	// 베스트글(추천수 큐레이션 가상 게시판) 아이콘의 lucide 이름. 베스트는 community_board 행이
+	// 없는 가상 게시판이라 게시판 아이콘 컬럼 대신 여기 저장한다. null이면 미지정(기존 코럴
+	// 액센트 바 유지) — 값 검증은 API 쪽 COMMUNITY_BOARD_ICONS enum(zod)이 맡는다.
+	bestBoardIcon: text("best_board_icon"),
 	// 개인정보 처리방침에 노출하는 위탁사·관리부서 연락처. 운영자 사이트 설정에서 편집한다.
 	// null이면 프론트가 코드 폴백(BAMBI_PROCESSORS 이름 / BAMBI_COMPANY.privacyOfficer)을 쓴다.
 	privacyPaymentProcessor: text("privacy_payment_processor"),

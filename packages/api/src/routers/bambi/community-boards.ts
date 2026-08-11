@@ -1,5 +1,9 @@
 import { db } from "@bambi-app/db";
-import { communityBoard, communityPost } from "@bambi-app/db/schema/bambi";
+import {
+	bambiSiteSettings,
+	communityBoard,
+	communityPost,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import { asc, eq, max } from "drizzle-orm";
 import z from "zod";
@@ -77,6 +81,13 @@ const updateBoardInput = boardKeyInput
 
 const setBoardActiveInput = boardKeyInput.extend({ isActive: z.boolean() });
 
+// 베스트글(가상 게시판) 전용. null은 아이콘 해제(기존 코럴 액센트 바로 복귀)다.
+const updateBestBoardIconInput = z.object({ icon: boardIconSchema.nullable() });
+
+// site_settings 단일 행 고정 키. site-settings.ts의 SETTINGS_ROW_ID와 동일 규약이며,
+// 베스트 아이콘도 그 행의 컬럼 하나라 여기서만 별도로 상수를 둔다.
+const SETTINGS_ROW_ID = "default";
+
 const BOARD_NOT_FOUND = "게시판을 찾을 수 없습니다.";
 
 // 운영자가 코드 배포 없이 수다방 게시판을 늘리고 감추는 라우터. 삭제(remove)는 글이 하나도
@@ -84,22 +95,32 @@ const BOARD_NOT_FOUND = "게시판을 찾을 수 없습니다.";
 // 사라지므로 숨김(setActive(false))으로 안내한다.
 export const communityBoardsRouter = {
 	// 화면(목록·글쓰기·홈)이 소비하는 게시판 목록. 비로그인도 게시판 이름은 볼 수 있다
-	// (글 열람 자격은 community 라우터가 따로 본다).
-	listActive: publicProcedure.handler(async () =>
-		db
-			.select({
-				description: communityBoard.description,
-				icon: communityBoard.icon,
-				isWritable: communityBoard.isWritable,
-				key: communityBoard.key,
-				label: communityBoard.label,
-				slug: communityBoard.slug,
-				sortOrder: communityBoard.sortOrder,
-			})
-			.from(communityBoard)
-			.where(eq(communityBoard.isActive, true))
-			.orderBy(asc(communityBoard.sortOrder))
-	),
+	// (글 열람 자격은 community 라우터가 따로 본다). 베스트글은 DB 행이 없는 가상 게시판이라
+	// 아이콘이 site_settings에 있는데, 화면(toBoardMetas)이 best를 선두에 얹으므로 그 아이콘도
+	// 여기서 함께 내려준다 — 목록·상세 헤더가 홈 미리보기(overview)와 같은 아이콘을 보게 한다.
+	listActive: publicProcedure.handler(async () => {
+		const [boards, [settingsRow]] = await Promise.all([
+			db
+				.select({
+					description: communityBoard.description,
+					icon: communityBoard.icon,
+					isWritable: communityBoard.isWritable,
+					key: communityBoard.key,
+					label: communityBoard.label,
+					slug: communityBoard.slug,
+					sortOrder: communityBoard.sortOrder,
+				})
+				.from(communityBoard)
+				.where(eq(communityBoard.isActive, true))
+				.orderBy(asc(communityBoard.sortOrder)),
+			db
+				.select({ icon: bambiSiteSettings.bestBoardIcon })
+				.from(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+				.limit(1),
+		]);
+		return { bestIcon: settingsRow?.icon ?? null, boards };
+	}),
 
 	list: adminProcedure.handler(async () =>
 		db.select().from(communityBoard).orderBy(asc(communityBoard.sortOrder))
@@ -225,5 +246,32 @@ export const communityBoardsRouter = {
 			}
 
 			return updated;
+		}),
+
+	// 베스트글은 community_board 행이 없는 가상 게시판이라 위 CRUD로 다룰 수 없다.
+	// 아이콘은 site_settings 단일 행에 저장하고, 운영자 게시판 관리 화면이 이 조회로
+	// 현재값을 읽는다.
+	getBestBoardIcon: adminProcedure.handler(async () => {
+		const [row] = await db
+			.select({ icon: bambiSiteSettings.bestBoardIcon })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+		return { icon: row?.icon ?? null };
+	}),
+
+	// 운영자 전용 저장. site_settings 단일 행을 upsert 하되 베스트 아이콘 컬럼만 갱신한다.
+	updateBestBoardIcon: adminProcedure
+		.input(updateBestBoardIconInput)
+		.handler(async ({ input }) => {
+			const [saved] = await db
+				.insert(bambiSiteSettings)
+				.values({ bestBoardIcon: input.icon, id: SETTINGS_ROW_ID })
+				.onConflictDoUpdate({
+					set: { bestBoardIcon: input.icon },
+					target: bambiSiteSettings.id,
+				})
+				.returning({ icon: bambiSiteSettings.bestBoardIcon });
+			return { icon: saved?.icon ?? null };
 		}),
 };

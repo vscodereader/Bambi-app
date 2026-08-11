@@ -11,6 +11,7 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Separator } from "@bambi-app/ui/components/separator";
+import { Switch } from "@bambi-app/ui/components/switch";
 import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
@@ -72,6 +73,129 @@ const newAccountRow = (
 	holder: account?.holder ?? "",
 	id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
 });
+
+// 슬롯 입력은 1 이상의 정수만 통과시키고 그 외에는 null(=검증 실패)로 돌려준다.
+// 최종 범위 검증은 서버 스키마가 맡고, 여기선 즉시 피드백용 최소 검증만 한다.
+const parsePositiveSlotCount = (raw: string): number | null => {
+	const parsed = Number(raw.trim());
+	return Number.isInteger(parsed) && parsed >= 1 ? parsed : null;
+};
+
+// 노출 섹션 관리 카드. 급구 숨김 토글과 스페셜/추천 슬롯 수를 다룬다. 자체 쿼리·상태만
+// 쓰고 부모 폼들과 얽히지 않아 별도 컴포넌트로 분리했다(부모 페이지 복잡도도 낮춘다).
+function ExposureSectionCard() {
+	const queryClient = useQueryClient();
+	const exposureSectionQuery = useQuery(
+		orpc.bambi.siteSettings.getExposureSectionConfig.queryOptions()
+	);
+	const [urgentHidden, setUrgentHidden] = useState(true);
+	const [specialSlots, setSpecialSlots] = useState("");
+	const [recommendedSlots, setRecommendedSlots] = useState("");
+
+	// 저장된 값이 오면 폼에 채운다. 급구 숨김은 not null(기본 true)이라 그대로 반영하고,
+	// 슬롯 수는 서버가 이미 코드 기본값(12/20)으로 폴백해 내려주므로 그 값을 표시한다.
+	useEffect(() => {
+		const data = exposureSectionQuery.data;
+		if (!data) {
+			return;
+		}
+		setUrgentHidden(data.urgentHidden);
+		setSpecialSlots(String(data.specialSlots));
+		setRecommendedSlots(String(data.recommendedSlots));
+	}, [exposureSectionQuery.data]);
+
+	const saveExposureSectionMutation = useMutation(
+		orpc.bambi.siteSettings.updateExposureSectionConfig.mutationOptions({
+			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("노출 섹션 설정을 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getExposureSectionConfig.queryKey(),
+				});
+			},
+		})
+	);
+
+	const onSubmit = (event: FormEvent) => {
+		event.preventDefault();
+		const parsedSpecial = parsePositiveSlotCount(specialSlots);
+		const parsedRecommended = parsePositiveSlotCount(recommendedSlots);
+		if (parsedSpecial === null || parsedRecommended === null) {
+			toast.error("스페셜·추천 슬롯 수는 1 이상의 정수로 입력해 주세요.");
+			return;
+		}
+		saveExposureSectionMutation.mutate({
+			recommendedSlots: parsedRecommended,
+			specialSlots: parsedSpecial,
+			urgentHidden,
+		});
+	};
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>노출 섹션 관리</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<form className="flex flex-col gap-5" onSubmit={onSubmit}>
+					<div className="flex items-start justify-between gap-4">
+						<div className="flex flex-col gap-1">
+							<Label htmlFor="urgentSectionHidden">급구 섹션 숨김</Label>
+							<p className="m-0 text-muted-foreground text-xs">
+								켜두면 메인의 급구 채용 섹션이 노출되지 않습니다. 배포 없이 바로
+								켜고 끌 수 있어요.
+							</p>
+						</div>
+						<Switch
+							checked={urgentHidden}
+							disabled={exposureSectionQuery.isLoading}
+							id="urgentSectionHidden"
+							onCheckedChange={setUrgentHidden}
+						/>
+					</div>
+					<div className="grid grid-cols-1 gap-5 md:max-w-md md:grid-cols-2">
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="specialSlots">스페셜 슬롯 수</Label>
+							<Input
+								id="specialSlots"
+								inputMode="numeric"
+								onChange={(event) => setSpecialSlots(event.target.value)}
+								placeholder="12"
+								value={specialSlots}
+							/>
+						</div>
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="recommendedSlots">추천 슬롯 수</Label>
+							<Input
+								id="recommendedSlots"
+								inputMode="numeric"
+								onChange={(event) => setRecommendedSlots(event.target.value)}
+								placeholder="20"
+								value={recommendedSlots}
+							/>
+						</div>
+					</div>
+					<p className="m-0 text-muted-foreground text-xs">
+						스페셜/추천 리스팅 광고는 이 슬롯 수만큼 고정 인벤토리로 노출되며,
+						빈 자리는 "광고 모집중"으로 채워집니다. 슬롯이 차면 신규 승인은
+						대기열로 들어가요.
+					</p>
+					<div className="flex justify-end">
+						<Button
+							disabled={
+								saveExposureSectionMutation.isPending ||
+								exposureSectionQuery.isLoading
+							}
+							type="submit"
+						>
+							{saveExposureSectionMutation.isPending ? "저장 중…" : "저장"}
+						</Button>
+					</div>
+				</form>
+			</CardContent>
+		</Card>
+	);
+}
 
 export default function ModeratorSiteSettingsPage() {
 	const queryClient = useQueryClient();
@@ -808,6 +932,8 @@ export default function ModeratorSiteSettingsPage() {
 					</form>
 				</CardContent>
 			</Card>
+
+			<ExposureSectionCard />
 		</div>
 	);
 }
