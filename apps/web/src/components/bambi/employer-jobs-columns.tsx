@@ -17,6 +17,7 @@ import type { DataColumn } from "@/components/bambi/data-table";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import {
 	getJobDisplayStatus,
+	isQueuedListing,
 	JOB_DETAIL_DESIGN_STATUS_LABELS,
 } from "@/lib/bambi/exposure";
 import { formatPay } from "@/lib/bambi-format";
@@ -30,13 +31,22 @@ const TITLE_MAX_LENGTH = 17;
 
 // 공개 상세(/seeker/jobs/[id])는 published+paid 게이트를 통과해야만 열린다. 그렇지 않은
 // 공고 제목을 링크로 걸면 클릭 시 404가 나므로, 공개 가능한 공고만 링크로 노출한다.
+// 대기열 공고도 published+paid지만 상세 게이트에서 NOT_FOUND라 링크를 걸면 안 된다.
 export const isPubliclyViewable = (job: EmployerJob): boolean =>
-	job.status === "published" && job.paymentStatus === "paid";
+	job.status === "published" &&
+	job.paymentStatus === "paid" &&
+	!isQueuedListing(job);
 
 // 배지 한 줄로는 "왜 안 보이는지"를 알 수 없다. 스페셜·급구·추천 상품을 붙였는데 목록 섹션에
 // 안 뜨는 흔한 원인이 결제 대기(무통장입금 미확인)이고, 반려는 사유를 봐야 다시 낼 수 있다.
 // 공개 게이트는 published AND paid라 두 축을 함께 본다.
 export const getJobStatusNote = (job: EmployerJob): null | string => {
+	// 대기 공고는 published+paid라 아래 결제·검수·반려 분기에 하나도 안 걸린다.
+	// 그래서 대기 안내는 반드시 맨 앞에서 먼저 반환해야 한다.
+	if (isQueuedListing(job)) {
+		return "자리가 나면 순서대로 자동 노출됩니다.";
+	}
+
 	if (job.paymentStatus !== "paid" && job.status === "published") {
 		return "입금 확인 후 노출됩니다.";
 	}
@@ -58,6 +68,12 @@ export const getJobStatusNote = (job: EmployerJob): null | string => {
 
 	return null;
 };
+
+// 대기열 공고의 상태 배지 라벨. 순번이 부착돼 있으면 "대기열 #N", 없으면 "대기열"만 표기한다.
+const getQueueStatusLabel = (job: EmployerJob): string =>
+	job.listingQueuePosition === null
+		? "대기열"
+		: `대기열 #${job.listingQueuePosition}`;
 
 const getTruncatedTitle = (title: string): string =>
 	title.length > TITLE_MAX_LENGTH
@@ -155,16 +171,26 @@ export function getEmployerJobsColumns({
 		{
 			id: "status",
 			header: "공고 상태",
-			sortValue: (job) => getJobDisplayStatus(job).label,
+			sortValue: (job) =>
+				isQueuedListing(job)
+					? getQueueStatusLabel(job)
+					: getJobDisplayStatus(job).label,
 			cell: (job) => {
 				const display = getJobDisplayStatus(job);
 				const note = getJobStatusNote(job);
+				const queued = isQueuedListing(job);
 
 				return (
 					<div className="flex flex-col items-start gap-1">
 						{/* 열을 늘리면 모바일 가로 스크롤이 길어진다 — 제작 상태는 같은 셀에 붙인다. */}
 						<div className="flex flex-wrap items-center gap-1">
-							<StatusBadge tone={display.tone}>{display.label}</StatusBadge>
+							{queued ? (
+								<StatusBadge tone="warning">
+									{getQueueStatusLabel(job)}
+								</StatusBadge>
+							) : (
+								<StatusBadge tone={display.tone}>{display.label}</StatusBadge>
+							)}
 							{job.detailDesignStatus === null ? null : (
 								<StatusBadge
 									tone={

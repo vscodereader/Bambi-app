@@ -37,7 +37,7 @@ import {
 } from "@/components/bambi/job-table-columns";
 import { ListingCapacityOverview } from "@/components/bambi/listing-capacity-overview";
 import { RowActions } from "@/components/bambi/row-actions";
-import { getJobDisplayStatus } from "@/lib/bambi/exposure";
+import { getJobDisplayStatus, isQueuedListing } from "@/lib/bambi/exposure";
 import { formatDateTime } from "@/lib/bambi-format";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
@@ -162,13 +162,6 @@ const STATUS_ACTIONS: Record<
 // 구인자 목록(employer-jobs-columns)의 isPubliclyViewable과 같은 판정이다.
 const isPubliclyViewable = (job: JobRow): boolean =>
 	job.status === "published" && job.paymentStatus === "paid";
-
-// 리스팅(스페셜·추천) 유료 대기열 판정: 결제됐지만 종료일이 아직 없으면(노출 시계 미시작)
-// 정원이 차 큐에 대기 중인 공고다. 이런 행만 "대기열에서 빼기"를 노출한다.
-const isQueuedListing = (job: JobRow): boolean =>
-	job.paymentStatus === "paid" &&
-	(job.exposureType === "special" || job.exposureType === "recommended") &&
-	job.exposureEndsAt == null;
 
 // 공개 상세로 이동할 수 있는 행만 제목을 링크로 만든다. 나머지는 왜 못 가는지
 // 한 줄로 알린다 — 상태 원값이 아니라 공용 라벨 헬퍼가 만든 표시 문구를 쓴다.

@@ -38,6 +38,7 @@ import {
 import { type PgColumn, unionAll } from "drizzle-orm/pg-core";
 
 import type { JobPostMediaUsage } from "./bambi-job-media-policy";
+import { notQueuedListingFilter } from "./bambi-premium-capacity";
 
 type JobIndustryCategory = (typeof jobIndustryCategory.enumValues)[number];
 type EmployerVerificationStatus =
@@ -210,6 +211,9 @@ const jobPostFeedConditions = (input: JobFeedInput): SQL[] => {
 	const conditions: SQL[] = [
 		eq(jobPost.status, "published"),
 		eq(jobPost.paymentStatus, "paid"),
+		// 대기열(결제됨·exposureEndsAt null) 스페셜/추천 공고는 아직 노출 자리를 얻지 못했으므로
+		// 공개 목록·검색에 내리지 않는다. 이 빌더를 쓰는 listJobFeed·searchJobFeed 양쪽에 일괄 적용된다.
+		notQueuedListingFilter(),
 	];
 
 	if (input.industryCategory) {

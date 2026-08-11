@@ -23,6 +23,13 @@ export const JOB_DETAIL_DESIGN_STATUS_LABELS = {
 	completed: "제작 완료",
 } as const;
 
+// 리스팅 대기열 배지용 짧은 라벨. EXPOSURE_TYPE_LABELS("스페셜 채용")는 배지엔 길어서
+// 대기열 표기 전용의 축약 라벨 맵을 따로 둔다. 대기열은 스페셜·추천 2종에만 존재한다.
+export const LISTING_QUEUE_SHORT_LABELS = {
+	recommended: "추천",
+	special: "스페셜",
+} as const;
+
 export type ExposureType = keyof typeof EXPOSURE_TYPE_LABELS;
 export type JobDetailDesignStatusKey =
 	keyof typeof JOB_DETAIL_DESIGN_STATUS_LABELS;
@@ -119,6 +126,48 @@ export const expiryLabel = (
 	}
 
 	return days > 0 ? "진행중" : "만료";
+};
+
+// 리스팅 대기열 판정에 필요한 공고 필드. 노출 조회 헬퍼들과 달리 status·paymentStatus까지 본다.
+export interface QueueableJobFields {
+	exposureEndsAt: Date | string | null;
+	exposureType: string;
+	paymentStatus: string;
+	status: string;
+}
+
+/**
+ * FIFO 유료 대기열에 걸린 공고인지 판정한다(구인자·운영자 화면 공용).
+ * 대기 = published + paid 인 스페셜/추천 공고인데 아직 노출이 시작되지 않은 상태.
+ * exposureEndsAt === null 이 "결제됐지만 정원 만석이라 미노출 대기중"을 뜻한다
+ * (노출이 시작되면 그 시점부터 만료일이 채워진다). packages/api의 queuedListingWhere와 같은 조건.
+ */
+export const isQueuedListing = (job: QueueableJobFields): boolean =>
+	job.status === "published" &&
+	job.paymentStatus === "paid" &&
+	job.exposureType in LISTING_QUEUE_SHORT_LABELS &&
+	job.exposureEndsAt === null;
+
+/**
+ * 대기열 배지 라벨. position이 있으면 "스페셜 #3", null이면 "스페셜 대기".
+ * 대기열 대상이 아닌(맵에 없는) 노출 타입은 원값 노출 없이 "대기"로 방어한다.
+ */
+export const listingQueueBadgeLabel = (
+	exposureType: string,
+	position: number | null
+): string => {
+	const shortLabel =
+		LISTING_QUEUE_SHORT_LABELS[
+			exposureType as keyof typeof LISTING_QUEUE_SHORT_LABELS
+		];
+
+	if (shortLabel === undefined) {
+		return "대기";
+	}
+
+	return position === null
+		? `${shortLabel} 대기`
+		: `${shortLabel} #${position}`;
 };
 
 // 노출 마감 라벨(expiryLabel 결과)을 StatusBadge tone으로 매핑. 공고 관리·결제 관리 공용.
