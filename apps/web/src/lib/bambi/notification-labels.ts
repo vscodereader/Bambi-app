@@ -295,8 +295,12 @@ const jobPostHref = (item: BambiNotificationView): string => {
 	if (rawAction.startsWith("set_payment")) {
 		return "/employer/promotions";
 	}
-	// 대기열 접수·자동 노출 시작은 대기 순번·노출 상태가 보이는 광고 관리로 보낸다.
-	if (rawAction === "listing_queued" || rawAction === "listing_activated") {
+	// 대기열 3종(접수·자동 노출 시작·제외) 모두 대기 순번·노출 상태가 보이는 광고 관리로 보낸다.
+	if (
+		rawAction === "listing_queued" ||
+		rawAction === "listing_activated" ||
+		rawAction === "remove_from_listing_queue"
+	) {
 		return "/employer/promotions";
 	}
 	if (rawAction === "hard_delete") {
