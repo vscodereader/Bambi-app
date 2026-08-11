@@ -48,14 +48,22 @@ const AD_POLICY_WARNING =
 const PRODUCT_ROW_GRID =
 	"md:grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.9fr)] md:items-start md:gap-6";
 
-interface PremiumCapacity {
+// 정원·남은 자리 표시에 필요한 최소 형태. premiumCapacity·listingCapacity 응답 모두
+// (추가 필드가 있어도) 구조적으로 이 형태에 대입된다.
+interface CapacityInfo {
 	capacity: number;
 	remaining: number;
 }
 
-// 프리미엄 광고(배너) 신청 버튼 위 남은 자리 안내. 만석이면 대기열 등록 안내로 바뀐다.
-function PremiumCapacityNote({ capacity }: { capacity: PremiumCapacity }) {
-	if (capacity.remaining === 0) {
+// 스페셜/추천 리스팅 정원 응답(previewTemplate으로 섹션을 고른다).
+interface ListingCapacity {
+	recommended: CapacityInfo;
+	special: CapacityInfo;
+}
+
+// 신청 버튼 위 남은 자리 안내. 배너·리스팅 공용. 만석이면 대기열 등록 안내로 바뀐다.
+function CapacityNote({ capacity, remaining }: CapacityInfo) {
+	if (remaining === 0) {
 		return (
 			<span className="text-muted-foreground text-xs">
 				현재 정원이 가득 찼어요 — 지금 신청하면 대기열에 등록돼요.
@@ -65,10 +73,27 @@ function PremiumCapacityNote({ capacity }: { capacity: PremiumCapacity }) {
 
 	return (
 		<span className="font-medium text-sm">
-			남은 자리 <span className="text-primary">{capacity.remaining}</span>/
-			{capacity.capacity}
+			남은 자리 <span className="text-primary">{remaining}</span>/{capacity}
 		</span>
 	);
+}
+
+// 리스팅 상품이 어느 정원을 쓰는지 previewTemplate으로 판정. 급구·기타 값은 노트 미표시,
+// 데이터 로딩 전(null)에도 노트를 그리지 않아 깜빡임을 막는다.
+function listingCapacityFor(
+	previewTemplate: string,
+	listingCapacity: ListingCapacity | null
+): CapacityInfo | null {
+	if (!listingCapacity) {
+		return null;
+	}
+	if (previewTemplate === "special-list") {
+		return listingCapacity.special;
+	}
+	if (previewTemplate === "recommended-list") {
+		return listingCapacity.recommended;
+	}
+	return null;
 }
 
 // 노출 위치 미리보기. 표 안에서는 max-h-40이라 어디에 뜨는 배너인지 알아보기 어렵다 —
@@ -108,9 +133,11 @@ function AdPlacementPreview({ alt, src }: { alt: string; src: string }) {
 
 function PlacementSection({
 	capacity,
+	listingCapacity,
 	placement,
 }: {
-	capacity: PremiumCapacity | null;
+	capacity: CapacityInfo | null;
+	listingCapacity: ListingCapacity | null;
 	placement: AdCatalogPlacement;
 }) {
 	return (
@@ -128,6 +155,12 @@ function PlacementSection({
 					{placement.description ? (
 						<p className="m-0 text-muted-foreground text-sm">
 							{placement.description}
+						</p>
+					) : null}
+					{placement.kind === "banner" ? (
+						<p className="m-0 text-muted-foreground text-xs">
+							프리미엄 배너는 상단·좌·우 3자리를 지정 주기로 순환
+							노출합니다(구매자 수에 따라 대략 1/N 비중).
 						</p>
 					) : null}
 				</div>
@@ -187,8 +220,14 @@ function PlacementSection({
 									</span>
 								) : null}
 								{product.autoBoostsPerDay > 0 ? (
-									<span className="font-medium text-coral-500 text-sm">
-										일일 자동 끌어올리기 {product.autoBoostsPerDay}회 포함
+									<span className="flex flex-col gap-0.5">
+										<span className="font-medium text-coral-500 text-sm">
+											하루 {product.autoBoostsPerDay}회 최상단 재노출 보장
+										</span>
+										<span className="text-muted-foreground text-xs">
+											지정 시간대(09~21시)에 목록 최상단으로 자동 재게시 · 타
+											공고 갱신 시 순위는 자연 변동
+										</span>
 									</span>
 								) : null}
 								{/* 디자인 제작은 상품에 포함된 혜택이 아니라 공고 등록 시 고르는
@@ -250,9 +289,22 @@ function PlacementSection({
 
 							{/* 신청 */}
 							<div className="flex flex-col gap-2">
-								{placement.kind === "banner" && capacity ? (
-									<PremiumCapacityNote capacity={capacity} />
-								) : null}
+								{(() => {
+									// 배너는 프리미엄 정원, 리스팅은 previewTemplate로 스페셜/추천 정원을 쓴다.
+									const note =
+										placement.kind === "banner"
+											? capacity
+											: listingCapacityFor(
+													product.previewTemplate,
+													listingCapacity
+												);
+									return note ? (
+										<CapacityNote
+											capacity={note.capacity}
+											remaining={note.remaining}
+										/>
+									) : null;
+								})()}
 								<Link
 									className={cn(
 										buttonVariants({ variant: "default" }),
@@ -337,8 +389,14 @@ export function EmployerAdGuideScreen() {
 		...orpc.bambi.adProducts.premiumCapacity.queryOptions(),
 		refetchInterval: 30_000,
 	});
+	// 스페셜/추천 리스팅 정원도 동일 주기로 갱신한다(만료 시 자리가 자동으로 늘어남).
+	const listingCapacityQuery = useQuery({
+		...orpc.bambi.adProducts.listingCapacity.queryOptions(),
+		refetchInterval: 30_000,
+	});
 	const placements = catalogQuery.data ?? [];
 	const capacity = capacityQuery.data ?? null;
+	const listingCapacity = listingCapacityQuery.data ?? null;
 
 	return (
 		<PageShell
@@ -393,6 +451,7 @@ export function EmployerAdGuideScreen() {
 				<PlacementSection
 					capacity={capacity}
 					key={placement.id}
+					listingCapacity={listingCapacity}
 					placement={placement}
 				/>
 			))}

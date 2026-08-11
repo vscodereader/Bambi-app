@@ -1182,6 +1182,11 @@ export const adProduct = pgTable(
 		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
 		// 이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는 횟수(구매 시 공고로 스냅샷). 0 = 미제공.
 		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
+		// 이 상품을 구매한 공고의 수동 끌어올리기 최소 간격(분). 하루 한도와 별개로 연타를 막아
+		// 리스트 품질을 지킨다. 정책 노브라 라이브 참조(운영자 변경 즉시 반영), 기본 10분.
+		manualBoostCooldownMinutes: integer("manual_boost_cooldown_minutes")
+			.default(10)
+			.notNull(),
 		// 이 상품을 살 때 함께 신청할 수 있는 "상세이미지 디자인 제작" 애드온 가격.
 		// null = 이 상품엔 옵션 미제공(구인자 화면에서 체크박스 자체가 안 보인다).
 		detailDesignPrice: integer("detail_design_price"),
