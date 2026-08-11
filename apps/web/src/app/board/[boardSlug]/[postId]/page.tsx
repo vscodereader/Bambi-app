@@ -23,7 +23,11 @@ import {
 	publicBoardPath,
 	publicPostPath,
 } from "@/lib/bambi/public-community";
-import { breadcrumbJsonLd } from "@/lib/bambi/seo";
+import {
+	breadcrumbJsonLd,
+	mergeSeoKeywords,
+	SITE_KEYWORDS,
+} from "@/lib/bambi/seo";
 import { readGuestCanWrite, readVisitorState } from "@/lib/bambi/visitor";
 import { client } from "@/utils/orpc";
 
@@ -69,6 +73,10 @@ export async function generateMetadata({
 	return {
 		alternates: { canonical },
 		description,
+		keywords: mergeSeoKeywords(SITE_KEYWORDS, [
+			board?.label ?? "커뮤니티",
+			"밤알바 커뮤니티",
+		]),
 		openGraph: {
 			description,
 			publishedTime: new Date(post.createdAt).toISOString(),
@@ -163,9 +171,23 @@ export default async function PublicPostPage({ params }: PageProps) {
 					"@context": "https://schema.org",
 					"@type": "DiscussionForumPosting",
 					author: { "@type": "Person", name: post.authorName },
+					mainEntityOfPage: `${BAMBI_COMPANY.url}${publicPostPath(boardSlug, postId)}`,
+					text: communityBodyText(post.body, 5000),
 					datePublished: new Date(post.createdAt).toISOString(),
 					dateModified: new Date(post.updatedAt).toISOString(),
 					headline: post.title,
+					interactionStatistic: [
+						{
+							"@type": "InteractionCounter",
+							interactionType: "https://schema.org/LikeAction",
+							userInteractionCount: post.likeCount,
+						},
+						{
+							"@type": "InteractionCounter",
+							interactionType: "https://schema.org/CommentAction",
+							userInteractionCount: post.commentCount,
+						},
+					],
 					inLanguage: "ko-KR",
 					url: `${BAMBI_COMPANY.url}${publicPostPath(boardSlug, postId)}`,
 				}}

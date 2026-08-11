@@ -113,7 +113,51 @@ export const jobLandingHeading = (target: JobLandingTarget): string => {
 };
 
 export const jobLandingTitle = (target: JobLandingTarget): string =>
-	`${jobLandingHeading(target)} | 밤비알바`;
+	target.region
+		? `${scopeLabel(target)} 밤알바·유흥알바 채용 정보 | 밤비알바`
+		: "지역·업종별 밤알바·유흥알바 채용 정보 | 밤비알바";
+
+const industryKeywordAliases = (industry?: JobLandingIndustry): string[] => {
+	if (!industry) {
+		return [];
+	}
+	const aliases: Partial<Record<IndustryOption, string[]>> = {
+		BAR: ["바알바", "BAR알바"],
+		노래주점: ["노래방알바", "노래방도우미알바"],
+		룸싸롱: ["룸살롱알바", "룸알바"],
+		마사지: ["마사지알바"],
+		"텐프로/쩜오": ["텐프로알바", "쩜오알바"],
+	};
+	return aliases[industry.label] ?? [];
+};
+
+export const jobLandingKeywords = ({
+	industry,
+	region,
+}: JobLandingTarget): string[] => {
+	if (!region) {
+		return ["지역별 채용 정보", "밤알바", "유흥알바", "룸알바"];
+	}
+	const regionKeywords = [
+		`${region.label} 밤알바`,
+		`${region.label} 유흥알바`,
+		`${region.label} 여성알바`,
+		`${region.label} 고소득알바`,
+		`${region.label} 구인구직`,
+	];
+	if (!industry) {
+		return regionKeywords;
+	}
+	return [
+		...regionKeywords,
+		`${region.label} ${industry.label} 알바`,
+		`${region.label} ${industry.label} 구인`,
+		`${region.label} ${industry.label} 채용`,
+		...industryKeywordAliases(industry).map(
+			(alias) => `${region.label} ${alias}`
+		),
+	];
+};
 
 export const jobLandingDescription = ({
 	industry,

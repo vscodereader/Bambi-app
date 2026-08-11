@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 				url: "/og-image.png",
 				width: 1200,
 				height: 630,
-				alt: "밤비알바 - 유흥·접객 룸알바·구인구직 사이트",
+				alt: SITE_TITLE,
 			},
 		],
 	},

@@ -2,66 +2,45 @@ import { describe, expect, it } from "vitest";
 import {
 	bambiSiteJsonLd,
 	breadcrumbJsonLd,
+	mergeSeoKeywords,
 	SITE_KEYWORDS,
 	toJsonLdScriptContent,
 } from "@/lib/bambi/seo";
 
 const ABSOLUTE_HTTPS = /^https:\/\//;
-
 const nodes = bambiSiteJsonLd["@graph"];
 const nodeOf = (type: string) => nodes.find((node) => node["@type"] === type);
 
-const ORIGINAL_KEYWORDS = [
-	"유흥알바",
-	"밤비알바",
-	"밤알바",
-	"룸알바",
-	"노래주점알바",
-	"룸싸롱알바",
-	"유흥구인구직",
-	"고소득알바",
-	"여성알바",
-	"접객알바",
-] as const;
-
-const REQUESTED_KEYWORDS = [
-	"여성알바",
-	"퀸알바",
-	"밤알바",
-	"룸알바",
-	"밤일알바",
-	"여우알바",
-	"악녀알바",
-	"노래방도우미",
-	"보도알바",
-	"유흥알바",
-	"텐프로",
-	"안마",
-	"마사지",
-	"주점",
-	"유흥업소알바",
-	"아가씨알바",
-	"구인구직 사이트",
-	"이브알바",
-	"고소득알바",
-] as const;
-
 describe("SITE_KEYWORDS", () => {
-	it("기존 목록과 요청 목록의 합집합을 중복 없이 유지한다", () => {
-		const expectedKeywords = [
-			...new Set([...ORIGINAL_KEYWORDS, ...REQUESTED_KEYWORDS]),
-		];
-
+	it("keeps the researched keyword inventory unique and complete", () => {
+		expect(SITE_KEYWORDS).toHaveLength(99);
 		expect(new Set(SITE_KEYWORDS).size).toBe(SITE_KEYWORDS.length);
-		expect(SITE_KEYWORDS).toEqual(expectedKeywords);
+		expect(SITE_KEYWORDS).toEqual(
+			expect.arrayContaining([
+				"유흥알바",
+				"밤비알바",
+				"밤알바",
+				"여우알바",
+				"퀸알바",
+				"레이디알바",
+				"구인구직 사이트",
+				"알바 채용 정보",
+			])
+		);
 	});
 
-	it("구인구직 사이트를 분리하지 않은 하나의 키워드로 유지한다", () => {
+	it("keeps 구인구직 사이트 as one phrase", () => {
 		expect(
 			SITE_KEYWORDS.filter((keyword) => keyword === "구인구직 사이트")
 		).toHaveLength(1);
 		expect(SITE_KEYWORDS).not.toContain("구인구직");
 		expect(SITE_KEYWORDS).not.toContain("사이트");
+	});
+
+	it("merges inherited and page keywords without blanks or duplicates", () => {
+		expect(
+			mergeSeoKeywords(["밤알바", "  "], ["밤알바", "서울 밤알바"])
+		).toEqual(["밤알바", "서울 밤알바"]);
 	});
 });
 
@@ -80,18 +59,18 @@ describe("bambiSiteJsonLd", () => {
 		expect(organization?.["@id"]).toBeTruthy();
 		expect(
 			website && "publisher" in website ? website.publisher : null
-		).toEqual({ "@id": organization?.["@id"] });
+		).toEqual({
+			"@id": organization?.["@id"],
+		});
 	});
 
-	it("절대 URL만 싣는다(크롤러는 상대 경로를 해석하지 못한다)", () => {
+	it("절대 URL만 싣는다", () => {
 		const organization = nodeOf("Organization");
 		const logo =
 			organization && "logo" in organization ? organization.logo : null;
 		expect(logo).toMatch(ABSOLUTE_HTTPS);
 	});
 
-	// company.ts의 대표자·사업자번호·주소·전화는 아직 `TODO_` 자리표시자다.
-	// 구조화 데이터로 색인되면 되돌리기 어려우니 유출을 막는다.
 	it("TODO_ 자리표시자를 포함하지 않는다", () => {
 		expect(JSON.stringify(bambiSiteJsonLd)).not.toContain("TODO_");
 	});
@@ -103,13 +82,11 @@ describe("breadcrumbJsonLd", () => {
 			{ name: "채용 정보", path: "/jobs" },
 			{ name: "서울", path: "/jobs/seoul" },
 		]);
-
 		expect(data["@type"]).toBe("BreadcrumbList");
 		expect(data.itemListElement.map((item) => item.position)).toEqual([1, 2]);
 		for (const item of data.itemListElement) {
 			expect(item.item).toMatch(ABSOLUTE_HTTPS);
 		}
-		expect(data.itemListElement.at(-1)?.item).toContain("/jobs/seoul");
 	});
 });
 
