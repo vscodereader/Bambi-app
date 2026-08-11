@@ -22,6 +22,7 @@ import {
 	eq,
 	gt,
 	inArray,
+	isNotNull,
 	isNull,
 	or,
 	type SQL,
@@ -119,6 +120,12 @@ import {
 	getUpdatedJobPostStatus,
 	type JobPostStatus,
 } from "../../services/bambi-policy";
+import {
+	DEFAULT_RECOMMENDED_CAPACITY,
+	DEFAULT_SPECIAL_CAPACITY,
+	getListingQueuePositions,
+	notQueuedListingFilter,
+} from "../../services/bambi-premium-capacity";
 import { resolveRegionSelection } from "../../services/bambi-region";
 import {
 	createJobPostMediaUploadIntent,
@@ -1283,6 +1290,10 @@ export const jobsRouter = {
 		const filters = [
 			eq(jobPost.status, "published" as JobPostStatus),
 			eq(jobPost.paymentStatus, "paid"),
+			// 대기열(결제됨·미활성) 스페셜/추천 공고를 organic 목록·전체 카운트에서 뺀다.
+			// 섹션 쿼리(getExposedJobs)는 이미 exposureEndsAt로 제외하고, urgent엔 이 필터가
+			// 항상 참이라 무해하다(정원 대상 타입에만 걸리는 조건).
+			notQueuedListingFilter(),
 		];
 
 		if (input.industryCategory) {
@@ -1372,14 +1383,19 @@ export const jobsRouter = {
 				return [];
 			}
 
+			// 대기열(결제됨·exposureEndsAt null) 공고는 노출에서 제외 — 활성화된 것만 보인다.
+			// 단 이 배제는 정원 리스팅(special/recommended)에만 적용한다. urgent는 정원 대기열이
+			// 없어 기존 동작(null=상시 노출) 그대로 유지한다.
+			const exposureWindow =
+				type === "urgent"
+					? or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
+					: and(
+							isNotNull(jobPost.exposureEndsAt),
+							gt(jobPost.exposureEndsAt, now)
+						);
+
 			return await selectExposureJobs()
-				.where(
-					and(
-						...filters,
-						eq(jobPost.exposureType, type),
-						or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
-					)
-				)
+				.where(and(...filters, eq(jobPost.exposureType, type), exposureWindow))
 				.orderBy(desc(exposureRankSql));
 		};
 
@@ -1389,6 +1405,7 @@ export const jobsRouter = {
 			recommendedRows,
 			organicRows,
 			[jobPostTotalRow],
+			[listingCapacityRow],
 		] = await Promise.all([
 			getExposedJobs("special"),
 			getExposedJobs("urgent"),
@@ -1416,6 +1433,15 @@ export const jobsRouter = {
 					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
 				)
 				.where(and(...filters)),
+			// 스페셜/추천 방어적 slice에 쓸 정원. null이면 아래에서 코드 기본값으로 폴백한다.
+			db
+				.select({
+					recommendedCapacity: bambiSiteSettings.recommendedCapacity,
+					specialCapacity: bambiSiteSettings.specialCapacity,
+				})
+				.from(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, "default"))
+				.limit(1),
 		]);
 		const jobPostTotal = jobPostTotalRow?.value ?? 0;
 
@@ -1427,6 +1453,18 @@ export const jobsRouter = {
 			specialRows,
 			urgentRows,
 		});
+
+		// 방어적 slice: 정원=슬롯 수 불변식은 승인 게이트가 지키지만, 운영자가 정원을 낮춘
+		// 직후처럼 이미 active인 공고 수가 새 정원을 넘는 전이 상태가 있을 수 있다. 정렬은
+		// 그대로 두고 앞에서부터 정원 개수만 남긴다(urgent/organic·cursor·totalCount는 그대로).
+		result.sections.special = result.sections.special.slice(
+			0,
+			listingCapacityRow?.specialCapacity ?? DEFAULT_SPECIAL_CAPACITY
+		);
+		result.sections.recommended = result.sections.recommended.slice(
+			0,
+			listingCapacityRow?.recommendedCapacity ?? DEFAULT_RECOMMENDED_CAPACITY
+		);
 
 		// 현재 요청에서 새로 기록하는 impression 때문에 판정이 왜곡되지 않도록,
 		// recordJobListingImpressions 이전에 최근 7일 성과를 집계해 각 item에 붙인다.
@@ -1549,6 +1587,8 @@ export const jobsRouter = {
 		const filters = [
 			eq(jobPost.status, "published" as JobPostStatus),
 			eq(jobPost.paymentStatus, "paid"),
+			// 대기열(결제됨·미활성) 스페셜/추천 공고 제외 — list와 동일.
+			notQueuedListingFilter(),
 		];
 
 		if (input.industryCategory) {
@@ -1736,6 +1776,8 @@ export const jobsRouter = {
 					createdByUserId: jobPost.createdByUserId,
 					status: jobPost.status,
 					paymentStatus: jobPost.paymentStatus,
+					exposureType: jobPost.exposureType,
+					exposureEndsAt: jobPost.exposureEndsAt,
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
 					district: jobPost.district,
@@ -1775,6 +1817,16 @@ export const jobsRouter = {
 				.limit(1);
 
 			if (post?.status !== "published" || post.paymentStatus !== "paid") {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			// 대기열 공고(스페셜/추천이면서 아직 미활성=exposureEndsAt null)는 아직 공개 전이다 —
+			// 결제·게시됐어도 자리가 나 활성화되기 전까지 상세를 열어주지 않는다.
+			const isQueuedListing =
+				(post.exposureType === "special" ||
+					post.exposureType === "recommended") &&
+				post.exposureEndsAt === null;
+			if (isQueuedListing) {
 				throw new ORPCError("NOT_FOUND");
 			}
 
@@ -1859,7 +1911,7 @@ export const jobsRouter = {
 			return [];
 		}
 
-		return await db
+		const rows = await db
 			.select({
 				id: jobPost.id,
 				title: jobPost.title,
@@ -1894,6 +1946,14 @@ export const jobsRouter = {
 			)
 			.where(or(...accessFilters))
 			.orderBy(desc(jobPost.updatedAt));
+
+		// 대기열 공고에 FIFO 순번을 붙여 "대기열 #N"을 렌더할 수 있게 한다. 양 섹션 대기 행을
+		// 요청당 1회만 조회하고, 대기가 아닌 행은 position이 없어 null이 된다.
+		const queuePositions = await getListingQueuePositions(db);
+		return rows.map((row) => ({
+			...row,
+			listingQueuePosition: queuePositions.get(row.id)?.position ?? null,
+		}));
 	}),
 
 	getEditableById: protectedProcedure

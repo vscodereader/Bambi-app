@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	adProduct,
+	bambiSiteSettings,
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobBoostEvent,
@@ -18,6 +19,7 @@ import {
 	gte,
 	inArray,
 	isNull,
+	max,
 	or,
 	type SQL,
 	sql,
@@ -34,16 +36,74 @@ import { getAccessibleTeamPostScopes } from "../../services/bambi-job-access";
 import {
 	BOOST_INELIGIBLE_MESSAGES,
 	type BoostPurchaseLike,
+	DEFAULT_MANUAL_BOOST_COOLDOWN_MINUTES,
 	getKstDayStart,
+	isManualBoostWithinCooldown,
+	manualBoostCooldownRemainingMs,
 	pickCountPurchaseToConsume,
 	resolveBoostEligibility,
 	sumActivePeriodBoostsPerDay,
 	sumRemainingBoostCount,
 } from "../../services/bambi-job-boost";
 import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
-import { derivePremiumQueue } from "../../services/bambi-premium-capacity";
+import {
+	DEFAULT_RECOMMENDED_CAPACITY,
+	DEFAULT_SPECIAL_CAPACITY,
+	deriveListingQueue,
+	derivePremiumQueue,
+} from "../../services/bambi-premium-capacity";
 
 // 구 jobPromotionCampaign 축 라우터를 광고 상품 축으로 재작성했다.
+type BoostTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// 상품별 쿨다운(최소 간격) 게이트. 잠금·자격 판정 뒤, 횟수권 소비·이벤트 기록 전에 호출한다.
+// 하루 한도와 별개로 연타를 막아 목록 품질을 지킨다. 이 공고의 가장 최근 수동 끌어올림
+// (daily·count 무관) 시각과 비교한다. 쿨다운 분은 정책 노브라 라이브 참조한다(운영자 변경 즉시
+// 반영): 광고 공고는 adProduct 현재 값, 무료 공고(adProductId null)는 기본값.
+const assertManualBoostCooldown = async (
+	tx: BoostTx,
+	{
+		adProductId,
+		jobPostId,
+		now,
+	}: { adProductId: string | null; jobPostId: string; now: Date }
+): Promise<void> => {
+	const [lastManual] = await tx
+		.select({ lastAt: max(jobBoostEvent.createdAt) })
+		.from(jobBoostEvent)
+		.where(
+			and(
+				eq(jobBoostEvent.jobPostId, jobPostId),
+				eq(jobBoostEvent.boostType, "manual")
+			)
+		);
+	const lastManualBoostAt = lastManual?.lastAt ?? null;
+
+	let cooldownMinutes = DEFAULT_MANUAL_BOOST_COOLDOWN_MINUTES;
+	if (adProductId !== null) {
+		const [product] = await tx
+			.select({
+				manualBoostCooldownMinutes: adProduct.manualBoostCooldownMinutes,
+			})
+			.from(adProduct)
+			.where(eq(adProduct.id, adProductId))
+			.limit(1);
+		cooldownMinutes =
+			product?.manualBoostCooldownMinutes ??
+			DEFAULT_MANUAL_BOOST_COOLDOWN_MINUTES;
+	}
+
+	if (isManualBoostWithinCooldown(lastManualBoostAt, now, cooldownMinutes)) {
+		const remainingMinutes = Math.ceil(
+			manualBoostCooldownRemainingMs(lastManualBoostAt, now, cooldownMinutes) /
+				60_000
+		);
+		throw new ORPCError("BAD_REQUEST", {
+			message: `너무 잦은 끌어올리기예요. 약 ${remainingMinutes}분 후에 다시 시도해 주세요.`,
+		});
+	}
+};
+
 // 광고 목록(listMyAds)과 수동 끌어올리기(boost)만 제공한다.
 export const promotionsRouter = {
 	listMyAds: protectedProcedure.handler(async ({ context }) => {
@@ -197,9 +257,40 @@ export const promotionsRouter = {
 			purchasesByJobId.set(purchaseRow.jobPostId, list);
 		}
 
-		// 배너 미결제 신청의 파생 큐 정보(진행 가능 여부·대기 순번). ranksByJobId는 pending
-		// 배너 공고만 담으므로 결제완료·비배너 행은 자연히 null이 된다.
-		const { ranksByJobId } = await derivePremiumQueue(db, now);
+		// 배너 + 스페셜/추천 미결제 신청의 파생 큐 정보(진행 가능 여부·대기 순번)를 한데 모아
+		// 같은 premiumQueue 필드로 노출한다 — 신청자 쪽은 배너냐 리스팅이냐가 아니라 "내 신청이
+		// 진행 가능한지, 대기 몇 번째인지"만 필요해서다(기존 premiumQueue 필드·관용 그대로 확장).
+		// 각 파생 큐의 ranksByJobId는 해당 섹션 pending 공고만 담으므로(exposureType로 나뉜
+		// 서로 다른 공고 집합) 세 맵을 합쳐도 키가 겹치지 않는다.
+		const [settingsRow] = await db
+			.select({
+				recommendedCapacity: bambiSiteSettings.recommendedCapacity,
+				specialCapacity: bambiSiteSettings.specialCapacity,
+			})
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"))
+			.limit(1);
+		const [premiumQueueResult, specialQueueResult, recommendedQueueResult] =
+			await Promise.all([
+				derivePremiumQueue(db, now),
+				deriveListingQueue(
+					db,
+					"special",
+					settingsRow?.specialCapacity ?? DEFAULT_SPECIAL_CAPACITY,
+					now
+				),
+				deriveListingQueue(
+					db,
+					"recommended",
+					settingsRow?.recommendedCapacity ?? DEFAULT_RECOMMENDED_CAPACITY,
+					now
+				),
+			]);
+		const queueByJobId = new Map([
+			...premiumQueueResult.ranksByJobId,
+			...specialQueueResult.ranksByJobId,
+			...recommendedQueueResult.ranksByJobId,
+		]);
 
 		return rows.map((row) => {
 			const purchases = purchasesByJobId.get(row.jobPostId) ?? [];
@@ -221,7 +312,7 @@ export const promotionsRouter = {
 				hasUnpaidBoostOption: purchases.some(
 					(p) => p.paymentStatus === "unpaid"
 				),
-				premiumQueue: ranksByJobId.get(row.jobPostId) ?? null,
+				premiumQueue: queueByJobId.get(row.jobPostId) ?? null,
 			};
 		});
 	}),
@@ -315,6 +406,13 @@ export const promotionsRouter = {
 						message: BOOST_INELIGIBLE_MESSAGES[verdict.reason],
 					});
 				}
+
+				// 상품별 쿨다운(최소 간격) 게이트: 잠금·자격 판정 뒤, 횟수권 소비·이벤트 기록 전.
+				await assertManualBoostCooldown(tx, {
+					adProductId: post.adProductId,
+					jobPostId: input.jobPostId,
+					now,
+				});
 
 				// 횟수권 소비면 가장 오래된 활성 구매를 조건부 차감한다. remainingCount > 0 가드로
 				// 동시 클릭 시 0행이 나면 CONFLICT로 막는다. purchaseId를 이벤트에 남겨 하루 한도와

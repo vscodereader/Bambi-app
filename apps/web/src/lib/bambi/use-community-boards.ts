@@ -24,7 +24,8 @@ export function useCommunityBoards(): {
 	});
 
 	const boards = useMemo(
-		() => (query.data ? toBoardMetas(query.data) : []),
+		() =>
+			query.data ? toBoardMetas(query.data.boards, query.data.bestIcon) : [],
 		[query.data]
 	);
 

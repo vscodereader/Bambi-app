@@ -81,6 +81,41 @@ export const countDueAutoBoostSlots = (
 	return Math.min(due, autoBoostsPerDay);
 };
 
+// 수동 끌어올리기 최소 간격 기본값(분). 무료 공고(adProduct 없음)에 적용한다.
+// 광고 공고는 adProduct.manualBoostCooldownMinutes를 라이브 참조한다.
+export const DEFAULT_MANUAL_BOOST_COOLDOWN_MINUTES = 10;
+
+// 마지막 수동 끌어올림 이후 cooldownMinutes 분이 아직 안 지났으면 true(연타 차단).
+// last가 없거나(첫 끌어올림) cooldownMinutes<=0이면 쿨다운 자체가 없어 false.
+// 경계: 정확히 경과한 시점(=)은 허용(false), 그 직전(<)만 차단(true).
+export const isManualBoostWithinCooldown = (
+	lastManualBoostAt: Date | null,
+	now: Date,
+	cooldownMinutes: number
+): boolean => {
+	if (lastManualBoostAt === null || cooldownMinutes <= 0) {
+		return false;
+	}
+
+	return now.getTime() - lastManualBoostAt.getTime() < cooldownMinutes * 60_000;
+};
+
+// 쿨다운 종료까지 남은 시간(ms). last가 없으면 0. 라우터 메시지의 "약 N분 후" 계산용.
+export const manualBoostCooldownRemainingMs = (
+	lastManualBoostAt: Date | null,
+	now: Date,
+	cooldownMinutes: number
+): number => {
+	if (lastManualBoostAt === null) {
+		return 0;
+	}
+
+	return Math.max(
+		0,
+		cooldownMinutes * 60_000 - (now.getTime() - lastManualBoostAt.getTime())
+	);
+};
+
 export type BoostIneligibleReason =
 	| "banner_product"
 	| "daily_limit_reached"

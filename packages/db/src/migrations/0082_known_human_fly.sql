@@ -1,0 +1,1 @@
+ALTER TABLE "ad_product" ADD COLUMN "manual_boost_cooldown_minutes" integer DEFAULT 10 NOT NULL;

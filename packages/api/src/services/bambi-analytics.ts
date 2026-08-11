@@ -1,6 +1,10 @@
 import { db } from "@bambi-app/db";
 import { member } from "@bambi-app/db/schema/auth";
-import { jobPerformanceEvent, jobPost } from "@bambi-app/db/schema/bambi";
+import {
+	jobBoostEvent,
+	jobPerformanceEvent,
+	jobPost,
+} from "@bambi-app/db/schema/bambi";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { isOrganizationManagerRole } from "./bambi-organization-authz";
 
@@ -359,6 +363,9 @@ export const getRecentJobPerformanceMetrics = async (
 };
 
 export interface JobPerformanceMetrics {
+	// 최근 7일 자동 재노출(auto-boost) 발동 횟수. 나머지 지표는 누적이지만, 이 값은
+	// "하루 N회 재게시" 보장의 최근 이행 증빙이라 7일 창으로만 센다.
+	autoBoostFires: number;
 	chatStarts: number;
 	contactReveals: number;
 	detailViews: number;
@@ -387,6 +394,7 @@ export interface EmployerJobPerformanceSummary {
 }
 
 const emptyMetrics = (): JobPerformanceMetrics => ({
+	autoBoostFires: 0,
 	chatStarts: 0,
 	contactReveals: 0,
 	detailViews: 0,
@@ -539,6 +547,35 @@ export const getEmployerJobPerformanceSummary = async (
 			if (sectionMetrics) {
 				incrementSectionMetric(sectionMetrics, event.metadata ?? null);
 			}
+		}
+	}
+
+	// 최근 7일 자동 재노출 발동 수를 공고별로 단일 group-by count로 집계한다(N+1 없음).
+	// impression은 트래픽 의존이라 보장 증빙이 못 되고, boostType=auto 발동이 "하루 N회
+	// 최상단 재게시" 이행 이력이라 이 값만 별도 창으로 센다.
+	const autoBoostWindowStart = new Date(
+		Date.now() - RECENT_PERFORMANCE_WINDOW_DAYS * 24 * 60 * 60 * 1000
+	);
+	const autoBoostRows = await db
+		.select({
+			jobPostId: jobBoostEvent.jobPostId,
+			total: sql<number>`count(*)::int`,
+		})
+		.from(jobBoostEvent)
+		.where(
+			and(
+				inArray(jobBoostEvent.jobPostId, jobIds),
+				eq(jobBoostEvent.boostType, "auto"),
+				gte(jobBoostEvent.createdAt, autoBoostWindowStart)
+			)
+		)
+		.groupBy(jobBoostEvent.jobPostId);
+
+	for (const row of autoBoostRows) {
+		const metrics = metricsByJobId.get(row.jobPostId);
+
+		if (metrics) {
+			metrics.autoBoostFires = row.total;
 		}
 	}
 

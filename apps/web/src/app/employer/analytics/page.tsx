@@ -117,6 +117,7 @@ export default function EmployerAnalyticsPage() {
 	};
 	const totals = summaries.reduce(
 		(accumulator, item) => ({
+			autoBoostFires: accumulator.autoBoostFires + item.metrics.autoBoostFires,
 			chatStarts: accumulator.chatStarts + item.metrics.chatStarts,
 			detailViews: accumulator.detailViews + item.metrics.detailViews,
 			impressions: accumulator.impressions + item.metrics.impressions,
@@ -140,6 +141,7 @@ export default function EmployerAnalyticsPage() {
 				accumulator.urgentImpressions + item.sectionMetrics.urgentImpressions,
 		}),
 		{
+			autoBoostFires: 0,
 			chatStarts: 0,
 			detailViews: 0,
 			impressions: 0,
@@ -239,13 +241,17 @@ export default function EmployerAnalyticsPage() {
 				</div>
 			</div>
 
-			<dl className="grid gap-3 sm:grid-cols-3">
+			<dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				<MetricCard label="노출" value={formatNumber(totals.impressions)} />
 				<MetricCard
 					label="상세 조회"
 					value={formatNumber(totals.detailViews)}
 				/>
 				<MetricCard label="채팅 시작" value={formatNumber(totals.chatStarts)} />
+				<MetricCard
+					label="자동 재노출(7일)"
+					value={formatNumber(totals.autoBoostFires)}
+				/>
 			</dl>
 
 			<section
@@ -388,6 +394,14 @@ export default function EmployerAnalyticsPage() {
 												</dd>
 											</div>
 											<div className="col-span-2">
+												<dt className="text-muted-foreground">
+													자동 재노출(7일)
+												</dt>
+												<dd className="mt-1 font-medium">
+													{formatNumber(summary.metrics.autoBoostFires)}회
+												</dd>
+											</div>
+											<div className="col-span-2">
 												<dt className="text-muted-foreground">게재 구분</dt>
 												<dd className="mt-1 break-words font-medium">
 													{formatPlacementMetrics(summary)}
@@ -420,6 +434,9 @@ export default function EmployerAnalyticsPage() {
 											상세 전환
 										</th>
 										<th className="px-4 py-3 font-medium" scope="col">
+											자동 재노출(7일)
+										</th>
+										<th className="px-4 py-3 font-medium" scope="col">
 											게재 구분
 										</th>
 									</tr>
@@ -449,6 +466,9 @@ export default function EmployerAnalyticsPage() {
 													summary.metrics.detailViews,
 													summary.metrics.impressions
 												)}
+											</td>
+											<td className="px-4 py-3">
+												{formatNumber(summary.metrics.autoBoostFires)}회
 											</td>
 											<td className="px-4 py-3">
 												{formatPlacementMetrics(summary)}

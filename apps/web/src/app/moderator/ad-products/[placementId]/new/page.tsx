@@ -42,6 +42,7 @@ export default function NewAdProductPage() {
 						previewTemplate: draft.previewTemplate,
 						manualBoostsPerDay: draft.manualBoostsPerDay,
 						autoBoostsPerDay: draft.autoBoostsPerDay,
+						manualBoostCooldownMinutes: draft.manualBoostCooldownMinutes,
 					})
 				}
 				pending={create.isPending}
