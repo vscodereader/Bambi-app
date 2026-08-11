@@ -421,12 +421,17 @@ describe("notificationHref", () => {
 		).toBe("/employer/jobs/target-1/edit");
 	});
 
-	it("대기열 접수·자동 노출 시작 알림은 광고 관리로 보낸다", () => {
+	it("대기열 3종(접수·자동 노출 시작·제외) 알림은 광고 관리로 보낸다", () => {
 		expect(
 			notificationHref(view({ metadata: { action: "listing_queued" } }))
 		).toBe("/employer/promotions");
 		expect(
 			notificationHref(view({ metadata: { action: "listing_activated" } }))
+		).toBe("/employer/promotions");
+		expect(
+			notificationHref(
+				view({ metadata: { action: "remove_from_listing_queue" } })
+			)
 		).toBe("/employer/promotions");
 	});
 
