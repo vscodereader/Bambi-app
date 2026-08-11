@@ -20,7 +20,6 @@ import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
-import { EMPLOYMENT_RESOURCES } from "@/lib/bambi/employment-resources";
 import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import { MANUAL_PATH } from "@/lib/bambi/manual";
 import { SUPPORT_PATH } from "@/lib/bambi/support";
@@ -180,21 +179,6 @@ export function SiteFooter({
 							>
 								체불사업주 명단
 							</a>
-							{EMPLOYMENT_RESOURCES.map((resource) => (
-								<a
-									className={FOOTER_LINK_CLASS}
-									href={resource.href}
-									key={resource.href}
-									rel={
-										resource.href.startsWith("http") ? "noreferrer" : undefined
-									}
-									target={
-										resource.href.startsWith("http") ? "_blank" : undefined
-									}
-								>
-									{resource.label}
-								</a>
-							))}
 							{/* 고객센터는 메일 클라이언트를 띄우는 대신 1:1 문의 창구로 보낸다 —
 							    문의 이력이 남고 답변을 서비스 안에서 받을 수 있는 경로다.
 							    /support는 로그인 뒤에 있지만, 비로그인 방문자도 아래 사업자 정보
