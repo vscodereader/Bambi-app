@@ -22,6 +22,7 @@ import {
 	eq,
 	gt,
 	inArray,
+	isNotNull,
 	isNull,
 	or,
 	type SQL,
@@ -1376,14 +1377,19 @@ export const jobsRouter = {
 				return [];
 			}
 
+			// 대기열(결제됨·exposureEndsAt null) 공고는 노출에서 제외 — 활성화된 것만 보인다.
+			// 단 이 배제는 정원 리스팅(special/recommended)에만 적용한다. urgent는 정원 대기열이
+			// 없어 기존 동작(null=상시 노출) 그대로 유지한다.
+			const exposureWindow =
+				type === "urgent"
+					? or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
+					: and(
+							isNotNull(jobPost.exposureEndsAt),
+							gt(jobPost.exposureEndsAt, now)
+						);
+
 			return await selectExposureJobs()
-				.where(
-					and(
-						...filters,
-						eq(jobPost.exposureType, type),
-						or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
-					)
-				)
+				.where(and(...filters, eq(jobPost.exposureType, type), exposureWindow))
 				.orderBy(desc(exposureRankSql));
 		};
 

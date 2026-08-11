@@ -11,6 +11,7 @@ import {
 	gt,
 	gte,
 	inArray,
+	isNotNull,
 	isNull,
 	notInArray,
 	or,
@@ -27,6 +28,7 @@ import {
 	getKstDayStart,
 	sumActivePeriodBoostsPerDay,
 } from "./bambi-job-boost";
+import { CAPACITY_LISTING_EXPOSURE_TYPES } from "./bambi-premium-capacity";
 
 // 한 틱에서 동시에 처리할 공고 트랜잭션 상한. 대규모 공고에서도 DB 커넥션·잠금 경합을
 // 상한 안에 가두면서 순차 for-await보다 처리량을 끌어올린다(공유 인덱스 워커 풀).
@@ -105,6 +107,13 @@ export const runAutoBoostTick = async (now: Date): Promise<number> => {
 				eq(jobPost.status, "published"),
 				eq(jobPost.paymentStatus, "paid"),
 				or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now)),
+				// 대기열 리스팅(결제완료·exposureEndsAt null인 스페셜/추천)은 노출 전이라 자동 끌올 제외.
+				or(
+					notInArray(jobPost.exposureType, [
+						...CAPACITY_LISTING_EXPOSURE_TYPES,
+					]),
+					isNotNull(jobPost.exposureEndsAt)
+				),
 				or(
 					and(
 						gt(jobPost.autoBoostsPerDay, 0),

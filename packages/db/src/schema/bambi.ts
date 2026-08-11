@@ -901,6 +901,10 @@ export const jobPost = pgTable(
 		// 서버 틱 스케줄러가 09~21시 KST 창을 이 횟수로 균등 분배해 자동 발동한다.
 		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
 		publishedAt: timestamp("published_at"),
+		// 리스팅(스페셜/추천) 공고가 결제완료된 시각. 만석이면 결제 후에도 노출되지 않고
+		// 대기열에 들어가는데, 이 값이 FIFO 대기 순번의 키다(먼저 결제된 광고가 먼저 자리를 차지).
+		// 활성 여부는 exposureEndsAt로 구분한다(null=대기중). null=미결제/비리스팅.
+		listingPaidAt: timestamp("listing_paid_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
