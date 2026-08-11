@@ -169,9 +169,8 @@ export function SiteFooter({
 									</div>
 								</DialogContent>
 							</Dialog>
-							{/* 직업정보제공사업자 준수사항: 명단이 공개 중인 체불사업주인지 구직자가
-						    확인할 수 있어야 한다. 명단은 고용노동부가 직접 관리·갱신하므로
-						    사본을 두지 않고 원본을 새 탭으로 연다(밤비를 떠나게 하지 않는다). */}
+							{/* 직업정보제공사업자 준수사항: 체불사업주 명단은 반드시 독립된
+							    고정 링크로 유지한다. 다른 공공정보 배열 변경과 무관하게 빠지면 안 된다. */}
 							<a
 								className={FOOTER_LINK_CLASS}
 								href="https://www.moel.go.kr/info/defaulter/defaulterList.do"

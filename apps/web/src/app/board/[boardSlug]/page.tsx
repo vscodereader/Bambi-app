@@ -31,7 +31,11 @@ import {
 	publicPostPath,
 	publicWritePath,
 } from "@/lib/bambi/public-community";
-import { breadcrumbJsonLd } from "@/lib/bambi/seo";
+import {
+	breadcrumbJsonLd,
+	mergeSeoKeywords,
+	SITE_KEYWORDS,
+} from "@/lib/bambi/seo";
 import { readGuestCanWrite, readVisitorState } from "@/lib/bambi/visitor";
 import { client } from "@/utils/orpc";
 
@@ -57,6 +61,11 @@ export async function generateMetadata({
 		// 접히지 않는다(글 목록이 달라 실제로 다른 문서다).
 		alternates: { canonical: publicBoardPath(board.slug, page) },
 		description: `${board.description}. 밤비알바 커뮤니티 ${board.label} 게시판의 최신 글을 확인해 보세요.`,
+		keywords: mergeSeoKeywords(SITE_KEYWORDS, [
+			board.label,
+			"밤알바 커뮤니티",
+			"여성알바 정보",
+		]),
 		openGraph: {
 			description: board.description,
 			title: `${board.label}${pageSuffix} - 밤비알바 커뮤니티`,

@@ -11,14 +11,22 @@ import {
 	PUBLIC_BOARDS,
 	publicBoardPath,
 } from "@/lib/bambi/public-community";
+import { mergeSeoKeywords, SITE_KEYWORDS } from "@/lib/bambi/seo";
 
 // 공개 게시판 허브. 목록·상세로 들어가는 내부 링크를 한 곳에 모아 크롤러가
 // 공개 영역 전체를 한 번에 훑을 수 있게 한다.
 export const metadata: Metadata = {
 	alternates: { canonical: PUBLIC_BOARD_INDEX_PATH },
 	description:
-		"밤비알바 커뮤니티 공개 게시판입니다. 공지사항과 회원들의 일 이야기·자유수다를 로그인 없이 읽어볼 수 있습니다.",
-	title: "커뮤니티 게시판 - 밤비알바",
+		"밤알바·여우알바·퀸알바·여성알바 정보를 나누는 밤비알바 공개 커뮤니티입니다. 공지사항과 회원들의 일 이야기·자유수다를 로그인 없이 확인하세요.",
+	keywords: mergeSeoKeywords(SITE_KEYWORDS, [
+		"밤알바 커뮤니티",
+		"여우알바 커뮤니티",
+		"퀸알바 커뮤니티",
+		"여성알바 커뮤니티",
+		"밤알바 후기",
+	]),
+	title: "밤알바·여우알바·퀸알바 정보 커뮤니티 | 밤비알바",
 };
 
 export default function PublicBoardIndexPage() {

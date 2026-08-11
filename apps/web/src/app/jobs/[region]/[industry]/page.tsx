@@ -6,9 +6,11 @@ import {
 	findJobLandingRegion,
 	type JobLandingTarget,
 	jobLandingDescription,
+	jobLandingKeywords,
 	jobLandingPath,
 	jobLandingTitle,
 } from "@/lib/bambi/job-landing";
+import { mergeSeoKeywords, SITE_KEYWORDS } from "@/lib/bambi/seo";
 
 interface IndustryLandingProps {
 	params: Promise<{ industry: string; region: string }>;
@@ -37,6 +39,7 @@ export async function generateMetadata({
 	return {
 		title: jobLandingTitle(target),
 		description: jobLandingDescription(target),
+		keywords: mergeSeoKeywords(SITE_KEYWORDS, jobLandingKeywords(target)),
 		alternates: { canonical: jobLandingPath(target) },
 	};
 }
