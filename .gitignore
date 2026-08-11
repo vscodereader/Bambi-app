@@ -60,6 +60,7 @@ temp
 .omx
 
 .claude/worktrees/*
+.claude/launch.json
 
 # Graphify generated knowledge graph
 graphify-out/
