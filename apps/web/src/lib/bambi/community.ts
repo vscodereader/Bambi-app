@@ -123,9 +123,14 @@ export const toBoardMeta = (row: ActiveBoardRow): CommunityBoardMeta => ({
 });
 
 // 화면이 쓰는 게시판 목록. 베스트는 DB 행이 아니라 서버가 만들어 주는 가상 게시판이라
-// 선두에 직접 얹는다(community.overview도 같은 자리에 끼운다).
-export const toBoardMetas = (rows: ActiveBoardRow[]): CommunityBoardMeta[] => [
-	getBoardByKey("best"),
+// 선두에 직접 얹는다(community.overview도 같은 자리에 끼운다). 베스트 아이콘은 DB 행이 없어
+// site_settings에 저장되므로 listActive가 함께 내려준 bestIcon을 여기서 메타에 얹는다
+// (미지정이면 null → 기존 코럴 액센트 바 유지).
+export const toBoardMetas = (
+	rows: ActiveBoardRow[],
+	bestIcon: string | null = null
+): CommunityBoardMeta[] => [
+	{ ...getBoardByKey("best"), icon: bestIcon },
 	...rows.map(toBoardMeta),
 ];
 

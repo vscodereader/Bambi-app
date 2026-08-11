@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import { member, team, teamMember } from "@bambi-app/db/schema/auth";
 import {
 	adProduct,
+	bambiSiteSettings,
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobBoostEvent,
@@ -41,7 +42,12 @@ import {
 	sumRemainingBoostCount,
 } from "../../services/bambi-job-boost";
 import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
-import { derivePremiumQueue } from "../../services/bambi-premium-capacity";
+import {
+	DEFAULT_RECOMMENDED_CAPACITY,
+	DEFAULT_SPECIAL_CAPACITY,
+	deriveListingQueue,
+	derivePremiumQueue,
+} from "../../services/bambi-premium-capacity";
 
 // 구 jobPromotionCampaign 축 라우터를 광고 상품 축으로 재작성했다.
 // 광고 목록(listMyAds)과 수동 끌어올리기(boost)만 제공한다.
@@ -197,9 +203,40 @@ export const promotionsRouter = {
 			purchasesByJobId.set(purchaseRow.jobPostId, list);
 		}
 
-		// 배너 미결제 신청의 파생 큐 정보(진행 가능 여부·대기 순번). ranksByJobId는 pending
-		// 배너 공고만 담으므로 결제완료·비배너 행은 자연히 null이 된다.
-		const { ranksByJobId } = await derivePremiumQueue(db, now);
+		// 배너 + 스페셜/추천 미결제 신청의 파생 큐 정보(진행 가능 여부·대기 순번)를 한데 모아
+		// 같은 premiumQueue 필드로 노출한다 — 신청자 쪽은 배너냐 리스팅이냐가 아니라 "내 신청이
+		// 진행 가능한지, 대기 몇 번째인지"만 필요해서다(기존 premiumQueue 필드·관용 그대로 확장).
+		// 각 파생 큐의 ranksByJobId는 해당 섹션 pending 공고만 담으므로(exposureType로 나뉜
+		// 서로 다른 공고 집합) 세 맵을 합쳐도 키가 겹치지 않는다.
+		const [settingsRow] = await db
+			.select({
+				recommendedCapacity: bambiSiteSettings.recommendedCapacity,
+				specialCapacity: bambiSiteSettings.specialCapacity,
+			})
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"))
+			.limit(1);
+		const [premiumQueueResult, specialQueueResult, recommendedQueueResult] =
+			await Promise.all([
+				derivePremiumQueue(db, now),
+				deriveListingQueue(
+					db,
+					"special",
+					settingsRow?.specialCapacity ?? DEFAULT_SPECIAL_CAPACITY,
+					now
+				),
+				deriveListingQueue(
+					db,
+					"recommended",
+					settingsRow?.recommendedCapacity ?? DEFAULT_RECOMMENDED_CAPACITY,
+					now
+				),
+			]);
+		const queueByJobId = new Map([
+			...premiumQueueResult.ranksByJobId,
+			...specialQueueResult.ranksByJobId,
+			...recommendedQueueResult.ranksByJobId,
+		]);
 
 		return rows.map((row) => {
 			const purchases = purchasesByJobId.get(row.jobPostId) ?? [];
@@ -221,7 +258,7 @@ export const promotionsRouter = {
 				hasUnpaidBoostOption: purchases.some(
 					(p) => p.paymentStatus === "unpaid"
 				),
-				premiumQueue: ranksByJobId.get(row.jobPostId) ?? null,
+				premiumQueue: queueByJobId.get(row.jobPostId) ?? null,
 			};
 		});
 	}),

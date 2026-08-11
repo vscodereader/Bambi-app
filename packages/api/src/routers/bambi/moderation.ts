@@ -10,6 +10,7 @@ import {
 import {
 	adminModerationAction,
 	bambiProfile,
+	bambiSiteSettings,
 	chatAttachment,
 	chatMessage,
 	chatMessageReadReceipt,
@@ -72,7 +73,14 @@ import {
 	notifyModerationAction,
 } from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
-import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
+import {
+	assertListingApprovalWithinCapacity,
+	assertPremiumApprovalWithinCapacity,
+	CAPACITY_LISTING_EXPOSURE_TYPES,
+	type CapacityListingExposureType,
+	DEFAULT_RECOMMENDED_CAPACITY,
+	DEFAULT_SPECIAL_CAPACITY,
+} from "../../services/bambi-premium-capacity";
 import {
 	createJobPostMediaUploadIntent,
 	getBusinessDocumentObjectUrl,
@@ -88,6 +96,65 @@ import {
 	getStoredAdBannerLayout,
 	jobPostInput,
 } from "./jobs";
+
+// 스페셜/추천 리스팅 승인(unpaid→paid) 시 섹션별 정원 게이트를 건다. 배너 게이트
+// (assertPremiumApprovalWithinCapacity)와 독립된 별도 흐름 — exposureType이 special/recommended가
+// 아니면 아무것도 하지 않는다. 정원은 사이트 설정에서 읽되 null이면 코드 기본값으로 폴백한다.
+// 승인이 아닌 전환(paid→unpaid 등)엔 설정 조회조차 하지 않도록 먼저 걸러낸다.
+const assertListingApprovalGate = async ({
+	executor,
+	existingExposureType,
+	existingPaymentStatus,
+	newPaymentStatus,
+	now,
+}: {
+	executor: Parameters<
+		typeof assertListingApprovalWithinCapacity
+	>[0]["executor"];
+	existingExposureType: string;
+	existingPaymentStatus: string;
+	newPaymentStatus: string;
+	now: Date;
+}): Promise<void> => {
+	const isApproval =
+		existingPaymentStatus === "unpaid" && newPaymentStatus === "paid";
+	if (
+		!(
+			isApproval &&
+			(CAPACITY_LISTING_EXPOSURE_TYPES as readonly string[]).includes(
+				existingExposureType
+			)
+		)
+	) {
+		return;
+	}
+	const exposureType = existingExposureType as CapacityListingExposureType;
+
+	// 정원은 트러스트 바운더리(운영자 설정) 값이지만 select만 하므로 여기선 폴백만 처리하고,
+	// 범위·정수 검증은 저장 프로시저(updateExposureSectionConfig) 쪽에서 맡는다.
+	const [settings] = await executor
+		.select({
+			recommendedCapacity: bambiSiteSettings.recommendedCapacity,
+			specialCapacity: bambiSiteSettings.specialCapacity,
+		})
+		.from(bambiSiteSettings)
+		.where(eq(bambiSiteSettings.id, "default"))
+		.limit(1);
+
+	const capacity =
+		exposureType === "special"
+			? (settings?.specialCapacity ?? DEFAULT_SPECIAL_CAPACITY)
+			: (settings?.recommendedCapacity ?? DEFAULT_RECOMMENDED_CAPACITY);
+
+	await assertListingApprovalWithinCapacity({
+		capacity,
+		executor,
+		existingPaymentStatus,
+		exposureType,
+		newPaymentStatus,
+		now,
+	});
+};
 
 export const targetTypeSchema = z.enum([
 	"job_post",
@@ -1943,6 +2010,15 @@ export const moderationRouter = {
 					now: new Date(),
 				});
 
+				// 스페셜/추천 리스팅 승인은 배너와 별개 정원 게이트를 탄다(같은 트랜잭션·advisory lock).
+				await assertListingApprovalGate({
+					executor: tx,
+					existingExposureType: existing.exposureType,
+					existingPaymentStatus: existing.paymentStatus,
+					newPaymentStatus: input.paymentStatus,
+					now: new Date(),
+				});
+
 				const exposureEndsAt =
 					input.paymentStatus === "paid" &&
 					existing.exposureDurationDays !== null
@@ -2433,6 +2509,16 @@ export const moderationRouter = {
 							// 정원 초과 승인은 항목별 실패로 떨어진다(CONFLICT). 같은 트랜잭션에서
 							// 앞선 승인이 반영돼 active가 늘므로, 정원 내 앞 항목만 성공한다.
 							await assertPremiumApprovalWithinCapacity({
+								executor: tx,
+								existingExposureType: existing.exposureType,
+								existingPaymentStatus: existing.paymentStatus,
+								newPaymentStatus: input.paymentStatus,
+								now: new Date(),
+							});
+
+							// 스페셜/추천 리스팅 승인은 배너와 별개 정원 게이트를 탄다 — 정원 초과 항목은
+							// CONFLICT로 개별 실패하고, 같은 트랜잭션의 앞선 승인이 active에 반영된다.
+							await assertListingApprovalGate({
 								executor: tx,
 								existingExposureType: existing.exposureType,
 								existingPaymentStatus: existing.paymentStatus,

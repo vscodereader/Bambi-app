@@ -1297,6 +1297,19 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 광고 배너 로테이션 주기(분). 운영자 사이트 설정에서 편집한다. 활성 광고 칸이 이 주기마다
 	// 한 칸씩 전진한다. null이면 코드 기본값(DEFAULT_AD_ROTATION_MINUTES=60)으로 폴백한다.
 	adBannerRotationMinutes: integer("ad_banner_rotation_minutes"),
+	// 급구 채용 섹션 숨김. 코드에서 섹션을 지우지 않고 운영자 토글로 뺀 값 — 기본 true라
+	// 마이그레이션 직후 즉시 숨겨지고(기존 단일 행에도 채워짐), 운영자가 끄면(false) 다시 노출된다.
+	urgentSectionHidden: boolean("urgent_section_hidden").default(true).notNull(),
+	// 스페셜 리스팅 광고의 정원 = 렌더 슬롯 수(고정 인벤토리, 로테이션 없음). 자리가 차면 신규
+	// 승인은 대기열로 밀린다. null이면 코드 기본값(DEFAULT_SPECIAL_CAPACITY=12)으로 폴백한다.
+	specialCapacity: integer("special_capacity"),
+	// 추천 리스팅 광고의 정원 = 렌더 슬롯 수. 위 스페셜과 동일 규칙이며 null이면 코드 기본값
+	// (DEFAULT_RECOMMENDED_CAPACITY=20)으로 폴백한다.
+	recommendedCapacity: integer("recommended_capacity"),
+	// 베스트글(추천수 큐레이션 가상 게시판) 아이콘의 lucide 이름. 베스트는 community_board 행이
+	// 없는 가상 게시판이라 게시판 아이콘 컬럼 대신 여기 저장한다. null이면 미지정(기존 코럴
+	// 액센트 바 유지) — 값 검증은 API 쪽 COMMUNITY_BOARD_ICONS enum(zod)이 맡는다.
+	bestBoardIcon: text("best_board_icon"),
 	// 개인정보 처리방침에 노출하는 위탁사·관리부서 연락처. 운영자 사이트 설정에서 편집한다.
 	// null이면 프론트가 코드 폴백(BAMBI_PROCESSORS 이름 / BAMBI_COMPANY.privacyOfficer)을 쓴다.
 	privacyPaymentProcessor: text("privacy_payment_processor"),

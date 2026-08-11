@@ -119,6 +119,10 @@ import {
 	getUpdatedJobPostStatus,
 	type JobPostStatus,
 } from "../../services/bambi-policy";
+import {
+	DEFAULT_RECOMMENDED_CAPACITY,
+	DEFAULT_SPECIAL_CAPACITY,
+} from "../../services/bambi-premium-capacity";
 import { resolveRegionSelection } from "../../services/bambi-region";
 import {
 	createJobPostMediaUploadIntent,
@@ -1389,6 +1393,7 @@ export const jobsRouter = {
 			recommendedRows,
 			organicRows,
 			[jobPostTotalRow],
+			[listingCapacityRow],
 		] = await Promise.all([
 			getExposedJobs("special"),
 			getExposedJobs("urgent"),
@@ -1416,6 +1421,15 @@ export const jobsRouter = {
 					eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
 				)
 				.where(and(...filters)),
+			// 스페셜/추천 방어적 slice에 쓸 정원. null이면 아래에서 코드 기본값으로 폴백한다.
+			db
+				.select({
+					recommendedCapacity: bambiSiteSettings.recommendedCapacity,
+					specialCapacity: bambiSiteSettings.specialCapacity,
+				})
+				.from(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, "default"))
+				.limit(1),
 		]);
 		const jobPostTotal = jobPostTotalRow?.value ?? 0;
 
@@ -1427,6 +1441,18 @@ export const jobsRouter = {
 			specialRows,
 			urgentRows,
 		});
+
+		// 방어적 slice: 정원=슬롯 수 불변식은 승인 게이트가 지키지만, 운영자가 정원을 낮춘
+		// 직후처럼 이미 active인 공고 수가 새 정원을 넘는 전이 상태가 있을 수 있다. 정렬은
+		// 그대로 두고 앞에서부터 정원 개수만 남긴다(urgent/organic·cursor·totalCount는 그대로).
+		result.sections.special = result.sections.special.slice(
+			0,
+			listingCapacityRow?.specialCapacity ?? DEFAULT_SPECIAL_CAPACITY
+		);
+		result.sections.recommended = result.sections.recommended.slice(
+			0,
+			listingCapacityRow?.recommendedCapacity ?? DEFAULT_RECOMMENDED_CAPACITY
+		);
 
 		// 현재 요청에서 새로 기록하는 impression 때문에 판정이 왜곡되지 않도록,
 		// recordJobListingImpressions 이전에 최근 7일 성과를 집계해 각 item에 붙인다.
