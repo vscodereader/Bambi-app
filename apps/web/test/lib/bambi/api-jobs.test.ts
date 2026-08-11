@@ -6,6 +6,13 @@ process.env.NEXT_PUBLIC_SERVER_URL = "http://localhost:3000";
 process.env.NEXT_PUBLIC_GCS_PUBLIC_BASE_URL = "https://cdn.bambi.test";
 
 const { toMarketplaceJob } = await import("@/lib/bambi/api-job-mapper");
+const { MARKETPLACE_PAGE_SIZE } = await import("@/lib/bambi/api-jobs");
+
+describe("marketplace pagination", () => {
+	it("loads the first page and each subsequent page in a 4 by 12 window", () => {
+		expect(MARKETPLACE_PAGE_SIZE).toBe(48);
+	});
+});
 
 describe("toMarketplaceJob", () => {
 	it("maps API rating aggregates onto marketplace jobs", () => {

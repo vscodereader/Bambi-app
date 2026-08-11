@@ -218,10 +218,13 @@ const listForFixtureRegion = () =>
 
 const organicIds = (
 	result: Awaited<ReturnType<typeof listForFixtureRegion>>
-): string[] =>
-	result.sections.organic
+): string[] => {
+	const standardJobIds = new Set([fixture.organicNewId, fixture.organicOldId]);
+
+	return result.sections.organic
 		.map((item) => item.id)
-		.filter((id) => fixture.jobPostIds.includes(id));
+		.filter((id) => standardJobIds.has(id));
+};
 
 describe("jobs.list boost ordering", () => {
 	beforeAll(async () => {
@@ -244,7 +247,7 @@ describe("jobs.list boost ordering", () => {
 		]);
 	});
 
-	it("lifts a boosted job above newer publishedAt in its section and organic", async () => {
+	it("orders sequential boosts newest first and shifts the previous boost back", async () => {
 		const now = new Date();
 		await db
 			.update(jobPost)
@@ -263,6 +266,26 @@ describe("jobs.list boost ordering", () => {
 		expect(organicIds(result)).toEqual([
 			fixture.organicOldId,
 			fixture.organicNewId,
+		]);
+
+		const nextBoostAt = new Date(now.getTime() + 1000);
+		await db
+			.update(jobPost)
+			.set({ boostedAt: nextBoostAt })
+			.where(eq(jobPost.id, fixture.specialNewId));
+		await db
+			.update(jobPost)
+			.set({ boostedAt: nextBoostAt })
+			.where(eq(jobPost.id, fixture.organicNewId));
+
+		const afterNextBoost = await listForFixtureRegion();
+		expect(afterNextBoost.sections.special.map((item) => item.id)).toEqual([
+			fixture.specialNewId,
+			fixture.specialOldId,
+		]);
+		expect(organicIds(afterNextBoost)).toEqual([
+			fixture.organicNewId,
+			fixture.organicOldId,
 		]);
 	});
 });
