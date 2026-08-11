@@ -1049,6 +1049,58 @@ const succeededBulkTargetIds = (
 	return targetIds.filter((targetId) => !failed.has(targetId));
 };
 
+/**
+ * 결제 확정이 즉시 노출이 아니라 대기열 접수일 수 있다 — 스페셜/추천은 정원이 차 있으면
+ * exposureEndsAt=null(노출 시계 미시작)·listingPaidAt 세팅으로 FIFO 유료 대기열에 들어간다.
+ * 그 행을 판별해 알림 문구("게시됐어요" vs "대기열 접수")를 사실에 맞게 가른다.
+ */
+const isQueuedListingRow = (row: {
+	exposureEndsAt: Date | null;
+	exposureType: string;
+	listingPaidAt: Date | null;
+}): boolean =>
+	(row.exposureType === "special" || row.exposureType === "recommended") &&
+	row.exposureEndsAt === null &&
+	row.listingPaidAt !== null;
+
+/**
+ * 결제 확정 알림 payload. 대기열 접수면 순번을 붙여 "listing_queued"로, 그 외(즉시 활성화·
+ * 비리스팅·unpaid 전환)는 기존 "set_payment"로 낸다. bulk 여부만 set_payment metadata에 반영한다.
+ */
+const buildListingPaymentNotification = ({
+	bulk,
+	paymentStatus,
+	position,
+	row,
+}: {
+	bulk: boolean;
+	paymentStatus: string;
+	position: number | null;
+	row:
+		| {
+				exposureEndsAt: Date | null;
+				exposureType: string;
+				listingPaidAt: Date | null;
+				title: string;
+		  }
+		| undefined;
+}): { action: string; metadata: Record<string, unknown> } => {
+	if (paymentStatus === "paid" && row && isQueuedListingRow(row)) {
+		return {
+			action: "listing_queued",
+			metadata: {
+				exposureType: row.exposureType,
+				jobPostTitle: row.title,
+				position,
+			},
+		};
+	}
+	return {
+		action: `set_payment:${paymentStatus}`,
+		metadata: bulk ? { bulk: true, paymentStatus } : { paymentStatus },
+	};
+};
+
 const rejectTeamInvitation = async (
 	tx: ModerationTx,
 	adminUserId: string,
@@ -2018,11 +2070,24 @@ export const moderationRouter = {
 				organizationId,
 			});
 
-			// unpaid→paid가 노출 개시라, 구인자에게는 "광고가 시작됐다"는 유일한 신호다.
+			// unpaid→paid가 노출 개시라, 구인자에게는 "광고가 시작됐다"는 유일한 신호다. 단, 스페셜/추천이
+			// 만석 대기열로 들어갔으면(exposureEndsAt=null) 게시가 아니라 접수라 순번을 붙여 다르게 알린다.
+			const queuedNow =
+				input.paymentStatus === "paid" && isQueuedListingRow(updated);
+			const position = queuedNow
+				? ((await getListingQueuePositions(db)).get(input.jobPostId)
+						?.position ?? null)
+				: null;
+			const notification = buildListingPaymentNotification({
+				bulk: false,
+				paymentStatus: input.paymentStatus,
+				position,
+				row: updated,
+			});
 			await notifyModerationAction({
-				action: `set_payment:${input.paymentStatus}`,
+				action: notification.action,
 				actorUserId: admin.userId,
-				metadata: { paymentStatus: input.paymentStatus },
+				metadata: notification.metadata,
 				targetId: input.jobPostId,
 				targetType: "job_post",
 			});
@@ -2621,15 +2686,43 @@ export const moderationRouter = {
 				await syncAdvertiserFlagForOrganization({ now, organizationId });
 			}
 
-			// 정원 초과로 CONFLICT 난 공고는 승인되지 않았다 — 성공분에만 "노출 개시"를 알린다.
-			for (const jobPostId of succeededBulkTargetIds(
-				input.jobPostIds,
-				result
-			)) {
+			// 정원 초과로 CONFLICT 난 공고는 승인되지 않았다 — 성공분에만 결과를 알린다. 스페셜/추천이
+			// 만석 대기열로 들어갔으면(exposureEndsAt=null) "노출 개시"가 아니라 "대기열 접수"라 순번을
+			// 붙여 다르게 알린다. 성공분 행과 순번 맵을 각각 1회만 뽑아 행별로 문구를 가른다.
+			const succeededIds = succeededBulkTargetIds(input.jobPostIds, result);
+			const succeededRows =
+				succeededIds.length > 0
+					? await db
+							.select({
+								exposureEndsAt: jobPost.exposureEndsAt,
+								exposureType: jobPost.exposureType,
+								id: jobPost.id,
+								listingPaidAt: jobPost.listingPaidAt,
+								title: jobPost.title,
+							})
+							.from(jobPost)
+							.where(inArray(jobPost.id, succeededIds))
+					: [];
+			const succeededRowById = new Map(
+				succeededRows.map((row) => [row.id, row] as const)
+			);
+			// 순번 맵은 대기열 행이 하나라도 있을 때만 1회 뽑는다(즉시 활성화·unpaid엔 불필요).
+			const queuePositions =
+				input.paymentStatus === "paid" && succeededRows.some(isQueuedListingRow)
+					? await getListingQueuePositions(db)
+					: null;
+
+			for (const jobPostId of succeededIds) {
+				const notification = buildListingPaymentNotification({
+					bulk: true,
+					paymentStatus: input.paymentStatus,
+					position: queuePositions?.get(jobPostId)?.position ?? null,
+					row: succeededRowById.get(jobPostId),
+				});
 				await notifyModerationAction({
-					action: `set_payment:${input.paymentStatus}`,
+					action: notification.action,
 					actorUserId: admin.userId,
-					metadata: { bulk: true, paymentStatus: input.paymentStatus },
+					metadata: notification.metadata,
 					targetId: jobPostId,
 					targetType: "job_post",
 				});
