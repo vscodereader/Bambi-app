@@ -144,6 +144,8 @@ const createProductInput = z.object({
 	previewImageUrl: previewImageUrlSchema,
 	manualBoostsPerDay: z.number().int().min(0).default(0),
 	autoBoostsPerDay: z.number().int().min(0).default(0),
+	// 수동 끌어올리기 최소 간격(분). 연타를 막아 목록 품질을 지킨다. 기본 10분.
+	manualBoostCooldownMinutes: z.number().int().min(1).max(1440).default(10),
 	// 상세이미지 디자인 제작 애드온 가격. 비우면(null) 이 상품에는 옵션을 팔지 않는다.
 	detailDesignPrice: z.number().int().min(0).nullish(),
 	sortOrder: z.number().int().min(0).default(0),
@@ -160,6 +162,8 @@ const updateProductInput = z.object({
 	previewImageUrl: previewImageUrlSchema,
 	manualBoostsPerDay: z.number().int().min(0).optional(),
 	autoBoostsPerDay: z.number().int().min(0).optional(),
+	// 수동 끌어올리기 최소 간격(분). 키 생략은 기존 값 유지.
+	manualBoostCooldownMinutes: z.number().int().min(1).max(1440).optional(),
 	// nullish라 명시적 null이 오면 옵션 미제공으로 되돌린다(키 생략은 기존 값 유지).
 	detailDesignPrice: z.number().int().min(0).nullish(),
 	sortOrder: z.number().int().min(0).optional(),

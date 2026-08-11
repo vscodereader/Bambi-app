@@ -7,6 +7,8 @@ import {
 	getAutoBoostSlotOffsetMs,
 	getKstDayStart,
 	isBoostPurchaseActive,
+	isManualBoostWithinCooldown,
+	manualBoostCooldownRemainingMs,
 	pickCountPurchaseToConsume,
 	resolveBoostEligibility,
 	sumActivePeriodBoostsPerDay,
@@ -404,6 +406,54 @@ describe("countDueAutoBoostSlots", () => {
 				);
 			}
 		});
+	});
+});
+
+describe("isManualBoostWithinCooldown", () => {
+	const now = new Date("2026-07-16T05:00:00Z");
+	const COOLDOWN = 10; // 분
+
+	it("null(첫 끌어올림)이면 false", () => {
+		expect(isManualBoostWithinCooldown(null, now, COOLDOWN)).toBe(false);
+	});
+
+	it("방금(간격 미달)이면 true", () => {
+		// 5분 전 — 10분 쿨다운 미경과
+		const last = new Date(now.getTime() - 5 * 60_000);
+		expect(isManualBoostWithinCooldown(last, now, COOLDOWN)).toBe(true);
+	});
+
+	it("정확히 경과한 시점은 허용(false)", () => {
+		const last = new Date(now.getTime() - COOLDOWN * 60_000);
+		expect(isManualBoostWithinCooldown(last, now, COOLDOWN)).toBe(false);
+	});
+
+	it("초과 경과면 false", () => {
+		const last = new Date(now.getTime() - 15 * 60_000);
+		expect(isManualBoostWithinCooldown(last, now, COOLDOWN)).toBe(false);
+	});
+
+	it("cooldown 0(미제공)이면 언제든 false", () => {
+		const last = new Date(now.getTime() - 1000);
+		expect(isManualBoostWithinCooldown(last, now, 0)).toBe(false);
+	});
+});
+
+describe("manualBoostCooldownRemainingMs", () => {
+	const now = new Date("2026-07-16T05:00:00Z");
+
+	it("null이면 0", () => {
+		expect(manualBoostCooldownRemainingMs(null, now, 10)).toBe(0);
+	});
+
+	it("남은 시간을 ms로 반환한다", () => {
+		const last = new Date(now.getTime() - 4 * 60_000); // 4분 전, 10분 쿨다운
+		expect(manualBoostCooldownRemainingMs(last, now, 10)).toBe(6 * 60_000);
+	});
+
+	it("경과했으면 0으로 클램프", () => {
+		const last = new Date(now.getTime() - 20 * 60_000);
+		expect(manualBoostCooldownRemainingMs(last, now, 10)).toBe(0);
 	});
 });
 

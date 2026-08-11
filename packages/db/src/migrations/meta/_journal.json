@@ -575,6 +575,13 @@
       "when": 1786414602645,
       "tag": "0081_violet_oracle",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1786419633731,
+      "tag": "0082_known_human_fly",
+      "breakpoints": true
     }
   ]
 }
