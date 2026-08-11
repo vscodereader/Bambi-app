@@ -7,7 +7,6 @@
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
-import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Label } from "@bambi-app/ui/components/label";
@@ -187,12 +186,6 @@ export default function ModeratorPaymentsPage() {
 	const bulkPaymentMutation = useMutation(
 		orpc.bambi.moderation.bulkSetJobPostPayment.mutationOptions()
 	);
-	// 배너형(프리미엄) 결제 승인은 정원(10자리) 게이트를 타고 초과분이 CONFLICT로 떨어진다.
-	// 누르기 전에 남은 자리를 화면에서 먼저 보여 준다(광고 안내 페이지와 같은 조회 재사용).
-	const capacityQuery = useQuery(
-		orpc.bambi.adProducts.premiumCapacity.queryOptions()
-	);
-	const capacity = capacityQuery.data;
 
 	const jobs = jobsQuery.data ?? [];
 
@@ -240,19 +233,13 @@ export default function ModeratorPaymentsPage() {
 					onError: () =>
 						toast("결제 상태를 변경하지 못했어요. 다시 시도해 주세요."),
 					onSuccess: async (result) => {
-						await Promise.all([
-							// 필터가 둘로 늘어나 키가 갈린다 — 조회와 같은 입력으로 무효화하지
-							// 않으면 처리 후 목록이 옛 상태 그대로 남는다.
-							queryClient.invalidateQueries({
-								queryKey: orpc.bambi.moderation.listJobsForPayment.queryKey({
-									input: queryInput,
-								}),
+						// 필터가 둘로 늘어나 키가 갈린다 — 조회와 같은 입력으로 무효화하지
+						// 않으면 처리 후 목록이 옛 상태 그대로 남는다.
+						await queryClient.invalidateQueries({
+							queryKey: orpc.bambi.moderation.listJobsForPayment.queryKey({
+								input: queryInput,
 							}),
-							// 결제완료 처리가 프리미엄 자리를 소비하므로 정원 배지도 갱신한다.
-							queryClient.invalidateQueries({
-								queryKey: orpc.bambi.adProducts.premiumCapacity.queryKey(),
-							}),
-						]);
+						});
 						clearSelection();
 
 						const actionLabel =
@@ -298,20 +285,6 @@ export default function ModeratorPaymentsPage() {
 					</p>
 				</div>
 				<div className="flex flex-wrap items-center gap-3">
-					{capacity ? (
-						<div className="flex flex-wrap items-center gap-2">
-							<Badge
-								variant={capacity.remaining > 0 ? "secondary" : "destructive"}
-							>
-								프리미엄 정원 사용 {capacity.activeCount} / {capacity.capacity}
-							</Badge>
-							<span className="text-muted-foreground text-sm">
-								{capacity.remaining > 0
-									? `남은 자리 ${capacity.remaining}개 · 결제 대기 ${capacity.pendingCount}건`
-									: `정원이 찼어요. 배너형 결제 승인은 자리가 빌 때까지 실패해요(결제 대기 ${capacity.pendingCount}건).`}
-							</span>
-						</div>
-					) : null}
 					<div className="flex items-center gap-2">
 						<Switch
 							checked={onlyUnpaid}
