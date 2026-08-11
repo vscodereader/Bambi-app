@@ -97,6 +97,7 @@ interface ExposureSectionProps {
 	selectedJobId?: string;
 	title: string;
 	tone: ExposureTone;
+	trackAnalytics?: boolean;
 }
 
 function ExposureSection({
@@ -105,6 +106,7 @@ function ExposureSection({
 	meta,
 	onOpen,
 	selectedJobId,
+	trackAnalytics = false,
 	title,
 	tone,
 }: ExposureSectionProps) {
@@ -123,13 +125,15 @@ function ExposureSection({
 				</span>
 			</div>
 			<div className={CARD_GRID_CLASS}>
-				{jobs.map((job) => (
+				{jobs.map((job, index) => (
 					<VisualJobCard
 						active={job.id === selectedJobId}
+						analyticsIndex={index}
 						job={job}
 						key={`${tone}-${job.id}`}
 						onOpen={onOpen}
 						tone={tone}
+						trackAnalytics={trackAnalytics}
 					/>
 				))}
 				{placeholderKeys.map((key, index) => (
@@ -157,6 +161,7 @@ interface VisualJobExposureSectionsProps {
 	onOpen: (job: Job) => void;
 	sections: MarketplaceJobSections;
 	selectedJobId?: string;
+	trackAnalytics?: boolean;
 }
 
 export function VisualJobExposureSections({
@@ -169,6 +174,7 @@ export function VisualJobExposureSections({
 	onOpen,
 	sections,
 	selectedJobId,
+	trackAnalytics = false,
 }: VisualJobExposureSectionsProps) {
 	// 첫 로딩엔 jobs가 비어 있어 아래 빈 상태 분기가 "공고가 없어요"를 잠깐 보여준다.
 	// 그 앞에서 실제 레이아웃과 같은 골격(grid gap-5 + 4개 섹션)의 스켈레톤으로 가로챈다.
@@ -238,6 +244,7 @@ export function VisualJobExposureSections({
 				onOpen={onOpen}
 				title="스페셜 채용"
 				tone="special"
+				trackAnalytics={trackAnalytics}
 			/>
 			<ExposureSection
 				fillEmpty
@@ -256,6 +263,7 @@ export function VisualJobExposureSections({
 				onOpen={onOpen}
 				title="추천 채용"
 				tone="recommended"
+				trackAnalytics={trackAnalytics}
 			/>
 			<ExposureSection
 				jobs={sections.organic}
@@ -264,6 +272,7 @@ export function VisualJobExposureSections({
 				selectedJobId={selectedJobId}
 				title="전체 공고"
 				tone="organic"
+				trackAnalytics={trackAnalytics}
 			/>
 			{hasMore && onLoadMore ? (
 				<div className="flex justify-center">

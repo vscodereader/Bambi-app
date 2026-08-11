@@ -25,6 +25,7 @@ import {
 } from "@/components/bambi/community-board-preview";
 import { PhoneVerifyDialog } from "@/components/bambi/phone-verify-dialog";
 import { COMMUNITY_ROOT_PATH } from "@/lib/bambi/community";
+import { trackNavigationClick } from "@/lib/bambi/ga-interaction";
 import { orpc } from "@/utils/orpc";
 
 const COMMUNITY_BLOCKED_MESSAGE =
@@ -46,6 +47,10 @@ function SectionHeader({
 				className="flex items-center gap-1 font-semibold text-muted-foreground text-xs hover:text-foreground"
 				href={COMMUNITY_ROOT_PATH}
 				onClick={(event) => {
+					trackNavigationClick({
+						contentId: "community",
+						linkType: "section_more",
+					});
 					if (onBlockedNavigate) {
 						event.preventDefault();
 						onBlockedNavigate(COMMUNITY_ROOT_PATH);
@@ -116,6 +121,7 @@ function CommunityContent({
 		<section className="grid gap-2">
 			<SectionHeader onBlockedNavigate={onBlockedNavigate} />
 			<CommunityOverviewGrid
+				analyticsSurface="seeker_home_community"
 				boards={overviewQuery.data?.boards ?? []}
 				isPending={overviewQuery.isPending}
 				onBlockedNavigate={onBlockedNavigate}

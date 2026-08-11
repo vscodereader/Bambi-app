@@ -2,12 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
 	buildPromotionParams,
+	SPECIAL_PROMOTION,
 	shouldTrackPromotion,
 	trackPromotionSelect,
 	trackPromotionView,
 } from "@/lib/bambi/ga-promotion";
 
-const paidBanner = { crawled: false, id: "job-1", title: "강남 라운지 급구" };
+const paidBanner = {
+	company: "밤비 라운지",
+	crawled: false,
+	id: "job-1",
+	title: "강남 라운지 급구",
+};
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -34,12 +40,30 @@ describe("buildPromotionParams", () => {
 				{
 					creative_slot: "seeker_center_2",
 					index: 1,
+					item_brand: "밤비 라운지",
 					item_id: "job-1",
 					item_name: "강남 라운지 급구",
+					promotion_id: "premium-banner",
+					promotion_name: "프리미엄 배너",
 				},
 			],
 			promotion_id: "premium-banner",
 			promotion_name: "프리미엄 배너",
+		});
+	});
+
+	it("스페셜 정의를 넘기면 이벤트와 item 프로모션 식별자를 함께 바꾼다", () => {
+		expect(
+			buildPromotionParams(paidBanner, "seeker_special_1", 0, SPECIAL_PROMOTION)
+		).toMatchObject({
+			items: [
+				{
+					promotion_id: "special-list",
+					promotion_name: "스페셜 채용",
+				},
+			],
+			promotion_id: "special-list",
+			promotion_name: "스페셜 채용",
 		});
 	});
 });

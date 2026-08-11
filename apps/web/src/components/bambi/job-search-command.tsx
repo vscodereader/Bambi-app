@@ -12,8 +12,13 @@ import { DialogClose } from "@bambi-app/ui/components/dialog";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { SearchIcon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useJobSearch } from "@/lib/bambi/api-jobs";
+import {
+	JOB_LISTS,
+	trackJobListView,
+	trackJobSelect,
+} from "@/lib/bambi/ga-job";
 import type { Job } from "@/lib/bambi/types";
 import { JobCoverImage } from "./job-cover-image";
 
@@ -130,9 +135,29 @@ export function JobSearchCommand({
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const debouncedQuery = useDebouncedValue(query);
+	const lastTrackedResultsRef = useRef("");
 	const { isError, isFetching, jobs, refetch } = useJobSearch(
 		open ? debouncedQuery : ""
 	);
+
+	useEffect(() => {
+		if (!(open && debouncedQuery.trim() && debouncedQuery === query)) {
+			return;
+		}
+		if (isFetching || jobs.length === 0) {
+			return;
+		}
+		const signature = `${debouncedQuery}:${jobs.map((job) => job.id).join(",")}`;
+		if (lastTrackedResultsRef.current === signature) {
+			return;
+		}
+		lastTrackedResultsRef.current = signature;
+		trackJobListView(jobs, {
+			listId: JOB_LISTS.search.id,
+			listName: JOB_LISTS.search.name,
+			tone: "search",
+		});
+	}, [debouncedQuery, isFetching, jobs, open, query]);
 
 	useEffect(() => {
 		if (!withHotkey) {
@@ -199,6 +224,12 @@ export function JobSearchCommand({
 						isFetching={isFetching || debouncedQuery !== query}
 						jobs={jobs}
 						onSelect={(job) => {
+							trackJobSelect(job, {
+								index: jobs.findIndex((item) => item.id === job.id),
+								listId: JOB_LISTS.search.id,
+								listName: JOB_LISTS.search.name,
+								tone: "search",
+							});
 							setOpen(false);
 							onSelectJob(job);
 						}}
