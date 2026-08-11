@@ -95,7 +95,7 @@ function AdSlotInquiryContent({
 }) {
 	if (variant === "vertical") {
 		return (
-			<div className="flex size-full flex-col items-center justify-center gap-2 bg-coral-500 p-2 text-center text-white">
+			<div className="flex size-full flex-col items-center justify-center gap-2 rounded-lg border border-coral-300 bg-destructive/10 p-2 text-center text-destructive">
 				<Megaphone className="size-4" />
 				<span className="font-bold text-xs leading-tight">광고 등록 문의</span>
 				<span className="font-extrabold text-sm leading-tight tracking-tight">
@@ -106,7 +106,7 @@ function AdSlotInquiryContent({
 	}
 
 	return (
-		<div className="flex size-full flex-col items-center justify-center gap-1 bg-coral-500 p-3 text-center text-white">
+		<div className="flex size-full flex-col items-center justify-center gap-1 rounded-lg border border-coral-300 bg-destructive/10 p-3 text-center text-destructive">
 			<span className="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
 				<Megaphone className="size-4" />
 				광고 등록 문의
