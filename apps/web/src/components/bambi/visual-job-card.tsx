@@ -236,7 +236,7 @@ export function VisualJobCard({
 			{/* mt-auto: 그리드 행이 늘어나(모집중 placeholder 등) 카드가 stretch 되어도
 			    급여 행이 항상 카드 하단에 붙도록 고정한다. */}
 			<div className="mt-auto flex">
-				<span className="flex h-9 min-w-0 items-center gap-1.5 rounded-md border border-border bg-background px-[14px]">
+				<span className="flex h-9 min-w-0 items-center gap-1.5">
 					{payUnit ? (
 						<Badge className="shrink-0" tone={toneBadge[tone]}>
 							{payUnit}
