@@ -1,5 +1,6 @@
 "use client";
 
+import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { Badge } from "@bambi-app/ui/components/badge";
 import {
 	Card,
@@ -14,6 +15,10 @@ import { orpc } from "@/utils/orpc";
 
 // 결제완료(승인) 시 정원을 1 소비한다. 만료로 자리가 자동으로 늘 수 있어 30초마다 갱신한다.
 const REFETCH_INTERVAL = 30_000;
+
+type ListingQueueItem = Awaited<
+	ReturnType<AppRouterClient["bambi"]["moderation"]["listListingQueues"]>
+>["special"][number];
 
 interface CapacityStat {
 	activeCount: number;
@@ -52,6 +57,27 @@ function CapacitySectionStat({
 	);
 }
 
+// 섹션별 FIFO 대기열 목록. 비어 있으면(대기 없음) 아무것도 그리지 않아 정원 통계만 남긴다.
+function ListingQueueList({
+	items,
+}: {
+	items: ListingQueueItem[] | undefined;
+}) {
+	if (!items || items.length === 0) {
+		return null;
+	}
+
+	return (
+		<ul className="flex flex-col gap-0.5">
+			{items.map((item) => (
+				<li className="text-muted-foreground text-xs" key={item.id}>
+					{`#${item.position} ${item.title} · ${item.organizationDisplayName}`}
+				</li>
+			))}
+		</ul>
+	);
+}
+
 export function ListingCapacityOverview() {
 	const premiumQuery = useQuery({
 		...orpc.bambi.adProducts.premiumCapacity.queryOptions(),
@@ -61,13 +87,27 @@ export function ListingCapacityOverview() {
 		...orpc.bambi.adProducts.listingCapacity.queryOptions(),
 		refetchInterval: REFETCH_INTERVAL,
 	});
+	// 대기열 목록은 정원 통계와 같은 주기로 갱신한다(만료 시 순번이 당겨진다).
+	const queuesQuery = useQuery({
+		...orpc.bambi.moderation.listListingQueues.queryOptions(),
+		refetchInterval: REFETCH_INTERVAL,
+	});
 
 	const sections = [
-		{ label: "프리미엄", stat: premiumQuery.data },
-		{ label: "스페셜", stat: listingQuery.data?.special },
-		{ label: "추천", stat: listingQuery.data?.recommended },
+		{ label: "프리미엄", queue: undefined, stat: premiumQuery.data },
+		{
+			label: "스페셜",
+			queue: queuesQuery.data?.special,
+			stat: listingQuery.data?.special,
+		},
+		{
+			label: "추천",
+			queue: queuesQuery.data?.recommended,
+			stat: listingQuery.data?.recommended,
+		},
 	];
 
+	// 대기열 조회는 보조 정보라 그리드 표시를 막지 않는다(로딩·실패 시 목록만 비운다).
 	const isPending = premiumQuery.isPending || listingQuery.isPending;
 	const isError = premiumQuery.isError || listingQuery.isError;
 
@@ -76,8 +116,8 @@ export function ListingCapacityOverview() {
 			<CardHeader>
 				<CardTitle>광고 정원·대기열 현황</CardTitle>
 				<CardDescription>
-					결제완료(승인) 시 정원을 소비합니다. 만석이면 승인이 자리가 빌 때까지
-					실패하고, 신청 건은 대기열로 접수됩니다.
+					결제완료(승인) 시 정원을 소비합니다. 만석이면 결제완료 시 대기열로
+					접수되고, 자리가 나면 순서대로 자동 노출됩니다.
 				</CardDescription>
 			</CardHeader>
 			<CardContent>
@@ -90,11 +130,13 @@ export function ListingCapacityOverview() {
 				{isError || isPending ? null : (
 					<div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
 						{sections.map((section) => (
-							<CapacitySectionStat
-								key={section.label}
-								label={section.label}
-								stat={section.stat}
-							/>
+							<div className="flex flex-col gap-2" key={section.label}>
+								<CapacitySectionStat
+									label={section.label}
+									stat={section.stat}
+								/>
+								<ListingQueueList items={section.queue} />
+							</div>
 						))}
 					</div>
 				)}

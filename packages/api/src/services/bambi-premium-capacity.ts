@@ -18,7 +18,9 @@ import {
 	inArray,
 	isNotNull,
 	isNull,
+	notInArray,
 	or,
+	type SQL,
 	sql,
 } from "drizzle-orm";
 
@@ -118,6 +120,52 @@ export const queuedListingWhere = (type: CapacityListingExposureType) =>
 		eq(jobPost.exposureType, type),
 		isNull(jobPost.exposureEndsAt)
 	);
+
+// "리스팅 대기 행이 아니다". published/paid가 이미 걸린 공개 쿼리의 and(...)에 붙여, 결제됨·미활성
+// (exposureEndsAt null인 스페셜/추천) 대기 공고만 노출에서 뺀다. 대기 대상이 아닌 타입은 통과시키고,
+// 스페셜/추천이라도 활성화(exposureEndsAt 세팅)됐으면 통과시킨다. queuedListingWhere의 역(逆) 조건이다.
+export const notQueuedListingFilter = (): SQL<unknown> => {
+	// or()의 반환 타입은 SQL | undefined지만 인자가 항상 2개라 undefined일 수 없다 — 좁혀서 반환한다.
+	const filter = or(
+		notInArray(jobPost.exposureType, [...CAPACITY_LISTING_EXPOSURE_TYPES]),
+		isNotNull(jobPost.exposureEndsAt)
+	);
+	if (!filter) {
+		throw new Error("notQueuedListingFilter: unreachable");
+	}
+	return filter;
+};
+
+export interface ListingQueuePositionEntry {
+	exposureType: CapacityListingExposureType;
+	position: number; // 1-based FIFO
+}
+
+// 양 섹션(스페셜·추천)의 대기 행 전체를 한 쿼리로 뽑아 jobPost.id → {섹션, 순번} 맵으로 돌려준다.
+// 순번은 섹션별로 독립된 1-based FIFO(listing_paid_at asc, 동률 id asc). 목록 API가 요청당 1회만
+// 호출해 각 행에 listingQueuePosition을 부착하는 용도다.
+export const getListingQueuePositions = async (
+	executor: QueryExecutor
+): Promise<Map<string, ListingQueuePositionEntry>> => {
+	const rows = await executor
+		.select({ exposureType: jobPost.exposureType, id: jobPost.id })
+		.from(jobPost)
+		.where(or(queuedListingWhere("special"), queuedListingWhere("recommended")))
+		.orderBy(asc(jobPost.listingPaidAt), asc(jobPost.id));
+
+	const positions = new Map<string, ListingQueuePositionEntry>();
+	// 섹션별 카운터로 1-based 순번을 매긴다(where가 스페셜/추천만 남기므로 캐스팅이 안전).
+	const counters: Record<CapacityListingExposureType, number> = {
+		recommended: 0,
+		special: 0,
+	};
+	for (const row of rows) {
+		const exposureType = row.exposureType as CapacityListingExposureType;
+		counters[exposureType] += 1;
+		positions.set(row.id, { exposureType, position: counters[exposureType] });
+	}
+	return positions;
+};
 
 // active 카운트 조회의 공통 실행부. where만 배너/리스팅으로 갈린다.
 const countActiveWhere = async (

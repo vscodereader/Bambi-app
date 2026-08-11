@@ -123,6 +123,8 @@ import {
 import {
 	DEFAULT_RECOMMENDED_CAPACITY,
 	DEFAULT_SPECIAL_CAPACITY,
+	getListingQueuePositions,
+	notQueuedListingFilter,
 } from "../../services/bambi-premium-capacity";
 import { resolveRegionSelection } from "../../services/bambi-region";
 import {
@@ -1288,6 +1290,10 @@ export const jobsRouter = {
 		const filters = [
 			eq(jobPost.status, "published" as JobPostStatus),
 			eq(jobPost.paymentStatus, "paid"),
+			// 대기열(결제됨·미활성) 스페셜/추천 공고를 organic 목록·전체 카운트에서 뺀다.
+			// 섹션 쿼리(getExposedJobs)는 이미 exposureEndsAt로 제외하고, urgent엔 이 필터가
+			// 항상 참이라 무해하다(정원 대상 타입에만 걸리는 조건).
+			notQueuedListingFilter(),
 		];
 
 		if (input.industryCategory) {
@@ -1581,6 +1587,8 @@ export const jobsRouter = {
 		const filters = [
 			eq(jobPost.status, "published" as JobPostStatus),
 			eq(jobPost.paymentStatus, "paid"),
+			// 대기열(결제됨·미활성) 스페셜/추천 공고 제외 — list와 동일.
+			notQueuedListingFilter(),
 		];
 
 		if (input.industryCategory) {
@@ -1768,6 +1776,8 @@ export const jobsRouter = {
 					createdByUserId: jobPost.createdByUserId,
 					status: jobPost.status,
 					paymentStatus: jobPost.paymentStatus,
+					exposureType: jobPost.exposureType,
+					exposureEndsAt: jobPost.exposureEndsAt,
 					industryCategory: jobPost.industryCategory,
 					region: jobPost.region,
 					district: jobPost.district,
@@ -1807,6 +1817,16 @@ export const jobsRouter = {
 				.limit(1);
 
 			if (post?.status !== "published" || post.paymentStatus !== "paid") {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			// 대기열 공고(스페셜/추천이면서 아직 미활성=exposureEndsAt null)는 아직 공개 전이다 —
+			// 결제·게시됐어도 자리가 나 활성화되기 전까지 상세를 열어주지 않는다.
+			const isQueuedListing =
+				(post.exposureType === "special" ||
+					post.exposureType === "recommended") &&
+				post.exposureEndsAt === null;
+			if (isQueuedListing) {
 				throw new ORPCError("NOT_FOUND");
 			}
 
@@ -1891,7 +1911,7 @@ export const jobsRouter = {
 			return [];
 		}
 
-		return await db
+		const rows = await db
 			.select({
 				id: jobPost.id,
 				title: jobPost.title,
@@ -1926,6 +1946,14 @@ export const jobsRouter = {
 			)
 			.where(or(...accessFilters))
 			.orderBy(desc(jobPost.updatedAt));
+
+		// 대기열 공고에 FIFO 순번을 붙여 "대기열 #N"을 렌더할 수 있게 한다. 양 섹션 대기 행을
+		// 요청당 1회만 조회하고, 대기가 아닌 행은 position이 없어 null이 된다.
+		const queuePositions = await getListingQueuePositions(db);
+		return rows.map((row) => ({
+			...row,
+			listingQueuePosition: queuePositions.get(row.id)?.position ?? null,
+		}));
 	}),
 
 	getEditableById: protectedProcedure

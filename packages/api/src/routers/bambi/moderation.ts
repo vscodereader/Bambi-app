@@ -73,7 +73,11 @@ import {
 	notifyModerationAction,
 } from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
-import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
+import {
+	assertPremiumApprovalWithinCapacity,
+	getListingQueuePositions,
+	queuedListingWhere,
+} from "../../services/bambi-premium-capacity";
 import {
 	createJobPostMediaUploadIntent,
 	getBusinessDocumentObjectUrl,
@@ -1176,6 +1180,28 @@ const acceptTeamInvitation = async (
 	return updated;
 };
 
+// 대기열(결제완료·미활성) 리스팅을 섹션별로 뽑아 FIFO(listing_paid_at asc, 동률 id asc) 순번을
+// 부착한다. position은 배열 순번(1-based) — getListingQueuePositions의 섹션별 순번과 같은 규칙.
+// 대기 판정은 queuedListingWhere 단일 소스만 쓴다(재발명 금지).
+const listListingQueueSection = async (type: "recommended" | "special") => {
+	const rows = await db
+		.select({
+			id: jobPost.id,
+			listingPaidAt: jobPost.listingPaidAt,
+			organizationDisplayName: employerOrganizationProfile.displayName,
+			title: jobPost.title,
+		})
+		.from(jobPost)
+		.innerJoin(
+			employerOrganizationProfile,
+			eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+		)
+		.where(queuedListingWhere(type))
+		.orderBy(asc(jobPost.listingPaidAt), asc(jobPost.id));
+
+	return rows.map((row, index) => ({ ...row, position: index + 1 }));
+};
+
 export const moderationRouter = {
 	createReport: protectedProcedure
 		.input(createReportInput)
@@ -1365,11 +1391,17 @@ export const moderationRouter = {
 				.orderBy(desc(jobPost.updatedAt))
 				.limit(input.limit);
 
-			if (input.status) {
-				return await query.where(eq(jobPost.status, input.status));
-			}
+			const rows = input.status
+				? await query.where(eq(jobPost.status, input.status))
+				: await query;
 
-			return await query;
+			// 대기 공고는 상태 배지 대신 "스페셜/추천 #N"으로 표기하므로 FIFO 순번을 요청당 1회만
+			// 뽑아 부착한다(대기 행이 아니면 null).
+			const positions = await getListingQueuePositions(db);
+			return rows.map((row) => ({
+				...row,
+				listingQueuePosition: positions.get(row.id)?.position ?? null,
+			}));
 		}),
 
 	// 운영자 편집 화면 프리필용. getEditableById(jobs)는 조직 멤버십을 요구해 운영자가
@@ -2366,6 +2398,19 @@ export const moderationRouter = {
 			return updated;
 		}),
 
+	// 운영자 정원 카드용 섹션별 대기열 목록(스페셜/추천). 대기 판정은 queuedListingWhere 단일
+	// 소스, 순번은 FIFO(listing_paid_at asc). 가드·프로시저 종류는 removeFromListingQueue와 동일.
+	listListingQueues: adminProcedure.handler(async ({ context }) => {
+		await requireAdminProfile(context.session);
+
+		const [recommended, special] = await Promise.all([
+			listListingQueueSection("recommended"),
+			listListingQueueSection("special"),
+		]);
+
+		return { recommended, special };
+	}),
+
 	// 결제 처리가 의미있는 공고 목록(초안 제외: pending_review·published).
 	// 인증 업체 공고는 검수 큐 없이 자동 published라 여기서 결제를 처리한다.
 	listJobsForPayment: protectedProcedure
@@ -2388,7 +2433,7 @@ export const moderationRouter = {
 				conditions.push(isNotNull(jobPost.detailDesignStatus));
 			}
 
-			return await db
+			const rows = await db
 				.select({
 					id: jobPost.id,
 					title: jobPost.title,
@@ -2411,6 +2456,13 @@ export const moderationRouter = {
 				.where(and(...conditions))
 				.orderBy(desc(jobPost.createdAt))
 				.limit(input.limit);
+
+			// 결제관리 목록도 대기 공고에 FIFO 순번을 보여주므로 요청당 1회 뽑아 부착한다.
+			const positions = await getListingQueuePositions(db);
+			return rows.map((row) => ({
+				...row,
+				listingQueuePosition: positions.get(row.id)?.position ?? null,
+			}));
 		}),
 
 	bulkSetJobPostStatus: protectedProcedure
