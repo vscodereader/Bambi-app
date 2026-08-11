@@ -19,6 +19,7 @@ import {
 	getJobDisplayStatus,
 	isQueuedListing,
 	JOB_DETAIL_DESIGN_STATUS_LABELS,
+	LISTING_QUEUE_SHORT_LABELS,
 } from "@/lib/bambi/exposure";
 import { formatPay } from "@/lib/bambi-format";
 
@@ -69,11 +70,20 @@ export const getJobStatusNote = (job: EmployerJob): null | string => {
 	return null;
 };
 
-// 대기열 공고의 상태 배지 라벨. 순번이 부착돼 있으면 "대기열 #N", 없으면 "대기열"만 표기한다.
-const getQueueStatusLabel = (job: EmployerJob): string =>
-	job.listingQueuePosition === null
-		? "대기열"
-		: `대기열 #${job.listingQueuePosition}`;
+// 대기열 공고의 상태 배지 라벨. 어떤 섹션 대기열인지 알 수 있도록 섹션 라벨을 접두한다.
+// 예: 순번이 있으면 "스페셜 대기열 #1", 없으면 "스페셜 대기열". 정상 흐름에선 불가능하지만
+// exposureType이 라벨 맵에 없으면 접두 없이 "대기열"/"대기열 #N"으로 방어한다.
+const getQueueStatusLabel = (job: EmployerJob): string => {
+	const sectionLabel =
+		LISTING_QUEUE_SHORT_LABELS[
+			job.exposureType as keyof typeof LISTING_QUEUE_SHORT_LABELS
+		];
+	const prefix = sectionLabel === undefined ? "" : `${sectionLabel} `;
+
+	return job.listingQueuePosition === null
+		? `${prefix}대기열`
+		: `${prefix}대기열 #${job.listingQueuePosition}`;
+};
 
 const getTruncatedTitle = (title: string): string =>
 	title.length > TITLE_MAX_LENGTH
