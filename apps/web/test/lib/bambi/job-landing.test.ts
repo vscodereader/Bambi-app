@@ -64,7 +64,7 @@ describe("job landing paths and copy", () => {
 	});
 	it("gives each landing its own title and description", () => {
 		expect(jobLandingTitle({ industry, region })).toBe(
-			"서울 룸싸롱 밤알바·유흥알바 채용 정보 | 밤비알바"
+			"서울 룸싸롱 밤알바·여우알바·퀸알바 채용 정보 | 밤비알바"
 		);
 		const titles = new Set([
 			jobLandingTitle({}),
@@ -84,6 +84,8 @@ describe("job landing paths and copy", () => {
 		expect(jobLandingKeywords({ industry, region })).toEqual(
 			expect.arrayContaining([
 				"서울 밤알바",
+				"서울 여우알바",
+				"서울 퀸알바",
 				"서울 룸싸롱 알바",
 				"서울 룸살롱알바",
 			])
