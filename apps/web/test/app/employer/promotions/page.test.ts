@@ -51,6 +51,21 @@ describe("employer ads management page", () => {
 		expect(source).toContain("회 실행");
 	});
 
+	it("uses shared boost badges in both the desktop table and mobile cards", () => {
+		expect(source).toContain("function ManualBoostBadge");
+		expect(source).toContain("function AutoBoostBadge");
+		expect(source).toContain("<StatusBadge>미설정</StatusBadge>");
+		expect(source).toContain("<StatusBadge>대상 아님</StatusBadge>");
+		expect(source.match(/<ManualBoostBadge ad=\{ad\} \/>/g)).toHaveLength(2);
+		expect(source.match(/<AutoBoostBadge ad=\{ad\} \/>/g)).toHaveLength(2);
+	});
+
+	it("stacks the daily manual quota and count pass as separate badges", () => {
+		expect(source).toContain('className="flex flex-col items-start gap-1"');
+		expect(source).toContain("remainingBoosts(ad)");
+		expect(source).toContain("횟수권");
+	});
+
 	it("replaces boost UI with a notice for banner exposure rows", () => {
 		// 배너형(프리미엄·좌측·우측 배너)은 끌어올리기 대상이 아니라 안내 문구만 표시
 		expect(source).toContain("isBannerExposureType");

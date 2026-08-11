@@ -358,62 +358,13 @@ function getAdColumns({
 			id: "boostsToday",
 			header: "오늘 끌어올리기",
 			sortValue: (ad) => remainingBoosts(ad),
-			cell: (ad) => {
-				if (isBannerExposureType(ad.exposureType)) {
-					return <span className="text-muted-foreground">—</span>;
-				}
-
-				const limit = dailyBoostLimit(ad);
-				const remaining = remainingBoosts(ad);
-
-				return (
-					<div className="flex flex-col items-start gap-1">
-						{limit === 0 ? (
-							<span className="text-muted-foreground">미포함</span>
-						) : (
-							<span
-								className={cn(
-									"whitespace-nowrap",
-									remaining === 0 && "text-muted-foreground"
-								)}
-							>
-								{`남은 ${remaining}회 / 일일 ${limit}회`}
-							</span>
-						)}
-						<div className="flex flex-wrap gap-1">
-							{ad.boostOptionManualPerDay > 0 ? (
-								<StatusBadge tone="good">{`수동 +${ad.boostOptionManualPerDay}/일`}</StatusBadge>
-							) : null}
-							{ad.boostCountRemaining > 0 ? (
-								<StatusBadge tone="good">{`횟수권 ${ad.boostCountRemaining}회`}</StatusBadge>
-							) : null}
-						</div>
-					</div>
-				);
-			},
+			cell: (ad) => <ManualBoostBadge ad={ad} />,
 		},
 		{
 			id: "autoBoostsToday",
 			header: "자동 끌어올리기",
 			sortValue: (ad) => autoBoostLimit(ad),
-			cell: (ad) => {
-				const limit = autoBoostLimit(ad);
-
-				if (limit === 0) {
-					return <span className="text-muted-foreground">—</span>;
-				}
-
-				return (
-					<div className="flex flex-col items-start gap-1">
-						<span className="whitespace-nowrap">
-							{`오늘 ${ad.autoBoostsUsedToday}/${limit}회 실행`}
-						</span>
-						{ad.boostOptionAutoPerDay > 0 ? (
-							<StatusBadge tone="good">{`자동 +${ad.boostOptionAutoPerDay}/일`}</StatusBadge>
-						) : null}
-					</div>
-				);
-			},
+			cell: (ad) => <AutoBoostBadge ad={ad} />,
 		},
 		{
 			id: "boostedAt",
@@ -448,24 +399,47 @@ function getAdColumns({
 
 const MOBILE_AD_PAGE_SIZE = 10;
 
-// 데스크톱 표(boostsToday 열)와 같은 값을 내야 한다 — 번들만 보는 manualBoostsPerDay가 아니라
-// 옵션을 합산한 dailyBoostLimit을 쓰고, 별도 재고인 횟수권 잔여도 함께 붙인다.
-function getManualBoostLabel(ad: AdListItem) {
+function ManualBoostBadge({ ad }: { ad: AdListItem }) {
 	if (isBannerExposureType(ad.exposureType)) {
-		return "—";
+		return <StatusBadge>대상 아님</StatusBadge>;
 	}
 
 	const limit = dailyBoostLimit(ad);
-	const parts: string[] = [];
 
-	if (limit > 0) {
-		parts.push(`남은 ${remainingBoosts(ad)}회 / 일일 ${limit}회`);
-	}
-	if (ad.boostCountRemaining > 0) {
-		parts.push(`횟수권 ${ad.boostCountRemaining}회`);
+	if (limit === 0 && ad.boostCountRemaining === 0) {
+		return <StatusBadge>미포함</StatusBadge>;
 	}
 
-	return parts.length > 0 ? parts.join(" · ") : "미포함";
+	return (
+		<div className="flex flex-col items-start gap-1">
+			{limit > 0 ? (
+				<StatusBadge tone="good">
+					{`남은 ${remainingBoosts(ad)}회 / 일일 ${limit}회`}
+				</StatusBadge>
+			) : null}
+			{ad.boostCountRemaining > 0 ? (
+				<StatusBadge tone="good">
+					{`횟수권 ${ad.boostCountRemaining}회`}
+				</StatusBadge>
+			) : null}
+		</div>
+	);
+}
+
+function AutoBoostBadge({ ad }: { ad: AdListItem }) {
+	if (isBannerExposureType(ad.exposureType)) {
+		return <StatusBadge>대상 아님</StatusBadge>;
+	}
+
+	const limit = autoBoostLimit(ad);
+
+	return limit === 0 ? (
+		<StatusBadge>미설정</StatusBadge>
+	) : (
+		<StatusBadge tone="good">
+			{`오늘 ${ad.autoBoostsUsedToday}/${limit}회 실행`}
+		</StatusBadge>
+	);
 }
 
 function MobileAds({
@@ -542,17 +516,13 @@ function MobileAds({
 								<span className="text-muted-foreground text-xs">
 									오늘 끌어올리기
 								</span>
-								<span>{getManualBoostLabel(ad)}</span>
+								<ManualBoostBadge ad={ad} />
 							</div>
 							<div className="flex flex-col gap-1">
 								<span className="text-muted-foreground text-xs">
 									자동 끌어올리기
 								</span>
-								<span>
-									{autoBoostLimit(ad) === 0
-										? "—"
-										: `오늘 ${ad.autoBoostsUsedToday}/${autoBoostLimit(ad)}회 실행`}
-								</span>
+								<AutoBoostBadge ad={ad} />
 							</div>
 						</div>
 						<div className="flex flex-col gap-1">

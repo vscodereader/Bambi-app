@@ -23,10 +23,9 @@ import {
 const UUID_RE =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// 첫 로드는 기존과 같은 30건. "더보기"는 서버 상한(50)까지 받아 클릭 수를 줄인다
-// (자격 공고가 수백 건이라 30씩 끊으면 끝까지 보는 데만 열 번을 넘게 눌러야 한다).
-const FIRST_PAGE_SIZE = 30;
-const MORE_PAGE_SIZE = 50;
+// 데스크톱 4열 × 12줄을 한 페이지로 삼는다. 첫 조회와 더보기를 같은 크기로 유지해야
+// 사용자가 누를 때마다 예측 가능한 12줄씩 이어지고 커서 소비량도 화면 계약과 일치한다.
+export const MARKETPLACE_PAGE_SIZE = 48;
 
 // 전체 공고(organic) 이어받기 커서. 자체 공고 블록과 수집 블록이 순서대로 이어붙는 구조라
 // 위치가 블록별로 둘이다(서버 nextOrganicOffset을 그대로 되돌려준다).
@@ -130,7 +129,7 @@ export function useMarketplaceJobs(
 			initialPageParam: null as null | OrganicOffset,
 			input: (organicOffset: null | OrganicOffset) => ({
 				...toApiListInput(filters),
-				limit: organicOffset ? MORE_PAGE_SIZE : FIRST_PAGE_SIZE,
+				limit: MARKETPLACE_PAGE_SIZE,
 				organicOffset: organicOffset ?? undefined,
 			}),
 		})
