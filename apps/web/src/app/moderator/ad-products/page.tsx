@@ -1,5 +1,16 @@
 "use client";
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
@@ -309,33 +320,42 @@ export default function ModeratorAdProductsPage() {
 							>
 								수정
 							</Link>
-							{confirmingId === placement.id ? (
-								<div className="flex gap-1">
-									<Button
-										disabled={deletePlacement.isPending}
-										onClick={() => deletePlacement.mutate({ id: placement.id })}
-										size="sm"
-										variant="destructive"
-									>
-										삭제 확인
-									</Button>
-									<Button
-										onClick={() => setConfirmingId(null)}
-										size="sm"
-										variant="ghost"
-									>
-										취소
-									</Button>
-								</div>
-							) : (
-								<Button
-									onClick={() => setConfirmingId(placement.id)}
-									size="sm"
-									variant="ghost"
-								>
-									삭제
-								</Button>
-							)}
+							<AlertDialog
+								onOpenChange={(open) => {
+									setConfirmingId(open ? placement.id : null);
+								}}
+								open={confirmingId === placement.id}
+							>
+								<AlertDialogTrigger
+									render={
+										<Button size="sm" variant="ghost">
+											삭제
+										</Button>
+									}
+								/>
+								<AlertDialogContent>
+									<AlertDialogHeader>
+										<AlertDialogTitle>
+											“{placement.name}” 위치를 삭제할까요?
+										</AlertDialogTitle>
+										<AlertDialogDescription>
+											삭제한 노출 위치는 되돌릴 수 없어요.
+										</AlertDialogDescription>
+									</AlertDialogHeader>
+									<AlertDialogFooter>
+										<AlertDialogCancel>취소</AlertDialogCancel>
+										<AlertDialogAction
+											disabled={deletePlacement.isPending}
+											onClick={() =>
+												deletePlacement.mutate({ id: placement.id })
+											}
+											variant="destructive"
+										>
+											삭제
+										</AlertDialogAction>
+									</AlertDialogFooter>
+								</AlertDialogContent>
+							</AlertDialog>
 						</div>
 					</CardHeader>
 					{collapsedPlacementIds.has(placement.id) ? null : (
@@ -418,35 +438,42 @@ export default function ModeratorAdProductsPage() {
 											>
 												수정
 											</Link>
-											{confirmingProductId === product.id ? (
-												<div className="flex gap-1">
-													<Button
-														disabled={deleteProduct.isPending}
-														onClick={() =>
-															deleteProduct.mutate({ id: product.id })
-														}
-														size="sm"
-														variant="destructive"
-													>
-														삭제 확인
-													</Button>
-													<Button
-														onClick={() => setConfirmingProductId(null)}
-														size="sm"
-														variant="ghost"
-													>
-														취소
-													</Button>
-												</div>
-											) : (
-												<Button
-													onClick={() => setConfirmingProductId(product.id)}
-													size="sm"
-													variant="ghost"
-												>
-													삭제
-												</Button>
-											)}
+											<AlertDialog
+												onOpenChange={(open) => {
+													setConfirmingProductId(open ? product.id : null);
+												}}
+												open={confirmingProductId === product.id}
+											>
+												<AlertDialogTrigger
+													render={
+														<Button size="sm" variant="ghost">
+															삭제
+														</Button>
+													}
+												/>
+												<AlertDialogContent>
+													<AlertDialogHeader>
+														<AlertDialogTitle>
+															“{product.name}” 상품을 삭제할까요?
+														</AlertDialogTitle>
+														<AlertDialogDescription>
+															삭제한 광고 상품은 되돌릴 수 없어요.
+														</AlertDialogDescription>
+													</AlertDialogHeader>
+													<AlertDialogFooter>
+														<AlertDialogCancel>취소</AlertDialogCancel>
+														<AlertDialogAction
+															disabled={deleteProduct.isPending}
+															onClick={() =>
+																deleteProduct.mutate({ id: product.id })
+															}
+															variant="destructive"
+														>
+															삭제
+														</AlertDialogAction>
+													</AlertDialogFooter>
+												</AlertDialogContent>
+											</AlertDialog>
 										</div>
 									</div>
 									{collapsedProductIds.has(product.id) ? null : (

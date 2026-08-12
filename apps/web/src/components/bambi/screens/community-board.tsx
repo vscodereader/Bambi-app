@@ -122,6 +122,7 @@ function BoardPostRow({
 	showBadges: boolean;
 }) {
 	// 수집 글은 게시판 상세가 아니라 전용 상세로 분기한다(순수 글은 기존 경로 그대로).
+	// 목록에 출처 배지는 달지 않는다 — 라우팅 판별에만 쓰는 값이다.
 	const isCrawled = post.source === "crawled";
 
 	return (
@@ -141,11 +142,6 @@ function BoardPostRow({
 					{post.board === "notice" ? (
 						<Badge className="shrink-0">
 							{post.isEvent ? "이벤트" : "공지"}
-						</Badge>
-					) : null}
-					{isCrawled ? (
-						<Badge className="shrink-0" variant="secondary">
-							외부 수집
 						</Badge>
 					) : null}
 					{showBadges ? <CommunityRoleBadges post={post} /> : null}

@@ -20,6 +20,11 @@ export default function EditAdProductPage() {
 	);
 	const placement = catalogQuery.data?.find((p) => p.id === placementId);
 	const product = placement?.products.find((item) => item.id === productId);
+	// 급구 섹션이 숨김이면 노출 영역 선택지에서 "급구 채용 리스팅"을 뺀다(이미 급구로 저장된
+	// 상품은 폼에서 값 유실 방지를 위해 그대로 유지).
+	const exposureQuery = useQuery(
+		orpc.bambi.siteSettings.getExposureSectionConfig.queryOptions()
+	);
 
 	const updateProduct = useMutation(
 		orpc.bambi.adProducts.updateProduct.mutationOptions({
@@ -91,6 +96,7 @@ export default function EditAdProductPage() {
 					pending={updateProduct.isPending}
 					placementKind={placement?.kind}
 					submitLabel="수정 저장"
+					urgentHidden={exposureQuery.data?.urgentHidden}
 				/>
 			) : null}
 		</div>

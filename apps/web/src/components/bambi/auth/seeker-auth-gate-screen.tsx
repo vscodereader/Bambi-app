@@ -38,15 +38,21 @@ export async function SeekerAuthGateScreen() {
 
 	return (
 		<div className="flex min-h-dvh flex-col bg-secondary">
-			<div className="relative flex-1">
+			{/* 헤더가 없는 전체 화면이라 본문에 뷰포트 최소 높이를 줘, 형제 푸터가 첫
+			    화면 아래로 밀린다. */}
+			<div className="relative flex min-h-dvh flex-1 flex-col">
 				<AuthBackdrop jobs={backdropJobs} />
 				{/* md 미만에서는 문서 흐름에 두어 페이지가 정상 스크롤되고, md 이상에서만
 				    블러 배경 위에 겹쳐 띄운다. 스크림은 배경을 한 겹 눌러 카드 대비를
 				    확보하되, 뒤의 화면이 무엇인지는 알아볼 수 있는 정도로만 덮는다.
+				    흐름에 있는 동안에는 flex-1로 부모(min-h-dvh)를 채워 카드가 첫 화면
+				    한가운데에 온다 — min-h-full은 부모 높이가 min-height뿐이라 0으로
+				    풀려 카드가 상단에 붙었다. 카드가 화면보다 길면 이 층이 내용만큼
+				    늘어나 페이지가 그대로 스크롤된다.
 				    겹쳐 띄운 층은 화면에서 잘라낸 고정 높이라, 카드가 그보다 길면(가입 폼
 				    1열) 넘친 부분이 아래 푸터를 덮는다 — overflow-y-auto로 그 층 안에서
 				    스크롤되게 해 푸터를 침범하지 않게 한다(카드의 my-auto가 짝이다). */}
-				<div className="flex min-h-full items-center justify-center p-4 md:absolute md:inset-0 md:overflow-y-auto md:bg-background/60 md:p-6">
+				<div className="flex flex-1 items-center justify-center p-4 md:absolute md:inset-0 md:overflow-y-auto md:bg-background/60 md:p-6">
 					{/* AuthPanel이 useSearchParams를 쓰므로 Suspense가 필요하다. */}
 					<Suspense>
 						<AuthPanel />

@@ -131,12 +131,14 @@ describe("visual job marketplace components", () => {
 		expect(marketplace).toContain("/seeker/jobs/crawled/${job.id}");
 	});
 
-	// 수집 공고 상세는 우리 검수·인증 배지를 달 수 없다(우리가 본 적 없는 공고다).
-	// 채팅·후기·신고·연락처도 없다 — 응대할 담당자가 우리 서비스에 없다.
+	// 수집 공고 상세는 우리 검수·인증 배지를 달 수 없고(우리가 본 적 없는 공고다), 반대로
+	// 출처를 알리는 배지·고지도 두지 않는다 — 화면에는 공고 내용만 남긴다.
+	// 채팅·후기·신고·연락처는 여전히 없다 — 응대할 담당자가 우리 서비스에 없다.
 	it("shows the crawled job detail without our verification signals", () => {
 		const source = readComponent("screens/seeker-crawled-job-detail.tsx");
 
-		expect(source).toContain("외부에서 수집된 공고");
+		expect(source).not.toContain("외부 수집");
+		expect(source).not.toContain("외부에서 수집");
 		expect(source).not.toContain("검수 통과");
 		expect(source).not.toContain("검증 완료");
 		expect(source).not.toContain("채팅 시작");
@@ -174,9 +176,14 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("SEEKER_CONTENT_WIDTH");
 		expect(source).not.toContain("max-w-[80%]");
 		expect(source).not.toContain("조건에 맞는 안전한 자리를 찾아요");
-		// 검색은 헤더(SeekerAppShell)와 필터를 공유하고, 본문 검색은 모바일 전용
+		// 탐색 바(세그먼트 탭·퀵칩·본문 검색·필터 버튼·필터 시트)는 전부 걷어냈다.
+		// 검색은 헤더(SeekerAppShell)로, 필터는 1720px+ 사이드바로만 남는다.
 		expect(source).toContain("useSeekerFilters");
-		expect(source).toContain('searchFieldClassName="md:hidden"');
+		expect(source).toContain("MarketplaceFilterControls");
+		expect(source).not.toContain("MarketplaceDiscoveryBar");
+		expect(source).not.toContain("MarketplaceDiscoveryAxisChips");
+		expect(source).not.toContain("MarketplaceFilterSheet");
+		expect(source).not.toContain("MarketplaceSearch");
 	});
 
 	it("hosts the seeker marketplace search in the shared header only on /seeker", () => {
@@ -185,36 +192,23 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("export function SeekerAppShell");
 		expect(source).toContain("useSeekerFilters");
 		expect(source).toContain('pathname === "/seeker"');
-		// 마켓플레이스에서만 헤더에 검색창을 끼운다
+		// 마켓플레이스에서만 데스크톱·모바일 두 헤더에 검색을 끼운다. 두 헤더는 CSS로만
+		// 숨겨질 뿐 항상 함께 마운트되므로 Ctrl/Cmd+K 리스너는 데스크톱 쪽에서만 켠다.
 		expect(source).toContain(
-			"headerSlot={isMarketplace ? <SeekerHeaderSearch />"
+			"isMarketplace ? <SeekerHeaderSearch withHotkey />"
+		);
+		expect(source).toContain(
+			"mobileHeaderSlot={isMarketplace ? <SeekerHeaderSearch /> : undefined}"
 		);
 		// 헤더 검색은 아이콘 버튼 트리거의 모달(JobSearchCommand)이다. 고정폭 검색창을
 		// 되살리면 내비가 압축돼 마지막 항목("고객센터") 끝 글자가 잘린다.
 		expect(source).toContain("JobSearchCommand");
-		expect(source).toContain('trigger="header"');
+		expect(source).not.toContain('trigger="header"');
 		expect(source).not.toContain('className="relative w-48"');
 		expect(source).not.toContain("w-64");
 		// 모든 seeker 페이지 헤더를 /seeker와 동일한 고정폭으로 통일한다(경로별 분기 없음)
 		expect(source).toContain("contentWidthClassName={SEEKER_CONTENT_MAX_W}");
 		expect(source).not.toContain("isJobArea");
-	});
-
-	it("wires the public marketplace to visual exposure sections", () => {
-		const source = readComponent("screens/public-marketplace.tsx");
-
-		expect(source).toContain("VisualJobExposureSections");
-		expect(source).not.toContain("<JobList");
-		// 본문 컨테이너는 고정폭이 아닌 유동 폭(뷰포트 비례)을 사용하며 헤더와 동일하게 맞춘다
-		expect(source).toContain("max-w-[80%]");
-		// 검색창을 헤더(연락처 보호 왼쪽)로 옮기고 본문 검색은 모바일 전용으로 둔다
-		expect(source).toContain("headerSlot={headerSearch}");
-		// 헤더 검색은 seeker와 동일한 아이콘 버튼 트리거 모달이다(고정폭 검색창 제거).
-		expect(source).toContain('trigger="header"');
-		expect(source).not.toContain('className="relative w-48"');
-		expect(source).toContain('searchFieldClassName="md:hidden"');
-		// 히어로 카피 블록은 제거됨
-		expect(source).not.toContain("밤비 안에서 먼저 대화해요");
 	});
 
 	it("aligns the employer page shell to the shared fixed content width", () => {

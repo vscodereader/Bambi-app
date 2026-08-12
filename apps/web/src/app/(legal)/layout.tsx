@@ -23,7 +23,9 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
 					</Link>
 				</div>
 			</header>
-			<main className="flex flex-1 flex-col">
+			{/* 헤더(h-14/h-16)를 뺀 최소 높이를 본문에 줘, 콘텐츠가 짧아도 형제 푸터가
+			    첫 화면 아래로 밀린다. */}
+			<main className="flex min-h-[calc(100dvh-3.5rem)] flex-1 flex-col md:min-h-[calc(100dvh-4rem)]">
 				<div className={cn("mx-auto w-full px-6", APP_CONTENT_MAX_W)}>
 					{children}
 				</div>

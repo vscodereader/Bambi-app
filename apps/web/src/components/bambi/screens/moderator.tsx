@@ -5,6 +5,16 @@
 // 복구 가능 여부 판정은 서버(accountRecovery.restoreWithdrawnAccount)와 같은 순수 함수를
 // 공유한다 — 화면이 규칙을 따로 구현하면 버튼은 열려 있는데 서버가 거절하는 상태가 생긴다.
 import { resolveAccountRestoreDecision } from "@bambi-app/api/services/bambi-account-restore";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Button as UiButton } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
@@ -1558,49 +1568,6 @@ const COMMUNITY_ACTIONS: Record<
 const getCommunityBoardLabel = (board: string): string =>
 	COMMUNITY_BOARDS.find((item) => item.key === board)?.label ?? board;
 
-function CommunityDeleteSheet({
-	kindLabel,
-	reason,
-	onCancel,
-	onConfirm,
-}: {
-	kindLabel: string;
-	reason: string;
-	onCancel: () => void;
-	onConfirm: () => void;
-}) {
-	return (
-		<div className="absolute inset-0 z-20 flex flex-col justify-end">
-			<button
-				aria-label="닫기"
-				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
-				onClick={onCancel}
-				type="button"
-			/>
-			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
-				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
-					{kindLabel}을 삭제할까요?
-				</h2>
-				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
-					삭제하면 사용자에게 더 이상 보이지 않아요. 입력한 사유는 기록에
-					남아요.
-				</p>
-				<div className="mb-4 rounded-[14px] bg-secondary px-3 py-2.5 text-[13px] text-[color:var(--text-default)] leading-[1.5]">
-					{reason}
-				</div>
-				<div className="grid grid-cols-2 gap-2.5">
-					<Button block onClick={onCancel} size="lg" variant="secondary">
-						취소
-					</Button>
-					<Button block onClick={onConfirm} size="lg" variant="danger">
-						삭제하기
-					</Button>
-				</div>
-			</div>
-		</div>
-	);
-}
-
 function CommunityTargetPanel({
 	report,
 	onModerate,
@@ -1704,22 +1671,46 @@ function CommunityTargetPanel({
 					))}
 				</div>
 			</div>
-			{pendingDelete ? (
-				<CommunityDeleteSheet
-					kindLabel={kindLabel}
-					onCancel={() => setPendingDelete(false)}
-					onConfirm={() => {
+			{/* 삭제는 되돌릴 수 없어 확인 창을 한 번 세운다 — 기록에 남길 사유를 그대로 보여준다. */}
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
 						setPendingDelete(false);
-						runAction("deleted");
-					}}
-					reason={reason.trim()}
-				/>
-			) : null}
+					}
+				}}
+				open={pendingDelete}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{kindLabel}을 삭제할까요?</AlertDialogTitle>
+						<AlertDialogDescription>
+							삭제하면 사용자에게 더 이상 보이지 않아요. 입력한 사유는 기록에
+							남아요.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<p className="m-0 rounded-md bg-secondary px-3 py-2.5 text-foreground text-sm leading-relaxed">
+						{reason.trim()}
+					</p>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								setPendingDelete(false);
+								runAction("deleted");
+							}}
+							variant="destructive"
+						>
+							삭제하기
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }
 
-// 당사자 카드 2개. 모바일은 가로 나란히, 데스크톱 사이드 패널에서는 세로로 쌓는다.
+// 당사자 카드 2개. 모바일에서 가로로 나란히 두면 좁은 폭(375px)에서 신고자 카드가 화면
+// 밖으로 밀리므로 데스크톱 사이드 패널과 동일하게 항상 세로로 쌓는다.
 // 피신고 대상이 사용자 계정이면 카드를 그대로 계정 상세 링크로 감싼다(제재 이력·누적
 // 신고를 바로 확인할 수 있게).
 function ReportParties({ item }: { item: Report }) {
@@ -1730,7 +1721,7 @@ function ReportParties({ item }: { item: Report }) {
 		item.targetType === "user" && item.targetId ? item.targetId : null;
 
 	return (
-		<div className="flex gap-2.5 md:flex-col">
+		<div className="flex flex-col gap-2.5">
 			{targetUserId ? (
 				<Link
 					className="flex min-w-0 flex-1"

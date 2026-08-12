@@ -35,14 +35,6 @@ export const trackMarketplaceFilterChanges = (
 	}
 };
 
-export const trackDiscoveryTab = (tab: string): void =>
-	sendGaEvent("filter_change", {
-		enabled: true,
-		filter_name: "discovery_tab",
-		filter_value: tab,
-		surface: "seeker_marketplace",
-	});
-
 export const trackLoadMore = (visibleCount: number): void =>
 	sendGaEvent("load_more", {
 		content_type: "job",

@@ -1,15 +1,9 @@
 "use client";
 
 import type { AppRouter } from "@bambi-app/api/routers/index";
-import {
-	Alert,
-	AlertDescription,
-	AlertTitle,
-} from "@bambi-app/ui/components/alert";
 import { cn } from "@bambi-app/ui/lib/utils";
 import type { InferRouterOutputs } from "@orpc/server";
 import { useQuery } from "@tanstack/react-query";
-import { InfoIcon } from "lucide-react";
 import Image from "next/image";
 import { formatMarketplacePay } from "@/lib/bambi/api-job-mapper";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
@@ -18,7 +12,7 @@ import { formatMinimumWageLabel } from "@/lib/bambi/minimum-wage";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
-import { Badge, Button, Card, InfoTile } from "../ds";
+import { Button, Card, InfoTile } from "../ds";
 import { EmptyState } from "../empty-state";
 import {
 	AlertCircle,
@@ -27,7 +21,6 @@ import {
 	ClockIcon,
 	DollarCircle,
 	MapPinIcon,
-	ShieldIcon,
 	StarIcon,
 } from "../icons";
 import { EmployerPhoneTile } from "./seeker-job-detail-responsive";
@@ -50,11 +43,12 @@ const formatCrawledPay = (job: CrawledJobDetail): string => {
 	return job.payRaw ?? NEGOTIABLE_PAY_TEXT;
 };
 
-// 외부 사이트에서 수집한 공고 상세. 구성(좌우 광고 레일 · 본문 + 320px sticky 요약 카드 ·
-// InfoTile 목록)은 우리 공고 상세(SeekerJobDetailResponsive)를 그대로 미러링하되, 컴포넌트는
-// 재사용하지 않는다 — 그 화면의 검수·인증 배지와 안전 확인 문구가 하드코딩이라, 우리가 확인한
-// 적 없는 공고에 그대로 붙으면 거짓 신호가 된다. 채팅·후기 본문·신고도 없다(담당자가 우리
-// 서비스 이용자가 아니라 응대할 사람이 없고, 후기·신고는 서버가 job_post 행을 요구한다).
+// 수집 공고 상세. 구성(좌우 광고 레일 · 본문 + 320px sticky 요약 카드 · InfoTile 목록)은
+// 우리 공고 상세(SeekerJobDetailResponsive)를 그대로 미러링하되, 컴포넌트는 재사용하지
+// 않는다 — 그 화면의 검수·인증 배지가 하드코딩이라, 우리가 확인한 적 없는 공고에 그대로
+// 붙으면 거짓 신호가 된다. 반대로 출처를 알리는 배지·문구도 두지 않는다(화면에는 공고
+// 내용만 남긴다). 채팅·지원·후기 본문·신고는 여전히 없다 — 담당자가 우리 서비스 이용자가
+// 아니라 응대할 사람이 없고, 후기·신고는 서버가 job_post 행을 요구한다.
 export function SeekerCrawledJobDetail({
 	job,
 	onBack,
@@ -102,22 +96,10 @@ export function SeekerCrawledJobDetail({
 							목록으로
 						</Button>
 					</div>
-					<Alert className="mb-4" variant="warning">
-						<InfoIcon />
-						<AlertTitle>외부에서 수집된 공고예요</AlertTitle>
-						<AlertDescription>
-							밤비알바가 검수·인증한 공고가 아니라 다른 채용 사이트에 올라온
-							내용을 그대로 옮긴 것이에요. 채팅·지원은 제공되지 않으니, 조건은
-							반드시 원본 게시자에게 직접 확인해 주세요.
-						</AlertDescription>
-					</Alert>
 					<section className="rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
+						{/* 우리 공고 상세가 검수·연락처보호 배지를 다는 자리는 비워 둔다 —
+						    수집 공고에는 둘 다 사실이 아니라 아무 배지도 달지 않는다. */}
 						<div className="flex flex-col gap-4">
-							<div className="flex flex-wrap items-center gap-2">
-								{/* 우리 공고 상세가 검수·연락처보호 배지를 다는 자리. 수집분에는 둘 다
-								    사실이 아니라 출처만 밝히는 중립 배지로 대체한다. */}
-								<Badge tone="neutral">외부 수집 공고</Badge>
-							</div>
 							<div>
 								<h1 className="m-0 font-extrabold text-[28px] leading-tight md:text-[34px]">
 									{job.shopName ? `${job.shopName} ` : ""}
@@ -216,24 +198,12 @@ export function SeekerCrawledJobDetail({
 						    썸네일로 대체돼 버린다. 상세 이미지가 비면 수집 파서 문제이므로
 						    화면에서 대체물을 만들지 말고 파서를 고친다. */}
 					</section>
-					{/* 우리 공고 상세와 같은 자리·같은 3칸 카드 구성의 안전 확인. 문구만 바꿨다 —
-					    우리 공고의 세 항목(연락처 비공개·공고 검수·신고 가능)은 수집분에선 셋 다
-					    사실이 아니라, 출처 고지와 자기 방어 수칙으로 대체한다. */}
+					{/* 우리 공고 상세와 같은 자리의 안전 확인. 문구만 바꿨다 — 우리 공고의 세
+					    항목(연락처 비공개·공고 검수·신고 가능)은 여기서 사실이 아니라, 자기
+					    방어 수칙 두 장만 남긴다. */}
 					<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
 						<h2 className="m-0 font-extrabold text-xl">안전 확인</h2>
-						<div className="mt-4 grid gap-3 md:grid-cols-3">
-							<Card className="rounded-lg" pad="md" tone="subtle">
-								<span className="inline-flex size-5 text-green-600">
-									<ShieldIcon />
-								</span>
-								<h3 className="my-2 font-extrabold text-base">
-									외부 수집 공고
-								</h3>
-								<p className="m-0 text-muted-foreground text-sm leading-relaxed">
-									다른 채용 사이트의 공고를 그대로 옮겨온 것으로, 밤비알바의
-									검수·인증을 거치지 않았어요.
-								</p>
-							</Card>
+						<div className="mt-4 grid gap-3 md:grid-cols-2">
 							<Card className="rounded-lg" pad="md" tone="subtle">
 								<span className="inline-flex size-5 text-red-600">
 									<AlertCircle />
@@ -268,10 +238,12 @@ export function SeekerCrawledJobDetail({
 						<div className="flex flex-wrap items-center gap-3">
 							<h2 className="m-0 font-extrabold text-xl">후기</h2>
 						</div>
+						{/* 문구는 우리 공고 상세의 후기 빈 상태와 같게 맞춘다(후기 컴포넌트 자체는
+							    회원 전용 쿼리라 재사용하지 않는다). */}
 						<EmptyState
 							className="mt-2"
-							description="외부 수집 공고는 밤비알바 채팅·면접을 거치지 않아 후기가 쌓이지 않아요."
-							title="아직 등록된 후기가 없어요"
+							description="면접을 마친 구직자가 남긴 후기가 여기에 표시돼요."
+							title="아직 후기가 없어요"
 						/>
 					</section>
 				</main>
@@ -280,8 +252,7 @@ export function SeekerCrawledJobDetail({
 				    수집 공고 id로는 접수 자체가 실패한다. */}
 				<aside className="hidden lg:block">
 					<div className="sticky top-20 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border">
-						<Badge tone="neutral">외부 수집</Badge>
-						<div className="mt-3 mb-2 flex flex-wrap items-baseline gap-x-2">
+						<div className="mb-2 flex flex-wrap items-baseline gap-x-2">
 							<h2 className="m-0 font-extrabold text-xl">
 								{formatCrawledPay(job)}
 							</h2>
@@ -308,8 +279,7 @@ export function SeekerCrawledJobDetail({
 							) : null}
 						</div>
 						<p className="mt-5 mb-0 text-muted-foreground text-xs leading-relaxed">
-							밤비알바가 검수한 공고가 아니어서 신고 접수 대상이 아니에요.
-							조건은 원본 게시자에게 직접 확인해 주세요.
+							급여·근무 조건은 게시자에게 직접 확인해 주세요.
 						</p>
 					</div>
 				</aside>

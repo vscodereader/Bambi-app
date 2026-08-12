@@ -270,6 +270,47 @@ const getContactRequestNotice = ({
 		: "연락처 공개를 거절했습니다.";
 };
 
+// interview_proposal 메시지 metadata는 interviewScheduleId만 담는다(상태·일시는 방
+// 조회 schedules가 정본). 형태가 어긋나면 null → body 텍스트 폴백.
+const readInterviewProposalMetadata = (
+	value: unknown
+): { interviewScheduleId: string } | null => {
+	if (typeof value !== "object" || value === null) {
+		return null;
+	}
+
+	const { interviewScheduleId } = value as Record<string, unknown>;
+
+	if (typeof interviewScheduleId === "string") {
+		return { interviewScheduleId };
+	}
+
+	return null;
+};
+
+// 면접 제안 인라인 카드 문구. status 전이 + 내가 제안자(구인자)인지로 분기.
+const getInterviewProposalNotice = (
+	status: string,
+	viewerIsProposer: boolean
+): string => {
+	switch (status) {
+		case "proposed":
+			return viewerIsProposer
+				? "면접 일정을 제안했어요."
+				: "면접 일정 제안이 도착했어요.";
+		case "confirmed":
+			return "면접 일정이 확정됐어요.";
+		case "declined":
+			return "면접 제안이 거절됐어요.";
+		case "canceled":
+			return "면접이 취소됐어요.";
+		case "completed":
+			return "면접이 완료됐어요.";
+		default:
+			return "면접 일정을 제안했습니다.";
+	}
+};
+
 const getRealtimeStatusLabel = (status: RealtimeStatus): string => {
 	switch (status) {
 		case "connected":
@@ -290,6 +331,15 @@ interface ChatMessageItem {
 	metadata: unknown;
 	revealedPhone: null | string;
 	senderUserId: string;
+}
+
+// 방 조회(getById)가 내려주는 면접 일정. 사이드패널과 인라인 카드가 공유한다.
+interface InterviewScheduleItem {
+	id: string;
+	locationNote: null | string;
+	proposedByUserId: string;
+	scheduledAt: Date | string;
+	status: string;
 }
 
 // 일반 말풍선. 내(coral-500)/상대(secondary)로 좌우 정렬. shadcn Message 래핑.
@@ -453,15 +503,100 @@ function ContactRequestMessage({
 	);
 }
 
+// interview_proposal 특수 렌더. 연락처 공개 카드와 같은 중앙 정렬 시스템 카드 +
+// 구직자가 proposed 상태에 바로 응답하는 확정/거절 버튼(사이드패널까지 안 가도 된다).
+function InterviewProposalMessage({
+	currentUserId,
+	isStatusPending,
+	message,
+	onSetStatus,
+	schedules,
+}: {
+	currentUserId: string;
+	isStatusPending: boolean;
+	message: ChatMessageItem;
+	onSetStatus: (
+		interviewScheduleId: string,
+		status: "canceled" | "confirmed" | "declined"
+	) => void;
+	schedules: readonly InterviewScheduleItem[];
+}) {
+	const metadata = readInterviewProposalMetadata(message.metadata);
+	const schedule = metadata
+		? schedules.find(({ id }) => id === metadata.interviewScheduleId)
+		: undefined;
+
+	// 일정을 못 찾으면(삭제 등) 자연문 body만 폴백 렌더한다.
+	if (!schedule) {
+		return (
+			<div className="mx-auto flex w-full max-w-[80%] flex-col gap-1 rounded-lg border border-coral-100 bg-coral-50 px-4 py-3 text-center">
+				<p className="m-0 font-semibold text-coral-800 text-sm leading-relaxed">
+					{message.body}
+				</p>
+				<p className="m-0 text-[11px] text-coral-700/70">
+					{formatDateTime(message.createdAt)}
+				</p>
+			</div>
+		);
+	}
+
+	const viewerIsProposer = schedule.proposedByUserId === currentUserId;
+	// 제안자(구인자)가 아닌 참여자만, 그리고 아직 proposed일 때만 응답할 수 있다.
+	const canRespond = schedule.status === "proposed" && !viewerIsProposer;
+
+	return (
+		<div className="mx-auto flex w-full max-w-[80%] flex-col gap-2 rounded-lg border border-coral-100 bg-coral-50 px-4 py-3 text-center">
+			<p className="m-0 font-semibold text-coral-800 text-sm leading-relaxed">
+				{getInterviewProposalNotice(schedule.status, viewerIsProposer)}
+			</p>
+			<p className="m-0 font-semibold text-coral-700 text-sm">
+				{formatDateTime(schedule.scheduledAt)}
+			</p>
+			{schedule.locationNote ? (
+				<p className="m-0 text-coral-700/80 text-xs">{schedule.locationNote}</p>
+			) : null}
+			{canRespond ? (
+				<div className="mt-1 flex justify-center gap-2">
+					<Button
+						disabled={isStatusPending}
+						onClick={() => onSetStatus(schedule.id, "confirmed")}
+						size="sm"
+						variant="primary"
+					>
+						확정
+					</Button>
+					<Button
+						disabled={isStatusPending}
+						onClick={() => onSetStatus(schedule.id, "declined")}
+						size="sm"
+						variant="secondary"
+					>
+						거절
+					</Button>
+				</div>
+			) : null}
+			<p className="m-0 text-[11px] text-coral-700/70">
+				{formatDateTime(message.createdAt)}
+			</p>
+		</div>
+	);
+}
+
 interface ChatMessageListProps {
 	canLoadOlder: boolean;
 	counterpartName: null | string;
 	currentUserId: string;
 	isLoadingOlder: boolean;
 	isResponding: boolean;
+	isStatusPending: boolean;
 	messages: ChatMessageItem[];
 	onLoadOlder: () => void;
 	onRespond: (messageId: string, decision: ContactRevealDecision) => void;
+	onSetInterviewStatus: (
+		interviewScheduleId: string,
+		status: "canceled" | "confirmed" | "declined"
+	) => void;
+	schedules: readonly InterviewScheduleItem[];
 	typingUserIds: string[];
 	viewerIsEmployer: boolean;
 }
@@ -472,9 +607,12 @@ function ChatMessageList({
 	currentUserId,
 	isLoadingOlder,
 	isResponding,
+	isStatusPending,
 	messages,
 	onLoadOlder,
 	onRespond,
+	onSetInterviewStatus,
+	schedules,
 	typingUserIds,
 	viewerIsEmployer,
 }: ChatMessageListProps) {
@@ -501,10 +639,12 @@ function ChatMessageList({
 				</div>
 			) : null}
 			{annotateChatMessages(messages).map(
-				({ dateLabel, isGroupEnd, isGroupStart, message: chatMessage }) => (
-					<Fragment key={chatMessage.id}>
-						{dateLabel ? <ChatDateChip label={dateLabel} /> : null}
-						{chatMessage.kind === "contact_request" ? (
+				({ dateLabel, isGroupEnd, isGroupStart, message: chatMessage }) => {
+					// kind가 셋(연락처 공개·면접 제안·일반)이라 중첩 삼항 대신 분기로 고른다.
+					let content: ReactNode;
+
+					if (chatMessage.kind === "contact_request") {
+						content = (
 							<ContactRequestMessage
 								counterpartName={counterpartName}
 								currentUserId={currentUserId}
@@ -513,7 +653,19 @@ function ChatMessageList({
 								onRespond={onRespond}
 								viewerIsEmployer={viewerIsEmployer}
 							/>
-						) : (
+						);
+					} else if (chatMessage.kind === "interview_proposal") {
+						content = (
+							<InterviewProposalMessage
+								currentUserId={currentUserId}
+								isStatusPending={isStatusPending}
+								message={chatMessage}
+								onSetStatus={onSetInterviewStatus}
+								schedules={schedules}
+							/>
+						);
+					} else {
+						content = (
 							<ChatMessageBubble
 								counterpartName={counterpartName}
 								currentUserId={currentUserId}
@@ -521,9 +673,16 @@ function ChatMessageList({
 								isGroupStart={isGroupStart}
 								message={chatMessage}
 							/>
-						)}
-					</Fragment>
-				)
+						);
+					}
+
+					return (
+						<Fragment key={chatMessage.id}>
+							{dateLabel ? <ChatDateChip label={dateLabel} /> : null}
+							{content}
+						</Fragment>
+					);
+				}
 			)}
 			{typingUserIds.length > 0 ? (
 				<Message align="start">
@@ -2103,9 +2262,12 @@ export function SeekerChatRoomResponsive({
 						currentUserId={currentUserId}
 						isLoadingOlder={isLoadingOlder}
 						isResponding={respondContactRevealMutation.isPending}
+						isStatusPending={setInterviewStatusMutation.isPending}
 						messages={messages}
 						onLoadOlder={() => loadOlder(messages)}
 						onRespond={handleRespondContact}
+						onSetInterviewStatus={setScheduleStatus}
+						schedules={schedules}
 						typingUserIds={typingUserIds}
 						viewerIsEmployer={!isJobSeeker}
 					/>

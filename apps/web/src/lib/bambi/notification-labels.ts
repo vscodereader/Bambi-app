@@ -2,7 +2,11 @@
 // 그대로 렌더되지 않도록 표시는 전부 여기를 거친다 — 모르는 값에도 중립 폴백이 있어
 // 서버가 먼저 새 값을 내려도 원값이 화면에 새지 않는다(report-labels.ts와 같은 관례).
 
-import { COMMUNITY_BOARDS, communityPostPath } from "./community";
+import {
+	COMMUNITY_BOARDS,
+	communityCrawledPath,
+	communityPostPath,
+} from "./community";
 import { LISTING_QUEUE_SHORT_LABELS } from "./exposure";
 import { organizationRoleLabel } from "./team-labels";
 
@@ -271,6 +275,12 @@ const boardSlug = (item: BambiNotificationView): null | string => {
 };
 
 const communityHref = (item: BambiNotificationView): string => {
+	// 수집 글에 달린 댓글은 게시판 글이 아니라 수집 전용 상세로 보낸다(게시판 slug·postId가
+	// 아예 없는 알림이라 이 분기가 없으면 알림함으로 되돌아간다).
+	const crawledTopicId = readString(item.metadata, "crawledTopicId");
+	if (crawledTopicId) {
+		return communityCrawledPath(crawledTopicId);
+	}
 	const slug = boardSlug(item);
 	const postId = readString(item.metadata, "postId");
 	return slug && postId ? communityPostPath(slug, postId) : NOTIFICATIONS_HREF;

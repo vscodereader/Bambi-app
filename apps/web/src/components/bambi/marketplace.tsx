@@ -1,6 +1,5 @@
 "use client";
 
-import { Button as UiButton } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	Select,
@@ -9,20 +8,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
-import {
-	Sheet,
-	SheetContent,
-	SheetTitle,
-} from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { type ReactNode, useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	ALL_OPTION,
-	applyDiscoveryAxis,
 	DEFAULT_MARKETPLACE_FILTERS,
-	discoveryAxisForTab,
 	MARKETPLACE_CATEGORIES,
-	MARKETPLACE_QUICK_FILTERS,
 	type MarketplaceFilters,
 } from "@/lib/bambi/marketplace";
 import { findRegion, useRegions } from "@/lib/bambi/regions";
@@ -33,14 +24,11 @@ import {
 	BriefcaseIcon,
 	CheckIcon,
 	ClockIcon,
-	Filter,
 	MapPinIcon,
 	Message,
-	Search2,
 	StarIcon,
 } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
-import { JobSearchCommand } from "./job-search-command";
 
 type FilterChange = (nextFilters: MarketplaceFilters) => void;
 
@@ -50,21 +38,51 @@ const formatReviewValue = ({
 }: Pick<Job, "rating" | "reviews">): string =>
 	`${reviews}개 · ${reviews > 0 ? rating.toFixed(1) : "신규"}`;
 
-interface MarketplaceFilterSidebarProps {
+// 기본값과 다른 필터 항목 수 — "필터 초기화" 버튼 활성 여부를 이 값으로 판단한다.
+// 키를 순회하므로 MarketplaceFilters에 필드가 늘어도 따로 손댈 필요가 없다.
+const countActiveFilters = (filters: MarketplaceFilters): number =>
+	(
+		Object.keys(DEFAULT_MARKETPLACE_FILTERS) as (keyof MarketplaceFilters)[]
+	).filter((key) => filters[key] !== DEFAULT_MARKETPLACE_FILTERS[key]).length;
+
+interface MarketplaceFilterControlsProps {
 	filters: MarketplaceFilters;
-	// 사이드바 하단(sticky 컬럼 안)에 덧붙일 슬롯 — 광고 배너 등.
-	footer?: ReactNode;
 	onChange: FilterChange;
+	// true면 컨트롤 하단에 "필터 초기화" 버튼을 붙인다(사이드바용). 시트는 자체 하단 바에서
+	// 초기화를 제공하므로 이 값을 넘기지 않는다.
+	showReset?: boolean;
 }
 
 export function MarketplaceFilterControls({
 	filters,
 	onChange,
-}: MarketplaceFilterSidebarProps) {
+	showReset = false,
+}: MarketplaceFilterControlsProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
 	const { isLoading, regions } = useRegions();
 	const districts = findRegion(regions, filters.regionCode)?.districts ?? [];
+	// 최소시급은 타이핑 즉시 표시하되 300ms 멈춘 뒤에만 필터에 반영해 재조회 난사를 막는다.
+	const [payInput, setPayInput] = useState(() =>
+		String(filters.minimumPay || "")
+	);
+	// 초기화 등 외부에서 minimumPay가 바뀌면 로컬 표시값을 다시 맞춘다.
+	useEffect(() => {
+		setPayInput(String(filters.minimumPay || ""));
+	}, [filters.minimumPay]);
+	useEffect(() => {
+		// 음수·빈값·비숫자는 필터 해제(0)로 떨어뜨린다 — 서버 minPayAmount는 양수만 받는다.
+		const parsed = Number(payInput);
+		const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+		if (next === filters.minimumPay) {
+			return;
+		}
+		const timer = setTimeout(
+			() => onChange({ ...filters, minimumPay: next }),
+			300
+		);
+		return () => clearTimeout(timer);
+	}, [payInput, filters, onChange]);
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex flex-col gap-2">
@@ -159,16 +177,10 @@ export function MarketplaceFilterControls({
 					최소 시급
 				</span>
 				<Input
-					onChange={(event) => {
-						// 음수·빈값·비숫자는 필터 해제(0)로 떨어뜨린다 — 서버 minPayAmount는 양수만 받는다.
-						const parsed = Number(event.target.value);
-						update({
-							minimumPay: Number.isFinite(parsed) && parsed > 0 ? parsed : 0,
-						});
-					}}
+					onChange={(event) => setPayInput(event.target.value)}
 					placeholder="예: 17000"
 					type="number"
-					value={String(filters.minimumPay || "")}
+					value={payInput}
 				/>
 			</div>
 			<label
@@ -206,142 +218,17 @@ export function MarketplaceFilterControls({
 				/>
 				초보 가능만 보기
 			</label>
-		</div>
-	);
-}
-
-export function MarketplaceFilterSidebar({
-	filters,
-	footer,
-	onChange,
-}: MarketplaceFilterSidebarProps) {
-	return (
-		<aside className="hidden w-[236px] shrink-0 lg:block">
-			<div className="sticky top-20 flex flex-col gap-4">
-				<Card className="rounded-lg" pad="lg" tone="outline">
-					<div className="mb-4 flex items-center gap-2">
-						<span className="inline-flex size-5 text-coral-600">
-							<Search2 />
-						</span>
-						<h2 className="m-0 font-extrabold text-base">빠른 탐색</h2>
-					</div>
-					<MarketplaceFilterControls filters={filters} onChange={onChange} />
-				</Card>
-				{footer}
-			</div>
-		</aside>
-	);
-}
-
-interface MarketplaceFilterSheetProps {
-	filters: MarketplaceFilters;
-	onChange: FilterChange;
-	onOpenChange: (open: boolean) => void;
-	open: boolean;
-}
-
-export function MarketplaceFilterSheet({
-	filters,
-	onChange,
-	onOpenChange,
-	open,
-}: MarketplaceFilterSheetProps) {
-	return (
-		<Sheet onOpenChange={onOpenChange} open={open}>
-			<SheetContent
-				onKeyDown={(event) => {
-					// 입력칸에서 Enter = 시트 닫기(필터 값은 onChange로 이미 반영된 상태).
-					// Select·체크박스의 Enter는 조작 키라 닫지 않고, IME 조합 중 Enter도 무시한다.
-					if (
-						event.key === "Enter" &&
-						event.target instanceof HTMLInputElement &&
-						!event.nativeEvent.isComposing
-					) {
-						onOpenChange(false);
-					}
-				}}
-			>
-				<SheetTitle className="mb-4">빠른 탐색</SheetTitle>
-				<MarketplaceFilterControls filters={filters} onChange={onChange} />
-			</SheetContent>
-		</Sheet>
-	);
-}
-
-// 기본값과 다른 필터 항목 수. 시트를 열지 않아도 몇 개가 걸려 있는지 배지로 보여준다.
-// 키를 순회하므로 MarketplaceFilters에 필드가 늘어도 따로 손댈 필요가 없다.
-const countActiveFilters = (filters: MarketplaceFilters): number =>
-	(
-		Object.keys(DEFAULT_MARKETPLACE_FILTERS) as (keyof MarketplaceFilters)[]
-	).filter((key) => filters[key] !== DEFAULT_MARKETPLACE_FILTERS[key]).length;
-
-interface MarketplaceSearchProps {
-	filters: MarketplaceFilters;
-	onChange: FilterChange;
-	onOpenFilters?: () => void;
-	onSelectJob: (job: Job) => void;
-	searchFieldClassName?: string;
-}
-
-export function MarketplaceSearch({
-	filters,
-	onChange,
-	onOpenFilters,
-	onSelectJob,
-	searchFieldClassName,
-}: MarketplaceSearchProps) {
-	const update = (patch: Partial<MarketplaceFilters>) =>
-		onChange({ ...filters, ...patch });
-	const activeFilterCount = countActiveFilters(filters);
-	return (
-		<div className="flex flex-col gap-3">
-			<div className={cn("flex items-center gap-2.5", searchFieldClassName)}>
-				<JobSearchCommand
-					onSelectJob={onSelectJob}
-					trigger="field"
-					triggerClassName="flex-1"
-				/>
-				<UiButton
-					className="h-12 gap-2 rounded-lg bg-card px-4 font-bold text-sm lg:hidden"
-					onClick={onOpenFilters}
-					variant="outline"
+			{showReset ? (
+				<Button
+					block
+					disabled={countActiveFilters(filters) === 0}
+					onClick={() => onChange(DEFAULT_MARKETPLACE_FILTERS)}
+					size="md"
+					variant="secondary"
 				>
-					<Filter />
-					필터
-					{activeFilterCount > 0 ? (
-						<Badge tone="primary">{activeFilterCount}</Badge>
-					) : null}
-				</UiButton>
-			</div>
-			<div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
-				{MARKETPLACE_QUICK_FILTERS.map((filter) => {
-					const selected =
-						(filter.id === "verified" && filters.onlyVerified) ||
-						(filter.id === "today" && filters.onlyToday) ||
-						(filter.id === "beginner" && filters.onlyBeginnerFriendly);
-					return (
-						<Tag
-							key={filter.id}
-							onClick={() => {
-								if (filter.id === "verified") {
-									update({ onlyVerified: !filters.onlyVerified });
-								}
-								if (filter.id === "today") {
-									update({ onlyToday: !filters.onlyToday });
-								}
-								if (filter.id === "beginner") {
-									update({
-										onlyBeginnerFriendly: !filters.onlyBeginnerFriendly,
-									});
-								}
-							}}
-							selected={selected}
-						>
-							{filter.label}
-						</Tag>
-					);
-				})}
-			</div>
+					필터 초기화
+				</Button>
+			) : null}
 		</div>
 	);
 }
@@ -414,90 +301,6 @@ export function MarketplaceAxisChips({
 			</div>
 		</div>
 	);
-}
-
-export const MARKETPLACE_DISCOVERY_TABS = [
-	{ disabled: false, id: "all", label: "전체" },
-	{ disabled: false, id: "region", label: "지역별" },
-	{ disabled: false, id: "category", label: "업종별" },
-	{ disabled: true, id: "map", label: "지도" },
-	{ disabled: true, id: "recent", label: "오늘 본 공고" },
-] as const;
-
-export type MarketplaceDiscoveryTabId =
-	(typeof MARKETPLACE_DISCOVERY_TABS)[number]["id"];
-
-export function useMarketplaceDiscovery(
-	filters: MarketplaceFilters,
-	onChange: FilterChange
-) {
-	const [discoveryTabId, setDiscoveryTabId] =
-		useState<MarketplaceDiscoveryTabId>("all");
-	const selectDiscoveryTab = (tabId: MarketplaceDiscoveryTabId) => {
-		setDiscoveryTabId(tabId);
-		onChange(applyDiscoveryAxis(filters, discoveryAxisForTab(tabId)));
-	};
-	return { discoveryTabId, selectDiscoveryTab };
-}
-
-export function MarketplaceDiscoveryTabs({
-	onSelect,
-	value,
-}: {
-	onSelect: (tabId: MarketplaceDiscoveryTabId) => void;
-	value: MarketplaceDiscoveryTabId;
-}) {
-	return (
-		<div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
-			{MARKETPLACE_DISCOVERY_TABS.map((tab) => (
-				<button
-					aria-pressed={value === tab.id}
-					className={cn(
-						"h-9 shrink-0 rounded-lg px-3 font-bold text-sm disabled:opacity-50",
-						value === tab.id
-							? "bg-foreground text-background"
-							: "border border-border bg-card text-muted-foreground"
-					)}
-					disabled={tab.disabled}
-					key={tab.id}
-					onClick={() => onSelect(tab.id)}
-					type="button"
-				>
-					{tab.label}
-				</button>
-			))}
-		</div>
-	);
-}
-
-export function MarketplaceDiscoveryAxisChips({
-	discoveryTabId,
-	filters,
-	onChange,
-}: {
-	discoveryTabId: MarketplaceDiscoveryTabId;
-	filters: MarketplaceFilters;
-	onChange: FilterChange;
-}) {
-	if (discoveryTabId === "region") {
-		return (
-			<MarketplaceAxisChips
-				axis="region"
-				filters={filters}
-				onChange={onChange}
-			/>
-		);
-	}
-	if (discoveryTabId === "category") {
-		return (
-			<MarketplaceAxisChips
-				axis="category"
-				filters={filters}
-				onChange={onChange}
-			/>
-		);
-	}
-	return null;
 }
 
 // 지역 전용 사용처(홈 PublicMarketplaceScreen)를 위한 얇은 래퍼.

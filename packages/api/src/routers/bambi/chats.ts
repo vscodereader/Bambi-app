@@ -1544,21 +1544,61 @@ export const chatsRouter = {
 			});
 			assertChatSendRateLimit("proposeInterview", profile.userId);
 
-			const [schedule] = await db
-				.insert(interviewSchedule)
-				.values({
-					chatRoomId: room.id,
-					proposedByUserId: profile.userId,
-					scheduledAt: new Date(input.scheduledAt),
-					locationNote: input.locationNote,
-				})
-				.returning();
+			// 일정 INSERT와 인라인 안내 메시지 INSERT를 한 트랜잭션으로 묶는다. 커밋이
+			// 안 되면 둘 다 없다 — 일정만 남고 채팅엔 아무 흔적도 없는 어긋남이 사라진다.
+			const schedule = await db.transaction(async (tx) => {
+				const [createdSchedule] = await tx
+					.insert(interviewSchedule)
+					.values({
+						chatRoomId: room.id,
+						locationNote: input.locationNote,
+						proposedByUserId: profile.userId,
+						scheduledAt: new Date(input.scheduledAt),
+					})
+					.returning();
 
-			if (!schedule) {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Interview schedule could not be created.",
+				if (!createdSchedule) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR", {
+						message: "Interview schedule could not be created.",
+					});
+				}
+
+				// 채팅 스트림에 남는 인라인 카드. body는 자연문이라 카드 미지원 클라이언트
+				// (네이티브·운영자 열람)에서도 일반 말풍선으로 자연스럽게 읽힌다. 상태·일시는
+				// metadata에 이중 저장하지 않고 interviewScheduleId로 방 조회 schedules에서 찾는다.
+				const [createdMessage] = await tx
+					.insert(chatMessage)
+					.values({
+						body: "면접 일정을 제안했습니다.",
+						chatRoomId: room.id,
+						id: generateChatMessageId(),
+						kind: "interview_proposal",
+						metadata: { interviewScheduleId: createdSchedule.id },
+						senderUserId: profile.userId,
+					})
+					.returning();
+
+				if (!createdMessage) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR", {
+						message: "Interview proposal message could not be created.",
+					});
+				}
+
+				await tx
+					.update(chatRoom)
+					.set({ updatedAt: new Date() })
+					.where(eq(chatRoom.id, room.id));
+				await enqueueChatMessageSync(tx, {
+					chatRoomId: room.id,
+					createdAt: createdMessage.createdAt,
+					messageId: createdMessage.id,
+					senderUserId: profile.userId,
 				});
-			}
+
+				return createdSchedule;
+			});
+
+			await drainPendingChatMessageSyncs();
 
 			emitRoomUpdated({ roomId: room.id });
 

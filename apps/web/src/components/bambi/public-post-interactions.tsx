@@ -12,15 +12,18 @@
 // 미인증(anon·구 토큰) 방문자에게는 서버가 이미 렌더한 댓글을 그대로 보여주고 참여
 // 자리에 본인인증 카드를 세운다 — 추가 요청이 없어 크롤러 방문에도 부담이 없다.
 
-import { Button } from "@bambi-app/ui/components/button";
 import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogDescription,
-	DialogTitle,
-	DialogTrigger,
-} from "@bambi-app/ui/components/dialog";
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "@bambi-app/ui/components/alert-dialog";
+import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Textarea } from "@bambi-app/ui/components/textarea";
@@ -97,7 +100,7 @@ function PasswordConfirmDialog({
 	onConfirm: (password: string) => Promise<unknown>;
 	pending: boolean;
 	title: string;
-	// base-ui DialogTrigger render는 ReactElement를 요구한다(ReactNode 불가).
+	// base-ui AlertDialogTrigger render는 ReactElement를 요구한다(ReactNode 불가).
 	trigger: ReactElement;
 }) {
 	const [open, setOpen] = useState(false);
@@ -114,27 +117,21 @@ function PasswordConfirmDialog({
 	};
 
 	return (
-		<Dialog onOpenChange={setOpen} open={open}>
-			<DialogTrigger render={trigger} />
-			<DialogContent>
-				<div className="flex flex-col gap-2">
-					<DialogTitle>{title}</DialogTitle>
-					<DialogDescription>{description}</DialogDescription>
-				</div>
+		<AlertDialog onOpenChange={setOpen} open={open}>
+			<AlertDialogTrigger render={trigger} />
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>{title}</AlertDialogTitle>
+					<AlertDialogDescription>{description}</AlertDialogDescription>
+				</AlertDialogHeader>
 				<PasswordField
 					id="public-confirm-password"
 					onChange={setPassword}
 					value={password}
 				/>
-				<div className="flex justify-end gap-2">
-					<DialogClose
-						render={
-							<Button type="button" variant="outline">
-								취소
-							</Button>
-						}
-					/>
-					<Button
+				<AlertDialogFooter>
+					<AlertDialogCancel>취소</AlertDialogCancel>
+					<AlertDialogAction
 						disabled={password.length < PASSWORD_MIN || pending}
 						onClick={() => {
 							submit().catch(() => setPassword(""));
@@ -142,10 +139,10 @@ function PasswordConfirmDialog({
 						variant="destructive"
 					>
 						삭제
-					</Button>
-				</div>
-			</DialogContent>
-		</Dialog>
+					</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
 	);
 }
 

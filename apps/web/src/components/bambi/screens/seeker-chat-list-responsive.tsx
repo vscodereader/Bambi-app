@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
+import { formatChatTimeLabel } from "@/lib/bambi/chat-message-grouping";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { connectBambiChatSocket } from "@/lib/bambi-chat-realtime";
 import { orpc } from "@/utils/orpc";
@@ -30,18 +31,47 @@ const formatDateTime = (value: Date | string): string =>
 		timeStyle: "short",
 	}).format(new Date(value));
 
+// 모바일 행 우측 끝의 간결 시간. 오늘이면 시각("오전 9:56"), 어제면 "어제", 그
+// 이전이면 날짜만("8. 12."). 오늘 시각은 채팅방 유틸을 재사용한다(라이브러리 추가 없음).
+const DAY_MS = 86_400_000;
+const listDateFormat = new Intl.DateTimeFormat("ko-KR", {
+	day: "numeric",
+	month: "numeric",
+});
+
+const formatChatListTime = (value: Date | string): string => {
+	const at = new Date(value);
+	const now = new Date();
+	// 로컬 자정 기준으로 오늘/어제를 가른다(UTC로 자르면 새벽 메시지가 어제로 샌다).
+	const startOfToday = new Date(
+		now.getFullYear(),
+		now.getMonth(),
+		now.getDate()
+	).getTime();
+
+	if (at.getTime() >= startOfToday) {
+		return formatChatTimeLabel(at);
+	}
+	if (at.getTime() >= startOfToday - DAY_MS) {
+		return "어제";
+	}
+	return listDateFormat.format(at);
+};
+
 const getRoomItemClassName = (
 	unreadCount: number,
 	isBlocked: boolean
 ): string =>
 	cn(
-		"relative flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors",
+		// 모바일은 카드 테두리를 걷고 아래 구분선만 남긴 메신저식 행, md 이상은 기존 카드.
+		"relative flex min-w-0 items-center gap-3 rounded-none border-border border-x-0 border-t-0 border-b bg-card p-3 transition-colors md:rounded-lg md:border md:p-4",
 		// 차단된 방은 열 수 없으니 hover 강조·미확인 링 같은 "눌러보세요" 신호를 지운다.
 		isBlocked
 			? null
 			: cn(
 					"hover:border-coral-200",
-					unreadCount > 0 && "border-coral-300 ring-1 ring-coral-200"
+					// 미확인 강조: 모바일은 마지막 메시지 굵기로 절제하고, 테두리·링은 md 이상만.
+					unreadCount > 0 && "md:border-coral-300 md:ring-1 md:ring-coral-200"
 				)
 	);
 
@@ -164,8 +194,9 @@ function ChatRoomActions({
 	);
 }
 
-// 목록의 방 한 칸. 데스크톱·모바일이 같은 마크업을 쓰고(폭에 따라 "최근 업데이트"
-// 칼럼만 md:block으로 붙는다) 차단 처리도 그래서 한 곳에만 있으면 된다.
+// 목록의 방 한 칸. 컨테이너·아바타·차단 처리는 공유하고, 텍스트 영역만 뷰포트로
+// 갈라 md:hidden(모바일 메신저 행)과 hidden md:block(데스크톱 카드)을 나란히 둔다 —
+// 시간·미확인·상태 배지가 행마다 다른 자리로 가서 한 트리로는 얽히기 때문이다.
 function ChatRoomItem({
 	isBlocked,
 	onOpen,
@@ -199,8 +230,46 @@ function ChatRoomItem({
 					isBlocked && "select-none blur-sm"
 				)}
 			>
-				<Avatar className="shrink-0" name={jobTitle} size="lg" square />
-				<div className="min-w-0 flex-1">
+				{/* 아바타는 밤비 DS 규칙(아바타=full)에 맞춰 양쪽 모두 원형으로 통일한다 —
+				square는 root·fallback 모두 rounded-[14px]로 박혀 있어 뷰포트별 분기가 어렵다. */}
+				<Avatar className="shrink-0" name={jobTitle} size="lg" />
+				{/* 모바일: 메신저식 3단 행(제목+시간 / 상대명+상태 / 마지막 메시지+미확인 카운트). */}
+				<div className="flex min-w-0 flex-1 flex-col gap-0.5 md:hidden">
+					<div className="flex min-w-0 items-center gap-2">
+						<h2 className="m-0 min-w-0 flex-1 truncate font-bold text-sm">
+							{jobTitle}
+						</h2>
+						<time className="shrink-0 text-muted-foreground text-xs">
+							{formatChatListTime(room.updatedAt)}
+						</time>
+					</div>
+					<div className="flex min-w-0 items-center gap-1.5">
+						{room.counterpartName ? (
+							<span className="min-w-0 truncate text-muted-foreground text-xs">
+								{room.counterpartName}
+							</span>
+						) : null}
+						<ChatRoomStateBadge isBlocked={isBlocked} />
+					</div>
+					<div className="flex min-w-0 items-center gap-2">
+						<p
+							className={cn(
+								"m-0 min-w-0 flex-1 truncate text-muted-foreground text-xs",
+								// 미확인은 링 대신 마지막 메시지를 올려 절제해서 강조한다.
+								room.unreadCount > 0 && "font-semibold text-foreground"
+							)}
+						>
+							{room.lastMessageBody ?? "아직 주고받은 메시지가 없어요"}
+						</p>
+						{room.unreadCount > 0 ? (
+							<span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-coral-500 px-1.5 text-white text-xs">
+								{room.unreadCount}
+							</span>
+						) : null}
+					</div>
+				</div>
+				{/* 데스크톱: 기존 카드 레이아웃 그대로(제목행 + 상대명 + 마지막 메시지 + 우측 시각 칼럼). */}
+				<div className="hidden min-w-0 flex-1 md:block">
 					<div className="flex min-w-0 flex-wrap items-center gap-2">
 						<h2 className="m-0 truncate font-extrabold text-base">
 							{jobTitle}
@@ -374,7 +443,7 @@ export function SeekerChatListResponsive({
 					</p>
 				</Card>
 			) : (
-				<div className="grid gap-3">
+				<div className="grid gap-0 md:gap-3">
 					{rooms.map((room) => (
 						<ChatRoomItem
 							isBlocked={room.isBlocked}

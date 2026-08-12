@@ -353,7 +353,9 @@ const deriveReportCommunity = (input: {
 				createdAt: comment.createdAt,
 				id: comment.id,
 				kind: "comment",
-				postId: comment.postId,
+				// 수집 글 댓글은 원글(community_post) 행이 없어 postId가 null로 온다 —
+				// 원글 링크가 없는 상태(undefined)로 정규화한다.
+				postId: comment.postId ?? undefined,
 				status: comment.status,
 				title: comment.postTitle,
 			},
