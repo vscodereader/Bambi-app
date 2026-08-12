@@ -69,7 +69,9 @@ export interface AdProductDraft {
 }
 
 interface BenefitField {
-	id: number;
+	// id는 렌더 간 결정적이어야 한다 — 초기 항목은 인덱스 기반, 추가 항목은 카운터 기반
+	// 문자열이라 서로 충돌하지 않는다(서버=클라이언트 동일, 하이드레이션 불일치 방지).
+	id: string;
 	value: string;
 }
 interface PriceOptionField extends PriceOption {
@@ -78,7 +80,7 @@ interface PriceOptionField extends PriceOption {
 	campaignEndsAt?: Date | null;
 	campaignStartsAt?: Date | null;
 	campaignStatus?: "active" | "cancelled" | "ended" | "planned";
-	id: number;
+	id: string;
 }
 
 const MAX_PREVIEW_IMAGE_BYTES = 1_500_000;
@@ -272,21 +274,24 @@ export function AdProductForm({
 	// 뺀다(단, 이미 급구로 저장된 상품 수정 시에는 값 유실 방지를 위해 유지).
 	urgentHidden?: boolean;
 }) {
+	// 추가 버튼으로 만드는 항목에만 쓰는 카운터 기반 id(`new-*`). 초기 항목은 아래에서
+	// 인덱스 기반 id(`benefit-*`·`price-*`)로 만든다 — useState 초기화 함수를 순수하게
+	// 유지해야 SSR·CSR·StrictMode 이중호출에서 id가 어긋나지 않는다(하이드레이션 불일치 방지).
 	const nextFieldId = useRef(0);
-	const makeId = () => nextFieldId.current++;
+	const makeId = () => `new-${nextFieldId.current++}`;
 
 	const [name, setName] = useState(initialValue?.name ?? "");
 	const [tagline, setTagline] = useState(initialValue?.tagline ?? "");
 	const [benefits, setBenefits] = useState<BenefitField[]>(() =>
 		(initialValue?.benefits.length ? initialValue.benefits : [""]).map(
-			(value) => ({ id: makeId(), value })
+			(value, index) => ({ id: `benefit-${index}`, value })
 		)
 	);
 	const [priceOptions, setPriceOptions] = useState<PriceOptionField[]>(() =>
 		(initialValue?.priceOptions.length
 			? initialValue.priceOptions
 			: [{ amount: 0, days: 30 }]
-		).map((o) => {
+		).map((o, index) => {
 			const campaign = selectEditableAdCampaign(
 				initialValue?.discountCampaigns ?? [],
 				o.days
@@ -294,7 +299,7 @@ export function AdProductForm({
 			const campaignEnabled =
 				campaign?.status === "active" || campaign?.status === "planned";
 			return {
-				id: makeId(),
+				id: `price-${index}`,
 				...o,
 				campaignDiscountPercent: campaign?.discountPercent,
 				campaignEnabled,
@@ -323,7 +328,7 @@ export function AdProductForm({
 	);
 	const [pendingDaysChange, setPendingDaysChange] = useState<{
 		days: number;
-		id: number;
+		id: string;
 	} | null>(null);
 	// 배너형(프리미엄·레거시 사이드) 판정은 광고 배너 슬롯 표에서 파생시킨 공용 헬퍼를 쓴다.
 	// 끌어올리기(수동·자동)는 리스팅형(스페셜·급구·추천)에만 제공된다.
@@ -346,13 +351,13 @@ export function AdProductForm({
 		placementKind
 	);
 
-	const setPrice = (id: number, patch: Partial<PriceOption>) =>
+	const setPrice = (id: string, patch: Partial<PriceOption>) =>
 		setPriceOptions((options) =>
 			options.map((option) =>
 				option.id === id ? { ...option, ...patch } : option
 			)
 		);
-	const setBenefit = (id: number, value: string) =>
+	const setBenefit = (id: string, value: string) =>
 		setBenefits((items) =>
 			items.map((item) => (item.id === id ? { ...item, value } : item))
 		);
