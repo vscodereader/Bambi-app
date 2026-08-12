@@ -297,6 +297,7 @@ export function MarketplaceFilterSheet({
 				    safe-area 인셋만큼 하단 여백을 더해 홈 인디케이터에 버튼이 가리지 않게 한다. */}
 				<div className="flex gap-2 border-border border-t bg-card px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
 					<Button
+						className="shrink-0"
 						disabled={countActiveFilters(filters) === 0}
 						onClick={() => onChange(DEFAULT_MARKETPLACE_FILTERS)}
 						size="md"
@@ -305,7 +306,7 @@ export function MarketplaceFilterSheet({
 						초기화
 					</Button>
 					<Button
-						block
+						className="min-w-0 flex-1"
 						onClick={() => onOpenChange(false)}
 						size="md"
 						variant="primary"
@@ -413,7 +414,8 @@ export function useMarketplaceDiscovery(
 }
 
 // 디스커버리 탭을 코럴 세그먼트 컨트롤로 — 활성 세그먼트만 카드 톤 배경 + 코럴 텍스트로
-// 띄운다. disabled(지도·오늘 본 공고)는 opacity-40 + native disabled로 남겨둔다.
+// 띄운다. disabled(지도·오늘 본 공고)는 미출시 기능이라 opacity-40 + native disabled에
+// "준비 중" 보조 라벨을 붙여 존재하는 기능으로 혼동하지 않게 한다.
 function MarketplaceDiscoverySegments({
 	onSelect,
 	value,
@@ -429,7 +431,7 @@ function MarketplaceDiscoverySegments({
 					className={cn(
 						"h-8 shrink-0 rounded-full px-3 font-bold text-sm transition-colors",
 						value === tab.id
-							? "bg-card text-coral-600 shadow-[var(--shadow-card)]"
+							? "bg-card text-coral-600"
 							: "text-muted-foreground",
 						tab.disabled && "opacity-40"
 					)}
@@ -439,6 +441,9 @@ function MarketplaceDiscoverySegments({
 					type="button"
 				>
 					{tab.label}
+					{tab.disabled ? (
+						<span className="ml-1 font-medium text-xs">준비 중</span>
+					) : null}
 				</button>
 			))}
 		</div>
@@ -498,7 +503,7 @@ function MarketplaceFilterButton({
 	return (
 		<UiButton
 			className={cn(
-				"h-12 shrink-0 gap-2 rounded-lg bg-card px-4 font-bold text-sm",
+				"h-12 shrink-0 gap-2 rounded-lg bg-card px-4 font-bold text-sm shadow-none",
 				className
 			)}
 			onClick={onClick}
