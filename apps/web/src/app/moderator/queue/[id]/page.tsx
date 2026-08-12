@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { ModeratorPaymentPanel } from "@/components/bambi/moderator-payment-panel";
 import { QueueDetail } from "@/components/bambi/screens/moderator";
 import { useMod } from "@/components/bambi/screens/moderator-context";
 import { orpc } from "@/utils/orpc";
@@ -58,7 +57,6 @@ export default function ModeratorQueueDetailPage() {
 				}}
 				tone="calm"
 			/>
-			<ModeratorPaymentPanel jobPostId={item.id} />
 		</div>
 	);
 }

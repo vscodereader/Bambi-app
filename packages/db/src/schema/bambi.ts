@@ -122,6 +122,11 @@ export const jobBoostOptionType = pgEnum("job_boost_option_type", [
 	"auto_period",
 ]);
 
+export const jobBoostPurchaseSource = pgEnum("job_boost_purchase_source", [
+	"job_registration",
+	"standalone",
+]);
+
 export const jobPaymentMethod = pgEnum("job_payment_method", [
 	"card",
 	"bank_transfer",
@@ -1121,6 +1126,11 @@ export const jobBoostPurchase = pgTable(
 		// onDelete를 두지 않는다(조직 축이 결제 주체라 사용자는 참고값).
 		buyerUserId: text("buyer_user_id").references(() => user.id),
 		optionType: jobBoostOptionType("option_type").notNull(),
+		// 유료 노출상품 등록과 함께 산 옵션만 공고 결제에 묶는다. 기존 구매와 광고관리에서
+		// 따로 산 옵션은 standalone이라 운영자 옵션 결제 목록에서 개별 처리한다.
+		purchaseSource: jobBoostPurchaseSource("purchase_source")
+			.default("standalone")
+			.notNull(),
 		// 결제 금액 스냅샷. 옵션 가격이 나중에 바뀌어도 이 구매의 청구액은 이 값으로 고정.
 		amount: integer("amount").notNull(),
 		// 아래 세 칸은 구매 시점 옵션 값 스냅샷 — 운영자가 옵션을 바꿔도 기존 구매 비소급.
