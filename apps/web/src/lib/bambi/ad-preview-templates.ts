@@ -73,14 +73,18 @@ export type AdPlacementKind = "banner" | "listing";
 // "프리미엄 광고 배너"가 뜨면 위치와 상품이 어긋난 채 팔린다. "노출 영역 없음(일반)"은
 // 광고 없는 기본 상품이라 어느 위치에서도 고를 수 있다. 유형을 아직 모르면(카탈로그
 // 로딩·조회 실패) 좁히지 않고 전체를 준다.
+// includeUrgent가 false면(사이트 설정에서 급구 섹션 숨김) "급구 채용 리스팅"을 뺀다.
+// 기본은 true(옵션 미지정)이라 기존 호출부 동작은 그대로다.
 export const getPreviewTemplateOptionsForPlacementKind = (
-	placementKind: AdPlacementKind | undefined
+	placementKind: AdPlacementKind | undefined,
+	options?: { includeUrgent?: boolean }
 ): (typeof AD_PREVIEW_TEMPLATE_OPTIONS)[number][] =>
 	AD_PREVIEW_TEMPLATE_OPTIONS.filter(
 		(option) =>
-			placementKind === undefined ||
-			option.value === "none" ||
-			isBannerPreviewTemplate(option.value) === (placementKind === "banner")
+			(options?.includeUrgent !== false || option.value !== "urgent-list") &&
+			(placementKind === undefined ||
+				option.value === "none" ||
+				isBannerPreviewTemplate(option.value) === (placementKind === "banner"))
 	);
 
 // 이미 저장된 값이 위치 유형과 어긋나는가(기존 상품 편집 경고용). 레거시 side 값은

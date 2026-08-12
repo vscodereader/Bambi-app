@@ -26,14 +26,16 @@ describe("employer ad guide screen", () => {
 
 	it("shows an auto-boost inclusion line when the product has auto boosts", () => {
 		// 자동 횟수>0이면 수동 라인과 동일 스타일의 자동 포함 라인을 표기한다
+		// (문구는 "재노출 보장" 리라벨 이후 기준 — feat/exposure-section-configuration)
 		expect(source).toContain("product.autoBoostsPerDay > 0");
-		expect(source).toContain("일일 자동 끌어올리기");
+		expect(source).toContain("최상단 재노출 보장");
 	});
 
 	it("clarifies boosts are for listing ads only, not banner ads", () => {
 		// 끌어올리기는 리스팅 전용·배너 제외임이 안내 문구로 드러나야 한다
-		expect(source).toContain("리스팅 광고에만 제공되며");
-		expect(source).toContain("배너 광고에는 제공되지 않습니다");
+		// (문구는 별도 판매 끌어올리기 옵션 도입 이후 기준)
+		expect(source).toContain("광고에만 제공됩니다");
+		expect(source).toContain("배너 광고를");
 	});
 
 	it("reflects per-option catalog discounts through the shared price tag", () => {

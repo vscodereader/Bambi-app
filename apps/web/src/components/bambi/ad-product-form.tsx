@@ -258,6 +258,7 @@ export function AdProductForm({
 	pending,
 	placementKind,
 	submitLabel = "저장",
+	urgentHidden,
 }: {
 	initialValue?: AdProductDraft;
 	onSubmit: (draft: AdProductDraft) => void;
@@ -267,6 +268,9 @@ export function AdProductForm({
 	// 위치를 아직 못 읽었으면(로딩·조회 실패) undefined로 전체 선택지를 유지한다.
 	placementKind?: AdPlacementKind;
 	submitLabel?: string;
+	// 사이트 설정에서 급구 섹션이 숨김이면 true. 노출 영역 선택지에서 "급구 채용 리스팅"을
+	// 뺀다(단, 이미 급구로 저장된 상품 수정 시에는 값 유실 방지를 위해 유지).
+	urgentHidden?: boolean;
 }) {
 	const nextFieldId = useRef(0);
 	const makeId = () => nextFieldId.current++;
@@ -325,8 +329,12 @@ export function AdProductForm({
 	// 끌어올리기(수동·자동)는 리스팅형(스페셜·급구·추천)에만 제공된다.
 	const isBannerTemplate = isBannerPreviewTemplate(previewTemplate);
 	// 게재 위치 유형에 맞는 선택지만 남긴다(판정은 ad-preview-templates의 공용 헬퍼).
-	const templateOptions =
-		getPreviewTemplateOptionsForPlacementKind(placementKind);
+	// 급구 숨김이면 "급구 채용 리스팅"을 뺀다 — 단 현재 값이 이미 urgent-list면(기존 상품
+	// 수정) 옵션을 유지해 폼이 깨지지 않게 한다.
+	const templateOptions = getPreviewTemplateOptionsForPlacementKind(
+		placementKind,
+		{ includeUrgent: !urgentHidden || previewTemplate === "urgent-list" }
+	);
 	// 현재 값이 선택지에 없는 경우가 둘 있다: 레거시 side 값(좌/우 사이드 배너)이거나,
 	// 위치 유형과 어긋난 채 저장된 기존 상품이다. 둘 다 항목으로 함께 렌더해 편집 중
 	// 값이 유실되지 않게 한다. AD_PREVIEW_TEMPLATE_LABELS는 레거시 포함 전체 라벨을 제공한다.

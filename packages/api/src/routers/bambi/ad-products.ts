@@ -274,20 +274,30 @@ const syncDiscountCampaigns = async ({
 
 export const adProductsRouter = {
 	getCatalog: protectedProcedure.handler(async () => {
+		// 급구 섹션이 숨김이면(사이트 설정 단일 행, 행 없으면 기본 true) 급구 리스팅
+		// (urgent-list) 상품도 구매 카탈로그에서 제외한다 — 메인에 뜨지 않는 섹션을 팔 수
+		// 없게 서버에서 근본 차단(구인자 등록/수정·운영자 대행·미디어 업로더 호출부 전부 커버).
+		const [settingsRow] = await db
+			.select({ urgentSectionHidden: bambiSiteSettings.urgentSectionHidden })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"))
+			.limit(1);
+		const urgentHidden = settingsRow?.urgentSectionHidden ?? true;
+		// 좌/우 사이드 배너(side-horizontal·side-vertical)는 프리미엄 광고로 통합돼 항상 제외.
+		// 급구 숨김이면 urgent-list도 더한다. 레거시·비노출 데이터는 구인자 구매 카탈로그에서만
+		// 빠지며, 운영자 관리(listCatalogAdmin)에는 계속 노출한다.
+		const excludedTemplates: (typeof adProduct.$inferSelect.previewTemplate)[] =
+			urgentHidden
+				? ["side-horizontal", "side-vertical", "urgent-list"]
+				: ["side-horizontal", "side-vertical"];
 		const placements = await db.query.adPlacement.findMany({
 			where: eq(adPlacement.isActive, true),
 			orderBy: [asc(adPlacement.sortOrder), asc(adPlacement.createdAt)],
 			with: {
 				products: {
-					// 좌/우 사이드 배너(side-horizontal·side-vertical)는 프리미엄 광고로 통합돼
-					// 신규 구매를 차단한다. 레거시 데이터(이미 팔린 공고)는 계속 노출하되
-					// 구인자 구매 카탈로그에서만 제외한다. 운영자 관리(listCatalogAdmin)에는 계속 노출.
 					where: and(
 						eq(adProduct.isActive, true),
-						notInArray(adProduct.previewTemplate, [
-							"side-horizontal",
-							"side-vertical",
-						])
+						notInArray(adProduct.previewTemplate, excludedTemplates)
 					),
 					orderBy: [asc(adProduct.sortOrder), asc(adProduct.createdAt)],
 				},

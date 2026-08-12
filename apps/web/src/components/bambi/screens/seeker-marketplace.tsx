@@ -110,6 +110,7 @@ export function SeekerMarketplaceScreen() {
 							<MarketplaceFilterControls
 								filters={filters}
 								onChange={handleFiltersChange}
+								showReset
 							/>
 						</Card>
 					</div>
@@ -187,6 +188,7 @@ export function SeekerMarketplaceScreen() {
 				onChange={handleFiltersChange}
 				onOpenChange={setFiltersOpen}
 				open={filtersOpen}
+				resultCount={totalCount}
 			/>
 		</>
 	);
