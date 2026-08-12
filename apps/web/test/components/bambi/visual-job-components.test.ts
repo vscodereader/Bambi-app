@@ -174,9 +174,12 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("SEEKER_CONTENT_WIDTH");
 		expect(source).not.toContain("max-w-[80%]");
 		expect(source).not.toContain("조건에 맞는 안전한 자리를 찾아요");
-		// 검색은 헤더(SeekerAppShell)와 필터를 공유하고, 본문 검색은 모바일 전용
+		// 검색은 헤더(SeekerAppShell)와 필터를 공유하고, 본문 검색은 모바일 전용이다.
+		// 탐색 바(탭·퀵칩·검색·필터)는 MarketplaceDiscoveryBar 한 컴포넌트로 합쳐졌고,
+		// 모바일 전용 검색 필드 처리는 그 안에서(md:hidden 행) 담당한다.
 		expect(source).toContain("useSeekerFilters");
-		expect(source).toContain('searchFieldClassName="md:hidden"');
+		expect(source).toContain("MarketplaceDiscoveryBar");
+		expect(source).not.toContain("MarketplaceSearch");
 	});
 
 	it("hosts the seeker marketplace search in the shared header only on /seeker", () => {
