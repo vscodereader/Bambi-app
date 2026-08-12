@@ -1,0 +1,2 @@
+CREATE TYPE "public"."job_boost_purchase_source" AS ENUM('job_registration', 'standalone');--> statement-breakpoint
+ALTER TABLE "job_boost_purchase" ADD COLUMN "purchase_source" "job_boost_purchase_source" DEFAULT 'standalone' NOT NULL;

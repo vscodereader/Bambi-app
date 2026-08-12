@@ -302,8 +302,13 @@ function getAdColumns({
 			sortValue: (ad) => ad.title,
 			cell: (ad) => (
 				<div className="flex min-w-0 flex-col gap-1">
-					<span className="break-keep font-semibold text-foreground">
-						{ad.title}
+					<span
+						className="break-keep font-semibold text-foreground"
+						title={
+							truncateJobTitle(ad.title).isTruncated ? ad.title : undefined
+						}
+					>
+						{truncateJobTitle(ad.title).text}
 					</span>
 					{ad.teamDisplayName ? (
 						<span className="break-keep text-muted-foreground text-xs">
@@ -399,6 +404,20 @@ function getAdColumns({
 
 const MOBILE_AD_PAGE_SIZE = 10;
 
+const JOB_TITLE_MAX_LENGTH = 15;
+
+function truncateJobTitle(title: string) {
+	const characters = Array.from(title);
+	const isTruncated = characters.length > JOB_TITLE_MAX_LENGTH;
+
+	return {
+		isTruncated,
+		text: isTruncated
+			? `${characters.slice(0, JOB_TITLE_MAX_LENGTH).join("")}...`
+			: title,
+	};
+}
+
 function ManualBoostBadge({ ad }: { ad: AdListItem }) {
 	if (isBannerExposureType(ad.exposureType)) {
 		return <StatusBadge>대상 아님</StatusBadge>;
@@ -463,79 +482,88 @@ function MobileAds({
 
 	return (
 		<div className="flex flex-col gap-3 md:hidden">
-			{pageAds.map((ad) => (
-				<Card key={ad.jobPostId}>
-					<CardHeader className="gap-3">
-						<div className="min-w-0 flex-1">
-							<CardTitle className="truncate text-base" title={ad.title}>
-								{ad.title}
-							</CardTitle>
-							{ad.teamDisplayName ? (
-								<p className="m-0 mt-1 truncate text-muted-foreground text-xs">
-									{ad.teamDisplayName}
-								</p>
-							) : null}
-						</div>
-						<CardAction>
-							<AdActionsMenu
-								ad={ad}
-								isBoostPending={isBoostPending}
-								onBoost={onBoost}
-								onPurchaseOption={onPurchaseOption}
-							/>
-						</CardAction>
-					</CardHeader>
-					<CardContent className="grid gap-3 text-sm">
-						<div className="flex flex-col items-start gap-1">
-							<span className="text-muted-foreground text-xs">상태</span>
-							<AdStatusDetails ad={ad} />
-						</div>
-						<div className="grid grid-cols-2 gap-3">
-							<div className="flex min-w-0 flex-col gap-1">
-								<span className="text-muted-foreground text-xs">
-									노출 위치/상품
-								</span>
-								<div className="flex flex-wrap items-center gap-2">
-									<StatusBadge>{exposureLabel(ad)}</StatusBadge>
-									{ad.adProductName ? (
-										<span className="text-muted-foreground text-xs">
-											{ad.adProductName}
-										</span>
-									) : null}
+			{pageAds.map((ad) => {
+				const truncatedTitle = truncateJobTitle(ad.title);
+
+				return (
+					<Card key={ad.jobPostId}>
+						<CardHeader className="gap-3">
+							<div className="min-w-0 flex-1">
+								<CardTitle
+									className="truncate text-base"
+									title={truncatedTitle.isTruncated ? ad.title : undefined}
+								>
+									{truncatedTitle.text}
+								</CardTitle>
+								{ad.teamDisplayName ? (
+									<p className="m-0 mt-1 truncate text-muted-foreground text-xs">
+										{ad.teamDisplayName}
+									</p>
+								) : null}
+							</div>
+							<CardAction>
+								<AdActionsMenu
+									ad={ad}
+									isBoostPending={isBoostPending}
+									onBoost={onBoost}
+									onPurchaseOption={onPurchaseOption}
+								/>
+							</CardAction>
+						</CardHeader>
+						<CardContent className="grid gap-3 text-sm">
+							<div className="flex flex-col items-start gap-1">
+								<span className="text-muted-foreground text-xs">상태</span>
+								<AdStatusDetails ad={ad} />
+							</div>
+							<div className="grid grid-cols-2 gap-3">
+								<div className="flex min-w-0 flex-col gap-1">
+									<span className="text-muted-foreground text-xs">
+										노출 위치/상품
+									</span>
+									<div className="flex flex-wrap items-center gap-2">
+										<StatusBadge>{exposureLabel(ad)}</StatusBadge>
+										{ad.adProductName ? (
+											<span className="text-muted-foreground text-xs">
+												{ad.adProductName}
+											</span>
+										) : null}
+									</div>
+								</div>
+								<div className="flex flex-col gap-1">
+									<span className="text-muted-foreground text-xs">
+										노출 마감
+									</span>
+									<span>
+										{ad.exposureEndsAt ? formatDate(ad.exposureEndsAt) : "-"}
+									</span>
+								</div>
+							</div>
+							<div className="grid grid-cols-2 gap-3">
+								<div className="flex flex-col gap-1">
+									<span className="text-muted-foreground text-xs">
+										오늘 끌어올리기
+									</span>
+									<ManualBoostBadge ad={ad} />
+								</div>
+								<div className="flex flex-col gap-1">
+									<span className="text-muted-foreground text-xs">
+										자동 끌어올리기
+									</span>
+									<AutoBoostBadge ad={ad} />
 								</div>
 							</div>
 							<div className="flex flex-col gap-1">
-								<span className="text-muted-foreground text-xs">노출 마감</span>
-								<span>
-									{ad.exposureEndsAt ? formatDate(ad.exposureEndsAt) : "-"}
-								</span>
-							</div>
-						</div>
-						<div className="grid grid-cols-2 gap-3">
-							<div className="flex flex-col gap-1">
 								<span className="text-muted-foreground text-xs">
-									오늘 끌어올리기
+									최근 끌어올림
 								</span>
-								<ManualBoostBadge ad={ad} />
-							</div>
-							<div className="flex flex-col gap-1">
-								<span className="text-muted-foreground text-xs">
-									자동 끌어올리기
+								<span className="text-muted-foreground">
+									{ad.boostedAt ? formatDateTime(ad.boostedAt) : "없음"}
 								</span>
-								<AutoBoostBadge ad={ad} />
 							</div>
-						</div>
-						<div className="flex flex-col gap-1">
-							<span className="text-muted-foreground text-xs">
-								최근 끌어올림
-							</span>
-							<span className="text-muted-foreground">
-								{ad.boostedAt ? formatDateTime(ad.boostedAt) : "없음"}
-							</span>
-						</div>
-					</CardContent>
-				</Card>
-			))}
+						</CardContent>
+					</Card>
+				);
+			})}
 			{pageCount > 1 ? (
 				<div className="flex items-center justify-between gap-3">
 					<Button

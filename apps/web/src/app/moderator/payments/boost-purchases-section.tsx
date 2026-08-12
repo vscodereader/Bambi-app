@@ -140,47 +140,73 @@ export function BoostPurchasesSection() {
 			) : null}
 
 			{purchasesQuery.isSuccess && purchases.length > 0 ? (
-				<div className="rounded-xl border border-border">
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead>공고 제목</TableHead>
-								<TableHead>업소</TableHead>
-								<TableHead>옵션</TableHead>
-								<TableHead>스펙</TableHead>
-								<TableHead>금액</TableHead>
-								<TableHead>결제수단</TableHead>
-								<TableHead>상태</TableHead>
-								<TableHead>구매일</TableHead>
-								<TableHead className="text-right">관리</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{purchases.map((purchase) => (
-								<PurchaseRow
-									isPending={isRowPending(purchase.id)}
-									key={purchase.id}
-									onCancel={() =>
-										cancelMutation.mutate({ purchaseId: purchase.id })
-									}
-									onSetPaid={() =>
-										confirmMutation.mutate({
-											paymentStatus: "paid",
-											purchaseId: purchase.id,
-										})
-									}
-									onSetUnpaid={() =>
-										confirmMutation.mutate({
-											paymentStatus: "unpaid",
-											purchaseId: purchase.id,
-										})
-									}
-									purchase={purchase}
-								/>
-							))}
-						</TableBody>
-					</Table>
-				</div>
+				<>
+					<div className="hidden rounded-xl border border-border md:block">
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>공고 제목</TableHead>
+									<TableHead>업소</TableHead>
+									<TableHead>옵션</TableHead>
+									<TableHead>스펙</TableHead>
+									<TableHead>금액</TableHead>
+									<TableHead>결제수단</TableHead>
+									<TableHead>상태</TableHead>
+									<TableHead>구매일</TableHead>
+									<TableHead className="text-right">관리</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{purchases.map((purchase) => (
+									<PurchaseRow
+										isPending={isRowPending(purchase.id)}
+										key={purchase.id}
+										onCancel={() =>
+											cancelMutation.mutate({ purchaseId: purchase.id })
+										}
+										onSetPaid={() =>
+											confirmMutation.mutate({
+												paymentStatus: "paid",
+												purchaseId: purchase.id,
+											})
+										}
+										onSetUnpaid={() =>
+											confirmMutation.mutate({
+												paymentStatus: "unpaid",
+												purchaseId: purchase.id,
+											})
+										}
+										purchase={purchase}
+									/>
+								))}
+							</TableBody>
+						</Table>
+					</div>
+					<div className="flex flex-col gap-3 md:hidden">
+						{purchases.map((purchase) => (
+							<PurchaseCard
+								isPending={isRowPending(purchase.id)}
+								key={purchase.id}
+								onCancel={() =>
+									cancelMutation.mutate({ purchaseId: purchase.id })
+								}
+								onSetPaid={() =>
+									confirmMutation.mutate({
+										paymentStatus: "paid",
+										purchaseId: purchase.id,
+									})
+								}
+								onSetUnpaid={() =>
+									confirmMutation.mutate({
+										paymentStatus: "unpaid",
+										purchaseId: purchase.id,
+									})
+								}
+								purchase={purchase}
+							/>
+						))}
+					</div>
+				</>
 			) : null}
 		</section>
 	);
@@ -192,6 +218,94 @@ interface PurchaseRowProps {
 	onSetPaid: () => void;
 	onSetUnpaid: () => void;
 	purchase: BoostPurchase;
+}
+
+function PurchaseActions({
+	isPending,
+	isUnpaid,
+	onCancel,
+	onSetPaid,
+	onSetUnpaid,
+}: Omit<PurchaseRowProps, "purchase"> & { isUnpaid: boolean }) {
+	return isUnpaid ? (
+		<>
+			<Button disabled={isPending} onClick={onSetPaid} size="sm" type="button">
+				입금 확인
+			</Button>
+			<Button
+				disabled={isPending}
+				onClick={onCancel}
+				size="sm"
+				type="button"
+				variant="outline"
+			>
+				취소
+			</Button>
+		</>
+	) : (
+		<Button
+			disabled={isPending}
+			onClick={onSetUnpaid}
+			size="sm"
+			type="button"
+			variant="outline"
+		>
+			미결제로
+		</Button>
+	);
+}
+
+function PurchaseCard(props: PurchaseRowProps) {
+	const { purchase } = props;
+	const isUnpaid = purchase.paymentStatus === "unpaid";
+	return (
+		<article className="rounded-xl border border-border bg-card p-4">
+			<div className="flex items-start justify-between gap-3">
+				<div className="min-w-0">
+					<h3 className="m-0 break-words font-semibold text-base">
+						{purchase.jobPostTitle}
+					</h3>
+					<p className="m-0 text-muted-foreground text-sm">
+						{purchase.organizationDisplayName}
+					</p>
+				</div>
+				<StatusBadge tone={isUnpaid ? "warning" : "good"}>
+					{PAYMENT_STATUS_LABELS[purchase.paymentStatus]}
+				</StatusBadge>
+			</div>
+			<div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+				<div>
+					<p className="m-0 text-muted-foreground">옵션</p>
+					<p className="m-0">
+						{JOB_BOOST_OPTION_TYPE_LABELS[purchase.optionType]}
+					</p>
+				</div>
+				<div>
+					<p className="m-0 text-muted-foreground">스펙</p>
+					<p className="m-0">{formatBoostOptionSpec(purchase) || "-"}</p>
+				</div>
+				<div>
+					<p className="m-0 text-muted-foreground">금액</p>
+					<p className="m-0 font-medium">{formatAdPrice(purchase.amount)}</p>
+				</div>
+				<div>
+					<p className="m-0 text-muted-foreground">결제수단</p>
+					<p className="m-0">
+						{purchase.paymentMethod
+							? PAYMENT_METHOD_LABELS[purchase.paymentMethod]
+							: "-"}
+					</p>
+				</div>
+				<div className="col-span-2">
+					<p className="m-0 text-muted-foreground">구매일</p>
+					<p className="m-0">{formatDateTime(purchase.createdAt)}</p>
+				</div>
+			</div>
+			<div className="mt-4 flex justify-end gap-2">
+				<PurchaseActions {...props} isUnpaid={isUnpaid} />
+			</div>
+		</article>
+	);
 }
 
 function PurchaseRow({
@@ -232,37 +346,13 @@ function PurchaseRow({
 			</TableCell>
 			<TableCell className="text-right">
 				<div className="flex items-center justify-end gap-2">
-					{isUnpaid ? (
-						<>
-							<Button
-								disabled={isPending}
-								onClick={onSetPaid}
-								size="sm"
-								type="button"
-							>
-								입금 확인
-							</Button>
-							<Button
-								disabled={isPending}
-								onClick={onCancel}
-								size="sm"
-								type="button"
-								variant="outline"
-							>
-								취소
-							</Button>
-						</>
-					) : (
-						<Button
-							disabled={isPending}
-							onClick={onSetUnpaid}
-							size="sm"
-							type="button"
-							variant="outline"
-						>
-							미결제로
-						</Button>
-					)}
+					<PurchaseActions
+						isPending={isPending}
+						isUnpaid={isUnpaid}
+						onCancel={onCancel}
+						onSetPaid={onSetPaid}
+						onSetUnpaid={onSetUnpaid}
+					/>
 				</div>
 			</TableCell>
 		</TableRow>
