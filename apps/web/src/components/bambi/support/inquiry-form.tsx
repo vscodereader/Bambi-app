@@ -71,14 +71,21 @@ export function InquiryForm() {
 		})
 	);
 
-	// 이미지만 있는 문의(스크린샷)도 허용한다 — 수다방과 같은 비어있음 판정.
-	const canSubmit =
-		title.trim().length >= TITLE_MIN &&
-		(bodyText.trim().length >= BODY_TEXT_MIN || hasImage) &&
-		!createMutation.isPending;
-
+	// 검증은 제출 시점에 하고 사유를 토스트로 알린다(auth-panel과 같은 방식). 버튼을
+	// 상시 disabled로 잠그면 제목 1자가 왜 막히는지 안 보이므로, 제출 진입을 열고 여기서 거른다.
 	const handleSubmit = () => {
-		if (!canSubmit || submittingRef.current) {
+		if (submittingRef.current || createMutation.isPending) {
+			return;
+		}
+		if (title.trim().length < TITLE_MIN) {
+			toast(`제목은 ${TITLE_MIN}~${TITLE_MAX}자로 입력해 주세요.`);
+			return;
+		}
+		// 이미지만 있는 문의(스크린샷)도 허용한다 — 수다방과 같은 비어있음 판정.
+		if (bodyText.trim().length < BODY_TEXT_MIN && !hasImage) {
+			toast(
+				`문의 내용을 ${BODY_TEXT_MIN}자 이상 입력하거나 이미지를 첨부해 주세요.`
+			);
 			return;
 		}
 		submittingRef.current = true;
@@ -153,7 +160,11 @@ export function InquiryForm() {
 				>
 					취소
 				</Button>
-				<Button disabled={!canSubmit} onClick={handleSubmit} type="button">
+				<Button
+					disabled={createMutation.isPending}
+					onClick={handleSubmit}
+					type="button"
+				>
 					문의 등록
 				</Button>
 			</div>

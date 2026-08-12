@@ -1119,13 +1119,18 @@ function InterviewProposalForm({
 
 	return (
 		<form className="mt-4 grid gap-3" onSubmit={onSubmit}>
-			<div className="flex flex-col gap-2">
+			{/* min-w-0: 이 div는 부모 grid의 아이템이라 자동 최소 크기가 자식 min-content
+			    (iOS Safari에서 datetime-local의 내재 폭)로 잡혀 열을 밀어낸다. 0으로 눌러야
+			    열이 가용 폭에 맞춰 줄어든다. */}
+			<div className="flex min-w-0 flex-col gap-2">
 				<FieldLabel htmlFor={`${fieldId}-interview-at`}>면접 일시</FieldLabel>
+				{/* appearance-none: iOS Safari 네이티브 datetime 컨트롤의 내재 폭을 제거해
+				    w-full(width:100%)을 실제로 따르게 한다. max-w-full은 컨테이너 초과 방지. */}
 				<Input
+					className="max-w-full appearance-none"
 					id={`${fieldId}-interview-at`}
 					min={new Date().toISOString().slice(0, 16)}
 					onChange={(event) => onScheduledAtChange(event.target.value)}
-					required
 					type="datetime-local"
 					value={interviewAt}
 				/>
