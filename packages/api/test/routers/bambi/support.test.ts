@@ -292,4 +292,104 @@ describe("고객센터 FAQ", () => {
 			})
 		).rejects.toMatchObject({ code: "BAD_REQUEST" });
 	});
+
+	it("운영자가 FAQ를 수정하면 질문·답변·카테고리·정렬이 갱신된다", async () => {
+		const createCaller = createProcedureClient(supportRouter.createFaq, {
+			context: createContextForUser(adminId),
+		});
+		const created = await createCaller({
+			answer: FAQ_ANSWER,
+			category: "account",
+			question: `수정전-${randomUUID().slice(0, 8)}`,
+			sortOrder: 0,
+		});
+		createdFaqIds.push(created.id);
+
+		const nextQuestion = `수정후-${randomUUID().slice(0, 8)}`;
+		const nextAnswer = JSON.stringify({
+			content: [
+				{
+					content: [{ text: "수정된 답변입니다.", type: "text" }],
+					type: "paragraph",
+				},
+			],
+			type: "doc",
+		});
+
+		const updateCaller = createProcedureClient(supportRouter.updateFaq, {
+			context: createContextForUser(adminId),
+		});
+		await updateCaller({
+			answer: nextAnswer,
+			category: "payment",
+			faqId: created.id,
+			question: nextQuestion,
+			sortOrder: 5,
+		});
+
+		const [row] = await db
+			.select()
+			.from(faqEntry)
+			.where(eq(faqEntry.id, created.id))
+			.limit(1);
+
+		expect(row?.question).toBe(nextQuestion);
+		expect(row?.answer).toBe(nextAnswer);
+		expect(row?.category).toBe("payment");
+		expect(row?.sortOrder).toBe(5);
+	});
+
+	it("수정 답변이 Tiptap doc JSON이 아니면 BAD_REQUEST", async () => {
+		const createCaller = createProcedureClient(supportRouter.createFaq, {
+			context: createContextForUser(adminId),
+		});
+		const created = await createCaller({
+			answer: FAQ_ANSWER,
+			category: "account",
+			question: `수정본문검증-${randomUUID().slice(0, 8)}`,
+			sortOrder: 0,
+		});
+		createdFaqIds.push(created.id);
+
+		const caller = createProcedureClient(supportRouter.updateFaq, {
+			context: createContextForUser(adminId),
+		});
+
+		await expect(
+			caller({
+				answer: "그냥 텍스트",
+				category: "etc",
+				faqId: created.id,
+				question: "수정 질문",
+				sortOrder: 0,
+			})
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+	});
+
+	it("일반 회원은 FAQ를 수정할 수 없다", async () => {
+		const createCaller = createProcedureClient(supportRouter.createFaq, {
+			context: createContextForUser(adminId),
+		});
+		const created = await createCaller({
+			answer: FAQ_ANSWER,
+			category: "account",
+			question: `수정권한-${randomUUID().slice(0, 8)}`,
+			sortOrder: 0,
+		});
+		createdFaqIds.push(created.id);
+
+		const caller = createProcedureClient(supportRouter.updateFaq, {
+			context: createContextForUser(seekerId),
+		});
+
+		await expect(
+			caller({
+				answer: FAQ_ANSWER,
+				category: "etc",
+				faqId: created.id,
+				question: "바꿔치기",
+				sortOrder: 0,
+			})
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+	});
 });

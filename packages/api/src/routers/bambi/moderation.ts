@@ -80,6 +80,7 @@ import {
 	getListingQueuePositions,
 	queuedListingWhere,
 } from "../../services/bambi-premium-capacity";
+import { PENDING_REPORT_STATUSES } from "../../services/bambi-report-status";
 import {
 	createJobPostMediaUploadIntent,
 	getBusinessDocumentObjectUrl,
@@ -1403,6 +1404,9 @@ export const moderationRouter = {
 			}
 
 			// 동일 신고자·대상의 중복 신고는 멱등 처리한다(스키마 변경 없이 기존 row 반환).
+			// 단 미처리(open/reviewing) 신고만 멱등 대상이다 — 운영자가 기각(dismissed)·조치완료
+			// (resolved)한 뒤 같은 대상을 재신고하면 옛 종결 행을 돌려주지 않고 새 신고 행을
+			// 만들어야, 재신고가 실제로 접수되고 채팅 숨김 파이프라인도 다시 걸린다.
 			const [existing] = await db
 				.select()
 				.from(report)
@@ -1410,7 +1414,8 @@ export const moderationRouter = {
 					and(
 						eq(report.reporterUserId, profile.userId),
 						eq(report.targetType, input.targetType),
-						eq(report.targetId, input.targetId)
+						eq(report.targetId, input.targetId),
+						inArray(report.status, [...PENDING_REPORT_STATUSES])
 					)
 				)
 				.limit(1);
