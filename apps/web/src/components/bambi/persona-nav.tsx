@@ -57,13 +57,17 @@ export function SeekerNav({ children }: { children: ReactNode }) {
 	const { isKeyboardOpen } = useMobileKeyboardState();
 	// 내 정보 하위 페이지(신고 내역·예정된 면접·차단 목록·계정 설정)도 하단 탭을
 	// 유지한다 → /seeker/me 및 그 하위 경로 전체에서 노출.
+	// 수다방도 마찬가지로 하위 전체(게시판·상세·수집 글 상세·글쓰기)에서 켠다 — 정확
+	// 일치였을 때 상세로 들어가는 순간 탭바가 사라져 모바일에서 되돌아갈 길이 없었다.
+	// 알림(/seeker/notifications)도 헤더 종 아이콘으로만 닿는 막다른 페이지라 함께 켠다.
 	// 채팅은 목록(/seeker/chats)만 탭바를 켠다 — 상세(/seeker/chats/[id])는 카카오톡식
 	// 풀스크린 채팅방이라 탭바도, Content의 하단 스페이서도 자리를 차지하면 안 된다.
 	const showNav =
 		path === "/seeker" ||
 		path === "/seeker/attendance" ||
 		path === "/seeker/chats" ||
-		path === "/seeker/community" ||
+		path === "/seeker/notifications" ||
+		path.startsWith("/seeker/community") ||
 		path === "/seeker/me" ||
 		path.startsWith("/seeker/me/");
 	return (
