@@ -20,11 +20,10 @@ import { HomeCommunitySection } from "../home-community-section";
 import { Search2 } from "../icons";
 import {
 	MarketplaceDiscoveryAxisChips,
+	MarketplaceDiscoveryBar,
 	type MarketplaceDiscoveryTabId,
-	MarketplaceDiscoveryTabs,
 	MarketplaceFilterControls,
 	MarketplaceFilterSheet,
-	MarketplaceSearch,
 	useMarketplaceDiscovery,
 } from "../marketplace";
 import { PremiumAdBannerSection } from "../premium-ad-banner-section";
@@ -125,16 +124,13 @@ export function SeekerMarketplaceScreen() {
 						promotionSurface="seeker_center"
 					/>
 					<div className="mb-5 flex flex-col gap-4">
-						<MarketplaceDiscoveryTabs
-							onSelect={handleDiscoveryTabSelect}
-							value={discoveryTabId}
-						/>
-						<MarketplaceSearch
+						<MarketplaceDiscoveryBar
+							discoveryTabId={discoveryTabId}
 							filters={filters}
 							onChange={handleFiltersChange}
 							onOpenFilters={() => setFiltersOpen(true)}
 							onSelectJob={openJob}
-							searchFieldClassName="md:hidden"
+							onSelectTab={handleDiscoveryTabSelect}
 						/>
 						<MarketplaceDiscoveryAxisChips
 							discoveryTabId={discoveryTabId}

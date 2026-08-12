@@ -265,7 +265,11 @@ export function MarketplaceFilterSheet({
 }: MarketplaceFilterSheetProps) {
 	return (
 		<Sheet onOpenChange={onOpenChange} open={open}>
+			{/* p-0으로 공용 SheetContent의 p-5를 걷어내고 헤더·본문·푸터 3단으로 나눈다.
+			    본문(flex-1)만 스크롤하고 푸터는 시트 flex 컬럼의 형제라 뷰포트 밖으로 밀려나지 않는다.
+			    (이전엔 스크롤 컨테이너 안에서 sticky+음수 마진으로 삐져나가 버튼이 화면 밖으로 밀렸다.) */}
 			<SheetContent
+				className="p-0"
 				onKeyDown={(event) => {
 					// 입력칸에서 Enter = 시트 닫기(필터 값은 onChange로 이미 반영된 상태).
 					// Select·체크박스의 Enter는 조작 키라 닫지 않고, IME 조합 중 Enter도 무시한다.
@@ -278,7 +282,7 @@ export function MarketplaceFilterSheet({
 					}
 				}}
 			>
-				<div className="mb-4 flex items-center justify-between gap-3">
+				<div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4">
 					<SheetTitle>빠른 탐색</SheetTitle>
 					<SheetClose className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary">
 						<span className="inline-flex size-5">
@@ -286,9 +290,12 @@ export function MarketplaceFilterSheet({
 						</span>
 					</SheetClose>
 				</div>
-				<MarketplaceFilterControls filters={filters} onChange={onChange} />
-				{/* 하단 고정 바: 초기화 + "N건 보기"(닫기). 필터는 즉시 적용되므로 별도 적용 버튼은 없다. */}
-				<div className="sticky bottom-0 -mx-5 mt-auto -mb-5 flex gap-2 border-border border-t bg-card px-5 py-3">
+				<div className="flex-1 overflow-y-auto px-5">
+					<MarketplaceFilterControls filters={filters} onChange={onChange} />
+				</div>
+				{/* 하단 고정 바: 초기화 + "N건 보기"(닫기). 필터는 즉시 적용되므로 별도 적용 버튼은 없다.
+				    safe-area 인셋만큼 하단 여백을 더해 홈 인디케이터에 버튼이 가리지 않게 한다. */}
+				<div className="flex gap-2 border-border border-t bg-card px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
 					<Button
 						disabled={countActiveFilters(filters) === 0}
 						onClick={() => onChange(DEFAULT_MARKETPLACE_FILTERS)}
@@ -308,80 +315,6 @@ export function MarketplaceFilterSheet({
 				</div>
 			</SheetContent>
 		</Sheet>
-	);
-}
-
-interface MarketplaceSearchProps {
-	filters: MarketplaceFilters;
-	onChange: FilterChange;
-	onOpenFilters?: () => void;
-	onSelectJob: (job: Job) => void;
-	searchFieldClassName?: string;
-}
-
-export function MarketplaceSearch({
-	filters,
-	onChange,
-	onOpenFilters,
-	onSelectJob,
-	searchFieldClassName,
-}: MarketplaceSearchProps) {
-	const update = (patch: Partial<MarketplaceFilters>) =>
-		onChange({ ...filters, ...patch });
-	const activeFilterCount = countActiveFilters(filters);
-	return (
-		<div className="flex flex-col gap-3">
-			{/* 사이드바(aside)가 1720px 이상에서만 뜨므로, 그 미만에서는 이 행이 필터 진입점이다.
-			    검색 필드만 헤더 검색과 겹치는 md 이상에서 숨기고(searchFieldClassName),
-			    필터 버튼은 1720px 미만 전 구간에서 보이도록 행 전체를 min-[1720px]:hidden 처리한다. */}
-			<div className="flex items-center gap-2.5 min-[1720px]:hidden">
-				<JobSearchCommand
-					onSelectJob={onSelectJob}
-					trigger="field"
-					triggerClassName={cn("flex-1", searchFieldClassName)}
-				/>
-				<UiButton
-					className="h-12 gap-2 rounded-lg bg-card px-4 font-bold text-sm"
-					onClick={onOpenFilters}
-					variant="outline"
-				>
-					<Filter />
-					필터
-					{activeFilterCount > 0 ? (
-						<Badge tone="primary">{activeFilterCount}</Badge>
-					) : null}
-				</UiButton>
-			</div>
-			<div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
-				{MARKETPLACE_QUICK_FILTERS.map((filter) => {
-					const selected =
-						(filter.id === "verified" && filters.onlyVerified) ||
-						(filter.id === "today" && filters.onlyToday) ||
-						(filter.id === "beginner" && filters.onlyBeginnerFriendly);
-					return (
-						<Tag
-							key={filter.id}
-							onClick={() => {
-								if (filter.id === "verified") {
-									update({ onlyVerified: !filters.onlyVerified });
-								}
-								if (filter.id === "today") {
-									update({ onlyToday: !filters.onlyToday });
-								}
-								if (filter.id === "beginner") {
-									update({
-										onlyBeginnerFriendly: !filters.onlyBeginnerFriendly,
-									});
-								}
-							}}
-							selected={selected}
-						>
-							{filter.label}
-						</Tag>
-					);
-				})}
-			</div>
-		</div>
 	);
 }
 
@@ -479,7 +412,9 @@ export function useMarketplaceDiscovery(
 	return { discoveryTabId, selectDiscoveryTab };
 }
 
-export function MarketplaceDiscoveryTabs({
+// 디스커버리 탭을 코럴 세그먼트 컨트롤로 — 활성 세그먼트만 카드 톤 배경 + 코럴 텍스트로
+// 띄운다. disabled(지도·오늘 본 공고)는 opacity-40 + native disabled로 남겨둔다.
+function MarketplaceDiscoverySegments({
 	onSelect,
 	value,
 }: {
@@ -487,15 +422,16 @@ export function MarketplaceDiscoveryTabs({
 	value: MarketplaceDiscoveryTabId;
 }) {
 	return (
-		<div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
+		<div className="inline-flex shrink-0 gap-1 rounded-full bg-secondary p-1">
 			{MARKETPLACE_DISCOVERY_TABS.map((tab) => (
 				<button
 					aria-pressed={value === tab.id}
 					className={cn(
-						"h-9 shrink-0 rounded-lg px-3 font-bold text-sm disabled:opacity-50",
+						"h-8 shrink-0 rounded-full px-3 font-bold text-sm transition-colors",
 						value === tab.id
-							? "bg-foreground text-background"
-							: "border border-border bg-card text-muted-foreground"
+							? "bg-card text-coral-600 shadow-[var(--shadow-card)]"
+							: "text-muted-foreground",
+						tab.disabled && "opacity-40"
 					)}
 					disabled={tab.disabled}
 					key={tab.id}
@@ -505,6 +441,131 @@ export function MarketplaceDiscoveryTabs({
 					{tab.label}
 				</button>
 			))}
+		</div>
+	);
+}
+
+// 검증 완료/당일면접/초보 가능 퀵칩 — 기존 Tag(selected 스타일) 그대로.
+function MarketplaceQuickChips({
+	filters,
+	onChange,
+}: {
+	filters: MarketplaceFilters;
+	onChange: FilterChange;
+}) {
+	const update = (patch: Partial<MarketplaceFilters>) =>
+		onChange({ ...filters, ...patch });
+	return (
+		<div className="flex shrink-0 gap-2">
+			{MARKETPLACE_QUICK_FILTERS.map((filter) => {
+				const selected =
+					(filter.id === "verified" && filters.onlyVerified) ||
+					(filter.id === "today" && filters.onlyToday) ||
+					(filter.id === "beginner" && filters.onlyBeginnerFriendly);
+				return (
+					<Tag
+						key={filter.id}
+						onClick={() => {
+							if (filter.id === "verified") {
+								update({ onlyVerified: !filters.onlyVerified });
+							}
+							if (filter.id === "today") {
+								update({ onlyToday: !filters.onlyToday });
+							}
+							if (filter.id === "beginner") {
+								update({ onlyBeginnerFriendly: !filters.onlyBeginnerFriendly });
+							}
+						}}
+						selected={selected}
+					>
+						{filter.label}
+					</Tag>
+				);
+			})}
+		</div>
+	);
+}
+
+function MarketplaceFilterButton({
+	activeFilterCount,
+	className,
+	onClick,
+}: {
+	activeFilterCount: number;
+	className?: string;
+	onClick?: () => void;
+}) {
+	return (
+		<UiButton
+			className={cn(
+				"h-12 shrink-0 gap-2 rounded-lg bg-card px-4 font-bold text-sm",
+				className
+			)}
+			onClick={onClick}
+			variant="outline"
+		>
+			<Filter />
+			필터
+			{activeFilterCount > 0 ? (
+				<Badge tone="primary">{activeFilterCount}</Badge>
+			) : null}
+		</UiButton>
+	);
+}
+
+interface MarketplaceDiscoveryBarProps {
+	discoveryTabId: MarketplaceDiscoveryTabId;
+	filters: MarketplaceFilters;
+	onChange: FilterChange;
+	onOpenFilters?: () => void;
+	onSelectJob: (job: Job) => void;
+	onSelectTab: (tabId: MarketplaceDiscoveryTabId) => void;
+}
+
+// 탐색 바 — 세그먼트 탭 + 퀵칩 + 필터 진입을 브레이크포인트별로 압축한다.
+// - 모바일(<md): 1행 검색+필터, 2행 [탭·구분선·칩] 가로 스크롤 레일.
+// - md~1719: 단일 행 [탭·구분선·칩] + 우측 필터 버튼(ml-auto).
+// - 1720px+: 사이드바가 필터를 담당하므로 필터 버튼만 숨기고 탭·칩 레일은 유지.
+export function MarketplaceDiscoveryBar({
+	discoveryTabId,
+	filters,
+	onChange,
+	onOpenFilters,
+	onSelectJob,
+	onSelectTab,
+}: MarketplaceDiscoveryBarProps) {
+	const activeFilterCount = countActiveFilters(filters);
+	return (
+		<div className="flex flex-col gap-3">
+			{/* 모바일 1행: 검색 필드 + 필터. 헤더 검색과 겹치는 md 이상에서는 숨긴다. */}
+			<div className="flex items-center gap-2.5 md:hidden">
+				<JobSearchCommand
+					onSelectJob={onSelectJob}
+					trigger="field"
+					triggerClassName="flex-1"
+				/>
+				<MarketplaceFilterButton
+					activeFilterCount={activeFilterCount}
+					onClick={onOpenFilters}
+				/>
+			</div>
+			{/* 탐색 레일: [세그먼트 탭] · 세로 구분선 · [퀵칩]을 한 줄에 담아 가로 스크롤한다.
+			    md~1719에서는 우측에 필터 버튼(ml-auto), 1720px+에서는 그 버튼만 숨는다. */}
+			<div className="flex items-center gap-2.5">
+				<div className="flex min-w-0 items-center gap-2.5 overflow-x-auto [scrollbar-width:none]">
+					<MarketplaceDiscoverySegments
+						onSelect={onSelectTab}
+						value={discoveryTabId}
+					/>
+					<span className="h-5 w-px shrink-0 self-center bg-border" />
+					<MarketplaceQuickChips filters={filters} onChange={onChange} />
+				</div>
+				<MarketplaceFilterButton
+					activeFilterCount={activeFilterCount}
+					className="ml-auto hidden md:inline-flex min-[1720px]:hidden"
+					onClick={onOpenFilters}
+				/>
+			</div>
 		</div>
 	);
 }
