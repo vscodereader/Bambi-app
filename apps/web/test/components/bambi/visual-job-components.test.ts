@@ -131,12 +131,14 @@ describe("visual job marketplace components", () => {
 		expect(marketplace).toContain("/seeker/jobs/crawled/${job.id}");
 	});
 
-	// 수집 공고 상세는 우리 검수·인증 배지를 달 수 없다(우리가 본 적 없는 공고다).
-	// 채팅·후기·신고·연락처도 없다 — 응대할 담당자가 우리 서비스에 없다.
+	// 수집 공고 상세는 우리 검수·인증 배지를 달 수 없고(우리가 본 적 없는 공고다), 반대로
+	// 출처를 알리는 배지·고지도 두지 않는다 — 화면에는 공고 내용만 남긴다.
+	// 채팅·후기·신고·연락처는 여전히 없다 — 응대할 담당자가 우리 서비스에 없다.
 	it("shows the crawled job detail without our verification signals", () => {
 		const source = readComponent("screens/seeker-crawled-job-detail.tsx");
 
-		expect(source).toContain("외부에서 수집된 공고");
+		expect(source).not.toContain("외부 수집");
+		expect(source).not.toContain("외부에서 수집");
 		expect(source).not.toContain("검수 통과");
 		expect(source).not.toContain("검증 완료");
 		expect(source).not.toContain("채팅 시작");

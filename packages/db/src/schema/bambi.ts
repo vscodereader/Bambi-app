@@ -1917,9 +1917,17 @@ export const communityComment = pgTable(
 	"community_comment",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		postId: uuid("post_id")
-			.notNull()
-			.references(() => communityPost.id, { onDelete: "cascade" }),
+		// 댓글이 달린 대상. 우리 글이면 post_id, 수집 커뮤니티 글이면 crawled_topic_id만
+		// 채워진다(아래 CHECK로 정확히 한쪽만 강제). 수집 글에도 회원·비회원이 우리 규칙대로
+		// 댓글을 달 수 있어야 해서 컬럼을 나눴다 — 수집 글을 community_post에 복제하면
+		// 재수집 때마다 두 테이블을 맞춰야 하고 우리 글과 수집 글의 경계가 흐려진다.
+		postId: uuid("post_id").references(() => communityPost.id, {
+			onDelete: "cascade",
+		}),
+		crawledTopicId: uuid("crawled_topic_id").references(
+			() => crawledCommunityTopic.id,
+			{ onDelete: "cascade" }
+		),
 		// 글과 같은 규칙: 회원이면 author_user_id, 비회원이면 author_guest_id만 채워진다.
 		authorUserId: text("author_user_id").references(() => user.id, {
 			onDelete: "cascade",
@@ -1946,11 +1954,23 @@ export const communityComment = pgTable(
 			table.status,
 			table.createdAt
 		),
+		// 수집 글 상세가 같은 모양의 목록 조회를 한다(대상 + 노출 상태 + 시간순).
+		index("community_comment_crawled_topic_id_status_created_at_idx").on(
+			table.crawledTopicId,
+			table.status,
+			table.createdAt
+		),
 		index("community_comment_author_user_id_idx").on(table.authorUserId),
 		index("community_comment_parent_comment_id_idx").on(table.parentCommentId),
 		check(
 			"community_comment_author_one_of_ck",
 			sql`num_nonnulls(${table.authorUserId}, ${table.authorGuestId}) = 1`
+		),
+		// 작성자 축과 별개인 대상 축. 둘 다 null(고아 댓글)이나 둘 다 채워진 행(어느 글의
+		// 댓글인지 모호)이 생기면 조회·카운트가 조용히 어긋난다.
+		check(
+			"community_comment_target_one_of_ck",
+			sql`num_nonnulls(${table.postId}, ${table.crawledTopicId}) = 1`
 		),
 	]
 );

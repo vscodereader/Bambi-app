@@ -105,8 +105,8 @@ const publicBoardSchema = z.enum(PUBLIC_COMMUNITY_BOARDS);
 const isPublicBoard = (board: string): boolean =>
 	publicBoardSchema.safeParse(board).success;
 
-// 요약 행의 출처. 화면이 이 값으로 "외부 수집" 배지·상세 라우팅을 가른다(공고 목록의
-// JobFeedSource와 같은 판별). 순수 글은 "native", 수집 글은 "crawled".
+// 요약 행의 출처. 화면이 이 값으로 상세 라우팅을 가른다(공고 목록의 JobFeedSource와 같은
+// 판별). 순수 글은 "native", 수집 글은 "crawled" — 목록에 출처 배지는 달지 않는다.
 type CommunityFeedSource = "crawled" | "native";
 
 // 설계 D4 — 수집 커뮤니티 글이 합류하는 게시판. 상수 하나만 바꾸면 다른 게시판으로 옮길 수 있게 둔다.
@@ -254,6 +254,15 @@ const createCommentInput = postIdInput.extend({
 	body: z.string().trim().min(1).max(1000),
 	parentCommentId: z.string().uuid().optional(),
 	password: z.string().trim().max(30).optional(),
+});
+
+// 수집 글 댓글 입력. 우리 글 댓글과 같은 필드에 대상만 topicId로 갈린다(잠금이 없어
+// password는 언제나 비회원 소유권 비밀번호 한 가지 뜻이다).
+const createCrawledCommentInput = z.object({
+	body: z.string().trim().min(1).max(1000),
+	parentCommentId: z.string().uuid().optional(),
+	password: z.string().trim().max(30).optional(),
+	topicId: z.string().uuid(),
 });
 
 const deleteCommentInput = z.object({
@@ -564,7 +573,7 @@ const toPublicSummary = (summary: PostSummaryRow) => ({
 	isEvent: summary.isEvent,
 	isPromotion: summary.isPromotion,
 	likeCount: summary.likeCount,
-	// 화면이 "외부 수집" 배지·상세 라우팅을 가르는 판별 필드.
+	// 화면이 상세 라우팅(수집 전용 상세)을 가르는 판별 필드.
 	source: summary.source,
 	// 목록 카드 썸네일(본문 첫 이미지). 목록에서는 블러로 가리고 상세에서 원본을 본다.
 	thumbnailUrl: summary.thumbnailUrl,
@@ -654,7 +663,9 @@ const readLikeCount = async (
 // 노출 대상 댓글 행. published 댓글 + published 대댓글을 가진 삭제 부모(스레드 유지용
 // 플레이스홀더)만 남긴다. 회원 목록(listComments)과 공개 상세(getPublicPost)가 같은
 // 기준을 공유해야 한쪽에서만 보이는 댓글이 생기지 않는다.
-const selectVisibleCommentRows = async (postId: string) => {
+// 대상 조건을 인자로 받는 이유는 수집 글 상세(getCrawledTopic)도 같은 규칙을 써야 해서다
+// (우리 글은 post_id, 수집 글은 crawled_topic_id로 좁힌다).
+const selectVisibleCommentRows = async (target: SQL) => {
 	const rows = await db
 		.select({
 			authorGuestId: communityComment.authorGuestId,
@@ -672,7 +683,7 @@ const selectVisibleCommentRows = async (postId: string) => {
 		})
 		.from(communityComment)
 		.leftJoin(user, eq(user.id, communityComment.authorUserId))
-		.where(eq(communityComment.postId, postId))
+		.where(target)
 		.orderBy(asc(communityComment.createdAt))
 		.limit(COMMENTS_CAP);
 
@@ -784,6 +795,76 @@ const toCommentItems = (
 			parentCommentId: row.parentCommentId,
 		};
 	});
+
+// 회원 열람 정책 — 계정 표시명(탈퇴자는 문구 치환)과 본인/운영자 권한. 우리 글 댓글
+// (listComments)과 수집 글 댓글(getCrawledTopic)이 같은 규칙을 써야 해서 한 곳에 둔다.
+const memberCommentPolicy =
+	(profile: BambiAccessProfile) => (row: CommentRow) => ({
+		// 비회원 댓글엔 계정이 없어 leftJoin 이름이 null이다 — 고정 표시명을 세운다.
+		// 탈퇴한 회원 댓글은 원본 닉네임 대신 탈퇴 문구로 바뀐다.
+		authorName: resolveVisibleDisplayName(
+			{ deletedAt: row.authorDeletedAt, name: row.authorName },
+			GUEST_DISPLAY_NAME
+		),
+		canDelete: row.authorUserId === profile.userId || profile.role === "admin",
+		// 삭제와 달리 수정은 작성자 본인만 가능하다(admin 제외 — getPost.canEdit와 동일 철학).
+		canEdit: row.authorUserId === profile.userId,
+	});
+
+// 비회원·비로그인 열람 정책 — 색인되는 공개 페이지라 회원 계정명은 싣지 않는다.
+// 수정·삭제 버튼은 gid 일치일 때만 여는 힌트이고, 실제 게이트는 서버의 비밀번호 검증이다.
+const guestCommentPolicy = (guestId: null | string) => (row: CommentRow) => ({
+	authorName: row.authorGuestId ? GUEST_DISPLAY_NAME : null,
+	canDelete: Boolean(guestId) && row.authorGuestId === guestId,
+	canEdit: Boolean(guestId) && row.authorGuestId === guestId,
+});
+
+// 액터에 맞는 댓글 표시·권한 정책. 회원이면 계정 표시명, 그 외에는 익명 정책이다.
+const commentPolicyForActor = (actor: CommunityActor | null) =>
+	actor?.kind === "member"
+		? memberCommentPolicy(actor.profile)
+		: guestCommentPolicy(actor?.kind === "guest" ? actor.gid : null);
+
+// 대댓글 부모 검증. 같은 글(우리 글이든 수집 글이든)의 살아 있는 최상위 댓글만 부모가 될
+// 수 있다 — belongsTo가 그 "같은 글" 판정을 대상별로 받아, 두 작성 경로가 1단계 제한과
+// 오류 문구를 공유한다. 반환값은 대댓글 알림 수신자(게스트 댓글은 null이라 알림이 생략된다).
+const loadCommentParentAuthor = async (
+	parentCommentId: string | undefined,
+	belongsTo: (parent: {
+		crawledTopicId: null | string;
+		postId: null | string;
+	}) => boolean
+): Promise<null | string> => {
+	if (!parentCommentId) {
+		return null;
+	}
+
+	const [parent] = await db
+		.select({
+			authorUserId: communityComment.authorUserId,
+			crawledTopicId: communityComment.crawledTopicId,
+			id: communityComment.id,
+			parentCommentId: communityComment.parentCommentId,
+			postId: communityComment.postId,
+			status: communityComment.status,
+		})
+		.from(communityComment)
+		.where(eq(communityComment.id, parentCommentId))
+		.limit(1);
+
+	if (parent?.status !== "published" || !belongsTo(parent)) {
+		throw new ORPCError("NOT_FOUND", {
+			message: "답글을 달 댓글을 찾을 수 없습니다.",
+		});
+	}
+	if (parent.parentCommentId) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "답글에는 다시 답글을 달 수 없습니다.",
+		});
+	}
+
+	return parent.authorUserId;
+};
 
 /**
  * 새 댓글·대댓글 알림. 글 작성자와 부모 댓글 작성자에게 한 통씩(같은 사람이면 한 통),
@@ -1046,7 +1127,9 @@ export const communityRouter = {
 				});
 			}
 
-			const rows = await selectVisibleCommentRows(input.postId);
+			const rows = await selectVisibleCommentRows(
+				eq(communityComment.postId, input.postId)
+			);
 
 			return {
 				authorName: post.authorDisplayName,
@@ -1159,14 +1242,17 @@ export const communityRouter = {
 
 	// 수집 커뮤니티 글 상세. 순수 getPost와 테이블이 달라 프로시저를 나눈다(crawledJobsRouter와
 	// 같은 판단 — 한 핸들러에서 두 테이블을 분기시키면 응답에 뭐가 섞일 수 있는지 매번 다시
-	// 읽어 확인해야 한다). 멤버 게이트 + 스위치 게이트를 통과해야 하고, 좋아요·수정·삭제·댓글
-	// 작성은 없다. sourceUrl은 절대 내려보내지 않는다 — 그 링크 한 줄이 원본 전체로 가는
+	// 읽어 확인해야 한다). 멤버 게이트 + 스위치 게이트를 통과해야 하고, 글 자체의 좋아요·
+	// 수정·삭제는 없다(우리 글이 아니다). 댓글은 우리 회원·비회원이 남긴 것만 우리 규칙대로
+	// 열려 있고(createCrawledComment) 원본 수집 댓글은 읽기 전용이다.
+	// sourceUrl은 절대 내려보내지 않는다 — 그 링크 한 줄이 원본 전체로 가는
 	// 우회로다(crawled-jobs.ts PUBLIC_COLUMNS 주석의 원칙 그대로).
 	getCrawledTopic: publicProcedure
 		.input(z.object({ topicId: z.uuid() }))
 		.handler(async ({ context, input }) => {
 			// 목록(listPosts)에서 이미 보이는 글이라 상세 게이트도 같은 액터 축으로 연다.
-			await resolveCommunityActor(context);
+			// 액터는 아래 댓글 권한(canEdit/canDelete) 판정에도 그대로 쓴다.
+			const actor = await resolveCommunityActor(context);
 			// 스위치 OFF면 존재를 숨긴다 — 노출을 내린 글은 상세도 열리지 않아야 한다.
 			if (!(await isCrawledCommunityFeedEnabled())) {
 				throw new ORPCError("NOT_FOUND", {
@@ -1202,14 +1288,27 @@ export const communityRouter = {
 				});
 			}
 
+			// 우리 회원·비회원이 이 글에 남긴 댓글. 우리 글 댓글과 같은 노출 규칙
+			// (published + 살아 있는 대댓글의 삭제 부모)과 같은 권한 정책을 쓴다.
+			const rows = await selectVisibleCommentRows(
+				eq(communityComment.crawledTopicId, topic.id)
+			);
+
 			return {
 				boardName: topic.boardName,
-				// 본문·댓글은 수집 시점에 이미 마스킹·정규화된 값이라 그대로 내린다.
+				// 본문·수집 댓글은 수집 시점에 이미 마스킹·정규화된 값이라 그대로 내린다.
 				body: topic.body ?? "",
-				commentCount: topic.commentCount ?? 0,
-				// null(아직 미수집)은 빈 목록으로 접어 화면이 분기 없이 렌더한다.
-				comments: topic.comments ?? [],
+				// 원본에 달려 있던 댓글 수 + 우리 쪽 노출 댓글 수. 목록 행의 댓글 수(수집
+				// 원본값)와 상세가 어긋나는 건 감수한다 — 목록은 union 투영이라 조인이 없다.
+				commentCount:
+					(topic.commentCount ?? 0) +
+					rows.filter((row) => row.status === "published").length,
+				// 우리 댓글(작성·수정·삭제 가능). 화면은 원본 댓글 뒤에 이어 붙인다.
+				comments: toCommentItems(rows, commentPolicyForActor(actor)),
 				id: topic.id,
+				// 원본에 달려 있던 댓글(익명·읽기 전용). null(아직 미수집)은 빈 목록으로 접어
+				// 화면이 분기 없이 렌더한다.
+				sourceComments: topic.comments ?? [],
 				sourcePostedAt: topic.sourcePostedAt,
 				title: topic.title,
 				viewCount: topic.viewCount ?? 0,
@@ -1547,21 +1646,12 @@ export const communityRouter = {
 				// 글 로드 후 post.board로 판정한다 — 목록에서 못 보는 글은 댓글도 못 본다.
 				assertLegalAdvisorBoardScope(profile, post.board);
 				requirePostReadAccess(post, profile, input.password);
-				const rows = await selectVisibleCommentRows(input.postId);
+				const rows = await selectVisibleCommentRows(
+					eq(communityComment.postId, input.postId)
+				);
 
 				// authorUserId는 canDelete 계산에만 쓰고 응답에서는 제외한다(익명성 보호).
-				return toCommentItems(rows, (row) => ({
-					// 비회원 댓글엔 계정이 없어 leftJoin 이름이 null이다 — 고정 표시명을 세운다.
-					// 탈퇴한 회원 댓글은 원본 닉네임 대신 탈퇴 문구로 바뀐다.
-					authorName: resolveVisibleDisplayName(
-						{ deletedAt: row.authorDeletedAt, name: row.authorName },
-						GUEST_DISPLAY_NAME
-					),
-					canDelete:
-						row.authorUserId === profile.userId || profile.role === "admin",
-					// 삭제와 달리 수정은 작성자 본인만 가능하다(admin 제외 — getPost.canEdit와 동일 철학).
-					canEdit: row.authorUserId === profile.userId,
-				}));
+				return toCommentItems(rows, memberCommentPolicy(profile));
 			}
 
 			const guestId = actor?.kind === "guest" ? actor.gid : null;
@@ -1574,15 +1664,13 @@ export const communityRouter = {
 				});
 			}
 
-			const rows = await selectVisibleCommentRows(input.postId);
+			const rows = await selectVisibleCommentRows(
+				eq(communityComment.postId, input.postId)
+			);
 
 			// 색인되는 공개 페이지라 회원 계정명은 싣지 않는다(getPublicPost와 같은 원칙).
 			// 화면은 authorRole 라벨로 작성인 유형만 표시한다.
-			return toCommentItems(rows, (row) => ({
-				authorName: row.authorGuestId ? GUEST_DISPLAY_NAME : null,
-				canDelete: Boolean(guestId) && row.authorGuestId === guestId,
-				canEdit: Boolean(guestId) && row.authorGuestId === guestId,
-			}));
+			return toCommentItems(rows, guestCommentPolicy(guestId));
 		}),
 
 	createComment: publicProcedure
@@ -1604,35 +1692,10 @@ export const communityRouter = {
 			await assertNoBannedWords([input.body]);
 
 			// 대댓글 알림에서 부모 댓글 작성자에게도 알려야 해 블록 밖으로 끌어올린다.
-			let parentAuthorUserId: null | string = null;
-
-			if (input.parentCommentId) {
-				const [parent] = await db
-					.select({
-						// 대댓글 알림 수신자. 게스트 댓글은 null이라 알림이 생략된다.
-						authorUserId: communityComment.authorUserId,
-						id: communityComment.id,
-						parentCommentId: communityComment.parentCommentId,
-						postId: communityComment.postId,
-						status: communityComment.status,
-					})
-					.from(communityComment)
-					.where(eq(communityComment.id, input.parentCommentId))
-					.limit(1);
-
-				if (parent?.status !== "published" || parent.postId !== input.postId) {
-					throw new ORPCError("NOT_FOUND", {
-						message: "답글을 달 댓글을 찾을 수 없습니다.",
-					});
-				}
-				if (parent.parentCommentId) {
-					throw new ORPCError("BAD_REQUEST", {
-						message: "답글에는 다시 답글을 달 수 없습니다.",
-					});
-				}
-
-				parentAuthorUserId = parent.authorUserId;
-			}
+			const parentAuthorUserId = await loadCommentParentAuthor(
+				input.parentCommentId,
+				(parent) => parent.postId === input.postId
+			);
 
 			// 검증을 모두 통과한 뒤에 센다(createPost와 같은 이유). 회원 댓글은 기존대로
 			// 한도가 없고, 계정 없이 부를 수 있는 비회원 경로에만 도배 방지를 건다.
@@ -1679,6 +1742,102 @@ export const communityRouter = {
 			return created;
 		}),
 
+	// 수집 커뮤니티 글에 다는 댓글. 우리 글 댓글과 같은 규칙(회원·인증 비회원, 비회원은
+	// 비밀번호 + 1분 5회 도배 방지, 금칙어 검사, 대댓글 1단계)을 쓰고 대상 컬럼만 다르다.
+	// 프로시저를 나눈 이유는 getCrawledTopic과 같다 — 잠금·게시판·법률자문 게이트가 통째로
+	// 없는 경로라 한 핸들러에 섞으면 어떤 가드가 어느 쪽에 걸리는지 매번 다시 읽어야 한다.
+	// 수정·삭제는 대상과 무관한 commentId 경로(updateComment·deleteComment)를 그대로 쓴다.
+	createCrawledComment: publicProcedure
+		.input(createCrawledCommentInput)
+		.handler(async ({ context, input }) => {
+			const actor = await resolveCommunityActor(context);
+
+			// 스위치 OFF·운영자가 내린 글에는 쓸 수 없다 — 상세와 같은 노출 게이트다.
+			if (!(await isCrawledCommunityFeedEnabled())) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "게시글을 찾을 수 없습니다.",
+				});
+			}
+			const [topic] = await db
+				.select({ id: crawledCommunityTopic.id })
+				.from(crawledCommunityTopic)
+				.where(
+					and(
+						eq(crawledCommunityTopic.id, input.topicId),
+						isNull(crawledCommunityTopic.removedAt)
+					)
+				)
+				.limit(1);
+
+			if (!topic) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "게시글을 찾을 수 없습니다.",
+				});
+			}
+
+			// 수집 글은 밤문화 이야기 게시판에 합류하므로 비회원 참여 여부·법률자문 격리도
+			// 그 게시판 기준으로 판정한다(잠금은 없다 — 수집 글에 비밀글 개념이 없다).
+			let guestPassword: null | string = null;
+			if (actor.kind === "guest") {
+				assertGuestWritableBoard(CRAWLED_COMMUNITY_BOARD);
+				guestPassword = requireGuestPassword(input.password);
+			} else {
+				assertLegalAdvisorBoardScope(actor.profile, CRAWLED_COMMUNITY_BOARD);
+			}
+			await assertNoBannedWords([input.body]);
+
+			const parentAuthorUserId = await loadCommentParentAuthor(
+				input.parentCommentId,
+				(parent) => parent.crawledTopicId === input.topicId
+			);
+
+			// 도배 방지 버킷은 우리 글 댓글과 같은 키를 쓴다 — 대상을 갈아 가며 한도를
+			// 두 배로 쓰는 우회로를 만들지 않는다.
+			if (actor.kind === "guest") {
+				assertWriteRateLimit({
+					keys: guestWriteKeys("createComment", actor.gid, context.clientIp),
+					limit: GUEST_COMMENT_LIMIT,
+					message: GUEST_COMMENT_RATE_LIMIT_ERROR,
+				});
+			}
+
+			// 우리 글과 달리 카운트 캐시 갱신이 없다 — crawled_community_topic.comment_count는
+			// 원본 값이고 재수집이 덮어쓴다. 상세가 두 원천을 합산해 보여준다.
+			const [created] = await db
+				.insert(communityComment)
+				.values({
+					authorGuestId: actorGuestId(actor),
+					authorRole: actorRole(actor),
+					authorUserId: actorUserId(actor),
+					body: input.body,
+					crawledTopicId: input.topicId,
+					parentCommentId: input.parentCommentId ?? null,
+					passwordHash: guestPassword
+						? hashCommunityPassword(guestPassword)
+						: "",
+				})
+				.returning({ id: communityComment.id });
+
+			// 알림은 대댓글 한 갈래뿐이다 — 수집 글에는 알릴 우리 작성자가 없다.
+			const commentActorUserId = actorUserId(actor);
+			if (
+				commentActorUserId &&
+				parentAuthorUserId &&
+				parentAuthorUserId !== commentActorUserId
+			) {
+				await notifyBambiNotification({
+					actorUserId: commentActorUserId,
+					// 딥링크는 게시판 글이 아니라 수집 글 상세다(웹 notificationHref가 분기한다).
+					metadata: { action: "reply", crawledTopicId: input.topicId },
+					recipientUserId: parentAuthorUserId,
+					targetId: input.parentCommentId ?? topic.id,
+					targetType: "community_comment",
+				});
+			}
+
+			return created;
+		}),
+
 	deleteComment: publicProcedure
 		.input(deleteCommentInput)
 		.handler(async ({ context, input }) => {
@@ -1705,17 +1864,23 @@ export const communityRouter = {
 				});
 			}
 
+			const { postId } = comment;
+
 			await db.transaction(async (tx) => {
 				await tx
 					.update(communityComment)
 					.set({ status: "deleted", updatedAt: new Date() })
 					.where(eq(communityComment.id, input.commentId));
-				await tx
-					.update(communityPost)
-					.set({
-						commentCount: sql`greatest(${communityPost.commentCount} - 1, 0)`,
-					})
-					.where(eq(communityPost.id, comment.postId));
+				// 수집 글 댓글(post_id null)은 줄일 캐시가 없다 — 수집 글의 댓글 수는 원본
+				// 값이고 상세가 두 원천을 합산한다.
+				if (postId) {
+					await tx
+						.update(communityPost)
+						.set({
+							commentCount: sql`greatest(${communityPost.commentCount} - 1, 0)`,
+						})
+						.where(eq(communityPost.id, postId));
+				}
 			});
 
 			return { id: comment.id };
@@ -1840,12 +2005,15 @@ export const communityRouter = {
 				const [existing] = await tx
 					.select({
 						// 딥링크는 글 단위다 — 댓글이 속한 글의 게시판·id가 필요하다.
+						// 수집 글 댓글은 우리 글 행이 없어 leftJoin이다(innerJoin이면 조치
+						// 자체가 NOT_FOUND로 막혀 신고를 접수하고도 내릴 수가 없다).
 						board: communityPost.board,
+						crawledTopicId: communityComment.crawledTopicId,
 						postId: communityComment.postId,
 						status: communityComment.status,
 					})
 					.from(communityComment)
-					.innerJoin(
+					.leftJoin(
 						communityPost,
 						eq(communityPost.id, communityComment.postId)
 					)
@@ -1880,20 +2048,22 @@ export const communityRouter = {
 				}
 
 				// 동일 노출성 전이(예: hidden→deleted, published→published)는 카운트를 건드리지 않는다.
+				// 수집 글 댓글(post_id null)은 갱신할 캐시가 없어 통째로 건너뛴다.
+				const postId = existing.postId;
 				const wasVisible = existing.status === "published";
 				const willVisible = input.status === "published";
-				if (wasVisible && !willVisible) {
+				if (postId && wasVisible && !willVisible) {
 					await tx
 						.update(communityPost)
 						.set({
 							commentCount: sql`greatest(${communityPost.commentCount} - 1, 0)`,
 						})
-						.where(eq(communityPost.id, existing.postId));
-				} else if (!wasVisible && willVisible) {
+						.where(eq(communityPost.id, postId));
+				} else if (postId && !wasVisible && willVisible) {
 					await tx
 						.update(communityPost)
 						.set({ commentCount: sql`${communityPost.commentCount} + 1` })
-						.where(eq(communityPost.id, existing.postId));
+						.where(eq(communityPost.id, postId));
 				}
 
 				await tx.insert(adminModerationAction).values({
@@ -1907,6 +2077,7 @@ export const communityRouter = {
 
 				return {
 					board: existing.board,
+					crawledTopicId: existing.crawledTopicId,
 					id: updated.id,
 					postId: existing.postId,
 					status: updated.status,
@@ -1916,7 +2087,12 @@ export const communityRouter = {
 			await notifyModerationAction({
 				action: `set_community_comment_status:${input.status}`,
 				actorUserId: admin.userId,
-				metadata: { board: result.board, postId: result.postId },
+				// 수집 글 댓글은 board·postId가 없어 수집 상세 id를 대신 싣는다(웹 딥링크 분기).
+				metadata: {
+					board: result.board,
+					crawledTopicId: result.crawledTopicId,
+					postId: result.postId,
+				},
 				reason: input.reason,
 				targetId: input.commentId,
 				targetType: "community_comment",

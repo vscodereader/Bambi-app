@@ -218,10 +218,11 @@ export function PopupManagement() {
 		}));
 	};
 	if (query.isLoading) {
-		return <p>팝업 설정을 불러오는 중입니다.</p>;
+		return <p className="px-5 md:px-6">팝업 설정을 불러오는 중입니다.</p>;
 	}
 	return (
-		<div className="flex flex-col gap-6 pb-16">
+		// 좌우 여백은 다른 운영자 콘솔 페이지와 동일한 체계를 따른다(px-5 → md:px-6).
+		<div className="flex flex-col gap-6 px-5 pb-16 md:px-6">
 			<section>
 				<h1 className="font-semibold text-2xl">팝업 설정</h1>
 				<p className="text-muted-foreground">

@@ -6,9 +6,11 @@ import {
 	AdBannerRail,
 	HorizontalAdBannerRail,
 } from "@/components/bambi/ad-banner";
+import { MobileTabBar } from "@/components/bambi/mobile-tab-bar";
 import { ResponsiveAppShell } from "@/components/bambi/responsive-shell";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import { APP_CONTENT_MAX_W, SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { useMobileKeyboardState } from "@/lib/bambi/use-mobile-keyboard-state";
 
 // 고객센터는 구인자·구직자 공통 창구라 역할 셸(seeker/employer)에 묶지 않는다.
 // 헤더 폭과 본문 폭은 다른 화면과 동일한 공용 상수를 그대로 쓴다 — 폭 기준이 갈리면
@@ -24,8 +26,14 @@ import { APP_CONTENT_MAX_W, SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 // 어긋난다(수다방 레이아웃과 같은 이유·같은 형태). 빈 슬롯은 rail이 자체 "광고 모집중"
 // 자리표시로 채우므로 조건 없이 렌더한다. 훅(useAdBannerJobs) 때문에 클라이언트
 // 모듈이지만 children(고객센터 페이지)은 RSC로 그대로 통과한다.
+//
+// 하단 탭바는 역할 셸(SeekerNav)을 거치지 않으므로 여기서 직접 붙인다 — 없으면 모바일에서
+// 고객센터에 들어간 순간 되돌아갈 길이 사라진다. 문의 작성 폼이 있어 SeekerNav와 같이
+// 키보드가 열리면 감춘다. 콘텐츠 하단 여백은 셸 푸터(withBottomNavClearance)가 이미
+// 확보하므로 따로 스페이서를 두지 않는다.
 export default function SupportLayout({ children }: { children: ReactNode }) {
 	const adBanners = useAdBannerJobs();
+	const { isKeyboardOpen } = useMobileKeyboardState();
 
 	return (
 		<ResponsiveAppShell
@@ -60,6 +68,7 @@ export default function SupportLayout({ children }: { children: ReactNode }) {
 					</div>
 				</aside>
 			</div>
+			{isKeyboardOpen ? null : <MobileTabBar homeHref="/seeker" />}
 		</ResponsiveAppShell>
 	);
 }

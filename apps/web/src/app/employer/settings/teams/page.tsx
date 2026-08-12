@@ -1,10 +1,15 @@
 "use client";
 
 import {
-	Alert,
-	AlertDescription,
-	AlertTitle,
-} from "@bambi-app/ui/components/alert";
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
 import { Label } from "@bambi-app/ui/components/label";
@@ -16,7 +21,6 @@ import {
 	SelectValue,
 } from "@bambi-app/ui/components/select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { TriangleAlert } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -319,41 +323,43 @@ export default function EmployerTeamSettingsPage() {
 								조직에 소속된 팀과 지역 정보를 확인합니다.
 							</p>
 						</div>
-						{deletingTeam ? (
-							<Alert variant="destructive">
-								<TriangleAlert />
-								<AlertTitle>
-									“{deletingTeam.displayName}” 팀을 삭제할까요?
-								</AlertTitle>
-								<AlertDescription>
-									삭제한 팀은 되돌릴 수 없어요. 팀과 연결된 공고는 팀 소속만
-									해제됩니다.
-								</AlertDescription>
-								<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-									<Button
+						<AlertDialog
+							onOpenChange={(open) => {
+								if (!open) {
+									setDeletingTeamId(null);
+								}
+							}}
+							open={deletingTeam !== null}
+						>
+							<AlertDialogContent>
+								<AlertDialogHeader>
+									<AlertDialogTitle>
+										“{deletingTeam?.displayName}” 팀을 삭제할까요?
+									</AlertDialogTitle>
+									<AlertDialogDescription>
+										삭제한 팀은 되돌릴 수 없어요. 팀과 연결된 공고는 팀 소속만
+										해제됩니다.
+									</AlertDialogDescription>
+								</AlertDialogHeader>
+								<AlertDialogFooter>
+									<AlertDialogCancel>취소</AlertDialogCancel>
+									<AlertDialogAction
 										disabled={deleteTeamMutation.isPending}
-										onClick={() => setDeletingTeamId(null)}
-										type="button"
-										variant="outline"
-									>
-										취소
-									</Button>
-									<Button
-										disabled={deleteTeamMutation.isPending}
-										onClick={() =>
-											deleteTeamMutation.mutate({
-												organizationId: selectedOrganizationId,
-												teamId: deletingTeam.teamId,
-											})
-										}
-										type="button"
+										onClick={() => {
+											if (deletingTeam) {
+												deleteTeamMutation.mutate({
+													organizationId: selectedOrganizationId,
+													teamId: deletingTeam.teamId,
+												});
+											}
+										}}
 										variant="destructive"
 									>
 										{deleteTeamMutation.isPending ? "삭제 중…" : "삭제"}
-									</Button>
-								</div>
-							</Alert>
-						) : null}
+									</AlertDialogAction>
+								</AlertDialogFooter>
+							</AlertDialogContent>
+						</AlertDialog>
 						{teamsContent}
 					</section>
 

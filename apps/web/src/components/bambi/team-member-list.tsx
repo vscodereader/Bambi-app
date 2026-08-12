@@ -2,10 +2,15 @@
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import {
-	Alert,
-	AlertDescription,
-	AlertTitle,
-} from "@bambi-app/ui/components/alert";
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import { Card, CardContent } from "@bambi-app/ui/components/card";
@@ -51,7 +56,7 @@ import {
 } from "@bambi-app/ui/components/select";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { EllipsisIcon, MailPlus, TriangleAlert } from "lucide-react";
+import { EllipsisIcon, MailPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -815,31 +820,35 @@ export function TeamMemberList({
 				</div>
 			</form>
 
-			{confirmView ? (
-				<Alert variant={confirmView.destructive ? "destructive" : "default"}>
-					<TriangleAlert />
-					<AlertTitle>{confirmView.title}</AlertTitle>
-					<AlertDescription>{confirmView.description}</AlertDescription>
-					<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-						<Button
-							disabled={confirmView.pending}
-							onClick={() => setConfirm(null)}
-							type="button"
-							variant="outline"
+			{/* 초대 삭제·멤버 내보내기·소유권 이전은 되돌리기 번거로운 조치라 확인 창을 한 번
+			    거친다(파괴적 조치만 붉은 확정 버튼). */}
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setConfirm(null);
+					}
+				}}
+				open={confirmView !== null}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{confirmView?.title}</AlertDialogTitle>
+						<AlertDialogDescription>
+							{confirmView?.description}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={confirmView?.pending}
+							onClick={confirmView?.onConfirm}
+							variant={confirmView?.destructive ? "destructive" : "default"}
 						>
-							취소
-						</Button>
-						<Button
-							disabled={confirmView.pending}
-							onClick={confirmView.onConfirm}
-							type="button"
-							variant={confirmView.destructive ? "destructive" : "default"}
-						>
-							{confirmView.pending ? "처리 중…" : confirmView.actionLabel}
-						</Button>
-					</div>
-				</Alert>
-			) : null}
+							{confirmView?.pending ? "처리 중…" : confirmView?.actionLabel}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
 			{members.length > 0 ? (
 				<>
@@ -989,7 +998,7 @@ function TeamAssignmentDialog({
 	);
 }
 
-// 확인 Alert에 그릴 제목·설명·확정 핸들러를 액션 종류별로 만든다.
+// 확인 창에 그릴 제목·설명·확정 핸들러를 액션 종류별로 만든다.
 function buildConfirmView({
 	confirm,
 	deletePending,

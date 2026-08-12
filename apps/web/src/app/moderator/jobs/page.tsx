@@ -9,6 +9,16 @@
 // 그 게이트를 통과한 행만 링크로 만든다.
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Dialog,
@@ -654,7 +664,8 @@ export default function ModeratorJobsPage() {
 				</DialogContent>
 			</Dialog>
 
-			<Dialog
+			{/* 삭제는 되돌릴 수 없어 확인 창을 한 번 세운다(Esc·바깥 클릭으로 닫히지 않는다). */}
+			<AlertDialog
 				onOpenChange={(open) => {
 					if (!open) {
 						setPendingDelete(null);
@@ -663,27 +674,25 @@ export default function ModeratorJobsPage() {
 				}}
 				open={pendingDelete !== null}
 			>
-				<DialogContent>
-					<DialogTitle>공고 삭제</DialogTitle>
-					<DialogDescription>
-						"{pendingDelete?.title}" 공고를 완전히 삭제합니다. 연결된
-						채팅방·미디어가 모두 지워지며 되돌릴 수 없어요. 사유는 감사 로그에
-						남아요(2자 이상).
-					</DialogDescription>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>공고 삭제</AlertDialogTitle>
+						<AlertDialogDescription>
+							"{pendingDelete?.title}" 공고를 완전히 삭제합니다. 연결된
+							채팅방·미디어가 모두 지워지며 되돌릴 수 없어요. 사유는 감사 로그에
+							남아요(2자 이상).
+						</AlertDialogDescription>
+					</AlertDialogHeader>
 					<Textarea
 						onChange={(event) => setDeleteReason(event.target.value)}
 						placeholder="삭제 사유를 입력해 주세요."
 						value={deleteReason}
 					/>
-					<div className="flex justify-end gap-2">
-						<DialogClose
-							render={
-								<Button size="sm" type="button" variant="ghost">
-									취소
-								</Button>
-							}
-						/>
-						<Button
+					<AlertDialogFooter>
+						<AlertDialogCancel size="sm" variant="ghost">
+							취소
+						</AlertDialogCancel>
+						<AlertDialogAction
 							disabled={!canConfirmDelete}
 							onClick={() => {
 								if (!pendingDelete) {
@@ -696,14 +705,13 @@ export default function ModeratorJobsPage() {
 								});
 							}}
 							size="sm"
-							type="button"
 							variant="destructive"
 						>
 							삭제 확정
-						</Button>
-					</div>
-				</DialogContent>
-			</Dialog>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
 			<Dialog
 				onOpenChange={(open) => {

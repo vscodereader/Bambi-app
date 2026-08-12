@@ -1,0 +1,5 @@
+ALTER TABLE "community_comment" ALTER COLUMN "post_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "community_comment" ADD COLUMN "crawled_topic_id" uuid;--> statement-breakpoint
+ALTER TABLE "community_comment" ADD CONSTRAINT "community_comment_crawled_topic_id_crawled_community_topic_id_fk" FOREIGN KEY ("crawled_topic_id") REFERENCES "public"."crawled_community_topic"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "community_comment_crawled_topic_id_status_created_at_idx" ON "community_comment" USING btree ("crawled_topic_id","status","created_at");--> statement-breakpoint
+ALTER TABLE "community_comment" ADD CONSTRAINT "community_comment_target_one_of_ck" CHECK (num_nonnulls("community_comment"."post_id", "community_comment"."crawled_topic_id") = 1);
