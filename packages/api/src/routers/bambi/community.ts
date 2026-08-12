@@ -385,7 +385,10 @@ const crawledCommunityFeedSelection = {
 	// 원본 수집 댓글 수 + 우리 회원·비회원이 남긴 published 댓글 수. 상세 getCrawledTopic과
 	// 같은 합산이라 목록 행과 상세가 어긋나지 않는다. 상관 스칼라 서브쿼리는 0084 인덱스
 	// (crawled_topic_id, status, created_at)를 타는 카운트라 union 투영에 조인 없이 붙는다.
-	commentCount: sql<number>`coalesce(${crawledCommunityTopic.commentCount}, 0) + (select count(*) from ${communityComment} where ${communityComment.crawledTopicId} = ${crawledCommunityTopic.id} and ${communityComment.status} = ${"published"})::int`,
+	// 외부 참조는 raw로 수식한다 — drizzle이 프로젝션 안 보간 컬럼의 테이블 수식을 벗겨
+	// ${crawledCommunityTopic.id}가 "id"로 렌더되고, 서브쿼리 스코프에선 comment 자신의
+	// id로 해석돼 상관이 끊긴다(카운트가 조용히 0이 되는 버그를 실제로 냈다).
+	commentCount: sql<number>`coalesce(${crawledCommunityTopic.commentCount}, 0) + (select count(*) from ${communityComment} where ${communityComment.crawledTopicId} = "crawled_community_topic"."id" and ${communityComment.status} = ${"published"})::int`,
 	// 원 게시일을 작성일 자리에 쓴다. where의 30일 컷오프가 null을 걸러내므로 결과에선
 	// non-null이고, UNION 상대(created_at NOT NULL)와 타입이 맞는다.
 	createdAt: sql<Date>`${crawledCommunityTopic.sourcePostedAt}`,
