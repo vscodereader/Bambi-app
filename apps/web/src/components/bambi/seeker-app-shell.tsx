@@ -29,7 +29,9 @@ export function useSeekerFilters(): SeekerFiltersContextValue {
 	return ctx;
 }
 
-function SeekerHeaderSearch() {
+// 데스크톱·모바일 헤더가 각각 자기 인스턴스를 마운트한다. Ctrl/Cmd+K 리스너는
+// 두 번 등록되면 모달이 두 개 열리므로 데스크톱 쪽에서만 켠다.
+function SeekerHeaderSearch({ withHotkey = false }: { withHotkey?: boolean }) {
 	const router = useRouter();
 	const { isGuest } = useBambiAuth();
 
@@ -47,8 +49,7 @@ function SeekerHeaderSearch() {
 				}
 				router.push(`/seeker/jobs/${job.id}` as Route);
 			}}
-			trigger="header"
-			withHotkey
+			withHotkey={withHotkey}
 		/>
 	);
 }
@@ -66,7 +67,10 @@ export function SeekerAppShell({ children }: { children: ReactNode }) {
 				// 모든 seeker 페이지(채용 목록·상세·채팅·수다방·내 정보) 헤더를
 				// /seeker와 동일한 고정폭·여백으로 통일한다.
 				contentWidthClassName={SEEKER_CONTENT_MAX_W}
-				headerSlot={isMarketplace ? <SeekerHeaderSearch /> : undefined}
+				headerSlot={
+					isMarketplace ? <SeekerHeaderSearch withHotkey /> : undefined
+				}
+				mobileHeaderSlot={isMarketplace ? <SeekerHeaderSearch /> : undefined}
 				variant="seeker"
 			>
 				{children}

@@ -55,6 +55,10 @@ interface ResponsiveAppShellProps {
 	// 데스크톱 헤더 바의 콘텐츠 폭. 기본은 유동 80%, 채용 경로는 고정폭을 주입한다.
 	contentWidthClassName?: string;
 	headerSlot?: ReactNode;
+	// 모바일 헤더(<md) 우측 액션 앞에 끼우는 슬롯. 두 헤더는 CSS로만 숨겨질 뿐 항상
+	// 함께 마운트되므로, 같은 노드를 재사용하지 말고 별도 인스턴스를 넘긴다
+	// (전역 단축키를 쓰는 슬롯이면 리스너가 두 번 등록된다).
+	mobileHeaderSlot?: ReactNode;
 	navItems?: readonly NavEntry[];
 	showDesktopNav?: boolean;
 	variant?: "public" | "seeker" | "employer" | "moderator";
@@ -239,6 +243,7 @@ export function ResponsiveAppShell({
 	className,
 	contentWidthClassName = "max-w-[80%]",
 	headerSlot,
+	mobileHeaderSlot,
 	navItems = DEFAULT_NAV_ITEMS,
 	showDesktopNav = true,
 	variant = "public",
@@ -345,6 +350,7 @@ export function ResponsiveAppShell({
 						<Logo lang="ko" size="sm" />
 					</Link>
 					<div className="flex items-center gap-2">
+						{mobileHeaderSlot}
 						{isModerator ? <ModeratorHeaderActions /> : <NotificationBell />}
 					</div>
 				</div>
