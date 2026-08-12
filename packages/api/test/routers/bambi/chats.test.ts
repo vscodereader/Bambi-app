@@ -315,6 +315,71 @@ describe("bambi chats router media", () => {
 			await cleanupChatFixture(fixture);
 		}
 	});
+
+	it("atomically creates separate attachment and text messages without duplicating retries", async () => {
+		const fixture = await createChatFixture();
+
+		try {
+			const createAttachmentUpload = createProcedureClient(
+				chatsRouter.createAttachmentUpload,
+				{
+					context: createContextForUser(fixture.jobSeekerUserId),
+					path: ["bambi", "chats", "createAttachmentUpload"],
+				}
+			);
+			const sendMediaMessage = createProcedureClient(
+				chatsRouter.sendMediaMessage,
+				{
+					context: createContextForUser(fixture.jobSeekerUserId),
+					path: ["bambi", "chats", "sendMediaMessage"],
+				}
+			);
+			const messageId = randomUUID();
+			const textMessageId = randomUUID();
+			const uploadIntent = await createAttachmentUpload({
+				byteSize: 256_000,
+				chatRoomId: fixture.chatRoomId,
+				fileName: "shift-photo.jpg",
+				mimeType: "image/jpeg",
+			});
+			const input = {
+				body: "사진 설명입니다.",
+				byteSize: uploadIntent.byteSize,
+				chatRoomId: fixture.chatRoomId,
+				fileName: uploadIntent.fileName,
+				messageId,
+				mimeType: uploadIntent.mimeType,
+				storageKey: uploadIntent.storageKey,
+				textMessageId,
+			};
+
+			const first = await sendMediaMessage(input);
+			const retried = await sendMediaMessage(input);
+			const savedMessages = await db
+				.select()
+				.from(chatMessage)
+				.where(inArray(chatMessage.id, [messageId, textMessageId]));
+			const savedAttachments = await db
+				.select()
+				.from(chatAttachment)
+				.where(eq(chatAttachment.messageId, messageId));
+
+			expect(first.message.id).toBe(messageId);
+			expect(first.textMessage).toMatchObject({
+				body: "사진 설명입니다.",
+				id: textMessageId,
+			});
+			expect(retried.message.id).toBe(messageId);
+			expect(retried.textMessage?.id).toBe(textMessageId);
+			expect(savedMessages).toHaveLength(2);
+			expect(first.message.createdAt.getTime()).toBeLessThan(
+				first.textMessage?.createdAt.getTime() ?? 0
+			);
+			expect(savedAttachments).toHaveLength(1);
+		} finally {
+			await cleanupChatFixture(fixture);
+		}
+	});
 });
 
 describe("bambi chats router interview proposals", () => {

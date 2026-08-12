@@ -92,10 +92,27 @@ const attachmentMetadataInput = z.object({
 	byteSize: z.number().int().min(1),
 });
 
-const sendMediaMessageInput = attachmentMetadataInput.extend({
-	messageId: clientMessageIdInput,
-	storageKey: z.string().min(1).max(512),
-});
+const sendMediaMessageInput = attachmentMetadataInput
+	.extend({
+		body: z.string().trim().min(1).max(2000).optional(),
+		messageId: clientMessageIdInput,
+		storageKey: z.string().min(1).max(512),
+		textMessageId: clientMessageIdInput,
+	})
+	.refine(
+		({ body, textMessageId }) => Boolean(body) === Boolean(textMessageId),
+		{
+			message: "Text message ID is required when a text body is provided.",
+			path: ["textMessageId"],
+		}
+	)
+	.refine(
+		({ messageId, textMessageId }) => !messageId || messageId !== textMessageId,
+		{
+			message: "Attachment and text message IDs must be different.",
+			path: ["textMessageId"],
+		}
+	);
 
 // 읽음 처리는 id 목록이 아니라 기준선("이 메시지까지 봤다") 하나만 받는다. 예전에는
 // 클라이언트가 방의 상대 메시지 id를 전부 실어 보냈는데 상한이 50이라, 51건째부터 요청
@@ -1295,12 +1312,18 @@ export const chatsRouter = {
 			assertChatSendRateLimit("sendMediaMessage", profile.userId);
 
 			const messageId = input.messageId ?? generateChatMessageId();
+			const textMessageId = input.body
+				? (input.textMessageId ?? generateChatMessageId())
+				: undefined;
+			const attachmentCreatedAt = new Date();
+			const textCreatedAt = new Date(attachmentCreatedAt.getTime() + 1);
 			const inserted = await db.transaction(async (tx) => {
 				const [createdMessage] = await tx
 					.insert(chatMessage)
 					.values({
 						body: "첨부 파일을 보냈습니다.",
 						chatRoomId: room.id,
+						createdAt: attachmentCreatedAt,
 						id: messageId,
 						senderUserId: profile.userId,
 					})
@@ -1331,6 +1354,27 @@ export const chatsRouter = {
 					});
 				}
 
+				let createdTextMessage: typeof createdMessage | undefined;
+				if (input.body && textMessageId) {
+					[createdTextMessage] = await tx
+						.insert(chatMessage)
+						.values({
+							body: input.body,
+							chatRoomId: room.id,
+							createdAt: textCreatedAt,
+							id: textMessageId,
+							senderUserId: profile.userId,
+						})
+						.onConflictDoNothing()
+						.returning();
+
+					if (!createdTextMessage) {
+						throw new ORPCError("CONFLICT", {
+							message: "Text message ID is already in use.",
+						});
+					}
+				}
+
 				await tx
 					.update(chatRoom)
 					.set({ updatedAt: new Date() })
@@ -1341,10 +1385,19 @@ export const chatsRouter = {
 					messageId: createdMessage.id,
 					senderUserId: profile.userId,
 				});
+				if (createdTextMessage) {
+					await enqueueChatMessageSync(tx, {
+						chatRoomId: room.id,
+						createdAt: createdTextMessage.createdAt,
+						messageId: createdTextMessage.id,
+						senderUserId: profile.userId,
+					});
+				}
 
 				return {
 					attachment: createdAttachment,
 					message: createdMessage,
+					textMessage: createdTextMessage,
 				};
 			});
 
@@ -1368,7 +1421,15 @@ export const chatsRouter = {
 					});
 				}
 
-				return { attachment: existingAttachment, message };
+				const textMessage = textMessageId
+					? await requireExistingChatMessage(
+							textMessageId,
+							room.id,
+							profile.userId
+						)
+					: undefined;
+
+				return { attachment: existingAttachment, message, textMessage };
 			}
 
 			await drainPendingChatMessageSyncs();
