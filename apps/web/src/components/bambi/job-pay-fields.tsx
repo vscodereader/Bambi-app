@@ -1,5 +1,6 @@
 "use client";
 
+import { JOB_PAY_AMOUNT_MAX } from "@bambi-app/api/services/bambi-job-pay";
 import { Input } from "@bambi-app/ui/components/input";
 import {
 	Select,
@@ -44,6 +45,7 @@ export function JobPayFields({
 						aria-invalid={Boolean(errors?.payAmount)}
 						id="payAmount"
 						inputMode="numeric"
+						max={JOB_PAY_AMOUNT_MAX}
 						min="1"
 						name="payAmount"
 						onChange={(event) => onChange("payAmount", event.target.value)}

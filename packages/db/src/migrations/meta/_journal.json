@@ -589,6 +589,13 @@
       "when": 1786428235198,
       "tag": "0083_perpetual_baron_strucker",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1786494607104,
+      "tag": "0084_amusing_solo",
+      "breakpoints": true
     }
   ]
 }

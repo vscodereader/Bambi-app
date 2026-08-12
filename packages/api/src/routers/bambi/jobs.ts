@@ -114,6 +114,10 @@ import {
 	validateJobPostImageUpload,
 	validateJobPostMediaSet,
 } from "../../services/bambi-job-media-policy";
+import {
+	JOB_PAY_AMOUNT_MAX,
+	JOB_PAY_AMOUNT_MAX_MESSAGE,
+} from "../../services/bambi-job-pay";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
 import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
 import {
@@ -186,7 +190,12 @@ const jobPostInputShape = z.object({
 	regionCode: z.string().length(10),
 	districtCode: z.string().length(10).optional(),
 	// "협의" 단위는 금액이 없다(면접 후 급여 협의). 아래 refine에서 짝을 강제한다.
-	payAmount: z.number().int().positive().nullish(),
+	payAmount: z
+		.number()
+		.int()
+		.positive()
+		.max(JOB_PAY_AMOUNT_MAX, JOB_PAY_AMOUNT_MAX_MESSAGE)
+		.nullish(),
 	payUnit: z.string().min(1).max(30),
 	workSchedule: z.string().min(1).max(200),
 	description: z.string().min(10).max(2000),
@@ -925,6 +934,7 @@ const syncBoostPurchases = async ({
 			optionType,
 			organizationId,
 			paymentMethod,
+			purchaseSource: isPaidPosting ? "job_registration" : "standalone",
 		});
 	}
 };
@@ -1199,7 +1209,7 @@ export const applyJobPostUpdate = async ({
 
 interface CrawledJobSections {
 	organic: JobFeedRow[];
-	// 섹션 보강분을 뺀 창 크기 — "더보기" 커서는 이 값만큼만 전진한다.
+	// 전체공고에 실제로 반환한 창 크기 — "더보기" 커서는 이 값만큼 전진한다.
 	organicWindowSize: number;
 	recommended: JobFeedRow[];
 	special: JobFeedRow[];
@@ -1254,21 +1264,6 @@ const loadCrawledJobSections = async (
 		countCrawledJobFeedRows(input),
 	]);
 	const organicWindowSize = organic.length;
-
-	// 섹션에 뜬 공고는 전체 공고에도 반드시 있어야 한다. 네 쿼리가 서로를 모르는 데다
-	// 정렬 키가 대량으로 동률이라, 전체 공고 쿼리가 섹션 행을 집어올 보장이 없다.
-	// 빠진 것만 뒤에 채운다 — listCrawledSectionRows가 승격해 둔 라벨은 'standard'로
-	// 되돌려야 전체 공고 카드가 유료 자리 배지를 달지 않는다.
-	const organicIds = new Set(organic.map((row) => row.id));
-
-	for (const row of [...special, ...urgent, ...recommended]) {
-		if (organicIds.has(row.id)) {
-			continue;
-		}
-
-		organicIds.add(row.id);
-		organic.push({ ...row, exposureType: "standard" });
-	}
 
 	return {
 		organic,
@@ -1420,8 +1415,8 @@ export const jobsRouter = {
 					// 같은 이유로 이미 하고 있는 것과 같다.
 					desc(jobPost.id)
 				)
-				// 첫 페이지만 유료 섹션 몫(+15)을 얹어 넉넉히 받는다(기존 동작 유지).
-				.limit(isFirstPage ? input.limit + 15 : input.limit)
+				// 전체공고는 페이지마다 정확히 limit개를 소비한다. 유료 섹션은 별도 쿼리다.
+				.limit(input.limit)
 				.offset(organicCursor?.jobPost ?? 0),
 			// 필터를 만족하는 자체 공고 전체 수. 페이지 창과 무관해야 헤더의 전체 건수와
 			// "더보기" 종료 판정이 정확하다.
@@ -1506,9 +1501,8 @@ export const jobsRouter = {
 		const crawled = await loadCrawledJobSections(
 			input,
 			{
-				limit: isFirstPage
-					? input.limit
-					: Math.max(0, input.limit - result.organicWindowSize),
+				// 밤비 공고가 먼저 자리를 차지하고 남은 칸만 크롤링 공고로 채운다.
+				limit: Math.max(0, input.limit - result.organicWindowSize),
 				offset: organicCursor?.crawled ?? 0,
 			},
 			isFirstPage

@@ -75,7 +75,7 @@ describe("buildExposureJobSections", () => {
 		});
 		expect(sections.special).toHaveLength(7);
 	});
-	it("유료 공고가 앞자리를 차지해도 무료 공고가 전체 공고에서 밀리지 않는다", () => {
+	it("전체 공고는 유료 여부와 무관하게 정렬 앞의 limit건만 유지한다", () => {
 		const specials = Array.from({ length: 3 }, (_, i) =>
 			row(`s${i}`, "special")
 		);
@@ -89,12 +89,9 @@ describe("buildExposureJobSections", () => {
 			urgentRows: [],
 		});
 		expect(sections.special).toHaveLength(3);
-		// organic 상한이 유료 섹션 크기만큼 늘어 무료 2건이 그대로 남는다.
-		const organicIds = sections.organic.map((r) => r.id);
-		expect(organicIds).toContain("o0");
-		expect(organicIds).toContain("o1");
+		expect(sections.organic.map((r) => r.id)).toEqual(["s0", "s1"]);
 	});
-	it("organic 쿼리가 못 집어온 섹션 공고도 전체 공고에 반드시 담는다", () => {
+	it("섹션 공고를 전체 공고 뒤에 보강해 페이지 정원을 넘기지 않는다", () => {
 		const special = row("s1", "special");
 		const urgent = row("u1", "urgent");
 		const { sections, totalCount } = buildExposureJobSections({
@@ -106,16 +103,10 @@ describe("buildExposureJobSections", () => {
 			specialRows: [special],
 			urgentRows: [urgent],
 		});
-		expect(sections.organic.map((r) => r.id)).toEqual(["o1", "s1", "u1"]);
-		// 유료 배지는 호출부가 섹션 여부로 붙이므로 원값을 유지한다.
-		expect(sections.organic.map((r) => r.exposureType)).toEqual([
-			"standard",
-			"special",
-			"urgent",
-		]);
+		expect(sections.organic.map((r) => r.id)).toEqual(["o1"]);
 		expect(totalCount).toBe(3);
 	});
-	it("전체 공고 창 크기는 섹션 보강분을 빼고 센다(더보기 커서 기준)", () => {
+	it("전체 공고 창과 더보기 커서는 정확히 limit건만 센다", () => {
 		const special = row("s1", "special");
 		const { organicWindowSize, sections } = buildExposureJobSections({
 			limit: 2,
@@ -129,10 +120,8 @@ describe("buildExposureJobSections", () => {
 			specialRows: [special],
 			urgentRows: [],
 		});
-		// 창 = limit(2) + 섹션 1건 = 3. 뒤에 보강으로 붙은 s1은 정렬 창 밖이라 세지 않는다 —
-		// 여기까지 커서를 전진시키면 다음 페이지가 o3 다음이 아니라 그 뒤부터 시작해 한 건이 샌다.
-		expect(sections.organic.map((r) => r.id)).toEqual(["o1", "o2", "o3", "s1"]);
-		expect(organicWindowSize).toBe(3);
+		expect(sections.organic.map((r) => r.id)).toEqual(["o1", "o2"]);
+		expect(organicWindowSize).toBe(2);
 	});
 });
 

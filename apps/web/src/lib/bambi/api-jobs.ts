@@ -136,8 +136,7 @@ export function useMarketplaceJobs(
 	);
 	const pages = jobsQuery.data?.pages ?? [];
 	const [firstPage] = pages;
-	// 1페이지 전체 공고 꼬리에는 섹션 보강분이 정렬과 무관한 위치로 섞여 있어 다음 페이지와
-	// 겹칠 수 있다(서버 커서는 정렬 창만큼만 전진하므로 누락은 없다). id 첫 등장만 남긴다.
+	// 페이지 사이 중복을 방어적으로 제거하되 서버는 각 페이지를 48개 정원으로 반환한다.
 	const organicRows = [
 		...new Map(
 			pages
