@@ -1,4 +1,5 @@
 import "@bambi-app/env/web";
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const publicMediaBaseUrl = process.env.NEXT_PUBLIC_GCS_PUBLIC_BASE_URL;
@@ -19,6 +20,9 @@ if (publicMediaBaseUrl) {
 
 const nextConfig: NextConfig = {
 	images: { remotePatterns: remoteImagePatterns },
+	// Git worktree에서도 상위 저장소의 lockfile을 루트로 잘못 선택하지 않도록
+	// 현재 worktree의 monorepo 루트를 명시한다.
+	turbopack: { root: path.resolve(import.meta.dirname, "../..") },
 	// /manual/* 페이지는 세션 검사 때문에 동적 렌더라, manual-content.ts의 fs.readFile이
 	// 런타임에 돈다. 원본 md는 apps/web 밖(리포 루트 docs/manual)에 있고 파일명도 변수라
 	// 파일 트레이싱이 정적으로 잡지 못한다 — 명시하지 않으면 배포 번들에서 빠져 전부

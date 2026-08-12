@@ -589,6 +589,13 @@
       "when": 1786428235198,
       "tag": "0083_perpetual_baron_strucker",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1786511236431,
+      "tag": "0084_aberrant_night_nurse",
+      "breakpoints": true
     }
   ]
 }

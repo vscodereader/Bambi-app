@@ -4,12 +4,20 @@ import { protectedProcedure, publicProcedure } from "../index";
 import { bambiRouter } from "./bambi";
 import { todoRouter } from "./todo";
 
-export const appRouter = {
-	healthCheck: publicProcedure.handler(() => "OK"),
-	privateData: protectedProcedure.handler(({ context }) => ({
-		message: "This is private",
-		user: context.session?.user,
-	})),
+const healthCheck = publicProcedure.handler(() => "OK");
+const privateData = protectedProcedure.handler(({ context }) => ({
+	message: "This is private",
+	user: context.session?.user,
+}));
+
+export const appRouter: {
+	bambi: typeof bambiRouter;
+	healthCheck: typeof healthCheck;
+	privateData: typeof privateData;
+	todo: typeof todoRouter;
+} = {
+	healthCheck,
+	privateData,
 	bambi: bambiRouter,
 	todo: todoRouter,
 };

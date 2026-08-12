@@ -26,7 +26,12 @@ import { orpc } from "@/utils/orpc";
 
 // 업소 인증 상태 필터. "all"은 서버에 status 미전달(전체 조회)로 매핑한다.
 type EmployerFilter = "all" | "pending" | "verified" | "rejected" | "none";
-type VerificationStatus = "none" | "pending" | "verified" | "rejected";
+type VerificationStatus =
+	| "none"
+	| "pending"
+	| "verified"
+	| "rejected"
+	| "changes_unsubmitted";
 
 const EMPLOYER_FILTERS: { value: EmployerFilter; label: string }[] = [
 	{ value: "all", label: "전체" },
@@ -43,6 +48,7 @@ const VERIFICATION_BADGE: Record<
 		variant: "success" | "warning" | "destructive" | "secondary";
 	}
 > = {
+	changes_unsubmitted: { label: "변경사항 미제출", variant: "warning" },
 	none: { label: "미제출", variant: "secondary" },
 	pending: { label: "승인 대기", variant: "warning" },
 	verified: { label: "승인 완료", variant: "success" },

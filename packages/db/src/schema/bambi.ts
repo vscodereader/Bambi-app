@@ -63,7 +63,7 @@ export const bambiGender = pgEnum("bambi_gender", ["male", "female"]);
 
 export const employerVerificationStatus = pgEnum(
 	"employer_verification_status",
-	["none", "pending", "verified", "rejected"]
+	["none", "pending", "verified", "rejected", "changes_unsubmitted"]
 );
 
 // on_hold(검수 보류)는 hidden(운영자 강제 숨김)과 구분되는 검수 축 상태다 — 둘을 같은
@@ -468,6 +468,10 @@ export const employerOrganizationProfile = pgTable(
 		representativeName: text("representative_name"),
 		// 개업일자 YYYYMMDD 8자리(본인인증 birth8과 같은 컨벤션 — 시각이 없는 날짜라 text).
 		businessStartDate: text("business_start_date"),
+		draftDisplayName: text("draft_display_name"),
+		draftBusinessRegistrationNumber: text("draft_business_registration_number"),
+		draftRepresentativeName: text("draft_representative_name"),
+		draftBusinessStartDate: text("draft_business_start_date"),
 		// 국세청 대조 성공 시각·납세자 상태 코드(b_stt_cd 원값). 둘 다 null이면 운영자에게는
 		// "미확인"이다(키 미설정·국세청 장애로 판정하지 못한 제출).
 		biznumCheckedAt: timestamp("biznum_checked_at"),
