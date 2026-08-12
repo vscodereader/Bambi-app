@@ -588,10 +588,6 @@ function BusinessInfoForm({
 		if (!changed) {
 			return;
 		}
-		if (verificationStatus === "verified") {
-			setShowChangeConfirm(true);
-			return;
-		}
 		const timer = window.setTimeout(() => {
 			draftMutation.mutate({
 				organizationId,
@@ -657,6 +653,7 @@ function BusinessInfoForm({
 				toast.error(error.message || "업체 정보를 제출하지 못했습니다.");
 			},
 			onSuccess: async () => {
+				setShowChangeConfirm(false);
 				toast.success("업체 정보를 제출했습니다. 운영자 승인을 기다려 주세요.");
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.onboarding.getMine.queryKey(),
@@ -685,10 +682,8 @@ function BusinessInfoForm({
 		startDate === defaultBusinessStartDate;
 	const blockUnchanged = isUnchanged && !isRejected && !isChangesUnsubmitted;
 
-	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-		if (nameError || brnError || representativeNameError || startDateError) {
-			setShowValidation(true);
+	const submitBusinessInfo = () => {
+		if (submitMutation.isPending) {
 			return;
 		}
 		submitMutation.mutate({
@@ -697,6 +692,19 @@ function BusinessInfoForm({
 			representativeName: representativeName.trim(),
 			businessStartDate: startDate,
 		});
+	};
+
+	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (nameError || brnError || representativeNameError || startDateError) {
+			setShowValidation(true);
+			return;
+		}
+		if (verificationStatus === "verified" || isChangesUnsubmitted) {
+			setShowChangeConfirm(true);
+			return;
+		}
+		submitBusinessInfo();
 	};
 
 	const focusSubmit = () => {
@@ -830,41 +838,19 @@ function BusinessInfoForm({
 			<AlertDialog onOpenChange={setShowChangeConfirm} open={showChangeConfirm}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>
-							사업자 인증 정보를 변경하시겠습니까?
-						</AlertDialogTitle>
+						<AlertDialogTitle>업체 정보를 변경하시겠습니까?</AlertDialogTitle>
 						<AlertDialogDescription>
-							계속하면 변경사항 미제출 상태로 전환되고, 기존 공고·광고 비공개 및
-							채팅 송수신 제한이 즉시 적용됩니다.
+							업체 정보를 제출하면 인증 대기 상태로 전환되며, 운영자 승인 전까지
+							기존 공고와 광고가 비공개 처리되고 채팅 송수신이 제한됩니다.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel
-							onClick={() => {
-								setDisplayName(defaultDisplayName);
-								setBrn(defaultBusinessRegistrationNumber);
-								setRepresentativeName(defaultRepresentativeName);
-								setStartDate(defaultBusinessStartDate);
-							}}
-						>
-							취소
-						</AlertDialogCancel>
+						<AlertDialogCancel>취소</AlertDialogCancel>
 						<AlertDialogAction
-							onClick={() => {
-								if (!organizationId) {
-									return;
-								}
-								draftMutation.mutate({
-									organizationId,
-									displayName: displayName.trim(),
-									businessRegistrationNumber: brn.trim(),
-									representativeName: representativeName.trim(),
-									businessStartDate: startDate,
-								});
-								setShowChangeConfirm(false);
-							}}
+							disabled={submitMutation.isPending}
+							onClick={submitBusinessInfo}
 						>
-							변경
+							변경사항 제출
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

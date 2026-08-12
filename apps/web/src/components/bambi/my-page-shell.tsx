@@ -223,7 +223,7 @@ export function MyPageShell({
 	return (
 		<div
 			className={cn(
-				"mx-auto flex min-h-0 w-full flex-1 flex-col gap-6 px-5 py-6 md:flex-row md:gap-8 md:px-6",
+				"mx-auto flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto px-5 py-6 md:flex-row md:gap-8 md:overflow-visible md:px-6",
 				APP_CONTENT_WIDTH
 			)}
 		>
