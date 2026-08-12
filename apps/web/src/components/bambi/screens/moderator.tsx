@@ -1719,7 +1719,8 @@ function CommunityTargetPanel({
 	);
 }
 
-// 당사자 카드 2개. 모바일은 가로 나란히, 데스크톱 사이드 패널에서는 세로로 쌓는다.
+// 당사자 카드 2개. 모바일에서 가로로 나란히 두면 좁은 폭(375px)에서 신고자 카드가 화면
+// 밖으로 밀리므로 데스크톱 사이드 패널과 동일하게 항상 세로로 쌓는다.
 // 피신고 대상이 사용자 계정이면 카드를 그대로 계정 상세 링크로 감싼다(제재 이력·누적
 // 신고를 바로 확인할 수 있게).
 function ReportParties({ item }: { item: Report }) {
@@ -1730,7 +1731,7 @@ function ReportParties({ item }: { item: Report }) {
 		item.targetType === "user" && item.targetId ? item.targetId : null;
 
 	return (
-		<div className="flex gap-2.5 md:flex-col">
+		<div className="flex flex-col gap-2.5">
 			{targetUserId ? (
 				<Link
 					className="flex min-w-0 flex-1"
