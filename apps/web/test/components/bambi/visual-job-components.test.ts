@@ -45,6 +45,12 @@ describe("visual job marketplace components", () => {
 		// 카드의 채팅 버튼은 제거됨 — 채팅 진입은 공고 상세에서만 한다
 		expect(source).not.toContain("채팅");
 		expect(source).not.toContain("onChat");
+		// 모든 노출 구역이 공유하는 카드에서 제목 → 업체 → 위치 순서와 7자 말줄임을 유지한다.
+		expect(source).toContain("const JOB_CARD_TEXT_LIMIT = 7");
+		expect(source).toContain("truncateJobCardText(job.title)");
+		expect(source).toContain("truncateJobCardText(job.company)");
+		expect(source).toContain("title={fullTextTitle(job.title)}");
+		expect(source).toContain("title={fullTextTitle(job.company)}");
 		// 최신(organic) 배지는 중립 톤 — 사용 색상 최소화
 		expect(source).toContain("tone={toneBadge[tone]}");
 		expect(source).toContain('organic: "neutral"');

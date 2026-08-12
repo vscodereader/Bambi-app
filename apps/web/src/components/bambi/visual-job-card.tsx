@@ -35,6 +35,18 @@ interface VisualJobCardProps {
 	trackAnalytics?: boolean;
 }
 
+const JOB_CARD_TEXT_LIMIT = 7;
+
+export function truncateJobCardText(value: string): string {
+	const characters = Array.from(value);
+	return characters.length > JOB_CARD_TEXT_LIMIT
+		? `${characters.slice(0, JOB_CARD_TEXT_LIMIT).join("")}...`
+		: value;
+}
+
+const fullTextTitle = (value: string): string | undefined =>
+	Array.from(value).length > JOB_CARD_TEXT_LIMIT ? value : undefined;
+
 const getPromotion = (
 	tone: VisualJobCardProps["tone"]
 ): PromotionDefinition | null => {
@@ -218,9 +230,18 @@ export function VisualJobCard({
 							showHitRibbon && "pr-8"
 						)}
 					>
-						<h3 className="m-0 truncate font-extrabold text-[15px] leading-snug">
-							{job.company}
+						<h3
+							className="m-0 truncate font-extrabold text-[15px] leading-snug"
+							title={fullTextTitle(job.title)}
+						>
+							{truncateJobCardText(job.title)}
 						</h3>
+						<span
+							className="truncate font-semibold text-muted-foreground text-xs"
+							title={fullTextTitle(job.company)}
+						>
+							{truncateJobCardText(job.company)}
+						</span>
 						<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
 							<span className="inline-flex size-3 shrink-0">
 								<MapPinIcon />
