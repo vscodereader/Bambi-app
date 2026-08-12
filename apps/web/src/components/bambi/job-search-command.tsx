@@ -10,7 +10,6 @@ import {
 } from "@bambi-app/ui/components/command";
 import { DialogClose } from "@bambi-app/ui/components/dialog";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
-import { cn } from "@bambi-app/ui/lib/utils";
 import { SearchIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useJobSearch } from "@/lib/bambi/api-jobs";
@@ -23,13 +22,6 @@ import type { Job } from "@/lib/bambi/types";
 import { JobCoverImage } from "./job-cover-image";
 
 const SEARCH_PLACEHOLDER = "업종, 지역, 공고 제목 검색";
-
-// 트리거는 헤더(돋보기 아이콘 버튼)와 본문 검색 필드 두 자리에서 같은 모달을 연다.
-// 헤더는 우측 액션 버튼들(h-10 outline)과 같은 룩으로 맞춘다. 본문 트리거는 눌러도
-// 타이핑이 아니라 모달이 뜨므로 입력창을 흉내 내지 않고 짧은 "검색" 라벨의 카드 톤 버튼으로
-// 둔다(옆 필터 버튼과 시각 위계를 나란히). 내용은 중앙 정렬해 placeholder가 아닌 버튼으로 읽힌다.
-const FIELD_TRIGGER_CLASS =
-	"h-12 w-full justify-center gap-2 rounded-lg bg-card px-4 font-semibold text-muted-foreground text-sm";
 
 const MESSAGE_CLASS = "py-6 text-center text-muted-foreground text-sm";
 
@@ -121,18 +113,13 @@ function JobSearchResults({
 
 interface JobSearchCommandProps {
 	onSelectJob: (job: Job) => void;
-	trigger: "field" | "header";
-	triggerClassName?: string;
 	withHotkey?: boolean;
 }
 
 export function JobSearchCommand({
 	onSelectJob,
-	trigger,
-	triggerClassName,
 	withHotkey = false,
 }: JobSearchCommandProps) {
-	const isHeader = trigger === "header";
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const debouncedQuery = useDebouncedValue(query);
@@ -176,18 +163,16 @@ export function JobSearchCommand({
 
 	return (
 		<>
+			{/* 트리거는 헤더(데스크톱·모바일)의 돋보기 아이콘 버튼 하나뿐이다 —
+			    우측 액션 버튼들(h-10 outline)과 같은 룩으로 맞춘다. */}
 			<Button
-				aria-label={isHeader ? SEARCH_PLACEHOLDER : undefined}
-				className={cn(
-					isHeader ? "size-10" : FIELD_TRIGGER_CLASS,
-					triggerClassName
-				)}
+				aria-label={SEARCH_PLACEHOLDER}
+				className="size-10"
 				onClick={() => setOpen(true)}
-				size={isHeader ? "icon-lg" : "default"}
+				size="icon-lg"
 				variant="outline"
 			>
-				<SearchIcon className={isHeader ? undefined : "text-coral-600"} />
-				{isHeader ? null : "검색"}
+				<SearchIcon />
 			</Button>
 			<CommandDialog
 				className="w-xl"
