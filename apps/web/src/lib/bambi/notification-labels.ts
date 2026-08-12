@@ -3,6 +3,7 @@
 // 서버가 먼저 새 값을 내려도 원값이 화면에 새지 않는다(report-labels.ts와 같은 관례).
 
 import { COMMUNITY_BOARDS, communityPostPath } from "./community";
+import { LISTING_QUEUE_SHORT_LABELS } from "./exposure";
 import { organizationRoleLabel } from "./team-labels";
 
 export const NOTIFICATIONS_HREF = "/seeker/notifications";
@@ -35,6 +36,16 @@ const readNumber = (
 const action = (item: BambiNotificationView): string =>
 	readString(item.metadata, "action") ?? "";
 
+// 대기열 알림의 exposureType(원값)을 짧은 섹션 라벨로. 맵 밖 값이면 null이라 호출부에서
+// 문구를 완성하지 못하고 정적 폴백으로 떨어진다.
+const queueSectionLabel = (item: BambiNotificationView): null | string =>
+	LISTING_QUEUE_SHORT_LABELS[
+		readString(
+			item.metadata,
+			"exposureType"
+		) as keyof typeof LISTING_QUEUE_SHORT_LABELS
+	] ?? null;
+
 const isShared = (item: BambiNotificationView): boolean =>
 	item.recipientRole !== null;
 
@@ -58,6 +69,11 @@ const TITLE_BY_TARGET_AND_ACTION: Record<string, string> = {
 	"job_post:adjust_job_post_exposure": "공고 노출 기간이 조정됐어요",
 	"job_post:edit_job_post": "운영자가 내 공고를 수정했어요",
 	"job_post:hard_delete": "내 공고가 삭제됐어요",
+	// FIFO 유료 대기열 3종. SSE 이벤트는 metadata 없이 action만 오므로 정적 폴백이 필수다
+	// (dynamicTitle이 재료 부족으로 null을 돌려도 여기로 떨어진다).
+	"job_post:listing_activated": "광고 노출이 시작됐어요",
+	"job_post:listing_queued": "결제가 확인돼 광고 대기열에 접수됐어요",
+	"job_post:remove_from_listing_queue": "광고 대기열에서 제외됐어요",
 	// 상세이미지 디자인 제작 애드온 진행 상태(운영자 토글). 완료 알림이 구인자가 받는
 	// 유일한 "상세이미지가 올라갔다" 신호라 폴백("공고 상태가 변경됐어요")으로 두면 안 된다.
 	"job_post:set_detail_design_status:completed":
@@ -118,6 +134,26 @@ const TITLE_BY_TARGET: Record<string, string> = {
 	team_invitation: "팀 초대에 변동이 있어요",
 };
 
+// 대기열 접수·노출 시작 동적 문구. 재료(제목·섹션 라벨·순번) 하나라도 없으면 null로
+// 정적 폴백 — SSE 이벤트는 metadata 없이 action만 오므로 실시간 배너는 항상 폴백을 탄다.
+const listingQueueTitle = (
+	item: BambiNotificationView,
+	key: string,
+	jobPostTitle: null | string
+): null | string => {
+	const sectionLabel = queueSectionLabel(item);
+	if (!(jobPostTitle && sectionLabel)) {
+		return null;
+	}
+	if (key === "job_post:listing_activated") {
+		return `｢${jobPostTitle}｣ ${sectionLabel} 노출이 시작됐어요`;
+	}
+	const position = readNumber(item.metadata, "position");
+	return position === null
+		? null
+		: `｢${jobPostTitle}｣이 ${sectionLabel} 대기열 #${position}에 접수됐어요`;
+};
+
 /**
  * 공고명·업소명처럼 metadata가 있어야 완성되는 문구. 서버가 그 값을 싣기 전에 쌓인
  * 구버전 행도 그대로 남아 있으므로, 재료가 하나라도 없으면 null을 돌려 아래 정적 맵
@@ -150,6 +186,9 @@ const dynamicTitle = (
 		}
 		case "job_post:hard_delete":
 			return jobPostTitle ? `｢${jobPostTitle}｣ 공고가 삭제됐어요` : null;
+		case "job_post:listing_activated":
+		case "job_post:listing_queued":
+			return listingQueueTitle(item, key, jobPostTitle);
 		case "review:created":
 			return jobPostTitle ? `｢${jobPostTitle}｣ 공고에 후기가 달렸어요` : null;
 		case "organization_member:role_changed": {
@@ -206,6 +245,8 @@ const REASON_VISIBLE_OUTCOMES = new Set([
 	"hidden",
 	"on_hold",
 	"rejected",
+	// 운영자가 유료 대기열에서 제외할 때 남기는 사유를 본문으로 노출한다.
+	"remove_from_listing_queue",
 ]);
 
 /**
@@ -252,6 +293,14 @@ const jobPostHref = (item: BambiNotificationView): string => {
 	// 결제 승인은 "노출이 시작됐다"는 신호라 광고 관리가 착지점이다. 하드 삭제된 공고는
 	// 수정 화면이 404라 목록으로 보낸다.
 	if (rawAction.startsWith("set_payment")) {
+		return "/employer/promotions";
+	}
+	// 대기열 3종(접수·자동 노출 시작·제외) 모두 대기 순번·노출 상태가 보이는 광고 관리로 보낸다.
+	if (
+		rawAction === "listing_queued" ||
+		rawAction === "listing_activated" ||
+		rawAction === "remove_from_listing_queue"
+	) {
 		return "/employer/promotions";
 	}
 	if (rawAction === "hard_delete") {
