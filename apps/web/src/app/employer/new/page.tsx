@@ -697,6 +697,7 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			<div className="flex flex-col gap-6 xl:flex-row xl:items-start">
 				<form
 					className="flex min-w-0 flex-1 flex-col gap-6"
+					noValidate
 					onSubmit={handleSubmit}
 					ref={formRef}
 				>

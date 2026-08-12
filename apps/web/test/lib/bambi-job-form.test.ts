@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyAdBannerLayout } from "@/lib/bambi/ad-banner-layout";
-import { emptyJobForm, validateJobForm } from "@/lib/bambi-job-form";
+import {
+	DESCRIPTION_BLOCK_MAX_COUNT,
+	emptyJobForm,
+	validateJobForm,
+} from "@/lib/bambi-job-form";
 
 const baseForm = {
 	...emptyJobForm,
@@ -107,6 +111,38 @@ describe("validateJobForm taxonomy 화이트리스트", () => {
 		);
 
 		expect(result.ok).toBe(false);
+	});
+});
+
+describe("validateJobForm 상세 블록 상한", () => {
+	// 블록 에디터가 추가 시점에 막는 것과 같은 상한(DESCRIPTION_BLOCK_MAX_COUNT).
+	// 제출 검증도 같은 상수를 봐야 화면 차단이 우회돼도 서버로 넘어가지 않는다.
+	const makeBlocks = (count: number) =>
+		Array.from({ length: count }, (_, index) => ({
+			id: `b${index}`,
+			text: "상세 블록 내용",
+			type: "paragraph" as const,
+		}));
+
+	it("최대 개수까지는 통과한다", () => {
+		const result = validateJobForm(baseForm, {
+			...options,
+			descriptionBlocks: makeBlocks(DESCRIPTION_BLOCK_MAX_COUNT),
+		});
+
+		expect(result.ok).toBe(true);
+	});
+
+	it("최대 개수를 넘기면 안내 문구로 거절한다", () => {
+		const result = validateJobForm(baseForm, {
+			...options,
+			descriptionBlocks: makeBlocks(DESCRIPTION_BLOCK_MAX_COUNT + 1),
+		});
+
+		expect(result.ok).toBe(false);
+		expect(!result.ok && result.errors.descriptionBlocks).toBe(
+			"상세 블록은 최대 12개까지 등록할 수 있습니다."
+		);
 	});
 });
 
