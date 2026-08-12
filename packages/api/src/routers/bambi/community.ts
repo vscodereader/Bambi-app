@@ -382,7 +382,10 @@ const crawledCommunityFeedSelection = {
 	// 게시판 enum은 순수 쪽 컬럼 타입을 그대로 쓴다(z 스키마의 "best"는 저장 게시판이 아니라
 	// 가상 큐레이션이라 UNION 타입에 섞이면 안 된다).
 	board: sql<CommunityPostColumns["board"]>`'work_talk'`,
-	commentCount: sql<number>`coalesce(${crawledCommunityTopic.commentCount}, 0)`,
+	// 원본 수집 댓글 수 + 우리 회원·비회원이 남긴 published 댓글 수. 상세 getCrawledTopic과
+	// 같은 합산이라 목록 행과 상세가 어긋나지 않는다. 상관 스칼라 서브쿼리는 0084 인덱스
+	// (crawled_topic_id, status, created_at)를 타는 카운트라 union 투영에 조인 없이 붙는다.
+	commentCount: sql<number>`coalesce(${crawledCommunityTopic.commentCount}, 0) + (select count(*) from ${communityComment} where ${communityComment.crawledTopicId} = ${crawledCommunityTopic.id} and ${communityComment.status} = ${"published"})::int`,
 	// 원 게시일을 작성일 자리에 쓴다. where의 30일 컷오프가 null을 걸러내므로 결과에선
 	// non-null이고, UNION 상대(created_at NOT NULL)와 타입이 맞는다.
 	createdAt: sql<Date>`${crawledCommunityTopic.sourcePostedAt}`,
@@ -1298,8 +1301,8 @@ export const communityRouter = {
 				boardName: topic.boardName,
 				// 본문·수집 댓글은 수집 시점에 이미 마스킹·정규화된 값이라 그대로 내린다.
 				body: topic.body ?? "",
-				// 원본에 달려 있던 댓글 수 + 우리 쪽 노출 댓글 수. 목록 행의 댓글 수(수집
-				// 원본값)와 상세가 어긋나는 건 감수한다 — 목록은 union 투영이라 조인이 없다.
+				// 원본에 달려 있던 댓글 수 + 우리 쪽 노출 댓글 수. 목록 행도 같은 합산을 쓰므로
+				// (crawledCommunityFeedSelection의 상관 서브쿼리) 목록과 상세가 일치한다.
 				commentCount:
 					(topic.commentCount ?? 0) +
 					rows.filter((row) => row.status === "published").length,
