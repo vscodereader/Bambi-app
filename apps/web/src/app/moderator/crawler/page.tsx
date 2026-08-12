@@ -735,8 +735,9 @@ export default function ModeratorCrawlerPage() {
 							<p className="m-0 text-muted-foreground text-xs">
 								수집한 커뮤니티 글이 「밤문화 이야기」 게시판과 수다방 홈
 								미리보기에 섞입니다. 우리 회원 글이 항상 먼저 나오고 남은 자리에
-								붙으며, 「외부 수집」 배지가 달립니다. 좋아요·댓글·신고는
-								제공되지 않아요.
+								붙습니다. 목록·상세에 출처 표시는 붙지 않고, 회원·비회원이 우리
+								글과 같은 규칙으로 댓글을 남길 수 있어요(글 자체의 좋아요·신고는
+								제공되지 않습니다).
 							</p>
 						</div>
 						<Switch

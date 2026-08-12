@@ -2420,8 +2420,10 @@ describe("bambi community router — 수집 글 union·상세", () => {
 			expect(detail.boardName).toBe("밤문화이야기");
 			expect(detail.viewCount).toBe(42);
 			expect(detail.commentCount).toBe(2);
-			expect(detail.comments).toHaveLength(2);
-			expect(detail.comments[0]?.body).toBe("첫 댓글");
+			// 원본 수집 댓글(읽기 전용)과 우리 회원·비회원 댓글은 별도 배열로 갈린다.
+			expect(detail.sourceComments).toHaveLength(2);
+			expect(detail.sourceComments[0]?.body).toBe("첫 댓글");
+			expect(detail.comments).toHaveLength(0);
 			// 원본 URL은 절대 응답에 실리지 않는다.
 			expect("sourceUrl" in detail).toBe(false);
 		} finally {

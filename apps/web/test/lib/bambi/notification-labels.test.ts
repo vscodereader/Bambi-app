@@ -400,6 +400,19 @@ describe("notificationHref", () => {
 		).toBe("/seeker/community/work-talk/post-1");
 	});
 
+	// 수집 글에 달린 댓글은 게시판 slug·postId가 없다 — 이 분기가 없으면 답글 알림이
+	// 글이 아니라 알림함으로 되돌아간다.
+	it("수집 글 댓글 알림은 수집 전용 상세로 보낸다", () => {
+		expect(
+			notificationHref(
+				view({
+					metadata: { action: "reply", crawledTopicId: "topic-1" },
+					targetType: "community_comment",
+				})
+			)
+		).toBe("/seeker/community/crawled/topic-1");
+	});
+
 	it("운영자 공유 행은 같은 targetType이라도 운영자 큐로 보낸다", () => {
 		expect(
 			// 공고 검수 요청은 공고 관리(/moderator/jobs)가 아니라 검수 대기 큐인 콘솔 루트로.

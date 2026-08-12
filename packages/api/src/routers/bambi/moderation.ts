@@ -795,8 +795,17 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 	};
 };
 
+// 수집 커뮤니티 글에 달린 댓글의 원글 자리 표기. 우리 community_post 행이 없어 제목·
+// 게시판을 조인으로 채울 수 없다(수집 글 제목은 crawled_community_topic에 있고, 운영
+// 화면에는 "우리 글이 아니다"만 보이면 충분하다).
+const CRAWLED_TOPIC_COMMENT_TITLE = "수집 커뮤니티 글";
+// 그 글의 작성자 자리(우리 회원이 아니라 원본 게시판이다).
+const CRAWLED_AUTHOR_DISPLAY_NAME = "밤문화이야기";
+
 // community_comment 신고 컨텍스트 — 작성자 표시명은 listComments와 동일하게 user.name
 // (표시명 정본)을 쓰고, 제목·게시판은 부모 글 조인으로 채운다(부모 글이 삭제 상태여도 조인 유지).
+// 수집 글 댓글은 원글 행이 없어 leftJoin이다 — innerJoin이면 신고가 들어와도 운영 화면에
+// 맥락이 뜨지 않아 조치 버튼까지 사라진다.
 const getCommunityCommentTargetContext = async (targetId: string) => {
 	const [comment] = await db
 		.select({
@@ -810,7 +819,7 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 			status: communityComment.status,
 		})
 		.from(communityComment)
-		.innerJoin(communityPost, eq(communityPost.id, communityComment.postId))
+		.leftJoin(communityPost, eq(communityPost.id, communityComment.postId))
 		.leftJoin(user, eq(user.id, communityComment.authorUserId))
 		.where(eq(communityComment.id, targetId))
 		.limit(1);
@@ -824,9 +833,11 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 		bodyPreview: comment.body.slice(0, COMMUNITY_BODY_PREVIEW_MAX),
 		createdAt: comment.createdAt,
 		id: comment.id,
-		postBoard: comment.postBoard,
+		// 수집 글은 밤문화 이야기 게시판에 합류하므로 게시판 배지도 그 값으로 세운다
+		// (운영 화면이 게시판 라벨 맵을 태우려면 null이 아니라 key여야 한다).
+		postBoard: comment.postBoard ?? "work_talk",
 		postId: comment.postId,
-		postTitle: comment.postTitle,
+		postTitle: comment.postTitle ?? CRAWLED_TOPIC_COMMENT_TITLE,
 		status: comment.status,
 	};
 };
@@ -3618,7 +3629,9 @@ export const moderationRouter = {
 						postAuthorName: communityPost.authorDisplayName,
 					})
 					.from(communityComment)
-					.innerJoin(
+					// 수집 글 댓글은 원글 행이 없다 — innerJoin이면 목록에서 통째로 빠져
+					// totalCount와 어긋나고 운영자가 내릴 수단도 사라진다.
+					.leftJoin(
 						communityPost,
 						eq(communityComment.postId, communityPost.id)
 					)
@@ -3635,9 +3648,9 @@ export const moderationRouter = {
 						// 화면이 유형별 좁히기 없이 한 형태만 렌더하게 둔다(상세와 같은 관례).
 						board: null as string | null,
 						// 댓글은 제목이 없으므로 원글 제목을 맥락으로 보여준다.
-						title: row.postTitle,
+						title: row.postTitle ?? CRAWLED_TOPIC_COMMENT_TITLE,
 						excerpt: excerpt(row.body),
-						authorName: row.postAuthorName,
+						authorName: row.postAuthorName ?? CRAWLED_AUTHOR_DISPLAY_NAME,
 						authorUserId: row.authorUserId,
 						status: row.status,
 						createdAt: row.createdAt,
@@ -3739,7 +3752,8 @@ export const moderationRouter = {
 						status: communityComment.status,
 					})
 					.from(communityComment)
-					.innerJoin(
+					// 목록과 같은 이유로 leftJoin이다(수집 글 댓글은 원글 행이 없다).
+					.leftJoin(
 						communityPost,
 						eq(communityComment.postId, communityPost.id)
 					)
@@ -3752,9 +3766,9 @@ export const moderationRouter = {
 
 				return {
 					// 댓글은 제목이 없으므로 원글 제목·작성자를 맥락으로 보여준다(목록과 동일).
-					title: row.postTitle,
+					title: row.postTitle ?? CRAWLED_TOPIC_COMMENT_TITLE,
 					body: row.body,
-					authorName: row.postAuthorName,
+					authorName: row.postAuthorName ?? CRAWLED_AUTHOR_DISPLAY_NAME,
 					createdAt: row.createdAt,
 					status: row.status,
 					board: null as string | null,
