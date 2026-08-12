@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { NextRequest } from "next/server";
@@ -11,32 +10,8 @@ const ALLOWED_MIME_TYPES = new Set([
 	"image/png",
 	"image/webp",
 ]);
-const GIT_DIR_PREFIX_PATTERN = /^gitdir:\s*/i;
-
-const resolveMainRepositoryRoot = (): string => {
-	const worktreeRoot = path.resolve(process.cwd(), "..", "..");
-	try {
-		// git worktree의 .git은 본 저장소 아래 worktrees/<name>을 가리키는 파일이다.
-		// 그 경로에서 본 저장소 루트를 구해 브랜치마다 로컬 원본이 갈라지지 않게 한다.
-		const gitDir = readFileSync(path.join(worktreeRoot, ".git"), "utf8")
-			.trim()
-			.replace(GIT_DIR_PREFIX_PATTERN, "")
-			.replaceAll("\\", "/");
-		const worktreesMarker = "/.git/worktrees/";
-		const markerIndex = gitDir.toLowerCase().lastIndexOf(worktreesMarker);
-		if (markerIndex >= 0) {
-			return path.normalize(gitDir.slice(0, markerIndex));
-		}
-	} catch {
-		// 본 작업트리에서는 .git이 디렉터리이므로 현재 저장소 루트를 그대로 쓴다.
-	}
-	return worktreeRoot;
-};
-
-const LOCAL_STORAGE_ROOT = path.join(
-	resolveMainRepositoryRoot(),
-	"apps",
-	"web",
+const LOCAL_STORAGE_ROOT = path.resolve(
+	process.cwd(),
 	".local-storage",
 	"business-documents"
 );

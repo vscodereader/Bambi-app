@@ -14,10 +14,6 @@ const myPageShellSource = readFileSync(
 	srcPath("components/bambi/my-page-shell.tsx"),
 	"utf8"
 );
-const localBusinessDocumentSource = readFileSync(
-	srcPath("app/bambi/local-chat-attachments/route.ts"),
-	"utf8"
-);
 
 describe("모바일 면접·인증·스크롤 QA", () => {
 	it("면접 상태 변경 뒤 예정된 면접 목록을 즉시 갱신한다", () => {
@@ -53,14 +49,6 @@ describe("모바일 면접·인증·스크롤 QA", () => {
 		);
 		expect(employerMeSource).toContain(
 			"onSuccess: async () => {\n\t\t\t\tsetShowChangeConfirm(false);"
-		);
-	});
-
-	it("개발환경 사업자 서류는 worktree별 폴더가 아닌 본 저장소 공용 경로를 쓴다", () => {
-		expect(localBusinessDocumentSource).toContain("resolveMainRepositoryRoot");
-		expect(localBusinessDocumentSource).toContain('"/.git/worktrees/"');
-		expect(localBusinessDocumentSource).toContain(
-			'".local-storage",\n\t"business-documents"'
 		);
 	});
 });
