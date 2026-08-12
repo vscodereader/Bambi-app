@@ -491,8 +491,12 @@ const buildListFilters = (
 	return combined ? [combined] : [];
 };
 
-// 검색어·내 글 토글은 AND로 좁힌다. body는 Tiptap doc JSON 문자열이라 본문 텍스트가
-// 그대로 들어 있어 ilike로 걸린다(태그명까지 매칭되지만 별도 색인 없이 쓰는 대가다).
+// ilike 검색 패턴. 순수·수집 두 헬퍼가 같은 관용(escape + 양끝 %)을 써야 해서 한 곳에 둔다.
+const likePattern = (q: string) => `%${escapeLikePattern(q)}%`;
+
+// 검색어·내 글 토글은 AND로 좁힌다. 순수 글 body는 Tiptap doc JSON 문자열이라 본문 텍스트가
+// 그대로 들어 있어 ilike로 걸린다(태그명까지 매칭되지만 별도 색인 없이 쓰는 대가다). 수집 글은
+// body가 평문 텍스트라 관용이 달라 buildCrawledSearchFilters로 따로 건다.
 // ponytail: ilike 순차 스캔 — 글 수가 커지면 pg_trgm 인덱스나 tsvector로.
 const buildNarrowFilters = ({
 	mine,
@@ -509,7 +513,7 @@ const buildNarrowFilters = ({
 		filters.push(owner);
 	}
 	if (q) {
-		const pattern = `%${escapeLikePattern(q)}%`;
+		const pattern = likePattern(q);
 		const combined = or(
 			ilike(communityPost.title, pattern),
 			ilike(communityPost.body, pattern)
@@ -519,6 +523,20 @@ const buildNarrowFilters = ({
 		}
 	}
 	return filters;
+};
+
+// 수집 글 검색 — 제목·본문 평문에 ilike. 수집 body는 Tiptap JSON이 아니라 평문 텍스트고
+// nullable이라 ilike(null)은 false로 떨어져 무해하다(제목 매칭이 남으므로 coalesce 불필요).
+const buildCrawledSearchFilters = (q?: string): SQL[] => {
+	if (!q) {
+		return [];
+	}
+	const pattern = likePattern(q);
+	const combined = or(
+		ilike(crawledCommunityTopic.title, pattern),
+		ilike(crawledCommunityTopic.body, pattern)
+	);
+	return combined ? [combined] : [];
 };
 
 // 마지막 정렬 키는 항상 id다. created_at만으로 정렬하면 같은 시각 글의 순서를 Postgres가
@@ -593,26 +611,37 @@ const toPublicSummary = (summary: PostSummaryRow) => ({
 // 테이블이 커져도 무너지지 않기 때문이다(bambi-job-feed.listJobFeed와 같은 판단). ALL인
 // 이유는 두 원천에 같은 행이 있을 수 없어 DISTINCT가 불필요해서다. 정렬은 공고와 같은
 // 우선순위 규칙 — 1순위 순수(is_crawled 0), 2순위 수집(1), 각 구간 내 최신순.
+// nativeFilters·crawledFilters는 각 원천 where에 그대로 얹는다(검색어를 순수·수집 양쪽에
+// 함께 걸 때 쓴다). overview는 인자 없이 전체를 섞는다.
 const selectWorkTalkFeedUnion = ({
 	limit,
 	offset,
 	windowStart,
+	nativeFilters = [],
+	crawledFilters = [],
 }: {
 	limit: number;
 	offset: number;
 	windowStart: Date;
+	nativeFilters?: SQL[];
+	crawledFilters?: SQL[];
 }) =>
 	unionAll(
 		db
 			.select(postSummarySelection)
 			.from(communityPost)
-			.where(and(...buildBoardFilters(CRAWLED_COMMUNITY_BOARD, windowStart))),
+			.where(
+				and(
+					...buildBoardFilters(CRAWLED_COMMUNITY_BOARD, windowStart),
+					...nativeFilters
+				)
+			),
 		db
 			.select(crawledCommunityFeedSelection)
 			.from(crawledCommunityTopic)
 			// 수집 글은 원 게시일 30일 이내만 노출한다(순수 work_talk엔 컷오프가 없지만, 남의
 			// 게시판에서 긁어 온 글은 신선한 것만 섞는다). null 게시일은 이 조건이 자연히 걸러낸다.
-			.where(and(...crawledTopicFeedFilters(windowStart)))
+			.where(and(...crawledTopicFeedFilters(windowStart), ...crawledFilters))
 	)
 		.orderBy(sql`is_crawled asc, created_at desc, id desc`)
 		.limit(limit)
@@ -640,14 +669,16 @@ const getBestBoardIcon = async (): Promise<string | null> => {
 	return row?.icon ?? null;
 };
 
-// 30일 컷오프 안의 수집 글 수. 스위치 ON일 때 totalCount에 합산한다.
+// 30일 컷오프 안의 수집 글 수. 스위치 ON일 때 totalCount에 합산한다. extraFilters로 검색어
+// 필터를 더해 목록 union과 같은 집합만 센다(검색 시 합산이 부풀지 않게).
 const countCrawledCommunityTopics = async (
-	windowStart: Date
+	windowStart: Date,
+	extraFilters: SQL[] = []
 ): Promise<number> => {
 	const [row] = await db
 		.select({ value: count() })
 		.from(crawledCommunityTopic)
-		.where(and(...crawledTopicFeedFilters(windowStart)));
+		.where(and(...crawledTopicFeedFilters(windowStart), ...extraFilters));
 	return row?.value ?? 0;
 };
 
@@ -964,24 +995,38 @@ export const communityRouter = {
 			const windowStart = bestWindowStart();
 			const offset = (input.page - 1) * PAGE_SIZE;
 
-			// 수집 글은 광고·업소·내 글 필터를 만족할 수 없고 검색 대상도 아니다 — 어떤 필터든
-			// 켜지면(listFilters가 있으면) 순수 글만 남기고 수집 union을 끈다.
-			// work_talk·스위치 ON·필터 없음일 때만 섞는다.
+			// 수집 글은 광고·업소·내 글(양성) 필터를 본질적으로 만족할 수 없어 그중 하나라도
+			// 켜지면 순수 글만 남기고 수집 union을 끈다. 검색어(q)는 예외 — 수집 글도 검색
+			// 대상이라 q만 있을 때는 수집을 섞고, 검색을 순수·수집 양쪽 where에 함께 건다.
+			// work_talk·스위치 ON일 때만 섞는다.
 			const includeCrawled =
 				input.board === CRAWLED_COMMUNITY_BOARD &&
-				listFilters.length === 0 &&
+				!input.mine &&
+				!input.showPromotion &&
+				!input.showEmployer &&
 				(await isCrawledCommunityFeedEnabled());
 
 			if (includeCrawled) {
+				// includeCrawled면 mine·양성 필터가 모두 꺼져 listFilters엔 검색어 필터만 남는다.
+				const crawledSearchFilters = buildCrawledSearchFilters(input.q);
 				const [items, [nativeTotal], crawledTotal] = await Promise.all([
-					selectWorkTalkFeedUnion({ limit: PAGE_SIZE, offset, windowStart }),
+					selectWorkTalkFeedUnion({
+						limit: PAGE_SIZE,
+						offset,
+						windowStart,
+						nativeFilters: listFilters,
+						crawledFilters: crawledSearchFilters,
+					}),
 					db
 						.select({ value: count() })
 						.from(communityPost)
 						.where(
-							and(...buildBoardFilters(CRAWLED_COMMUNITY_BOARD, windowStart))
+							and(
+								...buildBoardFilters(CRAWLED_COMMUNITY_BOARD, windowStart),
+								...listFilters
+							)
 						),
-					countCrawledCommunityTopics(windowStart),
+					countCrawledCommunityTopics(windowStart, crawledSearchFilters),
 				]);
 
 				return {
