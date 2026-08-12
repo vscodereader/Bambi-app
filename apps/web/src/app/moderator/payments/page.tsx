@@ -45,7 +45,7 @@ type PaymentJob = Awaited<
 
 const paymentTotal = (job: PaymentJob): null | number => {
 	const base = sumJobPaymentAmount(job.exposureAmount, job.detailDesignAmount);
-	const boostTotal = job.boostPurchases.reduce(
+	const boostTotal = (job.boostPurchases ?? []).reduce(
 		(sum, purchase) => sum + purchase.amount,
 		0
 	);
@@ -74,7 +74,7 @@ function PaymentAmountBreakdown({ job }: { job: PaymentJob }) {
 					디자인 +{formatAdPrice(job.detailDesignAmount)}
 				</span>
 			)}
-			{job.boostPurchases.map((purchase) => (
+			{(job.boostPurchases ?? []).map((purchase) => (
 				<span
 					className="whitespace-nowrap text-muted-foreground text-xs"
 					key={purchase.optionType}

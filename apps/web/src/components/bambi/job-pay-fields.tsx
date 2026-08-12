@@ -1,6 +1,9 @@
 "use client";
 
-import { JOB_PAY_AMOUNT_MAX } from "@bambi-app/api/services/bambi-job-pay";
+import {
+	JOB_PAY_AMOUNT_MAX,
+	JOB_PAY_AMOUNT_MAX_MESSAGE,
+} from "@bambi-app/api/services/bambi-job-pay";
 import { Input } from "@bambi-app/ui/components/input";
 import {
 	Select,
@@ -34,6 +37,11 @@ export function JobPayFields({
 	payUnit,
 }: JobPayFieldsProps) {
 	const isNegotiable = payUnit === NEGOTIABLE_PAY_UNIT;
+	const numericPayAmount = Number(payAmount);
+	const livePayAmountError =
+		payAmount.trim() !== "" && numericPayAmount > JOB_PAY_AMOUNT_MAX
+			? JOB_PAY_AMOUNT_MAX_MESSAGE
+			: errors?.payAmount;
 
 	return (
 		<>
@@ -41,11 +49,12 @@ export function JobPayFields({
 				<div className="flex flex-col gap-2">
 					<FieldLabel htmlFor="payAmount">급여 금액</FieldLabel>
 					<Input
-						aria-describedby={errors?.payAmount ? "payAmount-error" : undefined}
-						aria-invalid={Boolean(errors?.payAmount)}
+						aria-describedby={
+							livePayAmountError ? "payAmount-error" : undefined
+						}
+						aria-invalid={Boolean(livePayAmountError)}
 						id="payAmount"
 						inputMode="numeric"
-						max={JOB_PAY_AMOUNT_MAX}
 						min="1"
 						name="payAmount"
 						onChange={(event) => onChange("payAmount", event.target.value)}
@@ -55,7 +64,7 @@ export function JobPayFields({
 						value={payAmount}
 					/>
 					<PayAmountHint payAmount={payAmount} payUnit={payUnit} />
-					<FieldError id="payAmount-error" message={errors?.payAmount} />
+					<FieldError id="payAmount-error" message={livePayAmountError} />
 				</div>
 			)}
 			<div className="flex flex-col gap-2">

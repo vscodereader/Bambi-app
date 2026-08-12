@@ -86,7 +86,7 @@ describe("validateJobForm 급여 협의", () => {
 		);
 		expect(result.ok).toBe(false);
 		expect(!result.ok && result.errors.payAmount).toBe(
-			"급여 금액은 최대 123,456,789원까지 입력할 수 있어요."
+			"금액은 123,456,789원 이하여야 합니다"
 		);
 	});
 });

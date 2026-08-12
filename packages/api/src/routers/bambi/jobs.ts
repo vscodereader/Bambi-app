@@ -875,6 +875,34 @@ const syncBoostPurchases = async ({
 		}
 	}
 
+	// 무료 공고에서 먼저 담아 둔 standalone 미결제 옵션을 같은 수정 화면에서 유료
+	// 노출상품과 함께 저장하면, 새 구매 행을 만들지 않더라도 공고 결제 묶음으로 승격해야
+	// 한다. 결제됐거나 활성화된 단독 구매는 사용·환불 이력이 걸릴 수 있어 건드리지 않는다.
+	if (isPaidPosting && postingPaymentMethod) {
+		const bundledPurchaseIds = existing
+			.filter(
+				(purchase) =>
+					purchase.paymentStatus === "unpaid" &&
+					requestedTypes.includes(purchase.optionType as BoostOptionType)
+			)
+			.map((purchase) => purchase.id);
+
+		if (bundledPurchaseIds.length > 0) {
+			await tx
+				.update(jobBoostPurchase)
+				.set({
+					paymentMethod: postingPaymentMethod,
+					purchaseSource: "job_registration",
+				})
+				.where(
+					and(
+						inArray(jobBoostPurchase.id, bundledPurchaseIds),
+						eq(jobBoostPurchase.paymentStatus, "unpaid")
+					)
+				);
+		}
+	}
+
 	// 이미 unpaid·활성으로 잡혀 있는 유형은 그대로 두고, 새로 나타난 유형만 산다.
 	const typesToBuy = requestedTypes.filter(
 		(optionType) =>
