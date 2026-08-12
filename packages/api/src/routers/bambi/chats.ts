@@ -20,6 +20,7 @@ import { protectedProcedure } from "../../index";
 import { recordJobPerformanceEvent } from "../../services/bambi-analytics";
 import {
 	findUserBlockBetween,
+	isEmployerOrganizationChangesUnsubmitted,
 	requireActiveBambiProfile,
 	requireChatParticipant,
 } from "../../services/bambi-authz";
@@ -740,11 +741,22 @@ const throwIfHiddenByActiveReport = async ({
  */
 const throwIfChatUnavailable = async ({
 	actorUserId,
+	allowUnsubmittedRead = false,
 	room,
 }: {
 	actorUserId: string;
+	allowUnsubmittedRead?: boolean;
 	room: CounterpartRoom & { isBlocked: boolean };
 }): Promise<void> => {
+	if (
+		!allowUnsubmittedRead &&
+		(await isEmployerOrganizationChangesUnsubmitted(room.organizationId))
+	) {
+		throw new ORPCError("FORBIDDEN", {
+			message:
+				"업체 인증 변경사항을 제출하고 승인을 받기 전까지 채팅을 보낼 수 없습니다.",
+		});
+	}
 	await throwIfChatBlocked({ actorUserId, room });
 	await throwIfHiddenByActiveReport({ actorUserId, room });
 };
@@ -777,6 +789,13 @@ export const chatsRouter = {
 
 			if (post.employerUserId === profile.userId) {
 				throw new ORPCError("FORBIDDEN");
+			}
+
+			if (await isEmployerOrganizationChangesUnsubmitted(post.organizationId)) {
+				throw new ORPCError("FORBIDDEN", {
+					message:
+						"업체 인증 변경사항이 제출되기 전에는 새 채팅을 시작할 수 없습니다.",
+				});
 			}
 
 			if (
@@ -1067,6 +1086,7 @@ export const chatsRouter = {
 
 			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
+				allowUnsubmittedRead: true,
 				room,
 			});
 
@@ -1447,6 +1467,7 @@ export const chatsRouter = {
 
 			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
+				allowUnsubmittedRead: true,
 				room,
 			});
 

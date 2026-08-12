@@ -6,7 +6,8 @@ export type EmployerApprovalStatus =
 	| "none"
 	| "pending"
 	| "verified"
-	| "rejected";
+	| "rejected"
+	| "changes_unsubmitted";
 
 const EmployerApprovalContext = createContext<EmployerApprovalStatus>("none");
 

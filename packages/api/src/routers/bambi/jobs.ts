@@ -1313,6 +1313,7 @@ export const jobsRouter = {
 		const filters = [
 			eq(jobPost.status, "published" as JobPostStatus),
 			eq(jobPost.paymentStatus, "paid"),
+			eq(employerOrganizationProfile.verificationStatus, "verified"),
 			// 대기열(결제됨·미활성) 스페셜/추천 공고를 organic 목록·전체 카운트에서 뺀다.
 			// 섹션 쿼리(getExposedJobs)는 이미 exposureEndsAt로 제외하고, urgent엔 이 필터가
 			// 항상 참이라 무해하다(정원 대상 타입에만 걸리는 조건).
@@ -1488,6 +1489,14 @@ export const jobsRouter = {
 			0,
 			listingCapacityRow?.recommendedCapacity ?? DEFAULT_RECOMMENDED_CAPACITY
 		);
+		// 섹션 중복 노출을 위한 보강분 때문에 organic 배열이 limit을 넘을 수 있다.
+		// 실제 전체공고 페이지에는 밤비 공고를 최대 limit까지만 싣고, 남은 자리만
+		// 아래에서 크롤링 공고로 채운다.
+		const pageJobPostOrganic = result.sections.organic.slice(0, input.limit);
+		const jobPostWindowSize = Math.min(
+			result.organicWindowSize,
+			pageJobPostOrganic.length
+		);
 
 		// 현재 요청에서 새로 기록하는 impression 때문에 판정이 왜곡되지 않도록,
 		// recordJobListingImpressions 이전에 최근 7일 성과를 집계해 각 item에 붙인다.
@@ -1529,8 +1538,10 @@ export const jobsRouter = {
 		const crawled = await loadCrawledJobSections(
 			input,
 			{
-				// 밤비 공고가 먼저 자리를 차지하고 남은 칸만 크롤링 공고로 채운다.
-				limit: Math.max(0, input.limit - result.organicWindowSize),
+				// 첫 페이지와 더보기 모두 밤비 공고를 우선 배치하고 남은 슬롯만
+				// 크롤링 공고로 채운다. 밤비 공고가 재승인되어 다시 노출돼도
+				// 한 페이지의 전체공고 개수는 input.limit(현재 48)를 유지한다.
+				limit: Math.max(0, input.limit - pageJobPostOrganic.length),
 				offset: organicCursor?.crawled ?? 0,
 			},
 			isFirstPage
@@ -1545,7 +1556,7 @@ export const jobsRouter = {
 		);
 		const nextOrganicOffset = {
 			crawled: (organicCursor?.crawled ?? 0) + crawled.organicWindowSize,
-			jobPost: (organicCursor?.jobPost ?? 0) + result.organicWindowSize,
+			jobPost: (organicCursor?.jobPost ?? 0) + jobPostWindowSize,
 		};
 		const hasMoreOrganic =
 			nextOrganicOffset.jobPost < jobPostTotal ||
@@ -1563,7 +1574,7 @@ export const jobsRouter = {
 			totalCount: result.totalCount + crawledIds.size,
 			sections: {
 				organic: [
-					...result.sections.organic.map((item) => toListItem(item, false)),
+					...pageJobPostOrganic.map((item) => toListItem(item, false)),
 					...crawled.organic.map((item) => toListItem(item, false)),
 				],
 				recommended: [
@@ -1609,6 +1620,7 @@ export const jobsRouter = {
 		const filters = [
 			eq(jobPost.status, "published" as JobPostStatus),
 			eq(jobPost.paymentStatus, "paid"),
+			eq(employerOrganizationProfile.verificationStatus, "verified"),
 			// 대기열(결제됨·미활성) 스페셜/추천 공고 제외 — list와 동일.
 			notQueuedListingFilter(),
 		];
@@ -1713,6 +1725,7 @@ export const jobsRouter = {
 				and(
 					eq(jobPost.status, "published" as JobPostStatus),
 					eq(jobPost.paymentStatus, "paid"),
+					eq(employerOrganizationProfile.verificationStatus, "verified"),
 					inArray(jobPost.exposureType, [...AD_BANNER_EXPOSURE_TYPES]),
 					or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
 				)
@@ -1838,7 +1851,11 @@ export const jobsRouter = {
 				.where(eq(jobPost.id, input.id))
 				.limit(1);
 
-			if (post?.status !== "published" || post.paymentStatus !== "paid") {
+			if (
+				post?.status !== "published" ||
+				post.paymentStatus !== "paid" ||
+				post.employerVerificationStatus !== "verified"
+			) {
 				throw new ORPCError("NOT_FOUND");
 			}
 

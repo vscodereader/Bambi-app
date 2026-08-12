@@ -128,6 +128,11 @@ describe("deriveEmployerApprovalStatus", () => {
 			"pending"
 		);
 	});
+	it("returns changes_unsubmitted before rejected when no verified or pending", () => {
+		expect(
+			deriveEmployerApprovalStatus(["rejected", "changes_unsubmitted"])
+		).toBe("changes_unsubmitted");
+	});
 	it("returns rejected when only rejected/none", () => {
 		expect(deriveEmployerApprovalStatus(["none", "rejected"])).toBe("rejected");
 	});

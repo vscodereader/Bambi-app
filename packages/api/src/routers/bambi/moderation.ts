@@ -409,6 +409,7 @@ const employerVerificationStatusSchema = z.enum([
 	"pending",
 	"verified",
 	"rejected",
+	"changes_unsubmitted",
 ]);
 
 const listEmployersInput = z.object({

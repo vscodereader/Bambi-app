@@ -55,7 +55,12 @@ const createContextForUser = (userId: string): Context =>
 	}) as Context;
 
 const createFixture = async (
-	verificationStatus: "none" | "pending" | "verified" | "rejected" = "rejected"
+	verificationStatus:
+		| "none"
+		| "pending"
+		| "verified"
+		| "rejected"
+		| "changes_unsubmitted" = "rejected"
 ): Promise<BusinessDocumentFixture> => {
 	const ownerUserId = `user_business_owner_${randomUUID()}`;
 	const adminUserId = `user_business_admin_${randomUUID()}`;
@@ -217,7 +222,7 @@ describe("bambi onboarding business documents", () => {
 		}
 	});
 
-	it("allows additions while pending but locks deletion", async () => {
+	it("locks additions and deletion while pending", async () => {
 		const fixture = await createFixture("pending");
 		try {
 			const addDocument = createOwnerClient(
@@ -225,14 +230,31 @@ describe("bambi onboarding business documents", () => {
 				onboardingRouter.addBusinessDocument,
 				"addBusinessDocument"
 			);
-			const document = await addDocument({
-				byteSize: 2048,
-				fileName: "pending.pdf",
-				mimeType: "application/pdf",
-				organizationId: fixture.organizationId,
-				storageKey: `bambi-business-documents/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-pending.pdf`,
-			});
-			expect(document.category).toBe("pdf");
+			await expect(
+				addDocument({
+					byteSize: 2048,
+					fileName: "pending.pdf",
+					mimeType: "application/pdf",
+					organizationId: fixture.organizationId,
+					storageKey: `bambi-business-documents/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-pending.pdf`,
+				})
+			).rejects.toMatchObject({ code: "CONFLICT" });
+
+			const [document] = await db
+				.insert(employerBusinessDocument)
+				.values({
+					byteSize: 2048,
+					category: "pdf",
+					createdByUserId: fixture.ownerUserId,
+					fileName: "pending.pdf",
+					mimeType: "application/pdf",
+					organizationId: fixture.organizationId,
+					storageKey: `bambi-business-documents/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-pending.pdf`,
+				})
+				.returning();
+			if (!document) {
+				throw new Error("Expected pending document fixture to be created.");
+			}
 
 			const deleteDocument = createOwnerClient(
 				fixture,
@@ -247,7 +269,7 @@ describe("bambi onboarding business documents", () => {
 		}
 	});
 
-	it("moves a verified organization back to pending after document changes", async () => {
+	it("moves a verified organization to changes_unsubmitted after document changes", async () => {
 		const fixture = await createFixture("verified");
 		try {
 			const addDocument = createOwnerClient(
@@ -269,7 +291,7 @@ describe("bambi onboarding business documents", () => {
 				.where(
 					eq(employerOrganizationProfile.organizationId, fixture.organizationId)
 				);
-			expect(profile?.status).toBe("pending");
+			expect(profile?.status).toBe("changes_unsubmitted");
 
 			await db
 				.update(employerOrganizationProfile)
@@ -294,7 +316,7 @@ describe("bambi onboarding business documents", () => {
 				.where(
 					eq(employerOrganizationProfile.organizationId, fixture.organizationId)
 				);
-			expect(profileAfterDelete?.status).toBe("pending");
+			expect(profileAfterDelete?.status).toBe("changes_unsubmitted");
 		} finally {
 			await cleanupFixture(fixture);
 		}
