@@ -253,6 +253,8 @@ export function ResponsiveAppShell({
 	const showFooter =
 		variant === "seeker" || variant === "employer" || variant === "moderator";
 	const activeHref = findActiveHref(pathname, navItems);
+	// 채팅방은 모바일 헤더를 숨기고 자체 뷰포트 높이(fixed 오버레이/고정 높이)를 쓴다.
+	const isChatRoom = CHAT_ROOM_PATH_RE.test(pathname);
 	return (
 		<div className="min-h-[100dvh] bg-secondary text-foreground">
 			{showDesktopNav ? (
@@ -329,7 +331,7 @@ export function ResponsiveAppShell({
 			<header
 				className={cn(
 					"sticky top-0 z-30 border-border border-b bg-background/95 backdrop-blur md:hidden",
-					CHAT_ROOM_PATH_RE.test(pathname) && "hidden"
+					isChatRoom && "hidden"
 				)}
 			>
 				<div className="flex h-14 items-center justify-between px-5">
@@ -347,13 +349,19 @@ export function ResponsiveAppShell({
 					</div>
 				</div>
 			</header>
-			<main
-				className={cn(
-					"mx-auto flex min-h-[calc(100dvh-56px)] w-full flex-col",
-					className
-				)}
-			>
-				{children}
+			<main className={cn("mx-auto flex w-full flex-col", className)}>
+				{/* 콘텐츠 래퍼에만 최소 높이를 줘, 짧은 페이지에서도 푸터가 첫 화면
+				    아래로 밀린다(모바일 헤더 56px·데스크톱 64px 제외). 채팅방은 자체
+				    높이를 쓰므로 min-h를 주지 않는다. */}
+				<div
+					className={cn(
+						"flex w-full flex-col",
+						!isChatRoom &&
+							"min-h-[calc(100dvh-56px)] md:min-h-[calc(100dvh-64px)]"
+					)}
+				>
+					{children}
+				</div>
 				{showFooter ? (
 					<SiteFooter
 						contentWidthClassName={contentWidthClassName}

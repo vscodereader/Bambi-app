@@ -11,11 +11,12 @@ import {
 } from "@bambi-app/ui/components/select";
 import {
 	Sheet,
+	SheetClose,
 	SheetContent,
 	SheetTitle,
 } from "@bambi-app/ui/components/sheet";
 import { cn } from "@bambi-app/ui/lib/utils";
-import { type ReactNode, useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	ALL_OPTION,
 	applyDiscoveryAxis,
@@ -36,8 +37,8 @@ import {
 	Filter,
 	MapPinIcon,
 	Message,
-	Search2,
 	StarIcon,
+	XIcon,
 } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
 import { JobSearchCommand } from "./job-search-command";
@@ -50,21 +51,52 @@ const formatReviewValue = ({
 }: Pick<Job, "rating" | "reviews">): string =>
 	`${reviews}개 · ${reviews > 0 ? rating.toFixed(1) : "신규"}`;
 
-interface MarketplaceFilterSidebarProps {
+// 기본값과 다른 필터 항목 수. 시트를 열지 않아도 몇 개가 걸려 있는지 배지로 보여주고,
+// 초기화 버튼 활성 여부도 이 값으로 판단한다. 키를 순회하므로 MarketplaceFilters에
+// 필드가 늘어도 따로 손댈 필요가 없다.
+const countActiveFilters = (filters: MarketplaceFilters): number =>
+	(
+		Object.keys(DEFAULT_MARKETPLACE_FILTERS) as (keyof MarketplaceFilters)[]
+	).filter((key) => filters[key] !== DEFAULT_MARKETPLACE_FILTERS[key]).length;
+
+interface MarketplaceFilterControlsProps {
 	filters: MarketplaceFilters;
-	// 사이드바 하단(sticky 컬럼 안)에 덧붙일 슬롯 — 광고 배너 등.
-	footer?: ReactNode;
 	onChange: FilterChange;
+	// true면 컨트롤 하단에 "필터 초기화" 버튼을 붙인다(사이드바용). 시트는 자체 하단 바에서
+	// 초기화를 제공하므로 이 값을 넘기지 않는다.
+	showReset?: boolean;
 }
 
 export function MarketplaceFilterControls({
 	filters,
 	onChange,
-}: MarketplaceFilterSidebarProps) {
+	showReset = false,
+}: MarketplaceFilterControlsProps) {
 	const update = (patch: Partial<MarketplaceFilters>) =>
 		onChange({ ...filters, ...patch });
 	const { isLoading, regions } = useRegions();
 	const districts = findRegion(regions, filters.regionCode)?.districts ?? [];
+	// 최소시급은 타이핑 즉시 표시하되 300ms 멈춘 뒤에만 필터에 반영해 재조회 난사를 막는다.
+	const [payInput, setPayInput] = useState(() =>
+		String(filters.minimumPay || "")
+	);
+	// 초기화 등 외부에서 minimumPay가 바뀌면 로컬 표시값을 다시 맞춘다.
+	useEffect(() => {
+		setPayInput(String(filters.minimumPay || ""));
+	}, [filters.minimumPay]);
+	useEffect(() => {
+		// 음수·빈값·비숫자는 필터 해제(0)로 떨어뜨린다 — 서버 minPayAmount는 양수만 받는다.
+		const parsed = Number(payInput);
+		const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+		if (next === filters.minimumPay) {
+			return;
+		}
+		const timer = setTimeout(
+			() => onChange({ ...filters, minimumPay: next }),
+			300
+		);
+		return () => clearTimeout(timer);
+	}, [payInput, filters, onChange]);
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex flex-col gap-2">
@@ -159,16 +191,10 @@ export function MarketplaceFilterControls({
 					최소 시급
 				</span>
 				<Input
-					onChange={(event) => {
-						// 음수·빈값·비숫자는 필터 해제(0)로 떨어뜨린다 — 서버 minPayAmount는 양수만 받는다.
-						const parsed = Number(event.target.value);
-						update({
-							minimumPay: Number.isFinite(parsed) && parsed > 0 ? parsed : 0,
-						});
-					}}
+					onChange={(event) => setPayInput(event.target.value)}
 					placeholder="예: 17000"
 					type="number"
-					value={String(filters.minimumPay || "")}
+					value={payInput}
 				/>
 			</div>
 			<label
@@ -206,30 +232,18 @@ export function MarketplaceFilterControls({
 				/>
 				초보 가능만 보기
 			</label>
+			{showReset ? (
+				<Button
+					block
+					disabled={countActiveFilters(filters) === 0}
+					onClick={() => onChange(DEFAULT_MARKETPLACE_FILTERS)}
+					size="md"
+					variant="secondary"
+				>
+					필터 초기화
+				</Button>
+			) : null}
 		</div>
-	);
-}
-
-export function MarketplaceFilterSidebar({
-	filters,
-	footer,
-	onChange,
-}: MarketplaceFilterSidebarProps) {
-	return (
-		<aside className="hidden w-[236px] shrink-0 lg:block">
-			<div className="sticky top-20 flex flex-col gap-4">
-				<Card className="rounded-lg" pad="lg" tone="outline">
-					<div className="mb-4 flex items-center gap-2">
-						<span className="inline-flex size-5 text-coral-600">
-							<Search2 />
-						</span>
-						<h2 className="m-0 font-extrabold text-base">빠른 탐색</h2>
-					</div>
-					<MarketplaceFilterControls filters={filters} onChange={onChange} />
-				</Card>
-				{footer}
-			</div>
-		</aside>
 	);
 }
 
@@ -238,6 +252,8 @@ interface MarketplaceFilterSheetProps {
 	onChange: FilterChange;
 	onOpenChange: (open: boolean) => void;
 	open: boolean;
+	// 하단 "N건 보기" 버튼에 표시할 현재 결과 총 개수.
+	resultCount: number;
 }
 
 export function MarketplaceFilterSheet({
@@ -245,6 +261,7 @@ export function MarketplaceFilterSheet({
 	onChange,
 	onOpenChange,
 	open,
+	resultCount,
 }: MarketplaceFilterSheetProps) {
 	return (
 		<Sheet onOpenChange={onOpenChange} open={open}>
@@ -261,19 +278,38 @@ export function MarketplaceFilterSheet({
 					}
 				}}
 			>
-				<SheetTitle className="mb-4">빠른 탐색</SheetTitle>
+				<div className="mb-4 flex items-center justify-between gap-3">
+					<SheetTitle>빠른 탐색</SheetTitle>
+					<SheetClose className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary">
+						<span className="inline-flex size-5">
+							<XIcon />
+						</span>
+					</SheetClose>
+				</div>
 				<MarketplaceFilterControls filters={filters} onChange={onChange} />
+				{/* 하단 고정 바: 초기화 + "N건 보기"(닫기). 필터는 즉시 적용되므로 별도 적용 버튼은 없다. */}
+				<div className="sticky bottom-0 -mx-5 mt-auto -mb-5 flex gap-2 border-border border-t bg-card px-5 py-3">
+					<Button
+						disabled={countActiveFilters(filters) === 0}
+						onClick={() => onChange(DEFAULT_MARKETPLACE_FILTERS)}
+						size="md"
+						variant="secondary"
+					>
+						초기화
+					</Button>
+					<Button
+						block
+						onClick={() => onOpenChange(false)}
+						size="md"
+						variant="primary"
+					>
+						{resultCount}건 보기
+					</Button>
+				</div>
 			</SheetContent>
 		</Sheet>
 	);
 }
-
-// 기본값과 다른 필터 항목 수. 시트를 열지 않아도 몇 개가 걸려 있는지 배지로 보여준다.
-// 키를 순회하므로 MarketplaceFilters에 필드가 늘어도 따로 손댈 필요가 없다.
-const countActiveFilters = (filters: MarketplaceFilters): number =>
-	(
-		Object.keys(DEFAULT_MARKETPLACE_FILTERS) as (keyof MarketplaceFilters)[]
-	).filter((key) => filters[key] !== DEFAULT_MARKETPLACE_FILTERS[key]).length;
 
 interface MarketplaceSearchProps {
 	filters: MarketplaceFilters;
@@ -295,14 +331,17 @@ export function MarketplaceSearch({
 	const activeFilterCount = countActiveFilters(filters);
 	return (
 		<div className="flex flex-col gap-3">
-			<div className={cn("flex items-center gap-2.5", searchFieldClassName)}>
+			{/* 사이드바(aside)가 1720px 이상에서만 뜨므로, 그 미만에서는 이 행이 필터 진입점이다.
+			    검색 필드만 헤더 검색과 겹치는 md 이상에서 숨기고(searchFieldClassName),
+			    필터 버튼은 1720px 미만 전 구간에서 보이도록 행 전체를 min-[1720px]:hidden 처리한다. */}
+			<div className="flex items-center gap-2.5 min-[1720px]:hidden">
 				<JobSearchCommand
 					onSelectJob={onSelectJob}
 					trigger="field"
-					triggerClassName="flex-1"
+					triggerClassName={cn("flex-1", searchFieldClassName)}
 				/>
 				<UiButton
-					className="h-12 gap-2 rounded-lg bg-card px-4 font-bold text-sm lg:hidden"
+					className="h-12 gap-2 rounded-lg bg-card px-4 font-bold text-sm"
 					onClick={onOpenFilters}
 					variant="outline"
 				>

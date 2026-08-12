@@ -21,6 +21,10 @@ const realtimeSource = readFileSync(
 // 확정 카드에 취소 버튼만 남았는지 본다(들여쓰기 변화에 견디게 느슨히).
 const CONFIRMED_CANCEL_ONLY_PATTERN =
 	/schedule\.status === "confirmed" \? \(\s*<Button[\s\S]{0,300}setScheduleStatus\(schedule\.id, "canceled"\)/;
+// 완료 전이 뮤테이션 호출 금지 판별과 "completed" 리터럴 사용처 집계용.
+const COMPLETED_MUTATION_PATTERN =
+	/set(?:Schedule|Interview)Status\([^)]*"completed"/;
+const COMPLETED_LITERAL_PATTERN = /"completed"/g;
 
 describe("채팅방 연락처 재설계", () => {
 	it("구인자 버튼을 연락처 공개 요청으로 바꾼다", () => {
@@ -331,8 +335,12 @@ describe("면접 완료 버튼 이관", () => {
 	// 엣지케이스 때문이다. 방 화면에는 완료 전환 경로가 남아 있으면 안 된다.
 	it("방 화면에서 완료 전환을 제거한다", () => {
 		expect(source).not.toContain('setScheduleStatus(schedule.id, "completed")');
-		// 완료 상태를 읽던 자리는 후기 자격 판정뿐이었고, 그 후기도 예정된 면접으로 옮겼다.
-		expect(source).not.toContain('"completed"');
+		// 완료로 전이시키는 뮤테이션 경로는 어디에도 없어야 한다. 인라인 제안 카드가
+		// 완료 상태를 "표시"하는 것(case "completed" 문구 분기)만 허용된다.
+		expect(source).not.toMatch(COMPLETED_MUTATION_PATTERN);
+		const completedUsages = source.match(COMPLETED_LITERAL_PATTERN) ?? [];
+		expect(completedUsages).toHaveLength(1);
+		expect(source).toContain('case "completed":');
 	});
 
 	// 확정 카드에는 취소만, 제안 카드의 확정·거절은 그대로다.

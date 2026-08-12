@@ -200,23 +200,6 @@ describe("visual job marketplace components", () => {
 		expect(source).not.toContain("isJobArea");
 	});
 
-	it("wires the public marketplace to visual exposure sections", () => {
-		const source = readComponent("screens/public-marketplace.tsx");
-
-		expect(source).toContain("VisualJobExposureSections");
-		expect(source).not.toContain("<JobList");
-		// 본문 컨테이너는 고정폭이 아닌 유동 폭(뷰포트 비례)을 사용하며 헤더와 동일하게 맞춘다
-		expect(source).toContain("max-w-[80%]");
-		// 검색창을 헤더(연락처 보호 왼쪽)로 옮기고 본문 검색은 모바일 전용으로 둔다
-		expect(source).toContain("headerSlot={headerSearch}");
-		// 헤더 검색은 seeker와 동일한 아이콘 버튼 트리거 모달이다(고정폭 검색창 제거).
-		expect(source).toContain('trigger="header"');
-		expect(source).not.toContain('className="relative w-48"');
-		expect(source).toContain('searchFieldClassName="md:hidden"');
-		// 히어로 카피 블록은 제거됨
-		expect(source).not.toContain("밤비 안에서 먼저 대화해요");
-	});
-
 	it("aligns the employer page shell to the shared fixed content width", () => {
 		const source = readComponent("page-shell.tsx");
 

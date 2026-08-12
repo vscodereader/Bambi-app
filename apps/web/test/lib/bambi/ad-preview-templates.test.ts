@@ -89,6 +89,21 @@ describe("getPreviewTemplateOptionsForPlacementKind", () => {
 			...AD_PREVIEW_TEMPLATE_OPTIONS,
 		]);
 	});
+
+	it("급구 섹션 숨김이면 급구 리스팅 옵션을 감춘다", () => {
+		// 사이트정보에서 급구 섹션을 숨기면 광고 상품 추가 폼의 노출 영역에서도 급구가 빠져야 한다.
+		const values = getPreviewTemplateOptionsForPlacementKind("listing", {
+			includeUrgent: false,
+		}).map((option) => option.value);
+
+		expect(values).toEqual(["special-list", "recommended-list", "none"]);
+
+		// 미지정(undefined)이면 기존 동작 그대로 급구를 포함한다.
+		const defaults = getPreviewTemplateOptionsForPlacementKind("listing").map(
+			(option) => option.value
+		);
+		expect(defaults).toContain("urgent-list");
+	});
 });
 
 describe("isPreviewTemplateKindMismatch", () => {

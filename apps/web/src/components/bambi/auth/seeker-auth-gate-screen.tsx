@@ -38,7 +38,9 @@ export async function SeekerAuthGateScreen() {
 
 	return (
 		<div className="flex min-h-dvh flex-col bg-secondary">
-			<div className="relative flex-1">
+			{/* 헤더가 없는 전체 화면이라 본문에 뷰포트 최소 높이를 줘, 형제 푸터가 첫
+			    화면 아래로 밀린다. */}
+			<div className="relative min-h-dvh flex-1">
 				<AuthBackdrop jobs={backdropJobs} />
 				{/* md 미만에서는 문서 흐름에 두어 페이지가 정상 스크롤되고, md 이상에서만
 				    블러 배경 위에 겹쳐 띄운다. 스크림은 배경을 한 겹 눌러 카드 대비를
