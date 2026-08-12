@@ -1436,25 +1436,21 @@ export function SeekerChatRoomResponsive({
 			`${Math.round(visualViewportHeight)}px`
 		);
 	}, [visualViewportHeight]);
-	// 모바일 채팅방은 뷰포트에 고정된 풀스크린이라 문서 스크롤이 있을 이유가 없다. iOS는
-	// 키보드가 열리면 문서를 제멋대로 밀어 올리므로, 잠금과 함께 매 뷰포트 변화에서 0으로
-	// 되돌린다. 데스크톱(md+)에는 아무 일도 하지 않는다.
+	// 모바일 채팅방은 뷰포트에 고정된 풀스크린이다. iOS 키보드가 문서를 밀어 올리는 현상만
+	// 되돌리고 body 스크롤 잠금은 직접 소유하지 않는다. Sheet/Dialog도 body를 잠그므로
+	// 여기서 별도로 overflow를 저장·복원하면 닫히는 순서에 따라 hidden이 남을 수 있다.
 	useEffect(() => {
 		if (window.matchMedia("(min-width: 768px)").matches) {
 			return;
 		}
 
-		const { body } = document;
-		const previousOverflow = body.style.overflow;
 		const resetScroll = () => window.scrollTo(0, 0);
 
-		body.style.overflow = "hidden";
 		resetScroll();
 		window.visualViewport?.addEventListener("resize", resetScroll);
 		window.visualViewport?.addEventListener("scroll", resetScroll);
 
 		return () => {
-			body.style.overflow = previousOverflow;
 			window.visualViewport?.removeEventListener("resize", resetScroll);
 			window.visualViewport?.removeEventListener("scroll", resetScroll);
 		};
@@ -1591,7 +1587,12 @@ export function SeekerChatRoomResponsive({
 			},
 			onSuccess: async () => {
 				setScheduleErrorMessage(null);
-				await invalidateRoom();
+				await Promise.all([
+					invalidateRoom(),
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.chats.listMyUpcomingInterviews.key(),
+					}),
+				]);
 			},
 		})
 	);
@@ -2299,7 +2300,7 @@ export function SeekerChatRoomResponsive({
 			</aside>
 			{/* 모바일 서랍 — 헤더 메뉴로 열리며 데스크톱 사이드바와 같은 내용을 담는다. */}
 			<Sheet onOpenChange={setIsSheetOpen} open={isSheetOpen}>
-				<SheetContent>
+				<SheetContent className="h-[100dvh] min-h-0 overflow-y-auto overscroll-contain">
 					<SheetTitle className="mb-4">채팅 정보</SheetTitle>
 					{sidePanel}
 				</SheetContent>

@@ -10,7 +10,6 @@ const ALLOWED_MIME_TYPES = new Set([
 	"image/png",
 	"image/webp",
 ]);
-
 const LOCAL_STORAGE_ROOT = path.resolve(
 	process.cwd(),
 	".local-storage",
