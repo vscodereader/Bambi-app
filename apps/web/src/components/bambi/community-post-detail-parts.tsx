@@ -8,11 +8,21 @@ import {
 	AlertDescription,
 	AlertTitle,
 } from "@bambi-app/ui/components/alert";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Dialog,
-	DialogClose,
 	DialogContent,
 	DialogDescription,
 	DialogTitle,
@@ -356,39 +366,33 @@ export function DeletePostButton({
 	);
 
 	return (
-		<Dialog onOpenChange={setOpen} open={open}>
-			<DialogTrigger
+		<AlertDialog onOpenChange={setOpen} open={open}>
+			<AlertDialogTrigger
 				render={
 					<Button size="sm" variant="outline">
 						삭제
 					</Button>
 				}
 			/>
-			<DialogContent>
-				<div className="flex flex-col gap-2">
-					<DialogTitle>글 삭제</DialogTitle>
-					<DialogDescription>
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>글 삭제</AlertDialogTitle>
+					<AlertDialogDescription>
 						이 글을 삭제할까요? 삭제한 글은 되돌릴 수 없어요.
-					</DialogDescription>
-				</div>
-				<div className="flex justify-end gap-2">
-					<DialogClose
-						render={
-							<Button type="button" variant="outline">
-								취소
-							</Button>
-						}
-					/>
-					<Button
+					</AlertDialogDescription>
+				</AlertDialogHeader>
+				<AlertDialogFooter>
+					<AlertDialogCancel>취소</AlertDialogCancel>
+					<AlertDialogAction
 						disabled={deleteMutation.isPending}
 						onClick={() => deleteMutation.mutate({ postId })}
 						variant="destructive"
 					>
 						삭제
-					</Button>
-				</div>
-			</DialogContent>
-		</Dialog>
+					</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
 	);
 }
 

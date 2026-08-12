@@ -1,10 +1,15 @@
 "use client";
 
 import {
-	Alert,
-	AlertDescription,
-	AlertTitle,
-} from "@bambi-app/ui/components/alert";
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	Card,
@@ -32,7 +37,6 @@ import {
 	Clock,
 	Eye,
 	type LucideIcon,
-	TriangleAlert,
 	Zap,
 } from "lucide-react";
 import type { Route } from "next";
@@ -458,33 +462,39 @@ function OwnedJobsPanel({
 
 	return (
 		<div className="flex flex-col gap-3">
-			{jobToDelete ? (
-				<Alert variant="destructive">
-					<TriangleAlert />
-					<AlertTitle>“{jobToDelete.title}” 공고를 삭제할까요?</AlertTitle>
-					<AlertDescription>
-						삭제한 공고와 연결된 광고·성과 기록은 되돌릴 수 없어요.
-					</AlertDescription>
-					<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-						<Button
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						onCancelDelete();
+					}
+				}}
+				open={jobToDelete !== null}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							“{jobToDelete?.title}” 공고를 삭제할까요?
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							삭제한 공고와 연결된 광고·성과 기록은 되돌릴 수 없어요.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
 							disabled={isDeleting}
-							onClick={onCancelDelete}
-							type="button"
-							variant="outline"
-						>
-							취소
-						</Button>
-						<Button
-							disabled={isDeleting}
-							onClick={() => onConfirmDelete(jobToDelete.id)}
-							type="button"
+							onClick={() => {
+								if (jobToDelete) {
+									onConfirmDelete(jobToDelete.id);
+								}
+							}}
 							variant="destructive"
 						>
 							{isDeleting ? "삭제 중…" : "삭제"}
-						</Button>
-					</div>
-				</Alert>
-			) : null}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 			<Card aria-labelledby="owned-jobs">
 				<CardContent className="p-0">
 					<MobileOwnedJobs
