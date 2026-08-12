@@ -1,6 +1,6 @@
 {
-  "id": "f037ee78-21c2-4e44-a93f-04547fc938d5",
-  "prevId": "63a52ac2-46fc-4dac-b7e9-8c8324659308",
+  "id": "3b317f56-f990-498d-a989-fce72b49d64e",
+  "prevId": "f037ee78-21c2-4e44-a93f-04547fc938d5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4848,6 +4848,30 @@
           "primaryKey": false,
           "notNull": false
         },
+        "draft_display_name": {
+          "name": "draft_display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "draft_business_registration_number": {
+          "name": "draft_business_registration_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "draft_representative_name": {
+          "name": "draft_representative_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "draft_business_start_date": {
+          "name": "draft_business_start_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "biznum_checked_at": {
           "name": "biznum_checked_at",
           "type": "timestamp",
@@ -7822,7 +7846,13 @@
     "public.employer_verification_status": {
       "name": "employer_verification_status",
       "schema": "public",
-      "values": ["none", "pending", "verified", "rejected"]
+      "values": [
+        "none",
+        "pending",
+        "verified",
+        "rejected",
+        "changes_unsubmitted"
+      ]
     },
     "public.interview_status": {
       "name": "interview_status",

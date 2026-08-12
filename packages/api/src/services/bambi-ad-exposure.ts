@@ -135,29 +135,12 @@ export const buildExposureJobSections = <TRow extends ExposureSectionRow>({
 	const special = activeSection(specialRows, "special");
 	const urgent = activeSection(urgentRows, "urgent");
 	const recommended = activeSection(recommendedRows, "recommended");
-	const sectionJobIds = new Set(
-		[...special, ...urgent, ...recommended].map((item) => item.id)
-	);
-	// 전체 공고에는 광고 상품 적용 여부와 무관하게 게시된 공고를 모두 담는다
-	// (유료 섹션과 중복 노출). 유료 공고가 앞자리를 차지해 무료 공고가 상한에
-	// 밀리지 않도록 organic 한도를 유료 섹션 크기만큼 늘린다.
+	// 전체 공고 쿼리 자체가 유료·무료 공고를 모두 포함하므로 페이지 정원만 남긴다.
+	// 섹션 행을 다시 보강하면 48개 정원이 깨지고 다음 커서에서 행이 건너뛴다.
 	const organic = organicRows
 		.filter((item) => item.status === "published")
-		.slice(0, limit + sectionJobIds.size);
-	// 창을 넓히는 것만으로는 부족하다 — organicRows는 상한이 걸린 별도 쿼리라 정렬상
-	// 뒤로 밀린 섹션 공고를 애초에 담고 있지 않을 수 있다. 섹션에 뜬 공고는 전체 공고에도
-	// 반드시 있어야 하므로 빠진 것만 뒤에 채운다. exposureType은 DB 원값 그대로 둔다:
-	// organic 쿼리가 집어온 같은 공고도 special/urgent/recommended 그대로이고, 전체 공고
-	// 카드의 유료 배지는 exposureType이 아니라 호출부의 inPaidSection 플래그가 결정한다.
+		.slice(0, limit);
 	const organicWindowSize = organic.length;
-	const organicIds = new Set(organic.map((item) => item.id));
-
-	for (const item of [...special, ...urgent, ...recommended]) {
-		if (!organicIds.has(item.id)) {
-			organicIds.add(item.id);
-			organic.push(item);
-		}
-	}
 
 	return {
 		organicWindowSize,

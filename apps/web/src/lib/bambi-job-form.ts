@@ -1,4 +1,8 @@
 import {
+	JOB_PAY_AMOUNT_MAX,
+	JOB_PAY_AMOUNT_MAX_MESSAGE,
+} from "@bambi-app/api/services/bambi-job-pay";
+import {
 	type AdBannerLayout,
 	isAdBannerImageRequired,
 } from "./bambi/ad-banner-layout";
@@ -793,6 +797,11 @@ const getConditionErrors = ({
 		!(Number.isInteger(payAmount) && payAmount > 0)
 	) {
 		errors.payAmount = "급여 금액은 1 이상의 정수로 입력해 주세요.";
+	} else if (
+		payUnit !== NEGOTIABLE_PAY_UNIT &&
+		payAmount > JOB_PAY_AMOUNT_MAX
+	) {
+		errors.payAmount = JOB_PAY_AMOUNT_MAX_MESSAGE;
 	}
 
 	if (!(payUnitOptions as readonly string[]).includes(payUnit)) {

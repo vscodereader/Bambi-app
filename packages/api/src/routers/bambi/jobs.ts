@@ -114,6 +114,10 @@ import {
 	validateJobPostImageUpload,
 	validateJobPostMediaSet,
 } from "../../services/bambi-job-media-policy";
+import {
+	JOB_PAY_AMOUNT_MAX,
+	JOB_PAY_AMOUNT_MAX_MESSAGE,
+} from "../../services/bambi-job-pay";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
 import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
 import {
@@ -186,7 +190,12 @@ const jobPostInputShape = z.object({
 	regionCode: z.string().length(10),
 	districtCode: z.string().length(10).optional(),
 	// "협의" 단위는 금액이 없다(면접 후 급여 협의). 아래 refine에서 짝을 강제한다.
-	payAmount: z.number().int().positive().nullish(),
+	payAmount: z
+		.number()
+		.int()
+		.positive()
+		.max(JOB_PAY_AMOUNT_MAX, JOB_PAY_AMOUNT_MAX_MESSAGE)
+		.nullish(),
 	payUnit: z.string().min(1).max(30),
 	workSchedule: z.string().min(1).max(200),
 	description: z.string().min(10).max(2000),
@@ -866,6 +875,34 @@ const syncBoostPurchases = async ({
 		}
 	}
 
+	// 무료 공고에서 먼저 담아 둔 standalone 미결제 옵션을 같은 수정 화면에서 유료
+	// 노출상품과 함께 저장하면, 새 구매 행을 만들지 않더라도 공고 결제 묶음으로 승격해야
+	// 한다. 결제됐거나 활성화된 단독 구매는 사용·환불 이력이 걸릴 수 있어 건드리지 않는다.
+	if (isPaidPosting && postingPaymentMethod) {
+		const bundledPurchaseIds = existing
+			.filter(
+				(purchase) =>
+					purchase.paymentStatus === "unpaid" &&
+					requestedTypes.includes(purchase.optionType as BoostOptionType)
+			)
+			.map((purchase) => purchase.id);
+
+		if (bundledPurchaseIds.length > 0) {
+			await tx
+				.update(jobBoostPurchase)
+				.set({
+					paymentMethod: postingPaymentMethod,
+					purchaseSource: "job_registration",
+				})
+				.where(
+					and(
+						inArray(jobBoostPurchase.id, bundledPurchaseIds),
+						eq(jobBoostPurchase.paymentStatus, "unpaid")
+					)
+				);
+		}
+	}
+
 	// 이미 unpaid·활성으로 잡혀 있는 유형은 그대로 두고, 새로 나타난 유형만 산다.
 	const typesToBuy = requestedTypes.filter(
 		(optionType) =>
@@ -925,6 +962,7 @@ const syncBoostPurchases = async ({
 			optionType,
 			organizationId,
 			paymentMethod,
+			purchaseSource: isPaidPosting ? "job_registration" : "standalone",
 		});
 	}
 };
@@ -1199,7 +1237,7 @@ export const applyJobPostUpdate = async ({
 
 interface CrawledJobSections {
 	organic: JobFeedRow[];
-	// 섹션 보강분을 뺀 창 크기 — "더보기" 커서는 이 값만큼만 전진한다.
+	// 전체공고에 실제로 반환한 창 크기 — "더보기" 커서는 이 값만큼 전진한다.
 	organicWindowSize: number;
 	recommended: JobFeedRow[];
 	special: JobFeedRow[];
@@ -1255,21 +1293,6 @@ const loadCrawledJobSections = async (
 	]);
 	const organicWindowSize = organic.length;
 
-	// 섹션에 뜬 공고는 전체 공고에도 반드시 있어야 한다. 네 쿼리가 서로를 모르는 데다
-	// 정렬 키가 대량으로 동률이라, 전체 공고 쿼리가 섹션 행을 집어올 보장이 없다.
-	// 빠진 것만 뒤에 채운다 — listCrawledSectionRows가 승격해 둔 라벨은 'standard'로
-	// 되돌려야 전체 공고 카드가 유료 자리 배지를 달지 않는다.
-	const organicIds = new Set(organic.map((row) => row.id));
-
-	for (const row of [...special, ...urgent, ...recommended]) {
-		if (organicIds.has(row.id)) {
-			continue;
-		}
-
-		organicIds.add(row.id);
-		organic.push({ ...row, exposureType: "standard" });
-	}
-
 	return {
 		organic,
 		organicWindowSize,
@@ -1290,6 +1313,7 @@ export const jobsRouter = {
 		const filters = [
 			eq(jobPost.status, "published" as JobPostStatus),
 			eq(jobPost.paymentStatus, "paid"),
+			eq(employerOrganizationProfile.verificationStatus, "verified"),
 			// 대기열(결제됨·미활성) 스페셜/추천 공고를 organic 목록·전체 카운트에서 뺀다.
 			// 섹션 쿼리(getExposedJobs)는 이미 exposureEndsAt로 제외하고, urgent엔 이 필터가
 			// 항상 참이라 무해하다(정원 대상 타입에만 걸리는 조건).
@@ -1420,8 +1444,8 @@ export const jobsRouter = {
 					// 같은 이유로 이미 하고 있는 것과 같다.
 					desc(jobPost.id)
 				)
-				// 첫 페이지만 유료 섹션 몫(+15)을 얹어 넉넉히 받는다(기존 동작 유지).
-				.limit(isFirstPage ? input.limit + 15 : input.limit)
+				// 전체공고는 페이지마다 정확히 limit개를 소비한다. 유료 섹션은 별도 쿼리다.
+				.limit(input.limit)
 				.offset(organicCursor?.jobPost ?? 0),
 			// 필터를 만족하는 자체 공고 전체 수. 페이지 창과 무관해야 헤더의 전체 건수와
 			// "더보기" 종료 판정이 정확하다.
@@ -1465,6 +1489,14 @@ export const jobsRouter = {
 			0,
 			listingCapacityRow?.recommendedCapacity ?? DEFAULT_RECOMMENDED_CAPACITY
 		);
+		// 섹션 중복 노출을 위한 보강분 때문에 organic 배열이 limit을 넘을 수 있다.
+		// 실제 전체공고 페이지에는 밤비 공고를 최대 limit까지만 싣고, 남은 자리만
+		// 아래에서 크롤링 공고로 채운다.
+		const pageJobPostOrganic = result.sections.organic.slice(0, input.limit);
+		const jobPostWindowSize = Math.min(
+			result.organicWindowSize,
+			pageJobPostOrganic.length
+		);
 
 		// 현재 요청에서 새로 기록하는 impression 때문에 판정이 왜곡되지 않도록,
 		// recordJobListingImpressions 이전에 최근 7일 성과를 집계해 각 item에 붙인다.
@@ -1506,9 +1538,10 @@ export const jobsRouter = {
 		const crawled = await loadCrawledJobSections(
 			input,
 			{
-				limit: isFirstPage
-					? input.limit
-					: Math.max(0, input.limit - result.organicWindowSize),
+				// 첫 페이지와 더보기 모두 밤비 공고를 우선 배치하고 남은 슬롯만
+				// 크롤링 공고로 채운다. 밤비 공고가 재승인되어 다시 노출돼도
+				// 한 페이지의 전체공고 개수는 input.limit(현재 48)를 유지한다.
+				limit: Math.max(0, input.limit - pageJobPostOrganic.length),
 				offset: organicCursor?.crawled ?? 0,
 			},
 			isFirstPage
@@ -1523,7 +1556,7 @@ export const jobsRouter = {
 		);
 		const nextOrganicOffset = {
 			crawled: (organicCursor?.crawled ?? 0) + crawled.organicWindowSize,
-			jobPost: (organicCursor?.jobPost ?? 0) + result.organicWindowSize,
+			jobPost: (organicCursor?.jobPost ?? 0) + jobPostWindowSize,
 		};
 		const hasMoreOrganic =
 			nextOrganicOffset.jobPost < jobPostTotal ||
@@ -1541,7 +1574,7 @@ export const jobsRouter = {
 			totalCount: result.totalCount + crawledIds.size,
 			sections: {
 				organic: [
-					...result.sections.organic.map((item) => toListItem(item, false)),
+					...pageJobPostOrganic.map((item) => toListItem(item, false)),
 					...crawled.organic.map((item) => toListItem(item, false)),
 				],
 				recommended: [
@@ -1587,6 +1620,7 @@ export const jobsRouter = {
 		const filters = [
 			eq(jobPost.status, "published" as JobPostStatus),
 			eq(jobPost.paymentStatus, "paid"),
+			eq(employerOrganizationProfile.verificationStatus, "verified"),
 			// 대기열(결제됨·미활성) 스페셜/추천 공고 제외 — list와 동일.
 			notQueuedListingFilter(),
 		];
@@ -1691,6 +1725,7 @@ export const jobsRouter = {
 				and(
 					eq(jobPost.status, "published" as JobPostStatus),
 					eq(jobPost.paymentStatus, "paid"),
+					eq(employerOrganizationProfile.verificationStatus, "verified"),
 					inArray(jobPost.exposureType, [...AD_BANNER_EXPOSURE_TYPES]),
 					or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
 				)
@@ -1816,7 +1851,11 @@ export const jobsRouter = {
 				.where(eq(jobPost.id, input.id))
 				.limit(1);
 
-			if (post?.status !== "published" || post.paymentStatus !== "paid") {
+			if (
+				post?.status !== "published" ||
+				post.paymentStatus !== "paid" ||
+				post.employerVerificationStatus !== "verified"
+			) {
 				throw new ORPCError("NOT_FOUND");
 			}
 

@@ -63,7 +63,7 @@ export const bambiGender = pgEnum("bambi_gender", ["male", "female"]);
 
 export const employerVerificationStatus = pgEnum(
 	"employer_verification_status",
-	["none", "pending", "verified", "rejected"]
+	["none", "pending", "verified", "rejected", "changes_unsubmitted"]
 );
 
 // on_hold(검수 보류)는 hidden(운영자 강제 숨김)과 구분되는 검수 축 상태다 — 둘을 같은
@@ -120,6 +120,11 @@ export const jobBoostOptionType = pgEnum("job_boost_option_type", [
 	"manual_period",
 	"manual_count",
 	"auto_period",
+]);
+
+export const jobBoostPurchaseSource = pgEnum("job_boost_purchase_source", [
+	"job_registration",
+	"standalone",
 ]);
 
 export const jobPaymentMethod = pgEnum("job_payment_method", [
@@ -468,6 +473,10 @@ export const employerOrganizationProfile = pgTable(
 		representativeName: text("representative_name"),
 		// 개업일자 YYYYMMDD 8자리(본인인증 birth8과 같은 컨벤션 — 시각이 없는 날짜라 text).
 		businessStartDate: text("business_start_date"),
+		draftDisplayName: text("draft_display_name"),
+		draftBusinessRegistrationNumber: text("draft_business_registration_number"),
+		draftRepresentativeName: text("draft_representative_name"),
+		draftBusinessStartDate: text("draft_business_start_date"),
 		// 국세청 대조 성공 시각·납세자 상태 코드(b_stt_cd 원값). 둘 다 null이면 운영자에게는
 		// "미확인"이다(키 미설정·국세청 장애로 판정하지 못한 제출).
 		biznumCheckedAt: timestamp("biznum_checked_at"),
@@ -1117,6 +1126,11 @@ export const jobBoostPurchase = pgTable(
 		// onDelete를 두지 않는다(조직 축이 결제 주체라 사용자는 참고값).
 		buyerUserId: text("buyer_user_id").references(() => user.id),
 		optionType: jobBoostOptionType("option_type").notNull(),
+		// 유료 노출상품 등록과 함께 산 옵션만 공고 결제에 묶는다. 기존 구매와 광고관리에서
+		// 따로 산 옵션은 standalone이라 운영자 옵션 결제 목록에서 개별 처리한다.
+		purchaseSource: jobBoostPurchaseSource("purchase_source")
+			.default("standalone")
+			.notNull(),
 		// 결제 금액 스냅샷. 옵션 가격이 나중에 바뀌어도 이 구매의 청구액은 이 값으로 고정.
 		amount: integer("amount").notNull(),
 		// 아래 세 칸은 구매 시점 옵션 값 스냅샷 — 운영자가 옵션을 바꿔도 기존 구매 비소급.

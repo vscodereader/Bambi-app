@@ -13,18 +13,22 @@ import Link from "next/link";
 import type { ComponentType } from "react";
 import { useEmployerApproval } from "@/components/bambi/employer-approval-context";
 
-type GateStatus = "none" | "pending" | "rejected";
+type GateStatus = "none" | "pending" | "rejected" | "changes_unsubmitted";
 
 const GATE_STYLE: Record<
 	GateStatus,
 	{ variant: "brand" | "warning" | "destructive"; icon: ComponentType }
 > = {
+	changes_unsubmitted: { variant: "warning", icon: TriangleAlert },
 	none: { variant: "brand", icon: Store },
 	pending: { variant: "warning", icon: Clock },
 	rejected: { variant: "destructive", icon: TriangleAlert },
 };
 
 const getGateTitle = (status: GateStatus): string => {
+	if (status === "changes_unsubmitted") {
+		return "업체 인증 변경사항을 제출해 주세요";
+	}
 	if (status === "pending") {
 		return "운영자 승인 대기 중";
 	}
@@ -37,6 +41,9 @@ const getGateTitle = (status: GateStatus): string => {
 };
 
 const getGateDescription = (status: GateStatus, action: string): string => {
+	if (status === "changes_unsubmitted") {
+		return `변경한 업체 정보를 제출하고 운영자 승인을 받아야 ${action}할 수 있습니다.`;
+	}
 	if (status === "pending") {
 		return `${action}하려면 운영자 승인이 완료되어야 합니다.`;
 	}
@@ -46,6 +53,16 @@ const getGateDescription = (status: GateStatus, action: string): string => {
 	}
 
 	return `${action}하려면 업체명과 사업자등록번호를 입력하세요.`;
+};
+
+const getGateActionLabel = (status: GateStatus): string => {
+	if (status === "rejected") {
+		return "업체 정보 다시 제출";
+	}
+	if (status === "changes_unsubmitted") {
+		return "변경사항 제출";
+	}
+	return "업체 정보 입력";
 };
 
 // action 예: "공고를 등록", "조직 설정을 변경"
@@ -74,7 +91,7 @@ export function EmployerGateBanner({ action }: { action: string }) {
 						className={cn(buttonVariants({ size: "sm" }), "no-underline!")}
 						href={"/employer/me" as Route}
 					>
-						{status === "rejected" ? "업체 정보 다시 제출" : "업체 정보 입력"}
+						{getGateActionLabel(status)}
 					</Link>
 				)}
 			</AlertDescription>

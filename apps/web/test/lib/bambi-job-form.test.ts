@@ -70,6 +70,25 @@ describe("validateJobForm 급여 협의", () => {
 
 		expect(result.ok).toBe(false);
 	});
+
+	it("급여는 123,456,789원까지 허용한다", () => {
+		const result = validateJobForm(
+			{ ...baseForm, payAmount: "123456789" },
+			options
+		);
+		expect(result.ok).toBe(true);
+	});
+
+	it("급여가 123,456,789원을 넘으면 안내 문구로 거절한다", () => {
+		const result = validateJobForm(
+			{ ...baseForm, payAmount: "123456790" },
+			options
+		);
+		expect(result.ok).toBe(false);
+		expect(!result.ok && result.errors.payAmount).toBe(
+			"금액은 123,456,789원 이하여야 합니다"
+		);
+	});
 });
 
 describe("validateJobForm taxonomy 화이트리스트", () => {

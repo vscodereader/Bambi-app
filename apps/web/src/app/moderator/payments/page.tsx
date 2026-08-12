@@ -30,7 +30,9 @@ import {
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { formatAdPrice } from "@/lib/bambi/ad-catalog";
 import {
+	EXPOSURE_TYPE_LABELS,
 	JOB_DETAIL_DESIGN_STATUS_LABELS,
+	PAYMENT_STATUS_LABELS,
 	remainingDays,
 } from "@/lib/bambi/exposure";
 import { formatDateTime } from "@/lib/bambi-format";
@@ -40,6 +42,50 @@ import { BoostPurchasesSection } from "./boost-purchases-section";
 type PaymentJob = Awaited<
 	ReturnType<AppRouterClient["bambi"]["moderation"]["listJobsForPayment"]>
 >[number];
+
+const paymentTotal = (job: PaymentJob): null | number => {
+	const base = sumJobPaymentAmount(job.exposureAmount, job.detailDesignAmount);
+	const boostTotal = (job.boostPurchases ?? []).reduce(
+		(sum, purchase) => sum + purchase.amount,
+		0
+	);
+	return base === null && boostTotal === 0 ? null : (base ?? 0) + boostTotal;
+};
+
+const BUNDLED_PAYMENT_LABELS = {
+	auto_period: "자동 끌어올리기",
+	manual_count: "횟수권",
+	manual_period: "끌어올리기",
+} as const;
+
+function PaymentAmountBreakdown({ job }: { job: PaymentJob }) {
+	const total = paymentTotal(job);
+	if (total === null) {
+		return <span className="text-muted-foreground">무료</span>;
+	}
+
+	return (
+		<div className="flex flex-col items-start gap-0.5">
+			<span className="whitespace-nowrap font-medium text-foreground">
+				{formatAdPrice(total)}
+			</span>
+			{job.detailDesignAmount === null ? null : (
+				<span className="whitespace-nowrap text-muted-foreground text-xs">
+					디자인 +{formatAdPrice(job.detailDesignAmount)}
+				</span>
+			)}
+			{(job.boostPurchases ?? []).map((purchase) => (
+				<span
+					className="whitespace-nowrap text-muted-foreground text-xs"
+					key={purchase.optionType}
+				>
+					{BUNDLED_PAYMENT_LABELS[purchase.optionType]} +
+					{formatAdPrice(purchase.amount)}
+				</span>
+			))}
+		</div>
+	);
+}
 
 interface PaymentColumnsOptions {
 	allSelected: boolean;
@@ -86,32 +132,8 @@ function getPaymentColumns({
 		{
 			id: "exposureAmount",
 			header: "결제 금액",
-			sortValue: (job) =>
-				sumJobPaymentAmount(job.exposureAmount, job.detailDesignAmount) ?? 0,
-			cell: (job) => {
-				// 디자인 제작 애드온은 노출 금액과 함께 한 번에 입금받으므로 총액으로 보여준다.
-				const total = sumJobPaymentAmount(
-					job.exposureAmount,
-					job.detailDesignAmount
-				);
-
-				if (total === null) {
-					return <span className="text-muted-foreground">무료</span>;
-				}
-
-				return (
-					<div className="flex flex-col items-start gap-0.5">
-						<span className="whitespace-nowrap font-medium text-foreground">
-							{formatAdPrice(total)}
-						</span>
-						{job.detailDesignAmount === null ? null : (
-							<span className="whitespace-nowrap text-muted-foreground text-xs">
-								디자인 +{formatAdPrice(job.detailDesignAmount)}
-							</span>
-						)}
-					</div>
-				);
-			},
+			sortValue: (job) => paymentTotal(job) ?? 0,
+			cell: (job) => <PaymentAmountBreakdown job={job} />,
 		},
 		{
 			id: "detailDesign",
@@ -372,14 +394,90 @@ export default function ModeratorPaymentsPage() {
 			) : null}
 
 			{jobsQuery.isSuccess && jobs.length > 0 ? (
-				<div className="overflow-x-auto rounded-xl border border-border">
-					<DataTable
-						columns={columns}
-						data={jobs}
-						getRowKey={(job) => job.id}
-						pageSize={10}
-					/>
-				</div>
+				<>
+					<div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+						<DataTable
+							columns={columns}
+							data={jobs}
+							getRowKey={(job) => job.id}
+							pageSize={10}
+						/>
+					</div>
+					<div className="flex flex-col gap-3 md:hidden">
+						<div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+							<Checkbox
+								aria-label="전체 공고 선택"
+								checked={allSelected}
+								indeterminate={someSelected && !allSelected}
+								onCheckedChange={(checked) => toggleAll(checked === true)}
+							/>
+							전체 선택
+						</div>
+						{jobs.map((job) => {
+							const days = remainingDays(job.exposureEndsAt);
+							return (
+								<article
+									className="rounded-xl border border-border bg-card p-4"
+									key={job.id}
+								>
+									<div className="flex items-start gap-3">
+										<Checkbox
+											aria-label={`${job.title} 선택`}
+											checked={selectedIds.has(job.id)}
+											onCheckedChange={() => toggleRow(job.id)}
+										/>
+										<div className="min-w-0 flex-1">
+											<h3 className="m-0 break-words font-semibold text-base">
+												{job.title}
+											</h3>
+											<p className="m-0 text-muted-foreground text-sm">
+												{job.organizationDisplayName}
+											</p>
+										</div>
+										<StatusBadge
+											tone={job.paymentStatus === "paid" ? "good" : "warning"}
+										>
+											{PAYMENT_STATUS_LABELS[job.paymentStatus]}
+										</StatusBadge>
+									</div>
+									<div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+										<div>
+											<p className="m-0 text-muted-foreground">노출 상품</p>
+											<p className="m-0">
+												{EXPOSURE_TYPE_LABELS[job.exposureType]}
+											</p>
+										</div>
+										<div>
+											<p className="m-0 text-muted-foreground">남은 기간</p>
+											<p className="m-0">
+												{days === null ? "-" : `${Math.max(0, days)}일`}
+											</p>
+										</div>
+										<div>
+											<p className="m-0 text-muted-foreground">결제 금액</p>
+											<PaymentAmountBreakdown job={job} />
+										</div>
+										<div>
+											<p className="m-0 text-muted-foreground">등록일</p>
+											<p className="m-0">{formatDateTime(job.createdAt)}</p>
+										</div>
+									</div>
+									{job.detailDesignStatus === null ? null : (
+										<Button
+											className="mt-4 w-full"
+											onClick={() => setDesignJobId(job.id)}
+											size="sm"
+											type="button"
+											variant="outline"
+										>
+											디자인 제작 관리
+										</Button>
+									)}
+								</article>
+							);
+						})}
+					</div>
+				</>
 			) : null}
 
 			<Separator />

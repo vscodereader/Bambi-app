@@ -361,6 +361,7 @@ function ChatMessageBubble({
 }) {
 	const mine = message.senderUserId === currentUserId;
 	const attachments = message.attachments ?? [];
+	const hasAttachments = attachments.length > 0;
 	const senderName = counterpartName ?? "상대방";
 
 	return (
@@ -377,7 +378,7 @@ function ChatMessageBubble({
 			<div
 				className={cn(
 					"flex min-w-0 max-w-[60%] flex-col gap-1 md:max-w-[78%]",
-					attachments.length > 0 && "max-md:max-w-[58%]",
+					hasAttachments && "max-w-[min(60vw,240px)] md:max-w-[320px]",
 					mine && "items-end"
 				)}
 			>
@@ -386,57 +387,35 @@ function ChatMessageBubble({
 						{senderName}
 					</span>
 				)}
-				<div
-					className={cn(
-						"flex min-w-0 max-w-full items-end gap-1.5",
-						mine && "flex-row-reverse"
-					)}
-				>
-					<MessageContent
-						className={cn(
-							"w-fit min-w-0 max-w-full overflow-hidden rounded-lg px-4 py-2",
-							attachments.length > 0 &&
-								"max-md:w-full max-md:min-w-0 max-md:overflow-hidden",
-							mine
-								? "bg-coral-500 text-white"
-								: "bg-secondary text-foreground max-md:bg-background"
-						)}
-					>
-						{attachments.length === 0 ? (
+				<div className="flex min-w-0 max-w-full flex-col">
+					{hasAttachments ? (
+						<div className="grid min-w-0 max-w-full gap-2">
+							{attachments.map((attachment) => (
+								<ChatAttachmentPreview
+									attachment={attachment}
+									key={attachment.id}
+								/>
+							))}
+						</div>
+					) : (
+						<MessageContent
+							className={cn(
+								"w-fit min-w-0 max-w-full overflow-hidden rounded-lg px-4 py-2",
+								mine
+									? "bg-coral-500 text-white"
+									: "bg-secondary text-foreground max-md:bg-background"
+							)}
+						>
 							<p className="m-0 min-w-0 max-w-full whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">
 								{message.body}
 							</p>
-						) : (
-							<>
-								{message.body.trim() ? (
-									<p className="m-0 min-w-0 max-w-full whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere] md:hidden">
-										{message.body}
-									</p>
-								) : null}
-								<div className="grid min-w-0 max-w-full gap-2 max-md:w-full">
-									{attachments.map((attachment) => (
-										<ChatAttachmentPreview
-											attachment={attachment}
-											key={attachment.id}
-											mine={mine}
-										/>
-									))}
-								</div>
-								<p className="mt-1 mb-0 text-right text-[11px] opacity-70 md:hidden">
-									{formatChatTimeLabel(message.createdAt)}
-								</p>
-							</>
-						)}
-						<p className="mt-1 mb-0 text-[11px] opacity-70 max-md:hidden">
-							{formatDateTime(message.createdAt)}
-						</p>
-					</MessageContent>
-					{attachments.length === 0 ? (
+						</MessageContent>
+					)}
+					{isGroupEnd ? (
 						<span
-							aria-hidden={!isGroupEnd}
 							className={cn(
-								"flex-none text-[11px] text-muted-foreground md:hidden",
-								!isGroupEnd && "invisible"
+								"mt-1 block text-[11px] text-muted-foreground",
+								mine ? "text-right" : "text-left"
 							)}
 						>
 							{formatChatTimeLabel(message.createdAt)}
@@ -451,10 +430,12 @@ function ChatMessageBubble({
 // 날짜가 바뀌는 지점의 가운데 pill. 데스크톱 말풍선은 안에 날짜까지 찍으므로 모바일에만 둔다.
 function ChatDateChip({ label }: { label: string }) {
 	return (
-		<div className="flex justify-center py-1 md:hidden">
-			<span className="rounded-full bg-ink-900/10 px-3 py-1 font-semibold text-[11px] text-ink-800">
+		<div className="flex items-center justify-center gap-3 py-2">
+			<span className="hidden h-px flex-1 bg-coral-200 md:block" />
+			<span className="rounded-full bg-coral-50 px-3 py-1 font-semibold text-[11px] text-coral-800">
 				{label}
 			</span>
+			<span className="hidden h-px flex-1 bg-coral-200 md:block" />
 		</div>
 	);
 }
@@ -2027,6 +2008,8 @@ export function SeekerChatRoomResponsive({
 			});
 
 			try {
+				const attachmentMessageId = generateChatMessageId();
+				const textMessageId = body ? generateChatMessageId() : undefined;
 				const uploadIntent = await createAttachmentUploadMutation.mutateAsync({
 					byteSize: attachmentDraft.file.size,
 					chatRoomId: room.id,
@@ -2042,14 +2025,16 @@ export function SeekerChatRoomResponsive({
 				});
 
 				await sendMediaMessageMutation.mutateAsync({
+					body: body || undefined,
 					byteSize: uploadIntent.byteSize,
 					chatRoomId: room.id,
 					fileName: uploadIntent.fileName,
 					// 메시지 id는 클라이언트가 만들어 보낸다. 서버가 PK 충돌로 재시도·더블클릭을
 					// 흡수하므로 같은 전송이 두 번 들어가도 방에는 한 건만 남는다.
-					messageId: generateChatMessageId(),
+					messageId: attachmentMessageId,
 					mimeType: uploadIntent.mimeType,
 					storageKey: uploadIntent.storageKey,
+					textMessageId,
 				});
 				clearAttachmentDraft();
 				setMessage("");

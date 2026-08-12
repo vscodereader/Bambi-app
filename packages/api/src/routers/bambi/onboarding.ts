@@ -180,6 +180,10 @@ const deleteBusinessDocumentInput = z.object({
 	documentId: z.string().uuid(),
 });
 
+const saveEmployerBusinessDraftInput = submitEmployerBusinessInfoInput.extend({
+	organizationId: z.string().min(1),
+});
+
 const BIZNUM_MISMATCH_MESSAGE =
 	"국세청에 등록된 사업자등록정보와 일치하지 않습니다. 사업자등록번호·대표자 성명·개업일자를 사업자등록증에 적힌 그대로 입력했는지 확인해 주세요. 최근 개업했다면 국세청 반영까지 1~2일 걸릴 수 있습니다.";
 
@@ -533,7 +537,6 @@ export const onboardingRouter = {
 		.handler(async ({ context, input }) => {
 			const userId = context.session.user.id;
 			await requireBusinessDocumentOrganization({
-				allowPending: true,
 				organizationId: input.organizationId,
 				userId,
 			});
@@ -554,7 +557,6 @@ export const onboardingRouter = {
 		.handler(async ({ context, input }) => {
 			const userId = context.session.user.id;
 			await requireBusinessDocumentOrganization({
-				allowPending: true,
 				organizationId: input.organizationId,
 				userId,
 			});
@@ -616,7 +618,10 @@ export const onboardingRouter = {
 				if (lockedOrganizationProfile.verificationStatus === "verified") {
 					await tx
 						.update(employerOrganizationProfile)
-						.set({ verificationStatus: "pending", updatedAt: new Date() })
+						.set({
+							verificationStatus: "changes_unsubmitted",
+							updatedAt: new Date(),
+						})
 						.where(
 							eq(
 								employerOrganizationProfile.organizationId,
@@ -688,7 +693,10 @@ export const onboardingRouter = {
 				if (lockedOrganizationProfile.verificationStatus === "verified") {
 					await tx
 						.update(employerOrganizationProfile)
-						.set({ verificationStatus: "pending", updatedAt: new Date() })
+						.set({
+							verificationStatus: "changes_unsubmitted",
+							updatedAt: new Date(),
+						})
 						.where(
 							eq(
 								employerOrganizationProfile.organizationId,
@@ -764,6 +772,13 @@ export const onboardingRouter = {
 					employerOrganizationProfile.businessRegistrationNumber,
 				representativeName: employerOrganizationProfile.representativeName,
 				businessStartDate: employerOrganizationProfile.businessStartDate,
+				draftDisplayName: employerOrganizationProfile.draftDisplayName,
+				draftBusinessRegistrationNumber:
+					employerOrganizationProfile.draftBusinessRegistrationNumber,
+				draftRepresentativeName:
+					employerOrganizationProfile.draftRepresentativeName,
+				draftBusinessStartDate:
+					employerOrganizationProfile.draftBusinessStartDate,
 				biznumCheckedAt: employerOrganizationProfile.biznumCheckedAt,
 				biznumStatusCode: employerOrganizationProfile.biznumStatusCode,
 				verificationStatus: employerOrganizationProfile.verificationStatus,
@@ -1398,6 +1413,52 @@ export const onboardingRouter = {
 			return updatedProfile;
 		}),
 
+	saveEmployerBusinessDraft: protectedProcedure
+		.input(saveEmployerBusinessDraftInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			const profile = await requireBusinessDocumentOrganization({
+				allowPending: true,
+				organizationId: input.organizationId,
+				userId,
+			});
+			if (profile.verificationStatus === "pending") {
+				throw new ORPCError("CONFLICT", {
+					message: "심사 중에는 업체 정보를 변경할 수 없습니다.",
+				});
+			}
+			const [updated] = await db
+				.update(employerOrganizationProfile)
+				.set({
+					draftDisplayName: input.displayName.trim(),
+					draftBusinessRegistrationNumber:
+						input.businessRegistrationNumber.trim(),
+					draftRepresentativeName: input.representativeName.trim(),
+					draftBusinessStartDate: input.businessStartDate.replaceAll("-", ""),
+					verificationStatus:
+						profile.verificationStatus === "verified"
+							? "changes_unsubmitted"
+							: profile.verificationStatus,
+					updatedAt: new Date(),
+				})
+				.where(
+					and(
+						eq(
+							employerOrganizationProfile.organizationId,
+							input.organizationId
+						),
+						ne(employerOrganizationProfile.verificationStatus, "pending")
+					)
+				)
+				.returning();
+			if (!updated) {
+				throw new ORPCError("CONFLICT", {
+					message: "심사 중에는 업체 정보를 변경할 수 없습니다.",
+				});
+			}
+			return updated;
+		}),
+
 	submitEmployerBusinessInfo: protectedProcedure
 		.input(submitEmployerBusinessInfoInput)
 		.handler(async ({ context, input }) => {
@@ -1448,6 +1509,22 @@ export const onboardingRouter = {
 				.limit(1);
 
 			if (ownedOrg) {
+				if (ownedOrg.verificationStatus === "pending") {
+					throw new ORPCError("CONFLICT", {
+						message: "심사 중에는 업체 정보를 다시 제출할 수 없습니다.",
+					});
+				}
+				const documentCount = await db
+					.select({ count: count() })
+					.from(employerBusinessDocument)
+					.where(
+						eq(employerBusinessDocument.organizationId, ownedOrg.organizationId)
+					);
+				if ((documentCount[0]?.count ?? 0) < 1) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "사업자 인증 서류를 1개 이상 추가해 주세요.",
+					});
+				}
 				const isUnchanged =
 					ownedOrg.displayName === input.displayName &&
 					ownedOrg.businessRegistrationNumber ===
@@ -1465,23 +1542,39 @@ export const onboardingRouter = {
 
 				const biznumCheck = await checkBiznum({ ...input, businessStartDate });
 
-				await db
+				const [updatedProfile] = await db
 					.update(employerOrganizationProfile)
 					.set({
 						displayName: input.displayName,
 						businessRegistrationNumber: input.businessRegistrationNumber,
 						representativeName: input.representativeName,
 						businessStartDate,
+						draftDisplayName: null,
+						draftBusinessRegistrationNumber: null,
+						draftRepresentativeName: null,
+						draftBusinessStartDate: null,
 						...biznumCheck,
 						verificationStatus: "pending",
 						updatedAt: new Date(),
 					})
 					.where(
-						eq(
-							employerOrganizationProfile.organizationId,
-							ownedOrg.organizationId
+						and(
+							eq(
+								employerOrganizationProfile.organizationId,
+								ownedOrg.organizationId
+							),
+							ne(employerOrganizationProfile.verificationStatus, "pending")
 						)
-					);
+					)
+					.returning({
+						organizationId: employerOrganizationProfile.organizationId,
+					});
+
+				if (!updatedProfile) {
+					throw new ORPCError("CONFLICT", {
+						message: "이미 심사가 요청된 업체 정보입니다.",
+					});
+				}
 
 				// pending으로 전이됐을 때만 알린다 — verified 유지 경로(위)는 심사거리가
 				// 아니다. 제출·재제출 모두 운영자 인증 큐의 새 건이다.

@@ -3,6 +3,7 @@ export const employerVerificationStatuses = [
 	"pending",
 	"verified",
 	"rejected",
+	"changes_unsubmitted",
 ] as const;
 export const jobPostStatuses = [
 	"draft",
@@ -105,6 +106,7 @@ interface ShouldPrioritizeJobPostInput {
 }
 
 const employerVerificationStatusLabels = {
+	changes_unsubmitted: "변경사항 미제출",
 	none: "미인증",
 	pending: "인증 대기",
 	verified: "인증 완료",

@@ -20,6 +20,8 @@ import {
 	employerOrganizationProfile,
 	employerTeamProfile,
 	interviewSchedule,
+	jobBoostEvent,
+	jobBoostPurchase,
 	jobPost,
 	jobPostMedia,
 	report,
@@ -233,6 +235,91 @@ const removeFromListingQueueInput = z.object({
 });
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const USED_BUNDLED_BOOST_REVERT_MESSAGE =
+	"이미 사용한 끌어올리기 옵션이 있어 미결제로 전환할 수 없어요.";
+
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// 공고 등록 결제에 묶인 옵션만 공고 결제 상태와 함께 움직인다. 단독 구매는 별도 결제
+// 목록의 개별 처리 흐름을 유지한다. 미결제 전환은 실제 사용 이력이 하나라도 있으면 거절한다.
+const syncBundledBoostPurchasePayment = async ({
+	executor,
+	jobPostId,
+	now,
+	paymentStatus,
+}: {
+	executor: DbTransaction;
+	jobPostId: string;
+	now: Date;
+	paymentStatus: "paid" | "unpaid";
+}) => {
+	const purchases = await executor
+		.select()
+		.from(jobBoostPurchase)
+		.where(
+			and(
+				eq(jobBoostPurchase.jobPostId, jobPostId),
+				eq(jobBoostPurchase.purchaseSource, "job_registration")
+			)
+		)
+		.for("update");
+	if (paymentStatus === "unpaid" && purchases.length > 0) {
+		// 어느 한 옵션이라도 사용됐으면 아무 행도 바꾸기 전에 전체 전환을 거절한다.
+		// 루프 중간에 검사하면 앞 옵션만 unpaid가 되는 부분 갱신이 남을 수 있다.
+		const [usedEvent] = await executor
+			.select({ id: jobBoostEvent.id })
+			.from(jobBoostEvent)
+			.where(
+				inArray(
+					jobBoostEvent.purchaseId,
+					purchases.map((purchase) => purchase.id)
+				)
+			)
+			.limit(1);
+		if (usedEvent) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: USED_BUNDLED_BOOST_REVERT_MESSAGE,
+			});
+		}
+	}
+
+	for (const purchase of purchases) {
+		if (purchase.paymentStatus === paymentStatus) {
+			continue;
+		}
+
+		let patch: Partial<typeof jobBoostPurchase.$inferInsert>;
+		if (paymentStatus === "unpaid") {
+			patch = {
+				activatedAt: null,
+				expiresAt: null,
+				paymentStatus,
+				remainingCount: null,
+			};
+		} else if (purchase.optionType === "manual_count") {
+			patch = {
+				activatedAt: now,
+				expiresAt: null,
+				paymentStatus,
+				remainingCount: purchase.boostCount,
+			};
+		} else {
+			patch = {
+				activatedAt: now,
+				expiresAt: new Date(
+					now.getTime() + (purchase.durationDays ?? 0) * MS_PER_DAY
+				),
+				paymentStatus,
+				remainingCount: null,
+			};
+		}
+
+		await executor
+			.update(jobBoostPurchase)
+			.set(patch)
+			.where(eq(jobBoostPurchase.id, purchase.id));
+	}
+};
 
 // 계정 제재는 bambi_profile 행을 갱신하므로 온보딩 전 계정에는 걸 수 없다.
 const PROFILELESS_SANCTION_MESSAGE =
@@ -322,6 +409,7 @@ const employerVerificationStatusSchema = z.enum([
 	"pending",
 	"verified",
 	"rejected",
+	"changes_unsubmitted",
 ]);
 
 const listEmployersInput = z.object({
@@ -2022,6 +2110,7 @@ export const moderationRouter = {
 			// 배너형 승인(unpaid→paid)은 프리미엄 정원 게이트가 필요하므로 트랜잭션 안에서
 			// advisory lock으로 직렬화한다(assertPremiumApprovalWithinCapacity).
 			const { organizationId, updated } = await db.transaction(async (tx) => {
+				const now = new Date();
 				const [existing] = await tx
 					.select({
 						exposureDurationDays: jobPost.exposureDurationDays,
@@ -2042,7 +2131,7 @@ export const moderationRouter = {
 					existingExposureType: existing.exposureType,
 					existingPaymentStatus: existing.paymentStatus,
 					newPaymentStatus: input.paymentStatus,
-					now: new Date(),
+					now,
 				});
 
 				// 스페셜/추천 리스팅은 승인 게이트 대신 FIFO 유료 대기열을 탄다 — 정원이 차 있으면
@@ -2054,8 +2143,15 @@ export const moderationRouter = {
 						exposureType: existing.exposureType,
 						exposureDurationDays: existing.exposureDurationDays,
 						newPaymentStatus: input.paymentStatus,
-						now: new Date(),
+						now,
 					});
+
+				await syncBundledBoostPurchasePayment({
+					executor: tx,
+					jobPostId: input.jobPostId,
+					now,
+					paymentStatus: input.paymentStatus,
+				});
 
 				const [row] = await tx
 					.update(jobPost)
@@ -2402,6 +2498,7 @@ export const moderationRouter = {
 			const admin = await requireAdminProfile(context.session);
 
 			const { organizationId, updated } = await db.transaction(async (tx) => {
+				const now = new Date();
 				const [existing] = await tx
 					.select({
 						exposureEndsAt: jobPost.exposureEndsAt,
@@ -2428,6 +2525,13 @@ export const moderationRouter = {
 						message: "대기열에 있는 리스팅 공고만 대기열에서 뺄 수 있어요.",
 					});
 				}
+
+				await syncBundledBoostPurchasePayment({
+					executor: tx,
+					jobPostId: input.jobPostId,
+					now,
+					paymentStatus: "unpaid",
+				});
 
 				const [row] = await tx
 					.update(jobPost)
@@ -2533,10 +2637,38 @@ export const moderationRouter = {
 				.orderBy(desc(jobPost.createdAt))
 				.limit(input.limit);
 
+			const bundledPurchases =
+				rows.length === 0
+					? []
+					: await db
+							.select({
+								amount: jobBoostPurchase.amount,
+								jobPostId: jobBoostPurchase.jobPostId,
+								optionType: jobBoostPurchase.optionType,
+							})
+							.from(jobBoostPurchase)
+							.where(
+								and(
+									inArray(
+										jobBoostPurchase.jobPostId,
+										rows.map((row) => row.id)
+									),
+									eq(jobBoostPurchase.purchaseSource, "job_registration")
+								)
+							)
+							.orderBy(asc(jobBoostPurchase.createdAt));
+			const bundledByJobPostId = new Map<string, typeof bundledPurchases>();
+			for (const purchase of bundledPurchases) {
+				const current = bundledByJobPostId.get(purchase.jobPostId) ?? [];
+				current.push(purchase);
+				bundledByJobPostId.set(purchase.jobPostId, current);
+			}
+
 			// 결제관리 목록도 대기 공고에 FIFO 순번을 보여주므로 요청당 1회 뽑아 부착한다.
 			const positions = await getListingQueuePositions(db);
 			return rows.map((row) => ({
 				...row,
+				boostPurchases: bundledByJobPostId.get(row.id) ?? [],
 				listingQueuePosition: positions.get(row.id)?.position ?? null,
 			}));
 		}),
@@ -2636,6 +2768,7 @@ export const moderationRouter = {
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (jobPostId) => {
+							const now = new Date();
 							const [existing] = await tx
 								.select({
 									exposureDurationDays: jobPost.exposureDurationDays,
@@ -2660,7 +2793,7 @@ export const moderationRouter = {
 								existingExposureType: existing.exposureType,
 								existingPaymentStatus: existing.paymentStatus,
 								newPaymentStatus: input.paymentStatus,
-								now: new Date(),
+								now,
 							});
 
 							// 스페셜/추천 리스팅은 승인 게이트 없이 FIFO 대기열을 탄다 — 정원 내 항목은
@@ -2672,8 +2805,15 @@ export const moderationRouter = {
 									exposureType: existing.exposureType,
 									exposureDurationDays: existing.exposureDurationDays,
 									newPaymentStatus: input.paymentStatus,
-									now: new Date(),
+									now,
 								});
+
+							await syncBundledBoostPurchasePayment({
+								executor: tx,
+								jobPostId,
+								now,
+								paymentStatus: input.paymentStatus,
+							});
 
 							await tx
 								.update(jobPost)

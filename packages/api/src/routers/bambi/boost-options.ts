@@ -364,6 +364,7 @@ export const boostOptionsRouter = {
 					id: jobBoostPurchase.id,
 					buyerUserId: jobBoostPurchase.buyerUserId,
 					paymentStatus: jobBoostPurchase.paymentStatus,
+					purchaseSource: jobBoostPurchase.purchaseSource,
 					organizationId: jobBoostPurchase.organizationId,
 					teamId: jobPost.teamId,
 				})
@@ -374,6 +375,12 @@ export const boostOptionsRouter = {
 
 			if (!purchase) {
 				throw new ORPCError("NOT_FOUND");
+			}
+			if (purchase.purchaseSource !== "standalone") {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"공고 등록과 함께 구매한 옵션은 공고 결제에서 관리해 주세요.",
+				});
 			}
 
 			// 본인·운영자가 아니면 공고 접근 권한을 요구한다(권한 없으면 requireEmployerPostingAccess가 차단).
@@ -440,11 +447,12 @@ export const boostOptionsRouter = {
 				.orderBy(desc(jobBoostPurchase.createdAt))
 				.limit(input.limit);
 
+			const conditions = [eq(jobBoostPurchase.purchaseSource, "standalone")];
 			if (input.onlyUnpaid) {
-				return await query.where(eq(jobBoostPurchase.paymentStatus, "unpaid"));
+				conditions.push(eq(jobBoostPurchase.paymentStatus, "unpaid"));
 			}
 
-			return await query;
+			return await query.where(and(...conditions));
 		}),
 
 	// 운영자 입금 확인·정정. paid 전환 시 옵션을 활성화하고, unpaid 되돌림 시 세 활성 필드를 리셋한다.
@@ -463,6 +471,12 @@ export const boostOptionsRouter = {
 
 					if (!locked) {
 						throw new ORPCError("NOT_FOUND");
+					}
+					if (locked.purchaseSource !== "standalone") {
+						throw new ORPCError("BAD_REQUEST", {
+							message:
+								"공고 등록과 함께 구매한 옵션은 공고 결제에서 관리해 주세요.",
+						});
 					}
 
 					// 같은 상태 재확정은 멱등 처리한다 — paid를 다시 걸어 횟수권 잔여가 초기화되는 사고를 막는다.
