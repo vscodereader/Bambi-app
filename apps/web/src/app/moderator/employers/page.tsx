@@ -11,7 +11,7 @@ import {
 	AlertDialogTitle,
 } from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
-import { Button, buttonVariants } from "@bambi-app/ui/components/button";
+import { Button } from "@bambi-app/ui/components/button";
 import {
 	Card,
 	CardContent,
@@ -21,7 +21,7 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ChatAttachmentPreview } from "@/components/bambi/chat-attachment-preview";
@@ -198,35 +198,25 @@ export default function ModeratorEmployersPage() {
 										{employer.businessDocuments.map((document) => (
 											<li className="min-w-0" key={document.id}>
 												<ChatAttachmentPreview
+													actions={
+														<Button
+															aria-label={`${document.fileName} 삭제`}
+															className="size-8 rounded-full bg-background/80 text-muted-foreground hover:text-destructive"
+															disabled={deleteDocument.isPending}
+															onClick={() =>
+																setPendingDeleteDocumentId(document.id)
+															}
+															size="icon"
+															type="button"
+															variant="ghost"
+														>
+															<Trash2 aria-hidden />
+														</Button>
+													}
 													attachment={document}
+													downloadUrl={`${document.objectUrl}?download=1`}
 													mine={false}
 												/>
-												<div className="mt-2 flex gap-2">
-													<a
-														className={buttonVariants({
-															className: "flex-1",
-															size: "sm",
-															variant: "outline",
-														})}
-														download={document.fileName}
-														href={`${document.objectUrl}?download=1`}
-													>
-														<Download aria-hidden />
-														다운로드
-													</a>
-													<Button
-														aria-label={`${document.fileName} 삭제`}
-														disabled={deleteDocument.isPending}
-														onClick={() =>
-															setPendingDeleteDocumentId(document.id)
-														}
-														size="sm"
-														type="button"
-														variant="outline"
-													>
-														<Trash2 aria-hidden />
-													</Button>
-												</div>
 											</li>
 										))}
 									</ul>
