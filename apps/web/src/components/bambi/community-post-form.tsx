@@ -110,10 +110,12 @@ interface CommunityPostInitial {
 
 interface CommunityPostFormProps {
 	board: CommunityBoardMeta;
-	// 수정 모드 초기값. 비작성자(비밀번호 수정)는 editPassword로 게이트 통과 비번을 넘긴다.
+	// 수정 모드 초기값. 게이트(CommunityEditGate)를 통과한 비번을 넘긴다 — 비회원 수정과
+	// 회원 비작성자 수정 모두 이 값으로 인라인 비밀번호 재입력을 없앤다(회원 작성자는 undefined).
 	editPassword?: string;
-	// 비회원(게스트 인증) 모드. 작성인 기본값·비밀번호 필수·잠금/광고·이미지 업로드 숨김이
-	// 함께 바뀐다. 완료 후 이동은 신분이 아니라 지금 있는 영역(useCommunityAreaPaths)을 따른다.
+	// 비회원(게스트 인증) 모드. 작성인 기본값·잠금/광고·이미지 업로드 숨김이 함께 바뀐다.
+	// 작성 모드는 비밀번호 필드를 세워 새 비번을 받고, 수정 모드는 게이트에서 받은 editPassword를
+	// 쓰므로 필드를 숨긴다. 완료 후 이동은 신분이 아니라 지금 있는 영역(useCommunityAreaPaths)을 따른다.
 	guest?: boolean;
 	initialPost?: CommunityPostInitial;
 }
@@ -135,7 +137,8 @@ const passwordPlaceholder = (guest: boolean, isEdit: boolean): string => {
 // 비밀글 잠금 스위치 + (잠금 시) 비밀번호 필드. 자유수다는 스위치를 숨기되 수정 권한 확인용
 // 비밀번호 필드는 유지한다. 작성 모드는 잠금을 끄면 잔여 비번을 비운다.
 // 비회원은 잠금 자체를 쓸 수 없고(공개 경로에서 자기 글도 못 읽게 된다) 비밀번호가
-// 소유권 증명 전용이라 항상 필드를 노출한다.
+// 소유권 증명 전용이다. 작성 모드는 새 비밀번호를 정하는 곳이라 필드를 세우지만, 수정 모드는
+// 게이트(CommunityEditGate)에서 검증된 비번을 editPassword로 이미 받으므로 인라인 필드를 숨긴다.
 // 법률 자문(forcedLock)은 스위치 대신 안내만 두고 비밀번호를 반드시 받는다.
 function PostLockField({
 	allowLocking,
@@ -156,7 +159,7 @@ function PostLockField({
 	setIsLocked: (value: boolean) => void;
 	setPassword: (value: string) => void;
 }) {
-	const showPasswordField = guest || isEdit || isLocked;
+	const showPasswordField = guest ? !isEdit : isEdit || isLocked;
 	const handleLockChange = (checked: boolean) => {
 		setIsLocked(checked);
 		if (!(checked || isEdit)) {

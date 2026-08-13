@@ -1,6 +1,6 @@
 import type { Metadata, Route } from "next";
 import { notFound, redirect } from "next/navigation";
-import { CommunityPostForm } from "@/components/bambi/community-post-form";
+import { CommunityEditGate } from "@/components/bambi/community-edit-gate";
 import { GuestVerifyCard } from "@/components/bambi/guest-verify-card";
 import { communityEditPath } from "@/lib/bambi/community";
 import {
@@ -19,8 +19,9 @@ export const metadata: Metadata = {
 	robots: { follow: false, index: false },
 };
 
-// 비회원 글 수정. 소유권은 서버가 비밀번호로 판정하므로(폼의 비밀번호 필드) 여기서는
-// 별도 게이트를 두지 않는다 — 비밀번호가 틀리면 저장 시 403 안내가 나간다.
+// 비회원 글 수정. 비밀번호 입력 게이트를 먼저 세우고, 통과한 뒤에야 글 폼을 연다
+// (CommunityEditGate). 여기 서버 검증은 존재·보드·게스트글 판정과 본인인증 여부까지만
+// 맡고, 소유권 비밀번호 실검증은 게이트가 getPost로 서버에 위임한다.
 export default async function PublicPostEditPage({ params }: PageProps) {
 	const { boardSlug, postId } = await params;
 	const board = getPublicBoardBySlug(boardSlug);
@@ -33,7 +34,8 @@ export default async function PublicPostEditPage({ params }: PageProps) {
 		readVisitorState(),
 		readGuestCanWrite(),
 	]);
-	// 회원 글은 회원 화면에서 수정한다(잠금·광고 옵션이 그쪽에만 있다).
+	// 회원 글은 회원 화면에서 수정한다(잠금·광고 옵션이 그쪽에만 있다). getPublicPost 조회는
+	// 글 존재·보드·게스트글 여부 확인용으로만 쓴다(폼 초기값은 게이트가 다시 받아온다).
 	if (!post || post.board !== board.key || post.authorRole !== "guest") {
 		notFound();
 	}
@@ -52,19 +54,5 @@ export default async function PublicPostEditPage({ params }: PageProps) {
 		);
 	}
 
-	return (
-		<CommunityPostForm
-			board={board}
-			guest
-			initialPost={{
-				authorName: post.authorName,
-				authorRole: post.authorRole,
-				body: post.body,
-				id: post.id,
-				isLocked: false,
-				isPromotion: post.isPromotion,
-				title: post.title,
-			}}
-		/>
-	);
+	return <CommunityEditGate board={board} guest postId={postId} />;
 }
