@@ -2114,95 +2114,112 @@ export const moderationRouter = {
 
 			// 배너형 승인(unpaid→paid)은 프리미엄 정원 게이트가 필요하므로 트랜잭션 안에서
 			// advisory lock으로 직렬화한다(assertPremiumApprovalWithinCapacity).
-			const { organizationId, updated } = await db.transaction(async (tx) => {
-				const now = new Date();
-				const [existing] = await tx
-					.select({
-						exposureDurationDays: jobPost.exposureDurationDays,
-						exposureType: jobPost.exposureType,
-						organizationId: jobPost.organizationId,
-						paymentStatus: jobPost.paymentStatus,
-					})
-					.from(jobPost)
-					.where(eq(jobPost.id, input.jobPostId))
-					.limit(1);
+			const { changed, organizationId, updated } = await db.transaction(
+				async (tx) => {
+					const now = new Date();
+					const [existing] = await tx
+						.select()
+						.from(jobPost)
+						.where(eq(jobPost.id, input.jobPostId))
+						.limit(1);
 
-				if (!existing) {
-					throw new ORPCError("NOT_FOUND");
-				}
+					if (!existing) {
+						throw new ORPCError("NOT_FOUND");
+					}
 
-				await assertPremiumApprovalWithinCapacity({
-					executor: tx,
-					existingExposureType: existing.exposureType,
-					existingPaymentStatus: existing.paymentStatus,
-					newPaymentStatus: input.paymentStatus,
-					now,
-				});
+					// 같은 상태 재확정은 멱등 처리한다(confirmPurchasePayment와 동일 패턴) — 이미
+					// paid인 리스팅에 결제완료를 다시 걸면 만석 섹션에서 exposureEndsAt=null로
+					// 재계산돼 노출 중인 광고가 대기열 맨 뒤로 강등되고(listingPaidAt 리셋), 배너는
+					// 노출 시계가 부당 연장된다. changed=false로 알림·캐시 동기화도 건너뛴다(#4).
+					if (existing.paymentStatus === input.paymentStatus) {
+						return {
+							changed: false,
+							organizationId: existing.organizationId,
+							updated: existing,
+						};
+					}
 
-				// 스페셜/추천 리스팅은 승인 게이트 대신 FIFO 유료 대기열을 탄다 — 정원이 차 있으면
-				// 결제는 성공하되 exposureEndsAt=null로 대기(노출 시계 미시작), 자리가 나면 틱이 승격한다.
-				// 정원 내면 즉시 활성화(now+기간). 그 외(배너·비리스팅)는 기존 규칙 그대로.
-				const { exposureEndsAt, listingPaidAt } =
-					await resolveListingPaymentExposure({
+					await assertPremiumApprovalWithinCapacity({
 						executor: tx,
-						exposureType: existing.exposureType,
-						exposureDurationDays: existing.exposureDurationDays,
+						existingExposureType: existing.exposureType,
+						existingPaymentStatus: existing.paymentStatus,
 						newPaymentStatus: input.paymentStatus,
 						now,
 					});
 
-				await syncBundledBoostPurchasePayment({
-					executor: tx,
-					jobPostId: input.jobPostId,
-					now,
-					paymentStatus: input.paymentStatus,
+					// 스페셜/추천 리스팅은 승인 게이트 대신 FIFO 유료 대기열을 탄다 — 정원이 차 있으면
+					// 결제는 성공하되 exposureEndsAt=null로 대기(노출 시계 미시작), 자리가 나면 틱이 승격한다.
+					// 정원 내면 즉시 활성화(now+기간). 그 외(배너·비리스팅)는 기존 규칙 그대로.
+					const { exposureEndsAt, listingPaidAt } =
+						await resolveListingPaymentExposure({
+							executor: tx,
+							exposureType: existing.exposureType,
+							exposureDurationDays: existing.exposureDurationDays,
+							newPaymentStatus: input.paymentStatus,
+							now,
+						});
+
+					await syncBundledBoostPurchasePayment({
+						executor: tx,
+						jobPostId: input.jobPostId,
+						now,
+						paymentStatus: input.paymentStatus,
+					});
+
+					const [row] = await tx
+						.update(jobPost)
+						.set({
+							exposureEndsAt,
+							listingPaidAt,
+							paymentStatus: input.paymentStatus,
+						})
+						.where(eq(jobPost.id, input.jobPostId))
+						.returning();
+
+					if (!row) {
+						throw new ORPCError("NOT_FOUND");
+					}
+
+					return {
+						changed: true,
+						organizationId: existing.organizationId,
+						updated: row,
+					};
+				}
+			);
+
+			// 상태가 실제로 바뀐 경우에만 캐시 동기화·알림을 수행한다 — same-status 멱등 단락에서는
+			// 노출·순번이 그대로라 어느 쪽도 재실행할 이유가 없다(#4).
+			if (changed) {
+				// 결제 상태 전환은 공개 게이트(published AND paid)를 넘나들 수 있으므로
+				// 해당 조직 owner/admin의 수다방 광고 자격 캐시를 재동기화한다.
+				await syncAdvertiserFlagForOrganization({
+					now: new Date(),
+					organizationId,
 				});
 
-				const [row] = await tx
-					.update(jobPost)
-					.set({
-						exposureEndsAt,
-						listingPaidAt,
-						paymentStatus: input.paymentStatus,
-					})
-					.where(eq(jobPost.id, input.jobPostId))
-					.returning();
-
-				if (!row) {
-					throw new ORPCError("NOT_FOUND");
-				}
-
-				return { organizationId: existing.organizationId, updated: row };
-			});
-
-			// 결제 상태 전환은 공개 게이트(published AND paid)를 넘나들 수 있으므로
-			// 해당 조직 owner/admin의 수다방 광고 자격 캐시를 재동기화한다.
-			await syncAdvertiserFlagForOrganization({
-				now: new Date(),
-				organizationId,
-			});
-
-			// unpaid→paid가 노출 개시라, 구인자에게는 "광고가 시작됐다"는 유일한 신호다. 단, 스페셜/추천이
-			// 만석 대기열로 들어갔으면(exposureEndsAt=null) 게시가 아니라 접수라 순번을 붙여 다르게 알린다.
-			const queuedNow =
-				input.paymentStatus === "paid" && isQueuedListingRow(updated);
-			const position = queuedNow
-				? ((await getListingQueuePositions(db)).get(input.jobPostId)
-						?.position ?? null)
-				: null;
-			const notification = buildListingPaymentNotification({
-				bulk: false,
-				paymentStatus: input.paymentStatus,
-				position,
-				row: updated,
-			});
-			await notifyModerationAction({
-				action: notification.action,
-				actorUserId: admin.userId,
-				metadata: notification.metadata,
-				targetId: input.jobPostId,
-				targetType: "job_post",
-			});
+				// unpaid→paid가 노출 개시라, 구인자에게는 "광고가 시작됐다"는 유일한 신호다. 단, 스페셜/추천이
+				// 만석 대기열로 들어갔으면(exposureEndsAt=null) 게시가 아니라 접수라 순번을 붙여 다르게 알린다.
+				const queuedNow =
+					input.paymentStatus === "paid" && isQueuedListingRow(updated);
+				const position = queuedNow
+					? ((await getListingQueuePositions(db)).get(input.jobPostId)
+							?.position ?? null)
+					: null;
+				const notification = buildListingPaymentNotification({
+					bulk: false,
+					paymentStatus: input.paymentStatus,
+					position,
+					row: updated,
+				});
+				await notifyModerationAction({
+					action: notification.action,
+					actorUserId: admin.userId,
+					metadata: notification.metadata,
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+			}
 
 			return updated;
 		}),
@@ -2768,6 +2785,8 @@ export const moderationRouter = {
 
 			// 갱신에 성공한 공고들의 조직 유니크 집합 — 트랜잭션 커밋 후 광고 자격 캐시 동기화용.
 			const affectedOrganizationIds = new Set<string>();
+			// 같은 상태 재확정으로 무변경 처리된 공고들 — 성공으로 치되 알림·캐시 대상에서 뺀다(#4).
+			const noopJobPostIds = new Set<string>();
 
 			const result = await db.transaction(
 				async (tx) =>
@@ -2789,6 +2808,14 @@ export const moderationRouter = {
 								throw new ORPCError("NOT_FOUND", {
 									message: "Job post was not found.",
 								});
+							}
+
+							// 같은 상태 재확정은 항목 단위 no-op(#4, 단건과 동일). 성공으로 치되
+							// 아무것도 바꾸지 않고, 커밋 후 알림·캐시 동기화 대상에서도 뺀다 —
+							// 이미 paid인 리스팅을 재확정하면 노출 중인 광고가 대기열로 강등된다.
+							if (existing.paymentStatus === input.paymentStatus) {
+								noopJobPostIds.add(jobPostId);
+								return;
 							}
 
 							// 정원 초과 승인은 항목별 실패로 떨어진다(CONFLICT). 같은 트랜잭션에서
@@ -2869,6 +2896,10 @@ export const moderationRouter = {
 					: null;
 
 			for (const jobPostId of succeededIds) {
+				// 무변경(same-status) 건은 실제 전환이 없었으므로 알림을 보내지 않는다(#4).
+				if (noopJobPostIds.has(jobPostId)) {
+					continue;
+				}
 				const notification = buildListingPaymentNotification({
 					bulk: true,
 					paymentStatus: input.paymentStatus,
