@@ -173,6 +173,17 @@ describe("visual job marketplace components", () => {
 		expect(source).not.toContain("2xl:grid-cols-4");
 	});
 
+	// 섹션 헤더의 개수 표기는 제거됐다 — 크롤링 주입 상한·슬롯 컷·단기성 크롤링 변동이 겹쳐
+	// 어떤 기준(배열/카드/자격 총량)으로 세도 다른 숫자와 어긋났다(헤더 14 vs 카드 12 버그).
+	// 헤더에는 라벨(meta)만 남긴다.
+	it("renders section headers without a job count", () => {
+		const source = readComponent("visual-job-exposure-sections.tsx");
+
+		expect(source).not.toContain("개 · {meta}");
+		expect(source).not.toContain("{jobs.length}개");
+		expect(source).not.toContain("{shownJobs.length}개");
+	});
+
 	it("wires the seeker marketplace to visual exposure sections", () => {
 		const source = readComponent("screens/seeker-marketplace.tsx");
 

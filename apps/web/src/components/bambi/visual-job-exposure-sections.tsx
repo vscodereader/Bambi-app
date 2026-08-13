@@ -126,8 +126,10 @@ function ExposureSection({
 					<span className={cn("h-4 w-1 rounded-full", accentClassName[tone])} />
 					{title}
 				</h2>
+				{/* 개수 표기는 제거됐다 — 크롤링 주입 상한·슬롯 컷·단기성 크롤링 변동이 겹쳐
+				    "몇 개"가 기준마다 달라지므로(배열 vs 카드 vs 자격 총량) 숫자 없이 라벨만 남긴다. */}
 				<span className="font-semibold text-muted-foreground text-xs">
-					{jobs.length}개 · {meta}
+					{meta}
 				</span>
 			</div>
 			<div className={CARD_GRID_CLASS}>
