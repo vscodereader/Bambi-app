@@ -112,6 +112,7 @@ export function CommunityEditGate({
 						authorRole: data.authorRole,
 						body: data.body,
 						contactPhone: data.contactPhone,
+						commentsDisabled: data.commentsDisabled,
 						id: data.id,
 						isAnonymous: data.isAnonymous,
 						isLocked: data.isLocked,

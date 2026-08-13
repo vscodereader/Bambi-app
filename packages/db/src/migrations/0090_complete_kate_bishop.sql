@@ -1,0 +1,1 @@
+ALTER TABLE "community_post" ADD COLUMN "comments_disabled" boolean DEFAULT false NOT NULL;

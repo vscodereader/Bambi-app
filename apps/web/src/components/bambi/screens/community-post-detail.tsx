@@ -109,6 +109,7 @@ function GuestPostDetailView({
 				canReadComments
 				canWrite
 				commentCount={post.commentCount}
+				commentsDisabled={post.commentsDisabled}
 				initialComments={[]}
 				initialIsLiked={post.isLiked}
 				isGuestAuthored={post.canEdit}
@@ -296,6 +297,7 @@ function PostDetailView({
 					) : null}
 				</div>
 				<CommentList
+					allowReplies={!post.commentsDisabled}
 					comments={comments}
 					deletePending={deleteCommentMutation.isPending}
 					editingId={editingId}
@@ -321,19 +323,25 @@ function PostDetailView({
 					replyPending={createCommentMutation.isPending}
 					replyTo={replyTo}
 				/>
-				<CommentForm
-					canSubmit={canSubmitComment}
-					maxLength={COMMENT_MAX}
-					onChange={setCommentBody}
-					onSubmit={() =>
-						createCommentMutation.mutate({
-							body: trimmedComment,
-							password: appliedPassword,
-							postId,
-						})
-					}
-					value={commentBody}
-				/>
+				{post.commentsDisabled ? (
+					<p className="m-0 rounded-md bg-secondary px-3 py-2.5 text-muted-foreground text-sm">
+						운영자가 댓글 작성을 제한한 글입니다.
+					</p>
+				) : (
+					<CommentForm
+						canSubmit={canSubmitComment}
+						maxLength={COMMENT_MAX}
+						onChange={setCommentBody}
+						onSubmit={() =>
+							createCommentMutation.mutate({
+								body: trimmedComment,
+								password: appliedPassword,
+								postId,
+							})
+						}
+						value={commentBody}
+					/>
+				)}
 			</div>
 		</div>
 	);

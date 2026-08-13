@@ -27,11 +27,14 @@ export const isInternalPopupPath = (value: string): boolean =>
 	!value.includes("\\") &&
 	Array.from(value).every((character) => character.charCodeAt(0) >= 32);
 
-const ALLOWED_POPUP_HOSTS = new Set([
-	"bambialba.com",
-	"www.bambialba.com",
-	"localhost",
-]);
+const isAllowedPopupHost = (hostname: string): boolean => {
+	const normalized = hostname.toLowerCase();
+	return (
+		normalized === "localhost" ||
+		normalized === "bambialba.com" ||
+		normalized.endsWith(".bambialba.com")
+	);
+};
 
 export const normalizePopupLink = (value: string | null | undefined) => {
 	const trimmed = value?.trim() ?? "";
@@ -49,7 +52,7 @@ export const normalizePopupLink = (value: string | null | undefined) => {
 	}
 	if (
 		!(
-			ALLOWED_POPUP_HOSTS.has(parsed.hostname.toLowerCase()) &&
+			isAllowedPopupHost(parsed.hostname) &&
 			["http:", "https:"].includes(parsed.protocol)
 		)
 	) {

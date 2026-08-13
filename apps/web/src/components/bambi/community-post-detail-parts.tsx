@@ -96,6 +96,7 @@ export interface CommunityPostDetail {
 	canDelete: boolean;
 	canEdit: boolean;
 	commentCount: number;
+	commentsDisabled: boolean;
 	// 법률 자문 글에만 실린다. 잠금을 연 열람자(작성자·운영자·법률자문)에게만 서버가 내려준다.
 	contactPhone: string | null;
 	createdAt: Date | string;
@@ -671,7 +672,7 @@ function CommentThread({
 	onEditOpen: (commentId: string) => void;
 	onEditSubmit: (commentId: string, body: string) => void;
 	onReplyClose: () => void;
-	onReplyOpen: (parentId: string) => void;
+	onReplyOpen?: (parentId: string) => void;
 	onReplySubmit: (parentId: string, body: string) => void;
 	parent: CommunityCommentItem;
 	replies: CommunityCommentItem[];
@@ -679,7 +680,7 @@ function CommentThread({
 	replyTo: string | null;
 }) {
 	const isReplying = replyTo === parent.id;
-	const canReply = !(parent.isDeleted || isReplying);
+	const canReply = Boolean(onReplyOpen) && !(parent.isDeleted || isReplying);
 
 	return (
 		<div className="flex flex-col gap-3">
@@ -693,7 +694,9 @@ function CommentThread({
 				onEditClose={onEditClose}
 				onEditOpen={onEditOpen}
 				onEditSubmit={onEditSubmit}
-				onReply={canReply ? () => onReplyOpen(parent.id) : undefined}
+				onReply={
+					canReply && onReplyOpen ? () => onReplyOpen(parent.id) : undefined
+				}
 			/>
 			{isReplying || replies.length > 0 ? (
 				<div className="flex flex-col gap-3 border-border border-l pl-4">
@@ -730,6 +733,7 @@ const isEmployerComment = (comment: CommunityCommentItem): boolean =>
 	comment.authorRole === "employer";
 
 export function CommentList({
+	allowReplies,
 	comments,
 	deletePending,
 	editPending,
@@ -746,6 +750,7 @@ export function CommentList({
 	replyPending,
 	replyTo,
 }: {
+	allowReplies: boolean;
 	comments: CommunityCommentItem[];
 	deletePending: boolean;
 	editPending: boolean;
@@ -765,7 +770,9 @@ export function CommentList({
 	if (comments.length === 0) {
 		return (
 			<p className="m-0 py-2 text-muted-foreground text-sm">
-				아직 댓글이 없어요. 첫 댓글을 남겨보세요.
+				{allowReplies
+					? "아직 댓글이 없어요. 첫 댓글을 남겨보세요."
+					: "아직 등록된 댓글이 없어요."}
 			</p>
 		);
 	}
@@ -805,7 +812,7 @@ export function CommentList({
 					onEditOpen={onEditOpen}
 					onEditSubmit={onEditSubmit}
 					onReplyClose={onReplyClose}
-					onReplyOpen={onReplyOpen}
+					onReplyOpen={allowReplies ? onReplyOpen : undefined}
 					onReplySubmit={onReplySubmit}
 					parent={parent}
 					replies={repliesOf(parent.id)}

@@ -631,6 +631,13 @@
       "when": 1786601678118,
       "tag": "0089_abandoned_firelord",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1786611077883,
+      "tag": "0090_complete_kate_bishop",
+      "breakpoints": true
     }
   ]
 }

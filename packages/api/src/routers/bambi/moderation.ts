@@ -3516,9 +3516,11 @@ export const moderationRouter = {
 			const [room] = await db
 				.select({
 					chatRoomId: chatRoom.id,
+					employerImage: employerUser.image,
 					employerName: employerUser.name,
 					employerUserId: chatRoom.employerUserId,
 					jobPostTitle: jobPost.title,
+					jobSeekerImage: seekerUser.image,
 					jobSeekerName: seekerUser.name,
 					jobSeekerUserId: chatRoom.jobSeekerUserId,
 				})
@@ -3543,7 +3545,7 @@ export const moderationRouter = {
 				})
 				.from(chatMessage)
 				.where(eq(chatMessage.chatRoomId, input.chatRoomId))
-				.orderBy(asc(chatMessage.createdAt));
+				.orderBy(asc(chatMessage.createdAt), asc(chatMessage.id));
 
 			const messageIds = messages.map((message) => message.id);
 			const attachments = messageIds.length

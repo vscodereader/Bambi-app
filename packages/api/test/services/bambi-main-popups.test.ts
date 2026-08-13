@@ -25,9 +25,18 @@ describe("main popup policy", () => {
 				"https://www.bambialba.com/seeker/community/notice/post-2"
 			)
 		).toBe("/seeker/community/notice/post-2");
+		expect(
+			normalizePopupLink("https://test.bambialba.com/seeker/community/free")
+		).toBe("/seeker/community/free");
+		expect(
+			normalizePopupLink("https://preview.qa.bambialba.com/employer")
+		).toBe("/employer");
 		expect(() => normalizePopupLink("https://example.com/seeker")).toThrow(
 			"localhost 또는 bambialba.com 내부 주소"
 		);
+		expect(() =>
+			normalizePopupLink("https://bambialba.com.evil.test/seeker")
+		).toThrow("localhost 또는 bambialba.com 내부 주소");
 	});
 
 	it("uses an inclusive start and exclusive end", () => {

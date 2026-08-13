@@ -142,6 +142,7 @@ const createPostInput = z.object({
 	body: z.string().min(2).max(BODY_MAX),
 	// 법률 자문 글의 선택 입력 연락처. 다른 게시판에서는 받지 않는다(아래 assertContactPhoneBoard).
 	contactPhone: z.string().trim().max(20).optional(),
+	commentsDisabled: z.boolean().default(false),
 	isLocked: z.boolean().default(false),
 	isEvent: z.boolean().default(false),
 	isAnonymous: z.boolean().default(false),
@@ -229,6 +230,7 @@ const updatePostInput = postIdInput.extend({
 	authorName: z.string().trim().min(1).max(30),
 	body: z.string().min(2).max(BODY_MAX),
 	contactPhone: z.string().trim().max(20).optional(),
+	commentsDisabled: z.boolean().optional(),
 	isLocked: z.boolean(),
 	isEvent: z.boolean().optional(),
 	isAnonymous: z.boolean().optional(),
@@ -249,6 +251,26 @@ const assertAnonymousPostAllowed = ({
 		throw new ORPCError("FORBIDDEN", {
 			message: "이 게시판에서는 익명으로 작성할 수 없습니다.",
 		});
+	}
+};
+
+const assertCommentsDisabledAllowed = (
+	commentsDisabled: boolean | undefined,
+	role: string
+): void => {
+	if (commentsDisabled !== undefined && role !== "admin") {
+		throw new ORPCError("FORBIDDEN", {
+			message: "댓글 작성 제한은 운영자만 설정할 수 있습니다.",
+		});
+	}
+};
+
+const assertCreateCommentsDisabledAllowed = (
+	commentsDisabled: boolean,
+	role: string
+): void => {
+	if (commentsDisabled) {
+		assertCommentsDisabledAllowed(true, role);
 	}
 };
 
@@ -907,7 +929,8 @@ const memberCommentPolicy =
 // 비회원·비로그인 열람 정책 — 색인되는 공개 페이지라 회원 계정명은 싣지 않는다.
 // 수정·삭제 버튼은 gid 일치일 때만 여는 힌트이고, 실제 게이트는 서버의 비밀번호 검증이다.
 const guestCommentPolicy = (guestId: null | string) => (row: CommentRow) => ({
-	authorImage: null,
+	authorImage:
+		row.authorGuestId || row.authorDeletedAt ? null : row.authorImage,
 	authorName: row.authorGuestId ? GUEST_DISPLAY_NAME : null,
 	canDelete: Boolean(guestId) && row.authorGuestId === guestId,
 	canEdit: Boolean(guestId) && row.authorGuestId === guestId,
@@ -1253,7 +1276,14 @@ export const communityRouter = {
 				board: post.board,
 				body: post.body,
 				commentCount: post.commentCount,
+				commentsDisabled: post.commentsDisabled,
 				comments: rows.map((row) => ({
+					authorImage:
+						row.status === "published" &&
+						!row.authorGuestId &&
+						!row.authorDeletedAt
+							? row.authorImage
+							: null,
 					authorRole: row.status === "published" ? row.authorRole : null,
 					body: row.status === "published" ? row.body : "",
 					createdAt: row.createdAt,
@@ -1355,6 +1385,7 @@ export const communityRouter = {
 				canDelete: isMine || profile?.role === "admin",
 				canEdit: isMine,
 				commentCount: post.commentCount,
+				commentsDisabled: post.commentsDisabled,
 				// 잠금을 실제로 연 열람자(작성자·운영자·법률자문·비밀번호 통과)만 여기까지 온다 —
 				// 위쪽 잠금 축소 응답에는 연락처가 실리지 않는다. 법률 자문 외 게시판은 애초에
 				// 저장하지 않으므로 항상 null이다.
@@ -1504,6 +1535,7 @@ export const communityRouter = {
 					message: "공지사항은 운영자만 작성할 수 있습니다.",
 				});
 			}
+			assertCreateCommentsDisabledAllowed(input.commentsDisabled, role);
 			if (input.isPromotion && role !== "employer") {
 				throw new ORPCError("BAD_REQUEST", { message: PROMOTION_ROLE_ERROR });
 			}
@@ -1555,6 +1587,7 @@ export const communityRouter = {
 						board: input.board,
 						body: input.body,
 						contactPhone: input.contactPhone || null,
+						commentsDisabled: input.commentsDisabled,
 						isLocked,
 						isEvent: input.isEvent,
 						isAnonymous: input.isAnonymous,
@@ -1604,11 +1637,14 @@ export const communityRouter = {
 				post.board
 			);
 			const nextIsEvent = input.isEvent ?? post.isEvent;
+			const nextCommentsDisabled =
+				input.commentsDisabled ?? post.commentsDisabled;
 			const nextIsAnonymous = input.isAnonymous ?? post.isAnonymous;
 			assertAnonymousPostAllowed({
 				isAnonymous: nextIsAnonymous,
 				role: actorRole(actor),
 			});
+			assertCommentsDisabledAllowed(input.commentsDisabled, actorRole(actor));
 			const authorName = await resolveMemberPostAuthorName(
 				actor,
 				input.authorName,
@@ -1676,6 +1712,7 @@ export const communityRouter = {
 					authorDisplayName: authorName,
 					body: input.body,
 					contactPhone: input.contactPhone || null,
+					commentsDisabled: nextCommentsDisabled,
 					isLocked,
 					isEvent: nextIsEvent,
 					isAnonymous: nextIsAnonymous,
@@ -1694,7 +1731,6 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
-
 			if (actor.kind === "guest") {
 				assertGuestOwnership(post, input.password);
 			} else {
@@ -1840,6 +1876,11 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
+			if (post.commentsDisabled) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "이 글은 댓글을 작성할 수 없습니다.",
+				});
+			}
 			// 비회원이 닿을 수 있는 잠긴 글은 자기가 쓴 법률 자문 글뿐이고(assertGuestPostAccess가
 			// gid로 확인한다) 그 경우에도 잠금은 이미 통과한 상태라, password는 잠금 열쇠가
 			// 아니라 그대로 자기 댓글의 소유권 비밀번호가 된다.
@@ -1871,6 +1912,19 @@ export const communityRouter = {
 			}
 
 			const created = await db.transaction(async (tx) => {
+				await tx.execute(
+					sql`select ${communityPost.id} from ${communityPost} where ${communityPost.id} = ${input.postId} for share`
+				);
+				const [currentPost] = await tx
+					.select({ commentsDisabled: communityPost.commentsDisabled })
+					.from(communityPost)
+					.where(eq(communityPost.id, input.postId))
+					.limit(1);
+				if (currentPost?.commentsDisabled) {
+					throw new ORPCError("FORBIDDEN", {
+						message: "이 글은 댓글을 작성할 수 없습니다.",
+					});
+				}
 				const [row] = await tx
 					.insert(communityComment)
 					.values({

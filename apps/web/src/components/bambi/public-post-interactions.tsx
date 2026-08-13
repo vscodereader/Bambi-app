@@ -35,6 +35,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactElement, useState } from "react";
 import { toast } from "sonner";
+import { Avatar } from "@/components/bambi/ds";
 import { GuestVerifyCard } from "@/components/bambi/guest-verify-card";
 import {
 	communityAuthorRoleLabel,
@@ -49,6 +50,7 @@ const PASSWORD_MAX = 30;
 
 // 서버(getPublicPost)가 내려주는 댓글 모양. 인증 전에는 이 값이 그대로 화면이 된다.
 export interface PublicCommentSeed {
+	authorImage: string | null;
 	authorRole: string | null;
 	body: string;
 	createdAt: Date | string;
@@ -219,7 +221,13 @@ function CommentRow({
 		<div className="flex flex-col gap-1">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				{/* enum 원값 대신 라벨 맵을 거친다. 공개 경로는 회원 계정명을 싣지 않는다. */}
-				<span className="text-muted-foreground text-xs">
+				<span className="flex items-center gap-1.5 text-muted-foreground text-xs">
+					<Avatar
+						fallbackIcon="user"
+						name={communityAuthorRoleLabel(comment.authorRole)}
+						size="xs"
+						src={comment.authorImage ?? undefined}
+					/>
 					{communityAuthorRoleLabel(comment.authorRole)} ·{" "}
 					{formatCommunityDate(comment.createdAt)}
 				</span>
@@ -418,6 +426,7 @@ interface PublicPostInteractionsProps {
 	// 비회원 쓰기 자격(gid 있는 게스트 토큰). 없으면 읽기 + 본인인증 안내만.
 	canWrite: boolean;
 	commentCount: number;
+	commentsDisabled?: boolean;
 	initialComments: PublicCommentSeed[];
 	// 이미 추천했는지. 공개 상세(getPublicPost)는 내려주지 않아 기본 false지만, 회원 화면
 	// 상세(getPost)는 gid 기준으로 알려주므로 첫 클릭이 추천 취소가 되지 않게 넘겨받는다.
@@ -439,6 +448,7 @@ export function PublicPostInteractions({
 	canLike = false,
 	canWrite,
 	commentCount,
+	commentsDisabled = false,
 	initialComments,
 	initialIsLiked = false,
 	isGuestAuthored,
@@ -458,6 +468,7 @@ export function PublicPostInteractions({
 	const [like, setLike] = useState({ isLiked: initialIsLiked, likeCount });
 
 	const canParticipate = canWrite && participable;
+	const canComment = canParticipate && !commentsDisabled;
 
 	// 인증된 비회원만 재조회한다(내 댓글의 수정·삭제 권한 플래그가 필요해서다).
 	// 그 외에는 서버가 내려준 목록을 그대로 쓴다.
@@ -608,7 +619,7 @@ export function PublicPostInteractions({
 									updateCommentMutation.mutate({ body, commentId, password })
 								}
 								onReplyClose={() => setReplyTo(null)}
-								onReplyOpen={canParticipate ? setReplyTo : undefined}
+								onReplyOpen={canComment ? setReplyTo : undefined}
 								onReplySubmit={(parentCommentId, body, password) =>
 									createCommentMutation.mutate({
 										body,
@@ -625,7 +636,7 @@ export function PublicPostInteractions({
 						))}
 					</ul>
 				)}
-				{canParticipate ? (
+				{canComment ? (
 					<CommentComposer
 						onSubmit={(body, password) =>
 							createCommentMutation.mutate({ body, password, postId })
@@ -635,6 +646,11 @@ export function PublicPostInteractions({
 						placeholder="댓글을 입력해 주세요"
 						submitLabel="댓글 등록"
 					/>
+				) : null}
+				{commentsDisabled ? (
+					<p className="m-0 rounded-md bg-secondary px-3 py-2.5 text-muted-foreground text-sm">
+						운영자가 댓글 작성을 제한한 글입니다.
+					</p>
 				) : null}
 			</section>
 

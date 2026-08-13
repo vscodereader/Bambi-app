@@ -155,9 +155,6 @@ function ProfileCard() {
 			<div className="min-w-0 flex-1">
 				<div className="flex flex-wrap items-center gap-1.5 break-words font-extrabold text-foreground text-lg leading-tight">
 					<span>{displayName}</span>
-					{profile?.role === "admin" ? (
-						<Badge tone="primary">운영자</Badge>
-					) : null}
 				</div>
 				<div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
 					<span className="text-muted-foreground text-sm">{roleLabel}</span>
