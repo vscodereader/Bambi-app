@@ -18,7 +18,7 @@ import {
 	employerTeamProfile,
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
-import { env } from "@bambi-app/env/server";
+import { env, isTestIdentityChannelAllowed } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
 import { and, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import z from "zod";
@@ -77,12 +77,11 @@ import {
 import { takeRateLimit } from "../../services/rate-limit";
 
 // 포트원 테스트 채널은 통신사 대조를 하지 않아 아무 생년월일·주민번호 뒷자리나 통과시킨다.
-// 개발에서만 허용하고 프로덕션에서는 거부한다(판정은 여기서 하고 서비스에 옵션으로 넘긴다 —
-// bambi-identity는 env에 의존하지 않는 순수 모듈이다).
-// TODO(임시): KCP 실계약 전 테스트 흐름 확인을 위해 프로덕션에서도 테스트 채널을 허용 중.
-// 실연동 채널 전환 시 `env.NODE_ENV !== "production"` 판정으로 반드시 되돌릴 것.
+// 허용 판정은 env(isTestIdentityChannelAllowed)가 단일화한다 — 로컬·검증배포(test.bambialba.com)
+// 에서만 켜지고 실서비스 프로덕션에서는 default-deny로 거부된다. bambi-identity는 env에
+// 의존하지 않는 순수 모듈이라 판정 결과만 옵션으로 넘긴다.
 const identityChannelOptions = {
-	allowTestChannel: true,
+	allowTestChannel: isTestIdentityChannelAllowed,
 };
 
 const profileInput = z.object({
