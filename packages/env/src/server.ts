@@ -11,6 +11,11 @@ export const env = createEnv({
 		NODE_ENV: z
 			.enum(["development", "production", "test"])
 			.default("development"),
+		// 포트원 "테스트 채널"(통신사 대조 없이 아무 값이나 VERIFIED로 통과)을 프로덕션
+		// 빌드에서도 허용할지. test.bambialba.com처럼 NODE_ENV=production으로 도는 검증
+		// 환경에서만 true로 켜고, 실서비스 프로덕션에는 절대 넣지 않는다(기본 false = 안전).
+		// 로컬(NODE_ENV≠production)은 이 값과 무관하게 아래 파생 상수가 자동 허용한다.
+		ALLOW_TEST_IDENTITY_CHANNEL: z.stringbool().default(false),
 		// GCS는 개발·테스트에서만 선택 구성이다. 버킷이 비어 있으면 업로드 인텐트가 로컬
 		// 플레이스홀더로 폴백하므로, GCP 자격 증명 없이도 개발이 그대로 돌아간다.
 		GCP_PROJECT_ID: z.string().min(1).optional(),
@@ -47,6 +52,16 @@ export const env = createEnv({
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,
 });
+
+// 본인인증 테스트 채널 허용 여부의 단일 판정. 통신사 대조를 하지 않는 테스트 채널은
+// 이름·생년월일·주민번호를 아무 값이나 통과시키므로, 실서비스 프로덕션에서 허용하면
+// 성인·휴대폰 인증 우회와 (비로그인) 아이디/비밀번호 찾기 계정 탈취로 이어진다.
+// - 로컬(NODE_ENV≠production): 자동 허용 — 개발자가 별도 플래그를 넣지 않아도 된다.
+// - 검증 배포(test.bambialba.com 등, NODE_ENV=production): ALLOW_TEST_IDENTITY_CHANNEL=true로 명시 허용.
+// - 실서비스 프로덕션: 플래그를 넣지 않으면 기본 false로 거부된다(default-deny).
+// 두 라우터(onboarding·account-recovery)가 이 상수 하나만 쓰도록 여기서 판정한다.
+export const isTestIdentityChannelAllowed =
+	env.NODE_ENV !== "production" || env.ALLOW_TEST_IDENTITY_CHANNEL;
 
 // 프로덕션에서 버킷이 빠지면 업로드 인텐트가 local:// 플레이스홀더를 200으로 돌려주고,
 // 웹은 그걸 보면 PUT을 건너뛴다. 즉 아무것도 업로드되지 않은 채 DB에는 키만 남는다.
