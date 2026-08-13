@@ -6,9 +6,13 @@ dotenv.config({
 	path: "../../apps/server/.env",
 });
 
-const { isOwnedChatAttachmentKey, isOwnedEditorMediaKey } = await import(
-	"@/services/bambi-storage"
-);
+const {
+	createBusinessDocumentUploadIntent,
+	getBusinessDocumentViewPath,
+	isOwnedBusinessDocumentKey,
+	isOwnedChatAttachmentKey,
+	isOwnedEditorMediaKey,
+} = await import("@/services/bambi-storage");
 
 const OWNER_ID = "user_owner";
 const ROOM_ID = "11111111-1111-4111-8111-111111111111";
@@ -96,5 +100,89 @@ describe("bambi chat attachment key ownership", () => {
 				userId: OWNER_ID,
 			})
 		).toBe(false);
+	});
+});
+
+describe("business document private key ownership", () => {
+	const ORG_ID = "org_1";
+
+	it("employer/{orgId}/{userId}/ 프리픽스의 키만 소유로 인정한다", () => {
+		expect(
+			isOwnedBusinessDocumentKey({
+				organizationId: ORG_ID,
+				storageKey: `employer/${ORG_ID}/${OWNER_ID}/8f0c-doc.pdf`,
+				userId: OWNER_ID,
+			})
+		).toBe(true);
+
+		expect(
+			isOwnedBusinessDocumentKey({
+				organizationId: ORG_ID,
+				storageKey: `employer/${ORG_ID}/user_other/8f0c-doc.pdf`,
+				userId: OWNER_ID,
+			})
+		).toBe(false);
+
+		expect(
+			isOwnedBusinessDocumentKey({
+				organizationId: "org_2",
+				storageKey: `employer/${ORG_ID}/${OWNER_ID}/8f0c-doc.pdf`,
+				userId: OWNER_ID,
+			})
+		).toBe(false);
+	});
+
+	it("옛 공개 버킷 규칙(bambi-business-documents/)과 상위 경로 탈출은 거절한다", () => {
+		expect(
+			isOwnedBusinessDocumentKey({
+				organizationId: ORG_ID,
+				storageKey: `bambi-business-documents/${ORG_ID}/${OWNER_ID}/8f0c-doc.pdf`,
+				userId: OWNER_ID,
+			})
+		).toBe(false);
+
+		expect(
+			isOwnedBusinessDocumentKey({
+				organizationId: ORG_ID,
+				storageKey: `employer/${ORG_ID}/${OWNER_ID}/../../../etc/passwd`,
+				userId: OWNER_ID,
+			})
+		).toBe(false);
+	});
+});
+
+describe("business document upload intent (비프로덕션 = 로컬 폴백)", () => {
+	it("서버가 employer/{orgId}/{userId}/ 키를 정하고 로컬 업로드 URL을 내린다", async () => {
+		const intent = await createBusinessDocumentUploadIntent({
+			actorUserId: OWNER_ID,
+			byteSize: 1024,
+			category: "pdf",
+			fileName: "사업자 등록증.pdf",
+			mimeType: "application/pdf",
+			organizationId: "org_1",
+		});
+
+		expect(intent.storageKey.startsWith(`employer/org_1/${OWNER_ID}/`)).toBe(
+			true
+		);
+		expect(
+			isOwnedBusinessDocumentKey({
+				organizationId: "org_1",
+				storageKey: intent.storageKey,
+				userId: OWNER_ID,
+			})
+		).toBe(true);
+		// NODE_ENV=test는 프로덕션이 아니므로 GCS 대신 로컬 플레이스홀더 URL이어야 한다.
+		expect(intent.uploadUrl.startsWith("/bambi/local-chat-attachments?")).toBe(
+			true
+		);
+	});
+});
+
+describe("business document view path", () => {
+	it("문서 id 기반 앱 조회 경로를 만든다", () => {
+		expect(getBusinessDocumentViewPath("doc_1")).toBe(
+			"/bambi/business-documents/doc_1"
+		);
 	});
 });
