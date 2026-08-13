@@ -923,7 +923,12 @@ function PopupCard({
 											value={targetPageId}
 										>
 											<SelectTrigger className="flex-1">
-												<SelectValue placeholder="팝업 위치 선택" />
+												<SelectValue placeholder="팝업 위치 선택">
+													{(value) =>
+														options.find((page) => page.id === value)?.label ??
+														"팝업 위치 선택"
+													}
+												</SelectValue>
 											</SelectTrigger>
 											<SelectContent>
 												{options.map((page) => (
