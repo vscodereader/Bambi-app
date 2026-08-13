@@ -9,10 +9,11 @@
 
 import { db } from "@bambi-app/db";
 import { jobPost } from "@bambi-app/db/schema/bambi";
-import { and, asc, eq, notInArray } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 import { notifyBambiNotification } from "./bambi-notifications";
 import {
+	acquireListingCapacityLock,
 	CAPACITY_LISTING_EXPOSURE_TYPES,
 	type CapacityListingExposureType,
 	countActiveListings,
@@ -60,6 +61,10 @@ export const resolveListingPaymentExposure = async ({
 	}
 
 	if (isListingExposureType(exposureType)) {
+		// 정원 카운트→활성/대기 판정이 check-then-act라, 같은 섹션의 동시 승인·승격 틱과
+		// 마지막 자리를 두고 경합하면 정원 초과 노출이 난다. 섹션 advisory xact lock으로
+		// 직렬화한다(#3). 호출부(setJobPostPayment·bulkSetJobPostPayment)는 모두 tx 안이다.
+		await acquireListingCapacityLock(executor, exposureType);
 		const [active, capacity] = await Promise.all([
 			countActiveListings(executor, exposureType, now),
 			listingSectionCapacity(executor, exposureType),
@@ -85,64 +90,38 @@ export const resolveListingPaymentExposure = async ({
 	};
 };
 
-// 대기열 선두(FIFO)를 잠금 안에서 재확인한 뒤 노출로 승격한다. 잠금·재확인이 있어야 동시 틱·
-// 다중 인스턴스가 같은 행을 이중 승격하거나 이미 취소된 행을 되살리지 않는다(auto-boost와 동일 패턴).
-// 반환: 실제로 승격했으면 true, 이미 대기열이 아니면 false(다음 후보로 넘어감).
-const activateQueuedHead = (
-	headId: string,
-	exposureDurationDays: number | null,
-	now: Date
-): Promise<boolean> =>
-	db.transaction(async (tx) => {
-		const [locked] = await tx
-			.select({
-				exposureEndsAt: jobPost.exposureEndsAt,
-				exposureType: jobPost.exposureType,
-				paymentStatus: jobPost.paymentStatus,
-				status: jobPost.status,
-			})
-			.from(jobPost)
-			.where(eq(jobPost.id, headId))
-			.for("update");
+// 한 자리 승격 시도: 섹션 advisory xact lock 안에서 정원 재카운트→대기열 선두 선택(FOR UPDATE)→
+// 활성화를 원자적으로 수행한다(#3). 승인 경로(resolveListingPaymentExposure)와 같은 키로
+// 직렬화되므로 마지막 자리를 두고 틱과 승인이 동시에 통과할 수 없다. 선두 선택 WHERE에
+// queuedListingWhere가 있고 FOR UPDATE가 잠금 후 조건을 재평가하므로(READ COMMITTED),
+// 동시 취소로 대기열에서 빠진 행은 자연히 걸러진다 — 별도 재확인·skip 목록이 필요 없다.
+type PromoteOutcome =
+	| { kind: "stop" } // 정원 참 또는 대기열 비었음 — 이 섹션 종료
+	| {
+			head: {
+				createdByUserId: string;
+				exposureDurationDays: number | null;
+				id: string;
+				title: string;
+			};
+			kind: "promoted";
+	  };
 
-		if (!locked) {
-			return false;
-		}
-		// 잠금 안에서 여전히 QUEUED(게시+결제완료+리스팅형+exposureEndsAt null)인지 재확인.
-		if (
-			locked.status !== "published" ||
-			locked.paymentStatus !== "paid" ||
-			locked.exposureEndsAt !== null ||
-			!isListingExposureType(locked.exposureType)
-		) {
-			return false;
-		}
-
-		await tx
-			.update(jobPost)
-			.set({ exposureEndsAt: listingExposureEndsAt(now, exposureDurationDays) })
-			.where(eq(jobPost.id, headId));
-		return true;
-	});
-
-// 한 섹션(type)의 빈 자리를 대기열 선두부터 채운다. 매 반복마다 active를 재카운트해 정원까지만
-// 승격한다. 승격 실패(경합으로 이미 대기열 이탈 등)한 id는 skipIds로 제외해 같은 선두에서
-// 무한 루프에 빠지지 않게 한다(이번 틱에서만 건너뛰고, 다음 틱이 다시 시도).
-const promoteSectionToCapacity = async (
+const promoteOneSlot = (
 	type: CapacityListingExposureType,
 	now: Date
-): Promise<number> => {
-	const capacity = await listingSectionCapacity(db, type);
-	const skipIds = new Set<string>();
-	let promoted = 0;
-
-	while (true) {
-		const active = await countActiveListings(db, type, now);
+): Promise<PromoteOutcome> =>
+	db.transaction(async (tx) => {
+		await acquireListingCapacityLock(tx, type);
+		const [active, capacity] = await Promise.all([
+			countActiveListings(tx, type, now),
+			listingSectionCapacity(tx, type),
+		]);
 		if (active >= capacity) {
-			break;
+			return { kind: "stop" };
 		}
 
-		const [head] = await db
+		const [head] = await tx
 			.select({
 				createdByUserId: jobPost.createdByUserId,
 				exposureDurationDays: jobPost.exposureDurationDays,
@@ -150,42 +129,50 @@ const promoteSectionToCapacity = async (
 				title: jobPost.title,
 			})
 			.from(jobPost)
-			.where(
-				skipIds.size > 0
-					? and(queuedListingWhere(type), notInArray(jobPost.id, [...skipIds]))
-					: queuedListingWhere(type)
-			)
+			.where(queuedListingWhere(type))
 			.orderBy(asc(jobPost.listingPaidAt), asc(jobPost.id))
-			.limit(1);
-
+			.limit(1)
+			.for("update");
 		if (!head) {
+			return { kind: "stop" };
+		}
+
+		await tx
+			.update(jobPost)
+			.set({
+				exposureEndsAt: listingExposureEndsAt(now, head.exposureDurationDays),
+			})
+			.where(eq(jobPost.id, head.id));
+		return { head, kind: "promoted" };
+	});
+
+// 한 섹션(type)의 빈 자리를 대기열 선두부터 채운다. 승격 1건당 트랜잭션 1개라 락 점유가 짧고,
+// 매 반복 정원을 재카운트해 정원까지만 승격한다. 알림은 커밋 뒤에 보낸다(롤백된 승격 통지 방지).
+const promoteSectionToCapacity = async (
+	type: CapacityListingExposureType,
+	now: Date
+): Promise<number> => {
+	let promoted = 0;
+
+	while (true) {
+		const outcome = await promoteOneSlot(type, now);
+		if (outcome.kind === "stop") {
 			break;
 		}
-
-		const didActivate = await activateQueuedHead(
-			head.id,
-			head.exposureDurationDays,
-			now
-		);
-		if (didActivate) {
-			promoted += 1;
-			// 시스템 틱이라 액터가 없어 소유자를 액터로 기록한다(구인자 본인에게 노출 시작 통지).
-			await notifyBambiNotification({
-				actorUserId: head.createdByUserId,
-				metadata: {
-					action: "listing_activated",
-					exposureDurationDays: head.exposureDurationDays,
-					exposureType: type,
-					jobPostTitle: head.title,
-				},
-				recipientUserId: head.createdByUserId,
-				targetId: head.id,
-				targetType: "job_post",
-			});
-		} else {
-			// 잠금 재확인에서 대기열이 아니었던 행 — 이번 틱에선 다시 뽑지 않는다.
-			skipIds.add(head.id);
-		}
+		promoted += 1;
+		// 시스템 틱이라 액터가 없어 소유자를 액터로 기록한다(구인자 본인에게 노출 시작 통지).
+		await notifyBambiNotification({
+			actorUserId: outcome.head.createdByUserId,
+			metadata: {
+				action: "listing_activated",
+				exposureDurationDays: outcome.head.exposureDurationDays,
+				exposureType: type,
+				jobPostTitle: outcome.head.title,
+			},
+			recipientUserId: outcome.head.createdByUserId,
+			targetId: outcome.head.id,
+			targetType: "job_post",
+		});
 	}
 
 	return promoted;
@@ -197,9 +184,8 @@ const promoteSectionToCapacity = async (
 //
 // 개별 공고 실패는 삼켜 다음 섹션을 진행한다(틱이 서버를 죽이면 안 됨). 다음 틱이 캐치업한다.
 //
-// ponytail: 전역 정원 락은 없다 — apps/server 단일 인터벌 전제의 의도적 단순화. 다중 인스턴스가
-// 동시에 돌면 순간적으로 정원을 살짝 넘겨 승격할 수 있다. 필요하면 섹션별 advisory xact lock
-// (LISTING_CAPACITY_LOCK_KEYS)으로 틱 전체를 직렬화한다.
+// 섹션별 advisory xact lock(promoteOneSlot)으로 승인 경로와 직렬화된다 — 다중 인스턴스 동시
+// 틱에도 정원을 넘지 않는다.
 export const runListingPromotionTick = async (now: Date): Promise<number> => {
 	let promoted = 0;
 

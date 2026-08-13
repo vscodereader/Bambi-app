@@ -66,6 +66,18 @@ export const LISTING_CAPACITY_LOCK_KEYS: Record<
 	special: 918_273_646,
 };
 
+// 리스팅 섹션 정원 게이트 직렬화. 승인(resolveListingPaymentExposure)과 승격 틱이 같은 키를
+// 잡아 "카운트→활성화" check-then-act가 한 번에 한 트랜잭션만 진행된다. xact 스코프라
+// 반드시 트랜잭션 안에서 호출해야 커밋 시 해제된다(배너 게이트와 동일 패턴).
+export const acquireListingCapacityLock = async (
+	executor: QueryExecutor,
+	type: CapacityListingExposureType
+): Promise<void> => {
+	await executor.execute(
+		sql`select pg_advisory_xact_lock(${LISTING_CAPACITY_LOCK_KEYS[type]})`
+	);
+};
+
 // 섹션별 만석 메시지. enum 원값 대신 EXPOSURE_TYPE_LABELS로 사람이 읽는 라벨을 넣는다.
 export const listingCapacityFullMessage = (
 	exposureType: CapacityListingExposureType,
