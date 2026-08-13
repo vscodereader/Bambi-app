@@ -3,8 +3,9 @@
 날짜: 2026-08-13
 브랜치: `security/business-doc-private-bucket`
 배경: 보안 종합 조사 #2 — 사업자등록증 등 민감 서류가 공개 버킷(`bambi-storage-public`)에
-저장되어 URL만 알면 누구나 열람 가능하고, `allUsers → objectViewer`에 `objects.list`가
-포함되어 버킷 열거로 모든 문서 키를 수집할 수도 있는 상태.
+저장되어 URL만 알면 누구나 열람 가능한 상태. (구현 중 실측 보정: 공개 버킷의 `allUsers`는
+`objectViewer`가 아니라 `legacyObjectReader`(objects.list 없음)로 확인되어 버킷 열거는
+불가능했다 — 위험의 본질은 URL 유출·공유 시 무제한 열람이며 이는 그대로 유효.)
 
 ## 목적
 

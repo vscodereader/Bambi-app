@@ -116,6 +116,10 @@ jobs:
           # 공고 이미지·광고 배너용 공개 버킷. dev/prod가 다른 버킷을 쓰며, 이름은
           # 레포에 남기지 않고 GitHub 환경 변수(test/production)로 주입한다.
           GCS_PUBLIC_BUCKET: ${{ vars.GCS_PUBLIC_BUCKET }}
+          # 사업자 문서 등 민감 서류 전용 비공개 버킷(test=bambi-storage-private,
+          # production=bambi-storage-prod-private). 값이 비면 env 패키지가 undefined로
+          # 정규화하고 업로드가 default-deny로 거부된다 — 공개 버킷 폴백 없음.
+          GCS_PRIVATE_BUCKET: ${{ vars.GCS_PRIVATE_BUCKET }}
           # 세션 쿠키 prefix를 환경별로 분리. dev/prod가 같은 apex(.bambialba.com)를
           # 공유하므로 prefix가 같으면 쿠키가 서로 덮어써 세션이 충돌한다.
           BAMBI_COOKIE_PREFIX: ${{ github.ref_name == 'main' && 'bambi' || 'bambi-dev' }}
@@ -134,7 +138,7 @@ jobs:
             --timeout=900 \
             --session-affinity \
             --add-cloudsql-instances="${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" \
-            --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}##BAMBI_COOKIE_PREFIX=${BAMBI_COOKIE_PREFIX}" \
+            --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}##GCS_PRIVATE_BUCKET=${GCS_PRIVATE_BUCKET}##BAMBI_COOKIE_PREFIX=${BAMBI_COOKIE_PREFIX}" \
             --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest,PORTONE_API_SECRET=${SERVICE}-portone-api-secret:latest,BAMBI_GUEST_TOKEN_SECRET=${SERVICE}-bambi-guest-token-secret:latest"
 
       - name: Show service URL
