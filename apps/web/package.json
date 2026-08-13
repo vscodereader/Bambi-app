@@ -39,7 +39,8 @@
     "socket.io-client": "^4.8.3",
     "sonner": "catalog:",
     "streamdown": "^1.6.10",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "zustand": "catalog:"
   },
   "devDependencies": {
     "@bambi-app/config": "workspace:*",
