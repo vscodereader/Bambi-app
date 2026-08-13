@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import type { Context } from "@/context";
@@ -215,6 +215,190 @@ describe("listJobsForPayment 결제 큐 판별", () => {
 			);
 			const rows = await listJobsForPayment({ limit: 50, onlyUnpaid: false });
 			expect(rows.map((row) => row.id)).not.toContain(fixture.freeJobPostId);
+		} finally {
+			await cleanupPaymentQueueFixture(fixture);
+		}
+	});
+});
+
+// 리스팅(스페셜/추천) 공고를 원하는 결제·노출 상태로 시드한다. 반환 id를 fixture.jobPostIds에
+// 넣어 기존 cleanup이 함께 지우게 한다. 결제 멱등 가드는 exposureType·noop 분기만 타므로
+// adProductId 없이도 충분하다(가드가 resolveListingPaymentExposure 앞에서 단락).
+const seedListingJobPost = async (
+	fixture: PaymentQueueFixture,
+	overrides: {
+		exposureEndsAt: Date | null;
+		exposureType?: "recommended" | "special";
+		listingPaidAt: Date | null;
+		paymentStatus: "paid" | "unpaid";
+	}
+): Promise<string> => {
+	const id = randomUUID();
+	fixture.jobPostIds.push(id);
+	await db.insert(jobPost).values({
+		id,
+		organizationId: fixture.organizationId,
+		createdByUserId: fixture.employerUserId,
+		status: "published",
+		industryCategory: "BAR",
+		region: "서울 강남구",
+		payAmount: 12_000,
+		payUnit: "hour",
+		workSchedule: "평일 저녁",
+		title: "리스팅 결제 멱등 테스트 공고",
+		description: "same-status 재확정 멱등 검증용 리스팅 공고",
+		exposureType: overrides.exposureType ?? "special",
+		exposureAmount: 60_000,
+		exposureDurationDays: 30,
+		paymentStatus: overrides.paymentStatus,
+		exposureEndsAt: overrides.exposureEndsAt,
+		listingPaidAt: overrides.listingPaidAt,
+	});
+	return id;
+};
+
+// 결제 관련 컬럼만 다시 읽어 실제 DB 쓰기 여부를 확인한다(반환값이 아니라 저장 상태로 검증).
+const fetchPaymentFields = async (id: string) => {
+	const [row] = await db
+		.select({
+			exposureEndsAt: jobPost.exposureEndsAt,
+			listingPaidAt: jobPost.listingPaidAt,
+			paymentStatus: jobPost.paymentStatus,
+		})
+		.from(jobPost)
+		.where(eq(jobPost.id, id))
+		.limit(1);
+	if (!row) {
+		throw new Error("job post not found after mutation");
+	}
+	return row;
+};
+
+const createSetJobPostPaymentClient = (adminUserId: string) =>
+	createProcedureClient(moderationRouter.setJobPostPayment, {
+		context: createContextForUser(adminUserId),
+		path: ["bambi", "moderation", "setJobPostPayment"],
+	});
+
+// 미래·과거 고정 시각(오늘=2026-08-13 기준). 활성=미래 exposureEndsAt, listingPaidAt=과거.
+const FUTURE_ENDS_AT = new Date("2026-09-01T00:00:00.000Z");
+const PAST_PAID_AT = new Date("2026-08-01T00:00:00.000Z");
+
+describe("결제 재확정 멱등(#4)", () => {
+	it("활성 리스팅에 결제완료를 재확정해도 노출·순번이 그대로다", async () => {
+		const fixture = await createPaymentQueueFixture();
+		try {
+			const jobPostId = await seedListingJobPost(fixture, {
+				exposureEndsAt: FUTURE_ENDS_AT,
+				listingPaidAt: PAST_PAID_AT,
+				paymentStatus: "paid",
+			});
+			const setJobPostPayment = createSetJobPostPaymentClient(
+				fixture.adminUserId
+			);
+
+			await setJobPostPayment({ jobPostId, paymentStatus: "paid" });
+
+			// same-status no-op이라 재계산이 없어 노출 종료·FIFO 키가 원래 값 그대로여야 한다
+			// (강등·listingPaidAt 리셋 없음).
+			const row = await fetchPaymentFields(jobPostId);
+			expect(row.exposureEndsAt?.getTime()).toBe(FUTURE_ENDS_AT.getTime());
+			expect(row.listingPaidAt?.getTime()).toBe(PAST_PAID_AT.getTime());
+		} finally {
+			await cleanupPaymentQueueFixture(fixture);
+		}
+	});
+
+	it("대기열 리스팅에 결제완료를 재확정해도 FIFO 순번(listingPaidAt)이 유지된다", async () => {
+		const fixture = await createPaymentQueueFixture();
+		try {
+			const jobPostId = await seedListingJobPost(fixture, {
+				exposureEndsAt: null,
+				listingPaidAt: PAST_PAID_AT,
+				paymentStatus: "paid",
+			});
+			const setJobPostPayment = createSetJobPostPaymentClient(
+				fixture.adminUserId
+			);
+
+			await setJobPostPayment({ jobPostId, paymentStatus: "paid" });
+
+			// 대기열(exposureEndsAt=null)은 유지되고, listingPaidAt이 now로 리셋되면 대기열 맨
+			// 뒤로 밀린다 — 멱등 처리로 원래 결제 시각(FIFO 순번)이 보존돼야 한다.
+			const row = await fetchPaymentFields(jobPostId);
+			expect(row.exposureEndsAt).toBeNull();
+			expect(row.listingPaidAt?.getTime()).toBe(PAST_PAID_AT.getTime());
+		} finally {
+			await cleanupPaymentQueueFixture(fixture);
+		}
+	});
+
+	it("미결제 공고에 미결제를 재확정하면 에러 없이 현재 상태를 반환한다", async () => {
+		const fixture = await createPaymentQueueFixture();
+		try {
+			const jobPostId = await seedListingJobPost(fixture, {
+				exposureEndsAt: null,
+				listingPaidAt: null,
+				paymentStatus: "unpaid",
+			});
+			const setJobPostPayment = createSetJobPostPaymentClient(
+				fixture.adminUserId
+			);
+
+			// unpaid→unpaid도 same-status라 에러가 아니라 현재 행을 그대로 반환한다.
+			const updated = await setJobPostPayment({
+				jobPostId,
+				paymentStatus: "unpaid",
+			});
+			expect(updated.paymentStatus).toBe("unpaid");
+
+			const row = await fetchPaymentFields(jobPostId);
+			expect(row.paymentStatus).toBe("unpaid");
+			expect(row.exposureEndsAt).toBeNull();
+			expect(row.listingPaidAt).toBeNull();
+		} finally {
+			await cleanupPaymentQueueFixture(fixture);
+		}
+	});
+
+	it("혼합 일괄 결제완료: 이미 결제된 리스팅은 순번이 보존되고 미결제만 전환된다", async () => {
+		const fixture = await createPaymentQueueFixture();
+		try {
+			const alreadyPaidId = await seedListingJobPost(fixture, {
+				exposureEndsAt: FUTURE_ENDS_AT,
+				listingPaidAt: PAST_PAID_AT,
+				paymentStatus: "paid",
+			});
+			const unpaidId = await seedListingJobPost(fixture, {
+				exposureEndsAt: null,
+				listingPaidAt: null,
+				paymentStatus: "unpaid",
+			});
+			const bulkSetJobPostPayment = createProcedureClient(
+				moderationRouter.bulkSetJobPostPayment,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "bulkSetJobPostPayment"],
+				}
+			);
+
+			const result = await bulkSetJobPostPayment({
+				jobPostIds: [alreadyPaidId, unpaidId],
+				paymentStatus: "paid",
+			});
+
+			// 이미 paid였던 건은 no-op(성공으로 집계), 미결제였던 건은 실제 전환 — 둘 다 성공.
+			expect(result.succeeded).toBe(2);
+			expect(result.failed).toBe(0);
+
+			// no-op 대상: 노출·FIFO 키가 그대로여야 한다(대기열 맨 뒤로 강등 없음).
+			const paidRow = await fetchPaymentFields(alreadyPaidId);
+			expect(paidRow.listingPaidAt?.getTime()).toBe(PAST_PAID_AT.getTime());
+			expect(paidRow.exposureEndsAt?.getTime()).toBe(FUTURE_ENDS_AT.getTime());
+
+			// 실제 전환 대상: paid로 바뀌었다.
+			const unpaidRow = await fetchPaymentFields(unpaidId);
+			expect(unpaidRow.paymentStatus).toBe("paid");
 		} finally {
 			await cleanupPaymentQueueFixture(fixture);
 		}
