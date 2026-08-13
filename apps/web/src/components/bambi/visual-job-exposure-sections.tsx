@@ -126,10 +126,10 @@ function ExposureSection({
 					<span className={cn("h-4 w-1 rounded-full", accentClassName[tone])} />
 					{title}
 				</h2>
-				{/* 개수는 실제 렌더 카드 수(슬롯 컷 이후)를 표기한다 — 배열에는 슬롯을 넘는
-				    크롤링 주입분이 남아 있어 jobs.length로 세면 헤더가 카드 수보다 부푼다. */}
+				{/* 개수 표기는 제거됐다 — 크롤링 주입 상한·슬롯 컷·단기성 크롤링 변동이 겹쳐
+				    "몇 개"가 기준마다 달라지므로(배열 vs 카드 vs 자격 총량) 숫자 없이 라벨만 남긴다. */}
 				<span className="font-semibold text-muted-foreground text-xs">
-					{shownJobs.length}개 · {meta}
+					{meta}
 				</span>
 			</div>
 			<div className={CARD_GRID_CLASS}>

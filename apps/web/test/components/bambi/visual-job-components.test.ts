@@ -173,13 +173,15 @@ describe("visual job marketplace components", () => {
 		expect(source).not.toContain("2xl:grid-cols-4");
 	});
 
-	// 스페셜/추천 배열에는 슬롯을 넘는 크롤링 주입분이 담겨 올 수 있다. 카드는 slotCount로
-	// 컷하므로, 헤더 개수도 컷 이후(shownJobs)를 세야 카드 수와 일치한다(헤더 14 vs 카드 12 버그).
-	it("counts section headers by the rendered cards, not the raw section array", () => {
+	// 섹션 헤더의 개수 표기는 제거됐다 — 크롤링 주입 상한·슬롯 컷·단기성 크롤링 변동이 겹쳐
+	// 어떤 기준(배열/카드/자격 총량)으로 세도 다른 숫자와 어긋났다(헤더 14 vs 카드 12 버그).
+	// 헤더에는 라벨(meta)만 남긴다.
+	it("renders section headers without a job count", () => {
 		const source = readComponent("visual-job-exposure-sections.tsx");
 
-		expect(source).toContain("{shownJobs.length}개");
+		expect(source).not.toContain("개 · {meta}");
 		expect(source).not.toContain("{jobs.length}개");
+		expect(source).not.toContain("{shownJobs.length}개");
 	});
 
 	it("wires the seeker marketplace to visual exposure sections", () => {
