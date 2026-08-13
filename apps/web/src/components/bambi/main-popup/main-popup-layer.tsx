@@ -14,6 +14,7 @@ import {
 	popupLoginTargetStorageKey,
 } from "@/lib/bambi/main-popup";
 import { resolveMainPopupPageId } from "@/lib/bambi/main-popup-pages";
+import { useCommunityBoards } from "@/lib/bambi/use-community-boards";
 import { orpc } from "@/utils/orpc";
 import { PopupTextViewer } from "./popup-text-editor";
 
@@ -52,7 +53,8 @@ const isHidden = (id: string, revision: number) => {
 
 export function MainPopupLayer() {
 	const pathname = usePathname();
-	const pageId = resolveMainPopupPageId(pathname);
+	const { boards } = useCommunityBoards();
+	const pageId = resolveMainPopupPageId(pathname, boards);
 	const session = authClient.useSession();
 	const query = useQuery({
 		...orpc.bambi.mainPopups.listPublic.queryOptions(),

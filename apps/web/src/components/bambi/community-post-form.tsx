@@ -94,14 +94,11 @@ const canPromotePost = (
 ): boolean =>
 	isEdit ? initialAuthorRole === "employer" : currentRole === "employer";
 
-const ANONYMOUS_POST_BOARDS = new Set(["free", "work_talk", "market", "legal"]);
-
 const canUseAnonymousPostAuthor = (
-	boardKey: string,
+	boardWritable: boolean,
 	guest: boolean,
 	role: CommunityPostInitial["authorRole"] | undefined
-): boolean =>
-	!guest && role === "job_seeker" && ANONYMOUS_POST_BOARDS.has(boardKey);
+): boolean => boardWritable && !guest && role === "job_seeker";
 
 const canSubmitPost = ({
 	authorName,
@@ -472,7 +469,11 @@ export function CommunityPostForm({
 	// employer가 비번으로 타인(job_seeker) 글을 수정할 때 서버 검증(작성자 role
 	// 기준)과 어긋나 BAD_REQUEST 나던 문제를 막는다.
 	const canPromote = canPromotePost(isEdit, initialPost?.authorRole, role);
-	const canWriteAnonymously = canUseAnonymousPostAuthor(board.key, guest, role);
+	const canWriteAnonymously = canUseAnonymousPostAuthor(
+		board.writable,
+		guest,
+		role
+	);
 	useInitialAuthorName({ displayName, isAnonymous, isEdit, setAuthorName });
 
 	// 공지사항은 운영자만 작성 가능 — 작성 모드에서 비운영자는 안내 후 목록으로 보낸다.

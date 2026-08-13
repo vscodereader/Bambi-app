@@ -33,7 +33,6 @@ import { PublicPostInteractions } from "@/components/bambi/public-post-interacti
 import {
 	type CommunityBoardMeta,
 	communityBoardPath,
-	isGuestWritableBoardKey,
 	isLegalBoardKey,
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
@@ -95,7 +94,7 @@ function GuestPostDetailView({
 	// 글의 답변에 되묻지 못한다 — 서버도 legal 잠금글은 **작성한 비회원 본인**(gid 일치,
 	// 여기서는 canEdit)에게만 예외를 준다.
 	const participable =
-		isGuestWritableBoardKey(board.key) &&
+		board.writable &&
 		(!post.isLocked || (isLegalBoardKey(board.key) && post.canEdit));
 
 	return (

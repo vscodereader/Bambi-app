@@ -4,11 +4,6 @@ import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { notFound, useParams } from "next/navigation";
 import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { CommunityPostForm } from "@/components/bambi/community-post-form";
-import { EmptyState } from "@/components/bambi/empty-state";
-import {
-	GUEST_BOARD_LIMIT_NOTICE,
-	isGuestWritableBoardKey,
-} from "@/lib/bambi/community";
 import { useBoardBySlug } from "@/lib/bambi/use-community-boards";
 
 export default function SeekerCommunityWritePage() {
@@ -25,17 +20,6 @@ export default function SeekerCommunityWritePage() {
 
 	if (!board?.writable) {
 		notFound();
-	}
-
-	// 주소를 직접 친 경우 — 목록의 글쓰기 버튼은 비회원에게 애초에 뜨지 않는다.
-	if (isGuest && !isGuestWritableBoardKey(board.key)) {
-		return (
-			<EmptyState
-				className="flex-1"
-				description={GUEST_BOARD_LIMIT_NOTICE}
-				title="글을 쓸 수 없는 게시판이에요"
-			/>
-		);
 	}
 
 	return <CommunityPostForm board={board} guest={isGuest} />;

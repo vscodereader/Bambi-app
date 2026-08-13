@@ -135,15 +135,8 @@ export const assertLegalAdvisorBoardScope = (
 // 비회원이 글·댓글·추천을 남길 수 있는 게시판. 공개 읽기 보드(PUBLIC_COMMUNITY_BOARDS)보다
 // 좁다 — 공지(notice)는 운영자 게시판이라 읽기만 열어 두고, 중고거래·베스트는 애초에
 // 비로그인에게 닫혀 있다.
-const GUEST_WRITABLE_BOARDS = new Set<string>([
-	"free",
-	"work_talk",
-	LEGAL_BOARD,
-]);
 // 게시판 이름은 화면 라벨(COMMUNITY_BOARDS)과 같은 말을 쓴다 — work_talk의 라벨은
 // "밤문화 이야기"다.
-const GUEST_BOARD_ERROR =
-	"비회원은 자유수다·밤문화 이야기·무료 법률 자문에만 참여할 수 있어요.";
 const GUEST_PASSWORD_ERROR =
 	"비회원 글·댓글은 4자 이상의 비밀번호가 필요합니다.";
 export const GUEST_LOCKED_ERROR = "비회원은 비밀글을 작성할 수 없어요.";
@@ -153,12 +146,6 @@ const PASSWORD_MISMATCH_ERROR = "비밀번호가 일치하지 않습니다.";
 
 // 비회원이 참여할 수 있는 글인지. 게시판·잠금 두 축을 한 곳에서 본다 — 목록·상세에서
 // 비로그인에게 보이지 않는 글에는 댓글·추천도 남길 수 없어야 한다.
-export const assertGuestWritableBoard = (board: string): void => {
-	if (!GUEST_WRITABLE_BOARDS.has(board)) {
-		throw new ORPCError("BAD_REQUEST", { message: GUEST_BOARD_ERROR });
-	}
-};
-
 // 법률 자문 글은 회원·비회원 가릴 것 없이 잠금이 강제다(작성도 수정도) — 입력 토글이
 // 무엇이든 서버가 true로 굳힌다. 잠금이 강제되면 기존 잠금 규칙(4자 이상 비밀번호)이
 // 그대로 따라와 비밀번호도 필수가 되고, 수정에서도 잠금을 풀 수 없다.
@@ -178,7 +165,6 @@ export const assertGuestPostAccess = (
 	post: { authorGuestId: string | null; board: string; isLocked: boolean },
 	gid: string
 ): void => {
-	assertGuestWritableBoard(post.board);
 	if (!post.isLocked) {
 		return;
 	}

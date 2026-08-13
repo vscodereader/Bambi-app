@@ -36,7 +36,6 @@ import { assertNoBannedWords } from "../../services/bambi-banned-words";
 import {
 	assertGuestOwnership,
 	assertGuestPostAccess,
-	assertGuestWritableBoard,
 	assertLegalAdvisorBoardScope,
 	type CommunityActor,
 	canBypassLock,
@@ -239,21 +238,14 @@ const updatePostInput = postIdInput.extend({
 });
 
 const PROMOTION_ROLE_ERROR = "광고글은 업소회원만 표시할 수 있습니다.";
-const ANONYMOUS_POST_BOARDS = new Set(["free", "work_talk", "market", "legal"]);
-
 const assertAnonymousPostAllowed = ({
-	board,
 	isAnonymous,
 	role,
 }: {
-	board: string;
 	isAnonymous: boolean;
 	role: string;
 }): void => {
-	if (
-		isAnonymous &&
-		(role !== "job_seeker" || !ANONYMOUS_POST_BOARDS.has(board))
-	) {
+	if (isAnonymous && role !== "job_seeker") {
 		throw new ORPCError("FORBIDDEN", {
 			message: "이 게시판에서는 익명으로 작성할 수 없습니다.",
 		});
@@ -1485,7 +1477,6 @@ export const communityRouter = {
 			const actor = await resolveCommunityActor(context);
 			const role = actorRole(actor);
 			assertAnonymousPostAllowed({
-				board: input.board,
 				isAnonymous: input.isAnonymous,
 				role,
 			});
@@ -1536,7 +1527,6 @@ export const communityRouter = {
 			// 비회원은 게시판이 좁고 비밀번호가 필수다. 법률 자문을 뺀 보드에서는 is_locked가
 			// false로 남는다 — 비밀글은 공개 경로에서 숨겨져 작성자 본인도 다시 읽지 못한다.
 			if (actor.kind === "guest") {
-				assertGuestWritableBoard(input.board);
 				if (isLocked && input.board !== LEGAL_BOARD) {
 					throw new ORPCError("BAD_REQUEST", { message: GUEST_LOCKED_ERROR });
 				}
@@ -1616,7 +1606,6 @@ export const communityRouter = {
 			const nextIsEvent = input.isEvent ?? post.isEvent;
 			const nextIsAnonymous = input.isAnonymous ?? post.isAnonymous;
 			assertAnonymousPostAllowed({
-				board: post.board,
 				isAnonymous: nextIsAnonymous,
 				role: actorRole(actor),
 			});
@@ -1653,6 +1642,7 @@ export const communityRouter = {
 
 			// 비회원은 자기 신분(gid)이 찍힌 글만, 그것도 비밀번호로만 수정한다.
 			if (actor.kind === "guest") {
+				await assertBoard(post.board, { forWrite: true });
 				assertGuestPostAccess(post, actor.gid);
 				if (isLocked && post.board !== LEGAL_BOARD) {
 					throw new ORPCError("BAD_REQUEST", { message: GUEST_LOCKED_ERROR });
@@ -1735,9 +1725,8 @@ export const communityRouter = {
 			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
 			if (actor.kind === "guest") {
-				if (post.board !== "notice") {
-					assertGuestPostAccess(post, actor.gid);
-				}
+				await assertBoard(post.board, { forWrite: true });
+				assertGuestPostAccess(post, actor.gid);
 			} else {
 				assertLegalAdvisorBoardScope(actor.profile, post.board);
 				requirePostReadAccess(post, actor.profile, input.password);
@@ -1856,6 +1845,7 @@ export const communityRouter = {
 			// 아니라 그대로 자기 댓글의 소유권 비밀번호가 된다.
 			let guestPassword: string | null = null;
 			if (actor.kind === "guest") {
+				await assertBoard(post.board, { forWrite: true });
 				assertGuestPostAccess(post, actor.gid);
 				guestPassword = requireGuestPassword(input.password);
 			} else {
@@ -1952,7 +1942,7 @@ export const communityRouter = {
 			// 그 게시판 기준으로 판정한다(잠금은 없다 — 수집 글에 비밀글 개념이 없다).
 			let guestPassword: null | string = null;
 			if (actor.kind === "guest") {
-				assertGuestWritableBoard(CRAWLED_COMMUNITY_BOARD);
+				await assertBoard(CRAWLED_COMMUNITY_BOARD, { forWrite: true });
 				guestPassword = requireGuestPassword(input.password);
 			} else {
 				assertLegalAdvisorBoardScope(actor.profile, CRAWLED_COMMUNITY_BOARD);

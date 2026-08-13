@@ -53,6 +53,7 @@ import {
 	readPopupImage,
 } from "@/lib/bambi/main-popup";
 import { popupPageOptionsForAudience } from "@/lib/bambi/main-popup-pages";
+import { useCommunityBoards } from "@/lib/bambi/use-community-boards";
 import { orpc } from "@/utils/orpc";
 import { PopupDateTimePicker } from "./popup-date-time-picker";
 import { PopupImageEditor } from "./popup-image-editor";
@@ -64,11 +65,12 @@ const COUNT_INPUT_PATTERN = /^\d*$/;
 const handleClass = (handle: Handle) =>
 	`absolute z-20 size-4 touch-none rounded-full border-2 border-background bg-primary ${({ e: "top-1/2 -right-2 -translate-y-1/2 cursor-ew-resize", n: "-top-2 left-1/2 -translate-x-1/2 cursor-ns-resize", ne: "-top-2 -right-2 cursor-nesw-resize", nw: "-top-2 -left-2 cursor-nwse-resize", s: "-bottom-2 left-1/2 -translate-x-1/2 cursor-ns-resize", se: "-right-2 -bottom-2 cursor-nwse-resize", sw: "-bottom-2 -left-2 cursor-nesw-resize", w: "top-1/2 -left-2 -translate-y-1/2 cursor-ew-resize" } as const)[handle]}`;
 
-const toDraft = (row: Record<string, unknown>): MainPopupDraft => {
+const toDraft = (
+	row: Record<string, unknown>,
+	pageOptions: ReturnType<typeof popupPageOptionsForAudience>
+): MainPopupDraft => {
 	const audience = (row.audience ?? "common") as MainPopupDraft["audience"];
-	const allowedPageIds = new Set(
-		popupPageOptionsForAudience(audience).map((page) => page.id)
-	);
+	const allowedPageIds = new Set(pageOptions.map((page) => page.id));
 	const targetPages = Array.isArray(row.targetPages)
 		? row.targetPages.map(String).filter((id) => allowedPageIds.has(id))
 		: [];
@@ -95,6 +97,7 @@ const toDraft = (row: Record<string, unknown>): MainPopupDraft => {
 
 export function PopupManagement() {
 	const queryClient = useQueryClient();
+	const { boards } = useCommunityBoards();
 	const query = useQuery({
 		...orpc.bambi.mainPopups.listAdmin.queryOptions(),
 		refetchOnWindowFocus: false,
@@ -113,7 +116,10 @@ export function PopupManagement() {
 	useEffect(() => {
 		if (query.data) {
 			const next = query.data.items.map((item) =>
-				toDraft(item as unknown as Record<string, unknown>)
+				toDraft(
+					item as unknown as Record<string, unknown>,
+					popupPageOptionsForAudience(item.audience, boards)
+				)
 			);
 			setDrafts((current) => {
 				const currentById = new Map(current.map((draft) => [draft.id, draft]));
@@ -136,7 +142,7 @@ export function PopupManagement() {
 				)
 			);
 		}
-	}, [query.data]);
+	}, [boards, query.data]);
 	const count = parseNonNegativeInteger(countInput);
 	const countMutation = useMutation(
 		orpc.bambi.mainPopups.setCount.mutationOptions({
@@ -311,7 +317,10 @@ export function PopupManagement() {
 							setDrafts((current) =>
 								current.map((item) =>
 									item.id === draft.id
-										? toDraft(saved as unknown as Record<string, unknown>)
+										? toDraft(
+												saved as unknown as Record<string, unknown>,
+												popupPageOptionsForAudience(saved.audience, boards)
+											)
 										: item
 								)
 							);
@@ -377,6 +386,7 @@ export function PopupManagement() {
 						})
 					}
 					onUndo={() => undo(draft.id)}
+					pageOptions={popupPageOptionsForAudience(draft.audience, boards)}
 					update={(change, record) => update(draft.id, change, record)}
 				/>
 			))}
@@ -530,6 +540,7 @@ function PopupCard({
 	onDelete,
 	onExpandedChange,
 	onPaste,
+	pageOptions,
 	onSave,
 	onUndo,
 	update,
@@ -543,6 +554,7 @@ function PopupCard({
 	onDelete: () => void;
 	onExpandedChange: (expanded: boolean) => void;
 	onPaste: () => void;
+	pageOptions: ReturnType<typeof popupPageOptionsForAudience>;
 	onSave: () => void;
 	onUndo: () => void;
 	update: PopupDraftUpdater;
@@ -907,7 +919,7 @@ function PopupCard({
 						<Label>팝업 위치</Label>
 						<div className="grid gap-2 rounded-xl border p-3">
 							{draft.targetPages.map((targetPageId, index) => {
-								const options = popupPageOptionsForAudience(draft.audience);
+								const options = pageOptions;
 								return (
 									<div className="flex items-center gap-2" key={targetPageId}>
 										<Select
@@ -967,9 +979,9 @@ function PopupCard({
 								);
 							})}
 							{(() => {
-								const nextPage = popupPageOptionsForAudience(
-									draft.audience
-								).find((page) => !draft.targetPages.includes(page.id));
+								const nextPage = pageOptions.find(
+									(page) => !draft.targetPages.includes(page.id)
+								);
 								return nextPage ? (
 									<Button
 										className="justify-self-start"

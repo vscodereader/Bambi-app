@@ -60,7 +60,6 @@ import {
 	formatCommunityDate,
 	getCommunityPageItems,
 	getCommunityTotalPages,
-	isGuestWritableBoardKey,
 } from "@/lib/bambi/community";
 import { communityBoardIcon } from "@/lib/bambi/community-board-icons";
 import { orpc } from "@/utils/orpc";
@@ -514,10 +513,7 @@ export function CommunityBoardScreen({ board }: { board: CommunityBoardMeta }) {
 	const showFilter = !NO_FILTER_BOARD_KEYS.includes(board.key);
 	// 공지 게시판은 글쓰기가 운영자 전용이라 admin에게만 버튼을 노출한다.
 	// 비회원은 읽기만 전체 보드고 쓰기는 자유수다·밤문화 이야기로 좁다(서버 가드와 동일).
-	const canWrite =
-		board.writable &&
-		(!board.adminOnly || isAdmin) &&
-		(!isGuest || isGuestWritableBoardKey(board.key));
+	const canWrite = board.writable && (!board.adminOnly || isAdmin);
 	// 공지 게시판은 배지(광고·업소)를 생략한다.
 	const showBadges = board.key !== "notice";
 	// 제목 앞 아이콘 — 운영자가 지정한 아이콘이 우선이고, 없으면 공지의 확성기만 남는다

@@ -7,6 +7,12 @@ export interface MainPopupPageOption {
 	match: (pathname: string) => boolean;
 }
 
+interface PopupCommunityBoard {
+	key: string;
+	label: string;
+	slug: string;
+}
+
 const exact =
 	(...paths: string[]) =>
 	(pathname: string) =>
@@ -140,14 +146,49 @@ export const MAIN_POPUP_PAGE_OPTIONS: MainPopupPageOption[] = [
 	},
 ];
 
-export const popupPageOptionsForAudience = (audience: MainPopupAudience) =>
-	MAIN_POPUP_PAGE_OPTIONS.filter(
+const BUILTIN_COMMUNITY_PAGE_IDS = new Map([
+	["free", "community_free"],
+	["work_talk", "community_work_talk"],
+	["market", "community_market"],
+	["legal", "community_legal"],
+]);
+
+const communityPopupPageId = (key: string) =>
+	BUILTIN_COMMUNITY_PAGE_IDS.get(key) ?? `community_board:${key}`;
+
+export const popupPageOptionsForAudience = (
+	audience: MainPopupAudience,
+	boards: PopupCommunityBoard[] = []
+) => {
+	const staticOptions = MAIN_POPUP_PAGE_OPTIONS.filter(
 		(option) => option.audience === "common" || option.audience === audience
 	);
+	const staticIds = new Set(staticOptions.map((option) => option.id));
+	const dynamicBoards = boards
+		.map((board) => ({
+			audience: "common" as const,
+			id: communityPopupPageId(board.key),
+			label: board.label,
+			match: exact(`/board/${board.slug}`, `/seeker/community/${board.slug}`),
+		}))
+		.filter((option) => !staticIds.has(option.id));
+	return [...staticOptions, ...dynamicBoards];
+};
 
-export const resolveMainPopupPageId = (pathname: string): string | null => {
+export const resolveMainPopupPageId = (
+	pathname: string,
+	boards: PopupCommunityBoard[] = []
+): string | null => {
 	if (pathname.startsWith("/moderator")) {
 		return null;
+	}
+	const dynamicBoard = boards.find(
+		(board) =>
+			pathname === `/board/${board.slug}` ||
+			pathname === `/seeker/community/${board.slug}`
+	);
+	if (dynamicBoard) {
+		return communityPopupPageId(dynamicBoard.key);
 	}
 	const candidates = MAIN_POPUP_PAGE_OPTIONS.filter((option) =>
 		option.match(pathname)
