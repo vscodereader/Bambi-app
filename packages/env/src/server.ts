@@ -20,6 +20,10 @@ export const env = createEnv({
 		// 플레이스홀더로 폴백하므로, GCP 자격 증명 없이도 개발이 그대로 돌아간다.
 		GCP_PROJECT_ID: z.string().min(1).optional(),
 		GCS_PUBLIC_BUCKET: z.string().min(1).optional(),
+		// 민감 서류(사업자등록증 등) 전용 비공개 버킷. 공개 버킷과 달리 프로덕션 부팅
+		// 가드를 두지 않는 대신, 미설정 상태로 사업자 문서 업로드를 시도하면 그 시점에
+		// 에러로 거부한다(default-deny) — 공개 버킷으로 새는 폴백은 두지 않는다.
+		GCS_PRIVATE_BUCKET: z.string().min(1).optional(),
 		// 포트원 V2 API Secret(본인인증 단건조회). 개발에서는 선택 — 비어 있으면 회원
 		// 본인인증이 목 핸들러(verifyMyPhoneMock)로 폴백한다.
 		PORTONE_API_SECRET: z.string().min(1).optional(),

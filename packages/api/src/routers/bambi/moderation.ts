@@ -83,12 +83,12 @@ import {
 import { PENDING_REPORT_STATUSES } from "../../services/bambi-report-status";
 import {
 	createJobPostMediaUploadIntent,
-	getBusinessDocumentObjectUrl,
+	getBusinessDocumentViewPath,
 	isOwnedJobPostMediaKey,
 } from "../../services/bambi-storage";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 import { purgeWithdrawnAccountsBatch } from "../../services/bambi-withdrawal-purge";
-import { deletePublicObjects } from "../../services/gcs";
+import { deletePrivateObjects, deletePublicObjects } from "../../services/gcs";
 import {
 	applyJobPostUpdate,
 	getJobPostMediaSet,
@@ -3116,7 +3116,7 @@ export const moderationRouter = {
 					fileName: document.fileName,
 					id: document.id,
 					mimeType: document.mimeType,
-					objectUrl: getBusinessDocumentObjectUrl(document),
+					objectUrl: getBusinessDocumentViewPath(document.id),
 				});
 				documentsByOrganizationId.set(
 					document.organizationId,
@@ -3129,6 +3129,34 @@ export const moderationRouter = {
 				businessDocuments:
 					documentsByOrganizationId.get(employer.organizationId) ?? [],
 			}));
+		}),
+
+	// 운영자의 부적절 서류 제거 수단. 구인자 본인 삭제(onboarding.deleteBusinessDocument)와
+	// 달리 조직 verificationStatus 전이를 하지 않는다 — 심사 판정은 별도 반려 플로우가 담당.
+	deleteBusinessDocument: adminProcedure
+		.input(z.object({ documentId: z.string().min(1) }))
+		.handler(async ({ input }) => {
+			const [document] = await db
+				.select({
+					id: employerBusinessDocument.id,
+					storageKey: employerBusinessDocument.storageKey,
+				})
+				.from(employerBusinessDocument)
+				.where(eq(employerBusinessDocument.id, input.documentId))
+				.limit(1);
+
+			if (!document) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Business document was not found.",
+				});
+			}
+
+			await db
+				.delete(employerBusinessDocument)
+				.where(eq(employerBusinessDocument.id, document.id));
+			await deletePrivateObjects([document.storageKey]);
+
+			return { id: document.id };
 		}),
 
 	listPendingTeamInvitations: protectedProcedure

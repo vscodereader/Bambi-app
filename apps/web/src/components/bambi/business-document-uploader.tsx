@@ -252,7 +252,7 @@ export function BusinessDocumentUploader({
 											variant: "ghost",
 										})}
 										download={document.fileName}
-										href={document.objectUrl}
+										href={`${document.objectUrl}?download=1`}
 									>
 										<Download aria-hidden />
 									</a>
