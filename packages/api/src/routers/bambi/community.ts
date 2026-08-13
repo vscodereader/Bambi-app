@@ -1235,6 +1235,15 @@ export const communityRouter = {
 						message: "비밀번호가 일치하지 않습니다.",
 					});
 				}
+			} else if (
+				input.password &&
+				!verifyCommunityPassword(input.password, post.passwordHash)
+			) {
+				// 비잠금 글이라도 password가 오면(수정 진입 게이트) 소유권 비밀번호로 검증한다 —
+				// 틀린 비번으로 폼이 열려 저장 단계에서야 403이 나는 흐름을 게이트에서 끊는다.
+				throw new ORPCError("FORBIDDEN", {
+					message: "비밀번호가 일치하지 않습니다.",
+				});
 			}
 
 			// 원자 증가 후 값을 응답에 그대로 반영한다(증가 전 스냅샷+1이 아니라 실제 값).
