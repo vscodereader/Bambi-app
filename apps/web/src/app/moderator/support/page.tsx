@@ -38,6 +38,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { CommunityPostEditor } from "@/components/bambi/community-editor";
 import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
+import { Avatar } from "@/components/bambi/ds";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { communityBodyText } from "@/lib/bambi/public-community";
 import {
@@ -201,19 +202,43 @@ function InquiryThread({
 			{/* 원문 문의 본문은 Tiptap 리치 텍스트(이미지 포함)라 뷰어로 렌더한다. 카드
 			    미리보기(communityBodyText)는 평문 발췌라 첨부 이미지가 빠져, 여기서만 원문을 본다. */}
 			{threadQuery.data ? (
-				<PostBodyViewer body={threadQuery.data.inquiry.body} />
+				<div className="flex min-w-0 gap-3">
+					<Avatar
+						fallbackIcon="user"
+						name={threadQuery.data.inquiry.authorName}
+						size="sm"
+						src={threadQuery.data.inquiry.authorImage ?? undefined}
+					/>
+					<div className="min-w-0 flex-1">
+						<p className="mt-0 mb-1 font-semibold text-sm">
+							{threadQuery.data.inquiry.authorName}
+						</p>
+						<PostBodyViewer body={threadQuery.data.inquiry.body} />
+					</div>
+				</div>
 			) : null}
 			{(threadQuery.data?.messages ?? []).map((message) => (
-				<div className="flex min-w-0 flex-col gap-1" key={message.id}>
-					<div className="flex flex-wrap items-center gap-2">
-						<Badge variant={message.isStaff ? "default" : "outline"}>
-							{message.isStaff ? "운영자" : "회원"}
-						</Badge>
-						<span className="text-muted-foreground text-xs">
-							{formatDateTime(message.createdAt)}
-						</span>
+				<div className="flex min-w-0 gap-3" key={message.id}>
+					<Avatar
+						fallbackIcon="user"
+						name={message.authorName}
+						size="sm"
+						src={message.authorImage ?? undefined}
+					/>
+					<div className="flex min-w-0 flex-1 flex-col gap-1">
+						<div className="flex flex-wrap items-center gap-2">
+							<span className="font-semibold text-sm">
+								{message.authorName}
+							</span>
+							<Badge variant={message.isStaff ? "default" : "outline"}>
+								{message.isStaff ? "운영자" : "회원"}
+							</Badge>
+							<span className="text-muted-foreground text-xs">
+								{formatDateTime(message.createdAt)}
+							</span>
+						</div>
+						<p className="m-0 whitespace-pre-wrap text-sm">{message.body}</p>
 					</div>
-					<p className="m-0 whitespace-pre-wrap text-sm">{message.body}</p>
 				</div>
 			))}
 

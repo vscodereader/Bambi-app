@@ -253,17 +253,19 @@ function PostDetailView({
 				}
 			/>
 			<div className="flex items-center justify-between gap-2">
-				<ReportDialog
-					targetId={postId}
-					targetType="community_post"
-					title="글 신고"
-					trigger={
-						<Button size="sm" variant="ghost">
-							<FlagIcon data-icon="inline-start" />
-							신고
-						</Button>
-					}
-				/>
+				{post.authorRole === "admin" ? null : (
+					<ReportDialog
+						targetId={postId}
+						targetType="community_post"
+						title="글 신고"
+						trigger={
+							<Button size="sm" variant="ghost">
+								<FlagIcon data-icon="inline-start" />
+								신고
+							</Button>
+						}
+					/>
+				)}
 				<div className="flex items-center gap-2">
 					{post.canEdit ? (
 						<EditPostButton boardSlug={board.slug} postId={postId} />

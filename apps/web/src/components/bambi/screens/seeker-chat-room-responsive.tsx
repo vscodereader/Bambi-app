@@ -343,17 +343,18 @@ interface InterviewScheduleItem {
 }
 
 // 일반 말풍선. 내(coral-500)/상대(secondary)로 좌우 정렬. shadcn Message 래핑.
-// 모바일(<md)은 카카오톡식이다 — 상대 아바타·이름은 그룹 첫 메시지에만 붙고(이어지는
-// 메시지는 아바타 폭만큼 들여쓴다), 시간은 그룹 마지막 메시지의 말풍선 밖에 붙인다.
-// 데스크톱은 현행 그대로라 모바일 전용 조각은 md:hidden, 말풍선 안 시간은 max-md:hidden이다.
+// 카카오톡식으로 상대 아바타·이름은 그룹 첫 메시지에만 붙고(이어지는 메시지는 아바타
+// 폭만큼 들여쓴다), 시간은 그룹 마지막 메시지의 말풍선 밖에 붙인다.
 function ChatMessageBubble({
 	counterpartName,
+	counterpartProfileImageUrl,
 	currentUserId,
 	isGroupEnd,
 	isGroupStart,
 	message,
 }: {
 	counterpartName: null | string;
+	counterpartProfileImageUrl: null | string;
 	currentUserId: string;
 	isGroupEnd: boolean;
 	isGroupStart: boolean;
@@ -367,11 +368,16 @@ function ChatMessageBubble({
 	return (
 		<Message align={mine ? "end" : "start"}>
 			{mine ? null : (
-				<span className="flex-none self-start md:hidden">
+				<span className="flex-none self-start">
 					{isGroupStart ? (
-						<Avatar name={senderName} size="xs" />
+						<Avatar
+							fallbackIcon="user"
+							name={senderName}
+							size="sm"
+							src={counterpartProfileImageUrl ?? undefined}
+						/>
 					) : (
-						<span className="block size-7" />
+						<span className="block size-9" />
 					)}
 				</span>
 			)}
@@ -383,7 +389,7 @@ function ChatMessageBubble({
 				)}
 			>
 				{mine || !isGroupStart ? null : (
-					<span className="truncate font-semibold text-muted-foreground text-xs md:hidden">
+					<span className="truncate font-semibold text-muted-foreground text-xs">
 						{senderName}
 					</span>
 				)}
@@ -585,6 +591,7 @@ function InterviewProposalMessage({
 interface ChatMessageListProps {
 	canLoadOlder: boolean;
 	counterpartName: null | string;
+	counterpartProfileImageUrl: null | string;
 	currentUserId: string;
 	isLoadingOlder: boolean;
 	isResponding: boolean;
@@ -604,6 +611,7 @@ interface ChatMessageListProps {
 function ChatMessageList({
 	canLoadOlder,
 	counterpartName,
+	counterpartProfileImageUrl,
 	currentUserId,
 	isLoadingOlder,
 	isResponding,
@@ -668,6 +676,7 @@ function ChatMessageList({
 						content = (
 							<ChatMessageBubble
 								counterpartName={counterpartName}
+								counterpartProfileImageUrl={counterpartProfileImageUrl}
 								currentUserId={currentUserId}
 								isGroupEnd={isGroupEnd}
 								isGroupStart={isGroupStart}
@@ -1919,6 +1928,7 @@ export function SeekerChatRoomResponsive({
 
 	const {
 		counterpartName,
+		counterpartProfileImageUrl,
 		currentUserId,
 		employerVerifiedPhone,
 		jobPost,
@@ -2265,6 +2275,7 @@ export function SeekerChatRoomResponsive({
 					<ChatMessageList
 						canLoadOlder={canLoadOlder}
 						counterpartName={counterpartName}
+						counterpartProfileImageUrl={counterpartProfileImageUrl}
 						currentUserId={currentUserId}
 						isLoadingOlder={isLoadingOlder}
 						isResponding={respondContactRevealMutation.isPending}

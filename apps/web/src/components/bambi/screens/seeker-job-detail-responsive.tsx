@@ -14,7 +14,7 @@ import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
 import { formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
-import { Badge, Button, Card, InfoTile } from "../ds";
+import { Avatar, Badge, Button, Card, InfoTile } from "../ds";
 import {
 	AlertCircle,
 	BriefcaseIcon,
@@ -41,6 +41,15 @@ interface SeekerJobDetailResponsiveProps {
 	onReport: () => void;
 	onStartChat: () => void;
 }
+
+const displayJobTitle = (title: string, company: string): string => {
+	const withoutCompany = title
+		.split(company)
+		.join(" ")
+		.replace(/\s+/g, " ")
+		.trim();
+	return withoutCompany || "채용 공고";
+};
 
 const formatReviewValue = ({
 	rating,
@@ -256,11 +265,26 @@ export function SeekerJobDetailResponsive({
 							</div>
 							<div>
 								<h1 className="m-0 font-extrabold text-[28px] leading-tight md:text-[34px]">
-									{job.company} {job.title}
+									{displayJobTitle(job.title, job.company)}
 								</h1>
 								<p className="mt-2 mb-0 text-muted-foreground">
 									{job.location} · {job.type}
 								</p>
+								<div className="mt-3 flex items-center gap-2">
+									<Avatar
+										name={job.company}
+										size="sm"
+										src={job.createdByProfileImageUrl}
+									/>
+									<div className="min-w-0 text-sm">
+										<div className="truncate font-semibold">{job.company}</div>
+										{job.createdByDisplayName ? (
+											<div className="truncate text-muted-foreground">
+												등록자 {job.createdByDisplayName}
+											</div>
+										) : null}
+									</div>
+								</div>
 							</div>
 							{/* 대표 이미지는 목록·카드 썸네일 전용이라 상세에서는 노출하지 않는다. */}
 							<div className="flex flex-col gap-3">

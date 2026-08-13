@@ -1,6 +1,6 @@
 import {
-	DEV_GUEST_TOKEN_SECRET,
 	GUEST_COOKIE_NAME,
+	resolveGuestTokenSecret,
 	verifyGuestToken,
 } from "@bambi-app/api/services/bambi-guest-token";
 import { getSessionCookie } from "better-auth/cookies";
@@ -12,7 +12,10 @@ export type VisitorState = "anon" | "guest" | "member";
 
 // proxy.ts·/api/guest와 같은 서명 키여야 한다(개발 폴백은 공용 상수).
 const guestTokenSecret = (): string =>
-	process.env.BAMBI_GUEST_TOKEN_SECRET ?? DEV_GUEST_TOKEN_SECRET;
+	resolveGuestTokenSecret(
+		process.env.BAMBI_GUEST_TOKEN_SECRET,
+		process.env.NODE_ENV
+	);
 
 // proxy.ts와 같은 규칙으로 판정한다 — 세션 쿠키는 같은 getSessionCookie로
 // (쿠키 prefix 포함), 게스트는 평문 비교가 아니라 HMAC 서명 검증으로 본다. 서버에서

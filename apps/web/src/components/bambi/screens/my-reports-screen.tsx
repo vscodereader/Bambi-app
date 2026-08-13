@@ -49,6 +49,78 @@ function statusTone(status: string): "default" | "good" | "warning" | "danger" {
 	return STATUS_TONES[status as ReportStatus] ?? "default";
 }
 
+const preview = (value: string, max = 12): string =>
+	value.length > max ? `${value.slice(0, max)}...` : value;
+
+interface ReportContext {
+	chatRoom?: { jobPostTitle: string; organizationDisplayName: string };
+	communityComment?: { bodyPreview: string };
+	communityPost?: { title: string };
+	jobPost?: {
+		id: string;
+		organizationDisplayName: string;
+		payAmount: number | null;
+		payUnit: string;
+		title: string;
+	};
+}
+
+interface TargetSummaryItem {
+	resolutionReason?: string | null;
+	status: string;
+	targetContext: ReportContext | null;
+	targetUnavailable: boolean;
+}
+
+function TargetSummary({ item }: { item: TargetSummaryItem }) {
+	const context = item.targetContext;
+	if (!context || item.targetUnavailable) {
+		return (
+			<p className="m-0 text-muted-foreground text-sm">
+				삭제되었거나 확인할 수 없는 대상입니다.
+			</p>
+		);
+	}
+	if ("jobPost" in context && context.jobPost) {
+		const job = context.jobPost;
+		return (
+			<a
+				className="grid gap-1 rounded-lg bg-muted/40 p-3 text-sm no-underline"
+				href={`/seeker/jobs/${job.id}`}
+			>
+				<strong>{job.title}</strong>
+				<span>{job.organizationDisplayName}</span>
+				<span>
+					{job.payUnit} {job.payAmount?.toLocaleString()}원
+				</span>
+			</a>
+		);
+	}
+	if ("chatRoom" in context && context.chatRoom) {
+		return (
+			<div className="grid gap-1 rounded-lg bg-muted/40 p-3 text-sm">
+				<strong>{context.chatRoom.jobPostTitle}</strong>
+				<span>{context.chatRoom.organizationDisplayName}</span>
+			</div>
+		);
+	}
+	if ("communityPost" in context && context.communityPost) {
+		return (
+			<p className="m-0 text-sm">
+				원글 : {preview(context.communityPost.title)}
+			</p>
+		);
+	}
+	if ("communityComment" in context && context.communityComment) {
+		return (
+			<p className="m-0 text-sm">
+				원 댓글 : {preview(context.communityComment.bodyPreview)}
+			</p>
+		);
+	}
+	return null;
+}
+
 export function MyReportsScreen() {
 	const query = useQuery(
 		orpc.bambi.moderation.listMyReports.queryOptions({ input: { limit: 50 } })
@@ -75,11 +147,11 @@ export function MyReportsScreen() {
 			{reports.length > 0 ? (
 				<div className="flex flex-col gap-3">
 					{reports.map((item) => (
-						<div
+						<details
 							className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
 							key={item.id}
 						>
-							<div className="flex items-start justify-between gap-3">
+							<summary className="flex cursor-pointer list-none items-start justify-between gap-3">
 								<div className="flex min-w-0 flex-col gap-1">
 									<span className="font-semibold text-foreground text-sm">
 										{reportReasonLabel(item.reason)}
@@ -92,13 +164,24 @@ export function MyReportsScreen() {
 								<StatusBadge tone={statusTone(item.status)}>
 									{statusLabel(item.status)}
 								</StatusBadge>
+							</summary>
+							<div className="mt-3 grid gap-2">
+								<TargetSummary item={item as TargetSummaryItem} />
+								{item.status === "dismissed" && item.resolutionReason ? (
+									<div className="rounded-lg bg-muted/40 p-3 text-sm">
+										<strong className="block">기각 사유</strong>
+										<p className="m-0 mt-1 whitespace-pre-wrap text-muted-foreground">
+											{item.resolutionReason}
+										</p>
+									</div>
+								) : null}
+								{item.details ? (
+									<p className="m-0 text-muted-foreground text-sm">
+										{item.details}
+									</p>
+								) : null}
 							</div>
-							{item.details ? (
-								<p className="m-0 text-muted-foreground text-sm">
-									{item.details}
-								</p>
-							) : null}
-						</div>
+						</details>
 					))}
 				</div>
 			) : null}

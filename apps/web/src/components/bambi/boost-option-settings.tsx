@@ -1,5 +1,11 @@
 "use client";
 
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Card,
@@ -78,72 +84,79 @@ function BoostOptionRow({ option }: { option: BoostOptionRow }) {
 		});
 
 	return (
-		<div className="flex flex-col gap-3 rounded-lg border border-border p-3 md:flex-row md:items-end md:gap-4">
-			<span className="font-bold md:w-36 md:shrink-0 md:self-center">
+		<AccordionItem
+			className="rounded-lg border border-border px-3"
+			value={option.optionType}
+		>
+			<AccordionTrigger className="font-bold">
 				{JOB_BOOST_OPTION_TYPE_LABELS[option.optionType]}
-			</span>
-			<div className="flex flex-col gap-1.5">
-				<Label htmlFor={`${option.optionType}-price`}>판매가(원)</Label>
-				<Input
-					className="md:w-32"
-					id={`${option.optionType}-price`}
-					min={0}
-					onChange={(event) => setPrice(event.target.value)}
-					type="number"
-					value={price}
-				/>
-			</div>
-			{period ? (
-				<>
-					<div className="flex flex-col gap-1.5">
-						<Label htmlFor={`${option.optionType}-boosts-per-day`}>
-							하루 끌어올리기 횟수
-						</Label>
-						<Input
-							className="md:w-32"
-							id={`${option.optionType}-boosts-per-day`}
-							min={1}
-							onChange={(event) => setBoostsPerDay(event.target.value)}
-							type="number"
-							value={boostsPerDay}
-						/>
-					</div>
-					<div className="flex flex-col gap-1.5">
-						<Label htmlFor={`${option.optionType}-duration-days`}>
-							적용 일수
-						</Label>
-						<Input
-							className="md:w-32"
-							id={`${option.optionType}-duration-days`}
-							min={1}
-							onChange={(event) => setDurationDays(event.target.value)}
-							type="number"
-							value={durationDays}
-						/>
-					</div>
-				</>
-			) : (
+			</AccordionTrigger>
+			<AccordionContent className="flex flex-col gap-3 md:flex-row md:items-end md:gap-4">
 				<div className="flex flex-col gap-1.5">
-					<Label htmlFor={`${option.optionType}-boost-count`}>충전 횟수</Label>
+					<Label htmlFor={`${option.optionType}-price`}>판매가(원)</Label>
 					<Input
 						className="md:w-32"
-						id={`${option.optionType}-boost-count`}
-						min={1}
-						onChange={(event) => setBoostCount(event.target.value)}
+						id={`${option.optionType}-price`}
+						min={0}
+						onChange={(event) => setPrice(event.target.value)}
 						type="number"
-						value={boostCount}
+						value={price}
 					/>
 				</div>
-			)}
-			<Button
-				disabled={upsert.isPending}
-				onClick={save}
-				type="button"
-				variant="secondary"
-			>
-				저장
-			</Button>
-		</div>
+				{period ? (
+					<>
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor={`${option.optionType}-boosts-per-day`}>
+								하루 끌어올리기 횟수
+							</Label>
+							<Input
+								className="md:w-32"
+								id={`${option.optionType}-boosts-per-day`}
+								min={1}
+								onChange={(event) => setBoostsPerDay(event.target.value)}
+								type="number"
+								value={boostsPerDay}
+							/>
+						</div>
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor={`${option.optionType}-duration-days`}>
+								적용 일수
+							</Label>
+							<Input
+								className="md:w-32"
+								id={`${option.optionType}-duration-days`}
+								min={1}
+								onChange={(event) => setDurationDays(event.target.value)}
+								type="number"
+								value={durationDays}
+							/>
+						</div>
+					</>
+				) : (
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor={`${option.optionType}-boost-count`}>
+							충전 횟수
+						</Label>
+						<Input
+							className="md:w-32"
+							id={`${option.optionType}-boost-count`}
+							min={1}
+							onChange={(event) => setBoostCount(event.target.value)}
+							type="number"
+							value={boostCount}
+						/>
+					</div>
+				)}
+				<Button
+					disabled={upsert.isPending}
+					onClick={save}
+					type="button"
+					variant="secondary"
+				>
+					저장
+				</Button>
+			</AccordionContent>
+		</AccordionItem>
 	);
 }
 
@@ -166,12 +179,14 @@ export function BoostOptionSettings() {
 				{options.length === 0 ? (
 					<p className="m-0 text-muted-foreground text-sm">불러오는 중…</p>
 				) : (
-					options.map((option) => (
-						<BoostOptionRow
-							key={option.optionType}
-							option={option as BoostOptionRow}
-						/>
-					))
+					<Accordion className="flex flex-col gap-3" multiple>
+						{options.map((option) => (
+							<BoostOptionRow
+								key={option.optionType}
+								option={option as BoostOptionRow}
+							/>
+						))}
+					</Accordion>
 				)}
 			</CardContent>
 		</Card>

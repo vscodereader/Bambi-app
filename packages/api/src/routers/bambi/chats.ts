@@ -1154,7 +1154,11 @@ export const chatsRouter = {
 				[room],
 				profile.userId
 			);
-
+			const [counterpartUser] = await db
+				.select({ image: user.image })
+				.from(user)
+				.where(eq(user.id, counterpartUserId(room, profile.userId)))
+				.limit(1);
 			// 구인자 인증번호는 양쪽에 노출, 구직자 공개번호는 revealed 요청을 보는
 			// 구인자에게만 응답 조립 시점에 실어 준다(DB metadata엔 저장하지 않음).
 			const participantPhones = await db
@@ -1182,6 +1186,7 @@ export const chatsRouter = {
 
 			return {
 				counterpartName: counterpartNames.get(room.id) ?? null,
+				counterpartProfileImageUrl: counterpartUser?.image ?? null,
 				currentUserId: profile.userId,
 				employerVerifiedPhone: verifiedPhoneFor(room.employerUserId),
 				// 화면이 "이전 메시지 더 보기"를 띄울지 판단하는 근거.

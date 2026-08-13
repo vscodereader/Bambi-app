@@ -46,8 +46,8 @@ export default function ModeratorReportDetailPage() {
 			onBack={() => router.push("/moderator/reports")}
 			onBlockChatRoom={blockChatRoom}
 			onModerateCommunity={moderateCommunityTarget}
-			onResolve={(rid, action) => {
-				resolveReport(rid, action);
+			onResolve={(rid, action, reason) => {
+				resolveReport(rid, action, reason);
 				router.push("/moderator/reports");
 			}}
 			onSanction={sanction}

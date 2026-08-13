@@ -23,6 +23,7 @@ export interface MainPopupDraft {
 	revision: number;
 	slotIndex: number;
 	startsAt: Date | null;
+	targetPages: string[];
 	textDocument: JSONContent | null;
 	updatedAt: Date;
 	updatedByName?: string | null;

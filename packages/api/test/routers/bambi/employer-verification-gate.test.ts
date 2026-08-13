@@ -154,6 +154,7 @@ describe("verification gate — teams mutations", () => {
 			inviteMember({
 				email: "invitee@bambi.test",
 				organizationId,
+				reason: "신규 지점 운영 지원을 위한 초대입니다.",
 				role: "staff",
 			})
 		).rejects.toThrow();

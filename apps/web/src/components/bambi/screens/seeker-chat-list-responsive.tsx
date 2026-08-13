@@ -232,7 +232,12 @@ function ChatRoomItem({
 			>
 				{/* 아바타는 밤비 DS 규칙(아바타=full)에 맞춰 양쪽 모두 원형으로 통일한다 —
 				square는 root·fallback 모두 rounded-[14px]로 박혀 있어 뷰포트별 분기가 어렵다. */}
-				<Avatar className="shrink-0" name={jobTitle} size="lg" />
+				<Avatar
+					className="shrink-0"
+					fallbackIcon="message"
+					name={jobTitle}
+					size="lg"
+				/>
 				{/* 모바일: 메신저식 3단 행(제목+시간 / 상대명+상태 / 마지막 메시지+미확인 카운트). */}
 				<div className="flex min-w-0 flex-1 flex-col gap-0.5 md:hidden">
 					<div className="flex min-w-0 items-center gap-2">

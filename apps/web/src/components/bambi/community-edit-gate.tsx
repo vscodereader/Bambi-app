@@ -113,6 +113,7 @@ export function CommunityEditGate({
 						body: data.body,
 						contactPhone: data.contactPhone,
 						id: data.id,
+						isAnonymous: data.isAnonymous,
 						isLocked: data.isLocked,
 						isEvent: data.isEvent,
 						isPromotion: data.isPromotion,

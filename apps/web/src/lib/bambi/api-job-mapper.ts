@@ -38,6 +38,8 @@ export interface ApiMarketplaceJob {
 	// 수집 공고의 대표 이미지. job_post_media 행이 아니라 미러링된 URL 한 줄로 오므로
 	// storageKey 기반 조립을 거치지 않는다(버킷이 없는 환경에서는 원본 URL이 그대로 온다).
 	coverImageUrl?: null | string;
+	createdByDisplayName?: null | string;
+	createdByProfileImageUrl?: null | string;
 	// 공고 상세(getById) 응답에만 존재 — 공고를 올린 구인자의 user id.
 	createdByUserId?: null | string;
 	description?: string | null;
@@ -184,6 +186,7 @@ const toRegionCodes = (
 const toEmployerUserId = (job: ApiMarketplaceJob): string | undefined =>
 	job.createdByUserId ?? undefined;
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: legacy mapper keeps all marketplace fallbacks in one place.
 export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 	const company = getMarketplaceJobCompany(job);
 	const coverImage =
@@ -216,6 +219,8 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		detailImages,
 		district: job.district ?? "",
 		employerUserId: toEmployerUserId(job),
+		createdByDisplayName: job.createdByDisplayName ?? undefined,
+		createdByProfileImageUrl: job.createdByProfileImageUrl ?? undefined,
 		employerVerifiedPhone: job.employerVerifiedPhone ?? null,
 		exposureType: job.exposureType ?? null,
 		featured: job.employerVerificationStatus === "verified",

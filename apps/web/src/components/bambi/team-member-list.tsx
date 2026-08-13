@@ -54,6 +54,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
+import { Textarea } from "@bambi-app/ui/components/textarea";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EllipsisIcon, MailPlus } from "lucide-react";
@@ -465,6 +466,17 @@ function buildMemberColumns({
 	];
 }
 
+const getInviteReasonError = (reason: string): string => {
+	const normalizedReason = reason.trim();
+	if (normalizedReason.length < 10) {
+		return "초대 사유는 10자 이상 입력해 주세요.";
+	}
+	if (normalizedReason.length > 200) {
+		return "초대 사유는 200자 이하로 입력해 주세요.";
+	}
+	return "";
+};
+
 export function TeamMemberList({
 	disabled = false,
 	organization,
@@ -479,9 +491,13 @@ export function TeamMemberList({
 	// 초대 사유는 선택 입력이다 — 운영자 승인 판단을 돕는 참고 정보라서, 필수로 막으면
 	// 기존 초대 흐름이 통째로 멈춘다.
 	const [inviteReason, setInviteReason] = useState("");
+	const [resubmitTarget, setResubmitTarget] =
+		useState<OrganizationMember | null>(null);
 	const [teamId, setTeamId] = useState(teams[0]?.teamId ?? "");
 	const [formError, setFormError] = useState<null | string>(null);
 	const [showValidation, setShowValidation] = useState(false);
+	const normalizedInviteReason = inviteReason.trim();
+	const inviteReasonError = getInviteReasonError(inviteReason);
 	const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
 	const [teamsTarget, setTeamsTarget] = useState<OrganizationMember | null>(
 		null
@@ -567,6 +583,12 @@ export function TeamMemberList({
 				toast.error(error.message || "초대를 재제출하지 못했습니다.");
 			},
 			onSuccess: async () => {
+				setResubmitTarget(null);
+				setEmail("");
+				setSearch("");
+				setInviteReason("");
+				setFormError(null);
+				setShowValidation(false);
 				toast.success("초대를 재제출했습니다. 운영자 승인을 기다립니다.");
 				await invalidateMembers();
 			},
@@ -615,15 +637,24 @@ export function TeamMemberList({
 			return;
 		}
 
-		if (emailError) {
+		if (emailError || inviteReasonError) {
 			setShowValidation(true);
+			return;
+		}
+
+		if (resubmitTarget) {
+			resubmitMutation.mutate({
+				invitationId: resubmitTarget.id,
+				organizationId,
+				reason: normalizedInviteReason,
+			});
 			return;
 		}
 
 		inviteMutation.mutate({
 			email: email.trim(),
 			organizationId,
-			reason: inviteReason.trim() || undefined,
+			reason: normalizedInviteReason,
 			role,
 			teamId: teamId || undefined,
 		});
@@ -648,14 +679,23 @@ export function TeamMemberList({
 	}
 
 	const members = membersQuery.data ?? [];
+	const prepareResubmit = (row: OrganizationMember) => {
+		setResubmitTarget(row);
+		setEmail(row.invitedEmail ?? row.email);
+		setSearch(row.invitedEmail ?? row.email);
+		setRole(row.role === "manager" ? "manager" : "staff");
+		setTeamId(row.teams[0]?.id ?? "");
+		setInviteReason(row.kind === "invitation" ? (row.inviteReason ?? "") : "");
+		setFormError(null);
+		setShowValidation(false);
+	};
 
 	const columns = buildMemberColumns({
 		canManage: organization.canManageOrganization,
 		disabled,
 		onDeleteInvite: (row) => setConfirm({ kind: "deleteInvite", row }),
 		onRemove: (row) => setConfirm({ kind: "remove", row }),
-		onResubmit: (row) =>
-			resubmitMutation.mutate({ invitationId: row.id, organizationId }),
+		onResubmit: prepareResubmit,
 		onRoleChange: (row, value) =>
 			setRoleMutation.mutate({ memberId: row.id, organizationId, role: value }),
 		onSetTeams: (row) => setTeamsTarget(row),
@@ -687,7 +727,7 @@ export function TeamMemberList({
 			</div>
 
 			<form className="border p-4" onSubmit={submitInvite}>
-				<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_180px_auto] lg:items-start">
+				<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_180px] lg:items-start">
 					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="invite-email">이메일</Label>
 						<Popover onOpenChange={setPopoverOpen} open={popoverOpen}>
@@ -784,37 +824,43 @@ export function TeamMemberList({
 							</SelectContent>
 						</Select>
 					</div>
-					<div className="flex flex-col gap-1.5">
-						<Label
-							aria-hidden="true"
-							className="hidden select-none lg:block lg:opacity-0"
-						>
-							초대
-						</Label>
-						<Button
-							className="w-full lg:w-auto"
-							disabled={disabled || inviteMutation.isPending}
-							type="submit"
-						>
-							<MailPlus aria-hidden="true" data-icon="inline-start" />
-							초대
-						</Button>
-					</div>
 				</div>
 				<div className="mt-3 flex flex-col gap-1.5">
-					<Label htmlFor="invite-reason">초대 사유(선택)</Label>
-					<Input
+					<Label htmlFor="invite-reason">초대 사유</Label>
+					<Textarea
+						aria-invalid={showValidation && Boolean(inviteReasonError)}
+						className="min-h-20 resize-y break-words [overflow-wrap:anywhere]"
 						disabled={disabled}
 						id="invite-reason"
-						maxLength={500}
+						maxLength={200}
 						onChange={(event) => setInviteReason(event.target.value)}
 						placeholder="예: 2호점 매니저로 합류 예정"
+						required
 						value={inviteReason}
 					/>
+					<FieldError
+						id="invite-reason-error"
+						message={showValidation ? inviteReasonError : ""}
+					/>
 					<p className="m-0 text-muted-foreground text-xs">
-						운영자가 팀 합류를 승인할 때 이 사유를 함께 봅니다.
+						10자 이상 200자 이하로 작성해 주세요. 운영자가 팀 합류를 승인할 때
+						이 사유를 함께 봅니다.
 					</p>
 				</div>
+				<Button
+					className="mt-3 w-full lg:w-auto"
+					disabled={
+						disabled ||
+						inviteMutation.isPending ||
+						resubmitMutation.isPending ||
+						Boolean(emailError) ||
+						Boolean(inviteReasonError)
+					}
+					type="submit"
+				>
+					<MailPlus aria-hidden="true" data-icon="inline-start" />
+					{resubmitTarget ? "재제출" : "초대"}
+				</Button>
 				<div className="mt-3">
 					<FormError message={formError} />
 				</div>
@@ -862,12 +908,7 @@ export function TeamMemberList({
 									setConfirm({ kind: "deleteInvite", row: member })
 								}
 								onRemove={() => setConfirm({ kind: "remove", row: member })}
-								onResubmit={() =>
-									resubmitMutation.mutate({
-										invitationId: member.id,
-										organizationId,
-									})
-								}
+								onResubmit={() => prepareResubmit(member)}
 								onRoleChange={(value) =>
 									setRoleMutation.mutate({
 										memberId: member.id,

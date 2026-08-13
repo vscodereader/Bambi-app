@@ -410,6 +410,7 @@ function CommentThread({
 
 interface PublicPostInteractionsProps {
 	boardSlug: string;
+	canLike?: boolean;
 	// 댓글 목록을 서버에서 다시 읽을지. 기본은 참여 가능할 때만(공개 상세는 서버가 이미
 	// 렌더한 목록을 그대로 쓰고, 미인증 방문자·크롤러에게는 추가 요청을 만들지 않는다).
 	// 회원 화면에 얹을 때처럼 씨앗 목록이 없으면 참여 자격과 무관하게 켠다.
@@ -435,6 +436,7 @@ interface PublicPostInteractionsProps {
 export function PublicPostInteractions({
 	boardSlug,
 	canReadComments,
+	canLike = false,
 	canWrite,
 	commentCount,
 	initialComments,
@@ -538,20 +540,21 @@ export function PublicPostInteractions({
 
 	return (
 		<div className="flex flex-col gap-4">
-			{canParticipate ? (
-				<div className="flex flex-wrap items-center justify-between gap-2">
+			{canWrite ? (
+				<div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+					<span />
 					<Button
 						aria-pressed={like.isLiked}
 						className={cn(like.isLiked && "border-coral-500 text-coral-500")}
-						disabled={likeMutation.isPending}
+						disabled={!canLike || likeMutation.isPending}
 						onClick={() => likeMutation.mutate({ postId })}
 						variant="outline"
 					>
 						<ThumbsUpIcon data-icon="inline-start" />
 						추천 {like.likeCount}
 					</Button>
-					{isGuestAuthored ? (
-						<span className="flex items-center gap-2">
+					{canParticipate && isGuestAuthored ? (
+						<span className="flex items-center gap-2 justify-self-end">
 							<Button
 								nativeButton={false}
 								render={
@@ -576,7 +579,9 @@ export function PublicPostInteractions({
 								}
 							/>
 						</span>
-					) : null}
+					) : (
+						<span />
+					)}
 				</div>
 			) : null}
 

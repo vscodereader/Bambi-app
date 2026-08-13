@@ -8,6 +8,7 @@ import {
 	AlertTitle,
 } from "@bambi-app/ui/components/alert";
 import { Button } from "@bambi-app/ui/components/button";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Switch } from "@bambi-app/ui/components/switch";
@@ -93,6 +94,38 @@ const canPromotePost = (
 ): boolean =>
 	isEdit ? initialAuthorRole === "employer" : currentRole === "employer";
 
+const ANONYMOUS_POST_BOARDS = new Set(["free", "work_talk", "market", "legal"]);
+
+const canUseAnonymousPostAuthor = (
+	boardKey: string,
+	guest: boolean,
+	role: CommunityPostInitial["authorRole"] | undefined
+): boolean =>
+	!guest && role === "job_seeker" && ANONYMOUS_POST_BOARDS.has(boardKey);
+
+const canSubmitPost = ({
+	authorName,
+	bodyHasImage,
+	bodyText,
+	isSubmitting,
+	password,
+	requiresPassword,
+	title,
+}: {
+	authorName: string;
+	bodyHasImage: boolean;
+	bodyText: string;
+	isSubmitting: boolean;
+	password: string;
+	requiresPassword: boolean;
+	title: string;
+}): boolean =>
+	authorName.trim().length >= 1 &&
+	title.trim().length >= MIN_TEXT &&
+	(bodyText.trim().length >= MIN_TEXT || bodyHasImage) &&
+	(!requiresPassword || password.length >= PASSWORD_MIN) &&
+	!isSubmitting;
+
 interface CommunityPostInitial {
 	authorName: string;
 	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
@@ -101,6 +134,7 @@ interface CommunityPostInitial {
 	// 법률 자문 글의 연락처. 수정 폼이 다시 실어 보내지 않으면 서버가 null로 덮어쓴다.
 	contactPhone?: string | null;
 	id: string;
+	isAnonymous?: boolean;
 	isEvent?: boolean;
 	isLocked: boolean;
 	// 수정 모드 광고글 초기값. 편집 페이지가 getPost.isPromotion을 넘겨주면 사용한다.
@@ -272,18 +306,20 @@ function useNoticeWriteRedirect({
 
 function useInitialAuthorName({
 	displayName,
+	isAnonymous,
 	isEdit,
 	setAuthorName,
 }: {
 	displayName: string;
+	isAnonymous: boolean;
 	isEdit: boolean;
 	setAuthorName: (updater: (previous: string) => string) => void;
 }) {
 	useEffect(() => {
-		if (!isEdit && displayName) {
+		if (!(isEdit || isAnonymous) && displayName) {
 			setAuthorName((previous) => (previous === "" ? displayName : previous));
 		}
-	}, [displayName, isEdit, setAuthorName]);
+	}, [displayName, isAnonymous, isEdit, setAuthorName]);
 }
 
 function NoticeEventField({
@@ -334,6 +370,52 @@ function PromotionField({
 	);
 }
 
+function PostAuthorField({
+	authorName,
+	canWriteAnonymously,
+	displayName,
+	guest,
+	isAnonymous,
+	setAuthorName,
+	setIsAnonymous,
+}: {
+	authorName: string;
+	canWriteAnonymously: boolean;
+	displayName: string;
+	guest: boolean;
+	isAnonymous: boolean;
+	setAuthorName: (value: string) => void;
+	setIsAnonymous: (value: boolean) => void;
+}) {
+	return (
+		<div className="flex flex-col gap-2">
+			<Label htmlFor="community-post-author">작성인</Label>
+			<Input
+				disabled={guest || !isAnonymous}
+				id="community-post-author"
+				maxLength={AUTHOR_MAX}
+				onChange={(event) => setAuthorName(event.target.value)}
+				placeholder="작성인 이름"
+				value={authorName}
+			/>
+			{canWriteAnonymously ? (
+				<div className="flex items-center gap-2">
+					<Checkbox
+						checked={isAnonymous}
+						id="community-post-anonymous"
+						onCheckedChange={(checked) => {
+							const nextAnonymous = checked === true;
+							setIsAnonymous(nextAnonymous);
+							setAuthorName(nextAnonymous ? "" : displayName);
+						}}
+					/>
+					<Label htmlFor="community-post-anonymous">익명</Label>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 export function CommunityPostForm({
 	board,
 	editPassword,
@@ -351,6 +433,11 @@ export function CommunityPostForm({
 	const [authorName, setAuthorName] = useState(
 		initialAuthorName(guest, initialPost?.authorName)
 	);
+	useEffect(() => {
+		if (guest) {
+			setAuthorName(GUEST_AUTHOR_DEFAULT);
+		}
+	}, [guest]);
 	const [password, setPassword] = useState(editPassword ?? "");
 	const [isLocked, setIsLocked] = useState(
 		getInitialLockedState(board.key, initialPost?.isLocked)
@@ -362,6 +449,9 @@ export function CommunityPostForm({
 		initialPost?.contactPhone ?? ""
 	);
 	const [isEvent, setIsEvent] = useState(initialPost?.isEvent ?? false);
+	const [isAnonymous, setIsAnonymous] = useState(
+		initialPost?.isAnonymous ?? false
+	);
 	const [title, setTitle] = useState(initialPost?.title ?? "");
 	const [bodyJson, setBodyJson] = useState(initialPost?.body ?? "");
 	const [bodyText, setBodyText] = useState("");
@@ -382,7 +472,8 @@ export function CommunityPostForm({
 	// employer가 비번으로 타인(job_seeker) 글을 수정할 때 서버 검증(작성자 role
 	// 기준)과 어긋나 BAD_REQUEST 나던 문제를 막는다.
 	const canPromote = canPromotePost(isEdit, initialPost?.authorRole, role);
-	useInitialAuthorName({ displayName, isEdit, setAuthorName });
+	const canWriteAnonymously = canUseAnonymousPostAuthor(board.key, guest, role);
+	useInitialAuthorName({ displayName, isAnonymous, isEdit, setAuthorName });
 
 	// 공지사항은 운영자만 작성 가능 — 작성 모드에서 비운영자는 안내 후 목록으로 보낸다.
 	const blockedFromNotice = Boolean(
@@ -433,12 +524,15 @@ export function CommunityPostForm({
 		board.key === "notice" && role === "admin" && isEvent;
 
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
-	const canSubmit =
-		authorName.trim().length >= 1 &&
-		title.trim().length >= MIN_TEXT &&
-		(bodyText.trim().length >= MIN_TEXT || bodyHasImage) &&
-		(!requiresPassword || password.length >= PASSWORD_MIN) &&
-		!isSubmitting;
+	const canSubmit = canSubmitPost({
+		authorName,
+		bodyHasImage,
+		bodyText,
+		isSubmitting,
+		password,
+		requiresPassword,
+		title,
+	});
 
 	const submitEdit = (postId: string) => {
 		const trimmedPassword = password.trim();
@@ -448,6 +542,7 @@ export function CommunityPostForm({
 			body: bodyJson,
 			isLocked: submittedIsLocked,
 			isEvent: submittedIsEvent,
+			isAnonymous,
 			isPromotion,
 			postId,
 			title: title.trim(),
@@ -466,6 +561,7 @@ export function CommunityPostForm({
 			body: bodyJson,
 			isLocked: submittedIsLocked,
 			isEvent: submittedIsEvent,
+			isAnonymous,
 			isPromotion,
 			title: title.trim(),
 			...(trimmedPassword ? { password: trimmedPassword } : {}),
@@ -502,16 +598,15 @@ export function CommunityPostForm({
 				{board.label} {isEdit ? "글 수정" : "글쓰기"}
 			</h1>
 
-			<div className="flex flex-col gap-2">
-				<Label htmlFor="community-post-author">작성인</Label>
-				<Input
-					id="community-post-author"
-					maxLength={AUTHOR_MAX}
-					onChange={(event) => setAuthorName(event.target.value)}
-					placeholder="작성인 이름"
-					value={authorName}
-				/>
-			</div>
+			<PostAuthorField
+				authorName={authorName}
+				canWriteAnonymously={canWriteAnonymously}
+				displayName={displayName}
+				guest={guest}
+				isAnonymous={isAnonymous}
+				setAuthorName={setAuthorName}
+				setIsAnonymous={setIsAnonymous}
+			/>
 
 			<PostLockField
 				allowLocking={!(isFreeBoard || guest || isLegalBoard)}

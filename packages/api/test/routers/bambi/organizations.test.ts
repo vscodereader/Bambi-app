@@ -310,6 +310,7 @@ describe("bambi organization and team routers", () => {
 			const invited = await inviteMember({
 				email: "new-staff@bambi.test",
 				organizationId: fixture.organizationId,
+				reason: "신규 지점 운영 지원을 위한 초대입니다.",
 				role: "staff",
 				teamId: fixture.teamId,
 			});

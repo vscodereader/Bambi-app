@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
 	createGuestToken,
+	DEV_GUEST_TOKEN_SECRET,
 	decodeGuestTokenGender,
 	readGuestTokenFromCookieString,
+	resolveGuestTokenSecret,
 	verifyGuestToken,
 } from "@/services/bambi-guest-token";
 
@@ -41,6 +43,19 @@ const makeToken = () =>
 	});
 
 describe("guest token", () => {
+	it("개발 환경에서는 프로세스별 env 설정과 관계없이 공통 개발 키를 쓴다", () => {
+		expect(resolveGuestTokenSecret("web-only-secret", "development")).toBe(
+			DEV_GUEST_TOKEN_SECRET
+		);
+		expect(resolveGuestTokenSecret(undefined, "test")).toBe(
+			DEV_GUEST_TOKEN_SECRET
+		);
+	});
+
+	it("운영 환경에서는 설정된 운영 키를 쓴다", () => {
+		expect(resolveGuestTokenSecret(SECRET, "production")).toBe(SECRET);
+	});
+
 	it("서명한 토큰은 검증을 통과하고 페이로드를 돌려준다", async () => {
 		const token = await makeToken();
 		const payload = await verifyGuestToken(token, SECRET, NOW);

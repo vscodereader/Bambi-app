@@ -19,6 +19,13 @@ import {
 } from "@bambi-app/ui/components/card";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { JSONContent } from "@tiptap/react";
@@ -27,6 +34,7 @@ import {
 	ChevronUp,
 	ClipboardPaste,
 	ImagePlus,
+	Plus,
 	Save,
 	Trash2,
 	Undo2,
@@ -44,6 +52,7 @@ import {
 	popupSaveErrorMessage,
 	readPopupImage,
 } from "@/lib/bambi/main-popup";
+import { popupPageOptionsForAudience } from "@/lib/bambi/main-popup-pages";
 import { orpc } from "@/utils/orpc";
 import { PopupDateTimePicker } from "./popup-date-time-picker";
 import { PopupImageEditor } from "./popup-image-editor";
@@ -55,24 +64,34 @@ const COUNT_INPUT_PATTERN = /^\d*$/;
 const handleClass = (handle: Handle) =>
 	`absolute z-20 size-4 touch-none rounded-full border-2 border-background bg-primary ${({ e: "top-1/2 -right-2 -translate-y-1/2 cursor-ew-resize", n: "-top-2 left-1/2 -translate-x-1/2 cursor-ns-resize", ne: "-top-2 -right-2 cursor-nesw-resize", nw: "-top-2 -left-2 cursor-nwse-resize", s: "-bottom-2 left-1/2 -translate-x-1/2 cursor-ns-resize", se: "-right-2 -bottom-2 cursor-nwse-resize", sw: "-bottom-2 -left-2 cursor-nesw-resize", w: "top-1/2 -left-2 -translate-y-1/2 cursor-ew-resize" } as const)[handle]}`;
 
-const toDraft = (row: Record<string, unknown>): MainPopupDraft => ({
-	audience: (row.audience ?? "common") as MainPopupDraft["audience"],
-	contentHeight: Number(row.contentHeight),
-	contentType: row.contentType as "image" | "text",
-	contentWidth: Number(row.contentWidth),
-	editedImage: row.editedImage as PopupImageAsset | null,
-	enabled: Boolean(row.enabled),
-	endsAt: row.endsAt ? new Date(row.endsAt as string | Date) : null,
-	id: String(row.id),
-	linkPath: row.linkPath ? String(row.linkPath) : null,
-	originalImage: row.originalImage as PopupImageAsset | null,
-	revision: Number(row.revision),
-	slotIndex: Number(row.slotIndex),
-	startsAt: row.startsAt ? new Date(row.startsAt as string | Date) : null,
-	textDocument: row.textDocument as JSONContent | null,
-	updatedAt: new Date(row.updatedAt as string | Date),
-	updatedByName: row.updatedByName ? String(row.updatedByName) : null,
-});
+const toDraft = (row: Record<string, unknown>): MainPopupDraft => {
+	const audience = (row.audience ?? "common") as MainPopupDraft["audience"];
+	const allowedPageIds = new Set(
+		popupPageOptionsForAudience(audience).map((page) => page.id)
+	);
+	const targetPages = Array.isArray(row.targetPages)
+		? row.targetPages.map(String).filter((id) => allowedPageIds.has(id))
+		: [];
+	return {
+		audience,
+		contentHeight: Number(row.contentHeight),
+		contentType: row.contentType as "image" | "text",
+		contentWidth: Number(row.contentWidth),
+		editedImage: row.editedImage as PopupImageAsset | null,
+		enabled: Boolean(row.enabled),
+		endsAt: row.endsAt ? new Date(row.endsAt as string | Date) : null,
+		id: String(row.id),
+		linkPath: row.linkPath ? String(row.linkPath) : null,
+		originalImage: row.originalImage as PopupImageAsset | null,
+		revision: Number(row.revision),
+		slotIndex: Number(row.slotIndex),
+		startsAt: row.startsAt ? new Date(row.startsAt as string | Date) : null,
+		targetPages: targetPages.length > 0 ? targetPages : ["main"],
+		textDocument: row.textDocument as JSONContent | null,
+		updatedAt: new Date(row.updatedAt as string | Date),
+		updatedByName: row.updatedByName ? String(row.updatedByName) : null,
+	};
+};
 
 export function PopupManagement() {
 	const queryClient = useQueryClient();
@@ -347,6 +366,7 @@ export function PopupManagement() {
 							originalImage:
 								draft.contentType === "image" ? draft.originalImage : null,
 							startsAt: draft.startsAt,
+							targetPages: draft.targetPages,
 							textDocument:
 								draft.contentType === "text"
 									? ((draft.textDocument ?? EMPTY_TEXT_DOCUMENT) as Record<
@@ -655,7 +675,11 @@ function PopupCard({
 								<Button
 									key={value}
 									onClick={() =>
-										update((current) => ({ ...current, audience: value }))
+										update((current) => ({
+											...current,
+											audience: value,
+											targetPages: ["main"],
+										}))
 									}
 									variant={draft.audience === value ? "default" : "outline"}
 								>
@@ -878,6 +902,90 @@ function PopupCard({
 								value={draft.endsAt}
 							/>
 						</div>
+					</div>
+					<div className="grid gap-2">
+						<Label>팝업 위치</Label>
+						<div className="grid gap-2 rounded-xl border p-3">
+							{draft.targetPages.map((targetPageId, index) => {
+								const options = popupPageOptionsForAudience(draft.audience);
+								return (
+									<div className="flex items-center gap-2" key={targetPageId}>
+										<Select
+											onValueChange={(value) =>
+												update((current) => ({
+													...current,
+													targetPages: current.targetPages.map(
+														(id, pageIndex) =>
+															pageIndex === index ? (value ?? id) : id
+													),
+												}))
+											}
+											value={targetPageId}
+										>
+											<SelectTrigger className="flex-1">
+												<SelectValue placeholder="팝업 위치 선택" />
+											</SelectTrigger>
+											<SelectContent>
+												{options.map((page) => (
+													<SelectItem
+														disabled={
+															page.id !== targetPageId &&
+															draft.targetPages.includes(page.id)
+														}
+														key={page.id}
+														value={page.id}
+													>
+														{page.label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+										{draft.targetPages.length > 1 ? (
+											<Button
+												aria-label="팝업 위치 삭제"
+												onClick={() =>
+													update((current) => ({
+														...current,
+														targetPages: current.targetPages.filter(
+															(_, pageIndex) => pageIndex !== index
+														),
+													}))
+												}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 />
+											</Button>
+										) : null}
+									</div>
+								);
+							})}
+							{(() => {
+								const nextPage = popupPageOptionsForAudience(
+									draft.audience
+								).find((page) => !draft.targetPages.includes(page.id));
+								return nextPage ? (
+									<Button
+										className="justify-self-start"
+										onClick={() =>
+											update((current) => ({
+												...current,
+												targetPages: [...current.targetPages, nextPage.id],
+											}))
+										}
+										size="sm"
+										type="button"
+										variant="outline"
+									>
+										<Plus /> 위치 추가
+									</Button>
+								) : null;
+							})()}
+						</div>
+						<p className="text-muted-foreground text-xs">
+							여러 페이지를 선택할 수 있습니다.
+						</p>
 					</div>
 					<div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
 						<p className="text-muted-foreground text-sm">

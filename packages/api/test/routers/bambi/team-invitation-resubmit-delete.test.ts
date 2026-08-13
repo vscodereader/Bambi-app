@@ -113,10 +113,15 @@ describe("teams.resubmitInvitation", () => {
 			context: ctx(seed.ownerId),
 			path: ["bambi", "teams", "resubmitInvitation"],
 		});
-		await call({ invitationId: seed.inviteId, organizationId: seed.orgId });
+		await call({
+			invitationId: seed.inviteId,
+			organizationId: seed.orgId,
+			reason: "반려 사유를 보완하여 다시 제출합니다.",
+		});
 
 		const [row] = await db
 			.select({
+				inviteReason: invitation.inviteReason,
 				rejectionReason: invitation.rejectionReason,
 				status: invitation.status,
 			})
@@ -124,6 +129,7 @@ describe("teams.resubmitInvitation", () => {
 			.where(eq(invitation.id, seed.inviteId));
 		expect(row?.status).toBe("pending");
 		expect(row?.rejectionReason).toBeNull();
+		expect(row?.inviteReason).toBe("반려 사유를 보완하여 다시 제출합니다.");
 
 		await cleanup(seed);
 	});
@@ -136,7 +142,11 @@ describe("teams.resubmitInvitation", () => {
 			path: ["bambi", "teams", "resubmitInvitation"],
 		});
 		await expectOrpcCode(
-			call({ invitationId: seed.inviteId, organizationId: seed.orgId }),
+			call({
+				invitationId: seed.inviteId,
+				organizationId: seed.orgId,
+				reason: "반려 사유를 보완하여 다시 제출합니다.",
+			}),
 			"CONFLICT"
 		);
 
@@ -152,7 +162,11 @@ describe("teams.resubmitInvitation", () => {
 			path: ["bambi", "teams", "resubmitInvitation"],
 		});
 		await expectOrpcCode(
-			call({ invitationId: seed.inviteId, organizationId: seed.orgId }),
+			call({
+				invitationId: seed.inviteId,
+				organizationId: seed.orgId,
+				reason: "반려 사유를 보완하여 다시 제출합니다.",
+			}),
 			"FORBIDDEN"
 		);
 

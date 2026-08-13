@@ -71,12 +71,18 @@ const setMemberTeamsInput = organizationIdInput.extend({
 	teamIds: z.array(z.string().min(1)),
 });
 
+const inviteReasonSchema = z
+	.string()
+	.trim()
+	.min(10, "초대 사유는 10자 이상 입력해 주세요.")
+	.max(200, "초대 사유는 200자 이하로 입력해 주세요.");
+
 const inviteMemberInput = organizationIdInput.extend({
 	email: z.string().email().max(320),
 	role: organizationRoleSchema,
 	teamId: z.string().min(1).optional(),
 	// 초대 사유(선택). 운영자 팀 합류 승인 화면에 그대로 노출된다.
-	reason: z.string().trim().max(500).optional(),
+	reason: inviteReasonSchema,
 });
 
 const setMemberRoleInput = organizationIdInput.extend({
@@ -98,6 +104,10 @@ const searchEmployerInviteesInput = organizationIdInput.extend({
 
 const invitationActionInput = organizationIdInput.extend({
 	invitationId: z.string().min(1),
+});
+
+const resubmitInvitationInput = invitationActionInput.extend({
+	reason: inviteReasonSchema,
 });
 
 const forbidden = (message: string) => new ORPCError("FORBIDDEN", { message });
@@ -410,7 +420,7 @@ export const teamsRouter = {
 		}),
 
 	resubmitInvitation: protectedProcedure
-		.input(invitationActionInput)
+		.input(resubmitInvitationInput)
 		.handler(async ({ context, input }) => {
 			const { profile } = await requireOrganizationTeamManagementAccess({
 				organizationId: input.organizationId,
@@ -446,6 +456,7 @@ export const teamsRouter = {
 				.update(invitation)
 				.set({
 					expiresAt: getExpiresAt(),
+					inviteReason: input.reason,
 					inviterId: profile.userId,
 					rejectionReason: null,
 					status: "pending",

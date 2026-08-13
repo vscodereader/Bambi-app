@@ -78,7 +78,11 @@ interface ModContextValue {
 	queue: QueueItem[];
 	reports: Report[];
 	resolveQueue: (id: string, action: QueueVerdict, reason?: string) => void;
-	resolveReport: (id: string, action: "dismiss" | "act") => void;
+	resolveReport: (
+		id: string,
+		action: "dismiss" | "act",
+		reason?: string
+	) => void;
 	// 탈퇴 복구(deletedAt 해제). 파기 완료 계정 등 서버 거절 사유를 그대로 띄워야 해서
 	// 성공 여부만 돌려준다.
 	restoreAccount: (id: string, reason: string) => Promise<boolean>;
@@ -474,6 +478,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				id: item.id,
 				note: attachmentNote ? `${baseNote}\n${attachmentNote}` : baseNote,
 				reason: reportReasonLabel(item.reason),
+				resolutionReason: item.resolutionReason,
 				reporter: reporterName,
 				reporterRole,
 				sev: getReportSeverity(item.reason, item.status),
@@ -605,13 +610,18 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			setSelected((s) => s.filter((x) => x !== id));
 			flash(QUEUE_VERDICT_TOAST[action]);
 		};
-		const resolveReport = (id: string, action: "dismiss" | "act") => {
+		const resolveReport = (
+			id: string,
+			action: "dismiss" | "act",
+			reason?: string
+		) => {
 			setReportStatusMutation.mutate(
 				{
 					reason:
-						action === "dismiss"
+						reason?.trim() ||
+						(action === "dismiss"
 							? "운영자가 신고를 기각했습니다."
-							: "운영자가 신고 조치를 완료했습니다.",
+							: "운영자가 신고 조치를 완료했습니다."),
 					reportId: id,
 					status: action === "dismiss" ? "dismissed" : "resolved",
 				},
