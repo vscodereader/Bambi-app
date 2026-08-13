@@ -32,6 +32,7 @@ import { hasActiveAdExposure } from "../../services/bambi-advertiser";
 import {
 	isEmployerLikeRole,
 	isEmployerOrganizationVerified,
+	requireAdminProfile,
 } from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
@@ -62,10 +63,11 @@ import {
 import { resolveOptionalRegion } from "../../services/bambi-region";
 import {
 	createBusinessDocumentUploadIntent,
-	getBusinessDocumentObjectUrl,
+	getBusinessDocumentViewPath,
 	isOwnedBusinessDocumentKey,
+	resolveBusinessDocumentViewUrl,
 } from "../../services/bambi-storage";
-import { deletePublicObjects } from "../../services/gcs";
+import { deletePrivateObjects } from "../../services/gcs";
 import {
 	type BiznumValidation,
 	validateBiznum,
@@ -177,6 +179,11 @@ const addBusinessDocumentInput = businessDocumentUploadInput.extend({
 
 const deleteBusinessDocumentInput = z.object({
 	documentId: z.string().uuid(),
+});
+
+const businessDocumentViewInput = z.object({
+	documentId: z.string().min(1),
+	download: z.boolean().default(false),
 });
 
 const saveEmployerBusinessDraftInput = submitEmployerBusinessInfoInput.extend({
@@ -360,7 +367,7 @@ const toBusinessDocumentResponse = (document: {
 	fileName: document.fileName,
 	id: document.id,
 	mimeType: document.mimeType,
-	objectUrl: getBusinessDocumentObjectUrl(document),
+	objectUrl: getBusinessDocumentViewPath(document.id),
 });
 
 // 다른 계정이 같은 사람으로 인증했는지 본다. 판정 축은 DI지만, 과거 CI만 저장된
@@ -641,6 +648,41 @@ export const onboardingRouter = {
 			return toBusinessDocumentResponse(createdDocument);
 		}),
 
+	// 목록 응답에는 앱 경로(/bambi/business-documents/{id})만 실린다. 실제 파일 위치는
+	// 이 프로시저가 매 호출 인가를 통과한 요청에만 내려준다 — 서명 URL(60초)이 응답·캐시에
+	// 상주하지 않으므로 URL 유출·공유가 무의미하다.
+	createBusinessDocumentViewUrl: protectedProcedure
+		.input(businessDocumentViewInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			const [document] = await db
+				.select()
+				.from(employerBusinessDocument)
+				.where(eq(employerBusinessDocument.id, input.documentId))
+				.limit(1);
+
+			if (!document) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Business document was not found.",
+				});
+			}
+
+			// 소유 축은 "올린 본인"(createdByUserId)이다. 같은 조직의 다른 멤버도 볼 수 없고,
+			// 본인이 아니면 운영자(admin)만 통과한다(심사 화면).
+			if (document.createdByUserId !== userId) {
+				await requireAdminProfile(context.session);
+			}
+
+			return {
+				url: await resolveBusinessDocumentViewUrl({
+					category: document.category,
+					download: input.download,
+					fileName: document.fileName,
+					storageKey: document.storageKey,
+				}),
+			};
+		}),
+
 	deleteBusinessDocument: protectedProcedure
 		.input(deleteBusinessDocumentInput)
 		.handler(async ({ context, input }) => {
@@ -704,7 +746,7 @@ export const onboardingRouter = {
 						);
 				}
 			});
-			await deletePublicObjects([document.storageKey]);
+			await deletePrivateObjects([document.storageKey]);
 
 			return { id: document.id };
 		}),
