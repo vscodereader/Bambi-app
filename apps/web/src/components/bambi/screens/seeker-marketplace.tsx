@@ -25,8 +25,9 @@ import { VisualJobExposureSections } from "../visual-job-exposure-sections";
 export function SeekerMarketplaceScreen() {
 	const router = useRouter();
 	const { isGuest } = useBambiAuth();
-	// 필터는 헤더 검색창과 공유하기 위해 SeekerAppShell 컨텍스트에서 가져온다
-	const { filters, setFilters } = useSeekerFilters();
+	// 필터는 헤더 검색창과 공유하기 위해 SeekerAppShell의 zustand 스토어에서 가져온다
+	const filters = useSeekerFilters((state) => state.filters);
+	const setFilters = useSeekerFilters((state) => state.setFilters);
 	const {
 		hasMore,
 		isApiBacked,

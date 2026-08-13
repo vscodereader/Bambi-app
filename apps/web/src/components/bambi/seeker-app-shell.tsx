@@ -3,30 +3,29 @@
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, type ReactNode, useContext, useState } from "react";
+import { useStore } from "zustand";
 import { SEEKER_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import {
-	DEFAULT_MARKETPLACE_FILTERS,
-	type MarketplaceFilters,
-} from "@/lib/bambi/marketplace";
+	createSeekerFiltersStore,
+	type SeekerFiltersState,
+	type SeekerFiltersStore,
+} from "@/stores/seeker-filters-store";
 import { useBambiAuth } from "./auth-client-provider";
 import { JobSearchCommand } from "./job-search-command";
 import { ResponsiveAppShell } from "./responsive-shell";
 
-interface SeekerFiltersContextValue {
-	filters: MarketplaceFilters;
-	setFilters: (filters: MarketplaceFilters) => void;
-}
+// 컨텍스트에는 상태가 아니라 스토어 인스턴스만 담는다 — 상태 변경 시 리렌더는
+// useStore 셀렉터를 구독한 컴포넌트로만 좁혀진다.
+const SeekerFiltersContext = createContext<SeekerFiltersStore | null>(null);
 
-const SeekerFiltersContext = createContext<SeekerFiltersContextValue | null>(
-	null
-);
-
-export function useSeekerFilters(): SeekerFiltersContextValue {
-	const ctx = useContext(SeekerFiltersContext);
-	if (!ctx) {
+export function useSeekerFilters<T>(
+	selector: (state: SeekerFiltersState) => T
+): T {
+	const store = useContext(SeekerFiltersContext);
+	if (!store) {
 		throw new Error("useSeekerFilters must be used within SeekerAppShell");
 	}
-	return ctx;
+	return useStore(store, selector);
 }
 
 // 데스크톱·모바일 헤더가 각각 자기 인스턴스를 마운트한다. Ctrl/Cmd+K 리스너는
@@ -56,13 +55,11 @@ function SeekerHeaderSearch({ withHotkey = false }: { withHotkey?: boolean }) {
 
 export function SeekerAppShell({ children }: { children: ReactNode }) {
 	const pathname = usePathname();
-	const [filters, setFilters] = useState<MarketplaceFilters>(
-		DEFAULT_MARKETPLACE_FILTERS
-	);
+	const [store] = useState(createSeekerFiltersStore);
 	// 검색창은 마켓플레이스(/seeker)에서만 헤더에 노출하고 채팅·내정보엔 두지 않는다
 	const isMarketplace = pathname === "/seeker";
 	return (
-		<SeekerFiltersContext.Provider value={{ filters, setFilters }}>
+		<SeekerFiltersContext.Provider value={store}>
 			<ResponsiveAppShell
 				// 모든 seeker 페이지(채용 목록·상세·채팅·수다방·내 정보) 헤더를
 				// /seeker와 동일한 고정폭·여백으로 통일한다.
