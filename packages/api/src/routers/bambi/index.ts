@@ -23,7 +23,34 @@ import { siteSettingsRouter } from "./site-settings";
 import { supportRouter } from "./support";
 import { teamsRouter } from "./teams";
 
-export const bambiRouter = {
+// 라우터가 커지며 추론 타입이 tsc의 선언 직렬화 한도를 넘어(TS7056) appRouter와
+// 같은 방식으로 명시 주석을 단다 — typeof 참조라 클라이언트 타입 추론은 그대로다.
+export const bambiRouter: {
+	accountRecovery: typeof accountRecoveryRouter;
+	adProducts: typeof adProductsRouter;
+	analytics: typeof analyticsRouter;
+	attendance: typeof attendanceRouter;
+	bannedWords: typeof bannedWordsRouter;
+	blocks: typeof blocksRouter;
+	boostOptions: typeof boostOptionsRouter;
+	chats: typeof chatsRouter;
+	community: typeof communityRouter;
+	communityBoards: typeof communityBoardsRouter;
+	crawledJobs: typeof crawledJobsRouter;
+	crawler: typeof crawlerRouter;
+	jobs: typeof jobsRouter;
+	mainPopups: typeof mainPopupsRouter;
+	moderation: typeof moderationRouter;
+	notifications: typeof notificationsRouter;
+	onboarding: typeof onboardingRouter;
+	organizations: typeof organizationsRouter;
+	promotions: typeof promotionsRouter;
+	regions: typeof regionsRouter;
+	reviews: typeof reviewsRouter;
+	siteSettings: typeof siteSettingsRouter;
+	support: typeof supportRouter;
+	teams: typeof teamsRouter;
+} = {
 	accountRecovery: accountRecoveryRouter,
 	adProducts: adProductsRouter,
 	analytics: analyticsRouter,
