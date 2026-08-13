@@ -2,10 +2,13 @@ import { randomUUID } from "node:crypto";
 
 import type { ChatMediaCategory } from "./bambi-media-policy";
 import {
+	createPrivateSignedReadUrl,
+	createPrivateSignedUploadUrl,
 	createSignedUploadUrl,
 	getPublicObjectUrl,
+	isProductionStorageRuntime,
 	isPublicBucketConfigured,
-	shouldUsePublicBucket,
+	shouldUsePrivateBucket,
 } from "./gcs";
 
 export interface ChatAttachmentStorageInput {
@@ -90,7 +93,12 @@ const normalizeFileNameForStorage = (fileName: string): string => {
 
 const JOB_POST_MEDIA_KEY_ROOT = "bambi-job-post-media";
 
-const BUSINESS_DOCUMENT_KEY_ROOT = "bambi-business-documents";
+// 비공개 버킷(bambi-storage-private) 키 규칙 — 전 서비스 공통:
+//   seeker/{userId}/…            구직자 민감 파일(아직 미사용, 규칙만 예약)
+//   employer/{orgId}/{userId}/…  구인자 민감 파일(사업자 문서가 첫 사용자)
+// 구인자 파일은 조직이 소유 경계(DB organizationId)라 키에 조직 경계를 드러내
+// 조직 단위 일괄 정리·감사가 프리픽스만으로 가능하게 한다.
+const PRIVATE_EMPLOYER_KEY_ROOT = "employer";
 
 const buildBusinessDocumentKeyPrefix = ({
 	organizationId,
@@ -98,7 +106,7 @@ const buildBusinessDocumentKeyPrefix = ({
 }: {
 	organizationId: string;
 	userId: string;
-}): string => `${BUSINESS_DOCUMENT_KEY_ROOT}/${organizationId}/${userId}/`;
+}): string => `${PRIVATE_EMPLOYER_KEY_ROOT}/${organizationId}/${userId}/`;
 
 export const isOwnedBusinessDocumentKey = ({
 	organizationId,
@@ -226,12 +234,25 @@ export const getChatAttachmentObjectUrl = (
 		? getPublicObjectUrl(input.storageKey)
 		: buildLocalObjectUrl(input);
 
-export const getBusinessDocumentObjectUrl = (
-	input: ChatAttachmentObjectInput
-): string =>
-	shouldUsePublicBucket()
-		? getPublicObjectUrl(input.storageKey)
-		: buildLocalObjectUrl(input);
+export const getBusinessDocumentViewPath = (documentId: string): string =>
+	`/bambi/business-documents/${documentId}`;
+
+// 조회 URL은 매 요청 인가를 통과한 뒤에만 만들어진다(onboarding.createBusinessDocumentViewUrl).
+// 프로덕션+버킷 구성 시 60초 서명 GET, 그 외(dev)는 로컬 플레이스홀더 라우트.
+export const resolveBusinessDocumentViewUrl = async ({
+	category,
+	download,
+	fileName,
+	storageKey,
+}: {
+	category: ChatMediaCategory;
+	download: boolean;
+	fileName: string;
+	storageKey: string;
+}): Promise<string> =>
+	shouldUsePrivateBucket()
+		? await createPrivateSignedReadUrl({ download, fileName, storageKey })
+		: buildLocalObjectUrl({ category, fileName, storageKey });
 
 export const createBusinessDocumentUploadIntent = async ({
 	actorUserId,
@@ -253,8 +274,10 @@ export const createBusinessDocumentUploadIntent = async ({
 		fileName: fileName.trim(),
 		mimeType,
 		storageKey,
-		uploadUrl: shouldUsePublicBucket()
-			? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
+		uploadUrl: isProductionStorageRuntime()
+			? // 버킷 미설정이면 createPrivateSignedUploadUrl 내부 requirePrivateBucket이
+				// throw 한다 — 공개 버킷·로컬 폴백 없이 업로드를 거부한다(default-deny).
+				await createPrivateSignedUploadUrl({ byteSize, mimeType, storageKey })
 			: buildLocalObjectUrl({
 					category,
 					fileName: fileName.trim(),

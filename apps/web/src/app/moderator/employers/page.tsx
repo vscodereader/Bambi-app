@@ -1,5 +1,15 @@
 "use client";
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
@@ -11,7 +21,7 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { Download, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ChatAttachmentPreview } from "@/components/bambi/chat-attachment-preview";
@@ -84,6 +94,20 @@ export default function ModeratorEmployersPage() {
 					return rest;
 				});
 				// 입력 키 전체(상태 필터·페이지 무관)를 함께 무효화한다.
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.moderation.listEmployers.key(),
+				});
+			},
+			onError: (error) => toast.error(error.message),
+		})
+	);
+	const [pendingDeleteDocumentId, setPendingDeleteDocumentId] = useState<
+		string | null
+	>(null);
+	const deleteDocument = useMutation(
+		orpc.bambi.moderation.deleteBusinessDocument.mutationOptions({
+			onSuccess: async () => {
+				toast.success("서류를 삭제했어요.");
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.moderation.listEmployers.key(),
 				});
@@ -177,18 +201,32 @@ export default function ModeratorEmployersPage() {
 													attachment={document}
 													mine={false}
 												/>
-												<a
-													className={buttonVariants({
-														className: "mt-2 w-full",
-														size: "sm",
-														variant: "outline",
-													})}
-													download={document.fileName}
-													href={document.objectUrl}
-												>
-													<Download aria-hidden />
-													다운로드
-												</a>
+												<div className="mt-2 flex gap-2">
+													<a
+														className={buttonVariants({
+															className: "flex-1",
+															size: "sm",
+															variant: "outline",
+														})}
+														download={document.fileName}
+														href={`${document.objectUrl}?download=1`}
+													>
+														<Download aria-hidden />
+														다운로드
+													</a>
+													<Button
+														aria-label={`${document.fileName} 삭제`}
+														disabled={deleteDocument.isPending}
+														onClick={() =>
+															setPendingDeleteDocumentId(document.id)
+														}
+														size="sm"
+														type="button"
+														variant="outline"
+													>
+														<Trash2 aria-hidden />
+													</Button>
+												</div>
 											</li>
 										))}
 									</ul>
@@ -261,6 +299,40 @@ export default function ModeratorEmployersPage() {
 					다음
 				</Button>
 			</div>
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setPendingDeleteDocumentId(null);
+					}
+				}}
+				open={pendingDeleteDocumentId !== null}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>이 서류를 삭제하시겠습니까?</AlertDialogTitle>
+						<AlertDialogDescription>
+							파일이 저장소에서 함께 제거되며 되돌릴 수 없습니다. 업소 인증
+							상태는 바뀌지 않습니다 — 판정이 필요하면 반려를 사용하세요.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								if (pendingDeleteDocumentId) {
+									deleteDocument.mutate({
+										documentId: pendingDeleteDocumentId,
+									});
+								}
+								setPendingDeleteDocumentId(null);
+							}}
+							variant="destructive"
+						>
+							삭제
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }

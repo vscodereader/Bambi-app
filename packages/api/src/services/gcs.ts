@@ -2,6 +2,7 @@ import { env } from "@bambi-app/env/server";
 import { Storage } from "@google-cloud/storage";
 
 const SIGNED_UPLOAD_URL_TTL_MS = 5 * 60 * 1000;
+const SIGNED_READ_URL_TTL_MS = 60 * 1000;
 const PUBLIC_OBJECT_BASE_URL = "https://storage.googleapis.com";
 
 export interface SignedUploadUrlInput {
@@ -44,18 +45,40 @@ const requirePublicBucket = (): string => {
 	return bucketName;
 };
 
+export const isPrivateBucketConfigured = (): boolean =>
+	Boolean(env.GCS_PRIVATE_BUCKET);
+
+// 조회 라우트·업로드 인텐트가 "프로덕션인가"를 물을 때 env를 직접 들지 않도록 한 곳에 둔다.
+export const isProductionStorageRuntime = (): boolean =>
+	env.NODE_ENV === "production";
+
+export const shouldUsePrivateBucket = (): boolean =>
+	isProductionStorageRuntime() && isPrivateBucketConfigured();
+
+const requirePrivateBucket = (): string => {
+	const bucketName = env.GCS_PRIVATE_BUCKET;
+
+	if (!bucketName) {
+		// 사업자 문서 업로드 경로에서 이 에러가 그대로 올라간다 — 공개 버킷 폴백 금지.
+		throw new Error(
+			"GCS_PRIVATE_BUCKET 환경 변수가 설정되지 않았습니다. 민감 서류는 비공개 버킷 없이는 업로드할 수 없습니다."
+		);
+	}
+
+	return bucketName;
+};
+
 export const getPublicObjectUrl = (storageKey: string): string =>
 	`${PUBLIC_OBJECT_BASE_URL}/${requirePublicBucket()}/${storageKey}`;
 
 // 서명에 Content-Type과 Content-Length를 묶는다. 클라이언트가 선언한 값과 실제
 // 업로드가 다르면 GCS가 거부하므로, 용량·타입 정책이 서버 검증을 넘어 GCS에서도 강제된다.
-export const createSignedUploadUrl = async ({
-	byteSize,
-	mimeType,
-	storageKey,
-}: SignedUploadUrlInput): Promise<string> => {
+const createSignedUploadUrlForBucket = async (
+	bucketName: string,
+	{ byteSize, mimeType, storageKey }: SignedUploadUrlInput
+): Promise<string> => {
 	const [signedUrl] = await getStorageClient()
-		.bucket(requirePublicBucket())
+		.bucket(bucketName)
 		.file(storageKey)
 		.getSignedUrl({
 			action: "write",
@@ -63,6 +86,46 @@ export const createSignedUploadUrl = async ({
 			expires: Date.now() + SIGNED_UPLOAD_URL_TTL_MS,
 			extensionHeaders: { "content-length": String(byteSize) },
 			version: "v4",
+		});
+
+	return signedUrl;
+};
+
+export const createSignedUploadUrl = (
+	input: SignedUploadUrlInput
+): Promise<string> =>
+	createSignedUploadUrlForBucket(requirePublicBucket(), input);
+
+export const createPrivateSignedUploadUrl = (
+	input: SignedUploadUrlInput
+): Promise<string> =>
+	createSignedUploadUrlForBucket(requirePrivateBucket(), input);
+
+// 조회는 매번 앱 라우트의 세션 검증을 거친 직후에만 발급되므로 60초면 충분하다 —
+// 길게 주면 유출된 URL의 소지자 사용 창만 넓어진다.
+export const createPrivateSignedReadUrl = async ({
+	download,
+	fileName,
+	storageKey,
+}: {
+	download: boolean;
+	fileName: string;
+	storageKey: string;
+}): Promise<string> => {
+	const [signedUrl] = await getStorageClient()
+		.bucket(requirePrivateBucket())
+		.file(storageKey)
+		.getSignedUrl({
+			action: "read",
+			expires: Date.now() + SIGNED_READ_URL_TTL_MS,
+			version: "v4",
+			// 서명 URL은 302로 이동한 크로스 오리진 응답이라 <a download>가 안 먹는다.
+			// 다운로드 의도는 Content-Disposition으로 GCS가 강제하게 한다.
+			...(download
+				? {
+						responseDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+					}
+				: {}),
 		});
 
 	return signedUrl;
@@ -83,6 +146,22 @@ export const deletePublicObjects = async (
 	}
 
 	const bucket = getStorageClient().bucket(requirePublicBucket());
+
+	await Promise.allSettled(
+		storageKeys.map((storageKey) =>
+			bucket.file(storageKey).delete({ ignoreNotFound: true })
+		)
+	);
+};
+
+export const deletePrivateObjects = async (
+	storageKeys: string[]
+): Promise<void> => {
+	if (!isPrivateBucketConfigured() || storageKeys.length === 0) {
+		return;
+	}
+
+	const bucket = getStorageClient().bucket(requirePrivateBucket());
 
 	await Promise.allSettled(
 		storageKeys.map((storageKey) =>

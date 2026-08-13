@@ -12,15 +12,26 @@ dotenv.config({
 });
 
 vi.mock("@/services/gcs", () => ({
+	createPrivateSignedReadUrl: vi.fn(
+		async ({ storageKey }: { storageKey: string }) =>
+			`https://private.bambi.test/${storageKey}`
+	),
+	createPrivateSignedUploadUrl: vi.fn(
+		async ({ storageKey }: { storageKey: string }) =>
+			`https://upload.bambi.test/${storageKey}`
+	),
 	createSignedUploadUrl: vi.fn(
 		async ({ storageKey }: { storageKey: string }) =>
 			`https://upload.bambi.test/${storageKey}`
 	),
+	deletePrivateObjects: vi.fn(async () => undefined),
 	deletePublicObjects: vi.fn(async () => undefined),
 	getPublicObjectUrl: (storageKey: string) =>
 		`https://files.bambi.test/${storageKey}`,
+	// 비프로덕션 취급 — 업로드 인텐트·조회 URL 모두 로컬 플레이스홀더로 떨어진다.
+	isProductionStorageRuntime: () => false,
 	isPublicBucketConfigured: () => true,
-	shouldUsePublicBucket: () => true,
+	shouldUsePrivateBucket: () => false,
 }));
 
 const [
@@ -164,7 +175,7 @@ describe("bambi onboarding business documents", () => {
 				mimeType: "image/webp",
 			});
 			expect(intent.storageKey).toContain(
-				`bambi-business-documents/${fixture.organizationId}/${fixture.ownerUserId}/`
+				`employer/${fixture.organizationId}/${fixture.ownerUserId}/`
 			);
 
 			const addDocument = createOwnerClient(
@@ -182,7 +193,7 @@ describe("bambi onboarding business documents", () => {
 			expect(document).toMatchObject({
 				category: "image",
 				fileName: "registration.webp",
-				objectUrl: `https://files.bambi.test/${intent.storageKey}`,
+				objectUrl: `/bambi/business-documents/${document.id}`,
 			});
 
 			const getMine = createOwnerClient(
@@ -236,7 +247,7 @@ describe("bambi onboarding business documents", () => {
 					fileName: "pending.pdf",
 					mimeType: "application/pdf",
 					organizationId: fixture.organizationId,
-					storageKey: `bambi-business-documents/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-pending.pdf`,
+					storageKey: `employer/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-pending.pdf`,
 				})
 			).rejects.toMatchObject({ code: "CONFLICT" });
 
@@ -249,7 +260,7 @@ describe("bambi onboarding business documents", () => {
 					fileName: "pending.pdf",
 					mimeType: "application/pdf",
 					organizationId: fixture.organizationId,
-					storageKey: `bambi-business-documents/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-pending.pdf`,
+					storageKey: `employer/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-pending.pdf`,
 				})
 				.returning();
 			if (!document) {
@@ -282,7 +293,7 @@ describe("bambi onboarding business documents", () => {
 				fileName: "approved.png",
 				mimeType: "image/png",
 				organizationId: fixture.organizationId,
-				storageKey: `bambi-business-documents/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-approved.png`,
+				storageKey: `employer/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-approved.png`,
 			});
 
 			const [profile] = await db
@@ -350,7 +361,7 @@ describe("bambi onboarding business documents", () => {
 					fileName: "foreign.pdf",
 					mimeType: "application/pdf",
 					organizationId: fixture.organizationId,
-					storageKey: `bambi-business-documents/foreign/${fixture.ownerUserId}/foreign.pdf`,
+					storageKey: `employer/foreign/${fixture.ownerUserId}/foreign.pdf`,
 				})
 			).rejects.toMatchObject({ code: "FORBIDDEN" });
 
@@ -362,7 +373,7 @@ describe("bambi onboarding business documents", () => {
 					fileName: `${index}.png`,
 					mimeType: "image/png",
 					organizationId: fixture.organizationId,
-					storageKey: `bambi-business-documents/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-${index}.png`,
+					storageKey: `employer/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-${index}.png`,
 				}))
 			);
 			await expect(
@@ -371,9 +382,159 @@ describe("bambi onboarding business documents", () => {
 					fileName: "sixth.png",
 					mimeType: "image/png",
 					organizationId: fixture.organizationId,
-					storageKey: `bambi-business-documents/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-sixth.png`,
+					storageKey: `employer/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-sixth.png`,
 				})
 			).rejects.toMatchObject({ code: "CONFLICT" });
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+});
+
+describe("bambi onboarding createBusinessDocumentViewUrl", () => {
+	it("serves the uploader and moderators, rejects other members and missing documents", async () => {
+		const fixture = await createFixture();
+		const otherMemberUserId = `user_business_other_${randomUUID()}`;
+		try {
+			await db.insert(user).values({
+				email: `${otherMemberUserId}@bambi.test`,
+				id: otherMemberUserId,
+				name: "Other member",
+			});
+			await db
+				.insert(bambiProfile)
+				.values({ role: "employer", userId: otherMemberUserId });
+			await db.insert(member).values({
+				createdAt: new Date(),
+				id: `member_business_other_${randomUUID()}`,
+				organizationId: fixture.organizationId,
+				role: "admin",
+				userId: otherMemberUserId,
+			});
+
+			const [document] = await db
+				.insert(employerBusinessDocument)
+				.values({
+					byteSize: 1024,
+					category: "pdf",
+					createdByUserId: fixture.ownerUserId,
+					fileName: "view.pdf",
+					mimeType: "application/pdf",
+					organizationId: fixture.organizationId,
+					storageKey: `employer/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-view.pdf`,
+				})
+				.returning();
+			if (!document) {
+				throw new Error("Expected view document fixture to be created.");
+			}
+
+			const viewAsOwner = createOwnerClient(
+				fixture,
+				onboardingRouter.createBusinessDocumentViewUrl,
+				"createBusinessDocumentViewUrl"
+			);
+			const owned = await viewAsOwner({ documentId: document.id });
+			// 비프로덕션(모킹된 shouldUsePrivateBucket=false)이라 로컬 플레이스홀더 URL.
+			expect(owned.url.startsWith("/bambi/local-chat-attachments?")).toBe(true);
+
+			// 같은 조직의 다른 멤버(운영자 아님)는 올린 본인이 아니므로 거절된다.
+			const viewAsOtherMember = createProcedureClient(
+				onboardingRouter.createBusinessDocumentViewUrl,
+				{
+					context: createContextForUser(otherMemberUserId),
+					path: ["bambi", "onboarding", "createBusinessDocumentViewUrl"],
+				}
+			);
+			await expect(
+				viewAsOtherMember({ documentId: document.id })
+			).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+			const viewAsModerator = createProcedureClient(
+				onboardingRouter.createBusinessDocumentViewUrl,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "onboarding", "createBusinessDocumentViewUrl"],
+				}
+			);
+			const moderated = await viewAsModerator({ documentId: document.id });
+			expect(moderated.url.startsWith("/bambi/local-chat-attachments?")).toBe(
+				true
+			);
+
+			await expect(
+				viewAsOwner({ documentId: randomUUID() })
+			).rejects.toMatchObject({ code: "NOT_FOUND" });
+		} finally {
+			await cleanupFixture(fixture);
+			await db
+				.delete(bambiProfile)
+				.where(eq(bambiProfile.userId, otherMemberUserId));
+			await db.delete(user).where(eq(user.id, otherMemberUserId));
+		}
+	});
+});
+
+describe("bambi moderation deleteBusinessDocument", () => {
+	it("lets moderators delete a document without touching verification status", async () => {
+		const fixture = await createFixture("pending");
+		try {
+			const [document] = await db
+				.insert(employerBusinessDocument)
+				.values({
+					byteSize: 2048,
+					category: "pdf",
+					createdByUserId: fixture.ownerUserId,
+					fileName: "moderated.pdf",
+					mimeType: "application/pdf",
+					organizationId: fixture.organizationId,
+					storageKey: `employer/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-moderated.pdf`,
+				})
+				.returning();
+			if (!document) {
+				throw new Error("Expected moderated document fixture to be created.");
+			}
+
+			// 운영자가 아니면 adminProcedure 게이트에서 거절된다.
+			const deleteAsOwner = createProcedureClient(
+				moderationRouter.deleteBusinessDocument,
+				{
+					context: createContextForUser(fixture.ownerUserId),
+					path: ["bambi", "moderation", "deleteBusinessDocument"],
+				}
+			);
+			await expect(
+				deleteAsOwner({ documentId: document.id })
+			).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+			const deleteAsModerator = createProcedureClient(
+				moderationRouter.deleteBusinessDocument,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "deleteBusinessDocument"],
+				}
+			);
+			await expect(
+				deleteAsModerator({ documentId: document.id })
+			).resolves.toEqual({ id: document.id });
+
+			const [remaining] = await db
+				.select({ id: employerBusinessDocument.id })
+				.from(employerBusinessDocument)
+				.where(eq(employerBusinessDocument.id, document.id));
+			expect(remaining).toBeUndefined();
+
+			// 본인 삭제와 달리 verificationStatus 전이는 없다.
+			const [profile] = await db
+				.select({ status: employerOrganizationProfile.verificationStatus })
+				.from(employerOrganizationProfile)
+				.where(
+					eq(employerOrganizationProfile.organizationId, fixture.organizationId)
+				);
+			expect(profile?.status).toBe("pending");
+
+			await expect(
+				deleteAsModerator({ documentId: randomUUID() })
+			).rejects.toMatchObject({ code: "NOT_FOUND" });
 		} finally {
 			await cleanupFixture(fixture);
 		}

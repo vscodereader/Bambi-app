@@ -1,28 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const gcsMocks = vi.hoisted(() => ({
+	createPrivateSignedReadUrl: vi.fn(),
+	createPrivateSignedUploadUrl: vi.fn(),
 	createSignedUploadUrl: vi.fn(),
 	getPublicObjectUrl: vi.fn(),
 }));
 
 vi.mock("@/services/gcs", () => ({
 	...gcsMocks,
+	isProductionStorageRuntime: () => false,
 	isPublicBucketConfigured: () => true,
-	shouldUsePublicBucket: () => false,
+	shouldUsePrivateBucket: () => false,
 }));
 
 import {
 	createBusinessDocumentUploadIntent,
-	getBusinessDocumentObjectUrl,
+	resolveBusinessDocumentViewUrl,
 } from "@/services/bambi-storage";
 
 describe("business document local storage fallback", () => {
 	beforeEach(() => {
+		gcsMocks.createPrivateSignedReadUrl.mockClear();
+		gcsMocks.createPrivateSignedUploadUrl.mockClear();
 		gcsMocks.createSignedUploadUrl.mockClear();
 		gcsMocks.getPublicObjectUrl.mockClear();
 	});
 
-	it("uses the local upload flow when the public bucket is disabled at runtime", async () => {
+	it("uses the local upload flow when not running in production", async () => {
 		const intent = await createBusinessDocumentUploadIntent({
 			actorUserId: "user-1",
 			byteSize: 1024,
@@ -36,13 +41,16 @@ describe("business document local storage fallback", () => {
 		expect(intent.uploadUrl).toContain(
 			`key=${encodeURIComponent(intent.storageKey)}`
 		);
-		expect(
-			getBusinessDocumentObjectUrl({
+		await expect(
+			resolveBusinessDocumentViewUrl({
 				category: intent.category,
+				download: false,
 				fileName: intent.fileName,
 				storageKey: intent.storageKey,
 			})
-		).toContain("/bambi/local-chat-attachments?");
+		).resolves.toContain("/bambi/local-chat-attachments?");
+		expect(gcsMocks.createPrivateSignedReadUrl).not.toHaveBeenCalled();
+		expect(gcsMocks.createPrivateSignedUploadUrl).not.toHaveBeenCalled();
 		expect(gcsMocks.createSignedUploadUrl).not.toHaveBeenCalled();
 		expect(gcsMocks.getPublicObjectUrl).not.toHaveBeenCalled();
 	});
