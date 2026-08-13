@@ -289,6 +289,7 @@ function TopicComments({
 			) : null}
 			{topic.comments.length > 0 ? (
 				<CommentList
+					allowReplies
 					comments={topic.comments}
 					deletePending={deleteMutation.isPending}
 					editingId={editingId}

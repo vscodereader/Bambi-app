@@ -128,6 +128,7 @@ interface CommunityPostInitial {
 	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
 	authorRole: "admin" | "employer" | "guest" | "job_seeker" | "legal_advisor";
 	body: string;
+	commentsDisabled?: boolean;
 	// 법률 자문 글의 연락처. 수정 폼이 다시 실어 보내지 않으면 서버가 null로 덮어쓴다.
 	contactPhone?: string | null;
 	id: string;
@@ -445,6 +446,9 @@ export function CommunityPostForm({
 	const [contactPhone, setContactPhone] = useState(
 		initialPost?.contactPhone ?? ""
 	);
+	const [commentsDisabled, setCommentsDisabled] = useState(
+		initialPost?.commentsDisabled ?? false
+	);
 	const [isEvent, setIsEvent] = useState(initialPost?.isEvent ?? false);
 	const [isAnonymous, setIsAnonymous] = useState(
 		initialPost?.isAnonymous ?? false
@@ -541,6 +545,7 @@ export function CommunityPostForm({
 			...contactPhoneInput(board.key, contactPhone),
 			authorName: authorName.trim(),
 			body: bodyJson,
+			...(role === "admin" ? { commentsDisabled } : {}),
 			isLocked: submittedIsLocked,
 			isEvent: submittedIsEvent,
 			isAnonymous,
@@ -560,6 +565,7 @@ export function CommunityPostForm({
 			authorName: authorName.trim(),
 			board: board.key,
 			body: bodyJson,
+			commentsDisabled: role === "admin" && commentsDisabled,
 			isLocked: submittedIsLocked,
 			isEvent: submittedIsEvent,
 			isAnonymous,
@@ -608,6 +614,18 @@ export function CommunityPostForm({
 				setAuthorName={setAuthorName}
 				setIsAnonymous={setIsAnonymous}
 			/>
+			{role === "admin" ? (
+				<div className="flex items-center gap-2">
+					<Checkbox
+						checked={commentsDisabled}
+						id="community-post-comments-disabled"
+						onCheckedChange={(checked) => setCommentsDisabled(checked === true)}
+					/>
+					<Label htmlFor="community-post-comments-disabled">
+						댓글 작성 불가
+					</Label>
+				</div>
+			) : null}
 
 			<PostLockField
 				allowLocking={!(isFreeBoard || guest || isLegalBoard)}

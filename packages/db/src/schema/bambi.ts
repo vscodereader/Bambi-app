@@ -1906,6 +1906,9 @@ export const communityPost = pgTable(
 		// 토글·작성·삭제 트랜잭션에서 함께 증감한다.
 		likeCount: integer("like_count").default(0).notNull(),
 		commentCount: integer("comment_count").default(0).notNull(),
+		// 운영자가 글 단위로 새 댓글·답글 작성을 잠근다. 기존 댓글 열람·수정·삭제에는
+		// 영향을 주지 않으며 일반 회원·비회원은 API에서 이 값을 설정할 수 없다.
+		commentsDisabled: boolean("comments_disabled").default(false).notNull(),
 		status: communityContentStatus("status").default("published").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		// $onUpdate를 쓰지 않는다 — 조회수 증가가 "수정됨" 시각을 갱신하면 안 되므로

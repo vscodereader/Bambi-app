@@ -270,6 +270,7 @@ export default async function PublicPostPage({ params }: PageProps) {
 					}
 					canWrite={canWrite}
 					commentCount={post.commentCount}
+					commentsDisabled={post.commentsDisabled}
 					initialComments={post.comments}
 					isGuestAuthored={post.authorRole === "guest"}
 					likeCount={post.likeCount}

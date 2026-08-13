@@ -39,7 +39,7 @@ import {
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MessageCircle } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -1247,10 +1247,12 @@ function PartyBox({
 	name,
 	role,
 	flagged,
+	icon = "user",
 }: {
 	name: string;
 	role: string;
 	flagged?: boolean;
+	icon?: "chat" | "user";
 }) {
 	return (
 		<div
@@ -1261,7 +1263,13 @@ function PartyBox({
 					: "border border-border"
 			)}
 		>
-			<Avatar name={name} size="sm" square />
+			{icon === "chat" ? (
+				<span className="flex size-10 flex-none items-center justify-center rounded-xl bg-primary/10 text-primary">
+					<MessageCircle className="size-5" />
+				</span>
+			) : (
+				<Avatar name={name} size="sm" square />
+			)}
 			<div className="min-w-0">
 				<div className="truncate font-bold text-[13.5px] text-foreground">
 					{name}
@@ -1684,7 +1692,12 @@ function CommunityTargetPanel({
 // 신고를 바로 확인할 수 있게).
 function ReportParties({ item }: { item: Report }) {
 	const targetBox = (
-		<PartyBox flagged name={item.target} role={`피신고 · ${item.targetRole}`} />
+		<PartyBox
+			flagged
+			icon={item.targetType === "chat_room" ? "chat" : "user"}
+			name={item.target}
+			role={`피신고 · ${item.targetRole}`}
+		/>
 	);
 	const targetUserId =
 		item.targetType === "user" && item.targetId ? item.targetId : null;
