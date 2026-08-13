@@ -73,7 +73,8 @@ bambi-storage-private/
 - `isPrivateBucketConfigured()`, `shouldUsePrivateBucket()`
   (= `NODE_ENV === "production" && GCS_PRIVATE_BUCKET 설정`)
 - `createPrivateSignedUploadUrl({ byteSize, mimeType, storageKey })` — 서명 PUT, TTL 5분
-- `createPrivateSignedReadUrl(storageKey)` — 서명 GET, **TTL 60초**
+- `createPrivateSignedReadUrl({ download, fileName, storageKey })` — 서명 GET, **TTL 60초**,
+  `download`면 `Content-Disposition: attachment` 포함
 - `deletePrivateObjects(storageKeys)`
 
 ### 3) 저장 서비스 — `packages/api/src/services/bambi-storage.ts`
@@ -92,20 +93,23 @@ bambi-storage-private/
 
 ### 4) 조회 라우트 — `apps/web/src/app/bambi/business-documents/[documentId]/route.ts` (신규)
 
-`GET` 핸들러, 매 요청 처리 순서:
+구현 확정(계획 단계 보정): oRPC API는 apps/server(Fastify)에서 돌고 web(Vercel)에는
+DB·GCS 접근이 없다. 따라서 웹 라우트는 검증을 직접 하지 않고, **매 요청** 들어온
+헤더(세션 쿠키 포함)를 기존 SSR 포워딩 인프라(`@/utils/orpc`의 `client`)로 API 서버에
+넘겨 프로시저를 호출한다.
 
-1. better-auth 세션 확인 — 없으면 401.
-2. `employer_business_document`에서 문서 조회 — 없으면 404.
-3. 인가: `document.createdByUserId === session.user.id` **또는** 운영자
-   (moderation 라우터가 쓰는 기존 운영자 판정 재사용) — 아니면 403.
-4. 스토리지 분기:
-   - `shouldUsePrivateBucket()` → `createPrivateSignedReadUrl(storageKey)`로 302
-     리다이렉트(`Cache-Control: no-store`).
-   - dev(로컬) → 기존 로컬 파일 응답 흐름으로 302
-     (`/bambi/local-chat-attachments?...`).
+- 신규 프로시저 `onboarding.createBusinessDocumentViewUrl({ documentId, download })`
+  (protectedProcedure): 문서 조회(없으면 NOT_FOUND) → `createdByUserId === 나`가
+  아니면 `requireAdminProfile`(운영자만 통과, 아니면 FORBIDDEN) →
+  `shouldUsePrivateBucket()`이면 60초 서명 GET URL, dev면 로컬 플레이스홀더 URL 반환.
+  `download: true`면 서명에 `Content-Disposition: attachment`를 실어 다운로드를 강제한다
+  (302 후 크로스 오리진이라 `<a download>` 속성이 안 먹는 것의 대체).
+- 웹 라우트 `GET`: 프로시저 호출 성공 시 302(`Cache-Control: no-store`),
+  ORPCError 코드를 401/403/404로 매핑, 그 외 500.
 
-효과: 화면에 노출되는 URL은 앱 경로뿐이라 유출·공유돼도 세션 없이는 무용지물.
-프론트는 일반 `<a href>` 새 탭 링크를 유지한다(팝업 차단 우회 불필요).
+효과는 동일: 화면에 노출되는 URL은 앱 경로뿐이라 유출·공유돼도 세션 없이는 무용지물.
+프론트는 일반 `<a href>` 새 탭 링크를 유지한다(팝업 차단 우회 불필요). 목록 응답의
+`objectUrl` 값은 `/bambi/business-documents/{id}`(+다운로드 링크는 `?download=1`)다.
 
 ### 5) 로컬 플레이스홀더 라우트 — `apps/web/src/app/bambi/local-chat-attachments/route.ts`
 
