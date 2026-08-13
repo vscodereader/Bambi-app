@@ -63,6 +63,7 @@ const AVATAR_FALLBACK_TEXT: Record<Size, string> = {
 
 interface AvatarProps {
 	className?: string;
+	fallbackIcon?: "message" | "user";
 	name?: string;
 	ring?: boolean;
 	size?: Size;
@@ -70,7 +71,29 @@ interface AvatarProps {
 	src?: string;
 }
 
+const avatarFallback = (
+	fallbackIcon: AvatarProps["fallbackIcon"],
+	initials: string
+): ReactNode => {
+	if (fallbackIcon === "message") {
+		return (
+			<span className="inline-flex size-1/2">
+				<Message aria-hidden="true" />
+			</span>
+		);
+	}
+	if (fallbackIcon === "user") {
+		return (
+			<span className="inline-flex size-1/2">
+				<UserIcon aria-hidden="true" />
+			</span>
+		);
+	}
+	return initials || "•";
+};
+
 export function Avatar({
+	fallbackIcon = "user",
 	name = "",
 	size = "md",
 	square = false,
@@ -85,6 +108,7 @@ export function Avatar({
 		.slice(0, 2)
 		.join("")
 		.toUpperCase();
+	const fallback = avatarFallback(fallbackIcon, initials);
 	return (
 		<UiAvatar
 			className={cn(
@@ -103,7 +127,7 @@ export function Avatar({
 					square ? "rounded-[14px]" : "rounded-full"
 				)}
 			>
-				{initials || "•"}
+				{fallback}
 			</UiAvatarFallback>
 		</UiAvatar>
 	);

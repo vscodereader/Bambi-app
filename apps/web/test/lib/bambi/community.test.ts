@@ -10,7 +10,6 @@ import {
 	getCommunityPageItems,
 	getCommunityTotalPages,
 	isBuiltinBoardKey,
-	isGuestWritableBoardKey,
 	isLegalAdvisorAllowedPath,
 	isLegalBoardKey,
 	isNewCommunityPost,
@@ -33,15 +32,6 @@ describe("community boards meta", () => {
 			"market",
 			"legal",
 		]);
-	});
-
-	it("비회원 글쓰기는 자유수다·밤문화 이야기·무료 법률 자문만 열린다", () => {
-		expect(isGuestWritableBoardKey("free")).toBe(true);
-		expect(isGuestWritableBoardKey("work_talk")).toBe(true);
-		expect(isGuestWritableBoardKey("legal")).toBe(true);
-		expect(isGuestWritableBoardKey("notice")).toBe(false);
-		expect(isGuestWritableBoardKey("market")).toBe(false);
-		expect(isGuestWritableBoardKey("best")).toBe(false);
 	});
 
 	it("무료 법률 자문 게시판만 잠금·연락처 규칙을 탄다", () => {

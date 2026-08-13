@@ -1,5 +1,5 @@
 import { db } from "@bambi-app/db";
-import { member, team, teamMember } from "@bambi-app/db/schema/auth";
+import { member, team, teamMember, user } from "@bambi-app/db/schema/auth";
 import {
 	adProduct,
 	bambiProfile,
@@ -1879,15 +1879,20 @@ export const jobsRouter = {
 			// 공고 작성자(구인자)의 인증번호를 상세에 노출한다(인증된 경우에만).
 			const [creatorProfile] = await db
 				.select({
+					displayName: user.name,
+					profileImageUrl: user.image,
 					isPhoneVerified: bambiProfile.isPhoneVerified,
 					phoneNumber: bambiProfile.phoneNumber,
 				})
 				.from(bambiProfile)
+				.innerJoin(user, eq(user.id, bambiProfile.userId))
 				.where(eq(bambiProfile.userId, post.createdByUserId))
 				.limit(1);
 
 			return {
 				...post,
+				createdByDisplayName: creatorProfile?.displayName ?? null,
+				createdByProfileImageUrl: creatorProfile?.profileImageUrl ?? null,
 				employerVerifiedPhone: creatorProfile?.isPhoneVerified
 					? (creatorProfile.phoneNumber ?? null)
 					: null,

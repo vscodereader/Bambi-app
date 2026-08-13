@@ -16,6 +16,8 @@ import {
 } from "@bambi-app/ui/components/dialog";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
+import { DownloadIcon, FileTextIcon } from "lucide-react";
+import { type ReactNode, useRef } from "react";
 import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
@@ -25,8 +27,73 @@ export interface ViewingChat {
 	title: string;
 }
 
+function AttachmentStrip({ children }: { children: ReactNode }) {
+	const stripRef = useRef<HTMLDivElement>(null);
+	const dragRef = useRef({ left: 0, moved: false, startX: 0 });
+
+	return (
+		<div
+			className="flex cursor-grab gap-2 overflow-x-auto overscroll-x-contain pb-1 active:cursor-grabbing md:gap-3"
+			onClickCapture={(event) => {
+				if (dragRef.current.moved) {
+					event.preventDefault();
+					event.stopPropagation();
+					dragRef.current.moved = false;
+				}
+			}}
+			onPointerCancel={(event) => {
+				const strip = stripRef.current;
+				if (strip?.hasPointerCapture(event.pointerId)) {
+					strip.releasePointerCapture(event.pointerId);
+				}
+			}}
+			onPointerDown={(event) => {
+				const strip = stripRef.current;
+				if (!strip) {
+					return;
+				}
+				dragRef.current = {
+					left: strip.scrollLeft,
+					moved: false,
+					startX: event.clientX,
+				};
+			}}
+			onPointerMove={(event) => {
+				const strip = stripRef.current;
+				if (!strip || event.buttons !== 1) {
+					return;
+				}
+				const distance = event.clientX - dragRef.current.startX;
+				dragRef.current.moved ||= Math.abs(distance) > 4;
+				if (
+					dragRef.current.moved &&
+					!strip.hasPointerCapture(event.pointerId)
+				) {
+					strip.setPointerCapture(event.pointerId);
+				}
+				strip.scrollLeft = dragRef.current.left - distance;
+			}}
+			onPointerUp={(event) => {
+				const strip = stripRef.current;
+				if (strip?.hasPointerCapture(event.pointerId)) {
+					strip.releasePointerCapture(event.pointerId);
+				}
+			}}
+			ref={stripRef}
+		>
+			{children}
+		</div>
+	);
+}
+
 // 다이얼로그가 열릴 때만 마운트돼 메시지를 조회·렌더한다(support InquiryThread와 동일 패턴).
-function ChatHistoryContent({ chatRoomId }: { chatRoomId: string }) {
+export function ChatHistoryContent({
+	chatRoomId,
+	constrained = true,
+}: {
+	chatRoomId: string;
+	constrained?: boolean;
+}) {
 	const historyQuery = useQuery({
 		...orpc.bambi.moderation.getChatMessagesForModeration.queryOptions({
 			input: { chatRoomId },
@@ -51,6 +118,13 @@ function ChatHistoryContent({ chatRoomId }: { chatRoomId: string }) {
 
 	const { employerName, employerUserId, jobSeekerName, messages } =
 		historyQuery.data;
+	const previewAttachments = messages.flatMap((message) =>
+		message.attachments.filter(
+			(attachment) =>
+				attachment.category === "pdf" ||
+				(attachment.category === "image" && attachment.mimeType !== "image/gif")
+		)
+	);
 
 	if (messages.length === 0) {
 		return (
@@ -59,37 +133,106 @@ function ChatHistoryContent({ chatRoomId }: { chatRoomId: string }) {
 	}
 
 	return (
-		<div className="flex max-h-[60vh] min-w-0 flex-col gap-3 overflow-y-auto">
-			{messages.map((message) => {
-				const isEmployer = message.senderUserId === employerUserId;
-				return (
-					<div className="flex min-w-0 flex-col gap-1" key={message.id}>
-						<div className="flex flex-wrap items-center gap-2">
-							<Badge variant={isEmployer ? "default" : "secondary"}>
-								{isEmployer ? employerName : jobSeekerName}
-							</Badge>
-							{message.kind === "contact_request" ? (
-								<Badge variant="outline">연락처 요청</Badge>
-							) : null}
-							<span className="text-muted-foreground text-xs">
-								{formatDateTime(message.createdAt)}
-							</span>
-						</div>
-						<p className="m-0 whitespace-pre-wrap text-foreground text-sm">
-							{message.body}
-						</p>
-						{message.attachments.length > 0 ? (
-							<div className="flex flex-wrap gap-1">
-								{message.attachments.map((attachment) => (
-									<Badge key={attachment.id} variant="outline">
-										첨부 · {attachment.fileName}
-									</Badge>
-								))}
+		<div
+			className={`flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden ${constrained ? "max-h-[60vh]" : "h-[min(70vh,720px)]"}`}
+		>
+			<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain pr-1">
+				{messages.map((message) => {
+					const isEmployer = message.senderUserId === employerUserId;
+					return (
+						<div
+							className={`flex min-w-0 max-w-[85%] flex-col gap-1 ${isEmployer ? "items-start self-start" : "items-end self-end"}`}
+							key={message.id}
+						>
+							<div
+								className={`flex flex-wrap items-center gap-2 ${isEmployer ? "justify-start" : "justify-end"}`}
+							>
+								<Badge variant={isEmployer ? "default" : "secondary"}>
+									{isEmployer ? employerName : jobSeekerName}
+								</Badge>
+								{message.kind === "contact_request" ? (
+									<Badge variant="outline">연락처 요청</Badge>
+								) : null}
+								<span className="text-muted-foreground text-xs">
+									{formatDateTime(message.createdAt)}
+								</span>
 							</div>
-						) : null}
-					</div>
-				);
-			})}
+							<p
+								className={`m-0 w-fit whitespace-pre-wrap rounded-xl px-3 py-2 text-sm ${isEmployer ? "bg-secondary text-foreground" : "bg-primary text-primary-foreground"}`}
+							>
+								{message.body}
+							</p>
+							{message.attachments.some(
+								(attachment) => attachment.mimeType === "image/gif"
+							) ? (
+								<div className="flex flex-wrap gap-1">
+									{message.attachments
+										.filter((attachment) => attachment.mimeType === "image/gif")
+										.map((attachment) => (
+											<Badge key={attachment.id} variant="outline">
+												첨부 · {attachment.fileName}
+											</Badge>
+										))}
+								</div>
+							) : null}
+						</div>
+					);
+				})}
+			</div>
+			{previewAttachments.length > 0 ? (
+				<div className="flex-none rounded-xl border bg-background p-2 md:p-3">
+					<p className="mt-0 mb-1.5 font-semibold text-xs md:mb-2 md:text-sm">
+						첨부파일
+					</p>
+					<AttachmentStrip>
+						{previewAttachments.map((attachment) =>
+							attachment.category === "image" ? (
+								<a
+									className="block size-16 flex-none overflow-hidden rounded-lg border bg-background md:size-20"
+									href={attachment.objectUrl}
+									key={attachment.id}
+									rel="noopener"
+									target="_blank"
+									title={attachment.fileName}
+								>
+									{/* biome-ignore lint/performance/noImgElement: signed chat URLs need direct thumbnail rendering. */}
+									<img
+										alt={attachment.fileName}
+										className="size-full object-contain"
+										height={80}
+										src={attachment.objectUrl}
+										width={80}
+									/>
+								</a>
+							) : (
+								<div
+									className="flex h-16 w-44 flex-none items-center gap-2 rounded-lg border bg-background p-2 md:h-20 md:w-52"
+									key={attachment.id}
+								>
+									<FileTextIcon className="size-6 flex-none text-primary md:size-7" />
+									<a
+										className="min-w-0 flex-1 truncate text-sm hover:underline"
+										href={attachment.objectUrl}
+										rel="noopener"
+										target="_blank"
+										title={attachment.fileName}
+									>
+										{attachment.fileName}
+									</a>
+									<a
+										aria-label={`${attachment.fileName} 다운로드`}
+										className="inline-flex size-8 flex-none items-center justify-center rounded-full text-muted-foreground hover:bg-secondary"
+										download={attachment.fileName}
+										href={attachment.objectUrl}
+									>
+										<DownloadIcon className="size-4" />
+									</a>
+								</div>
+							)
+						)}
+					</AttachmentStrip>
+				</div>
+			) : null}
 		</div>
 	);
 }

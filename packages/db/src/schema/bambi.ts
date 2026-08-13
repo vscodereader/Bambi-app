@@ -1733,6 +1733,8 @@ export const report = pgTable(
 		targetId: text("target_id").notNull(),
 		reason: text("reason").notNull(),
 		details: text("details"),
+		resolutionReason: text("resolution_reason"),
+		targetSnapshot: jsonb("target_snapshot").$type<Record<string, unknown>>(),
 		status: reportStatus("status").default("open").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -1885,6 +1887,7 @@ export const communityPost = pgTable(
 		authorGuestId: text("author_guest_id"),
 		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
 		authorDisplayName: text("author_display_name").notNull(),
+		isAnonymous: boolean("is_anonymous").default(false).notNull(),
 		passwordHash: text("password_hash").notNull(),
 		isLocked: boolean("is_locked").default(false).notNull(),
 		// 법률 자문 글의 선택 입력 연락처(휴대폰). 잠금을 연 열람자(작성자·운영자·법률자문)에게만
@@ -2324,6 +2327,10 @@ export const mainPopup = pgTable(
 		linkPath: text("link_path"),
 		startsAt: timestamp("starts_at", { withTimezone: true }),
 		endsAt: timestamp("ends_at", { withTimezone: true }),
+		targetPages: jsonb("target_pages")
+			.$type<string[]>()
+			.default(["main"])
+			.notNull(),
 		revision: integer("revision").default(0).notNull(),
 		updatedByUserId: text("updated_by_user_id").references(() => user.id, {
 			onDelete: "set null",

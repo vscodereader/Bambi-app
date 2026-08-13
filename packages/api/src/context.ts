@@ -5,8 +5,8 @@ import { env } from "@bambi-app/env/server";
 import { fromNodeHeaders } from "better-auth/node";
 
 import {
-	DEV_GUEST_TOKEN_SECRET,
 	readGuestTokenFromCookieString,
+	resolveGuestTokenSecret,
 	verifyGuestToken,
 } from "./services/bambi-guest-token";
 import { parseTrustedProxyHops, resolveClientIp } from "./services/client-ip";
@@ -25,7 +25,7 @@ export interface GuestIdentity {
 }
 
 const guestTokenSecret = (): string =>
-	env.BAMBI_GUEST_TOKEN_SECRET ?? DEV_GUEST_TOKEN_SECRET;
+	resolveGuestTokenSecret(env.BAMBI_GUEST_TOKEN_SECRET, process.env.NODE_ENV);
 
 const headerValue = (
 	req: IncomingHttpHeaders,

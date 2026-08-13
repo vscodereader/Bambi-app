@@ -47,6 +47,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ChatHistoryContent } from "@/app/moderator/chats/chat-history-dialog";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
@@ -1273,12 +1274,6 @@ function PartyBox({
 
 // ---- 신고 대상 맥락(targetType별 분기 렌더) --------------------------------
 // 상태·역할 라벨은 공용 moderation-labels 모듈에서 소비한다(원값 노출 금지·중립 폴백).
-const formatMessageTime = (value: Date | string) =>
-	new Intl.DateTimeFormat("ko-KR", {
-		dateStyle: "short",
-		timeStyle: "short",
-	}).format(new Date(value));
-
 // 대상 맥락 카드의 공통 껍데기(제목 + 회색 박스). 기존 "신고된 대화" 블록과 룩앤필 통일.
 function ContextSection({
 	title,
@@ -1420,34 +1415,8 @@ function ChatRoomContext({
 					{chatRoom.isBlocked ? "차단됨" : "정상"}
 				</Badge>
 			</div>
-			<div className="flex flex-col gap-1.5">
-				<div className="text-[11px] text-muted-foreground">
-					최근 메시지 {chatRoom.recentMessages.length}건
-				</div>
-				{chatRoom.recentMessages.length ? (
-					chatRoom.recentMessages.map((message) => (
-						<div
-							className="rounded-[10px] border border-border bg-card px-2.5 py-2"
-							key={message.id}
-						>
-							<div className="mb-0.5 flex items-center justify-between gap-2 text-[10.5px] text-[color:var(--text-subtle)]">
-								<span className="truncate">
-									{message.senderUserId.slice(0, 6)}
-								</span>
-								<span className="whitespace-nowrap">
-									{formatMessageTime(message.createdAt)}
-								</span>
-							</div>
-							<div className="text-[13px] text-[color:var(--text-default)] leading-[1.45]">
-								{message.body}
-							</div>
-						</div>
-					))
-				) : (
-					<div className="text-[12.5px] text-muted-foreground">
-						표시할 메시지가 없어요.
-					</div>
-				)}
+			<div className="min-w-0 rounded-[12px] bg-card p-3">
+				<ChatHistoryContent chatRoomId={chatRoom.id} constrained={false} />
 			</div>
 			{onBlock ? (
 				<div className="flex flex-col gap-2 border-border border-t pt-2.5">
@@ -1800,10 +1769,11 @@ function ReportActions({
 	sanctionUserId,
 }: {
 	item: Report;
-	onResolve: (id: string, action: "dismiss" | "act") => void;
+	onResolve: (id: string, action: "dismiss" | "act", reason?: string) => void;
 	onSanctionRequest: () => void;
 	sanctionUserId: string | null;
 }) {
+	const [dismissReasonOpen, setDismissReasonOpen] = useState(false);
 	return (
 		<div>
 			{sanctionUserId ? null : (
@@ -1815,7 +1785,7 @@ function ReportActions({
 			<div className="grid grid-cols-2 gap-2.5">
 				<Button
 					block
-					onClick={() => onResolve(item.id, "dismiss")}
+					onClick={() => setDismissReasonOpen(true)}
 					size="lg"
 					variant="secondary"
 				>
@@ -1836,6 +1806,24 @@ function ReportActions({
 					</Button>
 				)}
 			</div>
+			{dismissReasonOpen ? (
+				<ReasonConfirmSheet
+					confirmLabel="기각하기"
+					danger
+					defaultReason=""
+					description="신고자에게 표시할 기각 사유를 입력해 주세요."
+					onCancel={() => setDismissReasonOpen(false)}
+					onConfirm={(reason) => {
+						onResolve(item.id, "dismiss", reason);
+						setDismissReasonOpen(false);
+					}}
+					placeholder="기각 사유를 입력해 주세요."
+					positioning="fixed"
+					reasonFieldId={`report-dismiss-reason-${item.id}`}
+					reasonLabel="기각 사유"
+					title="신고 기각 사유"
+				/>
+			) : null}
 		</div>
 	);
 }
@@ -1851,7 +1839,7 @@ export function ReportDetail({
 }: {
 	item: Report;
 	onBack: () => void;
-	onResolve: (id: string, action: "dismiss" | "act") => void;
+	onResolve: (id: string, action: "dismiss" | "act", reason?: string) => void;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
 	onBlockChatRoom?: (
 		chatRoomId: string,

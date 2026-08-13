@@ -1,6 +1,6 @@
 import {
-	DEV_GUEST_TOKEN_SECRET,
 	GUEST_COOKIE_NAME,
+	resolveGuestTokenSecret,
 	verifyGuestToken,
 } from "@bambi-app/api/services/bambi-guest-token";
 import { getSessionCookie } from "better-auth/cookies";
@@ -17,7 +17,10 @@ export const config = {
 // /api/guest 라우트·api 서버의 서명 키와 같은 값이어야 한다. edge 미들웨어라
 // @bambi-app/env를 거치지 않고 process.env를 직접 읽는다(개발 폴백은 공용 상수).
 const guestTokenSecret = (): string =>
-	process.env.BAMBI_GUEST_TOKEN_SECRET ?? DEV_GUEST_TOKEN_SECRET;
+	resolveGuestTokenSecret(
+		process.env.BAMBI_GUEST_TOKEN_SECRET,
+		process.env.NODE_ENV
+	);
 
 export async function proxy(request: NextRequest) {
 	const { pathname } = request.nextUrl;

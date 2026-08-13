@@ -60,6 +60,7 @@ import {
 	communityEditorExtensions,
 	parseCommunityBody,
 } from "@/components/bambi/community-editor";
+import { Avatar } from "@/components/bambi/ds";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
 	communityAuthorName,
@@ -87,6 +88,7 @@ export type CommunityAuthorRole =
 
 // 상세 화면이 소비하는 글 필드(잠금 해제 상태).
 export interface CommunityPostDetail {
+	authorImage?: string | null;
 	authorName: string;
 	authorRole: CommunityAuthorRole;
 	board: string;
@@ -107,6 +109,7 @@ export interface CommunityPostDetail {
 }
 
 export interface CommunityCommentItem {
+	authorImage?: string | null;
 	authorName: string | null;
 	authorRole: CommunityAuthorRole | null;
 	body: string;
@@ -185,7 +188,15 @@ export function PostHeader({ post }: { post: CommunityPostDetail }) {
 				{post.title}
 			</h1>
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
-				<span>{communityAuthorName(post.authorName)}</span>
+				<span className="flex items-center gap-1.5">
+					<Avatar
+						fallbackIcon="user"
+						name={communityAuthorName(post.authorName)}
+						size="xs"
+						src={post.authorImage ?? undefined}
+					/>
+					{communityAuthorName(post.authorName)}
+				</span>
 				<span>{formatCommunityDate(post.createdAt)}</span>
 				<span className="flex items-center gap-0.5">
 					<EyeIcon className="size-3" />
@@ -306,6 +317,17 @@ export function ReportDialog({
 					/>
 				</div>
 				<div className="flex justify-end gap-2">
+					<Button
+						disabled={reportMutation.isPending}
+						onClick={() => {
+							setDetails("");
+							setReason("other");
+							setOpen(false);
+						}}
+						variant="outline"
+					>
+						신고 취소
+					</Button>
 					<Button
 						disabled={reportMutation.isPending}
 						onClick={() =>
@@ -434,7 +456,8 @@ function CommentActions({
 						</Button>
 					) : null}
 				</>
-			) : (
+			) : null}
+			{!comment.canEdit && comment.authorRole !== "admin" ? (
 				<ReportDialog
 					targetId={comment.id}
 					targetType="community_comment"
@@ -445,7 +468,7 @@ function CommentActions({
 						</Button>
 					}
 				/>
-			)}
+			) : null}
 		</span>
 	);
 }
@@ -529,9 +552,18 @@ function CommentRow({
 		<div className="flex flex-col gap-1">
 			<div className="flex items-center justify-between gap-2">
 				<span className="flex items-center gap-1.5 font-semibold text-xs">
+					<Avatar
+						fallbackIcon="user"
+						name={comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
+						size="xs"
+						src={comment.authorImage ?? undefined}
+					/>
 					{comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
 					{comment.authorRole === "employer" ? (
 						<Badge variant="secondary">업소</Badge>
+					) : null}
+					{comment.authorRole === "admin" ? (
+						<Badge variant="default">운영자</Badge>
 					) : null}
 					{/* 법률 자문 게시판의 답변인지 한눈에 보이게 — 질문자와 자문 답변이 섞이면
 					    어느 쪽이 전문가 답변인지 알 수 없다. */}

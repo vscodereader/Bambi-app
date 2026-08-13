@@ -467,7 +467,7 @@ export function ReportForm({
 					size="lg"
 					variant="secondary"
 				>
-					취소
+					신고 취소
 				</Button>
 				<Button
 					block

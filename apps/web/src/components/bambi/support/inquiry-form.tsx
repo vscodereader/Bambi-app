@@ -148,6 +148,7 @@ export function InquiryForm() {
 						setBodyText(payload.text);
 						setHasImage(payload.hasImage);
 					}}
+					plainTextPaste
 					value={body}
 				/>
 			</div>

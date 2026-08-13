@@ -84,6 +84,7 @@ import { PENDING_REPORT_STATUSES } from "../../services/bambi-report-status";
 import {
 	createJobPostMediaUploadIntent,
 	getBusinessDocumentViewPath,
+	getChatAttachmentObjectUrl,
 	isOwnedJobPostMediaKey,
 } from "../../services/bambi-storage";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
@@ -632,6 +633,8 @@ const getJobPostTargetContext = async (targetId: string) => {
 			riskFlags: jobPost.riskFlags,
 			rejectionReason: jobPost.rejectionReason,
 			organizationDisplayName: employerOrganizationProfile.displayName,
+			payAmount: jobPost.payAmount,
+			payUnit: jobPost.payUnit,
 		})
 		.from(jobPost)
 		.innerJoin(
@@ -684,9 +687,14 @@ const getChatRoomTargetContext = async (targetId: string) => {
 			id: chatRoom.id,
 			isBlocked: chatRoom.isBlocked,
 			jobPostTitle: jobPost.title,
+			organizationDisplayName: employerOrganizationProfile.displayName,
 		})
 		.from(chatRoom)
 		.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+		.innerJoin(
+			employerOrganizationProfile,
+			eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+		)
 		.where(eq(chatRoom.id, targetId))
 		.limit(1);
 
@@ -858,6 +866,7 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 	const [post] = await db
 		.select({
 			authorDisplayName: communityPost.authorDisplayName,
+			authorRole: bambiProfile.role,
 			board: communityPost.board,
 			body: communityPost.body,
 			createdAt: communityPost.createdAt,
@@ -866,6 +875,7 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 			title: communityPost.title,
 		})
 		.from(communityPost)
+		.leftJoin(bambiProfile, eq(bambiProfile.userId, communityPost.authorUserId))
 		.where(eq(communityPost.id, targetId))
 		.limit(1);
 
@@ -875,6 +885,7 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 
 	return {
 		authorName: post.authorDisplayName,
+		authorRole: post.authorRole,
 		board: post.board,
 		bodyPreview: toCommunityBodyPreview(post.body),
 		createdAt: post.createdAt,
@@ -899,6 +910,7 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 	const [comment] = await db
 		.select({
 			authorName: user.name,
+			authorRole: bambiProfile.role,
 			body: communityComment.body,
 			createdAt: communityComment.createdAt,
 			id: communityComment.id,
@@ -910,6 +922,10 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 		.from(communityComment)
 		.leftJoin(communityPost, eq(communityPost.id, communityComment.postId))
 		.leftJoin(user, eq(user.id, communityComment.authorUserId))
+		.leftJoin(
+			bambiProfile,
+			eq(bambiProfile.userId, communityComment.authorUserId)
+		)
 		.where(eq(communityComment.id, targetId))
 		.limit(1);
 
@@ -919,6 +935,7 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 
 	return {
 		authorName: comment.authorName,
+		authorRole: comment.authorRole,
 		bodyPreview: comment.body.slice(0, COMMUNITY_BODY_PREVIEW_MAX),
 		createdAt: comment.createdAt,
 		id: comment.id,
@@ -931,7 +948,9 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 	};
 };
 
-const getReportTargetContext = async (reportRow: ReportRow) => {
+const getReportTargetContext = async (
+	reportRow: Pick<ReportRow, "targetId" | "targetType">
+) => {
 	// uuid가 아닌 targetId는 대상 조회 자체가 불가하므로 컨텍스트 없이 넘어간다(신고 행은 유지).
 	if (
 		uuidTargetTypes.has(reportRow.targetType) &&
@@ -968,12 +987,46 @@ const getReportTargetContext = async (reportRow: ReportRow) => {
 	}
 };
 
+type ReportTargetContext = NonNullable<
+	Awaited<ReturnType<typeof getReportTargetContext>>
+>;
+
+const REPORT_CONTEXT_KEYS = [
+	"chatMessage",
+	"jobPost",
+	"review",
+	"user",
+	"chatRoom",
+	"communityPost",
+	"communityComment",
+] as const;
+
+const isReportTargetContext = (
+	value: unknown
+): value is ReportTargetContext => {
+	if (!(value && typeof value === "object") || Array.isArray(value)) {
+		return false;
+	}
+
+	return REPORT_CONTEXT_KEYS.some((key) => key in value);
+};
+
 const withReportTargetContexts = async (reportRows: ReportRow[]) =>
 	await Promise.all(
-		reportRows.map(async (reportRow) => ({
-			...reportRow,
-			targetContext: await getReportTargetContext(reportRow),
-		}))
+		reportRows.map(async (reportRow) => {
+			const liveTargetContext = await getReportTargetContext(reportRow);
+			const snapshotTargetContext = isReportTargetContext(
+				reportRow.targetSnapshot
+			)
+				? reportRow.targetSnapshot
+				: null;
+			return {
+				...reportRow,
+				targetContext: liveTargetContext ?? snapshotTargetContext,
+				targetUnavailable:
+					liveTargetContext === null && snapshotTargetContext === null,
+			};
+		})
 	);
 
 // 신고 목록 각 row에 붙일 신고자 표시 정보(실명·이메일 폴백·역할). displayName은 null일 수
@@ -1359,6 +1412,7 @@ export const moderationRouter = {
 		.input(createReportInput)
 		.handler(async ({ context, input }) => {
 			const profile = await requireActiveBambiProfile(context.session);
+			const targetContext = await getReportTargetContext(input);
 
 			if (input.targetType === "user" && input.targetId === profile.userId) {
 				throw new ORPCError("BAD_REQUEST", {
@@ -1383,6 +1437,33 @@ export const moderationRouter = {
 			// 방 uuid만 알면 남의 대화를 읽는 우회로가 됐다. 비참여자에겐 requireChatParticipant가
 			// NOT_FOUND를 내 존재 여부도 새지 않는다.
 			await assertReportTargetExists(input.targetType, input.targetId);
+
+			let communityAuthorRole:
+				| "admin"
+				| "employer"
+				| "guest"
+				| "job_seeker"
+				| "legal_advisor"
+				| null = null;
+			if (
+				input.targetType === "community_post" &&
+				targetContext &&
+				"communityPost" in targetContext
+			) {
+				communityAuthorRole = targetContext.communityPost?.authorRole ?? null;
+			} else if (
+				input.targetType === "community_comment" &&
+				targetContext &&
+				"communityComment" in targetContext
+			) {
+				communityAuthorRole =
+					targetContext.communityComment?.authorRole ?? null;
+			}
+			if (communityAuthorRole === "admin") {
+				throw new ORPCError("FORBIDDEN", {
+					message: "관리자가 작성한 글이나 댓글에는 신고할 수 없습니다.",
+				});
+			}
 
 			if (input.targetType === "chat_room") {
 				await requireChatParticipant(input.targetId, context.session);
@@ -1436,6 +1517,7 @@ export const moderationRouter = {
 					targetId: input.targetId,
 					reason: input.reason,
 					details: input.details,
+					targetSnapshot: targetContext,
 				})
 				.returning();
 
@@ -1947,7 +2029,13 @@ export const moderationRouter = {
 			const updated = await db.transaction(async (tx) => {
 				const [updated] = await tx
 					.update(report)
-					.set({ status: input.status })
+					.set({
+						resolutionReason:
+							input.status === "dismissed" || input.status === "resolved"
+								? input.reason
+								: null,
+						status: input.status,
+					})
 					.where(eq(report.id, input.reportId))
 					.returning();
 
@@ -1997,7 +2085,13 @@ export const moderationRouter = {
 						processTarget: async (reportId) => {
 							const [updated] = await tx
 								.update(report)
-								.set({ status: input.status })
+								.set({
+									resolutionReason:
+										input.status === "dismissed" || input.status === "resolved"
+											? input.reason
+											: null,
+									status: input.status,
+								})
 								.where(eq(report.id, reportId))
 								.returning();
 
@@ -3455,9 +3549,13 @@ export const moderationRouter = {
 			const attachments = messageIds.length
 				? await db
 						.select({
+							byteSize: chatAttachment.byteSize,
+							category: chatAttachment.category,
 							fileName: chatAttachment.fileName,
 							id: chatAttachment.id,
 							messageId: chatAttachment.messageId,
+							mimeType: chatAttachment.mimeType,
+							storageKey: chatAttachment.storageKey,
 						})
 						.from(chatAttachment)
 						.where(inArray(chatAttachment.messageId, messageIds))
@@ -3466,11 +3564,25 @@ export const moderationRouter = {
 
 			const attachmentsByMessage = new Map<
 				string,
-				{ fileName: string; id: string }[]
+				{
+					byteSize: number;
+					category: "image" | "pdf";
+					fileName: string;
+					id: string;
+					mimeType: string;
+					objectUrl: string;
+				}[]
 			>();
 			for (const attachment of attachments) {
 				const list = attachmentsByMessage.get(attachment.messageId) ?? [];
-				list.push({ fileName: attachment.fileName, id: attachment.id });
+				list.push({
+					byteSize: attachment.byteSize,
+					category: attachment.category,
+					fileName: attachment.fileName,
+					id: attachment.id,
+					mimeType: attachment.mimeType,
+					objectUrl: getChatAttachmentObjectUrl(attachment),
+				});
 				attachmentsByMessage.set(attachment.messageId, list);
 			}
 

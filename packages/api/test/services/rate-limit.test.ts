@@ -7,6 +7,7 @@ import {
 	IDENTITY_RATE_LIMIT,
 	PUBLIC_RATE_LIMIT_WINDOW_MS,
 	REALTIME_CONNECT_RATE_LIMIT,
+	releaseRateLimit,
 	resolveChatSendRateLimit,
 	resolvePublicRateLimit,
 	resolveRealtimeConnectRateLimit,
@@ -41,6 +42,14 @@ describe("takeRateLimit", () => {
 		expect(
 			takeRateLimit({ key: "ip-d", limit: 1, now: 0, windowMs: WINDOW })
 		).toBe(true);
+	});
+
+	it("후속 저장이 실패해 예약을 반환하면 즉시 다시 시도할 수 있다", () => {
+		const base = { key: "post-write", limit: 1, now: 10, windowMs: WINDOW };
+
+		expect(takeRateLimit(base)).toBe(true);
+		releaseRateLimit({ key: base.key, now: base.now });
+		expect(takeRateLimit({ ...base, now: 11 })).toBe(true);
 	});
 });
 

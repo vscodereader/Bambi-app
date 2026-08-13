@@ -1,3 +1,4 @@
+import { Badge } from "@bambi-app/ui/components/badge";
 import { buttonVariants } from "@bambi-app/ui/components/button";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { cn } from "@bambi-app/ui/lib/utils";
@@ -5,6 +6,7 @@ import { ChevronLeftIcon, EyeIcon, ThumbsUpIcon } from "lucide-react";
 import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Avatar } from "@/components/bambi/ds";
 import { JsonLd } from "@/components/bambi/json-ld";
 import { PublicPostBody } from "@/components/bambi/public-post-body";
 import { PublicPostInteractions } from "@/components/bambi/public-post-interactions";
@@ -217,9 +219,20 @@ export default async function PublicPostPage({ params }: PageProps) {
 			</div>
 
 			<header className="flex flex-col gap-2">
-				<h1 className="m-0 font-extrabold text-xl">{post.title}</h1>
+				<h1 className="m-0 flex items-center gap-1.5 font-extrabold text-xl">
+					{post.board === "notice" ? <Badge>공지</Badge> : null}
+					{post.title}
+				</h1>
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
-					<span>{communityAuthorName(post.authorName)}</span>
+					<span className="flex items-center gap-1.5">
+						<Avatar
+							fallbackIcon="user"
+							name={communityAuthorName(post.authorName)}
+							size="xs"
+							src={post.authorImage ?? undefined}
+						/>
+						{communityAuthorName(post.authorName)}
+					</span>
 					{/* 광고·업소 표시는 회원 화면(배지)과 같은 정보를 공개 화면에서도 밝힌다. */}
 					{post.isPromotion ? <span>광고</span> : null}
 					{post.authorRole === "employer" ? <span>업소 회원</span> : null}
@@ -248,6 +261,13 @@ export default async function PublicPostPage({ params }: PageProps) {
 			) : (
 				<PublicPostInteractions
 					boardSlug={boardSlug}
+					canLike={
+						canWrite &&
+						Boolean(
+							board &&
+								(isGuestWritableBoard(board.key) || board.key === "notice")
+						)
+					}
 					canWrite={canWrite}
 					commentCount={post.commentCount}
 					initialComments={post.comments}

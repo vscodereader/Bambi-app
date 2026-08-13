@@ -14,7 +14,6 @@ process.env.CORS_ORIGIN ||= "http://localhost:3001";
 const {
 	assertGuestOwnership,
 	assertGuestPostAccess,
-	assertGuestWritableBoard,
 	assertLegalAdvisorBoardScope,
 	assertLegalAdvisorRoleSwitch,
 	canBypassLock,
@@ -69,16 +68,6 @@ describe("resolveCommunityActor — 비회원 분기", () => {
 });
 
 describe("비회원 쓰기 게이트", () => {
-	it("자유수다·밤문화 이야기·무료 법률 자문에만 참여할 수 있다", () => {
-		expect(codeOf(() => assertGuestWritableBoard("free"))).toBeUndefined();
-		expect(codeOf(() => assertGuestWritableBoard("work_talk"))).toBeUndefined();
-		expect(codeOf(() => assertGuestWritableBoard("legal"))).toBeUndefined();
-		// 공지는 읽기만 열려 있고(운영자 게시판), 중고거래·베스트는 비로그인에게 닫혀 있다.
-		for (const board of ["notice", "market", "best"]) {
-			expect(codeOf(() => assertGuestWritableBoard(board))).toBe("BAD_REQUEST");
-		}
-	});
-
 	it("잠금글에는 비회원이 댓글·추천을 남길 수 없다", () => {
 		const post = (board: string, isLocked: boolean) => ({
 			authorGuestId: "gid-1",
@@ -91,9 +80,6 @@ describe("비회원 쓰기 게이트", () => {
 		// 자기 글이어도 법률 자문 밖 보드의 잠금글은 그대로 막힌다.
 		expect(
 			codeOf(() => assertGuestPostAccess(post("free", true), "gid-1"))
-		).toBe("BAD_REQUEST");
-		expect(
-			codeOf(() => assertGuestPostAccess(post("notice", false), "gid-1"))
 		).toBe("BAD_REQUEST");
 	});
 

@@ -1,11 +1,12 @@
 import { db } from "@bambi-app/db";
+import { user } from "@bambi-app/db/schema/auth";
 import {
 	faqEntry,
 	supportInquiry,
 	supportInquiryMessage,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure } from "../../index";
@@ -234,17 +235,44 @@ export const supportRouter = {
 				.where(eq(supportInquiryMessage.inquiryId, inquiry.id))
 				.orderBy(asc(supportInquiryMessage.createdAt))
 				.limit(MESSAGES_CAP);
+			const authorIds = [
+				...new Set([
+					inquiry.authorUserId,
+					...messageRows.map((message) => message.authorUserId),
+				]),
+			];
+			const authorRows = await db
+				.select({ id: user.id, image: user.image, name: user.name })
+				.from(user)
+				.where(inArray(user.id, authorIds));
+			const authorsById = new Map(
+				authorRows.map((author) => [author.id, author])
+			);
 
 			// 숨김·삭제된 메시지는 운영자에게만 원문이 보인다. 작성자에게는 자리표시로 바뀐다.
 			const messages = messageRows.map((message) => {
+				const author = authorsById.get(message.authorUserId);
+				const withAuthor = {
+					...message,
+					authorImage: author?.image ?? null,
+					authorName: author?.name ?? (message.isStaff ? "운영자" : "회원"),
+				};
 				if (message.status === "published" || isAdmin) {
-					return message;
+					return withAuthor;
 				}
 
-				return { ...message, body: "운영자가 숨긴 메시지입니다." };
+				return { ...withAuthor, body: "운영자가 숨긴 메시지입니다." };
 			});
 
-			return { inquiry, messages };
+			const inquiryAuthor = authorsById.get(inquiry.authorUserId);
+			return {
+				inquiry: {
+					...inquiry,
+					authorImage: inquiryAuthor?.image ?? null,
+					authorName: inquiryAuthor?.name ?? "회원",
+				},
+				messages,
+			};
 		}),
 
 	createInquiryMessage: protectedProcedure

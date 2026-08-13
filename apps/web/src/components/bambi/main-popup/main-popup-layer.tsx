@@ -4,6 +4,7 @@ import { Button } from "@bambi-app/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
 import type { JSONContent } from "@tiptap/react";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import {
@@ -12,6 +13,8 @@ import {
 	type PopupImageAsset,
 	popupLoginTargetStorageKey,
 } from "@/lib/bambi/main-popup";
+import { resolveMainPopupPageId } from "@/lib/bambi/main-popup-pages";
+import { useCommunityBoards } from "@/lib/bambi/use-community-boards";
 import { orpc } from "@/utils/orpc";
 import { PopupTextViewer } from "./popup-text-editor";
 
@@ -24,6 +27,7 @@ interface PublicPopup {
 	linkPath: string | null;
 	revision: number;
 	slotIndex: number;
+	targetPages: string[];
 	textDocument: JSONContent | null;
 }
 interface HiddenState {
@@ -48,6 +52,9 @@ const isHidden = (id: string, revision: number) => {
 };
 
 export function MainPopupLayer() {
+	const pathname = usePathname();
+	const { boards } = useCommunityBoards();
+	const pageId = resolveMainPopupPageId(pathname, boards);
 	const session = authClient.useSession();
 	const query = useQuery({
 		...orpc.bambi.mainPopups.listPublic.queryOptions(),
@@ -68,10 +75,13 @@ export function MainPopupLayer() {
 		() =>
 			ready
 				? ((query.data?.items ?? []).filter(
-						(item) => !(closed.has(item.id) || isHidden(item.id, item.revision))
+						(item) =>
+							pageId !== null &&
+							item.targetPages.includes(pageId) &&
+							!(closed.has(item.id) || isHidden(item.id, item.revision))
 					) as PublicPopup[])
 				: [],
-		[closed, query.data?.items, ready]
+		[closed, pageId, query.data?.items, ready]
 	);
 	useEffect(() => {
 		const media = window.matchMedia("(max-width: 767px)");

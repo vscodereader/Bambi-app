@@ -144,16 +144,6 @@ export const isLegalBoardKey = (key: string): boolean => key === "legal";
 export const COMMUNITY_BOARD_LABELS: Record<string, string> =
 	Object.fromEntries(COMMUNITY_BOARDS.map((board) => [board.key, board.label]));
 
-// 비회원(여성 인증 게스트)이 글·댓글·추천을 남길 수 있는 게시판. 읽기는 회원과 같은
-// 전체 보드지만 쓰기는 여기로 좁힌다 — 정본은 서버(bambi-community-authz의
-// GUEST_WRITABLE_BOARDS)이고 이 사본은 버튼·안내 노출용이다.
-export const isGuestWritableBoardKey = (key: string): boolean =>
-	key === "free" || key === "work_talk" || key === "legal";
-
-// 위 제한을 화면에서 설명할 때 쓰는 문구(서버 GUEST_BOARD_ERROR와 같은 말).
-export const GUEST_BOARD_LIMIT_NOTICE =
-	"비회원은 자유수다·밤문화 이야기·무료 법률 자문에만 참여할 수 있어요.";
-
 // 법률자문 계정이 다른 게시판을 눌렀을 때의 안내(서버 LEGAL_ADVISOR_BOARD_ERROR와 같은 말).
 export const LEGAL_ADVISOR_BOARD_NOTICE =
 	"법률자문 계정은 무료 법률 자문 게시판만 이용할 수 있어요.";

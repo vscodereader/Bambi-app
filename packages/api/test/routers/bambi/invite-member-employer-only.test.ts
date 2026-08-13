@@ -75,6 +75,7 @@ describe("inviteMember employer-only", () => {
 		const created = await invite({
 			organizationId,
 			email: inviteeEmail,
+			reason: "신규 지점 운영 지원을 위한 초대입니다.",
 			role: "staff",
 		});
 		expect(created?.email).toBe(inviteeEmail.toLowerCase());
@@ -103,7 +104,12 @@ describe("inviteMember employer-only", () => {
 		});
 
 		await expect(
-			invite({ organizationId, email: seekerEmail, role: "staff" })
+			invite({
+				organizationId,
+				email: seekerEmail,
+				reason: "신규 지점 운영 지원을 위한 초대입니다.",
+				role: "staff",
+			})
 		).rejects.toThrow();
 
 		await db.delete(user).where(eq(user.id, ownerId));
@@ -123,6 +129,7 @@ describe("inviteMember employer-only", () => {
 			invite({
 				organizationId,
 				email: `ghost_${randomUUID()}@bambi.test`,
+				reason: "신규 지점 운영 지원을 위한 초대입니다.",
 				role: "staff",
 			})
 		).rejects.toThrow();
