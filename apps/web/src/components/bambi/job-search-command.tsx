@@ -103,8 +103,8 @@ function JobSearchResults({
 						<span className="truncate text-muted-foreground text-xs">
 							{job.type} · {job.location}
 						</span>
+						<span className="truncate font-extrabold text-sm">{job.pay}</span>
 					</div>
-					<span className="shrink-0 font-extrabold text-sm">{job.pay}</span>
 				</CommandItem>
 			))}
 		</CommandGroup>

@@ -17,7 +17,7 @@ import {
 	adminModerationAction,
 	bambiProfile,
 } from "@bambi-app/db/schema/bambi";
-import { env } from "@bambi-app/env/server";
+import { env, isTestIdentityChannelAllowed } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
 import { and, eq, isNull, or } from "drizzle-orm";
 import z from "zod";
@@ -129,9 +129,9 @@ const resolveAccountByIdentity = async (
 	const identity = await resolveVerifiedIdentity(
 		apiSecret,
 		identityVerificationId,
-		// 테스트 채널은 통신사 대조를 하지 않아 아무 값이나 통과한다 — 개발에서만 허용한다.
-		// TODO(임시): KCP 실계약 전 테스트 흐름 확인용으로 프로덕션에서도 허용 중 — 실연동 전환 시 원복.
-		{ allowTestChannel: true }
+		// 테스트 채널은 통신사 대조 없이 아무 값이나 통과시켜 비로그인 계정 탈취로 직결되므로,
+		// env 단일 판정(로컬·검증배포만 허용, 실서비스 프로덕션 default-deny)을 그대로 따른다.
+		{ allowTestChannel: isTestIdentityChannelAllowed }
 	);
 	return await findRecoverableAccount(identity);
 };
