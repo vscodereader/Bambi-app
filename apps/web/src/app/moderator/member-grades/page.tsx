@@ -53,6 +53,20 @@ function toColorInput(color: string): string | undefined {
 	return trimmed.length > 0 ? trimmed : undefined;
 }
 
+const GRADE_INPUT_ERROR =
+	"등급명은 1~20자, 색은 #RRGGBB 6자리로 입력해 주세요.";
+const HANGUL_CHAR = /[가-힣]/;
+
+// orpc 입력 검증 실패는 error.message가 영어(예: "Input validation failed")로 와서 화면에
+// 그대로 노출하면 안 된다. 서버가 명시적으로 던진 한국어 문구(중복·삭제 가드 등, 한글 포함)만
+// 그대로 띄우고, 그 외(검증 실패·빈 메시지)는 한국어 폴백으로 덮는다.
+function localizedGradeError(
+	message: string | undefined,
+	fallback: string
+): string {
+	return message && HANGUL_CHAR.test(message) ? message : fallback;
+}
+
 function getGradeColumns({
 	onDelete,
 	onEdit,
@@ -235,7 +249,7 @@ export default function ModeratorMemberGradesPage() {
 	const createMutation = useMutation(
 		orpc.bambi.memberGrades.create.mutationOptions({
 			onError: (error) =>
-				toast.error(error.message || "등급을 만들지 못했어요."),
+				toast.error(localizedGradeError(error.message, GRADE_INPUT_ERROR)),
 			onSuccess: async () => {
 				toast.success("등급을 만들었어요.");
 				setName("");
@@ -249,7 +263,7 @@ export default function ModeratorMemberGradesPage() {
 	const updateMutation = useMutation(
 		orpc.bambi.memberGrades.update.mutationOptions({
 			onError: (error) =>
-				toast.error(error.message || "등급을 수정하지 못했어요."),
+				toast.error(localizedGradeError(error.message, GRADE_INPUT_ERROR)),
 			onSuccess: async () => {
 				toast.success("등급을 수정했어요.");
 				setEditing(null);
@@ -263,7 +277,9 @@ export default function ModeratorMemberGradesPage() {
 	const removeMutation = useMutation(
 		orpc.bambi.memberGrades.remove.mutationOptions({
 			onError: (error) =>
-				toast.error(error.message || "등급을 삭제하지 못했어요."),
+				toast.error(
+					localizedGradeError(error.message, "등급을 삭제하지 못했어요.")
+				),
 			onSuccess: async () => {
 				toast.success("등급을 삭제했어요.");
 				setDeleting(null);
