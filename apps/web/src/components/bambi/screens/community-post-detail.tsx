@@ -33,7 +33,6 @@ import { PublicPostInteractions } from "@/components/bambi/public-post-interacti
 import {
 	type CommunityBoardMeta,
 	communityBoardPath,
-	isGuestWritableBoardKey,
 	isLegalBoardKey,
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
@@ -95,7 +94,7 @@ function GuestPostDetailView({
 	// 글의 답변에 되묻지 못한다 — 서버도 legal 잠금글은 **작성한 비회원 본인**(gid 일치,
 	// 여기서는 canEdit)에게만 예외를 준다.
 	const participable =
-		isGuestWritableBoardKey(board.key) &&
+		board.writable &&
 		(!post.isLocked || (isLegalBoardKey(board.key) && post.canEdit));
 
 	return (
@@ -110,6 +109,7 @@ function GuestPostDetailView({
 				canReadComments
 				canWrite
 				commentCount={post.commentCount}
+				commentsDisabled={post.commentsDisabled}
 				initialComments={[]}
 				initialIsLiked={post.isLiked}
 				isGuestAuthored={post.canEdit}
@@ -227,6 +227,7 @@ function PostDetailView({
 	const hasEmployerComments = comments.some(
 		(comment) => comment.authorRole === "employer"
 	);
+	const hideCommentsSection = post.commentsDisabled && post.commentCount === 0;
 	const trimmedComment = commentBody.trim();
 	const canSubmitComment =
 		trimmedComment.length >= 1 && !createCommentMutation.isPending;
@@ -253,17 +254,19 @@ function PostDetailView({
 				}
 			/>
 			<div className="flex items-center justify-between gap-2">
-				<ReportDialog
-					targetId={postId}
-					targetType="community_post"
-					title="글 신고"
-					trigger={
-						<Button size="sm" variant="ghost">
-							<FlagIcon data-icon="inline-start" />
-							신고
-						</Button>
-					}
-				/>
+				{post.authorRole === "admin" ? null : (
+					<ReportDialog
+						targetId={postId}
+						targetType="community_post"
+						title="글 신고"
+						trigger={
+							<Button size="sm" variant="ghost">
+								<FlagIcon data-icon="inline-start" />
+								신고
+							</Button>
+						}
+					/>
+				)}
 				<div className="flex items-center gap-2">
 					{post.canEdit ? (
 						<EditPostButton boardSlug={board.slug} postId={postId} />
@@ -273,8 +276,8 @@ function PostDetailView({
 					) : null}
 				</div>
 			</div>
-			<Separator />
-			<div className="flex flex-col gap-3">
+			<Separator hidden={hideCommentsSection} />
+			<div className="flex flex-col gap-3" hidden={hideCommentsSection}>
 				<div className="flex flex-wrap items-center justify-between gap-2">
 					<h2 className="m-0 font-bold text-base">댓글 {post.commentCount}</h2>
 					{hasEmployerComments ? (
@@ -295,6 +298,7 @@ function PostDetailView({
 					) : null}
 				</div>
 				<CommentList
+					allowReplies={!post.commentsDisabled}
 					comments={comments}
 					deletePending={deleteCommentMutation.isPending}
 					editingId={editingId}
@@ -320,19 +324,25 @@ function PostDetailView({
 					replyPending={createCommentMutation.isPending}
 					replyTo={replyTo}
 				/>
-				<CommentForm
-					canSubmit={canSubmitComment}
-					maxLength={COMMENT_MAX}
-					onChange={setCommentBody}
-					onSubmit={() =>
-						createCommentMutation.mutate({
-							body: trimmedComment,
-							password: appliedPassword,
-							postId,
-						})
-					}
-					value={commentBody}
-				/>
+				{post.commentsDisabled ? (
+					<p className="m-0 rounded-md bg-secondary px-3 py-2.5 text-muted-foreground text-sm">
+						운영자가 댓글 작성을 제한한 글입니다.
+					</p>
+				) : (
+					<CommentForm
+						canSubmit={canSubmitComment}
+						maxLength={COMMENT_MAX}
+						onChange={setCommentBody}
+						onSubmit={() =>
+							createCommentMutation.mutate({
+								body: trimmedComment,
+								password: appliedPassword,
+								postId,
+							})
+						}
+						value={commentBody}
+					/>
+				)}
 			</div>
 		</div>
 	);

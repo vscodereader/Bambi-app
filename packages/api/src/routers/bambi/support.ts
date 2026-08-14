@@ -1,11 +1,12 @@
 import { db } from "@bambi-app/db";
+import { user } from "@bambi-app/db/schema/auth";
 import {
 	faqEntry,
 	supportInquiry,
 	supportInquiryMessage,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, asc, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure } from "../../index";
@@ -15,19 +16,22 @@ import {
 } from "../../services/bambi-authz";
 import { assertNoBannedWords } from "../../services/bambi-banned-words";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
-import { assertTiptapDoc } from "../../services/bambi-tiptap-text";
+import {
+	assertTiptapDoc,
+	extractTiptapText,
+} from "../../services/bambi-tiptap-text";
 
 const PAGE_SIZE = 20;
+// 스레드 메시지(createInquiryMessage)용 평문 상한. 답장 입력은 아직 Textarea 평문이다.
 const BODY_MAX = 5000;
 const MESSAGES_CAP = 100;
 const TITLE_MAX = 100;
 const TITLE_MIN = 2;
-const BODY_MIN = 5;
-// FAQ 답변은 1:1 문의 본문과 달리 리치 에디터(CommunityPostEditor)가 만든 Tiptap JSON이라
+// FAQ 답변·1:1 문의 본문은 둘 다 리치 에디터(CommunityPostEditor)가 만든 Tiptap JSON이라
 // 마크·노드 래핑 오버헤드(문단당 ~50자, 이미지 노드는 URL까지)가 붙는다. 같은 에디터로
-// 쓰는 수다방 본문 상한(community BODY_MAX=30_000)과 값을 맞춰 두 리치 본문이 하나의
-// 천장을 공유하게 한다 — FAQ만 더 좁게 잡을 근거가 없고, 다르면 에디터 동작이 화면마다 갈린다.
-const FAQ_ANSWER_MAX = 30_000;
+// 쓰는 수다방 본문 상한(community BODY_MAX=30_000)과 값을 맞춰 세 리치 본문이 하나의
+// 천장을 공유하게 한다 — 다르면 같은 에디터인데 화면마다 저장 한도가 갈린다.
+const RICH_BODY_MAX = 30_000;
 const FAQ_QUESTION_MAX = 300;
 const FAQ_QUESTION_MIN = 2;
 
@@ -37,10 +41,12 @@ const inquiryCategorySchema = z.enum([
 	"payment",
 	"report",
 	"etc",
+	"design",
 ]);
 
 const createInquiryInput = z.object({
-	body: z.string().trim().min(BODY_MIN).max(BODY_MAX),
+	// 직렬화된 Tiptap JSON이라 .trim()은 의미가 없다(문서 형식은 핸들러의 assertTiptapDoc이 검증).
+	body: z.string().min(1).max(RICH_BODY_MAX),
 	category: inquiryCategorySchema,
 	title: z.string().trim().min(TITLE_MIN).max(TITLE_MAX),
 });
@@ -66,7 +72,7 @@ const listFaqInput = z.object({
 
 const createFaqInput = z.object({
 	// 직렬화된 Tiptap JSON이라 .trim()은 의미가 없다(문서 형식은 핸들러의 assertTiptapDoc이 검증).
-	answer: z.string().min(1).max(FAQ_ANSWER_MAX),
+	answer: z.string().min(1).max(RICH_BODY_MAX),
 	category: inquiryCategorySchema,
 	question: z.string().trim().min(FAQ_QUESTION_MIN).max(FAQ_QUESTION_MAX),
 	sortOrder: z.number().int().min(0).default(0),
@@ -77,7 +83,7 @@ const faqIdInput = z.object({
 });
 
 const updateFaqInput = faqIdInput.extend({
-	answer: z.string().min(1).max(FAQ_ANSWER_MAX),
+	answer: z.string().min(1).max(RICH_BODY_MAX),
 	category: inquiryCategorySchema,
 	question: z.string().trim().min(FAQ_QUESTION_MIN).max(FAQ_QUESTION_MAX),
 	sortOrder: z.number().int().min(0),
@@ -145,7 +151,8 @@ export const supportRouter = {
 				});
 			}
 
-			await assertNoBannedWords([input.title, input.body]);
+			assertTiptapDoc(input.body);
+			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 
 			const [created] = await db
 				.insert(supportInquiry)
@@ -228,17 +235,44 @@ export const supportRouter = {
 				.where(eq(supportInquiryMessage.inquiryId, inquiry.id))
 				.orderBy(asc(supportInquiryMessage.createdAt))
 				.limit(MESSAGES_CAP);
+			const authorIds = [
+				...new Set([
+					inquiry.authorUserId,
+					...messageRows.map((message) => message.authorUserId),
+				]),
+			];
+			const authorRows = await db
+				.select({ id: user.id, image: user.image, name: user.name })
+				.from(user)
+				.where(inArray(user.id, authorIds));
+			const authorsById = new Map(
+				authorRows.map((author) => [author.id, author])
+			);
 
 			// 숨김·삭제된 메시지는 운영자에게만 원문이 보인다. 작성자에게는 자리표시로 바뀐다.
 			const messages = messageRows.map((message) => {
+				const author = authorsById.get(message.authorUserId);
+				const withAuthor = {
+					...message,
+					authorImage: author?.image ?? null,
+					authorName: author?.name ?? (message.isStaff ? "운영자" : "회원"),
+				};
 				if (message.status === "published" || isAdmin) {
-					return message;
+					return withAuthor;
 				}
 
-				return { ...message, body: "운영자가 숨긴 메시지입니다." };
+				return { ...withAuthor, body: "운영자가 숨긴 메시지입니다." };
 			});
 
-			return { inquiry, messages };
+			const inquiryAuthor = authorsById.get(inquiry.authorUserId);
+			return {
+				inquiry: {
+					...inquiry,
+					authorImage: inquiryAuthor?.image ?? null,
+					authorName: inquiryAuthor?.name ?? "회원",
+				},
+				messages,
+			};
 		}),
 
 	createInquiryMessage: protectedProcedure

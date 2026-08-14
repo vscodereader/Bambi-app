@@ -15,6 +15,10 @@ export default function NewAdProductPage() {
 		orpc.bambi.adProducts.listCatalogAdmin.queryOptions()
 	);
 	const placement = catalogQuery.data?.find((p) => p.id === params.placementId);
+	// 급구 섹션이 숨김이면 노출 영역 선택지에서 "급구 채용 리스팅"을 뺀다.
+	const exposureQuery = useQuery(
+		orpc.bambi.siteSettings.getExposureSectionConfig.queryOptions()
+	);
 	const create = useMutation(
 		orpc.bambi.adProducts.createProduct.mutationOptions({
 			onSuccess: () => {
@@ -35,16 +39,19 @@ export default function NewAdProductPage() {
 						name: draft.name,
 						tagline: draft.tagline || undefined,
 						benefits: draft.benefits,
+						detailDesignPrice: draft.detailDesignPrice,
 						discountCampaigns: draft.discountCampaigns,
 						priceOptions: draft.priceOptions,
 						previewImageUrl: draft.previewImageUrl,
 						previewTemplate: draft.previewTemplate,
 						manualBoostsPerDay: draft.manualBoostsPerDay,
 						autoBoostsPerDay: draft.autoBoostsPerDay,
+						manualBoostCooldownMinutes: draft.manualBoostCooldownMinutes,
 					})
 				}
 				pending={create.isPending}
 				placementKind={placement?.kind}
+				urgentHidden={exposureQuery.data?.urgentHidden}
 			/>
 		</div>
 	);

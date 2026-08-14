@@ -8,6 +8,7 @@ import {
 	AlertTitle,
 } from "@bambi-app/ui/components/alert";
 import { Button } from "@bambi-app/ui/components/button";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Switch } from "@bambi-app/ui/components/switch";
@@ -93,14 +94,45 @@ const canPromotePost = (
 ): boolean =>
 	isEdit ? initialAuthorRole === "employer" : currentRole === "employer";
 
+const canUseAnonymousPostAuthor = (
+	boardWritable: boolean,
+	guest: boolean,
+	role: CommunityPostInitial["authorRole"] | undefined
+): boolean => boardWritable && !guest && role === "job_seeker";
+
+const canSubmitPost = ({
+	authorName,
+	bodyHasImage,
+	bodyText,
+	isSubmitting,
+	password,
+	requiresPassword,
+	title,
+}: {
+	authorName: string;
+	bodyHasImage: boolean;
+	bodyText: string;
+	isSubmitting: boolean;
+	password: string;
+	requiresPassword: boolean;
+	title: string;
+}): boolean =>
+	authorName.trim().length >= 1 &&
+	title.trim().length >= MIN_TEXT &&
+	(bodyText.trim().length >= MIN_TEXT || bodyHasImage) &&
+	(!requiresPassword || password.length >= PASSWORD_MIN) &&
+	!isSubmitting;
+
 interface CommunityPostInitial {
 	authorName: string;
 	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
 	authorRole: "admin" | "employer" | "guest" | "job_seeker" | "legal_advisor";
 	body: string;
+	commentsDisabled?: boolean;
 	// 법률 자문 글의 연락처. 수정 폼이 다시 실어 보내지 않으면 서버가 null로 덮어쓴다.
 	contactPhone?: string | null;
 	id: string;
+	isAnonymous?: boolean;
 	isEvent?: boolean;
 	isLocked: boolean;
 	// 수정 모드 광고글 초기값. 편집 페이지가 getPost.isPromotion을 넘겨주면 사용한다.
@@ -110,10 +142,12 @@ interface CommunityPostInitial {
 
 interface CommunityPostFormProps {
 	board: CommunityBoardMeta;
-	// 수정 모드 초기값. 비작성자(비밀번호 수정)는 editPassword로 게이트 통과 비번을 넘긴다.
+	// 수정 모드 초기값. 게이트(CommunityEditGate)를 통과한 비번을 넘긴다 — 비회원 수정과
+	// 회원 비작성자 수정 모두 이 값으로 인라인 비밀번호 재입력을 없앤다(회원 작성자는 undefined).
 	editPassword?: string;
-	// 비회원(게스트 인증) 모드. 작성인 기본값·비밀번호 필수·잠금/광고·이미지 업로드 숨김이
-	// 함께 바뀐다. 완료 후 이동은 신분이 아니라 지금 있는 영역(useCommunityAreaPaths)을 따른다.
+	// 비회원(게스트 인증) 모드. 작성인 기본값·잠금/광고·이미지 업로드 숨김이 함께 바뀐다.
+	// 작성 모드는 비밀번호 필드를 세워 새 비번을 받고, 수정 모드는 게이트에서 받은 editPassword를
+	// 쓰므로 필드를 숨긴다. 완료 후 이동은 신분이 아니라 지금 있는 영역(useCommunityAreaPaths)을 따른다.
 	guest?: boolean;
 	initialPost?: CommunityPostInitial;
 }
@@ -135,7 +169,8 @@ const passwordPlaceholder = (guest: boolean, isEdit: boolean): string => {
 // 비밀글 잠금 스위치 + (잠금 시) 비밀번호 필드. 자유수다는 스위치를 숨기되 수정 권한 확인용
 // 비밀번호 필드는 유지한다. 작성 모드는 잠금을 끄면 잔여 비번을 비운다.
 // 비회원은 잠금 자체를 쓸 수 없고(공개 경로에서 자기 글도 못 읽게 된다) 비밀번호가
-// 소유권 증명 전용이라 항상 필드를 노출한다.
+// 소유권 증명 전용이다. 작성 모드는 새 비밀번호를 정하는 곳이라 필드를 세우지만, 수정 모드는
+// 게이트(CommunityEditGate)에서 검증된 비번을 editPassword로 이미 받으므로 인라인 필드를 숨긴다.
 // 법률 자문(forcedLock)은 스위치 대신 안내만 두고 비밀번호를 반드시 받는다.
 function PostLockField({
 	allowLocking,
@@ -156,7 +191,7 @@ function PostLockField({
 	setIsLocked: (value: boolean) => void;
 	setPassword: (value: string) => void;
 }) {
-	const showPasswordField = guest || isEdit || isLocked;
+	const showPasswordField = guest ? !isEdit : isEdit || isLocked;
 	const handleLockChange = (checked: boolean) => {
 		setIsLocked(checked);
 		if (!(checked || isEdit)) {
@@ -269,18 +304,20 @@ function useNoticeWriteRedirect({
 
 function useInitialAuthorName({
 	displayName,
+	isAnonymous,
 	isEdit,
 	setAuthorName,
 }: {
 	displayName: string;
+	isAnonymous: boolean;
 	isEdit: boolean;
 	setAuthorName: (updater: (previous: string) => string) => void;
 }) {
 	useEffect(() => {
-		if (!isEdit && displayName) {
+		if (!(isEdit || isAnonymous) && displayName) {
 			setAuthorName((previous) => (previous === "" ? displayName : previous));
 		}
-	}, [displayName, isEdit, setAuthorName]);
+	}, [displayName, isAnonymous, isEdit, setAuthorName]);
 }
 
 function NoticeEventField({
@@ -331,6 +368,52 @@ function PromotionField({
 	);
 }
 
+function PostAuthorField({
+	authorName,
+	canWriteAnonymously,
+	displayName,
+	guest,
+	isAnonymous,
+	setAuthorName,
+	setIsAnonymous,
+}: {
+	authorName: string;
+	canWriteAnonymously: boolean;
+	displayName: string;
+	guest: boolean;
+	isAnonymous: boolean;
+	setAuthorName: (value: string) => void;
+	setIsAnonymous: (value: boolean) => void;
+}) {
+	return (
+		<div className="flex flex-col gap-2">
+			<Label htmlFor="community-post-author">작성인</Label>
+			<Input
+				disabled={guest || !isAnonymous}
+				id="community-post-author"
+				maxLength={AUTHOR_MAX}
+				onChange={(event) => setAuthorName(event.target.value)}
+				placeholder="작성인 이름"
+				value={authorName}
+			/>
+			{canWriteAnonymously ? (
+				<div className="flex items-center gap-2">
+					<Checkbox
+						checked={isAnonymous}
+						id="community-post-anonymous"
+						onCheckedChange={(checked) => {
+							const nextAnonymous = checked === true;
+							setIsAnonymous(nextAnonymous);
+							setAuthorName(nextAnonymous ? "" : displayName);
+						}}
+					/>
+					<Label htmlFor="community-post-anonymous">익명</Label>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 export function CommunityPostForm({
 	board,
 	editPassword,
@@ -348,6 +431,11 @@ export function CommunityPostForm({
 	const [authorName, setAuthorName] = useState(
 		initialAuthorName(guest, initialPost?.authorName)
 	);
+	useEffect(() => {
+		if (guest) {
+			setAuthorName(GUEST_AUTHOR_DEFAULT);
+		}
+	}, [guest]);
 	const [password, setPassword] = useState(editPassword ?? "");
 	const [isLocked, setIsLocked] = useState(
 		getInitialLockedState(board.key, initialPost?.isLocked)
@@ -358,7 +446,13 @@ export function CommunityPostForm({
 	const [contactPhone, setContactPhone] = useState(
 		initialPost?.contactPhone ?? ""
 	);
+	const [commentsDisabled, setCommentsDisabled] = useState(
+		initialPost?.commentsDisabled ?? false
+	);
 	const [isEvent, setIsEvent] = useState(initialPost?.isEvent ?? false);
+	const [isAnonymous, setIsAnonymous] = useState(
+		initialPost?.isAnonymous ?? false
+	);
 	const [title, setTitle] = useState(initialPost?.title ?? "");
 	const [bodyJson, setBodyJson] = useState(initialPost?.body ?? "");
 	const [bodyText, setBodyText] = useState("");
@@ -379,7 +473,12 @@ export function CommunityPostForm({
 	// employer가 비번으로 타인(job_seeker) 글을 수정할 때 서버 검증(작성자 role
 	// 기준)과 어긋나 BAD_REQUEST 나던 문제를 막는다.
 	const canPromote = canPromotePost(isEdit, initialPost?.authorRole, role);
-	useInitialAuthorName({ displayName, isEdit, setAuthorName });
+	const canWriteAnonymously = canUseAnonymousPostAuthor(
+		board.writable,
+		guest,
+		role
+	);
+	useInitialAuthorName({ displayName, isAnonymous, isEdit, setAuthorName });
 
 	// 공지사항은 운영자만 작성 가능 — 작성 모드에서 비운영자는 안내 후 목록으로 보낸다.
 	const blockedFromNotice = Boolean(
@@ -430,12 +529,15 @@ export function CommunityPostForm({
 		board.key === "notice" && role === "admin" && isEvent;
 
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
-	const canSubmit =
-		authorName.trim().length >= 1 &&
-		title.trim().length >= MIN_TEXT &&
-		(bodyText.trim().length >= MIN_TEXT || bodyHasImage) &&
-		(!requiresPassword || password.length >= PASSWORD_MIN) &&
-		!isSubmitting;
+	const canSubmit = canSubmitPost({
+		authorName,
+		bodyHasImage,
+		bodyText,
+		isSubmitting,
+		password,
+		requiresPassword,
+		title,
+	});
 
 	const submitEdit = (postId: string) => {
 		const trimmedPassword = password.trim();
@@ -443,8 +545,10 @@ export function CommunityPostForm({
 			...contactPhoneInput(board.key, contactPhone),
 			authorName: authorName.trim(),
 			body: bodyJson,
+			...(role === "admin" ? { commentsDisabled } : {}),
 			isLocked: submittedIsLocked,
 			isEvent: submittedIsEvent,
+			isAnonymous,
 			isPromotion,
 			postId,
 			title: title.trim(),
@@ -461,8 +565,10 @@ export function CommunityPostForm({
 			authorName: authorName.trim(),
 			board: board.key,
 			body: bodyJson,
+			commentsDisabled: role === "admin" && commentsDisabled,
 			isLocked: submittedIsLocked,
 			isEvent: submittedIsEvent,
+			isAnonymous,
 			isPromotion,
 			title: title.trim(),
 			...(trimmedPassword ? { password: trimmedPassword } : {}),
@@ -499,16 +605,27 @@ export function CommunityPostForm({
 				{board.label} {isEdit ? "글 수정" : "글쓰기"}
 			</h1>
 
-			<div className="flex flex-col gap-2">
-				<Label htmlFor="community-post-author">작성인</Label>
-				<Input
-					id="community-post-author"
-					maxLength={AUTHOR_MAX}
-					onChange={(event) => setAuthorName(event.target.value)}
-					placeholder="작성인 이름"
-					value={authorName}
-				/>
-			</div>
+			<PostAuthorField
+				authorName={authorName}
+				canWriteAnonymously={canWriteAnonymously}
+				displayName={displayName}
+				guest={guest}
+				isAnonymous={isAnonymous}
+				setAuthorName={setAuthorName}
+				setIsAnonymous={setIsAnonymous}
+			/>
+			{role === "admin" ? (
+				<div className="flex items-center gap-2">
+					<Checkbox
+						checked={commentsDisabled}
+						id="community-post-comments-disabled"
+						onCheckedChange={(checked) => setCommentsDisabled(checked === true)}
+					/>
+					<Label htmlFor="community-post-comments-disabled">
+						댓글 작성 불가
+					</Label>
+				</div>
+			) : null}
 
 			<PostLockField
 				allowLocking={!(isFreeBoard || guest || isLegalBoard)}

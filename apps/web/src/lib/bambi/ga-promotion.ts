@@ -1,30 +1,40 @@
-// GA4 프로모션 계측 헬퍼 — 순수(자체 결제) 프리미엄 배너의 노출/클릭을
-// view_promotion / select_promotion 이벤트로 보낸다(이슈 #59).
+// GA4 프로모션 계측 헬퍼 — 자체 결제 프리미엄·스페셜·추천 광고의 노출/클릭을
+// view_promotion / select_promotion 이벤트로 보낸다.
 // gtag는 프로덕션 레이아웃(app/layout.tsx)에서만 로드되므로 없으면 전부 no-op —
 // 로컬·프리뷰·GA 차단 브라우저에서 앱 동작에 영향이 없다.
 
+import { sendGaEvent } from "./ga";
+
 export interface PromotionBanner {
-	crawled: boolean;
+	company?: string;
+	crawled?: boolean;
 	id: string;
 	title: string;
 }
 
-export const PREMIUM_PROMOTION_ID = "premium-banner";
-export const PREMIUM_PROMOTION_NAME = "프리미엄 배너";
+export interface PromotionDefinition {
+	id: string;
+	name: string;
+}
 
-type GtagFn = (
-	command: "event",
-	eventName: string,
-	params: Record<string, unknown>
-) => void;
+export const PREMIUM_PROMOTION = {
+	id: "premium-banner",
+	name: "프리미엄 배너",
+} as const satisfies PromotionDefinition;
 
-const getGtag = (): GtagFn | null => {
-	if (typeof window === "undefined") {
-		return null;
-	}
-	const gtag = (window as { gtag?: unknown }).gtag;
-	return typeof gtag === "function" ? (gtag as GtagFn) : null;
-};
+export const SPECIAL_PROMOTION = {
+	id: "special-list",
+	name: "스페셜 채용",
+} as const satisfies PromotionDefinition;
+
+export const RECOMMENDED_PROMOTION = {
+	id: "recommended-list",
+	name: "추천 채용",
+} as const satisfies PromotionDefinition;
+
+// 기존 테스트·호출부가 참조하는 이름은 프리미엄 정의에서 파생해 유지한다.
+export const PREMIUM_PROMOTION_ID = PREMIUM_PROMOTION.id;
+export const PREMIUM_PROMOTION_NAME = PREMIUM_PROMOTION.name;
 
 // 계측 대상 판정 — 빈 슬롯(null)과 크롤링 채움 배너는 이벤트를 보내지 않는다.
 export const shouldTrackPromotion = (
@@ -36,49 +46,53 @@ export const shouldTrackPromotion = (
 export const buildPromotionParams = (
 	item: PromotionBanner,
 	creativeSlot: string,
-	index: number
+	index: number,
+	promotion: PromotionDefinition = PREMIUM_PROMOTION
 ): Record<string, unknown> => ({
 	items: [
 		{
 			creative_slot: creativeSlot,
 			index,
+			...(item.company ? { item_brand: item.company } : {}),
 			item_id: item.id,
 			item_name: item.title,
+			promotion_id: promotion.id,
+			promotion_name: promotion.name,
 		},
 	],
-	promotion_id: PREMIUM_PROMOTION_ID,
-	promotion_name: PREMIUM_PROMOTION_NAME,
+	promotion_id: promotion.id,
+	promotion_name: promotion.name,
 });
 
 const sendPromotionEvent = (
 	eventName: "select_promotion" | "view_promotion",
 	item: PromotionBanner,
 	creativeSlot: string,
-	index: number
+	index: number,
+	promotion: PromotionDefinition
 ): void => {
 	// 게이트(shouldTrackPromotion)를 안 거친 미래 콜사이트 방어 — 크롤링 배너는 계측 제외.
 	if (item.crawled) {
 		return;
 	}
-	const gtag = getGtag();
-	if (!gtag) {
-		return;
-	}
-	try {
-		gtag("event", eventName, buildPromotionParams(item, creativeSlot, index));
-	} catch {
-		// 계측 실패가 렌더·내비게이션을 깨면 안 된다.
-	}
+	sendGaEvent(
+		eventName,
+		buildPromotionParams(item, creativeSlot, index, promotion)
+	);
 };
 
 export const trackPromotionView = (
 	item: PromotionBanner,
 	creativeSlot: string,
-	index: number
-): void => sendPromotionEvent("view_promotion", item, creativeSlot, index);
+	index: number,
+	promotion: PromotionDefinition = PREMIUM_PROMOTION
+): void =>
+	sendPromotionEvent("view_promotion", item, creativeSlot, index, promotion);
 
 export const trackPromotionSelect = (
 	item: PromotionBanner,
 	creativeSlot: string,
-	index: number
-): void => sendPromotionEvent("select_promotion", item, creativeSlot, index);
+	index: number,
+	promotion: PromotionDefinition = PREMIUM_PROMOTION
+): void =>
+	sendPromotionEvent("select_promotion", item, creativeSlot, index, promotion);

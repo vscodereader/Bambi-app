@@ -9,6 +9,16 @@
 // 그 게이트를 통과한 행만 링크로 만든다.
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Dialog,
@@ -35,8 +45,9 @@ import {
 	jobStatusColumn,
 	paymentStatusColumn,
 } from "@/components/bambi/job-table-columns";
+import { ListingCapacityOverview } from "@/components/bambi/listing-capacity-overview";
 import { RowActions } from "@/components/bambi/row-actions";
-import { getJobDisplayStatus } from "@/lib/bambi/exposure";
+import { getJobDisplayStatus, isQueuedListing } from "@/lib/bambi/exposure";
 import { formatDateTime } from "@/lib/bambi-format";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
@@ -192,7 +203,8 @@ const publicDetailTitleColumn: DataColumn<JobRow> = {
 function getJobColumns(
 	onRequestStatus: (job: JobRow, status: ActionStatus, label: string) => void,
 	onRequestDelete: (job: JobRow) => void,
-	onRequestExposure: (job: JobRow, direction: "extend" | "shorten") => void
+	onRequestExposure: (job: JobRow, direction: "extend" | "shorten") => void,
+	onRequestQueueRemoval: (job: JobRow) => void
 ): DataColumn<JobRow>[] {
 	return [
 		publicDetailTitleColumn,
@@ -258,6 +270,18 @@ function getJobColumns(
 							label: "광고 단축",
 							onSelect: () => onRequestExposure(job, "shorten"),
 						},
+						// 유료 대기열에 묶인 리스팅 공고만 큐에서 빼낼 수 있다(미결제로 되돌리며
+						// 결제 승인 흐름과 대칭). 활성·비리스팅 공고에는 노출하지 않는다.
+						...(isQueuedListing(job)
+							? [
+									{
+										key: "dequeue",
+										label: "대기열에서 빼기",
+										onSelect: () => onRequestQueueRemoval(job),
+										variant: "destructive" as const,
+									},
+								]
+							: []),
 						{
 							key: "edit",
 							label: "수정",
@@ -277,6 +301,88 @@ function getJobColumns(
 	];
 }
 
+// 대기열에서 빼기 확인 다이얼로그. 자체 사유 입력·뮤테이션을 소유해 상위 페이지 컴포넌트의
+// 인지 복잡도를 낮춘다(상위는 어떤 공고를 뺄지 pending만 넘긴다).
+function QueueRemovalDialog({
+	pending,
+	onClose,
+}: {
+	pending: { jobPostId: string; title: string } | null;
+	onClose: () => void;
+}) {
+	const queryClient = useQueryClient();
+	const [reason, setReason] = useState("");
+	const mutation = useMutation(
+		orpc.bambi.moderation.removeFromListingQueue.mutationOptions({
+			onSuccess: async () => {
+				toast.success("대기열에서 뺐어요.");
+				onClose();
+				setReason("");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.moderation.listJobPosts.queryKey({
+						input: { limit: LIST_LIMIT },
+					}),
+				});
+			},
+			onError: () =>
+				toast.error("대기열에서 빼지 못했어요. 다시 시도해 주세요."),
+		})
+	);
+	const canConfirm = reason.trim().length >= 2 && !mutation.isPending;
+
+	return (
+		<Dialog
+			onOpenChange={(open) => {
+				if (!open) {
+					onClose();
+					setReason("");
+				}
+			}}
+			open={pending !== null}
+		>
+			<DialogContent>
+				<DialogTitle>대기열에서 빼기</DialogTitle>
+				<DialogDescription>
+					"{pending?.title}" 공고를 리스팅 대기열에서 뺍니다. 결제가 미결제로
+					되돌아가고 순번에서 제외돼요. 사유는 감사 로그에 남아요(2자 이상).
+				</DialogDescription>
+				<Textarea
+					onChange={(event) => setReason(event.target.value)}
+					placeholder="조치 사유를 입력해 주세요."
+					value={reason}
+				/>
+				<div className="flex justify-end gap-2">
+					<DialogClose
+						render={
+							<Button size="sm" type="button" variant="ghost">
+								취소
+							</Button>
+						}
+					/>
+					<Button
+						disabled={!canConfirm}
+						onClick={() => {
+							if (!pending) {
+								return;
+							}
+
+							mutation.mutate({
+								jobPostId: pending.jobPostId,
+								reason: reason.trim(),
+							});
+						}}
+						size="sm"
+						type="button"
+						variant="destructive"
+					>
+						대기열에서 빼기 확정
+					</Button>
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
 export default function ModeratorJobsPage() {
 	const queryClient = useQueryClient();
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -292,6 +398,10 @@ export default function ModeratorJobsPage() {
 		useState<PendingExposure | null>(null);
 	const [exposureDays, setExposureDays] = useState("7");
 	const [exposureReason, setExposureReason] = useState("");
+	const [pendingQueueRemoval, setPendingQueueRemoval] = useState<{
+		jobPostId: string;
+		title: string;
+	} | null>(null);
 
 	const jobsQuery = useQuery(
 		orpc.bambi.moderation.listJobPosts.queryOptions({
@@ -356,7 +466,6 @@ export default function ModeratorJobsPage() {
 				toast.error("광고 기간을 변경하지 못했어요. 다시 시도해 주세요."),
 		})
 	);
-
 	const jobs = jobsQuery.data ?? [];
 
 	const visibleJobs = useMemo(() => {
@@ -400,9 +509,19 @@ export default function ModeratorJobsPage() {
 		[]
 	);
 
+	const requestQueueRemoval = useCallback((job: JobRow) => {
+		setPendingQueueRemoval({ jobPostId: job.id, title: job.title });
+	}, []);
+
 	const columns = useMemo(
-		() => getJobColumns(requestStatusChange, requestDelete, requestExposure),
-		[requestStatusChange, requestDelete, requestExposure]
+		() =>
+			getJobColumns(
+				requestStatusChange,
+				requestDelete,
+				requestExposure,
+				requestQueueRemoval
+			),
+		[requestStatusChange, requestDelete, requestExposure, requestQueueRemoval]
 	);
 
 	const canConfirm = reason.trim().length >= 2 && !setStatusMutation.isPending;
@@ -431,6 +550,8 @@ export default function ModeratorJobsPage() {
 					"수정"에서 진행합니다.
 				</p>
 			</div>
+
+			<ListingCapacityOverview />
 
 			<div className="flex flex-wrap items-center gap-3">
 				<Tabs
@@ -543,7 +664,8 @@ export default function ModeratorJobsPage() {
 				</DialogContent>
 			</Dialog>
 
-			<Dialog
+			{/* 삭제는 되돌릴 수 없어 확인 창을 한 번 세운다(Esc·바깥 클릭으로 닫히지 않는다). */}
+			<AlertDialog
 				onOpenChange={(open) => {
 					if (!open) {
 						setPendingDelete(null);
@@ -552,27 +674,25 @@ export default function ModeratorJobsPage() {
 				}}
 				open={pendingDelete !== null}
 			>
-				<DialogContent>
-					<DialogTitle>공고 삭제</DialogTitle>
-					<DialogDescription>
-						"{pendingDelete?.title}" 공고를 완전히 삭제합니다. 연결된
-						채팅방·미디어가 모두 지워지며 되돌릴 수 없어요. 사유는 감사 로그에
-						남아요(2자 이상).
-					</DialogDescription>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>공고 삭제</AlertDialogTitle>
+						<AlertDialogDescription>
+							"{pendingDelete?.title}" 공고를 완전히 삭제합니다. 연결된
+							채팅방·미디어가 모두 지워지며 되돌릴 수 없어요. 사유는 감사 로그에
+							남아요(2자 이상).
+						</AlertDialogDescription>
+					</AlertDialogHeader>
 					<Textarea
 						onChange={(event) => setDeleteReason(event.target.value)}
 						placeholder="삭제 사유를 입력해 주세요."
 						value={deleteReason}
 					/>
-					<div className="flex justify-end gap-2">
-						<DialogClose
-							render={
-								<Button size="sm" type="button" variant="ghost">
-									취소
-								</Button>
-							}
-						/>
-						<Button
+					<AlertDialogFooter>
+						<AlertDialogCancel size="sm" variant="ghost">
+							취소
+						</AlertDialogCancel>
+						<AlertDialogAction
 							disabled={!canConfirmDelete}
 							onClick={() => {
 								if (!pendingDelete) {
@@ -585,14 +705,13 @@ export default function ModeratorJobsPage() {
 								});
 							}}
 							size="sm"
-							type="button"
 							variant="destructive"
 						>
 							삭제 확정
-						</Button>
-					</div>
-				</DialogContent>
-			</Dialog>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
 			<Dialog
 				onOpenChange={(open) => {
@@ -669,6 +788,11 @@ export default function ModeratorJobsPage() {
 					</div>
 				</DialogContent>
 			</Dialog>
+
+			<QueueRemovalDialog
+				onClose={() => setPendingQueueRemoval(null)}
+				pending={pendingQueueRemoval}
+			/>
 		</div>
 	);
 }

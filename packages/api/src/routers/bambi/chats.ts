@@ -20,6 +20,7 @@ import { protectedProcedure } from "../../index";
 import { recordJobPerformanceEvent } from "../../services/bambi-analytics";
 import {
 	findUserBlockBetween,
+	isEmployerOrganizationChangesUnsubmitted,
 	requireActiveBambiProfile,
 	requireChatParticipant,
 } from "../../services/bambi-authz";
@@ -92,10 +93,27 @@ const attachmentMetadataInput = z.object({
 	byteSize: z.number().int().min(1),
 });
 
-const sendMediaMessageInput = attachmentMetadataInput.extend({
-	messageId: clientMessageIdInput,
-	storageKey: z.string().min(1).max(512),
-});
+const sendMediaMessageInput = attachmentMetadataInput
+	.extend({
+		body: z.string().trim().min(1).max(2000).optional(),
+		messageId: clientMessageIdInput,
+		storageKey: z.string().min(1).max(512),
+		textMessageId: clientMessageIdInput,
+	})
+	.refine(
+		({ body, textMessageId }) => Boolean(body) === Boolean(textMessageId),
+		{
+			message: "Text message ID is required when a text body is provided.",
+			path: ["textMessageId"],
+		}
+	)
+	.refine(
+		({ messageId, textMessageId }) => !messageId || messageId !== textMessageId,
+		{
+			message: "Attachment and text message IDs must be different.",
+			path: ["textMessageId"],
+		}
+	);
 
 // 읽음 처리는 id 목록이 아니라 기준선("이 메시지까지 봤다") 하나만 받는다. 예전에는
 // 클라이언트가 방의 상대 메시지 id를 전부 실어 보냈는데 상한이 50이라, 51건째부터 요청
@@ -723,11 +741,22 @@ const throwIfHiddenByActiveReport = async ({
  */
 const throwIfChatUnavailable = async ({
 	actorUserId,
+	allowUnsubmittedRead = false,
 	room,
 }: {
 	actorUserId: string;
+	allowUnsubmittedRead?: boolean;
 	room: CounterpartRoom & { isBlocked: boolean };
 }): Promise<void> => {
+	if (
+		!allowUnsubmittedRead &&
+		(await isEmployerOrganizationChangesUnsubmitted(room.organizationId))
+	) {
+		throw new ORPCError("FORBIDDEN", {
+			message:
+				"업체 인증 변경사항을 제출하고 승인을 받기 전까지 채팅을 보낼 수 없습니다.",
+		});
+	}
 	await throwIfChatBlocked({ actorUserId, room });
 	await throwIfHiddenByActiveReport({ actorUserId, room });
 };
@@ -760,6 +789,13 @@ export const chatsRouter = {
 
 			if (post.employerUserId === profile.userId) {
 				throw new ORPCError("FORBIDDEN");
+			}
+
+			if (await isEmployerOrganizationChangesUnsubmitted(post.organizationId)) {
+				throw new ORPCError("FORBIDDEN", {
+					message:
+						"업체 인증 변경사항이 제출되기 전에는 새 채팅을 시작할 수 없습니다.",
+				});
 			}
 
 			if (
@@ -1050,6 +1086,7 @@ export const chatsRouter = {
 
 			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
+				allowUnsubmittedRead: true,
 				room,
 			});
 
@@ -1117,7 +1154,11 @@ export const chatsRouter = {
 				[room],
 				profile.userId
 			);
-
+			const [counterpartUser] = await db
+				.select({ image: user.image })
+				.from(user)
+				.where(eq(user.id, counterpartUserId(room, profile.userId)))
+				.limit(1);
 			// 구인자 인증번호는 양쪽에 노출, 구직자 공개번호는 revealed 요청을 보는
 			// 구인자에게만 응답 조립 시점에 실어 준다(DB metadata엔 저장하지 않음).
 			const participantPhones = await db
@@ -1145,6 +1186,7 @@ export const chatsRouter = {
 
 			return {
 				counterpartName: counterpartNames.get(room.id) ?? null,
+				counterpartProfileImageUrl: counterpartUser?.image ?? null,
 				currentUserId: profile.userId,
 				employerVerifiedPhone: verifiedPhoneFor(room.employerUserId),
 				// 화면이 "이전 메시지 더 보기"를 띄울지 판단하는 근거.
@@ -1295,12 +1337,18 @@ export const chatsRouter = {
 			assertChatSendRateLimit("sendMediaMessage", profile.userId);
 
 			const messageId = input.messageId ?? generateChatMessageId();
+			const textMessageId = input.body
+				? (input.textMessageId ?? generateChatMessageId())
+				: undefined;
+			const attachmentCreatedAt = new Date();
+			const textCreatedAt = new Date(attachmentCreatedAt.getTime() + 1);
 			const inserted = await db.transaction(async (tx) => {
 				const [createdMessage] = await tx
 					.insert(chatMessage)
 					.values({
 						body: "첨부 파일을 보냈습니다.",
 						chatRoomId: room.id,
+						createdAt: attachmentCreatedAt,
 						id: messageId,
 						senderUserId: profile.userId,
 					})
@@ -1331,6 +1379,27 @@ export const chatsRouter = {
 					});
 				}
 
+				let createdTextMessage: typeof createdMessage | undefined;
+				if (input.body && textMessageId) {
+					[createdTextMessage] = await tx
+						.insert(chatMessage)
+						.values({
+							body: input.body,
+							chatRoomId: room.id,
+							createdAt: textCreatedAt,
+							id: textMessageId,
+							senderUserId: profile.userId,
+						})
+						.onConflictDoNothing()
+						.returning();
+
+					if (!createdTextMessage) {
+						throw new ORPCError("CONFLICT", {
+							message: "Text message ID is already in use.",
+						});
+					}
+				}
+
 				await tx
 					.update(chatRoom)
 					.set({ updatedAt: new Date() })
@@ -1341,10 +1410,19 @@ export const chatsRouter = {
 					messageId: createdMessage.id,
 					senderUserId: profile.userId,
 				});
+				if (createdTextMessage) {
+					await enqueueChatMessageSync(tx, {
+						chatRoomId: room.id,
+						createdAt: createdTextMessage.createdAt,
+						messageId: createdTextMessage.id,
+						senderUserId: profile.userId,
+					});
+				}
 
 				return {
 					attachment: createdAttachment,
 					message: createdMessage,
+					textMessage: createdTextMessage,
 				};
 			});
 
@@ -1368,7 +1446,15 @@ export const chatsRouter = {
 					});
 				}
 
-				return { attachment: existingAttachment, message };
+				const textMessage = textMessageId
+					? await requireExistingChatMessage(
+							textMessageId,
+							room.id,
+							profile.userId
+						)
+					: undefined;
+
+				return { attachment: existingAttachment, message, textMessage };
 			}
 
 			await drainPendingChatMessageSyncs();
@@ -1386,6 +1472,7 @@ export const chatsRouter = {
 
 			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
+				allowUnsubmittedRead: true,
 				room,
 			});
 
@@ -1462,21 +1549,61 @@ export const chatsRouter = {
 			});
 			assertChatSendRateLimit("proposeInterview", profile.userId);
 
-			const [schedule] = await db
-				.insert(interviewSchedule)
-				.values({
-					chatRoomId: room.id,
-					proposedByUserId: profile.userId,
-					scheduledAt: new Date(input.scheduledAt),
-					locationNote: input.locationNote,
-				})
-				.returning();
+			// 일정 INSERT와 인라인 안내 메시지 INSERT를 한 트랜잭션으로 묶는다. 커밋이
+			// 안 되면 둘 다 없다 — 일정만 남고 채팅엔 아무 흔적도 없는 어긋남이 사라진다.
+			const schedule = await db.transaction(async (tx) => {
+				const [createdSchedule] = await tx
+					.insert(interviewSchedule)
+					.values({
+						chatRoomId: room.id,
+						locationNote: input.locationNote,
+						proposedByUserId: profile.userId,
+						scheduledAt: new Date(input.scheduledAt),
+					})
+					.returning();
 
-			if (!schedule) {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Interview schedule could not be created.",
+				if (!createdSchedule) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR", {
+						message: "Interview schedule could not be created.",
+					});
+				}
+
+				// 채팅 스트림에 남는 인라인 카드. body는 자연문이라 카드 미지원 클라이언트
+				// (네이티브·운영자 열람)에서도 일반 말풍선으로 자연스럽게 읽힌다. 상태·일시는
+				// metadata에 이중 저장하지 않고 interviewScheduleId로 방 조회 schedules에서 찾는다.
+				const [createdMessage] = await tx
+					.insert(chatMessage)
+					.values({
+						body: "면접 일정을 제안했습니다.",
+						chatRoomId: room.id,
+						id: generateChatMessageId(),
+						kind: "interview_proposal",
+						metadata: { interviewScheduleId: createdSchedule.id },
+						senderUserId: profile.userId,
+					})
+					.returning();
+
+				if (!createdMessage) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR", {
+						message: "Interview proposal message could not be created.",
+					});
+				}
+
+				await tx
+					.update(chatRoom)
+					.set({ updatedAt: new Date() })
+					.where(eq(chatRoom.id, room.id));
+				await enqueueChatMessageSync(tx, {
+					chatRoomId: room.id,
+					createdAt: createdMessage.createdAt,
+					messageId: createdMessage.id,
+					senderUserId: profile.userId,
 				});
-			}
+
+				return createdSchedule;
+			});
+
+			await drainPendingChatMessageSyncs();
 
 			emitRoomUpdated({ roomId: room.id });
 

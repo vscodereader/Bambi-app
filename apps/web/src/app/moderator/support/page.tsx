@@ -38,7 +38,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { CommunityPostEditor } from "@/components/bambi/community-editor";
 import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
+import { Avatar } from "@/components/bambi/ds";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { communityBodyText } from "@/lib/bambi/public-community";
 import {
 	INQUIRY_STATUS_LABELS,
 	type InquiryStatus,
@@ -127,8 +129,9 @@ function InquiryQueue() {
 						<CardTitle className="truncate">{item.title}</CardTitle>
 					</CardHeader>
 					<CardContent className="flex min-w-0 flex-col gap-3">
+						{/* 본문은 Tiptap JSON이라 발췌 평문만 뽑아 미리보기한다(JSON 블롭 노출 방지). */}
 						<p className="m-0 line-clamp-3 whitespace-pre-wrap text-muted-foreground text-sm">
-							{item.body}
+							{communityBodyText(item.body)}
 						</p>
 						<Button
 							className="self-start"
@@ -196,17 +199,46 @@ function InquiryThread({
 	return (
 		<div className="flex min-w-0 flex-col gap-3">
 			<Separator />
-			{(threadQuery.data?.messages ?? []).map((message) => (
-				<div className="flex min-w-0 flex-col gap-1" key={message.id}>
-					<div className="flex flex-wrap items-center gap-2">
-						<Badge variant={message.isStaff ? "default" : "outline"}>
-							{message.isStaff ? "운영자" : "회원"}
-						</Badge>
-						<span className="text-muted-foreground text-xs">
-							{formatDateTime(message.createdAt)}
-						</span>
+			{/* 원문 문의 본문은 Tiptap 리치 텍스트(이미지 포함)라 뷰어로 렌더한다. 카드
+			    미리보기(communityBodyText)는 평문 발췌라 첨부 이미지가 빠져, 여기서만 원문을 본다. */}
+			{threadQuery.data ? (
+				<div className="flex min-w-0 gap-3">
+					<Avatar
+						fallbackIcon="user"
+						name={threadQuery.data.inquiry.authorName}
+						size="sm"
+						src={threadQuery.data.inquiry.authorImage ?? undefined}
+					/>
+					<div className="min-w-0 flex-1">
+						<p className="mt-0 mb-1 font-semibold text-sm">
+							{threadQuery.data.inquiry.authorName}
+						</p>
+						<PostBodyViewer body={threadQuery.data.inquiry.body} />
 					</div>
-					<p className="m-0 whitespace-pre-wrap text-sm">{message.body}</p>
+				</div>
+			) : null}
+			{(threadQuery.data?.messages ?? []).map((message) => (
+				<div className="flex min-w-0 gap-3" key={message.id}>
+					<Avatar
+						fallbackIcon="user"
+						name={message.authorName}
+						size="sm"
+						src={message.authorImage ?? undefined}
+					/>
+					<div className="flex min-w-0 flex-1 flex-col gap-1">
+						<div className="flex flex-wrap items-center gap-2">
+							<span className="font-semibold text-sm">
+								{message.authorName}
+							</span>
+							<Badge variant={message.isStaff ? "default" : "outline"}>
+								{message.isStaff ? "운영자" : "회원"}
+							</Badge>
+							<span className="text-muted-foreground text-xs">
+								{formatDateTime(message.createdAt)}
+							</span>
+						</div>
+						<p className="m-0 whitespace-pre-wrap text-sm">{message.body}</p>
+					</div>
 				</div>
 			))}
 
@@ -253,6 +285,8 @@ function FaqManager() {
 	const invalidate = useInvalidateSupport();
 	const [category, setCategory] = useState<SupportCategory>("account");
 	const [question, setQuestion] = useState("");
+	// 인라인 수정 중인 FAQ id(없으면 null). 한 번에 한 행만 편집한다.
+	const [editingId, setEditingId] = useState<string | null>(null);
 	// answer는 제출용 Tiptap JSON 문자열이라 빈 문서도 40자쯤 된다 — 비어있음 판정에
 	// 쓰면 등록 버튼이 항상 열린다. 판정은 에디터가 같이 주는 text·hasImage로만 한다
 	// (이미지만 넣은 답변도 유효하므로 텍스트 길이 단독 게이트는 쓰지 않는다).
@@ -399,41 +433,162 @@ function FaqManager() {
 								{item.question}
 							</AccordionTrigger>
 							<AccordionContent className="flex min-w-0 flex-col gap-3">
-								{/* 답변은 Tiptap JSON이라 뷰어로 렌더한다. JSON이 아닌 기존 평문 행은
-								    뷰어가 whitespace-pre-wrap <p> 폴백으로 그대로 보여준다. */}
-								<PostBodyViewer body={item.answer} />
-								<div className="flex flex-wrap items-center gap-3">
-									<Label
-										className="flex items-center gap-2"
-										htmlFor={`faq-published-${item.id}`}
-									>
-										<Switch
-											checked={item.isPublished}
-											disabled={setPublished.isPending}
-											id={`faq-published-${item.id}`}
-											onCheckedChange={(checked) =>
-												setPublished.mutate({
-													faqId: item.id,
-													isPublished: checked,
-												})
-											}
-										/>
-										{item.isPublished ? "공개 중" : "숨김"}
-									</Label>
-									<Button
-										disabled={removeFaq.isPending}
-										onClick={() => removeFaq.mutate({ faqId: item.id })}
-										size="sm"
-										variant="destructive"
-									>
-										삭제
-									</Button>
-								</div>
+								{editingId === item.id ? (
+									<FaqEditForm
+										item={item}
+										onCancel={() => setEditingId(null)}
+										onSaved={async () => {
+											setEditingId(null);
+											await invalidate();
+										}}
+									/>
+								) : (
+									<>
+										{/* 답변은 Tiptap JSON이라 뷰어로 렌더한다. JSON이 아닌 기존 평문 행은
+										    뷰어가 whitespace-pre-wrap <p> 폴백으로 그대로 보여준다. */}
+										<PostBodyViewer body={item.answer} />
+										<div className="flex flex-wrap items-center gap-3">
+											<Label
+												className="flex items-center gap-2"
+												htmlFor={`faq-published-${item.id}`}
+											>
+												<Switch
+													checked={item.isPublished}
+													disabled={setPublished.isPending}
+													id={`faq-published-${item.id}`}
+													onCheckedChange={(checked) =>
+														setPublished.mutate({
+															faqId: item.id,
+															isPublished: checked,
+														})
+													}
+												/>
+												{item.isPublished ? "공개 중" : "숨김"}
+											</Label>
+											<Button
+												onClick={() => setEditingId(item.id)}
+												size="sm"
+												variant="outline"
+											>
+												수정
+											</Button>
+											<Button
+												disabled={removeFaq.isPending}
+												onClick={() => removeFaq.mutate({ faqId: item.id })}
+												size="sm"
+												variant="destructive"
+											>
+												삭제
+											</Button>
+										</div>
+									</>
+								)}
 							</AccordionContent>
 						</AccordionItem>
 					))}
 				</Accordion>
 			) : null}
+		</div>
+	);
+}
+
+// FAQ 인라인 수정 폼. 등록 폼과 같은 필드 구성(카테고리·질문·리치 답변)을 재사용하되,
+// 초기값을 기존 FAQ로 채운다. 정렬값(sortOrder)은 편집 UI에 노출하지 않고 원값을 그대로
+// 실어 보낸다 — 수정 폼에서 sortOrder를 빼먹으면 서버가 0으로 덮어써 순서가 흐트러진다.
+function FaqEditForm({
+	item,
+	onCancel,
+	onSaved,
+}: {
+	item: {
+		answer: string;
+		category: SupportCategory;
+		id: string;
+		question: string;
+		sortOrder: number;
+	};
+	onCancel: () => void;
+	onSaved: () => Promise<void>;
+}) {
+	const [category, setCategory] = useState<SupportCategory>(item.category);
+	const [question, setQuestion] = useState(item.question);
+	// answer는 제출용 Tiptap JSON. 비어있음 판정은 에디터가 같이 주는 text·hasImage로 한다
+	// (에디터 onCreate가 마운트 즉시 기존 답변을 흘려 두 값이 채워진다).
+	const [answer, setAnswer] = useState(item.answer);
+	const [answerText, setAnswerText] = useState("");
+	const [answerHasImage, setAnswerHasImage] = useState(false);
+
+	const updateFaq = useMutation(
+		orpc.bambi.support.updateFaq.mutationOptions({
+			onError: (error) => toast.error(error.message),
+			onSuccess: async () => {
+				toast.success("FAQ를 수정했어요.");
+				await onSaved();
+			},
+		})
+	);
+
+	return (
+		<div className="flex min-w-0 flex-col gap-3">
+			<Label>카테고리</Label>
+			<ToggleGroup
+				aria-label="FAQ 카테고리"
+				className="w-full flex-wrap"
+				onValueChange={(value) => setCategory(value.at(-1) ?? category)}
+				value={[category]}
+			>
+				{SUPPORT_CATEGORIES.map((key) => (
+					<ToggleGroupItem key={key} value={key}>
+						{SUPPORT_CATEGORY_LABELS[key]}
+					</ToggleGroupItem>
+				))}
+			</ToggleGroup>
+			<Label htmlFor={`faq-edit-question-${item.id}`}>질문</Label>
+			<Input
+				id={`faq-edit-question-${item.id}`}
+				maxLength={300}
+				onChange={(event) => setQuestion(event.target.value)}
+				placeholder="자주 묻는 질문을 입력하세요"
+				value={question}
+			/>
+			<Label>답변</Label>
+			<CommunityPostEditor
+				onChange={(payload) => {
+					setAnswer(payload.json);
+					setAnswerText(payload.text);
+					setAnswerHasImage(payload.hasImage);
+				}}
+				value={answer}
+			/>
+			<div className="flex flex-wrap gap-2">
+				<Button
+					disabled={
+						question.trim().length < FAQ_QUESTION_MIN ||
+						(answerText.trim().length === 0 && !answerHasImage) ||
+						updateFaq.isPending
+					}
+					onClick={() =>
+						updateFaq.mutate({
+							answer,
+							category,
+							faqId: item.id,
+							question: question.trim(),
+							sortOrder: item.sortOrder,
+						})
+					}
+					size="sm"
+				>
+					저장
+				</Button>
+				<Button
+					disabled={updateFaq.isPending}
+					onClick={onCancel}
+					size="sm"
+					variant="outline"
+				>
+					취소
+				</Button>
+			</div>
 		</div>
 	);
 }

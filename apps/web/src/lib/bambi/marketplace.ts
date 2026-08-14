@@ -6,12 +6,6 @@ export const ALL_OPTION = "전체";
 
 export const MARKETPLACE_CATEGORIES = [ALL_OPTION, ...industryOptions] as const;
 
-export const MARKETPLACE_QUICK_FILTERS = [
-	{ id: "verified", label: "검증 완료" },
-	{ id: "today", label: "당일면접 가능" },
-	{ id: "beginner", label: "초보 가능" },
-] as const;
-
 export interface MarketplaceFilters {
 	category: string;
 	// 지역 축은 표시 문자열이 아니라 지역 마스터 코드로 들고 다닌다(서버 필터 입력도 코드다).
@@ -108,33 +102,4 @@ export function getSelectedMarketplaceJob(
 	selectedJobId?: string
 ): Job | undefined {
 	return jobs.find((job) => job.id === selectedJobId) ?? jobs[0];
-}
-
-export type MarketplaceDiscoveryAxis = "all" | "category" | "region";
-
-// 탭 전환 시 비활성 축을 "전체"로 리셋한다(축 배타성) — 화면 칩과 결과가 항상 일치한다.
-export function applyDiscoveryAxis(
-	filters: MarketplaceFilters,
-	axis: MarketplaceDiscoveryAxis
-): MarketplaceFilters {
-	if (axis === "region") {
-		return { ...filters, category: ALL_OPTION };
-	}
-	if (axis === "category") {
-		return { ...filters, districtCode: ALL_OPTION, regionCode: ALL_OPTION };
-	}
-	return {
-		...filters,
-		category: ALL_OPTION,
-		districtCode: ALL_OPTION,
-		regionCode: ALL_OPTION,
-	};
-}
-
-// discovery 탭 id를 필터 축으로 매핑한다(비활성 map/recent 탭은 방어적으로 all).
-export function discoveryAxisForTab(tabId: string): MarketplaceDiscoveryAxis {
-	if (tabId === "region" || tabId === "category") {
-		return tabId;
-	}
-	return "all";
 }

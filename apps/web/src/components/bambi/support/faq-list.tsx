@@ -22,6 +22,7 @@ import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { PostBodyViewer } from "@/components/bambi/community-post-detail-parts";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { ModeratorSupportNotice } from "@/components/bambi/support/moderator-support-notice";
+import { MANUAL_PATH } from "@/lib/bambi/manual";
 import {
 	SUPPORT_CATEGORIES,
 	SUPPORT_CATEGORY_LABELS,
@@ -125,6 +126,13 @@ export function FaqList() {
 						href={SUPPORT_INQUIRIES_PATH}
 					>
 						내 문의 내역
+					</Link>
+					{/* /manual 인덱스가 역할별 기본 매뉴얼로 보내므로 여기서 역할 분기가 필요 없다. */}
+					<Link
+						className={buttonVariants({ size: "lg", variant: "outline" })}
+						href={MANUAL_PATH}
+					>
+						이용 가이드
 					</Link>
 				</div>
 			)}

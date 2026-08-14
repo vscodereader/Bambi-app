@@ -467,7 +467,7 @@ export function ReportForm({
 					size="lg"
 					variant="secondary"
 				>
-					취소
+					신고 취소
 				</Button>
 				<Button
 					block
@@ -492,9 +492,11 @@ export function ReportForm({
 export function ReportDone({
 	onClose,
 	compact,
+	isChat,
 }: {
 	onClose: () => void;
 	compact?: boolean;
+	isChat?: boolean;
 }) {
 	return (
 		<div
@@ -513,8 +515,9 @@ export function ReportDone({
 					신고가 접수됐어요
 				</h2>
 				<p className="m-0 max-w-[260px] text-[13px] text-muted-foreground leading-normal">
-					운영팀이 대화 내용을 검토하고 24시간 내 조치해요. 안전을 위해 해당
-					채팅은 잠시 숨겨둘게요.
+					{isChat
+						? "운영팀이 대화 내용을 검토하고 24시간 내 조치해요. 안전을 위해 해당 채팅은 잠시 숨겨둘게요."
+						: "운영팀이 신고 내용을 검토하고 24시간 내 조치해요."}
 				</p>
 			</div>
 			<Button block onClick={onClose} size="lg" variant="primary">

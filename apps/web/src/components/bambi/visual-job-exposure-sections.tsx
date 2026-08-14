@@ -3,30 +3,31 @@
 import { Button } from "@bambi-app/ui/components/button";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import type { Job, MarketplaceJobSections } from "@/lib/bambi/types";
+import { orpc } from "@/utils/orpc";
 import { AdSlotPlaceholder } from "./ad-banner";
 import { Card } from "./ds";
 import { VisualJobCard } from "./visual-job-card";
 
 const CARD_GRID_CLASS = "grid grid-cols-1 gap-3 lg:grid-cols-3 xl:grid-cols-4";
-// xl 4열 기준으로 빈 자리를 채운다. 자리표시 키는 index-in-key 린트를 피해 상수로 둔다.
-const PLACEHOLDER_COLUMNS = 4;
+// 스켈레톤이 한 행만 채울 때 쓰는 자리표시 키(모바일 1·lg 3·xl 4). index-in-key 린트를
+// 피해 상수로 둔다.
 const CARD_PLACEHOLDER_KEYS = ["ph-1", "ph-2", "ph-3", "ph-4"] as const;
 
-// 유료 노출 섹션(스페셜·급구·추천)의 빈 자리표시 개수·breakpoint 표시 규칙.
-// 이 섹션들의 헤더 meta는 구직자 시점의 "○○ 광고" 고지 표기다(광고 상품 용어 미노출).
-// 빈 섹션은 한 행만 채운다(모바일 1·lg 3·xl 4). 부분 판매 섹션은 xl(4열) 기준
-// 마지막 행 나머지를 채운다(그리드가 반응형이라 lg/모바일 정렬은 단순화 허용).
-const cardPlaceholderCount = (jobsLength: number): number => {
-	if (jobsLength === 0) {
-		return PLACEHOLDER_COLUMNS;
-	}
-	return (
-		(PLACEHOLDER_COLUMNS - (jobsLength % PLACEHOLDER_COLUMNS)) %
-		PLACEHOLDER_COLUMNS
-	);
-};
+// 스페셜/추천 고정 인벤토리 자리표시 키. 슬롯 수만큼 잘라 쓴다(서버 슬롯 상한 60과 맞춰
+// 넉넉히 잡음). index-in-key 린트를 피하려고 map 안에서 인덱스로 키를 만들지 않고 상수 배열을
+// slice 한다.
+const SLOT_PLACEHOLDER_KEYS = Array.from(
+	{ length: 60 },
+	(_, index) => `slot-${index}`
+);
+
+// 스페셜/추천 슬롯 수 코드 기본값 — 설정 조회가 도착하기 전(로딩) 폴백. 서버
+// getExposureSectionConfig 폴백값(DEFAULT_SPECIAL/RECOMMENDED_CAPACITY)과 같은 12/20이다.
+const DEFAULT_SPECIAL_SLOTS = 12;
+const DEFAULT_RECOMMENDED_SLOTS = 20;
 
 // 빈 섹션에서 한 행만 남기려고 여분 자리표시를 breakpoint별로 숨긴다. base엔 flex/hidden이
 // 없으므로 display 클래스를 여기서 온전히 지정한다.
@@ -88,29 +89,36 @@ function JobCardSkeleton({ className }: { className?: string }) {
 }
 
 interface ExposureSectionProps {
-	// 유료 노출 섹션(스페셜·급구·추천)은 공고가 없어도 빈 자리를 "광고 모집중"
-	// 자리표시로 채운다. 전체(organic) 섹션은 채우지 않는다(기존 동작 유지).
-	fillEmpty?: boolean;
 	jobs: Job[];
 	meta: string;
 	onOpen: (job: Job) => void;
 	selectedJobId?: string;
+	// 스페셜·추천은 고정 슬롯 인벤토리다: slotCount만큼 항상 칸을 렌더하고, 공고로 채운 뒤
+	// 남는 칸은 "광고 모집중"(AdSlotPlaceholder)으로 패딩한다. 공고가 슬롯을 넘으면
+	// 슬롯 수에서 컷한다(정원 하향 직후 등 전이 상태 방어). slotCount를 주지 않으면(전체 섹션·
+	// 재노출된 급구) 공고 전부를 패딩 없이 렌더한다.
+	slotCount?: number;
 	title: string;
 	tone: ExposureTone;
+	trackAnalytics?: boolean;
 }
 
 function ExposureSection({
-	fillEmpty = false,
+	slotCount,
 	jobs,
 	meta,
 	onOpen,
 	selectedJobId,
+	trackAnalytics = false,
 	title,
 	tone,
 }: ExposureSectionProps) {
-	const placeholderKeys = fillEmpty
-		? CARD_PLACEHOLDER_KEYS.slice(0, cardPlaceholderCount(jobs.length))
-		: [];
+	// 고정 인벤토리: 공고를 슬롯 수에서 컷하고, 남는 칸 수만큼 자리표시 키를 뽑는다.
+	const shownJobs = slotCount === undefined ? jobs : jobs.slice(0, slotCount);
+	const placeholderKeys =
+		slotCount === undefined
+			? []
+			: SLOT_PLACEHOLDER_KEYS.slice(0, slotCount - shownJobs.length);
 	return (
 		<section className="grid gap-2">
 			<div className="flex items-center justify-between">
@@ -118,23 +126,27 @@ function ExposureSection({
 					<span className={cn("h-4 w-1 rounded-full", accentClassName[tone])} />
 					{title}
 				</h2>
+				{/* 개수 표기는 제거됐다 — 크롤링 주입 상한·슬롯 컷·단기성 크롤링 변동이 겹쳐
+				    "몇 개"가 기준마다 달라지므로(배열 vs 카드 vs 자격 총량) 숫자 없이 라벨만 남긴다. */}
 				<span className="font-semibold text-muted-foreground text-xs">
-					{jobs.length}개 · {meta}
+					{meta}
 				</span>
 			</div>
 			<div className={CARD_GRID_CLASS}>
-				{jobs.map((job) => (
+				{shownJobs.map((job, index) => (
 					<VisualJobCard
 						active={job.id === selectedJobId}
+						analyticsIndex={index}
 						job={job}
 						key={`${tone}-${job.id}`}
 						onOpen={onOpen}
 						tone={tone}
+						trackAnalytics={trackAnalytics}
 					/>
 				))}
-				{placeholderKeys.map((key, index) => (
+				{placeholderKeys.map((key) => (
 					<AdSlotPlaceholder
-						className={cardPlaceholderClass(jobs.length, index)}
+						className="flex min-h-29 w-full"
 						key={`${tone}-${key}`}
 					/>
 				))}
@@ -157,6 +169,7 @@ interface VisualJobExposureSectionsProps {
 	onOpen: (job: Job) => void;
 	sections: MarketplaceJobSections;
 	selectedJobId?: string;
+	trackAnalytics?: boolean;
 }
 
 export function VisualJobExposureSections({
@@ -169,13 +182,28 @@ export function VisualJobExposureSections({
 	onOpen,
 	sections,
 	selectedJobId,
+	trackAnalytics = false,
 }: VisualJobExposureSectionsProps) {
+	// 운영자 노출 섹션 설정 — 급구 숨김 여부·스페셜/추천 고정 슬롯 수. 조회 전(로딩)에는
+	// 안전한 기본값(급구 숨김, 12/20)으로 폴백해 서버 폴백과 일치시킨다.
+	const { data: config } = useQuery(
+		orpc.bambi.siteSettings.getExposureSectionConfig.queryOptions()
+	);
+	const urgentHidden = config?.urgentHidden ?? true;
+	const specialSlots = config?.specialSlots ?? DEFAULT_SPECIAL_SLOTS;
+	const recommendedSlots =
+		config?.recommendedSlots ?? DEFAULT_RECOMMENDED_SLOTS;
+
 	// 첫 로딩엔 jobs가 비어 있어 아래 빈 상태 분기가 "공고가 없어요"를 잠깐 보여준다.
 	// 그 앞에서 실제 레이아웃과 같은 골격(grid gap-5 + 4개 섹션)의 스켈레톤으로 가로챈다.
 	if (isLoading) {
+		// 급구가 숨김이면 스켈레톤에서도 급구 섹션을 미러링하지 않는다(실제 렌더와 일치).
+		const loadingSections = urgentHidden
+			? LOADING_SECTIONS.filter(({ tone }) => tone !== "urgent")
+			: LOADING_SECTIONS;
 		return (
 			<div className="grid gap-5">
-				{LOADING_SECTIONS.map(({ title, tone }) => (
+				{loadingSections.map(({ title, tone }) => (
 					<section className="grid gap-2" key={tone}>
 						<div className="flex items-center justify-between">
 							<h2 className="m-0 flex items-center gap-2 font-extrabold text-base">
@@ -229,33 +257,37 @@ export function VisualJobExposureSections({
 
 	return (
 		<div className="grid gap-5">
-			{/* 스페셜·급구·추천은 공고가 0개여도 섹션을 렌더하고 빈 자리를 "광고 모집중"
-			    자리표시로 채운다(fillEmpty). */}
+			{/* 스페셜·추천은 고정 슬롯 인벤토리(운영자 설정값)만큼 항상 렌더하고 남는 칸을
+			    "광고 모집중"으로 채운다. 급구는 운영자 토글로 숨김/노출한다. */}
 			<ExposureSection
-				fillEmpty
 				jobs={sections.special}
 				meta="스페셜 광고"
 				onOpen={onOpen}
+				slotCount={specialSlots}
 				title="스페셜 채용"
 				tone="special"
+				trackAnalytics={trackAnalytics}
 			/>
-			<ExposureSection
-				fillEmpty
-				jobs={sections.urgent}
-				meta="급구 광고"
-				onOpen={onOpen}
-				title="급구 채용"
-				tone="urgent"
-			/>
+			{/* 급구는 정원·고정 슬롯 대상이 아니다 — 노출 시 공고 전부를 패딩 없이 보여준다. */}
+			{urgentHidden ? null : (
+				<ExposureSection
+					jobs={sections.urgent}
+					meta="급구 광고"
+					onOpen={onOpen}
+					title="급구 채용"
+					tone="urgent"
+				/>
+			)}
 			{/* 스페셜·급구 뒤, 추천·전체 앞 고정 위치. */}
 			{communitySlot}
 			<ExposureSection
-				fillEmpty
 				jobs={sections.recommended}
 				meta="추천 광고"
 				onOpen={onOpen}
+				slotCount={recommendedSlots}
 				title="추천 채용"
 				tone="recommended"
+				trackAnalytics={trackAnalytics}
 			/>
 			<ExposureSection
 				jobs={sections.organic}
@@ -264,6 +296,7 @@ export function VisualJobExposureSections({
 				selectedJobId={selectedJobId}
 				title="전체 공고"
 				tone="organic"
+				trackAnalytics={trackAnalytics}
 			/>
 			{hasMore && onLoadMore ? (
 				<div className="flex justify-center">

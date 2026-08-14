@@ -13,11 +13,11 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
-import { Textarea } from "@bambi-app/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { CommunityPostEditor } from "@/components/bambi/community-editor";
 import {
 	SUPPORT_CATEGORIES,
 	SUPPORT_CATEGORY_LABELS,
@@ -27,11 +27,12 @@ import {
 } from "@/lib/bambi/support";
 import { orpc } from "@/utils/orpc";
 
-// 서버 zod 스키마(createInquiryInput)와 같은 값을 쓴다 — 어긋나면 제출 후에야 거절된다.
+// 제목은 서버 zod 스키마(createInquiryInput)와 같은 값을 쓴다 — 어긋나면 제출 후에야 거절된다.
 const TITLE_MIN = 2;
 const TITLE_MAX = 100;
-const BODY_MIN = 5;
-const BODY_MAX = 5000;
+// 본문은 리치 에디터(Tiptap JSON)라 서버는 형식·길이만 검증한다. 이 값은 "너무 짧은
+// 문의"를 막는 클라이언트 UX 게이트로, 에디터가 주는 평문(bodyText) 길이에만 건다.
+const BODY_TEXT_MIN = 5;
 
 // base-ui Select는 SelectValue가 라벨을 그리려면 items 매핑이 필요하다(값만으론 원값이 노출된다).
 const CATEGORY_ITEMS = SUPPORT_CATEGORIES.map((key) => ({
@@ -44,11 +45,19 @@ export function InquiryForm() {
 	const queryClient = useQueryClient();
 	const [category, setCategory] = useState<SupportCategory>("account");
 	const [title, setTitle] = useState("");
+	// body는 제출용 Tiptap JSON 문자열. 비어있음 판정은 에디터가 같이 주는 평문(bodyText)·
+	// hasImage로만 한다(빈 문서도 JSON은 40자쯤 되므로 body 길이로는 못 판단한다).
 	const [body, setBody] = useState("");
+	const [bodyText, setBodyText] = useState("");
+	const [hasImage, setHasImage] = useState(false);
+	// isPending은 리렌더 후에야 반영돼 연타 두 번이 다 통과한다. 동기 ref로 즉시 잠근다.
+	const submittingRef = useRef(false);
 
 	const createMutation = useMutation(
 		orpc.bambi.support.createInquiry.mutationOptions({
 			onError: (error) => {
+				// 실패 시엔 재시도할 수 있게 잠금을 푼다(성공은 router.replace로 이탈하므로 유지).
+				submittingRef.current = false;
 				// 서버 ORPCError의 한국어 message를 그대로 노출한다(금칙어 차단 문구 포함).
 				toast(error.message || "문의를 등록하지 못했어요.");
 			},
@@ -62,17 +71,27 @@ export function InquiryForm() {
 		})
 	);
 
-	const canSubmit =
-		title.trim().length >= TITLE_MIN &&
-		body.trim().length >= BODY_MIN &&
-		!createMutation.isPending;
-
+	// 검증은 제출 시점에 하고 사유를 토스트로 알린다(auth-panel과 같은 방식). 버튼을
+	// 상시 disabled로 잠그면 제목 1자가 왜 막히는지 안 보이므로, 제출 진입을 열고 여기서 거른다.
 	const handleSubmit = () => {
-		if (!canSubmit) {
+		if (submittingRef.current || createMutation.isPending) {
 			return;
 		}
+		if (title.trim().length < TITLE_MIN) {
+			toast(`제목은 ${TITLE_MIN}~${TITLE_MAX}자로 입력해 주세요.`);
+			return;
+		}
+		// 이미지만 있는 문의(스크린샷)도 허용한다 — 수다방과 같은 비어있음 판정.
+		if (bodyText.trim().length < BODY_TEXT_MIN && !hasImage) {
+			toast(
+				`문의 내용을 ${BODY_TEXT_MIN}자 이상 입력하거나 이미지를 첨부해 주세요.`
+			);
+			return;
+		}
+		submittingRef.current = true;
 		createMutation.mutate({
-			body: body.trim(),
+			// body는 JSON 문자열이라 trim하면 형식이 깨진다.
+			body,
 			category,
 			title: title.trim(),
 		});
@@ -122,13 +141,14 @@ export function InquiryForm() {
 			</div>
 
 			<div className="flex flex-col gap-2">
-				<Label htmlFor="inquiry-body">내용</Label>
-				<Textarea
-					className="min-h-40"
-					id="inquiry-body"
-					maxLength={BODY_MAX}
-					onChange={(event) => setBody(event.target.value)}
-					placeholder="문의 내용을 자세히 적어 주세요 (5자 이상)"
+				<Label>내용</Label>
+				<CommunityPostEditor
+					onChange={(payload) => {
+						setBody(payload.json);
+						setBodyText(payload.text);
+						setHasImage(payload.hasImage);
+					}}
+					plainTextPaste
 					value={body}
 				/>
 			</div>
@@ -141,7 +161,11 @@ export function InquiryForm() {
 				>
 					취소
 				</Button>
-				<Button disabled={!canSubmit} onClick={handleSubmit} type="button">
+				<Button
+					disabled={createMutation.isPending}
+					onClick={handleSubmit}
+					type="button"
+				>
 					문의 등록
 				</Button>
 			</div>

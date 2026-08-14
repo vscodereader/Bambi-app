@@ -455,6 +455,7 @@ interface CommunityPostEditorProps {
 		json: string;
 		text: string;
 	}) => void;
+	plainTextPaste?: boolean;
 	value: string;
 }
 
@@ -482,12 +483,26 @@ const buildEditorPayload = (editor: Editor) => ({
 export function CommunityPostEditor({
 	allowUpload = true,
 	onChange,
+	plainTextPaste = false,
 	value,
 }: CommunityPostEditorProps) {
 	const editor = useEditor({
 		content: parseCommunityBody(value),
 		editorProps: {
 			attributes: { class: EDITOR_BODY_CLASS },
+			handlePaste: plainTextPaste
+				? (view, event) => {
+						const text = event.clipboardData?.getData("text/plain");
+						if (!text) {
+							return false;
+						}
+						event.preventDefault();
+						view.dispatch(
+							view.state.tr.insertText(text.replace(/\r?\n+/g, " "))
+						);
+						return true;
+					}
+				: undefined,
 		},
 		extensions: communityEditorExtensions,
 		immediatelyRender: false,

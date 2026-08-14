@@ -23,6 +23,7 @@ export interface MainPopupDraft {
 	revision: number;
 	slotIndex: number;
 	startsAt: Date | null;
+	targetPages: string[];
 	textDocument: JSONContent | null;
 	updatedAt: Date;
 	updatedByName?: string | null;
@@ -64,6 +65,10 @@ export const hiddenPopupStorageKey = (id: string) =>
 	`bambi:main-popup:hidden:${id}`;
 
 export const popupLoginTargetStorageKey = "bambi:main-popup:login-target";
+
+export const popupAuthTransitionStorageKey =
+	"bambi:main-popup:auth-transition-source";
+export const popupAuthTransitionEvent = "bambi:main-popup:auth-transition";
 
 export const popupExpandedStorageKey = (id: string) =>
 	`bambi:main-popup:expanded:${id}`;

@@ -3,14 +3,14 @@ import path from "node:path";
 import type { NextRequest } from "next/server";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const BUSINESS_DOCUMENT_KEY_PREFIX = "bambi-business-documents/";
+// 비공개 버킷 키 규칙의 구인자 루트(employer/{orgId}/{userId}/…)를 따른다.
+const BUSINESS_DOCUMENT_KEY_PREFIX = "employer/";
 const ALLOWED_MIME_TYPES = new Set([
 	"application/pdf",
 	"image/jpeg",
 	"image/png",
 	"image/webp",
 ]);
-
 const LOCAL_STORAGE_ROOT = path.resolve(
 	process.cwd(),
 	".local-storage",

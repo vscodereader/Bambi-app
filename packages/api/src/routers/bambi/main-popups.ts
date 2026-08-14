@@ -35,6 +35,7 @@ const saveInput = z
 		audience: z.enum(["common", "job_seeker", "employer"]),
 		originalImage: popupImageAssetSchema.nullable(),
 		startsAt: z.coerce.date().nullable(),
+		targetPages: z.array(z.string().min(1).max(100)).min(1).max(50),
 		textDocument: popupTextDocumentSchema.nullable(),
 	})
 	.superRefine((input, context) => {
@@ -79,6 +80,7 @@ const adminColumns = {
 	revision: mainPopup.revision,
 	slotIndex: mainPopup.slotIndex,
 	startsAt: mainPopup.startsAt,
+	targetPages: mainPopup.targetPages,
 	textDocument: mainPopup.textDocument,
 	updatedAt: mainPopup.updatedAt,
 } as const;
@@ -93,6 +95,7 @@ const publicColumns = {
 	linkPath: mainPopup.linkPath,
 	revision: mainPopup.revision,
 	slotIndex: mainPopup.slotIndex,
+	targetPages: mainPopup.targetPages,
 	textDocument: mainPopup.textDocument,
 } as const;
 
@@ -109,6 +112,9 @@ export const mainPopupsRouter = {
 	listPublic: publicProcedure.handler(async ({ context }) => {
 		const now = new Date();
 		const userId = context.session?.user?.id;
+		if (!userId) {
+			return { items: [] };
+		}
 		let allowedAudiences: Array<"common" | "job_seeker" | "employer"> = [
 			"common",
 		];
@@ -260,6 +266,7 @@ export const mainPopupsRouter = {
 				originalImage: input.originalImage,
 				revision: input.expectedRevision + 1,
 				startsAt: input.startsAt,
+				targetPages: [...new Set(input.targetPages)],
 				textDocument: input.textDocument,
 				updatedAt: new Date(),
 				updatedByUserId: context.session.user.id,

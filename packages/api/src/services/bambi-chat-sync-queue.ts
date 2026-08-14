@@ -13,7 +13,11 @@
  */
 
 import type { db } from "@bambi-app/db";
-import { chatMessageSyncQueue, chatRoom } from "@bambi-app/db/schema/bambi";
+import {
+	chatMessage,
+	chatMessageSyncQueue,
+	chatRoom,
+} from "@bambi-app/db/schema/bambi";
 import { asc, eq, lt } from "drizzle-orm";
 
 import {
@@ -40,6 +44,8 @@ export interface ChatMessageSyncEvent {
 
 interface NotifyChatMessageInput {
 	createdAt: Date | string;
+	/** 메시지 종류. 전용 알림이 이미 나간 시스템 메시지를 알림에서 제외하는 데 쓴다. */
+	kind?: null | string;
 	messageId: string;
 	profileUserId: string;
 	room: {
@@ -65,6 +71,7 @@ const toIsoDateTime = (value: Date | string): string =>
  */
 export const notifyChatMessageCreated = async ({
 	createdAt,
+	kind,
 	messageId,
 	profileUserId,
 	room,
@@ -92,7 +99,13 @@ export const notifyChatMessageCreated = async ({
 		roomId: room.id,
 	});
 
-	if (!isParticipantActiveInRoom(room.id, recipientUserId)) {
+	// 면접 제안 시스템 메시지는 전용 interview_schedule 알림(action: proposed)이 이미
+	// 나갔다. 여기서 chat_message 알림까지 만들면 미접속 수신자에게 알림이 두 번 간다.
+	// 소켓 브로드캐스트(위)는 그대로 두고 알림 행 생성만 건너뛴다.
+	if (
+		kind !== "interview_proposal" &&
+		!isParticipantActiveInRoom(room.id, recipientUserId)
+	) {
 		await createBambiNotification({
 			actorUserId: profileUserId,
 			chatRoomId: room.id,
@@ -128,6 +141,10 @@ const runDrain = async (): Promise<void> => {
 			employerUserId: chatRoom.employerUserId,
 			id: chatMessageSyncQueue.id,
 			jobSeekerUserId: chatRoom.jobSeekerUserId,
+			// 메시지 종류를 여기서 함께 읽어(전용 알림이 이미 나간 시스템 메시지 판별).
+			// 큐 테이블에 컬럼을 더하지 않으려 조인으로 가져온다(마이그레이션 없음). 메시지가
+			// 사라진 큐 행도 놓치지 않도록 leftJoin — kind null은 일반 메시지로 취급한다.
+			kind: chatMessage.kind,
 			messageCreatedAt: chatMessageSyncQueue.messageCreatedAt,
 			messageId: chatMessageSyncQueue.messageId,
 			roomId: chatMessageSyncQueue.chatRoomId,
@@ -135,6 +152,7 @@ const runDrain = async (): Promise<void> => {
 		})
 		.from(chatMessageSyncQueue)
 		.innerJoin(chatRoom, eq(chatRoom.id, chatMessageSyncQueue.chatRoomId))
+		.leftJoin(chatMessage, eq(chatMessage.id, chatMessageSyncQueue.messageId))
 		.where(lt(chatMessageSyncQueue.attempts, MAX_SYNC_ATTEMPTS))
 		.orderBy(asc(chatMessageSyncQueue.createdAt))
 		.limit(DRAIN_BATCH_SIZE);
@@ -143,6 +161,7 @@ const runDrain = async (): Promise<void> => {
 		try {
 			await notifyChatMessageCreated({
 				createdAt: row.messageCreatedAt,
+				kind: row.kind,
 				messageId: row.messageId,
 				profileUserId: row.senderUserId,
 				room: {

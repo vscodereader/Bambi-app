@@ -353,7 +353,7 @@ function ReportOverlay({
 					{step === "form" ? (
 						<ReportForm onCancel={onCancel} onSubmit={onSubmit} tone={tone} />
 					) : (
-						<ReportDone onClose={onClose} />
+						<ReportDone isChat onClose={onClose} />
 					)}
 				</div>
 			</div>
@@ -494,7 +494,7 @@ export function SeekerChat({
 						) : null}
 						{report === "done" && reportMode === "inline" ? (
 							<div className="my-1 self-stretch rounded-2xl border border-border bg-card p-[18px] shadow-md">
-								<ReportDone compact onClose={closeReport} />
+								<ReportDone compact isChat onClose={closeReport} />
 							</div>
 						) : null}
 					</>

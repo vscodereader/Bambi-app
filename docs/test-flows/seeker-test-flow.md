@@ -327,7 +327,7 @@
   3. **급구 채용** (`· 급구 광고`, 자리표시)
   4. **커뮤니티 슬롯** (`HomeCommunitySection`)
   5. **추천 채용** (`· 추천 광고`, 자리표시)
-  6. **전체 공고** (`· 최신순`, 자리표시 없음)
+  6. **전체 공고** (`· 최신순`, 자리표시 없음, 데스크톱 4열 × 12줄 단위)
   7. **[공고 더보기]** 버튼
   - 초광폭(`min-[1720px]`)에서만 좌(가로형)·우(세로형) 광고 레일 노출
   - 헤더 "추천 공고 / {N}개 · 실시간"의 N은 **조건에 맞는 전체 건수**(로드된 수 아님)
@@ -389,12 +389,14 @@
 ### 4.4 페이지네이션 · 정렬
 
 - **경로**: `/seeker` 하단 [공고 더보기]
-- **절차**: 버튼을 끝까지 눌러 목록을 소진
+- **절차**: 데스크톱에서 최초 48건(4열 × 12줄)을 확인하고 버튼을 끝까지 눌러 목록을 소진
 - **기대 결과**:
-  - **무한스크롤이 아니라 버튼**. 첫 페이지 `limit=30`, 더보기부터 `limit=50`(서버 max 50)
+  - **무한스크롤이 아니라 버튼**. 첫 페이지와 더보기 모두 `limit=48`(서버 max 50)
   - 커서는 `organicOffset: {jobPost, crawled}` 두 축. 응답의 `nextOrganicOffset`을 그대로 되돌려 보낸다. `null`이면 버튼이 사라진다
   - **스페셜·급구·추천 섹션은 1페이지 응답으로 고정**, 2페이지부터는 전체 공고만 이어 받는다
   - 정렬(전체 공고): **인증업체 우선 → `greatest(boosted_at, published_at)` DESC → id DESC**. 사용자가 고르는 정렬 UI는 **없음**
+  - 인증업체 공고 A를 끌어올리면 A가 전체 공고 첫 칸으로 이동한다. 이후 공고 B를 끌어올리면 B가 첫 칸, A가 둘째 칸으로 밀린다
+  - 모바일은 동일하게 48건을 받되 기존 반응형 1열 배치를 유지한다
   - 수집 공고는 항상 각 블록의 **뒤에** 붙는다
 - **엣지 케이스**: 로컬 전용 필터를 켠 상태에서 더보기를 누르면 페이지마다 남는 건수가 들쭉날쭉하다(서버가 그 조건을 모름)
 - **관련 API**: `bambi.jobs.list`
@@ -1323,7 +1325,7 @@
 | A-8 | "면접 확정 전까지 전화번호는 공개되지 않는다" | **구인자의 인증 전화번호는 면접 확정과 무관하게** 공고 상세(`bambi.jobs.getById`, publicProcedure)와 채팅방(`getById`)에서 구직자에게 노출된다 | `packages/api/src/routers/bambi/jobs.ts`, `.../chats.ts` |
 | A-9 | "계정 설정: **표시 이름**을 바꾸고… 로그아웃" | 로그아웃 버튼은 계정설정에서 **`md:hidden`(모바일 전용)**이다. 데스크톱은 마이페이지 사이드바에만 있다. 또 계정설정 최하단에 **회원 탈퇴 섹션**이 있는데 매뉴얼에 없다 | `apps/web/src/components/bambi/screens/account-settings-screen.tsx`, `.../withdraw-account-section.tsx` |
 | A-10 | 신고 사유 7종을 그대로 나열 | 사유는 맞지만 **"외부 연락처 유도"가 서버 enum `misleading_job_information`으로 매핑**되어 "내 신고 내역"에서는 **"허위 공고 정보"** 로 표시된다 | `apps/web/src/components/bambi/report-dialog.tsx`, `apps/web/src/lib/bambi/report-labels.ts` |
-| A-11 | "채팅방에서 신고한 경우 해당 대화가 **잠시 숨겨질 수 있습니다**" | 신고로 채팅을 숨기는 코드가 **없다**. 완료 화면 문구만 그렇게 말한다 | `apps/web/src/components/bambi/safety-kit.tsx` `ReportDone` |
+| A-11 | "채팅방에서 신고한 경우 해당 대화가 **잠시 숨겨질 수 있습니다**" | 완료 문구가 **대상별로 다르다**. 채팅 신고만 채팅 숨김을 안내하고 실제로 목록 재조회로 숨겨지며, 공고·수다방 등 비채팅 신고는 숨김을 주장하지 않는 일반 문구를 보여 준다 | `apps/web/src/components/bambi/safety-kit.tsx` `ReportDone`, `.../screens/seeker-chat-list-responsive.tsx` |
 | A-12 | "채팅 목록: 각 방에 **N개 미확인** 표시" (신고 배지 언급 없음) | `신고 완료 · 조치 대기 중` 배지가 추가로 있다. 또 케밥 메뉴에 **삭제·신고·차단**이 있는데 매뉴얼에 없다 | `apps/web/src/components/bambi/screens/seeker-chat-list-responsive.tsx` |
 | A-13 | "면접 일정 제안은 보통 업체가 합니다" | "보통"이 아니라 **구직자는 제안 자체가 불가능**하다(서버 `FORBIDDEN` + UI 미노출) | `packages/api/src/routers/bambi/chats.ts` `proposeInterview` |
 | A-14 | "사진은 8MB, PDF는 10MB" | 클라이언트는 8MB/10MB지만 **서버 정책은 이미지·PDF 모두 10MB**다 | `apps/web/src/components/bambi/screens/seeker-chat-room-responsive.tsx` vs `packages/api/src/services/bambi-media-policy.ts` |

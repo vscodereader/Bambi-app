@@ -1,21 +1,64 @@
 "use client";
 
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useCallback, useMemo } from "react";
+import {
+	JOB_LISTS,
+	shouldTrackJobAnalytics,
+	trackJobListView,
+	trackJobSelect,
+} from "@/lib/bambi/ga-job";
+import {
+	type PromotionDefinition,
+	RECOMMENDED_PROMOTION,
+	SPECIAL_PROMOTION,
+	shouldTrackPromotion,
+	trackPromotionSelect,
+	trackPromotionView,
+} from "@/lib/bambi/ga-promotion";
 import {
 	HIT_RIBBON_CLASS_BY_TONE,
 	shouldShowHitRibbon,
 } from "@/lib/bambi/job-hit";
 import type { Job } from "@/lib/bambi/types";
+import { usePromotionImpression } from "@/lib/bambi/use-promotion-impression";
 import { Badge } from "./ds";
 import { MapPinIcon } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
 
 interface VisualJobCardProps {
 	active?: boolean;
+	analyticsIndex?: number;
 	job: Job;
 	onOpen: (job: Job) => void;
 	tone: "organic" | "recommended" | "special" | "urgent";
+	trackAnalytics?: boolean;
 }
+
+const JOB_CARD_TEXT_LIMIT = 7;
+
+export function truncateJobCardText(value: string): string {
+	const characters = Array.from(value);
+	return characters.length > JOB_CARD_TEXT_LIMIT
+		? `${characters.slice(0, JOB_CARD_TEXT_LIMIT).join("")}...`
+		: value;
+}
+
+const fullTextTitle = (value: string): string | undefined =>
+	Array.from(value).length > JOB_CARD_TEXT_LIMIT ? value : undefined;
+
+const getPromotion = (
+	tone: VisualJobCardProps["tone"]
+): PromotionDefinition | null => {
+	switch (tone) {
+		case "special":
+			return SPECIAL_PROMOTION;
+		case "recommended":
+			return RECOMMENDED_PROMOTION;
+		default:
+			return null;
+	}
+};
 
 // 등급 카드는 배경 틴트 없이 테두리 색상만으로 구분한다.
 const toneClassName = {
@@ -77,8 +120,10 @@ export function splitPay(pay: string): { amount: string; unit: null | string } {
 
 export function VisualJobCard({
 	active = false,
+	analyticsIndex = 0,
 	job,
 	onOpen,
+	trackAnalytics = false,
 	tone,
 }: VisualJobCardProps) {
 	const { amount: payAmount, unit: payUnit } = splitPay(job.pay);
@@ -86,6 +131,57 @@ export function VisualJobCard({
 	const showHitRibbon = shouldShowHitRibbon(job, tone);
 	const hitRibbonClassName =
 		tone === "organic" ? "" : HIT_RIBBON_CLASS_BY_TONE[tone];
+	const analyticsContext = useMemo(
+		() =>
+			tone === "urgent"
+				? null
+				: {
+						index: analyticsIndex,
+						listId: JOB_LISTS[tone].id,
+						listName: JOB_LISTS[tone].name,
+						tone,
+					},
+		[analyticsIndex, tone]
+	);
+	const promotion = getPromotion(tone);
+	const promotionSlot = `seeker_${tone}_${analyticsIndex + 1}`;
+	const handleImpression = useCallback(() => {
+		if (!(trackAnalytics && analyticsContext)) {
+			return;
+		}
+		trackJobListView([job], analyticsContext);
+		if (
+			promotion &&
+			shouldTrackJobAnalytics(job, tone) &&
+			shouldTrackPromotion(job)
+		) {
+			trackPromotionView(job, promotionSlot, analyticsIndex, promotion);
+		}
+	}, [
+		analyticsContext,
+		analyticsIndex,
+		job,
+		promotion,
+		promotionSlot,
+		tone,
+		trackAnalytics,
+	]);
+	const impressionRef = usePromotionImpression(
+		trackAnalytics && analyticsContext ? handleImpression : null
+	);
+	const handleOpen = () => {
+		if (trackAnalytics && analyticsContext) {
+			trackJobSelect(job, analyticsContext);
+			if (
+				promotion &&
+				shouldTrackJobAnalytics(job, tone) &&
+				shouldTrackPromotion(job)
+			) {
+				trackPromotionSelect(job, promotionSlot, analyticsIndex, promotion);
+			}
+		}
+		onOpen(job);
+	};
 	return (
 		<article
 			className={cn(
@@ -94,6 +190,7 @@ export function VisualJobCard({
 				showHitRibbon && hitBorderClassName[tone],
 				active && "border-coral-400 ring-2 ring-coral-100"
 			)}
+			ref={impressionRef}
 		>
 			{showHitRibbon ? (
 				// 카드 우측 상단을 대각선으로 가로지르는 얇은 코너 리본. article의 overflow-hidden이
@@ -111,7 +208,7 @@ export function VisualJobCard({
 			) : null}
 			<button
 				className="flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
-				onClick={() => onOpen(job)}
+				onClick={handleOpen}
 				type="button"
 			>
 				<div className="flex items-start gap-3">
@@ -133,9 +230,18 @@ export function VisualJobCard({
 							showHitRibbon && "pr-8"
 						)}
 					>
-						<h3 className="m-0 truncate font-extrabold text-[15px] leading-snug">
-							{job.company}
+						<h3
+							className="m-0 truncate font-extrabold text-[15px] leading-snug"
+							title={fullTextTitle(job.title)}
+						>
+							{truncateJobCardText(job.title)}
 						</h3>
+						<span
+							className="truncate font-semibold text-muted-foreground text-xs"
+							title={fullTextTitle(job.company)}
+						>
+							{truncateJobCardText(job.company)}
+						</span>
 						<span className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs">
 							<span className="inline-flex size-3 shrink-0">
 								<MapPinIcon />
@@ -151,7 +257,7 @@ export function VisualJobCard({
 			{/* mt-auto: 그리드 행이 늘어나(모집중 placeholder 등) 카드가 stretch 되어도
 			    급여 행이 항상 카드 하단에 붙도록 고정한다. */}
 			<div className="mt-auto flex">
-				<span className="flex h-9 min-w-0 items-center gap-1.5 rounded-md border border-border bg-background px-[14px]">
+				<span className="flex h-9 min-w-0 items-center gap-1.5">
 					{payUnit ? (
 						<Badge className="shrink-0" tone={toneBadge[tone]}>
 							{payUnit}

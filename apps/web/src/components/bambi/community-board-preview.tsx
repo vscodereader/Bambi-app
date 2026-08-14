@@ -3,7 +3,6 @@
 // 게시판별 최신 글 미리보기 카드 — 수다방 홈과 seeker 홈 커뮤니티 섹션이 공유한다.
 
 import type { AppRouter } from "@bambi-app/api/routers/index";
-import { Badge } from "@bambi-app/ui/components/badge";
 import {
 	Card,
 	CardContent,
@@ -39,6 +38,7 @@ import {
 	LEGAL_ADVISOR_BOARD_NOTICE,
 } from "@/lib/bambi/community";
 import { communityBoardIcon } from "@/lib/bambi/community-board-icons";
+import { trackNavigationClick } from "@/lib/bambi/ga-interaction";
 
 // 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 미리보기 게시판·글 타입을 파생한다.
 // overview는 고정 키 객체가 아니라 배열이다 — 운영자가 게시판을 늘리면 그대로 따라 붙는다.
@@ -95,12 +95,14 @@ function BoardTitleMark({
 }
 
 export function BoardPreviewCard({
+	analyticsSurface,
 	board,
 	className,
 	compact = false,
 	emptyText,
 	onBlockedNavigate,
 }: {
+	analyticsSurface?: "seeker_home_community";
 	board: OverviewBoard;
 	className?: string;
 	// 반폭 칸(중고거래·법률 자문)에 들어가는 카드. 제목이 설 자리를 남기려고 작성인을
@@ -136,6 +138,12 @@ export function BoardPreviewCard({
 					className="flex items-center gap-1 font-semibold text-muted-foreground text-xs hover:text-foreground"
 					href={communityBoardPath(board.slug) as Route}
 					onClick={(event) => {
+						if (analyticsSurface) {
+							trackNavigationClick({
+								contentId: board.key,
+								linkType: "board_more",
+							});
+						}
 						if (onBlockedNavigate) {
 							event.preventDefault();
 							onBlockedNavigate(communityBoardPath(board.slug));
@@ -160,6 +168,7 @@ export function BoardPreviewCard({
 							COMMUNITY_BOARDS.find((item) => item.key === post.board)?.slug ??
 							post.board;
 						// 수집 글은 전용 상세로 분기한다(순수 글은 기존 게시판 상세 경로 그대로).
+						// 출처 배지는 달지 않는다 — 라우팅 판별에만 쓰는 값이다.
 						const isCrawled = post.source === "crawled";
 						const href = isCrawled
 							? communityCrawledPath(post.id)
@@ -173,6 +182,12 @@ export function BoardPreviewCard({
 								href={href as Route}
 								key={post.id}
 								onClick={(event) => {
+									if (analyticsSurface) {
+										trackNavigationClick({
+											contentId: post.id,
+											linkType: "post",
+										});
+									}
 									if (onBlockedNavigate) {
 										event.preventDefault();
 										onBlockedNavigate(href);
@@ -182,11 +197,6 @@ export function BoardPreviewCard({
 								<span className="flex min-w-0 items-center gap-1.5">
 									{post.isLocked ? (
 										<LockIcon className="size-3 shrink-0 text-muted-foreground" />
-									) : null}
-									{isCrawled ? (
-										<Badge className="shrink-0" variant="secondary">
-											외부 수집
-										</Badge>
 									) : null}
 									{isNotice ? null : <CommunityRoleBadges post={post} />}
 									<CommunityNewBadge createdAt={post.createdAt} />
@@ -242,10 +252,12 @@ const PAIRED_BOARD_KEYS = ["market", "legal"];
 //들고 있어 홈과 수다방의 같은 섹션이 서로 다르게 보이던 걸 한 컴포넌트로 모은다.
 // 운영자가 추가한 게시판은 서버 순서(sort_order) 그대로 solo 카드로 뒤에 붙는다.
 export function CommunityOverviewGrid({
+	analyticsSurface,
 	boards,
 	isPending,
 	onBlockedNavigate,
 }: {
+	analyticsSurface?: "seeker_home_community";
 	boards: OverviewBoard[];
 	isPending: boolean;
 	// BoardPreviewCard와 같은 의미 — 지정 시 수다방 링크를 가로채 호출한 화면이 안내한다.
@@ -280,6 +292,7 @@ export function CommunityOverviewGrid({
 		<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 			{notice ? (
 				<BoardPreviewCard
+					analyticsSurface={analyticsSurface}
 					board={notice}
 					className="md:col-span-2"
 					emptyText="등록된 공지사항이 없어요."
@@ -288,6 +301,7 @@ export function CommunityOverviewGrid({
 			) : null}
 			{soloBoards.map((board) => (
 				<BoardPreviewCard
+					analyticsSurface={analyticsSurface}
 					board={board}
 					key={board.key}
 					onBlockedNavigate={onBlockedNavigate}
@@ -297,6 +311,7 @@ export function CommunityOverviewGrid({
 				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 					{pairedBoards.map((board) => (
 						<BoardPreviewCard
+							analyticsSurface={analyticsSurface}
 							board={board}
 							compact
 							key={board.key}

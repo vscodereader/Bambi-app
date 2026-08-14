@@ -81,7 +81,8 @@ export type EmployerApprovalStatus =
 	| "none"
 	| "pending"
 	| "verified"
-	| "rejected";
+	| "rejected"
+	| "changes_unsubmitted";
 
 export const deriveEmployerApprovalStatus = (
 	statuses: string[]
@@ -91,6 +92,9 @@ export const deriveEmployerApprovalStatus = (
 	}
 	if (statuses.includes("pending")) {
 		return "pending";
+	}
+	if (statuses.includes("changes_unsubmitted")) {
+		return "changes_unsubmitted";
 	}
 	if (statuses.includes("rejected")) {
 		return "rejected";

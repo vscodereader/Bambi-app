@@ -4,14 +4,17 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
+import { trackContactIntent } from "@/lib/bambi/ga-interaction";
+import { trackJobView } from "@/lib/bambi/ga-job";
 import { SEEKER_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { formatMinimumWageLabel } from "@/lib/bambi/minimum-wage";
 import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
 import { formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
-import { Badge, Button, Card, InfoTile } from "../ds";
+import { Avatar, Badge, Button, Card, InfoTile } from "../ds";
 import {
 	AlertCircle,
 	BriefcaseIcon,
@@ -38,6 +41,15 @@ interface SeekerJobDetailResponsiveProps {
 	onReport: () => void;
 	onStartChat: () => void;
 }
+
+const displayJobTitle = (title: string, company: string): string => {
+	const withoutCompany = title
+		.split(company)
+		.join(" ")
+		.replace(/\s+/g, " ")
+		.trim();
+	return withoutCompany || "채용 공고";
+};
 
 const formatReviewValue = ({
 	rating,
@@ -87,7 +99,17 @@ function DescriptionBlock({ block }: { block: JobDescriptionBlock }) {
 // truncate를 걸지 않고 아이콘을 상단 정렬(items-start)한다.
 // 수집 공고 상세(seeker-crawled-job-detail)도 같은 타일을 쓰므로 export한다 — 연락처 안내
 // 문구가 두 화면에서 갈라지면 한쪽만 고쳐지는 사고가 난다.
-export function EmployerPhoneTile({ phone }: { phone: string }) {
+export function EmployerPhoneTile({
+	itemVariant,
+	jobId,
+	phone,
+	trackAnalytics = true,
+}: {
+	itemVariant?: "crawled" | "native";
+	jobId?: string;
+	phone: string;
+	trackAnalytics?: boolean;
+}) {
 	return (
 		<div className="flex min-w-0 items-start gap-3">
 			<div className="inline-flex size-12 flex-[0_0_48px] items-center justify-center rounded-md bg-secondary text-foreground">
@@ -104,6 +126,11 @@ export function EmployerPhoneTile({ phone }: { phone: string }) {
 					<a
 						className="font-bold text-base text-foreground underline-offset-2 hover:underline"
 						href={`tel:${phone}`}
+						onClick={() => {
+							if (trackAnalytics && jobId && itemVariant) {
+								trackContactIntent({ itemVariant, jobId, method: "phone" });
+							}
+						}}
 					>
 						{formatPhone(phone)}
 					</a>
@@ -146,6 +173,24 @@ export function SeekerJobDetailResponsive({
 	onStartChat,
 }: SeekerJobDetailResponsiveProps) {
 	const adBanners = useAdBannerJobs();
+	const viewedJobIdRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (viewedJobIdRef.current === job.id) {
+			return;
+		}
+		viewedJobIdRef.current = job.id;
+		trackJobView(job);
+	}, [job]);
+	const handleStartChat = () => {
+		if (job.exposureType !== "urgent") {
+			trackContactIntent({
+				itemVariant: "native",
+				jobId: job.id,
+				method: "chat",
+			});
+		}
+		onStartChat();
+	};
 	// 최저시급은 사이트 설정 공개 조회에 실려 있다(광고 슬롯이 같은 쿼리를 이미 쓰므로
 	// 추가 요청이 생기지 않는다). 미설정·실패는 헬퍼가 코드 기본값으로 폴백한다.
 	const siteSettings = useQuery(
@@ -220,11 +265,26 @@ export function SeekerJobDetailResponsive({
 							</div>
 							<div>
 								<h1 className="m-0 font-extrabold text-[28px] leading-tight md:text-[34px]">
-									{job.company} {job.title}
+									{displayJobTitle(job.title, job.company)}
 								</h1>
 								<p className="mt-2 mb-0 text-muted-foreground">
 									{job.location} · {job.type}
 								</p>
+								<div className="mt-3 flex items-center gap-2">
+									<Avatar
+										name={job.company}
+										size="sm"
+										src={job.createdByProfileImageUrl}
+									/>
+									<div className="min-w-0 text-sm">
+										<div className="truncate font-semibold">{job.company}</div>
+										{job.createdByDisplayName ? (
+											<div className="truncate text-muted-foreground">
+												등록자 {job.createdByDisplayName}
+											</div>
+										) : null}
+									</div>
+								</div>
 							</div>
 							{/* 대표 이미지는 목록·카드 썸네일 전용이라 상세에서는 노출하지 않는다. */}
 							<div className="flex flex-col gap-3">
@@ -248,7 +308,12 @@ export function SeekerJobDetailResponsive({
 									value={job.hours}
 								/>
 								{job.employerVerifiedPhone ? (
-									<EmployerPhoneTile phone={job.employerVerifiedPhone} />
+									<EmployerPhoneTile
+										itemVariant="native"
+										jobId={job.id}
+										phone={job.employerVerifiedPhone}
+										trackAnalytics={job.exposureType !== "urgent"}
+									/>
 								) : null}
 								<InfoTile
 									icon={<BriefcaseIcon />}
@@ -375,7 +440,7 @@ export function SeekerJobDetailResponsive({
 								<Button
 									block
 									className="mt-5 shadow-none"
-									onClick={onStartChat}
+									onClick={handleStartChat}
 									rightIcon={<Message />}
 								>
 									1:1 채팅 시작
@@ -413,7 +478,7 @@ export function SeekerJobDetailResponsive({
 						<Button
 							block
 							className="shadow-none"
-							onClick={onStartChat}
+							onClick={handleStartChat}
 							rightIcon={<Message />}
 						>
 							1:1 채팅 시작

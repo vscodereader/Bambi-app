@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 
 import {
 	createEmptyDescriptionBlock,
+	DESCRIPTION_BLOCK_MAX_COUNT,
 	type JobDescriptionBlockFormValue,
 	type JobDescriptionBlockType,
 } from "@/lib/bambi-job-form";
@@ -38,7 +39,15 @@ export function JobPostBlockEditor({
 	error,
 	onChange,
 }: JobPostBlockEditorProps) {
+	const isFull = blocks.length >= DESCRIPTION_BLOCK_MAX_COUNT;
+
 	const addBlock = (type: JobDescriptionBlockType) => {
+		// 제출 검증(getDescriptionBlockError)과 같은 상한. 추가 시점에 막지 않으면
+		// 상한을 넘겨 채운 뒤 제출할 때야 거부당한다.
+		if (isFull) {
+			return;
+		}
+
 		onChange([...blocks, createEmptyDescriptionBlock(type)]);
 	};
 
@@ -78,6 +87,7 @@ export function JobPostBlockEditor({
 				<span className="font-medium text-sm">블록형 상세 설명</span>
 				{blockTypeOrder.map((type) => (
 					<Button
+						disabled={isFull}
 						key={type}
 						onClick={() => addBlock(type)}
 						size="sm"
@@ -89,6 +99,12 @@ export function JobPostBlockEditor({
 					</Button>
 				))}
 			</div>
+			{isFull ? (
+				<p className="text-muted-foreground text-xs">
+					상세 블록은 최대 {DESCRIPTION_BLOCK_MAX_COUNT}개까지 등록할 수
+					있습니다.
+				</p>
+			) : null}
 			{blocks.length === 0 ? (
 				<p className="border border-dashed p-3 text-muted-foreground text-sm">
 					블록을 추가하면 기본 상세 설명 대신 블록 내용이 공개됩니다.

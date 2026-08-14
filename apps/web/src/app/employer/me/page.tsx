@@ -1,5 +1,20 @@
 "use client";
 
+import {
+	Alert,
+	AlertDescription,
+	AlertTitle,
+} from "@bambi-app/ui/components/alert";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Avatar, AvatarFallback } from "@bambi-app/ui/components/avatar";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
@@ -17,7 +32,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
 	type BusinessDocument,
@@ -314,14 +329,23 @@ export default function EmployerMePage() {
 					biznumCheckEnabled={biznumCheckEnabled}
 					businessDocuments={organizationProfiles[0]?.businessDocuments ?? []}
 					defaultBusinessRegistrationNumber={
-						organizationProfiles[0]?.businessRegistrationNumber ?? ""
+						organizationProfiles[0]?.draftBusinessRegistrationNumber ??
+						organizationProfiles[0]?.businessRegistrationNumber ??
+						""
 					}
 					defaultBusinessStartDate={formatBusinessStartDate(
-						organizationProfiles[0]?.businessStartDate
+						organizationProfiles[0]?.draftBusinessStartDate ??
+							organizationProfiles[0]?.businessStartDate
 					)}
-					defaultDisplayName={organizationProfiles[0]?.displayName ?? ""}
+					defaultDisplayName={
+						organizationProfiles[0]?.draftDisplayName ??
+						organizationProfiles[0]?.displayName ??
+						""
+					}
 					defaultRepresentativeName={
-						organizationProfiles[0]?.representativeName ?? ""
+						organizationProfiles[0]?.draftRepresentativeName ??
+						organizationProfiles[0]?.representativeName ??
+						""
 					}
 					isRejected={
 						organizationProfiles[0]?.verificationStatus === "rejected"
@@ -531,6 +555,97 @@ function BusinessInfoForm({
 	);
 	const [startDate, setStartDate] = useState(defaultBusinessStartDate);
 	const [showValidation, setShowValidation] = useState(false);
+	const [showChangeConfirm, setShowChangeConfirm] = useState(false);
+	const [showLeaveBlocked, setShowLeaveBlocked] = useState(false);
+	const [isSubmitHighlighted, setIsSubmitHighlighted] = useState(false);
+	const submitButtonRef = useRef<HTMLButtonElement>(null);
+	const isPending = verificationStatus === "pending";
+	const isChangesUnsubmitted = verificationStatus === "changes_unsubmitted";
+	const draftMutation = useMutation(
+		orpc.bambi.onboarding.saveEmployerBusinessDraft.mutationOptions({
+			onSuccess: async () => {
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.onboarding.getMine.queryKey(),
+				});
+			},
+		})
+	);
+
+	useEffect(() => {
+		if (
+			!(
+				organizationId &&
+				(verificationStatus === "verified" || isChangesUnsubmitted)
+			)
+		) {
+			return;
+		}
+		const changed =
+			displayName.trim() !== defaultDisplayName.trim() ||
+			brn.trim() !== defaultBusinessRegistrationNumber.trim() ||
+			representativeName.trim() !== defaultRepresentativeName.trim() ||
+			startDate !== defaultBusinessStartDate;
+		if (!changed) {
+			return;
+		}
+		const timer = window.setTimeout(() => {
+			draftMutation.mutate({
+				organizationId,
+				displayName: displayName.trim(),
+				businessRegistrationNumber: brn.trim(),
+				representativeName: representativeName.trim(),
+				businessStartDate: startDate,
+			});
+		}, 500);
+		return () => window.clearTimeout(timer);
+	}, [
+		brn,
+		defaultBusinessRegistrationNumber,
+		defaultBusinessStartDate,
+		defaultDisplayName,
+		defaultRepresentativeName,
+		displayName,
+		draftMutation.mutate,
+		isChangesUnsubmitted,
+		organizationId,
+		representativeName,
+		startDate,
+		verificationStatus,
+	]);
+
+	useEffect(() => {
+		if (!isChangesUnsubmitted) {
+			return;
+		}
+		const beforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+		const click = (event: MouseEvent) => {
+			const link = (event.target as HTMLElement).closest<HTMLAnchorElement>(
+				"a[href]"
+			);
+			if (!link) {
+				return;
+			}
+			const destination = new URL(link.href, window.location.href);
+			if (destination.origin !== window.location.origin) {
+				return;
+			}
+			event.preventDefault();
+			setShowLeaveBlocked(true);
+		};
+		const popState = () => {
+			window.history.pushState(null, "", window.location.href);
+			setShowLeaveBlocked(true);
+		};
+		window.history.pushState(null, "", window.location.href);
+		window.addEventListener("beforeunload", beforeUnload);
+		window.addEventListener("popstate", popState);
+		document.addEventListener("click", click, true);
+		return () => {
+			window.removeEventListener("beforeunload", beforeUnload);
+			window.removeEventListener("popstate", popState);
+			document.removeEventListener("click", click, true);
+		};
+	}, [isChangesUnsubmitted]);
 
 	const submitMutation = useMutation(
 		orpc.bambi.onboarding.submitEmployerBusinessInfo.mutationOptions({
@@ -538,6 +653,7 @@ function BusinessInfoForm({
 				toast.error(error.message || "업체 정보를 제출하지 못했습니다.");
 			},
 			onSuccess: async () => {
+				setShowChangeConfirm(false);
 				toast.success("업체 정보를 제출했습니다. 운영자 승인을 기다려 주세요.");
 				await queryClient.invalidateQueries({
 					queryKey: orpc.bambi.onboarding.getMine.queryKey(),
@@ -564,12 +680,10 @@ function BusinessInfoForm({
 		brn.trim() === defaultBusinessRegistrationNumber.trim() &&
 		representativeName.trim() === defaultRepresentativeName.trim() &&
 		startDate === defaultBusinessStartDate;
-	const blockUnchanged = isUnchanged && !isRejected;
+	const blockUnchanged = isUnchanged && !isRejected && !isChangesUnsubmitted;
 
-	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-		if (nameError || brnError || representativeNameError || startDateError) {
-			setShowValidation(true);
+	const submitBusinessInfo = () => {
+		if (submitMutation.isPending) {
 			return;
 		}
 		submitMutation.mutate({
@@ -580,91 +694,181 @@ function BusinessInfoForm({
 		});
 	};
 
+	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (nameError || brnError || representativeNameError || startDateError) {
+			setShowValidation(true);
+			return;
+		}
+		if (verificationStatus === "verified" || isChangesUnsubmitted) {
+			setShowChangeConfirm(true);
+			return;
+		}
+		submitBusinessInfo();
+	};
+
+	const focusSubmit = () => {
+		setShowLeaveBlocked(false);
+		// AlertDialog가 닫혀 포커스 트랩이 해제된 다음 제출 버튼으로 이동한다.
+		window.setTimeout(() => {
+			submitButtonRef.current?.scrollIntoView({
+				behavior: "smooth",
+				block: "center",
+			});
+			submitButtonRef.current?.focus();
+			setIsSubmitHighlighted(true);
+			window.setTimeout(() => setIsSubmitHighlighted(false), 2200);
+		}, 0);
+	};
+
 	return (
-		<form onSubmit={handleSubmit}>
-			<Card>
-				<CardContent className="flex flex-col gap-4">
-					<div className="grid gap-4 sm:grid-cols-2">
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="business-name">업체명</Label>
-							<Input
-								aria-invalid={showValidation && Boolean(nameError)}
-								id="business-name"
-								onChange={(event) => setDisplayName(event.target.value)}
-								placeholder="예: 밤비 라운지"
-								value={displayName}
-							/>
-							<FieldError
-								id="business-name-error"
-								message={showValidation ? nameError : ""}
-							/>
+		<>
+			<form onSubmit={handleSubmit}>
+				{verificationStatus === "verified" ? (
+					<Alert className="mb-4 border-primary/40 bg-primary/5">
+						<AlertTitle>인증 정보 변경 전 확인해 주세요</AlertTitle>
+						<AlertDescription>
+							인증 완료 후 업체 정보나 인증 서류를 변경하면 변경사항 미제출
+							상태로 전환됩니다. 기존 공고와 광고는 비공개 처리되며, 재승인
+							전까지 공고·광고 등록과 채팅 송수신을 이용할 수 없습니다.
+						</AlertDescription>
+					</Alert>
+				) : null}
+				{isChangesUnsubmitted ? (
+					<Alert className="mb-4 border-primary bg-primary/10">
+						<AlertTitle>변경사항 미제출</AlertTitle>
+						<AlertDescription>
+							변경사항이 아직 제출되지 않았습니다. 기존 공고와 광고가 비공개
+							처리되었으며 채팅 송수신이 제한됩니다. 업체 정보 제출 후 운영자
+							승인을 받아야 다시 이용할 수 있습니다.
+						</AlertDescription>
+					</Alert>
+				) : null}
+				<Card>
+					<CardContent className="flex flex-col gap-4">
+						<div className="grid gap-4 sm:grid-cols-2">
+							<div className="flex flex-col gap-1.5">
+								<Label htmlFor="business-name">업체명</Label>
+								<Input
+									aria-invalid={showValidation && Boolean(nameError)}
+									disabled={isPending}
+									id="business-name"
+									onChange={(event) => setDisplayName(event.target.value)}
+									placeholder="예: 밤비 라운지"
+									value={displayName}
+								/>
+								<FieldError
+									id="business-name-error"
+									message={showValidation ? nameError : ""}
+								/>
+							</div>
+							<div className="flex flex-col gap-1.5">
+								<Label htmlFor="business-brn">사업자 등록 번호</Label>
+								<Input
+									aria-invalid={showValidation && Boolean(brnError)}
+									disabled={isPending}
+									id="business-brn"
+									onChange={(event) => setBrn(event.target.value)}
+									placeholder="000-00-00000"
+									value={brn}
+								/>
+								<FieldError
+									id="business-brn-error"
+									message={showValidation ? brnError : ""}
+								/>
+							</div>
+							<div className="flex flex-col gap-1.5">
+								<Label htmlFor="business-representative">대표자 성명</Label>
+								<Input
+									aria-invalid={
+										showValidation && Boolean(representativeNameError)
+									}
+									disabled={isPending}
+									id="business-representative"
+									onChange={(event) =>
+										setRepresentativeName(event.target.value)
+									}
+									placeholder="예: 홍길동"
+									value={representativeName}
+								/>
+								<FieldError
+									id="business-representative-error"
+									message={showValidation ? representativeNameError : ""}
+								/>
+							</div>
+							<div className="flex flex-col gap-1.5">
+								<Label htmlFor="business-start-date">개업일자</Label>
+								<Input
+									aria-invalid={showValidation && Boolean(startDateError)}
+									disabled={isPending}
+									id="business-start-date"
+									onChange={(event) => setStartDate(event.target.value)}
+									type="date"
+									value={startDate}
+								/>
+								<FieldError
+									id="business-start-date-error"
+									message={showValidation ? startDateError : ""}
+								/>
+							</div>
 						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="business-brn">사업자 등록 번호</Label>
-							<Input
-								aria-invalid={showValidation && Boolean(brnError)}
-								id="business-brn"
-								onChange={(event) => setBrn(event.target.value)}
-								placeholder="000-00-00000"
-								value={brn}
-							/>
-							<FieldError
-								id="business-brn-error"
-								message={showValidation ? brnError : ""}
-							/>
+						<p className="text-muted-foreground text-xs">
+							{biznumCheckEnabled
+								? "대표자 성명과 개업일자는 사업자등록증에 적힌 그대로 입력해야 국세청 진위확인을 통과합니다."
+								: "국세청 사업자등록정보 진위확인은 곧 준비될 기능이에요. 지금은 제출하신 정보를 운영자가 사업자등록증과 직접 대조해 승인하니, 대표자 성명과 개업일자를 사업자등록증에 적힌 그대로 입력해 주세요."}
+						</p>
+						<BusinessDocumentUploader
+							documents={businessDocuments}
+							organizationId={organizationId}
+							verificationStatus={verificationStatus}
+						/>
+						<div className="flex justify-end">
+							<Button
+								className={`w-full sm:w-auto ${isSubmitHighlighted ? "animate-pulse ring-2 ring-primary ring-offset-4" : ""}`}
+								disabled={submitMutation.isPending || blockUnchanged}
+								ref={submitButtonRef}
+								type="submit"
+							>
+								{isRejected ? "업체 정보 재제출" : "업체 정보 제출"}
+							</Button>
 						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="business-representative">대표자 성명</Label>
-							<Input
-								aria-invalid={
-									showValidation && Boolean(representativeNameError)
-								}
-								id="business-representative"
-								onChange={(event) => setRepresentativeName(event.target.value)}
-								placeholder="예: 홍길동"
-								value={representativeName}
-							/>
-							<FieldError
-								id="business-representative-error"
-								message={showValidation ? representativeNameError : ""}
-							/>
-						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="business-start-date">개업일자</Label>
-							<Input
-								aria-invalid={showValidation && Boolean(startDateError)}
-								id="business-start-date"
-								onChange={(event) => setStartDate(event.target.value)}
-								type="date"
-								value={startDate}
-							/>
-							<FieldError
-								id="business-start-date-error"
-								message={showValidation ? startDateError : ""}
-							/>
-						</div>
-					</div>
-					<p className="text-muted-foreground text-xs">
-						{biznumCheckEnabled
-							? "대표자 성명과 개업일자는 사업자등록증에 적힌 그대로 입력해야 국세청 진위확인을 통과합니다."
-							: "국세청 사업자등록정보 진위확인은 곧 준비될 기능이에요. 지금은 제출하신 정보를 운영자가 사업자등록증과 직접 대조해 승인하니, 대표자 성명과 개업일자를 사업자등록증에 적힌 그대로 입력해 주세요."}
-					</p>
-					<BusinessDocumentUploader
-						documents={businessDocuments}
-						organizationId={organizationId}
-						verificationStatus={verificationStatus}
-					/>
-					<div className="flex justify-end">
-						<Button
-							className="w-full sm:w-auto"
-							disabled={submitMutation.isPending || blockUnchanged}
-							type="submit"
+					</CardContent>
+				</Card>
+			</form>
+			<AlertDialog onOpenChange={setShowChangeConfirm} open={showChangeConfirm}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>업체 정보를 변경하시겠습니까?</AlertDialogTitle>
+						<AlertDialogDescription>
+							업체 정보를 제출하면 인증 대기 상태로 전환되며, 운영자 승인 전까지
+							기존 공고와 광고가 비공개 처리되고 채팅 송수신이 제한됩니다.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={submitMutation.isPending}
+							onClick={submitBusinessInfo}
 						>
-							{isRejected ? "업체 정보 재제출" : "업체 정보 제출"}
-						</Button>
-					</div>
-				</CardContent>
-			</Card>
-		</form>
+							변경사항 제출
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+			<AlertDialog onOpenChange={setShowLeaveBlocked} open={showLeaveBlocked}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>업체 정보를 먼저 제출해 주세요</AlertDialogTitle>
+						<AlertDialogDescription>
+							사업자 인증 서류가 변경되었기에 업체 정보 제출을 누르기 전까지
+							뒤로가기가 불가합니다.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogAction onClick={focusSubmit}>확인</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</>
 	);
 }

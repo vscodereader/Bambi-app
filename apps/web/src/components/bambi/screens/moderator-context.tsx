@@ -73,12 +73,16 @@ interface ModContextValue {
 		report: Report,
 		status: CommunityTargetStatus,
 		reason: string
-	) => void;
+	) => Promise<boolean>;
 	openReports: number;
 	queue: QueueItem[];
 	reports: Report[];
 	resolveQueue: (id: string, action: QueueVerdict, reason?: string) => void;
-	resolveReport: (id: string, action: "dismiss" | "act") => void;
+	resolveReport: (
+		id: string,
+		action: "dismiss" | "act",
+		reason?: string
+	) => Promise<boolean>;
 	// 탈퇴 복구(deletedAt 해제). 파기 완료 계정 등 서버 거절 사유를 그대로 띄워야 해서
 	// 성공 여부만 돌려준다.
 	restoreAccount: (id: string, reason: string) => Promise<boolean>;
@@ -353,7 +357,9 @@ const deriveReportCommunity = (input: {
 				createdAt: comment.createdAt,
 				id: comment.id,
 				kind: "comment",
-				postId: comment.postId,
+				// 수집 글 댓글은 원글(community_post) 행이 없어 postId가 null로 온다 —
+				// 원글 링크가 없는 상태(undefined)로 정규화한다.
+				postId: comment.postId ?? undefined,
 				status: comment.status,
 				title: comment.postTitle,
 			},
@@ -472,6 +478,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				id: item.id,
 				note: attachmentNote ? `${baseNote}\n${attachmentNote}` : baseNote,
 				reason: reportReasonLabel(item.reason),
+				resolutionReason: item.resolutionReason,
 				reporter: reporterName,
 				reporterRole,
 				sev: getReportSeverity(item.reason, item.status),
@@ -603,26 +610,31 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			setSelected((s) => s.filter((x) => x !== id));
 			flash(QUEUE_VERDICT_TOAST[action]);
 		};
-		const resolveReport = (id: string, action: "dismiss" | "act") => {
-			setReportStatusMutation.mutate(
-				{
+		const resolveReport = async (
+			id: string,
+			action: "dismiss" | "act",
+			reason?: string
+		) => {
+			try {
+				await setReportStatusMutation.mutateAsync({
 					reason:
-						action === "dismiss"
+						reason?.trim() ||
+						(action === "dismiss"
 							? "운영자가 신고를 기각했습니다."
-							: "운영자가 신고 조치를 완료했습니다.",
+							: "운영자가 신고 조치를 완료했습니다."),
 					reportId: id,
 					status: action === "dismiss" ? "dismissed" : "resolved",
-				},
-				{
-					onSuccess: async () => {
-						await invalidateReports();
-					},
-					onError: () =>
-						flash("신고 상태를 API에 반영하지 못했어요. 다시 시도해 주세요."),
-				}
-			);
+				});
+			} catch {
+				flash(
+					"사유가 500자를 넘어 신고 상태를 API에 반영하지 못했어요. 사유는 500자 이내로 입력해 주세요."
+				);
+				return false;
+			}
 
+			await invalidateReports();
 			flash(action === "dismiss" ? "신고를 기각했어요" : "조치를 적용했어요");
+			return true;
 		};
 		// 적용이 끝날 때까지 기다렸다가 결과를 알려준다 — 실패한 제재로 화면이 먼저
 		// 넘어가면 운영자가 반영되지 않은 걸 모른 채 목록으로 돌아간다.
@@ -695,44 +707,42 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		};
 		// 커뮤니티 대상(글·댓글) 콘텐츠 조치. 신고 상태 변경(resolveReport)과는 별개로,
 		// kind에 맞는 프로시저를 호출하고 성공 시 신고 목록을 무효화해 상태 배지를 갱신한다.
-		const moderateCommunityTarget = (
+		const moderateCommunityTarget = async (
 			report: Report,
 			status: CommunityTargetStatus,
 			reason: string
 		) => {
 			const communityTarget = report.communityTarget;
 			if (!communityTarget) {
-				return;
+				return false;
 			}
 
-			const onSuccess = async () => {
-				await invalidateReports();
-				sonnerToast(communityActionMessage(communityTarget.kind, status));
-			};
-			const onError = () =>
-				sonnerToast("조치를 반영하지 못했어요. 다시 시도해 주세요.");
-
-			if (communityTarget.kind === "post") {
-				setPostStatusByAdminMutation.mutate(
-					{
+			try {
+				if (communityTarget.kind === "post") {
+					await setPostStatusByAdminMutation.mutateAsync({
 						postId: communityTarget.id,
 						reason,
 						reportId: report.id,
 						status,
-					},
-					{ onError, onSuccess }
-				);
-			} else {
-				setCommentStatusByAdminMutation.mutate(
-					{
+					});
+				} else {
+					await setCommentStatusByAdminMutation.mutateAsync({
 						commentId: communityTarget.id,
 						reason,
 						reportId: report.id,
 						status,
-					},
-					{ onError, onSuccess }
-				);
+					});
+				}
+			} catch {
+				sonnerToast("조치를 반영하지 못했어요. 다시 시도해 주세요.");
+				return false;
 			}
+
+			const resolved = await resolveReport(report.id, "act", reason);
+			if (resolved) {
+				sonnerToast(communityActionMessage(communityTarget.kind, status));
+			}
+			return resolved;
 		};
 		const applyQueueBulkAction = (
 			selectedIds: string[],

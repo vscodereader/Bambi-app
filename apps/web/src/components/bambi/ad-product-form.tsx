@@ -55,7 +55,11 @@ export interface PriceOption {
 export interface AdProductDraft {
 	autoBoostsPerDay: number;
 	benefits: string[];
+	// 상세이미지 디자인 제작 애드온 가격. null이면 이 상품에는 옵션을 팔지 않는다.
+	detailDesignPrice: number | null;
 	discountCampaigns: DiscountCampaignDraft[];
+	// 수동 끌어올리기 최소 간격(분). 연타를 막아 목록 품질을 지킨다. 기본 10분.
+	manualBoostCooldownMinutes: number;
 	manualBoostsPerDay: number;
 	name: string;
 	previewImageUrl: string | null;
@@ -65,7 +69,9 @@ export interface AdProductDraft {
 }
 
 interface BenefitField {
-	id: number;
+	// id는 렌더 간 결정적이어야 한다 — 초기 항목은 인덱스 기반, 추가 항목은 카운터 기반
+	// 문자열이라 서로 충돌하지 않는다(서버=클라이언트 동일, 하이드레이션 불일치 방지).
+	id: string;
 	value: string;
 }
 interface PriceOptionField extends PriceOption {
@@ -74,10 +80,179 @@ interface PriceOptionField extends PriceOption {
 	campaignEndsAt?: Date | null;
 	campaignStartsAt?: Date | null;
 	campaignStatus?: "active" | "cancelled" | "ended" | "planned";
-	id: number;
+	id: string;
 }
 
 const MAX_PREVIEW_IMAGE_BYTES = 1_500_000;
+
+// 디자인 제작 가격은 빈 문자열 = 미제공(null)로 들고 있는다. 숫자로만 들고 있으면
+// "0원 제공"과 "미제공"을 구분할 수 없다.
+const toPriceInput = (value?: number | null) =>
+	value == null ? "" : String(value);
+const fromPriceInput = (value: string) =>
+	value.trim() === "" ? null : Number(value);
+
+const clampPercent = (value: number) =>
+	Math.max(0, Math.min(100, Math.floor(value)));
+
+// 폼 상태 → 저장 draft 정규화·검증. 분기가 많아 컴포넌트 복잡도를 낮추려 모듈로 분리했다.
+// 검증 실패 시 { error }(토스트 문구), 성공 시 { draft }를 돌려준다.
+const buildProductDraft = (state: {
+	autoBoostsPerDay: number;
+	benefits: BenefitField[];
+	detailDesignPrice: string;
+	isBannerTemplate: boolean;
+	manualBoostCooldownMinutes: number;
+	manualBoostsPerDay: number;
+	name: string;
+	previewImageUrl: string | null;
+	previewTemplate: AdPreviewTemplateValue;
+	priceOptions: PriceOptionField[];
+	tagline: string;
+}): { draft: AdProductDraft } | { error: string } => {
+	const normalizedPriceOptions = state.priceOptions
+		.filter((option) => option.days > 0)
+		.map(({ amount, days, discountPercent }) => {
+			const percent = discountPercent ? clampPercent(discountPercent) : 0;
+			// 0이면 discountPercent 필드를 생략(undefined), 1~100이면 포함한다.
+			return percent > 0
+				? { amount, days, discountPercent: percent }
+				: { amount, days };
+		});
+	const dayValues = normalizedPriceOptions.map((option) => option.days);
+	if (new Set(dayValues).size !== dayValues.length) {
+		return {
+			error: "같은 이용 기간이 중복됩니다. 기간별로 하나만 등록해주세요.",
+		};
+	}
+	const invalidCampaign = state.priceOptions.find(
+		(option) =>
+			option.campaignEnabled &&
+			(!option.campaignStartsAt || option.campaignDiscountPercent == null)
+	);
+	if (invalidCampaign) {
+		return { error: "기간 할인의 시작 일시와 할인율을 모두 입력해 주세요." };
+	}
+	const discountCampaigns = state.priceOptions.flatMap((option) =>
+		option.campaignEnabled &&
+		option.campaignStartsAt &&
+		option.campaignDiscountPercent != null
+			? [
+					{
+						discountPercent: clampPercent(option.campaignDiscountPercent),
+						endsAt: option.campaignEndsAt ?? null,
+						priceOptionDays: option.days,
+						startsAt: option.campaignStartsAt,
+					},
+				]
+			: []
+	);
+	return {
+		draft: {
+			// 배너형은 끌어올리기 미제공 — 항상 0으로 저장(서버도 거부).
+			autoBoostsPerDay: state.isBannerTemplate ? 0 : state.autoBoostsPerDay,
+			benefits: state.benefits
+				.map((item) => item.value.trim())
+				.filter((value) => value.length > 0),
+			detailDesignPrice: fromPriceInput(state.detailDesignPrice),
+			discountCampaigns,
+			// 최소 1분으로 보정. 배너형은 서버 기본 10이 적용되므로 값을 보내도 무방하다.
+			manualBoostCooldownMinutes: Math.max(1, state.manualBoostCooldownMinutes),
+			manualBoostsPerDay: state.isBannerTemplate ? 0 : state.manualBoostsPerDay,
+			name: state.name.trim(),
+			previewImageUrl: state.previewImageUrl,
+			previewTemplate: state.previewTemplate,
+			priceOptions: normalizedPriceOptions,
+			tagline: state.tagline.trim(),
+		},
+	};
+};
+
+// 끌어올리기(수동·자동·쿨다운) 설정 필드. 배너형엔 미제공 안내만. 컴포넌트 복잡도를
+// 낮추려 분리했다(리스팅형에서만 실제 입력을 렌더).
+function BoostSettingsFields({
+	autoBoostsPerDay,
+	isBannerTemplate,
+	manualBoostCooldownMinutes,
+	manualBoostsPerDay,
+	setAutoBoostsPerDay,
+	setManualBoostCooldownMinutes,
+	setManualBoostsPerDay,
+}: {
+	autoBoostsPerDay: number;
+	isBannerTemplate: boolean;
+	manualBoostCooldownMinutes: number;
+	manualBoostsPerDay: number;
+	setAutoBoostsPerDay: (value: number) => void;
+	setManualBoostCooldownMinutes: (value: number) => void;
+	setManualBoostsPerDay: (value: number) => void;
+}) {
+	if (isBannerTemplate) {
+		return (
+			<p className="m-0 text-muted-foreground text-sm">
+				배너형 광고는 끌어올리기(수동·자동)를 제공하지 않아 횟수 설정이
+				없습니다. 끌어올리기는 스페셜·급구·추천 리스팅 상품에만 제공됩니다.
+			</p>
+		);
+	}
+
+	return (
+		<>
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-manual-boosts">일일 끌어올리기 횟수</Label>
+				<Input
+					className="w-24"
+					id="p-manual-boosts"
+					onChange={(e) => setManualBoostsPerDay(Number(e.target.value) || 0)}
+					type="number"
+					value={manualBoostsPerDay === 0 ? "" : manualBoostsPerDay}
+				/>
+				<p className="m-0 text-muted-foreground text-xs">
+					이 상품을 구매한 공고가 하루에 쓸 수 있는 끌어올리기 횟수입니다.
+					비워두면 미제공(0회)입니다.
+				</p>
+			</div>
+
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-auto-boosts">
+					최소 노출 빈도 — 하루 N회 최상단 재노출 보장
+				</Label>
+				<Input
+					className="w-24"
+					id="p-auto-boosts"
+					onChange={(e) => setAutoBoostsPerDay(Number(e.target.value) || 0)}
+					type="number"
+					value={autoBoostsPerDay === 0 ? "" : autoBoostsPerDay}
+				/>
+				<p className="m-0 text-muted-foreground text-xs">
+					매일 이 횟수만큼 지정 시간대(09~21시)에 목록 최상단으로 자동
+					재게시됩니다. 타 공고 갱신 시 순위는 자연 변동합니다. 비워두면
+					미제공(0회)입니다.
+				</p>
+			</div>
+
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-manual-cooldown">수동 끌어올리기 최소 간격(분)</Label>
+				<Input
+					className="w-24"
+					id="p-manual-cooldown"
+					min={1}
+					onChange={(e) =>
+						setManualBoostCooldownMinutes(Number(e.target.value) || 0)
+					}
+					type="number"
+					value={
+						manualBoostCooldownMinutes === 0 ? "" : manualBoostCooldownMinutes
+					}
+				/>
+				<p className="m-0 text-muted-foreground text-xs">
+					구인자가 직접 누르는 끌어올리기의 최소 간격입니다. 연타를 막아 목록
+					품질을 지킵니다. 기본 10분.
+				</p>
+			</div>
+		</>
+	);
+}
 
 export function AdProductForm({
 	initialValue,
@@ -85,6 +260,7 @@ export function AdProductForm({
 	pending,
 	placementKind,
 	submitLabel = "저장",
+	urgentHidden,
 }: {
 	initialValue?: AdProductDraft;
 	onSubmit: (draft: AdProductDraft) => void;
@@ -94,22 +270,28 @@ export function AdProductForm({
 	// 위치를 아직 못 읽었으면(로딩·조회 실패) undefined로 전체 선택지를 유지한다.
 	placementKind?: AdPlacementKind;
 	submitLabel?: string;
+	// 사이트 설정에서 급구 섹션이 숨김이면 true. 노출 영역 선택지에서 "급구 채용 리스팅"을
+	// 뺀다(단, 이미 급구로 저장된 상품 수정 시에는 값 유실 방지를 위해 유지).
+	urgentHidden?: boolean;
 }) {
+	// 추가 버튼으로 만드는 항목에만 쓰는 카운터 기반 id(`new-*`). 초기 항목은 아래에서
+	// 인덱스 기반 id(`benefit-*`·`price-*`)로 만든다 — useState 초기화 함수를 순수하게
+	// 유지해야 SSR·CSR·StrictMode 이중호출에서 id가 어긋나지 않는다(하이드레이션 불일치 방지).
 	const nextFieldId = useRef(0);
-	const makeId = () => nextFieldId.current++;
+	const makeId = () => `new-${nextFieldId.current++}`;
 
 	const [name, setName] = useState(initialValue?.name ?? "");
 	const [tagline, setTagline] = useState(initialValue?.tagline ?? "");
 	const [benefits, setBenefits] = useState<BenefitField[]>(() =>
 		(initialValue?.benefits.length ? initialValue.benefits : [""]).map(
-			(value) => ({ id: makeId(), value })
+			(value, index) => ({ id: `benefit-${index}`, value })
 		)
 	);
 	const [priceOptions, setPriceOptions] = useState<PriceOptionField[]>(() =>
 		(initialValue?.priceOptions.length
 			? initialValue.priceOptions
 			: [{ amount: 0, days: 30 }]
-		).map((o) => {
+		).map((o, index) => {
 			const campaign = selectEditableAdCampaign(
 				initialValue?.discountCampaigns ?? [],
 				o.days
@@ -117,7 +299,7 @@ export function AdProductForm({
 			const campaignEnabled =
 				campaign?.status === "active" || campaign?.status === "planned";
 			return {
-				id: makeId(),
+				id: `price-${index}`,
 				...o,
 				campaignDiscountPercent: campaign?.discountPercent,
 				campaignEnabled,
@@ -127,8 +309,6 @@ export function AdProductForm({
 			};
 		})
 	);
-	const clampPercent = (value: number) =>
-		Math.max(0, Math.min(100, Math.floor(value)));
 	const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(
 		initialValue?.previewImageUrl ?? null
 	);
@@ -140,16 +320,26 @@ export function AdProductForm({
 	const [autoBoostsPerDay, setAutoBoostsPerDay] = useState(
 		initialValue?.autoBoostsPerDay ?? 0
 	);
+	const [manualBoostCooldownMinutes, setManualBoostCooldownMinutes] = useState(
+		initialValue?.manualBoostCooldownMinutes ?? 10
+	);
+	const [detailDesignPrice, setDetailDesignPrice] = useState(
+		toPriceInput(initialValue?.detailDesignPrice)
+	);
 	const [pendingDaysChange, setPendingDaysChange] = useState<{
 		days: number;
-		id: number;
+		id: string;
 	} | null>(null);
 	// 배너형(프리미엄·레거시 사이드) 판정은 광고 배너 슬롯 표에서 파생시킨 공용 헬퍼를 쓴다.
 	// 끌어올리기(수동·자동)는 리스팅형(스페셜·급구·추천)에만 제공된다.
 	const isBannerTemplate = isBannerPreviewTemplate(previewTemplate);
 	// 게재 위치 유형에 맞는 선택지만 남긴다(판정은 ad-preview-templates의 공용 헬퍼).
-	const templateOptions =
-		getPreviewTemplateOptionsForPlacementKind(placementKind);
+	// 급구 숨김이면 "급구 채용 리스팅"을 뺀다 — 단 현재 값이 이미 urgent-list면(기존 상품
+	// 수정) 옵션을 유지해 폼이 깨지지 않게 한다.
+	const templateOptions = getPreviewTemplateOptionsForPlacementKind(
+		placementKind,
+		{ includeUrgent: !urgentHidden || previewTemplate === "urgent-list" }
+	);
 	// 현재 값이 선택지에 없는 경우가 둘 있다: 레거시 side 값(좌/우 사이드 배너)이거나,
 	// 위치 유형과 어긋난 채 저장된 기존 상품이다. 둘 다 항목으로 함께 렌더해 편집 중
 	// 값이 유실되지 않게 한다. AD_PREVIEW_TEMPLATE_LABELS는 레거시 포함 전체 라벨을 제공한다.
@@ -161,13 +351,13 @@ export function AdProductForm({
 		placementKind
 	);
 
-	const setPrice = (id: number, patch: Partial<PriceOption>) =>
+	const setPrice = (id: string, patch: Partial<PriceOption>) =>
 		setPriceOptions((options) =>
 			options.map((option) =>
 				option.id === id ? { ...option, ...patch } : option
 			)
 		);
-	const setBenefit = (id: number, value: string) =>
+	const setBenefit = (id: string, value: string) =>
 		setBenefits((items) =>
 			items.map((item) => (item.id === id ? { ...item, value } : item))
 		);
@@ -187,57 +377,24 @@ export function AdProductForm({
 	};
 
 	const submit = () => {
-		const normalizedPriceOptions = priceOptions
-			.filter((option) => option.days > 0)
-			.map(({ amount, days, discountPercent }) => {
-				const percent = discountPercent ? clampPercent(discountPercent) : 0;
-				// 0이면 discountPercent 필드를 생략(undefined), 1~100이면 포함한다.
-				return percent > 0
-					? { amount, days, discountPercent: percent }
-					: { amount, days };
-			});
-		const dayValues = normalizedPriceOptions.map((option) => option.days);
-		if (new Set(dayValues).size !== dayValues.length) {
-			toast.error("같은 이용 기간이 중복됩니다. 기간별로 하나만 등록해주세요.");
-			return;
-		}
-		const invalidCampaign = priceOptions.find(
-			(option) =>
-				option.campaignEnabled &&
-				(!option.campaignStartsAt || option.campaignDiscountPercent == null)
-		);
-		if (invalidCampaign) {
-			toast.error("기간 할인의 시작 일시와 할인율을 모두 입력해 주세요.");
-			return;
-		}
-		const discountCampaigns = priceOptions.flatMap((option) =>
-			option.campaignEnabled &&
-			option.campaignStartsAt &&
-			option.campaignDiscountPercent != null
-				? [
-						{
-							discountPercent: clampPercent(option.campaignDiscountPercent),
-							endsAt: option.campaignEndsAt ?? null,
-							priceOptionDays: option.days,
-							startsAt: option.campaignStartsAt,
-						},
-					]
-				: []
-		);
-		onSubmit({
-			name: name.trim(),
-			tagline: tagline.trim(),
-			benefits: benefits
-				.map((item) => item.value.trim())
-				.filter((value) => value.length > 0),
-			discountCampaigns,
-			priceOptions: normalizedPriceOptions,
+		const result = buildProductDraft({
+			autoBoostsPerDay,
+			benefits,
+			detailDesignPrice,
+			isBannerTemplate,
+			manualBoostCooldownMinutes,
+			manualBoostsPerDay,
+			name,
 			previewImageUrl,
 			previewTemplate,
-			// 배너형은 끌어올리기 미제공 — 항상 0으로 저장(서버도 거부)
-			manualBoostsPerDay: isBannerTemplate ? 0 : manualBoostsPerDay,
-			autoBoostsPerDay: isBannerTemplate ? 0 : autoBoostsPerDay,
+			priceOptions,
+			tagline,
 		});
+		if ("error" in result) {
+			toast.error(result.error);
+			return;
+		}
+		onSubmit(result.draft);
 	};
 
 	return (
@@ -501,46 +658,36 @@ export function AdProductForm({
 				</p>
 			</div>
 
-			{isBannerTemplate ? (
-				<p className="m-0 text-muted-foreground text-sm">
-					배너형 광고는 끌어올리기(수동·자동)를 제공하지 않아 횟수 설정이
-					없습니다. 끌어올리기는 스페셜·급구·추천 리스팅 상품에만 제공됩니다.
-				</p>
-			) : (
-				<>
-					<div className="flex flex-col gap-1.5">
-						<Label htmlFor="p-manual-boosts">일일 끌어올리기 횟수</Label>
-						<Input
-							className="w-24"
-							id="p-manual-boosts"
-							onChange={(e) =>
-								setManualBoostsPerDay(Number(e.target.value) || 0)
-							}
-							type="number"
-							value={manualBoostsPerDay === 0 ? "" : manualBoostsPerDay}
-						/>
-						<p className="m-0 text-muted-foreground text-xs">
-							이 상품을 구매한 공고가 하루에 쓸 수 있는 끌어올리기 횟수입니다.
-							비워두면 미제공(0회)입니다.
-						</p>
-					</div>
+			<BoostSettingsFields
+				autoBoostsPerDay={autoBoostsPerDay}
+				isBannerTemplate={isBannerTemplate}
+				manualBoostCooldownMinutes={manualBoostCooldownMinutes}
+				manualBoostsPerDay={manualBoostsPerDay}
+				setAutoBoostsPerDay={setAutoBoostsPerDay}
+				setManualBoostCooldownMinutes={setManualBoostCooldownMinutes}
+				setManualBoostsPerDay={setManualBoostsPerDay}
+			/>
 
-					<div className="flex flex-col gap-1.5">
-						<Label htmlFor="p-auto-boosts">일일 자동 끌어올리기 횟수</Label>
-						<Input
-							className="w-24"
-							id="p-auto-boosts"
-							onChange={(e) => setAutoBoostsPerDay(Number(e.target.value) || 0)}
-							type="number"
-							value={autoBoostsPerDay === 0 ? "" : autoBoostsPerDay}
-						/>
-						<p className="m-0 text-muted-foreground text-xs">
-							이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는
-							횟수입니다(09~21시 균등 분배). 비워두면 미제공(0회)입니다.
-						</p>
-					</div>
-				</>
-			)}
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor="p-detail-design-price">
+					상세이미지 디자인 제작 가격
+				</Label>
+				<div className="flex items-center gap-2">
+					<Input
+						className="w-40"
+						id="p-detail-design-price"
+						min={0}
+						onChange={(e) => setDetailDesignPrice(e.target.value)}
+						type="number"
+						value={detailDesignPrice}
+					/>
+					<span className="text-muted-foreground text-sm">원</span>
+				</div>
+				<p className="m-0 text-muted-foreground text-xs">
+					이 상품을 구매하는 구인자가 함께 신청할 수 있는 디자이너 상세이미지
+					제작 옵션의 가격입니다. 비워두면 이 상품에는 옵션이 노출되지 않습니다.
+				</p>
+			</div>
 
 			<div className="flex flex-col gap-1.5">
 				<Label htmlFor="p-preview-image">게시 위치 미리보기</Label>

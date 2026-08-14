@@ -12,15 +12,18 @@
 // 미인증(anon·구 토큰) 방문자에게는 서버가 이미 렌더한 댓글을 그대로 보여주고 참여
 // 자리에 본인인증 카드를 세운다 — 추가 요청이 없어 크롤러 방문에도 부담이 없다.
 
-import { Button } from "@bambi-app/ui/components/button";
 import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogDescription,
-	DialogTitle,
-	DialogTrigger,
-} from "@bambi-app/ui/components/dialog";
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "@bambi-app/ui/components/alert-dialog";
+import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Textarea } from "@bambi-app/ui/components/textarea";
@@ -32,6 +35,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactElement, useState } from "react";
 import { toast } from "sonner";
+import { Avatar } from "@/components/bambi/ds";
 import { GuestVerifyCard } from "@/components/bambi/guest-verify-card";
 import {
 	communityAuthorRoleLabel,
@@ -46,6 +50,7 @@ const PASSWORD_MAX = 30;
 
 // 서버(getPublicPost)가 내려주는 댓글 모양. 인증 전에는 이 값이 그대로 화면이 된다.
 export interface PublicCommentSeed {
+	authorImage: string | null;
 	authorRole: string | null;
 	body: string;
 	createdAt: Date | string;
@@ -97,7 +102,7 @@ function PasswordConfirmDialog({
 	onConfirm: (password: string) => Promise<unknown>;
 	pending: boolean;
 	title: string;
-	// base-ui DialogTrigger render는 ReactElement를 요구한다(ReactNode 불가).
+	// base-ui AlertDialogTrigger render는 ReactElement를 요구한다(ReactNode 불가).
 	trigger: ReactElement;
 }) {
 	const [open, setOpen] = useState(false);
@@ -114,27 +119,21 @@ function PasswordConfirmDialog({
 	};
 
 	return (
-		<Dialog onOpenChange={setOpen} open={open}>
-			<DialogTrigger render={trigger} />
-			<DialogContent>
-				<div className="flex flex-col gap-2">
-					<DialogTitle>{title}</DialogTitle>
-					<DialogDescription>{description}</DialogDescription>
-				</div>
+		<AlertDialog onOpenChange={setOpen} open={open}>
+			<AlertDialogTrigger render={trigger} />
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>{title}</AlertDialogTitle>
+					<AlertDialogDescription>{description}</AlertDialogDescription>
+				</AlertDialogHeader>
 				<PasswordField
 					id="public-confirm-password"
 					onChange={setPassword}
 					value={password}
 				/>
-				<div className="flex justify-end gap-2">
-					<DialogClose
-						render={
-							<Button type="button" variant="outline">
-								취소
-							</Button>
-						}
-					/>
-					<Button
+				<AlertDialogFooter>
+					<AlertDialogCancel>취소</AlertDialogCancel>
+					<AlertDialogAction
 						disabled={password.length < PASSWORD_MIN || pending}
 						onClick={() => {
 							submit().catch(() => setPassword(""));
@@ -142,10 +141,10 @@ function PasswordConfirmDialog({
 						variant="destructive"
 					>
 						삭제
-					</Button>
-				</div>
-			</DialogContent>
-		</Dialog>
+					</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
 	);
 }
 
@@ -222,7 +221,13 @@ function CommentRow({
 		<div className="flex flex-col gap-1">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				{/* enum 원값 대신 라벨 맵을 거친다. 공개 경로는 회원 계정명을 싣지 않는다. */}
-				<span className="text-muted-foreground text-xs">
+				<span className="flex items-center gap-1.5 text-muted-foreground text-xs">
+					<Avatar
+						fallbackIcon="user"
+						name={communityAuthorRoleLabel(comment.authorRole)}
+						size="xs"
+						src={comment.authorImage ?? undefined}
+					/>
 					{communityAuthorRoleLabel(comment.authorRole)} ·{" "}
 					{formatCommunityDate(comment.createdAt)}
 				</span>
@@ -413,6 +418,7 @@ function CommentThread({
 
 interface PublicPostInteractionsProps {
 	boardSlug: string;
+	canLike?: boolean;
 	// 댓글 목록을 서버에서 다시 읽을지. 기본은 참여 가능할 때만(공개 상세는 서버가 이미
 	// 렌더한 목록을 그대로 쓰고, 미인증 방문자·크롤러에게는 추가 요청을 만들지 않는다).
 	// 회원 화면에 얹을 때처럼 씨앗 목록이 없으면 참여 자격과 무관하게 켠다.
@@ -420,6 +426,7 @@ interface PublicPostInteractionsProps {
 	// 비회원 쓰기 자격(gid 있는 게스트 토큰). 없으면 읽기 + 본인인증 안내만.
 	canWrite: boolean;
 	commentCount: number;
+	commentsDisabled?: boolean;
 	initialComments: PublicCommentSeed[];
 	// 이미 추천했는지. 공개 상세(getPublicPost)는 내려주지 않아 기본 false지만, 회원 화면
 	// 상세(getPost)는 gid 기준으로 알려주므로 첫 클릭이 추천 취소가 되지 않게 넘겨받는다.
@@ -438,8 +445,10 @@ interface PublicPostInteractionsProps {
 export function PublicPostInteractions({
 	boardSlug,
 	canReadComments,
+	canLike = false,
 	canWrite,
 	commentCount,
+	commentsDisabled = false,
 	initialComments,
 	initialIsLiked = false,
 	isGuestAuthored,
@@ -459,12 +468,14 @@ export function PublicPostInteractions({
 	const [like, setLike] = useState({ isLiked: initialIsLiked, likeCount });
 
 	const canParticipate = canWrite && participable;
+	const canComment = canParticipate && !commentsDisabled;
+	const showCommentsSection = !commentsDisabled || commentCount > 0;
 
 	// 인증된 비회원만 재조회한다(내 댓글의 수정·삭제 권한 플래그가 필요해서다).
 	// 그 외에는 서버가 내려준 목록을 그대로 쓴다.
 	const commentsQuery = useQuery(
 		orpc.bambi.community.listComments.queryOptions({
-			enabled: canReadComments ?? canParticipate,
+			enabled: showCommentsSection && (canReadComments ?? canParticipate),
 			input: { password, postId },
 		})
 	);
@@ -541,20 +552,21 @@ export function PublicPostInteractions({
 
 	return (
 		<div className="flex flex-col gap-4">
-			{canParticipate ? (
-				<div className="flex flex-wrap items-center justify-between gap-2">
+			{canWrite ? (
+				<div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+					<span />
 					<Button
 						aria-pressed={like.isLiked}
 						className={cn(like.isLiked && "border-coral-500 text-coral-500")}
-						disabled={likeMutation.isPending}
+						disabled={!canLike || likeMutation.isPending}
 						onClick={() => likeMutation.mutate({ postId })}
 						variant="outline"
 					>
 						<ThumbsUpIcon data-icon="inline-start" />
 						추천 {like.likeCount}
 					</Button>
-					{isGuestAuthored ? (
-						<span className="flex items-center gap-2">
+					{canParticipate && isGuestAuthored ? (
+						<span className="flex items-center gap-2 justify-self-end">
 							<Button
 								nativeButton={false}
 								render={
@@ -579,11 +591,15 @@ export function PublicPostInteractions({
 								}
 							/>
 						</span>
-					) : null}
+					) : (
+						<span />
+					)}
 				</div>
 			) : null}
 
-			<section className="flex flex-col gap-3">
+			<section
+				className={cn("flex flex-col gap-3", !showCommentsSection && "hidden")}
+			>
 				<h2 className="m-0 font-bold text-base">댓글 {commentCount}</h2>
 				{comments.length === 0 ? (
 					<p className="m-0 text-muted-foreground text-sm">
@@ -606,7 +622,7 @@ export function PublicPostInteractions({
 									updateCommentMutation.mutate({ body, commentId, password })
 								}
 								onReplyClose={() => setReplyTo(null)}
-								onReplyOpen={canParticipate ? setReplyTo : undefined}
+								onReplyOpen={canComment ? setReplyTo : undefined}
 								onReplySubmit={(parentCommentId, body, password) =>
 									createCommentMutation.mutate({
 										body,
@@ -623,7 +639,7 @@ export function PublicPostInteractions({
 						))}
 					</ul>
 				)}
-				{canParticipate ? (
+				{canComment ? (
 					<CommentComposer
 						onSubmit={(body, password) =>
 							createCommentMutation.mutate({ body, password, postId })
@@ -633,6 +649,11 @@ export function PublicPostInteractions({
 						placeholder="댓글을 입력해 주세요"
 						submitLabel="댓글 등록"
 					/>
+				) : null}
+				{commentsDisabled ? (
+					<p className="m-0 rounded-md bg-secondary px-3 py-2.5 text-muted-foreground text-sm">
+						운영자가 댓글 작성을 제한한 글입니다.
+					</p>
 				) : null}
 			</section>
 

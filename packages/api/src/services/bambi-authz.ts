@@ -148,6 +148,12 @@ export const requireEmployerPostingAccess = async ({
 		throw forbidden("Organization membership is required to post jobs.");
 	}
 
+	if (!(await isEmployerOrganizationVerified(organizationId))) {
+		throw forbidden(
+			"인증 완료된 업체만 공고와 광고 기능을 이용할 수 있습니다."
+		);
+	}
+
 	if (!teamId) {
 		if (ORGANIZATION_ADMIN_ROLES.has(organizationMember.role)) {
 			return profile;
@@ -202,6 +208,17 @@ export const isEmployerOrganizationVerified = async (
 		.limit(1);
 
 	return row?.status === "verified";
+};
+
+export const isEmployerOrganizationChangesUnsubmitted = async (
+	organizationId: string
+): Promise<boolean> => {
+	const [row] = await db
+		.select({ status: employerOrganizationProfile.verificationStatus })
+		.from(employerOrganizationProfile)
+		.where(eq(employerOrganizationProfile.organizationId, organizationId))
+		.limit(1);
+	return row?.status === "changes_unsubmitted";
 };
 
 /**

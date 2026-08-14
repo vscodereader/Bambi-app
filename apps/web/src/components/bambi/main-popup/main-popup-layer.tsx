@@ -4,14 +4,20 @@ import { Button } from "@bambi-app/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
 import type { JSONContent } from "@tiptap/react";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { authClient } from "@/lib/auth-client";
 import {
 	EMPTY_TEXT_DOCUMENT,
 	hiddenPopupStorageKey,
 	type PopupImageAsset,
+	popupAuthTransitionEvent,
+	popupAuthTransitionStorageKey,
 	popupLoginTargetStorageKey,
 } from "@/lib/bambi/main-popup";
+import { resolveMainPopupPageId } from "@/lib/bambi/main-popup-pages";
+import { useCommunityBoards } from "@/lib/bambi/use-community-boards";
 import { orpc } from "@/utils/orpc";
 import { PopupTextViewer } from "./popup-text-editor";
 
@@ -24,6 +30,7 @@ interface PublicPopup {
 	linkPath: string | null;
 	revision: number;
 	slotIndex: number;
+	targetPages: string[];
 	textDocument: JSONContent | null;
 }
 interface HiddenState {
@@ -48,15 +55,68 @@ const isHidden = (id: string, revision: number) => {
 };
 
 export function MainPopupLayer() {
+	const pathname = usePathname();
+	const { boards } = useCommunityBoards();
+	const pageId = resolveMainPopupPageId(pathname, boards);
 	const session = authClient.useSession();
+	const { isAuthenticated, isPending } = useBambiAuth();
 	const query = useQuery({
 		...orpc.bambi.mainPopups.listPublic.queryOptions(),
+		enabled: !isPending && isAuthenticated,
 		refetchInterval: 15_000,
 	});
 	const [closed, setClosed] = useState<Set<string>>(new Set());
 	const [ready, setReady] = useState(false);
+	const [authTransition, setAuthTransition] = useState(false);
+	const [pageReady, setPageReady] = useState(false);
 	const [frontId, setFrontId] = useState<string | null>(null);
 	useEffect(() => setReady(true), []);
+	useEffect(() => {
+		const syncAuthTransition = () => {
+			setAuthTransition(
+				sessionStorage.getItem(popupAuthTransitionStorageKey) !== null
+			);
+		};
+		syncAuthTransition();
+		window.addEventListener(popupAuthTransitionEvent, syncAuthTransition);
+		return () =>
+			window.removeEventListener(popupAuthTransitionEvent, syncAuthTransition);
+	}, []);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: pathname은 값을 읽는 대신 페이지 이동마다 준비 상태를 초기화하는 재실행 키다.
+	useEffect(() => {
+		let firstFrame = 0;
+		let secondFrame = 0;
+		const markPageReady = () => {
+			firstFrame = window.requestAnimationFrame(() => {
+				secondFrame = window.requestAnimationFrame(() => {
+					const transitionSource = sessionStorage.getItem(
+						popupAuthTransitionStorageKey
+					);
+					if (
+						transitionSource &&
+						transitionSource !== String(performance.timeOrigin)
+					) {
+						sessionStorage.removeItem(popupAuthTransitionStorageKey);
+						setAuthTransition(false);
+					}
+					setPageReady(true);
+				});
+			});
+		};
+
+		setPageReady(false);
+		if (document.readyState === "complete") {
+			markPageReady();
+		} else {
+			window.addEventListener("load", markPageReady, { once: true });
+		}
+
+		return () => {
+			window.removeEventListener("load", markPageReady);
+			window.cancelAnimationFrame(firstFrame);
+			window.cancelAnimationFrame(secondFrame);
+		};
+	}, [pathname]);
 	useEffect(() => {
 		const refresh = () => {
 			query.refetch();
@@ -66,12 +126,24 @@ export function MainPopupLayer() {
 	}, [query]);
 	const items = useMemo(
 		() =>
-			ready
+			ready && pageReady && !authTransition && !isPending && isAuthenticated
 				? ((query.data?.items ?? []).filter(
-						(item) => !(closed.has(item.id) || isHidden(item.id, item.revision))
+						(item) =>
+							pageId !== null &&
+							item.targetPages.includes(pageId) &&
+							!(closed.has(item.id) || isHidden(item.id, item.revision))
 					) as PublicPopup[])
 				: [],
-		[closed, query.data?.items, ready]
+		[
+			authTransition,
+			closed,
+			isAuthenticated,
+			isPending,
+			pageId,
+			pageReady,
+			query.data?.items,
+			ready,
+		]
 	);
 	useEffect(() => {
 		const media = window.matchMedia("(max-width: 767px)");

@@ -547,6 +547,97 @@
       "when": 1786084225762,
       "tag": "0077_grey_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1786330313164,
+      "tag": "0078_tough_franklin_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1786334485343,
+      "tag": "0079_lucky_madelyne_pryor",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1786343308773,
+      "tag": "0080_small_skreet",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1786414602645,
+      "tag": "0081_violet_oracle",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1786419633731,
+      "tag": "0082_known_human_fly",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1786428235198,
+      "tag": "0083_perpetual_baron_strucker",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1786494607104,
+      "tag": "0084_amusing_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1786514970201,
+      "tag": "0085_abandoned_banshee",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1786516043135,
+      "tag": "0086_cooing_odin",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1786591304160,
+      "tag": "0087_overjoyed_azazel",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1786598962518,
+      "tag": "0088_redundant_barracuda",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1786601678118,
+      "tag": "0089_abandoned_firelord",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1786611077883,
+      "tag": "0090_complete_kate_bishop",
+      "breakpoints": true
     }
   ]
 }

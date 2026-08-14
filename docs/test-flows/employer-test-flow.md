@@ -373,7 +373,7 @@
   - 블록형 상세 설명(선택): 문단/제목/목록/강조 4종, 블록당 800자, **최대 12개**, 위/아래 이동·삭제
   - 면접 안내(선택): 500자
   - **블록이 1개라도 있으면 최종 `description`이 블록 텍스트 `\n\n` join으로 대체된다**(기본 상세 설명은 저장되지 않음)
-- **엣지 케이스**: 빈 블록 금지, 800자 초과 금지, 13개째 추가 시 "상세 블록은 최대 12개까지 등록할 수 있습니다." (`apps/web/src/lib/bambi-job-form.ts`, 서버 `packages/api/src/services/bambi-job-description-blocks.ts`)
+- **엣지 케이스**: 빈 블록 금지, 800자 초과 금지. **12개가 차면 블록 추가 버튼(문단/제목/목록/강조 4개)이 전부 비활성**되고 안내 문구 "상세 블록은 최대 12개까지 등록할 수 있습니다."가 뜬다 — 추가 시점에서 막히므로 13개째가 만들어지지 않는다. 제출 검증도 같은 상한(`DESCRIPTION_BLOCK_MAX_COUNT = 12`, 화면·검증이 공유)을 재확인해 화면 차단이 우회돼도 서버로 넘어가지 않는다 (`apps/web/src/components/bambi/job-post-block-editor.tsx`, `apps/web/src/lib/bambi-job-form.ts`, 서버 `packages/api/src/services/bambi-job-description-blocks.ts`)
 - **관련 API**: `bambi.jobs.create` (`descriptionBlocks` 필드)
 
 ### 5.4 이미지 업로드 (썸네일 · 상세)
@@ -452,6 +452,7 @@
   - **제출 버튼 비활성 조건**: create pending / 이미지 업로드 pending / 신용카드 선택 / 무통장인데 계좌 0건 / 필수 배너 이미지 누락 / **미승인(`!verified`)**
   - 배너 누락 시 버튼 위 warning Alert. 서버도 `BAD_REQUEST "프리미엄 광고는 가로형·세로형 배너 이미지를 모두 등록해야 합니다."`
   - 검증 실패 → 필드 에러 + 상단 FormError + 첫 에러 토스트 + 첫 `aria-invalid` 요소로 스크롤·포커스
+  - **`<form noValidate>`이므로** 빈 폼·제목 1자로 제출해도 브라우저 네이티브 required/minLength 버블이 뜨지 않고 앱 검증(`validateJobForm`)이 항상 먼저 돈다 — 검증이 위 앱 파이프라인 한 곳으로 일원화된다(공고 등록 폼 `/employer/new`, 수정 폼 동일). `required`/`minLength`/`maxLength` 속성은 접근성 시맨틱·입력 상한 용도로 유지된다
   - 미승인 조직에 직접 API 호출 → `FORBIDDEN "운영자 승인 후 공고를 등록할 수 있습니다."`
   - 조직 프로필 없는 조직 → `FORBIDDEN "Employer organization profile is required."`
   - **임시저장(draft) 기능은 없다.** `jobStatusLabels.draft = "임시 저장"` 라벨만 존재하고, 서버 `create`는 항상 `pending_review`를 세팅한다. draft 상태를 만드는 코드 경로가 리포 전체에 없음
@@ -602,7 +603,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 ### 9.1 광고 목록 확인
 
 - **경로**: `/employer/promotions` (파일: `apps/web/src/app/employer/promotions/page.tsx`)
-- **선행 조건**: 광고 상품이 적용된 공고 1건 이상. **광고 미적용 일반 공고는 목록에 나타나지 않는다**(`innerJoin(adProduct)`)
+- **선행 조건**: 접근 범위 안의 공고 1건 이상. **광고 미적용(무료) 공고도 목록에 표시된다** — 무료 공고도 끌어올리기 옵션 단품 구매로 끌어올릴 수 있어 광고 상품 없는 공고까지 포함한다(`leftJoin(adProduct)`, 필터는 접근 범위뿐)
 - **기대 결과**:
   - 상태 탭: 전체 / 진행 중 / 결제 대기 / 만료. 분류 우선순위 = 만료 > 결제 대기 > 진행 중 > 그 외(전체 탭에만)
   - 컬럼: 공고(제목+팀) / 상태(+ 입금 안내 + 프리미엄 큐 배지) / 노출 위치·상품 / 노출 마감 / 오늘 끌어올리기 / 자동 끌어올리기 / 최근 끌어올림 / `⋯`
@@ -666,7 +667,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 - **절차**: 텍스트 입력 후 전송 / 이미지·PDF 첨부
 - **기대 결과**: `sendMessage`/`sendMediaMessage` 성공. 한쪽이 나간 방은 양쪽 모두에게서 사라져 열람·전송이 `NOT_FOUND`(부활 없음)
 - **엣지 케이스**: 차단된 방은 `FORBIDDEN` + 안내("…님이 차단했어요." / "…님을 차단했어요. 차단 관리에서 해제할 수 있어요."). 운영자가 방을 차단하면(`setChatRoomBlocked`) 목록으로 되돌려 보낸다
-- **신고 양쪽 차단 회귀 테스트**: 구직자가 방 또는 메시지를 신고하면 구인자 목록에서도 즉시 사라져야 한다. 구인자는 기존 직접 URL로 열람하거나 텍스트·첨부·면접·연락처·읽음·타이핑을 보낼 수 없고, 시도한 메시지가 구직자의 하단 채팅 핀을 만들면 안 된다. 운영자가 기각하면 양쪽 모두 즉시 복구되고, 조치 완료면 계속 숨겨진다.
+- **신고 양쪽 차단 회귀 테스트**: 구직자가 방 또는 메시지를 신고하면 구인자 목록에서도 즉시 사라져야 한다. 구인자는 기존 직접 URL로 열람하거나 텍스트·첨부·면접·연락처·읽음·타이핑을 보낼 수 없고, 시도한 메시지가 구직자의 하단 채팅 핀을 만들면 안 된다. 운영자가 기각하면 양쪽 모두 즉시 복구되고, 조치 완료면 계속 숨겨진다. **기각 후 구직자가 같은 방·메시지를 재신고하면 새 open 신고가 생겨 방이 다시 양쪽에서 숨겨져야 한다**(재신고가 옛 기각 행을 돌려주지 않는다).
 - **모바일 키보드 회귀 테스트**: 채팅방에서 Android 키보드를 열면 하단 내비게이션이 숨겨지고 입력창은 키보드 위에 유지되며 메시지 목록만 줄어들어 스크롤되어야 한다.
 - **관련 API**: `bambi.chats.sendMessage`, `bambi.chats.createAttachmentUpload`, `bambi.chats.sendMediaMessage`, `bambi.chats.markRead`, `bambi.chats.deleteChatRoom`
 
@@ -684,7 +685,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
   | `completed` | 현재 `confirmed` (양쪽 다 가능) |
   - 구직자가 아닌 사람(구인자)이 제안하려 하면 `FORBIDDEN`. 구인자가 자기 제안을 확정하려 해도 `FORBIDDEN`
   - 상태가 이미 바뀐 뒤 재시도 → `CONFLICT "Interview schedule status has changed."`
-  - 빈 일시 → "면접 일시를 선택해 주세요." / 과거 → "면접 일시를 다시 확인해 주세요."
+  - 빈 일시 → "면접 일시를 선택해 주세요." / 과거 → "면접 일시를 다시 확인해 주세요." — datetime-local Input의 `required` 속성을 제거해 브라우저 네이티브 버블("이 입력란을 작성하세요.")이 앞서지 않고 이 앱 검증 메시지가 뜬다(검증 일원화)
 - **관련 API**: `bambi.chats.proposeInterview`, `bambi.chats.setInterviewStatus`, `bambi.chats.listMyUpcomingInterviews`
 
 ### 10.4 연락처 공개 요청 (구인자 → 구직자)
@@ -724,7 +725,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 ### 11.2 신고
 
 - **경로**: 공고·커뮤니티 화면의 신고 다이얼로그 (파일: `apps/web/src/components/bambi/report-dialog.tsx`), 내역: `/seeker/me/reports`
-- **기대 결과**: 사유 선택 + 상세 입력 → `report` 행 생성. 같은 신고자·대상 중복은 멱등(기존 행 반환)
+- **기대 결과**: 사유 선택 + 상세 입력 → `report` 행 생성. 같은 신고자·대상의 **미처리(open/reviewing) 신고만** 멱등 처리(기존 행 반환). **운영자가 기각(dismissed)·조치완료(resolved)한 뒤 같은 대상을 재신고하면 종결 행을 돌려주지 않고 새 `report`(open) 행을 만든다** → 재접수가 실제로 되고 운영자 신고 알림·채팅 숨김 파이프라인이 다시 걸린다 (`PENDING_REPORT_STATUSES`, `packages/api/src/routers/bambi/moderation.ts` `createReport`)
 - **엣지 케이스 / 실패 케이스**:
   - **채팅방·채팅 메시지 신고는 구직자 전용** → 구인자가 호출하면 `FORBIDDEN "채팅 신고는 구직자만 할 수 있어요."`
   - 자기 자신 신고 → `BAD_REQUEST "자기 자신은 신고할 수 없어요."`
@@ -818,9 +819,13 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 ### 15.2 1:1 문의 등록
 
 - **경로**: `/support/inquiries/new` (파일: `apps/web/src/components/bambi/support/inquiry-form.tsx`)
-- **절차**: 문의 유형(기본 "계정·로그인") / 제목(2~100자) / 내용(5~5000자) → "문의 등록"
-- **기대 결과**: 토스트 "문의가 등록됐어요." → `/support/inquiries/{id}`로 replace. `authorRole`에 구인자 역할이 기록된다
-- **엣지 케이스**: **첨부파일 업로드 UI가 없다.** 금칙어 포함 시 `assertNoBannedWords`가 차단하고 해당 메시지가 그대로 토스트로 노출
+- **절차**: 문의 유형(기본 "계정·로그인") / 제목(2~100자) / 내용(리치 에디터 `CommunityPostEditor` = Tiptap, **이미지 인라인 삽입 가능**) → "문의 등록"
+- **기대 결과**: 토스트 "문의가 등록됐어요." → `/support/inquiries/{id}`로 replace. `authorRole`에 구인자 역할이 기록된다. 본문은 Tiptap JSON으로 저장되고 상세 화면에서 이미지까지 그대로 렌더된다
+- **엣지 케이스**:
+  - **등록 버튼은 제출 중(`isPending`)에만 비활성**이다. 상시 disabled가 아니라 제출 시점에 검증하고 사유를 토스트로 알린다 — 제목 2자 미만이면 "제목은 2~100자로 입력해 주세요.", 본문 평문이 5자 미만이면서 이미지도 없으면 "문의 내용을 5자 이상 입력하거나 이미지를 첨부해 주세요." (이미지만 있는 문의는 허용)
+  - 연타 이중 제출은 `submittingRef` + `isPending`으로 차단
+  - 금칙어 포함 시 `assertNoBannedWords`가 차단하고 해당 메시지가 그대로 토스트로 노출
+  - **가입 자격/성별 게이트는 없다** — `createInquiry`는 `protectedProcedure` + 활성 프로필만 요구하고(운영자 계정만 `FORBIDDEN`), 커뮤니티의 "여성회원·광고 중 업소회원" 가드를 쓰지 않는다
 - **관련 API**: `bambi.support.createInquiry`
 
 ### 15.3 문의 목록 · 상세 · 추가 메시지
@@ -948,7 +953,7 @@ paid          → unpaid      (구인자가 노출 상품/기간을 변경하면
 | 9 | 공고 이미지 "(JPG·PNG·WebP 형식)" | 형식은 맞다. 다만 **장당 10MB 상한**과 **이미지 설명(alt) 120자 제한**이 매뉴얼에 없다 | `packages/api/src/services/bambi-job-media-policy.ts`, `apps/web/src/lib/bambi-job-form.ts` |
 | 10 | "초보 가능 / 당일면접 가능" 체크박스 | 매뉴얼 공고 등록 절에 **누락**되어 있음(실제 폼에 존재) | `apps/web/src/app/employer/new/page.tsx` |
 | 11 | 프리미엄 배너 "자리는 상단 2칸, 좌측·우측 각 3칸으로 **총 8칸**" / "최대 8칸까지 동시에" / "8개를 넘으면" | 실제 링은 **좌 3 + 상단(중간) 3 + 우 3 = 9칸**(`SIDE_BANNER_MAX_SLOTS = 3`, `PREMIUM_BANNER_MAX_SLOTS = 3`, `TOTAL_RING_SLOTS = 9`) | `packages/api/src/services/bambi-ad-exposure.ts` |
-| 12 | 광고 관리 "광고 상품을 적용한 공고의 노출 상태와 … 표로 확인합니다" | 맞지만, **광고 상품이 적용된 공고만 목록에 나온다**(무료 일반 공고는 이 화면에 아예 없다)는 점이 명시되어 있지 않아 "내 공고가 안 보인다"는 오인을 부를 수 있다 | `packages/api/src/routers/bambi/promotions.ts` `listMyAds` (`innerJoin(adProduct)`) |
+| 12 | 광고 관리 "광고 상품을 적용한 공고의 노출 상태와 … 표로 확인합니다" | 실제로는 **광고 미적용 무료 공고도 이 목록에 함께 표시된다**(무료 공고도 끌어올리기 옵션 단품으로 끌어올릴 수 있어 포함). 매뉴얼 문구가 "광고 상품을 적용한 공고"만 나오는 것처럼 읽혀 실제와 어긋난다 | `packages/api/src/routers/bambi/promotions.ts` `listMyAds` (`leftJoin(adProduct)`) |
 | 13 | "4. 공고 상태와 검수 안내 — **임시 저장**: 아직 검수 신청 전인 초안 상태" | **임시저장 기능이 존재하지 않는다.** 라벨만 있고 `draft` 상태를 만드는 코드 경로가 리포 전체에 없다(서버 `create`는 항상 `pending_review`) | `packages/api/src/routers/bambi/jobs.ts`, `packages/api/src/services/bambi-policy.ts` |
 | 14 | ~~공고 반려 사유가 구인자 화면에 표시되지 않는다~~ (해소) | `listMine`이 `rejectionReason`을 내려주고, 목록 상태 배지 아래(`getJobStatusNote`)와 수정 화면 상단 Alert(`ReviewStatusNotice`)에 표시된다 | `packages/api/src/routers/bambi/jobs.ts`, `apps/web/src/components/bambi/employer-jobs-columns.tsx`, `apps/web/src/app/employer/jobs/[id]/edit/page.tsx` |
 | 15 | "연락처 보호 … 면접 일정이 확정되면 채팅방의 **연락처 공개하기** 화면에서 사장님이 연락 방식(전화번호·카카오톡·이메일)을 골라 … **내 연락처 공개**를 누르면" | 웹 UI는 이 흐름을 쓰지 않는다. 실제로는 **"연락처 공개 요청" 버튼 한 개**로 구직자에게 요청을 보내고 구직자가 공개/거절한다. 면접 확정도 요구하지 않는다(본인인증만 요구) | `apps/web/src/components/bambi/screens/seeker-chat-room-responsive.tsx`, `bambi.chats.requestContactReveal` |

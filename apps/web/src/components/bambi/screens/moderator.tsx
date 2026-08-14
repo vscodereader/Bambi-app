@@ -5,6 +5,16 @@
 // 복구 가능 여부 판정은 서버(accountRecovery.restoreWithdrawnAccount)와 같은 순수 함수를
 // 공유한다 — 화면이 규칙을 따로 구현하면 버튼은 열려 있는데 서버가 거절하는 상태가 생긴다.
 import { resolveAccountRestoreDecision } from "@bambi-app/api/services/bambi-account-restore";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Button as UiButton } from "@bambi-app/ui/components/button";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
@@ -29,7 +39,7 @@ import {
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MessageCircle } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -37,6 +47,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ChatHistoryContent } from "@/app/moderator/chats/chat-history-dialog";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
@@ -144,7 +155,7 @@ function HiText({
 		segs.push({ t: text.slice(cur), hi: false, start: cur });
 	}
 	return (
-		<p className="m-0 text-[14.5px] text-[color:var(--text-default)] leading-[1.65]">
+		<p className="m-0 break-words text-[14.5px] text-[color:var(--text-default)] leading-[1.65]">
 			{segs.map((s) =>
 				s.hi ? (
 					<mark
@@ -1236,10 +1247,12 @@ function PartyBox({
 	name,
 	role,
 	flagged,
+	icon = "user",
 }: {
 	name: string;
 	role: string;
 	flagged?: boolean;
+	icon?: "chat" | "user";
 }) {
 	return (
 		<div
@@ -1250,7 +1263,13 @@ function PartyBox({
 					: "border border-border"
 			)}
 		>
-			<Avatar name={name} size="sm" square />
+			{icon === "chat" ? (
+				<span className="flex size-10 flex-none items-center justify-center rounded-xl bg-primary/10 text-primary">
+					<MessageCircle className="size-5" />
+				</span>
+			) : (
+				<Avatar name={name} size="sm" square />
+			)}
 			<div className="min-w-0">
 				<div className="truncate font-bold text-[13.5px] text-foreground">
 					{name}
@@ -1263,12 +1282,6 @@ function PartyBox({
 
 // ---- 신고 대상 맥락(targetType별 분기 렌더) --------------------------------
 // 상태·역할 라벨은 공용 moderation-labels 모듈에서 소비한다(원값 노출 금지·중립 폴백).
-const formatMessageTime = (value: Date | string) =>
-	new Intl.DateTimeFormat("ko-KR", {
-		dateStyle: "short",
-		timeStyle: "short",
-	}).format(new Date(value));
-
 // 대상 맥락 카드의 공통 껍데기(제목 + 회색 박스). 기존 "신고된 대화" 블록과 룩앤필 통일.
 function ContextSection({
 	title,
@@ -1410,34 +1423,8 @@ function ChatRoomContext({
 					{chatRoom.isBlocked ? "차단됨" : "정상"}
 				</Badge>
 			</div>
-			<div className="flex flex-col gap-1.5">
-				<div className="text-[11px] text-muted-foreground">
-					최근 메시지 {chatRoom.recentMessages.length}건
-				</div>
-				{chatRoom.recentMessages.length ? (
-					chatRoom.recentMessages.map((message) => (
-						<div
-							className="rounded-[10px] border border-border bg-card px-2.5 py-2"
-							key={message.id}
-						>
-							<div className="mb-0.5 flex items-center justify-between gap-2 text-[10.5px] text-[color:var(--text-subtle)]">
-								<span className="truncate">
-									{message.senderUserId.slice(0, 6)}
-								</span>
-								<span className="whitespace-nowrap">
-									{formatMessageTime(message.createdAt)}
-								</span>
-							</div>
-							<div className="text-[13px] text-[color:var(--text-default)] leading-[1.45]">
-								{message.body}
-							</div>
-						</div>
-					))
-				) : (
-					<div className="text-[12.5px] text-muted-foreground">
-						표시할 메시지가 없어요.
-					</div>
-				)}
+			<div className="min-w-0 rounded-[12px] bg-card p-3">
+				<ChatHistoryContent chatRoomId={chatRoom.id} constrained={false} />
 			</div>
 			{onBlock ? (
 				<div className="flex flex-col gap-2 border-border border-t pt-2.5">
@@ -1488,7 +1475,7 @@ function ReportTargetContextView({
 		report: Report,
 		status: CommunityTargetStatus,
 		reason: string
-	) => void;
+	) => Promise<boolean>;
 }) {
 	// 커뮤니티 글·댓글은 미리보기와 숨김/삭제 조치를 함께 제공하는 전용 패널로 렌더한다.
 	// 컨텍스트가 유실돼도 패널이 "대상을 찾을 수 없어요"를 안내하므로 targetContext보다 먼저 본다.
@@ -1558,49 +1545,6 @@ const COMMUNITY_ACTIONS: Record<
 const getCommunityBoardLabel = (board: string): string =>
 	COMMUNITY_BOARDS.find((item) => item.key === board)?.label ?? board;
 
-function CommunityDeleteSheet({
-	kindLabel,
-	reason,
-	onCancel,
-	onConfirm,
-}: {
-	kindLabel: string;
-	reason: string;
-	onCancel: () => void;
-	onConfirm: () => void;
-}) {
-	return (
-		<div className="absolute inset-0 z-20 flex flex-col justify-end">
-			<button
-				aria-label="닫기"
-				className="absolute inset-0 cursor-pointer border-none bg-[color:var(--overlay-scrim)]"
-				onClick={onCancel}
-				type="button"
-			/>
-			<div className="relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-[24px] bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]">
-				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
-					{kindLabel}을 삭제할까요?
-				</h2>
-				<p className="mt-0 mr-0 mb-[14px] ml-0 text-[13px] text-muted-foreground">
-					삭제하면 사용자에게 더 이상 보이지 않아요. 입력한 사유는 기록에
-					남아요.
-				</p>
-				<div className="mb-4 rounded-[14px] bg-secondary px-3 py-2.5 text-[13px] text-[color:var(--text-default)] leading-[1.5]">
-					{reason}
-				</div>
-				<div className="grid grid-cols-2 gap-2.5">
-					<Button block onClick={onCancel} size="lg" variant="secondary">
-						취소
-					</Button>
-					<Button block onClick={onConfirm} size="lg" variant="danger">
-						삭제하기
-					</Button>
-				</div>
-			</div>
-		</div>
-	);
-}
-
 function CommunityTargetPanel({
 	report,
 	onModerate,
@@ -1610,11 +1554,12 @@ function CommunityTargetPanel({
 		report: Report,
 		status: CommunityTargetStatus,
 		reason: string
-	) => void;
+	) => Promise<boolean>;
 }) {
 	const target = report.communityTarget;
 	const [reason, setReason] = useState("");
 	const [pendingDelete, setPendingDelete] = useState(false);
+	const [isApplying, setIsApplying] = useState(false);
 
 	// 커뮤니티 신고인데 대상 컨텍스트가 유실된 경우: 조치 없이 안내만.
 	if (!target) {
@@ -1635,15 +1580,18 @@ function CommunityTargetPanel({
 		target.kind === "comment" ? `원글: ${target.title}` : target.title;
 	const statusBadge = COMMUNITY_STATUS_BADGE[target.status];
 	const actions = COMMUNITY_ACTIONS[target.status];
-	const canModerate = reason.trim().length >= 2 && Boolean(onModerate);
+	const canModerate =
+		reason.trim().length >= 2 && Boolean(onModerate) && !isApplying;
 	const reasonId = `community-reason-${target.id}`;
 
-	const runAction = (status: CommunityTargetStatus) => {
+	const runAction = async (status: CommunityTargetStatus) => {
 		const trimmed = reason.trim();
 		if (!(onModerate && trimmed)) {
 			return;
 		}
-		onModerate(report, status, trimmed);
+		setIsApplying(true);
+		await onModerate(report, status, trimmed);
+		setIsApplying(false);
 	};
 
 	return (
@@ -1670,6 +1618,14 @@ function CommunityTargetPanel({
 				</div>
 			</div>
 			<div className="flex flex-col gap-2">
+				<div className="rounded-[14px] border border-border bg-secondary px-3 py-2.5">
+					<div className="mb-1 font-bold text-[13px] text-foreground">
+						신고 내용
+					</div>
+					<p className="m-0 whitespace-pre-wrap text-[13px] text-muted-foreground leading-relaxed">
+						{report.note}
+					</p>
+				</div>
 				<label
 					className="font-bold text-[13px] text-foreground"
 					htmlFor={reasonId}
@@ -1684,6 +1640,9 @@ function CommunityTargetPanel({
 					placeholder="조치 사유를 입력하면 기록에 남아요."
 					value={reason}
 				/>
+				<p className="m-0 text-right text-[12px] text-muted-foreground">
+					{reason.length} / 500
+				</p>
 				<div className="flex flex-wrap gap-2">
 					{actions.map((action) => (
 						<Button
@@ -1694,7 +1653,7 @@ function CommunityTargetPanel({
 									setPendingDelete(true);
 									return;
 								}
-								runAction(action.status);
+								runAction(action.status).catch(() => undefined);
 							}}
 							size="sm"
 							variant={action.tone === "danger" ? "danger" : "secondary"}
@@ -1704,33 +1663,62 @@ function CommunityTargetPanel({
 					))}
 				</div>
 			</div>
-			{pendingDelete ? (
-				<CommunityDeleteSheet
-					kindLabel={kindLabel}
-					onCancel={() => setPendingDelete(false)}
-					onConfirm={() => {
+			{/* 삭제는 되돌릴 수 없어 확인 창을 한 번 세운다 — 기록에 남길 사유를 그대로 보여준다. */}
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
 						setPendingDelete(false);
-						runAction("deleted");
-					}}
-					reason={reason.trim()}
-				/>
-			) : null}
+					}
+				}}
+				open={pendingDelete}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{kindLabel}을 삭제할까요?</AlertDialogTitle>
+						<AlertDialogDescription>
+							삭제하면 사용자에게 더 이상 보이지 않아요. 입력한 사유는 기록에
+							남아요.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<p className="m-0 rounded-md bg-secondary px-3 py-2.5 text-foreground text-sm leading-relaxed">
+						{reason.trim()}
+					</p>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								setPendingDelete(false);
+								runAction("deleted").catch(() => undefined);
+							}}
+							variant="destructive"
+						>
+							삭제하기
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }
 
-// 당사자 카드 2개. 모바일은 가로 나란히, 데스크톱 사이드 패널에서는 세로로 쌓는다.
+// 당사자 카드 2개. 모바일에서 가로로 나란히 두면 좁은 폭(375px)에서 신고자 카드가 화면
+// 밖으로 밀리므로 데스크톱 사이드 패널과 동일하게 항상 세로로 쌓는다.
 // 피신고 대상이 사용자 계정이면 카드를 그대로 계정 상세 링크로 감싼다(제재 이력·누적
 // 신고를 바로 확인할 수 있게).
 function ReportParties({ item }: { item: Report }) {
 	const targetBox = (
-		<PartyBox flagged name={item.target} role={`피신고 · ${item.targetRole}`} />
+		<PartyBox
+			flagged
+			icon={item.targetType === "chat_room" ? "chat" : "user"}
+			name={item.target}
+			role={`피신고 · ${item.targetRole}`}
+		/>
 	);
 	const targetUserId =
 		item.targetType === "user" && item.targetId ? item.targetId : null;
 
 	return (
-		<div className="flex gap-2.5 md:flex-col">
+		<div className="flex flex-col gap-2.5">
 			{targetUserId ? (
 				<Link
 					className="flex min-w-0 flex-1"
@@ -1807,12 +1795,20 @@ function ReportActions({
 	onResolve,
 	onSanctionRequest,
 	sanctionUserId,
+	showActAction = true,
 }: {
 	item: Report;
-	onResolve: (id: string, action: "dismiss" | "act") => void;
+	onResolve: (
+		id: string,
+		action: "dismiss" | "act",
+		reason?: string
+	) => Promise<boolean>;
 	onSanctionRequest: () => void;
 	sanctionUserId: string | null;
+	showActAction?: boolean;
 }) {
+	const [dismissReasonOpen, setDismissReasonOpen] = useState(false);
+	const [isResolving, setIsResolving] = useState(false);
 	return (
 		<div>
 			{sanctionUserId ? null : (
@@ -1821,20 +1817,21 @@ function ReportActions({
 					관리에서 진행해 주세요.
 				</p>
 			)}
-			<div className="grid grid-cols-2 gap-2.5">
+			<div className={showActAction ? "grid grid-cols-2 gap-2.5" : "grid"}>
 				<Button
 					block
-					onClick={() => onResolve(item.id, "dismiss")}
+					onClick={() => setDismissReasonOpen(true)}
 					size="lg"
 					variant="secondary"
 				>
 					기각
 				</Button>
-				{sanctionUserId ? (
+				{showActAction && sanctionUserId ? (
 					<Button block onClick={onSanctionRequest} size="lg" variant="danger">
 						제재 적용
 					</Button>
-				) : (
+				) : null}
+				{showActAction && !sanctionUserId ? (
 					<Button
 						block
 						onClick={() => onResolve(item.id, "act")}
@@ -1843,8 +1840,31 @@ function ReportActions({
 					>
 						조치 완료
 					</Button>
-				)}
+				) : null}
 			</div>
+			{dismissReasonOpen ? (
+				<ReasonConfirmSheet
+					confirmLabel="기각하기"
+					danger
+					defaultReason=""
+					description="신고자에게 표시할 기각 사유를 입력해 주세요."
+					isApplying={isResolving}
+					onCancel={() => setDismissReasonOpen(false)}
+					onConfirm={async (reason) => {
+						setIsResolving(true);
+						const succeeded = await onResolve(item.id, "dismiss", reason);
+						setIsResolving(false);
+						if (succeeded) {
+							setDismissReasonOpen(false);
+						}
+					}}
+					placeholder="기각 사유를 입력해 주세요."
+					positioning="fixed"
+					reasonFieldId={`report-dismiss-reason-${item.id}`}
+					reasonLabel="기각 사유"
+					title="신고 기각 사유"
+				/>
+			) : null}
 		</div>
 	);
 }
@@ -1860,7 +1880,11 @@ export function ReportDetail({
 }: {
 	item: Report;
 	onBack: () => void;
-	onResolve: (id: string, action: "dismiss" | "act") => void;
+	onResolve: (
+		id: string,
+		action: "dismiss" | "act",
+		reason?: string
+	) => Promise<boolean>;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
 	onBlockChatRoom?: (
 		chatRoomId: string,
@@ -1872,7 +1896,7 @@ export function ReportDetail({
 		report: Report,
 		status: CommunityTargetStatus,
 		reason: string
-	) => void;
+	) => Promise<boolean>;
 }) {
 	const [act, setAct] = useState(false);
 	// 구조화된 대상 맥락(공고·후기·사용자·대화방)이 있으면 전용 카드로, 없으면(채팅 메시지·
@@ -1901,6 +1925,7 @@ export function ReportDetail({
 			onResolve={onResolve}
 			onSanctionRequest={() => setAct(true)}
 			sanctionUserId={sanctionUserId}
+			showActAction={!item.communityKind}
 		/>
 	);
 	return (
@@ -2173,6 +2198,7 @@ export function ReasonConfirmSheet({
 	onCancel: () => void;
 	onConfirm: (reason: string) => void;
 }) {
+	const reasonMaxLength = 500;
 	const [reason, setReason] = useState(defaultReason);
 	const canConfirm = reason.trim().length >= minLength && !isApplying;
 	const fixed = positioning === "fixed";
@@ -2214,10 +2240,14 @@ export function ReasonConfirmSheet({
 				<textarea
 					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
 					id={reasonFieldId}
+					maxLength={reasonMaxLength}
 					onChange={(event) => setReason(event.target.value)}
 					placeholder={placeholder ?? defaultReason}
 					value={reason}
 				/>
+				<p className="mt-1.5 mb-0 text-right text-[12px] text-muted-foreground">
+					{reason.length} / {reasonMaxLength}
+				</p>
 				<div className="mt-4 grid grid-cols-2 gap-2.5">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
@@ -2942,6 +2972,7 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 		);
 		setDetail(null);
 		flash(action === "dismiss" ? "신고를 기각했어요" : "조치를 적용했어요");
+		return Promise.resolve(true);
 	};
 	const sanction = (id: string, status: UserStatus, label: string) => {
 		setUsers((u) =>

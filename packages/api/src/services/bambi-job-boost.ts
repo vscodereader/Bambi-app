@@ -81,13 +81,47 @@ export const countDueAutoBoostSlots = (
 	return Math.min(due, autoBoostsPerDay);
 };
 
+// 수동 끌어올리기 최소 간격 기본값(분). 무료 공고(adProduct 없음)에 적용한다.
+// 광고 공고는 adProduct.manualBoostCooldownMinutes를 라이브 참조한다.
+export const DEFAULT_MANUAL_BOOST_COOLDOWN_MINUTES = 10;
+
+// 마지막 수동 끌어올림 이후 cooldownMinutes 분이 아직 안 지났으면 true(연타 차단).
+// last가 없거나(첫 끌어올림) cooldownMinutes<=0이면 쿨다운 자체가 없어 false.
+// 경계: 정확히 경과한 시점(=)은 허용(false), 그 직전(<)만 차단(true).
+export const isManualBoostWithinCooldown = (
+	lastManualBoostAt: Date | null,
+	now: Date,
+	cooldownMinutes: number
+): boolean => {
+	if (lastManualBoostAt === null || cooldownMinutes <= 0) {
+		return false;
+	}
+
+	return now.getTime() - lastManualBoostAt.getTime() < cooldownMinutes * 60_000;
+};
+
+// 쿨다운 종료까지 남은 시간(ms). last가 없으면 0. 라우터 메시지의 "약 N분 후" 계산용.
+export const manualBoostCooldownRemainingMs = (
+	lastManualBoostAt: Date | null,
+	now: Date,
+	cooldownMinutes: number
+): number => {
+	if (lastManualBoostAt === null) {
+		return 0;
+	}
+
+	return Math.max(
+		0,
+		cooldownMinutes * 60_000 - (now.getTime() - lastManualBoostAt.getTime())
+	);
+};
+
 export type BoostIneligibleReason =
 	| "banner_product"
 	| "daily_limit_reached"
 	| "exposure_expired"
-	| "not_ad_job"
-	| "not_publicly_visible"
-	| "product_without_boost";
+	| "no_boost_available"
+	| "not_publicly_visible";
 
 export const BOOST_INELIGIBLE_MESSAGES: Record<BoostIneligibleReason, string> =
 	{
@@ -95,62 +129,140 @@ export const BOOST_INELIGIBLE_MESSAGES: Record<BoostIneligibleReason, string> =
 			"배너 광고는 끌어올리기 대상이 아닙니다. 리스팅 광고(스페셜·급구·추천)에서만 제공됩니다.",
 		daily_limit_reached: "오늘 끌어올리기 횟수를 모두 사용했습니다.",
 		exposure_expired: "광고 노출 기간이 만료되어 끌어올릴 수 없습니다.",
-		not_ad_job: "광고 상품이 적용된 공고만 끌어올릴 수 있습니다.",
+		no_boost_available:
+			"이 공고에 사용할 수 있는 끌어올리기가 없습니다. 광고 상품 또는 끌어올리기 옵션을 구매해 주세요.",
 		not_publicly_visible:
 			"공개 중(결제 완료·게시)인 공고만 끌어올릴 수 있습니다.",
-		product_without_boost:
-			"이 광고 상품에는 끌어올리기가 포함되어 있지 않습니다.",
 	};
 
-// 끌어올리기 자격: 광고 공고(adProductId 보유) AND 공개 게이트(published+paid) AND
-// 노출 유효(exposureEndsAt null 또는 미래 — isExposureActive와 동일 판정) AND
-// 리스팅형 노출(배너형은 끌어올리기 비대상) AND 상품이 점프 제공(manualBoostsPerDay > 0)
-// AND 오늘 사용량이 한도 미만.
+// 끌어올리기 추가 옵션 구매 1건의 판정용 최소 형태(jobBoostPurchase 행의 부분집합).
+// 순수 서비스가 DB 스키마에 직접 매이지 않도록 필요한 칸만 인터페이스로 노출한다.
+export interface BoostPurchaseLike {
+	boostsPerDay: null | number;
+	createdAt: Date;
+	expiresAt: Date | null;
+	id: string;
+	optionType: "auto_period" | "manual_count" | "manual_period";
+	paymentStatus: string;
+	remainingCount: null | number;
+}
+
+// 구매가 지금 유효한지: 결제 완료 AND (기간제는 만료 미래 / 횟수권은 잔여 > 0).
+export const isBoostPurchaseActive = (
+	p: BoostPurchaseLike,
+	now: Date
+): boolean => {
+	if (p.paymentStatus !== "paid") {
+		return false;
+	}
+
+	if (p.optionType === "manual_count") {
+		return (p.remainingCount ?? 0) > 0;
+	}
+
+	// 기간제(manual_period·auto_period): 만료 시각이 미래여야 활성.
+	return p.expiresAt !== null && p.expiresAt.getTime() > now.getTime();
+};
+
+// 활성 기간제 구매의 하루 끌어올리기 횟수 합. optionType으로 수동/자동 기간제를 구분해 집계한다.
+export const sumActivePeriodBoostsPerDay = (
+	purchases: BoostPurchaseLike[],
+	optionType: "auto_period" | "manual_period",
+	now: Date
+): number =>
+	purchases
+		.filter((p) => p.optionType === optionType && isBoostPurchaseActive(p, now))
+		.reduce((sum, p) => sum + (p.boostsPerDay ?? 0), 0);
+
+// 활성 횟수권(manual_count) 잔여 횟수 합.
+export const sumRemainingBoostCount = (
+	purchases: BoostPurchaseLike[],
+	now: Date
+): number =>
+	purchases
+		.filter(
+			(p) => p.optionType === "manual_count" && isBoostPurchaseActive(p, now)
+		)
+		.reduce((sum, p) => sum + (p.remainingCount ?? 0), 0);
+
+// 차감할 횟수권 1건: 활성 횟수권 중 가장 오래된 것(createdAt 오름차순, FIFO). 없으면 null.
+// isBoostPurchaseActive가 잔여 0을 이미 걸러 잔여 있는 활성 구매만 후보가 된다.
+export const pickCountPurchaseToConsume = (
+	purchases: BoostPurchaseLike[],
+	now: Date
+): BoostPurchaseLike | null =>
+	purchases
+		.filter(
+			(p) => p.optionType === "manual_count" && isBoostPurchaseActive(p, now)
+		)
+		.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0] ?? null;
+
+// 끌어올리기 자격 v2. 상품(번들)과 추가 옵션을 합산해 판정한다:
+// 공개 게이트(published+paid) → 광고 공고 노출 만료 → 배너 비대상 →
+// 하루 한도(상품 manualBoostsPerDay + 활성 옵션 기간제 optionManualPerDay)와 횟수권 잔여를 종합.
+// 무료 공고(adProductId null)는 노출 만료 판정을 건너뛰어, 옵션만으로도 끌어올릴 수 있다.
+// consume은 이번 끌어올림을 어디서 소진할지: "daily"=하루 한도, "count"=횟수권 1회 차감.
 export const resolveBoostEligibility = ({
 	adProductId,
+	countRemaining,
 	exposureEndsAt,
 	exposureType,
 	manualBoostsPerDay,
 	now,
+	optionManualPerDay,
 	paymentStatus,
 	status,
 	usedToday,
 }: {
 	adProductId: string | null;
+	countRemaining: number;
 	exposureEndsAt: Date | null;
 	exposureType: string;
 	manualBoostsPerDay: number;
 	now: Date;
+	optionManualPerDay: number;
 	paymentStatus: string;
 	status: string;
 	usedToday: number;
-}): { eligible: true } | { eligible: false; reason: BoostIneligibleReason } => {
-	if (!adProductId) {
-		return { eligible: false, reason: "not_ad_job" };
-	}
-
+}):
+	| { eligible: true; consume: "count" | "daily" }
+	| { eligible: false; reason: BoostIneligibleReason } => {
 	if (status !== "published" || paymentStatus !== "paid") {
 		return { eligible: false, reason: "not_publicly_visible" };
 	}
 
-	if (exposureEndsAt !== null && exposureEndsAt.getTime() <= now.getTime()) {
+	// 광고 공고(adProductId 보유)만 노출 기간 만료를 따진다. 무료 공고는 노출 기간이 없어(null)
+	// 이 게이트를 건너뛰고, 옵션 구매만으로 끌어올릴 수 있다.
+	if (
+		adProductId !== null &&
+		exposureEndsAt !== null &&
+		exposureEndsAt.getTime() <= now.getTime()
+	) {
 		return { eligible: false, reason: "exposure_expired" };
 	}
 
 	// 배너형 공고는 끌어올리기 대상이 아니다(리스팅형: 스페셜·급구·추천에서만 제공).
-	// 상태·노출 게이트 뒤에 둬 일시적 사유(미게시·만료)가 먼저 안내되게 하고,
-	// 상품 유형 사유는 그 다음으로 판정한다.
 	if ((AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(exposureType)) {
 		return { eligible: false, reason: "banner_product" };
 	}
 
-	if (manualBoostsPerDay <= 0) {
-		return { eligible: false, reason: "product_without_boost" };
+	// 하루 한도 = 상품 번들 + 활성 기간제 옵션 합.
+	const dailyLimit = manualBoostsPerDay + optionManualPerDay;
+
+	// 하루 한도도 없고 횟수권 잔여도 없으면 애초에 쓸 끌어올리기가 없다.
+	if (dailyLimit <= 0 && countRemaining <= 0) {
+		return { eligible: false, reason: "no_boost_available" };
 	}
 
-	if (usedToday >= manualBoostsPerDay) {
-		return { eligible: false, reason: "daily_limit_reached" };
+	// 하루 한도가 남았으면 우선 그것부터 소진한다(횟수권을 아낀다).
+	if (usedToday < dailyLimit) {
+		return { consume: "daily", eligible: true };
 	}
 
-	return { eligible: true };
+	// 하루 한도는 소진됐지만 횟수권이 남았으면 횟수권 1회 차감.
+	if (countRemaining > 0) {
+		return { consume: "count", eligible: true };
+	}
+
+	return { eligible: false, reason: "daily_limit_reached" };
 };

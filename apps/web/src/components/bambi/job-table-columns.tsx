@@ -5,6 +5,8 @@ import {
 	expiryLabel,
 	getExpiryTone,
 	getJobDisplayStatus,
+	isQueuedListing,
+	listingQueueBadgeLabel,
 	PAYMENT_STATUS_LABELS,
 	remainingDays,
 } from "@/lib/bambi/exposure";
@@ -12,6 +14,36 @@ import {
 // 행 필드 타입을 헬퍼에서 파생해 JobRow/PaymentJob에 직접 의존하지 않는다.
 type JobStatusFields = Parameters<typeof getJobDisplayStatus>[0];
 type ExposureEndsAt = Parameters<typeof expiryLabel>[0];
+
+// 대기열 순번 표시를 위한 선택 필드. 이 필드를 안 내려주는 기존 사용처는 대기 판정을 건너뛴다.
+type JobStatusRow = JobStatusFields & {
+	exposureEndsAt?: ExposureEndsAt;
+	exposureType?: string;
+	listingQueuePosition?: number | null;
+};
+
+// 대기열 배지 라벨을 계산. 선택 필드가 없거나 대기 상태가 아니면 null → 기존 상태 표시로 폴백.
+function getQueueBadgeLabel(row: JobStatusRow): string | null {
+	if (row.exposureType === undefined || row.exposureEndsAt === undefined) {
+		return null;
+	}
+
+	if (
+		!isQueuedListing({
+			exposureEndsAt: row.exposureEndsAt,
+			exposureType: row.exposureType,
+			paymentStatus: row.paymentStatus,
+			status: row.status,
+		})
+	) {
+		return null;
+	}
+
+	return listingQueueBadgeLabel(
+		row.exposureType,
+		row.listingQueuePosition ?? null
+	);
+}
 
 export function jobTitleColumn<T extends { title: string }>(): DataColumn<T> {
 	return {
@@ -42,16 +74,23 @@ export function jobOrganizationColumn<
 	};
 }
 
-export function jobStatusColumn<T extends JobStatusFields>(): DataColumn<T> {
+export function jobStatusColumn<T extends JobStatusRow>(): DataColumn<T> {
 	return {
 		id: "status",
 		header: "공고 상태",
 		sortValue: (row) =>
+			getQueueBadgeLabel(row) ??
 			getJobDisplayStatus({
 				paymentStatus: row.paymentStatus,
 				status: row.status,
 			}).label,
 		cell: (row) => {
+			const queueLabel = getQueueBadgeLabel(row);
+
+			if (queueLabel !== null) {
+				return <StatusBadge tone="warning">{queueLabel}</StatusBadge>;
+			}
+
 			const display = getJobDisplayStatus({
 				paymentStatus: row.paymentStatus,
 				status: row.status,

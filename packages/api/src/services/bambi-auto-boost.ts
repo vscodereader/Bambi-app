@@ -1,22 +1,60 @@
 import { db } from "@bambi-app/db";
-import { jobBoostEvent, jobPost } from "@bambi-app/db/schema/bambi";
-import { and, count, eq, gt, gte, inArray, isNull, or } from "drizzle-orm";
-
-import { LISTING_SECTION_EXPOSURE_TYPES } from "./bambi-ad-exposure";
 import {
+	jobBoostEvent,
+	jobBoostPurchase,
+	jobPost,
+} from "@bambi-app/db/schema/bambi";
+import {
+	and,
+	count,
+	eq,
+	gt,
+	gte,
+	inArray,
+	isNull,
+	notInArray,
+	or,
+} from "drizzle-orm";
+
+import {
+	AD_BANNER_EXPOSURE_TYPES,
+	LISTING_SECTION_EXPOSURE_TYPES,
+} from "./bambi-ad-exposure";
+import {
+	type BoostPurchaseLike,
 	countDueAutoBoostSlots,
 	getAutoBoostSlotOffsetMs,
 	getKstDayStart,
+	sumActivePeriodBoostsPerDay,
 } from "./bambi-job-boost";
+import { notQueuedListingFilter } from "./bambi-premium-capacity";
 
 // 한 틱에서 동시에 처리할 공고 트랜잭션 상한. 대규모 공고에서도 DB 커넥션·잠금 경합을
 // 상한 안에 가두면서 순차 for-await보다 처리량을 끌어올린다(공유 인덱스 워커 풀).
 const AUTO_BOOST_TICK_CONCURRENCY = 10;
 
+// jobBoostPurchase 행에서 BoostPurchaseLike 판정에 필요한 칸만 뽑는 공통 셀렉션.
+// 사전 필터(전역 조회)와 잠금 내 재조회가 같은 형태를 읽어 판정이 어긋나지 않게 한다.
+const boostPurchaseColumns = {
+	boostsPerDay: jobBoostPurchase.boostsPerDay,
+	createdAt: jobBoostPurchase.createdAt,
+	expiresAt: jobBoostPurchase.expiresAt,
+	id: jobBoostPurchase.id,
+	optionType: jobBoostPurchase.optionType,
+	paymentStatus: jobBoostPurchase.paymentStatus,
+	remainingCount: jobBoostPurchase.remainingCount,
+} as const;
+
 // 자동 끌어올리기 틱: 매 호출마다 DB 기준으로 재계산한다(무상태). 후보 공고 중
 // 오늘 도래한 자동 슬롯 수보다 자동 발동이 덜 된 공고를 공고별 트랜잭션으로 1건씩 발동한다.
 // 상태를 메모리에 두지 않아 서버 재시작에도 당일 내 캐치업되고, 이력·정렬이 수동 끌어올리기와
 // 동일한 데이터 경로(jobBoostEvent + boostedAt)를 공유한다.
+//
+// 자동 발동 후보는 두 갈래의 합집합이다:
+//   (a) 상품 번들 자동(autoBoostsPerDay>0) ∧ 리스팅형(스페셜·급구·추천).
+//   (b) 활성 auto_period 옵션 구매 보유 공고 ∧ 배너형만 제외(standard 등 무료 공고 포함).
+// 공고별 유효 자동 횟수 effectiveAutoPerDay = 번들 + Σ활성 auto_period boostsPerDay이며,
+// 슬롯 도래·재확인 판정 모두 이 합산 횟수로 한다(자동 기간제는 차감 개념이 없다).
 //
 // 발동 대상은 동시 실행 상한이 있는 워커 풀로 병렬 처리한다(공고별 트랜잭션·잠금 내 재확인·
 // 개별 실패 삼킴은 순차 구현과 동일 — 정확성 패턴 불변, 처리량만 확대).
@@ -26,28 +64,75 @@ const AUTO_BOOST_TICK_CONCURRENCY = 10;
 export const runAutoBoostTick = async (now: Date): Promise<number> => {
 	const dayStart = getKstDayStart(now);
 
-	// 후보: 자동 횟수 보유 AND 리스팅형 노출(배너형은 끌어올리기 비대상) AND
-	// 공개 중(게시+결제완료) AND 노출 유효(만료 안 됨).
-	const candidates = await db
+	// 활성 auto_period 구매(결제완료·미만료)를 공고별로 모은다. WHERE에서 이미 활성만 남겼지만,
+	// 합산은 Task 2 헬퍼(sumActivePeriodBoostsPerDay)로 해 라우터 축과 판정 규칙을 공유한다.
+	const autoPeriodRows = await db
+		.select({ ...boostPurchaseColumns, jobPostId: jobBoostPurchase.jobPostId })
+		.from(jobBoostPurchase)
+		.where(
+			and(
+				eq(jobBoostPurchase.optionType, "auto_period"),
+				eq(jobBoostPurchase.paymentStatus, "paid"),
+				gt(jobBoostPurchase.expiresAt, now)
+			)
+		);
+	const autoPeriodByJobId = new Map<string, BoostPurchaseLike[]>();
+	for (const row of autoPeriodRows) {
+		const list = autoPeriodByJobId.get(row.jobPostId) ?? [];
+		list.push(row);
+		autoPeriodByJobId.set(row.jobPostId, list);
+	}
+	const autoPeriodJobIds = [...autoPeriodByJobId.keys()];
+
+	// 후보 = 공개 중(게시+결제완료) ∧ 노출 유효(무료 공고는 exposureEndsAt null이라 통과) ∧
+	//   (a) 번들 자동 보유 ∧ 리스팅형  OR  (b) 활성 auto_period 보유 ∧ 배너형 제외.
+	// auto_period 구매가 하나도 없으면 (b) 조건은 undefined라 or가 (a)만으로 축소된다.
+	const autoPeriodBranch =
+		autoPeriodJobIds.length > 0
+			? and(
+					inArray(jobPost.id, autoPeriodJobIds),
+					notInArray(jobPost.exposureType, [...AD_BANNER_EXPOSURE_TYPES])
+				)
+			: undefined;
+
+	const candidateRows = await db
 		.select({
 			autoBoostsPerDay: jobPost.autoBoostsPerDay,
 			id: jobPost.id,
-			organizationId: jobPost.organizationId,
 		})
 		.from(jobPost)
 		.where(
 			and(
-				gt(jobPost.autoBoostsPerDay, 0),
-				inArray(jobPost.exposureType, [...LISTING_SECTION_EXPOSURE_TYPES]),
 				eq(jobPost.status, "published"),
 				eq(jobPost.paymentStatus, "paid"),
-				or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
+				or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now)),
+				// 대기열 리스팅(결제완료·exposureEndsAt null인 스페셜/추천)은 노출 전이라 자동 끌올 제외.
+				notQueuedListingFilter(),
+				or(
+					and(
+						gt(jobPost.autoBoostsPerDay, 0),
+						inArray(jobPost.exposureType, [...LISTING_SECTION_EXPOSURE_TYPES])
+					),
+					autoPeriodBranch
+				)
 			)
 		);
 
-	if (candidates.length === 0) {
+	if (candidateRows.length === 0) {
 		return 0;
 	}
+
+	// 공고별 유효 자동 횟수 = 번들 + 활성 auto_period 합산.
+	const candidates = candidateRows.map((row) => ({
+		effectiveAutoPerDay:
+			row.autoBoostsPerDay +
+			sumActivePeriodBoostsPerDay(
+				autoPeriodByJobId.get(row.id) ?? [],
+				"auto_period",
+				now
+			),
+		id: row.id,
+	}));
 
 	// 오늘 이미 발동된 자동 이벤트 수를 공고별로 집계한다(수동 이벤트는 boostType 필터로 제외).
 	const autoUsedRows = await db
@@ -68,10 +153,10 @@ export const runAutoBoostTick = async (now: Date): Promise<number> => {
 		// 사전 필터도 이 공고의 오프셋을 반영해야 잠금 내 재확인과 판정이 일치한다(둘이 다르면 재확인 무의미).
 		const offsetMs = getAutoBoostSlotOffsetMs(
 			candidate.id,
-			candidate.autoBoostsPerDay
+			candidate.effectiveAutoPerDay
 		);
 		const dueCount = countDueAutoBoostSlots(
-			candidate.autoBoostsPerDay,
+			candidate.effectiveAutoPerDay,
 			now,
 			offsetMs
 		);
@@ -80,7 +165,7 @@ export const runAutoBoostTick = async (now: Date): Promise<number> => {
 	});
 
 	// 공고 하나를 자기 트랜잭션에서 발동한다. jobPost 행 잠금이 동시 틱·다중 인스턴스의
-	// 직렬화 지점이다. 잠금 안에서 상태·자동 카운트를 재확인해 쿼터 초과 발동을 구조적으로 막는다.
+	// 직렬화 지점이다. 잠금 안에서 상태·유효 자동 횟수를 재확인해 쿼터 초과 발동을 구조적으로 막는다.
 	const fireCandidate = (candidate: (typeof dueCandidates)[number]) =>
 		db.transaction(async (tx) => {
 			const [locked] = await tx
@@ -100,15 +185,38 @@ export const runAutoBoostTick = async (now: Date): Promise<number> => {
 				return false;
 			}
 
-			// 사전 필터와 판정을 일치시킨다(리스팅형만 발동, 배너형은 잠금 내에서도 제외).
+			// 잠금 안에서 이 공고의 auto_period 구매를 재조회해 사전 필터와 같은 유효 횟수로 판정한다
+			// (사전 필터와 재확인 판정이 일치해야 재확인이 의미 있다).
+			const purchases: BoostPurchaseLike[] = await tx
+				.select(boostPurchaseColumns)
+				.from(jobBoostPurchase)
+				.where(eq(jobBoostPurchase.jobPostId, candidate.id));
+			const optionAutoPerDay = sumActivePeriodBoostsPerDay(
+				purchases,
+				"auto_period",
+				now
+			);
+			const effectiveAutoPerDay = locked.autoBoostsPerDay + optionAutoPerDay;
+
+			// 후보 합집합(사전 필터)과 동일한 소속 판정:
+			//   (a) 번들 자동 ∧ 리스팅형  OR  (b) 활성 auto_period ∧ 배너형 제외.
+			const isBundleListing =
+				locked.autoBoostsPerDay > 0 &&
+				(LISTING_SECTION_EXPOSURE_TYPES as readonly string[]).includes(
+					locked.exposureType
+				);
+			const isAutoPeriodNonBanner =
+				optionAutoPerDay > 0 &&
+				!(AD_BANNER_EXPOSURE_TYPES as readonly string[]).includes(
+					locked.exposureType
+				);
+
 			if (
 				locked.status !== "published" ||
 				locked.paymentStatus !== "paid" ||
-				!(LISTING_SECTION_EXPOSURE_TYPES as readonly string[]).includes(
-					locked.exposureType
-				) ||
 				(locked.exposureEndsAt !== null &&
-					locked.exposureEndsAt.getTime() <= now.getTime())
+					locked.exposureEndsAt.getTime() <= now.getTime()) ||
+				!(isBundleListing || isAutoPeriodNonBanner)
 			) {
 				return false;
 			}
@@ -116,10 +224,10 @@ export const runAutoBoostTick = async (now: Date): Promise<number> => {
 			// 사전 필터와 동일하게 이 공고의 오프셋을 반영한 dueCount로 재확인한다.
 			const offsetMs = getAutoBoostSlotOffsetMs(
 				candidate.id,
-				locked.autoBoostsPerDay
+				effectiveAutoPerDay
 			);
 			const dueCount = countDueAutoBoostSlots(
-				locked.autoBoostsPerDay,
+				effectiveAutoPerDay,
 				now,
 				offsetMs
 			);
@@ -140,6 +248,7 @@ export const runAutoBoostTick = async (now: Date): Promise<number> => {
 			}
 
 			// 자동 발동엔 사람 액터가 없어 actorUserId는 null로 저장한다(boostType으로 구분).
+			// 자동 기간제는 차감 개념이 없어 purchaseId도 남기지 않는다.
 			await tx.insert(jobBoostEvent).values({
 				actorUserId: null,
 				boostType: "auto",

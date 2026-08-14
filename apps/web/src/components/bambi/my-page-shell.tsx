@@ -22,10 +22,12 @@ import type { ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
+import { MANUAL_PATH } from "@/lib/bambi/manual";
 import { orpc } from "@/utils/orpc";
 import { useBambiAuth } from "./auth-client-provider";
 import { Avatar, Badge } from "./ds";
 import {
+	BookOpenIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	ClipboardListIcon,
@@ -81,18 +83,21 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 		icon: <SettingsIcon />,
 		label: "계정 설정",
 	},
+	{ href: MANUAL_PATH, icon: <BookOpenIcon />, label: "이용 가이드" },
 	{ href: "/support" as Route, icon: <Message />, label: "고객센터" },
 ];
 
 // 역할별로 감추는 항목. 운영자는 신고·면접·차단·고객센터를 콘솔에서 처리하므로 개인용
-// 메뉴가 의미 없다. 구인자는 예정된 면접을 그대로 본다 — 카드가 호출자 기준(구직자 닉네임·
-// 공고명·일시)으로 그려지므로 구인자 시점에서도 읽힌다. 노출만 감추는 것이라 직접 URL로는
-// 그대로 들어갈 수 있다. 데스크톱 허브 카드(screens/seeker.tsx)도 같은 표를 쓴다.
+// 메뉴가 의미 없다. 이용 가이드도 운영자는 콘솔 "콘텐츠 → 운영자 매뉴얼"로 보므로 감춘다.
+// 구인자는 예정된 면접을 그대로 본다 — 카드가 호출자 기준(구직자 닉네임·공고명·일시)으로
+// 그려지므로 구인자 시점에서도 읽힌다. 노출만 감추는 것이라 직접 URL로는 그대로 들어갈 수
+// 있다. 데스크톱 허브 카드(screens/seeker.tsx)도 같은 표를 쓴다.
 const HIDDEN_MY_PAGE_HREFS: Record<string, string[]> = {
 	admin: [
 		"/seeker/me/reports",
 		"/seeker/me/interviews",
 		"/seeker/me/blocks",
+		"/manual",
 		"/support",
 	],
 };
@@ -135,11 +140,21 @@ function ProfileCard() {
 		// 코럴 보더 링은 이 구역의 시그니처 — 사이드바에서도 그대로 유지한다.
 		// 인증 배지는 최상위가 아니라 역할 라벨 줄에 둔다 — 긴 이름이 두 줄로 꺾여도 배지가
 		// 어정쩡한 높이에 끼지 않고, 그 줄이 flex-wrap이라 좁은 사이드바에선 아래로 접힌다.
-		<div className="flex items-center gap-3 rounded-xl border border-primary bg-card p-4">
-			<Avatar name={displayName} ring size="lg" />
+		<Link
+			aria-label="계정 설정으로 이동"
+			className="flex items-center gap-3 rounded-xl border border-primary bg-card p-4 no-underline transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+			href="/seeker/me/settings"
+		>
+			<Avatar
+				fallbackIcon="user"
+				name={displayName}
+				ring
+				size="lg"
+				src={session.data?.user.image ?? undefined}
+			/>
 			<div className="min-w-0 flex-1">
-				<div className="break-words font-extrabold text-foreground text-lg leading-tight">
-					{displayName}
+				<div className="flex flex-wrap items-center gap-1.5 break-words font-extrabold text-foreground text-lg leading-tight">
+					<span>{displayName}</span>
 				</div>
 				<div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
 					<span className="text-muted-foreground text-sm">{roleLabel}</span>
@@ -148,7 +163,7 @@ function ProfileCard() {
 					</Badge>
 				</div>
 			</div>
-		</div>
+		</Link>
 	);
 }
 
@@ -218,7 +233,7 @@ export function MyPageShell({
 	return (
 		<div
 			className={cn(
-				"mx-auto flex min-h-0 w-full flex-1 flex-col gap-6 px-5 py-6 md:flex-row md:gap-8 md:px-6",
+				"mx-auto flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto px-5 py-6 md:flex-row md:gap-8 md:overflow-visible md:px-6",
 				APP_CONTENT_WIDTH
 			)}
 		>

@@ -1,8 +1,8 @@
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import {
 	createGuestToken,
-	DEV_GUEST_TOKEN_SECRET,
 	GUEST_COOKIE_NAME,
+	resolveGuestTokenSecret,
 } from "@bambi-app/api/services/bambi-guest-token";
 import { resolveClientIp } from "@bambi-app/api/services/client-ip";
 import {
@@ -26,7 +26,7 @@ import {
 } from "@/lib/bambi/guest";
 
 const guestTokenSecret = (): string =>
-	env.BAMBI_GUEST_TOKEN_SECRET ?? DEV_GUEST_TOKEN_SECRET;
+	resolveGuestTokenSecret(env.BAMBI_GUEST_TOKEN_SECRET, process.env.NODE_ENV);
 
 // 본인인증 경로의 봇 방어. 한도·윈도는 api 서버와 같은 표에서 온다
 // (@bambi-app/api services/rate-limit의 resolvePublicRateLimit).

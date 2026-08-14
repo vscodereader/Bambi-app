@@ -20,6 +20,8 @@ import {
 	employerOrganizationProfile,
 	employerTeamProfile,
 	interviewSchedule,
+	jobBoostEvent,
+	jobBoostPurchase,
 	jobPost,
 	jobPostMedia,
 	report,
@@ -58,7 +60,14 @@ import {
 } from "../../services/bambi-chat-realtime";
 import { assertLegalAdvisorRoleSwitch } from "../../services/bambi-community-authz";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
+import { jobDetailDesignStatuses } from "../../services/bambi-job-detail-design";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
+import {
+	JOB_POST_DETAIL_IMAGE_LIMIT,
+	validateJobPostImageUpload,
+	validateJobPostMediaSet,
+} from "../../services/bambi-job-media-policy";
+import { resolveListingPaymentExposure } from "../../services/bambi-listing-promotion";
 import { executeBulkModeration } from "../../services/bambi-moderation-bulk";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
 import {
@@ -66,11 +75,21 @@ import {
 	notifyModerationAction,
 } from "../../services/bambi-notifications";
 import { normalizeOrganizationManagementRole } from "../../services/bambi-organization-authz";
-import { assertPremiumApprovalWithinCapacity } from "../../services/bambi-premium-capacity";
-import { getBusinessDocumentObjectUrl } from "../../services/bambi-storage";
+import {
+	assertPremiumApprovalWithinCapacity,
+	getListingQueuePositions,
+	queuedListingWhere,
+} from "../../services/bambi-premium-capacity";
+import { PENDING_REPORT_STATUSES } from "../../services/bambi-report-status";
+import {
+	createJobPostMediaUploadIntent,
+	getBusinessDocumentViewPath,
+	getChatAttachmentObjectUrl,
+	isOwnedJobPostMediaKey,
+} from "../../services/bambi-storage";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
 import { purgeWithdrawnAccountsBatch } from "../../services/bambi-withdrawal-purge";
-import { deletePublicObjects } from "../../services/gcs";
+import { deletePrivateObjects, deletePublicObjects } from "../../services/gcs";
 import {
 	applyJobPostUpdate,
 	getJobPostMediaSet,
@@ -125,6 +144,22 @@ const createReportInput = z.object({
 	details: z.string().max(1000).optional(),
 });
 
+const reportTargetDuplicateLabels: Record<
+	z.infer<typeof targetTypeSchema>,
+	string
+> = {
+	chat_message: "채팅방",
+	chat_room: "채팅방",
+	community_comment: "댓글",
+	community_post: "글",
+	job_post: "공고",
+	review: "대상",
+	user: "대상",
+};
+
+const duplicateReportMessage = (targetType: z.infer<typeof targetTypeSchema>) =>
+	`이미 신고된 ${reportTargetDuplicateLabels[targetType]}입니다. 처리결과를 기다려주세요.`;
+
 const listReportsInput = z.object({
 	status: reportStatusSchema.optional(),
 	limit: z.number().int().min(1).max(100).default(50),
@@ -162,8 +197,40 @@ const setJobPostPaymentInput = z.object({
 	paymentStatus: z.enum(["unpaid", "paid"]),
 });
 
+const setJobPostDesignStatusInput = z.object({
+	jobPostId: z.string().uuid(),
+	status: z.enum(jobDetailDesignStatuses),
+});
+
+const createJobPostDesignMediaUploadInput = z.object({
+	byteSize: z.number().int().min(1),
+	fileName: z.string().max(180),
+	jobPostId: z.string().uuid(),
+	mimeType: z.string().min(1).max(120),
+});
+
+const setJobPostDesignMediaInput = z.object({
+	// 저장될 상세 이미지 전량. 빠진 기존 이미지는 행과 GCS 객체가 함께 지워진다.
+	detail: z
+		.array(
+			z.object({
+				altText: z.string().max(120).default(""),
+				byteSize: z.number().int().min(1),
+				fileName: z.string().max(180),
+				height: z.number().int().min(1).max(20_000).optional(),
+				mimeType: z.string().min(1).max(120),
+				storageKey: z.string().min(1).max(512),
+				width: z.number().int().min(1).max(20_000).optional(),
+			})
+		)
+		.max(JOB_POST_DETAIL_IMAGE_LIMIT),
+	jobPostId: z.string().uuid(),
+});
+
 const listJobsForPaymentInput = z.object({
 	onlyUnpaid: z.boolean().default(false),
+	// 상세이미지 디자인 제작을 신청한 건만 추린다(별도 큐 화면 대신 이 필터로 처리한다).
+	onlyDetailDesign: z.boolean().default(false),
 	limit: z.number().int().min(1).max(100).default(50),
 });
 
@@ -179,7 +246,98 @@ const adjustJobPostExposureInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
+// 대기 중인 스페셜/추천 리스팅을 대기열에서 뺀다(결제 취소). 활성/비리스팅엔 쓰지 않는다.
+const removeFromListingQueueInput = z.object({
+	jobPostId: z.string().uuid(),
+	reason: z.string().min(2).max(500),
+});
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const USED_BUNDLED_BOOST_REVERT_MESSAGE =
+	"이미 사용한 끌어올리기 옵션이 있어 미결제로 전환할 수 없어요.";
+
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// 공고 등록 결제에 묶인 옵션만 공고 결제 상태와 함께 움직인다. 단독 구매는 별도 결제
+// 목록의 개별 처리 흐름을 유지한다. 미결제 전환은 실제 사용 이력이 하나라도 있으면 거절한다.
+const syncBundledBoostPurchasePayment = async ({
+	executor,
+	jobPostId,
+	now,
+	paymentStatus,
+}: {
+	executor: DbTransaction;
+	jobPostId: string;
+	now: Date;
+	paymentStatus: "paid" | "unpaid";
+}) => {
+	const purchases = await executor
+		.select()
+		.from(jobBoostPurchase)
+		.where(
+			and(
+				eq(jobBoostPurchase.jobPostId, jobPostId),
+				eq(jobBoostPurchase.purchaseSource, "job_registration")
+			)
+		)
+		.for("update");
+	if (paymentStatus === "unpaid" && purchases.length > 0) {
+		// 어느 한 옵션이라도 사용됐으면 아무 행도 바꾸기 전에 전체 전환을 거절한다.
+		// 루프 중간에 검사하면 앞 옵션만 unpaid가 되는 부분 갱신이 남을 수 있다.
+		const [usedEvent] = await executor
+			.select({ id: jobBoostEvent.id })
+			.from(jobBoostEvent)
+			.where(
+				inArray(
+					jobBoostEvent.purchaseId,
+					purchases.map((purchase) => purchase.id)
+				)
+			)
+			.limit(1);
+		if (usedEvent) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: USED_BUNDLED_BOOST_REVERT_MESSAGE,
+			});
+		}
+	}
+
+	for (const purchase of purchases) {
+		if (purchase.paymentStatus === paymentStatus) {
+			continue;
+		}
+
+		let patch: Partial<typeof jobBoostPurchase.$inferInsert>;
+		if (paymentStatus === "unpaid") {
+			patch = {
+				activatedAt: null,
+				expiresAt: null,
+				paymentStatus,
+				remainingCount: null,
+			};
+		} else if (purchase.optionType === "manual_count") {
+			patch = {
+				activatedAt: now,
+				expiresAt: null,
+				paymentStatus,
+				remainingCount: purchase.boostCount,
+			};
+		} else {
+			patch = {
+				activatedAt: now,
+				expiresAt: new Date(
+					now.getTime() + (purchase.durationDays ?? 0) * MS_PER_DAY
+				),
+				paymentStatus,
+				remainingCount: null,
+			};
+		}
+
+		await executor
+			.update(jobBoostPurchase)
+			.set(patch)
+			.where(eq(jobBoostPurchase.id, purchase.id));
+	}
+};
 
 // 계정 제재는 bambi_profile 행을 갱신하므로 온보딩 전 계정에는 걸 수 없다.
 const PROFILELESS_SANCTION_MESSAGE =
@@ -269,6 +427,7 @@ const employerVerificationStatusSchema = z.enum([
 	"pending",
 	"verified",
 	"rejected",
+	"changes_unsubmitted",
 ]);
 
 const listEmployersInput = z.object({
@@ -490,6 +649,8 @@ const getJobPostTargetContext = async (targetId: string) => {
 			riskFlags: jobPost.riskFlags,
 			rejectionReason: jobPost.rejectionReason,
 			organizationDisplayName: employerOrganizationProfile.displayName,
+			payAmount: jobPost.payAmount,
+			payUnit: jobPost.payUnit,
 		})
 		.from(jobPost)
 		.innerJoin(
@@ -542,9 +703,14 @@ const getChatRoomTargetContext = async (targetId: string) => {
 			id: chatRoom.id,
 			isBlocked: chatRoom.isBlocked,
 			jobPostTitle: jobPost.title,
+			organizationDisplayName: employerOrganizationProfile.displayName,
 		})
 		.from(chatRoom)
 		.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+		.innerJoin(
+			employerOrganizationProfile,
+			eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+		)
 		.where(eq(chatRoom.id, targetId))
 		.limit(1);
 
@@ -716,6 +882,7 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 	const [post] = await db
 		.select({
 			authorDisplayName: communityPost.authorDisplayName,
+			authorRole: bambiProfile.role,
 			board: communityPost.board,
 			body: communityPost.body,
 			createdAt: communityPost.createdAt,
@@ -724,6 +891,7 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 			title: communityPost.title,
 		})
 		.from(communityPost)
+		.leftJoin(bambiProfile, eq(bambiProfile.userId, communityPost.authorUserId))
 		.where(eq(communityPost.id, targetId))
 		.limit(1);
 
@@ -733,6 +901,7 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 
 	return {
 		authorName: post.authorDisplayName,
+		authorRole: post.authorRole,
 		board: post.board,
 		bodyPreview: toCommunityBodyPreview(post.body),
 		createdAt: post.createdAt,
@@ -742,12 +911,22 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 	};
 };
 
+// 수집 커뮤니티 글에 달린 댓글의 원글 자리 표기. 우리 community_post 행이 없어 제목·
+// 게시판을 조인으로 채울 수 없다(수집 글 제목은 crawled_community_topic에 있고, 운영
+// 화면에는 "우리 글이 아니다"만 보이면 충분하다).
+const CRAWLED_TOPIC_COMMENT_TITLE = "수집 커뮤니티 글";
+// 그 글의 작성자 자리(우리 회원이 아니라 원본 게시판이다).
+const CRAWLED_AUTHOR_DISPLAY_NAME = "밤문화이야기";
+
 // community_comment 신고 컨텍스트 — 작성자 표시명은 listComments와 동일하게 user.name
 // (표시명 정본)을 쓰고, 제목·게시판은 부모 글 조인으로 채운다(부모 글이 삭제 상태여도 조인 유지).
+// 수집 글 댓글은 원글 행이 없어 leftJoin이다 — innerJoin이면 신고가 들어와도 운영 화면에
+// 맥락이 뜨지 않아 조치 버튼까지 사라진다.
 const getCommunityCommentTargetContext = async (targetId: string) => {
 	const [comment] = await db
 		.select({
 			authorName: user.name,
+			authorRole: bambiProfile.role,
 			body: communityComment.body,
 			createdAt: communityComment.createdAt,
 			id: communityComment.id,
@@ -757,8 +936,12 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 			status: communityComment.status,
 		})
 		.from(communityComment)
-		.innerJoin(communityPost, eq(communityPost.id, communityComment.postId))
+		.leftJoin(communityPost, eq(communityPost.id, communityComment.postId))
 		.leftJoin(user, eq(user.id, communityComment.authorUserId))
+		.leftJoin(
+			bambiProfile,
+			eq(bambiProfile.userId, communityComment.authorUserId)
+		)
 		.where(eq(communityComment.id, targetId))
 		.limit(1);
 
@@ -768,17 +951,22 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 
 	return {
 		authorName: comment.authorName,
+		authorRole: comment.authorRole,
 		bodyPreview: comment.body.slice(0, COMMUNITY_BODY_PREVIEW_MAX),
 		createdAt: comment.createdAt,
 		id: comment.id,
-		postBoard: comment.postBoard,
+		// 수집 글은 밤문화 이야기 게시판에 합류하므로 게시판 배지도 그 값으로 세운다
+		// (운영 화면이 게시판 라벨 맵을 태우려면 null이 아니라 key여야 한다).
+		postBoard: comment.postBoard ?? "work_talk",
 		postId: comment.postId,
-		postTitle: comment.postTitle,
+		postTitle: comment.postTitle ?? CRAWLED_TOPIC_COMMENT_TITLE,
 		status: comment.status,
 	};
 };
 
-const getReportTargetContext = async (reportRow: ReportRow) => {
+const getReportTargetContext = async (
+	reportRow: Pick<ReportRow, "targetId" | "targetType">
+) => {
 	// uuid가 아닌 targetId는 대상 조회 자체가 불가하므로 컨텍스트 없이 넘어간다(신고 행은 유지).
 	if (
 		uuidTargetTypes.has(reportRow.targetType) &&
@@ -815,12 +1003,46 @@ const getReportTargetContext = async (reportRow: ReportRow) => {
 	}
 };
 
+type ReportTargetContext = NonNullable<
+	Awaited<ReturnType<typeof getReportTargetContext>>
+>;
+
+const REPORT_CONTEXT_KEYS = [
+	"chatMessage",
+	"jobPost",
+	"review",
+	"user",
+	"chatRoom",
+	"communityPost",
+	"communityComment",
+] as const;
+
+const isReportTargetContext = (
+	value: unknown
+): value is ReportTargetContext => {
+	if (!(value && typeof value === "object") || Array.isArray(value)) {
+		return false;
+	}
+
+	return REPORT_CONTEXT_KEYS.some((key) => key in value);
+};
+
 const withReportTargetContexts = async (reportRows: ReportRow[]) =>
 	await Promise.all(
-		reportRows.map(async (reportRow) => ({
-			...reportRow,
-			targetContext: await getReportTargetContext(reportRow),
-		}))
+		reportRows.map(async (reportRow) => {
+			const liveTargetContext = await getReportTargetContext(reportRow);
+			const snapshotTargetContext = isReportTargetContext(
+				reportRow.targetSnapshot
+			)
+				? reportRow.targetSnapshot
+				: null;
+			return {
+				...reportRow,
+				targetContext: liveTargetContext ?? snapshotTargetContext,
+				targetUnavailable:
+					liveTargetContext === null && snapshotTargetContext === null,
+			};
+		})
 	);
 
 // 신고 목록 각 row에 붙일 신고자 표시 정보(실명·이메일 폴백·역할). displayName은 null일 수
@@ -996,6 +1218,58 @@ const succeededBulkTargetIds = (
 	return targetIds.filter((targetId) => !failed.has(targetId));
 };
 
+/**
+ * 결제 확정이 즉시 노출이 아니라 대기열 접수일 수 있다 — 스페셜/추천은 정원이 차 있으면
+ * exposureEndsAt=null(노출 시계 미시작)·listingPaidAt 세팅으로 FIFO 유료 대기열에 들어간다.
+ * 그 행을 판별해 알림 문구("게시됐어요" vs "대기열 접수")를 사실에 맞게 가른다.
+ */
+const isQueuedListingRow = (row: {
+	exposureEndsAt: Date | null;
+	exposureType: string;
+	listingPaidAt: Date | null;
+}): boolean =>
+	(row.exposureType === "special" || row.exposureType === "recommended") &&
+	row.exposureEndsAt === null &&
+	row.listingPaidAt !== null;
+
+/**
+ * 결제 확정 알림 payload. 대기열 접수면 순번을 붙여 "listing_queued"로, 그 외(즉시 활성화·
+ * 비리스팅·unpaid 전환)는 기존 "set_payment"로 낸다. bulk 여부만 set_payment metadata에 반영한다.
+ */
+const buildListingPaymentNotification = ({
+	bulk,
+	paymentStatus,
+	position,
+	row,
+}: {
+	bulk: boolean;
+	paymentStatus: string;
+	position: number | null;
+	row:
+		| {
+				exposureEndsAt: Date | null;
+				exposureType: string;
+				listingPaidAt: Date | null;
+				title: string;
+		  }
+		| undefined;
+}): { action: string; metadata: Record<string, unknown> } => {
+	if (paymentStatus === "paid" && row && isQueuedListingRow(row)) {
+		return {
+			action: "listing_queued",
+			metadata: {
+				exposureType: row.exposureType,
+				jobPostTitle: row.title,
+				position,
+			},
+		};
+	}
+	return {
+		action: `set_payment:${paymentStatus}`,
+		metadata: bulk ? { bulk: true, paymentStatus } : { paymentStatus },
+	};
+};
+
 const rejectTeamInvitation = async (
 	tx: ModerationTx,
 	adminUserId: string,
@@ -1127,11 +1401,34 @@ const acceptTeamInvitation = async (
 	return updated;
 };
 
+// 대기열(결제완료·미활성) 리스팅을 섹션별로 뽑아 FIFO(listing_paid_at asc, 동률 id asc) 순번을
+// 부착한다. position은 배열 순번(1-based) — getListingQueuePositions의 섹션별 순번과 같은 규칙.
+// 대기 판정은 queuedListingWhere 단일 소스만 쓴다(재발명 금지).
+const listListingQueueSection = async (type: "recommended" | "special") => {
+	const rows = await db
+		.select({
+			id: jobPost.id,
+			listingPaidAt: jobPost.listingPaidAt,
+			organizationDisplayName: employerOrganizationProfile.displayName,
+			title: jobPost.title,
+		})
+		.from(jobPost)
+		.innerJoin(
+			employerOrganizationProfile,
+			eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+		)
+		.where(queuedListingWhere(type))
+		.orderBy(asc(jobPost.listingPaidAt), asc(jobPost.id));
+
+	return rows.map((row, index) => ({ ...row, position: index + 1 }));
+};
+
 export const moderationRouter = {
 	createReport: protectedProcedure
 		.input(createReportInput)
 		.handler(async ({ context, input }) => {
 			const profile = await requireActiveBambiProfile(context.session);
+			const targetContext = await getReportTargetContext(input);
 
 			if (input.targetType === "user" && input.targetId === profile.userId) {
 				throw new ORPCError("BAD_REQUEST", {
@@ -1157,6 +1454,33 @@ export const moderationRouter = {
 			// NOT_FOUND를 내 존재 여부도 새지 않는다.
 			await assertReportTargetExists(input.targetType, input.targetId);
 
+			let communityAuthorRole:
+				| "admin"
+				| "employer"
+				| "guest"
+				| "job_seeker"
+				| "legal_advisor"
+				| null = null;
+			if (
+				input.targetType === "community_post" &&
+				targetContext &&
+				"communityPost" in targetContext
+			) {
+				communityAuthorRole = targetContext.communityPost?.authorRole ?? null;
+			} else if (
+				input.targetType === "community_comment" &&
+				targetContext &&
+				"communityComment" in targetContext
+			) {
+				communityAuthorRole =
+					targetContext.communityComment?.authorRole ?? null;
+			}
+			if (communityAuthorRole === "admin") {
+				throw new ORPCError("FORBIDDEN", {
+					message: "관리자가 작성한 글이나 댓글에는 신고할 수 없습니다.",
+				});
+			}
+
 			if (input.targetType === "chat_room") {
 				await requireChatParticipant(input.targetId, context.session);
 			} else if (input.targetType === "chat_message") {
@@ -1177,6 +1501,9 @@ export const moderationRouter = {
 			}
 
 			// 동일 신고자·대상의 중복 신고는 멱등 처리한다(스키마 변경 없이 기존 row 반환).
+			// 단 미처리(open/reviewing) 신고만 멱등 대상이다 — 운영자가 기각(dismissed)·조치완료
+			// (resolved)한 뒤 같은 대상을 재신고하면 옛 종결 행을 돌려주지 않고 새 신고 행을
+			// 만들어야, 재신고가 실제로 접수되고 채팅 숨김 파이프라인도 다시 걸린다.
 			const [existing] = await db
 				.select()
 				.from(report)
@@ -1184,17 +1511,16 @@ export const moderationRouter = {
 					and(
 						eq(report.reporterUserId, profile.userId),
 						eq(report.targetType, input.targetType),
-						eq(report.targetId, input.targetId)
+						eq(report.targetId, input.targetId),
+						inArray(report.status, [...PENDING_REPORT_STATUSES])
 					)
 				)
 				.limit(1);
 
 			if (existing) {
-				await emitChatReportAvailabilityChanged(
-					existing.targetType,
-					existing.targetId
-				);
-				return existing;
+				throw new ORPCError("CONFLICT", {
+					message: duplicateReportMessage(input.targetType),
+				});
 			}
 
 			const [created] = await db
@@ -1205,6 +1531,7 @@ export const moderationRouter = {
 					targetId: input.targetId,
 					reason: input.reason,
 					details: input.details,
+					targetSnapshot: targetContext,
 				})
 				.returning();
 
@@ -1316,11 +1643,17 @@ export const moderationRouter = {
 				.orderBy(desc(jobPost.updatedAt))
 				.limit(input.limit);
 
-			if (input.status) {
-				return await query.where(eq(jobPost.status, input.status));
-			}
+			const rows = input.status
+				? await query.where(eq(jobPost.status, input.status))
+				: await query;
 
-			return await query;
+			// 대기 공고는 상태 배지 대신 "스페셜/추천 #N"으로 표기하므로 FIFO 순번을 요청당 1회만
+			// 뽑아 부착한다(대기 행이 아니면 null).
+			const positions = await getListingQueuePositions(db);
+			return rows.map((row) => ({
+				...row,
+				listingQueuePosition: positions.get(row.id)?.position ?? null,
+			}));
 		}),
 
 	// 운영자 편집 화면 프리필용. getEditableById(jobs)는 조직 멤버십을 요구해 운영자가
@@ -1710,7 +2043,13 @@ export const moderationRouter = {
 			const updated = await db.transaction(async (tx) => {
 				const [updated] = await tx
 					.update(report)
-					.set({ status: input.status })
+					.set({
+						resolutionReason:
+							input.status === "dismissed" || input.status === "resolved"
+								? input.reason
+								: null,
+						status: input.status,
+					})
 					.where(eq(report.id, input.reportId))
 					.returning();
 
@@ -1760,7 +2099,13 @@ export const moderationRouter = {
 						processTarget: async (reportId) => {
 							const [updated] = await tx
 								.update(report)
-								.set({ status: input.status })
+								.set({
+									resolutionReason:
+										input.status === "dismissed" || input.status === "resolved"
+											? input.reason
+											: null,
+									status: input.status,
+								})
 								.where(eq(report.id, reportId))
 								.returning();
 
@@ -1877,14 +2222,126 @@ export const moderationRouter = {
 
 			// 배너형 승인(unpaid→paid)은 프리미엄 정원 게이트가 필요하므로 트랜잭션 안에서
 			// advisory lock으로 직렬화한다(assertPremiumApprovalWithinCapacity).
-			const { organizationId, updated } = await db.transaction(async (tx) => {
+			const { changed, organizationId, updated } = await db.transaction(
+				async (tx) => {
+					const now = new Date();
+					const [existing] = await tx
+						.select()
+						.from(jobPost)
+						.where(eq(jobPost.id, input.jobPostId))
+						.limit(1);
+
+					if (!existing) {
+						throw new ORPCError("NOT_FOUND");
+					}
+
+					// 같은 상태 재확정은 멱등 처리한다(confirmPurchasePayment와 동일 패턴) — 이미
+					// paid인 리스팅에 결제완료를 다시 걸면 만석 섹션에서 exposureEndsAt=null로
+					// 재계산돼 노출 중인 광고가 대기열 맨 뒤로 강등되고(listingPaidAt 리셋), 배너는
+					// 노출 시계가 부당 연장된다. changed=false로 알림·캐시 동기화도 건너뛴다(#4).
+					if (existing.paymentStatus === input.paymentStatus) {
+						return {
+							changed: false,
+							organizationId: existing.organizationId,
+							updated: existing,
+						};
+					}
+
+					await assertPremiumApprovalWithinCapacity({
+						executor: tx,
+						existingExposureType: existing.exposureType,
+						existingPaymentStatus: existing.paymentStatus,
+						newPaymentStatus: input.paymentStatus,
+						now,
+					});
+
+					// 스페셜/추천 리스팅은 승인 게이트 대신 FIFO 유료 대기열을 탄다 — 정원이 차 있으면
+					// 결제는 성공하되 exposureEndsAt=null로 대기(노출 시계 미시작), 자리가 나면 틱이 승격한다.
+					// 정원 내면 즉시 활성화(now+기간). 그 외(배너·비리스팅)는 기존 규칙 그대로.
+					const { exposureEndsAt, listingPaidAt } =
+						await resolveListingPaymentExposure({
+							executor: tx,
+							exposureType: existing.exposureType,
+							exposureDurationDays: existing.exposureDurationDays,
+							newPaymentStatus: input.paymentStatus,
+							now,
+						});
+
+					await syncBundledBoostPurchasePayment({
+						executor: tx,
+						jobPostId: input.jobPostId,
+						now,
+						paymentStatus: input.paymentStatus,
+					});
+
+					const [row] = await tx
+						.update(jobPost)
+						.set({
+							exposureEndsAt,
+							listingPaidAt,
+							paymentStatus: input.paymentStatus,
+						})
+						.where(eq(jobPost.id, input.jobPostId))
+						.returning();
+
+					if (!row) {
+						throw new ORPCError("NOT_FOUND");
+					}
+
+					return {
+						changed: true,
+						organizationId: existing.organizationId,
+						updated: row,
+					};
+				}
+			);
+
+			// 상태가 실제로 바뀐 경우에만 캐시 동기화·알림을 수행한다 — same-status 멱등 단락에서는
+			// 노출·순번이 그대로라 어느 쪽도 재실행할 이유가 없다(#4).
+			if (changed) {
+				// 결제 상태 전환은 공개 게이트(published AND paid)를 넘나들 수 있으므로
+				// 해당 조직 owner/admin의 수다방 광고 자격 캐시를 재동기화한다.
+				await syncAdvertiserFlagForOrganization({
+					now: new Date(),
+					organizationId,
+				});
+
+				// unpaid→paid가 노출 개시라, 구인자에게는 "광고가 시작됐다"는 유일한 신호다. 단, 스페셜/추천이
+				// 만석 대기열로 들어갔으면(exposureEndsAt=null) 게시가 아니라 접수라 순번을 붙여 다르게 알린다.
+				const queuedNow =
+					input.paymentStatus === "paid" && isQueuedListingRow(updated);
+				const position = queuedNow
+					? ((await getListingQueuePositions(db)).get(input.jobPostId)
+							?.position ?? null)
+					: null;
+				const notification = buildListingPaymentNotification({
+					bulk: false,
+					paymentStatus: input.paymentStatus,
+					position,
+					row: updated,
+				});
+				await notifyModerationAction({
+					action: notification.action,
+					actorUserId: admin.userId,
+					metadata: notification.metadata,
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+			}
+
+			return updated;
+		}),
+
+	// 디자인 제작 진행 상태 토글. 신청하지 않은 공고에는 상태를 세울 수 없다 —
+	// 금액 스냅샷 없이 상태만 서면 결제 관리에서 "받은 돈 없는 제작 건"이 생긴다.
+	setJobPostDesignStatus: adminProcedure
+		.input(setJobPostDesignStatusInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const updated = await db.transaction(async (tx) => {
 				const [existing] = await tx
-					.select({
-						exposureDurationDays: jobPost.exposureDurationDays,
-						exposureType: jobPost.exposureType,
-						organizationId: jobPost.organizationId,
-						paymentStatus: jobPost.paymentStatus,
-					})
+					.select({ detailDesignStatus: jobPost.detailDesignStatus })
 					.from(jobPost)
 					.where(eq(jobPost.id, input.jobPostId))
 					.limit(1);
@@ -1893,26 +2350,15 @@ export const moderationRouter = {
 					throw new ORPCError("NOT_FOUND");
 				}
 
-				await assertPremiumApprovalWithinCapacity({
-					executor: tx,
-					existingExposureType: existing.exposureType,
-					existingPaymentStatus: existing.paymentStatus,
-					newPaymentStatus: input.paymentStatus,
-					now: new Date(),
-				});
-
-				const exposureEndsAt =
-					input.paymentStatus === "paid" &&
-					existing.exposureDurationDays !== null
-						? new Date(Date.now() + existing.exposureDurationDays * MS_PER_DAY)
-						: null;
+				if (existing.detailDesignStatus === null) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "상세이미지 디자인 제작을 신청하지 않은 공고입니다.",
+					});
+				}
 
 				const [row] = await tx
 					.update(jobPost)
-					.set({
-						exposureEndsAt,
-						paymentStatus: input.paymentStatus,
-					})
+					.set({ detailDesignStatus: input.status })
 					.where(eq(jobPost.id, input.jobPostId))
 					.returning();
 
@@ -1920,26 +2366,182 @@ export const moderationRouter = {
 					throw new ORPCError("NOT_FOUND");
 				}
 
-				return { organizationId: existing.organizationId, updated: row };
+				await tx.insert(adminModerationAction).values({
+					action: `set_detail_design_status:${input.status}`,
+					adminUserId: admin.userId,
+					metadata: { previousStatus: existing.detailDesignStatus },
+					reason: "상세이미지 디자인 제작 상태 변경",
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+
+				return row;
 			});
 
-			// 결제 상태 전환은 공개 게이트(published AND paid)를 넘나들 수 있으므로
-			// 해당 조직 owner/admin의 수다방 광고 자격 캐시를 재동기화한다.
-			await syncAdvertiserFlagForOrganization({
-				now: new Date(),
-				organizationId,
-			});
-
-			// unpaid→paid가 노출 개시라, 구인자에게는 "광고가 시작됐다"는 유일한 신호다.
+			// 완료 처리는 구인자에게 "상세이미지가 올라갔다"는 유일한 신호다.
 			await notifyModerationAction({
-				action: `set_payment:${input.paymentStatus}`,
+				action: `set_detail_design_status:${input.status}`,
 				actorUserId: admin.userId,
-				metadata: { paymentStatus: input.paymentStatus },
+				metadata: { jobPostTitle: updated.title },
 				targetId: input.jobPostId,
 				targetType: "job_post",
 			});
 
 			return updated;
+		}),
+
+	// 운영자가 완성본을 직접 올린다. 서명 URL의 조직 prefix는 반드시 **대상 공고의 조직**이어야
+	// 한다 — 운영자 자신의 조직으로 발급하면 저장 단계의 isOwnedJobPostMediaKey에 걸린다.
+	createJobPostDesignMediaUpload: adminProcedure
+		.input(createJobPostDesignMediaUploadInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const [target] = await db
+				.select({ organizationId: jobPost.organizationId })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!target) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const policy = validateJobPostImageUpload({
+				byteSize: input.byteSize,
+				fileName: input.fileName,
+				mimeType: input.mimeType,
+				usage: "detail",
+			});
+
+			if (!policy.ok) {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"상세 이미지는 JPG·PNG·WebP 형식의 10MB 이하 파일만 등록할 수 있습니다.",
+				});
+			}
+
+			return await createJobPostMediaUploadIntent({
+				actorUserId: admin.userId,
+				byteSize: input.byteSize,
+				fileName: input.fileName,
+				mimeType: input.mimeType,
+				organizationId: target.organizationId,
+			});
+		}),
+
+	// 상세 이미지(usage=detail) 전량 교체. 5장 제한은 기존 정책을 그대로 태우고, 교체에서
+	// 빠진 키는 트랜잭션 커밋 뒤에만 GCS에서 지운다(롤백된 변경으로 원본을 잃지 않게).
+	setJobPostDesignMedia: adminProcedure
+		.input(setJobPostDesignMediaInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const [target] = await db
+				.select({ organizationId: jobPost.organizationId })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+
+			if (!target) {
+				throw new ORPCError("NOT_FOUND");
+			}
+
+			const rows = input.detail.map((item, index) => ({
+				...item,
+				position: index,
+				usage: "detail" as const,
+			}));
+			const policy = validateJobPostMediaSet(rows);
+
+			if (!policy.ok) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: `상세 이미지는 최대 ${JOB_POST_DETAIL_IMAGE_LIMIT}장까지, JPG·PNG·WebP 10MB 이하만 등록할 수 있습니다.`,
+				});
+			}
+
+			for (const row of rows) {
+				if (
+					!isOwnedJobPostMediaKey({
+						organizationId: target.organizationId,
+						storageKey: row.storageKey,
+					})
+				) {
+					throw new ORPCError("FORBIDDEN", {
+						message: "이 공고의 조직에 속하지 않은 이미지 키입니다.",
+					});
+				}
+			}
+
+			const { detail, removedKeys } = await db.transaction(async (tx) => {
+				// 스냅샷도 tx 안에서 읽는다. 밖에서 읽으면 그 사이 끼어든 detail 행이 삭제 대상
+				// 목록에 빠져 GCS 객체만 영영 남는다.
+				const previousKeys = await tx
+					.select({ storageKey: jobPostMedia.storageKey })
+					.from(jobPostMedia)
+					.where(
+						and(
+							eq(jobPostMedia.jobPostId, input.jobPostId),
+							eq(jobPostMedia.usage, "detail")
+						)
+					);
+
+				await tx
+					.delete(jobPostMedia)
+					.where(
+						and(
+							eq(jobPostMedia.jobPostId, input.jobPostId),
+							eq(jobPostMedia.usage, "detail")
+						)
+					);
+
+				const inserted =
+					rows.length === 0
+						? []
+						: await tx
+								.insert(jobPostMedia)
+								.values(
+									rows.map((row) => ({
+										altText: row.altText.trim(),
+										byteSize: row.byteSize,
+										fileName: row.fileName.trim(),
+										height: row.height ?? null,
+										jobPostId: input.jobPostId,
+										mimeType: row.mimeType,
+										organizationId: target.organizationId,
+										position: row.position,
+										storageKey: row.storageKey,
+										uploadedByUserId: admin.userId,
+										usage: row.usage,
+										width: row.width ?? null,
+									}))
+								)
+								.returning();
+
+				const retained = new Set(rows.map((row) => row.storageKey));
+				const removed = previousKeys
+					.map((row) => row.storageKey)
+					.filter((key) => !retained.has(key));
+
+				// 남의 조직 자산을 파괴적으로 교체하는 조치라 흔적을 남긴다.
+				await tx.insert(adminModerationAction).values({
+					action: "set_detail_design_media",
+					adminUserId: admin.userId,
+					metadata: {
+						removedCount: removed.length,
+						savedCount: inserted.length,
+					},
+					reason: "상세이미지 디자인 완성본 등록",
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+
+				return { detail: inserted, removedKeys: removed };
+			});
+
+			await deletePublicObjects(removedKeys);
+
+			return { detail };
 		}),
 
 	// 공고의 광고 종료일만 앞뒤로 민다. 결제 상태·노출 종류는 그대로라 프리미엄 정원(자리 수)에
@@ -2017,6 +2619,108 @@ export const moderationRouter = {
 			return updated;
 		}),
 
+	// 대기 중(paid·미노출)인 스페셜/추천 리스팅을 대기열에서 뺀다 — 결제를 unpaid로 되돌리고
+	// listingPaidAt(FIFO 키)·exposureEndsAt을 비운다. 이미 활성(노출 중)이거나 비리스팅·미결제
+	// 공고는 대상이 아니라 BAD_REQUEST로 막는다. adjustJobPostExposure와 같은 흐름.
+	removeFromListingQueue: adminProcedure
+		.input(removeFromListingQueueInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+
+			const { organizationId, updated } = await db.transaction(async (tx) => {
+				const now = new Date();
+				const [existing] = await tx
+					.select({
+						exposureEndsAt: jobPost.exposureEndsAt,
+						exposureType: jobPost.exposureType,
+						organizationId: jobPost.organizationId,
+						paymentStatus: jobPost.paymentStatus,
+					})
+					.from(jobPost)
+					.where(eq(jobPost.id, input.jobPostId))
+					.limit(1);
+
+				if (!existing) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				// 대기열 정의: paid + 리스팅 종류 + exposureEndsAt IS NULL(노출 시계 미시작).
+				const isQueuedListing =
+					existing.paymentStatus === "paid" &&
+					(existing.exposureType === "special" ||
+						existing.exposureType === "recommended") &&
+					existing.exposureEndsAt === null;
+				if (!isQueuedListing) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "대기열에 있는 리스팅 공고만 대기열에서 뺄 수 있어요.",
+					});
+				}
+
+				await syncBundledBoostPurchasePayment({
+					executor: tx,
+					jobPostId: input.jobPostId,
+					now,
+					paymentStatus: "unpaid",
+				});
+
+				const [row] = await tx
+					.update(jobPost)
+					.set({
+						exposureEndsAt: null,
+						listingPaidAt: null,
+						paymentStatus: "unpaid",
+					})
+					.where(eq(jobPost.id, input.jobPostId))
+					.returning();
+
+				if (!row) {
+					throw new ORPCError("NOT_FOUND");
+				}
+
+				await tx.insert(adminModerationAction).values({
+					action: "remove_from_listing_queue",
+					adminUserId: admin.userId,
+					metadata: { previousExposureType: existing.exposureType },
+					reason: input.reason,
+					targetId: input.jobPostId,
+					targetType: "job_post",
+				});
+
+				return { organizationId: existing.organizationId, updated: row };
+			});
+
+			// 대기열에서 빠지면 미결제로 돌아가 공개 게이트(published AND paid)를 벗어나므로
+			// 해당 조직의 수다방 광고 자격 캐시를 재동기화한다(setJobPostPayment와 동일 이유).
+			await syncAdvertiserFlagForOrganization({
+				now: new Date(),
+				organizationId,
+			});
+
+			await notifyModerationAction({
+				action: "remove_from_listing_queue",
+				actorUserId: admin.userId,
+				metadata: { jobPostTitle: updated.title },
+				reason: input.reason,
+				targetId: input.jobPostId,
+				targetType: "job_post",
+			});
+
+			return updated;
+		}),
+
+	// 운영자 정원 카드용 섹션별 대기열 목록(스페셜/추천). 대기 판정은 queuedListingWhere 단일
+	// 소스, 순번은 FIFO(listing_paid_at asc). 가드·프로시저 종류는 removeFromListingQueue와 동일.
+	listListingQueues: adminProcedure.handler(async ({ context }) => {
+		await requireAdminProfile(context.session);
+
+		const [recommended, special] = await Promise.all([
+			listListingQueueSection("recommended"),
+			listListingQueueSection("special"),
+		]);
+
+		return { recommended, special };
+	}),
+
 	// 결제 처리가 의미있는 공고 목록(초안 제외: pending_review·published).
 	// 인증 업체 공고는 검수 큐 없이 자동 published라 여기서 결제를 처리한다.
 	listJobsForPayment: protectedProcedure
@@ -2035,13 +2739,19 @@ export const moderationRouter = {
 				conditions.push(eq(jobPost.paymentStatus, "unpaid"));
 			}
 
-			return await db
+			if (input.onlyDetailDesign) {
+				conditions.push(isNotNull(jobPost.detailDesignStatus));
+			}
+
+			const rows = await db
 				.select({
 					id: jobPost.id,
 					title: jobPost.title,
 					status: jobPost.status,
 					exposureType: jobPost.exposureType,
 					exposureAmount: jobPost.exposureAmount,
+					detailDesignAmount: jobPost.detailDesignAmount,
+					detailDesignStatus: jobPost.detailDesignStatus,
 					paymentStatus: jobPost.paymentStatus,
 					exposureDurationDays: jobPost.exposureDurationDays,
 					exposureEndsAt: jobPost.exposureEndsAt,
@@ -2056,6 +2766,41 @@ export const moderationRouter = {
 				.where(and(...conditions))
 				.orderBy(desc(jobPost.createdAt))
 				.limit(input.limit);
+
+			const bundledPurchases =
+				rows.length === 0
+					? []
+					: await db
+							.select({
+								amount: jobBoostPurchase.amount,
+								jobPostId: jobBoostPurchase.jobPostId,
+								optionType: jobBoostPurchase.optionType,
+							})
+							.from(jobBoostPurchase)
+							.where(
+								and(
+									inArray(
+										jobBoostPurchase.jobPostId,
+										rows.map((row) => row.id)
+									),
+									eq(jobBoostPurchase.purchaseSource, "job_registration")
+								)
+							)
+							.orderBy(asc(jobBoostPurchase.createdAt));
+			const bundledByJobPostId = new Map<string, typeof bundledPurchases>();
+			for (const purchase of bundledPurchases) {
+				const current = bundledByJobPostId.get(purchase.jobPostId) ?? [];
+				current.push(purchase);
+				bundledByJobPostId.set(purchase.jobPostId, current);
+			}
+
+			// 결제관리 목록도 대기 공고에 FIFO 순번을 보여주므로 요청당 1회 뽑아 부착한다.
+			const positions = await getListingQueuePositions(db);
+			return rows.map((row) => ({
+				...row,
+				boostPurchases: bundledByJobPostId.get(row.id) ?? [],
+				listingQueuePosition: positions.get(row.id)?.position ?? null,
+			}));
 		}),
 
 	bulkSetJobPostStatus: protectedProcedure
@@ -2148,11 +2893,14 @@ export const moderationRouter = {
 
 			// 갱신에 성공한 공고들의 조직 유니크 집합 — 트랜잭션 커밋 후 광고 자격 캐시 동기화용.
 			const affectedOrganizationIds = new Set<string>();
+			// 같은 상태 재확정으로 무변경 처리된 공고들 — 성공으로 치되 알림·캐시 대상에서 뺀다(#4).
+			const noopJobPostIds = new Set<string>();
 
 			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (jobPostId) => {
+							const now = new Date();
 							const [existing] = await tx
 								.select({
 									exposureDurationDays: jobPost.exposureDurationDays,
@@ -2170,6 +2918,14 @@ export const moderationRouter = {
 								});
 							}
 
+							// 같은 상태 재확정은 항목 단위 no-op(#4, 단건과 동일). 성공으로 치되
+							// 아무것도 바꾸지 않고, 커밋 후 알림·캐시 동기화 대상에서도 뺀다 —
+							// 이미 paid인 리스팅을 재확정하면 노출 중인 광고가 대기열로 강등된다.
+							if (existing.paymentStatus === input.paymentStatus) {
+								noopJobPostIds.add(jobPostId);
+								return;
+							}
+
 							// 정원 초과 승인은 항목별 실패로 떨어진다(CONFLICT). 같은 트랜잭션에서
 							// 앞선 승인이 반영돼 active가 늘므로, 정원 내 앞 항목만 성공한다.
 							await assertPremiumApprovalWithinCapacity({
@@ -2177,21 +2933,33 @@ export const moderationRouter = {
 								existingExposureType: existing.exposureType,
 								existingPaymentStatus: existing.paymentStatus,
 								newPaymentStatus: input.paymentStatus,
-								now: new Date(),
+								now,
 							});
 
-							const exposureEndsAt =
-								input.paymentStatus === "paid" &&
-								existing.exposureDurationDays !== null
-									? new Date(
-											Date.now() + existing.exposureDurationDays * MS_PER_DAY
-										)
-									: null;
+							// 스페셜/추천 리스팅은 승인 게이트 없이 FIFO 대기열을 탄다 — 정원 내 항목은
+							// 즉시 활성화되고, 같은 트랜잭션의 앞선 활성화가 뒤 항목의 active 카운트에
+							// 보이므로 처리 순서대로 자리를 채운다. 정원이 차면 대기(exposureEndsAt=null).
+							const { exposureEndsAt, listingPaidAt } =
+								await resolveListingPaymentExposure({
+									executor: tx,
+									exposureType: existing.exposureType,
+									exposureDurationDays: existing.exposureDurationDays,
+									newPaymentStatus: input.paymentStatus,
+									now,
+								});
+
+							await syncBundledBoostPurchasePayment({
+								executor: tx,
+								jobPostId,
+								now,
+								paymentStatus: input.paymentStatus,
+							});
 
 							await tx
 								.update(jobPost)
 								.set({
 									exposureEndsAt,
+									listingPaidAt,
 									paymentStatus: input.paymentStatus,
 								})
 								.where(eq(jobPost.id, jobPostId));
@@ -2209,15 +2977,47 @@ export const moderationRouter = {
 				await syncAdvertiserFlagForOrganization({ now, organizationId });
 			}
 
-			// 정원 초과로 CONFLICT 난 공고는 승인되지 않았다 — 성공분에만 "노출 개시"를 알린다.
-			for (const jobPostId of succeededBulkTargetIds(
-				input.jobPostIds,
-				result
-			)) {
+			// 정원 초과로 CONFLICT 난 공고는 승인되지 않았다 — 성공분에만 결과를 알린다. 스페셜/추천이
+			// 만석 대기열로 들어갔으면(exposureEndsAt=null) "노출 개시"가 아니라 "대기열 접수"라 순번을
+			// 붙여 다르게 알린다. 성공분 행과 순번 맵을 각각 1회만 뽑아 행별로 문구를 가른다.
+			const succeededIds = succeededBulkTargetIds(input.jobPostIds, result);
+			const succeededRows =
+				succeededIds.length > 0
+					? await db
+							.select({
+								exposureEndsAt: jobPost.exposureEndsAt,
+								exposureType: jobPost.exposureType,
+								id: jobPost.id,
+								listingPaidAt: jobPost.listingPaidAt,
+								title: jobPost.title,
+							})
+							.from(jobPost)
+							.where(inArray(jobPost.id, succeededIds))
+					: [];
+			const succeededRowById = new Map(
+				succeededRows.map((row) => [row.id, row] as const)
+			);
+			// 순번 맵은 대기열 행이 하나라도 있을 때만 1회 뽑는다(즉시 활성화·unpaid엔 불필요).
+			const queuePositions =
+				input.paymentStatus === "paid" && succeededRows.some(isQueuedListingRow)
+					? await getListingQueuePositions(db)
+					: null;
+
+			for (const jobPostId of succeededIds) {
+				// 무변경(same-status) 건은 실제 전환이 없었으므로 알림을 보내지 않는다(#4).
+				if (noopJobPostIds.has(jobPostId)) {
+					continue;
+				}
+				const notification = buildListingPaymentNotification({
+					bulk: true,
+					paymentStatus: input.paymentStatus,
+					position: queuePositions?.get(jobPostId)?.position ?? null,
+					row: succeededRowById.get(jobPostId),
+				});
 				await notifyModerationAction({
-					action: `set_payment:${input.paymentStatus}`,
+					action: notification.action,
 					actorUserId: admin.userId,
-					metadata: { bulk: true, paymentStatus: input.paymentStatus },
+					metadata: notification.metadata,
 					targetId: jobPostId,
 					targetType: "job_post",
 				});
@@ -2455,7 +3255,7 @@ export const moderationRouter = {
 					fileName: document.fileName,
 					id: document.id,
 					mimeType: document.mimeType,
-					objectUrl: getBusinessDocumentObjectUrl(document),
+					objectUrl: getBusinessDocumentViewPath(document.id),
 				});
 				documentsByOrganizationId.set(
 					document.organizationId,
@@ -2468,6 +3268,34 @@ export const moderationRouter = {
 				businessDocuments:
 					documentsByOrganizationId.get(employer.organizationId) ?? [],
 			}));
+		}),
+
+	// 운영자의 부적절 서류 제거 수단. 구인자 본인 삭제(onboarding.deleteBusinessDocument)와
+	// 달리 조직 verificationStatus 전이를 하지 않는다 — 심사 판정은 별도 반려 플로우가 담당.
+	deleteBusinessDocument: adminProcedure
+		.input(z.object({ documentId: z.string().min(1) }))
+		.handler(async ({ input }) => {
+			const [document] = await db
+				.select({
+					id: employerBusinessDocument.id,
+					storageKey: employerBusinessDocument.storageKey,
+				})
+				.from(employerBusinessDocument)
+				.where(eq(employerBusinessDocument.id, input.documentId))
+				.limit(1);
+
+			if (!document) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Business document was not found.",
+				});
+			}
+
+			await db
+				.delete(employerBusinessDocument)
+				.where(eq(employerBusinessDocument.id, document.id));
+			await deletePrivateObjects([document.storageKey]);
+
+			return { id: document.id };
 		}),
 
 	listPendingTeamInvitations: protectedProcedure
@@ -2702,9 +3530,11 @@ export const moderationRouter = {
 			const [room] = await db
 				.select({
 					chatRoomId: chatRoom.id,
+					employerImage: employerUser.image,
 					employerName: employerUser.name,
 					employerUserId: chatRoom.employerUserId,
 					jobPostTitle: jobPost.title,
+					jobSeekerImage: seekerUser.image,
 					jobSeekerName: seekerUser.name,
 					jobSeekerUserId: chatRoom.jobSeekerUserId,
 				})
@@ -2729,15 +3559,19 @@ export const moderationRouter = {
 				})
 				.from(chatMessage)
 				.where(eq(chatMessage.chatRoomId, input.chatRoomId))
-				.orderBy(asc(chatMessage.createdAt));
+				.orderBy(asc(chatMessage.createdAt), asc(chatMessage.id));
 
 			const messageIds = messages.map((message) => message.id);
 			const attachments = messageIds.length
 				? await db
 						.select({
+							byteSize: chatAttachment.byteSize,
+							category: chatAttachment.category,
 							fileName: chatAttachment.fileName,
 							id: chatAttachment.id,
 							messageId: chatAttachment.messageId,
+							mimeType: chatAttachment.mimeType,
+							storageKey: chatAttachment.storageKey,
 						})
 						.from(chatAttachment)
 						.where(inArray(chatAttachment.messageId, messageIds))
@@ -2746,11 +3580,25 @@ export const moderationRouter = {
 
 			const attachmentsByMessage = new Map<
 				string,
-				{ fileName: string; id: string }[]
+				{
+					byteSize: number;
+					category: "image" | "pdf";
+					fileName: string;
+					id: string;
+					mimeType: string;
+					objectUrl: string;
+				}[]
 			>();
 			for (const attachment of attachments) {
 				const list = attachmentsByMessage.get(attachment.messageId) ?? [];
-				list.push({ fileName: attachment.fileName, id: attachment.id });
+				list.push({
+					byteSize: attachment.byteSize,
+					category: attachment.category,
+					fileName: attachment.fileName,
+					id: attachment.id,
+					mimeType: attachment.mimeType,
+					objectUrl: getChatAttachmentObjectUrl(attachment),
+				});
 				attachmentsByMessage.set(attachment.messageId, list);
 			}
 
@@ -3113,7 +3961,9 @@ export const moderationRouter = {
 						postAuthorName: communityPost.authorDisplayName,
 					})
 					.from(communityComment)
-					.innerJoin(
+					// 수집 글 댓글은 원글 행이 없다 — innerJoin이면 목록에서 통째로 빠져
+					// totalCount와 어긋나고 운영자가 내릴 수단도 사라진다.
+					.leftJoin(
 						communityPost,
 						eq(communityComment.postId, communityPost.id)
 					)
@@ -3130,9 +3980,9 @@ export const moderationRouter = {
 						// 화면이 유형별 좁히기 없이 한 형태만 렌더하게 둔다(상세와 같은 관례).
 						board: null as string | null,
 						// 댓글은 제목이 없으므로 원글 제목을 맥락으로 보여준다.
-						title: row.postTitle,
+						title: row.postTitle ?? CRAWLED_TOPIC_COMMENT_TITLE,
 						excerpt: excerpt(row.body),
-						authorName: row.postAuthorName,
+						authorName: row.postAuthorName ?? CRAWLED_AUTHOR_DISPLAY_NAME,
 						authorUserId: row.authorUserId,
 						status: row.status,
 						createdAt: row.createdAt,
@@ -3234,7 +4084,8 @@ export const moderationRouter = {
 						status: communityComment.status,
 					})
 					.from(communityComment)
-					.innerJoin(
+					// 목록과 같은 이유로 leftJoin이다(수집 글 댓글은 원글 행이 없다).
+					.leftJoin(
 						communityPost,
 						eq(communityComment.postId, communityPost.id)
 					)
@@ -3247,9 +4098,9 @@ export const moderationRouter = {
 
 				return {
 					// 댓글은 제목이 없으므로 원글 제목·작성자를 맥락으로 보여준다(목록과 동일).
-					title: row.postTitle,
+					title: row.postTitle ?? CRAWLED_TOPIC_COMMENT_TITLE,
 					body: row.body,
-					authorName: row.postAuthorName,
+					authorName: row.postAuthorName ?? CRAWLED_AUTHOR_DISPLAY_NAME,
 					createdAt: row.createdAt,
 					status: row.status,
 					board: null as string | null,

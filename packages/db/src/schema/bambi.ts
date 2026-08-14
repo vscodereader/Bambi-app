@@ -63,7 +63,7 @@ export const bambiGender = pgEnum("bambi_gender", ["male", "female"]);
 
 export const employerVerificationStatus = pgEnum(
 	"employer_verification_status",
-	["none", "pending", "verified", "rejected"]
+	["none", "pending", "verified", "rejected", "changes_unsubmitted"]
 );
 
 // on_hold(검수 보류)는 hidden(운영자 강제 숨김)과 구분되는 검수 축 상태다 — 둘을 같은
@@ -103,6 +103,28 @@ export const jobExposureType = pgEnum("job_exposure_type", [
 	"urgent",
 	"recommended",
 	"standard",
+]);
+
+// 상세이미지 디자인 제작 애드온의 진행 상태. 컬럼이 nullable이라 null = 미신청이고,
+// 신청 순간 requested로 시작해 운영자가 완성본을 등록하면 completed로 넘어간다.
+// 별도 주문 테이블 없이 공고 스냅샷으로만 표현하므로 1공고 1회 주문이며 재주문 이력은 없다.
+export const jobDetailDesignStatus = pgEnum("job_detail_design_status", [
+	"requested",
+	"completed",
+]);
+
+// 공고 끌어올리기 추가 옵션의 종류. 기간제 수동(manual_period)·횟수권 수동(manual_count)·
+// 기간제 자동(auto_period) 세 가지를 전역으로 판다. 전역 카탈로그(job_boost_option)와
+// 구매 스냅샷(job_boost_purchase)이 이 값으로 옵션을 특정한다.
+export const jobBoostOptionType = pgEnum("job_boost_option_type", [
+	"manual_period",
+	"manual_count",
+	"auto_period",
+]);
+
+export const jobBoostPurchaseSource = pgEnum("job_boost_purchase_source", [
+	"job_registration",
+	"standalone",
 ]);
 
 export const jobPaymentMethod = pgEnum("job_payment_method", [
@@ -211,6 +233,7 @@ export const supportInquiryCategory = pgEnum("support_inquiry_category", [
 	"payment",
 	"report",
 	"etc",
+	"design",
 ]);
 
 // 문의 진행 상태. 운영 조치 상태(community_content_status)와는 별개 축이다 —
@@ -450,6 +473,10 @@ export const employerOrganizationProfile = pgTable(
 		representativeName: text("representative_name"),
 		// 개업일자 YYYYMMDD 8자리(본인인증 birth8과 같은 컨벤션 — 시각이 없는 날짜라 text).
 		businessStartDate: text("business_start_date"),
+		draftDisplayName: text("draft_display_name"),
+		draftBusinessRegistrationNumber: text("draft_business_registration_number"),
+		draftRepresentativeName: text("draft_representative_name"),
+		draftBusinessStartDate: text("draft_business_start_date"),
 		// 국세청 대조 성공 시각·납세자 상태 코드(b_stt_cd 원값). 둘 다 null이면 운영자에게는
 		// "미확인"이다(키 미설정·국세청 장애로 판정하지 못한 제출).
 		biznumCheckedAt: timestamp("biznum_checked_at"),
@@ -860,6 +887,13 @@ export const jobPost = pgTable(
 			onDelete: "set null",
 		}),
 		exposureAmount: integer("exposure_amount"),
+		// 디자인 제작 애드온의 구매 시점 가격 스냅샷(exposure_amount와 동일 철학).
+		// 상품 가격이 나중에 바뀌어도 이미 신청한 공고의 결제 금액은 이 값으로 고정된다.
+		// null = 미신청.
+		detailDesignAmount: integer("detail_design_amount"),
+		// 신청 시 requested로 시작하고 운영자가 완성본을 올리면 completed가 된다.
+		// completed인 공고는 옵션 해제가 막힌다(이미 제작된 작업의 흔적 보존).
+		detailDesignStatus: jobDetailDesignStatus("detail_design_status"),
 		paymentMethod: jobPaymentMethod("payment_method"),
 		paymentStatus: jobPaymentStatus("payment_status")
 			.default("unpaid")
@@ -876,6 +910,10 @@ export const jobPost = pgTable(
 		// 서버 틱 스케줄러가 09~21시 KST 창을 이 횟수로 균등 분배해 자동 발동한다.
 		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
 		publishedAt: timestamp("published_at"),
+		// 리스팅(스페셜/추천) 공고가 결제완료된 시각. 만석이면 결제 후에도 노출되지 않고
+		// 대기열에 들어가는데, 이 값이 FIFO 대기 순번의 키다(먼저 결제된 광고가 먼저 자리를 차지).
+		// 활성 여부는 exposureEndsAt로 구분한다(null=대기중). null=미결제/비리스팅.
+		listingPaidAt: timestamp("listing_paid_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -1033,6 +1071,11 @@ export const jobBoostEvent = pgTable(
 		// 자동 발동('auto')은 사람 액터가 없어 null. 수동('manual')은 클릭한 사용자를 저장한다.
 		actorUserId: text("actor_user_id").references(() => user.id),
 		boostType: text("boost_type").default("manual").notNull(),
+		// 이 끌어올림을 유발한 추가 옵션 구매(횟수권 차감·기간제 자동 발동의 출처). 추가 옵션
+		// 축이 아닌 기존 상품 끌어올림은 null. 구매 행이 정리돼도 이력은 남겨야 하므로 set null.
+		purchaseId: uuid("purchase_id").references(() => jobBoostPurchase.id, {
+			onDelete: "set null",
+		}),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
@@ -1041,6 +1084,75 @@ export const jobBoostEvent = pgTable(
 			table.createdAt
 		),
 		index("job_boost_event_organization_id_idx").on(table.organizationId),
+	]
+);
+
+// 공고 끌어올리기 추가 옵션의 전역 판매 정의(옵션 종류당 1행). 공고별이 아니라 운영자가
+// 관리하는 상품 카탈로그라, 세 옵션의 가격·수량을 여기서 한 번만 정한다. 기간제와 횟수권이
+// 서로 다른 수량 축을 쓰므로 컬럼을 나눠 두고 해당 없는 축은 null로 남긴다.
+export const jobBoostOption = pgTable("job_boost_option", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	// 옵션 종류당 한 행뿐이라 유니크. 구매 스냅샷·화면이 이 값으로 옵션을 특정한다.
+	optionType: jobBoostOptionType("option_type").notNull().unique(),
+	// null = 미판매(구인자 화면에서 이 옵션 자체가 안 보인다). 값이 있으면 판매가.
+	price: integer("price"),
+	// 기간제(manual_period·auto_period) 전용 — 하루 끌어올리기 횟수. 횟수권은 null.
+	boostsPerDay: integer("boosts_per_day"),
+	// 기간제 전용 — 판매 기간(일). 횟수권은 null.
+	durationDays: integer("duration_days"),
+	// 횟수권(manual_count) 전용 — 총 끌어올리기 횟수. 기간제는 null.
+	boostCount: integer("boost_count"),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
+
+// 공고 끌어올리기 추가 옵션의 구매 1건. 전역 카탈로그(job_boost_option)에서 산 결과를 공고
+// 단위로 기록한다. 아래 스냅샷 컬럼(amount·boostsPerDay·durationDays·boostCount)은 구매
+// 시점의 옵션 값을 복사한 것이라, 운영자가 나중에 옵션 가격·수량을 바꿔도 기존 구매에는
+// 비소급으로 고정된다(노출 상품 exposure_amount 스냅샷과 동일 철학).
+export const jobBoostPurchase = pgTable(
+	"job_boost_purchase",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		// 구매를 실행한 사용자. jobBoostEvent.actorUserId와 같이 사용자 삭제에 매이지 않게
+		// onDelete를 두지 않는다(조직 축이 결제 주체라 사용자는 참고값).
+		buyerUserId: text("buyer_user_id").references(() => user.id),
+		optionType: jobBoostOptionType("option_type").notNull(),
+		// 유료 노출상품 등록과 함께 산 옵션만 공고 결제에 묶는다. 기존 구매와 광고관리에서
+		// 따로 산 옵션은 standalone이라 운영자 옵션 결제 목록에서 개별 처리한다.
+		purchaseSource: jobBoostPurchaseSource("purchase_source")
+			.default("standalone")
+			.notNull(),
+		// 결제 금액 스냅샷. 옵션 가격이 나중에 바뀌어도 이 구매의 청구액은 이 값으로 고정.
+		amount: integer("amount").notNull(),
+		// 아래 세 칸은 구매 시점 옵션 값 스냅샷 — 운영자가 옵션을 바꿔도 기존 구매 비소급.
+		// 기간제는 boostsPerDay·durationDays, 횟수권은 boostCount만 채우고 나머지는 null.
+		boostsPerDay: integer("boosts_per_day"),
+		durationDays: integer("duration_days"),
+		boostCount: integer("boost_count"),
+		paymentMethod: jobPaymentMethod("payment_method"),
+		paymentStatus: jobPaymentStatus("payment_status")
+			.default("unpaid")
+			.notNull(),
+		// 결제 확정 후 옵션이 켜진 시각. 미결제면 null.
+		activatedAt: timestamp("activated_at"),
+		// 기간제 옵션의 만료 시각. 횟수권·미결제면 null.
+		expiresAt: timestamp("expires_at"),
+		// 횟수권 옵션의 잔여 횟수. 발동할 때마다 차감한다. 기간제·미결제면 null.
+		remainingCount: integer("remaining_count"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_boost_purchase_job_post_id_idx").on(table.jobPostId),
+		index("job_boost_purchase_payment_status_idx").on(table.paymentStatus),
 	]
 );
 
@@ -1088,6 +1200,14 @@ export const adProduct = pgTable(
 		manualBoostsPerDay: integer("manual_boosts_per_day").default(0).notNull(),
 		// 이 상품을 구매한 공고가 하루에 자동으로 끌어올려지는 횟수(구매 시 공고로 스냅샷). 0 = 미제공.
 		autoBoostsPerDay: integer("auto_boosts_per_day").default(0).notNull(),
+		// 이 상품을 구매한 공고의 수동 끌어올리기 최소 간격(분). 하루 한도와 별개로 연타를 막아
+		// 리스트 품질을 지킨다. 정책 노브라 라이브 참조(운영자 변경 즉시 반영), 기본 10분.
+		manualBoostCooldownMinutes: integer("manual_boost_cooldown_minutes")
+			.default(10)
+			.notNull(),
+		// 이 상품을 살 때 함께 신청할 수 있는 "상세이미지 디자인 제작" 애드온 가격.
+		// null = 이 상품엔 옵션 미제공(구인자 화면에서 체크박스 자체가 안 보인다).
+		detailDesignPrice: integer("detail_design_price"),
 		sortOrder: integer("sort_order").default(0).notNull(),
 		isActive: boolean("is_active").default(true).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1200,6 +1320,19 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 광고 배너 로테이션 주기(분). 운영자 사이트 설정에서 편집한다. 활성 광고 칸이 이 주기마다
 	// 한 칸씩 전진한다. null이면 코드 기본값(DEFAULT_AD_ROTATION_MINUTES=60)으로 폴백한다.
 	adBannerRotationMinutes: integer("ad_banner_rotation_minutes"),
+	// 급구 채용 섹션 숨김. 코드에서 섹션을 지우지 않고 운영자 토글로 뺀 값 — 기본 true라
+	// 마이그레이션 직후 즉시 숨겨지고(기존 단일 행에도 채워짐), 운영자가 끄면(false) 다시 노출된다.
+	urgentSectionHidden: boolean("urgent_section_hidden").default(true).notNull(),
+	// 스페셜 리스팅 광고의 정원 = 렌더 슬롯 수(고정 인벤토리, 로테이션 없음). 자리가 차면 신규
+	// 승인은 대기열로 밀린다. null이면 코드 기본값(DEFAULT_SPECIAL_CAPACITY=12)으로 폴백한다.
+	specialCapacity: integer("special_capacity"),
+	// 추천 리스팅 광고의 정원 = 렌더 슬롯 수. 위 스페셜과 동일 규칙이며 null이면 코드 기본값
+	// (DEFAULT_RECOMMENDED_CAPACITY=20)으로 폴백한다.
+	recommendedCapacity: integer("recommended_capacity"),
+	// 베스트글(추천수 큐레이션 가상 게시판) 아이콘의 lucide 이름. 베스트는 community_board 행이
+	// 없는 가상 게시판이라 게시판 아이콘 컬럼 대신 여기 저장한다. null이면 미지정(기존 코럴
+	// 액센트 바 유지) — 값 검증은 API 쪽 COMMUNITY_BOARD_ICONS enum(zod)이 맡는다.
+	bestBoardIcon: text("best_board_icon"),
 	// 개인정보 처리방침에 노출하는 위탁사·관리부서 연락처. 운영자 사이트 설정에서 편집한다.
 	// null이면 프론트가 코드 폴백(BAMBI_PROCESSORS 이름 / BAMBI_COMPANY.privacyOfficer)을 쓴다.
 	privacyPaymentProcessor: text("privacy_payment_processor"),
@@ -1600,6 +1733,8 @@ export const report = pgTable(
 		targetId: text("target_id").notNull(),
 		reason: text("reason").notNull(),
 		details: text("details"),
+		resolutionReason: text("resolution_reason"),
+		targetSnapshot: jsonb("target_snapshot").$type<Record<string, unknown>>(),
 		status: reportStatus("status").default("open").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -1752,6 +1887,7 @@ export const communityPost = pgTable(
 		authorGuestId: text("author_guest_id"),
 		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
 		authorDisplayName: text("author_display_name").notNull(),
+		isAnonymous: boolean("is_anonymous").default(false).notNull(),
 		passwordHash: text("password_hash").notNull(),
 		isLocked: boolean("is_locked").default(false).notNull(),
 		// 법률 자문 글의 선택 입력 연락처(휴대폰). 잠금을 연 열람자(작성자·운영자·법률자문)에게만
@@ -1770,6 +1906,9 @@ export const communityPost = pgTable(
 		// 토글·작성·삭제 트랜잭션에서 함께 증감한다.
 		likeCount: integer("like_count").default(0).notNull(),
 		commentCount: integer("comment_count").default(0).notNull(),
+		// 운영자가 글 단위로 새 댓글·답글 작성을 잠근다. 기존 댓글 열람·수정·삭제에는
+		// 영향을 주지 않으며 일반 회원·비회원은 API에서 이 값을 설정할 수 없다.
+		commentsDisabled: boolean("comments_disabled").default(false).notNull(),
 		status: communityContentStatus("status").default("published").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		// $onUpdate를 쓰지 않는다 — 조회수 증가가 "수정됨" 시각을 갱신하면 안 되므로
@@ -1798,9 +1937,17 @@ export const communityComment = pgTable(
 	"community_comment",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
-		postId: uuid("post_id")
-			.notNull()
-			.references(() => communityPost.id, { onDelete: "cascade" }),
+		// 댓글이 달린 대상. 우리 글이면 post_id, 수집 커뮤니티 글이면 crawled_topic_id만
+		// 채워진다(아래 CHECK로 정확히 한쪽만 강제). 수집 글에도 회원·비회원이 우리 규칙대로
+		// 댓글을 달 수 있어야 해서 컬럼을 나눴다 — 수집 글을 community_post에 복제하면
+		// 재수집 때마다 두 테이블을 맞춰야 하고 우리 글과 수집 글의 경계가 흐려진다.
+		postId: uuid("post_id").references(() => communityPost.id, {
+			onDelete: "cascade",
+		}),
+		crawledTopicId: uuid("crawled_topic_id").references(
+			() => crawledCommunityTopic.id,
+			{ onDelete: "cascade" }
+		),
 		// 글과 같은 규칙: 회원이면 author_user_id, 비회원이면 author_guest_id만 채워진다.
 		authorUserId: text("author_user_id").references(() => user.id, {
 			onDelete: "cascade",
@@ -1827,11 +1974,23 @@ export const communityComment = pgTable(
 			table.status,
 			table.createdAt
 		),
+		// 수집 글 상세가 같은 모양의 목록 조회를 한다(대상 + 노출 상태 + 시간순).
+		index("community_comment_crawled_topic_id_status_created_at_idx").on(
+			table.crawledTopicId,
+			table.status,
+			table.createdAt
+		),
 		index("community_comment_author_user_id_idx").on(table.authorUserId),
 		index("community_comment_parent_comment_id_idx").on(table.parentCommentId),
 		check(
 			"community_comment_author_one_of_ck",
 			sql`num_nonnulls(${table.authorUserId}, ${table.authorGuestId}) = 1`
+		),
+		// 작성자 축과 별개인 대상 축. 둘 다 null(고아 댓글)이나 둘 다 채워진 행(어느 글의
+		// 댓글인지 모호)이 생기면 조회·카운트가 조용히 어긋난다.
+		check(
+			"community_comment_target_one_of_ck",
+			sql`num_nonnulls(${table.postId}, ${table.crawledTopicId}) = 1`
 		),
 	]
 );
@@ -2054,6 +2213,24 @@ export const jobPromotionBoostEventRelations = relations(
 	})
 );
 
+export const jobBoostPurchaseRelations = relations(
+	jobBoostPurchase,
+	({ many, one }) => ({
+		jobPost: one(jobPost, {
+			fields: [jobBoostPurchase.jobPostId],
+			references: [jobPost.id],
+		}),
+		boostEvents: many(jobBoostEvent),
+	})
+);
+
+export const jobBoostEventRelations = relations(jobBoostEvent, ({ one }) => ({
+	purchase: one(jobBoostPurchase, {
+		fields: [jobBoostEvent.purchaseId],
+		references: [jobBoostPurchase.id],
+	}),
+}));
+
 export const adPlacementRelations = relations(adPlacement, ({ many }) => ({
 	products: many(adProduct),
 }));
@@ -2153,6 +2330,10 @@ export const mainPopup = pgTable(
 		linkPath: text("link_path"),
 		startsAt: timestamp("starts_at", { withTimezone: true }),
 		endsAt: timestamp("ends_at", { withTimezone: true }),
+		targetPages: jsonb("target_pages")
+			.$type<string[]>()
+			.default(["main"])
+			.notNull(),
 		revision: integer("revision").default(0).notNull(),
 		updatedByUserId: text("updated_by_user_id").references(() => user.id, {
 			onDelete: "set null",

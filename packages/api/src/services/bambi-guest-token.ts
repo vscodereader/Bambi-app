@@ -15,6 +15,14 @@ export const GUEST_COOKIE_NAME = "bambi_guest";
 export const DEV_GUEST_TOKEN_SECRET =
 	"bambi-dev-guest-token-secret-not-for-prod";
 
+export const resolveGuestTokenSecret = (
+	configuredSecret: string | undefined,
+	nodeEnv: string | undefined
+): string =>
+	nodeEnv === "production"
+		? (configuredSecret ?? DEV_GUEST_TOKEN_SECRET)
+		: DEV_GUEST_TOKEN_SECRET;
+
 export interface GuestTokenPayload {
 	// 만료(Unix 초). 쿠키 maxAge와 별개로 토큰 자체에도 만료를 박아, 훔친 쿠키를
 	// 무기한 재사용하는 것을 막는다.

@@ -18,13 +18,17 @@ import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { UserRound } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
 import type { MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { formatPhone } from "@/lib/bambi-format";
+import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
 import { Badge } from "../ds";
 import { MyPageShell } from "../my-page-shell";
@@ -32,6 +36,8 @@ import { PhoneVerifyDialog } from "../phone-verify-dialog";
 import { WithdrawAccountSection } from "../withdraw-account-section";
 
 const BIRTH_PATTERN = /^\d{8}$/;
+const PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const PROFILE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const formatGender = (gender: string | null | undefined): string => {
 	if (gender === "male") {
@@ -58,9 +64,24 @@ export function AccountSettingsScreen() {
 	const mineQuery = useQuery(orpc.bambi.onboarding.getMine.queryOptions());
 	const profile = mineQuery.data?.bambiProfile ?? null;
 	const isPhoneVerified = Boolean(profile?.isPhoneVerified);
+	const profileImageInputRef = useRef<HTMLInputElement>(null);
+	const [isProfileImageSaving, setIsProfileImageSaving] = useState(false);
+	const [draftProfileImage, setDraftProfileImage] = useState<string | null>(
+		null
+	);
+	const [isProfileImageDirty, setIsProfileImageDirty] = useState(false);
+	const createMediaUpload = useMutation(
+		orpc.bambi.community.createMediaUpload.mutationOptions()
+	);
 
 	// 표시 이름(닉네임)의 정본은 user.name(세션)이다. bambi_profile.display_name은 제거됐다.
 	const currentName = session.data?.user?.name ?? "";
+	const currentProfileImage = session.data?.user?.image ?? null;
+	useEffect(() => {
+		if (!isProfileImageDirty) {
+			setDraftProfileImage(currentProfileImage);
+		}
+	}, [currentProfileImage, isProfileImageDirty]);
 	const [displayName, setDisplayName] = useState("");
 	useEffect(() => {
 		if (currentName) {
@@ -123,6 +144,69 @@ export function AccountSettingsScreen() {
 
 	const handleSignOut = async () => {
 		await signOutToHome(router);
+	};
+
+	const handleProfileImageChange = async (
+		event: React.ChangeEvent<HTMLInputElement>
+	) => {
+		const file = event.target.files?.[0];
+		event.target.value = "";
+		if (!file) {
+			return;
+		}
+		if (!PROFILE_IMAGE_TYPES.has(file.type)) {
+			toast.error("JPG, PNG, WebP 이미지만 등록할 수 있어요.");
+			return;
+		}
+		if (file.size > PROFILE_IMAGE_MAX_BYTES) {
+			toast.error("프로필 사진은 5MB 이하만 등록할 수 있어요.");
+			return;
+		}
+		setIsProfileImageSaving(true);
+		try {
+			const intent = await createMediaUpload.mutateAsync({
+				byteSize: file.size,
+				fileName: file.name,
+				mimeType: file.type,
+			});
+			await uploadFileToSignedUrl({ file, uploadIntent: intent });
+			setDraftProfileImage(jobMediaPublicUrl(intent.storageKey));
+			setIsProfileImageDirty(true);
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "프로필 사진을 저장하지 못했어요."
+			);
+		} finally {
+			setIsProfileImageSaving(false);
+		}
+	};
+
+	const handleProfileImageDelete = () => {
+		setDraftProfileImage(null);
+		setIsProfileImageDirty(currentProfileImage !== null);
+	};
+
+	const handleProfileImageSave = async () => {
+		setIsProfileImageSaving(true);
+		try {
+			const result = await authClient.updateUser({ image: draftProfileImage });
+			if (result.error) {
+				throw new Error(result.error.message);
+			}
+			await session.refetch();
+			setIsProfileImageDirty(false);
+			toast.success("프로필 사진을 저장했어요.");
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "프로필 사진을 저장하지 못했어요."
+			);
+		} finally {
+			setIsProfileImageSaving(false);
+		}
 	};
 
 	return (
@@ -222,6 +306,68 @@ export function AccountSettingsScreen() {
 			</Card>
 
 			{/* 데스크톱은 마이페이지 사이드바에 로그아웃이 있어 본문에서는 감춘다. */}
+			<Card>
+				<CardHeader>
+					<CardTitle>프로필 사진 설정</CardTitle>
+					<CardDescription>
+						JPG, PNG, WebP 형식의 5MB 이하 이미지를 등록할 수 있어요.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="flex items-center gap-4">
+					<div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary">
+						{draftProfileImage ? (
+							<Image
+								alt="프로필"
+								className="size-full object-cover"
+								height={80}
+								src={draftProfileImage}
+								unoptimized
+								width={80}
+							/>
+						) : (
+							<UserRound
+								aria-hidden="true"
+								className="size-9 text-muted-foreground"
+							/>
+						)}
+					</div>
+					<div className="flex flex-wrap gap-2">
+						<input
+							accept="image/jpeg,image/png,image/webp"
+							className="sr-only"
+							onChange={handleProfileImageChange}
+							ref={profileImageInputRef}
+							type="file"
+						/>
+						<Button
+							disabled={isProfileImageSaving}
+							onClick={() => profileImageInputRef.current?.click()}
+							type="button"
+							variant="outline"
+						>
+							{isProfileImageSaving ? "저장 중" : "사진 선택"}
+						</Button>
+						{draftProfileImage ? (
+							<Button
+								disabled={isProfileImageSaving}
+								onClick={handleProfileImageDelete}
+								type="button"
+								variant="ghost"
+							>
+								기본 이미지로 변경
+							</Button>
+						) : null}
+						<Button
+							disabled={!isProfileImageDirty || isProfileImageSaving}
+							onClick={handleProfileImageSave}
+							type="button"
+						>
+							저장
+						</Button>
+					</div>
+				</CardContent>
+			</Card>
+
 			<Button
 				className="w-full md:hidden"
 				onClick={handleSignOut}

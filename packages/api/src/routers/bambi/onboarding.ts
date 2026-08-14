@@ -18,7 +18,7 @@ import {
 	employerTeamProfile,
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
-import { env } from "@bambi-app/env/server";
+import { env, isTestIdentityChannelAllowed } from "@bambi-app/env/server";
 import { ORPCError } from "@orpc/server";
 import { and, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import z from "zod";
@@ -32,6 +32,7 @@ import { hasActiveAdExposure } from "../../services/bambi-advertiser";
 import {
 	isEmployerLikeRole,
 	isEmployerOrganizationVerified,
+	requireAdminProfile,
 } from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
@@ -62,10 +63,11 @@ import {
 import { resolveOptionalRegion } from "../../services/bambi-region";
 import {
 	createBusinessDocumentUploadIntent,
-	getBusinessDocumentObjectUrl,
+	getBusinessDocumentViewPath,
 	isOwnedBusinessDocumentKey,
+	resolveBusinessDocumentViewUrl,
 } from "../../services/bambi-storage";
-import { deletePublicObjects } from "../../services/gcs";
+import { deletePrivateObjects } from "../../services/gcs";
 import {
 	type BiznumValidation,
 	validateBiznum,
@@ -77,12 +79,11 @@ import {
 import { takeRateLimit } from "../../services/rate-limit";
 
 // 포트원 테스트 채널은 통신사 대조를 하지 않아 아무 생년월일·주민번호 뒷자리나 통과시킨다.
-// 개발에서만 허용하고 프로덕션에서는 거부한다(판정은 여기서 하고 서비스에 옵션으로 넘긴다 —
-// bambi-identity는 env에 의존하지 않는 순수 모듈이다).
-// TODO(임시): KCP 실계약 전 테스트 흐름 확인을 위해 프로덕션에서도 테스트 채널을 허용 중.
-// 실연동 채널 전환 시 `env.NODE_ENV !== "production"` 판정으로 반드시 되돌릴 것.
+// 허용 판정은 env(isTestIdentityChannelAllowed)가 단일화한다 — 로컬·검증배포(test.bambialba.com)
+// 에서만 켜지고 실서비스 프로덕션에서는 default-deny로 거부된다. bambi-identity는 env에
+// 의존하지 않는 순수 모듈이라 판정 결과만 옵션으로 넘긴다.
 const identityChannelOptions = {
-	allowTestChannel: true,
+	allowTestChannel: isTestIdentityChannelAllowed,
 };
 
 const profileInput = z.object({
@@ -178,6 +179,15 @@ const addBusinessDocumentInput = businessDocumentUploadInput.extend({
 
 const deleteBusinessDocumentInput = z.object({
 	documentId: z.string().uuid(),
+});
+
+const businessDocumentViewInput = z.object({
+	documentId: z.string().min(1),
+	download: z.boolean().default(false),
+});
+
+const saveEmployerBusinessDraftInput = submitEmployerBusinessInfoInput.extend({
+	organizationId: z.string().min(1),
 });
 
 const BIZNUM_MISMATCH_MESSAGE =
@@ -357,7 +367,7 @@ const toBusinessDocumentResponse = (document: {
 	fileName: document.fileName,
 	id: document.id,
 	mimeType: document.mimeType,
-	objectUrl: getBusinessDocumentObjectUrl(document),
+	objectUrl: getBusinessDocumentViewPath(document.id),
 });
 
 // 다른 계정이 같은 사람으로 인증했는지 본다. 판정 축은 DI지만, 과거 CI만 저장된
@@ -533,7 +543,6 @@ export const onboardingRouter = {
 		.handler(async ({ context, input }) => {
 			const userId = context.session.user.id;
 			await requireBusinessDocumentOrganization({
-				allowPending: true,
 				organizationId: input.organizationId,
 				userId,
 			});
@@ -554,7 +563,6 @@ export const onboardingRouter = {
 		.handler(async ({ context, input }) => {
 			const userId = context.session.user.id;
 			await requireBusinessDocumentOrganization({
-				allowPending: true,
 				organizationId: input.organizationId,
 				userId,
 			});
@@ -616,7 +624,10 @@ export const onboardingRouter = {
 				if (lockedOrganizationProfile.verificationStatus === "verified") {
 					await tx
 						.update(employerOrganizationProfile)
-						.set({ verificationStatus: "pending", updatedAt: new Date() })
+						.set({
+							verificationStatus: "changes_unsubmitted",
+							updatedAt: new Date(),
+						})
 						.where(
 							eq(
 								employerOrganizationProfile.organizationId,
@@ -635,6 +646,41 @@ export const onboardingRouter = {
 			}
 
 			return toBusinessDocumentResponse(createdDocument);
+		}),
+
+	// 목록 응답에는 앱 경로(/bambi/business-documents/{id})만 실린다. 실제 파일 위치는
+	// 이 프로시저가 매 호출 인가를 통과한 요청에만 내려준다 — 서명 URL(60초)이 응답·캐시에
+	// 상주하지 않으므로 URL 유출·공유가 무의미하다.
+	createBusinessDocumentViewUrl: protectedProcedure
+		.input(businessDocumentViewInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			const [document] = await db
+				.select()
+				.from(employerBusinessDocument)
+				.where(eq(employerBusinessDocument.id, input.documentId))
+				.limit(1);
+
+			if (!document) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Business document was not found.",
+				});
+			}
+
+			// 소유 축은 "올린 본인"(createdByUserId)이다. 같은 조직의 다른 멤버도 볼 수 없고,
+			// 본인이 아니면 운영자(admin)만 통과한다(심사 화면).
+			if (document.createdByUserId !== userId) {
+				await requireAdminProfile(context.session);
+			}
+
+			return {
+				url: await resolveBusinessDocumentViewUrl({
+					category: document.category,
+					download: input.download,
+					fileName: document.fileName,
+					storageKey: document.storageKey,
+				}),
+			};
 		}),
 
 	deleteBusinessDocument: protectedProcedure
@@ -688,7 +734,10 @@ export const onboardingRouter = {
 				if (lockedOrganizationProfile.verificationStatus === "verified") {
 					await tx
 						.update(employerOrganizationProfile)
-						.set({ verificationStatus: "pending", updatedAt: new Date() })
+						.set({
+							verificationStatus: "changes_unsubmitted",
+							updatedAt: new Date(),
+						})
 						.where(
 							eq(
 								employerOrganizationProfile.organizationId,
@@ -697,7 +746,7 @@ export const onboardingRouter = {
 						);
 				}
 			});
-			await deletePublicObjects([document.storageKey]);
+			await deletePrivateObjects([document.storageKey]);
 
 			return { id: document.id };
 		}),
@@ -764,6 +813,13 @@ export const onboardingRouter = {
 					employerOrganizationProfile.businessRegistrationNumber,
 				representativeName: employerOrganizationProfile.representativeName,
 				businessStartDate: employerOrganizationProfile.businessStartDate,
+				draftDisplayName: employerOrganizationProfile.draftDisplayName,
+				draftBusinessRegistrationNumber:
+					employerOrganizationProfile.draftBusinessRegistrationNumber,
+				draftRepresentativeName:
+					employerOrganizationProfile.draftRepresentativeName,
+				draftBusinessStartDate:
+					employerOrganizationProfile.draftBusinessStartDate,
 				biznumCheckedAt: employerOrganizationProfile.biznumCheckedAt,
 				biznumStatusCode: employerOrganizationProfile.biznumStatusCode,
 				verificationStatus: employerOrganizationProfile.verificationStatus,
@@ -1398,6 +1454,52 @@ export const onboardingRouter = {
 			return updatedProfile;
 		}),
 
+	saveEmployerBusinessDraft: protectedProcedure
+		.input(saveEmployerBusinessDraftInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			const profile = await requireBusinessDocumentOrganization({
+				allowPending: true,
+				organizationId: input.organizationId,
+				userId,
+			});
+			if (profile.verificationStatus === "pending") {
+				throw new ORPCError("CONFLICT", {
+					message: "심사 중에는 업체 정보를 변경할 수 없습니다.",
+				});
+			}
+			const [updated] = await db
+				.update(employerOrganizationProfile)
+				.set({
+					draftDisplayName: input.displayName.trim(),
+					draftBusinessRegistrationNumber:
+						input.businessRegistrationNumber.trim(),
+					draftRepresentativeName: input.representativeName.trim(),
+					draftBusinessStartDate: input.businessStartDate.replaceAll("-", ""),
+					verificationStatus:
+						profile.verificationStatus === "verified"
+							? "changes_unsubmitted"
+							: profile.verificationStatus,
+					updatedAt: new Date(),
+				})
+				.where(
+					and(
+						eq(
+							employerOrganizationProfile.organizationId,
+							input.organizationId
+						),
+						ne(employerOrganizationProfile.verificationStatus, "pending")
+					)
+				)
+				.returning();
+			if (!updated) {
+				throw new ORPCError("CONFLICT", {
+					message: "심사 중에는 업체 정보를 변경할 수 없습니다.",
+				});
+			}
+			return updated;
+		}),
+
 	submitEmployerBusinessInfo: protectedProcedure
 		.input(submitEmployerBusinessInfoInput)
 		.handler(async ({ context, input }) => {
@@ -1448,6 +1550,22 @@ export const onboardingRouter = {
 				.limit(1);
 
 			if (ownedOrg) {
+				if (ownedOrg.verificationStatus === "pending") {
+					throw new ORPCError("CONFLICT", {
+						message: "심사 중에는 업체 정보를 다시 제출할 수 없습니다.",
+					});
+				}
+				const documentCount = await db
+					.select({ count: count() })
+					.from(employerBusinessDocument)
+					.where(
+						eq(employerBusinessDocument.organizationId, ownedOrg.organizationId)
+					);
+				if ((documentCount[0]?.count ?? 0) < 1) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "사업자 인증 서류를 1개 이상 추가해 주세요.",
+					});
+				}
 				const isUnchanged =
 					ownedOrg.displayName === input.displayName &&
 					ownedOrg.businessRegistrationNumber ===
@@ -1465,23 +1583,39 @@ export const onboardingRouter = {
 
 				const biznumCheck = await checkBiznum({ ...input, businessStartDate });
 
-				await db
+				const [updatedProfile] = await db
 					.update(employerOrganizationProfile)
 					.set({
 						displayName: input.displayName,
 						businessRegistrationNumber: input.businessRegistrationNumber,
 						representativeName: input.representativeName,
 						businessStartDate,
+						draftDisplayName: null,
+						draftBusinessRegistrationNumber: null,
+						draftRepresentativeName: null,
+						draftBusinessStartDate: null,
 						...biznumCheck,
 						verificationStatus: "pending",
 						updatedAt: new Date(),
 					})
 					.where(
-						eq(
-							employerOrganizationProfile.organizationId,
-							ownedOrg.organizationId
+						and(
+							eq(
+								employerOrganizationProfile.organizationId,
+								ownedOrg.organizationId
+							),
+							ne(employerOrganizationProfile.verificationStatus, "pending")
 						)
-					);
+					)
+					.returning({
+						organizationId: employerOrganizationProfile.organizationId,
+					});
+
+				if (!updatedProfile) {
+					throw new ORPCError("CONFLICT", {
+						message: "이미 심사가 요청된 업체 정보입니다.",
+					});
+				}
 
 				// pending으로 전이됐을 때만 알린다 — verified 유지 경로(위)는 심사거리가
 				// 아니다. 제출·재제출 모두 운영자 인증 큐의 새 건이다.

@@ -7,6 +7,7 @@ export const SUPPORT_CATEGORIES = [
 	"job_post",
 	"payment",
 	"report",
+	"design",
 	"etc",
 ] as const;
 
@@ -17,6 +18,7 @@ export const SUPPORT_CATEGORY_LABELS: Record<SupportCategory, string> = {
 	job_post: "공고·지원",
 	payment: "결제·광고",
 	report: "신고·제재",
+	design: "디자인 제작",
 	etc: "기타",
 };
 

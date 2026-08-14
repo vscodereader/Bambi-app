@@ -6,6 +6,7 @@ import {
 	ArrowUpDown,
 	Bell,
 	Bookmark,
+	BookOpen,
 	Briefcase,
 	Calendar,
 	Check,
@@ -28,6 +29,7 @@ import {
 	type LucideIcon,
 	type LucideProps,
 	MapPin,
+	Menu,
 	MessageCircle,
 	MessagesSquare,
 	MoreHorizontal,
@@ -58,6 +60,7 @@ export const AlertCircle = fill(CircleAlert);
 export const ArrowNarrowLeft = fill(ArrowLeft);
 export const BellIcon = fill(Bell);
 export const BookmarkIcon = fill(Bookmark);
+export const BookOpenIcon = fill(BookOpen);
 export const BriefcaseIcon = fill(Briefcase);
 export const CalendarIcon = fill(Calendar);
 export const CheckIcon = fill(Check);
@@ -79,6 +82,7 @@ export const Home2 = fill(House);
 export const ImageIcon = fill(ImageIconBase);
 export const LockIcon = fill(Lock);
 export const MapPinIcon = fill(MapPin);
+export const MenuIcon = fill(Menu);
 export const Message = fill(MessageCircle);
 export const MessagesIcon = fill(MessagesSquare);
 export const MoreIcon = fill(MoreHorizontal);

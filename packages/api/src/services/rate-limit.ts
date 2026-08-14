@@ -54,6 +54,25 @@ export function takeRateLimit({
 	return true;
 }
 
+// 허용 처리 직후의 후속 작업이 실패했을 때 해당 호출 기록 한 건만 되돌린다. 동일 키의
+// 다른 정상 호출까지 지우지 않도록 예약 시각과 일치하는 마지막 항목 하나만 제거한다.
+export function releaseRateLimit({ key, now }: { key: string; now: number }) {
+	const hits = buckets.get(key);
+	if (!hits) {
+		return;
+	}
+	const index = hits.lastIndexOf(now);
+	if (index === -1) {
+		return;
+	}
+	hits.splice(index, 1);
+	if (hits.length === 0) {
+		buckets.delete(key);
+	} else {
+		buckets.set(key, hits);
+	}
+}
+
 // ── 공개(비로그인) 경로의 IP 기반 한도 정책 ──────────────────────────────────────
 // api의 레이트리밋 미들웨어(packages/api/src/index.ts)와 web의 게스트 인증 라우트
 // (/api/guest)가 같은 표를 본다. 정책이 한 곳에 모여 있어야 "본인인증 한 번에 두 엔드포인트를

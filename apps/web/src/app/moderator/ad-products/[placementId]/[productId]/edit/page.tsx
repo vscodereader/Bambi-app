@@ -20,6 +20,11 @@ export default function EditAdProductPage() {
 	);
 	const placement = catalogQuery.data?.find((p) => p.id === placementId);
 	const product = placement?.products.find((item) => item.id === productId);
+	// 급구 섹션이 숨김이면 노출 영역 선택지에서 "급구 채용 리스팅"을 뺀다(이미 급구로 저장된
+	// 상품은 폼에서 값 유실 방지를 위해 그대로 유지).
+	const exposureQuery = useQuery(
+		orpc.bambi.siteSettings.getExposureSectionConfig.queryOptions()
+	);
 
 	const updateProduct = useMutation(
 		orpc.bambi.adProducts.updateProduct.mutationOptions({
@@ -56,6 +61,7 @@ export default function EditAdProductPage() {
 						name: product.name,
 						tagline: product.tagline ?? "",
 						benefits: product.benefits,
+						detailDesignPrice: product.detailDesignPrice ?? null,
 						discountCampaigns: product.discountCampaigns.map((campaign) => ({
 							discountPercent: campaign.discountPercent,
 							endsAt: campaign.endsAt ? new Date(campaign.endsAt) : null,
@@ -68,6 +74,8 @@ export default function EditAdProductPage() {
 						previewTemplate: product.previewTemplate,
 						manualBoostsPerDay: product.manualBoostsPerDay ?? 0,
 						autoBoostsPerDay: product.autoBoostsPerDay ?? 0,
+						manualBoostCooldownMinutes:
+							product.manualBoostCooldownMinutes ?? 10,
 					}}
 					onSubmit={(draft) =>
 						updateProduct.mutate({
@@ -75,17 +83,20 @@ export default function EditAdProductPage() {
 							name: draft.name,
 							tagline: draft.tagline.trim() || null,
 							benefits: draft.benefits,
+							detailDesignPrice: draft.detailDesignPrice,
 							discountCampaigns: draft.discountCampaigns,
 							priceOptions: draft.priceOptions,
 							previewImageUrl: draft.previewImageUrl,
 							previewTemplate: draft.previewTemplate,
 							manualBoostsPerDay: draft.manualBoostsPerDay,
 							autoBoostsPerDay: draft.autoBoostsPerDay,
+							manualBoostCooldownMinutes: draft.manualBoostCooldownMinutes,
 						})
 					}
 					pending={updateProduct.isPending}
 					placementKind={placement?.kind}
 					submitLabel="수정 저장"
+					urgentHidden={exposureQuery.data?.urgentHidden}
 				/>
 			) : null}
 		</div>

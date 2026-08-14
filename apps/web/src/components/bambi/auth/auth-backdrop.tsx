@@ -23,7 +23,8 @@ import { SEEKER_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import { Badge, Logo } from "../ds";
 import { MapPinIcon, Search2 } from "../icons";
 
-// 실제 헤더(DEFAULT_NAV_ITEMS)·탐색 탭(MARKETPLACE_DISCOVERY_TABS)과 같은 라벨.
+// 실제 헤더(DEFAULT_NAV_ITEMS)와 같은 라벨. 탐색 탭은 마켓플레이스에서 제거됐지만
+// 흐릿한 장식 배경이라 예전 라벨을 그대로 둔다.
 const NAV_ITEMS = ["채용정보", "수다방", "고객센터"] as const;
 const DISCOVERY_TABS = [
 	"전체",

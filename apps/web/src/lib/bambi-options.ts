@@ -75,6 +75,7 @@ export const verificationStatusLabels = {
 	pending: "인증 대기",
 	verified: "인증 완료",
 	rejected: "인증 반려",
+	changes_unsubmitted: "변경사항 미제출",
 } as const;
 
 export const interviewStatusLabels = {

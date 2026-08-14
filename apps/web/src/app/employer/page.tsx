@@ -1,17 +1,30 @@
 "use client";
 
 import {
-	Alert,
-	AlertDescription,
-	AlertTitle,
-} from "@bambi-app/ui/components/alert";
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Button, buttonVariants } from "@bambi-app/ui/components/button";
 import {
 	Card,
+	CardAction,
 	CardContent,
 	CardHeader,
 	CardTitle,
 } from "@bambi-app/ui/components/card";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@bambi-app/ui/components/select";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
@@ -24,25 +37,28 @@ import {
 	Clock,
 	Eye,
 	type LucideIcon,
-	TriangleAlert,
 	Zap,
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DataTable } from "@/components/bambi/data-table";
 import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
 import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
 import {
 	type EmployerJob,
+	EmployerJobActionsMenu,
 	getEmployerJobsColumns,
+	getJobStatusNote,
+	isPubliclyViewable,
 } from "@/components/bambi/employer-jobs-columns";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { authClient } from "@/lib/auth-client";
-import { formatNullable } from "@/lib/bambi-format";
+import { getJobDisplayStatus } from "@/lib/bambi/exposure";
+import { formatNullable, formatPay } from "@/lib/bambi-format";
 import { verificationStatusLabels } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 
@@ -74,6 +90,10 @@ const getErrorCode = (error: Error | null): string | undefined =>
 		: undefined;
 
 interface AdSummaryItem {
+	// null = 광고 상품 없는 무료 공고(listMyAds는 무료 공고도 내려준다).
+	adProductName: null | string;
+	boostCountRemaining: number;
+	boostOptionManualPerDay: number;
 	boostsUsedToday: number;
 	exposureEndsAt: Date | null | string;
 	manualBoostsPerDay: number;
@@ -82,19 +102,30 @@ interface AdSummaryItem {
 }
 
 const getAdSummary = (ads: AdSummaryItem[], now: number) => {
-	const isActive = (ad: AdSummaryItem) =>
+	const isLive = (ad: AdSummaryItem) =>
 		ad.status === "published" &&
 		ad.paymentStatus === "paid" &&
 		(ad.exposureEndsAt === null || new Date(ad.exposureEndsAt).getTime() > now);
 
 	return {
-		activeCount: ads.filter(isActive).length,
+		// "진행 중인 광고"는 광고 상품이 붙은 공고만 센다 — 무료 공고까지 세면 숫자가 부푼다.
+		activeCount: ads.filter((ad) => isLive(ad) && ad.adProductName !== null)
+			.length,
 		pendingCount: ads.filter((ad) => ad.paymentStatus !== "paid").length,
+		// 남은 끌올 = 하루 한도(상품 번들 + 활성 기간제 옵션) 잔여 + 횟수권 잔여.
+		// 서버 resolveBoostEligibility와 같은 계산이라, 옵션만 산 무료 공고도 포함된다.
 		remainingBoostCount: ads
-			.filter(isActive)
+			.filter(isLive)
 			.reduce(
 				(total, ad) =>
-					total + Math.max(0, ad.manualBoostsPerDay - ad.boostsUsedToday),
+					total +
+					Math.max(
+						0,
+						ad.manualBoostsPerDay +
+							ad.boostOptionManualPerDay -
+							ad.boostsUsedToday
+					) +
+					ad.boostCountRemaining,
 				0
 			),
 	};
@@ -216,6 +247,160 @@ function QuickLinkTile({
 	);
 }
 
+const JOB_PAGE_SIZE = 10;
+
+type MobileJobSort = "pay" | "recent" | "status" | "title";
+
+function MobileOwnedJobs({
+	deletingJobId,
+	jobs,
+	onRequestDelete,
+}: {
+	deletingJobId: null | string;
+	jobs: EmployerJob[];
+	onRequestDelete: (jobId: string) => void;
+}) {
+	const [page, setPage] = useState(1);
+	const [sort, setSort] = useState<MobileJobSort>("recent");
+	const sortedJobs = useMemo(() => {
+		const next = [...jobs];
+
+		return next.sort((left, right) => {
+			if (sort === "title") {
+				return left.title.localeCompare(right.title, "ko");
+			}
+			if (sort === "pay") {
+				return (right.payAmount ?? 0) - (left.payAmount ?? 0);
+			}
+			if (sort === "status") {
+				return getJobDisplayStatus(left).label.localeCompare(
+					getJobDisplayStatus(right).label,
+					"ko"
+				);
+			}
+
+			return (
+				new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+			);
+		});
+	}, [jobs, sort]);
+	const pageCount = Math.max(1, Math.ceil(sortedJobs.length / JOB_PAGE_SIZE));
+	const safePage = Math.min(page, pageCount);
+	const pageJobs = sortedJobs.slice(
+		(safePage - 1) * JOB_PAGE_SIZE,
+		safePage * JOB_PAGE_SIZE
+	);
+
+	return (
+		<div className="flex flex-col gap-3 px-2 md:hidden">
+			<Select
+				items={[
+					{ label: "최근 수정순", value: "recent" },
+					{ label: "제목순", value: "title" },
+					{ label: "급여순", value: "pay" },
+					{ label: "상태순", value: "status" },
+				]}
+				onValueChange={(value) => {
+					setSort((value ?? "recent") as MobileJobSort);
+					setPage(1);
+				}}
+				value={sort}
+			>
+				<SelectTrigger aria-label="내 공고 정렬" className="w-full">
+					<SelectValue />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="recent">최근 수정순</SelectItem>
+					<SelectItem value="title">제목순</SelectItem>
+					<SelectItem value="pay">급여순</SelectItem>
+					<SelectItem value="status">상태순</SelectItem>
+				</SelectContent>
+			</Select>
+			{pageJobs.map((job) => {
+				const display = getJobDisplayStatus(job);
+				const note = getJobStatusNote(job);
+				const title = (
+					<span className="block truncate font-semibold" title={job.title}>
+						{job.title}
+					</span>
+				);
+
+				return (
+					<Card key={job.id}>
+						<CardHeader className="gap-3">
+							<CardTitle className="min-w-0 flex-1 text-base">
+								{isPubliclyViewable(job) ? (
+									<Link
+										className="underline-offset-4 hover:underline"
+										href={`/seeker/jobs/${job.id}` as Route}
+									>
+										{title}
+									</Link>
+								) : (
+									title
+								)}
+							</CardTitle>
+							<CardAction>
+								<EmployerJobActionsMenu
+									deletingJobId={deletingJobId}
+									job={job}
+									onRequestDelete={onRequestDelete}
+								/>
+							</CardAction>
+						</CardHeader>
+						<CardContent className="grid gap-3 text-sm">
+							<div className="grid grid-cols-2 gap-3">
+								<div className="flex flex-col gap-1">
+									<span className="text-muted-foreground text-xs">
+										직종·지역
+									</span>
+									<span>{`${job.industryCategory} · ${job.region}`}</span>
+								</div>
+								<div className="flex flex-col gap-1">
+									<span className="text-muted-foreground text-xs">급여</span>
+									<span>{formatPay(job.payAmount, job.payUnit)}</span>
+								</div>
+							</div>
+							<div className="flex flex-col items-start gap-1">
+								<span className="text-muted-foreground text-xs">공고 상태</span>
+								<StatusBadge tone={display.tone}>{display.label}</StatusBadge>
+								{note ? (
+									<span className="text-muted-foreground text-xs">{note}</span>
+								) : null}
+							</div>
+						</CardContent>
+					</Card>
+				);
+			})}
+			{pageCount > 1 ? (
+				<div className="flex items-center justify-between gap-3">
+					<Button
+						disabled={safePage === 1}
+						onClick={() => setPage((current) => Math.max(1, current - 1))}
+						type="button"
+						variant="outline"
+					>
+						이전
+					</Button>
+					<span className="text-muted-foreground text-sm">
+						{safePage} / {pageCount}
+					</span>
+					<Button
+						disabled={safePage === pageCount}
+						onClick={() =>
+							setPage((current) => Math.min(pageCount, current + 1))
+						}
+						type="button"
+						variant="outline"
+					>
+						다음
+					</Button>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 function OwnedJobsPanel({
 	deletingJobId,
 	isDeleting,
@@ -277,44 +462,58 @@ function OwnedJobsPanel({
 
 	return (
 		<div className="flex flex-col gap-3">
-			{jobToDelete ? (
-				<Alert variant="destructive">
-					<TriangleAlert />
-					<AlertTitle>“{jobToDelete.title}” 공고를 삭제할까요?</AlertTitle>
-					<AlertDescription>
-						삭제한 공고와 연결된 광고·성과 기록은 되돌릴 수 없어요.
-					</AlertDescription>
-					<div className="col-start-2 mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-						<Button
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						onCancelDelete();
+					}
+				}}
+				open={jobToDelete !== null}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							“{jobToDelete?.title}” 공고를 삭제할까요?
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							삭제한 공고와 연결된 광고·성과 기록은 되돌릴 수 없어요.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
 							disabled={isDeleting}
-							onClick={onCancelDelete}
-							type="button"
-							variant="outline"
-						>
-							취소
-						</Button>
-						<Button
-							disabled={isDeleting}
-							onClick={() => onConfirmDelete(jobToDelete.id)}
-							type="button"
+							onClick={() => {
+								if (jobToDelete) {
+									onConfirmDelete(jobToDelete.id);
+								}
+							}}
 							variant="destructive"
 						>
 							{isDeleting ? "삭제 중…" : "삭제"}
-						</Button>
-					</div>
-				</Alert>
-			) : null}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 			<Card aria-labelledby="owned-jobs">
-				<CardContent className="overflow-x-auto p-0">
-					<DataTable
-						columns={getEmployerJobsColumns({
-							deletingJobId,
-							onRequestDelete,
-						})}
-						data={jobs}
-						emptyMessage="등록한 공고가 없습니다."
-						getRowKey={(job) => job.id}
+				<CardContent className="p-0">
+					<MobileOwnedJobs
+						deletingJobId={deletingJobId}
+						jobs={jobs}
+						onRequestDelete={onRequestDelete}
 					/>
+					<div className="hidden overflow-x-auto md:block">
+						<DataTable
+							columns={getEmployerJobsColumns({
+								deletingJobId,
+								onRequestDelete,
+							})}
+							data={jobs}
+							emptyMessage="등록한 공고가 없습니다."
+							getRowKey={(job) => job.id}
+							pageSize={JOB_PAGE_SIZE}
+						/>
+					</div>
 				</CardContent>
 			</Card>
 		</div>

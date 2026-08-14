@@ -1,0 +1,1 @@
+ALTER TABLE "job_post" ADD COLUMN "listing_paid_at" timestamp;

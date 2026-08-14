@@ -1,5 +1,7 @@
 @import "../../../packages/ui/src/styles/globals.css";
 @import "./styles/bambi/tokens.css";
+/* streamdown 공식 설치법 — 매뉴얼 본문 렌더러가 쓰는 자체 클래스를 Tailwind 스캔에 포함한다. */
+@source "../node_modules/streamdown/dist/*.js";
 
 /* ---- web 브랜드: shadcn 시맨틱 토큰을 밤비 팔레트로 매핑 ---- */
 :root {

@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { getAuthModeUrl } from "@/lib/bambi/auth-mode-url";
+import { trackLogin, trackSignUp } from "@/lib/bambi/ga-interaction";
 import {
 	type BambiGenderValue,
 	clearGuestCookie,
@@ -16,7 +17,11 @@ import {
 	readGuestGenderFromCookieString,
 } from "@/lib/bambi/guest";
 import { isEmailLoginId } from "@/lib/bambi/login-id";
-import { popupLoginTargetStorageKey } from "@/lib/bambi/main-popup";
+import {
+	popupAuthTransitionEvent,
+	popupAuthTransitionStorageKey,
+	popupLoginTargetStorageKey,
+} from "@/lib/bambi/main-popup";
 import { client, queryClient } from "@/utils/orpc";
 import { Button, Card, Logo } from "../ds";
 import { PhoneVerifyDialog } from "../phone-verify-dialog";
@@ -254,6 +259,7 @@ export function AuthPanel() {
 	// 하드 내비게이션으로 Router Cache를 우회해 갓 세팅된 게스트 쿠키가 반영되게 한다.
 	const handleVerifiedForGuest = async (identityVerificationId: string) => {
 		await postGuestVerification({ identityVerificationId });
+		trackSignUp();
 		window.location.assign("/seeker");
 	};
 
@@ -348,11 +354,18 @@ export function AuthPanel() {
 			return;
 		}
 
+		sessionStorage.setItem(
+			popupAuthTransitionStorageKey,
+			String(performance.timeOrigin)
+		);
+		window.dispatchEvent(new Event(popupAuthTransitionEvent));
 		setIsSubmitting(true);
 		const callbacks = {
 			onError: (error: {
 				error: { message?: string; statusText?: string };
 			}) => {
+				sessionStorage.removeItem(popupAuthTransitionStorageKey);
+				window.dispatchEvent(new Event(popupAuthTransitionEvent));
 				setNotice({
 					text:
 						error.error.message ??
@@ -361,7 +374,14 @@ export function AuthPanel() {
 					tone: "error",
 				});
 			},
-			onSuccess: handleAuthSuccess,
+			onSuccess: async () => {
+				if (!isSignUp) {
+					trackLogin(
+						isEmailLoginId(form.username.trim()) ? "email" : "username"
+					);
+				}
+				await handleAuthSuccess();
+			},
 		};
 
 		if (isSignUp) {

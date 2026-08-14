@@ -8,11 +8,21 @@ import {
 	AlertDescription,
 	AlertTitle,
 } from "@bambi-app/ui/components/alert";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Dialog,
-	DialogClose,
 	DialogContent,
 	DialogDescription,
 	DialogTitle,
@@ -50,6 +60,7 @@ import {
 	communityEditorExtensions,
 	parseCommunityBody,
 } from "@/components/bambi/community-editor";
+import { Avatar } from "@/components/bambi/ds";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
 	communityAuthorName,
@@ -77,6 +88,7 @@ export type CommunityAuthorRole =
 
 // 상세 화면이 소비하는 글 필드(잠금 해제 상태).
 export interface CommunityPostDetail {
+	authorImage?: string | null;
 	authorName: string;
 	authorRole: CommunityAuthorRole;
 	board: string;
@@ -84,6 +96,7 @@ export interface CommunityPostDetail {
 	canDelete: boolean;
 	canEdit: boolean;
 	commentCount: number;
+	commentsDisabled: boolean;
 	// 법률 자문 글에만 실린다. 잠금을 연 열람자(작성자·운영자·법률자문)에게만 서버가 내려준다.
 	contactPhone: string | null;
 	createdAt: Date | string;
@@ -97,6 +110,7 @@ export interface CommunityPostDetail {
 }
 
 export interface CommunityCommentItem {
+	authorImage?: string | null;
 	authorName: string | null;
 	authorRole: CommunityAuthorRole | null;
 	body: string;
@@ -175,7 +189,15 @@ export function PostHeader({ post }: { post: CommunityPostDetail }) {
 				{post.title}
 			</h1>
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
-				<span>{communityAuthorName(post.authorName)}</span>
+				<span className="flex items-center gap-1.5">
+					<Avatar
+						fallbackIcon="user"
+						name={communityAuthorName(post.authorName)}
+						size="xs"
+						src={post.authorImage ?? undefined}
+					/>
+					{communityAuthorName(post.authorName)}
+				</span>
 				<span>{formatCommunityDate(post.createdAt)}</span>
 				<span className="flex items-center gap-0.5">
 					<EyeIcon className="size-3" />
@@ -298,6 +320,17 @@ export function ReportDialog({
 				<div className="flex justify-end gap-2">
 					<Button
 						disabled={reportMutation.isPending}
+						onClick={() => {
+							setDetails("");
+							setReason("other");
+							setOpen(false);
+						}}
+						variant="outline"
+					>
+						신고 취소
+					</Button>
+					<Button
+						disabled={reportMutation.isPending}
 						onClick={() =>
 							reportMutation.mutate({
 								details: details.trim() || undefined,
@@ -356,39 +389,33 @@ export function DeletePostButton({
 	);
 
 	return (
-		<Dialog onOpenChange={setOpen} open={open}>
-			<DialogTrigger
+		<AlertDialog onOpenChange={setOpen} open={open}>
+			<AlertDialogTrigger
 				render={
 					<Button size="sm" variant="outline">
 						삭제
 					</Button>
 				}
 			/>
-			<DialogContent>
-				<div className="flex flex-col gap-2">
-					<DialogTitle>글 삭제</DialogTitle>
-					<DialogDescription>
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>글 삭제</AlertDialogTitle>
+					<AlertDialogDescription>
 						이 글을 삭제할까요? 삭제한 글은 되돌릴 수 없어요.
-					</DialogDescription>
-				</div>
-				<div className="flex justify-end gap-2">
-					<DialogClose
-						render={
-							<Button type="button" variant="outline">
-								취소
-							</Button>
-						}
-					/>
-					<Button
+					</AlertDialogDescription>
+				</AlertDialogHeader>
+				<AlertDialogFooter>
+					<AlertDialogCancel>취소</AlertDialogCancel>
+					<AlertDialogAction
 						disabled={deleteMutation.isPending}
 						onClick={() => deleteMutation.mutate({ postId })}
 						variant="destructive"
 					>
 						삭제
-					</Button>
-				</div>
-			</DialogContent>
-		</Dialog>
+					</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
 	);
 }
 
@@ -430,7 +457,8 @@ function CommentActions({
 						</Button>
 					) : null}
 				</>
-			) : (
+			) : null}
+			{!comment.canEdit && comment.authorRole !== "admin" ? (
 				<ReportDialog
 					targetId={comment.id}
 					targetType="community_comment"
@@ -441,7 +469,7 @@ function CommentActions({
 						</Button>
 					}
 				/>
-			)}
+			) : null}
 		</span>
 	);
 }
@@ -525,9 +553,18 @@ function CommentRow({
 		<div className="flex flex-col gap-1">
 			<div className="flex items-center justify-between gap-2">
 				<span className="flex items-center gap-1.5 font-semibold text-xs">
+					<Avatar
+						fallbackIcon="user"
+						name={comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
+						size="xs"
+						src={comment.authorImage ?? undefined}
+					/>
 					{comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
 					{comment.authorRole === "employer" ? (
 						<Badge variant="secondary">업소</Badge>
+					) : null}
+					{comment.authorRole === "admin" ? (
+						<Badge variant="default">운영자</Badge>
 					) : null}
 					{/* 법률 자문 게시판의 답변인지 한눈에 보이게 — 질문자와 자문 답변이 섞이면
 					    어느 쪽이 전문가 답변인지 알 수 없다. */}
@@ -635,7 +672,7 @@ function CommentThread({
 	onEditOpen: (commentId: string) => void;
 	onEditSubmit: (commentId: string, body: string) => void;
 	onReplyClose: () => void;
-	onReplyOpen: (parentId: string) => void;
+	onReplyOpen?: (parentId: string) => void;
 	onReplySubmit: (parentId: string, body: string) => void;
 	parent: CommunityCommentItem;
 	replies: CommunityCommentItem[];
@@ -643,7 +680,7 @@ function CommentThread({
 	replyTo: string | null;
 }) {
 	const isReplying = replyTo === parent.id;
-	const canReply = !(parent.isDeleted || isReplying);
+	const canReply = Boolean(onReplyOpen) && !(parent.isDeleted || isReplying);
 
 	return (
 		<div className="flex flex-col gap-3">
@@ -657,7 +694,9 @@ function CommentThread({
 				onEditClose={onEditClose}
 				onEditOpen={onEditOpen}
 				onEditSubmit={onEditSubmit}
-				onReply={canReply ? () => onReplyOpen(parent.id) : undefined}
+				onReply={
+					canReply && onReplyOpen ? () => onReplyOpen(parent.id) : undefined
+				}
 			/>
 			{isReplying || replies.length > 0 ? (
 				<div className="flex flex-col gap-3 border-border border-l pl-4">
@@ -694,6 +733,7 @@ const isEmployerComment = (comment: CommunityCommentItem): boolean =>
 	comment.authorRole === "employer";
 
 export function CommentList({
+	allowReplies,
 	comments,
 	deletePending,
 	editPending,
@@ -710,6 +750,7 @@ export function CommentList({
 	replyPending,
 	replyTo,
 }: {
+	allowReplies: boolean;
 	comments: CommunityCommentItem[];
 	deletePending: boolean;
 	editPending: boolean;
@@ -729,7 +770,9 @@ export function CommentList({
 	if (comments.length === 0) {
 		return (
 			<p className="m-0 py-2 text-muted-foreground text-sm">
-				아직 댓글이 없어요. 첫 댓글을 남겨보세요.
+				{allowReplies
+					? "아직 댓글이 없어요. 첫 댓글을 남겨보세요."
+					: "아직 등록된 댓글이 없어요."}
 			</p>
 		);
 	}
@@ -769,7 +812,7 @@ export function CommentList({
 					onEditOpen={onEditOpen}
 					onEditSubmit={onEditSubmit}
 					onReplyClose={onReplyClose}
-					onReplyOpen={onReplyOpen}
+					onReplyOpen={allowReplies ? onReplyOpen : undefined}
 					onReplySubmit={onReplySubmit}
 					parent={parent}
 					replies={repliesOf(parent.id)}

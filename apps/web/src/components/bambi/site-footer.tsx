@@ -21,6 +21,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
+import { MANUAL_PATH } from "@/lib/bambi/manual";
 import { SUPPORT_PATH } from "@/lib/bambi/support";
 import { orpc } from "@/utils/orpc";
 import { BOTTOM_NAV_CONTENT_SPACER } from "./bottom-nav-shell";
@@ -51,6 +52,10 @@ const PUBLIC_NAV_LINKS: FooterLink[] = [
 	{ href: "/jobs" as Route, label: "지역별 채용 정보" },
 	{ href: "/board" as Route, label: "커뮤니티 게시판" },
 	{ href: "/board/notice" as Route, label: "공지사항" },
+	// 이용 가이드(/manual)는 로그인 필요 영역이라 위 "로그인 없이 열리는" 묶음의
+	// 예외다 — 비로그인 클릭은 로그인 화면을 거친다. 회원이 푸터에서 매뉴얼을 찾는
+	// 동선이 우선이라 여기 함께 둔다.
+	{ href: MANUAL_PATH, label: "이용 가이드" },
 ];
 
 const FOOTER_LINK_CLASS =
@@ -164,9 +169,8 @@ export function SiteFooter({
 									</div>
 								</DialogContent>
 							</Dialog>
-							{/* 직업정보제공사업자 준수사항: 명단이 공개 중인 체불사업주인지 구직자가
-						    확인할 수 있어야 한다. 명단은 고용노동부가 직접 관리·갱신하므로
-						    사본을 두지 않고 원본을 새 탭으로 연다(밤비를 떠나게 하지 않는다). */}
+							{/* 직업정보제공사업자 준수사항: 체불사업주 명단은 반드시 독립된
+							    고정 링크로 유지한다. 다른 공공정보 배열 변경과 무관하게 빠지면 안 된다. */}
 							<a
 								className={FOOTER_LINK_CLASS}
 								href="https://www.moel.go.kr/info/defaulter/defaulterList.do"

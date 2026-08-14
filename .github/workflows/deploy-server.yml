@@ -116,9 +116,17 @@ jobs:
           # 공고 이미지·광고 배너용 공개 버킷. dev/prod가 다른 버킷을 쓰며, 이름은
           # 레포에 남기지 않고 GitHub 환경 변수(test/production)로 주입한다.
           GCS_PUBLIC_BUCKET: ${{ vars.GCS_PUBLIC_BUCKET }}
+          # 사업자 문서 등 민감 서류 전용 비공개 버킷(test=bambi-storage-private,
+          # production=bambi-storage-prod-private). 값이 비면 env 패키지가 undefined로
+          # 정규화하고 업로드가 default-deny로 거부된다 — 공개 버킷 폴백 없음.
+          GCS_PRIVATE_BUCKET: ${{ vars.GCS_PRIVATE_BUCKET }}
           # 세션 쿠키 prefix를 환경별로 분리. dev/prod가 같은 apex(.bambialba.com)를
           # 공유하므로 prefix가 같으면 쿠키가 서로 덮어써 세션이 충돌한다.
           BAMBI_COOKIE_PREFIX: ${{ github.ref_name == 'main' && 'bambi' || 'bambi-dev' }}
+          # 포트원 본인인증 테스트 채널 허용 여부. GitHub test 환경에만 true를 넣는다 —
+          # production 환경에는 변수 자체를 만들지 않아 빈 값이 들어가고, env 패키지가
+          # emptyStringAsUndefined로 정규화해 기본 false(default-deny)로 떨어진다.
+          ALLOW_TEST_IDENTITY_CHANNEL: ${{ vars.ALLOW_TEST_IDENTITY_CHANNEL }}
         run: |
           gcloud run deploy "$SERVICE" \
             --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/server:${GITHUB_SHA}" \
@@ -134,7 +142,7 @@ jobs:
             --timeout=900 \
             --session-affinity \
             --add-cloudsql-instances="${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" \
-            --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}##BAMBI_COOKIE_PREFIX=${BAMBI_COOKIE_PREFIX}" \
+            --set-env-vars="^##^NODE_ENV=production##BETTER_AUTH_URL=${BETTER_AUTH_URL}##CORS_ORIGIN=${CORS_ORIGIN}##GCP_PROJECT_ID=${PROJECT_ID}##GCS_PUBLIC_BUCKET=${GCS_PUBLIC_BUCKET}##GCS_PRIVATE_BUCKET=${GCS_PRIVATE_BUCKET}##BAMBI_COOKIE_PREFIX=${BAMBI_COOKIE_PREFIX}##ALLOW_TEST_IDENTITY_CHANNEL=${ALLOW_TEST_IDENTITY_CHANNEL}" \
             --set-secrets="DATABASE_URL=${SERVICE}-database-url:latest,BETTER_AUTH_SECRET=${SERVICE}-better-auth-secret:latest,PORTONE_API_SECRET=${SERVICE}-portone-api-secret:latest,BAMBI_GUEST_TOKEN_SECRET=${SERVICE}-bambi-guest-token-secret:latest"
 
       - name: Show service URL
