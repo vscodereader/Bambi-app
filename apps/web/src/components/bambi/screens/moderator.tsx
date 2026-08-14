@@ -155,7 +155,7 @@ function HiText({
 		segs.push({ t: text.slice(cur), hi: false, start: cur });
 	}
 	return (
-		<p className="m-0 text-[14.5px] text-[color:var(--text-default)] leading-[1.65]">
+		<p className="m-0 break-words text-[14.5px] text-[color:var(--text-default)] leading-[1.65]">
 			{segs.map((s) =>
 				s.hi ? (
 					<mark
@@ -1475,7 +1475,7 @@ function ReportTargetContextView({
 		report: Report,
 		status: CommunityTargetStatus,
 		reason: string
-	) => void;
+	) => Promise<boolean>;
 }) {
 	// 커뮤니티 글·댓글은 미리보기와 숨김/삭제 조치를 함께 제공하는 전용 패널로 렌더한다.
 	// 컨텍스트가 유실돼도 패널이 "대상을 찾을 수 없어요"를 안내하므로 targetContext보다 먼저 본다.
@@ -1554,11 +1554,12 @@ function CommunityTargetPanel({
 		report: Report,
 		status: CommunityTargetStatus,
 		reason: string
-	) => void;
+	) => Promise<boolean>;
 }) {
 	const target = report.communityTarget;
 	const [reason, setReason] = useState("");
 	const [pendingDelete, setPendingDelete] = useState(false);
+	const [isApplying, setIsApplying] = useState(false);
 
 	// 커뮤니티 신고인데 대상 컨텍스트가 유실된 경우: 조치 없이 안내만.
 	if (!target) {
@@ -1579,15 +1580,18 @@ function CommunityTargetPanel({
 		target.kind === "comment" ? `원글: ${target.title}` : target.title;
 	const statusBadge = COMMUNITY_STATUS_BADGE[target.status];
 	const actions = COMMUNITY_ACTIONS[target.status];
-	const canModerate = reason.trim().length >= 2 && Boolean(onModerate);
+	const canModerate =
+		reason.trim().length >= 2 && Boolean(onModerate) && !isApplying;
 	const reasonId = `community-reason-${target.id}`;
 
-	const runAction = (status: CommunityTargetStatus) => {
+	const runAction = async (status: CommunityTargetStatus) => {
 		const trimmed = reason.trim();
 		if (!(onModerate && trimmed)) {
 			return;
 		}
-		onModerate(report, status, trimmed);
+		setIsApplying(true);
+		await onModerate(report, status, trimmed);
+		setIsApplying(false);
 	};
 
 	return (
@@ -1614,6 +1618,14 @@ function CommunityTargetPanel({
 				</div>
 			</div>
 			<div className="flex flex-col gap-2">
+				<div className="rounded-[14px] border border-border bg-secondary px-3 py-2.5">
+					<div className="mb-1 font-bold text-[13px] text-foreground">
+						신고 내용
+					</div>
+					<p className="m-0 whitespace-pre-wrap text-[13px] text-muted-foreground leading-relaxed">
+						{report.note}
+					</p>
+				</div>
 				<label
 					className="font-bold text-[13px] text-foreground"
 					htmlFor={reasonId}
@@ -1628,6 +1640,9 @@ function CommunityTargetPanel({
 					placeholder="조치 사유를 입력하면 기록에 남아요."
 					value={reason}
 				/>
+				<p className="m-0 text-right text-[12px] text-muted-foreground">
+					{reason.length} / 500
+				</p>
 				<div className="flex flex-wrap gap-2">
 					{actions.map((action) => (
 						<Button
@@ -1638,7 +1653,7 @@ function CommunityTargetPanel({
 									setPendingDelete(true);
 									return;
 								}
-								runAction(action.status);
+								runAction(action.status).catch(() => undefined);
 							}}
 							size="sm"
 							variant={action.tone === "danger" ? "danger" : "secondary"}
@@ -1673,7 +1688,7 @@ function CommunityTargetPanel({
 						<AlertDialogAction
 							onClick={() => {
 								setPendingDelete(false);
-								runAction("deleted");
+								runAction("deleted").catch(() => undefined);
 							}}
 							variant="destructive"
 						>
@@ -1780,13 +1795,20 @@ function ReportActions({
 	onResolve,
 	onSanctionRequest,
 	sanctionUserId,
+	showActAction = true,
 }: {
 	item: Report;
-	onResolve: (id: string, action: "dismiss" | "act", reason?: string) => void;
+	onResolve: (
+		id: string,
+		action: "dismiss" | "act",
+		reason?: string
+	) => Promise<boolean>;
 	onSanctionRequest: () => void;
 	sanctionUserId: string | null;
+	showActAction?: boolean;
 }) {
 	const [dismissReasonOpen, setDismissReasonOpen] = useState(false);
+	const [isResolving, setIsResolving] = useState(false);
 	return (
 		<div>
 			{sanctionUserId ? null : (
@@ -1795,7 +1817,7 @@ function ReportActions({
 					관리에서 진행해 주세요.
 				</p>
 			)}
-			<div className="grid grid-cols-2 gap-2.5">
+			<div className={showActAction ? "grid grid-cols-2 gap-2.5" : "grid"}>
 				<Button
 					block
 					onClick={() => setDismissReasonOpen(true)}
@@ -1804,11 +1826,12 @@ function ReportActions({
 				>
 					기각
 				</Button>
-				{sanctionUserId ? (
+				{showActAction && sanctionUserId ? (
 					<Button block onClick={onSanctionRequest} size="lg" variant="danger">
 						제재 적용
 					</Button>
-				) : (
+				) : null}
+				{showActAction && !sanctionUserId ? (
 					<Button
 						block
 						onClick={() => onResolve(item.id, "act")}
@@ -1817,7 +1840,7 @@ function ReportActions({
 					>
 						조치 완료
 					</Button>
-				)}
+				) : null}
 			</div>
 			{dismissReasonOpen ? (
 				<ReasonConfirmSheet
@@ -1825,10 +1848,15 @@ function ReportActions({
 					danger
 					defaultReason=""
 					description="신고자에게 표시할 기각 사유를 입력해 주세요."
+					isApplying={isResolving}
 					onCancel={() => setDismissReasonOpen(false)}
-					onConfirm={(reason) => {
-						onResolve(item.id, "dismiss", reason);
-						setDismissReasonOpen(false);
+					onConfirm={async (reason) => {
+						setIsResolving(true);
+						const succeeded = await onResolve(item.id, "dismiss", reason);
+						setIsResolving(false);
+						if (succeeded) {
+							setDismissReasonOpen(false);
+						}
 					}}
 					placeholder="기각 사유를 입력해 주세요."
 					positioning="fixed"
@@ -1852,7 +1880,11 @@ export function ReportDetail({
 }: {
 	item: Report;
 	onBack: () => void;
-	onResolve: (id: string, action: "dismiss" | "act", reason?: string) => void;
+	onResolve: (
+		id: string,
+		action: "dismiss" | "act",
+		reason?: string
+	) => Promise<boolean>;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
 	onBlockChatRoom?: (
 		chatRoomId: string,
@@ -1864,7 +1896,7 @@ export function ReportDetail({
 		report: Report,
 		status: CommunityTargetStatus,
 		reason: string
-	) => void;
+	) => Promise<boolean>;
 }) {
 	const [act, setAct] = useState(false);
 	// 구조화된 대상 맥락(공고·후기·사용자·대화방)이 있으면 전용 카드로, 없으면(채팅 메시지·
@@ -1893,6 +1925,7 @@ export function ReportDetail({
 			onResolve={onResolve}
 			onSanctionRequest={() => setAct(true)}
 			sanctionUserId={sanctionUserId}
+			showActAction={!item.communityKind}
 		/>
 	);
 	return (
@@ -2165,6 +2198,7 @@ export function ReasonConfirmSheet({
 	onCancel: () => void;
 	onConfirm: (reason: string) => void;
 }) {
+	const reasonMaxLength = 500;
 	const [reason, setReason] = useState(defaultReason);
 	const canConfirm = reason.trim().length >= minLength && !isApplying;
 	const fixed = positioning === "fixed";
@@ -2206,10 +2240,14 @@ export function ReasonConfirmSheet({
 				<textarea
 					className="min-h-[92px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
 					id={reasonFieldId}
+					maxLength={reasonMaxLength}
 					onChange={(event) => setReason(event.target.value)}
 					placeholder={placeholder ?? defaultReason}
 					value={reason}
 				/>
+				<p className="mt-1.5 mb-0 text-right text-[12px] text-muted-foreground">
+					{reason.length} / {reasonMaxLength}
+				</p>
 				<div className="mt-4 grid grid-cols-2 gap-2.5">
 					<Button block onClick={onCancel} size="lg" variant="secondary">
 						취소
@@ -2934,6 +2972,7 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 		);
 		setDetail(null);
 		flash(action === "dismiss" ? "신고를 기각했어요" : "조치를 적용했어요");
+		return Promise.resolve(true);
 	};
 	const sanction = (id: string, status: UserStatus, label: string) => {
 		setUsers((u) =>

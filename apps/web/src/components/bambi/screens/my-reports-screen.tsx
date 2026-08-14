@@ -167,18 +167,21 @@ export function MyReportsScreen() {
 							</summary>
 							<div className="mt-3 grid gap-2">
 								<TargetSummary item={item as TargetSummaryItem} />
-								{item.status === "dismissed" && item.resolutionReason ? (
-									<div className="rounded-lg bg-muted/40 p-3 text-sm">
-										<strong className="block">기각 사유</strong>
-										<p className="m-0 mt-1 whitespace-pre-wrap text-muted-foreground">
-											{item.resolutionReason}
-										</p>
-									</div>
-								) : null}
 								{item.details ? (
 									<p className="m-0 text-muted-foreground text-sm">
 										{item.details}
 									</p>
+								) : null}
+								{(item.status === "dismissed" || item.status === "resolved") &&
+								item.resolutionReason ? (
+									<div className="rounded-lg bg-muted/40 p-3 text-sm">
+										<strong className="block">
+											{item.status === "dismissed" ? "기각 사유" : "조치"}
+										</strong>
+										<p className="m-0 mt-1 whitespace-pre-wrap text-muted-foreground">
+											{item.resolutionReason}
+										</p>
+									</div>
 								) : null}
 							</div>
 						</details>

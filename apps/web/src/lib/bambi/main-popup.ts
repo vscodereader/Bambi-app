@@ -66,6 +66,10 @@ export const hiddenPopupStorageKey = (id: string) =>
 
 export const popupLoginTargetStorageKey = "bambi:main-popup:login-target";
 
+export const popupAuthTransitionStorageKey =
+	"bambi:main-popup:auth-transition-source";
+export const popupAuthTransitionEvent = "bambi:main-popup:auth-transition";
+
 export const popupExpandedStorageKey = (id: string) =>
 	`bambi:main-popup:expanded:${id}`;
 

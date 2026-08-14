@@ -17,7 +17,11 @@ import {
 	readGuestGenderFromCookieString,
 } from "@/lib/bambi/guest";
 import { isEmailLoginId } from "@/lib/bambi/login-id";
-import { popupLoginTargetStorageKey } from "@/lib/bambi/main-popup";
+import {
+	popupAuthTransitionEvent,
+	popupAuthTransitionStorageKey,
+	popupLoginTargetStorageKey,
+} from "@/lib/bambi/main-popup";
 import { client, queryClient } from "@/utils/orpc";
 import { Button, Card, Logo } from "../ds";
 import { PhoneVerifyDialog } from "../phone-verify-dialog";
@@ -350,11 +354,18 @@ export function AuthPanel() {
 			return;
 		}
 
+		sessionStorage.setItem(
+			popupAuthTransitionStorageKey,
+			String(performance.timeOrigin)
+		);
+		window.dispatchEvent(new Event(popupAuthTransitionEvent));
 		setIsSubmitting(true);
 		const callbacks = {
 			onError: (error: {
 				error: { message?: string; statusText?: string };
 			}) => {
+				sessionStorage.removeItem(popupAuthTransitionStorageKey);
+				window.dispatchEvent(new Event(popupAuthTransitionEvent));
 				setNotice({
 					text:
 						error.error.message ??

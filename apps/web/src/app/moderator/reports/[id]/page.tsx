@@ -45,10 +45,19 @@ export default function ModeratorReportDetailPage() {
 			item={item}
 			onBack={() => router.push("/moderator/reports")}
 			onBlockChatRoom={blockChatRoom}
-			onModerateCommunity={moderateCommunityTarget}
-			onResolve={(rid, action, reason) => {
-				resolveReport(rid, action, reason);
-				router.push("/moderator/reports");
+			onModerateCommunity={async (report, status, reason) => {
+				const succeeded = await moderateCommunityTarget(report, status, reason);
+				if (succeeded) {
+					router.push("/moderator/reports");
+				}
+				return succeeded;
+			}}
+			onResolve={async (rid, action, reason) => {
+				const succeeded = await resolveReport(rid, action, reason);
+				if (succeeded) {
+					router.push("/moderator/reports");
+				}
+				return succeeded;
 			}}
 			onSanction={sanction}
 		/>
