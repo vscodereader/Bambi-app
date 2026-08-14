@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 // 이 파일은 순수 함수만 검증하지만, 모듈이 최상단에서 @bambi-app/db를 정적 import하므로
@@ -10,6 +11,7 @@ const {
 	computePremiumQueue,
 	DEFAULT_RECOMMENDED_CAPACITY,
 	DEFAULT_SPECIAL_CAPACITY,
+	hasActiveOrgResponderFilter,
 	listingCapacityFullMessage,
 	PREMIUM_AD_CAPACITY,
 } = await import("@/services/bambi-premium-capacity");
@@ -142,6 +144,25 @@ describe("computeCapacityQueue", () => {
 			rank: 1,
 		});
 		expect(queue.remaining).toBe(0);
+	});
+});
+
+// 탈퇴로 고아가 된 조직(응대자 0명) 공고를 공개 목록·검색·상세·배너에서 빼는 읽기 시점 가드.
+// 실 카운트는 라우터 테스트가 실 DB로 보고, 여기서는 만들어지는 SQL 조각의 모양만 못박는다 —
+// 살아있는 멤버(deleted_at is null)를 요구하는 상관 EXISTS인지.
+describe("hasActiveOrgResponderFilter", () => {
+	it("소유 조직에 탈퇴하지 않은 멤버가 있어야 통과하는 상관 EXISTS를 만든다", () => {
+		const { sql: compiled } = new PgDialect().sqlToQuery(
+			hasActiveOrgResponderFilter()
+		);
+
+		expect(compiled).toContain("exists");
+		expect(compiled).toContain('"member"');
+		expect(compiled).toContain('"user"');
+		// 탈퇴 계정 제외.
+		expect(compiled).toContain('"deleted_at" is null');
+		// jobPost.organization_id를 참조하는 상관 조건이라 jobPost가 FROM에 있는 쿼리에서만 유효하다.
+		expect(compiled).toContain('"job_post"."organization_id"');
 	});
 });
 
