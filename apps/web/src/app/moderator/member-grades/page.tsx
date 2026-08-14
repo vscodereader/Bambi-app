@@ -26,7 +26,7 @@ import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
@@ -39,6 +39,8 @@ type GradeRow = Awaited<
 
 const NAME_MAX = 20;
 const MIN_POINTS_MAX = 10_000_000;
+// 회원 누적 포인트 상한 입력 한계(서버 memberGrades.updatePointsCap과 같은 값).
+const POINTS_CAP_MAX = 100_000_000;
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 // 서버(member-grades.ts)의 createGradeInput과 같은 판정 — 왕복 전에 막는다. color는 비우면
@@ -237,8 +239,20 @@ export default function ModeratorMemberGradesPage() {
 	const [color, setColor] = useState("");
 	const [editing, setEditing] = useState<GradeRow | null>(null);
 	const [deleting, setDeleting] = useState<GradeRow | null>(null);
+	const [maxPoints, setMaxPoints] = useState("");
 
 	const listQuery = useQuery(orpc.bambi.memberGrades.list.queryOptions());
+	const capQuery = useQuery(
+		orpc.bambi.memberGrades.getPointsCap.queryOptions()
+	);
+	// 서버가 내려준 상한을 폼에 반영한다 — null(무제한)이면 빈칸으로 둔다.
+	useEffect(() => {
+		if (capQuery.data) {
+			setMaxPoints(
+				capQuery.data.maxPoints === null ? "" : String(capQuery.data.maxPoints)
+			);
+		}
+	}, [capQuery.data]);
 
 	const invalidate = async () => {
 		await queryClient.invalidateQueries({
@@ -288,6 +302,19 @@ export default function ModeratorMemberGradesPage() {
 		})
 	);
 
+	const capMutation = useMutation(
+		orpc.bambi.memberGrades.updatePointsCap.mutationOptions({
+			onError: (error) =>
+				toast.error(
+					localizedGradeError(error.message, "상한을 저장하지 못했어요.")
+				),
+			onSuccess: async () => {
+				toast.success("회원 포인트 상한을 저장했어요.");
+				await invalidate();
+			},
+		})
+	);
+
 	const grades = listQuery.data ?? [];
 	const parsedNewMinPoints = Number(minPoints);
 	const canCreate =
@@ -297,6 +324,18 @@ export default function ModeratorMemberGradesPage() {
 		parsedNewMinPoints <= MIN_POINTS_MAX &&
 		isValidColor(color) &&
 		!createMutation.isPending;
+
+	const trimmedCap = maxPoints.trim();
+	const parsedCap = Number(trimmedCap);
+	// 빈칸은 "상한 없음"(무제한)으로 저장하고, 값이면 0~상한 범위의 정수만 허용한다.
+	const canSaveCap =
+		(trimmedCap === "" ||
+			(Number.isInteger(parsedCap) &&
+				parsedCap >= 0 &&
+				parsedCap <= POINTS_CAP_MAX)) &&
+		!capMutation.isPending;
+	const saveCap = () =>
+		capMutation.mutate({ maxPoints: trimmedCap === "" ? null : parsedCap });
 
 	const columns = getGradeColumns({
 		onDelete: setDeleting,
@@ -313,6 +352,36 @@ export default function ModeratorMemberGradesPage() {
 					0인 기본 등급은 최소 하나 남아 있어야 하며, 그 외 등급은 자유롭게
 					추가·수정·삭제할 수 있습니다.
 				</p>
+			</div>
+
+			<div className="flex flex-col gap-2 rounded-xl border border-border p-4">
+				<div className="flex flex-col gap-1">
+					<h2 className="m-0 font-bold text-lg">회원 포인트 상한</h2>
+					<p className="m-0 text-muted-foreground text-sm">
+						회원이 쌓을 수 있는 누적 포인트의 최대치입니다. 비우면 상한 없이
+						무제한으로 적립됩니다. 최고 등급 기준 포인트보다 낮게는 설정할 수
+						없습니다.
+					</p>
+				</div>
+				<div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="member-points-cap">최대 포인트</Label>
+						<Input
+							className="sm:w-48"
+							id="member-points-cap"
+							inputMode="numeric"
+							max={POINTS_CAP_MAX}
+							min={0}
+							onChange={(event) => setMaxPoints(event.target.value)}
+							placeholder="무제한"
+							type="number"
+							value={maxPoints}
+						/>
+					</div>
+					<Button disabled={!canSaveCap} onClick={saveCap} type="button">
+						{capMutation.isPending ? "저장 중" : "저장"}
+					</Button>
+				</div>
 			</div>
 
 			<div className="flex flex-col gap-2">

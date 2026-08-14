@@ -1332,6 +1332,10 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 추천 리스팅 광고의 정원 = 렌더 슬롯 수. 위 스페셜과 동일 규칙이며 null이면 코드 기본값
 	// (DEFAULT_RECOMMENDED_CAPACITY=20)으로 폴백한다.
 	recommendedCapacity: integer("recommended_capacity"),
+	// 회원이 보유할 수 있는 누적 포인트 상한(cap). 운영자가 등급 관리에서 설정한다. null이면
+	// 상한 없음(무제한 적립). 값이 있으면 게시판 활동 적립이 이 값을 넘지 못하게 잘려 들어간다.
+	// 저장 가드(API): 최고 등급 기준 포인트보다 낮게는 저장할 수 없다 — 그 등급이 도달 불가가 되므로.
+	maxMemberPoints: integer("max_member_points"),
 	// 베스트글(추천수 큐레이션 가상 게시판) 아이콘의 lucide 이름. 베스트는 community_board 행이
 	// 없는 가상 게시판이라 게시판 아이콘 컬럼 대신 여기 저장한다. null이면 미지정(기존 코럴
 	// 액센트 바 유지) — 값 검증은 API 쪽 COMMUNITY_BOARD_ICONS enum(zod)이 맡는다.

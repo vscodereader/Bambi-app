@@ -4,8 +4,14 @@ import { describe, expect, it } from "vitest";
 // 모듈이 @bambi-app/db를 정적 import하므로 env 먼저 로드(다른 서비스 테스트와 동일 패턴).
 dotenv.config({ path: "../../apps/server/.env" });
 
-const { assertGradeDeletable, nextGrade, reconcilePoints, resolveGrade } =
-	await import("@/services/bambi-member-points");
+const {
+	applyPointsCap,
+	assertGradeDeletable,
+	isPointsCapAllowed,
+	nextGrade,
+	reconcilePoints,
+	resolveGrade,
+} = await import("@/services/bambi-member-points");
 
 const GRADES = [
 	{ id: "g0", name: "새싹", minPoints: 0, color: null },
@@ -68,5 +74,42 @@ describe("assertGradeDeletable", () => {
 	});
 	it("0이 아닌 등급은 언제나 삭제 가능", () => {
 		expect(assertGradeDeletable({ minPoints: 1000 }, 1)).toBe(true);
+	});
+});
+
+describe("applyPointsCap", () => {
+	it("상한 없음(null)이면 델타 그대로", () => {
+		expect(applyPointsCap(100, 900, null)).toBe(100);
+	});
+	it("회수(델타 ≤ 0)는 상한과 무관하게 그대로", () => {
+		expect(applyPointsCap(-100, 5000, 1000)).toBe(-100);
+	});
+	it("여유가 충분하면 델타 그대로", () => {
+		expect(applyPointsCap(100, 800, 1000)).toBe(100);
+	});
+	it("여유가 부족하면 남은 만큼만 잘라 적립", () => {
+		expect(applyPointsCap(100, 950, 1000)).toBe(50);
+	});
+	it("이미 상한에 도달했으면 0(적립 없음)", () => {
+		expect(applyPointsCap(100, 1000, 1000)).toBe(0);
+	});
+	it("이미 상한을 넘었어도 음수로 만들지 않는다", () => {
+		expect(applyPointsCap(100, 1200, 1000)).toBe(0);
+	});
+});
+
+describe("isPointsCapAllowed", () => {
+	it("상한 없음(null)은 항상 허용", () => {
+		expect(isPointsCapAllowed(null, 50_000)).toBe(true);
+	});
+	it("최고 등급 기준 이상이면 허용", () => {
+		expect(isPointsCapAllowed(50_000, 50_000)).toBe(true);
+		expect(isPointsCapAllowed(60_000, 50_000)).toBe(true);
+	});
+	it("최고 등급 기준보다 낮으면 거부", () => {
+		expect(isPointsCapAllowed(49_999, 50_000)).toBe(false);
+	});
+	it("등급이 없어(최고 기준 0) 어떤 상한도 허용", () => {
+		expect(isPointsCapAllowed(0, 0)).toBe(true);
 	});
 });
