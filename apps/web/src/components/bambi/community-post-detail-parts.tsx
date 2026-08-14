@@ -61,6 +61,7 @@ import {
 	parseCommunityBody,
 } from "@/components/bambi/community-editor";
 import { Avatar } from "@/components/bambi/ds";
+import { GradeBadge } from "@/components/bambi/grade-badge";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
 	communityAuthorName,
@@ -88,6 +89,7 @@ export type CommunityAuthorRole =
 
 // 상세 화면이 소비하는 글 필드(잠금 해제 상태).
 export interface CommunityPostDetail {
+	authorGrade: { name: string; color: string | null } | null;
 	authorImage?: string | null;
 	authorName: string;
 	authorRole: CommunityAuthorRole;
@@ -110,6 +112,7 @@ export interface CommunityPostDetail {
 }
 
 export interface CommunityCommentItem {
+	authorGrade: { name: string; color: string | null } | null;
 	authorImage?: string | null;
 	authorName: string | null;
 	authorRole: CommunityAuthorRole | null;
@@ -197,6 +200,7 @@ export function PostHeader({ post }: { post: CommunityPostDetail }) {
 						src={post.authorImage ?? undefined}
 					/>
 					{communityAuthorName(post.authorName)}
+					<GradeBadge grade={post.authorGrade} />
 				</span>
 				<span>{formatCommunityDate(post.createdAt)}</span>
 				<span className="flex items-center gap-0.5">
@@ -560,6 +564,7 @@ function CommentRow({
 						src={comment.authorImage ?? undefined}
 					/>
 					{comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
+					<GradeBadge grade={comment.authorGrade} />
 					{comment.authorRole === "employer" ? (
 						<Badge variant="secondary">업소</Badge>
 					) : null}

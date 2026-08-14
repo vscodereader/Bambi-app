@@ -62,6 +62,14 @@ import {
 	type JobPostImageUploadPolicyCode,
 	validateJobPostImageUpload,
 } from "../../services/bambi-job-media-policy";
+import {
+	type GradeBadge,
+	getBoardContentPoints,
+	loadGradeBadges,
+	POINT_REASONS,
+	reconcileContentPoints,
+	resolveCommentAward,
+} from "../../services/bambi-member-points";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
 import {
 	notifyBambiNotification,
@@ -639,9 +647,23 @@ const selectBoardPosts = (
 
 type PostSummaryRow = Awaited<ReturnType<typeof selectBoardPosts>>[number];
 
+// 응답에 실을 작성자 등급 뱃지를 회원 authorUserId만 모아 한 번에 배치 조회한다
+// (게스트·수집 글은 null). 글 요약·댓글 행 모두 authorUserId를 가져 같은 헬퍼를 쓴다.
+const loadAuthorBadges = (rows: { authorUserId: null | string }[]) =>
+	loadGradeBadges(
+		rows.map((row) => row.authorUserId).filter((id): id is string => id != null)
+	);
+
 // authorUserId는 마스킹·bypass 계산엔 필요하지만 익명성 보호를 위해 클라이언트
-// 응답에서는 제외한다(명시적 화이트리스트 매핑).
-const toPublicSummary = (summary: PostSummaryRow) => ({
+// 응답에서는 제외한다(명시적 화이트리스트 매핑). 등급(이름·색)은 신원이 아니라 노출 OK.
+const toPublicSummary = (
+	summary: PostSummaryRow,
+	gradeBadges?: Map<string, GradeBadge>
+) => ({
+	// 게스트·수집 글(authorUserId null)은 등급 없음(null).
+	authorGrade: summary.authorUserId
+		? (gradeBadges?.get(summary.authorUserId) ?? null)
+		: null,
 	authorName: summary.authorName,
 	authorRole: summary.authorRole,
 	board: summary.board,
@@ -878,11 +900,13 @@ const toCommentItems = (
 		authorName: string | null;
 		canDelete: boolean;
 		canEdit: boolean;
-	}
+	},
+	gradeBadges: Map<string, GradeBadge>
 ) =>
 	rows.map((row) => {
 		if (row.status !== "published") {
 			return {
+				authorGrade: null,
 				authorImage: null,
 				authorName: null,
 				authorRole: null,
@@ -897,6 +921,10 @@ const toCommentItems = (
 		}
 		const policy = resolve(row);
 		return {
+			// authorUserId는 응답에서 계속 제외(익명성) — 등급만 노출한다. 게스트는 null.
+			authorGrade: row.authorUserId
+				? (gradeBadges.get(row.authorUserId) ?? null)
+				: null,
 			authorImage: policy.authorImage,
 			authorName: policy.authorName,
 			authorRole: row.authorRole,
@@ -1045,6 +1073,39 @@ const notifyNewComment = async ({
 	}
 };
 
+// 운영자 댓글 상태 전이 시 포인트 회수·재적립(published 이탈=회수, 진입=재적립).
+// setCommentStatusByAdmin 핸들러 복잡도를 낮추려 분리했다. 수집 글 댓글(board null)은
+// 회원 글이 아니라 target 0으로 계산돼 안전하다.
+const reconcileCommentPointsOnStatusChange = async (
+	tx: CommunityTx,
+	args: {
+		authorUserId: string | null;
+		postAuthorUserId: string | null;
+		board: string | null;
+		commentId: string;
+		currentAwarded: number;
+		willVisible: boolean;
+	}
+) => {
+	const { commentPoints } = args.willVisible
+		? await getBoardContentPoints(args.board ?? "")
+		: { commentPoints: 0 };
+	const nextAwarded = await reconcileContentPoints(tx, {
+		userId: args.authorUserId,
+		currentAwarded: args.currentAwarded,
+		targetAmount: resolveCommentAward(
+			args.authorUserId,
+			args.postAuthorUserId,
+			commentPoints
+		),
+		reasons: POINT_REASONS.comment,
+	});
+	await tx
+		.update(communityComment)
+		.set({ pointsAwarded: nextAwarded })
+		.where(eq(communityComment.id, args.commentId));
+};
+
 export const communityRouter = {
 	// 회원과 비회원(여성 성인인증 게스트)이 같은 목록을 본다 — 게시판·필터·정렬이 모두 같고,
 	// 갈리는 건 개인화 축(내 글)과 잠금 우회뿐이다. 게스트는 profile이 null이라 비밀글 제목이
@@ -1109,8 +1170,12 @@ export const communityRouter = {
 					countCrawledCommunityTopics(windowStart, crawledSearchFilters),
 				]);
 
+				const crawledMasked = maskLockedSummaries(items, profile);
+				const crawledBadges = await loadAuthorBadges(crawledMasked);
 				return {
-					items: maskLockedSummaries(items, profile).map(toPublicSummary),
+					items: crawledMasked.map((item) =>
+						toPublicSummary(item, crawledBadges)
+					),
 					page: input.page,
 					pageSize: PAGE_SIZE,
 					totalCount: (nativeTotal?.value ?? 0) + crawledTotal,
@@ -1132,8 +1197,10 @@ export const communityRouter = {
 					),
 			]);
 
+			const masked = maskLockedSummaries(items, profile);
+			const badges = await loadAuthorBadges(masked);
 			return {
-				items: maskLockedSummaries(items, profile).map(toPublicSummary),
+				items: masked.map((item) => toPublicSummary(item, badges)),
 				page: input.page,
 				pageSize: PAGE_SIZE,
 				totalCount: total?.value ?? 0,
@@ -1197,8 +1264,10 @@ export const communityRouter = {
 		return {
 			boards: previews.map((board, index) => ({
 				...board,
+				// 홈 미리보기(요약)는 등급 뱃지를 싣지 않는다 — 게시판마다 배치 조회를 더하지
+				// 않는다. 등급은 목록·상세에서만 노출한다.
 				posts: maskLockedSummaries(postsPerBoard[index] ?? [], profile).map(
-					toPublicSummary
+					(post) => toPublicSummary(post)
 				),
 			})),
 		};
@@ -1235,8 +1304,9 @@ export const communityRouter = {
 					),
 			]);
 
+			const badges = await loadAuthorBadges(items);
 			return {
-				items: items.map(toPublicSummary),
+				items: items.map((item) => toPublicSummary(item, badges)),
 				page: input.page,
 				pageSize: PAGE_SIZE,
 				totalCount: total?.value ?? 0,
@@ -1268,8 +1338,13 @@ export const communityRouter = {
 			const rows = await selectVisibleCommentRows(
 				eq(communityComment.postId, input.postId)
 			);
+			const authorGrade = post.authorUserId
+				? ((await loadAuthorBadges([post])).get(post.authorUserId) ?? null)
+				: null;
 
 			return {
+				// author_user_id는 익명성 때문에 계속 제외하고 등급(이름·색)만 노출한다.
+				authorGrade,
 				authorImage: post.isAnonymous ? null : (postAuthor?.image ?? null),
 				authorName: post.authorDisplayName,
 				authorRole: post.authorRole,
@@ -1376,7 +1451,13 @@ export const communityRouter = {
 					? post.authorUserId === actor.profile.userId
 					: post.authorGuestId === actor.gid;
 
+			const authorGrade = post.authorUserId
+				? ((await loadAuthorBadges([post])).get(post.authorUserId) ?? null)
+				: null;
+
 			return {
+				// author_user_id는 익명성 때문에 계속 제외하고 등급(이름·색)만 노출한다.
+				authorGrade,
 				authorImage: post.isAnonymous ? null : (postAuthor?.image ?? null),
 				authorName: post.authorDisplayName,
 				authorRole: post.authorRole,
@@ -1458,6 +1539,7 @@ export const communityRouter = {
 			const rows = await selectVisibleCommentRows(
 				eq(communityComment.crawledTopicId, topic.id)
 			);
+			const commentBadges = await loadAuthorBadges(rows);
 
 			return {
 				boardName: topic.boardName,
@@ -1469,7 +1551,11 @@ export const communityRouter = {
 					(topic.commentCount ?? 0) +
 					rows.filter((row) => row.status === "published").length,
 				// 우리 댓글(작성·수정·삭제 가능). 화면은 원본 댓글 뒤에 이어 붙인다.
-				comments: toCommentItems(rows, commentPolicyForActor(actor)),
+				comments: toCommentItems(
+					rows,
+					commentPolicyForActor(actor),
+					commentBadges
+				),
 				id: topic.id,
 				// 원본에 달려 있던 댓글(익명·읽기 전용). null(아직 미수집)은 빈 목록으로 접어
 				// 화면이 분기 없이 렌더한다.
@@ -1575,31 +1661,46 @@ export const communityRouter = {
 				message: CREATE_POST_RATE_LIMIT_ERROR,
 			});
 
+			const authorUserId = actorUserId(actor);
+			const { postPoints } = await getBoardContentPoints(input.board);
+			// 회원이고 게시판 적립 금액이 있으면 그만큼, 아니면 0(게스트·0포인트 게시판).
+			const target = authorUserId ? postPoints : 0;
+
 			let created: { board: string; id: string } | undefined;
 			try {
-				[created] = await db
-					.insert(communityPost)
-					.values({
-						authorDisplayName: authorName,
-						authorGuestId: actorGuestId(actor),
-						authorRole: role,
-						authorUserId: actorUserId(actor),
-						board: input.board,
-						body: input.body,
-						contactPhone: input.contactPhone || null,
-						commentsDisabled: input.commentsDisabled,
-						isLocked,
-						isEvent: input.isEvent,
-						isAnonymous: input.isAnonymous,
-						isPromotion: input.isPromotion,
-						// 비번 미입력(잠그지 않은 회원 글)은 빈 문자열로 저장한다 — verify가 항상
-						// 실패해 잠금 게이트·비작성자 수정이 자연히 차단된다.
-						passwordHash: input.password
-							? hashCommunityPassword(input.password)
-							: "",
-						title: input.title,
-					})
-					.returning({ board: communityPost.board, id: communityPost.id });
+				created = await db.transaction(async (tx) => {
+					const [row] = await tx
+						.insert(communityPost)
+						.values({
+							authorDisplayName: authorName,
+							authorGuestId: actorGuestId(actor),
+							authorRole: role,
+							authorUserId,
+							board: input.board,
+							body: input.body,
+							contactPhone: input.contactPhone || null,
+							commentsDisabled: input.commentsDisabled,
+							isLocked,
+							isEvent: input.isEvent,
+							isAnonymous: input.isAnonymous,
+							isPromotion: input.isPromotion,
+							// 비번 미입력(잠그지 않은 회원 글)은 빈 문자열로 저장한다 — verify가 항상
+							// 실패해 잠금 게이트·비작성자 수정이 자연히 차단된다.
+							passwordHash: input.password
+								? hashCommunityPassword(input.password)
+								: "",
+							pointsAwarded: target,
+							title: input.title,
+						})
+						.returning({ board: communityPost.board, id: communityPost.id });
+					await reconcileContentPoints(tx, {
+						userId: authorUserId,
+						currentAwarded: 0,
+						targetAmount: target,
+						reasons: POINT_REASONS.post,
+					});
+					return row;
+				});
 			} catch (error) {
 				releaseWriteRateLimit(writeRateLimit);
 				throw error;
@@ -1747,10 +1848,18 @@ export const communityRouter = {
 				}
 			}
 
-			await db
-				.update(communityPost)
-				.set({ status: "deleted", updatedAt: new Date() })
-				.where(eq(communityPost.id, input.postId));
+			await db.transaction(async (tx) => {
+				await tx
+					.update(communityPost)
+					.set({ status: "deleted", pointsAwarded: 0, updatedAt: new Date() })
+					.where(eq(communityPost.id, input.postId));
+				await reconcileContentPoints(tx, {
+					userId: post.authorUserId,
+					currentAwarded: post.pointsAwarded,
+					targetAmount: 0,
+					reasons: POINT_REASONS.post,
+				});
+			});
 
 			return { id: post.id };
 		}),
@@ -1848,8 +1957,12 @@ export const communityRouter = {
 					eq(communityComment.postId, input.postId)
 				);
 
-				// authorUserId는 canDelete 계산에만 쓰고 응답에서는 제외한다(익명성 보호).
-				return toCommentItems(rows, memberCommentPolicy(profile));
+				// authorUserId는 canDelete·등급 조회에만 쓰고 응답에서는 제외한다(익명성 보호).
+				return toCommentItems(
+					rows,
+					memberCommentPolicy(profile),
+					await loadAuthorBadges(rows)
+				);
 			}
 
 			const guestId = actor?.kind === "guest" ? actor.gid : null;
@@ -1868,7 +1981,11 @@ export const communityRouter = {
 
 			// 색인되는 공개 페이지라 회원 계정명은 싣지 않는다(getPublicPost와 같은 원칙).
 			// 화면은 authorRole 라벨로 작성인 유형만 표시한다.
-			return toCommentItems(rows, guestCommentPolicy(guestId));
+			return toCommentItems(
+				rows,
+				guestCommentPolicy(guestId),
+				await loadAuthorBadges(rows)
+			);
 		}),
 
 	createComment: publicProcedure
@@ -1911,6 +2028,14 @@ export const communityRouter = {
 				});
 			}
 
+			const commentAuthorUserId = actorUserId(actor);
+			const { commentPoints } = await getBoardContentPoints(post.board);
+			const commentTarget = resolveCommentAward(
+				commentAuthorUserId,
+				post.authorUserId,
+				commentPoints
+			);
+
 			const created = await db.transaction(async (tx) => {
 				await tx.execute(
 					sql`select ${communityPost.id} from ${communityPost} where ${communityPost.id} = ${input.postId} for share`
@@ -1930,13 +2055,14 @@ export const communityRouter = {
 					.values({
 						authorGuestId: actorGuestId(actor),
 						authorRole: actorRole(actor),
-						authorUserId: actorUserId(actor),
+						authorUserId: commentAuthorUserId,
 						body: input.body,
 						parentCommentId: input.parentCommentId ?? null,
 						// 회원 댓글은 세션으로 소유권이 증명되므로 글과 같은 관례로 빈 문자열.
 						passwordHash: guestPassword
 							? hashCommunityPassword(guestPassword)
 							: "",
+						pointsAwarded: commentTarget,
 						postId: input.postId,
 					})
 					.returning({ id: communityComment.id });
@@ -1944,6 +2070,12 @@ export const communityRouter = {
 					.update(communityPost)
 					.set({ commentCount: sql`${communityPost.commentCount} + 1` })
 					.where(eq(communityPost.id, input.postId));
+				await reconcileContentPoints(tx, {
+					userId: commentAuthorUserId,
+					currentAwarded: 0,
+					targetAmount: commentTarget,
+					reasons: POINT_REASONS.comment,
+				});
 				return row;
 			});
 
@@ -2086,7 +2218,7 @@ export const communityRouter = {
 			await db.transaction(async (tx) => {
 				await tx
 					.update(communityComment)
-					.set({ status: "deleted", updatedAt: new Date() })
+					.set({ status: "deleted", pointsAwarded: 0, updatedAt: new Date() })
 					.where(eq(communityComment.id, input.commentId));
 				// 수집 글 댓글(post_id null)은 줄일 캐시가 없다 — 수집 글의 댓글 수는 원본
 				// 값이고 상세가 두 원천을 합산한다.
@@ -2098,6 +2230,12 @@ export const communityRouter = {
 						})
 						.where(eq(communityPost.id, postId));
 				}
+				await reconcileContentPoints(tx, {
+					userId: comment.authorUserId,
+					currentAwarded: comment.pointsAwarded,
+					targetAmount: 0,
+					reasons: POINT_REASONS.comment,
+				});
 			});
 
 			return { id: comment.id };
@@ -2148,8 +2286,11 @@ export const communityRouter = {
 				// 감춰도 낡은 목록 캐시나 다른 탭에서 요청이 들어올 수 있다.
 				const [existing] = await tx
 					.select({
+						// 회수·재적립 대상과 금액 스냅샷.
+						authorUserId: communityPost.authorUserId,
 						// 알림 딥링크(/seeker/community/{slug}/{postId})에 필요하다.
 						board: communityPost.board,
+						pointsAwarded: communityPost.pointsAwarded,
 						status: communityPost.status,
 					})
 					.from(communityPost)
@@ -2181,6 +2322,26 @@ export const communityRouter = {
 					throw new ORPCError("NOT_FOUND", {
 						message: "글을 찾을 수 없습니다.",
 					});
+				}
+
+				// 노출성 전이에서만 포인트를 움직인다 — 이탈이면 회수(target 0), 진입이면
+				// 재적립(회원 && 게시판 포인트). 동일 노출성 전이는 스냅샷 변화가 없다.
+				const wasVisible = existing.status === "published";
+				const willVisible = input.status === "published";
+				if (wasVisible !== willVisible) {
+					const { postPoints } = willVisible
+						? await getBoardContentPoints(existing.board)
+						: { postPoints: 0 };
+					const nextAwarded = await reconcileContentPoints(tx, {
+						userId: existing.authorUserId,
+						currentAwarded: existing.pointsAwarded,
+						targetAmount: existing.authorUserId ? postPoints : 0,
+						reasons: POINT_REASONS.post,
+					});
+					await tx
+						.update(communityPost)
+						.set({ pointsAwarded: nextAwarded })
+						.where(eq(communityPost.id, input.postId));
 				}
 
 				await tx.insert(adminModerationAction).values({
@@ -2224,8 +2385,12 @@ export const communityRouter = {
 						// 딥링크는 글 단위다 — 댓글이 속한 글의 게시판·id가 필요하다.
 						// 수집 글 댓글은 우리 글 행이 없어 leftJoin이다(innerJoin이면 조치
 						// 자체가 NOT_FOUND로 막혀 신고를 접수하고도 내릴 수가 없다).
+						// 회수·재적립 대상과 금액 스냅샷.
+						authorUserId: communityComment.authorUserId,
 						board: communityPost.board,
 						crawledTopicId: communityComment.crawledTopicId,
+						postAuthorUserId: communityPost.authorUserId,
+						pointsAwarded: communityComment.pointsAwarded,
 						postId: communityComment.postId,
 						status: communityComment.status,
 					})
@@ -2281,6 +2446,18 @@ export const communityRouter = {
 						.update(communityPost)
 						.set({ commentCount: sql`${communityPost.commentCount} + 1` })
 						.where(eq(communityPost.id, postId));
+				}
+
+				// 노출성 전이에서만 포인트를 움직인다(회수·재적립은 헬퍼로 분리).
+				if (wasVisible !== willVisible) {
+					await reconcileCommentPointsOnStatusChange(tx, {
+						authorUserId: existing.authorUserId,
+						postAuthorUserId: existing.postAuthorUserId,
+						board: existing.board,
+						commentId: input.commentId,
+						currentAwarded: existing.pointsAwarded,
+						willVisible,
+					});
 				}
 
 				await tx.insert(adminModerationAction).values({

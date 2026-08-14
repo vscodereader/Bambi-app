@@ -4,6 +4,7 @@ import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import type { Route } from "next";
 import Link from "next/link";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
+import { GradeBadge } from "@/components/bambi/grade-badge";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import type { ManagedUser, UserStatus } from "@/lib/bambi/types";
 
@@ -101,6 +102,22 @@ function getColumns({
 			sortValue: (user) => user.role,
 			cell: (user) => (
 				<span className="text-muted-foreground">{user.role}</span>
+			),
+		},
+		{
+			id: "grade",
+			header: "등급",
+			sortValue: (user) => user.grade?.name ?? "",
+			cell: (user) => <GradeBadge grade={user.grade} />,
+		},
+		{
+			id: "points",
+			header: "포인트",
+			sortValue: (user) => user.pointBalance,
+			cell: (user) => (
+				<span className="whitespace-nowrap tabular-nums">
+					{`${user.pointBalance.toLocaleString()}P`}
+				</span>
 			),
 		},
 		{

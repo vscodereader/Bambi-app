@@ -57,6 +57,7 @@ const SLUG_MAX = 30;
 const DESCRIPTION_MAX = 200;
 const SLUG_MIN = 2;
 const SORT_ORDER_MAX = 10_000;
+const POINTS_MAX = 100_000;
 
 // 서버(community-boards.ts)의 SLUG_PATTERN·RESERVED_SLUGS와 같은 말 — 왕복 전에 알려 준다.
 const SLUG_HINT =
@@ -246,25 +247,39 @@ function BoardEditForm({
 	isPending: boolean;
 	onClose: () => void;
 	onSubmit: (values: {
+		commentPoints: number;
 		description: string;
 		icon: CommunityBoardIconName | null;
 		label: string;
+		postPoints: number;
 		sortOrder: number;
 	}) => void;
 }) {
 	const [label, setLabel] = useState(board.label);
 	const [description, setDescription] = useState(board.description);
 	const [sortOrder, setSortOrder] = useState(String(board.sortOrder));
+	const [postPoints, setPostPoints] = useState(String(board.postPoints));
+	const [commentPoints, setCommentPoints] = useState(
+		String(board.commentPoints)
+	);
 	// 저장된 이름이 웹 맵에 없으면(서버만 아는 이름) "없음"으로 시작한다 — 그릴 수 없는
 	// 값을 고른 것처럼 보여 주지 않는다.
 	const [icon, setIcon] = useState<IconValue>(toIconValue(board.icon));
 
 	const parsedSortOrder = Number(sortOrder);
+	const parsedPostPoints = Number(postPoints);
+	const parsedCommentPoints = Number(commentPoints);
 	const canSubmit =
 		label.trim().length > 0 &&
 		Number.isInteger(parsedSortOrder) &&
 		parsedSortOrder >= 0 &&
 		parsedSortOrder <= SORT_ORDER_MAX &&
+		Number.isInteger(parsedPostPoints) &&
+		parsedPostPoints >= 0 &&
+		parsedPostPoints <= POINTS_MAX &&
+		Number.isInteger(parsedCommentPoints) &&
+		parsedCommentPoints >= 0 &&
+		parsedCommentPoints <= POINTS_MAX &&
 		!isPending;
 
 	return (
@@ -322,6 +337,32 @@ function BoardEditForm({
 					숫자가 작을수록 앞에 놓입니다(수다방 홈·게시판 목록 공통).
 				</p>
 			</div>
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="community-board-edit-post-points">글 작성 포인트</Label>
+				<Input
+					id="community-board-edit-post-points"
+					inputMode="numeric"
+					max={POINTS_MAX}
+					min={0}
+					onChange={(event) => setPostPoints(event.target.value)}
+					type="number"
+					value={postPoints}
+				/>
+			</div>
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="community-board-edit-comment-points">
+					댓글 작성 포인트
+				</Label>
+				<Input
+					id="community-board-edit-comment-points"
+					inputMode="numeric"
+					max={POINTS_MAX}
+					min={0}
+					onChange={(event) => setCommentPoints(event.target.value)}
+					type="number"
+					value={commentPoints}
+				/>
+			</div>
 			<div className="grid grid-cols-2 gap-2">
 				<Button onClick={onClose} type="button" variant="outline">
 					취소
@@ -330,10 +371,12 @@ function BoardEditForm({
 					disabled={!canSubmit}
 					onClick={() =>
 						onSubmit({
+							commentPoints: parsedCommentPoints,
 							description: description.trim(),
 							// 수정은 "없음"을 null로 보내 저장된 아이콘을 지운다.
 							icon: toIconInput(icon) ?? null,
 							label: label.trim(),
+							postPoints: parsedPostPoints,
 							sortOrder: parsedSortOrder,
 						})
 					}
@@ -352,6 +395,8 @@ export default function ModeratorCommunityBoardsPage() {
 	const [slug, setSlug] = useState("");
 	const [description, setDescription] = useState("");
 	const [icon, setIcon] = useState<IconValue>(ICON_NONE);
+	const [postPoints, setPostPoints] = useState("0");
+	const [commentPoints, setCommentPoints] = useState("0");
 	const [editing, setEditing] = useState<BoardRow | null>(null);
 	const [deleting, setDeleting] = useState<BoardRow | null>(null);
 
@@ -396,6 +441,8 @@ export default function ModeratorCommunityBoardsPage() {
 				setSlug("");
 				setDescription("");
 				setIcon(ICON_NONE);
+				setPostPoints("0");
+				setCommentPoints("0");
 				await invalidate();
 			},
 		})
@@ -431,6 +478,19 @@ export default function ModeratorCommunityBoardsPage() {
 			},
 		})
 	);
+
+	const parsedPostPoints = Number(postPoints);
+	const parsedCommentPoints = Number(commentPoints);
+	const canCreate =
+		label.trim().length > 0 &&
+		slug.trim().length >= SLUG_MIN &&
+		Number.isInteger(parsedPostPoints) &&
+		parsedPostPoints >= 0 &&
+		parsedPostPoints <= POINTS_MAX &&
+		Number.isInteger(parsedCommentPoints) &&
+		parsedCommentPoints >= 0 &&
+		parsedCommentPoints <= POINTS_MAX &&
+		!createMutation.isPending;
 
 	const boards = listQuery.data ?? [];
 	const BestIcon = communityBoardIcon(toIconInput(bestIcon));
@@ -488,6 +548,36 @@ export default function ModeratorCommunityBoardsPage() {
 							value={icon}
 						/>
 					</div>
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="community-board-new-post-points">
+							글 작성 포인트
+						</Label>
+						<Input
+							className="sm:w-32"
+							id="community-board-new-post-points"
+							inputMode="numeric"
+							max={POINTS_MAX}
+							min={0}
+							onChange={(event) => setPostPoints(event.target.value)}
+							type="number"
+							value={postPoints}
+						/>
+					</div>
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="community-board-new-comment-points">
+							댓글 작성 포인트
+						</Label>
+						<Input
+							className="sm:w-32"
+							id="community-board-new-comment-points"
+							inputMode="numeric"
+							max={POINTS_MAX}
+							min={0}
+							onChange={(event) => setCommentPoints(event.target.value)}
+							type="number"
+							value={commentPoints}
+						/>
+					</div>
 					<div className="flex flex-1 flex-col gap-2">
 						<Label htmlFor="community-board-new-description">설명</Label>
 						<Input
@@ -499,16 +589,14 @@ export default function ModeratorCommunityBoardsPage() {
 						/>
 					</div>
 					<Button
-						disabled={
-							label.trim().length === 0 ||
-							slug.trim().length < SLUG_MIN ||
-							createMutation.isPending
-						}
+						disabled={!canCreate}
 						onClick={() =>
 							createMutation.mutate({
+								commentPoints: parsedCommentPoints,
 								description: description.trim(),
 								icon: toIconInput(icon),
 								label: label.trim(),
+								postPoints: parsedPostPoints,
 								slug: slug.trim(),
 							})
 						}
