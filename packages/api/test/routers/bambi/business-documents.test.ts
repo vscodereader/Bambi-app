@@ -233,39 +233,32 @@ describe("bambi onboarding business documents", () => {
 		}
 	});
 
-	it("locks additions and deletion while pending", async () => {
+	it("allows additions but locks deletion while pending", async () => {
 		const fixture = await createFixture("pending");
 		try {
+			const createUpload = createOwnerClient(
+				fixture,
+				onboardingRouter.createBusinessDocumentUpload,
+				"createBusinessDocumentUpload"
+			);
+			const intent = await createUpload({
+				byteSize: 2048,
+				fileName: "pending.pdf",
+				mimeType: "application/pdf",
+				organizationId: fixture.organizationId,
+			});
 			const addDocument = createOwnerClient(
 				fixture,
 				onboardingRouter.addBusinessDocument,
 				"addBusinessDocument"
 			);
-			await expect(
-				addDocument({
-					byteSize: 2048,
-					fileName: "pending.pdf",
-					mimeType: "application/pdf",
-					organizationId: fixture.organizationId,
-					storageKey: `employer/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-pending.pdf`,
-				})
-			).rejects.toMatchObject({ code: "CONFLICT" });
-
-			const [document] = await db
-				.insert(employerBusinessDocument)
-				.values({
-					byteSize: 2048,
-					category: "pdf",
-					createdByUserId: fixture.ownerUserId,
-					fileName: "pending.pdf",
-					mimeType: "application/pdf",
-					organizationId: fixture.organizationId,
-					storageKey: `employer/${fixture.organizationId}/${fixture.ownerUserId}/${randomUUID()}-pending.pdf`,
-				})
-				.returning();
-			if (!document) {
-				throw new Error("Expected pending document fixture to be created.");
-			}
+			const document = await addDocument({
+				byteSize: intent.byteSize,
+				fileName: intent.fileName,
+				mimeType: intent.mimeType,
+				organizationId: fixture.organizationId,
+				storageKey: intent.storageKey,
+			});
 
 			const deleteDocument = createOwnerClient(
 				fixture,
