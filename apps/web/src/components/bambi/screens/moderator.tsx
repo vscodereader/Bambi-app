@@ -155,7 +155,7 @@ function HiText({
 		segs.push({ t: text.slice(cur), hi: false, start: cur });
 	}
 	return (
-		<p className="m-0 text-[14.5px] text-[color:var(--text-default)] leading-[1.65]">
+		<p className="m-0 break-words text-[14.5px] text-[color:var(--text-default)] leading-[1.65]">
 			{segs.map((s) =>
 				s.hi ? (
 					<mark
