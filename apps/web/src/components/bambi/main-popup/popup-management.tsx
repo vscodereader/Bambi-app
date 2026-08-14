@@ -842,14 +842,6 @@ function PopupCard({
 										>
 											<foreignObject height="100%" width="100%">
 												<PopupTextEditor
-													onAutoHeight={(contentHeight) => {
-														if (contentHeight > draft.contentHeight) {
-															update(
-																(current) => ({ ...current, contentHeight }),
-																false
-															);
-														}
-													}}
 													onChange={(textDocument) =>
 														update((current) => ({ ...current, textDocument }))
 													}

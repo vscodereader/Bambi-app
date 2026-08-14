@@ -2121,12 +2121,17 @@ export const moderationRouter = {
 											: null,
 									status: input.status,
 								})
-								.where(eq(report.id, reportId))
+								.where(
+									and(
+										eq(report.id, reportId),
+										inArray(report.status, ["open", "reviewing"])
+									)
+								)
 								.returning();
 
 							if (!updated) {
-								throw new ORPCError("NOT_FOUND", {
-									message: "Report was not found.",
+								throw new ORPCError("CONFLICT", {
+									message: "이미 조치 완료되거나 기각된 신고입니다.",
 								});
 							}
 
@@ -3403,7 +3408,7 @@ export const moderationRouter = {
 				// "조치 대기 중"으로 굳어, 차단을 풀어도 대화가 돌아오지 않는다.
 				const resolvedReports = await tx
 					.update(report)
-					.set({ status: "resolved" })
+					.set({ resolutionReason: input.reason, status: "resolved" })
 					.where(
 						and(
 							inArray(report.status, ["open", "reviewing"]),

@@ -543,10 +543,15 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			bulkSetJobPostStatusMutation.isPending ||
 			bulkSetReportStatusMutation.isPending ||
 			bulkSetUserStatusMutation.isPending;
-		const toggleSelect = (id: string) =>
+		const toggleSelect = (id: string) => {
+			const target = visibleReports.find((item) => item.id === id);
+			if (target?.status === "closed") {
+				return;
+			}
 			setSelected((s) =>
 				s.includes(id) ? s.filter((x) => x !== id) : [...s, id]
 			);
+		};
 		const clearSelection = () => setSelected([]);
 		const summarizeBulkResult = (
 			actionLabel: string,

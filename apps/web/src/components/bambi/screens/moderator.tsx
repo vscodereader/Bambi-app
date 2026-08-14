@@ -381,10 +381,12 @@ function QueueFilterRow({
 // (rounded-sm · border-input · 선택 시 primary)에 맞춘다.
 function QueueCheckbox({
 	checked,
+	disabled = false,
 	label = "항목 선택",
 	onToggle,
 }: {
 	checked: boolean;
+	disabled?: boolean;
 	label?: string;
 	onToggle: () => void;
 }) {
@@ -394,13 +396,17 @@ function QueueCheckbox({
 			aria-pressed={checked}
 			className={cn(
 				"mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border transition-colors",
+				disabled && "cursor-not-allowed opacity-40",
 				checked
 					? "border-primary bg-primary text-primary-foreground"
 					: "border-input bg-card text-transparent hover:border-primary/60"
 			)}
+			disabled={disabled}
 			onClick={(e) => {
 				e.stopPropagation();
-				onToggle();
+				if (!disabled) {
+					onToggle();
+				}
 			}}
 			type="button"
 		>
@@ -1025,6 +1031,7 @@ function ReportRow({
 			{onToggle ? (
 				<QueueCheckbox
 					checked={selected}
+					disabled={done}
 					label={`${r.reason} 신고 선택`}
 					onToggle={onToggle}
 				/>
@@ -1089,7 +1096,12 @@ function getReportColumns({
 							<Checkbox
 								aria-label={`${r.reason} 신고 선택`}
 								checked={selected.includes(r.id)}
-								onCheckedChange={() => onToggle(r.id)}
+								disabled={r.status === "closed"}
+								onCheckedChange={() => {
+									if (r.status === "open") {
+										onToggle(r.id);
+									}
+								}}
 								// 행 클릭(상세 이동)과 겹치지 않게 체크박스 클릭은 여기서 멈춘다.
 								onClick={(event) => event.stopPropagation()}
 							/>
@@ -1842,29 +1854,32 @@ function ReportActions({
 					</Button>
 				) : null}
 			</div>
-			{dismissReasonOpen ? (
-				<ReasonConfirmSheet
-					confirmLabel="기각하기"
-					danger
-					defaultReason=""
-					description="신고자에게 표시할 기각 사유를 입력해 주세요."
-					isApplying={isResolving}
-					onCancel={() => setDismissReasonOpen(false)}
-					onConfirm={async (reason) => {
-						setIsResolving(true);
-						const succeeded = await onResolve(item.id, "dismiss", reason);
-						setIsResolving(false);
-						if (succeeded) {
-							setDismissReasonOpen(false);
-						}
-					}}
-					placeholder="기각 사유를 입력해 주세요."
-					positioning="fixed"
-					reasonFieldId={`report-dismiss-reason-${item.id}`}
-					reasonLabel="기각 사유"
-					title="신고 기각 사유"
-				/>
-			) : null}
+			{dismissReasonOpen
+				? createPortal(
+						<ReasonConfirmSheet
+							confirmLabel="기각하기"
+							danger
+							defaultReason=""
+							description="신고자에게 표시할 기각 사유를 입력해 주세요."
+							isApplying={isResolving}
+							onCancel={() => setDismissReasonOpen(false)}
+							onConfirm={async (reason) => {
+								setIsResolving(true);
+								const succeeded = await onResolve(item.id, "dismiss", reason);
+								setIsResolving(false);
+								if (succeeded) {
+									setDismissReasonOpen(false);
+								}
+							}}
+							placeholder="기각 사유를 입력해 주세요."
+							positioning="fixed"
+							reasonFieldId={`report-dismiss-reason-${item.id}`}
+							reasonLabel="기각 사유"
+							title="신고 기각 사유"
+						/>,
+						document.body
+					)
+				: null}
 		</div>
 	);
 }
@@ -1902,6 +1917,8 @@ export function ReportDetail({
 	// 구조화된 대상 맥락(공고·후기·사용자·대화방)이 있으면 전용 카드로, 없으면(채팅 메시지·
 	// 프리뷰 목업) 기존 스레드 블록으로 폴백한다.
 	const ctx = item.targetContext;
+	const isChatReport =
+		item.targetType === "chat_room" || item.targetType === "chat_message";
 	const hasStructuredContext = Boolean(
 		ctx &&
 			("jobPost" in ctx ||
@@ -1925,7 +1942,7 @@ export function ReportDetail({
 			onResolve={onResolve}
 			onSanctionRequest={() => setAct(true)}
 			sanctionUserId={sanctionUserId}
-			showActAction={!item.communityKind}
+			showActAction={!(item.communityKind || isChatReport)}
 		/>
 	);
 	return (

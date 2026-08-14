@@ -893,7 +893,16 @@ function ChatJobPostLink({
 }
 
 // 헤더 상태 배지. 남는 상태는 운영자 차단뿐이다 — 상대가 나갔는지는 드러내지 않는다.
-function ChatRoomStateBadge({ isBlocked }: { isBlocked: boolean }) {
+function ChatRoomStateBadge({
+	counterpartWithdrawn = false,
+	isBlocked,
+}: {
+	counterpartWithdrawn?: boolean;
+	isBlocked: boolean;
+}) {
+	if (counterpartWithdrawn) {
+		return <Badge tone="danger">대화 불가능</Badge>;
+	}
 	if (isBlocked) {
 		return <Badge tone="danger">차단됨</Badge>;
 	}
@@ -1929,6 +1938,7 @@ export function SeekerChatRoomResponsive({
 	const {
 		counterpartName,
 		counterpartProfileImageUrl,
+		counterpartWithdrawn,
 		currentUserId,
 		employerVerifiedPhone,
 		jobPost,
@@ -2247,7 +2257,10 @@ export function SeekerChatRoomResponsive({
 					</div>
 					<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 						<ChatJobPostLink jobPost={jobPost} />
-						<ChatRoomStateBadge isBlocked={room.isBlocked} />
+						<ChatRoomStateBadge
+							counterpartWithdrawn={counterpartWithdrawn}
+							isBlocked={room.isBlocked}
+						/>
 						<Badge
 							tone={realtimeStatus === "connected" ? "success" : "neutral"}
 						>
@@ -2289,17 +2302,23 @@ export function SeekerChatRoomResponsive({
 						viewerIsEmployer={!isJobSeeker}
 					/>
 				</div>
-				<ChatComposer
-					attachmentDraft={attachmentDraft}
-					attachmentInputRef={attachmentInputRef}
-					isAttachmentSubmitting={isAttachmentSubmitting}
-					isComposerSubmitting={isComposerSubmitting}
-					message={message}
-					onAttachmentChange={handleAttachmentChange}
-					onClearAttachment={clearAttachmentDraft}
-					onMessageChange={setMessage}
-					onSubmit={handleSubmit}
-				/>
+				{counterpartWithdrawn ? (
+					<div className="flex-none border-border border-t px-4 py-4 text-center font-semibold text-muted-foreground text-sm">
+						탈퇴한 사용자와는 대화할 수 없습니다.
+					</div>
+				) : (
+					<ChatComposer
+						attachmentDraft={attachmentDraft}
+						attachmentInputRef={attachmentInputRef}
+						isAttachmentSubmitting={isAttachmentSubmitting}
+						isComposerSubmitting={isComposerSubmitting}
+						message={message}
+						onAttachmentChange={handleAttachmentChange}
+						onClearAttachment={clearAttachmentDraft}
+						onMessageChange={setMessage}
+						onSubmit={handleSubmit}
+					/>
+				)}
 				{errorMessage ? (
 					<div className="flex-none border-border border-t px-4 py-3 font-semibold text-red-600 text-sm">
 						{errorMessage}
