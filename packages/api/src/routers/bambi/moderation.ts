@@ -144,6 +144,22 @@ const createReportInput = z.object({
 	details: z.string().max(1000).optional(),
 });
 
+const reportTargetDuplicateLabels: Record<
+	z.infer<typeof targetTypeSchema>,
+	string
+> = {
+	chat_message: "채팅방",
+	chat_room: "채팅방",
+	community_comment: "댓글",
+	community_post: "글",
+	job_post: "공고",
+	review: "대상",
+	user: "대상",
+};
+
+const duplicateReportMessage = (targetType: z.infer<typeof targetTypeSchema>) =>
+	`이미 신고된 ${reportTargetDuplicateLabels[targetType]}입니다. 처리결과를 기다려주세요.`;
+
 const listReportsInput = z.object({
 	status: reportStatusSchema.optional(),
 	limit: z.number().int().min(1).max(100).default(50),
@@ -1502,11 +1518,9 @@ export const moderationRouter = {
 				.limit(1);
 
 			if (existing) {
-				await emitChatReportAvailabilityChanged(
-					existing.targetType,
-					existing.targetId
-				);
-				return existing;
+				throw new ORPCError("CONFLICT", {
+					message: duplicateReportMessage(input.targetType),
+				});
 			}
 
 			const [created] = await db
