@@ -20,7 +20,13 @@ import {
 	ImageIcon,
 	Trash2,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import {
+	type Ref,
+	useEffect,
+	useImperativeHandle,
+	useRef,
+	useState,
+} from "react";
 import { toast } from "sonner";
 import {
 	detectImageSignature,
@@ -50,8 +56,15 @@ export interface BusinessDocument {
 
 interface BusinessDocumentUploaderProps {
 	documents: BusinessDocument[];
+	onPendingFilesChange?: (hasPendingFiles: boolean) => void;
 	organizationId: null | string;
+	ref?: Ref<BusinessDocumentUploaderHandle>;
 	verificationStatus: string;
+}
+
+export interface BusinessDocumentUploaderHandle {
+	hasPendingFiles: () => boolean;
+	uploadPendingFiles: (organizationId: string) => Promise<void>;
 }
 
 const formatBytes = (bytes: number): string => {
@@ -87,14 +100,20 @@ const validateFile = async (file: File): Promise<string | null> => {
 
 export function BusinessDocumentUploader({
 	documents,
+	onPendingFilesChange,
 	organizationId,
+	ref,
 	verificationStatus,
 }: BusinessDocumentUploaderProps) {
 	const inputRef = useRef<HTMLInputElement>(null);
 	const queryClient = useQueryClient();
 	const [isUploading, setIsUploading] = useState(false);
 	const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+	const [stagedFiles, setStagedFiles] = useState<File[]>([]);
 	const [pendingDeleteId, setPendingDeleteId] = useState<null | string>(null);
+	useEffect(() => {
+		onPendingFilesChange?.(stagedFiles.length > 0);
+	}, [onPendingFilesChange, stagedFiles.length]);
 	const isDeleteLocked = verificationStatus === "pending";
 	const requiresConfirmation =
 		verificationStatus === "verified" ||
@@ -124,11 +143,10 @@ export function BusinessDocumentUploader({
 		})
 	);
 
-	const uploadFiles = async (selectedFiles: File[]) => {
-		if (!organizationId) {
-			return;
-		}
-
+	const uploadFiles = async (
+		selectedFiles: File[],
+		targetOrganizationId: string
+	) => {
 		const remainingCount = MAX_DOCUMENT_COUNT - documents.length;
 		if (selectedFiles.length > remainingCount) {
 			toast.error(`서류는 최대 ${MAX_DOCUMENT_COUNT}개까지 올릴 수 있습니다.`);
@@ -147,19 +165,20 @@ export function BusinessDocumentUploader({
 					byteSize: file.size,
 					fileName: file.name,
 					mimeType: file.type,
-					organizationId,
+					organizationId: targetOrganizationId,
 				});
 				await uploadFileToSignedUrl({ file, uploadIntent });
 				await addDocumentMutation.mutateAsync({
 					byteSize: file.size,
 					fileName: file.name,
 					mimeType: file.type,
-					organizationId,
+					organizationId: targetOrganizationId,
 					storageKey: uploadIntent.storageKey,
 				});
 			}
 
 			toast.success("사업자 인증 서류를 올렸습니다.");
+			setStagedFiles([]);
 			await refreshMine();
 		} catch (error) {
 			toast.error(
@@ -167,12 +186,28 @@ export function BusinessDocumentUploader({
 					? error.message
 					: "사업자 인증 서류를 올리지 못했습니다."
 			);
+			throw error;
 		} finally {
 			setIsUploading(false);
 			if (inputRef.current) {
 				inputRef.current.value = "";
 			}
 		}
+	};
+	useImperativeHandle(ref, () => ({
+		hasPendingFiles: () => stagedFiles.length > 0,
+		uploadPendingFiles: async (targetOrganizationId) => {
+			await uploadFiles(stagedFiles, targetOrganizationId);
+		},
+	}));
+	const stageFiles = (files: File[]) => {
+		const remainingCount =
+			MAX_DOCUMENT_COUNT - documents.length - stagedFiles.length;
+		if (files.length > remainingCount) {
+			toast.error(`서류는 최대 ${MAX_DOCUMENT_COUNT}개까지 올릴 수 있습니다.`);
+			return;
+		}
+		setStagedFiles((current) => [...current, ...files]);
 	};
 	const handleFileInputChange = async (
 		event: React.ChangeEvent<HTMLInputElement>
@@ -189,7 +224,7 @@ export function BusinessDocumentUploader({
 			setPendingFiles(files);
 			return;
 		}
-		await uploadFiles(files);
+		stageFiles(files);
 	};
 
 	return (
@@ -208,7 +243,7 @@ export function BusinessDocumentUploader({
 						</p>
 					</div>
 					<Badge variant="secondary">
-						{documents.length}/{MAX_DOCUMENT_COUNT}
+						{documents.length + stagedFiles.length}/{MAX_DOCUMENT_COUNT}
 					</Badge>
 				</div>
 
@@ -285,11 +320,39 @@ export function BusinessDocumentUploader({
 						등록된 사업자 인증 서류가 없습니다.
 					</p>
 				)}
+				{stagedFiles.length > 0 ? (
+					<ul className="grid gap-2">
+						{stagedFiles.map((file) => (
+							<li
+								className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-dashed p-3"
+								key={`${file.name}-${file.size}-${file.lastModified}`}
+							>
+								<div className="min-w-0">
+									<p className="truncate text-sm">{file.name}</p>
+									<p className="text-muted-foreground text-xs">
+										제출 대기 · {formatBytes(file.size)}
+									</p>
+								</div>
+								<Button
+									onClick={() =>
+										setStagedFiles((current) =>
+											current.filter((currentFile) => currentFile !== file)
+										)
+									}
+									size="sm"
+									type="button"
+									variant="ghost"
+								>
+									제거
+								</Button>
+							</li>
+						))}
+					</ul>
+				) : null}
 
 				<input
 					accept="image/jpeg,image/png,image/webp,application/pdf"
 					className="sr-only"
-					disabled={!organizationId}
 					multiple
 					onChange={handleFileInputChange}
 					ref={inputRef}
@@ -297,9 +360,8 @@ export function BusinessDocumentUploader({
 				/>
 				<Button
 					disabled={
-						!organizationId ||
 						isUploading ||
-						documents.length >= MAX_DOCUMENT_COUNT
+						documents.length + stagedFiles.length >= MAX_DOCUMENT_COUNT
 					}
 					onClick={() => inputRef.current?.click()}
 					type="button"
@@ -309,7 +371,7 @@ export function BusinessDocumentUploader({
 				</Button>
 				{organizationId ? null : (
 					<p className="text-muted-foreground text-xs">
-						업체 정보를 먼저 제출한 뒤 인증 서류를 추가할 수 있습니다.
+						선택한 파일은 업체 정보 제출을 누를 때 업로드됩니다.
 					</p>
 				)}
 				{isDeleteLocked ? (
@@ -340,10 +402,10 @@ export function BusinessDocumentUploader({
 					<AlertDialogFooter>
 						<AlertDialogCancel>취소</AlertDialogCancel>
 						<AlertDialogAction
-							onClick={async () => {
+							onClick={() => {
 								const files = pendingFiles;
 								setPendingFiles([]);
-								await uploadFiles(files);
+								stageFiles(files);
 							}}
 						>
 							추가

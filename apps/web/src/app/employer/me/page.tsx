@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import {
 	type BusinessDocument,
 	BusinessDocumentUploader,
+	type BusinessDocumentUploaderHandle,
 } from "@/components/bambi/business-document-uploader";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { FieldError } from "@/components/bambi/form-message";
@@ -558,7 +559,9 @@ function BusinessInfoForm({
 	const [showChangeConfirm, setShowChangeConfirm] = useState(false);
 	const [showLeaveBlocked, setShowLeaveBlocked] = useState(false);
 	const [isSubmitHighlighted, setIsSubmitHighlighted] = useState(false);
+	const [hasPendingDocuments, setHasPendingDocuments] = useState(false);
 	const submitButtonRef = useRef<HTMLButtonElement>(null);
+	const documentUploaderRef = useRef<BusinessDocumentUploaderHandle>(null);
 	const isPending = verificationStatus === "pending";
 	const isChangesUnsubmitted = verificationStatus === "changes_unsubmitted";
 	const draftMutation = useMutation(
@@ -661,6 +664,13 @@ function BusinessInfoForm({
 			},
 		})
 	);
+	const prepareDocumentsMutation = useMutation(
+		orpc.bambi.onboarding.prepareEmployerBusinessDocuments.mutationOptions({
+			onError: (error) => {
+				toast.error(error.message || "업체 정보 제출을 준비하지 못했습니다.");
+			},
+		})
+	);
 
 	const nameError =
 		displayName.trim().length === 0 ? "업체명을 입력해 주세요." : "";
@@ -672,6 +682,25 @@ function BusinessInfoForm({
 			? "대표자 성명을 입력해 주세요."
 			: "";
 	const startDateError = startDate ? "" : "개업일자를 입력해 주세요.";
+	const ensureOrganizationId = async (): Promise<null | string> => {
+		if (organizationId) {
+			return organizationId;
+		}
+		if (nameError || brnError || representativeNameError || startDateError) {
+			setShowValidation(true);
+			throw new Error("업체 정보를 먼저 모두 입력해 주세요.");
+		}
+		const prepared = await prepareDocumentsMutation.mutateAsync({
+			displayName: displayName.trim(),
+			businessRegistrationNumber: brn.trim(),
+			representativeName: representativeName.trim(),
+			businessStartDate: startDate,
+		});
+		await queryClient.invalidateQueries({
+			queryKey: orpc.bambi.onboarding.getMine.queryKey(),
+		});
+		return prepared.organizationId;
+	};
 
 	// 기존 값에서 바뀐 게 없으면 제출을 막는다(불필요한 재심사 요청 방지).
 	// 단, 반려된 경우엔 동일 정보라도 재제출(재심사 신청)을 허용한다.
@@ -680,18 +709,37 @@ function BusinessInfoForm({
 		brn.trim() === defaultBusinessRegistrationNumber.trim() &&
 		representativeName.trim() === defaultRepresentativeName.trim() &&
 		startDate === defaultBusinessStartDate;
-	const blockUnchanged = isUnchanged && !isRejected && !isChangesUnsubmitted;
+	const blockUnchanged =
+		verificationStatus !== "none" &&
+		isUnchanged &&
+		!hasPendingDocuments &&
+		!isRejected &&
+		!isChangesUnsubmitted;
 
-	const submitBusinessInfo = () => {
+	const submitBusinessInfo = async () => {
 		if (submitMutation.isPending) {
 			return;
 		}
-		submitMutation.mutate({
-			displayName: displayName.trim(),
-			businessRegistrationNumber: brn.trim(),
-			representativeName: representativeName.trim(),
-			businessStartDate: startDate,
-		});
+		try {
+			let targetOrganizationId = organizationId;
+			if (documentUploaderRef.current?.hasPendingFiles()) {
+				targetOrganizationId = await ensureOrganizationId();
+				if (!targetOrganizationId) {
+					return;
+				}
+				await documentUploaderRef.current.uploadPendingFiles(
+					targetOrganizationId
+				);
+			}
+			await submitMutation.mutateAsync({
+				displayName: displayName.trim(),
+				businessRegistrationNumber: brn.trim(),
+				representativeName: representativeName.trim(),
+				businessStartDate: startDate,
+			});
+		} catch {
+			return;
+		}
 	};
 
 	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -704,7 +752,7 @@ function BusinessInfoForm({
 			setShowChangeConfirm(true);
 			return;
 		}
-		submitBusinessInfo();
+		submitBusinessInfo().catch(() => undefined);
 	};
 
 	const focusSubmit = () => {
@@ -819,13 +867,19 @@ function BusinessInfoForm({
 						</p>
 						<BusinessDocumentUploader
 							documents={businessDocuments}
+							onPendingFilesChange={setHasPendingDocuments}
 							organizationId={organizationId}
+							ref={documentUploaderRef}
 							verificationStatus={verificationStatus}
 						/>
 						<div className="flex justify-end">
 							<Button
 								className={`w-full sm:w-auto ${isSubmitHighlighted ? "animate-pulse ring-2 ring-primary ring-offset-4" : ""}`}
-								disabled={submitMutation.isPending || blockUnchanged}
+								disabled={
+									submitMutation.isPending ||
+									prepareDocumentsMutation.isPending ||
+									blockUnchanged
+								}
 								ref={submitButtonRef}
 								type="submit"
 							>

@@ -131,11 +131,9 @@ const extensions = [
 ];
 
 export function PopupTextEditor({
-	onAutoHeight,
 	onChange,
 	value,
 }: {
-	onAutoHeight?: (height: number) => void;
 	onChange: (value: JSONContent) => void;
 	value: JSONContent;
 }) {
@@ -151,11 +149,6 @@ export function PopupTextEditor({
 		immediatelyRender: false,
 		onUpdate: ({ editor: current }) => {
 			onChange(current.getJSON());
-			requestAnimationFrame(() =>
-				onAutoHeight?.(
-					Math.min(window.innerHeight * 0.8, current.view.dom.scrollHeight + 48)
-				)
-			);
 		},
 	});
 	return (
