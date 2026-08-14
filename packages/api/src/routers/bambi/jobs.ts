@@ -128,6 +128,7 @@ import {
 	DEFAULT_RECOMMENDED_CAPACITY,
 	DEFAULT_SPECIAL_CAPACITY,
 	getListingQueuePositions,
+	hasActiveOrgResponderFilter,
 	notQueuedListingFilter,
 } from "../../services/bambi-premium-capacity";
 import { resolveRegionSelection } from "../../services/bambi-region";
@@ -1318,6 +1319,8 @@ export const jobsRouter = {
 			// 섹션 쿼리(getExposedJobs)는 이미 exposureEndsAt로 제외하고, urgent엔 이 필터가
 			// 항상 참이라 무해하다(정원 대상 타입에만 걸리는 조건).
 			notQueuedListingFilter(),
+			// 대표 탈퇴로 응대자가 0명이 된 고아 조직의 공고는 섹션·전체공고·카운트에서 뺀다.
+			hasActiveOrgResponderFilter(),
 		];
 
 		if (input.industryCategory) {
@@ -1623,6 +1626,8 @@ export const jobsRouter = {
 			eq(employerOrganizationProfile.verificationStatus, "verified"),
 			// 대기열(결제됨·미활성) 스페셜/추천 공고 제외 — list와 동일.
 			notQueuedListingFilter(),
+			// 고아 조직(응대자 0명) 공고 제외 — list와 동일.
+			hasActiveOrgResponderFilter(),
 		];
 
 		if (input.industryCategory) {
@@ -1727,7 +1732,9 @@ export const jobsRouter = {
 					eq(jobPost.paymentStatus, "paid"),
 					eq(employerOrganizationProfile.verificationStatus, "verified"),
 					inArray(jobPost.exposureType, [...AD_BANNER_EXPOSURE_TYPES]),
-					or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now))
+					or(isNull(jobPost.exposureEndsAt), gt(jobPost.exposureEndsAt, now)),
+					// 고아 조직(응대자 0명) 공고는 배너 슬롯에서도 뺀다.
+					hasActiveOrgResponderFilter()
 				)
 			)
 			.orderBy(desc(jobPost.publishedAt));
@@ -1848,7 +1855,9 @@ export const jobsRouter = {
 					employerTeamProfile,
 					eq(jobPost.teamId, employerTeamProfile.teamId)
 				)
-				.where(eq(jobPost.id, input.id))
+				// 고아 조직(대표 탈퇴로 응대자 0명) 공고는 상세 직접 접근도 NOT_FOUND로 막는다 —
+				// 조건 불일치 시 행이 안 잡혀 아래 status 게이트가 NOT_FOUND를 던진다.
+				.where(and(eq(jobPost.id, input.id), hasActiveOrgResponderFilter()))
 				.limit(1);
 
 			if (

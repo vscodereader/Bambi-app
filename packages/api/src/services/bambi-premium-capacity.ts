@@ -7,6 +7,7 @@
 //   늘고, pending 1순위가 "진행 가능"으로 파생 전환된다(별도 승격 쓰기·배치 불필요).
 
 import type { db } from "@bambi-app/db";
+import { member, user } from "@bambi-app/db/schema/auth";
 import { bambiSiteSettings, jobPost } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
@@ -147,6 +148,22 @@ export const notQueuedListingFilter = (): SQL<unknown> => {
 	}
 	return filter;
 };
+
+// 공개 노출 읽기 시점 가드: 공고 소유 조직에 탈퇴하지 않은 멤버(응대 가능자)가 최소 1명 있어야 한다.
+// 대표는 팀·팀원을 모두 비운 뒤에야 탈퇴되므로 탈퇴 시점의 조직은 고아가 되고, 그 순간의 published
+// 공고는 hidden으로 내려간다(onboarding.withdrawMyAccount). 이 1회성 스냅샷이 놓친 경우 —
+// deleted_at만 직접 세팅된 옛/시드 데이터, 탈퇴 뒤 boost·승격으로 status가 다시 published가 된 공고,
+// 멤버 제거로 뒤늦게 고아가 된 조직 — 목록·검색·상세·배너 어디에도 뜨지 않게 막는다. 정상 조직은
+// 대표가 늘 남아 있어 무해하다. jobPost.organizationId를 참조하는 상관 서브쿼리라 jobPost가
+// FROM에 있는 공개 쿼리의 and(...)에만 붙인다.
+export const hasActiveOrgResponderFilter = (): SQL<unknown> =>
+	sql`exists (
+		select 1
+		from ${member}
+		inner join ${user} on ${user.id} = ${member.userId}
+		where ${member.organizationId} = ${jobPost.organizationId}
+			and ${user.deletedAt} is null
+	)`;
 
 export interface ListingQueuePositionEntry {
 	exposureType: CapacityListingExposureType;
