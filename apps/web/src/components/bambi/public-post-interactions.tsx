@@ -469,12 +469,13 @@ export function PublicPostInteractions({
 
 	const canParticipate = canWrite && participable;
 	const canComment = canParticipate && !commentsDisabled;
+	const showCommentsSection = !commentsDisabled || commentCount > 0;
 
 	// 인증된 비회원만 재조회한다(내 댓글의 수정·삭제 권한 플래그가 필요해서다).
 	// 그 외에는 서버가 내려준 목록을 그대로 쓴다.
 	const commentsQuery = useQuery(
 		orpc.bambi.community.listComments.queryOptions({
-			enabled: canReadComments ?? canParticipate,
+			enabled: showCommentsSection && (canReadComments ?? canParticipate),
 			input: { password, postId },
 		})
 	);
@@ -596,7 +597,9 @@ export function PublicPostInteractions({
 				</div>
 			) : null}
 
-			<section className="flex flex-col gap-3">
+			<section
+				className={cn("flex flex-col gap-3", !showCommentsSection && "hidden")}
+			>
 				<h2 className="m-0 font-bold text-base">댓글 {commentCount}</h2>
 				{comments.length === 0 ? (
 					<p className="m-0 text-muted-foreground text-sm">
