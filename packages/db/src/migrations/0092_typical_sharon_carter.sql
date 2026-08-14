@@ -1,0 +1,1 @@
+ALTER TABLE "bambi_site_settings" ADD COLUMN "max_member_points" integer;

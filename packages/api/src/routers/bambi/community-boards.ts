@@ -53,28 +53,34 @@ const boardIconSchema = z.enum(COMMUNITY_BOARD_ICONS);
 const boardKeyInput = z.object({ key: z.string().trim().min(1).max(40) });
 
 const createBoardInput = z.object({
+	commentPoints: z.number().int().min(0).max(100_000).default(0),
 	description: z.string().trim().max(200).default(""),
 	icon: boardIconSchema.optional(),
 	label: z.string().trim().min(1).max(30),
+	postPoints: z.number().int().min(0).max(100_000).default(0),
 	slug: z.string().trim().min(2).max(30),
 });
 
 const updateBoardInput = boardKeyInput
 	.extend({
+		commentPoints: z.number().int().min(0).max(100_000).optional(),
 		description: z.string().trim().max(200).optional(),
 		// null이면 아이콘 제거(생략은 "안 건드림"과 구분된다).
 		icon: boardIconSchema.nullable().optional(),
 		isWritable: z.boolean().optional(),
 		label: z.string().trim().min(1).max(30).optional(),
+		postPoints: z.number().int().min(0).max(100_000).optional(),
 		sortOrder: z.number().int().min(0).max(10_000).optional(),
 	})
 	// 전부 생략하면 drizzle의 set에 넘길 값이 남지 않아 쿼리 자체가 터진다.
 	.refine(
 		(value) =>
+			value.commentPoints !== undefined ||
 			value.description !== undefined ||
 			value.icon !== undefined ||
 			value.isWritable !== undefined ||
 			value.label !== undefined ||
+			value.postPoints !== undefined ||
 			value.sortOrder !== undefined,
 		{ message: "바꿀 값을 하나 이상 보내야 합니다." }
 	);
@@ -157,10 +163,12 @@ export const communityBoardsRouter = {
 		const [created] = await db
 			.insert(communityBoard)
 			.values({
+				commentPoints: input.commentPoints,
 				description: input.description,
 				icon: input.icon,
 				key: input.slug,
 				label: input.label,
+				postPoints: input.postPoints,
 				slug: input.slug,
 				sortOrder: (tail?.value ?? 0) + 10,
 			})
@@ -181,11 +189,13 @@ export const communityBoardsRouter = {
 		const [updated] = await db
 			.update(communityBoard)
 			.set({
+				commentPoints: input.commentPoints,
 				description: input.description,
 				// undefined는 drizzle이 set에서 빼고, null은 그대로 실려 아이콘이 지워진다.
 				icon: input.icon,
 				isWritable: input.isWritable,
 				label: input.label,
+				postPoints: input.postPoints,
 				sortOrder: input.sortOrder,
 			})
 			.where(eq(communityBoard.key, input.key))

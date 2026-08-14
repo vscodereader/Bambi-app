@@ -50,6 +50,7 @@ import {
 	CommunityRoleBadges,
 } from "@/components/bambi/community-post-badges";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { GradeBadge } from "@/components/bambi/grade-badge";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
 	type CommunityBoardMeta,
@@ -154,7 +155,10 @@ function BoardPostRow({
 					) : null}
 				</span>
 				<span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-muted-foreground text-xs">
-					<span>{post.authorName ?? COMMUNITY_AUTHOR_FALLBACK}</span>
+					<span className="flex items-center gap-1.5">
+						{post.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
+						<GradeBadge grade={post.authorGrade} />
+					</span>
 					<span>{formatCommunityDate(post.createdAt)}</span>
 					<span className="flex items-center gap-0.5">
 						<EyeIcon className="size-3" />

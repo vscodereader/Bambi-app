@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
 	bambiAttendance,
+	bambiMemberGrade,
 	bambiPointTransaction,
 	bambiProfile,
 } from "@bambi-app/db/schema/bambi";
@@ -29,6 +30,7 @@ import {
 	requireActiveBambiProfile,
 	type SessionLike,
 } from "../../services/bambi-authz";
+import { nextGrade, resolveGrade } from "../../services/bambi-member-points";
 
 // 출석 대상 역할. 운영자·법률자문·게스트는 출석 대상이 아니다. 허용 목록으로 고정해
 // bambi_user_role에 값이 하나 늘어도 기본 판정이 "거부"가 되게 한다(bambi-authz 관례).
@@ -297,18 +299,39 @@ export const attendanceRouter = {
 			const attendedDatesDesc = rows.map((row) => row.attendedOn);
 
 			// 패널 초기 렌더에 잔액이 함께 필요하다(출석 전에도 보여야 해서 checkIn 응답만으론 부족).
-			const [balance] = await db
-				.select({ pointBalance: pointBalanceSql })
-				.from(bambiPointTransaction)
-				.where(eq(bambiPointTransaction.userId, profile.userId));
+			// 등급표는 잔액과 병렬로 읽는다 — 서로 의존하지 않는 조회다.
+			const [[balance], grades] = await Promise.all([
+				db
+					.select({ pointBalance: pointBalanceSql })
+					.from(bambiPointTransaction)
+					.where(eq(bambiPointTransaction.userId, profile.userId)),
+				db
+					.select({
+						id: bambiMemberGrade.id,
+						name: bambiMemberGrade.name,
+						minPoints: bambiMemberGrade.minPoints,
+						color: bambiMemberGrade.color,
+					})
+					.from(bambiMemberGrade)
+					.orderBy(asc(bambiMemberGrade.minPoints)),
+			]);
+
+			const pointBalance = balance?.pointBalance ?? 0;
+			const current = resolveGrade(pointBalance, grades);
+			const upcoming = nextGrade(pointBalance, grades);
 
 			return {
 				attendedDates: attendedDatesDesc.filter((attendedOn) =>
 					attendedOn.startsWith(month)
 				),
 				checkedInToday: attendedDatesDesc[0] === today,
+				grade: current ? { color: current.color, name: current.name } : null,
 				month,
-				pointBalance: balance?.pointBalance ?? 0,
+				nextGrade: upcoming
+					? { minPoints: upcoming.minPoints, name: upcoming.name }
+					: null,
+				pointBalance,
+				pointsToNext: upcoming ? upcoming.minPoints - pointBalance : null,
 				streakDays: countAttendanceStreak(attendedDatesDesc, today),
 				today,
 				totalDays: attendedDatesDesc.length,
