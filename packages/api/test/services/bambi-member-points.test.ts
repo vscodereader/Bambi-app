@@ -10,6 +10,7 @@ const {
 	isPointsCapAllowed,
 	nextGrade,
 	reconcilePoints,
+	resolveCommentAward,
 	resolveGrade,
 } = await import("@/services/bambi-member-points");
 
@@ -111,5 +112,23 @@ describe("isPointsCapAllowed", () => {
 	});
 	it("등급이 없어(최고 기준 0) 어떤 상한도 허용", () => {
 		expect(isPointsCapAllowed(0, 0)).toBe(true);
+	});
+});
+
+describe("resolveCommentAward", () => {
+	it("타인 글에 회원이 단 댓글: 게시판 댓글 포인트 적립", () => {
+		expect(resolveCommentAward("u1", "u2", 50)).toBe(50);
+	});
+	it("자기 글에 자기가 단 댓글: 0(셀프 적립 방지)", () => {
+		expect(resolveCommentAward("u1", "u1", 50)).toBe(0);
+	});
+	it("게스트 댓글(userId null): 0", () => {
+		expect(resolveCommentAward(null, "u2", 50)).toBe(0);
+	});
+	it("글 작성자 없음(수집 글 등 null): 회원 댓글은 포인트 적립", () => {
+		expect(resolveCommentAward("u1", null, 50)).toBe(50);
+	});
+	it("게시판 댓글 포인트가 0이면 0", () => {
+		expect(resolveCommentAward("u1", "u2", 0)).toBe(0);
 	});
 });
