@@ -94,7 +94,10 @@ export function ReportDialog({
 		<Dialog onOpenChange={handleOpenChange} open={open}>
 			<DialogContent>
 				{isDone ? (
-					<ReportDone onClose={() => handleOpenChange(false)} />
+					<ReportDone
+						isChat={targetType === "chat_room" || targetType === "chat_message"}
+						onClose={() => handleOpenChange(false)}
+					/>
 				) : (
 					<ReportForm
 						onCancel={() => handleOpenChange(false)}

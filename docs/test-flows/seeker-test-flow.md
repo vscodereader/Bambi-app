@@ -1325,7 +1325,7 @@
 | A-8 | "면접 확정 전까지 전화번호는 공개되지 않는다" | **구인자의 인증 전화번호는 면접 확정과 무관하게** 공고 상세(`bambi.jobs.getById`, publicProcedure)와 채팅방(`getById`)에서 구직자에게 노출된다 | `packages/api/src/routers/bambi/jobs.ts`, `.../chats.ts` |
 | A-9 | "계정 설정: **표시 이름**을 바꾸고… 로그아웃" | 로그아웃 버튼은 계정설정에서 **`md:hidden`(모바일 전용)**이다. 데스크톱은 마이페이지 사이드바에만 있다. 또 계정설정 최하단에 **회원 탈퇴 섹션**이 있는데 매뉴얼에 없다 | `apps/web/src/components/bambi/screens/account-settings-screen.tsx`, `.../withdraw-account-section.tsx` |
 | A-10 | 신고 사유 7종을 그대로 나열 | 사유는 맞지만 **"외부 연락처 유도"가 서버 enum `misleading_job_information`으로 매핑**되어 "내 신고 내역"에서는 **"허위 공고 정보"** 로 표시된다 | `apps/web/src/components/bambi/report-dialog.tsx`, `apps/web/src/lib/bambi/report-labels.ts` |
-| A-11 | "채팅방에서 신고한 경우 해당 대화가 **잠시 숨겨질 수 있습니다**" | 신고로 채팅을 숨기는 코드가 **없다**. 완료 화면 문구만 그렇게 말한다 | `apps/web/src/components/bambi/safety-kit.tsx` `ReportDone` |
+| A-11 | "채팅방에서 신고한 경우 해당 대화가 **잠시 숨겨질 수 있습니다**" | 완료 문구가 **대상별로 다르다**. 채팅 신고만 채팅 숨김을 안내하고 실제로 목록 재조회로 숨겨지며, 공고·수다방 등 비채팅 신고는 숨김을 주장하지 않는 일반 문구를 보여 준다 | `apps/web/src/components/bambi/safety-kit.tsx` `ReportDone`, `.../screens/seeker-chat-list-responsive.tsx` |
 | A-12 | "채팅 목록: 각 방에 **N개 미확인** 표시" (신고 배지 언급 없음) | `신고 완료 · 조치 대기 중` 배지가 추가로 있다. 또 케밥 메뉴에 **삭제·신고·차단**이 있는데 매뉴얼에 없다 | `apps/web/src/components/bambi/screens/seeker-chat-list-responsive.tsx` |
 | A-13 | "면접 일정 제안은 보통 업체가 합니다" | "보통"이 아니라 **구직자는 제안 자체가 불가능**하다(서버 `FORBIDDEN` + UI 미노출) | `packages/api/src/routers/bambi/chats.ts` `proposeInterview` |
 | A-14 | "사진은 8MB, PDF는 10MB" | 클라이언트는 8MB/10MB지만 **서버 정책은 이미지·PDF 모두 10MB**다 | `apps/web/src/components/bambi/screens/seeker-chat-room-responsive.tsx` vs `packages/api/src/services/bambi-media-policy.ts` |
