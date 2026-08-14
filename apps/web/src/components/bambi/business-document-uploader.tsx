@@ -289,7 +289,7 @@ export function BusinessDocumentUploader({
 				<input
 					accept="image/jpeg,image/png,image/webp,application/pdf"
 					className="sr-only"
-					disabled={!organizationId || isDeleteLocked}
+					disabled={!organizationId}
 					multiple
 					onChange={handleFileInputChange}
 					ref={inputRef}
@@ -298,7 +298,6 @@ export function BusinessDocumentUploader({
 				<Button
 					disabled={
 						!organizationId ||
-						isDeleteLocked ||
 						isUploading ||
 						documents.length >= MAX_DOCUMENT_COUNT
 					}
