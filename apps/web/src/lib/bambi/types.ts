@@ -213,6 +213,8 @@ export interface ManagedUser {
 	// 소프트 탈퇴 시각. null이 아니면 탈퇴한 계정이다.
 	deletedAt: Date | null;
 	email: string;
+	// 회원 등급 뱃지(이름·색). 게스트·미산정이면 null.
+	grade: { name: string; color: string | null } | null;
 	id: string;
 	isPhoneVerified: boolean;
 	// 표시용 가입일(포맷 완료 문자열). 정렬은 joinedAt으로 한다.
@@ -224,6 +226,8 @@ export interface ManagedUser {
 	note: string;
 	// 소속 업소 표시명(구인자만 채워진다).
 	organizationNames: string[];
+	// 포인트 잔액(원장 순합계). moderation.listUsers가 내려준다.
+	pointBalance: number;
 	// 개인정보 파기 완료 시각. 값이 있으면 탈퇴 복구가 불가능하다(로그인 수단이 이미 파기됨).
 	purgedAt: Date | null;
 	reports: number;
