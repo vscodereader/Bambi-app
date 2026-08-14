@@ -12,6 +12,7 @@ import { crawledJobsRouter } from "./crawled-jobs";
 import { crawlerRouter } from "./crawler";
 import { jobsRouter } from "./jobs";
 import { mainPopupsRouter } from "./main-popups";
+import { memberGradesRouter } from "./member-grades";
 import { moderationRouter } from "./moderation";
 import { notificationsRouter } from "./notifications";
 import { onboardingRouter } from "./onboarding";
@@ -40,6 +41,7 @@ export const bambiRouter: {
 	crawler: typeof crawlerRouter;
 	jobs: typeof jobsRouter;
 	mainPopups: typeof mainPopupsRouter;
+	memberGrades: typeof memberGradesRouter;
 	moderation: typeof moderationRouter;
 	notifications: typeof notificationsRouter;
 	onboarding: typeof onboardingRouter;
@@ -65,6 +67,7 @@ export const bambiRouter: {
 	crawler: crawlerRouter,
 	jobs: jobsRouter,
 	mainPopups: mainPopupsRouter,
+	memberGrades: memberGradesRouter,
 	moderation: moderationRouter,
 	notifications: notificationsRouter,
 	onboarding: onboardingRouter,
