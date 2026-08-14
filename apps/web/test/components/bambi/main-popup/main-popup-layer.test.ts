@@ -23,6 +23,15 @@ describe("PC 다중 팝업 배치", () => {
 	});
 });
 
+describe("팝업 표시 시점", () => {
+	it("로그인 이동 화면에서는 숨기고 목적 페이지 렌더링 뒤 표시한다", () => {
+		expect(source).toContain('document.readyState === "complete"');
+		expect(source).toContain("popupAuthTransitionStorageKey");
+		expect(source).toContain("!authTransition");
+		expect(source).toContain("window.requestAnimationFrame");
+	});
+});
+
 describe("팝업 운영자 라벨", () => {
 	it("중복 단계 번호 없이 필드 이름만 표시한다", () => {
 		expect(managementSource).toContain("게시 구분");

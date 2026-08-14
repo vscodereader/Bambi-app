@@ -474,7 +474,7 @@ describe("bambi moderation management: createReport guards", () => {
 		}
 	});
 
-	it("inserts a fresh report and de-duplicates repeat reports", async () => {
+	it("inserts a fresh report and rejects a repeat pending report", async () => {
 		const fixture = await createManagementFixture();
 
 		try {
@@ -498,15 +498,17 @@ describe("bambi moderation management: createReport guards", () => {
 				targetType: "review",
 			});
 
-			const second = await createReport({
-				details: "다시 신고합니다.",
-				reason: "harassment",
-				targetId: fixture.reviewId,
-				targetType: "review",
+			await expect(
+				createReport({
+					details: "다시 신고합니다.",
+					reason: "harassment",
+					targetId: fixture.reviewId,
+					targetType: "review",
+				})
+			).rejects.toMatchObject({
+				code: "CONFLICT",
+				message: "이미 신고된 대상입니다. 처리결과를 기다려주세요.",
 			});
-			expect(second?.id).toBe(first?.id);
-			// 멱등 반환이므로 두 번째 신고의 내용은 저장되지 않고 최초 row가 그대로 반환된다.
-			expect(second?.reason).toBe("other");
 
 			const rows = await db
 				.select({ id: report.id })

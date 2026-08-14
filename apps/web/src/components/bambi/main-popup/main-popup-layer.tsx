@@ -12,6 +12,8 @@ import {
 	EMPTY_TEXT_DOCUMENT,
 	hiddenPopupStorageKey,
 	type PopupImageAsset,
+	popupAuthTransitionEvent,
+	popupAuthTransitionStorageKey,
 	popupLoginTargetStorageKey,
 } from "@/lib/bambi/main-popup";
 import { resolveMainPopupPageId } from "@/lib/bambi/main-popup-pages";
@@ -65,8 +67,56 @@ export function MainPopupLayer() {
 	});
 	const [closed, setClosed] = useState<Set<string>>(new Set());
 	const [ready, setReady] = useState(false);
+	const [authTransition, setAuthTransition] = useState(false);
+	const [pageReady, setPageReady] = useState(false);
 	const [frontId, setFrontId] = useState<string | null>(null);
 	useEffect(() => setReady(true), []);
+	useEffect(() => {
+		const syncAuthTransition = () => {
+			setAuthTransition(
+				sessionStorage.getItem(popupAuthTransitionStorageKey) !== null
+			);
+		};
+		syncAuthTransition();
+		window.addEventListener(popupAuthTransitionEvent, syncAuthTransition);
+		return () =>
+			window.removeEventListener(popupAuthTransitionEvent, syncAuthTransition);
+	}, []);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: pathname은 값을 읽는 대신 페이지 이동마다 준비 상태를 초기화하는 재실행 키다.
+	useEffect(() => {
+		let firstFrame = 0;
+		let secondFrame = 0;
+		const markPageReady = () => {
+			firstFrame = window.requestAnimationFrame(() => {
+				secondFrame = window.requestAnimationFrame(() => {
+					const transitionSource = sessionStorage.getItem(
+						popupAuthTransitionStorageKey
+					);
+					if (
+						transitionSource &&
+						transitionSource !== String(performance.timeOrigin)
+					) {
+						sessionStorage.removeItem(popupAuthTransitionStorageKey);
+						setAuthTransition(false);
+					}
+					setPageReady(true);
+				});
+			});
+		};
+
+		setPageReady(false);
+		if (document.readyState === "complete") {
+			markPageReady();
+		} else {
+			window.addEventListener("load", markPageReady, { once: true });
+		}
+
+		return () => {
+			window.removeEventListener("load", markPageReady);
+			window.cancelAnimationFrame(firstFrame);
+			window.cancelAnimationFrame(secondFrame);
+		};
+	}, [pathname]);
 	useEffect(() => {
 		const refresh = () => {
 			query.refetch();
@@ -76,7 +126,7 @@ export function MainPopupLayer() {
 	}, [query]);
 	const items = useMemo(
 		() =>
-			ready && !isPending && isAuthenticated
+			ready && pageReady && !authTransition && !isPending && isAuthenticated
 				? ((query.data?.items ?? []).filter(
 						(item) =>
 							pageId !== null &&
@@ -84,7 +134,16 @@ export function MainPopupLayer() {
 							!(closed.has(item.id) || isHidden(item.id, item.revision))
 					) as PublicPopup[])
 				: [],
-		[closed, isAuthenticated, isPending, pageId, query.data?.items, ready]
+		[
+			authTransition,
+			closed,
+			isAuthenticated,
+			isPending,
+			pageId,
+			pageReady,
+			query.data?.items,
+			ready,
+		]
 	);
 	useEffect(() => {
 		const media = window.matchMedia("(max-width: 767px)");
