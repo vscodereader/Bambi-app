@@ -38,6 +38,22 @@ export function reconcilePoints(
 	return { delta: target - currentAwarded, nextAwarded: target };
 }
 
+// 순수: 댓글 적립 목표액. 게스트(userId null)와 자기 글에 자기가 단 댓글은 0(셀프 적립 방지),
+// 그 외 회원 댓글은 게시판 댓글 포인트. postAuthorUserId가 null(수집 글 등 작성자 없음)이면 셀프가 아니다.
+export function resolveCommentAward(
+	commentAuthorUserId: string | null,
+	postAuthorUserId: string | null,
+	boardCommentPoints: number
+): number {
+	if (commentAuthorUserId === null) {
+		return 0;
+	}
+	if (commentAuthorUserId === postAuthorUserId) {
+		return 0;
+	}
+	return boardCommentPoints;
+}
+
 // 순수: 적립 델타를 회원 누적 상한 여유분까지만 반영한다. cap null(무제한)이거나 회수(delta<=0)면
 // 그대로 둔다. currentBalance는 이 적립을 반영하기 전의 회원 순합계다.
 export function applyPointsCap(
