@@ -20,6 +20,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { GradeBadge } from "@/components/bambi/grade-badge";
 import { buildMonthGrid, shiftMonth } from "@/lib/bambi/attendance-calendar";
 import { orpc } from "@/utils/orpc";
 
@@ -95,7 +96,10 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 	const {
 		attendedDates,
 		checkedInToday,
+		grade,
+		nextGrade,
 		pointBalance,
+		pointsToNext,
 		streakDays,
 		today,
 		totalDays,
@@ -130,7 +134,17 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 						</div>
 						<div className="flex flex-col gap-0.5">
 							<dt className="m-0 text-muted-foreground text-xs">포인트</dt>
-							<dd className="m-0 font-extrabold text-xl">{`${pointBalance.toLocaleString("ko-KR")}P`}</dd>
+							<dd className="m-0 flex flex-col gap-0.5">
+								<span className="flex items-center gap-2 font-extrabold text-xl">
+									{`${pointBalance.toLocaleString("ko-KR")}P`}
+									<GradeBadge grade={grade} />
+								</span>
+								<span className="text-muted-foreground text-xs">
+									{nextGrade
+										? `${nextGrade.name}까지 ${pointsToNext?.toLocaleString("ko-KR")}P`
+										: "최고 등급입니다"}
+								</span>
+							</dd>
 						</div>
 					</dl>
 					<Button

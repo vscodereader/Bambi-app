@@ -212,6 +212,9 @@ export const communityBoard = pgTable("community_board", {
 	// false면 읽기만 열린다(글쓰기 버튼·서버 가드 양쪽에서 막는다).
 	isWritable: boolean("is_writable").default(true).notNull(),
 	sortOrder: integer("sort_order").notNull(),
+	// 이 게시판에 회원이 글/댓글을 쓸 때 적립할 포인트(0=미지급). 운영자가 게시판별로 편집한다.
+	postPoints: integer("post_points").default(0).notNull(),
+	commentPoints: integer("comment_points").default(0).notNull(),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
@@ -1870,6 +1873,22 @@ export const bambiPointTransaction = pgTable(
 	]
 );
 
+// 회원 등급 정의. 운영자가 편집한다(CRUD). 등급 = min_points ≤ 포인트 잔액(원장 순합계)인
+// 최상위 등급. min_points=0 기본 등급이 항상 하나 있어야 모든 회원이 등급을 갖는다(시드로 보장,
+// 삭제 API가 마지막 0 등급을 막는다). min_points UNIQUE로 구간 경계 중복을 DB가 거른다.
+export const bambiMemberGrade = pgTable("bambi_member_grade", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	name: text("name").notNull(),
+	minPoints: integer("min_points").notNull().unique(),
+	// 뱃지 색(hex). null이면 화면 기본색.
+	color: text("color"),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
+
 export const communityPost = pgTable(
 	"community_post",
 	{
@@ -1906,6 +1925,9 @@ export const communityPost = pgTable(
 		// 토글·작성·삭제 트랜잭션에서 함께 증감한다.
 		likeCount: integer("like_count").default(0).notNull(),
 		commentCount: integer("comment_count").default(0).notNull(),
+		// 이 글에 현재 적립돼 있는 포인트(회수·재적립 금액 기준). 게스트·0포인트 게시판은 0.
+		// published 이탈 시 이 값만큼 원장에서 회수하고 0으로, 복구 시 재적립한다.
+		pointsAwarded: integer("points_awarded").default(0).notNull(),
 		// 운영자가 글 단위로 새 댓글·답글 작성을 잠근다. 기존 댓글 열람·수정·삭제에는
 		// 영향을 주지 않으며 일반 회원·비회원은 API에서 이 값을 설정할 수 없다.
 		commentsDisabled: boolean("comments_disabled").default(false).notNull(),
@@ -1964,6 +1986,8 @@ export const communityComment = pgTable(
 			{ onDelete: "cascade" }
 		),
 		body: text("body").notNull(),
+		// 이 댓글에 현재 적립돼 있는 포인트(회수·재적립 기준). 게스트는 0.
+		pointsAwarded: integer("points_awarded").default(0).notNull(),
 		status: communityContentStatus("status").default("published").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),

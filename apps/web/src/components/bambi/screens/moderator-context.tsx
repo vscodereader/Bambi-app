@@ -509,6 +509,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			blockedByCount: item.blockedByCount,
 			deletedAt: item.deletedAt ? new Date(item.deletedAt) : null,
 			email: item.email,
+			grade: item.grade,
 			id: item.userId,
 			isPhoneVerified: item.isPhoneVerified,
 			joined: formatDate(item.createdAt),
@@ -520,6 +521,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				? "휴대폰 인증 완료"
 				: "휴대폰 인증이 필요합니다.",
 			organizationNames: item.organizationNames,
+			pointBalance: item.pointBalance,
 			purgedAt: item.purgedAt ? new Date(item.purgedAt) : null,
 			reports: item.reportsCount,
 			role: userRoleLabel(item.role),
