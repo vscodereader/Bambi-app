@@ -113,7 +113,7 @@ export function Avatar({
 		<UiAvatar
 			className={cn(
 				AVATAR_ROOT_SIZE[size] || AVATAR_ROOT_SIZE.md,
-				"after:border-0",
+				"isolate overflow-hidden after:border-0",
 				square ? "rounded-[14px] after:rounded-[14px]" : "rounded-full",
 				ring && "ring-2 ring-coral-50 ring-offset-2 ring-offset-background",
 				className

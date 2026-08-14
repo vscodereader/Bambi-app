@@ -71,7 +71,7 @@ export function AccountSettingsScreen() {
 	);
 	const [isProfileImageDirty, setIsProfileImageDirty] = useState(false);
 	const createMediaUpload = useMutation(
-		orpc.bambi.community.createMediaUpload.mutationOptions()
+		orpc.bambi.onboarding.createProfileImageUpload.mutationOptions()
 	);
 
 	// 표시 이름(닉네임)의 정본은 user.name(세션)이다. bambi_profile.display_name은 제거됐다.

@@ -77,7 +77,16 @@ const getRoomItemClassName = (
 
 // 방 상태 배지. 남는 상태는 운영자 차단뿐이다 — 상대가 나갔는지는 알리지 않는다
 // (나가도 발신은 그대로 되고, 그 사실이 상대에게 드러나서도 안 된다).
-function ChatRoomStateBadge({ isBlocked }: { isBlocked: boolean }) {
+function ChatRoomStateBadge({
+	counterpartWithdrawn,
+	isBlocked,
+}: {
+	counterpartWithdrawn: boolean;
+	isBlocked: boolean;
+}) {
+	if (counterpartWithdrawn) {
+		return <Badge tone="danger">대화 불가능</Badge>;
+	}
 	if (isBlocked) {
 		return <Badge tone="danger">차단됨</Badge>;
 	}
@@ -198,10 +207,12 @@ function ChatRoomActions({
 // 갈라 md:hidden(모바일 메신저 행)과 hidden md:block(데스크톱 카드)을 나란히 둔다 —
 // 시간·미확인·상태 배지가 행마다 다른 자리로 가서 한 트리로는 얽히기 때문이다.
 function ChatRoomItem({
+	counterpartWithdrawn,
 	isBlocked,
 	onOpen,
 	room,
 }: {
+	counterpartWithdrawn: boolean;
 	isBlocked: boolean;
 	onOpen: (roomId: string) => void;
 	room: ChatListRoom;
@@ -254,7 +265,10 @@ function ChatRoomItem({
 								{room.counterpartName}
 							</span>
 						) : null}
-						<ChatRoomStateBadge isBlocked={isBlocked} />
+						<ChatRoomStateBadge
+							counterpartWithdrawn={counterpartWithdrawn}
+							isBlocked={isBlocked}
+						/>
 					</div>
 					<div className="flex min-w-0 items-center gap-2">
 						<p
@@ -279,7 +293,10 @@ function ChatRoomItem({
 						<h2 className="m-0 truncate font-extrabold text-base">
 							{jobTitle}
 						</h2>
-						<ChatRoomStateBadge isBlocked={isBlocked} />
+						<ChatRoomStateBadge
+							counterpartWithdrawn={counterpartWithdrawn}
+							isBlocked={isBlocked}
+						/>
 						{room.unreadCount > 0 ? (
 							<Badge tone="primary">{room.unreadCount}개 미확인</Badge>
 						) : null}
@@ -451,6 +468,7 @@ export function SeekerChatListResponsive({
 				<div className="grid gap-0 md:gap-3">
 					{rooms.map((room) => (
 						<ChatRoomItem
+							counterpartWithdrawn={room.counterpartWithdrawn}
 							isBlocked={room.isBlocked}
 							key={room.id}
 							onOpen={onOpen}

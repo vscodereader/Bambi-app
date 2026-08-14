@@ -32,6 +32,7 @@ import { hasActiveAdExposure } from "../../services/bambi-advertiser";
 import {
 	isEmployerLikeRole,
 	isEmployerOrganizationVerified,
+	requireActiveBambiProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
 import { resolveCommunityAccess } from "../../services/bambi-community-access";
@@ -63,6 +64,7 @@ import {
 import { resolveOptionalRegion } from "../../services/bambi-region";
 import {
 	createBusinessDocumentUploadIntent,
+	createEditorMediaUploadIntent,
 	getBusinessDocumentViewPath,
 	isOwnedBusinessDocumentKey,
 	resolveBusinessDocumentViewUrl,
@@ -128,6 +130,18 @@ const mockPhoneVerificationInput = z.object({
 // 서버가 포트원 단건조회로 진위를 확인한다.
 const phoneVerificationInput = z.object({
 	identityVerificationId: z.string().min(1).max(120),
+});
+
+const PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const PROFILE_IMAGE_MIME_TYPES = new Set([
+	"image/jpeg",
+	"image/png",
+	"image/webp",
+]);
+const profileImageUploadInput = z.object({
+	byteSize: z.number().int().min(1).max(PROFILE_IMAGE_MAX_BYTES),
+	fileName: z.string().trim().min(1).max(180),
+	mimeType: z.string().trim().min(1).max(120),
 });
 
 const organizationProfileInput = z.object({
@@ -538,6 +552,22 @@ const findOrganizationsLeftEmptyBy = async (
 };
 
 export const onboardingRouter = {
+	createProfileImageUpload: protectedProcedure
+		.input(profileImageUploadInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireActiveBambiProfile(context.session);
+			if (!PROFILE_IMAGE_MIME_TYPES.has(input.mimeType)) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "JPG, PNG, WebP 이미지만 등록할 수 있습니다.",
+				});
+			}
+
+			return await createEditorMediaUploadIntent({
+				...input,
+				userId: profile.userId,
+			});
+		}),
+
 	createBusinessDocumentUpload: protectedProcedure
 		.input(businessDocumentUploadInput)
 		.handler(async ({ context, input }) => {
@@ -1500,6 +1530,50 @@ export const onboardingRouter = {
 				});
 			}
 			return updated;
+		}),
+
+	prepareEmployerBusinessDocuments: protectedProcedure
+		.input(submitEmployerBusinessInfoInput)
+		.handler(async ({ context, input }) => {
+			const userId = context.session.user.id;
+			await requireEmployerBambiProfile(userId);
+
+			const [ownedOrg] = await db
+				.select({ organizationId: member.organizationId })
+				.from(member)
+				.where(and(eq(member.userId, userId), eq(member.role, "owner")))
+				.limit(1);
+			if (ownedOrg) {
+				return { organizationId: ownedOrg.organizationId };
+			}
+
+			const organizationId = `org_${randomUUID()}`;
+			const now = new Date();
+			await db.transaction(async (tx) => {
+				await tx.insert(organization).values({
+					id: organizationId,
+					name: input.displayName,
+					slug: toOrganizationSlug(input.displayName),
+					createdAt: now,
+				});
+				await tx.insert(member).values({
+					id: `member_${randomUUID()}`,
+					organizationId,
+					role: "owner",
+					userId,
+					createdAt: now,
+				});
+				await tx.insert(employerOrganizationProfile).values({
+					organizationId,
+					displayName: input.displayName,
+					businessRegistrationNumber: input.businessRegistrationNumber,
+					representativeName: input.representativeName,
+					businessStartDate: input.businessStartDate.replaceAll("-", ""),
+					verificationStatus: "none",
+				});
+			});
+
+			return { organizationId };
 		}),
 
 	submitEmployerBusinessInfo: protectedProcedure

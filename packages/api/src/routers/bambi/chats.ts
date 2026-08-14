@@ -659,13 +659,25 @@ type ChatBlockReason =
 	| "blocked_by_counterpart"
 	| "blocked_by_me"
 	| "moderation"
-	| "pending_report";
+	| "pending_report"
+	| "withdrawn";
 
 const CHAT_BLOCK_MESSAGES: Record<ChatBlockReason, string> = {
 	blocked_by_counterpart: "상대가 회원님을 차단한 채팅방이에요.",
 	blocked_by_me: "회원님이 상대를 차단한 채팅방이에요.",
 	moderation: "신고에 대한 운영자 조치로 종료된 채팅방이에요.",
 	pending_report: "신고를 검토하고 있는 채팅이에요. 처리 후 다시 볼 수 있어요.",
+	withdrawn: "탈퇴한 사용자와는 대화할 수 없습니다.",
+};
+
+const isWithdrawnUser = async (userId: string): Promise<boolean> => {
+	const [counterpart] = await db
+		.select({ deletedAt: user.deletedAt })
+		.from(user)
+		.where(eq(user.id, userId))
+		.limit(1);
+
+	return Boolean(counterpart?.deletedAt);
 };
 
 /**
@@ -741,13 +753,21 @@ const throwIfHiddenByActiveReport = async ({
  */
 const throwIfChatUnavailable = async ({
 	actorUserId,
+	allowWithdrawnRead = false,
 	allowUnsubmittedRead = false,
 	room,
 }: {
 	actorUserId: string;
+	allowWithdrawnRead?: boolean;
 	allowUnsubmittedRead?: boolean;
 	room: CounterpartRoom & { isBlocked: boolean };
 }): Promise<void> => {
+	if (
+		!allowWithdrawnRead &&
+		(await isWithdrawnUser(counterpartUserId(room, actorUserId)))
+	) {
+		await throwChatBlocked("withdrawn", room, actorUserId);
+	}
 	if (
 		!allowUnsubmittedRead &&
 		(await isEmployerOrganizationChangesUnsubmitted(room.organizationId))
@@ -947,6 +967,13 @@ export const chatsRouter = {
 			visibleRooms.map(({ room }) => room),
 			profile.userId
 		);
+		const withdrawnCounterpartIds = new Set<string>();
+		for (const room of visibleRooms.map(({ room }) => room)) {
+			const counterpartId = counterpartUserId(room, profile.userId);
+			if (await isWithdrawnUser(counterpartId)) {
+				withdrawnCounterpartIds.add(counterpartId);
+			}
+		}
 
 		// 안 읽음 수도 방마다 묻지 않고 한 번의 집계로 모은다.
 		const unreadCountByRoomId = await getUnreadMessageCountsByRoom({
@@ -964,6 +991,9 @@ export const chatsRouter = {
 				room.isBlocked ||
 				blockedCounterpartIds.has(counterpartUserId(room, profile.userId)),
 			counterpartName: counterpartNames.get(room.id) ?? null,
+			counterpartWithdrawn: withdrawnCounterpartIds.has(
+				counterpartUserId(room, profile.userId)
+			),
 			// 목록 화면이 뷰어 쪽(구직자/구인자)을 판별하고 차단 대상을 고르는 근거.
 			// 방 row에는 양쪽 id만 있어 뷰어가 누구인지 화면에서 알 수 없다.
 			counterpartUserId: counterpartUserId(room, profile.userId),
@@ -1086,6 +1116,7 @@ export const chatsRouter = {
 
 			await throwIfChatUnavailable({
 				actorUserId: profile.userId,
+				allowWithdrawnRead: true,
 				allowUnsubmittedRead: true,
 				room,
 			});
@@ -1155,7 +1186,7 @@ export const chatsRouter = {
 				profile.userId
 			);
 			const [counterpartUser] = await db
-				.select({ image: user.image })
+				.select({ deletedAt: user.deletedAt, image: user.image })
 				.from(user)
 				.where(eq(user.id, counterpartUserId(room, profile.userId)))
 				.limit(1);
@@ -1187,6 +1218,7 @@ export const chatsRouter = {
 			return {
 				counterpartName: counterpartNames.get(room.id) ?? null,
 				counterpartProfileImageUrl: counterpartUser?.image ?? null,
+				counterpartWithdrawn: Boolean(counterpartUser?.deletedAt),
 				currentUserId: profile.userId,
 				employerVerifiedPhone: verifiedPhoneFor(room.employerUserId),
 				// 화면이 "이전 메시지 더 보기"를 띄울지 판단하는 근거.
