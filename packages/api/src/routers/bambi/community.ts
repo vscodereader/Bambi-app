@@ -68,6 +68,7 @@ import {
 	loadGradeBadges,
 	POINT_REASONS,
 	reconcileContentPoints,
+	resolveCommentAward,
 } from "../../services/bambi-member-points";
 import { resolveNotificationRecipients } from "../../services/bambi-notification-recipients";
 import {
@@ -1079,6 +1080,7 @@ const reconcileCommentPointsOnStatusChange = async (
 	tx: CommunityTx,
 	args: {
 		authorUserId: string | null;
+		postAuthorUserId: string | null;
 		board: string | null;
 		commentId: string;
 		currentAwarded: number;
@@ -1091,7 +1093,11 @@ const reconcileCommentPointsOnStatusChange = async (
 	const nextAwarded = await reconcileContentPoints(tx, {
 		userId: args.authorUserId,
 		currentAwarded: args.currentAwarded,
-		targetAmount: args.authorUserId ? commentPoints : 0,
+		targetAmount: resolveCommentAward(
+			args.authorUserId,
+			args.postAuthorUserId,
+			commentPoints
+		),
 		reasons: POINT_REASONS.comment,
 	});
 	await tx
@@ -2024,7 +2030,11 @@ export const communityRouter = {
 
 			const commentAuthorUserId = actorUserId(actor);
 			const { commentPoints } = await getBoardContentPoints(post.board);
-			const commentTarget = commentAuthorUserId ? commentPoints : 0;
+			const commentTarget = resolveCommentAward(
+				commentAuthorUserId,
+				post.authorUserId,
+				commentPoints
+			);
 
 			const created = await db.transaction(async (tx) => {
 				await tx.execute(
@@ -2379,6 +2389,7 @@ export const communityRouter = {
 						authorUserId: communityComment.authorUserId,
 						board: communityPost.board,
 						crawledTopicId: communityComment.crawledTopicId,
+						postAuthorUserId: communityPost.authorUserId,
 						pointsAwarded: communityComment.pointsAwarded,
 						postId: communityComment.postId,
 						status: communityComment.status,
@@ -2441,6 +2452,7 @@ export const communityRouter = {
 				if (wasVisible !== willVisible) {
 					await reconcileCommentPointsOnStatusChange(tx, {
 						authorUserId: existing.authorUserId,
+						postAuthorUserId: existing.postAuthorUserId,
 						board: existing.board,
 						commentId: input.commentId,
 						currentAwarded: existing.pointsAwarded,
