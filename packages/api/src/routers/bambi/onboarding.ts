@@ -543,6 +543,7 @@ export const onboardingRouter = {
 		.handler(async ({ context, input }) => {
 			const userId = context.session.user.id;
 			await requireBusinessDocumentOrganization({
+				allowPending: true,
 				organizationId: input.organizationId,
 				userId,
 			});
@@ -563,6 +564,7 @@ export const onboardingRouter = {
 		.handler(async ({ context, input }) => {
 			const userId = context.session.user.id;
 			await requireBusinessDocumentOrganization({
+				allowPending: true,
 				organizationId: input.organizationId,
 				userId,
 			});
