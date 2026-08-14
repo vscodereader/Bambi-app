@@ -6,6 +6,7 @@ import type { JSONContent } from "@tiptap/react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { authClient } from "@/lib/auth-client";
 import {
 	EMPTY_TEXT_DOCUMENT,
@@ -56,8 +57,10 @@ export function MainPopupLayer() {
 	const { boards } = useCommunityBoards();
 	const pageId = resolveMainPopupPageId(pathname, boards);
 	const session = authClient.useSession();
+	const { isAuthenticated, isPending } = useBambiAuth();
 	const query = useQuery({
 		...orpc.bambi.mainPopups.listPublic.queryOptions(),
+		enabled: !isPending && isAuthenticated,
 		refetchInterval: 15_000,
 	});
 	const [closed, setClosed] = useState<Set<string>>(new Set());
@@ -73,7 +76,7 @@ export function MainPopupLayer() {
 	}, [query]);
 	const items = useMemo(
 		() =>
-			ready
+			ready && !isPending && isAuthenticated
 				? ((query.data?.items ?? []).filter(
 						(item) =>
 							pageId !== null &&
@@ -81,7 +84,7 @@ export function MainPopupLayer() {
 							!(closed.has(item.id) || isHidden(item.id, item.revision))
 					) as PublicPopup[])
 				: [],
-		[closed, pageId, query.data?.items, ready]
+		[closed, isAuthenticated, isPending, pageId, query.data?.items, ready]
 	);
 	useEffect(() => {
 		const media = window.matchMedia("(max-width: 767px)");

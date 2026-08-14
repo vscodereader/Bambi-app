@@ -227,6 +227,7 @@ function PostDetailView({
 	const hasEmployerComments = comments.some(
 		(comment) => comment.authorRole === "employer"
 	);
+	const hideCommentsSection = post.commentsDisabled && post.commentCount === 0;
 	const trimmedComment = commentBody.trim();
 	const canSubmitComment =
 		trimmedComment.length >= 1 && !createCommentMutation.isPending;
@@ -275,8 +276,8 @@ function PostDetailView({
 					) : null}
 				</div>
 			</div>
-			<Separator />
-			<div className="flex flex-col gap-3">
+			<Separator hidden={hideCommentsSection} />
+			<div className="flex flex-col gap-3" hidden={hideCommentsSection}>
 				<div className="flex flex-wrap items-center justify-between gap-2">
 					<h2 className="m-0 font-bold text-base">댓글 {post.commentCount}</h2>
 					{hasEmployerComments ? (

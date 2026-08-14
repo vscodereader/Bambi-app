@@ -112,6 +112,9 @@ export const mainPopupsRouter = {
 	listPublic: publicProcedure.handler(async ({ context }) => {
 		const now = new Date();
 		const userId = context.session?.user?.id;
+		if (!userId) {
+			return { items: [] };
+		}
 		let allowedAudiences: Array<"common" | "job_seeker" | "employer"> = [
 			"common",
 		];
