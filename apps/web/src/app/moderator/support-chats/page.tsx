@@ -22,7 +22,7 @@ import {
 } from "@bambi-app/ui/components/toggle-group";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeftIcon, LockIcon, SendIcon } from "lucide-react";
+import { ChevronLeftIcon, LockIcon, SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
@@ -206,7 +206,7 @@ function RoomDetail({
 	const queryClient = useQueryClient();
 	const [reply, setReply] = useState("");
 	const [showInfo, setShowInfo] = useState(false);
-	const bottomRef = useRef<HTMLDivElement>(null);
+	const scrollRef = useRef<HTMLDivElement>(null);
 
 	const roomQuery = useQuery({
 		...orpc.bambi.supportChat.admin.getRoom.queryOptions({
@@ -268,11 +268,14 @@ function RoomDetail({
 		}
 	}, [roomId, unreadCount, markRead]);
 
-	// 메시지가 늘면 맨 아래로(길이를 읽어 재실행 트리거로 삼는다).
+	// 메시지가 늘면 목록 컨테이너만 맨 아래로(길이를 읽어 재실행 트리거로 삼는다).
+	// scrollIntoView는 문서까지 포함한 모든 스크롤 조상을 움직여, 답변을 보낼 때마다
+	// 페이지 전체가 튀었다 — 컨테이너 scrollTop만 손대 페이지 위치를 건드리지 않는다.
 	const messageCount = messages?.length ?? 0;
 	useEffect(() => {
-		if (messageCount > 0) {
-			bottomRef.current?.scrollIntoView({ block: "end" });
+		const el = scrollRef.current;
+		if (messageCount > 0 && el) {
+			el.scrollTop = el.scrollHeight;
 		}
 	}, [messageCount]);
 
@@ -321,7 +324,10 @@ function RoomDetail({
 						문의자 정보
 					</Button>
 				</CardHeader>
-				<CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-4">
+				<CardContent
+					className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-4"
+					ref={scrollRef}
+				>
 					{roomQuery.isPending ? (
 						<>
 							<Skeleton className="h-12 w-2/3" />
@@ -368,7 +374,6 @@ function RoomDetail({
 							</div>
 						);
 					})}
-					<div ref={bottomRef} />
 				</CardContent>
 				<div className="flex flex-col gap-2 border-t p-3">
 					{/* 종료 대화도 입력은 막지 않는다 — 답변 발신이 곧 재개다. */}
@@ -406,7 +411,7 @@ function RoomDetail({
 							onClick={send}
 							size="icon"
 						>
-							<SendIcon className="size-4" />
+							<SendHorizontal className="size-4" />
 						</Button>
 					</div>
 				</div>

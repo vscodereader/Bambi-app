@@ -138,6 +138,7 @@ function SupportChatPanel({
 				/>
 			) : (
 				<WidgetMessages
+					onClose={onClose}
 					onOpenRoom={onOpenRoom}
 					onStartNew={onStartNew}
 					rooms={rooms}
