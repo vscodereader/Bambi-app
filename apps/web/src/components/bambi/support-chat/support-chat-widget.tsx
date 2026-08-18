@@ -4,6 +4,11 @@ import { readSupportChatTokenFromCookieString } from "@bambi-app/api/services/ba
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Card } from "@bambi-app/ui/components/card";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@bambi-app/ui/components/tooltip";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Home, MessageCircle, MessageSquare } from "lucide-react";
@@ -127,6 +132,7 @@ function SupportChatPanel({
 				<WidgetHome
 					faqs={faqs}
 					notice={notice}
+					onClose={onClose}
 					onNavigate={onNavigate}
 					onStartChat={onStartChat}
 				/>
@@ -342,21 +348,20 @@ export function SupportChatWidget() {
 			</Badge>
 		) : null;
 
-	// 레일 포털일 때: 배너 스택의 마지막 카드처럼 보이는 전체 폭 CTA 카드(호버 시 살짝 리프트).
+	// 레일 포털일 때: 세로 배너와 같은 가로 폭(13rem*4/9 = aspect-[4/9] h-52의 폭)의 정사각
+	// 말풍선 아이콘 버튼. 호버 시 살짝 리프트 + 버튼 아래에 툴팁("운영자 문의하기").
 	const railLauncher = (
-		<button
-			aria-label="운영자 문의"
-			className="relative flex w-full items-center gap-3 rounded-lg bg-primary p-4 text-left text-primary-foreground shadow-[var(--shadow-primary)] transition hover:-translate-y-0.5"
-			onClick={onToggle}
-			type="button"
-		>
-			<MessageCircle className="size-6 shrink-0" />
-			<span className="flex min-w-0 flex-col gap-0.5">
-				<span className="font-semibold text-sm">운영자 문의</span>
-				<span className="text-xs opacity-90">궁금한 점을 바로 물어보세요</span>
-			</span>
-			{unreadBadge}
-		</button>
+		<Tooltip>
+			<TooltipTrigger
+				aria-label="운영자 문의"
+				className="relative flex aspect-square w-[calc(13rem*4/9)] items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[var(--shadow-primary)] transition hover:-translate-y-0.5"
+				onClick={onToggle}
+			>
+				<MessageCircle className="size-7" />
+				{unreadBadge}
+			</TooltipTrigger>
+			<TooltipContent side="bottom">운영자 문의하기</TooltipContent>
+		</Tooltip>
 	);
 
 	// fixed 폴백(좁은 화면 우하단): 원형 FAB — 현행 유지.
