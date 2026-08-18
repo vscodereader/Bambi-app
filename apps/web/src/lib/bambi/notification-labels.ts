@@ -103,6 +103,8 @@ const TITLE_BY_TARGET_AND_ACTION: Record<string, string> = {
 	"review:created": "내 업소에 새 후기가 등록됐어요",
 	"review:set_status:hidden": "내 후기가 숨김 처리됐어요",
 	"review:set_status:published": "내 후기가 게시됐어요",
+	"support_chat:message": "새 문의 채팅이 도착했어요",
+	"support_chat:replied": "문의 채팅에 답변이 도착했어요",
 	"support_inquiry:answered": "문의에 답변이 도착했어요",
 	"team_invitation:accepted": "팀 합류가 승인됐어요",
 	// 초대를 낸 조직 쪽이 받는 합류 완료 알림(합류자 본인의 accepted와 짝이다).
@@ -118,6 +120,7 @@ const SHARED_TITLE_BY_TARGET: Record<string, string> = {
 	job_post: "새 공고 검수 요청이 들어왔어요",
 	report: "새 신고가 접수됐어요",
 	review: "후기 심사 요청이 들어왔어요",
+	support_chat: "새 문의 채팅이 도착했어요",
 	support_inquiry: "새 1:1 문의가 접수됐어요",
 	team_invitation: "팀 초대 심사 요청이 들어왔어요",
 };
@@ -134,6 +137,7 @@ const TITLE_BY_TARGET: Record<string, string> = {
 	organization_member: "조직 구성원 정보가 변경됐어요",
 	report: "신고 처리 결과가 나왔어요",
 	review: "후기 상태가 변경됐어요",
+	support_chat: "문의 채팅에 변동이 있어요",
 	support_inquiry: "문의에 변동이 있어요",
 	team_invitation: "팀 초대에 변동이 있어요",
 };
@@ -294,6 +298,7 @@ const SHARED_HREF_BY_TARGET: Record<string, string> = {
 	job_post: "/moderator",
 	report: "/moderator/reports",
 	review: "/moderator/reviews",
+	support_chat: "/moderator/support-chats",
 	support_inquiry: "/moderator/support",
 	team_invitation: "/moderator/team-invites",
 };
@@ -360,6 +365,9 @@ export function notificationHref(item: BambiNotificationView): null | string {
 			const jobPostId = readString(item.metadata, "jobPostId");
 			return jobPostId ? `/seeker/jobs/${jobPostId}` : NOTIFICATIONS_HREF;
 		}
+		// 문의 채팅 답변은 위젯을 자동으로 여는 딥링크로 보낸다(Task 8과 약속된 쿼리 파라미터).
+		case "support_chat":
+			return "/?support-chat=1";
 		// 문의 답변은 문의자에게 가고 targetId가 곧 inquiry id다(서버 support 라우터 기준).
 		case "support_inquiry":
 			return `/support/inquiries/${item.targetId}`;

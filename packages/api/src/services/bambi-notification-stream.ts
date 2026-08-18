@@ -19,6 +19,7 @@ export type BambiNotificationTargetType =
 	| "organization_member"
 	| "report"
 	| "review"
+	| "support_chat"
 	| "support_inquiry"
 	| "team_invitation";
 

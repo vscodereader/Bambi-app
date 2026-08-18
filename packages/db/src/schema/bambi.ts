@@ -190,6 +190,7 @@ export const notificationTargetType = pgEnum("notification_target_type", [
 	"employer_verification",
 	"team_invitation",
 	"organization_member",
+	"support_chat",
 ]);
 
 // 수다방 게시판 정의. 운영자가 코드 배포 없이 추가·수정할 수 있도록 enum이 아니라
@@ -245,6 +246,11 @@ export const supportInquiryStatus = pgEnum("support_inquiry_status", [
 	"open",
 	"answered",
 	"closed",
+]);
+
+export const supportChatSender = pgEnum("support_chat_sender", [
+	"inquirer",
+	"admin",
 ]);
 
 export const promotionTier = pgEnum("promotion_tier", [
@@ -1801,9 +1807,7 @@ export const bambiNotification = pgTable(
 		readByUserId: text("read_by_user_id").references(() => user.id, {
 			onDelete: "set null",
 		}),
-		actorUserId: text("actor_user_id")
-			.notNull()
-			.references(() => user.id),
+		actorUserId: text("actor_user_id").references(() => user.id),
 		targetType: notificationTargetType("target_type").notNull(),
 		targetId: text("target_id").notNull(),
 		chatRoomId: uuid("chat_room_id").references(() => chatRoom.id, {
@@ -2111,6 +2115,64 @@ export const supportInquiryMessage = pgTable(
 	(table) => [
 		index("support_inquiry_message_inquiry_id_created_at_idx").on(
 			table.inquiryId,
+			table.createdAt
+		),
+	]
+);
+
+// 운영자 실시간 문의 채팅방. 회원은 userId, 비회원은 서명 쿠키의 sid(guestId)로
+// 1인 1방을 유지한다 — 부분 유니크가 축이고, CHECK가 두 축 중 정확히 하나만 강제한다.
+// 비회원이 쿠키를 지우면 새 방이 생기고 옛 방은 콘솔 이력으로 남는다.
+// 읽음은 방 단위 워터마크 2개다(운영자는 공용 큐라 1개면 된다). 미읽음 수 =
+// 워터마크 이후에 쌓인 상대측 메시지 count.
+export const supportChatRoom = pgTable(
+	"support_chat_room",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+		guestId: text("guest_id"),
+		// 운영자가 도배 방을 잠근다 — 잠긴 방의 문의자는 발신 403, 운영자 발신은 가능.
+		isBlocked: boolean("is_blocked").default(false).notNull(),
+		userLastReadAt: timestamp("user_last_read_at"),
+		adminLastReadAt: timestamp("admin_last_read_at"),
+		lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("support_chat_room_user_id_uidx")
+			.on(table.userId)
+			.where(sql`${table.userId} IS NOT NULL`),
+		uniqueIndex("support_chat_room_guest_id_uidx")
+			.on(table.guestId)
+			.where(sql`${table.guestId} IS NOT NULL`),
+		index("support_chat_room_last_message_at_idx").on(table.lastMessageAt),
+		check(
+			"support_chat_room_owner_one_of_ck",
+			sql`(${table.userId} IS NULL) <> (${table.guestId} IS NULL)`
+		),
+	]
+);
+
+export const supportChatMessage = pgTable(
+	"support_chat_message",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		roomId: uuid("room_id")
+			.notNull()
+			.references(() => supportChatRoom.id, { onDelete: "cascade" }),
+		senderType: supportChatSender("sender_type").notNull(),
+		// admin 발신일 때 어느 운영자인지 감사용. 비회원 inquirer는 null.
+		senderUserId: text("sender_user_id").references(() => user.id),
+		body: text("body").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("support_chat_message_room_id_created_at_idx").on(
+			table.roomId,
 			table.createdAt
 		),
 	]

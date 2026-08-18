@@ -48,7 +48,7 @@ const BASE64_PADDING = /=+$/;
 const BASE64URL_DASH = /-/g;
 const BASE64URL_UNDERSCORE = /_/g;
 
-const toBase64Url = (bytes: Uint8Array): string =>
+export const toBase64Url = (bytes: Uint8Array): string =>
 	btoa(String.fromCharCode(...bytes))
 		.replace(BASE64_PLUS, "-")
 		.replace(BASE64_SLASH, "_")
@@ -56,7 +56,9 @@ const toBase64Url = (bytes: Uint8Array): string =>
 
 // 반환 타입을 Uint8Array<ArrayBuffer>로 못박는다: 기본 인자(ArrayBufferLike)로 두면
 // DOM 타입이 있는 web 쪽 컴파일에서 crypto.subtle.verify의 BufferSource에 맞지 않는다.
-const fromBase64Url = (value: string): Uint8Array<ArrayBuffer> | null => {
+export const fromBase64Url = (
+	value: string
+): Uint8Array<ArrayBuffer> | null => {
 	try {
 		const base64 = value
 			.replace(BASE64URL_DASH, "+")
@@ -70,7 +72,7 @@ const fromBase64Url = (value: string): Uint8Array<ArrayBuffer> | null => {
 
 // 반환 타입을 적지 않는 이유: api 패키지는 lib DOM 없이(types: node) 컴파일돼
 // CryptoKey·BufferSource 같은 DOM 타입 이름을 쓸 수 없다. 추론에 맡긴다.
-const importHmacKey = (secret: string) =>
+export const importHmacKey = (secret: string) =>
 	crypto.subtle.importKey(
 		"raw",
 		encoder.encode(secret),
