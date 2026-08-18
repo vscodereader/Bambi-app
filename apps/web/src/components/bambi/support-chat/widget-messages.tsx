@@ -2,7 +2,7 @@
 
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
-import { SendHorizontal } from "lucide-react";
+import { SendHorizontal, X } from "lucide-react";
 import { formatDateTime } from "@/lib/bambi-format";
 
 // getMyRooms 응답의 방 요약. lastMessageAt은 oRPC 직렬화에 따라 Date/문자열 둘 다 올 수
@@ -18,16 +18,31 @@ export interface WidgetRoomSummary {
 
 // 메시지 뷰: 대화 목록(미리보기·시각·미읽음·종료 뱃지) + 하단 "메시지를 보내주세요"(새 대화).
 export function WidgetMessages({
+	onClose,
 	onOpenRoom,
 	onStartNew,
 	rooms,
 }: {
+	onClose: () => void;
 	onOpenRoom: (roomId: string) => void;
 	onStartNew: () => void;
 	rooms: WidgetRoomSummary[];
 }) {
 	return (
 		<div className="flex flex-1 flex-col overflow-hidden">
+			{/* 닫기는 헤더 줄에 둔다 — 홈처럼 목록 위에 겹치면 첫 대화 카드의 미읽음 뱃지를 가린다. */}
+			<div className="flex items-center justify-between gap-2 px-3 pt-3">
+				<p className="m-0 font-semibold text-sm">메시지</p>
+				<Button
+					aria-label="문의 닫기"
+					className="text-muted-foreground"
+					onClick={onClose}
+					size="icon-sm"
+					variant="ghost"
+				>
+					<X />
+				</Button>
+			</div>
 			<div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
 				{rooms.length === 0 ? (
 					<p className="m-0 py-8 text-center text-muted-foreground text-sm">
