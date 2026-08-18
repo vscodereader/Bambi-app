@@ -19,6 +19,8 @@ import {
 	TabsTrigger as UiTabsTrigger,
 } from "@bambi-app/ui/components/tabs";
 import { cn } from "@bambi-app/ui/lib/utils";
+import type { Route } from "next";
+import Link from "next/link";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import {
 	SELECTED_JOB_CARD_CLASS,
@@ -1035,6 +1037,7 @@ export function JobCard({
 
 // ---- StatGroup -------------------------------------------------------------
 interface StatCell {
+	href?: Route;
 	label: string;
 	tone?: "default" | "danger" | "primary";
 	value: ReactNode;
@@ -1052,29 +1055,41 @@ export function StatGroup({ items, className }: StatGroupProps) {
 				className
 			)}
 		>
-			{items.map((it, i) => (
-				<div
-					className={cn(
-						"flex flex-1 flex-col items-center gap-1 px-2 py-[14px]",
-						i ? "border-border border-l" : "border-none"
-					)}
-					key={it.label}
-				>
-					<span className="font-medium text-muted-foreground text-xs">
-						{it.label}
-					</span>
-					<span
-						className={cn(
-							"font-extrabold text-xl",
-							it.tone === "danger" || it.tone === "primary"
-								? "text-primary"
-								: "text-foreground"
-						)}
-					>
-						{it.value}
-					</span>
-				</div>
-			))}
+			{items.map((it, i) => {
+				const content = (
+					<>
+						<span className="font-medium text-muted-foreground text-xs">
+							{it.label}
+						</span>
+						<span
+							className={cn(
+								"font-extrabold text-xl",
+								it.tone === "danger" || it.tone === "primary"
+									? "text-primary"
+									: "text-foreground"
+							)}
+						>
+							{it.value}
+						</span>
+					</>
+				);
+				const cellClassName = cn(
+					"flex flex-1 flex-col items-center gap-1 px-2 py-[14px]",
+					i ? "border-border border-l" : "border-none",
+					it.href &&
+						"transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+				);
+
+				return it.href ? (
+					<Link className={cellClassName} href={it.href} key={it.label}>
+						{content}
+					</Link>
+				) : (
+					<div className={cn(cellClassName)} key={it.label}>
+						{content}
+					</div>
+				);
+			})}
 		</div>
 	);
 }

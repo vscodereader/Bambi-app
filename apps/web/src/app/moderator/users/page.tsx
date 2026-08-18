@@ -16,6 +16,8 @@ import {
 } from "@bambi-app/ui/components/select";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@bambi-app/ui/components/tabs";
+import type { Route } from "next";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { ModeratorUsersTable } from "@/components/bambi/moderator-users-table";
@@ -89,7 +91,11 @@ const matchesKeyword = (user: ManagedUser, keyword: string): boolean =>
 const matchesPhone = (user: ManagedUser, filter: string): boolean =>
 	filter === "all" || user.isPhoneVerified === (filter === "verified");
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: URL-backed filters and responsive controls share one page state boundary.
 export default function ModeratorUsersPage() {
+	const searchParams = useSearchParams();
+	const pathname = usePathname();
+	const router = useRouter();
 	const {
 		clearSelection,
 		isLoading,
@@ -99,12 +105,54 @@ export default function ModeratorUsersPage() {
 		toggleSelect,
 		users,
 	} = useMod();
-	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-	const [roleFilter, setRoleFilter] = useState("all");
-	const [phoneFilter, setPhoneFilter] = useState("all");
-	const [minReports, setMinReports] = useState(0);
-	const [minWarnings, setMinWarnings] = useState(0);
-	const [search, setSearch] = useState("");
+	const requestedStatus = searchParams.get("status");
+	const initialStatus = STATUS_FILTERS.some(
+		(option) => option.value === requestedStatus
+	)
+		? (requestedStatus as StatusFilter)
+		: "all";
+	const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus);
+	const [roleFilter, setRoleFilter] = useState(
+		searchParams.get("role") ?? "all"
+	);
+	const [phoneFilter, setPhoneFilter] = useState(
+		searchParams.get("phone") ?? "all"
+	);
+	const [minReports, setMinReports] = useState(
+		Number(searchParams.get("reports") ?? 0)
+	);
+	const [minWarnings, setMinWarnings] = useState(
+		Number(searchParams.get("warnings") ?? 0)
+	);
+	const [search, setSearch] = useState(searchParams.get("q") ?? "");
+	const [page, setPage] = useState(
+		Math.max(0, Number(searchParams.get("page") ?? 1) - 1)
+	);
+	const updateLocation = (patch: Record<string, string>, resetPage = true) => {
+		// 연달아 필터를 바꿔도 직전 router.replace가 반영되기 전의 searchParams로
+		// 되돌아가지 않도록 브라우저의 현재 URL을 기준으로 다음 쿼리를 만든다.
+		const next = new URLSearchParams(window.location.search);
+		for (const [key, value] of Object.entries(patch)) {
+			if (value === "" || value === "all" || value === "0") {
+				next.delete(key);
+			} else {
+				next.set(key, value);
+			}
+		}
+		if (resetPage) {
+			next.delete("page");
+		}
+		const query = next.toString();
+		router.replace(`${pathname}${query ? `?${query}` : ""}` as Route, {
+			scroll: false,
+		});
+	};
+	const changePage = (nextPage: number) => {
+		setPage(nextPage);
+		updateLocation({ page: String(nextPage + 1) }, false);
+	};
+	const currentQuery = searchParams.toString();
+	const listHref = `${pathname}${currentQuery ? `?${currentQuery}` : ""}`;
 	// 법률자문 지정·해제(사유 시트). 목록에서 대상 한 명을 체크하면 버튼이 나타난다.
 	const [pendingRole, setPendingRole] = useState<{
 		choice: LegalAdvisorChoice;
@@ -133,6 +181,13 @@ export default function ModeratorUsersPage() {
 		minWarnings,
 		search,
 	]);
+	let emptyDescription = "선택한 조건에 해당하는 사용자가 없어요.";
+	if (statusFilter === "warned") {
+		emptyDescription = "현재 경고 상태인 사용자가 없어요.";
+	}
+	if (search.trim()) {
+		emptyDescription = "검색 조건에 맞는 사용자가 없어요.";
+	}
 
 	// 역할 수정은 한 명씩만 — 정확히 1명 선택됐고 그 계정이 구직자·법률자문(탈퇴 아님)일
 	// 때만 버튼을 노출한다. 업소·운영자·탈퇴 계정은 서버가 어차피 거절하므로 아예 숨긴다.
@@ -180,7 +235,11 @@ export default function ModeratorUsersPage() {
 
 			<div className="flex flex-wrap items-center gap-3">
 				<Tabs
-					onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+					onValueChange={(value) => {
+						setStatusFilter(value as StatusFilter);
+						setPage(0);
+						updateLocation({ status: String(value) });
+					}}
 					value={statusFilter}
 				>
 					<TabsList className="max-w-full flex-wrap">
@@ -193,7 +252,11 @@ export default function ModeratorUsersPage() {
 				</Tabs>
 				<Input
 					className="max-w-xs"
-					onChange={(event) => setSearch(event.target.value)}
+					onChange={(event) => {
+						setSearch(event.target.value);
+						setPage(0);
+						updateLocation({ q: event.target.value });
+					}}
 					placeholder="이름·이메일·로그인 아이디 검색"
 					value={search}
 				/>
@@ -204,7 +267,11 @@ export default function ModeratorUsersPage() {
 					<Label htmlFor="filter-role">역할</Label>
 					<Select
 						items={ROLE_FILTER_ITEMS}
-						onValueChange={(value) => setRoleFilter(String(value))}
+						onValueChange={(value) => {
+							setRoleFilter(String(value));
+							setPage(0);
+							updateLocation({ role: String(value) });
+						}}
 						value={roleFilter}
 					>
 						<SelectTrigger className="w-36" id="filter-role">
@@ -223,7 +290,11 @@ export default function ModeratorUsersPage() {
 					<Label htmlFor="filter-phone">휴대폰 인증</Label>
 					<Select
 						items={PHONE_FILTER_ITEMS}
-						onValueChange={(value) => setPhoneFilter(String(value))}
+						onValueChange={(value) => {
+							setPhoneFilter(String(value));
+							setPage(0);
+							updateLocation({ phone: String(value) });
+						}}
 						value={phoneFilter}
 					>
 						<SelectTrigger className="w-36" id="filter-phone">
@@ -242,7 +313,11 @@ export default function ModeratorUsersPage() {
 					<Label htmlFor="filter-reports">누적 신고</Label>
 					<Select
 						items={REPORT_FILTER_ITEMS}
-						onValueChange={(value) => setMinReports(Number(value))}
+						onValueChange={(value) => {
+							setMinReports(Number(value));
+							setPage(0);
+							updateLocation({ reports: String(value) });
+						}}
 						value={String(minReports)}
 					>
 						<SelectTrigger className="w-36" id="filter-reports">
@@ -261,7 +336,11 @@ export default function ModeratorUsersPage() {
 					<Label htmlFor="filter-warnings">경고 횟수</Label>
 					<Select
 						items={WARNING_FILTER_ITEMS}
-						onValueChange={(value) => setMinWarnings(Number(value))}
+						onValueChange={(value) => {
+							setMinWarnings(Number(value));
+							setPage(0);
+							updateLocation({ warnings: String(value) });
+						}}
 						value={String(minWarnings)}
 					>
 						<SelectTrigger className="w-36" id="filter-warnings">
@@ -313,19 +392,22 @@ export default function ModeratorUsersPage() {
 
 			{!(isLoading || isUsersError) && filteredUsers.length === 0 ? (
 				<EmptyState
-					description={
-						search.trim()
-							? "검색 조건에 맞는 사용자가 없어요."
-							: "선택한 조건에 해당하는 사용자가 없어요."
+					description={emptyDescription}
+					title={
+						statusFilter === "warned"
+							? "경고 사용자가 없어요"
+							: "표시할 사용자가 없어요"
 					}
-					title="표시할 사용자가 없어요"
 				/>
 			) : null}
 
 			{!(isLoading || isUsersError) && filteredUsers.length > 0 ? (
 				<ModeratorUsersTable
+					listHref={listHref}
+					onPageChange={changePage}
 					onToggle={toggleSelect}
 					onToggleAll={toggleAll}
+					page={page}
 					selected={selected}
 					users={filteredUsers}
 				/>

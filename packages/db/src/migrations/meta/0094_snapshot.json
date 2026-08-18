@@ -1,6 +1,6 @@
 {
-  "id": "3bbf0b03-7518-455e-ba32-b73071960027",
-  "prevId": "ebe11549-26d2-457e-8f0a-dcd5d756cb3e",
+  "id": "ebe11549-26d2-457e-8f0a-dcd5d756cb3e",
+  "prevId": "de80ecdc-603a-4ba6-b604-164892ef98ca",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2157,6 +2157,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "warning_restriction_until": {
+          "name": "warning_restriction_until",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -2216,6 +2222,21 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bambi_profile_warning_restriction_until_idx": {
+          "name": "bambi_profile_warning_restriction_until_idx",
+          "columns": [
+            {
+              "expression": "warning_restriction_until",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2484,12 +2505,6 @@
         "crawled_community_limit": {
           "name": "crawled_community_limit",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "support_chat_notice": {
-          "name": "support_chat_notice",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -7677,20 +7692,6 @@
           "notNull": true,
           "default": false
         },
-        "status": {
-          "name": "status",
-          "type": "support_chat_room_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'open'"
-        },
-        "closed_at": {
-          "name": "closed_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "user_last_read_at": {
           "name": "user_last_read_at",
           "type": "timestamp",
@@ -7726,44 +7727,34 @@
         }
       },
       "indexes": {
-        "support_chat_room_user_id_idx": {
-          "name": "support_chat_room_user_id_idx",
+        "support_chat_room_user_id_uidx": {
+          "name": "support_chat_room_user_id_uidx",
           "columns": [
             {
               "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            },
-            {
-              "expression": "last_message_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
+          "where": "\"support_chat_room\".\"user_id\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "support_chat_room_guest_id_idx": {
-          "name": "support_chat_room_guest_id_idx",
+        "support_chat_room_guest_id_uidx": {
+          "name": "support_chat_room_guest_id_uidx",
           "columns": [
             {
               "expression": "guest_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            },
-            {
-              "expression": "last_message_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
+          "where": "\"support_chat_room\".\"guest_id\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -8440,11 +8431,6 @@
       "name": "review_status",
       "schema": "public",
       "values": ["published", "pending_review", "hidden"]
-    },
-    "public.support_chat_room_status": {
-      "name": "support_chat_room_status",
-      "schema": "public",
-      "values": ["open", "closed"]
     },
     "public.support_chat_sender": {
       "name": "support_chat_sender",

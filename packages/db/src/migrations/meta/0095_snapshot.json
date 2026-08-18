@@ -1,6 +1,6 @@
 {
-  "id": "de80ecdc-603a-4ba6-b604-164892ef98ca",
-  "prevId": "1881ea68-b5da-4114-82f4-eff63980054c",
+  "id": "3bbf0b03-7518-455e-ba32-b73071960027",
+  "prevId": "ebe11549-26d2-457e-8f0a-dcd5d756cb3e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1844,7 +1844,7 @@
           "name": "actor_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "target_type": {
           "name": "target_type",
@@ -2099,12 +2099,6 @@
           "notNull": true,
           "default": "'active'"
         },
-        "warning_restriction_until": {
-          "name": "warning_restriction_until",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "is_phone_verified": {
           "name": "is_phone_verified",
           "type": "boolean",
@@ -2163,6 +2157,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "warning_restriction_until": {
+          "name": "warning_restriction_until",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -2186,21 +2186,6 @@
           "columns": [
             {
               "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "bambi_profile_warning_restriction_until_idx": {
-          "name": "bambi_profile_warning_restriction_until_idx",
-          "columns": [
-            {
-              "expression": "warning_restriction_until",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2237,6 +2222,21 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bambi_profile_warning_restriction_until_idx": {
+          "name": "bambi_profile_warning_restriction_until_idx",
+          "columns": [
+            {
+              "expression": "warning_restriction_until",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2505,6 +2505,12 @@
         "crawled_community_limit": {
           "name": "crawled_community_limit",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "support_chat_notice": {
+          "name": "support_chat_notice",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -7569,6 +7575,258 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.support_chat_message": {
+      "name": "support_chat_message",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "room_id": {
+          "name": "room_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sender_type": {
+          "name": "sender_type",
+          "type": "support_chat_sender",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sender_user_id": {
+          "name": "sender_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "support_chat_message_room_id_created_at_idx": {
+          "name": "support_chat_message_room_id_created_at_idx",
+          "columns": [
+            {
+              "expression": "room_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "support_chat_message_room_id_support_chat_room_id_fk": {
+          "name": "support_chat_message_room_id_support_chat_room_id_fk",
+          "tableFrom": "support_chat_message",
+          "tableTo": "support_chat_room",
+          "columnsFrom": ["room_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "support_chat_message_sender_user_id_user_id_fk": {
+          "name": "support_chat_message_sender_user_id_user_id_fk",
+          "tableFrom": "support_chat_message",
+          "tableTo": "user",
+          "columnsFrom": ["sender_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.support_chat_room": {
+      "name": "support_chat_room",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guest_id": {
+          "name": "guest_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_blocked": {
+          "name": "is_blocked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "status": {
+          "name": "status",
+          "type": "support_chat_room_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_last_read_at": {
+          "name": "user_last_read_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admin_last_read_at": {
+          "name": "admin_last_read_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_message_at": {
+          "name": "last_message_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "support_chat_room_user_id_idx": {
+          "name": "support_chat_room_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_message_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "support_chat_room_guest_id_idx": {
+          "name": "support_chat_room_guest_id_idx",
+          "columns": [
+            {
+              "expression": "guest_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_message_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "support_chat_room_last_message_at_idx": {
+          "name": "support_chat_room_last_message_at_idx",
+          "columns": [
+            {
+              "expression": "last_message_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "support_chat_room_user_id_user_id_fk": {
+          "name": "support_chat_room_user_id_user_id_fk",
+          "tableFrom": "support_chat_room",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "support_chat_room_owner_one_of_ck": {
+          "name": "support_chat_room_owner_one_of_ck",
+          "value": "(\"support_chat_room\".\"user_id\" IS NULL) <> (\"support_chat_room\".\"guest_id\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.support_inquiry": {
       "name": "support_inquiry",
       "schema": "",
@@ -8173,7 +8431,8 @@
         "job_post",
         "employer_verification",
         "team_invitation",
-        "organization_member"
+        "organization_member",
+        "support_chat"
       ]
     },
     "public.promotion_status": {
@@ -8202,6 +8461,16 @@
       "name": "review_status",
       "schema": "public",
       "values": ["published", "pending_review", "hidden"]
+    },
+    "public.support_chat_room_status": {
+      "name": "support_chat_room_status",
+      "schema": "public",
+      "values": ["open", "closed"]
+    },
+    "public.support_chat_sender": {
+      "name": "support_chat_sender",
+      "schema": "public",
+      "values": ["inquirer", "admin"]
     },
     "public.support_inquiry_category": {
       "name": "support_inquiry_category",

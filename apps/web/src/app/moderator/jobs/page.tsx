@@ -607,6 +607,7 @@ export default function ModeratorJobsPage() {
 						data={visibleJobs}
 						getRowKey={(job) => job.id}
 						pageSize={10}
+						showPageInput
 					/>
 				</div>
 			) : null}

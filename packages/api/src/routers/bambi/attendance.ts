@@ -240,6 +240,7 @@ export const attendanceRouter = {
 			items: rows.slice(0, input.limit),
 			nextCursor: hasMore ? input.cursor + input.limit : null,
 			summary: summary ?? { attendedToday: 0, eligibleUsers: 0 },
+			totalCount: summary?.eligibleUsers ?? 0,
 		};
 	}),
 

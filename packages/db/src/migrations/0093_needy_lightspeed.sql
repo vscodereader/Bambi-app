@@ -1,0 +1,2 @@
+ALTER TABLE "bambi_profile" ADD COLUMN "warning_restriction_until" timestamp;--> statement-breakpoint
+CREATE INDEX "bambi_profile_warning_restriction_until_idx" ON "bambi_profile" USING btree ("warning_restriction_until");

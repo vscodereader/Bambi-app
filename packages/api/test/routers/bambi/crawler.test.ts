@@ -126,6 +126,12 @@ const removePostAs = (userId: string) =>
 		path: ["bambi", "crawler", "removePost"],
 	});
 
+const removePostsAs = (userId: string) =>
+	createProcedureClient(crawlerRouter.removePosts, {
+		context: createContextForUser(userId),
+		path: ["bambi", "crawler", "removePosts"],
+	});
+
 const restorePostAs = (userId: string) =>
 	createProcedureClient(crawlerRouter.restorePost, {
 		context: createContextForUser(userId),
@@ -186,6 +192,59 @@ const readTopicRemovedAt = async (id: string) => {
 const MISSING_ID = "00000000-0000-4000-8000-000000000000";
 
 describe("crawler 공고 삭제·복구", () => {
+	it("현재 페이지에서 고른 공고를 한 번에 removed 상태로 세운다", async () => {
+		const first = await createFixture();
+		const second = await createFixture({ industryCategory: "룸싸롱" });
+
+		try {
+			const result = await removePostsAs(first.adminUserId)({
+				ids: [first.jobPostId, second.jobPostId],
+			});
+
+			expect(result.count).toBe(2);
+			expect(new Set(result.ids)).toEqual(
+				new Set([first.jobPostId, second.jobPostId])
+			);
+			expect(await readJobStatus(first.jobPostId)).toBe("removed");
+			expect(await readJobStatus(second.jobPostId)).toBe("removed");
+		} finally {
+			await cleanupFixture(first);
+			await cleanupFixture(second);
+		}
+	});
+
+	it("삭제할 수 없는 ID가 섞이면 어느 공고도 변경하지 않는다", async () => {
+		const fixture = await createFixture();
+
+		try {
+			await expect(
+				removePostsAs(fixture.adminUserId)({
+					ids: [fixture.jobPostId, MISSING_ID],
+				})
+			).rejects.toMatchObject({ code: "CONFLICT" });
+			expect(await readJobStatus(fixture.jobPostId)).toBe("needs_review");
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
+	it("일괄 삭제 입력은 1~10개의 중복 없는 ID만 허용한다", async () => {
+		const fixture = await createFixture();
+		const client = removePostsAs(fixture.adminUserId);
+
+		try {
+			await expect(client({ ids: [] })).rejects.toBeTruthy();
+			await expect(
+				client({ ids: [fixture.jobPostId, fixture.jobPostId] })
+			).rejects.toBeTruthy();
+			await expect(
+				client({ ids: Array.from({ length: 11 }, () => randomUUID()) })
+			).rejects.toBeTruthy();
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
 	it("삭제는 행을 지우지 않고 removed 상태로 세운다", async () => {
 		const fixture = await createFixture();
 
@@ -258,6 +317,9 @@ describe("crawler 공고 삭제·복구", () => {
 		try {
 			await expect(
 				removePostAs(fixture.memberUserId)({ id: fixture.jobPostId })
+			).rejects.toBeTruthy();
+			await expect(
+				removePostsAs(fixture.memberUserId)({ ids: [fixture.jobPostId] })
 			).rejects.toBeTruthy();
 			expect(await readJobStatus(fixture.jobPostId)).toBe("needs_review");
 		} finally {

@@ -440,6 +440,9 @@ export const bambiProfile = pgTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		role: bambiUserRole("role").notNull(),
 		status: accountStatus("status").default("active").notNull(),
+		// 누적 경고가 정확히 5회가 된 순간부터 72시간 적용되는 역할별 제한 만료 시각.
+		// 정상 복구·5번째 경고 되돌리기는 null로 해제하고 6·7회 경고는 갱신하지 않는다.
+		warningRestrictionUntil: timestamp("warning_restriction_until"),
 		isPhoneVerified: boolean("is_phone_verified").default(false).notNull(),
 		phoneNumber: text("phone_number"),
 		gender: bambiGender("gender"),
@@ -464,6 +467,9 @@ export const bambiProfile = pgTable(
 	(table) => [
 		index("bambi_profile_role_idx").on(table.role),
 		index("bambi_profile_status_idx").on(table.status),
+		index("bambi_profile_warning_restriction_until_idx").on(
+			table.warningRestrictionUntil
+		),
 		uniqueIndex("bambi_profile_ci_hash_unique").on(table.ciHash),
 		uniqueIndex("bambi_profile_di_hash_unique").on(table.diHash),
 	]

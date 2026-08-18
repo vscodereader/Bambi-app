@@ -14,6 +14,7 @@ import {
 	readGuestGenderFromCookieString,
 } from "@/lib/bambi/guest";
 import { orpc } from "@/utils/orpc";
+import { WarningRestrictionGuard } from "./warning-restriction-guard";
 
 type BambiRole = "job_seeker" | "employer" | "admin" | "legal_advisor" | null;
 type BambiAccountStatus = "active" | "warned" | "suspended" | null;
@@ -28,6 +29,7 @@ interface BambiAuthValue {
 	isPending: boolean;
 	role: BambiRole;
 	user: { id: string; email: string; name: string } | null;
+	warningRestrictionUntil: string | null;
 }
 
 const BambiAuthContext = createContext<BambiAuthValue | null>(null);
@@ -71,6 +73,12 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 		role: (mineQuery.data?.bambiProfile?.role ?? null) as BambiRole,
 		accountStatus: (mineQuery.data?.bambiProfile?.status ??
 			null) as BambiAccountStatus,
+		warningRestrictionUntil: mineQuery.data?.bambiProfile
+			?.warningRestrictionUntil
+			? new Date(
+					mineQuery.data.bambiProfile.warningRestrictionUntil
+				).toISOString()
+			: null,
 		accountSanctionReason: mineQuery.data?.accountSanction?.reason ?? null,
 		// 제재 시각. oRPC RPC 직렬화는 Date를 보존하지만(문자열로 올 수도 있어)
 		// new Date(...)로 감싸 ISO 문자열로 정규화한다. 경고 배너 닫음 상태를
@@ -88,7 +96,12 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 
 	return (
 		<BambiAuthContext.Provider value={value}>
-			{children}
+			<WarningRestrictionGuard
+				role={value.role}
+				until={value.warningRestrictionUntil}
+			>
+				{children}
+			</WarningRestrictionGuard>
 		</BambiAuthContext.Provider>
 	);
 }

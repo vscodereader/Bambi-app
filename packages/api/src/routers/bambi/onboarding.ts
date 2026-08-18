@@ -69,6 +69,7 @@ import {
 	isOwnedBusinessDocumentKey,
 	resolveBusinessDocumentViewUrl,
 } from "../../services/bambi-storage";
+import { normalizeExpiredWarningRestriction } from "../../services/bambi-warning-restriction";
 import { deletePrivateObjects } from "../../services/gcs";
 import {
 	type BiznumValidation,
@@ -785,6 +786,7 @@ export const onboardingRouter = {
 
 	getMine: protectedProcedure.handler(async ({ context }) => {
 		const userId = context.session.user.id;
+		await normalizeExpiredWarningRestriction(userId);
 		const [profile] = await db
 			.select()
 			.from(bambiProfile)
