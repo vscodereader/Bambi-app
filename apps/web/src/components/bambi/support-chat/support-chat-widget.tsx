@@ -27,9 +27,13 @@ import { WidgetMessages, type WidgetRoomSummary } from "./widget-messages";
 // 두 자리 배지는 원형 버튼 밖으로 삐져나간다 — 정확한 수보다 "밀렸다"는 신호가 중요.
 const BADGE_CAP = 9;
 const ISSUE_ERROR = "문의를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.";
-// 패널 컨테이너 — 3개 뷰가 공유한다.
-const PANEL_CLASS =
-	"fixed right-4 bottom-36 z-50 flex h-[70dvh] max-h-[34rem] w-80 max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 md:bottom-24";
+// 패널 컨테이너 — 3개 뷰가 공유한다. 위치는 런처 형태에 따라 얹는다.
+const PANEL_BASE =
+	"z-50 flex h-[70dvh] max-h-[34rem] w-80 max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0";
+// FAB 모드(좁은 화면): 우하단 fixed.
+const PANEL_FIXED = "fixed right-4 bottom-36 md:bottom-24";
+// 레일 모드(≥1720px): 앵커 relative 래퍼 기준으로 런처 왼쪽에 붙는다(bottom 정렬, mr 간격).
+const PANEL_RAIL = "absolute right-full bottom-0 mr-3";
 
 const TABS = [
 	{ icon: Home, label: "홈", name: "home" },
@@ -84,6 +88,7 @@ function SupportChatPanel({
 	onSetView,
 	onStartChat,
 	onStartNew,
+	panelClassName,
 	rooms,
 	totalUnread,
 	view,
@@ -100,13 +105,14 @@ function SupportChatPanel({
 	onSetView: (view: WidgetView) => void;
 	onStartChat: () => void;
 	onStartNew: () => void;
+	panelClassName: string;
 	rooms: WidgetRoomSummary[];
 	totalUnread: number;
 	view: WidgetView;
 }) {
 	if (view.name === "conversation") {
 		return (
-			<Card className={PANEL_CLASS}>
+			<Card className={panelClassName}>
 				<WidgetConversation
 					isSending={isSending}
 					onBack={onBack}
@@ -123,7 +129,7 @@ function SupportChatPanel({
 		);
 	}
 	return (
-		<Card className={PANEL_CLASS}>
+		<Card className={panelClassName}>
 			{view.name === "home" ? (
 				<WidgetHome
 					faqs={faqs}
@@ -387,16 +393,48 @@ export function SupportChatWidget() {
 		</>
 	);
 
-	// 보이는 레일 앵커가 있으면 배너 스택 아래에 CTA 카드로, 없으면 fixed 우하단 원형 FAB로.
-	// 앵커가 DOM에서 떨어진 오래된 참조면(페이지 이동 직후 한 프레임) fixed로 폴백한다.
-	const renderLauncher = () =>
-		railAnchor?.isConnected ? (
-			createPortal(railLauncher, railAnchor)
-		) : (
+	// 패널 위치는 런처 형태를 따른다 — 레일 모드에선 앵커 relative 래퍼 기준 absolute로
+	// 런처 왼쪽에 붙어, fixed FAB 패널이 정사각 런처를 덮어 토글 클릭을 삼키던 문제를 없앤다.
+	const inRail = railAnchor?.isConnected ?? false;
+	const panelNode = open ? (
+		<SupportChatPanel
+			faqs={homeQuery.data?.faqs ?? []}
+			isSending={sendMutation.isPending}
+			notice={homeQuery.data?.notice ?? null}
+			onBack={() => setView({ name: "messages" })}
+			onClose={() => setOpen(false)}
+			onMarkRead={markRoomRead}
+			onNavigate={() => setOpen(false)}
+			onOpenRoom={(roomId) => setView({ name: "conversation", roomId })}
+			onSend={send}
+			onSetView={setView}
+			onStartChat={startChat}
+			onStartNew={() => setView({ name: "conversation", roomId: null })}
+			panelClassName={cn(PANEL_BASE, inRail ? PANEL_RAIL : PANEL_FIXED)}
+			rooms={rooms}
+			totalUnread={totalUnread}
+			view={view}
+		/>
+	) : null;
+
+	// 레일 모드: 앵커에 relative 래퍼를 심고 패널·런처를 함께 포털로 렌더 — 패널이 absolute로
+	// 런처 왼쪽에 붙는다. 앵커가 언마운트되면(오래된 참조) fixed 우하단 FAB 분기로 폴백.
+	const dock = railAnchor?.isConnected ? (
+		createPortal(
+			<div className="relative">
+				{panelNode}
+				{railLauncher}
+			</div>,
+			railAnchor
+		)
+	) : (
+		<>
+			{panelNode}
 			<span className="fixed right-4 bottom-20 z-50 inline-flex md:bottom-6">
 				{fabLauncher}
 			</span>
-		);
+		</>
+	);
 
 	// UI는 mounted 이후에만 그린다 — 인증 화면(?auth=) 판정이 나기 전에 버튼을 먼저
 	// 그리면 로그인 화면에서 한 프레임 비친다.
@@ -414,30 +452,7 @@ export function SupportChatWidget() {
 					onOpen={openPanel}
 				/>
 			</Suspense>
-			{hidden ? null : (
-				<>
-					{open ? (
-						<SupportChatPanel
-							faqs={homeQuery.data?.faqs ?? []}
-							isSending={sendMutation.isPending}
-							notice={homeQuery.data?.notice ?? null}
-							onBack={() => setView({ name: "messages" })}
-							onClose={() => setOpen(false)}
-							onMarkRead={markRoomRead}
-							onNavigate={() => setOpen(false)}
-							onOpenRoom={(roomId) => setView({ name: "conversation", roomId })}
-							onSend={send}
-							onSetView={setView}
-							onStartChat={startChat}
-							onStartNew={() => setView({ name: "conversation", roomId: null })}
-							rooms={rooms}
-							totalUnread={totalUnread}
-							view={view}
-						/>
-					) : null}
-					{renderLauncher()}
-				</>
-			)}
+			{hidden ? null : dock}
 		</>
 	);
 }
