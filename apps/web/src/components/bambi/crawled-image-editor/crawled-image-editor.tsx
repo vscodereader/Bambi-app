@@ -33,6 +33,7 @@ import {
 	Trash2,
 	Undo2,
 } from "lucide-react";
+import type { Route } from "next";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -62,6 +63,7 @@ import { CropDialog } from "./crop-dialog";
 
 interface CrawledImageEditorProps {
 	postId: string;
+	returnHref: Route;
 }
 interface Snapshot {
 	dirty: boolean;
@@ -135,7 +137,10 @@ const downloadAsset = (
 };
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: 한 편집 세션의 선택·undo·파일·저장 상태를 조율하는 최상위 경계다.
-export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
+export function CrawledImageEditor({
+	postId,
+	returnHref,
+}: CrawledImageEditorProps) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -291,6 +296,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 						}),
 					}),
 				]);
+				router.replace(returnHref);
 			},
 		})
 	);
@@ -934,7 +940,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 							if (dirty) {
 								setShowCancelConfirm(true);
 							} else {
-								router.push("/moderator/crawler");
+								router.push(returnHref);
 							}
 						}}
 						variant="outline"
@@ -1114,7 +1120,7 @@ export function CrawledImageEditor({ postId }: CrawledImageEditorProps) {
 						<AlertDialogAction
 							onClick={() => {
 								setShowCancelConfirm(false);
-								router.replace("/moderator/crawler");
+								router.replace(returnHref);
 							}}
 							variant="destructive"
 						>

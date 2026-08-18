@@ -9,7 +9,17 @@ import {
 	jobPost,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, count, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import {
+	and,
+	count,
+	desc,
+	eq,
+	inArray,
+	isNotNull,
+	isNull,
+	ne,
+	sql,
+} from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure } from "../../index";
@@ -102,6 +112,15 @@ const topicRemovedFilter = (removed: boolean | null | undefined) => {
 };
 
 const idInput = z.object({ id: z.uuid() });
+const BULK_REMOVE_LIMIT = 10;
+const removePostIdsInput = z
+	.object({
+		ids: z.array(z.uuid()).min(1).max(BULK_REMOVE_LIMIT),
+	})
+	.refine(({ ids }) => new Set(ids).size === ids.length, {
+		message: "중복된 공고를 선택할 수 없습니다.",
+		path: ["ids"],
+	});
 
 // 삭제·복구의 대상이 없으면 화면이 조용히 성공으로 읽지 않게 세운다 — 목록이 낡아 이미
 // 지워진 행을 가리키는 경우가 실제로 있다.
@@ -147,7 +166,14 @@ export const crawlerRouter = {
 				.select(LIST_COLUMNS)
 				.from(crawledJobPost)
 				.where(where)
-				.orderBy(desc(crawledJobPost.lastSeenAt))
+				// 전체 탭에서도 삭제 이력은 남기되 맨 뒤로 보낸다. 그래야 현재 페이지에서는
+				// 뒤의 정상 공고가 즉시 당겨지고, 삭제된 행이 빈자리를 차지하지 않는다.
+				// 한 회차에서 lastSeenAt이 같을 수 있으므로 id까지 보조 기준으로 고정한다.
+				.orderBy(
+					sql`case when ${crawledJobPost.status} = 'removed' then 1 else 0 end`,
+					desc(crawledJobPost.lastSeenAt),
+					desc(crawledJobPost.id)
+				)
 				.limit(input.limit)
 				.offset(input.offset),
 			db.select({ value: count() }).from(crawledJobPost).where(where),
@@ -321,6 +347,51 @@ export const crawlerRouter = {
 
 		return requireRow(saved);
 	}),
+
+	// 현재 페이지에서 고른 공고를 한 묶음으로 내린다. 일부만 지워지면 사용자가 다시 어떤
+	// 행을 골라야 하는지 알기 어려우므로, 대상 검증과 갱신을 한 transaction에서 처리한다.
+	removePosts: adminProcedure
+		.input(removePostIdsInput)
+		.handler(async ({ input }) =>
+			db.transaction(async (tx) => {
+				const targets = await tx
+					.select({ id: crawledJobPost.id })
+					.from(crawledJobPost)
+					.where(
+						and(
+							inArray(crawledJobPost.id, input.ids),
+							ne(crawledJobPost.status, "removed")
+						)
+					);
+
+				if (targets.length !== input.ids.length) {
+					throw new ORPCError("CONFLICT", {
+						message:
+							"선택한 공고 중 삭제할 수 없는 항목이 있습니다. 목록을 새로고침한 뒤 다시 선택해 주세요.",
+					});
+				}
+
+				const removed = await tx
+					.update(crawledJobPost)
+					.set({ status: "removed" })
+					.where(
+						and(
+							inArray(crawledJobPost.id, input.ids),
+							ne(crawledJobPost.status, "removed")
+						)
+					)
+					.returning({ id: crawledJobPost.id });
+
+				if (removed.length !== input.ids.length) {
+					throw new ORPCError("CONFLICT", {
+						message:
+							"선택한 공고가 삭제 중 변경되었습니다. 목록을 새로고침한 뒤 다시 선택해 주세요.",
+					});
+				}
+
+				return { count: removed.length, ids: removed.map((row) => row.id) };
+			})
+		),
 
 	// 공고 복구. 되돌릴 상태는 재수집 CASE와 같은 규칙으로 정한다 — 업종이 있으면 노출,
 	// 없으면 검토 대기. 여기서 무조건 active로 두면 업종 없는 공고가 화면에 서고, 무조건
