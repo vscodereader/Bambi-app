@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { PageControls } from "@/components/bambi/page-controls";
 import { RatingStars } from "@/components/bambi/rating-stars";
 import { REVIEW_STATUS_LABELS } from "@/lib/bambi/moderation-labels";
 import { orpc } from "@/utils/orpc";
@@ -21,6 +22,7 @@ import { orpc } from "@/utils/orpc";
 // 후기 검수 상태 필터. "all"은 서버에 status 미전달(전체 조회)로 매핑한다.
 type ReviewFilter = "all" | "published" | "pending_review" | "hidden";
 type ReviewStatus = "published" | "pending_review" | "hidden";
+const PAGE_SIZE = 10;
 
 const REVIEW_FILTERS: { value: ReviewFilter; label: string }[] = [
 	{ value: "all", label: "전체" },
@@ -56,13 +58,15 @@ interface PendingAction {
 export default function ModeratorReviewsPage() {
 	const queryClient = useQueryClient();
 	const [filter, setFilter] = useState<ReviewFilter>("all");
+	const [page, setPage] = useState(1);
 	const [pending, setPending] = useState<PendingAction | null>(null);
 	const [reason, setReason] = useState("");
 
 	const reviewsQuery = useQuery(
 		orpc.bambi.moderation.listReviews.queryOptions({
 			input: {
-				limit: 50,
+				page,
+				pageSize: PAGE_SIZE,
 				status: filter === "all" ? undefined : filter,
 			},
 		})
@@ -75,16 +79,16 @@ export default function ModeratorReviewsPage() {
 				setReason("");
 				// 부분 키(status 생략)로 모든 상태 필터 캐시를 함께 무효화한다.
 				await queryClient.invalidateQueries({
-					queryKey: orpc.bambi.moderation.listReviews.queryKey({
-						input: { limit: 50 },
-					}),
+					queryKey: orpc.bambi.moderation.listReviews.key(),
 				});
 			},
 			onError: (error) => toast.error(error.message),
 		})
 	);
 
-	const reviews = reviewsQuery.data ?? [];
+	const reviews = reviewsQuery.data?.items ?? [];
+	const totalCount = reviewsQuery.data?.totalCount ?? 0;
+	const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 	const canConfirm = reason.trim().length >= 2 && !setStatus.isPending;
 
 	const openAction = (action: PendingAction) => {
@@ -96,7 +100,10 @@ export default function ModeratorReviewsPage() {
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<h1 className="m-0 font-extrabold text-2xl">후기 관리</h1>
 			<Tabs
-				onValueChange={(value) => setFilter(value as ReviewFilter)}
+				onValueChange={(value) => {
+					setFilter(value as ReviewFilter);
+					setPage(1);
+				}}
 				value={filter}
 			>
 				<TabsList className="max-w-full flex-wrap">
@@ -220,6 +227,19 @@ export default function ModeratorReviewsPage() {
 					</Card>
 				);
 			})}
+			{reviews.length > 0 ? (
+				<div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+					<span className="text-muted-foreground text-sm">
+						전체 {totalCount}건 · {page} / {pageCount} 페이지
+					</span>
+					<PageControls
+						disabled={reviewsQuery.isFetching}
+						onPageChange={setPage}
+						page={page}
+						pageCount={pageCount}
+					/>
+				</div>
+			) : null}
 		</div>
 	);
 }

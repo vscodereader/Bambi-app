@@ -7,7 +7,7 @@ import { Megaphone } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useEffect, useMemo } from "react";
 import { isAdBannerImageRequired } from "@/lib/bambi/ad-banner-layout";
 import { resolveAdInquiryTel } from "@/lib/bambi/ad-inquiry-tel";
 import type { AdBannerItem } from "@/lib/bambi/api-job-mapper";
@@ -214,6 +214,11 @@ interface AdBannerRailProps {
 	promotionSurface?: string;
 }
 
+// 문의 위젯에 런처 앵커의 등장·제거를 알리는 이벤트. 수다방(RequireCommunityAccess)처럼
+// 마운트 게이트 뒤에서 rail이 늦게 나타나는 화면에선 위젯의 pathname·resize 재탐색이
+// 앵커 등장 시점을 놓쳐 FAB로 남는다 — rail이 직접 알려 재탐색을 트리거한다.
+export const SUPPORT_CHAT_ANCHOR_EVENT = "bambi:support-chat-anchor";
+
 // 세로 배너 스택(우측). 슬롯 3칸을 항상 렌더하고, 활성 칸(non-null)은 배너로, 빈 칸은
 // "광고 등록 문의" 자리표시로 채운다. 로딩 중에는 같은 크기 스켈레톤을 그린다.
 export function AdBannerRail({
@@ -222,6 +227,17 @@ export function AdBannerRail({
 	items,
 	promotionSurface,
 }: AdBannerRailProps) {
+	useEffect(() => {
+		window.dispatchEvent(new Event(SUPPORT_CHAT_ANCHOR_EVENT));
+		// 언마운트 알림은 마이크로태스크로 미룬다 — 앵커 DOM이 아직 떨어지기 전이라
+		// 즉시 재탐색하면 옛 앵커를 다시 잡는다.
+		return () => {
+			queueMicrotask(() =>
+				window.dispatchEvent(new Event(SUPPORT_CHAT_ANCHOR_EVENT))
+			);
+		};
+	}, []);
+
 	return (
 		<div className={cn("flex flex-col items-start gap-3", className)}>
 			{AD_RAIL_SLOT_KEYS.map((key, index) => {
@@ -249,6 +265,12 @@ export function AdBannerRail({
 					/>
 				);
 			})}
+			{/* 문의 채팅 런처 포털 앵커 — SupportChatWidget이 세로 배너 스택 바로 아래(gap-3)에
+			    버튼을 portal로 렌더한다. 위젯이 감춰진 화면(운영자 등)에선 빈 채로 둔다.
+			    한 페이지에 rail이 둘 렌더될 가능성을 배제할 수 없어 id 대신 data 속성을 쓰고,
+			    위젯은 querySelector 첫 매치만 사용한다. 런처가 고정 폭 정사각 버튼이라
+			    앵커는 폭을 강제하지 않고 내용(버튼)에 맞춘다. */}
+			<div data-support-chat-anchor="" />
 		</div>
 	);
 }

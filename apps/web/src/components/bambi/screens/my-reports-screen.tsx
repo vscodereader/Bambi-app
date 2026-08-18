@@ -4,8 +4,10 @@
 
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { MyPageShell } from "@/components/bambi/my-page-shell";
+import { PageControls } from "@/components/bambi/page-controls";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { reportReasonLabel, targetTypeLabel } from "@/lib/bambi/report-labels";
 import { orpc } from "@/utils/orpc";
@@ -122,10 +124,15 @@ function TargetSummary({ item }: { item: TargetSummaryItem }) {
 }
 
 export function MyReportsScreen() {
+	const [page, setPage] = useState(1);
 	const query = useQuery(
-		orpc.bambi.moderation.listMyReports.queryOptions({ input: { limit: 50 } })
+		orpc.bambi.moderation.listMyReports.queryOptions({
+			input: { page, pageSize: 10 },
+		})
 	);
-	const reports = query.data ?? [];
+	const reports = query.data?.items ?? [];
+	const total = query.data?.total ?? 0;
+	const pageCount = Math.max(1, Math.ceil(total / 10));
 
 	return (
 		<MyPageShell title="내 신고 내역">
@@ -186,6 +193,17 @@ export function MyReportsScreen() {
 							</div>
 						</details>
 					))}
+					<div className="mt-1 flex items-center justify-between gap-3 px-1">
+						<span className="text-muted-foreground text-sm">
+							전체 {total}건 · {page} / {pageCount} 페이지
+						</span>
+						<PageControls
+							disabled={query.isFetching}
+							onPageChange={setPage}
+							page={page}
+							pageCount={pageCount}
+						/>
+					</div>
 				</div>
 			) : null}
 		</MyPageShell>

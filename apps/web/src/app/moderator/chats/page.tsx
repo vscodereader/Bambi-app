@@ -26,6 +26,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { PageControls } from "@/components/bambi/page-controls";
 import { RowActions } from "@/components/bambi/row-actions";
 import { formatDateTime } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
@@ -302,9 +303,8 @@ export default function ModeratorChatsPage() {
 
 	const chats = chatsQuery.data?.items ?? [];
 	const totalCount = chatsQuery.data?.totalCount ?? 0;
-	const pageSize = chatsQuery.data?.pageSize ?? 20;
+	const pageSize = chatsQuery.data?.pageSize ?? 10;
 	const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-	const hasNextPage = page * pageSize < totalCount;
 	const isApplying = deleteMutation.isPending || blockMutation.isPending;
 	const canConfirm = reason.trim().length >= 2 && !isApplying;
 	const pendingCopy = pending ? CHAT_ACTION_COPY[pending.kind] : null;
@@ -405,24 +405,16 @@ export default function ModeratorChatsPage() {
 							getRowKey={(row) => row.chatRoomId}
 						/>
 					</div>
-					<div className="flex items-center justify-between gap-2">
-						<Button
-							disabled={page <= 1}
-							onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-							variant="outline"
-						>
-							이전
-						</Button>
+					<div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
 						<span className="text-muted-foreground text-sm">
-							{page} / {totalPages} · 전체 {totalCount}개
+							전체 {totalCount}개 · {page} / {totalPages} 페이지
 						</span>
-						<Button
-							disabled={!hasNextPage}
-							onClick={() => setPage((prev) => prev + 1)}
-							variant="outline"
-						>
-							다음
-						</Button>
+						<PageControls
+							disabled={chatsQuery.isFetching}
+							onPageChange={setPage}
+							page={page}
+							pageCount={totalPages}
+						/>
 					</div>
 				</>
 			) : null}

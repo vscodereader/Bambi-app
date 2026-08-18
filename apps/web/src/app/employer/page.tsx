@@ -54,6 +54,7 @@ import {
 	isPubliclyViewable,
 } from "@/components/bambi/employer-jobs-columns";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { PageControls } from "@/components/bambi/page-controls";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { authClient } from "@/lib/auth-client";
@@ -373,28 +374,15 @@ function MobileOwnedJobs({
 				);
 			})}
 			{pageCount > 1 ? (
-				<div className="flex items-center justify-between gap-3">
-					<Button
-						disabled={safePage === 1}
-						onClick={() => setPage((current) => Math.max(1, current - 1))}
-						type="button"
-						variant="outline"
-					>
-						이전
-					</Button>
+				<div className="flex flex-col items-center gap-1">
 					<span className="text-muted-foreground text-sm">
 						{safePage} / {pageCount}
 					</span>
-					<Button
-						disabled={safePage === pageCount}
-						onClick={() =>
-							setPage((current) => Math.min(pageCount, current + 1))
-						}
-						type="button"
-						variant="outline"
-					>
-						다음
-					</Button>
+					<PageControls
+						onPageChange={setPage}
+						page={safePage}
+						pageCount={pageCount}
+					/>
 				</div>
 			) : null}
 		</div>
@@ -512,6 +500,7 @@ function OwnedJobsPanel({
 							emptyMessage="등록한 공고가 없습니다."
 							getRowKey={(job) => job.id}
 							pageSize={JOB_PAGE_SIZE}
+							showPageInput
 						/>
 					</div>
 				</CardContent>

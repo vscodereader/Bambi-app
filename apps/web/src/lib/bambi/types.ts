@@ -200,6 +200,8 @@ export interface Report {
 	targetRole: string;
 	// 실데이터(orpc) 신고에만 존재하는 대상 맥락. 프리뷰 목업 신고에는 없다.
 	targetType?: ReportTargetType;
+	// 신고 대상 콘텐츠 작성자 또는 채팅 피신고자의 실제 사용자 id.
+	targetUserId?: string | null;
 	thread: ThreadMessage[];
 	time: string;
 }

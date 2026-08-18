@@ -18,6 +18,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@bambi-app/ui/components/card";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -47,11 +48,20 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
+import { PageControls } from "@/components/bambi/page-controls";
 import { communityCrawledPath } from "@/lib/bambi/community";
+import {
+	CRAWLED_JOB_PAGE_SIZE,
+	type CrawledJobStatusFilter,
+	crawledJobImageEditHref,
+	parseCrawledJobListState,
+	withCrawledJobListState,
+} from "@/lib/bambi/crawled-job-management";
 import {
 	CRAWLED_POST_STATUS_LABELS,
 	CRAWLED_POST_STATUS_VARIANTS,
@@ -60,7 +70,11 @@ import {
 import { orpc } from "@/utils/orpc";
 
 // 공고·커뮤니티 카드가 같은 눈금으로 페이지를 넘긴다.
-const PAGE_SIZE = 10;
+const PAGE_SIZE = CRAWLED_JOB_PAGE_SIZE;
+const JOB_LIST_SCROLL_STORAGE_PREFIX = "bambi:crawled-job-list-scroll";
+
+const jobListScrollStorageKey = (page: number, status: StatusFilter) =>
+	`${JOB_LIST_SCROLL_STORAGE_PREFIX}:${status}:${page}`;
 
 // 제목은 글자 수로 자른다(CSS truncate가 아니다) — 표 폭이 넓어도 업소명·지역 칸이
 // 밀리지 않게 제목 길이를 일정하게 묶어 두려는 것이다. 전체 제목은 title 툴팁에 남긴다.
@@ -75,11 +89,7 @@ const truncateTitle = (title: string): string =>
 // (crawled-jobs.ts). needs_review·expired·removed를 링크로 걸면 눌러서 NOT_FOUND를
 // 만나게 되므로, active인 행만 링크·「상세 보기」를 내주고 나머지는 일반 텍스트로 둔다.
 const crawledDetailHref = (id: string) => `/seeker/jobs/crawled/${id}` as Route;
-const crawledImageEditHref = (id: string) =>
-	`/moderator/crawler/jobs/${id}/edit` as Route;
-
-type CrawledPostStatus = keyof typeof CRAWLED_POST_STATUS_LABELS;
-type StatusFilter = "all" | CrawledPostStatus;
+type StatusFilter = CrawledJobStatusFilter;
 
 // 라벨 맵은 알파벳순이라 그대로 못 쓴다 — 훑는 순서(전체 → 정상 → 손볼 것 → 내려간 것)로 세운다.
 const STATUS_FILTERS: readonly { label: string; value: StatusFilter }[] = [
@@ -121,13 +131,30 @@ function useInvalidateCrawled() {
 			queryClient.invalidateQueries({
 				queryKey: orpc.bambi.crawler.listTopics.key(),
 			}),
+			queryClient.invalidateQueries({
+				queryKey: orpc.bambi.jobs.list.key(),
+			}),
 		]);
 }
 
 export function CrawledJobPostsCard() {
 	const invalidate = useInvalidateCrawled();
-	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-	const [page, setPage] = useState(1);
+	const pathname = usePathname();
+	const router = useRouter();
+	const searchParams = useSearchParams();
+	const { page, status: statusFilter } = parseCrawledJobListState(searchParams);
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+	const [isBulkRemoveOpen, setIsBulkRemoveOpen] = useState(false);
+	const setListState = useCallback(
+		(next: { page: number; status: StatusFilter }) => {
+			setSelectedIds(new Set());
+			router.replace(
+				`${pathname}${withCrawledJobListState(new URLSearchParams(searchParams), next)}` as Route,
+				{ scroll: false }
+			);
+		},
+		[pathname, router, searchParams]
+	);
 	// 확인 창을 띄울 대상. 제목까지 들고 있는 건 "무엇을 지우는지"를 창에서 되짚어 주기 위해서다.
 	const [pendingRemove, setPendingRemove] = useState<{
 		id: string;
@@ -165,10 +192,69 @@ export function CrawledJobPostsCard() {
 			},
 		})
 	);
-	const isPending = removeMutation.isPending || restoreMutation.isPending;
+	const bulkRemoveMutation = useMutation(
+		orpc.bambi.crawler.removePosts.mutationOptions({
+			onError: (error) => toast.error(error.message || "삭제하지 못했어요."),
+			onSuccess: async (result) => {
+				toast.success(`${result.count}개 공고를 삭제했어요.`);
+				setIsBulkRemoveOpen(false);
+				setSelectedIds(new Set());
+				await invalidate();
+				const refreshed = await listQuery.refetch();
+				const nextTotal = refreshed.data?.total ?? 0;
+				const nextTotalPages = Math.max(1, Math.ceil(nextTotal / PAGE_SIZE));
+				if (page > nextTotalPages) {
+					setListState({ page: nextTotalPages, status: statusFilter });
+				}
+			},
+		})
+	);
+	const isPending =
+		removeMutation.isPending ||
+		restoreMutation.isPending ||
+		bulkRemoveMutation.isPending;
 	const total = listQuery.data?.total ?? 0;
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-	const hasNextPage = page * PAGE_SIZE < total;
+	const selectableIds = useMemo(
+		() =>
+			(listQuery.data?.items ?? [])
+				.filter((item) => item.status !== "removed")
+				.map((item) => item.id),
+		[listQuery.data?.items]
+	);
+	const allSelected =
+		selectableIds.length > 0 &&
+		selectableIds.every((id) => selectedIds.has(id));
+	const someSelected = selectableIds.some((id) => selectedIds.has(id));
+	const showSelection = statusFilter !== "removed";
+
+	useEffect(() => {
+		const visible = new Set(selectableIds);
+		setSelectedIds((current) => {
+			const next = new Set([...current].filter((id) => visible.has(id)));
+			return next.size === current.size ? current : next;
+		});
+	}, [selectableIds]);
+	useEffect(() => {
+		if (listQuery.data && page > totalPages) {
+			setListState({ page: totalPages, status: statusFilter });
+		}
+	}, [listQuery.data, page, setListState, statusFilter, totalPages]);
+	useEffect(() => {
+		if (!listQuery.data) {
+			return;
+		}
+		const storageKey = jobListScrollStorageKey(page, statusFilter);
+		const savedScrollY = window.sessionStorage.getItem(storageKey);
+		if (savedScrollY === null) {
+			return;
+		}
+		window.sessionStorage.removeItem(storageKey);
+		const scrollY = Number(savedScrollY);
+		if (Number.isFinite(scrollY) && scrollY >= 0) {
+			window.requestAnimationFrame(() => window.scrollTo(0, scrollY));
+		}
+	}, [listQuery.data, page, statusFilter]);
 
 	return (
 		<Card>
@@ -184,25 +270,36 @@ export function CrawledJobPostsCard() {
 					{listQuery.data ? ` (조건에 맞는 ${total}건)` : ""}.
 				</p>
 
-				<ToggleGroup
-					aria-label="상태 필터"
-					className="w-full flex-wrap"
-					onValueChange={(value) => {
-						const next = value.at(-1);
-						if (next) {
-							setStatusFilter(next as StatusFilter);
-							// 조건이 바뀌면 건수가 통째로 달라진다 — 3페이지에 머물면 빈 표를 본다.
-							setPage(1);
-						}
-					}}
-					value={[statusFilter]}
-				>
-					{STATUS_FILTERS.map((filter) => (
-						<ToggleGroupItem key={filter.value} value={filter.value}>
-							{filter.label}
-						</ToggleGroupItem>
-					))}
-				</ToggleGroup>
+				<div className="flex flex-wrap items-center justify-between gap-2">
+					<ToggleGroup
+						aria-label="상태 필터"
+						className="flex-wrap"
+						onValueChange={(value) => {
+							const next = value.at(-1);
+							if (next) {
+								setListState({ page: 1, status: next as StatusFilter });
+							}
+						}}
+						value={[statusFilter]}
+					>
+						{STATUS_FILTERS.map((filter) => (
+							<ToggleGroupItem key={filter.value} value={filter.value}>
+								{filter.label}
+							</ToggleGroupItem>
+						))}
+					</ToggleGroup>
+					{showSelection && selectedIds.size > 0 ? (
+						<Button
+							disabled={isPending}
+							onClick={() => setIsBulkRemoveOpen(true)}
+							size="sm"
+							variant="destructive"
+						>
+							<Trash2Icon />
+							선택 삭제 ({selectedIds.size})
+						</Button>
+					) : null}
+				</div>
 
 				{listQuery.data?.items.length ? (
 					<>
@@ -210,6 +307,21 @@ export function CrawledJobPostsCard() {
 							<Table>
 								<TableHeader>
 									<TableRow>
+										{showSelection ? (
+											<TableHead className="w-10">
+												<Checkbox
+													aria-label="현재 페이지 공고 전체 선택"
+													checked={allSelected}
+													disabled={isPending || selectableIds.length === 0}
+													indeterminate={someSelected && !allSelected}
+													onCheckedChange={(checked) =>
+														setSelectedIds(
+															checked ? new Set(selectableIds) : new Set()
+														)
+													}
+												/>
+											</TableHead>
+										) : null}
 										<TableHead>제목</TableHead>
 										<TableHead>업소명</TableHead>
 										<TableHead>지역</TableHead>
@@ -221,6 +333,26 @@ export function CrawledJobPostsCard() {
 								<TableBody>
 									{listQuery.data.items.map((item) => (
 										<TableRow key={item.id}>
+											{showSelection ? (
+												<TableCell className="w-10">
+													<Checkbox
+														aria-label={`${item.title} 선택`}
+														checked={selectedIds.has(item.id)}
+														disabled={isPending || item.status === "removed"}
+														onCheckedChange={(checked) =>
+															setSelectedIds((current) => {
+																const next = new Set(current);
+																if (checked) {
+																	next.add(item.id);
+																} else {
+																	next.delete(item.id);
+																}
+																return next;
+															})
+														}
+													/>
+												</TableCell>
+											) : null}
 											<TableCell>
 												{item.status === "active" ? (
 													<Link
@@ -290,7 +422,19 @@ export function CrawledJobPostsCard() {
 																<DropdownMenuItem
 																	render={
 																		<Link
-																			href={crawledImageEditHref(item.id)}
+																			href={crawledJobImageEditHref(item.id, {
+																				page,
+																				status: statusFilter,
+																			})}
+																			onClick={() =>
+																				window.sessionStorage.setItem(
+																					jobListScrollStorageKey(
+																						page,
+																						statusFilter
+																					),
+																					String(window.scrollY)
+																				)
+																			}
 																		/>
 																	}
 																>
@@ -336,26 +480,15 @@ export function CrawledJobPostsCard() {
 							</Table>
 						</div>
 
-						<div className="flex items-center justify-end gap-2">
-							<Button
-								disabled={page <= 1}
-								onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-								size="sm"
-								variant="outline"
-							>
-								이전
-							</Button>
-							<span className="text-muted-foreground text-sm">
-								{page} / {totalPages}
-							</span>
-							<Button
-								disabled={!hasNextPage}
-								onClick={() => setPage((prev) => prev + 1)}
-								size="sm"
-								variant="outline"
-							>
-								다음
-							</Button>
+						<div className="flex justify-end">
+							<PageControls
+								disabled={listQuery.isFetching}
+								onPageChange={(nextPage) =>
+									setListState({ page: nextPage, status: statusFilter })
+								}
+								page={page}
+								pageCount={totalPages}
+							/>
 						</div>
 					</>
 				) : (
@@ -397,6 +530,32 @@ export function CrawledJobPostsCard() {
 										removeMutation.mutate({ id: pendingRemove.id });
 									}
 								}}
+								variant="destructive"
+							>
+								삭제
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+
+				<AlertDialog onOpenChange={setIsBulkRemoveOpen} open={isBulkRemoveOpen}>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>
+								선택한 공고 {selectedIds.size}개를 삭제할까요?
+							</AlertDialogTitle>
+							<AlertDialogDescription>
+								선택한 공고는 목록·배너에서 바로 빠지고 「삭제됨」 탭으로
+								이동합니다. 잘못 삭제한 공고는 그 탭에서 복구할 수 있습니다.
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>취소</AlertDialogCancel>
+							<AlertDialogAction
+								disabled={bulkRemoveMutation.isPending}
+								onClick={() =>
+									bulkRemoveMutation.mutate({ ids: [...selectedIds] })
+								}
 								variant="destructive"
 							>
 								삭제
@@ -450,7 +609,6 @@ export function CrawledCommunityTopicsCard() {
 	const isPending = removeMutation.isPending || restoreMutation.isPending;
 	const total = listQuery.data?.total ?? 0;
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-	const hasNextPage = page * PAGE_SIZE < total;
 
 	return (
 		<Card>
@@ -617,26 +775,13 @@ export function CrawledCommunityTopicsCard() {
 							</Table>
 						</div>
 
-						<div className="flex items-center justify-end gap-2">
-							<Button
-								disabled={page <= 1}
-								onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-								size="sm"
-								variant="outline"
-							>
-								이전
-							</Button>
-							<span className="text-muted-foreground text-sm">
-								{page} / {totalPages}
-							</span>
-							<Button
-								disabled={!hasNextPage}
-								onClick={() => setPage((prev) => prev + 1)}
-								size="sm"
-								variant="outline"
-							>
-								다음
-							</Button>
+						<div className="flex justify-end">
+							<PageControls
+								disabled={listQuery.isFetching}
+								onPageChange={setPage}
+								page={page}
+								pageCount={totalPages}
+							/>
 						</div>
 					</>
 				) : (

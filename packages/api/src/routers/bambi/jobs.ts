@@ -44,6 +44,8 @@ import {
 } from "../../services/bambi-ad-discount-campaigns";
 import {
 	AD_BANNER_EXPOSURE_TYPES,
+	type AdBannerGroupKey,
+	adBannerSlotLocation,
 	buildExposureJobSections,
 	DEFAULT_AD_ROTATION_MINUTES,
 	EXPOSURE_TYPE_LABELS,
@@ -136,6 +138,7 @@ import {
 	createJobPostMediaUploadIntent,
 	isOwnedJobPostMediaKey,
 } from "../../services/bambi-storage";
+import { assertJobPostWarningRestriction } from "../../services/bambi-warning-restriction";
 import { deletePublicObjects } from "../../services/gcs";
 import { requirePurchasableBoostOption } from "./boost-options";
 
@@ -1762,6 +1765,8 @@ export const jobsRouter = {
 		const groups = groupAdBannerJobs(rows, now, rotationMs);
 
 		// 슬롯 방향 배너가 없는 후보는 비운다(단색 배경 슬롯은 예외 — requireDirectionImage 참고).
+		// 문의 예약 칸과는 충돌하지 않는다: 그 칸은 groupAdBannerJobs가 이미 null로 비웠고
+		// requireDirectionImage는 null을 그대로 null로 흘려보내기만 한다(비우기만 하는 필터).
 		const directedGroups = {
 			leftBanner: requireDirectionImage(groups.leftBanner, "ad_horizontal"),
 			premiumBanner: requireDirectionImage(
@@ -1774,6 +1779,11 @@ export const jobsRouter = {
 		// impression은 결제 광고에만 기록한다. job_performance_event가 job_post를 FK로 잡고
 		// 있어 수집 공고 id를 넣으면 이 공개 조회가 통째로 실패하고, 성과 지표는 광고주에게
 		// 보여주는 값이라 수집 노출을 섞으면 숫자의 의미가 흐려진다.
+		//
+		// 순서 주의: 이 집계는 groupAdBannerJobs가 문의 칸을 이미 null로 비운 뒤의 groups를
+		// (requireDirectionImage만 한 겹 더 통과시켜) 그대로 받는다. 그래서 문의 칸에 밀려난
+		// 광고에는 노출이 기록되지 않는다 — 화면에 안 나온 광고의 impression을 광고주에게
+		// 청구하지 않으려면 이 순서(비우기 → 방향 필터 → 집계)가 유지돼야 한다.
 		await recordAdBannerImpressions({
 			actorUserId: context.session?.user.id,
 			groups: directedGroups,
@@ -1783,6 +1793,10 @@ export const jobsRouter = {
 			return directedGroups;
 		}
 
+		// 문의 칸은 전역 슬롯(0..8)으로 오므로 그룹 배열의 (그룹 키, 배열 위치)로 풀어 둔다.
+		// 0-2=좌·3-5=중간 프리미엄·6-8=우 순서이며, 변환은 링 base에서 파생하는 서비스 헬퍼가 맡는다.
+		const inquiry = adBannerSlotLocation(groups.inquirySlotIndex);
+
 		// 수집 배너는 결제 광고가 채우지 못한 칸에만 들어가고, 가로형·세로형이 서로 다른 링을
 		// 돈다(groupCrawledAdBannerJobs 참고).
 		const crawledGroups = groupCrawledAdBannerJobs(
@@ -1791,16 +1805,33 @@ export const jobsRouter = {
 			rotationMs
 		);
 
+		// 병합하되 문의 칸만은 끝까지 비워 둔다. 이 방어가 없으면 수집 배너가 켜진 사이트에서
+		// 빈 칸이 전부 수집 배너로 메워져 "광고 등록 문의" 카드가 다시 사라진다 — 결제 광고 만석
+		// 대비로 센티넬을 넣은 의미가 통째로 없어진다.
+		const mergeKeepingInquirySlot = <TCrawled, TPaid>(
+			group: AdBannerGroupKey,
+			paid: (TPaid | null)[],
+			crawled: (TCrawled | null)[]
+		): (TCrawled | TPaid | null)[] => {
+			const reservedIndex = inquiry.group === group ? inquiry.index : -1;
+			return mergeAdBannerSlots(paid, crawled).map((item, index) =>
+				index === reservedIndex ? null : item
+			);
+		};
+
 		return {
-			leftBanner: mergeAdBannerSlots(
+			leftBanner: mergeKeepingInquirySlot(
+				"leftBanner",
 				directedGroups.leftBanner,
 				crawledGroups.leftBanner
 			),
-			premiumBanner: mergeAdBannerSlots(
+			premiumBanner: mergeKeepingInquirySlot(
+				"premiumBanner",
 				directedGroups.premiumBanner,
 				crawledGroups.premiumBanner
 			),
-			rightBanner: mergeAdBannerSlots(
+			rightBanner: mergeKeepingInquirySlot(
+				"rightBanner",
 				directedGroups.rightBanner,
 				crawledGroups.rightBanner
 			),
@@ -2058,6 +2089,10 @@ export const jobsRouter = {
 				organizationId: input.organizationId,
 				teamId: input.teamId,
 				session: context.session,
+			});
+			await assertJobPostWarningRestriction({
+				role: actor.role,
+				userId: actor.userId,
 			});
 			const policy = validateJobPostImageUpload(input);
 

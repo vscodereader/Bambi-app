@@ -43,6 +43,7 @@ import {
 } from "@/lib/bambi/community";
 import { useCommunityAreaPaths } from "@/lib/bambi/community-paths";
 import { orpc } from "@/utils/orpc";
+import { showWarningRestrictionDialogForError } from "./warning-restriction-guard";
 
 const COMMENT_MAX = 1000;
 const PASSWORD_MIN = 4;
@@ -517,7 +518,11 @@ export function PublicPostInteractions({
 	);
 	const createCommentMutation = useMutation(
 		orpc.bambi.community.createComment.mutationOptions({
-			onError: (error) => toast(error.message || "댓글을 등록하지 못했어요."),
+			onError: (error) => {
+				if (!showWarningRestrictionDialogForError(error)) {
+					toast(error.message || "댓글을 등록하지 못했어요.");
+				}
+			},
 			onSuccess: async () => {
 				setReplyTo(null);
 				await refreshComments();

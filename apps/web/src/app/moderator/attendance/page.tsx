@@ -2,7 +2,7 @@
 
 // 밤비 — 운영자 출석 관리. 사용자별 총 출석일·이번 달·마지막 출석일·미출석 경과일을
 // 서버 집계(attendance.adminList)로 받아 표로 보여준다. 검색·역할 필터·정렬·페이지네이션이
-// 전부 서버 입력이라 다른 운영자 화면(클라이언트 필터)과 달리 useInfiniteQuery로 이어 받는다.
+// 전부 서버 입력이며 10개 단위 페이지로 조회한다.
 // 개인 상세·차트는 후속 범위다(스펙 §8).
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
@@ -42,21 +42,17 @@ import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
-import {
-	keepPreviousData,
-	useInfiniteQuery,
-	useMutation,
-	useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownIcon, ArrowUpDownIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { PageControls } from "@/components/bambi/page-controls";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { formatDate } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 // 검색어를 칠 때마다 서버를 때리면 집계 서브쿼리 5개짜리 목록 쿼리가 키 입력마다 나간다.
 // 채팅 관리(moderator/chats)·공고 검색 모달과 같은 250ms 디바운스를 쓴다.
@@ -195,16 +191,15 @@ export default function ModeratorAttendancePage() {
 	const [search, setSearch] = useState("");
 	const [roleFilter, setRoleFilter] = useState("all");
 	const [sort, setSort] = useState<SortKey>("recent");
+	const [page, setPage] = useState(1);
 	const [adjusting, setAdjusting] = useState<AttendanceRow | null>(null);
 	const debouncedSearch = useDebouncedValue(search);
 	const queryClient = useQueryClient();
 
-	const listQuery = useInfiniteQuery({
-		...orpc.bambi.attendance.adminList.infiniteOptions({
-			getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-			initialPageParam: 0,
-			input: (cursor: number) => ({
-				cursor,
+	const listQuery = useQuery(
+		orpc.bambi.attendance.adminList.queryOptions({
+			input: {
+				cursor: (page - 1) * PAGE_SIZE,
 				limit: PAGE_SIZE,
 				role:
 					roleFilter === "all"
@@ -212,12 +207,9 @@ export default function ModeratorAttendancePage() {
 						: (roleFilter as "employer" | "job_seeker"),
 				search: debouncedSearch.trim() || undefined,
 				sort,
-			}),
-		}),
-		// 검색·필터·정렬을 바꾸면 쿼리 키가 바뀐다 — 직전 결과를 남겨 두지 않으면 표가
-		// 통째로 사라졌다가 다시 그려진다.
-		placeholderData: keepPreviousData,
-	});
+			},
+		})
+	);
 
 	const adjustMutation = useMutation(
 		orpc.bambi.attendance.adminAdjustPoints.mutationOptions({
@@ -234,14 +226,13 @@ export default function ModeratorAttendancePage() {
 		})
 	);
 
-	const pages = listQuery.data?.pages ?? [];
-	// 페이지 사이에 출석이 끼어들면 오프셋이 밀려 같은 계정이 겹칠 수 있어 userId로 걸러낸다.
-	const items = [
-		...new Map(
-			pages.flatMap((page) => page.items).map((item) => [item.userId, item])
-		).values(),
-	];
-	const summary = pages[0]?.summary ?? { attendedToday: 0, eligibleUsers: 0 };
+	const items = listQuery.data?.items ?? [];
+	const summary = listQuery.data?.summary ?? {
+		attendedToday: 0,
+		eligibleUsers: 0,
+	};
+	const totalCount = listQuery.data?.totalCount ?? 0;
+	const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
@@ -282,7 +273,10 @@ export default function ModeratorAttendancePage() {
 					<Input
 						className="w-64 max-w-full"
 						id="attendance-search"
-						onChange={(event) => setSearch(event.target.value)}
+						onChange={(event) => {
+							setSearch(event.target.value);
+							setPage(1);
+						}}
 						placeholder="닉네임·아이디 검색"
 						value={search}
 					/>
@@ -291,7 +285,10 @@ export default function ModeratorAttendancePage() {
 					<Label htmlFor="attendance-role">역할</Label>
 					<Select
 						items={ROLE_FILTER_ITEMS}
-						onValueChange={(value) => setRoleFilter(String(value))}
+						onValueChange={(value) => {
+							setRoleFilter(String(value));
+							setPage(1);
+						}}
 						value={roleFilter}
 					>
 						<SelectTrigger className="w-36" id="attendance-role">
@@ -349,7 +346,10 @@ export default function ModeratorAttendancePage() {
 									>
 										<button
 											className="-mx-2 flex items-center gap-1 rounded-md px-2 py-1 font-medium hover:bg-muted/50"
-											onClick={() => setSort(column.key)}
+											onClick={() => {
+												setSort(column.key);
+												setPage(1);
+											}}
 											type="button"
 										>
 											{column.label}
@@ -414,15 +414,17 @@ export default function ModeratorAttendancePage() {
 				</div>
 			) : null}
 
-			{listQuery.hasNextPage ? (
-				<div className="flex justify-center">
-					<Button
-						disabled={listQuery.isFetchingNextPage}
-						onClick={() => listQuery.fetchNextPage()}
-						variant="outline"
-					>
-						{listQuery.isFetchingNextPage ? "불러오는 중" : "더 보기"}
-					</Button>
+			{items.length > 0 ? (
+				<div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+					<span className="text-muted-foreground text-sm">
+						전체 {totalCount}명 · {page} / {pageCount} 페이지
+					</span>
+					<PageControls
+						disabled={listQuery.isFetching}
+						onPageChange={setPage}
+						page={page}
+						pageCount={pageCount}
+					/>
 				</div>
 			) : null}
 

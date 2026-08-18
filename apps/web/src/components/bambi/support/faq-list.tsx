@@ -119,7 +119,7 @@ export function FaqList() {
 						className={buttonVariants({ size: "lg" })}
 						href={SUPPORT_INQUIRY_NEW_PATH}
 					>
-						1:1 문의하기
+						문의 글 등록하기
 					</Link>
 					<Link
 						className={buttonVariants({ size: "lg", variant: "outline" })}

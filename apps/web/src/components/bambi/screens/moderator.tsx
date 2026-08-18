@@ -267,9 +267,21 @@ export function ConsoleTop({
 			<div className="px-1">
 				<StatGroup
 					items={[
-						{ label: "검수 대기", value: counts.queue },
-						{ label: "신고 대기", value: counts.reports },
-						{ label: "경고 사용자", value: counts.warned },
+						{
+							href: "/moderator" as Route,
+							label: "검수 대기",
+							value: counts.queue,
+						},
+						{
+							href: "/moderator/reports" as Route,
+							label: "신고 대기",
+							value: counts.reports,
+						},
+						{
+							href: "/moderator/users?status=warned" as Route,
+							label: "경고 사용자",
+							value: counts.warned,
+						},
 					]}
 				/>
 			</div>
@@ -1222,6 +1234,7 @@ export function ReportList({
 					getRowKey={(r) => r.id}
 					onRowClick={onOpen}
 					pageSize={10}
+					showPageInput
 				/>
 			</div>
 			{/* 모바일: 기존 카드 목록. */}
@@ -1713,35 +1726,103 @@ function CommunityTargetPanel({
 	);
 }
 
-// 당사자 카드 2개. 모바일에서 가로로 나란히 두면 좁은 폭(375px)에서 신고자 카드가 화면
-// 밖으로 밀리므로 데스크톱 사이드 패널과 동일하게 항상 세로로 쌓는다.
+// 채팅방 신고는 채팅방 → 피신고자 → 신고자, 나머지는 피신고자/작성자 → 신고자 순서다.
+// 모바일에서 가로로 나란히 두면 좁은 폭(375px)에서 카드가 화면 밖으로 밀리므로
+// 데스크톱 사이드 패널과 동일하게 항상 세로로 쌓는다.
 // 피신고 대상이 사용자 계정이면 카드를 그대로 계정 상세 링크로 감싼다(제재 이력·누적
 // 신고를 바로 확인할 수 있게).
-function ReportParties({ item }: { item: Report }) {
+function ReportParties({
+	item,
+	onWarn,
+}: {
+	item: Report;
+	onWarn: (userId: string) => unknown;
+}) {
+	const [confirmingWarning, setConfirmingWarning] = useState(false);
+	const [isWarning, setIsWarning] = useState(false);
+	const chatRoom =
+		item.targetContext && "chatRoom" in item.targetContext
+			? item.targetContext.chatRoom
+			: null;
 	const targetBox = (
 		<PartyBox
 			flagged
-			icon={item.targetType === "chat_room" ? "chat" : "user"}
+			icon="user"
 			name={item.target}
-			role={`피신고 · ${item.targetRole}`}
+			role={`피신고자 · ${item.targetRole}`}
 		/>
 	);
-	const targetUserId =
-		item.targetType === "user" && item.targetId ? item.targetId : null;
+	const targetUserId = item.targetUserId ?? null;
 
 	return (
 		<div className="flex flex-col gap-2.5">
+			{chatRoom ? (
+				// biome-ignore lint/a11y/useValidAriaRole: PartyBox role is visible copy rather than a DOM ARIA role.
+				<PartyBox
+					icon="chat"
+					name={chatRoom.jobPostTitle}
+					role="신고 대상 · 채팅방"
+				/>
+			) : null}
 			{targetUserId ? (
-				<Link
-					className="flex min-w-0 flex-1"
-					href={`/moderator/users/${targetUserId}` as Route}
-				>
-					{targetBox}
-				</Link>
+				<div className="flex flex-col gap-2">
+					<Link
+						className="flex min-w-0 flex-1"
+						href={`/moderator/users/${targetUserId}` as Route}
+					>
+						{targetBox}
+					</Link>
+					<div className="grid grid-cols-2 gap-2">
+						<button
+							className="h-9 rounded-lg border border-border bg-card font-bold text-sm"
+							onClick={() => setConfirmingWarning(true)}
+							type="button"
+						>
+							경고
+						</button>
+						<Link
+							className="flex h-9 items-center justify-center rounded-lg border border-border bg-card font-bold text-sm"
+							href={`/moderator/users/${targetUserId}` as Route}
+						>
+							유저 보기
+						</Link>
+					</div>
+				</div>
 			) : (
 				targetBox
 			)}
 			<PartyBox name={item.reporter} role={`신고자 · ${item.reporterRole}`} />
+			<AlertDialog onOpenChange={setConfirmingWarning} open={confirmingWarning}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							{`정말 이 ${item.target}에게 경고를 주시겠습니까?`}
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							확인을 누르면 경고 횟수가 1회 누적됩니다.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={isWarning}>취소</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={isWarning || !targetUserId}
+							onClick={async () => {
+								if (!targetUserId) {
+									return;
+								}
+								setIsWarning(true);
+								const succeeded = await onWarn(targetUserId);
+								setIsWarning(false);
+								if (succeeded !== false) {
+									setConfirmingWarning(false);
+								}
+							}}
+						>
+							{isWarning ? "처리 중..." : "확인"}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }
@@ -1900,7 +1981,7 @@ export function ReportDetail({
 		action: "dismiss" | "act",
 		reason?: string
 	) => Promise<boolean>;
-	onSanction: (id: string, status: UserStatus, label: string) => void;
+	onSanction: (id: string, status: UserStatus, label: string) => unknown;
 	onBlockChatRoom?: (
 		chatRoomId: string,
 		isBlocked: boolean,
@@ -1932,8 +2013,8 @@ export function ReportDetail({
 	let sanctionUserId: string | null = null;
 	if (!item.targetType) {
 		sanctionUserId = `u-${item.id}`;
-	} else if (item.targetType === "user" && item.targetId) {
-		sanctionUserId = item.targetId;
+	} else if (item.targetUserId) {
+		sanctionUserId = item.targetUserId;
 	}
 	const isOpen = item.status === "open";
 	const actions = (
@@ -1957,7 +2038,12 @@ export function ReportDetail({
 							{item.reason}
 						</h2>
 					</div>
-					<ReportParties item={item} />
+					<ReportParties
+						item={item}
+						onWarn={(userId) =>
+							onSanction(userId, "warned", "신고 상세에서 경고를 부여했어요")
+						}
+					/>
 					{/* 데스크톱 전용: 처리 상태·조치는 오른쪽 패널에서 끝낸다. */}
 					<div className="flex flex-col gap-4 max-md:hidden">
 						{isOpen ? actions : <ReportResolvedNotice />}
@@ -2503,17 +2589,20 @@ export function UserDetail({
 	item,
 	onBack,
 	onRestore,
+	onRevertWarning,
 	onSanction,
 }: {
 	item: ManagedUser;
 	onBack: () => void;
 	onRestore: (id: string, reason: string) => void;
+	onRevertWarning: (id: string, reason: string) => undefined | Promise<boolean>;
 	onSanction: (id: string, status: UserStatus, label: string) => void;
 }) {
 	const c = STATUS_CONF[item.status];
 	// 경고/정지 버튼을 누르면 곧바로 적용하지 않고, 공용 사유 작성 시트를 띄워
 	// 기본 문구가 프리필된 사유를 운영자가 확인·수정한 뒤 확정하게 한다.
 	const [pending, setPending] = useState<SanctionChoice | null>(null);
+	const [revertingWarning, setRevertingWarning] = useState(false);
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="사용자 상세" />
@@ -2600,6 +2689,21 @@ export function UserDetail({
 						</Button>
 					</div>
 				)}
+				{item.warnings > 0 ? (
+					<div>
+						<div className="mb-2.5 font-bold text-[13px] text-foreground">
+							경고 되돌리기
+						</div>
+						<Button
+							block
+							onClick={() => setRevertingWarning(true)}
+							size="lg"
+							variant="secondary"
+						>
+							최근 경고 1회 되돌리기
+						</Button>
+					</div>
+				) : null}
 				<UserModerationHistory userId={item.id} />
 				<div>
 					<div className="mb-2.5 font-bold text-[13px] text-foreground">
@@ -2633,6 +2737,21 @@ export function UserDetail({
 					reasonFieldId={`user-sanction-reason-${item.id}`}
 					reasonLabel="제재 사유"
 					title={pending.title}
+				/>
+			) : null}
+			{revertingWarning ? (
+				<ReasonConfirmSheet
+					confirmLabel="경고 되돌리기"
+					defaultReason="운영자가 잘못 부여된 최근 경고를 되돌렸습니다."
+					description="가장 최근에 부여했고 아직 되돌리지 않은 경고 1회만 취소합니다."
+					onCancel={() => setRevertingWarning(false)}
+					onConfirm={async (reason) => {
+						await onRevertWarning(item.id, reason);
+						setRevertingWarning(false);
+					}}
+					positioning="absolute"
+					reasonFieldId="revert-warning-reason"
+					title="최근 경고를 되돌릴까요?"
 				/>
 			) : null}
 		</div>
@@ -3063,6 +3182,7 @@ export function ModeratorApp({ tone = "calm" }: { tone?: VisualTone }) {
 				item={detail.item}
 				onBack={() => setDetail(null)}
 				onRestore={restoreAccount}
+				onRevertWarning={() => undefined}
 				onSanction={sanction}
 			/>
 		);

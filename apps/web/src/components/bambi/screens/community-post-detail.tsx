@@ -36,6 +36,7 @@ import {
 	isLegalBoardKey,
 } from "@/lib/bambi/community";
 import { orpc } from "@/utils/orpc";
+import { showWarningRestrictionDialogForError } from "../warning-restriction-guard";
 
 const COMMENT_MAX = 1000;
 
@@ -194,7 +195,11 @@ function PostDetailView({
 	);
 	const createCommentMutation = useMutation(
 		orpc.bambi.community.createComment.mutationOptions({
-			onError: (error) => toast(error.message || "댓글을 등록하지 못했어요."),
+			onError: (error) => {
+				if (!showWarningRestrictionDialogForError(error)) {
+					toast(error.message || "댓글을 등록하지 못했어요.");
+				}
+			},
 			onSuccess: () => {
 				setCommentBody("");
 				setReplyTo(null);
