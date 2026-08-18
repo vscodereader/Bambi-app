@@ -4,11 +4,6 @@ import { readSupportChatTokenFromCookieString } from "@bambi-app/api/services/ba
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Card } from "@bambi-app/ui/components/card";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@bambi-app/ui/components/tooltip";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Home, MessageCircle, MessageSquare } from "lucide-react";
@@ -22,6 +17,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { SUPPORT_CHAT_ANCHOR_EVENT } from "@/components/bambi/ad-banner";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
 import { WidgetConversation } from "./widget-conversation";
@@ -201,7 +197,9 @@ export function SupportChatWidget() {
 
 	// 레일 앵커를 찾는다. aside가 `hidden min-[1720px]:block`이라 뷰포트가 좁으면
 	// display:none → offsetParent가 null이다(그 경우 fixed 폴백). pathname 변경(페이지 이동)과
-	// resize 때 다시 판정한다 — 한 페이지에 둘일 수 있어 첫 매치만 쓴다.
+	// resize, 그리고 rail 마운트 알림(수다방처럼 마운트 게이트 뒤에서 rail이 늦게 나타나는
+	// 화면은 pathname 재탐색이 앵커 등장을 놓친다) 때 다시 판정한다 — 한 페이지에 둘일 수
+	// 있어 첫 매치만 쓴다.
 	useEffect(() => {
 		const sync = () => {
 			const el = document.querySelector<HTMLElement>(
@@ -211,7 +209,11 @@ export function SupportChatWidget() {
 		};
 		sync();
 		window.addEventListener("resize", sync);
-		return () => window.removeEventListener("resize", sync);
+		window.addEventListener(SUPPORT_CHAT_ANCHOR_EVENT, sync);
+		return () => {
+			window.removeEventListener("resize", sync);
+			window.removeEventListener(SUPPORT_CHAT_ANCHOR_EVENT, sync);
+		};
 	}, [pathname]);
 
 	// 패널을 열 때(런처·딥링크) 항상 홈 뷰로 리셋한다.
@@ -227,11 +229,17 @@ export function SupportChatWidget() {
 	});
 	const isAdmin = profileQuery.data?.bambiProfile?.role === "admin";
 	const isModeratorPath = pathname?.startsWith("/moderator") ?? false;
+	// /jobs·/board는 검색엔진 크롤링용 공개 화면 — 문의 위젯을 통째로 감춘다.
+	const isCrawlerPath = ["/board", "/jobs"].some(
+		(prefix) =>
+			pathname === prefix || (pathname?.startsWith(`${prefix}/`) ?? false)
+	);
 	// 로그인 상태에서 프로필 응답 전까지도 감춘다 — admin 계정에서 버튼이 잠깐 떴다
 	// 사라지는 깜빡임 방지(비로그인은 조회가 없어 해당 없음). 인증 카드(?auth=) 위에도
 	// 버튼을 세우지 않는다.
 	const hidden =
 		isModeratorPath ||
+		isCrawlerPath ||
 		isAdmin ||
 		onAuthScreen ||
 		(Boolean(session) && profileQuery.isPending);
@@ -350,19 +358,18 @@ export function SupportChatWidget() {
 		) : null;
 
 	// 레일 포털일 때: 세로 배너와 같은 가로 폭(13rem*4/9 = aspect-[4/9] h-52의 폭)의 정사각
-	// 말풍선 아이콘 버튼. 호버 시 살짝 리프트 + 버튼 아래에 툴팁("운영자 문의하기").
+	// 버튼 — 말풍선 아이콘 아래 "1:1 상담" 라벨(툴팁 없음).
 	const railLauncher = (
-		<Tooltip>
-			<TooltipTrigger
-				aria-label="운영자 문의"
-				className="relative flex aspect-square w-[calc(13rem*4/9)] items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[var(--shadow-primary)] transition hover:-translate-y-0.5"
-				onClick={onToggle}
-			>
-				<MessageCircle className="size-7" />
-				{unreadBadge}
-			</TooltipTrigger>
-			<TooltipContent side="bottom">운영자 문의하기</TooltipContent>
-		</Tooltip>
+		<button
+			aria-label="운영자 문의"
+			className="relative flex aspect-square w-[calc(13rem*4/9)] flex-col items-center justify-center gap-1 rounded-lg bg-primary text-primary-foreground shadow-[var(--shadow-primary)] transition hover:-translate-y-0.5"
+			onClick={onToggle}
+			type="button"
+		>
+			<MessageCircle className="size-6" />
+			<span className="font-medium text-xs">1:1 상담</span>
+			{unreadBadge}
+		</button>
 	);
 
 	// fixed 폴백(좁은 화면 우하단): 원형 FAB — 현행 유지.
