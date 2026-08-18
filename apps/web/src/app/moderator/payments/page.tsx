@@ -401,6 +401,7 @@ export default function ModeratorPaymentsPage() {
 							data={jobs}
 							getRowKey={(job) => job.id}
 							pageSize={10}
+							showPageInput
 						/>
 					</div>
 					<div className="flex flex-col gap-3 md:hidden">

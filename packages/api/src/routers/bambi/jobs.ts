@@ -136,6 +136,7 @@ import {
 	createJobPostMediaUploadIntent,
 	isOwnedJobPostMediaKey,
 } from "../../services/bambi-storage";
+import { assertJobPostWarningRestriction } from "../../services/bambi-warning-restriction";
 import { deletePublicObjects } from "../../services/gcs";
 import { requirePurchasableBoostOption } from "./boost-options";
 
@@ -2058,6 +2059,10 @@ export const jobsRouter = {
 				organizationId: input.organizationId,
 				teamId: input.teamId,
 				session: context.session,
+			});
+			await assertJobPostWarningRestriction({
+				role: actor.role,
+				userId: actor.userId,
 			});
 			const policy = validateJobPostImageUpload(input);
 

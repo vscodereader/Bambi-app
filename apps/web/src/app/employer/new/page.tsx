@@ -53,6 +53,7 @@ import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
 import { JobPostMediaUploader } from "@/components/bambi/job-post-media-uploader";
 import { JobRegionFields } from "@/components/bambi/job-region-fields";
 import { PageShell } from "@/components/bambi/page-shell";
+import { showWarningRestrictionDialogForError } from "@/components/bambi/warning-restriction-guard";
 import Loader from "@/components/loader";
 import { useRequiredBannerGate } from "@/hooks/use-required-banner-gate";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
@@ -392,6 +393,10 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const createMutation = useMutation(
 		orpc.bambi.jobs.create.mutationOptions({
 			onError: async (error) => {
+				if (showWarningRestrictionDialogForError(error)) {
+					return;
+				}
+
 				if (getErrorCode(error) === "CONFLICT") {
 					await utils.invalidateQueries({
 						queryKey: orpc.bambi.adProducts.getCatalog.queryKey(),

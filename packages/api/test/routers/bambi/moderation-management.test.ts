@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { createProcedureClient } from "@orpc/server";
 import dotenv from "dotenv";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import type { Context } from "@/context";
@@ -22,6 +22,7 @@ const [{ db }, authSchema, bambiSchema, { moderationRouter }] =
 const { member, organization, user } = authSchema;
 const {
 	adminModerationAction,
+	bambiNotification,
 	bambiProfile,
 	chatMessage,
 	chatRoom,
@@ -214,6 +215,14 @@ const cleanupManagementFixture = async (
 	fixture: ManagementFixture
 ): Promise<void> => {
 	await db
+		.delete(bambiNotification)
+		.where(
+			or(
+				inArray(bambiNotification.actorUserId, fixture.userIds),
+				inArray(bambiNotification.recipientUserId, fixture.userIds)
+			)
+		);
+	await db
 		.delete(adminModerationAction)
 		.where(inArray(adminModerationAction.adminUserId, fixture.userIds));
 	await db
@@ -249,6 +258,56 @@ const expectOrpcCode = async (
 	await expect(promise).rejects.toMatchObject({ code });
 };
 
+describe("bambi moderation management: warnings", () => {
+	it("decrements the active warning count once per reversal", async () => {
+		const fixture = await createManagementFixture();
+
+		try {
+			const context = createContextForUser(fixture.adminUserId);
+			const setUserStatus = createProcedureClient(
+				moderationRouter.setUserStatus,
+				{ context, path: ["bambi", "moderation", "setUserStatus"] }
+			);
+			const revertLatestWarning = createProcedureClient(
+				moderationRouter.revertLatestWarning,
+				{ context, path: ["bambi", "moderation", "revertLatestWarning"] }
+			);
+			const listUsers = createProcedureClient(moderationRouter.listUsers, {
+				context,
+				path: ["bambi", "moderation", "listUsers"],
+			});
+
+			for (let index = 0; index < 3; index += 1) {
+				await setUserStatus({
+					reason: `경고 ${index + 1}회`,
+					status: "warned",
+					targetUserId: fixture.jobSeekerUserId,
+				});
+			}
+
+			const first = await revertLatestWarning({
+				reason: "최근 경고 되돌리기",
+				targetUserId: fixture.jobSeekerUserId,
+			});
+			expect(first.warningsCount).toBe(2);
+
+			const second = await revertLatestWarning({
+				reason: "그 이전 경고도 되돌리기",
+				targetUserId: fixture.jobSeekerUserId,
+			});
+			expect(second.warningsCount).toBe(1);
+
+			const users = await listUsers({ limit: 1000 });
+			expect(
+				users.find((row) => row.userId === fixture.jobSeekerUserId)
+					?.warningsCount
+			).toBe(1);
+		} finally {
+			await cleanupManagementFixture(fixture);
+		}
+	});
+});
+
 describe("bambi moderation management: reviews", () => {
 	it("lists reviews with join fields and applies the status filter", async () => {
 		const fixture = await createManagementFixture();
@@ -259,8 +318,11 @@ describe("bambi moderation management: reviews", () => {
 				path: ["bambi", "moderation", "listReviews"],
 			});
 
-			const published = await listReviews({ limit: 100, status: "published" });
-			const seeded = published.find((row) => row.id === fixture.reviewId);
+			const published = await listReviews({
+				pageSize: 100,
+				status: "published",
+			});
+			const seeded = published.items.find((row) => row.id === fixture.reviewId);
 
 			expect(seeded).toMatchObject({
 				body: "면접 분위기가 좋았어요.",
@@ -273,8 +335,10 @@ describe("bambi moderation management: reviews", () => {
 				status: "published",
 			});
 
-			const hidden = await listReviews({ limit: 100, status: "hidden" });
-			expect(hidden.find((row) => row.id === fixture.reviewId)).toBeUndefined();
+			const hidden = await listReviews({ pageSize: 100, status: "hidden" });
+			expect(
+				hidden.items.find((row) => row.id === fixture.reviewId)
+			).toBeUndefined();
 		} finally {
 			await cleanupManagementFixture(fixture);
 		}

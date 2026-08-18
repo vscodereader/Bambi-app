@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CommunityPostEditor } from "@/components/bambi/community-editor";
+import { showWarningRestrictionDialogForError } from "@/components/bambi/warning-restriction-guard";
 import { authClient } from "@/lib/auth-client";
 import {
 	type CommunityBoardMeta,
@@ -500,6 +501,9 @@ export function CommunityPostForm({
 	const createMutation = useMutation(
 		orpc.bambi.community.createPost.mutationOptions({
 			onError: (error) => {
+				if (showWarningRestrictionDialogForError(error)) {
+					return;
+				}
 				toast(error.message || "글을 등록하지 못했어요.");
 			},
 			onSuccess: async (created) => {

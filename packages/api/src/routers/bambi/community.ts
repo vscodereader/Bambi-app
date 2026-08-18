@@ -53,10 +53,8 @@ import {
 	verifyCommunityPassword,
 } from "../../services/bambi-community-password";
 import { assertNotAlreadyDeleted } from "../../services/bambi-content-status";
-
 import { assertDisplayNameAllowed } from "../../services/bambi-display-name-policy";
 import { escapeLikePattern } from "../../services/bambi-job-feed";
-
 import {
 	JOB_POST_IMAGE_MAX_BYTES,
 	type JobPostImageUploadPolicyCode,
@@ -80,6 +78,7 @@ import {
 	assertTiptapDoc,
 	extractTiptapText,
 } from "../../services/bambi-tiptap-text";
+import { assertCommunityWarningRestriction } from "../../services/bambi-warning-restriction";
 import { resolveVisibleDisplayName } from "../../services/bambi-withdrawn-display";
 import { releaseRateLimit, takeRateLimit } from "../../services/rate-limit";
 
@@ -1593,6 +1592,13 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const actor = await resolveCommunityActor(context);
 			const role = actorRole(actor);
+			if (actor.kind === "member") {
+				await assertCommunityWarningRestriction({
+					board: input.board,
+					role: actor.profile.role,
+					userId: actor.profile.userId,
+				});
+			}
 			assertAnonymousPostAllowed({
 				isAnonymous: input.isAnonymous,
 				role,
@@ -1993,6 +1999,13 @@ export const communityRouter = {
 		.handler(async ({ context, input }) => {
 			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
+			if (actor.kind === "member") {
+				await assertCommunityWarningRestriction({
+					board: post.board,
+					role: actor.profile.role,
+					userId: actor.profile.userId,
+				});
+			}
 			if (post.commentsDisabled) {
 				throw new ORPCError("FORBIDDEN", {
 					message: "이 글은 댓글을 작성할 수 없습니다.",
