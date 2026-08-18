@@ -269,13 +269,11 @@ export function SupportChatWidget() {
 		[queryClient]
 	);
 
+	const markReadMutate = markReadMutation.mutate;
 	const markRoomRead = useCallback(
 		(roomId: string) =>
-			markReadMutation.mutate(
-				{ roomId },
-				{ onSuccess: () => invalidateRooms() }
-			),
-		[markReadMutation, invalidateRooms]
+			markReadMutate({ roomId }, { onSuccess: () => invalidateRooms() }),
+		[markReadMutate, invalidateRooms]
 	);
 
 	// 발신 로직은 셸에 남긴다(쿠키 발급 + 새 대화/기존 발신). roomId=null이면 새 대화
@@ -335,37 +333,55 @@ export function SupportChatWidget() {
 	}, [rooms]);
 
 	const badgeCount = totalUnread > BADGE_CAP ? `${BADGE_CAP}+` : totalUnread;
+	const onToggle = () => (open ? setOpen(false) : openPanel());
+	// 미읽음 배지 — 두 런처 형태가 같은 캡 로직을 공유한다(코너에 absolute 배치).
+	const unreadBadge =
+		totalUnread > 0 ? (
+			<Badge className="absolute -top-2 -right-2 min-w-5 justify-center px-1 text-xs">
+				{badgeCount}
+			</Badge>
+		) : null;
 
-	// 버튼 + 미읽음 배지. 렌더 위치(레일 포털 / fixed)와 무관하게 함께 따라간다.
-	const launcher = (
+	// 레일 포털일 때: 배너 스택의 마지막 카드처럼 보이는 전체 폭 CTA 카드(호버 시 살짝 리프트).
+	const railLauncher = (
+		<button
+			aria-label="운영자 문의"
+			className="relative flex w-full items-center gap-3 rounded-lg bg-primary p-4 text-left text-primary-foreground shadow-[var(--shadow-primary)] transition hover:-translate-y-0.5"
+			onClick={onToggle}
+			type="button"
+		>
+			<MessageCircle className="size-6 shrink-0" />
+			<span className="flex min-w-0 flex-col gap-0.5">
+				<span className="font-semibold text-sm">운영자 문의</span>
+				<span className="text-xs opacity-90">궁금한 점을 바로 물어보세요</span>
+			</span>
+			{unreadBadge}
+		</button>
+	);
+
+	// fixed 폴백(좁은 화면 우하단): 원형 FAB — 현행 유지.
+	const fabLauncher = (
 		<>
 			<Button
 				aria-label="운영자 문의"
 				className="rounded-full"
-				onClick={() => (open ? setOpen(false) : openPanel())}
+				onClick={onToggle}
 				size="icon-lg"
 			>
 				<MessageCircle />
 			</Button>
-			{totalUnread > 0 ? (
-				<Badge className="absolute -top-2 -right-2 min-w-5 justify-center px-1 text-xs">
-					{badgeCount}
-				</Badge>
-			) : null}
+			{unreadBadge}
 		</>
 	);
 
-	// 보이는 레일 앵커가 있으면 배너 바로 아래에 portal로, 없으면 fixed 우하단에.
+	// 보이는 레일 앵커가 있으면 배너 스택 아래에 CTA 카드로, 없으면 fixed 우하단 원형 FAB로.
 	// 앵커가 DOM에서 떨어진 오래된 참조면(페이지 이동 직후 한 프레임) fixed로 폴백한다.
 	const renderLauncher = () =>
 		railAnchor?.isConnected ? (
-			createPortal(
-				<span className="relative inline-flex">{launcher}</span>,
-				railAnchor
-			)
+			createPortal(railLauncher, railAnchor)
 		) : (
 			<span className="fixed right-4 bottom-20 z-50 inline-flex md:bottom-6">
-				{launcher}
+				{fabLauncher}
 			</span>
 		);
 

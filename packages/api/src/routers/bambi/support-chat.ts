@@ -358,6 +358,8 @@ export const supportChatRouter = {
 		const [settings] = await db
 			.select({ notice: bambiSiteSettings.supportChatNotice })
 			.from(bambiSiteSettings)
+			// site-settings 라우터와 동일한 단일 행("default") 컨벤션.
+			.where(eq(bambiSiteSettings.id, "default"))
 			.limit(1);
 		const faqs = await db
 			.select({ id: faqEntry.id, question: faqEntry.question })

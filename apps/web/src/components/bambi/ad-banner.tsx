@@ -253,7 +253,7 @@ export function AdBannerRail({
 			    버튼을 portal로 렌더한다. 위젯이 감춰진 화면(운영자 등)에선 빈 채로 둔다.
 			    한 페이지에 rail이 둘 렌더될 가능성을 배제할 수 없어 id 대신 data 속성을 쓰고,
 			    위젯은 querySelector 첫 매치만 사용한다. */}
-			<div data-support-chat-anchor="" />
+			<div className="w-full" data-support-chat-anchor="" />
 		</div>
 	);
 }
