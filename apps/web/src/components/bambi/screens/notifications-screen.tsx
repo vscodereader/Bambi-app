@@ -35,7 +35,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import {
 	type BambiNotificationView,
 	notificationBody,
@@ -191,12 +190,10 @@ export function NotificationsScreen() {
 	};
 
 	return (
-		<div
-			className={cn(
-				"mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6",
-				APP_CONTENT_WIDTH
-			)}
-		>
+		// 폭 캡·센터링은 레이아웃(seeker/notifications/layout.tsx) 중앙 컬럼이 담당한다 —
+		// 여기서 mx-auto·APP_CONTENT_WIDTH를 다시 걸면 flex 자식의 auto 마진이 광고 rail을
+		// 밀거나 92% 캡이 이중으로 곱혀 좁아진다. 패딩(px-5/py-6/md:px-6)만 남긴다.
+		<div className="flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<h1 className="font-extrabold text-2xl text-foreground [font-family:var(--font-display)]">
 					알림
