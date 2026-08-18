@@ -14,7 +14,7 @@ import {
 export type BambiNotificationRecipientRole = "admin" | "legal_advisor";
 
 export interface CreateBambiNotificationInput {
-	actorUserId: string;
+	actorUserId?: null | string;
 	chatRoomId?: null | string;
 	/** 이벤트 세부. 라벨·딥링크가 읽는다: { action, reason, board, postId, jobPostId, ... } */
 	metadata?: Record<string, unknown>;
@@ -45,7 +45,7 @@ export const buildBambiNotificationValues = ({
 	targetId,
 	targetType,
 }: CreateBambiNotificationInput) => ({
-	actorUserId,
+	actorUserId: actorUserId ?? null,
 	chatRoomId: chatRoomId ?? null,
 	metadata: metadata ?? {},
 	recipientRole: recipientRole ?? null,

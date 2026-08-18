@@ -9,6 +9,11 @@ import {
 	resolveGuestTokenSecret,
 	verifyGuestToken,
 } from "./services/bambi-guest-token";
+import {
+	readSupportChatTokenFromCookieString,
+	SUPPORT_CHAT_HEADER,
+	verifySupportChatToken,
+} from "./services/bambi-support-chat-token";
 import { parseTrustedProxyHops, resolveClientIp } from "./services/client-ip";
 
 // 프로덕션 api 서버는 글로벌 외부 ALB 뒤에 있어 x-forwarded-for가
@@ -65,6 +70,25 @@ const resolveGuest = async (
 	return { gender: payload.gender, gid: payload.gid };
 };
 
+// 익명 문의 채팅 신원. 게스트 토큰과 같은 헤더 이송 방식(쿠키는 host-only) —
+// x-bambi-support-chat 헤더 우선, SSR 경유는 Cookie 헤더 폴백.
+const resolveSupportChat = async (
+	req: IncomingHttpHeaders
+): Promise<null | { sid: string }> => {
+	const token =
+		headerValue(req, SUPPORT_CHAT_HEADER) ||
+		readSupportChatTokenFromCookieString(headerValue(req, "cookie") ?? "");
+	if (!token) {
+		return null;
+	}
+	const payload = await verifySupportChatToken(
+		token,
+		guestTokenSecret(),
+		new Date()
+	);
+	return payload ? { sid: payload.sid } : null;
+};
+
 export async function createContext(req: IncomingHttpHeaders) {
 	const session = await auth.api.getSession({
 		headers: fromNodeHeaders(req),
@@ -74,6 +98,7 @@ export async function createContext(req: IncomingHttpHeaders) {
 		clientIp: clientIpFromHeaders(req),
 		guest: await resolveGuest(req),
 		session,
+		supportChat: await resolveSupportChat(req),
 	};
 }
 

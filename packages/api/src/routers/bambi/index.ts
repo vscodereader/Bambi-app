@@ -22,6 +22,7 @@ import { regionsRouter } from "./regions";
 import { reviewsRouter } from "./reviews";
 import { siteSettingsRouter } from "./site-settings";
 import { supportRouter } from "./support";
+import { supportChatRouter } from "./support-chat";
 import { teamsRouter } from "./teams";
 
 // 라우터가 커지며 추론 타입이 tsc의 선언 직렬화 한도를 넘어(TS7056) appRouter와
@@ -51,6 +52,7 @@ export const bambiRouter: {
 	reviews: typeof reviewsRouter;
 	siteSettings: typeof siteSettingsRouter;
 	support: typeof supportRouter;
+	supportChat: typeof supportChatRouter;
 	teams: typeof teamsRouter;
 } = {
 	accountRecovery: accountRecoveryRouter,
@@ -77,5 +79,6 @@ export const bambiRouter: {
 	reviews: reviewsRouter,
 	siteSettings: siteSettingsRouter,
 	support: supportRouter,
+	supportChat: supportChatRouter,
 	teams: teamsRouter,
 };

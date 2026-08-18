@@ -115,6 +115,11 @@ const updateFooterInput = z.object({
 	adInquiryTel: optionalText(60),
 });
 
+// 문의 채팅 위젯 홈 탭의 공지 배너 문구. 공백만 입력하면 null(배너 미표시)로 저장한다.
+const updateSupportChatInput = z.object({
+	supportChatNotice: optionalText(300),
+});
+
 // 회원 정책 — 탈퇴 개인정보 보존기간(일)과 파기 배치 자동 실행 시각. 둘 다 null이면 기본값으로
 // 복귀한다. 실행 시각은 생략(undefined)하면 기존 값을 유지한다 — 보존기간만 저장하는 호출을
 // 깨지 않기 위해서다.
@@ -318,6 +323,31 @@ export const siteSettingsRouter = {
 				})
 				.returning(FOOTER_COLUMNS);
 			return saved ?? null;
+		}),
+
+	// 문의 채팅 위젯 홈 공지 문구 조회. 운영자 전용 — 위젯 노출은 supportChat.getWidgetHome이
+	// 담당한다. 행이 없으면 null.
+	getSupportChat: adminProcedure.handler(async () => {
+		const [row] = await db
+			.select({ supportChatNotice: bambiSiteSettings.supportChatNotice })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, SETTINGS_ROW_ID))
+			.limit(1);
+		return { supportChatNotice: row?.supportChatNotice ?? null };
+	}),
+
+	// 운영자 전용 저장. 같은 단일 행을 upsert 하되 공지 문구 컬럼만 갱신한다.
+	updateSupportChat: adminProcedure
+		.input(updateSupportChatInput)
+		.handler(async ({ input }) => {
+			await db
+				.insert(bambiSiteSettings)
+				.values({ id: SETTINGS_ROW_ID, ...input })
+				.onConflictDoUpdate({
+					set: input,
+					target: bambiSiteSettings.id,
+				});
+			return { ok: true };
 		}),
 
 	// 개인정보 처리방침 연락처 공개 조회. 처리방침 페이지가 위탁사명·관리부서 연락처를

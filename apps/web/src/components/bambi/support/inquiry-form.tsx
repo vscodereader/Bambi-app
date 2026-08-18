@@ -99,7 +99,8 @@ export function InquiryForm() {
 
 	return (
 		<div className="flex flex-col gap-4 py-6">
-			<h1 className="m-0 font-extrabold text-xl">1:1 문의하기</h1>
+			{/* 문의 채팅 런처가 "1:1 상담"이 되면서, 글 문의 쪽은 진입 버튼과 같은 이름으로 구분한다. */}
+			<h1 className="m-0 font-extrabold text-xl">문의 글 등록하기</h1>
 
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="inquiry-category">문의 유형</Label>

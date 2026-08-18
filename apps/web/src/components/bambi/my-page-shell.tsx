@@ -21,7 +21,6 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { signOutToHome } from "@/lib/bambi/auth-actions";
-import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { MANUAL_PATH } from "@/lib/bambi/manual";
 import { orpc } from "@/utils/orpc";
 import { useBambiAuth } from "./auth-client-provider";
@@ -231,12 +230,12 @@ export function MyPageShell({
 	const isHub = pathname === MY_PAGE_HUB_HREF;
 
 	return (
-		<div
-			className={cn(
-				"mx-auto flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto px-5 py-6 md:flex-row md:gap-8 md:overflow-visible md:px-6",
-				APP_CONTENT_WIDTH
-			)}
-		>
+		// 폭 캡·센터링은 여기서 하지 않는다 — me/layout.tsx의 rail 3열이 seeker 중앙 컬럼과
+		// 같은 캡(SEEKER_CONTENT_WIDTH)을 이미 건다. 셸이 mx-auto를 갖고 flex 자식이 되면
+		// auto 마진이 justify-center보다 먼저 여유 폭을 흡수해 aside가 화면 끝까지 밀리고,
+		// 캡을 또 걸면 92%가 이중으로 곱혀 seeker보다 좁아진다. rail 밖 소비처(출석체크)는
+		// 페이지 쪽 래퍼가 같은 캡을 건다.
+		<div className="flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto px-5 py-6 md:flex-row md:gap-8 md:overflow-visible md:px-6">
 			<aside className="hidden w-56 shrink-0 md:block lg:w-64">
 				<div className="sticky top-20 flex flex-col gap-4">
 					<ProfileCard />
