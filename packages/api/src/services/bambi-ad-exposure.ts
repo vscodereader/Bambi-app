@@ -179,6 +179,29 @@ const TOTAL_RING_SLOTS = RIGHT_RING_BASE + SIDE_BANNER_MAX_SLOTS;
 const emptySlots = <TRow>(count: number): (TRow | null)[] =>
 	Array.from({ length: count }, () => null);
 
+// 배너 그룹(렌더 배열) 키. 링은 전역 슬롯 인덱스 0..8 하나로 돌지만 실제 렌더·병합은
+// 좌/중간/우 세 배열 단위라, 둘 사이를 오갈 때 이 키로 그룹을 지목한다.
+export type AdBannerGroupKey = "leftBanner" | "premiumBanner" | "rightBanner";
+
+// 전역 슬롯 인덱스(0..8 = 좌0-2·중간3-5·우6-8)를 그룹 배열의 (그룹 키, 배열 위치)로 되돌린다.
+// 링 배치가 좌(base 0)→중간(base 3)→우(base 6) 순서이므로 그 base를 그대로 역산한다 —
+// 상수를 손으로 적지 않고 base에서 파생시켜야 슬롯 수를 바꿔도 이 함수가 같이 따라온다.
+// "전역 인덱스로 받은 한 칸"(문의 카드 예약 칸)을 그룹별 배열에서 다시 찾을 때 쓴다.
+export const adBannerSlotLocation = (
+	globalSlotIndex: number
+): { group: AdBannerGroupKey; index: number } => {
+	if (globalSlotIndex >= RIGHT_RING_BASE) {
+		return { group: "rightBanner", index: globalSlotIndex - RIGHT_RING_BASE };
+	}
+	if (globalSlotIndex >= PREMIUM_RING_BASE) {
+		return {
+			group: "premiumBanner",
+			index: globalSlotIndex - PREMIUM_RING_BASE,
+		};
+	}
+	return { group: "leftBanner", index: globalSlotIndex - LEFT_RING_BASE };
+};
+
 // 링 위의 한 그룹을 채운다. 슬롯 s의 광고는 pool[j], j=((s−bucket) mod ring)이며 j가 풀
 // 크기 미만이면 노출, 아니면 대기(null)다. now는 항상 양수라 모듈러는 안전하지만 음수
 // 안전형으로 감아 둔다.
@@ -209,19 +232,37 @@ const placeOnRing = <TRow>({
 // 하나이고 활성(미만료)인 공고 전체(레거시 left-banner/right-banner 공고 포함).
 //
 // 컨베이어(밀어내기) 순환: 한 광고는 언제나 정확히 한 칸에만 존재한다. 풀을 id 오름차순으로
-// 정렬해 링 기준 순서를 고정하고(DB 정렬 순서 의존 제거), n개 광고를 길이 L=max(n,9)인 링에
-// 얹어 매 버킷 전체가 한 칸씩 전진시킨다. 슬롯 s(0..8 = 좌0-2·중3-5·우6-8)의 광고는 pool[j],
-// j=(((s−bucket) mod L)+L) mod L 이 n 미만이면, 아니면 null(대기 중, 호출부가 자리표시로 렌더).
+// 정렬해 링 기준 순서를 고정하고(DB 정렬 순서 의존 제거), n개 광고 + 문의 센티넬 1개를 길이
+// L=max(n+1,9)인 링에 얹어 매 버킷 전체가 한 칸씩 전진시킨다. 슬롯 s(0..8 = 좌0-2·중3-5·우6-8)의
+// 광고는 pool[j], j=(((s−bucket) mod L)+L) mod L 이 n 미만이면, 아니면 null(대기 중, 호출부가
+// 자리표시로 렌더).
 // 각 광고는 좌1→좌2→좌3→중1→중2→중3→우1→우2→우3까지 걸어간 뒤 화면에서 빠지고 L−9버킷
-// 대기했다가 좌1로 재진입한다. n≥9면 9칸 전부 서로 다른 광고가 동시 노출되고, n<9면 등록순 연속
+// 대기했다가 좌1로 재진입한다. n≥9면 문의 칸을 뺀 8칸이 서로 다른 광고로 차고, n<9면 등록순 연속
 // 칸을 채운 "열차"가 함께 이동하며, n=1이면 그 광고가 슬롯 (bucket mod 9) 한 칸만 옮겨 다닌다.
 // 같은 버킷이면 어느 인스턴스·요청이든 같은 결과다(다중 인스턴스 정합). 각 그룹은 고정 길이(좌3·
 // 중3·우3) 배열이며 대기 칸은 null이다. 풀이 비면 전부 null이다.
+//
+// "광고 등록 문의" 센티넬: 풀 맨 뒤(링 인덱스 n)에 광고가 아닌 **가상 아이템 1개**를 얹어 링을
+// 한 칸 늘린다(L = max(n+1, 9)). 이 센티넬은 데이터가 아니라 "이 칸은 문의 카드용으로 비운다"는
+// 예약이며, 광고와 똑같은 규칙으로 매 버킷 한 칸씩 전진한다. 이렇게 하는 이유는 두 가지 실패를
+// 한 번에 막기 위해서다 — 정원(10)이 다 차면 9칸이 전부 광고로 덮여 문의 카드가 화면에서 사라지고,
+// 반대로 광고가 적으면 남은 칸이 전부 같은 문의 카드로 도배된다. 센티넬은 어느 쪽이든 정확히
+// 한 칸만, 그리고 매 버킷 다른 자리에서 문의 카드를 보장한다.
+// 센티넬 칸(inquirySlotIndex)은 항상 0..8이며 반환 배열에서 항상 null이다 — 호출부(클라이언트)는
+// 기존대로 null 칸을 자리표시(AdSlotPlaceholder)로 렌더하므로 렌더러 변경이 필요 없다.
+//
+// 보장 단위 주의: "항상 한 칸"은 **전역 9칸 링 기준**이지 한 화면 기준이 아니다. 좌·우 레일은
+// 뷰포트 1720px 이상에서만 렌더되고(apps/web의 aside `hidden ... min-[1720px]:block`), 그 아래에서는
+// 마켓플레이스·커뮤니티 홈의 프리미엄 3칸(전역 3-5)만 남는다. 그래서 정원이 다 찬 상태의 좁은
+// 뷰포트에서는 예약 칸이 3..5에 드는 버킷에서만 문의 카드가 보인다(n=10이면 11버킷 중 3버킷).
+// 이를 화면 단위로 보장하려면 렌더 그룹별 센티넬 + 클라이언트 변경이 필요해 현 설계 범위 밖이다.
 export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	rows: TRow[],
 	now: Date,
 	rotationIntervalMs: number = DEFAULT_AD_ROTATION_INTERVAL_MS
 ): {
+	// "광고 등록 문의" 카드가 앉는 전역 슬롯(0..8). 이 칸은 세 배열 중 하나에서 반드시 null이다.
+	inquirySlotIndex: number;
 	leftBanner: (TRow | null)[];
 	premiumBanner: (TRow | null)[];
 	rightBanner: (TRow | null)[];
@@ -246,14 +287,13 @@ export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 	const premiumBanner = emptySlots<TRow>(PREMIUM_BANNER_MAX_SLOTS);
 	const rightBanner = emptySlots<TRow>(SIDE_BANNER_MAX_SLOTS);
 
-	if (n === 0) {
-		return { leftBanner, premiumBanner, rightBanner };
-	}
-
-	// 컨베이어 링 길이(광고가 9개 미만이어도 9칸 링에 대기 자리를 둔다). 슬롯 s의 광고는
-	// pool[j] (j=((s−bucket) mod ring)), j<n이면 노출·아니면 대기. now는 항상 양수라 모듈러는
-	// 안전하지만 음수 안전형으로 감아 둔다.
-	const ring = Math.max(n, TOTAL_RING_SLOTS);
+	// 컨베이어 링 길이. 광고 n개 + 문의 센티넬 1개가 함께 도므로 n+1이 하한이고, 광고가 적어도
+	// 9칸 링에 대기 자리를 둔다(n≤8이면 여전히 9). 슬롯 s의 광고는 pool[j]
+	// (j=((s−bucket) mod ring)), j<n이면 노출·아니면 대기. now는 항상 양수라 모듈러는 안전하지만
+	// 음수 안전형으로 감아 둔다.
+	const ring = Math.max(n + 1, TOTAL_RING_SLOTS);
+	// 풀이 비면 placeOnRing이 아무 칸도 채우지 않으므로(j<0인 광고가 없다) n=0도 같은 경로를 탄다.
+	// early return을 두면 그 경로만 inquirySlotIndex 계산을 건너뛰어 반환 계약이 갈린다.
 	placeOnRing({ base: LEFT_RING_BASE, bucket, pool, ring, slots: leftBanner });
 	placeOnRing({
 		base: PREMIUM_RING_BASE,
@@ -270,7 +310,38 @@ export const groupAdBannerJobs = <TRow extends AdBannerRow>(
 		slots: rightBanner,
 	});
 
-	return { leftBanner, premiumBanner, rightBanner };
+	// 센티넬의 링 인덱스는 풀 맨 뒤인 n이다. 광고 배치(슬롯 s ← pool[(s−bucket) mod ring])의
+	// 역이 곧 "링 인덱스 j가 앉는 슬롯 = (j+bucket) mod ring"이므로 센티넬 슬롯은 (bucket+n) mod ring.
+	const rawSlot = (((bucket + n) % ring) + ring) % ring;
+	// rawSlot이 9 이상이면 센티넬이 화면 밖 "대기 칸"에 있다는 뜻이다. 하지만 문의 카드는 만석
+	// (정원 10)에도 항상 한 칸을 지켜야 하는 요구라 대기시키지 않고 실제 칸으로 접는다(fold).
+	// 이 버킷에 한해 접힌 칸의 광고 1건이 밀려나며, n≤8이면 rawSlot이 절대 9 이상이 될 수 없어
+	// (ring=9) fold 자체가 일어나지 않는다 — 즉 광고가 적을 때는 원래 비어 있던 칸만 쓴다.
+	//
+	// 접는 칸에 bucket을 더하는 이유(공정성): 단순히 rawSlot % 9로 접으면 밀려나는 광고가 항상
+	// 같은 한 명이다. 접힌 칸 s=rawSlot−9에 앉은 광고의 링 인덱스는 j=(s−bucket) mod ring인데,
+	// rawSlot=(bucket+n) mod ring이라 j≡(bucket+n−9)−bucket≡n−9로 **버킷과 무관한 상수**가 된다.
+	// 즉 id 오름차순 n−9번째 광고 한 곳만 매 링 사이클 반복해서 노출(과 impression 집계)을 잃는다
+	// (n=10이면 링 한 바퀴에 9회 중 7회, n≥18이면 그 광고 노출이 0). 같은 값을 낸 광고주 사이에
+	// 항구적 차별이라 링을 도는 동안 손실이 고르게 퍼지도록 접는 칸을 버킷만큼 회전시킨다.
+	// fold 버킷은 9칸이 모두 광고로 차 있는 상태(n≥9)이므로 어느 칸으로 접든 "정확히 한 칸"과
+	// "한 바퀴에 9칸 모두 순회"는 그대로 유지된다.
+	const inquirySlotIndex =
+		rawSlot < TOTAL_RING_SLOTS
+			? rawSlot
+			: (rawSlot + bucket) % TOTAL_RING_SLOTS;
+
+	// 예약 칸을 비운다. 광고가 얹혀 있었다면(fold된 버킷) 덮어써서 비운다 — 그래야 호출부의
+	// impression 기록이 "밀려난 광고"를 노출로 세지 않는다(라우터가 이 결과를 그대로 집계한다).
+	const slotsByGroup: Record<AdBannerGroupKey, (TRow | null)[]> = {
+		leftBanner,
+		premiumBanner,
+		rightBanner,
+	};
+	const inquiry = adBannerSlotLocation(inquirySlotIndex);
+	slotsByGroup[inquiry.group][inquiry.index] = null;
+
+	return { inquirySlotIndex, leftBanner, premiumBanner, rightBanner };
 };
 
 // 수집 공고 배너의 순환 칸 수. 가로형(좌 3 + 중간 3)과 세로형(우 3)이 서로 다른 링이다.

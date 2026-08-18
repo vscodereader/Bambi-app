@@ -34,6 +34,10 @@ const PANEL_BASE =
 const PANEL_FIXED = "fixed right-4 bottom-36 md:bottom-24";
 // 레일 모드(≥1720px): 앵커 relative 래퍼 기준으로 런처 왼쪽에 붙는다(bottom 정렬, mr 간격).
 const PANEL_RAIL = "absolute right-full bottom-0 mr-3";
+// 채팅방(구인자↔구직자 대화방) 경로 — FAB을 감추는 판정에 쓴다. 매 렌더 재생성과
+// biome useTopLevelRegex를 피하려고 모듈 상수로 빼둔다. 목록(/seeker/chats)은 살려 두어야
+// 하므로 startsWith가 아니라 양끝 앵커(^…$)로 세그먼트 수까지 못 박는다.
+const CHAT_ROOM_PATH = /^\/seeker\/(?:chats\/[^/]+|jobs\/[^/]+\/chat)$/;
 
 const TABS = [
 	{ icon: Home, label: "홈", name: "home" },
@@ -240,12 +244,16 @@ export function SupportChatWidget() {
 		(prefix) =>
 			pathname === prefix || (pathname?.startsWith(`${prefix}/`) ?? false)
 	);
+	// 채팅방 안에선 FAB이 입력창·메시지를 가려 감춘다. 목록(/seeker/chats)은 그대로 둔다.
+	const isChatRoomPath = CHAT_ROOM_PATH.test(pathname ?? "");
 	// 로그인 상태에서 프로필 응답 전까지도 감춘다 — admin 계정에서 버튼이 잠깐 떴다
 	// 사라지는 깜빡임 방지(비로그인은 조회가 없어 해당 없음). 인증 카드(?auth=) 위에도
-	// 버튼을 세우지 않는다.
+	// 버튼을 세우지 않는다. hidden이면 아래 canPoll도 함께 꺼지는데, 채팅방에선 어차피
+	// 위젯이 안 보이므로 미읽음 폴링까지 멎는 건 의도한 이득이다(방을 나가면 되살아난다).
 	const hidden =
 		isModeratorPath ||
 		isCrawlerPath ||
+		isChatRoomPath ||
 		isAdmin ||
 		onAuthScreen ||
 		(Boolean(session) && profileQuery.isPending);
