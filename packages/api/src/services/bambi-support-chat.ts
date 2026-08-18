@@ -4,6 +4,26 @@ export const SUPPORT_CHAT_WINDOW_MS = 60 * 1000;
 export const SUPPORT_CHAT_RATE_LIMIT_ERROR =
 	"메시지를 너무 빠르게 보내고 있어요. 잠시 후 다시 시도해 주세요.";
 
+// 자동 종료 창. open이어도 마지막 메시지 후 이 기간이 지나면 종료로 취급한다 —
+// cron 없이 조회·발신 시점에 계산하는 파생 판정이라 행은 바뀌지 않는다.
+export const SUPPORT_CHAT_AUTO_CLOSE_DAYS = 7;
+export const SUPPORT_CHAT_AUTO_CLOSE_MS =
+	SUPPORT_CHAT_AUTO_CLOSE_DAYS * 24 * 60 * 60 * 1000;
+export const SUPPORT_CHAT_CLOSED_ERROR =
+	"종료된 대화예요. 새 대화를 시작해 주세요.";
+
+export function isSupportChatRoomEffectivelyClosed(
+	room: { lastMessageAt: Date; status: "closed" | "open" },
+	now: Date
+): boolean {
+	if (room.status === "closed") {
+		return true;
+	}
+	return (
+		now.getTime() - room.lastMessageAt.getTime() > SUPPORT_CHAT_AUTO_CLOSE_MS
+	);
+}
+
 export type SupportChatInquirer =
 	| { kind: "guest"; sid: string }
 	| { kind: "member"; userId: string };

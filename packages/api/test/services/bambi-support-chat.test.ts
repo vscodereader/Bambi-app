@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	isSupportChatRoomEffectivelyClosed,
 	resolveSupportChatNotificationTarget,
+	SUPPORT_CHAT_AUTO_CLOSE_MS,
 	supportChatSendKeys,
 } from "@/services/bambi-support-chat";
 
@@ -58,5 +60,35 @@ describe("resolveSupportChatNotificationTarget", () => {
 				senderType: "admin",
 			})
 		).toBeNull();
+	});
+});
+
+describe("isSupportChatRoomEffectivelyClosed", () => {
+	const now = new Date("2026-08-18T12:00:00Z");
+	it("명시 종료(closed)면 최근 메시지가 있어도 종료다", () => {
+		expect(
+			isSupportChatRoomEffectivelyClosed(
+				{ lastMessageAt: now, status: "closed" },
+				now
+			)
+		).toBe(true);
+	});
+	it("open이라도 마지막 메시지가 7일을 넘기면 종료다", () => {
+		const stale = new Date(now.getTime() - SUPPORT_CHAT_AUTO_CLOSE_MS - 1);
+		expect(
+			isSupportChatRoomEffectivelyClosed(
+				{ lastMessageAt: stale, status: "open" },
+				now
+			)
+		).toBe(true);
+	});
+	it("open이고 7일 이내면 진행 중이다(경계 포함)", () => {
+		const edge = new Date(now.getTime() - SUPPORT_CHAT_AUTO_CLOSE_MS);
+		expect(
+			isSupportChatRoomEffectivelyClosed(
+				{ lastMessageAt: edge, status: "open" },
+				now
+			)
+		).toBe(false);
 	});
 });
