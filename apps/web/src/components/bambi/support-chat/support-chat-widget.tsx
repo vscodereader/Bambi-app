@@ -4,35 +4,46 @@ import { readSupportChatTokenFromCookieString } from "@bambi-app/api/services/ba
 import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Card } from "@bambi-app/ui/components/card";
-import { Input } from "@bambi-app/ui/components/input";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageCircle, SendHorizontal, X } from "lucide-react";
+import { Home, MessageCircle, MessageSquare } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
-	type RefObject,
 	Suspense,
 	useCallback,
 	useEffect,
 	useLayoutEffect,
-	useRef,
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
+import { WidgetConversation } from "./widget-conversation";
+import { WidgetHome } from "./widget-home";
+import { WidgetMessages, type WidgetRoomSummary } from "./widget-messages";
 
-// 서버 sendMessage 입력 한도(SUPPORT_CHAT_BODY_MAX)와 맞춘다.
-const BODY_MAX = 1000;
 // 두 자리 배지는 원형 버튼 밖으로 삐져나간다 — 정확한 수보다 "밀렸다"는 신호가 중요.
 const BADGE_CAP = 9;
 const ISSUE_ERROR = "문의를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.";
+// 패널 컨테이너 — 3개 뷰가 공유한다.
+const PANEL_CLASS =
+	"fixed right-4 bottom-36 z-50 flex h-[70dvh] max-h-[34rem] w-80 max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 md:bottom-24";
+
+const TABS = [
+	{ icon: Home, label: "홈", name: "home" },
+	{ icon: MessageSquare, label: "메시지", name: "messages" },
+] as const;
+
+type WidgetView =
+	| { name: "conversation"; roomId: null | string } // null = 새 대화
+	| { name: "home" }
+	| { name: "messages" };
 
 // 쿼리 파라미터 구독. 위젯은 루트 레이아웃 상주라 라우터 내비게이션으로는 리마운트되지
 // 않는다 — 마운트 1회 읽기로는 인앱 알림 클릭(router.push)이 무동작이라 useSearchParams로
 // 값 변화를 구독한다(Suspense 경계가 필요해 자식으로 분리).
-// - ?support-chat=1 → 알림 딥링크로 패널 열림
+// - ?support-chat=1 → 알림 딥링크로 패널 열림(홈 뷰로)
 // - ?auth=… → 로그인/가입 카드가 떠 있는 화면 — 위젯을 감춘다(버튼이 인증 카드를 가리고,
 //   그 상태에서 문의를 시작하는 흐름 자체가 어색하다). 감춤 판정은 페인트 전에 반영해야
 //   로그인 화면에서 버튼이 한 프레임도 비치지 않는다 → useLayoutEffect.
@@ -57,109 +68,96 @@ function SupportChatSearchParams({
 	return null;
 }
 
-// 실제 senderType은 유니온이지만 여기선 "inquirer" 여부만 본다 — 최소 형태로 받는다.
-interface SupportChatMessage {
-	body: string;
-	id: string;
-	senderType: string;
-}
-
-// 열린 패널 본문. 위젯에서 분리한 건 렌더 트리 정리보다 인지 복잡도 예산 때문이다 —
-// 감춤/열림 래핑 아래 이 블록의 중첩 삼항이 쌓이면 위젯 함수가 임계를 넘는다.
+// 열린 패널 본문. 위젯에서 분리한 건 인지 복잡도 예산 때문이다 — 뷰 라우팅·탭바 중첩이
+// 감춤/열림 래핑 아래 쌓이면 위젯 함수가 임계를 넘는다.
 function SupportChatPanel({
-	draft,
-	isBlocked,
-	messages,
+	faqs,
+	isSending,
+	notice,
+	onBack,
 	onClose,
-	onDraftChange,
-	onSubmit,
-	scrollRef,
-	sending,
+	onMarkRead,
+	onNavigate,
+	onOpenRoom,
+	onSend,
+	onSetView,
+	onStartChat,
+	onStartNew,
+	rooms,
+	totalUnread,
+	view,
 }: {
-	draft: string;
-	isBlocked: boolean;
-	messages: SupportChatMessage[];
+	faqs: { id: string; question: string }[];
+	isSending: boolean;
+	notice: null | string;
+	onBack: () => void;
 	onClose: () => void;
-	onDraftChange: (value: string) => void;
-	onSubmit: () => void;
-	scrollRef: RefObject<HTMLDivElement | null>;
-	sending: boolean;
+	onMarkRead: (roomId: string) => void;
+	onNavigate: () => void;
+	onOpenRoom: (roomId: string) => void;
+	onSend: (roomId: null | string, body: string) => Promise<boolean>;
+	onSetView: (view: WidgetView) => void;
+	onStartChat: () => void;
+	onStartNew: () => void;
+	rooms: WidgetRoomSummary[];
+	totalUnread: number;
+	view: WidgetView;
 }) {
+	if (view.name === "conversation") {
+		return (
+			<Card className={PANEL_CLASS}>
+				<WidgetConversation
+					isSending={isSending}
+					onBack={onBack}
+					onClose={onClose}
+					onMarkRead={onMarkRead}
+					onSend={onSend}
+					onStartNew={onStartNew}
+					roomId={view.roomId}
+					unreadCount={
+						rooms.find((room) => room.id === view.roomId)?.unreadCount ?? 0
+					}
+				/>
+			</Card>
+		);
+	}
 	return (
-		<Card className="fixed right-4 bottom-36 z-50 flex h-96 w-80 max-w-[calc(100vw-2rem)] flex-col gap-0 p-0 md:bottom-24">
-			<div className="flex items-center justify-between gap-2 border-b p-3">
-				<span className="font-medium text-sm">운영자 문의</span>
-				<Button
-					aria-label="문의 닫기"
-					onClick={onClose}
-					size="icon-sm"
-					variant="ghost"
-				>
-					<X />
-				</Button>
-			</div>
-			<div
-				className="flex flex-1 flex-col gap-2 overflow-y-auto p-3"
-				ref={scrollRef}
-			>
-				{messages.length === 0 ? (
-					<p className="text-muted-foreground text-sm">
-						운영자에게 궁금한 점을 남겨 주세요.
-					</p>
-				) : (
-					messages.map((message) => (
-						<div
-							className={cn(
-								"flex",
-								message.senderType === "inquirer"
-									? "justify-end"
-									: "justify-start"
-							)}
-							key={message.id}
-						>
-							<div
-								className={cn(
-									"max-w-[80%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-sm",
-									message.senderType === "inquirer"
-										? "bg-primary text-primary-foreground"
-										: "bg-muted text-foreground"
-								)}
-							>
-								{message.body}
-							</div>
-						</div>
-					))
-				)}
-			</div>
-			{isBlocked ? (
-				<p className="border-t p-3 text-muted-foreground text-sm">
-					문의 발신이 제한된 상태예요.
-				</p>
+		<Card className={PANEL_CLASS}>
+			{view.name === "home" ? (
+				<WidgetHome
+					faqs={faqs}
+					notice={notice}
+					onNavigate={onNavigate}
+					onStartChat={onStartChat}
+				/>
 			) : (
-				<div className="flex items-center gap-2 border-t p-3">
-					<Input
-						maxLength={BODY_MAX}
-						onChange={(event) => onDraftChange(event.target.value)}
-						onKeyDown={(event) => {
-							// 한글 IME 조합 확정 Enter는 발신이 아니다.
-							if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-								event.preventDefault();
-								onSubmit();
-							}
-						}}
-						placeholder="메시지를 입력하세요"
-						value={draft}
-					/>
-					<Button
-						aria-label="전송"
-						disabled={draft.trim() === "" || sending}
-						onClick={onSubmit}
-						size="icon"
-					>
-						<SendHorizontal />
-					</Button>
-				</div>
+				<WidgetMessages
+					onOpenRoom={onOpenRoom}
+					onStartNew={onStartNew}
+					rooms={rooms}
+				/>
 			)}
+			<div className="flex border-t">
+				{TABS.map((tab) => (
+					<button
+						className={cn(
+							"flex flex-1 flex-col items-center gap-1 py-2 text-xs",
+							view.name === tab.name ? "text-primary" : "text-muted-foreground"
+						)}
+						key={tab.name}
+						onClick={() => onSetView({ name: tab.name })}
+						type="button"
+					>
+						<tab.icon className="size-5" />
+						<span className="relative">
+							{tab.label}
+							{tab.name === "messages" && totalUnread > 0 ? (
+								<span className="absolute top-0 -right-2 size-2 rounded-full bg-primary" />
+							) : null}
+						</span>
+					</button>
+				))}
+			</div>
 		</Card>
 	);
 }
@@ -170,7 +168,7 @@ export function SupportChatWidget() {
 	const queryClient = useQueryClient();
 
 	const [open, setOpen] = useState(false);
-	const [draft, setDraft] = useState("");
+	const [view, setView] = useState<WidgetView>({ name: "home" });
 	// 쿠키 존재 여부는 마운트 시·발급 후에만 바뀌므로 state로 든다. 쿠키 없는 익명
 	// 방문자는 폴링하지 않는다(전 방문자 폴링은 서버 낭비).
 	const [hasCookie, setHasCookie] = useState(false);
@@ -185,7 +183,6 @@ export function SupportChatWidget() {
 	// 세로 배너 레일(AdBannerRail) 하단의 포털 앵커. 초광폭(≥1720px)에서만 보이는 sticky
 	// 레일이라, 보이지 않을 땐 null로 두고 런처를 지금처럼 fixed 우하단에 그린다.
 	const [railAnchor, setRailAnchor] = useState<HTMLElement | null>(null);
-	const scrollRef = useRef<HTMLDivElement>(null);
 
 	// 마운트 1회: 쿠키 존재 반영. 딥링크·인증 화면 판정은 SupportChatSearchParams가 담당.
 	useEffect(() => {
@@ -210,7 +207,11 @@ export function SupportChatWidget() {
 		return () => window.removeEventListener("resize", sync);
 	}, [pathname]);
 
-	const openPanel = useCallback(() => setOpen(true), []);
+	// 패널을 열 때(런처·딥링크) 항상 홈 뷰로 리셋한다.
+	const openPanel = useCallback(() => {
+		setView({ name: "home" });
+		setOpen(true);
+	}, []);
 
 	// 운영자 계정은 위젯을 감춘다(문의를 받는 쪽). 로그인 상태에서만 프로필을 조회.
 	const profileQuery = useQuery({
@@ -229,15 +230,20 @@ export function SupportChatWidget() {
 		(Boolean(session) && profileQuery.isPending);
 
 	const canPoll = (Boolean(session) || hasCookie) && !hidden;
-	const roomQuery = useQuery({
-		...orpc.bambi.supportChat.getMyRoom.queryOptions(),
+	const roomsQuery = useQuery({
+		...orpc.bambi.supportChat.getMyRooms.queryOptions(),
 		enabled: canPoll,
 		refetchInterval: open ? 3000 : 30_000,
 	});
-	const roomData = roomQuery.data;
-	const messages = roomData?.messages ?? [];
-	const unreadCount = roomData?.unreadCount ?? 0;
-	const isBlocked = roomData?.room.isBlocked ?? false;
+	const rooms: WidgetRoomSummary[] = roomsQuery.data?.rooms ?? [];
+	const totalUnread = rooms.reduce((sum, room) => sum + room.unreadCount, 0);
+
+	// 홈 탭 데이터 — 신원 불요, 패널 연 뒤 1회(5분 신선).
+	const homeQuery = useQuery({
+		...orpc.bambi.supportChat.getWidgetHome.queryOptions(),
+		enabled: mounted && !hidden && open,
+		staleTime: 5 * 60 * 1000,
+	});
 
 	const markReadMutation = useMutation(
 		orpc.bambi.supportChat.markRead.mutationOptions()
@@ -246,98 +252,136 @@ export function SupportChatWidget() {
 		orpc.bambi.supportChat.sendMessage.mutationOptions()
 	);
 
-	const invalidateRoom = useCallback(
+	const invalidateRooms = useCallback(
 		() =>
 			queryClient.invalidateQueries({
-				queryKey: orpc.bambi.supportChat.getMyRoom.queryKey(),
+				queryKey: orpc.bambi.supportChat.getMyRooms.queryKey(),
+			}),
+		[queryClient]
+	);
+	const invalidateMessages = useCallback(
+		(roomId: string) =>
+			queryClient.invalidateQueries({
+				queryKey: orpc.bambi.supportChat.getRoomMessages.queryKey({
+					input: { roomId },
+				}),
 			}),
 		[queryClient]
 	);
 
-	// 패널이 열려 있고 안 읽은 운영자 메시지가 있으면 읽음 처리 — 읽으면 unreadCount가
-	// 0으로 떨어져 재실행되지 않는다(markRead는 멱등).
-	useEffect(() => {
-		if (open && unreadCount > 0) {
-			markReadMutation.mutate(undefined, { onSuccess: invalidateRoom });
-		}
-	}, [open, unreadCount, markReadMutation.mutate, invalidateRoom]);
+	const markReadMutate = markReadMutation.mutate;
+	const markRoomRead = useCallback(
+		(roomId: string) =>
+			markReadMutate({ roomId }, { onSuccess: () => invalidateRooms() }),
+		[markReadMutate, invalidateRooms]
+	);
 
-	// 메시지가 늘거나 패널이 열리면 맨 아래로.
-	useEffect(() => {
-		const el = scrollRef.current;
-		if (el) {
-			el.scrollTop = el.scrollHeight;
-		}
-	}, [messages.length, open]);
-
-	const send = async () => {
-		const body = draft.trim();
-		if (!body || sendMutation.isPending) {
-			return;
-		}
-		// 비로그인 + 쿠키 없음 → 먼저 익명 신원 쿠키를 발급받는다. 발급 후 orpc 요청이
-		// x-bambi-support-chat 헤더로 신원을 실어 보낸다.
-		if (!(session || hasCookie)) {
-			try {
-				const res = await fetch("/api/support-chat", { method: "POST" });
-				if (!res.ok) {
+	// 발신 로직은 셸에 남긴다(쿠키 발급 + 새 대화/기존 발신). roomId=null이면 새 대화
+	// 생성 후 반환 roomId로 뷰를 고정한다. 실패(차단·종료 409 포함) 시 rooms/messages를
+	// 무효화해 종료·차단 상태가 반영되게 한다.
+	const send = useCallback(
+		async (roomId: null | string, body: string): Promise<boolean> => {
+			const trimmed = body.trim();
+			if (!trimmed || sendMutation.isPending) {
+				return false;
+			}
+			// 비로그인 + 쿠키 없음 → 먼저 익명 신원 쿠키를 발급받는다. 발급 후 orpc 요청이
+			// x-bambi-support-chat 헤더로 신원을 실어 보낸다.
+			if (!(session || hasCookie)) {
+				try {
+					const res = await fetch("/api/support-chat", { method: "POST" });
+					if (!res.ok) {
+						toast.error(ISSUE_ERROR);
+						return false;
+					}
+					setHasCookie(true);
+				} catch {
 					toast.error(ISSUE_ERROR);
-					return;
+					return false;
 				}
-				setHasCookie(true);
-			} catch {
-				toast.error(ISSUE_ERROR);
-				return;
 			}
-		}
-		sendMutation.mutate(
-			{ body },
-			{
-				onError: (error) => toast.error(error.message),
-				onSuccess: () => {
-					setDraft("");
-					invalidateRoom();
-				},
+			try {
+				const result = await sendMutation.mutateAsync({
+					body: trimmed,
+					roomId: roomId ?? undefined,
+				});
+				if (roomId === null) {
+					setView({ name: "conversation", roomId: result.roomId });
+				}
+				invalidateRooms();
+				invalidateMessages(result.roomId);
+				return true;
+			} catch (error) {
+				toast.error((error as Error).message);
+				invalidateRooms();
+				if (roomId) {
+					invalidateMessages(roomId);
+				}
+				return false;
 			}
-		);
-	};
+		},
+		[session, hasCookie, sendMutation, invalidateRooms, invalidateMessages]
+	);
 
-	const onSubmit = () => {
-		send().catch(() => undefined);
-	};
+	// 홈의 "메시지를 보내주세요" — 진행 중(open) 최신 대화가 있으면 그 대화, 없으면 새 대화.
+	const startChat = useCallback(() => {
+		const latestOpen = rooms.find((room) => room.status === "open");
+		setView({
+			name: "conversation",
+			roomId: latestOpen ? latestOpen.id : null,
+		});
+	}, [rooms]);
 
-	const badgeCount = unreadCount > BADGE_CAP ? `${BADGE_CAP}+` : unreadCount;
+	const badgeCount = totalUnread > BADGE_CAP ? `${BADGE_CAP}+` : totalUnread;
+	const onToggle = () => (open ? setOpen(false) : openPanel());
+	// 미읽음 배지 — 두 런처 형태가 같은 캡 로직을 공유한다(코너에 absolute 배치).
+	const unreadBadge =
+		totalUnread > 0 ? (
+			<Badge className="absolute -top-2 -right-2 min-w-5 justify-center px-1 text-xs">
+				{badgeCount}
+			</Badge>
+		) : null;
 
-	// 버튼 + 미읽음 배지. 렌더 위치(레일 포털 / fixed)와 무관하게 함께 따라간다.
-	const launcher = (
+	// 레일 포털일 때: 배너 스택의 마지막 카드처럼 보이는 전체 폭 CTA 카드(호버 시 살짝 리프트).
+	const railLauncher = (
+		<button
+			aria-label="운영자 문의"
+			className="relative flex w-full items-center gap-3 rounded-lg bg-primary p-4 text-left text-primary-foreground shadow-[var(--shadow-primary)] transition hover:-translate-y-0.5"
+			onClick={onToggle}
+			type="button"
+		>
+			<MessageCircle className="size-6 shrink-0" />
+			<span className="flex min-w-0 flex-col gap-0.5">
+				<span className="font-semibold text-sm">운영자 문의</span>
+				<span className="text-xs opacity-90">궁금한 점을 바로 물어보세요</span>
+			</span>
+			{unreadBadge}
+		</button>
+	);
+
+	// fixed 폴백(좁은 화면 우하단): 원형 FAB — 현행 유지.
+	const fabLauncher = (
 		<>
 			<Button
 				aria-label="운영자 문의"
 				className="rounded-full"
-				onClick={() => setOpen((prev) => !prev)}
+				onClick={onToggle}
 				size="icon-lg"
 			>
 				<MessageCircle />
 			</Button>
-			{unreadCount > 0 ? (
-				<Badge className="absolute -top-2 -right-2 min-w-5 justify-center px-1 text-xs">
-					{badgeCount}
-				</Badge>
-			) : null}
+			{unreadBadge}
 		</>
 	);
 
-	// 보이는 레일 앵커가 있으면 배너 바로 아래에 portal로, 없으면 fixed 우하단에.
+	// 보이는 레일 앵커가 있으면 배너 스택 아래에 CTA 카드로, 없으면 fixed 우하단 원형 FAB로.
 	// 앵커가 DOM에서 떨어진 오래된 참조면(페이지 이동 직후 한 프레임) fixed로 폴백한다.
 	const renderLauncher = () =>
 		railAnchor?.isConnected ? (
-			createPortal(
-				<span className="relative inline-flex">{launcher}</span>,
-				railAnchor
-			)
+			createPortal(railLauncher, railAnchor)
 		) : (
 			<span className="fixed right-4 bottom-20 z-50 inline-flex md:bottom-6">
-				{launcher}
+				{fabLauncher}
 			</span>
 		);
 
@@ -361,14 +405,21 @@ export function SupportChatWidget() {
 				<>
 					{open ? (
 						<SupportChatPanel
-							draft={draft}
-							isBlocked={isBlocked}
-							messages={messages}
+							faqs={homeQuery.data?.faqs ?? []}
+							isSending={sendMutation.isPending}
+							notice={homeQuery.data?.notice ?? null}
+							onBack={() => setView({ name: "messages" })}
 							onClose={() => setOpen(false)}
-							onDraftChange={setDraft}
-							onSubmit={onSubmit}
-							scrollRef={scrollRef}
-							sending={sendMutation.isPending}
+							onMarkRead={markRoomRead}
+							onNavigate={() => setOpen(false)}
+							onOpenRoom={(roomId) => setView({ name: "conversation", roomId })}
+							onSend={send}
+							onSetView={setView}
+							onStartChat={startChat}
+							onStartNew={() => setView({ name: "conversation", roomId: null })}
+							rooms={rooms}
+							totalUnread={totalUnread}
+							view={view}
 						/>
 					) : null}
 					{renderLauncher()}

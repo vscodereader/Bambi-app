@@ -16,6 +16,10 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@bambi-app/ui/components/toggle-group";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeftIcon, LockIcon, SendIcon } from "lucide-react";
@@ -38,11 +42,19 @@ const genderLabel = (gender: null | string): string =>
 
 export default function ModeratorSupportChatsPage() {
 	const [page, setPage] = useState(1);
+	const [status, setStatus] = useState<"closed" | "open">("open");
 	const [selectedRoomId, setSelectedRoomId] = useState<null | string>(null);
+
+	// 상태 탭 전환 시 페이지·선택을 초기화한다 — 탭마다 목록이 완전히 다르다.
+	const switchStatus = (next: "closed" | "open") => {
+		setStatus(next);
+		setPage(1);
+		setSelectedRoomId(null);
+	};
 
 	const listQuery = useQuery({
 		...orpc.bambi.supportChat.admin.listRooms.queryOptions({
-			input: { page },
+			input: { page, status },
 		}),
 		refetchInterval: 5000,
 	});
@@ -63,6 +75,24 @@ export default function ModeratorSupportChatsPage() {
 						selectedRoomId && "hidden md:flex"
 					)}
 				>
+					<ToggleGroup
+						aria-label="대화 상태"
+						className="w-full"
+						onValueChange={(value) => {
+							const next = value.at(-1);
+							if (next) {
+								switchStatus(next as "closed" | "open");
+							}
+						}}
+						value={[status]}
+					>
+						<ToggleGroupItem className="flex-1" value="open">
+							진행 중
+						</ToggleGroupItem>
+						<ToggleGroupItem className="flex-1" value="closed">
+							종료
+						</ToggleGroupItem>
+					</ToggleGroup>
 					<div className="min-h-0 flex-1 overflow-y-auto">
 						{listQuery.isPending ? (
 							<div className="flex flex-col gap-2">
@@ -101,6 +131,9 @@ export default function ModeratorSupportChatsPage() {
 												className="size-4 shrink-0 text-muted-foreground"
 											/>
 										) : null}
+										{room.status === "closed" ? (
+											<Badge variant="outline">종료</Badge>
+										) : null}
 										{room.unreadCount > 0 ? (
 											<Badge>{room.unreadCount}</Badge>
 										) : null}
@@ -108,9 +141,12 @@ export default function ModeratorSupportChatsPage() {
 									<p className="m-0 truncate text-muted-foreground text-xs">
 										{room.lastMessagePreview || "메시지 없음"}
 									</p>
-									<span className="text-muted-foreground text-xs">
-										{formatDateTime(room.lastMessageAt)}
-									</span>
+									<div className="flex items-center gap-2 text-muted-foreground text-xs">
+										<span>{formatDateTime(room.lastMessageAt)}</span>
+										{room.ownerRoomCount > 1 ? (
+											<span>대화 {room.ownerRoomCount}개</span>
+										) : null}
+									</div>
 								</button>
 							))}
 						</div>
@@ -204,7 +240,17 @@ function RoomDetail({
 		orpc.bambi.supportChat.admin.setBlocked.mutationOptions({
 			onError: (error) => toast.error(error.message),
 			onSuccess: async () => {
-				toast.success("방 상태를 바꿨어요.");
+				toast.success("문의자 발신 잠금을 바꿨어요.");
+				await invalidate();
+			},
+		})
+	);
+
+	const setClosed = useMutation(
+		orpc.bambi.supportChat.admin.setClosed.mutationOptions({
+			onError: (error) => toast.error(error.message),
+			onSuccess: async () => {
+				toast.success("대화 상태를 바꿨어요.");
 				await invalidate();
 			},
 		})
@@ -253,6 +299,19 @@ function RoomDetail({
 						<ChevronLeftIcon className="size-4" />
 					</Button>
 					<CardTitle className="min-w-0 flex-1 truncate">문의 대화</CardTitle>
+					<Button
+						disabled={setClosed.isPending || !data}
+						onClick={() =>
+							setClosed.mutate({
+								closed: data?.room.status !== "closed",
+								roomId,
+							})
+						}
+						size="sm"
+						variant="outline"
+					>
+						{data?.room.status === "closed" ? "대화 재개" : "대화 종료"}
+					</Button>
 					<Button
 						className="lg:hidden"
 						onClick={() => setShowInfo((previous) => !previous)}
@@ -311,36 +370,44 @@ function RoomDetail({
 					})}
 					<div ref={bottomRef} />
 				</CardContent>
-				<div className="flex items-center gap-2 border-t p-3">
-					{isBlocked ? (
-						<p className="m-0 flex-1 text-center text-muted-foreground text-sm">
-							잠긴 방이에요. 잠금을 해제하면 문의자가 다시 보낼 수 있어요.
+				<div className="flex flex-col gap-2 border-t p-3">
+					{/* 종료 대화도 입력은 막지 않는다 — 답변 발신이 곧 재개다. */}
+					{data?.room.status === "closed" ? (
+						<p className="m-0 text-center text-muted-foreground text-sm">
+							종료된 대화예요. 답변을 보내면 다시 열려요.
 						</p>
 					) : null}
-					<Input
-						maxLength={MESSAGE_MAX}
-						onChange={(event) => setReply(event.target.value)}
-						onKeyDown={(event) => {
-							// 한글 IME 조합 확정 Enter는 발신이 아니다.
-							if (
-								event.key === "Enter" &&
-								!event.shiftKey &&
-								!event.nativeEvent.isComposing
-							) {
-								event.preventDefault();
-								send();
-							}
-						}}
-						placeholder="답변을 입력하세요"
-						value={reply}
-					/>
-					<Button
-						disabled={reply.trim().length === 0 || sendMutation.isPending}
-						onClick={send}
-						size="icon"
-					>
-						<SendIcon className="size-4" />
-					</Button>
+					<div className="flex items-center gap-2">
+						{isBlocked ? (
+							<p className="m-0 flex-1 text-center text-muted-foreground text-sm">
+								이 문의자의 발신을 잠갔어요. 해제하면 다시 보낼 수 있어요.
+							</p>
+						) : null}
+						<Input
+							maxLength={MESSAGE_MAX}
+							onChange={(event) => setReply(event.target.value)}
+							onKeyDown={(event) => {
+								// 한글 IME 조합 확정 Enter는 발신이 아니다.
+								if (
+									event.key === "Enter" &&
+									!event.shiftKey &&
+									!event.nativeEvent.isComposing
+								) {
+									event.preventDefault();
+									send();
+								}
+							}}
+							placeholder="답변을 입력하세요"
+							value={reply}
+						/>
+						<Button
+							disabled={reply.trim().length === 0 || sendMutation.isPending}
+							onClick={send}
+							size="icon"
+						>
+							<SendIcon className="size-4" />
+						</Button>
+					</div>
 				</div>
 			</Card>
 
@@ -407,7 +474,7 @@ function InquirerInfo({
 					onClick={onToggleBlock}
 					variant="outline"
 				>
-					{isBlocked ? "잠금 해제" : "발신 잠금"}
+					{isBlocked ? "잠금 해제" : "문의자 발신 잠금"}
 				</Button>
 			</CardContent>
 		</Card>
