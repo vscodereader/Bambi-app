@@ -45,6 +45,11 @@ export function SupportChatWidget() {
 	// 쿠키 존재 여부는 마운트 시·발급 후에만 바뀌므로 state로 든다. 쿠키 없는 익명
 	// 방문자는 폴링하지 않는다(전 방문자 폴링은 서버 낭비).
 	const [hasCookie, setHasCookie] = useState(false);
+	// 딥링크 구독(useSearchParams)은 마운트 후에만 렌더한다. SSR에서 이 훅은 Suspense
+	// 경계를 서스펜드시켜 서버 HTML에 경계 마커가 남고, 클라이언트 첫 렌더와 형제
+	// 노드(Toaster) 매칭이 어긋나 hydration 불일치가 났다 — 서버·클라 첫 렌더를
+	// 둘 다 null로 맞춘다(마운트 직후 붙으므로 첫 로드 딥링크도 동작한다).
+	const [mounted, setMounted] = useState(false);
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	// 마운트 1회: 쿠키 존재 반영. 딥링크 자동 열림은 SupportChatDeepLink가 담당.
@@ -52,6 +57,7 @@ export function SupportChatWidget() {
 		setHasCookie(
 			Boolean(readSupportChatTokenFromCookieString(document.cookie))
 		);
+		setMounted(true);
 	}, []);
 
 	const openPanel = useCallback(() => setOpen(true), []);
@@ -154,9 +160,11 @@ export function SupportChatWidget() {
 
 	return (
 		<>
-			<Suspense fallback={null}>
-				<SupportChatDeepLink onOpen={openPanel} />
-			</Suspense>
+			{mounted ? (
+				<Suspense fallback={null}>
+					<SupportChatDeepLink onOpen={openPanel} />
+				</Suspense>
+			) : null}
 			{open ? (
 				<Card className="fixed right-4 bottom-36 z-50 flex h-96 w-80 max-w-[calc(100vw-2rem)] flex-col gap-0 p-0 md:bottom-24">
 					<div className="flex items-center justify-between gap-2 border-b p-3">
