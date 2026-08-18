@@ -18,6 +18,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
@@ -181,6 +182,9 @@ export function SupportChatWidget() {
 	const [mounted, setMounted] = useState(false);
 	// 인증 카드(?auth=)가 떠 있는 화면인지 — SupportChatSearchParams가 페인트 전에 갱신.
 	const [onAuthScreen, setOnAuthScreen] = useState(false);
+	// 세로 배너 레일(AdBannerRail) 하단의 포털 앵커. 초광폭(≥1720px)에서만 보이는 sticky
+	// 레일이라, 보이지 않을 땐 null로 두고 런처를 지금처럼 fixed 우하단에 그린다.
+	const [railAnchor, setRailAnchor] = useState<HTMLElement | null>(null);
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	// 마운트 1회: 쿠키 존재 반영. 딥링크·인증 화면 판정은 SupportChatSearchParams가 담당.
@@ -190,6 +194,21 @@ export function SupportChatWidget() {
 		);
 		setMounted(true);
 	}, []);
+
+	// 레일 앵커를 찾는다. aside가 `hidden min-[1720px]:block`이라 뷰포트가 좁으면
+	// display:none → offsetParent가 null이다(그 경우 fixed 폴백). pathname 변경(페이지 이동)과
+	// resize 때 다시 판정한다 — 한 페이지에 둘일 수 있어 첫 매치만 쓴다.
+	useEffect(() => {
+		const sync = () => {
+			const el = document.querySelector<HTMLElement>(
+				"[data-support-chat-anchor]"
+			);
+			setRailAnchor(el && el.offsetParent !== null ? el : null);
+		};
+		sync();
+		window.addEventListener("resize", sync);
+		return () => window.removeEventListener("resize", sync);
+	}, [pathname]);
 
 	const openPanel = useCallback(() => setOpen(true), []);
 
@@ -289,6 +308,39 @@ export function SupportChatWidget() {
 
 	const badgeCount = unreadCount > BADGE_CAP ? `${BADGE_CAP}+` : unreadCount;
 
+	// 버튼 + 미읽음 배지. 렌더 위치(레일 포털 / fixed)와 무관하게 함께 따라간다.
+	const launcher = (
+		<>
+			<Button
+				aria-label="운영자 문의"
+				className="rounded-full"
+				onClick={() => setOpen((prev) => !prev)}
+				size="icon-lg"
+			>
+				<MessageCircle />
+			</Button>
+			{unreadCount > 0 ? (
+				<Badge className="absolute -top-2 -right-2 min-w-5 justify-center px-1 text-xs">
+					{badgeCount}
+				</Badge>
+			) : null}
+		</>
+	);
+
+	// 보이는 레일 앵커가 있으면 배너 바로 아래에 portal로, 없으면 fixed 우하단에.
+	// 앵커가 DOM에서 떨어진 오래된 참조면(페이지 이동 직후 한 프레임) fixed로 폴백한다.
+	const renderLauncher = () =>
+		railAnchor?.isConnected ? (
+			createPortal(
+				<span className="relative inline-flex">{launcher}</span>,
+				railAnchor
+			)
+		) : (
+			<span className="fixed right-4 bottom-20 z-50 inline-flex md:bottom-6">
+				{launcher}
+			</span>
+		);
+
 	// UI는 mounted 이후에만 그린다 — 인증 화면(?auth=) 판정이 나기 전에 버튼을 먼저
 	// 그리면 로그인 화면에서 한 프레임 비친다.
 	if (!mounted) {
@@ -319,21 +371,7 @@ export function SupportChatWidget() {
 							sending={sendMutation.isPending}
 						/>
 					) : null}
-					<span className="fixed right-4 bottom-20 z-50 inline-flex md:bottom-6">
-						<Button
-							aria-label="운영자 문의"
-							className="rounded-full"
-							onClick={() => setOpen((prev) => !prev)}
-							size="icon-lg"
-						>
-							<MessageCircle />
-						</Button>
-						{unreadCount > 0 ? (
-							<Badge className="absolute -top-2 -right-2 min-w-5 justify-center px-1 text-xs">
-								{badgeCount}
-							</Badge>
-						) : null}
-					</span>
+					{renderLauncher()}
 				</>
 			)}
 		</>
