@@ -86,6 +86,7 @@ interface ModContextValue {
 	// 탈퇴 복구(deletedAt 해제). 파기 완료 계정 등 서버 거절 사유를 그대로 띄워야 해서
 	// 성공 여부만 돌려준다.
 	restoreAccount: (id: string, reason: string) => Promise<boolean>;
+	revertLatestWarning: (id: string, reason: string) => Promise<boolean>;
 	// 적용 성공 여부를 돌려준다 — 호출자가 성공했을 때만 목록으로 되돌아갈 수 있게.
 	sanction: (id: string, status: UserStatus, label: string) => Promise<boolean>;
 	selected: string[];
@@ -406,6 +407,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 	const setUserStatusMutation = useMutation(
 		orpc.bambi.moderation.setUserStatus.mutationOptions()
 	);
+	const revertLatestWarningMutation = useMutation(
+		orpc.bambi.moderation.revertLatestWarning.mutationOptions()
+	);
 	const setUserRoleMutation = useMutation(
 		orpc.bambi.moderation.setUserRole.mutationOptions()
 	);
@@ -442,6 +446,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			timer.current = setTimeout(() => setToast(null), 2200);
 		};
 		const apiQueue = moderationQueueQuery.data?.map(toApiQueueItem);
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: target unions are normalized in one exhaustive adapter.
 		const apiReports = moderationReportsQuery.data?.map<Report>((item) => {
 			// targetContext는 targetType별 단일 키 유니온이라 chat_message만 좁혀서 첨부를 읽는다.
 			const targetContext = item.targetContext;
@@ -468,6 +473,11 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				item.targetType,
 				item.targetId
 			);
+			const targetUser = item.targetUserId
+				? moderationUsersQuery.data?.find(
+						(candidate) => candidate.userId === item.targetUserId
+					)
+				: null;
 			// 커뮤니티 대상(글·댓글) 컨텍스트·라벨은 별도 헬퍼로 뽑아 콜백 복잡도를 낮춘다.
 			const { communityKind, communityTarget, target } =
 				deriveReportCommunity(item);
@@ -488,12 +498,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 						: "closed",
 				// 커뮤니티 대상은 deriveReportCommunity가 만든 라벨("커뮤니티 글 · 제목")이 더
 				// 구체적이고, 그 외 대상은 resolveReportTargetParty가 실명·공고 제목을 찾아준다.
-				target: communityKind ? target : targetName,
+				target: targetUser?.name ?? (communityKind ? target : targetName),
 				// 실데이터 신고의 대상 맥락(orpc 추론)을 그대로 전달해 상세에서 타입별 렌더한다.
 				targetContext: item.targetContext,
 				// 실제 대상 id(사용자 제재 등에 사용). 프리뷰 목업 신고에는 없다.
 				targetId: item.targetId,
-				targetRole,
+				targetUserId: item.targetUserId,
+				targetRole: targetUser ? userRoleLabel(targetUser.role) : targetRole,
 				targetType: item.targetType,
 				thread: [
 					{
@@ -659,6 +670,25 @@ export function ModProvider({ children }: { children: ReactNode }) {
 
 			await invalidateUsers();
 			flash(label);
+			return true;
+		};
+		const revertLatestWarning = async (id: string, reason: string) => {
+			try {
+				await revertLatestWarningMutation.mutateAsync({
+					reason,
+					targetUserId: id,
+				});
+			} catch (error) {
+				flash(
+					error instanceof Error && error.message
+						? error.message
+						: "최근 경고를 되돌리지 못했어요. 다시 시도해 주세요."
+				);
+				return false;
+			}
+
+			await invalidateUsers();
+			flash("최근 경고 1회를 되돌렸어요");
 			return true;
 		};
 		// 역할 전환은 구직자 ↔ 법률자문만 열려 있다(서버 assertLegalAdvisorRoleSwitch).
@@ -904,6 +934,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			resolveQueue,
 			resolveReport,
 			restoreAccount,
+			revertLatestWarning,
 			sanction,
 			setLegalAdvisor,
 			moderateCommunityTarget,
@@ -922,6 +953,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 		moderationUsersQuery.isPending,
 		queryClient,
 		restoreWithdrawnAccountMutation,
+		revertLatestWarningMutation,
 		selected,
 		setChatRoomBlockedMutation,
 		setCommentStatusByAdminMutation,

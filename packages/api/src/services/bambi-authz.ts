@@ -13,6 +13,7 @@ import { ORPCError } from "@orpc/server";
 import { and, eq, or } from "drizzle-orm";
 
 import { isChatRoomLeftByAnyone } from "./bambi-chat-participation";
+import { normalizeExpiredWarningRestriction } from "./bambi-warning-restriction";
 
 export interface SessionLike {
 	user?: {
@@ -66,6 +67,7 @@ export const requireSessionUserId = (
 export const getBambiAccessProfile = async (
 	userId: string
 ): Promise<BambiAccessProfile | null> => {
+	await normalizeExpiredWarningRestriction(userId);
 	const [profile] = await db
 		.select({
 			userId: bambiProfile.userId,

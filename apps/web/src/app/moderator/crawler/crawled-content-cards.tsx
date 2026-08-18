@@ -53,6 +53,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/bambi/empty-state";
+import { PageControls } from "@/components/bambi/page-controls";
 import { communityCrawledPath } from "@/lib/bambi/community";
 import {
 	CRAWLED_JOB_PAGE_SIZE,
@@ -214,7 +215,6 @@ export function CrawledJobPostsCard() {
 		bulkRemoveMutation.isPending;
 	const total = listQuery.data?.total ?? 0;
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-	const hasNextPage = page * PAGE_SIZE < total;
 	const selectableIds = useMemo(
 		() =>
 			(listQuery.data?.items ?? [])
@@ -480,33 +480,15 @@ export function CrawledJobPostsCard() {
 							</Table>
 						</div>
 
-						<div className="flex items-center justify-end gap-2">
-							<Button
-								disabled={page <= 1}
-								onClick={() =>
-									setListState({
-										page: Math.max(1, page - 1),
-										status: statusFilter,
-									})
+						<div className="flex justify-end">
+							<PageControls
+								disabled={listQuery.isFetching}
+								onPageChange={(nextPage) =>
+									setListState({ page: nextPage, status: statusFilter })
 								}
-								size="sm"
-								variant="outline"
-							>
-								이전
-							</Button>
-							<span className="text-muted-foreground text-sm">
-								{page} / {totalPages}
-							</span>
-							<Button
-								disabled={!hasNextPage}
-								onClick={() =>
-									setListState({ page: page + 1, status: statusFilter })
-								}
-								size="sm"
-								variant="outline"
-							>
-								다음
-							</Button>
+								page={page}
+								pageCount={totalPages}
+							/>
 						</div>
 					</>
 				) : (
@@ -627,7 +609,6 @@ export function CrawledCommunityTopicsCard() {
 	const isPending = removeMutation.isPending || restoreMutation.isPending;
 	const total = listQuery.data?.total ?? 0;
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-	const hasNextPage = page * PAGE_SIZE < total;
 
 	return (
 		<Card>
@@ -794,26 +775,13 @@ export function CrawledCommunityTopicsCard() {
 							</Table>
 						</div>
 
-						<div className="flex items-center justify-end gap-2">
-							<Button
-								disabled={page <= 1}
-								onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-								size="sm"
-								variant="outline"
-							>
-								이전
-							</Button>
-							<span className="text-muted-foreground text-sm">
-								{page} / {totalPages}
-							</span>
-							<Button
-								disabled={!hasNextPage}
-								onClick={() => setPage((prev) => prev + 1)}
-								size="sm"
-								variant="outline"
-							>
-								다음
-							</Button>
+						<div className="flex justify-end">
+							<PageControls
+								disabled={listQuery.isFetching}
+								onPageChange={setPage}
+								page={page}
+								pageCount={totalPages}
+							/>
 						</div>
 					</>
 				) : (

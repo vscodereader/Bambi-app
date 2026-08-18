@@ -24,8 +24,11 @@ const statusConf = (user: ManagedUser): { label: string; tone: Tone } =>
 		: STATUS_CONF[user.status];
 
 interface ModeratorUsersTableProps {
+	listHref: string;
+	onPageChange: (page: number) => void;
 	onToggle: (id: string) => void;
 	onToggleAll: () => void;
+	page: number;
 	selected: string[];
 	users: ManagedUser[];
 }
@@ -35,7 +38,11 @@ function getColumns({
 	onToggle,
 	onToggleAll,
 	selected,
-}: Omit<ModeratorUsersTableProps, "users"> & {
+	listHref,
+}: Pick<
+	ModeratorUsersTableProps,
+	"listHref" | "onToggle" | "onToggleAll" | "selected"
+> & {
 	allSelected: boolean;
 }): DataColumn<ManagedUser>[] {
 	return [
@@ -59,20 +66,27 @@ function getColumns({
 		{
 			id: "name",
 			header: "이름",
+			cellClassName: "h-14",
 			sortValue: (user) => user.name,
 			cell: (user) => (
 				<div className="flex flex-col gap-0.5">
 					<Link
-						className="font-medium text-foreground underline-offset-4 hover:underline"
-						href={`/moderator/users/${user.id}` as Route}
+						className="whitespace-nowrap font-medium text-foreground underline-offset-4 hover:underline"
+						href={
+							`/moderator/users/${user.id}?returnTo=${encodeURIComponent(listHref)}` as Route
+						}
 					>
 						{user.name}
 					</Link>
 					{user.organizationNames.length > 0 ? (
-						<span className="max-w-56 truncate text-muted-foreground text-xs">
+						<span className="whitespace-nowrap text-muted-foreground text-xs">
 							{user.organizationNames.join(", ")}
 						</span>
-					) : null}
+					) : (
+						<span aria-hidden="true" className="text-xs">
+							&nbsp;
+						</span>
+					)}
 				</div>
 			),
 		},
@@ -160,8 +174,11 @@ function getColumns({
 }
 
 export function ModeratorUsersTable({
+	listHref,
+	onPageChange,
 	onToggle,
 	onToggleAll,
+	page,
 	selected,
 	users,
 }: ModeratorUsersTableProps) {
@@ -169,19 +186,27 @@ export function ModeratorUsersTable({
 		users.length > 0 && users.every((user) => selected.includes(user.id));
 	const columns = getColumns({
 		allSelected,
+		listHref,
 		onToggle,
 		onToggleAll,
 		selected,
 	});
 
 	return (
-		<div className="overflow-x-auto rounded-xl border border-border">
+		<div>
 			<DataTable
 				columns={columns}
 				data={users}
 				emptyMessage="사용자가 없습니다"
 				getRowKey={(user) => user.id}
+				onPageChange={onPageChange}
+				page={page}
 				pageSize={10}
+				reservedPageRowHeight="3.5rem"
+				reservePageRows
+				rowClassName="h-14"
+				showPageInput
+				tableClassName="overflow-hidden rounded-xl border border-border"
 			/>
 		</div>
 	);

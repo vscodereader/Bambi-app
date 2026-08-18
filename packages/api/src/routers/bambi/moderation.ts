@@ -92,6 +92,12 @@ import {
 	isOwnedJobPostMediaKey,
 } from "../../services/bambi-storage";
 import { extractTiptapText } from "../../services/bambi-tiptap-text";
+import {
+	normalizeAllExpiredWarningRestrictions,
+	normalizeExpiredWarningRestriction,
+	WARNING_RESTRICTION_DURATION_MS,
+	WARNING_RESTRICTION_THRESHOLD,
+} from "../../services/bambi-warning-restriction";
 import { purgeWithdrawnAccountsBatch } from "../../services/bambi-withdrawal-purge";
 import { deletePrivateObjects, deletePublicObjects } from "../../services/gcs";
 import {
@@ -355,6 +361,32 @@ const setUserStatusInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
+const revertLatestWarningInput = z.object({
+	reason: z.string().min(2).max(500),
+	targetUserId: z.string().min(1),
+});
+
+const warningAction = alias(adminModerationAction, "warning_action");
+const warningReversal = alias(adminModerationAction, "warning_reversal");
+const activeWarningsCountSql = (
+	targetUserId: string | ReturnType<typeof sql>
+) =>
+	sql<number>`(
+		select count(*)::int
+		from "admin_moderation_action" as warning_action
+		where warning_action."target_type" = 'user'
+			and warning_action."target_id" = ${targetUserId}
+			and warning_action."action" = 'set_status:warned'
+			and not exists (
+				select 1
+				from "admin_moderation_action" as warning_reversal
+				where warning_reversal."target_type" = 'user'
+					and warning_reversal."target_id" = warning_action."target_id"
+					and warning_reversal."action" = 'revert_warning'
+					and warning_reversal."metadata"->>'warningActionId' = warning_action."id"::text
+			)
+	)`;
+
 // 법률 자문 계정 지정·해제. 전환 축이 구직자 ↔ 법률자문 둘뿐이라 입력도 그 둘만 받고,
 // 나머지 조합(업소·운영자 계정)은 서버 가드(assertLegalAdvisorRoleSwitch)가 막는다.
 const setUserRoleInput = z.object({
@@ -411,7 +443,8 @@ const reviewModerationStatusSchema = z.enum([
 
 const listReviewsInput = z.object({
 	status: reviewModerationStatusSchema.optional(),
-	limit: z.number().int().min(1).max(100).default(50),
+	page: z.number().int().min(1).default(1),
+	pageSize: z.number().int().min(1).max(100).default(10),
 });
 
 const setReviewStatusInput = z.object({
@@ -461,7 +494,7 @@ const hardDeleteChatRoomInput = z.object({
 	reason: z.string().min(2).max(500),
 });
 
-const CHAT_MODERATION_PAGE_SIZE = 20;
+const CHAT_MODERATION_PAGE_SIZE = 10;
 const CHAT_SEARCH_MAX = 100;
 
 const listAllChatsForModerationInput = z.object({
@@ -646,6 +679,7 @@ const jobPostHasCoverImageSql = sql<boolean>`exists(
 const getJobPostTargetContext = async (targetId: string) => {
 	const [row] = await db
 		.select({
+			createdByUserId: jobPost.createdByUserId,
 			id: jobPost.id,
 			title: jobPost.title,
 			description: jobPost.description,
@@ -708,6 +742,7 @@ const getChatRoomTargetContext = async (targetId: string) => {
 			isBlocked: chatRoom.isBlocked,
 			jobPostTitle: jobPost.title,
 			organizationDisplayName: employerOrganizationProfile.displayName,
+			employerUserId: chatRoom.employerUserId,
 		})
 		.from(chatRoom)
 		.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
@@ -885,6 +920,7 @@ const toCommunityBodyPreview = (body: string): string =>
 const getCommunityPostTargetContext = async (targetId: string) => {
 	const [post] = await db
 		.select({
+			authorUserId: communityPost.authorUserId,
 			authorDisplayName: communityPost.authorDisplayName,
 			authorRole: bambiProfile.role,
 			board: communityPost.board,
@@ -904,6 +940,7 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 	}
 
 	return {
+		authorUserId: post.authorUserId,
 		authorName: post.authorDisplayName,
 		authorRole: post.authorRole,
 		board: post.board,
@@ -929,6 +966,7 @@ const CRAWLED_AUTHOR_DISPLAY_NAME = "밤문화이야기";
 const getCommunityCommentTargetContext = async (targetId: string) => {
 	const [comment] = await db
 		.select({
+			authorUserId: communityComment.authorUserId,
 			authorName: user.name,
 			authorRole: bambiProfile.role,
 			body: communityComment.body,
@@ -954,6 +992,7 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 	}
 
 	return {
+		authorUserId: comment.authorUserId,
 		authorName: comment.authorName,
 		authorRole: comment.authorRole,
 		bodyPreview: comment.body.slice(0, COMMUNITY_BODY_PREVIEW_MAX),
@@ -1033,6 +1072,7 @@ const isReportTargetContext = (
 
 const withReportTargetContexts = async (reportRows: ReportRow[]) =>
 	await Promise.all(
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: target-specific live and snapshot fallbacks are normalized exhaustively here.
 		reportRows.map(async (reportRow) => {
 			const liveTargetContext = await getReportTargetContext(reportRow);
 			const snapshotTargetContext = isReportTargetContext(
@@ -1040,9 +1080,27 @@ const withReportTargetContexts = async (reportRows: ReportRow[]) =>
 			)
 				? reportRow.targetSnapshot
 				: null;
+			const targetContext = liveTargetContext ?? snapshotTargetContext;
+			let targetUserId: string | null = null;
+			if (targetContext) {
+				if ("jobPost" in targetContext) {
+					targetUserId = targetContext.jobPost?.createdByUserId ?? null;
+				} else if ("chatRoom" in targetContext) {
+					targetUserId = targetContext.chatRoom?.employerUserId ?? null;
+				} else if ("chatMessage" in targetContext) {
+					targetUserId = targetContext.chatMessage?.senderUserId ?? null;
+				} else if ("communityPost" in targetContext) {
+					targetUserId = targetContext.communityPost?.authorUserId ?? null;
+				} else if ("communityComment" in targetContext) {
+					targetUserId = targetContext.communityComment?.authorUserId ?? null;
+				} else if ("user" in targetContext) {
+					targetUserId = targetContext.user?.userId ?? null;
+				}
+			}
 			return {
 				...reportRow,
-				targetContext: liveTargetContext ?? snapshotTargetContext,
+				targetContext,
+				targetUserId,
 				targetUnavailable:
 					liveTargetContext === null && snapshotTargetContext === null,
 			};
@@ -1522,6 +1580,10 @@ export const moderationRouter = {
 				.limit(1);
 
 			if (existing) {
+				await emitChatReportAvailabilityChanged(
+					existing.targetType,
+					existing.targetId
+				);
 				throw new ORPCError("CONFLICT", {
 					message: duplicateReportMessage(input.targetType),
 				});
@@ -1587,18 +1649,36 @@ export const moderationRouter = {
 
 	// 내가 접수한 신고 목록. 관리자용 listReports와 달리 reporterUserId=본인으로 한정한다.
 	listMyReports: protectedProcedure
-		.input(z.object({ limit: z.number().int().min(1).max(100).default(50) }))
+		.input(
+			z.object({
+				page: z.number().int().min(1).default(1),
+				pageSize: z.number().int().min(1).max(50).default(10),
+			})
+		)
 		.handler(async ({ context, input }) => {
 			const profile = await requireActiveBambiProfile(context.session);
+			const offset = (input.page - 1) * input.pageSize;
 
-			const reportRows = await db
-				.select()
-				.from(report)
-				.where(eq(report.reporterUserId, profile.userId))
-				.orderBy(desc(report.createdAt))
-				.limit(input.limit);
+			const [[totalRow], reportRows] = await Promise.all([
+				db
+					.select({ value: count() })
+					.from(report)
+					.where(eq(report.reporterUserId, profile.userId)),
+				db
+					.select()
+					.from(report)
+					.where(eq(report.reporterUserId, profile.userId))
+					.orderBy(desc(report.createdAt), desc(report.id))
+					.limit(input.pageSize)
+					.offset(offset),
+			]);
 
-			return await withReportTargetContexts(reportRows);
+			return {
+				items: await withReportTargetContexts(reportRows),
+				page: input.page,
+				pageSize: input.pageSize,
+				total: totalRow?.value ?? 0,
+			};
 		}),
 
 	listJobPosts: protectedProcedure
@@ -1799,6 +1879,7 @@ export const moderationRouter = {
 		.input(listUsersInput)
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
+			await normalizeAllExpiredWarningRestrictions();
 
 			// 계정 목록의 기준 테이블은 user다. bambi_profile은 좌측 조인해 부가 정보로만
 			// 붙이므로, 프로필이 아직 없는(온보딩 전) 계정도 그대로 노출된다.
@@ -1812,12 +1893,7 @@ export const moderationRouter = {
 					and ${report.targetId} = ${user.id}
 					and ${report.status} <> 'dismissed'
 			)`;
-			const warningsCountSql = sql<number>`(
-				select count(*)::int from ${adminModerationAction}
-				where ${adminModerationAction.targetType} = 'user'
-					and ${adminModerationAction.targetId} = ${user.id}
-					and ${adminModerationAction.action} = 'set_status:warned'
-			)`;
+			const warningsCountSql = activeWarningsCountSql(sql`${user.id}`);
 			// 구인자 계정의 소속 업소 표시명. 한 계정이 여러 업소에 속할 수 있어 배열로 모은다.
 			const organizationNamesSql = sql<string[]>`(
 				select coalesce(
@@ -1919,8 +1995,10 @@ export const moderationRouter = {
 		.input(listReviewsInput)
 		.handler(async ({ context, input }) => {
 			await requireAdminProfile(context.session);
+			const where = input.status ? eq(review.status, input.status) : undefined;
+			const offset = (input.page - 1) * input.pageSize;
 
-			const query = db
+			const itemsQuery = db
 				.select({
 					id: review.id,
 					body: review.body,
@@ -1942,14 +2020,22 @@ export const moderationRouter = {
 					eq(review.organizationId, employerOrganizationProfile.organizationId)
 				)
 				.leftJoin(user, eq(review.reviewerUserId, user.id))
-				.orderBy(desc(review.createdAt))
-				.limit(input.limit);
+				.where(where)
+				.orderBy(desc(review.createdAt), desc(review.id))
+				.limit(input.pageSize)
+				.offset(offset);
+			const countQuery = db
+				.select({ value: count() })
+				.from(review)
+				.where(where);
+			const [items, [totalRow]] = await Promise.all([itemsQuery, countQuery]);
 
-			if (input.status) {
-				return await query.where(eq(review.status, input.status));
-			}
-
-			return await query;
+			return {
+				items,
+				page: input.page,
+				pageSize: input.pageSize,
+				totalCount: totalRow?.value ?? 0,
+			};
 		}),
 
 	setReviewStatus: protectedProcedure
@@ -3050,21 +3136,59 @@ export const moderationRouter = {
 		.input(setUserStatusInput)
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
+			await normalizeExpiredWarningRestriction(input.targetUserId);
 
 			return await db.transaction(async (tx) => {
-				const [updated] = await tx
-					.update(bambiProfile)
-					.set({ status: input.status })
+				const [current] = await tx
+					.select({
+						status: bambiProfile.status,
+						warningRestrictionUntil: bambiProfile.warningRestrictionUntil,
+					})
+					.from(bambiProfile)
 					.where(eq(bambiProfile.userId, input.targetUserId))
-					.returning();
+					.limit(1)
+					.for("update");
 
-				if (!updated) {
+				if (!current) {
 					// 계정 상태는 bambi_profile에만 있어 온보딩 전 계정은 갱신할 행이 없다.
 					// NOT_FOUND면 운영자가 "왜 실패했는지" 알 수 없어 원인을 그대로 알려준다.
 					throw new ORPCError("BAD_REQUEST", {
 						message: PROFILELESS_SANCTION_MESSAGE,
 					});
 				}
+
+				let nextStatus = input.status;
+				let warningRestrictionUntil: Date | null = null;
+				if (input.status === "warned") {
+					const [countRow] = await tx
+						.select({ value: activeWarningsCountSql(input.targetUserId) })
+						.from(bambiProfile)
+						.where(eq(bambiProfile.userId, input.targetUserId))
+						.limit(1);
+					const nextWarningCount = (countRow?.value ?? 0) + 1;
+					if (nextWarningCount === WARNING_RESTRICTION_THRESHOLD) {
+						nextStatus =
+							current.status === "suspended" ? "suspended" : "warned";
+						warningRestrictionUntil = new Date(
+							Date.now() + WARNING_RESTRICTION_DURATION_MS
+						);
+					} else {
+						nextStatus = current.status;
+						warningRestrictionUntil = current.warningRestrictionUntil;
+					}
+				}
+
+				const [updated] = await tx
+					.update(bambiProfile)
+					.set({
+						status: nextStatus,
+						warningRestrictionUntil:
+							input.status === "active" || input.status === "suspended"
+								? null
+								: warningRestrictionUntil,
+					})
+					.where(eq(bambiProfile.userId, input.targetUserId))
+					.returning();
 
 				await tx.insert(adminModerationAction).values({
 					adminUserId: admin.userId,
@@ -3075,6 +3199,83 @@ export const moderationRouter = {
 				});
 
 				return updated;
+			});
+		}),
+
+	revertLatestWarning: protectedProcedure
+		.input(revertLatestWarningInput)
+		.handler(async ({ context, input }) => {
+			const admin = await requireAdminProfile(context.session);
+			await normalizeExpiredWarningRestriction(input.targetUserId);
+
+			return await db.transaction(async (tx) => {
+				const [current] = await tx
+					.select({ status: bambiProfile.status })
+					.from(bambiProfile)
+					.where(eq(bambiProfile.userId, input.targetUserId))
+					.limit(1)
+					.for("update");
+				if (!current) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: PROFILELESS_SANCTION_MESSAGE,
+					});
+				}
+
+				const [latestWarning] = await tx
+					.select({ id: warningAction.id })
+					.from(warningAction)
+					.where(
+						and(
+							eq(warningAction.targetType, "user"),
+							eq(warningAction.targetId, input.targetUserId),
+							eq(warningAction.action, "set_status:warned"),
+							sql`not exists (
+								select 1 from "admin_moderation_action" as warning_reversal
+								where ${warningReversal.targetType} = 'user'
+									and ${warningReversal.targetId} = ${warningAction.targetId}
+									and ${warningReversal.action} = 'revert_warning'
+									and ${warningReversal.metadata}->>'warningActionId' = ${warningAction.id}::text
+							)`
+						)
+					)
+					.orderBy(desc(warningAction.createdAt), desc(warningAction.id))
+					.limit(1);
+				if (!latestWarning) {
+					throw new ORPCError("CONFLICT", {
+						message: "되돌릴 경고가 없습니다.",
+					});
+				}
+
+				await tx.insert(adminModerationAction).values({
+					action: "revert_warning",
+					adminUserId: admin.userId,
+					metadata: { warningActionId: latestWarning.id },
+					reason: input.reason,
+					targetId: input.targetUserId,
+					targetType: "user",
+				});
+
+				const [countRow] = await tx
+					.select({ value: activeWarningsCountSql(input.targetUserId) })
+					.from(bambiProfile)
+					.where(eq(bambiProfile.userId, input.targetUserId))
+					.limit(1);
+				const warningsCount = countRow?.value ?? 0;
+				const shouldClearRestriction =
+					warningsCount < WARNING_RESTRICTION_THRESHOLD;
+				const [updated] = await tx
+					.update(bambiProfile)
+					.set({
+						status:
+							shouldClearRestriction && current.status === "warned"
+								? "active"
+								: current.status,
+						warningRestrictionUntil: shouldClearRestriction ? null : undefined,
+					})
+					.where(eq(bambiProfile.userId, input.targetUserId))
+					.returning();
+
+				return { profile: updated, warningsCount };
 			});
 		}),
 
@@ -3126,10 +3327,53 @@ export const moderationRouter = {
 			return await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
+						// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: bulk transitions mirror the single-user transactional warning policy.
 						processTarget: async (targetUserId) => {
+							const [current] = await tx
+								.select({
+									status: bambiProfile.status,
+									warningRestrictionUntil: bambiProfile.warningRestrictionUntil,
+								})
+								.from(bambiProfile)
+								.where(eq(bambiProfile.userId, targetUserId))
+								.limit(1)
+								.for("update");
+							if (!current) {
+								throw new ORPCError("BAD_REQUEST", {
+									message: PROFILELESS_SANCTION_MESSAGE,
+								});
+							}
+
+							let nextStatus = input.status;
+							let warningRestrictionUntil: Date | null = null;
+							if (input.status === "warned") {
+								const [countRow] = await tx
+									.select({ value: activeWarningsCountSql(targetUserId) })
+									.from(bambiProfile)
+									.where(eq(bambiProfile.userId, targetUserId))
+									.limit(1);
+								const nextWarningCount = (countRow?.value ?? 0) + 1;
+								if (nextWarningCount === WARNING_RESTRICTION_THRESHOLD) {
+									nextStatus =
+										current.status === "suspended" ? "suspended" : "warned";
+									warningRestrictionUntil = new Date(
+										Date.now() + WARNING_RESTRICTION_DURATION_MS
+									);
+								} else {
+									nextStatus = current.status;
+									warningRestrictionUntil = current.warningRestrictionUntil;
+								}
+							}
+
 							const [updated] = await tx
 								.update(bambiProfile)
-								.set({ status: input.status })
+								.set({
+									status: nextStatus,
+									warningRestrictionUntil:
+										input.status === "active" || input.status === "suspended"
+											? null
+											: warningRestrictionUntil,
+								})
 								.where(eq(bambiProfile.userId, targetUserId))
 								.returning();
 

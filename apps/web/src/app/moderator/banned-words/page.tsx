@@ -382,6 +382,7 @@ function BannedWordsManager({
 					}
 					getRowKey={(row) => row.id}
 					pageSize={20}
+					showPageInput
 				/>
 			</div>
 		</section>

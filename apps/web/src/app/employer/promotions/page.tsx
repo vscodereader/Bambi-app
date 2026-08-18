@@ -44,6 +44,7 @@ import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
 import { BoostOptionPurchaseDialog } from "@/components/bambi/boost-option-purchase-dialog";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { PageControls } from "@/components/bambi/page-controls";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import Loader from "@/components/loader";
@@ -565,28 +566,15 @@ function MobileAds({
 				);
 			})}
 			{pageCount > 1 ? (
-				<div className="flex items-center justify-between gap-3">
-					<Button
-						disabled={safePage === 1}
-						onClick={() => setPage((current) => Math.max(1, current - 1))}
-						type="button"
-						variant="outline"
-					>
-						이전
-					</Button>
+				<div className="flex flex-col items-center gap-1">
 					<span className="text-muted-foreground text-sm">
 						{safePage} / {pageCount}
 					</span>
-					<Button
-						disabled={safePage === pageCount}
-						onClick={() =>
-							setPage((current) => Math.min(pageCount, current + 1))
-						}
-						type="button"
-						variant="outline"
-					>
-						다음
-					</Button>
+					<PageControls
+						onPageChange={setPage}
+						page={safePage}
+						pageCount={pageCount}
+					/>
 				</div>
 			) : null}
 		</div>
@@ -710,6 +698,7 @@ export default function EmployerAdsPage() {
 						data={visibleAds}
 						getRowKey={(ad) => ad.jobPostId}
 						pageSize={10}
+						showPageInput
 					/>
 				</div>
 			</div>
