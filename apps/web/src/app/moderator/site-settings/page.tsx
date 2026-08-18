@@ -197,6 +197,75 @@ function ExposureSectionCard() {
 	);
 }
 
+// 문의 채팅 공지 카드. 위젯 홈 탭에 노출할 공지 문구 하나만 다뤄 자체 쿼리·상태만 쓴다.
+function SupportChatCard() {
+	const queryClient = useQueryClient();
+	const supportChatQuery = useQuery(
+		orpc.bambi.siteSettings.getSupportChat.queryOptions()
+	);
+	const [notice, setNotice] = useState("");
+
+	// 저장된 값이 오면 폼에 채운다(미설정이면 빈 값 → 배너 미표시).
+	useEffect(() => {
+		const data = supportChatQuery.data;
+		if (!data) {
+			return;
+		}
+		setNotice(data.supportChatNotice ?? "");
+	}, [supportChatQuery.data]);
+
+	const saveMutation = useMutation(
+		orpc.bambi.siteSettings.updateSupportChat.mutationOptions({
+			onError: (error) => toast.error(error.message || "저장하지 못했어요."),
+			onSuccess: async () => {
+				toast.success("문의 채팅 공지 문구를 저장했어요.");
+				await queryClient.invalidateQueries({
+					queryKey: orpc.bambi.siteSettings.getSupportChat.queryKey(),
+				});
+			},
+		})
+	);
+
+	const onSubmit = (event: FormEvent) => {
+		event.preventDefault();
+		saveMutation.mutate({ supportChatNotice: notice });
+	};
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>문의 채팅</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<form className="flex flex-col gap-5" onSubmit={onSubmit}>
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="supportChatNotice">홈 공지 문구</Label>
+						<Textarea
+							id="supportChatNotice"
+							maxLength={300}
+							onChange={(event) => setNotice(event.target.value)}
+							placeholder="위젯 홈에 노출할 공지 문구 (비우면 배너 미표시)"
+							value={notice}
+						/>
+						<p className="m-0 text-muted-foreground text-xs">
+							문의 채팅 위젯의 홈 탭 상단에 배너로 노출됩니다. 비워두면 배너가
+							표시되지 않아요. 최대 300자.
+						</p>
+					</div>
+					<div className="flex justify-end">
+						<Button
+							disabled={saveMutation.isPending || supportChatQuery.isLoading}
+							type="submit"
+						>
+							{saveMutation.isPending ? "저장 중…" : "저장"}
+						</Button>
+					</div>
+				</form>
+			</CardContent>
+		</Card>
+	);
+}
+
 export default function ModeratorSiteSettingsPage() {
 	const queryClient = useQueryClient();
 	const settingsQuery = useQuery(
@@ -934,6 +1003,8 @@ export default function ModeratorSiteSettingsPage() {
 			</Card>
 
 			<ExposureSectionCard />
+
+			<SupportChatCard />
 		</div>
 	);
 }
