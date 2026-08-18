@@ -226,8 +226,8 @@ const assertEventNoticePolicy = ({
 const WRITE_WINDOW_MS = 60 * 1000;
 const CREATE_POST_RATE_LIMIT_ERROR =
 	"글은 1분에 한 번만 등록할 수 있어요. 잠시 후 다시 시도해 주세요.";
-const GUEST_COMMENT_LIMIT = 5;
-const GUEST_COMMENT_RATE_LIMIT_ERROR =
+const COMMENT_LIMIT = 5;
+const COMMENT_RATE_LIMIT_ERROR =
 	"댓글을 너무 빠르게 남기고 있어요. 잠시 후 다시 시도해 주세요.";
 
 // 댓글에는 글과 달리 표시명 컬럼이 없다(회원은 계정 이름을 join한다) — 비회원 댓글은
@@ -888,6 +888,17 @@ const guestWriteKeys = (
 	`community.${action}:guest:${gid}`,
 	`community.${action}:ip:${clientIp ?? "unknown"}`,
 ];
+
+// 댓글 도배 방지 버킷 키. 회원은 계정 하나가 축이고, 비회원은 쿠키를 지우면 gid가 새로
+// 발급되므로 gid·IP 두 축을 모두 건다. 게시판 글 댓글과 수집 글 댓글이 같은 키를 써서
+// 대상을 갈아 가며 한도를 두 배로 쓰는 우회로를 막는다.
+const commentWriteKeys = (
+	actor: CommunityActor,
+	clientIp: string | undefined
+): string[] =>
+	actor.kind === "member"
+		? [`community.createComment:${actor.profile.userId}`]
+		: guestWriteKeys("createComment", actor.gid, clientIp);
 
 type CommentRow = Awaited<ReturnType<typeof selectVisibleCommentRows>>[number];
 
@@ -2018,15 +2029,13 @@ export const communityRouter = {
 				(parent) => parent.postId === input.postId
 			);
 
-			// 검증을 모두 통과한 뒤에 센다(createPost와 같은 이유). 회원 댓글은 기존대로
-			// 한도가 없고, 계정 없이 부를 수 있는 비회원 경로에만 도배 방지를 건다.
-			if (actor.kind === "guest") {
-				assertWriteRateLimit({
-					keys: guestWriteKeys("createComment", actor.gid, context.clientIp),
-					limit: GUEST_COMMENT_LIMIT,
-					message: GUEST_COMMENT_RATE_LIMIT_ERROR,
-				});
-			}
+			// 검증을 모두 통과한 뒤에 센다(createPost와 같은 이유). 회원도 계정당 같은
+			// 한도를 받는다 — 적립 포인트를 노린 연타가 계정 하나로도 가능했다.
+			assertWriteRateLimit({
+				keys: commentWriteKeys(actor, context.clientIp),
+				limit: COMMENT_LIMIT,
+				message: COMMENT_RATE_LIMIT_ERROR,
+			});
 
 			const commentAuthorUserId = actorUserId(actor);
 			const { commentPoints } = await getBoardContentPoints(post.board);
@@ -2092,7 +2101,7 @@ export const communityRouter = {
 		}),
 
 	// 수집 커뮤니티 글에 다는 댓글. 우리 글 댓글과 같은 규칙(회원·인증 비회원, 비회원은
-	// 비밀번호 + 1분 5회 도배 방지, 금칙어 검사, 대댓글 1단계)을 쓰고 대상 컬럼만 다르다.
+	// 비밀번호, 1분 5회 도배 방지, 금칙어 검사, 대댓글 1단계)을 쓰고 대상 컬럼만 다르다.
 	// 프로시저를 나눈 이유는 getCrawledTopic과 같다 — 잠금·게시판·법률자문 게이트가 통째로
 	// 없는 경로라 한 핸들러에 섞으면 어떤 가드가 어느 쪽에 걸리는지 매번 다시 읽어야 한다.
 	// 수정·삭제는 대상과 무관한 commentId 경로(updateComment·deleteComment)를 그대로 쓴다.
@@ -2142,13 +2151,11 @@ export const communityRouter = {
 
 			// 도배 방지 버킷은 우리 글 댓글과 같은 키를 쓴다 — 대상을 갈아 가며 한도를
 			// 두 배로 쓰는 우회로를 만들지 않는다.
-			if (actor.kind === "guest") {
-				assertWriteRateLimit({
-					keys: guestWriteKeys("createComment", actor.gid, context.clientIp),
-					limit: GUEST_COMMENT_LIMIT,
-					message: GUEST_COMMENT_RATE_LIMIT_ERROR,
-				});
-			}
+			assertWriteRateLimit({
+				keys: commentWriteKeys(actor, context.clientIp),
+				limit: COMMENT_LIMIT,
+				message: COMMENT_RATE_LIMIT_ERROR,
+			});
 
 			// 우리 글과 달리 카운트 캐시 갱신이 없다 — crawled_community_topic.comment_count는
 			// 원본 값이고 재수집이 덮어쓴다. 상세가 두 원천을 합산해 보여준다.
