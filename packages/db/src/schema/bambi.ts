@@ -253,6 +253,11 @@ export const supportChatSender = pgEnum("support_chat_sender", [
 	"admin",
 ]);
 
+export const supportChatRoomStatus = pgEnum("support_chat_room_status", [
+	"open",
+	"closed",
+]);
+
 export const promotionTier = pgEnum("promotion_tier", [
 	"premium",
 	"recommended",
@@ -1405,6 +1410,8 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// "수집 규모"다 — 최신순 앞에서 이 개수만큼만 담고, 채우면 남은 목록 페이지를 받지 않는다.
 	// 같은 이유로 null이면 코드 기본값(DEFAULT_CRAWLED_LIMITS.community)으로 폴백한다.
 	crawledCommunityLimit: integer("crawled_community_limit"),
+	// 문의 채팅 위젯 홈 탭의 공지 배너 문구. null/빈 값이면 배너를 그리지 않는다.
+	supportChatNotice: text("support_chat_notice"),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())
@@ -2120,10 +2127,11 @@ export const supportInquiryMessage = pgTable(
 	]
 );
 
-// 운영자 실시간 문의 채팅방. 회원은 userId, 비회원은 서명 쿠키의 sid(guestId)로
-// 1인 1방을 유지한다 — 부분 유니크가 축이고, CHECK가 두 축 중 정확히 하나만 강제한다.
-// 비회원이 쿠키를 지우면 새 방이 생기고 옛 방은 콘솔 이력으로 남는다.
-// 읽음은 방 단위 워터마크 2개다(운영자는 공용 큐라 1개면 된다). 미읽음 수 =
+// 운영자 실시간 문의 채팅. 회원은 userId, 비회원은 서명 쿠키의 sid(guestId)로
+// 소유자 축을 잡되, 1인 N대화를 허용한다 — 대화가 종료되면 새 대화를 시작할 수 있고
+// 과거 대화는 목록으로 남는다. CHECK가 두 축 중 정확히 하나만 강제한다.
+// 비회원이 쿠키를 지우면 옛 대화와 끊기고 새 대화가 시작된다.
+// 읽음은 대화 단위 워터마크 2개다(운영자는 공용 큐라 1개면 된다). 미읽음 수 =
 // 워터마크 이후에 쌓인 상대측 메시지 count.
 export const supportChatRoom = pgTable(
 	"support_chat_room",
@@ -2133,6 +2141,11 @@ export const supportChatRoom = pgTable(
 		guestId: text("guest_id"),
 		// 운영자가 도배 방을 잠근다 — 잠긴 방의 문의자는 발신 403, 운영자 발신은 가능.
 		isBlocked: boolean("is_blocked").default(false).notNull(),
+		// 대화 상태. closed여도 운영자 발신은 재개(open 복귀)로 이어진다. 자동 종료
+		// (7일 무활동)는 이 컬럼을 바꾸지 않는 파생 판정이다 — cron 없음.
+		status: supportChatRoomStatus("status").default("open").notNull(),
+		// 운영자 명시 종료 시각. 자동 종료는 기록하지 않는다.
+		closedAt: timestamp("closed_at"),
 		userLastReadAt: timestamp("user_last_read_at"),
 		adminLastReadAt: timestamp("admin_last_read_at"),
 		lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
@@ -2143,12 +2156,14 @@ export const supportChatRoom = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		uniqueIndex("support_chat_room_user_id_uidx")
-			.on(table.userId)
-			.where(sql`${table.userId} IS NOT NULL`),
-		uniqueIndex("support_chat_room_guest_id_uidx")
-			.on(table.guestId)
-			.where(sql`${table.guestId} IS NOT NULL`),
+		index("support_chat_room_user_id_idx").on(
+			table.userId,
+			table.lastMessageAt
+		),
+		index("support_chat_room_guest_id_idx").on(
+			table.guestId,
+			table.lastMessageAt
+		),
 		index("support_chat_room_last_message_at_idx").on(table.lastMessageAt),
 		check(
 			"support_chat_room_owner_one_of_ck",
