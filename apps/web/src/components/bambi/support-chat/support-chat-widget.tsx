@@ -369,11 +369,11 @@ export function SupportChatWidget() {
 		<>
 			<Button
 				aria-label="운영자 문의"
-				className="rounded-full"
+				className="size-13 rounded-full"
 				onClick={onToggle}
 				size="icon-lg"
 			>
-				<MessageCircle />
+				<MessageCircle className="size-6" />
 			</Button>
 			{unreadBadge}
 		</>

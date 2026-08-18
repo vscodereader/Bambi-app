@@ -377,12 +377,13 @@ function RoomDetail({
 							종료된 대화예요. 답변을 보내면 다시 열려요.
 						</p>
 					) : null}
+					{/* 잠금은 문의자 발신만 막는다 — 운영자 입력은 그대로 두고 안내만 위에 쌓는다. */}
+					{isBlocked ? (
+						<p className="m-0 text-center text-muted-foreground text-sm">
+							이 문의자의 발신을 잠갔어요. 해제하면 다시 보낼 수 있어요.
+						</p>
+					) : null}
 					<div className="flex items-center gap-2">
-						{isBlocked ? (
-							<p className="m-0 flex-1 text-center text-muted-foreground text-sm">
-								이 문의자의 발신을 잠갔어요. 해제하면 다시 보낼 수 있어요.
-							</p>
-						) : null}
 						<Input
 							maxLength={MESSAGE_MAX}
 							onChange={(event) => setReply(event.target.value)}
