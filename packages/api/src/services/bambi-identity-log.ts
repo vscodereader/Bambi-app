@@ -25,6 +25,7 @@ export const recordIdentityVerification = async ({
 	const values = {
 		birthDate: identity.birth8,
 		gender: identity.gender,
+		name: identity.name,
 		phoneNumber: identity.phoneNumber,
 	};
 	const insert = db

@@ -17,6 +17,7 @@ export interface VerifiedIdentity {
 	ciHash: string;
 	diHash: string;
 	gender: "female" | "male" | null;
+	name?: string;
 	phoneNumber?: string;
 }
 
@@ -77,6 +78,7 @@ export const resolveVerifiedIdentity = async (
 		ciHash: await hashIdentityValue(customer.ci),
 		diHash: await hashIdentityValue(customer.di),
 		gender: mapPortOneGender(customer.gender),
+		name: customer.name,
 		phoneNumber: customer.phoneNumber,
 	};
 };

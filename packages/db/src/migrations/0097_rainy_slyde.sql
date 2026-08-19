@@ -1,0 +1,1 @@
+ALTER TABLE "bambi_identity_verification_log" ADD COLUMN "name" text;
