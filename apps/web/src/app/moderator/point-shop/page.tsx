@@ -123,6 +123,34 @@ function ItemThumbnail({ item }: { item: ItemRow }) {
 	);
 }
 
+// 아이템 행 우측 조치 메뉴(주문 탭 OrderRowActions와 같은 운영자 content 관리 패턴).
+// 수정·삭제 핸들러는 그대로 두고 트리거만 인라인 버튼에서 드롭다운으로 옮긴다.
+function ItemRowActions({
+	onDelete,
+	onEdit,
+}: {
+	onDelete: () => void;
+	onEdit: () => void;
+}) {
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				render={
+					<Button aria-label="관리 메뉴" size="icon-sm" variant="ghost">
+						<MoreHorizontalIcon />
+					</Button>
+				}
+			/>
+			<DropdownMenuContent align="end" className="w-32">
+				<DropdownMenuItem onClick={onEdit}>수정</DropdownMenuItem>
+				<DropdownMenuItem onClick={onDelete} variant="destructive">
+					삭제
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 function getItemColumns({
 	onDelete,
 	onEdit,
@@ -187,24 +215,10 @@ function getItemColumns({
 			headerClassName: "text-right",
 			cellClassName: "text-right",
 			cell: (row) => (
-				<div className="flex justify-end gap-2">
-					<Button
-						onClick={() => onEdit(row)}
-						size="sm"
-						type="button"
-						variant="outline"
-					>
-						수정
-					</Button>
-					<Button
-						onClick={() => onDelete(row)}
-						size="sm"
-						type="button"
-						variant="destructive"
-					>
-						삭제
-					</Button>
-				</div>
+				<ItemRowActions
+					onDelete={() => onDelete(row)}
+					onEdit={() => onEdit(row)}
+				/>
 			),
 		},
 	];
