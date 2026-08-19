@@ -22,6 +22,8 @@ const PUBLIC_PREFIXES = [
 	"/bambi",
 	"/board",
 	"/jobs",
+	// 포인트몰 — 목록 공개, 구매만 로그인(버튼에서 유도)
+	"/point-shop",
 	"/terms",
 	"/privacy",
 ];
