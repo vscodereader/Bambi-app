@@ -7,6 +7,8 @@ import {
 } from "@bambi-app/db/schema/bambi";
 import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 
+import { lockMemberPoints } from "./bambi-point-ledger";
+
 // site_settings 단일 행 고정 키(site-settings.ts SETTINGS_ROW_ID와 같은 값).
 const SITE_SETTINGS_ROW_ID = "default";
 
@@ -158,18 +160,20 @@ export async function reconcileContentPoints(
 	if (delta === 0 || !args.userId) {
 		return args.currentAwarded + delta;
 	}
+	await lockMemberPoints(tx, args.userId);
 	// 적립만 상한으로 자른다 — 회수(delta<0)는 상한과 무관하다.
 	let appliedDelta = delta;
+	const balance = await getMemberBalanceTx(tx, args.userId);
 	if (delta > 0) {
 		const cap = await getMemberPointsCap();
 		if (cap !== null) {
-			const balance = await getMemberBalanceTx(tx, args.userId);
 			appliedDelta = applyPointsCap(delta, balance, cap);
 		}
 	}
 	if (appliedDelta !== 0) {
 		await tx.insert(bambiPointTransaction).values({
 			amount: appliedDelta,
+			balanceAfter: balance + appliedDelta,
 			reason: appliedDelta > 0 ? args.reasons.award : args.reasons.revoke,
 			userId: args.userId,
 		});

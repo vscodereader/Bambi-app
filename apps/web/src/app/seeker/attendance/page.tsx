@@ -15,7 +15,7 @@ export default function SeekerAttendancePage() {
 					APP_CONTENT_WIDTH
 				)}
 			>
-				<MyPageShell title="출석체크">
+				<MyPageShell title="포인트 내역">
 					<AttendancePanel embedded />
 				</MyPageShell>
 			</div>

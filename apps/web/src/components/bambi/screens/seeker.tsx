@@ -58,6 +58,7 @@ import {
 	isMyPageItemVisible,
 	MyPageShell,
 } from "../my-page-shell";
+import { MyPointsSummaryCard } from "../my-points-summary-card";
 import { PhoneFrame } from "../phone-frame";
 import { ReportDone, ReportForm, SafetyNotice } from "../safety-kit";
 import { ContactReveal } from "./contact-reveal";
@@ -589,9 +590,9 @@ const seekerMeSections: {
 	},
 	{
 		href: ATTENDANCE_HREF,
-		icon: <ClockIcon />,
-		label: "출석체크",
-		description: "하루 한 번 출석하고 연속 기록을 확인해요.",
+		icon: <DollarCircle />,
+		label: "포인트 내역",
+		description: "출석 기록과 보유 포인트 내역을 확인해요.",
 	},
 	{
 		href: "/seeker/me/settings" as Route,
@@ -609,7 +610,7 @@ export function SeekerMe() {
 		isMyPageItemVisible(section.href, role)
 	);
 	return (
-		<MyPageShell title="내 정보">
+		<MyPageShell hubSummary={<MyPointsSummaryCard />} title="내 정보">
 			<div className="hidden gap-4 md:grid md:grid-cols-2">
 				{sections.map((section) => (
 					<Link

@@ -392,6 +392,27 @@ function MobileOwnedJobs({
 	);
 }
 
+interface RefundPreview {
+	cap?: number | null;
+	forfeitedAmount: number;
+	refundAmount: number;
+	refundLocked: boolean;
+	usedAmount: number;
+}
+
+function getDeleteDescription(preview?: RefundPreview): string {
+	if (preview?.refundLocked) {
+		return "한 번이라도 결제 완료가 되거나 공개 처리된 공고에 사용된 포인트는 환불이 어렵습니다. 삭제한 공고와 연결된 기록은 되돌릴 수 없어요.";
+	}
+	if (preview && preview.forfeitedAmount > 0) {
+		return `지금 취소하시면 최대 보유 포인트는 ${(preview.cap ?? 0).toLocaleString("ko-KR")}포인트까지 가능하므로 사용하신 ${preview.usedAmount.toLocaleString("ko-KR")}포인트 중 ${preview.forfeitedAmount.toLocaleString("ko-KR")}포인트는 환급이 불가합니다. 그대로 하시겠습니까?`;
+	}
+	if (preview && preview.refundAmount > 0) {
+		return `공고를 삭제하면 사용한 ${preview.refundAmount.toLocaleString("ko-KR")}포인트가 즉시 환급됩니다.`;
+	}
+	return "삭제한 공고와 연결된 광고·성과 기록은 되돌릴 수 없어요.";
+}
+
 function OwnedJobsPanel({
 	deletingJobId,
 	isDeleting,
@@ -402,6 +423,7 @@ function OwnedJobsPanel({
 	onConfirmDelete,
 	onRequestDelete,
 	onRetry,
+	refundPreview,
 	verified,
 }: {
 	deletingJobId: null | string;
@@ -410,9 +432,14 @@ function OwnedJobsPanel({
 	isLoading: boolean;
 	jobs: EmployerJob[];
 	onCancelDelete: () => void;
-	onConfirmDelete: (jobId: string) => void;
+	onConfirmDelete: (
+		jobId: string,
+		refundAmount: number,
+		forfeitedAmount: number
+	) => void;
 	onRequestDelete: (jobId: string) => void;
 	onRetry: () => void;
+	refundPreview?: RefundPreview;
 	verified: boolean;
 }) {
 	if (isLoading) {
@@ -467,7 +494,7 @@ function OwnedJobsPanel({
 							“{jobToDelete?.title}” 공고를 삭제할까요?
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							삭제한 공고와 연결된 광고·성과 기록은 되돌릴 수 없어요.
+							{getDeleteDescription(refundPreview)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -476,7 +503,11 @@ function OwnedJobsPanel({
 							disabled={isDeleting}
 							onClick={() => {
 								if (jobToDelete) {
-									onConfirmDelete(jobToDelete.id);
+									onConfirmDelete(
+										jobToDelete.id,
+										refundPreview?.refundAmount ?? 0,
+										refundPreview?.forfeitedAmount ?? 0
+									);
 								}
 							}}
 							variant="destructive"
@@ -538,6 +569,12 @@ export default function EmployerPage() {
 	const jobStatusCounts = getJobStatusCounts(jobs);
 	const queryClient = useQueryClient();
 	const [deletingJobId, setDeletingJobId] = useState<null | string>(null);
+	const refundPreviewQuery = useQuery({
+		...orpc.bambi.jobs.getDeletePointRefundPreview.queryOptions({
+			input: { id: deletingJobId ?? "00000000-0000-0000-0000-000000000000" },
+		}),
+		enabled: deletingJobId !== null,
+	});
 	const deleteMutation = useMutation(
 		orpc.bambi.jobs.delete.mutationOptions({
 			onError: (error) => {
@@ -668,9 +705,16 @@ export default function EmployerPage() {
 			isLoading={jobsQuery.isLoading}
 			jobs={jobs}
 			onCancelDelete={() => setDeletingJobId(null)}
-			onConfirmDelete={(id) => deleteMutation.mutate({ id })}
+			onConfirmDelete={(id, expectedRefundAmount, expectedForfeitedAmount) =>
+				deleteMutation.mutate({
+					expectedForfeitedAmount,
+					expectedRefundAmount,
+					id,
+				})
+			}
 			onRequestDelete={setDeletingJobId}
 			onRetry={() => jobsQuery.refetch()}
+			refundPreview={refundPreviewQuery.data}
 			verified={verified}
 		/>
 	);

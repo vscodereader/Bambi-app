@@ -1400,10 +1400,11 @@ const assertDevPasswordWorks = async (devUser: DevUser): Promise<void> => {
 	}
 };
 
-// 로그인 아이디(login_id): dev 유저 key를 소문자로 정규화해 유니크하게 만든다.
-// (seeker→"seeker", ownerMars→"ownermars"). username 플러그인이 signUpEmail에서
-// 이 값을 login_id/login_id_display 컬럼으로 매핑하며, 소문자 정규화라 값도 소문자다.
-const loginIdFor = (devUser: DevUser): string => devUser.key.toLowerCase();
+// 로그인 아이디(login_id): 개발 계정 안내에 쓰는 이메일의 @ 앞부분과 동일하게 둔다.
+// seeker-g@bambi.dev 계정은 seeker-g로 로그인해야 하며, 내부 seed key(seekerG)를
+// 소문자화하면 하이픈이 사라져 안내된 로그인 아이디와 실제 저장값이 어긋난다.
+const loginIdFor = (devUser: DevUser): string =>
+	devUser.email.slice(0, devUser.email.lastIndexOf("@")).toLowerCase();
 
 const ensureAuthUser = async (devUser: DevUser): Promise<string> => {
 	const loginId = loginIdFor(devUser);

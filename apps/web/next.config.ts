@@ -42,6 +42,16 @@ const nextConfig: NextConfig = {
 		return Promise.resolve([
 			{ source: "/welcome", destination: "/seeker", permanent: true },
 			{ source: "/login", destination: "/seeker?auth=login", permanent: true },
+			{
+				source: "/moderator/attendance",
+				destination: "/moderator/points/attendance",
+				permanent: true,
+			},
+			{
+				source: "/moderator/member-grades",
+				destination: "/moderator/points/grades",
+				permanent: true,
+			},
 		]);
 	},
 };
