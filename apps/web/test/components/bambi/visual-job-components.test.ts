@@ -248,14 +248,15 @@ describe("visual job marketplace components", () => {
 		const chatList = readComponent("screens/seeker-chat-list-responsive.tsx");
 		const chatRoom = readComponent("screens/seeker-chat-room-responsive.tsx");
 		const contactReveal = readComponent("screens/contact-reveal.tsx");
-		const myPageShell = readComponent("my-page-shell.tsx");
+		const myPageLayout = readComponent("../../app/seeker/me/layout.tsx");
 
 		// 채팅 목록·상세·연락처 공개 본문을 헤더와 동일한 고정폭으로 맞춘다
 		for (const source of [chatList, chatRoom, contactReveal]) {
 			expect(source).toContain("SEEKER_CONTENT_WIDTH");
 		}
-		// 내 정보(마이페이지) 계열은 공용 셸이 같은 상수의 원본(APP_CONTENT_WIDTH)으로 폭을 잡는다
-		expect(myPageShell).toContain("APP_CONTENT_WIDTH");
+		// 내 정보(마이페이지) 폭 캡은 공용 셸이 아니라 me/layout.tsx가 seeker 중앙 컬럼과
+		// 같은 SEEKER_CONTENT_WIDTH로 건다(셸은 캡 없이 그 안을 채운다).
+		expect(myPageLayout).toContain("SEEKER_CONTENT_WIDTH");
 		// 개별 하드코딩 폭은 제거됐다(공유 상수로 대체)
 		expect(chatList).not.toContain("max-w-[860px]");
 		expect(chatList).not.toContain("max-w-[760px]");
