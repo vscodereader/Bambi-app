@@ -19,7 +19,7 @@ import type { ReactNode } from "react";
 import { useUnreadMessageCount } from "@/lib/bambi/use-unread-message-count";
 import { useBambiAuth } from "./auth-client-provider";
 import { Logo } from "./ds";
-import { Message, ShieldIcon } from "./icons";
+import { Message, ShieldIcon, StoreIcon } from "./icons";
 import { NotificationBell } from "./notification-bell";
 import { SiteFooter } from "./site-footer";
 
@@ -192,6 +192,27 @@ function ChatNavButton({ withPin }: { withPin: boolean }) {
 	);
 }
 
+// 모바일 헤더 전용 포인트몰 진입 버튼(데스크톱은 nav에 포인트몰 링크가 있어 불필요).
+// 알림 벨과 같은 아웃라인 아이콘 버튼 룩. 포인트몰에 있을 때는 코럴로 현재 위치를 표시한다.
+function PointShopNavButton() {
+	const pathname = usePathname();
+	const isActive =
+		pathname === "/point-shop" || pathname.startsWith("/point-shop/");
+	return (
+		<Button
+			aria-current={isActive ? "page" : undefined}
+			aria-label="포인트몰"
+			className={cn("bg-card", isActive && "text-coral-500")}
+			nativeButton={false}
+			render={<Link href={"/point-shop" as Route} />}
+			size="icon-lg"
+			variant="outline"
+		>
+			<StoreIcon />
+		</Button>
+	);
+}
+
 function ModeratorHeaderActions() {
 	return (
 		<>
@@ -256,6 +277,9 @@ export function ResponsiveAppShell({
 	// 채팅 버튼은 기존 nav "채팅"이 뜨던 셸(구직자·고객센터=seeker, 공개 마켓)에만
 	// 노출한다. 구인자·운영자 셸에는 넣지 않는다.
 	const showChatButton = variant === "seeker" || variant === "public";
+	// 모바일 포인트몰 진입점은 nav에 포인트몰 링크가 있는 셸(구직자·공개)에만 둔다 —
+	// 데스크톱 헤더 nav와 같은 범위. 구인자·운영자 셸엔 넣지 않는다.
+	const showPointShopEntry = variant === "seeker" || variant === "public";
 	// 푸터는 구직자·구인자·운영자 셸에 노출한다(공개 셸 제외).
 	const showFooter =
 		variant === "seeker" || variant === "employer" || variant === "moderator";
@@ -368,6 +392,7 @@ export function ResponsiveAppShell({
 					</Link>
 					<div className="flex items-center gap-2">
 						{mobileHeaderSlot}
+						{showPointShopEntry ? <PointShopNavButton /> : null}
 						{isModerator ? <ModeratorHeaderActions /> : <NotificationBell />}
 					</div>
 				</div>
