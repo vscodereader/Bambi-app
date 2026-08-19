@@ -58,6 +58,23 @@ describe("visual job marketplace components", () => {
 		expect(source).not.toContain("truncateDesc");
 	});
 
+	it("renders the ad-period badge in the salary row without adding a new row", () => {
+		const source = readComponent("visual-job-card.tsx");
+
+		// 배지는 lib 티어·포맷과 등급 아이콘을 쓴다
+		expect(source).toContain("adPeriodTier");
+		expect(source).toContain("formatAdPeriod");
+		expect(source).toContain("MedalIcon");
+		expect(source).toContain("CrownIcon");
+		// null이면 렌더하지 않는다(조건부 렌더)
+		expect(source).toContain("job.adPeriod");
+		// 급여 행(mt-auto)에 얹는다 — 새 행 추가 없이 오른쪽 끝(ml-auto) 배치
+		expect(source).toContain("mt-auto flex items-center");
+		expect(source).toContain("ml-auto");
+		// 접근성 툴팁
+		expect(source).toContain("누적");
+	});
+
 	it("makes every ad banner link to the advertised job detail page", () => {
 		const banner = readComponent("ad-banner.tsx");
 
