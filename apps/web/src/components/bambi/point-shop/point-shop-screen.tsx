@@ -84,9 +84,11 @@ function ItemCard({
 			    flex-1 칸이 이미지 원본 높이만큼 버텨 정사각 비율이 깨진다. */}
 			<span className="relative block min-h-0 w-full flex-1 bg-secondary">
 				{item.imageUrl ? (
+					// 운영자가 올리는 이미지는 배너형 등 비정사각이 많아 cover로 자르면 문구가
+					// 잘린다 — contain으로 전체를 보여주고 남는 여백은 bg-secondary가 받친다.
 					<Image
 						alt=""
-						className="object-cover"
+						className="object-contain"
 						fill
 						sizes={ITEM_IMAGE_SIZES}
 						src={item.imageUrl}
@@ -134,7 +136,7 @@ function PurchaseDialogBody({
 					{item.imageUrl ? (
 						<Image
 							alt=""
-							className="object-cover"
+							className="object-contain"
 							fill
 							sizes="420px"
 							src={item.imageUrl}
