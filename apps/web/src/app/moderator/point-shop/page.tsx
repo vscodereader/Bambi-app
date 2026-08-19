@@ -880,8 +880,8 @@ function OrdersTab() {
 						<AlertDialogTitle>주문을 취소하고 환불할까요?</AlertDialogTitle>
 						<AlertDialogDescription>
 							{canceling?.pricePoints.toLocaleString("ko-KR")}P를 구매자에게
-							바로 돌려줍니다. 사유는 구매자의 포인트 구매 내역에 그대로
-							보입니다.
+							바로 돌려줍니다. 사유는 구매자의 포인트 내역 화면 구매 내역 카드에
+							그대로 보입니다.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<div className="flex flex-col gap-2">

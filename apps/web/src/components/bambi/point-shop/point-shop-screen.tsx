@@ -204,7 +204,7 @@ export function PointShopScreen() {
 			onSuccess: async () => {
 				setSelected(null);
 				toast.success(
-					"구매했어요. 처리 상태는 내 정보 → 포인트 구매 내역에서 볼 수 있어요."
+					"구매했어요. 처리 상태는 내 정보 → 포인트 내역의 구매 내역에서 볼 수 있어요."
 				);
 				// 잔액 칩·목록·구매 내역이 한 번에 따라오도록 포인트몰 쿼리를 통째로 무효화한다.
 				await queryClient.invalidateQueries({
