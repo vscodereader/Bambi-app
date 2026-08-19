@@ -10,6 +10,7 @@ import { healthPlugin } from "./plugins/health";
 import { listingPromotionPlugin } from "./plugins/listing-promotion";
 import { observabilityPlugin } from "./plugins/observability";
 import { orpcPlugin } from "./plugins/orpc";
+import { pointShopExpiryPlugin } from "./plugins/point-shop-expiry";
 import { realtimePlugin } from "./plugins/realtime";
 import { ssePlugin } from "./plugins/sse";
 import { withdrawalPurgePlugin } from "./plugins/withdrawal-purge";
@@ -30,6 +31,7 @@ fastify.register(autoBoostPlugin);
 fastify.register(listingPromotionPlugin);
 fastify.register(crawlPlugin);
 fastify.register(withdrawalPurgePlugin);
+fastify.register(pointShopExpiryPlugin);
 // 소켓 전송을 쓰므로 realtimePlugin이 붙은 뒤에 등록한다(부팅 직후 잔여 행 drain).
 fastify.register(chatSyncQueuePlugin);
 
