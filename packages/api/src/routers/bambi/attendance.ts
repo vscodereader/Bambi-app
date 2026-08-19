@@ -30,7 +30,11 @@ import {
 	requireActiveBambiProfile,
 	type SessionLike,
 } from "../../services/bambi-authz";
-import { nextGrade, resolveGrade } from "../../services/bambi-member-points";
+import {
+	nextGrade,
+	POINT_SHOP_REASONS,
+	resolveGrade,
+} from "../../services/bambi-member-points";
 
 // 출석 대상 역할. 운영자·법률자문·게스트는 출석 대상이 아니다. 허용 목록으로 고정해
 // bambi_user_role에 값이 하나 늘어도 기본 판정이 "거부"가 되게 한다(bambi-authz 관례).
@@ -41,6 +45,9 @@ const ATTENDANCE_POINT_AMOUNT = 10;
 
 // 잔액은 원장 합산이다(잔액 컬럼 없음). 행이 없으면 0.
 const pointBalanceSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}), 0)::int`;
+
+// 등급 기준 합계 — 포인트몰 구매·환불 제외(bambi-member-points GRADE_EXCLUDED_REASONS와 동일 규칙).
+const gradeBasisSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}) filter (where ${bambiPointTransaction.reason} not in (${POINT_SHOP_REASONS.purchase}, ${POINT_SHOP_REASONS.refund})), 0)::int`;
 
 const getMineInput = z.object({
 	// YYYY-MM. 생략하면 서버 KST 기준 이번 달.
@@ -303,7 +310,7 @@ export const attendanceRouter = {
 			// 등급표는 잔액과 병렬로 읽는다 — 서로 의존하지 않는 조회다.
 			const [[balance], grades] = await Promise.all([
 				db
-					.select({ pointBalance: pointBalanceSql })
+					.select({ gradeBasis: gradeBasisSql, pointBalance: pointBalanceSql })
 					.from(bambiPointTransaction)
 					.where(eq(bambiPointTransaction.userId, profile.userId)),
 				db
@@ -318,8 +325,10 @@ export const attendanceRouter = {
 			]);
 
 			const pointBalance = balance?.pointBalance ?? 0;
-			const current = resolveGrade(pointBalance, grades);
-			const upcoming = nextGrade(pointBalance, grades);
+			// 표시 잔액은 전체 합계, 등급 판정만 포인트몰 제외 합계를 쓴다.
+			const gradeBasis = balance?.gradeBasis ?? 0;
+			const current = resolveGrade(gradeBasis, grades);
+			const upcoming = nextGrade(gradeBasis, grades);
 
 			return {
 				attendedDates: attendedDatesDesc.filter((attendedOn) =>
@@ -332,7 +341,7 @@ export const attendanceRouter = {
 					? { minPoints: upcoming.minPoints, name: upcoming.name }
 					: null,
 				pointBalance,
-				pointsToNext: upcoming ? upcoming.minPoints - pointBalance : null,
+				pointsToNext: upcoming ? upcoming.minPoints - gradeBasis : null,
 				streakDays: countAttendanceStreak(attendedDatesDesc, today),
 				today,
 				totalDays: attendedDatesDesc.length,
