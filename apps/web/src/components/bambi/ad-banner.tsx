@@ -212,6 +212,9 @@ interface AdBannerRailProps {
 	// GA4 프로모션 지면 접두어(이슈 #59). 넘기면 각 칸이 `${promotionSurface}_${순번}` 슬롯으로
 	// 계측되고, 안 넘기면 이 rail은 계측하지 않는다.
 	promotionSurface?: string;
+	// 하단 문의 런처 앵커를 렌더할지(기본 true). 전용 1:1 상담 버튼이 따로 있는 화면(포인트몰)은
+	// false로 넘겨, 런처가 이 레일에 도킹돼 상담 버튼과 중복되는 걸 막는다.
+	withSupportChatAnchor?: boolean;
 }
 
 // 문의 위젯에 런처 앵커의 등장·제거를 알리는 이벤트. 수다방(RequireCommunityAccess)처럼
@@ -226,8 +229,14 @@ export function AdBannerRail({
 	isLoading,
 	items,
 	promotionSurface,
+	withSupportChatAnchor = true,
 }: AdBannerRailProps) {
 	useEffect(() => {
+		// 앵커를 안 그리는 레일은 위젯에 알릴 것이 없다(앵커 부재 시 위젯 sync가 railAnchor를
+		// null로 둬 런처가 기본 FAB 위치로 남으므로 dispatch가 불필요).
+		if (!withSupportChatAnchor) {
+			return;
+		}
 		window.dispatchEvent(new Event(SUPPORT_CHAT_ANCHOR_EVENT));
 		// 언마운트 알림은 마이크로태스크로 미룬다 — 앵커 DOM이 아직 떨어지기 전이라
 		// 즉시 재탐색하면 옛 앵커를 다시 잡는다.
@@ -236,7 +245,7 @@ export function AdBannerRail({
 				window.dispatchEvent(new Event(SUPPORT_CHAT_ANCHOR_EVENT))
 			);
 		};
-	}, []);
+	}, [withSupportChatAnchor]);
 
 	return (
 		<div className={cn("flex flex-col items-start gap-3", className)}>
@@ -269,8 +278,9 @@ export function AdBannerRail({
 			    버튼을 portal로 렌더한다. 위젯이 감춰진 화면(운영자 등)에선 빈 채로 둔다.
 			    한 페이지에 rail이 둘 렌더될 가능성을 배제할 수 없어 id 대신 data 속성을 쓰고,
 			    위젯은 querySelector 첫 매치만 사용한다. 런처가 고정 폭 정사각 버튼이라
-			    앵커는 폭을 강제하지 않고 내용(버튼)에 맞춘다. */}
-			<div data-support-chat-anchor="" />
+			    앵커는 폭을 강제하지 않고 내용(버튼)에 맞춘다.
+			    withSupportChatAnchor=false면 앵커를 생략한다(전용 상담 버튼과 중복 방지). */}
+			{withSupportChatAnchor ? <div data-support-chat-anchor="" /> : null}
 		</div>
 	);
 }

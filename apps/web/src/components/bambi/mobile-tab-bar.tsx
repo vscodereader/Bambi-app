@@ -33,8 +33,12 @@ export function MobileTabBar({ homeHref }: { homeHref: string }) {
 		value = "chat";
 	} else if (path.startsWith("/seeker/community")) {
 		value = "community";
-	} else if (path === "/seeker/notifications" || path.startsWith("/support")) {
-		// 알림·고객센터는 탭 5개 중 어디에도 속하지 않는다. 어떤 항목과도 겹치지 않는
+	} else if (
+		path === "/seeker/notifications" ||
+		path.startsWith("/support") ||
+		path.startsWith("/point-shop")
+	) {
+		// 알림·고객센터·포인트몰은 탭 5개 중 어디에도 속하지 않는다. 어떤 항목과도 겹치지 않는
 		// value를 주면 BottomNav(ds.tsx)가 `it.value === value`로만 활성을 판정하므로
 		// 아무 탭도 켜지지 않는다 — 기본값 "home"을 두면 "탐색"이 잘못 켜진다.
 		value = "none";

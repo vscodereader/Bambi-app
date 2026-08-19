@@ -17,6 +17,7 @@ import { moderationRouter } from "./moderation";
 import { notificationsRouter } from "./notifications";
 import { onboardingRouter } from "./onboarding";
 import { organizationsRouter } from "./organizations";
+import { pointShopRouter } from "./point-shop";
 import { promotionsRouter } from "./promotions";
 import { regionsRouter } from "./regions";
 import { reviewsRouter } from "./reviews";
@@ -47,6 +48,7 @@ export const bambiRouter: {
 	notifications: typeof notificationsRouter;
 	onboarding: typeof onboardingRouter;
 	organizations: typeof organizationsRouter;
+	pointShop: typeof pointShopRouter;
 	promotions: typeof promotionsRouter;
 	regions: typeof regionsRouter;
 	reviews: typeof reviewsRouter;
@@ -74,6 +76,7 @@ export const bambiRouter: {
 	notifications: notificationsRouter,
 	onboarding: onboardingRouter,
 	organizations: organizationsRouter,
+	pointShop: pointShopRouter,
 	promotions: promotionsRouter,
 	regions: regionsRouter,
 	reviews: reviewsRouter,

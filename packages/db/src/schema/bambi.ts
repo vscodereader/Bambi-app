@@ -1910,6 +1910,47 @@ export const bambiMemberGrade = pgTable("bambi_member_grade", {
 		.notNull(),
 });
 
+// 포인트몰 판매 아이템. 재고 수량은 두지 않는다 — 주문이 운영자 수동 이행이라 품절 시
+// 노출을 끄거나 주문을 취소하면 되고, 필요해지면 후속으로 추가한다.
+export const bambiPointShopItem = pgTable("bambi_point_shop_item", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	name: text("name").notNull(),
+	description: text("description"),
+	imageUrl: text("image_url"),
+	pricePoints: integer("price_points").notNull(),
+	sortOrder: integer("sort_order").notNull().default(0),
+	isActive: boolean("is_active").notNull().default(true),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// 포인트몰 주문. 아이템이 삭제돼도 주문·차감 근거가 남아야 해서 이름·가격을 구매 시점
+// 스냅샷으로 저장하고 item_id는 set null로 둔다. status는 pending → completed | canceled
+// (취소 시 원장에 환불 + 행). 전이 가드는 라우터의 resolveOrderTransition이 담당한다.
+export const bambiPointShopOrder = pgTable(
+	"bambi_point_shop_order",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		itemId: uuid("item_id").references(() => bambiPointShopItem.id, {
+			onDelete: "set null",
+		}),
+		itemName: text("item_name").notNull(),
+		pricePoints: integer("price_points").notNull(),
+		status: text("status").notNull().default("pending"),
+		operatorMemo: text("operator_memo"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		processedAt: timestamp("processed_at"),
+	},
+	(table) => [
+		// 내 구매 내역(사용자별 최신순)과 운영자 대기 필터가 각각 훑는다.
+		index("bambi_point_shop_order_user_id_idx").on(table.userId),
+		index("bambi_point_shop_order_status_idx").on(table.status),
+	]
+);
+
 export const communityPost = pgTable(
 	"community_post",
 	{

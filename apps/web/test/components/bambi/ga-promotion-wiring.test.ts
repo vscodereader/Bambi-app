@@ -63,6 +63,24 @@ const SURFACES = [
 	},
 	{
 		expects: [
+			'promotionSurface="point_shop_left"',
+			'promotionSurface="point_shop_right"',
+		],
+		label: "포인트몰 레이아웃 rail",
+		relativePath: path.join("app", "point-shop", "layout.tsx"),
+	},
+	{
+		expects: ['promotionSurface="point_shop_center"'],
+		label: "포인트몰 프리미엄 섹션",
+		relativePath: path.join(
+			"components",
+			"bambi",
+			"point-shop",
+			"point-shop-screen.tsx"
+		),
+	},
+	{
+		expects: [
 			'promotionSurface="chats_left"',
 			'promotionSurface="chats_right"',
 		],

@@ -673,6 +673,13 @@
       "when": 1787025256700,
       "tag": "0095_smooth_rafael_vega",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1787100931676,
+      "tag": "0096_freezing_prism",
+      "breakpoints": true
     }
   ]
 }

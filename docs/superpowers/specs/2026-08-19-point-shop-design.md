@@ -117,19 +117,29 @@ drizzle-kit generate로 1건 생성(테이블 2개). 실행은 사용자 지시 
 
 라우터는 `routers/bambi/index.ts`에 `pointShop`으로 등록한다.
 
-## 4. seeker 웹 — `/seeker/point-shop`
+## 4. seeker 웹 — `/point-shop`
+
+### 라우트 (계획 단계 조정 — 2026-08-19)
+
+당초 `/seeker/point-shop`으로 잡았으나 조사 결과 **`/seeker/*` 하위는 목록 공개가
+불가능**하다: edge 미들웨어 게이트(`resolve-gate.ts`)가 anon을 `/seeker` 루트 외
+전부 로그인으로 리다이렉트하고, `seeker/layout.tsx`가 anon의 children을
+`SeekerAuthGateScreen`으로 대체하는데 layout은 pathname을 알 수 없어 예외를 못
+둔다. 따라서 `/support`·`/board`·`/jobs` 선례대로 **최상위 라우트 `/point-shop`**
++ 자체 layout(`ResponsiveAppShell variant="seeker"` — `/support`와 동일 패턴) +
+`resolve-gate.ts`의 `PUBLIC_PREFIXES`에 `"/point-shop"` 추가로 연다.
 
 ### nav
 
 `DEFAULT_NAV_ITEMS`(`responsive-shell.tsx`)의 수다방·고객센터 사이에
-`{ href: "/seeker/point-shop", label: "포인트몰" }` 삽입. 목록 공개이므로
+`{ href: "/point-shop", label: "포인트몰" }` 삽입. 목록 공개이므로
 비로그인(public) 셸에도 그대로 노출된다(의도).
 
 ### 헤더 — 보유 포인트 칩
 
-- 포인트몰 페이지 진입 시 헤더에 **보유 포인트 칩 + 검색창**을 노출한다
-  (`SeekerAppShell`의 headerSlot/mobileHeaderSlot 분기를 `/seeker/point-shop`
-  포함으로 확장). 칩은 검색창 **왼쪽**, 회원에게만 표시(비로그인·게스트 미표시).
+- 포인트몰 layout이 `ResponsiveAppShell`의 headerSlot/mobileHeaderSlot에
+  **보유 포인트 칩 + 검색창**을 넘긴다. 칩은 검색창 **왼쪽**, 회원에게만
+  표시(비로그인·게스트 미표시).
 - 헤더 검색은 메인과 같은 공고 검색(`SeekerHeaderSearch`) 재사용 — 현재는
   마켓플레이스 전용인데 포인트몰에도 함께 켠다. ※ "검색 버튼 왼쪽" 요청을
   충족하기 위한 기본값 결정 — 검색창 없이 칩만 원하면 분기에서 검색만 빼면 된다.
@@ -166,9 +176,11 @@ drizzle-kit generate로 1건 생성(테이블 2개). 실행은 사용자 지시 
 ### 모바일
 
 카드 1열(기본 grid-cols-1), 배너 aside는 기존과 동일하게 초광폭 전용이라 자동
-비노출. **하단 탭바는 켠다** — `/seeker/point-shop`을 `SeekerNav.showNav` 목록에
-추가한다. 탭바 없이 진입하면 모바일에서 되돌아갈 길이 없는 막다른 길 함정(수다방
-상세·알림에서 겪은 사례)을 피하기 위함이다.
+비노출. **하단 탭바는 켠다** — `/support` layout 선례처럼 포인트몰 layout이
+`MobileTabBar homeHref="/seeker"`를 직접 붙인다(탭바 없이 진입하면 모바일에서
+되돌아갈 길이 없는 막다른 길 함정 방지). `mobile-tab-bar.tsx`의 어느 탭에도 속하지
+않는 경로 분기(`value = "none"`)에 `/point-shop`을 추가해 "탐색" 탭이 잘못
+활성화되지 않게 한다.
 
 ## 5. 마이페이지 — 구매 내역
 
@@ -210,6 +222,7 @@ drizzle-kit generate로 1건 생성(테이블 2개). 실행은 사용자 지시 
 - 주문 상태 변경 알림(완료/취소 시 사용자 알림).
 - 포인트몰 전용 배너 인벤토리(현재는 메인 재사용).
 - 구매 확인 외 상세 페이지(현재는 Dialog로 충분).
+- myOrders·adminListOrders 서버 페이지네이션(현재 전건 반환 — 주문 누적 시 커서 페이징 필요, 리뷰에서 이연 확정).
 
 ## 9. 배포 체크리스트
 

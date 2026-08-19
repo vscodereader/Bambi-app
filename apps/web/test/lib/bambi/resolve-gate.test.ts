@@ -111,6 +111,14 @@ describe("resolveGate", () => {
 			expect(resolveGate({ pathname, ...guest }).type).toBe("next");
 		}
 	});
+	it("lets the point shop pass for logged-out visitors", () => {
+		expect(resolveGate({ pathname: "/point-shop", ...fresh })).toEqual({
+			type: "next",
+		});
+		expect(resolveGate({ pathname: "/point-shop", ...guest })).toEqual({
+			type: "next",
+		});
+	});
 	it("keeps job detail behind the gate even with the /jobs landing open", () => {
 		expect(resolveGate({ pathname: "/seeker/jobs/abc", ...fresh }).type).toBe(
 			"redirect"
