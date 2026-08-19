@@ -30,6 +30,7 @@ import { orpc } from "@/utils/orpc";
 
 const COMMUNITY_BLOCKED_MESSAGE =
 	"일반 여성 회원과 광고 중인 업소회원만 가능합니다";
+const SUSPENDED_COMMUNITY_BLOCKED_MESSAGE = "차단된 유저는 확인이 불가합니다";
 
 // 섹션 헤더 — visual-job-exposure-sections의 ExposureSection 헤더 문법을 따른다.
 function SectionHeader({
@@ -149,8 +150,13 @@ export function HomeCommunitySection() {
 		setMounted(true);
 	}, []);
 
-	const { canAccessCommunity, isAuthenticated, isGuest, isPending } =
-		useBambiAuth();
+	const {
+		accountStatus,
+		canAccessCommunity,
+		isAuthenticated,
+		isGuest,
+		isPending,
+	} = useBambiAuth();
 	// 법률자문 계정은 입장은 되지만 legal 게시판만 이용한다 — 다른 게시판 카드는 그대로
 	// 보이고 누르면 안내한다.
 	const legalAdvisorGuard = useLegalAdvisorNavGuard();
@@ -168,6 +174,10 @@ export function HomeCommunitySection() {
 	// 목적지로 복귀). 로그인은 했지만 자격이 없는 회원은 기존대로 토스트로만 안내한다.
 	const isAnon = !(isAuthenticated || isGuest);
 	const handleBlocked = (href: string) => {
+		if (accountStatus === "suspended") {
+			toast(SUSPENDED_COMMUNITY_BLOCKED_MESSAGE);
+			return;
+		}
 		if (isAnon) {
 			setVerifyTarget(href);
 			return;

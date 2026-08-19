@@ -506,6 +506,55 @@ describe("getChatMessagesForModeration", () => {
 		}
 	});
 
+	it("참가자가 탈퇴해도 기존 이름과 전체 메시지·첨부를 운영자에게 제공한다", async () => {
+		const fixture = await createFixture();
+		const room = fixture.rooms.normal;
+
+		try {
+			await db
+				.update(user)
+				.set({ deletedAt: new Date() })
+				.where(inArray(user.id, [fixture.employerUserId, room.userId]));
+			await db
+				.update(chatRoom)
+				.set({ employerDeletedAt: new Date(), seekerDeletedAt: new Date() })
+				.where(eq(chatRoom.id, room.chatRoomId));
+			await db.insert(chatAttachment).values({
+				byteSize: 2048,
+				category: "image",
+				chatRoomId: room.chatRoomId,
+				createdByUserId: room.userId,
+				fileName: "withdrawn-proof.png",
+				messageId: room.messageId,
+				mimeType: "image/png",
+				storageKey: `bambi-chat/${room.chatRoomId}/${randomUUID()}.png`,
+			});
+
+			const getMessages = createProcedureClient(
+				moderationRouter.getChatMessagesForModeration,
+				{
+					context: createContextForUser(fixture.adminUserId),
+					path: ["bambi", "moderation", "getChatMessagesForModeration"],
+				}
+			);
+
+			const result = await getMessages({ chatRoomId: room.chatRoomId });
+
+			expect(result).toMatchObject({
+				employerName: "채용 담당자",
+				employerWithdrawn: true,
+				jobSeekerName: "구직자-normal",
+				jobSeekerWithdrawn: true,
+			});
+			expect(result.messages).toHaveLength(1);
+			expect(result.messages[0]?.attachments[0]?.fileName).toBe(
+				"withdrawn-proof.png"
+			);
+		} finally {
+			await cleanupFixture(fixture);
+		}
+	});
+
 	it("없는 방이면 NOT_FOUND", async () => {
 		const fixture = await createFixture();
 

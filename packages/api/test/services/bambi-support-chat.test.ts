@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,6 +7,23 @@ import {
 	SUPPORT_CHAT_AUTO_CLOSE_MS,
 	supportChatSendKeys,
 } from "@/services/bambi-support-chat";
+
+const supportChatRouterSource = readFileSync(
+	new URL("../../src/routers/bambi/support-chat.ts", import.meta.url),
+	"utf8"
+);
+
+describe("supportChat 이용정지 예외", () => {
+	it("구직자와 구인자 모두 활성 상태 가드 없이 운영자 문의를 보낼 수 있다", () => {
+		expect(supportChatRouterSource).toContain(
+			"requireBambiAccessProfile(context.session)"
+		);
+		expect(supportChatRouterSource).not.toContain(
+			"requireActiveBambiProfile(context.session)"
+		);
+		expect(supportChatRouterSource).toContain('profile.role === "admin"');
+	});
+});
 
 describe("supportChatSendKeys", () => {
 	it("회원은 계정 한 축", () => {

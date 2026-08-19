@@ -69,6 +69,7 @@ export function PageControls({
 	showPageInput?: boolean;
 }): React.JSX.Element {
 	const safePage = Math.min(Math.max(page, 1), Math.max(pageCount, 1));
+	const safePageCount = Math.max(pageCount, 1);
 
 	return (
 		<div className="flex items-center gap-1">
@@ -83,16 +84,22 @@ export function PageControls({
 				<ChevronLeftIcon />
 			</Button>
 			{showPageInput ? (
-				<PageNumberInput
-					disabled={disabled}
-					onPageChange={onPageChange}
-					page={safePage}
-					pageCount={pageCount}
-				/>
+				<>
+					<PageNumberInput
+						disabled={disabled}
+						onPageChange={onPageChange}
+						page={safePage}
+						pageCount={safePageCount}
+					/>
+					<span className="whitespace-nowrap text-muted-foreground text-sm">
+						/ {safePageCount}
+						<span className="sr-only">페이지</span>
+					</span>
+				</>
 			) : null}
 			<Button
 				aria-label="다음 페이지"
-				disabled={disabled || safePage >= pageCount}
+				disabled={disabled || safePage >= safePageCount}
 				onClick={() => onPageChange(safePage + 1)}
 				size="icon-sm"
 				type="button"
