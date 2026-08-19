@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import { member, team, teamMember, user } from "@bambi-app/db/schema/auth";
 import {
 	adProduct,
+	bambiPointTransaction,
 	bambiProfile,
 	bambiSiteSettings,
 	employerOrganizationProfile,
@@ -120,8 +121,19 @@ import {
 	JOB_PAY_AMOUNT_MAX,
 	JOB_PAY_AMOUNT_MAX_MESSAGE,
 } from "../../services/bambi-job-pay";
+import {
+	JOB_PAYMENT_POINTS_EXCEED_EDITED_TOTAL,
+	resolveCappedPointRefund,
+	resolveJobPointUseLimit,
+} from "../../services/bambi-job-payment-points";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
 import { isOrganizationManagerRole } from "../../services/bambi-organization-authz";
+import {
+	adjustMemberPoints,
+	awardMemberPoints,
+	getPointBalanceTx,
+	lockMemberPoints,
+} from "../../services/bambi-point-ledger";
 import {
 	getUpdatedJobPostStatus,
 	type JobPostStatus,
@@ -183,6 +195,29 @@ const boostOptionTypeSchema = z.enum([
 ]);
 type BoostOptionType = z.infer<typeof boostOptionTypeSchema>;
 
+const BOOST_OPTION_POINT_LABELS: Record<BoostOptionType, string> = {
+	auto_period: "자동 끌어올리기",
+	manual_count: "끌어올리기 횟수권",
+	manual_period: "끌어올리기",
+};
+
+const buildJobPointDescription = (
+	exposureType: JobExposureType,
+	boostOptionTypes: BoostOptionType[] | undefined
+): string => {
+	const base =
+		exposureType === "standard"
+			? "무료 공고"
+			: `공고 등록(${EXPOSURE_TYPE_LABELS[exposureType]})`;
+	const options = (boostOptionTypes ?? []).map(
+		(option) => BOOST_OPTION_POINT_LABELS[option]
+	);
+	return [base, ...options].join(" + ");
+};
+
+const buildJobPointRefundDescription = (description: null | string): string =>
+	description ? `공고 취소 환급(${description})` : "공고 취소 포인트 환급";
+
 const jobPostInputShape = z.object({
 	organizationId: z.string().min(1),
 	teamId: z.string().min(1).optional(),
@@ -241,6 +276,9 @@ const jobPostInputShape = z.object({
 	boostOptionTypes: z.array(boostOptionTypeSchema).max(3).optional(),
 	// 무료 공고에서 옵션을 신청할 때의 결제수단. 유료 공고는 공고 결제수단을 그대로 쓴다.
 	boostOptionPaymentMethod: z.enum(["bank_transfer", "card"]).optional(),
+	// 새 공고 등록 시에만 사용한다. 수정에서는 기존 스냅샷을 보존한다.
+	pointsToUse: z.number().int().min(0).default(0),
+	submissionKey: z.string().uuid().optional(),
 	media: jobPostMediaSetInput,
 });
 
@@ -966,7 +1004,7 @@ const syncBoostPurchases = async ({
 			optionType,
 			organizationId,
 			paymentMethod,
-			purchaseSource: isPaidPosting ? "job_registration" : "standalone",
+			purchaseSource: "job_registration",
 		});
 	}
 };
@@ -1002,6 +1040,8 @@ export const applyJobPostUpdate = async ({
 		detailDesignAmount: _detailDesignAmount,
 		detailDesignRequested: _detailDesignRequested,
 		media,
+		pointsToUse: _pointsToUse,
+		submissionKey: _submissionKey,
 		...jobInput
 	} = data;
 
@@ -1192,6 +1232,27 @@ export const applyJobPostUpdate = async ({
 				postingPaymentMethod: exposure.paymentMethod,
 				requestedTypes: data.boostOptionTypes,
 				tx,
+			});
+		}
+
+		const [registrationOptions] = await tx
+			.select({
+				total: sql<number>`coalesce(sum(${jobBoostPurchase.amount}), 0)::int`,
+			})
+			.from(jobBoostPurchase)
+			.where(
+				and(
+					eq(jobBoostPurchase.jobPostId, existing.id),
+					eq(jobBoostPurchase.purchaseSource, "job_registration")
+				)
+			);
+		const updatedGrossAmount =
+			(updated.exposureAmount ?? 0) +
+			(updated.detailDesignAmount ?? 0) +
+			(registrationOptions?.total ?? 0);
+		if (updatedGrossAmount < existing.pointsUsed) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: JOB_PAYMENT_POINTS_EXCEED_EDITED_TOTAL,
 			});
 		}
 
@@ -2073,6 +2134,7 @@ export const jobsRouter = {
 						id: jobBoostPurchase.id,
 						optionType: jobBoostPurchase.optionType,
 						paymentStatus: jobBoostPurchase.paymentStatus,
+						purchaseSource: jobBoostPurchase.purchaseSource,
 						remainingCount: jobBoostPurchase.remainingCount,
 					})
 					.from(jobBoostPurchase)
@@ -2126,6 +2188,8 @@ export const jobsRouter = {
 				detailDesignAmount: _detailDesignAmount,
 				detailDesignRequested: _detailDesignRequested,
 				media,
+				pointsToUse: _pointsToUse,
+				submissionKey: _submissionKey,
 				...jobInput
 			} = input;
 			const actor = await requireEmployerPostingAccess({
@@ -2192,7 +2256,23 @@ export const jobsRouter = {
 			// 공고는 예외 없이 운영자 검수를 거친다. 업소 인증 여부로 건너뛰지 않는다.
 			const status: JobPostStatus = "pending_review";
 
+			// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: 공고·옵션·미디어·포인트를 원자적으로 확정하는 단일 트랜잭션이다.
 			const result = await db.transaction(async (tx) => {
+				if (input.submissionKey) {
+					const [retried] = await tx
+						.select()
+						.from(jobPost)
+						.where(
+							and(
+								eq(jobPost.createdByUserId, actor.userId),
+								eq(jobPost.submissionKey, input.submissionKey)
+							)
+						)
+						.limit(1);
+					if (retried) {
+						return { ...retried, media: await getJobPostMediaSet(retried.id) };
+					}
+				}
 				const [created] = await tx
 					.insert(jobPost)
 					.values({
@@ -2217,6 +2297,9 @@ export const jobsRouter = {
 						// 무료 공고(유료 노출상품 미선택)는 결제 게이트 없이 즉시 노출한다.
 						// 유료 노출상품을 선택한 경우에만 운영자 결제완료 처리를 기다린다.
 						paymentStatus: exposure.adProductId ? "unpaid" : "paid",
+						pointsUsed: 0,
+						pointsUsedByUserId: input.pointsToUse > 0 ? actor.userId : null,
+						submissionKey: input.submissionKey,
 						publishedAt: null,
 					})
 					.returning();
@@ -2244,6 +2327,85 @@ export const jobsRouter = {
 					tx,
 				});
 
+				const [boostTotalRow] = await tx
+					.select({
+						total: sql<number>`coalesce(sum(${jobBoostPurchase.amount}), 0)::int`,
+					})
+					.from(jobBoostPurchase)
+					.where(
+						and(
+							eq(jobBoostPurchase.jobPostId, created.id),
+							eq(jobBoostPurchase.purchaseSource, "job_registration")
+						)
+					);
+				const grossAmount =
+					(created.exposureAmount ?? 0) +
+					(created.detailDesignAmount ?? 0) +
+					(boostTotalRow?.total ?? 0);
+				const requestedPoints = input.pointsToUse;
+				const pointDescription = buildJobPointDescription(
+					exposure.exposureType,
+					input.boostOptionTypes
+				);
+				if (requestedPoints > 0) {
+					const [settings] = await tx
+						.select({
+							max: bambiSiteSettings.jobPaymentMaxPoints,
+							min: bambiSiteSettings.jobPaymentMinPoints,
+						})
+						.from(bambiSiteSettings)
+						.where(eq(bambiSiteSettings.id, "default"))
+						.limit(1);
+					const minimum = settings?.min ?? 0;
+					if (minimum <= 0 || requestedPoints < minimum) {
+						throw new ORPCError("BAD_REQUEST", {
+							message:
+								minimum > 0
+									? `최소 ${minimum.toLocaleString("ko-KR")}포인트부터 사용할 수 있어요.`
+									: "공고 결제 포인트 사용이 중단되어 있습니다.",
+						});
+					}
+					const balance = await getPointBalanceTx(tx, actor.userId);
+					const limit = resolveJobPointUseLimit({
+						balance,
+						grossAmount,
+						maximum: settings?.max ?? null,
+						minimum,
+					});
+					if (!limit.enabled || requestedPoints > limit.maximum) {
+						throw new ORPCError("BAD_REQUEST", {
+							message:
+								"결제 예정 금액과 설정된 사용 한도를 초과할 수 없습니다.",
+						});
+					}
+					try {
+						await adjustMemberPoints(tx, {
+							amount: -requestedPoints,
+							description: pointDescription,
+							externalKey: `job_payment_use:${created.id}`,
+							reason: `공고 등록 포인트 사용: ${created.id}`,
+							userId: actor.userId,
+						});
+					} catch (error) {
+						throw new ORPCError("BAD_REQUEST", {
+							message:
+								error instanceof Error
+									? error.message
+									: "포인트를 사용할 수 없습니다.",
+						});
+					}
+				}
+				const needsPaymentConfirmation = grossAmount > 0 || requestedPoints > 0;
+				const [withPoints] = await tx
+					.update(jobPost)
+					.set({
+						paymentStatus: needsPaymentConfirmation ? "unpaid" : "paid",
+						pointsUsed: requestedPoints,
+						pointsUsedByUserId: requestedPoints > 0 ? actor.userId : null,
+					})
+					.where(eq(jobPost.id, created.id))
+					.returning();
+
 				const insertedMedia =
 					mediaRows.length > 0
 						? await tx
@@ -2260,7 +2422,7 @@ export const jobsRouter = {
 						: [];
 
 				return {
-					...created,
+					...(withPoints ?? created),
 					media: toJobPostMediaSet(insertedMedia),
 				};
 			});
@@ -2328,8 +2490,67 @@ export const jobsRouter = {
 
 			return result;
 		}),
-	delete: protectedProcedure
+	getDeletePointRefundPreview: protectedProcedure
 		.input(z.object({ id: z.string().uuid() }))
+		.handler(async ({ context, input }) => {
+			const [existing] = await db
+				.select()
+				.from(jobPost)
+				.where(eq(jobPost.id, input.id))
+				.limit(1);
+			if (!existing) {
+				throw new ORPCError("NOT_FOUND");
+			}
+			await requireEmployerPostingAccess({
+				organizationId: existing.organizationId,
+				teamId: existing.teamId,
+				session: context.session,
+			});
+			if (
+				existing.pointsUsed <= 0 ||
+				!existing.pointsUsedByUserId ||
+				existing.pointsRefundedAt ||
+				existing.pointsRefundLockedAt
+			) {
+				return {
+					forfeitedAmount: 0,
+					refundAmount: 0,
+					refundLocked: existing.pointsRefundLockedAt !== null,
+					usedAmount: existing.pointsUsed,
+				};
+			}
+			return await db.transaction(async (tx) => {
+				await lockMemberPoints(tx, existing.pointsUsedByUserId as string);
+				const [capRow] = await tx
+					.select({ cap: bambiSiteSettings.maxMemberPoints })
+					.from(bambiSiteSettings)
+					.where(eq(bambiSiteSettings.id, "default"))
+					.limit(1);
+				const balance = await getPointBalanceTx(
+					tx,
+					existing.pointsUsedByUserId as string
+				);
+				const refund = resolveCappedPointRefund({
+					balance,
+					cap: capRow?.cap ?? null,
+					usedAmount: existing.pointsUsed,
+				});
+				return {
+					cap: capRow?.cap ?? null,
+					...refund,
+					refundLocked: false,
+					usedAmount: existing.pointsUsed,
+				};
+			});
+		}),
+	delete: protectedProcedure
+		.input(
+			z.object({
+				expectedForfeitedAmount: z.number().int().min(0).optional(),
+				expectedRefundAmount: z.number().int().min(0).optional(),
+				id: z.string().uuid(),
+			})
+		)
 		.handler(async ({ context, input }) => {
 			const [existing] = await db
 				.select()
@@ -2351,7 +2572,91 @@ export const jobsRouter = {
 			// GCS 객체는 cascade 대상이 아니므로 키를 미리 확보해 직접 지운다.
 			const storageKeys = await getJobPostMediaStorageKeys(input.id);
 
-			await db.delete(jobPost).where(eq(jobPost.id, input.id));
+			await db.transaction(async (tx) => {
+				const [locked] = await tx
+					.select()
+					.from(jobPost)
+					.where(eq(jobPost.id, input.id))
+					.for("update")
+					.limit(1);
+				if (!locked) {
+					throw new ORPCError("NOT_FOUND");
+				}
+				if (
+					locked.pointsUsed > 0 &&
+					locked.pointsUsedByUserId &&
+					!locked.pointsRefundedAt &&
+					!locked.pointsRefundLockedAt
+				) {
+					await lockMemberPoints(tx, locked.pointsUsedByUserId);
+					const [debit] = await tx
+						.select({
+							amount: bambiPointTransaction.amount,
+							description: bambiPointTransaction.description,
+						})
+						.from(bambiPointTransaction)
+						.where(
+							eq(
+								bambiPointTransaction.externalKey,
+								`job_payment_use:${locked.id}`
+							)
+						)
+						.limit(1);
+					if (!debit || -debit.amount !== locked.pointsUsed) {
+						throw new ORPCError("CONFLICT", {
+							message:
+								"공고의 포인트 차감 기록이 일치하지 않아 삭제할 수 없습니다. 운영자에게 문의해 주세요.",
+						});
+					}
+					const [capRow] = await tx
+						.select({ cap: bambiSiteSettings.maxMemberPoints })
+						.from(bambiSiteSettings)
+						.where(eq(bambiSiteSettings.id, "default"))
+						.limit(1);
+					const balance = await getPointBalanceTx(
+						tx,
+						locked.pointsUsedByUserId
+					);
+					const { forfeitedAmount, refundAmount } = resolveCappedPointRefund({
+						balance,
+						cap: capRow?.cap ?? null,
+						usedAmount: locked.pointsUsed,
+					});
+					if (
+						input.expectedRefundAmount !== undefined &&
+						(input.expectedRefundAmount !== refundAmount ||
+							input.expectedForfeitedAmount !== forfeitedAmount)
+					) {
+						throw new ORPCError("CONFLICT", {
+							message:
+								"포인트 잔액이 변경되었습니다. 최신 환급 금액을 확인한 뒤 다시 시도해 주세요.",
+						});
+					}
+					if (refundAmount > 0) {
+						await awardMemberPoints(tx, {
+							amount: refundAmount,
+							description: buildJobPointRefundDescription(debit.description),
+							externalKey: `job_payment_refund:${locked.id}`,
+							reason: `공고 취소 포인트 환급: ${locked.id}`,
+							userId: locked.pointsUsedByUserId,
+						});
+					} else {
+						await tx.insert(bambiPointTransaction).values({
+							amount: 0,
+							balanceAfter: balance,
+							description: buildJobPointRefundDescription(debit.description),
+							externalKey: `job_payment_refund:${locked.id}`,
+							reason: `공고 취소 포인트 환급 완료(상한 소멸): ${locked.id}`,
+							userId: locked.pointsUsedByUserId,
+						});
+					}
+					await tx
+						.update(jobPost)
+						.set({ pointsRefundedAt: new Date() })
+						.where(eq(jobPost.id, locked.id));
+				}
+				await tx.delete(jobPost).where(eq(jobPost.id, input.id));
+			});
 			await deletePublicObjects(storageKeys);
 
 			return { id: input.id };

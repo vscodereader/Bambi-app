@@ -235,6 +235,34 @@ describe("법률자문 게시판 격리", () => {
 		).toBe("FORBIDDEN");
 	});
 
+	it("남성 legal_advisor는 공지와 법률 게시판만 통과한다", () => {
+		for (const board of ["notice", "legal"]) {
+			expect(
+				codeOf(() =>
+					assertLegalAdvisorBoardScope(profile("legal_advisor", "male"), board)
+				)
+			).toBeUndefined();
+		}
+		expect(
+			codeOf(() =>
+				assertLegalAdvisorBoardScope(profile("legal_advisor", "male"), "free")
+			)
+		).toBe("FORBIDDEN");
+	});
+
+	it("남성 구직자는 공지사항만 통과한다", () => {
+		expect(
+			codeOf(() =>
+				assertLegalAdvisorBoardScope(profile("job_seeker", "male"), "notice")
+			)
+		).toBeUndefined();
+		expect(
+			codeOf(() =>
+				assertLegalAdvisorBoardScope(profile("job_seeker", "male"), "legal")
+			)
+		).toBe("FORBIDDEN");
+	});
+
 	it("다른 역할·게스트(null)에는 발동하지 않는다", () => {
 		for (const role of ["job_seeker", "employer", "admin"]) {
 			for (const board of [

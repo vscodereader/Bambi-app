@@ -21,8 +21,18 @@ export const MODERATOR_NAV_ITEMS: NavEntry[] = [
 			{ href: "/moderator/reports", label: "신고" },
 			{ href: "/moderator/employers", label: "업소 승인" },
 			{ href: "/moderator/team-invites", label: "팀 합류 승인" },
-			{ href: "/moderator/attendance" as Route, label: "출석 관리" },
-			{ href: "/moderator/member-grades" as Route, label: "등급 관리" },
+		],
+	},
+	{
+		label: "포인트 관리",
+		items: [
+			{ href: "/moderator/points/attendance" as Route, label: "출석 관리" },
+			{ href: "/moderator/points/grades" as Route, label: "등급 관리" },
+			{ href: "/moderator/points/members" as Route, label: "포인트 관리" },
+			{
+				href: "/moderator/points/settings" as Route,
+				label: "기타 포인트 설정",
+			},
 		],
 	},
 	{

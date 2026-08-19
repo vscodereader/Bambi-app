@@ -57,10 +57,10 @@ describe("resolveCommunityAccess", () => {
 		).toEqual({ canAccess: false, notice: "male_employer" });
 	});
 
-	it("blocks male job seekers", () => {
+	it("allows male job seekers into their board-scoped notice view", () => {
 		expect(resolveCommunityAccess({ ...base, gender: "male" })).toEqual({
-			canAccess: false,
-			notice: "male_seeker",
+			canAccess: true,
+			notice: null,
 		});
 	});
 

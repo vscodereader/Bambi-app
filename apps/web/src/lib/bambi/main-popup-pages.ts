@@ -81,7 +81,7 @@ export const MAIN_POPUP_PAGE_OPTIONS: MainPopupPageOption[] = [
 	{
 		audience: "job_seeker",
 		id: "seeker_attendance",
-		label: "출석체크",
+		label: "포인트 내역",
 		match: prefix("/seeker/attendance"),
 	},
 	{
@@ -135,7 +135,7 @@ export const MAIN_POPUP_PAGE_OPTIONS: MainPopupPageOption[] = [
 	{
 		audience: "employer",
 		id: "employer_attendance",
-		label: "출석체크",
+		label: "포인트 내역",
 		match: prefix("/employer/attendance"),
 	},
 	{

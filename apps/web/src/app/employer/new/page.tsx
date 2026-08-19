@@ -329,7 +329,8 @@ const bankNoticeCopy = (boostOnly: boolean) =>
 // 모두 더한 값이라 결제 섹션에 보여 준 총액과 같다.
 function resolveBankNotice(
 	jobInput: JobPostInput,
-	boostOptionsAmount: number
+	boostOptionsAmount: number,
+	pointsUsed: number
 ): { amount: number | null; boostOnly: boolean } | null {
 	const isBankTransfer = jobInput.adProductId
 		? jobInput.paymentMethod === "bank_transfer"
@@ -340,15 +341,22 @@ function resolveBankNotice(
 	}
 
 	return {
-		amount: sumJobPaymentAmount(
-			sumJobPaymentAmount(jobInput.exposureAmount, jobInput.detailDesignAmount),
-			boostOptionsAmount > 0 ? boostOptionsAmount : null
+		amount: Math.max(
+			0,
+			(sumJobPaymentAmount(
+				sumJobPaymentAmount(
+					jobInput.exposureAmount,
+					jobInput.detailDesignAmount
+				),
+				boostOptionsAmount > 0 ? boostOptionsAmount : null
+			) ?? 0) - pointsUsed
 		),
 		// 무료 공고의 입금 대상은 끌어올리기 옵션뿐이다.
 		boostOnly: !jobInput.adProductId,
 	};
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: 기존 단일 공고 폼의 상호의존 필드와 결제 가드를 한 제출 경계에서 관리한다.
 function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const router = useRouter();
 	const utils = useQueryClient();
@@ -366,6 +374,8 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 	const formRef = useRef<HTMLFormElement>(null);
 	const [isDirty, setIsDirty] = useState(false);
 	const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+	const [pointsToUse, setPointsToUse] = useState("");
+	const submissionKeyRef = useRef(crypto.randomUUID());
 	const [priceConflictMessage, setPriceConflictMessage] = useState<
 		null | string
 	>(null);
@@ -398,6 +408,29 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 		boostOptionsQuery.data,
 		form.boostOptionTypes
 	);
+	const pointPaymentQuery = useQuery(
+		orpc.bambi.pointSettings.getJobPayment.queryOptions()
+	);
+	const grossPaymentAmount =
+		sumJobPaymentAmount(
+			sumJobPaymentAmount(form.exposureAmount, form.detailDesignAmount),
+			boostOptionsAmount > 0 ? boostOptionsAmount : null
+		) ?? 0;
+	const configuredMinimum = pointPaymentQuery.data?.jobPaymentMinPoints ?? 0;
+	const usableMaximum = Math.min(
+		pointPaymentQuery.data?.balance ?? 0,
+		grossPaymentAmount,
+		pointPaymentQuery.data?.jobPaymentMaxPoints ?? grossPaymentAmount
+	);
+	const parsedPointsToUse = pointsToUse === "" ? 0 : Number(pointsToUse);
+	const pointsEnabled =
+		configuredMinimum > 0 && usableMaximum >= configuredMinimum;
+	const pointsValid =
+		parsedPointsToUse === 0 ||
+		(pointsEnabled &&
+			Number.isInteger(parsedPointsToUse) &&
+			parsedPointsToUse >= configuredMinimum &&
+			parsedPointsToUse <= usableMaximum);
 
 	const leaveToEmployer = () => {
 		setBankNotice(null);
@@ -652,6 +685,12 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			focusFirstInvalidField(formRef.current);
 			return;
 		}
+		if (!pointsValid) {
+			toast.error(
+				`최소 ${configuredMinimum.toLocaleString("ko-KR")}포인트부터 사용할 수 있어요.`
+			);
+			return;
+		}
 
 		try {
 			const { media: validatedMedia, ...jobInput } = validation.input;
@@ -666,12 +705,15 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 			// 무통장입금 건이면 등록 성공 후 계좌 안내 다이얼로그를 띄우도록 표시해 둔다.
 			pendingBankNoticeRef.current = resolveBankNotice(
 				jobInput,
-				boostOptionsAmount
+				boostOptionsAmount,
+				parsedPointsToUse
 			);
 
 			createMutation.mutate({
 				...jobInput,
 				media: mediaPayload,
+				pointsToUse: parsedPointsToUse,
+				submissionKey: submissionKeyRef.current,
 			});
 		} catch (error) {
 			const message =
@@ -1057,6 +1099,66 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 						paymentMethod={form.paymentMethod}
 					/>
 
+					<section className="flex flex-col gap-3 rounded-xl border p-4">
+						<div>
+							<h2 className="m-0 font-bold text-base">포인트</h2>
+							<p className="m-0 text-muted-foreground text-sm">
+								보유{" "}
+								{(pointPaymentQuery.data?.balance ?? 0).toLocaleString("ko-KR")}
+								P · 1P는 1원으로 차감됩니다.
+							</p>
+						</div>
+						<div className="flex items-center gap-2">
+							<Input
+								aria-label="사용할 포인트"
+								disabled={!pointsEnabled}
+								inputMode="numeric"
+								max={usableMaximum}
+								min={configuredMinimum || undefined}
+								onChange={(event) => setPointsToUse(event.target.value)}
+								placeholder={
+									configuredMinimum > 0
+										? `최소 ${configuredMinimum.toLocaleString("ko-KR")}P부터 사용 가능`
+										: "포인트 사용 중단"
+								}
+								type="number"
+								value={pointsToUse}
+							/>
+							<Button
+								disabled={!pointsEnabled}
+								onClick={() => setPointsToUse(String(usableMaximum))}
+								type="button"
+								variant="outline"
+							>
+								전액 사용
+							</Button>
+						</div>
+						{parsedPointsToUse > 0 && !pointsValid ? (
+							<p className="m-0 text-destructive text-sm">
+								최소 {configuredMinimum.toLocaleString("ko-KR")}포인트부터 사용
+								가능해요.
+							</p>
+						) : null}
+						<div className="text-right">
+							<p className="m-0 text-muted-foreground text-sm">
+								결제 예정 금액 {grossPaymentAmount.toLocaleString("ko-KR")}원
+							</p>
+							<strong>
+								최종 입금액{" "}
+								{Math.max(
+									0,
+									grossPaymentAmount - parsedPointsToUse
+								).toLocaleString("ko-KR")}
+								원
+							</strong>
+						</div>
+						<p className="m-0 text-muted-foreground text-xs">
+							공고 생성 즉시 포인트가 차감됩니다. 결제 완료 전 취소하면 최대
+							보유 포인트 범위에서 환급되며, 한 번이라도 결제 완료가 되거나 공개
+							처리된 공고에 사용된 포인트는 환불이 어렵습니다.
+						</p>
+					</section>
+
 					<div className="xl:hidden">{listingPreview}</div>
 
 					<Alert>
@@ -1118,7 +1220,8 @@ function NewEmployerJobForm({ postingScopes }: NewEmployerJobFormProps) {
 										cardPaymentBlocked ||
 										bankTransferBlocked ||
 										bannerImagesMissing ||
-										!verified
+										!verified ||
+										!pointsValid
 									}
 									type="submit"
 								>

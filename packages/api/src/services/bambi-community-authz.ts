@@ -113,6 +113,7 @@ export const findCommunityActor = async (
 
 // 무료 법률 자문 게시판. 전 글이 강제 잠금이라 잠금 관련 가드가 여기서만 갈린다.
 export const LEGAL_BOARD = "legal";
+export const NOTICE_BOARD = "notice";
 // 그 게시판의 잠금글을 열람·답변하는 계정 역할(운영자가 지정·해제).
 export const LEGAL_ADVISOR_ROLE = "legal_advisor";
 
@@ -124,11 +125,24 @@ const LEGAL_ADVISOR_BOARD_ERROR =
 // 다른 역할·게스트(profile null)에는 발동하지 않는다. 라우터의 읽기·쓰기 경로가
 // 이 함수 하나를 지나므로 격리 범위가 바뀌면 여기만 고친다.
 export const assertLegalAdvisorBoardScope = (
-	profile: Pick<BambiAccessProfile, "role"> | null,
+	profile: Pick<BambiAccessProfile, "gender" | "role"> | null,
 	board: string
 ): void => {
-	if (profile?.role === LEGAL_ADVISOR_ROLE && board !== LEGAL_BOARD) {
+	if (
+		profile?.role === LEGAL_ADVISOR_ROLE &&
+		board !== LEGAL_BOARD &&
+		!(profile.gender === "male" && board === NOTICE_BOARD)
+	) {
 		throw new ORPCError("FORBIDDEN", { message: LEGAL_ADVISOR_BOARD_ERROR });
+	}
+	if (
+		profile?.role === "job_seeker" &&
+		profile.gender === "male" &&
+		board !== NOTICE_BOARD
+	) {
+		throw new ORPCError("FORBIDDEN", {
+			message: "남성 구직자는 공지사항만 열람할 수 있어요.",
+		});
 	}
 };
 

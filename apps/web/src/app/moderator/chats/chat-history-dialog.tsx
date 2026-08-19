@@ -185,7 +185,7 @@ export function ChatHistoryContent({
 
 	return (
 		<div
-			className={`flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden ${constrained ? "max-h-[60vh]" : "h-[min(70vh,720px)]"}`}
+			className={`flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden ${constrained ? "max-h-[60vh]" : "h-[70vh] max-h-180"}`}
 		>
 			<div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-y-contain pr-1">
 				{annotatedMessages.map(
@@ -367,7 +367,7 @@ export function ChatHistoryDialog({
 			}}
 			open={viewing !== null}
 		>
-			<DialogContent className="max-w-2xl">
+			<DialogContent className="w-[calc(100vw-2rem)] max-w-2xl px-5 sm:px-6">
 				<DialogTitle>채팅 내역</DialogTitle>
 				<DialogDescription>
 					"{viewing?.title}" 채팅방의 전체 대화를 시간순으로 봅니다. 열람은 읽기

@@ -37,6 +37,7 @@ import {
 	count,
 	desc,
 	eq,
+	gt,
 	ilike,
 	inArray,
 	isNotNull,
@@ -1864,6 +1865,7 @@ export const moderationRouter = {
 				.select({
 					id: jobPost.id,
 					ownerUserId: jobPost.createdByUserId,
+					pointsUsed: jobPost.pointsUsed,
 					// 삭제 알림은 "어느 공고였는지"가 전부다 — 지운 뒤에는 되찾을 수 없다.
 					title: jobPost.title,
 				})
@@ -1883,6 +1885,7 @@ export const moderationRouter = {
 					action: "hard_delete",
 					adminUserId: admin.userId,
 					reason: input.reason,
+					metadata: { pointsUsed: existing.pointsUsed, pointRefunded: false },
 					targetId: input.jobPostId,
 					targetType: "job_post",
 				});
@@ -2332,10 +2335,19 @@ export const moderationRouter = {
 					reason: input.reason,
 					status: input.status,
 				});
+				const refundLockPatch =
+					input.status === "published" &&
+					existing.paymentStatus === "paid" &&
+					existing.pointsUsed > 0
+						? {
+								pointsRefundLockedAt:
+									existing.pointsRefundLockedAt ?? new Date(),
+							}
+						: {};
 
 				const [updated] = await tx
 					.update(jobPost)
-					.set(statusPatch)
+					.set({ ...statusPatch, ...refundLockPatch })
 					.where(eq(jobPost.id, input.jobPostId))
 					.returning();
 
@@ -2434,6 +2446,10 @@ export const moderationRouter = {
 							exposureEndsAt,
 							listingPaidAt,
 							paymentStatus: input.paymentStatus,
+							pointsRefundLockedAt:
+								input.paymentStatus === "paid" && existing.pointsUsed > 0
+									? (existing.pointsRefundLockedAt ?? now)
+									: existing.pointsRefundLockedAt,
 						})
 						.where(eq(jobPost.id, input.jobPostId))
 						.returning();
@@ -2886,7 +2902,11 @@ export const moderationRouter = {
 				inArray(jobPost.status, ["pending_review", "published"]),
 				// 유료 여부의 단일 원천은 광고 상품 연결(adProductId)이다. exposureType은
 				// previewTemplate 'none' 상품에서 standard가 되므로 결제 판별에 쓰면 누락된다.
-				isNotNull(jobPost.adProductId),
+				or(
+					isNotNull(jobPost.adProductId),
+					gt(jobPost.pointsUsed, 0),
+					sql`exists (select 1 from ${jobBoostPurchase} where ${jobBoostPurchase.jobPostId} = ${jobPost.id} and ${jobBoostPurchase.purchaseSource} = 'job_registration')`
+				),
 			];
 
 			if (input.onlyUnpaid) {
@@ -2906,6 +2926,7 @@ export const moderationRouter = {
 					exposureAmount: jobPost.exposureAmount,
 					detailDesignAmount: jobPost.detailDesignAmount,
 					detailDesignStatus: jobPost.detailDesignStatus,
+					pointsUsed: jobPost.pointsUsed,
 					paymentStatus: jobPost.paymentStatus,
 					exposureDurationDays: jobPost.exposureDurationDays,
 					exposureEndsAt: jobPost.exposureEndsAt,
@@ -2995,13 +3016,19 @@ export const moderationRouter = {
 
 							await tx
 								.update(jobPost)
-								.set(
-									getJobPostModerationStatusPatch({
+								.set({
+									...getJobPostModerationStatusPatch({
 										existing,
 										reason: input.reason,
 										status: input.status,
-									})
-								)
+									}),
+									pointsRefundLockedAt:
+										input.status === "published" &&
+										existing.paymentStatus === "paid" &&
+										existing.pointsUsed > 0
+											? (existing.pointsRefundLockedAt ?? new Date())
+											: existing.pointsRefundLockedAt,
+								})
 								.where(eq(jobPost.id, jobPostId))
 								.returning();
 
@@ -3061,6 +3088,8 @@ export const moderationRouter = {
 									exposureType: jobPost.exposureType,
 									organizationId: jobPost.organizationId,
 									paymentStatus: jobPost.paymentStatus,
+									pointsRefundLockedAt: jobPost.pointsRefundLockedAt,
+									pointsUsed: jobPost.pointsUsed,
 								})
 								.from(jobPost)
 								.where(eq(jobPost.id, jobPostId))
@@ -3115,6 +3144,10 @@ export const moderationRouter = {
 									exposureEndsAt,
 									listingPaidAt,
 									paymentStatus: input.paymentStatus,
+									pointsRefundLockedAt:
+										input.paymentStatus === "paid" && existing.pointsUsed > 0
+											? (existing.pointsRefundLockedAt ?? now)
+											: existing.pointsRefundLockedAt,
 								})
 								.where(eq(jobPost.id, jobPostId));
 

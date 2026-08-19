@@ -2,6 +2,7 @@
 
 import { getLoginIdErrorMessage } from "@bambi-app/auth/login-id";
 import { cn } from "@bambi-app/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
@@ -22,7 +23,7 @@ import {
 	popupAuthTransitionStorageKey,
 	popupLoginTargetStorageKey,
 } from "@/lib/bambi/main-popup";
-import { client, queryClient } from "@/utils/orpc";
+import { client, orpc, queryClient } from "@/utils/orpc";
 import { Button, Card, Logo } from "../ds";
 import { PhoneVerifyDialog } from "../phone-verify-dialog";
 import { useAccountRecovery } from "./account-recovery-dialog";
@@ -165,6 +166,21 @@ function AuthCardHeader({
 				{title}
 			</h2>
 		</>
+	);
+}
+
+function SignupBonusCallout() {
+	const signupBonusQuery = useQuery(
+		orpc.bambi.pointSettings.getPublicSignupBonus.queryOptions()
+	);
+	const points = signupBonusQuery.data?.signupPoints ?? 0;
+	if (points <= 0) {
+		return null;
+	}
+	return (
+		<span className="relative mt-2 w-max max-w-[calc(100vw-4rem)] rounded-md bg-primary/10 px-3 py-2 text-center font-semibold text-primary text-xs before:absolute before:-top-2 before:left-1/2 before:size-0 before:-translate-x-1/2 before:border-x-8 before:border-x-transparent before:border-b-8 before:border-b-primary/10 before:content-[''] sm:text-sm">
+			지금 회원가입 시, {points.toLocaleString("ko-KR")}포인트 지급!
+		</span>
 	);
 }
 
@@ -513,19 +529,24 @@ export function AuthPanel() {
 									variant="secondary"
 								/>
 							)}
-							<p className="m-0 text-center text-muted-foreground text-sm">
-								{isSignUp
-									? "이미 계정이 있으신가요? "
-									: "밤비알바가 처음이신가요? "}
-								<button
-									className="font-bold text-primary underline-offset-2 hover:underline disabled:opacity-50"
-									disabled={isSubmitting}
-									onClick={toggleMode}
-									type="button"
-								>
-									{isSignUp ? "로그인" : "회원가입"}
-								</button>
-							</p>
+							<div className="flex items-start justify-center gap-1 text-center text-muted-foreground text-sm">
+								<span className="pt-0.5">
+									{isSignUp
+										? "이미 계정이 있으신가요?"
+										: "밤비알바가 처음이신가요?"}
+								</span>
+								<span className="inline-flex flex-col items-center">
+									<button
+										className="font-bold text-primary underline-offset-2 hover:underline disabled:opacity-50"
+										disabled={isSubmitting}
+										onClick={toggleMode}
+										type="button"
+									>
+										{isSignUp ? "로그인" : "회원가입"}
+									</button>
+									{isSignUp ? null : <SignupBonusCallout />}
+								</span>
+							</div>
 						</form>
 					)}
 				</div>
