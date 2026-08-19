@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { GradeBadge } from "@/components/bambi/grade-badge";
 import { PointHistoryCard } from "@/components/bambi/point-history-card";
+import { PointOrdersCard } from "@/components/bambi/point-orders-card";
 import { buildMonthGrid, shiftMonth } from "@/lib/bambi/attendance-calendar";
 import { orpc } from "@/utils/orpc";
 
@@ -243,6 +244,8 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 			</Card>
 
 			<PointHistoryCard />
+
+			<PointOrdersCard />
 		</div>
 	);
 }

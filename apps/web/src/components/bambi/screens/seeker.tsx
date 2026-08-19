@@ -50,7 +50,6 @@ import {
 	Search2,
 	SettingsIcon,
 	ShieldIcon,
-	StoreIcon,
 	UserIcon,
 } from "../icons";
 import {
@@ -583,16 +582,10 @@ const seekerMeSections: {
 		description: "차단한 상대를 확인하고 해제해요.",
 	},
 	{
-		href: "/seeker/me/point-orders" as Route,
-		icon: <StoreIcon />,
-		label: "포인트 구매 내역",
-		description: "포인트로 구매한 아이템의 처리 상태를 확인해요.",
-	},
-	{
 		href: ATTENDANCE_HREF,
 		icon: <DollarCircle />,
 		label: "포인트 내역",
-		description: "출석 기록과 보유 포인트 내역을 확인해요.",
+		description: "출석 기록·보유 포인트·구매 내역을 한곳에서 확인해요.",
 	},
 	{
 		href: "/seeker/me/settings" as Route,
