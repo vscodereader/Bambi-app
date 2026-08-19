@@ -151,10 +151,10 @@ drizzle-kit generate로 1건 생성(테이블 2개). 실행은 사용자 지시 
   promotionSurface `point_shop_left`. (메인의 "빠른 탐색" 필터 카드는 없음)
 - 중앙 `SEEKER_CONTENT_WIDTH`: `PremiumAdBannerSection`(`point_shop_center`) →
   아래 아이템 그리드.
-- 우 259px aside: `AdBannerRail`(`point_shop_right`) + **바로 밑 "1:1 상담"
-  버튼**. 기존 `SupportChatWidget`의 열림 상태가 컴포넌트 내부 `useState`라,
-  커스텀 이벤트(예: `bambi:open-support-chat`) 리스너를 위젯에 추가하는 소규모
-  리팩터 후 버튼이 이벤트를 쏴서 위젯을 연다.
+- 우 259px aside: `AdBannerRail`(`point_shop_right`). 레일 하단의 support-chat
+  앵커에 `SupportChatWidget` 런처가 포털되는 기존 동작을 그대로 재사용한다(seeker
+  메인과 동일) — 별도 버튼·이벤트 없음(2026-08-19 사용자 결정으로 커스텀 버튼
+  방식 폐기).
 - 양쪽 aside는 기존 규칙대로 `min-[1720px]`에서만 노출, sticky.
 
 ### 아이템 그리드

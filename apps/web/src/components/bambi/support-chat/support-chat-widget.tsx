@@ -38,9 +38,6 @@ const PANEL_RAIL = "absolute right-full bottom-0 mr-3";
 // biome useTopLevelRegex를 피하려고 모듈 상수로 빼둔다. 목록(/seeker/chats)은 살려 두어야
 // 하므로 startsWith가 아니라 양끝 앵커(^…$)로 세그먼트 수까지 못 박는다.
 const CHAT_ROOM_PATH = /^\/seeker\/(?:chats\/[^/]+|jobs\/[^/]+\/chat)$/;
-// 외부(포인트몰 1:1 상담 버튼 등)에서 위젯 패널을 여는 커스텀 이벤트. 위젯이 감춰지는
-// 화면(운영자·/board·/jobs·채팅방·?auth=)에선 dispatch해도 패널이 뜨지 않는다.
-export const SUPPORT_CHAT_OPEN_EVENT = "bambi:support-chat-open";
 
 const TABS = [
 	{ icon: Home, label: "홈", name: "home" },
@@ -234,12 +231,6 @@ export function SupportChatWidget() {
 		setView({ name: "home" });
 		setOpen(true);
 	}, []);
-
-	// 페이지가 직접 위젯을 열 수 있게 하는 통로(SUPPORT_CHAT_ANCHOR_EVENT와 같은 방식).
-	useEffect(() => {
-		window.addEventListener(SUPPORT_CHAT_OPEN_EVENT, openPanel);
-		return () => window.removeEventListener(SUPPORT_CHAT_OPEN_EVENT, openPanel);
-	}, [openPanel]);
 
 	// 운영자 계정은 위젯을 감춘다(문의를 받는 쪽). 로그인 상태에서만 프로필을 조회.
 	const profileQuery = useQuery({
