@@ -34,6 +34,7 @@ import {
 	LockIcon,
 	Message,
 	SettingsIcon,
+	StoreIcon,
 	UserIcon,
 } from "./icons";
 
@@ -73,6 +74,11 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 		label: "차단한 상대",
 	},
 	{
+		href: "/seeker/me/point-orders" as Route,
+		icon: <StoreIcon />,
+		label: "포인트 구매 내역",
+	},
+	{
 		href: ATTENDANCE_HREF,
 		icon: <ClockIcon />,
 		label: "출석체크",
@@ -88,6 +94,7 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 
 // 역할별로 감추는 항목. 운영자는 신고·면접·차단·고객센터를 콘솔에서 처리하므로 개인용
 // 메뉴가 의미 없다. 이용 가이드도 운영자는 콘솔 "콘텐츠 → 운영자 매뉴얼"로 보므로 감춘다.
+// 포인트 구매 내역도 마찬가지 — 구매 자체가 구직자·업주만 가능하다(POINT_SHOP_PURCHASE_ROLES).
 // 구인자는 예정된 면접을 그대로 본다 — 카드가 호출자 기준(구직자 닉네임·공고명·일시)으로
 // 그려지므로 구인자 시점에서도 읽힌다. 노출만 감추는 것이라 직접 URL로는 그대로 들어갈 수
 // 있다. 데스크톱 허브 카드(screens/seeker.tsx)도 같은 표를 쓴다.
@@ -96,6 +103,7 @@ const HIDDEN_MY_PAGE_HREFS: Record<string, string[]> = {
 		"/seeker/me/reports",
 		"/seeker/me/interviews",
 		"/seeker/me/blocks",
+		"/seeker/me/point-orders",
 		"/manual",
 		"/support",
 	],

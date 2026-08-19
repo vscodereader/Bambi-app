@@ -16,11 +16,12 @@ describe("내 정보 메뉴 역할별 숨김", () => {
 		expect(shell).not.toContain("employer: [");
 	});
 
-	it("운영자는 신고·면접·차단·이용 가이드·고객센터를 감춘다", () => {
+	it("운영자는 신고·면접·차단·포인트 구매 내역·이용 가이드·고객센터를 감춘다", () => {
 		for (const href of [
 			"/seeker/me/reports",
 			"/seeker/me/interviews",
 			"/seeker/me/blocks",
+			"/seeker/me/point-orders",
 			"/manual",
 			"/support",
 		]) {
