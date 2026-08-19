@@ -242,6 +242,20 @@ export default function NewEmployerJobPage() {
 		);
 	}
 
+	if (profile.status === "suspended") {
+		return (
+			<PageShell
+				description="이용정지 상태에서는 새 공고를 등록할 수 없습니다."
+				title="새 공고 등록"
+			>
+				<EmptyState
+					description="계정 이용정지로 공고 등록이 제한되었습니다. 도움이 필요하면 화면 우측 하단의 1:1 상담을 이용해 주세요."
+					title="이용정지된 계정입니다"
+				/>
+			</PageShell>
+		);
+	}
+
 	if (organizationProfiles.length === 0 || postingScopes.length === 0) {
 		return (
 			<PageShell

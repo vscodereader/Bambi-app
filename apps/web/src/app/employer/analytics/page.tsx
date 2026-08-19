@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
 
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
 import { StatusBadge } from "@/components/bambi/status-badge";
@@ -99,6 +100,7 @@ function MetricCard({ label, value }: MetricCardProps) {
 }
 
 export default function EmployerAnalyticsPage() {
+	const { accountStatus, isPending } = useBambiAuth();
 	const summaryQuery = useQuery(orpc.bambi.analytics.summary.queryOptions());
 	const summaries = summaryQuery.data ?? [];
 	const getPlacementMetrics = (
@@ -375,9 +377,15 @@ export default function EmployerAnalyticsPage() {
 			{summaries.length === 0 ? (
 				<EmptyState
 					action={
-						<Link className={buttonVariants()} href="/employer/new">
-							새 공고 등록
-						</Link>
+						isPending || accountStatus === "suspended" ? (
+							<Button disabled type="button">
+								새 공고 등록
+							</Button>
+						) : (
+							<Link className={buttonVariants()} href="/employer/new">
+								새 공고 등록
+							</Link>
+						)
 					}
 					description="공고를 등록하고 구직자가 목록이나 상세 화면을 보면 지표가 쌓입니다."
 					title="분석할 공고가 없습니다"

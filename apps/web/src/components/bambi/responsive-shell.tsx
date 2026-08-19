@@ -250,6 +250,7 @@ export function ResponsiveAppShell({
 	variant = "public",
 }: ResponsiveAppShellProps) {
 	const pathname = usePathname();
+	const { accountStatus, isPending } = useBambiAuth();
 	const isPublic = variant === "public";
 	const isModerator = variant === "moderator";
 	// 채팅 버튼은 기존 nav "채팅"이 뜨던 셸(구직자·고객센터=seeker, 공개 마켓)에만
@@ -305,15 +306,30 @@ export function ResponsiveAppShell({
 											);
 										}
 										const isActive = entry.href === activeHref;
+										const isDisabledEmployerRegistration =
+											variant === "employer" &&
+											entry.href === "/employer/new" &&
+											(isPending || accountStatus === "suspended");
 										return (
 											<NavigationMenuItem key={`${entry.href}-${entry.label}`}>
 												<NavigationMenuLink
 													aria-current={isActive ? "page" : undefined}
+													aria-disabled={
+														isDisabledEmployerRegistration || undefined
+													}
 													className={cn(
 														navigationMenuTriggerStyle(),
-														navItemClassName(isActive)
+														navItemClassName(isActive),
+														isDisabledEmployerRegistration &&
+															"cursor-not-allowed opacity-40"
 													)}
-													render={<Link href={entry.href} />}
+													render={
+														isDisabledEmployerRegistration ? (
+															<span />
+														) : (
+															<Link href={entry.href} />
+														)
+													}
 												>
 													{entry.label}
 												</NavigationMenuLink>

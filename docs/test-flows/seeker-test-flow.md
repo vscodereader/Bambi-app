@@ -310,7 +310,7 @@
   - 사유는 별도 알림 테이블이 아니라 `admin_moderation_action`의 최신 `set_status:{status}` 행에서 온다
   - 경고 닫힘은 `localStorage['bambi:warned-banner-dismissed:{userId}:{sanctionCreatedAt}']`에 저장 → **새 경고(제재 시각 변경)면 다시 노출**
 - **엣지 케이스**: 배너는 `SeekerShell` 안에만 있으므로 `/support`, `/terms`, `/privacy`, `/employer`, `/moderator`에서는 보이지 않는다
-- **정지 계정 실동작**: `requireActiveBambiProfile`을 쓰는 **모든** 프로시저가 `FORBIDDEN` → 채팅·신고·차단·후기·커뮤니티·**고객센터 문의·FAQ까지 전부 막힘**
+- **정지 계정 실동작**: `requireActiveBambiProfile`을 쓰는 일반 기능은 `FORBIDDEN` → 공고 지원 채팅·신고·차단·후기·커뮤니티 등은 막힌다. 단, 우측 하단 **운영자 문의(1:1 상담)**의 조회·새 문의·메시지 전송은 구직자와 구인자 모두 예외로 허용하며 `supportChat.sendMessage`는 `requireBambiAccessProfile`로 프로필 존재와 운영자 역할만 확인한다.
 - **관련 API**: `bambi.onboarding.getMine` (protected, `accountSanction` 필드)
 
 ---
@@ -1385,3 +1385,12 @@
 - `apps/web/src/components/bambi/screens/seeker-chat-preflight.tsx`의 내부 상수 `SEEKER_STEPS` / `PUBLIC_STEPS` 및 `?entry=public` 분기 — 페이지가 항상 `steps`를 덮어쓴다
 - `apps/web/src/components/bambi/ds.tsx`의 `DEFAULT_NAV_ITEMS` "저장" 탭 — 실제 탭바가 별도 목록을 넘긴다
 - `apps/web/src/components/bambi/screens/seeker.tsx`의 `SeekerChats` — 채팅 목록 API 실패 시의 목업 폴백으로만 사용
+
+## 2026-08-18 이용정지 접근 회귀 검증
+
+- 이용정지된 여성 구직자가 홈 수다방 카드나 더보기를 누르면 일반 자격 문구 대신 `차단된 유저는 확인이 불가합니다`가 표시되고 이동하지 않는다.
+- 이용정지 계정으로 수다방 URL을 직접 열어도 같은 안내 후 `/seeker`로 돌아간다.
+- 같은 이용정지 계정으로 우측 하단 `1:1 상담`의 기존 대화 조회와 메시지 전송은 가능하다.
+- 이용정지 구직자와 이용정지 구인자 모두 우측 하단 `운영자 문의`에서 새 문의를 만들고 메시지를 보낼 수 있다.
+- 공고 지원 채팅과 수다방 등 나머지 기존 제한은 계속 적용된다.
+- 공용 숫자 입력 페이지네이션에는 해당 목록이 계산한 `/ 총 페이지 수`가 표시된다.

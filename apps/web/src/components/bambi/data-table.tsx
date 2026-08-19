@@ -58,7 +58,7 @@ export function DataTable<T>({
 	reservePageRows = false,
 	reservedPageRowHeight,
 	rowClassName,
-	showPageInput = false,
+	showPageInput = true,
 	tableClassName,
 }: {
 	columns: DataColumn<T>[];
