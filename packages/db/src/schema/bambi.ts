@@ -399,7 +399,7 @@ export const bambiIdentityVerification = pgTable(
 // 본인인증 수집 로그. 실인증이 확인될 때마다 생년월일·번호·성별과 구분(비회원/구직자/
 // 구인자)을 사람당 1행으로 남긴다 — (birth_date, phone_number)가 사람 식별 upsert 키.
 // 같은 사람이 재인증하면(포트원 인증 건 ID는 매번 새로 발급) 기존 행을 갱신한다.
-// 이름은 담지 않는다(PII 최소화).
+// 포트원 인증창이 돌려준 실명(name)도 함께 남긴다 — 미제공 시 null.
 // 개발자 SQL 전용 표다 — 조회 프로시저·관리자 화면을 만들지 않는다(쓰기 코드만 존재).
 // bambi_identity_verification(발급 기록)에 FK를 걸지 않는다: 그쪽은 만료 행을 정리하는
 // 대상이라 cascade로 수집 로그까지 사라지면 안 된다.
@@ -413,6 +413,8 @@ export const bambiIdentityVerificationLog = pgTable(
 		// YYYYMMDD 8자리(bambi_profile.birth_date와 같은 컨벤션).
 		birthDate: varchar("birth_date", { length: 8 }).notNull(),
 		gender: bambiGender("gender"),
+		// 포트원 인증 결과의 실명(verifiedCustomer.name). 미제공 시 null.
+		name: text("name"),
 		// 구분 — guest/job_seeker/employer. 가입 전 인증은 아직 모르므로 null이고,
 		// 가입이 끝나면 그 역할로 덮어쓴다.
 		kind: bambiUserRole("kind"),
@@ -1186,6 +1188,37 @@ export const jobBoostPurchase = pgTable(
 	(table) => [
 		index("job_boost_purchase_job_post_id_idx").on(table.jobPostId),
 		index("job_boost_purchase_payment_status_idx").on(table.paymentStatus),
+	]
+);
+
+// 유료 광고(노출 상품) 결제 확정 1건의 이력. job_post의 exposure_* 컬럼은 재결제·기간 변경
+// 시 덮어써져 누적 이력이 남지 않으므로, 조직 단위 누적 광고 횟수·일수 집계를 위해 결제
+// 확정 시점 스냅샷을 여기에 append-only로 쌓는다(job_boost_purchase와 같은 철학, 별도 축).
+export const jobAdPurchase = pgTable(
+	"job_ad_purchase",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		// 결제 시점의 노출 상품. 상품이 지워져도 이력은 남아야 하므로 set null.
+		adProductId: uuid("ad_product_id").references(() => adProduct.id, {
+			onDelete: "set null",
+		}),
+		// 구매한 광고 기간(일) 스냅샷 — 재결제로 job_post가 덮여도 이 값은 고정.
+		durationDays: integer("duration_days").notNull(),
+		// 결제 금액 스냅샷.
+		amount: integer("amount").notNull(),
+		// 적재 출처: moderation_single / moderation_bulk / backfill.
+		source: text("source"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_ad_purchase_organization_id_idx").on(table.organizationId),
+		index("job_ad_purchase_job_post_id_idx").on(table.jobPostId),
 	]
 );
 
