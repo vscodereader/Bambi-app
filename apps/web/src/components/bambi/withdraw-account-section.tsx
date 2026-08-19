@@ -86,7 +86,8 @@ export function WithdrawAccountSection() {
 					<DialogTitle>정말 탈퇴하시겠어요?</DialogTitle>
 					<DialogDescription>
 						탈퇴 즉시 모든 기기에서 로그아웃되고 계정은 스스로 되돌릴 수 없어요.
-						남긴 채팅·리뷰는 '탈퇴한 회원'으로 표시돼요.
+						남긴 채팅·리뷰는 '탈퇴한 회원'으로 표시돼요. 포인트로 구매한 보유
+						아이템·쿠폰도 함께 사라지며 복구되지 않아요.
 					</DialogDescription>
 					<div className="flex justify-end gap-2">
 						<Button onClick={() => setOpen(false)} variant="outline">
