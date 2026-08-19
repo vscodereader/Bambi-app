@@ -2032,6 +2032,9 @@ export const bambiPointShopOrder = pgTable(
 		}),
 		// 만료 임박 알림 발송 시각(1회 멱등 가드). 끌올·연장 외 null.
 		expiryNotifiedAt: timestamp("expiry_notified_at"),
+		// 구매 시 재고를 실제 차감했는지. 취소 복원은 이 값이 true일 때만 한다 — 구매 후
+		// 운영자가 무제한↔유한 재고를 전환해도 복원이 부풀거나 누락되지 않게 하는 근거.
+		stockDecremented: boolean("stock_decremented").notNull().default(false),
 	},
 	(table) => [
 		// 내 구매 내역(사용자별 최신순)과 운영자 대기 필터가 각각 훑는다.

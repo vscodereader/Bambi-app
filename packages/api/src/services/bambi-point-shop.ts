@@ -274,6 +274,15 @@ export function isJobPostUsableForBenefit(args: {
 	return true;
 }
 
+// 순수: 취소 시 재고 복원 여부 — 구매 시 실제 차감(stock_decremented)된 주문만 복원한다.
+// 구매 후 무제한↔유한 재고 전환이 있어도 현재 재고가 아닌 구매 시점 사실로 판정한다.
+export function shouldRestoreItemStock(order: {
+	itemId: string | null;
+	stockDecremented: boolean;
+}): order is { itemId: string; stockDecremented: true } {
+	return order.itemId !== null && order.stockDecremented;
+}
+
 // 순수: 품절 파생. stock 0이면 품절, 무제한(null)·미설정은 품절 없음(전 유형 동일).
 export function isItemSoldOut(args: { stockQuantity: number | null }): boolean {
 	return args.stockQuantity !== null && args.stockQuantity <= 0;
