@@ -1,6 +1,6 @@
 {
-  "id": "52b5ca87-99b7-40e7-90ce-d381f10e5584",
-  "prevId": "1ea5c28d-fc19-4cc2-9d7b-a79d49dc46a3",
+  "id": "76c89a7c-719d-4c14-bb50-6c12c3db1c38",
+  "prevId": "52b5ca87-99b7-40e7-90ce-d381f10e5584",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2058,6 +2058,58 @@
           "notNull": true,
           "default": true
         },
+        "benefit_type": {
+          "name": "benefit_type",
+          "type": "point_shop_benefit_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "audience": {
+          "name": "audience",
+          "type": "point_shop_audience",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'all'"
+        },
+        "boosts_per_day": {
+          "name": "boosts_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_days": {
+          "name": "duration_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "boost_count": {
+          "name": "boost_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "extend_days": {
+          "name": "extend_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usage_limit_days": {
+          "name": "usage_limit_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stock_quantity": {
+          "name": "stock_quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -2141,6 +2193,62 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
+        },
+        "benefit_type": {
+          "name": "benefit_type",
+          "type": "point_shop_benefit_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "boosts_per_day": {
+          "name": "boosts_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_days": {
+          "name": "duration_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "boost_count": {
+          "name": "boost_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "extend_days": {
+          "name": "extend_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usable_until": {
+          "name": "usable_until",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "target_job_post_id": {
+          "name": "target_job_post_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expiry_notified_at": {
+          "name": "expiry_notified_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -2190,6 +2298,15 @@
           "tableFrom": "bambi_point_shop_order",
           "tableTo": "bambi_point_shop_item",
           "columnsFrom": ["item_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "bambi_point_shop_order_target_job_post_id_job_post_id_fk": {
+          "name": "bambi_point_shop_order_target_job_post_id_job_post_id_fk",
+          "tableFrom": "bambi_point_shop_order",
+          "tableTo": "job_post",
+          "columnsFrom": ["target_job_post_id"],
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
@@ -8651,7 +8768,7 @@
     "public.job_boost_purchase_source": {
       "name": "job_boost_purchase_source",
       "schema": "public",
-      "values": ["job_registration", "standalone"]
+      "values": ["job_registration", "standalone", "point_shop"]
     },
     "public.job_detail_design_status": {
       "name": "job_detail_design_status",
@@ -8767,7 +8884,25 @@
         "team_invitation",
         "organization_member",
         "support_chat",
-        "point_transaction"
+        "point_transaction",
+        "point_shop_order"
+      ]
+    },
+    "public.point_shop_audience": {
+      "name": "point_shop_audience",
+      "schema": "public",
+      "values": ["all", "employer", "job_seeker"]
+    },
+    "public.point_shop_benefit_type": {
+      "name": "point_shop_benefit_type",
+      "schema": "public",
+      "values": [
+        "none",
+        "coupon",
+        "boost_manual_period",
+        "boost_manual_count",
+        "boost_auto_period",
+        "ad_extend"
       ]
     },
     "public.promotion_status": {

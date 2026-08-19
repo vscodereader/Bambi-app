@@ -403,7 +403,7 @@ export const bambiIdentityVerification = pgTable(
 // 본인인증 수집 로그. 실인증이 확인될 때마다 생년월일·번호·성별과 구분(비회원/구직자/
 // 구인자)을 사람당 1행으로 남긴다 — (birth_date, phone_number)가 사람 식별 upsert 키.
 // 같은 사람이 재인증하면(포트원 인증 건 ID는 매번 새로 발급) 기존 행을 갱신한다.
-// 이름은 담지 않는다(PII 최소화).
+// 포트원 인증창이 돌려준 실명(name)도 함께 남긴다 — 미제공 시 null.
 // 개발자 SQL 전용 표다 — 조회 프로시저·관리자 화면을 만들지 않는다(쓰기 코드만 존재).
 // bambi_identity_verification(발급 기록)에 FK를 걸지 않는다: 그쪽은 만료 행을 정리하는
 // 대상이라 cascade로 수집 로그까지 사라지면 안 된다.
@@ -417,6 +417,8 @@ export const bambiIdentityVerificationLog = pgTable(
 		// YYYYMMDD 8자리(bambi_profile.birth_date와 같은 컨벤션).
 		birthDate: varchar("birth_date", { length: 8 }).notNull(),
 		gender: bambiGender("gender"),
+		// 포트원 인증 결과의 실명(verifiedCustomer.name). 미제공 시 null.
+		name: text("name"),
 		// 구분 — guest/job_seeker/employer. 가입 전 인증은 아직 모르므로 null이고,
 		// 가입이 끝나면 그 역할로 덮어쓴다.
 		kind: bambiUserRole("kind"),
