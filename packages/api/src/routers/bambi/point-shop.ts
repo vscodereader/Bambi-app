@@ -48,6 +48,7 @@ import {
 	resolveOwnedUsage,
 	resolvePurchase,
 	restoreItemStock,
+	shouldRestoreItemStock,
 	validateItemBenefitSpec,
 } from "../../services/bambi-point-shop";
 
@@ -210,10 +211,9 @@ export const pointShopRouter = {
 					});
 				}
 				// 재고 설정형은 조건부 원자 차감으로 서버 정본 품절을 판정한다(0행이면 롤백).
-				if (
-					item.stockQuantity !== null &&
-					!(await decrementItemStock(tx, item.id))
-				) {
+				// 차감 사실은 주문에 각인해 취소 복원의 근거로 쓴다(이후 무제한↔유한 전환 무관).
+				const stockDecremented = item.stockQuantity !== null;
+				if (stockDecremented && !(await decrementItemStock(tx, item.id))) {
 					throw new ORPCError("BAD_REQUEST", {
 						message: PURCHASE_DENIAL_MESSAGES.soldout,
 					});
@@ -237,6 +237,7 @@ export const pointShopRouter = {
 						itemName: item.name,
 						pricePoints: item.pricePoints,
 						status: isUsable ? "owned" : "pending",
+						stockDecremented,
 						usableUntil,
 						userId: profile.userId,
 					})
@@ -541,7 +542,8 @@ export const pointShopRouter = {
 					.update(bambiPointShopOrder)
 					.set({ processedAt: new Date(), status: "canceled" })
 					.where(eq(bambiPointShopOrder.id, order.id));
-				if (order.itemId) {
+				// 구매 시 실제 차감된 주문만 복원 — 이후 무제한↔유한 재고 전환에도 부풀림 없음.
+				if (shouldRestoreItemStock(order)) {
 					await restoreItemStock(tx, order.itemId);
 				}
 				// 환불(+): external_key 유니크로 멱등, 상한 클램프 적용. 클램프로 실제 환급이
@@ -800,7 +802,8 @@ export const pointShopRouter = {
 						status: "canceled",
 					})
 					.where(eq(bambiPointShopOrder.id, order.id));
-				if (order.itemId) {
+				// 회원 취소와 동일 가드 — 구매 시 실제 차감된 주문만 복원.
+				if (shouldRestoreItemStock(order)) {
 					await restoreItemStock(tx, order.itemId);
 				}
 				// 환불(+): external_key 유니크로 멱등, 상한 클램프(회원 취소와 동일 키·설명).

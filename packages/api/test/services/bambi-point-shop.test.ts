@@ -15,6 +15,7 @@ import {
 	resolveOwnedUsage,
 	resolvePurchase,
 	restoreItemStock,
+	shouldRestoreItemStock,
 	validateItemBenefitSpec,
 } from "../../src/services/bambi-point-shop";
 
@@ -366,6 +367,24 @@ describe("isJobPostUsableForBenefit", () => {
 				paymentStatus: "paid",
 				status: "published",
 			})
+		).toBe(false);
+	});
+});
+
+describe("shouldRestoreItemStock (취소 시 재고 복원 판정)", () => {
+	it("구매 시 실제 차감된 주문만 복원한다", () => {
+		expect(
+			shouldRestoreItemStock({ itemId: "item-1", stockDecremented: true })
+		).toBe(true);
+	});
+	it("무제한 시점 구매(미차감)는 이후 유한 재고 전환에도 복원하지 않는다", () => {
+		expect(
+			shouldRestoreItemStock({ itemId: "item-1", stockDecremented: false })
+		).toBe(false);
+	});
+	it("아이템이 삭제된 주문(itemId null)은 복원하지 않는다", () => {
+		expect(
+			shouldRestoreItemStock({ itemId: null, stockDecremented: true })
 		).toBe(false);
 	});
 });
