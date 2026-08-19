@@ -367,7 +367,7 @@ export function ChatHistoryDialog({
 			}}
 			open={viewing !== null}
 		>
-			<DialogContent className="max-w-2xl">
+			<DialogContent className="w-[calc(100vw-2rem)] max-w-2xl px-5 sm:w-[640px] sm:px-6">
 				<DialogTitle>채팅 내역</DialogTitle>
 				<DialogDescription>
 					"{viewing?.title}" 채팅방의 전체 대화를 시간순으로 봅니다. 열람은 읽기

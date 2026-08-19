@@ -16,17 +16,24 @@ const [
 	authSchema,
 	bambiSchema,
 	{ attendanceRouter },
+	{ pointSettingsRouter },
 	attendanceService,
 ] = await Promise.all([
 	import("@bambi-app/db"),
 	import("@bambi-app/db/schema/auth"),
 	import("@bambi-app/db/schema/bambi"),
 	import("@/routers/bambi/attendance"),
+	import("@/routers/bambi/point-settings"),
 	import("@/services/bambi-attendance"),
 ]);
 
 const { user } = authSchema;
-const { bambiAttendance, bambiPointTransaction, bambiProfile } = bambiSchema;
+const {
+	bambiAttendance,
+	bambiNotification,
+	bambiPointTransaction,
+	bambiProfile,
+} = bambiSchema;
 
 const createContextForUser = (userId: string): Context =>
 	({
@@ -48,6 +55,9 @@ const createUser = async (role: "admin" | "employer" | "job_seeker") => {
 };
 
 const cleanup = async (userIds: string[]) => {
+	await db
+		.delete(bambiNotification)
+		.where(inArray(bambiNotification.recipientUserId, userIds));
 	await db
 		.delete(bambiAttendance)
 		.where(inArray(bambiAttendance.userId, userIds));
@@ -217,6 +227,7 @@ describe("bambi attendance router", () => {
 				userId: seekerUserId,
 			});
 			expect(granted.pointBalance).toBe(100);
+			expect(granted.applied).toBe(100);
 
 			const deducted = await adjust({
 				amount: -30,
@@ -232,7 +243,9 @@ describe("bambi attendance router", () => {
 
 			const ledger = await db
 				.select({
+					actorUserId: bambiPointTransaction.actorUserId,
 					amount: bambiPointTransaction.amount,
+					balanceAfter: bambiPointTransaction.balanceAfter,
 					reason: bambiPointTransaction.reason,
 				})
 				.from(bambiPointTransaction)
@@ -242,6 +255,79 @@ describe("bambi attendance router", () => {
 			expect(ledger.map((row) => row.reason).sort()).toEqual([
 				"운영자 지급: 이벤트 보상",
 				"운영자 차감: 오지급 회수",
+			]);
+			expect(ledger.every((row) => row.actorUserId === adminUserId)).toBe(true);
+			expect(
+				ledger
+					.map((row) => row.balanceAfter)
+					.sort((a, b) => (a ?? 0) - (b ?? 0))
+			).toEqual([70, 100]);
+
+			const notifications = await db
+				.select({
+					metadata: bambiNotification.metadata,
+					targetId: bambiNotification.targetId,
+					targetType: bambiNotification.targetType,
+				})
+				.from(bambiNotification)
+				.where(eq(bambiNotification.recipientUserId, seekerUserId));
+			expect(notifications).toHaveLength(1);
+			expect(notifications[0]).toMatchObject({
+				metadata: { action: "admin_awarded", amount: 100 },
+				targetId: granted.transactionId,
+				targetType: "point_transaction",
+			});
+
+			const getHistory = createProcedureClient(
+				pointSettingsRouter.getMineHistory,
+				{ context: createContextForUser(seekerUserId) }
+			);
+			const history = await getHistory({ limit: 10 });
+			expect(history.balance).toBe(70);
+			expect(history.items).toHaveLength(2);
+			expect(
+				history.items.map(({ amount, label }) => ({ amount, label }))
+			).toEqual([
+				{ amount: -30, label: "운영자 차감: 오지급 회수" },
+				{ amount: 100, label: "운영자 지급: 이벤트 보상" },
+			]);
+
+			const listMembers = createProcedureClient(
+				pointSettingsRouter.listAdminMembers,
+				{ context: createContextForUser(adminUserId) }
+			);
+			const members = await listMembers({
+				page: 1,
+				pageSize: 10,
+				search: "출석 테스트 계정",
+			});
+			expect(members.items.some((item) => item.userId === seekerUserId)).toBe(
+				true
+			);
+
+			const getAdminMember = createProcedureClient(
+				pointSettingsRouter.getAdminMember,
+				{ context: createContextForUser(adminUserId) }
+			);
+			const member = await getAdminMember({ userId: seekerUserId });
+			expect(member.pointBalance).toBe(70);
+
+			const listAdminHistory = createProcedureClient(
+				pointSettingsRouter.listAdminMemberHistory,
+				{ context: createContextForUser(adminUserId) }
+			);
+			const adminHistory = await listAdminHistory({
+				page: 1,
+				pageSize: 10,
+				userId: seekerUserId,
+			});
+			expect(adminHistory.totalCount).toBe(2);
+			expect(adminHistory.items.map((item) => item.processor)).toEqual([
+				"출석 테스트 계정",
+				"출석 테스트 계정",
+			]);
+			expect(adminHistory.items.map((item) => item.balanceAfter)).toEqual([
+				70, 100,
 			]);
 
 			// 운영자 계정은 출석 대상 역할이 아니라 조정 대상이 될 수 없다.

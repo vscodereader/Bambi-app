@@ -4,11 +4,12 @@ import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import type { Route } from "next";
 import Link from "next/link";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
-import { GradeBadge } from "@/components/bambi/grade-badge";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import type { ManagedUser, UserStatus } from "@/lib/bambi/types";
 
 type Tone = React.ComponentProps<typeof StatusBadge>["tone"];
+const CENTER_HEADER = "text-center [&>button]:mx-auto";
+const CENTER_CELL = "h-14 text-center align-middle";
 
 const STATUS_CONF: Record<UserStatus, { label: string; tone: Tone }> = {
 	active: { label: "정상", tone: "good" },
@@ -22,6 +23,18 @@ const statusConf = (user: ManagedUser): { label: string; tone: Tone } =>
 	user.deletedAt
 		? { label: "탈퇴", tone: "default" }
 		: STATUS_CONF[user.status];
+
+const truncateEmail = (email: string): string => {
+	const characters = Array.from(email);
+	return characters.length > 20
+		? `${characters.slice(0, 20).join("")}...`
+		: email;
+};
+
+const truncateName = (name: string): string => {
+	const characters = Array.from(name);
+	return characters.length > 7 ? `${characters.slice(0, 7).join("")}...` : name;
+};
 
 interface ModeratorUsersTableProps {
 	listHref: string;
@@ -66,46 +79,58 @@ function getColumns({
 		{
 			id: "name",
 			header: "이름",
-			cellClassName: "h-14",
+			headerClassName: CENTER_HEADER,
+			cellClassName: CENTER_CELL,
 			sortValue: (user) => user.name,
 			cell: (user) => (
-				<div className="flex flex-col gap-0.5">
-					<Link
-						className="whitespace-nowrap font-medium text-foreground underline-offset-4 hover:underline"
-						href={
-							`/moderator/users/${user.id}?returnTo=${encodeURIComponent(listHref)}` as Route
-						}
-					>
-						{user.name}
-					</Link>
-					{user.organizationNames.length > 0 ? (
-						<span className="whitespace-nowrap text-muted-foreground text-xs">
-							{user.organizationNames.join(", ")}
-						</span>
-					) : (
-						<span aria-hidden="true" className="text-xs">
-							&nbsp;
-						</span>
-					)}
-				</div>
+				<Link
+					className="whitespace-nowrap font-medium text-foreground underline-offset-4 hover:underline"
+					href={
+						`/moderator/users/${user.id}?returnTo=${encodeURIComponent(listHref)}` as Route
+					}
+					title={user.name}
+				>
+					{truncateName(user.name)}
+				</Link>
+			),
+		},
+		{
+			id: "organization",
+			header: "소속 업소",
+			headerClassName: CENTER_HEADER,
+			cellClassName: CENTER_CELL,
+			sortValue: (user) => user.organizationNames.join(", "),
+			cell: (user) => (
+				<span className="mx-auto block max-w-36 truncate text-muted-foreground">
+					{user.organizationNames.length > 0
+						? user.organizationNames.join(", ")
+						: "-"}
+				</span>
 			),
 		},
 		{
 			id: "email",
 			header: "이메일",
+			headerClassName: CENTER_HEADER,
+			cellClassName: CENTER_CELL,
 			sortValue: (user) => user.email,
 			cell: (user) => (
-				<span className="block max-w-56 truncate text-muted-foreground">
-					{user.email}
+				<span
+					className="mx-auto block max-w-44 truncate text-muted-foreground"
+					title={user.email}
+				>
+					{truncateEmail(user.email)}
 				</span>
 			),
 		},
 		{
 			id: "loginId",
 			header: "아이디",
+			headerClassName: CENTER_HEADER,
+			cellClassName: CENTER_CELL,
 			sortValue: (user) => user.loginId ?? "",
 			cell: (user) => (
-				<span className="block max-w-40 truncate text-muted-foreground">
+				<span className="mx-auto block max-w-32 truncate text-muted-foreground">
 					{user.loginId ?? "-"}
 				</span>
 			),
@@ -113,30 +138,18 @@ function getColumns({
 		{
 			id: "role",
 			header: "역할",
+			headerClassName: CENTER_HEADER,
+			cellClassName: CENTER_CELL,
 			sortValue: (user) => user.role,
 			cell: (user) => (
 				<span className="text-muted-foreground">{user.role}</span>
 			),
 		},
 		{
-			id: "grade",
-			header: "등급",
-			sortValue: (user) => user.grade?.name ?? "",
-			cell: (user) => <GradeBadge grade={user.grade} />,
-		},
-		{
-			id: "points",
-			header: "포인트",
-			sortValue: (user) => user.pointBalance,
-			cell: (user) => (
-				<span className="whitespace-nowrap tabular-nums">
-					{`${user.pointBalance.toLocaleString()}P`}
-				</span>
-			),
-		},
-		{
 			id: "status",
 			header: "상태",
+			headerClassName: CENTER_HEADER,
+			cellClassName: CENTER_CELL,
 			sortValue: (user) => statusConf(user).label,
 			cell: (user) => {
 				const conf = statusConf(user);
@@ -147,6 +160,8 @@ function getColumns({
 		{
 			id: "reports",
 			header: "누적 신고",
+			headerClassName: CENTER_HEADER,
+			cellClassName: CENTER_CELL,
 			sortValue: (user) => user.reports,
 			cell: (user) => (
 				<span className="whitespace-nowrap">{`${user.reports}건`}</span>
@@ -155,6 +170,8 @@ function getColumns({
 		{
 			id: "warnings",
 			header: "경고",
+			headerClassName: CENTER_HEADER,
+			cellClassName: CENTER_CELL,
 			sortValue: (user) => user.warnings,
 			cell: (user) => (
 				<span className="whitespace-nowrap">{`${user.warnings}회`}</span>
@@ -163,6 +180,8 @@ function getColumns({
 		{
 			id: "joined",
 			header: "가입일",
+			headerClassName: CENTER_HEADER,
+			cellClassName: CENTER_CELL,
 			sortValue: (user) => user.joinedAt.getTime(),
 			cell: (user) => (
 				<span className="whitespace-nowrap text-muted-foreground">
@@ -193,7 +212,7 @@ export function ModeratorUsersTable({
 	});
 
 	return (
-		<div>
+		<div className="md:-mx-3 md:w-[calc(100%+1.5rem)]">
 			<DataTable
 				columns={columns}
 				data={users}
@@ -206,7 +225,7 @@ export function ModeratorUsersTable({
 				reservePageRows
 				rowClassName="h-14"
 				showPageInput
-				tableClassName="overflow-hidden rounded-xl border border-border"
+				tableClassName="overflow-hidden rounded-xl border border-border [&_td]:px-1 [&_th]:px-1"
 			/>
 		</div>
 	);

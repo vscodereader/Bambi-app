@@ -13,6 +13,7 @@ import {
 	adminModerationAction,
 	bambiLegalConsent,
 	bambiProfile,
+	bambiSiteSettings,
 	employerBusinessDocument,
 	employerOrganizationProfile,
 	employerTeamProfile,
@@ -61,6 +62,7 @@ import {
 	deriveEmployerApprovalStatus,
 	type OrganizationRole,
 } from "../../services/bambi-onboarding";
+import { awardMemberPoints } from "../../services/bambi-point-ledger";
 import { resolveOptionalRegion } from "../../services/bambi-region";
 import {
 	createBusinessDocumentUploadIntent,
@@ -476,20 +478,36 @@ const createBambiProfile = async ({
 		});
 	}
 
-	const [createdProfile] = await db
-		.insert(bambiProfile)
-		.values({
-			userId,
-			role,
-			phoneNumber: identity?.phoneNumber ?? phoneNumber,
-			// 실인증 결과가 신뢰 원천이므로 클라이언트가 보낸 성별을 덮어쓴다.
-			gender: identity?.gender ?? gender,
-			birthDate: identity?.birth8,
-			ciHash: identity?.ciHash,
-			diHash: identity?.diHash,
-			isPhoneVerified: identity !== null,
-		})
-		.returning();
+	const createdProfile = await db.transaction(async (tx) => {
+		const [created] = await tx
+			.insert(bambiProfile)
+			.values({
+				userId,
+				role,
+				phoneNumber: identity?.phoneNumber ?? phoneNumber,
+				gender: identity?.gender ?? gender,
+				birthDate: identity?.birth8,
+				ciHash: identity?.ciHash,
+				diHash: identity?.diHash,
+				isPhoneVerified: identity !== null,
+			})
+			.returning();
+		const [settings] = await tx
+			.select({ points: bambiSiteSettings.signupPoints })
+			.from(bambiSiteSettings)
+			.where(eq(bambiSiteSettings.id, "default"))
+			.limit(1);
+		const signupPoints = settings?.points ?? 1000;
+		if (signupPoints > 0) {
+			await awardMemberPoints(tx, {
+				amount: signupPoints,
+				externalKey: `signup_bonus:${userId}`,
+				reason: "signup_bonus",
+				userId,
+			});
+		}
+		return created;
+	});
 
 	return toClientProfile(createdProfile);
 };

@@ -39,6 +39,7 @@ export const resolveCommunityAccess = (
 		active &&
 		(profile.role === "admin" ||
 			profile.role === "legal_advisor" ||
+			(profile.role === "job_seeker" && profile.gender !== null) ||
 			(profile.role === "employer"
 				? profile.isAdvertiser
 				: profile.gender === "female"));

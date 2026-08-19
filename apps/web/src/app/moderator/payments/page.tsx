@@ -49,7 +49,9 @@ const paymentTotal = (job: PaymentJob): null | number => {
 		(sum, purchase) => sum + purchase.amount,
 		0
 	);
-	return base === null && boostTotal === 0 ? null : (base ?? 0) + boostTotal;
+	return base === null && boostTotal === 0 && job.pointsUsed === 0
+		? null
+		: Math.max(0, (base ?? 0) + boostTotal - job.pointsUsed);
 };
 
 const BUNDLED_PAYMENT_LABELS = {
@@ -83,6 +85,11 @@ function PaymentAmountBreakdown({ job }: { job: PaymentJob }) {
 					{formatAdPrice(purchase.amount)}
 				</span>
 			))}
+			{job.pointsUsed > 0 ? (
+				<span className="whitespace-nowrap font-medium text-primary text-xs">
+					포인트 -{formatAdPrice(job.pointsUsed)}
+				</span>
+			) : null}
 		</div>
 	);
 }

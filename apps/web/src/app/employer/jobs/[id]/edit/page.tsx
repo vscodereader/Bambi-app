@@ -1,5 +1,7 @@
 "use client";
 
+import { sumJobPaymentAmount } from "@bambi-app/api/services/bambi-job-detail-design";
+
 import {
 	Alert,
 	AlertDescription,
@@ -39,6 +41,7 @@ import {
 	getNewBoostOptionTypes,
 	type JobBoostPurchaseSummary,
 	JobExposureFields,
+	sumBoostOptionPrices,
 } from "@/components/bambi/job-exposure-fields";
 import { JobPayFields } from "@/components/bambi/job-pay-fields";
 import { JobPostBlockEditor } from "@/components/bambi/job-post-block-editor";
@@ -249,6 +252,7 @@ const toCheckedBoostOptionTypes = (
 ): JobBoostOptionTypeKey[] =>
 	Array.from(getBoostPurchaseStates(purchases, now).keys());
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: 기존 공고 편집 폼의 상태 전이와 결제 검증을 한 제출 경계에서 관리한다.
 export default function EditEmployerJobPage({
 	params,
 }: {
@@ -330,6 +334,23 @@ export default function EditEmployerJobPage({
 		media,
 	});
 	const job = jobQuery.data;
+	const boostOptionsQuery = useQuery(
+		orpc.bambi.boostOptions.listOptions.queryOptions()
+	);
+	const existingRegistrationBoostAmount = (job?.boostPurchases ?? [])
+		.filter((purchase) => purchase.purchaseSource === "job_registration")
+		.reduce((sum, purchase) => sum + purchase.amount, 0);
+	const existingTypes = new Set(
+		(job?.boostPurchases ?? []).map((purchase) => purchase.optionType)
+	);
+	const addedBoostTypes = (form.boostOptionTypes ?? []).filter(
+		(type) => !existingTypes.has(type)
+	);
+	const editedGrossAmount =
+		(sumJobPaymentAmount(form.exposureAmount, form.detailDesignAmount) ?? 0) +
+		existingRegistrationBoostAmount +
+		sumBoostOptionPrices(boostOptionsQuery.data, addedBoostTypes);
+	const pointsExceedEditedTotal = (job?.pointsUsed ?? 0) > editedGrossAmount;
 	const postingScopes = mineQuery.data?.employerJobPostingScopes ?? [];
 	const selectedPostingScope = findPostingScope(postingScopes, form);
 	const previewCompanyName = getPostingScopeDisplayName(selectedPostingScope);
@@ -1004,6 +1025,30 @@ export default function EditEmployerJobPage({
 						onProductChange={handleProductChange}
 						paymentMethod={form.paymentMethod}
 					/>
+					{pointsExceedEditedTotal ? (
+						<Alert variant="destructive">
+							<TriangleAlert />
+							<AlertTitle>결제금액보다 사용 포인트가 큽니다</AlertTitle>
+							<AlertDescription>
+								변경된 결제금액이 이미 사용한 포인트보다 적습니다. 공고를
+								취소하여 포인트를 환급받은 뒤 다시 등록해 주세요.
+							</AlertDescription>
+						</Alert>
+					) : null}
+					{(job?.pointsUsed ?? 0) > 0 && !pointsExceedEditedTotal ? (
+						<Alert>
+							<AlertTitle>등록 시 사용한 포인트는 유지됩니다</AlertTitle>
+							<AlertDescription>
+								사용 포인트 {(job?.pointsUsed ?? 0).toLocaleString("ko-KR")}P ·
+								변경 후 최종 입금액{" "}
+								{Math.max(
+									0,
+									editedGrossAmount - (job?.pointsUsed ?? 0)
+								).toLocaleString("ko-KR")}
+								원입니다. 수정 화면에서는 포인트를 추가로 사용할 수 없습니다.
+							</AlertDescription>
+						</Alert>
+					) : null}
 
 					<div className="xl:hidden">{listingPreview}</div>
 
@@ -1055,7 +1100,8 @@ export default function EditEmployerJobPage({
 										createMediaUploadMutation.isPending ||
 										cardPaymentBlocked ||
 										bankTransferBlocked ||
-										bannerImagesMissing
+										bannerImagesMissing ||
+										pointsExceedEditedTotal
 									}
 									type="submit"
 								>
