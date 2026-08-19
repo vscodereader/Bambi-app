@@ -13,7 +13,7 @@ import z from "zod";
 
 import type { Context } from "../../context";
 import { adminProcedure, publicProcedure } from "../../index";
-import { requireActiveBambiProfile } from "../../services/bambi-authz";
+import { requireBambiAccessProfile } from "../../services/bambi-authz";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
 import {
 	isSupportChatRoomEffectivelyClosed,
@@ -263,9 +263,10 @@ export const supportChatRouter = {
 				throw new ORPCError("UNAUTHORIZED", { message: NO_IDENTITY_ERROR });
 			}
 			if (inquirer.kind === "member") {
-				// 정지 계정 차단 겸 역할 확인. 운영자 계정은 받는 쪽이다 — 자기 문의가
-				// 공용 큐에 섞이면 처리 대상이 흐려진다(기존 티켓과 같은 규칙).
-				const profile = await requireActiveBambiProfile(context.session);
+				// 운영자 문의는 이용정지 회원에게도 열어 둔 유일한 예외 기능이다. 활성 상태
+				// 가드 대신 프로필 존재와 역할만 확인한다. 운영자 계정은 받는 쪽이다 — 자기
+				// 문의가 공용 큐에 섞이면 처리 대상이 흐려진다(기존 티켓과 같은 규칙).
+				const profile = await requireBambiAccessProfile(context.session);
 				if (profile.role === "admin") {
 					throw new ORPCError("FORBIDDEN", {
 						message: "운영자 계정은 문의 채팅을 보낼 수 없어요.",

@@ -53,6 +53,19 @@ const queueSectionLabel = (item: BambiNotificationView): null | string =>
 const isShared = (item: BambiNotificationView): boolean =>
 	item.recipientRole !== null;
 
+const pointTransactionTitle = (item: BambiNotificationView): null | string => {
+	if (
+		item.targetType !== "point_transaction" ||
+		action(item) !== "admin_awarded"
+	) {
+		return null;
+	}
+	const amount = readNumber(item.metadata, "amount");
+	return amount === null
+		? null
+		: `운영자로부터 ${amount.toLocaleString("ko-KR")} 포인트가 지급되었습니다!`;
+};
+
 // (targetType, action) 조합 문구. 조합이 없으면 targetType 기본 문구로 떨어진다.
 const TITLE_BY_TARGET_AND_ACTION: Record<string, string> = {
 	"community_comment:reply": "내 댓글에 답글이 달렸어요",
@@ -98,6 +111,7 @@ const TITLE_BY_TARGET_AND_ACTION: Record<string, string> = {
 	"organization_member:ownership_transferred": "조직 소유권을 넘겨받았어요",
 	"organization_member:removed": "조직에서 제외됐어요",
 	"organization_member:role_changed": "조직 내 권한이 변경됐어요",
+	"point_transaction:admin_awarded": "운영자로부터 포인트가 지급됐어요",
 	// 업주가 받는 "새 후기 등록"(reviews.ts action: "created"). 폴백 문구로 떨어지면
 	// "후기 상태가 변경됐어요"가 되어 내 후기가 조치된 것처럼 정반대로 읽힌다.
 	"review:created": "내 업소에 새 후기가 등록됐어요",
@@ -135,6 +149,7 @@ const TITLE_BY_TARGET: Record<string, string> = {
 	interview_schedule: "면접 일정에 변동이 있어요",
 	job_post: "공고 상태가 변경됐어요",
 	organization_member: "조직 구성원 정보가 변경됐어요",
+	point_transaction: "포인트에 변동이 있어요",
 	report: "신고 처리 결과가 나왔어요",
 	review: "후기 상태가 변경됐어요",
 	support_chat: "문의 채팅에 변동이 있어요",
@@ -237,6 +252,7 @@ export function notificationTitle(item: BambiNotificationView): string {
 	const key = `${item.targetType}:${normalizedAction}`;
 
 	return (
+		pointTransactionTitle(item) ??
 		dynamicTitle(item, key) ??
 		TITLE_BY_TARGET_AND_ACTION[key] ??
 		TITLE_BY_TARGET[item.targetType] ??
@@ -359,6 +375,8 @@ export function notificationHref(item: BambiNotificationView): null | string {
 				: "/employer/settings/teams";
 		case "team_invitation":
 			return "/employer/settings/teams";
+		case "point_transaction":
+			return "/seeker/attendance#point-history";
 		case "report":
 			return "/seeker/me/reports";
 		case "review": {

@@ -1257,7 +1257,18 @@ export const communityRouter = {
 				slug: BEST_BOARD,
 			},
 			...boards,
-		];
+		].filter((board) => {
+			if (profile?.role === "job_seeker" && profile.gender === "male") {
+				return board.key === "notice";
+			}
+			if (profile?.role === "legal_advisor") {
+				return (
+					board.key === "legal" ||
+					(profile.gender === "male" && board.key === "notice")
+				);
+			}
+			return true;
+		});
 
 		const postsPerBoard = await Promise.all(
 			previews.map((board) =>

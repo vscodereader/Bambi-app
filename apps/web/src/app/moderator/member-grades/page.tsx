@@ -110,10 +110,8 @@ function getGradeColumns({
 		{
 			id: "actions",
 			header: "관리",
-			headerClassName: "text-right",
-			cellClassName: "text-right",
 			cell: (row) => (
-				<div className="flex justify-end gap-2">
+				<div className="flex gap-2">
 					<Button
 						onClick={() => onEdit(row)}
 						size="sm"

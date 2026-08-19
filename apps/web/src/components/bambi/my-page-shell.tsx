@@ -31,6 +31,7 @@ import {
 	ChevronRightIcon,
 	ClipboardListIcon,
 	ClockIcon,
+	DollarCircle,
 	LockIcon,
 	Message,
 	SettingsIcon,
@@ -74,8 +75,8 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 	},
 	{
 		href: ATTENDANCE_HREF,
-		icon: <ClockIcon />,
-		label: "출석체크",
+		icon: <DollarCircle />,
+		label: "포인트 내역",
 	},
 	{
 		href: "/seeker/me/settings" as Route,
@@ -221,9 +222,11 @@ function SignOutButton() {
 
 export function MyPageShell({
 	children,
+	hubSummary,
 	title,
 }: {
 	children: ReactNode;
+	hubSummary?: ReactNode;
 	title: string;
 }) {
 	const pathname = usePathname();
@@ -259,13 +262,18 @@ export function MyPageShell({
 					{title}
 				</h1>
 				{isHub ? (
-					<div className="flex flex-col gap-4 md:hidden">
-						<ProfileCard />
-						<div className="rounded-xl border border-border bg-card p-2">
-							<MyPageNav />
+					<>
+						<div className="md:hidden">
+							<ProfileCard />
 						</div>
-						<SignOutButton />
-					</div>
+						{hubSummary}
+						<div className="flex flex-col gap-4 md:hidden">
+							<div className="rounded-xl border border-border bg-card p-2">
+								<MyPageNav />
+							</div>
+							<SignOutButton />
+						</div>
+					</>
 				) : null}
 				{children}
 			</div>

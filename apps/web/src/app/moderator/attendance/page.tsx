@@ -362,7 +362,7 @@ export default function ModeratorAttendancePage() {
 									</TableHead>
 								))}
 								<TableHead>포인트</TableHead>
-								<TableHead className="text-right">관리</TableHead>
+								<TableHead>관리</TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
@@ -397,7 +397,7 @@ export default function ModeratorAttendancePage() {
 									<TableCell className="whitespace-nowrap font-medium">
 										{formatPoints(item.pointBalance)}
 									</TableCell>
-									<TableCell className="text-right">
+									<TableCell>
 										<Button
 											onClick={() => setAdjusting(item)}
 											size="sm"

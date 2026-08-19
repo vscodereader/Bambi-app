@@ -6,6 +6,12 @@
 // 달력은 라이브러리 없이 Tailwind 7열 grid로 직접 그린다(의존성 추가 금지).
 // embedded=true면 MyPageShell 안에 들어간 상태 — 셸이 여백·제목을 주므로 자체 여백과 h1을 뺀다.
 
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Card,
@@ -21,6 +27,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { GradeBadge } from "@/components/bambi/grade-badge";
+import { PointHistoryCard } from "@/components/bambi/point-history-card";
 import { buildMonthGrid, shiftMonth } from "@/lib/bambi/attendance-calendar";
 import { orpc } from "@/utils/orpc";
 
@@ -94,6 +101,7 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 	}
 
 	const {
+		attendancePoints,
 		attendedDates,
 		checkedInToday,
 		grade,
@@ -111,10 +119,11 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 		<div className={containerClass}>
 			<div className="flex flex-col gap-1">
 				{embedded ? null : (
-					<h1 className="m-0 font-extrabold text-2xl">출석체크</h1>
+					<h1 className="m-0 font-extrabold text-2xl">포인트 내역</h1>
 				)}
 				<p className="m-0 text-muted-foreground text-sm">
-					하루에 한 번 출석 도장을 찍고 10포인트를 받아요.
+					하루에 한 번 출석 도장을 찍고{" "}
+					{attendancePoints.toLocaleString("ko-KR")}포인트를 받아요.
 				</p>
 			</div>
 
@@ -152,77 +161,88 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 						onClick={() => checkIn.mutate({})}
 						size="lg"
 					>
-						{checkedInToday ? "오늘 출석 완료" : "출석하기"}
+						{checkedInToday ? "출석 완료" : "출석하기"}
 					</Button>
 				</CardContent>
 			</Card>
 
 			<Card>
-				<CardHeader className="flex flex-row items-center justify-between gap-2">
-					<CardTitle className="text-base">{monthLabel(viewMonth)}</CardTitle>
-					<div className="flex gap-1">
-						<Button
-							aria-label="이전 달"
-							onClick={() => setMonth(shiftMonth(viewMonth, -1))}
-							size="icon-sm"
-							variant="outline"
-						>
-							<ChevronLeftIcon />
-						</Button>
-						<Button
-							aria-label="다음 달"
-							onClick={() => setMonth(shiftMonth(viewMonth, 1))}
-							size="icon-sm"
-							variant="outline"
-						>
-							<ChevronRightIcon />
-						</Button>
-					</div>
-				</CardHeader>
-				<CardContent>
-					<div className="grid grid-cols-7 gap-1">
-						{WEEKDAY_LABELS.map((label) => (
-							<div
-								className="py-1 text-center font-bold text-muted-foreground text-xs"
-								key={label}
-							>
-								{label}
-							</div>
-						))}
-						{buildMonthGrid(viewMonth).map((cell) => {
-							if (cell.date === null) {
-								return <div key={cell.key} />;
-							}
-
-							// 출석·오늘이 배경색과 테두리로만 구분되면 스크린리더·색각이상 사용자에게
-							// 전달되지 않는다(WCAG 1.4.1). 칸 안에 sr-only 텍스트를 같이 읽힌다 —
-							// div는 generic role이라 aria-label이 무시되므로 텍스트로 넣는다.
-							const marks = `${cell.date === today ? " 오늘" : ""}${
-								attended.has(cell.date) ? " 출석" : ""
-							}`;
-
-							return (
-								<div
-									className={cn(
-										"flex aspect-square items-center justify-center rounded-md border border-transparent text-sm",
-										attended.has(cell.date)
-											? "bg-primary/15 font-bold text-primary"
-											: "text-muted-foreground",
-										cell.date === today && "border-primary"
-									)}
-									key={cell.key}
-								>
-									{Number(cell.date.slice(8, 10))}
-									{marks ? <span className="sr-only">{marks}</span> : null}
+				<Accordion>
+					<AccordionItem className="border-0" value="attendance-calendar">
+						<AccordionTrigger className="px-6 py-5 font-bold text-base hover:no-underline">
+							출석 달력
+						</AccordionTrigger>
+						<AccordionContent className="px-6 pb-5">
+							<div className="mb-4 flex items-center justify-between gap-2">
+								<h2 className="m-0 font-bold text-base">
+									{monthLabel(viewMonth)}
+								</h2>
+								<div className="flex gap-1">
+									<Button
+										aria-label="이전 달"
+										onClick={() => setMonth(shiftMonth(viewMonth, -1))}
+										size="icon-sm"
+										variant="outline"
+									>
+										<ChevronLeftIcon />
+									</Button>
+									<Button
+										aria-label="다음 달"
+										onClick={() => setMonth(shiftMonth(viewMonth, 1))}
+										size="icon-sm"
+										variant="outline"
+									>
+										<ChevronRightIcon />
+									</Button>
 								</div>
-							);
-						})}
-					</div>
-					<p className="mt-3 mb-0 text-muted-foreground text-xs">
-						색이 채워진 날이 출석한 날이에요. 테두리는 오늘이에요.
-					</p>
-				</CardContent>
+							</div>
+							<div className="grid grid-cols-7 gap-1">
+								{WEEKDAY_LABELS.map((label) => (
+									<div
+										className="py-1 text-center font-bold text-muted-foreground text-xs"
+										key={label}
+									>
+										{label}
+									</div>
+								))}
+								{buildMonthGrid(viewMonth).map((cell) => {
+									if (cell.date === null) {
+										return <div key={cell.key} />;
+									}
+
+									// 출석·오늘이 배경색과 테두리로만 구분되면 스크린리더·색각이상 사용자에게
+									// 전달되지 않는다(WCAG 1.4.1). 칸 안에 sr-only 텍스트를 같이 읽힌다 —
+									// div는 generic role이라 aria-label이 무시되므로 텍스트로 넣는다.
+									const marks = `${cell.date === today ? " 오늘" : ""}${
+										attended.has(cell.date) ? " 출석" : ""
+									}`;
+
+									return (
+										<div
+											className={cn(
+												"flex aspect-square items-center justify-center rounded-md border border-transparent text-sm",
+												attended.has(cell.date)
+													? "bg-primary/15 font-bold text-primary"
+													: "text-muted-foreground",
+												cell.date === today && "border-primary"
+											)}
+											key={cell.key}
+										>
+											{Number(cell.date.slice(8, 10))}
+											{marks ? <span className="sr-only">{marks}</span> : null}
+										</div>
+									);
+								})}
+							</div>
+							<p className="mt-3 mb-0 text-muted-foreground text-xs">
+								색이 채워진 날이 출석한 날이에요. 테두리는 오늘이에요.
+							</p>
+						</AccordionContent>
+					</AccordionItem>
+				</Accordion>
 			</Card>
+
+			<PointHistoryCard />
 		</div>
 	);
 }

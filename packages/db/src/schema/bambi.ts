@@ -191,6 +191,7 @@ export const notificationTargetType = pgEnum("notification_target_type", [
 	"team_invitation",
 	"organization_member",
 	"support_chat",
+	"point_transaction",
 ]);
 
 // 수다방 게시판 정의. 운영자가 코드 배포 없이 추가·수정할 수 있도록 enum이 아니라
@@ -398,7 +399,7 @@ export const bambiIdentityVerification = pgTable(
 // 본인인증 수집 로그. 실인증이 확인될 때마다 생년월일·번호·성별과 구분(비회원/구직자/
 // 구인자)을 사람당 1행으로 남긴다 — (birth_date, phone_number)가 사람 식별 upsert 키.
 // 같은 사람이 재인증하면(포트원 인증 건 ID는 매번 새로 발급) 기존 행을 갱신한다.
-// 이름은 담지 않는다(PII 최소화).
+// 포트원 인증창이 돌려준 실명(name)도 함께 남긴다 — 미제공 시 null.
 // 개발자 SQL 전용 표다 — 조회 프로시저·관리자 화면을 만들지 않는다(쓰기 코드만 존재).
 // bambi_identity_verification(발급 기록)에 FK를 걸지 않는다: 그쪽은 만료 행을 정리하는
 // 대상이라 cascade로 수집 로그까지 사라지면 안 된다.
@@ -412,6 +413,8 @@ export const bambiIdentityVerificationLog = pgTable(
 		// YYYYMMDD 8자리(bambi_profile.birth_date와 같은 컨벤션).
 		birthDate: varchar("birth_date", { length: 8 }).notNull(),
 		gender: bambiGender("gender"),
+		// 포트원 인증 결과의 실명(verifiedCustomer.name). 미제공 시 null.
+		name: text("name"),
 		// 구분 — guest/job_seeker/employer. 가입 전 인증은 아직 모르므로 null이고,
 		// 가입이 끝나면 그 역할로 덮어쓴다.
 		kind: bambiUserRole("kind"),
@@ -918,6 +921,14 @@ export const jobPost = pgTable(
 		paymentStatus: jobPaymentStatus("payment_status")
 			.default("unpaid")
 			.notNull(),
+		pointsUsed: integer("points_used").default(0).notNull(),
+		pointsUsedByUserId: text("points_used_by_user_id").references(
+			() => user.id,
+			{ onDelete: "set null" }
+		),
+		pointsRefundedAt: timestamp("points_refunded_at"),
+		pointsRefundLockedAt: timestamp("points_refund_locked_at"),
+		submissionKey: uuid("submission_key").defaultRandom().notNull(),
 		exposureEndsAt: timestamp("exposure_ends_at"),
 		// 마지막 끌어올림(점프) 시각. 노출 정렬 키 GREATEST(boosted_at, published_at)의 재료.
 		boostedAt: timestamp("boosted_at"),
@@ -952,6 +963,10 @@ export const jobPost = pgTable(
 			table.payAmount
 		),
 		uniqueIndex("job_post_crawled_from_id_uidx").on(table.crawledFromId),
+		uniqueIndex("job_post_creator_submission_key_uidx").on(
+			table.createdByUserId,
+			table.submissionKey
+		),
 	]
 );
 
@@ -1353,6 +1368,13 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 상한 없음(무제한 적립). 값이 있으면 게시판 활동 적립이 이 값을 넘지 못하게 잘려 들어간다.
 	// 저장 가드(API): 최고 등급 기준 포인트보다 낮게는 저장할 수 없다 — 그 등급이 도달 불가가 되므로.
 	maxMemberPoints: integer("max_member_points"),
+	// 포인트 정책은 운영자가 저장한 뒤 새 거래부터 적용한다.
+	signupPoints: integer("signup_points").default(1000).notNull(),
+	attendancePoints: integer("attendance_points").default(10).notNull(),
+	// null/0이면 공고 등록 결제에서 포인트 사용을 중단한다.
+	jobPaymentMinPoints: integer("job_payment_min_points"),
+	// null이면 결제 예정 금액까지 사용할 수 있다.
+	jobPaymentMaxPoints: integer("job_payment_max_points"),
 	// 베스트글(추천수 큐레이션 가상 게시판) 아이콘의 lucide 이름. 베스트는 community_board 행이
 	// 없는 가상 게시판이라 게시판 아이콘 컬럼 대신 여기 저장한다. null이면 미지정(기존 코럴
 	// 액센트 바 유지) — 값 검증은 API 쪽 COMMUNITY_BOARD_ICONS enum(zod)이 맡는다.
@@ -1886,11 +1908,24 @@ export const bambiPointTransaction = pgTable(
 		// 적립은 양수, 차감은 음수. 잔액 = 계정 행 합산.
 		amount: integer("amount").notNull(),
 		reason: text("reason").notNull(),
+		// 운영자 수동 지급·차감의 실제 처리자. 자동 적립·사용은 null(시스템)이다.
+		actorUserId: text("actor_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		// 거래 직후 잔액. 기존 원장은 null이며 조회 시 거래 순서로 역산한다.
+		balanceAfter: integer("balance_after"),
+		// 공고 상품·옵션처럼 원본이 수정·삭제돼도 보존해야 하는 사용자 표시용 스냅샷.
+		description: text("description"),
+		// 한 번만 일어나야 하는 가입·공고 차감·환급 거래의 멱등키.
+		externalKey: text("external_key"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
 		// 잔액 합산이 계정 하나의 행만 훑게 한다(출석 화면이 진입마다 부른다).
 		index("bambi_point_transaction_user_id_idx").on(table.userId),
+		uniqueIndex("bambi_point_transaction_external_key_uidx").on(
+			table.externalKey
+		),
 	]
 );
 

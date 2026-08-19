@@ -37,6 +37,7 @@ import {
 	count,
 	desc,
 	eq,
+	gt,
 	ilike,
 	inArray,
 	isNotNull,
@@ -187,6 +188,8 @@ const listUsersInput = z.object({
 });
 
 const listUserModerationActionsInput = z.object({
+	page: z.number().int().min(1).default(1),
+	pageSize: z.number().int().min(1).max(50).default(10),
 	targetUserId: z.string().min(1),
 });
 
@@ -736,11 +739,17 @@ const getUserTargetContext = async (targetId: string) => {
 };
 
 const getChatRoomTargetContext = async (targetId: string) => {
+	const contextEmployerUser = alias(user, "chat_context_employer_user");
+	const contextSeekerUser = alias(user, "chat_context_seeker_user");
 	const [room] = await db
 		.select({
+			employerAccountDeletedAt: contextEmployerUser.deletedAt,
+			employerChatDeletedAt: chatRoom.employerDeletedAt,
 			id: chatRoom.id,
 			isBlocked: chatRoom.isBlocked,
 			jobPostTitle: jobPost.title,
+			seekerAccountDeletedAt: contextSeekerUser.deletedAt,
+			seekerChatDeletedAt: chatRoom.seekerDeletedAt,
 			organizationDisplayName: employerOrganizationProfile.displayName,
 			employerUserId: chatRoom.employerUserId,
 		})
@@ -749,6 +758,14 @@ const getChatRoomTargetContext = async (targetId: string) => {
 		.innerJoin(
 			employerOrganizationProfile,
 			eq(jobPost.organizationId, employerOrganizationProfile.organizationId)
+		)
+		.leftJoin(
+			contextEmployerUser,
+			eq(contextEmployerUser.id, chatRoom.employerUserId)
+		)
+		.leftJoin(
+			contextSeekerUser,
+			eq(contextSeekerUser.id, chatRoom.jobSeekerUserId)
 		)
 		.where(eq(chatRoom.id, targetId))
 		.limit(1);
@@ -770,7 +787,26 @@ const getChatRoomTargetContext = async (targetId: string) => {
 		.orderBy(desc(chatMessage.createdAt))
 		.limit(10);
 
-	return { chatRoom: { ...room, recentMessages } };
+	const {
+		employerAccountDeletedAt,
+		employerChatDeletedAt,
+		seekerAccountDeletedAt,
+		seekerChatDeletedAt,
+		...visibleRoom
+	} = room;
+
+	return {
+		chatRoom: {
+			...visibleRoom,
+			isDeleted: Boolean(
+				employerAccountDeletedAt ||
+					employerChatDeletedAt ||
+					seekerAccountDeletedAt ||
+					seekerChatDeletedAt
+			),
+			recentMessages,
+		},
+	};
 };
 
 // 신고된 채팅방 id 집합 — 방 직접 신고(chat_room)와 방 안 메시지 신고(chat_message)를 합친다.
@@ -1829,6 +1865,7 @@ export const moderationRouter = {
 				.select({
 					id: jobPost.id,
 					ownerUserId: jobPost.createdByUserId,
+					pointsUsed: jobPost.pointsUsed,
 					// 삭제 알림은 "어느 공고였는지"가 전부다 — 지운 뒤에는 되찾을 수 없다.
 					title: jobPost.title,
 				})
@@ -1848,6 +1885,7 @@ export const moderationRouter = {
 					action: "hard_delete",
 					adminUserId: admin.userId,
 					reason: input.reason,
+					metadata: { pointsUsed: existing.pointsUsed, pointRefunded: false },
 					targetId: input.jobPostId,
 					targetType: "job_post",
 				});
@@ -1964,12 +2002,17 @@ export const moderationRouter = {
 		}),
 
 	// 계정 상세의 제재 이력. 감사 로그(admin_moderation_action)에서 해당 사용자를 대상으로
-	// 한 기록만 최신순으로 보여준다(target_type·target_id 인덱스를 그대로 탄다).
+	// 한 기록을 최신순으로 페이지 조회한다(target_type·target_id 인덱스를 그대로 탄다).
 	listUserModerationActions: adminProcedure
 		.input(listUserModerationActionsInput)
-		.handler(
-			async ({ input }) =>
-				await db
+		.handler(async ({ input }) => {
+			const where = and(
+				eq(adminModerationAction.targetType, "user"),
+				eq(adminModerationAction.targetId, input.targetUserId)
+			);
+			const offset = (input.page - 1) * input.pageSize;
+			const [items, [totalRow]] = await Promise.all([
+				db
 					.select({
 						id: adminModerationAction.id,
 						action: adminModerationAction.action,
@@ -1981,15 +2024,23 @@ export const moderationRouter = {
 					})
 					.from(adminModerationAction)
 					.innerJoin(user, eq(user.id, adminModerationAction.adminUserId))
-					.where(
-						and(
-							eq(adminModerationAction.targetType, "user"),
-							eq(adminModerationAction.targetId, input.targetUserId)
-						)
+					.where(where)
+					.orderBy(
+						desc(adminModerationAction.createdAt),
+						desc(adminModerationAction.id)
 					)
-					.orderBy(desc(adminModerationAction.createdAt))
-					.limit(50)
-		),
+					.limit(input.pageSize)
+					.offset(offset),
+				db.select({ value: count() }).from(adminModerationAction).where(where),
+			]);
+
+			return {
+				items,
+				page: input.page,
+				pageSize: input.pageSize,
+				totalCount: totalRow?.value ?? 0,
+			};
+		}),
 
 	listReviews: protectedProcedure
 		.input(listReviewsInput)
@@ -2284,10 +2335,19 @@ export const moderationRouter = {
 					reason: input.reason,
 					status: input.status,
 				});
+				const refundLockPatch =
+					input.status === "published" &&
+					existing.paymentStatus === "paid" &&
+					existing.pointsUsed > 0
+						? {
+								pointsRefundLockedAt:
+									existing.pointsRefundLockedAt ?? new Date(),
+							}
+						: {};
 
 				const [updated] = await tx
 					.update(jobPost)
-					.set(statusPatch)
+					.set({ ...statusPatch, ...refundLockPatch })
 					.where(eq(jobPost.id, input.jobPostId))
 					.returning();
 
@@ -2386,6 +2446,10 @@ export const moderationRouter = {
 							exposureEndsAt,
 							listingPaidAt,
 							paymentStatus: input.paymentStatus,
+							pointsRefundLockedAt:
+								input.paymentStatus === "paid" && existing.pointsUsed > 0
+									? (existing.pointsRefundLockedAt ?? now)
+									: existing.pointsRefundLockedAt,
 						})
 						.where(eq(jobPost.id, input.jobPostId))
 						.returning();
@@ -2838,7 +2902,11 @@ export const moderationRouter = {
 				inArray(jobPost.status, ["pending_review", "published"]),
 				// 유료 여부의 단일 원천은 광고 상품 연결(adProductId)이다. exposureType은
 				// previewTemplate 'none' 상품에서 standard가 되므로 결제 판별에 쓰면 누락된다.
-				isNotNull(jobPost.adProductId),
+				or(
+					isNotNull(jobPost.adProductId),
+					gt(jobPost.pointsUsed, 0),
+					sql`exists (select 1 from ${jobBoostPurchase} where ${jobBoostPurchase.jobPostId} = ${jobPost.id} and ${jobBoostPurchase.purchaseSource} = 'job_registration')`
+				),
 			];
 
 			if (input.onlyUnpaid) {
@@ -2858,6 +2926,7 @@ export const moderationRouter = {
 					exposureAmount: jobPost.exposureAmount,
 					detailDesignAmount: jobPost.detailDesignAmount,
 					detailDesignStatus: jobPost.detailDesignStatus,
+					pointsUsed: jobPost.pointsUsed,
 					paymentStatus: jobPost.paymentStatus,
 					exposureDurationDays: jobPost.exposureDurationDays,
 					exposureEndsAt: jobPost.exposureEndsAt,
@@ -2947,13 +3016,19 @@ export const moderationRouter = {
 
 							await tx
 								.update(jobPost)
-								.set(
-									getJobPostModerationStatusPatch({
+								.set({
+									...getJobPostModerationStatusPatch({
 										existing,
 										reason: input.reason,
 										status: input.status,
-									})
-								)
+									}),
+									pointsRefundLockedAt:
+										input.status === "published" &&
+										existing.paymentStatus === "paid" &&
+										existing.pointsUsed > 0
+											? (existing.pointsRefundLockedAt ?? new Date())
+											: existing.pointsRefundLockedAt,
+								})
 								.where(eq(jobPost.id, jobPostId))
 								.returning();
 
@@ -3013,6 +3088,8 @@ export const moderationRouter = {
 									exposureType: jobPost.exposureType,
 									organizationId: jobPost.organizationId,
 									paymentStatus: jobPost.paymentStatus,
+									pointsRefundLockedAt: jobPost.pointsRefundLockedAt,
+									pointsUsed: jobPost.pointsUsed,
 								})
 								.from(jobPost)
 								.where(eq(jobPost.id, jobPostId))
@@ -3067,6 +3144,10 @@ export const moderationRouter = {
 									exposureEndsAt,
 									listingPaidAt,
 									paymentStatus: input.paymentStatus,
+									pointsRefundLockedAt:
+										input.paymentStatus === "paid" && existing.pointsUsed > 0
+											? (existing.pointsRefundLockedAt ?? now)
+											: existing.pointsRefundLockedAt,
 								})
 								.where(eq(jobPost.id, jobPostId));
 
@@ -3794,18 +3875,22 @@ export const moderationRouter = {
 			const [room] = await db
 				.select({
 					chatRoomId: chatRoom.id,
+					employerAccountDeletedAt: employerUser.deletedAt,
+					employerChatDeletedAt: chatRoom.employerDeletedAt,
 					employerImage: employerUser.image,
 					employerName: employerUser.name,
 					employerUserId: chatRoom.employerUserId,
 					jobPostTitle: jobPost.title,
+					jobSeekerAccountDeletedAt: seekerUser.deletedAt,
+					jobSeekerChatDeletedAt: chatRoom.seekerDeletedAt,
 					jobSeekerImage: seekerUser.image,
 					jobSeekerName: seekerUser.name,
 					jobSeekerUserId: chatRoom.jobSeekerUserId,
 				})
 				.from(chatRoom)
-				.innerJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
-				.innerJoin(employerUser, eq(employerUser.id, chatRoom.employerUserId))
-				.innerJoin(seekerUser, eq(seekerUser.id, chatRoom.jobSeekerUserId))
+				.leftJoin(jobPost, eq(chatRoom.jobPostId, jobPost.id))
+				.leftJoin(employerUser, eq(employerUser.id, chatRoom.employerUserId))
+				.leftJoin(seekerUser, eq(seekerUser.id, chatRoom.jobSeekerUserId))
 				.where(eq(chatRoom.id, input.chatRoomId))
 				.limit(1);
 
@@ -3877,8 +3962,25 @@ export const moderationRouter = {
 				targetType: "chat_room",
 			});
 
+			const {
+				employerAccountDeletedAt,
+				employerChatDeletedAt,
+				jobSeekerAccountDeletedAt,
+				jobSeekerChatDeletedAt,
+				...visibleRoom
+			} = room;
+
 			return {
-				...room,
+				...visibleRoom,
+				employerName: visibleRoom.employerName ?? "탈퇴한 구인자",
+				employerWithdrawn: Boolean(
+					employerAccountDeletedAt || employerChatDeletedAt
+				),
+				jobPostTitle: visibleRoom.jobPostTitle ?? "삭제된 공고",
+				jobSeekerName: visibleRoom.jobSeekerName ?? "탈퇴한 구직자",
+				jobSeekerWithdrawn: Boolean(
+					jobSeekerAccountDeletedAt || jobSeekerChatDeletedAt
+				),
 				messages: messages.map((message) => ({
 					...message,
 					attachments: attachmentsByMessage.get(message.id) ?? [],

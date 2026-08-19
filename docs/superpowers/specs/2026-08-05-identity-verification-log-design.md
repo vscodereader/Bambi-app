@@ -8,7 +8,7 @@
 
 ## 정책 결정 (확정)
 
-- 수집 항목은 4개뿐: 생년월일(YYYYMMDD)·휴대폰 번호·성별·구분. 이름(name)은 저장하지 않는다(PII 최소화).
+- 수집 항목은 생년월일(YYYYMMDD)·휴대폰 번호·성별·구분·이름(name). (~~이름(name)은 저장하지 않는다(PII 최소화).~~ — **2026-08-19 정책 변경**: 포트원 인증 결과의 실명(name)도 nullable로 함께 저장한다. 미제공 시 null.)
 - 구분은 인증 시점에 모를 수 있다(가입 전 인증) — nullable로 두고, 비회원 흐름은 즉시 `guest`, 회원은 가입 완료 시점에 역할로 채운다.
 - **사람당 1행**: (생년월일, 휴대폰 번호)가 사람 식별 upsert 키다. 같은 사람이 재인증하면(포트원 인증 건 ID는 실패·재시도마다 새로 발급) 기존 행이 최신 상태로 갱신된다. 번호가 null인 행은 사람을 특정할 수 없어 그냥 insert(부분 unique 인덱스 제외 대상).
 - 비회원으로 인증한 사람이 이어서 가입하면 구분을 가입 역할로 **덮어쓴다**(최종 상태 보존).
@@ -27,6 +27,7 @@
 | `phone_number` | text | |
 | `birth_date` | varchar(8) | YYYYMMDD |
 | `gender` | `bambi_gender` nullable | 포트원 미제공 시 null |
+| `name` | text nullable | 실명(포트원 `verifiedCustomer.name`). 2026-08-19 추가, 미제공 시 null |
 | `kind` | `bambi_user_role` nullable | 구분 — guest/job_seeker/employer 사용(admin 미사용) |
 | `created_at` / `updated_at` | timestamp | |
 

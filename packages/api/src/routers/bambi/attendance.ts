@@ -5,6 +5,7 @@ import {
 	bambiMemberGrade,
 	bambiPointTransaction,
 	bambiProfile,
+	bambiSiteSettings,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
 import {
@@ -31,13 +32,15 @@ import {
 	type SessionLike,
 } from "../../services/bambi-authz";
 import { nextGrade, resolveGrade } from "../../services/bambi-member-points";
+import { notifyBambiNotification } from "../../services/bambi-notifications";
+import {
+	adjustMemberPoints,
+	awardMemberPoints,
+} from "../../services/bambi-point-ledger";
 
 // 출석 대상 역할. 운영자·법률자문·게스트는 출석 대상이 아니다. 허용 목록으로 고정해
 // bambi_user_role에 값이 하나 늘어도 기본 판정이 "거부"가 되게 한다(bambi-authz 관례).
 const ATTENDANCE_ROLES = new Set<string>(["job_seeker", "employer"]);
-
-// 출석 1회당 적립 포인트. 원장(bambi_point_transaction)에 +10 행으로 쌓인다.
-const ATTENDANCE_POINT_AMOUNT = 10;
 
 // 잔액은 원장 합산이다(잔액 컬럼 없음). 행이 없으면 0.
 const pointBalanceSql = sql<number>`coalesce(sum(${bambiPointTransaction.amount}), 0)::int`;
@@ -93,7 +96,7 @@ const requireAttendanceProfile = async (
 export const attendanceRouter = {
 	adminAdjustPoints: adminProcedure
 		.input(adminAdjustPointsInput)
-		.handler(async ({ input }) => {
+		.handler(async ({ context, input }) => {
 			const [target] = await db
 				.select({ deletedAt: user.deletedAt, role: bambiProfile.role })
 				.from(user)
@@ -112,32 +115,46 @@ export const attendanceRouter = {
 				});
 			}
 
-			return await db.transaction(async (tx) => {
+			const result = await db.transaction(async (tx) => {
 				// 잔액 컬럼이 없어 합산으로 읽는다. 집계 select는 FOR UPDATE를 못 걸므로 동시에
 				// 두 운영자가 차감하면 둘 다 통과해 음수가 될 수 있다.
 				// ponytail: 운영자 수동 조작이라 경합을 방치, 자동 차감이 생기면 잔액 스냅샷 행이나
 				// 계정 단위 advisory lock으로 올린다.
-				const [current] = await tx
-					.select({ pointBalance: pointBalanceSql })
-					.from(bambiPointTransaction)
-					.where(eq(bambiPointTransaction.userId, input.userId));
-
-				const pointBalance = (current?.pointBalance ?? 0) + input.amount;
-				if (pointBalance < 0) {
+				try {
+					const adjustmentLabel =
+						input.amount > 0 ? "운영자 지급" : "운영자 차감";
+					const adjusted = await adjustMemberPoints(tx, {
+						actorUserId: context.session.user.id,
+						amount: input.amount,
+						description: `${adjustmentLabel}: ${input.reason}`,
+						reason: `${adjustmentLabel}: ${input.reason}`,
+						userId: input.userId,
+					});
+					return {
+						applied: adjusted.applied,
+						pointBalance: adjusted.balance,
+						transactionId: adjusted.transactionId,
+						userId: input.userId,
+					};
+				} catch (error) {
 					throw new ORPCError("BAD_REQUEST", {
-						message: "잔액보다 많이 차감할 수 없습니다.",
+						message:
+							error instanceof Error
+								? error.message
+								: "포인트를 조정하지 못했습니다.",
 					});
 				}
-
-				// 출석 적립(reason="attendance")과 섞이지 않게 프리픽스를 붙여 남긴다.
-				await tx.insert(bambiPointTransaction).values({
-					amount: input.amount,
-					reason: `${input.amount > 0 ? "운영자 지급" : "운영자 차감"}: ${input.reason}`,
-					userId: input.userId,
-				});
-
-				return { pointBalance, userId: input.userId };
 			});
+			if (result.applied > 0 && result.transactionId) {
+				await notifyBambiNotification({
+					actorUserId: context.session.user.id,
+					metadata: { action: "admin_awarded", amount: result.applied },
+					recipientUserId: input.userId,
+					targetId: result.transactionId,
+					targetType: "point_transaction",
+				});
+			}
+			return result;
 		}),
 
 	adminList: adminProcedure.input(adminListInput).handler(async ({ input }) => {
@@ -260,14 +277,22 @@ export const attendanceRouter = {
 				.returning({ attendedOn: bambiAttendance.attendedOn });
 
 			// 중복 적립 가드는 이 조건 하나다 — 출석 행이 실제로 생긴 경우에만 원장에 쌓는다.
-			const pointsAwarded = inserted.length === 0 ? 0 : ATTENDANCE_POINT_AMOUNT;
-			if (pointsAwarded > 0) {
-				await tx.insert(bambiPointTransaction).values({
-					amount: pointsAwarded,
-					reason: "attendance",
-					userId: profile.userId,
-				});
-			}
+			const [settings] = await tx
+				.select({ points: bambiSiteSettings.attendancePoints })
+				.from(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, "default"))
+				.limit(1);
+			const configuredPoints = settings?.points ?? 10;
+			const award =
+				inserted.length === 0
+					? null
+					: await awardMemberPoints(tx, {
+							amount: configuredPoints,
+							externalKey: `attendance:${profile.userId}:${attendedOn}`,
+							reason: "attendance",
+							userId: profile.userId,
+						});
+			const pointsAwarded = award?.awarded ?? 0;
 
 			const [balance] = await tx
 				.select({ pointBalance: pointBalanceSql })
@@ -332,6 +357,14 @@ export const attendanceRouter = {
 					? { minPoints: upcoming.minPoints, name: upcoming.name }
 					: null,
 				pointBalance,
+				attendancePoints:
+					(
+						await db
+							.select({ points: bambiSiteSettings.attendancePoints })
+							.from(bambiSiteSettings)
+							.where(eq(bambiSiteSettings.id, "default"))
+							.limit(1)
+					)[0]?.points ?? 10,
 				pointsToNext: upcoming ? upcoming.minPoints - pointBalance : null,
 				streakDays: countAttendanceStreak(attendedDatesDesc, today),
 				today,
