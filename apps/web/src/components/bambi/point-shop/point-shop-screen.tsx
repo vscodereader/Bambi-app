@@ -57,6 +57,16 @@ const ITEM_IMAGE_SIZES =
 const pointText = (points: number): string =>
 	`${points.toLocaleString("ko-KR")}P`;
 
+const HANGUL_CHAR = /[가-힣]/;
+
+// orpc 입력 검증 실패 메시지는 영어라 그대로 띄우면 안 된다(UNAUTHORIZED·zod 영어 등).
+// 서버가 명시적으로 던진 한국어 문구(한글 포함)만 살리고 나머지는 한국어 폴백으로 덮는다
+// (운영자 포인트몰 관리 화면의 localizedShopError와 같은 관례).
+const localizedPurchaseError = (message: string | undefined): string =>
+	message && HANGUL_CHAR.test(message)
+		? message
+		: "구매하지 못했어요. 잠시 후 다시 시도해 주세요.";
+
 function ItemCard({
 	item,
 	onOpen,
@@ -106,13 +116,16 @@ function PurchaseDialogBody({
 	onCancel,
 	onConfirm,
 }: {
-	balance: number;
+	// 잔액을 아직 못 받았으면(로딩·조회 실패) null. 잔액 검증의 정본은 서버(purchase가 계정
+	// 락 안에서 재검증)이고 여기 표시는 UX 보조일 뿐이라, null이면 부족 안내를 숨기고 구매
+	// 버튼은 열어 둔다 — 미확보 상태를 0P로 오판해 막지 않는다.
+	balance: null | number;
 	isPending: boolean;
 	item: PointShopItem;
 	onCancel: () => void;
 	onConfirm: () => void;
 }) {
-	const shortfall = item.pricePoints - balance;
+	const shortfall = balance === null ? 0 : item.pricePoints - balance;
 
 	return (
 		<>
@@ -143,10 +156,12 @@ function PurchaseDialogBody({
 					<dt className="m-0 text-muted-foreground">필요 포인트</dt>
 					<dd className="m-0 font-extrabold">{pointText(item.pricePoints)}</dd>
 				</div>
-				<div className="flex items-center justify-between gap-3">
-					<dt className="m-0 text-muted-foreground">내 포인트</dt>
-					<dd className="m-0 font-extrabold">{pointText(balance)}</dd>
-				</div>
+				{balance === null ? null : (
+					<div className="flex items-center justify-between gap-3">
+						<dt className="m-0 text-muted-foreground">내 포인트</dt>
+						<dd className="m-0 font-extrabold">{pointText(balance)}</dd>
+					</div>
+				)}
 			</dl>
 			{shortfall > 0 ? (
 				<p className="m-0 font-bold text-destructive text-sm">
@@ -183,7 +198,7 @@ export function PointShopScreen() {
 	});
 	const purchase = useMutation(
 		orpc.bambi.pointShop.purchase.mutationOptions({
-			onError: (error) => toast.error(error.message || "구매하지 못했어요."),
+			onError: (error) => toast.error(localizedPurchaseError(error.message)),
 			onSuccess: async () => {
 				setSelected(null);
 				toast.success(
@@ -281,7 +296,7 @@ export function PointShopScreen() {
 				<DialogContent>
 					{selected ? (
 						<PurchaseDialogBody
-							balance={balanceQuery.data?.pointBalance ?? 0}
+							balance={balanceQuery.data?.pointBalance ?? null}
 							isPending={purchase.isPending}
 							item={selected}
 							onCancel={() => setSelected(null)}

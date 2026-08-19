@@ -55,10 +55,12 @@ export default function PointShopLayout({ children }: { children: ReactNode }) {
 				</div>
 				<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 					<div className="sticky top-20 flex flex-col gap-3">
+						{/* 바로 아래 전용 1:1 상담 버튼이 있어 문의 런처 앵커는 생략한다(중복 방지). */}
 						<AdBannerRail
 							isLoading={adBanners.isLoading}
 							items={adBanners.rightBanner}
 							promotionSurface="point_shop_right"
+							withSupportChatAnchor={false}
 						/>
 						<PointShopConsultButton />
 					</div>

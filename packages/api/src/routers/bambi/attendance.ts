@@ -35,6 +35,7 @@ import {
 	POINT_SHOP_REASONS,
 	resolveGrade,
 } from "../../services/bambi-member-points";
+import { acquirePointShopUserLock } from "../../services/bambi-point-shop";
 
 // 출석 대상 역할. 운영자·법률자문·게스트는 출석 대상이 아니다. 허용 목록으로 고정해
 // bambi_user_role에 값이 하나 늘어도 기본 판정이 "거부"가 되게 한다(bambi-authz 관례).
@@ -120,10 +121,12 @@ export const attendanceRouter = {
 			}
 
 			return await db.transaction(async (tx) => {
-				// 잔액 컬럼이 없어 합산으로 읽는다. 집계 select는 FOR UPDATE를 못 걸므로 동시에
-				// 두 운영자가 차감하면 둘 다 통과해 음수가 될 수 있다.
-				// ponytail: 운영자 수동 조작이라 경합을 방치, 자동 차감이 생기면 잔액 스냅샷 행이나
-				// 계정 단위 advisory lock으로 올린다.
+				// 잔액 컬럼이 없어 합산으로 읽는다. 집계 select는 FOR UPDATE를 못 걸므로, 포인트몰
+				// 구매(자동 차감)와 같은 계정 단위 advisory lock에 참여해 같은 계정의 동시 차감을
+				// 직렬화한다 — 락 없이는 두 차감이 서로 잔액을 못 보고 음수로 빠진다
+				// (bambi-point-shop.purchase와 같은 네임스페이스 키).
+				await acquirePointShopUserLock(tx, input.userId);
+
 				const [current] = await tx
 					.select({ pointBalance: pointBalanceSql })
 					.from(bambiPointTransaction)
