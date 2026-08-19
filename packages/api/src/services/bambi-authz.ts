@@ -13,6 +13,7 @@ import { ORPCError } from "@orpc/server";
 import { and, eq, or } from "drizzle-orm";
 
 import { isChatRoomLeftByAnyone } from "./bambi-chat-participation";
+import { isOrganizationManagerRole } from "./bambi-organization-authz";
 import { normalizeExpiredWarningRestriction } from "./bambi-warning-restriction";
 
 export interface SessionLike {
@@ -47,8 +48,6 @@ interface EmployerPostingAccessInput {
 	session: SessionLike | null | undefined;
 	teamId?: string | null;
 }
-
-const ORGANIZATION_ADMIN_ROLES = new Set(["owner", "admin"]);
 
 const forbidden = (message: string) => new ORPCError("FORBIDDEN", { message });
 
@@ -157,7 +156,10 @@ export const requireEmployerPostingAccess = async ({
 	}
 
 	if (!teamId) {
-		if (ORGANIZATION_ADMIN_ROLES.has(organizationMember.role)) {
+		// 저장 원값에 레거시 별칭이 섞여 있어 raw 비교는 canonical "manager"를 놓친다
+		// (bambi-organization-authz 주석 참고). 목록 스코프(isOrganizationManagerRole)와
+		// 같은 정규화 판정으로 맞춰, 매니저가 후보로 뜬 공고에 실제로도 접근하게 한다.
+		if (isOrganizationManagerRole(organizationMember.role)) {
 			return profile;
 		}
 
@@ -176,7 +178,7 @@ export const requireEmployerPostingAccess = async ({
 		throw forbidden("Selected team must belong to the organization.");
 	}
 
-	if (ORGANIZATION_ADMIN_ROLES.has(organizationMember.role)) {
+	if (isOrganizationManagerRole(organizationMember.role)) {
 		return profile;
 	}
 
