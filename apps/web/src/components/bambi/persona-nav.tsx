@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef } from "react";
 import { APP_CONTENT_WIDTH } from "@/lib/bambi/layout";
 import { useMobileKeyboardState } from "@/lib/bambi/use-mobile-keyboard-state";
+import { useBambiAuth } from "./auth-client-provider";
 import { BOTTOM_NAV_CONTENT_SPACER, BottomNavShell } from "./bottom-nav-shell";
 import { BottomNav } from "./ds";
 import {
@@ -82,6 +83,8 @@ export function SeekerNav({ children }: { children: ReactNode }) {
 export function EmployerNav({ children }: { children: ReactNode }) {
 	const path = usePathname();
 	const router = useRouter();
+	const { accountStatus, isPending } = useBambiAuth();
+	const isRegistrationDisabled = isPending || accountStatus === "suspended";
 	// 하단 탭은 구인자 주요 라우트에서 항상 노출한다(승인 상태와 무관).
 	// 광고 안내·프로모션·성과 분석은 대시보드 퀵링크로만 닿는 하위 페이지지만, 하단 탭이
 	// 사라지면 모바일에서 되돌아갈 길이 없어 함께 노출한다("내 공고" 활성 유지).
@@ -105,6 +108,9 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 	}
 	const go = (v: string) => {
 		if (v === "post") {
+			if (isRegistrationDisabled) {
+				return;
+			}
 			router.push("/employer/new");
 		} else if (v === "settings") {
 			router.push("/employer/settings" as Route);
@@ -127,7 +133,12 @@ export function EmployerNav({ children }: { children: ReactNode }) {
 						items={[
 							{ value: "postings", label: "내 공고", icon: ClipboardListIcon },
 							{ value: "business", label: "업체 정보", icon: StoreIcon },
-							{ value: "post", label: "공고 등록", icon: PlusIcon },
+							{
+								disabled: isRegistrationDisabled,
+								value: "post",
+								label: "공고 등록",
+								icon: PlusIcon,
+							},
 							{ value: "settings", label: "조직 설정", icon: ShieldIcon },
 							{ value: "me", label: "내 정보", icon: UserIcon },
 						]}

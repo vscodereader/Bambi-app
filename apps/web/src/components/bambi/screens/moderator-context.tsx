@@ -595,12 +595,24 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				}),
 			});
 		};
-		const invalidateUsers = async () => {
-			await queryClient.invalidateQueries({
-				queryKey: orpc.bambi.moderation.listUsers.queryKey({
-					input: { limit: 1000 },
+		const invalidateUsers = async (targetUserId?: string) => {
+			const invalidations = [
+				queryClient.invalidateQueries({
+					queryKey: orpc.bambi.moderation.listUsers.queryKey({
+						input: { limit: 1000 },
+					}),
 				}),
-			});
+			];
+			if (targetUserId) {
+				invalidations.push(
+					queryClient.invalidateQueries({
+						queryKey: orpc.bambi.moderation.listUserModerationActions.queryKey({
+							input: { targetUserId },
+						}),
+					})
+				);
+			}
+			await Promise.all(invalidations);
 		};
 		const resolveQueue = (
 			id: string,
@@ -668,7 +680,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				return false;
 			}
 
-			await invalidateUsers();
+			await invalidateUsers(id);
 			flash(label);
 			return true;
 		};
@@ -687,7 +699,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				return false;
 			}
 
-			await invalidateUsers();
+			await invalidateUsers(id);
 			flash("최근 경고 1회를 되돌렸어요");
 			return true;
 		};
@@ -713,7 +725,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				return false;
 			}
 
-			await invalidateUsers();
+			await invalidateUsers(id);
 			flash(
 				role === "legal_advisor"
 					? "법률자문으로 지정했어요"
@@ -738,7 +750,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				return false;
 			}
 
-			await invalidateUsers();
+			await invalidateUsers(id);
 			flash("탈퇴를 복구했어요. 본인이 기존 아이디로 다시 로그인할 수 있어요");
 			return true;
 		};

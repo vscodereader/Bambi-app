@@ -43,6 +43,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { DataTable } from "@/components/bambi/data-table";
 import { useEmployerVerified } from "@/components/bambi/employer-approval-context";
 import { EmployerGateBanner } from "@/components/bambi/employer-gate-banner";
@@ -208,7 +209,9 @@ function OverviewStat({
 }
 
 function NewJobButton({ verified }: { verified: boolean }) {
-	if (verified) {
+	const { accountStatus, isPending } = useBambiAuth();
+
+	if (verified && !isPending && accountStatus !== "suspended") {
 		return (
 			<Link className={buttonVariants()} href="/employer/new">
 				새 공고 등록

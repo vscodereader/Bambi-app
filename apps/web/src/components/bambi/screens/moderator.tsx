@@ -49,6 +49,7 @@ import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChatHistoryContent } from "@/app/moderator/chats/chat-history-dialog";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
+import { PageControls } from "@/components/bambi/page-controls";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
@@ -1422,6 +1423,7 @@ function ChatRoomContext({
 	chatRoom: {
 		id: string;
 		isBlocked: boolean;
+		isDeleted: boolean;
 		jobPostTitle: string;
 		recentMessages: {
 			body: string;
@@ -1437,6 +1439,12 @@ function ChatRoomContext({
 	const nextBlocked = !chatRoom.isBlocked;
 	const canSubmit = reason.trim().length >= 2 && !isBlocking;
 	const reasonId = `chat-room-block-reason-${chatRoom.id}`;
+	let roomStatusLabel = "정상";
+	if (chatRoom.isBlocked) {
+		roomStatusLabel = "차단됨";
+	} else if (chatRoom.isDeleted) {
+		roomStatusLabel = "탈퇴";
+	}
 
 	return (
 		<ContextSection title="신고된 대화방">
@@ -1444,8 +1452,10 @@ function ChatRoomContext({
 				<span className="min-w-0 flex-1 truncate font-bold text-[13.5px] text-foreground">
 					{chatRoom.jobPostTitle}
 				</span>
-				<Badge tone={chatRoom.isBlocked ? "danger" : "success"}>
-					{chatRoom.isBlocked ? "차단됨" : "정상"}
+				<Badge
+					tone={chatRoom.isBlocked || chatRoom.isDeleted ? "danger" : "success"}
+				>
+					{roomStatusLabel}
 				</Badge>
 			</div>
 			<div className="min-w-0 rounded-[12px] bg-card p-3">
@@ -2325,7 +2335,8 @@ export function ReasonConfirmSheet({
 				className={cn(
 					"relative animate-[bambiSheetUp_var(--dur-base)_var(--ease-out)] rounded-t-3xl bg-background px-6 pt-5 pb-6 shadow-[0_-8px_40px_rgba(0,0,0,0.18)]",
 					"lg:w-full lg:max-w-lg lg:animate-none lg:rounded-3xl lg:px-7 lg:pt-6 lg:shadow-[var(--shadow-card)]",
-					fixed && "mx-auto w-full max-w-lg"
+					fixed &&
+						"mx-auto max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto"
 				)}
 			>
 				<h2 className="mt-0 mr-0 mb-1 ml-0 font-extrabold text-[19px] text-foreground">
@@ -2437,14 +2448,26 @@ function SanctionSheet({
 	);
 }
 
-// 계정 상세의 제재 이력(감사 로그 최신 50건). 액션 코드는 라벨 맵으로만 노출한다.
+const USER_MODERATION_HISTORY_PAGE_SIZE = 10;
+
+// 계정 상세의 제재 이력(감사 로그, 페이지당 10건). 액션 코드는 라벨 맵으로만 노출한다.
 function UserModerationHistory({ userId }: { userId: string }) {
+	const [page, setPage] = useState(1);
 	const historyQuery = useQuery(
 		orpc.bambi.moderation.listUserModerationActions.queryOptions({
-			input: { targetUserId: userId },
+			input: {
+				page,
+				pageSize: USER_MODERATION_HISTORY_PAGE_SIZE,
+				targetUserId: userId,
+			},
 		})
 	);
-	const actions = historyQuery.data ?? [];
+	const actions = historyQuery.data?.items ?? [];
+	const totalCount = historyQuery.data?.totalCount ?? 0;
+	const pageCount = Math.max(
+		1,
+		Math.ceil(totalCount / USER_MODERATION_HISTORY_PAGE_SIZE)
+	);
 
 	return (
 		<div>
@@ -2468,29 +2491,41 @@ function UserModerationHistory({ userId }: { userId: string }) {
 				</p>
 			) : null}
 			{actions.length > 0 ? (
-				<ul className="m-0 flex list-none flex-col gap-2 p-0">
-					{actions.map((action) => (
-						<li
-							className="rounded-[14px] border border-border bg-card p-3"
-							key={action.id}
-						>
-							<div className="flex items-center justify-between gap-2">
-								<span className="font-bold text-[13px] text-foreground">
-									{moderationActionLabel(action.action)}
-								</span>
-								<span className="whitespace-nowrap text-[11px] text-muted-foreground">
-									{formatDateTime(action.createdAt)}
-								</span>
-							</div>
-							<p className="mt-1 mb-0 text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
-								{action.reason}
-							</p>
-							<div className="mt-1 text-[11px] text-muted-foreground">
-								처리자 {action.adminName}
-							</div>
-						</li>
-					))}
-				</ul>
+				<>
+					<ul className="m-0 flex list-none flex-col gap-2 p-0">
+						{actions.map((action) => (
+							<li
+								className="rounded-[14px] border border-border bg-card p-3"
+								key={action.id}
+							>
+								<div className="flex items-center justify-between gap-2">
+									<span className="font-bold text-[13px] text-foreground">
+										{moderationActionLabel(action.action)}
+									</span>
+									<span className="whitespace-nowrap text-[11px] text-muted-foreground">
+										{formatDateTime(action.createdAt)}
+									</span>
+								</div>
+								<p className="mt-1 mb-0 text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
+									{action.reason}
+								</p>
+								<div className="mt-1 text-[11px] text-muted-foreground">
+									처리자 {action.adminName}
+								</div>
+							</li>
+						))}
+					</ul>
+					{pageCount > 1 ? (
+						<div className="mt-3 flex justify-end">
+							<PageControls
+								disabled={historyQuery.isFetching}
+								onPageChange={setPage}
+								page={page}
+								pageCount={pageCount}
+							/>
+						</div>
+					) : null}
+				</>
 			) : null}
 		</div>
 	);
@@ -2704,7 +2739,7 @@ export function UserDetail({
 						</Button>
 					</div>
 				) : null}
-				<UserModerationHistory userId={item.id} />
+				<UserModerationHistory key={item.id} userId={item.id} />
 				<div>
 					<div className="mb-2.5 font-bold text-[13px] text-foreground">
 						제재 적용
@@ -2733,7 +2768,7 @@ export function UserDetail({
 						onSanction(item.id, pending.status, reason);
 						setPending(null);
 					}}
-					positioning="absolute"
+					positioning="fixed"
 					reasonFieldId={`user-sanction-reason-${item.id}`}
 					reasonLabel="제재 사유"
 					title={pending.title}
@@ -2749,7 +2784,7 @@ export function UserDetail({
 						await onRevertWarning(item.id, reason);
 						setRevertingWarning(false);
 					}}
-					positioning="absolute"
+					positioning="fixed"
 					reasonFieldId="revert-warning-reason"
 					title="최근 경고를 되돌릴까요?"
 				/>

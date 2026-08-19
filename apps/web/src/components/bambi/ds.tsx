@@ -817,6 +817,7 @@ export function AppBar({
 
 // ---- BottomNav -------------------------------------------------------------
 interface NavItem {
+	disabled?: boolean;
 	icon: IconComp;
 	label: string;
 	value: string;
@@ -857,10 +858,13 @@ export function BottomNav({
 				const count = badges[it.value];
 				return (
 					<button
+						aria-disabled={it.disabled || undefined}
 						className={cn(
 							"flex flex-1 cursor-pointer flex-col items-center gap-1 border-none bg-none px-0 py-1",
-							on ? "text-primary" : "text-[color:var(--text-subtle)]"
+							on ? "text-primary" : "text-[color:var(--text-subtle)]",
+							it.disabled && "cursor-not-allowed opacity-40"
 						)}
+						disabled={it.disabled}
 						key={it.value}
 						onClick={() => onChange?.(it.value)}
 						type="button"

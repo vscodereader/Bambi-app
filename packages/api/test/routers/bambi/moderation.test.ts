@@ -1033,11 +1033,18 @@ describe("사용자 관리", () => {
 			});
 
 			const actions = await listUserModerationActions({
+				page: 1,
+				pageSize: 10,
 				targetUserId: fixture.jobSeekerUserId,
 			});
 
-			expect(actions).toHaveLength(1);
-			expect(actions[0]).toMatchObject({
+			expect(actions).toMatchObject({
+				page: 1,
+				pageSize: 10,
+				totalCount: 1,
+			});
+			expect(actions.items).toHaveLength(1);
+			expect(actions.items[0]).toMatchObject({
 				action: "set_status:warned",
 				adminName: "운영자",
 				adminUserId: fixture.adminUserId,
