@@ -46,6 +46,7 @@ function isNavGroup(entry: NavEntry): entry is NavGroup {
 export const DEFAULT_NAV_ITEMS: NavEntry[] = [
 	{ href: "/seeker", label: "채용정보" },
 	{ href: "/seeker/community", label: "수다방" },
+	{ href: "/point-shop" as Route, label: "포인트몰" },
 	{ href: "/support" as Route, label: "고객센터" },
 ];
 
