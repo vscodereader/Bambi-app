@@ -138,7 +138,7 @@
 ### 3.1 수동 지급형(`none`)·쿠폰 발송형(`coupon`) — 수동 처리 흐름
 
 두 유형은 상태 전이가 같다: `pending` 주문 접수 → 운영자 완료(`completed`)/취소
-(`canceled`). 취소 시 같은 트랜잭션에서 `point_shop_refund` 환불 + 재고 `+1` 복원
+(`canceled`). 취소 시 같은 트랜잭션에서 원장 서비스로 환불(§3.6) + 재고 `+1` 복원
 (조건부 원자 UPDATE — `stock_quantity IS NOT NULL`인 아이템만).
 
 - **수동 지급형(`none`)**: 현행 그대로.
@@ -165,7 +165,7 @@
 **발송 안내 문구:** 구매 확인 다이얼로그에 **"본인인증 시 등록된 휴대폰 번호로
 발송됩니다"**를 자동 표기(운영자가 그 번호로 쿠폰을 발송함을 구매자에게 고지).
 
-**이행:** 구매 시 `pending` 주문 + 원장 `point_shop_purchase` −가격(재고 설정 시 원자
+**이행:** 구매 시 `pending` 주문 + 원장 서비스로 −가격 반영(§3.6, 재고 설정 시 원자
 차감). 운영자가 외부 발송 후 `지급완료`(`completed`) 처리. 취소·환불은 §3.4(수동
 지급형과 동일 가드 — `pending`에서만).
 
@@ -175,7 +175,7 @@
 
 - 계정 락 + (재고 있으면) 조건부 원자 차감 → 주문 insert
   `status = owned`, benefit 스냅샷, `usable_until = 구매일 + usage_limit_days`
-  (null이면 무기한) → 원장 `point_shop_purchase` −가격.
+  (null이면 무기한) → 원장 서비스로 −가격 반영(§3.6).
 - 구매 확인 다이얼로그: "구매 후 보유함에서 사용하며, **사용 후에는 취소·환불이
   불가**합니다" 명시(사용 전에는 보유함에서 취소 가능함도 함께 안내).
 
@@ -214,8 +214,8 @@ point_shop`·born-paid(`payment_status=paid`)라, 운영자 결제 관리의 **�
 ### 3.4 취소·환불 (통합 정책)
 
 **원칙: 지급완료(수동·쿠폰) 또는 사용(끌올·연장) 전에는 취소·환불 가능, 이후에는
-불가.** 취소는 포인트 전액 환불(`point_shop_refund` +가격 원장 행) + 재고 복원을 같은
-트랜잭션에서 수행한다.
+불가.** 취소는 포인트 환불(원장 서비스, §3.6) + 재고 복원을 같은 트랜잭션에서
+수행한다.
 
 | 유형 | 취소 가능 조건 | 환불 시 동작 |
 | --- | --- | --- |
@@ -242,6 +242,32 @@ point_shop`·born-paid(`payment_status=paid`)라, 운영자 결제 관리의 **�
   발송 시각을 기록한다(재실행 시 재발송 금지).
 - 기존 notification 패턴·라벨 맵을 준수한다(enum 원값 노출 금지). 만료 자체는 사용
   거부·환불 불가로 이어지므로(§3.4) 알림은 "곧 만료됨" 사전 고지 목적이다.
+
+### 3.6 포인트 원장 통합 (develop 병합 반영)
+
+develop 병합(PR #210)으로 포인트 원장이 서비스화됐다
+(`packages/api/src/services/bambi-point-ledger.ts`: `adjustMemberPoints`·
+`awardMemberPoints`, `bambi_point_transaction`에 `actor_user_id`·`balance_after`·
+`description`·`external_key`(유니크) 컬럼 추가). 포인트몰 구매·환불도 **직접 insert
+대신 이 서비스 경유**로 통합한다.
+
+- **구매(−)**: `adjustMemberPoints(tx, { amount: -price, reason:
+  POINT_SHOP_REASONS.purchase, externalKey: "point_shop_purchase:{orderId}",
+  description: "포인트몰 구매: {itemName}", userId })`. 음수 경로가 자체 잔액 검증
+  ("잔액보다 많이 차감할 수 없습니다")으로 정본 방어하고 `balance_after`를 채운다.
+- **환불(+)**: `awardMemberPoints(tx, { amount: price, reason:
+  POINT_SHOP_REASONS.refund, externalKey: "point_shop_refund:{orderId}",
+  description: "포인트몰 취소·환불: {itemName}", userId })`. 양수 경로가
+  `external_key` 유니크로 `onConflictDoNothing` 멱등(이중 환불 이중 방어) + 보유 상한
+  (`max_member_points`) 클램프를 적용한다. 상한에 걸려 일부만 환불되면 공고 취소 환급
+  선례(`jobs.ts` L2636·L2644)처럼 잔여를 소멸로 본다(정책: 상한은 잔액 기준).
+- `external_key`는 주문당 유일(`{reason}:{orderId}`)이라 재시도·경합에도 중복 원장이
+  생기지 않는다. `POINT_SHOP_REASONS`(`point_shop_purchase`·`point_shop_refund`)는
+  기존 등급 산식 제외 규칙(`GRADE_EXCLUDED_REASONS`)과 그대로 호환된다.
+- `description`을 채우므로 통합 "포인트 내역"(`getMineHistory`)에서 `description ??
+  라벨`로 아이템명이 그대로 보인다(원값 노출 없음).
+- **기존 `point-shop.ts`의 직접 `bambiPointTransaction` insert(구매 −가격·환불 +가격)를
+  이 서비스 경유로 리팩터하는 것도 이번 구현 범위**다(§7). 락 순서는 §5.1.
 
 ## 4. API (기존 `pointShop` 라우터 확장)
 
@@ -291,6 +317,14 @@ point_shop`·born-paid(`payment_status=paid`)라, 운영자 결제 관리의 **�
 - 기존 계정 단위 advisory lock 유지: `acquirePointShopUserLock`(=
   `pg_advisory_xact_lock(918_273_648, hashtext(user_id))`) — 동시 구매로 잔액이
   음수가 되는 레이스 차단. 반드시 트랜잭션 안(xact 스코프).
+- **락 취득 순서(고정)**: 포인트몰 계정 락(`acquirePointShopUserLock`)을 **먼저** 잡고,
+  그다음 원장 서비스(§3.6)가 내부에서 잡는 원장 락(`lockMemberPoints`,
+  `pg_advisory_xact_lock(hashtextextended(user_id, 0))`)이 걸린다. 두 락은 키가 달라
+  공존하며, 구매·취소(환불) 등 **원장을 건드리는 모든** 포인트몰 트랜잭션이 이 순서를
+  지켜 교착을 막는다(attendance.ts `adminAdjustPoints`가 확립한 통합 순서와 동일 —
+  포인트몰 락 → `adjustMemberPoints`). 취소 핸들러(회원 `cancelMyOrder`·운영자
+  `cancelOrder`)도 `awardMemberPoints` 호출 전에 `acquirePointShopUserLock`을 먼저
+  잡는다.
 - **재고 차감**: 조건부 원자 UPDATE(`SET stock_quantity = stock_quantity - 1
   WHERE id = $1 AND stock_quantity > 0`, `RETURNING`). 0행이면 품절 에러.
   read-then-write 금지.
@@ -305,11 +339,11 @@ point_shop`·born-paid(`payment_status=paid`)라, 운영자 결제 관리의 **�
 - 사용(끌올·연장): 주문 행 `FOR UPDATE` + `owned` 전용 전이 가드(멱등) — `used`·
   `canceled`·만료면 거부. 같은 트랜잭션에서 `job_boost_purchase` 생성 또는 노출
   연장과 주문 상태 전이를 함께 커밋.
-- 취소(본인·운영자 공통): 주문 행 `FOR UPDATE` + 취소 가드 재확인(수동·쿠폰
-  `pending`, 끌올·연장 `owned`·미사용·미만료) → `canceled` 전이 + `point_shop_refund`
-  환불 + 재고 복원을 **한 트랜잭션**에서. 사용/완료와 취소가 동시에 들어와도 행
-  잠금으로 한쪽만 성립(다른 쪽은 상태 불일치로 거부) — **이중 환불·사용/완료 후
-  환불 방지**.
+- 취소(본인·운영자 공통): 포인트몰 락 → 주문 행 `FOR UPDATE` + 취소 가드 재확인(수동·
+  쿠폰 `pending`, 끌올·연장 `owned`·미사용·미만료) → `canceled` 전이 + 원장 환불(§3.6,
+  `awardMemberPoints`) + 재고 복원을 **한 트랜잭션**에서. 사용/완료와 취소가 동시에
+  들어와도 행 잠금으로 한쪽만 성립(다른 쪽은 상태 불일치로 거부)하고, 환불은
+  `external_key` 유니크로 한 번만 기록된다 — **이중 환불·사용/완료 후 환불 방지**.
 
 ### 5.3 운영자 노출 경합(광고 연장)
 
@@ -362,15 +396,24 @@ point_shop`·born-paid(`payment_status=paid`)라, 운영자 결제 관리의 **�
 - **표시 계층 ≠ 정본**: 카드/다이얼로그의 품절·자격·본인인증 표시는 UX 힌트일 뿐이고,
   실제 구매 가부는 서버 `purchase`가 락·원자 연산·`isPhoneVerified`로 재판정한다(§5).
 
-### 마이페이지 "내 아이템·구매 내역"(기존 구매 내역 확장)
+### 포인트 내역 페이지 — 아코디언 카드 (마이페이지 재배치, develop 병합 반영)
 
-- 보유 중(`owned`) 끌올·연장: "사용하기" 버튼 + 남은 기한(`usable_until`) 또는 무기한
-  표시, 만료 건은 만료 뱃지(사용·취소 불가). 미사용·미만료면 **"취소·환불" 버튼**
-  (`cancelMyOrder`).
-- 수동·쿠폰형: **코드 관련 UI 없이 주문 상태만** — 구매자 라벨 "주문완료"(pending)·
-  "지급완료"(completed)·"취소·환불"(canceled). `pending`이면 "취소·환불" 버튼
-  (`cancelMyOrder`). 쿠폰은 "본인인증 번호로 발송돼요" 안내 문구만.
-- 이력: 취소 건은 환불 표시.
+별도 "포인트 구매 내역" 페이지(`/seeker/me/point-orders`)는 **폐지**되고, 통합
+"포인트 내역" 페이지(`/seeker/attendance`·`/employer/attendance` 공용
+`AttendancePanel`, `apps/web/src/components/bambi/attendance-panel.tsx`)의 아코디언
+카드로 흡수된다. 카드 순서: **내 아이템(보유함) → 구매 내역 → 포인트 내역**. 두 카드
+모두 `employer`에도 그대로 노출된다(패널이 두 라우트 공용).
+
+- **내 아이템(보유함) 카드**(신규): `owned` 끌올·연장 주문만. "사용하기" 버튼(→ 사용
+  다이얼로그) + 남은 기한(`usable_until`)/무기한/만료 표시, 만료 건은 사용·취소 불가.
+  미사용·미만료면 **"취소·환불" 버튼**(`cancelMyOrder`). 보유 건이 없으면 카드를
+  숨기거나 빈 상태.
+- **구매 내역 카드**(develop 흡수분 `point-orders-card.tsx` 확장): 수동·쿠폰형 주문
+  목록 + `pending`이면 "취소·환불" 버튼(`cancelMyOrder`). 쿠폰은 "본인인증 번호로
+  발송돼요" 안내 문구만(코드 UI 없음). 상태는 **구매자용 라벨**(주문완료/지급완료/
+  취소·환불).
+- **포인트 내역 카드**(기존 `PointHistoryCard`): 원장 이력. 포인트몰 구매·환불 행은
+  §3.6의 `description`으로 아이템명이 그대로 보인다(별도 작업 불필요).
 
 ### 사용하기 다이얼로그(끌올·연장)
 
@@ -406,23 +449,33 @@ point_shop`·born-paid(`payment_status=paid`)라, 운영자 결제 관리의 **�
 
 ## 7. 테스트·마이그레이션
 
-- **마이그레이션 1건**(끌올 옵션 0080·프리미엄 정원 등과 같은 관례):
+- **마이그레이션 1건(0098 예상)** — develop 병합 리넘버로 0096=`robust_dormammu`
+  (develop)·0097=`freezing_prism`(포인트몰)이 선점됐으므로 이번 혜택 마이그레이션은
+  **0098**이다.
   - pgEnum 신설 2: `point_shop_benefit_type`·`point_shop_audience`.
   - 기존 `job_boost_purchase_source` enum에 `point_shop` 값 추가
     (`ALTER TYPE ... ADD VALUE`). ※ Postgres에서 `ADD VALUE`는 같은 트랜잭션 내에서
     곧바로 사용할 수 없으니, drizzle이 이 문을 별도 statement로 분리·선행하는지
     생성 결과에서 확인한다.
   - 기존 `notification_target_type` enum에 `point_shop_order` 값 추가
-    (`ALTER TYPE ... ADD VALUE`, 만료 임박 알림용). 같은 분리·선행 주의.
+    (`ALTER TYPE ... ADD VALUE`, 만료 임박 알림용). develop이 이미 추가한
+    `point_transaction` 값과 **공존**한다(우리 값은 그 뒤에 붙는다). 같은 분리·선행 주의.
   - `bambi_point_shop_item` 컬럼 8개 추가(`benefit_type`·`audience`·스펙 4·
-    `usage_limit_days`·`stock_quantity`).
+    `usage_limit_days`·`stock_quantity`). 병합으로 정의 위치가 밀렸다(≈ L1948).
   - `bambi_point_shop_order` 컬럼 9개 추가(§2.3 — `benefit_type`·스펙 4·
-    `usable_until`·`used_at`·`target_job_post_id`·`expiry_notified_at`).
-  - **코드 풀 테이블은 없다**(폐기). 신설 테이블 0건.
+    `usable_until`·`used_at`·`target_job_post_id`·`expiry_notified_at`, ≈ L1963).
+  - **코드 풀 테이블은 없다**(폐기). 신설 테이블 0건. develop이 추가한
+    `bambi_point_transaction` 컬럼(`actor_user_id`·`balance_after`·`description`·
+    `external_key`)·site_settings·job_post 포인트 결제 컬럼은 **이미 0096/0097에
+    포함**돼 있어 우리 마이그레이션 대상이 아니다.
   - **주문 `status`에 `owned`·`used`는 DB 변경 없음**(`text` 컬럼이라 코드 상수만
     확장). `db:generate`는 이 값들을 마이그레이션에 담지 않는다.
   - `db:generate`는 구현 시 생성, 적용은 사용자 지시 시(적용 검증 필수, `db:push`
     금지). **배포 전 운영 DB migrate 필수** — 미적용 시 아이템 등록·구매 insert 실패.
+- **포인트 원장 통합(§3.6)**: 포인트몰 구매/환불의 직접 원장 insert를
+  `adjustMemberPoints`/`awardMemberPoints` 경유로 리팩터(external_key·description·락
+  순서 포함). 순수 함수가 아니라 라우터 통합이라 typecheck + 코드 리뷰로 검증(라우터
+  스위트 실행 금지).
 - **만료 임박 알림 배치**(§3.5): 기존 cron 인프라(개인정보 파기 배치 패턴)에 매일
   1회 잡 추가 — 대상 선별은 순수 함수, 알림 발송·`expiry_notified_at` 기록은 트랜잭션.
 - 순수 함수만 `packages/api/test/services/bambi-point-shop.test.ts`에서 단위 테스트
