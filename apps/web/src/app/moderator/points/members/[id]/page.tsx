@@ -270,25 +270,25 @@ export default function ModeratorPointMemberDetailPage(): React.JSX.Element {
 					<ul className="m-0 flex list-none flex-col gap-2 p-0">
 						{history.map((item) => (
 							<li
-								className="rounded-[14px] border border-border bg-card p-3"
+								className="rounded-md border border-border bg-card p-3"
 								key={item.id}
 							>
 								<div className="flex items-center justify-between gap-2">
-									<span className="font-bold text-[13px] text-foreground">
+									<span className="font-bold text-foreground text-sm">
 										{Math.abs(item.amount).toLocaleString("ko-KR")}P{" "}
 										{item.amount >= 0 ? "지급" : "차감"}
 									</span>
-									<span className="whitespace-nowrap text-[11px] text-muted-foreground">
+									<span className="whitespace-nowrap text-muted-foreground text-xs">
 										{dateTimeFormatter.format(new Date(item.createdAt))}
 									</span>
 								</div>
-								<p className="mt-1 mb-0 text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
+								<p className="mt-1 mb-0 text-foreground text-sm leading-relaxed">
 									{item.description}
 								</p>
-								<div className="mt-1 font-semibold text-[12px] text-foreground">
+								<div className="mt-1 font-semibold text-foreground text-xs">
 									총 보유 포인트: {item.balanceAfter.toLocaleString("ko-KR")}P
 								</div>
-								<div className="mt-1 text-[11px] text-muted-foreground">
+								<div className="mt-1 text-muted-foreground text-xs">
 									처리자 {item.processor}
 								</div>
 							</li>
@@ -321,34 +321,34 @@ export default function ModeratorPointMemberDetailPage(): React.JSX.Element {
 				<h2 className="m-0 font-bold text-base">포인트 적용</h2>
 				<div className="flex flex-col gap-2.5">
 					<button
-						className="flex cursor-pointer items-center gap-3 rounded-[14px] border border-[color:var(--border-default)] bg-card p-[14px] text-left"
+						className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-card p-3.5 text-left"
 						onClick={() => setAdjustMode("grant")}
 						type="button"
 					>
 						<span className="flex-1">
-							<span className="block font-extrabold text-[14.5px] text-[color:var(--status-pending-fg)]">
+							<span className="block font-extrabold text-amber-500 text-sm">
 								포인트 지급
 							</span>
-							<span className="mt-0.5 block text-[12px] text-muted-foreground">
+							<span className="mt-0.5 block text-muted-foreground text-xs">
 								회원에게 포인트를 지급하고 사유를 기록해요
 							</span>
 						</span>
-						<ChevronRightIcon className="size-[18px] text-[color:var(--text-subtle)]" />
+						<ChevronRightIcon className="size-4 text-muted-foreground" />
 					</button>
 					<button
-						className="flex cursor-pointer items-center gap-3 rounded-[14px] border border-[color:var(--border-default)] bg-card p-[14px] text-left"
+						className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-card p-3.5 text-left"
 						onClick={() => setAdjustMode("deduct")}
 						type="button"
 					>
 						<span className="flex-1">
-							<span className="block font-extrabold text-[14.5px] text-[color:var(--red-600)]">
+							<span className="block font-extrabold text-destructive text-sm">
 								포인트 차감
 							</span>
-							<span className="mt-0.5 block text-[12px] text-muted-foreground">
+							<span className="mt-0.5 block text-muted-foreground text-xs">
 								회원의 보유 포인트에서 차감하고 사유를 기록해요
 							</span>
 						</span>
-						<ChevronRightIcon className="size-[18px] text-[color:var(--red-500)]" />
+						<ChevronRightIcon className="size-4 text-destructive" />
 					</button>
 				</div>
 			</section>
