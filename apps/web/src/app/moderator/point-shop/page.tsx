@@ -24,6 +24,12 @@ import {
 	DialogDescription,
 	DialogTitle,
 } from "@bambi-app/ui/components/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@bambi-app/ui/components/dropdown-menu";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
@@ -40,7 +46,7 @@ import {
 	ToggleGroupItem,
 } from "@bambi-app/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImageOffIcon, XIcon } from "lucide-react";
+import { ImageOffIcon, MoreHorizontalIcon, XIcon } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -204,6 +210,34 @@ function getItemColumns({
 	];
 }
 
+// 주문 행 우측 조치 메뉴(운영자 content 관리의 RowActions 패턴). 처리 대기 행에만 붙고
+// — 처리 뒤엔 남은 조치가 없다 — 실제 확정은 상위 OrdersTab의 AlertDialog가 받는다.
+function OrderRowActions({
+	onCancel,
+	onComplete,
+}: {
+	onCancel: () => void;
+	onComplete: () => void;
+}) {
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				render={
+					<Button aria-label="관리 메뉴" size="icon-sm" variant="ghost">
+						<MoreHorizontalIcon />
+					</Button>
+				}
+			/>
+			<DropdownMenuContent align="end" className="w-32">
+				<DropdownMenuItem onClick={onComplete}>지급 완료</DropdownMenuItem>
+				<DropdownMenuItem onClick={onCancel} variant="destructive">
+					취소·환불
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 function getOrderColumns({
 	onCancel,
 	onComplete,
@@ -289,24 +323,10 @@ function getOrderColumns({
 				}
 
 				return (
-					<div className="flex justify-end gap-2">
-						<Button
-							onClick={() => onComplete(row)}
-							size="sm"
-							type="button"
-							variant="outline"
-						>
-							지급 완료
-						</Button>
-						<Button
-							onClick={() => onCancel(row)}
-							size="sm"
-							type="button"
-							variant="destructive"
-						>
-							취소·환불
-						</Button>
-					</div>
+					<OrderRowActions
+						onCancel={() => onCancel(row)}
+						onComplete={() => onComplete(row)}
+					/>
 				);
 			},
 		},
