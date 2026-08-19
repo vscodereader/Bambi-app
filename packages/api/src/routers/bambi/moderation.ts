@@ -20,6 +20,7 @@ import {
 	employerOrganizationProfile,
 	employerTeamProfile,
 	interviewSchedule,
+	jobAdPurchase,
 	jobBoostEvent,
 	jobBoostPurchase,
 	jobPost,
@@ -48,6 +49,7 @@ import { alias } from "drizzle-orm/pg-core";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure } from "../../index";
+import { buildAdLedgerInsert } from "../../services/bambi-ad-ledger";
 import { syncAdvertiserFlagForOrganization } from "../../services/bambi-advertiser";
 import {
 	requireActiveBambiProfile,
@@ -2458,6 +2460,19 @@ export const moderationRouter = {
 						throw new ORPCError("NOT_FOUND");
 					}
 
+					// unpaid→paid 전환일 때만 조직 누적 원장에 append. 무료(adProductId null) 공고는 제외한다.
+					// same-status는 위에서 이미 단락돼(changed=false) 여기 도달하지 않으므로 자연 멱등.
+					if (input.paymentStatus === "paid") {
+						const ledgerRow = buildAdLedgerInsert(
+							input.jobPostId,
+							existing,
+							"moderation_single"
+						);
+						if (ledgerRow) {
+							await tx.insert(jobAdPurchase).values(ledgerRow);
+						}
+					}
+
 					return {
 						changed: true,
 						organizationId: existing.organizationId,
@@ -3084,6 +3099,8 @@ export const moderationRouter = {
 							const now = new Date();
 							const [existing] = await tx
 								.select({
+									adProductId: jobPost.adProductId,
+									exposureAmount: jobPost.exposureAmount,
 									exposureDurationDays: jobPost.exposureDurationDays,
 									exposureType: jobPost.exposureType,
 									organizationId: jobPost.organizationId,
@@ -3150,6 +3167,17 @@ export const moderationRouter = {
 											: existing.pointsRefundLockedAt,
 								})
 								.where(eq(jobPost.id, jobPostId));
+
+							if (input.paymentStatus === "paid") {
+								const ledgerRow = buildAdLedgerInsert(
+									jobPostId,
+									existing,
+									"moderation_bulk"
+								);
+								if (ledgerRow) {
+									await tx.insert(jobAdPurchase).values(ledgerRow);
+								}
+							}
 
 							affectedOrganizationIds.add(existing.organizationId);
 						},
