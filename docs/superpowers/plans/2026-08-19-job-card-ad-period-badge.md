@@ -39,7 +39,7 @@
 
 **Steps:**
 
-- [ ] **스키마에 테이블 추가.** `packages/db/src/schema/bambi.ts`의 `jobBoostPurchase` 테이블 정의(닫는 `);`, 현재 L1190) 바로 뒤에 삽입:
+- [x] **스키마에 테이블 추가.** `packages/db/src/schema/bambi.ts`의 `jobBoostPurchase` 테이블 정의(닫는 `);`, 현재 L1190) 바로 뒤에 삽입:
 
 ```ts
 // 유료 광고(노출 상품) 결제 확정 1건의 이력. job_post의 exposure_* 컬럼은 재결제·기간 변경
@@ -74,13 +74,13 @@ export const jobAdPurchase = pgTable(
 );
 ```
 
-- [ ] **마이그레이션 생성 실행(생성만, 적용 금지).**
+- [x] **마이그레이션 생성 실행(생성만, 적용 금지).**
 
 ```bash
 pnpm --filter @bambi-app/db db:generate
 ```
 
-- [ ] **생성된 `0097_*.sql` 끝에 백필 SQL을 수동 추가.** 생성된 `CREATE TABLE`·`ADD CONSTRAINT`·`CREATE INDEX` 뒤에 `--> statement-breakpoint`로 구분해 붙인다(기존 paid + 유료 광고 공고를 1행씩 적재):
+- [x] **생성된 `0097_*.sql` 끝에 백필 SQL을 수동 추가.** 생성된 `CREATE TABLE`·`ADD CONSTRAINT`·`CREATE INDEX` 뒤에 `--> statement-breakpoint`로 구분해 붙인다(기존 paid + 유료 광고 공고를 1행씩 적재):
 
 ```sql
 --> statement-breakpoint
@@ -97,15 +97,15 @@ FROM "job_post"
 WHERE "payment_status" = 'paid' AND "ad_product_id" IS NOT NULL;
 ```
 
-- [ ] **저널·스냅샷 정합 확인(적용 아님, 파일 검사).** `packages/db/src/migrations/meta/_journal.json`의 마지막 항목 `idx`가 97·`tag`가 `0097_*`인지, `meta/0097_snapshot.json`이 생성됐는지, `0097_*.sql`에 `CREATE TABLE "job_ad_purchase"`와 위 백필 INSERT가 모두 들어갔는지 확인한다.
+- [x] **저널·스냅샷 정합 확인(적용 아님, 파일 검사).** `packages/db/src/migrations/meta/_journal.json`의 마지막 항목 `idx`가 97·`tag`가 `0097_*`인지, `meta/0097_snapshot.json`이 생성됐는지, `0097_*.sql`에 `CREATE TABLE "job_ad_purchase"`와 위 백필 INSERT가 모두 들어갔는지 확인한다.
 
-- [ ] **타입체크.**
+- [x] **타입체크.**
 
 ```bash
 pnpm --filter @bambi-app/db check-types
 ```
 
-- [ ] **커밋.**
+- [x] **커밋.**
 
 ```
 feat: 조직 단위 누적 광고 이력 테이블 신설
@@ -135,7 +135,7 @@ DB를 직접 건드리지 않는 순수 매핑 함수로 분리해, 호출부는
 
 **Steps:**
 
-- [ ] **실패 테스트 작성.** `packages/api/test/services/bambi-ad-ledger.test.ts`:
+- [x] **실패 테스트 작성.** `packages/api/test/services/bambi-ad-ledger.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -189,13 +189,13 @@ describe("buildAdLedgerInsert", () => {
 });
 ```
 
-- [ ] **실패 확인 실행.**
+- [x] **실패 확인 실행.**
 
 ```bash
 pnpm --filter @bambi-app/api exec vitest run test/services/bambi-ad-ledger.test.ts
 ```
 
-- [ ] **최소 구현.** `packages/api/src/services/bambi-ad-ledger.ts`:
+- [x] **최소 구현.** `packages/api/src/services/bambi-ad-ledger.ts`:
 
 ```ts
 // 유료 광고(노출 상품) 결제 확정 시 조직 단위 누적 집계용 원장(job_ad_purchase) 1행을 만든다.
@@ -240,13 +240,13 @@ export const buildAdLedgerInsert = (
 };
 ```
 
-- [ ] **통과 확인 실행.**
+- [x] **통과 확인 실행.**
 
 ```bash
 pnpm --filter @bambi-app/api exec vitest run test/services/bambi-ad-ledger.test.ts
 ```
 
-- [ ] **커밋.**
+- [x] **커밋.**
 
 ```
 feat: 광고 결제 원장 적재 매핑 서비스 추가
@@ -274,13 +274,13 @@ feat: 광고 결제 원장 적재 매핑 서비스 추가
 
 **Steps:**
 
-- [ ] **import 추가.** `moderation.ts` 스키마 import 블록에 `jobAdPurchase,` 추가(알파벳 정렬 위치: `jobBoostPurchase` 앞). 서비스 import에 다음 줄 추가:
+- [x] **import 추가.** `moderation.ts` 스키마 import 블록에 `jobAdPurchase,` 추가(알파벳 정렬 위치: `jobBoostPurchase` 앞). 서비스 import에 다음 줄 추가:
 
 ```ts
 import { buildAdLedgerInsert } from "../../services/bambi-ad-ledger";
 ```
 
-- [ ] **개별 분기 적재.** `setJobPostPayment`에서 `const [row] = await tx.update(jobPost)...returning();`과 `if (!row) { throw new ORPCError("NOT_FOUND"); }` 뒤, `return { changed: true, organizationId: existing.organizationId, updated: row };` 앞에 삽입:
+- [x] **개별 분기 적재.** `setJobPostPayment`에서 `const [row] = await tx.update(jobPost)...returning();`과 `if (!row) { throw new ORPCError("NOT_FOUND"); }` 뒤, `return { changed: true, organizationId: existing.organizationId, updated: row };` 앞에 삽입:
 
 ```ts
 // unpaid→paid 전환일 때만 조직 누적 원장에 append. 무료(adProductId null) 공고는 제외한다.
@@ -297,14 +297,14 @@ if (input.paymentStatus === "paid") {
 }
 ```
 
-- [ ] **벌크 select 컬럼 보강.** `bulkSetJobPostPayment`의 `processTarget` 내 `tx.select({ ... })`(현재 exposureDurationDays·exposureType·organizationId·paymentStatus·pointsRefundLockedAt·pointsUsed)에 두 줄 추가:
+- [x] **벌크 select 컬럼 보강.** `bulkSetJobPostPayment`의 `processTarget` 내 `tx.select({ ... })`(현재 exposureDurationDays·exposureType·organizationId·paymentStatus·pointsRefundLockedAt·pointsUsed)에 두 줄 추가:
 
 ```ts
 						adProductId: jobPost.adProductId,
 						exposureAmount: jobPost.exposureAmount,
 ```
 
-- [ ] **벌크 분기 적재.** 같은 `processTarget`의 `await tx.update(jobPost).set({...}).where(eq(jobPost.id, jobPostId));` 뒤, `affectedOrganizationIds.add(existing.organizationId);` 앞에 삽입:
+- [x] **벌크 분기 적재.** 같은 `processTarget`의 `await tx.update(jobPost).set({...}).where(eq(jobPost.id, jobPostId));` 뒤, `affectedOrganizationIds.add(existing.organizationId);` 앞에 삽입:
 
 ```ts
 				if (input.paymentStatus === "paid") {
@@ -319,13 +319,13 @@ if (input.paymentStatus === "paid") {
 				}
 ```
 
-- [ ] **타입체크(라우터 테스트는 실행하지 않는다).**
+- [x] **타입체크(라우터 테스트는 실행하지 않는다).**
 
 ```bash
 pnpm --filter @bambi-app/api check-types
 ```
 
-- [ ] **커밋.**
+- [x] **커밋.**
 
 ```
 feat: 운영자 결제 확정 시 광고 원장 적재
@@ -352,9 +352,9 @@ feat: 운영자 결제 확정 시 광고 원장 적재
 
 **Steps:**
 
-- [ ] **import 추가.** `jobs.ts` 스키마 import 블록에 `jobAdPurchase,` 추가(`jobIndustryCategory` 앞).
+- [x] **import 추가.** `jobs.ts` 스키마 import 블록에 `jobAdPurchase,` 추가(`jobIndustryCategory` 앞).
 
-- [ ] **집계 삽입.** `const performanceByJobId = await getRecentJobPerformanceMetrics(performanceJobIds, now);` 뒤에 삽입:
+- [x] **집계 삽입.** `const performanceByJobId = await getRecentJobPerformanceMetrics(performanceJobIds, now);` 뒤에 삽입:
 
 ```ts
 		// 유료 광고 섹션(스페셜·급구·추천) 카드에 붙일 조직 단위 누적 광고 집계(횟수·일수).
@@ -389,7 +389,7 @@ feat: 운영자 결제 확정 시 광고 원장 적재
 		);
 ```
 
-- [ ] **`toListItem`에 adPeriod 추가.** `toListItem` 반환 객체(`performance:` 뒤)에 필드 추가:
+- [x] **`toListItem`에 adPeriod 추가.** `toListItem` 반환 객체(`performance:` 뒤)에 필드 추가:
 
 ```ts
 			// 유료 카드만·문자열 organizationId가 있을 때만 집계를 붙인다(수집 행은 organizationId
@@ -402,13 +402,13 @@ feat: 운영자 결제 확정 시 광고 원장 적재
 					: null,
 ```
 
-- [ ] **타입체크(라우터 테스트 미실행).**
+- [x] **타입체크(라우터 테스트 미실행).**
 
 ```bash
 pnpm --filter @bambi-app/api check-types
 ```
 
-- [ ] **커밋.**
+- [x] **커밋.**
 
 ```
 feat: jobs.list 응답에 조직 누적 광고 집계 부착
@@ -437,7 +437,7 @@ feat: jobs.list 응답에 조직 누적 광고 집계 부착
 
 **Steps:**
 
-- [ ] **실패 테스트 작성.** `apps/web/test/lib/bambi/ad-period.test.ts`:
+- [x] **실패 테스트 작성.** `apps/web/test/lib/bambi/ad-period.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -488,13 +488,13 @@ describe("formatAdPeriodTierRange", () => {
 });
 ```
 
-- [ ] **실패 확인 실행.**
+- [x] **실패 확인 실행.**
 
 ```bash
 pnpm --filter web exec vitest run test/lib/bambi/ad-period.test.ts
 ```
 
-- [ ] **최소 구현.** `apps/web/src/lib/bambi/ad-period.ts`:
+- [x] **최소 구현.** `apps/web/src/lib/bambi/ad-period.ts`:
 
 ```ts
 // 조직 단위 누적 광고일수 등급 정의(카드 배지·구인자 안내 등급표 공유 소스). 순수 모듈이라
@@ -546,13 +546,13 @@ export const formatAdPeriodTierRange = (tier: AdPeriodTier): string =>
 		: `누적 ${tier.minDays.toLocaleString("ko-KR")}~${tier.maxDays.toLocaleString("ko-KR")}일`;
 ```
 
-- [ ] **통과 확인 실행.**
+- [x] **통과 확인 실행.**
 
 ```bash
 pnpm --filter web exec vitest run test/lib/bambi/ad-period.test.ts
 ```
 
-- [ ] **커밋.**
+- [x] **커밋.**
 
 ```
 feat: 누적 광고일수 등급 lib 추가
@@ -579,34 +579,34 @@ feat: 누적 광고일수 등급 lib 추가
 
 **Steps:**
 
-- [ ] **아이콘 추가.** `icons.tsx`의 lucide import에 `Crown,`·`Medal,`를 알파벳 위치(각각 `Copy` 뒤·`LucideIcon` 앞)로 추가하고, export 목록에 추가:
+- [x] **아이콘 추가.** `icons.tsx`의 lucide import에 `Crown,`·`Medal,`를 알파벳 위치(각각 `Copy` 뒤·`LucideIcon` 앞)로 추가하고, export 목록에 추가:
 
 ```ts
 export const CrownIcon = fill(Crown);
 export const MedalIcon = fill(Medal);
 ```
 
-- [ ] **Job 타입 필드 추가.** `types.ts`의 `interface Job` 안(알파벳 위치, `beginnerFriendly` 뒤)에:
+- [x] **Job 타입 필드 추가.** `types.ts`의 `interface Job` 안(알파벳 위치, `beginnerFriendly` 뒤)에:
 
 ```ts
 	// 조직 단위 누적 광고 결제(횟수·누적 일수). 유료 광고 카드에만 값, 그 외 null/미정의.
 	adPeriod?: { count: number; totalDays: number } | null;
 ```
 
-- [ ] **ApiMarketplaceJob 필드 추가.** `api-job-mapper.ts`의 `interface ApiMarketplaceJob` 안(`beginnerFriendly` 앞, 알파벳 최상단)에:
+- [x] **ApiMarketplaceJob 필드 추가.** `api-job-mapper.ts`의 `interface ApiMarketplaceJob` 안(`beginnerFriendly` 앞, 알파벳 최상단)에:
 
 ```ts
 	// jobs.list가 유료 카드에만 부착하는 조직 단위 누적 광고 집계. 그 외 경로(search·수집)엔 없음.
 	adPeriod?: { count: number; totalDays: number } | null;
 ```
 
-- [ ] **매퍼 passthrough.** `toMarketplaceJob` 반환 객체(`beginnerFriendly:` 앞)에:
+- [x] **매퍼 passthrough.** `toMarketplaceJob` 반환 객체(`beginnerFriendly:` 앞)에:
 
 ```ts
 		adPeriod: job.adPeriod ?? null,
 ```
 
-- [ ] **매퍼 테스트 추가.** `api-job-mapper.test.ts`에 `describe("toMarketplaceJob adPeriod", ...)` 블록 추가:
+- [x] **매퍼 테스트 추가.** `api-job-mapper.test.ts`에 `describe("toMarketplaceJob adPeriod", ...)` 블록 추가:
 
 ```ts
 describe("toMarketplaceJob adPeriod", () => {
@@ -633,13 +633,13 @@ describe("toMarketplaceJob adPeriod", () => {
 });
 ```
 
-- [ ] **매퍼 테스트 실행.**
+- [x] **매퍼 테스트 실행.**
 
 ```bash
 pnpm --filter web exec vitest run test/lib/bambi/api-job-mapper.test.ts
 ```
 
-- [ ] **커밋.**
+- [x] **커밋.**
 
 ```
 feat: adPeriod 타입·매퍼 배선과 등급 아이콘 추가
@@ -665,7 +665,7 @@ feat: adPeriod 타입·매퍼 배선과 등급 아이콘 추가
 
 **Steps:**
 
-- [ ] **실패 테스트 작성(소스 grep).** `visual-job-components.test.ts`의 `describe("visual job marketplace components", ...)` 안에 케이스 추가:
+- [x] **실패 테스트 작성(소스 grep).** `visual-job-components.test.ts`의 `describe("visual job marketplace components", ...)` 안에 케이스 추가:
 
 ```ts
 	it("renders the ad-period badge in the salary row without adding a new row", () => {
@@ -686,13 +686,13 @@ feat: adPeriod 타입·매퍼 배선과 등급 아이콘 추가
 	});
 ```
 
-- [ ] **실패 확인 실행.**
+- [x] **실패 확인 실행.**
 
 ```bash
 pnpm --filter web exec vitest run test/components/bambi/visual-job-components.test.ts
 ```
 
-- [ ] **최소 구현 — import 추가.** `visual-job-card.tsx` 상단 import에:
+- [x] **최소 구현 — import 추가.** `visual-job-card.tsx` 상단 import에:
 
 ```ts
 import { adPeriodTier, formatAdPeriod } from "@/lib/bambi/ad-period";
@@ -704,7 +704,7 @@ import { adPeriodTier, formatAdPeriod } from "@/lib/bambi/ad-period";
 import { CrownIcon, MapPinIcon, MedalIcon } from "./icons";
 ```
 
-- [ ] **최소 구현 — 배지 컴포넌트 추가.** `VisualJobCard` 정의 위(예: `splitPay` 뒤)에 소형 컴포넌트 추가:
+- [x] **최소 구현 — 배지 컴포넌트 추가.** `VisualJobCard` 정의 위(예: `splitPay` 뒤)에 소형 컴포넌트 추가:
 
 ```tsx
 // 급여 행 오른쪽 끝의 누적 광고 배지(아이콘 + "N회 N일"). adPeriod가 없으면 카드가 렌더하지
@@ -732,7 +732,7 @@ function JobAdPeriodBadge({
 }
 ```
 
-- [ ] **최소 구현 — 급여 행 수정.** 급여 행(L259-270)을 교체:
+- [x] **최소 구현 — 급여 행 수정.** 급여 행(L259-270)을 교체:
 
 ```tsx
 			{/* mt-auto: 그리드 행이 늘어나(모집중 placeholder 등) 카드가 stretch 되어도
@@ -753,13 +753,13 @@ function JobAdPeriodBadge({
 			</div>
 ```
 
-- [ ] **통과 확인 실행.**
+- [x] **통과 확인 실행.**
 
 ```bash
 pnpm --filter web exec vitest run test/components/bambi/visual-job-components.test.ts
 ```
 
-- [ ] **커밋.**
+- [x] **커밋.**
 
 ```
 feat: 공고 카드 급여 행에 누적 광고 배지 추가
@@ -784,7 +784,7 @@ feat: 공고 카드 급여 행에 누적 광고 배지 추가
 
 **Steps:**
 
-- [ ] **실패 테스트 작성(grep).** `visual-job-components.test.ts`에 케이스 추가:
+- [x] **실패 테스트 작성(grep).** `visual-job-components.test.ts`에 케이스 추가:
 
 ```ts
 	it("shows the ad-period grade table on the employer ad guide", () => {
@@ -799,20 +799,20 @@ feat: 공고 카드 급여 행에 누적 광고 배지 추가
 	});
 ```
 
-- [ ] **실패 확인 실행.**
+- [x] **실패 확인 실행.**
 
 ```bash
 pnpm --filter web exec vitest run test/components/bambi/visual-job-components.test.ts
 ```
 
-- [ ] **최소 구현 — import 추가.** `employer-ad-guide.tsx` 상단에:
+- [x] **최소 구현 — import 추가.** `employer-ad-guide.tsx` 상단에:
 
 ```ts
 import { CrownIcon, MedalIcon } from "@/components/bambi/icons";
 import { AD_PERIOD_TIERS, formatAdPeriodTierRange } from "@/lib/bambi/ad-period";
 ```
 
-- [ ] **최소 구현 — 등급표 컴포넌트.** `EmployerAdGuideScreen` 정의 앞에 추가:
+- [x] **최소 구현 — 등급표 컴포넌트.** `EmployerAdGuideScreen` 정의 앞에 추가:
 
 ```tsx
 // 누적 광고일수 등급표. 공고 카드 배지와 같은 AD_PERIOD_TIERS를 재사용해 구간·아이콘이
@@ -850,19 +850,19 @@ function AdPeriodGradeGuide() {
 }
 ```
 
-- [ ] **최소 구현 — 화면에 배치.** `EmployerAdGuideScreen`의 `<BoostOptionsGuide />` 바로 뒤에 추가:
+- [x] **최소 구현 — 화면에 배치.** `EmployerAdGuideScreen`의 `<BoostOptionsGuide />` 바로 뒤에 추가:
 
 ```tsx
 				<AdPeriodGradeGuide />
 ```
 
-- [ ] **통과 확인 실행.**
+- [x] **통과 확인 실행.**
 
 ```bash
 pnpm --filter web exec vitest run test/components/bambi/visual-job-components.test.ts
 ```
 
-- [ ] **커밋.**
+- [x] **커밋.**
 
 ```
 feat: 구인자 광고 안내에 누적 광고일수 등급표 추가
@@ -885,7 +885,7 @@ feat: 구인자 광고 안내에 누적 광고일수 등급표 추가
 
 **Steps:**
 
-- [ ] **매뉴얼 문단 추가.** `docs/manual/employer-manual.md`의 "### 광고 상품 안내" 섹션에서, `> 상품 구성과 요금은 운영팀이 등록한 내용에 따라 달라집니다...`(현재 L325) 뒤에 문단 추가:
+- [x] **매뉴얼 문단 추가.** `docs/manual/employer-manual.md`의 "### 광고 상품 안내" 섹션에서, `> 상품 구성과 요금은 운영팀이 등록한 내용에 따라 달라집니다...`(현재 L325) 뒤에 문단 추가:
 
 ```markdown
 **누적 광고일수 등급**
@@ -893,7 +893,7 @@ feat: 구인자 광고 안내에 누적 광고일수 등급표 추가
 구직자 목록의 유료 광고 카드에는 그 업소가 지금까지 진행한 **누적 광고 횟수와 누적 일수**가 "N회 N일" 배지로 표시됩니다(예: "22회 900일"). 누적 일수가 쌓일수록 배지 옆 **등급 아이콘이 올라갑니다** — 누적 90일까지는 브론즈 메달, 91~180일 실버 메달, 181~360일 골드 메달, 361~720일 플래티넘 왕관, 721일 이상 다이아 왕관입니다. 이 배지는 **유료 광고(스페셜·급구·추천) 공고 카드에만** 표시되며, 무료 공고와 외부 수집 공고에는 나타나지 않습니다. 누적 집계는 업소(조직) 단위라 같은 업소의 여러 공고가 같은 배지를 공유합니다. 등급 기준은 **광고 안내** 화면의 **누적 광고일수 등급** 표에서도 확인할 수 있습니다.
 ```
 
-- [ ] **커밋.**
+- [x] **커밋.**
 
 ```
 docs: 구인자 매뉴얼에 누적 광고일수 배지·등급 안내 추가
@@ -912,7 +912,7 @@ docs: 구인자 매뉴얼에 누적 광고일수 배지·등급 안내 추가
 
 **Steps:**
 
-- [ ] **ultracite 린트(변경 파일 경로 명시).**
+- [x] **ultracite 린트(변경 파일 경로 명시).**
 
 ```bash
 pnpm exec ultracite check packages/db/src/schema/bambi.ts packages/api/src/services/bambi-ad-ledger.ts packages/api/test/services/bambi-ad-ledger.test.ts packages/api/src/routers/bambi/moderation.ts packages/api/src/routers/bambi/jobs.ts apps/web/src/lib/bambi/ad-period.ts apps/web/test/lib/bambi/ad-period.test.ts apps/web/src/lib/bambi/types.ts apps/web/src/lib/bambi/api-job-mapper.ts apps/web/test/lib/bambi/api-job-mapper.test.ts apps/web/src/components/bambi/icons.tsx apps/web/src/components/bambi/visual-job-card.tsx apps/web/test/components/bambi/visual-job-components.test.ts apps/web/src/components/bambi/screens/employer-ad-guide.tsx
@@ -920,19 +920,19 @@ pnpm exec ultracite check packages/db/src/schema/bambi.ts packages/api/src/servi
 
   린트 지적이 있으면 `pnpm exec ultracite fix <경로>`로 정리 후 재확인.
 
-- [ ] **db 타입체크.**
+- [x] **db 타입체크.**
 
 ```bash
 pnpm --filter @bambi-app/db check-types
 ```
 
-- [ ] **api 타입체크(라우터 테스트 미실행).**
+- [x] **api 타입체크(라우터 테스트 미실행).**
 
 ```bash
 pnpm --filter @bambi-app/api check-types
 ```
 
-- [ ] **web 타입체크.**
+- [x] **web 타입체크.**
 
 ```bash
 pnpm --filter web check-types
@@ -940,14 +940,14 @@ pnpm --filter web check-types
 
   주의: 메인 리포 web check-types는 낡은 `.next` 캐시 탓 오탐이 알려져 있다. 워크트리에서 무관한 기존 에러가 뜨면 이번 변경 파일과 무관한지 확인하고 사용자에게 보고한다.
 
-- [ ] **테스트 재실행(신규만, 라우터 스위트 제외).**
+- [x] **테스트 재실행(신규만, 라우터 스위트 제외).**
 
 ```bash
 pnpm --filter @bambi-app/api exec vitest run test/services/bambi-ad-ledger.test.ts
 pnpm --filter web exec vitest run test/lib/bambi/ad-period.test.ts test/lib/bambi/api-job-mapper.test.ts test/components/bambi/visual-job-components.test.ts
 ```
 
-- [ ] **배포 체크리스트 보고(커밋 없음).** 신규 마이그레이션 0097(테이블 + 백필) 운영 migrate 필요, `db:push`/`db:migrate`는 사용자 지시 전까지 미실행임을 브랜치·커밋 위치와 함께 보고한다.
+- [x] **배포 체크리스트 보고(커밋 없음).** 신규 마이그레이션 0097(테이블 + 백필) 운영 migrate 필요, `db:push`/`db:migrate`는 사용자 지시 전까지 미실행임을 브랜치·커밋 위치와 함께 보고한다.
 
 ---
 
