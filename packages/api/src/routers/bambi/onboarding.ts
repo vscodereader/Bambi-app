@@ -64,6 +64,7 @@ import {
 } from "../../services/bambi-onboarding";
 import { awardMemberPoints } from "../../services/bambi-point-ledger";
 import { resolveOptionalRegion } from "../../services/bambi-region";
+import { recordMockIdentityLog } from "../../services/bambi-secret-identity";
 import {
 	createBusinessDocumentUploadIntent,
 	createEditorMediaUploadIntent,
@@ -508,7 +509,6 @@ const createBambiProfile = async ({
 		}
 		return created;
 	});
-
 	return toClientProfile(createdProfile);
 };
 
@@ -1140,6 +1140,7 @@ export const onboardingRouter = {
 			// 비회원(수다방 게스트) 흐름에서 온 호출만 구분을 guest로 남긴다. 가입 폼의
 			// 사전확인 호출은 구분을 아직 모르므로 플래그 없이 부른다.
 			phoneVerificationInput.extend({
+				guestId: z.string().uuid().optional(),
 				source: z.literal("guest").optional(),
 			})
 		)
@@ -1159,6 +1160,7 @@ export const onboardingRouter = {
 				identityChannelOptions
 			);
 			await recordIdentityVerification({
+				guestId: input.source === "guest" ? input.guestId : undefined,
 				identity,
 				identityVerificationId: input.identityVerificationId,
 				kind: input.source,
@@ -1208,7 +1210,6 @@ export const onboardingRouter = {
 				identityVerificationId: input.identityVerificationId,
 				kind: existingProfile.role,
 			});
-
 			const [updatedProfile] = await db
 				.update(bambiProfile)
 				.set({
@@ -1222,7 +1223,6 @@ export const onboardingRouter = {
 				})
 				.where(eq(bambiProfile.userId, userId))
 				.returning();
-
 			return toClientProfile(updatedProfile);
 		}),
 
@@ -1243,7 +1243,7 @@ export const onboardingRouter = {
 			}
 			const userId = context.session.user.id;
 			const [existingProfile] = await db
-				.select({ gender: bambiProfile.gender })
+				.select({ gender: bambiProfile.gender, role: bambiProfile.role })
 				.from(bambiProfile)
 				.where(eq(bambiProfile.userId, userId))
 				.limit(1);
@@ -1264,8 +1264,41 @@ export const onboardingRouter = {
 				})
 				.where(eq(bambiProfile.userId, userId))
 				.returning();
+			if (input.gender && input.birthDate) {
+				await recordMockIdentityLog({
+					birthDate: input.birthDate,
+					gender: input.gender,
+					kind: existingProfile.role,
+					phoneNumber: input.phoneNumber,
+				});
+			}
 
 			return toClientProfile(updatedProfile);
+		}),
+
+	registerMockGuestIdentity: publicProcedure
+		.input(
+			z.object({
+				birthDate: z.string().regex(/^\d{8}$/),
+				gender: z.enum(["male", "female"]),
+				guestId: z.string().uuid(),
+				name: z.string().trim().min(1),
+				phoneNumber: z.string().trim().min(3),
+			})
+		)
+		.handler(async ({ input }) => {
+			if (env.PORTONE_API_SECRET || env.NODE_ENV === "production") {
+				throw new ORPCError("FORBIDDEN");
+			}
+			await recordMockIdentityLog({
+				birthDate: input.birthDate,
+				gender: input.gender,
+				guestId: input.guestId,
+				kind: "guest",
+				name: input.name,
+				phoneNumber: input.phoneNumber,
+			});
+			return { ok: true };
 		}),
 
 	createJobSeekerProfile: protectedProcedure

@@ -54,16 +54,26 @@ const isShared = (item: BambiNotificationView): boolean =>
 	item.recipientRole !== null;
 
 const pointTransactionTitle = (item: BambiNotificationView): null | string => {
-	if (
-		item.targetType !== "point_transaction" ||
-		action(item) !== "admin_awarded"
-	) {
+	if (item.targetType !== "point_transaction") {
 		return null;
 	}
 	const amount = readNumber(item.metadata, "amount");
-	return amount === null
-		? null
-		: `운영자로부터 ${amount.toLocaleString("ko-KR")} 포인트가 지급되었습니다!`;
+	if (amount === null) {
+		return null;
+	}
+	if (action(item) === "review_written") {
+		return `포인트 ${amount.toLocaleString("ko-KR")}가 지급되었어요! - 후기 작성`;
+	}
+	if (action(item) === "review_hidden") {
+		const reason = readString(item.metadata, "reason");
+		return `포인트 ${Math.abs(amount).toLocaleString("ko-KR")}가 차감되었어요 ㅠㅠ - 후기 숨김${reason ? ` (${reason})` : ""}`;
+	}
+	if (action(item) === "review_republished") {
+		return `포인트 ${amount.toLocaleString("ko-KR")}가 지급되었어요! - 후기 재게시`;
+	}
+	return action(item) === "admin_awarded"
+		? `운영자로부터 ${amount.toLocaleString("ko-KR")} 포인트가 지급되었습니다!`
+		: null;
 };
 
 // (targetType, action) 조합 문구. 조합이 없으면 targetType 기본 문구로 떨어진다.
@@ -111,6 +121,8 @@ const TITLE_BY_TARGET_AND_ACTION: Record<string, string> = {
 	"organization_member:ownership_transferred": "조직 소유권을 넘겨받았어요",
 	"organization_member:removed": "조직에서 제외됐어요",
 	"organization_member:role_changed": "조직 내 권한이 변경됐어요",
+	// 포인트몰 보유 아이템(끌올·연장) 사용 기한 임박. 본문에 아이템명이 붙는다.
+	"point_shop_order:expiry_soon": "보유 아이템이 곧 만료돼요",
 	"point_transaction:admin_awarded": "운영자로부터 포인트가 지급됐어요",
 	// 업주가 받는 "새 후기 등록"(reviews.ts action: "created"). 폴백 문구로 떨어지면
 	// "후기 상태가 변경됐어요"가 되어 내 후기가 조치된 것처럼 정반대로 읽힌다.
@@ -149,6 +161,7 @@ const TITLE_BY_TARGET: Record<string, string> = {
 	interview_schedule: "면접 일정에 변동이 있어요",
 	job_post: "공고 상태가 변경됐어요",
 	organization_member: "조직 구성원 정보가 변경됐어요",
+	point_shop_order: "보유 아이템에 변동이 있어요",
 	point_transaction: "포인트에 변동이 있어요",
 	report: "신고 처리 결과가 나왔어요",
 	review: "후기 상태가 변경됐어요",
@@ -279,6 +292,16 @@ const REASON_VISIBLE_OUTCOMES = new Set([
  * `hard_delete`·`rejected`처럼 단독으로 오므로 마지막 세그먼트로 판정한다.
  */
 export function notificationBody(item: BambiNotificationView): null | string {
+	// 만료 임박은 어떤 아이템인지 본문에 실어 준다(제목은 유형 불문 공통 문구).
+	if (
+		item.targetType === "point_shop_order" &&
+		action(item) === "expiry_soon"
+	) {
+		const itemName = readString(item.metadata, "itemName");
+		return itemName
+			? `｢${itemName}｣의 사용 기한이 곧 끝나요. 만료 전에 사용해 주세요.`
+			: null;
+	}
 	const rawAction = action(item);
 	// 신고 처리 결과의 reason만 예외로 전이 방향과 무관하게 남긴다 — 운영자가 신고자에게
 	// 남기는 처리 메모라(setReportStatus의 자유 입력) 결과가 resolved여도 본문이 정보다.
@@ -375,6 +398,9 @@ export function notificationHref(item: BambiNotificationView): null | string {
 				: "/employer/settings/teams";
 		case "team_invitation":
 			return "/employer/settings/teams";
+		// 보유 아이템 카드가 있는 포인트 내역 페이지로 보낸다(옛 구매 내역 페이지는 폐지).
+		case "point_shop_order":
+			return "/seeker/attendance";
 		case "point_transaction":
 			return "/seeker/attendance#point-history";
 		case "report":

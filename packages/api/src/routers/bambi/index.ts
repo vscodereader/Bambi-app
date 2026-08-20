@@ -1,4 +1,5 @@
 import { accountRecoveryRouter } from "./account-recovery";
+import { adPeriodTiersRouter } from "./ad-period-tiers";
 import { adProductsRouter } from "./ad-products";
 import { analyticsRouter } from "./analytics";
 import { attendanceRouter } from "./attendance";
@@ -8,6 +9,7 @@ import { boostOptionsRouter } from "./boost-options";
 import { chatsRouter } from "./chats";
 import { communityRouter } from "./community";
 import { communityBoardsRouter } from "./community-boards";
+import { contentHistoryRouter } from "./content-history";
 import { crawledJobsRouter } from "./crawled-jobs";
 import { crawlerRouter } from "./crawler";
 import { jobsRouter } from "./jobs";
@@ -18,6 +20,7 @@ import { notificationsRouter } from "./notifications";
 import { onboardingRouter } from "./onboarding";
 import { organizationsRouter } from "./organizations";
 import { pointSettingsRouter } from "./point-settings";
+import { pointShopRouter } from "./point-shop";
 import { promotionsRouter } from "./promotions";
 import { regionsRouter } from "./regions";
 import { reviewsRouter } from "./reviews";
@@ -30,6 +33,7 @@ import { teamsRouter } from "./teams";
 // 같은 방식으로 명시 주석을 단다 — typeof 참조라 클라이언트 타입 추론은 그대로다.
 export const bambiRouter: {
 	accountRecovery: typeof accountRecoveryRouter;
+	adPeriodTiers: typeof adPeriodTiersRouter;
 	adProducts: typeof adProductsRouter;
 	analytics: typeof analyticsRouter;
 	attendance: typeof attendanceRouter;
@@ -39,6 +43,7 @@ export const bambiRouter: {
 	chats: typeof chatsRouter;
 	community: typeof communityRouter;
 	communityBoards: typeof communityBoardsRouter;
+	contentHistory: typeof contentHistoryRouter;
 	crawledJobs: typeof crawledJobsRouter;
 	crawler: typeof crawlerRouter;
 	jobs: typeof jobsRouter;
@@ -49,6 +54,7 @@ export const bambiRouter: {
 	onboarding: typeof onboardingRouter;
 	organizations: typeof organizationsRouter;
 	pointSettings: typeof pointSettingsRouter;
+	pointShop: typeof pointShopRouter;
 	promotions: typeof promotionsRouter;
 	regions: typeof regionsRouter;
 	reviews: typeof reviewsRouter;
@@ -58,6 +64,7 @@ export const bambiRouter: {
 	teams: typeof teamsRouter;
 } = {
 	accountRecovery: accountRecoveryRouter,
+	adPeriodTiers: adPeriodTiersRouter,
 	adProducts: adProductsRouter,
 	analytics: analyticsRouter,
 	attendance: attendanceRouter,
@@ -67,6 +74,7 @@ export const bambiRouter: {
 	chats: chatsRouter,
 	community: communityRouter,
 	communityBoards: communityBoardsRouter,
+	contentHistory: contentHistoryRouter,
 	crawledJobs: crawledJobsRouter,
 	crawler: crawlerRouter,
 	jobs: jobsRouter,
@@ -77,6 +85,7 @@ export const bambiRouter: {
 	onboarding: onboardingRouter,
 	organizations: organizationsRouter,
 	pointSettings: pointSettingsRouter,
+	pointShop: pointShopRouter,
 	promotions: promotionsRouter,
 	regions: regionsRouter,
 	reviews: reviewsRouter,

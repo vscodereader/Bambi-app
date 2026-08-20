@@ -1,8 +1,13 @@
 import { db } from "@bambi-app/db";
-import { user } from "@bambi-app/db/schema/auth";
-import { interviewSchedule, jobPost, review } from "@bambi-app/db/schema/bambi";
+import { member, user } from "@bambi-app/db/schema/auth";
+import {
+	bambiSiteSettings,
+	interviewSchedule,
+	jobPost,
+	review,
+} from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import z from "zod";
 
 import { protectedProcedure } from "../../index";
@@ -11,6 +16,15 @@ import {
 	requireChatParticipant,
 } from "../../services/bambi-authz";
 import { notifyBambiNotification } from "../../services/bambi-notifications";
+import {
+	adjustMemberPoints,
+	awardMemberPoints,
+} from "../../services/bambi-point-ledger";
+import {
+	DEFAULT_REVIEW_VIEW_POINTS,
+	DEFAULT_REVIEW_WRITE_POINTS,
+	SITE_SETTINGS_ROW_ID,
+} from "../../services/bambi-point-settings";
 import {
 	maskReviewerDisplayName,
 	validateReviewInput,
@@ -32,6 +46,7 @@ const listByJobPostInput = z.object({
 	limit: z.number().int().min(1).max(50).default(10),
 	offset: z.number().int().min(0).default(0),
 });
+const unlockReviewInput = z.object({ reviewId: z.string().uuid() });
 
 const getPolicyErrorMessage = (code: string): string => {
 	switch (code) {
@@ -84,10 +99,7 @@ export const reviewsRouter = {
 				.where(
 					and(
 						eq(interviewSchedule.chatRoomId, room.id),
-						or(
-							eq(interviewSchedule.status, "confirmed"),
-							eq(interviewSchedule.status, "completed")
-						)
+						eq(interviewSchedule.status, "completed")
 					)
 				)
 				.limit(1);
@@ -103,7 +115,7 @@ export const reviewsRouter = {
 				.from(review)
 				.where(
 					and(
-						eq(review.chatRoomId, room.id),
+						eq(review.jobPostId, room.jobPostId),
 						eq(review.reviewerUserId, profile.userId)
 					)
 				)
@@ -123,20 +135,69 @@ export const reviewsRouter = {
 				});
 			}
 
-			const [created] = await db
-				.insert(review)
-				.values({
-					body: input.body.trim(),
-					chatRoomId: room.id,
-					isAnonymous: input.isAnonymous,
-					jobPostId: room.jobPostId,
-					organizationId: room.organizationId,
-					rating: input.rating,
-					reviewerUserId: profile.userId,
-					riskFlags: policyResult.riskFlags,
-					status: policyResult.status,
-				})
-				.returning();
+			const created = await db.transaction(async (tx) => {
+				const [reviewedJob] = await tx
+					.select({ title: jobPost.title })
+					.from(jobPost)
+					.where(eq(jobPost.id, room.jobPostId))
+					.limit(1);
+				if (!reviewedJob) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "후기를 작성할 공고를 찾을 수 없어요.",
+					});
+				}
+				const [settings] = await tx
+					.select({ points: bambiSiteSettings.reviewWritePoints })
+					.from(bambiSiteSettings)
+					.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
+					.limit(1);
+				const requestedPoints = settings?.points ?? DEFAULT_REVIEW_WRITE_POINTS;
+				const [row] = await tx
+					.insert(review)
+					.values({
+						body: input.body.trim(),
+						chatRoomId: room.id,
+						isAnonymous: input.isAnonymous,
+						jobPostId: room.jobPostId,
+						organizationId: room.organizationId,
+						rating: input.rating,
+						reviewerUserId: profile.userId,
+						pointsAwarded: 0,
+						riskFlags: policyResult.riskFlags,
+						status: policyResult.status,
+					})
+					.returning();
+				if (!row) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR");
+				}
+				const awarded = await awardMemberPoints(tx, {
+					amount: requestedPoints,
+					description: `후기 작성 · ${reviewedJob.title}`,
+					externalKey: `review_write:${row.id}:created`,
+					reason: "review_write",
+					userId: profile.userId,
+				});
+				if (awarded.awarded > 0) {
+					await tx
+						.update(review)
+						.set({ pointsAwarded: awarded.awarded })
+						.where(eq(review.id, row.id));
+				}
+				return {
+					...row,
+					pointTransactionId: awarded.transactionId,
+					pointsAwarded: awarded.awarded,
+				};
+			});
+			if (created.pointTransactionId && created.pointsAwarded > 0) {
+				await notifyBambiNotification({
+					actorUserId: profile.userId,
+					metadata: { action: "review_written", amount: created.pointsAwarded },
+					recipientUserId: profile.userId,
+					targetId: created.pointTransactionId,
+					targetType: "point_transaction",
+				});
+			}
 
 			// 후기는 구직자만 남기고, 그 대상은 그 방의 구인자다. 정책 판정이 심사 대기면
 			// 아직 게시되지 않으므로 구인자에게는 알리지 않는다(그 경우는 아래 운영자 큐로).
@@ -181,7 +242,26 @@ export const reviewsRouter = {
 	listByJobPost: protectedProcedure
 		.input(listByJobPostInput)
 		.handler(async ({ context, input }) => {
-			await requireActiveBambiProfile(context.session);
+			const profile = await requireActiveBambiProfile(context.session);
+			const [job] = await db
+				.select({ organizationId: jobPost.organizationId })
+				.from(jobPost)
+				.where(eq(jobPost.id, input.jobPostId))
+				.limit(1);
+			const [membership] =
+				job && profile.role === "employer"
+					? await db
+							.select({ userId: member.userId })
+							.from(member)
+							.where(
+								and(
+									eq(member.userId, profile.userId),
+									eq(member.organizationId, job.organizationId)
+								)
+							)
+							.limit(1)
+					: [];
+			const canViewAll = profile.role === "admin" || Boolean(membership);
 
 			const rows = await db
 				.select({
@@ -194,6 +274,7 @@ export const reviewsRouter = {
 					id: review.id,
 					isAnonymous: review.isAnonymous,
 					rating: review.rating,
+					reviewerUserId: review.reviewerUserId,
 				})
 				.from(review)
 				.leftJoin(user, eq(review.reviewerUserId, user.id))
@@ -210,15 +291,95 @@ export const reviewsRouter = {
 			const hasMore = rows.length > input.limit;
 			const items = (hasMore ? rows.slice(0, input.limit) : rows).map(
 				(row) => ({
-					body: row.body,
+					body:
+						canViewAll || row.reviewerUserId === profile.userId
+							? row.body
+							: null,
 					createdAt: row.createdAt,
 					id: row.id,
+					// 잠긴 후기에서도 실제 별점의 윤곽은 옅게 보여 주고, 본문만 결제 전까지
+					// 감춘다. 화면이 임의의 고정 별점을 그리면 후기마다 같은 값처럼 보인다.
 					rating: row.rating,
+					locked: !(canViewAll || row.reviewerUserId === profile.userId),
 					reviewerDisplayName: resolveReviewerDisplayName(row),
 				})
 			);
 
-			return { hasMore, items };
+			const [settings] = await db
+				.select({ points: bambiSiteSettings.reviewViewPoints })
+				.from(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
+				.limit(1);
+			return {
+				hasMore,
+				items,
+				reviewViewPoints: settings?.points ?? DEFAULT_REVIEW_VIEW_POINTS,
+			};
+		}),
+
+	unlock: protectedProcedure
+		.input(unlockReviewInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireActiveBambiProfile(context.session);
+			const [target] = await db
+				.select({
+					body: review.body,
+					id: review.id,
+					jobPostId: review.jobPostId,
+					rating: review.rating,
+					reviewerUserId: review.reviewerUserId,
+					status: review.status,
+				})
+				.from(review)
+				.where(eq(review.id, input.reviewId))
+				.limit(1);
+			if (target?.status !== "published") {
+				throw new ORPCError("NOT_FOUND");
+			}
+			if (
+				target.reviewerUserId === profile.userId ||
+				profile.role === "admin"
+			) {
+				return { body: target.body, rating: target.rating };
+			}
+			const [job] = await db
+				.select({ organizationId: jobPost.organizationId })
+				.from(jobPost)
+				.where(eq(jobPost.id, target.jobPostId))
+				.limit(1);
+			const [membership] =
+				job && profile.role === "employer"
+					? await db
+							.select({ userId: member.userId })
+							.from(member)
+							.where(
+								and(
+									eq(member.userId, profile.userId),
+									eq(member.organizationId, job.organizationId)
+								)
+							)
+							.limit(1)
+					: [];
+			if (membership) {
+				return { body: target.body, rating: target.rating };
+			}
+			await db.transaction(async (tx) => {
+				const [settings] = await tx
+					.select({ points: bambiSiteSettings.reviewViewPoints })
+					.from(bambiSiteSettings)
+					.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
+					.limit(1);
+				const cost = settings?.points ?? DEFAULT_REVIEW_VIEW_POINTS;
+				if (cost > 0) {
+					await adjustMemberPoints(tx, {
+						amount: -cost,
+						description: `후기 열람: ${target.jobPostId}/${target.id}`,
+						reason: "review_view",
+						userId: profile.userId,
+					});
+				}
+			});
+			return { body: target.body, rating: target.rating };
 		}),
 
 	listMine: protectedProcedure.handler(async ({ context }) => {

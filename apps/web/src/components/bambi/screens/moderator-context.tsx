@@ -233,7 +233,7 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 		title: item.title,
 	};
 };
-// 피신고 대상의 표시 이름·역할을 targetContext 타입별로 계산한다. 사용자는 실명 +
+// 피신고 대상의 표시 이름·역할을 targetContext 타입별로 계산한다. 사용자는 닉네임 +
 // userRoleLabel(role), 공고는 제목 + "공고", 대화방은 연결 공고 제목 + "채팅방". 이름을 알 수
 // 없는 대상(후기·채팅 메시지·맥락 없음)은 대상 id 축약(#앞8자)을 이름으로, 유형 라벨을 역할로
 // 채워 "대상" 하드코딩과 이름·역할의 단어 중복을 피한다. enum 원값은 userRoleLabel로 차단한다.
@@ -268,22 +268,35 @@ const resolveReportTargetParty = (
 	return { name: idShort, role: targetTypeLabel(targetType) };
 };
 
-// 신고자 표시 이름·역할. 서버 reporter(실명·이메일·역할)를 우선 쓰고, displayName이 없으면
+// 신고자 표시 이름·역할. 서버 reporter(닉네임·이메일·역할)를 우선 쓰고, displayName이 없으면
 // email로, reporter 자체가 없으면(대상 프로필 유실 등) 기존 합성 문자열로 폴백한다. 역할은
 // userRoleLabel로 enum 원값(job_seeker 등) 노출을 막는다.
 const resolveReportReporter = (
-	reporter: { displayName: string | null; email: string; role: string } | null,
+	reporter: {
+		displayName: string | null;
+		email: string;
+		gender: "female" | "male" | null;
+		role: string;
+	} | null,
 	reporterUserId: string
-): { name: string; role: string } => {
+): { gender: "female" | "male" | null; name: string; role: string } => {
 	if (!reporter) {
-		return { name: `신고자 ${reporterUserId.slice(0, 6)}`, role: "사용자" };
+		return {
+			gender: null,
+			name: `신고자 ${reporterUserId.slice(0, 6)}`,
+			role: "사용자",
+		};
 	}
 
 	return {
+		gender: reporter.gender,
 		name: reporter.displayName ?? reporter.email,
 		role: userRoleLabel(reporter.role),
 	};
 };
+
+// 피신고자 이름을 특정할 수 없을 때 쓰는 중립 라벨(대상 제목으로 대신 채우지 않는다).
+const MISSING_TARGET_NAME = "대상 없음";
 
 const COMMUNITY_TARGET_LABEL_MAX = 18;
 // 대상 라벨에 넣을 제목을 한 줄 길이로 줄인다(초과분은 말줄임).
@@ -335,6 +348,8 @@ const deriveReportCommunity = (input: {
 			communityTarget: {
 				authorName: post.authorName,
 				board: post.board,
+				boardLabel: post.boardLabel,
+				boardSlug: post.boardSlug,
 				bodyPreview: post.bodyPreview,
 				createdAt: post.createdAt,
 				id: post.id,
@@ -354,10 +369,13 @@ const deriveReportCommunity = (input: {
 			communityTarget: {
 				authorName: comment.authorName,
 				board: comment.postBoard,
+				boardLabel: comment.postBoardLabel,
+				boardSlug: comment.postBoardSlug,
 				bodyPreview: comment.bodyPreview,
 				createdAt: comment.createdAt,
 				id: comment.id,
 				kind: "comment",
+				parentStatus: comment.postStatus,
 				// 수집 글 댓글은 원글(community_post) 행이 없어 postId가 null로 온다 —
 				// 원글 링크가 없는 상태(undefined)로 정규화한다.
 				postId: comment.postId ?? undefined,
@@ -464,10 +482,11 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				: null;
 			// 신고자·피신고 표시 이름·역할은 각각 전용 헬퍼가 계산한다. 제재·분기용
 			// 원값(targetId/targetType/targetContext)은 반환에서 그대로 전달한다.
-			const { name: reporterName, role: reporterRole } = resolveReportReporter(
-				item.reporter,
-				item.reporterUserId
-			);
+			const {
+				gender: reporterGender,
+				name: reporterName,
+				role: reporterRole,
+			} = resolveReportReporter(item.reporter, item.reporterUserId);
 			const { name: targetName, role: targetRole } = resolveReportTargetParty(
 				targetContext,
 				item.targetType,
@@ -478,9 +497,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 						(candidate) => candidate.userId === item.targetUserId
 					)
 				: null;
+			const isChatRoomTarget = Boolean(
+				targetContext && "chatRoom" in targetContext
+			);
 			// 커뮤니티 대상(글·댓글) 컨텍스트·라벨은 별도 헬퍼로 뽑아 콜백 복잡도를 낮춘다.
 			const { communityKind, communityTarget, target } =
 				deriveReportCommunity(item);
+			const targetFallbackName = communityKind ? target : targetName;
 
 			return {
 				communityKind,
@@ -490,22 +513,33 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				reason: reportReasonLabel(item.reason),
 				resolutionReason: item.resolutionReason,
 				reporter: reporterName,
+				reporterGender,
 				reporterRole,
+				reporterVerifiedIdentity: item.reporterVerifiedIdentity,
 				sev: getReportSeverity(item.reason, item.status),
 				status:
 					item.status === "open" || item.status === "reviewing"
 						? "open"
 						: "closed",
 				// 커뮤니티 대상은 deriveReportCommunity가 만든 라벨("커뮤니티 글 · 제목")이 더
-				// 구체적이고, 그 외 대상은 resolveReportTargetParty가 실명·공고 제목을 찾아준다.
-				target: targetUser?.name ?? (communityKind ? target : targetName),
+				// 구체적이고, 그 외 대상은 resolveReportTargetParty가 닉네임·공고 제목을 찾아준다.
+				// 단 채팅방 신고의 targetName은 방 제목(연결 공고)이라 대상 회원을 못 찾았을 때
+				// 그대로 쓰면 방 제목이 피신고자 이름 자리에 들어간다 — 중립 라벨로 막는다.
+				target:
+					targetUser?.name ??
+					(isChatRoomTarget ? MISSING_TARGET_NAME : targetFallbackName),
 				// 실데이터 신고의 대상 맥락(orpc 추론)을 그대로 전달해 상세에서 타입별 렌더한다.
 				targetContext: item.targetContext,
 				// 실제 대상 id(사용자 제재 등에 사용). 프리뷰 목업 신고에는 없다.
 				targetId: item.targetId,
 				targetUserId: item.targetUserId,
-				targetRole: targetUser ? userRoleLabel(targetUser.role) : targetRole,
+				targetVerifiedIdentity: item.targetVerifiedIdentity,
+				targetRole:
+					isChatRoomTarget || !targetUser
+						? targetRole
+						: userRoleLabel(targetUser.role),
 				targetType: item.targetType,
+				targetUserRole: targetUser ? userRoleLabel(targetUser.role) : null,
 				thread: [
 					{
 						mine: false,

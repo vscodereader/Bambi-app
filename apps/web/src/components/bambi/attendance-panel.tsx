@@ -28,6 +28,8 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { GradeBadge } from "@/components/bambi/grade-badge";
 import { PointHistoryCard } from "@/components/bambi/point-history-card";
+import { PointOrdersCard } from "@/components/bambi/point-orders-card";
+import { MyBenefitsCard } from "@/components/bambi/point-shop/my-benefits-card";
 import { buildMonthGrid, shiftMonth } from "@/lib/bambi/attendance-calendar";
 import { orpc } from "@/utils/orpc";
 
@@ -241,6 +243,12 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 					</AccordionItem>
 				</Accordion>
 			</Card>
+
+			{/* 카드 순서(스펙 §6): 내 아이템(보유함) → 구매 내역 → 포인트 내역. 사용 가능한
+			    보유 혜택을 맨 위에 노출한다(만료 임박 알림 진입 시 바로 보이게). */}
+			<MyBenefitsCard />
+
+			<PointOrdersCard />
 
 			<PointHistoryCard />
 		</div>

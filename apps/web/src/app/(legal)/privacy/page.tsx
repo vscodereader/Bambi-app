@@ -17,6 +17,7 @@ import { BAMBI_COMPANY } from "@/lib/bambi/company";
 export const metadata: Metadata = {
 	title: "개인정보 처리방침 | 밤비알바",
 	description: "밤비알바 개인정보 처리방침",
+	alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {
@@ -72,27 +73,27 @@ export default function PrivacyPage() {
 				<LegalSubheading>다. 성인 인증(만 19세 이상 확인) 시</LegalSubheading>
 				<LegalParagraph>
 					본인확인은 포트원(주)의 인증창(엔에이치엔케이씨피(NHN KCP) 휴대폰
-					본인확인)을 통해 이루어집니다. 이름·주민등록번호 앞자리·통신사 정보는
-					인증창에 직접 입력되어 인증기관에서 처리되며, 회사의 시스템을
-					경유하거나 저장되지 않습니다.
+					본인확인)을 통해 이루어집니다. 주민등록번호 앞자리·통신사 정보는
+					인증창에서 인증기관이 처리하며 회사는 전달받지 않습니다.
 				</LegalParagraph>
 				<LegalParagraph>
 					- 인증 완료 후 회사가 전달받는 정보 : 이름, 생년월일, 성별,
 					휴대폰번호, 연계정보(CI), 중복가입확인정보(DI)
 				</LegalParagraph>
 				<LegalParagraph>
-					- 회원 데이터베이스에 저장하는 정보 : 휴대폰번호, 성별, 생년월일과,
-					연계정보(CI)·중복가입확인정보(DI)를 복호화할 수 없도록 일방향
-					암호화(SHA-256 해시)한 값
+					- 회원 데이터베이스에 저장하는 정보 : 검증된 이름, 휴대폰번호, 성별,
+					생년월일과, 연계정보(CI)·중복가입확인정보(DI)를 복호화할 수 없도록
+					일방향 암호화(SHA-256 해시)한 값
 				</LegalParagraph>
 				<LegalParagraph>
-					- 저장하지 않는 정보 : 이름, 통신사 정보,
-					연계정보(CI)·중복가입확인정보(DI) 원문
+					- 저장하지 않는 정보 : 통신사 정보, 연계정보(CI)·중복가입확인정보(DI)
+					원문
 				</LegalParagraph>
 				<LegalParagraph>
-					비회원(게스트)으로 성인 인증만 하는 경우 서버에는 어떠한 정보도
-					저장하지 않으며, 이용자의 브라우저에 저장되는 밤비알바 게스트
-					쿠키(bambi_guest, 유효기간 30일)에 서명된 토큰으로 성별과 만료 시각만
+					비회원(게스트)으로 인증하는 경우 비밀글 작성과 신고·분쟁 대응을 위해
+					검증된 이름·휴대폰번호·성별을 인증일로부터 30일 동안 서버에 분리
+					보관합니다. 브라우저의 밤비알바 게스트 쿠키(bambi_guest, 유효기간
+					30일)에는 실명과 전화번호를 넣지 않고 서명된 식별자·성별·만료 시각만
 					보관합니다.
 				</LegalParagraph>
 
@@ -189,6 +190,11 @@ export default function PrivacyPage() {
 				<LegalParagraph>
 					비회원의 성인 인증에 사용하는 밤비알바 게스트 쿠키(bambi_guest)는 발급
 					후 30일이 지나거나 회원 로그인·로그아웃 시 즉시 만료됩니다.
+				</LegalParagraph>
+				<LegalParagraph>
+					비회원의 검증된 이름·휴대폰번호·성별은 인증일로부터 30일 뒤
+					파기합니다. 다만 신고가 접수된 경우 신고 당시 신원 정보는 분쟁처리
+					기록으로 분리하여 3년간 보관한 뒤 파기합니다.
 				</LegalParagraph>
 
 				<LegalSubheading>다. 관계 법령에 따른 보존</LegalSubheading>

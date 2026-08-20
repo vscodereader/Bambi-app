@@ -31,18 +31,20 @@ const DEFAULT_RECOMMENDED_SLOTS = 20;
 
 // 빈 섹션에서 한 행만 남기려고 여분 자리표시를 breakpoint별로 숨긴다. base엔 flex/hidden이
 // 없으므로 display 클래스를 여기서 온전히 지정한다.
-// 자리표시는 항상 카드 자연 높이(약 118px = 테두리 2 + p-2 16 + 썸네일 56 + gap-2 8 + 급여 행 36)
-// 바로 아래인 min-h-29(116px)를 깐다. 모바일 1열은 자리표시가 자기 행에 혼자 있어 min-h가
-// 없으면 카드보다 납작해지고, lg/xl은 같은 행 실제 카드가 더 높아 stretch가 그대로 이긴다
-// (min-h가 카드 자연 높이를 넘으면 카드가 늘어나 하단 여백이 생기므로 116px에서 멈춘다).
+// 자리표시는 항상 카드 자연 높이(122.25px = 테두리 2 + p-2 16 + 썸네일 행 60.25 + gap-2 8 +
+// 급여 행 36) 바로 아래인 min-h-30(120px)을 깐다. 썸네일 행 60.25px은 h-14 썸네일이 아니라
+// 옆 텍스트 열(제목 20.25 + 4 + 업소 16 + 4 + 지역 16)이 정한다. 모바일 1열은 자리표시가 자기
+// 행에 혼자 있어 min-h가 없으면 카드보다 납작해지고, lg/xl은 같은 행 실제 카드가 더 높아
+// stretch가 그대로 이긴다(min-h가 카드 자연 높이를 넘으면 카드가 늘어나 하단 여백이 생기므로
+// 120px에서 멈춘다).
 const cardPlaceholderClass = (jobsLength: number, index: number): string => {
 	if (jobsLength > 0 || index === 0) {
-		return "flex min-h-29 w-full";
+		return "flex min-h-30 w-full";
 	}
 	if (index < 3) {
-		return "hidden min-h-29 w-full lg:flex";
+		return "hidden min-h-30 w-full lg:flex";
 	}
-	return "hidden min-h-29 w-full xl:flex";
+	return "hidden min-h-30 w-full xl:flex";
 };
 
 type ExposureTone = "organic" | "recommended" | "special" | "urgent";
@@ -132,25 +134,28 @@ function ExposureSection({
 					{meta}
 				</span>
 			</div>
-			<div className={CARD_GRID_CLASS}>
+			{/* 리스트 시맨틱: 스크린리더가 "N개 중 k번째"를 읽도록 그리드를 ul/li로 감싼다.
+			    li는 grid로 자식(카드·자리표시)을 그대로 스트레치해 카드 렌더 박스를 바꾸지
+			    않는다. ul은 기본 마커·패딩·마진을 제거한다. */}
+			<ul className={cn(CARD_GRID_CLASS, "m-0 list-none p-0")}>
 				{shownJobs.map((job, index) => (
-					<VisualJobCard
-						active={job.id === selectedJobId}
-						analyticsIndex={index}
-						job={job}
-						key={`${tone}-${job.id}`}
-						onOpen={onOpen}
-						tone={tone}
-						trackAnalytics={trackAnalytics}
-					/>
+					<li className="grid" key={`${tone}-${job.id}`}>
+						<VisualJobCard
+							active={job.id === selectedJobId}
+							analyticsIndex={index}
+							job={job}
+							onOpen={onOpen}
+							tone={tone}
+							trackAnalytics={trackAnalytics}
+						/>
+					</li>
 				))}
 				{placeholderKeys.map((key) => (
-					<AdSlotPlaceholder
-						className="flex min-h-29 w-full"
-						key={`${tone}-${key}`}
-					/>
+					<li className="grid" key={`${tone}-${key}`}>
+						<AdSlotPlaceholder className="flex min-h-30 w-full" />
+					</li>
 				))}
-			</div>
+			</ul>
 		</section>
 	);
 }
@@ -215,16 +220,19 @@ export function VisualJobExposureSections({
 							{/* 개수·meta 자리 — 로딩 중 "0개"를 노출하지 않는다. */}
 							<Skeleton className="h-4 w-20" />
 						</div>
-						<div className={CARD_GRID_CLASS}>
+						<ul className={cn(CARD_GRID_CLASS, "m-0 list-none p-0")}>
 							{/* 빈 섹션 자리표시와 같은 breakpoint 규칙으로 한 행만 채운다
-							    (모바일 1 · lg 3 · xl 4). */}
+							    (모바일 1 · lg 3 · xl 4). display를 제어하는 breakpoint 클래스는
+							    그리드 셀인 li에 실어야 숨김 슬롯이 빈 칸을 차지하지 않는다. */}
 							{CARD_PLACEHOLDER_KEYS.map((key, index) => (
-								<JobCardSkeleton
+								<li
 									className={cardPlaceholderClass(0, index)}
 									key={`${tone}-${key}`}
-								/>
+								>
+									<JobCardSkeleton />
+								</li>
 							))}
-						</div>
+						</ul>
 					</section>
 				))}
 			</div>

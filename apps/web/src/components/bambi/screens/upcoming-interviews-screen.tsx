@@ -208,9 +208,7 @@ function InterviewAccordionItem({
 					<CompleteInterviewAction interviewScheduleId={interview.id} />
 				) : null}
 				{/* 후기는 구직자만, 확정·완료 면접에만 — 서버 reviews.create 가드와 같은 조건. */}
-				{!interview.viewerIsEmployer &&
-				(interview.status === "confirmed" ||
-					interview.status === "completed") ? (
+				{!interview.viewerIsEmployer && interview.status === "completed" ? (
 					<InterviewReviewSection chatRoomId={interview.chatRoomId} />
 				) : null}
 				<InterviewChatHistory interviewScheduleId={interview.id} />

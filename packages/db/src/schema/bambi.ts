@@ -125,6 +125,8 @@ export const jobBoostOptionType = pgEnum("job_boost_option_type", [
 export const jobBoostPurchaseSource = pgEnum("job_boost_purchase_source", [
 	"job_registration",
 	"standalone",
+	// 포인트몰에서 보유 혜택을 사용해 만든 끌올 구매. born-paid이며 운영자 결제 큐에서 제외된다.
+	"point_shop",
 ]);
 
 export const jobPaymentMethod = pgEnum("job_payment_method", [
@@ -192,6 +194,8 @@ export const notificationTargetType = pgEnum("notification_target_type", [
 	"organization_member",
 	"support_chat",
 	"point_transaction",
+	// 포인트몰 보유 아이템 만료 임박 알림 등.
+	"point_shop_order",
 ]);
 
 // 수다방 게시판 정의. 운영자가 코드 배포 없이 추가·수정할 수 있도록 enum이 아니라
@@ -223,6 +227,26 @@ export const communityBoard = pgTable("community_board", {
 		.$onUpdate(() => /* @__PURE__ */ new Date())
 		.notNull(),
 });
+
+// 수다방 홈의 행·행 안 순서. best는 가상 게시판이라 FK를 걸지 않고 API가 유효 key를 검증한다.
+export const communityBoardHomeLayout = pgTable(
+	"community_board_home_layout",
+	{
+		boardKey: text("board_key").primaryKey(),
+		rowIndex: integer("row_index").notNull(),
+		position: integer("position").notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("community_board_home_layout_row_position_uidx").on(
+			table.rowIndex,
+			table.position
+		),
+	]
+);
 
 // 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
 export const communityContentStatus = pgEnum("community_content_status", [
@@ -415,6 +439,9 @@ export const bambiIdentityVerificationLog = pgTable(
 		gender: bambiGender("gender"),
 		// 포트원 인증 결과의 실명(verifiedCustomer.name). 미제공 시 null.
 		name: text("name"),
+		// 비회원 비밀글 작성자를 인증 로그에 연결하는 서명 토큰 gid. 토큰에는 실명·번호를
+		// 싣지 않고 이 임의 식별자만 둔다. 회원 인증 행은 null이다.
+		guestId: text("guest_id"),
 		// 구분 — guest/job_seeker/employer. 가입 전 인증은 아직 모르므로 null이고,
 		// 가입이 끝나면 그 역할로 덮어쓴다.
 		kind: bambiUserRole("kind"),
@@ -427,6 +454,9 @@ export const bambiIdentityVerificationLog = pgTable(
 	(table) => [
 		index("bambi_identity_verification_log_iv_id_idx").on(
 			table.identityVerificationId
+		),
+		uniqueIndex("bambi_identity_verification_log_guest_id_uidx").on(
+			table.guestId
 		),
 		// 사람 식별 upsert 키. phone_number가 null인 행은 사람을 특정할 수 없어 제외.
 		uniqueIndex("bambi_identity_verification_log_person_uidx")
@@ -1191,6 +1221,37 @@ export const jobBoostPurchase = pgTable(
 	]
 );
 
+// 유료 광고(노출 상품) 결제 확정 1건의 이력. job_post의 exposure_* 컬럼은 재결제·기간 변경
+// 시 덮어써져 누적 이력이 남지 않으므로, 조직 단위 누적 광고 횟수·일수 집계를 위해 결제
+// 확정 시점 스냅샷을 여기에 append-only로 쌓는다(job_boost_purchase와 같은 철학, 별도 축).
+export const jobAdPurchase = pgTable(
+	"job_ad_purchase",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		// 결제 시점의 노출 상품. 상품이 지워져도 이력은 남아야 하므로 set null.
+		adProductId: uuid("ad_product_id").references(() => adProduct.id, {
+			onDelete: "set null",
+		}),
+		// 구매한 광고 기간(일) 스냅샷 — 재결제로 job_post가 덮여도 이 값은 고정.
+		durationDays: integer("duration_days").notNull(),
+		// 결제 금액 스냅샷.
+		amount: integer("amount").notNull(),
+		// 적재 출처: moderation_single / moderation_bulk / backfill.
+		source: text("source"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_ad_purchase_organization_id_idx").on(table.organizationId),
+		index("job_ad_purchase_job_post_id_idx").on(table.jobPostId),
+	]
+);
+
 export const adPlacement = pgTable(
 	"ad_placement",
 	{
@@ -1375,6 +1436,9 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	jobPaymentMinPoints: integer("job_payment_min_points"),
 	// null이면 결제 예정 금액까지 사용할 수 있다.
 	jobPaymentMaxPoints: integer("job_payment_max_points"),
+	// 후기 저장 성공 시 지급할 포인트와 다른 구직자 후기 한 건 열람 비용.
+	reviewWritePoints: integer("review_write_points").default(0).notNull(),
+	reviewViewPoints: integer("review_view_points").default(10).notNull(),
 	// 베스트글(추천수 큐레이션 가상 게시판) 아이콘의 lucide 이름. 베스트는 community_board 행이
 	// 없는 가상 게시판이라 게시판 아이콘 컬럼 대신 여기 저장한다. null이면 미지정(기존 코럴
 	// 액센트 바 유지) — 값 검증은 API 쪽 COMMUNITY_BOARD_ICONS enum(zod)이 맡는다.
@@ -1755,6 +1819,8 @@ export const review = pgTable(
 		body: text("body").notNull(),
 		isAnonymous: boolean("is_anonymous").default(false).notNull(),
 		status: reviewStatus("status").default("published").notNull(),
+		// 현재 후기에 귀속된 실제 적립액. 숨김 때 이 값만 회수하고 재게시 때 최신 설정으로 갱신한다.
+		pointsAwarded: integer("points_awarded").default(0).notNull(),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1762,6 +1828,10 @@ export const review = pgTable(
 	(table) => [
 		uniqueIndex("review_chat_room_id_reviewer_user_id_uidx").on(
 			table.chatRoomId,
+			table.reviewerUserId
+		),
+		uniqueIndex("review_job_post_id_reviewer_user_id_uidx").on(
+			table.jobPostId,
 			table.reviewerUserId
 		),
 		index("review_job_post_id_status_idx").on(table.jobPostId, table.status),
@@ -1938,12 +2008,137 @@ export const bambiMemberGrade = pgTable("bambi_member_grade", {
 	minPoints: integer("min_points").notNull().unique(),
 	// 뱃지 색(hex). null이면 화면 기본색.
 	color: text("color"),
+	// 공개 GIF 아이콘의 스토리지 키. builtin/은 웹 public 기본 자산, 그 외는 등급 전용 업로드다.
+	iconStorageKey: text("icon_storage_key"),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())
 		.notNull(),
 });
+
+// 누적 광고일수 등급 아이콘 판별자. 카드 배지·구인자 안내가 이 값으로 lucide 아이콘을
+// 고른다(원값 직접 렌더 금지 — 화면은 라벨 맵 경유).
+export const bambiAdPeriodTierIcon = pgEnum("bambi_ad_period_tier_icon", [
+	"medal",
+	"crown",
+]);
+
+// 조직 단위 누적 광고일수 등급(운영자 CRUD). 코드 하드코딩(AD_PERIOD_TIERS)을 배포 없이
+// 편집한다. 행이 하나도 없으면 화면이 상수로 폴백한다. color_class는 Tailwind 텍스트 색
+// 유틸(raw hex 금지 — 화면 프리셋에서 선택), max_days=null이면 상한 없는 최상위 등급.
+export const bambiAdPeriodTier = pgTable("bambi_ad_period_tier", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	label: text("label").notNull(),
+	icon: bambiAdPeriodTierIcon("icon").notNull(),
+	// 업로드한 아이콘 이미지(GIF·PNG·WebP·JPG)의 공개 URL. 비어 있으면 위 icon 프리셋을
+	// 그린다 — 이미지가 있으면 이미지가 이긴다. 프리셋을 지우지 않는 이유는 이미지를
+	// 내렸을 때 돌아갈 자리가 필요하고, 업로드 실패·객체 유실 시에도 배지가 비지 않기 때문.
+	iconImageUrl: text("icon_image_url"),
+	colorClass: text("color_class").notNull(),
+	minDays: integer("min_days").notNull(),
+	maxDays: integer("max_days"),
+	sortOrder: integer("sort_order").default(0).notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
+
+// 포인트몰 아이템이 연결하는 혜택 종류. none=수동 지급(현행), coupon=쿠폰 발송(본인인증
+// 번호로 운영자 외부 발송), boost_*=끌어올리기, ad_extend=광고 기간 연장.
+export const pointShopBenefitType = pgEnum("point_shop_benefit_type", [
+	"none",
+	"coupon",
+	"boost_manual_period",
+	"boost_manual_count",
+	"boost_auto_period",
+	"ad_extend",
+]);
+
+// 아이템 구매 자격 대상. all=전원, employer=구인 회원, job_seeker=구직 회원.
+// 혜택형(끌올·연장)은 공고 단위라 job_seeker 단독은 서버·폼이 거부한다.
+export const pointShopAudience = pgEnum("point_shop_audience", [
+	"all",
+	"employer",
+	"job_seeker",
+]);
+
+// 포인트몰 판매 아이템. 혜택 유형(benefit_type)에 따라 수동 지급·쿠폰·끌올·광고 연장을
+// 연결한다. 선택 재고(stock_quantity)는 null이면 무제한, 값이 있으면 구매 시 조건부 원자
+// 차감·품절 거부한다.
+export const bambiPointShopItem = pgTable("bambi_point_shop_item", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	name: text("name").notNull(),
+	description: text("description"),
+	imageUrl: text("image_url"),
+	pricePoints: integer("price_points").notNull(),
+	sortOrder: integer("sort_order").notNull().default(0),
+	isActive: boolean("is_active").notNull().default(true),
+	// 연결 혜택 유형. 기존 행은 none 폴백이라 백필 불필요.
+	benefitType: pointShopBenefitType("benefit_type").notNull().default("none"),
+	// 구매 자격 대상. 목록 노출은 전원, 구매만 자격 검사.
+	audience: pointShopAudience("audience").notNull().default("all"),
+	// 혜택 스펙 스냅샷 원본(유형별로 채우고 나머지는 null). 사용 시 주문·구매로 복사한다.
+	boostsPerDay: integer("boosts_per_day"),
+	durationDays: integer("duration_days"),
+	boostCount: integer("boost_count"),
+	extendDays: integer("extend_days"),
+	// 보유·사용형(끌올·연장) 사용기한(구매 후 N일). null=무기한. 수동·쿠폰형은 미사용.
+	usageLimitDays: integer("usage_limit_days"),
+	// 전 유형 공통 선택 재고. null=무제한. 구매 시 조건부 원자 차감·품절 거부.
+	stockQuantity: integer("stock_quantity"),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// 포인트몰 주문. 아이템이 삭제돼도 주문·차감 근거가 남아야 해서 이름·가격을 구매 시점
+// 스냅샷으로 저장하고 item_id는 set null로 둔다. 수동·쿠폰형 status는 pending → completed
+// | canceled(전이 가드는 resolveOrderTransition), 끌올·연장형은 owned → used | canceled
+// (취소 시 원장에 환불 + 행). 혜택 스펙은 구매 시점 스냅샷으로 함께 저장한다.
+export const bambiPointShopOrder = pgTable(
+	"bambi_point_shop_order",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		itemId: uuid("item_id").references(() => bambiPointShopItem.id, {
+			onDelete: "set null",
+		}),
+		itemName: text("item_name").notNull(),
+		pricePoints: integer("price_points").notNull(),
+		status: text("status").notNull().default("pending"),
+		operatorMemo: text("operator_memo"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		processedAt: timestamp("processed_at"),
+		// 구매 시점 혜택 스냅샷.
+		benefitType: pointShopBenefitType("benefit_type").notNull().default("none"),
+		boostsPerDay: integer("boosts_per_day"),
+		durationDays: integer("duration_days"),
+		boostCount: integer("boost_count"),
+		extendDays: integer("extend_days"),
+		// 보유·사용형 사용기한 = 구매일 + usageLimitDays. null=무기한.
+		usableUntil: timestamp("usable_until"),
+		// 보유 건 실제 사용 시각(수동·쿠폰의 processed_at과 의미 분리).
+		usedAt: timestamp("used_at"),
+		// 사용 대상 공고. 공고 삭제돼도 주문 이력 보존.
+		targetJobPostId: uuid("target_job_post_id").references(() => jobPost.id, {
+			onDelete: "set null",
+		}),
+		// 만료 임박 알림 발송 시각(1회 멱등 가드). 끌올·연장 외 null.
+		expiryNotifiedAt: timestamp("expiry_notified_at"),
+		// 구매 시 재고를 실제 차감했는지. 취소 복원은 이 값이 true일 때만 한다 — 구매 후
+		// 운영자가 무제한↔유한 재고를 전환해도 복원이 부풀거나 누락되지 않게 하는 근거.
+		stockDecremented: boolean("stock_decremented").notNull().default(false),
+	},
+	(table) => [
+		// 내 구매 내역(사용자별 최신순)과 운영자 대기 필터가 각각 훑는다.
+		index("bambi_point_shop_order_user_id_idx").on(table.userId),
+		index("bambi_point_shop_order_status_idx").on(table.status),
+	]
+);
 
 export const communityPost = pgTable(
 	"community_post",
@@ -1962,6 +2157,8 @@ export const communityPost = pgTable(
 		authorGuestId: text("author_guest_id"),
 		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
 		authorDisplayName: text("author_display_name").notNull(),
+		// 비밀글 익명 아바타용 작성 시점 검증 성별. 일반 게시판은 null이다.
+		authorGender: bambiGender("author_gender"),
 		isAnonymous: boolean("is_anonymous").default(false).notNull(),
 		passwordHash: text("password_hash").notNull(),
 		isLocked: boolean("is_locked").default(false).notNull(),
@@ -2036,6 +2233,8 @@ export const communityComment = pgTable(
 		passwordHash: text("password_hash").default("").notNull(),
 		// 작성 시점 계정 유형 스냅샷(서버 기록). 업소 댓글 배지·숨김 토글용.
 		authorRole: bambiUserRole("author_role").notNull(),
+		// 비밀글 댓글의 익명 아바타용 작성 시점 검증 성별.
+		authorGender: bambiGender("author_gender"),
 		// 대댓글(1단계). null이면 최상위 댓글. 1단계 제한은 API에서 강제한다.
 		parentCommentId: uuid("parent_comment_id").references(
 			(): AnyPgColumn => communityComment.id,
@@ -2101,6 +2300,40 @@ export const communityPostLike = pgTable(
 		check(
 			"community_post_like_actor_one_of_ck",
 			sql`num_nonnulls(${table.userId}, ${table.guestId}) = 1`
+		),
+	]
+);
+
+// 회원의 좋아요 글 관리 이력. 원문이 운영자 영구 삭제로 사라져도 당시 게시판·제목을 남기고,
+// 좋아요 취소는 is_active만 내린다. post_id는 감사용 문자열이라 FK를 걸지 않는다.
+export const communityPostLikeHistory = pgTable(
+	"community_post_like_history",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		postId: uuid("post_id").notNull(),
+		boardKey: text("board_key").notNull(),
+		boardSlug: text("board_slug").notNull(),
+		title: text("title").notNull(),
+		postCreatedAt: timestamp("post_created_at").notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		likedAt: timestamp("liked_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("community_post_like_history_user_post_uidx").on(
+			table.userId,
+			table.postId
+		),
+		index("community_post_like_history_user_active_liked_idx").on(
+			table.userId,
+			table.isActive,
+			table.likedAt
 		),
 	]
 );

@@ -5,14 +5,17 @@ import {
 	bambiSiteSettings,
 	communityBoard,
 } from "@bambi-app/db/schema/bambi";
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
+
 import { lockMemberPoints } from "./bambi-point-ledger";
+import { resolveGradeIconUrl } from "./bambi-storage";
 
 // site_settings 단일 행 고정 키(site-settings.ts SETTINGS_ROW_ID와 같은 값).
 const SITE_SETTINGS_ROW_ID = "default";
 
 export interface MemberGrade {
 	color: string | null;
+	iconStorageKey?: string | null;
 	id: string;
 	minPoints: number;
 	name: string;
@@ -20,6 +23,7 @@ export interface MemberGrade {
 
 export interface GradeBadge {
 	color: string | null;
+	iconUrl: string | null;
 	name: string;
 }
 
@@ -28,6 +32,19 @@ export const POINT_REASONS = {
 	post: { award: "community_post", revoke: "community_post_revoke" },
 	comment: { award: "community_comment", revoke: "community_comment_revoke" },
 } as const;
+
+// 포인트몰 구매·환불 reason. 등급 계산에서 제외한다 — 구매(−)·환불(+)이 등급에 중립이어야
+// 하고, 글/댓글 회수(*_revoke, 음수)는 기존대로 등급에서 빠진다("양수만 합산"이면 회수가
+// 등급에 반영되지 않는 함정이 있어 reason 제외 방식을 쓴다).
+export const POINT_SHOP_REASONS = {
+	purchase: "point_shop_purchase",
+	refund: "point_shop_refund",
+} as const;
+
+const GRADE_EXCLUDED_REASONS = [
+	POINT_SHOP_REASONS.purchase,
+	POINT_SHOP_REASONS.refund,
+];
 
 // 순수: 현재 적립 스냅샷과 목표 적립액으로 원장 델타·새 스냅샷을 계산한다.
 // 목표는 caller가 (회원 && 게시판 포인트)일 때만 양수로, 그 외엔 0으로 넘긴다.
@@ -218,7 +235,36 @@ export async function getPointBalances(
 	return map;
 }
 
-// DB: 여러 회원의 등급 뱃지(이름·색). 등급표를 한 번 읽고 잔액→등급으로 매핑한다.
+// DB: 여러 회원의 등급 기준 포인트 = 포인트몰 reason 제외 원장 합계. 잔액(전체 합계)과
+// 구분된다. 결과에 없는 userId는 0으로 취급한다.
+export async function getGradeBasisPoints(
+	userIds: string[]
+): Promise<Map<string, number>> {
+	const map = new Map<string, number>();
+	const unique = [...new Set(userIds)];
+	if (unique.length === 0) {
+		return map;
+	}
+	const rows = await db
+		.select({
+			userId: bambiPointTransaction.userId,
+			basis: sql<number>`coalesce(sum(${bambiPointTransaction.amount}), 0)::int`,
+		})
+		.from(bambiPointTransaction)
+		.where(
+			and(
+				inArray(bambiPointTransaction.userId, unique),
+				notInArray(bambiPointTransaction.reason, GRADE_EXCLUDED_REASONS)
+			)
+		)
+		.groupBy(bambiPointTransaction.userId);
+	for (const row of rows) {
+		map.set(row.userId, row.basis);
+	}
+	return map;
+}
+
+// DB: 여러 회원의 등급 뱃지(이름·색). 등급표를 한 번 읽고 등급 기준 합계→등급으로 매핑한다.
 export async function loadGradeBadges(
 	userIds: string[]
 ): Promise<Map<string, GradeBadge>> {
@@ -227,25 +273,30 @@ export async function loadGradeBadges(
 	if (unique.length === 0) {
 		return badges;
 	}
-	const [grades, balances] = await Promise.all([
+	const [grades, basisPoints] = await Promise.all([
 		db
 			.select({
 				id: bambiMemberGrade.id,
 				name: bambiMemberGrade.name,
 				minPoints: bambiMemberGrade.minPoints,
 				color: bambiMemberGrade.color,
+				iconStorageKey: bambiMemberGrade.iconStorageKey,
 			})
 			.from(bambiMemberGrade)
 			.orderBy(asc(bambiMemberGrade.minPoints)),
-		getPointBalances(unique),
+		getGradeBasisPoints(unique),
 	]);
 	if (grades.length === 0) {
 		return badges;
 	}
 	for (const userId of unique) {
-		const grade = resolveGrade(balances.get(userId) ?? 0, grades);
+		const grade = resolveGrade(basisPoints.get(userId) ?? 0, grades);
 		if (grade) {
-			badges.set(userId, { name: grade.name, color: grade.color });
+			badges.set(userId, {
+				color: grade.color,
+				iconUrl: resolveGradeIconUrl(grade.iconStorageKey ?? null),
+				name: grade.name,
+			});
 		}
 	}
 	return badges;

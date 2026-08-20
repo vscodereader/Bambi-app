@@ -29,6 +29,7 @@ import {
 	breadcrumbJsonLd,
 	mergeSeoKeywords,
 	SITE_KEYWORDS,
+	SITE_OPEN_GRAPH_BASE,
 } from "@/lib/bambi/seo";
 import { readGuestCanWrite, readVisitorState } from "@/lib/bambi/visitor";
 import { client } from "@/utils/orpc";
@@ -79,7 +80,10 @@ export async function generateMetadata({
 			board?.label ?? "커뮤니티",
 			"밤알바 커뮤니티",
 		]),
+		// article type·publishedTime은 siteOpenGraph 시그니처 밖이라 base를 직접 스프레드해
+		// 기본 필드(images·siteName·locale)만 되살린다.
 		openGraph: {
+			...SITE_OPEN_GRAPH_BASE,
 			description,
 			publishedTime: new Date(post.createdAt).toISOString(),
 			title,

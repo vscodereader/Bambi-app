@@ -332,9 +332,11 @@ function getAdColumns({
 		{
 			id: "exposure",
 			header: "노출 위치/상품",
+			headerClassName: "min-w-44",
+			cellClassName: "min-w-44 align-middle",
 			sortValue: (ad) => exposureLabel(ad),
 			cell: (ad) => (
-				<div className="flex flex-wrap items-center gap-2">
+				<div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
 					<StatusBadge>{exposureLabel(ad)}</StatusBadge>
 					{ad.adProductName ? (
 						<span className="break-keep text-muted-foreground text-xs">

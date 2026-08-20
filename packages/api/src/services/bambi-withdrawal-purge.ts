@@ -1,7 +1,12 @@
 import { db } from "@bambi-app/db";
 import { account, session, user } from "@bambi-app/db/schema/auth";
-import { bambiProfile, bambiSiteSettings } from "@bambi-app/db/schema/bambi";
-import { and, eq, inArray, isNotNull, isNull, lte } from "drizzle-orm";
+import {
+	bambiIdentityVerificationLog,
+	bambiProfile,
+	bambiSiteSettings,
+	report,
+} from "@bambi-app/db/schema/bambi";
+import { and, eq, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 
 import { resolveWithdrawalRetentionDays } from "./bambi-member-policy";
 import {
@@ -12,6 +17,8 @@ import { WITHDRAWN_DISPLAY_NAME } from "./bambi-withdrawn-display";
 
 // 사이트 설정은 고정 키 "default" 단일 행이다(site-settings 라우터와 동일 규약).
 const SETTINGS_ROW_ID = "default";
+const GUEST_IDENTITY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const REPORT_IDENTITY_RETENTION_MS = 3 * 365 * 24 * 60 * 60 * 1000;
 
 // 배치가 돈 시각을 남긴다. 스케줄러의 "오늘 이미 돌았는지" 판정 근거이자 운영자 화면의
 // "마지막 실행" 표시값이다. 설정 행이 아직 없을 수도 있어 update가 아니라 upsert다 —
@@ -45,6 +52,31 @@ export const purgeWithdrawnAccountsBatch = async (
 	// touchLastRunAt과 같은 이유). 운영자의 수동 실행도 이 함수를 지나므로 함께 찍히고
 	// 그날 예약 실행은 건너뛴다 — 멱등이라 결과가 같고, crawl의 「즉시 수집」도 같은 방식으로 주기를 민다.
 	await touchLastRunAt(now);
+	await db
+		.delete(bambiIdentityVerificationLog)
+		.where(
+			and(
+				isNotNull(bambiIdentityVerificationLog.guestId),
+				lte(
+					bambiIdentityVerificationLog.updatedAt,
+					new Date(now.getTime() - GUEST_IDENTITY_RETENTION_MS)
+				)
+			)
+		);
+	await db
+		.update(report)
+		.set({
+			targetSnapshot: sql`coalesce(${report.targetSnapshot}, '{}'::jsonb) #- '{reporterIdentity}' #- '{communityPost,secretIdentity}' #- '{communityComment,secretIdentity}'`,
+		})
+		.where(
+			and(
+				lte(
+					report.createdAt,
+					new Date(now.getTime() - REPORT_IDENTITY_RETENTION_MS)
+				),
+				isNotNull(report.targetSnapshot)
+			)
+		);
 	const retentionDays = await resolveWithdrawalRetentionDays();
 	const cutoff = resolveWithdrawalPurgeCutoff(now, retentionDays);
 	const targets = await db

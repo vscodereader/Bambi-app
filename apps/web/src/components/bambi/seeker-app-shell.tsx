@@ -31,7 +31,12 @@ export function useSeekerFilters(): SeekerFiltersContextValue {
 
 // 데스크톱·모바일 헤더가 각각 자기 인스턴스를 마운트한다. Ctrl/Cmd+K 리스너는
 // 두 번 등록되면 모달이 두 개 열리므로 데스크톱 쪽에서만 켠다.
-function SeekerHeaderSearch({ withHotkey = false }: { withHotkey?: boolean }) {
+// 역할 셸 밖(포인트몰 레이아웃)에서도 같은 검색창을 헤더에 얹으므로 export 한다.
+export function SeekerHeaderSearch({
+	withHotkey = false,
+}: {
+	withHotkey?: boolean;
+}) {
 	const router = useRouter();
 	const { isGuest } = useBambiAuth();
 

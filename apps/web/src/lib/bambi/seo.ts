@@ -3,15 +3,20 @@
 
 import { BAMBI_COMPANY } from "./company";
 
-export const SITE_TITLE = "밤비알바 - 밤알바·유흥알바·룸알바 | 여성 구인구직";
+// 경쟁 서비스명 노출 순서는 퀸알바 → 여우알바 → 밤알바로 고정한다(사용자 확정 정책,
+// 2026-08-20). title·description·keywords 선두가 모두 이 순서를 따른다.
+export const SITE_TITLE =
+	"밤비알바 - 퀸알바·여우알바·밤알바 | 유흥알바 구인구직";
 
 export const SITE_DESCRIPTION =
-	"밤비알바는 밤알바·유흥알바·룸알바 등 지역·업종별 여성 구인구직 정보를 제공하고 구직자와 구인자를 1:1 채팅으로 연결하는 플랫폼입니다.";
+	"밤비알바는 퀸알바·여우알바·밤알바 관련 유흥알바·룸알바를 비롯해 룸싸롱·노래방도우미·텐프로·쩜오 등 지역·업종별 여성 구인구직 정보를 제공하고 구직자와 구인자를 1:1 채팅으로 연결하는 플랫폼입니다.";
 
 export const SITE_KEYWORDS = [
-	"유흥알바",
-	"밤비알바",
+	"퀸알바",
+	"여우알바",
 	"밤알바",
+	"밤비알바",
+	"유흥알바",
 	"룸알바",
 	"노래주점알바",
 	"룸싸롱알바",
@@ -19,9 +24,7 @@ export const SITE_KEYWORDS = [
 	"고소득알바",
 	"여성알바",
 	"접객알바",
-	"퀸알바",
 	"밤일알바",
-	"여우알바",
 	"악녀알바",
 	"노래방도우미",
 	"보도알바",
@@ -120,6 +123,29 @@ export const mergeSeoKeywords = (
 			.filter(Boolean)
 	),
 ];
+
+// Next metadata의 openGraph는 최상위 키 단위 shallow-merge라, 페이지가 openGraph를
+// 부분 정의하면 루트의 images·siteName·locale·type이 통째로 사라진다. 이 헬퍼로
+// 기본 필드를 항상 실어 보존하고, 페이지 값(title·description·url)만 덮는다.
+//
+// type은 base에 넣지 않는다 — article 등 다른 type과 publishedTime 같은 헬퍼 시그니처
+// 밖 필드를 쓰는 페이지(게시글 상세)는 이 base를 직접 스프레드하고 자기 필드를 얹는다.
+// 헬퍼에 type 유니온을 받으면 Metadata의 판별 유니온과 어긋나 리터럴 타입이 깨진다.
+export const SITE_OPEN_GRAPH_BASE = {
+	locale: "ko_KR",
+	siteName: BAMBI_COMPANY.serviceName,
+	images: [{ url: "/og-image.png", width: 1200, height: 630, alt: SITE_TITLE }],
+};
+
+export const siteOpenGraph = (page: {
+	title: string;
+	description: string;
+	url: string;
+}) => ({
+	type: "website" as const,
+	...SITE_OPEN_GRAPH_BASE,
+	...page,
+});
 
 // OG 배너를 로고로 겸용한다. schema.org logo는 래스터(PNG/JPG)만 인정돼
 // app/icon.svg는 쓸 수 없다. 정사각 브랜드 로고가 생기면 이 경로만 교체한다

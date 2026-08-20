@@ -14,12 +14,14 @@ process.env.CORS_ORIGIN ||= "http://localhost:3001";
 const {
 	assertGuestOwnership,
 	assertGuestPostAccess,
+	assertAnonymousPostAllowed,
 	assertLegalAdvisorBoardScope,
 	assertLegalAdvisorRoleSwitch,
 	canBypassLock,
 	findCommunityActor,
 	requireGuestPassword,
 	resolveCommunityActor,
+	resolveCommunityReaderForBoard,
 	resolveLockedForBoard,
 } = await import("@/services/bambi-community-authz");
 type AccessProfile = Parameters<typeof canBypassLock>[1];
@@ -64,6 +66,64 @@ describe("resolveCommunityActor — 비회원 분기", () => {
 		await expect(
 			findCommunityActor({ guest: { gender: "male", gid: "g-4" } })
 		).resolves.toBeNull();
+	});
+});
+
+describe("비밀글 읽기 전용 actor", () => {
+	it("성별이 있는 인증 게스트는 남녀 모두 비밀글을 읽을 수 있다", async () => {
+		await expect(
+			resolveCommunityReaderForBoard(
+				{ guest: { gender: "male", gid: "g-reader-m" } },
+				"secret"
+			)
+		).resolves.toEqual({ gender: "male", gid: "g-reader-m", kind: "guest" });
+		await expect(
+			resolveCommunityReaderForBoard(
+				{ guest: { gender: "female", gid: "g-reader-f" } },
+				"secret"
+			)
+		).resolves.toEqual({ gender: "female", gid: "g-reader-f", kind: "guest" });
+	});
+
+	it("인증 정보가 없는 비회원은 비밀글 읽기를 통과하지 못한다", async () => {
+		await expect(
+			resolveCommunityReaderForBoard({}, "secret")
+		).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+	});
+
+	it("일반 게시판은 기존 성별 기반 게이트를 유지한다", async () => {
+		await expect(
+			resolveCommunityReaderForBoard(
+				{ guest: { gender: "male", gid: "g-reader-normal" } },
+				"free"
+			)
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+	});
+});
+
+describe("비밀글 익명 작성 정책", () => {
+	it("비회원도 secret 게시판에서는 강제 익명 작성을 통과한다", () => {
+		expect(
+			codeOf(() =>
+				assertAnonymousPostAllowed({
+					board: "secret",
+					isAnonymous: true,
+					role: "guest",
+				})
+			)
+		).toBeUndefined();
+	});
+
+	it("일반 게시판의 비회원 익명 작성 제한은 유지한다", () => {
+		expect(
+			codeOf(() =>
+				assertAnonymousPostAllowed({
+					board: "free",
+					isAnonymous: true,
+					role: "guest",
+				})
+			)
+		).toBe("FORBIDDEN");
 	});
 });
 

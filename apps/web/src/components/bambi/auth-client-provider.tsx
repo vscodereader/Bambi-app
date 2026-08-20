@@ -24,6 +24,7 @@ interface BambiAuthValue {
 	accountSanctionReason: string | null;
 	accountStatus: BambiAccountStatus;
 	canAccessCommunity: boolean;
+	guestGender: "female" | "male" | null;
 	isAuthenticated: boolean;
 	isGuest: boolean;
 	isPending: boolean;
@@ -54,12 +55,14 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 
 	const isGuest =
 		mounted && !isAuthenticated && readGuestFromCookieString(document.cookie);
+	const guestGender = isGuest
+		? readGuestGenderFromCookieString(document.cookie)
+		: null;
 
 	// 여성 인증 게스트는 회원 수다방(/seeker/community)에 들어올 수 있다. 여기 판정은
 	// 버튼·안내를 고르기 위한 UI 편의일 뿐이다 — 서명·만료·gid까지 보는 최종 강제는
 	// 미들웨어(resolve-gate)와 서버(resolveCommunityActor)가 한다.
-	const isCommunityGuest =
-		isGuest && readGuestGenderFromCookieString(document.cookie) === "female";
+	const isCommunityGuest = isGuest && guestGender !== null;
 
 	const community = mineQuery.data?.community;
 	const value: BambiAuthValue = {
@@ -91,6 +94,7 @@ export function AuthClientProvider({ children }: { children: ReactNode }) {
 			: isCommunityGuest,
 		isAuthenticated,
 		isGuest,
+		guestGender,
 		isPending: session.isPending || (isAuthenticated && mineQuery.isLoading),
 	};
 

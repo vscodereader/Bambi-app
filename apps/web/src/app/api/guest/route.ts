@@ -72,9 +72,13 @@ const underageResponse = () =>
 // 공용 PC·XSS에서 그대로 새어 나가고, 만료 뒤엔 어차피 쓸 수도 없다(자체점검 항목 4).
 // 대신 게스트 식별자(gid)가 실린다 — 수다방 게스트 글·댓글·추천의 소유·중복방지 키이며,
 // 발급 시점에 만들어지므로 이 라우트를 다시 타면(재인증) 새 게스트로 취급된다.
-const verifiedResponse = async (gender: BambiGenderValue | null) => {
+const verifiedResponse = async (
+	gender: BambiGenderValue | null,
+	guestId?: string
+) => {
 	const token = await createGuestToken({
 		gender,
+		gid: guestId,
 		maxAgeSeconds: GUEST_COOKIE_MAX_AGE,
 		now: new Date(),
 		secret: guestTokenSecret(),
@@ -99,12 +103,14 @@ const handleRealVerification = async (identityVerificationId: string) => {
 		return NextResponse.json({ ok: false }, { status: 503 });
 	}
 	try {
+		const guestId = crypto.randomUUID();
 		const { gender } = await rpc.bambi.onboarding.checkIdentityForSignup({
+			guestId,
 			identityVerificationId,
 			// 비회원 인증 흐름 — 수집 로그의 구분을 guest로 남긴다(가입하면 역할로 덮인다).
 			source: "guest",
 		});
-		return await verifiedResponse(gender);
+		return await verifiedResponse(gender, guestId);
 	} catch (error) {
 		if (error instanceof ORPCError) {
 			// 미성년(FORBIDDEN)은 전용 코드로 안내하고, 재사용·미완료 인증(BAD_REQUEST)은
@@ -159,7 +165,15 @@ const handleMockVerification = async (body: Record<string, unknown>) => {
 	if (!isAdultBirth8(input.birth, new Date())) {
 		return underageResponse();
 	}
-	return await verifiedResponse(input.gender);
+	const guestId = crypto.randomUUID();
+	await rpc.bambi.onboarding.registerMockGuestIdentity({
+		birthDate: input.birth,
+		guestId,
+		gender: input.gender,
+		name: input.name,
+		phoneNumber: input.phone,
+	});
+	return await verifiedResponse(input.gender, guestId);
 };
 
 export async function POST(request: Request) {

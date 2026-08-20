@@ -14,12 +14,14 @@ import {
 	chatMessage,
 	chatMessageReadReceipt,
 	chatRoom,
+	communityBoard,
 	communityComment,
 	communityPost,
 	employerBusinessDocument,
 	employerOrganizationProfile,
 	employerTeamProfile,
 	interviewSchedule,
+	jobAdPurchase,
 	jobBoostEvent,
 	jobBoostPurchase,
 	jobPost,
@@ -48,6 +50,7 @@ import { alias } from "drizzle-orm/pg-core";
 import z from "zod";
 
 import { adminProcedure, protectedProcedure } from "../../index";
+import { buildAdLedgerInsert } from "../../services/bambi-ad-ledger";
 import { syncAdvertiserFlagForOrganization } from "../../services/bambi-advertiser";
 import {
 	requireActiveBambiProfile,
@@ -86,6 +89,8 @@ import {
 	queuedListingWhere,
 } from "../../services/bambi-premium-capacity";
 import { PENDING_REPORT_STATUSES } from "../../services/bambi-report-status";
+import { transitionReviewPoints } from "../../services/bambi-review-points";
+import { getVerifiedIdentityForAdmin } from "../../services/bambi-secret-identity";
 import {
 	createJobPostMediaUploadIntent,
 	getBusinessDocumentViewPath,
@@ -597,6 +602,8 @@ const emitChatReportAvailabilityChanged = async (
 
 	const [room] = await db
 		.select({
+			authorGender: communityPost.authorGender,
+			authorGuestId: communityPost.authorGuestId,
 			employerUserId: chatRoom.employerUserId,
 			jobSeekerUserId: chatRoom.jobSeekerUserId,
 		})
@@ -956,10 +963,14 @@ const toCommunityBodyPreview = (body: string): string =>
 const getCommunityPostTargetContext = async (targetId: string) => {
 	const [post] = await db
 		.select({
+			authorGender: communityPost.authorGender,
+			authorGuestId: communityPost.authorGuestId,
 			authorUserId: communityPost.authorUserId,
 			authorDisplayName: communityPost.authorDisplayName,
-			authorRole: bambiProfile.role,
+			authorRole: communityPost.authorRole,
 			board: communityPost.board,
+			boardLabel: communityBoard.label,
+			boardSlug: communityBoard.slug,
 			body: communityPost.body,
 			createdAt: communityPost.createdAt,
 			id: communityPost.id,
@@ -967,6 +978,7 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 			title: communityPost.title,
 		})
 		.from(communityPost)
+		.leftJoin(communityBoard, eq(communityBoard.key, communityPost.board))
 		.leftJoin(bambiProfile, eq(bambiProfile.userId, communityPost.authorUserId))
 		.where(eq(communityPost.id, targetId))
 		.limit(1);
@@ -974,12 +986,25 @@ const getCommunityPostTargetContext = async (targetId: string) => {
 	if (!post) {
 		return null;
 	}
+	const authorIdentity = post.authorGuestId
+		? await getVerifiedIdentityForAdmin({ guestId: post.authorGuestId })
+		: await getVerifiedIdentityForAdmin({ userId: post.authorUserId });
+	const secretIdentity =
+		post.board === "secret"
+			? (authorIdentity ??
+				(await getVerifiedIdentityForAdmin({ userId: post.authorUserId })))
+			: null;
 
 	return {
 		authorUserId: post.authorUserId,
 		authorName: post.authorDisplayName,
 		authorRole: post.authorRole,
+		authorGender: post.authorGender,
+		authorIdentity,
+		secretIdentity,
 		board: post.board,
+		boardLabel: post.boardLabel,
+		boardSlug: post.boardSlug,
 		bodyPreview: toCommunityBodyPreview(post.body),
 		createdAt: post.createdAt,
 		id: post.id,
@@ -1002,19 +1027,25 @@ const CRAWLED_AUTHOR_DISPLAY_NAME = "밤문화이야기";
 const getCommunityCommentTargetContext = async (targetId: string) => {
 	const [comment] = await db
 		.select({
+			authorGender: communityComment.authorGender,
+			authorGuestId: communityComment.authorGuestId,
 			authorUserId: communityComment.authorUserId,
 			authorName: user.name,
-			authorRole: bambiProfile.role,
+			authorRole: communityComment.authorRole,
 			body: communityComment.body,
 			createdAt: communityComment.createdAt,
 			id: communityComment.id,
 			postBoard: communityPost.board,
+			postBoardLabel: communityBoard.label,
+			postBoardSlug: communityBoard.slug,
 			postId: communityComment.postId,
+			postStatus: communityPost.status,
 			postTitle: communityPost.title,
 			status: communityComment.status,
 		})
 		.from(communityComment)
 		.leftJoin(communityPost, eq(communityPost.id, communityComment.postId))
+		.leftJoin(communityBoard, eq(communityBoard.key, communityPost.board))
 		.leftJoin(user, eq(user.id, communityComment.authorUserId))
 		.leftJoin(
 			bambiProfile,
@@ -1026,18 +1057,32 @@ const getCommunityCommentTargetContext = async (targetId: string) => {
 	if (!comment) {
 		return null;
 	}
+	const authorIdentity = comment.authorGuestId
+		? await getVerifiedIdentityForAdmin({ guestId: comment.authorGuestId })
+		: await getVerifiedIdentityForAdmin({ userId: comment.authorUserId });
+	const secretIdentity =
+		comment.postBoard === "secret"
+			? (authorIdentity ??
+				(await getVerifiedIdentityForAdmin({ userId: comment.authorUserId })))
+			: null;
 
 	return {
 		authorUserId: comment.authorUserId,
 		authorName: comment.authorName,
 		authorRole: comment.authorRole,
+		authorGender: comment.authorGender,
+		authorIdentity,
+		secretIdentity,
 		bodyPreview: comment.body.slice(0, COMMUNITY_BODY_PREVIEW_MAX),
 		createdAt: comment.createdAt,
 		id: comment.id,
 		// 수집 글은 밤문화 이야기 게시판에 합류하므로 게시판 배지도 그 값으로 세운다
 		// (운영 화면이 게시판 라벨 맵을 태우려면 null이 아니라 key여야 한다).
 		postBoard: comment.postBoard ?? "work_talk",
+		postBoardLabel: comment.postBoardLabel,
+		postBoardSlug: comment.postBoardSlug,
 		postId: comment.postId,
+		postStatus: comment.postStatus,
 		postTitle: comment.postTitle ?? CRAWLED_TOPIC_COMMENT_TITLE,
 		status: comment.status,
 	};
@@ -1106,25 +1151,171 @@ const isReportTargetContext = (
 	return REPORT_CONTEXT_KEYS.some((key) => key in value);
 };
 
+// 운영자 채팅 열람 응답의 메시지 한 건. 라이브 조회와 스냅샷 폴백이 같은 형태로 내려간다.
+interface ModerationChatHistoryMessage {
+	attachments: {
+		byteSize: number;
+		category: "image" | "pdf";
+		fileName: string;
+		id: string;
+		mimeType: string;
+		objectUrl: string;
+	}[];
+	body: string;
+	createdAt: Date;
+	id: string;
+	kind: string;
+	senderUserId: string;
+}
+
+// 하드삭제된 채팅방의 신고 시점 스냅샷(target_snapshot.chatRoom). 방 행이 사라져도 신고는
+// 조치의 감사 근거로 남으므로, 운영자 열람은 이 스냅샷을 폴백으로 쓴다.
+const getDeletedChatRoomSnapshot = async (chatRoomId: string) => {
+	const [row] = await db
+		.select({ targetSnapshot: report.targetSnapshot })
+		.from(report)
+		.where(
+			and(eq(report.targetType, "chat_room"), eq(report.targetId, chatRoomId))
+		)
+		.orderBy(desc(report.createdAt))
+		.limit(1);
+
+	const snapshot = row?.targetSnapshot;
+	if (!(isReportTargetContext(snapshot) && "chatRoom" in snapshot)) {
+		return null;
+	}
+
+	// recentMessages가 붙기 전에 쓰인 옛 스냅샷은 폴백으로 쓸 수 없다(기존대로 404).
+	const snapshotRoom = snapshot.chatRoom;
+	return Array.isArray(snapshotRoom?.recentMessages) ? snapshotRoom : null;
+};
+
+const sanitizeIdentitySnapshot = (
+	value: unknown
+): { gender: "female" | "male"; phoneNumber: string } | null => {
+	if (!(value && typeof value === "object")) {
+		return null;
+	}
+	const { gender, phoneNumber } = value as Record<string, unknown>;
+	if (
+		(gender !== "female" && gender !== "male") ||
+		typeof phoneNumber !== "string"
+	) {
+		return null;
+	}
+	return { gender, phoneNumber };
+};
+
+const sanitizeReportIdentitySnapshots = (
+	context: ReportTargetContext | null
+): ReportTargetContext | null => {
+	if (context && "communityPost" in context && context.communityPost) {
+		return {
+			...context,
+			communityPost: {
+				...context.communityPost,
+				authorIdentity: sanitizeIdentitySnapshot(
+					context.communityPost.authorIdentity
+				),
+				secretIdentity: sanitizeIdentitySnapshot(
+					context.communityPost.secretIdentity
+				),
+			},
+		};
+	}
+	if (context && "communityComment" in context && context.communityComment) {
+		return {
+			...context,
+			communityComment: {
+				...context.communityComment,
+				authorIdentity: sanitizeIdentitySnapshot(
+					context.communityComment.authorIdentity
+				),
+				secretIdentity: sanitizeIdentitySnapshot(
+					context.communityComment.secretIdentity
+				),
+			},
+		};
+	}
+	return context;
+};
+
+const mergeReportIdentitySnapshot = (
+	live: ReportTargetContext | null,
+	snapshot: ReportTargetContext | null
+): ReportTargetContext | null => {
+	if (!live) {
+		return snapshot;
+	}
+	if (!snapshot) {
+		return live;
+	}
+	if (
+		"communityPost" in live &&
+		"communityPost" in snapshot &&
+		live.communityPost &&
+		snapshot.communityPost
+	) {
+		return {
+			...live,
+			communityPost: {
+				...live.communityPost,
+				authorIdentity:
+					live.communityPost.authorIdentity ??
+					snapshot.communityPost.authorIdentity,
+				secretIdentity:
+					live.communityPost.secretIdentity ??
+					snapshot.communityPost.secretIdentity,
+			},
+		};
+	}
+	if (
+		"communityComment" in live &&
+		"communityComment" in snapshot &&
+		live.communityComment &&
+		snapshot.communityComment
+	) {
+		return {
+			...live,
+			communityComment: {
+				...live.communityComment,
+				authorIdentity:
+					live.communityComment.authorIdentity ??
+					snapshot.communityComment.authorIdentity,
+				secretIdentity:
+					live.communityComment.secretIdentity ??
+					snapshot.communityComment.secretIdentity,
+			},
+		};
+	}
+	return live;
+};
+
 const withReportTargetContexts = async (reportRows: ReportRow[]) =>
 	await Promise.all(
 		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: target-specific live and snapshot fallbacks are normalized exhaustively here.
 		reportRows.map(async (reportRow) => {
 			const liveTargetContext = await getReportTargetContext(reportRow);
-			const snapshotTargetContext = isReportTargetContext(
-				reportRow.targetSnapshot
-			)
-				? reportRow.targetSnapshot
-				: null;
-			const targetContext = liveTargetContext ?? snapshotTargetContext;
+			const snapshotTargetContext = sanitizeReportIdentitySnapshots(
+				isReportTargetContext(reportRow.targetSnapshot)
+					? reportRow.targetSnapshot
+					: null
+			);
+			const targetContext = mergeReportIdentitySnapshot(
+				liveTargetContext,
+				snapshotTargetContext
+			);
 			let targetUserId: string | null = null;
+			let isChatTarget = false;
 			if (targetContext) {
 				if ("jobPost" in targetContext) {
 					targetUserId = targetContext.jobPost?.createdByUserId ?? null;
 				} else if ("chatRoom" in targetContext) {
 					targetUserId = targetContext.chatRoom?.employerUserId ?? null;
+					isChatTarget = true;
 				} else if ("chatMessage" in targetContext) {
 					targetUserId = targetContext.chatMessage?.senderUserId ?? null;
+					isChatTarget = true;
 				} else if ("communityPost" in targetContext) {
 					targetUserId = targetContext.communityPost?.authorUserId ?? null;
 				} else if ("communityComment" in targetContext) {
@@ -1133,37 +1324,86 @@ const withReportTargetContexts = async (reportRows: ReportRow[]) =>
 					targetUserId = targetContext.user?.userId ?? null;
 				}
 			}
+			const targetVerifiedIdentity =
+				isChatTarget && targetUserId
+					? await getVerifiedIdentityForAdmin({ userId: targetUserId })
+					: null;
 			return {
 				...reportRow,
 				targetContext,
 				targetUserId,
+				targetVerifiedIdentity,
 				targetUnavailable:
 					liveTargetContext === null && snapshotTargetContext === null,
 			};
 		})
 	);
 
-// 신고 목록 각 row에 붙일 신고자 표시 정보(실명·이메일 폴백·역할). displayName은 null일 수
+// 신고 목록 각 row에 붙일 신고자 표시 정보(닉네임·이메일 폴백·역할). displayName은 null일 수
 // 있어 클라이언트가 listUsers와 동일하게 displayName ?? email로 표시한다.
 // orpc 추론이 listReports 반환 타입에 이 이름을 참조하므로 export 해 패키지 경계 밖에서
 // 명명 가능하게 한다(비-export 시 TS4023).
 export interface ReportReporter {
 	displayName: string | null;
 	email: string;
+	gender: "female" | "male" | null;
 	role: string;
 }
+export interface ReportVerifiedIdentity {
+	gender: "female" | "male";
+	phoneNumber: string;
+}
 
-// listReports 전용: 신고자(reporterUserId)의 실명·역할을 배치 조회해 각 row에 reporter로
+// listReports 전용: 신고자(reporterUserId)의 닉네임·역할을 배치 조회해 각 row에 reporter로
 // 붙인다. 목록 전체를 N+1로 돌리지 않도록 distinct reporterUserId를 inArray로 한 번에
 // 조회하고 맵으로 합류한다. displayName·폴백용 email 모두 auth user 테이블에서
 // 가져온다(listUsers와 동일한 조인·폴백 패턴). 대상 row가 없는 신고자는 reporter=null.
-const withReporters = async <T extends ReportRow>(
+const isIdentityReportContext = (
+	context: ReportTargetContext | null | undefined
+) =>
+	Boolean(
+		context &&
+			("communityPost" in context ||
+				"communityComment" in context ||
+				"chatRoom" in context ||
+				"chatMessage" in context)
+	);
+
+const snapshotReporterIdentity = (
+	value: Record<string, unknown> | null
+): ReportVerifiedIdentity | null => {
+	const candidate = value?.reporterIdentity;
+	if (!(candidate && typeof candidate === "object")) {
+		return null;
+	}
+	const { gender, phoneNumber } = candidate as Record<string, unknown>;
+	if (
+		(gender !== "female" && gender !== "male") ||
+		typeof phoneNumber !== "string"
+	) {
+		return null;
+	}
+	return { gender, phoneNumber };
+};
+
+const withReporters = async <
+	T extends ReportRow & { targetContext?: ReportTargetContext | null },
+>(
 	reportRows: T[]
-): Promise<(T & { reporter: ReportReporter | null })[]> => {
+): Promise<
+	(T & {
+		reporter: ReportReporter | null;
+		reporterVerifiedIdentity: ReportVerifiedIdentity | null;
+	})[]
+> => {
 	const reporterIds = [...new Set(reportRows.map((row) => row.reporterUserId))];
 
 	if (reporterIds.length === 0) {
-		return reportRows.map((row) => ({ ...row, reporter: null }));
+		return reportRows.map((row) => ({
+			...row,
+			reporter: null,
+			reporterVerifiedIdentity: null,
+		}));
 	}
 
 	const reporterRows = await db
@@ -1171,6 +1411,7 @@ const withReporters = async <T extends ReportRow>(
 			userId: bambiProfile.userId,
 			displayName: user.name,
 			email: user.email,
+			gender: bambiProfile.gender,
 			role: bambiProfile.role,
 		})
 		.from(bambiProfile)
@@ -1180,14 +1421,26 @@ const withReporters = async <T extends ReportRow>(
 	const reporterMap = new Map<string, ReportReporter>(
 		reporterRows.map((row) => [
 			row.userId,
-			{ displayName: row.displayName, email: row.email, role: row.role },
+			{
+				displayName: row.displayName,
+				email: row.email,
+				gender: row.gender,
+				role: row.role,
+			},
 		])
 	);
 
-	return reportRows.map((row) => ({
-		...row,
-		reporter: reporterMap.get(row.reporterUserId) ?? null,
-	}));
+	return await Promise.all(
+		reportRows.map(async (row) => ({
+			...row,
+			reporter: reporterMap.get(row.reporterUserId) ?? null,
+			reporterVerifiedIdentity: isIdentityReportContext(row.targetContext)
+				? ((await getVerifiedIdentityForAdmin({
+						userId: row.reporterUserId,
+					})) ?? snapshotReporterIdentity(row.targetSnapshot))
+				: null,
+		}))
+	);
 };
 
 // 관리자용 신고 목록: 대상 맥락 + 신고자 정보를 모두 붙여 반환한다(listMyReports는 미적용).
@@ -1526,7 +1779,13 @@ export const moderationRouter = {
 		.input(createReportInput)
 		.handler(async ({ context, input }) => {
 			const profile = await requireActiveBambiProfile(context.session);
-			const targetContext = await getReportTargetContext(input);
+			const rawTargetContext = await getReportTargetContext(input);
+			const reporterIdentity = await getVerifiedIdentityForAdmin({
+				userId: profile.userId,
+			});
+			const targetContext = rawTargetContext
+				? { ...rawTargetContext, reporterIdentity }
+				: rawTargetContext;
 
 			if (input.targetType === "user" && input.targetId === profile.userId) {
 				throw new ORPCError("BAD_REQUEST", {
@@ -2093,13 +2352,15 @@ export const moderationRouter = {
 		.input(setReviewStatusInput)
 		.handler(async ({ context, input }) => {
 			const admin = await requireAdminProfile(context.session);
+			const eventId = randomUUID();
 
-			const updated = await db.transaction(async (tx) => {
-				const [updated] = await tx
-					.update(review)
-					.set({ status: input.status })
-					.where(eq(review.id, input.reviewId))
-					.returning();
+			const transitionResult = await db.transaction(async (tx) => {
+				const transition = await transitionReviewPoints(tx, {
+					eventId,
+					nextStatus: input.status,
+					reviewId: input.reviewId,
+				});
+				const updated = transition?.review;
 
 				if (!updated) {
 					throw new ORPCError("NOT_FOUND");
@@ -2113,8 +2374,28 @@ export const moderationRouter = {
 					reason: input.reason,
 				});
 
-				return updated;
+				return transition;
 			});
+			const updated = transitionResult.review;
+			if (
+				transitionResult.transactionId &&
+				transitionResult.appliedPoints !== 0
+			) {
+				await notifyBambiNotification({
+					actorUserId: admin.userId,
+					metadata: {
+						action:
+							input.status === "hidden"
+								? "review_hidden"
+								: "review_republished",
+						amount: transitionResult.appliedPoints,
+						reason: input.reason,
+					},
+					recipientUserId: transitionResult.reviewerUserId,
+					targetId: transitionResult.transactionId,
+					targetType: "point_transaction",
+				});
+			}
 
 			// 후기 알림 딥링크는 metadata.jobPostId로 공고 상세를 연다 — 없으면 알림함으로
 			// 떨어진다(web notification-labels: case "review").
@@ -2137,16 +2418,21 @@ export const moderationRouter = {
 
 			// 알림 딥링크(metadata.jobPostId)용 — 갱신된 행에서만 얻을 수 있어 여기 모은다.
 			const jobPostIdByReviewId = new Map<string, string>();
+			const pointTransitionByReviewId = new Map<
+				string,
+				NonNullable<Awaited<ReturnType<typeof transitionReviewPoints>>>
+			>();
 
 			const result = await db.transaction(
 				async (tx) =>
 					await executeBulkModeration({
 						processTarget: async (reviewId) => {
-							const [updated] = await tx
-								.update(review)
-								.set({ status: input.status })
-								.where(eq(review.id, reviewId))
-								.returning();
+							const transition = await transitionReviewPoints(tx, {
+								eventId: randomUUID(),
+								nextStatus: input.status,
+								reviewId,
+							});
+							const updated = transition?.review;
 
 							if (!updated) {
 								throw new ORPCError("NOT_FOUND", {
@@ -2155,6 +2441,7 @@ export const moderationRouter = {
 							}
 
 							jobPostIdByReviewId.set(reviewId, updated.jobPostId);
+							pointTransitionByReviewId.set(reviewId, transition);
 
 							await tx.insert(adminModerationAction).values({
 								adminUserId: admin.userId,
@@ -2171,6 +2458,26 @@ export const moderationRouter = {
 
 			// 알림은 트랜잭션 밖에서 성공분에만 보낸다(항목별 실패가 섞인다).
 			for (const reviewId of succeededBulkTargetIds(input.reviewIds, result)) {
+				const pointTransition = pointTransitionByReviewId.get(reviewId);
+				if (
+					pointTransition?.transactionId &&
+					pointTransition.appliedPoints !== 0
+				) {
+					await notifyBambiNotification({
+						actorUserId: admin.userId,
+						metadata: {
+							action:
+								input.status === "hidden"
+									? "review_hidden"
+									: "review_republished",
+							amount: pointTransition.appliedPoints,
+							reason: input.reason,
+						},
+						recipientUserId: pointTransition.reviewerUserId,
+						targetId: pointTransition.transactionId,
+						targetType: "point_transaction",
+					});
+				}
 				await notifyModerationAction({
 					action: `set_status:${input.status}`,
 					actorUserId: admin.userId,
@@ -2458,6 +2765,19 @@ export const moderationRouter = {
 						throw new ORPCError("NOT_FOUND");
 					}
 
+					// unpaid→paid 전환일 때만 조직 누적 원장에 append. 무료(adProductId null) 공고는 제외한다.
+					// same-status는 위에서 이미 단락돼(changed=false) 여기 도달하지 않으므로 자연 멱등.
+					if (input.paymentStatus === "paid") {
+						const ledgerRow = buildAdLedgerInsert(
+							input.jobPostId,
+							existing,
+							"moderation_single"
+						);
+						if (ledgerRow) {
+							await tx.insert(jobAdPurchase).values(ledgerRow);
+						}
+					}
+
 					return {
 						changed: true,
 						organizationId: existing.organizationId,
@@ -2724,27 +3044,26 @@ export const moderationRouter = {
 			const admin = await requireAdminProfile(context.session);
 
 			const { organizationId, updated } = await db.transaction(async (tx) => {
+				// 이전 종료일은 감사 로그 스냅샷 전용으로만 읽는다(FOR UPDATE로 잠가 동시
+				// 조정 간 로그가 어긋나지 않게 한다). 실제 종료일 계산은 아래 원자 UPDATE가
+				// `coalesce(현재값, now()) + make_interval`로 SQL에서 수행하므로 이 값이
+				// 계산에 개입하지 않는다 — read-modify-write 경합을 제거한다.
 				const [existing] = await tx
-					.select({
-						exposureEndsAt: jobPost.exposureEndsAt,
-						organizationId: jobPost.organizationId,
-					})
+					.select({ exposureEndsAt: jobPost.exposureEndsAt })
 					.from(jobPost)
 					.where(eq(jobPost.id, input.jobPostId))
+					.for("update")
 					.limit(1);
 
 				if (!existing) {
 					throw new ORPCError("NOT_FOUND");
 				}
 
-				const exposureEndsAt = new Date(
-					(existing.exposureEndsAt ?? new Date()).getTime() +
-						input.days * MS_PER_DAY
-				);
-
 				const [row] = await tx
 					.update(jobPost)
-					.set({ exposureEndsAt })
+					.set({
+						exposureEndsAt: sql`coalesce(${jobPost.exposureEndsAt}, now()) + make_interval(days => ${input.days})`,
+					})
 					.where(eq(jobPost.id, input.jobPostId))
 					.returning();
 
@@ -2760,13 +3079,13 @@ export const moderationRouter = {
 					reason: input.reason,
 					metadata: {
 						days: input.days,
-						exposureEndsAt: exposureEndsAt.toISOString(),
+						exposureEndsAt: row.exposureEndsAt?.toISOString() ?? null,
 						previousExposureEndsAt:
 							existing.exposureEndsAt?.toISOString() ?? null,
 					},
 				});
 
-				return { organizationId: existing.organizationId, updated: row };
+				return { organizationId: row.organizationId, updated: row };
 			});
 
 			// 종료일이 과거/미래를 넘나들면 광고 유효 여부가 뒤집히므로 수다방 광고 자격
@@ -3084,6 +3403,8 @@ export const moderationRouter = {
 							const now = new Date();
 							const [existing] = await tx
 								.select({
+									adProductId: jobPost.adProductId,
+									exposureAmount: jobPost.exposureAmount,
 									exposureDurationDays: jobPost.exposureDurationDays,
 									exposureType: jobPost.exposureType,
 									organizationId: jobPost.organizationId,
@@ -3150,6 +3471,17 @@ export const moderationRouter = {
 											: existing.pointsRefundLockedAt,
 								})
 								.where(eq(jobPost.id, jobPostId));
+
+							if (input.paymentStatus === "paid") {
+								const ledgerRow = buildAdLedgerInsert(
+									jobPostId,
+									existing,
+									"moderation_bulk"
+								);
+								if (ledgerRow) {
+									await tx.insert(jobAdPurchase).values(ledgerRow);
+								}
+							}
 
 							affectedOrganizationIds.add(existing.organizationId);
 						},
@@ -3894,21 +4226,29 @@ export const moderationRouter = {
 				.where(eq(chatRoom.id, input.chatRoomId))
 				.limit(1);
 
-			if (!room) {
+			// 방 행이 하드삭제되면 메시지도 함께 사라지지만 신고는 남는다 — 404로 막으면
+			// 운영자가 신고 근거를 전혀 못 본다. 신고 시점 스냅샷으로 폴백한다.
+			const deletedRoomSnapshot = room
+				? null
+				: await getDeletedChatRoomSnapshot(input.chatRoomId);
+
+			if (!(room || deletedRoomSnapshot)) {
 				throw new ORPCError("NOT_FOUND");
 			}
 
-			const messages = await db
-				.select({
-					body: chatMessage.body,
-					createdAt: chatMessage.createdAt,
-					id: chatMessage.id,
-					kind: chatMessage.kind,
-					senderUserId: chatMessage.senderUserId,
-				})
-				.from(chatMessage)
-				.where(eq(chatMessage.chatRoomId, input.chatRoomId))
-				.orderBy(asc(chatMessage.createdAt), asc(chatMessage.id));
+			const messages = room
+				? await db
+						.select({
+							body: chatMessage.body,
+							createdAt: chatMessage.createdAt,
+							id: chatMessage.id,
+							kind: chatMessage.kind,
+							senderUserId: chatMessage.senderUserId,
+						})
+						.from(chatMessage)
+						.where(eq(chatMessage.chatRoomId, input.chatRoomId))
+						.orderBy(asc(chatMessage.createdAt), asc(chatMessage.id))
+				: [];
 
 			const messageIds = messages.map((message) => message.id);
 			const attachments = messageIds.length
@@ -3929,14 +4269,7 @@ export const moderationRouter = {
 
 			const attachmentsByMessage = new Map<
 				string,
-				{
-					byteSize: number;
-					category: "image" | "pdf";
-					fileName: string;
-					id: string;
-					mimeType: string;
-					objectUrl: string;
-				}[]
+				ModerationChatHistoryMessage["attachments"]
 			>();
 			for (const attachment of attachments) {
 				const list = attachmentsByMessage.get(attachment.messageId) ?? [];
@@ -3951,40 +4284,64 @@ export const moderationRouter = {
 				attachmentsByMessage.set(attachment.messageId, list);
 			}
 
+			// 스냅샷은 최신순 10건이라 화면 정렬(시간순)에 맞춰 되돌린다. 첨부는 방과 함께
+			// 지워졌고 스냅샷에도 담기지 않으므로 빈 배열이다.
+			const historyMessages: ModerationChatHistoryMessage[] =
+				deletedRoomSnapshot
+					? deletedRoomSnapshot.recentMessages
+							.map((message) => ({
+								attachments: [],
+								body: message.body,
+								createdAt: new Date(message.createdAt),
+								id: message.id,
+								kind: "text",
+								senderUserId: message.senderUserId,
+							}))
+							.reverse()
+					: messages.map((message) => ({
+							...message,
+							attachments: attachmentsByMessage.get(message.id) ?? [],
+						}));
+
 			// 사유 입력이 없는 조치라 reason은 고정 문구다(컬럼이 NOT NULL). 조치와 섞이지
-			// 않도록 action은 view_messages로 구분한다.
+			// 않도록 action은 view_messages로 구분한다. target_id는 FK가 없어 방이 지워진
+			// 뒤에도 기록된다 — 무엇을 봤는지(스냅샷 여부)까지 metadata에 남긴다.
 			await db.insert(adminModerationAction).values({
 				action: "view_messages",
 				adminUserId: admin.userId,
-				metadata: { messageCount: messages.length },
+				metadata: {
+					fromDeletedRoom: Boolean(deletedRoomSnapshot),
+					messageCount: historyMessages.length,
+				},
 				reason: "운영자 채팅 내역 열람",
 				targetId: input.chatRoomId,
 				targetType: "chat_room",
 			});
 
-			const {
-				employerAccountDeletedAt,
-				employerChatDeletedAt,
-				jobSeekerAccountDeletedAt,
-				jobSeekerChatDeletedAt,
-				...visibleRoom
-			} = room;
-
+			// 방 행이 없으면 참가자 이름을 알 수 없다 — "탈퇴"로 단정하지 않고 역할만 쓴다.
 			return {
-				...visibleRoom,
-				employerName: visibleRoom.employerName ?? "탈퇴한 구인자",
+				chatRoomId: input.chatRoomId,
+				employerImage: room?.employerImage ?? null,
+				employerName: room ? (room.employerName ?? "탈퇴한 구인자") : "구인자",
+				employerUserId:
+					room?.employerUserId ?? deletedRoomSnapshot?.employerUserId ?? "",
 				employerWithdrawn: Boolean(
-					employerAccountDeletedAt || employerChatDeletedAt
+					room?.employerAccountDeletedAt || room?.employerChatDeletedAt
 				),
-				jobPostTitle: visibleRoom.jobPostTitle ?? "삭제된 공고",
-				jobSeekerName: visibleRoom.jobSeekerName ?? "탈퇴한 구직자",
+				fromDeletedRoom: Boolean(deletedRoomSnapshot),
+				jobPostTitle:
+					room?.jobPostTitle ??
+					deletedRoomSnapshot?.jobPostTitle ??
+					"삭제된 공고",
+				jobSeekerImage: room?.jobSeekerImage ?? null,
+				jobSeekerName: room
+					? (room.jobSeekerName ?? "탈퇴한 구직자")
+					: "구직자",
+				jobSeekerUserId: room?.jobSeekerUserId ?? "",
 				jobSeekerWithdrawn: Boolean(
-					jobSeekerAccountDeletedAt || jobSeekerChatDeletedAt
+					room?.jobSeekerAccountDeletedAt || room?.jobSeekerChatDeletedAt
 				),
-				messages: messages.map((message) => ({
-					...message,
-					attachments: attachmentsByMessage.get(message.id) ?? [],
-				})),
+				messages: historyMessages,
 			};
 		}),
 

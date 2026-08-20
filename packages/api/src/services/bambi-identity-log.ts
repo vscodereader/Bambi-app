@@ -15,16 +15,19 @@ import type { BambiProfileRole } from "./bambi-onboarding";
 export const recordIdentityVerification = async ({
 	identity,
 	identityVerificationId,
+	guestId,
 	kind,
 }: {
 	identity: VerifiedIdentity;
 	identityVerificationId: string;
+	guestId?: string;
 	// 아직 구분을 모르는 호출(가입 전 사전확인)은 생략한다 — 기존 행의 kind를 지우지 않는다.
 	kind?: BambiProfileRole;
 }): Promise<void> => {
 	const values = {
 		birthDate: identity.birth8,
 		gender: identity.gender,
+		guestId,
 		name: identity.name,
 		phoneNumber: identity.phoneNumber,
 	};
@@ -46,6 +49,7 @@ export const recordIdentityVerification = async ({
 		set: {
 			...values,
 			identityVerificationId,
+			...(guestId ? { guestId } : {}),
 			...(kind ? { kind } : {}),
 			updatedAt: new Date(),
 		},

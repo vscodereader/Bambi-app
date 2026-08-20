@@ -1,0 +1,15 @@
+import fs from "node:fs";
+import { describe, expect, it } from "vitest";
+import { srcPath } from "../../src-path";
+
+const source = fs.readFileSync(
+	srcPath("components/bambi/community-board-preview.tsx"),
+	"utf8"
+);
+
+describe("수다방 홈 카드 외곽선", () => {
+	it("양끝 border를 자르지 않고 공용 최소 여백을 둔다", () => {
+		expect(source).toContain("max-w-full flex-col gap-4 px-px");
+		expect(source).not.toContain("max-w-full flex-col gap-4 overflow-x-clip");
+	});
+});

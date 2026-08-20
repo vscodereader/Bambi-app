@@ -72,6 +72,9 @@ export function SeekerMarketplaceScreen() {
 	// 좌우 여백 컬럼은 매우 넓은 화면에서만 노출한다.
 	return (
 		<div className="mx-auto flex w-full justify-center gap-5 py-5 pb-24 md:py-10">
+			{/* 페이지 h1: 시각적으로 숨기지만 스크린리더·문서 개요에 최상위 제목을 준다.
+			    이 아래 가장 상위 제목은 "빠른 탐색" h2였다(h1 부재). */}
+			<h1 className="sr-only">밤비알바 채용정보</h1>
 			<aside className="hidden w-[259px] shrink-0 min-[1720px]:block">
 				<div className="sticky top-20 flex flex-col gap-4">
 					{/* 배너 rail을 "빠른 탐색" 카드 위에 둔다. 빈 슬롯은 rail이 자체
