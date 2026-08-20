@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-	isAdPeriodTierBorderClassValid,
 	isAdPeriodTierColorClassValid,
 	isAdPeriodTierRangeValid,
 } from "@/services/bambi-ad-period-tiers";
@@ -28,18 +27,5 @@ describe("isAdPeriodTierColorClassValid", () => {
 	it("raw hex·비-text 유틸은 거부", () => {
 		expect(isAdPeriodTierColorClassValid("text-#fff")).toBe(false);
 		expect(isAdPeriodTierColorClassValid("bg-red-500")).toBe(false);
-	});
-});
-
-describe("isAdPeriodTierBorderClassValid", () => {
-	it("브랜드색 border-primary(숫자 없음) 통과", () => {
-		expect(isAdPeriodTierBorderClassValid("border-primary")).toBe(true);
-	});
-	it("팔레트 색 border-amber-500(숫자 있음) 통과", () => {
-		expect(isAdPeriodTierBorderClassValid("border-amber-500")).toBe(true);
-	});
-	it("raw hex·비-border 유틸은 거부", () => {
-		expect(isAdPeriodTierBorderClassValid("border-#fff")).toBe(false);
-		expect(isAdPeriodTierBorderClassValid("bg-red-500")).toBe(false);
 	});
 });

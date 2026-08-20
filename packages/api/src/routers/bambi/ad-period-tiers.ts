@@ -6,7 +6,6 @@ import z from "zod";
 
 import { adminProcedure, publicProcedure } from "../../index";
 import {
-	isAdPeriodTierBorderClassValid,
 	isAdPeriodTierColorClassValid,
 	isAdPeriodTierRangeValid,
 } from "../../services/bambi-ad-period-tiers";
@@ -25,15 +24,6 @@ const tierShape = z.object({
 	maxDays: z.number().int().min(0).max(DAYS_MAX).nullable(),
 	minDays: z.number().int().min(0).max(DAYS_MAX),
 	sortOrder: z.number().int().min(0).max(1000).optional(),
-	// 강조 테두리 켜기·색. 미지정 시 false. borderColorClass는 null=기본값(border-primary)으로 되돌리기,
-	// undefined=미변경. border-primary(숫자 없음)·border-amber-500(숫자 있음) 둘 다 허용.
-	emphasizeBorder: z.boolean().optional(),
-	borderColorClass: z
-		.string()
-		.trim()
-		.refine(isAdPeriodTierBorderClassValid)
-		.nullable()
-		.optional(),
 });
 
 const isRangeValid = (value: { maxDays: null | number; minDays: number }) =>
@@ -63,8 +53,6 @@ export const adPeriodTiersRouter = {
 				label: input.label,
 				maxDays: input.maxDays,
 				minDays: input.minDays,
-				emphasizeBorder: input.emphasizeBorder ?? false,
-				borderColorClass: input.borderColorClass ?? null,
 				// 지정이 없으면 최소 일수를 정렬 키로 써 자연 오름차순으로 쌓인다(별도 순서 UI 없음).
 				sortOrder: input.sortOrder ?? input.minDays,
 			})
@@ -81,11 +69,6 @@ export const adPeriodTiersRouter = {
 				label: input.label,
 				maxDays: input.maxDays,
 				minDays: input.minDays,
-				emphasizeBorder: input.emphasizeBorder ?? false,
-				// undefined=미변경, null=기본값(border-primary)으로 되돌리기를 구분해 존중한다.
-				...(input.borderColorClass === undefined
-					? {}
-					: { borderColorClass: input.borderColorClass }),
 				...(input.sortOrder === undefined
 					? {}
 					: { sortOrder: input.sortOrder }),

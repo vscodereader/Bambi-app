@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-	AD_PERIOD_TIER_BORDER_PRESETS,
 	AD_PERIOD_TIER_COLOR_PRESETS,
 	AD_PERIOD_TIERS,
 	adPeriodTier,
-	adPeriodTierEmphasisClass,
 	formatAdPeriod,
 	formatAdPeriodTierRange,
 } from "@/lib/bambi/ad-period";
@@ -38,8 +36,6 @@ describe("adPeriodTier", () => {
 	it("주입한 티어 배열로 매핑한다(운영자 설정값)", () => {
 		const custom = [
 			{
-				borderColorClass: null,
-				emphasizeBorder: false,
 				icon: "medal",
 				colorClass: "text-sky-500",
 				label: "A",
@@ -47,8 +43,6 @@ describe("adPeriodTier", () => {
 				maxDays: 10,
 			},
 			{
-				borderColorClass: null,
-				emphasizeBorder: false,
 				icon: "crown",
 				colorClass: "text-violet-500",
 				label: "B",
@@ -65,8 +59,6 @@ describe("adPeriodTier", () => {
 	it("상한 없는 최상위가 없으면 초과 일수를 최상위로 올린다", () => {
 		const bounded = [
 			{
-				borderColorClass: null,
-				emphasizeBorder: false,
 				icon: "medal",
 				colorClass: "text-sky-500",
 				label: "A",
@@ -74,8 +66,6 @@ describe("adPeriodTier", () => {
 				maxDays: 10,
 			},
 			{
-				borderColorClass: null,
-				emphasizeBorder: false,
 				icon: "crown",
 				colorClass: "text-violet-500",
 				label: "B",
@@ -109,51 +99,8 @@ describe("formatAdPeriodTierRange", () => {
 	});
 });
 
-describe("adPeriodTierEmphasisClass", () => {
-	const baseTier = {
-		borderColorClass: null,
-		colorClass: "text-amber-500",
-		emphasizeBorder: false,
-		icon: "crown",
-		label: "다이아",
-		maxDays: null,
-		minDays: 721,
-	} as const;
-
-	it("강조 꺼진 등급은 빈 문자열", () => {
-		expect(adPeriodTierEmphasisClass(baseTier)).toBe("");
-	});
-
-	it("강조 켜짐 + 색 null이면 border-2 + 기본 border-primary", () => {
-		expect(
-			adPeriodTierEmphasisClass({ ...baseTier, emphasizeBorder: true })
-		).toBe("border-2 border-primary");
-	});
-
-	it("강조 켜짐 + 커스텀 색이면 그 색을 쓴다", () => {
-		expect(
-			adPeriodTierEmphasisClass({
-				...baseTier,
-				borderColorClass: "border-rose-500",
-				emphasizeBorder: true,
-			})
-		).toBe("border-2 border-rose-500");
-	});
-
-	it("최상위 다이아만 강조가 켜져 있다", () => {
-		expect(AD_PERIOD_TIERS.at(-1)?.emphasizeBorder).toBe(true);
-		for (const tier of AD_PERIOD_TIERS.slice(0, -1)) {
-			expect(tier.emphasizeBorder).toBe(false);
-		}
-	});
-});
-
 describe("ad-period tier presets", () => {
 	it("색 프리셋 첫 항목이 브랜드 primary", () => {
 		expect(AD_PERIOD_TIER_COLOR_PRESETS[0].className).toBe("text-primary");
-	});
-
-	it("테두리 프리셋 첫 항목(기본값)이 border-primary", () => {
-		expect(AD_PERIOD_TIER_BORDER_PRESETS[0].className).toBe("border-primary");
 	});
 });
