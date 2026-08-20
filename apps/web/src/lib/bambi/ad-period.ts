@@ -111,7 +111,7 @@ export const AD_PERIOD_TIER_DEFAULT_BORDER_CLASS = "border-primary";
 // 강조 켜진 등급의 배지·칩 테두리 클래스(두께 border-2 + 색). 꺼져 있으면 빈 문자열.
 export const adPeriodTierEmphasisClass = (tier: AdPeriodTier): string =>
 	tier.emphasizeBorder
-		? `border-2 ${tier.borderColorClass ?? AD_PERIOD_TIER_DEFAULT_BORDER_CLASS}`
+		? `border-1 ${tier.borderColorClass ?? AD_PERIOD_TIER_DEFAULT_BORDER_CLASS}`
 		: "";
 
 // 누적 일수 → 티어. tiers를 주입할 수 있고(운영자 설정값), 비었으면 상수로 폴백한다.
