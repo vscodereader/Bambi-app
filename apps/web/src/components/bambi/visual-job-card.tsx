@@ -300,20 +300,11 @@ export function VisualJobCard({
 				<div className="mt-auto flex items-center">
 					<span className="flex h-9 min-w-0 items-center gap-1.5">
 						{payUnit ? (
-							<Badge
-								className={cn(
-									"shrink-0",
-									// danger 톤 단위 배지는 틴트 배경 위 글자 대비가 부족해(2.74:1)
-									// coral-700로 어둡게 덮는다(합성 배경 #FFEFEF 대비 5.35:1). 틴트는 유지.
-									toneBadge[tone] === "danger" && "text-coral-700"
-								)}
-								tone={toneBadge[tone]}
-							>
+							<Badge className="shrink-0" tone={toneBadge[tone]}>
 								{payUnit}
 							</Badge>
 						) : null}
-						{/* coral-600(4.32:1)은 흰 배경 4.5:1 미달 — coral-700(5.96:1)로 올린다. */}
-						<span className="truncate font-extrabold text-base text-coral-700 leading-none">
+						<span className="truncate font-extrabold text-base text-coral-600 leading-none">
 							{payAmount}
 						</span>
 					</span>

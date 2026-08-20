@@ -60,10 +60,9 @@ describe("visual job marketplace components", () => {
 		// 스크린리더가 잘린 제목·급여 누락 대신 전체 정보를 읽는다.
 		expect(source).toContain("aria-label={");
 		expect(source).toContain("flex flex-1 cursor-pointer");
-		// a11y: 급여 금액은 흰 배경 4.5:1을 넘기려 coral-700(5.96:1)을 쓴다.
-		// coral-600(4.32:1)은 미달이라 파일에서 사라져야 한다.
-		expect(source).toContain("text-coral-700");
-		expect(source).not.toContain("text-coral-600");
+		// 급여 금액·단위 배지는 브랜드 톤 유지 결정으로 coral-600(4.32:1)을 쓴다 —
+		// 대비 상향(coral-700)은 적용했다가 사용자 결정으로 롤백됨(2026-08-20).
+		expect(source).toContain("text-coral-600");
 		// a11y: 커버 이미지는 업소명이 옆에 텍스트로 있어 장식 처리(alt="")한다.
 		expect(source).toContain('alt=""');
 	});
