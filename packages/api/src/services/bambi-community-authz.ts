@@ -9,6 +9,10 @@ import {
 } from "./bambi-authz";
 import { resolveCommunityAccess } from "./bambi-community-access";
 import { verifyCommunityPassword } from "./bambi-community-password";
+import {
+	hasFreshGuestVerifiedIdentity,
+	hasMemberVerifiedIdentity,
+} from "./bambi-secret-identity";
 
 // 수다방 라우터 공용 가드. 클라이언트 게이트(RequireCommunityAccess)와 별개로 서버에서도
 // 자격(여성 | 광고 중 업소 | 관리자)을 강제한다. isAdvertiser는 캐시 컬럼이 아니라
@@ -60,7 +64,7 @@ export const findCommunityMember = async (
 // 수다방 쓰기 주체. 회원은 세션 프로필이고, 비회원은 본인인증(성인·성별)을 통과한 게스트
 // 토큰의 gid다 — 계정이 없어 소유권은 글·댓글의 비밀번호 해시로만 증명한다.
 export type CommunityActor =
-	| { gender: "female"; gid: string; kind: "guest" }
+	| { gender: "female" | "male"; gid: string; kind: "guest" }
 	| { kind: "member"; profile: BambiAccessProfile };
 
 interface CommunityActorContext {
@@ -94,6 +98,89 @@ export const resolveCommunityActor = async (
 	}
 
 	return { gender: "female", gid: context.guest.gid, kind: "guest" };
+};
+
+export const SECRET_BOARD = "secret";
+export const SECRET_AUTHOR_NAME = "밤비";
+export const isSecretBoard = (board: string): boolean => board === SECRET_BOARD;
+
+export const assertAnonymousPostAllowed = ({
+	board,
+	isAnonymous,
+	role,
+}: {
+	board: string;
+	isAnonymous: boolean;
+	role: string;
+}): void => {
+	if (!isSecretBoard(board) && isAnonymous && role !== "job_seeker") {
+		throw new ORPCError("FORBIDDEN", {
+			message: "이 게시판에서는 익명으로 작성할 수 없습니다.",
+		});
+	}
+};
+
+// 비밀글은 일반 수다방 자격과 별개로 성인 본인인증·성별 확인만 요구한다. 로그인 상태에서는
+// 정지 여부를 포함한 활성 프로필을 강제하고, 게스트는 서명 토큰의 gid·성별을 사용한다.
+export const resolveCommunityActorForBoard = async (
+	context: CommunityActorContext,
+	board: string
+): Promise<CommunityActor> => {
+	if (!isSecretBoard(board)) {
+		return await resolveCommunityActor(context);
+	}
+	if (context.session?.user?.id) {
+		const profile = await requireActiveBambiProfile(context.session);
+		if (profile.gender === null) {
+			throw new ORPCError("FORBIDDEN", {
+				message: "본인인증으로 성별을 확인한 뒤 이용할 수 있습니다.",
+			});
+		}
+		return { kind: "member", profile };
+	}
+	if (!context.guest?.gender) {
+		throw new ORPCError("UNAUTHORIZED", {
+			message: "성인 본인인증 후 이용할 수 있습니다.",
+		});
+	}
+	return {
+		gender: context.guest.gender,
+		gid: context.guest.gid,
+		kind: "guest",
+	};
+};
+
+export const assertSecretActorIdentity = async (
+	actor: CommunityActor,
+	board: string
+): Promise<void> => {
+	if (!isSecretBoard(board)) {
+		return;
+	}
+	const ready =
+		actor.kind === "member"
+			? await hasMemberVerifiedIdentity(actor.profile.userId)
+			: await hasFreshGuestVerifiedIdentity(actor.gid);
+	if (!ready) {
+		throw new ORPCError("FORBIDDEN", {
+			message:
+				"비밀글을 작성하려면 실명이 포함된 본인인증을 다시 완료해 주세요.",
+		});
+	}
+};
+
+export const findCommunityActorForBoard = async (
+	context: CommunityActorContext,
+	board: string
+): Promise<CommunityActor | null> => {
+	try {
+		return await resolveCommunityActorForBoard(context, board);
+	} catch (error) {
+		if (error instanceof ORPCError) {
+			return null;
+		}
+		throw error;
+	}
 };
 
 // findCommunityMember와 같은 용도의 접기 — 공개 읽기 경로(listComments)가 회원/그 외를
@@ -130,6 +217,7 @@ export const assertLegalAdvisorBoardScope = (
 ): void => {
 	if (
 		profile?.role === LEGAL_ADVISOR_ROLE &&
+		board !== SECRET_BOARD &&
 		board !== LEGAL_BOARD &&
 		!(profile.gender === "male" && board === NOTICE_BOARD)
 	) {
@@ -138,7 +226,8 @@ export const assertLegalAdvisorBoardScope = (
 	if (
 		profile?.role === "job_seeker" &&
 		profile.gender === "male" &&
-		board !== NOTICE_BOARD
+		board !== NOTICE_BOARD &&
+		board !== SECRET_BOARD
 	) {
 		throw new ORPCError("FORBIDDEN", {
 			message: "남성 구직자는 공지사항만 열람할 수 있어요.",

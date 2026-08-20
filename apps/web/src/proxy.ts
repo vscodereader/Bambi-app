@@ -52,7 +52,7 @@ export async function proxy(request: NextRequest) {
 		: null;
 	// 수다방 입장은 gid까지 있는 여성 토큰만 — api의 게스트 액터 판정
 	// (bambi-community-authz의 resolveCommunityActor)과 같은 축이다.
-	const isCommunityGuest = guest?.gender === "female" && Boolean(guest.gid);
+	const isCommunityGuest = Boolean(guest?.gender && guest.gid);
 
 	const decision = resolveGate({
 		hasSession,

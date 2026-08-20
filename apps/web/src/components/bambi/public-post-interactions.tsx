@@ -37,6 +37,7 @@ import { type ReactElement, useState } from "react";
 import { toast } from "sonner";
 import { Avatar } from "@/components/bambi/ds";
 import { GuestVerifyCard } from "@/components/bambi/guest-verify-card";
+import { SecretAuthorMark } from "@/components/bambi/secret-author-mark";
 import {
 	communityAuthorRoleLabel,
 	formatCommunityDate,
@@ -51,6 +52,7 @@ const PASSWORD_MAX = 30;
 
 // 서버(getPublicPost)가 내려주는 댓글 모양. 인증 전에는 이 값이 그대로 화면이 된다.
 export interface PublicCommentSeed {
+	authorGender?: "female" | "male" | null;
 	authorImage: string | null;
 	authorRole: string | null;
 	body: string;
@@ -223,13 +225,20 @@ function CommentRow({
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				{/* enum 원값 대신 라벨 맵을 거친다. 공개 경로는 회원 계정명을 싣지 않는다. */}
 				<span className="flex items-center gap-1.5 text-muted-foreground text-xs">
-					<Avatar
-						fallbackIcon="user"
-						name={communityAuthorRoleLabel(comment.authorRole)}
-						size="xs"
-						src={comment.authorImage ?? undefined}
-					/>
-					{communityAuthorRoleLabel(comment.authorRole)} ·{" "}
+					{comment.authorGender ? (
+						<SecretAuthorMark gender={comment.authorGender} />
+					) : (
+						<>
+							<Avatar
+								fallbackIcon="user"
+								name={communityAuthorRoleLabel(comment.authorRole)}
+								size="xs"
+								src={comment.authorImage ?? undefined}
+							/>
+							{communityAuthorRoleLabel(comment.authorRole)}
+						</>
+					)}
+					<span>·</span>
 					{formatCommunityDate(comment.createdAt)}
 				</span>
 				{comment.canEdit && !(isEditing || comment.isDeleted) ? (
@@ -392,7 +401,10 @@ function CommentThread({
 					{isReplying ? (
 						<li className="flex flex-col gap-1">
 							<span className="text-muted-foreground text-xs">
-								{communityAuthorRoleLabel(parent.authorRole)}님의 댓글에 답글
+								{parent.authorGender
+									? "밤비"
+									: communityAuthorRoleLabel(parent.authorRole)}
+								님의 댓글에 답글
 							</span>
 							<CommentComposer
 								onCancel={onReplyClose}

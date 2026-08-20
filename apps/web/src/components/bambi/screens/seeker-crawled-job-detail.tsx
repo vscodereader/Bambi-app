@@ -12,6 +12,7 @@ import { formatMinimumWageLabel } from "@/lib/bambi/minimum-wage";
 import { NEGOTIABLE_PAY_TEXT } from "@/lib/bambi-options";
 import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
+import { CollapsibleJobDescription } from "../collapsible-job-description";
 import { Button, Card, InfoTile } from "../ds";
 import { EmptyState } from "../empty-state";
 import {
@@ -152,8 +153,7 @@ export function SeekerCrawledJobDetail({
 							</div>
 						</div>
 					</section>
-					<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
-						<h2 className="m-0 font-extrabold text-xl">공고 설명</h2>
+					<CollapsibleJobDescription>
 						<p className="mt-3 mb-0 whitespace-pre-line text-[15px] text-foreground leading-relaxed">
 							{job.body}
 						</p>
@@ -197,6 +197,14 @@ export function SeekerCrawledJobDetail({
 						{/* 목록 썸네일(thumbnailUrl)은 상세에 폴백으로 넣지 않는다 — 상세 내용이
 						    썸네일로 대체돼 버린다. 상세 이미지가 비면 수집 파서 문제이므로
 						    화면에서 대체물을 만들지 말고 파서를 고친다. */}
+					</CollapsibleJobDescription>
+					<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
+						<h2 className="m-0 font-extrabold text-xl">후기</h2>
+						<EmptyState
+							className="mt-2"
+							description="면접을 마친 구직자가 남긴 후기가 여기에 표시돼요."
+							title="아직 후기가 없어요"
+						/>
 					</section>
 					{/* 우리 공고 상세와 같은 자리의 안전 확인. 문구만 바꿨다 — 우리 공고의 세
 					    항목(연락처 비공개·공고 검수·신고 가능)은 여기서 사실이 아니라, 자기
@@ -229,22 +237,6 @@ export function SeekerCrawledJobDetail({
 								</p>
 							</Card>
 						</div>
-					</section>
-					{/* 후기 섹션은 우리 공고 상세의 후기 컴포넌트 마크업(제목 + 빈 상태)을 미러링한
-					    정적 블록이다. 그 컴포넌트를 재사용하지 않는 이유: 후기 조회가 회원 전용이라
-					    비로그인 방문자에게 에러가 뜨고, review.jobPostId는 우리 job_post를 가리켜
-					    수집 공고 id로는 언제나 빈 결과다. 그래서 쿼리 없이 0개 상태만 그린다. */}
-					<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
-						<div className="flex flex-wrap items-center gap-3">
-							<h2 className="m-0 font-extrabold text-xl">후기</h2>
-						</div>
-						{/* 문구는 우리 공고 상세의 후기 빈 상태와 같게 맞춘다(후기 컴포넌트 자체는
-							    회원 전용 쿼리라 재사용하지 않는다). */}
-						<EmptyState
-							className="mt-2"
-							description="면접을 마친 구직자가 남긴 후기가 여기에 표시돼요."
-							title="아직 후기가 없어요"
-						/>
 					</section>
 				</main>
 				{/* 우리 공고 상세와 같은 위치의 요약 카드. 채팅 CTA는 없고(담당자가 우리 이용자가

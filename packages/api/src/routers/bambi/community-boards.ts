@@ -2,6 +2,7 @@ import { db } from "@bambi-app/db";
 import {
 	bambiSiteSettings,
 	communityBoard,
+	communityBoardHomeLayout,
 	communityPost,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -28,6 +29,7 @@ const BUILTIN_BOARD_KEYS = new Set([
 	"work_talk",
 	"market",
 	"legal",
+	"secret",
 ]);
 
 // 운영자가 고를 수 있는 게시판 아이콘(lucide 컴포넌트 이름). 자유 입력을 받으면 웹이
@@ -46,6 +48,7 @@ export const COMMUNITY_BOARD_ICONS = [
 	"Star",
 	"Users",
 	"Newspaper",
+	"MessageSquareLock",
 ] as const;
 
 const boardIconSchema = z.enum(COMMUNITY_BOARD_ICONS);
@@ -86,6 +89,9 @@ const updateBoardInput = boardKeyInput
 	);
 
 const setBoardActiveInput = boardKeyInput.extend({ isActive: z.boolean() });
+const updateHomeLayoutInput = z.object({
+	rows: z.array(z.array(z.string().trim().min(1).max(40)).min(1)).max(30),
+});
 
 // 베스트글(가상 게시판) 전용. null은 아이콘 해제(기존 코럴 액센트 바로 복귀)다.
 const updateBestBoardIconInput = z.object({ icon: boardIconSchema.nullable() });
@@ -131,6 +137,46 @@ export const communityBoardsRouter = {
 	list: adminProcedure.handler(async () =>
 		db.select().from(communityBoard).orderBy(asc(communityBoard.sortOrder))
 	),
+
+	getHomeLayout: adminProcedure.handler(async () =>
+		db
+			.select()
+			.from(communityBoardHomeLayout)
+			.orderBy(
+				asc(communityBoardHomeLayout.rowIndex),
+				asc(communityBoardHomeLayout.position)
+			)
+	),
+
+	updateHomeLayout: adminProcedure
+		.input(updateHomeLayoutInput)
+		.handler(async ({ input }) => {
+			const keys = input.rows.flat();
+			if (new Set(keys).size !== keys.length) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "같은 게시판을 홈 배치에 두 번 넣을 수 없습니다.",
+				});
+			}
+			const validRows = await db
+				.select({ key: communityBoard.key })
+				.from(communityBoard);
+			const validKeys = new Set(["best", ...validRows.map((row) => row.key)]);
+			if (keys.some((key) => !validKeys.has(key))) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "존재하지 않는 게시판이 홈 배치에 포함되어 있습니다.",
+				});
+			}
+			await db.transaction(async (tx) => {
+				await tx.delete(communityBoardHomeLayout);
+				const values = input.rows.flatMap((row, rowIndex) =>
+					row.map((boardKey, position) => ({ boardKey, position, rowIndex }))
+				);
+				if (values.length > 0) {
+					await tx.insert(communityBoardHomeLayout).values(values);
+				}
+			});
+			return { rows: input.rows };
+		}),
 
 	create: adminProcedure.input(createBoardInput).handler(async ({ input }) => {
 		if (!SLUG_PATTERN.test(input.slug)) {
@@ -238,6 +284,9 @@ export const communityBoardsRouter = {
 		if (!deleted) {
 			throw new ORPCError("NOT_FOUND", { message: BOARD_NOT_FOUND });
 		}
+		await db
+			.delete(communityBoardHomeLayout)
+			.where(eq(communityBoardHomeLayout.boardKey, input.key));
 
 		return deleted;
 	}),

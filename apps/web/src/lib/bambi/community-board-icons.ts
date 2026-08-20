@@ -4,13 +4,14 @@
 // 명시적 Record라 쓰는 아이콘만 남는다. 서버에만 있고 여기 없는 이름은 조용히 무시된다.
 // label은 운영자 화면 표기용이다: lucide 이름(키 원값)을 그대로 노출하지 않는다.
 
+import type { LucideIcon } from "lucide-react";
 import {
 	BriefcaseIcon,
 	CoffeeIcon,
 	HeartIcon,
-	type LucideIcon,
 	MegaphoneIcon,
 	MessageCircleIcon,
+	MessageSquareLockIcon,
 	MusicIcon,
 	NewspaperIcon,
 	ScaleIcon,
@@ -23,6 +24,7 @@ import {
 export const COMMUNITY_BOARD_ICONS = {
 	Briefcase: { icon: BriefcaseIcon, label: "서류가방" },
 	Coffee: { icon: CoffeeIcon, label: "커피" },
+	MessageSquareLock: { icon: MessageSquareLockIcon, label: "잠긴 말풍선" },
 	Heart: { icon: HeartIcon, label: "하트" },
 	Megaphone: { icon: MegaphoneIcon, label: "확성기" },
 	MessageCircle: { icon: MessageCircleIcon, label: "말풍선" },

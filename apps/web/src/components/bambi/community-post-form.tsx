@@ -25,6 +25,7 @@ import {
 	type CommunityBoardMeta,
 	communityBoardPath,
 	isLegalBoardKey,
+	isSecretBoardKey,
 } from "@/lib/bambi/community";
 import { useCommunityAreaPaths } from "@/lib/bambi/community-paths";
 import { orpc } from "@/utils/orpc";
@@ -415,6 +416,31 @@ function PostAuthorField({
 	);
 }
 
+function PostAuthorIdentitySection(
+	props: Parameters<typeof PostAuthorField>[0] & { secret: boolean }
+) {
+	if (props.secret) {
+		return (
+			<p className="m-0 rounded-lg bg-secondary p-3 text-sm">
+				비밀글에서는 작성자 이름과 프로필이 성별 아이콘과 밤비로만 표시됩니다.
+			</p>
+		);
+	}
+	return <PostAuthorField {...props} />;
+}
+
+const initialAuthorNameForBoard = (
+	boardKey: string,
+	guest: boolean,
+	initialName?: string
+): string =>
+	isSecretBoardKey(boardKey) ? "밤비" : initialAuthorName(guest, initialName);
+
+const initialAnonymousForBoard = (
+	boardKey: string,
+	initialValue?: boolean
+): boolean => isSecretBoardKey(boardKey) || Boolean(initialValue);
+
 export function CommunityPostForm({
 	board,
 	editPassword,
@@ -427,10 +453,11 @@ export function CommunityPostForm({
 	const isEdit = Boolean(initialPost);
 	const isFreeBoard = board.key === "free";
 	const isLegalBoard = isLegalBoardKey(board.key);
+	const isSecretBoard = isSecretBoardKey(board.key);
 	const listPath = paths.boardPath(board.slug);
 
 	const [authorName, setAuthorName] = useState(
-		initialAuthorName(guest, initialPost?.authorName)
+		initialAuthorNameForBoard(board.key, guest, initialPost?.authorName)
 	);
 	useEffect(() => {
 		if (guest) {
@@ -452,7 +479,7 @@ export function CommunityPostForm({
 	);
 	const [isEvent, setIsEvent] = useState(initialPost?.isEvent ?? false);
 	const [isAnonymous, setIsAnonymous] = useState(
-		initialPost?.isAnonymous ?? false
+		initialAnonymousForBoard(board.key, initialPost?.isAnonymous)
 	);
 	const [title, setTitle] = useState(initialPost?.title ?? "");
 	const [bodyJson, setBodyJson] = useState(initialPost?.body ?? "");
@@ -609,12 +636,13 @@ export function CommunityPostForm({
 				{board.label} {isEdit ? "글 수정" : "글쓰기"}
 			</h1>
 
-			<PostAuthorField
+			<PostAuthorIdentitySection
 				authorName={authorName}
 				canWriteAnonymously={canWriteAnonymously}
 				displayName={displayName}
 				guest={guest}
 				isAnonymous={isAnonymous}
+				secret={isSecretBoard}
 				setAuthorName={setAuthorName}
 				setIsAnonymous={setIsAnonymous}
 			/>
