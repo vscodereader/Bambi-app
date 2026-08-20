@@ -74,7 +74,7 @@ export const contentHistoryRouter = {
 						boardKey: communityPostLikeHistory.boardKey,
 						boardLabel: communityBoard.label,
 						boardSlug: communityPostLikeHistory.boardSlug,
-						createdAt: communityPostLikeHistory.likedAt,
+						createdAt: communityPostLikeHistory.postCreatedAt,
 						id: communityPostLikeHistory.postId,
 						title: communityPostLikeHistory.title,
 					})

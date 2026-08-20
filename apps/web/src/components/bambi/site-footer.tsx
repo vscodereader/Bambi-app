@@ -1,10 +1,9 @@
 // 밤비 — 공용 사이트 푸터. 구직자(/seeker)·구인자(/employer) 셸과 약관·개인정보
 // 처리방침 페이지가 함께 재사용한다. 운영자 콘솔(/moderator)에는 노출하지 않는다.
 //
-// 사업자 정보는 운영자 콘솔(/moderator/site-settings)에서 저장한 값을 쓰고, 값이
-// 없으면 BAMBI_COMPANY 상수로 폴백한다. 재사용처 중 하나(responsive-shell)가
-// "use client" 트리라 서버 컴포넌트 async 페치를 쓸 수 없어, 클라이언트에서 react
-// query로 불러오되 폴백 값을 먼저 표시해 로딩 깜빡임을 없앤다.
+// 사업자 정보는 운영자 콘솔(/moderator/site-settings)에서 저장한 실제 값만 쓴다.
+// 재사용처 중 하나(responsive-shell)가 "use client" 트리라 react-query로 불러오며,
+// 서버·첫 클라이언트 렌더에서는 사업자 조각을 숨겨 hydration 차이와 TODO 노출을 막는다.
 "use client";
 
 import {
@@ -19,6 +18,7 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { Route } from "next";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { BAMBI_COMPANY } from "@/lib/bambi/company";
 import { APP_CONTENT_MAX_W } from "@/lib/bambi/layout";
 import { MANUAL_PATH } from "@/lib/bambi/manual";
@@ -93,15 +93,21 @@ export function SiteFooter({
 	withBottomNavClearance = false,
 }: SiteFooterProps) {
 	const { data } = useQuery(orpc.bambi.siteSettings.getFooter.queryOptions());
+	const [mounted, setMounted] = useState(false);
+	useEffect(() => {
+		setMounted(true);
+	}, []);
+	const settings = mounted ? data : undefined;
 
-	// DB에 값이 있으면 그 값, 없으면 코드 상수로 폴백.
-	const intro = data?.footerIntro ?? BAMBI_COMPANY.footerIntro;
-	const operator = data?.operator ?? BAMBI_COMPANY.operator;
-	const ceo = data?.ceo ?? BAMBI_COMPANY.ceo;
-	const bizRegNo = data?.bizRegNo ?? BAMBI_COMPANY.bizRegNo;
-	const address = data?.address ?? BAMBI_COMPANY.address;
-	const email = data?.email ?? BAMBI_COMPANY.email;
-	const tel = data?.tel ?? BAMBI_COMPANY.tel;
+	// TODO_* 사업자 자리표시자는 사용자에게 노출하지 않는다. 서버와 첫 클라이언트 렌더는
+	// 모두 설정 미표시 상태로 맞추고, 마운트 뒤 DB에 실제 값이 있는 조각만 붙인다.
+	const intro = settings?.footerIntro ?? BAMBI_COMPANY.footerIntro;
+	const operator = settings?.operator ?? BAMBI_COMPANY.operator;
+	const ceo = settings?.ceo?.trim() || null;
+	const bizRegNo = settings?.bizRegNo?.trim() || null;
+	const address = settings?.address?.trim() || null;
+	const email = settings?.email ?? BAMBI_COMPANY.email;
+	const tel = settings?.tel?.trim() || null;
 
 	return (
 		<footer
@@ -194,13 +200,21 @@ export function SiteFooter({
 
 				<div className="flex flex-col gap-1 text-muted-foreground text-xs leading-relaxed">
 					<p>
-						{operator} · 대표 {ceo} · 사업자등록번호 {bizRegNo} ·
+						{operator}
+						{ceo ? <> · 대표 {ceo}</> : null}
+						{bizRegNo ? <> · 사업자등록번호 {bizRegNo}</> : null} ·
 						직업정보제공사업 신고번호 {BAMBI_COMPANY.jobInfoProviderNo}
 					</p>
 					{/* 연락처는 읽는 값이 아니라 거는 값이다 — 모바일에서 번호를 받아 적지 않고
 					    바로 통화·메일로 이어지도록 각각 tel:·mailto:로 건다. */}
 					<p>
-						{address} · TEL <FooterTel tel={tel} /> · 고객문의{" "}
+						{address ? <>{address} · </> : null}
+						{tel ? (
+							<>
+								TEL <FooterTel tel={tel} /> ·{" "}
+							</>
+						) : null}
+						고객문의{" "}
 						<a className={FOOTER_INLINE_LINK_CLASS} href={`mailto:${email}`}>
 							{email}
 						</a>

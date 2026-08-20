@@ -2317,6 +2317,7 @@ export const communityPostLikeHistory = pgTable(
 		boardKey: text("board_key").notNull(),
 		boardSlug: text("board_slug").notNull(),
 		title: text("title").notNull(),
+		postCreatedAt: timestamp("post_created_at").notNull(),
 		isActive: boolean("is_active").default(true).notNull(),
 		likedAt: timestamp("liked_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
