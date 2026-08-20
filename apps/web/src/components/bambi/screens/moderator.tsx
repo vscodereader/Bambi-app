@@ -74,6 +74,7 @@ import {
 } from "@/lib/bambi/moderation-labels";
 import { MODERATOR_MORE_GROUPS } from "@/lib/bambi/moderator-navigation";
 import { scan } from "@/lib/bambi/scanner";
+import { CONTENT_STATUS_LABELS } from "@/lib/bambi/support";
 import type {
 	CommunityTargetStatus,
 	ManagedUser,
@@ -2772,9 +2773,22 @@ function UserModerationHistory({ userId }: { userId: string }) {
 	);
 }
 
+type ContentHistoryFilter = "all" | "comment" | "post";
+
+const CONTENT_HISTORY_FILTERS: ContentHistoryFilter[] = [
+	"all",
+	"post",
+	"comment",
+];
+const CONTENT_HISTORY_FILTER_LABEL: Record<ContentHistoryFilter, string> = {
+	all: "전체",
+	post: "글",
+	comment: "댓글",
+};
+
 function UserContentHistory({ userId }: { userId: string }) {
 	const [page, setPage] = useState(1);
-	const [filter, setFilter] = useState<"all" | "comment" | "post">("all");
+	const [filter, setFilter] = useState<ContentHistoryFilter>("all");
 	const query = useQuery(
 		orpc.bambi.contentHistory.listAdminMemberContent.queryOptions({
 			input: { filter, page, pageSize: 10, userId },
@@ -2788,18 +2802,26 @@ function UserContentHistory({ userId }: { userId: string }) {
 				<AccordionContent>
 					<Select
 						onValueChange={(value) => {
-							setFilter(value as typeof filter);
-							setPage(1);
+							if (value) {
+								setFilter(value as ContentHistoryFilter);
+								setPage(1);
+							}
 						}}
 						value={filter}
 					>
 						<SelectTrigger>
-							<SelectValue />
+							<SelectValue>
+								{(value) =>
+									CONTENT_HISTORY_FILTER_LABEL[value as ContentHistoryFilter]
+								}
+							</SelectValue>
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="all">전체</SelectItem>
-							<SelectItem value="post">글</SelectItem>
-							<SelectItem value="comment">댓글</SelectItem>
+							{CONTENT_HISTORY_FILTERS.map((value) => (
+								<SelectItem key={value} value={value}>
+									{CONTENT_HISTORY_FILTER_LABEL[value]}
+								</SelectItem>
+							))}
 						</SelectContent>
 					</Select>
 					<ul className="mt-3 grid list-none gap-2 p-0">
@@ -2813,7 +2835,7 @@ function UserContentHistory({ userId }: { userId: string }) {
 										{item.kind === "post" ? "글" : "댓글"} · {item.title}
 									</strong>
 									<span className="text-muted-foreground text-xs">
-										{item.status}
+										{CONTENT_STATUS_LABELS[item.status]}
 									</span>
 								</div>
 								<p className="mb-0 line-clamp-3 text-sm">{item.body}</p>
