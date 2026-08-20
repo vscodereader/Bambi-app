@@ -131,7 +131,7 @@ function JobAdPeriodBadge({
 	return (
 		<UiBadge
 			className={cn(
-				"ml-auto h-auto rounded-md py-3 font-semibold",
+				"ml-auto h-auto rounded-sm py-2 font-semibold",
 				tier.colorClass
 			)}
 			title={`광고 ${adPeriod.count}회 · 누적 ${adPeriod.totalDays}일`}
