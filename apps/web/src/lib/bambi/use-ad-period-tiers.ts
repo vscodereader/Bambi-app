@@ -14,7 +14,9 @@ export function useAdPeriodTiers(): readonly AdPeriodTier[] {
 		return AD_PERIOD_TIERS;
 	}
 	return rows.map((row) => ({
+		borderColorClass: row.borderColorClass,
 		colorClass: row.colorClass,
+		emphasizeBorder: row.emphasizeBorder,
 		icon: row.icon,
 		label: row.label,
 		maxDays: row.maxDays,

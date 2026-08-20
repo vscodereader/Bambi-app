@@ -26,7 +26,10 @@ import {
 	formatAdDuration,
 	formatAdPrice,
 } from "@/lib/bambi/ad-catalog";
-import { formatAdPeriodTierRange } from "@/lib/bambi/ad-period";
+import {
+	adPeriodTierEmphasisClass,
+	formatAdPeriodTierRange,
+} from "@/lib/bambi/ad-period";
 import {
 	formatBoostOptionSpec,
 	JOB_BOOST_OPTION_TYPE_LABELS,
@@ -402,7 +405,13 @@ function AdPeriodGradeGuide() {
 				</p>
 				<ul className="m-0 flex flex-col gap-2 p-0">
 					{tiers.map((tier) => (
-						<li className="flex items-center gap-2 text-sm" key={tier.label}>
+						<li
+							className={cn(
+								"flex items-center gap-2 rounded-md px-2 py-1 text-sm",
+								adPeriodTierEmphasisClass(tier)
+							)}
+							key={tier.label}
+						>
 							<span
 								className={cn("inline-flex size-4 shrink-0", tier.colorClass)}
 							>

@@ -21,6 +21,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@bambi-app/ui/components/alert-dialog";
+import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import {
 	Dialog,
@@ -31,6 +32,7 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import { Switch } from "@bambi-app/ui/components/switch";
 import {
 	ToggleGroup,
 	ToggleGroupItem,
@@ -41,9 +43,12 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { CrownIcon, MedalIcon } from "@/components/bambi/icons";
 import {
+	AD_PERIOD_TIER_BORDER_PRESETS,
 	AD_PERIOD_TIER_COLOR_PRESETS,
+	AD_PERIOD_TIER_DEFAULT_BORDER_CLASS,
 	AD_PERIOD_TIER_ICON_LABELS,
 	type AdPeriodTier,
+	adPeriodTierEmphasisClass,
 	formatAdPeriodTierRange,
 } from "@/lib/bambi/ad-period";
 import { orpc } from "@/utils/orpc";
@@ -68,7 +73,9 @@ const toDaysInput = (value: null | number): string =>
 	value == null ? "" : String(value);
 
 interface TierFormValues {
+	borderColorClass: null | string;
 	colorClass: string;
+	emphasizeBorder: boolean;
 	icon: TierIcon;
 	label: string;
 	maxDays: null | number;
@@ -105,6 +112,13 @@ function AdPeriodTierForm({
 		initial ? String(initial.minDays) : ""
 	);
 	const [maxDays, setMaxDays] = useState(toDaysInput(initial?.maxDays ?? null));
+	const [emphasizeBorder, setEmphasizeBorder] = useState(
+		initial?.emphasizeBorder ?? false
+	);
+	// null(기본 primary)은 첫 프리셋으로 보이고, 제출 때 다시 null로 되돌린다.
+	const [borderColorClass, setBorderColorClass] = useState(
+		initial?.borderColorClass ?? AD_PERIOD_TIER_DEFAULT_BORDER_CLASS
+	);
 
 	const parsedMin = Number(minDays);
 	const trimmedMax = maxDays.trim();
@@ -126,7 +140,13 @@ function AdPeriodTierForm({
 
 	const submit = () =>
 		onSubmit({
+			// 기본 primary는 null로 보내 계약(null = 기본 primary)을 지킨다.
+			borderColorClass:
+				borderColorClass === AD_PERIOD_TIER_DEFAULT_BORDER_CLASS
+					? null
+					: borderColorClass,
 			colorClass,
+			emphasizeBorder,
 			icon,
 			label: label.trim(),
 			maxDays: trimmedMax === "" ? null : parsedMax,
@@ -199,9 +219,10 @@ function AdPeriodTierForm({
 				</ToggleGroup>
 			</div>
 			<div className="flex flex-col gap-1.5">
-				<Label>등급 색</Label>
+				<Label>아이콘 색</Label>
 				<ToggleGroup
-					aria-label="등급 색"
+					aria-label="아이콘 색"
+					className="max-w-full flex-wrap"
 					onValueChange={(value) => {
 						const next = value.at(-1);
 						if (next) {
@@ -219,10 +240,53 @@ function AdPeriodTierForm({
 							<span className={cn("inline-flex size-4", preset.className)}>
 								<TierIconGlyph icon={icon} />
 							</span>
+							{preset.label}
 						</ToggleGroupItem>
 					))}
 				</ToggleGroup>
 			</div>
+			<div className="flex items-center gap-2">
+				<Switch
+					checked={emphasizeBorder}
+					id={`${idPrefix}-emphasize`}
+					onCheckedChange={setEmphasizeBorder}
+				/>
+				<Label htmlFor={`${idPrefix}-emphasize`}>강조 테두리</Label>
+			</div>
+			{emphasizeBorder ? (
+				<div className="flex flex-col gap-1.5">
+					<Label>강조 테두리 색</Label>
+					<ToggleGroup
+						aria-label="강조 테두리 색"
+						className="max-w-full flex-wrap"
+						onValueChange={(value) => {
+							const next = value.at(-1);
+							if (next) {
+								setBorderColorClass(next);
+							}
+						}}
+						value={[borderColorClass]}
+					>
+						{AD_PERIOD_TIER_BORDER_PRESETS.map((preset) => (
+							<ToggleGroupItem
+								aria-label={preset.label}
+								key={preset.className}
+								value={preset.className}
+							>
+								<Badge
+									className={cn("gap-1 border-2", preset.className, colorClass)}
+									variant="outline"
+								>
+									<span className="inline-flex size-4 shrink-0">
+										<TierIconGlyph icon={icon} />
+									</span>
+									{preset.label}
+								</Badge>
+							</ToggleGroupItem>
+						))}
+					</ToggleGroup>
+				</div>
+			) : null}
 			<div className={cn(onCancel ? "grid grid-cols-2 gap-2" : "flex")}>
 				{onCancel ? (
 					<Button onClick={onCancel} type="button" variant="outline">
@@ -233,7 +297,7 @@ function AdPeriodTierForm({
 					disabled={!canSubmit}
 					onClick={submit}
 					type="button"
-					variant={onCancel ? "default" : "secondary"}
+					variant="default"
 				>
 					{isPending ? "저장 중" : submitLabel}
 				</Button>
@@ -345,18 +409,21 @@ export function AdPeriodTierSettings() {
 									className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"
 									key={tier.id}
 								>
-									<span
-										className={cn(
-											"inline-flex size-5 shrink-0",
-											tier.colorClass
-										)}
-									>
-										<TierIconGlyph icon={tier.icon} />
-									</span>
 									<span className="font-bold">{tier.label}</span>
-									<span className="text-muted-foreground text-xs">
+									{/* 카드 배지와 동일하게 아이콘 색·강조 테두리를 입혀 결과를 미리 본다. */}
+									<Badge
+										className={cn(
+											"gap-1",
+											tier.colorClass,
+											adPeriodTierEmphasisClass(tier)
+										)}
+										variant="outline"
+									>
+										<span className="inline-flex size-4 shrink-0">
+											<TierIconGlyph icon={tier.icon} />
+										</span>
 										{formatAdPeriodTierRange(tier)}
-									</span>
+									</Badge>
 									<div className="ml-auto flex gap-2">
 										<Button
 											onClick={() => setEditing(tier)}

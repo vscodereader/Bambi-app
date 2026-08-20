@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isAdPeriodTierRangeValid } from "@/services/bambi-ad-period-tiers";
+import {
+	isAdPeriodTierBorderClassValid,
+	isAdPeriodTierColorClassValid,
+	isAdPeriodTierRangeValid,
+} from "@/services/bambi-ad-period-tiers";
 
 describe("isAdPeriodTierRangeValid", () => {
 	it("상한 없음(null)은 항상 유효(최상위 등급)", () => {
@@ -11,5 +15,31 @@ describe("isAdPeriodTierRangeValid", () => {
 	});
 	it("최소 > 최대면 무효", () => {
 		expect(isAdPeriodTierRangeValid(200, 180)).toBe(false);
+	});
+});
+
+describe("isAdPeriodTierColorClassValid", () => {
+	it("브랜드색 text-primary(숫자 없음) 통과", () => {
+		expect(isAdPeriodTierColorClassValid("text-primary")).toBe(true);
+	});
+	it("팔레트 색 text-amber-500(숫자 있음) 통과", () => {
+		expect(isAdPeriodTierColorClassValid("text-amber-500")).toBe(true);
+	});
+	it("raw hex·비-text 유틸은 거부", () => {
+		expect(isAdPeriodTierColorClassValid("text-#fff")).toBe(false);
+		expect(isAdPeriodTierColorClassValid("bg-red-500")).toBe(false);
+	});
+});
+
+describe("isAdPeriodTierBorderClassValid", () => {
+	it("브랜드색 border-primary(숫자 없음) 통과", () => {
+		expect(isAdPeriodTierBorderClassValid("border-primary")).toBe(true);
+	});
+	it("팔레트 색 border-amber-500(숫자 있음) 통과", () => {
+		expect(isAdPeriodTierBorderClassValid("border-amber-500")).toBe(true);
+	});
+	it("raw hex·비-border 유틸은 거부", () => {
+		expect(isAdPeriodTierBorderClassValid("border-#fff")).toBe(false);
+		expect(isAdPeriodTierBorderClassValid("bg-red-500")).toBe(false);
 	});
 });

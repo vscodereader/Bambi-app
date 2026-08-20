@@ -4,3 +4,16 @@ export const isAdPeriodTierRangeValid = (
 	minDays: number,
 	maxDays: null | number
 ): boolean => maxDays === null || minDays <= maxDays;
+
+// 아이콘 색: Tailwind 텍스트 색 유틸만 허용(raw hex 금지). 브랜드색 text-primary(숫자 없음)와
+// text-amber-500(숫자 있음) 둘 다 통과. 화면은 프리셋에서 고르지만 서버도 최소 형태를 막는다.
+const TEXT_COLOR_CLASS = /^text-[a-z]+(-\d{2,3})?$/;
+
+// 강조 테두리 색: border-primary(숫자 없음)·border-amber-500(숫자 있음) 둘 다 통과.
+const BORDER_COLOR_CLASS = /^border-[a-z]+(-\d{2,3})?$/;
+
+export const isAdPeriodTierColorClassValid = (value: string): boolean =>
+	TEXT_COLOR_CLASS.test(value);
+
+export const isAdPeriodTierBorderClassValid = (value: string): boolean =>
+	BORDER_COLOR_CLASS.test(value);

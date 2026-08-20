@@ -3,7 +3,11 @@
 import { Badge as UiBadge } from "@bambi-app/ui/components/badge";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useCallback, useMemo } from "react";
-import { adPeriodTier, formatAdPeriod } from "@/lib/bambi/ad-period";
+import {
+	adPeriodTier,
+	adPeriodTierEmphasisClass,
+	formatAdPeriod,
+} from "@/lib/bambi/ad-period";
 import {
 	JOB_LISTS,
 	shouldTrackJobAnalytics,
@@ -135,7 +139,8 @@ function JobAdPeriodBadge({
 		<UiBadge
 			className={cn(
 				"ml-auto h-auto rounded-sm py-2 font-semibold",
-				tier.colorClass
+				tier.colorClass,
+				adPeriodTierEmphasisClass(tier)
 			)}
 			title={`광고 ${adPeriod.count}회 · 누적 ${adPeriod.totalDays}일`}
 			variant="outline"

@@ -73,6 +73,8 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("ml-auto");
 		// 접근성 툴팁
 		expect(source).toContain("누적");
+		// 강조 등급은 두꺼운 색 테두리로 표시한다 — 공용 헬퍼로 배지 className에 합친다
+		expect(source).toContain("adPeriodTierEmphasisClass");
 	});
 
 	it("shows the ad-period grade table on the employer ad guide", () => {
@@ -85,6 +87,8 @@ describe("visual job marketplace components", () => {
 		// 카드와 같은 등급 아이콘을 쓴다
 		expect(source).toContain("MedalIcon");
 		expect(source).toContain("CrownIcon");
+		// 등급표도 카드 배지와 같은 강조 헬퍼를 재사용해 어긋나지 않게 한다
+		expect(source).toContain("adPeriodTierEmphasisClass");
 	});
 
 	it("wires the ad-period tier settings section into the ad-products console", () => {
