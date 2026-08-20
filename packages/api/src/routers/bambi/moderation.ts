@@ -1151,6 +1151,45 @@ const isReportTargetContext = (
 	return REPORT_CONTEXT_KEYS.some((key) => key in value);
 };
 
+// 운영자 채팅 열람 응답의 메시지 한 건. 라이브 조회와 스냅샷 폴백이 같은 형태로 내려간다.
+interface ModerationChatHistoryMessage {
+	attachments: {
+		byteSize: number;
+		category: "image" | "pdf";
+		fileName: string;
+		id: string;
+		mimeType: string;
+		objectUrl: string;
+	}[];
+	body: string;
+	createdAt: Date;
+	id: string;
+	kind: string;
+	senderUserId: string;
+}
+
+// 하드삭제된 채팅방의 신고 시점 스냅샷(target_snapshot.chatRoom). 방 행이 사라져도 신고는
+// 조치의 감사 근거로 남으므로, 운영자 열람은 이 스냅샷을 폴백으로 쓴다.
+const getDeletedChatRoomSnapshot = async (chatRoomId: string) => {
+	const [row] = await db
+		.select({ targetSnapshot: report.targetSnapshot })
+		.from(report)
+		.where(
+			and(eq(report.targetType, "chat_room"), eq(report.targetId, chatRoomId))
+		)
+		.orderBy(desc(report.createdAt))
+		.limit(1);
+
+	const snapshot = row?.targetSnapshot;
+	if (!(isReportTargetContext(snapshot) && "chatRoom" in snapshot)) {
+		return null;
+	}
+
+	// recentMessages가 붙기 전에 쓰인 옛 스냅샷은 폴백으로 쓸 수 없다(기존대로 404).
+	const snapshotRoom = snapshot.chatRoom;
+	return Array.isArray(snapshotRoom?.recentMessages) ? snapshotRoom : null;
+};
+
 const sanitizeIdentitySnapshot = (
 	value: unknown
 ): { gender: "female" | "male"; phoneNumber: string } | null => {
@@ -4187,21 +4226,29 @@ export const moderationRouter = {
 				.where(eq(chatRoom.id, input.chatRoomId))
 				.limit(1);
 
-			if (!room) {
+			// 방 행이 하드삭제되면 메시지도 함께 사라지지만 신고는 남는다 — 404로 막으면
+			// 운영자가 신고 근거를 전혀 못 본다. 신고 시점 스냅샷으로 폴백한다.
+			const deletedRoomSnapshot = room
+				? null
+				: await getDeletedChatRoomSnapshot(input.chatRoomId);
+
+			if (!(room || deletedRoomSnapshot)) {
 				throw new ORPCError("NOT_FOUND");
 			}
 
-			const messages = await db
-				.select({
-					body: chatMessage.body,
-					createdAt: chatMessage.createdAt,
-					id: chatMessage.id,
-					kind: chatMessage.kind,
-					senderUserId: chatMessage.senderUserId,
-				})
-				.from(chatMessage)
-				.where(eq(chatMessage.chatRoomId, input.chatRoomId))
-				.orderBy(asc(chatMessage.createdAt), asc(chatMessage.id));
+			const messages = room
+				? await db
+						.select({
+							body: chatMessage.body,
+							createdAt: chatMessage.createdAt,
+							id: chatMessage.id,
+							kind: chatMessage.kind,
+							senderUserId: chatMessage.senderUserId,
+						})
+						.from(chatMessage)
+						.where(eq(chatMessage.chatRoomId, input.chatRoomId))
+						.orderBy(asc(chatMessage.createdAt), asc(chatMessage.id))
+				: [];
 
 			const messageIds = messages.map((message) => message.id);
 			const attachments = messageIds.length
@@ -4222,14 +4269,7 @@ export const moderationRouter = {
 
 			const attachmentsByMessage = new Map<
 				string,
-				{
-					byteSize: number;
-					category: "image" | "pdf";
-					fileName: string;
-					id: string;
-					mimeType: string;
-					objectUrl: string;
-				}[]
+				ModerationChatHistoryMessage["attachments"]
 			>();
 			for (const attachment of attachments) {
 				const list = attachmentsByMessage.get(attachment.messageId) ?? [];
@@ -4244,40 +4284,64 @@ export const moderationRouter = {
 				attachmentsByMessage.set(attachment.messageId, list);
 			}
 
+			// 스냅샷은 최신순 10건이라 화면 정렬(시간순)에 맞춰 되돌린다. 첨부는 방과 함께
+			// 지워졌고 스냅샷에도 담기지 않으므로 빈 배열이다.
+			const historyMessages: ModerationChatHistoryMessage[] =
+				deletedRoomSnapshot
+					? deletedRoomSnapshot.recentMessages
+							.map((message) => ({
+								attachments: [],
+								body: message.body,
+								createdAt: new Date(message.createdAt),
+								id: message.id,
+								kind: "text",
+								senderUserId: message.senderUserId,
+							}))
+							.reverse()
+					: messages.map((message) => ({
+							...message,
+							attachments: attachmentsByMessage.get(message.id) ?? [],
+						}));
+
 			// 사유 입력이 없는 조치라 reason은 고정 문구다(컬럼이 NOT NULL). 조치와 섞이지
-			// 않도록 action은 view_messages로 구분한다.
+			// 않도록 action은 view_messages로 구분한다. target_id는 FK가 없어 방이 지워진
+			// 뒤에도 기록된다 — 무엇을 봤는지(스냅샷 여부)까지 metadata에 남긴다.
 			await db.insert(adminModerationAction).values({
 				action: "view_messages",
 				adminUserId: admin.userId,
-				metadata: { messageCount: messages.length },
+				metadata: {
+					fromDeletedRoom: Boolean(deletedRoomSnapshot),
+					messageCount: historyMessages.length,
+				},
 				reason: "운영자 채팅 내역 열람",
 				targetId: input.chatRoomId,
 				targetType: "chat_room",
 			});
 
-			const {
-				employerAccountDeletedAt,
-				employerChatDeletedAt,
-				jobSeekerAccountDeletedAt,
-				jobSeekerChatDeletedAt,
-				...visibleRoom
-			} = room;
-
+			// 방 행이 없으면 참가자 이름을 알 수 없다 — "탈퇴"로 단정하지 않고 역할만 쓴다.
 			return {
-				...visibleRoom,
-				employerName: visibleRoom.employerName ?? "탈퇴한 구인자",
+				chatRoomId: input.chatRoomId,
+				employerImage: room?.employerImage ?? null,
+				employerName: room ? (room.employerName ?? "탈퇴한 구인자") : "구인자",
+				employerUserId:
+					room?.employerUserId ?? deletedRoomSnapshot?.employerUserId ?? "",
 				employerWithdrawn: Boolean(
-					employerAccountDeletedAt || employerChatDeletedAt
+					room?.employerAccountDeletedAt || room?.employerChatDeletedAt
 				),
-				jobPostTitle: visibleRoom.jobPostTitle ?? "삭제된 공고",
-				jobSeekerName: visibleRoom.jobSeekerName ?? "탈퇴한 구직자",
+				fromDeletedRoom: Boolean(deletedRoomSnapshot),
+				jobPostTitle:
+					room?.jobPostTitle ??
+					deletedRoomSnapshot?.jobPostTitle ??
+					"삭제된 공고",
+				jobSeekerImage: room?.jobSeekerImage ?? null,
+				jobSeekerName: room
+					? (room.jobSeekerName ?? "탈퇴한 구직자")
+					: "구직자",
+				jobSeekerUserId: room?.jobSeekerUserId ?? "",
 				jobSeekerWithdrawn: Boolean(
-					jobSeekerAccountDeletedAt || jobSeekerChatDeletedAt
+					room?.jobSeekerAccountDeletedAt || room?.jobSeekerChatDeletedAt
 				),
-				messages: messages.map((message) => ({
-					...message,
-					attachments: attachmentsByMessage.get(message.id) ?? [],
-				})),
+				messages: historyMessages,
 			};
 		}),
 
