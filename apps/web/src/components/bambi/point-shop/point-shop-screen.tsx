@@ -425,6 +425,7 @@ export function PointShopScreen() {
 			birthDate: input.birth,
 			gender: input.gender,
 			phoneNumber: input.phone,
+			realName: input.name,
 		});
 	};
 

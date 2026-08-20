@@ -54,7 +54,7 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { type ReactElement, useMemo, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
 	communityEditorExtensions,
@@ -62,6 +62,10 @@ import {
 } from "@/components/bambi/community-editor";
 import { Avatar } from "@/components/bambi/ds";
 import { GradeBadge } from "@/components/bambi/grade-badge";
+import {
+	type SecretAuthorGender,
+	SecretAuthorIdentityMark,
+} from "@/components/bambi/secret-author-mark";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
 	communityAuthorName,
@@ -89,7 +93,12 @@ export type CommunityAuthorRole =
 
 // 상세 화면이 소비하는 글 필드(잠금 해제 상태).
 export interface CommunityPostDetail {
-	authorGrade: { name: string; color: string | null } | null;
+	authorGender?: SecretAuthorGender | null;
+	authorGrade: {
+		name: string;
+		color: string | null;
+		iconUrl?: string | null;
+	} | null;
 	authorImage?: string | null;
 	authorName: string;
 	authorRole: CommunityAuthorRole;
@@ -112,7 +121,12 @@ export interface CommunityPostDetail {
 }
 
 export interface CommunityCommentItem {
-	authorGrade: { name: string; color: string | null } | null;
+	authorGender?: SecretAuthorGender | null;
+	authorGrade: {
+		name: string;
+		color: string | null;
+		iconUrl?: string | null;
+	} | null;
 	authorImage?: string | null;
 	authorName: string | null;
 	authorRole: CommunityAuthorRole | null;
@@ -159,6 +173,9 @@ export function PostBodyViewer({ body }: { body: string }) {
 
 function PostHeaderBadges({ post }: { post: CommunityPostDetail }) {
 	const isNotice = post.board === "notice";
+	if (post.board === "secret") {
+		return null;
+	}
 	if (!(post.isPromotion || post.authorRole === "employer" || isNotice)) {
 		return null;
 	}
@@ -193,14 +210,26 @@ export function PostHeader({ post }: { post: CommunityPostDetail }) {
 			</h1>
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
 				<span className="flex items-center gap-1.5">
-					<Avatar
-						fallbackIcon="user"
-						name={communityAuthorName(post.authorName)}
-						size="xs"
-						src={post.authorImage ?? undefined}
-					/>
-					{communityAuthorName(post.authorName)}
-					<GradeBadge grade={post.authorGrade} />
+					{post.authorGender ? (
+						<SecretAuthorIdentityMark
+							gender={post.authorGender}
+							id={post.id}
+							targetType="post"
+						/>
+					) : (
+						<>
+							<Avatar
+								fallbackIcon="user"
+								name={communityAuthorName(post.authorName)}
+								size="xs"
+								src={post.authorImage ?? undefined}
+							/>
+							{communityAuthorName(post.authorName)}
+						</>
+					)}
+					{post.board === "secret" ? null : (
+						<GradeBadge grade={post.authorGrade} />
+					)}
 				</span>
 				<span>{formatCommunityDate(post.createdAt)}</span>
 				<span className="flex items-center gap-0.5">
@@ -545,66 +574,126 @@ function CommentRow({
 	onEditSubmit: (commentId: string, body: string) => void;
 	onReply?: () => void;
 }) {
+	const rowRef = useRef<HTMLDivElement>(null);
+	const [isHighlighted, setIsHighlighted] = useState(false);
+
+	useEffect(() => {
+		const highlightedCommentId = new URLSearchParams(
+			window.location.search
+		).get("highlightComment");
+		if (highlightedCommentId !== comment.id) {
+			return;
+		}
+		let secondFrame: number | undefined;
+		let timer: number | undefined;
+		const firstFrame = window.requestAnimationFrame(() => {
+			secondFrame = window.requestAnimationFrame(() => {
+				rowRef.current?.scrollIntoView({ block: "center" });
+				setIsHighlighted(true);
+				timer = window.setTimeout(() => setIsHighlighted(false), 1000);
+			});
+		});
+		return () => {
+			window.cancelAnimationFrame(firstFrame);
+			if (secondFrame !== undefined) {
+				window.cancelAnimationFrame(secondFrame);
+			}
+			if (timer !== undefined) {
+				window.clearTimeout(timer);
+			}
+		};
+	}, [comment.id]);
+
 	if (comment.isDeleted) {
 		return (
-			<p className="m-0 py-1 text-muted-foreground text-sm italic">
-				삭제된 댓글입니다
-			</p>
+			<div
+				className={cn(
+					"-m-2 rounded-xl p-2 transition-[background-color,box-shadow] duration-200",
+					isHighlighted && "bg-primary/20 ring-2 ring-primary"
+				)}
+				id={`comment-${comment.id}`}
+				ref={rowRef}
+			>
+				<p className="m-0 py-1 text-muted-foreground text-sm italic">
+					삭제된 댓글입니다
+				</p>
+			</div>
 		);
 	}
 
 	return (
-		<div className="flex flex-col gap-1">
-			<div className="flex items-center justify-between gap-2">
-				<span className="flex items-center gap-1.5 font-semibold text-xs">
-					<Avatar
-						fallbackIcon="user"
-						name={comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
-						size="xs"
-						src={comment.authorImage ?? undefined}
-					/>
-					{comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
-					<GradeBadge grade={comment.authorGrade} />
-					{comment.authorRole === "employer" ? (
-						<Badge variant="secondary">업소</Badge>
-					) : null}
-					{comment.authorRole === "admin" ? (
-						<Badge variant="default">운영자</Badge>
-					) : null}
-					{/* 법률 자문 게시판의 답변인지 한눈에 보이게 — 질문자와 자문 답변이 섞이면
-					    어느 쪽이 전문가 답변인지 알 수 없다. */}
-					{comment.authorRole === "legal_advisor" ? (
-						<Badge variant="dark">법률자문</Badge>
-					) : null}
-				</span>
-				{isEditing ? null : (
-					<CommentActions
-						comment={comment}
-						deletePending={deletePending}
-						onDelete={onDelete}
-						onEditOpen={onEditOpen}
-					/>
-				)}
-			</div>
-			{isEditing ? (
-				<CommentEditForm
-					initialBody={comment.body}
-					maxLength={maxLength}
-					onCancel={onEditClose}
-					onSubmit={(body) => onEditSubmit(comment.id, body)}
-					pending={editPending}
-				/>
-			) : (
-				<p className="m-0 whitespace-pre-wrap text-sm">{comment.body}</p>
+		<div
+			className={cn(
+				"-m-2 rounded-xl p-2 transition-[background-color,box-shadow] duration-200",
+				isHighlighted && "bg-primary/20 ring-2 ring-primary"
 			)}
-			{onReply && !isEditing ? (
-				<div>
-					<Button onClick={onReply} size="sm" variant="ghost">
-						<CornerDownRightIcon data-icon="inline-start" />
-						답글
-					</Button>
+			id={`comment-${comment.id}`}
+			ref={rowRef}
+		>
+			<div className="flex flex-col gap-1">
+				<div className="flex items-center justify-between gap-2">
+					<span className="flex items-center gap-1.5 font-semibold text-xs">
+						{comment.authorGender ? (
+							<SecretAuthorIdentityMark
+								gender={comment.authorGender}
+								id={comment.id}
+								targetType="comment"
+							/>
+						) : (
+							<>
+								<Avatar
+									fallbackIcon="user"
+									name={comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
+									size="xs"
+									src={comment.authorImage ?? undefined}
+								/>
+								{comment.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
+							</>
+						)}
+						{comment.authorGender ? null : (
+							<GradeBadge grade={comment.authorGrade} />
+						)}
+						{!comment.authorGender && comment.authorRole === "employer" ? (
+							<Badge variant="secondary">업소</Badge>
+						) : null}
+						{!comment.authorGender && comment.authorRole === "admin" ? (
+							<Badge variant="default">운영자</Badge>
+						) : null}
+						{/* 법률 자문 게시판의 답변인지 한눈에 보이게 — 질문자와 자문 답변이 섞이면
+					    어느 쪽이 전문가 답변인지 알 수 없다. */}
+						{!comment.authorGender && comment.authorRole === "legal_advisor" ? (
+							<Badge variant="dark">법률자문</Badge>
+						) : null}
+					</span>
+					{isEditing ? null : (
+						<CommentActions
+							comment={comment}
+							deletePending={deletePending}
+							onDelete={onDelete}
+							onEditOpen={onEditOpen}
+						/>
+					)}
 				</div>
-			) : null}
+				{isEditing ? (
+					<CommentEditForm
+						initialBody={comment.body}
+						maxLength={maxLength}
+						onCancel={onEditClose}
+						onSubmit={(body) => onEditSubmit(comment.id, body)}
+						pending={editPending}
+					/>
+				) : (
+					<p className="m-0 whitespace-pre-wrap text-sm">{comment.body}</p>
+				)}
+				{onReply && !isEditing ? (
+					<div>
+						<Button onClick={onReply} size="sm" variant="ghost">
+							<CornerDownRightIcon data-icon="inline-start" />
+							답글
+						</Button>
+					</div>
+				) : null}
+			</div>
 		</div>
 	);
 }

@@ -15,18 +15,8 @@ import {
 	DropdownMenuTrigger,
 } from "@bambi-app/ui/components/dropdown-menu";
 import { Input } from "@bambi-app/ui/components/input";
-import {
-	Pagination,
-	PaginationContent,
-	PaginationEllipsis,
-	PaginationItem,
-	PaginationLink,
-	PaginationNext,
-	PaginationPrevious,
-} from "@bambi-app/ui/components/pagination";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
-import { cn } from "@bambi-app/ui/lib/utils";
 import type { InferRouterOutputs } from "@orpc/server";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -51,6 +41,8 @@ import {
 } from "@/components/bambi/community-post-badges";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { GradeBadge } from "@/components/bambi/grade-badge";
+import { PageControls } from "@/components/bambi/page-controls";
+import { SecretAuthorMark } from "@/components/bambi/secret-author-mark";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
 	type CommunityBoardMeta,
@@ -59,7 +51,6 @@ import {
 	communityPostPath,
 	communityWritePath,
 	formatCommunityDate,
-	getCommunityPageItems,
 	getCommunityTotalPages,
 } from "@/lib/bambi/community";
 import { communityBoardIcon } from "@/lib/bambi/community-board-icons";
@@ -156,8 +147,14 @@ function BoardPostRow({
 				</span>
 				<span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-muted-foreground text-xs">
 					<span className="flex items-center gap-1.5">
-						{post.authorName ?? COMMUNITY_AUTHOR_FALLBACK}
-						<GradeBadge grade={post.authorGrade} />
+						{post.authorGender ? (
+							<SecretAuthorMark gender={post.authorGender} />
+						) : (
+							(post.authorName ?? COMMUNITY_AUTHOR_FALLBACK)
+						)}
+						{post.board === "secret" ? null : (
+							<GradeBadge grade={post.authorGrade} />
+						)}
 					</span>
 					<span>{formatCommunityDate(post.createdAt)}</span>
 					<span className="flex items-center gap-0.5">
@@ -196,59 +193,16 @@ function BoardPagination({
 	pageHref: (nextPage: number) => Route;
 	totalPages: number;
 }) {
-	const pageItems = getCommunityPageItems(page, totalPages);
-	const prevDisabled = page <= 1;
-	const nextDisabled = page >= totalPages;
-	const prevPage = Math.max(1, page - 1);
-	const nextPage = Math.min(totalPages, page + 1);
+	const router = useRouter();
 
 	return (
-		<Pagination>
-			<PaginationContent>
-				<PaginationItem>
-					<PaginationPrevious
-						aria-disabled={prevDisabled}
-						className={cn(prevDisabled && "pointer-events-none opacity-50")}
-						onClick={(event) => {
-							if (prevDisabled) {
-								event.preventDefault();
-							}
-						}}
-						render={<Link href={pageHref(prevPage)} />}
-						tabIndex={prevDisabled ? -1 : undefined}
-					/>
-				</PaginationItem>
-				{pageItems.map((item) =>
-					typeof item === "number" ? (
-						<PaginationItem key={item}>
-							<PaginationLink
-								isActive={item === page}
-								render={<Link href={pageHref(item)} />}
-							>
-								{item}
-							</PaginationLink>
-						</PaginationItem>
-					) : (
-						<PaginationItem key={item}>
-							<PaginationEllipsis />
-						</PaginationItem>
-					)
-				)}
-				<PaginationItem>
-					<PaginationNext
-						aria-disabled={nextDisabled}
-						className={cn(nextDisabled && "pointer-events-none opacity-50")}
-						onClick={(event) => {
-							if (nextDisabled) {
-								event.preventDefault();
-							}
-						}}
-						render={<Link href={pageHref(nextPage)} />}
-						tabIndex={nextDisabled ? -1 : undefined}
-					/>
-				</PaginationItem>
-			</PaginationContent>
-		</Pagination>
+		<div className="flex justify-center">
+			<PageControls
+				onPageChange={(nextPage) => router.replace(pageHref(nextPage))}
+				page={page}
+				pageCount={totalPages}
+			/>
+		</div>
 	);
 }
 
@@ -453,7 +407,7 @@ export function CommunityBoardScreen({ board }: { board: CommunityBoardMeta }) {
 	);
 
 	// 비회원(여성 인증 게스트)도 목록을 읽는다 — 프로필 조회는 회원 전용이라 걸지 않는다.
-	const { isGuest, role } = useBambiAuth();
+	const { guestGender, isGuest, role } = useBambiAuth();
 	const mineQuery = useQuery(
 		orpc.bambi.onboarding.getMine.queryOptions({ enabled: !isGuest })
 	);
@@ -462,16 +416,21 @@ export function CommunityBoardScreen({ board }: { board: CommunityBoardMeta }) {
 	// 법률자문 계정은 legal 게시판만 이용한다(서버가 다른 보드를 FORBIDDEN으로 막는다).
 	// 비-legal 보드 URL로 직접 들어오면 에러 화면 대신 legal 게시판으로 안내한다.
 	// 입장 게이트(RequireCommunityAccess)가 isPending 동안 렌더를 막아 role은 확정 상태다.
-	const legalAdvisorBlocked = role === "legal_advisor" && board.key !== "legal";
+	const legalAdvisorBlocked =
+		role === "legal_advisor" && board.key !== "legal" && board.key !== "secret";
+	const maleGuestBlocked =
+		isGuest && guestGender === "male" && board.key !== "secret";
 	useEffect(() => {
-		if (legalAdvisorBlocked) {
-			router.replace(communityBoardPath("legal") as Route);
+		if (legalAdvisorBlocked || maleGuestBlocked) {
+			router.replace(
+				communityBoardPath(maleGuestBlocked ? "secret" : "legal") as Route
+			);
 		}
-	}, [legalAdvisorBlocked, router]);
+	}, [legalAdvisorBlocked, maleGuestBlocked, router]);
 
 	const listQuery = useQuery(
 		orpc.bambi.community.listPosts.queryOptions({
-			enabled: !legalAdvisorBlocked,
+			enabled: !(legalAdvisorBlocked || maleGuestBlocked),
 			input: {
 				board: board.key,
 				mine,
@@ -508,7 +467,7 @@ export function CommunityBoardScreen({ board }: { board: CommunityBoardMeta }) {
 		buildHref,
 	]);
 
-	if (legalAdvisorBlocked) {
+	if (legalAdvisorBlocked || maleGuestBlocked) {
 		return null;
 	}
 

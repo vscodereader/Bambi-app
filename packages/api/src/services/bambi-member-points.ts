@@ -8,12 +8,14 @@ import {
 import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 
 import { lockMemberPoints } from "./bambi-point-ledger";
+import { resolveGradeIconUrl } from "./bambi-storage";
 
 // site_settings 단일 행 고정 키(site-settings.ts SETTINGS_ROW_ID와 같은 값).
 const SITE_SETTINGS_ROW_ID = "default";
 
 export interface MemberGrade {
 	color: string | null;
+	iconStorageKey?: string | null;
 	id: string;
 	minPoints: number;
 	name: string;
@@ -21,6 +23,7 @@ export interface MemberGrade {
 
 export interface GradeBadge {
 	color: string | null;
+	iconUrl: string | null;
 	name: string;
 }
 
@@ -277,6 +280,7 @@ export async function loadGradeBadges(
 				name: bambiMemberGrade.name,
 				minPoints: bambiMemberGrade.minPoints,
 				color: bambiMemberGrade.color,
+				iconStorageKey: bambiMemberGrade.iconStorageKey,
 			})
 			.from(bambiMemberGrade)
 			.orderBy(asc(bambiMemberGrade.minPoints)),
@@ -288,7 +292,11 @@ export async function loadGradeBadges(
 	for (const userId of unique) {
 		const grade = resolveGrade(basisPoints.get(userId) ?? 0, grades);
 		if (grade) {
-			badges.set(userId, { name: grade.name, color: grade.color });
+			badges.set(userId, {
+				color: grade.color,
+				iconUrl: resolveGradeIconUrl(grade.iconStorageKey ?? null),
+				name: grade.name,
+			});
 		}
 	}
 	return badges;

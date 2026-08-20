@@ -30,7 +30,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { GradeBadge } from "@/components/bambi/grade-badge";
+import { GradeBadge, GradeIcon } from "@/components/bambi/grade-badge";
+import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
 
 type GradeRow = Awaited<
@@ -86,7 +87,12 @@ function getGradeColumns({
 			id: "name",
 			header: "등급명",
 			sortValue: (row) => row.name,
-			cell: (row) => <span className="font-bold">{row.name}</span>,
+			cell: (row) => (
+				<span className="flex items-center gap-2 font-bold">
+					<GradeIcon iconUrl={row.iconUrl} name={row.name} />
+					{row.name}
+				</span>
+			),
 		},
 		{
 			id: "minPoints",
@@ -146,6 +152,8 @@ function GradeEditForm({
 	onClose: () => void;
 	onSubmit: (values: {
 		color: string | undefined;
+		iconFile: File | null;
+		removeIcon: boolean;
 		minPoints: number;
 		name: string;
 	}) => void;
@@ -153,6 +161,19 @@ function GradeEditForm({
 	const [name, setName] = useState(grade.name);
 	const [minPoints, setMinPoints] = useState(String(grade.minPoints));
 	const [color, setColor] = useState(grade.color ?? "");
+	const [iconFile, setIconFile] = useState<File | null>(null);
+	const [removeIcon, setRemoveIcon] = useState(false);
+	const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+	useEffect(() => {
+		if (!iconFile) {
+			setLocalPreviewUrl(null);
+			return;
+		}
+		const objectUrl = URL.createObjectURL(iconFile);
+		setLocalPreviewUrl(objectUrl);
+		return () => URL.revokeObjectURL(objectUrl);
+	}, [iconFile]);
+	const previewUrl = localPreviewUrl ?? grade.iconUrl;
 
 	const parsedMinPoints = Number(minPoints);
 	const canSubmit =
@@ -197,6 +218,40 @@ function GradeEditForm({
 				</p>
 			</div>
 			<div className="flex flex-col gap-2">
+				<Label htmlFor="member-grade-edit-icon">등급 GIF 아이콘</Label>
+				<div className="flex items-center gap-3">
+					<GradeIcon
+						iconUrl={removeIcon ? null : previewUrl}
+						name={grade.name}
+					/>
+					<Input
+						accept="image/gif"
+						id="member-grade-edit-icon"
+						onChange={(event) => {
+							setIconFile(event.target.files?.[0] ?? null);
+							setRemoveIcon(false);
+						}}
+						type="file"
+					/>
+					{grade.iconUrl || iconFile ? (
+						<Button
+							onClick={() => {
+								setIconFile(null);
+								setRemoveIcon(true);
+							}}
+							size="sm"
+							type="button"
+							variant="outline"
+						>
+							제거
+						</Button>
+					) : null}
+				</div>
+				<p className="m-0 text-muted-foreground text-xs">
+					2MB 이하의 GIF만 등록할 수 있습니다.
+				</p>
+			</div>
+			<div className="flex flex-col gap-2">
 				<Label htmlFor="member-grade-edit-color">뱃지 색(hex)</Label>
 				<Input
 					id="member-grade-edit-color"
@@ -217,6 +272,8 @@ function GradeEditForm({
 					onClick={() =>
 						onSubmit({
 							color: toColorInput(color),
+							iconFile,
+							removeIcon,
 							minPoints: parsedMinPoints,
 							name: name.trim(),
 						})
@@ -282,6 +339,9 @@ export default function ModeratorMemberGradesPage() {
 				await invalidate();
 			},
 		})
+	);
+	const iconUploadMutation = useMutation(
+		orpc.bambi.memberGrades.createIconUpload.mutationOptions()
 	);
 
 	// 삭제 거절 사유(기본 등급 보호)는 서버 문구를 그대로 띄운다 — 화면이 같은 판정을 두 벌로
@@ -478,12 +538,42 @@ export default function ModeratorMemberGradesPage() {
 					{editing ? (
 						<GradeEditForm
 							grade={editing}
-							isPending={updateMutation.isPending}
+							isPending={
+								updateMutation.isPending || iconUploadMutation.isPending
+							}
 							key={editing.id}
 							onClose={() => setEditing(null)}
-							onSubmit={(values) =>
-								updateMutation.mutate({ ...values, id: editing.id })
-							}
+							onSubmit={async ({ iconFile, removeIcon, ...values }) => {
+								try {
+									let iconStorageKey = removeIcon
+										? null
+										: editing.iconStorageKey;
+									if (iconFile) {
+										const uploadIntent = await iconUploadMutation.mutateAsync({
+											byteSize: iconFile.size,
+											fileName: iconFile.name,
+											gradeId: editing.id,
+											mimeType: "image/gif",
+										});
+										await uploadFileToSignedUrl({
+											file: iconFile,
+											uploadIntent,
+										});
+										iconStorageKey = uploadIntent.storageKey;
+									}
+									updateMutation.mutate({
+										...values,
+										iconStorageKey,
+										id: editing.id,
+									});
+								} catch (error) {
+									toast.error(
+										error instanceof Error
+											? error.message
+											: "GIF 아이콘을 업로드하지 못했어요."
+									);
+								}
+							}}
 						/>
 					) : null}
 				</DialogContent>

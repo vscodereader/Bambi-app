@@ -54,16 +54,26 @@ const isShared = (item: BambiNotificationView): boolean =>
 	item.recipientRole !== null;
 
 const pointTransactionTitle = (item: BambiNotificationView): null | string => {
-	if (
-		item.targetType !== "point_transaction" ||
-		action(item) !== "admin_awarded"
-	) {
+	if (item.targetType !== "point_transaction") {
 		return null;
 	}
 	const amount = readNumber(item.metadata, "amount");
-	return amount === null
-		? null
-		: `운영자로부터 ${amount.toLocaleString("ko-KR")} 포인트가 지급되었습니다!`;
+	if (amount === null) {
+		return null;
+	}
+	if (action(item) === "review_written") {
+		return `포인트 ${amount.toLocaleString("ko-KR")}가 지급되었어요! - 후기 작성`;
+	}
+	if (action(item) === "review_hidden") {
+		const reason = readString(item.metadata, "reason");
+		return `포인트 ${Math.abs(amount).toLocaleString("ko-KR")}가 차감되었어요 ㅠㅠ - 후기 숨김${reason ? ` (${reason})` : ""}`;
+	}
+	if (action(item) === "review_republished") {
+		return `포인트 ${amount.toLocaleString("ko-KR")}가 지급되었어요! - 후기 재게시`;
+	}
+	return action(item) === "admin_awarded"
+		? `운영자로부터 ${amount.toLocaleString("ko-KR")} 포인트가 지급되었습니다!`
+		: null;
 };
 
 // (targetType, action) 조합 문구. 조합이 없으면 targetType 기본 문구로 떨어진다.

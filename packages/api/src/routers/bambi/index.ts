@@ -9,6 +9,7 @@ import { boostOptionsRouter } from "./boost-options";
 import { chatsRouter } from "./chats";
 import { communityRouter } from "./community";
 import { communityBoardsRouter } from "./community-boards";
+import { contentHistoryRouter } from "./content-history";
 import { crawledJobsRouter } from "./crawled-jobs";
 import { crawlerRouter } from "./crawler";
 import { jobsRouter } from "./jobs";
@@ -42,6 +43,7 @@ export const bambiRouter: {
 	chats: typeof chatsRouter;
 	community: typeof communityRouter;
 	communityBoards: typeof communityBoardsRouter;
+	contentHistory: typeof contentHistoryRouter;
 	crawledJobs: typeof crawledJobsRouter;
 	crawler: typeof crawlerRouter;
 	jobs: typeof jobsRouter;
@@ -72,6 +74,7 @@ export const bambiRouter: {
 	chats: chatsRouter,
 	community: communityRouter,
 	communityBoards: communityBoardsRouter,
+	contentHistory: contentHistoryRouter,
 	crawledJobs: crawledJobsRouter,
 	crawler: crawlerRouter,
 	jobs: jobsRouter,

@@ -4,6 +4,8 @@ import { asc, eq } from "drizzle-orm";
 
 export const DEFAULT_SIGNUP_POINTS = 1000;
 export const DEFAULT_ATTENDANCE_POINTS = 10;
+export const DEFAULT_REVIEW_VIEW_POINTS = 10;
+export const DEFAULT_REVIEW_WRITE_POINTS = 0;
 export const SITE_SETTINGS_ROW_ID = "default";
 
 export async function getPointSettings() {
@@ -13,6 +15,8 @@ export async function getPointSettings() {
 				attendancePoints: bambiSiteSettings.attendancePoints,
 				jobPaymentMaxPoints: bambiSiteSettings.jobPaymentMaxPoints,
 				jobPaymentMinPoints: bambiSiteSettings.jobPaymentMinPoints,
+				reviewViewPoints: bambiSiteSettings.reviewViewPoints,
+				reviewWritePoints: bambiSiteSettings.reviewWritePoints,
 				signupPoints: bambiSiteSettings.signupPoints,
 			})
 			.from(bambiSiteSettings)
@@ -34,6 +38,9 @@ export async function getPointSettings() {
 		boards,
 		jobPaymentMaxPoints: settings?.jobPaymentMaxPoints ?? null,
 		jobPaymentMinPoints: settings?.jobPaymentMinPoints ?? null,
+		reviewViewPoints: settings?.reviewViewPoints ?? DEFAULT_REVIEW_VIEW_POINTS,
+		reviewWritePoints:
+			settings?.reviewWritePoints ?? DEFAULT_REVIEW_WRITE_POINTS,
 		signupPoints: settings?.signupPoints ?? DEFAULT_SIGNUP_POINTS,
 	};
 }

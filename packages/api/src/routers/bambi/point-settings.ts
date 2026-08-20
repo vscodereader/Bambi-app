@@ -43,6 +43,8 @@ const saveInput = z.object({
 	attendancePoints: nonnegativePoints,
 	jobPaymentMaxPoints: nonnegativePoints.nullable(),
 	jobPaymentMinPoints: nonnegativePoints.nullable(),
+	reviewViewPoints: nonnegativePoints,
+	reviewWritePoints: nonnegativePoints,
 	signupPoints: nonnegativePoints,
 });
 const saveBoardInput = z.object({
@@ -88,6 +90,15 @@ const pointReasonLabel = (reason: string): string => {
 	}
 	if (reason === "community_comment_revoke") {
 		return "게시판 댓글 포인트 회수";
+	}
+	if (reason === "review_write") {
+		return "후기 작성";
+	}
+	if (reason === "review_write_revoke") {
+		return "후기 작성 포인트 회수";
+	}
+	if (reason === "review_view") {
+		return "다른 구직자 후기 열람";
 	}
 	if (reason.startsWith("운영자 지급:")) {
 		return reason;
@@ -420,6 +431,8 @@ export const pointSettingsRouter = {
 					id: SITE_SETTINGS_ROW_ID,
 					jobPaymentMaxPoints: input.jobPaymentMaxPoints,
 					jobPaymentMinPoints: normalizedMin,
+					reviewViewPoints: input.reviewViewPoints,
+					reviewWritePoints: input.reviewWritePoints,
 					signupPoints: input.signupPoints,
 				})
 				.onConflictDoUpdate({
@@ -427,6 +440,8 @@ export const pointSettingsRouter = {
 						attendancePoints: input.attendancePoints,
 						jobPaymentMaxPoints: input.jobPaymentMaxPoints,
 						jobPaymentMinPoints: normalizedMin,
+						reviewViewPoints: input.reviewViewPoints,
+						reviewWritePoints: input.reviewWritePoints,
 						signupPoints: input.signupPoints,
 					},
 					target: bambiSiteSettings.id,

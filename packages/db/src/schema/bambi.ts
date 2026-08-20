@@ -228,6 +228,26 @@ export const communityBoard = pgTable("community_board", {
 		.notNull(),
 });
 
+// 수다방 홈의 행·행 안 순서. best는 가상 게시판이라 FK를 걸지 않고 API가 유효 key를 검증한다.
+export const communityBoardHomeLayout = pgTable(
+	"community_board_home_layout",
+	{
+		boardKey: text("board_key").primaryKey(),
+		rowIndex: integer("row_index").notNull(),
+		position: integer("position").notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("community_board_home_layout_row_position_uidx").on(
+			table.rowIndex,
+			table.position
+		),
+	]
+);
+
 // 글·댓글 공용 상태. 삭제는 소프트(deleted), hidden은 후속 운영자 숨김용 예약값.
 export const communityContentStatus = pgEnum("community_content_status", [
 	"published",
@@ -419,6 +439,9 @@ export const bambiIdentityVerificationLog = pgTable(
 		gender: bambiGender("gender"),
 		// 포트원 인증 결과의 실명(verifiedCustomer.name). 미제공 시 null.
 		name: text("name"),
+		// 비회원 비밀글 작성자를 인증 로그에 연결하는 서명 토큰 gid. 토큰에는 실명·번호를
+		// 싣지 않고 이 임의 식별자만 둔다. 회원 인증 행은 null이다.
+		guestId: text("guest_id"),
 		// 구분 — guest/job_seeker/employer. 가입 전 인증은 아직 모르므로 null이고,
 		// 가입이 끝나면 그 역할로 덮어쓴다.
 		kind: bambiUserRole("kind"),
@@ -431,6 +454,9 @@ export const bambiIdentityVerificationLog = pgTable(
 	(table) => [
 		index("bambi_identity_verification_log_iv_id_idx").on(
 			table.identityVerificationId
+		),
+		uniqueIndex("bambi_identity_verification_log_guest_id_uidx").on(
+			table.guestId
 		),
 		// 사람 식별 upsert 키. phone_number가 null인 행은 사람을 특정할 수 없어 제외.
 		uniqueIndex("bambi_identity_verification_log_person_uidx")
@@ -1410,6 +1436,9 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	jobPaymentMinPoints: integer("job_payment_min_points"),
 	// null이면 결제 예정 금액까지 사용할 수 있다.
 	jobPaymentMaxPoints: integer("job_payment_max_points"),
+	// 후기 저장 성공 시 지급할 포인트와 다른 구직자 후기 한 건 열람 비용.
+	reviewWritePoints: integer("review_write_points").default(0).notNull(),
+	reviewViewPoints: integer("review_view_points").default(10).notNull(),
 	// 베스트글(추천수 큐레이션 가상 게시판) 아이콘의 lucide 이름. 베스트는 community_board 행이
 	// 없는 가상 게시판이라 게시판 아이콘 컬럼 대신 여기 저장한다. null이면 미지정(기존 코럴
 	// 액센트 바 유지) — 값 검증은 API 쪽 COMMUNITY_BOARD_ICONS enum(zod)이 맡는다.
@@ -1790,6 +1819,8 @@ export const review = pgTable(
 		body: text("body").notNull(),
 		isAnonymous: boolean("is_anonymous").default(false).notNull(),
 		status: reviewStatus("status").default("published").notNull(),
+		// 현재 후기에 귀속된 실제 적립액. 숨김 때 이 값만 회수하고 재게시 때 최신 설정으로 갱신한다.
+		pointsAwarded: integer("points_awarded").default(0).notNull(),
 		riskFlags: jsonb("risk_flags").$type<string[]>().default([]).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1797,6 +1828,10 @@ export const review = pgTable(
 	(table) => [
 		uniqueIndex("review_chat_room_id_reviewer_user_id_uidx").on(
 			table.chatRoomId,
+			table.reviewerUserId
+		),
+		uniqueIndex("review_job_post_id_reviewer_user_id_uidx").on(
+			table.jobPostId,
 			table.reviewerUserId
 		),
 		index("review_job_post_id_status_idx").on(table.jobPostId, table.status),
@@ -1973,6 +2008,8 @@ export const bambiMemberGrade = pgTable("bambi_member_grade", {
 	minPoints: integer("min_points").notNull().unique(),
 	// 뱃지 색(hex). null이면 화면 기본색.
 	color: text("color"),
+	// 공개 GIF 아이콘의 스토리지 키. builtin/은 웹 public 기본 자산, 그 외는 등급 전용 업로드다.
+	iconStorageKey: text("icon_storage_key"),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
@@ -2120,6 +2157,8 @@ export const communityPost = pgTable(
 		authorGuestId: text("author_guest_id"),
 		// 클래식 게시판 필드: 글별 표시명(익명), 글 비밀번호(scrypt salt:hash), 비밀글 여부.
 		authorDisplayName: text("author_display_name").notNull(),
+		// 비밀글 익명 아바타용 작성 시점 검증 성별. 일반 게시판은 null이다.
+		authorGender: bambiGender("author_gender"),
 		isAnonymous: boolean("is_anonymous").default(false).notNull(),
 		passwordHash: text("password_hash").notNull(),
 		isLocked: boolean("is_locked").default(false).notNull(),
@@ -2194,6 +2233,8 @@ export const communityComment = pgTable(
 		passwordHash: text("password_hash").default("").notNull(),
 		// 작성 시점 계정 유형 스냅샷(서버 기록). 업소 댓글 배지·숨김 토글용.
 		authorRole: bambiUserRole("author_role").notNull(),
+		// 비밀글 댓글의 익명 아바타용 작성 시점 검증 성별.
+		authorGender: bambiGender("author_gender"),
 		// 대댓글(1단계). null이면 최상위 댓글. 1단계 제한은 API에서 강제한다.
 		parentCommentId: uuid("parent_comment_id").references(
 			(): AnyPgColumn => communityComment.id,
@@ -2259,6 +2300,39 @@ export const communityPostLike = pgTable(
 		check(
 			"community_post_like_actor_one_of_ck",
 			sql`num_nonnulls(${table.userId}, ${table.guestId}) = 1`
+		),
+	]
+);
+
+// 회원의 좋아요 글 관리 이력. 원문이 운영자 영구 삭제로 사라져도 당시 게시판·제목을 남기고,
+// 좋아요 취소는 is_active만 내린다. post_id는 감사용 문자열이라 FK를 걸지 않는다.
+export const communityPostLikeHistory = pgTable(
+	"community_post_like_history",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		postId: uuid("post_id").notNull(),
+		boardKey: text("board_key").notNull(),
+		boardSlug: text("board_slug").notNull(),
+		title: text("title").notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		likedAt: timestamp("liked_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("community_post_like_history_user_post_uidx").on(
+			table.userId,
+			table.postId
+		),
+		index("community_post_like_history_user_active_liked_idx").on(
+			table.userId,
+			table.isActive,
+			table.likedAt
 		),
 	]
 );

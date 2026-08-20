@@ -83,11 +83,13 @@ export const importHmacKey = (secret: string) =>
 
 export async function createGuestToken({
 	gender,
+	gid,
 	maxAgeSeconds,
 	now,
 	secret,
 }: {
 	gender: "female" | "male" | null;
+	gid?: string;
 	maxAgeSeconds: number;
 	now: Date;
 	secret: string;
@@ -95,7 +97,7 @@ export async function createGuestToken({
 	const payload: GuestTokenPayload = {
 		exp: Math.floor(now.getTime() / 1000) + maxAgeSeconds,
 		gender,
-		gid: crypto.randomUUID(),
+		gid: gid ?? crypto.randomUUID(),
 		v: 2,
 	};
 	const payloadPart = toBase64Url(encoder.encode(JSON.stringify(payload)));

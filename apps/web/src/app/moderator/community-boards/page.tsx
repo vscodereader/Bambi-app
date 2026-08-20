@@ -36,7 +36,7 @@ import {
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { type DragEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
@@ -389,6 +389,193 @@ function BoardEditForm({
 	);
 }
 
+function HomeLayoutEditor({
+	boards,
+	isPending,
+	onSave,
+	rows,
+	setRows,
+}: {
+	boards: { key: string; label: string }[];
+	isPending: boolean;
+	onSave: () => void;
+	rows: string[][];
+	setRows: (rows: string[][]) => void;
+}) {
+	const [additions, setAdditions] = useState<Record<number, string>>({});
+	const labels = new Map(boards.map((board) => [board.key, board.label]));
+	const assigned = new Set(rows.flat());
+	const unassigned = boards.filter((board) => !assigned.has(board.key));
+	const availableItems = Object.fromEntries(
+		unassigned.map((board) => [board.key, board.label])
+	);
+	const moveBoard = (
+		boardKey: string,
+		targetRow: number,
+		targetIndex?: number
+	) => {
+		const next = rows.map((row) => row.filter((key) => key !== boardKey));
+		const insertion = targetIndex ?? next[targetRow]?.length ?? 0;
+		next[targetRow]?.splice(insertion, 0, boardKey);
+		setRows(next.filter((row) => row.length > 0));
+	};
+	const droppedKey = (event: DragEvent): string => {
+		event.preventDefault();
+		return event.dataTransfer.getData("text/board-key");
+	};
+
+	return (
+		<section className="flex flex-col gap-3 rounded-xl border border-border p-4">
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<h2 className="m-0 font-bold text-lg">수다방 홈 행 배치</h2>
+					<p className="m-0 text-muted-foreground text-sm">
+						게시판을 드래그하거나 각 행의 + 선택기로 넣으세요. 행에서 제거해도
+						게시판과 글은 삭제되지 않습니다.
+					</p>
+				</div>
+				<div className="flex gap-2">
+					<Button
+						disabled={rows.some((row) => row.length === 0)}
+						onClick={() => setRows([...rows, []])}
+						type="button"
+						variant="outline"
+					>
+						행 추가
+					</Button>
+					<Button disabled={isPending} onClick={onSave} type="button">
+						{isPending ? "저장 중" : "배치 저장"}
+					</Button>
+				</div>
+			</div>
+			<div className="flex flex-col gap-3">
+				{rows.map((row, rowIndex) => (
+					// biome-ignore lint/a11y/noNoninteractiveElementInteractions: native drop zone has equivalent +/remove button controls.
+					// biome-ignore lint/a11y/noStaticElementInteractions: native drop zone has equivalent +/remove button controls.
+					<div
+						className="flex min-h-20 flex-wrap items-center gap-2 rounded-lg border border-border border-dashed bg-secondary/50 p-3"
+						key={row.join("|") || "empty-home-row"}
+						onDragOver={(event) => event.preventDefault()}
+						onDrop={(event) => {
+							const key = droppedKey(event);
+							if (key) {
+								moveBoard(key, rowIndex);
+							}
+						}}
+					>
+						<span className="mr-1 font-bold text-muted-foreground text-sm">
+							{rowIndex + 1}행
+						</span>
+						{row.map((boardKey, position) => (
+							// biome-ignore lint/a11y/noNoninteractiveElementInteractions: native drag item also has keyboard-accessible add/remove controls.
+							// biome-ignore lint/a11y/noStaticElementInteractions: native drag item also has keyboard-accessible add/remove controls.
+							<div
+								className="flex cursor-grab items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm"
+								draggable
+								key={boardKey}
+								onDragOver={(event) => event.preventDefault()}
+								onDragStart={(event) =>
+									event.dataTransfer.setData("text/board-key", boardKey)
+								}
+								onDrop={(event) => {
+									event.stopPropagation();
+									const key = droppedKey(event);
+									if (key) {
+										moveBoard(key, rowIndex, position);
+									}
+								}}
+							>
+								<span aria-hidden>⋮⋮</span>
+								<span className="font-bold text-sm">
+									{labels.get(boardKey) ?? boardKey}
+								</span>
+								<button
+									aria-label={`${labels.get(boardKey) ?? boardKey} 홈 배치에서 제거`}
+									className="text-muted-foreground hover:text-foreground"
+									onClick={() => {
+										const next = rows
+											.map((item) => item.filter((key) => key !== boardKey))
+											.filter((item) => item.length > 0);
+										setRows(next);
+									}}
+									type="button"
+								>
+									×
+								</button>
+							</div>
+						))}
+						{unassigned.length > 0 ? (
+							<div className="ml-auto flex items-center gap-2">
+								<Select
+									items={availableItems}
+									onValueChange={(value) =>
+										setAdditions((current) => ({
+											...current,
+											[rowIndex]: String(value),
+										}))
+									}
+									value={additions[rowIndex]}
+								>
+									<SelectTrigger
+										aria-label={`${rowIndex + 1}행 게시판 선택`}
+										className="w-40"
+									>
+										<SelectValue placeholder="게시판 선택" />
+									</SelectTrigger>
+									<SelectContent>
+										{unassigned.map((board) => (
+											<SelectItem key={board.key} value={board.key}>
+												{board.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<Button
+									disabled={!additions[rowIndex]}
+									onClick={() => {
+										const key = additions[rowIndex];
+										if (key) {
+											moveBoard(key, rowIndex);
+											setAdditions((current) => ({
+												...current,
+												[rowIndex]: "",
+											}));
+										}
+									}}
+									size="sm"
+									type="button"
+								>
+									+
+								</Button>
+							</div>
+						) : null}
+					</div>
+				))}
+			</div>
+			{unassigned.length > 0 ? (
+				<div className="flex flex-wrap items-center gap-2">
+					<span className="font-bold text-muted-foreground text-sm">
+						미배치 게시판
+					</span>
+					{unassigned.map((board) => (
+						<button
+							className="cursor-grab rounded-full border border-border bg-card px-3 py-1 text-sm"
+							draggable
+							key={board.key}
+							onDragStart={(event) =>
+								event.dataTransfer.setData("text/board-key", board.key)
+							}
+							type="button"
+						>
+							{board.label}
+						</button>
+					))}
+				</div>
+			) : null}
+		</section>
+	);
+}
+
 export default function ModeratorCommunityBoardsPage() {
 	const queryClient = useQueryClient();
 	const [label, setLabel] = useState("");
@@ -401,6 +588,25 @@ export default function ModeratorCommunityBoardsPage() {
 	const [deleting, setDeleting] = useState<BoardRow | null>(null);
 
 	const listQuery = useQuery(orpc.bambi.communityBoards.list.queryOptions());
+	const homeLayoutQuery = useQuery(
+		orpc.bambi.communityBoards.getHomeLayout.queryOptions()
+	);
+	const [homeRows, setHomeRows] = useState<string[][]>([]);
+	useEffect(() => {
+		if (!homeLayoutQuery.data) {
+			return;
+		}
+		const grouped = new Map<number, string[]>();
+		for (const item of homeLayoutQuery.data) {
+			grouped.set(item.rowIndex, [
+				...(grouped.get(item.rowIndex) ?? []),
+				item.boardKey,
+			]);
+		}
+		setHomeRows(
+			[...grouped.entries()].sort(([a], [b]) => a - b).map(([, row]) => row)
+		);
+	}, [homeLayoutQuery.data]);
 
 	const invalidate = async () => {
 		await queryClient.invalidateQueries({
@@ -454,6 +660,16 @@ export default function ModeratorCommunityBoardsPage() {
 			onSuccess: async () => {
 				toast("게시판을 수정했어요.");
 				setEditing(null);
+				await invalidate();
+			},
+		})
+	);
+	const homeLayoutMutation = useMutation(
+		orpc.bambi.communityBoards.updateHomeLayout.mutationOptions({
+			onError: (error) =>
+				toast(error.message || "홈 배치를 저장하지 못했어요."),
+			onSuccess: async () => {
+				toast("수다방 홈 배치를 저장했어요.");
 				await invalidate();
 			},
 		})
@@ -515,6 +731,21 @@ export default function ModeratorCommunityBoardsPage() {
 					하나도 없는 새 게시판만 가능하고, 기본 게시판은 지울 수 없습니다.
 				</p>
 			</div>
+
+			<HomeLayoutEditor
+				boards={[
+					{ key: "best", label: "베스트글" },
+					...boards.map((board) => ({ key: board.key, label: board.label })),
+				]}
+				isPending={homeLayoutMutation.isPending}
+				onSave={() =>
+					homeLayoutMutation.mutate({
+						rows: homeRows.filter((row) => row.length > 0),
+					})
+				}
+				rows={homeRows}
+				setRows={setHomeRows}
+			/>
 
 			<div className="flex flex-col gap-2">
 				<div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">

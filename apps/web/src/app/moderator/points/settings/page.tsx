@@ -35,6 +35,8 @@ export default function ModeratorPointSettingsPage() {
 	const [attendance, setAttendance] = useState("");
 	const [minimum, setMinimum] = useState("");
 	const [maximum, setMaximum] = useState("");
+	const [reviewWrite, setReviewWrite] = useState("");
+	const [reviewView, setReviewView] = useState("");
 	const [boards, setBoards] = useState<BoardDraft[]>([]);
 	useEffect(() => {
 		if (!query.data) {
@@ -52,6 +54,8 @@ export default function ModeratorPointSettingsPage() {
 				? ""
 				: String(query.data.jobPaymentMaxPoints)
 		);
+		setReviewWrite(String(query.data.reviewWritePoints));
+		setReviewView(String(query.data.reviewViewPoints));
 		setBoards(
 			query.data.boards.map((board) => ({
 				...board,
@@ -93,6 +97,8 @@ export default function ModeratorPointSettingsPage() {
 		valid(attendance) &&
 		valid(minimum, true) &&
 		valid(maximum, true) &&
+		valid(reviewWrite) &&
+		valid(reviewView) &&
 		!globalMutation.isPending;
 	if (query.isError) {
 		return (
@@ -129,6 +135,19 @@ export default function ModeratorPointSettingsPage() {
 						value={attendance}
 					/>
 					<PointField
+						id="review-write-points"
+						label="후기 작성 포인트"
+						onChange={setReviewWrite}
+						value={reviewWrite}
+					/>
+					<PointField
+						hint="다른 구직자의 후기 한 건을 열 때 사용하는 포인트입니다."
+						id="review-view-points"
+						label="다른 구직자 후기 열람 포인트"
+						onChange={setReviewView}
+						value={reviewView}
+					/>
+					<PointField
 						hint="비우거나 0으로 저장하면 공고 결제 포인트 사용을 중단합니다."
 						id="job-min-points"
 						label="공고 시 최소 사용 포인트"
@@ -154,6 +173,8 @@ export default function ModeratorPointSettingsPage() {
 							jobPaymentMaxPoints: parsePoints(maximum),
 							jobPaymentMinPoints: parsePoints(minimum),
 							signupPoints: Number(signup),
+							reviewViewPoints: Number(reviewView),
+							reviewWritePoints: Number(reviewWrite),
 						})
 					}
 				>

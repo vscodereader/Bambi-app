@@ -64,6 +64,7 @@ import {
 } from "../../services/bambi-onboarding";
 import { awardMemberPoints } from "../../services/bambi-point-ledger";
 import { resolveOptionalRegion } from "../../services/bambi-region";
+import { recordMockIdentityLog } from "../../services/bambi-secret-identity";
 import {
 	createBusinessDocumentUploadIntent,
 	createEditorMediaUploadIntent,
@@ -121,6 +122,7 @@ const profileUpdateInput = profileInput
 // 목(mock) 휴대폰 본인인증 입력 — 포트원 미구성 개발 환경 전용(핸들러에서 잠근다).
 // gender는 커뮤니티 게이팅용 불변값이라 아직 없을 때만 채운다.
 const mockPhoneVerificationInput = z.object({
+	realName: z.string().trim().min(1).max(80),
 	phoneNumber: z.string().min(3).max(30),
 	gender: z.enum(["male", "female"]).optional(),
 	birthDate: z
@@ -508,7 +510,6 @@ const createBambiProfile = async ({
 		}
 		return created;
 	});
-
 	return toClientProfile(createdProfile);
 };
 
@@ -1140,6 +1141,7 @@ export const onboardingRouter = {
 			// 비회원(수다방 게스트) 흐름에서 온 호출만 구분을 guest로 남긴다. 가입 폼의
 			// 사전확인 호출은 구분을 아직 모르므로 플래그 없이 부른다.
 			phoneVerificationInput.extend({
+				guestId: z.string().uuid().optional(),
 				source: z.literal("guest").optional(),
 			})
 		)
@@ -1159,6 +1161,7 @@ export const onboardingRouter = {
 				identityChannelOptions
 			);
 			await recordIdentityVerification({
+				guestId: input.source === "guest" ? input.guestId : undefined,
 				identity,
 				identityVerificationId: input.identityVerificationId,
 				kind: input.source,
@@ -1208,7 +1211,6 @@ export const onboardingRouter = {
 				identityVerificationId: input.identityVerificationId,
 				kind: existingProfile.role,
 			});
-
 			const [updatedProfile] = await db
 				.update(bambiProfile)
 				.set({
@@ -1222,7 +1224,6 @@ export const onboardingRouter = {
 				})
 				.where(eq(bambiProfile.userId, userId))
 				.returning();
-
 			return toClientProfile(updatedProfile);
 		}),
 
@@ -1243,7 +1244,7 @@ export const onboardingRouter = {
 			}
 			const userId = context.session.user.id;
 			const [existingProfile] = await db
-				.select({ gender: bambiProfile.gender })
+				.select({ gender: bambiProfile.gender, role: bambiProfile.role })
 				.from(bambiProfile)
 				.where(eq(bambiProfile.userId, userId))
 				.limit(1);
@@ -1264,8 +1265,42 @@ export const onboardingRouter = {
 				})
 				.where(eq(bambiProfile.userId, userId))
 				.returning();
+			if (input.gender && input.birthDate) {
+				await recordMockIdentityLog({
+					birthDate: input.birthDate,
+					gender: input.gender,
+					kind: existingProfile.role,
+					name: input.realName,
+					phoneNumber: input.phoneNumber,
+				});
+			}
 
 			return toClientProfile(updatedProfile);
+		}),
+
+	registerMockGuestIdentity: publicProcedure
+		.input(
+			z.object({
+				birthDate: z.string().regex(/^\d{8}$/),
+				gender: z.enum(["male", "female"]),
+				guestId: z.string().uuid(),
+				name: z.string().trim().min(1),
+				phoneNumber: z.string().trim().min(3),
+			})
+		)
+		.handler(async ({ input }) => {
+			if (env.PORTONE_API_SECRET || env.NODE_ENV === "production") {
+				throw new ORPCError("FORBIDDEN");
+			}
+			await recordMockIdentityLog({
+				birthDate: input.birthDate,
+				gender: input.gender,
+				guestId: input.guestId,
+				kind: "guest",
+				name: input.name,
+				phoneNumber: input.phoneNumber,
+			});
+			return { ok: true };
 		}),
 
 	createJobSeekerProfile: protectedProcedure

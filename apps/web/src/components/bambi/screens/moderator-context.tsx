@@ -272,14 +272,24 @@ const resolveReportTargetParty = (
 // email로, reporter 자체가 없으면(대상 프로필 유실 등) 기존 합성 문자열로 폴백한다. 역할은
 // userRoleLabel로 enum 원값(job_seeker 등) 노출을 막는다.
 const resolveReportReporter = (
-	reporter: { displayName: string | null; email: string; role: string } | null,
+	reporter: {
+		displayName: string | null;
+		email: string;
+		gender: "female" | "male" | null;
+		role: string;
+	} | null,
 	reporterUserId: string
-): { name: string; role: string } => {
+): { gender: "female" | "male" | null; name: string; role: string } => {
 	if (!reporter) {
-		return { name: `신고자 ${reporterUserId.slice(0, 6)}`, role: "사용자" };
+		return {
+			gender: null,
+			name: `신고자 ${reporterUserId.slice(0, 6)}`,
+			role: "사용자",
+		};
 	}
 
 	return {
+		gender: reporter.gender,
 		name: reporter.displayName ?? reporter.email,
 		role: userRoleLabel(reporter.role),
 	};
@@ -335,6 +345,8 @@ const deriveReportCommunity = (input: {
 			communityTarget: {
 				authorName: post.authorName,
 				board: post.board,
+				boardLabel: post.boardLabel,
+				boardSlug: post.boardSlug,
 				bodyPreview: post.bodyPreview,
 				createdAt: post.createdAt,
 				id: post.id,
@@ -354,10 +366,13 @@ const deriveReportCommunity = (input: {
 			communityTarget: {
 				authorName: comment.authorName,
 				board: comment.postBoard,
+				boardLabel: comment.postBoardLabel,
+				boardSlug: comment.postBoardSlug,
 				bodyPreview: comment.bodyPreview,
 				createdAt: comment.createdAt,
 				id: comment.id,
 				kind: "comment",
+				parentStatus: comment.postStatus,
 				// 수집 글 댓글은 원글(community_post) 행이 없어 postId가 null로 온다 —
 				// 원글 링크가 없는 상태(undefined)로 정규화한다.
 				postId: comment.postId ?? undefined,
@@ -464,10 +479,11 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				: null;
 			// 신고자·피신고 표시 이름·역할은 각각 전용 헬퍼가 계산한다. 제재·분기용
 			// 원값(targetId/targetType/targetContext)은 반환에서 그대로 전달한다.
-			const { name: reporterName, role: reporterRole } = resolveReportReporter(
-				item.reporter,
-				item.reporterUserId
-			);
+			const {
+				gender: reporterGender,
+				name: reporterName,
+				role: reporterRole,
+			} = resolveReportReporter(item.reporter, item.reporterUserId);
 			const { name: targetName, role: targetRole } = resolveReportTargetParty(
 				targetContext,
 				item.targetType,
@@ -478,6 +494,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 						(candidate) => candidate.userId === item.targetUserId
 					)
 				: null;
+			const isChatRoomTarget = Boolean(
+				targetContext && "chatRoom" in targetContext
+			);
 			// 커뮤니티 대상(글·댓글) 컨텍스트·라벨은 별도 헬퍼로 뽑아 콜백 복잡도를 낮춘다.
 			const { communityKind, communityTarget, target } =
 				deriveReportCommunity(item);
@@ -490,7 +509,9 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				reason: reportReasonLabel(item.reason),
 				resolutionReason: item.resolutionReason,
 				reporter: reporterName,
+				reporterGender,
 				reporterRole,
+				reporterVerifiedIdentity: item.reporterVerifiedIdentity,
 				sev: getReportSeverity(item.reason, item.status),
 				status:
 					item.status === "open" || item.status === "reviewing"
@@ -504,8 +525,13 @@ export function ModProvider({ children }: { children: ReactNode }) {
 				// 실제 대상 id(사용자 제재 등에 사용). 프리뷰 목업 신고에는 없다.
 				targetId: item.targetId,
 				targetUserId: item.targetUserId,
-				targetRole: targetUser ? userRoleLabel(targetUser.role) : targetRole,
+				targetVerifiedIdentity: item.targetVerifiedIdentity,
+				targetRole:
+					isChatRoomTarget || !targetUser
+						? targetRole
+						: userRoleLabel(targetUser.role),
 				targetType: item.targetType,
+				targetUserRole: targetUser ? userRoleLabel(targetUser.role) : null,
 				thread: [
 					{
 						mine: false,
