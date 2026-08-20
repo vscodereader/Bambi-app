@@ -50,6 +50,8 @@ export interface JobPerformanceMetrics {
 }
 
 export interface Job {
+	// 조직 단위 누적 광고 결제(횟수·누적 일수). 유료 광고 카드에만 값, 그 외 null/미정의.
+	adPeriod?: { count: number; totalDays: number } | null;
 	beginnerFriendly: boolean;
 	company: string;
 	coverImage?: JobMedia | null;

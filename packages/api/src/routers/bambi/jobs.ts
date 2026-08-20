@@ -8,6 +8,7 @@ import {
 	employerOrganizationProfile,
 	employerTeamProfile,
 	jobAdBannerLayout,
+	jobAdPurchase,
 	jobBoostOption,
 	jobBoostPurchase,
 	jobIndustryCategory,
@@ -1579,6 +1580,37 @@ export const jobsRouter = {
 			performanceJobIds,
 			now
 		);
+
+		// 유료 광고 섹션(스페셜·급구·추천) 카드에 붙일 조직 단위 누적 광고 집계(횟수·일수).
+		// 노출된 유료 밤비 공고의 조직만 모아 job_ad_purchase를 1회 group by 한다 —
+		// organic·수집 행은 유료 자리가 아니라 대상이 아니다(빈 org 집합이면 쿼리 생략).
+		const paidSectionOrgIds = [
+			...new Set(
+				[
+					...result.sections.special,
+					...result.sections.urgent,
+					...result.sections.recommended,
+				].map((item) => item.organizationId)
+			),
+		];
+		const adPeriodRows =
+			paidSectionOrgIds.length > 0
+				? await db
+						.select({
+							organizationId: jobAdPurchase.organizationId,
+							count: sql<number>`count(*)::int`,
+							totalDays: sql<number>`coalesce(sum(${jobAdPurchase.durationDays}), 0)::int`,
+						})
+						.from(jobAdPurchase)
+						.where(inArray(jobAdPurchase.organizationId, paidSectionOrgIds))
+						.groupBy(jobAdPurchase.organizationId)
+				: [];
+		const adPeriodByOrg = new Map(
+			adPeriodRows.map((row) => [
+				row.organizationId,
+				{ count: row.count, totalDays: row.totalDays },
+			])
+		);
 		const toListItem = <TItem extends { exposureType: string; id: string }>(
 			item: TItem,
 			inPaidSection: boolean
@@ -1592,6 +1624,14 @@ export const jobsRouter = {
 				detailViews: 0,
 				impressions: 0,
 			},
+			// 유료 카드만·문자열 organizationId가 있을 때만 집계를 붙인다(수집 행은 organizationId
+			// 가 null이라 자연히 제외, organic은 inPaidSection=false라 제외).
+			adPeriod:
+				inPaidSection &&
+				"organizationId" in item &&
+				typeof item.organizationId === "string"
+					? (adPeriodByOrg.get(item.organizationId) ?? null)
+					: null,
 		});
 
 		await recordJobListingImpressions({

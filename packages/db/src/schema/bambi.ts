@@ -1195,6 +1195,37 @@ export const jobBoostPurchase = pgTable(
 	]
 );
 
+// 유료 광고(노출 상품) 결제 확정 1건의 이력. job_post의 exposure_* 컬럼은 재결제·기간 변경
+// 시 덮어써져 누적 이력이 남지 않으므로, 조직 단위 누적 광고 횟수·일수 집계를 위해 결제
+// 확정 시점 스냅샷을 여기에 append-only로 쌓는다(job_boost_purchase와 같은 철학, 별도 축).
+export const jobAdPurchase = pgTable(
+	"job_ad_purchase",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		// 결제 시점의 노출 상품. 상품이 지워져도 이력은 남아야 하므로 set null.
+		adProductId: uuid("ad_product_id").references(() => adProduct.id, {
+			onDelete: "set null",
+		}),
+		// 구매한 광고 기간(일) 스냅샷 — 재결제로 job_post가 덮여도 이 값은 고정.
+		durationDays: integer("duration_days").notNull(),
+		// 결제 금액 스냅샷.
+		amount: integer("amount").notNull(),
+		// 적재 출처: moderation_single / moderation_bulk / backfill.
+		source: text("source"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_ad_purchase_organization_id_idx").on(table.organizationId),
+		index("job_ad_purchase_job_post_id_idx").on(table.jobPostId),
+	]
+);
+
 export const adPlacement = pgTable(
 	"ad_placement",
 	{
@@ -1942,6 +1973,35 @@ export const bambiMemberGrade = pgTable("bambi_member_grade", {
 	minPoints: integer("min_points").notNull().unique(),
 	// 뱃지 색(hex). null이면 화면 기본색.
 	color: text("color"),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
+
+// 누적 광고일수 등급 아이콘 판별자. 카드 배지·구인자 안내가 이 값으로 lucide 아이콘을
+// 고른다(원값 직접 렌더 금지 — 화면은 라벨 맵 경유).
+export const bambiAdPeriodTierIcon = pgEnum("bambi_ad_period_tier_icon", [
+	"medal",
+	"crown",
+]);
+
+// 조직 단위 누적 광고일수 등급(운영자 CRUD). 코드 하드코딩(AD_PERIOD_TIERS)을 배포 없이
+// 편집한다. 행이 하나도 없으면 화면이 상수로 폴백한다. color_class는 Tailwind 텍스트 색
+// 유틸(raw hex 금지 — 화면 프리셋에서 선택), max_days=null이면 상한 없는 최상위 등급.
+export const bambiAdPeriodTier = pgTable("bambi_ad_period_tier", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	label: text("label").notNull(),
+	icon: bambiAdPeriodTierIcon("icon").notNull(),
+	// 업로드한 아이콘 이미지(GIF·PNG·WebP·JPG)의 공개 URL. 비어 있으면 위 icon 프리셋을
+	// 그린다 — 이미지가 있으면 이미지가 이긴다. 프리셋을 지우지 않는 이유는 이미지를
+	// 내렸을 때 돌아갈 자리가 필요하고, 업로드 실패·객체 유실 시에도 배지가 비지 않기 때문.
+	iconImageUrl: text("icon_image_url"),
+	colorClass: text("color_class").notNull(),
+	minDays: integer("min_days").notNull(),
+	maxDays: integer("max_days"),
+	sortOrder: integer("sort_order").default(0).notNull(),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()

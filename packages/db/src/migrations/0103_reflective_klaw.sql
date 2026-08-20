@@ -1,0 +1,1 @@
+ALTER TABLE "bambi_ad_period_tier" ADD COLUMN "icon_image_url" text;

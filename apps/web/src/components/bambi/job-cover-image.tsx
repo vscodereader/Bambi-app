@@ -6,6 +6,9 @@ import { sampleThumbnailUrl } from "@/lib/bambi/sample-thumbnails";
 import type { JobMedia } from "@/lib/bambi/types";
 
 interface JobCoverImageProps {
+	// 명시하면(빈 문자열 포함) 그 값을 alt로 쓴다 — 업소명이 옆에 텍스트로 있는 카드는
+	// alt=""로 장식 처리한다. 미지정이면 기존대로 media의 altText·파일명을 쓴다.
+	alt?: string;
 	className?: string;
 	height: number;
 	media: JobMedia;
@@ -17,6 +20,7 @@ interface JobCoverImageProps {
 // 알 수 없으므로(HEAD 조회는 목록마다 비용) 브라우저의 로드 실패를 감지해 public 샘플 썸네일로
 // 교체한다. 객체가 실제로 있으면 그대로 렌더되므로 정상 업로드 공고는 영향받지 않는다.
 export function JobCoverImage({
+	alt,
 	className,
 	height,
 	media,
@@ -40,7 +44,7 @@ export function JobCoverImage({
 
 	return (
 		<Image
-			alt={media.altText || media.fileName}
+			alt={alt ?? (media.altText || media.fileName)}
 			className={className}
 			height={height}
 			onError={handleError}

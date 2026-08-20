@@ -33,6 +33,8 @@ export interface ApiJobMediaSet {
 }
 
 export interface ApiMarketplaceJob {
+	// jobs.list가 유료 카드에만 부착하는 조직 단위 누적 광고 집계. 그 외 경로(search·수집)엔 없음.
+	adPeriod?: { count: number; totalDays: number } | null;
 	beginnerFriendly?: boolean | null;
 	coverImage?: ApiJobMedia | null;
 	// 수집 공고의 대표 이미지. job_post_media 행이 아니라 미러링된 URL 한 줄로 오므로
@@ -207,6 +209,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 	const location = [job.region, job.district].filter(Boolean).join(" · ");
 
 	return {
+		adPeriod: job.adPeriod ?? null,
 		beginnerFriendly: job.beginnerFriendly ?? false,
 		company,
 		coverImage,
