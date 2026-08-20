@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge as UiBadge } from "@bambi-app/ui/components/badge";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useCallback, useMemo } from "react";
 import { adPeriodTier, formatAdPeriod } from "@/lib/bambi/ad-period";
@@ -128,18 +129,16 @@ function JobAdPeriodBadge({
 }) {
 	const tier = adPeriodTier(adPeriod.totalDays);
 	return (
-		<span
-			className={cn(
-				"ml-auto flex shrink-0 items-center gap-1 font-semibold text-[11px] leading-none",
-				tier.colorClass
-			)}
+		<UiBadge
+			className={cn("ml-auto font-semibold", tier.colorClass)}
 			title={`광고 ${adPeriod.count}회 · 누적 ${adPeriod.totalDays}일`}
+			variant="outline"
 		>
-			<span className="inline-flex size-3.5 shrink-0">
+			<span className="inline-flex size-4 shrink-0">
 				{tier.icon === "crown" ? <CrownIcon /> : <MedalIcon />}
 			</span>
 			{formatAdPeriod(adPeriod)}
-		</span>
+		</UiBadge>
 	);
 }
 
