@@ -244,13 +244,16 @@ export function VisualJobCard({
 				</span>
 			) : null}
 			<button
-				className="flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
+				aria-label={`${job.title} · ${job.company} · ${job.location}${job.type ? ` · ${job.type}` : ""} · ${job.pay}`}
+				className="flex flex-1 cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
 				onClick={handleOpen}
 				type="button"
 			>
 				<div className="flex items-start gap-3">
 					{job.coverImage ? (
 						<JobCoverImage
+							// 업소명이 바로 옆에 텍스트로 있으므로 커버는 장식 이미지로 처리한다(alt="").
+							alt=""
 							className="h-14 w-30 shrink-0 rounded-md border border-white object-fill"
 							height={56}
 							media={job.coverImage}
@@ -290,23 +293,33 @@ export function VisualJobCard({
 						</span>
 					</div>
 				</div>
-			</button>
-			{/* mt-auto: 그리드 행이 늘어나(모집중 placeholder 등) 카드가 stretch 되어도
-			    급여 행이 항상 카드 하단에 붙도록 고정한다. 광고 배지는 새 행을 만들지 않고
-			    이 행 오른쪽 끝(ml-auto)에 얹어 카드 높이(122px) 결합을 건드리지 않는다. */}
-			<div className="mt-auto flex items-center">
-				<span className="flex h-9 min-w-0 items-center gap-1.5">
-					{payUnit ? (
-						<Badge className="shrink-0" tone={toneBadge[tone]}>
-							{payUnit}
-						</Badge>
-					) : null}
-					<span className="truncate font-extrabold text-base text-coral-600 leading-none">
-						{payAmount}
+				{/* mt-auto: 버튼이 flex-1로 카드 세로를 채우므로 급여 행이 항상 카드 하단에
+				    붙는다. 급여 행을 button 안에 두어 카드 세로 전체가 클릭 영역이 되게 한다.
+				    광고 배지는 새 행을 만들지 않고 이 행 오른쪽 끝(ml-auto)에 얹어 카드
+				    높이(122px) 결합을 건드리지 않는다. */}
+				<div className="mt-auto flex items-center">
+					<span className="flex h-9 min-w-0 items-center gap-1.5">
+						{payUnit ? (
+							<Badge
+								className={cn(
+									"shrink-0",
+									// danger 톤 단위 배지는 틴트 배경 위 글자 대비가 부족해(2.74:1)
+									// coral-700로 어둡게 덮는다(합성 배경 #FFEFEF 대비 5.35:1). 틴트는 유지.
+									toneBadge[tone] === "danger" && "text-coral-700"
+								)}
+								tone={toneBadge[tone]}
+							>
+								{payUnit}
+							</Badge>
+						) : null}
+						{/* coral-600(4.32:1)은 흰 배경 4.5:1 미달 — coral-700(5.96:1)로 올린다. */}
+						<span className="truncate font-extrabold text-base text-coral-700 leading-none">
+							{payAmount}
+						</span>
 					</span>
-				</span>
-				{job.adPeriod ? <JobAdPeriodBadge adPeriod={job.adPeriod} /> : null}
-			</div>
+					{job.adPeriod ? <JobAdPeriodBadge adPeriod={job.adPeriod} /> : null}
+				</div>
+			</button>
 		</article>
 	);
 }

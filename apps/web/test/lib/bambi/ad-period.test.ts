@@ -23,7 +23,7 @@ describe("adPeriodTier", () => {
 		expect(AD_PERIOD_TIERS.at(-1)?.maxDays).toBeNull();
 		expect(adPeriodTier(721)).toMatchObject({
 			icon: "crown",
-			colorClass: "text-amber-500",
+			colorClass: "text-amber-800",
 		});
 	});
 
@@ -100,7 +100,57 @@ describe("formatAdPeriodTierRange", () => {
 });
 
 describe("ad-period tier presets", () => {
-	it("색 프리셋 첫 항목이 브랜드 primary", () => {
-		expect(AD_PERIOD_TIER_COLOR_PRESETS[0].className).toBe("text-primary");
+	it("색 프리셋 첫 항목이 브랜드(코럴)", () => {
+		expect(AD_PERIOD_TIER_COLOR_PRESETS[0].className).toBe("text-coral-700");
+		expect(AD_PERIOD_TIER_COLOR_PRESETS[0].label).toBe("브랜드(코럴)");
+	});
+});
+
+// Tailwind v4 기본 팔레트 + @theme coral 토큰 hex. WCAG 대비를 계산하려면 원 hex가 필요하다.
+// 운영자가 프리셋/폴백 등급에 새 색을 추가할 때 흰 카드 배경 대비 미달을 CI에서 잡는다.
+const TEXT_CLASS_HEX: Record<string, string> = {
+	"text-coral-700": "#c11f39",
+	"text-amber-700": "#b45309",
+	"text-amber-800": "#92400e",
+	"text-slate-500": "#64748b",
+	"text-slate-600": "#475569",
+	"text-sky-700": "#0369a1",
+	"text-violet-600": "#7c3aed",
+};
+
+// WCAG 상대휘도·대비비.
+const channelLuminance = (channel: number): number => {
+	const v = channel / 255;
+	return v <= 0.039_28 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+};
+
+const relativeLuminance = (hex: string): number => {
+	const r = Number.parseInt(hex.slice(1, 3), 16);
+	const g = Number.parseInt(hex.slice(3, 5), 16);
+	const b = Number.parseInt(hex.slice(5, 7), 16);
+	return (
+		0.2126 * channelLuminance(r) +
+		0.7152 * channelLuminance(g) +
+		0.0722 * channelLuminance(b)
+	);
+};
+
+// 흰 배경(#fff, L=1) 대비.
+const contrastOnWhite = (hex: string): number =>
+	(1 + 0.05) / (relativeLuminance(hex) + 0.05);
+
+describe("ad-period tier 색 대비(WCAG AA)", () => {
+	const classes = [
+		...AD_PERIOD_TIER_COLOR_PRESETS.map((preset) => preset.className),
+		...AD_PERIOD_TIERS.map((tier) => tier.colorClass),
+	];
+
+	it.each([
+		...new Set(classes),
+	])("%s 는 흰 배경 대비 4.5:1 이상", (className) => {
+		const hex = TEXT_CLASS_HEX[className];
+		// 색을 추가/교체했는데 hex 매핑을 안 넣으면 여기서 먼저 걸린다.
+		expect(hex, `${className} hex 매핑 누락`).toBeDefined();
+		expect(contrastOnWhite(hex)).toBeGreaterThanOrEqual(4.5);
 	});
 });
