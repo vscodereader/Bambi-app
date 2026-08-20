@@ -134,14 +134,22 @@ function JobAdPeriodBadge({
 	const tier = adPeriodTier(adPeriod.totalDays, tiers);
 	return (
 		<UiBadge
+			// 테두리·세로 패딩 없음: 칩이 아니라 급여 행에 얹힌 글자로 보이게 한다. pr-0으로
+			// 배지 오른쪽 끝을 카드 콘텐츠 경계(p-2)에 맞추고, 왼쪽 px-2는 급여와의 간격으로 남긴다.
+			// 아이콘이 24px이라 배지 높이도 24px — 급여 행 h-9(36px) 안이라 카드 높이는 그대로다.
 			className={cn(
-				"ml-auto h-auto rounded-sm py-2 font-semibold",
+				"ml-auto h-auto border-0 py-0 pr-0 font-semibold",
 				tier.colorClass
 			)}
 			title={`광고 ${adPeriod.count}회 · 누적 ${adPeriod.totalDays}일`}
 			variant="outline"
 		>
-			<AdPeriodTierIcon icon={tier.icon} iconImageUrl={tier.iconImageUrl} />
+			{/* 업로드 아이콘이 16px에선 알아보기 어려워 배지에서만 24px로 키운다. */}
+			<AdPeriodTierIcon
+				className="size-6"
+				icon={tier.icon}
+				iconImageUrl={tier.iconImageUrl}
+			/>
 			{formatAdPeriod(adPeriod)}
 		</UiBadge>
 	);
