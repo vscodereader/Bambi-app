@@ -5,10 +5,12 @@ import { asc, eq } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure, publicProcedure } from "../../index";
-import { isAdPeriodTierRangeValid } from "../../services/bambi-ad-period-tiers";
+import {
+	isAdPeriodTierBorderClassValid,
+	isAdPeriodTierColorClassValid,
+	isAdPeriodTierRangeValid,
+} from "../../services/bambi-ad-period-tiers";
 
-// Tailwind 텍스트 색 유틸만 허용(raw hex 금지). 화면은 프리셋에서 고르지만 서버도 최소 형태를 막는다.
-const TEXT_COLOR_CLASS = /^text-[a-z]+-\d{2,3}$/;
 const DAYS_MAX = 100_000;
 const RANGE_REFINE = {
 	message: "최소 일수는 최대 일수보다 클 수 없습니다.",
@@ -16,12 +18,22 @@ const RANGE_REFINE = {
 };
 
 const tierShape = z.object({
-	colorClass: z.string().trim().regex(TEXT_COLOR_CLASS),
+	// 아이콘 색: Tailwind 텍스트 색 유틸만 허용(raw hex 금지). 브랜드색 text-primary 포함.
+	colorClass: z.string().trim().refine(isAdPeriodTierColorClassValid),
 	icon: z.enum(["crown", "medal"]),
 	label: z.string().trim().min(1).max(20),
 	maxDays: z.number().int().min(0).max(DAYS_MAX).nullable(),
 	minDays: z.number().int().min(0).max(DAYS_MAX),
 	sortOrder: z.number().int().min(0).max(1000).optional(),
+	// 강조 테두리 켜기·색. 미지정 시 false. borderColorClass는 null=기본값(border-primary)으로 되돌리기,
+	// undefined=미변경. border-primary(숫자 없음)·border-amber-500(숫자 있음) 둘 다 허용.
+	emphasizeBorder: z.boolean().optional(),
+	borderColorClass: z
+		.string()
+		.trim()
+		.refine(isAdPeriodTierBorderClassValid)
+		.nullable()
+		.optional(),
 });
 
 const isRangeValid = (value: { maxDays: null | number; minDays: number }) =>
@@ -51,6 +63,8 @@ export const adPeriodTiersRouter = {
 				label: input.label,
 				maxDays: input.maxDays,
 				minDays: input.minDays,
+				emphasizeBorder: input.emphasizeBorder ?? false,
+				borderColorClass: input.borderColorClass ?? null,
 				// 지정이 없으면 최소 일수를 정렬 키로 써 자연 오름차순으로 쌓인다(별도 순서 UI 없음).
 				sortOrder: input.sortOrder ?? input.minDays,
 			})
@@ -67,6 +81,11 @@ export const adPeriodTiersRouter = {
 				label: input.label,
 				maxDays: input.maxDays,
 				minDays: input.minDays,
+				emphasizeBorder: input.emphasizeBorder ?? false,
+				// undefined=미변경, null=기본값(border-primary)으로 되돌리기를 구분해 존중한다.
+				...(input.borderColorClass === undefined
+					? {}
+					: { borderColorClass: input.borderColorClass }),
 				...(input.sortOrder === undefined
 					? {}
 					: { sortOrder: input.sortOrder }),
