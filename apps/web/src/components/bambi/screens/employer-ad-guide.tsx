@@ -16,9 +16,9 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowUpToLine, Check, Megaphone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { AdPeriodTierIcon } from "@/components/bambi/ad-period-tier-icon";
 import { AdPriceTag } from "@/components/bambi/ad-price-tag";
 import { EmptyState } from "@/components/bambi/empty-state";
-import { CrownIcon, MedalIcon } from "@/components/bambi/icons";
 import { PageShell } from "@/components/bambi/page-shell";
 import {
 	type AdCatalogPlacement,
@@ -403,11 +403,11 @@ function AdPeriodGradeGuide() {
 				<ul className="m-0 flex flex-col gap-2 p-0">
 					{tiers.map((tier) => (
 						<li className="flex items-center gap-2 text-sm" key={tier.label}>
-							<span
-								className={cn("inline-flex size-4 shrink-0", tier.colorClass)}
-							>
-								{tier.icon === "crown" ? <CrownIcon /> : <MedalIcon />}
-							</span>
+							<AdPeriodTierIcon
+								className={tier.colorClass}
+								icon={tier.icon}
+								iconImageUrl={tier.iconImageUrl}
+							/>
 							<span className="font-medium">{tier.label}</span>
 							<span className="text-muted-foreground text-xs">
 								{formatAdPeriodTierRange(tier)}

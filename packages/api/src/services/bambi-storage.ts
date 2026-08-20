@@ -313,6 +313,34 @@ export const createEditorMediaUploadIntent = async ({
 	};
 };
 
+// 누적 광고일수 등급 아이콘. 운영자만 올리고 조직·유저 경계가 없는 서비스 전역 자산이라
+// 키도 1단(root/uuid-파일명)이면 충분하다 — 소유권 가드가 필요 없는 유일한 미디어다
+// (발급 자체가 adminProcedure 뒤에 있다).
+const AD_PERIOD_TIER_ICON_KEY_ROOT = "bambi-ad-period-tier-icons";
+
+export const createAdPeriodTierIconUploadIntent = async ({
+	byteSize,
+	fileName,
+	mimeType,
+}: {
+	byteSize: number;
+	fileName: string;
+	mimeType: string;
+}): Promise<JobPostMediaUploadIntent> => {
+	const storageFileName = normalizeFileNameForStorage(fileName);
+	const storageKey = `${AD_PERIOD_TIER_ICON_KEY_ROOT}/${randomUUID()}-${storageFileName}`;
+
+	return {
+		byteSize,
+		fileName: fileName.trim(),
+		mimeType,
+		storageKey,
+		uploadUrl: isPublicBucketConfigured()
+			? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
+			: `local://upload/${storageKey}`,
+	};
+};
+
 export const createJobPostMediaUploadIntent = async ({
 	actorUserId,
 	byteSize,

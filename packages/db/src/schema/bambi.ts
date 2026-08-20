@@ -1994,6 +1994,10 @@ export const bambiAdPeriodTier = pgTable("bambi_ad_period_tier", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	label: text("label").notNull(),
 	icon: bambiAdPeriodTierIcon("icon").notNull(),
+	// 업로드한 아이콘 이미지(GIF·PNG·WebP·JPG)의 공개 URL. 비어 있으면 위 icon 프리셋을
+	// 그린다 — 이미지가 있으면 이미지가 이긴다. 프리셋을 지우지 않는 이유는 이미지를
+	// 내렸을 때 돌아갈 자리가 필요하고, 업로드 실패·객체 유실 시에도 배지가 비지 않기 때문.
+	iconImageUrl: text("icon_image_url"),
 	colorClass: text("color_class").notNull(),
 	minDays: integer("min_days").notNull(),
 	maxDays: integer("max_days"),

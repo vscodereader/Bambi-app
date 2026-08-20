@@ -61,11 +61,12 @@ describe("visual job marketplace components", () => {
 	it("renders the ad-period badge in the salary row without adding a new row", () => {
 		const source = readComponent("visual-job-card.tsx");
 
-		// 배지는 lib 티어·포맷과 등급 아이콘을 쓴다
+		// 배지는 lib 티어·포맷과 등급 아이콘을 쓴다. 아이콘은 공용 컴포넌트가 그린다 —
+		// 업로드 이미지/프리셋 분기를 카드·안내·설정이 각자 재구현하지 않게 한다.
 		expect(source).toContain("adPeriodTier");
 		expect(source).toContain("formatAdPeriod");
-		expect(source).toContain("MedalIcon");
-		expect(source).toContain("CrownIcon");
+		expect(source).toContain("AdPeriodTierIcon");
+		expect(source).toContain("tier.iconImageUrl");
 		// null이면 렌더하지 않는다(조건부 렌더)
 		expect(source).toContain("job.adPeriod");
 		// 급여 행(mt-auto)에 얹는다 — 새 행 추가 없이 오른쪽 끝(ml-auto) 배치
@@ -82,7 +83,18 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain("useAdPeriodTiers");
 		expect(source).toContain("formatAdPeriodTierRange");
 		expect(source).toContain("누적 광고일수 등급");
-		// 카드와 같은 등급 아이콘을 쓴다
+		// 카드와 같은 등급 아이콘 컴포넌트를 쓴다(업로드 이미지도 그대로 따라온다)
+		expect(source).toContain("AdPeriodTierIcon");
+		expect(source).toContain("tier.iconImageUrl");
+	});
+
+	// 등급 아이콘은 업로드 이미지가 프리셋을 이긴다. GIF를 애니메이션으로 보이게 하려면
+	// next/image 최적화를 꺼야 한다 — unoptimized가 빠지면 첫 프레임만 남아 요구사항이 깨진다.
+	it("prefers the uploaded tier icon image and keeps GIFs animated", () => {
+		const source = readComponent("ad-period-tier-icon.tsx");
+
+		expect(source).toContain("iconImageUrl");
+		expect(source).toContain("unoptimized");
 		expect(source).toContain("MedalIcon");
 		expect(source).toContain("CrownIcon");
 	});
@@ -104,6 +116,10 @@ describe("visual job marketplace components", () => {
 		// 색·아이콘은 자유 입력이 아니라 프리셋/토글에서 고른다.
 		expect(settings).toContain("AD_PERIOD_TIER_COLOR_PRESETS");
 		expect(settings).toContain("ToggleGroup");
+		// 프리셋 대신 쓸 아이콘 이미지를 직접 올릴 수 있다(GIF 포함).
+		expect(settings).toContain("adPeriodTiers.createIconUpload");
+		expect(settings).toContain("uploadFileToSignedUrl");
+		expect(settings).toContain("image/gif");
 	});
 
 	it("makes every ad banner link to the advertised job detail page", () => {

@@ -40,13 +40,15 @@ import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CrownIcon, MedalIcon } from "@/components/bambi/icons";
+import { AdPeriodTierIcon } from "@/components/bambi/ad-period-tier-icon";
 import {
 	AD_PERIOD_TIER_COLOR_PRESETS,
 	AD_PERIOD_TIER_ICON_LABELS,
 	type AdPeriodTier,
 	formatAdPeriodTierRange,
 } from "@/lib/bambi/ad-period";
+import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
+import { uploadFileToSignedUrl } from "@/lib/bambi-job-form";
 import { orpc } from "@/utils/orpc";
 
 type TierRow = Awaited<
@@ -58,6 +60,16 @@ const LABEL_MAX = 20;
 const DAYS_MAX = 100_000;
 const ICONS: TierIcon[] = ["medal", "crown"];
 const HANGUL_CHAR = /[가-힣]/;
+
+// 서버 정책(bambi-ad-period-tiers.ts)과 같은 값. 왕복 전에 여기서 먼저 걸러 준다.
+// 공용 미디어 정책과 달리 GIF를 받는 자리다 — 운영자만 올릴 수 있어서 허용된다.
+const ICON_MIME_TYPES = new Set([
+	"image/gif",
+	"image/jpeg",
+	"image/png",
+	"image/webp",
+]);
+const ICON_MAX_BYTES = 2 * 1024 * 1024;
 
 // orpc 입력 검증 실패 메시지는 영어라 그대로 노출하면 안 된다. 서버가 던진 한국어 문구만
 // 그대로 띄우고, 그 외(검증 실패·빈 메시지)는 한국어 폴백으로 덮는다(등급 관리와 동일 관례).
@@ -71,13 +83,10 @@ const toDaysInput = (value: null | number): string =>
 interface TierFormValues {
 	colorClass: string;
 	icon: TierIcon;
+	iconImageUrl: null | string;
 	label: string;
 	maxDays: null | number;
 	minDays: number;
-}
-
-function TierIconGlyph({ icon }: { icon: TierIcon }) {
-	return icon === "crown" ? <CrownIcon /> : <MedalIcon />;
 }
 
 // 추가·수정 공용 폼. 내부 상태로 입력을 들고, 유효할 때만 onSubmit을 호출한다. 상한(최대
@@ -106,6 +115,52 @@ function AdPeriodTierForm({
 		initial ? String(initial.minDays) : ""
 	);
 	const [maxDays, setMaxDays] = useState(toDaysInput(initial?.maxDays ?? null));
+	const [iconImageUrl, setIconImageUrl] = useState<null | string>(
+		initial?.iconImageUrl ?? null
+	);
+	const [isUploading, setIsUploading] = useState(false);
+	const createIconUpload = useMutation(
+		orpc.bambi.adPeriodTiers.createIconUpload.mutationOptions()
+	);
+
+	// 포인트몰 아이템 이미지와 같은 절차: 클라 사전검증 → 업로드 인텐트 → 서명 URL PUT →
+	// 공개 URL을 폼 값으로 든다. 저장하지 않고 닫으면 객체만 남고 참조는 생기지 않는다.
+	const handleIconFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0];
+		// 같은 파일을 다시 고를 때도 change가 뜨도록 값을 비운다(실패 후 재시도 경로).
+		event.target.value = "";
+		if (!file) {
+			return;
+		}
+		if (!ICON_MIME_TYPES.has(file.type)) {
+			toast.error("GIF, PNG, WebP, JPG 이미지만 올릴 수 있어요.");
+			return;
+		}
+		if (file.size > ICON_MAX_BYTES) {
+			toast.error("아이콘은 2MB 이하만 올릴 수 있어요.");
+			return;
+		}
+
+		setIsUploading(true);
+		try {
+			const intent = await createIconUpload.mutateAsync({
+				byteSize: file.size,
+				fileName: file.name,
+				mimeType: file.type,
+			});
+			await uploadFileToSignedUrl({ file, uploadIntent: intent });
+			setIconImageUrl(jobMediaPublicUrl(intent.storageKey));
+		} catch (error) {
+			toast.error(
+				localized(
+					error instanceof Error ? error.message : undefined,
+					"아이콘을 올리지 못했어요."
+				)
+			);
+		} finally {
+			setIsUploading(false);
+		}
+	};
 
 	const parsedMin = Number(minDays);
 	const trimmedMax = maxDays.trim();
@@ -123,12 +178,13 @@ function AdPeriodTierForm({
 		parsedMin <= DAYS_MAX &&
 		maxIsValid &&
 		rangeIsValid &&
-		!isPending;
+		!(isPending || isUploading);
 
 	const submit = () =>
 		onSubmit({
 			colorClass,
 			icon,
+			iconImageUrl,
 			label: label.trim(),
 			maxDays: trimmedMax === "" ? null : parsedMax,
 			minDays: parsedMin,
@@ -191,13 +247,50 @@ function AdPeriodTierForm({
 				>
 					{ICONS.map((option) => (
 						<ToggleGroupItem key={option} value={option}>
-							<span className="inline-flex size-4">
-								<TierIconGlyph icon={option} />
-							</span>
+							<AdPeriodTierIcon icon={option} />
 							{AD_PERIOD_TIER_ICON_LABELS[option]}
 						</ToggleGroupItem>
 					))}
 				</ToggleGroup>
+			</div>
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor={`${idPrefix}-icon-image`}>아이콘 이미지</Label>
+				<p className="m-0 text-muted-foreground text-xs">
+					GIF·PNG·WebP·JPG 2MB 이하. 올리면 위 프리셋 대신 이 이미지가 배지에
+					표시됩니다. 배지에서 16px로 작게 그려지니 단순한 그림이 잘 보입니다.
+				</p>
+				{iconImageUrl ? (
+					<div className="flex items-center gap-3">
+						{/* 실제 배지 크기(16px)와 확대본을 함께 보여 준다 — 작게 줄였을 때
+						    알아볼 수 있는지가 이 자리에서 유일하게 중요한 판단이다. */}
+						<span className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+							<AdPeriodTierIcon icon={icon} iconImageUrl={iconImageUrl} />
+							<AdPeriodTierIcon
+								className="size-10"
+								icon={icon}
+								iconImageUrl={iconImageUrl}
+							/>
+						</span>
+						<Button
+							onClick={() => setIconImageUrl(null)}
+							size="sm"
+							type="button"
+							variant="outline"
+						>
+							이미지 제거
+						</Button>
+					</div>
+				) : null}
+				<Input
+					accept="image/gif,image/png,image/webp,image/jpeg"
+					disabled={isUploading}
+					id={`${idPrefix}-icon-image`}
+					onChange={handleIconFile}
+					type="file"
+				/>
+				{isUploading ? (
+					<span className="text-muted-foreground text-xs">올리는 중…</span>
+				) : null}
 			</div>
 			<div className="flex flex-col gap-1.5">
 				<Label>아이콘 색</Label>
@@ -218,9 +311,9 @@ function AdPeriodTierForm({
 							key={preset.className}
 							value={preset.className}
 						>
-							<span className={cn("inline-flex size-4", preset.className)}>
-								<TierIconGlyph icon={icon} />
-							</span>
+							{/* 이미지 아이콘을 써도 색은 배지 글자에 그대로 적용되므로, 색 견본은
+							    이미지 대신 항상 프리셋 글리프로 그려 색이 잘 보이게 한다. */}
+							<AdPeriodTierIcon className={preset.className} icon={icon} />
 							{preset.label}
 						</ToggleGroupItem>
 					))}
@@ -354,9 +447,10 @@ export function AdPeriodTierSettings() {
 										className={cn("gap-1", tier.colorClass)}
 										variant="outline"
 									>
-										<span className="inline-flex size-4 shrink-0">
-											<TierIconGlyph icon={tier.icon} />
-										</span>
+										<AdPeriodTierIcon
+											icon={tier.icon}
+											iconImageUrl={tier.iconImageUrl}
+										/>
 										{formatAdPeriodTierRange(tier)}
 									</Badge>
 									<div className="ml-auto flex gap-2">
