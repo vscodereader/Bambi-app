@@ -114,8 +114,8 @@ export const jobLandingHeading = (target: JobLandingTarget): string => {
 
 export const jobLandingTitle = (target: JobLandingTarget): string =>
 	target.region
-		? `${scopeLabel(target)} 밤알바·여우알바·퀸알바 채용 정보 | 밤비알바`
-		: "지역·업종별 밤알바·여우알바·퀸알바 채용 정보 | 밤비알바";
+		? `${scopeLabel(target)} 퀸알바·여우알바·밤알바 채용 정보 | 밤비알바`
+		: "지역·업종별 퀸알바·여우알바·밤알바 채용 정보 | 밤비알바";
 
 const industryKeywordAliases = (industry?: JobLandingIndustry): string[] => {
 	if (!industry) {
@@ -138,17 +138,17 @@ export const jobLandingKeywords = ({
 	if (!region) {
 		return [
 			"지역별 채용 정보",
-			"밤알바",
-			"여우알바",
 			"퀸알바",
+			"여우알바",
+			"밤알바",
 			"유흥알바",
 			"룸알바",
 		];
 	}
 	const regionKeywords = [
-		`${region.label} 밤알바`,
-		`${region.label} 여우알바`,
 		`${region.label} 퀸알바`,
+		`${region.label} 여우알바`,
+		`${region.label} 밤알바`,
 		`${region.label} 유흥알바`,
 		`${region.label} 여성알바`,
 		`${region.label} 고소득알바`,
@@ -173,14 +173,14 @@ export const jobLandingDescription = ({
 	region,
 }: JobLandingTarget): string => {
 	if (region && industry) {
-		return `${region.label} ${industry.label} 밤알바·여우알바·퀸알바 채용 정보를 모았습니다. 급여와 근무 시간, 업체 인증 여부를 확인하고 밤비알바 1:1 채팅으로 문의하세요.`;
+		return `${region.label} ${industry.label} 퀸알바·여우알바·밤알바 채용 정보를 모았습니다. 급여와 근무 시간, 업체 인증 여부를 확인하고 밤비알바 1:1 채팅으로 문의하세요.`;
 	}
 
 	if (region) {
-		return `${region.label} 밤알바·여우알바·퀸알바 관련 유흥·접객 채용 정보를 모았습니다. 업종별로 공고를 좁혀 보고 밤비알바 1:1 채팅으로 안전하게 문의하세요.`;
+		return `${region.label} 퀸알바·여우알바·밤알바 관련 유흥·접객 채용 정보를 모았습니다. 업종별로 공고를 좁혀 보고 밤비알바 1:1 채팅으로 안전하게 문의하세요.`;
 	}
 
-	return "밤비알바의 지역·업종별 밤알바·여우알바·퀸알바 관련 유흥·접객 채용 정보입니다. 전국 시·도와 업종별 공고를 로그인 없이 둘러보세요.";
+	return "밤비알바의 지역·업종별 퀸알바·여우알바·밤알바 관련 유흥·접객 채용 정보입니다. 전국 시·도와 업종별 공고를 로그인 없이 둘러보세요.";
 };
 
 // 랜딩마다 다른 소개 문단(1~2개). 같은 문장을 지역만 바꿔 반복하지 않도록 축 조합별로

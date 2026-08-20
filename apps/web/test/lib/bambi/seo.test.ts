@@ -4,6 +4,7 @@ import {
 	breadcrumbJsonLd,
 	mergeSeoKeywords,
 	SITE_KEYWORDS,
+	SITE_TITLE,
 	toJsonLdScriptContent,
 } from "@/lib/bambi/seo";
 
@@ -27,6 +28,14 @@ describe("SITE_KEYWORDS", () => {
 				"알바 채용 정보",
 			])
 		);
+	});
+
+	// 경쟁 서비스명 노출 순서는 퀸알바 → 여우알바 → 밤알바(사용자 확정 정책, 2026-08-20).
+	it("leads title and keywords with 퀸알바·여우알바·밤알바 in that order", () => {
+		expect(SITE_TITLE).toBe(
+			"밤비알바 - 퀸알바·여우알바·밤알바 | 유흥알바 구인구직"
+		);
+		expect(SITE_KEYWORDS.slice(0, 3)).toEqual(["퀸알바", "여우알바", "밤알바"]);
 	});
 
 	it("keeps 구인구직 사이트 as one phrase", () => {
