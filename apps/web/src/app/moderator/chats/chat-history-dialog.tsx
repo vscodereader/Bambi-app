@@ -109,6 +109,8 @@ export function ChatHistoryContent({
 	});
 
 	const messages = historyQuery.data?.messages ?? [];
+	// 방이 하드삭제된 뒤에는 신고 시점 스냅샷(최근 메시지)만 남는다.
+	const fromDeletedRoom = historyQuery.data?.fromDeletedRoom ?? false;
 	const employerName = historyQuery.data?.employerName ?? "구인자";
 	const employerImage = historyQuery.data?.employerImage ?? null;
 	const employerUserId = historyQuery.data?.employerUserId ?? "";
@@ -179,7 +181,11 @@ export function ChatHistoryContent({
 
 	if (messages.length === 0) {
 		return (
-			<p className="m-0 text-muted-foreground text-sm">아직 메시지가 없어요.</p>
+			<p className="m-0 text-muted-foreground text-sm">
+				{fromDeletedRoom
+					? "삭제된 채팅방이라 신고 시점 기록만 볼 수 있는데, 남은 메시지가 없어요."
+					: "아직 메시지가 없어요."}
+			</p>
 		);
 	}
 
@@ -187,6 +193,12 @@ export function ChatHistoryContent({
 		<div
 			className={`flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden ${constrained ? "max-h-[60vh]" : "h-[70vh] max-h-180"}`}
 		>
+			{fromDeletedRoom ? (
+				<p className="m-0 flex-none text-muted-foreground text-xs">
+					삭제된 채팅방이라 신고 시점에 기록된 최근 메시지만 보여요. 첨부 파일은
+					방과 함께 삭제됐어요.
+				</p>
+			) : null}
 			<div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-y-contain pr-1">
 				{annotatedMessages.map(
 					// 메시지 종류·그룹 경계·발신 방향·첨부 유무가 한 행에서 함께 결정된다.

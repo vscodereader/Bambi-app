@@ -295,6 +295,9 @@ const resolveReportReporter = (
 	};
 };
 
+// 피신고자 이름을 특정할 수 없을 때 쓰는 중립 라벨(대상 제목으로 대신 채우지 않는다).
+const MISSING_TARGET_NAME = "대상 없음";
+
 const COMMUNITY_TARGET_LABEL_MAX = 18;
 // 대상 라벨에 넣을 제목을 한 줄 길이로 줄인다(초과분은 말줄임).
 const truncateTargetLabel = (value: string): string =>
@@ -500,6 +503,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			// 커뮤니티 대상(글·댓글) 컨텍스트·라벨은 별도 헬퍼로 뽑아 콜백 복잡도를 낮춘다.
 			const { communityKind, communityTarget, target } =
 				deriveReportCommunity(item);
+			const targetFallbackName = communityKind ? target : targetName;
 
 			return {
 				communityKind,
@@ -519,7 +523,11 @@ export function ModProvider({ children }: { children: ReactNode }) {
 						: "closed",
 				// 커뮤니티 대상은 deriveReportCommunity가 만든 라벨("커뮤니티 글 · 제목")이 더
 				// 구체적이고, 그 외 대상은 resolveReportTargetParty가 닉네임·공고 제목을 찾아준다.
-				target: targetUser?.name ?? (communityKind ? target : targetName),
+				// 단 채팅방 신고의 targetName은 방 제목(연결 공고)이라 대상 회원을 못 찾았을 때
+				// 그대로 쓰면 방 제목이 피신고자 이름 자리에 들어간다 — 중립 라벨로 막는다.
+				target:
+					targetUser?.name ??
+					(isChatRoomTarget ? MISSING_TARGET_NAME : targetFallbackName),
 				// 실데이터 신고의 대상 맥락(orpc 추론)을 그대로 전달해 상세에서 타입별 렌더한다.
 				targetContext: item.targetContext,
 				// 실제 대상 id(사용자 제재 등에 사용). 프리뷰 목업 신고에는 없다.
