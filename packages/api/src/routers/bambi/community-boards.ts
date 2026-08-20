@@ -101,6 +101,21 @@ const updateBestBoardIconInput = z.object({ icon: boardIconSchema.nullable() });
 const SETTINGS_ROW_ID = "default";
 
 const BOARD_NOT_FOUND = "게시판을 찾을 수 없습니다.";
+const NOTICE_BOARD_KEY = "notice";
+const BEST_BOARD_KEY = "best";
+
+export const assertHomeLayoutFixedSlots = (rows: string[][]): void => {
+	if (
+		rows.length < 2 ||
+		rows[0]?.length !== 1 ||
+		rows[0]?.[0] !== NOTICE_BOARD_KEY ||
+		rows[1]?.[0] !== BEST_BOARD_KEY
+	) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "1행은 공지사항 전용이고 2행 1열은 베스트글로 고정해야 합니다.",
+		});
+	}
+};
 
 // 운영자가 코드 배포 없이 수다방 게시판을 늘리고 감추는 라우터. 삭제(remove)는 글이 하나도
 // 없는 운영자 생성 게시판에만 열려 있다 — 글이 FK로 매달린 게시판은 지우면 과거 글이 함께
@@ -151,6 +166,7 @@ export const communityBoardsRouter = {
 	updateHomeLayout: adminProcedure
 		.input(updateHomeLayoutInput)
 		.handler(async ({ input }) => {
+			assertHomeLayoutFixedSlots(input.rows);
 			const keys = input.rows.flat();
 			if (new Set(keys).size !== keys.length) {
 				throw new ORPCError("BAD_REQUEST", {
@@ -160,7 +176,10 @@ export const communityBoardsRouter = {
 			const validRows = await db
 				.select({ key: communityBoard.key })
 				.from(communityBoard);
-			const validKeys = new Set(["best", ...validRows.map((row) => row.key)]);
+			const validKeys = new Set([
+				BEST_BOARD_KEY,
+				...validRows.map((row) => row.key),
+			]);
 			if (keys.some((key) => !validKeys.has(key))) {
 				throw new ORPCError("BAD_REQUEST", {
 					message: "존재하지 않는 게시판이 홈 배치에 포함되어 있습니다.",

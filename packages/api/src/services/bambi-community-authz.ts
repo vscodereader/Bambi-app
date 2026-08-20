@@ -150,6 +150,34 @@ export const resolveCommunityActorForBoard = async (
 	};
 };
 
+// 비밀글 읽기는 쓰기와 분리한다. 로그인한 활성 회원은 성별·생년월일이 아직 없어도 목록과
+// 상세를 볼 수 있지만, 글·댓글 작성은 resolveCommunityActorForBoard와
+// assertSecretActorIdentity를 계속 지나므로 기존 성인 본인인증·성별 요건이 유지된다.
+export const resolveCommunityReaderForBoard = async (
+	context: CommunityActorContext,
+	board: string
+): Promise<CommunityActor> => {
+	if (!isSecretBoard(board)) {
+		return await resolveCommunityActor(context);
+	}
+	if (context.session?.user?.id) {
+		return {
+			kind: "member",
+			profile: await requireActiveBambiProfile(context.session),
+		};
+	}
+	if (!context.guest?.gender) {
+		throw new ORPCError("UNAUTHORIZED", {
+			message: "성인 본인인증 후 이용할 수 있습니다.",
+		});
+	}
+	return {
+		gender: context.guest.gender,
+		gid: context.guest.gid,
+		kind: "guest",
+	};
+};
+
 export const assertSecretActorIdentity = async (
 	actor: CommunityActor,
 	board: string
@@ -175,6 +203,20 @@ export const findCommunityActorForBoard = async (
 ): Promise<CommunityActor | null> => {
 	try {
 		return await resolveCommunityActorForBoard(context, board);
+	} catch (error) {
+		if (error instanceof ORPCError) {
+			return null;
+		}
+		throw error;
+	}
+};
+
+export const findCommunityReaderForBoard = async (
+	context: CommunityActorContext,
+	board: string
+): Promise<CommunityActor | null> => {
+	try {
+		return await resolveCommunityReaderForBoard(context, board);
 	} catch (error) {
 		if (error instanceof ORPCError) {
 			return null;

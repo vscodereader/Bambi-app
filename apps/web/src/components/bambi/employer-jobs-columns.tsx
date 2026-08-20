@@ -226,8 +226,8 @@ export function getEmployerJobsColumns({
 		{
 			id: "actions",
 			header: "관리",
-			headerClassName: "text-right",
-			cellClassName: "text-right",
+			headerClassName: "text-center",
+			cellClassName: "text-center",
 			cell: (job) => (
 				<EmployerJobActionsMenu
 					deletingJobId={deletingJobId}

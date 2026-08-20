@@ -58,6 +58,9 @@ const DESCRIPTION_MAX = 200;
 const SLUG_MIN = 2;
 const SORT_ORDER_MAX = 10_000;
 const POINTS_MAX = 100_000;
+const NOTICE_BOARD_KEY = "notice";
+const BEST_BOARD_KEY = "best";
+const FIXED_HOME_BOARD_KEYS = new Set([NOTICE_BOARD_KEY, BEST_BOARD_KEY]);
 
 // 서버(community-boards.ts)의 SLUG_PATTERN·RESERVED_SLUGS와 같은 말 — 왕복 전에 알려 준다.
 const SLUG_HINT =
@@ -469,8 +472,13 @@ function HomeLayoutEditor({
 		targetRow: number,
 		targetIndex?: number
 	) => {
+		if (FIXED_HOME_BOARD_KEYS.has(boardKey) || targetRow === 0) {
+			return;
+		}
 		const next = rows.map((row) => row.filter((key) => key !== boardKey));
-		const insertion = targetIndex ?? next[targetRow]?.length ?? 0;
+		const requestedInsertion = targetIndex ?? next[targetRow]?.length ?? 0;
+		const insertion =
+			targetRow === 1 ? Math.max(1, requestedInsertion) : requestedInsertion;
 		next[targetRow]?.splice(insertion, 0, boardKey);
 		setRows(next.filter((row) => row.length > 0));
 	};
@@ -510,8 +518,12 @@ function HomeLayoutEditor({
 						</span>
 						{row.map((boardKey, position) => (
 							<NativeBoardDropTarget
-								className="flex cursor-grab items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm"
-								dragKey={boardKey}
+								className={`flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm ${
+									FIXED_HOME_BOARD_KEYS.has(boardKey) ? "" : "cursor-grab"
+								}`}
+								dragKey={
+									FIXED_HOME_BOARD_KEYS.has(boardKey) ? undefined : boardKey
+								}
 								key={boardKey}
 								onBoardDrop={(droppedBoardKey) =>
 									moveBoard(droppedBoardKey, rowIndex, position)
@@ -521,19 +533,23 @@ function HomeLayoutEditor({
 								<span className="font-bold text-sm">
 									{labels.get(boardKey) ?? boardKey}
 								</span>
-								<button
-									aria-label={`${labels.get(boardKey) ?? boardKey} 홈 배치에서 제거`}
-									className="text-muted-foreground hover:text-foreground"
-									onClick={() => {
-										const next = rows
-											.map((item) => item.filter((key) => key !== boardKey))
-											.filter((item) => item.length > 0);
-										setRows(next);
-									}}
-									type="button"
-								>
-									×
-								</button>
+								{FIXED_HOME_BOARD_KEYS.has(boardKey) ? (
+									<span className="text-muted-foreground text-xs">고정</span>
+								) : (
+									<button
+										aria-label={`${labels.get(boardKey) ?? boardKey} 홈 배치에서 제거`}
+										className="text-muted-foreground hover:text-foreground"
+										onClick={() => {
+											const next = rows
+												.map((item) => item.filter((key) => key !== boardKey))
+												.filter((item) => item.length > 0);
+											setRows(next);
+										}}
+										type="button"
+									>
+										×
+									</button>
+								)}
 							</NativeBoardDropTarget>
 						))}
 						{unassigned.length > 0 ? (
@@ -635,9 +651,30 @@ export default function ModeratorCommunityBoardsPage() {
 				item.boardKey,
 			]);
 		}
-		setHomeRows(
-			[...grouped.entries()].sort(([a], [b]) => a - b).map(([, row]) => row)
+		const storedRows = [...grouped.entries()]
+			.sort(([a], [b]) => a - b)
+			.map(([, row]) => row);
+		const bestRowIndex = storedRows.findIndex((row) =>
+			row.includes(BEST_BOARD_KEY)
 		);
+		const bestRow =
+			bestRowIndex >= 0
+				? (storedRows[bestRowIndex]?.filter(
+						(key) => !FIXED_HOME_BOARD_KEYS.has(key)
+					) ?? [])
+				: [];
+		const remainingRows = storedRows
+			.map((row, index) =>
+				index === bestRowIndex
+					? []
+					: row.filter((key) => !FIXED_HOME_BOARD_KEYS.has(key))
+			)
+			.filter((row) => row.length > 0);
+		setHomeRows([
+			[NOTICE_BOARD_KEY],
+			[BEST_BOARD_KEY, ...bestRow],
+			...remainingRows,
+		]);
 	}, [homeLayoutQuery.data]);
 
 	const invalidate = async () => {
@@ -766,7 +803,7 @@ export default function ModeratorCommunityBoardsPage() {
 
 			<HomeLayoutEditor
 				boards={[
-					{ key: "best", label: "베스트글" },
+					{ key: BEST_BOARD_KEY, label: "베스트글" },
 					...boards.map((board) => ({ key: board.key, label: board.label })),
 				]}
 				isPending={homeLayoutMutation.isPending}

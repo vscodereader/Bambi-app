@@ -20,7 +20,7 @@ import {
 } from "@bambi-app/ui/components/toggle-group";
 import { useQuery } from "@tanstack/react-query";
 import { Ban, Info } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { type ReactNode, useEffect, useMemo } from "react";
 
 import { AdPriceTag } from "@/components/bambi/ad-price-tag";
 import { BankTransferGuide } from "@/components/bambi/bank-transfer-guide";
@@ -202,6 +202,8 @@ interface JobExposureFieldsProps {
 	onPaymentMethodChange: (value: JobPaymentMethod) => void;
 	onProductChange: (productId: string | null) => void;
 	paymentMethod: JobPaymentMethod | null;
+	pointsUsed?: number;
+	pointUsageSlot?: ReactNode;
 }
 
 const isJobPaymentMethod = (value: string): value is JobPaymentMethod =>
@@ -238,6 +240,11 @@ const findDurationOption = (
 		? product.priceOptions.find((priceOption) => priceOption.days === days)
 		: undefined;
 
+const subtractPoints = (
+	amount: number | null,
+	pointsUsed: number
+): number | null => (amount === null ? null : Math.max(0, amount - pointsUsed));
+
 // 결제 예정 금액 = 노출 금액 + 디자인 제작 옵션 금액 + 끌어올리기 옵션 금액. 애드온이
 // 하나도 없을 때는 기존처럼 원가 취소선(AdPriceTag)을 보여 주고, 애드온이 붙으면 총액 +
 // 내역 한 줄로 바꾼다(취소선 뱃지 옆에 다른 금액을 더하면 어느 값이 결제액인지 읽히지 않는다).
@@ -248,22 +255,25 @@ function PayableTotal({
 	boostAmount,
 	detailDesignAmount,
 	option,
+	pointsUsed,
 	show,
 }: {
 	amount: number | null;
 	boostAmount: number | null;
 	detailDesignAmount: number | null;
 	option: AdPriceOption | undefined;
+	pointsUsed: number;
 	show: boolean;
 }) {
 	if (!show) {
 		return null;
 	}
 
-	const total = sumJobPaymentAmount(
+	const grossTotal = sumJobPaymentAmount(
 		sumJobPaymentAmount(amount, detailDesignAmount),
 		boostAmount
 	);
+	const total = subtractPoints(grossTotal, pointsUsed);
 	const breakdown = [
 		amount === null ? null : `광고 ${formatAdPrice(amount)}`,
 		detailDesignAmount === null
@@ -273,6 +283,9 @@ function PayableTotal({
 			? null
 			: `끌어올리기 옵션 ${formatAdPrice(boostAmount)}`,
 	].filter((part): part is string => part !== null);
+	const breakdownText = `${breakdown.join(" + ")}${
+		pointsUsed > 0 ? ` - 포인트 ${formatAdPrice(pointsUsed)}` : ""
+	}`;
 
 	return (
 		<div className="flex flex-col gap-1 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
@@ -280,7 +293,10 @@ function PayableTotal({
 				<span className="font-medium text-muted-foreground text-sm">
 					결제 예정 금액
 				</span>
-				{option && detailDesignAmount === null && boostAmount === null ? (
+				{option &&
+				detailDesignAmount === null &&
+				boostAmount === null &&
+				pointsUsed === 0 ? (
 					<AdPriceTag
 						amount={option.amount}
 						className="justify-end"
@@ -293,10 +309,8 @@ function PayableTotal({
 					</span>
 				)}
 			</div>
-			{breakdown.length > 1 ? (
-				<span className="text-muted-foreground text-xs">
-					{breakdown.join(" + ")}
-				</span>
+			{breakdown.length > 1 || pointsUsed > 0 ? (
+				<span className="text-muted-foreground text-xs">{breakdownText}</span>
 			) : null}
 		</div>
 	);
@@ -645,6 +659,8 @@ export function JobExposureFields({
 	onPaymentMethodChange,
 	onProductChange,
 	paymentMethod,
+	pointsUsed = 0,
+	pointUsageSlot,
 }: JobExposureFieldsProps) {
 	const catalogQuery = useQuery({
 		...orpc.bambi.adProducts.getCatalog.queryOptions(),
@@ -710,6 +726,7 @@ export function JobExposureFields({
 		sumJobPaymentAmount(exposureAmount, appliedDetailDesignAmount),
 		boostAmount
 	);
+	const payableAfterPoints = subtractPoints(payableTotal, pointsUsed);
 	const nextPricingChangeAt = useMemo(() => {
 		const futureBoundaries = products
 			.flatMap((product) => product.priceOptions)
@@ -931,17 +948,20 @@ export function JobExposureFields({
 						show={showBoostOptions}
 					/>
 
+					{pointUsageSlot}
+
 					<PayableTotal
 						amount={exposureAmount}
 						boostAmount={boostAmount}
 						detailDesignAmount={appliedDetailDesignAmount}
 						option={selectedDurationOption}
+						pointsUsed={pointsUsed}
 						show={showTotal}
 					/>
 
 					{showPaidOptions ? (
 						<PaymentMethodField
-							amount={payableTotal}
+							amount={payableAfterPoints}
 							errorMessage={errors?.paymentMethod}
 							id="paymentMethod"
 							label="결제 방법"
@@ -957,7 +977,7 @@ export function JobExposureFields({
 					newBoostOptionTypes.length === 0 ||
 					!onBoostOptionPaymentMethodChange ? null : (
 						<PaymentMethodField
-							amount={boostAmount}
+							amount={payableAfterPoints}
 							errorMessage={errors?.boostOptionPaymentMethod}
 							id="boostOptionPaymentMethod"
 							label="끌어올리기 옵션 결제 방법"

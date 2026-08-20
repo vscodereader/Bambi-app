@@ -291,7 +291,7 @@ export function CommunityOverviewGrid({
 	}
 
 	return (
-		<div className="flex w-full min-w-0 max-w-full flex-col gap-4 overflow-x-clip">
+		<div className="flex w-full min-w-0 max-w-full flex-col gap-4 px-px">
 			{rows.map(([rowIndex, rowBoards]) => (
 				<div
 					className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[repeat(var(--community-row-columns),minmax(0,1fr))]"

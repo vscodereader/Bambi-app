@@ -43,8 +43,8 @@ import {
 	assertSecretActorIdentity,
 	type CommunityActor,
 	canBypassLock,
-	findCommunityActorForBoard,
 	findCommunityMember,
+	findCommunityReaderForBoard,
 	GUEST_LOCKED_ERROR,
 	isSecretBoard,
 	LEGAL_BOARD,
@@ -52,6 +52,7 @@ import {
 	requireGuestPassword,
 	resolveCommunityActor,
 	resolveCommunityActorForBoard,
+	resolveCommunityReaderForBoard,
 	resolveLockedForBoard,
 	SECRET_AUTHOR_NAME,
 } from "../../services/bambi-community-authz";
@@ -1175,7 +1176,7 @@ export const communityRouter = {
 	listPosts: publicProcedure
 		.input(listPostsInput)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActorForBoard(context, input.board);
+			const actor = await resolveCommunityReaderForBoard(context, input.board);
 			const profile = actor.kind === "member" ? actor.profile : null;
 			// 법률자문 계정은 legal 게시판만 — 가상 큐레이션 best도 비-legal 글이 섞이므로 막는다.
 			assertLegalAdvisorBoardScope(profile, input.board);
@@ -1490,7 +1491,7 @@ export const communityRouter = {
 		)
 		.handler(async ({ context, input }) => {
 			const post = await findPublishedPost(input.postId);
-			const actor = await resolveCommunityActorForBoard(context, post.board);
+			const actor = await resolveCommunityReaderForBoard(context, post.board);
 			const profile = actor.kind === "member" ? actor.profile : null;
 			assertLegalAdvisorBoardScope(profile, post.board);
 			const [postAuthor] = post.authorUserId
@@ -2059,6 +2060,7 @@ export const communityRouter = {
 						.values({
 							boardKey: post.board,
 							boardSlug: board?.slug ?? post.board,
+							postCreatedAt: post.createdAt,
 							postId: post.id,
 							title: post.title,
 							userId: actor.profile.userId,
@@ -2069,6 +2071,7 @@ export const communityRouter = {
 								boardSlug: board?.slug ?? post.board,
 								isActive: true,
 								likedAt: new Date(),
+								postCreatedAt: post.createdAt,
 								title: post.title,
 							},
 							target: [
@@ -2094,7 +2097,7 @@ export const communityRouter = {
 		.input(postReadInput)
 		.handler(async ({ context, input }) => {
 			const post = await findPublishedPost(input.postId);
-			const actor = await findCommunityActorForBoard(context, post.board);
+			const actor = await findCommunityReaderForBoard(context, post.board);
 
 			if (actor?.kind === "member") {
 				const { profile } = actor;
