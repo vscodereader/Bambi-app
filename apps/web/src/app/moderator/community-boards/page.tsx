@@ -36,7 +36,7 @@ import {
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type DragEvent, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
@@ -389,6 +389,61 @@ function BoardEditForm({
 	);
 }
 
+function NativeBoardDropTarget({
+	children,
+	className,
+	dragKey,
+	onBoardDrop,
+}: {
+	children: ReactNode;
+	className: string;
+	dragKey?: string;
+	onBoardDrop: (boardKey: string) => void;
+}) {
+	const elementRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		const element = elementRef.current;
+		if (!element) {
+			return;
+		}
+		const handleDragOver = (event: globalThis.DragEvent) => {
+			event.preventDefault();
+		};
+		const handleDrop = (event: globalThis.DragEvent) => {
+			event.preventDefault();
+			event.stopPropagation();
+			const boardKey = event.dataTransfer?.getData("text/board-key");
+			if (boardKey) {
+				onBoardDrop(boardKey);
+			}
+		};
+		const handleDragStart = (event: globalThis.DragEvent) => {
+			if (dragKey) {
+				event.dataTransfer?.setData("text/board-key", dragKey);
+			}
+		};
+
+		element.addEventListener("dragover", handleDragOver);
+		element.addEventListener("drop", handleDrop);
+		if (dragKey) {
+			element.draggable = true;
+			element.addEventListener("dragstart", handleDragStart);
+		}
+		return () => {
+			element.removeEventListener("dragover", handleDragOver);
+			element.removeEventListener("drop", handleDrop);
+			element.removeEventListener("dragstart", handleDragStart);
+		};
+	}, [dragKey, onBoardDrop]);
+
+	return (
+		<div className={className} ref={elementRef}>
+			{children}
+		</div>
+	);
+}
+
 function HomeLayoutEditor({
 	boards,
 	isPending,
@@ -419,11 +474,6 @@ function HomeLayoutEditor({
 		next[targetRow]?.splice(insertion, 0, boardKey);
 		setRows(next.filter((row) => row.length > 0));
 	};
-	const droppedKey = (event: DragEvent): string => {
-		event.preventDefault();
-		return event.dataTransfer.getData("text/board-key");
-	};
-
 	return (
 		<section className="flex flex-col gap-3 rounded-xl border border-border p-4">
 			<div className="flex flex-wrap items-start justify-between gap-3">
@@ -450,40 +500,22 @@ function HomeLayoutEditor({
 			</div>
 			<div className="flex flex-col gap-3">
 				{rows.map((row, rowIndex) => (
-					// biome-ignore lint/a11y/noNoninteractiveElementInteractions: native drop zone has equivalent +/remove button controls.
-					// biome-ignore lint/a11y/noStaticElementInteractions: native drop zone has equivalent +/remove button controls.
-					<div
+					<NativeBoardDropTarget
 						className="flex min-h-20 flex-wrap items-center gap-2 rounded-lg border border-border border-dashed bg-secondary/50 p-3"
 						key={row.join("|") || "empty-home-row"}
-						onDragOver={(event) => event.preventDefault()}
-						onDrop={(event) => {
-							const key = droppedKey(event);
-							if (key) {
-								moveBoard(key, rowIndex);
-							}
-						}}
+						onBoardDrop={(boardKey) => moveBoard(boardKey, rowIndex)}
 					>
 						<span className="mr-1 font-bold text-muted-foreground text-sm">
 							{rowIndex + 1}행
 						</span>
 						{row.map((boardKey, position) => (
-							// biome-ignore lint/a11y/noNoninteractiveElementInteractions: native drag item also has keyboard-accessible add/remove controls.
-							// biome-ignore lint/a11y/noStaticElementInteractions: native drag item also has keyboard-accessible add/remove controls.
-							<div
+							<NativeBoardDropTarget
 								className="flex cursor-grab items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm"
-								draggable
+								dragKey={boardKey}
 								key={boardKey}
-								onDragOver={(event) => event.preventDefault()}
-								onDragStart={(event) =>
-									event.dataTransfer.setData("text/board-key", boardKey)
+								onBoardDrop={(droppedBoardKey) =>
+									moveBoard(droppedBoardKey, rowIndex, position)
 								}
-								onDrop={(event) => {
-									event.stopPropagation();
-									const key = droppedKey(event);
-									if (key) {
-										moveBoard(key, rowIndex, position);
-									}
-								}}
 							>
 								<span aria-hidden>⋮⋮</span>
 								<span className="font-bold text-sm">
@@ -502,7 +534,7 @@ function HomeLayoutEditor({
 								>
 									×
 								</button>
-							</div>
+							</NativeBoardDropTarget>
 						))}
 						{unassigned.length > 0 ? (
 							<div className="ml-auto flex items-center gap-2">
@@ -549,7 +581,7 @@ function HomeLayoutEditor({
 								</Button>
 							</div>
 						) : null}
-					</div>
+					</NativeBoardDropTarget>
 				))}
 			</div>
 			{unassigned.length > 0 ? (
