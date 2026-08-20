@@ -3,12 +3,8 @@
 // 이 판별자로 lucide 아이콘을 고른다. 색은 Tailwind 토큰 유틸(raw hex/oklch 금지).
 
 export interface AdPeriodTier {
-	// 강조 테두리 색(Tailwind border 유틸). null이면 기본값(border-primary)을 쓴다.
-	borderColorClass: null | string;
 	// 티어 색(Tailwind 유틸).
 	colorClass: string;
-	// 배지·등급표 테두리를 두껍게 강조할지 여부(최상위만 켜는 게 관례).
-	emphasizeBorder: boolean;
 	// 카드·안내가 이 값으로 lucide 아이콘을 고른다.
 	icon: "crown" | "medal";
 	// 등급 이름(등급표·툴팁).
@@ -22,8 +18,6 @@ export interface AdPeriodTier {
 // 5구간: ≤90 / 91–180 / 181–360 / 361–720 / ≥721. 고정 하드코딩(운영자 설정화는 YAGNI).
 export const AD_PERIOD_TIERS: readonly AdPeriodTier[] = [
 	{
-		borderColorClass: null,
-		emphasizeBorder: false,
 		icon: "medal",
 		colorClass: "text-amber-700",
 		label: "브론즈",
@@ -31,8 +25,6 @@ export const AD_PERIOD_TIERS: readonly AdPeriodTier[] = [
 		maxDays: 90,
 	},
 	{
-		borderColorClass: null,
-		emphasizeBorder: false,
 		icon: "medal",
 		colorClass: "text-slate-400",
 		label: "실버",
@@ -40,8 +32,6 @@ export const AD_PERIOD_TIERS: readonly AdPeriodTier[] = [
 		maxDays: 180,
 	},
 	{
-		borderColorClass: null,
-		emphasizeBorder: false,
 		icon: "medal",
 		colorClass: "text-amber-500",
 		label: "골드",
@@ -49,8 +39,6 @@ export const AD_PERIOD_TIERS: readonly AdPeriodTier[] = [
 		maxDays: 360,
 	},
 	{
-		borderColorClass: null,
-		emphasizeBorder: false,
 		icon: "crown",
 		colorClass: "text-slate-500",
 		label: "플래티넘",
@@ -58,9 +46,6 @@ export const AD_PERIOD_TIERS: readonly AdPeriodTier[] = [
 		maxDays: 720,
 	},
 	{
-		// 최상위 다이아만 브랜드 primary 테두리로 강조한다(borderColorClass=null → border-primary).
-		borderColorClass: null,
-		emphasizeBorder: true,
 		icon: "crown",
 		colorClass: "text-amber-500",
 		label: "다이아",
@@ -90,29 +75,6 @@ export const AD_PERIOD_TIER_COLOR_PRESETS: readonly {
 	{ className: "text-sky-500", label: "스카이" },
 	{ className: "text-violet-500", label: "바이올렛" },
 ];
-
-// 강조 테두리 색 프리셋(자유 입력 금지). 첫 항목이 기본값(브랜드 코럴). borderColorClass가
-// null인 등급은 이 첫 항목(border-primary)으로 렌더된다.
-export const AD_PERIOD_TIER_BORDER_PRESETS: readonly {
-	className: string;
-	label: string;
-}[] = [
-	{ className: "border-primary", label: "브랜드(코럴)" },
-	{ className: "border-amber-500", label: "골드" },
-	{ className: "border-slate-400", label: "실버" },
-	{ className: "border-sky-500", label: "스카이" },
-	{ className: "border-violet-500", label: "바이올렛" },
-	{ className: "border-rose-500", label: "로즈" },
-];
-
-// borderColorClass가 null일 때 쓰는 기본 강조 테두리 색(브랜드 primary).
-export const AD_PERIOD_TIER_DEFAULT_BORDER_CLASS = "border-primary";
-
-// 강조 켜진 등급의 배지·칩 테두리 클래스(두께 border-2 + 색). 꺼져 있으면 빈 문자열.
-export const adPeriodTierEmphasisClass = (tier: AdPeriodTier): string =>
-	tier.emphasizeBorder
-		? `border-1 ${tier.borderColorClass ?? AD_PERIOD_TIER_DEFAULT_BORDER_CLASS}`
-		: "";
 
 // 누적 일수 → 티어. tiers를 주입할 수 있고(운영자 설정값), 비었으면 상수로 폴백한다.
 // 운영자가 상한 없는(maxDays=null) 최상위 없이 구성할 수 있으므로, 모든 구간을 넘긴 일수는

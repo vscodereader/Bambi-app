@@ -1997,9 +1997,6 @@ export const bambiAdPeriodTier = pgTable("bambi_ad_period_tier", {
 	colorClass: text("color_class").notNull(),
 	minDays: integer("min_days").notNull(),
 	maxDays: integer("max_days"),
-	// 카드 배지에 강조 테두리를 두를지 여부. border_color_class=null이면 기본값(border-primary).
-	emphasizeBorder: boolean("emphasize_border").default(false).notNull(),
-	borderColorClass: text("border_color_class"),
 	sortOrder: integer("sort_order").default(0).notNull(),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at")
