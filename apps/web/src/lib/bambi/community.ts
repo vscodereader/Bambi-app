@@ -93,13 +93,6 @@ export const COMMUNITY_BOARDS: BuiltinBoardMeta[] = [
 		writable: true,
 	},
 	{
-		description: "본인인증 이용자가 익명으로 이야기를 나눠요",
-		key: "secret",
-		label: "비밀글",
-		slug: "secret",
-		writable: true,
-	},
-	{
 		description: "법률자문에게 비밀글로 물어보는 무료 상담",
 		key: "legal",
 		label: "무료 법률 자문",
@@ -161,7 +154,8 @@ export const LEGAL_ADVISOR_BOARD_NOTICE =
 // community-boards.remove의 BUILTIN_BOARD_KEYS와 같은 말). best는 DB 행이 아니라 가상
 // 게시판이라 애초에 운영자 목록에 나오지 않는다.
 export const isBuiltinBoardKey = (key: string): boolean =>
-	key !== "best" && COMMUNITY_BOARDS.some((board) => board.key === key);
+	key === "secret" ||
+	(key !== "best" && COMMUNITY_BOARDS.some((board) => board.key === key));
 
 // 빌트인 게시판 전용 조회 — 동적 게시판까지 보려면 useBoardBySlug 훅을 쓴다.
 export const getBoardBySlug = (slug: string): BuiltinBoardMeta | undefined =>
@@ -180,12 +174,14 @@ export const COMMUNITY_ROOT_PATH = "/seeker/community";
 export const communityBoardPath = (slug: string): string =>
 	`${COMMUNITY_ROOT_PATH}/${slug}`;
 
-// 법률자문 계정이 눌러도 되는 수다방 경로 — 수다방 홈과 legal 게시판(목록·글·글쓰기).
-// 그 외 게시판은 서버가 FORBIDDEN을 내므로 카드는 그대로 보여주되 클릭만 가로챈다.
-export const isLegalAdvisorAllowedPath = (href: string): boolean =>
+// 법률자문 계정이 눌러도 되는 수다방 경로. 허용 게시판의 slug는 DB 목록에서 받은 값을
+// 호출부가 넘긴다. 표시명·주소를 코드에 다시 두지 않는다.
+export const isLegalAdvisorAllowedPath = (
+	href: string,
+	allowedBoardSlugs: string[]
+): boolean =>
 	href === COMMUNITY_ROOT_PATH ||
-	href.startsWith(communityBoardPath("legal")) ||
-	href.startsWith(communityBoardPath("secret"));
+	allowedBoardSlugs.some((slug) => href.startsWith(communityBoardPath(slug)));
 
 export const communityPostPath = (slug: string, postId: string): string =>
 	`/seeker/community/${slug}/${postId}`;

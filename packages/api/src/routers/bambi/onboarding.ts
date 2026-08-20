@@ -122,7 +122,6 @@ const profileUpdateInput = profileInput
 // 목(mock) 휴대폰 본인인증 입력 — 포트원 미구성 개발 환경 전용(핸들러에서 잠근다).
 // gender는 커뮤니티 게이팅용 불변값이라 아직 없을 때만 채운다.
 const mockPhoneVerificationInput = z.object({
-	realName: z.string().trim().min(1).max(80),
 	phoneNumber: z.string().min(3).max(30),
 	gender: z.enum(["male", "female"]).optional(),
 	birthDate: z
@@ -1270,7 +1269,6 @@ export const onboardingRouter = {
 					birthDate: input.birthDate,
 					gender: input.gender,
 					kind: existingProfile.role,
-					name: input.realName,
 					phoneNumber: input.phoneNumber,
 				});
 			}

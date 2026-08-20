@@ -126,7 +126,7 @@ export const recordMockIdentityLog = async (input: {
 	gender: "female" | "male";
 	guestId?: string;
 	kind: "admin" | "employer" | "guest" | "job_seeker" | "legal_advisor";
-	name: string;
+	name?: string;
 	phoneNumber: string;
 }): Promise<void> => {
 	const values = {
@@ -135,7 +135,7 @@ export const recordMockIdentityLog = async (input: {
 		guestId: input.guestId,
 		identityVerificationId: `mock-${randomUUID()}`,
 		kind: input.kind,
-		name: input.name,
+		...(input.name ? { name: input.name } : {}),
 		phoneNumber: input.phoneNumber,
 	};
 	await db

@@ -3,6 +3,8 @@
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { isSecretBoardKey } from "@/lib/bambi/community";
+import { useBoardBySlug } from "@/lib/bambi/use-community-boards";
 import { useBambiAuth } from "./auth-client-provider";
 import { RequireAuth } from "./require-auth";
 
@@ -37,13 +39,17 @@ function CommunityGate({ children }: { children: ReactNode }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const { accountStatus, canAccessCommunity, isPending } = useBambiAuth();
+	const boardSlug = pathname.split("/")[3] ?? "";
+	const { board, isPending: isBoardPending } = useBoardBySlug(boardSlug);
+	const isSecretBoard = Boolean(board && isSecretBoardKey(board.key));
 	const notified = useRef(false);
 
 	useEffect(() => {
 		if (
 			isPending ||
+			isBoardPending ||
 			canAccessCommunity ||
-			pathname.startsWith("/seeker/community/secret") ||
+			isSecretBoard ||
 			notified.current
 		) {
 			return;
@@ -55,12 +61,16 @@ function CommunityGate({ children }: { children: ReactNode }) {
 				: COMMUNITY_BLOCKED_MESSAGE
 		);
 		router.replace("/seeker");
-	}, [accountStatus, isPending, canAccessCommunity, pathname, router]);
+	}, [
+		accountStatus,
+		isPending,
+		isBoardPending,
+		canAccessCommunity,
+		isSecretBoard,
+		router,
+	]);
 
-	if (
-		isPending ||
-		!(canAccessCommunity || pathname.startsWith("/seeker/community/secret"))
-	) {
+	if (isPending || isBoardPending || !(canAccessCommunity || isSecretBoard)) {
 		return null;
 	}
 	return <>{children}</>;

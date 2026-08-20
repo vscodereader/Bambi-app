@@ -45,14 +45,9 @@ CREATE UNIQUE INDEX "review_job_post_id_reviewer_user_id_uidx" ON "review" USING
 ALTER TABLE "bambi_site_settings" ADD CONSTRAINT "bambi_site_settings_review_points_check" CHECK ("review_write_points" >= 0 AND "review_view_points" >= 0);--> statement-breakpoint
 ALTER TABLE "review" ADD CONSTRAINT "review_points_awarded_check" CHECK ("points_awarded" >= 0);--> statement-breakpoint
 INSERT INTO "community_board" ("key", "slug", "label", "description", "icon", "is_active", "is_writable", "sort_order", "post_points", "comment_points")
-VALUES ('secret', 'secret', '비밀글', '본인인증 이용자가 익명으로 이야기를 나눠요', 'MessageSquareLock', true, true, 40, 0, 0)
+SELECT 'secret', 'secret', '비밀글', '본인인증 이용자가 익명으로 이야기를 나눠요', 'MessageSquareLock', true, true, COALESCE(MAX("sort_order") + 10, 0), 0, 0
+FROM "community_board"
 ON CONFLICT ("key") DO UPDATE SET "slug" = excluded."slug", "label" = excluded."label", "description" = excluded."description", "icon" = excluded."icon";--> statement-breakpoint
-UPDATE "community_board" SET "sort_order" = CASE "key"
-	WHEN 'notice' THEN 0 WHEN 'free' THEN 20 WHEN 'work_talk' THEN 30
-	WHEN 'secret' THEN 40 WHEN 'market' THEN 50 WHEN 'legal' THEN 60
-	ELSE "sort_order" + 20
-END
-WHERE "key" IN ('notice', 'free', 'work_talk', 'secret', 'market', 'legal') OR "sort_order" >= 40;--> statement-breakpoint
 UPDATE "bambi_point_transaction" AS "transaction"
 SET "description" = '후기 작성 · ' || "job"."title"
 FROM "review" AS "review_row"
@@ -60,20 +55,3 @@ INNER JOIN "job_post" AS "job" ON "job"."id" = "review_row"."job_post_id"
 WHERE "transaction"."reason" = 'review_write'
 	AND "transaction"."external_key" = 'review_write:' || "review_row"."id"::text || ':created'
 	AND ("transaction"."description" IS NULL OR "transaction"."description" LIKE '후기 작성:%');--> statement-breakpoint
-UPDATE "bambi_member_grade"
-SET "icon_storage_key" = CASE "name"
-	WHEN '새싹' THEN 'builtin/grade-icons/seedling-v2.gif'
-	WHEN '일반' THEN 'builtin/grade-icons/standard-v2.gif'
-	WHEN '우수회원' THEN 'builtin/grade-icons/excellent-v2.gif'
-	WHEN '열혈회원' THEN 'builtin/grade-icons/passionate-v2.gif'
-	WHEN 'VIP' THEN 'builtin/grade-icons/vip-v2.gif'
-	ELSE "icon_storage_key"
-END;--> statement-breakpoint
-INSERT INTO "community_board_home_layout" ("board_key", "row_index", "position") VALUES
-	('notice', 0, 0),
-	('best', 1, 0),
-	('free', 1, 1),
-	('work_talk', 1, 2),
-	('secret', 2, 0),
-	('market', 2, 1),
-	('legal', 2, 2);

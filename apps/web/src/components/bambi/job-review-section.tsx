@@ -198,7 +198,7 @@ export function JobReviewSection({
 							<span className="block">
 								후기를 확인하기 위해서는 {reviewViewPoints}pt를 사용해야합니다!
 							</span>
-							<span className="block whitespace-nowrap text-[9.5px] tracking-[-0.03em] sm:text-sm sm:tracking-normal">
+							<span className="block whitespace-nowrap text-xs sm:text-sm">
 								이 페이지를 나갔다 오시면 다시 포인트를 사용하셔야 해요.
 							</span>
 							<span className="block">꼼꼼히 확인하세요!</span>

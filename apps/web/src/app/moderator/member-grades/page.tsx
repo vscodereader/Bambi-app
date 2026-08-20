@@ -107,6 +107,8 @@ function getGradeColumns({
 		{
 			id: "color",
 			header: "색(hex)",
+			headerClassName: "text-center",
+			cellClassName: "text-center",
 			cell: (row) => (
 				<span className="text-muted-foreground tabular-nums">
 					{row.color ?? "—"}
@@ -116,8 +118,10 @@ function getGradeColumns({
 		{
 			id: "actions",
 			header: "관리",
+			headerClassName: "text-center",
+			cellClassName: "text-center",
 			cell: (row) => (
-				<div className="flex gap-2">
+				<div className="flex justify-center gap-2">
 					<Button
 						onClick={() => onEdit(row)}
 						size="sm"

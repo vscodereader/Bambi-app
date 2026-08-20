@@ -1322,7 +1322,7 @@ function PartyBox({
 	return (
 		<div
 			className={cn(
-				"flex flex-1 items-center gap-2.5 rounded-[14px] bg-card p-3",
+				"flex flex-1 items-center gap-2.5 rounded-xl bg-card p-3",
 				flagged
 					? "border border-[color:var(--red-300)]"
 					: "border border-border"
@@ -1334,11 +1334,9 @@ function PartyBox({
 					{name}
 				</div>
 				{detail ? (
-					<div className="truncate text-[11px] text-muted-foreground">
-						{detail}
-					</div>
+					<div className="truncate text-muted-foreground text-xs">{detail}</div>
 				) : null}
-				<div className="truncate text-[11px] text-muted-foreground">{role}</div>
+				<div className="truncate text-muted-foreground text-xs">{role}</div>
 			</div>
 		</div>
 	);
@@ -1356,8 +1354,8 @@ function ContextSection({
 }) {
 	return (
 		<div>
-			<div className="mb-2 font-bold text-[13px] text-foreground">{title}</div>
-			<div className="flex flex-col gap-2.5 rounded-[14px] border border-border bg-secondary p-[14px]">
+			<div className="mb-2 font-bold text-foreground text-sm">{title}</div>
+			<div className="flex flex-col gap-2.5 rounded-xl border border-border bg-secondary p-3">
 				{children}
 			</div>
 		</div>
@@ -1367,8 +1365,8 @@ function ContextSection({
 function ContextField({ label, value }: { label: string; value: string }) {
 	return (
 		<div className="flex flex-col gap-0.5">
-			<div className="text-[11px] text-muted-foreground">{label}</div>
-			<div className="text-[13.5px] text-[color:var(--text-default)] leading-[1.5]">
+			<div className="text-muted-foreground text-xs">{label}</div>
+			<div className="text-[color:var(--text-default)] text-sm leading-normal">
 				{value}
 			</div>
 		</div>
@@ -1658,11 +1656,11 @@ function CommunityTargetPanel({
 	// 커뮤니티 신고인데 대상 컨텍스트가 유실된 경우: 조치 없이 안내만.
 	if (!target) {
 		return (
-			<div className="flex items-center gap-2 rounded-[14px] border border-border bg-secondary p-[14px]">
+			<div className="flex items-center gap-2 rounded-xl border border-border bg-secondary p-3">
 				<span className="inline-flex size-[18px] text-muted-foreground">
 					<AlertCircle />
 				</span>
-				<span className="text-[13px] text-muted-foreground">
+				<span className="text-muted-foreground text-sm">
 					대상 콘텐츠를 찾을 수 없어요.
 				</span>
 			</div>
@@ -1685,7 +1683,7 @@ function CommunityTargetPanel({
 	const targetPreview = (
 		<div
 			className={cn(
-				"flex flex-col gap-2.5 rounded-[14px] border border-border bg-secondary p-[14px]",
+				"flex flex-col gap-2.5 rounded-xl border border-border bg-secondary p-3",
 				targetHref &&
 					"transition-colors hover:border-primary/40 hover:bg-primary/5"
 			)}
@@ -1695,11 +1693,11 @@ function CommunityTargetPanel({
 					{target.boardLabel ?? getCommunityBoardLabel(target.board)}
 				</Badge>
 				<Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
-				<span className="ml-auto text-[11.5px] text-[color:var(--text-subtle)]">
+				<span className="ml-auto text-[color:var(--text-subtle)] text-xs">
 					{formatCommunityDate(target.createdAt)}
 				</span>
 			</div>
-			<div className="flex flex-wrap items-center gap-2 font-extrabold text-[15px] text-foreground leading-[1.4]">
+			<div className="flex flex-wrap items-center gap-2 font-extrabold text-base text-foreground leading-snug">
 				<span>{titleLabel}</span>
 				{target.kind === "comment" && target.parentStatus === "deleted" ? (
 					<Badge tone="danger">원글 삭제됨</Badge>
@@ -1708,10 +1706,10 @@ function CommunityTargetPanel({
 					<Badge tone="neutral">원글 숨김</Badge>
 				) : null}
 			</div>
-			<p className="m-0 whitespace-pre-wrap text-[13px] text-[color:var(--text-default)] leading-[1.6]">
+			<p className="m-0 whitespace-pre-wrap text-[color:var(--text-default)] text-sm leading-relaxed">
 				{bodyLabel}
 			</p>
-			<div className="text-[11.5px] text-muted-foreground">
+			<div className="text-muted-foreground text-xs">
 				작성자 {communityAuthorName(target.authorName)}
 			</div>
 		</div>
@@ -1729,7 +1727,7 @@ function CommunityTargetPanel({
 
 	return (
 		<div className="flex flex-col gap-3">
-			<div className="font-bold text-[13px] text-foreground">
+			<div className="font-bold text-foreground text-sm">
 				신고된 커뮤니티 {kindLabel}
 			</div>
 			{targetHref ? (
@@ -1743,29 +1741,26 @@ function CommunityTargetPanel({
 				targetPreview
 			)}
 			<div className="flex flex-col gap-2">
-				<div className="rounded-[14px] border border-border bg-secondary px-3 py-2.5">
-					<div className="mb-1 font-bold text-[13px] text-foreground">
+				<div className="rounded-xl border border-border bg-secondary px-3 py-2.5">
+					<div className="mb-1 font-bold text-foreground text-sm">
 						신고 내용
 					</div>
 					<p className="m-0 whitespace-pre-wrap text-[13px] text-muted-foreground leading-relaxed">
 						{report.note}
 					</p>
 				</div>
-				<label
-					className="font-bold text-[13px] text-foreground"
-					htmlFor={reasonId}
-				>
+				<label className="font-bold text-foreground text-sm" htmlFor={reasonId}>
 					조치 사유
 				</label>
 				<textarea
-					className="min-h-[72px] w-full resize-none rounded-[14px] border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+					className="min-h-18 w-full resize-none rounded-xl border border-border bg-card px-3 py-2.5 text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
 					id={reasonId}
 					maxLength={500}
 					onChange={(event) => setReason(event.target.value)}
 					placeholder="조치 사유를 입력하면 기록에 남아요."
 					value={reason}
 				/>
-				<p className="m-0 text-right text-[12px] text-muted-foreground">
+				<p className="m-0 text-right text-muted-foreground text-xs">
 					{reason.length} / 500
 				</p>
 				<div className="flex flex-wrap gap-2">
@@ -2725,12 +2720,12 @@ function UserModerationHistory({ userId }: { userId: string }) {
 						</div>
 					) : null}
 					{historyQuery.isError ? (
-						<p className="m-0 text-[12.5px] text-muted-foreground">
+						<p className="m-0 text-muted-foreground text-sm">
 							제재 이력을 불러오지 못했어요.
 						</p>
 					) : null}
 					{historyQuery.isSuccess && actions.length === 0 ? (
-						<p className="m-0 text-[12.5px] text-muted-foreground">
+						<p className="m-0 text-muted-foreground text-sm">
 							제재 이력이 없어요
 						</p>
 					) : null}
@@ -2739,21 +2734,21 @@ function UserModerationHistory({ userId }: { userId: string }) {
 							<ul className="m-0 flex list-none flex-col gap-2 p-0">
 								{actions.map((action) => (
 									<li
-										className="rounded-[14px] border border-border bg-card p-3"
+										className="rounded-xl border border-border bg-card p-3"
 										key={action.id}
 									>
 										<div className="flex items-center justify-between gap-2">
-											<span className="font-bold text-[13px] text-foreground">
+											<span className="font-bold text-foreground text-sm">
 												{moderationActionLabel(action.action)}
 											</span>
-											<span className="whitespace-nowrap text-[11px] text-muted-foreground">
+											<span className="whitespace-nowrap text-muted-foreground text-xs">
 												{formatDateTime(action.createdAt)}
 											</span>
 										</div>
-										<p className="mt-1 mb-0 text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
+										<p className="mt-1 mb-0 text-[color:var(--text-default)] text-sm leading-normal">
 											{action.reason}
 										</p>
-										<div className="mt-1 text-[11px] text-muted-foreground">
+										<div className="mt-1 text-muted-foreground text-xs">
 											처리자 {action.adminName}
 										</div>
 									</li>

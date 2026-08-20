@@ -130,7 +130,6 @@ export function AccountSettingsScreen() {
 	// 목 폴백(포트원 미구성 개발 환경): 폼 입력을 그대로 저장한다.
 	const handleMockVerified = async (input: MockPhoneVerifyInput) => {
 		await mockVerifyMutation.mutateAsync({
-			realName: input.name,
 			phoneNumber: input.phone,
 			gender: input.gender,
 			birthDate: input.birth,

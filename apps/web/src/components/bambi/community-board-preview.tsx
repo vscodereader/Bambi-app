@@ -36,10 +36,13 @@ import {
 	communityPostPath,
 	formatCommunityDate,
 	isLegalAdvisorAllowedPath,
+	isLegalBoardKey,
+	isSecretBoardKey,
 	LEGAL_ADVISOR_BOARD_NOTICE,
 } from "@/lib/bambi/community";
 import { communityBoardIcon } from "@/lib/bambi/community-board-icons";
 import { trackNavigationClick } from "@/lib/bambi/ga-interaction";
+import { useCommunityBoards } from "@/lib/bambi/use-community-boards";
 
 // 서버 응답과의 드리프트를 막기 위해 oRPC 추론 출력에서 미리보기 게시판·글 타입을 파생한다.
 // overview는 고정 키 객체가 아니라 배열이다 — 운영자가 게시판을 늘리면 그대로 따라 붙는다.
@@ -230,13 +233,19 @@ export function useLegalAdvisorNavGuard():
 	| undefined {
 	const { role } = useBambiAuth();
 	const router = useRouter();
+	const { boards } = useCommunityBoards();
+	const allowedBoardSlugs = boards
+		.filter(
+			(board) => isLegalBoardKey(board.key) || isSecretBoardKey(board.key)
+		)
+		.map((board) => board.slug);
 
 	if (role !== "legal_advisor") {
 		return;
 	}
 
 	return (href: string) => {
-		if (isLegalAdvisorAllowedPath(href)) {
+		if (isLegalAdvisorAllowedPath(href, allowedBoardSlugs)) {
 			router.push(href as Route);
 			return;
 		}
