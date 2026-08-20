@@ -286,7 +286,7 @@ export function VisualJobCard({
 			</button>
 			{/* mt-auto: 그리드 행이 늘어나(모집중 placeholder 등) 카드가 stretch 되어도
 			    급여 행이 항상 카드 하단에 붙도록 고정한다. 광고 배지는 새 행을 만들지 않고
-			    이 행 오른쪽 끝(ml-auto)에 얹어 카드 높이(118px) 결합을 건드리지 않는다. */}
+			    이 행 오른쪽 끝(ml-auto)에 얹어 카드 높이(122px) 결합을 건드리지 않는다. */}
 			<div className="mt-auto flex items-center">
 				<span className="flex h-9 min-w-0 items-center gap-1.5">
 					{payUnit ? (
