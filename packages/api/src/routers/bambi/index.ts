@@ -1,4 +1,5 @@
 import { accountRecoveryRouter } from "./account-recovery";
+import { adPeriodTiersRouter } from "./ad-period-tiers";
 import { adProductsRouter } from "./ad-products";
 import { analyticsRouter } from "./analytics";
 import { attendanceRouter } from "./attendance";
@@ -31,6 +32,7 @@ import { teamsRouter } from "./teams";
 // 같은 방식으로 명시 주석을 단다 — typeof 참조라 클라이언트 타입 추론은 그대로다.
 export const bambiRouter: {
 	accountRecovery: typeof accountRecoveryRouter;
+	adPeriodTiers: typeof adPeriodTiersRouter;
 	adProducts: typeof adProductsRouter;
 	analytics: typeof analyticsRouter;
 	attendance: typeof attendanceRouter;
@@ -60,6 +62,7 @@ export const bambiRouter: {
 	teams: typeof teamsRouter;
 } = {
 	accountRecovery: accountRecoveryRouter,
+	adPeriodTiers: adPeriodTiersRouter,
 	adProducts: adProductsRouter,
 	analytics: analyticsRouter,
 	attendance: attendanceRouter,

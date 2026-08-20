@@ -27,6 +27,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { AdPeriodTierSettings } from "@/components/bambi/ad-period-tier-settings";
 import { AdPriceTag } from "@/components/bambi/ad-price-tag";
 import { BoostOptionSettings } from "@/components/bambi/boost-option-settings";
 import { EmptyState } from "@/components/bambi/empty-state";
@@ -502,6 +503,7 @@ export default function ModeratorAdProductsPage() {
 					)}
 				</Card>
 			))}
+			<AdPeriodTierSettings />
 		</div>
 	);
 }
