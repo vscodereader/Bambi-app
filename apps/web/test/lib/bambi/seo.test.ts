@@ -4,6 +4,7 @@ import {
 	breadcrumbJsonLd,
 	mergeSeoKeywords,
 	SITE_KEYWORDS,
+	SITE_OPEN_GRAPH_BASE,
 	SITE_TITLE,
 	siteOpenGraph,
 	toJsonLdScriptContent,
@@ -68,6 +69,18 @@ describe("siteOpenGraph", () => {
 		expect(og.locale).toBe("ko_KR");
 		expect(og.siteName).toBeTruthy();
 		expect(og.images).toHaveLength(1);
+	});
+
+	// 게시글 상세처럼 article type·publishedTime을 쓰는 페이지는 base를 직접 스프레드한다.
+	// base에 type이 섞이면 article 리터럴을 덮어버리므로 없어야 한다.
+	it("SITE_OPEN_GRAPH_BASE는 type 없이 기본 필드만 담아 article 페이지가 스프레드할 수 있다", () => {
+		expect(SITE_OPEN_GRAPH_BASE).not.toHaveProperty("type");
+		expect(SITE_OPEN_GRAPH_BASE.locale).toBe("ko_KR");
+		expect(SITE_OPEN_GRAPH_BASE.siteName).toBeTruthy();
+		expect(SITE_OPEN_GRAPH_BASE.images).toHaveLength(1);
+		const articleOg = { ...SITE_OPEN_GRAPH_BASE, type: "article" as const };
+		expect(articleOg.type).toBe("article");
+		expect(articleOg.images).toHaveLength(1);
 	});
 });
 

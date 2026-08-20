@@ -127,15 +127,23 @@ export const mergeSeoKeywords = (
 // Next metadata의 openGraph는 최상위 키 단위 shallow-merge라, 페이지가 openGraph를
 // 부분 정의하면 루트의 images·siteName·locale·type이 통째로 사라진다. 이 헬퍼로
 // 기본 필드를 항상 실어 보존하고, 페이지 값(title·description·url)만 덮는다.
+//
+// type은 base에 넣지 않는다 — article 등 다른 type과 publishedTime 같은 헬퍼 시그니처
+// 밖 필드를 쓰는 페이지(게시글 상세)는 이 base를 직접 스프레드하고 자기 필드를 얹는다.
+// 헬퍼에 type 유니온을 받으면 Metadata의 판별 유니온과 어긋나 리터럴 타입이 깨진다.
+export const SITE_OPEN_GRAPH_BASE = {
+	locale: "ko_KR",
+	siteName: BAMBI_COMPANY.serviceName,
+	images: [{ url: "/og-image.png", width: 1200, height: 630, alt: SITE_TITLE }],
+};
+
 export const siteOpenGraph = (page: {
 	title: string;
 	description: string;
 	url: string;
 }) => ({
 	type: "website" as const,
-	locale: "ko_KR",
-	siteName: BAMBI_COMPANY.serviceName,
-	images: [{ url: "/og-image.png", width: 1200, height: 630, alt: SITE_TITLE }],
+	...SITE_OPEN_GRAPH_BASE,
 	...page,
 });
 
