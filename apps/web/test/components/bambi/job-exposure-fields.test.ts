@@ -117,8 +117,21 @@ describe("job exposure and payment fields", () => {
 	it("무통장입금 안내 금액도 애드온을 합한 총액이다", () => {
 		const source = readComponent("job-exposure-fields.tsx");
 
-		// 노출 금액만 안내하면 애드온만큼 덜 입금된다.
-		expect(source).toContain("amount={payableTotal}");
+		// 노출·애드온 총액에서 포인트를 뺀 실제 입금액을 안내한다.
+		expect(source).toContain("amount={payableAfterPoints}");
+	});
+
+	it("포인트 사용을 끌어올리기 옵션 아래에서 총액과 함께 계산한다", () => {
+		const exposureSource = readComponent("job-exposure-fields.tsx");
+		const newJobSource = readComponent("../../app/employer/new/page.tsx");
+
+		expect(exposureSource).toContain("{pointUsageSlot}");
+		expect(exposureSource).toContain("subtractPoints(grossTotal, pointsUsed)");
+		expect(exposureSource).toContain(" - 포인트 ");
+		expect(exposureSource).toContain("formatAdPrice(pointsUsed)");
+		expect(newJobSource).toContain("pointUsageSlot={pointUsageSlot}");
+		expect(newJobSource).toContain("pointsUsed={appliedPoints}");
+		expect(newJobSource).not.toContain("최종 입금액");
 	});
 
 	it("등록·수정 폼이 애드온 상태를 JobExposureFields에 잇는다", () => {
