@@ -40,6 +40,7 @@ export const MODERATOR_NAV_ITEMS: NavEntry[] = [
 		items: [
 			{ href: "/moderator/ad-products", label: "광고 상품" },
 			{ href: "/moderator/payments", label: "결제 관리" },
+			{ href: "/moderator/point-shop" as Route, label: "포인트몰" },
 		],
 	},
 	{

@@ -1,0 +1,1 @@
+ALTER TABLE "bambi_point_shop_order" ADD COLUMN "stock_decremented" boolean DEFAULT false NOT NULL;

@@ -125,6 +125,8 @@ export const jobBoostOptionType = pgEnum("job_boost_option_type", [
 export const jobBoostPurchaseSource = pgEnum("job_boost_purchase_source", [
 	"job_registration",
 	"standalone",
+	// 포인트몰에서 보유 혜택을 사용해 만든 끌올 구매. born-paid이며 운영자 결제 큐에서 제외된다.
+	"point_shop",
 ]);
 
 export const jobPaymentMethod = pgEnum("job_payment_method", [
@@ -192,6 +194,8 @@ export const notificationTargetType = pgEnum("notification_target_type", [
 	"organization_member",
 	"support_chat",
 	"point_transaction",
+	// 포인트몰 보유 아이템 만료 임박 알림 등.
+	"point_shop_order",
 ]);
 
 // 수다방 게시판 정의. 운영자가 코드 배포 없이 추가·수정할 수 있도록 enum이 아니라
@@ -1944,6 +1948,100 @@ export const bambiMemberGrade = pgTable("bambi_member_grade", {
 		.$onUpdate(() => /* @__PURE__ */ new Date())
 		.notNull(),
 });
+
+// 포인트몰 아이템이 연결하는 혜택 종류. none=수동 지급(현행), coupon=쿠폰 발송(본인인증
+// 번호로 운영자 외부 발송), boost_*=끌어올리기, ad_extend=광고 기간 연장.
+export const pointShopBenefitType = pgEnum("point_shop_benefit_type", [
+	"none",
+	"coupon",
+	"boost_manual_period",
+	"boost_manual_count",
+	"boost_auto_period",
+	"ad_extend",
+]);
+
+// 아이템 구매 자격 대상. all=전원, employer=구인 회원, job_seeker=구직 회원.
+// 혜택형(끌올·연장)은 공고 단위라 job_seeker 단독은 서버·폼이 거부한다.
+export const pointShopAudience = pgEnum("point_shop_audience", [
+	"all",
+	"employer",
+	"job_seeker",
+]);
+
+// 포인트몰 판매 아이템. 혜택 유형(benefit_type)에 따라 수동 지급·쿠폰·끌올·광고 연장을
+// 연결한다. 선택 재고(stock_quantity)는 null이면 무제한, 값이 있으면 구매 시 조건부 원자
+// 차감·품절 거부한다.
+export const bambiPointShopItem = pgTable("bambi_point_shop_item", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	name: text("name").notNull(),
+	description: text("description"),
+	imageUrl: text("image_url"),
+	pricePoints: integer("price_points").notNull(),
+	sortOrder: integer("sort_order").notNull().default(0),
+	isActive: boolean("is_active").notNull().default(true),
+	// 연결 혜택 유형. 기존 행은 none 폴백이라 백필 불필요.
+	benefitType: pointShopBenefitType("benefit_type").notNull().default("none"),
+	// 구매 자격 대상. 목록 노출은 전원, 구매만 자격 검사.
+	audience: pointShopAudience("audience").notNull().default("all"),
+	// 혜택 스펙 스냅샷 원본(유형별로 채우고 나머지는 null). 사용 시 주문·구매로 복사한다.
+	boostsPerDay: integer("boosts_per_day"),
+	durationDays: integer("duration_days"),
+	boostCount: integer("boost_count"),
+	extendDays: integer("extend_days"),
+	// 보유·사용형(끌올·연장) 사용기한(구매 후 N일). null=무기한. 수동·쿠폰형은 미사용.
+	usageLimitDays: integer("usage_limit_days"),
+	// 전 유형 공통 선택 재고. null=무제한. 구매 시 조건부 원자 차감·품절 거부.
+	stockQuantity: integer("stock_quantity"),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// 포인트몰 주문. 아이템이 삭제돼도 주문·차감 근거가 남아야 해서 이름·가격을 구매 시점
+// 스냅샷으로 저장하고 item_id는 set null로 둔다. 수동·쿠폰형 status는 pending → completed
+// | canceled(전이 가드는 resolveOrderTransition), 끌올·연장형은 owned → used | canceled
+// (취소 시 원장에 환불 + 행). 혜택 스펙은 구매 시점 스냅샷으로 함께 저장한다.
+export const bambiPointShopOrder = pgTable(
+	"bambi_point_shop_order",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		itemId: uuid("item_id").references(() => bambiPointShopItem.id, {
+			onDelete: "set null",
+		}),
+		itemName: text("item_name").notNull(),
+		pricePoints: integer("price_points").notNull(),
+		status: text("status").notNull().default("pending"),
+		operatorMemo: text("operator_memo"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		processedAt: timestamp("processed_at"),
+		// 구매 시점 혜택 스냅샷.
+		benefitType: pointShopBenefitType("benefit_type").notNull().default("none"),
+		boostsPerDay: integer("boosts_per_day"),
+		durationDays: integer("duration_days"),
+		boostCount: integer("boost_count"),
+		extendDays: integer("extend_days"),
+		// 보유·사용형 사용기한 = 구매일 + usageLimitDays. null=무기한.
+		usableUntil: timestamp("usable_until"),
+		// 보유 건 실제 사용 시각(수동·쿠폰의 processed_at과 의미 분리).
+		usedAt: timestamp("used_at"),
+		// 사용 대상 공고. 공고 삭제돼도 주문 이력 보존.
+		targetJobPostId: uuid("target_job_post_id").references(() => jobPost.id, {
+			onDelete: "set null",
+		}),
+		// 만료 임박 알림 발송 시각(1회 멱등 가드). 끌올·연장 외 null.
+		expiryNotifiedAt: timestamp("expiry_notified_at"),
+		// 구매 시 재고를 실제 차감했는지. 취소 복원은 이 값이 true일 때만 한다 — 구매 후
+		// 운영자가 무제한↔유한 재고를 전환해도 복원이 부풀거나 누락되지 않게 하는 근거.
+		stockDecremented: boolean("stock_decremented").notNull().default(false),
+	},
+	(table) => [
+		// 내 구매 내역(사용자별 최신순)과 운영자 대기 필터가 각각 훑는다.
+		index("bambi_point_shop_order_user_id_idx").on(table.userId),
+		index("bambi_point_shop_order_status_idx").on(table.status),
+	]
+);
 
 export const communityPost = pgTable(
 	"community_post",

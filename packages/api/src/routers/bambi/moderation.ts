@@ -2724,27 +2724,26 @@ export const moderationRouter = {
 			const admin = await requireAdminProfile(context.session);
 
 			const { organizationId, updated } = await db.transaction(async (tx) => {
+				// 이전 종료일은 감사 로그 스냅샷 전용으로만 읽는다(FOR UPDATE로 잠가 동시
+				// 조정 간 로그가 어긋나지 않게 한다). 실제 종료일 계산은 아래 원자 UPDATE가
+				// `coalesce(현재값, now()) + make_interval`로 SQL에서 수행하므로 이 값이
+				// 계산에 개입하지 않는다 — read-modify-write 경합을 제거한다.
 				const [existing] = await tx
-					.select({
-						exposureEndsAt: jobPost.exposureEndsAt,
-						organizationId: jobPost.organizationId,
-					})
+					.select({ exposureEndsAt: jobPost.exposureEndsAt })
 					.from(jobPost)
 					.where(eq(jobPost.id, input.jobPostId))
+					.for("update")
 					.limit(1);
 
 				if (!existing) {
 					throw new ORPCError("NOT_FOUND");
 				}
 
-				const exposureEndsAt = new Date(
-					(existing.exposureEndsAt ?? new Date()).getTime() +
-						input.days * MS_PER_DAY
-				);
-
 				const [row] = await tx
 					.update(jobPost)
-					.set({ exposureEndsAt })
+					.set({
+						exposureEndsAt: sql`coalesce(${jobPost.exposureEndsAt}, now()) + make_interval(days => ${input.days})`,
+					})
 					.where(eq(jobPost.id, input.jobPostId))
 					.returning();
 
@@ -2760,13 +2759,13 @@ export const moderationRouter = {
 					reason: input.reason,
 					metadata: {
 						days: input.days,
-						exposureEndsAt: exposureEndsAt.toISOString(),
+						exposureEndsAt: row.exposureEndsAt?.toISOString() ?? null,
 						previousExposureEndsAt:
 							existing.exposureEndsAt?.toISOString() ?? null,
 					},
 				});
 
-				return { organizationId: existing.organizationId, updated: row };
+				return { organizationId: row.organizationId, updated: row };
 			});
 
 			// 종료일이 과거/미래를 넘나들면 광고 유효 여부가 뒤집히므로 수다방 광고 자격

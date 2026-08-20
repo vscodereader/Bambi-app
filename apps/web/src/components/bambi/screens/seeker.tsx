@@ -585,7 +585,7 @@ const seekerMeSections: {
 		href: ATTENDANCE_HREF,
 		icon: <DollarCircle />,
 		label: "포인트 내역",
-		description: "출석 기록과 보유 포인트 내역을 확인해요.",
+		description: "출석 기록·보유 포인트·구매 내역을 한곳에서 확인해요.",
 	},
 	{
 		href: "/seeker/me/settings" as Route,
