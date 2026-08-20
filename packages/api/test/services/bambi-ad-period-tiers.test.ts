@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+	AD_PERIOD_TIER_ICON_MAX_BYTES,
 	isAdPeriodTierColorClassValid,
 	isAdPeriodTierRangeValid,
+	validateAdPeriodTierIconUpload,
 } from "@/services/bambi-ad-period-tiers";
 
 describe("isAdPeriodTierRangeValid", () => {
@@ -27,5 +29,56 @@ describe("isAdPeriodTierColorClassValid", () => {
 	it("raw hex·비-text 유틸은 거부", () => {
 		expect(isAdPeriodTierColorClassValid("text-#fff")).toBe(false);
 		expect(isAdPeriodTierColorClassValid("bg-red-500")).toBe(false);
+	});
+});
+
+describe("validateAdPeriodTierIconUpload", () => {
+	const base = { byteSize: 1024, fileName: "tier.gif", mimeType: "image/gif" };
+
+	// 공용 미디어 정책(bambi-media-policy)은 GIF를 막는다 — 등급 아이콘만 예외로 받는 것이
+	// 이 함수를 따로 둔 이유라, GIF 통과가 깨지면 요구사항 자체가 깨진 것이다.
+	it("GIF를 허용한다(공용 정책과 갈리는 지점)", () => {
+		expect(validateAdPeriodTierIconUpload(base).ok).toBe(true);
+	});
+
+	it("PNG·WebP·JPG도 허용", () => {
+		for (const mimeType of ["image/png", "image/webp", "image/jpeg"]) {
+			expect(validateAdPeriodTierIconUpload({ ...base, mimeType }).ok).toBe(
+				true
+			);
+		}
+	});
+
+	it("이미지가 아닌 타입은 거부", () => {
+		expect(
+			validateAdPeriodTierIconUpload({
+				...base,
+				mimeType: "application/pdf",
+			})
+		).toEqual({ code: "unsupported_type", ok: false });
+		expect(
+			validateAdPeriodTierIconUpload({ ...base, mimeType: "image/svg+xml" })
+		).toEqual({ code: "unsupported_type", ok: false });
+	});
+
+	it("상한(2MB) 초과는 거부, 경계값은 허용", () => {
+		expect(
+			validateAdPeriodTierIconUpload({
+				...base,
+				byteSize: AD_PERIOD_TIER_ICON_MAX_BYTES,
+			}).ok
+		).toBe(true);
+		expect(
+			validateAdPeriodTierIconUpload({
+				...base,
+				byteSize: AD_PERIOD_TIER_ICON_MAX_BYTES + 1,
+			})
+		).toEqual({ code: "file_too_large", ok: false });
+	});
+
+	it("빈 파일명은 거부", () => {
+		expect(
+			validateAdPeriodTierIconUpload({ ...base, fileName: "   " })
+		).toEqual({ code: "empty_file_name", ok: false });
 	});
 });

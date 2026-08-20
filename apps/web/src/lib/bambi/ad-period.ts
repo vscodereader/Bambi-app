@@ -7,6 +7,9 @@ export interface AdPeriodTier {
 	colorClass: string;
 	// 카드·안내가 이 값으로 lucide 아이콘을 고른다.
 	icon: "crown" | "medal";
+	// 운영자가 올린 아이콘 이미지(GIF·PNG·WebP·JPG) URL. 있으면 icon 프리셋 대신 이걸 그린다.
+	// 코드 상수 등급(AD_PERIOD_TIERS)은 이미지가 없으므로 선택 필드로 둔다.
+	iconImageUrl?: null | string;
 	// 등급 이름(등급표·툴팁).
 	label: string;
 	// 티어 최대 누적 일수. 최상위는 상한 없음(null).

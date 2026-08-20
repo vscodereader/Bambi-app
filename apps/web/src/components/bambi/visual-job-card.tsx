@@ -25,8 +25,9 @@ import {
 import type { Job } from "@/lib/bambi/types";
 import { useAdPeriodTiers } from "@/lib/bambi/use-ad-period-tiers";
 import { usePromotionImpression } from "@/lib/bambi/use-promotion-impression";
+import { AdPeriodTierIcon } from "./ad-period-tier-icon";
 import { Badge } from "./ds";
-import { CrownIcon, MapPinIcon, MedalIcon } from "./icons";
+import { MapPinIcon } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
 
 interface VisualJobCardProps {
@@ -140,9 +141,7 @@ function JobAdPeriodBadge({
 			title={`광고 ${adPeriod.count}회 · 누적 ${adPeriod.totalDays}일`}
 			variant="outline"
 		>
-			<span className="inline-flex size-4 shrink-0">
-				{tier.icon === "crown" ? <CrownIcon /> : <MedalIcon />}
-			</span>
+			<AdPeriodTierIcon icon={tier.icon} iconImageUrl={tier.iconImageUrl} />
 			{formatAdPeriod(adPeriod)}
 		</UiBadge>
 	);
