@@ -198,7 +198,6 @@ export interface Report {
 	reporterVerifiedIdentity?: {
 		gender: "female" | "male";
 		phoneNumber: string;
-		realName: string;
 	} | null;
 	resolutionReason?: string | null;
 	sev: ReportSeverity;
@@ -217,7 +216,6 @@ export interface Report {
 	targetVerifiedIdentity?: {
 		gender: "female" | "male";
 		phoneNumber: string;
-		realName: string;
 	} | null;
 	thread: ThreadMessage[];
 	time: string;

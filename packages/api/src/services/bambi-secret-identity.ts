@@ -47,7 +47,6 @@ const memberIdentity = async (userId: string) => {
 	const [row] = await db
 		.select({
 			gender: bambiIdentityVerificationLog.gender,
-			name: bambiIdentityVerificationLog.name,
 			phoneNumber: bambiIdentityVerificationLog.phoneNumber,
 		})
 		.from(bambiIdentityVerificationLog)
@@ -79,7 +78,6 @@ const guestIdentity = async (guestId: string, freshOnly: boolean) => {
 	const [row] = await db
 		.select({
 			gender: bambiIdentityVerificationLog.gender,
-			name: bambiIdentityVerificationLog.name,
 			phoneNumber: bambiIdentityVerificationLog.phoneNumber,
 		})
 		.from(bambiIdentityVerificationLog)
@@ -114,13 +112,12 @@ export const getVerifiedIdentityForAdmin = async (owner: {
 	userId?: string | null;
 }) => {
 	const row = await ownerIdentity(owner);
-	if (!(row?.gender && row.name && row.phoneNumber)) {
+	if (!(row?.gender && row.phoneNumber)) {
 		return null;
 	}
 	return {
 		gender: row.gender,
 		phoneNumber: row.phoneNumber,
-		realName: row.name,
 	};
 };
 
