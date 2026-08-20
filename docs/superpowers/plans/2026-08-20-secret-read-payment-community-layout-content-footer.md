@@ -1,10 +1,10 @@
-# 비밀글 열람·공고 포인트·수다방 배치·글 관리·푸터 안정화 설계
+# 비밀글 열람·공고 포인트·수다방 배치·글 관리 안정화 설계
 
 ## 목표
 
 성별·생년월일이 없는 활성 회원도 비밀글을 읽을 수 있게 하되 작성 시 기존 본인인증 요건은
 유지한다. 구인자 공고 등록의 포인트 사용과 결제 총액을 한 흐름으로 합치고, 수다방 카드
-테두리·운영자 고정 배치·회원 글 관리·푸터 사이트 정보의 초기 렌더를 정리한다.
+테두리·운영자 고정 배치·회원 글 관리를 정리한다.
 
 ## 기준 브랜치
 
@@ -81,17 +81,6 @@
 - API의 좋아요 목록 `createdAt`은 `post_created_at`을 반환한다.
 - DB 변경은 Drizzle migration으로만 수행하며 기존 migration을 수정하지 않는다.
 
-## 6. 사이트 푸터 TODO·hydration 안정화
-
-- `SiteFooter`는 사이트 설정 쿼리가 준비되기 전에 `BAMBI_COMPANY`의 `TODO_*` 값을 렌더하지
-  않는다.
-- 서버 렌더와 첫 클라이언트 렌더는 동일한 중립 로딩 상태를 사용한다.
-- 설정 로드 후 DB 값이 있는 항목만 사업자 정보 줄에 표시한다.
-- 대표자·사업자등록번호·주소가 비어 있으면 해당 조각만 숨긴다.
-- 고객센터 전화가 비어 있으면 `TEL` 조각 전체를 숨기고 광고 문의 전화로 대체하지 않는다.
-- 고객문의 이메일과 직업정보제공사업 신고번호는 기존대로 유지한다.
-- API 오류 때도 `TODO_*` 문자열을 사용자에게 노출하지 않는다.
-
 ## 변경 예상 파일
 
 - `packages/api/src/services/bambi-community-authz.ts`
@@ -105,7 +94,6 @@
 - `apps/web/src/components/bambi/community-board-preview.tsx`
 - `apps/web/src/app/moderator/community-boards/page.tsx`
 - `apps/web/src/components/bambi/screens/my-content-screen.tsx`
-- `apps/web/src/components/bambi/site-footer.tsx`
 - 관련 API·Web 단위 테스트
 
 ## 검증
@@ -116,6 +104,5 @@
 - 수다방 1·3·4열 배치에서 양끝 border 확인
 - notice 및 best 고정 슬롯 클라이언트·API 가드 테스트
 - 글 관리 두 Accordion 기본 닫힘·독립 10건 페이지네이션·작성일 확인
-- 푸터 로딩·빈 필드·API 오류에 `TODO_*` 미노출 및 hydration 일치 확인
 - DB/API/Web `check-types`, 변경 파일 Biome, 관련 Vitest, `git diff --check`
 - PR 전 최신 `origin/develop` 재확인
