@@ -56,6 +56,16 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain('organic: "neutral"');
 		// 4열 컴팩트화로 설명(shortDesc) 줄과 truncateDesc는 제거됨
 		expect(source).not.toContain("truncateDesc");
+		// a11y: 버튼이 카드 전체를 덮고(flex-1) 접근성 이름을 준다 —
+		// 스크린리더가 잘린 제목·급여 누락 대신 전체 정보를 읽는다.
+		expect(source).toContain("aria-label={");
+		expect(source).toContain("flex flex-1 cursor-pointer");
+		// a11y: 급여 금액은 흰 배경 4.5:1을 넘기려 coral-700(5.96:1)을 쓴다.
+		// coral-600(4.32:1)은 미달이라 파일에서 사라져야 한다.
+		expect(source).toContain("text-coral-700");
+		expect(source).not.toContain("text-coral-600");
+		// a11y: 커버 이미지는 업소명이 옆에 텍스트로 있어 장식 처리(alt="")한다.
+		expect(source).toContain('alt=""');
 	});
 
 	it("renders the ad-period badge in the salary row without adding a new row", () => {

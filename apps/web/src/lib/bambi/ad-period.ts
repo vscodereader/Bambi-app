@@ -29,14 +29,14 @@ export const AD_PERIOD_TIERS: readonly AdPeriodTier[] = [
 	},
 	{
 		icon: "medal",
-		colorClass: "text-slate-400",
+		colorClass: "text-slate-600",
 		label: "실버",
 		minDays: 91,
 		maxDays: 180,
 	},
 	{
 		icon: "medal",
-		colorClass: "text-amber-500",
+		colorClass: "text-amber-800",
 		label: "골드",
 		minDays: 181,
 		maxDays: 360,
@@ -50,7 +50,7 @@ export const AD_PERIOD_TIERS: readonly AdPeriodTier[] = [
 	},
 	{
 		icon: "crown",
-		colorClass: "text-amber-500",
+		colorClass: "text-amber-800",
 		label: "다이아",
 		minDays: 721,
 		maxDays: null,
@@ -70,13 +70,13 @@ export const AD_PERIOD_TIER_COLOR_PRESETS: readonly {
 	className: string;
 	label: string;
 }[] = [
-	{ className: "text-primary", label: "브랜드(코럴)" },
+	{ className: "text-coral-700", label: "브랜드(코럴)" },
 	{ className: "text-amber-700", label: "브론즈" },
-	{ className: "text-slate-400", label: "실버" },
-	{ className: "text-amber-500", label: "골드" },
+	{ className: "text-slate-600", label: "실버" },
+	{ className: "text-amber-800", label: "골드" },
 	{ className: "text-slate-500", label: "슬레이트" },
-	{ className: "text-sky-500", label: "스카이" },
-	{ className: "text-violet-500", label: "바이올렛" },
+	{ className: "text-sky-700", label: "스카이" },
+	{ className: "text-violet-600", label: "바이올렛" },
 ];
 
 // 누적 일수 → 티어. tiers를 주입할 수 있고(운영자 설정값), 비었으면 상수로 폴백한다.
