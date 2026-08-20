@@ -5,6 +5,7 @@ import {
 	mergeSeoKeywords,
 	SITE_KEYWORDS,
 	SITE_TITLE,
+	siteOpenGraph,
 	toJsonLdScriptContent,
 } from "@/lib/bambi/seo";
 
@@ -50,6 +51,23 @@ describe("SITE_KEYWORDS", () => {
 		expect(
 			mergeSeoKeywords(["밤알바", "  "], ["밤알바", "서울 밤알바"])
 		).toEqual(["밤알바", "서울 밤알바"]);
+	});
+});
+
+describe("siteOpenGraph", () => {
+	it("페이지 값은 덮고 기본 필드는 보존한다", () => {
+		const og = siteOpenGraph({
+			title: "서울 밤알바",
+			description: "서울 지역 공개 공고",
+			url: "/jobs/seoul",
+		});
+		expect(og.title).toBe("서울 밤알바");
+		expect(og.description).toBe("서울 지역 공개 공고");
+		expect(og.url).toBe("/jobs/seoul");
+		expect(og.type).toBe("website");
+		expect(og.locale).toBe("ko_KR");
+		expect(og.siteName).toBeTruthy();
+		expect(og.images).toHaveLength(1);
 	});
 });
 

@@ -5,7 +5,11 @@ import {
 	jobLandingKeywords,
 	jobLandingTitle,
 } from "@/lib/bambi/job-landing";
-import { mergeSeoKeywords, SITE_KEYWORDS } from "@/lib/bambi/seo";
+import {
+	mergeSeoKeywords,
+	SITE_KEYWORDS,
+	siteOpenGraph,
+} from "@/lib/bambi/seo";
 
 // 공개 랜딩 인덱스. 서비스 소개 + 지역·업종 진입 링크 + 최신 공개 공고를 서버에서 그린다.
 export const metadata: Metadata = {
@@ -13,6 +17,11 @@ export const metadata: Metadata = {
 	description: jobLandingDescription({}),
 	keywords: mergeSeoKeywords(SITE_KEYWORDS, jobLandingKeywords({})),
 	alternates: { canonical: "/jobs" },
+	openGraph: siteOpenGraph({
+		title: jobLandingTitle({}),
+		description: jobLandingDescription({}),
+		url: "/jobs",
+	}),
 };
 
 export default function JobsLandingPage() {

@@ -124,6 +124,21 @@ export const mergeSeoKeywords = (
 	),
 ];
 
+// Next metadata의 openGraph는 최상위 키 단위 shallow-merge라, 페이지가 openGraph를
+// 부분 정의하면 루트의 images·siteName·locale·type이 통째로 사라진다. 이 헬퍼로
+// 기본 필드를 항상 실어 보존하고, 페이지 값(title·description·url)만 덮는다.
+export const siteOpenGraph = (page: {
+	title: string;
+	description: string;
+	url: string;
+}) => ({
+	type: "website" as const,
+	locale: "ko_KR",
+	siteName: BAMBI_COMPANY.serviceName,
+	images: [{ url: "/og-image.png", width: 1200, height: 630, alt: SITE_TITLE }],
+	...page,
+});
+
 // OG 배너를 로고로 겸용한다. schema.org logo는 래스터(PNG/JPG)만 인정돼
 // app/icon.svg는 쓸 수 없다. 정사각 브랜드 로고가 생기면 이 경로만 교체한다
 // (OG 이미지와 용도가 달라 레이아웃의 openGraph.images와는 일부러 묶지 않는다).
