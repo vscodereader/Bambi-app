@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useBambiAuth } from "./auth-client-provider";
@@ -35,11 +35,17 @@ export function RequireCommunityAccess({ children }: { children: ReactNode }) {
 
 function CommunityGate({ children }: { children: ReactNode }) {
 	const router = useRouter();
+	const pathname = usePathname();
 	const { accountStatus, canAccessCommunity, isPending } = useBambiAuth();
 	const notified = useRef(false);
 
 	useEffect(() => {
-		if (isPending || canAccessCommunity || notified.current) {
+		if (
+			isPending ||
+			canAccessCommunity ||
+			pathname.startsWith("/seeker/community/secret") ||
+			notified.current
+		) {
 			return;
 		}
 		notified.current = true;
@@ -49,9 +55,12 @@ function CommunityGate({ children }: { children: ReactNode }) {
 				: COMMUNITY_BLOCKED_MESSAGE
 		);
 		router.replace("/seeker");
-	}, [accountStatus, isPending, canAccessCommunity, router]);
+	}, [accountStatus, isPending, canAccessCommunity, pathname, router]);
 
-	if (isPending || !canAccessCommunity) {
+	if (
+		isPending ||
+		!(canAccessCommunity || pathname.startsWith("/seeker/community/secret"))
+	) {
 		return null;
 	}
 	return <>{children}</>;

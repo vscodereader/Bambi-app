@@ -212,7 +212,7 @@ export function ModeratorUsersTable({
 	});
 
 	return (
-		<div className="md:-mx-3 md:w-[calc(100%+1.5rem)]">
+		<div className="w-full">
 			<DataTable
 				columns={columns}
 				data={users}
@@ -225,7 +225,7 @@ export function ModeratorUsersTable({
 				reservePageRows
 				rowClassName="h-14"
 				showPageInput
-				tableClassName="overflow-hidden rounded-xl border border-border [&_td]:px-1 [&_th]:px-1"
+				tableClassName="overflow-hidden rounded-xl border border-border [&_td]:px-1 [&_th]:px-1 [&_thead_tr]:bg-primary/10 [&_thead_tr:not(:hover)_[data-slot=checkbox]]:!border-white [&_thead_tr:not(:hover)_[data-slot=checkbox]]:!bg-white [&_thead_tr:not(:hover)_[data-slot=checkbox]]:!text-primary [&_thead_tr:hover_[data-slot=checkbox]]:!border-input [&_thead_tr:hover_[data-slot=checkbox]]:!bg-background [&_thead_tr:hover_[data-slot=checkbox]]:!text-primary"
 			/>
 		</div>
 	);

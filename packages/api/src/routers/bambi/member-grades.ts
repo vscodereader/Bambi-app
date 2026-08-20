@@ -13,6 +13,12 @@ import {
 	getMemberPointsCap,
 	isPointsCapAllowed,
 } from "../../services/bambi-member-points";
+import {
+	createGradeIconUploadIntent,
+	deleteGradeIconObject,
+	isOwnedGradeIconKey,
+	resolveGradeIconUrl,
+} from "../../services/bambi-storage";
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 // site_settings 단일 행 고정 키(site-settings.ts SETTINGS_ROW_ID와 같은 값).
@@ -37,6 +43,21 @@ const createGradeInput = z.object({
 });
 
 const updateGradeInput = createGradeInput.extend({ id: z.string().uuid() });
+
+const updateGradeWithIconInput = updateGradeInput.extend({
+	iconStorageKey: z.string().min(1).max(512).nullable().optional(),
+});
+
+const createIconUploadInput = z.object({
+	byteSize: z
+		.number()
+		.int()
+		.positive()
+		.max(2 * 1024 * 1024),
+	fileName: z.string().trim().min(1).max(160),
+	gradeId: z.string().uuid(),
+	mimeType: z.literal("image/gif"),
+});
 
 const gradeIdInput = z.object({ id: z.string().uuid() });
 
@@ -77,9 +98,32 @@ export const memberGradesRouter = {
 			return { maxPoints: input.maxPoints };
 		}),
 
-	list: adminProcedure.handler(async () =>
-		db.select().from(bambiMemberGrade).orderBy(asc(bambiMemberGrade.minPoints))
-	),
+	list: adminProcedure.handler(async () => {
+		const rows = await db
+			.select()
+			.from(bambiMemberGrade)
+			.orderBy(asc(bambiMemberGrade.minPoints));
+		return rows.map((row) => ({
+			...row,
+			iconUrl: resolveGradeIconUrl(row.iconStorageKey),
+		}));
+	}),
+
+	createIconUpload: adminProcedure
+		.input(createIconUploadInput)
+		.handler(async ({ input }) => {
+			const [grade] = await db
+				.select({ id: bambiMemberGrade.id })
+				.from(bambiMemberGrade)
+				.where(eq(bambiMemberGrade.id, input.gradeId))
+				.limit(1);
+			if (!grade) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "등급을 찾을 수 없습니다.",
+				});
+			}
+			return await createGradeIconUploadIntent(input);
+		}),
 
 	create: adminProcedure.input(createGradeInput).handler(async ({ input }) => {
 		try {
@@ -98,35 +142,65 @@ export const memberGradesRouter = {
 		}
 	}),
 
-	update: adminProcedure.input(updateGradeInput).handler(async ({ input }) => {
-		try {
-			const [updated] = await db
-				.update(bambiMemberGrade)
-				.set({
-					color: input.color ?? null,
-					minPoints: input.minPoints,
-					name: input.name,
-				})
-				.where(eq(bambiMemberGrade.id, input.id))
-				.returning({ id: bambiMemberGrade.id });
-			if (!updated) {
-				throw new ORPCError("NOT_FOUND", {
-					message: "등급을 찾을 수 없습니다.",
-				});
+	update: adminProcedure
+		.input(updateGradeWithIconInput)
+		.handler(async ({ input }) => {
+			try {
+				if (
+					input.iconStorageKey &&
+					!input.iconStorageKey.startsWith("builtin/") &&
+					!isOwnedGradeIconKey({
+						gradeId: input.id,
+						storageKey: input.iconStorageKey,
+					})
+				) {
+					throw new ORPCError("FORBIDDEN", {
+						message: "이 등급에 업로드한 GIF만 사용할 수 있습니다.",
+					});
+				}
+				const [existing] = await db
+					.select({ iconStorageKey: bambiMemberGrade.iconStorageKey })
+					.from(bambiMemberGrade)
+					.where(eq(bambiMemberGrade.id, input.id))
+					.limit(1);
+				const [updated] = await db
+					.update(bambiMemberGrade)
+					.set({
+						color: input.color ?? null,
+						minPoints: input.minPoints,
+						name: input.name,
+						iconStorageKey: input.iconStorageKey,
+					})
+					.where(eq(bambiMemberGrade.id, input.id))
+					.returning({ id: bambiMemberGrade.id });
+				if (!updated) {
+					throw new ORPCError("NOT_FOUND", {
+						message: "등급을 찾을 수 없습니다.",
+					});
+				}
+				if (
+					input.iconStorageKey !== undefined &&
+					existing?.iconStorageKey &&
+					existing.iconStorageKey !== input.iconStorageKey
+				) {
+					await deleteGradeIconObject(existing.iconStorageKey);
+				}
+				return updated;
+			} catch (error) {
+				if (error instanceof ORPCError) {
+					throw error;
+				}
+				throw new ORPCError("CONFLICT", { message: DUP_MIN_POINTS });
 			}
-			return updated;
-		} catch (error) {
-			if (error instanceof ORPCError) {
-				throw error;
-			}
-			throw new ORPCError("CONFLICT", { message: DUP_MIN_POINTS });
-		}
-	}),
+		}),
 
-	remove: adminProcedure.input(gradeIdInput).handler(async ({ input }) =>
-		db.transaction(async (tx) => {
+	remove: adminProcedure.input(gradeIdInput).handler(async ({ input }) => {
+		const removedIcon = await db.transaction(async (tx) => {
 			const [grade] = await tx
-				.select({ minPoints: bambiMemberGrade.minPoints })
+				.select({
+					iconStorageKey: bambiMemberGrade.iconStorageKey,
+					minPoints: bambiMemberGrade.minPoints,
+				})
 				.from(bambiMemberGrade)
 				.where(eq(bambiMemberGrade.id, input.id))
 				.limit(1);
@@ -147,7 +221,9 @@ export const memberGradesRouter = {
 			await tx
 				.delete(bambiMemberGrade)
 				.where(eq(bambiMemberGrade.id, input.id));
-			return { id: input.id };
-		})
-	),
+			return grade.iconStorageKey;
+		});
+		await deleteGradeIconObject(removedIcon);
+		return { id: input.id };
+	}),
 };

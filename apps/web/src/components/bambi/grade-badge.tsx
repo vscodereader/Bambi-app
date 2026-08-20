@@ -1,7 +1,27 @@
 import { Badge } from "@bambi-app/ui/components/badge";
+import Image from "next/image";
 
 interface Props {
-	grade: { name: string; color: string | null } | null;
+	grade: { name: string; color: string | null; iconUrl?: string | null } | null;
+}
+
+export function GradeIcon({
+	iconUrl,
+	name,
+}: {
+	iconUrl?: string | null;
+	name: string;
+}) {
+	return iconUrl ? (
+		<Image
+			alt={`${name} 등급 아이콘`}
+			className="size-6 shrink-0 object-contain"
+			height={24}
+			src={iconUrl}
+			unoptimized
+			width={24}
+		/>
+	) : null;
 }
 
 // 작성자명·회원 옆 등급 뱃지. 등급 없음(게스트·미산정)이면 렌더하지 않는다.
@@ -11,5 +31,10 @@ export function GradeBadge({ grade }: Props) {
 	if (!grade) {
 		return null;
 	}
-	return <Badge variant="secondary">{grade.name}</Badge>;
+	return (
+		<Badge className="gap-1" variant="secondary">
+			<GradeIcon iconUrl={grade.iconUrl} name={grade.name} />
+			{grade.name}
+		</Badge>
+	);
 }

@@ -21,6 +21,7 @@ import {
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { CSSProperties } from "react";
 import { toast } from "sonner";
 import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import {
@@ -243,10 +244,6 @@ export function useLegalAdvisorNavGuard():
 	};
 }
 
-// 중고거래·무료 법률 자문은 2열 그리드의 한 칸을 좌우로 나눠 쓴다(모바일은 세로 스택).
-// 글이 적은 두 게시판이라 각각 한 칸씩 차지하면 홈에서 빈 카드가 두 줄로 늘어진다.
-const PAIRED_BOARD_KEYS = ["market", "legal"];
-
 // 수다방 홈과 seeker 홈 커뮤니티 섹션이 공유하는 미리보기 배치. 공지사항은 글 유무와
 // 무관하게 항상 최상단 전폭, 나머지 게시판은 그 아래 2열 그리드. 두 화면이 각자 배치를
 //들고 있어 홈과 수다방의 같은 섹션이 서로 다르게 보이던 걸 한 컴포넌트로 모은다.
@@ -263,63 +260,57 @@ export function CommunityOverviewGrid({
 	// BoardPreviewCard와 같은 의미 — 지정 시 수다방 링크를 가로채 호출한 화면이 안내한다.
 	onBlockedNavigate?: (href: string) => void;
 }) {
-	const notice = boards.find((board) => board.key === "notice");
-	const pairedBoards = PAIRED_BOARD_KEYS.map((key) =>
-		boards.find((board) => board.key === key)
-	).filter((board) => board !== undefined);
-	const soloBoards = boards.filter(
-		(board) => board.key !== "notice" && !PAIRED_BOARD_KEYS.includes(board.key)
+	const boardsByRow = new Map<number, OverviewBoard[]>();
+	for (const board of boards) {
+		boardsByRow.set(board.rowIndex, [
+			...(boardsByRow.get(board.rowIndex) ?? []),
+			board,
+		]);
+	}
+	const rows = [...boardsByRow.entries()].sort(
+		([left], [right]) => left - right
 	);
 
 	// 로딩 자리표시자는 실제 게시판 수를 모른다(목록도 같이 오는 중) — 빌트인 배치와
 	// 같은 모양으로 자리만 잡아 둔다.
 	if (isPending) {
 		return (
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<BoardPreviewSkeleton className="md:col-span-2" />
+			<div className="flex flex-col gap-4">
 				<BoardPreviewSkeleton />
-				<BoardPreviewSkeleton />
-				<BoardPreviewSkeleton />
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<BoardPreviewSkeleton />
-					<BoardPreviewSkeleton />
-				</div>
 			</div>
 		);
 	}
 
 	return (
-		<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-			{notice ? (
-				<BoardPreviewCard
-					analyticsSurface={analyticsSurface}
-					board={notice}
-					className="md:col-span-2"
-					emptyText="등록된 공지사항이 없어요."
-					onBlockedNavigate={onBlockedNavigate}
-				/>
-			) : null}
-			{soloBoards.map((board) => (
-				<BoardPreviewCard
-					analyticsSurface={analyticsSurface}
-					board={board}
-					key={board.key}
-					onBlockedNavigate={onBlockedNavigate}
-				/>
-			))}
-			{pairedBoards.length > 0 ? (
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-					{pairedBoards.map((board) => (
-						<BoardPreviewCard
-							analyticsSurface={analyticsSurface}
-							board={board}
-							compact
-							key={board.key}
-							onBlockedNavigate={onBlockedNavigate}
-						/>
-					))}
+		<div className="flex w-full min-w-0 max-w-full flex-col gap-4 overflow-x-clip">
+			{rows.map(([rowIndex, rowBoards]) => (
+				<div
+					className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[repeat(var(--community-row-columns),minmax(0,1fr))]"
+					key={rowIndex}
+					style={
+						{
+							"--community-row-columns": rowBoards.length,
+						} as CSSProperties
+					}
+				>
+					{rowBoards
+						.toSorted((left, right) => left.position - right.position)
+						.map((board) => (
+							<BoardPreviewCard
+								analyticsSurface={analyticsSurface}
+								board={board}
+								className="w-full min-w-0 max-w-full"
+								emptyText={
+									board.key === "notice"
+										? "등록된 공지사항이 없어요."
+										: undefined
+								}
+								key={board.key}
+								onBlockedNavigate={onBlockedNavigate}
+							/>
+						))}
 				</div>
-			) : null}
+			))}
 		</div>
 	);
 }

@@ -42,6 +42,7 @@ import {
 	awardMemberPoints,
 } from "../../services/bambi-point-ledger";
 import { acquirePointShopUserLock } from "../../services/bambi-point-shop";
+import { resolveGradeIconUrl } from "../../services/bambi-storage";
 
 // 출석 대상 역할. 운영자·법률자문·게스트는 출석 대상이 아니다. 허용 목록으로 고정해
 // bambi_user_role에 값이 하나 늘어도 기본 판정이 "거부"가 되게 한다(bambi-authz 관례).
@@ -348,6 +349,7 @@ export const attendanceRouter = {
 						name: bambiMemberGrade.name,
 						minPoints: bambiMemberGrade.minPoints,
 						color: bambiMemberGrade.color,
+						iconStorageKey: bambiMemberGrade.iconStorageKey,
 					})
 					.from(bambiMemberGrade)
 					.orderBy(asc(bambiMemberGrade.minPoints)),
@@ -372,7 +374,13 @@ export const attendanceRouter = {
 							.limit(1)
 					)[0]?.points ?? 10,
 				checkedInToday: attendedDatesDesc[0] === today,
-				grade: current ? { color: current.color, name: current.name } : null,
+				grade: current
+					? {
+							color: current.color,
+							iconUrl: resolveGradeIconUrl(current.iconStorageKey ?? null),
+							name: current.name,
+						}
+					: null,
 				month,
 				nextGrade: upcoming
 					? { minPoints: upcoming.minPoints, name: upcoming.name }

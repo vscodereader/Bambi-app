@@ -5,10 +5,12 @@ import {
 	createPrivateSignedReadUrl,
 	createPrivateSignedUploadUrl,
 	createSignedUploadUrl,
+	deletePublicObjects,
 	getPublicObjectUrl,
 	isProductionStorageRuntime,
 	isPublicBucketConfigured,
 	shouldUsePrivateBucket,
+	shouldUsePublicBucket,
 } from "./gcs";
 
 export interface ChatAttachmentStorageInput {
@@ -80,6 +82,13 @@ export interface JobPostMediaUploadIntent {
 // 본문에 심는 흐름이 동일). 같은 필드를 한 번 더 적는 대신 별칭으로 둔다.
 export type EditorMediaUploadIntent = JobPostMediaUploadIntent;
 
+export interface GradeIconStorageInput {
+	byteSize: number;
+	fileName: string;
+	gradeId: string;
+	mimeType: "image/gif";
+}
+
 const normalizeFileNameForStorage = (fileName: string): string => {
 	const normalized = fileName
 		.trim()
@@ -92,6 +101,66 @@ const normalizeFileNameForStorage = (fileName: string): string => {
 };
 
 const JOB_POST_MEDIA_KEY_ROOT = "bambi-job-post-media";
+const GRADE_ICON_KEY_ROOT = "bambi-grade-icons";
+const BUILTIN_GRADE_ICON_KEY_ROOT = "builtin/";
+
+const buildGradeIconKeyPrefix = (gradeId: string): string =>
+	`${GRADE_ICON_KEY_ROOT}/${gradeId}/`;
+
+export const isOwnedGradeIconKey = ({
+	gradeId,
+	storageKey,
+}: {
+	gradeId: string;
+	storageKey: string;
+}): boolean =>
+	storageKey.startsWith(buildGradeIconKeyPrefix(gradeId)) &&
+	!storageKey.includes("..");
+
+export const resolveGradeIconUrl = (
+	storageKey: string | null
+): string | null => {
+	if (!storageKey) {
+		return null;
+	}
+	if (storageKey.startsWith(BUILTIN_GRADE_ICON_KEY_ROOT)) {
+		return `/${storageKey.slice(BUILTIN_GRADE_ICON_KEY_ROOT.length)}`;
+	}
+	if (!isProductionStorageRuntime()) {
+		return `/bambi/local-grade-icons?key=${encodeURIComponent(storageKey)}`;
+	}
+	return getPublicObjectUrl(storageKey);
+};
+
+export const createGradeIconUploadIntent = async ({
+	byteSize,
+	fileName,
+	gradeId,
+	mimeType,
+}: GradeIconStorageInput): Promise<JobPostMediaUploadIntent> => {
+	const storageFileName = normalizeFileNameForStorage(fileName);
+	const storageKey = `${buildGradeIconKeyPrefix(gradeId)}${randomUUID()}-${storageFileName}`;
+	return {
+		byteSize,
+		fileName: fileName.trim(),
+		mimeType,
+		storageKey,
+		uploadUrl: shouldUsePublicBucket()
+			? await createSignedUploadUrl({ byteSize, mimeType, storageKey })
+			: `/bambi/local-grade-icons?key=${encodeURIComponent(storageKey)}`,
+	};
+};
+
+export const deleteGradeIconObject = async (
+	storageKey: string | null
+): Promise<void> => {
+	if (
+		storageKey?.startsWith(`${GRADE_ICON_KEY_ROOT}/`) &&
+		shouldUsePublicBucket()
+	) {
+		await deletePublicObjects([storageKey]);
+	}
+};
 
 // 비공개 버킷(bambi-storage-private) 키 규칙 — 전 서비스 공통:
 //   seeker/{userId}/…            구직자 민감 파일(아직 미사용, 규칙만 예약)

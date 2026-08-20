@@ -6,6 +6,12 @@
 // 공유한다 — 화면이 규칙을 따로 구현하면 버튼은 열려 있는데 서버가 거절하는 상태가 생긴다.
 import { resolveAccountRestoreDecision } from "@bambi-app/api/services/bambi-account-restore";
 import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
+import {
 	AlertDialog,
 	AlertDialogAction,
 	AlertDialogCancel,
@@ -39,7 +45,7 @@ import {
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, MessageCircle } from "lucide-react";
+import { ChevronRight, FileTextIcon, MessageCircle } from "lucide-react";
 import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -50,11 +56,13 @@ import { createPortal } from "react-dom";
 import { ChatHistoryContent } from "@/app/moderator/chats/chat-history-dialog";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { PageControls } from "@/components/bambi/page-controls";
+import { SecretAuthorMark } from "@/components/bambi/secret-author-mark";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
 	COMMUNITY_BOARDS,
 	communityAuthorName,
+	communityPostPath,
 	formatCommunityDate,
 } from "@/lib/bambi/community";
 import {
@@ -71,12 +79,13 @@ import type {
 	ManagedUser,
 	QueueItem,
 	Report,
+	ReportCommunityTarget,
 	ReportSeverity,
 	RiskLevel,
 	UserStatus,
 	VisualTone,
 } from "@/lib/bambi/types";
-import { formatDateTime } from "@/lib/bambi-format";
+import { formatDateTime, formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 import { BOTTOM_NAV_STACK_OFFSET } from "../bottom-nav-shell";
 import { AppBar, Avatar, Badge, Button, StatGroup } from "../ds";
@@ -1269,16 +1278,46 @@ export function ReportList({
 	);
 }
 
+function PartyIcon({
+	gender,
+	icon,
+	name,
+}: {
+	gender?: "female" | "male";
+	icon: "chat" | "document" | "user";
+	name: string;
+}) {
+	if (icon === "chat" || icon === "document") {
+		return (
+			<span className="flex size-10 flex-none items-center justify-center rounded-xl bg-primary/10 text-primary">
+				{icon === "chat" ? (
+					<MessageCircle className="size-5" />
+				) : (
+					<FileTextIcon className="size-5" />
+				)}
+			</span>
+		);
+	}
+	if (gender) {
+		return <SecretAuthorMark gender={gender} showName={false} size="md" />;
+	}
+	return <Avatar name={name} size="sm" square />;
+}
+
 function PartyBox({
+	detail,
 	name,
 	role,
 	flagged,
 	icon = "user",
+	gender,
 }: {
+	detail?: string;
 	name: string;
 	role: string;
 	flagged?: boolean;
-	icon?: "chat" | "user";
+	icon?: "chat" | "document" | "user";
+	gender?: "female" | "male";
 }) {
 	return (
 		<div
@@ -1289,17 +1328,16 @@ function PartyBox({
 					: "border border-border"
 			)}
 		>
-			{icon === "chat" ? (
-				<span className="flex size-10 flex-none items-center justify-center rounded-xl bg-primary/10 text-primary">
-					<MessageCircle className="size-5" />
-				</span>
-			) : (
-				<Avatar name={name} size="sm" square />
-			)}
+			<PartyIcon gender={gender} icon={icon} name={name} />
 			<div className="min-w-0">
 				<div className="truncate font-bold text-[13.5px] text-foreground">
 					{name}
 				</div>
+				{detail ? (
+					<div className="truncate text-[11px] text-muted-foreground">
+						{detail}
+					</div>
+				) : null}
 				<div className="truncate text-[11px] text-muted-foreground">{role}</div>
 			</div>
 		</div>
@@ -1580,6 +1618,27 @@ const COMMUNITY_ACTIONS: Record<
 const getCommunityBoardLabel = (board: string): string =>
 	COMMUNITY_BOARDS.find((item) => item.key === board)?.label ?? board;
 
+const communityTargetHref = (
+	target: ReportCommunityTarget
+): Route | undefined => {
+	if (target.status !== "published" || !target.boardSlug) {
+		return;
+	}
+	if (target.kind === "comment" && target.parentStatus !== "published") {
+		return;
+	}
+	const postId = target.kind === "comment" ? target.postId : target.id;
+	if (!postId) {
+		return;
+	}
+	const postHref = communityPostPath(target.boardSlug, postId);
+	return (
+		target.kind === "comment"
+			? `${postHref}?highlightComment=${encodeURIComponent(target.id)}`
+			: postHref
+	) as Route;
+};
+
 function CommunityTargetPanel({
 	report,
 	onModerate,
@@ -1613,11 +1672,50 @@ function CommunityTargetPanel({
 	const kindLabel = target.kind === "post" ? "글" : "댓글";
 	const titleLabel =
 		target.kind === "comment" ? `원글: ${target.title}` : target.title;
+	const bodyLabel =
+		target.kind === "comment"
+			? `신고된 댓글: ${target.bodyPreview}`
+			: target.bodyPreview;
 	const statusBadge = COMMUNITY_STATUS_BADGE[target.status];
 	const actions = COMMUNITY_ACTIONS[target.status];
 	const canModerate =
 		reason.trim().length >= 2 && Boolean(onModerate) && !isApplying;
 	const reasonId = `community-reason-${target.id}`;
+	const targetHref = communityTargetHref(target);
+	const targetPreview = (
+		<div
+			className={cn(
+				"flex flex-col gap-2.5 rounded-[14px] border border-border bg-secondary p-[14px]",
+				targetHref &&
+					"transition-colors hover:border-primary/40 hover:bg-primary/5"
+			)}
+		>
+			<div className="flex flex-wrap items-center gap-2">
+				<Badge tone="neutral">
+					{target.boardLabel ?? getCommunityBoardLabel(target.board)}
+				</Badge>
+				<Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
+				<span className="ml-auto text-[11.5px] text-[color:var(--text-subtle)]">
+					{formatCommunityDate(target.createdAt)}
+				</span>
+			</div>
+			<div className="flex flex-wrap items-center gap-2 font-extrabold text-[15px] text-foreground leading-[1.4]">
+				<span>{titleLabel}</span>
+				{target.kind === "comment" && target.parentStatus === "deleted" ? (
+					<Badge tone="danger">원글 삭제됨</Badge>
+				) : null}
+				{target.kind === "comment" && target.parentStatus === "hidden" ? (
+					<Badge tone="neutral">원글 숨김</Badge>
+				) : null}
+			</div>
+			<p className="m-0 whitespace-pre-wrap text-[13px] text-[color:var(--text-default)] leading-[1.6]">
+				{bodyLabel}
+			</p>
+			<div className="text-[11.5px] text-muted-foreground">
+				작성자 {communityAuthorName(target.authorName)}
+			</div>
+		</div>
+	);
 
 	const runAction = async (status: CommunityTargetStatus) => {
 		const trimmed = reason.trim();
@@ -1634,24 +1732,16 @@ function CommunityTargetPanel({
 			<div className="font-bold text-[13px] text-foreground">
 				신고된 커뮤니티 {kindLabel}
 			</div>
-			<div className="flex flex-col gap-2.5 rounded-[14px] border border-border bg-secondary p-[14px]">
-				<div className="flex flex-wrap items-center gap-2">
-					<Badge tone="neutral">{getCommunityBoardLabel(target.board)}</Badge>
-					<Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
-					<span className="ml-auto text-[11.5px] text-[color:var(--text-subtle)]">
-						{formatCommunityDate(target.createdAt)}
-					</span>
-				</div>
-				<div className="font-extrabold text-[15px] text-foreground leading-[1.4]">
-					{titleLabel}
-				</div>
-				<p className="m-0 whitespace-pre-wrap text-[13px] text-[color:var(--text-default)] leading-[1.6]">
-					{target.bodyPreview}
-				</p>
-				<div className="text-[11.5px] text-muted-foreground">
-					작성자 {communityAuthorName(target.authorName)}
-				</div>
-			</div>
+			{targetHref ? (
+				<Link
+					aria-label={`${target.kind === "comment" ? "신고된 댓글" : titleLabel} 원문 보기`}
+					href={targetHref}
+				>
+					{targetPreview}
+				</Link>
+			) : (
+				targetPreview
+			)}
 			<div className="flex flex-col gap-2">
 				<div className="rounded-[14px] border border-border bg-secondary px-3 py-2.5">
 					<div className="mb-1 font-bold text-[13px] text-foreground">
@@ -1736,6 +1826,129 @@ function CommunityTargetPanel({
 	);
 }
 
+const reportCommunityTarget = (item: Report) => {
+	if (item.targetContext && "communityPost" in item.targetContext) {
+		return item.targetContext.communityPost;
+	}
+	if (item.targetContext && "communityComment" in item.targetContext) {
+		return item.targetContext.communityComment;
+	}
+	return null;
+};
+
+const reportCommunityBoardKey = (
+	target: ReturnType<typeof reportCommunityTarget>
+): string | null => {
+	if (!target) {
+		return null;
+	}
+	return "postBoard" in target ? target.postBoard : target.board;
+};
+
+const reportTargetRole = (
+	item: Report,
+	isCommunity: boolean,
+	isGuestAuthor: boolean,
+	isSecret: boolean
+): string => {
+	if (isSecret && !isGuestAuthor) {
+		return "피신고자";
+	}
+	if (isCommunity) {
+		return "피신고자 · 작성자";
+	}
+	return `피신고자 · ${item.targetUserRole ?? item.targetRole}`;
+};
+
+const MISSING_VERIFIED_IDENTITY = "본인인증 정보 없음";
+
+const verifiedPartyLines = (
+	label: string,
+	identity: {
+		phoneNumber: string;
+		realName: string;
+	} | null
+) => ({
+	detail: identity
+		? formatPhone(identity.phoneNumber)
+		: MISSING_VERIFIED_IDENTITY,
+	name: identity ? `${label} (${identity.realName})` : label,
+});
+
+const isChatReport = (item: Report): boolean =>
+	Boolean(
+		item.targetContext &&
+			("chatRoom" in item.targetContext || "chatMessage" in item.targetContext)
+	);
+
+const reportPartyPresentation = (
+	item: Report,
+	communityTarget: ReturnType<typeof reportCommunityTarget>
+) => {
+	const isSecret = reportCommunityBoardKey(communityTarget) === "secret";
+	const targetIdentity = communityTarget?.secretIdentity ?? null;
+	const memberIdentity = communityTarget?.authorIdentity ?? null;
+	const guestIdentity = communityTarget?.authorIdentity ?? null;
+	const isGuestAuthor = communityTarget?.authorRole === "guest";
+	const isCommunity = communityTarget !== null;
+	const isChat = isChatReport(item);
+	const reporterIdentity =
+		isCommunity || isChat ? (item.reporterVerifiedIdentity ?? null) : null;
+	const missing = MISSING_VERIFIED_IDENTITY;
+	let reporterName = item.reporter;
+	let reporterDetail: string | undefined;
+	let targetName = item.target;
+	let targetDetail: string | undefined;
+	if (isSecret) {
+		const reporter = verifiedPartyLines("회원", reporterIdentity);
+		reporterName = reporter.name;
+		reporterDetail = reporter.detail;
+		targetName = targetIdentity
+			? `${targetIdentity.realName} · ${formatPhone(targetIdentity.phoneNumber)}`
+			: missing;
+	} else if (communityTarget) {
+		const nickname = communityTarget.authorName ?? "회원";
+		const target = verifiedPartyLines(nickname, memberIdentity);
+		const reporter = verifiedPartyLines(item.reporter, reporterIdentity);
+		targetName = target.name;
+		targetDetail = target.detail;
+		reporterName = reporter.name;
+		reporterDetail = reporter.detail;
+	}
+	if (isGuestAuthor) {
+		const guest = verifiedPartyLines("비회원", guestIdentity);
+		targetName = guest.name;
+		targetDetail = guest.detail;
+	}
+	if (isChat) {
+		targetDetail = item.targetVerifiedIdentity
+			? `(${item.targetVerifiedIdentity.realName})`
+			: `(${missing})`;
+		reporterDetail = reporterIdentity
+			? `(${reporterIdentity.realName})`
+			: `(${missing})`;
+	}
+	const targetRole = reportTargetRole(
+		item,
+		isCommunity,
+		isGuestAuthor,
+		isSecret
+	);
+	return {
+		isSecret,
+		reporterGender: reporterIdentity?.gender,
+		reporterDetail,
+		reporterName,
+		reporterRole: isCommunity ? "신고자" : `신고자 · ${item.reporterRole}`,
+		targetDetail,
+		targetGender: isGuestAuthor
+			? guestIdentity?.gender
+			: targetIdentity?.gender,
+		targetName,
+		targetRole,
+	};
+};
+
 // 채팅방 신고는 채팅방 → 피신고자 → 신고자, 나머지는 피신고자/작성자 → 신고자 순서다.
 // 모바일에서 가로로 나란히 두면 좁은 폭(375px)에서 카드가 화면 밖으로 밀리므로
 // 데스크톱 사이드 패널과 동일하게 항상 세로로 쌓는다.
@@ -1754,18 +1967,57 @@ function ReportParties({
 		item.targetContext && "chatRoom" in item.targetContext
 			? item.targetContext.chatRoom
 			: null;
+	const communityTarget = reportCommunityTarget(item);
+	const communityTargetModel = item.communityTarget;
+	const communityHref = communityTargetModel
+		? communityTargetHref(communityTargetModel)
+		: undefined;
+	const communityBox = communityTargetModel ? (
+		<PartyBox
+			detail={
+				communityTargetModel.kind === "comment"
+					? "커뮤니티 댓글"
+					: "커뮤니티 글"
+			}
+			icon="document"
+			name={
+				communityTargetModel.kind === "comment"
+					? communityTargetModel.bodyPreview
+					: communityTargetModel.title
+			}
+			role={
+				communityTargetModel.status === "published"
+					? `${communityTargetModel.boardLabel ?? getCommunityBoardLabel(communityTargetModel.board)} 게시판`
+					: COMMUNITY_STATUS_BADGE[communityTargetModel.status].label
+			}
+		/>
+	) : null;
+	const presentation = reportPartyPresentation(item, communityTarget);
 	const targetBox = (
 		<PartyBox
+			detail={presentation.targetDetail}
 			flagged
+			gender={presentation.targetGender}
 			icon="user"
-			name={item.target}
-			role={`피신고자 · ${item.targetRole}`}
+			name={presentation.targetName}
+			role={presentation.targetRole}
 		/>
 	);
 	const targetUserId = item.targetUserId ?? null;
 
 	return (
 		<div className="flex flex-col gap-2.5">
+			{communityHref && communityBox ? (
+				<Link
+					aria-label="신고 대상 원문 보기"
+					className="flex min-w-0"
+					href={communityHref}
+				>
+					{communityBox}
+				</Link>
+			) : (
+				communityBox
+			)}
 			{chatRoom ? (
 				// biome-ignore lint/a11y/useValidAriaRole: PartyBox role is visible copy rather than a DOM ARIA role.
 				<PartyBox
@@ -1801,7 +2053,12 @@ function ReportParties({
 			) : (
 				targetBox
 			)}
-			<PartyBox name={item.reporter} role={`신고자 · ${item.reporterRole}`} />
+			<PartyBox
+				detail={presentation.reporterDetail}
+				gender={presentation.reporterGender}
+				name={presentation.reporterName}
+				role={presentation.reporterRole}
+			/>
 			<AlertDialog onOpenChange={setConfirmingWarning} open={confirmingWarning}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
@@ -2470,64 +2727,128 @@ function UserModerationHistory({ userId }: { userId: string }) {
 	);
 
 	return (
-		<div>
-			<div className="mb-2.5 font-bold text-[13px] text-foreground">
-				제재 이력
-			</div>
-			{historyQuery.isPending ? (
-				<div className="flex flex-col gap-2">
-					<Skeleton className="h-16 w-full" />
-					<Skeleton className="h-16 w-full" />
-				</div>
-			) : null}
-			{historyQuery.isError ? (
-				<p className="m-0 text-[12.5px] text-muted-foreground">
-					제재 이력을 불러오지 못했어요.
-				</p>
-			) : null}
-			{historyQuery.isSuccess && actions.length === 0 ? (
-				<p className="m-0 text-[12.5px] text-muted-foreground">
-					제재 이력이 없어요
-				</p>
-			) : null}
-			{actions.length > 0 ? (
-				<>
-					<ul className="m-0 flex list-none flex-col gap-2 p-0">
-						{actions.map((action) => (
+		<Accordion>
+			<AccordionItem value="moderation-history">
+				<AccordionTrigger>제재 이력</AccordionTrigger>
+				<AccordionContent>
+					{historyQuery.isPending ? (
+						<div className="flex flex-col gap-2">
+							<Skeleton className="h-16 w-full" />
+							<Skeleton className="h-16 w-full" />
+						</div>
+					) : null}
+					{historyQuery.isError ? (
+						<p className="m-0 text-[12.5px] text-muted-foreground">
+							제재 이력을 불러오지 못했어요.
+						</p>
+					) : null}
+					{historyQuery.isSuccess && actions.length === 0 ? (
+						<p className="m-0 text-[12.5px] text-muted-foreground">
+							제재 이력이 없어요
+						</p>
+					) : null}
+					{actions.length > 0 ? (
+						<>
+							<ul className="m-0 flex list-none flex-col gap-2 p-0">
+								{actions.map((action) => (
+									<li
+										className="rounded-[14px] border border-border bg-card p-3"
+										key={action.id}
+									>
+										<div className="flex items-center justify-between gap-2">
+											<span className="font-bold text-[13px] text-foreground">
+												{moderationActionLabel(action.action)}
+											</span>
+											<span className="whitespace-nowrap text-[11px] text-muted-foreground">
+												{formatDateTime(action.createdAt)}
+											</span>
+										</div>
+										<p className="mt-1 mb-0 text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
+											{action.reason}
+										</p>
+										<div className="mt-1 text-[11px] text-muted-foreground">
+											처리자 {action.adminName}
+										</div>
+									</li>
+								))}
+							</ul>
+							{pageCount > 1 ? (
+								<div className="mt-3 flex justify-end">
+									<PageControls
+										disabled={historyQuery.isFetching}
+										onPageChange={setPage}
+										page={page}
+										pageCount={pageCount}
+									/>
+								</div>
+							) : null}
+						</>
+					) : null}
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
+	);
+}
+
+function UserContentHistory({ userId }: { userId: string }) {
+	const [page, setPage] = useState(1);
+	const [filter, setFilter] = useState<"all" | "comment" | "post">("all");
+	const query = useQuery(
+		orpc.bambi.contentHistory.listAdminMemberContent.queryOptions({
+			input: { filter, page, pageSize: 10, userId },
+		})
+	);
+	const pageCount = Math.max(1, Math.ceil((query.data?.totalCount ?? 0) / 10));
+	return (
+		<Accordion>
+			<AccordionItem value="content-history">
+				<AccordionTrigger>작성 콘텐츠 이력</AccordionTrigger>
+				<AccordionContent>
+					<Select
+						onValueChange={(value) => {
+							setFilter(value as typeof filter);
+							setPage(1);
+						}}
+						value={filter}
+					>
+						<SelectTrigger>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">전체</SelectItem>
+							<SelectItem value="post">글</SelectItem>
+							<SelectItem value="comment">댓글</SelectItem>
+						</SelectContent>
+					</Select>
+					<ul className="mt-3 grid list-none gap-2 p-0">
+						{query.data?.items.map((item) => (
 							<li
-								className="rounded-[14px] border border-border bg-card p-3"
-								key={action.id}
+								className="rounded-lg border p-3"
+								key={`${item.kind}-${item.id}`}
 							>
-								<div className="flex items-center justify-between gap-2">
-									<span className="font-bold text-[13px] text-foreground">
-										{moderationActionLabel(action.action)}
-									</span>
-									<span className="whitespace-nowrap text-[11px] text-muted-foreground">
-										{formatDateTime(action.createdAt)}
+								<div className="flex justify-between gap-3">
+									<strong>
+										{item.kind === "post" ? "글" : "댓글"} · {item.title}
+									</strong>
+									<span className="text-muted-foreground text-xs">
+										{item.status}
 									</span>
 								</div>
-								<p className="mt-1 mb-0 text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
-									{action.reason}
-								</p>
-								<div className="mt-1 text-[11px] text-muted-foreground">
-									처리자 {action.adminName}
-								</div>
+								<p className="mb-0 line-clamp-3 text-sm">{item.body}</p>
 							</li>
 						))}
 					</ul>
-					{pageCount > 1 ? (
-						<div className="mt-3 flex justify-end">
-							<PageControls
-								disabled={historyQuery.isFetching}
-								onPageChange={setPage}
-								page={page}
-								pageCount={pageCount}
-							/>
-						</div>
-					) : null}
-				</>
-			) : null}
-		</div>
+					<div className="mt-3 flex justify-end">
+						<PageControls
+							disabled={query.isFetching}
+							onPageChange={setPage}
+							page={page}
+							pageCount={pageCount}
+						/>
+					</div>
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
 	);
 }
 
@@ -2740,6 +3061,7 @@ export function UserDetail({
 					</div>
 				) : null}
 				<UserModerationHistory key={item.id} userId={item.id} />
+				<UserContentHistory userId={item.id} />
 				<div>
 					<div className="mb-2.5 font-bold text-[13px] text-foreground">
 						제재 적용

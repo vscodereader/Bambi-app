@@ -1,7 +1,20 @@
 "use client";
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@bambi-app/ui/components/alert-dialog";
 import { Button } from "@bambi-app/ui/components/button";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { cn } from "@bambi-app/ui/lib/utils";
+import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
 import { isApiJobId } from "@/lib/bambi/api-jobs";
 import { formatDate } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
@@ -25,6 +38,21 @@ export function JobReviewSection({
 	reviewCount,
 }: JobReviewSectionProps) {
 	const canQuery = isApiJobId(jobPostId);
+	const [unlocked, setUnlocked] = useState(
+		new Map<string, { body: string; rating: number }>()
+	);
+	const [pendingReviewId, setPendingReviewId] = useState<string | null>(null);
+	const unlockMutation = useMutation(
+		orpc.bambi.reviews.unlock.mutationOptions({
+			onError: (error) => toast.error(error.message || "후기를 열지 못했어요."),
+			onSuccess: (data, variables) => {
+				setUnlocked((current) =>
+					new Map(current).set(variables.reviewId, data)
+				);
+				setPendingReviewId(null);
+			},
+		})
+	);
 	const reviewsQuery = useInfiniteQuery({
 		...orpc.bambi.reviews.listByJobPost.infiniteOptions({
 			getNextPageParam: (lastPage, _allPages, lastOffset) =>
@@ -48,6 +76,7 @@ export function JobReviewSection({
 			)
 		).values(),
 	];
+	const reviewViewPoints = reviewsQuery.data?.pages[0]?.reviewViewPoints ?? 0;
 
 	return (
 		<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
@@ -89,25 +118,57 @@ export function JobReviewSection({
 
 			{items.length > 0 ? (
 				<ul className="mt-4 grid list-none gap-3 p-0">
-					{items.map((item) => (
-						<li
-							className="rounded-lg border border-border bg-background p-4"
-							key={item.id}
-						>
-							<div className="flex flex-wrap items-center gap-2">
-								<RatingStars rating={item.rating} />
-								<span className="font-bold text-foreground text-sm">
-									{item.reviewerDisplayName}
-								</span>
-								<span className="ml-auto text-muted-foreground text-xs">
-									{formatDate(item.createdAt)}
-								</span>
-							</div>
-							<p className="mt-2 mb-0 whitespace-pre-wrap text-foreground text-sm leading-relaxed">
-								{item.body}
-							</p>
-						</li>
-					))}
+					{items.map((item) => {
+						const paid = unlocked.get(item.id);
+						const body = item.body ?? paid?.body ?? null;
+						const rating = item.rating ?? paid?.rating ?? null;
+						return (
+							<li
+								className="rounded-lg border border-border bg-background"
+								key={item.id}
+							>
+								<button
+									className="w-full cursor-pointer p-4 text-left disabled:cursor-default"
+									disabled={!item.locked || Boolean(paid)}
+									onClick={() => {
+										if (item.locked && !paid) {
+											setPendingReviewId(item.id);
+										}
+									}}
+									type="button"
+								>
+									<div className="flex flex-wrap items-center gap-2">
+										{rating === null ? null : (
+											<RatingStars
+												className={cn(
+													"transition-opacity",
+													item.locked &&
+														!paid &&
+														"select-none opacity-35 blur-[1px]"
+												)}
+												rating={rating}
+											/>
+										)}
+										<span className="font-bold text-foreground text-sm">
+											{item.reviewerDisplayName}
+										</span>
+										<span className="ml-auto text-muted-foreground text-xs">
+											{formatDate(item.createdAt)}
+										</span>
+									</div>
+									{body === null ? (
+										<p className="mt-2 mb-0 select-none text-sm blur-md">
+											후기를 확인하려면 포인트를 사용해 주세요.
+										</p>
+									) : (
+										<p className="mt-2 mb-0 whitespace-pre-wrap text-foreground text-sm leading-relaxed">
+											{body}
+										</p>
+									)}
+								</button>
+							</li>
+						);
+					})}
 				</ul>
 			) : null}
 
@@ -122,6 +183,42 @@ export function JobReviewSection({
 					</Button>
 				</div>
 			) : null}
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setPendingReviewId(null);
+					}
+				}}
+				open={pendingReviewId !== null}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>후기를 확인할까요?</AlertDialogTitle>
+						<AlertDialogDescription>
+							<span className="block">
+								후기를 확인하기 위해서는 {reviewViewPoints}pt를 사용해야합니다!
+							</span>
+							<span className="block whitespace-nowrap text-[9.5px] tracking-[-0.03em] sm:text-sm sm:tracking-normal">
+								이 페이지를 나갔다 오시면 다시 포인트를 사용하셔야 해요.
+							</span>
+							<span className="block">꼼꼼히 확인하세요!</span>
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>취소</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={unlockMutation.isPending}
+							onClick={() => {
+								if (pendingReviewId) {
+									unlockMutation.mutate({ reviewId: pendingReviewId });
+								}
+							}}
+						>
+							확인
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</section>
 	);
 }

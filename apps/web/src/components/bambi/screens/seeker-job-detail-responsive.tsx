@@ -14,6 +14,7 @@ import type { Job, JobDescriptionBlock } from "@/lib/bambi/types";
 import { formatPhone } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
 import { AdBannerRail, HorizontalAdBannerRail } from "../ad-banner";
+import { CollapsibleJobDescription } from "../collapsible-job-description";
 import { Avatar, Badge, Button, Card, InfoTile } from "../ds";
 import {
 	AlertCircle,
@@ -328,8 +329,7 @@ export function SeekerJobDetailResponsive({
 							</div>
 						</div>
 					</section>
-					<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
-						<h2 className="m-0 font-extrabold text-xl">공고 설명</h2>
+					<CollapsibleJobDescription>
 						{job.descriptionBlocks?.length ? (
 							<div className="mt-4 grid gap-4">
 								{job.descriptionBlocks.map((block) => (
@@ -358,7 +358,12 @@ export function SeekerJobDetailResponsive({
 								))}
 							</div>
 						) : null}
-					</section>
+					</CollapsibleJobDescription>
+					<JobReviewSection
+						jobPostId={job.id}
+						ratingAverage={job.rating}
+						reviewCount={job.reviews}
+					/>
 					<section className="mt-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border md:p-7">
 						<h2 className="m-0 font-extrabold text-xl">안전 확인</h2>
 						<div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -391,11 +396,6 @@ export function SeekerJobDetailResponsive({
 							</Card>
 						</div>
 					</section>
-					<JobReviewSection
-						jobPostId={job.id}
-						ratingAverage={job.rating}
-						reviewCount={job.reviews}
-					/>
 				</main>
 				<aside className="hidden lg:block">
 					<div className="sticky top-20 rounded-lg bg-card p-5 shadow-sm ring-1 ring-border">
@@ -413,11 +413,11 @@ export function SeekerJobDetailResponsive({
 								</span>
 								{job.location}
 							</div>
-							<div className="flex items-center gap-2 font-bold">
-								<span className="inline-flex size-4 text-coral-600">
+							<div className="flex min-w-0 items-start gap-2 font-bold">
+								<span className="mt-0.5 inline-flex size-4 shrink-0 text-coral-600">
 									<ClockIcon />
 								</span>
-								{job.hours}
+								<span className="min-w-0 break-all">{job.hours}</span>
 							</div>
 						</div>
 						{showBlockedNotice ? (

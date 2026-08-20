@@ -64,6 +64,11 @@ const NAV_ITEMS: { href: Route; icon: ReactNode; label: string }[] = [
 		label: "내 신고 내역",
 	},
 	{
+		href: "/seeker/me/content" as Route,
+		icon: <ClipboardListIcon />,
+		label: "글 관리",
+	},
+	{
 		href: "/seeker/me/interviews" as Route,
 		icon: <ClockIcon />,
 		label: "예정된 면접",

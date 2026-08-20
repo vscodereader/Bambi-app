@@ -14,6 +14,7 @@ process.env.CORS_ORIGIN ||= "http://localhost:3001";
 const {
 	assertGuestOwnership,
 	assertGuestPostAccess,
+	assertAnonymousPostAllowed,
 	assertLegalAdvisorBoardScope,
 	assertLegalAdvisorRoleSwitch,
 	canBypassLock,
@@ -64,6 +65,32 @@ describe("resolveCommunityActor — 비회원 분기", () => {
 		await expect(
 			findCommunityActor({ guest: { gender: "male", gid: "g-4" } })
 		).resolves.toBeNull();
+	});
+});
+
+describe("비밀글 익명 작성 정책", () => {
+	it("비회원도 secret 게시판에서는 강제 익명 작성을 통과한다", () => {
+		expect(
+			codeOf(() =>
+				assertAnonymousPostAllowed({
+					board: "secret",
+					isAnonymous: true,
+					role: "guest",
+				})
+			)
+		).toBeUndefined();
+	});
+
+	it("일반 게시판의 비회원 익명 작성 제한은 유지한다", () => {
+		expect(
+			codeOf(() =>
+				assertAnonymousPostAllowed({
+					board: "free",
+					isAnonymous: true,
+					role: "guest",
+				})
+			)
+		).toBe("FORBIDDEN");
 	});
 });
 

@@ -4,9 +4,11 @@ import {
 	adminModerationAction,
 	bambiSiteSettings,
 	communityBoard,
+	communityBoardHomeLayout,
 	communityComment,
 	communityPost,
 	communityPostLike,
+	communityPostLikeHistory,
 	crawledCommunityTopic,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
@@ -27,26 +29,35 @@ import {
 import { unionAll } from "drizzle-orm/pg-core";
 import z from "zod";
 
-import { protectedProcedure, publicProcedure } from "../../index";
+import {
+	adminProcedure,
+	protectedProcedure,
+	publicProcedure,
+} from "../../index";
 import {
 	type BambiAccessProfile,
 	requireAdminProfile,
 } from "../../services/bambi-authz";
 import { assertNoBannedWords } from "../../services/bambi-banned-words";
 import {
+	assertAnonymousPostAllowed,
 	assertGuestOwnership,
 	assertGuestPostAccess,
 	assertLegalAdvisorBoardScope,
+	assertSecretActorIdentity,
 	type CommunityActor,
 	canBypassLock,
-	findCommunityActor,
+	findCommunityActorForBoard,
 	findCommunityMember,
 	GUEST_LOCKED_ERROR,
+	isSecretBoard,
 	LEGAL_BOARD,
 	requireCommunityMember,
 	requireGuestPassword,
 	resolveCommunityActor,
+	resolveCommunityActorForBoard,
 	resolveLockedForBoard,
+	SECRET_AUTHOR_NAME,
 } from "../../services/bambi-community-authz";
 import {
 	hashCommunityPassword,
@@ -73,6 +84,7 @@ import {
 	notifyBambiNotification,
 	notifyModerationAction,
 } from "../../services/bambi-notifications";
+import { getVerifiedIdentityForAdmin } from "../../services/bambi-secret-identity";
 import { createEditorMediaUploadIntent } from "../../services/bambi-storage";
 import {
 	assertTiptapDoc,
@@ -247,19 +259,6 @@ const updatePostInput = postIdInput.extend({
 });
 
 const PROMOTION_ROLE_ERROR = "광고글은 업소회원만 표시할 수 있습니다.";
-const assertAnonymousPostAllowed = ({
-	isAnonymous,
-	role,
-}: {
-	isAnonymous: boolean;
-	role: string;
-}): void => {
-	if (isAnonymous && role !== "job_seeker") {
-		throw new ORPCError("FORBIDDEN", {
-			message: "이 게시판에서는 익명으로 작성할 수 없습니다.",
-		});
-	}
-};
 
 const assertCommentsDisabledAllowed = (
 	commentsDisabled: boolean | undefined,
@@ -395,11 +394,23 @@ const maskLockedSummaries = <
 			: item
 	);
 
+const visiblePostAuthorName = (post: {
+	authorDisplayName: string;
+	authorGender: "female" | "male" | null;
+}): string => (post.authorGender ? SECRET_AUTHOR_NAME : post.authorDisplayName);
+
+const visiblePostAuthorImage = (
+	post: { authorGender: "female" | "male" | null; isAnonymous: boolean },
+	image: null | string | undefined
+): null | string =>
+	post.authorGender || post.isAnonymous ? null : (image ?? null);
+
 // 목록·상세 공용 요약 셀렉션. 작성자 표시명은 글별 author_display_name 컬럼 값.
 // source·isCrawled는 순수 글 쪽 상수다 — 수집 글 union(crawledCommunityFeedSelection)이
 // 같은 키·순서로 마주 서야 해서 여기에 둔다. isCrawled는 union 정렬 키로만 쓰이고
 // 응답(toPublicSummary)에는 나가지 않는다.
 const postSummarySelection = {
+	authorGender: communityPost.authorGender,
 	authorName: communityPost.authorDisplayName,
 	authorRole: communityPost.authorRole,
 	authorUserId: communityPost.authorUserId,
@@ -430,6 +441,7 @@ const postSummarySelection = {
 // 컬럼을 맞추므로 postSummarySelection과 **키 순서까지** 같아야 한다(bambi-job-feed.ts와 같은 원칙).
 // 없는 값은 리터럴로 채운다 — 수집 글엔 작성자 계정·잠금·추천·광고가 없다.
 const crawledCommunityFeedSelection = {
+	authorGender: sql<CommunityPostColumns["authorGender"]>`null`,
 	// 작성자 자리에 원본 게시판명을 노출한다(설계 D4 — "밤문화이야기"). 개인 필명이 아니다.
 	// board_name은 nullable이라 coalesce로 채운다 — UNION 상대(순수 author_display_name)가
 	// NOT NULL이고, 값이 비어도 화면에 빈 작성자가 서면 안 된다.
@@ -663,6 +675,7 @@ const toPublicSummary = (
 	authorGrade: summary.authorUserId
 		? (gradeBadges?.get(summary.authorUserId) ?? null)
 		: null,
+	authorGender: summary.authorGender,
 	authorName: summary.authorName,
 	authorRole: summary.authorRole,
 	board: summary.board,
@@ -781,6 +794,7 @@ const readLikeCount = async (
 const selectVisibleCommentRows = async (target: SQL) => {
 	const rows = await db
 		.select({
+			authorGender: communityComment.authorGender,
 			authorGuestId: communityComment.authorGuestId,
 			// 표시명은 작성 시점 스냅샷이 아니라 계정의 정본이라 탈퇴 여부를 함께 읽는다 —
 			// 탈퇴자는 표시 계층에서 "탈퇴한 회원"으로 바꿔 내보낸다(listComments).
@@ -840,6 +854,45 @@ const actorUserId = (actor: CommunityActor): string | null =>
 
 const actorGuestId = (actor: CommunityActor): string | null =>
 	actor.kind === "guest" ? actor.gid : null;
+
+const secretActorGender = (
+	actor: CommunityActor,
+	board: string
+): "female" | "male" | null => {
+	if (!isSecretBoard(board)) {
+		return null;
+	}
+	return actor.kind === "guest" ? actor.gender : actor.profile.gender;
+};
+
+const resolvePostAuthorName = async (
+	actor: CommunityActor,
+	input: { authorName: string; board: string; isAnonymous: boolean }
+): Promise<string> => {
+	if (isSecretBoard(input.board)) {
+		return SECRET_AUTHOR_NAME;
+	}
+	return await resolveMemberPostAuthorName(
+		actor,
+		input.authorName,
+		input.isAnonymous
+	);
+};
+
+const validateGuestPostPassword = (
+	actor: CommunityActor,
+	board: string,
+	isLocked: boolean,
+	password?: string
+): void => {
+	if (actor.kind !== "guest") {
+		return;
+	}
+	if (isLocked && board !== LEGAL_BOARD) {
+		throw new ORPCError("BAD_REQUEST", { message: GUEST_LOCKED_ERROR });
+	}
+	requireGuestPassword(password);
+};
 
 // 버킷이 여러 개면 전부 통과해야 한다 — 비회원은 gid·IP 이중이다. 쿠키를 지우면 gid가
 // 새로 발급되므로 IP 축이 없으면 사실상 무제한이고, IP만 세면 공용망 사용자가 서로를 막는다.
@@ -936,7 +989,8 @@ const toCommentItems = (
 				? (gradeBadges.get(row.authorUserId) ?? null)
 				: null,
 			authorImage: policy.authorImage,
-			authorName: policy.authorName,
+			authorGender: row.authorGender,
+			authorName: row.authorGender ? SECRET_AUTHOR_NAME : policy.authorName,
 			authorRole: row.authorRole,
 			body: row.body,
 			canDelete: policy.canDelete,
@@ -952,7 +1006,8 @@ const toCommentItems = (
 // (listComments)과 수집 글 댓글(getCrawledTopic)이 같은 규칙을 써야 해서 한 곳에 둔다.
 const memberCommentPolicy =
 	(profile: BambiAccessProfile) => (row: CommentRow) => ({
-		authorImage: row.authorDeletedAt ? null : row.authorImage,
+		authorImage:
+			row.authorGender || row.authorDeletedAt ? null : row.authorImage,
 		// 비회원 댓글엔 계정이 없어 leftJoin 이름이 null이다 — 고정 표시명을 세운다.
 		// 탈퇴한 회원 댓글은 원본 닉네임 대신 탈퇴 문구로 바뀐다.
 		authorName: resolveVisibleDisplayName(
@@ -968,7 +1023,9 @@ const memberCommentPolicy =
 // 수정·삭제 버튼은 gid 일치일 때만 여는 힌트이고, 실제 게이트는 서버의 비밀번호 검증이다.
 const guestCommentPolicy = (guestId: null | string) => (row: CommentRow) => ({
 	authorImage:
-		row.authorGuestId || row.authorDeletedAt ? null : row.authorImage,
+		row.authorGender || row.authorGuestId || row.authorDeletedAt
+			? null
+			: row.authorImage,
 	authorName: row.authorGuestId ? GUEST_DISPLAY_NAME : null,
 	canDelete: Boolean(guestId) && row.authorGuestId === guestId,
 	canEdit: Boolean(guestId) && row.authorGuestId === guestId,
@@ -1117,13 +1174,56 @@ const reconcileCommentPointsOnStatusChange = async (
 };
 
 export const communityRouter = {
+	getSecretAuthorIdentity: adminProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				targetType: z.enum(["comment", "post"]),
+			})
+		)
+		.handler(async ({ input }) => {
+			const [owner] =
+				input.targetType === "post"
+					? await db
+							.select({
+								board: communityPost.board,
+								guestId: communityPost.authorGuestId,
+								userId: communityPost.authorUserId,
+							})
+							.from(communityPost)
+							.where(eq(communityPost.id, input.id))
+							.limit(1)
+					: await db
+							.select({
+								board: communityPost.board,
+								guestId: communityComment.authorGuestId,
+								userId: communityComment.authorUserId,
+							})
+							.from(communityComment)
+							.innerJoin(
+								communityPost,
+								eq(communityPost.id, communityComment.postId)
+							)
+							.where(eq(communityComment.id, input.id))
+							.limit(1);
+			if (owner?.board !== "secret") {
+				throw new ORPCError("NOT_FOUND");
+			}
+			const identity = await getVerifiedIdentityForAdmin(owner);
+			if (!identity) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "검증 신원을 찾을 수 없습니다.",
+				});
+			}
+			return { realName: identity.realName };
+		}),
 	// 회원과 비회원(여성 성인인증 게스트)이 같은 목록을 본다 — 게시판·필터·정렬이 모두 같고,
 	// 갈리는 건 개인화 축(내 글)과 잠금 우회뿐이다. 게스트는 profile이 null이라 비밀글 제목이
 	// 항상 마스킹된다(회원 비소유자와 동일).
 	listPosts: publicProcedure
 		.input(listPostsInput)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActor(context);
+			const actor = await resolveCommunityActorForBoard(context, input.board);
 			const profile = actor.kind === "member" ? actor.profile : null;
 			// 법률자문 계정은 legal 게시판만 — 가상 큐레이션 best도 비-legal 글이 섞이므로 막는다.
 			assertLegalAdvisorBoardScope(profile, input.board);
@@ -1228,7 +1328,7 @@ export const communityRouter = {
 
 		const windowStart = bestWindowStart();
 		// work_talk 미리보기도 스위치 ON이면 목록과 같은 union 규칙으로 수집 글을 섞는다.
-		const [communityFeedOn, bestIcon, boards] = await Promise.all([
+		const [communityFeedOn, bestIcon, boards, homeLayout] = await Promise.all([
 			isCrawledCommunityFeedEnabled(),
 			getBestBoardIcon(),
 			db
@@ -1242,7 +1342,21 @@ export const communityRouter = {
 				.from(communityBoard)
 				.where(eq(communityBoard.isActive, true))
 				.orderBy(asc(communityBoard.sortOrder)),
+			db
+				.select({
+					boardKey: communityBoardHomeLayout.boardKey,
+					position: communityBoardHomeLayout.position,
+					rowIndex: communityBoardHomeLayout.rowIndex,
+				})
+				.from(communityBoardHomeLayout)
+				.orderBy(
+					asc(communityBoardHomeLayout.rowIndex),
+					asc(communityBoardHomeLayout.position)
+				),
 		]);
+		const layoutByKey = new Map(
+			homeLayout.map((item) => [item.boardKey, item] as const)
+		);
 
 		// 법률 자문처럼 전 글이 잠긴 게시판도 같은 마스킹 규칙을 그대로 탄다
 		// (작성자·운영자·법률자문만 실제 제목을 본다).
@@ -1254,21 +1368,37 @@ export const communityRouter = {
 				icon: bestIcon,
 				key: BEST_BOARD,
 				label: BEST_BOARD_LABEL,
+				position: layoutByKey.get(BEST_BOARD)?.position,
+				rowIndex: layoutByKey.get(BEST_BOARD)?.rowIndex,
 				slug: BEST_BOARD,
 			},
-			...boards,
-		].filter((board) => {
-			if (profile?.role === "job_seeker" && profile.gender === "male") {
-				return board.key === "notice";
-			}
-			if (profile?.role === "legal_advisor") {
-				return (
-					board.key === "legal" ||
-					(profile.gender === "male" && board.key === "notice")
-				);
-			}
-			return true;
-		});
+			...boards.map((board) => ({
+				...board,
+				position: layoutByKey.get(board.key)?.position,
+				rowIndex: layoutByKey.get(board.key)?.rowIndex,
+			})),
+		]
+			.filter((board) => {
+				if (board.rowIndex === undefined || board.position === undefined) {
+					return false;
+				}
+				if (profile?.role === "job_seeker" && profile.gender === "male") {
+					return board.key === "notice" || board.key === "secret";
+				}
+				if (profile?.role === "legal_advisor") {
+					return (
+						board.key === "legal" ||
+						board.key === "secret" ||
+						(profile.gender === "male" && board.key === "notice")
+					);
+				}
+				return true;
+			})
+			.sort(
+				(left, right) =>
+					(left.rowIndex ?? 0) - (right.rowIndex ?? 0) ||
+					(left.position ?? 0) - (right.position ?? 0)
+			);
 
 		const postsPerBoard = await Promise.all(
 			previews.map((board) =>
@@ -1285,6 +1415,8 @@ export const communityRouter = {
 		return {
 			boards: previews.map((board, index) => ({
 				...board,
+				position: board.position ?? 0,
+				rowIndex: board.rowIndex ?? 0,
 				// 홈 미리보기(요약)는 등급 뱃지를 싣지 않는다 — 게시판마다 배치 조회를 더하지
 				// 않는다. 등급은 목록·상세에서만 노출한다.
 				posts: maskLockedSummaries(postsPerBoard[index] ?? [], profile).map(
@@ -1366,8 +1498,9 @@ export const communityRouter = {
 			return {
 				// author_user_id는 익명성 때문에 계속 제외하고 등급(이름·색)만 노출한다.
 				authorGrade,
-				authorImage: post.isAnonymous ? null : (postAuthor?.image ?? null),
-				authorName: post.authorDisplayName,
+				authorGender: post.authorGender,
+				authorImage: visiblePostAuthorImage(post, postAuthor?.image),
+				authorName: visiblePostAuthorName(post),
 				authorRole: post.authorRole,
 				board: post.board,
 				body: post.body,
@@ -1404,11 +1537,9 @@ export const communityRouter = {
 			})
 		)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActor(context);
-			// 게스트는 profile이 null이라 잠금 우회가 없다 — 비밀글은 회원 비소유자와 똑같이
-			// 비밀번호로만 열린다(게스트는 비밀글을 쓸 수 없어 자기 글이 잠긴 경우도 없다).
-			const profile = actor.kind === "member" ? actor.profile : null;
 			const post = await findPublishedPost(input.postId);
+			const actor = await resolveCommunityActorForBoard(context, post.board);
+			const profile = actor.kind === "member" ? actor.profile : null;
 			assertLegalAdvisorBoardScope(profile, post.board);
 			const [postAuthor] = post.authorUserId
 				? await db
@@ -1421,7 +1552,8 @@ export const communityRouter = {
 			if (post.isLocked && !canBypassLock(post, profile)) {
 				if (!input.password) {
 					return {
-						authorName: post.authorDisplayName,
+						authorGender: post.authorGender,
+						authorName: visiblePostAuthorName(post),
 						board: post.board,
 						createdAt: post.createdAt,
 						id: post.id,
@@ -1479,8 +1611,9 @@ export const communityRouter = {
 			return {
 				// author_user_id는 익명성 때문에 계속 제외하고 등급(이름·색)만 노출한다.
 				authorGrade,
-				authorImage: post.isAnonymous ? null : (postAuthor?.image ?? null),
-				authorName: post.authorDisplayName,
+				authorGender: post.authorGender,
+				authorImage: visiblePostAuthorImage(post, postAuthor?.image),
+				authorName: visiblePostAuthorName(post),
 				authorRole: post.authorRole,
 				board: post.board,
 				body: post.body,
@@ -1612,7 +1745,8 @@ export const communityRouter = {
 	createPost: publicProcedure
 		.input(createPostInput)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActor(context);
+			const actor = await resolveCommunityActorForBoard(context, input.board);
+			await assertSecretActorIdentity(actor, input.board);
 			const role = actorRole(actor);
 			if (actor.kind === "member") {
 				await assertCommunityWarningRestriction({
@@ -1622,14 +1756,11 @@ export const communityRouter = {
 				});
 			}
 			assertAnonymousPostAllowed({
-				isAnonymous: input.isAnonymous,
+				board: input.board,
+				isAnonymous: isSecretBoard(input.board) || input.isAnonymous,
 				role,
 			});
-			const authorName = await resolveMemberPostAuthorName(
-				actor,
-				input.authorName,
-				input.isAnonymous
-			);
+			const authorName = await resolvePostAuthorName(actor, input);
 			assertLegalAdvisorBoardScope(
 				actor.kind === "member" ? actor.profile : null,
 				input.board
@@ -1672,12 +1803,7 @@ export const communityRouter = {
 			}
 			// 비회원은 게시판이 좁고 비밀번호가 필수다. 법률 자문을 뺀 보드에서는 is_locked가
 			// false로 남는다 — 비밀글은 공개 경로에서 숨겨져 작성자 본인도 다시 읽지 못한다.
-			if (actor.kind === "guest") {
-				if (isLocked && input.board !== LEGAL_BOARD) {
-					throw new ORPCError("BAD_REQUEST", { message: GUEST_LOCKED_ERROR });
-				}
-				requireGuestPassword(input.password);
-			}
+			validateGuestPostPassword(actor, input.board, isLocked, input.password);
 			// 검증을 모두 통과한 뒤에 센다 — 금칙어·비번 오류로 튕긴 시도가 1분 락을
 			// 먹으면 고쳐서 다시 낼 수도 없다.
 			const writeRateLimit = assertWriteRateLimit({
@@ -1701,6 +1827,7 @@ export const communityRouter = {
 						.insert(communityPost)
 						.values({
 							authorDisplayName: authorName,
+							authorGender: secretActorGender(actor, input.board),
 							authorGuestId: actorGuestId(actor),
 							authorRole: role,
 							authorUserId,
@@ -1710,7 +1837,7 @@ export const communityRouter = {
 							commentsDisabled: input.commentsDisabled,
 							isLocked,
 							isEvent: input.isEvent,
-							isAnonymous: input.isAnonymous,
+							isAnonymous: isSecretBoard(input.board) || input.isAnonymous,
 							isPromotion: input.isPromotion,
 							// 비번 미입력(잠그지 않은 회원 글)은 빈 문자열로 저장한다 — verify가 항상
 							// 실패해 잠금 게이트·비작성자 수정이 자연히 차단된다.
@@ -1759,8 +1886,8 @@ export const communityRouter = {
 	updatePost: publicProcedure
 		.input(updatePostInput)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
+			const actor = await resolveCommunityActorForBoard(context, post.board);
 			assertLegalAdvisorBoardScope(
 				actor.kind === "member" ? actor.profile : null,
 				post.board
@@ -1770,15 +1897,16 @@ export const communityRouter = {
 				input.commentsDisabled ?? post.commentsDisabled;
 			const nextIsAnonymous = input.isAnonymous ?? post.isAnonymous;
 			assertAnonymousPostAllowed({
+				board: post.board,
 				isAnonymous: nextIsAnonymous,
 				role: actorRole(actor),
 			});
 			assertCommentsDisabledAllowed(input.commentsDisabled, actorRole(actor));
-			const authorName = await resolveMemberPostAuthorName(
-				actor,
-				input.authorName,
-				nextIsAnonymous
-			);
+			const authorName = await resolvePostAuthorName(actor, {
+				authorName: input.authorName,
+				board: post.board,
+				isAnonymous: nextIsAnonymous,
+			});
 			assertTiptapDoc(input.body);
 			await assertNoBannedWords([input.title, extractTiptapText(input.body)]);
 			await assertDisplayNameAllowed(authorName, {
@@ -1858,8 +1986,8 @@ export const communityRouter = {
 	deletePost: publicProcedure
 		.input(deletePostInput)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
+			const actor = await resolveCommunityActorForBoard(context, post.board);
 			if (actor.kind === "guest") {
 				assertGuestOwnership(post, input.password);
 			} else {
@@ -1895,8 +2023,8 @@ export const communityRouter = {
 	toggleLike: publicProcedure
 		.input(postReadInput)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
+			const actor = await resolveCommunityActorForBoard(context, post.board);
 			if (actor.kind === "guest") {
 				await assertBoard(post.board, { forWrite: true });
 				assertGuestPostAccess(post, actor.gid);
@@ -1942,6 +2070,17 @@ export const communityRouter = {
 						})
 						.where(eq(communityPost.id, input.postId))
 						.returning({ likeCount: communityPost.likeCount });
+					if (actor.kind === "member") {
+						await tx
+							.update(communityPostLikeHistory)
+							.set({ isActive: false })
+							.where(
+								and(
+									eq(communityPostLikeHistory.userId, actor.profile.userId),
+									eq(communityPostLikeHistory.postId, input.postId)
+								)
+							);
+					}
 					return { isLiked: false, likeCount: updated?.likeCount ?? 0 };
 				}
 
@@ -1956,6 +2095,35 @@ export const communityRouter = {
 				if (inserted.length === 0) {
 					const likeCount = await readLikeCount(tx, input.postId);
 					return { isLiked: true, likeCount };
+				}
+				if (actor.kind === "member") {
+					const [board] = await tx
+						.select({ slug: communityBoard.slug })
+						.from(communityBoard)
+						.where(eq(communityBoard.key, post.board))
+						.limit(1);
+					await tx
+						.insert(communityPostLikeHistory)
+						.values({
+							boardKey: post.board,
+							boardSlug: board?.slug ?? post.board,
+							postId: post.id,
+							title: post.title,
+							userId: actor.profile.userId,
+						})
+						.onConflictDoUpdate({
+							set: {
+								boardKey: post.board,
+								boardSlug: board?.slug ?? post.board,
+								isActive: true,
+								likedAt: new Date(),
+								title: post.title,
+							},
+							target: [
+								communityPostLikeHistory.userId,
+								communityPostLikeHistory.postId,
+							],
+						});
 				}
 				const [updated] = await tx
 					.update(communityPost)
@@ -1973,8 +2141,8 @@ export const communityRouter = {
 	listComments: publicProcedure
 		.input(postReadInput)
 		.handler(async ({ context, input }) => {
-			const actor = await findCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
+			const actor = await findCommunityActorForBoard(context, post.board);
 
 			if (actor?.kind === "member") {
 				const { profile } = actor;
@@ -2019,8 +2187,9 @@ export const communityRouter = {
 	createComment: publicProcedure
 		.input(createCommentInput)
 		.handler(async ({ context, input }) => {
-			const actor = await resolveCommunityActor(context);
 			const post = await findPublishedPost(input.postId);
+			const actor = await resolveCommunityActorForBoard(context, post.board);
+			await assertSecretActorIdentity(actor, post.board);
 			if (actor.kind === "member") {
 				await assertCommunityWarningRestriction({
 					board: post.board,
@@ -2087,6 +2256,7 @@ export const communityRouter = {
 					.insert(communityComment)
 					.values({
 						authorGuestId: actorGuestId(actor),
+						authorGender: secretActorGender(actor, post.board),
 						authorRole: actorRole(actor),
 						authorUserId: commentAuthorUserId,
 						body: input.body,

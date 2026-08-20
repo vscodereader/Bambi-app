@@ -10,7 +10,8 @@ export type CommunityBoardKey =
 	| "free"
 	| "work_talk"
 	| "market"
-	| "legal";
+	| "legal"
+	| "secret";
 
 export interface CommunityBoardMeta {
 	// 운영자만 글을 쓸 수 있는 게시판(공지사항). 목록/폼에서 글쓰기 권한 게이트에 쓴다.
@@ -92,6 +93,13 @@ export const COMMUNITY_BOARDS: BuiltinBoardMeta[] = [
 		writable: true,
 	},
 	{
+		description: "본인인증 이용자가 익명으로 이야기를 나눠요",
+		key: "secret",
+		label: "비밀글",
+		slug: "secret",
+		writable: true,
+	},
+	{
 		description: "법률자문에게 비밀글로 물어보는 무료 상담",
 		key: "legal",
 		label: "무료 법률 자문",
@@ -137,6 +145,7 @@ export const toBoardMetas = (
 // 법률 자문 게시판은 글이 전부 비밀글(서버 강제)이고 연락처 입력이 열린다 — 폼·상세가
 // 같은 판정을 쓰도록 한 곳에 둔다.
 export const isLegalBoardKey = (key: string): boolean => key === "legal";
+export const isSecretBoardKey = (key: string): boolean => key === "secret";
 
 // 빌트인 게시판 key → 표시 라벨. key 원값이 화면에 새지 않도록 표시는 라벨 맵을 거친다.
 // 운영자가 추가한 게시판은 여기 없으므로 DB 라벨(communityBoards.list)을 먼저 보고
@@ -174,7 +183,9 @@ export const communityBoardPath = (slug: string): string =>
 // 법률자문 계정이 눌러도 되는 수다방 경로 — 수다방 홈과 legal 게시판(목록·글·글쓰기).
 // 그 외 게시판은 서버가 FORBIDDEN을 내므로 카드는 그대로 보여주되 클릭만 가로챈다.
 export const isLegalAdvisorAllowedPath = (href: string): boolean =>
-	href === COMMUNITY_ROOT_PATH || href.startsWith(communityBoardPath("legal"));
+	href === COMMUNITY_ROOT_PATH ||
+	href.startsWith(communityBoardPath("legal")) ||
+	href.startsWith(communityBoardPath("secret"));
 
 export const communityPostPath = (slug: string, postId: string): string =>
 	`/seeker/community/${slug}/${postId}`;

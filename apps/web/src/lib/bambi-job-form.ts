@@ -376,7 +376,8 @@ export const toPlainJobDescription = (
 const isAllowedUploadUrl = (uploadUrl: string): boolean =>
 	uploadUrl.startsWith("https://") ||
 	(process.env.NODE_ENV !== "production" &&
-		uploadUrl.startsWith("/bambi/local-chat-attachments?"));
+		(uploadUrl.startsWith("/bambi/local-chat-attachments?") ||
+			uploadUrl.startsWith("/bambi/local-grade-icons?")));
 
 // 서명 URL로 브라우저가 GCS에 직접 PUT 한다. Content-Type은 서명에 묶여 있어
 // 인텐트에서 선언한 값과 정확히 일치해야 GCS가 받아준다.

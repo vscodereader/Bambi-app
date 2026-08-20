@@ -67,6 +67,37 @@ describe("notificationTitle", () => {
 		).toBe("내 후기가 숨김 처리됐어요");
 	});
 
+	it("후기 포인트 지급·숨김 회수·재게시 금액을 사용자 문구로 표시한다", () => {
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "review_written", amount: 30 },
+					targetType: "point_transaction",
+				})
+			)
+		).toBe("포인트 30가 지급되었어요! - 후기 작성");
+		expect(
+			notificationTitle(
+				view({
+					metadata: {
+						action: "review_hidden",
+						amount: -30,
+						reason: "개인정보 노출",
+					},
+					targetType: "point_transaction",
+				})
+			)
+		).toBe("포인트 30가 차감되었어요 ㅠㅠ - 후기 숨김 (개인정보 노출)");
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "review_republished", amount: 50 },
+					targetType: "point_transaction",
+				})
+			)
+		).toBe("포인트 50가 지급되었어요! - 후기 재게시");
+	});
+
 	it("공고 승인은 결제 대기·재공개·즉시 게시로 갈린다", () => {
 		expect(
 			notificationTitle(

@@ -169,10 +169,14 @@ export type CommunityTargetStatus = "published" | "hidden" | "deleted";
 export interface ReportCommunityTarget {
 	authorName: string | null;
 	board: string;
+	boardLabel?: string | null;
+	boardSlug?: string | null;
 	bodyPreview: string;
 	createdAt: Date | string;
 	id: string;
 	kind: "post" | "comment";
+	// 댓글이면 원글의 현재 상태. 수집 글처럼 원글 행이 없으면 null.
+	parentStatus?: CommunityTargetStatus | null;
 	// 댓글이면 원글 id.
 	postId?: string;
 	status: CommunityTargetStatus;
@@ -189,7 +193,13 @@ export interface Report {
 	note: string;
 	reason: string;
 	reporter: string;
+	reporterGender?: "female" | "male" | null;
 	reporterRole: string;
+	reporterVerifiedIdentity?: {
+		gender: "female" | "male";
+		phoneNumber: string;
+		realName: string;
+	} | null;
 	resolutionReason?: string | null;
 	sev: ReportSeverity;
 	status: "open" | "closed";
@@ -202,6 +212,13 @@ export interface Report {
 	targetType?: ReportTargetType;
 	// 신고 대상 콘텐츠 작성자 또는 채팅 피신고자의 실제 사용자 id.
 	targetUserId?: string | null;
+	// 상세의 피신고자 역할. 목록의 targetRole(신고 대상 종류)과 분리한다.
+	targetUserRole?: string | null;
+	targetVerifiedIdentity?: {
+		gender: "female" | "male";
+		phoneNumber: string;
+		realName: string;
+	} | null;
 	thread: ThreadMessage[];
 	time: string;
 }
@@ -215,8 +232,12 @@ export interface ManagedUser {
 	// 소프트 탈퇴 시각. null이 아니면 탈퇴한 계정이다.
 	deletedAt: Date | null;
 	email: string;
-	// 회원 등급 뱃지(이름·색). 게스트·미산정이면 null.
-	grade: { name: string; color: string | null } | null;
+	// 회원 등급 뱃지(이름·색·공용 GIF). 게스트·미산정이면 null.
+	grade: {
+		name: string;
+		color: string | null;
+		iconUrl?: string | null;
+	} | null;
 	id: string;
 	isPhoneVerified: boolean;
 	// 표시용 가입일(포맷 완료 문자열). 정렬은 joinedAt으로 한다.
