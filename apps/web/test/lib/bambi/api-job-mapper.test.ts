@@ -171,3 +171,26 @@ describe("toMarketplaceJob", () => {
 		);
 	});
 });
+
+describe("toMarketplaceJob adPeriod", () => {
+	const base = {
+		id: "22222222-2222-4222-8222-222222222222",
+		industryCategory: "cafe",
+		payAmount: 12_000,
+		payUnit: "시급",
+		region: "서울",
+		status: "published",
+		title: "카페 알바",
+	} as Parameters<typeof toMarketplaceJob>[0];
+
+	it("adPeriod가 있으면 그대로 흘린다", () => {
+		expect(
+			toMarketplaceJob({ ...base, adPeriod: { count: 22, totalDays: 900 } })
+				.adPeriod
+		).toEqual({ count: 22, totalDays: 900 });
+	});
+
+	it("adPeriod가 없으면 null로 채운다", () => {
+		expect(toMarketplaceJob(base).adPeriod).toBeNull();
+	});
+});

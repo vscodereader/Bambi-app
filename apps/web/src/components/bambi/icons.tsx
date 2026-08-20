@@ -18,6 +18,7 @@ import {
 	ClipboardList,
 	Clock,
 	Copy,
+	Crown,
 	EllipsisVertical,
 	Eye,
 	EyeOff,
@@ -29,6 +30,7 @@ import {
 	type LucideIcon,
 	type LucideProps,
 	MapPin,
+	Medal,
 	Menu,
 	MessageCircle,
 	MessagesSquare,
@@ -70,6 +72,7 @@ export const ChevronRightIcon = fill(ChevronRight);
 export const ClipboardListIcon = fill(ClipboardList);
 export const ClockIcon = fill(Clock);
 export const CopyIcon = fill(Copy);
+export const CrownIcon = fill(Crown);
 export const DollarCircle = fill(CircleDollarSign);
 export const DotsVertical = fill(EllipsisVertical);
 export const EyeIcon = fill(Eye);
@@ -82,6 +85,7 @@ export const Home2 = fill(House);
 export const ImageIcon = fill(ImageIconBase);
 export const LockIcon = fill(Lock);
 export const MapPinIcon = fill(MapPin);
+export const MedalIcon = fill(Medal);
 export const MenuIcon = fill(Menu);
 export const Message = fill(MessageCircle);
 export const MessagesIcon = fill(MessagesSquare);

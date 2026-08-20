@@ -1,6 +1,6 @@
 {
-  "id": "9873c19e-ab8e-42bd-9e70-8df8e306b1d9",
-  "prevId": "ef86eecd-9687-428e-b493-3530c3cf938f",
+  "id": "5d53999a-633e-47ea-afc8-f45531ff49ae",
+  "prevId": "01215dc3-c928-4130-89ef-170dd3bedad6",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1432,6 +1432,84 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bambi_ad_period_tier": {
+      "name": "bambi_ad_period_tier",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "icon": {
+          "name": "icon",
+          "type": "bambi_ad_period_tier_icon",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "icon_image_url": {
+          "name": "icon_image_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "color_class": {
+          "name": "color_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "min_days": {
+          "name": "min_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_days": {
+          "name": "max_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -8822,6 +8900,11 @@
         "side-horizontal",
         "none"
       ]
+    },
+    "public.bambi_ad_period_tier_icon": {
+      "name": "bambi_ad_period_tier_icon",
+      "schema": "public",
+      "values": ["medal", "crown"]
     },
     "public.bambi_gender": {
       "name": "bambi_gender",

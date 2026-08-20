@@ -56,6 +56,96 @@ describe("visual job marketplace components", () => {
 		expect(source).toContain('organic: "neutral"');
 		// 4열 컴팩트화로 설명(shortDesc) 줄과 truncateDesc는 제거됨
 		expect(source).not.toContain("truncateDesc");
+		// a11y: 버튼이 카드 전체를 덮고(flex-1) 접근성 이름을 준다 —
+		// 스크린리더가 잘린 제목·급여 누락 대신 전체 정보를 읽는다.
+		expect(source).toContain("aria-label={");
+		expect(source).toContain("flex flex-1 cursor-pointer");
+		// a11y #7: 카드 버튼에 브랜드 코럴 포커스 링을 명시한다(브라우저 기본 outline 대체).
+		// active 카드의 ring-coral-100보다 진한 ring-coral-400 + rounded-md로 각지지 않게.
+		expect(source).toContain("focus-visible:outline-none");
+		expect(source).toContain("focus-visible:ring-2");
+		expect(source).toContain("focus-visible:ring-coral-400");
+		expect(source).toContain("focus-visible:ring-offset-2");
+		expect(source).toContain("rounded-md border-none");
+		// a11y #5: 스페셜/추천/급구 구분이 테두리 색뿐이라 aria-label 끝에 톤 라벨을 붙인다.
+		expect(source).toContain('special: "스페셜 공고"');
+		expect(source).toContain('urgent: "급구 공고"');
+		expect(source).toContain('recommended: "추천 공고"');
+		expect(source).toContain("toneAriaLabel[tone]");
+		// 급여 금액·단위 배지는 브랜드 톤 유지 결정으로 coral-600(4.32:1)을 쓴다 —
+		// 대비 상향(coral-700)은 적용했다가 사용자 결정으로 롤백됨(2026-08-20).
+		expect(source).toContain("text-coral-600");
+		// a11y: 커버 이미지는 업소명이 옆에 텍스트로 있어 장식 처리(alt="")한다.
+		expect(source).toContain('alt=""');
+	});
+
+	it("renders the ad-period badge in the salary row without adding a new row", () => {
+		const source = readComponent("visual-job-card.tsx");
+
+		// 배지는 lib 티어·포맷과 등급 아이콘을 쓴다. 아이콘은 공용 컴포넌트가 그린다 —
+		// 업로드 이미지/프리셋 분기를 카드·안내·설정이 각자 재구현하지 않게 한다.
+		expect(source).toContain("adPeriodTier");
+		expect(source).toContain("formatAdPeriod");
+		expect(source).toContain("AdPeriodTierIcon");
+		expect(source).toContain("tier.iconImageUrl");
+		// null이면 렌더하지 않는다(조건부 렌더)
+		expect(source).toContain("job.adPeriod");
+		// 급여 행(mt-auto)에 얹는다 — 새 행 추가 없이 오른쪽 끝(ml-auto) 배치
+		expect(source).toContain("mt-auto flex items-center");
+		expect(source).toContain("ml-auto");
+		// 테두리 없이 글자처럼 얹고(border-0), pr-0으로 카드 콘텐츠 오른쪽 경계에 맞춘다.
+		// py-0은 미관이 아니라 결합이다 — 아이콘 24px + 세로 패딩이 급여 행 h-9(36px)을
+		// 넘으면 카드 높이가 늘어 광고 레일 비율(aspect-[259/122])까지 어긋난다.
+		expect(source).toContain("border-0 py-0 pr-0");
+		expect(source).toContain('className="size-6"');
+		// 접근성 툴팁
+		expect(source).toContain("누적");
+	});
+
+	it("shows the ad-period grade table on the employer ad guide", () => {
+		const source = readComponent("screens/employer-ad-guide.tsx");
+
+		// 등급표는 이제 운영자 설정값을 읽는 훅에서 온다(없으면 상수 폴백).
+		expect(source).toContain("useAdPeriodTiers");
+		expect(source).toContain("formatAdPeriodTierRange");
+		expect(source).toContain("누적 광고일수 등급");
+		// 카드와 같은 등급 아이콘 컴포넌트를 쓴다(업로드 이미지도 그대로 따라온다)
+		expect(source).toContain("AdPeriodTierIcon");
+		expect(source).toContain("tier.iconImageUrl");
+	});
+
+	// 등급 아이콘은 업로드 이미지가 프리셋을 이긴다. GIF를 애니메이션으로 보이게 하려면
+	// next/image 최적화를 꺼야 한다 — unoptimized가 빠지면 첫 프레임만 남아 요구사항이 깨진다.
+	it("prefers the uploaded tier icon image and keeps GIFs animated", () => {
+		const source = readComponent("ad-period-tier-icon.tsx");
+
+		expect(source).toContain("iconImageUrl");
+		expect(source).toContain("unoptimized");
+		expect(source).toContain("MedalIcon");
+		expect(source).toContain("CrownIcon");
+	});
+
+	it("wires the ad-period tier settings section into the ad-products console", () => {
+		const page = readComponent("../../app/moderator/ad-products/page.tsx");
+		const settings = readComponent("ad-period-tier-settings.tsx");
+
+		// 광고 상품 관리 페이지 하단에 등급 관리 섹션을 얹는다.
+		expect(page).toContain("AdPeriodTierSettings");
+		// 접이식 섹션은 shadcn Accordion으로 감싼다.
+		expect(settings).toContain("Accordion");
+		expect(settings).toContain("누적 광고일수 등급");
+		// 목록 조회·CRUD 뮤테이션을 orpc로 연결한다.
+		expect(settings).toContain("adPeriodTiers.list");
+		expect(settings).toContain("adPeriodTiers.create");
+		expect(settings).toContain("adPeriodTiers.update");
+		expect(settings).toContain("adPeriodTiers.remove");
+		// 색·아이콘은 자유 입력이 아니라 프리셋/토글에서 고른다.
+		expect(settings).toContain("AD_PERIOD_TIER_COLOR_PRESETS");
+		expect(settings).toContain("ToggleGroup");
+		// 프리셋 대신 쓸 아이콘 이미지를 직접 올릴 수 있다(GIF 포함).
+		expect(settings).toContain("adPeriodTiers.createIconUpload");
+		expect(settings).toContain("uploadFileToSignedUrl");
+		expect(settings).toContain("image/gif");
 	});
 
 	it("makes every ad banner link to the advertised job detail page", () => {
@@ -99,7 +189,7 @@ describe("visual job marketplace components", () => {
 		// 가로형도 수집·결제 구분 없이 규격 슬롯 하나로 그린다. 기본값 16:9는 상단 프리미엄
 		// 3칸이 쓰는 값이라 좌측 레일 높이를 맞추더라도 여기서 바뀌면 안 된다.
 		expect(horizontal).toContain("aspect-[16/9] w-full rounded-lg border");
-		expect(horizontal).not.toContain("aspect-[259/118]");
+		expect(horizontal).not.toContain("aspect-[259/122]");
 		expect(horizontal).toContain('"object-fill"');
 		expect(horizontal).not.toContain("item.crawled");
 		expect(horizontal).not.toContain("h-auto");
@@ -107,7 +197,7 @@ describe("visual job marketplace components", () => {
 		expect(banner).not.toContain("if (!item.href)");
 	});
 
-	// 좌측 사이드(w-[259px]) 레일 슬롯은 공고 카드 높이 118px에 맞춘다 —
+	// 좌측 사이드(w-[259px]) 레일 슬롯은 공고 카드 높이 122px에 맞춘다 —
 	// 16:9면 ≈146px라 옆 카드보다 커진다. 고정 px가 아니라 비율로 처리한다.
 	it("sizes the left rail slots to the job card height", () => {
 		const banner = readComponent("ad-banner.tsx");
@@ -118,7 +208,7 @@ describe("visual job marketplace components", () => {
 		);
 
 		expect(banner).toContain(
-			'const RAIL_SLOT_ASPECT_CLASS = "aspect-[259/118]"'
+			'const RAIL_SLOT_ASPECT_CLASS = "aspect-[259/122]"'
 		);
 		// 세 렌더 경로(배너·자리표시·스켈레톤)가 모두 같은 비율 상수를 쓴다.
 		expect(rail.match(/RAIL_SLOT_ASPECT_CLASS/g)).toHaveLength(3);
@@ -248,14 +338,15 @@ describe("visual job marketplace components", () => {
 		const chatList = readComponent("screens/seeker-chat-list-responsive.tsx");
 		const chatRoom = readComponent("screens/seeker-chat-room-responsive.tsx");
 		const contactReveal = readComponent("screens/contact-reveal.tsx");
-		const myPageShell = readComponent("my-page-shell.tsx");
+		const myPageLayout = readComponent("../../app/seeker/me/layout.tsx");
 
 		// 채팅 목록·상세·연락처 공개 본문을 헤더와 동일한 고정폭으로 맞춘다
 		for (const source of [chatList, chatRoom, contactReveal]) {
 			expect(source).toContain("SEEKER_CONTENT_WIDTH");
 		}
-		// 내 정보(마이페이지) 계열은 공용 셸이 같은 상수의 원본(APP_CONTENT_WIDTH)으로 폭을 잡는다
-		expect(myPageShell).toContain("APP_CONTENT_WIDTH");
+		// 내 정보(마이페이지) 폭 캡은 공용 셸이 아니라 me/layout.tsx가 seeker 중앙 컬럼과
+		// 같은 SEEKER_CONTENT_WIDTH로 건다(셸은 캡 없이 그 안을 채운다).
+		expect(myPageLayout).toContain("SEEKER_CONTENT_WIDTH");
 		// 개별 하드코딩 폭은 제거됐다(공유 상수로 대체)
 		expect(chatList).not.toContain("max-w-[860px]");
 		expect(chatList).not.toContain("max-w-[760px]");
@@ -414,5 +505,25 @@ describe("visual job marketplace components", () => {
 		expect(productEdit).toContain("updateProduct");
 		expect(productEdit).toContain("AdProductForm");
 		expect(productEdit).toContain("initialValue");
+	});
+
+	// a11y #10: 카드 그리드가 raw <div grid>라 스크린리더가 "N개 중 k번째"를 못 읽었다.
+	// 그리드를 ul/li로 감싸 리스트 시맨틱을 준다(li는 grid로 카드 박스 유지).
+	it("wraps exposure section card grids in ul/li list semantics", () => {
+		const source = readComponent("visual-job-exposure-sections.tsx");
+
+		expect(source).toContain("<ul");
+		expect(source).toContain("<li");
+		// ul 기본 마커·패딩·마진 제거
+		expect(source).toContain("list-none");
+		// 그리드는 더 이상 raw <div className={CARD_GRID_CLASS}>가 아니다(두 곳 모두 ul로)
+		expect(source).not.toContain("<div className={CARD_GRID_CLASS}>");
+	});
+
+	// a11y #11: /seeker에 h1이 없었다(최상위가 h2 "빠른 탐색"). sr-only h1을 추가한다.
+	it("gives the seeker marketplace a screen-reader-only h1", () => {
+		const source = readComponent("screens/seeker-marketplace.tsx");
+
+		expect(source).toContain('<h1 className="sr-only">밤비알바 채용정보</h1>');
 	});
 });

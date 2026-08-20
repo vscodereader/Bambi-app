@@ -1,7 +1,9 @@
 "use client";
 
+import { Badge as UiBadge } from "@bambi-app/ui/components/badge";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useCallback, useMemo } from "react";
+import { adPeriodTier, formatAdPeriod } from "@/lib/bambi/ad-period";
 import {
 	JOB_LISTS,
 	shouldTrackJobAnalytics,
@@ -21,7 +23,9 @@ import {
 	shouldShowHitRibbon,
 } from "@/lib/bambi/job-hit";
 import type { Job } from "@/lib/bambi/types";
+import { useAdPeriodTiers } from "@/lib/bambi/use-ad-period-tiers";
 import { usePromotionImpression } from "@/lib/bambi/use-promotion-impression";
+import { AdPeriodTierIcon } from "./ad-period-tier-icon";
 import { Badge } from "./ds";
 import { MapPinIcon } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
@@ -37,6 +41,9 @@ interface VisualJobCardProps {
 
 const JOB_CARD_TEXT_LIMIT = 7;
 
+// 7자 초과 제목은 카드에서 잘린다. 전체 텍스트 복원 경로: title 속성(마우스 호버) +
+// 버튼 aria-label(스크린리더) + 카드를 열면 상세 페이지. 시각 사용자(터치·키보드)는
+// 상세로 복원한다 — 카드 폭 결합상 잘림 로직 자체는 유지한다.
 export function truncateJobCardText(value: string): string {
 	const characters = Array.from(value);
 	return characters.length > JOB_CARD_TEXT_LIMIT
@@ -59,6 +66,15 @@ const getPromotion = (
 			return null;
 	}
 };
+
+// 스페셜/추천/급구 구분은 시각적으로 테두리 색뿐이라(색 외 수단 부재), 스크린리더용으로
+// aria-label 끝에 톤 라벨을 덧붙인다. organic은 무표기.
+const toneAriaLabel = {
+	organic: "",
+	recommended: "추천 공고",
+	special: "스페셜 공고",
+	urgent: "급구 공고",
+} as const;
 
 // 등급 카드는 배경 틴트 없이 테두리 색상만으로 구분한다.
 const toneClassName = {
@@ -116,6 +132,39 @@ export function splitPay(pay: string): { amount: string; unit: null | string } {
 		return { amount: tail, unit: head };
 	}
 	return { amount: trimmed, unit: null };
+}
+
+// 급여 행 오른쪽 끝의 누적 광고 배지(아이콘 + "N회 N일"). adPeriod가 없으면 카드가 렌더하지
+// 않으므로 여기서는 값이 있다고 가정한다. 새 행을 만들지 않도록 급여 행 안에 ml-auto로 얹는다.
+function JobAdPeriodBadge({
+	adPeriod,
+}: {
+	adPeriod: NonNullable<Job["adPeriod"]>;
+}) {
+	// 운영자 설정 등급(없으면 상수 폴백). react-query 캐시가 카드마다의 조회를 합친다.
+	const tiers = useAdPeriodTiers();
+	const tier = adPeriodTier(adPeriod.totalDays, tiers);
+	return (
+		<UiBadge
+			// 테두리·세로 패딩 없음: 칩이 아니라 급여 행에 얹힌 글자로 보이게 한다. pr-0으로
+			// 배지 오른쪽 끝을 카드 콘텐츠 경계(p-2)에 맞추고, 왼쪽 px-2는 급여와의 간격으로 남긴다.
+			// 아이콘이 24px이라 배지 높이도 24px — 급여 행 h-9(36px) 안이라 카드 높이는 그대로다.
+			className={cn(
+				"ml-auto h-auto border-0 py-0 pr-0 font-semibold",
+				tier.colorClass
+			)}
+			title={`광고 ${adPeriod.count}회 · 누적 ${adPeriod.totalDays}일`}
+			variant="outline"
+		>
+			{/* 업로드 아이콘이 16px에선 알아보기 어려워 배지에서만 24px로 키운다. */}
+			<AdPeriodTierIcon
+				className="size-6"
+				icon={tier.icon}
+				iconImageUrl={tier.iconImageUrl}
+			/>
+			{formatAdPeriod(adPeriod)}
+		</UiBadge>
+	);
 }
 
 export function VisualJobCard({
@@ -207,13 +256,16 @@ export function VisualJobCard({
 				</span>
 			) : null}
 			<button
-				className="flex cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
+				aria-label={`${job.title} · ${job.company} · ${job.location}${job.type ? ` · ${job.type}` : ""} · ${job.pay}${toneAriaLabel[tone] ? ` · ${toneAriaLabel[tone]}` : ""}`}
+				className="flex flex-1 cursor-pointer flex-col gap-2 rounded-md border-none bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral-400 focus-visible:ring-offset-2"
 				onClick={handleOpen}
 				type="button"
 			>
 				<div className="flex items-start gap-3">
 					{job.coverImage ? (
 						<JobCoverImage
+							// 업소명이 바로 옆에 텍스트로 있으므로 커버는 장식 이미지로 처리한다(alt="").
+							alt=""
 							className="h-14 w-30 shrink-0 rounded-md border border-white object-fill"
 							height={56}
 							media={job.coverImage}
@@ -253,21 +305,24 @@ export function VisualJobCard({
 						</span>
 					</div>
 				</div>
-			</button>
-			{/* mt-auto: 그리드 행이 늘어나(모집중 placeholder 등) 카드가 stretch 되어도
-			    급여 행이 항상 카드 하단에 붙도록 고정한다. */}
-			<div className="mt-auto flex">
-				<span className="flex h-9 min-w-0 items-center gap-1.5">
-					{payUnit ? (
-						<Badge className="shrink-0" tone={toneBadge[tone]}>
-							{payUnit}
-						</Badge>
-					) : null}
-					<span className="truncate font-extrabold text-base text-coral-600 leading-none">
-						{payAmount}
+				{/* mt-auto: 버튼이 flex-1로 카드 세로를 채우므로 급여 행이 항상 카드 하단에
+				    붙는다. 급여 행을 button 안에 두어 카드 세로 전체가 클릭 영역이 되게 한다.
+				    광고 배지는 새 행을 만들지 않고 이 행 오른쪽 끝(ml-auto)에 얹어 카드
+				    높이(122px) 결합을 건드리지 않는다. */}
+				<div className="mt-auto flex items-center">
+					<span className="flex h-9 min-w-0 items-center gap-1.5">
+						{payUnit ? (
+							<Badge className="shrink-0" tone={toneBadge[tone]}>
+								{payUnit}
+							</Badge>
+						) : null}
+						<span className="truncate font-extrabold text-base text-coral-600 leading-none">
+							{payAmount}
+						</span>
 					</span>
-				</span>
-			</div>
+					{job.adPeriod ? <JobAdPeriodBadge adPeriod={job.adPeriod} /> : null}
+				</div>
+			</button>
 		</article>
 	);
 }

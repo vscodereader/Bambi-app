@@ -16,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowUpToLine, Check, Megaphone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { AdPeriodTierIcon } from "@/components/bambi/ad-period-tier-icon";
 import { AdPriceTag } from "@/components/bambi/ad-price-tag";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { PageShell } from "@/components/bambi/page-shell";
@@ -25,10 +26,12 @@ import {
 	formatAdDuration,
 	formatAdPrice,
 } from "@/lib/bambi/ad-catalog";
+import { formatAdPeriodTierRange } from "@/lib/bambi/ad-period";
 import {
 	formatBoostOptionSpec,
 	JOB_BOOST_OPTION_TYPE_LABELS,
 } from "@/lib/bambi/boost-options";
+import { useAdPeriodTiers } from "@/lib/bambi/use-ad-period-tiers";
 import { orpc } from "@/utils/orpc";
 
 // 광고 상품 신청 = 공고 등록 화면으로 이동(밤비엔 별도 광고 결제 흐름이 없음).
@@ -380,6 +383,43 @@ function BoostOptionsGuide() {
 	);
 }
 
+// 누적 광고일수 등급표. 공고 카드 배지와 같은 등급 소스(운영자 설정, 없으면 상수 폴백)를
+// 재사용해 구간·아이콘이 어긋나지 않게 한다. 광고를 오래·자주 진행한 업소일수록 등급 아이콘이 올라간다.
+function AdPeriodGradeGuide() {
+	const tiers = useAdPeriodTiers();
+	return (
+		<Card>
+			<CardContent className="flex flex-col gap-3">
+				<div className="flex items-center gap-2">
+					<span className="inline-flex size-5 text-primary">
+						<Megaphone size={20} />
+					</span>
+					<span className="font-bold">누적 광고일수 등급</span>
+				</div>
+				<p className="m-0 text-muted-foreground text-sm">
+					공고 카드에는 업소가 지금까지 진행한 누적 광고 횟수·일수가 "N회 N일"
+					배지로 표시되고, 누적 일수가 쌓일수록 아래 등급 아이콘이 올라갑니다.
+				</p>
+				<ul className="m-0 flex flex-col gap-2 p-0">
+					{tiers.map((tier) => (
+						<li className="flex items-center gap-2 text-sm" key={tier.label}>
+							<AdPeriodTierIcon
+								className={tier.colorClass}
+								icon={tier.icon}
+								iconImageUrl={tier.iconImageUrl}
+							/>
+							<span className="font-medium">{tier.label}</span>
+							<span className="text-muted-foreground text-xs">
+								{formatAdPeriodTierRange(tier)}
+							</span>
+						</li>
+					))}
+				</ul>
+			</CardContent>
+		</Card>
+	);
+}
+
 export function EmployerAdGuideScreen() {
 	const catalogQuery = useQuery(
 		orpc.bambi.adProducts.getCatalog.queryOptions()
@@ -457,6 +497,8 @@ export function EmployerAdGuideScreen() {
 			))}
 
 			<BoostOptionsGuide />
+
+			<AdPeriodGradeGuide />
 		</PageShell>
 	);
 }
