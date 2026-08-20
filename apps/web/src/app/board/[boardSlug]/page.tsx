@@ -35,6 +35,7 @@ import {
 	breadcrumbJsonLd,
 	mergeSeoKeywords,
 	SITE_KEYWORDS,
+	siteOpenGraph,
 } from "@/lib/bambi/seo";
 import { readGuestCanWrite, readVisitorState } from "@/lib/bambi/visitor";
 import { client } from "@/utils/orpc";
@@ -66,11 +67,11 @@ export async function generateMetadata({
 			"밤알바 커뮤니티",
 			"여성알바 정보",
 		]),
-		openGraph: {
+		openGraph: siteOpenGraph({
 			description: board.description,
 			title: `${board.label}${pageSuffix} - 밤비알바 커뮤니티`,
 			url: `${BAMBI_COMPANY.url}${publicBoardPath(board.slug, page)}`,
-		},
+		}),
 		title: `${board.label}${pageSuffix} - 밤비알바 커뮤니티`,
 	};
 }
