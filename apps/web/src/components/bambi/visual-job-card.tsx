@@ -41,6 +41,9 @@ interface VisualJobCardProps {
 
 const JOB_CARD_TEXT_LIMIT = 7;
 
+// 7자 초과 제목은 카드에서 잘린다. 전체 텍스트 복원 경로: title 속성(마우스 호버) +
+// 버튼 aria-label(스크린리더) + 카드를 열면 상세 페이지. 시각 사용자(터치·키보드)는
+// 상세로 복원한다 — 카드 폭 결합상 잘림 로직 자체는 유지한다.
 export function truncateJobCardText(value: string): string {
 	const characters = Array.from(value);
 	return characters.length > JOB_CARD_TEXT_LIMIT
@@ -63,6 +66,15 @@ const getPromotion = (
 			return null;
 	}
 };
+
+// 스페셜/추천/급구 구분은 시각적으로 테두리 색뿐이라(색 외 수단 부재), 스크린리더용으로
+// aria-label 끝에 톤 라벨을 덧붙인다. organic은 무표기.
+const toneAriaLabel = {
+	organic: "",
+	recommended: "추천 공고",
+	special: "스페셜 공고",
+	urgent: "급구 공고",
+} as const;
 
 // 등급 카드는 배경 틴트 없이 테두리 색상만으로 구분한다.
 const toneClassName = {
@@ -244,8 +256,8 @@ export function VisualJobCard({
 				</span>
 			) : null}
 			<button
-				aria-label={`${job.title} · ${job.company} · ${job.location}${job.type ? ` · ${job.type}` : ""} · ${job.pay}`}
-				className="flex flex-1 cursor-pointer flex-col gap-2 border-none bg-transparent p-0 text-left"
+				aria-label={`${job.title} · ${job.company} · ${job.location}${job.type ? ` · ${job.type}` : ""} · ${job.pay}${toneAriaLabel[tone] ? ` · ${toneAriaLabel[tone]}` : ""}`}
+				className="flex flex-1 cursor-pointer flex-col gap-2 rounded-md border-none bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral-400 focus-visible:ring-offset-2"
 				onClick={handleOpen}
 				type="button"
 			>

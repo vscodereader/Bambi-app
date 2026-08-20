@@ -60,6 +60,18 @@ describe("visual job marketplace components", () => {
 		// 스크린리더가 잘린 제목·급여 누락 대신 전체 정보를 읽는다.
 		expect(source).toContain("aria-label={");
 		expect(source).toContain("flex flex-1 cursor-pointer");
+		// a11y #7: 카드 버튼에 브랜드 코럴 포커스 링을 명시한다(브라우저 기본 outline 대체).
+		// active 카드의 ring-coral-100보다 진한 ring-coral-400 + rounded-md로 각지지 않게.
+		expect(source).toContain("focus-visible:outline-none");
+		expect(source).toContain("focus-visible:ring-2");
+		expect(source).toContain("focus-visible:ring-coral-400");
+		expect(source).toContain("focus-visible:ring-offset-2");
+		expect(source).toContain("rounded-md border-none");
+		// a11y #5: 스페셜/추천/급구 구분이 테두리 색뿐이라 aria-label 끝에 톤 라벨을 붙인다.
+		expect(source).toContain('special: "스페셜 공고"');
+		expect(source).toContain('urgent: "급구 공고"');
+		expect(source).toContain('recommended: "추천 공고"');
+		expect(source).toContain("toneAriaLabel[tone]");
 		// 급여 금액·단위 배지는 브랜드 톤 유지 결정으로 coral-600(4.32:1)을 쓴다 —
 		// 대비 상향(coral-700)은 적용했다가 사용자 결정으로 롤백됨(2026-08-20).
 		expect(source).toContain("text-coral-600");
@@ -493,5 +505,25 @@ describe("visual job marketplace components", () => {
 		expect(productEdit).toContain("updateProduct");
 		expect(productEdit).toContain("AdProductForm");
 		expect(productEdit).toContain("initialValue");
+	});
+
+	// a11y #10: 카드 그리드가 raw <div grid>라 스크린리더가 "N개 중 k번째"를 못 읽었다.
+	// 그리드를 ul/li로 감싸 리스트 시맨틱을 준다(li는 grid로 카드 박스 유지).
+	it("wraps exposure section card grids in ul/li list semantics", () => {
+		const source = readComponent("visual-job-exposure-sections.tsx");
+
+		expect(source).toContain("<ul");
+		expect(source).toContain("<li");
+		// ul 기본 마커·패딩·마진 제거
+		expect(source).toContain("list-none");
+		// 그리드는 더 이상 raw <div className={CARD_GRID_CLASS}>가 아니다(두 곳 모두 ul로)
+		expect(source).not.toContain("<div className={CARD_GRID_CLASS}>");
+	});
+
+	// a11y #11: /seeker에 h1이 없었다(최상위가 h2 "빠른 탐색"). sr-only h1을 추가한다.
+	it("gives the seeker marketplace a screen-reader-only h1", () => {
+		const source = readComponent("screens/seeker-marketplace.tsx");
+
+		expect(source).toContain('<h1 className="sr-only">밤비알바 채용정보</h1>');
 	});
 });

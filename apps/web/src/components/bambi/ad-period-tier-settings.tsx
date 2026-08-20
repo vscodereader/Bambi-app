@@ -258,6 +258,8 @@ function AdPeriodTierForm({
 				<p className="m-0 text-muted-foreground text-xs">
 					GIF·PNG·WebP·JPG 2MB 이하. 올리면 위 프리셋 대신 이 이미지가 배지에
 					표시됩니다. 배지에서 16px로 작게 그려지니 단순한 그림이 잘 보입니다.
+					그림 주변 투명 여백이 위아래로 비대칭이면 배지에서 아이콘이 치우쳐
+					보이니, 여백을 딱 맞게 자르거나 상하 대칭으로 맞춰 올려 주세요.
 				</p>
 				{iconImageUrl ? (
 					<div className="flex items-center gap-3">

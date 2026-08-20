@@ -134,25 +134,28 @@ function ExposureSection({
 					{meta}
 				</span>
 			</div>
-			<div className={CARD_GRID_CLASS}>
+			{/* 리스트 시맨틱: 스크린리더가 "N개 중 k번째"를 읽도록 그리드를 ul/li로 감싼다.
+			    li는 grid로 자식(카드·자리표시)을 그대로 스트레치해 카드 렌더 박스를 바꾸지
+			    않는다. ul은 기본 마커·패딩·마진을 제거한다. */}
+			<ul className={cn(CARD_GRID_CLASS, "m-0 list-none p-0")}>
 				{shownJobs.map((job, index) => (
-					<VisualJobCard
-						active={job.id === selectedJobId}
-						analyticsIndex={index}
-						job={job}
-						key={`${tone}-${job.id}`}
-						onOpen={onOpen}
-						tone={tone}
-						trackAnalytics={trackAnalytics}
-					/>
+					<li className="grid" key={`${tone}-${job.id}`}>
+						<VisualJobCard
+							active={job.id === selectedJobId}
+							analyticsIndex={index}
+							job={job}
+							onOpen={onOpen}
+							tone={tone}
+							trackAnalytics={trackAnalytics}
+						/>
+					</li>
 				))}
 				{placeholderKeys.map((key) => (
-					<AdSlotPlaceholder
-						className="flex min-h-30 w-full"
-						key={`${tone}-${key}`}
-					/>
+					<li className="grid" key={`${tone}-${key}`}>
+						<AdSlotPlaceholder className="flex min-h-30 w-full" />
+					</li>
 				))}
-			</div>
+			</ul>
 		</section>
 	);
 }
@@ -217,16 +220,19 @@ export function VisualJobExposureSections({
 							{/* 개수·meta 자리 — 로딩 중 "0개"를 노출하지 않는다. */}
 							<Skeleton className="h-4 w-20" />
 						</div>
-						<div className={CARD_GRID_CLASS}>
+						<ul className={cn(CARD_GRID_CLASS, "m-0 list-none p-0")}>
 							{/* 빈 섹션 자리표시와 같은 breakpoint 규칙으로 한 행만 채운다
-							    (모바일 1 · lg 3 · xl 4). */}
+							    (모바일 1 · lg 3 · xl 4). display를 제어하는 breakpoint 클래스는
+							    그리드 셀인 li에 실어야 숨김 슬롯이 빈 칸을 차지하지 않는다. */}
 							{CARD_PLACEHOLDER_KEYS.map((key, index) => (
-								<JobCardSkeleton
+								<li
 									className={cardPlaceholderClass(0, index)}
 									key={`${tone}-${key}`}
-								/>
+								>
+									<JobCardSkeleton />
+								</li>
 							))}
-						</div>
+						</ul>
 					</section>
 				))}
 			</div>
