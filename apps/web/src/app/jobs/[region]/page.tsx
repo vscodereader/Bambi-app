@@ -8,7 +8,11 @@ import {
 	jobLandingPath,
 	jobLandingTitle,
 } from "@/lib/bambi/job-landing";
-import { mergeSeoKeywords, SITE_KEYWORDS } from "@/lib/bambi/seo";
+import {
+	mergeSeoKeywords,
+	SITE_KEYWORDS,
+	siteOpenGraph,
+} from "@/lib/bambi/seo";
 
 interface RegionLandingProps {
 	params: Promise<{ region: string }>;
@@ -30,6 +34,11 @@ export async function generateMetadata({
 		description: jobLandingDescription({ region }),
 		keywords: mergeSeoKeywords(SITE_KEYWORDS, jobLandingKeywords({ region })),
 		alternates: { canonical: jobLandingPath({ region }) },
+		openGraph: siteOpenGraph({
+			title: jobLandingTitle({ region }),
+			description: jobLandingDescription({ region }),
+			url: jobLandingPath({ region }),
+		}),
 	};
 }
 

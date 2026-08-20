@@ -1,9 +1,35 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { SeekerAuthGateScreen } from "@/components/bambi/auth/seeker-auth-gate-screen";
 import { GuestBlockedToast } from "@/components/bambi/guest-blocked-toast";
 import { SeekerMarketplaceScreen } from "@/components/bambi/screens/seeker-marketplace";
 import { SeekerShell } from "@/components/bambi/seeker-shell";
+import {
+	mergeSeoKeywords,
+	SITE_KEYWORDS,
+	siteOpenGraph,
+} from "@/lib/bambi/seo";
 import { readVisitorState } from "@/lib/bambi/visitor";
+
+// /seeker는 사이트맵 1순위 정적 경로다. 루트와 title·description이 겹치지 않게
+// 이 라우트 고유 metadata를 둔다. anon 방문자에겐 layout이 children을 버리고
+// 게이트를 그리지만, 이 export는 렌더 분기와 무관하게 라우트에 그대로 적용된다.
+const SEEKER_TITLE =
+	"밤비알바 채용정보 - 퀸알바·여우알바·밤알바 유흥알바 구인구직";
+const SEEKER_DESCRIPTION =
+	"밤비알바 채용정보에서 퀸알바·여우알바·밤알바 관련 유흥알바·룸알바 공고를 지역·업종별로 살펴보세요. 회원가입 후 전체 공고 열람과 구인자와 1:1 채팅 문의가 가능합니다.";
+
+export const metadata: Metadata = {
+	title: SEEKER_TITLE,
+	description: SEEKER_DESCRIPTION,
+	keywords: mergeSeoKeywords(SITE_KEYWORDS, ["밤비알바 채용정보"]),
+	alternates: { canonical: "/seeker" },
+	openGraph: siteOpenGraph({
+		title: SEEKER_TITLE,
+		description: SEEKER_DESCRIPTION,
+		url: "/seeker",
+	}),
+};
 
 export default async function SeekerHomePage({
 	searchParams,
