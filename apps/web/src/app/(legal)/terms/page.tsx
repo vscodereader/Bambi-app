@@ -10,6 +10,7 @@ import { BAMBI_COMPANY } from "@/lib/bambi/company";
 export const metadata: Metadata = {
 	title: "이용약관 | 밤비알바",
 	description: "밤비알바 서비스 이용약관",
+	alternates: { canonical: "/terms" },
 };
 
 function Chapter({ label }: { label: string }) {
