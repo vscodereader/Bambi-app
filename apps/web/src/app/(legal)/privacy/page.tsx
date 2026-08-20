@@ -17,6 +17,7 @@ import { BAMBI_COMPANY } from "@/lib/bambi/company";
 export const metadata: Metadata = {
 	title: "개인정보 처리방침 | 밤비알바",
 	description: "밤비알바 개인정보 처리방침",
+	alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {

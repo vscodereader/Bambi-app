@@ -4,6 +4,9 @@ import {
 	breadcrumbJsonLd,
 	mergeSeoKeywords,
 	SITE_KEYWORDS,
+	SITE_OPEN_GRAPH_BASE,
+	SITE_TITLE,
+	siteOpenGraph,
 	toJsonLdScriptContent,
 } from "@/lib/bambi/seo";
 
@@ -29,6 +32,14 @@ describe("SITE_KEYWORDS", () => {
 		);
 	});
 
+	// 경쟁 서비스명 노출 순서는 퀸알바 → 여우알바 → 밤알바(사용자 확정 정책, 2026-08-20).
+	it("leads title and keywords with 퀸알바·여우알바·밤알바 in that order", () => {
+		expect(SITE_TITLE).toBe(
+			"밤비알바 - 퀸알바·여우알바·밤알바 | 유흥알바 구인구직"
+		);
+		expect(SITE_KEYWORDS.slice(0, 3)).toEqual(["퀸알바", "여우알바", "밤알바"]);
+	});
+
 	it("keeps 구인구직 사이트 as one phrase", () => {
 		expect(
 			SITE_KEYWORDS.filter((keyword) => keyword === "구인구직 사이트")
@@ -41,6 +52,35 @@ describe("SITE_KEYWORDS", () => {
 		expect(
 			mergeSeoKeywords(["밤알바", "  "], ["밤알바", "서울 밤알바"])
 		).toEqual(["밤알바", "서울 밤알바"]);
+	});
+});
+
+describe("siteOpenGraph", () => {
+	it("페이지 값은 덮고 기본 필드는 보존한다", () => {
+		const og = siteOpenGraph({
+			title: "서울 밤알바",
+			description: "서울 지역 공개 공고",
+			url: "/jobs/seoul",
+		});
+		expect(og.title).toBe("서울 밤알바");
+		expect(og.description).toBe("서울 지역 공개 공고");
+		expect(og.url).toBe("/jobs/seoul");
+		expect(og.type).toBe("website");
+		expect(og.locale).toBe("ko_KR");
+		expect(og.siteName).toBeTruthy();
+		expect(og.images).toHaveLength(1);
+	});
+
+	// 게시글 상세처럼 article type·publishedTime을 쓰는 페이지는 base를 직접 스프레드한다.
+	// base에 type이 섞이면 article 리터럴을 덮어버리므로 없어야 한다.
+	it("SITE_OPEN_GRAPH_BASE는 type 없이 기본 필드만 담아 article 페이지가 스프레드할 수 있다", () => {
+		expect(SITE_OPEN_GRAPH_BASE).not.toHaveProperty("type");
+		expect(SITE_OPEN_GRAPH_BASE.locale).toBe("ko_KR");
+		expect(SITE_OPEN_GRAPH_BASE.siteName).toBeTruthy();
+		expect(SITE_OPEN_GRAPH_BASE.images).toHaveLength(1);
+		const articleOg = { ...SITE_OPEN_GRAPH_BASE, type: "article" as const };
+		expect(articleOg.type).toBe("article");
+		expect(articleOg.images).toHaveLength(1);
 	});
 });
 

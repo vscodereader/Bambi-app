@@ -10,6 +10,7 @@ import {
 	SITE_DESCRIPTION,
 	SITE_KEYWORDS,
 	SITE_TITLE,
+	siteOpenGraph,
 } from "@/lib/bambi/seo";
 import "../index.css";
 
@@ -20,22 +21,11 @@ export const metadata: Metadata = {
 	keywords: SITE_KEYWORDS,
 	authors: [{ name: "밤비알바" }],
 	classification: "job",
-	openGraph: {
-		type: "website",
-		locale: "ko_KR",
-		siteName: BAMBI_COMPANY.serviceName,
-		url: BAMBI_COMPANY.url,
+	openGraph: siteOpenGraph({
 		title: SITE_TITLE,
 		description: SITE_DESCRIPTION,
-		images: [
-			{
-				url: "/og-image.png",
-				width: 1200,
-				height: 630,
-				alt: SITE_TITLE,
-			},
-		],
-	},
+		url: BAMBI_COMPANY.url,
+	}),
 };
 
 export const viewport: Viewport = {

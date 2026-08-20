@@ -64,7 +64,7 @@ describe("job landing paths and copy", () => {
 	});
 	it("gives each landing its own title and description", () => {
 		expect(jobLandingTitle({ industry, region })).toBe(
-			"서울 룸싸롱 밤알바·여우알바·퀸알바 채용 정보 | 밤비알바"
+			"서울 룸싸롱 퀸알바·여우알바·밤알바 채용 정보 | 밤비알바"
 		);
 		const titles = new Set([
 			jobLandingTitle({}),
