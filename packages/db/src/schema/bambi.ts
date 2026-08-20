@@ -1195,6 +1195,37 @@ export const jobBoostPurchase = pgTable(
 	]
 );
 
+// 유료 광고(노출 상품) 결제 확정 1건의 이력. job_post의 exposure_* 컬럼은 재결제·기간 변경
+// 시 덮어써져 누적 이력이 남지 않으므로, 조직 단위 누적 광고 횟수·일수 집계를 위해 결제
+// 확정 시점 스냅샷을 여기에 append-only로 쌓는다(job_boost_purchase와 같은 철학, 별도 축).
+export const jobAdPurchase = pgTable(
+	"job_ad_purchase",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		jobPostId: uuid("job_post_id")
+			.notNull()
+			.references(() => jobPost.id, { onDelete: "cascade" }),
+		// 결제 시점의 노출 상품. 상품이 지워져도 이력은 남아야 하므로 set null.
+		adProductId: uuid("ad_product_id").references(() => adProduct.id, {
+			onDelete: "set null",
+		}),
+		// 구매한 광고 기간(일) 스냅샷 — 재결제로 job_post가 덮여도 이 값은 고정.
+		durationDays: integer("duration_days").notNull(),
+		// 결제 금액 스냅샷.
+		amount: integer("amount").notNull(),
+		// 적재 출처: moderation_single / moderation_bulk / backfill.
+		source: text("source"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("job_ad_purchase_organization_id_idx").on(table.organizationId),
+		index("job_ad_purchase_job_post_id_idx").on(table.jobPostId),
+	]
+);
+
 export const adPlacement = pgTable(
 	"ad_placement",
 	{

@@ -2,6 +2,7 @@
 
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useCallback, useMemo } from "react";
+import { adPeriodTier, formatAdPeriod } from "@/lib/bambi/ad-period";
 import {
 	JOB_LISTS,
 	shouldTrackJobAnalytics,
@@ -23,7 +24,7 @@ import {
 import type { Job } from "@/lib/bambi/types";
 import { usePromotionImpression } from "@/lib/bambi/use-promotion-impression";
 import { Badge } from "./ds";
-import { MapPinIcon } from "./icons";
+import { CrownIcon, MapPinIcon, MedalIcon } from "./icons";
 import { JobCoverImage } from "./job-cover-image";
 
 interface VisualJobCardProps {
@@ -116,6 +117,30 @@ export function splitPay(pay: string): { amount: string; unit: null | string } {
 		return { amount: tail, unit: head };
 	}
 	return { amount: trimmed, unit: null };
+}
+
+// 급여 행 오른쪽 끝의 누적 광고 배지(아이콘 + "N회 N일"). adPeriod가 없으면 카드가 렌더하지
+// 않으므로 여기서는 값이 있다고 가정한다. 새 행을 만들지 않도록 급여 행 안에 ml-auto로 얹는다.
+function JobAdPeriodBadge({
+	adPeriod,
+}: {
+	adPeriod: NonNullable<Job["adPeriod"]>;
+}) {
+	const tier = adPeriodTier(adPeriod.totalDays);
+	return (
+		<span
+			className={cn(
+				"ml-auto flex shrink-0 items-center gap-1 font-semibold text-[11px] leading-none",
+				tier.colorClass
+			)}
+			title={`광고 ${adPeriod.count}회 · 누적 ${adPeriod.totalDays}일`}
+		>
+			<span className="inline-flex size-3.5 shrink-0">
+				{tier.icon === "crown" ? <CrownIcon /> : <MedalIcon />}
+			</span>
+			{formatAdPeriod(adPeriod)}
+		</span>
+	);
 }
 
 export function VisualJobCard({
@@ -255,8 +280,9 @@ export function VisualJobCard({
 				</div>
 			</button>
 			{/* mt-auto: 그리드 행이 늘어나(모집중 placeholder 등) 카드가 stretch 되어도
-			    급여 행이 항상 카드 하단에 붙도록 고정한다. */}
-			<div className="mt-auto flex">
+			    급여 행이 항상 카드 하단에 붙도록 고정한다. 광고 배지는 새 행을 만들지 않고
+			    이 행 오른쪽 끝(ml-auto)에 얹어 카드 높이(118px) 결합을 건드리지 않는다. */}
+			<div className="mt-auto flex items-center">
 				<span className="flex h-9 min-w-0 items-center gap-1.5">
 					{payUnit ? (
 						<Badge className="shrink-0" tone={toneBadge[tone]}>
@@ -267,6 +293,7 @@ export function VisualJobCard({
 						{payAmount}
 					</span>
 				</span>
+				{job.adPeriod ? <JobAdPeriodBadge adPeriod={job.adPeriod} /> : null}
 			</div>
 		</article>
 	);
