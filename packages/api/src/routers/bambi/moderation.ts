@@ -1151,6 +1151,56 @@ const isReportTargetContext = (
 	return REPORT_CONTEXT_KEYS.some((key) => key in value);
 };
 
+const sanitizeIdentitySnapshot = (
+	value: unknown
+): { gender: "female" | "male"; phoneNumber: string } | null => {
+	if (!(value && typeof value === "object")) {
+		return null;
+	}
+	const { gender, phoneNumber } = value as Record<string, unknown>;
+	if (
+		(gender !== "female" && gender !== "male") ||
+		typeof phoneNumber !== "string"
+	) {
+		return null;
+	}
+	return { gender, phoneNumber };
+};
+
+const sanitizeReportIdentitySnapshots = (
+	context: ReportTargetContext | null
+): ReportTargetContext | null => {
+	if (context && "communityPost" in context && context.communityPost) {
+		return {
+			...context,
+			communityPost: {
+				...context.communityPost,
+				authorIdentity: sanitizeIdentitySnapshot(
+					context.communityPost.authorIdentity
+				),
+				secretIdentity: sanitizeIdentitySnapshot(
+					context.communityPost.secretIdentity
+				),
+			},
+		};
+	}
+	if (context && "communityComment" in context && context.communityComment) {
+		return {
+			...context,
+			communityComment: {
+				...context.communityComment,
+				authorIdentity: sanitizeIdentitySnapshot(
+					context.communityComment.authorIdentity
+				),
+				secretIdentity: sanitizeIdentitySnapshot(
+					context.communityComment.secretIdentity
+				),
+			},
+		};
+	}
+	return context;
+};
+
 const mergeReportIdentitySnapshot = (
 	live: ReportTargetContext | null,
 	snapshot: ReportTargetContext | null
@@ -1207,11 +1257,11 @@ const withReportTargetContexts = async (reportRows: ReportRow[]) =>
 		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: target-specific live and snapshot fallbacks are normalized exhaustively here.
 		reportRows.map(async (reportRow) => {
 			const liveTargetContext = await getReportTargetContext(reportRow);
-			const snapshotTargetContext = isReportTargetContext(
-				reportRow.targetSnapshot
-			)
-				? reportRow.targetSnapshot
-				: null;
+			const snapshotTargetContext = sanitizeReportIdentitySnapshots(
+				isReportTargetContext(reportRow.targetSnapshot)
+					? reportRow.targetSnapshot
+					: null
+			);
 			const targetContext = mergeReportIdentitySnapshot(
 				liveTargetContext,
 				snapshotTargetContext
@@ -1250,7 +1300,7 @@ const withReportTargetContexts = async (reportRows: ReportRow[]) =>
 		})
 	);
 
-// 신고 목록 각 row에 붙일 신고자 표시 정보(실명·이메일 폴백·역할). displayName은 null일 수
+// 신고 목록 각 row에 붙일 신고자 표시 정보(닉네임·이메일 폴백·역할). displayName은 null일 수
 // 있어 클라이언트가 listUsers와 동일하게 displayName ?? email로 표시한다.
 // orpc 추론이 listReports 반환 타입에 이 이름을 참조하므로 export 해 패키지 경계 밖에서
 // 명명 가능하게 한다(비-export 시 TS4023).
@@ -1263,10 +1313,9 @@ export interface ReportReporter {
 export interface ReportVerifiedIdentity {
 	gender: "female" | "male";
 	phoneNumber: string;
-	realName: string;
 }
 
-// listReports 전용: 신고자(reporterUserId)의 실명·역할을 배치 조회해 각 row에 reporter로
+// listReports 전용: 신고자(reporterUserId)의 닉네임·역할을 배치 조회해 각 row에 reporter로
 // 붙인다. 목록 전체를 N+1로 돌리지 않도록 distinct reporterUserId를 inArray로 한 번에
 // 조회하고 맵으로 합류한다. displayName·폴백용 email 모두 auth user 테이블에서
 // 가져온다(listUsers와 동일한 조인·폴백 패턴). 대상 row가 없는 신고자는 reporter=null.
@@ -1288,18 +1337,14 @@ const snapshotReporterIdentity = (
 	if (!(candidate && typeof candidate === "object")) {
 		return null;
 	}
-	const { gender, phoneNumber, realName } = candidate as Record<
-		string,
-		unknown
-	>;
+	const { gender, phoneNumber } = candidate as Record<string, unknown>;
 	if (
 		(gender !== "female" && gender !== "male") ||
-		typeof phoneNumber !== "string" ||
-		typeof realName !== "string"
+		typeof phoneNumber !== "string"
 	) {
 		return null;
 	}
-	return { gender, phoneNumber, realName };
+	return { gender, phoneNumber };
 };
 
 const withReporters = async <

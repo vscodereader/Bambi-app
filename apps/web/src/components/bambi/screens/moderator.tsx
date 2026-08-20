@@ -1845,15 +1845,7 @@ const reportCommunityBoardKey = (
 	return "postBoard" in target ? target.postBoard : target.board;
 };
 
-const reportTargetRole = (
-	item: Report,
-	isCommunity: boolean,
-	isGuestAuthor: boolean,
-	isSecret: boolean
-): string => {
-	if (isSecret && !isGuestAuthor) {
-		return "피신고자";
-	}
+const reportTargetRole = (item: Report, isCommunity: boolean): string => {
 	if (isCommunity) {
 		return "피신고자 · 작성자";
 	}
@@ -1866,13 +1858,12 @@ const verifiedPartyLines = (
 	label: string,
 	identity: {
 		phoneNumber: string;
-		realName: string;
 	} | null
 ) => ({
 	detail: identity
 		? formatPhone(identity.phoneNumber)
 		: MISSING_VERIFIED_IDENTITY,
-	name: identity ? `${label} (${identity.realName})` : label,
+	name: label,
 });
 
 const isChatReport = (item: Report): boolean =>
@@ -1903,8 +1894,9 @@ const reportPartyPresentation = (
 		const reporter = verifiedPartyLines("회원", reporterIdentity);
 		reporterName = reporter.name;
 		reporterDetail = reporter.detail;
-		targetName = targetIdentity
-			? `${targetIdentity.realName} · ${formatPhone(targetIdentity.phoneNumber)}`
+		targetName = "회원";
+		targetDetail = targetIdentity
+			? formatPhone(targetIdentity.phoneNumber)
 			: missing;
 	} else if (communityTarget) {
 		const nickname = communityTarget.authorName ?? "회원";
@@ -1922,18 +1914,13 @@ const reportPartyPresentation = (
 	}
 	if (isChat) {
 		targetDetail = item.targetVerifiedIdentity
-			? `(${item.targetVerifiedIdentity.realName})`
-			: `(${missing})`;
+			? formatPhone(item.targetVerifiedIdentity.phoneNumber)
+			: missing;
 		reporterDetail = reporterIdentity
-			? `(${reporterIdentity.realName})`
-			: `(${missing})`;
+			? formatPhone(reporterIdentity.phoneNumber)
+			: missing;
 	}
-	const targetRole = reportTargetRole(
-		item,
-		isCommunity,
-		isGuestAuthor,
-		isSecret
-	);
+	const targetRole = reportTargetRole(item, isCommunity);
 	return {
 		isSecret,
 		reporterGender: reporterIdentity?.gender,

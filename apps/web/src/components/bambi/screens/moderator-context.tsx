@@ -233,7 +233,7 @@ const toApiQueueItem = (item: ApiQueueItem): QueueItem => {
 		title: item.title,
 	};
 };
-// 피신고 대상의 표시 이름·역할을 targetContext 타입별로 계산한다. 사용자는 실명 +
+// 피신고 대상의 표시 이름·역할을 targetContext 타입별로 계산한다. 사용자는 닉네임 +
 // userRoleLabel(role), 공고는 제목 + "공고", 대화방은 연결 공고 제목 + "채팅방". 이름을 알 수
 // 없는 대상(후기·채팅 메시지·맥락 없음)은 대상 id 축약(#앞8자)을 이름으로, 유형 라벨을 역할로
 // 채워 "대상" 하드코딩과 이름·역할의 단어 중복을 피한다. enum 원값은 userRoleLabel로 차단한다.
@@ -268,7 +268,7 @@ const resolveReportTargetParty = (
 	return { name: idShort, role: targetTypeLabel(targetType) };
 };
 
-// 신고자 표시 이름·역할. 서버 reporter(실명·이메일·역할)를 우선 쓰고, displayName이 없으면
+// 신고자 표시 이름·역할. 서버 reporter(닉네임·이메일·역할)를 우선 쓰고, displayName이 없으면
 // email로, reporter 자체가 없으면(대상 프로필 유실 등) 기존 합성 문자열로 폴백한다. 역할은
 // userRoleLabel로 enum 원값(job_seeker 등) 노출을 막는다.
 const resolveReportReporter = (
@@ -518,7 +518,7 @@ export function ModProvider({ children }: { children: ReactNode }) {
 						? "open"
 						: "closed",
 				// 커뮤니티 대상은 deriveReportCommunity가 만든 라벨("커뮤니티 글 · 제목")이 더
-				// 구체적이고, 그 외 대상은 resolveReportTargetParty가 실명·공고 제목을 찾아준다.
+				// 구체적이고, 그 외 대상은 resolveReportTargetParty가 닉네임·공고 제목을 찾아준다.
 				target: targetUser?.name ?? (communityKind ? target : targetName),
 				// 실데이터 신고의 대상 맥락(orpc 추론)을 그대로 전달해 상세에서 타입별 렌더한다.
 				targetContext: item.targetContext,

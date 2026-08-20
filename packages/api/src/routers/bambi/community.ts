@@ -29,11 +29,7 @@ import {
 import { unionAll } from "drizzle-orm/pg-core";
 import z from "zod";
 
-import {
-	adminProcedure,
-	protectedProcedure,
-	publicProcedure,
-} from "../../index";
+import { protectedProcedure, publicProcedure } from "../../index";
 import {
 	type BambiAccessProfile,
 	requireAdminProfile,
@@ -84,7 +80,6 @@ import {
 	notifyBambiNotification,
 	notifyModerationAction,
 } from "../../services/bambi-notifications";
-import { getVerifiedIdentityForAdmin } from "../../services/bambi-secret-identity";
 import { createEditorMediaUploadIntent } from "../../services/bambi-storage";
 import {
 	assertTiptapDoc,
@@ -1174,49 +1169,6 @@ const reconcileCommentPointsOnStatusChange = async (
 };
 
 export const communityRouter = {
-	getSecretAuthorIdentity: adminProcedure
-		.input(
-			z.object({
-				id: z.string().uuid(),
-				targetType: z.enum(["comment", "post"]),
-			})
-		)
-		.handler(async ({ input }) => {
-			const [owner] =
-				input.targetType === "post"
-					? await db
-							.select({
-								board: communityPost.board,
-								guestId: communityPost.authorGuestId,
-								userId: communityPost.authorUserId,
-							})
-							.from(communityPost)
-							.where(eq(communityPost.id, input.id))
-							.limit(1)
-					: await db
-							.select({
-								board: communityPost.board,
-								guestId: communityComment.authorGuestId,
-								userId: communityComment.authorUserId,
-							})
-							.from(communityComment)
-							.innerJoin(
-								communityPost,
-								eq(communityPost.id, communityComment.postId)
-							)
-							.where(eq(communityComment.id, input.id))
-							.limit(1);
-			if (owner?.board !== "secret") {
-				throw new ORPCError("NOT_FOUND");
-			}
-			const identity = await getVerifiedIdentityForAdmin(owner);
-			if (!identity) {
-				throw new ORPCError("NOT_FOUND", {
-					message: "검증 신원을 찾을 수 없습니다.",
-				});
-			}
-			return { realName: identity.realName };
-		}),
 	// 회원과 비회원(여성 성인인증 게스트)이 같은 목록을 본다 — 게시판·필터·정렬이 모두 같고,
 	// 갈리는 건 개인화 축(내 글)과 잠금 우회뿐이다. 게스트는 profile이 null이라 비밀글 제목이
 	// 항상 마스킹된다(회원 비소유자와 동일).

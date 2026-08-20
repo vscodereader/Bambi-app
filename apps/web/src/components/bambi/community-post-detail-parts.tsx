@@ -64,7 +64,7 @@ import { Avatar } from "@/components/bambi/ds";
 import { GradeBadge } from "@/components/bambi/grade-badge";
 import {
 	type SecretAuthorGender,
-	SecretAuthorIdentityMark,
+	SecretAuthorMark,
 } from "@/components/bambi/secret-author-mark";
 import {
 	COMMUNITY_AUTHOR_FALLBACK,
@@ -211,11 +211,7 @@ export function PostHeader({ post }: { post: CommunityPostDetail }) {
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
 				<span className="flex items-center gap-1.5">
 					{post.authorGender ? (
-						<SecretAuthorIdentityMark
-							gender={post.authorGender}
-							id={post.id}
-							targetType="post"
-						/>
+						<SecretAuthorMark gender={post.authorGender} />
 					) : (
 						<>
 							<Avatar
@@ -634,11 +630,7 @@ function CommentRow({
 				<div className="flex items-center justify-between gap-2">
 					<span className="flex items-center gap-1.5 font-semibold text-xs">
 						{comment.authorGender ? (
-							<SecretAuthorIdentityMark
-								gender={comment.authorGender}
-								id={comment.id}
-								targetType="comment"
-							/>
+							<SecretAuthorMark gender={comment.authorGender} />
 						) : (
 							<>
 								<Avatar

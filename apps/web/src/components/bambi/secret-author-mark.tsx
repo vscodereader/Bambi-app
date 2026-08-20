@@ -1,9 +1,5 @@
 import { cn } from "@bambi-app/ui/lib/utils";
-import { useQuery } from "@tanstack/react-query";
 import { MarsIcon, VenusIcon } from "lucide-react";
-import { useState } from "react";
-import { orpc } from "@/utils/orpc";
-import { useBambiAuth } from "./auth-client-provider";
 
 export type SecretAuthorGender = "female" | "male";
 
@@ -30,42 +26,5 @@ export function SecretAuthorMark({
 			</span>
 			{showName ? <span>밤비</span> : null}
 		</span>
-	);
-}
-
-export function SecretAuthorIdentityMark({
-	gender,
-	id,
-	targetType,
-}: {
-	gender: SecretAuthorGender;
-	id: string;
-	targetType: "comment" | "post";
-}) {
-	const { role } = useBambiAuth();
-	const [revealed, setRevealed] = useState(false);
-	const query = useQuery({
-		...orpc.bambi.community.getSecretAuthorIdentity.queryOptions({
-			input: { id, targetType },
-		}),
-		enabled: revealed && role === "admin",
-	});
-	if (role !== "admin") {
-		return <SecretAuthorMark gender={gender} />;
-	}
-	return (
-		<button
-			aria-label="작성자 실명 표시 전환"
-			className="rounded-md border-0 bg-transparent p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			onClick={() => setRevealed((current) => !current)}
-			type="button"
-		>
-			<span className="inline-flex items-center gap-1.5">
-				<SecretAuthorMark gender={gender} showName={false} />
-				<span>
-					{revealed ? (query.data?.realName ?? "확인 중...") : "밤비"}
-				</span>
-			</span>
-		</button>
 	);
 }
