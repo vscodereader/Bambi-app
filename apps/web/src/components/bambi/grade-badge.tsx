@@ -1,4 +1,5 @@
 import { Badge } from "@bambi-app/ui/components/badge";
+import { cn } from "@bambi-app/ui/lib/utils";
 import Image from "next/image";
 
 interface Props {
@@ -6,16 +7,18 @@ interface Props {
 }
 
 export function GradeIcon({
+	className,
 	iconUrl,
 	name,
 }: {
+	className?: string;
 	iconUrl?: string | null;
 	name: string;
 }) {
 	return iconUrl ? (
 		<Image
 			alt={`${name} 등급 아이콘`}
-			className="size-6 shrink-0 object-contain"
+			className={cn("size-6 shrink-0 object-contain", className)}
 			height={24}
 			src={iconUrl}
 			unoptimized
@@ -33,7 +36,11 @@ export function GradeBadge({ grade }: Props) {
 	}
 	return (
 		<Badge className="gap-1" variant="secondary">
-			<GradeIcon iconUrl={grade.iconUrl} name={grade.name} />
+			<GradeIcon
+				className="h-full max-h-full w-auto"
+				iconUrl={grade.iconUrl}
+				name={grade.name}
+			/>
 			{grade.name}
 		</Badge>
 	);
