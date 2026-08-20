@@ -279,8 +279,10 @@ export function AdBannerEditorLauncher({
 				    걸면 max-w-[92vw] 안전망만 사라지고 420px 고정폭이 남아, 375~412px 휴대폰에서
 				    다이얼로그 오른쪽이 화면 밖으로 나간다(fixed라 스크롤로 닿지도 않는다).
 				    모바일에선 이 다이얼로그가 유일한 편집 경로라 안전 영역도 여기서 확보한다 —
-				    inset-2만 두면 노치·홈 인디케이터가 헤더와 하단 버튼을 덮는다. */}
-				<DialogContent className="top-[calc(--spacing(2)+env(safe-area-inset-top))] right-[calc(--spacing(2)+env(safe-area-inset-right))] bottom-[calc(--spacing(2)+env(safe-area-inset-bottom))] left-[calc(--spacing(2)+env(safe-area-inset-left))] w-auto max-w-none translate-x-0 translate-y-0 gap-4 p-4 md:inset-6 md:p-6">
+				    inset-2만 두면 노치·홈 인디케이터가 헤더와 하단 버튼을 덮는다.
+				    max-h-none: base의 max-h가 top·bottom inset과 겹치면 높이가 과제약돼 bottom이
+				    무시되고 하단이 뜬다 — inset이 이미 높이를 정하므로 base 상한을 끈다. */}
+				<DialogContent className="top-[calc(--spacing(2)+env(safe-area-inset-top))] right-[calc(--spacing(2)+env(safe-area-inset-right))] bottom-[calc(--spacing(2)+env(safe-area-inset-bottom))] left-[calc(--spacing(2)+env(safe-area-inset-left))] max-h-none w-auto max-w-none translate-x-0 translate-y-0 gap-4 p-4 md:inset-6 md:p-6">
 					<DialogTitle className="sr-only">광고 배너 편집</DialogTitle>
 					{dialogMedia ? (
 						<AdBannerEditor

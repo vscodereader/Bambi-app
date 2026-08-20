@@ -144,7 +144,7 @@ export function BoostOptionPurchaseDialog({
 		<Dialog onOpenChange={onOpenChange} open={open}>
 			{/* 폭은 DialogContent 기본값(w-[420px]·max-w-[92vw])을 그대로 쓴다 — w-auto로 덮으면
 			    콘텐츠가 짧을 때 데스크톱에서 창이 쪼그라든다. */}
-			<DialogContent className="max-h-[85vh]">
+			<DialogContent>
 				<div className="flex flex-col gap-4">
 					<div className="flex flex-col gap-1">
 						<DialogTitle className="text-base">

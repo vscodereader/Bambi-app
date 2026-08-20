@@ -219,7 +219,7 @@ export function JobDetailDesignDialog({
 
 	return (
 		<Dialog onOpenChange={onOpenChange} open={open}>
-			<DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-4xl overflow-y-auto">
+			<DialogContent className="w-[calc(100vw-2rem)] max-w-4xl">
 				<div className="flex flex-col gap-4">
 					<div className="flex flex-col gap-1">
 						<DialogTitle className="text-base">디자인 제작 관리</DialogTitle>

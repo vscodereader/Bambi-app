@@ -73,7 +73,8 @@ function DialogContent({
 				className={cn(
 					// overscroll-contain: 모바일에서 시트 끝까지 스크롤해도 뒤 페이지가 함께 밀리지
 					// 않는다. motion-reduce: 확대·페이드 등장을 끈다(백드롭과 같은 처리).
-					"fixed top-1/2 left-1/2 z-50 flex w-[420px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto overscroll-contain rounded-xl bg-card p-6 shadow-[var(--shadow-lg)] transition-[transform,opacity] duration-200 data-[ending-style]:scale-95 data-[starting-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none motion-reduce:data-[ending-style]:scale-100 motion-reduce:data-[starting-style]:scale-100",
+					// max-h(dvh): 내용이 길면 팝업 내부만 스크롤해 상·하단 버튼이 뷰포트 밖으로 밀려나지 않는다.
+					"fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[420px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto overscroll-contain rounded-xl bg-card p-6 shadow-[var(--shadow-lg)] transition-[transform,opacity] duration-200 data-[ending-style]:scale-95 data-[starting-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none motion-reduce:data-[ending-style]:scale-100 motion-reduce:data-[starting-style]:scale-100",
 					className
 				)}
 				data-slot="dialog-content"
