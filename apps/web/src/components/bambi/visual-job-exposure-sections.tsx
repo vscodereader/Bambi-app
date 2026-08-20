@@ -31,18 +31,20 @@ const DEFAULT_RECOMMENDED_SLOTS = 20;
 
 // 빈 섹션에서 한 행만 남기려고 여분 자리표시를 breakpoint별로 숨긴다. base엔 flex/hidden이
 // 없으므로 display 클래스를 여기서 온전히 지정한다.
-// 자리표시는 항상 카드 자연 높이(약 118px = 테두리 2 + p-2 16 + 썸네일 56 + gap-2 8 + 급여 행 36)
-// 바로 아래인 min-h-29(116px)를 깐다. 모바일 1열은 자리표시가 자기 행에 혼자 있어 min-h가
-// 없으면 카드보다 납작해지고, lg/xl은 같은 행 실제 카드가 더 높아 stretch가 그대로 이긴다
-// (min-h가 카드 자연 높이를 넘으면 카드가 늘어나 하단 여백이 생기므로 116px에서 멈춘다).
+// 자리표시는 항상 카드 자연 높이(122.25px = 테두리 2 + p-2 16 + 썸네일 행 60.25 + gap-2 8 +
+// 급여 행 36) 바로 아래인 min-h-30(120px)을 깐다. 썸네일 행 60.25px은 h-14 썸네일이 아니라
+// 옆 텍스트 열(제목 20.25 + 4 + 업소 16 + 4 + 지역 16)이 정한다. 모바일 1열은 자리표시가 자기
+// 행에 혼자 있어 min-h가 없으면 카드보다 납작해지고, lg/xl은 같은 행 실제 카드가 더 높아
+// stretch가 그대로 이긴다(min-h가 카드 자연 높이를 넘으면 카드가 늘어나 하단 여백이 생기므로
+// 120px에서 멈춘다).
 const cardPlaceholderClass = (jobsLength: number, index: number): string => {
 	if (jobsLength > 0 || index === 0) {
-		return "flex min-h-29 w-full";
+		return "flex min-h-30 w-full";
 	}
 	if (index < 3) {
-		return "hidden min-h-29 w-full lg:flex";
+		return "hidden min-h-30 w-full lg:flex";
 	}
-	return "hidden min-h-29 w-full xl:flex";
+	return "hidden min-h-30 w-full xl:flex";
 };
 
 type ExposureTone = "organic" | "recommended" | "special" | "urgent";
@@ -146,7 +148,7 @@ function ExposureSection({
 				))}
 				{placeholderKeys.map((key) => (
 					<AdSlotPlaceholder
-						className="flex min-h-29 w-full"
+						className="flex min-h-30 w-full"
 						key={`${tone}-${key}`}
 					/>
 				))}

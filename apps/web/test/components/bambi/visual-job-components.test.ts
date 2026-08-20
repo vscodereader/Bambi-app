@@ -147,7 +147,7 @@ describe("visual job marketplace components", () => {
 		// 가로형도 수집·결제 구분 없이 규격 슬롯 하나로 그린다. 기본값 16:9는 상단 프리미엄
 		// 3칸이 쓰는 값이라 좌측 레일 높이를 맞추더라도 여기서 바뀌면 안 된다.
 		expect(horizontal).toContain("aspect-[16/9] w-full rounded-lg border");
-		expect(horizontal).not.toContain("aspect-[259/118]");
+		expect(horizontal).not.toContain("aspect-[259/122]");
 		expect(horizontal).toContain('"object-fill"');
 		expect(horizontal).not.toContain("item.crawled");
 		expect(horizontal).not.toContain("h-auto");
@@ -155,7 +155,7 @@ describe("visual job marketplace components", () => {
 		expect(banner).not.toContain("if (!item.href)");
 	});
 
-	// 좌측 사이드(w-[259px]) 레일 슬롯은 공고 카드 높이 118px에 맞춘다 —
+	// 좌측 사이드(w-[259px]) 레일 슬롯은 공고 카드 높이 122px에 맞춘다 —
 	// 16:9면 ≈146px라 옆 카드보다 커진다. 고정 px가 아니라 비율로 처리한다.
 	it("sizes the left rail slots to the job card height", () => {
 		const banner = readComponent("ad-banner.tsx");
@@ -166,7 +166,7 @@ describe("visual job marketplace components", () => {
 		);
 
 		expect(banner).toContain(
-			'const RAIL_SLOT_ASPECT_CLASS = "aspect-[259/118]"'
+			'const RAIL_SLOT_ASPECT_CLASS = "aspect-[259/122]"'
 		);
 		// 세 렌더 경로(배너·자리표시·스켈레톤)가 모두 같은 비율 상수를 쓴다.
 		expect(rail.match(/RAIL_SLOT_ASPECT_CLASS/g)).toHaveLength(3);
