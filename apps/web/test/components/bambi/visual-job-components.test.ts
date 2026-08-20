@@ -72,6 +72,11 @@ describe("visual job marketplace components", () => {
 		// 급여 행(mt-auto)에 얹는다 — 새 행 추가 없이 오른쪽 끝(ml-auto) 배치
 		expect(source).toContain("mt-auto flex items-center");
 		expect(source).toContain("ml-auto");
+		// 테두리 없이 글자처럼 얹고(border-0), pr-0으로 카드 콘텐츠 오른쪽 경계에 맞춘다.
+		// py-0은 미관이 아니라 결합이다 — 아이콘 24px + 세로 패딩이 급여 행 h-9(36px)을
+		// 넘으면 카드 높이가 늘어 광고 레일 비율(aspect-[259/122])까지 어긋난다.
+		expect(source).toContain("border-0 py-0 pr-0");
+		expect(source).toContain('className="size-6"');
 		// 접근성 툴팁
 		expect(source).toContain("누적");
 	});

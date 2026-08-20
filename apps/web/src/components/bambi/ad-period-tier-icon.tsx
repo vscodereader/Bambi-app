@@ -6,7 +6,8 @@ import Image from "next/image";
 import { CrownIcon, MedalIcon } from "@/components/bambi/icons";
 import type { AdPeriodTier } from "@/lib/bambi/ad-period";
 
-// 16px 자리에 그리지만 고해상도 화면에서 뭉개지지 않게 2배로 요청한다.
+// next/image가 요구하는 고유 크기 값일 뿐이다 — unoptimized라 실제로 받는 화소는 업로드한
+// 원본 그대로고, 화면 크기는 className(기본 size-4, 카드 배지는 size-6)이 정한다.
 const ICON_RENDER_PX = 32;
 
 export function AdPeriodTierIcon({
