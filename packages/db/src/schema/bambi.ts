@@ -1980,6 +1980,31 @@ export const bambiMemberGrade = pgTable("bambi_member_grade", {
 		.notNull(),
 });
 
+// 누적 광고일수 등급 아이콘 판별자. 카드 배지·구인자 안내가 이 값으로 lucide 아이콘을
+// 고른다(원값 직접 렌더 금지 — 화면은 라벨 맵 경유).
+export const bambiAdPeriodTierIcon = pgEnum("bambi_ad_period_tier_icon", [
+	"medal",
+	"crown",
+]);
+
+// 조직 단위 누적 광고일수 등급(운영자 CRUD). 코드 하드코딩(AD_PERIOD_TIERS)을 배포 없이
+// 편집한다. 행이 하나도 없으면 화면이 상수로 폴백한다. color_class는 Tailwind 텍스트 색
+// 유틸(raw hex 금지 — 화면 프리셋에서 선택), max_days=null이면 상한 없는 최상위 등급.
+export const bambiAdPeriodTier = pgTable("bambi_ad_period_tier", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	label: text("label").notNull(),
+	icon: bambiAdPeriodTierIcon("icon").notNull(),
+	colorClass: text("color_class").notNull(),
+	minDays: integer("min_days").notNull(),
+	maxDays: integer("max_days"),
+	sortOrder: integer("sort_order").default(0).notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.notNull(),
+});
+
 // 포인트몰 아이템이 연결하는 혜택 종류. none=수동 지급(현행), coupon=쿠폰 발송(본인인증
 // 번호로 운영자 외부 발송), boost_*=끌어올리기, ad_extend=광고 기간 연장.
 export const pointShopBenefitType = pgEnum("point_shop_benefit_type", [

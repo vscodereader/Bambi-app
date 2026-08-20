@@ -23,6 +23,7 @@ import {
 	shouldShowHitRibbon,
 } from "@/lib/bambi/job-hit";
 import type { Job } from "@/lib/bambi/types";
+import { useAdPeriodTiers } from "@/lib/bambi/use-ad-period-tiers";
 import { usePromotionImpression } from "@/lib/bambi/use-promotion-impression";
 import { Badge } from "./ds";
 import { CrownIcon, MapPinIcon, MedalIcon } from "./icons";
@@ -127,7 +128,9 @@ function JobAdPeriodBadge({
 }: {
 	adPeriod: NonNullable<Job["adPeriod"]>;
 }) {
-	const tier = adPeriodTier(adPeriod.totalDays);
+	// 운영자 설정 등급(없으면 상수 폴백). react-query 캐시가 카드마다의 조회를 합친다.
+	const tiers = useAdPeriodTiers();
+	const tier = adPeriodTier(adPeriod.totalDays, tiers);
 	return (
 		<UiBadge
 			className={cn(

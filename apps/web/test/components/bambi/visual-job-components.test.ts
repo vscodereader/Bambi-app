@@ -78,12 +78,32 @@ describe("visual job marketplace components", () => {
 	it("shows the ad-period grade table on the employer ad guide", () => {
 		const source = readComponent("screens/employer-ad-guide.tsx");
 
-		expect(source).toContain("AD_PERIOD_TIERS");
+		// 등급표는 이제 운영자 설정값을 읽는 훅에서 온다(없으면 상수 폴백).
+		expect(source).toContain("useAdPeriodTiers");
 		expect(source).toContain("formatAdPeriodTierRange");
 		expect(source).toContain("누적 광고일수 등급");
 		// 카드와 같은 등급 아이콘을 쓴다
 		expect(source).toContain("MedalIcon");
 		expect(source).toContain("CrownIcon");
+	});
+
+	it("wires the ad-period tier settings section into the ad-products console", () => {
+		const page = readComponent("../../app/moderator/ad-products/page.tsx");
+		const settings = readComponent("ad-period-tier-settings.tsx");
+
+		// 광고 상품 관리 페이지 하단에 등급 관리 섹션을 얹는다.
+		expect(page).toContain("AdPeriodTierSettings");
+		// 접이식 섹션은 shadcn Accordion으로 감싼다.
+		expect(settings).toContain("Accordion");
+		expect(settings).toContain("누적 광고일수 등급");
+		// 목록 조회·CRUD 뮤테이션을 orpc로 연결한다.
+		expect(settings).toContain("adPeriodTiers.list");
+		expect(settings).toContain("adPeriodTiers.create");
+		expect(settings).toContain("adPeriodTiers.update");
+		expect(settings).toContain("adPeriodTiers.remove");
+		// 색·아이콘은 자유 입력이 아니라 프리셋/토글에서 고른다.
+		expect(settings).toContain("AD_PERIOD_TIER_COLOR_PRESETS");
+		expect(settings).toContain("ToggleGroup");
 	});
 
 	it("makes every ad banner link to the advertised job detail page", () => {

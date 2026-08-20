@@ -54,11 +54,41 @@ export const AD_PERIOD_TIERS: readonly AdPeriodTier[] = [
 	},
 ];
 
-// 누적 일수 → 티어. 배열이 상한 없는 최상위로 끝나 항상 매칭되지만, 타입 좁힘용 최저 폴백.
-export const adPeriodTier = (totalDays: number): AdPeriodTier =>
-	AD_PERIOD_TIERS.find(
-		(tier) => tier.maxDays === null || totalDays <= tier.maxDays
-	) ?? AD_PERIOD_TIERS[0];
+// 아이콘 판별자 → 화면 라벨(운영자 UI 선택지). enum 원값을 그대로 노출하지 않는다.
+export const AD_PERIOD_TIER_ICON_LABELS: Record<AdPeriodTier["icon"], string> =
+	{
+		crown: "왕관",
+		medal: "메달",
+	};
+
+// colorClass 프리셋(자유 입력 금지). 운영자는 이 중에서 고른다 — 카드 배지가 쓰는 Tailwind
+// 텍스트 색 유틸이다. 기존 5등급 색(앰버·슬레이트)을 포함한다.
+export const AD_PERIOD_TIER_COLOR_PRESETS: readonly {
+	className: string;
+	label: string;
+}[] = [
+	{ className: "text-amber-700", label: "브론즈" },
+	{ className: "text-slate-400", label: "실버" },
+	{ className: "text-amber-500", label: "골드" },
+	{ className: "text-slate-500", label: "슬레이트" },
+	{ className: "text-sky-500", label: "스카이" },
+	{ className: "text-violet-500", label: "바이올렛" },
+];
+
+// 누적 일수 → 티어. tiers를 주입할 수 있고(운영자 설정값), 비었으면 상수로 폴백한다.
+// 운영자가 상한 없는(maxDays=null) 최상위 없이 구성할 수 있으므로, 모든 구간을 넘긴 일수는
+// 최하위가 아니라 최상위로 떨어뜨린다(오름차순 정렬된 목록 전제).
+export const adPeriodTier = (
+	totalDays: number,
+	tiers: readonly AdPeriodTier[] = AD_PERIOD_TIERS
+): AdPeriodTier => {
+	const list = tiers.length > 0 ? tiers : AD_PERIOD_TIERS;
+	return (
+		list.find((tier) => tier.maxDays === null || totalDays <= tier.maxDays) ??
+		list.at(-1) ??
+		list[0]
+	);
+};
 
 // "22회 900일". totalDays가 0이어도(백필 기간 null 행) 정직하게 그대로 노출한다.
 export const formatAdPeriod = ({

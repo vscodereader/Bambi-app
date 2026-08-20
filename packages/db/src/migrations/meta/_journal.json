@@ -715,6 +715,13 @@
       "when": 1787184348373,
       "tag": "0101_overjoyed_prism",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1787187502574,
+      "tag": "0102_elite_logan",
+      "breakpoints": true
     }
   ]
 }

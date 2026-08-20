@@ -31,6 +31,54 @@ describe("adPeriodTier", () => {
 			expect(tier.colorClass).toMatch(TAILWIND_TEXT_CLASS);
 		}
 	});
+
+	it("주입한 티어 배열로 매핑한다(운영자 설정값)", () => {
+		const custom = [
+			{
+				icon: "medal",
+				colorClass: "text-sky-500",
+				label: "A",
+				minDays: 0,
+				maxDays: 10,
+			},
+			{
+				icon: "crown",
+				colorClass: "text-violet-500",
+				label: "B",
+				minDays: 11,
+				maxDays: null,
+			},
+		] as const;
+		expect(adPeriodTier(5, custom).label).toBe("A");
+		expect(adPeriodTier(10, custom).label).toBe("A");
+		expect(adPeriodTier(11, custom).label).toBe("B");
+		expect(adPeriodTier(9999, custom).label).toBe("B");
+	});
+
+	it("상한 없는 최상위가 없으면 초과 일수를 최상위로 올린다", () => {
+		const bounded = [
+			{
+				icon: "medal",
+				colorClass: "text-sky-500",
+				label: "A",
+				minDays: 0,
+				maxDays: 10,
+			},
+			{
+				icon: "crown",
+				colorClass: "text-violet-500",
+				label: "B",
+				minDays: 11,
+				maxDays: 20,
+			},
+		] as const;
+		expect(adPeriodTier(9999, bounded).label).toBe("B");
+	});
+
+	it("빈 배열을 주입하면 상수로 폴백한다", () => {
+		expect(adPeriodTier(50, []).label).toBe(AD_PERIOD_TIERS[0].label);
+		expect(adPeriodTier(9999, []).label).toBe(AD_PERIOD_TIERS[4].label);
+	});
 });
 
 describe("formatAdPeriod", () => {
