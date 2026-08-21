@@ -1427,10 +1427,18 @@ export const communityRouter = {
 				board.key === CRAWLED_COMMUNITY_BOARD && communityFeedOn
 					? selectWorkTalkFeedUnion({
 							limit: OVERVIEW_LIMIT,
+							nativeFilters: [eq(communityPost.board, CRAWLED_COMMUNITY_BOARD)],
 							offset: 0,
 							windowStart,
 						})
-					: selectBoardPosts(board.key, { limit: OVERVIEW_LIMIT, windowStart })
+					: selectBoardPosts(board.key, {
+							filters:
+								board.key === BEST_BOARD
+									? []
+									: [eq(communityPost.board, board.key)],
+							limit: OVERVIEW_LIMIT,
+							windowStart,
+						})
 			)
 		);
 

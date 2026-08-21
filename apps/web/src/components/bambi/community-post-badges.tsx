@@ -36,8 +36,18 @@ export function CommunityRoleBadges({
 
 // 새 글 표시(작성 후 이틀). 글자 "N"만으로는 뜻이 전달되지 않아 role·aria-label로
 // "새 글"이라 읽히게 한다.
-export function CommunityNewBadge({ createdAt }: { createdAt: Date | string }) {
-	if (!isNewCommunityPost(createdAt)) {
+export function CommunityNewBadge({
+	createdAt,
+	displayedBoardKey,
+	postBoardKey,
+}: {
+	createdAt: Date | string;
+	displayedBoardKey: string;
+	postBoardKey: string;
+}) {
+	const isCrossListedNotice =
+		postBoardKey === "notice" && displayedBoardKey !== "notice";
+	if (isCrossListedNotice || !isNewCommunityPost(createdAt)) {
 		return null;
 	}
 	return (

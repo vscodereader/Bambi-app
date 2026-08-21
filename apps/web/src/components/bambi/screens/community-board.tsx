@@ -142,7 +142,11 @@ function BoardPostRow({
 						</Badge>
 					) : null}
 					{showBadges ? <CommunityRoleBadges post={post} /> : null}
-					<CommunityNewBadge createdAt={post.createdAt} />
+					<CommunityNewBadge
+						createdAt={post.createdAt}
+						displayedBoardKey={boardKey}
+						postBoardKey={post.board}
+					/>
 					<span className="truncate font-semibold text-sm">{post.title}</span>
 					{post.commentCount > 0 ? (
 						<span className="flex shrink-0 items-center gap-0.5 font-semibold text-coral-500 text-xs">
