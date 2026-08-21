@@ -1,0 +1,1 @@
+ALTER TYPE "public"."notification_target_type" ADD VALUE 'member_item_transaction';

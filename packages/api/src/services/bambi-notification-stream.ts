@@ -16,6 +16,7 @@ export type BambiNotificationTargetType =
 	| "employer_verification"
 	| "interview_schedule"
 	| "job_post"
+	| "member_item_transaction"
 	| "organization_member"
 	| "point_shop_order"
 	| "point_transaction"

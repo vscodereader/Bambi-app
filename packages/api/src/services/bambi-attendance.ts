@@ -50,3 +50,49 @@ export const countAttendanceStreak = (
 
 	return streak;
 };
+
+export interface AttendanceRewardRun {
+	endOn: string;
+	entitledClaims: number;
+	length: number;
+	startOn: string;
+}
+
+// 새 체크인·복구 날짜를 포함하는 보상 대상 연속 구간. 배포 전 행은 라우터에서 제외하고
+// streak_reward_eligible=true 날짜만 넘긴다.
+export const resolveAttendanceRewardRun = (
+	eligibleDates: readonly string[],
+	triggerAttendedOn: string
+): AttendanceRewardRun | null => {
+	const dates = [...new Set(eligibleDates)].sort();
+	const triggerIndex = dates.indexOf(triggerAttendedOn);
+	if (triggerIndex < 0) {
+		return null;
+	}
+	let startIndex = triggerIndex;
+	while (
+		startIndex > 0 &&
+		dates[startIndex - 1] === shiftKstDate(dates[startIndex] as string, -1)
+	) {
+		startIndex -= 1;
+	}
+	let endIndex = triggerIndex;
+	while (
+		endIndex < dates.length - 1 &&
+		dates[endIndex + 1] === shiftKstDate(dates[endIndex] as string, 1)
+	) {
+		endIndex += 1;
+	}
+	const startOn = dates[startIndex];
+	const endOn = dates[endIndex];
+	if (!(startOn && endOn)) {
+		return null;
+	}
+	const length = endIndex - startIndex + 1;
+	return {
+		entitledClaims: Math.floor(length / 7),
+		endOn,
+		length,
+		startOn,
+	};
+};

@@ -34,6 +34,8 @@ export const POINT_SHOP_BENEFIT_TYPES = [
 	"boost_manual_count",
 	"boost_auto_period",
 	"ad_extend",
+	"draw_ticket",
+	"attendance_restore_ticket",
 ] as const;
 export type PointShopBenefitType = (typeof POINT_SHOP_BENEFIT_TYPES)[number];
 
@@ -56,6 +58,14 @@ export function isUsableBenefit(benefitType: PointShopBenefitType): boolean {
 		benefitType === "boost_manual_count" ||
 		benefitType === "boost_auto_period" ||
 		benefitType === "ad_extend"
+	);
+}
+
+export function isQuantityItemBenefit(
+	benefitType: PointShopBenefitType
+): benefitType is "attendance_restore_ticket" | "draw_ticket" {
+	return (
+		benefitType === "draw_ticket" || benefitType === "attendance_restore_ticket"
 	);
 }
 
@@ -90,6 +100,12 @@ export function resolvePurchase(args: {
 	// 회원이 사면 사용 시점에 requireEmployerPostingAccess·공고 부재로 영원히 거부돼
 	// 취소·환불 외 출구가 없는 dead-end 구매가 된다 — 여기서 서버가 먼저 막는다.
 	if (isUsableBenefit(args.benefitType) && args.role === "job_seeker") {
+		return { code: "audience", ok: false };
+	}
+	if (
+		args.benefitType === "attendance_restore_ticket" &&
+		args.role !== "job_seeker"
+	) {
 		return { code: "audience", ok: false };
 	}
 	if (args.benefitType === "coupon" && !args.isPhoneVerified) {
@@ -207,10 +223,12 @@ const SPEC_FIELDS: readonly SpecField[] = [
 const REQUIRED_SPEC_FIELDS: Record<PointShopBenefitType, readonly SpecField[]> =
 	{
 		ad_extend: ["extendDays"],
+		attendance_restore_ticket: [],
 		boost_auto_period: ["boostsPerDay", "durationDays"],
 		boost_manual_count: ["boostCount"],
 		boost_manual_period: ["boostsPerDay", "durationDays"],
 		coupon: [],
+		draw_ticket: [],
 		none: [],
 	};
 
@@ -224,6 +242,12 @@ export function validateItemBenefitSpec(args: {
 	extendDays: number | null;
 }): { ok: true } | { code: ItemSpecError; ok: false } {
 	if (isUsableBenefit(args.benefitType) && args.audience === "job_seeker") {
+		return { code: "audience_conflict", ok: false };
+	}
+	if (
+		args.benefitType === "attendance_restore_ticket" &&
+		args.audience !== "job_seeker"
+	) {
 		return { code: "audience_conflict", ok: false };
 	}
 	const values: Record<SpecField, number | null> = {

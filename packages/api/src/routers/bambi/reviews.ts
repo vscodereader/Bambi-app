@@ -1,6 +1,7 @@
 import { db } from "@bambi-app/db";
 import { member, user } from "@bambi-app/db/schema/auth";
 import {
+	bambiReviewDrawReward,
 	bambiSiteSettings,
 	interviewSchedule,
 	jobPost,
@@ -25,6 +26,7 @@ import {
 	DEFAULT_REVIEW_WRITE_POINTS,
 	SITE_SETTINGS_ROW_ID,
 } from "../../services/bambi-point-settings";
+import { REVIEW_DRAW_REWARD_DELAY_MS } from "../../services/bambi-review-draw-rewards";
 import {
 	maskReviewerDisplayName,
 	validateReviewInput,
@@ -137,7 +139,10 @@ export const reviewsRouter = {
 
 			const created = await db.transaction(async (tx) => {
 				const [reviewedJob] = await tx
-					.select({ title: jobPost.title })
+					.select({
+						createdByUserId: jobPost.createdByUserId,
+						title: jobPost.title,
+					})
 					.from(jobPost)
 					.where(eq(jobPost.id, room.jobPostId))
 					.limit(1);
@@ -170,6 +175,19 @@ export const reviewsRouter = {
 				if (!row) {
 					throw new ORPCError("INTERNAL_SERVER_ERROR");
 				}
+				await tx.insert(bambiReviewDrawReward).values({
+					disqualifiedReason:
+						row.status === "published"
+							? null
+							: "review_not_published_at_creation",
+					eligibleAt: new Date(
+						row.createdAt.getTime() + REVIEW_DRAW_REWARD_DELAY_MS
+					),
+					processedAt: row.status === "published" ? null : new Date(),
+					recipientUserId: reviewedJob.createdByUserId,
+					reviewId: row.id,
+					status: row.status === "published" ? "pending" : "disqualified",
+				});
 				const awarded = await awardMemberPoints(tx, {
 					amount: requestedPoints,
 					description: `후기 작성 · ${reviewedJob.title}`,

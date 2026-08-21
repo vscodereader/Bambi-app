@@ -3,6 +3,7 @@ import { user } from "@bambi-app/db/schema/auth";
 import {
 	bambiAttendance,
 	bambiMemberGrade,
+	bambiMemberItemTransaction,
 	bambiPointTransaction,
 	bambiProfile,
 	bambiSiteSettings,
@@ -26,11 +27,13 @@ import {
 	countAttendanceStreak,
 	getKstDateString,
 } from "../../services/bambi-attendance";
+import { reconcileAttendanceDrawTicket } from "../../services/bambi-attendance-rewards";
 import {
 	type BambiAccessProfile,
 	requireActiveBambiProfile,
 	type SessionLike,
 } from "../../services/bambi-authz";
+import { adjustMemberItem } from "../../services/bambi-member-items";
 import {
 	nextGrade,
 	POINT_SHOP_REASONS,
@@ -60,6 +63,10 @@ const getMineInput = z.object({
 		.string()
 		.regex(/^\d{4}-\d{2}$/)
 		.optional(),
+});
+
+const restoreDateInput = z.object({
+	attendedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
 const adminListInput = z.object({
@@ -279,7 +286,7 @@ export const attendanceRouter = {
 
 		// 출석 기록과 포인트 적립은 한 트랜잭션이다 — 따로 쓰면 적립만 실패했을 때 복합 PK 탓에
 		// 그날은 영영 재적립할 수 없다(재시도해도 출석 insert가 충돌로 스킵되기 때문).
-		return await db.transaction(async (tx) => {
+		const result = await db.transaction(async (tx) => {
 			// 복합 PK가 하루 1회를 보장하므로 중복 클릭·동시 클릭은 충돌을 무시하고 성공으로 끝낸다.
 			// 삽입된 행이 없으면 이미 출석한 날이다(조회 후 삽입하면 그 사이 경합에서 500이 난다).
 			const inserted = await tx
@@ -305,6 +312,13 @@ export const attendanceRouter = {
 							userId: profile.userId,
 						});
 			const pointsAwarded = award?.awarded ?? 0;
+			const streakReward =
+				inserted.length > 0 && profile.role === "job_seeker"
+					? await reconcileAttendanceDrawTicket(tx, {
+							triggerAttendedOn: attendedOn,
+							userId: profile.userId,
+						})
+					: null;
 
 			const [balance] = await tx
 				.select({ pointBalance: pointBalanceSql })
@@ -316,9 +330,101 @@ export const attendanceRouter = {
 				attendedOn,
 				pointBalance: balance?.pointBalance ?? 0,
 				pointsAwarded,
+				drawTicketAwarded: streakReward?.awarded ?? false,
+				drawTicketBalance: streakReward?.balance ?? null,
+				drawTicketTransactionId: streakReward?.transactionId ?? null,
 			};
 		});
+		if (result.drawTicketAwarded && result.drawTicketTransactionId) {
+			await notifyBambiNotification({
+				metadata: { action: "attendance_streak_draw_ticket" },
+				recipientUserId: profile.userId,
+				targetId: result.drawTicketTransactionId,
+				targetType: "member_item_transaction",
+			});
+		}
+		return result;
 	}),
+
+	restoreDate: protectedProcedure
+		.input(restoreDateInput)
+		.handler(async ({ context, input }) => {
+			const profile = await requireAttendanceProfile(context.session);
+			if (profile.role !== "job_seeker") {
+				throw new ORPCError("FORBIDDEN", {
+					message: "출석 복구권은 구직자만 사용할 수 있어요.",
+				});
+			}
+			const today = getKstDateString();
+			if (input.attendedOn >= today) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "오늘이나 미래 날짜는 복구할 수 없어요.",
+				});
+			}
+			try {
+				const result = await db.transaction(async (tx) => {
+					const [inserted] = await tx
+						.insert(bambiAttendance)
+						.values({
+							attendedOn: input.attendedOn,
+							source: "restore_ticket",
+							streakRewardEligible: true,
+							userId: profile.userId,
+						})
+						.onConflictDoNothing()
+						.returning({ attendedOn: bambiAttendance.attendedOn });
+					if (!inserted) {
+						throw new Error("이미 출석한 날짜예요.");
+					}
+					const used = await adjustMemberItem(tx, {
+						description: `${input.attendedOn} 출석 복구`,
+						externalKey: `attendance_restore:${profile.userId}:${input.attendedOn}`,
+						itemType: "attendance_restore_ticket",
+						quantity: -1,
+						reason: "attendance_restore_use",
+						referenceId: input.attendedOn,
+						referenceType: "attendance",
+						userId: profile.userId,
+					});
+					await tx
+						.update(bambiAttendance)
+						.set({ restoredByItemTransactionId: used.transactionId })
+						.where(
+							and(
+								eq(bambiAttendance.userId, profile.userId),
+								eq(bambiAttendance.attendedOn, input.attendedOn)
+							)
+						);
+					const streakReward = await reconcileAttendanceDrawTicket(tx, {
+						triggerAttendedOn: input.attendedOn,
+						userId: profile.userId,
+					});
+					return {
+						attendedOn: input.attendedOn,
+						drawTicketAwarded: streakReward.awarded,
+						drawTicketBalance: streakReward.balance,
+						drawTicketTransactionId: streakReward.transactionId,
+						restoreTicketBalance: used.balance,
+					};
+				});
+				if (result.drawTicketAwarded && result.drawTicketTransactionId) {
+					await notifyBambiNotification({
+						metadata: { action: "attendance_restored_streak_draw_ticket" },
+						recipientUserId: profile.userId,
+						targetId: result.drawTicketTransactionId,
+						targetType: "member_item_transaction",
+					});
+				}
+				return result;
+			} catch (error) {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						error instanceof Error
+							? error.message
+							: "출석을 복구하지 못했습니다.",
+				});
+			}
+		}),
 
 	getMine: protectedProcedure
 		.input(getMineInput)
@@ -330,15 +436,25 @@ export const attendanceRouter = {
 			// 출석은 하루 한 행이라 계정당 행 수가 가입 일수를 넘지 않는다. 총계·연속·월 달력이
 			// 전부 같은 목록에서 나오므로 쿼리를 셋으로 쪼개지 않고 한 번에 읽는다.
 			const rows = await db
-				.select({ attendedOn: bambiAttendance.attendedOn })
+				.select({
+					attendedOn: bambiAttendance.attendedOn,
+					source: bambiAttendance.source,
+					streakRewardEligible: bambiAttendance.streakRewardEligible,
+				})
 				.from(bambiAttendance)
 				.where(eq(bambiAttendance.userId, profile.userId))
 				.orderBy(desc(bambiAttendance.attendedOn));
 			const attendedDatesDesc = rows.map((row) => row.attendedOn);
+			const rewardStreakDays = countAttendanceStreak(
+				rows
+					.filter((row) => row.streakRewardEligible)
+					.map((row) => row.attendedOn),
+				today
+			);
 
 			// 패널 초기 렌더에 잔액이 함께 필요하다(출석 전에도 보여야 해서 checkIn 응답만으론 부족).
 			// 등급표는 잔액과 병렬로 읽는다 — 서로 의존하지 않는 조회다.
-			const [[balance], grades] = await Promise.all([
+			const [[balance], grades, itemBalances] = await Promise.all([
 				db
 					.select({ gradeBasis: gradeBasisSql, pointBalance: pointBalanceSql })
 					.from(bambiPointTransaction)
@@ -353,7 +469,18 @@ export const attendanceRouter = {
 					})
 					.from(bambiMemberGrade)
 					.orderBy(asc(bambiMemberGrade.minPoints)),
+				db
+					.select({
+						balance: sql<number>`coalesce(sum(${bambiMemberItemTransaction.quantity}), 0)::int`,
+						itemType: bambiMemberItemTransaction.itemType,
+					})
+					.from(bambiMemberItemTransaction)
+					.where(eq(bambiMemberItemTransaction.userId, profile.userId))
+					.groupBy(bambiMemberItemTransaction.itemType),
 			]);
+			const itemBalanceMap = new Map(
+				itemBalances.map((row) => [row.itemType, row.balance])
+			);
 
 			const pointBalance = balance?.pointBalance ?? 0;
 			// 표시 잔액은 전체 합계, 등급 판정만 포인트몰 제외 합계를 쓴다.
@@ -362,6 +489,9 @@ export const attendanceRouter = {
 			const upcoming = nextGrade(gradeBasis, grades);
 
 			return {
+				attendanceEntries: rows.filter((row) =>
+					row.attendedOn.startsWith(month)
+				),
 				attendedDates: attendedDatesDesc.filter((attendedOn) =>
 					attendedOn.startsWith(month)
 				),
@@ -374,6 +504,7 @@ export const attendanceRouter = {
 							.limit(1)
 					)[0]?.points ?? 10,
 				checkedInToday: attendedDatesDesc[0] === today,
+				drawTicketBalance: itemBalanceMap.get("draw_ticket") ?? 0,
 				grade: current
 					? {
 							color: current.color,
@@ -386,6 +517,12 @@ export const attendanceRouter = {
 					? { minPoints: upcoming.minPoints, name: upcoming.name }
 					: null,
 				pointBalance,
+				restoreTicketBalance:
+					itemBalanceMap.get("attendance_restore_ticket") ?? 0,
+				nextDrawTicketIn:
+					profile.role === "job_seeker" ? 7 - (rewardStreakDays % 7) : null,
+				rewardStreakDays:
+					profile.role === "job_seeker" ? rewardStreakDays : null,
 				// 다음 등급까지 남은 포인트도 등급 기준(포인트몰 제외) 합계로 계산한다.
 				pointsToNext: upcoming ? upcoming.minPoints - gradeBasis : null,
 				streakDays: countAttendanceStreak(attendedDatesDesc, today),

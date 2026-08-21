@@ -207,6 +207,7 @@ export const notificationTargetType = pgEnum("notification_target_type", [
 	"point_transaction",
 	// 포인트몰 보유 아이템 만료 임박 알림 등.
 	"point_shop_order",
+	"member_item_transaction",
 ]);
 
 // 수다방 게시판 정의. 운영자가 코드 배포 없이 추가·수정할 수 있도록 enum이 아니라
@@ -1971,6 +1972,11 @@ export const bambiNotification = pgTable(
 // attended_on은 KST 달력일이다(서버가 services/bambi-attendance의 getKstDateString으로
 // 계산해 넣는다 — 클라이언트 시계 불신). 출석 포인트는 이 테이블에 컬럼을 붙이지 않고
 // 아래 bambi_point_transaction 원장에 별도 행으로 쌓는다(적립 이력이 남아야 해서).
+export const bambiAttendanceSource = pgEnum("bambi_attendance_source", [
+	"check_in",
+	"restore_ticket",
+]);
+
 export const bambiAttendance = pgTable(
 	"bambi_attendance",
 	{
@@ -1978,6 +1984,14 @@ export const bambiAttendance = pgTable(
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
 		attendedOn: date("attended_on").notNull(),
+		source: bambiAttendanceSource("source").default("check_in").notNull(),
+		// migration 이전 행은 false로 backfill한다. 새 체크인·복구만 7일 보상 계산에 참여한다.
+		streakRewardEligible: boolean("streak_reward_eligible")
+			.default(true)
+			.notNull(),
+		restoredByItemTransactionId: uuid(
+			"restored_by_item_transaction_id"
+		).references(() => bambiMemberItemTransaction.id, { onDelete: "set null" }),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
@@ -2019,6 +2033,189 @@ export const bambiPointTransaction = pgTable(
 		index("bambi_point_transaction_user_id_idx").on(table.userId),
 		uniqueIndex("bambi_point_transaction_external_key_uidx").on(
 			table.externalKey
+		),
+	]
+);
+
+export const bambiMemberItemType = pgEnum("bambi_member_item_type", [
+	"draw_ticket",
+	"attendance_restore_ticket",
+]);
+
+export const bambiMemberItemReason = pgEnum("bambi_member_item_reason", [
+	"attendance_streak",
+	"employer_review_retained",
+	"point_shop_purchase",
+	"draw_use",
+	"attendance_restore_use",
+	"admin_adjustment",
+]);
+
+// 뽑기권·출석 복구권 수량 원장. 잔액은 계정·종류별 quantity 합계이며 모든 변경은
+// external_key로 멱등하게 기록한다.
+export const bambiMemberItemTransaction = pgTable(
+	"bambi_member_item_transaction",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		itemType: bambiMemberItemType("item_type").notNull(),
+		quantity: integer("quantity").notNull(),
+		reason: bambiMemberItemReason("reason").notNull(),
+		externalKey: text("external_key").notNull(),
+		pointShopOrderId: uuid("point_shop_order_id").references(
+			() => bambiPointShopOrder.id,
+			{ onDelete: "set null" }
+		),
+		referenceType: text("reference_type"),
+		referenceId: text("reference_id"),
+		description: text("description"),
+		balanceAfter: integer("balance_after").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("bambi_member_item_transaction_user_type_created_idx").on(
+			table.userId,
+			table.itemType,
+			table.createdAt
+		),
+		uniqueIndex("bambi_member_item_transaction_external_key_uidx").on(
+			table.externalKey
+		),
+		index("bambi_member_item_transaction_order_id_idx").on(
+			table.pointShopOrderId
+		),
+		check(
+			"bambi_member_item_transaction_quantity_nonzero_ck",
+			sql`${table.quantity} <> 0`
+		),
+		check(
+			"bambi_member_item_transaction_balance_nonnegative_ck",
+			sql`${table.balanceAfter} >= 0`
+		),
+	]
+);
+
+export const bambiAttendanceStreakClaim = pgTable(
+	"bambi_attendance_streak_claim",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		runStartOn: date("run_start_on").notNull(),
+		runEndOn: date("run_end_on").notNull(),
+		triggerAttendedOn: date("trigger_attended_on").notNull(),
+		itemTransactionId: uuid("item_transaction_id")
+			.notNull()
+			.references(() => bambiMemberItemTransaction.id),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("bambi_attendance_streak_claim_user_run_idx").on(
+			table.userId,
+			table.runStartOn,
+			table.runEndOn
+		),
+		uniqueIndex("bambi_attendance_streak_claim_item_transaction_uidx").on(
+			table.itemTransactionId
+		),
+	]
+);
+
+export const bambiReviewDrawRewardStatus = pgEnum(
+	"bambi_review_draw_reward_status",
+	["pending", "awarded", "disqualified"]
+);
+
+export const bambiReviewDrawReward = pgTable(
+	"bambi_review_draw_reward",
+	{
+		reviewId: uuid("review_id")
+			.primaryKey()
+			.references(() => review.id, { onDelete: "cascade" }),
+		recipientUserId: text("recipient_user_id")
+			.notNull()
+			.references(() => user.id),
+		eligibleAt: timestamp("eligible_at").notNull(),
+		status: bambiReviewDrawRewardStatus("status").default("pending").notNull(),
+		disqualifiedReason: text("disqualified_reason"),
+		itemTransactionId: uuid("item_transaction_id").references(
+			() => bambiMemberItemTransaction.id
+		),
+		processedAt: timestamp("processed_at"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("bambi_review_draw_reward_status_eligible_idx").on(
+			table.status,
+			table.eligibleAt
+		),
+		uniqueIndex("bambi_review_draw_reward_item_transaction_uidx").on(
+			table.itemTransactionId
+		),
+	]
+);
+
+export const bambiPointDrawPrize = pgTable(
+	"bambi_point_draw_prize",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		points: integer("points").notNull(),
+		weight: integer("weight").notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		sortOrder: integer("sort_order").default(0).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		check(
+			"bambi_point_draw_prize_points_positive_ck",
+			sql`${table.points} > 0`
+		),
+		check(
+			"bambi_point_draw_prize_weight_positive_ck",
+			sql`${table.weight} > 0`
+		),
+	]
+);
+
+export const bambiPointDraw = pgTable(
+	"bambi_point_draw",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		requestId: uuid("request_id").notNull(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		prizeId: uuid("prize_id").references(() => bambiPointDrawPrize.id, {
+			onDelete: "set null",
+		}),
+		prizePointsSnapshot: integer("prize_points_snapshot").notNull(),
+		prizeWeightSnapshot: integer("prize_weight_snapshot").notNull(),
+		awardedPoints: integer("awarded_points").notNull(),
+		ticketTransactionId: uuid("ticket_transaction_id")
+			.notNull()
+			.references(() => bambiMemberItemTransaction.id),
+		pointTransactionId: uuid("point_transaction_id").references(
+			() => bambiPointTransaction.id
+		),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("bambi_point_draw_user_request_uidx").on(
+			table.userId,
+			table.requestId
+		),
+		uniqueIndex("bambi_point_draw_ticket_transaction_uidx").on(
+			table.ticketTransactionId
+		),
+		uniqueIndex("bambi_point_draw_point_transaction_uidx").on(
+			table.pointTransactionId
 		),
 	]
 );
@@ -2138,6 +2335,8 @@ export const pointShopBenefitType = pgEnum("point_shop_benefit_type", [
 	"boost_manual_count",
 	"boost_auto_period",
 	"ad_extend",
+	"draw_ticket",
+	"attendance_restore_ticket",
 ]);
 
 // 아이템 구매 자격 대상. all=전원, employer=구인 회원, job_seeker=구직 회원.
@@ -2147,6 +2346,53 @@ export const pointShopAudience = pgEnum("point_shop_audience", [
 	"employer",
 	"job_seeker",
 ]);
+
+export const pointShopCategoryKind = pgEnum("point_shop_category_kind", [
+	"featured",
+	"standard",
+]);
+
+export const bambiPointShopCategory = pgTable(
+	"bambi_point_shop_category",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		key: text("key").notNull(),
+		name: text("name").notNull(),
+		kind: pointShopCategoryKind("kind").default("standard").notNull(),
+		isActive: boolean("is_active").default(true).notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [uniqueIndex("bambi_point_shop_category_key_uidx").on(table.key)]
+);
+
+// 분류와 별도로 행을 저장해 운영자가 추가한 빈 행도 보존한다. 한 행에는 분류 하나만
+// 들어가며 featured 행(position 0) 고정은 API와 migration seed가 함께 보장한다.
+export const bambiPointShopLayoutRow = pgTable(
+	"bambi_point_shop_layout_row",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		position: integer("position").notNull(),
+		categoryId: uuid("category_id").references(
+			() => bambiPointShopCategory.id,
+			{ onDelete: "set null" }
+		),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("bambi_point_shop_layout_row_position_uidx").on(table.position),
+		uniqueIndex("bambi_point_shop_layout_row_category_id_uidx").on(
+			table.categoryId
+		),
+	]
+);
 
 // 포인트몰 판매 아이템. 혜택 유형(benefit_type)에 따라 수동 지급·쿠폰·끌올·광고 연장을
 // 연결한다. 선택 재고(stock_quantity)는 null이면 무제한, 값이 있으면 구매 시 조건부 원자
@@ -2159,6 +2405,9 @@ export const bambiPointShopItem = pgTable("bambi_point_shop_item", {
 	pricePoints: integer("price_points").notNull(),
 	sortOrder: integer("sort_order").notNull().default(0),
 	isActive: boolean("is_active").notNull().default(true),
+	categoryId: uuid("category_id")
+		.notNull()
+		.references(() => bambiPointShopCategory.id, { onDelete: "restrict" }),
 	// 연결 혜택 유형. 기존 행은 none 폴백이라 백필 불필요.
 	benefitType: pointShopBenefitType("benefit_type").notNull().default("none"),
 	// 구매 자격 대상. 목록 노출은 전원, 구매만 자격 검사.
@@ -2220,6 +2469,22 @@ export const bambiPointShopOrder = pgTable(
 		// 내 구매 내역(사용자별 최신순)과 운영자 대기 필터가 각각 훑는다.
 		index("bambi_point_shop_order_user_id_idx").on(table.userId),
 		index("bambi_point_shop_order_status_idx").on(table.status),
+	]
+);
+
+export const bambiPointShopFeaturedItem = pgTable(
+	"bambi_point_shop_featured_item",
+	{
+		itemId: uuid("item_id")
+			.primaryKey()
+			.references(() => bambiPointShopItem.id, { onDelete: "cascade" }),
+		position: integer("position").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		uniqueIndex("bambi_point_shop_featured_item_position_uidx").on(
+			table.position
+		),
 	]
 );
 

@@ -89,6 +89,7 @@ import {
 	queuedListingWhere,
 } from "../../services/bambi-premium-capacity";
 import { PENDING_REPORT_STATUSES } from "../../services/bambi-report-status";
+import { disqualifyReviewDrawReward } from "../../services/bambi-review-draw-rewards";
 import { transitionReviewPoints } from "../../services/bambi-review-points";
 import { getVerifiedIdentityForAdmin } from "../../services/bambi-secret-identity";
 import {
@@ -2365,6 +2366,12 @@ export const moderationRouter = {
 				if (!updated) {
 					throw new ORPCError("NOT_FOUND");
 				}
+				if (input.status !== "published") {
+					await disqualifyReviewDrawReward(tx, {
+						reason: `review_${input.status}`,
+						reviewId: input.reviewId,
+					});
+				}
 
 				await tx.insert(adminModerationAction).values({
 					adminUserId: admin.userId,
@@ -2437,6 +2444,12 @@ export const moderationRouter = {
 							if (!updated) {
 								throw new ORPCError("NOT_FOUND", {
 									message: "Review was not found.",
+								});
+							}
+							if (input.status !== "published") {
+								await disqualifyReviewDrawReward(tx, {
+									reason: `review_${input.status}`,
+									reviewId,
 								});
 							}
 
