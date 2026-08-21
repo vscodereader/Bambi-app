@@ -1,3 +1,60 @@
+DO $$ BEGIN
+	CREATE TYPE "public"."point_shop_audience" AS ENUM('all', 'employer', 'job_seeker');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."point_shop_benefit_type" AS ENUM('none', 'coupon', 'boost_manual_period', 'boost_manual_count', 'boost_auto_period', 'ad_extend');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+ALTER TYPE "public"."job_boost_purchase_source" ADD VALUE IF NOT EXISTS 'point_shop';--> statement-breakpoint
+ALTER TYPE "public"."notification_target_type" ADD VALUE IF NOT EXISTS 'point_shop_order';--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "bambi_point_shop_item" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" text NOT NULL,
+	"description" text,
+	"image_url" text,
+	"price_points" integer NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"benefit_type" "point_shop_benefit_type" DEFAULT 'none' NOT NULL,
+	"audience" "point_shop_audience" DEFAULT 'all' NOT NULL,
+	"boosts_per_day" integer,
+	"duration_days" integer,
+	"boost_count" integer,
+	"extend_days" integer,
+	"usage_limit_days" integer,
+	"stock_quantity" integer,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "bambi_point_shop_order" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" text NOT NULL,
+	"item_id" uuid,
+	"item_name" text NOT NULL,
+	"price_points" integer NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"operator_memo" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"processed_at" timestamp,
+	"benefit_type" "point_shop_benefit_type" DEFAULT 'none' NOT NULL,
+	"boosts_per_day" integer,
+	"duration_days" integer,
+	"boost_count" integer,
+	"extend_days" integer,
+	"usable_until" timestamp,
+	"used_at" timestamp,
+	"target_job_post_id" uuid,
+	"expiry_notified_at" timestamp,
+	"stock_decremented" boolean DEFAULT false NOT NULL,
+	CONSTRAINT "bambi_point_shop_order_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action,
+	CONSTRAINT "bambi_point_shop_order_item_id_bambi_point_shop_item_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."bambi_point_shop_item"("id") ON DELETE set null ON UPDATE no action,
+	CONSTRAINT "bambi_point_shop_order_target_job_post_id_job_post_id_fk" FOREIGN KEY ("target_job_post_id") REFERENCES "public"."job_post"("id") ON DELETE set null ON UPDATE no action
+);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "bambi_point_shop_order_user_id_idx" ON "bambi_point_shop_order" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "bambi_point_shop_order_status_idx" ON "bambi_point_shop_order" USING btree ("status");--> statement-breakpoint
 CREATE TYPE "public"."bambi_attendance_source" AS ENUM('check_in', 'restore_ticket');--> statement-breakpoint
 CREATE TYPE "public"."bambi_member_item_reason" AS ENUM('attendance_streak', 'employer_review_retained', 'point_shop_purchase', 'draw_use', 'attendance_restore_use', 'admin_adjustment');--> statement-breakpoint
 CREATE TYPE "public"."bambi_member_item_type" AS ENUM('draw_ticket', 'attendance_restore_ticket');--> statement-breakpoint

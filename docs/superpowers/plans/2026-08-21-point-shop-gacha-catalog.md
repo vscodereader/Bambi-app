@@ -889,11 +889,13 @@
 ### DB 결과
 
 - `0109_steep_drax`: 핵심 테이블·enum·분류 seed·기존 상품 other 이관·배포 전 출석 보상 제외
+- 기존 migration 워터마크가 `0098~0100`을 건너뛴 DB에서는 누락된 포인트몰 기반을 조건부 복구한 뒤 0109를 적용
 - `0110_dark_carnage`: `member_item_transaction` 알림 target 추가
 - `db:push` 미사용
 - `drizzle-kit check`: `Everything's fine`
 - 재 `drizzle-kit generate`: `No schema changes`
-- dev DB `db:migrate`: 사용자 허용 전이므로 미실행
+- dev DB `db:migrate`: 0109·0110 적용 성공
+- migration 원장 2건과 포인트몰·아이템 원장·뽑기·후기 보상 테이블, 초기 분류·신규 benefit enum 직접 조회 확인
 
 ### 자동 검증 결과
 
@@ -911,6 +913,6 @@
 
 - PR #233 실제 merge 후 최신 `origin/develop` 재반영
 - migration 번호·snapshot·journal 충돌 재확인
-- 허용된 dev DB에서 migration 적용 후 실제 DB/API 동작 검증
+- 실제 로그인 계정으로 구매·복구·뽑기·운영자 저장 동작 검증
 - migration 적용 후 로그인된 구직자·구인자·운영자 계정으로 구매·복구·뽑기·운영자 저장 동작 검수
 - 이 검증 결과를 본 문서와 PR 본문에 다시 기록
