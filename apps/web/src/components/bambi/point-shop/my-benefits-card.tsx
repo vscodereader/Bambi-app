@@ -97,7 +97,11 @@ export function MyBenefitsCard(): React.JSX.Element {
 									</span>
 								</div>
 								{item.itemType === "draw_ticket" ? (
-									<Button render={<Link href="/point-shop/draw" />} size="sm">
+									<Button
+										nativeButton={false}
+										render={<Link href="/point-shop/draw" />}
+										size="sm"
+									>
 										사용하기
 									</Button>
 								) : (

@@ -20,10 +20,17 @@ const BALLS = [
 	[styles.ball1, "text-rose-400"],
 	[styles.ball2, "text-sky-400"],
 	[styles.ball3, "text-emerald-400"],
-	[styles.ball4, "text-amber-300"],
-	[styles.ball5, "text-violet-400"],
+	[styles.ball4, "text-yellow-300"],
+	[styles.ball5, "text-sky-300"],
 	[styles.ball6, "text-red-400"],
-	[styles.ball7, "text-blue-400"],
+	[styles.ball7, "text-emerald-500"],
+	[styles.ball8, "text-yellow-300"],
+	[styles.ball9, "text-red-400"],
+	[styles.ball10, "text-sky-400"],
+	[styles.ball11, "text-yellow-300"],
+	[styles.ball12, "text-rose-400"],
+	[styles.ball13, "text-emerald-400"],
+	[styles.ball14, "text-sky-300"],
 ] as const;
 
 const wait = (milliseconds: number) =>
@@ -84,7 +91,7 @@ export function PointDrawMachine(): React.JSX.Element {
 				<h1 className="m-0 font-black text-4xl tracking-tight">
 					포인트 랜덤 뽑기
 				</h1>
-				<div className="mt-3 rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground text-sm shadow-sm">
+				<div className={styles.speechBubble}>
 					{state?.maxPrizePoints
 						? `행운의 ${state.maxPrizePoints.toLocaleString("ko-KR")} 포인트 주인공이 되어보세요`
 						: "운영자가 뽑기 보상을 준비 중입니다"}
@@ -96,6 +103,8 @@ export function PointDrawMachine(): React.JSX.Element {
 				className={cn(styles.machine, stage === "shaking" && styles.shaking)}
 				role="img"
 			>
+				<div className={styles.topButton} />
+				<div className={styles.cap} />
 				<div className={styles.globe}>
 					{BALLS.map(([position, color]) => (
 						<span
@@ -105,8 +114,14 @@ export function PointDrawMachine(): React.JSX.Element {
 						/>
 					))}
 				</div>
+				<div className={styles.collar} />
 				<div className={styles.body}>
-					<div className={styles.knob} />
+					<div className={styles.bodyShine} />
+					<div className={styles.alertMark}>!</div>
+					<div className={styles.crank}>
+						<span className={styles.crankCenter} />
+						<span className={styles.crankHandle} />
+					</div>
 					<div className={styles.exit}>
 						<span
 							aria-hidden
@@ -118,6 +133,8 @@ export function PointDrawMachine(): React.JSX.Element {
 						/>
 					</div>
 				</div>
+				<div className={styles.base} />
+				<div className={styles.shadow} />
 			</div>
 
 			<Card className="w-full">

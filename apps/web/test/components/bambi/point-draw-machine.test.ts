@@ -27,7 +27,9 @@ describe("포인트 랜덤 뽑기 화면", () => {
 	});
 
 	it("움직이는 볼과 reduced-motion 대체를 제공한다", () => {
-		expect(styles).toContain("@keyframes ball-float");
+		expect(styles).toContain("@keyframes route-one");
+		expect(styles).toContain("@keyframes route-two");
+		expect(styles).toContain("@keyframes route-three");
 		expect(styles).toContain("@keyframes machine-shake");
 		expect(styles).toContain("@keyframes dispense-ball");
 		expect(styles).toContain("@keyframes open-ball");

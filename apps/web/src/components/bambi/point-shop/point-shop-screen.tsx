@@ -465,7 +465,7 @@ export function PointShopScreen() {
 					<span className="font-extrabold text-lg">포인트 랜덤 뽑기</span>
 					<span className="text-primary text-sm">100% 포인트 당첨</span>
 				</div>
-				<Button render={<Link href="/point-shop/draw" />}>
+				<Button nativeButton={false} render={<Link href="/point-shop/draw" />}>
 					뽑기 하러 가기
 				</Button>
 			</div>

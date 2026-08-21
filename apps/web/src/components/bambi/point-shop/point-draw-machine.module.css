@@ -1,112 +1,326 @@
+.speechBubble {
+	position: relative;
+	max-width: 24rem;
+	padding: 0.55rem 1rem;
+	margin-top: 0.75rem;
+	font-size: 0.875rem;
+	font-weight: 700;
+	color: var(--primary-foreground);
+	text-align: center;
+	background: var(--primary);
+	border-radius: 9999px;
+	box-shadow: 0 0.25rem 0.7rem
+		color-mix(in oklab, var(--primary) 25%, transparent);
+}
+
+.speechBubble::before {
+	position: absolute;
+	top: -0.45rem;
+	left: 18%;
+	width: 0.9rem;
+	height: 0.9rem;
+	content: "";
+	background: var(--primary);
+	transform: rotate(45deg);
+}
+
 .machine {
-	width: min(100%, 28rem);
+	position: relative;
+	width: min(92vw, 25rem);
+	padding-top: 2.4rem;
+	padding-bottom: 1.3rem;
 	transform-origin: center bottom;
 }
 
 .shaking {
-	animation: machine-shake 0.16s ease-in-out 8 alternate;
+	animation: machine-shake 0.12s ease-in-out 12 alternate;
+}
+
+.topButton {
+	position: absolute;
+	top: 0.45rem;
+	left: 46%;
+	z-index: 4;
+	width: 8%;
+	aspect-ratio: 0.72;
+	background: color-mix(in oklab, var(--primary) 88%, black);
+	border-radius: 9999px 9999px 0 0;
+}
+
+.cap {
+	position: absolute;
+	top: 1.65rem;
+	left: 22%;
+	z-index: 4;
+	width: 56%;
+	height: 3rem;
+	background: var(--primary);
+	border-radius: 70% 70% 12% 12%;
+	box-shadow: inset 0 -0.35rem 0 color-mix(in oklab, var(--primary) 78%, black);
 }
 
 .globe {
 	position: relative;
+	z-index: 2;
+	width: 84%;
 	aspect-ratio: 1;
+	margin: 1.4rem auto 0;
 	overflow: hidden;
-	background: color-mix(in oklab, var(--primary) 8%, transparent);
-	border: 0.6rem solid color-mix(in oklab, var(--primary) 28%, white);
+	background:
+		radial-gradient(
+			circle at 32% 22%,
+			rgb(255 255 255 / 70%) 0 2%,
+			transparent 13%
+		),
+		linear-gradient(145deg, rgb(234 249 255 / 82%), rgb(221 242 248 / 55%));
+	border: 0.38rem solid color-mix(in oklab, var(--primary) 16%, white);
 	border-radius: 9999px;
+	box-shadow:
+		inset 0 0 1.5rem rgb(255 255 255 / 82%),
+		0 0.4rem 0.8rem rgb(30 80 100 / 8%);
 }
 
 .ball {
 	position: absolute;
-	width: 15%;
+	z-index: 2;
+	width: 16%;
 	aspect-ratio: 1;
-	background: currentColor;
-	border: 0.2rem solid color-mix(in oklab, currentColor 68%, white);
+	background: linear-gradient(
+		to bottom,
+		color-mix(in oklab, currentColor 78%, white) 0 47%,
+		currentColor 48% 100%
+	);
+	border: 0.14rem solid color-mix(in oklab, currentColor 65%, white);
 	border-radius: 9999px;
-	box-shadow: inset 0.3rem 0.35rem 0 color-mix(in oklab, white 50%, transparent);
-	animation: ball-float 2.4s ease-in-out infinite alternate;
+	box-shadow:
+		inset 0.35rem 0.25rem 0 rgb(255 255 255 / 38%),
+		0 0.16rem 0.25rem rgb(0 0 0 / 14%);
+	animation-timing-function: cubic-bezier(0.36, 0.08, 0.64, 0.92);
+	animation-iteration-count: infinite;
+	animation-direction: alternate;
 }
+
+.ball::after {
+	position: absolute;
+	top: 46%;
+	left: 3%;
+	width: 94%;
+	height: 8%;
+	content: "";
+	background: color-mix(in oklab, currentColor 65%, white);
+	box-shadow: 0 0.09rem 0 rgb(255 255 255 / 50%);
+}
+
 .ball1 {
-	top: 24%;
-	left: 10%;
-	animation-duration: 2.1s;
-	animation-delay: 0s;
+	top: 18%;
+	left: 14%;
+	animation: route-one 0.78s infinite alternate;
 }
 .ball2 {
-	top: 12%;
-	left: 32%;
-	animation-duration: 2.23s;
-	animation-delay: 0.3s;
+	top: 15%;
+	left: 43%;
+	animation: route-two 0.92s 0.08s infinite alternate;
 }
 .ball3 {
 	top: 26%;
-	left: 55%;
-	animation-duration: 2.36s;
-	animation-delay: 0.7s;
+	left: 68%;
+	animation: route-three 0.74s 0.14s infinite alternate;
 }
 .ball4 {
-	top: 48%;
-	left: 70%;
-	animation-duration: 2.49s;
-	animation-delay: 1s;
+	top: 43%;
+	left: 12%;
+	animation: route-two 0.86s 0.2s infinite alternate-reverse;
 }
 .ball5 {
-	top: 58%;
-	left: 18%;
-	animation-duration: 2.62s;
-	animation-delay: 1.3s;
+	top: 48%;
+	left: 40%;
+	animation: route-three 0.68s 0.05s infinite alternate;
 }
 .ball6 {
-	top: 62%;
-	left: 43%;
-	animation-duration: 2.75s;
-	animation-delay: 0.5s;
+	top: 45%;
+	left: 68%;
+	animation: route-one 0.82s 0.26s infinite alternate-reverse;
 }
 .ball7 {
-	top: 70%;
-	left: 61%;
-	animation-duration: 2.88s;
-	animation-delay: 1.6s;
+	top: 65%;
+	left: 17%;
+	animation: route-three 0.9s 0.18s infinite alternate;
+}
+.ball8 {
+	top: 69%;
+	left: 44%;
+	animation: route-one 0.72s 0.1s infinite alternate;
+}
+.ball9 {
+	top: 66%;
+	left: 68%;
+	animation: route-two 0.8s 0.3s infinite alternate-reverse;
+}
+.ball10 {
+	top: 34%;
+	left: 28%;
+	animation: route-three 0.76s 0.36s infinite alternate-reverse;
+}
+.ball11 {
+	top: 56%;
+	left: 27%;
+	animation: route-one 0.88s 0.22s infinite alternate;
+}
+.ball12 {
+	top: 56%;
+	left: 55%;
+	animation: route-two 0.7s 0.12s infinite alternate;
+}
+.ball13 {
+	top: 31%;
+	left: 51%;
+	animation: route-one 0.84s 0.4s infinite alternate-reverse;
+}
+.ball14 {
+	top: 72%;
+	left: 31%;
+	animation: route-three 0.79s 0.34s infinite alternate;
+}
+
+.collar {
+	position: relative;
+	z-index: 4;
+	width: 68%;
+	height: 2.35rem;
+	margin: -2rem auto 0;
+	background: var(--primary);
+	border-radius: 9999px;
+	box-shadow: inset 0 -0.35rem 0 color-mix(in oklab, var(--primary) 78%, black);
 }
 
 .body {
 	position: relative;
-	width: 72%;
-	padding: 14% 10% 10%;
-	margin: -8% auto 0;
-	background: var(--primary);
-	border-radius: 20% 20% 10% 10%;
+	z-index: 3;
+	width: 66%;
+	height: 16.5rem;
+	margin: -0.7rem auto 0;
+	overflow: hidden;
+	background: linear-gradient(
+		105deg,
+		color-mix(in oklab, var(--primary) 92%, white),
+		var(--primary)
+	);
+	border-radius: 10% 10% 5% 5%;
+	clip-path: polygon(13% 0, 87% 0, 100% 100%, 0 100%);
 }
 
-.knob {
-	width: 26%;
+.bodyShine {
+	position: absolute;
+	top: 14%;
+	left: 17%;
+	width: 7%;
+	height: 56%;
+	background: rgb(255 255 255 / 58%);
+	border-radius: 9999px;
+	transform: rotate(8deg);
+}
+
+.alertMark {
+	position: absolute;
+	top: 53%;
+	left: 18%;
+	font-size: 2rem;
+	font-weight: 900;
+	color: rgb(255 255 255 / 78%);
+	transform: rotate(7deg);
+}
+
+.crank {
+	position: absolute;
+	top: 17%;
+	left: 34%;
+	width: 32%;
 	aspect-ratio: 1;
-	margin: 0 auto 10%;
 	background: white;
-	border: 0.45rem solid color-mix(in oklab, var(--primary) 65%, black);
+	border: 0.45rem solid color-mix(in oklab, var(--primary) 68%, black);
+	border-radius: 9999px;
+	box-shadow: inset 0 -0.3rem 0 rgb(0 0 0 / 10%);
+}
+
+.crankCenter {
+	position: absolute;
+	top: 31%;
+	left: 31%;
+	width: 38%;
+	aspect-ratio: 1;
+	background: var(--primary);
+	border-radius: 9999px;
+}
+
+.crankHandle {
+	position: absolute;
+	top: 42%;
+	left: -40%;
+	width: 180%;
+	height: 16%;
+	background: color-mix(in oklab, var(--primary) 65%, black);
 	border-radius: 9999px;
 }
 
 .exit {
-	position: relative;
+	position: absolute;
+	bottom: -1%;
+	left: 31%;
 	width: 38%;
-	aspect-ratio: 1.1;
-	margin: auto;
+	aspect-ratio: 0.82;
 	overflow: visible;
-	background: color-mix(in oklab, black 88%, var(--primary));
-	border-radius: 9999px 9999px 18% 18%;
+	background: color-mix(in oklab, black 91%, var(--primary));
+	border-radius: 9999px 9999px 10% 10%;
+}
+
+.base {
+	position: relative;
+	z-index: 5;
+	width: 78%;
+	height: 1.35rem;
+	margin: -0.65rem auto 0;
+	background: rgb(8 13 12);
+	border-radius: 70% 70% 38% 38%;
+	box-shadow: inset 0 0.25rem 0 color-mix(in oklab, var(--primary) 65%, black);
+}
+
+.shadow {
+	position: relative;
+	z-index: 1;
+	width: 82%;
+	height: 1.1rem;
+	margin: -0.4rem auto 0;
+	background: rgb(0 0 0 / 12%);
+	border-radius: 50%;
+	filter: blur(0.12rem);
 }
 
 .dispensedBall {
 	position: absolute;
-	top: 18%;
-	left: 24%;
-	width: 52%;
+	top: 15%;
+	left: 20%;
+	z-index: 7;
+	width: 60%;
 	aspect-ratio: 1;
-	background: var(--accent);
+	background: linear-gradient(
+		to bottom,
+		color-mix(in oklab, var(--primary) 65%, white) 0 47%,
+		var(--primary) 48% 100%
+	);
+	border: 0.15rem solid color-mix(in oklab, var(--primary) 66%, white);
 	border-radius: 9999px;
 	opacity: 0;
-	transform: translateY(-120%);
+	transform: translateY(-150%);
+}
+
+.dispensedBall::after {
+	position: absolute;
+	top: 46%;
+	left: 3%;
+	width: 94%;
+	height: 8%;
+	content: "";
+	background: color-mix(in oklab, var(--primary) 60%, white);
 }
 
 .dispensing {
@@ -118,48 +332,94 @@
 	animation: open-ball 0.65s ease-in-out forwards;
 }
 
-@keyframes ball-float {
-	from {
-		transform: translate(-18%, -12%) rotate(0deg);
+@keyframes route-one {
+	0% {
+		transform: translate(-80%, -65%) rotate(0deg);
 	}
-	to {
-		transform: translate(22%, 18%) rotate(150deg);
+	35% {
+		transform: translate(230%, 110%) rotate(110deg);
+	}
+	70% {
+		transform: translate(-130%, 190%) rotate(230deg);
+	}
+	100% {
+		transform: translate(280%, -90%) rotate(360deg);
+	}
+}
+
+@keyframes route-two {
+	0% {
+		transform: translate(60%, -110%) rotate(0deg);
+	}
+	30% {
+		transform: translate(-290%, 55%) rotate(-100deg);
+	}
+	65% {
+		transform: translate(90%, 180%) rotate(-245deg);
+	}
+	100% {
+		transform: translate(-210%, -80%) rotate(-360deg);
+	}
+}
+
+@keyframes route-three {
+	0% {
+		transform: translate(-120%, 170%) rotate(0deg);
+	}
+	28% {
+		transform: translate(210%, -100%) rotate(95deg);
+	}
+	62% {
+		transform: translate(-270%, -25%) rotate(220deg);
+	}
+	100% {
+		transform: translate(130%, 135%) rotate(360deg);
 	}
 }
 
 @keyframes machine-shake {
 	from {
-		transform: translateY(-2%) rotate(-1.5deg);
+		transform: translateY(-2.5%) rotate(-1.8deg);
 	}
 	to {
-		transform: translateY(2%) rotate(1.5deg);
+		transform: translateY(2.5%) rotate(1.8deg);
 	}
 }
 
 @keyframes dispense-ball {
 	0% {
 		opacity: 0;
-		transform: translateY(-150%) scale(0.8);
+		transform: translateY(-150%) scale(0.75);
 	}
 	70% {
 		opacity: 1;
-		transform: translateY(55%) scale(1);
+		transform: translateY(75%) scale(1);
 	}
 	100% {
 		opacity: 1;
-		transform: translateY(48%) scale(1);
+		transform: translateY(65%) scale(1);
 	}
 }
 
 @keyframes open-ball {
 	0% {
-		transform: translateY(48%) scale(1);
+		transform: translateY(65%) scale(1);
 	}
 	45% {
-		transform: translateY(48%) scale(1.12) rotate(-8deg);
+		transform: translateY(65%) scale(1.14) rotate(-10deg);
 	}
 	100% {
-		transform: translateY(48%) scale(1.2) rotate(8deg);
+		transform: translateY(65%) scale(1.22) rotate(10deg);
+	}
+}
+
+@media (max-width: 40rem) {
+	.machine {
+		width: min(94vw, 22rem);
+	}
+
+	.body {
+		height: 14rem;
 	}
 }
 
