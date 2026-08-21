@@ -98,6 +98,34 @@ describe("notificationTitle", () => {
 		).toBe("포인트 50가 지급되었어요! - 후기 재게시");
 	});
 
+	it("포인트 공고 적립 문구와 내부·수집 공고 딥링크를 만든다", () => {
+		const internal = view({
+			metadata: {
+				action: "point_job_reward",
+				amount: 10,
+				category: "special",
+				jobPostId: "11111111-1111-4111-8111-111111111111",
+				targetSource: "job_post",
+			},
+			targetType: "point_transaction",
+		});
+		expect(notificationTitle(internal)).toBe(
+			"스페셜 포인트 공고를 확인해 10포인트를 받았어요."
+		);
+		expect(notificationHref(internal)).toBe(
+			"/seeker/jobs/11111111-1111-4111-8111-111111111111"
+		);
+		expect(
+			notificationHref({
+				...internal,
+				metadata: {
+					...internal.metadata,
+					targetSource: "crawled_job_post",
+				},
+			})
+		).toBe("/seeker/jobs/crawled/11111111-1111-4111-8111-111111111111");
+	});
+
 	it("공고 승인은 결제 대기·재공개·즉시 게시로 갈린다", () => {
 		expect(
 			notificationTitle(

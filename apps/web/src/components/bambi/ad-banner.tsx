@@ -19,6 +19,7 @@ import {
 import { usePromotionImpression } from "@/lib/bambi/use-promotion-impression";
 import { orpc } from "@/utils/orpc";
 import { AdBannerLayoutRenderer } from "./ad-banner-layout-renderer";
+import { PointJobSticker, usePointJobReward } from "./point-job-sticker";
 
 // GA4 프로모션 슬롯 지정(이슈 #59) — rail이 칸 순번으로 만들어 배너까지 내려보낸다.
 interface PromotionSlot {
@@ -47,6 +48,11 @@ function AdBannerFrame({
 	promotion?: PromotionSlot;
 }) {
 	const tracked = promotion && shouldTrackPromotion(item) ? promotion : null;
+	const pointReward = usePointJobReward({
+		category: "premium",
+		targetId: item.id,
+		targetSource: item.crawled ? "crawled_job_post" : "job_post",
+	});
 	// onImpress는 primitive에만 의존시킨다. item 객체는 렌더마다 새로 만들어지므로
 	// (useAdBannerJobs의 map) 객체째 의존하면 매 렌더 ref가 detach/재attach되고,
 	// 그때마다 IntersectionObserver 초기 콜백이 취소돼 노출이 통째로 유실될 수 있다.
@@ -64,17 +70,19 @@ function AdBannerFrame({
 
 	return (
 		<Link
-			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기`}
+			aria-label={`${item.company} ${item.title} 광고 공고 상세 보기${pointReward.points > 0 ? " · 포인트 적립 대상" : ""}`}
 			className={cn(AD_BANNER_SURFACE_CLASS, AD_BANNER_LINK_CLASS, className)}
 			href={item.href as Route}
-			onClick={
-				tracked
-					? () => trackPromotionSelect(item, tracked.slot, tracked.index)
-					: undefined
-			}
+			onClick={() => {
+				pointReward.claim();
+				if (tracked) {
+					trackPromotionSelect(item, tracked.slot, tracked.index);
+				}
+			}}
 			ref={impressionRef}
 		>
 			{children}
+			{pointReward.points > 0 ? <PointJobSticker /> : null}
 		</Link>
 	);
 }

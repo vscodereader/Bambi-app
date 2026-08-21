@@ -9,6 +9,8 @@ import {
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
+import { Separator } from "@bambi-app/ui/components/separator";
+import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -27,6 +29,10 @@ const parsePoints = (value: string): number | null =>
 const valid = (value: string, nullable = false): boolean =>
 	(nullable && value.trim() === "") ||
 	(Number.isInteger(Number(value)) && Number(value) >= 0);
+const validRotationHours = (value: string): boolean =>
+	Number.isInteger(Number(value)) && Number(value) > 0;
+const settingDraft = (value: null | number): string =>
+	value === null ? "" : String(value);
 
 export default function ModeratorPointSettingsPage() {
 	const client = useQueryClient();
@@ -37,6 +43,12 @@ export default function ModeratorPointSettingsPage() {
 	const [maximum, setMaximum] = useState("");
 	const [reviewWrite, setReviewWrite] = useState("");
 	const [reviewView, setReviewView] = useState("");
+	const [premiumPointReward, setPremiumPointReward] = useState("");
+	const [premiumRotationHours, setPremiumRotationHours] = useState("");
+	const [specialPointReward, setSpecialPointReward] = useState("");
+	const [specialRotationHours, setSpecialRotationHours] = useState("");
+	const [recommendedPointReward, setRecommendedPointReward] = useState("");
+	const [recommendedRotationHours, setRecommendedRotationHours] = useState("");
 	const [boards, setBoards] = useState<BoardDraft[]>([]);
 	useEffect(() => {
 		if (!query.data) {
@@ -56,6 +68,20 @@ export default function ModeratorPointSettingsPage() {
 		);
 		setReviewWrite(String(query.data.reviewWritePoints));
 		setReviewView(String(query.data.reviewViewPoints));
+		setPremiumPointReward(settingDraft(query.data.premiumPointJobRewardPoints));
+		setPremiumRotationHours(
+			settingDraft(query.data.premiumPointJobRotationHours)
+		);
+		setSpecialPointReward(settingDraft(query.data.specialPointJobRewardPoints));
+		setSpecialRotationHours(
+			settingDraft(query.data.specialPointJobRotationHours)
+		);
+		setRecommendedPointReward(
+			settingDraft(query.data.recommendedPointJobRewardPoints)
+		);
+		setRecommendedRotationHours(
+			settingDraft(query.data.recommendedPointJobRotationHours)
+		);
 		setBoards(
 			query.data.boards.map((board) => ({
 				...board,
@@ -72,6 +98,9 @@ export default function ModeratorPointSettingsPage() {
 				toast.success("포인트 설정을 저장했어요.");
 				await client.invalidateQueries({
 					queryKey: orpc.bambi.pointSettings.key(),
+				});
+				await client.invalidateQueries({
+					queryKey: orpc.bambi.pointJobRewards.key(),
 				});
 			},
 		})
@@ -99,6 +128,12 @@ export default function ModeratorPointSettingsPage() {
 		valid(maximum, true) &&
 		valid(reviewWrite) &&
 		valid(reviewView) &&
+		valid(premiumPointReward, true) &&
+		validRotationHours(premiumRotationHours) &&
+		valid(specialPointReward, true) &&
+		validRotationHours(specialRotationHours) &&
+		valid(recommendedPointReward, true) &&
+		validRotationHours(recommendedRotationHours) &&
 		!globalMutation.isPending;
 	if (query.isError) {
 		return (
@@ -119,34 +154,190 @@ export default function ModeratorPointSettingsPage() {
 					입력한 값은 저장 버튼을 눌러야 새 적립과 결제부터 반영됩니다.
 				</p>
 			</div>
+			<Accordion className="flex flex-col gap-3" multiple>
+				<AccordionItem
+					className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+					value="signup-attendance"
+				>
+					<AccordionTrigger className="bg-card px-4 py-4 font-bold hover:bg-muted/50">
+						회원가입과 출석
+					</AccordionTrigger>
+					<AccordionContent className="grid gap-4 px-4 pt-4 pb-4 md:grid-cols-2">
+						<PointField
+							hint="0이면 지급과 로그인 화면 안내를 중단합니다."
+							id="signup-points"
+							label="회원가입 포인트"
+							onChange={setSignup}
+							value={signup}
+						/>
+						<PointField
+							id="attendance-points"
+							label="출석 포인트"
+							onChange={setAttendance}
+							value={attendance}
+						/>
+					</AccordionContent>
+				</AccordionItem>
+				<AccordionItem
+					className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+					value="job-points"
+				>
+					<AccordionTrigger className="bg-card px-4 py-4 font-bold hover:bg-muted/50">
+						공고 포인트
+					</AccordionTrigger>
+					<AccordionContent className="grid gap-4 px-4 pt-4 pb-4 md:grid-cols-2">
+						<PointField
+							id="review-write-points"
+							label="후기 작성 포인트"
+							onChange={setReviewWrite}
+							value={reviewWrite}
+						/>
+						<PointField
+							hint="다른 구직자의 후기 한 건을 열 때 사용하는 포인트입니다."
+							id="review-view-points"
+							label="다른 구직자 후기 열람 포인트"
+							onChange={setReviewView}
+							value={reviewView}
+						/>
+						<div className="mt-4 grid gap-4 md:col-span-2 md:grid-cols-2">
+							<Separator className="md:col-span-2" />
+							<PointField
+								hint="0이거나 비어 있으면 프리미엄 포인트 광고를 비활성화합니다."
+								id="premium-point-job-reward"
+								label="프리미엄 포인트"
+								onChange={setPremiumPointReward}
+								value={premiumPointReward}
+							/>
+							<PointField
+								id="premium-point-job-rotation"
+								label="프리미엄 로테이션 시간"
+								min={1}
+								onChange={setPremiumRotationHours}
+								suffix="시간"
+								value={premiumRotationHours}
+							/>
+						</div>
+						<div className="grid gap-4 md:col-span-2 md:grid-cols-2">
+							<Separator className="md:col-span-2" />
+							<PointField
+								hint="0이거나 비어 있으면 스페셜 포인트 광고를 비활성화합니다."
+								id="special-point-job-reward"
+								label="스페셜 포인트"
+								onChange={setSpecialPointReward}
+								value={specialPointReward}
+							/>
+							<PointField
+								id="special-point-job-rotation"
+								label="스페셜 로테이션 시간"
+								min={1}
+								onChange={setSpecialRotationHours}
+								suffix="시간"
+								value={specialRotationHours}
+							/>
+						</div>
+						<div className="grid gap-4 md:col-span-2 md:grid-cols-2">
+							<Separator className="md:col-span-2" />
+							<PointField
+								hint="0이거나 비어 있으면 추천 포인트 광고를 비활성화합니다."
+								id="recommended-point-job-reward"
+								label="추천 포인트"
+								onChange={setRecommendedPointReward}
+								value={recommendedPointReward}
+							/>
+							<PointField
+								id="recommended-point-job-rotation"
+								label="추천 로테이션 시간"
+								min={1}
+								onChange={setRecommendedRotationHours}
+								suffix="시간"
+								value={recommendedRotationHours}
+							/>
+						</div>
+					</AccordionContent>
+				</AccordionItem>
+				<AccordionItem
+					className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+					value="board-points"
+				>
+					<AccordionTrigger className="bg-card px-4 py-4 font-bold hover:bg-muted/50">
+						게시판별 작성 포인트
+					</AccordionTrigger>
+					<AccordionContent className="px-0 pt-4 pb-0">
+						<Accordion className="divide-y" multiple>
+							{boards.map((board, index) => (
+								<AccordionItem key={board.key} value={board.key}>
+									<AccordionTrigger className="px-4 py-4 font-bold">
+										<span className="flex flex-col items-start gap-1">
+											<span>{board.label}</span>
+											<span className="font-normal text-muted-foreground text-xs">
+												{board.key}
+											</span>
+										</span>
+									</AccordionTrigger>
+									<AccordionContent className="grid gap-4 px-4 pb-4 md:grid-cols-2">
+										{board.key === "notice" ? null : (
+											<PointField
+												id={`${board.key}-post`}
+												label="글 작성"
+												onChange={(value) =>
+													setBoards((current) =>
+														current.map((item, itemIndex) =>
+															itemIndex === index
+																? { ...item, postPoints: value }
+																: item
+														)
+													)
+												}
+												value={board.postPoints}
+											/>
+										)}
+										<PointField
+											id={`${board.key}-comment`}
+											label="댓글 작성"
+											onChange={(value) =>
+												setBoards((current) =>
+													current.map((item, itemIndex) =>
+														itemIndex === index
+															? { ...item, commentPoints: value }
+															: item
+													)
+												)
+											}
+											value={board.commentPoints}
+										/>
+										<Button
+											className="md:col-span-2 md:ml-auto"
+											disabled={
+												!valid(board.commentPoints) ||
+												(board.key !== "notice" && !valid(board.postPoints)) ||
+												boardMutation.isPending
+											}
+											onClick={() =>
+												boardMutation.mutate({
+													commentPoints: Number(board.commentPoints),
+													key: board.key,
+													postPoints:
+														board.key === "notice"
+															? undefined
+															: Number(board.postPoints),
+												})
+											}
+										>
+											{boardMutation.isPending &&
+											boardMutation.variables?.key === board.key
+												? "저장 중"
+												: "저장"}
+										</Button>
+									</AccordionContent>
+								</AccordionItem>
+							))}
+						</Accordion>
+					</AccordionContent>
+				</AccordionItem>
+			</Accordion>
 			<section className="rounded-xl border p-4">
+				<h2 className="mb-4 font-bold text-lg">공고 결제 포인트 사용</h2>
 				<div className="grid gap-4 md:grid-cols-2">
-					<PointField
-						hint="0이면 지급과 로그인 화면 안내를 중단합니다."
-						id="signup-points"
-						label="회원가입 포인트"
-						onChange={setSignup}
-						value={signup}
-					/>
-					<PointField
-						id="attendance-points"
-						label="출석 포인트"
-						onChange={setAttendance}
-						value={attendance}
-					/>
-					<PointField
-						id="review-write-points"
-						label="후기 작성 포인트"
-						onChange={setReviewWrite}
-						value={reviewWrite}
-					/>
-					<PointField
-						hint="다른 구직자의 후기 한 건을 열 때 사용하는 포인트입니다."
-						id="review-view-points"
-						label="다른 구직자 후기 열람 포인트"
-						onChange={setReviewView}
-						value={reviewView}
-					/>
 					<PointField
 						hint="비우거나 0으로 저장하면 공고 결제 포인트 사용을 중단합니다."
 						id="job-min-points"
@@ -164,130 +355,70 @@ export default function ModeratorPointSettingsPage() {
 						value={maximum}
 					/>
 				</div>
-				<Button
-					className="mt-4 ml-auto flex"
-					disabled={!canSaveGlobal}
-					onClick={() =>
-						globalMutation.mutate({
-							attendancePoints: Number(attendance),
-							jobPaymentMaxPoints: parsePoints(maximum),
-							jobPaymentMinPoints: parsePoints(minimum),
-							signupPoints: Number(signup),
-							reviewViewPoints: Number(reviewView),
-							reviewWritePoints: Number(reviewWrite),
-						})
-					}
-				>
-					{globalMutation.isPending ? "저장 중" : "저장"}
-				</Button>
 			</section>
-			<section className="rounded-xl border">
-				<div className="border-b p-4">
-					<h2 className="m-0 font-bold text-lg">게시판별 작성 포인트</h2>
-				</div>
-				<Accordion className="divide-y" multiple>
-					{boards.map((board, index) => (
-						<AccordionItem key={board.key} value={board.key}>
-							<AccordionTrigger className="px-4 py-4 font-bold">
-								<span className="flex flex-col items-start gap-1">
-									<span>{board.label}</span>
-									<span className="font-normal text-muted-foreground text-xs">
-										{board.key}
-									</span>
-								</span>
-							</AccordionTrigger>
-							<AccordionContent className="grid gap-4 px-4 pb-4 md:grid-cols-2">
-								{board.key === "notice" ? null : (
-									<PointField
-										id={`${board.key}-post`}
-										label="글 작성"
-										onChange={(value) =>
-											setBoards((current) =>
-												current.map((item, itemIndex) =>
-													itemIndex === index
-														? { ...item, postPoints: value }
-														: item
-												)
-											)
-										}
-										value={board.postPoints}
-									/>
-								)}
-								<PointField
-									id={`${board.key}-comment`}
-									label="댓글 작성"
-									onChange={(value) =>
-										setBoards((current) =>
-											current.map((item, itemIndex) =>
-												itemIndex === index
-													? { ...item, commentPoints: value }
-													: item
-											)
-										)
-									}
-									value={board.commentPoints}
-								/>
-								<Button
-									className="md:col-span-2 md:ml-auto"
-									disabled={
-										!valid(board.commentPoints) ||
-										(board.key !== "notice" && !valid(board.postPoints)) ||
-										boardMutation.isPending
-									}
-									onClick={() =>
-										boardMutation.mutate({
-											commentPoints: Number(board.commentPoints),
-											key: board.key,
-											postPoints:
-												board.key === "notice"
-													? undefined
-													: Number(board.postPoints),
-										})
-									}
-								>
-									{boardMutation.isPending &&
-									boardMutation.variables?.key === board.key
-										? "저장 중"
-										: "저장"}
-								</Button>
-							</AccordionContent>
-						</AccordionItem>
-					))}
-				</Accordion>
-			</section>
+			<Button
+				className="mt-4 ml-auto flex"
+				disabled={!canSaveGlobal}
+				onClick={() =>
+					globalMutation.mutate({
+						attendancePoints: Number(attendance),
+						jobPaymentMaxPoints: parsePoints(maximum),
+						jobPaymentMinPoints: parsePoints(minimum),
+						signupPoints: Number(signup),
+						reviewViewPoints: Number(reviewView),
+						reviewWritePoints: Number(reviewWrite),
+						premiumPointJobRewardPoints: parsePoints(premiumPointReward),
+						premiumPointJobRotationHours: Number(premiumRotationHours),
+						recommendedPointJobRewardPoints: parsePoints(
+							recommendedPointReward
+						),
+						recommendedPointJobRotationHours: Number(recommendedRotationHours),
+						specialPointJobRewardPoints: parsePoints(specialPointReward),
+						specialPointJobRotationHours: Number(specialRotationHours),
+					})
+				}
+			>
+				{globalMutation.isPending ? "저장 중" : "저장"}
+			</Button>
 		</main>
 	);
 }
 
 function PointField({
+	className,
 	hint,
 	id,
 	label,
+	min = 0,
 	onChange,
 	placeholder,
+	suffix = "P",
 	value,
 }: {
+	className?: string;
 	hint?: string;
 	id: string;
 	label: string;
+	min?: number;
 	onChange: (value: string) => void;
 	placeholder?: string;
+	suffix?: string;
 	value: string;
 }) {
 	return (
-		<div className="flex flex-col gap-2">
+		<div className={cn("flex flex-col gap-2", className)}>
 			<Label htmlFor={id}>{label}</Label>
 			<div className="flex items-center gap-2">
 				<Input
 					id={id}
 					inputMode="numeric"
-					min={0}
+					min={min}
 					onChange={(event) => onChange(event.target.value)}
 					placeholder={placeholder}
 					type="number"
 					value={value}
 				/>
-				<span>P</span>
+				<span className="shrink-0 whitespace-nowrap text-xs">{suffix}</span>
 			</div>
 			{hint ? (
 				<p className="m-0 text-muted-foreground text-xs">{hint}</p>

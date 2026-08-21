@@ -2,10 +2,11 @@ import { db } from "@bambi-app/db";
 import {
 	bambiMemberGrade,
 	bambiPointTransaction,
+	bambiProfile,
 	bambiSiteSettings,
 	communityBoard,
 } from "@bambi-app/db/schema/bambi";
-import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 
 import { lockMemberPoints } from "./bambi-point-ledger";
 import { resolveGradeIconUrl } from "./bambi-storage";
@@ -273,6 +274,16 @@ export async function loadGradeBadges(
 	if (unique.length === 0) {
 		return badges;
 	}
+	const eligibleRows = await db
+		.select({ userId: bambiProfile.userId })
+		.from(bambiProfile)
+		.where(
+			and(inArray(bambiProfile.userId, unique), ne(bambiProfile.role, "admin"))
+		);
+	const eligibleUserIds = eligibleRows.map((row) => row.userId);
+	if (eligibleUserIds.length === 0) {
+		return badges;
+	}
 	const [grades, basisPoints] = await Promise.all([
 		db
 			.select({
@@ -284,12 +295,12 @@ export async function loadGradeBadges(
 			})
 			.from(bambiMemberGrade)
 			.orderBy(asc(bambiMemberGrade.minPoints)),
-		getGradeBasisPoints(unique),
+		getGradeBasisPoints(eligibleUserIds),
 	]);
 	if (grades.length === 0) {
 		return badges;
 	}
-	for (const userId of unique) {
+	for (const userId of eligibleUserIds) {
 		const grade = resolveGrade(basisPoints.get(userId) ?? 0, grades);
 		if (grade) {
 			badges.set(userId, {

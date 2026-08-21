@@ -161,7 +161,7 @@ export const pointShopRouter = {
 	}),
 
 	getMyBalance: protectedProcedure.handler(async ({ context }) => {
-		const profile = await requireActiveBambiProfile(context.session);
+		const profile = await requirePurchaseProfile(context.session);
 		const [row] = await db
 			.select({ pointBalance: pointBalanceSql })
 			.from(bambiPointTransaction)

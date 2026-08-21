@@ -105,6 +105,17 @@ export const jobExposureType = pgEnum("job_exposure_type", [
 	"standard",
 ]);
 
+export const pointJobRewardCategory = pgEnum("point_job_reward_category", [
+	"premium",
+	"special",
+	"recommended",
+]);
+
+export const pointJobTargetSource = pgEnum("point_job_target_source", [
+	"job_post",
+	"crawled_job_post",
+]);
+
 // 상세이미지 디자인 제작 애드온의 진행 상태. 컬럼이 nullable이라 null = 미신청이고,
 // 신청 순간 requested로 시작해 운영자가 완성본을 등록하면 completed로 넘어간다.
 // 별도 주문 테이블 없이 공고 스냅샷으로만 표현하므로 1공고 1회 주문이며 재주문 이력은 없다.
@@ -1439,6 +1450,19 @@ export const bambiSiteSettings = pgTable("bambi_site_settings", {
 	// 후기 저장 성공 시 지급할 포인트와 다른 구직자 후기 한 건 열람 비용.
 	reviewWritePoints: integer("review_write_points").default(0).notNull(),
 	reviewViewPoints: integer("review_view_points").default(10).notNull(),
+	// 구 단일 포인트 광고 금액. 유형별 컬럼 이관 근거로만 남기고 신규 경로에서는 읽지 않는다.
+	pointJobRewardPoints: integer("point_job_reward_points"),
+	premiumPointJobRewardPoints: integer("premium_point_job_reward_points"),
+	specialPointJobRewardPoints: integer("special_point_job_reward_points"),
+	recommendedPointJobRewardPoints: integer(
+		"recommended_point_job_reward_points"
+	),
+	// 유형별 광고 교체 간격이자 개인 재지급 쿨타임. null이면 운영자 미설정 상태다.
+	premiumPointJobRotationHours: integer("premium_point_job_rotation_hours"),
+	specialPointJobRotationHours: integer("special_point_job_rotation_hours"),
+	recommendedPointJobRotationHours: integer(
+		"recommended_point_job_rotation_hours"
+	),
 	// 베스트글(추천수 큐레이션 가상 게시판) 아이콘의 lucide 이름. 베스트는 community_board 행이
 	// 없는 가상 게시판이라 게시판 아이콘 컬럼 대신 여기 저장한다. null이면 미지정(기존 코럴
 	// 액센트 바 유지) — 값 검증은 API 쪽 COMMUNITY_BOARD_ICONS enum(zod)이 맡는다.
@@ -1999,6 +2023,65 @@ export const bambiPointTransaction = pgTable(
 	]
 );
 
+// KST 날짜별 전역 포인트 광고 선정. 내부·수집 공고가 한 테이블을 공유하므로 다형 대상은
+// source+uuid로 저장하고, 대상 삭제 뒤에도 당일 선정 감사 기록을 보존하려고 FK를 걸지 않는다.
+export const bambiPointJobDailySelection = pgTable(
+	"bambi_point_job_daily_selection",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		selectedOn: date("selected_on").notNull(),
+		category: pointJobRewardCategory("category").notNull(),
+		targetSource: pointJobTargetSource("target_source").notNull(),
+		targetId: uuid("target_id").notNull(),
+		titleSnapshot: text("title_snapshot").notNull(),
+		selectedAt: timestamp("selected_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("bambi_point_job_daily_selection_category_selected_idx").on(
+			table.category,
+			table.selectedAt
+		),
+		index("bambi_point_job_daily_selection_target_idx").on(
+			table.targetSource,
+			table.targetId
+		),
+	]
+);
+
+// 계정·광고 유형별 rolling 24시간 보상 이력. 날짜가 아니라 rewarded_at이 쿨다운 정본이다.
+export const bambiPointJobReward = pgTable(
+	"bambi_point_job_reward",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		category: pointJobRewardCategory("category").notNull(),
+		selectionId: uuid("selection_id").references(
+			() => bambiPointJobDailySelection.id,
+			{ onDelete: "set null" }
+		),
+		selectedOn: date("selected_on").notNull(),
+		targetSource: pointJobTargetSource("target_source").notNull(),
+		targetId: uuid("target_id").notNull(),
+		titleSnapshot: text("title_snapshot").notNull(),
+		amount: integer("amount").notNull(),
+		rewardedAt: timestamp("rewarded_at").defaultNow().notNull(),
+		cooldownUntil: timestamp("cooldown_until").notNull(),
+	},
+	(table) => [
+		index("bambi_point_job_reward_user_category_rewarded_idx").on(
+			table.userId,
+			table.category,
+			table.rewardedAt
+		),
+		check(
+			"bambi_point_job_reward_amount_positive_ck",
+			sql`${table.amount} > 0`
+		),
+	]
+);
+
 // 회원 등급 정의. 운영자가 편집한다(CRUD). 등급 = min_points ≤ 포인트 잔액(원장 순합계)인
 // 최상위 등급. min_points=0 기본 등급이 항상 하나 있어야 모든 회원이 등급을 갖는다(시드로 보장,
 // 삭제 API가 마지막 0 등급을 막는다). min_points UNIQUE로 구간 경계 중복을 DB가 거른다.
@@ -2204,6 +2287,28 @@ export const communityPost = pgTable(
 		check(
 			"community_post_author_one_of_ck",
 			sql`num_nonnulls(${table.authorUserId}, ${table.authorGuestId}) = 1`
+		),
+	]
+);
+
+// 공지 한 건을 선택한 여러 게시판 목록에 함께 노출한다. 게시물을 복제하지 않아 수정·삭제·
+// 댓글·좋아요·조회수가 모든 노출 위치에서 같은 community_post 행을 정본으로 사용한다.
+export const communityNoticeBoardPlacement = pgTable(
+	"community_notice_board_placement",
+	{
+		postId: uuid("post_id")
+			.notNull()
+			.references(() => communityPost.id, { onDelete: "cascade" }),
+		boardKey: text("board_key")
+			.notNull()
+			.references(() => communityBoard.key),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.postId, table.boardKey] }),
+		index("community_notice_board_placement_board_post_idx").on(
+			table.boardKey,
+			table.postId
 		),
 	]
 );

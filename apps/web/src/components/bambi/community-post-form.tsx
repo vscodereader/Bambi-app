@@ -3,6 +3,12 @@
 // 글 작성/수정 공용 폼. 컨트롤드 필드 + Tiptap 본문 에디터, 서버 검증에 위임한다.
 
 import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
+import {
 	Alert,
 	AlertDescription,
 	AlertTitle,
@@ -139,6 +145,7 @@ interface CommunityPostInitial {
 	isLocked: boolean;
 	// 수정 모드 광고글 초기값. 편집 페이지가 getPost.isPromotion을 넘겨주면 사용한다.
 	isPromotion?: boolean;
+	noticeBoardKeys?: string[];
 	title: string;
 }
 
@@ -346,6 +353,56 @@ function NoticeEventField({
 	);
 }
 
+function NoticeBoardPlacementField({
+	boards,
+	onChange,
+	selected,
+	visible,
+}: {
+	boards: { key: string; label: string }[];
+	onChange: (keys: string[]) => void;
+	selected: string[];
+	visible: boolean;
+}) {
+	if (!visible) {
+		return null;
+	}
+	const selectedSet = new Set(selected);
+	return (
+		<Accordion>
+			<AccordionItem value="notice-board-placement">
+				<AccordionTrigger>
+					게시판 선택하기 · {selected.length}개 선택
+				</AccordionTrigger>
+				<AccordionContent className="flex flex-col gap-3 pt-2">
+					{boards.length === 0 ? (
+						<p className="m-0 text-muted-foreground text-sm">
+							선택할 수 있는 게시판이 없어요.
+						</p>
+					) : (
+						boards.map((item) => (
+							<div className="flex items-center gap-2" key={item.key}>
+								<Checkbox
+									checked={selectedSet.has(item.key)}
+									id={`notice-board-${item.key}`}
+									onCheckedChange={(checked) =>
+										onChange(
+											checked === true
+												? [...selected, item.key]
+												: selected.filter((key) => key !== item.key)
+										)
+									}
+								/>
+								<Label htmlFor={`notice-board-${item.key}`}>{item.label}</Label>
+							</div>
+						))
+					)}
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
+	);
+}
+
 function PromotionField({
 	checked,
 	onChange,
@@ -441,6 +498,17 @@ const initialAnonymousForBoard = (
 	initialValue?: boolean
 ): boolean => isSecretBoardKey(boardKey) || Boolean(initialValue);
 
+const useNoticeBoards = (boardKey: string, role: string | undefined) => {
+	const query = useQuery({
+		...orpc.bambi.communityBoards.listActive.queryOptions(),
+		enabled: boardKey === "notice" && role === "admin",
+	});
+	return (query.data?.boards ?? []).filter((item) => item.key !== "notice");
+};
+
+const isAdminNoticeBoard = (boardKey: string, role: string | undefined) =>
+	boardKey === "notice" && role === "admin";
+
 export function CommunityPostForm({
 	board,
 	editPassword,
@@ -478,6 +546,9 @@ export function CommunityPostForm({
 		initialPost?.commentsDisabled ?? false
 	);
 	const [isEvent, setIsEvent] = useState(initialPost?.isEvent ?? false);
+	const [noticeBoardKeys, setNoticeBoardKeys] = useState(
+		initialPost?.noticeBoardKeys ?? []
+	);
 	const [isAnonymous, setIsAnonymous] = useState(
 		initialAnonymousForBoard(board.key, initialPost?.isAnonymous)
 	);
@@ -495,6 +566,8 @@ export function CommunityPostForm({
 		orpc.bambi.onboarding.getMine.queryOptions({ enabled: !guest })
 	);
 	const role = mineQuery.data?.bambiProfile?.role;
+	const canManageNotice = isAdminNoticeBoard(board.key, role);
+	const noticeBoards = useNoticeBoards(board.key, role);
 	// 작성인 기본값은 표시명(user.name, 세션)에서 가져온다 — bambi_profile.display_name은 제거됐다.
 	const displayName = session.data?.user?.name ?? "";
 	// 광고 Switch 노출: 작성 모드는 편집자 role, 수정 모드는 글 작성자 role 기준.
@@ -556,8 +629,7 @@ export function CommunityPostForm({
 	const requiresPassword =
 		guest || isLockPasswordRequired(isEdit, isFreeBoard, isLocked);
 	const submittedIsLocked = resolveSubmittedLock(board.key, guest, isLocked);
-	const submittedIsEvent =
-		board.key === "notice" && role === "admin" && isEvent;
+	const submittedIsEvent = canManageNotice && isEvent;
 
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
 	const canSubmit = canSubmitPost({
@@ -581,6 +653,7 @@ export function CommunityPostForm({
 			isEvent: submittedIsEvent,
 			isAnonymous,
 			isPromotion,
+			noticeBoardKeys,
 			postId,
 			title: title.trim(),
 			...(trimmedPassword ? { password: trimmedPassword } : {}),
@@ -601,6 +674,7 @@ export function CommunityPostForm({
 			isEvent: submittedIsEvent,
 			isAnonymous,
 			isPromotion,
+			noticeBoardKeys,
 			title: title.trim(),
 			...(trimmedPassword ? { password: trimmedPassword } : {}),
 		});
@@ -669,17 +743,23 @@ export function CommunityPostForm({
 				setIsLocked={handleLockChange}
 				setPassword={setPassword}
 			/>
+			<NoticeEventField
+				isEvent={isEvent}
+				onChange={handleEventChange}
+				visible={canManageNotice}
+			/>
+
+			<NoticeBoardPlacementField
+				boards={noticeBoards}
+				onChange={setNoticeBoardKeys}
+				selected={noticeBoardKeys}
+				visible={canManageNotice}
+			/>
 
 			<LegalContactPhoneField
 				setValue={setContactPhone}
 				value={contactPhone}
 				visible={isLegalBoard}
-			/>
-
-			<NoticeEventField
-				isEvent={isEvent}
-				onChange={handleEventChange}
-				visible={board.key === "notice" && role === "admin"}
 			/>
 
 			<PromotionField

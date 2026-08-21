@@ -118,6 +118,7 @@ export function CommunityEditGate({
 						isLocked: data.isLocked,
 						isEvent: data.isEvent,
 						isPromotion: data.isPromotion,
+						noticeBoardKeys: data.noticeBoardKeys,
 						title: data.title,
 					}}
 				/>

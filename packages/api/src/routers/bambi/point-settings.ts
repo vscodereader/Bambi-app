@@ -1,6 +1,8 @@
 import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
+	bambiPointJobDailySelection,
+	bambiPointJobReward,
 	bambiPointTransaction,
 	bambiProfile,
 	bambiSiteSettings,
@@ -12,6 +14,7 @@ import {
 	count,
 	desc,
 	eq,
+	gt,
 	ilike,
 	inArray,
 	isNull,
@@ -39,12 +42,19 @@ import {
 } from "../../services/bambi-point-settings";
 
 const nonnegativePoints = z.number().int().min(0).max(100_000_000);
+const rotationHours = z.number().int().positive();
 const saveInput = z.object({
 	attendancePoints: nonnegativePoints,
 	jobPaymentMaxPoints: nonnegativePoints.nullable(),
 	jobPaymentMinPoints: nonnegativePoints.nullable(),
 	reviewViewPoints: nonnegativePoints,
 	reviewWritePoints: nonnegativePoints,
+	premiumPointJobRewardPoints: nonnegativePoints.nullable(),
+	premiumPointJobRotationHours: rotationHours,
+	recommendedPointJobRewardPoints: nonnegativePoints.nullable(),
+	recommendedPointJobRotationHours: rotationHours,
+	specialPointJobRewardPoints: nonnegativePoints.nullable(),
+	specialPointJobRotationHours: rotationHours,
 	signupPoints: nonnegativePoints,
 });
 const saveBoardInput = z.object({
@@ -99,6 +109,9 @@ const pointReasonLabel = (reason: string): string => {
 	}
 	if (reason === "review_view") {
 		return "다른 구직자 후기 열람";
+	}
+	if (reason === "point_job_view") {
+		return "포인트 공고 확인";
 	}
 	if (reason.startsWith("운영자 지급:")) {
 		return reason;
@@ -424,6 +437,55 @@ export const pointSettingsRouter = {
 			});
 		}
 		return await db.transaction(async (tx) => {
+			const [existing] = await tx
+				.select({
+					premium: bambiSiteSettings.premiumPointJobRotationHours,
+					recommended: bambiSiteSettings.recommendedPointJobRotationHours,
+					special: bambiSiteSettings.specialPointJobRotationHours,
+				})
+				.from(bambiSiteSettings)
+				.where(eq(bambiSiteSettings.id, SITE_SETTINGS_ROW_ID))
+				.limit(1);
+			const now = new Date();
+			const rotationChanges = [
+				{
+					category: "premium" as const,
+					current: existing?.premium ?? null,
+					next: input.premiumPointJobRotationHours,
+				},
+				{
+					category: "special" as const,
+					current: existing?.special ?? null,
+					next: input.specialPointJobRotationHours,
+				},
+				{
+					category: "recommended" as const,
+					current: existing?.recommended ?? null,
+					next: input.recommendedPointJobRotationHours,
+				},
+			];
+			for (const change of rotationChanges) {
+				if (change.current === change.next) {
+					continue;
+				}
+				await tx
+					.update(bambiPointJobReward)
+					.set({
+						cooldownUntil: sql`case
+							when ${bambiPointJobReward.cooldownUntil} <= ${now} + make_interval(hours => ${change.next}) then ${now}
+							else ${bambiPointJobReward.cooldownUntil} - make_interval(hours => ${change.next})
+						end`,
+					})
+					.where(
+						and(
+							eq(bambiPointJobReward.category, change.category),
+							gt(bambiPointJobReward.cooldownUntil, now)
+						)
+					);
+				await tx
+					.delete(bambiPointJobDailySelection)
+					.where(eq(bambiPointJobDailySelection.category, change.category));
+			}
 			await tx
 				.insert(bambiSiteSettings)
 				.values({
@@ -433,6 +495,14 @@ export const pointSettingsRouter = {
 					jobPaymentMinPoints: normalizedMin,
 					reviewViewPoints: input.reviewViewPoints,
 					reviewWritePoints: input.reviewWritePoints,
+					premiumPointJobRewardPoints: input.premiumPointJobRewardPoints,
+					premiumPointJobRotationHours: input.premiumPointJobRotationHours,
+					recommendedPointJobRewardPoints:
+						input.recommendedPointJobRewardPoints,
+					recommendedPointJobRotationHours:
+						input.recommendedPointJobRotationHours,
+					specialPointJobRewardPoints: input.specialPointJobRewardPoints,
+					specialPointJobRotationHours: input.specialPointJobRotationHours,
 					signupPoints: input.signupPoints,
 				})
 				.onConflictDoUpdate({
@@ -442,6 +512,14 @@ export const pointSettingsRouter = {
 						jobPaymentMinPoints: normalizedMin,
 						reviewViewPoints: input.reviewViewPoints,
 						reviewWritePoints: input.reviewWritePoints,
+						premiumPointJobRewardPoints: input.premiumPointJobRewardPoints,
+						premiumPointJobRotationHours: input.premiumPointJobRotationHours,
+						recommendedPointJobRewardPoints:
+							input.recommendedPointJobRewardPoints,
+						recommendedPointJobRotationHours:
+							input.recommendedPointJobRotationHours,
+						specialPointJobRewardPoints: input.specialPointJobRewardPoints,
+						specialPointJobRotationHours: input.specialPointJobRotationHours,
 						signupPoints: input.signupPoints,
 					},
 					target: bambiSiteSettings.id,

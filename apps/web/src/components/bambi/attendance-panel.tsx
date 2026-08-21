@@ -23,7 +23,8 @@ import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { cn } from "@bambi-app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { GradeBadge } from "@/components/bambi/grade-badge";
@@ -32,6 +33,8 @@ import { PointOrdersCard } from "@/components/bambi/point-orders-card";
 import { MyBenefitsCard } from "@/components/bambi/point-shop/my-benefits-card";
 import { buildMonthGrid, shiftMonth } from "@/lib/bambi/attendance-calendar";
 import { orpc } from "@/utils/orpc";
+import { useBambiAuth } from "./auth-client-provider";
+import { canUseAttendance } from "./my-page-shell";
 
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -39,6 +42,13 @@ const monthLabel = (month: string): string =>
 	`${month.slice(0, 4)}년 ${Number(month.slice(5, 7))}월`;
 
 export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
+	const { role } = useBambiAuth();
+	const router = useRouter();
+	useEffect(() => {
+		if (role && !canUseAttendance(role)) {
+			router.replace(role === "admin" ? "/moderator" : "/");
+		}
+	}, [role, router]);
 	const containerClass = cn(
 		"flex w-full max-w-2xl flex-col gap-4",
 		!embedded && "mx-auto px-5 py-6 md:px-6"
@@ -48,11 +58,12 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 	// 자정 전후 시계 차이로 서버와 다른 달을 요청하게 된다.
 	const [month, setMonth] = useState<null | string>(null);
 
-	const mineQuery = useQuery(
-		orpc.bambi.attendance.getMine.queryOptions({
+	const mineQuery = useQuery({
+		...orpc.bambi.attendance.getMine.queryOptions({
 			input: month === null ? {} : { month },
-		})
-	);
+		}),
+		enabled: canUseAttendance(role),
+	});
 	const checkIn = useMutation(
 		orpc.bambi.attendance.checkIn.mutationOptions({
 			onError: (error) => toast.error(error.message || "출석하지 못했어요."),
@@ -69,6 +80,10 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 			},
 		})
 	);
+
+	if (!canUseAttendance(role)) {
+		return null;
+	}
 
 	if (mineQuery.isPending) {
 		return (
