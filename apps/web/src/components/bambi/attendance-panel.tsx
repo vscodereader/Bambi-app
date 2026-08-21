@@ -30,6 +30,7 @@ import { EmptyState } from "@/components/bambi/empty-state";
 import { GradeBadge } from "@/components/bambi/grade-badge";
 import { PointHistoryCard } from "@/components/bambi/point-history-card";
 import { PointOrdersCard } from "@/components/bambi/point-orders-card";
+import { ItemHistoryCard } from "@/components/bambi/point-shop/item-history-card";
 import { MyBenefitsCard } from "@/components/bambi/point-shop/my-benefits-card";
 import { buildMonthGrid, shiftMonth } from "@/lib/bambi/attendance-calendar";
 import { orpc } from "@/utils/orpc";
@@ -123,6 +124,7 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 		checkedInToday,
 		grade,
 		nextGrade,
+		nextDrawTicketIn,
 		pointBalance,
 		pointsToNext,
 		streakDays,
@@ -153,6 +155,11 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 						<div className="flex flex-col gap-0.5">
 							<dt className="m-0 text-muted-foreground text-xs">연속 출석</dt>
 							<dd className="m-0 font-extrabold text-xl">{`${streakDays}일`}</dd>
+							{nextDrawTicketIn === null ? null : (
+								<span className="text-muted-foreground text-xs">
+									다음 뽑기권까지 {nextDrawTicketIn}일
+								</span>
+							)}
 						</div>
 						<div className="flex flex-col gap-0.5">
 							<dt className="m-0 text-muted-foreground text-xs">총 출석</dt>
@@ -264,6 +271,8 @@ export function AttendancePanel({ embedded = false }: { embedded?: boolean }) {
 			<MyBenefitsCard />
 
 			<PointOrdersCard />
+
+			<ItemHistoryCard />
 
 			<PointHistoryCard />
 		</div>

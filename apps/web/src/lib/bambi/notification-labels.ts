@@ -81,6 +81,12 @@ const pointTransactionTitle = (item: BambiNotificationView): null | string => {
 					];
 		return `${label ?? "포인트"} 포인트 공고를 확인해 ${amount.toLocaleString("ko-KR")}포인트를 받았어요.`;
 	}
+	if (action(item) === "point_draw_reward") {
+		const prizePoints = readNumber(item.metadata, "prizePoints");
+		return prizePoints === null
+			? `랜덤 뽑기로 ${amount.toLocaleString("ko-KR")}포인트를 받았어요.`
+			: `${prizePoints.toLocaleString("ko-KR")}포인트에 당첨되어 ${amount.toLocaleString("ko-KR")}포인트가 적립됐어요.`;
+	}
 	return action(item) === "admin_awarded"
 		? `운영자로부터 ${amount.toLocaleString("ko-KR")} 포인트가 지급되었습니다!`
 		: null;
@@ -88,6 +94,12 @@ const pointTransactionTitle = (item: BambiNotificationView): null | string => {
 
 // (targetType, action) 조합 문구. 조합이 없으면 targetType 기본 문구로 떨어진다.
 const TITLE_BY_TARGET_AND_ACTION: Record<string, string> = {
+	"member_item_transaction:attendance_restored_streak_draw_ticket":
+		"출석을 복구해 7일 연속 출석을 완성하고 뽑기권을 받았어요",
+	"member_item_transaction:attendance_streak_draw_ticket":
+		"7일 연속 출석을 완료해 뽑기권을 받았어요",
+	"member_item_transaction:employer_review_draw_ticket":
+		"후기가 3일 동안 유지되어 뽑기권을 받았어요",
 	"community_comment:reply": "내 댓글에 답글이 달렸어요",
 	"community_comment:set_community_comment_status:deleted":
 		"내 댓글이 삭제됐어요",
@@ -169,6 +181,7 @@ const TITLE_BY_TARGET: Record<string, string> = {
 	contact_reveal: "연락처가 공개됐어요",
 	employer_verification: "사업자 인증 상태가 변경됐어요",
 	interview_schedule: "면접 일정에 변동이 있어요",
+	member_item_transaction: "보유 아이템에 변동이 있어요",
 	job_post: "공고 상태가 변경됐어요",
 	organization_member: "조직 구성원 정보가 변경됐어요",
 	point_shop_order: "보유 아이템에 변동이 있어요",
@@ -410,6 +423,7 @@ export function notificationHref(item: BambiNotificationView): null | string {
 			return "/employer/settings/teams";
 		// 보유 아이템 카드가 있는 포인트 내역 페이지로 보낸다(옛 구매 내역 페이지는 폐지).
 		case "point_shop_order":
+		case "member_item_transaction":
 			return "/seeker/attendance";
 		case "point_transaction":
 			if (action(item) === "point_job_reward") {

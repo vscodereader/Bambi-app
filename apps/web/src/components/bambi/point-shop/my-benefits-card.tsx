@@ -18,15 +18,17 @@ import { Card } from "@bambi-app/ui/components/card";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import type { InferRouterOutputs } from "@orpc/server";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { CancelOrderButton } from "@/components/bambi/point-shop/cancel-order-button";
 import { UseBenefitDialog } from "@/components/bambi/point-shop/use-benefit-dialog";
 import { StatusBadge } from "@/components/bambi/status-badge";
 import { pointShopBenefitTypeLabel } from "@/lib/bambi/point-shop-labels";
 import { formatDate } from "@/lib/bambi-format";
 import { orpc } from "@/utils/orpc";
+import { AttendanceRestoreDialog } from "./attendance-restore-dialog";
 
 type PointShopOrder =
-	InferRouterOutputs<AppRouter>["bambi"]["pointShop"]["myOrders"][number];
+	InferRouterOutputs<AppRouter>["bambi"]["pointShop"]["myInventory"]["ownedBenefits"][number];
 
 const MY_BENEFITS_VALUE = "my-benefits";
 
@@ -42,9 +44,9 @@ const isExpired = (usableUntil: Date | string | null): boolean =>
 	usableUntil !== null && new Date(usableUntil).getTime() <= Date.now();
 
 export function MyBenefitsCard(): React.JSX.Element {
-	const query = useQuery(orpc.bambi.pointShop.myOrders.queryOptions());
+	const query = useQuery(orpc.bambi.pointShop.myInventory.queryOptions());
 
-	const benefits = (query.data ?? []).filter(
+	const benefits = (query.data?.ownedBenefits ?? []).filter(
 		(order) =>
 			order.status === "owned" && USABLE_BENEFIT_TYPES.has(order.benefitType)
 	);
@@ -60,7 +62,8 @@ export function MyBenefitsCard(): React.JSX.Element {
 								<Skeleton className="h-5 w-40" />
 							) : (
 								<span className="text-muted-foreground text-sm">
-									사용할 수 있는 혜택 {benefits.length}건
+									사용할 수 있는 혜택{" "}
+									{benefits.length + (query.data?.quantityItems.length ?? 0)}건
 								</span>
 							)}
 						</span>
@@ -82,7 +85,30 @@ export function MyBenefitsCard(): React.JSX.Element {
 							</div>
 						) : null}
 						{query.isLoading ? <BenefitSkeletonList /> : null}
-						{query.isLoading || query.isError || benefits.length > 0 ? null : (
+						{query.data?.quantityItems.map((item) => (
+							<div
+								className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4"
+								key={item.itemType}
+							>
+								<div className="flex flex-col gap-1">
+									<span className="font-bold text-sm">{item.name}</span>
+									<span className="text-muted-foreground text-xs">
+										보유 {item.balance.toLocaleString("ko-KR")}개
+									</span>
+								</div>
+								{item.itemType === "draw_ticket" ? (
+									<Button render={<Link href="/point-shop/draw" />} size="sm">
+										사용하기
+									</Button>
+								) : (
+									<AttendanceRestoreDialog />
+								)}
+							</div>
+						))}
+						{query.isLoading ||
+						query.isError ||
+						benefits.length > 0 ||
+						(query.data?.quantityItems.length ?? 0) > 0 ? null : (
 							<p className="m-0 rounded-lg bg-secondary p-4 text-center text-muted-foreground text-sm">
 								보유한 혜택이 없어요. 포인트몰에서 끌어올리기·광고 연장 혜택을
 								구매하면 여기에 담겨요.

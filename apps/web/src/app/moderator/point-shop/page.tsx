@@ -7,6 +7,12 @@
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
+import {
 	AlertDialog,
 	AlertDialogAction,
 	AlertDialogCancel,
@@ -59,6 +65,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { CatalogSettings } from "@/components/bambi/point-shop/catalog-settings";
+import { PointShopProductImage } from "@/components/bambi/point-shop/product-image";
 import { jobMediaPublicUrl } from "@/lib/bambi/api-job-mapper";
 import {
 	pointShopAudienceLabel,
@@ -87,6 +95,8 @@ const BENEFIT_TYPE_OPTIONS: BenefitType[] = [
 	"boost_manual_count",
 	"boost_auto_period",
 	"ad_extend",
+	"draw_ticket",
+	"attendance_restore_ticket",
 ];
 const AUDIENCE_OPTIONS: Audience[] = ["all", "employer", "job_seeker"];
 
@@ -556,6 +566,7 @@ interface ItemFormValues {
 	benefitType: BenefitType;
 	boostCount: null | number;
 	boostsPerDay: null | number;
+	categoryId: string;
 	description: null | string;
 	durationDays: null | number;
 	extendDays: null | number;
@@ -593,7 +604,13 @@ function ItemBenefitFields({
 					}))}
 					onValueChange={(value) => {
 						if (value) {
-							onChange({ benefitType: value as BenefitType });
+							onChange({
+								audience:
+									value === "attendance_restore_ticket"
+										? "job_seeker"
+										: draft.audience,
+								benefitType: value as BenefitType,
+							});
 						}
 					}}
 					value={draft.benefitType}
@@ -684,6 +701,7 @@ function ItemBenefitFields({
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="point-shop-item-audience">구매 대상</Label>
 				<Select
+					disabled={draft.benefitType === "attendance_restore_ticket"}
 					items={AUDIENCE_OPTIONS.map((value) => ({
 						label: pointShopAudienceLabel(value),
 						value,
@@ -760,17 +778,22 @@ function ItemBenefitFields({
 
 // 추가·수정 공용 폼. 대상마다 새로 마운트돼(key) 초기값이 따라온다.
 function ItemForm({
+	categories,
 	isPending,
 	item,
 	onClose,
 	onSubmit,
 }: {
+	categories: Array<{ id: string; name: string }>;
 	isPending: boolean;
 	item: ItemRow | null;
 	onClose: () => void;
 	onSubmit: (values: ItemFormValues) => void;
 }) {
 	const [name, setName] = useState(item?.name ?? "");
+	const [categoryId, setCategoryId] = useState(
+		item?.categoryId ?? categories[0]?.id ?? ""
+	);
 	const [description, setDescription] = useState(item?.description ?? "");
 	const [benefit, setBenefit] = useState<BenefitDraft>(() =>
 		initialBenefitDraft(item)
@@ -792,10 +815,30 @@ function ItemForm({
 
 	const parsedPrice = Number(pricePoints);
 	const parsedSortOrder = Number(sortOrder);
+	const benefitPayload = benefitDraftToPayload(benefit);
+	const isDirty =
+		item === null ||
+		name.trim() !== item.name ||
+		(description.trim() || null) !== item.description ||
+		categoryId !== item.categoryId ||
+		imageUrl !== item.imageUrl ||
+		isActive !== item.isActive ||
+		parsedPrice !== item.pricePoints ||
+		parsedSortOrder !== item.sortOrder ||
+		benefitPayload.audience !== item.audience ||
+		benefitPayload.benefitType !== item.benefitType ||
+		benefitPayload.boostCount !== item.boostCount ||
+		benefitPayload.boostsPerDay !== item.boostsPerDay ||
+		benefitPayload.durationDays !== item.durationDays ||
+		benefitPayload.extendDays !== item.extendDays ||
+		benefitPayload.stockQuantity !== item.stockQuantity ||
+		benefitPayload.usageLimitDays !== item.usageLimitDays;
 	const canSubmit =
+		isDirty &&
 		name.trim().length > 0 &&
+		categoryId.length > 0 &&
 		Number.isInteger(parsedPrice) &&
-		parsedPrice >= 1 &&
+		parsedPrice >= 0 &&
 		parsedPrice <= PRICE_MAX &&
 		Number.isInteger(parsedSortOrder) &&
 		parsedSortOrder >= 0 &&
@@ -877,6 +920,28 @@ function ItemForm({
 				draft={benefit}
 				onChange={updateBenefit}
 			/>
+			<div className="flex flex-col gap-2">
+				<Label htmlFor="point-shop-item-category">상품 분류</Label>
+				<Select
+					items={categories.map((category) => ({
+						label: category.name,
+						value: category.id,
+					}))}
+					onValueChange={(value) => value && setCategoryId(value)}
+					value={categoryId}
+				>
+					<SelectTrigger id="point-shop-item-category">
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						{categories.map((category) => (
+							<SelectItem key={category.id} value={category.id}>
+								{category.name}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
 			<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 				<div className="flex flex-col gap-2">
 					<Label htmlFor="point-shop-item-price">가격(포인트)</Label>
@@ -884,7 +949,7 @@ function ItemForm({
 						id="point-shop-item-price"
 						inputMode="numeric"
 						max={PRICE_MAX}
-						min={1}
+						min={0}
 						onChange={(event) => setPricePoints(event.target.value)}
 						placeholder="예: 5000"
 						type="number"
@@ -919,14 +984,13 @@ function ItemForm({
 				<Label htmlFor="point-shop-item-image">이미지</Label>
 				{imageUrl ? (
 					<div className="flex items-center gap-3">
-						<Image
-							alt="아이템 이미지 미리보기"
-							className="size-20 rounded-lg object-cover"
-							height={80}
-							src={imageUrl}
-							unoptimized
-							width={80}
-						/>
+						<div className="size-20 overflow-hidden rounded-lg">
+							<PointShopProductImage
+								imageUrl={imageUrl}
+								name={name || "상품"}
+								sizes="5rem"
+							/>
+						</div>
 						<Button
 							onClick={() => setImageUrl(null)}
 							size="sm"
@@ -961,7 +1025,8 @@ function ItemForm({
 					disabled={!canSubmit}
 					onClick={() =>
 						onSubmit({
-							...benefitDraftToPayload(benefit),
+							...benefitPayload,
+							categoryId,
 							description: description.trim() || null,
 							imageUrl,
 							isActive,
@@ -987,6 +1052,12 @@ function ItemsTab() {
 
 	const listQuery = useQuery(
 		orpc.bambi.pointShop.adminListItems.queryOptions()
+	);
+	const layoutQuery = useQuery(
+		orpc.bambi.pointShop.adminGetCatalogLayout.queryOptions()
+	);
+	const categories = (layoutQuery.data?.categories ?? []).filter(
+		(category) => category.kind === "standard"
 	);
 
 	const invalidate = async () => {
@@ -1036,6 +1107,15 @@ function ItemsTab() {
 			},
 		})
 	);
+	const activeMutation = useMutation(
+		orpc.bambi.pointShop.adminSetItemActive.mutationOptions({
+			onError: (error) =>
+				toast.error(
+					localizedShopError(error.message, "공개 상태를 바꾸지 못했어요.")
+				),
+			onSuccess: invalidate,
+		})
+	);
 
 	const editingItem = formTarget === "new" ? null : formTarget;
 	const columns = getItemColumns({
@@ -1049,8 +1129,12 @@ function ItemsTab() {
 				<p className="m-0 text-muted-foreground text-sm">
 					숨김으로 두면 포인트몰 목록에서 사라지고 구매도 막힙니다.
 				</p>
-				<Button onClick={() => setFormTarget("new")} type="button">
-					아이템 추가
+				<Button
+					disabled={categories.length === 0}
+					onClick={() => setFormTarget("new")}
+					type="button"
+				>
+					포인트 상품 추가
 				</Button>
 			</div>
 
@@ -1070,14 +1154,80 @@ function ItemsTab() {
 			) : null}
 
 			{listQuery.isSuccess ? (
-				<div className="overflow-x-auto rounded-xl border border-border">
-					<DataTable
-						columns={columns}
-						data={listQuery.data}
-						emptyMessage="등록된 아이템이 없어요."
-						getRowKey={(row) => row.id}
-					/>
-				</div>
+				<Accordion
+					className="rounded-xl border border-border"
+					data-column-count={columns.length}
+				>
+					{listQuery.data.map((item) => (
+						<AccordionItem key={item.id} value={item.id}>
+							<AccordionTrigger className="px-4 hover:no-underline">
+								<span className="flex items-center gap-3 text-left">
+									<ItemThumbnail item={item} />
+									<span className="flex flex-col gap-1">
+										<strong>{item.name}</strong>
+										<span className="text-muted-foreground text-xs">
+											{item.pricePoints.toLocaleString("ko-KR")}P ·{" "}
+											{item.isActive ? "공개" : "비공개"}
+										</span>
+									</span>
+								</span>
+							</AccordionTrigger>
+							<AccordionContent className="px-4 pb-4">
+								<div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+									<div className="flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/30">
+										<PointShopProductImage
+											imageUrl={item.imageUrl}
+											name={item.name}
+										/>
+									</div>
+									<div className="flex flex-col gap-2 text-sm">
+										<p className="m-0">
+											<strong>분류</strong> ·{" "}
+											{categories.find(
+												(category) => category.id === item.categoryId
+											)?.name ?? "분류 확인 필요"}
+										</p>
+										<p className="m-0">
+											<strong>이름</strong> · {item.name}
+										</p>
+										<p className="m-0">
+											<strong>가격</strong> ·{" "}
+											{item.pricePoints.toLocaleString("ko-KR")}P
+										</p>
+										<p className="m-0">
+											<strong>혜택</strong> ·{" "}
+											{pointShopBenefitTypeLabel(item.benefitType)}
+										</p>
+										<div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+											<span>
+												<strong>공개</strong> · 가격이 0P여도 공개 상태면
+												사용자에게 보여요.
+											</span>
+											<Switch
+												checked={item.isActive}
+												onCheckedChange={(isActive) =>
+													activeMutation.mutate({ id: item.id, isActive })
+												}
+											/>
+										</div>
+										<div className="mt-auto flex flex-wrap justify-end gap-2">
+											<Button onClick={() => setFormTarget(item)} size="sm">
+												수정
+											</Button>
+											<Button
+												onClick={() => setDeleting(item)}
+												size="sm"
+												variant="destructive"
+											>
+												삭제
+											</Button>
+										</div>
+									</div>
+								</div>
+							</AccordionContent>
+						</AccordionItem>
+					))}
+				</Accordion>
 			) : null}
 
 			<Dialog
@@ -1091,6 +1241,7 @@ function ItemsTab() {
 				<DialogContent>
 					{formTarget ? (
 						<ItemForm
+							categories={categories}
 							isPending={createMutation.isPending || updateMutation.isPending}
 							item={editingItem}
 							key={editingItem?.id ?? "new"}
@@ -1347,10 +1498,14 @@ export default function ModeratorPointShopPage() {
 			<Tabs defaultValue="items">
 				<TabsList className="max-w-full flex-wrap">
 					<TabsTrigger value="items">아이템 관리</TabsTrigger>
+					<TabsTrigger value="catalog">포인트몰 설정</TabsTrigger>
 					<TabsTrigger value="orders">주문 관리</TabsTrigger>
 				</TabsList>
 				<TabsContent value="items">
 					<ItemsTab />
+				</TabsContent>
+				<TabsContent value="catalog">
+					<CatalogSettings />
 				</TabsContent>
 				<TabsContent value="orders">
 					<OrdersTab />

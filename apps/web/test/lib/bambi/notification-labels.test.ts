@@ -18,6 +18,36 @@ const view = (
 });
 
 describe("notificationTitle", () => {
+	it("출석·후기 뽑기권과 랜덤 뽑기 결과를 구분한다", () => {
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "attendance_streak_draw_ticket" },
+					targetType: "member_item_transaction",
+				})
+			)
+		).toBe("7일 연속 출석을 완료해 뽑기권을 받았어요");
+		expect(
+			notificationTitle(
+				view({
+					metadata: { action: "employer_review_draw_ticket" },
+					targetType: "member_item_transaction",
+				})
+			)
+		).toBe("후기가 3일 동안 유지되어 뽑기권을 받았어요");
+		expect(
+			notificationTitle(
+				view({
+					metadata: {
+						action: "point_draw_reward",
+						amount: 80,
+						prizePoints: 100,
+					},
+					targetType: "point_transaction",
+				})
+			)
+		).toBe("100포인트에 당첨되어 80포인트가 적립됐어요.");
+	});
 	it("면접 상태별로 다른 문구를 낸다", () => {
 		expect(
 			notificationTitle(

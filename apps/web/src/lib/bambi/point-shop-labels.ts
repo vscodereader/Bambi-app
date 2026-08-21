@@ -30,10 +30,12 @@ export function pointShopBuyerStatusLabel(status: string): string {
 // 혜택 유형(point_shop_benefit_type) 라벨. 카드·다이얼로그·운영자 폼 공용.
 const POINT_SHOP_BENEFIT_TYPE_LABELS: Record<string, string> = {
 	ad_extend: "광고 기간 연장",
+	attendance_restore_ticket: "출석 복구권",
 	boost_auto_period: "자동 끌어올리기(기간)",
 	boost_manual_count: "끌어올리기 횟수권",
 	boost_manual_period: "끌어올리기(기간)",
 	coupon: "쿠폰 발송",
+	draw_ticket: "포인트 랜덤 뽑기권",
 	none: "직접 지급",
 };
 

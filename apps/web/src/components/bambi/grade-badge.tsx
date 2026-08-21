@@ -35,7 +35,10 @@ export function GradeBadge({ grade }: Props) {
 		return null;
 	}
 	return (
-		<Badge className="gap-1 text-sm" variant="secondary">
+		<Badge
+			className="h-auto min-h-7 gap-1 overflow-visible py-1 text-sm leading-none"
+			variant="secondary"
+		>
 			<GradeIcon iconUrl={grade.iconUrl} name={grade.name} />
 			{grade.name}
 		</Badge>

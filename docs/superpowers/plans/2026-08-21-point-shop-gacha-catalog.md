@@ -1,10 +1,10 @@
 # 포인트몰 동적 진열·랜덤 뽑기·아이템 보상 통합 설계 및 구현 계획
 
-> 작성일: 2026-08-21  
-> 작업 브랜치: `feat/point-shop-gacha-catalog`  
-> 관련 이슈: #234  
-> 기준: PR #233 (`ff03265c`)이 `develop`에 병합된 직후의 코드와 DB migration `0108`까지  
-> 실제 PR 전 필수: 최신 `origin/develop` 재반영, migration 번호 및 충돌 재확인  
+> 작성일: 2026-08-21
+> 작업 브랜치: `feat/point-shop-gacha-catalog`
+> 관련 이슈: #234
+> 기준: PR #233 (`ff03265c`)이 `develop`에 병합된 직후의 코드와 DB migration `0108`까지
+> 실제 PR 전 필수: 최신 `origin/develop` 재반영, migration 번호 및 충돌 재확인
 > 커밋·푸시·머지: 사용자가 직접 수행하며 구현자는 임의로 실행하지 않는다.
 
 ## 1. 목표

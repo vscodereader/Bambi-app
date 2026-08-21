@@ -20,6 +20,7 @@ import type { InferRouterOutputs } from "@orpc/server";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GiftIcon, Info, TriangleAlert } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -31,10 +32,11 @@ import { useAdBannerJobs } from "@/lib/bambi/api-jobs";
 import type { BambiGenderValue, MockPhoneVerifyInput } from "@/lib/bambi/guest";
 import { pointShopBenefitTypeLabel } from "@/lib/bambi/point-shop-labels";
 import { orpc } from "@/utils/orpc";
+import { PointShopProductImage } from "./product-image";
 
 // 서버 응답과의 드리프트를 막으려고 oRPC 추론 출력에서 아이템 타입을 파생한다.
 type PointShopItem =
-	InferRouterOutputs<AppRouter>["bambi"]["pointShop"]["listItems"][number];
+	InferRouterOutputs<AppRouter>["bambi"]["pointShop"]["listCatalog"][number]["items"][number];
 
 // 보유·사용형(끌올·연장) — 구매 후 보유함에서 공고에 쓰는 유형. 다이얼로그 고지 분기용.
 const OWNED_BENEFIT_TYPES = new Set([
@@ -101,22 +103,11 @@ function ItemCard({
 			{/* 이미지 칸이 카드 대부분을 차지하고 이름 줄만 아래에 붙는다. min-h-0이 없으면
 			    flex-1 칸이 이미지 원본 높이만큼 버텨 정사각 비율이 깨진다. */}
 			<span className="relative block min-h-0 w-full flex-1 bg-secondary">
-				{item.imageUrl ? (
-					// 운영자가 올리는 이미지는 배너형 등 비정사각이 많아 cover로 자르면 문구가
-					// 잘린다 — contain으로 전체를 보여주고 남는 여백은 bg-secondary가 받친다.
-					<Image
-						alt=""
-						className="object-contain"
-						fill
-						sizes={ITEM_IMAGE_SIZES}
-						src={item.imageUrl}
-						unoptimized
-					/>
-				) : (
-					<span className="flex size-full items-center justify-center text-coral-300">
-						<GiftIcon className="size-10" />
-					</span>
-				)}
+				<PointShopProductImage
+					imageUrl={item.imageUrl}
+					name={item.name}
+					sizes={ITEM_IMAGE_SIZES}
+				/>
 				{/* 품절은 파생 상태(재고 0). 이미지를 딤 처리하고 가운데 "품절" 스탬프를 얹어
 				    진열대에서 한눈에 빠진 상품처럼 읽히게 한다. 클릭은 막지 않는다(다이얼로그가
 				    품절 안내). 딤을 가격표 앞에 둬 우상단 가격은 또렷이 남긴다. */}
@@ -144,6 +135,27 @@ type PurchaseActionMode = "audience" | "buy" | "identity" | "soldout";
 // 유형별 이행 고지(구매 전 사전 고지). 끌올·연장은 사용기한·환불 정책, 쿠폰은 발송 경로,
 // 수동 지급은 지급완료 전 취소 가능을 알린다 — 항상 한 줄 고지가 붙는다.
 function BenefitFulfillmentNotice({ item }: { item: PointShopItem }) {
+	if (item.benefitType === "draw_ticket") {
+		return (
+			<Alert variant="brand">
+				<Info />
+				<AlertDescription>
+					구매 즉시 포인트 랜덤 뽑기권 1장이 충전돼요.
+				</AlertDescription>
+			</Alert>
+		);
+	}
+	if (item.benefitType === "attendance_restore_ticket") {
+		return (
+			<Alert variant="brand">
+				<Info />
+				<AlertDescription>
+					구매 즉시 출석 복구권 1장이 충전되며 과거 미출석일 한 날짜에 사용할 수
+					있어요.
+				</AlertDescription>
+			</Alert>
+		);
+	}
 	if (isOwnedBenefit(item.benefitType)) {
 		return (
 			<Alert variant="brand">
@@ -363,7 +375,9 @@ export function PointShopScreen() {
 	const { isAuthenticated, isPending: isAuthPending } = useBambiAuth();
 	const [selected, setSelected] = useState<null | PointShopItem>(null);
 
-	const itemsQuery = useQuery(orpc.bambi.pointShop.listItems.queryOptions());
+	const catalogQuery = useQuery(
+		orpc.bambi.pointShop.listCatalog.queryOptions()
+	);
 	// 쿠폰형 본인인증 게이트·자격 안내에 쓸 프로필(역할·본인인증·성별). auth-provider의
 	// getMine과 같은 키라 캐시를 공유한다.
 	const mineQuery = useQuery({
@@ -446,13 +460,22 @@ export function PointShopScreen() {
 
 	return (
 		<div className="flex w-full flex-col gap-6 py-6">
+			<div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 md:flex-row md:items-center md:justify-between">
+				<div className="flex flex-col gap-1">
+					<span className="font-extrabold text-lg">포인트 랜덤 뽑기</span>
+					<span className="text-primary text-sm">100% 포인트 당첨</span>
+				</div>
+				<Button render={<Link href="/point-shop/draw" />}>
+					뽑기 하러 가기
+				</Button>
+			</div>
 			<PremiumAdBannerSection
 				isLoading={adBanners.isLoading}
 				items={adBanners.premiumBanner}
 				promotionSurface="point_shop_center"
 			/>
 
-			<section className="flex flex-col gap-3">
+			<section className="flex flex-col gap-5">
 				<div className="flex flex-col gap-1">
 					<h2 className="m-0 font-extrabold text-lg">포인트 아이템</h2>
 					<p className="m-0 text-muted-foreground text-sm">
@@ -461,7 +484,7 @@ export function PointShopScreen() {
 					</p>
 				</div>
 
-				{itemsQuery.isPending ? (
+				{catalogQuery.isPending ? (
 					<div className={ITEM_GRID_CLASS}>
 						{SKELETON_KEYS.map((key, index) => (
 							<Skeleton
@@ -475,10 +498,10 @@ export function PointShopScreen() {
 					</div>
 				) : null}
 
-				{itemsQuery.isError ? (
+				{catalogQuery.isError ? (
 					<EmptyState
 						action={
-							<Button onClick={() => itemsQuery.refetch()} type="button">
+							<Button onClick={() => catalogQuery.refetch()} type="button">
 								다시 시도
 							</Button>
 						}
@@ -487,20 +510,29 @@ export function PointShopScreen() {
 					/>
 				) : null}
 
-				{itemsQuery.data?.length === 0 ? (
+				{catalogQuery.data?.every((section) => section.items.length === 0) ? (
 					<EmptyState
 						description="새 아이템이 등록되면 이곳에 바로 보여요."
 						title="준비 중인 아이템이 없어요"
 					/>
 				) : null}
 
-				{itemsQuery.data && itemsQuery.data.length > 0 ? (
-					<div className={ITEM_GRID_CLASS}>
-						{itemsQuery.data.map((item) => (
-							<ItemCard item={item} key={item.id} onOpen={handleOpen} />
-						))}
+				{catalogQuery.data?.map((section) => (
+					<div className="flex flex-col gap-3" key={section.categoryId}>
+						<h3 className="m-0 font-bold text-base">{section.categoryName}</h3>
+						{section.items.length > 0 ? (
+							<div className={ITEM_GRID_CLASS}>
+								{section.items.map((item) => (
+									<ItemCard item={item} key={item.id} onOpen={handleOpen} />
+								))}
+							</div>
+						) : (
+							<p className="m-0 rounded-lg bg-muted/40 p-4 text-muted-foreground text-sm">
+								등록된 상품이 없어요.
+							</p>
+						)}
 					</div>
-				) : null}
+				))}
 			</section>
 
 			{/* 다이얼로그는 목록 밖에 하나만 두고 대상만 갈아끼운다(운영자 출석 화면과 같은 관례). */}

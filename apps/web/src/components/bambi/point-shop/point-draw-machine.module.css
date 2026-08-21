@@ -1,0 +1,174 @@
+.machine {
+	width: min(100%, 28rem);
+	transform-origin: center bottom;
+}
+
+.shaking {
+	animation: machine-shake 0.16s ease-in-out 8 alternate;
+}
+
+.globe {
+	position: relative;
+	aspect-ratio: 1;
+	overflow: hidden;
+	background: color-mix(in oklab, var(--primary) 8%, transparent);
+	border: 0.6rem solid color-mix(in oklab, var(--primary) 28%, white);
+	border-radius: 9999px;
+}
+
+.ball {
+	position: absolute;
+	width: 15%;
+	aspect-ratio: 1;
+	background: currentColor;
+	border: 0.2rem solid color-mix(in oklab, currentColor 68%, white);
+	border-radius: 9999px;
+	box-shadow: inset 0.3rem 0.35rem 0 color-mix(in oklab, white 50%, transparent);
+	animation: ball-float 2.4s ease-in-out infinite alternate;
+}
+.ball1 {
+	top: 24%;
+	left: 10%;
+	animation-duration: 2.1s;
+	animation-delay: 0s;
+}
+.ball2 {
+	top: 12%;
+	left: 32%;
+	animation-duration: 2.23s;
+	animation-delay: 0.3s;
+}
+.ball3 {
+	top: 26%;
+	left: 55%;
+	animation-duration: 2.36s;
+	animation-delay: 0.7s;
+}
+.ball4 {
+	top: 48%;
+	left: 70%;
+	animation-duration: 2.49s;
+	animation-delay: 1s;
+}
+.ball5 {
+	top: 58%;
+	left: 18%;
+	animation-duration: 2.62s;
+	animation-delay: 1.3s;
+}
+.ball6 {
+	top: 62%;
+	left: 43%;
+	animation-duration: 2.75s;
+	animation-delay: 0.5s;
+}
+.ball7 {
+	top: 70%;
+	left: 61%;
+	animation-duration: 2.88s;
+	animation-delay: 1.6s;
+}
+
+.body {
+	position: relative;
+	width: 72%;
+	padding: 14% 10% 10%;
+	margin: -8% auto 0;
+	background: var(--primary);
+	border-radius: 20% 20% 10% 10%;
+}
+
+.knob {
+	width: 26%;
+	aspect-ratio: 1;
+	margin: 0 auto 10%;
+	background: white;
+	border: 0.45rem solid color-mix(in oklab, var(--primary) 65%, black);
+	border-radius: 9999px;
+}
+
+.exit {
+	position: relative;
+	width: 38%;
+	aspect-ratio: 1.1;
+	margin: auto;
+	overflow: visible;
+	background: color-mix(in oklab, black 88%, var(--primary));
+	border-radius: 9999px 9999px 18% 18%;
+}
+
+.dispensedBall {
+	position: absolute;
+	top: 18%;
+	left: 24%;
+	width: 52%;
+	aspect-ratio: 1;
+	background: var(--accent);
+	border-radius: 9999px;
+	opacity: 0;
+	transform: translateY(-120%);
+}
+
+.dispensing {
+	animation: dispense-ball 0.8s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+}
+
+.opening {
+	opacity: 1;
+	animation: open-ball 0.65s ease-in-out forwards;
+}
+
+@keyframes ball-float {
+	from {
+		transform: translate(-18%, -12%) rotate(0deg);
+	}
+	to {
+		transform: translate(22%, 18%) rotate(150deg);
+	}
+}
+
+@keyframes machine-shake {
+	from {
+		transform: translateY(-2%) rotate(-1.5deg);
+	}
+	to {
+		transform: translateY(2%) rotate(1.5deg);
+	}
+}
+
+@keyframes dispense-ball {
+	0% {
+		opacity: 0;
+		transform: translateY(-150%) scale(0.8);
+	}
+	70% {
+		opacity: 1;
+		transform: translateY(55%) scale(1);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(48%) scale(1);
+	}
+}
+
+@keyframes open-ball {
+	0% {
+		transform: translateY(48%) scale(1);
+	}
+	45% {
+		transform: translateY(48%) scale(1.12) rotate(-8deg);
+	}
+	100% {
+		transform: translateY(48%) scale(1.2) rotate(8deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.shaking,
+	.ball,
+	.dispensing,
+	.opening {
+		animation-duration: 0.01ms;
+		animation-iteration-count: 1;
+	}
+}
