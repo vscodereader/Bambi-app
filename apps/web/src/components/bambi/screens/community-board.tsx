@@ -17,6 +17,7 @@ import {
 import { Input } from "@bambi-app/ui/components/input";
 import { Separator } from "@bambi-app/ui/components/separator";
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
+import { cn } from "@bambi-app/ui/lib/utils";
 import type { InferRouterOutputs } from "@orpc/server";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -104,10 +105,12 @@ type BoardPostItem =
 	InferRouterOutputs<AppRouter>["bambi"]["community"]["listPosts"]["items"][number];
 
 function BoardPostRow({
+	boardKey,
 	boardSlug,
 	post,
 	showBadges,
 }: {
+	boardKey: string;
 	boardSlug: string;
 	post: BoardPostItem;
 	showBadges: boolean;
@@ -118,7 +121,10 @@ function BoardPostRow({
 
 	return (
 		<Link
-			className={`flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-muted ${post.board === "notice" && post.isEvent ? "bg-primary/5" : ""}`}
+			className={cn(
+				"flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-muted",
+				post.board === "notice" && boardKey !== "notice" && "bg-primary/5"
+			)}
 			href={
 				(isCrawled
 					? communityCrawledPath(post.id)
@@ -229,6 +235,7 @@ const getEmptyDescription = (
 
 // 목록 본문 — 로딩·에러·빈 상태·글 행. 화면 컴포넌트에서 이 분기를 덜어낸다.
 function BoardPostList({
+	boardKey,
 	boardSlug,
 	emptyDescription,
 	isError,
@@ -236,6 +243,7 @@ function BoardPostList({
 	items,
 	showBadges,
 }: {
+	boardKey: string;
 	boardSlug: string;
 	emptyDescription: string;
 	isError: boolean;
@@ -276,6 +284,7 @@ function BoardPostList({
 				<Fragment key={post.id}>
 					{index > 0 ? <Separator /> : null}
 					<BoardPostRow
+						boardKey={boardKey}
 						boardSlug={boardSlug}
 						post={post}
 						showBadges={showBadges}
@@ -542,6 +551,7 @@ export function CommunityBoardScreen({ board }: { board: CommunityBoardMeta }) {
 			</div>
 
 			<BoardPostList
+				boardKey={board.key}
 				boardSlug={board.slug}
 				emptyDescription={emptyDescription}
 				isError={listQuery.isError}

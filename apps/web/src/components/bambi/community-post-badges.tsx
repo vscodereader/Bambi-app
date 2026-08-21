@@ -10,7 +10,6 @@ import { isNewCommunityPost } from "@/lib/bambi/community";
 // listPosts·overview 두 응답이 공통으로 갖는 필드만 받는다 — 라우터 출력 타입 하나에
 // 묶어두면 다른 쪽에서 못 쓴다.
 export interface CommunityPostBadgeSource {
-	authorRole: string | null;
 	createdAt: Date | string;
 	isPromotion: boolean;
 }
@@ -21,7 +20,7 @@ export function CommunityRoleBadges({
 }: {
 	post: CommunityPostBadgeSource;
 }) {
-	if (!(post.isPromotion || post.authorRole === "employer")) {
+	if (!post.isPromotion) {
 		return null;
 	}
 	return (
@@ -29,11 +28,6 @@ export function CommunityRoleBadges({
 			{post.isPromotion ? (
 				<Badge className="shrink-0" variant="warning">
 					광고
-				</Badge>
-			) : null}
-			{post.authorRole === "employer" ? (
-				<Badge className="shrink-0" variant="secondary">
-					업소
 				</Badge>
 			) : null}
 		</>
