@@ -135,6 +135,9 @@ interface CommunityPostInitial {
 	authorName: string;
 	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
 	authorRole: "admin" | "employer" | "guest" | "job_seeker" | "legal_advisor";
+	// 글이 실제로 속한 게시판 key(getPost.board). 교차 노출된 게시판 경로로 수정에
+	// 들어와도 공지/이벤트 판정이 URL slug가 아니라 글의 원래 게시판을 따르게 한다.
+	board?: string;
 	body: string;
 	commentsDisabled?: boolean;
 	// 법률 자문 글의 연락처. 수정 폼이 다시 실어 보내지 않으면 서버가 null로 덮어쓴다.
@@ -566,8 +569,12 @@ export function CommunityPostForm({
 		orpc.bambi.onboarding.getMine.queryOptions({ enabled: !guest })
 	);
 	const role = mineQuery.data?.bambiProfile?.role;
-	const canManageNotice = isAdminNoticeBoard(board.key, role);
-	const noticeBoards = useNoticeBoards(board.key, role);
+	// 공지/이벤트 판정에 쓸 유효 게시판 key. 수정 모드에서는 글의 원래 게시판(initialPost.board)을,
+	// 작성 모드에서는 URL이 가리키는 board.key를 쓴다 — 공지를 교차 노출한 게시판 경로로
+	// 수정에 들어와도 공지 관리 UI가 사라지지 않게 한다. 잠금·자유/비밀 판정은 URL board 그대로 둔다.
+	const effectiveBoardKey = initialPost?.board ?? board.key;
+	const canManageNotice = isAdminNoticeBoard(effectiveBoardKey, role);
+	const noticeBoards = useNoticeBoards(effectiveBoardKey, role);
 	// 작성인 기본값은 표시명(user.name, 세션)에서 가져온다 — bambi_profile.display_name은 제거됐다.
 	const displayName = session.data?.user?.name ?? "";
 	// 광고 Switch 노출: 작성 모드는 편집자 role, 수정 모드는 글 작성자 role 기준.
