@@ -225,7 +225,7 @@ export function ModeratorUsersTable({
 				reservePageRows
 				rowClassName="h-14"
 				showPageInput
-				tableClassName="overflow-hidden rounded-xl border border-border [&_td]:px-1 [&_th]:px-1 [&_thead_tr]:bg-primary/10 [&_thead_tr:hover]:bg-primary/10 [&_thead_tr_[data-slot=checkbox]]:!border-white [&_thead_tr_[data-slot=checkbox]]:!bg-white [&_thead_tr_[data-slot=checkbox]]:!text-primary"
+				tableClassName="overflow-hidden rounded-xl border border-border [&_td]:px-1 [&_th]:px-1"
 			/>
 		</div>
 	);
