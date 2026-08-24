@@ -472,7 +472,7 @@ export const pointSettingsRouter = {
 					.update(bambiPointJobReward)
 					.set({
 						cooldownUntil: sql`case
-							when ${bambiPointJobReward.cooldownUntil} <= ${now} + make_interval(hours => ${change.next}) then ${now}
+							when ${bambiPointJobReward.cooldownUntil} <= ${now.toISOString()}::timestamp + make_interval(hours => ${change.next}) then ${now.toISOString()}::timestamp
 							else ${bambiPointJobReward.cooldownUntil} - make_interval(hours => ${change.next})
 						end`,
 					})
