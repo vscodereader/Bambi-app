@@ -2689,7 +2689,11 @@ function SanctionSheet({
 	);
 }
 
-const USER_MODERATION_HISTORY_PAGE_SIZE = 10;
+const USER_MODERATION_HISTORY_PAGE_SIZE = 5;
+
+// 본인인증 생년월일은 YYYYMMDD 텍스트로 저장된다 — 화면에는 1990.01.01로 끊어 보여준다.
+const formatBirthDate = (d: string) =>
+	d.length === 8 ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
 
 // 계정 상세의 제재 이력(감사 로그, 페이지당 10건). 액션 코드는 라벨 맵으로만 노출한다.
 function UserModerationHistory({ userId }: { userId: string }) {
@@ -2792,10 +2796,10 @@ function UserContentHistory({ userId }: { userId: string }) {
 	const [filter, setFilter] = useState<ContentHistoryFilter>("all");
 	const query = useQuery(
 		orpc.bambi.contentHistory.listAdminMemberContent.queryOptions({
-			input: { filter, page, pageSize: 10, userId },
+			input: { filter, page, pageSize: 5, userId },
 		})
 	);
-	const pageCount = Math.max(1, Math.ceil((query.data?.totalCount ?? 0) / 10));
+	const pageCount = Math.max(1, Math.ceil((query.data?.totalCount ?? 0) / 5));
 	return (
 		<Accordion>
 			<AccordionItem value="content-history">
@@ -2839,6 +2843,9 @@ function UserContentHistory({ userId }: { userId: string }) {
 										{CONTENT_STATUS_LABELS[item.status]}
 									</span>
 								</div>
+								<span className="text-muted-foreground text-xs">
+									{formatDateTime(item.createdAt)}
+								</span>
 								<p className="mb-0 line-clamp-3 text-sm">{item.body}</p>
 							</li>
 						))}
@@ -3009,6 +3016,16 @@ export function UserDetail({
 					</div>
 					<Separator className="hidden md:block" />
 					<ContextSection title="계정 정보">
+						<ContextField
+							label="인증 번호"
+							value={item.phoneNumber ?? "미인증"}
+						/>
+						<ContextField
+							label="생년월일"
+							value={
+								item.birthDate ? formatBirthDate(item.birthDate) : "미등록"
+							}
+						/>
 						<ContextField label="이메일" value={item.email} />
 						<ContextField
 							label="로그인 아이디"
