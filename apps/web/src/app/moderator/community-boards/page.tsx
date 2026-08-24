@@ -24,6 +24,12 @@ import {
 	DialogDescription,
 	DialogTitle,
 } from "@bambi-app/ui/components/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@bambi-app/ui/components/dropdown-menu";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import {
@@ -36,6 +42,7 @@ import {
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MoreHorizontal } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
@@ -211,27 +218,33 @@ function getBoardColumns({
 			headerClassName: "text-right",
 			cellClassName: "text-right",
 			cell: (row) => (
-				<div className="flex justify-end gap-2">
-					<Button
-						onClick={() => onEdit(row)}
-						size="sm"
-						type="button"
-						variant="outline"
-					>
-						수정
-					</Button>
-					{/* 빌트인 5종은 서버가 거절하므로 버튼 자체를 감춘다. 글이 붙은 게시판은
-					    눌러 봐야 서버가 막지만, 글 수를 여기서 세지 않으므로 버튼은 남긴다. */}
-					{isBuiltinBoardKey(row.key) ? null : (
-						<Button
-							onClick={() => onDelete(row)}
-							size="sm"
-							type="button"
-							variant="destructive"
-						>
-							삭제
-						</Button>
-					)}
+				<div className="flex justify-end">
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							render={
+								<Button size="icon" type="button" variant="ghost">
+									<MoreHorizontal />
+									<span className="sr-only">메뉴 열기</span>
+								</Button>
+							}
+						/>
+						<DropdownMenuContent align="end">
+							<DropdownMenuItem onClick={() => onEdit(row)}>
+								수정
+							</DropdownMenuItem>
+							{/* 빌트인 5종은 서버가 거절하므로 삭제 항목 자체를 감춘다. 글이 붙은
+							    게시판은 눌러 봐야 서버가 막지만, 글 수를 여기서 세지 않으므로 항목은
+							    남긴다. */}
+							{isBuiltinBoardKey(row.key) ? null : (
+								<DropdownMenuItem
+									onClick={() => onDelete(row)}
+									variant="destructive"
+								>
+									삭제
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
 				</div>
 			),
 		},
