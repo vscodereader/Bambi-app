@@ -2,6 +2,7 @@
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
 import { Button } from "@bambi-app/ui/components/button";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import {
@@ -30,7 +31,7 @@ import { GradeBadge } from "@/components/bambi/grade-badge";
 import { MemberPointAdjustDialog } from "@/components/bambi/member-point-adjust-dialog";
 import { PageControls } from "@/components/bambi/page-controls";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
-import { orpc } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 
 const PAGE_SIZE = 10;
 const ROLE_ITEMS: Record<string, string> = {
@@ -57,6 +58,9 @@ export default function ModeratorPointMembersPage(): React.JSX.Element {
 	const [role, setRole] = useState("all");
 	const [page, setPage] = useState(1);
 	const [adjusting, setAdjusting] = useState<PointMember | null>(null);
+	const [selectedIds, setSelectedIds] = useState<string[]>([]);
+	const [bulkOpen, setBulkOpen] = useState(false);
+	const [bulkPending, setBulkPending] = useState(false);
 	const debouncedSearch = useDebouncedValue(search);
 	const queryClient = useQueryClient();
 	const query = useQuery(
@@ -89,6 +93,60 @@ export default function ModeratorPointMembersPage(): React.JSX.Element {
 	);
 	const openMember = (userId: string) =>
 		router.push(`/moderator/points/members/${userId}` as Route);
+
+	// 페이지·검색·역할 필터가 바뀌면 현재 페이지 items가 갈리므로 선택을 비운다(stale userId 방지).
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 필터 변화 자체가 초기화 트리거
+	useEffect(() => {
+		setSelectedIds([]);
+	}, [page, debouncedSearch, role]);
+
+	const allSelected =
+		items.length > 0 &&
+		items.every((item) => selectedIds.includes(item.userId));
+	const toggleAll = () =>
+		setSelectedIds(allSelected ? [] : items.map((item) => item.userId));
+	const toggleOne = (userId: string) =>
+		setSelectedIds((prev) =>
+			prev.includes(userId)
+				? prev.filter((id) => id !== userId)
+				: [...prev, userId]
+		);
+	const selectedMembers = items.filter((item) =>
+		selectedIds.includes(item.userId)
+	);
+	const bulkMemberName =
+		selectedIds.length > 1
+			? `${selectedMembers[0]?.name ?? ""} 외 ${selectedIds.length - 1}명`
+			: (selectedMembers[0]?.name ?? "");
+
+	const runBulkAdjust = async (values: {
+		amount: number;
+		reason: string;
+	}): Promise<void> => {
+		setBulkPending(true);
+		let ok = 0;
+		let fail = 0;
+		// 직렬 호출 — 서버 부하·레이트리밋 안전
+		for (const userId of selectedIds) {
+			try {
+				await client.bambi.attendance.adminAdjustPoints({ ...values, userId });
+				ok += 1;
+			} catch {
+				fail += 1;
+			}
+		}
+		setBulkPending(false);
+		setBulkOpen(false);
+		setSelectedIds([]);
+		await queryClient.invalidateQueries({
+			queryKey: orpc.bambi.pointSettings.listAdminMembers.key(),
+		});
+		if (fail === 0) {
+			toast.success(`${ok}명에게 포인트를 적용했어요.`);
+		} else {
+			toast.error(`${ok}명 적용, ${fail}명 실패했어요.`);
+		}
+	};
 
 	return (
 		<main className="mx-auto flex w-full flex-col gap-5 px-5 py-6 md:px-6">
@@ -155,11 +213,40 @@ export default function ModeratorPointMembersPage(): React.JSX.Element {
 					title="표시할 회원이 없어요"
 				/>
 			) : null}
+			{selectedIds.length > 0 ? (
+				<div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+					<span className="font-medium text-sm">
+						{selectedIds.length}명 선택됨
+					</span>
+					<div className="flex flex-wrap gap-2">
+						<Button
+							onClick={() => setSelectedIds([])}
+							size="sm"
+							type="button"
+							variant="ghost"
+						>
+							선택 해제
+						</Button>
+						<Button onClick={() => setBulkOpen(true)} size="sm" type="button">
+							선택 지급·차감
+						</Button>
+					</div>
+				</div>
+			) : null}
 			{items.length > 0 ? (
 				<div className="overflow-x-auto rounded-xl border">
 					<Table>
 						<TableHeader>
-							<TableRow className="bg-primary/5 hover:bg-primary/5">
+							<TableRow>
+								<TableHead className="w-10 text-center">
+									<div className="flex justify-center">
+										<Checkbox
+											aria-label="전체 선택"
+											checked={allSelected}
+											onCheckedChange={toggleAll}
+										/>
+									</div>
+								</TableHead>
 								<TableHead className="text-center">회원</TableHead>
 								<TableHead className="text-center">로그인 아이디</TableHead>
 								<TableHead className="text-center">역할</TableHead>
@@ -175,6 +262,18 @@ export default function ModeratorPointMembersPage(): React.JSX.Element {
 									key={item.userId}
 									onClick={() => openMember(item.userId)}
 								>
+									<TableCell
+										className="text-center align-middle"
+										onClick={(event) => event.stopPropagation()}
+									>
+										<div className="flex justify-center">
+											<Checkbox
+												aria-label={`${item.name} 선택`}
+												checked={selectedIds.includes(item.userId)}
+												onCheckedChange={() => toggleOne(item.userId)}
+											/>
+										</div>
+									</TableCell>
 									<TableCell className="text-center align-middle">
 										<button
 											className="w-full text-center font-medium hover:underline"
@@ -242,6 +341,15 @@ export default function ModeratorPointMembersPage(): React.JSX.Element {
 					open
 					pending={adjustMutation.isPending}
 					pointBalance={adjusting.pointBalance}
+				/>
+			) : null}
+			{bulkOpen ? (
+				<MemberPointAdjustDialog
+					memberName={bulkMemberName}
+					onOpenChange={(open) => !open && setBulkOpen(false)}
+					onSubmit={runBulkAdjust}
+					open
+					pending={bulkPending}
 				/>
 			) : null}
 		</main>
