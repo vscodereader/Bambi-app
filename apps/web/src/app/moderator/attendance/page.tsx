@@ -16,6 +16,12 @@ import {
 	CardTitle,
 } from "@bambi-app/ui/components/card";
 import { Checkbox } from "@bambi-app/ui/components/checkbox";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@bambi-app/ui/components/dropdown-menu";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import {
@@ -35,7 +41,7 @@ import {
 	TableRow,
 } from "@bambi-app/ui/components/table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownIcon, ArrowUpDownIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpDownIcon, MoreHorizontal } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -122,12 +128,14 @@ function MemberRow({
 	item,
 	onAdjust,
 	onOpen,
+	onPoints,
 	onToggle,
 	selected,
 }: {
 	item: AttendanceRow;
 	onAdjust: () => void;
 	onOpen: () => void;
+	onPoints: () => void;
 	onToggle: () => void;
 	selected: boolean;
 }) {
@@ -185,9 +193,20 @@ function MemberRow({
 				{formatPoints(item.pointBalance)}
 			</TableCell>
 			<TableCell onClick={(event) => event.stopPropagation()}>
-				<Button onClick={onAdjust} size="sm" type="button" variant="outline">
-					지급·차감
-				</Button>
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						render={
+							<Button size="icon" type="button" variant="ghost">
+								<MoreHorizontal />
+								<span className="sr-only">메뉴 열기</span>
+							</Button>
+						}
+					/>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem onClick={onPoints}>포인트 상세</DropdownMenuItem>
+						<DropdownMenuItem onClick={onAdjust}>지급·차감</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</TableCell>
 		</TableRow>
 	);
@@ -454,6 +473,11 @@ export default function ModeratorAttendancePage() {
 									key={item.userId}
 									onAdjust={() => setAdjusting(item)}
 									onOpen={() => openMember(item.userId)}
+									onPoints={() =>
+										router.push(
+											`/moderator/points/members/${item.userId}` as Route
+										)
+									}
 									onToggle={() => toggleOne(item.userId)}
 									selected={selectedIds.includes(item.userId)}
 								/>
