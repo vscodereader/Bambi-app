@@ -161,7 +161,7 @@ function MediaSlot({
 					</Button>
 				) : null}
 			</div>
-			<div className="grid gap-3 sm:grid-cols-[7rem_1fr]">
+			<div className="grid grid-cols-[5rem_1fr] gap-3 sm:grid-cols-[7rem_1fr]">
 				<div className="flex aspect-square items-center justify-center overflow-hidden rounded-md border border-border bg-muted/30">
 					{item?.previewUrl ? (
 						<Image
