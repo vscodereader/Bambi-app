@@ -254,10 +254,13 @@ function BoardEditForm({
 		description: string;
 		icon: CommunityBoardIconName | null;
 		label: string;
-		postPoints: number;
+		postPoints?: number;
 		sortOrder: number;
 	}) => void;
 }) {
+	// 공지는 운영자만 글을 쓰므로 글 작성 적립이 무의미하다 — 입력을 숨기고 저장 시 보내지
+	// 않는다(서버도 notice postPoints를 0으로 고정한다).
+	const isNotice = board.key === NOTICE_BOARD_KEY;
 	const [label, setLabel] = useState(board.label);
 	const [description, setDescription] = useState(board.description);
 	const [sortOrder, setSortOrder] = useState(String(board.sortOrder));
@@ -277,9 +280,10 @@ function BoardEditForm({
 		Number.isInteger(parsedSortOrder) &&
 		parsedSortOrder >= 0 &&
 		parsedSortOrder <= SORT_ORDER_MAX &&
-		Number.isInteger(parsedPostPoints) &&
-		parsedPostPoints >= 0 &&
-		parsedPostPoints <= POINTS_MAX &&
+		(isNotice ||
+			(Number.isInteger(parsedPostPoints) &&
+				parsedPostPoints >= 0 &&
+				parsedPostPoints <= POINTS_MAX)) &&
 		Number.isInteger(parsedCommentPoints) &&
 		parsedCommentPoints >= 0 &&
 		parsedCommentPoints <= POINTS_MAX &&
@@ -340,18 +344,22 @@ function BoardEditForm({
 					숫자가 작을수록 앞에 놓입니다(수다방 홈·게시판 목록 공통).
 				</p>
 			</div>
-			<div className="flex flex-col gap-2">
-				<Label htmlFor="community-board-edit-post-points">글 작성 포인트</Label>
-				<Input
-					id="community-board-edit-post-points"
-					inputMode="numeric"
-					max={POINTS_MAX}
-					min={0}
-					onChange={(event) => setPostPoints(event.target.value)}
-					type="number"
-					value={postPoints}
-				/>
-			</div>
+			{isNotice ? null : (
+				<div className="flex flex-col gap-2">
+					<Label htmlFor="community-board-edit-post-points">
+						글 작성 포인트
+					</Label>
+					<Input
+						id="community-board-edit-post-points"
+						inputMode="numeric"
+						max={POINTS_MAX}
+						min={0}
+						onChange={(event) => setPostPoints(event.target.value)}
+						type="number"
+						value={postPoints}
+					/>
+				</div>
+			)}
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="community-board-edit-comment-points">
 					댓글 작성 포인트
@@ -379,7 +387,8 @@ function BoardEditForm({
 							// 수정은 "없음"을 null로 보내 저장된 아이콘을 지운다.
 							icon: toIconInput(icon) ?? null,
 							label: label.trim(),
-							postPoints: parsedPostPoints,
+							// 공지는 글 작성 포인트를 보내지 않는다 — 서버가 0으로 고정한다.
+							postPoints: isNotice ? undefined : parsedPostPoints,
 							sortOrder: parsedSortOrder,
 						})
 					}

@@ -17,13 +17,6 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
 import { orpc } from "@/utils/orpc";
 
-interface BoardDraft {
-	commentPoints: string;
-	key: string;
-	label: string;
-	postPoints: string;
-}
-
 const parsePoints = (value: string): number | null =>
 	value.trim() === "" ? null : Number(value);
 const fieldValid = (value: string, min = 0, nullable = false): boolean =>
@@ -48,7 +41,6 @@ export default function ModeratorPointSettingsPage() {
 	const [specialRotationHours, setSpecialRotationHours] = useState("");
 	const [recommendedPointReward, setRecommendedPointReward] = useState("");
 	const [recommendedRotationHours, setRecommendedRotationHours] = useState("");
-	const [boards, setBoards] = useState<BoardDraft[]>([]);
 	useEffect(() => {
 		if (!query.data) {
 			return;
@@ -81,13 +73,6 @@ export default function ModeratorPointSettingsPage() {
 		setRecommendedRotationHours(
 			settingDraft(query.data.recommendedPointJobRotationHours)
 		);
-		setBoards(
-			query.data.boards.map((board) => ({
-				...board,
-				commentPoints: String(board.commentPoints),
-				postPoints: String(board.postPoints),
-			}))
-		);
 	}, [query.data]);
 	const globalMutation = useMutation(
 		orpc.bambi.pointSettings.saveAdmin.mutationOptions({
@@ -101,22 +86,6 @@ export default function ModeratorPointSettingsPage() {
 				await client.invalidateQueries({
 					queryKey: orpc.bambi.pointJobRewards.key(),
 				});
-			},
-		})
-	);
-	const boardMutation = useMutation(
-		orpc.bambi.pointSettings.saveBoard.mutationOptions({
-			onError: (error) =>
-				toast.error(error.message || "게시판 포인트를 저장하지 못했어요."),
-			onSuccess: (saved) => {
-				toast.success("게시판 포인트를 저장했어요.");
-				setBoards((current) =>
-					current.map((board) =>
-						board.key === saved.key
-							? { ...board, postPoints: String(saved.postPoints) }
-							: board
-					)
-				);
 			},
 		})
 	);
@@ -255,86 +224,6 @@ export default function ModeratorPointSettingsPage() {
 								value={recommendedRotationHours}
 							/>
 						</div>
-					</AccordionContent>
-				</AccordionItem>
-				<AccordionItem
-					className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
-					value="board-points"
-				>
-					<AccordionTrigger className="bg-card px-4 py-4 font-bold hover:bg-muted/50">
-						게시판별 작성 포인트
-					</AccordionTrigger>
-					<AccordionContent className="px-0 pt-4 pb-0">
-						<Accordion className="divide-y" multiple>
-							{boards.map((board, index) => (
-								<AccordionItem key={board.key} value={board.key}>
-									<AccordionTrigger className="px-4 py-4 font-bold">
-										<span className="flex flex-col items-start gap-1">
-											<span>{board.label}</span>
-											<span className="font-normal text-muted-foreground text-xs">
-												{board.key}
-											</span>
-										</span>
-									</AccordionTrigger>
-									<AccordionContent className="grid gap-4 px-4 pb-4 md:grid-cols-2">
-										{board.key === "notice" ? null : (
-											<PointField
-												id={`${board.key}-post`}
-												label="글 작성"
-												onChange={(value) =>
-													setBoards((current) =>
-														current.map((item, itemIndex) =>
-															itemIndex === index
-																? { ...item, postPoints: value }
-																: item
-														)
-													)
-												}
-												value={board.postPoints}
-											/>
-										)}
-										<PointField
-											id={`${board.key}-comment`}
-											label="댓글 작성"
-											onChange={(value) =>
-												setBoards((current) =>
-													current.map((item, itemIndex) =>
-														itemIndex === index
-															? { ...item, commentPoints: value }
-															: item
-													)
-												)
-											}
-											value={board.commentPoints}
-										/>
-										<Button
-											className="md:col-span-2 md:ml-auto"
-											disabled={
-												!fieldValid(board.commentPoints) ||
-												(board.key !== "notice" &&
-													!fieldValid(board.postPoints)) ||
-												boardMutation.isPending
-											}
-											onClick={() =>
-												boardMutation.mutate({
-													commentPoints: Number(board.commentPoints),
-													key: board.key,
-													postPoints:
-														board.key === "notice"
-															? undefined
-															: Number(board.postPoints),
-												})
-											}
-										>
-											{boardMutation.isPending &&
-											boardMutation.variables?.key === board.key
-												? "저장 중"
-												: "저장"}
-										</Button>
-									</AccordionContent>
-								</AccordionItem>
-							))}
-						</Accordion>
 					</AccordionContent>
 				</AccordionItem>
 			</Accordion>
