@@ -113,7 +113,25 @@ export const mainPopupsRouter = {
 		const now = new Date();
 		const userId = context.session?.user?.id;
 		if (!userId) {
-			return { items: [] };
+			// 비로그인(anon·게스트)에게는 "로그인" 위치를 지정한 팝업만 노출한다.
+			// 다른 위치 팝업이 유출되지 않도록 targetPages 멤버십을 경계로 삼는다.
+			const loginRows = await db
+				.select({
+					...publicColumns,
+					endsAt: mainPopup.endsAt,
+					startsAt: mainPopup.startsAt,
+				})
+				.from(mainPopup)
+				.where(eq(mainPopup.enabled, true))
+				.orderBy(asc(mainPopup.slotIndex));
+			return {
+				items: loginRows.filter(
+					(row) =>
+						row.targetPages.includes("login") &&
+						isPopupScheduledNow(row.startsAt, row.endsAt, now) &&
+						hasPopupContent(row)
+				),
+			};
 		}
 		let allowedAudiences: Array<"common" | "job_seeker" | "employer"> = [
 			"common",

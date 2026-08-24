@@ -26,6 +26,14 @@ export const MAIN_POPUP_PAGE_OPTIONS: MainPopupPageOption[] = [
 	{ audience: "common", id: "main", label: "메인", match: exact("/seeker") },
 	{
 		audience: "common",
+		id: "login",
+		label: "로그인",
+		// 로그인 화면은 pathname만으로 구분되지 않는다(비로그인 anon, 또는 게스트+auth 쿼리).
+		// 실제 판별은 isLoginPopupScreen이 하고, 이 항목은 운영자 위치 선택지 노출용이다.
+		match: () => false,
+	},
+	{
+		audience: "common",
 		id: "jobs",
 		label: "지역별 채용 정보",
 		match: prefix("/jobs"),
@@ -173,6 +181,24 @@ export const popupPageOptionsForAudience = (
 		}))
 		.filter((option) => !staticIds.has(option.id));
 	return [...staticOptions, ...dynamicBoards];
+};
+
+// 로그인 화면(비로그인 상태에서 로그인 패널이 실제 보이는 경우)만 "login"으로 판별한다.
+// - anon 방문자: /seeker는 항상 로그인 게이트 화면(쿼리 무관).
+// - 게스트: /seeker?auth=login|signup일 때만 로그인 패널이 뜬다.
+// - 로그인 사용자: 로그인 화면 자체를 볼 수 없으므로 항상 false.
+export const isLoginPopupScreen = (input: {
+	authParam: string | null;
+	isAuthenticated: boolean;
+	isGuest: boolean;
+	pathname: string;
+}): boolean => {
+	if (input.isAuthenticated || input.pathname !== "/seeker") {
+		return false;
+	}
+	return input.isGuest
+		? input.authParam === "login" || input.authParam === "signup"
+		: true;
 };
 
 export const resolveMainPopupPageId = (

@@ -4,7 +4,7 @@ import { Button } from "@bambi-app/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
 import type { JSONContent } from "@tiptap/react";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { authClient } from "@/lib/auth-client";
@@ -16,7 +16,10 @@ import {
 	popupAuthTransitionStorageKey,
 	popupLoginTargetStorageKey,
 } from "@/lib/bambi/main-popup";
-import { resolveMainPopupPageId } from "@/lib/bambi/main-popup-pages";
+import {
+	isLoginPopupScreen,
+	resolveMainPopupPageId,
+} from "@/lib/bambi/main-popup-pages";
 import { useCommunityBoards } from "@/lib/bambi/use-community-boards";
 import { orpc } from "@/utils/orpc";
 import { PopupTextViewer } from "./popup-text-editor";
@@ -56,13 +59,20 @@ const isHidden = (id: string, revision: number) => {
 
 export function MainPopupLayer() {
 	const pathname = usePathname();
+	const searchParams = useSearchParams();
 	const { boards } = useCommunityBoards();
-	const pageId = resolveMainPopupPageId(pathname, boards);
 	const session = authClient.useSession();
-	const { isAuthenticated, isPending } = useBambiAuth();
+	const { isAuthenticated, isGuest, isPending } = useBambiAuth();
+	const isLogin = isLoginPopupScreen({
+		authParam: searchParams.get("auth"),
+		isAuthenticated,
+		isGuest,
+		pathname,
+	});
+	const pageId = isLogin ? "login" : resolveMainPopupPageId(pathname, boards);
 	const query = useQuery({
 		...orpc.bambi.mainPopups.listPublic.queryOptions(),
-		enabled: !isPending && isAuthenticated,
+		enabled: !isPending && (isAuthenticated || isLogin),
 		refetchInterval: 15_000,
 	});
 	const [closed, setClosed] = useState<Set<string>>(new Set());
@@ -126,7 +136,11 @@ export function MainPopupLayer() {
 	}, [query]);
 	const items = useMemo(
 		() =>
-			ready && pageReady && !authTransition && !isPending && isAuthenticated
+			ready &&
+			pageReady &&
+			!authTransition &&
+			!isPending &&
+			(isAuthenticated || isLogin)
 				? ((query.data?.items ?? []).filter(
 						(item) =>
 							pageId !== null &&
@@ -138,6 +152,7 @@ export function MainPopupLayer() {
 			authTransition,
 			closed,
 			isAuthenticated,
+			isLogin,
 			isPending,
 			pageId,
 			pageReady,

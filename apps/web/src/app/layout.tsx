@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Suspense } from "react";
 import { JsonLd } from "@/components/bambi/json-ld";
 import { MainPopupLayer } from "@/components/bambi/main-popup/main-popup-layer";
 import { SupportChatWidget } from "@/components/bambi/support-chat/support-chat-widget";
@@ -45,7 +46,10 @@ export default function RootLayout({
 				<JsonLd data={bambiSiteJsonLd} />
 				<Providers>
 					{children}
-					<MainPopupLayer />
+					{/* MainPopupLayer는 useSearchParams(로그인 화면 판별)를 쓰므로 Suspense로 감싼다. */}
+					<Suspense>
+						<MainPopupLayer />
+					</Suspense>
 					<SupportChatWidget />
 				</Providers>
 				{/* Vercel은 프리뷰·개발 배포도 NODE_ENV=production이라, 프로덕션 배포에서만
