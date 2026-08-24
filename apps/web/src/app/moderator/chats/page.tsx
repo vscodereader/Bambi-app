@@ -88,7 +88,7 @@ function ChatStatusBadges({ row }: { row: ChatRow }) {
 	const active = CHAT_STATUS_BADGES.filter((badge) => badge.flag(row));
 
 	if (active.length === 0) {
-		return <span className="text-muted-foreground">정상</span>;
+		return <Badge variant="outline">정상</Badge>;
 	}
 
 	return (

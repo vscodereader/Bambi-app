@@ -2,7 +2,8 @@
 
 // 밤비 — 운영자 출석 관리. 사용자별 총 출석일·이번 달·마지막 출석일·미출석 경과일을
 // 서버 집계(attendance.adminList)로 받아 표로 보여준다. 검색·역할 필터·정렬·페이지네이션이
-// 전부 서버 입력이며 10개 단위 페이지로 조회한다.
+// 전부 서버 입력이며 10개 단위 페이지로 조회한다. 회원 선택 후 일괄 지급·차감도 여기서 한다
+// (옛 포인트 관리 화면을 흡수).
 // 개인 상세·차트는 후속 범위다(스펙 §8).
 
 import type { AppRouterClient } from "@bambi-app/api/routers/index";
@@ -14,12 +15,13 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@bambi-app/ui/components/card";
+import { Checkbox } from "@bambi-app/ui/components/checkbox";
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogTitle,
-} from "@bambi-app/ui/components/dialog";
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@bambi-app/ui/components/dropdown-menu";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import {
@@ -38,19 +40,19 @@ import {
 	TableHeader,
 	TableRow,
 } from "@bambi-app/ui/components/table";
-import {
-	ToggleGroup,
-	ToggleGroupItem,
-} from "@bambi-app/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownIcon, ArrowUpDownIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpDownIcon, MoreHorizontal } from "lucide-react";
+import type { Route } from "next";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/bambi/empty-state";
+import { GradeBadge } from "@/components/bambi/grade-badge";
+import { MemberPointAdjustDialog } from "@/components/bambi/member-point-adjust-dialog";
 import { PageControls } from "@/components/bambi/page-controls";
 import { userRoleLabel } from "@/lib/bambi/moderation-labels";
 import { formatDate } from "@/lib/bambi-format";
-import { orpc } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 
 const PAGE_SIZE = 10;
 
@@ -85,114 +87,141 @@ type AttendanceRow = Awaited<
 	ReturnType<AppRouterClient["bambi"]["attendance"]["adminList"]>
 >["items"][number];
 
-// 서버 adminAdjustPointsInput과 같은 상한이다 — 왕복 전에 막아 준다.
-const AMOUNT_MAX = 100_000;
-const REASON_MAX = 200;
-
 const formatPoints = (points: number) => `${points.toLocaleString("ko-KR")}P`;
 
-// 지급·차감 폼. 양은 항상 양수로 받고 방향은 토글이 정한다 — 음수 입력을 허용하면
-// "차감"에 -100을 넣어 되레 지급되는 부호 뒤집힘이 난다. 대상마다 새로 마운트된다(key).
-function PointAdjustForm({
-	isPending,
-	onClose,
-	onSubmit,
-	row,
+// 일괄 조정 다이얼로그 제목용 이름. 2명 이상이면 "첫 회원 외 N명".
+function bulkMemberLabel(members: AttendanceRow[]): string {
+	const first = members[0]?.displayName ?? "";
+	return members.length > 1 ? `${first} 외 ${members.length - 1}명` : first;
+}
+
+// 정렬 열 헤더. 서버 정렬은 축마다 방향이 고정(내림차순)이라 활성 열은 항상 descending이다.
+function SortHead({
+	active,
+	label,
+	onSelect,
 }: {
-	isPending: boolean;
-	onClose: () => void;
-	onSubmit: (values: { amount: number; reason: string }) => void;
-	row: AttendanceRow;
+	active: boolean;
+	label: string;
+	onSelect: () => void;
 }) {
-	const [direction, setDirection] = useState<"deduct" | "grant">("grant");
-	const [amount, setAmount] = useState("");
-	const [reason, setReason] = useState("");
-
-	const parsedAmount = Number(amount);
-	const isAmountValid =
-		Number.isInteger(parsedAmount) &&
-		parsedAmount > 0 &&
-		parsedAmount <= AMOUNT_MAX;
-	const canSubmit = isAmountValid && reason.trim().length > 0 && !isPending;
-
 	return (
-		<>
-			<div className="flex flex-col gap-2">
-				<DialogTitle>포인트 지급·차감</DialogTitle>
-				<DialogDescription>
-					{`${row.displayName} 회원의 현재 잔액은 ${formatPoints(row.pointBalance)}예요. 조정 내역은 사유와 함께 기록됩니다.`}
-				</DialogDescription>
-			</div>
-			<div className="flex flex-col gap-2">
-				<ToggleGroup
-					aria-label="조정 방향"
-					onValueChange={(value) => {
-						const next = value.at(-1);
-						if (next) {
-							setDirection(next as "deduct" | "grant");
+		<TableHead aria-sort={active ? "descending" : undefined}>
+			<button
+				className="-mx-2 flex items-center gap-1 rounded-md px-2 py-1 font-medium hover:bg-muted/50"
+				onClick={onSelect}
+				type="button"
+			>
+				{label}
+				{active ? (
+					<ArrowDownIcon className="size-3.5 text-muted-foreground" />
+				) : (
+					<ArrowUpDownIcon className="size-3.5 text-muted-foreground/50" />
+				)}
+			</button>
+		</TableHead>
+	);
+}
+
+// 회원 한 행. 행 클릭은 사용자 상세로, 체크박스·관리 버튼은 stopPropagation으로 행 이동을 막는다.
+function MemberRow({
+	item,
+	onAdjust,
+	onOpen,
+	onPoints,
+	onToggle,
+	selected,
+}: {
+	item: AttendanceRow;
+	onAdjust: () => void;
+	onOpen: () => void;
+	onPoints: () => void;
+	onToggle: () => void;
+	selected: boolean;
+}) {
+	return (
+		<TableRow className="cursor-pointer" onClick={onOpen}>
+			<TableCell
+				className="text-center align-middle"
+				onClick={(event) => event.stopPropagation()}
+			>
+				<div className="flex justify-center">
+					<Checkbox
+						aria-label={`${item.displayName} 선택`}
+						checked={selected}
+						onCheckedChange={onToggle}
+					/>
+				</div>
+			</TableCell>
+			<TableCell>
+				<div className="flex flex-col gap-0.5">
+					<span className="flex items-center gap-1.5 font-medium text-foreground">
+						<button
+							className="hover:underline"
+							onClick={(event) => {
+								event.stopPropagation();
+								onOpen();
+							}}
+							type="button"
+						>
+							{item.displayName}
+						</button>
+						{item.attendedToday ? (
+							<Badge variant="success">오늘 출석</Badge>
+						) : null}
+					</span>
+					<span className="max-w-40 truncate text-muted-foreground text-xs">
+						{item.loginId ?? "-"}
+					</span>
+				</div>
+			</TableCell>
+			<TableCell className="text-muted-foreground">
+				{userRoleLabel(item.role)}
+			</TableCell>
+			<TableCell>
+				<GradeBadge grade={item.grade} />
+			</TableCell>
+			<TableCell className="whitespace-nowrap">{`${item.totalDays}일`}</TableCell>
+			<TableCell className="whitespace-nowrap">{`${item.monthDays}일`}</TableCell>
+			<TableCell className="whitespace-nowrap text-muted-foreground">
+				{item.lastAttendedOn ? formatDate(item.lastAttendedOn) : "기록 없음"}
+			</TableCell>
+			<TableCell className="whitespace-nowrap text-muted-foreground">
+				{item.idleDays === null ? "-" : `${item.idleDays}일`}
+			</TableCell>
+			<TableCell className="whitespace-nowrap font-medium">
+				{formatPoints(item.pointBalance)}
+			</TableCell>
+			<TableCell onClick={(event) => event.stopPropagation()}>
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						render={
+							<Button size="icon" type="button" variant="ghost">
+								<MoreHorizontal />
+								<span className="sr-only">메뉴 열기</span>
+							</Button>
 						}
-					}}
-					value={[direction]}
-				>
-					<ToggleGroupItem value="grant">지급</ToggleGroupItem>
-					<ToggleGroupItem value="deduct">차감</ToggleGroupItem>
-				</ToggleGroup>
-			</div>
-			<div className="flex flex-col gap-2">
-				<Label htmlFor="attendance-points-amount">포인트</Label>
-				<Input
-					id="attendance-points-amount"
-					inputMode="numeric"
-					max={AMOUNT_MAX}
-					min={1}
-					onChange={(event) => setAmount(event.target.value)}
-					placeholder="예: 100"
-					type="number"
-					value={amount}
-				/>
-			</div>
-			<div className="flex flex-col gap-2">
-				<Label htmlFor="attendance-points-reason">사유</Label>
-				<Input
-					id="attendance-points-reason"
-					maxLength={REASON_MAX}
-					onChange={(event) => setReason(event.target.value)}
-					placeholder="예: 이벤트 당첨 보상"
-					value={reason}
-				/>
-				<p className="m-0 text-muted-foreground text-xs">
-					{isAmountValid
-						? `조정 후 예상 잔액 ${formatPoints(row.pointBalance + (direction === "deduct" ? -parsedAmount : parsedAmount))}`
-						: `1 이상 ${AMOUNT_MAX.toLocaleString("ko-KR")} 이하의 정수를 입력해 주세요.`}
-				</p>
-			</div>
-			<div className="grid grid-cols-2 gap-2">
-				<Button onClick={onClose} type="button" variant="outline">
-					취소
-				</Button>
-				<Button
-					disabled={!canSubmit}
-					onClick={() =>
-						onSubmit({
-							amount: direction === "deduct" ? -parsedAmount : parsedAmount,
-							reason: reason.trim(),
-						})
-					}
-					type="button"
-				>
-					{isPending ? "저장 중" : "적용"}
-				</Button>
-			</div>
-		</>
+					/>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem onClick={onPoints}>포인트 상세</DropdownMenuItem>
+						<DropdownMenuItem onClick={onAdjust}>지급·차감</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</TableCell>
+		</TableRow>
 	);
 }
 
 export default function ModeratorAttendancePage() {
+	const router = useRouter();
 	const [search, setSearch] = useState("");
 	const [roleFilter, setRoleFilter] = useState("all");
 	const [sort, setSort] = useState<SortKey>("recent");
 	const [page, setPage] = useState(1);
 	const [adjusting, setAdjusting] = useState<AttendanceRow | null>(null);
+	const [selectedIds, setSelectedIds] = useState<string[]>([]);
+	const [bulkOpen, setBulkOpen] = useState(false);
+	const [bulkPending, setBulkPending] = useState(false);
 	const debouncedSearch = useDebouncedValue(search);
 	const queryClient = useQueryClient();
 
@@ -234,12 +263,65 @@ export default function ModeratorAttendancePage() {
 	const totalCount = listQuery.data?.totalCount ?? 0;
 	const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
+	// 페이지·검색·역할·정렬이 바뀌면 현재 페이지 items가 갈리므로 선택을 비운다(stale userId 방지).
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 필터 변화 자체가 초기화 트리거
+	useEffect(() => {
+		setSelectedIds([]);
+	}, [page, debouncedSearch, roleFilter, sort]);
+
+	const allSelected =
+		items.length > 0 &&
+		items.every((item) => selectedIds.includes(item.userId));
+	const toggleAll = () =>
+		setSelectedIds(allSelected ? [] : items.map((item) => item.userId));
+	const toggleOne = (userId: string) =>
+		setSelectedIds((prev) =>
+			prev.includes(userId)
+				? prev.filter((id) => id !== userId)
+				: [...prev, userId]
+		);
+	const bulkMemberName = bulkMemberLabel(
+		items.filter((item) => selectedIds.includes(item.userId))
+	);
+
+	const openMember = (userId: string) =>
+		router.push(`/moderator/users/${userId}` as Route);
+
+	const runBulkAdjust = async (values: {
+		amount: number;
+		reason: string;
+	}): Promise<void> => {
+		setBulkPending(true);
+		let ok = 0;
+		let fail = 0;
+		// 직렬 호출 — 서버 부하·레이트리밋 안전
+		for (const userId of selectedIds) {
+			try {
+				await client.bambi.attendance.adminAdjustPoints({ ...values, userId });
+				ok += 1;
+			} catch {
+				fail += 1;
+			}
+		}
+		setBulkPending(false);
+		setBulkOpen(false);
+		setSelectedIds([]);
+		await queryClient.invalidateQueries({
+			queryKey: orpc.bambi.attendance.adminList.key(),
+		});
+		if (fail === 0) {
+			toast.success(`${ok}명에게 포인트를 적용했어요.`);
+		} else {
+			toast.error(`${ok}명 적용, ${fail}명 실패했어요.`);
+		}
+	};
+
 	return (
 		<div className="mx-auto flex w-full flex-col gap-4 px-5 py-6 md:px-6">
 			<div className="flex flex-col gap-1">
 				<h1 className="m-0 font-extrabold text-2xl">출석 관리</h1>
 				<p className="m-0 text-muted-foreground text-sm">
-					구직자·업소 회원의 출석 현황이에요. 검색·역할·정렬 조건은 요약
+					구직자·업소 회원의 출석 현황과 포인트예요. 검색·역할·정렬 조건은 요약
 					숫자에도 함께 적용돼요.
 				</p>
 			</div>
@@ -331,35 +413,54 @@ export default function ModeratorAttendancePage() {
 				/>
 			) : null}
 
+			{selectedIds.length > 0 ? (
+				<div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+					<span className="font-medium text-sm">
+						{selectedIds.length}명 선택됨
+					</span>
+					<div className="flex flex-wrap gap-2">
+						<Button
+							onClick={() => setSelectedIds([])}
+							size="sm"
+							type="button"
+							variant="ghost"
+						>
+							선택 해제
+						</Button>
+						<Button onClick={() => setBulkOpen(true)} size="sm" type="button">
+							선택 지급·차감
+						</Button>
+					</div>
+				</div>
+			) : null}
+
 			{items.length > 0 ? (
 				<div className="overflow-x-auto rounded-xl border border-border">
 					<Table>
 						<TableHeader>
 							<TableRow>
+								<TableHead className="w-10 text-center">
+									<div className="flex justify-center">
+										<Checkbox
+											aria-label="전체 선택"
+											checked={allSelected}
+											onCheckedChange={toggleAll}
+										/>
+									</div>
+								</TableHead>
 								<TableHead>회원</TableHead>
 								<TableHead>역할</TableHead>
+								<TableHead>등급</TableHead>
 								{SORTABLE_COLUMNS.map((column) => (
-									// 서버 정렬은 축마다 방향이 고정(내림차순)이라 활성 열은 항상 descending이다.
-									<TableHead
-										aria-sort={sort === column.key ? "descending" : undefined}
+									<SortHead
+										active={sort === column.key}
 										key={column.key}
-									>
-										<button
-											className="-mx-2 flex items-center gap-1 rounded-md px-2 py-1 font-medium hover:bg-muted/50"
-											onClick={() => {
-												setSort(column.key);
-												setPage(1);
-											}}
-											type="button"
-										>
-											{column.label}
-											{sort === column.key ? (
-												<ArrowDownIcon className="size-3.5 text-muted-foreground" />
-											) : (
-												<ArrowUpDownIcon className="size-3.5 text-muted-foreground/50" />
-											)}
-										</button>
-									</TableHead>
+										label={column.label}
+										onSelect={() => {
+											setSort(column.key);
+											setPage(1);
+										}}
+									/>
 								))}
 								<TableHead>포인트</TableHead>
 								<TableHead>관리</TableHead>
@@ -367,47 +468,19 @@ export default function ModeratorAttendancePage() {
 						</TableHeader>
 						<TableBody>
 							{items.map((item) => (
-								<TableRow key={item.userId}>
-									<TableCell>
-										<div className="flex flex-col gap-0.5">
-											<span className="flex items-center gap-1.5 font-medium text-foreground">
-												{item.displayName}
-												{item.attendedToday ? (
-													<Badge variant="success">오늘 출석</Badge>
-												) : null}
-											</span>
-											<span className="max-w-40 truncate text-muted-foreground text-xs">
-												{item.loginId ?? "-"}
-											</span>
-										</div>
-									</TableCell>
-									<TableCell className="text-muted-foreground">
-										{userRoleLabel(item.role)}
-									</TableCell>
-									<TableCell className="whitespace-nowrap">{`${item.totalDays}일`}</TableCell>
-									<TableCell className="whitespace-nowrap">{`${item.monthDays}일`}</TableCell>
-									<TableCell className="whitespace-nowrap text-muted-foreground">
-										{item.lastAttendedOn
-											? formatDate(item.lastAttendedOn)
-											: "기록 없음"}
-									</TableCell>
-									<TableCell className="whitespace-nowrap text-muted-foreground">
-										{item.idleDays === null ? "-" : `${item.idleDays}일`}
-									</TableCell>
-									<TableCell className="whitespace-nowrap font-medium">
-										{formatPoints(item.pointBalance)}
-									</TableCell>
-									<TableCell>
-										<Button
-											onClick={() => setAdjusting(item)}
-											size="sm"
-											type="button"
-											variant="outline"
-										>
-											지급·차감
-										</Button>
-									</TableCell>
-								</TableRow>
+								<MemberRow
+									item={item}
+									key={item.userId}
+									onAdjust={() => setAdjusting(item)}
+									onOpen={() => openMember(item.userId)}
+									onPoints={() =>
+										router.push(
+											`/moderator/points/members/${item.userId}` as Route
+										)
+									}
+									onToggle={() => toggleOne(item.userId)}
+									selected={selectedIds.includes(item.userId)}
+								/>
 							))}
 						</TableBody>
 					</Table>
@@ -428,30 +501,29 @@ export default function ModeratorAttendancePage() {
 				</div>
 			) : null}
 
-			{/* 조정 폼은 목록 밖에 하나만 두고 대상만 갈아끼운다(행마다 Dialog를 두면
-			    회원 수만큼 마운트된다 — 게시판 관리 화면과 같은 관례). */}
-			<Dialog
-				onOpenChange={(open) => {
-					if (!open) {
-						setAdjusting(null);
+			{adjusting ? (
+				<MemberPointAdjustDialog
+					key={adjusting.userId}
+					memberName={adjusting.displayName}
+					onOpenChange={(open) => !open && setAdjusting(null)}
+					onSubmit={(values) =>
+						adjustMutation.mutate({ ...values, userId: adjusting.userId })
 					}
-				}}
-				open={adjusting !== null}
-			>
-				<DialogContent>
-					{adjusting ? (
-						<PointAdjustForm
-							isPending={adjustMutation.isPending}
-							key={adjusting.userId}
-							onClose={() => setAdjusting(null)}
-							onSubmit={(values) =>
-								adjustMutation.mutate({ ...values, userId: adjusting.userId })
-							}
-							row={adjusting}
-						/>
-					) : null}
-				</DialogContent>
-			</Dialog>
+					open
+					pending={adjustMutation.isPending}
+					pointBalance={adjusting.pointBalance}
+				/>
+			) : null}
+
+			{bulkOpen ? (
+				<MemberPointAdjustDialog
+					memberName={bulkMemberName}
+					onOpenChange={(open) => !open && setBulkOpen(false)}
+					onSubmit={runBulkAdjust}
+					open
+					pending={bulkPending}
+				/>
+			) : null}
 		</div>
 	);
 }
