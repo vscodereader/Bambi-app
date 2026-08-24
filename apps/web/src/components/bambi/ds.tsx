@@ -770,7 +770,7 @@ export function AppBar({
 	return (
 		<header
 			className={cn(
-				"flex h-[56px] items-center gap-3 px-2",
+				"flex h-[56px] items-center gap-3 px-6",
 				tone === "inverse" ? "bg-ink-800" : "bg-transparent",
 				className
 			)}
@@ -779,8 +779,8 @@ export function AppBar({
 				<button
 					aria-label="뒤로"
 					className={cn(
-						"inline-flex size-10 flex-[0_0_40px] cursor-pointer items-center justify-center rounded-lg border-none",
-						tone === "inverse" ? "bg-white/[0.08]" : "bg-secondary",
+						"-ml-[9px] inline-flex size-10 flex-[0_0_40px] cursor-pointer items-center justify-center rounded-lg border-none bg-transparent",
+						tone === "inverse" ? "hover:bg-white/[0.08]" : "hover:bg-secondary",
 						fg
 					)}
 					onClick={onBack}
@@ -790,9 +790,7 @@ export function AppBar({
 						<ArrowNarrowLeft />
 					</span>
 				</button>
-			) : (
-				<span className="w-10 flex-[0_0_40px]" />
-			)}
+			) : null}
 			<div
 				className={cn(
 					"flex min-w-0 flex-1 flex-col gap-px",
