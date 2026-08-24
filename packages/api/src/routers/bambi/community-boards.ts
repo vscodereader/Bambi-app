@@ -260,7 +260,9 @@ export const communityBoardsRouter = {
 				icon: input.icon,
 				isWritable: input.isWritable,
 				label: input.label,
-				postPoints: input.postPoints,
+				// 공지는 운영자만 글을 쓰므로 글 작성 적립이 무의미하다 — 화면이 입력을 숨기지만
+				// 여기서도 0으로 고정해 우회 저장을 막는다(게시판 관리가 이 값의 단일 소스).
+				postPoints: input.key === NOTICE_BOARD_KEY ? 0 : input.postPoints,
 				sortOrder: input.sortOrder,
 			})
 			.where(eq(communityBoard.key, input.key))
