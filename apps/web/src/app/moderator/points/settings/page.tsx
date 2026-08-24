@@ -26,11 +26,10 @@ interface BoardDraft {
 
 const parsePoints = (value: string): number | null =>
 	value.trim() === "" ? null : Number(value);
-const valid = (value: string, nullable = false): boolean =>
-	(nullable && value.trim() === "") ||
-	(Number.isInteger(Number(value)) && Number(value) >= 0);
-const validRotationHours = (value: string): boolean =>
-	Number.isInteger(Number(value)) && Number(value) > 0;
+const fieldValid = (value: string, min = 0, nullable = false): boolean =>
+	value.trim() === ""
+		? nullable
+		: Number.isInteger(Number(value)) && Number(value) >= min;
 const settingDraft = (value: null | number): string =>
 	value === null ? "" : String(value);
 
@@ -122,18 +121,18 @@ export default function ModeratorPointSettingsPage() {
 		})
 	);
 	const canSaveGlobal =
-		valid(signup) &&
-		valid(attendance) &&
-		valid(minimum, true) &&
-		valid(maximum, true) &&
-		valid(reviewWrite) &&
-		valid(reviewView) &&
-		valid(premiumPointReward, true) &&
-		validRotationHours(premiumRotationHours) &&
-		valid(specialPointReward, true) &&
-		validRotationHours(specialRotationHours) &&
-		valid(recommendedPointReward, true) &&
-		validRotationHours(recommendedRotationHours) &&
+		fieldValid(signup) &&
+		fieldValid(attendance) &&
+		fieldValid(minimum, 0, true) &&
+		fieldValid(maximum, 0, true) &&
+		fieldValid(reviewWrite) &&
+		fieldValid(reviewView) &&
+		fieldValid(premiumPointReward, 0, true) &&
+		fieldValid(premiumRotationHours, 1) &&
+		fieldValid(specialPointReward, 0, true) &&
+		fieldValid(specialRotationHours, 1) &&
+		fieldValid(recommendedPointReward, 0, true) &&
+		fieldValid(recommendedRotationHours, 1) &&
 		!globalMutation.isPending;
 	if (query.isError) {
 		return (
@@ -205,6 +204,7 @@ export default function ModeratorPointSettingsPage() {
 								hint="0이거나 비어 있으면 프리미엄 포인트 광고를 비활성화합니다."
 								id="premium-point-job-reward"
 								label="프리미엄 포인트"
+								nullable
 								onChange={setPremiumPointReward}
 								value={premiumPointReward}
 							/>
@@ -223,6 +223,7 @@ export default function ModeratorPointSettingsPage() {
 								hint="0이거나 비어 있으면 스페셜 포인트 광고를 비활성화합니다."
 								id="special-point-job-reward"
 								label="스페셜 포인트"
+								nullable
 								onChange={setSpecialPointReward}
 								value={specialPointReward}
 							/>
@@ -241,6 +242,7 @@ export default function ModeratorPointSettingsPage() {
 								hint="0이거나 비어 있으면 추천 포인트 광고를 비활성화합니다."
 								id="recommended-point-job-reward"
 								label="추천 포인트"
+								nullable
 								onChange={setRecommendedPointReward}
 								value={recommendedPointReward}
 							/>
@@ -308,8 +310,9 @@ export default function ModeratorPointSettingsPage() {
 										<Button
 											className="md:col-span-2 md:ml-auto"
 											disabled={
-												!valid(board.commentPoints) ||
-												(board.key !== "notice" && !valid(board.postPoints)) ||
+												!fieldValid(board.commentPoints) ||
+												(board.key !== "notice" &&
+													!fieldValid(board.postPoints)) ||
 												boardMutation.isPending
 											}
 											onClick={() =>
@@ -342,6 +345,7 @@ export default function ModeratorPointSettingsPage() {
 						hint="비우거나 0으로 저장하면 공고 결제 포인트 사용을 중단합니다."
 						id="job-min-points"
 						label="공고 시 최소 사용 포인트"
+						nullable
 						onChange={setMinimum}
 						placeholder="사용 안 함"
 						value={minimum}
@@ -350,6 +354,7 @@ export default function ModeratorPointSettingsPage() {
 						hint="비우면 결제 예정 금액까지 사용할 수 있습니다."
 						id="job-max-points"
 						label="공고 시 최대 사용 포인트"
+						nullable
 						onChange={setMaximum}
 						placeholder="결제 예정 금액까지"
 						value={maximum}
@@ -390,6 +395,7 @@ function PointField({
 	id,
 	label,
 	min = 0,
+	nullable = false,
 	onChange,
 	placeholder,
 	suffix = "P",
@@ -400,16 +406,23 @@ function PointField({
 	id: string;
 	label: string;
 	min?: number;
+	nullable?: boolean;
 	onChange: (value: string) => void;
 	placeholder?: string;
 	suffix?: string;
 	value: string;
 }) {
+	const invalid = !fieldValid(value, min, nullable);
+	const errorMessage =
+		value.trim() === ""
+			? "값을 입력해주세요"
+			: `${min} 이상의 정수를 입력해주세요`;
 	return (
 		<div className={cn("flex flex-col gap-2", className)}>
 			<Label htmlFor={id}>{label}</Label>
 			<div className="flex items-center gap-2">
 				<Input
+					aria-invalid={invalid}
 					id={id}
 					inputMode="numeric"
 					min={min}
@@ -420,9 +433,12 @@ function PointField({
 				/>
 				<span className="shrink-0 whitespace-nowrap text-xs">{suffix}</span>
 			</div>
-			{hint ? (
-				<p className="m-0 text-muted-foreground text-xs">{hint}</p>
+			{invalid ? (
+				<p className="m-0 text-destructive text-xs">{errorMessage}</p>
 			) : null}
+			{invalid || !hint ? null : (
+				<p className="m-0 text-muted-foreground text-xs">{hint}</p>
+			)}
 		</div>
 	);
 }
