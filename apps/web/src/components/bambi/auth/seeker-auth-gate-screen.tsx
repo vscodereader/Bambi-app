@@ -13,10 +13,10 @@ import { AuthPanel } from "./auth-panel";
 
 const BACKDROP_JOB_LIMIT = 12;
 
-// 실제 공고를 받아 개수·레이아웃은 진짜처럼 두되, 문자열은 직렬화 전에 전부
-// 마스킹한다. 클라이언트로 넘어가는 값은 이 함수의 반환값(BackdropJob[])뿐이라
-// 원본 업소명·공고 제목은 RSC 페이로드에 실리지 않는다. 조회에 실패해도 화면은
-// 떠야 하므로 빈 배열로 폴백한다.
+// 실제 공고를 받아 개수·레이아웃은 진짜처럼 둔다. 직렬화 전에 업소명(company)만
+// 마스킹하고 지역·급여는 /jobs 랜딩에 이미 공개된 실값 그대로 싣는다. 클라이언트로
+// 넘어가는 값은 이 함수의 반환값(BackdropJob[])뿐이라 원본 업소명은 RSC 페이로드에
+// 실리지 않는다. 조회에 실패해도 화면은 떠야 하므로 빈 배열로 폴백한다.
 const loadBackdropJobs = async () => {
 	try {
 		const result = await client.bambi.jobs.list({ limit: BACKDROP_JOB_LIMIT });
@@ -64,7 +64,9 @@ export async function SeekerAuthGateScreen() {
 					</Suspense>
 				</div>
 			</div>
-			{/* 게이트는 공고 텍스트가 전부 마스킹돼 실질 본문이 푸터뿐이다. 크롤러와
+			{/* 배경 카드는 업소명만 마스킹하고 title·지역·급여·tags는 실값이지만 aria-hidden·
+				    inert·hidden(md 미만 display:none)이라 크롤러가 안정적으로 읽는 실질 본문은
+				    아니다. 그래서 크롤러와
 			    사용자 모두에게 보이는 최소 소개 + 공개 랜딩(/jobs)으로 빠지는 본문 링크를
 			    푸터 위에 둔다 — md 이상에선 위 카드층이 absolute라 이 띠가 첫 화면 아래
 			    정상 흐름에 오고, md 미만에선 카드 다음으로 스크롤되며 자연히 이어진다.
