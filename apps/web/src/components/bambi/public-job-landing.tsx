@@ -31,6 +31,15 @@ import {
 	jobLandingPath,
 } from "@/lib/bambi/job-landing";
 import {
+	type DefinitionBlock,
+	type FaqItem,
+	jobLandingIndustryDefinition,
+	jobLandingIndustryFaqs,
+	jobLandingPlatformFaqs,
+	jobLandingRegionNote,
+	jobLandingServiceDefinition,
+} from "@/lib/bambi/job-landing-content";
+import {
 	type BreadcrumbItem,
 	breadcrumbJsonLd,
 	collectionPageJsonLd,
@@ -252,6 +261,90 @@ function LandingJobCard({ job }: { job: Job }) {
 	);
 }
 
+// 정의 섹션(h2 질문형 + 문단). 헤딩 직하 첫 문단은 반드시 완결된 직답(body[0])이어야
+// AI가 문단째 발췌한다 — 그래서 지역 고유 lead는 body[0] '뒤'에 끼운다. 같은 업종 정의가
+// 16개 지역에 반복돼도 지역 문장이 페이지마다 텍스트를 달라지게 하되, 직답은 항상 맨 앞이다.
+function DefinitionSection({
+	block,
+	lead,
+}: {
+	block: DefinitionBlock;
+	lead?: string;
+}) {
+	return (
+		<section className="flex flex-col gap-3">
+			<h2 className="m-0 font-extrabold text-lg">{block.title}</h2>
+			{block.body.map((paragraph, index) => (
+				<Fragment key={paragraph}>
+					<p className="m-0 text-muted-foreground text-sm">{paragraph}</p>
+					{index === 0 && lead ? (
+						<p className="m-0 text-muted-foreground text-sm">{lead}</p>
+					) : null}
+				</Fragment>
+			))}
+		</section>
+	);
+}
+
+// FAQ는 접힘(details/accordion) 없이 항상 펼쳐진 정적 텍스트로 그린다 — 크롤러·AI가 접힌
+// 답변을 못 읽는 리스크를 없앤다. 질문은 h3(정의 h2 하위), 답변은 첫 문장이 직답.
+function FaqSection({ items }: { items: readonly FaqItem[] }) {
+	return (
+		<section className="flex flex-col gap-4">
+			<h2 className="m-0 font-extrabold text-lg">자주 묻는 질문</h2>
+			{items.map((item) => (
+				<div className="flex flex-col gap-1" key={item.question}>
+					<h3 className="m-0 font-bold text-base text-foreground">
+						{item.question}
+					</h3>
+					<p className="m-0 text-muted-foreground text-sm">{item.answer}</p>
+				</div>
+			))}
+		</section>
+	);
+}
+
+// 축 조합별 정의·FAQ 노출: 인덱스=서비스 정의+플랫폼 FAQ, 지역=지역 서술+플랫폼 FAQ,
+// 지역×업종=업종 정의(지역 서술로 감쌈)+업종 FAQ.
+function LandingContentSections({ industry, region }: JobLandingTarget) {
+	if (region && industry) {
+		return (
+			<>
+				<DefinitionSection
+					block={jobLandingIndustryDefinition(industry)}
+					lead={jobLandingRegionNote(region) || undefined}
+				/>
+				<FaqSection items={jobLandingIndustryFaqs(industry)} />
+			</>
+		);
+	}
+
+	if (region) {
+		const note = jobLandingRegionNote(region);
+
+		return (
+			<>
+				{note ? (
+					<section className="flex flex-col gap-3">
+						<h2 className="m-0 font-extrabold text-lg">
+							{region.label} 유흥·접객 알바 안내
+						</h2>
+						<p className="m-0 text-muted-foreground text-sm">{note}</p>
+					</section>
+				) : null}
+				<FaqSection items={jobLandingPlatformFaqs()} />
+			</>
+		);
+	}
+
+	return (
+		<>
+			<DefinitionSection block={jobLandingServiceDefinition()} />
+			<FaqSection items={jobLandingPlatformFaqs()} />
+		</>
+	);
+}
+
 function LandingLinkChips({ items, title }: LandingLinkSection) {
 	return (
 		<section className="flex flex-col gap-2">
@@ -327,6 +420,8 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 					</Empty>
 				)}
 			</section>
+
+			<LandingContentSections industry={industry} region={region} />
 
 			{buildLinkSections(target).map((section) => (
 				<LandingLinkChips
