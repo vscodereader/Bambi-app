@@ -10,7 +10,6 @@ import { isNewCommunityPost } from "@/lib/bambi/community";
 // listPosts·overview 두 응답이 공통으로 갖는 필드만 받는다 — 라우터 출력 타입 하나에
 // 묶어두면 다른 쪽에서 못 쓴다.
 export interface CommunityPostBadgeSource {
-	authorRole: string | null;
 	createdAt: Date | string;
 	isPromotion: boolean;
 }
@@ -21,7 +20,7 @@ export function CommunityRoleBadges({
 }: {
 	post: CommunityPostBadgeSource;
 }) {
-	if (!(post.isPromotion || post.authorRole === "employer")) {
+	if (!post.isPromotion) {
 		return null;
 	}
 	return (
@@ -31,19 +30,24 @@ export function CommunityRoleBadges({
 					광고
 				</Badge>
 			) : null}
-			{post.authorRole === "employer" ? (
-				<Badge className="shrink-0" variant="secondary">
-					업소
-				</Badge>
-			) : null}
 		</>
 	);
 }
 
 // 새 글 표시(작성 후 이틀). 글자 "N"만으로는 뜻이 전달되지 않아 role·aria-label로
 // "새 글"이라 읽히게 한다.
-export function CommunityNewBadge({ createdAt }: { createdAt: Date | string }) {
-	if (!isNewCommunityPost(createdAt)) {
+export function CommunityNewBadge({
+	createdAt,
+	displayedBoardKey,
+	postBoardKey,
+}: {
+	createdAt: Date | string;
+	displayedBoardKey: string;
+	postBoardKey: string;
+}) {
+	const isCrossListedNotice =
+		postBoardKey === "notice" && displayedBoardKey !== "notice";
+	if (isCrossListedNotice || !isNewCommunityPost(createdAt)) {
 		return null;
 	}
 	return (

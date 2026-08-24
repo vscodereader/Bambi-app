@@ -17,6 +17,18 @@ export async function getPointSettings() {
 				jobPaymentMinPoints: bambiSiteSettings.jobPaymentMinPoints,
 				reviewViewPoints: bambiSiteSettings.reviewViewPoints,
 				reviewWritePoints: bambiSiteSettings.reviewWritePoints,
+				premiumPointJobRewardPoints:
+					bambiSiteSettings.premiumPointJobRewardPoints,
+				premiumPointJobRotationHours:
+					bambiSiteSettings.premiumPointJobRotationHours,
+				recommendedPointJobRewardPoints:
+					bambiSiteSettings.recommendedPointJobRewardPoints,
+				recommendedPointJobRotationHours:
+					bambiSiteSettings.recommendedPointJobRotationHours,
+				specialPointJobRewardPoints:
+					bambiSiteSettings.specialPointJobRewardPoints,
+				specialPointJobRotationHours:
+					bambiSiteSettings.specialPointJobRotationHours,
 				signupPoints: bambiSiteSettings.signupPoints,
 			})
 			.from(bambiSiteSettings)
@@ -41,6 +53,16 @@ export async function getPointSettings() {
 		reviewViewPoints: settings?.reviewViewPoints ?? DEFAULT_REVIEW_VIEW_POINTS,
 		reviewWritePoints:
 			settings?.reviewWritePoints ?? DEFAULT_REVIEW_WRITE_POINTS,
+		premiumPointJobRewardPoints: settings?.premiumPointJobRewardPoints ?? null,
+		premiumPointJobRotationHours:
+			settings?.premiumPointJobRotationHours ?? null,
+		recommendedPointJobRewardPoints:
+			settings?.recommendedPointJobRewardPoints ?? null,
+		recommendedPointJobRotationHours:
+			settings?.recommendedPointJobRotationHours ?? null,
+		specialPointJobRewardPoints: settings?.specialPointJobRewardPoints ?? null,
+		specialPointJobRotationHours:
+			settings?.specialPointJobRotationHours ?? null,
 		signupPoints: settings?.signupPoints ?? DEFAULT_SIGNUP_POINTS,
 	};
 }

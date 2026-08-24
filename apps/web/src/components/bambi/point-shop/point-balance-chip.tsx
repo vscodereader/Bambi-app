@@ -11,14 +11,15 @@ import { useBambiAuth } from "@/components/bambi/auth-client-provider";
 import { orpc } from "@/utils/orpc";
 
 export function PointBalanceChip() {
-	const { isAuthenticated } = useBambiAuth();
+	const { isAuthenticated, role } = useBambiAuth();
+	const canUsePoints = role === "job_seeker" || role === "employer";
 	const balanceQuery = useQuery({
 		...orpc.bambi.pointShop.getMyBalance.queryOptions(),
-		enabled: isAuthenticated,
+		enabled: isAuthenticated && canUsePoints,
 	});
 
 	// 조회 실패도 칩을 숨긴다 — 헤더에 영영 안 끝나는 자리표시를 남기지 않는다.
-	if (!isAuthenticated || balanceQuery.isError) {
+	if (!(isAuthenticated && canUsePoints) || balanceQuery.isError) {
 		return null;
 	}
 	if (!balanceQuery.data) {

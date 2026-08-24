@@ -3,6 +3,12 @@
 // 글 작성/수정 공용 폼. 컨트롤드 필드 + Tiptap 본문 에디터, 서버 검증에 위임한다.
 
 import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
+import {
 	Alert,
 	AlertDescription,
 	AlertTitle,
@@ -129,6 +135,9 @@ interface CommunityPostInitial {
 	authorName: string;
 	// 글 작성자의 role 스냅샷(getPost.authorRole). 수정 모드 광고 Switch 게이트에 쓴다.
 	authorRole: "admin" | "employer" | "guest" | "job_seeker" | "legal_advisor";
+	// 글이 실제로 속한 게시판 key(getPost.board). 교차 노출된 게시판 경로로 수정에
+	// 들어와도 공지/이벤트 판정이 URL slug가 아니라 글의 원래 게시판을 따르게 한다.
+	board?: string;
 	body: string;
 	commentsDisabled?: boolean;
 	// 법률 자문 글의 연락처. 수정 폼이 다시 실어 보내지 않으면 서버가 null로 덮어쓴다.
@@ -139,6 +148,7 @@ interface CommunityPostInitial {
 	isLocked: boolean;
 	// 수정 모드 광고글 초기값. 편집 페이지가 getPost.isPromotion을 넘겨주면 사용한다.
 	isPromotion?: boolean;
+	noticeBoardKeys?: string[];
 	title: string;
 }
 
@@ -346,6 +356,56 @@ function NoticeEventField({
 	);
 }
 
+function NoticeBoardPlacementField({
+	boards,
+	onChange,
+	selected,
+	visible,
+}: {
+	boards: { key: string; label: string }[];
+	onChange: (keys: string[]) => void;
+	selected: string[];
+	visible: boolean;
+}) {
+	if (!visible) {
+		return null;
+	}
+	const selectedSet = new Set(selected);
+	return (
+		<Accordion>
+			<AccordionItem value="notice-board-placement">
+				<AccordionTrigger>
+					게시판 선택하기 · {selected.length}개 선택
+				</AccordionTrigger>
+				<AccordionContent className="flex flex-col gap-3 pt-2">
+					{boards.length === 0 ? (
+						<p className="m-0 text-muted-foreground text-sm">
+							선택할 수 있는 게시판이 없어요.
+						</p>
+					) : (
+						boards.map((item) => (
+							<div className="flex items-center gap-2" key={item.key}>
+								<Checkbox
+									checked={selectedSet.has(item.key)}
+									id={`notice-board-${item.key}`}
+									onCheckedChange={(checked) =>
+										onChange(
+											checked === true
+												? [...selected, item.key]
+												: selected.filter((key) => key !== item.key)
+										)
+									}
+								/>
+								<Label htmlFor={`notice-board-${item.key}`}>{item.label}</Label>
+							</div>
+						))
+					)}
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
+	);
+}
+
 function PromotionField({
 	checked,
 	onChange,
@@ -441,6 +501,17 @@ const initialAnonymousForBoard = (
 	initialValue?: boolean
 ): boolean => isSecretBoardKey(boardKey) || Boolean(initialValue);
 
+const useNoticeBoards = (boardKey: string, role: string | undefined) => {
+	const query = useQuery({
+		...orpc.bambi.communityBoards.listActive.queryOptions(),
+		enabled: boardKey === "notice" && role === "admin",
+	});
+	return (query.data?.boards ?? []).filter((item) => item.key !== "notice");
+};
+
+const isAdminNoticeBoard = (boardKey: string, role: string | undefined) =>
+	boardKey === "notice" && role === "admin";
+
 export function CommunityPostForm({
 	board,
 	editPassword,
@@ -478,6 +549,9 @@ export function CommunityPostForm({
 		initialPost?.commentsDisabled ?? false
 	);
 	const [isEvent, setIsEvent] = useState(initialPost?.isEvent ?? false);
+	const [noticeBoardKeys, setNoticeBoardKeys] = useState(
+		initialPost?.noticeBoardKeys ?? []
+	);
 	const [isAnonymous, setIsAnonymous] = useState(
 		initialAnonymousForBoard(board.key, initialPost?.isAnonymous)
 	);
@@ -495,6 +569,12 @@ export function CommunityPostForm({
 		orpc.bambi.onboarding.getMine.queryOptions({ enabled: !guest })
 	);
 	const role = mineQuery.data?.bambiProfile?.role;
+	// 공지/이벤트 판정에 쓸 유효 게시판 key. 수정 모드에서는 글의 원래 게시판(initialPost.board)을,
+	// 작성 모드에서는 URL이 가리키는 board.key를 쓴다 — 공지를 교차 노출한 게시판 경로로
+	// 수정에 들어와도 공지 관리 UI가 사라지지 않게 한다. 잠금·자유/비밀 판정은 URL board 그대로 둔다.
+	const effectiveBoardKey = initialPost?.board ?? board.key;
+	const canManageNotice = isAdminNoticeBoard(effectiveBoardKey, role);
+	const noticeBoards = useNoticeBoards(effectiveBoardKey, role);
 	// 작성인 기본값은 표시명(user.name, 세션)에서 가져온다 — bambi_profile.display_name은 제거됐다.
 	const displayName = session.data?.user?.name ?? "";
 	// 광고 Switch 노출: 작성 모드는 편집자 role, 수정 모드는 글 작성자 role 기준.
@@ -556,8 +636,7 @@ export function CommunityPostForm({
 	const requiresPassword =
 		guest || isLockPasswordRequired(isEdit, isFreeBoard, isLocked);
 	const submittedIsLocked = resolveSubmittedLock(board.key, guest, isLocked);
-	const submittedIsEvent =
-		board.key === "notice" && role === "admin" && isEvent;
+	const submittedIsEvent = canManageNotice && isEvent;
 
 	const isSubmitting = createMutation.isPending || updateMutation.isPending;
 	const canSubmit = canSubmitPost({
@@ -581,6 +660,7 @@ export function CommunityPostForm({
 			isEvent: submittedIsEvent,
 			isAnonymous,
 			isPromotion,
+			noticeBoardKeys,
 			postId,
 			title: title.trim(),
 			...(trimmedPassword ? { password: trimmedPassword } : {}),
@@ -601,6 +681,7 @@ export function CommunityPostForm({
 			isEvent: submittedIsEvent,
 			isAnonymous,
 			isPromotion,
+			noticeBoardKeys,
 			title: title.trim(),
 			...(trimmedPassword ? { password: trimmedPassword } : {}),
 		});
@@ -669,17 +750,23 @@ export function CommunityPostForm({
 				setIsLocked={handleLockChange}
 				setPassword={setPassword}
 			/>
+			<NoticeEventField
+				isEvent={isEvent}
+				onChange={handleEventChange}
+				visible={canManageNotice}
+			/>
+
+			<NoticeBoardPlacementField
+				boards={noticeBoards}
+				onChange={setNoticeBoardKeys}
+				selected={noticeBoardKeys}
+				visible={canManageNotice}
+			/>
 
 			<LegalContactPhoneField
 				setValue={setContactPhone}
 				value={contactPhone}
 				visible={isLegalBoard}
-			/>
-
-			<NoticeEventField
-				isEvent={isEvent}
-				onChange={handleEventChange}
-				visible={board.key === "notice" && role === "admin"}
 			/>
 
 			<PromotionField
