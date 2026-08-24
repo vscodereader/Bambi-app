@@ -1,13 +1,13 @@
 "use client";
 
 import { DEFAULT_MINIMUM_WAGE } from "@bambi-app/api/services/bambi-policy";
-import { Button } from "@bambi-app/ui/components/button";
 import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@bambi-app/ui/components/card";
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@bambi-app/ui/components/accordion";
+import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import { Separator } from "@bambi-app/ui/components/separator";
@@ -132,11 +132,9 @@ function ExposureSectionCard() {
 	};
 
 	return (
-		<Card>
-			<CardHeader>
-				<CardTitle>노출 섹션 관리</CardTitle>
-			</CardHeader>
-			<CardContent>
+		<AccordionItem value="exposure-section">
+			<AccordionTrigger>노출 섹션 관리</AccordionTrigger>
+			<AccordionContent>
 				<form className="flex flex-col gap-5" onSubmit={onSubmit}>
 					<div className="flex items-start justify-between gap-4">
 						<div className="flex flex-col gap-1">
@@ -192,8 +190,8 @@ function ExposureSectionCard() {
 						</Button>
 					</div>
 				</form>
-			</CardContent>
-		</Card>
+			</AccordionContent>
+		</AccordionItem>
 	);
 }
 
@@ -232,11 +230,9 @@ function SupportChatCard() {
 	};
 
 	return (
-		<Card>
-			<CardHeader>
-				<CardTitle>문의 채팅</CardTitle>
-			</CardHeader>
-			<CardContent>
+		<AccordionItem value="support-chat">
+			<AccordionTrigger>문의 채팅</AccordionTrigger>
+			<AccordionContent>
 				<form className="flex flex-col gap-5" onSubmit={onSubmit}>
 					<div className="flex flex-col gap-2">
 						<Label htmlFor="supportChatNotice">홈 공지 문구</Label>
@@ -261,8 +257,8 @@ function SupportChatCard() {
 						</Button>
 					</div>
 				</form>
-			</CardContent>
-		</Card>
+			</AccordionContent>
+		</AccordionItem>
 	);
 }
 
@@ -578,433 +574,447 @@ export default function ModeratorSiteSettingsPage() {
 				</p>
 			</div>
 
-			<Card>
-				<CardHeader>
-					<CardTitle>푸터 사업자 정보</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<form className="flex flex-col gap-5" onSubmit={onSubmit}>
-						<div className="flex flex-col gap-2">
-							<Label htmlFor="footerIntro">서비스 소개 문구</Label>
-							<Textarea
-								id="footerIntro"
-								onChange={update("footerIntro")}
-								placeholder={BAMBI_COMPANY.footerIntro}
-								value={form.footerIntro}
-							/>
-						</div>
-						<div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+			<Accordion
+				defaultValue={[
+					"footer-info",
+					"privacy-contact",
+					"bank-account",
+					"member-policy",
+					"minimum-wage",
+					"ad-rotation",
+					"exposure-section",
+					"support-chat",
+				]}
+				multiple
+			>
+				<AccordionItem value="footer-info">
+					<AccordionTrigger>푸터 사업자 정보</AccordionTrigger>
+					<AccordionContent>
+						<form className="flex flex-col gap-5" onSubmit={onSubmit}>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="operator">상호(운영 주체)</Label>
-								<Input
-									id="operator"
-									onChange={update("operator")}
-									placeholder={BAMBI_COMPANY.operator}
-									value={form.operator}
+								<Label htmlFor="footerIntro">서비스 소개 문구</Label>
+								<Textarea
+									id="footerIntro"
+									onChange={update("footerIntro")}
+									placeholder={BAMBI_COMPANY.footerIntro}
+									value={form.footerIntro}
 								/>
 							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="ceo">대표자</Label>
-								<Input
-									id="ceo"
-									onChange={update("ceo")}
-									placeholder={BAMBI_COMPANY.ceo}
-									value={form.ceo}
-								/>
+							<div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="operator">상호(운영 주체)</Label>
+									<Input
+										id="operator"
+										onChange={update("operator")}
+										placeholder={BAMBI_COMPANY.operator}
+										value={form.operator}
+									/>
+								</div>
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="ceo">대표자</Label>
+									<Input
+										id="ceo"
+										onChange={update("ceo")}
+										placeholder={BAMBI_COMPANY.ceo}
+										value={form.ceo}
+									/>
+								</div>
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="bizRegNo">사업자등록번호</Label>
+									<Input
+										id="bizRegNo"
+										onChange={update("bizRegNo")}
+										placeholder={BAMBI_COMPANY.bizRegNo}
+										value={form.bizRegNo}
+									/>
+								</div>
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="email">고객문의 이메일</Label>
+									<Input
+										id="email"
+										onChange={update("email")}
+										placeholder={BAMBI_COMPANY.email}
+										type="email"
+										value={form.email}
+									/>
+								</div>
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="tel">고객센터 전화</Label>
+									<Input
+										id="tel"
+										onChange={update("tel")}
+										placeholder={BAMBI_COMPANY.tel}
+										type="tel"
+										value={form.tel}
+									/>
+								</div>
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="adInquiryTel">광고 등록 문의 전화</Label>
+									<Input
+										id="adInquiryTel"
+										onChange={update("adInquiryTel")}
+										placeholder={form.tel || BAMBI_COMPANY.tel}
+										type="tel"
+										value={form.adInquiryTel}
+									/>
+									<p className="m-0 text-muted-foreground text-xs">
+										광고 슬롯의 "광고 등록 문의"에 노출됩니다. 비워두면 고객센터
+										전화가 표시됩니다.
+									</p>
+								</div>
+								<div className="flex flex-col gap-2 md:col-span-2">
+									<Label htmlFor="address">사업장 주소</Label>
+									<Input
+										id="address"
+										onChange={update("address")}
+										placeholder={BAMBI_COMPANY.address}
+										value={form.address}
+									/>
+								</div>
 							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="bizRegNo">사업자등록번호</Label>
-								<Input
-									id="bizRegNo"
-									onChange={update("bizRegNo")}
-									placeholder={BAMBI_COMPANY.bizRegNo}
-									value={form.bizRegNo}
-								/>
+							<div className="flex justify-end">
+								<Button
+									disabled={saveMutation.isPending || settingsQuery.isLoading}
+									type="submit"
+								>
+									{saveMutation.isPending ? "저장 중…" : "저장"}
+								</Button>
 							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="email">고객문의 이메일</Label>
-								<Input
-									id="email"
-									onChange={update("email")}
-									placeholder={BAMBI_COMPANY.email}
-									type="email"
-									value={form.email}
-								/>
-							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="tel">고객센터 전화</Label>
-								<Input
-									id="tel"
-									onChange={update("tel")}
-									placeholder={BAMBI_COMPANY.tel}
-									type="tel"
-									value={form.tel}
-								/>
-							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="adInquiryTel">광고 등록 문의 전화</Label>
-								<Input
-									id="adInquiryTel"
-									onChange={update("adInquiryTel")}
-									placeholder={form.tel || BAMBI_COMPANY.tel}
-									type="tel"
-									value={form.adInquiryTel}
-								/>
-								<p className="m-0 text-muted-foreground text-xs">
-									광고 슬롯의 "광고 등록 문의"에 노출됩니다. 비워두면 고객센터
-									전화가 표시됩니다.
-								</p>
-							</div>
-							<div className="flex flex-col gap-2 md:col-span-2">
-								<Label htmlFor="address">사업장 주소</Label>
-								<Input
-									id="address"
-									onChange={update("address")}
-									placeholder={BAMBI_COMPANY.address}
-									value={form.address}
-								/>
-							</div>
-						</div>
-						<div className="flex justify-end">
-							<Button
-								disabled={saveMutation.isPending || settingsQuery.isLoading}
-								type="submit"
-							>
-								{saveMutation.isPending ? "저장 중…" : "저장"}
-							</Button>
-						</div>
-					</form>
-				</CardContent>
-			</Card>
+						</form>
+					</AccordionContent>
+				</AccordionItem>
 
-			<Card>
-				<CardHeader>
-					<CardTitle>개인정보 처리방침 연락처</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<form className="flex flex-col gap-5" onSubmit={onSubmitPrivacy}>
-						<p className="m-0 text-muted-foreground text-sm">
-							개인정보 처리방침 페이지의 위탁사명과 보호책임자 정보에
-							노출됩니다. 비워두면 기본값이 표시됩니다.
-						</p>
-						<div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="privacyPaymentProcessor">
-									본인인증 대행사(수탁사명)
-								</Label>
-								<Input
-									id="privacyPaymentProcessor"
-									onChange={updatePrivacy("privacyPaymentProcessor")}
-									placeholder={BAMBI_PROCESSORS[0].name}
-									value={privacyForm.privacyPaymentProcessor}
-								/>
-							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="privacyOfficerName">보호책임자 성명</Label>
-								<Input
-									id="privacyOfficerName"
-									onChange={updatePrivacy("privacyOfficerName")}
-									placeholder={BAMBI_COMPANY.privacyOfficer.name}
-									value={privacyForm.privacyOfficerName}
-								/>
-							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="privacyContactPhone">관리부서 전화</Label>
-								<Input
-									id="privacyContactPhone"
-									onChange={updatePrivacy("privacyContactPhone")}
-									placeholder={BAMBI_COMPANY.privacyOfficer.tel}
-									value={privacyForm.privacyContactPhone}
-								/>
-							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="privacyContactEmail">관리부서 메일</Label>
-								<Input
-									id="privacyContactEmail"
-									onChange={updatePrivacy("privacyContactEmail")}
-									placeholder={BAMBI_COMPANY.privacyOfficer.email}
-									type="email"
-									value={privacyForm.privacyContactEmail}
-								/>
-							</div>
-						</div>
-						<div className="flex justify-end">
-							<Button
-								disabled={
-									savePrivacyMutation.isPending || privacyQuery.isLoading
-								}
-								type="submit"
-							>
-								{savePrivacyMutation.isPending ? "저장 중…" : "저장"}
-							</Button>
-						</div>
-					</form>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>무통장입금 계좌</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<form className="flex flex-col gap-5" onSubmit={onSubmitAccounts}>
-						<p className="m-0 text-muted-foreground text-sm">
-							공고 결제 안내에 노출됩니다. 등록된 계좌가 없으면 안내 화면은
-							고객센터 문의 문구로 대체됩니다.
-						</p>
-						{accounts.length === 0 ? (
+				<AccordionItem value="privacy-contact">
+					<AccordionTrigger>개인정보 처리방침 연락처</AccordionTrigger>
+					<AccordionContent>
+						<form className="flex flex-col gap-5" onSubmit={onSubmitPrivacy}>
 							<p className="m-0 text-muted-foreground text-sm">
-								등록된 계좌가 없습니다. 아래에서 계좌를 추가해 주세요.
+								개인정보 처리방침 페이지의 위탁사명과 보호책임자 정보에
+								노출됩니다. 비워두면 기본값이 표시됩니다.
 							</p>
-						) : (
-							<div className="flex flex-col gap-4">
-								{accounts.map((account, index) => (
-									<div
-										className="grid grid-cols-1 gap-3 rounded-lg border p-4 md:grid-cols-[1fr_1fr_1fr_auto]"
-										key={account.id}
-									>
-										<div className="flex flex-col gap-2">
-											<Label htmlFor={`bank-${account.id}`}>은행명</Label>
-											<Input
-												id={`bank-${account.id}`}
-												onChange={updateAccount(account.id, "bank")}
-												placeholder="예: 국민은행"
-												value={account.bank}
-											/>
-										</div>
-										<div className="flex flex-col gap-2">
-											<Label htmlFor={`accountNumber-${account.id}`}>
-												계좌번호
-											</Label>
-											<Input
-												id={`accountNumber-${account.id}`}
-												onChange={updateAccount(account.id, "accountNumber")}
-												placeholder="예: 123456-01-234567"
-												value={account.accountNumber}
-											/>
-										</div>
-										<div className="flex flex-col gap-2">
-											<Label htmlFor={`holder-${account.id}`}>예금주</Label>
-											<Input
-												id={`holder-${account.id}`}
-												onChange={updateAccount(account.id, "holder")}
-												placeholder="예: 밤비알바"
-												value={account.holder}
-											/>
-										</div>
-										<div className="flex items-end">
-											<Button
-												aria-label={`계좌 ${index + 1} 삭제`}
-												onClick={() => removeAccount(account.id)}
-												type="button"
-												variant="outline"
-											>
-												삭제
-											</Button>
-										</div>
-									</div>
-								))}
+							<div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="privacyPaymentProcessor">
+										본인인증 대행사(수탁사명)
+									</Label>
+									<Input
+										id="privacyPaymentProcessor"
+										onChange={updatePrivacy("privacyPaymentProcessor")}
+										placeholder={BAMBI_PROCESSORS[0].name}
+										value={privacyForm.privacyPaymentProcessor}
+									/>
+								</div>
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="privacyOfficerName">보호책임자 성명</Label>
+									<Input
+										id="privacyOfficerName"
+										onChange={updatePrivacy("privacyOfficerName")}
+										placeholder={BAMBI_COMPANY.privacyOfficer.name}
+										value={privacyForm.privacyOfficerName}
+									/>
+								</div>
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="privacyContactPhone">관리부서 전화</Label>
+									<Input
+										id="privacyContactPhone"
+										onChange={updatePrivacy("privacyContactPhone")}
+										placeholder={BAMBI_COMPANY.privacyOfficer.tel}
+										value={privacyForm.privacyContactPhone}
+									/>
+								</div>
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="privacyContactEmail">관리부서 메일</Label>
+									<Input
+										id="privacyContactEmail"
+										onChange={updatePrivacy("privacyContactEmail")}
+										placeholder={BAMBI_COMPANY.privacyOfficer.email}
+										type="email"
+										value={privacyForm.privacyContactEmail}
+									/>
+								</div>
 							</div>
-						)}
-						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-							<Button onClick={addAccount} type="button" variant="outline">
-								계좌 추가
-							</Button>
-							<Button
-								disabled={
-									saveAccountsMutation.isPending || accountsQuery.isLoading
-								}
-								type="submit"
-							>
-								{saveAccountsMutation.isPending ? "저장 중…" : "계좌 저장"}
-							</Button>
-						</div>
-					</form>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>회원 정책</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<form className="flex flex-col gap-5" onSubmit={onSubmitMemberPolicy}>
-						<div className="grid grid-cols-1 gap-5 md:max-w-md md:grid-cols-2">
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="withdrawalRetentionDays">
-									탈퇴 개인정보 보존기간(일)
-								</Label>
-								<Input
-									id="withdrawalRetentionDays"
-									inputMode="numeric"
-									onChange={(event) => setRetentionDays(event.target.value)}
-									placeholder={String(
-										memberPolicyQuery.data?.defaultDays ?? 30
-									)}
-									value={retentionDays}
-								/>
-								<p className="m-0 text-muted-foreground text-xs">
-									연락처·비밀번호 등은 탈퇴 즉시 파기하고, 부정 재가입 차단에
-									필요한 본인인증 식별값(CI·DI 해시)만 이 기간 동안 남겨요.
-									비워두면 기본값을 사용하고, 탈퇴 안내 문구와 개인정보
-									처리방침에도 그대로 표시돼요.
-								</p>
-							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="withdrawalPurgeHour">
-									파기 배치 실행 시각(0~23시)
-								</Label>
-								<Input
-									id="withdrawalPurgeHour"
-									inputMode="numeric"
-									onChange={(event) => setPurgeHour(event.target.value)}
-									placeholder={String(
-										memberPolicyQuery.data?.defaultPurgeHour ?? 4
-									)}
-									value={purgeHour}
-								/>
-								<p className="m-0 text-muted-foreground text-xs">
-									보존기간이 지난 탈퇴 계정을 파기하는 배치가 매일 이 시각(한국
-									시간)에 자동으로 돌아요. 비워두면 기본값(새벽 4시)을 사용해요.
-								</p>
-							</div>
-						</div>
-						<div className="flex justify-end">
-							<Button
-								disabled={
-									saveMemberPolicyMutation.isPending ||
-									memberPolicyQuery.isLoading
-								}
-								type="submit"
-							>
-								{saveMemberPolicyMutation.isPending ? "저장 중…" : "저장"}
-							</Button>
-						</div>
-					</form>
-					<Separator className="my-5" />
-					<div className="flex flex-col gap-3">
-						<p className="m-0 text-muted-foreground text-xs">
-							보존기간이 지난 탈퇴 계정의 잔여 식별값을 파기해요. 매일 위에서
-							설정한 시각(기본 새벽 4시)에 자동으로 실행되며, 이 버튼은 지금
-							바로 실행하고 싶을 때 눌러 주세요.
-						</p>
-						<p className="m-0 text-muted-foreground text-xs">
-							마지막 실행:{" "}
-							{memberPolicyQuery.data?.purgeLastRunAt
-								? formatDateTime(memberPolicyQuery.data.purgeLastRunAt)
-								: "아직 없음"}
-						</p>
-						<div className="flex justify-end">
-							<Button
-								disabled={purgeMutation.isPending}
-								onClick={() => purgeMutation.mutate({})}
-								type="button"
-								variant="outline"
-							>
-								{purgeMutation.isPending ? "파기 중…" : "지금 파기 실행"}
-							</Button>
-						</div>
-					</div>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>최저시급 표기</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<form className="flex flex-col gap-5" onSubmit={onSubmitMinimumWage}>
-						<div className="grid grid-cols-1 gap-5 md:max-w-md md:grid-cols-2">
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="minimumWageYear">기준 연도</Label>
-								<Input
-									id="minimumWageYear"
-									inputMode="numeric"
-									onChange={(event) =>
-										setMinimumWage((prev) => ({
-											...prev,
-											year: event.target.value,
-										}))
+							<div className="flex justify-end">
+								<Button
+									disabled={
+										savePrivacyMutation.isPending || privacyQuery.isLoading
 									}
-									placeholder={String(DEFAULT_MINIMUM_WAGE.year)}
-									value={minimumWage.year}
-								/>
+									type="submit"
+								>
+									{savePrivacyMutation.isPending ? "저장 중…" : "저장"}
+								</Button>
 							</div>
-							<div className="flex flex-col gap-2">
-								<Label htmlFor="minimumWageHourly">시급(원)</Label>
-								<Input
-									id="minimumWageHourly"
-									inputMode="numeric"
-									onChange={(event) =>
-										setMinimumWage((prev) => ({
-											...prev,
-											hourly: event.target.value,
-										}))
-									}
-									placeholder={String(DEFAULT_MINIMUM_WAGE.hourly)}
-									value={minimumWage.hourly}
-								/>
-							</div>
-						</div>
-						<p className="m-0 text-muted-foreground text-xs">
-							공고 상세의 급여 옆에 "{DEFAULT_MINIMUM_WAGE.year}년 최저시급{" "}
-							{DEFAULT_MINIMUM_WAGE.hourly.toLocaleString("ko-KR")}원" 형태로
-							노출됩니다. 비워두면 기본값을 사용해요. 다음 해 최저시급이
-							고시되면 연도와 시급을 함께 바꿔 주세요.
-						</p>
-						<div className="flex justify-end">
-							<Button
-								disabled={
-									saveMinimumWageMutation.isPending || settingsQuery.isLoading
-								}
-								type="submit"
-							>
-								{saveMinimumWageMutation.isPending ? "저장 중…" : "저장"}
-							</Button>
-						</div>
-					</form>
-				</CardContent>
-			</Card>
+						</form>
+					</AccordionContent>
+				</AccordionItem>
 
-			<Card>
-				<CardHeader>
-					<CardTitle>광고 배너 로테이션</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<form className="flex flex-col gap-5" onSubmit={onSubmitAdRotation}>
-						<div className="flex flex-col gap-2 md:max-w-xs">
-							<Label htmlFor="adBannerRotationMinutes">로테이션 주기(분)</Label>
-							<Input
-								id="adBannerRotationMinutes"
-								inputMode="numeric"
-								onChange={(event) => setRotationMinutes(event.target.value)}
-								placeholder={String(adRotationQuery.data?.defaultMinutes ?? 60)}
-								value={rotationMinutes}
-							/>
+				<AccordionItem value="bank-account">
+					<AccordionTrigger>무통장입금 계좌</AccordionTrigger>
+					<AccordionContent>
+						<form className="flex flex-col gap-5" onSubmit={onSubmitAccounts}>
+							<p className="m-0 text-muted-foreground text-sm">
+								공고 결제 안내에 노출됩니다. 등록된 계좌가 없으면 안내 화면은
+								고객센터 문의 문구로 대체됩니다.
+							</p>
+							{accounts.length === 0 ? (
+								<p className="m-0 text-muted-foreground text-sm">
+									등록된 계좌가 없습니다. 아래에서 계좌를 추가해 주세요.
+								</p>
+							) : (
+								<div className="flex flex-col gap-4">
+									{accounts.map((account, index) => (
+										<div
+											className="grid grid-cols-1 gap-3 rounded-lg border p-4 md:grid-cols-[1fr_1fr_1fr_auto]"
+											key={account.id}
+										>
+											<div className="flex flex-col gap-2">
+												<Label htmlFor={`bank-${account.id}`}>은행명</Label>
+												<Input
+													id={`bank-${account.id}`}
+													onChange={updateAccount(account.id, "bank")}
+													placeholder="예: 국민은행"
+													value={account.bank}
+												/>
+											</div>
+											<div className="flex flex-col gap-2">
+												<Label htmlFor={`accountNumber-${account.id}`}>
+													계좌번호
+												</Label>
+												<Input
+													id={`accountNumber-${account.id}`}
+													onChange={updateAccount(account.id, "accountNumber")}
+													placeholder="예: 123456-01-234567"
+													value={account.accountNumber}
+												/>
+											</div>
+											<div className="flex flex-col gap-2">
+												<Label htmlFor={`holder-${account.id}`}>예금주</Label>
+												<Input
+													id={`holder-${account.id}`}
+													onChange={updateAccount(account.id, "holder")}
+													placeholder="예: 밤비알바"
+													value={account.holder}
+												/>
+											</div>
+											<div className="flex items-end">
+												<Button
+													aria-label={`계좌 ${index + 1} 삭제`}
+													onClick={() => removeAccount(account.id)}
+													type="button"
+													variant="outline"
+												>
+													삭제
+												</Button>
+											</div>
+										</div>
+									))}
+								</div>
+							)}
+							<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+								<Button onClick={addAccount} type="button" variant="outline">
+									계좌 추가
+								</Button>
+								<Button
+									disabled={
+										saveAccountsMutation.isPending || accountsQuery.isLoading
+									}
+									type="submit"
+								>
+									{saveAccountsMutation.isPending ? "저장 중…" : "계좌 저장"}
+								</Button>
+							</div>
+						</form>
+					</AccordionContent>
+				</AccordionItem>
+
+				<AccordionItem value="member-policy">
+					<AccordionTrigger>회원 정책</AccordionTrigger>
+					<AccordionContent>
+						<form
+							className="flex flex-col gap-5"
+							onSubmit={onSubmitMemberPolicy}
+						>
+							<div className="grid grid-cols-1 gap-5 md:max-w-md md:grid-cols-2">
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="withdrawalRetentionDays">
+										탈퇴 개인정보 보존기간(일)
+									</Label>
+									<Input
+										id="withdrawalRetentionDays"
+										inputMode="numeric"
+										onChange={(event) => setRetentionDays(event.target.value)}
+										placeholder={String(
+											memberPolicyQuery.data?.defaultDays ?? 30
+										)}
+										value={retentionDays}
+									/>
+									<p className="m-0 text-muted-foreground text-xs">
+										연락처·비밀번호 등은 탈퇴 즉시 파기하고, 부정 재가입 차단에
+										필요한 본인인증 식별값(CI·DI 해시)만 이 기간 동안 남겨요.
+										비워두면 기본값을 사용하고, 탈퇴 안내 문구와 개인정보
+										처리방침에도 그대로 표시돼요.
+									</p>
+								</div>
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="withdrawalPurgeHour">
+										파기 배치 실행 시각(0~23시)
+									</Label>
+									<Input
+										id="withdrawalPurgeHour"
+										inputMode="numeric"
+										onChange={(event) => setPurgeHour(event.target.value)}
+										placeholder={String(
+											memberPolicyQuery.data?.defaultPurgeHour ?? 4
+										)}
+										value={purgeHour}
+									/>
+									<p className="m-0 text-muted-foreground text-xs">
+										보존기간이 지난 탈퇴 계정을 파기하는 배치가 매일 이
+										시각(한국 시간)에 자동으로 돌아요. 비워두면 기본값(새벽
+										4시)을 사용해요.
+									</p>
+								</div>
+							</div>
+							<div className="flex justify-end">
+								<Button
+									disabled={
+										saveMemberPolicyMutation.isPending ||
+										memberPolicyQuery.isLoading
+									}
+									type="submit"
+								>
+									{saveMemberPolicyMutation.isPending ? "저장 중…" : "저장"}
+								</Button>
+							</div>
+						</form>
+						<Separator className="my-5" />
+						<div className="flex flex-col gap-3">
 							<p className="m-0 text-muted-foreground text-xs">
-								프리미엄 광고 배너는 한 광고가 한 칸씩 차지해 최대 8칸까지 동시
-								노출되며, 이 주기마다 각 광고가 좌→상단→우 순서로 한 칸씩
-								전진(밀어내기)합니다. 비워두면 기본값(60분)을 사용합니다. 주기를
-								바꾸면 이동 위치가 한 번 점프할 수 있어요.
+								보존기간이 지난 탈퇴 계정의 잔여 식별값을 파기해요. 매일 위에서
+								설정한 시각(기본 새벽 4시)에 자동으로 실행되며, 이 버튼은 지금
+								바로 실행하고 싶을 때 눌러 주세요.
 							</p>
+							<p className="m-0 text-muted-foreground text-xs">
+								마지막 실행:{" "}
+								{memberPolicyQuery.data?.purgeLastRunAt
+									? formatDateTime(memberPolicyQuery.data.purgeLastRunAt)
+									: "아직 없음"}
+							</p>
+							<div className="flex justify-end">
+								<Button
+									disabled={purgeMutation.isPending}
+									onClick={() => purgeMutation.mutate({})}
+									type="button"
+									variant="outline"
+								>
+									{purgeMutation.isPending ? "파기 중…" : "지금 파기 실행"}
+								</Button>
+							</div>
 						</div>
-						<div className="flex justify-end">
-							<Button
-								disabled={
-									saveAdRotationMutation.isPending || adRotationQuery.isLoading
-								}
-								type="submit"
-							>
-								{saveAdRotationMutation.isPending ? "저장 중…" : "저장"}
-							</Button>
-						</div>
-					</form>
-				</CardContent>
-			</Card>
+					</AccordionContent>
+				</AccordionItem>
 
-			<ExposureSectionCard />
+				<AccordionItem value="minimum-wage">
+					<AccordionTrigger>최저시급 표기</AccordionTrigger>
+					<AccordionContent>
+						<form
+							className="flex flex-col gap-5"
+							onSubmit={onSubmitMinimumWage}
+						>
+							<div className="grid grid-cols-1 gap-5 md:max-w-md md:grid-cols-2">
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="minimumWageYear">기준 연도</Label>
+									<Input
+										id="minimumWageYear"
+										inputMode="numeric"
+										onChange={(event) =>
+											setMinimumWage((prev) => ({
+												...prev,
+												year: event.target.value,
+											}))
+										}
+										placeholder={String(DEFAULT_MINIMUM_WAGE.year)}
+										value={minimumWage.year}
+									/>
+								</div>
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="minimumWageHourly">시급(원)</Label>
+									<Input
+										id="minimumWageHourly"
+										inputMode="numeric"
+										onChange={(event) =>
+											setMinimumWage((prev) => ({
+												...prev,
+												hourly: event.target.value,
+											}))
+										}
+										placeholder={String(DEFAULT_MINIMUM_WAGE.hourly)}
+										value={minimumWage.hourly}
+									/>
+								</div>
+							</div>
+							<p className="m-0 text-muted-foreground text-xs">
+								공고 상세의 급여 옆에 "{DEFAULT_MINIMUM_WAGE.year}년 최저시급{" "}
+								{DEFAULT_MINIMUM_WAGE.hourly.toLocaleString("ko-KR")}원" 형태로
+								노출됩니다. 비워두면 기본값을 사용해요. 다음 해 최저시급이
+								고시되면 연도와 시급을 함께 바꿔 주세요.
+							</p>
+							<div className="flex justify-end">
+								<Button
+									disabled={
+										saveMinimumWageMutation.isPending || settingsQuery.isLoading
+									}
+									type="submit"
+								>
+									{saveMinimumWageMutation.isPending ? "저장 중…" : "저장"}
+								</Button>
+							</div>
+						</form>
+					</AccordionContent>
+				</AccordionItem>
 
-			<SupportChatCard />
+				<AccordionItem value="ad-rotation">
+					<AccordionTrigger>광고 배너 로테이션</AccordionTrigger>
+					<AccordionContent>
+						<form className="flex flex-col gap-5" onSubmit={onSubmitAdRotation}>
+							<div className="flex flex-col gap-2 md:max-w-xs">
+								<Label htmlFor="adBannerRotationMinutes">
+									로테이션 주기(분)
+								</Label>
+								<Input
+									id="adBannerRotationMinutes"
+									inputMode="numeric"
+									onChange={(event) => setRotationMinutes(event.target.value)}
+									placeholder={String(
+										adRotationQuery.data?.defaultMinutes ?? 60
+									)}
+									value={rotationMinutes}
+								/>
+								<p className="m-0 text-muted-foreground text-xs">
+									프리미엄 광고 배너는 한 광고가 한 칸씩 차지해 최대 8칸까지
+									동시 노출되며, 이 주기마다 각 광고가 좌→상단→우 순서로 한 칸씩
+									전진(밀어내기)합니다. 비워두면 기본값(60분)을 사용합니다.
+									주기를 바꾸면 이동 위치가 한 번 점프할 수 있어요.
+								</p>
+							</div>
+							<div className="flex justify-end">
+								<Button
+									disabled={
+										saveAdRotationMutation.isPending ||
+										adRotationQuery.isLoading
+									}
+									type="submit"
+								>
+									{saveAdRotationMutation.isPending ? "저장 중…" : "저장"}
+								</Button>
+							</div>
+						</form>
+					</AccordionContent>
+				</AccordionItem>
+
+				<ExposureSectionCard />
+
+				<SupportChatCard />
+			</Accordion>
 		</div>
 	);
 }
