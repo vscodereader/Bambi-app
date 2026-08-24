@@ -24,6 +24,12 @@ import {
 	DialogDescription,
 	DialogTitle,
 } from "@bambi-app/ui/components/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@bambi-app/ui/components/dropdown-menu";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
 import {
@@ -36,6 +42,7 @@ import {
 import { Skeleton } from "@bambi-app/ui/components/skeleton";
 import { Switch } from "@bambi-app/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MoreHorizontal } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type DataColumn, DataTable } from "@/components/bambi/data-table";
@@ -211,27 +218,33 @@ function getBoardColumns({
 			headerClassName: "text-right",
 			cellClassName: "text-right",
 			cell: (row) => (
-				<div className="flex justify-end gap-2">
-					<Button
-						onClick={() => onEdit(row)}
-						size="sm"
-						type="button"
-						variant="outline"
-					>
-						수정
-					</Button>
-					{/* 빌트인 5종은 서버가 거절하므로 버튼 자체를 감춘다. 글이 붙은 게시판은
-					    눌러 봐야 서버가 막지만, 글 수를 여기서 세지 않으므로 버튼은 남긴다. */}
-					{isBuiltinBoardKey(row.key) ? null : (
-						<Button
-							onClick={() => onDelete(row)}
-							size="sm"
-							type="button"
-							variant="destructive"
-						>
-							삭제
-						</Button>
-					)}
+				<div className="flex justify-end">
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							render={
+								<Button size="icon" type="button" variant="ghost">
+									<MoreHorizontal />
+									<span className="sr-only">메뉴 열기</span>
+								</Button>
+							}
+						/>
+						<DropdownMenuContent align="end">
+							<DropdownMenuItem onClick={() => onEdit(row)}>
+								수정
+							</DropdownMenuItem>
+							{/* 빌트인 5종은 서버가 거절하므로 삭제 항목 자체를 감춘다. 글이 붙은
+							    게시판은 눌러 봐야 서버가 막지만, 글 수를 여기서 세지 않으므로 항목은
+							    남긴다. */}
+							{isBuiltinBoardKey(row.key) ? null : (
+								<DropdownMenuItem
+									onClick={() => onDelete(row)}
+									variant="destructive"
+								>
+									삭제
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
 				</div>
 			),
 		},
@@ -254,10 +267,13 @@ function BoardEditForm({
 		description: string;
 		icon: CommunityBoardIconName | null;
 		label: string;
-		postPoints: number;
+		postPoints?: number;
 		sortOrder: number;
 	}) => void;
 }) {
+	// 공지는 운영자만 글을 쓰므로 글 작성 적립이 무의미하다 — 입력을 숨기고 저장 시 보내지
+	// 않는다(서버도 notice postPoints를 0으로 고정한다).
+	const isNotice = board.key === NOTICE_BOARD_KEY;
 	const [label, setLabel] = useState(board.label);
 	const [description, setDescription] = useState(board.description);
 	const [sortOrder, setSortOrder] = useState(String(board.sortOrder));
@@ -277,9 +293,10 @@ function BoardEditForm({
 		Number.isInteger(parsedSortOrder) &&
 		parsedSortOrder >= 0 &&
 		parsedSortOrder <= SORT_ORDER_MAX &&
-		Number.isInteger(parsedPostPoints) &&
-		parsedPostPoints >= 0 &&
-		parsedPostPoints <= POINTS_MAX &&
+		(isNotice ||
+			(Number.isInteger(parsedPostPoints) &&
+				parsedPostPoints >= 0 &&
+				parsedPostPoints <= POINTS_MAX)) &&
 		Number.isInteger(parsedCommentPoints) &&
 		parsedCommentPoints >= 0 &&
 		parsedCommentPoints <= POINTS_MAX &&
@@ -340,18 +357,22 @@ function BoardEditForm({
 					숫자가 작을수록 앞에 놓입니다(수다방 홈·게시판 목록 공통).
 				</p>
 			</div>
-			<div className="flex flex-col gap-2">
-				<Label htmlFor="community-board-edit-post-points">글 작성 포인트</Label>
-				<Input
-					id="community-board-edit-post-points"
-					inputMode="numeric"
-					max={POINTS_MAX}
-					min={0}
-					onChange={(event) => setPostPoints(event.target.value)}
-					type="number"
-					value={postPoints}
-				/>
-			</div>
+			{isNotice ? null : (
+				<div className="flex flex-col gap-2">
+					<Label htmlFor="community-board-edit-post-points">
+						글 작성 포인트
+					</Label>
+					<Input
+						id="community-board-edit-post-points"
+						inputMode="numeric"
+						max={POINTS_MAX}
+						min={0}
+						onChange={(event) => setPostPoints(event.target.value)}
+						type="number"
+						value={postPoints}
+					/>
+				</div>
+			)}
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="community-board-edit-comment-points">
 					댓글 작성 포인트
@@ -379,7 +400,8 @@ function BoardEditForm({
 							// 수정은 "없음"을 null로 보내 저장된 아이콘을 지운다.
 							icon: toIconInput(icon) ?? null,
 							label: label.trim(),
-							postPoints: parsedPostPoints,
+							// 공지는 글 작성 포인트를 보내지 않는다 — 서버가 0으로 고정한다.
+							postPoints: isNotice ? undefined : parsedPostPoints,
 							sortOrder: parsedSortOrder,
 						})
 					}
