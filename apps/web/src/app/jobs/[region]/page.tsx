@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { PublicJobLanding } from "@/components/bambi/public-job-landing";
+import {
+	loadLandingJobs,
+	PublicJobLanding,
+} from "@/components/bambi/public-job-landing";
 import {
 	findJobLandingRegion,
 	jobLandingDescription,
@@ -29,6 +32,11 @@ export async function generateMetadata({
 		return {};
 	}
 
+	// 같은 요청에서 페이지 렌더도 loadLandingJobs를 부르지만 React cache로 조회를 공유해
+	// 중복 조회가 없다. 지역×업종 조합은 다수가 빈 상태로 색인되면 thin/도어웨이 리스크라,
+	// 진짜 0건([])일 때만 noindex(follow)를 붙인다 — 조회 실패(null)면 robots를 생략해 색인 유지.
+	const jobs = await loadLandingJobs({ region });
+
 	return {
 		title: jobLandingTitle({ region }),
 		description: jobLandingDescription({ region }),
@@ -39,6 +47,7 @@ export async function generateMetadata({
 			description: jobLandingDescription({ region }),
 			url: jobLandingPath({ region }),
 		}),
+		...(jobs?.length === 0 ? { robots: { index: false, follow: true } } : {}),
 	};
 }
 

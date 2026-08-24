@@ -62,7 +62,10 @@ export async function proxy(request: NextRequest) {
 	});
 
 	if (decision.type === "redirect") {
-		return NextResponse.redirect(new URL(decision.to, request.url));
+		return NextResponse.redirect(
+			new URL(decision.to, request.url),
+			decision.permanent ? 308 : 307
+		);
 	}
 
 	return NextResponse.next();
