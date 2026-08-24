@@ -35,6 +35,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@bambi-app/ui/components/select";
+import { Separator } from "@bambi-app/ui/components/separator";
 import {
 	Sheet,
 	SheetClose,
@@ -2966,120 +2967,134 @@ export function UserDetail({
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			<AppBar onBack={onBack} title="사용자 상세" />
-			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-2 pb-5">
-				<div className="flex flex-col items-center gap-2.5 py-1 text-center">
-					<Avatar name={item.name} size="xl" square={item.role === "구인자"} />
-					<div>
-						<div className="font-extrabold text-[21px] text-foreground">
-							{item.name}
-						</div>
-						<div className="mt-[3px] text-[13px] text-muted-foreground">
-							{item.role} · 가입 {item.joined}
-						</div>
-					</div>
-					<div className="flex items-center gap-2">
-						<Badge dot tone={c.tone}>
-							{c.label}
-						</Badge>
-						{item.deletedAt ? <Badge tone="neutral">탈퇴</Badge> : null}
-					</div>
-				</div>
-				<div className="flex flex-col gap-2">
-					<div className="grid grid-cols-2 gap-2.5">
-						<MetaBox label="누적 신고" value={`${item.reports}건`} />
-						<MetaBox label="경고 횟수" value={`${item.warnings}회`} />
-						<MetaBox label="차단당한 횟수" value={`${item.blockedByCount}회`} />
-					</div>
-					<Link
-						className="self-start text-[12.5px] text-primary underline-offset-4 hover:underline"
-						href={`/moderator/reports?user=${item.id}` as Route}
-					>
-						신고 내역 보기
-					</Link>
-				</div>
-				<ContextSection title="계정 정보">
-					<ContextField label="이메일" value={item.email} />
-					<ContextField
-						label="로그인 아이디"
-						value={item.loginId ?? "미설정"}
-					/>
-					{item.organizationNames.length > 0 ? (
-						<ContextField
-							label="소속 업소"
-							value={item.organizationNames.join(", ")}
+			<div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-6 pt-2 pb-5 md:grid md:grid-cols-[340px_minmax(0,1fr)] md:items-start md:gap-5">
+				{/* 왼쪽 컬럼 — 프로필 카드 (데스크톱에서만 카드 스타일, 모바일은 배경 없이 지금과 동일) */}
+				<div className="flex flex-col gap-[18px] md:rounded-[20px] md:border md:border-border md:bg-card md:p-5">
+					<div className="flex flex-col items-center gap-2.5 py-1 text-center">
+						<Avatar
+							name={item.name}
+							size="xl"
+							square={item.role === "구인자"}
 						/>
-					) : null}
-					{item.deletedAt ? (
-						<ContextField
-							label="탈퇴 시각"
-							value={formatDateTime(item.deletedAt)}
-						/>
-					) : null}
-				</ContextSection>
-				<div className="flex gap-2 rounded-[14px] bg-secondary p-[14px]">
-					<span className="mt-px inline-flex size-4 flex-[0_0_16px] text-muted-foreground">
-						<AlertCircle />
-					</span>
-					<span className="text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
-						{item.note}
-					</span>
-				</div>
-				{item.deletedAt ? (
-					<UserWithdrawalPanel item={item} onRestore={onRestore} />
-				) : null}
-				{item.status === "active" ? null : (
-					<div>
-						<div className="mb-2.5 font-bold text-[13px] text-foreground">
-							계정 상태 복구
+						<div>
+							<div className="font-extrabold text-[21px] text-foreground">
+								{item.name}
+							</div>
+							<div className="mt-[3px] text-[13px] text-muted-foreground">
+								{item.role} · 가입 {item.joined}
+							</div>
 						</div>
-						<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
-							현재 {c.label} 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
-							상태로 되돌릴 수 있어요.
-						</p>
-						<Button
-							block
-							leftIcon={<CheckIcon />}
-							onClick={() =>
-								onSanction(item.id, "active", "계정을 정상으로 복구했어요")
-							}
-							size="lg"
-							variant="primary"
-						>
-							정상으로 복구
-						</Button>
-					</div>
-				)}
-				{item.warnings > 0 ? (
-					<div>
-						<div className="mb-2.5 font-bold text-[13px] text-foreground">
-							경고 되돌리기
+						<div className="flex items-center gap-2">
+							<Badge dot tone={c.tone}>
+								{c.label}
+							</Badge>
+							{item.deletedAt ? <Badge tone="neutral">탈퇴</Badge> : null}
 						</div>
-						<Button
-							block
-							onClick={() => setRevertingWarning(true)}
-							size="lg"
-							variant="secondary"
-						>
-							최근 경고 1회 되돌리기
-						</Button>
 					</div>
-				) : null}
-				<UserModerationHistory key={item.id} userId={item.id} />
-				<UserContentHistory userId={item.id} />
-				<div>
-					<div className="mb-2.5 font-bold text-[13px] text-foreground">
-						제재 적용
-					</div>
-					<div className="flex flex-col gap-2.5">
-						{SANCTION_CHOICES.map((choice) => (
-							<SanctionBtn
-								desc={choice.desc}
-								key={choice.status}
-								label={choice.title}
-								onClick={() => setPending(choice)}
-								tone={choice.tone}
+					<div className="flex flex-col gap-2">
+						<div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+							<MetaBox label="누적 신고" value={`${item.reports}건`} />
+							<MetaBox label="경고 횟수" value={`${item.warnings}회`} />
+							<MetaBox
+								label="차단당한 횟수"
+								value={`${item.blockedByCount}회`}
 							/>
-						))}
+						</div>
+						<Link
+							className="self-start text-[12.5px] text-primary underline-offset-4 hover:underline"
+							href={`/moderator/reports?user=${item.id}` as Route}
+						>
+							신고 내역 보기
+						</Link>
+					</div>
+					<Separator className="hidden md:block" />
+					<ContextSection title="계정 정보">
+						<ContextField label="이메일" value={item.email} />
+						<ContextField
+							label="로그인 아이디"
+							value={item.loginId ?? "미설정"}
+						/>
+						{item.organizationNames.length > 0 ? (
+							<ContextField
+								label="소속 업소"
+								value={item.organizationNames.join(", ")}
+							/>
+						) : null}
+						{item.deletedAt ? (
+							<ContextField
+								label="탈퇴 시각"
+								value={formatDateTime(item.deletedAt)}
+							/>
+						) : null}
+					</ContextSection>
+				</div>
+				{/* 오른쪽 컬럼 — 메모·조치 패널·이력·제재 세로 스택 */}
+				<div className="flex flex-col gap-[18px]">
+					<div className="flex gap-2 rounded-[14px] bg-secondary p-[14px]">
+						<span className="mt-px inline-flex size-4 flex-[0_0_16px] text-muted-foreground">
+							<AlertCircle />
+						</span>
+						<span className="text-[12.5px] text-[color:var(--text-default)] leading-[1.5]">
+							{item.note}
+						</span>
+					</div>
+					{item.deletedAt ? (
+						<UserWithdrawalPanel item={item} onRestore={onRestore} />
+					) : null}
+					{item.status === "active" ? null : (
+						<div>
+							<div className="mb-2.5 font-bold text-[13px] text-foreground">
+								계정 상태 복구
+							</div>
+							<p className="mt-0 mb-2.5 text-[12.5px] text-muted-foreground leading-[1.5]">
+								현재 {c.label} 상태예요. 제재 사유가 해소됐다면 계정을 정상 이용
+								상태로 되돌릴 수 있어요.
+							</p>
+							<Button
+								block
+								leftIcon={<CheckIcon />}
+								onClick={() =>
+									onSanction(item.id, "active", "계정을 정상으로 복구했어요")
+								}
+								size="lg"
+								variant="primary"
+							>
+								정상으로 복구
+							</Button>
+						</div>
+					)}
+					{item.warnings > 0 ? (
+						<div>
+							<div className="mb-2.5 font-bold text-[13px] text-foreground">
+								경고 되돌리기
+							</div>
+							<Button
+								block
+								onClick={() => setRevertingWarning(true)}
+								size="lg"
+								variant="secondary"
+							>
+								최근 경고 1회 되돌리기
+							</Button>
+						</div>
+					) : null}
+					<UserModerationHistory key={item.id} userId={item.id} />
+					<UserContentHistory userId={item.id} />
+					<div>
+						<div className="mb-2.5 font-bold text-[13px] text-foreground">
+							제재 적용
+						</div>
+						<div className="flex flex-col gap-2.5 md:grid md:grid-cols-3 md:gap-2.5">
+							{SANCTION_CHOICES.map((choice) => (
+								<SanctionBtn
+									desc={choice.desc}
+									key={choice.status}
+									label={choice.title}
+									onClick={() => setPending(choice)}
+									tone={choice.tone}
+								/>
+							))}
+						</div>
 					</div>
 				</div>
 			</div>
