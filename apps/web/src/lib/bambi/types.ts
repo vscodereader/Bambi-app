@@ -227,6 +227,8 @@ export interface Report {
 export type UserStatus = "active" | "warned" | "suspended";
 
 export interface ManagedUser {
+	// 본인인증에서 받은 생년월일(YYYYMMDD 텍스트). 미등록이면 null.
+	birthDate: string | null;
 	// 다른 사용자에게 차단당한 횟수(신고와 별개의 위험 신호).
 	blockedByCount: number;
 	// 소프트 탈퇴 시각. null이 아니면 탈퇴한 계정이다.
@@ -249,6 +251,8 @@ export interface ManagedUser {
 	note: string;
 	// 소속 업소 표시명(구인자만 채워진다).
 	organizationNames: string[];
+	// 본인인증한 휴대폰 번호. 미인증이면 null.
+	phoneNumber: string | null;
 	// 포인트 잔액(원장 순합계). moderation.listUsers가 내려준다.
 	pointBalance: number;
 	// 개인정보 파기 완료 시각. 값이 있으면 탈퇴 복구가 불가능하다(로그인 수단이 이미 파기됨).

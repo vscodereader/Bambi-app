@@ -562,6 +562,8 @@ export function ModProvider({ children }: { children: ReactNode }) {
 			joinedAt: new Date(item.createdAt),
 			loginId: item.loginId,
 			name: item.name,
+			phoneNumber: item.phoneNumber ?? null,
+			birthDate: item.birthDate ?? null,
 			note: item.isPhoneVerified
 				? "휴대폰 인증 완료"
 				: "휴대폰 인증이 필요합니다.",

@@ -2220,6 +2220,7 @@ export const moderationRouter = {
 					>`coalesce(${bambiProfile.status}, 'active')`,
 					isPhoneVerified: sql<boolean>`coalesce(${bambiProfile.isPhoneVerified}, false)`,
 					phoneNumber: bambiProfile.phoneNumber,
+					birthDate: bambiProfile.birthDate,
 					reportsCount: reportsCountSql,
 					warningsCount: warningsCountSql,
 					organizationNames: organizationNamesSql,
