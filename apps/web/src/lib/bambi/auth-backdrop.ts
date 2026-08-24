@@ -1,10 +1,19 @@
-// 비로그인(anon) 화면의 블러 배경에 실을 데이터. 블러는 CSS라 devtools로 걷어낼 수
-// 있으므로 연출일 뿐이고, 실제 가드는 여기서 문자열을 마스킹해 클라이언트로 아예
-// 읽을 수 있는 값을 보내지 않는 것이다. 필드는 화이트리스트로 뽑는다 — Job에 새
-// 필드가 생겨도 배경으로 새지 않는다.
+// 비로그인(anon) 화면의 블러 배경에 실을 데이터. 필드는 화이트리스트로 뽑는다 —
+// Job에 새 필드가 생겨도 배경으로 새지 않는다.
 //
-// 마스크는 진짜 한국어처럼 보이는 더미다(예전엔 ■ 격자였다). 블러가 걸린 상태에서는
-// 실제 목록과 구분되지 않고, 블러를 걷어내도 가짜 업소명만 남는다.
+// 마스킹은 업소명(company)만 한다. 업소명은 로그인 후 열람이 제품 원칙이라 배경에서도
+// 가려야 하지만, location·pay는 공개 랜딩(/jobs)에 이미 실값으로 노출돼 있어 배경에서만
+// 숨기는 건 보안 이득이 없다. 그래서 나머지 필드는 원값을 그대로 싣는다.
+//
+// 마스킹을 company로 좁혀 얻는 실익은 둘: (a) 전 필드를 가짜 한국어로 마스킹하면 그 더미
+// 텍스트가 색인돼 무의미 텍스트/클로킹 오인 리스크만 커지는데 그걸 없앤다. (b) 데스크톱·
+// 소스 파싱 크롤러에 한해 실콘텐츠가 노출된다. 단, 이 배경 래퍼는 aria-hidden+inert에
+// hidden md:block(모바일 우선 크롤러엔 display:none)이라 안정적으로 색인되는 실질 본문은
+// 아니다 — 확실히 크롤되는 콘텐츠는 게이트 화면의 가시 소개 문단과 /jobs 링크다
+// (seeker-auth-gate-screen.tsx).
+//
+// company 마스크는 진짜 한국어처럼 보이는 더미다(예전엔 ■ 격자였다). 블러가 걸린
+// 상태에서는 실제 목록과 구분되지 않고, 블러를 걷어내도 가짜 업소명만 남는다.
 
 import type { Job } from "./types";
 
@@ -13,8 +22,6 @@ export interface BackdropJob {
 	company: string;
 	location: string;
 	pay: string;
-	tags: string[];
-	title: string;
 }
 
 // 실제 업소명으로 오인될 조합이 나오지 않게 기본 자모 음절을 쓰되, 받침 있는 음절을
@@ -51,16 +58,12 @@ const maskText = (value: string, seed: number): string =>
 		.map((char, index) => maskChar(char, index + seed))
 		.join("");
 
-const maskJobForBackdrop = (job: Job, jobIndex: number): BackdropJob => {
-	const seed = jobIndex * 11;
-	return {
-		company: maskText(job.company, seed + 1),
-		location: maskText(job.location, seed + 2),
-		pay: maskText(job.pay, seed + 3),
-		tags: job.tags.map((tag, tagIndex) => maskText(tag, seed + 4 + tagIndex)),
-		title: maskText(job.title, seed + 8),
-	};
-};
+const maskJobForBackdrop = (job: Job, jobIndex: number): BackdropJob => ({
+	// 업소명만 마스킹. seed로 카드마다 다른 더미 음절이 나오게 한다.
+	company: maskText(job.company, jobIndex * 11 + 1),
+	location: job.location,
+	pay: job.pay,
+});
 
 export const maskJobsForBackdrop = (jobs: Job[]): BackdropJob[] =>
 	jobs.map(maskJobForBackdrop);
