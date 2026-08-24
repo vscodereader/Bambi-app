@@ -57,12 +57,17 @@ export default function RootLayout({
 				    루트 레이아웃은 서버 컴포넌트라 이 값이 런타임에 읽힌다. */}
 				{process.env.VERCEL_ENV === "production" && (
 					<>
-						<Script src="https://www.googletagmanager.com/gtag/js?id=G-HNVZKKB0NX" />
+						{/* lazyOnload로 미뤄 모바일 TBT를 줄인다 — 대신 페이지뷰 계측이
+						    hydration 이후로 밀리는 트레이드오프가 있다. */}
+						<Script
+							src="https://www.googletagmanager.com/gtag/js?id=G-HNVZKKB0NX"
+							strategy="lazyOnload"
+						/>
 						{/* 광고 신호를 끈다 — 크로스사이트 행태정보 수집·광고 개인화를 차단해
 						    GA를 자사 방문 통계(처리위탁)로만 쓴다. 이래야 개인정보 보호법
 						    제28조의8 제1항 제3호(위탁·보관 + 처리방침 공개)로 국외 이전을
 						    동의 없이 커버할 수 있다. 광고 목적으로 전환하면 별도 동의가 필요하다. */}
-						<Script id="gtag-init">
+						<Script id="gtag-init" strategy="lazyOnload">
 							{`window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());

@@ -19,21 +19,39 @@ describe("resolveGate", () => {
 	it("lets anonymous visitors reach the seeker list root", () => {
 		expect(resolveGate({ pathname: "/seeker", ...fresh }).type).toBe("next");
 	});
-	it("sends anonymous visitors elsewhere to the login overlay", () => {
+	it("sends anonymous visitors from gated seeker paths to the login overlay", () => {
 		expect(resolveGate({ pathname: "/seeker/jobs/abc", ...fresh })).toEqual({
 			type: "redirect",
 			to: "/seeker?auth=login",
 		});
+	});
+	it("permanently redirects anon and guest at root to canonical /seeker", () => {
 		expect(resolveGate({ pathname: "/", ...fresh })).toEqual({
 			type: "redirect",
-			to: "/seeker?auth=login",
+			to: "/seeker",
+			permanent: true,
+		});
+		expect(resolveGate({ pathname: "/", ...guest })).toEqual({
+			type: "redirect",
+			to: "/seeker",
+			permanent: true,
 		});
 	});
-	it("no longer treats /welcome or /login as public", () => {
-		expect(resolveGate({ pathname: "/welcome", ...fresh }).type).toBe(
-			"redirect"
-		);
-		expect(resolveGate({ pathname: "/login", ...fresh }).type).toBe("redirect");
+	it("lets arbitrary nonexistent paths fall through to a real 404", () => {
+		// 게이트되지 않은 경로는 next로 흘려 Next의 not-found가 진짜 404를 내게 한다
+		// (예전 soft-404: 미존재 경로가 307→로그인 200으로 남던 문제).
+		for (const pathname of ["/random-xyz", "/this-page-does-not-exist"]) {
+			expect(resolveGate({ pathname, ...fresh }).type).toBe("next");
+			expect(resolveGate({ pathname, ...guest }).type).toBe("next");
+		}
+	});
+	it("lets /welcome and /login fall through (redirects/404 handle them, not the gate)", () => {
+		// next.config redirects가 프록시보다 먼저 308로 흡수하고, 그게 실패해도
+		// 404가 로그인 리다이렉트보다 낫다.
+		for (const pathname of ["/welcome", "/login"]) {
+			expect(resolveGate({ pathname, ...fresh }).type).toBe("next");
+			expect(resolveGate({ pathname, ...guest }).type).toBe("next");
+		}
 	});
 	it("allows guest on seeker list root", () => {
 		expect(resolveGate({ pathname: "/seeker", ...guest }).type).toBe("next");
@@ -87,11 +105,22 @@ describe("resolveGate", () => {
 			to: "/seeker?auth=signup&guestBlocked=1",
 		});
 	});
-	it("sends guest at root to seeker", () => {
-		expect(resolveGate({ pathname: "/", ...guest })).toEqual({
-			type: "redirect",
-			to: "/seeker",
-		});
+	it("keeps every gated root behind the login overlay for anon visitors", () => {
+		for (const pathname of [
+			"/ad-banner-editor",
+			"/employer",
+			"/employer/jobs",
+			"/manual",
+			"/moderator",
+			"/moderator/x",
+			"/preview",
+			"/support",
+		]) {
+			expect(resolveGate({ pathname, ...fresh })).toEqual({
+				type: "redirect",
+				to: "/seeker?auth=login",
+			});
+		}
 	});
 	it("lets terms/privacy pass for logged-out visitors", () => {
 		expect(resolveGate({ pathname: "/terms", ...fresh }).type).toBe("next");
