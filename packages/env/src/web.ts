@@ -22,6 +22,10 @@ export const env = createEnv({
 		// getSessionCookie를 읽어야 세션 판정이 어긋나지 않는다. 서버 env와 같은 값
 		// (prod=bambi, dev=bambi-dev). 미설정이면 better-auth 기본 prefix.
 		BAMBI_COOKIE_PREFIX: z.string().optional(),
+		// IndexNow 검증 키. proxy(edge 미들웨어)가 /{key}.txt 요청에 이 값을 그대로
+		// 돌려준다 — 서버(server.ts INDEXNOW_KEY)와 같은 값이어야 핑 host·keyLocation이
+		// 실제 서빙 위치와 맞는다. 미설정이면 키 파일이 404가 되고 핑도 no-op이다.
+		INDEXNOW_KEY: z.string().optional(),
 	},
 	runtimeEnv: {
 		NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL,
@@ -33,6 +37,7 @@ export const env = createEnv({
 		PORTONE_API_SECRET: process.env.PORTONE_API_SECRET,
 		BAMBI_GUEST_TOKEN_SECRET: process.env.BAMBI_GUEST_TOKEN_SECRET,
 		BAMBI_COOKIE_PREFIX: process.env.BAMBI_COOKIE_PREFIX,
+		INDEXNOW_KEY: process.env.INDEXNOW_KEY,
 	},
 	emptyStringAsUndefined: true,
 });

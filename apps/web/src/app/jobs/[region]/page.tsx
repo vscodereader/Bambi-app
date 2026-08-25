@@ -6,6 +6,7 @@ import {
 } from "@/components/bambi/public-job-landing";
 import {
 	findJobLandingRegion,
+	JOB_LANDING_REGIONS,
 	jobLandingDescription,
 	jobLandingKeywords,
 	jobLandingPath,
@@ -19,6 +20,14 @@ import {
 
 interface RegionLandingProps {
 	params: Promise<{ region: string }>;
+}
+
+// 16개 시/도 슬러그를 빌드 시점에 정적 생성한다. publicClient로만 조회해 ISR(10분)로 재생성된다.
+// 표에 없는 슬러그는 dynamicParams 기본값(true)으로 온디맨드 렌더 후 notFound()가 404를 낸다.
+export const revalidate = 600;
+
+export function generateStaticParams() {
+	return JOB_LANDING_REGIONS.map((region) => ({ region: region.slug }));
 }
 
 export async function generateMetadata({

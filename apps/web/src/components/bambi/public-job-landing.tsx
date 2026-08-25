@@ -16,7 +16,10 @@ import {
 import type { Route } from "next";
 import Link from "next/link";
 import { cache, Fragment } from "react";
-import { toMarketplaceJob } from "@/lib/bambi/api-job-mapper";
+import {
+	HOURS_PLACEHOLDER,
+	toMarketplaceJob,
+} from "@/lib/bambi/api-job-mapper";
 import {
 	findJobLandingIndustry,
 	findJobLandingRegion,
@@ -31,18 +34,31 @@ import {
 	jobLandingPath,
 } from "@/lib/bambi/job-landing";
 import {
+	type DefinitionBlock,
+	type FaqItem,
+	jobLandingIndustryDefinition,
+	jobLandingIndustryFaqs,
+	jobLandingPlatformFaqs,
+	jobLandingRegionNote,
+	jobLandingServiceDefinition,
+} from "@/lib/bambi/job-landing-content";
+import {
 	type BreadcrumbItem,
 	breadcrumbJsonLd,
 	collectionPageJsonLd,
 } from "@/lib/bambi/seo";
 import type { Job } from "@/lib/bambi/types";
-import { client } from "@/utils/orpc";
+import { publicClient } from "@/utils/orpc-public";
 import { JobCoverImage } from "./job-cover-image";
 import { JsonLd } from "./json-ld";
 
 // 첫 화면에 실을 공고 수. 더보기·페이징은 두지 않는다 — 랜딩의 역할은 색인용 진입점이지
 // 전체 목록 열람이 아니고, 더 보려면 /seeker 목록으로 넘어가는 게 정상 동선이다.
 const LANDING_JOB_LIMIT = 24;
+
+// 근무시간 줄은 실제 값이 있을 때만 그리고, 매퍼가 채운 자리표시(HOURS_PLACEHOLDER)는
+// 줄째 생략한다 — 값이 없는데도 "채팅으로 확인"을 근무시간처럼 노출하지 않는다(색인
+// 텍스트가 사실만 담게). 상수는 매퍼에서 가져와 매퍼가 넣는 값과 어긋나지 않게 한다.
 
 // 가입 유도 목적지. anon이 눌러도 게이트 리다이렉트 없이 바로 가입 카드가 뜬다.
 const SIGNUP_HREF = "/seeker?auth=signup" as Route;
@@ -58,7 +74,7 @@ const loadLandingJobsBySlug = cache(
 			: undefined;
 
 		try {
-			const { sections } = await client.bambi.jobs.list({
+			const { sections } = await publicClient.bambi.jobs.list({
 				limit: LANDING_JOB_LIMIT,
 				...(industry ? { industryCategory: industry.label } : {}),
 				...(region ? { regionCode: region.code } : {}),
@@ -233,13 +249,22 @@ function LandingJobCard({ job }: { job: Job }) {
 				/>
 			) : null}
 			<div className="flex min-w-0 flex-1 flex-col gap-1">
-				<h3 className="m-0 truncate font-extrabold text-base text-foreground">
+				{/* 모바일(1열)은 제목을 2줄까지 보여준다 — 한 줄 truncate면 좁은 폭에서 핵심
+				    키워드가 잘린다. 다열 그리드(sm+)는 행 높이 정렬을 위해 한 줄 유지. */}
+				<h3 className="m-0 line-clamp-2 font-extrabold text-base text-foreground sm:line-clamp-1">
 					{job.title}
 				</h3>
+				{/* 시/도·시군구(세부지역). 상세 주소(동·번지)는 싣지 않는다. */}
 				<p className="m-0 truncate text-muted-foreground text-sm">
 					{job.company} · {job.location}
 				</p>
+				{/* 급여는 DB 저장 표기 그대로(협의면 "급여 협의"), 근무시간은 실제 값이 있을 때만. */}
 				<p className="m-0 font-bold text-foreground text-sm">{job.pay}</p>
+				{job.hours && job.hours !== HOURS_PLACEHOLDER ? (
+					<p className="m-0 truncate text-muted-foreground text-sm">
+						근무시간 {job.hours}
+					</p>
+				) : null}
 				<div className="flex flex-wrap items-center gap-1">
 					<Badge variant="secondary">{job.type}</Badge>
 					{job.verified ? <Badge variant="success">인증 완료</Badge> : null}
@@ -249,6 +274,90 @@ function LandingJobCard({ job }: { job: Job }) {
 				</div>
 			</div>
 		</Link>
+	);
+}
+
+// 정의 섹션(h2 질문형 + 문단). 헤딩 직하 첫 문단은 반드시 완결된 직답(body[0])이어야
+// AI가 문단째 발췌한다 — 그래서 지역 고유 lead는 body[0] '뒤'에 끼운다. 같은 업종 정의가
+// 16개 지역에 반복돼도 지역 문장이 페이지마다 텍스트를 달라지게 하되, 직답은 항상 맨 앞이다.
+function DefinitionSection({
+	block,
+	lead,
+}: {
+	block: DefinitionBlock;
+	lead?: string;
+}) {
+	return (
+		<section className="flex flex-col gap-3">
+			<h2 className="m-0 font-extrabold text-lg">{block.title}</h2>
+			{block.body.map((paragraph, index) => (
+				<Fragment key={paragraph}>
+					<p className="m-0 text-muted-foreground text-sm">{paragraph}</p>
+					{index === 0 && lead ? (
+						<p className="m-0 text-muted-foreground text-sm">{lead}</p>
+					) : null}
+				</Fragment>
+			))}
+		</section>
+	);
+}
+
+// FAQ는 접힘(details/accordion) 없이 항상 펼쳐진 정적 텍스트로 그린다 — 크롤러·AI가 접힌
+// 답변을 못 읽는 리스크를 없앤다. 질문은 h3(정의 h2 하위), 답변은 첫 문장이 직답.
+function FaqSection({ items }: { items: readonly FaqItem[] }) {
+	return (
+		<section className="flex flex-col gap-4">
+			<h2 className="m-0 font-extrabold text-lg">자주 묻는 질문</h2>
+			{items.map((item) => (
+				<div className="flex flex-col gap-1" key={item.question}>
+					<h3 className="m-0 font-bold text-base text-foreground">
+						{item.question}
+					</h3>
+					<p className="m-0 text-muted-foreground text-sm">{item.answer}</p>
+				</div>
+			))}
+		</section>
+	);
+}
+
+// 축 조합별 정의·FAQ 노출: 인덱스=서비스 정의+플랫폼 FAQ, 지역=지역 서술+플랫폼 FAQ,
+// 지역×업종=업종 정의(지역 서술로 감쌈)+업종 FAQ.
+function LandingContentSections({ industry, region }: JobLandingTarget) {
+	if (region && industry) {
+		return (
+			<>
+				<DefinitionSection
+					block={jobLandingIndustryDefinition(industry)}
+					lead={jobLandingRegionNote(region) || undefined}
+				/>
+				<FaqSection items={jobLandingIndustryFaqs(industry)} />
+			</>
+		);
+	}
+
+	if (region) {
+		const note = jobLandingRegionNote(region);
+
+		return (
+			<>
+				{note ? (
+					<section className="flex flex-col gap-3">
+						<h2 className="m-0 font-extrabold text-lg">
+							{region.label} 유흥·접객 알바 안내
+						</h2>
+						<p className="m-0 text-muted-foreground text-sm">{note}</p>
+					</section>
+				) : null}
+				<FaqSection items={jobLandingPlatformFaqs()} />
+			</>
+		);
+	}
+
+	return (
+		<>
+			<DefinitionSection block={jobLandingServiceDefinition()} />
+			<FaqSection items={jobLandingPlatformFaqs()} />
+		</>
 	);
 }
 
@@ -309,8 +418,10 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 				<h2 className="m-0 font-extrabold text-lg">
 					모집 중인 공고 {jobs.length}개
 				</h2>
+				{/* 그리드 기본 구간에도 grid-cols-1(minmax(0,1fr))을 명시한다 — 안 주면 auto 트랙이
+				    카드 안 truncate(nowrap) 텍스트 폭만큼 벌어져 모바일에서 가로 스크롤이 생긴다. */}
 				{jobs.length > 0 ? (
-					<div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+					<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
 						{jobs.map((job) => (
 							<LandingJobCard job={job} key={job.id} />
 						))}
@@ -327,6 +438,8 @@ export async function PublicJobLanding({ industry, region }: JobLandingTarget) {
 					</Empty>
 				)}
 			</section>
+
+			<LandingContentSections industry={industry} region={region} />
 
 			{buildLinkSections(target).map((section) => (
 				<LandingLinkChips

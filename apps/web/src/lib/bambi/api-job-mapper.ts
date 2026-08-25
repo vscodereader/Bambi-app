@@ -13,6 +13,11 @@ import type {
 	JobPerformanceMetrics,
 } from "./types";
 
+// workSchedule이 없을 때 hours에 채워 넣는 자리표시 문구. 공개 랜딩이 근무시간 줄을
+// 이 값과 비교해 통째로 생략하므로(값 없는데 "채팅으로 확인"을 근무시간처럼 색인하지
+// 않으려고), 매퍼와 소비처가 같은 상수를 봐야 한다.
+export const HOURS_PLACEHOLDER = "채팅으로 확인";
+
 export interface ApiJobMedia {
 	altText?: null | string;
 	byteSize: number;
@@ -227,7 +232,7 @@ export const toMarketplaceJob = (job: ApiMarketplaceJob): Job => {
 		employerVerifiedPhone: job.employerVerifiedPhone ?? null,
 		exposureType: job.exposureType ?? null,
 		featured: job.employerVerificationStatus === "verified",
-		hours: job.workSchedule ?? "채팅으로 확인",
+		hours: job.workSchedule ?? HOURS_PLACEHOLDER,
 		id: job.id,
 		instantInterview: job.instantInterview ?? false,
 		isPromoted: job.isPromoted ?? Boolean(job.promotionTier),
