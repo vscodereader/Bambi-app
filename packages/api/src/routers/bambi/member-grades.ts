@@ -1,11 +1,13 @@
 import { db } from "@bambi-app/db";
 import {
 	bambiCommentMilestone,
+	bambiCommentMilestoneAward,
 	bambiMemberGrade,
 	bambiSiteSettings,
+	communityComment,
 } from "@bambi-app/db/schema/bambi";
 import { ORPCError } from "@orpc/server";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { asc, count, desc, eq, sql } from "drizzle-orm";
 import z from "zod";
 
 import { adminProcedure } from "../../index";
@@ -96,12 +98,28 @@ const DUP_MILESTONE = "이미 같은 댓글 회차의 마일스톤이 있습니�
 // memberGrades.commentMilestones.* 로 접근한다. 삭제는 자유이며 지급 기록(award)은
 // FK cascade가 함께 지운다.
 const commentMilestonesRouter = {
-	list: adminProcedure.handler(async () =>
-		db
-			.select()
-			.from(bambiCommentMilestone)
-			.orderBy(asc(bambiCommentMilestone.commentCount))
-	),
+	// 전역 선착 모델이라 달성 상태를 함께 내린다: award 유무(당첨 완료)와 현재 사이트 전체 댓글 수
+	// (회차와 비교해 대기/지나감 판정). award는 마일스톤당 1행(unique)이라 조인이 안 불린다.
+	list: adminProcedure.handler(async () => {
+		const [milestones, [totalRow]] = await Promise.all([
+			db
+				.select({
+					id: bambiCommentMilestone.id,
+					commentCount: bambiCommentMilestone.commentCount,
+					bonusPoints: bambiCommentMilestone.bonusPoints,
+					createdAt: bambiCommentMilestone.createdAt,
+					awarded: sql<boolean>`${bambiCommentMilestoneAward.id} is not null`,
+				})
+				.from(bambiCommentMilestone)
+				.leftJoin(
+					bambiCommentMilestoneAward,
+					eq(bambiCommentMilestoneAward.milestoneId, bambiCommentMilestone.id)
+				)
+				.orderBy(asc(bambiCommentMilestone.commentCount)),
+			db.select({ value: count() }).from(communityComment),
+		]);
+		return { milestones, totalCommentCount: totalRow?.value ?? 0 };
+	}),
 
 	create: adminProcedure
 		.input(createMilestoneInput)

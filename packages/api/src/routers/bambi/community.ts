@@ -2,6 +2,8 @@ import { db } from "@bambi-app/db";
 import { user } from "@bambi-app/db/schema/auth";
 import {
 	adminModerationAction,
+	bambiCommentMilestone,
+	bambiCommentMilestoneAward,
 	bambiSiteSettings,
 	communityBoard,
 	communityBoardHomeLayout,
@@ -870,9 +872,21 @@ const selectVisibleCommentRows = async (target: SQL) => {
 			id: communityComment.id,
 			parentCommentId: communityComment.parentCommentId,
 			status: communityComment.status,
+			// 당첨 배지용(모든 열람자에게 공개). bonusPoints는 랜덤 보너스 확정액(불변),
+			// milestoneCommentCount는 이 댓글이 딴 전역 마일스톤 회차(award 조인, 없으면 null).
+			bonusPoints: communityComment.bonusPoints,
+			milestoneCommentCount: bambiCommentMilestone.commentCount,
 		})
 		.from(communityComment)
 		.leftJoin(user, eq(user.id, communityComment.authorUserId))
+		.leftJoin(
+			bambiCommentMilestoneAward,
+			eq(bambiCommentMilestoneAward.commentId, communityComment.id)
+		)
+		.leftJoin(
+			bambiCommentMilestone,
+			eq(bambiCommentMilestone.id, bambiCommentMilestoneAward.milestoneId)
+		)
 		.where(target)
 		.orderBy(asc(communityComment.createdAt))
 		.limit(COMMENTS_CAP);
@@ -1043,11 +1057,13 @@ const toCommentItems = (
 				authorName: null,
 				authorRole: null,
 				body: "",
+				bonusPoints: 0,
 				canDelete: false,
 				canEdit: false,
 				createdAt: row.createdAt,
 				id: row.id,
 				isDeleted: true,
+				milestoneCommentCount: null,
 				parentCommentId: row.parentCommentId,
 			};
 		}
@@ -1062,11 +1078,14 @@ const toCommentItems = (
 			authorName: row.authorGender ? SECRET_AUTHOR_NAME : policy.authorName,
 			authorRole: row.authorRole,
 			body: row.body,
+			// 당첨 배지(공개): 랜덤 보너스 확정액과 딴 마일스톤 회차. 숨김/삭제 댓글은 위에서 미노출.
+			bonusPoints: row.bonusPoints,
 			canDelete: policy.canDelete,
 			canEdit: policy.canEdit,
 			createdAt: row.createdAt,
 			id: row.id,
 			isDeleted: false,
+			milestoneCommentCount: row.milestoneCommentCount,
 			parentCommentId: row.parentCommentId,
 		};
 	});
@@ -1559,9 +1578,13 @@ export const communityRouter = {
 							: null,
 					authorRole: row.status === "published" ? row.authorRole : null,
 					body: row.status === "published" ? row.body : "",
+					// 당첨 배지(공개) — 숨김/삭제 댓글은 노출하지 않는다(위 렌더 정책과 동일).
+					bonusPoints: row.status === "published" ? row.bonusPoints : 0,
 					createdAt: row.createdAt,
 					id: row.id,
 					isDeleted: row.status !== "published",
+					milestoneCommentCount:
+						row.status === "published" ? row.milestoneCommentCount : null,
 					parentCommentId: row.parentCommentId,
 				})),
 				createdAt: post.createdAt,
@@ -2416,17 +2439,19 @@ export const communityRouter = {
 						.set({ bonusPointsAwarded })
 						.where(eq(communityComment.id, row.id));
 				}
-				// 마일스톤은 셀프 댓글 포함 모든 회원 댓글에서 누적 수(status 무관)로 catch-up 지급한다.
+				// 전역 선착 마일스톤: 사이트 전체 통산 댓글 수(작성자·status 무관)가 이번 댓글로
+				// 정확히 어느 회차와 일치하면 이 댓글을 단 회원이 가져간다. 게스트 댓글도 카운트에
+				// 들지만, 게스트가 정확히 회차에 안착하면 userId가 없어 수상자 없이 넘어간다(의도된 에지).
 				let milestones: Awaited<ReturnType<typeof awardCommentMilestones>> = [];
-				if (commentAuthorUserId) {
+				if (commentAuthorUserId && row) {
 					const [countRow] = await tx
 						.select({ value: count() })
-						.from(communityComment)
-						.where(eq(communityComment.authorUserId, commentAuthorUserId));
+						.from(communityComment);
 					milestones = await awardCommentMilestones(
 						tx,
 						commentAuthorUserId,
-						countRow?.value ?? 0
+						countRow?.value ?? 0,
+						row.id
 					);
 				}
 				return { bonusPoints: bonusPointsAwarded, id: row?.id, milestones };

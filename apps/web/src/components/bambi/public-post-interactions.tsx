@@ -23,6 +23,7 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger,
 } from "@bambi-app/ui/components/alert-dialog";
+import { Badge } from "@bambi-app/ui/components/badge";
 import { Button } from "@bambi-app/ui/components/button";
 import { Input } from "@bambi-app/ui/components/input";
 import { Label } from "@bambi-app/ui/components/label";
@@ -57,9 +58,13 @@ export interface PublicCommentSeed {
 	authorImage: string | null;
 	authorRole: string | null;
 	body: string;
+	// 랜덤 보너스 당첨액(0=꽝). 공개값 — 게스트에게도 배지로 보인다.
+	bonusPoints: number;
 	createdAt: Date | string;
 	id: string;
 	isDeleted: boolean;
+	// 이 댓글이 딴 전역 마일스톤 회차(없으면 null).
+	milestoneCommentCount: number | null;
 	parentCommentId: string | null;
 }
 
@@ -241,6 +246,18 @@ function CommentRow({
 					)}
 					<span>·</span>
 					{formatCommunityDate(comment.createdAt)}
+					{/* 당첨 배지(공개) — 전역 선착 마일스톤·랜덤 보너스. 삭제 댓글엔 서버가 0/null. */}
+					{comment.milestoneCommentCount === null ? null : (
+						<Badge variant="success">
+							🏆 전체 {comment.milestoneCommentCount.toLocaleString("ko-KR")}
+							번째 댓글 보너스 당첨
+						</Badge>
+					)}
+					{comment.bonusPoints > 0 ? (
+						<Badge variant="success">
+							🎉 {comment.bonusPoints.toLocaleString("ko-KR")}P 보너스 당첨
+						</Badge>
+					) : null}
 				</span>
 				{comment.canEdit && !(isEditing || comment.isDeleted) ? (
 					<span className="flex items-center gap-1">
